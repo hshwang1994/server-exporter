@@ -16,7 +16,7 @@
 # 검증 기준: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json 참조
 # Storage strategy: standard storage path (iDRAC8 2.30+ 부터 표준 Storage 지원)
 # Power strategy: Power deprecated path only (PowerSubsystem 미도입 시기) +
-#                 PowerSubsystem fallback 코드 적용 (Additive only)
+#                 PowerSubsystem fallback 경로 지원
 # OEM namespace: Oem.Dell
 # Next action: lab 도입 후 iDRAC8 사이트 실측 fixture 캡처
 # ──────────────────────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ capabilities:
     - storage
     - network
     - firmware
-    - power  # PowerSubsystem fallback 코드 적용 — Additive only
+    - power  # PowerSubsystem fallback 경로 지원
 
 collect:
   strategy: standard_plus_oem

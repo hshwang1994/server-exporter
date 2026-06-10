@@ -1,21 +1,19 @@
 """회귀 — adapter `recovery_accounts.vault_label` ↔ vendor 별 허용 label set 정합.
 
 배경 (commit `a82afc4b`):
-  9 vendor recovery 자격 매트릭스 정착 후 29 adapter (`redfish_generic` 제외) 의
+  9 vendor recovery 자격 매트릭스 정착 후 30 adapter (`redfish_generic` 제외) 의
   `recovery_accounts.vault_label` 을 vault 실 label 와 1:1 정합시킴. 본 회귀
   테스트는 향후 adapter 추가/수정 시 drift 차단.
 
 검증 항목 (정본 = `docs/21_vault-operations.md` §6.5):
-  1. 각 adapter (29) 의 `recovery_accounts` 가 비어있지 않음
+  1. 각 adapter (30) 의 `recovery_accounts` 가 비어있지 않음
   2. 각 `vault_label` 이 vendor 별 허용 set 에 포함
   3. 각 entry 에 `role: recovery` 명시
   4. vendor 는 파일명 prefix 또는 `credentials.profile` 기반
 
-원칙 준수:
-  - 정적 검증 — envelope shape 변경 0
-  - adapter declare 만 검증 — gather 코드 영향 0
-  - Additive only — 신규 회귀 1 파일 추가, 기존 회귀 변경 0
-  - 호출자 시스템 파싱 변경 0
+검증 범위:
+  - adapter YAML 의 declare 만 정적 검증 (gather 코드는 건드리지 않음)
+  - 출력 envelope shape 와 무관
 """
 from __future__ import annotations
 
@@ -107,7 +105,7 @@ def _all_redfish_adapters() -> list[Path]:
 def test_adapter_directory_has_expected_count() -> None:
     """30 adapter (generic 제외) 가 존재. drift 감지 — adapter 추가/삭제 시 회귀 알림.
 
-    29 → 30 (hpe_csus_3200 신설).
+    현재 30 adapter (hpe_csus_3200 포함).
     """
     adapters = _all_redfish_adapters()
     assert len(adapters) == 30, (
@@ -124,7 +122,7 @@ def test_vendor_allowed_labels_matrix_covers_9_vendors() -> None:
     }
 
 
-# ── 본 검증: 29 adapter × parametrize ────────────────────────────────────────
+# ── 본 검증: 30 adapter × parametrize ────────────────────────────────────────
 
 
 @pytest.mark.parametrize("adapter_path", _all_redfish_adapters(), ids=lambda p: p.name)

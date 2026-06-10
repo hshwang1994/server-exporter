@@ -3,7 +3,7 @@
 # Vendor: Supermicro / Super Micro Computer
 # Firmware: X12 / H12 generation BMC (AST2600)
 # Origin: Supermicro X12/H12 BMC documentation
-# Last sync: 2026-05-11 (priority 90→100 — X11/X13 일관성 fix)
+# Last sync: 2026-05-11
 # Notes: Whitley/Tatlow platform. AST2600 BMC. Root of Trust 지원.
 #   H12 일부 variant 는 AST2500 (X11 와 동일 BMC) → hybrid. AST2600 H12는 본 adapter cover.
 # Sources (lab 부재):
@@ -23,8 +23,8 @@
 #   - 신 firmware update parameters (read-only 영향 없음 — server-exporter GET only)
 #   - firmware 형식: 3-part "0?1.YY.ZZ" 또는 "X.YY.ZZ" (AST2600)
 # Lab status: 부재 — web sources only (사이트 BMC 0대, 2026-05-07)
-# Priority 결정 (priority 일관성 검토):
-#   - 100 (X11/X13 와 일관) — 이전 90 (의도 불명) 에서 fix
+# Priority (일관성):
+#   - 100 (X11/X13 와 일관)
 #   - X14 (110) > X11/X12/X13 (100) > generic supermicro_bmc (10)
 #   - generation 별 model_patterns 가 vendor 분리 보장 (동률 발생 시나리오 없음)
 # Next action: X12/H12 (Whitley/Tatlow + AST2600) lab 도입 후 검증
@@ -89,4 +89,4 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Supermicro X12/H12 계열 — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."
+  not_supported_message: "Supermicro X12/H12 계열 — Redfish 완전 지원 가정."

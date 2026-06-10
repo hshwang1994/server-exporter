@@ -1,6 +1,6 @@
 """회귀 — `_resolve_all_member_uris` 단위 테스트.
 
-`_resolve_first_member_uri` 의 Additive 확장. RMC (HPE CSUS 3200 / Superdome Flex)
+`_resolve_first_member_uri` 를 보존한 채 추가된 확장. RMC (HPE CSUS 3200 / Superdome Flex)
 단일 진입점이 N개 Manager / N개 nPartition / N개 Chassis 노출 환경에서 전수 수집.
 
 검증 항목:
@@ -9,7 +9,7 @@
 3. Members 비어있음 → ([], st, 'members 없음')
 4. Members N개 → list of {uri, id} (ID = URI 마지막 segment, trailing '/' 제거)
 5. @odata.id 누락 Member 는 skip
-6. 기존 `_resolve_first_member_uri` 행동 보존 (Additive 검증)
+6. 기존 `_resolve_first_member_uri` 행동 보존
 """
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def test_resolve_all_members_odata_id_missing_skipped(monkeypatch) -> None:
     assert [m["id"] for m in members] == ["Partition0", "Partition1"]
 
 
-# ── 기존 `_resolve_first_member_uri` 행동 보존 (Additive 검증) ──────────────
+# ── 기존 `_resolve_first_member_uri` 행동 보존 ──────────────
 
 
 def test_resolve_first_member_uri_unchanged(monkeypatch) -> None:

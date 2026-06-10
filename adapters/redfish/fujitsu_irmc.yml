@@ -125,4 +125,4 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Fujitsu iRMC 장비 (PRIMERGY/PRIMEQUEST) — Redfish 표준 호환 가정 (lab 부재 — web sources 기반). iRMC S2 generation 의 Redfish 미지원 가능 — graceful degradation."
+  not_supported_message: "Fujitsu iRMC 장비 (PRIMERGY/PRIMEQUEST) — Redfish 표준 호환 가정. iRMC S2 generation 의 Redfish 미지원 가능 — graceful degradation."

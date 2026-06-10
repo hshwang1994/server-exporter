@@ -437,7 +437,7 @@ hostname = system.hostname  OR  system.fqdn  OR  ip_fallback
 
 > HPE Compute Scale-up Server 3200 / Superdome Flex 처럼 단일 RMC (Rack Management Controller) 가 N개 chassis × N개 nPartition × 다중 Manager 를 통합 노출하는 환경 정식 지원.
 >
-> CSUS 3200 Redfish 모델 검수 결과 누락분 5종 Additive 추가 — per-partition `boot` (부팅 순서), per-chassis `thermal` (온도/팬), per-manager `log_services` (LogServices), `multi_node.composition` (CompositionService/ResourceBlocks), `multi_node.fabrics` (Fabrics/FlexGrid Switches+Endpoints, NUMAlink). 모두 `data.multi_node` 내부 신 키 (envelope 13 필드 / 기존 9 section path 변경 0).
+> CSUS 3200 Redfish 모델 검수 결과 누락분 5종 추가 — per-partition `boot` (부팅 순서), per-chassis `thermal` (온도/팬), per-manager `log_services` (LogServices), `multi_node.composition` (CompositionService/ResourceBlocks), `multi_node.fabrics` (Fabrics/FlexGrid Switches+Endpoints, NUMAlink). 모두 `data.multi_node` 내부 키이며, envelope 13 필드와 기존 9 section path 는 그대로 유지된다.
 
 ### 활성 조건
 
@@ -449,9 +449,9 @@ hostname = system.hostname  OR  system.fqdn  OR  ip_fallback
 | HPE Superdome Flex | `hpe_superdome_flex.yml` | `rmc_primary_ilo_secondary` | YES |
 | 기타 13 vendor (HPE iLO 4~7 / Dell / Cisco / Lenovo / Supermicro / Huawei / Inspur / Fujitsu / Quanta) | — | (미정의) | NO — `data.multi_node = null` |
 
-### Envelope shape (Additive only)
+### Envelope shape (추가 전용 — 기존 path 는 그대로 유지)
 
-기존 9 section path (`data.system` / `data.bmc` / `data.cpu` / `data.memory` / `data.storage` / `data.network` / `data.firmware` / `data.power` / `data.hardware`) 는 **Partition0 representative** 로 그대로 유지. 호출자 시스템 파싱 변경 0.
+기존 9 section path (`data.system` / `data.bmc` / `data.cpu` / `data.memory` / `data.storage` / `data.network` / `data.firmware` / `data.power` / `data.hardware`) 는 **Partition0 representative** 로 그대로 유지된다. 기존 호출자 시스템의 파싱 방식은 바뀌지 않는다.
 
 ```json
 {
@@ -524,7 +524,7 @@ hostname = system.hostname  OR  system.fqdn  OR  ip_fallback
 
 ### 확장 컴포넌트
 
-CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 내부 (Additive). Redfish 표준 리소스 미노출 시 graceful (boot/thermal=`{}`, log_services=`[]`, composition/fabrics=`null`).
+CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 내부 키이다. Redfish 표준 리소스 미노출 시 graceful (boot/thermal=`{}`, log_services=`[]`, composition/fabrics=`null`).
 
 | 키 | 출처 Redfish 리소스 | 필드 | 비고 |
 |---|---|---|---|
@@ -534,20 +534,20 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | `composition` | `CompositionService` + `ResourceBlocks` | `enabled`, `state/health`, `resource_block_count`, `resource_blocks[]` (id/types/composition_state/processor_count/memory_count/`chassis[]`/`computer_systems[]`) | nPartition 조합 구조. 각 ResourceBlock ↔ chassis 대응 (설명 모델). ServiceRoot 미노출 시 `null` |
 | `fabrics` | `Fabrics` + `Fabrics/{id}` (Switches/Endpoints) | `[]` of {id/fabric_type/health/`switch_count`/`endpoint_count`/`switches[]`/`endpoints[]`} | NUMAlink FlexGrid (Switches+Endpoints, Links/Zones 미사용 — 설명 모델). ServiceRoot 미노출 시 `null` |
 
-> **Lab 부재 주의**: 위 5종은 lab 부재 web sources (DMTF DSP0266 + HPE CSUS 3200 Admin Guide + Superdome Flex 상속) 합성 검증. `fabric_type` 은 DMTF enum 에 NUMAlink 가 없어 placeholder (`PCIe`) — 사이트 실측 시 정정.
+> **Lab 부재 주의**: 위 5종은 lab 부재로 공식 문서 (DMTF DSP0266 + HPE CSUS 3200 Admin Guide + Superdome Flex 상속) 합성 검증. `fabric_type` 은 DMTF enum 에 NUMAlink 가 없어 placeholder (`PCIe`) — 사이트 실측 시 정정 가능.
 
 ### 호출자 가이드
 
 | 시나리오 | 권장 처리 |
 |---|---|
-| 기존 호출자 (`data.system` / `data.bmc` 만 사용) | 변경 0 — Partition0 데이터로 동일 동작 |
+| 기존 호출자 (`data.system` / `data.bmc` 만 사용) | 변경 없음 — Partition0 데이터로 동일 동작 |
 | 멀티-노드 인식 호출자 | `data.multi_node != null` 확인 후 `partitions[]` / `managers[]` / `chassis[]` 순회 |
 | 확장 컴포넌트 인식 호출자 | `multi_node.composition` / `multi_node.fabrics` (null 가드) + `partitions[].boot` / `chassis[].thermal` / `managers[].log_services` 순회 |
 | 활성화 미상 진단 | `diagnosis.details.rmc_activation_check == false` 시 사이트 RMC Redfish 서비스 / Subscription 라이선스 확인 (`docs/22_rmc-activation-guide.md`) |
 
 ### Lab 부재 한계
 
-현재 mock fixture 는 sdflexutils + DMTF v1.15 + iLO 5 API ref 합성. ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema 는 사이트 실측 후 정정 의무.
+현재 mock fixture 는 sdflexutils + DMTF v1.15 + iLO 5 API ref 합성. ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema 는 사이트 실측 후 정정 가능.
 
 ---
 

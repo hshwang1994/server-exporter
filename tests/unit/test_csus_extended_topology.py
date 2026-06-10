@@ -1,14 +1,14 @@
 """회귀 — HPE CSUS 3200 / Superdome Flex 멀티-노드 토폴로지 확장 수집.
 
-설명 모델 검수 후속 — 누락분 5종 Additive 구현 회귀 차단:
+멀티-노드 토폴로지 5종 수집 회귀 차단:
   1. Chassis Thermal (gather_thermal + /ThermalSubsystem fallback)
   2. per-partition Boot order (gather_boot)
   3. Manager LogServices (gather_manager_logs)
   4. CompositionService + ResourceBlocks (gather_composition_service)
   5. Fabrics + FlexGrid Switches/Endpoints (gather_fabrics)
 
-모두 mock HTTP 응답 (lab 부재 — web sources 합성: DMTF DSP0266 + HPE CSUS 3200
-Administration Guide + Superdome Flex 상속). 단일 노드 path / 13 vendor 영향 0 검증 포함.
+모두 mock HTTP 응답 (lab 부재 — DMTF DSP0266 + HPE CSUS 3200
+Administration Guide + Superdome Flex 상속 합성). 단일 노드 path 및 기존 vendor 동작 유지 검증 포함.
 """
 from __future__ import annotations
 
@@ -329,7 +329,7 @@ def test_composition_service_resource_blocks(monkeypatch) -> None:
 
 
 def test_composition_absent_returns_none(monkeypatch) -> None:
-    """ServiceRoot 에 CompositionService 링크 없음 → None (graceful, 13 vendor 안전)."""
+    """ServiceRoot 에 CompositionService 링크 없음 → None (graceful, 기존 vendor 안전)."""
     _patch(monkeypatch)
     sr = {"Systems": {"@odata.id": "/redfish/v1/Systems"}}  # no CompositionService
     comp, errs = rg.gather_composition_service("10.0.0.1", sr, *CREDS)
@@ -397,7 +397,7 @@ def test_topology_full_includes_all_new_components(monkeypatch) -> None:
 
 def test_topology_without_new_links_is_backward_compatible(monkeypatch) -> None:
     """ServiceRoot 에 Fabrics/CompositionService 링크 없음 (= 기존 CSUS 시나리오) →
-    composition None / fabrics None / summary 카운트 0. 13 vendor / 기존 동작 영향 0."""
+    composition None / fabrics None / summary 카운트 0. 기존 vendor / 기존 동작 유지."""
     _patch(monkeypatch)
     sr = {
         "Systems":  {"@odata.id": "/redfish/v1/Systems"},
@@ -418,19 +418,19 @@ def test_topology_without_new_links_is_backward_compatible(monkeypatch) -> None:
 
 
 def test_topology_layout_none_still_none(monkeypatch) -> None:
-    """manager_layout=None → None (신 컬렉터 추가 후에도 13 vendor 영향 0 불변)."""
+    """manager_layout=None → None (신 컬렉터 추가 후에도 기존 vendor 동작 유지)."""
     _patch(monkeypatch)
     result = rg._collect_multi_node_topology(
         "10.0.0.1", "hpe", _full_service_root(), *CREDS, manager_layout=None)
     assert result is None
 
 
-# ── review fix 회귀 ──────────────────────────────────────
+# ── 회귀 ──────────────────────────────────────
 
 
 def test_chassis_get_fail_appends_member_without_doomed_subcalls(monkeypatch) -> None:
     """비-404 chassis GET 실패 → 멤버 append (chassis_count 보존) + power/thermal={} +
-    중복 Power/Thermal error noise 없음 (review LOW fix)."""
+    중복 Power/Thermal error noise 없음."""
     extra = {
         "Chassis": (200, {"Members": [
             {"@odata.id": "/redfish/v1/Chassis/Base"},
@@ -451,9 +451,10 @@ def test_chassis_get_fail_appends_member_without_doomed_subcalls(monkeypatch) ->
 
 def test_manager_label_role_consistent_for_nondocumented_ids(monkeypatch) -> None:
     """비-documented manager ID (Managers/1, Self, 2) → 첫 Manager 만 RMC/primary,
-    나머지 generic/secondary. name/role 일치 + 단일 RMC (review genuine_bug_final fix).
+    나머지 generic/secondary. name/role 일치 + 단일 RMC.
 
-    구: layout-default 가 substring 미매치 manager 전부 'RMC' 로 오라벨 + role=None (모순).
+    substring 미매치 manager 는 첫 Manager 외 전부 generic/secondary 로 분류된다
+    (전부 'RMC' 로 오라벨 + role=None 모순이 발생하지 않음).
     """
     extra = {
         "Managers": (200, {"Members": [
@@ -481,11 +482,10 @@ def test_manager_label_role_consistent_for_nondocumented_ids(monkeypatch) -> Non
 
 
 def test_manager_name_role_consistent_when_body_id_differs_from_uri_segment(monkeypatch) -> None:
-    """응답 body Id ≠ URI 마지막 segment 인 경우에도 name/role 모순 불가 (review fix).
+    """응답 body Id ≠ URI 마지막 segment 인 경우에도 name/role 모순 불가.
 
-    DMTF 는 Manager.Id 와 @odata.id segment 불일치를 허용. 구: name 은 body Id 로,
-    role 는 URI segment 로 분류 → 서로 다른 source 라 모순 가능 (예: name='RMC', role='secondary').
-    fix: 두 분류 모두 동일 id(URI segment m['id']) 사용 → name=='RMC' iff role=='primary'.
+    DMTF 는 Manager.Id 와 @odata.id segment 불일치를 허용. name 과 role 모두
+    동일 id(URI segment m['id']) 로 분류 → name=='RMC' iff role=='primary'.
     """
     extra = {
         "Managers": (200, {"Members": [
@@ -508,7 +508,7 @@ def test_manager_name_role_consistent_when_body_id_differs_from_uri_segment(monk
 
 
 def test_manager_documented_ids_unchanged(monkeypatch) -> None:
-    """documented ID (RMC/PDHC0/Bay1.iLO5) 는 fix 후에도 동일 (회귀 차단)."""
+    """documented ID (RMC/PDHC0/Bay1.iLO5) 의 name/role 분류 (회귀 차단)."""
     extra = {
         "Managers": (200, {"Members": [
             {"@odata.id": "/redfish/v1/Managers/RMC"},
@@ -530,7 +530,7 @@ def test_manager_documented_ids_unchanged(monkeypatch) -> None:
 def test_composition_malformed_200_enabled_none(monkeypatch) -> None:
     """CompositionService 가 200 이지만 비-dict(null) body → enabled=None (정직한 unknown).
 
-    구: bool(_safe(None, 'ServiceEnabled', default=True)) → True (오해 소지). fix → None.
+    null body 에서는 ServiceEnabled 를 알 수 없으므로 enabled=None (True 로 단정하지 않음).
     """
     extra = {"CompositionService": (200, None, None)}  # null body @ 200
     _patch(monkeypatch, extra)

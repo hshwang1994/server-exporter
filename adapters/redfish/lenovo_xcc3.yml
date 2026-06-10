@@ -24,7 +24,7 @@
 #   - FPGA firmware separate item — UpdateService/FirmwareInventory/FPGA (gather 자동 cover)
 #   - ExtendedError.1.2.2.json OEM registry 신규 (server-exporter 미사용)
 #   - UEFI/BMC 설정 이름 형식 변경 (read-only 영향 작음)
-# HTTP 헤더 정책 (2026-04-30 사이트 사고 관측):
+# HTTP 헤더 정책 (2026-04-30 사이트 이슈 관측):
 #   - Accept-only 헤더 패턴 유지 (사이트 BMC 1.17.0 reject 회피)
 #   - OData-Version / User-Agent 추가 금지
 #   → redfish_gather.py _get() 의 공통 정책 그대로 사용
@@ -89,7 +89,7 @@ graceful_degradation:
 # - OpenBMC 기반 — 표준 Redfish 우선, OEM 의존 감소
 # - Redfish 1.17.0 / bundle 2024.3
 # - FPGA firmware separate (FirmwareInventory 자동 cover)
-# - Accept-only 헤더 (2026-04-30 사이트 hotfix 패턴 준수)
+# - Accept-only 헤더 정책 (사이트 BMC 1.17.0 reject 회피)
 vendor_notes:
   generation: xcc3
   base_platform: openbmc
@@ -99,4 +99,4 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Lenovo XCC3 장비 (ThinkSystem V4) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."
+  not_supported_message: "Lenovo XCC3 장비 (ThinkSystem V4) — Redfish 완전 지원 가정."

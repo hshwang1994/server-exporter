@@ -20,4 +20,4 @@
 ## 미래 작업
 
 `schema/baseline_v1/hpe_csus_3200_baseline.json` 실측 baseline 추가 시
-본 디렉터리는 삭제 + `tests/baseline/test_hpe_csus_3200.py` 신설로 교체.
+본 디렉터리는 실측 baseline 으로 교체할 수 있다.

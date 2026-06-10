@@ -8,7 +8,7 @@ HPE 의 스케일업 서버 군 (CSUS 3200 / Superdome Flex / Flex 280) 은 단�
 
 > "supports large, partitionable systems managed by a **single aggregated controller like HPE Compute Scale-up Server 3200 RMC**."
 
-server-exporter 는 RMC primary 시스템의 전 Partition/Manager/Chassis 를 수집한다 (`data.multi_node` Additive 컨테이너).
+server-exporter 는 RMC primary 시스템의 전 Partition/Manager/Chassis 를 수집한다 (`data.multi_node` 추가 전용 컨테이너 — 기존 9 section 외에 별도로 채워지는 영역).
 
 CSUS 3200 Redfish 모델 전체를 수집한다 — nPartition 별 부팅 순서(`partitions[].boot`), chassis 별 Thermal(`chassis[].thermal`, Power 와 쌍), RMC LogServices(`managers[].log_services`), CompositionService/ResourceBlocks(`multi_node.composition` — 각 ResourceBlock ↔ chassis 대응), Fabrics/FlexGrid(`multi_node.fabrics` — NUMAlink Switches+Endpoints). 상세 shape 는 `docs/20_json-schema-fields.md` 9절 (`data.multi_node` 확장 컴포넌트) 참조.
 
@@ -55,7 +55,7 @@ HPE community 게시물 ([7200359 "impossible to get redfish answer from superdo
 
 ## 4. RMC Redfish 활성화 절차
 
-> sd00002765en_us (HPE Compute Scale-up Server 3200 Administration Guide) 및 [HPE Server Management Portal](https://servermanagementportal.ext.hpe.com/docs/concepts/gettingstarted) 기반. 사이트 실측 시 본 절 정정 의무.
+> sd00002765en_us (HPE Compute Scale-up Server 3200 Administration Guide) 및 [HPE Server Management Portal](https://servermanagementportal.ext.hpe.com/docs/concepts/gettingstarted) 기반. 사이트 실측 시 본 절 정정 가능.
 
 ### 4.1 라이선스 / Subscription 확인
 

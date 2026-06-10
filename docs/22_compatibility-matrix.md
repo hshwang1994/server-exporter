@@ -105,7 +105,7 @@ baseline 을 가진 lab tested 벤더 4개 (Dell iDRAC9 / HPE iLO6 / Lenovo XCC 
 ## 칸을 격상 / 격하하는 절차
 
 - `OK★` → `OK` — 실장비 검증 후 `schema/baseline_v1/<vendor>_baseline.json` 추가
-- `GAP` → `FB` — 호환성 fallback 코드 추가 (Additive only — 기존 동작 유지)
+- `GAP` → `FB` — 호환성 fallback 코드 추가 (기존 동작 유지, 추가만)
 - `BLOCK` → `OK★` — 사이트 fixture 캡처 + adapter capabilities 명시
 - `?` → `OK★` / `GAP` — 벤더 공식 문서 / DMTF 스펙 확인 후 결정
 
@@ -117,7 +117,7 @@ baseline 을 가진 lab tested 벤더 4개 (Dell iDRAC9 / HPE iLO6 / Lenovo XCC 
 | 2026-05-01 | 신 세대 BMC 7종 + 호환성 fallback 22건 일괄 | iDRAC 7 / 10, iLO 7, XCC v3, X12~14, UCS X-Series — 신규 row |
 | 2026-05-01 | 신규 4 vendor 도입 | Huawei / Inspur / Fujitsu / Quanta — 신규 row |
 | 2026-05-01 | Lenovo XCC 권한 캐시 fix | XCC v3 auth recovery `BLOCK` → `OK★` |
-| 2026-05-06 | 호환성 fallback 9 라인 (Additive only) | 칸 자체는 불변 (기존 path 유지 + 새 fallback path 추가) |
+| 2026-05-06 | 호환성 fallback 9 라인 (추가만) | 칸 자체는 불변 (기존 path 유지 + 새 fallback path 추가) |
 | 2026-05-06 | HPE Superdome Flex 추가 | 신규 row (HPE sub-line) |
 
 ---

@@ -18,10 +18,10 @@
 #     펌웨어 prefix: "AFBT*" / "CDI*" 등 model-specific
 #   - XCC2 (ThinkSystem V3, 2020-2024): DSP0268 v1.10+
 #     펌웨어 prefix: "USX*" / "TAOT*" 등 (V3 신 모델)
-#     header 정책 보수적 — 2026-04-30 사이트 사고 (1.17.0 reject) 동일 정책 가능
-# HTTP 헤더 정책 (2026-04-30 사이트 사고 관측):
+#     header 정책 보수적 — 2026-04-30 사이트 이슈 (1.17.0 reject) 동일 정책 가능
+# HTTP 헤더 정책 (2026-04-30 사이트 이슈 관측):
 #   - 사이트 XCC2 일부 펌웨어 (1.17.0) Accept + OData-Version + User-Agent reject
-#   - "Accept만" 으로 정정 (사이트 실측 우선)
+#   - "Accept만" 사용 (사이트 실측 우선)
 #   - XCC1 / XCC2 모두 보수적 header 정책 의무 (redfish_gather.py _get() 공통 정책 사용)
 # OEM namespace: Oem.Lenovo (모든 세대)
 # 검증 기준 (실측 2026-04-28, Round 11):
@@ -42,7 +42,7 @@ match:
   vendor: ["Lenovo", "LENOVO"]
   # XCC1 / XCC2 만 cover. XCC3 는 lenovo_xcc3.yml (priority=120) 우선.
   # firmware_patterns 는 XCC + V2/V3 model 시그니처. 점수 동률 시 XCC3 priority 가 높아 자동 우선.
-  # XCC1 + XCC2 명시적 매트릭스 (Additive only — 새 adapter 신설 회피):
+  # XCC1 + XCC2 명시적 매트릭스 (단일 adapter 에서 두 세대 cover):
   firmware_patterns:
     - "XCC"          # XCC 모든 세대 (XCC1 + XCC2 cover. XCC3 는 lenovo_xcc3.yml 우선)
     - "AFBT*"        # XCC1 ThinkSystem V2 시기 펌웨어 prefix (e.g., AFBT58B)

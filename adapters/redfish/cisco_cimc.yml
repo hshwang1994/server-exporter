@@ -21,7 +21,7 @@
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/release/notes/b_release-notes-for-cisco-ucs-rack-server-software-release-4_3_5.html
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/release/notes/b_release-notes-for-cisco-ucs-rack-server-software-release-4_3_6.html
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/c/sw/api/3_0/b_Cisco_IMC_REST_API_guide_301/m_redfish_api_examples.html
-# 검증 기준 (실측 2026-04-29, cisco-critical-review):
+# 검증 기준 (실측 2026-04-29):
 #   - TA-UNODE-G1 (Cisco Systems Inc) × 1대
 #   - CIMC FirmwareVersion: "4.1(2g)"
 #   - BIOS: C220M4.4.1.2c.0.0202211901 (UCS C220 M4 계열)

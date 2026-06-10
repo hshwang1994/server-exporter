@@ -1,18 +1,15 @@
-"""HP CSUS 3200 사이트 사고 회귀 — vendor=hp 오선택 + hardware null fix.
+"""HP CSUS 3200 회귀 — vendor=hp 오선택 + hardware null 방지.
 
-사이트 실측: HPE Compute Scale-up Server 3200 (CSUS 3200)
-수집 시 envelope vendor='hp' (→ 'hpCsus' 여야 함) + data.hardware.vendor/model=null.
+대상: HPE Compute Scale-up Server 3200 (CSUS 3200)
+수집 시 envelope vendor 는 'hpCsus' 여야 하고 data.hardware.vendor/model 은 null 이 아니어야 한다.
 
-근본 원인 (실 adapter 시뮬레이션):
-  - 무인증 probe 벤더 감지에 "Compute Scale-up Server 3200" 시그니처 부재.
-  - hpe_ilo6 (priority=100) 은 model_patterns 부재라 절대 실격 안 됨 → 구 CSUS(96)/
-    Superdome(95) 가 모델 매치해도 priority 로 패배.
-  - gather_system 이 System.Manufacturer/Model 부재 시 Chassis 폴백 없음.
-
-Fix:
+검증 동작:
+  - 무인증 probe 벤더 감지가 "Compute Scale-up Server 3200" 시그니처를 인식.
+  - hpe_ilo6 (priority=100) 은 model_patterns 부재라 실격되지 않으므로, CSUS(102)/
+    Superdome(101) 이 iLO6 catch-all 위에 위치해 모델 매치 우선권을 가짐.
   - _BMC_PRODUCT_HINTS 에 'compute scale-up server' / 'csus 3200' → 'hpe' (복합 키만).
-  - hpe_csus_3200 priority 96→102, hpe_superdome_flex 95→101 (iLO6 catch-all 위).
-  - gather_system Chassis.Manufacturer/Model 폴백 (result 값 None 일 때만, Additive).
+  - gather_system 이 System.Manufacturer/Model 부재 시 Chassis.Manufacturer/Model 로 폴백
+    (result 값이 None 일 때만).
 
 본 테스트는 실 adapter YAML + 실 adapter_common 점수 + 실 gather_system 코드로 검증 (mock 입력).
 """
@@ -130,7 +127,7 @@ def test_superdome_model_selects_superdome_firmware_empty():
     assert _out_vendor(winner, "hpe") == "hpCsus"
 
 
-# ── 무회귀: 정상 HPE / Dell ──────────────────────────────────────────────────
+# ── 회귀: 정상 HPE / Dell ──────────────────────────────────────────────────
 
 
 def test_normal_proliant_gen11_still_ilo6():
@@ -204,7 +201,7 @@ def test_a1_chassis_fallback_fills_null_hardware(monkeypatch):
 
 
 def test_a1_does_not_override_present_values(monkeypatch):
-    """정상 Dell: System 값 존재 → Chassis 가 덮어쓰지 않음 (무회귀)."""
+    """정상 Dell: System 값 존재 → Chassis 가 덮어쓰지 않음 (회귀 차단)."""
     _patch_get(
         monkeypatch,
         {"Manufacturer": "Dell Inc.", "Model": "PowerEdge R760", "SerialNumber": "S", "UUID": "u2"},
@@ -248,7 +245,7 @@ def test_a1b_serviceroot_product_model_fallback(monkeypatch):
 
 
 def test_a1b_product_ignored_when_system_model_present(monkeypatch):
-    """정상 vendor: System.Model 존재 → product_hint 무시 (무회귀)."""
+    """정상 vendor: System.Model 존재 → product_hint 무시 (회귀 차단)."""
     _patch_get(
         monkeypatch,
         {"Manufacturer": "Dell Inc.", "Model": "PowerEdge R760", "SerialNumber": "S", "UUID": "u2"},
@@ -285,7 +282,7 @@ def test_bugc_cpu_model_fallback_jinja_render():
     # CSUS partition: per-proc 비고 ProcessorSummary.Model 만
     a = t.render(_rf_d_cpus=[], _rf_d_system={"cpu_summary": {"model": "Intel(R) Xeon(R) Gold 6142 Processor"}})
     assert a.strip() == "Intel(R) Xeon(R) Gold 6142 Processor"
-    # 정상 vendor: per-proc model 우선 (summary 무시 — 무회귀)
+    # 정상 vendor: per-proc model 우선 (summary 무시)
     b = t.render(_rf_d_cpus=[{"model": "Intel(R) Xeon(R) Gold 6430"}], _rf_d_system={"cpu_summary": {"model": "X"}})
     assert b.strip() == "Intel(R) Xeon(R) Gold 6430"
     # 둘 다 없으면 None

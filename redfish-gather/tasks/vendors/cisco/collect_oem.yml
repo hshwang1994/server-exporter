@@ -17,7 +17,7 @@
 #   - Oem.Cisco.FaultEvents        — Cisco-specific fault aggregation
 #
 # CIMC 1.x 는 OEM 영역 약함 — rescue block 으로 graceful degradation
-# Additive only — UCS X-series 사이트 검증 envelope shape 변경 0
+# 기존 표준 섹션 안에서만 확장 — envelope 키는 그대로 유지
 
 - name: "redfish | cisco | collect_oem — best-effort"
   block:

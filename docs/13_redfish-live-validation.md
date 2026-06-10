@@ -408,7 +408,7 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 | 5 | lenovo_imm2.yml | `+ power` (A2) |
 | 6 | huawei/inspur/fujitsu/quanta_*.yml | `- users` 4 곳 제거 (sections.yml channels=[os] 정합) |
 
-→ **9 라인 변경 (Additive only)** + pytest 294/294 PASS + envelope 13 필드 변경 0.
+→ **9 라인 변경 (기존 capabilities 에 추가만, 기존 동작 유지)** + pytest 294/294 PASS + envelope 13 필드는 그대로 유지.
 
 ### 15-4. HPE Superdome Flex 추가
 
@@ -457,7 +457,7 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 - 8 Redfish + 7 OS + 3 ESXi 통합 검증 commit `0a485823` 에 PASS 기록
 - 본 검증 시점 baseline_v1 4 vendor (Dell/HPE/Lenovo/Cisco) 갱신
 
-#### 사이트 사고 / 학습 (reverse regression)
+#### 사이트 이슈 / 학습 (reverse regression)
 
 - Lenovo XCC3 펌웨어 1.17.0 — Accept + OData-Version + User-Agent 추가 시 reject
 - "Accept 만" 으로 hotfix (사이트 실측 > spec)
@@ -493,7 +493,7 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 | Supermicro | H11 ~ H14 (AMD) | 부재 | adapter X11~X14 model_patterns 확장 | [PENDING] |
 | Supermicro | **X10 (신설)** | 부재 | adapter supermicro_x10.yml (priority=75) | [PENDING] |
 | Supermicro | **ARS (ARM, 신설)** | 부재 | adapter supermicro_ars.yml (priority=80) | [PENDING] |
-| **HPE** | **Compute Scale-up Server 3200 (CSUS 3200, 신설)** | **부재 (lab 도입 시 별도 검증)** | **adapter hpe_csus_3200.yml (priority=96 → 현재 102, docs/10 §3.5) + HPE OEM tasks 재사용 (regex 확장 Additive)** | **[PENDING]** |
+| **HPE** | **Compute Scale-up Server 3200 (CSUS 3200, 신설)** | **부재 (lab 도입 시 별도 검증)** | **adapter hpe_csus_3200.yml (priority=96 → 현재 102, docs/10 §3.5) + HPE OEM tasks 재사용 (regex 확장 — 기존 매칭에 추가만)** | **[PENDING]** |
 | Huawei | iBMC 1.x ~ 5.x + Atlas | 부재 | adapter huawei_ibmc.yml + OEM tasks + mock | [PENDING] |
 | Inspur | ISBMC | 부재 | adapter inspur_isbmc.yml + OEM tasks + mock | [PENDING] |
 | Fujitsu | iRMC S2 | 부재 (Redfish 미지원 가능성) | adapter fujitsu_irmc.yml (firmware_patterns) | [SKIP] |
@@ -522,10 +522,10 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 - **Redfish**: 표준 (RMC = API host) + HPE OneView profile 동시 지원
 - **adapter**: `adapters/redfish/hpe_csus_3200.yml` (priority=96 → 현재 102 — Superdome Flex 95→101 직상, docs/10 §3.5)
 - **OEM tasks**: HPE 공통 (`redfish-gather/tasks/vendors/hpe/{collect,normalize}_oem.yml`) 재사용
-- **regex 확장**: `(?i)Superdome|Flex` → `(?i)Superdome|Flex|Compute Scale-up|CSUS` (Additive only)
+- **regex 확장**: `(?i)Superdome|Flex` → `(?i)Superdome|Flex|Compute Scale-up|CSUS` (기존 매칭에 추가만, 기존 동작 유지)
 - **vault profile**: `hpe` 재사용 (향후 분리 가능)
 - **web sources 7건** (adapter 헤더 origin 주석)
-- **lab 도입 후 검증**: `hpe-csus-3200-lab-validation` round (후속 작업 등재)
+- **lab 도입 후 검증**: 실장비 확보 시 별도 검증 round 권장
 
 ### 16.4 all-vendor-coverage 산출 요약
 
@@ -565,7 +565,7 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 
 | 대상 | 상태 | 비고 |
 |---|---|---|
-| HPE CSUS 3200 | **mock baseline (미검증)** | 전 공통 섹션 realistic mock 작성 (FC HBA + RAID1 SATA + DDR5 + 3 partition). web evidence (HPE Superdome Flex Admin Guide P/N 10-192008-Q123 등). **사이트 RMC 실측 시 정정 의무** |
+| HPE CSUS 3200 | **mock baseline (미검증)** | 전 공통 섹션 realistic mock 작성 (FC HBA + RAID1 SATA + DDR5 + 3 partition). 공식 문서 근거 (HPE Superdome Flex Admin Guide P/N 10-192008-Q123 등). 사이트 RMC 실측 시 정정 가능 |
 | FC HBA (전 vendor) | **미검증** | redfish/os/windows baseline 은 lab FC 부재로 빈. esxi_baseline 은 offline FC 2 (Cisco UCS VIC). |
 | InfiniBand | **미검증** | Linux sysfs 가 정본 채널. lab IB HCA 부재. |
 

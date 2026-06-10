@@ -519,7 +519,7 @@ python3 tests/validate_field_dictionary.py
 
 > Redfish 채널은 `system` / `users` 가 보통 `not_supported` (OS 정보는 OS 채널 담당). 신세대 모델(iDRAC10 / iLO7 등)은 `memory.slots[].base_module_type`, `hardware.tpm`, `network.adapters[]` / `network.ports[]`, `firmware[].category`, `power.summary` 등 더 풍부한 필드를 채운다 — `schema/output_examples/redfish_dell_idrac10.jsonc` 참조.
 
-> **멀티노드 (CSUS / Superdome RMC)**: HPE Compute Scale-up Server 처럼 RMC 가 여러 파티션을 관리하는 장비는 `data.multi_node` (Additive 컨테이너) 에 partitions / managers / chassis 가 추가로 채워진다 — `schema/output_examples/redfish_hpe_csus_3200.jsonc` 참조.
+> **멀티노드 (CSUS / Superdome RMC)**: HPE Compute Scale-up Server 처럼 RMC 가 여러 파티션을 관리하는 장비는 `data.multi_node` (추가 전용 컨테이너 — 기존 9 section 외에 별도로 채워지는 영역) 에 partitions / managers / chassis 가 추가로 채워진다 — `schema/output_examples/redfish_hpe_csus_3200.jsonc` 참조.
 
 ---
 

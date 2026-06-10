@@ -11,7 +11,7 @@
 | `tests/regression/` | Cross-channel 회귀 | baseline 추가 / envelope 변경 |
 | `tests/integration/` | 오프라인 회귀 (HPE iLO 에뮬레이터 + DMTF 표준 mockup replay + robustness round 회귀). Jenkins Stage 4 (`Jenkinsfile`) 가 `-m "not live"` 로 실행 | 펌웨어 robustness 라운드 / mutation |
 | `tests/redfish-probe/` | 실장비 probe 스크립트 (probe_redfish + deep_probe) | 새 vendor / 펌웨어 |
-| `tests/fixtures/` | mock 회귀 입력 (실 BMC 응답 sanitize) | 사이트 사고 / 사이트 fixture 캡처 |
+| `tests/fixtures/` | mock 회귀 입력 (실 BMC 응답 sanitize) | 사이트 이슈 / 사이트 fixture 캡처 |
 | `tests/scripts/` | 보조 검증 스크립트 (conditional_review 등) | Jenkins Stage 4 보조 |
 | `tests/e2e_browser/` | BMC WebUI 브라우저 테스트 (선택) | BMC WebUI 변경 |
 

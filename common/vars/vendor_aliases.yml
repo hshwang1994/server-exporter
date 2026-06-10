@@ -58,8 +58,7 @@ vendor_aliases:
     - "CISCO"
     - "cisco"
 
-  # ── 신규 4 vendor (lab 부재) ─────────
-  # vault 단계 SKIP. lab/사이트 도입 시 vault 만 추가.
+  # ── 신규 4 vendor — vault 미설정(향후 추가 가능) ─────────
   huawei:
     - "Huawei"
     - "HUAWEI"
@@ -104,7 +103,7 @@ vendor_aliases:
 #   - esxi-gather/site.yml     (_out_vendor: vendor_output_display)
 #   - os-gather/site.yml       (raw-fallback inline 매핑 — 동일 결정값을 mirror)
 #
-# 결정 근거: 이전 "CSUS 별도 vendor 불필요" 방침을 이후 supersede.
+# CSUS 계열은 별도 표시값(hpCsus)으로 노출한다.
 
 # 내부 canonical → 호출자 노출값 (전 채널 공통)
 vendor_output_display:

@@ -80,4 +80,4 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Supermicro ARS (ARM) 계열 — Redfish 완전 지원 가정 (lab 부재 — web sources 기반). Processor.InstructionSet=ARM-A64 응답 가정."
+  not_supported_message: "Supermicro ARS (ARM) 계열 — Redfish 완전 지원 가정. Processor.InstructionSet=ARM-A64 응답 가정."

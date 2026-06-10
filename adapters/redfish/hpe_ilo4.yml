@@ -15,9 +15,9 @@
 # Lab status: 부재 — iLO 7 만 사이트 검증 (iLO 4 lab 도입 시 fixture 캡처)
 # Storage strategy: smart_storage_only (legacy SmartStorage path)
 #   - 표준 Storage path 미지원 — /Systems/{id}/SmartStorage 만 사용
-#   - SimpleStorage fallback 코드 적용 — Additive only
+#   - SimpleStorage fallback 경로 지원
 # Power strategy: Power deprecated only
-#   - PowerSubsystem→Power fallback 적용 — Additive only
+#   - PowerSubsystem→Power fallback 경로 지원
 # OEM namespace: Oem.Hp (iLO 4 시기 — iLO 5+ 'Oem.Hpe' rebrand 전)
 #   - HPE OEM tasks (vendors/hpe/) 가 Oem.Hp / Oem.Hpe 양쪽 fallback 처리
 # 검증 기준: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json 참조
@@ -38,10 +38,10 @@ capabilities:
     - bmc
     - cpu
     - memory
-    - storage  # SimpleStorage fallback 코드 적용 — Additive only
+    - storage  # SimpleStorage fallback 경로 지원
     - network
     - firmware
-    - power    # PowerSubsystem→Power fallback 적용 — Additive only
+    - power    # PowerSubsystem→Power fallback 경로 지원
 
 collect:
   strategy: standard_plus_oem

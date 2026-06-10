@@ -15,9 +15,9 @@
 # Lab status: 부재 — XCC3 만 사이트 검증 (IMM2 lab 도입 시 fixture 캡처)
 # Storage strategy: standard_with_simple_fallback
 #   - IMM2 일부 펌웨어 SimpleStorage path 만 지원 (1.x ~ 2.x 펌웨어)
-#   - SimpleStorage fallback 코드 적용 — Additive only
+#   - SimpleStorage fallback 경로 지원
 # Power strategy: Power deprecated path only (PowerSubsystem 미도입 시기)
-#   - PowerSubsystem→Power fallback 적용 — Additive only
+#   - PowerSubsystem→Power fallback 경로 지원
 # OEM namespace: Oem.Lenovo (IBM IMM2 → Lenovo IMM2 인수 후 동일)
 # History note: IBM IMM2 → Lenovo IMM2 (2014 System x 인수 후) — Manufacturer 'IBM' 포함
 # 검증 기준:
@@ -42,10 +42,10 @@ capabilities:
     - bmc
     - cpu
     - memory
-    - storage  # SimpleStorage fallback 코드 적용 — Additive only
+    - storage  # SimpleStorage fallback 경로 지원
     - network
     - firmware
-    - power    # PowerSubsystem→Power fallback 적용 — Additive only
+    - power    # PowerSubsystem→Power fallback 경로 지원
 
 collect:
   strategy: standard_plus_oem

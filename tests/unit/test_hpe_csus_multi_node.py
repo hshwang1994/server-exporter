@@ -5,7 +5,7 @@
 × 3-chassis 시나리오) 으로 lab 부재 환경 회귀 차단.
 
 검증 항목:
-1. manager_layout=None → multi_node=None (기존 13 vendor 영향 0)
+1. manager_layout=None → multi_node=None (기존 vendor 동작 유지)
 2. manager_layout='rmc_primary' + 멀티 manager → 전 manager 추출 + RMC primary 라벨
 3. manager_layout='rmc_primary_ilo_secondary' + RMC+PDHC+iLO5 → 라벨 분기 (RMC/PDHC/iLO)
 4. multi-partition 전수 수집 — partitions[].id 모두 추출
@@ -154,7 +154,7 @@ def _patch_get(monkeypatch, extra=None) -> None:
 
 
 def test_multi_node_topology_disabled_when_layout_none(monkeypatch) -> None:
-    """manager_layout=None → None 반환 (기존 13 vendor 영향 0)."""
+    """manager_layout=None → None 반환 (기존 vendor 동작 유지)."""
     _patch_get(monkeypatch)
     service_root = {
         "Systems":  {"@odata.id": "/redfish/v1/Systems"},

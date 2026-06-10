@@ -19,7 +19,7 @@
   block:
 
     - name: "redfish | try_account | attempt"
-      # manager_layout 인자 전달 (Additive).
+      # manager_layout 인자 전달.
       # adapter `vendor_notes.manager_layout` 정의 vendor (HPE CSUS 3200 / Superdome
       # Flex) 만 멀티-노드 토폴로지 활성. 다른 vendor 는 빈 문자열 → 모듈이 None 처리.
       redfish_gather:

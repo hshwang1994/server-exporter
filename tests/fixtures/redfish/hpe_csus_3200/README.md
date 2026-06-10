@@ -1,6 +1,6 @@
 # HPE Compute Scale-up Server 3200 (CSUS 3200) Mock Fixture
 
-> Lab 부재 — Web Sources 합성. 사이트 실측 후 정정 의무.
+> Lab 부재 — web sources 합성. 사이트 실측 시 정정 가능.
 
 ## 메타
 
@@ -59,7 +59,7 @@ HPE community 게시물 7200359 ("impossible to get redfish answer from superdom
 ## 한계
 
 - 사이트 실측 부재 → 모든 fixture 합성 (Confidence MED)
-- ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema → 실장비 도입 후 정정 의무
+- ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema → 실장비 도입 시 정정 가능
 - pytest 통과 = 합성 fixture 통과 ≠ 사이트 실측 통과
 
 ## 후속 작업

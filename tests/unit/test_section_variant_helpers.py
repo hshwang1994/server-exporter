@@ -1,10 +1,10 @@
 """Regression — section variant helpers.
 
 목적: storage SmartStorage, power dual-emit dedup, OEM namespace unified,
-NIC OCP/SR-IOV, RoleId enum / DIMM label 의 Additive helper 함수가
-기대대로 동작하는지 + 호출자 envelope 영향 0 검증.
+NIC OCP/SR-IOV, RoleId enum / DIMM label 의 helper 함수가
+기대대로 동작하는지 검증.
 
-모든 helper 는 raw dict 만 반환. envelope shape 변경 없음.
+모든 helper 는 raw dict 만 반환하며 출력 envelope 의 구조에는 관여하지 않는다.
 OEM namespace 직접 의존 영역 (Redfish API spec).
 """
 from __future__ import annotations
@@ -389,14 +389,14 @@ def test_normalize_dimm_label_none():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Smoke: envelope shape 변경 0 (Additive 검증)
+# Smoke: helper 들이 출력 envelope 구조에 관여하지 않음
 # ──────────────────────────────────────────────────────────────────────────────
 
 
 def test_helpers_do_not_export_new_envelope_keys():
     """추가 helper 들이 모듈 top-level 에 envelope 키 영향 없음 검증.
 
-    호출자 envelope 13 필드 변경 0 / data.<section>.<field> 신규 키 추가 0.
+    호출자 envelope 13 필드와 data.<section>.<field> 키는 그대로 유지된다.
     """
     # 새 helper 들이 모두 underscore prefix (internal only)
     new_helpers = [

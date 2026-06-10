@@ -21,17 +21,16 @@
 # source: https://redfish.dmtf.org/schemas/DSP0266_1.15.0.html — Specification v1.15
 # source: https://thelinuxcluster.com/2020/05/06/upgrading-firmware-for-super-dome-flex/ — RMC firmware 3.10.164
 # source: https://hewlettpackard.github.io/ilo-rest-api-docs/ilo5/ — iLO 5 API reference
-# 정정 추적: Manufacturer string / ServiceRoot.Product 사이트 실측 시 정정 가능
+# Manufacturer string / ServiceRoot.Product 은 사이트 실측 시 정정 가능
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_superdome_flex
 channel: redfish
 priority: 101
-# priority 차등 (일관성) — 2026-06-04 (HP CSUS 3200 사이트 사고) 갱신:
+# priority 차등 (일관성):
 #   iLO 7 (120) > CSUS 3200 (102) = Superdome Flex (101) > iLO 6 (100) > iLO 5 (90) > iLO 4 (50) > generic (10)
-#   변경 이유: hpe_ilo6 (priority=100) 은 model_patterns 부재라 실격되지 않음 → 구 Superdome(95) 가
-#     모델("Superdome Flex")을 매치해도 priority 로 패배. scale-up 2 종을 iLO 6(100) 위로 올려 모델 매치 우선권 부여.
-#   정상 ProLiant 는 scale-up model_patterns 미매치 → 실격되어 iLO 5/6/7 자동 선택 (무회귀 — 검증 완료).
-#   적용 2026-06-04.
+#   근거: hpe_ilo6 (priority=100) 은 model_patterns 부재라 firmware-only catch-all 로 항상 매치됨.
+#     scale-up 2 종을 iLO 6(100) 위로 두어 모델("Superdome Flex") 매치에 우선권 부여.
+#   정상 ProLiant 는 scale-up model_patterns 미매치 → 실격되어 iLO 5/6/7 자동 선택.
 
 match:
   vendor: ["HPE", "Hewlett Packard Enterprise"]
@@ -103,4 +102,4 @@ diagnosis:
   not_supported_message: >-
     HPE Superdome Flex / Flex 280 — RMC + iLO 5 dual-manager, multi-partition (nPAR).
     전 partition / 전 manager / 전 chassis 수집 활성.
-    data.multi_node 컨테이너에 partitions / managers / chassis 리스트 노출 (Additive).
+    data.multi_node 컨테이너에 partitions / managers / chassis 리스트 노출.

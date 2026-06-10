@@ -39,7 +39,7 @@
       {{ out }}
   no_log: true
 
-# 2026-04-29 cisco-critical-review: BMC NIC NameServers / IPv4 Gateway 추출
+# BMC NIC NameServers / IPv4 Gateway 추출
 # (envelope 비노출 — dns_servers / default_gateways 정규화 전용 임시 변수).
 # redfish_gather.py gather_bmc 가 result['_network_meta'] 로 emit. _rf_d_bmc_clean 은
 # envelope 의 data.bmc 에 들어갈 dict 에서 _network_meta 임시 키를 제거한 결과.
@@ -62,8 +62,7 @@
 # ── network ──────────────────────────────────────────────────────────────────
 - name: "redfish | normalize_standard | interfaces"
   ansible.builtin.set_fact:
-    # 2026-04-29 hpe-critical-review: is_primary 가 항상 false (이전: hardcoded false).
-    # 첫 LinkUp + IPv4 가 있는 NIC 1건을 primary 로 표시. IPv4 가 모두 비어 있는
+    # is_primary 표시: 첫 LinkUp + IPv4 가 있는 NIC 1건을 primary 로 표시. IPv4 가 모두 비어 있는
     # 환경 (HPE iLO host NIC 한계) 에서는 첫 LinkUp NIC 만으로 fallback.
     # ns.primary_marked: 한 번만 true 부여 보장.
     _rf_norm_interfaces: >-
@@ -111,7 +110,7 @@
 
 - name: "redfish | normalize_standard | aggregate gateways + dns_servers"
   ansible.builtin.set_fact:
-    # 2026-04-29 cisco-critical-review: BMC NIC IPv4Addresses[*].Gateway 도 합침.
+    # BMC NIC IPv4Addresses[*].Gateway 도 합침.
     # Cisco 등 server NIC 에 IPv4 정보가 없는 vendor 도 default_gateways 가 채워진다.
     _rf_norm_gateways: >-
       {%- set gws = [] -%}
@@ -130,11 +129,10 @@
         {%- endif -%}
       {%- endfor -%}
       {{ gws }}
-    # 2026-04-29 cisco-critical-review: dns_servers 신설 — BMC NIC NameServers /
-    # StaticNameServers union (이전: [] 하드코딩).
-    # 2026-04-29 hpe-critical-review: HPE iLO 6 실측 StaticNameServers 가
+    # dns_servers — BMC NIC NameServers / StaticNameServers union.
+    # HPE iLO 6 실측 StaticNameServers 가
     # ['0.0.0.0','0.0.0.0','0.0.0.0','::','::','::'] 형태 (placeholder) 로 응답 →
-    # IPv4 unset(0.0.0.0) / IPv6 unset(::) 필터링 추가.
+    # IPv4 unset(0.0.0.0) / IPv6 unset(::) 필터링.
     _rf_norm_dns: >-
       {%- set out = [] -%}
       {%- set placeholders = ['0.0.0.0', '::', '', none] -%}
@@ -481,11 +479,11 @@
         logical_threads: >-
           {%- set s = (_rf_d_cpus | map(attribute='total_threads') | select | list | sum) if _rf_d_cpus else 0 -%}
           {{ s if s else (_rf_d_system.cpu_summary | default({})).logical_processor_count | default(none) }}
-        # BUG-C fix (2026-06-04, HP CSUS 3200): per-processor list 가 비면 (Superdome/CSUS
+        # HP CSUS 3200: per-processor list 가 비면 (Superdome/CSUS
         # partition System 은 /Processors drill-in 부재 — sdflexutils system.json 실측:
         # Processors/Memory/Storage/EthernetInterfaces sub-collection 부재, ProcessorSummary 만 존재)
-        # System.ProcessorSummary.Model fallback. Additive — 정상 vendor 는 per-proc 우선.
-        # (sockets/cores/threads 는 이미 BUG-13 fallback 존재 — 위 473~482. model 만 누락이었음.)
+        # System.ProcessorSummary.Model fallback. 정상 vendor 는 per-proc 우선.
+        # (sockets/cores/threads 는 위 473~482 의 fallback 으로 처리.)
         model: >-
           {%- set _m = _rf_d_cpus | map(attribute='model') | select | list | first | default(none) -%}
           {{ _m if _m else (_rf_d_system.cpu_summary | default({})).model | default(none) }}
@@ -495,7 +493,7 @@
           {{ _rf_d_cpus | map(attribute='architecture') | select | list | first | default(_rf_d_cpus | map(attribute='instruction_set') | select | list | first | default(none)) }}
         summary: "{{ _rf_summary_cpu | default({'groups': []}) }}"
       memory:
-        # BUG-14 fix: per-DIMM CapacityMiB sum 이 0/None 이면
+        # per-DIMM CapacityMiB sum 이 0/None 이면
         # System.MemorySummary.TotalSystemMemoryGiB * 1024 fallback.
         # 일부 펌웨어/Absent 슬롯 다수 환경에서 per-DIMM 합산이 0 이 되는 케이스 방어.
         total_mb: >-
@@ -537,9 +535,9 @@
           {{ none }}
         {%- endif -%}
       # HPE CSUS 3200 / Superdome Flex RMC primary
-      # 멀티-노드 토폴로지 수집 결과 (Additive 신 키). manager_layout 미정의 vendor 는
-      # None — `data.multi_node = null` 로 envelope 에 emit (13 vendor 영향 0).
-      # envelope 13 필드 shape 변경 0 + Additive only.
+      # 멀티-노드 토폴로지 수집 결과 (신 키). manager_layout 미정의 vendor 는
+      # None — `data.multi_node = null` 로 envelope 에 emit.
+      # envelope 13 필드 shape 는 그대로 유지한다.
       multi_node: "{{ _rf_raw_collect.multi_node | default(none) }}"
     _sections_supported_fragment: >-
       {{ ['hardware','bmc','cpu','memory','storage','network','firmware','power'] }}

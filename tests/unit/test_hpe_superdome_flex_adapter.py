@@ -57,11 +57,10 @@ def test_adapter_required_keys() -> None:
 def test_priority_above_ilo6_below_ilo7() -> None:
     """priority=101 — iLO 6 (100) < Superdome Flex (101) < iLO 7 (120). priority 일관성.
 
-    구 95 → 101 상향.
-    이유: hpe_ilo6 (100) 은 model_patterns 부재라 절대 실격되지 않아, 구 95 Superdome 이
-    모델("Superdome Flex")을 매치해도 priority 로 패배 → 사이트에서 vendor=hp 오선택.
-    scale-up 2 종(CSUS 102 / Superdome 101)을 iLO 6(100) 위로 올려 모델 매치 우선권 부여.
-    정상 ProLiant 는 scale-up model_patterns 미매치 → 실격되어 iLO 5/6/7 자동 선택 (무회귀).
+    hpe_ilo6 (100) 은 model_patterns 부재라 실격되지 않으므로, Superdome 이
+    모델("Superdome Flex")을 매치해도 priority 가 낮으면 패배 → vendor=hp 오선택.
+    scale-up 2 종(CSUS 102 / Superdome 101)을 iLO 6(100) 위에 두어 모델 매치 우선권 부여.
+    정상 ProLiant 는 scale-up model_patterns 미매치 → 실격되어 iLO 5/6/7 자동 선택.
     """
     d = yaml.safe_load(ADAPTER_PATH.read_text(encoding="utf-8"))
     assert d.get("priority") == 101, (

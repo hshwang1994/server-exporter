@@ -24,11 +24,11 @@
 
 - FC/IB 분류를 DMTF `PortProtocol`/`LinkNetworkTechnology`/`NetDevFuncType` 기반으로 정정 (PortType 사용 금지). WWPN/WWNN/GUID 는 NetworkDeviceFunction 에서.
 - 전 채널 통일 canonical shape + `source` 필드. CSUS 전 Partition canonical 정규화 + realistic mock baseline.
-- D1=ESXi API-only / D2=Linux 보강 / D3=Additive (schema_version "1" 유지, field_dictionary 74→83).
+- D1=ESXi API-only / D2=Linux 보강 / D3=추가만 (schema_version "1" 유지, field_dictionary 74→83).
 
 ### 영향
 
-- Additive only (envelope 13 필드 / 기존 path 변경 0). 4 채널 gather + redfish library + field_dictionary + esxi/csus baseline + docs/20.
+- 추가만 (envelope 13 필드와 기존 path 는 그대로 유지). 4 채널 gather + redfish library + field_dictionary + esxi/csus baseline + docs/20.
 - esxi_baseline hbas 5→2 (FC 만 — 동일 raw 재분류, SATA AHCI/SAS RAID 제외).
 
 ### 회귀
@@ -43,7 +43,7 @@
 ### 배경 (2026-05-12)
 
 - HPE Compute Scale-up Server(CSUS) 3200 의 Redfish API 통신은 RMC(Rack Management Controller)를 통해 수행된다. CSUS 장비를 개더링할 수 있도록 계획 필요. 기존 CSUS 수집 방식이 RMC 모델과 맞지 않아 CSUS 지원 방식을 전면 재검토. 테스트 장비 부재로 web 확인.
-- 결정 4건: (1) 전 Partition / Manager / Chassis 수집 (대형 변경) / (2) 권위 인용으로 외부 계약 보강 / (3) RMC 분리 — adapter capability 기반 분기 (Additive) / (4) lab 부재 — web sources only
+- 결정 4건: (1) 전 Partition / Manager / Chassis 수집 (대형 변경) / (2) 권위 인용으로 외부 계약 보강 / (3) RMC 분리 — adapter capability 기반 분기 (기존 동작에 추가만) / (4) lab 부재 — 공식 문서 (web) 기반
 
 ### 컨텍스트
 
@@ -54,18 +54,18 @@
 - `bmc_names['hpe'] = 'iLO'` (line 1308) — RMC primary 시스템이 `bmc.name = 'iLO'` 로 잘못 출력
 - ServiceRoot 실패 시 graceful fail 부재 — HPE community 7200359 "Error getting service root, aborting" 사례
 
-HPE 공식 인용 (WebSearch 2026-05-12): "supports large, partitionable systems managed by a single aggregated controller like HPE Compute Scale-up Server 3200 RMC. supports full nPar (Partitioning)."
+HPE 공식 인용 (웹 검색, 2026-05-12): "supports large, partitionable systems managed by a single aggregated controller like HPE Compute Scale-up Server 3200 RMC. supports full nPar (Partitioning)."
 
 ### 결정 (8종)
 
-1. **envelope 표현 — Option C**: `data.multi_node` Additive 단일 컨테이너 + 기존 9 section path 100% 보존 (`data.system`/`data.bmc`/... 변경 0)
+1. **envelope 표현 — Option C**: `data.multi_node` 단일 컨테이너를 추가하고 기존 9 section path (`data.system`/`data.bmc`/...) 는 그대로 유지
 2. **코드 리팩토링 — 변형 1**: `gather_*_multi()` 함수 신설 + 기존 함수 그대로 유지
 3. **RMC 라벨**: adapter `vendor_notes.manager_layout` 을 `redfish_gather.py` 까지 전달 + `_classify_rmc_label` substring 매칭
-4. **precheck graceful fail**: `diagnosis.details.rmc_activation_check` + `multi_node_layout` Additive + `docs/22_rmc-activation-guide.md` 신규
+4. **precheck graceful fail**: `diagnosis.details.rmc_activation_check` + `multi_node_layout` 추가 + `docs/22_rmc-activation-guide.md` 신규
 5. **mock fixture 합성**: 3-partition × 4-manager × 3-chassis (sdflexutils + DMTF v1.15 + iLO5 API ref 3-source cross-check) + README 출처 매핑
 6. **baseline 경로**: `tests/expected/redfish/hpe_csus_3200/mock_v1.json` 별도 경로 — `schema/baseline_v1/` 는 lab 도입 시까지 미작성 (실측 baseline 보호)
-7. **derived 추가**: 기존 baseline 9종 `data.multi_node: null` Additive (summary inject 패턴 재사용)
-8. **후속 작업 등재**: 사이트 fixture / baseline / lab 검증 / vault / Product 실측 / Member ID 실측 / Oem schema 실측 / 활성화 요구 실측
+7. **derived 추가**: 기존 baseline 9종에 `data.multi_node: null` 추가 (summary inject 패턴 재사용)
+8. **후속 검증 권장**: 사이트 fixture / baseline / lab 검증 / vault / Product 실측 / Member ID 실측 / Oem schema 실측 / 활성화 요구 실측
 
 ### 대안 거절 사유
 
@@ -92,26 +92,26 @@ HPE 공식 인용 (WebSearch 2026-05-12): "supports large, partitionable systems
 
 | 영역 | 변경 |
 |---|---|
-| `redfish-gather/library/redfish_gather.py` | `_resolve_all_member_uris` / `gather_systems_multi` / `gather_managers_multi` / `gather_chassis_multi` / `_classify_rmc_label` / `_collect_multi_node_topology` 신설 (Additive). `gather_bmc` 에 `manager_layout` 옵션 인자 |
+| `redfish-gather/library/redfish_gather.py` | `_resolve_all_member_uris` / `gather_systems_multi` / `gather_managers_multi` / `gather_chassis_multi` / `_classify_rmc_label` / `_collect_multi_node_topology` 신설 (기존 함수 유지, 추가만). `gather_bmc` 에 `manager_layout` 옵션 인자 |
 | `redfish-gather/tasks/{detect_vendor,collect_standard,try_one_account,normalize_standard}.yml` | `_rf_adapter_manager_layout` fact + `manager_layout` 인자 전달 + `_data_fragment.multi_node` 조립 |
 | `redfish-gather/tasks/vendors/hpe/{collect,normalize}_oem.yml` | 멀티 partition loop (`systems[0]` → 전수) |
-| `adapters/redfish/hpe_csus_3200.yml` / `hpe_superdome_flex.yml` | vendor_notes 정정 ("첫 partition 만 수집" 표현 제거, `multi_node_support: true` Additive) |
+| `adapters/redfish/hpe_csus_3200.yml` / `hpe_superdome_flex.yml` | vendor_notes 갱신 ("첫 partition 만 수집" 표현 제거, `multi_node_support: true` 추가) |
 | `schema/field_dictionary.yml` | `data.multi_node.*` 8~12 nice entries 추가 |
 | `schema/baseline_v1/*.json` (9종) | `data.multi_node: null` derived 추가 |
 | `tests/fixtures/redfish/hpe_csus_3200/` | 신규 17 fixture (3-partition × 4-manager × 3-chassis) |
 | `tests/fixtures/redfish/hpe_superdome_flex/` | Partition1/2 + Expansion 보강 |
 | `tests/expected/redfish/hpe_csus_3200/mock_v1.json` | 신규 (fixture-derived expected) |
-| `tests/redfish/test_{hpe_csus_multi_node,resolve_all_members,classify_rmc_label}.py` | 신규 3 단위 테스트 |
+| `tests/unit/test_*.py` | 신규 3 단위 테스트 (hpe_csus_multi_node / resolve_all_members / classify_rmc_label) |
 | `docs/20_json-schema-fields.md` | multi_node 절 추가 (docs/20 동기화) |
 | `docs/22_rmc-activation-guide.md` | 신규 — RMC 활성화 절차 + community 7200359 트러블슈팅 |
 
 ### 검증
 
-Additive 검증 체크리스트:
-- envelope 13 필드 shape 변경 0
-- sections 10 변경 0
+검증 체크리스트:
+- envelope 13 필드 shape 그대로 유지
+- sections 10 그대로 유지
 - field_dictionary 65 → +8~12 nice entries
-- 13 vendor 회귀 0 (manager_layout 미정의 vendor 의 `data.multi_node = null` 외 변경 0)
+- 13 vendor 회귀 통과 (manager_layout 미정의 vendor 는 `data.multi_node = null` 만 추가되고 나머지는 그대로 유지)
 
 ### 관련
 
@@ -140,7 +140,7 @@ Supermicro 공식 docs / DMTF web 검색 후 결정.
 
 #### 적용 사항
 
-- **`adapters/redfish/supermicro_x12.yml` L27 `priority: 90 → 100`** (X11/X13 와 일관성). model_patterns 정확 매칭 시 결과 동일 (Additive). lab 부재라 사이트 영향 0.
+- **`adapters/redfish/supermicro_x12.yml` L27 `priority: 90 → 100`** (X11/X13 와 일관성). model_patterns 가 정확히 매칭되면 선택 결과는 동일하다. lab 부재라 사이트 동작에 영향 없음.
 - origin 주석 갱신 — Last sync 2026-05-11 + 사유 + 보류분 결정 명시.
 
 #### 보류 사항
@@ -171,7 +171,7 @@ Supermicro X11~X14 firmware_patterns 추가는 **보류**. 근거:
 ### 검증
 
 - pytest 신규 12 시나리오 + priority test PASS
-- 기존 626 회귀 영향 0 (관련 회귀 PASS)
+- 기존 626 회귀 영향 없음 (관련 회귀 PASS)
 - ansible syntax-check redfish-gather/site.yml PASS
 
 ### 관련
@@ -187,7 +187,7 @@ Supermicro X11~X14 firmware_patterns 추가는 **보류**. 근거:
 ### 배경 (2026-05-11)
 - HPE CSUS 장비 개더링 요구 발생.
 - CSUS = HPE Compute Scale-up Server 3200 / lab 부재 — web sources only / BMC 정보 미상
-- 결정 3종 (priority=96 / vault profile=hpe 재사용 / OEM regex 확장 Additive) 모두 적용
+- 결정 3종 (priority=96 / vault profile=hpe 재사용 / OEM regex 확장 — 기존 매칭에 추가만) 모두 적용
 
 ### 컨텍스트
 
@@ -196,14 +196,14 @@ CSUS3200 매칭 패턴이 부재하여 현재 `hpe_ilo.yml` (priority=10) generi
 ### 결정
 
 1. **별도 adapter 파일 신설** ("새 모델 = 새 adapter") — `adapters/redfish/hpe_csus_3200.yml` 신규
-2. **priority = 96** — Superdome Flex (95) 직상, iLO 6 (100) 직하. model_patterns 분리로 ProLiant 영향 0 (점수 일관성)
-3. **HPE 공통 OEM tasks 재사용** — `redfish-gather/tasks/vendors/hpe/{collect,normalize}_oem.yml` 의 model regex 확장 (Additive only):
+2. **priority = 96** — Superdome Flex (95) 직상, iLO 6 (100) 직하. model_patterns 분리로 ProLiant 는 영향받지 않음 (점수 일관성)
+3. **HPE 공통 OEM tasks 재사용** — `redfish-gather/tasks/vendors/hpe/{collect,normalize}_oem.yml` 의 model regex 확장 (기존 매칭에 추가만):
    - 기존: `(?i)Superdome|Flex`
    - 변경: `(?i)Superdome|Flex|Compute Scale-up|CSUS`
-   - fragment field name (`oem_hpe_superdome`) 유지 — envelope shape 영향 0
+   - fragment field name (`oem_hpe_superdome`) 유지 — envelope shape 변동 없음
 4. **vault profile = "hpe" 재사용** — 별도 `vault/redfish/hpe_csus.yml` 분리는 후속 등재
 5. **baseline / fixture SKIP** (lab 부재). 후속 작업 4 항목 등재
-6. **firmware_patterns 추정**: `^[34]\\.[0-9]+\\..*` (RMC 3.x/4.x — Superdome Flex 2.x/3.x 후속, 사이트 실측 시 정정)
+6. **firmware_patterns 추정**: `^[34]\\.[0-9]+\\..*` (RMC 3.x/4.x — Superdome Flex 2.x/3.x 후속, 사이트 실측 시 정정 가능)
 
 ### 대안 거절 사유
 
@@ -211,15 +211,15 @@ CSUS3200 매칭 패턴이 부재하여 현재 `hpe_ilo.yml` (priority=10) generi
 |---|---|
 | Superdome Flex adapter 의 model_patterns 만 확장 | CSUS3200 은 DDR5 신라인 + RMC firmware 세대 다름. 펌웨어/모델 매트릭스 추적 흐려짐. Round 검증 후 별도 baseline 필요 |
 | 새 HPE sub-vendor 신설 (`hpe_csus` 별도) | HPE 동일 vendor (Manufacturer = "HPE / Hewlett Packard Enterprise"). vendor_aliases.yml 변경 불필요. **(2026-06-04 refine: 내부 canonical 은 여전히 `hpe` 로 유지하되, 출력 표시값만 `hpCsus` 로 분기 — 본 거절 사유는 canonical 차원에서 유효)** |
-| OEM tasks 별도 분리 (collect_csus_oem.yml 신설) | Oem.Hpe namespace 동일 + PartitionInfo/FlexNodeInfo 상속. 재사용이 단순 + Additive 검증 용이 |
+| OEM tasks 별도 분리 (collect_csus_oem.yml 신설) | Oem.Hpe namespace 동일 + PartitionInfo/FlexNodeInfo 상속. 재사용이 단순하고 기존 동작을 유지하기 쉬움 |
 
 ### 적용 변경
 
 | 영역 | 변경 |
 |---|---|
 | `adapters/redfish/hpe_csus_3200.yml` | 신규 (priority=96, web sources 7건 origin 주석) |
-| `redfish-gather/tasks/vendors/hpe/collect_oem.yml` | model regex 확장 (Additive) + 주석 갱신 |
-| `redfish-gather/tasks/vendors/hpe/normalize_oem.yml` | model regex 확장 (Additive) + 주석 갱신 |
+| `redfish-gather/tasks/vendors/hpe/collect_oem.yml` | model regex 확장 (기존 매칭에 추가만) + 주석 갱신 |
+| `redfish-gather/tasks/vendors/hpe/normalize_oem.yml` | model regex 확장 (기존 매칭에 추가만) + 주석 갱신 |
 | `docs/13_redfish-live-validation.md` | 16.3 / 16.3.1 항목 추가 |
 
 ### Web Sources (lab 부재 vendor 의무, 확인 2026-05-11)
@@ -236,7 +236,7 @@ CSUS3200 매칭 패턴이 부재하여 현재 `hpe_ilo.yml` (priority=10) generi
 
 - 정적: `ansible-playbook --syntax-check redfish-gather/site.yml` / yamllint
 - 동적: adapter 점수 mock — CSUS 3200 / ProLiant Gen11 (회귀) / Superdome Flex 280 (회귀) 각각 올바른 adapter 선택 확인
-- 회귀: HPE baseline (`hpe_baseline.json` — DL380 Gen11 iLO 6) 통과 (model_patterns 분리로 영향 0)
+- 회귀: HPE baseline (`hpe_baseline.json` — DL380 Gen11 iLO 6) 통과 (model_patterns 분리로 영향 없음)
 
 ---
 
@@ -311,12 +311,12 @@ Gen12 OEM 정보 (Oem.Hpe.SystemInformation 등) 수집 실패.
 
 ### 결정
 
-1. **`hpe_ilo7.yml` L43 firmware_patterns 확장 (Additive only)**:
+1. **`hpe_ilo7.yml` L43 firmware_patterns 확장 (기존 패턴 유지, 추가만)**:
    - 기존: `["iLO.*7", "^\\d+\\.\\d+\\.\\d+"]`
    - 변경: `["iLO.*7", "^\\d+\\.\\d+\\.\\d+", "^1\\.1[0-9]"]`
    - `^1\.1[0-9]` (1.10~1.19) 명시 — 충돌 검증:
-     - iLO 4 `^1\.[0-9]` (한자리 minor 1.0~1.9): 충돌 0
-     - iLO 6 `^1\.[5-9]` (한자리 minor 1.5~1.9): 충돌 0
+     - iLO 4 `^1\.[0-9]` (한자리 minor 1.0~1.9): 충돌 없음
+     - iLO 6 `^1\.[5-9]` (한자리 minor 1.5~1.9): 충돌 없음
 2. **origin 주석 보강** — mock 갭 재현 기록 + 미래 1.20+ 2-part 사이트 실측 위임 명시
 3. **회귀 보존 5 시나리오 검증**:
    - S1 (1.10) → iLO 7 (fix 효과)
@@ -355,7 +355,7 @@ Gen12 OEM 정보 (Oem.Hpe.SystemInformation 등) 수집 실패.
 
 - iLO 7 Gen12 사이트 fixture 캡처 (`tests/fixtures/redfish/hpe_ilo7/` — facts.firmware 실측 형식 확정)
 - 1.20+ 2-part 변형 발견 시 firmware_patterns 추가 정정
-- 사이트 사고 발생 시 reverse regression 검토 (사이트 실측 > spec)
+- 사이트 이슈 발생 시 reverse regression 검토 (사이트 실측 > spec)
 
 ---
 
@@ -412,18 +412,18 @@ vendor default 계정 자동 생성 path 보장 후속 검증 중 `dell_idrac10.
 
 총 변경 line: 94 insertions / 39 deletions (29 file). vault 변경 0.
 
-### 원칙 준수
+### 변경 범위
 
-- **Additive only** — adapter declare entry **추가만**. 코드 로직 / collect / normalize / match 불변
-- **envelope shape 변경 0** — adapter declare 텍스트만 변경. 호출자 시스템 파싱 영향 0
-- **vault 자동 반영 영향 0** — cacheable / fact_caching / decrypt 캐시 모두 0 유지
+- **추가만** — adapter declare entry 를 **추가**할 뿐, 코드 로직 / collect / normalize / match 는 그대로 유지
+- **envelope shape 유지** — adapter declare 텍스트만 변경. 기존 호출자 시스템의 파싱 방식은 바뀌지 않음
+- **vault 자동 반영 유지** — cacheable / fact_caching / decrypt 캐시 모두 사용 안 함
 
 ### 효과
 
 - **label 우선 매칭 활성화** — `account_service.yml:31-41` chain 의 label match (line 32-35) 가 즉시 hit → username fallback (line 37-39) 추가 시도 회피. multi-vendor 환경에서 try_one_account 시도 회수 감소 (성능 향상)
 - **label mismatch 해제** — 9 vendor 전수 (Dell + HPE + Lenovo 14 adapter mismatch 해제)
 - **6 vendor recovery_accounts 채움** — Supermicro/Cisco/Huawei/Inspur/Fujitsu/Quanta `[]` → 1+ entry (`*_factory`)
-- **호출자 영향 0** — envelope shape 불변
+- **호출자 동작 유지** — envelope shape 그대로 유지
 
 ### 검증
 
@@ -478,8 +478,8 @@ vendor default 계정 자동 생성 path 보장 후속 검증 중 `dell_idrac10.
 ### 검증
 
 - pytest 335/335 PASS
-- envelope 13 필드 / sections 10 / field_dictionary 65 — 변경 없음 (Additive only)
-- 호출자 시스템 파싱 변경 0
+- envelope 13 필드 / sections 10 / field_dictionary 65 — 변경 없음 (추가만)
+- 기존 호출자 시스템의 파싱 방식은 바뀌지 않음
 
 ### 후속
 
@@ -509,20 +509,20 @@ build_status.yml 판정 로직 (정본 인라인 Jinja2): **errors[] 는 보지 
 
 | 결정 | 선택 | 근거 |
 |---|---|---|
-| (1) 시나리오 B 처리 | **B-1 (현재 동작 유지)** | 의도된 설계 + Additive only + envelope shape 보존 |
+| (1) 시나리오 B 처리 | **B-1 (현재 동작 유지)** | 의도된 설계 + 기존 동작 유지 + envelope shape 보존 |
 | (2) errors[] severity | **(a) 유지** | Fragment 5 변수 / 타입 + envelope 13 필드 + 3채널 27+ 위치 영향 → 별도 작업 영역 |
 | (3) status_rules.yml | **(c) 유지** | DEAD CODE 명시 주석 "삭제 금지 / 향후 reserved" |
 | (4) status enum | **(a) 3 enum 유지** | envelope 13 필드 정본 + 호환성 외 schema 확장 별도 작업 |
 
-→ **Case A 채택** — 의도된 동작 명시 only (Additive 주석/문서 강화).
+→ **Case A 채택** — 의도된 동작 명시만 (주석/문서 강화, 동작 변경 없음).
 
 ### 영향
 
-- 코드 동작 변경: **0건**
-- envelope 13 필드: **변경 0** (보존)
+- 코드 동작 변경: **없음**
+- envelope 13 필드: **변경 없음** (보존)
 - status enum: **3종 유지** (success / partial / failed)
-- 9 vendor baseline 회귀: **영향 0**
-- 호출자 시스템 파싱: **영향 0**
+- 9 vendor baseline 회귀: **영향 없음**
+- 호출자 시스템 파싱: **영향 없음**
 
 ### 후속 작업
 
@@ -535,14 +535,14 @@ build_status.yml 판정 로직 (정본 인라인 Jinja2): **errors[] 는 보지 
 ### 대안 비교
 
 - **Case B (B-2 + ?)**: errors non-empty → overall=partial. 거절 이유: 모든 vendor baseline 회귀 fail (success → partial 전환), 호출자 partial 대응 로직 추가 필요, 호환성 외 영역
-- **Case C (B-3 + (b) + (b))**: 4 enum + severity 도입. 거절 이유: envelope schema 변경 (승인 필요), 3채널 27+ 위치 영향, Additive only 영역 외 — 별도 작업 승인 후 진행 영역
+- **Case C (B-3 + (b) + (b))**: 4 enum + severity 도입. 거절 이유: envelope schema 변경 (승인 필요), 3채널 27+ 위치 영향, 단순 추가 범위를 넘어섬 — 별도 작업 승인 후 진행 영역
 
 ### 정본 참조
 
 - envelope 13 필드 — status 필드 정본 보존
 - Fragment 5 변수 / 타입 정본 — 변경 안 함
 - status_rules.yml 유지 (DEAD CODE)
-- Additive only
+- 동작 변경 없이 추가만
 - schema 변경 승인 필요 — Case C 거절 이유
 - 호환성 외 envelope shape 변경 자제
 
@@ -641,7 +641,7 @@ agent 10.100.64.154 SSH + 진단 playbook (`tests/scripts/diag_esxi_raw.yml`) �
 - `default_gateways=[]` / `dns_servers=[]` — vmware_host_facts 미반환 / host_config_info 빈 응답 (vmware_host_dns_info 모듈 추가 필요)
 - `speed_mbps` int / "N/A" string 혼재
 - `cpu.architecture` / `max_speed_mhz` null (model 파싱 폴백 가능)
-- `include_vars` `name:` reserved-name 경고 (호출자 영향 0)
+- `include_vars` `name:` reserved-name 경고 (호출자 동작에는 영향 없음)
 
 ---
 

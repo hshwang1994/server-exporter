@@ -72,4 +72,4 @@ graceful_degradation:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Dell iDRAC 10 장비 (PowerEdge 17G) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."
+  not_supported_message: "Dell iDRAC 10 장비 (PowerEdge 17G) — Redfish 완전 지원 가정."

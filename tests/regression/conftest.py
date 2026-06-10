@@ -30,7 +30,7 @@ BASELINE_REGISTRY: list[tuple[str, str, str, str]] = [
     # CSUS 3200 은 lab 부재 — 아래는 FABRICATED MOCK (실장비 미검증).
     # envelope SHAPE 회귀에만 포함 (multi_node 구조 검증용). 실측 baseline 아님.
     # 내부 일관성 가드: tests/regression/test_csus_mock_consistency.py
-    # 사이트 fixture 캡처 후 실측 baseline 으로 교체 의무.
+    # 사이트 fixture 캡처 후 실측 baseline 으로 교체 가능.
     ("hpe_csus_3200_redfish_MOCK", "redfish", "redfish_api", "hpe_csus_3200_baseline.json"),
     ("ubuntu_os", "os", "agent", "ubuntu_baseline.json"),
     ("windows_os", "os", "agent", "windows_baseline.json"),

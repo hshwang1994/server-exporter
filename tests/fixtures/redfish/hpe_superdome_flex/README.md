@@ -56,7 +56,7 @@
   - `_hpe_superdome_partition` → `Oem.Hpe.PartitionInfo` (Systems)
   - `_hpe_superdome_flex_node` → `Oem.Hpe.FlexNodeInfo` (Chassis)
   - `_hpe_superdome_global` → `Oem.Hpe.GlobalConfiguration` (Systems)
-- iLO 시리즈 mock (사이트 검증 iLO7 등) 영향 0 — `regex_search('(?i)Superdome|Flex')` when 조건 매칭 안 됨 (Additive)
+- iLO 시리즈 mock (사이트 검증 iLO7 등) 미간섭 — `regex_search('(?i)Superdome|Flex')` when 조건이 매칭되지 않음
 - multi-node 수집: 전 partition → `data.multi_node.partitions[]`, `representative_partition` = partitions[0]
 
 ## 변형 가능성 (사이트 도입 시 정정)

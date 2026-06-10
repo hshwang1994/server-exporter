@@ -27,7 +27,7 @@
 # 검증 기준 (실측 2026-04-30, 사이트 site-A):
 #   - ProLiant Compute DL380 Gen12 (Redfish 1.20.0) — Stage 3 OK
 #   - 기타 site BMC (Redfish 1.17.0, Product 필드 부재) — HTTP 406 발생
-#     → http_get Accept/OData/User-Agent 헤더 명시 fix 후 통과 (2026-04-30)
+#     → http_get Accept/OData/User-Agent 헤더 명시로 통과
 # Next action: iLO 6 추가 펌웨어 (Gen11 1.30+ / Gen12 1.20+) lab 도입 후 PowerSubsystem dual 회귀 + SmartStorage fallback 검증
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_ilo6

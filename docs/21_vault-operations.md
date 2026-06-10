@@ -178,7 +178,7 @@ ansible-vault create vault/redfish/{vendor}.yml
 | primary username | `infraops` (모든 vendor 통일) |
 | primary password | `Password123!` (운영 통일값) |
 | vault password (ansible-vault) | `Goodmit0802!` |
-| recovery 정책 | vendor 공장 기본 자격 + (기존) lab/사이트 운영 자격 (Additive) |
+| recovery 정책 | vendor 공장 기본 자격 + (기존) lab/사이트 운영 자격 (기존 항목 유지, 추가) |
 
 ### vendor 별 recovery 자격 (공장 기본)
 
@@ -194,7 +194,7 @@ ansible-vault create vault/redfish/{vendor}.yml
 | **Fujitsu** | admin / admin | `fujitsu_factory` | Fujitsu PRIMERGY iRMC user guide |
 | **Quanta** | admin / admin | `quanta_factory` | Quanta QCT server user guide |
 
-### 기존 vendor 의 다중 recovery (보존 — Additive only)
+### 기존 vendor 의 다중 recovery (보존 — 기존 항목 유지, 추가만)
 
 5 사이트 검증 vendor 는 누적된 lab / 사이트 운영 자격이 보존됨:
 - **Dell**: 4 recovery (dell_fallback_1, dell_fallback_2, dell_current, lab_dell_root)
@@ -270,11 +270,11 @@ adapter (`adapters/redfish/{vendor}_*.yml`) 의 `credentials.recovery_accounts[*
 
 총 30 adapter (`redfish_generic.yml` 제외 — generic fallback 은 vendor 미상으로 `recovery_accounts: []` 유지).
 
-### 변경 원칙 (Additive only)
+### 변경 원칙 (기존 항목 유지, 추가만)
 
-adapter `recovery_accounts` 변경은 **Additive only** 의무:
+adapter `recovery_accounts` 변경은 **기존 항목을 유지하고 추가만** 하는 것을 원칙으로 한다:
 
-- **Allowed**: vault accounts 신규 추가 후 adapter 에 동일 label entry **추가** (Additive)
+- **Allowed**: vault accounts 신규 추가 후 adapter 에 동일 label entry **추가**
 - **Allowed**: adapter declare entry 순서 변경 (시도 순서는 vault accounts 순서로 결정 — adapter 순서 변경은 cosmetic)
 - **Forbidden**:
   - adapter 의 기존 label entry **삭제 / 리네임** (호환성 변경 외)

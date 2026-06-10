@@ -18,10 +18,10 @@
 #   - gather 시 표준 Storage path 우선 + SmartStorage fallback
 # Power strategy: Power deprecated path only (PowerSubsystem 미도입 시기)
 # OEM namespace: Oem.Hpe (iLO 5 시기부터 HPE rebrand)
-# 2026-04-30 호환성 (사이트 사고 hotfix):
+# 호환성 (사이트 이슈 대응):
 #   - 일부 펌웨어 (Redfish 1.17.0 등)는 HTTP 406 (Accept 헤더 명시 요구)
-#   - precheck/redfish_gather에 Accept/OData-Version/User-Agent 헤더 명시 fix
-#     (commit 4715bb5b 적용)
+#   - precheck/redfish_gather에 Accept/OData-Version/User-Agent 헤더 명시
+#     (commit 4715bb5b)
 # 검증 기준: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json 참조
 # Next action: lab 도입 후 Gen10 Plus 와 Gen10 응답 차이 확정
 # ──────────────────────────────────────────────────────────────────────────────

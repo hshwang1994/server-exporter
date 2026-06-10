@@ -510,7 +510,7 @@ _BMC_PRODUCT_HINTS = {
     # 부재 펌웨어 환경에서 BMC 제품명으로 정규화 강건성 향상.
     # source: HPE Superdome Flex Server Admin Guide + sdflexutils GitHub
     'superdome': 'hpe', 'superdome flex': 'hpe',
-    # 2026-06-04 (HP CSUS 3200 사이트 사고): RMC 가 ServiceRoot.Product/Name 에
+    # HP CSUS 3200: RMC 가 ServiceRoot.Product/Name 에
     # "Compute Scale-up Server 3200" 으로 응답 — Manufacturer/alias 시그니처 부재
     # 펌웨어에서 무인증 probe 벤더 감지 강건성 향상.
     # 복합 키만 사용 — 'csus'/'compute' 단독은 비-HPE Product/Name 와 substring 충돌
@@ -688,7 +688,7 @@ def _detect_vendor_from_service_root(root):
 
     Returns: vendor 문자열 ('dell', 'hpe', 'lenovo', 'supermicro', 'cisco') 또는 None
     """
-    # production-audit (2026-04-29): vendor_aliases.yml + fallback merge.
+    # vendor_aliases.yml + fallback merge.
     # 기존 _BUILTIN_VENDOR_MAP만 사용 시 YAML에 추가된 alias가 detect에 반영 안 되는 drift 차단.
     aliases_yaml = _load_vendor_aliases_file()
     vm = {**_FALLBACK_VENDOR_MAP, **aliases_yaml}
@@ -840,10 +840,10 @@ def _resolve_first_member_uri(bmc_ip, coll_uri, username, password, timeout, ver
 def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, verify_ssl):
     """컬렉션 URI → 모든 Members 의 @odata.id 추출.
 
-    `_resolve_first_member_uri` 의 Additive 확장. RMC (HPE Compute Scale-up Server 3200 /
+    `_resolve_first_member_uri` 의 확장. RMC (HPE Compute Scale-up Server 3200 /
     Superdome Flex) 같이 단일 진입점이 N개 Manager / N개 nPartition / N개 Chassis 를
-    노출하는 환경에서 전수 수집을 위해 신설. 기존 단일 노드 함수는 변경 0
-    (Additive only / production 위험 회피).
+    노출하는 환경에서 전수 수집을 위한 함수. 기존 단일 노드 함수는 그대로 두고
+    별도 경로로 동작한다.
 
     source:
       - HPE 공식: "supports large, partitionable systems managed by a single aggregated
@@ -883,13 +883,13 @@ def _classify_rmc_label(manager_uri, manager_id, manager_layout, is_first=True):
       - per-node iLO 5 → 'iLO'
 
     Allowed 영역 — line ~1559 `bmc_names` 매핑 (외부 spec 기반 표준 이름) 의
-    fallback path 확장. `manager_layout` None 시 기존 동작 100% 보존 (Additive).
+    fallback path 확장. `manager_layout` None 시 기존 동작을 그대로 유지한다.
 
-    (review): `is_first` 추가. layout-default 'RMC' 는 **첫 Manager**
-    에만 적용한다. 구: substring 미매치 Manager 가 전부 'RMC' 로 오라벨 + _classify_manager_role
-    의 role 과 불일치 (name='RMC' 인데 role=None). 비-first unmatched → None 반환 →
+    `is_first` 로 layout-default 'RMC' 는 **첫 Manager** 에만 적용한다.
+    substring 미매치 Manager 가 전부 'RMC' 로 오라벨되면 _classify_manager_role
+    의 role 과 불일치 (name='RMC' 인데 role=None) 한다. 비-first unmatched → None 반환 →
     호출자가 generic bmc_names[vendor] 사용. 비-documented manager ID (Managers/1 / Self)
-    환경에서 다중 RMC 오라벨 + name/role 모순 차단 (lab 부재 — 사이트 ID 패턴 향후 결정).
+    환경에서 다중 RMC 오라벨 + name/role 모순을 차단한다 (lab 부재 — 사이트 ID 패턴 향후 결정).
 
     source: HPE Superdome Flex Admin Guide + sdflexutils GitHub README
 
@@ -922,7 +922,7 @@ def _classify_manager_role(manager_uri, manager_id, manager_layout, is_first=Fal
       - 그 외 첫 Manager → primary, 비-first → secondary
       - layout 미정의 → None
 
-    (review): `is_first` 추가 — `_classify_rmc_label` 과 name/role 정합.
+    `is_first` 로 `_classify_rmc_label` 과 name/role 을 정합한다.
     첫 Manager unmatched → primary (RMC 가정), 비-first unmatched → secondary. substring
     매치(pdhc/ilo)는 position 무관 secondary (첫 슬롯이라도 PDHC/iLO 면 secondary).
 
@@ -1060,7 +1060,7 @@ def _extract_probe_facts(root, vendor):
 
     본 함수는 ServiceRoot (무인증 / 인증 fallback) 에서 vendor 별 semantic 을 알고
     safe 한 hint 만 추출. detect_vendor.yml 이 data.bmc/data.system 비어 있을 때
-    fallback 으로 사용 (Additive — 기존 path 변경 0).
+    fallback 으로 사용 (기존 path 는 그대로 두고 별도 경로로 동작).
 
     vendor 별 ServiceRoot semantic 차이
       HPE: ServiceRoot.Product = 서버 모델 (예: "ProLiant DL380 Gen11"),
@@ -1256,7 +1256,7 @@ def _hoist_oem_extras(oem_dict, target):
 # vendor 별 default role enum 변형을 5 표준 카테고리로 매핑.
 # 표준 카테고리: 'administrator' / 'operator' / 'readonly' / 'none' / 'custom'
 # Redfish AccountService spec enum 직접 의존.
-# Additive helper (호출자가 옵션 사용. envelope 영향 0).
+# 호출자가 옵션으로 사용하는 helper (envelope 키는 그대로 유지).
 _ROLE_ID_NORMALIZATION_MATRIX = {
     # Dell iDRAC 표준
     'administrator': 'administrator',
@@ -1284,7 +1284,7 @@ def _normalize_role_id(raw_role):
         normalized: 'administrator' / 'operator' / 'readonly' / 'none' / 'custom' / raw
                     (매트릭스에 없는 vendor-specific role 은 lowercase 그대로 보존)
 
-    Additive (호출자가 옵션 사용. envelope 영향 0).
+    호출자가 옵션으로 사용한다 (envelope 키는 그대로 유지).
     """
     if raw_role is None:
         return None
@@ -1308,7 +1308,7 @@ def _normalize_dimm_label(raw_label):
 
     Returns: normalized label (공백 구분) — 정보 손실 없음
 
-    Additive (호출자가 옵션 사용. raw label 도 함께 보존 권장).
+    호출자가 옵션으로 사용한다 (raw label 도 함께 보존 권장).
     """
     if raw_label is None:
         return None
@@ -1428,7 +1428,7 @@ _OEM_EXTRACTORS = {
 # 9 vendor 의 OEM namespace 변형 (Oem.Hp vs Oem.Hpe / Oem.Inspur vs Oem.Inspur_System
 # / Oem.ts_fujitsu vs Oem.Fujitsu / Oem.Quanta_Computer_Inc vs Oem.QCT) 한 번에 해석.
 # Redfish API spec OEM namespace 직접 의존 (vendor namespace 허용 영역).
-# Additive — 본 helper 는 raw dict 만 반환. envelope 영향 0.
+# 본 helper 는 raw dict 만 반환한다 (envelope 키 그대로 유지).
 _OEM_NAMESPACE_FALLBACK_CHAIN = (
     ('dell',       ('Dell',)),
     ('hpe',        ('Hpe', 'Hp')),  # iLO4 legacy
@@ -1461,7 +1461,7 @@ def _extract_oem_unified(data, expected_vendor=None):
         - matched_namespace: 'Dell' / 'Hp' / 'ts_fujitsu' / ... 또는 None
 
     Redfish API spec OEM namespace 직접 의존.
-    Additive helper. 호출자가 raw dict 사용. envelope shape 변경 0.
+    호출자가 raw dict 를 사용하는 helper (envelope 키는 그대로 유지).
     """
     if not isinstance(data, dict):
         return {}, None, None
@@ -1586,9 +1586,9 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
         # OEM dict 에서는 제거. 기존 envelope 키만 채움 — 새 키 추가 없음.
         result['oem'] = _hoist_oem_extras(raw_oem, result)
 
-    # A1 (2026-06-04, HP CSUS 3200 사이트 사고): Chassis 폴백 — System.Manufacturer/Model
-    # 부재(None) 시 이미 fetch 한 chassis_data(상단)에서 보충. Additive only
-    #   - result 값이 None 일 때만 발동 (정상 13 vendor 는 System.Manufacturer/Model 보유 → 미발동).
+    # HP CSUS 3200: Chassis 폴백 — System.Manufacturer/Model
+    # 부재(None) 시 이미 fetch 한 chassis_data(상단)에서 보충.
+    #   - result 값이 None 일 때만 발동 (정상 vendor 는 System.Manufacturer/Model 보유 → 미발동).
     #   - _strip_or_none 으로 '' → None 정규화 유지 (파이프라인 불변식: 빈 문자열 금지).
     #   - chassis 값이 strip 후 truthy 일 때만 대입 (None→None / ''→None 무의미 대입 방지).
     # 근거: HPE Scale-up (CSUS 3200 / Superdome Flex) RMC 는 Partition0 System.Manufacturer/
@@ -1628,8 +1628,8 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
       - GET {manager_uri}                            (예: /redfish/v1/Managers/1)
       - GET {manager_uri}/EthernetInterfaces (선택, BMC IP 추출)
 
-    `manager_layout` 옵션 인자 추가 (Additive).
-      - None (기본값) — 기존 동작 100% 보존. `bmc.name = bmc_names[vendor]` 통일.
+    `manager_layout` 옵션 인자.
+      - None (기본값) — 기존 동작을 그대로 유지. `bmc.name = bmc_names[vendor]` 통일.
       - 'rmc_primary' / 'rmc_primary_ilo_secondary' — `_classify_rmc_label` 우선 적용.
         Manager URI/ID substring (`rmc` / `pdhc` / `ilo`) 매칭 시 'RMC' / 'PDHC' / 'iLO'.
 
@@ -1651,7 +1651,7 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
                  'quanta': 'BMC'}
     # RMC primary 시스템 (HPE CSUS 3200 / Superdome Flex)
     # 라벨 분기 — manager_layout 정의 시 _classify_rmc_label 우선. None 일 때 기존 동작.
-    # (review): name(label) 과 role 가 동일 id 로 분류돼 모순 불가능하도록,
+    # name(label) 과 role 가 동일 id 로 분류돼 모순 불가능하도록,
     # multi 경로는 manager_id(=URI segment m['id']) 를 명시 전달 — _classify_manager_role 와
     # 동일 source. 단일 노드(manager_id=None)는 응답 body Id 사용 (기존 동작 보존).
     _mid = manager_id if manager_id is not None else _safe(data, 'Id')
@@ -1677,7 +1677,7 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     }
 
     # Manager EthernetInterfaces에서 BMC IP / MAC / FQDN + NameServers / Gateway 추출
-    # 2026-04-29 cisco-critical-review: BMC NIC 의 NameServers / IPv4Addresses[*].Gateway
+    # BMC NIC 의 NameServers / IPv4Addresses[*].Gateway
     # 를 envelope 비노출 임시 키 (_network_meta) 로 캐시한다. normalize_standard.yml 이
     # dns_servers / default_gateways 정규화에 사용 후 _network_meta 키 자체는 envelope
     # 에서 제거한다.
@@ -2220,16 +2220,16 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
                 'controller_health':       _safe(ctrl_data, 'Status', 'Health'),
             })
     # SmartStorage 는 logical volume (LogicalDrives) 별도 경로 — iLO4 fixture 부재로
-    # controllers + drives 만 수집 (Additive — 향후 lab fixture 추가 시 보강)
+    # controllers + drives 만 수집 (향후 lab fixture 확보 시 보강 가능)
     return controllers, [], errors
 
 
 def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
     """Storage 진입 — Storage → SimpleStorage → SmartStorage fallback dispatcher.
 
-    SmartStorage (HPE iLO4) fallback chain 추가 — Additive.
-    기존 Storage / SimpleStorage 분기 변경 0. SmartStorage 는 iLO4 legacy path 라
-    표준 / SimpleStorage 둘 다 404 일 때만 시도.
+    SmartStorage (HPE iLO4) fallback chain 을 포함한다.
+    기존 Storage / SimpleStorage 분기는 그대로 두고, SmartStorage 는 iLO4 legacy path 라
+    표준 / SimpleStorage 둘 다 404 일 때만 시도한다.
     """
     path = _p(system_uri) + '/Storage'
     st, coll, err = _get(bmc_ip, path, username, password, timeout, verify_ssl)
@@ -2246,7 +2246,7 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             errors.append(_err('storage', 'Storage 미지원, SimpleStorage fallback 사용'))
         else:
             # SmartStorage (HPE iLO4 OEM legacy) fallback —
-            # 표준/SimpleStorage 모두 404 시 HPE 구 path 시도 (Additive).
+            # 표준/SimpleStorage 모두 404 시 HPE 구 path 시도.
             ctrls, vols, smart_errors = _gather_smart_storage(
                 bmc_ip, system_uri, username, password, timeout, verify_ssl
             )
@@ -2314,7 +2314,7 @@ def _detect_nic_ocp_slot(adata):
     Returns: 'ocp' / 'pcie' / None (식별 불가)
 
     DSP0268 Location.PartLocation spec 직접 의존.
-    Additive helper (호출자가 사용. envelope 영향 0).
+    호출자가 사용하는 helper (envelope 키는 그대로 유지).
     """
     if not isinstance(adata, dict):
         return None
@@ -2347,7 +2347,7 @@ def _detect_nic_sriov_capable(adata):
     Returns: True / False / None (미응답)
 
     Redfish OEM spec 직접 의존.
-    Additive helper (envelope 영향 0).
+    호출자가 사용하는 helper (envelope 키는 그대로 유지).
     """
     if not isinstance(adata, dict):
         return None
@@ -2709,10 +2709,10 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
                 member = fw_data
         fw_id = _safe(member, 'Id') or (member_uri.rstrip('/').split('/')[-1]  # rstrip: 후행 슬래시 → 빈 id 방지 (Round 1 #13)
                                         if isinstance(member_uri, str) and member_uri else None)
-        # Q-14: Dell Previous- 항목 스킵 (비활성 이전 버전)
+        # Dell Previous- 항목 스킵 (비활성 이전 버전)
         if fw_id and isinstance(fw_id, str) and fw_id.startswith('Previous-'):
             continue
-        # 2026-04-29 cisco-critical-review: Cisco CIMC 의 "N/A" 빈 슬롯 (slot-1, slot-2
+        # Cisco CIMC 의 "N/A" 빈 슬롯 (slot-1, slot-2
         # 등 PCIe 미장착 슬롯) 노이즈 필터. Version 이 "N/A"/""/"NA" 면 firmware 컴포넌트가
         # 부재 — 호출자에게 노이즈로 전달되지 않도록 skip (기존 키 유지, list 길이만 정확).
         ver = _safe(member, 'Version')
@@ -2829,7 +2829,7 @@ def _merge_power_dual(legacy_result, subsystem_result):
     더 풍부).
 
     입력 dict shape 유지 — `power_supplies` + `power_control` 키만.
-    호출자 envelope 영향 0.
+    호출자가 보는 envelope 키는 그대로 유지한다.
 
     Returns: merged dict (power_supplies + power_control).
     """
@@ -2865,10 +2865,10 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
     /Power 404 시 /PowerSubsystem fallback (DMTF 2020.4 신 schema).
     Storage SimpleStorage fallback 패턴 따름 (gather_storage 참조).
 
-    dual-emit dedup helper (_merge_power_dual) 추가 (Additive).
+    dual-emit dedup helper (_merge_power_dual) 를 함께 둔다.
     현재 dispatcher 는 404 fallback only — dual emit 펌웨어 (iDRAC9 5.x / iLO5-6
     등) 의 PSU 중복 처리는 향후 adapter capability `power_strategy=dual` 활성화
-    시 본 helper 호출 (현재는 사이트 검증 4 vendor 영향 0 위해 wire 보류).
+    시 본 helper 를 호출한다 (현재는 미연결).
     """
     errors = []
     if not chassis_uri:
@@ -2886,7 +2886,7 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
         errors.append(_err('power', f'Power 정보 실패: {perr or st}'))
         return {}, errors
 
-    # 2026-04-29 cisco-critical-review: PSU 정격 (power_capacity_w) fallback —
+    # PSU 정격 (power_capacity_w) fallback —
     # Cisco CIMC / 일부 vendor 는 PowerSupplies[*].PowerCapacityWatts 를 응답하지 않고
     # InputRanges[0].OutputWattage 에 PSU 정격을 둔다. envelope 키는 그대로,
     # null 이던 값을 채운다.
@@ -2909,14 +2909,14 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
         })
 
     # PowerControl — system-level power consumption (Safe Common: 3 vendors verified)
-    # production-audit (2026-04-29): pdata가 dict가 아닌 list/None일 가능성 방어 (Cisco/Supermicro edge)
+    # pdata가 dict가 아닌 list/None일 가능성 방어 (Cisco/Supermicro edge)
     pc_list = (pdata.get('PowerControl') if isinstance(pdata, dict) else None) or []
     # Round 3 #0: 비-dict 원소 방어. Round 16: PowerControl 자체가 비-list(dict/int) 오염 시
     # pc_list[0] 가 KeyError(0)/TypeError → power 섹션 전체(이미 수집한 PSU 포함) 유실.
     # isinstance(pc_list, list) 추가로 컨테이너 타입까지 방어 (정상 list-of-dict 결과 불변).
     pc0 = pc_list[0] if (isinstance(pc_list, list) and pc_list and isinstance(pc_list[0], dict)) else {}
     pm = pc0.get('PowerMetrics') or {}
-    # 2026-04-29 cisco-critical-review: chassis level power_capacity_watts fallback —
+    # chassis level power_capacity_watts fallback —
     # Cisco 는 PowerControl[0].PowerCapacityWatts 를 null 응답. PSU power_capacity_w
     # 합산으로 fallback (PSU 770W × 2 = 1540W 형태).
     pc_capacity = _safe_int(_safe(pc0, 'PowerCapacityWatts'))  # Round 2: watt int 통일
@@ -2949,7 +2949,7 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
     source:
       - DMTF DSP0266 Thermal.v1 (legacy) + ThermalSubsystem.v1_0 (2020.4)
       - HPE Superdome Flex Admin Guide (chassis Thermal 표준 Redfish)
-    lab 부재 — 사이트 실측 시 정정 의무.
+    lab 부재 — 사이트 실측 시 정정 가능.
 
     Returns: (data_dict, errors_list)  — 빈 {} 시 Thermal 미지원 (graceful).
     """
@@ -3051,7 +3051,7 @@ def gather_boot(bmc_ip, system_uri, username, password, timeout, verify_ssl):
     설명 모델 요구 — "각 Systems/<id> (nPartition) 는 ... 부팅 순서 ... 를 포함".
     기존 gather_system 은 boot_progress (BootProgress.LastState) 만 추출 — 본 함수는
     Boot.BootOrder / BootSourceOverride* 를 별도 수집해 multi_node.partitions[].boot
-    로 노출 (Additive — 단일 노드 path / 13 vendor 영향 0).
+    로 노출한다 (단일 노드 path 는 그대로 동작).
 
     source: DMTF DSP0266 ComputerSystem.Boot (BootOrder /
       BootSourceOverrideTarget / BootSourceOverrideEnabled)
@@ -3063,7 +3063,7 @@ def gather_boot(bmc_ip, system_uri, username, password, timeout, verify_ssl):
     st, sdata, serr = _get(bmc_ip, _p(system_uri), username, password, timeout, verify_ssl)
     if serr or st != 200:
         # System GET 실패는 gather_system 이 이미 errors[] 에 보고 — boot 는 보조 정보라
-        # silent (중복 error noise → status 오분류 방지). self-review.
+        # silent (중복 error noise → status 오분류 방지).
         return {}, []
     boot = _safe(sdata, 'Boot')
     if not isinstance(boot, dict):  # Boot 미노출 / 비-dict 오염 방어
@@ -3142,8 +3142,8 @@ def gather_manager_logs(bmc_ip, manager_uri, username, password, timeout, verify
 
     설명 모델 요구 — "RMC 는 ... Services 와 Logs 리소스로 연결된다". 본 함수는
     LogServices 컬렉션 메타(각 LogService 의 id/name/정책)를 수집해
-    multi_node.managers[].log_services 로 노출 (Additive — 단일 노드 path /
-    13 vendor 영향 0). 로그 엔트리 자체(대용량)는 수집하지 않음 — 범위 외.
+    multi_node.managers[].log_services 로 노출한다 (단일 노드 path 는 그대로 동작).
+    로그 엔트리 자체(대용량)는 수집하지 않음 — 범위 외.
 
     source: DMTF DSP0266 LogService / LogServiceCollection
     Returns: (list_of_log_services, errors_list)  — 빈 [] 시 LogServices 미노출.
@@ -3154,7 +3154,7 @@ def gather_manager_logs(bmc_ip, manager_uri, username, password, timeout, verify
     st, mdata, merr = _get(bmc_ip, _p(manager_uri), username, password, timeout, verify_ssl)
     if merr or st != 200:
         # Manager GET 실패는 gather_bmc 가 이미 errors[] 에 보고 — log_services 는 보조
-        # 정보라 silent (중복 error noise 차단). self-review.
+        # 정보라 silent (중복 error noise 차단).
         return [], []
     ls_link = _safe(mdata, 'LogServices', '@odata.id')
     if not ls_link:
@@ -3189,8 +3189,8 @@ def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
     HPE CSUS 3200 / Superdome Flex 의 RMC + per-chassis PDHC + per-node iLO5 전수 수집.
     `manager_layout` 으로 `bmc.name` 라벨 분기 (RMC / PDHC / iLO).
 
-    Additive only — 기존 `gather_bmc` 함수 변경 0. 다른 vendor 영향 0
-    (이 함수는 manager_layout 정의된 vendor 만 호출).
+    기존 `gather_bmc` 함수는 그대로 두고 별도로 동작한다. 이 함수는
+    manager_layout 이 정의된 vendor 에서만 호출된다.
 
     Returns: {'managers': [{id, uri, role, bmc, log_services}], 'errors': [...]}
     """
@@ -3205,14 +3205,14 @@ def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
     # Round 16: multi-node 멤버 순회도 _capped DoS 상한 적용 (file 전역 컨벤션 일관 —
     # account/logs/composition/fabrics 와 동일). 실 BMC 멤버 수 << 상한 → 정상 결과 불변.
     for idx, m in enumerate(_capped(members, 'multi_node.managers', out['errors'])):
-        # (review): 첫 Manager 만 layout-default RMC/primary (다중 RMC
+        # 첫 Manager 만 layout-default RMC/primary (다중 RMC
         # 오라벨 + name/role 불일치 차단). substring 매치(rmc/pdhc/ilo)는 position 무관.
         is_first = (idx == 0)
         bmc_data, bmc_errs = gather_bmc(
             bmc_ip, m['uri'], vendor,
             username, password, timeout, verify_ssl,
             manager_layout=manager_layout, is_first=is_first,
-            manager_id=m['id'],  # role 와 동일 id source (name/role 모순 차단 — review)
+            manager_id=m['id'],  # role 와 동일 id source (name/role 모순 차단)
         )
         # Manager LogServices 수집 (설명 모델 "Services 와 Logs").
         logs_data, logs_errs = gather_manager_logs(
@@ -3261,7 +3261,7 @@ def _normalize_storage_raw(raw):
     multi_node.partitions[].storage 가 raw 로 노출되던 문제 해소.
     top-level normalize_standard.yml(Ansible) 과 동일 canonical shape 를 Python 에서 생성
     (multi_node 전용 parallel — 두 경로 모두 같은 schema 보장). hbas/infiniband 는 chassis
-    레벨 NetworkAdapter 소관이라 partition storage 에는 빈 list (Additive 자리만 유지).
+    레벨 NetworkAdapter 소관이라 partition storage 에는 빈 list (키 자리만 유지).
     """
     raw = raw if isinstance(raw, dict) else {}
     controllers_out, physical, seen = [], [], set()
@@ -3472,7 +3472,7 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
             'memory':     _normalize_memory_raw(mem_data),
             'storage':    _normalize_storage_raw(sto_data),
             'network':    _normalize_network_raw(net_data),
-            # boot order (Additive — Boot 미노출 시 {}).
+            # boot order (Boot 미노출 시 {}).
             'boot':       boot_data,
         })
         out['errors'].extend(sys_errs)
@@ -3515,7 +3515,7 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
         if not isinstance(cdata, dict):  # 비-dict 응답 오염 방어
             cdata = {}
         kind = _classify_chassis_kind(m['uri'], m['id'], cdata)
-        # (review): chassis GET 성공 시에만 Power/Thermal sub-GET.
+        # chassis GET 성공 시에만 Power/Thermal sub-GET.
         # 실패 chassis 에 doomed sub-GET (2 round-trip) + 중복 error noise 차단 — 멤버는
         # append (chassis_count 보존). 설명 모델 "Power 와 Thermal".
         if get_ok:
@@ -3535,7 +3535,7 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
             'serial_number': _safe(cdata, 'SerialNumber'),
             'part_number':   _safe(cdata, 'PartNumber'),
             'power':         pwr_data,
-            # thermal (Additive — Thermal 미노출 시 {}).
+            # thermal (Thermal 미노출 시 {}).
             'thermal':       thm_data,
         })
         out['errors'].extend(pwr_errs)
@@ -3550,14 +3550,14 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
     구성된다. 각 ResourceBlock 은 하나의 chassis 에 대응하고 CPU/DIMM 을 포함하며,
     ResourceBlock 의 ComputerSystems 링크가 조합된 nPartition 을 가리킨다.
 
-    multi_node.composition (Additive — manager_layout 정의 vendor 만 호출).
+    multi_node.composition (manager_layout 정의 vendor 만 호출).
     CompositionService 링크 부재 시 None (graceful — 대다수 vendor 는 미노출).
 
     source:
       - DMTF DSP0266 CompositionService / ResourceBlock
         (redfish.dmtf.org/schemas/v1/ResourceBlock.json)
       - HPE Compute Scale-up Server 3200 Administration Guide (nPartition = ResourceBlock 조합)
-    lab 부재 — 사이트 실측 시 정정 의무.
+    lab 부재 — 사이트 실측 시 정정 가능.
 
     Returns: (dict_or_None, errors_list)
     """
@@ -3616,7 +3616,7 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                     'computer_systems':     systems_links,
                 })
     return {
-        # (review): 비-dict/null 200 body 는 enabled=None (정직한 unknown).
+        # 비-dict/null 200 body 는 enabled=None (정직한 unknown).
         # dict 면 ServiceEnabled 누락 시 DMTF 관례상 True. sibling gather_manager_logs 와 정합.
         'enabled':              (bool(comp.get('ServiceEnabled', True)) if isinstance(comp, dict) else None),
         'state':                _safe(comp, 'Status', 'State'),
@@ -3670,13 +3670,13 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
     설명 모델 요구 — HPE CSUS 3200 은 NUMAlink fabric 을 표준 Redfish Fabric 모델로
     표현하며, FlexGrid Flex Fabric 은 Switches 와 Endpoints 를 사용한다 (Links/Zones 미사용).
 
-    multi_node.fabrics (Additive — manager_layout 정의 vendor 만 호출). Fabrics 링크
+    multi_node.fabrics (manager_layout 정의 vendor 만 호출). Fabrics 링크
     부재 시 None (graceful).
 
     source:
       - DMTF DSP0266 Fabric / Switch / Endpoint
       - HPE Compute Scale-up Server 3200 architecture (NUMAlink / FlexGrid)
-    lab 부재 — 사이트 실측 시 정정 의무.
+    lab 부재 — 사이트 실측 시 정정 가능.
 
     Returns: (list_of_fabrics_or_None, errors_list)
     """
@@ -3723,7 +3723,7 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
                                  manager_layout=None):
     """Multi-node topology 전수 수집.
 
-    `manager_layout` 미정의 (None) 시 None 반환 — 기존 13 vendor 영향 0.
+    `manager_layout` 미정의 (None) 시 None 반환 — 기존 동작을 그대로 유지한다.
     HPE CSUS 3200 (`rmc_primary`) / Superdome Flex (`rmc_primary_ilo_secondary`) 만 활성.
 
     Returns: dict | None
@@ -3757,7 +3757,7 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
         bmc_ip, chassis_uri_coll, username, password, timeout, verify_ssl,
     )
     # CompositionService/ResourceBlocks + Fabrics/FlexGrid 수집
-    # (설명 모델 요구). ServiceRoot 에 링크 부재 시 None (graceful — Additive).
+    # (설명 모델 요구). ServiceRoot 에 링크 부재 시 None (graceful).
     composition, comp_errs = gather_composition_service(
         bmc_ip, service_root, username, password, timeout, verify_ssl,
     )
@@ -3779,14 +3779,14 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
             'manager_count':             len(managers),
             'chassis_count':             len(chassis),
             'representative_partition':  representative,
-            # composition / fabric 규모 (Additive 신 키)
+            # composition / fabric 규모
             'resource_block_count':      rb_count,
             'fabric_count':              len(fabrics) if isinstance(fabrics, list) else 0,
         },
         'partitions': partitions,
         'managers':   managers,
         'chassis':    chassis,
-        # 신 컨테이너 (None = ServiceRoot 미노출 — Additive).
+        # 신 컨테이너 (None = ServiceRoot 미노출).
         'composition': composition,
         'fabrics':     fabrics,
         'errors': (
@@ -3809,8 +3809,8 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     unsupported list 추가 — 404 응답 섹션을 별도 분류
     (capability 미지원 = noise 아님).
 
-    `manager_layout` 옵션 인자 추가 (Additive).
-    None 시 기존 동작 100% 보존. RMC primary adapter 만 `gather_bmc` 라벨 분기 활성.
+    `manager_layout` 옵션 인자.
+    None 시 기존 동작을 그대로 유지한다. RMC primary adapter 만 `gather_bmc` 라벨 분기 활성.
     """
     _run = _make_section_runner(all_errors, collected, failed, unsupported)
     creds = (username, password, timeout, verify_ssl)
@@ -4029,7 +4029,7 @@ def account_service_provision(
 
     # Cisco 외 vendor도 일부 펌웨어가 AccountService 404
     # 응답 가능 (lab 부재 펌웨어 / 펌웨어 hot-fix 시 변동). errs가 404-only 시
-    # 'not_supported' 분류 + errors[]에 noise 안 만듦 (Additive — 기존 cisco
+    # 'not_supported' 분류 + errors[]에 noise 안 만듦 (기존 cisco
     # 분기 + 일반 404 graceful).
     # source: redfish.dmtf.org/schemas/v1/AccountService.json (선택적 endpoint)
     if _is_404_only_error(errs):
@@ -4384,7 +4384,7 @@ def main():
             # HPE CSUS 3200 / Superdome Flex
             # RMC primary 멀티-노드 토폴로지 수집 활성. adapter `vendor_notes.manager_layout`
             # 을 detect_vendor.yml → collect_standard.yml → 본 모듈까지 전달.
-            # None 시 기존 13 vendor 영향 0 (Additive only).
+            # None 시 기존 동작 유지 (기존 vendor 영향 없음).
             #   Allowed values: None / 'rmc_primary' / 'rmc_primary_ilo_secondary'
             manager_layout  = dict(type='str',  default=None, required=False),
         ),
@@ -4433,7 +4433,7 @@ def main():
     all_errors, collected, failed, unsupported = [], [], [], []
 
     # manager_layout (adapter capability) 수신.
-    # None 시 기존 13 vendor 영향 0 (Additive).
+    # None 시 기존 동작 유지 (기존 vendor 영향 없음).
     manager_layout = p.get('manager_layout') or None
 
     vendor, system_uri, manager_uri, chassis_uri, det_errors, service_root = detect_vendor(
@@ -4445,8 +4445,7 @@ def main():
     # detect_vendor.yml 의 probe 단계 (무인증) 에서 data.bmc/data.system 가 empty 이면
     # adapter_loader 가 priority 만으로 선택 — vendor-specific generation 정확 매칭 불가.
     # probe_facts 가 model_hint/firmware_hint/manager_type 을 제공해 adapter 선택 정확도 보강.
-    # Additive only — envelope shape 신 키 추가는 본 probe 경로 한정 +
-    # 호출자 시스템 (Jenkins downstream) 은 본 키 모름 → 파싱 변경 0.
+    # probe_facts 는 본 probe 경로에서만 쓰이는 보조 키로, 기존 envelope 키는 그대로 유지한다.
     probe_facts = _extract_probe_facts(service_root, vendor)
 
     if not system_uri:
@@ -4467,14 +4466,14 @@ def main():
     )
 
     # manager_layout 정의 vendor 만 multi_node 수집.
-    # None / 미정의 vendor — 13 vendor 영향 0 (Additive only).
+    # None / 미정의 vendor — 기존 동작 유지 (기존 vendor 영향 없음).
     multi_node = _collect_multi_node_topology(
         bmc_ip, vendor, service_root,
         username, password, timeout, verify_ssl,
         manager_layout=manager_layout,
     )
     # Round 10: multi_node(RMC) 수집 errors(401/403 포함)를 status 계산 + envelope errors[] 에 반영.
-    # 누락 시 multi_node 인증 실패가 success/partial 로 오분류(status 거짓). multi_node=None 시 영향 0.
+    # 누락 시 multi_node 인증 실패가 success/partial 로 오분류(status 거짓). multi_node=None 시 영향 없음.
     if isinstance(multi_node, dict):
         all_errors.extend(multi_node.get('errors') or [])
 

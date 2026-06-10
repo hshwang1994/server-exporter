@@ -36,7 +36,7 @@ match:
   #   - 일부 Gen12 BMC 는 2-part short version "1.10" / "1.16" 만 보고
   #     (facts.firmware 추출 path 가 Manager.FirmwareVersion 만일 때).
   #   - `^1\.1[0-9]` (1.10~1.19) 추가 — 주의: iLO 4 `^1\.[0-9]` 는 "1.1" prefix 로 1.10~1.19
-  #     도 매칭하고 iLO 6 `^1\.[5-9]` 도 일부 겹침 (정규식 충돌 있음, 주석 정정).
+  #     도 매칭하고 iLO 6 `^1\.[5-9]` 도 일부 겹침 (정규식 중복 있음).
   #     그러나 (1) priority 차등 (iLO7=120 > iLO6/iLO4) + (2) model_patterns (iLO7=Gen12 필수)
   #     로 의도된 adapter 선택 보장 — 실 기기는 generation 별 firmware format 보고하므로 충돌은 이론적.
   #   - 미래 Gen12 firmware 1.20+ 2-part 시 본 regex 재검토 (사이트 실측).
@@ -103,4 +103,4 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "HPE iLO 7 장비 (Gen12) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."
+  not_supported_message: "HPE iLO 7 장비 (Gen12) — Redfish 완전 지원 가정."

@@ -9,7 +9,7 @@ PowerSubsystem 본체가 아닌 /Chassis/{id}/EnvironmentMetrics 의 PowerWatts 
 본 테스트:
   - PowerSubsystem fetch 후 EnvironmentMetrics 응답이 200 일 때 power_control 채움
   - EnvironmentMetrics 404 시 power_capacity_watts (PSU 합산) 만 유지, 나머지 None
-  - PSU 자체 부재 시 power_control = None (이전 동작 유지 — Additive only)
+  - PSU 자체 부재 시 power_control = None (이전 동작 유지)
 """
 from __future__ import annotations
 
@@ -113,7 +113,7 @@ def test_power_subsystem_environment_metrics_404(monkeypatch):
 
 
 def test_power_subsystem_no_psu_returns_none_control(monkeypatch):
-    """PSU collection link 없음 → power_control = None (Additive only — 기존 동작)."""
+    """PSU collection link 없음 → power_control = None (기존 동작)."""
     routes = {
         'PowerSubsystem': (200, {}),  # PowerSupplies link 없음
     }

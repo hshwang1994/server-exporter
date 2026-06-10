@@ -195,7 +195,7 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 |------|------------|
 | 새 섹션이 envelope 에 안 보임 | `merge_fragment.yml` 호출 누락 또는 `_sections_supported_fragment` 에 추가 안 함 |
 | 다른 채널에서 새 섹션이 `not_supported` 가 아닌 `failed` 로 보임 | 다른 채널 site.yml 의 supported_sections 에 영향이 가지 않도록 fragment 변수만 set_fact |
-| `output_schema_drift_check.py` FAIL | sections.yml + field_dictionary.yml + baseline JSON 3종 동반 갱신이 누락됨 |
+| `tests/validate_field_dictionary.py` FAIL | sections.yml + field_dictionary.yml + baseline JSON 3종 동반 갱신이 누락됨 |
 | 어댑터를 추가했는데 선택되지 않음 | match.manufacturer / model_patterns 가 실 응답과 일치하는지 raw fixture 비교 |
 
 ---
@@ -212,7 +212,7 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 | 2 | `adapters/{redfish,os,esxi}/{vendor}_*.yml` | **의무** | adapter_loader 가 본 vendor 인식 못 함 |
 | 3 | `redfish-gather/library/redfish_gather.py` `_OEM_EXTRACTORS` | 선택 (OEM 추출 시) | OEM 데이터 envelope `data.hardware.oem` 누락 |
 | 4 | `redfish-gather/tasks/vendors/{vendor}/collect_oem.yml + normalize_oem.yml` | 선택 (vendor 특이 endpoint 시) | vendor-specific endpoint 미수집 |
-| 5 | `schema/baseline_v1/{vendor}_baseline.json` | **의무 (실측 후)** / lab 부재 시 후속 작업 등재 | 회귀 테스트 미보호 → drift 가능 |
+| 5 | `schema/baseline_v1/{vendor}_baseline.json` | **의무 (실측 후)** / lab 부재 시 후속 검증으로 보류 | 회귀 테스트 미보호 → drift 가능 |
 
 `vault/redfish/{vendor}.yml` (자격증명) 도 의무.
 
@@ -233,7 +233,7 @@ lab 환경에 vendor 장비 없을 때 (예: Huawei/Inspur/Fujitsu/Quanta + Supe
 | 단계 | lab 부재 처리 |
 |---|---|
 | 4 (vault) | placeholder + 향후 승인 — 실 운영 vault 결정 보류 |
-| 5 (baseline) | SKIP — "사이트 fixture 캡처" + "baseline 추가" 후속 작업 등재 |
+| 5 (baseline) | SKIP — "사이트 fixture 캡처" + "baseline 추가" 는 실장비 확보 후 진행 |
 | 6 (Round) | "lab 부재 — web sources" 표기. web sources 4종 의무 (vendor docs / DMTF / GitHub / 사이트 실측) |
 
 ### Priority 값 결정 절차
@@ -317,7 +317,7 @@ _OEM_EXTRACTORS = {
 ### 회귀 검증 (PR 머지 전)
 
 ```bash
-pytest tests/regression/                       # 회귀 158 (cross-channel envelope 120 포함)
+pytest tests/regression/                       # 회귀 (cross-channel envelope 일관성 포함)
 pytest tests/redfish-probe/probe_redfish.py --vendor {vendor}
 ansible-playbook --syntax-check redfish-gather/site.yml
 ```

@@ -51,7 +51,7 @@ match:
     - "Atlas.*"
     - ".*Atlas 800.*"
     - ".*Atlas 500.*"
-  # firmware_patterns 5 generation 추가 (Additive — match 조건 보강)
+  # firmware_patterns 5 generation 추가 (match 조건 보강)
   # source: Huawei iBMC Redfish API guide (확인 2026-05-07) / DMTF DSP0268 v1.0~v1.13
   firmware_patterns:
     - "iBMC*1.*"      # iBMC 1.x (2014-2016)
@@ -129,7 +129,7 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Huawei iBMC 장비 — Redfish 표준 호환 가정 (lab 부재 — web sources 기반)."
+  not_supported_message: "Huawei iBMC 장비 — Redfish 표준 호환 가정."
 
 metadata:
   vendor: huawei

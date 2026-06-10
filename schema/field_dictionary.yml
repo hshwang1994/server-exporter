@@ -31,7 +31,7 @@
 #   skip — 의미가 자명해서 본 사전에 등록하지 않음 (예: hostname)
 #
 # 등록 현황 (2026-05-29): Must 39 / Nice 38 / Skip 6 = 총 83 entries
-#   (+9 Nice — storage.hbas[]/infiniband[] 서브필드. Additive, schema_version 유지)
+#   (+9 Nice — storage.hbas[]/infiniband[] 서브필드. 추가형, schema_version 유지)
 #
 # 검증 (수동): tests/validate_field_dictionary.py 가 다음 5가지를 검사합니다.
 #   1) 모든 entry 에 help_ko, help_en 이 함께 있는지
@@ -962,7 +962,7 @@ fields:
       InfiniBand adapter list. node_guid/link_status/rate. May be empty depending
       on vendor/firmware exposure (best-effort).
 
-  # ── HBA / InfiniBand 서브필드 (Additive Nice) ──
+  # ── HBA / InfiniBand 서브필드 (추가형 Nice) ──
   # 전 채널 통일 shape (canonical) — 호출자가 채널 무관하게 같은 키로 파싱.
   # source 필드로 출처 식별 (redfish / os / esxi). lab 부재 vendor 는 사이트 실측 시 정정.
 
@@ -1099,7 +1099,7 @@ fields:
   # RMC 멀티-노드 토폴로지
   # HPE CSUS 3200 / Superdome Flex 처럼 단일 진입점이 N개 Manager / N개 nPartition /
   # N개 Chassis 노출. adapter `vendor_notes.manager_layout` 정의 vendor 만 활성.
-  # 기타 13 vendor 는 `data.multi_node = null` (Additive — envelope shape 변경 0).
+  # 기타 vendor 는 `data.multi_node = null` (추가 전용 — 기존 envelope 유지).
   # ──────────────────────────────────────────────────────────────────────────
 
   "multi_node":
@@ -1110,13 +1110,13 @@ fields:
       RMC 산하 멀티-노드 토폴로지 컨테이너. HPE CSUS 3200 / Superdome Flex 처럼 단일
       진입점이 N개 Manager / N개 nPartition / N개 Chassis 노출 환경에서 활성.
       adapter vendor_notes.manager_layout 미정의 vendor 는 null. 기존 data.system /
-      data.bmc / ... 등 9 section path 는 Partition0 representative 로 유지 (Additive
-      only).
+      data.bmc / ... 등 9 section path 는 Partition0 representative 로 유지 (추가 전용 —
+      기존 path 유지).
     help_en: >-
       RMC multi-node topology container. Active for single-aggregated-controller
       environments like HPE CSUS 3200 / Superdome Flex. null when adapter
       vendor_notes.manager_layout not defined. Existing data.system/data.bmc/...
-      paths retained as Partition0 representative (Additive only).
+      paths retained as Partition0 representative (existing paths unchanged).
 
   "multi_node.enabled":
     type: "boolean"

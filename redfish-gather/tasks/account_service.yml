@@ -94,7 +94,7 @@
       failed_when: false
       no_log: true
 
-    # production-audit (2026-04-29): bool typing 명시 cast (string "true"/"false" emit 차단)
+    # bool typing 명시 cast (string "true"/"false" emit 차단)
     - name: "redfish | account_service | record meta"
       ansible.builtin.set_fact:
         _rf_account_service_meta:

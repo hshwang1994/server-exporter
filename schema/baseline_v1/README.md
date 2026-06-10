@@ -38,12 +38,12 @@
 mock-derived baseline 의 필수 marker (양쪽 모두):
 
 1. **본 README 표 의 vendor 행 옆** "mock-derived (lab 부재 ...)" 명시
-2. **baseline JSON 의 `diagnosis.details.baseline_origin`** 필드 — 출처 + 실측 교체 의무 명시
+2. **baseline JSON 의 `diagnosis.details.baseline_origin`** 필드 — 출처 + 실측 교체 대상 명시
 3. **호환 한글 주석본** (`schema/output_examples/{vendor}.jsonc`) 헤더에 "Lab 부재 — Mock 합성" 명시
 
 회귀 비교 도구 (`tests/e2e/test_redfish_baseline.py` 등) 가 mock-derived baseline 을 사용할 때 의식할 점:
 - mock-derived 통과 = 합성 fixture 통과 ≠ 사이트 통과
-- 사이트 fixture 캡처 후속 작업 진행 시 mock-derived baseline 은 실측으로 교체 의무
+- 사이트 실측 진행 시 mock-derived baseline 은 실측으로 교체 대상
 - mock-derived 가 실측 baseline 으로 잘못 인용되는 사고 차단을 위해 `diagnosis.details.baseline_origin` 자동 검사 도입 검토 (미래 작업)
 
 ### 한글 주석본을 보는 순서

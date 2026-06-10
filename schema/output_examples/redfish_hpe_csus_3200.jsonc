@@ -7,11 +7,11 @@
 //             nPartition × 다중 Manager 통합 노출. 본 예시 = 3-partition × 4-manager ×
 //             3-chassis 합성 시나리오 (sdflexutils 1.5.1 + DMTF v1.15 + iLO5 API ref +
 //             HPE psnow doc/a50009596enw + support.hpe.com sd00002765en_us).
-//             `data.multi_node` Additive 컨테이너.
+//             `data.multi_node` 추가 전용 컨테이너.
 //             기존 9 section path (data.system / data.bmc / ...) 는 Partition0
-//             representative 로 유지 (envelope shape 변경 0).
+//             representative 로 유지 (기존 envelope 유지).
 //             bmc.name='RMC' (manager_layout=rmc_primary) — 일반 iLO 와 분기.
-// Lab 상태  : 부재 — web sources only. 사이트 실측 시 정정 의무
+// Lab 상태  : 부재 — web sources only. 사이트 실측 시 정정 가능
 //             (Product / Member ID / OEM schema / 활성화).
 // 캡처 일시 : 2026-05-12 (mock 합성)
 // =============================================================================
@@ -51,7 +51,7 @@
       "systems_uri": "/redfish/v1/Systems/",            // HPE 는 trailing slash
       "multi_node_layout": "rmc_primary",               // adapter vendor_notes.manager_layout 노출
       "rmc_activation_check": true,                     // RMC Redfish 활성화 검사 — false 시 HPE community 7200359 사례 (docs/22 참조)
-      "baseline_origin": "mock-derived (lab 부재 — sdflexutils + DMTF v1.15 + iLO5 API ref 합성). 사이트 fixture 캡처 후 실측 baseline 으로 교체 의무."
+      "baseline_origin": "mock-derived (lab 부재 — sdflexutils + DMTF v1.15 + iLO5 API ref 합성). 사이트 실측 후 실측 baseline 으로 교체 대상."
     }
   },
   "meta": {                                             // 수집 메타데이터 — 운영 추적 + 성능 분석
@@ -171,7 +171,7 @@
     "firmware": [],                                     // UpdateService FirmwareInventory (mock 비어있음 — 실측 시 BMC/BIOS/NIC firmware list)
     "power": null,                                      // Chassis.PowerSubsystem (mock — site 실측 시 PSU / power_supplies)
     "users": [],                                        // AccountService Accounts list. Redfish 채널은 일반적으로 빈 list (capability)
-    "multi_node": {                                     // RMC primary 시스템 전수 수집 컨테이너 (Additive)
+    "multi_node": {                                     // RMC primary 시스템 전수 수집 컨테이너 (추가 전용)
       "enabled": true,                                  // manager_layout 정의 vendor 만 true — null 시 비-RMC vendor
       "layout": "rmc_primary",                          // rmc_primary (CSUS 3200) / rmc_primary_ilo_secondary (Superdome Flex)
       "summary": {                                      // 호출자가 멀티-노드 규모 파악 시 사용

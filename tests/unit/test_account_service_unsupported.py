@@ -5,7 +5,7 @@ cisco vendor 시 GET 자체 실패 → noise. vendor='cisco' 분기에서
 method='not_supported' 명시 + errors[] 한 줄.
 
 또한 Cisco 외 vendor 도 일부 펌웨어가 AccountService 404 → _is_404_only_error
-판정으로 'not_supported' graceful 분류 (Additive — 기존 cisco 분기와 별개).
+판정으로 'not_supported' graceful 분류 (기존 cisco 분기와 별개의 경로).
 
 본 테스트:
   - vendor='cisco' → method='not_supported', recovered=False

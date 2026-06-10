@@ -75,8 +75,7 @@
 
         # HPE CSUS 3200 / Superdome Flex RMC primary
         # 멀티-노드 토폴로지 수집 활성. adapter `vendor_notes.manager_layout` 을
-        # redfish_gather 모듈까지 전달. None / 미정의 vendor 는 기존 동작 100% 보존
-        # (Additive only). 13 vendor 영향 0.
+        # redfish_gather 모듈까지 전달. None / 미정의 vendor 는 기존 동작을 그대로 유지한다.
         #   Allowed values: '' (None) / 'rmc_primary' / 'rmc_primary_ilo_secondary'
         - name: "redfish | extract manager_layout from adapter"
           ansible.builtin.set_fact:
