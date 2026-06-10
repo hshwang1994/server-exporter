@@ -59,7 +59,7 @@ HPE community 게시물 7200359 ("impossible to get redfish answer from superdom
 ## 한계
 
 - 사이트 실측 부재 → 모든 fixture 합성 (Confidence MED)
-- ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema → lab 도입 cycle 정정 의무 (`docs/ai/NEXT_ACTIONS.md` C1, C5, C6, C7)
+- ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema → lab 도입 cycle 정정 의무 (후속 작업 C1, C5, C6, C7)
 - pytest 통과 = 합성 fixture 통과 ≠ 사이트 실측 통과
 
 ## 후속 작업 (NEXT_ACTIONS C1~C8)

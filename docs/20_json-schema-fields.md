@@ -429,7 +429,7 @@ hostname = system.hostname  OR  system.fqdn  OR  ip_fallback
 
 ### 알려진 baseline drift
 
-- `cisco_baseline.json` 은 `hostname == ip` (`10.100.15.2`, IP fallback) — `data.system.fqdn` 은 `C220-FCH2116V1V0` 로 non-null 이지만 hostname 해석이 IP 로 폴백된 상태. 후속 작업: lab Cisco UCS 실측 후 hostname/fqdn 해석 재검증 + baseline 갱신 (`docs/ai/NEXT_ACTIONS.md` 추적).
+- `cisco_baseline.json` 은 `hostname == ip` (`10.100.15.2`, IP fallback) — `data.system.fqdn` 은 `C220-FCH2116V1V0` 로 non-null 이지만 hostname 해석이 IP 로 폴백된 상태. 후속 작업: lab Cisco UCS 실측 후 hostname/fqdn 해석 재검증 + baseline 갱신.
 
 ---
 
@@ -547,7 +547,7 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 
 ### Lab 부재 한계 (NEXT_ACTIONS C1~C8)
 
-현재 mock fixture 는 sdflexutils + DMTF v1.15 + iLO 5 API ref 합성. ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema 는 사이트 실측 후 정정 의무 (`docs/ai/NEXT_ACTIONS.md` C1~C8 참조).
+현재 mock fixture 는 sdflexutils + DMTF v1.15 + iLO 5 API ref 합성. ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema 는 사이트 실측 후 정정 의무.
 
 ---
 
@@ -560,7 +560,6 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | 벤더별 회귀 기준선 JSON | `schema/baseline_v1/{vendor}_baseline.json` |
 | 섹션 정의 원본 | `schema/sections.yml` |
 | 필드 사전 원본 | `schema/field_dictionary.yml` |
-| **필드 × baseline 사용 실태 매트릭스 (4 상태)** | **`docs/ai/catalogs/FIELD_USAGE_MATRIX.md` (cycle 2026-05-11 신규, 측정 대상 #13)** |
 | 출력 조립 코드 | `common/tasks/normalize/build_output.yml` |
 | 채널 처리 과정 | `docs/06_gather-structure.md`, `docs/07_normalize-flow.md` |
 | 진단 단계 상세 | `docs/11_precheck-module.md` |

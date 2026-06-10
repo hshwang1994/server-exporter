@@ -1,7 +1,0 @@
-# impact/
-
-사고 / 큰 변경의 영향 분석 위치.
-
-write-impact-brief skill / change-impact-analyst agent의 출력 보존.
-
-형식: `YYYY-MM-DD-<주제>.md`

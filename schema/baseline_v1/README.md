@@ -43,8 +43,8 @@ mock-derived baseline 의 필수 marker (양쪽 모두):
 
 회귀 비교 도구 (`tests/e2e/test_redfish_baseline.py` 등) 가 mock-derived baseline 을 사용할 때 의식할 점:
 - mock-derived 통과 = 합성 fixture 통과 ≠ 사이트 통과
-- NEXT_ACTIONS (`docs/ai/NEXT_ACTIONS.md`) 의 C1~C8 등 사이트 fixture 캡처 후속 작업 진행 시 mock-derived baseline 은 실측으로 교체 의무 (rule 13 R4 정신)
-- mock-derived 가 실측 baseline 으로 잘못 인용되는 사고 차단을 위해 `diagnosis.details.baseline_origin` 자동 검사 hook 도입 검토 (NEXT_ACTIONS — 미래 작업)
+- 사이트 fixture 캡처 후속 작업 진행 시 mock-derived baseline 은 실측으로 교체 의무 (rule 13 R4 정신)
+- mock-derived 가 실측 baseline 으로 잘못 인용되는 사고 차단을 위해 `diagnosis.details.baseline_origin` 자동 검사 도입 검토 (미래 작업)
 
 ### 한글 주석본을 보는 순서
 

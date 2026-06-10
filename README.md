@@ -231,4 +231,4 @@ server-exporter/
 | 결정 추적 (왜 지금 이 모습?) | [19](docs/19_decision-log.md) |
 | 환경 사전 점검 | [REQUIREMENTS.md](REQUIREMENTS.md) |
 
-파일 단위 상세 구조와 AI 협업 정책은 [CLAUDE.md](CLAUDE.md) 의 "파일 구조" 와 "AI 하네스 운영" 절 참조.
+Fragment 기반 수집 철학과 변수 규칙, 새 gather 추가 절차는 [GUIDE_FOR_AI.md](GUIDE_FOR_AI.md) 참조.

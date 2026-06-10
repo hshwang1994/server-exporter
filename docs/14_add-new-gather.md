@@ -214,7 +214,7 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 | 4 | `redfish-gather/tasks/vendors/{vendor}/collect_oem.yml + normalize_oem.yml` | 선택 (vendor 특이 endpoint 시) | vendor-specific endpoint 미수집 |
 | 5 | `schema/baseline_v1/{vendor}_baseline.json` | **의무 (실측 후)** / lab 부재 시 NEXT_ACTIONS 등재 | 회귀 테스트 미보호 → drift 가능 |
 
-`vault/redfish/{vendor}.yml` (자격증명) + `.claude/ai-context/vendors/{vendor}.md` (도메인 노트) 도 의무 (rule 50 R2 9단계).
+`vault/redfish/{vendor}.yml` (자격증명) 도 의무 (rule 50 R2 9단계).
 
 ### 9 단계 (rule 50 R2 정본)
 
@@ -223,10 +223,8 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 3. (선택) `redfish-gather/tasks/vendors/{vendor}/` OEM tasks
 4. `vault/redfish/{vendor}.yml` 생성 (ansible-vault encrypt) — lab 부재 시 placeholder + 사용자 명시 승인
 5. `schema/baseline_v1/{vendor}_baseline.json` 추가 (실장비 검증 후) — lab 부재 시 단계 10 등재
-6. `.claude/ai-context/vendors/{vendor}.md` 추가
-7. `.claude/policy/vendor-boundary-map.yaml` 갱신
-8. `docs/13_redfish-live-validation.md` Round 갱신
-9. `docs/19_decision-log.md` ADR 추가
+6. `docs/13_redfish-live-validation.md` Round 갱신
+7. `docs/19_decision-log.md` ADR 추가
 
 ### 단계 10 — lab 부재 vendor 처리 (rule 50 R2 단계 10 / rule 96 R1-A + R1-C)
 
@@ -235,7 +233,7 @@ lab 환경에 vendor 장비 없을 때 (예: cycle 2026-05-01 Huawei/Inspur/Fuji
 | 단계 | lab 부재 처리 |
 |---|---|
 | 4 (vault) | placeholder 사용자 명시 승인 — 실 운영 vault 결정 보류 |
-| 5 (baseline) | SKIP — `docs/ai/NEXT_ACTIONS.md` "사이트 fixture 캡처" + "baseline 추가" 등재 |
+| 5 (baseline) | SKIP — "사이트 fixture 캡처" + "baseline 추가" 후속 작업 등재 |
 | 8 (Round) | "lab 부재 — web sources" 표기. rule 96 R1-A web sources 4종 의무 (vendor docs / DMTF / GitHub / 사이트 실측) |
 
 `add-vendor-no-lab` skill 자동화 — lab 부재 vendor 추가 시 호출.
@@ -323,6 +321,5 @@ _OEM_EXTRACTORS = {
 ```bash
 pytest tests/regression/                       # 회귀 158 (cross-channel envelope 120 포함)
 pytest tests/redfish-probe/probe_redfish.py --vendor {vendor}
-python scripts/ai/verify_vendor_boundary.py    # vendor 경계 (rule 12)
 ansible-playbook --syntax-check redfish-gather/site.yml
 ```

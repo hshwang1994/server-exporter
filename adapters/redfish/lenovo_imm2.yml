@@ -24,7 +24,7 @@
 #   - System x3650 M5 (IMM2 v6.x 펌웨어) — 가이드 기준선
 #   - System x3550 M5 / x3850 X6 — 동일 IMM2 계열 (펌웨어 1.x ~ 2.x)
 #   - 실장비 검증은 schema/baseline_v1/lenovo_imm2_baseline.json + tests/evidence/ 참조 (해당 시)
-#   - DRIFT 발견 시: docs/ai/catalogs/EXTERNAL_CONTRACTS.md에 즉시 기록 (rule 96 R4)
+#   - DRIFT 발견 시: 즉시 기록 (rule 96 R4)
 # Next action: lab 도입 후 별도 cycle (IMM2 SimpleStorage path 응답 형식 확정)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_lenovo_imm2

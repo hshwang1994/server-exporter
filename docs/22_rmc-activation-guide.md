@@ -100,8 +100,6 @@ curl -k -s -u <user>:<password> https://<rmc-ip>/redfish/v1/Chassis
 3. `schema/baseline_v1/hpe_csus_3200_baseline.json` 교체 (현재 mock-derived → 실측 baseline, rule 13 R4)
 4. `docs/19_decision-log.md` Round 신 항목
 
-→ NEXT_ACTIONS C1~C8 (`docs/ai/NEXT_ACTIONS.md`) 참조.
-
 ## 6. 트러블슈팅 매트릭스
 
 | 증상 | 의심 원인 | 진단 |
@@ -115,11 +113,8 @@ curl -k -s -u <user>:<password> https://<rmc-ip>/redfish/v1/Chassis
 
 ## 7. 관련
 
-- ADR: `docs/ai/decisions/ADR-2026-05-12-csus-rmc-multi-node.md`
 - envelope reference: `docs/20_json-schema-fields.md` 9절 (`data.multi_node`)
 - adapter: `adapters/redfish/hpe_csus_3200.yml` / `hpe_superdome_flex.yml`
-- 외부 계약: `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` HPE 절
-- NEXT_ACTIONS: `docs/ai/NEXT_ACTIONS.md` C1~C8
 - web sources:
   - https://servermanagementportal.ext.hpe.com/docs/concepts/gettingstarted
   - https://support.hpe.com/hpesc/public/docDisplay?docId=sd00002765en_us&docLocale=en_US

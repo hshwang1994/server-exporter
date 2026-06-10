@@ -113,7 +113,7 @@ def test_adapter_directory_has_expected_count() -> None:
     adapters = _all_redfish_adapters()
     assert len(adapters) == 30, (
         f"adapters/redfish/ 비-generic adapter 개수 drift: {len(adapters)} (기대 30). "
-        f"adapter 추가/삭제 시 본 테스트 + docs/21 §6.5 + CLAUDE.md 카운트 동반 갱신."
+        f"adapter 추가/삭제 시 본 테스트 + docs/21 §6.5 카운트 동반 갱신."
     )
 
 

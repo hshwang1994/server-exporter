@@ -172,7 +172,6 @@ adapter_loader: 선택됨 — dell_idrac9 (score=100345) [rule 10 R5 score = pri
 
 **필드 누락 사고 (rule 95 R1 #2 fragment 침범 회귀)**:
 - 회귀 테스트: `pytest tests/regression/test_cross_channel_consistency.py::test_envelope_thirteen_fields_present`
-- skeleton sync hook: `scripts/ai/hooks/pre_commit_fragment_skeleton_sync.py`
 
 ---
 
@@ -263,14 +262,12 @@ community.vmware 로그 → `-vvv` 출력의 `vmware_*` 모듈 응답.
 2. **Jinja2 namespace 회귀 차단** (Phase B): `pre_commit_jinja_namespace_check.py`
 3. **Fragment skeleton sync 차단** (Phase B): `pre_commit_fragment_skeleton_sync.py`
 4. **사이트 fixture 캡처** (rule 21 R2): `capture-site-fixture` skill
-5. **외부 계약 drift** (rule 96): `docs/ai/catalogs/EXTERNAL_CONTRACTS.md`
+5. **외부 계약 drift** (rule 96)
 
 **회귀 검증 명령** (PR 머지 전):
 ```bash
 pytest tests/                                      # 전체 회귀
 pytest tests/regression/                           # 회귀 전체 158 (cross-channel 120 포함)
-python scripts/ai/verify_harness_consistency.py    # 하네스 일관성
-python scripts/ai/verify_vendor_boundary.py        # vendor 경계 (rule 12)
 ansible-playbook --syntax-check os-gather/site.yml  # 3 채널 syntax
 ```
 

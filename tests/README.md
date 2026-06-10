@@ -56,4 +56,3 @@
 - `docs/13_redfish-live-validation.md` — 실장비 검증 / Round
 - `docs/22_compatibility-matrix.md` — 호환성 매트릭스
 - `docs/23_debugging-entrypoints.md` — 디버깅 매트릭스
-- `.claude/skills/capture-site-fixture/SKILL.md` — 사이트 fixture 캡처 절차

@@ -35,7 +35,7 @@ schema 변경 시 다음 3종 동시 갱신:
 | 명령 | 검증 |
 |---|---|
 | `python tests/validate_field_dictionary.py` | sections × field_dictionary 정합 |
-| `python scripts/ai/hooks/output_schema_drift_check.py` | schema 변경 drift |
+| `python3 tests/validate_field_dictionary.py` | schema 변경 drift |
 | `pytest tests/regression/` | cross-channel envelope 13 필드 (cycle 2026-05-07) |
 
 ## envelope 13 필드 (rule 13 R5)

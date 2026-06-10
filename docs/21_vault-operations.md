@@ -360,7 +360,6 @@ accounts:
 | `skill: debug-precheck-failure` | auth 실패 시 |
 | `redfish-gather/tasks/load_vault.yml` | vault 로딩 정본 코드 |
 | `docs/03_agent-setup.md` | Agent 보안 설정 |
-| `docs/ai/references/ansible/ansible-vault.md` | ansible-vault 명령 reference |
 
 ---
 

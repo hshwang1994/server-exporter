@@ -46,16 +46,6 @@ tests/reference/local/*
 tests/reference/.cache/
 tests/reference/**/.crawl_inflight/
 
-# AI scheduled wakeup runtime state
-.claude/scheduled_tasks.lock
-
-# AI 하네스 — 로컬 캐시 / 개인 설정 (commit 금지)
-.claude/.cache/
-.claude/settings.local.json
-
-# Incoming-review 자동 보고서 (각 머지마다 생성, 정리 후 후속 PR)
-docs/ai/incoming-review/*-*.md
-!docs/ai/incoming-review/.gitkeep
 .cache/
 
 # Jenkins 작업 잔재 (로컬 디버깅 / probe 결과 — commit 금지)
@@ -70,8 +60,3 @@ _job.json
 _lb.json
 b[0-9].log
 b[0-9][0-9].log
-
-# vault 복호화 헬퍼 (개인 도구 — 하드코딩 자격 leak 차단)
-# scripts/ai/vault_decrypt_check.py 는 cycle-018 (2026-05-01) 결정으로 .gitignore
-# 사유: line 97 fallback password "Goodmit0802!" 평문 — git 추적 시 자격 재leak
-scripts/ai/vault_decrypt_check.py

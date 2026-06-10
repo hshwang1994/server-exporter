@@ -115,18 +115,3 @@ def test_f44_f47_adapter_match_includes_canonical_vendor() -> None:
         assert canonical in d["match"]["vendor"], (
             f"{name}: match.vendor 에 '{canonical}' 부재"
         )
-
-
-# ── ai-context vendors/{name}.md 4 파일 ──────────────────────────────────────
-
-
-def test_f44_f47_ai_context_files_exist() -> None:
-    """4 신규 vendor ai-context 파일 존재."""
-    base = REPO / ".claude" / "ai-context" / "vendors"
-    for v in NEW_VENDORS:
-        path = base / f"{v}.md"
-        assert path.exists(), f"{path} 부재"
-        content = path.read_text(encoding="utf-8")
-        assert "vault_status" in content.lower() or "미생성" in content, (
-            f"{v}.md: vault SKIP 명시 부재"
-        )

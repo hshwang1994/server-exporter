@@ -12,8 +12,6 @@ cycle 2026-05-06 M-E1 web 검색 (14 sources) + M-E2 adapter 추가.
 6. credentials.profile = "hpe" (vault 재사용)
 7. collect.oem_tasks = HPE 공유 (Oem.Hpe namespace)
 8. _BMC_PRODUCT_HINTS 에 'superdome' 시그니처 → 'hpe' 정규화
-9. ai-context vendors/hpe.md 에 Superdome 절 명시
-10. vendor-boundary-map.yaml 에 superdome_flex sub_line 명시
 """
 from __future__ import annotations
 
@@ -39,8 +37,6 @@ sys.modules.setdefault("ansible.module_utils.basic", _stub_basic)
 import redfish_gather as rg  # noqa: E402
 
 ADAPTER_PATH = REPO / "adapters" / "redfish" / "hpe_superdome_flex.yml"
-AI_CONTEXT_HPE = REPO / ".claude" / "ai-context" / "vendors" / "hpe.md"
-BOUNDARY_MAP = REPO / ".claude" / "policy" / "vendor-boundary-map.yaml"
 SECTIONS_YML = REPO / "schema" / "sections.yml"
 
 
@@ -144,35 +140,6 @@ def test_m_e2_bmc_product_hints_superdome_added() -> None:
     assert hints.get("superdome flex") == "hpe", (
         "_BMC_PRODUCT_HINTS: 'superdome flex' → 'hpe' 매핑 부재 (M-E2)"
     )
-
-
-# ── ai-context vendors/hpe.md Superdome 절 ──────────────────────────────────
-
-
-def test_m_e2_ai_context_hpe_has_superdome_section() -> None:
-    """ai-context vendors/hpe.md 에 Superdome 절 추가 (M-E3)."""
-    content = AI_CONTEXT_HPE.read_text(encoding="utf-8")
-    assert "Superdome" in content, "hpe.md 에 'Superdome' 절 부재"
-    assert "Flex 280" in content, "hpe.md 에 'Flex 280' 모델 명시 부재"
-    assert "Multi-partition" in content or "nPAR" in content, (
-        "hpe.md 에 nPAR / Multi-partition 한계 명시 부재"
-    )
-
-
-# ── vendor-boundary-map.yaml superdome_flex sub_line ────────────────────────
-
-
-def test_m_e2_boundary_map_has_superdome_flex_sub_line() -> None:
-    """vendor-boundary-map.yaml 에 superdome_flex sub_line 명시 (M-E4)."""
-    d = yaml.safe_load(BOUNDARY_MAP.read_text(encoding="utf-8"))
-    hpe = d["vendors"]["hpe"]
-    sub_lines = hpe.get("sub_lines", {})
-    assert "superdome_flex" in sub_lines, (
-        "vendor-boundary-map.yaml: hpe.sub_lines.superdome_flex 부재 (M-E4)"
-    )
-    sf = sub_lines["superdome_flex"]
-    assert sf["priority"] == 101, "superdome_flex priority=101 (cycle 2026-06-04 95→101)"
-    assert "lab_status" in sf, "lab_status 명시 부재 (rule 96 R1-A)"
 
 
 # ── adapter origin 주석 (rule 96 R1-A — web sources 14건) ───────────────────

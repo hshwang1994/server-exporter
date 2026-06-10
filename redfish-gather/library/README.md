@@ -38,7 +38,6 @@
 | `account_service_provision()` 본문 | inline if/elif vendor 분기 | 사이트 실측 + 펌웨어 별 사고 매트릭스 |
 
 이 외 영역 (common / 3-channel) 의 vendor 하드코딩 금지 (rule 12 R1).
-검증: `python scripts/ai/verify_vendor_boundary.py`.
 
 ## 외부 의존성 정책 (rule 10 R2)
 

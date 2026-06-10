@@ -48,13 +48,6 @@ flowchart TD
   classDef cb fill:#fdd,stroke:#c33,color:#000,stroke-width:2px
 ```
 
-## 회귀 차단 (cycle 2026-05-07 추가)
-
-3 skeleton 파일 (init_fragments / build_empty_data / build_failed_output) 의 data skeleton 동기화 검증:
-```bash
-python scripts/ai/hooks/pre_commit_fragment_skeleton_sync.py --all
-```
-
 ## Fragment 변수 정본 (rule 22 R7)
 
 각 gather 가 set 하는 5 변수 (변수 이름 공통, 값으로 자기 섹션):

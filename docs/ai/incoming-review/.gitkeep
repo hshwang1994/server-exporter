@@ -1,8 +1,0 @@
-# incoming-review/
-
-머지 / pull / rebase 후 자동 검증 보고서 위치 (rule 97).
-
-`scripts/ai/hooks/post_merge_incoming_review.py` 실행 시 `<날짜>-<sha>.md` 자동 생성.
-
-수동 호출 가능:
-- skill `review-incoming-merge`

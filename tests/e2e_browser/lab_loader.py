@@ -60,6 +60,6 @@ def require_lab_creds() -> LabCreds:
         raise RuntimeError(
             f"Lab credentials not found: {LAB_CREDS_PATH}\n"
             "Browser E2E and live probe tests require local lab access.\n"
-            "See docs/ai/catalogs/LAB_INVENTORY.md for setup."
+            "Provide lab inventory and credentials to enable these tests."
         )
     return creds

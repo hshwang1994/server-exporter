@@ -513,7 +513,7 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 | GitHub community / issue | Inspur / Quanta / Huawei / Fujitsu (영문 docs 약함 영역) |
 | 사이트 실측 | 본 Round 16.1 (Dell/HPE/Lenovo/Cisco × 1 generation) |
 
-cycle 2026-05-07 M-K1 검증: 30/30 adapter origin 주석 일관성 PASS (verify 도구: `python scripts/ai/hooks/adapter_origin_check.py --all --redfish-only`).
+cycle 2026-05-07 M-K1 검증: 30/30 adapter origin 주석 일관성 PASS.
 
 ### 16.3.1 cycle 2026-05-11 hpe-csus-add 추가 (lab 부재)
 
@@ -556,10 +556,6 @@ cycle 2026-05-07 M-K1 검증: 30/30 adapter origin 주석 일관성 PASS (verify
 | 호환성 매트릭스 | [22_compatibility-matrix.md](22_compatibility-matrix.md) |
 | Adapter 시스템 (점수 계산) | [10_adapter-system.md](10_adapter-system.md) |
 | 결정 추적 | [19_decision-log.md](19_decision-log.md) |
-| lab 도입 후 별도 cycle | [docs/ai/NEXT_ACTIONS.md](ai/NEXT_ACTIONS.md) (M-L1) |
-| vendor adapter 매트릭스 | [docs/ai/catalogs/VENDOR_ADAPTERS.md](ai/catalogs/VENDOR_ADAPTERS.md) (M-L2) |
-| compatibility matrix 상세 | [docs/ai/catalogs/COMPATIBILITY-MATRIX.md](ai/catalogs/COMPATIBILITY-MATRIX.md) (M-L3) |
-| 외부 계약 매트릭스 | [docs/ai/catalogs/EXTERNAL_CONTRACTS.md](ai/catalogs/EXTERNAL_CONTRACTS.md) (M-K2) |
 
 ## 자주 헷갈리는 점
 

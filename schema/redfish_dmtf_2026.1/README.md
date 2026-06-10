@@ -47,9 +47,8 @@ print(d["definitions"]["LinkStatus"]["enum"])
 - 신규 vendor / 세대 추가 시 참조 리소스 확장
 
 갱신 시: 동일 절차로 해당 리소스 최신 json-schema 재복사 + `dmtf_info.json` 버전 갱신 +
-`docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 의 대조 스냅샷 갱신.
+외부 계약 대조 스냅샷 갱신.
 
 ## 최초 대조 결과 (2026-06-08)
 
 `redfish_gather.py` 의 enum/필드/path 10개 대조 항목 중 **9 MATCH + 1 GAP(보정 완료)**.
-상세는 `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` "DMTF DSP8010 2026.1 대조" 절 참조.
