@@ -4,10 +4,10 @@
 // 대상      : Dell PowerEdge R760 / iDRAC 7.10.70.00 (10.100.15.27, hostname=r760-1.gooddi.lab)
 // 채널      : redfish-gather (stdlib HTTPS + Basic Auth)
 // 특이사항  : iDRAC10 / Redfish 1.20.1 (Dell Mavericks 세대)
-//             - adapter: redfish_dell_idrac10 (cycle 2026-05-01 신설 priority=110)
+//             - adapter: redfish_dell_idrac10 (priority=120)
 //             - sections 8/10 success: system / users 미지원 (Redfish 채널 특성)
 //             - 풍부한 OEM 필드 (Dell.idrac_*, Dell.lifecycle_*, Dell.chassis_service_tag)
-//             - cycle 2026-05-06 F49: Dell iDRAC9 7.10+ Security Strengthen Policy (15자 이상)
+//             - Dell iDRAC9 7.10+ Security Strengthen Policy (15자 이상)
 //               primary 인증 = infraops/Passw0rd1!Infra (vault recovery list 와 다름)
 // 캡처 일시 : 2026-05-07
 // =============================================================================
@@ -47,7 +47,7 @@
       "systems_uri": "/redfish/v1/Systems",                // Systems collection URI
       "auth": {                                         // try_credentials 결과 — 시도한 계정 / 사용한 계정 / fallback 여부
         "attempted_count": 5,                              // vault/redfish/dell.yml accounts 5개 (primary + recovery 4)
-        "used_label": "common_infraops",                   // primary 성공 (5 vendor 통일 — cycle 2026-05-06 F50)
+        "used_label": "common_infraops",                   // primary 성공 (5 vendor 통일)
         "used_role": "primary",                         // 계정 role — primary / secondary / recovery
         "fallback_used": false                          // recovery 계정 사용 여부
       },
@@ -68,7 +68,7 @@
     "bmc_ip": "10.100.15.27",                              // Redfish 채널 — BMC IP
     "host_ip": "10.100.15.27"                              // 호출자 inventory_json bmc_ip
   },
-  "errors": [],                                         // 수집 중 errors (warning 수준이면 status=success 와 공존 가능 — rule 13 R8)
+  "errors": [],                                         // 수집 중 errors (warning 수준이면 status=success 와 공존 가능)
   "data": {                                             // 실제 수집된 raw 데이터 (섹션별 dict). not_supported / failed 섹션은 null 또는 빈 list
     "memory": {
       "total_mb": 262144,                                  // 256 GB
@@ -163,7 +163,7 @@
           "protocol": "PCIe",                           // SAS / SATA / PCIe / NVMe / null
           "health": "OK",
           "failure_predicted": false,                      // SMART 기반 — 장애 예측
-          "predicted_life_percent": 100                    // 남은 수명 (%) — Dell 전용 (cycle 2026-05-06 F49)
+          "predicted_life_percent": 100                    // 남은 수명 (%) — Dell 전용
         }
       ],
       "logical_volumes": [                              // LVM/RAID 가상 볼륨 list
@@ -366,5 +366,5 @@
       {"id": "Installed-28897-7.10.70.00__USC.Embedded.1:LC.Embedded.1", "name": "Lifecycle Controller", "version": "7.10.70.00", "updateable": true, "component": "28897", "pending": false, "category": "lifecycle"}
     ]
   },
-  "schema_version": "1"                                 // envelope schema 버전 — "1" 고정 (rule 13 R5)
+  "schema_version": "1"                                 // envelope schema 버전 — "1" 고정
 }

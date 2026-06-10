@@ -1,5 +1,5 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Supermicro / Super Micro Computer
 # Firmware: ARS generation BMC (ARM platform — Ampere Altra / Microsoft Cobalt)
 # Origin: Supermicro ARS BMC documentation
@@ -8,19 +8,19 @@
 #   AST2600 BMC (Intel/AMD platform 과 동일 BMC chip) + 최신 Redfish 펌웨어.
 #   Processor 영역 차이: Manufacturer="Ampere" 또는 "Microsoft", InstructionSet="ARM-A64".
 #   기타 sections (Storage / Power / Network / BMC) 는 X13/X14 와 거의 동일.
-# Sources (rule 96 R1-A — lab 부재):
+# Sources (lab 부재):
 #   - https://www.supermicro.com/manuals/superserver/ARS/
 #   - https://www.supermicro.com/manuals/other/RedfishUserGuide.pdf
 #   - https://www.supermicro.com/support/resources/bios_ipmi.php?type=BMC
-# Tested against: lab 부재 (web sources only). 사용자 사이트 도입 시 fixture 캡처.
+# 검증 기준: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
 # Compatibility 가정 (web sources):
 #   - manufacturer: Supermicro alias 전 generation 공통
 #   - Manager URI / System URI: X12+ 와 동일
 #   - PowerSubsystem 표준 지원 (X12+ 와 동일)
 #   - Storage 표준 path 지원 (X11+ 와 동일)
 #   - OEM 약함 — 표준 path 위주
-# Lab status: 부재 — 사용자 명시 2026-05-07 Q2 (Supermicro 사이트 BMC 0대)
-# Next action: lab 도입 후 별도 cycle — ARM Processor 영역 capability 보정 (rule 50 R2 단계 10)
+# Lab status: 부재 — web sources only (Supermicro 사이트 BMC 0대)
+# Next action: lab 도입 후 ARM Processor 영역 capability 보정
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_supermicro_ars
 channel: redfish
@@ -55,7 +55,7 @@ normalize:
 credentials:
   profile: "supermicro"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
+  # AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: supermicro_factory, role: recovery }
 

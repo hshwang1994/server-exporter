@@ -1,4 +1,4 @@
-# Cisco CIMC 4.x (UCS C-series M5/M6) fixture — M-H4 (cycle 2026-05-07)
+# Cisco CIMC 4.x (UCS C-series M5/M6) fixture
 
 > Lab 검증된 fixture `tests/fixtures/redfish/cisco/` (CIMC 4.1) 와 동일 generation.
 > 본 fixture 는 CIMC 4.x 신 펌웨어 (PowerSubsystem 일부 도입) 변형 시뮬.
@@ -7,7 +7,7 @@
 
 - Sources: `https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/c/sw/api/4_3/`
 - Generation: CIMC 4.x (UCS C-series M5/M6) 2020-2022
-- Lab tested 4.1: `tests/evidence/2026-04-29-cisco-redfish-critical-review.md`
+- Lab tested 4.1
 
 ## 시뮬레이션 시나리오
 

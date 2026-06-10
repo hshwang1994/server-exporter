@@ -1,28 +1,28 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Cisco
 # Firmware: 4.x / 5.x / 6.x — UCS C-Series M4 ~ M8 generation cover
 # Generation: cimc (CIMC 4.x ~ 6.x — M4 lab tested + M5~M8 web sources)
 # Generation Year: "2014-2024 (CIMC 2.x ~ 6.x evolution)"
 # Redfish Introduction: "DSP0268 v1.0+ ~ v1.10+"
 # Origin: Cisco UCS Manager / CIMC Redfish API documentation
-# Last sync: 2026-05-11 (M-H4 — M5~M8 generation 매트릭스 + firmware_patterns 확장)
+# Last sync: 2026-05-11 (M5~M8 generation 매트릭스 + firmware_patterns 확장)
 # Notes: UCS C-Series M4~M8. strategy: standard_only (OEM 디렉터리 미생성).
 #
-# Generation 매트릭스 (F68 cycle 2026-05-01 — web sources):
-#   - M4 (Broadwell-EP) — lab tested 10.100.15.2 / 4.1(2g) / Redfish 1.2.0 ✓
+# Generation 매트릭스 (web sources):
+#   - M4 (Broadwell-EP) — lab tested / 4.1(2g) / Redfish 1.2.0 ✓
 #   - M5 (Skylake-SP) — 4.3(2.x) 마지막 (2024-2025 EOL). web sources only.
 #   - M6 (Ice Lake-SP) — Redfish 1.x 정식 지원. web sources only.
 #   - M7 (Sapphire Rapids) — Redfish 활발 지원. web sources only.
 #   - M8 (Emerald Rapids) — IMC 4.3(6.250039) 첫 지원. 2025 출하. web sources only.
-# Sources (M5~M8 web sources, rule 96 R1-A):
+# Sources (M5~M8 web sources):
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/c/sw/api/4_3/b-cisco-ucs-c-series-servers-rest-api-programmer-s-guide-release-4-3/m-cisco-imc-rest-api-overview.html
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/release/notes/b_release-notes-for-cisco-ucs-rack-server-software-release-6-0-1.html
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/release/notes/b_release-notes-for-cisco-ucs-rack-server-software-release-4_3_5.html
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/release/notes/b_release-notes-for-cisco-ucs-rack-server-software-release-4_3_6.html
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/c/sw/api/3_0/b_Cisco_IMC_REST_API_guide_301/m_redfish_api_examples.html
-# Tested against (실측 2026-04-29, cisco-critical-review):
-#   - TA-UNODE-G1 (Cisco Systems Inc) × 1대 (10.100.15.2)
+# 검증 기준 (실측 2026-04-29, cisco-critical-review):
+#   - TA-UNODE-G1 (Cisco Systems Inc) × 1대
 #   - CIMC FirmwareVersion: "4.1(2g)"
 #   - BIOS: C220M4.4.1.2c.0.0202211901 (UCS C220 M4 계열)
 #   - Redfish: 1.2.0 (구 spec — Cisco BMC가 Redfish 표준 부분 지원)
@@ -31,11 +31,10 @@
 #   - Manager URI: /redfish/v1/Managers/CIMC
 #   - PSU: 770W × 2 (InputRanges[0].OutputWattage)
 #   - DIMM: 16 × 64 GiB DDR4-2400
-#   - 데이터 경로: tests/fixtures/redfish/cisco/, tests/evidence/2026-04-29-cisco-redfish-critical-review.md
+#   - 데이터 경로: tests/fixtures/redfish/cisco/
 #   - 주의: ServiceRoot.Oem 키 비어있음
 # Untested (Round 11 환경 이슈):
-#   - 10.100.15.1: HTTP 503 (CIMC 서비스 다운)
-#   - 10.100.15.3: connect timeout (BMC 도달 불가)
+#   - HTTP 503 (CIMC 서비스 다운) / connect timeout (BMC 도달 불가) 사례
 #
 # Quirks (실측 확정 2026-04-29 — gather 코드의 fallback 경로가 처리):
 #   Q1. ServiceRoot.Vendor = "Cisco Systems Inc."(마침표) vs
@@ -58,18 +57,18 @@
 #       의 _network_meta 임시 키로 추출 후 normalize_standard.yml 의 dns_servers
 #       / default_gateways 에 union (이전: dns_servers 하드코딩 [], 손실).
 #
-# Generation matrix (M-H4 cycle 2026-05-07 — web sources 기반 확장):
+# Generation matrix (web sources 기반 확장):
 #   - CIMC 1.x (UCS M3, 2013): cisco_bmc.yml (priority=10) 가 fallback cover
 #   - CIMC 2.x (UCS M4 시기, 2014-2017): standard storage / Power deprecated only
 #   - CIMC 3.x (UCS M5 시기, 2017-2020): standard storage / Power deprecated only
 #   - CIMC 4.x (UCS M5/M6 시기, 2020-2022): PowerSubsystem 일부 도입
 #   - CIMC 5.x (UCS M7 시기, 2022-2024): PowerSubsystem 표준
 #   - CIMC 6.x (UCS M7/M8 시기, 2024+): PowerSubsystem 표준 + Storage RDE 가능
-# Lab status: M4 (10.100.15.2, CIMC 4.1) 만 lab 검증. M5~M8 web sources only.
-# UCS B-series (blade) 는 UCS Manager 매개 — 본 adapter 범위 외 (별도 cycle).
-# UCS S-series (storage) 는 cycle 2026-05-07 model_patterns 추가 — CIMC 와 유사.
+# Lab status: M4 (CIMC 4.1) 만 lab 검증. M5~M8 web sources only.
+# UCS B-series (blade) 는 UCS Manager 매개 — 본 adapter 범위 외 (별도 검토).
+# UCS S-series (storage) 는 model_patterns 추가 — CIMC 와 유사.
 # UCS X-series 는 cisco_ucs_xseries.yml (priority=110) 별도 cover.
-# Next action: M5~M8 lab 도입 후 별도 cycle (Power / Storage 분기 검증)
+# Next action: M5~M8 lab 도입 후 Power / Storage 분기 검증
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_cisco_cimc
 channel: redfish
@@ -77,12 +76,12 @@ priority: 100
 
 match:
   vendor: ["Cisco", "Cisco Systems Inc", "Cisco Systems Inc.", "Cisco Systems", "cisco"]
-  # F125 cycle 2026-05-01 — CIMC < 4.x advisory: 매우 제한적 Redfish (Redfish 1.0.x).
+  # CIMC < 4.x advisory: 매우 제한적 Redfish (Redfish 1.0.x).
   #   3.x 이하 펌웨어는 cisco_bmc.yml (priority=10, generic fallback) 가 cover.
   # 본 adapter (M4 lab tested + M5~M8 web sources) 는 4.x / 5.x / 6.x cover.
-  # M-H4 (cycle 2026-05-07) — S-series storage server 추가 (CIMC 와 유사 + Storage 강화):
+  # S-series storage server 추가 (CIMC 와 유사 + Storage 강화):
   firmware_patterns: ["^[4-6]\\.", "CIMC.*[4-6]"]
-  # Round 17 #22: 실제 Redfish System.Model 은 하이픈형 "UCSC-C220-M5SX" (fixtures 확인).
+  # 실제 Redfish System.Model 은 하이픈형 "UCSC-C220-M5SX" (fixtures 확인).
   # 기존 패턴은 공백 "C220 M5" 만 허용해 ServiceRoot.Product 외 System.Model 과 미스매치.
   # [ -] 로 공백/하이픈 양형 수용 (source: tests/fixtures/redfish/cisco_cimc_v{2,3,4}/system.json).
   model_patterns:
@@ -90,8 +89,8 @@ match:
     - "C220[ -]M[4-8]"
     - "C240[ -]M[4-8]"
     - "C480[ -]M[4-8]"
-    - "UCS-S3260.*"     # M-H4 cycle 2026-05-07 — S-series storage server M5+
-    - "S3260.*"         # M-H4 cycle 2026-05-07 — S-series 단축형
+    - "UCS-S3260.*"     # S-series storage server M5+
+    - "S3260.*"         # S-series 단축형
     - "TA-UNODE.*"
 
 capabilities:
@@ -116,7 +115,7 @@ normalize:
 credentials:
   profile: "cisco"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/cisco.yml accounts 의 label 과 매핑 (CIMC AccountService 표준 미지원 시 graceful degradation)
+  # AccountService 진입점 — vault/redfish/cisco.yml accounts 의 label 과 매핑 (CIMC AccountService 표준 미지원 시 graceful degradation)
   recovery_accounts:
     - { vault_label: cisco_current, role: recovery }
     - { vault_label: cisco_factory, role: recovery }

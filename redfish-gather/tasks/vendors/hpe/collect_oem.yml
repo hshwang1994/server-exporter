@@ -4,30 +4,30 @@
 # HPE OEM 특화 수집 (Oem.Hpe namespace)
 # 결과는 반드시 fragment 로만 생성하고 merge_fragment 를 호출한다.
 #
-# Fragment 철학 (rule 22) — 자기 fragment 만
-# Additive only (rule 92 R2) — 기존 iLO 시리즈 영역 변경 0 / Superdome 분기 추가만
+# Fragment 철학 — 자기 fragment 만
+# Additive only — 기존 iLO 시리즈 영역 변경 0 / Superdome 분기 추가만
 #
-# M-G1 cycle 2026-05-07-all-vendor-coverage: Superdome Flex (Gen 1/2 + 280) 분기 보강
-# M-CSUS3200 cycle 2026-05-11: HPE CSUS 3200 (Compute Scale-up Server 3200) 분기 확장
+# Superdome Flex (Gen 1/2 + 280) 분기 보강
+# HPE CSUS 3200 (Compute Scale-up Server 3200) 분기 확장
 #   — Superdome Flex 후속 (HPE 공식 "built on the proven HPE Superdome Flex architecture")
 #   — 동일 Oem.Hpe namespace + PartitionInfo/FlexNodeInfo/GlobalConfiguration 상속
-#   — model regex 확장 Additive only (rule 92 R2) — fragment shape 변경 0
+#   — model regex 확장 Additive only — fragment shape 변경 0
 #
-# cycle 2026-05-12 (ADR-2026-05-12) — RMC 멀티-노드 토폴로지 정식 지원:
+# RMC 멀티-노드 토폴로지 정식 지원:
 #   - 본 task 는 Partition0 representative OEM 영역만 처리 (현행 placeholder 유지).
-#   - 멀티 partition 별 Oem.Hpe.PartitionInfo 정밀화는 lab 도입 cycle 영역 (NEXT_ACTIONS C7).
+#   - 멀티 partition 별 Oem.Hpe.PartitionInfo 정밀화는 lab 도입 후 영역.
 #   - 실제 multi-node 데이터는 redfish_gather.py `_collect_multi_node_topology` 가 수집해
-#     `data.multi_node.partitions[]` 컨테이너에 노출 (envelope Additive — rule 92 R2).
+#     `data.multi_node.partitions[]` 컨테이너에 노출 (envelope Additive).
 #   - lab 도입 후 본 task 를 `_rf_raw_collect.multi_node.partitions[].system.Oem.Hpe.*`
 #     loop 로 확장 — 단, gather_systems_multi 가 raw OEM 보존 API 추가 필요.
 #
-# source: HPE Superdome Flex Server Admin Guide (확인 2026-05-11 — lab 부재)
+# source: HPE Superdome Flex Server Admin Guide (lab 부재)
 # source: https://support.hpe.com/hpesc/public/docDisplay (Superdome Flex/280 매뉴얼)
 # source: https://github.com/HewlettPackard/sdflexutils (sdflexutils 1.5.1)
 # source: https://hewlettpackard.github.io/ilo-rest-api-docs/ilo5/ (iLO 5 API reference)
 # source: https://www.hpe.com/psnow/doc/a50009596enw (CSUS 3200 architecture and RAS — Superdome Flex 후속 명시)
 # source: https://cdrdv2-public.intel.com/792357/FAQ%20-%20HPE%20Compute%20Scale-up%20Server%203200.pdf (CSUS 3200 FAQ — RMC + 표준 Redfish)
-# lab: 부재 (사용자 명시 2026-05-01 / CSUS3200 사용자 명시 2026-05-11)
+# lab: 부재 (web sources)
 #
 # OEM namespace: Oem.Hpe (iLO 시리즈 + Superdome + CSUS 3200 공통)
 # Superdome / CSUS 3200 공통 특이 영역:
@@ -42,7 +42,7 @@
     _hpe_oem_ilo_thermal: {}
   no_log: true
 
-# ── 2) Superdome Flex / CSUS 3200 분기 (M-G1 + M-CSUS3200) — model_patterns 매칭 시만 ──
+# ── 2) Superdome Flex / CSUS 3200 분기 — model_patterns 매칭 시만 ──
 - name: "redfish | hpe | Superdome Flex / CSUS 3200 OEM 수집 (모델 매칭 시)"
   block:
     - name: "redfish | hpe | Superdome/CSUS — PartitionInfo 추출 (Systems.Oem.Hpe.PartitionInfo)"
@@ -85,12 +85,12 @@
         _hpe_superdome_global: {}
   when:
     # Superdome / CSUS 3200 모델 시그니처 매칭 (lab 부재 — model_patterns 기반)
-    # Round 15 fix: _rf_detected_model 은 어디서도 set 안 되는 변수 (항상 '' → 본 block 영구 skip
+    # _rf_detected_model 은 어디서도 set 안 되는 변수 (항상 '' → 본 block 영구 skip
     #   → CSUS 3200 OEM 수집이 한 번도 실행 안 되던 잠복 버그). detect_vendor.yml 가 set 하는
     #   _rf_probe_facts.model (실제 model 문자열) 로 교체. 일반 iLO 는 model 불일치 → 종전대로 skip.
-    # M-CSUS3200 cycle 2026-05-11: "Compute Scale-up|CSUS" 추가 — fragment shape 동일 유지
-    # 2026-05-11 fix: regex_search 가 미매치 시 None 반환 — Ansible strict mode 에서 NoneType conditional fail.
-    # 일반 iLO 모델 (예: DL380 Gen11) 에서 본 conditional 평가 시 task 전체 fail 사고 (build #133/135/136/137).
+    # "Compute Scale-up|CSUS" 추가 — fragment shape 동일 유지
+    # regex_search 가 미매치 시 None 반환 — Ansible strict mode 에서 NoneType conditional fail.
+    # 일반 iLO 모델 (예: DL380 Gen11) 에서 본 conditional 평가 시 task 전체 fail 사고.
     # `is not none` 명시 boolean 변환으로 차단.
     - "(((_rf_probe_facts | default({})).model | default('')) | regex_search('(?i)Superdome|Flex|Compute Scale-up|CSUS')) is not none"
 

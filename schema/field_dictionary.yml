@@ -30,8 +30,8 @@
 #   nice — 설명이 있으면 좋고 없어도 사용에 지장 없음
 #   skip — 의미가 자명해서 본 사전에 등록하지 않음 (예: hostname)
 #
-# 등록 현황 (2026-05-29 hba-ib-csus): Must 39 / Nice 38 / Skip 6 = 총 83 entries
-#   (cycle 2026-05-29 +9 Nice — storage.hbas[]/infiniband[] 서브필드. Additive, schema_version 유지 D3)
+# 등록 현황 (2026-05-29): Must 39 / Nice 38 / Skip 6 = 총 83 entries
+#   (+9 Nice — storage.hbas[]/infiniband[] 서브필드. Additive, schema_version 유지)
 #
 # 검증 (수동): tests/validate_field_dictionary.py 가 다음 5가지를 검사합니다.
 #   1) 모든 entry 에 help_ko, help_en 이 함께 있는지
@@ -111,7 +111,7 @@ fields:
       호출자 노출용 벤더 표시값. 내부 canonical(예: 'hpe')을 vendor_aliases.yml 의
       vendor_output_display / adapter_output_display 로 매핑한 결과.
       HPE 계열 → 'hp', HPE Compute Scale-up Servers (Superdome Flex + CSUS 3200) → 'hpCsus'
-      (camelCase 예외 — 2026-06-04 사용자 결정 + HPE 공식 분류 web 검증). OS 채널은 hardware 미수집 시 null.
+      (camelCase 예외 — 2026-06-04, HPE 공식 분류 web 검증 근거). OS 채널은 hardware 미수집 시 null.
       ESXi 는 hosting hardware 벤더.
     help_en: >-
       Caller-facing vendor display value: internal canonical (e.g. 'hpe') mapped
@@ -273,32 +273,32 @@ fields:
     type: "integer|null"
     priority: must
     channel: [redfish, os]
-    # cycle 2026-05-11 field-channel-refinement: ESXi channel 제거.
+    # ESXi channel 제거.
     # 근거: esxi_baseline.json 의 installed_mb=null (ansible_memtotal_mb 만 수집,
-    # DIMM 슬롯 정보 없음). field_usage_matrix 분류 1 (수집 불가).
+    # DIMM 슬롯 정보 없음). 분류 1 (수집 불가).
     help_ko: >-
       물리적으로 장착된 메모리 용량 (MB).
       Redfish 채널에서 주로 제공. OS 채널에서는 dmidecode 권한 부족 시 null 가능.
-      ESXi 채널은 미수집 (ansible_memtotal_mb 만 제공) — channel 에서 제외 (cycle 2026-05-11).
+      ESXi 채널은 미수집 (ansible_memtotal_mb 만 제공) — channel 에서 제외.
       total_mb와 동일한 값일 수 있으나, total_basis가 다르면 의미가 다름.
     help_en: >-
       Physically installed memory capacity (MB).
       Primarily provided by Redfish. May be null in OS channel (dmidecode permission).
-      ESXi channel excluded (cycle 2026-05-11) — ansible_memtotal_mb only.
+      ESXi channel excluded — ansible_memtotal_mb only.
 
   memory.visible_mb:
     type: "integer|null"
     priority: must
     channel: [os, esxi]
-    # cycle 2026-05-11 field-channel-refinement: Redfish channel 제거.
+    # Redfish channel 제거.
     # 근거: Redfish spec 미정의 (Memory.v1_*.json 에 VisibleMiB 필드 없음).
-    # 4 redfish baseline (dell/hpe/lenovo/cisco) 모두 null. field_usage_matrix 분류 1.
+    # 4 redfish baseline (dell/hpe/lenovo/cisco) 모두 null. 분류 1.
     help_ko: >-
       운영체제 또는 하이퍼바이저가 인식하는 메모리 용량 (MB).
-      OS/ESXi 채널 전용. Redfish 는 BMC API spec 미정의 — channel 에서 제외 (cycle 2026-05-11).
+      OS/ESXi 채널 전용. Redfish 는 BMC API spec 미정의 — channel 에서 제외.
     help_en: >-
       OS or hypervisor visible memory capacity (MB).
-      OS/ESXi channels only. Redfish excluded (cycle 2026-05-11) — not defined in BMC spec.
+      OS/ESXi channels only. Redfish excluded — not defined in BMC spec.
 
   # ──────────────────────────────────────────────────────────────────────────
   # storage
@@ -584,7 +584,7 @@ fields:
       Raw string "null" is converted to None.
 
   # ──────────────────────────────────────────────────────────────────────────
-  # users (DRIFT-004 cycle-006 신규)
+  # users
   # ──────────────────────────────────────────────────────────────────────────
 
   "users[]":
@@ -772,9 +772,9 @@ fields:
     enum: ["reachable", "port", "protocol", "auth", "fallback"]
     priority: nice
     channel: [redfish, os, esxi]
-    # cycle 2026-05-11 field-channel-refinement: conditional 필드 — channel 유지.
+    # conditional 필드 — channel 유지.
     # success status baseline 에서 항상 null (실패하지 않음). 실패 status fixture
-    # 추가 시 채워짐. field_usage_matrix 자동 분류 1 (모든 baseline null) 은
+    # 추가 시 채워짐. 자동 분류 1 (모든 baseline null) 은
     # success-only baseline 한계 — conditional 분류 (channel 축소 안 함).
     help_ko: >-
       실패 시 어느 단계에서 실패했는지. **conditional 필드** — status=failed 시만 채워짐.
@@ -962,7 +962,7 @@ fields:
       InfiniBand adapter list. node_guid/link_status/rate. May be empty depending
       on vendor/firmware exposure (best-effort).
 
-  # ── HBA / InfiniBand 서브필드 (cycle 2026-05-29 hba-ib-csus, Additive Nice) ──
+  # ── HBA / InfiniBand 서브필드 (Additive Nice) ──
   # 전 채널 통일 shape (canonical) — 호출자가 채널 무관하게 같은 키로 파싱.
   # source 필드로 출처 식별 (redfish / os / esxi). lab 부재 vendor 는 사이트 실측 시 정정.
 
@@ -1072,7 +1072,7 @@ fields:
     type: "object"
     priority: nice
     channel: [os, esxi]
-    # cycle 2026-05-11 field-channel-refinement F5: OS channel 추가 (Linux + Windows 빌더 구현).
+    # OS channel 추가 (Linux + Windows 빌더 구현).
     # 9 필드 통일 shape (Linux/Windows/ESXi 동일):
     #   timezone(str) / ntp_active(bool) / ntp_synchronized(bool) /
     #   firewall_tool(str) / firewall_state(str) / listening_ports(str[]) /
@@ -1096,7 +1096,7 @@ fields:
       Best-effort: null/[] when unavailable.
 
   # ──────────────────────────────────────────────────────────────────────────
-  # cycle 2026-05-12 (ADR-2026-05-12) — RMC 멀티-노드 토폴로지
+  # RMC 멀티-노드 토폴로지
   # HPE CSUS 3200 / Superdome Flex 처럼 단일 진입점이 N개 Manager / N개 nPartition /
   # N개 Chassis 노출. adapter `vendor_notes.manager_layout` 정의 vendor 만 활성.
   # 기타 13 vendor 는 `data.multi_node = null` (Additive — envelope shape 변경 0).
@@ -1111,12 +1111,12 @@ fields:
       진입점이 N개 Manager / N개 nPartition / N개 Chassis 노출 환경에서 활성.
       adapter vendor_notes.manager_layout 미정의 vendor 는 null. 기존 data.system /
       data.bmc / ... 등 9 section path 는 Partition0 representative 로 유지 (Additive
-      only — rule 92 R2).
+      only).
     help_en: >-
       RMC multi-node topology container. Active for single-aggregated-controller
       environments like HPE CSUS 3200 / Superdome Flex. null when adapter
       vendor_notes.manager_layout not defined. Existing data.system/data.bmc/...
-      paths retained as Partition0 representative (Additive only — rule 92 R2).
+      paths retained as Partition0 representative (Additive only).
 
   "multi_node.enabled":
     type: "boolean"

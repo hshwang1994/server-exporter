@@ -3,7 +3,7 @@
   "@odata.id": "/redfish/v1/Fabrics/FlexGrid/Endpoints",
   "@odata.type": "#EndpointCollection.EndpointCollection",
   "Name": "Endpoint Collection",
-  "_note": "lab 부재 — FlexGrid Endpoints. rule 96 R1-A.",
+  "_note": "lab 부재 — FlexGrid Endpoints.",
   "Members@odata.count": 2,
   "Members": [
     {"@odata.id": "/redfish/v1/Fabrics/FlexGrid/Endpoints/Endpoint0"},

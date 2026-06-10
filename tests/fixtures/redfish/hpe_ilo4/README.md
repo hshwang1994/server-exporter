@@ -1,6 +1,6 @@
-# HPE iLO 4 fixture — M-H2 (cycle 2026-05-07)
+# HPE iLO 4 fixture
 
-> Lab 부재 — web sources only (rule 96 R1-A). Priority 2 fixture.
+> Lab 부재 — web sources only. Priority 2 fixture.
 
 ## 출처
 

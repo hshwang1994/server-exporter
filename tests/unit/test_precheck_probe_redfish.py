@@ -88,7 +88,7 @@ def test_service_root_503_treated_as_supported():
 
 
 def test_service_root_406_treated_as_supported():
-    """회귀 차단 (cycle 2026-04-30): 406 = Accept 헤더 협상 불일치.
+    """회귀 차단: 406 = Accept 헤더 협상 불일치.
     HPE iLO 펌웨어 ServiceRoot RedfishVersion 1.17.0 등 일부 BMC가 Accept 헤더
     누락된 요청을 거부. http_get에 Accept/OData-Version 명시 + 406도 supported로 분류.
     """

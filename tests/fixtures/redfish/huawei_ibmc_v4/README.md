@@ -1,6 +1,6 @@
 # Huawei iBMC 4.x mock fixture — FusionServer Pro V6
 
-> cycle 2026-05-11 M-C3 — lab 부재 web sources 기반 (rule 96 R1-A)
+> Lab 부재 web sources 기반
 
 ## Vendor
 
@@ -17,11 +17,11 @@
 | Storage | standard | standard |
 | OEM | Oem.Huawei 강화 | 표준 가까움 + Oem.Huawei 유지 |
 
-## Web sources (rule 96 R1-A)
+## Web sources
 
 - Huawei iBMC 4.x Redfish API guide (확인 2026-05-07)
 - DMTF DSP0268 v1.10 — PowerSubsystem schema
 
 ## lab 상태
 
-- **부재** — 사이트 fixture 도입 시 보정 의무 (NEXT_ACTIONS 등재)
+- **부재** — 사이트 fixture 도입 시 보정 의무

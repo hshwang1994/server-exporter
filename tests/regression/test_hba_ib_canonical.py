@@ -1,8 +1,8 @@
-"""HBA / InfiniBand canonical cross-channel shape regression (cycle 2026-05-29).
+"""HBA / InfiniBand canonical cross-channel shape regression.
 
-cycle 2026-05-29 (hba-ib-csus): storage.hbas[] / storage.infiniband[] 가 전 채널
+storage.hbas[] / storage.infiniband[] 가 전 채널
 (redfish / os / esxi) 에서 동일 canonical 키를 emit 하는지 검증. 호출자가 채널 무관하게
-같은 키로 파싱 가능해야 함 (EXTERNAL-CONTRACTS §1/§2 통일 shape).
+같은 키로 파싱 가능해야 함 (통일 shape).
 
 빈 baseline (FC/IB 미보유 lab 호스트) 은 빈 list → trivially pass.
 populated: esxi_baseline (FC 2), hpe_csus_3200_baseline (FC 2) 가 실제 검증.

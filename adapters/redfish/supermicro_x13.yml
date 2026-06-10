@@ -1,21 +1,21 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Supermicro / Super Micro Computer
 # Firmware: X13 / H13 / B13 generation BMC (AST2600)
 # Origin: Supermicro X13/H13/B13 BMC documentation
 # Last sync: 2026-05-01 (web sources only — lab 부재)
 # Notes: Eagle platform. Sapphire Rapids / Genoa CPU. AST2600 BMC.
 #   B13 는 X13 derivative (Building Blocks platform).
-# Sources (rule 96 R1-A — lab 부재):
+# Sources (lab 부재):
 #   - https://www.supermicro.com/manuals/other/BMC_IPMI_X13_H13_B13.pdf
 #   - https://www.supermicro.com/manuals/other/RedfishUserGuide.pdf
 #   - https://www.supermicro.com/manuals/other/redfish-ref-guide-html/Content/general-content/firmware-inventory-update-service.htm
-# Tested against: lab 부재 (web sources only). 사용자 사이트 도입 시 fixture 캡처.
+# 검증 기준: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
 # Compatibility 가정:
 #   - X12 와 동일 BMC chip (AST2600) → schema 기본 호환
 #   - 신 firmware update parameters (server-exporter read-only 영향 없음)
-# Lab status: 부재 — web sources only (rule 96 R1-A — 사이트 BMC 0대, cycle 2026-05-07 Q2)
-# Next action: X13/H13/B13 (Eagle / Sapphire Rapids / Genoa) lab 도입 후 별도 cycle (B13 Building Blocks platform schema 검증)
+# Lab status: 부재 — web sources only (사이트 BMC 0대, 2026-05-07)
+# Next action: X13/H13/B13 (Eagle / Sapphire Rapids / Genoa) lab 도입 후 B13 Building Blocks platform schema 검증
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_supermicro_x13
 channel: redfish
@@ -49,7 +49,7 @@ normalize:
 credentials:
   profile: "supermicro"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
+  # AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: supermicro_factory, role: recovery }
 
@@ -70,8 +70,8 @@ vendor_notes:
   power_subsystem_introduction: true     # PowerSubsystem 표준 지원 (X12+)
   storage_strategy_evolution: standard   # 표준 Storage path 지원
   redfish_introduction: "DSP0268 v1.16+"
-# Lab status: 부재 — 사용자 명시 2026-05-07 Q2 (Supermicro 사이트 BMC 0대)
-# Next action: lab 도입 후 별도 cycle — capability 보정 (rule 50 R2 단계 10)
+# Lab status: 부재 — web sources only (Supermicro 사이트 BMC 0대)
+# Next action: lab 도입 후 capability 보정
 
 diagnosis:
   protocol_name: redfish

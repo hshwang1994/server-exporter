@@ -69,7 +69,7 @@ pipeline {
             defaultValue: '',
             description : '결과 전달 Callback URL (예: http://portal.example.com)'
         )
-        // cycle 2026-04-30: 디버그용 ANSIBLE_VERBOSITY 토글 (운영 기본 0)
+        // 디버그용 ANSIBLE_VERBOSITY 토글 (운영 기본 0)
         // 0=production (json_only callback만), 1~4=점진적 verbose. 디버그 빌드 한정 1~2 권장.
         // 주의: -vv 이상 시 vault 변수 노출 가능 (no_log 미설정 task가 있다면). 운영은 0 유지.
         choice(
@@ -95,7 +95,7 @@ pipeline {
     stages {
 
         // -- 1. Validate [Agent] -----------------------------------------------
-        // production-audit (2026-04-29): per-stage timeout 명시 — 글로벌 120m을 단일 stage가 독차지하지 않도록
+        // per-stage timeout 명시 — 글로벌 120m을 단일 stage가 독차지하지 않도록
         stage('Validate') {
             agent { label "${params.loc}" }
             options { timeout(time: 2, unit: 'MINUTES') }
@@ -158,7 +158,7 @@ pipeline {
                 REPO_ROOT                = "${WORKSPACE}"
                 ANSIBLE_CONFIG           = "${WORKSPACE}/ansible.cfg"
                 ANSIBLE_JSON_OUTPUT_FILE = "${WORKSPACE}/gather_output.json"
-                // cycle 2026-04-30: verbosity 파라미터로 빌드별 토글 (운영 기본 0)
+                // verbosity 파라미터로 빌드별 토글 (운영 기본 0)
                 ANSIBLE_VERBOSITY        = "${params.verbosity}"
             }
             steps {
@@ -232,13 +232,13 @@ pipeline {
         }
 
         // -- 3. Validate Schema [Agent] ----------------------------------------
-        // production-audit (2026-04-29): catchError 제거 — Stage 3는 hard FAIL 게이트 (rule 80 R1).
+        // catchError 제거 — Stage 3는 hard FAIL 게이트.
         // schema-invalid JSON이 portal로 POST되어 호출자 시스템 파싱이 깨지는 사고 차단.
         stage('Validate Schema') {
             agent { label "${params.loc}" }
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
-                // Round 17 #23: venv 활성화 추가 — 메인 Jenkinsfile Stage 3 와 동일하게 PyYAML 이
+                // venv 활성화 추가 — 메인 Jenkinsfile Stage 3 와 동일하게 PyYAML 이
                 // 있는 /opt/ansible-env 를 활성화. 시스템 python3 에 PyYAML 부재 시 validator 가
                 // ModuleNotFoundError 로 죽어 hard-gate 가 매 빌드 실패하던 것 방지.
                 sh '''#!/bin/bash
@@ -336,7 +336,7 @@ pipeline {
                         }
                     }
 
-                    // production-audit (2026-04-29): rule 31 R2 — callback POST 실패가 빌드 fail 유발 금지.
+                    // callback POST 실패가 빌드 fail 유발 금지.
                     // 수집은 이미 성공했으므로 통보 실패는 UNSTABLE로 마킹 (호출자가 재취득 가능).
                     if (!success) {
                         unstable "[Callback] ${maxRetries}회 재시도 실패 -- ${lastError} (수집 결과는 console log/artifact 확인)"

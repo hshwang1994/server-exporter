@@ -1,6 +1,6 @@
 {
   "_origin": "Supermicro X14 BMC docs (web sources mock, 확인 2026-05-07)",
-  "_note": "X14 — CPLD inventory 추가 (cycle 2026-05-01 cpld_firmware_inventory: true)",
+  "_note": "X14 — CPLD inventory 추가 (CPLD inventory)",
   "@odata.context": "/redfish/v1/$metadata#SoftwareInventoryCollection.SoftwareInventoryCollection",
   "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory",
   "@odata.type": "#SoftwareInventoryCollection.SoftwareInventoryCollection",

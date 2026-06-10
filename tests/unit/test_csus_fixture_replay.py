@@ -1,13 +1,13 @@
 """CSUS 3200 fixture replay — tests/fixtures/redfish/hpe_csus_3200/ 오프라인 재생.
 
-cycle 2026-06-09 (ADR-2026-06-09). 합성 fixture 파일들을 @odata.id 로 키잉한
+합성 fixture 파일들을 @odata.id 로 키잉한
 응답 맵으로 재생해 `_collect_multi_node_topology` 를 end-to-end 구동한다. 이로써
 (1) 신 컴포넌트(Thermal/Boot/LogServices/CompositionService/Fabrics) 수집 경로가
 실제 fixture 로 회귀 보호되고, (2) fixture 들이 내부적으로 일관(링크 ↔ 대상 파일)
 한지 검증된다.
 
-lab 부재 — fixture 는 web sources 합성 (rule 96 R1-A). 실 장비 fixture (NEXT_ACTIONS
-C1) 교체 시 본 테스트는 그대로 재사용 (assert 는 구조 기반).
+lab 부재 — fixture 는 web sources 합성. 실 장비 fixture 교체 시 본 테스트는
+그대로 재사용 (assert 는 구조 기반).
 """
 from __future__ import annotations
 
@@ -102,7 +102,7 @@ def test_partition0_boot_order(topology):
 
 
 def test_all_partitions_populated(topology):
-    """3 nPartition 전부 fixture 로 채워짐 (silent-empty 회귀 차단 — cycle 2026-06-09 review).
+    """3 nPartition 전부 fixture 로 채워짐 (silent-empty 회귀 차단).
 
     이전엔 Partition1/2 fixture 부재로 system/boot 가 조용히 비어 있었음.
     """
@@ -117,7 +117,7 @@ def test_all_managers_populated_and_labeled(topology):
     """4 manager 전부 fixture 로 채워지고 RMC/PDHC/iLO 라벨 + role 분기.
 
     이전엔 PDHC0/PDHC1/Bay1.iLO5 fixture 부재로 bmc.name=None / log_services=[] 가
-    조용히 발생 (cycle 2026-06-09 review MEDIUM).
+    조용히 발생.
     """
     mgrs = {m["id"]: m for m in topology["managers"]}
     assert set(mgrs) == {"RMC", "PDHC0", "PDHC1", "Bay1.iLO5"}
@@ -143,14 +143,14 @@ def test_all_chassis_populated_with_thermal(topology):
 def test_replay_errors_are_only_graceful_404(topology):
     """replay error 는 fixture 미제공 sub-resource(404)만 — 예기치 못한 error 부재 보장.
 
-    cycle 2026-06-09 review [5]: silent-empty 가 아닌 '의도된 graceful 404' 임을 명시.
+    silent-empty 가 아닌 '의도된 graceful 404' 임을 명시.
     per-partition Processors/Memory/Storage/Network sub-resource fixture 부재 (4×3=12).
     """
     GRACEFUL = {"processors", "memory", "storage", "network"}
     errs = topology["errors"]
     bad = [e for e in errs if e.get("section") not in GRACEFUL]
     assert not bad, f"예기치 못한 (graceful 404 아님) error: {bad}"
-    # 모든 error 는 dict + section/message 보유 (rule 22 R8)
+    # 모든 error 는 dict + section/message 보유
     assert all(isinstance(e, dict) and e.get("section") and "message" in e for e in errs)
 
 

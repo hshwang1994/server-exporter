@@ -1,6 +1,6 @@
 # Inspur ISBMC mock fixture — NF5280M5
 
-> cycle 2026-05-11 M-D2 — lab 부재 web sources 기반 (rule 96 R1-A)
+> Lab 부재 web sources 기반
 
 ## Vendor
 
@@ -10,7 +10,7 @@
 - BMC firmware: 4.16.11
 - Manager URI: `/redfish/v1/Managers/1` (표준)
 
-## Web sources (rule 96 R1-A)
+## Web sources
 
 - https://manualzz.com/doc/o/v7c5h/inspur-server-user-manual-nf5280m5-9.14-redfish (확인 2026-05-07)
 - https://www.inspur.com/eportal/fileDir/defaultCurSite/resource/cms/2020/04/2020040211224398612.pdf
@@ -18,9 +18,9 @@
 
 ## lab 상태
 
-- **부재** (사용자 명시 2026-05-01)
+- **부재**
 - Inspur 영문 docs 약함 — 가장 표준 가까운 응답 가정
-- 사이트 도입 시 보정 의무 (NEXT_ACTIONS 등재됨)
+- 사이트 도입 시 보정 의무
 
 ## fixture 구성
 

@@ -1,9 +1,9 @@
 ---
-# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Microsoft Windows Server 2022
-# Firmware: tested_against ["Build 20348 (Server 2022)"]
+# Firmware: 검증 버전 ["Build 20348 (Server 2022)"]
 # Origin: 추정 — 검증 필요 (ansible.windows 3.3.0 + pywinrm 0.5.0 호환성)
-# Last sync: 2026-04-27 (hshwang1994)
+# Last sync: 2026-04-27
 # Notes: priority=50 — windows_2019와 같은 priority. version_patterns로 분기.
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: os_windows_2022

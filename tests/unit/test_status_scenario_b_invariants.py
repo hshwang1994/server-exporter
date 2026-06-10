@@ -1,10 +1,10 @@
-"""M-A3 Case A — 시나리오 B (섹션 success + errors warning) 회귀.
+"""시나리오 B (섹션 success + errors warning) 회귀.
 
 본 회귀는 ``common/tasks/normalize/build_status.yml`` 의 Jinja2 판정 로직을
 Python 으로 재현하여 mock fixture (``tests/fixtures/outputs/status_success_with_warnings.json``)
 의 invariants 를 검증한다.
 
-의도된 설계 (M-A2 결정 결과 — Case A 채택):
+의도된 설계:
     - overall.status 는 섹션 status 만 본다. envelope.errors[] 는 보지 않는다.
     - 시나리오 B: 모든 섹션 success + errors[] 에 warning 있음 → overall=success
     - errors[] 는 사유 추적용 분리 영역 — 호출자가 별도 검사
@@ -12,8 +12,8 @@ Python 으로 재현하여 mock fixture (``tests/fixtures/outputs/status_success
 reference:
     - common/tasks/normalize/build_status.yml (정본 헤더 주석)
     - os-gather/tasks/linux/gather_memory.yml:171-175 (dmidecode fallback 시 errors emit)
-    - docs/19_decision-log.md (M-A2 결정 / 2026-05-06)
-    - rule 13 R5 (envelope 13 필드) / rule 96 R1-B (호환성 외 schema 확장 금지)
+    - docs/19_decision-log.md
+    - envelope 13 필드 / 호환성 외 schema 확장 금지
 """
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def test_fixture_exists_and_loads(envelope: dict) -> None:
 
 
 def test_envelope_has_13_fields(envelope: dict) -> None:
-    """rule 13 R5 — envelope 13 필드 모두 존재."""
+    """envelope 13 필드 모두 존재."""
     for field in ENVELOPE_FIELDS:
         assert field in envelope, f"envelope 필드 누락: {field}"
 
@@ -102,7 +102,7 @@ def test_errors_non_empty_with_warnings(envelope: dict) -> None:
 
 
 def test_errors_have_section_and_message(envelope: dict) -> None:
-    """errors[] 각 항목은 section + message 필수 (rule 22 R8 타입 정본)."""
+    """errors[] 각 항목은 section + message 필수 (타입 정본)."""
     for err in envelope["errors"]:
         assert "section" in err
         assert "message" in err

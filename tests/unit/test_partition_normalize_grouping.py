@@ -1,6 +1,6 @@
-"""CSUS per-partition normalize 의 grouping-key drift 가드 (CS-3, 2026-06-08).
+"""CSUS per-partition normalize 의 grouping-key drift 가드.
 
-배경 (AUDIT-2026-05-29 CS-3 / rule 95 R3):
+배경:
     `redfish_gather.py` 의 `_summarize_partition_disks` / `_normalize_{storage,cpu,
     memory,network}_raw` (~210줄) 는 top-level `normalize_standard.yml`(Ansible) 의
     grouping/summary 로직을 Python 으로 **평행 재구현** 한다. 두 경로가 같은 grouping

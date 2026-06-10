@@ -128,7 +128,7 @@
 
 ---
 
-## HBA / InfiniBand 채널 매핑 (cycle 2026-05-29)
+## HBA / InfiniBand 채널 매핑
 
 `data.storage.hbas[]` (FC HBA) / `data.storage.infiniband[]` 는 전 채널 동일 canonical 키
 (`wwpn`/`wwnn`/`port_type`/`link_speed_gbps`/`source` 등). 채널별 수집원:

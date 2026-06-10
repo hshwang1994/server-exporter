@@ -1,6 +1,6 @@
 """HPE iLO 에뮬레이터 record/replay 오프라인 회귀 테스트.
 
-목적 (rule 40 / rule 21 R1 / rule 25 R7-B):
+목적:
     HPE 공식 iLO Redfish 에뮬레이터로 캡처한 recording 을 **오프라인**(에뮬레이터
     없이) 재생해 redfish_gather.py 의 파싱/정규화 엔진을 결정적으로 회귀 검증한다.
     실장비 1 대(DL380 Gen11)뿐인 lab 부재 상황에서 iLO5/iLO6/Gen12 + HBA/FC 코드

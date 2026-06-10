@@ -1,13 +1,13 @@
-"""ADR-2026-06-09 회귀 — HPE CSUS 3200 / Superdome Flex 멀티-노드 토폴로지 확장 수집.
+"""회귀 — HPE CSUS 3200 / Superdome Flex 멀티-노드 토폴로지 확장 수집.
 
-cycle 2026-06-09 (설명 모델 검수 후속) — 누락분 5종 Additive 구현 회귀 차단:
+설명 모델 검수 후속 — 누락분 5종 Additive 구현 회귀 차단:
   1. Chassis Thermal (gather_thermal + /ThermalSubsystem fallback)
   2. per-partition Boot order (gather_boot)
   3. Manager LogServices (gather_manager_logs)
   4. CompositionService + ResourceBlocks (gather_composition_service)
   5. Fabrics + FlexGrid Switches/Endpoints (gather_fabrics)
 
-모두 mock HTTP 응답 (lab 부재 — rule 96 R1-A 합성: DMTF DSP0266 + HPE CSUS 3200
+모두 mock HTTP 응답 (lab 부재 — web sources 합성: DMTF DSP0266 + HPE CSUS 3200
 Administration Guide + Superdome Flex 상속). 단일 노드 path / 13 vendor 영향 0 검증 포함.
 """
 from __future__ import annotations
@@ -425,7 +425,7 @@ def test_topology_layout_none_still_none(monkeypatch) -> None:
     assert result is None
 
 
-# ── review fix 회귀 (cycle 2026-06-09) ──────────────────────────────────────
+# ── review fix 회귀 ──────────────────────────────────────
 
 
 def test_chassis_get_fail_appends_member_without_doomed_subcalls(monkeypatch) -> None:

@@ -1,7 +1,7 @@
 """Redfish recording 변형(fault-injection) 레이어 — 기존 replay seam 위에 한 겹.
 
-배경 (사용자 요청 2026-06-09 / rule 95 / rule 25 R7-B):
-    직전 사이클이 만든 record/replay 하네스(`emulator_harness.py`)는 **정상(well-formed)**
+배경:
+    record/replay 공용 모듈(`emulator_harness.py`)는 **정상(well-formed)**
     에뮬레이터 응답을 golden 으로 고정(characterization)만 했다 — 버그까지 함께 고정. 본
     모듈은 그 recording 을 **변형**해 redfish_gather.py 의 파싱 엔진에 신뢰 불가/오염 입력을
     주입하고, 엔진이 **크래시 없이 graceful degrade** 하는지 증명하는 fault-injection 도구다.

@@ -2,7 +2,7 @@
 # redfish-gather/tasks/collect_standard.yml
 #
 # 표준 Redfish 수집 (벤더 공통).
-# P1 (cycle 2026-04-28): 단일 자격 → 후보 순차 시도 (primary → secondary → recovery)
+# 단일 자격 → 후보 순차 시도 (primary → secondary → recovery)
 #
 # 출력:
 #   _rf_raw_collect    : redfish_gather 결과 (성공한 후보 기준)
@@ -28,7 +28,7 @@
 - when: (_rf_accounts | default([])) | length == 0
   block:
     - name: "redfish | collect_standard | empty-credential attempt"
-      # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 인자 전달 (Additive — 빈 자격 경로).
+      # manager_layout 인자 전달 (Additive — 빈 자격 경로).
       redfish_gather:
         bmc_ip:         "{{ _rf_ip }}"
         username:       ""

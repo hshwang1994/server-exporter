@@ -1,6 +1,6 @@
-"""precheck_bundle.py fault-injection 회귀 (rule 27 / rule 95 R1 #2).
+"""precheck_bundle.py fault-injection 회귀.
 
-배경 (audit 2026-06-09):
+배경:
     precheck 는 모든 gather 의 첫 관문이다. 대부분 IPv6 듀얼스택 / timeout / 예외 처리가
     견고하나, _try_redfish_auth 의 Systems Members[0] 접근이 비-dict 멤버(예: [null])에서
     AttributeError 로 모듈 전체를 죽일 수 있다. 본 테스트는 그 crash 를 드러내고(RED) 가드
@@ -75,7 +75,7 @@ def test_auth_wellformed_member_extracts_uri(monkeypatch):
 
 
 def test_probe_redfish_non_dict_json_does_not_crash(monkeypatch):
-    """ServiceRoot 가 비-dict JSON('error' 등) 반환 → json_data.get AttributeError 방어 (UNWRAPPED P0)."""
+    """ServiceRoot 가 비-dict JSON('error' 등) 반환 → json_data.get AttributeError 방어."""
     monkeypatch.setattr(pb, "http_get",
                         lambda *a, **k: (True, None, {"status_code": 200, "json": "errorstring"}))
     ok, err, facts = pb.probe_redfish("10.0.0.1", 443, 5)  # 가드 전: str.get AttributeError
@@ -83,7 +83,7 @@ def test_probe_redfish_non_dict_json_does_not_crash(monkeypatch):
 
 
 def test_auth_non_dict_json_does_not_crash(monkeypatch):
-    """Systems 가 비-dict JSON → json_data.get('Members') AttributeError 방어 (UNWRAPPED P0)."""
+    """Systems 가 비-dict JSON → json_data.get('Members') AttributeError 방어."""
     monkeypatch.setattr(pb, "http_get",
                         lambda *a, **k: (True, None, {"status_code": 200, "json": 12345}))
     result = _fresh_result()

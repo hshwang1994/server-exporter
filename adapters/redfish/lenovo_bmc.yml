@@ -1,19 +1,19 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Lenovo / IBM
 # Firmware: 모든 세대 (BMC legacy / IMM / IMM2 / XCC / XCC2 / XCC3 미매치 시 fallback)
 # Generation: bmc_legacy (generic lenovo fallback)
 # Generation Year: "2007-2014 (IBM xSeries BMC / IMM 시기)"
 # Origin: Lenovo Redfish API documentation / IBM xSeries archive
-# Last sync: 2026-05-11 (M-H3 — generic fallback + IBM 시기 origin 보강)
+# Last sync: 2026-05-11 (generic fallback + IBM 시기 origin 보강)
 # Notes: generic Lenovo fallback (priority=10). 세대별 미매치 시 사용 — Dell/HPE/Supermicro와 동일 패턴.
-# Sources (rule 96 R1-A — lab 부재 legacy generation 보강):
+# Sources (lab 부재 legacy generation 보강):
 #   - https://pubs.lenovo.com/redfish-resources/   (Lenovo Redfish 종합 portal)
 #   - IBM xSeries archive (legacy BMC / IMM — Redfish 미지원 또는 부분)
 #   - https://lenovopress.lenovo.com/lp1991-thinksystem-v3-v4-server-firmware-and-drivers-best-practices-advanced-guide
 # Lab status: 부재 — XCC3 만 사이트 검증 (BMC legacy / IMM / IMM2 / XCC / XCC2 web sources 기반)
 # History note: IBM 시기 (Lenovo 인수 전 2014) — Manufacturer aliases 에 'IBM' 포함 (vendor_aliases.yml)
-# Protocol support matrix (web sources, M-H3 cycle 2026-05-07):
+# Protocol support matrix (web sources):
 #   - BMC legacy (IBM, 2007-2014): IPMI only — Redfish 미지원 또는 매우 제한적
 #   - IMM (Integrated Management Module, IBM 2007-2012): Redfish 미지원
 #   - IMM2 (2014-2017): DSP0268 v1.0+ 부분 지원 (SimpleStorage path)
@@ -21,8 +21,8 @@
 #   - XCC2 (2020-2024): DSP0268 v1.10+ — header 정책 보수적 (Accept-only)
 #   - XCC3 (2024+, OpenBMC): DSP0268 v1.13+
 # OEM namespace: Oem.Lenovo (모든 세대 동일)
-# Tested against: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json + tests/evidence/ 참조
-# Next action: lab 도입 후 별도 cycle (legacy BMC graceful degradation 시나리오)
+# 검증 기준: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json 참조
+# Next action: lab 도입 후 legacy BMC graceful degradation 시나리오
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_lenovo_bmc
 channel: redfish
@@ -55,7 +55,7 @@ normalize:
 credentials:
   profile: "lenovo"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/lenovo.yml accounts 의 label 과 매핑
+  # AccountService 진입점 — vault/redfish/lenovo.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: lenovo_fallback, role: recovery }
     - { vault_label: lenovo_current,  role: recovery }

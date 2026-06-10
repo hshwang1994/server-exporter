@@ -10,5 +10,5 @@
   "PowerState": "On",
   "Status": {"Health": "OK", "State": "Enabled"},
   "Links": {"ManagerForServers": [{"@odata.id": "/redfish/v1/Systems/Partition0"}]},
-  "Oem": {"Hpe": {"Role": "secondary", "Note": "lab 부재 — per-node iLO5 합성 (Superdome Flex 패턴). rule 96 R1-A."}}
+  "Oem": {"Hpe": {"Role": "secondary", "Note": "lab 부재 — per-node iLO5 합성 (Superdome Flex 패턴)."}}
 }

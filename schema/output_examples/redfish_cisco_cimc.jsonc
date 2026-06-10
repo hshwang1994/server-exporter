@@ -9,7 +9,7 @@
 //             - 8 × SSD (RAID5 + RAID0) — 18TB+
 //             - power.summary.health_rollup = Unknown (Cisco PSU.health 미보고 → unknown_health_count=2)
 //             - duration_ms = 270089 (4.5분 — Cisco BMC 가 가장 느림)
-//             - cycle 2026-05-06 F50 학습: AccountService 표준 POST 지원 확인 (이전 not_supported 정정)
+//             - AccountService 표준 POST 지원 확인 (이전 not_supported 정정)
 // 캡처 일시 : 2026-05-07
 // =============================================================================
 {
@@ -69,7 +69,7 @@
     "bmc_ip": "10.100.15.2",                            // BMC IP (Redfish 채널만 채워짐. OS/ESXi 는 null)
     "host_ip": "10.100.15.2"                            // 호출자가 전달한 service_ip / bmc_ip
   },
-  "errors": [],                                         // 수집 중 errors (warning 수준이면 status=success 와 공존 가능 — rule 13 R8)
+  "errors": [],                                         // 수집 중 errors (warning 수준이면 status=success 와 공존 가능)
   "data": {                                             // 실제 수집된 raw 데이터 (섹션별 dict). not_supported / failed 섹션은 null 또는 빈 list
     "cpu": {
       "sockets": 2,                                     // 물리 socket 수
@@ -245,5 +245,5 @@
       {"id": "FlexFlash-0", "name": "FlexFlash-0", "version": "1.3.2 build 176", "updateable": false, "component": "FlexFlash-0", "pending": false, "category": "other"}
     ]
   },
-  "schema_version": "1"                                 // envelope schema 버전 — "1" 고정 (rule 13 R5)
+  "schema_version": "1"                                 // envelope schema 버전 — "1" 고정
 }

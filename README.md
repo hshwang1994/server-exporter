@@ -95,8 +95,7 @@ server-exporter/
 │
 ├── tests/                   회귀 / 검증
 │   ├── fixtures/            실장비 raw 응답
-│   ├── e2e/, e2e_browser/   백엔드·브라우저 E2E
-│   └── reference/           실장비 종합 자료
+│   └── e2e/, e2e_browser/   백엔드·브라우저 E2E
 │
 └── docs/                    설치 / 운영 / 개발 문서 (01~23)
 ```
@@ -231,4 +230,4 @@ server-exporter/
 | 결정 추적 (왜 지금 이 모습?) | [19](docs/19_decision-log.md) |
 | 환경 사전 점검 | [REQUIREMENTS.md](REQUIREMENTS.md) |
 
-Fragment 기반 수집 철학과 변수 규칙, 새 gather 추가 절차는 [GUIDE_FOR_AI.md](GUIDE_FOR_AI.md) 참조.
+Fragment 기반 수집 철학과 변수 규칙, 새 gather 추가 절차는 [docs/07_normalize-flow.md](docs/07_normalize-flow.md) 와 [docs/14_add-new-gather.md](docs/14_add-new-gather.md) 참조.

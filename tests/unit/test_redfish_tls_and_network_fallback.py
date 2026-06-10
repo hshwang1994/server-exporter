@@ -1,9 +1,9 @@
-"""F48 + F84 회귀 — NetworkPorts/Ports fallback + TLS 1.2/1.3 호환.
+"""NetworkPorts/Ports fallback + TLS 1.2/1.3 호환 회귀.
 
-F48: HPE iLO 6+ deprecated NetworkPorts → Ports (Redfish 1.6+) fallback.
+NetworkPorts fallback: HPE iLO 6+ deprecated NetworkPorts → Ports (Redfish 1.6+) fallback.
      `gather_network_adapters_chassis` 가 NetworkPorts 없을 때 Ports 사용 확인.
 
-F84: SSLContext minimum_version=TLSv1_2 / maximum_version=TLSv1_3 명시.
+TLS context: SSLContext minimum_version=TLSv1_2 / maximum_version=TLSv1_3 명시.
      - 구 BMC (TLS 1.2 only) 호환 보장
      - 신 BMC (TLS 1.3) 호환 보장
      - SECLEVEL=0 weak cipher fallback 유지 (iLO 4 / IMM2 / 구 iDRAC)
@@ -31,17 +31,17 @@ sys.modules.setdefault("ansible.module_utils.basic", _stub_basic)
 import redfish_gather as rg  # noqa: E402
 
 
-# ── F84 TLS context 회귀 ─────────────────────────────────────────────────────
+# ── TLS context 회귀 ─────────────────────────────────────────────────────────
 
 
-def test_f84_tls_context_min_version_1_2() -> None:
+def test_tls_context_min_version_1_2() -> None:
     """verify_ssl=True 시 minimum_version=TLSv1_2 적용."""
     ctx = rg._ctx(verify_ssl=True)
     if hasattr(ssl, "TLSVersion"):
         assert ctx.minimum_version == ssl.TLSVersion.TLSv1_2
 
 
-def test_f84_tls_context_max_version_1_3() -> None:
+def test_tls_context_max_version_1_3() -> None:
     """verify_ssl=True 시 maximum_version=TLSv1_3 (OpenSSL TLS 1.3 지원 가정)."""
     ctx = rg._ctx(verify_ssl=True)
     if hasattr(ssl, "TLSVersion"):
@@ -49,21 +49,21 @@ def test_f84_tls_context_max_version_1_3() -> None:
         assert ctx.maximum_version >= ssl.TLSVersion.TLSv1_2
 
 
-def test_f84_tls_context_unverified_self_signed() -> None:
+def test_tls_context_unverified_self_signed() -> None:
     """verify_ssl=False (사내 BMC self-signed) 시 hostname 검증 / cert 검증 disable."""
     ctx = rg._ctx(verify_ssl=False)
     assert ctx.check_hostname is False
     assert ctx.verify_mode == ssl.CERT_NONE
 
 
-def test_f84_tls_context_legacy_renegotiation_flag() -> None:
+def test_tls_context_legacy_renegotiation_flag() -> None:
     """verify_ssl=False 시 OP_LEGACY_SERVER_CONNECT 적용 (구 BMC OpenSSL 3.x 호환)."""
     ctx = rg._ctx(verify_ssl=False)
     if hasattr(ssl, "OP_LEGACY_SERVER_CONNECT"):
         assert (ctx.options & ssl.OP_LEGACY_SERVER_CONNECT) != 0
 
 
-# ── F48 NetworkPorts/Ports fallback 회귀 ─────────────────────────────────────
+# ── NetworkPorts/Ports fallback 회귀 ─────────────────────────────────────────
 
 
 def _mk_get(responses):
@@ -76,7 +76,7 @@ def _mk_get(responses):
     return fake
 
 
-def test_f48_network_adapters_uses_ports_when_no_networkports(monkeypatch) -> None:
+def test_network_adapters_uses_ports_when_no_networkports(monkeypatch) -> None:
     """HPE iLO 6+ NetworkPorts deprecated — Ports collection 사용 fallback.
 
     NetworkAdapter 응답에 'NetworkPorts' 없고 'Ports' 만 존재 시 Ports 컬렉션을
@@ -142,7 +142,7 @@ def test_f48_network_adapters_uses_ports_when_no_networkports(monkeypatch) -> No
     assert out["ports"][0]["current_link_speed_mbps"] == 25000
 
 
-def test_f48_network_adapters_prefers_networkports_when_present(monkeypatch) -> None:
+def test_network_adapters_prefers_networkports_when_present(monkeypatch) -> None:
     """Redfish 1.5 이전 BMC — NetworkPorts 존재 시 Ports 보다 우선."""
     chassis_uri = "/redfish/v1/Chassis/1"
     adapters_coll = {
@@ -180,7 +180,7 @@ def test_f48_network_adapters_prefers_networkports_when_present(monkeypatch) -> 
     assert len(out["adapters"]) == 1
 
 
-def test_f48_network_adapters_skip_empty_placeholder(monkeypatch) -> None:
+def test_network_adapters_skip_empty_placeholder(monkeypatch) -> None:
     """port_count=0 + manufacturer/model 빈 entry → 실 NIC 아닌 placeholder skip.
 
     실측 Lenovo XCC SR650 V2 — PCIe slot 자체를 NetworkAdapters 컬렉션에

@@ -1,5 +1,5 @@
 {
-  "_note": "fixture-derived expected (compact) — baseline 아님. rule 13 R4 보호. cycle 2026-05-12, 2026-06-09 확장(ADR-2026-06-09).",
+  "_note": "fixture-derived expected (compact) — baseline 아님.",
   "_source": "tests/fixtures/redfish/hpe_csus_3200/ 합성 fixture 의 예상 envelope (요약). 실제 fixture→run 회귀는 tests/unit/test_csus_fixture_replay.py.",
   "data": {
     "multi_node": {

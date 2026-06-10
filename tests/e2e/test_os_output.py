@@ -88,8 +88,8 @@ class TestWindowsBaseline:
 class TestRhel810RawFallback:
     """OS-RHEL810: Linux raw_fallback (Python <3.9) baseline 검증.
 
-    production-audit (2026-04-29): RHEL 8.10 py3.6 환경의 raw fallback path 회귀.
-    cycle-016 build #49 evidence 기반.
+    RHEL 8.10 py3.6 환경의 raw fallback path 회귀.
+    build #49 evidence 기반.
     """
 
     def test_common_structure(self, rhel810_raw_fallback_baseline):

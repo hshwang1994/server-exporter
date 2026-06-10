@@ -14,7 +14,7 @@
 #   _all_sec_supported    : list  — 지원 섹션 누적
 #   _all_sec_collected    : list  — 수집 성공 섹션 누적
 #   _all_sec_failed       : list  — 수집 실패 섹션 누적
-#   _all_sec_unsupported  : list  — 지원되지 않는 섹션 누적 (cycle 2026-05-01)
+#   _all_sec_unsupported  : list  — 지원되지 않는 섹션 누적
 #                                   - redfish 404, OS 명령 부재, ESXi API 미지원
 #                                   - errors[] 노이즈 차단 + sections.{name}='not_supported'
 #   _all_errors           : list  — errors 누적
@@ -31,7 +31,7 @@
 - name: "normalize | init_fragments | timestamp"
   ansible.builtin.set_fact:
     _started_at:    "{{ now(utc=true).isoformat() + 'Z' }}"
-    # 2026-04-29 fix B50: duration_ms 1초 단위 절삭 — now(fmt='%s')는 정수 초만 반환.
+    # duration_ms 1초 단위 절삭 — now(fmt='%s')는 정수 초만 반환.
     # microsecond 까지 보존하기 위해 ISO 타임스탬프 (timestamp() float) 로 저장.
     _started_epoch: "{{ '%.6f' | format(now(utc=true).timestamp()) }}"
   no_log: true

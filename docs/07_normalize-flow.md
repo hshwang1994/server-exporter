@@ -93,7 +93,7 @@ _merged_data:         {}    # data 그릇 (실제로는 sections 별 빈 skeleto
 _all_sec_supported:   []
 _all_sec_collected:   []
 _all_sec_failed:      []
-_all_sec_unsupported: []    # vendor/펌웨어 미지원 섹션 (cycle 2026-05-01)
+_all_sec_unsupported: []    # vendor/펌웨어 미지원 섹션
 _all_errors:          []
 ```
 
@@ -201,6 +201,6 @@ gather 안에서 `_merged_data` 나 `_all_errors` 를 set_fact 로 직접 고침
 |---|---|
 | 출력 JSON 의 키 의미 | `docs/20_json-schema-fields.md` |
 | 채널 구조 (어떤 채널이 어떤 gather 호출하나) | `docs/06_gather-structure.md` |
-| Fragment 철학 (왜 자기 영역만 만지나) | `GUIDE_FOR_AI.md` 의 Fragment 절 |
+| Fragment 철학 (왜 자기 영역만 만지나) | `docs/06_gather-structure.md` §3 공통 골격 |
 | 빌더 코드 본체 | `common/tasks/normalize/build_*.yml` |
 | 누적 합치기 코드 | `common/tasks/normalize/merge_fragment.yml` |

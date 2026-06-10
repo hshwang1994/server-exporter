@@ -74,7 +74,7 @@ class CallbackModule(CallbackBase):
             line = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
         except TypeError:
             # 비-JSON-직렬화 객체(datetime / Ansible 객체 등)가 섞이면 callback 전체가 죽어
-            # OUTPUT 이 통째로 소실된다 → str fallback 으로 graceful (Round 2 #0/#9).
+            # OUTPUT 이 통째로 소실된다 → str fallback 으로 graceful.
             line = json.dumps(str(data), ensure_ascii=False, separators=(',', ':'))
         print(line, file=target, flush=True)
         # OUTPUT 결과를 파일로도 기록 (stdout target 일 때만, stderr 결과는 제외)
@@ -84,7 +84,7 @@ class CallbackModule(CallbackBase):
                     fh.write(line + '\n')
             except (OSError, IOError) as e:
                 # 파일 쓰기 실패: stdout 은 정상이라 callback 흐름은 유지하되, 파일 소비자(다운스트림)
-                # 가 빈 결과를 받는 silent data-loss 를 stderr 로 가시화 (Round 15 observability).
+                # 가 빈 결과를 받는 silent data-loss 를 stderr 로 가시화 (observability).
                 # stderr 는 stdout JSON 과 분리되어 호출자 파싱에 영향 없음.
                 sys.stderr.write(
                     '[json_only] WARNING: OUTPUT 파일 쓰기 실패 ({}): {}\n'.format(

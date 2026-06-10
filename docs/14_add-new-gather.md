@@ -147,7 +147,7 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 - [ ] `tasks/normalize.yml` — fragment 생성 + `merge_fragment` 호출
 - [ ] `site.yml` — `init_fragments` → collect → normalize → build_* → `schema_version` 주입
 - [ ] `OUTPUT` 태스크 — `name: OUTPUT` 유지 (절대 변경 금지)
-- [ ] `GUIDE_FOR_AI.md` — 섹션 지원 현황 표 업데이트
+- [ ] `common/vars/supported_sections.yml` — 섹션 지원 현황 업데이트
 
 ---
 
@@ -200,9 +200,9 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 
 ---
 
-## 절차 B — 새 벤더 / 새 세대 추가 (기존 redfish/os/esxi 채널 안 — cycle 2026-05-07 추가)
+## 절차 B — 새 벤더 / 새 세대 추가 (기존 redfish/os/esxi 채널 안)
 
-> 우려 5 답변. 새 채널 (IPMI / SNMP) 가 아니라 **기존 redfish 채널에 신 vendor (예: Huawei) 또는 신 generation (예: dell_idrac10)** 을 추가할 때.
+> 새 채널 (IPMI / SNMP) 가 아니라 **기존 redfish 채널에 신 vendor (예: Huawei) 또는 신 generation (예: dell_idrac10)** 을 추가할 때.
 
 ### 5 파일 동시 수정 매트릭스
 
@@ -212,31 +212,29 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 | 2 | `adapters/{redfish,os,esxi}/{vendor}_*.yml` | **의무** | adapter_loader 가 본 vendor 인식 못 함 |
 | 3 | `redfish-gather/library/redfish_gather.py` `_OEM_EXTRACTORS` | 선택 (OEM 추출 시) | OEM 데이터 envelope `data.hardware.oem` 누락 |
 | 4 | `redfish-gather/tasks/vendors/{vendor}/collect_oem.yml + normalize_oem.yml` | 선택 (vendor 특이 endpoint 시) | vendor-specific endpoint 미수집 |
-| 5 | `schema/baseline_v1/{vendor}_baseline.json` | **의무 (실측 후)** / lab 부재 시 NEXT_ACTIONS 등재 | 회귀 테스트 미보호 → drift 가능 |
+| 5 | `schema/baseline_v1/{vendor}_baseline.json` | **의무 (실측 후)** / lab 부재 시 후속 작업 등재 | 회귀 테스트 미보호 → drift 가능 |
 
-`vault/redfish/{vendor}.yml` (자격증명) 도 의무 (rule 50 R2 9단계).
+`vault/redfish/{vendor}.yml` (자격증명) 도 의무.
 
-### 9 단계 (rule 50 R2 정본)
+### 벤더 추가 절차 (7 단계)
 
 1. `common/vars/vendor_aliases.yml` 매핑 추가
 2. `adapters/{channel}/{vendor}_*.yml` adapter 생성 (priority 정책표 — `docs/10` 3.5절)
 3. (선택) `redfish-gather/tasks/vendors/{vendor}/` OEM tasks
-4. `vault/redfish/{vendor}.yml` 생성 (ansible-vault encrypt) — lab 부재 시 placeholder + 사용자 명시 승인
-5. `schema/baseline_v1/{vendor}_baseline.json` 추가 (실장비 검증 후) — lab 부재 시 단계 10 등재
+4. `vault/redfish/{vendor}.yml` 생성 (ansible-vault encrypt) — lab 부재 시 placeholder + 향후 승인
+5. `schema/baseline_v1/{vendor}_baseline.json` 추가 (실장비 검증 후) — lab 부재 시 lab 부재 처리 표 참조
 6. `docs/13_redfish-live-validation.md` Round 갱신
-7. `docs/19_decision-log.md` ADR 추가
+7. `docs/19_decision-log.md` 결정 기록 추가
 
-### 단계 10 — lab 부재 vendor 처리 (rule 50 R2 단계 10 / rule 96 R1-A + R1-C)
+### lab 부재 vendor 처리
 
-lab 환경에 vendor 장비 없을 때 (예: cycle 2026-05-01 Huawei/Inspur/Fujitsu/Quanta + cycle 2026-05-06 Superdome Flex):
+lab 환경에 vendor 장비 없을 때 (예: Huawei/Inspur/Fujitsu/Quanta + Superdome Flex):
 
 | 단계 | lab 부재 처리 |
 |---|---|
-| 4 (vault) | placeholder 사용자 명시 승인 — 실 운영 vault 결정 보류 |
+| 4 (vault) | placeholder + 향후 승인 — 실 운영 vault 결정 보류 |
 | 5 (baseline) | SKIP — "사이트 fixture 캡처" + "baseline 추가" 후속 작업 등재 |
-| 8 (Round) | "lab 부재 — web sources" 표기. rule 96 R1-A web sources 4종 의무 (vendor docs / DMTF / GitHub / 사이트 실측) |
-
-`add-vendor-no-lab` skill 자동화 — lab 부재 vendor 추가 시 호출.
+| 6 (Round) | "lab 부재 — web sources" 표기. web sources 4종 의무 (vendor docs / DMTF / GitHub / 사이트 실측) |
 
 ### Priority 값 결정 절차
 
@@ -262,7 +260,7 @@ ansible-playbook -vvv 로그에서 score 동률 경고 모니터링
 
 ### dell_idrac9 walkthrough (예시)
 
-다음은 Dell iDRAC 9 가 메인 세대로 추가될 때 수정한 5 파일 (cycle 2026-04-15 기준):
+다음은 Dell iDRAC 9 가 메인 세대로 추가될 때 수정한 5 파일:
 
 ```yaml
 # 1. common/vars/vendor_aliases.yml

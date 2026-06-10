@@ -373,7 +373,7 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 
 > [!NOTE]
 > 이 표는 "벤더별 최소 BMC 버전"(3-1절)에 못 미치는 세대를 모은 것이다.
-> 이 중 Dell iDRAC 8 / HPE iLO 4 / Lenovo IMM2 는 priority 50 fallback adapter 가 storage/power 까지 fallback 으로 수집한다 (cycle 2026-05-06 M-D3 — 일부 필드 `null` 가능). Supermicro X9 만 storage/firmware/power 를 `not_supported` 로 보고한다. 완전 차단은 adapter 자체가 없는 더 낮은 세대와 Redfish 미지원 장비(Lenovo ThinkServer 등)다.
+> 이 중 Dell iDRAC 8 / HPE iLO 4 / Lenovo IMM2 는 priority 50 fallback adapter 가 storage/power 까지 fallback 으로 수집한다 (일부 필드 `null` 가능). Supermicro X9 만 storage/firmware/power 를 `not_supported` 로 보고한다. 완전 차단은 adapter 자체가 없는 더 낮은 세대와 Redfish 미지원 장비(Lenovo ThinkServer 등)다.
 
 **제한 지원** (수집은 되지만 일부 필드 `null`):
 

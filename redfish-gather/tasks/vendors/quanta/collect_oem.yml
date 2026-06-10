@@ -4,14 +4,14 @@
 # Quanta QCT BMC OEM 특화 수집 (Oem.Quanta_Computer_Inc / Oem.QCT fallback)
 # 결과는 반드시 fragment 로만 생성하고 merge_fragment 를 호출한다.
 #
-# M-F1 cycle 2026-05-07-all-vendor-coverage: Quanta OEM tasks 신설
-# Fragment 철학 (rule 22)
+# Quanta OEM tasks 신설
+# Fragment 철학
 #
-# source: Quanta QCT BMC User Guide (확인 2026-05-11 — lab 부재)
+# source: Quanta QCT BMC User Guide (lab 부재)
 # source: https://www.qct.io/product/index/Server/rackmount-server/
 # source: https://www.exalit.com/storage/2023/09/D54Q-2U_v20230330.pdf
-# source: GitHub community Quanta Redfish 사용자 보고
-# lab: 부재 (사용자 명시 2026-05-01) — vault 신설 완료 (M-A4)
+# source: GitHub community Quanta Redfish 커뮤니티 보고
+# lab: 부재 (web sources, 2026-05-01) — vault 신설 완료
 #
 # Quanta OEM namespace 변형:
 #   - Oem.Quanta_Computer_Inc (vendor 공식 — 일반 vendor 표기)

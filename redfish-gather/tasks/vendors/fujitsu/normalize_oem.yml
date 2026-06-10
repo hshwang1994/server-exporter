@@ -2,9 +2,9 @@
 # redfish-gather/tasks/vendors/fujitsu/normalize_oem.yml
 #
 # Fujitsu iRMC OEM 정규화 — Oem.ts_fujitsu / Oem.Fujitsu fallback
-# fragment 방식 (rule 22) — 자기 fragment 만 생성하고 merge_fragment 호출
+# fragment 방식 — 자기 fragment 만 생성하고 merge_fragment 호출
 #
-# M-E2 cycle 2026-05-07-all-vendor-coverage: Fujitsu OEM tasks 신설
+# Fujitsu OEM tasks 신설
 #
 # 원칙:
 #   - 표준 스키마 섹션 (bmc / hardware) 안의 하위 필드로 확장 (새 섹션 추가 안 함)

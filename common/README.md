@@ -13,20 +13,20 @@ common/
 │   │   └── run_precheck.yml   # precheck_bundle 호출 + diagnosis 생성
 │   └── normalize/             # Fragment 정규화 빌더 (10 파일 — 핵심 빌더 8 + 실패 경로 보조 2) — README 별도
 └── vars/
-    ├── supported_sections.yml # 10 sections 정본 (rule 13 R1)
-    ├── vendor_aliases.yml     # vendor 정규화 정본 (rule 50 R1)
+    ├── supported_sections.yml # 10 sections 정본
+    ├── vendor_aliases.yml     # vendor 정규화 정본
     └── status_rules.yml       # status 판정 보조 규칙
 ```
 
 ## 책임 분리
 
-| 영역 | 책임 | 정본 rule |
-|---|---|---|
-| `library/precheck_bundle.py` | Python 4단계 진단 엔진 (stdlib only) | rule 27 |
-| `tasks/precheck/run_precheck.yml` | Ansible wrapper — Python 모듈 호출 + diagnosis 변수 set | rule 27 |
-| `tasks/normalize/build_*.yml` | Fragment → 누적 변수 → envelope 13 필드 빌더 | rule 13 R5 / rule 22 R5 |
-| `vars/supported_sections.yml` | 10 sections enum | rule 13 R1 |
-| `vars/vendor_aliases.yml` | 벤더 정규화 매핑 (canonical: ['alias', ...]) | rule 50 R1 |
+| 영역 | 책임 |
+|---|---|
+| `library/precheck_bundle.py` | Python 4단계 진단 엔진 (stdlib only) |
+| `tasks/precheck/run_precheck.yml` | Ansible wrapper — Python 모듈 호출 + diagnosis 변수 set |
+| `tasks/normalize/build_*.yml` | Fragment → 누적 변수 → envelope 13 필드 빌더 |
+| `vars/supported_sections.yml` | 10 sections enum |
+| `vars/vendor_aliases.yml` | 벤더 정규화 매핑 (canonical: ['alias', ...]) |
 
 ## 왜 precheck 가 Python + Ansible 두 곳에 분산되어 있나
 
@@ -43,7 +43,7 @@ precheck 4단계 어디서 막혔는지 확인:
 ```bash
 ansible-playbook ... -vvv | grep -i precheck
 ```
-또는 envelope `diagnosis.details` 참조 (rule 27 / docs/12).
+또는 envelope `diagnosis.details` 참조 (docs/12).
 
 ## 관련 문서
 

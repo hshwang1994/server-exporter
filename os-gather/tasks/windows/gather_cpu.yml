@@ -1,10 +1,10 @@
 ---
 # os-gather/tasks/windows/gather_cpu.yml → data.cpu fragment
-# cycle-016 Phase O: Win32_Processor 풍부 필드 (manufacturer/max_clock/L2/L3/architecture) 추가
+# Win32_Processor 풍부 필드 (manufacturer/max_clock/L2/L3/architecture) 추가
 
 - name: "windows | cpu | collect Win32_Processor 상세"
   ansible.windows.win_shell: |
-    # windows-audit (2026-04-29): VMware/일부 BIOS는 Name 필드를 ALL CAPS로 노출
+    # VMware/일부 BIOS는 Name 필드를 ALL CAPS로 노출
     # ("INTEL(R) XEON(R) SILVER 4510"). Linux 표기와 일관 위해 정규화.
     function Normalize-CpuModel($n) {
       if (-not $n) { return $null }
@@ -62,19 +62,19 @@
       {%- endif -%}
   no_log: true
 
-# cycle-016 Phase O 후속: Linux 와 일관 — manufacturer 정규화 (GenuineIntel → Intel)
+# Linux 와 일관 — manufacturer 정규화 (GenuineIntel → Intel)
 - name: "windows | cpu | compute summary groups"
   ansible.builtin.set_fact:
     _w_cpu_summary: >-
       {%- set ns = namespace(groups=[], seen={}) -%}
-      {# Round 17 #8: PS5.1 ConvertTo-Json 단일 원소 배열 → object collapse 방어 (gather_storage.yml 동일).
+      {# PS5.1 ConvertTo-Json 단일 원소 배열 → object collapse 방어 (gather_storage.yml 동일).
          단일 소켓 호스트(흔한 케이스)에서 processors 가 dict 가 되어 for 가 KEY(문자열)를 순회 →
          p.name/cores/manufacturer 가 Undefined → summary 가 model='unknown'/cores=0 으로 corrupt. #}
       {%- set _procs = _w_cpu_data.processors | default([]) -%}
       {%- if _procs is mapping -%}{%- set _procs = [_procs] -%}{%- endif -%}
       {%- for p in _procs -%}
         {%- set m = p.name | default('unknown') -%}
-        {# Round 16: JSON null/비-str manufacturer 시 'X' in None → TypeError (host 전체 rescue
+        {# JSON null/비-str manufacturer 시 'X' in None → TypeError (host 전체 rescue
            collapse). default('') 는 undefined 만 치환 → (.. or '') | string 로 str 강제. #}
         {%- set raw_mfr = (p.manufacturer | default('') or '') | string -%}
         {%- set mfr = none -%}
@@ -84,7 +84,7 @@
         {%- endif -%}
         {%- if m in ns.seen -%}
           {%- set idx = ns.seen[m] -%}
-          {# Round 15: 같은 model 중복 시 cores_per_socket 도 재계산 (Redfish _normalize_cpu_raw 의 same-model grouping 과 일관 — 혼합 코어 same-model 평균) #}
+          {# 같은 model 중복 시 cores_per_socket 도 재계산 (Redfish _normalize_cpu_raw 의 same-model grouping 과 일관 — 혼합 코어 same-model 평균) #}
           {%- set _nt = ns.groups[idx].total_cores + (p.cores | default(0) | int) -%}
           {%- set _nsk = ns.groups[idx].sockets + 1 -%}
           {%- set _ = ns.groups[idx].update({'sockets': _nsk, 'total_cores': _nt, 'cores_per_socket': (_nt // _nsk)}) -%}
@@ -114,7 +114,7 @@
         logical_threads: "{{ _w_cpu_data.logical  | default(ansible_processor_vcpus | default(none)) }}"
         model:           "{{ _w_cpu_data.model    | default(none) }}"
         manufacturer: >-
-          {# Round 16: JSON null/비-str manufacturer 시 'X' in None → TypeError 방어 (위 summary 와 동일). #}
+          {# JSON null/비-str manufacturer 시 'X' in None → TypeError 방어 (위 summary 와 동일). #}
           {%- set v = (_w_cpu_data.manufacturer | default('') or '') | string -%}
           {%- if 'GenuineIntel' in v or 'Intel' in v -%}Intel
           {%- elif 'AuthenticAMD' in v or 'AMD' in v -%}AMD

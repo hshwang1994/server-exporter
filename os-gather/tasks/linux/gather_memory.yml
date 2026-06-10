@@ -32,7 +32,7 @@
       failed_when: false
       no_log: true
 
-    # cycle-016 Phase L: slot 단위 dmidecode → manufacturer/part_number 도 emit
+    # slot 단위 dmidecode → manufacturer/part_number 도 emit
     - name: "linux | memory | physical (dmidecode slots)"
       ansible.builtin.shell: |
         if command -v dmidecode >/dev/null 2>&1; then
@@ -71,7 +71,7 @@
 
     - name: "linux | memory | parse slots + grouping"
       ansible.builtin.set_fact:
-        # 2026-04-29 fix B23: dmidecode Manufacturer는 raw JEDEC ID hex (예: '00AD063200AD').
+        # dmidecode Manufacturer는 raw JEDEC ID hex (예: '00AD063200AD').
         # jedec_to_vendor 필터로 정규화 (00AD -> 'SK hynix', 00CE -> 'Samsung').
         _l_mem_slots: >-
           {%- set out = [] -%}
@@ -97,7 +97,7 @@
           {{ out }}
       no_log: true
 
-    # cycle-016 Phase L: groups 에 manufacturer + part_number 추가 (사용자 "부실" 피드백)
+    # groups 에 manufacturer + part_number 추가 (상세 정보 보강)
     - name: "linux | memory | compute summary groups"
       ansible.builtin.set_fact:
         _l_mem_summary: >-
@@ -126,7 +126,7 @@
           {{ {'groups': ns.groups, 'grand_total_gb': ns.total if ns.total > 0 else fallback_total} }}
       no_log: true
 
-    # production-audit (2026-04-29 후속): free_mb 의 의미를 raw 경로와 통일.
+    # free_mb 의 의미를 raw 경로와 통일.
     # ansible_memfree_mb = MemFree (cache/buffer 미포함) 라 사용자 직관과 다름.
     # raw 경로는 MemAvailable 사용 — Python 경로도 동일하게 MemAvailable 추출.
     - name: "linux | memory | get MemAvailable"
@@ -163,7 +163,7 @@
               {%- set avail = (_l_mem_avail_kb.stdout | default('') | trim) -%}
               {{ ((avail | int) / 1024) | round(0,'floor') | int if avail else (ansible_memfree_mb | default(none)) }}
             slots:       "{{ _l_mem_slots | default([]) }}"
-            # cycle-016 (2026-04-29): dmidecode slot 단위 group summary
+            # dmidecode slot 단위 group summary
             summary: "{{ _l_mem_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
         _sections_supported_fragment: ['memory']
         _sections_collected_fragment: ['memory']
@@ -180,7 +180,7 @@
 # Raw Fallback Path — /proc/meminfo + dmidecode (raw only)
 # =============================================================================
 - block:
-    # cycle-016 후속 (HIGH-1 fix): raw fallback path 도 become: true (sudo dmidecode)
+    # raw fallback path 도 become: true (sudo dmidecode)
     - name: "linux | memory | raw gather"
       become: true
       ansible.builtin.raw: |
@@ -200,7 +200,7 @@
             | awk '{if($3=="GB")s+=$2*1024;else if($3=="MB")s+=$2;else if($3=="KB")s+=$2/1024} END{print int(s)}' 2>/dev/null)
         fi
         echo "MEM_PHYS_MB=${phys:-0}"
-        # cycle-016 (2026-04-29) + production-audit 후속: slot 단위 emit (raw fallback) — Python 경로와 동일하게 manufacturer/part_number 포함
+        # slot 단위 emit (raw fallback) — Python 경로와 동일하게 manufacturer/part_number 포함
         if command -v dmidecode >/dev/null 2>&1; then
           dmidecode -t memory 2>/dev/null | awk '
             BEGIN{ in_dev=0; size=""; type=""; speed=""; mfr=""; pn=""; }
@@ -242,7 +242,7 @@
                   | map('split', '=', 1)
                   | list) }}
         _l_mem_slots_r: >-
-          {# 2026-04-29 fix B91: raw fallback path도 jedec_to_vendor 적용 (Python path와 동일).
+          {# raw fallback path도 jedec_to_vendor 적용 (Python path와 동일).
              RHEL 8.10/Python 3.6 환경에서 dmidecode raw '00AD063200AD' → 'SK hynix' 정규화. #}
           {%- set out = [] -%}
           {%- for line in (_l_mem_raw_result.stdout_lines | default([])) -%}
@@ -316,7 +316,7 @@
             free_mb: >-
               {{ ((_l_mem_rp.MEM_AVAIL_KB | default('0')) | trim | int / 1024) | round(0,'floor') | int }}
             slots: "{{ _l_mem_slots_r | default([]) }}"
-            # cycle-016 (2026-04-29): dmidecode slot 단위 group summary (raw)
+            # dmidecode slot 단위 group summary (raw)
             summary: "{{ _l_mem_summary_r | default({'groups': [], 'grand_total_gb': 0}) }}"
         _sections_supported_fragment: ['memory']
         _sections_collected_fragment: ['memory']

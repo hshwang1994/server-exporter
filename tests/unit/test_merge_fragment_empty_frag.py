@@ -1,4 +1,4 @@
-"""Round 17 #6 — merge_fragment 빈 _data_fragment 는 누적 data 를 보존(덮어쓰지 않음).
+"""merge_fragment 빈 _data_fragment 는 누적 data 를 보존(덮어쓰지 않음).
 
 gather_runtime 의 rescue 가 all-null runtime 을 emit 하면 merge_fragment 의 2-level
 wholesale 교체(L89-90)로 gather_system 이 이미 수집한 runtime 을 통째로 덮어써 데이터
@@ -45,7 +45,7 @@ _GOOD_RUNTIME = {
 
 
 def test_empty_fragment_preserves_accumulated_runtime():
-    """rescue 의 빈 fragment({}) → gather_system 이 수집한 runtime 보존(#6 fix)."""
+    """rescue 의 빈 fragment({}) → gather_system 이 수집한 runtime 보존."""
     base = {"system": {"runtime": dict(_GOOD_RUNTIME), "vendor": "Dell"}}
     merged = _merge(base, {})
     assert merged["system"]["runtime"] == _GOOD_RUNTIME   # 보존 (가드 전: rescue all-null 로 덮임)
@@ -55,7 +55,7 @@ def test_empty_fragment_preserves_accumulated_runtime():
 def test_all_null_runtime_fragment_would_clobber_proves_mechanism():
     """기존 버그 재현: all-null runtime fragment 는 wholesale 교체로 좋은 데이터를 덮는다.
 
-    rescue 가 {} 대신 이 dict 를 emit 하던 것이 #6 의 원인 — 수정으로 더는 emit 되지 않음."""
+    rescue 가 {} 대신 이 dict 를 emit 하던 것이 원인 — 수정으로 더는 emit 되지 않음."""
     base = {"system": {"runtime": dict(_GOOD_RUNTIME)}}
     all_null = {"system": {"runtime": {k: None for k in _GOOD_RUNTIME}}}
     merged = _merge(base, all_null)

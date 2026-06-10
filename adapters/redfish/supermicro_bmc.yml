@@ -1,21 +1,21 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Supermicro / Super Micro Computer
 # Firmware: BMC firmware 1.x / 2.x (generic fallback — 세대 무관)
 # Origin: Supermicro BMC Redfish API documentation
-# Last sync: 2026-05-07 (M-B2 — origin 주석 강화)
+# Last sync: 2026-05-07 (origin 주석 강화)
 # Notes: generic Supermicro BMC fallback. 세대 식별 안 될 때 사용.
-# Sources (rule 96 R1-A — lab 부재):
+# Sources (lab 부재):
 #   - https://www.supermicro.com/manuals/superserver/IPMI/
 #   - https://www.supermicro.com/manuals/other/RedfishUserGuide.pdf
 #   - https://www.supermicro.com/support/resources/bios_ipmi.php?type=BMC
-# Tested against: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
-# Capability 매트릭스 (cycle 2026-05-07 M-B2):
+# 검증 기준: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
+# Capability 매트릭스:
 #   - generation: bmc (legacy generic fallback)
 #   - power_subsystem_introduction: false (legacy 평균 — PowerSubsystem 미보장)
 #   - storage_strategy_evolution: simple_storage (legacy 평균 — Storage 표준 path 미보장)
-# Lab status: 부재 — 사용자 명시 2026-05-07 Q2 (Supermicro 사이트 BMC 0대)
-# Next action: lab 도입 후 별도 cycle — generic fallback 동작 검증 (rule 50 R2 단계 10)
+# Lab status: 부재 — web sources only (Supermicro 사이트 BMC 0대)
+# Next action: lab 도입 후 generic fallback 동작 검증
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_supermicro_bmc
 channel: redfish
@@ -48,7 +48,7 @@ normalize:
 credentials:
   profile: "supermicro"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
+  # AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: supermicro_factory, role: recovery }
 

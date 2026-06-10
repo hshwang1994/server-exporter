@@ -26,7 +26,6 @@ vault/*.unencrypted.yml
 vault/redfish/*.unencrypted.yml
 
 # Lab 자격증명 (로컬 전용 — repo private 전환 전까지 commit 금지)
-# 2026-04-29 cycle-015 — 사용자가 public 작업 종료 후 private 전환 예정
 vault/.lab-credentials.yml
 vault/.lab-credentials.*.yml
 inventory/lab/
@@ -43,7 +42,6 @@ tests/scripts/local/*
 .cache/
 
 # Jenkins 작업 잔재 (로컬 디버깅 / probe 결과 — commit 금지)
-# cycle-018 (2026-05-01) 추가
 .jenkins_*.log
 .jenkins_builds.json
 .console-*.txt

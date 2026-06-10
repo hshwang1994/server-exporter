@@ -21,7 +21,7 @@
       ansible.builtin.set_fact:
         _l_norm_physical_disks: >-
           {%- set out = [] -%}
-          {# Round 15: 빈 stdout('')은 default('{}')를 통과(undefined만 catch) → from_json('') crash. raw path(_l_norm_physical_disks_raw)와 동일 length 가드 #}
+          {# 빈 stdout('')은 default('{}')를 통과(undefined만 catch) → from_json('') crash. raw path(_l_norm_physical_disks_raw)와 동일 length 가드 #}
           {%- set lsblk = (_l_lsblk_raw.stdout | from_json) if (_l_lsblk_raw.stdout | default('') | trim | length > 0) else {} -%}
           {%- if lsblk.blockdevices is defined -%}
             {%- for dev in lsblk.blockdevices -%}
@@ -36,7 +36,7 @@
                 {%- set _ = out.append({
                   'id':         _dev_path,
                   'device':     _dev_path,
-                  {# Round 16: lsblk 가 virtio/일부 가상 disk 에 "model": null 방출 → 'is defined'
+                  {# lsblk 가 virtio/일부 가상 disk 에 "model": null 방출 → 'is defined'
                      통과 후 None|trim='None' 누설. truthy 체크로 None/''/undefined → none. #}
                   'model':      (dev.model | trim) if dev.model else none,
                   'total_mb':   (dev.size | int / 1048576) | round(0,'floor') | int,
@@ -50,7 +50,7 @@
           {{ out }}
       no_log: true
 
-    # production-audit (2026-04-29): FS allow-list 확장 — ZFS/tmpfs/overlay/btrfs subvolume 등 포함.
+    # FS allow-list 확장 — ZFS/tmpfs/overlay/btrfs subvolume 등 포함.
     # NFS lazy-mount의 size_total=None 방어. 기존 m.device.startswith('/dev/')만 검사하면 ZFS pool, btrfs subvolume,
     # overlayfs(컨테이너), tmpfs(영구 마운트) 모두 누락. fstype allow-list로 정상 FS만 채택.
     - name: "linux | storage | normalize filesystems"
@@ -66,7 +66,7 @@
               {%- set avail_b = m.size_available | default(0) -%}
               {%- if total_b is none -%}{%- set total_b = 0 -%}{%- endif -%}
               {%- if avail_b is none -%}{%- set avail_b = 0 -%}{%- endif -%}
-              {# 2026-04-29 fix B64: used_mb / available_mb / total_mb 부동소수점 오차 방지 — int() cast.
+              {# used_mb / available_mb / total_mb 부동소수점 오차 방지 — int() cast.
                  이전: round(1) → 33965.5, 246.29999... 같은 부정확 float가 envelope에 그대로 노출됨.
                  호출자가 정수로 기대하므로 int 변환 (소수점 미만 절삭). usage_percent 만 1자리 round 유지. #}
               {%- set total_mb = ((total_b | int) / 1048576) | int -%}
@@ -88,7 +88,7 @@
           {{ out }}
       no_log: true
 
-    # cycle-016 (2026-04-29): storage.summary group 산출 (namespace 사용 — Jinja2 loop scoping fix)
+    # storage.summary group 산출 (namespace 사용 — Jinja2 loop scoping fix)
     - name: "linux | storage | compute summary groups"
       ansible.builtin.set_fact:
         _l_stor_summary: >-
@@ -143,7 +143,7 @@
       failed_when: false
       no_log: true
 
-    # production-audit: NFS/cifs idle mount은 df가 '-'/'n/a' 출력. awk로 numeric strip 처리.
+    # NFS/cifs idle mount은 df가 '-'/'n/a' 출력. awk로 numeric strip 처리.
     - name: "linux | storage | raw df"
       ansible.builtin.raw: |
         export LANG=C LC_ALL=C
@@ -183,7 +183,7 @@
                 {%- set _ = out.append({
                   'id':         _dev_path,
                   'device':     _dev_path,
-                  {# Round 16: lsblk 가 virtio/일부 가상 disk 에 "model": null 방출 → 'is defined'
+                  {# lsblk 가 virtio/일부 가상 disk 에 "model": null 방출 → 'is defined'
                      통과 후 None|trim='None' 누설. truthy 체크로 None/''/undefined → none. #}
                   'model':      (dev.model | trim) if dev.model else none,
                   'total_mb':   (dev.size | int / 1048576) | round(0,'floor') | int,
@@ -209,7 +209,7 @@
                 {%- set used  = parts[4] | int -%}
                 {%- set avail = parts[5] | int -%}
                 {%- set pct   = parts[6] | float -%}
-                {# 2026-04-29 fix B64: total_mb / used_mb / available_mb 정수 일관성 (raw fallback path) #}
+                {# total_mb / used_mb / available_mb 정수 일관성 (raw fallback path) #}
                 {%- set _ = out.append({
                   'device':        parts[0],
                   'mount_point':   parts[1],

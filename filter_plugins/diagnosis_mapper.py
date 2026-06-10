@@ -27,14 +27,13 @@ def build_diagnosis(precheck_result, channel, adapter_id=None):
     Returns:
         diagnosis dict — output JSON의 diagnosis 필드에 들어감
     """
-    # production-audit (2026-04-29): precheck_result가 None / non-dict 일 때 AttributeError 방어.
+    # precheck_result가 None / non-dict 일 때 AttributeError 방어.
     # rescue path 또는 precheck 모듈이 raise한 경우 호출됨.
     if not isinstance(precheck_result, dict):
         precheck_result = {}
 
-    # cycle 2026-05-01: 사용자 명시 "신규 JSON 추가 없음 — 호환성 only" 원칙 적용.
+    # "신규 JSON 추가 없음 — 호환성 only" 원칙 적용.
     # detail 정보는 envelope `errors[0].detail` 에 이미 존재. diagnosis.details 에 중복 추가 안 함.
-    # (cycle 2026-04-30에 추가됐던 'detail' 키 제거 — 호환성 영역 외)
     details = {
         "channel": channel,
         "adapter_candidate": adapter_id,
@@ -53,7 +52,7 @@ def build_diagnosis(precheck_result, channel, adapter_id=None):
 
     # probe_facts 병합
     probe_facts = precheck_result.get("probe_facts", {})
-    # Round 15: 비-dict probe_facts (손상된 캐시/외부 JSON) → details.update() ValueError 방어
+    # 비-dict probe_facts (손상된 캐시/외부 JSON) → details.update() ValueError 방어
     if isinstance(probe_facts, dict) and probe_facts:
         details.update(probe_facts)
 

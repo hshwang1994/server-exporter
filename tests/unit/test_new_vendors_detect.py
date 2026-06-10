@@ -1,6 +1,6 @@
-"""F44~F47 회귀 — 신규 vendor 4종 (Huawei / Inspur / Fujitsu / Quanta) detect.
+"""회귀 — 신규 vendor 4종 (Huawei / Inspur / Fujitsu / Quanta) detect.
 
-사용자 명시 승인 (2026-05-01) — vault SKIP, adapter + ai-context + boundary-map 만.
+vault SKIP, adapter 만 (lab 부재 — web sources).
 
 검증 항목:
 1. vendor_aliases.yml 의 4 신규 vendor entry 존재
@@ -41,7 +41,7 @@ NEW_ADAPTERS = ["huawei_ibmc", "inspur_isbmc", "fujitsu_irmc", "quanta_qct_bmc"]
 # ── vendor_aliases.yml entries ───────────────────────────────────────────────
 
 
-def test_f44_f47_vendor_aliases_yaml_has_4_new_entries() -> None:
+def test_vendor_aliases_yaml_has_4_new_entries() -> None:
     """vendor_aliases.yml 의 4 신규 vendor entry 존재."""
     data = yaml.safe_load(ALIASES_PATH.read_text(encoding="utf-8"))
     aliases = data["vendor_aliases"]
@@ -51,10 +51,10 @@ def test_f44_f47_vendor_aliases_yaml_has_4_new_entries() -> None:
         assert len(aliases[v]) >= 3, f"vendor_aliases.yml: {v} 변형 alias 3개 미만"
 
 
-# ── _FALLBACK_VENDOR_MAP sync (rule 50 + cycle-005 동기화 게이트) ─────────────
+# ── _FALLBACK_VENDOR_MAP sync (동기화 게이트) ─────────────
 
 
-def test_f44_f47_fallback_vendor_map_sync() -> None:
+def test_fallback_vendor_map_sync() -> None:
     """_FALLBACK_VENDOR_MAP 에 4 신규 vendor canonical 매핑 존재."""
     fb = rg._FALLBACK_VENDOR_MAP
     for v in NEW_VENDORS:
@@ -65,7 +65,7 @@ def test_f44_f47_fallback_vendor_map_sync() -> None:
         assert fb.get(v) == v, f"_FALLBACK_VENDOR_MAP: {v} → {v} self-mapping 부재"
 
 
-def test_f44_f47_bmc_product_hints_added() -> None:
+def test_bmc_product_hints_added() -> None:
     """_BMC_PRODUCT_HINTS 에 4 신규 vendor BMC 시그니처 존재."""
     hints = rg._BMC_PRODUCT_HINTS
     expected_signatures = {
@@ -83,25 +83,25 @@ def test_f44_f47_bmc_product_hints_added() -> None:
 # ── adapter YAML 구조 검증 ───────────────────────────────────────────────────
 
 
-def test_f44_f47_adapter_yaml_files_exist() -> None:
+def test_adapter_yaml_files_exist() -> None:
     """4 신규 adapter YAML 파일 존재."""
     for name in NEW_ADAPTERS:
         path = ADAPTERS_DIR / f"{name}.yml"
         assert path.exists(), f"{path} 부재"
 
 
-def test_f44_f47_adapter_yaml_required_keys() -> None:
-    """4 신규 adapter 의 4 필수 키 (rule 12 R4) 존재."""
+def test_adapter_yaml_required_keys() -> None:
+    """4 신규 adapter 의 4 필수 키 존재."""
     required = ["match", "capabilities", "collect", "normalize"]
     for name in NEW_ADAPTERS:
         path = ADAPTERS_DIR / f"{name}.yml"
         d = yaml.safe_load(path.read_text(encoding="utf-8"))
         for key in required:
             assert key in d, f"{name}: 필수 키 '{key}' 부재"
-        assert d.get("priority") == 80, f"{name}: priority=80 (사용자 명시 — lab 부재)"
+        assert d.get("priority") == 80, f"{name}: priority=80 (lab 부재)"
 
 
-def test_f44_f47_adapter_match_includes_canonical_vendor() -> None:
+def test_adapter_match_includes_canonical_vendor() -> None:
     """4 신규 adapter 의 match.vendor 에 canonical 표기 포함."""
     expected_canonical = {
         "huawei_ibmc": "Huawei",

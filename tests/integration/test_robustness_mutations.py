@@ -1,7 +1,7 @@
-"""Redfish 파싱 엔진 fault-injection 회귀 (mutation 하네스 기반).
+"""Redfish 파싱 엔진 fault-injection 회귀 (mutation 기반).
 
-목적 (사용자 요청 2026-06-09):
-    직전 사이클의 record/replay 하네스는 정상 응답을 golden 으로 고정만 했다. 본 테스트는
+목적:
+    record/replay 공용 모듈은 정상 응답을 golden 으로 고정만 했다. 본 테스트는
     그 recording 을 **변형**(mutation.py)해 redfish_gather.py 엔진에 신뢰 불가 입력을 주입하고,
     엔진이 **크래시 없이 graceful degrade** 함을 증명한다 — 시뮬레이터/mock 으로 gathering
     로직을 실제로 견고하게 만드는 도구.
@@ -193,11 +193,11 @@ class TestSingleNodeDegradation:
 
 
 # ---------------------------------------------------------------------------
-# 5) P1 — @odata.id 오염 / 수집 중 5xx (silent-loss 가드)
+# 5) @odata.id 오염 / 수집 중 5xx (silent-loss 가드)
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
 @pytest.mark.skipif(PRIMARY not in CASE_IDS, reason=f"{PRIMARY} fixture 없음")
-class TestP1SilentLoss:
+class TestSilentLoss:
     """비-str @odata.id, 부분 5xx 등 — crash 없이 degrade."""
 
     def setup_method(self):
@@ -248,11 +248,11 @@ class TestP1SilentLoss:
 
 
 # ---------------------------------------------------------------------------
-# 6) P2 — 무경계 collection 순회 상한 (DoS / huge-payload)
+# 6) 무경계 collection 순회 상한 (DoS / huge-payload)
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
 @pytest.mark.skipif(PRIMARY not in CASE_IDS, reason=f"{PRIMARY} fixture 없음")
-class TestP2Bounds:
+class TestBounds:
     """수천 멤버 collection → 멤버당 _get N회로 hang. 상한으로 절단됨을 검증."""
 
     def setup_method(self):

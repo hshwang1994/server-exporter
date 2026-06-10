@@ -1,6 +1,6 @@
 """Regression for redfish_gather._compute_final_status.
 
-배경 (cycle 2026-04-30): try_one_account.yml의 break 가드는
+배경: try_one_account.yml의 break 가드는
 `status != 'failed'`. 이전 _compute_final_status는 1개 섹션이라도
 collected에 들어가면 'partial' 반환 → 첫 자격증명 fail이어도 partial로
 emit → loop break → 두 번째 자격증명으로 fallback 안 됨.

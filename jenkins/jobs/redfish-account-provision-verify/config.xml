@@ -1,26 +1,26 @@
 <?xml version='1.1' encoding='UTF-8'?>
 <!--
-  F49 (cycle 2026-05-01): Jenkins job — redfish account_provision 검증 자동화.
+  Jenkins job — redfish account_provision 검증 자동화.
 
   목적:
-    - 사용자 보고 사고 (redfish 공통계정 생성 안 됨) 회귀 차단
+    - redfish 공통계정 생성 사고 회귀 차단
     - 5 BMC (Dell × 2, HPE, Lenovo, Cisco) 매트릭스 검증
-    - dryrun=true 가 default — 실 적용은 사용자 명시 파라미터
+    - dryrun=true 가 default — 실 적용은 명시적 파라미터
     - envelope.diagnosis.details.account_service 결과 archive
 
   실행 위치: Jenkins agent 10.100.64.154 또는 10.100.64.155
-  실행 빈도: 수동 + 코드 변경 시 (post-merge hook 가능)
+  실행 빈도: 수동 + 코드 변경 시
 -->
 <project>
   <actions/>
-  <description>F49 — redfish account_provision multi-vendor 호환성 검증.&#xd;
+  <description>redfish account_provision multi-vendor 호환성 검증.&#xd;
     - Dell iDRAC (10.100.15.27, 10.100.15.31) — patch_empty_slot 또는 patch_existing 검증&#xd;
     - HPE iLO (10.50.11.231) — primary 통과 (이미 infraops 존재)&#xd;
     - Lenovo XCC (10.50.11.232) — primary 통과 (이미 infraops 존재)&#xd;
     - Cisco CIMC (10.100.15.2) — not_supported graceful&#xd;
     &#xd;
     Vault password file: .vault_pass (Goodmit0802!)&#xd;
-    소스: F49 cycle 2026-05-01 (사용자 사이트 실측 + label 매칭 fix).</description>
+    소스: 사용자 사이트 실측 + label 매칭 fix.</description>
   <keepDependencies>false</keepDependencies>
   <properties>
     <hudson.model.ParametersDefinitionProperty>
@@ -86,7 +86,7 @@
       <command>#!/bin/bash
 set -euo pipefail
 
-echo "==== F49 redfish account_provision verify ===="
+echo "==== redfish account_provision verify ===="
 echo "DRYRUN=${DRYRUN}"
 echo "TARGET=${TARGET}"
 echo "BRANCH=${BRANCH}"

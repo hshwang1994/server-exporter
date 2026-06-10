@@ -20,9 +20,9 @@
 
 - name: "windows | storage | physical disks"
   ansible.windows.win_shell: |
-    # production-audit (2026-04-29): Get-PhysicalDisk(modern) + Win32_DiskDrive(fallback)로
+    # Get-PhysicalDisk(modern) + Win32_DiskDrive(fallback)로
     # MediaType을 HDD/SSD enum으로 정규화. 기존 raw WMI string ("Fixed hard disk media") 누출 차단.
-    # windows-audit (2026-04-29): PS5.1=int / PS7+=enum string 양쪽 BusType 처리.
+    # PS5.1=int / PS7+=enum string 양쪽 BusType 처리.
     #   Win32_DiskDrive raw "Fixed hard disk media"는 SSD/HDD 정보 부재 → null (잘못된 추정 차단).
     #   HealthStatus 매핑 (Healthy/Warning/Unhealthy) → health 필드.
     $physical_map = @{}
@@ -114,11 +114,11 @@
   failed_when: false
   no_log: true
 
-# P4 (cycle 2026-04-29 → 2026-05-29 enrich, hba-ib-csus): FC HBA initiator + MSFC_* 보강.
+# FC HBA initiator + MSFC_* 보강.
 # Get-InitiatorPort = WWPN/WWNN/상태 (Win2012+ 무 role/feature). MSFC_FCAdapterHBAAttributes /
 # MSFC_FibrePortHBAAttributes (root\WMI) = model/vendor/driver/firmware/speed (HBA miniport
 # driver 가 T11 FC-HBA API 등록 시만 — try/catch + 부재 시 graceful null). WWN 은 colon-hex 정규화.
-# source: MS docs MSFT_InitiatorPort / MSFC_* (EXTERNAL-CONTRACTS §4). lab 부재 — 사이트 실측 시 정정.
+# source: MS docs MSFT_InitiatorPort / MSFC_*. lab 부재 — 사이트 실측 시 정정.
 - name: "windows | storage | initiator ports + HBA attrs"
   ansible.windows.win_shell: |
     function Format-Wwn($v) {
@@ -178,10 +178,10 @@
   failed_when: false
   no_log: true
 
-# P4 (cycle 2026-05-29 hba-ib-csus): Windows InfiniBand best-effort (구: hardcoded []).
+# Windows InfiniBand best-effort (구: hardcoded []).
 # Get-NetAdapter PhysicalMediaType=InfiniBand / NdisPhysicalMedium=11 (authoritative) +
 # Get-PnpDevice VEN_15B3 (Mellanox) fallback. node_guid 는 Windows 표준 API 부재 → null (날조 금지).
-# source: MS docs Get-NetAdapter / OID_GEN_PHYSICAL_MEDIUM (EXTERNAL-CONTRACTS §4). lab 부재.
+# source: MS docs Get-NetAdapter / OID_GEN_PHYSICAL_MEDIUM. lab 부재.
 - name: "windows | storage | infiniband adapters (best-effort)"
   ansible.windows.win_shell: |
     $ib = @()
@@ -221,7 +221,7 @@
   failed_when: false
   no_log: true
 
-# cycle 2026-05-29 (hba-ib-csus): HBA/IB canonical 정규화.
+# HBA/IB canonical 정규화.
 #   - win_shell 단일 JSON object(stdout) 파싱 (구: line-by-line).
 #   - FC/iSCSI 만 hbas[] (SAS/Other initiator 제외 — storage controller 영역).
 #   - MSFC_* 보강 join (node_wwn → vendor/model/driver/firmware ; port_wwn → speed).
@@ -302,7 +302,7 @@
           'vendor':      'Mellanox',
           'firmware':    none,
           'source':      'os',
-          'note':        'Windows: node_guid 표준 API 부재 → null (best-effort, rule 96 R1-A).',
+          'note':        'Windows: node_guid 표준 API 부재 → null (best-effort).',
         }) -%}
       {%- endfor -%}
       {{ out }}
@@ -354,7 +354,7 @@
       {{ out }}
   no_log: true
 
-# cycle-016 (2026-04-29): storage.summary grouping
+# storage.summary grouping
 - name: "windows | storage | compute summary groups"
   ansible.builtin.set_fact:
     _w_stor_summary: >-
@@ -389,9 +389,9 @@
         datastores:      []
         controllers:     []
         logical_volumes: []
-        # cycle-016 (2026-04-29): Win32_DiskDrive 기반 group summary
+        # Win32_DiskDrive 기반 group summary
         summary:         "{{ _w_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
-        # P4 (cycle 2026-04-29 → 2026-05-29): Get-InitiatorPort + MSFC_* FC HBA / Get-NetAdapter IB
+        # Get-InitiatorPort + MSFC_* FC HBA / Get-NetAdapter IB
         hbas:            "{{ _w_hbas | default([]) }}"
         infiniband:      "{{ _w_ib | default([]) }}"
     _sections_supported_fragment: ['storage']

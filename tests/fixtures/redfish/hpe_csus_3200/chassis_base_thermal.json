@@ -4,7 +4,7 @@
   "@odata.type": "#Thermal.v1_7_1.Thermal",
   "Id": "Thermal",
   "Name": "CSUS 3200 Base Chassis Thermal",
-  "_note": "lab 부재 — DMTF DSP0266 Thermal.v1 합성. rule 96 R1-A. cycle 2026-06-09 ADR.",
+  "_note": "lab 부재 — DMTF DSP0266 Thermal.v1 합성.",
   "Temperatures": [
     {"Name": "Inlet Ambient", "ReadingCelsius": 22, "PhysicalContext": "Intake", "UpperThresholdCritical": 42, "Status": {"Health": "OK", "State": "Enabled"}},
     {"Name": "CPU 1", "ReadingCelsius": 55, "PhysicalContext": "CPU", "UpperThresholdCritical": 90, "Status": {"Health": "OK", "State": "Enabled"}},

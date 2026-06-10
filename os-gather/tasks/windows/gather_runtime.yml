@@ -1,7 +1,7 @@
 ---
 # os-gather/tasks/windows/gather_runtime.yml
 #
-# P5 sub-phase b (cycle 2026-04-29): Windows 운영 런타임 정보.
+# Windows 운영 런타임 정보.
 # w32tm / Get-NetFirewallProfile / Get-NetTCPConnection / Win32_PageFileUsage.
 # best-effort: 일부 cmdlet 미설치 / 권한 부족 시 빈 값.
 #
@@ -10,7 +10,6 @@
 - block:
     - name: "windows | runtime | timezone + NTP"
       ansible.windows.win_shell: |
-        # windows-audit (2026-04-29):
         #   1) timezone: Windows TZ ID → IANA 매핑 (Linux 표기와 일관). 매핑 없으면 raw 유지.
         #   2) NTP last_sync: w32tm /query /status 출력은 OS locale 의존 (en/ko/ja/...).
         #      → registry HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Config (locale-free) 우선.
@@ -166,7 +165,7 @@
           {{ out }}
       no_log: true
 
-    # cycle-016 Phase P 후속: Linux 와 키 일관성 통일
+    # Linux 와 키 일관성 통일
     - name: "windows | runtime | merge fragment"
       ansible.builtin.set_fact:
         _data_fragment:
@@ -174,11 +173,11 @@
             runtime:
               timezone:         "{{ _w_rt_ntp_obj.timezone | default(none) }}"
               ntp_active:       "{{ (_w_rt_ntp_obj.w32time_state | default('')) | lower in ['running','active'] }}"
-              # windows-audit: locale-independent (w32tm /query /source) — Korean/Japanese 서버에서도 정확
+              # locale-independent (w32tm /query /source) — Korean/Japanese 서버에서도 정확
               ntp_synchronized: "{{ _w_rt_ntp_obj.synced | default(false) | bool }}"
               firewall_tool:    "windows_firewall"
               firewall_state: >-
-                {# Round 19 (R19-1): plain set 은 for-loop 밖으로 전파되지 않아 any_enabled 가
+                {# plain set 은 for-loop 밖으로 전파되지 않아 any_enabled 가
                    항상 false → firewall_state 가 모든 호스트에서 'inactive' 오보(보안 필드).
                    인접 swap_* 와 동일하게 namespace 사용 (loop-scoping fix). #}
                 {%- set ns = namespace(any=false) -%}
@@ -192,7 +191,7 @@
                   {%- set _ = out.append(p | string) -%}
                 {%- endfor -%}
                 {{ out }}
-              # production-audit (2026-04-29): Jinja2 loop scoping 버그 수정 — namespace pattern (cycle-016 memory/storage와 일치)
+              # Jinja2 loop scoping 버그 수정 — namespace pattern (memory/storage와 일치)
               # 기존: `{% set total = total + ... %}` 는 loop 종료 시 마지막 iteration 값만 보존 → 합계가 아닌 마지막 pagefile 크기만 emit
               swap_total_mb: >-
                 {%- set ns = namespace(t=0) -%}
@@ -225,7 +224,7 @@
   rescue:
     - name: "windows | runtime | rescue (best-effort skip — gather_system runtime 보존)"
       ansible.builtin.set_fact:
-        # Round 18 (R18-2): Linux #6 와 동일 — 기존엔 all-null runtime 을 emit → merge_fragment 의
+        # Linux runtime rescue 와 동일 — 기존엔 all-null runtime 을 emit → merge_fragment 의
         # 2-level wholesale 교체로 gather_system 이 이미 수집한 runtime 을 통째로 덮어써 데이터 유실.
         # 빈 fragment 를 emit 해 gather_system 의 runtime 을 보존한다.
         _data_fragment: {}

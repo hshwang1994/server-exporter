@@ -1,6 +1,6 @@
 # redfish-gather/library/ — Redfish API 엔진 (stdlib only)
 
-> 약 4,500 줄 (2026-06 기준) 단일 Python 모듈. urllib / ssl / json 만 사용 (rule 10 R2 — 외부 라이브러리 금지).
+> 약 4,500 줄 (2026-06 기준) 단일 Python 모듈. urllib / ssl / json 만 사용 (외부 라이브러리 금지).
 
 ## 파일
 
@@ -24,22 +24,22 @@
 | `gather_firmware` | GET `/redfish/v1/UpdateService/FirmwareInventory` |
 | `gather_power` | GET `/redfish/v1/Chassis/{id}/Power` 또는 PowerSubsystem |
 
-각 함수 docstring 에 endpoint 명시 (cycle 2026-05-07 보강).
+각 함수 docstring 에 endpoint 명시.
 
-## vendor 분기 정본 위치 (rule 12 R1 Allowed 영역)
+## vendor 분기 정본 위치 (vendor namespace 허용 영역)
 
 | 위치 | 분기 | 근거 |
 |---|---|---|
 | `_OEM_EXTRACTORS` | vendor → OEM extractor 함수 매핑 | Redfish API spec 자체가 vendor namespace 정의 (`Oem.Hpe`, `Oem.Dell`...) |
-| `_FALLBACK_VENDOR_MAP` | vendor_aliases.yml load 실패 시 fallback | rule 12 R1 Allowed |
+| `_FALLBACK_VENDOR_MAP` | vendor_aliases.yml load 실패 시 fallback | vendor namespace 허용 |
 | `_detect_vendor_from_service_root` | vendor 시그니처 매핑 (product / manufacturer 문자열 → vendor) | BMC product name 으로 vendor 추론 |
 | `bmc_names` dict | BMC 표시명 매핑 (dell→iDRAC) | UI / 메시지용 |
-| `_ACCOUNT_CREATE_STRATEGY` | vendor → 계정 생성 strategy (cycle 2026-05-07 추가) | AccountService PATCH/POST 차이 |
+| `_ACCOUNT_CREATE_STRATEGY` | vendor → 계정 생성 strategy | AccountService PATCH/POST 차이 |
 | `account_service_provision()` 본문 | inline if/elif vendor 분기 | 사이트 실측 + 펌웨어 별 사고 매트릭스 |
 
-이 외 영역 (common / 3-channel) 의 vendor 하드코딩 금지 (rule 12 R1).
+이 외 영역 (common / 3-channel) 의 vendor 하드코딩 금지.
 
-## 외부 의존성 정책 (rule 10 R2)
+## 외부 의존성 정책
 
 | 카테고리 | 사용 가능 |
 |---|---|
@@ -59,8 +59,8 @@
 
 ## 관련 문서
 
-- `docs/10_adapter-system.md` — Adapter 시스템 + priority 정책 (cycle 2026-05-07 보강)
+- `docs/10_adapter-system.md` — Adapter 시스템 + priority 정책
 - `docs/13_redfish-live-validation.md` — 실장비 검증
-- `docs/14_add-new-gather.md` 절차 B — 신 vendor / 새 세대 추가 (cycle 2026-05-07 보강)
+- `docs/14_add-new-gather.md` 절차 B — 신 vendor / 새 세대 추가
 - `docs/22_compatibility-matrix.md` — vendor × generation × section
-- `docs/23_debugging-entrypoints.md` — 디버깅 매트릭스 (cycle 2026-05-07 신설)
+- `docs/23_debugging-entrypoints.md` — 디버깅 매트릭스

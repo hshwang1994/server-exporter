@@ -1,6 +1,6 @@
 """redfish storage 경로 fault-injection 회귀 (Round 1 #0/#1/#2/#10/11/20/#24/#25).
 
-배경: 멀티에이전트 적대적 검증이 storage 수집 경로의 crash/correctness 결함을 다수 확인:
+배경: storage 수집 경로의 crash/correctness 결함을 다수 확인:
   - #0 _extract_storage_controller_info: 비-list StorageControllers[0] crash
   - #1 _extract_storage_volumes: 비-str Links.Drives @odata.id .rstrip crash
   - #2 _normalize_storage_raw: 비-dict controller/drive .get crash

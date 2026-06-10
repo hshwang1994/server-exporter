@@ -1,9 +1,9 @@
 ---
-# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: VMware ESXi 7.x
-# Firmware: tested_against ["7.0 U1", "7.0 U2", "7.0 U3"]
+# Firmware: 검증 버전 ["7.0 U1", "7.0 U2", "7.0 U3"]
 # Origin: 추정 — 검증 필요 (community.vmware 6.2.0 + vSphere 7.x release notes)
-# Last sync: 2026-04-27 (hshwang1994)
+# Last sync: 2026-04-27
 # Notes: 운영 환경 대다수 7.x — priority=50.
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: esxi_7x

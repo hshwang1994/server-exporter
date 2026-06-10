@@ -1,6 +1,6 @@
 # DMTF Redfish Schema — vendored subset (DSP8010 2026.1)
 
-> 외부 시스템 계약(rule 96)의 **정본 reference**. server-exporter 의 Redfish 수집 코드가
+> 외부 시스템 계약의 **정본 reference**. server-exporter 의 Redfish 수집 코드가
 > 참조하는 enum / 필드명 / path 를 DMTF 표준과 대조·검증하기 위한 큐레이션 스냅샷이다.
 > **런타임 코드는 이 파일들을 import 하지 않는다** — 순수 reference 데이터(의존성 아님).
 
@@ -40,7 +40,7 @@ print(d["definitions"]["LinkStatus"]["enum"])
 # ['LinkUp', 'Starting', 'Training', 'LinkDown', 'NoLink']
 ```
 
-## 갱신 trigger (rule 28 #11 — 외부 계약, TTL 90일)
+## 갱신 trigger (외부 계약, TTL 90일)
 
 - DMTF 신 release (DSP8010 2026.2+) 발표
 - 사이트 BMC 펌웨어 업그레이드로 응답 schema 변경 관측

@@ -1,8 +1,8 @@
-"""Round 17 #9/#10 — adapter selection facts 가 실제 generation 매칭을 가능케 하는지 검증.
+"""adapter selection facts 가 실제 generation 매칭을 가능케 하는지 검증.
 
-#9 (esxi): site.yml 이 collect_facts 전에 facts={} 로 선택 → version_patterns(^6./^7./^8.)
+(esxi): site.yml 이 collect_facts 전에 facts={} 로 선택 → version_patterns(^6./^7./^8.)
    가 죽고 priority 만으로 esxi_8x 항상 선택. 수정: collect_facts 뒤로 옮겨 실제 version 전달.
-#10 (windows): site.yml 이 facts.version 으로 ansible_os_product_type(=SKU 'server')를 넘겨
+(windows): site.yml 이 facts.version 으로 ansible_os_product_type(=SKU 'server')를 넘겨
    version_patterns(2019/2022, 10.0.NNNNN)와 절대 안 맞아 generation adapter 가 죽고
    os_windows_generic 만 선택. 수정: ansible_kernel(빌드 10.0.20348.0)을 넘김.
 
@@ -43,7 +43,7 @@ def _select(channel: str, facts: dict) -> str:
     return matched[0][1]
 
 
-# ── #9 ESXi: 실제 버전이 전달되면 generation 별로 올바로 선택 ──────────────────
+# ── ESXi: 실제 버전이 전달되면 generation 별로 올바로 선택 ──────────────────
 @pytest.mark.parametrize("version,expected", [
     ("8.0.2", "esxi_8x"),
     ("8.0 U2", "esxi_8x"),
@@ -61,7 +61,7 @@ def test_esxi_empty_facts_was_priority_only_bug():
     assert _select("esxi", {"version": "7.0.3"}) != _select("esxi", {})
 
 
-# ── #10 Windows: ansible_kernel(빌드)이면 generation 선택, SKU 면 generic 으로 죽음 ──
+# ── Windows: ansible_kernel(빌드)이면 generation 선택, SKU 면 generic 으로 죽음 ──
 @pytest.mark.parametrize("version,expected", [
     ("10.0.20348.0", "os_windows_2022"),   # ansible_kernel (fix)
     ("10.0.17763.5122", "os_windows_2019"),

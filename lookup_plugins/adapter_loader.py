@@ -96,7 +96,7 @@ def _scan_adapters(adapter_dir):
     glob 결과는 sorted()로 알파벳순 정렬한다 — 스캔 순서가 결정적이어야
     `_match_and_score()` 출력 list 순서가 일관된다. score 동률 시 Python
     `list.sort()`는 stable sort이므로 알파벳순 (= 파일명 순)이 tie-break이
-    된다 (rule 50 R3 / NEXT_ACTIONS T3-02 관련).
+    된다.
     """
     if not os.path.isdir(adapter_dir):
         raise AnsibleError(
@@ -107,7 +107,7 @@ def _scan_adapters(adapter_dir):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
-            if not isinstance(data, dict):  # Round 9 #3: scalar/list adapter YAML → skip (item assignment crash 방지)
+            if not isinstance(data, dict):  # scalar/list adapter YAML → skip (item assignment crash 방지)
                 continue
             data["_source_file"] = path
             data["_filename"] = os.path.basename(path)
@@ -138,7 +138,7 @@ def _match_and_score(adapters, facts, aliases, adapter_matches, adapter_score,
             score = adapter_score(adapter, facts, aliases)
             if score > -9999:
                 matched.append((score, adapter))
-                # score breakdown logging (rule 95 R1 — debugging visibility)
+                # score breakdown logging (debugging visibility)
                 if adapter_specificity and adapter_match_score:
                     priority = adapter.get("priority", 0)  # 표시용 raw (int() 제거 — 오타 priority 가 로깅서 crash 안 나게)
                     spec = adapter_specificity(adapter)
@@ -203,7 +203,7 @@ class LookupModule(LookupBase):
         adapter_dir = os.path.join(repo_root, "adapters", channel)
         adapters = _scan_adapters(adapter_dir)
 
-        # rule 95 R1 #4 (debugging visibility) — facts 입력 요약 -vvv 로그
+        # debugging visibility — facts 입력 요약 -vvv 로그
         display.vvv(
             "adapter_loader: channel={0}, facts vendor={1}, model={2}, firmware={3}".format(
                 channel,
@@ -235,11 +235,11 @@ class LookupModule(LookupBase):
         # 동률 시 _scan_adapters()가 알파벳순 정렬해 둔 원래 순서를
         # 유지한다 — 즉 동률 tie-break는 파일명 알파벳 오름차순.
         # 동률 발생 자체가 priority/specificity 일관성 위반 신호이므로
-        # 동률 발견 시 vvv 경고를 남긴다 (rule 10 R5).
+        # 동률 발견 시 vvv 경고를 남긴다.
         matched.sort(key=lambda x: x[0], reverse=True)
         best_score, best_adapter = matched[0]
 
-        # rule 95 R1 #4 — top 3 후보 -vvv 로그 (debugging visibility)
+        # top 3 후보 -vvv 로그 (debugging visibility)
         display.vvv(
             "adapter_loader: top {0} candidates (score 내림차순):".format(
                 min(3, len(matched))
@@ -262,7 +262,7 @@ class LookupModule(LookupBase):
             )
 
         display.v(
-            "adapter_loader: 선택됨 — {0} (score={1}) [rule 10 R5 score = priority×1000 + specificity×10 + match]".format(
+            "adapter_loader: 선택됨 — {0} (score={1}) [score = priority×1000 + specificity×10 + match]".format(
                 best_adapter.get("adapter_id", "unknown"), best_score
             )
         )

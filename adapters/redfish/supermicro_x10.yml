@@ -1,5 +1,5 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Supermicro / Super Micro Computer
 # Firmware: X10 generation BMC (Aspeed AST2400 / 일부 AST2500)
 # Origin: Supermicro X10 IPMI/BMC documentation
@@ -9,19 +9,19 @@
 #   일부 endpoint 미지원: PowerSubsystem 없음 (Power deprecated path 만),
 #   Storage 는 SimpleStorage 만 (Storage 표준 path 부분 지원/미지원 혼재).
 #   OEM 확장 매우 약함 (X11+ 대비 표준 path 만 의존).
-# Sources (rule 96 R1-A — lab 부재):
+# Sources (lab 부재):
 #   - https://www.supermicro.com/manuals/superserver/IPMI/IPMI_Users_Guide_X10.pdf
 #   - https://www.supermicro.com/support/resources/bios_ipmi.php?type=BMC
 #   - https://redfish.dmtf.org/schemas/v1/ (DSP0268 v1.0~v1.6 영역)
-# Tested against: lab 부재 (web sources only). 사용자 사이트 도입 시 fixture 캡처.
+# 검증 기준: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
 # Compatibility 가정 (web sources):
 #   - manufacturer: "Supermicro" / "Super Micro Computer, Inc." (전 generation 공통)
 #   - Manager URI: /redfish/v1/Managers/1
 #   - System URI: /redfish/v1/Systems/1
 #   - PowerSubsystem 미지원 (Power deprecated path 만 사용)
 #   - SimpleStorage 우선 (Storage 표준 path 미지원 펌웨어 다수)
-# Lab status: 부재 — 사용자 명시 2026-05-07 Q2 (Supermicro 사이트 BMC 0대)
-# Next action: lab 도입 후 별도 cycle — 실 X10 BMC 검증 후 capabilities 보정 (rule 50 R2 단계 10)
+# Lab status: 부재 — web sources only (Supermicro 사이트 BMC 0대)
+# Next action: lab 도입 후 실 X10 BMC 검증 후 capabilities 보정
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_supermicro_x10
 channel: redfish
@@ -53,7 +53,7 @@ normalize:
 credentials:
   profile: "supermicro"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
+  # AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: supermicro_factory, role: recovery }
 

@@ -1,6 +1,6 @@
-"""multi_node 정규화 함수 fault-injection 회귀 (P0 crash 가드).
+"""multi_node 정규화 함수 fault-injection 회귀 (crash 가드).
 
-배경 (사용자 요청 2026-06-09 / rule 95 R1 #7):
+배경:
     redfish_gather.py 의 단일 노드 수집기는 _safe_int 로 비-숫자 캐스팅을 방어하지만,
     multi_node(HPE CSUS 3200 / Superdome Flex RMC) 전용 정규화 함수들은 bare int() / // 를
     써서 BMC 펌웨어가 capacity/cores 를 **문자열**로 반환하면 모듈 전체가 ValueError/TypeError
@@ -22,7 +22,7 @@ rg = H.rg
 
 
 # ===========================================================================
-# P0-1: _summarize_partition_disks — total_mb 가 문자열이면 `str // int` TypeError
+# _summarize_partition_disks — total_mb 가 문자열이면 `str // int` TypeError
 # ===========================================================================
 class TestSummarizePartitionDisks:
     def test_string_total_mb_does_not_crash(self):
@@ -50,7 +50,7 @@ class TestSummarizePartitionDisks:
 
 
 # ===========================================================================
-# P0-3/P0-4: _normalize_cpu_raw — total_cores 문자열이면 int() ValueError (sum + grouping)
+# _normalize_cpu_raw — total_cores 문자열이면 int() ValueError (sum + grouping)
 # ===========================================================================
 class TestNormalizeCpuRaw:
     def test_string_total_cores_does_not_crash(self):
@@ -80,7 +80,7 @@ class TestNormalizeCpuRaw:
 
 
 # ===========================================================================
-# P0-2: _normalize_memory_raw — capacity_mb 문자열이면 int() ValueError
+# _normalize_memory_raw — capacity_mb 문자열이면 int() ValueError
 # ===========================================================================
 class TestNormalizeMemoryRaw:
     def test_unit_suffixed_capacity_does_not_crash(self):

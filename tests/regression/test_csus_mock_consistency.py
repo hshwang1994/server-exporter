@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-HPE CSUS 3200 mock baseline — 자기 일관성 가드 (cycle 2026-05-29 audit, CS-02).
+HPE CSUS 3200 mock baseline — 자기 일관성 가드.
 
 schema/baseline_v1/hpe_csus_3200_baseline.json 은 lab 부재로 FABRICATED MOCK 이다
-(rule 25 R7-B — "검증됨" 주장 금지). envelope SHAPE 회귀에는 쓰이지만 실측이 아니므로,
+("검증됨" 주장 금지). envelope SHAPE 회귀에는 쓰이지만 실측이 아니므로,
 조작된 값들이 내부적으로 모순되거나(예: summary 카운트 ≠ 실제 list 길이) mock 표식이
 사라진 채 방치되는 것을 막기 위한 가드 테스트.
 
-실 CSUS/Superdome 장비 fixture (NEXT_ACTIONS C1) 로 교체될 때 본 테스트는
+실 CSUS/Superdome 장비 fixture 로 교체될 때 본 테스트는
 삭제 또는 실측 기준으로 갱신한다 (mock 표식 assert 가 의도적으로 실패하여 전환을 강제).
 """
 import json

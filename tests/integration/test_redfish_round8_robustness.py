@@ -1,9 +1,9 @@
 """redfish Round 8 robustness/correctness 회귀 (string-method 패턴 클래스).
 
   - _str 헬퍼 (문자열 메서드 전 비-str 방어)
-  - #0 _classify_rmc_label 비-str manager_id (.lower UNWRAPPED P0)
-  - #1 gather_memory name trailing whitespace 정규화
-  - #2 gather_bmc 비-str Gateway
+  - _classify_rmc_label 비-str manager_id (.lower 방어)
+  - gather_memory name trailing whitespace 정규화
+  - gather_bmc 비-str Gateway
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def test_str_helper():
 
 
 def test_classify_rmc_label_non_str_manager_id():
-    """manager_layout truthy + 비-str Id → (id or '').lower() AttributeError 방어 (UNWRAPPED P0)."""
+    """manager_layout truthy + 비-str Id → (id or '').lower() AttributeError 방어."""
     r = rg._classify_rmc_label("/redfish/v1/Managers/1", 123, "rmc_primary")  # 가드 전: int.lower crash
     assert r is None or isinstance(r, str)
     # 정상 str id 동작 불변

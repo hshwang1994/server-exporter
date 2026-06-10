@@ -1,6 +1,6 @@
-"""data skeleton 3-파일 동기화 가드 (rule 13 R1 / build_*.yml 정합).
+"""data skeleton 3-파일 동기화 가드 (build_*.yml 정합).
 
-배경 (audit 2026-06-09):
+배경:
     빈 data 뼈대(skeleton)가 세 파일에 **수동 복제**되어 있다 (각 파일 상단 주석이 명시):
       - common/tasks/normalize/init_fragments.yml      (_merged_data)
       - common/tasks/normalize/build_empty_data.yml    (_norm_empty_data)
@@ -9,7 +9,7 @@
     Stage 3 (Validate Schema) FAIL — 운영 중에야 발견된다. 본 테스트는 그 drift 를
     **커밋 전 pytest** 로 잡는다 (사람 주석 의존 → 자동 가드 격상).
 
-검증 가능 (rule 24 R1): 순수 PyYAML 파싱 — ansible-playbook 불필요.
+검증 가능: 순수 PyYAML 파싱 — ansible-playbook 불필요.
 """
 from __future__ import annotations
 

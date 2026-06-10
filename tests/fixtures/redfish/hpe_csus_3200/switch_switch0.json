@@ -7,5 +7,5 @@
   "SwitchType": "PCIe",
   "Status": {"State": "Enabled", "Health": "OK"},
   "Ports": {"@odata.id": "/redfish/v1/Fabrics/FlexGrid/Switches/Switch0/Ports"},
-  "_note": "lab 부재 — NUMAlink ASIC switch 합성. rule 96 R1-A."
+  "_note": "lab 부재 — NUMAlink ASIC switch 합성."
 }

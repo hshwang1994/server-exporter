@@ -2,9 +2,9 @@
 # redfish-gather/tasks/vendors/quanta/normalize_oem.yml
 #
 # Quanta QCT BMC OEM 정규화 — Oem.Quanta_Computer_Inc / Oem.QCT fallback
-# fragment 방식 (rule 22) — 자기 fragment 만 생성하고 merge_fragment 호출
+# fragment 방식 — 자기 fragment 만 생성하고 merge_fragment 호출
 #
-# M-F1 cycle 2026-05-07-all-vendor-coverage: Quanta OEM tasks 신설
+# Quanta OEM tasks 신설
 #
 # 원칙:
 #   - 표준 스키마 섹션 (bmc) 안의 하위 필드로 확장 (새 섹션 추가 안 함)

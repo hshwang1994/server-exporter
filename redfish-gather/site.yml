@@ -37,7 +37,7 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/init_fragments.yml"
 
-        # ── pre-check (Phase 1) ──────────────────────────────────────────
+        # ── pre-check ──────────────────────────────────────────
         - name: "redfish | run precheck"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/precheck/run_precheck.yml"
@@ -59,7 +59,7 @@
         - name: "redfish | detect vendor"
           ansible.builtin.include_tasks: tasks/detect_vendor.yml
 
-        # ── select adapter (Phase 2) ─────────────────────────────────────
+        # ── select adapter ─────────────────────────────────────
         - name: "redfish | select adapter"
           ansible.builtin.set_fact:
             _selected_adapter: >-
@@ -73,10 +73,10 @@
           ansible.builtin.debug:
             msg: "adapter={{ _selected_adapter.adapter_id | default('none') }}"
 
-        # cycle 2026-05-12 (ADR-2026-05-12): HPE CSUS 3200 / Superdome Flex RMC primary
+        # HPE CSUS 3200 / Superdome Flex RMC primary
         # 멀티-노드 토폴로지 수집 활성. adapter `vendor_notes.manager_layout` 을
         # redfish_gather 모듈까지 전달. None / 미정의 vendor 는 기존 동작 100% 보존
-        # (Additive only — rule 92 R2). 13 vendor 영향 0.
+        # (Additive only). 13 vendor 영향 0.
         #   Allowed values: '' (None) / 'rmc_primary' / 'rmc_primary_ilo_secondary'
         - name: "redfish | extract manager_layout from adapter"
           ansible.builtin.set_fact:
@@ -112,8 +112,8 @@
               {%- endif -%}
           when: not (_rf_collect_ok | bool)
 
-        # ── P2 (cycle 2026-04-28): recovery 자격 사용 시 공통계정 자동 복구 ──
-        # 사용자 결정 #4: dryrun ON default, lab 검증 후 OFF 전환
+        # ── recovery 자격 사용 시 공통계정 자동 복구 ──
+        # 설계 정책: dryrun ON default, lab 검증 후 OFF 전환
         - name: "redfish | account_service (recovery → primary)"
           when:
             - (_rf_used_account | default({})).role | default('primary') == 'recovery'
@@ -154,15 +154,15 @@
             _out_target_type:       "redfish"
             _out_collection_method: "redfish_api"
             _out_ip:                "{{ _rf_ip }}"
-            # cycle 2026-06-04 (사용자 결정): 출력 envelope vendor 표시값 매핑 (내부 canonical 유지).
+            # 출력 envelope vendor 표시값 매핑 (내부 canonical 유지).
             # adapter_output_display(예: redfish_hpe_csus_3200 → hpCsus) 우선, 없으면
             # vendor_output_display(hpe → hp), 둘 다 없으면 canonical 그대로.
-            # _va = common/vars/vendor_aliases.yml (detect_vendor.yml 에서 로드). data-driven — rule 12 R1.
+            # _va = common/vars/vendor_aliases.yml (detect_vendor.yml 에서 로드). data-driven — vendor 비분기.
             _out_vendor: >-
               {{ ((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default(''))
                  or ((_va | default({})).vendor_output_display | default({})).get(_rf_vendor | default(''), _rf_vendor | default(none)) }}
-            # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
-            # P2: meta.account_service — recovery 자격으로 공통계정 자동 복구 시 노출
+            # meta.auth — fallback_used 노출
+            # meta.account_service — recovery 자격으로 공통계정 자동 복구 시 노출
             _diagnosis: >-
               {{ _diagnosis | combine({
                    'auth_success': true,
@@ -180,7 +180,7 @@
                    })
                  }) }}
 
-        # ── meta & correlation (Phase 3) ─────────────────────────────────
+        # ── meta & correlation ─────────────────────────────────
         - name: "redfish | build_meta"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_meta.yml"
@@ -204,10 +204,10 @@
             _out_target_type:       "redfish"
             _out_collection_method: "redfish_api"
             _out_ip:                "{{ _rf_ip }}"
-            # cycle 2026-06-04 (사용자 결정): 출력 envelope vendor 표시값 매핑 (내부 canonical 유지).
+            # 출력 envelope vendor 표시값 매핑 (내부 canonical 유지).
             # adapter_output_display(예: redfish_hpe_csus_3200 → hpCsus) 우선, 없으면
             # vendor_output_display(hpe → hp), 둘 다 없으면 canonical 그대로.
-            # _va = common/vars/vendor_aliases.yml (detect_vendor.yml 에서 로드). data-driven — rule 12 R1.
+            # _va = common/vars/vendor_aliases.yml (detect_vendor.yml 에서 로드). data-driven — vendor 비분기.
             _out_vendor: >-
               {{ ((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default(''))
                  or ((_va | default({})).vendor_output_display | default({})).get(_rf_vendor | default(''), _rf_vendor | default(none)) }}
@@ -227,7 +227,7 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       always:
-        # rule 13 R5 / rule 20 R1: 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
+        # 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
         - name: OUTPUT
           ansible.builtin.debug:
             msg: "{{ (_output | default({

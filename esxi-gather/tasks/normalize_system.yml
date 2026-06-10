@@ -5,15 +5,15 @@
 - name: "esxi | normalize system | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
-      # cycle-016 Phase P: 3 채널 일관성 — system.runtime 노출 (Linux/Windows 와 동일 키)
-      # BUG #1 fix: hostname / fqdn 을 ansible_hostname (ESXi configured name) 으로.
+      # 3 채널 일관성 — system.runtime 노출 (Linux/Windows 와 동일 키)
+      # hostname / fqdn 을 ansible_hostname (ESXi configured name) 으로.
       # 이전: fqdn=_e_ip (= IP), hostname 키 자체 누락 → build_output.yml 이 IP 폴백.
       system:
         os_family:      "VMware ESXi"
         distribution:   "VMware ESXi"
         version:        "{{ _e_raw_facts.ansible_distribution_version | default(none) }}"
         kernel:         "{{ _e_raw_facts.ansible_distribution_build   | default(none) }}"
-        # 잔류 fix (Round 12 후속): vmware_host_facts 가 ansible_machine 미반환 시 x86_64 기본
+        # 잔류 fix: vmware_host_facts 가 ansible_machine 미반환 시 x86_64 기본
         architecture: >-
           {%- set m = _e_raw_facts.ansible_machine | default(none) -%}
           {{ m if m else 'x86_64' }}
@@ -45,7 +45,7 @@
         cores_physical:  "{{ _e_raw_facts.ansible_processor_cores | default(none) }}"
         logical_threads: "{{ _e_raw_facts.ansible_processor_vcpus | default(none) }}"
         model:           "{{ _e_raw_facts.ansible_processor       | default(none) }}"
-        # 잔류 fix (Round 12 후속): vmware_host_facts 가 ansible_processor_mhz 미반환 시
+        # 잔류 fix: vmware_host_facts 가 ansible_processor_mhz 미반환 시
         # CPU model 의 "@ N.NGHz" 패턴에서 추출 (Intel/AMD 표준 표기).
         max_speed_mhz: >-
           {%- set raw_mhz = _e_raw_facts.ansible_processor_mhz | default(none) -%}
@@ -58,7 +58,7 @@
         architecture: >-
           {%- set m = _e_raw_facts.ansible_machine | default(none) -%}
           {{ m if m else 'x86_64' }}
-        # cycle-016 Phase O: ESXi cpu.summary.groups 에 max_speed_mhz / manufacturer / architecture 추가
+        # ESXi cpu.summary.groups 에 max_speed_mhz / manufacturer / architecture 추가
         summary:
           groups:
             - model:            "{{ _e_raw_facts.ansible_processor | default('unknown') }}"
@@ -92,7 +92,7 @@
         visible_mb:   "{{ _e_raw_facts.ansible_memtotal_mb | default(none) }}"
         free_mb:      "{{ _e_raw_facts.ansible_memfree_mb  | default(none) }}"
         slots:        []
-        # cycle-016 (2026-04-29): ESXi 는 DIMM slot 정보 미수집 — grand_total 만
+        # ESXi 는 DIMM slot 정보 미수집 — grand_total 만
         summary:
           groups: []
           grand_total_gb: >-

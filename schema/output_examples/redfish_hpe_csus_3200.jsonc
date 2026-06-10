@@ -7,12 +7,12 @@
 //             nPartition × 다중 Manager 통합 노출. 본 예시 = 3-partition × 4-manager ×
 //             3-chassis 합성 시나리오 (sdflexutils 1.5.1 + DMTF v1.15 + iLO5 API ref +
 //             HPE psnow doc/a50009596enw + support.hpe.com sd00002765en_us).
-//             cycle 2026-05-12 (ADR-2026-05-12) — `data.multi_node` Additive 컨테이너.
+//             `data.multi_node` Additive 컨테이너.
 //             기존 9 section path (data.system / data.bmc / ...) 는 Partition0
-//             representative 로 유지 (envelope shape 변경 0 — rule 13 R5 / 92 R2).
+//             representative 로 유지 (envelope shape 변경 0).
 //             bmc.name='RMC' (manager_layout=rmc_primary) — 일반 iLO 와 분기.
-// Lab 상태  : 부재 — web sources only (rule 96 R1-A). 사이트 실측 시 정정 의무
-//             (NEXT_ACTIONS C1~C8: Product / Member ID / OEM schema / 활성화).
+// Lab 상태  : 부재 — web sources only. 사이트 실측 시 정정 의무
+//             (Product / Member ID / OEM schema / 활성화).
 // 캡처 일시 : 2026-05-12 (mock 합성)
 // =============================================================================
 {
@@ -43,15 +43,15 @@
     "failure_reason": null,                             // 실패 사유 한글 (성공 시 null)
     "details": {                                        // 채널별 추가 진단 정보
       "channel": "redfish",                             // 수집 채널 식별
-      "adapter_candidate": "redfish_hpe_csus_3200",     // adapter_loader 선택 결과 (priority=96 / Superdome Flex 95 직상)
+      "adapter_candidate": "redfish_hpe_csus_3200",     // adapter_loader 선택 결과 (priority=102 / Superdome Flex 101 직상)
       "checked_ports": [443],                           // detect 시도한 port list
       "selected_port": 443,                             // 실제 통신 port
       "redfish_version": "1.15.0",                      // ServiceRoot.RedfishVersion (DMTF DSP0266 v1.15)
-      "product": "Compute Scale-up Server 3200",        // ServiceRoot.Product (mock 추정 — NEXT_ACTIONS C5 실측)
+      "product": "Compute Scale-up Server 3200",        // ServiceRoot.Product (mock 추정 — 사이트 실측 필요)
       "systems_uri": "/redfish/v1/Systems/",            // HPE 는 trailing slash
-      "multi_node_layout": "rmc_primary",               // cycle 2026-05-12 ADR-2026-05-12 — adapter vendor_notes.manager_layout 노출
+      "multi_node_layout": "rmc_primary",               // adapter vendor_notes.manager_layout 노출
       "rmc_activation_check": true,                     // RMC Redfish 활성화 검사 — false 시 HPE community 7200359 사례 (docs/22 참조)
-      "baseline_origin": "mock-derived (lab 부재 — sdflexutils + DMTF v1.15 + iLO5 API ref 합성). cycle 2026-05-12 ADR-2026-05-12. C1 사이트 fixture 캡처 후 실측 baseline 으로 교체 의무 (NEXT_ACTIONS)."
+      "baseline_origin": "mock-derived (lab 부재 — sdflexutils + DMTF v1.15 + iLO5 API ref 합성). 사이트 fixture 캡처 후 실측 baseline 으로 교체 의무."
     }
   },
   "meta": {                                             // 수집 메타데이터 — 운영 추적 + 성능 분석
@@ -69,7 +69,7 @@
     "host_ip": "10.50.11.999"
   },
   "errors": [],                                         // section/auth/protocol errors (success 시 빈 list)
-  "data": {                                             // 9 sections + multi_node (cycle 2026-05-12)
+  "data": {                                             // 9 sections + multi_node
     "system": {                                         // OS 정보 — Redfish 채널 not_supported (모두 null 또는 fqdn 만)
       "os_family": null,
       "distribution": null,
@@ -99,8 +99,8 @@
       "oem": {}                                         // HPE Oem.Hpe.* hoisted (PartitionInfo / FlexNodeInfo / GlobalConfiguration)
     },
     "bmc": {                                            // RMC (Manager) — Partition0 routing 시 representative
-      "name": "RMC",                                    // cycle 2026-05-12 — manager_layout=rmc_primary 시 'RMC' (일반 HPE iLO 는 'iLO')
-      "firmware_version": "3.10.00",                    // RMC firmware (CSUS 3200 추정 3.x/4.x — NEXT_ACTIONS C8 실측)
+      "name": "RMC",                                    // manager_layout=rmc_primary 시 'RMC' (일반 HPE iLO 는 'iLO')
+      "firmware_version": "3.10.00",                    // RMC firmware (CSUS 3200 추정 3.x/4.x — 사이트 실측 필요)
       "model": "HPE CSUS 3200 RMC",
       "manager_type": "EnclosureManager",               // Redfish 표준 — RMC 가 enclosure aggregator
       "health": "OK",
@@ -125,7 +125,7 @@
       "model": "Intel(R) Xeon(R) Platinum 8480+",
       "max_speed_mhz": null,                            // mock — site 실측 시 ProcessorMaxSpeedMHz
       "architecture": null,
-      "summary": {                                      // cycle 2026-05-11 F2-b 8 필드 통일
+      "summary": {                                      // 8 필드 통일
         "groups": [],
         "manufacturer": "Intel",
         "max_speed_mhz": null,
@@ -165,13 +165,13 @@
       "summary": {
         "groups": []
       },
-      "adapters": [],                                   // P4 (cycle 2026-04-28) — NetworkAdapters / NetworkPorts
+      "adapters": [],                                   // NetworkAdapters / NetworkPorts
       "ports": []
     },
     "firmware": [],                                     // UpdateService FirmwareInventory (mock 비어있음 — 실측 시 BMC/BIOS/NIC firmware list)
     "power": null,                                      // Chassis.PowerSubsystem (mock — site 실측 시 PSU / power_supplies)
-    "users": [],                                        // AccountService Accounts list. Redfish 채널은 일반적으로 빈 list (rule 12 capability)
-    "multi_node": {                                     // cycle 2026-05-12 (ADR-2026-05-12) — RMC primary 시스템 전수 수집 컨테이너 (Additive)
+    "users": [],                                        // AccountService Accounts list. Redfish 채널은 일반적으로 빈 list (capability)
+    "multi_node": {                                     // RMC primary 시스템 전수 수집 컨테이너 (Additive)
       "enabled": true,                                  // manager_layout 정의 vendor 만 true — null 시 비-RMC vendor
       "layout": "rmc_primary",                          // rmc_primary (CSUS 3200) / rmc_primary_ilo_secondary (Superdome Flex)
       "summary": {                                      // 호출자가 멀티-노드 규모 파악 시 사용
@@ -179,14 +179,14 @@
         "manager_count": 4,                             // RMC + PDHC0 + PDHC1 + Bay1.iLO5
         "chassis_count": 3,                             // Base + Expansion1 + Expansion2 (최대 4 chassis)
         "representative_partition": "Partition0",        // data.system / data.bmc / data.cpu 등 기존 9 section path 의 source
-        "resource_block_count": 3,                      // cycle 2026-06-09 — CompositionService ResourceBlocks 개수
-        "fabric_count": 1                               // cycle 2026-06-09 — Fabrics(FlexGrid) 개수
+        "resource_block_count": 3,                      // CompositionService ResourceBlocks 개수
+        "fabric_count": 1                               // Fabrics(FlexGrid) 개수
       },
       "partitions": [                                   // per-partition 수집 list — 각 partition 의 system/cpu/memory/storage/network
-        {                                                // F1+F2 cycle 2026-05-12 갱신 — Partition0/1/2 각 4-socket × 2TB 동일 mock (sdflexutils + DMTF v1.15 합성)
+        {                                                // Partition0/1/2 각 4-socket × 2TB 동일 mock (sdflexutils + DMTF v1.15 합성)
           "id": "Partition0",                           // /redfish/v1/Systems/<id> 의 마지막 segment (representative — data.system / data.cpu 의 source)
           "system_uri": "/redfish/v1/Systems/Partition0",
-          "boot": {                                     // cycle 2026-06-09 — Systems.Boot 부팅 순서 (per-nPartition)
+          "boot": {                                     // Systems.Boot 부팅 순서 (per-nPartition)
             "boot_order": ["Boot0001", "Boot0002", "Boot0003"],
             "boot_source_override_enabled": "Disabled",
             "boot_source_override_target": "None",
@@ -194,7 +194,7 @@
             "boot_next": "",
             "uefi_target": null
           },
-          "system": {                                   // hardware 깊이 (cycle-016 Phase N 16 필드 패턴 — sku/asset_tag/system_type/part_number 등)
+          "system": {                                   // hardware 깊이 (16 필드 패턴 — sku/asset_tag/system_type/part_number 등)
             "manufacturer": "HPE",
             "model": "Compute Scale-up Server 3200",
             "serial": "MOCK-CSUS-P0-001",
@@ -311,7 +311,7 @@
           "id": "RMC",
           "uri": "/redfish/v1/Managers/RMC",
           "role": "primary",                            // RMC = primary AccountService host
-          "log_services": [                             // cycle 2026-06-09 — Managers/LogServices (RMC Services/Logs)
+          "log_services": [                             // Managers/LogServices (RMC Services/Logs)
             {"id": "IML", "name": "Integrated Management Log", "overwrite_policy": "WrapsWhenFull", "service_enabled": true, "log_entry_type": "OEM", "date_time": "2026-06-09T12:00:00Z"},
             {"id": "IEL", "name": "Integrated Event Log", "overwrite_policy": "WrapsWhenFull", "service_enabled": true, "log_entry_type": "Event", "date_time": "2026-06-09T12:00:00Z"}
           ],
@@ -362,7 +362,7 @@
           "id": "Base",
           "uri": "/redfish/v1/Chassis/Base",
           "kind": "base",                               // _classify_chassis_kind — 'base' substring → 'base'
-          "thermal": {                                  // cycle 2026-06-09 — Chassis/Thermal (Power 와 쌍)
+          "thermal": {                                  // Chassis/Thermal (Power 와 쌍)
             "temperatures": [
               {"name": "Inlet Ambient", "reading_celsius": 22, "health": "OK", "state": "Enabled", "upper_critical": 42, "physical_context": "Intake"},
               {"name": "CPU 1", "reading_celsius": 55, "health": "OK", "state": "Enabled", "upper_critical": 90, "physical_context": "CPU"}
@@ -420,7 +420,7 @@
           "power": null
         }
       ],
-      "composition": {                                  // cycle 2026-06-09 — CompositionService + ResourceBlocks (nPartition 조합 구조)
+      "composition": {                                  // CompositionService + ResourceBlocks (nPartition 조합 구조)
         "enabled": true,
         "state": "Enabled",
         "health": "OK",
@@ -431,7 +431,7 @@
           {"id": "Block2", "name": "Compute Resource Block 2 (Expansion2)", "resource_block_types": ["Compute"], "state": "Enabled", "health": "OK", "composition_state": "Composed", "processor_count": 4, "memory_count": 8, "chassis": ["/redfish/v1/Chassis/Expansion2"], "computer_systems": ["/redfish/v1/Systems/Partition2"]}
         ]
       },
-      "fabrics": [                                       // cycle 2026-06-09 — Fabrics + FlexGrid (NUMAlink, Switches+Endpoints, Links/Zones 미사용)
+      "fabrics": [                                       // Fabrics + FlexGrid (NUMAlink, Switches+Endpoints, Links/Zones 미사용)
         {
           "id": "FlexGrid",
           "name": "NUMAlink FlexGrid Fabric",
@@ -452,5 +452,5 @@
       ]
     }
   },
-  "schema_version": "1"                                 // envelope schema version (현재 "1" 고정 — rule 13 R5)
+  "schema_version": "1"                                 // envelope schema version (현재 "1" 고정)
 }

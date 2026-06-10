@@ -1,17 +1,17 @@
 ---
 # os-gather/tasks/linux/gather_hba_ib.yml
 #
-# P4 (cycle 2026-04-29): Linux FC HBA + InfiniBand 정보 수집.
+# Linux FC HBA + InfiniBand 정보 수집.
 # raw 명령으로 /sys/class/fc_host + /sys/class/infiniband 파싱.
 # 미설치 환경에서는 빈 list (graceful degradation, errors 기록 없음).
 #
 # 출력 sub-key:
 #   data.storage.hbas[]       — FC HBA (WWPN, link state, speed)
 #   data.storage.infiniband[] — InfiniBand 어댑터 (node_guid, link state, rate)
-#   data.network.driver_map   — interface → driver 매핑 (P5 NIC 깊이)
+#   data.network.driver_map   — interface → driver 매핑 (NIC 깊이)
 
 - block:
-    # cycle 2026-05-29 (hba-ib-csus, D2): WWNN(node_name) + driver + firmware 보강.
+    # WWNN(node_name) + driver + firmware 보강.
     # delimiter '|' 9 필드: FC|host|wwpn|wwnn|symbolic|state|speed|driver|firmware
     - name: "linux | hba_ib | enumerate fc_host"
       ansible.builtin.raw: |
@@ -40,7 +40,7 @@
       failed_when: false
       no_log: true
 
-    # cycle 2026-05-29 (hba-ib-csus, D2): per-port GID(port_guid) + rate + fw_ver + hca(vendor) 보강.
+    # per-port GID(port_guid) + rate + fw_ver + hca(vendor) 보강.
     # delimiter '|' 9 필드: IB|adapter|port|node_guid|gid0|state|rate|firmware|hca
     - name: "linux | hba_ib | enumerate infiniband"
       ansible.builtin.raw: |

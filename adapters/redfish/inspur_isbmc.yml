@@ -1,12 +1,12 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Inspur
 # Firmware: ISBMC (Inspur Server BMC) — NF / TS 시리즈
 # Origin: Inspur 공식 문서 / 매뉴얼
 # Last sync: 2026-05-01 (web sources only — lab 부재)
 # Notes: NF5280M5 / NF5280M6 / NF5280LM6 / NF8480M6 (4-socket).
-#   사용자 명시 승인 (2026-05-01) — vault 신설 완료 (2026-05-11, vault/redfish/inspur.yml).
-# Sources (rule 96 R1-A — lab 부재):
+#   vault 신설 완료 (2026-05-11, vault/redfish/inspur.yml).
+# Sources (lab 부재):
 #   - https://manualzz.com/doc/o/v7c5h/inspur-server-user-manual-nf5280m5-9.14-redfish
 #   - https://www.inspur.com/eportal/fileDir/defaultCurSite/resource/cms/2020/04/2020040211224398612.pdf
 #   - https://www.inspur.com/eportal/fileDir/en/resource/cms/2023/01/2023011012511875447.pdf (NF5280LM6 White Paper)
@@ -17,8 +17,8 @@
 #   - OEM namespace: Oem.Inspur (부분 사용 가능)
 #   - 표준 Redfish + IPMI 2.0
 # Vault: 신설 완료 (2026-05-11) — vault/redfish/inspur.yml 존재
-# Lab status: 부재 — web sources only (rule 96 R1-A — cycle 2026-05-01 사용자 명시)
-# Next action: NF/TS 시리즈 lab 도입 후 별도 cycle (ISBMC 펌웨어 응답 형식 확정 + Oem.Inspur vs Oem.Inspur_System fallback 검증)
+# Lab status: 부재 — web sources only (2026-05-01)
+# Next action: NF/TS 시리즈 lab 도입 후 ISBMC 펌웨어 응답 형식 확정 + Oem.Inspur vs Oem.Inspur_System fallback 검증
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_inspur_isbmc
 channel: redfish
@@ -44,23 +44,23 @@ capabilities:
     - network
     - firmware
     - power
-    # M-D3 W6 (cycle 2026-05-06): users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
+    # users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
 
 collect:
-  # M-D1 (cycle 2026-05-11): strategy 변경 standard_only → standard+oem (OEM tasks dep)
+  # strategy 변경 standard_only → standard+oem (OEM tasks dep)
   strategy: standard+oem
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
   oem_tasks: "redfish-gather/tasks/vendors/inspur/collect_oem.yml"
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  # M-D1 (cycle 2026-05-11): oem_normalize 경로 추가
+  # oem_normalize 경로 추가
   oem_normalize: "redfish-gather/tasks/vendors/inspur/normalize_oem.yml"
 
 credentials:
   profile: "inspur"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/inspur.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
+  # AccountService 진입점 — vault/redfish/inspur.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
   recovery_accounts:
     - { vault_label: inspur_factory, role: recovery }
 

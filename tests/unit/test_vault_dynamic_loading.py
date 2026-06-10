@@ -1,8 +1,8 @@
-"""M-C3 회귀 — vault 자동 반영 메커니즘 (M-C2 시나리오 5건 mock 검증).
+"""회귀 — vault 자동 반영 메커니즘 (시나리오 5건 mock 검증).
 
-cycle 2026-05-06 M-C1/M-C2 사용자 답변: vault 변경은 다음 ansible-playbook run 부터 자동 반영.
+vault 변경은 다음 ansible-playbook run 부터 자동 반영된다.
 
-검증 항목 (M-C2 5 시나리오):
+검증 항목 (5 시나리오):
 1. include_vars 가 cacheable 미사용 — load_vault.yml 정합 (코드 grep)
 2. fact_caching 이 프로젝트 ansible.cfg 에 0 건 — Agent 공통 설정에서만 관리
 3. redfish-gather/site.yml 에 gather_facts: no 명시
@@ -28,8 +28,8 @@ SITE_YML = REPO / "redfish-gather" / "site.yml"
 # ── (1) include_vars 가 cacheable 미사용 ─────────────────────────────────────
 
 
-def test_m_c3_load_vault_no_cacheable() -> None:
-    """load_vault.yml 의 include_vars / set_fact 가 cacheable: yes 미사용 (M-C2 (1))."""
+def test_load_vault_no_cacheable() -> None:
+    """load_vault.yml 의 include_vars / set_fact 가 cacheable: yes 미사용."""
     content = LOAD_VAULT.read_text(encoding="utf-8")
     # cacheable: yes 또는 cacheable: True 패턴 검색
     assert "cacheable: yes" not in content.lower(), (
@@ -40,7 +40,7 @@ def test_m_c3_load_vault_no_cacheable() -> None:
     )
 
 
-def test_m_c3_load_vault_uses_include_vars() -> None:
+def test_load_vault_uses_include_vars() -> None:
     """load_vault.yml 가 include_vars 사용 (매 task disk read — 캐시 없음)."""
     content = LOAD_VAULT.read_text(encoding="utf-8")
     assert "include_vars" in content, (
@@ -51,8 +51,8 @@ def test_m_c3_load_vault_uses_include_vars() -> None:
 # ── (2) 프로젝트 ansible.cfg 에 fact_caching 설정 0 건 ──────────────────────
 
 
-def test_m_c3_ansible_cfg_no_fact_caching() -> None:
-    """ansible.cfg 에 활성 fact_caching 설정 부재 (M-C2 (1) 보강).
+def test_ansible_cfg_no_fact_caching() -> None:
+    """ansible.cfg 에 활성 fact_caching 설정 부재.
 
     Agent 공통 설정 (/etc/ansible/ansible.cfg) 에 있으나 프로젝트 설정에는 없음.
     프로젝트 cfg 에서 활성 fact_caching = redis 같은 라인 부재 검증.
@@ -76,8 +76,8 @@ def test_m_c3_ansible_cfg_no_fact_caching() -> None:
 # ── (3) redfish-gather/site.yml gather_facts: no ─────────────────────────────
 
 
-def test_m_c3_site_yml_gather_facts_no() -> None:
-    """redfish-gather/site.yml 에 gather_facts: no 명시 (M-C2 (1) 결론)."""
+def test_site_yml_gather_facts_no() -> None:
+    """redfish-gather/site.yml 에 gather_facts: no 명시."""
     content = SITE_YML.read_text(encoding="utf-8")
     # YAML 파싱하여 plays list 의 첫 play 확인
     plays = yaml.safe_load(content)
@@ -93,7 +93,7 @@ def test_m_c3_site_yml_gather_facts_no() -> None:
 # ── (4) accounts list 정규화 로직 ────────────────────────────────────────────
 
 
-def test_m_c3_load_vault_normalizes_accounts_list() -> None:
+def test_load_vault_normalizes_accounts_list() -> None:
     """load_vault.yml 가 accounts list 를 _rf_accounts 로 정규화 (list[0] = primary)."""
     content = LOAD_VAULT.read_text(encoding="utf-8")
     assert "_rf_accounts" in content, "load_vault.yml: _rf_accounts 변수 부재"
@@ -104,7 +104,7 @@ def test_m_c3_load_vault_normalizes_accounts_list() -> None:
     )
 
 
-def test_m_c3_load_vault_legacy_fallback() -> None:
+def test_load_vault_legacy_fallback() -> None:
     """load_vault.yml legacy ansible_user/password fallback (backward-compat)."""
     content = LOAD_VAULT.read_text(encoding="utf-8")
     assert "ansible_user" in content, (
@@ -113,13 +113,13 @@ def test_m_c3_load_vault_legacy_fallback() -> None:
     assert "ansible_password" in content, "load_vault.yml: legacy ansible_password fallback 부재"
 
 
-# ── (5) M-C2 시나리오 5: single run 중 vault 변경 영향 없음 (task scope 캐시) ─
+# ── (5) 시나리오 5: single run 중 vault 변경 영향 없음 (task scope 캐시) ─
 
 
-def test_m_c3_scenario_5_single_run_no_midway_invalidation() -> None:
+def test_scenario_5_single_run_no_midway_invalidation() -> None:
     """include_vars 의 name 파라미터로 task scope 변수 (run 중 변경 영향 없음).
 
-    M-C2 시나리오 5: load_vault.yml 가 이미 실행된 후 vault file 수정 시
+    시나리오 5: load_vault.yml 가 이미 실행된 후 vault file 수정 시
     현 run 의 _rf_vault_data 는 task scope 캐시 사용 → 다음 run N+1 부터 반영.
 
     검증: load_vault.yml 의 include_vars 가 name= 으로 변수 저장
@@ -134,7 +134,7 @@ def test_m_c3_scenario_5_single_run_no_midway_invalidation() -> None:
 # ── (6) vault profile resolve from adapter ──────────────────────────────────
 
 
-def test_m_c3_vault_profile_from_adapter() -> None:
+def test_vault_profile_from_adapter() -> None:
     """_rf_vault_profile 가 _selected_adapter.credentials.profile 에서 resolve (매 run lookup)."""
     content = LOAD_VAULT.read_text(encoding="utf-8")
     assert "_rf_vault_profile" in content, "_rf_vault_profile 변수 부재"
@@ -143,20 +143,20 @@ def test_m_c3_vault_profile_from_adapter() -> None:
     )
 
 
-# ── (7) F50 phase 4 분리 — BMC 권한 cache 와 vault 자동 반영 분리 ───────────
+# ── (7) 책임 분리 — BMC 권한 cache 와 vault 자동 반영 분리 ───────────
 
 
-def test_m_c3_f50_phase4_bmc_cache_independent() -> None:
-    """F50 phase 4 verify-fallback (commit 3fa39dec) 가 vault 자동 반영과 별 layer.
+def test_vault_profile_bmc_cache_independent() -> None:
+    """verify-fallback (commit 3fa39dec) 가 vault 자동 반영과 별 layer.
 
-    M-C2 (D): BMC 권한 cache (BMC 펌웨어) ≠ vault 자동 반영 (Ansible run).
+    BMC 권한 cache (BMC 펌웨어) ≠ vault 자동 반영 (Ansible run).
     검증: load_vault.yml 안에 BMC verify / DELETE+POST fallback 코드 부재
     (account_service.yml 또는 redfish_gather.py:account_service_provision 에 분리).
     """
     content = LOAD_VAULT.read_text(encoding="utf-8")
     # load_vault.yml 은 vault load 만 — verify-fallback / account_service 코드 미포함
     assert "verify-fallback" not in content.lower(), (
-        "load_vault.yml: verify-fallback 코드 혼재 — F50 phase 4 영역 분리 깨짐"
+        "load_vault.yml: verify-fallback 코드 혼재 — 책임 영역 분리 깨짐"
     )
     assert "account_service_provision" not in content, (
         "load_vault.yml: account_service_provision 호출 — vault load 책임 분리 깨짐"

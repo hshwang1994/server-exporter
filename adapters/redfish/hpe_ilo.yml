@@ -1,13 +1,13 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: HPE / Hewlett Packard Enterprise
 # Firmware: iLO 모든 세대 (legacy iLO 1/2/3 ~ iLO 7)
 # Generation: ilo_legacy (generic hpe fallback)
 # Generation Year: "2002-2014 (iLO 1/2/3 — Redfish 미지원 시기)"
 # Origin: HPE iLO Redfish API documentation / HPE archive docs
-# Last sync: 2026-05-11 (M-H2 — generic fallback origin 보강)
+# Last sync: 2026-05-11 (generic fallback origin 보강)
 # Notes: generic hpe fallback (priority=10). 세대별 미매치 시 사용.
-# Sources (rule 96 R1-A — lab 부재 legacy generation 보강):
+# Sources (lab 부재 legacy generation 보강):
 #   - https://servermanagementportal.ext.hpe.com/   (HPE iLO 종합 docs portal)
 #   - https://hewlettpackard.github.io/ilo-rest-api-docs/    (iLO 4/5/6 REST API guide)
 #   - HPE archive docs (iLO 1/2/3 — Redfish 미지원, IPMI only)
@@ -21,8 +21,8 @@
 # OEM namespace evolution:
 #   - iLO 4 시기: Oem.Hp (Hewlett-Packard 시기)
 #   - iLO 5+: Oem.Hpe (HPE rebrand 후)
-# Tested against: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json + tests/evidence/ 참조
-# Next action: lab 도입 후 별도 cycle — graceful degradation 시나리오 (iLO 1/2/3)
+# 검증 기준: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json 참조
+# Next action: lab 도입 후 graceful degradation 시나리오 (iLO 1/2/3)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_ilo
 channel: redfish
@@ -55,7 +55,7 @@ normalize:
 credentials:
   profile: "hpe"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/hpe.yml accounts 의 label 과 매핑
+  # AccountService 진입점 — vault/redfish/hpe.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: hpe_fallback, role: recovery }
     - { vault_label: hpe_current,  role: recovery }

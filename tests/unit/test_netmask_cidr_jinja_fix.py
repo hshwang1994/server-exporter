@@ -1,4 +1,4 @@
-"""Netmask → CIDR 변환 Jinja2 namespace fix 회귀 (cycle 2026-05-07-post).
+"""Netmask → CIDR 변환 Jinja2 namespace fix 회귀.
 
 기존 버그 (gather_network.yml:99 / esxi normalize_network.yml:67):
   - `{% set val = octet | int %}` 가 outer for(octet) iteration 안에서 set

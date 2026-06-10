@@ -27,7 +27,7 @@ parameters (loc, target_type, inventory_json)
 | Stage | 도구 | 게이트 | 비고 |
 |-------|------|--------|------|
 | Validate Schema | `python3 tests/validate_field_dictionary.py` | **FAIL** | 실패 시 빌드 FAILURE |
-| E2E Regression | `pytest tests/e2e/` + `pytest tests/integration/ -m "not live"` (별도 호출, 둘 중 하나라도 FAIL 시 stage 실패) | **FAIL** | tests/e2e=baseline/fixture 회귀, tests/integration=HPE 에뮬레이터 오프라인 회귀 하네스(2026-06-08 추가, 에뮬레이터 불필요·완전 오프라인). 별도 호출 이유=양쪽이 top-level `conftest` 충돌. |
+| E2E Regression | `pytest tests/e2e/` + `pytest tests/integration/ -m "not live"` (별도 호출, 둘 중 하나라도 FAIL 시 stage 실패) | **FAIL** | tests/e2e=baseline/fixture 회귀, tests/integration=HPE 에뮬레이터 오프라인 회귀(에뮬레이터 불필요·완전 오프라인). 별도 호출 이유=양쪽이 top-level `conftest` 충돌. |
 
 Stage 3/4는 venv Python을 사용한다 (`. /opt/ansible-env/bin/activate`).
 

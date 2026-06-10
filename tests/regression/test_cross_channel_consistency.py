@@ -1,24 +1,24 @@
 """Cross-channel envelope consistency regression.
 
-Validates that the 13-field envelope (rule 13 R5) is structurally identical
+Validates that the 13-field envelope is structurally identical
 across all 3 channels (os / esxi / redfish), so downstream callers can parse
 any baseline without channel-specific branches.
 
 Test groups:
-  T1 — Envelope 13 fields present (rule 13 R5)
+  T1 — Envelope 13 fields present
   T2 — target_type / collection_method enum
-  T3 — hostname fallback chain non-null (concern 7 invariant)
-  T4 — vendor canonical form (cycle-016 BUG #2 regression)
-  T5 — status enum (rule 13 R8 — 4 scenarios A/B/C/D)
+  T3 — hostname fallback chain non-null invariant
+  T4 — vendor canonical form regression
+  T5 — status enum (4 scenarios A/B/C/D)
   T6 — sections values enum
-  T7 — diagnosis dict shape (production-audit BUG fix invariant)
-  T8 — errors[] is list (rule 22 R8 fragment type)
+  T7 — diagnosis dict shape invariant
+  T8 — errors[] is list (fragment type)
 """
 from __future__ import annotations
 
 import pytest
 
-# rule 13 R5 — 13-field envelope
+# 13-field envelope
 ENVELOPE_FIELDS: tuple[str, ...] = (
     "target_type",
     "collection_method",
@@ -43,8 +43,8 @@ VALID_STATUS: frozenset[str] = frozenset({"success", "partial", "failed"})
 VALID_SECTION_STATUS: frozenset[str] = frozenset(
     {"success", "not_supported", "failed", "partial"}
 )
-# rule 50 R1 — vendor 정규화 정본 (vendor_aliases.yml + 신규 4 vendor)
-# cycle 2026-06-04 (사용자 결정): 출력 표시값 매핑 — 내부 canonical 'hpe' 는 envelope
+# vendor 정규화 정본 (vendor_aliases.yml + 신규 4 vendor)
+# 출력 표시값 매핑 — 내부 canonical 'hpe' 는 envelope
 # 에서 'hp' (CSUS 3200 → 'hpCsus') 로 노출. 'hpe' 는 always-fallback degradation 대비 허용 유지.
 CANONICAL_VENDORS: frozenset[str | None] = frozenset(
     {
@@ -68,7 +68,7 @@ CANONICAL_VENDORS: frozenset[str | None] = frozenset(
 # T1 — Envelope 13 fields present
 # ---------------------------------------------------------------------------
 def test_envelope_thirteen_fields_present(baseline_envelope: dict) -> None:
-    """rule 13 R5 — every baseline must expose all 13 envelope fields."""
+    """Every baseline must expose all 13 envelope fields."""
     label = baseline_envelope["__label"]
     for field in ENVELOPE_FIELDS:
         assert field in baseline_envelope, (
@@ -77,7 +77,7 @@ def test_envelope_thirteen_fields_present(baseline_envelope: dict) -> None:
 
 
 def test_envelope_no_extra_fields(baseline_envelope: dict) -> None:
-    """rule 13 R5 — no fields beyond the 13 (excluding test-only __label keys)."""
+    """No fields beyond the 13 (excluding test-only __label keys)."""
     label = baseline_envelope["__label"]
     extra = {
         k for k in baseline_envelope
@@ -100,7 +100,7 @@ def test_target_type_enum(baseline_envelope: dict) -> None:
 
 
 def test_collection_method_matches_target_type(baseline_envelope: dict) -> None:
-    """Each target_type pairs with one collection_method (rule 13 R5)."""
+    """Each target_type pairs with one collection_method."""
     label = baseline_envelope["__label"]
     expected = baseline_envelope["__expected_collection_method"]
     actual = baseline_envelope.get("collection_method")
@@ -110,12 +110,12 @@ def test_collection_method_matches_target_type(baseline_envelope: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# T3 — hostname fallback chain non-null (concern 7 invariant)
+# T3 — hostname fallback chain non-null invariant
 # ---------------------------------------------------------------------------
-# cycle 2026-05-07-post: cisco_baseline.json hostname=null drift 보정 완료.
+# cisco_baseline.json hostname=null drift 보정 완료.
 # build_output.yml fallback chain (system.hostname OR system.fqdn OR ip) 의도대로
 # hostname 을 ip ("10.100.15.2") 로 보정 + evidence 기록. xfail 제거.
-# 실 lab Cisco UCS 검증은 별도 cycle (rule 13 R4).
+# 실 lab Cisco UCS 검증은 별도 진행.
 
 
 def test_hostname_never_null(baseline_envelope: dict) -> None:
@@ -137,11 +137,11 @@ def test_ip_present(baseline_envelope: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# T4 — vendor canonical form (cycle-016 BUG #2 regression)
+# T4 — vendor canonical form regression
 # ---------------------------------------------------------------------------
 def test_vendor_canonical(baseline_envelope: dict) -> None:
     """ESXi/Redfish vendor must be canonical (e.g., 'cisco' not 'Cisco
-    Systems Inc'). cycle-016 production-audit BUG #2 regression."""
+    Systems Inc')."""
     label = baseline_envelope["__label"]
     vendor = baseline_envelope.get("vendor")
     assert vendor in CANONICAL_VENDORS, (
@@ -151,7 +151,7 @@ def test_vendor_canonical(baseline_envelope: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# T5 — status enum (rule 13 R8 — 4 scenarios A/B/C/D)
+# T5 — status enum (4 scenarios A/B/C/D)
 # ---------------------------------------------------------------------------
 def test_status_enum(baseline_envelope: dict) -> None:
     label = baseline_envelope["__label"]
@@ -177,10 +177,10 @@ def test_sections_values_enum(baseline_envelope: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# T7 — diagnosis dict shape (production-audit BUG fix invariant)
+# T7 — diagnosis dict shape invariant
 # ---------------------------------------------------------------------------
 def test_diagnosis_is_dict(baseline_envelope: dict) -> None:
-    """diagnosis must be dict, not list/str (production-audit shape fix)."""
+    """diagnosis must be dict, not list/str (shape fix)."""
     label = baseline_envelope["__label"]
     diagnosis = baseline_envelope.get("diagnosis")
     assert isinstance(diagnosis, dict), (
@@ -190,7 +190,7 @@ def test_diagnosis_is_dict(baseline_envelope: dict) -> None:
 
 def test_diagnosis_has_4stage_keys(baseline_envelope: dict) -> None:
     """precheck 4-stage keys must be present in success path
-    (rule 27 — ping → port → protocol → auth)."""
+    (ping → port → protocol → auth)."""
     label = baseline_envelope["__label"]
     diagnosis = baseline_envelope.get("diagnosis", {})
     for key in ("reachable", "port_open", "protocol_supported", "auth_success"):
@@ -200,10 +200,10 @@ def test_diagnosis_has_4stage_keys(baseline_envelope: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# T8 — errors[] is list (rule 22 R8 fragment type)
+# T8 — errors[] is list (fragment type)
 # ---------------------------------------------------------------------------
 def test_errors_is_list(baseline_envelope: dict) -> None:
-    """rule 22 R8 — _errors_fragment is list of dicts."""
+    """_errors_fragment is list of dicts."""
     label = baseline_envelope["__label"]
     errors = baseline_envelope.get("errors")
     assert isinstance(errors, list), (
@@ -216,10 +216,10 @@ def test_errors_is_list(baseline_envelope: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# T9 — schema_version present and matches policy (rule 13 R3)
+# T9 — schema_version present and matches policy
 # ---------------------------------------------------------------------------
 def test_schema_version_is_one(baseline_envelope: dict) -> None:
-    """schema_version is currently 1 (rule 13 R3 — bumped only by user)."""
+    """schema_version is currently 1 (bumped only by user)."""
     label = baseline_envelope["__label"]
     sv = baseline_envelope.get("schema_version")
     assert sv == "1", (
@@ -228,7 +228,7 @@ def test_schema_version_is_one(baseline_envelope: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# T10 — Aggregate: all 8 baselines covered (rule 21 R1 baseline registry)
+# T10 — Aggregate: all 8 baselines covered (baseline registry)
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
     "channel,expected_min",

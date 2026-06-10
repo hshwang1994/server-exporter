@@ -10,5 +10,5 @@
   "PowerState": "On",
   "Status": {"Health": "OK", "State": "Enabled"},
   "Links": {"ManagerForChassis": [{"@odata.id": "/redfish/v1/Chassis/Base"}]},
-  "Oem": {"Hpe": {"Role": "secondary", "Note": "lab 부재 — per-chassis PDHC 합성. rule 96 R1-A."}}
+  "Oem": {"Hpe": {"Role": "secondary", "Note": "lab 부재 — per-chassis PDHC 합성."}}
 }

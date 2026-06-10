@@ -1,6 +1,6 @@
 """DMTF 표준 mockup(DSP2043) record/replay 오프라인 회귀 테스트.
 
-목적 (rule 40 / rule 21 R1 / rule 96 R1-A):
+목적:
     redfish_gather.py 의 **표준(vendor-agnostic, OEM 미사용) 추출 경로** 를 결정적으로
     회귀 검증한다. 기존 hpe_emulator_* 는 전부 vendor=hpe(Oem.Hpe 경로), baseline 5종도
     벤더 특화 — OEM 확장이 전혀 없는 순수 DMTF 표준 서버는 오프라인 회귀가 없었다.
@@ -13,7 +13,7 @@
     **mockup != 실장비.** golden 은 schema/baseline_v1/ 실측 baseline 이 아니라
     tests/fixtures/redfish/dmtf_*/expected_output.json (DMTF-mockup-derived).
 
-오프라인 보장: recording.json 만 사용 — 네트워크 호출 0 (conftest hermetic 가드 + harness
+오프라인 보장: recording.json 만 사용 — 네트워크 호출 0 (conftest hermetic 가드 + replay
 realm seam). 정적 mockup 은 vendor=unknown 이라 G6 realm probe 에 도달하지만, replayer 의
 realm_impl(None) 이 seam 우회 urlopen 을 막는다.
 """
@@ -127,12 +127,11 @@ class TestDmtfMockupReplay:
     def test_simplestorage_fallback_parsed(self, replay_case):
         """SimpleStorage fallback 파싱 정상 — data.storage 가 있으면 controller/drive 추출.
 
-        주의(rule 95 R3): redfish_gather 는 modern Storage 부재 시 SimpleStorage fallback
+        주의: redfish_gather 는 modern Storage 부재 시 SimpleStorage fallback
         을 쓰며, 이때 'Storage 미지원, SimpleStorage fallback 사용' notice 를 errors[] 에
         남겨 storage 를 failed 로 분류한다(데이터는 정상). 이는 HPE iLO4 SmartStorage
         fallback 과 동일한 **기존 엔진 동작**이다. 분류 개선(fallback 성공 시 failed→
-        degraded)은 status 의미론 변경(rule 13 R8)이라 별도 cycle 후보 — NEXT_ACTIONS /
-        FAILURE_PATTERNS(external-contract-observation) 참조. 본 테스트는 분류와 무관하게
+        degraded)은 status 의미론 변경이라 별도 후속 작업 후보. 본 테스트는 분류와 무관하게
         **파싱 정확성(positive invariant)** 만 검증한다 — 현재 동작 freeze 가 아님.
         """
         result, _golden, case_dir = replay_case

@@ -1,9 +1,9 @@
 ---
-# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: VMware ESXi 6.x
-# Firmware: tested_against ["6.0", "6.5", "6.7"]
+# Firmware: 검증 버전 ["6.0", "6.5", "6.7"]
 # Origin: 추정 — 검증 필요 (community.vmware 6.2.0 + vSphere 6.x release notes)
-# Last sync: 2026-04-27 (hshwang1994)
+# Last sync: 2026-04-27
 # Notes: ESXi 6.x는 EOL. 잔존 환경 대비 priority=30 (7.x=50/8.x=100보다 낮음).
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: esxi_6x

@@ -1,10 +1,10 @@
 ---
-# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Linux (generic fallback)
-# Firmware: tested_against [] — 임의 distribution
+# Firmware: 검증 버전 없음 — 임의 distribution
 # Origin: server-exporter 정책 — distribution_patterns 매치 실패 시 fallback
-# Last sync: 2026-04-27 (hshwang1994)
-# Notes: priority=0 — Linux 2-tier (rule 10 R4) Python ok / raw fallback 모두 지원.
+# Last sync: 2026-04-27
+# Notes: priority=0 — Linux 2-tier Python ok / raw fallback 모두 지원.
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: os_linux_generic
 channel: os

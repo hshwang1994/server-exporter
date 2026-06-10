@@ -1,6 +1,6 @@
 # HPE Superdome Flex mock fixture — Gen 1/2 generic
 
-> M-G2 cycle 2026-05-07-all-vendor-coverage — lab 부재 vendor mock fixture (mission-critical).
+> Lab 부재 vendor mock fixture (mission-critical).
 
 ## 메타
 
@@ -12,8 +12,8 @@
 | Firmware | RMC 2.4.0 |
 | Redfish version | 1.10.0 |
 | OEM namespace | `Oem.Hpe` (iLO 시리즈 + Superdome 공통) |
-| Multi-partition | YES (nPAR — 전 partition 을 data.multi_node 로 수집, cycle 2026-05-12) |
-| Lab | 부재 — web sources 기반 (rule 96 R1-A) |
+| Multi-partition | YES (nPAR — 전 partition 을 data.multi_node 로 수집) |
+| Lab | 부재 — web sources 기반 |
 
 ## Sources
 
@@ -29,7 +29,7 @@
 
 | 특이점 | 설명 |
 |---|---|
-| Multi-partition (nPAR) | Systems ID = `Partition<N>` — server-exporter 는 전 partition 을 `data.multi_node.partitions[]` 로 수집 (cycle 2026-05-12, ADR-2026-05-12). top-level `data.*` 섹션은 Partition0 대표 |
+| Multi-partition (nPAR) | Systems ID = `Partition<N>` — 전 partition 을 `data.multi_node.partitions[]` 로 수집. top-level `data.*` 섹션은 Partition0 대표 |
 | Dual-manager | RMC + 각 컴퓨트 모듈 iLO 5. RMC 가 primary AccountService host |
 | OEM 영역 | `Oem.Hpe.PartitionInfo` (Systems) / `Oem.Hpe.FlexNodeInfo` (Chassis) / `Oem.Hpe.GlobalConfiguration` (Systems/Managers) |
 | Storage-less | Compute node 는 SmartStorage 영역 없음 (storage-less node — Storage endpoint 빈 응답) |
@@ -51,13 +51,13 @@
 
 ## 검증 포인트
 
-- adapter 선택: `redfish_hpe_superdome_flex` (priority=101, model_patterns: `^Superdome Flex.*` 매칭 — cycle 2026-06-04 95→101, iLO6 catch-all 위로 상향)
-- OEM 추출 (M-G1 collect_oem.yml when 조건 매칭):
+- adapter 선택: `redfish_hpe_superdome_flex` (priority=101, model_patterns: `^Superdome Flex.*` 매칭 — iLO6 catch-all(100) 위, iLO7(120) 아래)
+- OEM 추출 (collect_oem.yml when 조건 매칭):
   - `_hpe_superdome_partition` → `Oem.Hpe.PartitionInfo` (Systems)
   - `_hpe_superdome_flex_node` → `Oem.Hpe.FlexNodeInfo` (Chassis)
   - `_hpe_superdome_global` → `Oem.Hpe.GlobalConfiguration` (Systems)
 - iLO 시리즈 mock (사이트 검증 iLO7 등) 영향 0 — `regex_search('(?i)Superdome|Flex')` when 조건 매칭 안 됨 (Additive)
-- multi-node 수집: 전 partition → `data.multi_node.partitions[]`, `representative_partition` = partitions[0] (cycle 2026-05-12)
+- multi-node 수집: 전 partition → `data.multi_node.partitions[]`, `representative_partition` = partitions[0]
 
 ## 변형 가능성 (사이트 도입 시 정정)
 

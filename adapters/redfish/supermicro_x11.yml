@@ -1,23 +1,23 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Supermicro / Super Micro Computer
 # Firmware: X11 generation BMC (Aspeed AST2500)
 # Origin: Supermicro X11 BMC documentation
-# Last sync: 2026-05-07 (M-B2 — origin 주석 강화)
+# Last sync: 2026-05-07 (origin 주석 강화)
 # Notes: Purley platform (2017-2020). Skylake / Cascade Lake / Cooper Lake.
 #   AST2500 BMC — Redfish 1.4+ 표준 호환 (DSP0268 v1.4+).
 #   PowerSubsystem 미도입 (X12+ 부터 도입), 표준 Storage path 지원, OEM 약함.
-# Sources (rule 96 R1-A — lab 부재):
+# Sources (lab 부재):
 #   - https://www.supermicro.com/manuals/superserver/IPMI/IPMI_Users_Guide_X11.pdf
 #   - https://www.supermicro.com/manuals/other/RedfishUserGuide.pdf
 #   - https://www.supermicro.com/support/resources/bios_ipmi.php?type=BMC
-# Tested against: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
-# Capability 매트릭스 (cycle 2026-05-07 M-B2):
+# 검증 기준: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
+# Capability 매트릭스:
 #   - generation: x11 (2017-2020)
 #   - power_subsystem_introduction: false (X12+ 부터 도입 — DSP0268 v1.13+)
 #   - storage_strategy_evolution: standard (X11 부터 표준 Storage path 도입)
-# Lab status: 부재 — 사용자 명시 2026-05-07 Q2 (Supermicro 사이트 BMC 0대)
-# Next action: lab 도입 후 별도 cycle — capability 보정 (rule 50 R2 단계 10)
+# Lab status: 부재 — web sources only (Supermicro 사이트 BMC 0대)
+# Next action: lab 도입 후 capability 보정
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_supermicro_x11
 channel: redfish
@@ -25,7 +25,7 @@ priority: 100
 
 match:
   vendor: ["Supermicro", "Super Micro Computer, Inc.", "Super Micro Computer", "SUPERMICRO"]
-  # X11 (Intel Skylake/Cascade Lake/Cooper Lake) + H11 (AMD EPYC Naples) — 동세대 BMC 공유 (cycle 2026-05-07 M-B3)
+  # X11 (Intel Skylake/Cascade Lake/Cooper Lake) + H11 (AMD EPYC Naples) — 동세대 BMC 공유
   model_patterns: ["X11", "x11", "H11", "h11"]
 
 capabilities:
@@ -52,7 +52,7 @@ normalize:
 credentials:
   profile: "supermicro"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
+  # AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: supermicro_factory, role: recovery }
 

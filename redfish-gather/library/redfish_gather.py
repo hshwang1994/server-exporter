@@ -5,28 +5,28 @@ Ansible Custom Module: redfish_gather  v4
 ------------------------------------------
 검증된 벤더별 URI 구조 (공식 문서 기반):
 
-  HPE iLO 5/6/7 : Systems/1               / Managers/1   (Oem.Hpe / Oem.Hp fallback)
-  Dell iDRAC 9/10 : Systems/System.Embedded.1 / Managers/iDRAC.Embedded.1  (Oem.Dell)
-  Lenovo XCC/XCC2/XCC3 : Systems/1        / Managers/1   (Oem.Lenovo)
-  Supermicro X11~X14 : Systems/1          / Managers/1   (Oem.Supermicro)
+  HPE iLO 5/6/7: Systems/1               / Managers/1   (Oem.Hpe / Oem.Hp fallback)
+  Dell iDRAC 9/10: Systems/System.Embedded.1 / Managers/iDRAC.Embedded.1  (Oem.Dell)
+  Lenovo XCC/XCC2/XCC3: Systems/1        / Managers/1   (Oem.Lenovo)
+  Supermicro X11~X14: Systems/1          / Managers/1   (Oem.Supermicro)
     Manufacturer = "Super Micro Computer, Inc."
-  Cisco CIMC M4~M8 / UCS X-Series : Systems/<serial> / Managers/CIMC (Oem.Cisco — 옵션)
+  Cisco CIMC M4~M8 / UCS X-Series: Systems/<serial> / Managers/CIMC (Oem.Cisco — 옵션)
     Manufacturer = "Cisco Systems"
 
 외부 라이브러리 불필요 — Python stdlib(urllib, ssl, socket) 만 사용
 
 ──────────────────────────────────────────────────────────────────────────────
-Read-only 보장 (F83 / F87 — DSP0266 §11 + bmcweb OpenBMC #262 회피):
+Read-only 보장 (DSP0266 §11 + bmcweb OpenBMC #262 회피):
 ──────────────────────────────────────────────────────────────────────────────
 본 모듈은 GET only — 정보 수집만 수행.
-- _post() / _patch() 헬퍼는 P2 AccountService 계정 생성/갱신 진입점 한정 사용
+- _post() / _patch() 헬퍼는 AccountService 계정 생성/갱신 진입점 한정 사용
   (recovery 계정 부재 시 자동 생성). dryrun=true 가 기본값이라 실 BMC 호출은
-  사용자 명시 토글 후만. dryrun=false 도 idempotent (이미 존재 시 PATCH skip).
+  명시적 토글 후만. dryrun=false 도 idempotent (이미 존재 시 PATCH skip).
 - ETag / If-Match 헤더 미사용 → bmcweb 일부 펌웨어의 If-Match crash 회피
   (OpenBMC issue #262).
 - DELETE / OEM Action (SystemErase / SetBiosTime / RetryCloudConnect / ClearCMOS
   등) 절대 호출 안 함.
-- F84 cycle 2026-05-01 추가: TLS 1.2/1.3 양쪽 호환 — _ctx() 가 SSLContext
+- TLS 1.2/1.3 양쪽 호환 — _ctx() 가 SSLContext
   default 정책 (TLS 1.2 minimum) 사용. 구 BMC OpenSSL 3.x renegotiation 은
   OP_LEGACY_SERVER_CONNECT 로 호환. SECLEVEL=0 으로 weak cipher 허용.
 """
@@ -46,14 +46,14 @@ options:
 
 import json, socket, sys, traceback
 
-# ── 단위 변환 상수 (cycle 2026-06-04 R-4 — 매직넘버 명명) ──────────────────────
+# ── 단위 변환 상수 ──────────────────────
 # 주의: decimal(10^n) 과 binary(2^n) 는 의미가 다르므로 절대 통합 금지.
 #   capacity_gb = DECIMAL GB (÷1e9) / total_mb·capacity_mb = BINARY MiB (÷2^20).
 BYTES_PER_GB_DECIMAL = 1_000_000_000   # 10^9 — CapacityBytes ↔ capacity_gb (decimal GB)
 BYTES_PER_MIB = 1048576                # 2^20 — CapacityBytes → total_mb (binary MiB)
 MIB_PER_GIB = 1024                     # 2^10 — MiB → GiB (binary, grouping key)
 MBPS_PER_GBPS = 1000.0                 # 10^3 — 네트워크 Mbps → Gbps (decimal bitrate, byte 아님)
-MAX_COLLECTION_MEMBERS = 1024          # rule 95 R1: 무경계 Members/Drives 순회 DoS 상한 (실 BMC << 1024)
+MAX_COLLECTION_MEMBERS = 1024  # 무경계 Members/Drives 순회 DoS 상한 (실 BMC << 1024)
 
 
 def _removeprefix(s, prefix):
@@ -66,13 +66,13 @@ def _removeprefix(s, prefix):
 def _safe_int(x, default=None):
     """Redfish 응답 robustness — string/None/non-numeric → default.
 
-    rule 96 외부 계약 drift 대비. 펌웨어 변경으로 capacity 필드가 비-숫자
+    외부 계약 drift 대비. 펌웨어 변경으로 capacity 필드가 비-숫자
     문자열 또는 None을 반환할 때 ValueError로 모듈 자체가 죽는 사고 차단.
     """
     if x is None:
         return default
     try:
-        return int(x)  # rule 95 R1 #7 ok: try/except 보호 안
+        return int(x)  # ok: try/except 보호 안
     except (ValueError, TypeError, OverflowError):  # Round 15: int(float('inf')) → OverflowError 방어
         return default
 
@@ -135,26 +135,26 @@ from ansible.module_utils.basic import AnsibleModule
 
 # ── HTTP 유틸 ────────────────────────────────────────────────────────────────
 
-# verify_ssl(bool) 별 SSLContext 캐시 (cycle 2026-05-29 audit — host 당 재생성 제거)
+# verify_ssl(bool) 별 SSLContext 캐시
 _CTX_CACHE = {}
 
 
 def _ctx(verify_ssl):
     """HTTPS context — verify_ssl=False 시 self-signed BMC 인증서 허용.
 
-    cycle 2026-04-30: 구 BMC (HPE iLO4, Lenovo IMM2, 일부 iDRAC7/8 펌웨어) 호환.
+    구 BMC (HPE iLO4, Lenovo IMM2, 일부 iDRAC7/8 펌웨어) 호환.
     OpenSSL 3.x legacy renegotiation + weak cipher 허용 — verify=False 환경 한정.
     curl -k 와 동등한 관용성. 사내 BMC self-signed 망 한정.
 
-    F84 cycle 2026-05-01 — TLS 1.2/1.3 양쪽 호환 명시:
+    TLS 1.2/1.3 양쪽 호환 명시:
     - minimum_version = TLSv1_2 (DMTF DSP0266 §10.2 권장 + iLO 7 enum 제거)
     - maximum_version = TLSv1_3 (Gen11+ / XCC3+ / X14+ 강제 가능)
     - SECLEVEL=0 으로 weak cipher 허용 (iLO 4 / IMM2 / 구 iDRAC 펌웨어)
     구 BMC TLS 1.0/1.1 만 지원하면 본 코드는 핸드셰이크 실패 → graceful
     degradation 으로 status=failed (precheck protocol 단계). 별 사고 신호
-    없으면 minimum_version 유지. (rule 92 R2)
+    없으면 minimum_version 유지.
 
-    cycle 2026-05-29 (audit): verify_ssl(bool) 별 1회만 빌드 후 재사용 (_CTX_CACHE).
+    verify_ssl(bool) 별 1회만 빌드 후 재사용 (_CTX_CACHE).
     SSLContext 는 다중 연결 재사용이 표준 (Python 권장). host 당 30~150 회 재생성
     제거 — 동작 동일 (controller-side CPU/alloc 절감). Ansible module 은 host 당
     단일 subprocess → thread-safety 무관.
@@ -189,8 +189,8 @@ def _auth(username, password):
 
 def _get(bmc_ip, path, username, password, timeout, verify_ssl):
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
-    # cycle 2026-04-30 hotfix: User-Agent 추가가 Lenovo XCC 일부 펌웨어 reject 유발 (사이트 검증).
-    # Accept + OData-Version 만 유지 (cycle 전부터 동작 검증된 헤더 셋).
+    # hotfix: User-Agent 추가가 Lenovo XCC 일부 펌웨어 reject 유발 (사이트 검증).
+    # Accept + OData-Version 만 유지 (동작 검증된 헤더 셋).
     req = urlreq.Request(url, headers={
         'Authorization': _auth(username, password),
         'Accept': 'application/json',
@@ -222,7 +222,7 @@ def _get(bmc_ip, path, username, password, timeout, verify_ssl):
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
 def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
-    """P2 (cycle 2026-04-28): AccountService 계정 생성 (POST /Accounts)."""
+    """AccountService 계정 생성 (POST /Accounts)."""
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     try:
         payload = json.dumps(body).encode('utf-8')
@@ -254,7 +254,7 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
 def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
-    """F50 phase 4 (cycle 2026-05-06): DELETE method 추가 — Lenovo XCC 권한 cache 손상 시
+    """DELETE method 추가 — Lenovo XCC 권한 cache 손상 시
     DELETE + POST 재생성 fallback. Dell iDRAC 는 DELETE 미지원 (PATCH-only)."""
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     req = urlreq.Request(url, method='DELETE', headers={
@@ -278,7 +278,7 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
 
 
 def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl):
-    """P2 (cycle 2026-04-28): AccountService 계정 update (PATCH /Accounts/{id})."""
+    """AccountService 계정 update (PATCH /Accounts/{id})."""
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     try:
         payload = json.dumps(body).encode('utf-8')
@@ -312,7 +312,7 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl):
 def _p(uri):
     """@odata.id URI → _get() path 인수.
 
-    rule 95 R1: @odata.id 는 Redfish spec 상 str URI 지만, 오염/펌웨어 버그로 비-str
+    @odata.id 는 Redfish spec 상 str URI 지만, 오염/펌웨어 버그로 비-str
     (dict/int)이 오면 uri.lstrip 이 AttributeError → 호출 섹션 전체가 죽는다(silent
     total-section loss). 비-str 은 절대 매치 안 되는 무효 path 로 치환해 _get 가 404 로
     깨끗이 실패하게 한다 — '' 반환은 ServiceRoot(200) 오인 위험이 있어 금지.
@@ -348,11 +348,11 @@ def _err(section, message, detail=None):
 
 
 def _capped(seq, section=None, errors=None):
-    """무경계 collection(Members/Drives) 순회 상한 — P2 DoS/huge-payload 방어.
+    """무경계 collection(Members/Drives) 순회 상한 — DoS/huge-payload 방어.
 
     오염/악성/버그 BMC 가 수천 멤버를 반환하면 멤버당 _get 가 N회 네트워크 왕복(각 timeout)을
     유발해 사실상 hang. cap 초과 시 절단 + (errors 제공 시) _err 로 명시(silent 절단 금지 —
-    rule 70). 실 BMC 멤버 수는 cap 보다 훨씬 작아 정상 입력 결과 불변(rule 92 R2 Additive).
+    ). 실 BMC 멤버 수는 cap 보다 훨씬 작아 정상 입력 결과 불변.
     """
     seq = seq if isinstance(seq, list) else []  # Round 4 #2: 비-list 방어 (len/slice crash 차단)
     if len(seq) > MAX_COLLECTION_MEMBERS:
@@ -363,7 +363,7 @@ def _capped(seq, section=None, errors=None):
     return seq
 
 
-# 2026-04-29 fix B90 / B23: JEDEC ID -> vendor name normalization (rule 10 stdlib only)
+# 2026-04-29 JEDEC ID -> vendor name normalization
 # Cisco CIMC returns Memory.Manufacturer as raw '0xCExx' (Samsung) instead of name.
 # JEP106 standard: 7-bit ID byte (MSB = parity). Common DRAM vendors below.
 _JEDEC_VENDORS = {
@@ -457,67 +457,67 @@ def _strip_or_none(value):
 # 내장 벤더 매핑 (vendor_aliases.yml 로드 불가 시 fallback)
 # ※ common/vars/vendor_aliases.yml과 동기화 필요 — 변경 시 양쪽 모두 수정할 것
 # canonical vendors: dell, hpe, lenovo, supermicro, cisco
-# nosec rule12-r1: 아래 dict는 vendor 분기 코드가 아니라 Ansible runtime 외 환경
+# 아래 dict는 vendor 분기 코드가 아니라 Ansible runtime 외 환경
 # (pytest / 직접 invoke)에서 vendor_aliases.yml load 실패 시 fallback 정규화 맵.
 # vendor_aliases.yml이 primary, 본 dict는 secondary. 신규 alias 추가 시 vendor_aliases.yml만
-# 갱신하면 충분 (verify_harness_consistency.py 동기화 게이트로 drift 검출).
+# 갱신하면 충분.
 _FALLBACK_VENDOR_MAP = {
-    'dell': 'dell', 'dell inc.': 'dell', 'dell emc': 'dell',                # nosec rule12-r1
-    'hpe': 'hpe', 'hewlett packard enterprise': 'hpe',                      # nosec rule12-r1
-    'hewlett packard enterprise co.': 'hpe', 'hewlett-packard': 'hpe',      # nosec rule12-r1
-    'hp enterprise': 'hpe', 'hp': 'hpe',                                    # nosec rule12-r1
-    'lenovo': 'lenovo', 'lenovo group ltd.': 'lenovo',                      # nosec rule12-r1
-    'lenovo group limited': 'lenovo', 'ibm': 'lenovo',                      # nosec rule12-r1
-    'supermicro': 'supermicro', 'super micro computer, inc.': 'supermicro', # nosec rule12-r1
-    'super micro computer': 'supermicro', 'smci': 'supermicro',             # nosec rule12-r1
-    'cisco': 'cisco', 'cisco systems inc': 'cisco',                         # nosec rule12-r1
-    'cisco systems inc.': 'cisco', 'cisco systems, inc': 'cisco',           # nosec rule12-r1
-    'cisco systems, inc.': 'cisco', 'cisco systems': 'cisco',               # nosec rule12-r1
-    # 2026-05-01 F44~F47 (사용자 명시 승인): Huawei / Inspur / Fujitsu / Quanta
-    'huawei': 'huawei', 'huawei technologies co., ltd.': 'huawei',          # nosec rule12-r1
-    'huawei technologies': 'huawei',                                        # nosec rule12-r1
-    'inspur': 'inspur',                                                     # nosec rule12-r1
-    'inspur information technology company limited': 'inspur',              # nosec rule12-r1
-    'inspur information': 'inspur', 'inspur systems': 'inspur',             # nosec rule12-r1
-    'fujitsu': 'fujitsu', 'fujitsu limited': 'fujitsu',                     # nosec rule12-r1
-    'fujitsu technology solutions': 'fujitsu',                              # nosec rule12-r1
-    'quanta': 'quanta', 'quanta computer': 'quanta',                        # nosec rule12-r1
-    'quanta computer inc.': 'quanta',                                       # nosec rule12-r1
-    'quanta cloud technology': 'quanta', 'qct': 'quanta',                   # nosec rule12-r1
+    'dell': 'dell', 'dell inc.': 'dell', 'dell emc': 'dell',
+    'hpe': 'hpe', 'hewlett packard enterprise': 'hpe',
+    'hewlett packard enterprise co.': 'hpe', 'hewlett-packard': 'hpe',
+    'hp enterprise': 'hpe', 'hp': 'hpe',
+    'lenovo': 'lenovo', 'lenovo group ltd.': 'lenovo',
+    'lenovo group limited': 'lenovo', 'ibm': 'lenovo',
+    'supermicro': 'supermicro', 'super micro computer, inc.': 'supermicro',
+    'super micro computer': 'supermicro', 'smci': 'supermicro',
+    'cisco': 'cisco', 'cisco systems inc': 'cisco',
+    'cisco systems inc.': 'cisco', 'cisco systems, inc': 'cisco',
+    'cisco systems, inc.': 'cisco', 'cisco systems': 'cisco',
+    # 2026-05-01 추가: Huawei / Inspur / Fujitsu / Quanta
+    'huawei': 'huawei', 'huawei technologies co., ltd.': 'huawei',
+    'huawei technologies': 'huawei',
+    'inspur': 'inspur',
+    'inspur information technology company limited': 'inspur',
+    'inspur information': 'inspur', 'inspur systems': 'inspur',
+    'fujitsu': 'fujitsu', 'fujitsu limited': 'fujitsu',
+    'fujitsu technology solutions': 'fujitsu',
+    'quanta': 'quanta', 'quanta computer': 'quanta',
+    'quanta computer inc.': 'quanta',
+    'quanta cloud technology': 'quanta', 'qct': 'quanta',
 }
 # 호환 alias (외부 코드가 _BUILTIN_VENDOR_MAP 이름 참조 시)
 _BUILTIN_VENDOR_MAP = _FALLBACK_VENDOR_MAP
 
 # BMC 시그니처 → vendor (Redfish ServiceRoot Product/Name 필드의 BMC 제품명 매칭)
-# nosec rule12-r1: ServiceRoot v1.0~1.4 펌웨어는 Vendor/Product 표준 필드 부재.
+# ServiceRoot v1.0~1.4 펌웨어는 Vendor/Product 표준 필드 부재.
 # BMC 제품명이 vendor 시그니처로 사실상 외부 Redfish spec 일부 (HPE Hpe namespace,
 # Dell iDRAC, Lenovo XClarity 등). vendor 분기 코드가 아니라 정규화 맵.
 _BMC_PRODUCT_HINTS = {
-    'idrac': 'dell', 'integrated dell': 'dell',                             # nosec rule12-r1
-    'ilo': 'hpe', 'proliant': 'hpe',                                        # nosec rule12-r1
-    'xclarity': 'lenovo', 'thinksystem': 'lenovo',                          # nosec rule12-r1
-    'xcc': 'lenovo', 'imm2': 'lenovo',                                      # nosec rule12-r1
-    'megarac': 'supermicro',                                                # nosec rule12-r1
-    'cimc': 'cisco', 'ucs': 'cisco',                                        # nosec rule12-r1
-    # 2026-05-01 F44~F47 (사용자 명시 승인) — vendor BMC 시그니처
-    'ibmc': 'huawei', 'fusionserver': 'huawei',                             # nosec rule12-r1
-    'isbmc': 'inspur',                                                      # nosec rule12-r1
-    'irmc': 'fujitsu', 'primergy': 'fujitsu',                               # nosec rule12-r1
-    'quantagrid': 'quanta', 'quantaplex': 'quanta',                         # nosec rule12-r1
-    # 2026-05-06 M-E2 (HPE Superdome Flex / Flex 280 web 검색 — lab 부재):
+    'idrac': 'dell', 'integrated dell': 'dell',
+    'ilo': 'hpe', 'proliant': 'hpe',
+    'xclarity': 'lenovo', 'thinksystem': 'lenovo',
+    'xcc': 'lenovo', 'imm2': 'lenovo',
+    'megarac': 'supermicro',
+    'cimc': 'cisco', 'ucs': 'cisco',
+    # 2026-05-01 추가 — vendor BMC 시그니처
+    'ibmc': 'huawei', 'fusionserver': 'huawei',
+    'isbmc': 'inspur',
+    'irmc': 'fujitsu', 'primergy': 'fujitsu',
+    'quantagrid': 'quanta', 'quantaplex': 'quanta',
+    # 2026-05-06 (HPE Superdome Flex / Flex 280 web 검색 — lab 부재):
     # Superdome Flex 의 RMC (Rack Management Controller) host 가 ServiceRoot.Product 에
     # "Superdome Flex" 또는 "iLO 5" 로 응답 — hpe sub-line. Manufacturer 시그니처
     # 부재 펌웨어 환경에서 BMC 제품명으로 정규화 강건성 향상.
     # source: HPE Superdome Flex Server Admin Guide + sdflexutils GitHub
-    'superdome': 'hpe', 'superdome flex': 'hpe',                            # nosec rule12-r1
+    'superdome': 'hpe', 'superdome flex': 'hpe',
     # 2026-06-04 (HP CSUS 3200 사이트 사고): RMC 가 ServiceRoot.Product/Name 에
     # "Compute Scale-up Server 3200" 으로 응답 — Manufacturer/alias 시그니처 부재
-    # 펌웨어에서 무인증 probe 벤더 감지 강건성 향상 (rule 96 R1-A web 검증).
+    # 펌웨어에서 무인증 probe 벤더 감지 강건성 향상.
     # 복합 키만 사용 — 'csus'/'compute' 단독은 비-HPE Product/Name 와 substring 충돌
-    # 위험 (워크플로 adversarial 검증 — _detect_vendor_from_service_root 의
+    # 위험 (_detect_vendor_from_service_root 의
     # `if hint in p`(Product) / `if hint in n`(Name) plain substring 매칭).
     # source: HPE Compute Scale-up Server 3200 FAQ + Superdome Flex Admin Guide (CSUS = Superdome Flex 후속).
-    'compute scale-up server': 'hpe', 'csus 3200': 'hpe',                   # nosec rule12-r1
+    'compute scale-up server': 'hpe', 'csus 3200': 'hpe',
 }
 
 
@@ -589,7 +589,7 @@ def _normalize_vendor_from_aliases(mfr_lower):
 
     # 부분 매칭 (기존 로직 호환)
     for key, canon in merged.items():
-        if key and (key in mfr_lower or mfr_lower in key):  # rule 95: 빈 alias wildcard 매칭 방어 (Round 1 #9)
+        if key and (key in mfr_lower or mfr_lower in key):  # 빈 alias wildcard 매칭 방어 (Round 1 #9)
             return canon
 
     return 'unknown'
@@ -598,7 +598,7 @@ def _normalize_vendor_from_aliases(mfr_lower):
 # ── 벤더 감지 ────────────────────────────────────────────────────────────────
 
 def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
-    """G6 (cycle 2026-04-30): 401/403 응답의 WWW-Authenticate realm에서 vendor hint 추출.
+    """401/403 응답의 WWW-Authenticate realm에서 vendor hint 추출.
 
     ServiceRoot 본문이 비어 vendor 식별 불가한 BMC에서도 401 응답 헤더의
     `WWW-Authenticate: Basic realm="iDRAC"` / `realm="iLO"` / `realm="XClarity Controller"`
@@ -638,10 +638,10 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
     for alias, canon in vm.items():
         if alias and alias in realm:
             return canon
-    # nosec rule12-r1: realm BMC 시그니처
-    for hint, canon in _BMC_PRODUCT_HINTS.items():                              # nosec rule12-r1
-        if hint in realm:                                                       # nosec rule12-r1
-            return canon                                                        # nosec rule12-r1
+    # realm BMC 시그니처
+    for hint, canon in _BMC_PRODUCT_HINTS.items():
+        if hint in realm:
+            return canon
     return None
 
 
@@ -702,17 +702,17 @@ def _detect_vendor_from_service_root(root):
             if k in vm:
                 return vm[k]
         # 1-B. namespace prefix 매칭 — Lenovo XCC2/XCC3 'Lenovo_xxx', 일부 펌웨어 'Hpe_xxx' 등
-        # nosec rule12-r1: BMC vendor OEM namespace prefix → vendor 식별 (외부 Redfish spec)
-        for key in oem:                                                       # nosec rule12-r1
-            k = key.lower()                                                   # nosec rule12-r1
-            for alias, canon in vm.items():                                   # nosec rule12-r1
-                if not alias:                                                 # nosec rule12-r1
-                    continue                                                  # nosec rule12-r1
-                if k.startswith(alias + '_') or k.startswith(alias + '.'):    # nosec rule12-r1
-                    return canon                                              # nosec rule12-r1
+        # BMC vendor OEM namespace prefix → vendor 식별 (외부 Redfish spec)
+        for key in oem:
+            k = key.lower()
+            for alias, canon in vm.items():
+                if not alias:
+                    continue
+                if k.startswith(alias + '_') or k.startswith(alias + '.'):
+                    return canon
 
     # 2. Vendor 필드 확인 — ServiceRoot v1.5.0+ 표준
-    # G7 (cycle 2026-04-30): 'Dell Inc.' 같은 trailing dot/whitespace + substring 매칭
+    # 'Dell Inc.' 같은 trailing dot/whitespace + substring 매칭
     vendor_field = _safe(root, 'Vendor')
     if vendor_field and isinstance(vendor_field, str):
         v = vendor_field.lower().strip()
@@ -730,24 +730,24 @@ def _detect_vendor_from_service_root(root):
     if product and isinstance(product, str):
         p = product.lower()
         for alias, canonical in vm.items():
-            if alias and alias in p:  # rule 95: 빈 alias wildcard 매칭 방어 (Round 1 #8, 아래 Name 필드 동일 가드)
+            if alias and alias in p:  # 빈 alias wildcard 매칭 방어 (Round 1 #8, 아래 Name 필드 동일 가드)
                 return canonical
-        # nosec rule12-r1: BMC 시그니처 → vendor 식별 (외부 Redfish spec OEM namespace)
-        for hint, canon in _BMC_PRODUCT_HINTS.items():                        # nosec rule12-r1
-            if hint in p:                                                     # nosec rule12-r1
-                return canon                                                  # nosec rule12-r1
+        # BMC 시그니처 → vendor 식별 (외부 Redfish spec OEM namespace)
+        for hint, canon in _BMC_PRODUCT_HINTS.items():
+            if hint in p:
+                return canon
 
     # 4. Name 필드에 벤더명 포함 확인 — Cisco "Cisco RESTful Root Service" 등
     name = _safe(root, 'Name')
     if name and isinstance(name, str):
         n = name.lower()
         for alias, canonical in vm.items():
-            if alias and alias in n:  # rule 95: 빈 alias wildcard 매칭 방어 (Round 1 #8)
+            if alias and alias in n:  # 빈 alias wildcard 매칭 방어 (Round 1 #8)
                 return canonical
-        # nosec rule12-r1: BMC 시그니처 fallback (Name 필드)
-        for hint, canon in _BMC_PRODUCT_HINTS.items():                        # nosec rule12-r1
-            if hint in n:                                                     # nosec rule12-r1
-                return canon                                                  # nosec rule12-r1
+        # BMC 시그니처 fallback (Name 필드)
+        for hint, canon in _BMC_PRODUCT_HINTS.items():
+            if hint in n:
+                return canon
 
     # 5. 해당 없음
     return None
@@ -776,7 +776,7 @@ def _endpoint_with_fallback(bmc_ip, primary_path, fallback_path, username,
                             password, timeout, verify_ssl, section_name='generic'):
     """primary endpoint 시도 → 404 / 미지원 시 fallback endpoint 시도.
 
-    cycle 2026-05-01 신설 (rule 22 R5 헬퍼 추상화 / HARNESS B5).
+    신설.
     Storage→SimpleStorage / Power→PowerSubsystem / 향후 ThermalSubsystem 같은
     DMTF 변천 호환 패턴을 재사용 가능한 단일 함수로 추상화.
 
@@ -786,7 +786,7 @@ def _endpoint_with_fallback(bmc_ip, primary_path, fallback_path, username,
     - fallback 404 → ({}, [], 'not_supported') 반환 (호출자가 분류)
     - 5xx / 401 / 403 / 그 외 → ({}, [error], 'failed')
 
-    호환성 fallback only — envelope 신 키 추가 안 함 (rule 96 R1-B Additive).
+    호환성 fallback only — envelope 신 키 추가 안 함.
 
     Args:
         bmc_ip: BMC IP
@@ -823,7 +823,7 @@ def _endpoint_with_fallback(bmc_ip, primary_path, fallback_path, username,
 def _resolve_first_member_uri(bmc_ip, coll_uri, username, password, timeout, verify_ssl):
     """컬렉션 URI → 첫 번째 Member의 @odata.id 추출.
 
-    Managers/Chassis 등 N+1 컬렉션에서 첫 멤버만 반환 (NEXT_ACTIONS T3-05 — 향후 결정).
+    Managers/Chassis 등 N+1 컬렉션에서 첫 멤버만 반환.
     Returns: (member_uri_or_none, status_code, error_msg)
     """
     if not coll_uri:
@@ -832,20 +832,20 @@ def _resolve_first_member_uri(bmc_ip, coll_uri, username, password, timeout, ver
     if err or st != 200:
         return None, st, err or f'HTTP {st}'
     members = _safe(coll, 'Members') or []
-    if not isinstance(members, list) or not members:  # rule 95 R1 #2: 비-list Members 방어 (Round 1 #24)
+    if not isinstance(members, list) or not members:  # 비-list Members 방어 (Round 1 #24)
         return None, st, 'members 없음'
     return _safe(members[0], '@odata.id'), st, None
 
 
 def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, verify_ssl):
-    """컬렉션 URI → 모든 Members 의 @odata.id 추출 (cycle 2026-05-12 — ADR-2026-05-12).
+    """컬렉션 URI → 모든 Members 의 @odata.id 추출.
 
     `_resolve_first_member_uri` 의 Additive 확장. RMC (HPE Compute Scale-up Server 3200 /
     Superdome Flex) 같이 단일 진입점이 N개 Manager / N개 nPartition / N개 Chassis 를
-    노출하는 환경에서 전수 수집을 위해 신설. 기존 단일 노드 함수는 변경 0 (rule 92 R2
-    Additive only / rule 95 R1 #11 production 위험 회피).
+    노출하는 환경에서 전수 수집을 위해 신설. 기존 단일 노드 함수는 변경 0
+    (Additive only / production 위험 회피).
 
-    source (rule 96 R1-A):
+    source:
       - HPE 공식: "supports large, partitionable systems managed by a single aggregated
         controller like HPE Compute Scale-up Server 3200 RMC"
       - DMTF DSP0266 v1.15.0 Collection.Members[] 표준 schema
@@ -859,7 +859,7 @@ def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, veri
     if err or st != 200:
         return [], st, err or f'HTTP {st}'
     raw_members = _safe(coll, 'Members') or []
-    if not isinstance(raw_members, list):  # rule 95 R1 #2: 비-list Members 방어 (Round 2 #15)
+    if not isinstance(raw_members, list):  # 비-list Members 방어 (Round 2 #15)
         raw_members = []
     out = []
     for m in raw_members:
@@ -874,24 +874,24 @@ def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, veri
     return out, st, None
 
 
-def _classify_rmc_label(manager_uri, manager_id, manager_layout, is_first=True):  # nosec rule12-r1
-    """Manager URI / ID + adapter capability 기반 BMC 표시명 결정 (cycle 2026-05-12).
+def _classify_rmc_label(manager_uri, manager_id, manager_layout, is_first=True):
+    """Manager URI / ID + adapter capability 기반 BMC 표시명 결정.
 
     HPE CSUS 3200 / Superdome Flex 의 RMC primary 시스템에서 manager 별 라벨 분기:
       - RMC (Rack Management Controller) → 'RMC'
       - PDHC (per-chassis controller) → 'PDHC'
       - per-node iLO 5 → 'iLO'
 
-    rule 12 R1 Allowed 영역 — line ~1559 `bmc_names` 매핑 (외부 spec 기반 표준 이름) 의
+    Allowed 영역 — line ~1559 `bmc_names` 매핑 (외부 spec 기반 표준 이름) 의
     fallback path 확장. `manager_layout` None 시 기존 동작 100% 보존 (Additive).
 
-    cycle 2026-06-09 (review): `is_first` 추가. layout-default 'RMC' 는 **첫 Manager**
+    (review): `is_first` 추가. layout-default 'RMC' 는 **첫 Manager**
     에만 적용한다. 구: substring 미매치 Manager 가 전부 'RMC' 로 오라벨 + _classify_manager_role
     의 role 과 불일치 (name='RMC' 인데 role=None). 비-first unmatched → None 반환 →
     호출자가 generic bmc_names[vendor] 사용. 비-documented manager ID (Managers/1 / Self)
-    환경에서 다중 RMC 오라벨 + name/role 모순 차단 (lab 부재 — 사이트 ID 패턴 NEXT_ACTIONS C6).
+    환경에서 다중 RMC 오라벨 + name/role 모순 차단 (lab 부재 — 사이트 ID 패턴 향후 결정).
 
-    source (rule 96 R1-A): HPE Superdome Flex Admin Guide + sdflexutils GitHub README
+    source: HPE Superdome Flex Admin Guide + sdflexutils GitHub README
 
     Returns: str | None  (None 시 호출자가 bmc_names[vendor] fallback 사용)
     """
@@ -900,21 +900,21 @@ def _classify_rmc_label(manager_uri, manager_id, manager_layout, is_first=True):
     lid = _str(manager_id).lower()
     luri = _str(manager_uri).lower()
     # 우선순위: ID substring → URI substring → (첫 Manager 한정) layout default
-    if 'rmc' in lid or 'rmc' in luri:                                            # nosec rule12-r1
-        return 'RMC'                                                             # nosec rule12-r1
-    if 'pdhc' in lid or 'pdhc' in luri:                                          # nosec rule12-r1
-        return 'PDHC'                                                            # nosec rule12-r1
-    if 'ilo' in lid or 'ilo' in luri:                                            # nosec rule12-r1
-        return 'iLO'                                                             # nosec rule12-r1
+    if 'rmc' in lid or 'rmc' in luri:
+        return 'RMC'
+    if 'pdhc' in lid or 'pdhc' in luri:
+        return 'PDHC'
+    if 'ilo' in lid or 'ilo' in luri:
+        return 'iLO'
     # layout default — `rmc_primary` 시 **첫 Manager 만** RMC 로 가정. 비-first 는 None
     # (호출자 generic fallback) — 다중 RMC 오라벨 방지.
     if is_first and manager_layout in ('rmc_primary', 'rmc_primary_ilo_secondary'):
-        return 'RMC'                                                             # nosec rule12-r1
+        return 'RMC'
     return None
 
 
-def _classify_manager_role(manager_uri, manager_id, manager_layout, is_first=False):  # nosec rule12-r1
-    """Manager 의 role (primary / secondary) 결정 (cycle 2026-05-12).
+def _classify_manager_role(manager_uri, manager_id, manager_layout, is_first=False):
+    """Manager 의 role (primary / secondary) 결정.
 
     `manager_layout` + ID substring 매칭 기반:
       - RMC → primary
@@ -922,7 +922,7 @@ def _classify_manager_role(manager_uri, manager_id, manager_layout, is_first=Fal
       - 그 외 첫 Manager → primary, 비-first → secondary
       - layout 미정의 → None
 
-    cycle 2026-06-09 (review): `is_first` 추가 — `_classify_rmc_label` 과 name/role 정합.
+    (review): `is_first` 추가 — `_classify_rmc_label` 과 name/role 정합.
     첫 Manager unmatched → primary (RMC 가정), 비-first unmatched → secondary. substring
     매치(pdhc/ilo)는 position 무관 secondary (첫 슬롯이라도 PDHC/iLO 면 secondary).
 
@@ -932,18 +932,18 @@ def _classify_manager_role(manager_uri, manager_id, manager_layout, is_first=Fal
         return None
     lid = _str(manager_id).lower()
     luri = _str(manager_uri).lower()
-    if 'rmc' in lid or 'rmc' in luri:                                            # nosec rule12-r1
+    if 'rmc' in lid or 'rmc' in luri:
         return 'primary'
     if manager_layout in ('rmc_primary', 'rmc_primary_ilo_secondary'):
-        if 'pdhc' in lid or 'pdhc' in luri or 'ilo' in lid or 'ilo' in luri:    # nosec rule12-r1
+        if 'pdhc' in lid or 'pdhc' in luri or 'ilo' in lid or 'ilo' in luri:
             return 'secondary'
         # substring 미매치: 첫 Manager 는 primary (RMC 가정 — label 과 정합), 그 외 secondary
         return 'primary' if is_first else 'secondary'
     return None
 
 
-def _classify_chassis_kind(chassis_uri, chassis_id, chassis_data):               # nosec rule12-r1
-    """Chassis 의 kind (base / expansion / compute_module) 결정 (cycle 2026-05-12).
+def _classify_chassis_kind(chassis_uri, chassis_id, chassis_data):
+    """Chassis 의 kind (base / expansion / compute_module) 결정.
 
     HPE Superdome Flex / CSUS 3200 multi-chassis 환경:
       - base / Base → 'base'
@@ -951,7 +951,7 @@ def _classify_chassis_kind(chassis_uri, chassis_id, chassis_data):              
       - compute / module → 'compute_module'
       - ChassisType 표준 필드 사용 가능 시 우선
 
-    source (rule 96 R1-A): DMTF DSP0266 Chassis.v1_20 ChassisType enum
+    source: DMTF DSP0266 Chassis.v1_20 ChassisType enum
 
     Returns: str | None
     """
@@ -979,7 +979,7 @@ def detect_vendor(bmc_ip, username, password, timeout, verify_ssl):
 
     Returns: (vendor, system_uri, manager_uri, chassis_uri, errors, service_root)
         service_root: 무인증/인증 ServiceRoot 응답 dict 원본 (None 가능).
-            cycle 2026-05-11 추가 (T-01 HPE adapter 오선택 fix) —
+            추가 (HPE adapter 오선택 fix) —
             _extract_probe_facts() 가 ServiceRoot 에서 model/firmware hint 추출 시 사용.
     """
     root, errors = _fetch_service_root(bmc_ip, username, password, timeout, verify_ssl)
@@ -1013,7 +1013,7 @@ def detect_vendor(bmc_ip, username, password, timeout, verify_ssl):
         username, password, timeout, verify_ssl,
     )
 
-    # G3 (cycle 2026-04-30): vendor=unknown 시 Chassis/Managers/System Manufacturer fallback.
+    # vendor=unknown 시 Chassis/Managers/System Manufacturer fallback.
     # ServiceRoot v1.0~1.4 펌웨어는 Vendor/Product 표준 필드 부재 — Manufacturer는 표준.
     if vendor == 'unknown':
         for fb_uri, fb_label in (
@@ -1037,7 +1037,7 @@ def detect_vendor(bmc_ip, username, password, timeout, verify_ssl):
                         f'{fb_label} Manufacturer fallback로 vendor={fb_vendor} 식별 (ServiceRoot 정보 부족)'))
                     break
 
-    # G6 (cycle 2026-04-30): G3까지 fail이면 401 WWW-Authenticate realm 헤더로 마지막 추정.
+    # 앞선 fallback 단계까지 모두 fail이면 401 WWW-Authenticate realm 헤더로 마지막 추정.
     if vendor == 'unknown':
         realm_vendor = _probe_realm_hint(bmc_ip, timeout, verify_ssl)
         if realm_vendor:
@@ -1049,20 +1049,20 @@ def detect_vendor(bmc_ip, username, password, timeout, verify_ssl):
     return vendor, system_uri, manager_uri, chassis_uri, errors, root
 
 
-def _extract_probe_facts(root, vendor):                                       # nosec rule12-r1
+def _extract_probe_facts(root, vendor):
     """ServiceRoot 무인증 응답에서 adapter selection 용 facts 추출.
 
     detect_vendor.yml 의 probe 단계는 무인증 (`username=""`) 으로 호출 — 본 수집의
     `gather_system()` / `gather_bmc()` 등은 모두 401 fail → `data.system` / `data.bmc`
     empty dict. 결과: facts.model / facts.firmware 가 비어 priority 가 가장 높은
-    adapter 가 model/firmware 무관하게 선택됨 (T-01: HPE DL380 Gen11 가 hpe_ilo7
+    adapter 가 model/firmware 무관하게 선택됨 (HPE DL380 Gen11 가 hpe_ilo7
     Gen12-only adapter 로 오선택 사고).
 
     본 함수는 ServiceRoot (무인증 / 인증 fallback) 에서 vendor 별 semantic 을 알고
     safe 한 hint 만 추출. detect_vendor.yml 이 data.bmc/data.system 비어 있을 때
     fallback 으로 사용 (Additive — 기존 path 변경 0).
 
-    vendor 별 ServiceRoot semantic 차이 (rule 96 R1 외부 계약):
+    vendor 별 ServiceRoot semantic 차이
       HPE: ServiceRoot.Product = 서버 모델 (예: "ProLiant DL380 Gen11"),
            Oem.Hpe.Manager[0].ManagerFirmwareVersion = iLO 펌웨어 (예: "1.73"),
            Oem.Hpe.Manager[0].ManagerType = iLO 세대 (예: "iLO 6").
@@ -1077,18 +1077,18 @@ def _extract_probe_facts(root, vendor):                                       # 
     Returns: dict — 채워진 hint 만 포함. 빈 dict 가능.
         {model_hint: str, firmware_hint: str, manager_type: str}
 
-    nosec rule12-r1: Redfish API spec 자체가 OEM namespace (Oem.Hpe / Oem.Hp) 정의 —
-    라이브러리에서 vendor 분기 허용 (rule 12 R1 Allowed 영역, _extract_oem_* 와 동일 정신).
+    Redfish API spec 자체가 OEM namespace (Oem.Hpe / Oem.Hp) 정의 —
+    라이브러리에서 vendor 분기 허용.
     """
     if not isinstance(root, dict):
         return {}
     facts = {}
-    if vendor == 'hpe':                                                       # nosec rule12-r1
+    if vendor == 'hpe':
         product = _safe(root, 'Product')
         if isinstance(product, str) and product.strip():
             facts['model_hint'] = product.strip()
-        managers = (_safe(root, 'Oem', 'Hpe', 'Manager')                       # nosec rule12-r1
-                    or _safe(root, 'Oem', 'Hp', 'Manager'))                    # nosec rule12-r1
+        managers = (_safe(root, 'Oem', 'Hpe', 'Manager')
+                    or _safe(root, 'Oem', 'Hp', 'Manager'))
         mgr0 = None
         if isinstance(managers, list) and managers and isinstance(managers[0], dict):
             mgr0 = managers[0]
@@ -1106,11 +1106,11 @@ def _extract_probe_facts(root, vendor):                                       # 
 
 # ── 섹션별 수집 ───────────────────────────────────────────────────────────────
 
-# nosec rule12-r1 (전체 _extract_oem_*): 외부 계약 (rule 96 R1) 직접 의존.
+# (전체 _extract_oem_*): 외부 계약 직접 의존.
 # Redfish API spec 자체가 vendor namespace 정의 (Oem.Hpe / Oem.Dell / Oem.Lenovo ...)
 # — adapter YAML로 위임 불가하므로 라이브러리에서 vendor 분기 허용.
 
-def _extract_oem_hpe(data):                                                   # nosec rule12-r1
+def _extract_oem_hpe(data):
     """HPE OEM (iLO 5/6 = Oem.Hpe, iLO 4 이하 = Oem.Hp fallback).
 
     Underscore-prefixed keys (e.g. `_bios_date`) are hoisted to hardware-level
@@ -1119,11 +1119,11 @@ def _extract_oem_hpe(data):                                                   # 
     Verified 2026-04-29 against HPE iLO 6 v1.73 (10.50.11.231): Bios.Current.Date
     populated; Manager.Oem.Hpe.Type field does not exist (former mapping was bug).
     """
-    oem = _safe(data, 'Oem', 'Hpe') or _safe(data, 'Oem', 'Hp') or {}         # nosec rule12-r1
+    oem = _safe(data, 'Oem', 'Hpe') or _safe(data, 'Oem', 'Hp') or {}
     ahs = _safe(oem, 'AggregateHealthStatus') or {}
     bios_oem = _safe(oem, 'Bios', 'Current') or {}
     return {
-        # Hoisted to hardware.bios_date (rule 96 — HPE OEM contract)
+        # Hoisted to hardware.bios_date
         '_bios_date':              _safe(bios_oem, 'Date'),
         'post_state':              _safe(oem, 'PostState'),
         'server_signature':        _safe(oem, 'ServerSignature'),
@@ -1142,14 +1142,14 @@ def _extract_oem_hpe(data):                                                   # 
     }
 
 
-def _extract_oem_dell(data):                                                  # nosec rule12-r1
+def _extract_oem_dell(data):
     """Dell OEM (Oem.Dell.DellSystem).
 
     Round 11 raw 검증 (10.100.15.27, iDRAC 7.10.70.00): 정확한 키는
     'EstimatedExhaustTemperatureCelsius'. 일부 구 펌웨어에서 'Cel' 변형 가능성
     있어 Celsius 우선, Cel fallback.
     """
-    oem = _safe(data, 'Oem', 'Dell', 'DellSystem') or {}                      # nosec rule12-r1
+    oem = _safe(data, 'Oem', 'Dell', 'DellSystem') or {}
     bios_date = _safe(oem, 'BIOSReleaseDate')
     return {
         # Hoisted to hardware.bios_date by gather_system (envelope consistency w/ HPE)
@@ -1169,17 +1169,17 @@ def _extract_oem_dell(data):                                                  # 
     }
 
 
-def _extract_oem_lenovo(data, chassis_data=None):                             # nosec rule12-r1
+def _extract_oem_lenovo(data, chassis_data=None):
     """Lenovo OEM (Oem.Lenovo).
 
     실측 (Lenovo XCC SR650 V2, 2026-04-28): ProductName은 System.Oem.Lenovo
     가 아닌 Chassis.Oem.Lenovo 에 존재. chassis_data 가 주어지면 Chassis 우선,
     없으면 System.Model 로 fallback.
 
-    2026-04-29 fix B61: 추가 OEM 키 추출 — System.Oem.Lenovo의 운영 메타.
+    2026-04-29 추가 OEM 키 추출 — System.Oem.Lenovo의 운영 메타.
     """
-    sys_oem = _safe(data, 'Oem', 'Lenovo') or {}                              # nosec rule12-r1
-    cha_oem = _safe(chassis_data or {}, 'Oem', 'Lenovo') or {} if chassis_data else {}  # nosec rule12-r1
+    sys_oem = _safe(data, 'Oem', 'Lenovo') or {}
+    cha_oem = _safe(chassis_data or {}, 'Oem', 'Lenovo') or {} if chassis_data else {}
     product_name = (
         _safe(sys_oem, 'ProductName')
         or _safe(cha_oem, 'ProductName')
@@ -1198,23 +1198,23 @@ def _extract_oem_lenovo(data, chassis_data=None):                             # 
     }
 
 
-def _extract_oem_supermicro(data):                                            # nosec rule12-r1
+def _extract_oem_supermicro(data):
     """Supermicro OEM (Oem.Supermicro)."""
-    oem = _safe(data, 'Oem', 'Supermicro') or {}                              # nosec rule12-r1
+    oem = _safe(data, 'Oem', 'Supermicro') or {}
     return {
         'board_id':   _safe(oem, 'BoardID'),
         'node_id':    _safe(oem, 'NodeID'),
     }
 
 
-def _extract_oem_cisco(data, chassis_data=None):                              # nosec rule12-r1
+def _extract_oem_cisco(data, chassis_data=None):
     """Cisco OEM (Oem.Cisco).
 
-    2026-04-29 fix B61: Cisco CIMC C220 M4 (Round 11): ServiceRoot.Oem 빈 dict
+    2026-04-29 Cisco CIMC C220 M4 (Round 11): ServiceRoot.Oem 빈 dict
     이지만 System/Chassis Oem.Cisco는 BoardSerial / Locator 등 일부 노출.
     """
-    sys_oem = _safe(data, 'Oem', 'Cisco') or {}                               # nosec rule12-r1
-    cha_oem = _safe(chassis_data or {}, 'Oem', 'Cisco') or {} if chassis_data else {}  # nosec rule12-r1
+    sys_oem = _safe(data, 'Oem', 'Cisco') or {}
+    cha_oem = _safe(chassis_data or {}, 'Oem', 'Cisco') or {} if chassis_data else {}
     return {
         'board_serial':       _safe(sys_oem, 'BoardSerialNumber') or _safe(cha_oem, 'BoardSerialNumber'),
         'platform_name':      _safe(sys_oem, 'PlatformName') or _safe(cha_oem, 'PlatformName'),
@@ -1224,7 +1224,7 @@ def _extract_oem_cisco(data, chassis_data=None):                              # 
     }
 
 
-def _hoist_oem_extras(oem_dict, target):                                      # nosec rule12-r1
+def _hoist_oem_extras(oem_dict, target):
     """Move underscore-prefixed keys from OEM extractor result into target dict.
 
     Vendor extractors emit `_field` keys to populate **existing** envelope fields
@@ -1240,7 +1240,7 @@ def _hoist_oem_extras(oem_dict, target):                                      # 
         if isinstance(k, str) and k.startswith('_'):
             field = k[1:]
             if field in target and v is not None:
-                # 2026-04-29 fix B16: bios_date / bios_release_date를 ISO 8601로 정규화.
+                # 2026-04-29 bios_date / bios_release_date를 ISO 8601로 정규화.
                 # Dell '09/10/2024' (MM/DD/YYYY) / HPE '03/01/2024' / 등 → 'YYYY-MM-DD'.
                 if field in ('bios_date', 'bios_release_date'):
                     target[field] = _normalize_bios_date(v)
@@ -1252,30 +1252,30 @@ def _hoist_oem_extras(oem_dict, target):                                      # 
     return cleaned
 
 
-# cycle 2026-05-07 M-I5: RoleId enum 정규화 매트릭스 (9 vendor).
+# RoleId enum 정규화 매트릭스 (9 vendor).
 # vendor 별 default role enum 변형을 5 표준 카테고리로 매핑.
 # 표준 카테고리: 'administrator' / 'operator' / 'readonly' / 'none' / 'custom'
-# rule 12 R1 Allowed — Redfish AccountService spec enum 직접 의존.
-# rule 92 R2 — Additive helper (호출자가 옵션 사용. envelope 영향 0).
-_ROLE_ID_NORMALIZATION_MATRIX = {                                             # nosec rule12-r1
+# Redfish AccountService spec enum 직접 의존.
+# Additive helper (호출자가 옵션 사용. envelope 영향 0).
+_ROLE_ID_NORMALIZATION_MATRIX = {
     # Dell iDRAC 표준
     'administrator': 'administrator',
-    'admin':         'administrator',                                         # nosec rule12-r1 — Cisco CIMC
-    'supervisor':    'administrator',                                         # nosec rule12-r1 — Lenovo XCC
+    'admin':         'administrator',  # Cisco CIMC
+    'supervisor':    'administrator',  # Lenovo XCC
     'operator':      'operator',
-    'user':          'operator',                                              # nosec rule12-r1 — Supermicro
+    'user':          'operator',  # Supermicro
     'readonly':      'readonly',
     'read-only':     'readonly',
     'read_only':     'readonly',
-    'commonuser':    'readonly',                                              # nosec rule12-r1 — Huawei iBMC
-    'callback':      'readonly',                                              # nosec rule12-r1 — Supermicro read-only role
+    'commonuser':    'readonly',  # Huawei iBMC
+    'callback':      'readonly',  # Supermicro read-only role
     'none':          'none',
-    'virtualmedia':  'custom',                                                # nosec rule12-r1 — HPE iLO
+    'virtualmedia':  'custom',  # HPE iLO
 }
 
 
-def _normalize_role_id(raw_role):                                             # nosec rule12-r1
-    """cycle 2026-05-07 M-I5: RoleId enum 정규화 (9 vendor → 5 표준 enum).
+def _normalize_role_id(raw_role):
+    """RoleId enum 정규화 (9 vendor → 5 표준 enum).
 
     Args:
         raw_role: BMC 응답의 RoleId raw 문자열 (Administrator / admin / Supervisor / ...)
@@ -1284,7 +1284,7 @@ def _normalize_role_id(raw_role):                                             # 
         normalized: 'administrator' / 'operator' / 'readonly' / 'none' / 'custom' / raw
                     (매트릭스에 없는 vendor-specific role 은 lowercase 그대로 보존)
 
-    rule 92 R2 — Additive (호출자가 옵션 사용. envelope 영향 0).
+    Additive (호출자가 옵션 사용. envelope 영향 0).
     """
     if raw_role is None:
         return None
@@ -1294,12 +1294,12 @@ def _normalize_role_id(raw_role):                                             # 
     return _ROLE_ID_NORMALIZATION_MATRIX.get(s, s)
 
 
-def _normalize_dimm_label(raw_label):                                         # nosec rule12-r1
-    """cycle 2026-05-07 M-I5: DIMM ServiceLabel vendor 별 정규화.
+def _normalize_dimm_label(raw_label):
+    """DIMM ServiceLabel vendor 별 정규화.
 
     vendor 별 라벨 변형을 공통 형식으로 통일:
       - Dell:       "DIMM_A1"        → "DIMM A1"
-      - HPE:        "P1-DIMM-A1"     → "P1 DIMM A1"  (CPU prefix 보존)
+      - HPE: "P1-DIMM-A1" → "P1 DIMM A1" (CPU prefix 보존)
       - Lenovo:     "DIMM 1"         → "DIMM 1"
       - Supermicro: "CPU0_DIMM_A1"   → "CPU0 DIMM A1"
 
@@ -1308,7 +1308,7 @@ def _normalize_dimm_label(raw_label):                                         # 
 
     Returns: normalized label (공백 구분) — 정보 손실 없음
 
-    rule 92 R2 — Additive (호출자가 옵션 사용. raw label 도 함께 보존 권장).
+    Additive (호출자가 옵션 사용. raw label 도 함께 보존 권장).
     """
     if raw_label is None:
         return None
@@ -1409,41 +1409,41 @@ def _normalize_bios_date(value):
     return s
 
 
-# 주의 (2026-04-28 / NEXT_ACTIONS T3-03):
+# 주의 (2026-04-28 / 향후 결정):
 # cisco ServiceRoot.Oem 은 Round 11 실측 빈 dict (adapter cisco_cimc.yml strategy=standard_only).
-# 단, 2026-04-29 fix B61 이후 System/Chassis Oem.Cisco 에서 일부 운영 메타가 나와
+# 단, 2026-04-29 이후 System/Chassis Oem.Cisco 에서 일부 운영 메타가 나와
 # _extract_oem_cisco 를 아래 매핑에 추가함 (ServiceRoot 가 아닌 System/Chassis 기준).
-_OEM_EXTRACTORS = {                                                           # nosec rule12-r1
-    'hpe':        _extract_oem_hpe,                                           # nosec rule12-r1
-    'dell':       _extract_oem_dell,                                          # nosec rule12-r1
-    'lenovo':     _extract_oem_lenovo,                                        # nosec rule12-r1
-    'supermicro': _extract_oem_supermicro,                                    # nosec rule12-r1
-    # 2026-04-29 fix B61: Cisco CIMC OEM 추출 추가 (이전 ServiceRoot.Oem 빈 dict이라 skip했지만
+_OEM_EXTRACTORS = {
+    'hpe':        _extract_oem_hpe,
+    'dell':       _extract_oem_dell,
+    'lenovo':     _extract_oem_lenovo,
+    'supermicro': _extract_oem_supermicro,
+    # 2026-04-29 Cisco CIMC OEM 추출 추가 (이전 ServiceRoot.Oem 빈 dict이라 skip했지만
     # System/Chassis Oem.Cisco는 일부 운영 메타 노출).
-    'cisco':      _extract_oem_cisco,                                         # nosec rule12-r1
+    'cisco':      _extract_oem_cisco,
 }
 
 
-# cycle 2026-05-07 M-I3: bmc / firmware OEM namespace unified extractor.
+# bmc / firmware OEM namespace unified extractor.
 # 9 vendor 의 OEM namespace 변형 (Oem.Hp vs Oem.Hpe / Oem.Inspur vs Oem.Inspur_System
 # / Oem.ts_fujitsu vs Oem.Fujitsu / Oem.Quanta_Computer_Inc vs Oem.QCT) 한 번에 해석.
-# rule 12 R1 Allowed — Redfish API spec OEM namespace 직접 의존 (Allowed 영역).
-# rule 92 R2 Additive — 본 helper 는 raw dict 만 반환. envelope 영향 0.
-_OEM_NAMESPACE_FALLBACK_CHAIN = (                                             # nosec rule12-r1
-    ('dell',       ('Dell',)),                                                # nosec rule12-r1
-    ('hpe',        ('Hpe', 'Hp')),                                            # nosec rule12-r1 — iLO4 legacy
-    ('lenovo',     ('Lenovo',)),                                              # nosec rule12-r1
-    ('cisco',      ('Cisco', 'Cisco_RackUnit')),                              # nosec rule12-r1 — UCS variant
-    ('supermicro', ('Supermicro',)),                                          # nosec rule12-r1
-    ('huawei',     ('Huawei',)),                                              # nosec rule12-r1
-    ('inspur',     ('Inspur', 'Inspur_System')),                              # nosec rule12-r1 — older firmware variant
-    ('fujitsu',    ('ts_fujitsu', 'Fujitsu')),                                # nosec rule12-r1 — iRMC alias
-    ('quanta',     ('Quanta_Computer_Inc', 'QCT')),                           # nosec rule12-r1
+# Redfish API spec OEM namespace 직접 의존 (vendor namespace 허용 영역).
+# Additive — 본 helper 는 raw dict 만 반환. envelope 영향 0.
+_OEM_NAMESPACE_FALLBACK_CHAIN = (
+    ('dell',       ('Dell',)),
+    ('hpe',        ('Hpe', 'Hp')),  # iLO4 legacy
+    ('lenovo',     ('Lenovo',)),
+    ('cisco',      ('Cisco', 'Cisco_RackUnit')),  # UCS variant
+    ('supermicro', ('Supermicro',)),
+    ('huawei',     ('Huawei',)),
+    ('inspur',     ('Inspur', 'Inspur_System')),  # older firmware variant
+    ('fujitsu',    ('ts_fujitsu', 'Fujitsu')),  # iRMC alias
+    ('quanta',     ('Quanta_Computer_Inc', 'QCT')),
 )
 
 
-def _extract_oem_unified(data, expected_vendor=None):                         # nosec rule12-r1
-    """cycle 2026-05-07 M-I3: 9 vendor OEM namespace 통합 추출 helper.
+def _extract_oem_unified(data, expected_vendor=None):
+    """9 vendor OEM namespace 통합 추출 helper.
 
     Redfish 응답의 `Oem.<namespace>` 영역을 vendor 별 alias chain (Oem.Hp / Oem.Hpe,
     Oem.ts_fujitsu / Oem.Fujitsu 등) 순서대로 탐색해 첫 매치 반환.
@@ -1460,8 +1460,8 @@ def _extract_oem_unified(data, expected_vendor=None):                         # 
         - matched_vendor: 'dell' / 'hpe' / ... 또는 None
         - matched_namespace: 'Dell' / 'Hp' / 'ts_fujitsu' / ... 또는 None
 
-    rule 12 R1 Allowed — Redfish API spec OEM namespace 직접 의존.
-    rule 92 R2 — Additive helper. 호출자가 raw dict 사용. envelope shape 변경 0.
+    Redfish API spec OEM namespace 직접 의존.
+    Additive helper. 호출자가 raw dict 사용. envelope shape 변경 0.
     """
     if not isinstance(data, dict):
         return {}, None, None
@@ -1520,7 +1520,7 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
     if mem_health is None:
         mem_health = _safe(data, 'MemorySummary', 'Status', 'HealthRollup')
 
-    # cycle-016 Phase N: System 의 raw API 풍부 필드 추가 (asset/lastreset/tpm)
+    # System 의 raw API 풍부 필드 추가 (asset/lastreset/tpm)
     tpm_modules = _safe(data, 'TrustedModules') or []
     tpm_summary = None
     if isinstance(tpm_modules, list) and tpm_modules:
@@ -1536,7 +1536,7 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
     # 2026-04-30 추가: Cisco 등 일부 BMC가 trailing whitespace 포함하는 PartNumber 반환 →
     # cross-vendor consistency 위해 strip().
     def _ne(*keys):
-        # _strip_or_none + _safe 조합 (중복 stripping 로직 3곳 → 1곳 dedup, cycle 2026-05-29)
+        # _strip_or_none + _safe 조합 (중복 stripping 로직 3곳 → 1곳 dedup)
         return _strip_or_none(_safe(data, *keys))
 
     result = {
@@ -1575,11 +1575,11 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
     }
 
     # 벤더별 OEM 확장 dispatch (helper 함수에 위임)
-    extractor = _OEM_EXTRACTORS.get(vendor)                                   # nosec rule12-r1
+    extractor = _OEM_EXTRACTORS.get(vendor)
     if extractor is not None:
-        # _extract_oem_lenovo / _extract_oem_cisco 는 chassis_data 인자 추가 (rule 96 R3 외부 계약).
-        if vendor in ('lenovo', 'cisco'):                                     # nosec rule12-r1
-            raw_oem = extractor(data, chassis_data=chassis_data)              # nosec rule12-r1
+        # _extract_oem_lenovo / _extract_oem_cisco 는 chassis_data 인자 추가.
+        if vendor in ('lenovo', 'cisco'):
+            raw_oem = extractor(data, chassis_data=chassis_data)
         else:
             raw_oem = extractor(data)
         # `_*` prefix 키 (예: `_bios_date`) 를 result hardware-level 로 끌어올린 뒤
@@ -1587,17 +1587,17 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
         result['oem'] = _hoist_oem_extras(raw_oem, result)
 
     # A1 (2026-06-04, HP CSUS 3200 사이트 사고): Chassis 폴백 — System.Manufacturer/Model
-    # 부재(None) 시 이미 fetch 한 chassis_data(상단)에서 보충. Additive only (rule 92 R2):
+    # 부재(None) 시 이미 fetch 한 chassis_data(상단)에서 보충. Additive only
     #   - result 값이 None 일 때만 발동 (정상 13 vendor 는 System.Manufacturer/Model 보유 → 미발동).
     #   - _strip_or_none 으로 '' → None 정규화 유지 (파이프라인 불변식: 빈 문자열 금지).
     #   - chassis 값이 strip 후 truthy 일 때만 대입 (None→None / ''→None 무의미 대입 방지).
     # 근거: HPE Scale-up (CSUS 3200 / Superdome Flex) RMC 는 Partition0 System.Manufacturer/
     # Model 이 비고 Chassis 에만 존재 (DMTF ComputerSystem Manufacturer/Model optional+nullable).
     #
-    # A1b (2026-06-04): System.Model 부재 시 ServiceRoot.Product(product_hint) 우선 fallback.
+    # System.Model 부재 시 ServiceRoot.Product(product_hint) 우선 fallback.
     # 근거: check_redfish (실 CSUS 3200 지원 도구) cr_module/system_chassis.py 가 동일 —
-    #   `if model is None: model = connection.root.get("Product")` (rule 96 R1-A web 검증).
-    # 사용자 CSUS 실측: ServiceRoot.Product="Compute Scale-up Server 3200" (깨끗한 모델명 —
+    # `if model is None: model = connection.root.get("Product")`.
+    # CSUS 실측: ServiceRoot.Product="Compute Scale-up Server 3200" (깨끗한 모델명 —
     # Chassis.Model 의 "... Base" 접미사보다 정확). 정상 vendor 는 System.Model 보유 → 미발동
     # (ServiceRoot.Product 가 BMC 명인 Dell/Lenovo 도 System.Model 있어 fallback 안 탐).
     if result['model'] is None and product_hint:
@@ -1628,7 +1628,7 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
       - GET {manager_uri}                            (예: /redfish/v1/Managers/1)
       - GET {manager_uri}/EthernetInterfaces (선택, BMC IP 추출)
 
-    cycle 2026-05-12 (ADR-2026-05-12): `manager_layout` 옵션 인자 추가 (Additive).
+    `manager_layout` 옵션 인자 추가 (Additive).
       - None (기본값) — 기존 동작 100% 보존. `bmc.name = bmc_names[vendor]` 통일.
       - 'rmc_primary' / 'rmc_primary_ilo_secondary' — `_classify_rmc_label` 우선 적용.
         Manager URI/ID substring (`rmc` / `pdhc` / `ilo`) 매칭 시 'RMC' / 'PDHC' / 'iLO'.
@@ -1644,19 +1644,19 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         errors.append(_err('bmc', f'BMC 수집 실패: {err or st}'))
         return {}, errors
 
-    # nosec rule12-r1: vendor → BMC 표시명 매핑 (외부 spec 기반 표준 이름)
+    # vendor → BMC 표시명 매핑 (외부 spec 기반 표준 이름)
     bmc_names = {'dell': 'iDRAC', 'hpe': 'iLO', 'lenovo': 'XCC', 'supermicro': 'BMC',
-                 'cisco': 'CIMC',                                              # nosec rule12-r1
-                 'huawei': 'iBMC', 'inspur': 'ISBMC', 'fujitsu': 'iRMC',       # nosec rule12-r1
-                 'quanta': 'BMC'}                                              # nosec rule12-r1
-    # cycle 2026-05-12 (ADR-2026-05-12): RMC primary 시스템 (HPE CSUS 3200 / Superdome Flex)
+                 'cisco': 'CIMC',
+                 'huawei': 'iBMC', 'inspur': 'ISBMC', 'fujitsu': 'iRMC',
+                 'quanta': 'BMC'}
+    # RMC primary 시스템 (HPE CSUS 3200 / Superdome Flex)
     # 라벨 분기 — manager_layout 정의 시 _classify_rmc_label 우선. None 일 때 기존 동작.
-    # cycle 2026-06-09 (review): name(label) 과 role 가 동일 id 로 분류돼 모순 불가능하도록,
+    # (review): name(label) 과 role 가 동일 id 로 분류돼 모순 불가능하도록,
     # multi 경로는 manager_id(=URI segment m['id']) 를 명시 전달 — _classify_manager_role 와
     # 동일 source. 단일 노드(manager_id=None)는 응답 body Id 사용 (기존 동작 보존).
     _mid = manager_id if manager_id is not None else _safe(data, 'Id')
     rmc_label = _classify_rmc_label(manager_uri, _mid, manager_layout, is_first)
-    # cycle-016 Phase M/N: BMC 운영 정보 강화 — datetime / dns / mac / uuid / last_reset / timezone / power_state
+    # BMC 운영 정보 강화 — datetime / dns / mac / uuid / last_reset / timezone / power_state
     result = {
         'name':             rmc_label or bmc_names.get(vendor, 'BMC'),
         'firmware_version': _safe(data, 'FirmwareVersion'),
@@ -1680,7 +1680,7 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     # 2026-04-29 cisco-critical-review: BMC NIC 의 NameServers / IPv4Addresses[*].Gateway
     # 를 envelope 비노출 임시 키 (_network_meta) 로 캐시한다. normalize_standard.yml 이
     # dns_servers / default_gateways 정규화에 사용 후 _network_meta 키 자체는 envelope
-    # 에서 제거한다 (rule 13 R5 / 22 / envelope 키 추가 금지).
+    # 에서 제거한다.
     bmc_name_servers = []
     bmc_static_name_servers = []
     bmc_gateways = []
@@ -1734,31 +1734,31 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     }
 
     # 벤더별 BMC OEM 확장 (Redfish API spec)
-    if vendor == 'hpe':                                                       # nosec rule12-r1
-        oem = _safe(data, 'Oem', 'Hpe') or _safe(data, 'Oem', 'Hp') or {}     # nosec rule12-r1
+    if vendor == 'hpe':
+        oem = _safe(data, 'Oem', 'Hpe') or _safe(data, 'Oem', 'Hp') or {}
         # 2026-04-29 raw 검증 (10.50.11.231 iLO 6 v1.73): Manager.Oem.Hpe 에 `Type`
         # 필드 부재 — 이전 매핑은 항상 null. 의미 있는 값은 Firmware.Current.VersionString.
         result['oem'] = {
             'ilo_version': (_safe(oem, 'Firmware', 'Current', 'VersionString')
                             or _safe(data, 'Model')),
         }
-    elif vendor == 'supermicro':                                              # nosec rule12-r1
-        oem = _safe(data, 'Oem', 'Supermicro') or {}                          # nosec rule12-r1
+    elif vendor == 'supermicro':
+        oem = _safe(data, 'Oem', 'Supermicro') or {}
         result['oem'] = {'bmc_ip': _safe(oem, 'BMCIPv4Address')}
         if not result['ip'] and result['oem'].get('bmc_ip'):
             result['ip'] = result['oem']['bmc_ip']
-    elif vendor == 'lenovo':                                                  # nosec rule12-r1
+    elif vendor == 'lenovo':
         # Lenovo XCC: Manager.Oem.Lenovo.release_name 등 운영 상태 메타.
         # 실측 (XCC SR650 V2, 2026-04-28): release_name="whitley_gp_23-5".
-        oem = _safe(data, 'Oem', 'Lenovo') or {}                              # nosec rule12-r1
+        oem = _safe(data, 'Oem', 'Lenovo') or {}
         result['oem'] = {'release_name': _safe(oem, 'release_name')}
-    elif vendor == 'dell':                                                    # nosec rule12-r1
-        # F50 (cycle 2026-05-06): Dell Manager.Oem.Dell.DelliDRACCard 추가.
+    elif vendor == 'dell':
+        # Dell Manager.Oem.Dell.DelliDRACCard 추가.
         # 사이트 실측 (10.100.15.27 iDRAC9 7.10.70.00): IPMIVersion / LastUpdateTime
         # / LastSystemInventoryTime / URLString 풍부.
         # source: dell.com/support/manuals/.../idrac9_*_redfishapiguide_pub
         #         (DellManager.v1_4_0 + DelliDRACCard.v1_1_0).
-        oem_dell = _safe(data, 'Oem', 'Dell', 'DelliDRACCard') or {}          # nosec rule12-r1
+        oem_dell = _safe(data, 'Oem', 'Dell', 'DelliDRACCard') or {}
         result['oem'] = {
             'idrac_ipmi_version':            _safe(oem_dell, 'IPMIVersion'),
             'idrac_last_inventory_time':     _safe(oem_dell, 'LastSystemInventoryTime'),
@@ -1802,10 +1802,10 @@ def gather_processors(bmc_ip, system_uri, username, password, timeout, verify_ss
             continue
         # 2026-04-29 raw 검증 (HPE iLO 6): SerialNumber / PartNumber 가 빈 문자열 ""
         # 반환 (BMC 한계). "" 은 의미상 None — 호출자가 truthy 비교만으로 판정 가능하도록
-        # None 으로 정규화. cycle-016 Phase N 풍부 필드는 그대로 유지.
+        # None 으로 정규화. 풍부 필드는 그대로 유지.
         # 2026-04-30: Cisco 등 trailing whitespace 정규화 추가.
         def _ne_p(*ks):
-            # _strip_or_none + _safe 조합 (중복 stripping 로직 3곳 → 1곳 dedup, cycle 2026-05-29)
+            # _strip_or_none + _safe 조합 (중복 stripping 로직 3곳 → 1곳 dedup)
             return _strip_or_none(_safe(pdata, *ks))
 
         processors.append({
@@ -1862,11 +1862,11 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         cap_int = _safe_int(cap)
         if cap_int is not None:  # Round 2 #4: 0-capacity 도 합산(no-op이나 preserve-0 일관)
             total_mib += cap_int
-        # cycle-016 Phase N: BaseModuleType / RankCount / ErrorCorrection / DataWidth 추가
+        # BaseModuleType / RankCount / ErrorCorrection / DataWidth 추가
         # Phase P: 3 채널 키 일관성 — capacity_mb (이전 capacity_mib) 로 통일
-        # 2026-04-29 fix B90: Cisco CIMC가 Manufacturer를 raw JEDEC ID '0xCExx'로 emit.
+        # 2026-04-29 Cisco CIMC가 Manufacturer를 raw JEDEC ID '0xCExx'로 emit.
         # _normalize_jedec()로 vendor 이름 정규화 (Samsung/SK hynix/Micron 등).
-        # 2026-04-29 fix B09: locator (DIMM 물리 위치) 추가 — 교체 작업 시 식별용.
+        # 2026-04-29 locator (DIMM 물리 위치) 추가 — 교체 작업 시 식별용.
         slots.append({
             'id':              _safe(mdata, 'Id'),
             'name':            _strip_or_none(_safe(mdata, 'Name')),
@@ -1938,7 +1938,7 @@ def _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout,
     # 정상 부재와 구분 불가했음.
     errors = []
     inline_ctrls = _safe(sdata, 'StorageControllers') or []
-    if isinstance(inline_ctrls, list) and inline_ctrls:  # rule 95 R1 #2: 비-list StorageControllers 방어 (Round 1 #0)
+    if isinstance(inline_ctrls, list) and inline_ctrls:  # 비-list StorageControllers 방어 (Round 1 #0)
         c = inline_ctrls[0]
         return {
             'controller_name':         _safe(c, 'Name'),
@@ -1958,7 +1958,7 @@ def _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout,
                            detail={'status_code': cst}))
         return {'controller_fetch_status': cst}, errors
     ctrl_members = _safe(ctrl_coll, 'Members') or []
-    if not isinstance(ctrl_members, list) or not ctrl_members:  # rule 95 R1 #2: 비-list 방어 (Round 2 #13)
+    if not isinstance(ctrl_members, list) or not ctrl_members:  # 비-list 방어 (Round 2 #13)
         return {}, errors
     c_uri = _safe(ctrl_members[0], '@odata.id')
     if not c_uri:
@@ -2018,7 +2018,7 @@ def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_s
     return drives, errors
 
 
-# Redfish VolumeType enum → canonical RAID level (cycle 2026-06-04 R-4 — module-level hoist)
+# Redfish VolumeType enum → canonical RAID level
 _VOLUMETYPE_RAID_MAP = {
     'NonRedundant': 'RAID0', 'Mirrored': 'RAID1',
     'StripedWithParity': 'RAID5', 'SpannedMirrors': 'RAID10',
@@ -2051,7 +2051,7 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
         member_ids = [
             d_oid.rstrip('/').rsplit('/', 1)[-1]
             for d_link in _dicts(_safe(vdata, 'Links', 'Drives'))
-            for d_oid in [_safe(d_link, '@odata.id')] if d_oid and isinstance(d_oid, str)  # rule 95: 비-str @odata.id 방어 (Round 1 #1)
+            for d_oid in [_safe(d_link, '@odata.id')] if d_oid and isinstance(d_oid, str)  # 비-str @odata.id 방어 (Round 1 #1)
         ]
         # JBOD/pass-through 필터: Non-RAID 모드에서 물리 디스크를 개별 Volume으로 노출
         vol_id = _safe(vdata, 'Id')
@@ -2061,7 +2061,7 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
         # BUG-16 fix: Volume Name / DisplayName trailing whitespace 제거 (raw 'VD_0   ' 사고)
         v_name_raw = _safe(vdata, 'Name')
         v_name = v_name_raw.strip() if isinstance(v_name_raw, str) else v_name_raw
-        # 2026-04-29 fix B48: Cisco CIMC가 Volume.Name을 빈 문자열 "" 로 emit.
+        # 2026-04-29 Cisco CIMC가 Volume.Name을 빈 문자열 "" 로 emit.
         # 호출자 친화 fallback: 'Volume {id}' 또는 '{raid_level} Volume'.
         if not v_name:
             if vol_id:
@@ -2075,8 +2075,8 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
         std_boot = _safe(vdata, 'BootVolume')
         if std_boot is not None:
             boot_volume = bool(std_boot)
-        elif _safe(vdata, 'Oem', 'Dell'):                                              # nosec rule12-r1
-            boot_volume = _safe(vdata, 'Oem', 'Dell', 'DellVolume', 'BootVolumeSource') is not None  # nosec rule12-r1
+        elif _safe(vdata, 'Oem', 'Dell'):
+            boot_volume = _safe(vdata, 'Oem', 'Dell', 'DellVolume', 'BootVolumeSource') is not None
         else:
             boot_volume = None
         volumes.append({
@@ -2128,14 +2128,14 @@ def _gather_standard_storage(bmc_ip, members, username, password, timeout, verif
     return controllers, volumes, errors
 
 
-def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):    # nosec rule12-r1
-    """HPE iLO4 SmartStorage legacy path (cycle 2026-05-07 M-I1 — Additive).
+def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
+    """HPE iLO4 SmartStorage legacy path.
 
     iLO4 (Gen8/Gen9 pre-iLO5) 펌웨어는 표준 `/Systems/{id}/Storage` 미도입,
     HPE OEM `/Systems/{id}/SmartStorage/ArrayControllers/*` + `/HostBusAdapters/*`
     경로로만 storage 정보 제공.
 
-    rule 12 R1 Allowed — HPE OEM Redfish spec 직접 의존 (SmartStorage namespace).
+    HPE OEM Redfish spec 직접 의존 (SmartStorage namespace).
     source: HPE iLO4 Redfish API guide (DSP0268 v1.5 pre-spec OEM path).
 
     Returns: (controllers: list, volumes: list, errors: list) — gather_standard_storage 와
@@ -2216,18 +2216,18 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
                 'controller_model':        _safe(ctrl_data, 'Model'),
                 'controller_firmware':     _safe(ctrl_data, 'FirmwareVersion', 'Current', 'VersionString')
                                            or _safe(ctrl_data, 'FirmwareVersion'),
-                'controller_manufacturer': _safe(ctrl_data, 'Manufacturer') or 'HPE',  # nosec rule12-r1 — SmartStorage path 은 HPE OEM legacy spec 직접 의존
+                'controller_manufacturer': _safe(ctrl_data, 'Manufacturer') or 'HPE',  # SmartStorage path 은 HPE OEM legacy spec 직접 의존
                 'controller_health':       _safe(ctrl_data, 'Status', 'Health'),
             })
     # SmartStorage 는 logical volume (LogicalDrives) 별도 경로 — iLO4 fixture 부재로
-    # 본 cycle 은 controllers + drives 만 (Additive — 향후 lab fixture 추가 시 보강)
+    # controllers + drives 만 수집 (Additive — 향후 lab fixture 추가 시 보강)
     return controllers, [], errors
 
 
 def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
     """Storage 진입 — Storage → SimpleStorage → SmartStorage fallback dispatcher.
 
-    cycle 2026-05-07 M-I1: SmartStorage (HPE iLO4) fallback chain 추가 — Additive.
+    SmartStorage (HPE iLO4) fallback chain 추가 — Additive.
     기존 Storage / SimpleStorage 분기 변경 0. SmartStorage 는 iLO4 legacy path 라
     표준 / SimpleStorage 둘 다 404 일 때만 시도.
     """
@@ -2245,13 +2245,13 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             coll = coll2
             errors.append(_err('storage', 'Storage 미지원, SimpleStorage fallback 사용'))
         else:
-            # cycle 2026-05-07 M-I1: SmartStorage (HPE iLO4 OEM legacy) fallback —
+            # SmartStorage (HPE iLO4 OEM legacy) fallback —
             # 표준/SimpleStorage 모두 404 시 HPE 구 path 시도 (Additive).
             ctrls, vols, smart_errors = _gather_smart_storage(
                 bmc_ip, system_uri, username, password, timeout, verify_ssl
             )
             if ctrls:
-                errors.append(_err('storage', 'Storage/SimpleStorage 미지원, SmartStorage (HPE OEM legacy) fallback 사용'))  # nosec rule12-r1 — SmartStorage OEM path spec
+                errors.append(_err('storage', 'Storage/SimpleStorage 미지원, SmartStorage (HPE OEM legacy) fallback 사용'))  # SmartStorage OEM path spec
                 errors.extend(smart_errors)
                 return {'controllers': ctrls, 'volumes': vols}, errors
             errors.append(_err('storage', f'Storage/SimpleStorage/SmartStorage 모두 실패: {err or st}'))
@@ -2290,7 +2290,7 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             for a in _dicts(_safe(ndata, 'IPv4Addresses'))
             if a.get('Address') not in (None, '0.0.0.0', '')
         ]
-        # 2026-04-29 fix B13: link_status enum 정규화 — Dell linkup/linkdown / HPE NoLink / Cisco Connected/Disconnected → up/down/unknown
+        # 2026-04-29 link_status enum 정규화 — Dell linkup/linkdown / HPE NoLink / Cisco Connected/Disconnected → up/down/unknown
         nics.append({
             'id': _safe(ndata, 'Id'), 'name': _safe(ndata, 'Name') or _safe(ndata, 'Id') or '',
             'mac': _safe(ndata, 'MACAddress'), 'speed_mbps': _safe_int(_safe(ndata, 'SpeedMbps')),  # Round 2 #18: mbps int 통일
@@ -2302,19 +2302,19 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
     return nics, errors
 
 
-def _detect_nic_ocp_slot(adata):                                              # nosec rule12-r1
-    """cycle 2026-05-07 M-I4: NIC OCP (Open Compute Project) mezzanine 식별.
+def _detect_nic_ocp_slot(adata):
+    """NIC OCP (Open Compute Project) mezzanine 식별.
 
     NetworkAdapter.Location.PartLocation.LocationType 또는 ServiceLabel 패턴으로
     OCP NIC 식별. 펌웨어 별 차이:
-      - iDRAC9 6.x+ : Location.PartLocation.LocationType='Slot' + ServiceLabel='OCP'
-      - iLO6+ : Oem.Hpe.Location.OCPSlot
-      - Supermicro X13+ : Location.PartLocation.LocationType='Slot' + name 'OCP*'
+      - iDRAC9 6.x+: Location.PartLocation.LocationType='Slot' + ServiceLabel='OCP'
+      - iLO6+: Oem.Hpe.Location.OCPSlot
+      - Supermicro X13+: Location.PartLocation.LocationType='Slot' + name 'OCP*'
 
     Returns: 'ocp' / 'pcie' / None (식별 불가)
 
-    rule 12 R1 Allowed — DSP0268 Location.PartLocation spec 직접 의존.
-    rule 92 R2 — Additive helper (호출자가 사용. envelope 영향 0).
+    DSP0268 Location.PartLocation spec 직접 의존.
+    Additive helper (호출자가 사용. envelope 영향 0).
     """
     if not isinstance(adata, dict):
         return None
@@ -2325,16 +2325,16 @@ def _detect_nic_ocp_slot(adata):                                              # 
     if 'OCP' in service_label or 'OCP' in name:
         return 'ocp'
     # HPE OEM fallback
-    hpe_oem = _safe(adata, 'Oem', 'Hpe') or {}                                # nosec rule12-r1
-    if _safe(hpe_oem, 'Location', 'OCPSlot') or _safe(hpe_oem, 'OCPSlot'):    # nosec rule12-r1
+    hpe_oem = _safe(adata, 'Oem', 'Hpe') or {}
+    if _safe(hpe_oem, 'Location', 'OCPSlot') or _safe(hpe_oem, 'OCPSlot'):
         return 'ocp'
     if location_type == 'slot':
         return 'pcie'
     return None
 
 
-def _detect_nic_sriov_capable(adata):                                         # nosec rule12-r1
-    """cycle 2026-05-07 M-I4: NIC SR-IOV capability 식별.
+def _detect_nic_sriov_capable(adata):
+    """NIC SR-IOV capability 식별.
 
     표준 DSP0268 v1.6+ NetworkDeviceFunctions 우선, vendor OEM fallback:
       - 표준: NetworkDeviceFunctions[*].SRIOV.SRIOVCapable
@@ -2346,8 +2346,8 @@ def _detect_nic_sriov_capable(adata):                                         # 
 
     Returns: True / False / None (미응답)
 
-    rule 12 R1 Allowed — Redfish OEM spec 직접 의존.
-    rule 92 R2 — Additive helper (envelope 영향 0).
+    Redfish OEM spec 직접 의존.
+    Additive helper (envelope 영향 0).
     """
     if not isinstance(adata, dict):
         return None
@@ -2357,13 +2357,13 @@ def _detect_nic_sriov_capable(adata):                                         # 
     if _safe(adata, 'SRIOV', 'SRIOVCapable') is True:
         return True
     # Dell OEM
-    dell_oem = _safe(adata, 'Oem', 'Dell') or {}                              # nosec rule12-r1
-    dell_sriov = _safe(dell_oem, 'NICDeviceFunctions', 'SRIOVCapable')        # nosec rule12-r1
+    dell_oem = _safe(adata, 'Oem', 'Dell') or {}
+    dell_sriov = _safe(dell_oem, 'NICDeviceFunctions', 'SRIOVCapable')
     if dell_sriov is not None:
         return bool(dell_sriov)
     # HPE OEM
-    hpe_oem = _safe(adata, 'Oem', 'Hpe') or {}                                # nosec rule12-r1
-    if _safe(hpe_oem, 'NetworkAdapter', 'SRIOVConfig'):                       # nosec rule12-r1
+    hpe_oem = _safe(adata, 'Oem', 'Hpe') or {}
+    if _safe(hpe_oem, 'NetworkAdapter', 'SRIOVConfig'):
         return True
     return None
 
@@ -2372,7 +2372,7 @@ def _normalize_wwn(value):
     """WWN(WWPN/WWNN) → 소문자 colon-grouped hex 정규화 (cross-channel 매칭 키).
 
     입력 변형 흡수: '20:00:00:24:..', '0x200000..', '200000..', None.
-    16 hex(8 octet) 가 아니면 정리본(소문자) 보존 — 날조 금지 (rule 25 R7-B).
+    16 hex(8 octet) 가 아니면 정리본(소문자) 보존 — 날조 금지.
     """
     if value is None:
         return None
@@ -2389,13 +2389,13 @@ def _normalize_wwn(value):
 def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
     """포트/디바이스펑션 → 'FibreChannel'|'FCoE'|'InfiniBand'|'Ethernet'|None.
 
-    DMTF 정본 (EXTERNAL-CONTRACTS §1/§2 — cycle 2026-05-29):
-      - FC : Port.PortProtocol(Protocol enum) ∈ {FC,FCP,FCoE}
+    DMTF 정본:
+      - FC: Port.PortProtocol(Protocol enum) ∈ {FC,FCP,FCoE}
              또는 NetworkDeviceFunction.NetDevFuncType ∈ {FibreChannel,FibreChannelOverEthernet}
-      - IB : Port.LinkNetworkTechnology=='InfiniBand' (또는 ActiveLinkTechnology)
+      - IB: Port.LinkNetworkTechnology=='InfiniBand' (또는 ActiveLinkTechnology)
              또는 NetworkDeviceFunction.NetworkDeviceTechnology=='InfiniBand'
     PortType enum 에는 FC/IB 값이 없어 사용 금지 (구 코드 dead-code 원인).
-    rule 12 R1 Allowed — DMTF Protocol/NetDevFuncType spec 직접 의존 (vendor 분기 아님).
+    DMTF Protocol/NetDevFuncType spec 직접 의존 (vendor 분기 아님).
     """
     pp = _str(port_protocol).strip().upper()
     lt = _str(link_tech).strip().lower()
@@ -2462,7 +2462,7 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl):
 
 def _make_fc_hba(adapter_id, adapter_info, port_id, cls, link_status, speed_gbps,
                  primary_addr, ndf):
-    """canonical storage.hbas[] entry 생성 (전 채널 통일 shape — EXTERNAL-CONTRACTS §1)."""
+    """canonical storage.hbas[] entry 생성 (전 채널 통일 shape)."""
     wwpn = ndf.get('wwpn') if isinstance(ndf, dict) else None
     wwnn = ndf.get('wwnn') if isinstance(ndf, dict) else None
     if not wwpn:
@@ -2489,7 +2489,7 @@ def _make_fc_hba(adapter_id, adapter_info, port_id, cls, link_status, speed_gbps
 
 
 def _make_ib_port(adapter_id, adapter_info, port_id, link_status, speed_gbps, pdata, ndf):
-    """canonical storage.infiniband[] entry 생성 (전 채널 통일 shape — EXTERNAL-CONTRACTS §2)."""
+    """canonical storage.infiniband[] entry 생성 (전 채널 통일 shape)."""
     node_guid = ndf.get('node_guid') if isinstance(ndf, dict) else None
     port_guid = ndf.get('port_guid') if isinstance(ndf, dict) else None
     if isinstance(pdata, dict):
@@ -2523,11 +2523,11 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
     Ports/NetworkPorts      → ports[]    (port-level link/speed)
     NetworkDeviceFunctions  → 식별 (FC WWPN/WWNN, IB Node/Port GUID)
 
-    분류 정본 (DMTF — cycle 2026-05-29 fix, EXTERNAL-CONTRACTS §1/§2):
-      - FC : Port.PortProtocol ∈ {FC,FCP,FCoE} 또는 NDF.NetDevFuncType=FibreChannel(OverEthernet)
-      - IB : Port.LinkNetworkTechnology=='InfiniBand' 또는 NDF.NetworkDeviceTechnology=='InfiniBand'
+    분류 정본 (DMTF):
+      - FC: Port.PortProtocol ∈ {FC,FCP,FCoE} 또는 NDF.NetDevFuncType=FibreChannel(OverEthernet)
+      - IB: Port.LinkNetworkTechnology=='InfiniBand' 또는 NDF.NetworkDeviceTechnology=='InfiniBand'
       - 구 코드의 PortType('fibrechannel'/'infiniband') 분류는 dead-code (PortType enum 에
-        FC/IB 값 없음 → 실장비 영원히 미매치). 본 cycle 에서 protocol/technology 기반으로 정정.
+        FC/IB 값 없음 → 실장비 영원히 미매치). protocol/technology 기반으로 정정.
 
     WWPN/WWNN/GUID 는 NetworkDeviceFunction 에서 추출 (Port 아님). Port 가 없는 FC/IB NDF 도
     식별만으로 emit. 일부 vendor (Cisco CIMC 등) 미지원 → 빈 결과 graceful degradation.
@@ -2572,7 +2572,7 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         model = _str(_safe(adata, 'Model')).strip()
         if port_count == 0 and not mfr and not model:
             continue
-        # 2026-04-29 fix B93: HPE iLO NetworkAdapter는 mac/link/speed 가 NetworkAdapter root에 없고
+        # 2026-04-29 HPE iLO NetworkAdapter는 mac/link/speed 가 NetworkAdapter root에 없고
         # NetworkPorts/Ports collection에만 존재. adapter level에 fold-in (첫 번째 활성 port의 메타).
         # Dell/Lenovo는 NetworkAdapter root에 정보 있어 그대로 보존.
         adapter_info = {
@@ -2583,15 +2583,15 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
             'part_number':      _safe(adata, 'PartNumber') or None,
             'serial_number':    _safe(adata, 'SerialNumber') or None,
             'firmware_version': fw_ver or None,
-            'mac':              None,  # ports fold-in으로 채워짐 (B93)
-            'link_status':      'unknown',  # 동일 (B93)
+            'mac':              None,  # ports fold-in으로 채워짐
+            'link_status':      'unknown',  # 동일
             'speed_mbps':       None,
             'port_count':       port_count,
         }
         out['adapters'].append(adapter_info)
         adapter_idx = len(out['adapters']) - 1
 
-        # NetworkDeviceFunctions — FC WWPN/WWNN + IB GUID 식별 (cycle 2026-05-29).
+        # NetworkDeviceFunctions — FC WWPN/WWNN + IB GUID 식별.
         ndfs = _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl)
         ndf_by_port = {n['port_uri']: i for i, n in enumerate(ndfs) if n.get('port_uri')}
         ndf_matched = set()
@@ -2615,14 +2615,14 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     # 속도: 신 CurrentSpeedGbps(Gbps) 우선 > 구 CurrentLinkSpeedMbps/1000 (Round 17 #3)
                     speed_gbps, speed_mbps = _normalize_port_speed(pdata)
                     assoc = _safe(pdata, 'AssociatedNetworkAddresses', default=[]) or []
-                    if not isinstance(assoc, list):  # rule 95 R1 #2: 비-list 방어 (Round 2 #14)
+                    if not isinstance(assoc, list):  # 비-list 방어 (Round 2 #14)
                         assoc = []
                     primary_addr = assoc[0] if assoc else None
                     raw_port_type = _safe(pdata, 'PortType') or ''
                     port_protocol = _safe(pdata, 'PortProtocol')
                     link_tech = (_safe(pdata, 'LinkNetworkTechnology')
                                  or _safe(pdata, 'ActiveLinkTechnology'))
-                    # 2026-04-29 fix B13: ports의 link_status도 동일 enum 정규화.
+                    # 2026-04-29 ports의 link_status도 동일 enum 정규화.
                     normalized_link = _normalize_link_status(_safe(pdata, 'LinkStatus'))
                     port_id = _safe(pdata, 'Id')
 
@@ -2650,7 +2650,7 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         'associated_address':      primary_addr,
                     }
                     out['ports'].append(port_info)
-                    # 2026-04-29 fix B93: adapter level에 ports의 첫 active 메타 fold-in.
+                    # 2026-04-29 adapter level에 ports의 첫 active 메타 fold-in.
                     # FC/IB 포트의 WWPN/GUID 는 NIC mac 이 아니므로 fold-in 제외.
                     cur = out['adapters'][adapter_idx]
                     if cur.get('mac') is None and primary_addr and cls not in ('FibreChannel', 'FCoE', 'InfiniBand'):
@@ -2722,7 +2722,7 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
         component = _safe(member, 'SoftwareId')
         if isinstance(component, str) and component.lower() == 'null':
             component = None
-        # 2026-04-29 fix B43: Lenovo XCC pending firmware (BMC-Primary-Pending, UEFI-Pending)는
+        # 2026-04-29 Lenovo XCC pending firmware (BMC-Primary-Pending, UEFI-Pending)는
         # version=null + ID에 'Pending' 포함. version=null만으로는 호출자가 단순 누락인지 의도된
         # pending 인지 모름 → pending 메타필드 추가 (정책: pending=true이고 version=null은 정상,
         # pending=false이고 version=null은 데이터 누락).
@@ -2741,7 +2741,7 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
 def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
     """DMTF 2020.4 (Redfish 1.13+) PowerSubsystem fallback parser.
 
-    cycle 2026-05-01: 신 펌웨어 (HPE iLO 6 / Lenovo XCC2-3 / Dell iDRAC9 5.x+ /
+    신 펌웨어 (HPE iLO 6 / Lenovo XCC2-3 / Dell iDRAC9 5.x+ /
     Supermicro X14+) 가 /Power 대신 /PowerSubsystem 응답. 기본 PSU 정보는 공통.
     PowerControl 같은 system-level metric 은 PowerSubsystem 에 직접 없고
     EnvironmentMetrics 로 분리됨 — 본 fallback 은 PSU info 만 매핑 (호출자 envelope
@@ -2760,7 +2760,7 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     if psu_link:
         st_c, coll, _err_c = _get(bmc_ip, _p(psu_link), username, password, timeout, verify_ssl)
         if st_c == 200:
-            for member in _capped(_dicts(_safe(coll, 'Members')), 'power', errors):  # Round 4 비-list 방어 + cycle 2026-06-09 DoS 상한 (sibling 일관)
+            for member in _capped(_dicts(_safe(coll, 'Members')), 'power', errors):  # Round 4 비-list 방어 + DoS 상한 (sibling 일관)
                 m_uri = _safe(member, '@odata.id')
                 if not m_uri:
                     continue
@@ -2792,7 +2792,7 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
         'max_consumed_watts':    None,
     } if psus else None
 
-    # F05 (cycle 2026-05-01): DMTF 2020.4 EnvironmentMetrics fallback —
+    # DMTF 2020.4 EnvironmentMetrics fallback —
     # PowerSubsystem 신 schema는 system-level metric을 EnvironmentMetrics 로 분리.
     # source: redfish.dmtf.org/schemas/v1/EnvironmentMetrics.v1_3_0.json (2020.4)
     # PowerWatts.Reading / ReadingRangeMin/Max 가 PowerControl 대응.
@@ -2816,8 +2816,8 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     return {'power_supplies': psus, 'power_control': power_control}, errors
 
 
-def _merge_power_dual(legacy_result, subsystem_result):    # nosec rule12-r1
-    """cycle 2026-05-07 M-I2: Power (deprecated) + PowerSubsystem dual-emit dedup.
+def _merge_power_dual(legacy_result, subsystem_result):
+    """Power (deprecated) + PowerSubsystem dual-emit dedup.
 
     DSP0268 v1.13+ 이전/이후 펌웨어가 dual emit 하는 환경 (iDRAC9 5.x / iLO5-6 /
     XCC3 / Supermicro X12-X14) 에서 PowerSupplies 중복 제거.
@@ -2828,7 +2828,7 @@ def _merge_power_dual(legacy_result, subsystem_result):    # nosec rule12-r1
     표준에는 system-level metric 없고 EnvironmentMetrics 로 분리됨 — legacy 가
     더 풍부).
 
-    rule 92 R2: 입력 dict shape 유지 — `power_supplies` + `power_control` 키만.
+    입력 dict shape 유지 — `power_supplies` + `power_control` 키만.
     호출자 envelope 영향 0.
 
     Returns: merged dict (power_supplies + power_control).
@@ -2862,13 +2862,13 @@ def _merge_power_dual(legacy_result, subsystem_result):    # nosec rule12-r1
 def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
     """Chassis/{id}/Power — PSU 정보. chassis_uri는 detect_vendor()에서 전달.
 
-    cycle 2026-05-01: /Power 404 시 /PowerSubsystem fallback (DMTF 2020.4 신 schema).
+    /Power 404 시 /PowerSubsystem fallback (DMTF 2020.4 신 schema).
     Storage SimpleStorage fallback 패턴 따름 (gather_storage 참조).
 
-    cycle 2026-05-07 M-I2: dual-emit dedup helper (_merge_power_dual) 추가 (Additive).
+    dual-emit dedup helper (_merge_power_dual) 추가 (Additive).
     현재 dispatcher 는 404 fallback only — dual emit 펌웨어 (iDRAC9 5.x / iLO5-6
     등) 의 PSU 중복 처리는 향후 adapter capability `power_strategy=dual` 활성화
-    시 본 helper 호출 (현 cycle 은 사이트 검증 4 vendor 영향 0 위해 wire 보류).
+    시 본 helper 호출 (현재는 사이트 검증 4 vendor 영향 0 위해 wire 보류).
     """
     errors = []
     if not chassis_uri:
@@ -2878,7 +2878,7 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
     power_path = _p(chassis_uri) + '/Power'
     st, pdata, perr = _get(bmc_ip, power_path, username, password, timeout, verify_ssl)
 
-    # cycle 2026-05-01: 404 = 신 펌웨어 가능 → PowerSubsystem fallback
+    # 404 = 신 펌웨어 가능 → PowerSubsystem fallback
     if st == 404:
         return _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
 
@@ -2939,17 +2939,17 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
 
 
 def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
-    """Chassis/{id}/Thermal — 온도 센서 + 팬 정보 (cycle 2026-06-09, ADR-2026-06-09).
+    """Chassis/{id}/Thermal — 온도 센서 + 팬 정보.
 
     gather_power 패턴 mirror. /Thermal (legacy) 404 시 /ThermalSubsystem fallback
     (DMTF 2020.4 / Redfish 1.13+ 신 schema). HPE Compute Scale-up Server 3200 /
     Superdome Flex 의 multi-chassis 환경에서 chassis 별 Thermal 수집 — 설명 모델
     ("각 chassis 는 Power 와 Thermal 리소스를 둔다") 요구.
 
-    source (rule 96 R1-A):
+    source:
       - DMTF DSP0266 Thermal.v1 (legacy) + ThermalSubsystem.v1_0 (2020.4)
       - HPE Superdome Flex Admin Guide (chassis Thermal 표준 Redfish)
-    lab 부재 — 사이트 실측 시 정정 의무 (NEXT_ACTIONS).
+    lab 부재 — 사이트 실측 시 정정 의무.
 
     Returns: (data_dict, errors_list)  — 빈 {} 시 Thermal 미지원 (graceful).
     """
@@ -2968,7 +2968,7 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
         return {}, [_err('thermal', f'Thermal 정보 실패: {terr or st}')]
 
     temps = []
-    for t in _dicts(_safe(tdata, 'Temperatures')):  # 비-list/dict 방어 (rule 95 R1 #2)
+    for t in _dicts(_safe(tdata, 'Temperatures')):  # 비-list/dict 방어
         temps.append({
             'name':             _safe(t, 'Name'),
             'reading_celsius':  _safe_int(_safe(t, 'ReadingCelsius')),  # str '42' 방어
@@ -2994,7 +2994,7 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
 
 
 def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
-    """DMTF 2020.4 ThermalSubsystem fallback — /Thermal 404 시 (cycle 2026-06-09).
+    """DMTF 2020.4 ThermalSubsystem fallback — /Thermal 404 시.
 
     ThermalMetrics.TemperatureReadingsCelsius[] + Fans 컬렉션. _gather_power_subsystem
     패턴 mirror.
@@ -3046,14 +3046,14 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
 
 
 def gather_boot(bmc_ip, system_uri, username, password, timeout, verify_ssl):
-    """Systems/{id} Boot 객체 → 부팅 순서 + override 설정 (cycle 2026-06-09).
+    """Systems/{id} Boot 객체 → 부팅 순서 + override 설정.
 
     설명 모델 요구 — "각 Systems/<id> (nPartition) 는 ... 부팅 순서 ... 를 포함".
     기존 gather_system 은 boot_progress (BootProgress.LastState) 만 추출 — 본 함수는
     Boot.BootOrder / BootSourceOverride* 를 별도 수집해 multi_node.partitions[].boot
     로 노출 (Additive — 단일 노드 path / 13 vendor 영향 0).
 
-    source (rule 96 R1-A): DMTF DSP0266 ComputerSystem.Boot (BootOrder /
+    source: DMTF DSP0266 ComputerSystem.Boot (BootOrder /
       BootSourceOverrideTarget / BootSourceOverrideEnabled)
     Returns: (data_dict, errors_list)  — 빈 {} 시 Boot 미노출 (graceful).
     """
@@ -3063,7 +3063,7 @@ def gather_boot(bmc_ip, system_uri, username, password, timeout, verify_ssl):
     st, sdata, serr = _get(bmc_ip, _p(system_uri), username, password, timeout, verify_ssl)
     if serr or st != 200:
         # System GET 실패는 gather_system 이 이미 errors[] 에 보고 — boot 는 보조 정보라
-        # silent (중복 error noise → status 오분류 방지). cycle 2026-06-09 self-review.
+        # silent (중복 error noise → status 오분류 방지). self-review.
         return {}, []
     boot = _safe(sdata, 'Boot')
     if not isinstance(boot, dict):  # Boot 미노출 / 비-dict 오염 방어
@@ -3084,7 +3084,7 @@ def gather_boot(bmc_ip, system_uri, username, password, timeout, verify_ssl):
 def _is_404_only_error(errs):
     """모든 errors가 'HTTP 404' 시그널이면 True (endpoint 자체 부재 = capability 미지원).
 
-    cycle 2026-05-01: 404 = "endpoint 없음 = vendor/펌웨어 미지원" — errors[] 노이즈
+    404 = "endpoint 없음 = vendor/펌웨어 미지원" — errors[] 노이즈
     분리. 5xx / timeout / 401 / 403 과 분리해 'unsupported' 시그널로 분류.
     """
     if not errs:
@@ -3107,8 +3107,8 @@ def _is_404_only_error(errs):
 def _make_section_runner(all_errors, collected, failed, unsupported=None):
     """섹션 collector wrapper — 예외/errors 누적 + collected/failed/unsupported 추적.
 
-    rule 60: stacktrace는 stderr console verbose에만, errors[]에는 type+message만.
-    cycle 2026-05-01: 404 시그널은 unsupported list로 분리 (endpoint 부재 = capability 미지원).
+    stacktrace는 stderr console verbose에만, errors[]에는 type+message만.
+    404 시그널은 unsupported list로 분리 (endpoint 부재 = capability 미지원).
     호환성: unsupported 인자 미전달 시 기존 동작 유지 (back-compat).
     """
     def _run(section, fn, *args):
@@ -3138,14 +3138,14 @@ def _make_section_runner(all_errors, collected, failed, unsupported=None):
 
 
 def gather_manager_logs(bmc_ip, manager_uri, username, password, timeout, verify_ssl):
-    """Managers/{id}/LogServices → 로그 서비스 목록 (cycle 2026-06-09).
+    """Managers/{id}/LogServices → 로그 서비스 목록.
 
     설명 모델 요구 — "RMC 는 ... Services 와 Logs 리소스로 연결된다". 본 함수는
     LogServices 컬렉션 메타(각 LogService 의 id/name/정책)를 수집해
     multi_node.managers[].log_services 로 노출 (Additive — 단일 노드 path /
     13 vendor 영향 0). 로그 엔트리 자체(대용량)는 수집하지 않음 — 범위 외.
 
-    source (rule 96 R1-A): DMTF DSP0266 LogService / LogServiceCollection
+    source: DMTF DSP0266 LogService / LogServiceCollection
     Returns: (list_of_log_services, errors_list)  — 빈 [] 시 LogServices 미노출.
     """
     errors = []
@@ -3154,7 +3154,7 @@ def gather_manager_logs(bmc_ip, manager_uri, username, password, timeout, verify
     st, mdata, merr = _get(bmc_ip, _p(manager_uri), username, password, timeout, verify_ssl)
     if merr or st != 200:
         # Manager GET 실패는 gather_bmc 가 이미 errors[] 에 보고 — log_services 는 보조
-        # 정보라 silent (중복 error noise 차단). cycle 2026-06-09 self-review.
+        # 정보라 silent (중복 error noise 차단). self-review.
         return [], []
     ls_link = _safe(mdata, 'LogServices', '@odata.id')
     if not ls_link:
@@ -3184,12 +3184,12 @@ def gather_manager_logs(bmc_ip, manager_uri, username, password, timeout, verify
 
 def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
                           timeout, verify_ssl, manager_layout=None):
-    """모든 Managers Member 별 gather_bmc 호출 (cycle 2026-05-12 / ADR-2026-05-12).
+    """모든 Managers Member 별 gather_bmc 호출.
 
     HPE CSUS 3200 / Superdome Flex 의 RMC + per-chassis PDHC + per-node iLO5 전수 수집.
     `manager_layout` 으로 `bmc.name` 라벨 분기 (RMC / PDHC / iLO).
 
-    rule 92 R2 Additive only — 기존 `gather_bmc` 함수 변경 0. 다른 vendor 영향 0
+    Additive only — 기존 `gather_bmc` 함수 변경 0. 다른 vendor 영향 0
     (이 함수는 manager_layout 정의된 vendor 만 호출).
 
     Returns: {'managers': [{id, uri, role, bmc, log_services}], 'errors': [...]}
@@ -3205,7 +3205,7 @@ def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
     # Round 16: multi-node 멤버 순회도 _capped DoS 상한 적용 (file 전역 컨벤션 일관 —
     # account/logs/composition/fabrics 와 동일). 실 BMC 멤버 수 << 상한 → 정상 결과 불변.
     for idx, m in enumerate(_capped(members, 'multi_node.managers', out['errors'])):
-        # cycle 2026-06-09 (review): 첫 Manager 만 layout-default RMC/primary (다중 RMC
+        # (review): 첫 Manager 만 layout-default RMC/primary (다중 RMC
         # 오라벨 + name/role 불일치 차단). substring 매치(rmc/pdhc/ilo)는 position 무관.
         is_first = (idx == 0)
         bmc_data, bmc_errs = gather_bmc(
@@ -3214,7 +3214,7 @@ def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
             manager_layout=manager_layout, is_first=is_first,
             manager_id=m['id'],  # role 와 동일 id source (name/role 모순 차단 — review)
         )
-        # cycle 2026-06-09: Manager LogServices 수집 (설명 모델 "Services 와 Logs").
+        # Manager LogServices 수집 (설명 모델 "Services 와 Logs").
         logs_data, logs_errs = gather_manager_logs(
             bmc_ip, m['uri'], username, password, timeout, verify_ssl)
         out['managers'].append({
@@ -3233,11 +3233,11 @@ def _summarize_partition_disks(physical_disks):
     """physical_disks[] → storage.summary {groups, grand_total_gb} (per-partition).
 
     top-level normalize_standard.yml 의 _rf_summary_storage 와 동일 grouping 규칙
-    (단위용량 × media × protocol × model). cycle 2026-05-29.
+    (단위용량 × media × protocol × model)..
     """
     groups, seen, total = [], {}, 0
     for d in (physical_disks or []):
-        cap_mb = _safe_int(d.get('total_mb'), 0)  # rule 95 R1 #7: 펌웨어가 str 반환 시 str//int crash 방어
+        cap_mb = _safe_int(d.get('total_mb'), 0)  # 펌웨어가 str 반환 시 str//int crash 방어
         cap_gb = cap_mb // MIB_PER_GIB if cap_mb else 0
         if cap_gb <= 0:
             continue
@@ -3258,7 +3258,7 @@ def _summarize_partition_disks(physical_disks):
 def _normalize_storage_raw(raw):
     """raw gather_storage {controllers, volumes} → canonical storage section.
 
-    cycle 2026-05-29: multi_node.partitions[].storage 가 raw 로 노출되던 문제 해소.
+    multi_node.partitions[].storage 가 raw 로 노출되던 문제 해소.
     top-level normalize_standard.yml(Ansible) 과 동일 canonical shape 를 Python 에서 생성
     (multi_node 전용 parallel — 두 경로 모두 같은 schema 보장). hbas/infiniband 는 chassis
     레벨 NetworkAdapter 소관이라 partition storage 에는 빈 list (Additive 자리만 유지).
@@ -3266,7 +3266,7 @@ def _normalize_storage_raw(raw):
     raw = raw if isinstance(raw, dict) else {}
     controllers_out, physical, seen = [], [], set()
     for ctrl in (raw.get('controllers') or []):
-        if not isinstance(ctrl, dict):  # rule 95 R1 #2: 비-dict controller 방어 (Round 1 #2)
+        if not isinstance(ctrl, dict):  # 비-dict controller 방어 (Round 1 #2)
             continue
         drives_out = []
         for drv in (ctrl.get('drives') or []):
@@ -3321,7 +3321,7 @@ def _normalize_storage_raw(raw):
 def _normalize_network_raw(raw_nics):
     """raw gather_network (NIC list) → canonical network section (per-partition).
 
-    cycle 2026-05-29: multi_node.partitions[].network 가 list 로 노출되던 schema 불일치
+    multi_node.partitions[].network 가 list 로 노출되던 schema 불일치
     해소 (top-level network 와 동일 dict shape). normalize_standard.yml interfaces 로직 parallel.
     """
     nics = raw_nics if isinstance(raw_nics, list) else []
@@ -3356,13 +3356,13 @@ def _normalize_network_raw(raw_nics):
 def _normalize_cpu_raw(procs):
     """raw gather_processors (list) → canonical cpu section (per-partition).
 
-    cycle 2026-05-29: top-level normalize_standard.yml 의 B01 필터 + 합산 + summary 와
+    top-level normalize_standard.yml 의 필터 + 합산 + summary 와
     동일 결과를 Python 에서 생성 (multi_node.partitions[].cpu 일관성).
     """
     procs = procs if isinstance(procs, list) else []
     cpus = [p for p in procs if isinstance(p, dict)
             and (str(p.get('processor_type') or '').strip().upper() in ('CPU', 'CORE', ''))]
-    cores = sum(_safe_int(p.get('total_cores'), 0) for p in cpus)  # rule 95 R1 #7: 비-숫자 cores str 방어
+    cores = sum(_safe_int(p.get('total_cores'), 0) for p in cpus)  # 비-숫자 cores str 방어
     threads = sum(_safe_int(p.get('total_threads'), 0) for p in cpus)
     models = [p.get('model') for p in cpus if p.get('model')]
     speeds = [p.get('speed_mhz') for p in cpus if p.get('speed_mhz')]
@@ -3371,7 +3371,7 @@ def _normalize_cpu_raw(procs):
     groups, seen = [], {}
     for p in cpus:
         m = p.get('model') or 'unknown'
-        tc = _safe_int(p.get('total_cores'), 0)  # rule 95 R1 #7: grouping 도 동일 방어
+        tc = _safe_int(p.get('total_cores'), 0)  # grouping 도 동일 방어
         if m in seen:
             g = groups[seen[m]]
             g['sockets'] += 1
@@ -3397,7 +3397,7 @@ def _normalize_cpu_raw(procs):
 def _normalize_memory_raw(raw_mem):
     """raw gather_memory {total_mib, slots} → canonical memory section (per-partition).
 
-    cycle 2026-05-29: top-level normalize_standard.yml _rf_summary_memory 와 동일 grouping.
+    top-level normalize_standard.yml _rf_summary_memory 와 동일 grouping.
     """
     raw_mem = raw_mem if isinstance(raw_mem, dict) else {}
     slots = raw_mem.get('slots') or []
@@ -3406,7 +3406,7 @@ def _normalize_memory_raw(raw_mem):
     for s in slots:
         if not isinstance(s, dict):
             continue
-        cap_mb = _safe_int(s.get('capacity_mb') or s.get('capacity_mib'), 0)  # rule 95 R1 #7: '8GB' 등 단위문자열 방어
+        cap_mb = _safe_int(s.get('capacity_mb') or s.get('capacity_mib'), 0)  # '8GB' 등 단위문자열 방어
         if cap_mb <= 0:
             continue
         cap_gb = cap_mb // MIB_PER_GIB
@@ -3432,11 +3432,11 @@ def _normalize_memory_raw(raw_mem):
 
 def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
                          timeout, verify_ssl, chassis_uri=None):
-    """모든 Systems Member 별 gather_system + per-partition summary (cycle 2026-05-12).
+    """모든 Systems Member 별 gather_system + per-partition summary.
 
     nPartition 환경 — 각 Partition 별 cpu / memory / storage / network 모두 수집.
 
-    cycle 2026-05-29: storage/network 를 canonical shape 로 정규화 (구: raw 노출).
+    storage/network 를 canonical shape 로 정규화 (구: raw 노출).
     storage = {controllers, physical_disks, logical_volumes, hbas, infiniband, summary};
     network = {dns_servers, default_gateways, interfaces, adapters, ports, summary}.
 
@@ -3459,20 +3459,20 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
         mem_data, mem_errs = gather_memory(bmc_ip, m['uri'], *creds)
         sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds)
         net_data, net_errs = gather_network(bmc_ip, m['uri'], *creds)
-        # cycle 2026-06-09: per-partition boot order (설명 모델 "부팅 순서").
+        # per-partition boot order (설명 모델 "부팅 순서").
         boot_data, boot_errs = gather_boot(bmc_ip, m['uri'], *creds)
         out['partitions'].append({
             'id':         m['id'],
             'system_uri': m['uri'],
             'system':     sys_data,
-            # cycle 2026-05-29: per-partition 전 섹션 canonical 정규화.
+            # per-partition 전 섹션 canonical 정규화.
             # 구: cpu=raw list / memory=raw dict / storage=raw / network=raw list
             #     → normalize 누락 (top-level 과 shape 불일치 + network 가 list).
             'cpu':        _normalize_cpu_raw(cpu_data),
             'memory':     _normalize_memory_raw(mem_data),
             'storage':    _normalize_storage_raw(sto_data),
             'network':    _normalize_network_raw(net_data),
-            # cycle 2026-06-09: boot order (Additive — Boot 미노출 시 {}).
+            # boot order (Additive — Boot 미노출 시 {}).
             'boot':       boot_data,
         })
         out['errors'].extend(sys_errs)
@@ -3486,7 +3486,7 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
 
 def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
                          timeout, verify_ssl):
-    """모든 Chassis Member 별 hardware + power 수집 (cycle 2026-05-12).
+    """모든 Chassis Member 별 hardware + power 수집.
 
     Base / Expansion / Compute Module 구분 + ChassisType 표준 fallback.
 
@@ -3509,13 +3509,13 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
         if not get_ok:
             out['errors'].append(_err('multi_node.chassis',
                 f"Chassis {m['id']} GET 실패: {cerr or cst}"))
-            # cycle 2026-06-09: append-on-fail — GET 실패해도 멤버는 노출한다.
+            # append-on-fail — GET 실패해도 멤버는 노출한다.
             # gather_systems_multi / gather_managers_multi 와 일관 (구: continue 로 drop
             # → chassis_count 가 collection 멤버 수보다 작게 under-report 되는 불일치).
-        if not isinstance(cdata, dict):  # 비-dict 응답 오염 방어 (rule 95 R1 #2)
+        if not isinstance(cdata, dict):  # 비-dict 응답 오염 방어
             cdata = {}
         kind = _classify_chassis_kind(m['uri'], m['id'], cdata)
-        # cycle 2026-06-09 (review): chassis GET 성공 시에만 Power/Thermal sub-GET.
+        # (review): chassis GET 성공 시에만 Power/Thermal sub-GET.
         # 실패 chassis 에 doomed sub-GET (2 round-trip) + 중복 error noise 차단 — 멤버는
         # append (chassis_count 보존). 설명 모델 "Power 와 Thermal".
         if get_ok:
@@ -3535,7 +3535,7 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
             'serial_number': _safe(cdata, 'SerialNumber'),
             'part_number':   _safe(cdata, 'PartNumber'),
             'power':         pwr_data,
-            # cycle 2026-06-09: thermal (Additive — Thermal 미노출 시 {}).
+            # thermal (Additive — Thermal 미노출 시 {}).
             'thermal':       thm_data,
         })
         out['errors'].extend(pwr_errs)
@@ -3544,7 +3544,7 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
 
 
 def gather_composition_service(bmc_ip, service_root, username, password, timeout, verify_ssl):
-    """CompositionService + ResourceBlocks 수집 (cycle 2026-06-09, ADR-2026-06-09).
+    """CompositionService + ResourceBlocks 수집.
 
     설명 모델 요구 — HPE CSUS 3200 nPartition 은 표준 Redfish Composition Service 로
     구성된다. 각 ResourceBlock 은 하나의 chassis 에 대응하고 CPU/DIMM 을 포함하며,
@@ -3553,11 +3553,11 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
     multi_node.composition (Additive — manager_layout 정의 vendor 만 호출).
     CompositionService 링크 부재 시 None (graceful — 대다수 vendor 는 미노출).
 
-    source (rule 96 R1-A):
+    source:
       - DMTF DSP0266 CompositionService / ResourceBlock
         (redfish.dmtf.org/schemas/v1/ResourceBlock.json)
       - HPE Compute Scale-up Server 3200 Administration Guide (nPartition = ResourceBlock 조합)
-    lab 부재 — 사이트 실측 시 정정 의무 (NEXT_ACTIONS).
+    lab 부재 — 사이트 실측 시 정정 의무.
 
     Returns: (dict_or_None, errors_list)
     """
@@ -3609,14 +3609,14 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                     'composition_state':    _safe(bd, 'CompositionStatus', 'CompositionState'),
                     # 표준 ResourceBlock = Processors/Memory idRef 배열 (DMTF). 비-표준
                     # collection-link(dict) 펌웨어면 0 으로 under-count — lab 부재, 사이트
-                    # fixture 확인 시 정정 (NEXT_ACTIONS C9, rule 96 R1-A).
+                    # fixture 확인 시 정정.
                     'processor_count':      len(_dicts(_safe(bd, 'Processors'))),
                     'memory_count':         len(_dicts(_safe(bd, 'Memory'))),
                     'chassis':              chassis_links,
                     'computer_systems':     systems_links,
                 })
     return {
-        # cycle 2026-06-09 (review): 비-dict/null 200 body 는 enabled=None (정직한 unknown).
+        # (review): 비-dict/null 200 body 는 enabled=None (정직한 unknown).
         # dict 면 ServiceEnabled 누락 시 DMTF 관례상 True. sibling gather_manager_logs 와 정합.
         'enabled':              (bool(comp.get('ServiceEnabled', True)) if isinstance(comp, dict) else None),
         'state':                _safe(comp, 'Status', 'State'),
@@ -3627,10 +3627,10 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
 
 
 def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify_ssl, errors, kind):
-    """Fabric 의 Switches / Endpoints 컬렉션 멤버 수집 helper (cycle 2026-06-09).
+    """Fabric 의 Switches / Endpoints 컬렉션 멤버 수집 helper.
 
     kind='switch' → SwitchType / Status. kind='endpoint' → EndpointProtocol / Status.
-    source (rule 96 R1-A): DMTF DSP0266 Switch / Endpoint.
+    source: DMTF DSP0266 Switch / Endpoint.
     """
     if not coll_uri:
         return []
@@ -3665,7 +3665,7 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
 
 
 def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl):
-    """Fabrics + FlexGrid (Switches/Endpoints) 수집 (cycle 2026-06-09, ADR-2026-06-09).
+    """Fabrics + FlexGrid (Switches/Endpoints) 수집.
 
     설명 모델 요구 — HPE CSUS 3200 은 NUMAlink fabric 을 표준 Redfish Fabric 모델로
     표현하며, FlexGrid Flex Fabric 은 Switches 와 Endpoints 를 사용한다 (Links/Zones 미사용).
@@ -3673,10 +3673,10 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
     multi_node.fabrics (Additive — manager_layout 정의 vendor 만 호출). Fabrics 링크
     부재 시 None (graceful).
 
-    source (rule 96 R1-A):
+    source:
       - DMTF DSP0266 Fabric / Switch / Endpoint
       - HPE Compute Scale-up Server 3200 architecture (NUMAlink / FlexGrid)
-    lab 부재 — 사이트 실측 시 정정 의무 (NEXT_ACTIONS).
+    lab 부재 — 사이트 실측 시 정정 의무.
 
     Returns: (list_of_fabrics_or_None, errors_list)
     """
@@ -3721,7 +3721,7 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
 def _collect_multi_node_topology(bmc_ip, vendor, service_root,
                                  username, password, timeout, verify_ssl,
                                  manager_layout=None):
-    """Multi-node topology 전수 수집 (cycle 2026-05-12 / ADR-2026-05-12).
+    """Multi-node topology 전수 수집.
 
     `manager_layout` 미정의 (None) 시 None 반환 — 기존 13 vendor 영향 0.
     HPE CSUS 3200 (`rmc_primary`) / Superdome Flex (`rmc_primary_ilo_secondary`) 만 활성.
@@ -3756,7 +3756,7 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
     chs_result = gather_chassis_multi(
         bmc_ip, chassis_uri_coll, username, password, timeout, verify_ssl,
     )
-    # cycle 2026-06-09: CompositionService/ResourceBlocks + Fabrics/FlexGrid 수집
+    # CompositionService/ResourceBlocks + Fabrics/FlexGrid 수집
     # (설명 모델 요구). ServiceRoot 에 링크 부재 시 None (graceful — Additive).
     composition, comp_errs = gather_composition_service(
         bmc_ip, service_root, username, password, timeout, verify_ssl,
@@ -3769,7 +3769,7 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
     managers   = mgr_result.get('managers')   or []
     chassis    = chs_result.get('chassis')    or []
 
-    representative = partitions[0].get('id') if partitions else None  # rule 95 R1 #2: 방어적 .get (id 누락 KeyError 회피)
+    representative = partitions[0].get('id') if partitions else None  # 방어적 .get (id 누락 KeyError 회피)
     rb_count = composition.get('resource_block_count', 0) if isinstance(composition, dict) else 0
     return {
         'enabled': True,
@@ -3779,14 +3779,14 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
             'manager_count':             len(managers),
             'chassis_count':             len(chassis),
             'representative_partition':  representative,
-            # cycle 2026-06-09: composition / fabric 규모 (Additive 신 키)
+            # composition / fabric 규모 (Additive 신 키)
             'resource_block_count':      rb_count,
             'fabric_count':              len(fabrics) if isinstance(fabrics, list) else 0,
         },
         'partitions': partitions,
         'managers':   managers,
         'chassis':    chassis,
-        # cycle 2026-06-09: 신 컨테이너 (None = ServiceRoot 미노출 — Additive).
+        # 신 컨테이너 (None = ServiceRoot 미노출 — Additive).
         'composition': composition,
         'fabrics':     fabrics,
         'errors': (
@@ -3804,12 +3804,12 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                           all_errors, collected, failed, unsupported=None,
                           manager_layout=None, product_hint=None):
     """9개 섹션 dispatch (system / bmc / processors / memory / storage / network /
-    firmware / power / network_adapters[P4]).
+    firmware / power / network_adapters).
 
-    cycle 2026-05-01: unsupported list 추가 — 404 응답 섹션을 별도 분류
+    unsupported list 추가 — 404 응답 섹션을 별도 분류
     (capability 미지원 = noise 아님).
 
-    cycle 2026-05-12 (ADR-2026-05-12): `manager_layout` 옵션 인자 추가 (Additive).
+    `manager_layout` 옵션 인자 추가 (Additive).
     None 시 기존 동작 100% 보존. RMC primary adapter 만 `gather_bmc` 라벨 분기 활성.
     """
     _run = _make_section_runner(all_errors, collected, failed, unsupported)
@@ -3823,7 +3823,7 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         'network':           _run('network',    gather_network,    bmc_ip, system_uri,          *creds),
         'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds),
         'power':             _run('power',      gather_power,      bmc_ip, chassis_uri,         *creds),
-        # P4 (cycle 2026-04-28): NIC 카드 + port-level + FC HBA / InfiniBand 분류
+        # NIC 카드 + port-level + FC HBA / InfiniBand 분류
         'network_adapters':  _run('network_adapters',
                                    gather_network_adapters_chassis,
                                    bmc_ip, chassis_uri, *creds),
@@ -3833,7 +3833,7 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
 def _compute_final_status(collected, failed, errors=None):
     """collected / failed list → final_status (success / partial / failed).
 
-    cycle 2026-04-30: errors[]에 인증 실패 (HTTP 401/403) 흔적 발견 시 'failed' 강제.
+    errors[]에 인증 실패 (HTTP 401/403) 흔적 발견 시 'failed' 강제.
     이전 동작은 1개 섹션이라도 collected에 들어가면 'partial' 반환 — try_one_account
     loop가 'partial'을 success로 판정해 두 번째 자격증명으로 fallback 안 함 (Dell vault
     accounts 순서 사고). 인증 자체가 거부된 상태에서 partial로 emit하면 호출자도
@@ -3861,31 +3861,31 @@ def _compute_final_status(collected, failed, errors=None):
     return 'success', clean
 
 
-# ── P2 (cycle 2026-04-28): AccountService — 공통계정 자동 생성/복구 ──────────
-# vendor 분기는 Redfish API spec OEM namespace 의존 (rule 96 R1 외부 계약).
-# Dell  : slot 기반 PATCH (/Accounts/{N}, N=1..17). POST 미지원
+# ── AccountService — 공통계정 자동 생성/복구 ──────────
+# vendor 분기는 Redfish API spec OEM namespace 의존.
+# Dell: slot 기반 PATCH (/Accounts/{N}, N=1..17). POST 미지원
 # HPE / Lenovo / Supermicro: POST /Accounts 표준
-# Cisco : AccountService 표준 미지원 (errors[]에 not_supported 기록 후 종료)
+# Cisco: AccountService 표준 미지원 (errors[]에 not_supported 기록 후 종료)
 
-# rule 95 R1 #4 (debugging visibility — cycle 2026-05-07 Phase H 보강):
+# (debugging visibility 보강):
 # vendor → 신규 계정 생성 strategy 매핑 (account_service_provision 분기 정본).
 # 본 dict 는 코드 분기를 변경하지 않음 — 의도 가시화 + log/도구가 사용.
 # source: 사이트 실측 + Dell SWC0296 + Cisco CIMC 사이트 실측 (10.100.15.2).
-_ACCOUNT_CREATE_STRATEGY = {                                                   # nosec rule12-r1
-    'dell':       'patch_slot',     # nosec rule12-r1 — PATCH /Accounts/{N=2..17}
-    'hpe':        'post_standard',  # nosec rule12-r1 — POST /AccountService/Accounts
-    'lenovo':     'post_standard',  # nosec rule12-r1
-    'supermicro': 'post_standard',  # nosec rule12-r1
-    'cisco':      'post_id_role_remap',  # nosec rule12-r1 — POST + Id 1-15 + RoleId enum remap
-    'huawei':     'post_standard',  # nosec rule12-r1 — lab 부재 / web sources
-    'inspur':     'post_standard',  # nosec rule12-r1
-    'fujitsu':    'post_standard',  # nosec rule12-r1
-    'quanta':     'post_standard',  # nosec rule12-r1
+_ACCOUNT_CREATE_STRATEGY = {
+    'dell':       'patch_slot',  # PATCH /Accounts/{N=2..17}
+    'hpe':        'post_standard',  # POST /AccountService/Accounts
+    'lenovo':     'post_standard',
+    'supermicro': 'post_standard',
+    'cisco':      'post_id_role_remap',  # POST + Id 1-15 + RoleId enum remap
+    'huawei':     'post_standard',  # lab 부재 / web sources
+    'inspur':     'post_standard',
+    'fujitsu':    'post_standard',
+    'quanta':     'post_standard',
 }
 
 
 def _account_create_method_for_vendor(vendor):
-    """vendor → 신규 계정 생성 strategy 이름 (rule 95 R1 #4 debugging helper).
+    """vendor → 신규 계정 생성 strategy 이름.
 
     실제 분기는 account_service_provision() 본문 inline if/elif 가 수행.
     본 함수는 가시성 / 로깅 / 도구 (-vvv 시 정상 어떻게 분기될지) 용도.
@@ -3913,7 +3913,7 @@ def account_service_get(bmc_ip, username, password, timeout, verify_ssl):
         errors.append(_err('account_service', 'GET Accounts 컬렉션 실패', detail=err or f'HTTP {code}'))
         return root_data, [], errors
     members = _safe(acc_coll, 'Members', default=[]) or []
-    if not isinstance(members, list):  # rule 95 R1 #2: 비-list Members → 빈 계정 (Round 1 #25)
+    if not isinstance(members, list):  # 비-list Members → 빈 계정 (Round 1 #25)
         members = []
     accounts = []
     for m in _capped(members, 'account_service', errors):  # Round 6 #8: 무경계 계정 순회 DoS 방어
@@ -3945,7 +3945,7 @@ def account_service_find_user(accounts, target_username):
 def account_service_find_empty_slot(accounts, skip_slot_ids=None):
     """빈 사용자 슬롯 검색 (Dell PATCH 패턴). UserName='' 인 첫 슬롯 반환.
 
-    F49 (cycle 2026-05-01): skip_slot_ids 파라미터 추가 — vendor 별 reserved
+    skip_slot_ids 파라미터 추가 — vendor 별 reserved
     slot 회피. Dell iDRAC9: slot 1 = anonymous reserved (UserName='', Enabled=false,
     PATCH 거부 → recovered=False). 호출자가 ['1'] 전달 시 슬롯 1 건너뛰고 2..N 에서
     빈 슬롯 검색. 다 차있으면 None.
@@ -4019,15 +4019,15 @@ def account_service_provision(
         bmc_ip, current_username, current_password, timeout, verify_ssl
     )
 
-    # F50 (cycle 2026-05-06): Cisco AccountService 실 지원 확인 (10.100.15.2 사이트 실측).
-    # 이전: not_supported 분기 (cycle 2026-04-29 잘못된 결론 — Members=1 만 보고 미지원 분류).
+    # Cisco AccountService 실 지원 확인 (10.100.15.2 사이트 실측).
+    # 이전: not_supported 분기.
     # 신: 표준 POST 지원하나 Id 필드 명시 필수 (1-15) + RoleId Cisco-specific enum
     #     ('admin'/'user'/'readonly'/'SNMPOnly' — 'Administrator' 거부).
     # source: 사이트 실측 (10.100.15.2 CIMC AccountService.v1_6_0,
     #         POST /Accounts {Id:'2', RoleId:'admin'} → HTTP 201 + 인증 200).
     # cisco 분기는 아래 신규 생성 단계에서 POST body 변형으로 처리.
 
-    # F13 (cycle 2026-05-01): Cisco 외 vendor도 일부 펌웨어가 AccountService 404
+    # Cisco 외 vendor도 일부 펌웨어가 AccountService 404
     # 응답 가능 (lab 부재 펌웨어 / 펌웨어 hot-fix 시 변동). errs가 404-only 시
     # 'not_supported' 분류 + errors[]에 noise 안 만듦 (Additive — 기존 cisco
     # 분기 + 일반 404 graceful).
@@ -4050,7 +4050,7 @@ def account_service_provision(
         out['slot_uri'] = existing.get('slot_uri')
         if dryrun:
             return out
-        # F50 phase 4 (cycle 2026-05-06): full body PATCH 의무 (Password + Enabled +
+        # full body PATCH 의무 (Password + Enabled +
         # Locked + RoleId 항상 함께). 사이트 실측 (10.50.11.232 Lenovo XCC):
         # password 단독 PATCH 시 권한 cache 손상 (RoleId='Administrator' 표시되지만
         # /Managers AccessDenied). full body PATCH 시 권한 유지 정상.
@@ -4064,7 +4064,7 @@ def account_service_provision(
         # Round 15 fix: Cisco CIMC 는 RoleId 표준 enum ('Administrator') 거부 →
         # vendor enum ('admin'/'user'/'readonly') remap (POST/DELETE+POST 경로와 일관).
         # 미적용 시 PATCH 기존 사용자 HTTP 400 + fallback 미도달. source: 사이트 실측 10.100.15.2.
-        if vendor == 'cisco':                                                  # nosec rule12-r1
+        if vendor == 'cisco':
             cisco_role_map = {'Administrator': 'admin', 'Operator': 'user',
                               'ReadOnly': 'readonly'}
             body_full['RoleId'] = cisco_role_map.get(target_role, 'admin')
@@ -4091,7 +4091,7 @@ def account_service_provision(
                 detail=err or f'HTTP {code}',
             ))
             return out
-        # F50 phase 4: PATCH 후 실 인증 verify — silent fail / 권한 cache 손상 감지.
+        # PATCH 후 실 인증 verify — silent fail / 권한 cache 손상 감지.
         # 1차 verify: 새 자격으로 /Systems GET. 401 이면 권한 손상.
         # fallback: DELETE + POST 재생성 (Lenovo XCC 권한 cache 클린 상태 보장).
         verify_code, _, verify_err = _get(
@@ -4111,11 +4111,11 @@ def account_service_provision(
             f'DELETE+POST 재생성 fallback 시도 (slot={existing.get("id")})',
             detail=verify_err or f'verify HTTP {verify_code}',
         ))
-        if vendor == 'dell':                                                   # nosec rule12-r1
+        if vendor == 'dell':
             # Dell PATCH-only — DELETE + POST 미지원
             out['errors'].append(_err(
                 'account_service',
-                'Dell iDRAC PATCH-only — DELETE+POST fallback 미지원 (수동 복구 필요)',  # nosec rule12-r1
+                'Dell iDRAC PATCH-only — DELETE+POST fallback 미지원 (수동 복구 필요)',
             ))
             return out
         # DELETE 시도
@@ -4138,7 +4138,7 @@ def account_service_provision(
             'Enabled':  True,
             'RoleId':   target_role,
         }
-        if vendor == 'cisco':                                                  # nosec rule12-r1
+        if vendor == 'cisco':
             cisco_role_map = {'Administrator': 'admin', 'Operator': 'user',
                               'ReadOnly': 'readonly'}
             body_post['RoleId'] = cisco_role_map.get(target_role, 'admin')
@@ -4160,8 +4160,8 @@ def account_service_provision(
         return out
 
     # 3) 신규 생성 — vendor 분기 (Dell=slot PATCH, 그 외=POST)
-    if vendor == 'dell':                                                      # nosec rule12-r1
-        # F49 (cycle 2026-05-06): Dell iDRAC9 사이트 실측 사고 매트릭스.
+    if vendor == 'dell':
+        # Dell iDRAC9 사이트 실측 사고 매트릭스.
         # 1. slot 1 = anonymous reserved (UserName='', Enabled=false). PATCH 거부.
         # 2. UserName + Password + Enabled + RoleId 동시 PATCH 시 HTTP 200 응답
         #    하지만 BMC 가 password 가 Security Strengthen Policy 미충족이면 silent
@@ -4175,7 +4175,7 @@ def account_service_provision(
         )
         if not empty_slots:
             out['errors'].append(_err(
-                'account_service', 'Dell iDRAC 빈 슬롯 없음 — 사용자 정리 필요',  # nosec rule12-r1
+                'account_service', 'Dell iDRAC 빈 슬롯 없음 — 사용자 정리 필요',
             ))
             return out
         out['method']   = 'patch_empty_slot'
@@ -4200,7 +4200,7 @@ def account_service_provision(
                 last_code = code
                 out['errors'].append(_err(
                     'account_service',
-                    f'Dell PATCH 빈 슬롯 실패 (slot={slot.get("id")}) — '            # nosec rule12-r1
+                    f'Dell PATCH 빈 슬롯 실패 (slot={slot.get("id")}) — '
                     f'다음 빈 슬롯으로 retry',
                     detail=err or f'HTTP {code}',
                 ))
@@ -4217,7 +4217,7 @@ def account_service_provision(
             # silent fail 감지 — slot cleanup (UserName 비우기) 후 다음 슬롯으로
             out['errors'].append(_err(
                 'account_service',
-                f'Dell PATCH 200 응답이지만 인증 실패 (slot={slot.get("id")}, '       # nosec rule12-r1
+                f'Dell PATCH 200 응답이지만 인증 실패 (slot={slot.get("id")}, '
                 f'verify HTTP {verify_code}) — Password 가 Security Strengthen '
                 f'Policy 미충족 가능. vault password 강화 필요 (15자 이상 권장).',
                 detail=verify_err or f'verify HTTP {verify_code}',
@@ -4232,15 +4232,15 @@ def account_service_provision(
         if not out['recovered']:
             out['errors'].append(_err(
                 'account_service',
-                f'Dell PATCH 모든 빈 슬롯 실패 (시도={len(empty_slots[:3])})',         # nosec rule12-r1
+                f'Dell PATCH 모든 빈 슬롯 실패 (시도={len(empty_slots[:3])})',
                 detail=last_err or f'HTTP {last_code}',
             ))
         return out
 
-    # F50 (cycle 2026-05-06): Cisco CIMC POST 변형 — Id 필드 + RoleId enum mapping.
+    # Cisco CIMC POST 변형 — Id 필드 + RoleId enum mapping.
     # source: 사이트 실측 — POST /Accounts 가 'Id' 1-15 필수 (BadRequest if absent),
     #   RoleId 표준 enum 'Administrator' 거부 → Cisco enum 'admin'/'user'/'readonly'.
-    if vendor == 'cisco':                                                     # nosec rule12-r1
+    if vendor == 'cisco':
         out['method'] = 'post_new'
         if dryrun:
             return out
@@ -4261,7 +4261,7 @@ def account_service_provision(
         if target_id is None:
             out['errors'].append(_err(
                 'account_service',
-                'Cisco CIMC: 빈 Account Id (2-15) 없음 — 사용자 정리 필요',  # nosec rule12-r1
+                'Cisco CIMC: 빈 Account Id (2-15) 없음 — 사용자 정리 필요',
             ))
             return out
         body_cisco = {
@@ -4281,13 +4281,13 @@ def account_service_provision(
         else:
             out['errors'].append(_err(
                 'account_service',
-                f'Cisco POST /AccountService/Accounts 실패 (Id={target_id})',  # nosec rule12-r1
+                f'Cisco POST /AccountService/Accounts 실패 (Id={target_id})',
                 detail=err or f'HTTP {code}',
             ))
         return out
 
     # HPE / Lenovo / Supermicro: POST 표준 + vendor-specific fallback retries.
-    # F49 (cycle 2026-05-01): 펌웨어별 호환성 강화 (web research 2026-05-01).
+    # 펌웨어별 호환성 강화 (web research 2026-05-01).
     # source: HPE iLO5/6 docs (Oem.Hpe.Privileges 가능, RoleId 만으로도 충분),
     #   Lenovo XCC docs (PasswordChangeRequired 선택적, 미설정 시 default false),
     #   Supermicro Redfish User Guide (RoleId Administrator/Operator/ReadOnly,
@@ -4314,7 +4314,7 @@ def account_service_provision(
     # 2차 retry: 400/405 — Lenovo PasswordChangeRequired 명시 (일부 XCC 펌웨어 요구)
     # source: pubs.lenovo.com/xcc-restapi/create_an_account_post (PasswordChangeRequired
     #   default true → 호출자가 false 로 명시해야 즉시 사용 가능).
-    if code in (400, 405):                                                    # nosec rule12-r1
+    if code in (400, 405):
         body_lenovo = dict(body_base, PasswordChangeRequired=False)
         code2, resp2, err2 = _post(
             bmc_ip, 'AccountService/Accounts', body_lenovo,
@@ -4326,14 +4326,14 @@ def account_service_provision(
             out['errors'].append(_err(
                 'account_service',
                 'POST 1차 실패 → PasswordChangeRequired:false 추가 후 retry 성공 '
-                '(Lenovo XCC password policy)',  # nosec rule12-r1
+                '(Lenovo XCC password policy)',
             ))
             return out
         # 3차 retry: HPE Oem.Hpe.Privileges (HPE iLO 일부 펌웨어가 RoleId 단독 거부 보고).
         # source: HewlettPackard/ilo-rest-api-docs add_user_account.py.
-        if vendor == 'hpe':                                                   # nosec rule12-r1
+        if vendor == 'hpe':
             body_hpe = dict(body_base)
-            body_hpe['Oem'] = {'Hpe': {'Privileges': {'LoginPriv': True,    # nosec rule12-r1
+            body_hpe['Oem'] = {'Hpe': {'Privileges': {'LoginPriv': True,
                                                       'RemoteConsolePriv': True,
                                                       'UserConfigPriv': True,
                                                       'VirtualMediaPriv': True,
@@ -4348,7 +4348,7 @@ def account_service_provision(
                 out['slot_uri']  = _str(_safe(resp3, '@odata.id')) or None  # Round 11 #6
                 out['errors'].append(_err(
                     'account_service',
-                    'POST 1차 실패 → Oem.Hpe.Privileges 추가 후 retry 성공',  # nosec rule12-r1
+                    'POST 1차 실패 → Oem.Hpe.Privileges 추가 후 retry 성공',
                 ))
                 return out
             err = err3 or err
@@ -4374,17 +4374,17 @@ def main():
             password        = dict(type='str',  required=True, no_log=True),
             timeout         = dict(type='int',  default=30),
             verify_ssl      = dict(type='bool', default=False),
-            # P2 (cycle 2026-04-28): AccountService 통합
+            # AccountService 통합
             mode            = dict(type='str',  default='gather',
                                    choices=['gather', 'account_provision']),
             target_username = dict(type='str',  default=''),
             target_password = dict(type='str',  default='', no_log=True),
             target_role     = dict(type='str',  default='Administrator'),
             dryrun          = dict(type='bool', default=True),
-            # cycle 2026-05-12 (ADR-2026-05-12): HPE CSUS 3200 / Superdome Flex
+            # HPE CSUS 3200 / Superdome Flex
             # RMC primary 멀티-노드 토폴로지 수집 활성. adapter `vendor_notes.manager_layout`
             # 을 detect_vendor.yml → collect_standard.yml → 본 모듈까지 전달.
-            # None 시 기존 13 vendor 영향 0 (Additive only — rule 92 R2).
+            # None 시 기존 13 vendor 영향 0 (Additive only).
             #   Allowed values: None / 'rmc_primary' / 'rmc_primary_ilo_secondary'
             manager_layout  = dict(type='str',  default=None, required=False),
         ),
@@ -4399,7 +4399,7 @@ def main():
     timeout, verify_ssl = p['timeout'], p['verify_ssl']
     mode = p['mode']
 
-    # ── P2: AccountService provision mode ────────────────────────────────
+    # ── AccountService provision mode ────────────────────────────────
     if mode == 'account_provision':
         target_username = p['target_username']
         target_password = p['target_password']
@@ -4429,10 +4429,10 @@ def main():
         )
         return
 
-    # ── 기존 gather mode (cycle 2026-05-01: unsupported 분류 추가) ──────
+    # ── 기존 gather mode ──────
     all_errors, collected, failed, unsupported = [], [], [], []
 
-    # cycle 2026-05-12 (ADR-2026-05-12): manager_layout (adapter capability) 수신.
+    # manager_layout (adapter capability) 수신.
     # None 시 기존 13 vendor 영향 0 (Additive).
     manager_layout = p.get('manager_layout') or None
 
@@ -4441,11 +4441,11 @@ def main():
     )
     all_errors.extend(det_errors)
 
-    # T-01 (cycle 2026-05-11): ServiceRoot 무인증 응답에서 adapter selection 용 facts 추출.
+    # ServiceRoot 무인증 응답에서 adapter selection 용 facts 추출.
     # detect_vendor.yml 의 probe 단계 (무인증) 에서 data.bmc/data.system 가 empty 이면
     # adapter_loader 가 priority 만으로 선택 — vendor-specific generation 정확 매칭 불가.
     # probe_facts 가 model_hint/firmware_hint/manager_type 을 제공해 adapter 선택 정확도 보강.
-    # rule 96 R1-B Additive only — envelope shape 신 키 추가는 본 probe 경로 한정 +
+    # Additive only — envelope shape 신 키 추가는 본 probe 경로 한정 +
     # 호출자 시스템 (Jenkins downstream) 은 본 키 모름 → 파싱 변경 0.
     probe_facts = _extract_probe_facts(service_root, vendor)
 
@@ -4462,11 +4462,11 @@ def main():
         username, password, timeout, verify_ssl,
         all_errors, collected, failed, unsupported,
         manager_layout=manager_layout,
-        # A1b (2026-06-04): ServiceRoot.Product 를 hardware.model fallback 로 전달 (check_redfish 동일).
+        # (2026-06-04): ServiceRoot.Product 를 hardware.model fallback 로 전달 (check_redfish 동일).
         product_hint=_safe(service_root, 'Product'),
     )
 
-    # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 정의 vendor 만 multi_node 수집.
+    # manager_layout 정의 vendor 만 multi_node 수집.
     # None / 미정의 vendor — 13 vendor 영향 0 (Additive only).
     multi_node = _collect_multi_node_topology(
         bmc_ip, vendor, service_root,

@@ -1,14 +1,14 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: HPE / Hewlett Packard Enterprise
 # Firmware: iLO 5 — 2.x (2.10+ ~ 2.99+)
 # Generation: ilo5
 # Generation Year: "2017-2022 (ProLiant Gen10 / Gen10 Plus)"
 # Redfish Introduction: "DSP0268 v1.4+"
 # Origin: HPE iLO 5 Redfish API documentation
-# Last sync: 2026-05-11 (M-H2 — capability + Oem.Hpe + SmartStorage dual 보강)
+# Last sync: 2026-05-11 (capability + Oem.Hpe + SmartStorage dual 보강)
 # Notes: ProLiant Gen10/Gen10 Plus (DL360 Gen10 / DL380 Gen10 / ML350 Gen10 등). Redfish 1.x 표준 호환.
-# Sources (rule 96 R1-A — lab 부재):
+# Sources (lab 부재):
 #   - https://hewlettpackard.github.io/ilo-rest-api-docs/ilo5/
 #   - https://servermanagementportal.ext.hpe.com/docs/redfishservices/ilos/ilo5/
 #   - https://techlibrary.hpe.com/docs/iLO/ilo5_RESTfulAPI_GettingStarted.pdf
@@ -22,13 +22,13 @@
 #   - 일부 펌웨어 (Redfish 1.17.0 등)는 HTTP 406 (Accept 헤더 명시 요구)
 #   - precheck/redfish_gather에 Accept/OData-Version/User-Agent 헤더 명시 fix
 #     (commit 4715bb5b 적용)
-# Tested against: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json + tests/evidence/ 참조
-# Next action: lab 도입 후 별도 cycle (Gen10 Plus 와 Gen10 응답 차이 확정)
+# 검증 기준: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json 참조
+# Next action: lab 도입 후 Gen10 Plus 와 Gen10 응답 차이 확정
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_ilo5
 channel: redfish
 priority: 90
-# priority 차등 (NEXT_ACTIONS T3-02): iLO 6 (100) > iLO 5 (90) > iLO 4 (50) > generic (10).
+# priority 차등: iLO 6 (100) > iLO 5 (90) > iLO 4 (50) > generic (10).
 # 동일 firmware_patterns 미매치 + vendor만 일치하는 부정확 응답 시 최신 세대가 우선.
 
 match:
@@ -59,7 +59,7 @@ normalize:
 credentials:
   profile: "hpe"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/hpe.yml accounts 의 label 과 매핑
+  # AccountService 진입점 — vault/redfish/hpe.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: hpe_fallback, role: recovery }
     - { vault_label: hpe_current,  role: recovery }

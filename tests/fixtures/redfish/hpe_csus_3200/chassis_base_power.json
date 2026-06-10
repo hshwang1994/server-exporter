@@ -4,7 +4,7 @@
   "@odata.type": "#Power.v1_7_1.Power",
   "Id": "Power",
   "Name": "CSUS 3200 Base Chassis Power",
-  "_note": "lab 부재 — DMTF Power.v1 합성 (baseline 정합). rule 96 R1-A.",
+  "_note": "lab 부재 — DMTF Power.v1 합성 (baseline 정합).",
   "PowerSupplies": [
     {"Name": "HpeServerPowerSupply", "Model": "P52600-B21", "SerialNumber": "5XLCSUS0001", "Manufacturer": "LTEON", "PowerCapacityWatts": 1600, "FirmwareVersion": "2.10", "Status": {"Health": "OK", "State": "Enabled"}},
     {"Name": "HpeServerPowerSupply", "Model": "P52600-B21", "SerialNumber": "5XLCSUS0002", "Manufacturer": "LTEON", "PowerCapacityWatts": 1600, "FirmwareVersion": "2.10", "Status": {"Health": "OK", "State": "Enabled"}}

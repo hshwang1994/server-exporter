@@ -12,18 +12,18 @@
     _rf_d_network: "{{ _rf_raw_collect.data.network     | default([]) }}"
     _rf_d_firmware: "{{ _rf_raw_collect.data.firmware    | default([]) }}"
     _rf_d_power:   "{{ _rf_raw_collect.data.power       | default(none) }}"
-    # P4 (cycle 2026-04-28): NetworkAdapters / Ports / FC HBA / InfiniBand
+    # NetworkAdapters / Ports / FC HBA / InfiniBand
     _rf_d_netad:   "{{ _rf_raw_collect.data.network_adapters | default({'adapters':[],'ports':[],'fc_hbas':[],'infiniband':[]}) }}"
   no_log: true
 
-# 2026-04-29 fix B01: ProcessorType=='CPU' 필터링 — Dell r760 Tesla T4 같은 GPU/Accelerator/FPGA/DSP가
+# ProcessorType=='CPU' 필터링 — Dell r760 Tesla T4 같은 GPU/Accelerator/FPGA/DSP가
 # /Systems/.../Processors/ 컬렉션에 함께 노출되는 경우 cpu.summary.groups + cpu.sockets/cores 가 잘못
 # 합산되는 문제 방어. ProcessorType이 None/빈 값이면 legacy BMC 호환성을 위해 CPU 로 간주.
 #
-# F02 (cycle 2026-05-01): Redfish 2024.x 신 enum 'Core' (logical processor) 통과 추가.
+# Redfish 2024.x 신 enum 'Core' (logical processor) 통과 추가.
 # source: redfish.dmtf.org/schemas/v1/Processor.v1_20_0.json — ProcessorType enum 확장.
-# Accelerator/GPU/FPGA/DSP 는 여전히 제외 (B01 의도 유지).
-- name: "redfish | normalize_standard | filter procs to CPU only (B01)"
+# Accelerator/GPU/FPGA/DSP 는 여전히 제외 (CPU-only 필터 의도 유지).
+- name: "redfish | normalize_standard | filter procs to CPU only"
   ansible.builtin.set_fact:
     _rf_d_cpus: >-
       {%- set out = [] -%}
@@ -224,14 +224,14 @@
       {{ out }}
   no_log: true
 
-# ── P3 (cycle 2026-04-28): Group Summary 계산 ────────────────────────────────
+# ── Group Summary 계산 ────────────────────────────────
 # Memory / Disk / CPU / Network 의 단위용량 × 수량 × 그룹총량 + 전체 총량 형식.
-# Fragment 철학 (rule 22): 각 gather 가 자기 섹션 안의 summary 만 채운다.
+# Fragment 철학: 각 gather 가 자기 섹션 안의 summary 만 채운다.
 
 - name: "redfish | normalize_standard | compute group summaries"
   ansible.builtin.set_fact:
-    # cycle-016 Phase M: cpu.summary.groups 강화 — manufacturer / max_speed_mhz / architecture 추가
-    # 2026-04-29 fix B01: _rf_d_cpus 사용 (위 단계에서 ProcessorType=='CPU'만 필터링됨).
+    # cpu.summary.groups — manufacturer / max_speed_mhz / architecture 포함
+    # _rf_d_cpus 사용 (위 단계에서 ProcessorType=='CPU'만 필터링됨).
     _rf_summary_cpu: >-
       {%- set ns = namespace(groups=[], seen={}) -%}
       {%- for p in (_rf_d_cpus | default([])) -%}
@@ -253,7 +253,7 @@
         {%- endif -%}
       {%- endfor -%}
       {{ {'groups': ns.groups} }}
-    # cycle-016 Phase L: groups 에 speed_mhz / manufacturer / part_number 추가 (사용자 "부실" 피드백)
+    # groups 에 speed_mhz / manufacturer / part_number 포함
     _rf_summary_memory: >-
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
       {%- for s in (_rf_d_memory.slots | default([])) -%}
@@ -277,7 +277,7 @@
         {%- endif -%}
       {%- endfor -%}
       {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
-    # cycle-016 Phase L: storage groups 에 model 추가 (디스크 모델 분류)
+    # storage groups 에 model 포함 (디스크 모델 분류)
     _rf_summary_storage: >-
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
       {%- for d in (_rf_norm_physical_disks | default([])) -%}
@@ -299,8 +299,8 @@
         {%- endif -%}
       {%- endfor -%}
       {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
-    # cycle-016 Phase M: network.summary 강화 — adapter_count / port_count / primary_speed_mbps 추가
-    # 2026-04-29 lenovo-critical-review: link_type 정규화 — NetworkAdapter ports 의 PortType
+    # network.summary — adapter_count / port_count / primary_speed_mbps 포함
+    # link_type 정규화 — NetworkAdapter ports 의 PortType
     # (Ethernet/FibreChannel/InfiniBand) 을 mac 기반 매칭. 미매칭/PortType 빈값 시 'ethernet'
     # 기본값 (host EthernetInterface 는 Ethernet). 이전 코드는 항상 None 하드코딩.
     _rf_summary_network: >-
@@ -344,7 +344,7 @@
         'port_count': (_rf_norm_interfaces | default([])) | length,
         'primary_speed_mbps': ns.primary_sp
       } }}
-    # cycle-016 Phase M: firmware 의 category 분류 (id/name 기반 inference)
+    # firmware 의 category 분류 (id/name 기반 inference)
     _rf_firmware_categorized: >-
       {%- set out = [] -%}
       {%- for fw in (_rf_d_firmware | default([])) -%}
@@ -353,7 +353,6 @@
         {%- set lid = (fid ~ '|' ~ fname) | lower -%}
         {%- set cat = 'other' -%}
         {%- if 'bios' in lid -%}{%- set cat = 'bios' -%}
-        {# nosec rule12-r1: firmware id substring 매칭 (Redfish firmware naming, vendor 분기 아님) #}
         {%- elif 'idrac' in lid or 'ilo' in lid or 'xcc' in lid or 'cimc' in lid or 'bmc' in lid -%}{%- set cat = 'bmc' -%}
         {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid -%}{%- set cat = 'nic' -%}
         {%- elif 'raid' in lid or 'perc' in lid or 'megaraid' in lid -%}{%- set cat = 'storage_controller' -%}
@@ -370,8 +369,7 @@
         {%- set _ = out.append(fw | combine({'category': cat})) -%}
       {%- endfor -%}
       {{ out }}
-    # cycle-016 Phase M: power.summary — psu_count / total_capacity_w / redundancy
-    # 2026-04-29 fix B58 + B59:
+    # power.summary — psu_count / total_capacity_w / redundancy
     #   - critical_count / unhealthy_count / health_rollup 추가 (운영 PSU Critical 알람 노출)
     #   - capacity_unknown_count: PSU.PowerCapacityWatts=null인 슬롯 수 분리 (None 무시 합산)
     _rf_power_summary: >-
@@ -416,10 +414,10 @@
   ansible.builtin.set_fact:
     _rf_collected_raw:    "{{ (_rf_raw_collect.collected | default([])) | to_json | from_json }}"
     _rf_failed_raw:       "{{ (_rf_raw_collect.failed_sections | default([])) | to_json | from_json }}"
-    # cycle 2026-05-01: redfish_gather 모듈이 emit 하는 unsupported_sections (404 only)
+    # redfish_gather 모듈이 emit 하는 unsupported_sections (404 only)
     _rf_unsupported_raw:  "{{ (_rf_raw_collect.unsupported_sections | default([])) | to_json | from_json }}"
     # processors → cpu, storage/network direct, firmware/power direct
-    # P4 (cycle 2026-04-28): network_adapters → network (NetworkAdapters/Ports 데이터는 network 섹션 안 sub-key)
+    # network_adapters → network (NetworkAdapters/Ports 데이터는 network 섹션 안 sub-key)
     _rf_proc_map:
       processors:        cpu
       storage:           storage
@@ -446,7 +444,7 @@
         uptime_seconds: null
         selinux:        null
         fqdn:           "{{ _rf_d_system.hostname | default(none) }}"
-      # cycle-016 Phase N: hardware 의 raw API 풍부 필드 추가 (asset_tag/system_type/part_number/last_reset/tpm)
+      # hardware 의 raw API 풍부 필드 (asset_tag/system_type/part_number/last_reset/tpm)
       hardware:
         vendor:       "{{ _rf_d_system.manufacturer | default(none) }}"
         model:        "{{ _rf_d_system.model        | default(none) }}"
@@ -454,8 +452,8 @@
         uuid:         "{{ _rf_d_system.uuid         | default(none) }}"
         sku:          "{{ _rf_d_system.sku           | default(none) }}"
         bios_version: "{{ _rf_d_system.bios_version | default(none) }}"
-        # BUG-12 fix: 표준 Redfish System schema 는 BIOS ReleaseDate 미제공.
-        # 2026-04-29 hpe-critical-review: redfish_gather.py _hoist_oem_extras 가 vendor
+        # 표준 Redfish System schema 는 BIOS ReleaseDate 미제공.
+        # redfish_gather.py _hoist_oem_extras 가 vendor
         # extractor 의 `_bios_date` 키를 result.bios_date 로 끌어올림 (HPE: Oem.Hpe.Bios.
         # Current.Date / Dell: Oem.Dell.DellSystem.BIOSReleaseDate). 우선순위:
         # 1) hoisted system.bios_date  2) Dell-only legacy oem.bios_release_date.
@@ -471,10 +469,10 @@
         oem:          "{{ _rf_d_system.oem          | default({}) }}"
       bmc: "{{ _rf_d_bmc_clean }}"
       cpu:
-        # 2026-04-29 fix B01: cpu top-level 도 ProcessorType=='CPU' 만 사용 (GPU 합산 차단).
+        # cpu top-level 도 ProcessorType=='CPU' 만 사용 (GPU 합산 차단).
         # _rf_d_cpus 는 위 Jinja2 for-loop 필터(ProcessorType in CPU/CORE/'')로 GPU/Accelerator 배제한 결과.
         sockets:         "{{ _rf_d_cpus | length if _rf_d_cpus else (_rf_d_system.cpu_summary | default({})).count | default(none) }}"
-        # BUG-13 fix: per-processor TotalCores/TotalThreads sum 이 0/None 이면
+        # per-processor TotalCores/TotalThreads sum 이 0/None 이면
         # System.ProcessorSummary.CoreCount / LogicalProcessorCount fallback.
         # 일부 펌웨어/세대에서 per-processor 응답에 TotalThreads 가 누락되는 케이스 방어.
         cores_physical: >-
@@ -520,7 +518,7 @@
         controllers:     "{{ _rf_norm_controllers }}"
         logical_volumes: "{{ _rf_norm_logical_volumes }}"
         summary: "{{ _rf_summary_storage | default({'groups': [], 'grand_total_gb': 0}) }}"
-        # P4 (cycle 2026-04-28): NetworkDeviceFunctions PortType 기반 분류
+        # NetworkDeviceFunctions PortType 기반 분류
         hbas:        "{{ _rf_d_netad.fc_hbas    | default([]) }}"
         infiniband:  "{{ _rf_d_netad.infiniband | default([]) }}"
       network:
@@ -528,7 +526,7 @@
         default_gateways: "{{ _rf_norm_gateways }}"
         interfaces:       "{{ _rf_norm_interfaces }}"
         summary: "{{ _rf_summary_network | default({'groups': []}) }}"
-        # P4 (cycle 2026-04-28): NetworkAdapters / NetworkPorts
+        # NetworkAdapters / NetworkPorts
         adapters:    "{{ _rf_d_netad.adapters | default([]) }}"
         ports:       "{{ _rf_d_netad.ports    | default([]) }}"
       firmware: "{{ _rf_firmware_categorized | default(_rf_d_firmware) }}"
@@ -538,10 +536,10 @@
         {%- else -%}
           {{ none }}
         {%- endif -%}
-      # cycle 2026-05-12 (ADR-2026-05-12): HPE CSUS 3200 / Superdome Flex RMC primary
+      # HPE CSUS 3200 / Superdome Flex RMC primary
       # 멀티-노드 토폴로지 수집 결과 (Additive 신 키). manager_layout 미정의 vendor 는
       # None — `data.multi_node = null` 로 envelope 에 emit (13 vendor 영향 0).
-      # rule 13 R5 envelope 13 필드 shape 변경 0 + rule 92 R2 Additive only + rule 96 R1-B.
+      # envelope 13 필드 shape 변경 0 + Additive only.
       multi_node: "{{ _rf_raw_collect.multi_node | default(none) }}"
     _sections_supported_fragment: >-
       {{ ['hardware','bmc','cpu','memory','storage','network','firmware','power'] }}
@@ -562,7 +560,7 @@
         {%- if mapped not in out -%}{%- set _ = out.append(mapped) -%}{%- endif -%}
       {%- endfor -%}
       {{ out }}
-    # cycle 2026-05-01: 404 only 섹션은 'unsupported' 분류 (errors[] 노이즈 차단)
+    # 404 only 섹션은 'unsupported' 분류 (errors[] 노이즈 차단)
     _sections_unsupported_fragment: >-
       {%- set out = [] -%}
       {%- set pmap = _rf_proc_map -%}
@@ -571,7 +569,7 @@
         {%- if mapped not in out -%}{%- set _ = out.append(mapped) -%}{%- endif -%}
       {%- endfor -%}
       {{ out }}
-    # rule 22 R8 — list 타입 강제. `>-` multi-block + 다중 {{ }} 분기는 Ansible
+    # list 타입 강제 (Fragment 변수 타입 규약). `>-` multi-block + 다중 {{ }} 분기는 Ansible
     # folded scalar 에서 string-coerce 위험이 있어 단일 expression 으로 단순화.
     # source contract: redfish_gather module 의 errors 는 list of dicts. 비정상
     # 경로는 빈 list 로 drop — receiving side (merge_fragment) 가드가 처리.

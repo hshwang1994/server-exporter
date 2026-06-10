@@ -36,7 +36,7 @@
         {%- endif -%}
       {%- endfor -%}
       {{ out }}
-    # cycle-016 (2026-04-29): default 메시지에 채널/IP 컨텍스트 포함 — "수집 실패" 단독 회피
+    # default 메시지에 채널/IP 컨텍스트 포함 — "수집 실패" 단독 회피
     _norm_errors:
       - section:  "{{ _fail_error_section | default('gather') }}"
         message: >-

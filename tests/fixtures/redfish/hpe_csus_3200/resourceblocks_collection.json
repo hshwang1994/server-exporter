@@ -3,7 +3,7 @@
   "@odata.id": "/redfish/v1/CompositionService/ResourceBlocks",
   "@odata.type": "#ResourceBlockCollection.ResourceBlockCollection",
   "Name": "Resource Block Collection",
-  "_note": "lab 부재 — 각 ResourceBlock 은 하나의 chassis 에 대응 (설명 모델). rule 96 R1-A.",
+  "_note": "lab 부재 — 각 ResourceBlock 은 하나의 chassis 에 대응 (설명 모델).",
   "Members@odata.count": 3,
   "Members": [
     {"@odata.id": "/redfish/v1/CompositionService/ResourceBlocks/Block0"},

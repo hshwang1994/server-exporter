@@ -38,7 +38,7 @@ def test_master_dashboard_reachable(page: Page, lab_creds) -> None:
 def test_master_login_then_dashboard(page: Page, lab_creds) -> None:
     """Jenkins master 로그인 + dashboard 진입 검증.
 
-    cycle-015 사용자 권한 부여로 lab_creds 의 jenkins master 자격증명 사용 활성.
+    사용자 권한 부여로 lab_creds 의 jenkins master 자격증명 사용 활성.
     """
     master = _first_master(lab_creds)
     url = master["web_url"]

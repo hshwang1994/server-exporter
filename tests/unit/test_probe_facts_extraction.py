@@ -1,5 +1,5 @@
 """
-T-01 (cycle 2026-05-11) `_extract_probe_facts()` 단위 테스트.
+`_extract_probe_facts()` 단위 테스트.
 
 `redfish_gather.py` 의 신규 함수가 HPE iLO 6 Gen11 ServiceRoot 무인증 응답에서
 model_hint / firmware_hint / manager_type 을 정확히 추출하는지 검증.

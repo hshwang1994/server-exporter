@@ -1,4 +1,4 @@
-"""Unit test for B58 (PSU Critical alarm in summary) + B59 (None capacity sum).
+"""Unit test for PSU Critical alarm in summary + None capacity sum.
 
 Validates the Jinja2 summary builder logic in:
   redfish-gather/tasks/normalize_standard.yml :: _rf_power_summary
@@ -25,7 +25,7 @@ POWER_FIXTURES = REPO / "tests" / "fixtures" / "power_summary"
 def build_summary(power_data: dict) -> dict:
     """Mirror of redfish-gather/tasks/normalize_standard.yml :: _rf_power_summary.
 
-    Implements B58 (critical_count + health_rollup) + B59 (capacity_unknown_count).
+    Implements critical_count + health_rollup + capacity_unknown_count.
     """
     psus = []
     for psu in (power_data.get("PowerSupplies") or []):
@@ -87,10 +87,10 @@ def load_power(label: str) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# B58: PSU Critical health surfaces in summary                                #
+# PSU Critical health surfaces in summary                                     #
 # --------------------------------------------------------------------------- #
 
-class TestB58CriticalCount:
+class TestCriticalCount:
     def test_hpe_psu_critical_count(self):
         """HPE DL380 has PSU#1 Critical+UnavailableOffline + PSU#2 OK+Enabled."""
         s = build_summary(load_power("hpe-dl380"))
@@ -117,10 +117,10 @@ class TestB58CriticalCount:
 
 
 # --------------------------------------------------------------------------- #
-# B59: PSU None capacity must not be silently summed                          #
+# PSU None capacity must not be silently summed                               #
 # --------------------------------------------------------------------------- #
 
-class TestB59CapacityUnknown:
+class TestCapacityUnknown:
     def test_lenovo_psu1_none_capacity_separated(self):
         """Lenovo PSU#1 PowerCapacityWatts=null, PSU#2=750 — total should be 750
         AND capacity_unknown_count=1 (so caller knows total is partial)."""

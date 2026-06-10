@@ -68,7 +68,7 @@
       {%- set hyp   = (_w_hosting.HypervisorPresent | default('')) | string -%}
       {%- set vm_models = ['Virtual Machine', 'VMware Virtual Platform', 'VirtualBox', 'KVM', 'QEMU Virtual Machine', 'Standard PC'] -%}
       {%- set vm_mfrs   = ['VMware, Inc.', 'QEMU', 'Xen', 'Amazon EC2', 'Google', 'DigitalOcean'] -%}
-      {# nosec rule12-r1: hosting_type 판정용 OEM mfr list (set membership 패턴, 분기 아님) #}
+      {# hosting_type 판정용 OEM mfr list (set membership 패턴, 분기 아님) #}
       {%- set oem_mfrs  = ['Dell Inc.', 'HPE', 'Hewlett Packard Enterprise', 'Lenovo', 'Cisco Systems Inc', 'Supermicro', 'Fujitsu', 'Inspur'] -%}
       {%- set is_vm_model = model in vm_models -%}
       {%- set is_vm_mfr   = mfr in vm_mfrs -%}
@@ -90,7 +90,7 @@
          else (ansible_product_uuid | default(none)) }}
   no_log: true
 
-# F5 cycle 2026-05-11: system.runtime — 9 필드 (timezone/ntp/firewall/listen/pagefile)
+# system.runtime — 9 필드 (timezone/ntp/firewall/listen/pagefile)
 # Linux 와 envelope shape 통일 — Windows pagefile 을 swap_*_mb 로 등가 표현.
 - name: "windows | system | gather runtime (timezone/ntp/firewall/listen/pagefile)"
   ansible.windows.win_shell: |
@@ -192,7 +192,7 @@
         fqdn:           "{{ ansible_fqdn | default(inventory_hostname) }}"
         serial_number:  "{{ _w_serial_val | default(none) }}"
         system_uuid:    "{{ _w_uuid_val | default(none) }}"
-        # F5 cycle 2026-05-11: system.runtime — 9 필드 (Linux 와 envelope shape 통일)
+        # system.runtime — 9 필드 (Linux 와 envelope shape 통일)
         # Windows pagefile = Linux swap 등가 (swap_*_mb 로 등가 표현).
         runtime:
           timezone: >-
@@ -216,7 +216,7 @@
           firewall_state: >-
             {%- set v = (_w_runtime.firewall_state | default('')) | string | trim -%}
             {{ v if v else none }}
-          # Round 18 (R18-2): str[] 계약 (gather_runtime·field_dictionary 와 동일). Get-NetTCPConnection
+          # str[] 계약 (gather_runtime·field_dictionary 와 동일). Get-NetTCPConnection
           # LocalPort 는 int → map('string'). gather_runtime rescue 가 {} 로 바뀌어 이 값이 보존될 때 계약 유지.
           listening_ports: "{{ (_w_runtime.listening_ports | default([])) | map('string') | list }}"
           swap_total_mb: >-
@@ -231,7 +231,7 @@
     _sections_supported_fragment: ['system']
     _sections_collected_fragment: ['system']
     _sections_failed_fragment:    []
-    # rule 22 R8 — list 타입 강제. `>-` multi-block + 다중 {{ }} 분기는 Ansible
+    # Fragment 변수는 list 타입 강제. `>-` multi-block + 다중 {{ }} 분기는 Ansible
     # folded scalar 에서 string-coerce 위험이 있어 단일 expression 으로 단순화.
     # source contract: _w_id_diagnostics 는 list of dicts. 비정상 경로 (string/
     # mapping/None) 은 빈 list 로 drop — receiving side (merge_fragment) 의 방어

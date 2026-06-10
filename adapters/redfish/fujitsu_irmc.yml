@@ -1,16 +1,16 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Fujitsu
 # Firmware: iRMC S2 / S4 / S5 / S6 (integrated Remote Management Controller)
 #           — PRIMERGY 시리즈 + PRIMEQUEST mission-critical
 # Origin: Fujitsu 공식 GitHub + iRMC RESTful API spec
-# Last sync: 2026-05-11 (M-E1 generation 분기 보강 — web sources only, lab 부재)
-# Lab status: 부재 — web sources only (rule 96 R1-A)
-# Next action: PRIMERGY M5/M6/M7 + PRIMEQUEST lab 도입 후 별도 cycle (iRMC S5/S6 응답 형식 확정 + Oem.ts_fujitsu vs Oem.Fujitsu fallback 검증)
+# Last sync: 2026-05-11 (generation 분기 보강 — web sources only, lab 부재)
+# Lab status: 부재 — web sources only
+# Next action: PRIMERGY M5/M6/M7 + PRIMEQUEST lab 도입 후 iRMC S5/S6 응답 형식 확정 + Oem.ts_fujitsu vs Oem.Fujitsu fallback 검증
 # Notes: PRIMERGY M5 (iRMC S5) / M6/M7 (iRMC S6 추정) + PRIMEQUEST 38xx (mission-critical).
-#   사용자 명시 승인 (2026-05-01) — vault 신설 완료 2026-05-11 M-A3.
-#   M-E1 cycle 2026-05-07-all-vendor-coverage: S2/S4/S5/S6 firmware_patterns + PRIMEQUEST model_patterns + generation matrix.
-# Sources (rule 96 R1-A — lab 부재):
+#   vault 신설 완료 2026-05-11.
+#   S2/S4/S5/S6 firmware_patterns + PRIMEQUEST model_patterns + generation matrix.
+# Sources (lab 부재):
 #   - https://github.com/fujitsu/iRMCtools (vendor 공식 GitHub)
 #   - https://github.com/fujitsu/iRMC-REST-API (vendor 공식 GitHub)
 #   - https://mmurayama.blogspot.com/2018/05/fujitsu-irmc-redfish-examples.html
@@ -31,7 +31,7 @@
 #   - iRMC S4 (2014-2019): DSP0268 v1.0+ / 표준 / OEM Oem.ts_fujitsu
 #   - iRMC S5 (2019-2022): DSP0268 v1.6+ / OEM 강화
 #   - iRMC S6 (2022+): DSP0268 v1.10+ / PowerSubsystem 일부 지원
-# Vault: 신설 완료 (2026-05-11 M-A3)
+# Vault: 신설 완료 (2026-05-11)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_fujitsu_irmc
 channel: redfish
@@ -46,11 +46,11 @@ match:
     - "RX2530 M[5-9]"
     - "RX4770 M[5-9]"
     - "TX2550 M[5-9]"
-    # PRIMEQUEST (mission-critical) — M-E1 추가
+    # PRIMEQUEST (mission-critical)
     - "PRIMEQUEST.*"
     - "PQ.*"
   firmware_patterns:
-    # M-E1 cycle 2026-05-07-all-vendor-coverage: S2/S4/S5/S6 generation 분기
+    # S2/S4/S5/S6 generation 분기
     - "iRMC.*S2.*"  # iRMC S2 (legacy 2010-2014) — Redfish 미지원 가능성
     - "iRMC.*S4.*"  # iRMC S4 (2014-2019)
     - "iRMC.*S5.*"  # iRMC S5 (2019-2022) — 대표 generation
@@ -67,7 +67,7 @@ capabilities:
     - network
     - firmware
     - power
-    # M-D3 W6 (cycle 2026-05-06): users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
+    # users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
   # Generation별 보조 capabilities (web sources 기반 — 사이트 검증 시 정정)
   power_subsystem: "conditional"            # iRMC S6+ 일부 지원 / 이전 generation 은 Power legacy
   storage_strategy: "standard_with_simple_fallback"  # iRMC S2/S4 시 SimpleStorage fallback
@@ -76,16 +76,16 @@ capabilities:
 collect:
   strategy: standard+oem
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/fujitsu/collect_oem.yml"  # M-E2 신설
+  oem_tasks: "redfish-gather/tasks/vendors/fujitsu/collect_oem.yml"
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/fujitsu/normalize_oem.yml"  # M-E2 신설
+  oem_tasks: "redfish-gather/tasks/vendors/fujitsu/normalize_oem.yml"
 
 credentials:
   profile: "fujitsu"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/fujitsu.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
+  # AccountService 진입점 — vault/redfish/fujitsu.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
   recovery_accounts:
     - { vault_label: fujitsu_factory, role: recovery }
 
@@ -102,8 +102,8 @@ vendor_notes:
   bmc_name: "iRMC"
   manager_uri_hint: "/redfish/v1/Managers/iRMC"
   oem_namespace: "Oem.ts_fujitsu"
-  oem_namespace_fallback: "Oem.Fujitsu"   # 펌웨어 변형 fallback (M-E2)
-  vault_status: "created (2026-05-11 M-A3)"
+  oem_namespace_fallback: "Oem.Fujitsu"   # 펌웨어 변형 fallback
+  vault_status: "created (2026-05-11)"
   generation_matrix:
     "S2": "IPMI 우선 / Redfish 미지원 또는 v1.0 부분 (2010-2014)"
     "S4": "DSP0268 v1.0+ / 표준 / OEM Oem.ts_fujitsu (2014-2019)"
@@ -120,7 +120,7 @@ vendor_notes:
     - "PRIMERGY RX2530 M6"
     - "PRIMERGY TX2550 M5"
     - "PRIMERGY RX4770 M6"
-    - "PRIMEQUEST 3800B"     # mission-critical (M-E1)
+    - "PRIMEQUEST 3800B"     # mission-critical
     - "PRIMEQUEST 3800E"
 
 diagnosis:

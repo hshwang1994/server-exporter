@@ -1,8 +1,7 @@
-"""F50 (cycle 2026-05-06): Dell Manager.Oem.Dell.DelliDRACCard 추출 회귀.
+"""Dell Manager.Oem.Dell.DelliDRACCard 추출 회귀.
 
-배경: 사용자 지적 "되는데 안된다고 적혀있어서 안되는게 더 있는지 확인" → 사이트 실측에서
-Dell iDRAC9 Manager.Oem.Dell.DelliDRACCard 풍부 데이터 (IPMIVersion, LastUpdateTime 등)
-가 server-exporter 코드에서 무시되고 있었음. cycle 2026-05-06 phase 2 에서 추출 추가.
+배경: 사이트 실측에서 Dell iDRAC9 Manager.Oem.Dell.DelliDRACCard 풍부 데이터
+(IPMIVersion, LastUpdateTime 등) 가 코드에서 무시되고 있어 추출 추가.
 
 source: 10.100.15.27 사이트 실측 + dell.com/support DellManager.v1_4_0 문서.
 """

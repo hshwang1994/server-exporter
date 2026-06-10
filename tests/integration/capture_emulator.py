@@ -7,7 +7,7 @@
 이 산출물은 tests/integration/test_hpe_emulator_replay.py 가 **오프라인**(에뮬레이터
 없이)으로 재생해 회귀 검증에 쓴다.
 
-주의 (rule 21 R1 / rule 25 R7-B): 에뮬레이터 != 실장비. 본 산출물은 절대
+주의: 에뮬레이터 != 실장비. 본 산출물은 절대
 schema/baseline_v1/ 실측 baseline 으로 승격하지 않는다. "emulator-derived" 라벨 유지.
 
 사용법:
@@ -21,7 +21,7 @@ schema/baseline_v1/ 실측 baseline 으로 승격하지 않는다. "emulator-der
 출력: tests/fixtures/redfish/hpe_emulator_<mockup_lower>/
     recording.json        — (path -> 응답) 기록 (replay 입력)
     expected_output.json  — 모듈 gather 산출 golden
-    README.md             — 출처 (rule 21 R2 / rule 96 R1-A)
+    README.md             — 출처
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ import argparse
 import json
 from pathlib import Path
 
-# 같은 디렉터리의 공용 하네스.
+# 같은 디렉터리의 공용 모듈.
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import emulator_harness as H  # noqa: E402
@@ -95,10 +95,10 @@ def main() -> int:
     fw = _manager_fw(output)
     readme = f"""# hpe_emulator_{args.mockup.lower()} — 에뮬레이터 캡처 fixture
 
-> [WARN] **emulator-derived — 실장비 아님.** rule 21 R1 / rule 25 R7-B 에 따라
-> 본 fixture/golden 은 `schema/baseline_v1/` 실측 baseline 으로 **승격 금지**.
+> [WARN] **emulator-derived — 실장비 아님.** 본 fixture/golden 은
+> `schema/baseline_v1/` 실측 baseline 으로 **승격 금지**.
 
-## 출처 (rule 21 R2 / rule 96 R1-A)
+## 출처
 
 - source: {EMULATOR_SOURCE} v{EMULATOR_VERSION}
 - mockup: `{args.mockup}`

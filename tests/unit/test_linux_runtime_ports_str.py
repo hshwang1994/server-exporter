@@ -1,4 +1,4 @@
-"""Round 17 #7 — gather_system listening_ports 타입 계약(str[]).
+"""gather_system listening_ports 타입 계약(str[]).
 
 field_dictionary 와 전 baseline 은 listening_ports 를 str[] (["22","53"]) 로 규정하나
 gather_system 은 int 로 모았다(`s | int`) → int[] 유출 위험(특히 rescue/부분실패 경로,

@@ -1,4 +1,4 @@
-"""빈 alias substring 매칭 가드 (Round 1 #8/#9 — rule 95 R1).
+"""빈 alias substring 매칭 가드.
 
 배경: vendor_aliases.yml 에 빈 alias 키('')가 들어가면(오타/병합 사고) substring 매칭
 `if alias in product` 가 **모든** 문자열에 매치돼(`'' in s` 는 항상 True) 잘못된 벤더로

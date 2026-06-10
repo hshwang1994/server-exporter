@@ -1,4 +1,4 @@
-"""Regression for F5 — PowerSubsystem fallback에 EnvironmentMetrics 통합 (cycle 2026-05-01).
+"""Regression — PowerSubsystem fallback에 EnvironmentMetrics 통합.
 
 배경: DMTF 2020.4 schema 분리로 PowerControl 같은 system-level metric 이
 PowerSubsystem 본체가 아닌 /Chassis/{id}/EnvironmentMetrics 의 PowerWatts 로 이동.

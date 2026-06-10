@@ -1,25 +1,24 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Dell Inc. / Dell EMC
 # Firmware: iDRAC 9 — 3.x / 4.x / 5.x / 6.x / 7.x
 # Generation: idrac9
 # Generation Year: "2017-2024 (PowerEdge 14G / 15G / 16G)"
 # Redfish Introduction: "DSP0268 v1.6+ ~ v1.13+"
 # Origin: Dell support.dell.com / Redfish API guide (iDRAC 9)
-# Last sync: 2026-05-11 (M-H1 — Round 11 + storage strategy 분기 매트릭스 보강)
+# Last sync: 2026-05-11 (Round 11 + storage strategy 분기 매트릭스 보강)
 # Notes: PowerEdge 14G/15G/16G. Storage Volumes 5.x+ 표준.
-# Sources (rule 96 R1-A — Round 11 외 generation 보강):
+# Sources (Round 11 외 generation 보강):
 #   - https://developer.dell.com/apis/2978/versions/3/docs/   (iDRAC9 spec)
 #   - https://www.dell.com/support/kbdoc/en-us/000178045/dell-redfish-api-development
 #   - https://infohub.delltechnologies.com/p/idrac9-redfish-pldm/   (PLDM RDE — 5.x+)
-# Tested against (실측 2026-04-28, Round 11 — iDRAC9 7.x 만):
-#   - PowerEdge R760 (16G Monolithic) × 5대 (10.100.15.27/28/31/33/34)
+# 검증 기준 (실측 2026-04-28, Round 11 — iDRAC9 7.x 만):
+#   - PowerEdge R760 (16G Monolithic) × 5대
 #   - iDRAC FirmwareVersion: 7.10.70.00
 #   - BIOS: 2.3.5
 #   - Redfish: 1.20.1
 #   - CPU: Intel Xeon Silver 4510
-#   - 데이터 경로: tests/reference/redfish/dell/10_100_15_*
-# Storage strategy evolution (web sources, M-H1 cycle 2026-05-07):
+# Storage strategy evolution (web sources):
 #   - iDRAC9 3.x ~ 4.x: standard storage path (Volumes 표준 미도입)
 #   - iDRAC9 5.x: PLDM RDE 우선 + standard fallback (dual)
 #   - iDRAC9 6.x+: PLDM RDE only (5.x 응답 형식 매우 유사)
@@ -28,7 +27,7 @@
 #   - iDRAC9 7.x: PowerSubsystem 우선 + Power fallback
 # OEM namespace: Oem.Dell (전 generation 동일)
 # Lab status: iDRAC9 7.x 사이트 검증 (Round 11). iDRAC9 3.x/4.x/5.x/6.x lab 부재.
-# Next action: iDRAC9 5.x 이전 lab 도입 시 별도 cycle (PLDM RDE 분기 검증)
+# Next action: iDRAC9 5.x 이전 lab 도입 시 PLDM RDE 분기 검증
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_dell_idrac9
 channel: redfish
@@ -62,7 +61,7 @@ normalize:
 credentials:
   profile: "dell"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/dell.yml accounts 의 label 과 매핑
+  # AccountService 진입점 — vault/redfish/dell.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: dell_fallback_1, role: recovery }
     - { vault_label: dell_fallback_2, role: recovery }

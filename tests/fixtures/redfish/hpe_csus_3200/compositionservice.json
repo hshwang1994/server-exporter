@@ -4,7 +4,7 @@
   "@odata.type": "#CompositionService.v1_2_0.CompositionService",
   "Id": "CompositionService",
   "Name": "Composition Service",
-  "_note": "lab 부재 — DMTF CompositionService + HPE CSUS 3200 Admin Guide (nPartition=ResourceBlock 조합) 합성. rule 96 R1-A. cycle 2026-06-09 ADR.",
+  "_note": "lab 부재 — DMTF CompositionService + HPE CSUS 3200 Admin Guide (nPartition=ResourceBlock 조합) 합성.",
   "ServiceEnabled": true,
   "Status": {"State": "Enabled", "Health": "OK"},
   "AllowOverprovisioning": false,

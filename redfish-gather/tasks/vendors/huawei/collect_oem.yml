@@ -6,8 +6,8 @@
 # source: Huawei iBMC Redfish API guide (확인 2026-05-07)
 #   - https://support.huawei.com/enterprise/en/doc/EDOC1000163550/41dfb258/ibmc
 #   - https://github.com/Huawei/Huawei-iBMC-Cmdlets
-# Fragment 철학 (rule 22) — 자기 fragment 만, 다른 gather 침범 금지
-# lab: 부재 (사용자 명시 2026-05-01) — mock fixture 기반 (M-C3)
+# Fragment 철학 — 자기 fragment 만, 다른 gather 침범 금지
+# lab: 부재 (web sources) — mock fixture 기반
 #
 # Oem.Huawei 주요 sub-namespace (web sources):
 #   - Oem.Huawei.SystemInfo       — 시스템 추가 정보 (Health 상세)
@@ -62,6 +62,6 @@
             severity: warning
       no_log: true
 
-# fragment 누적 병합 (rule 22 R3 — merge_fragment.yml 호출 의무)
+# fragment 누적 병합 (merge_fragment.yml 호출 의무)
 - name: "redfish | huawei | collect_oem | merge fragment"
   ansible.builtin.include_tasks: "{{ playbook_dir }}/common/tasks/normalize/merge_fragment.yml"

@@ -3,24 +3,24 @@
 > **이 문서는** server-exporter 가 지금 모습이 된 "이유" 를 누적 기록한 결정 이력이다.
 > 누군가 "왜 이렇게 만들었는지" 또는 "전에 다른 방식으로 한 적 있는지" 가 궁금할 때 가장 먼저 검색하는 곳이다.
 >
-> 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
+> 검증 라운드(Round) 결과, 이슈 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
 > 최종 갱신: 2026-06-04
 
 ## 2026-05-29 — CSUS 3200 전 공통 섹션 수집 + HBA/InfiniBand 전 채널 (lab 부재 — web sources)
 
-### 사용자 의심 / 요청
+### 배경
 
-- "csus 3200 장비도 다른 장비처럼 공통 json 내용이 모두 담기게 ... 대대적인 개편이 필요". "HBA / InfiniBand 도 개더링 (모든 서버)". lab 부재 → web 검색.
+- CSUS 3200 장비도 다른 장비처럼 공통 JSON 내용이 모두 담기도록 대대적 개편 필요. HBA / InfiniBand 도 전 서버 개더링 대상. lab 부재 → web 검색.
 
-### 분석 (10-agent recon + web research)
+### 분석
 
-- **CSUS baseline 이 빈 skeleton** — cycle 2026-05-12 는 multi_node 토폴로지(id) 만 채우고 per-partition cpu/memory/storage/network 는 raw/빈 + mock 미완성.
+- **CSUS baseline 이 빈 skeleton** — 멀티-노드 토폴로지(id) 만 채우고 per-partition cpu/memory/storage/network 는 raw/빈 + mock 미완성.
 - **HBA/IB 분류가 dead-code** — Redfish `Port.PortType` 에 FC/IB 값 없음 (DMTF Port.v1_9_0). ESXi `'infiniband' in type` 도 dead. Windows FC 필터 없음 + IB hardcoded []. → "안 담긴다" 의 실제 원인.
 - HBA/IB schema 는 이미 v1 존재 → 구현 + 정합 문제이지 schema 신설 아님.
 
-### 결정 (ADR-2026-05-29 — D1/D2/D3)
+### 결정 (D1/D2/D3)
 
 - FC/IB 분류를 DMTF `PortProtocol`/`LinkNetworkTechnology`/`NetDevFuncType` 기반으로 정정 (PortType 사용 금지). WWPN/WWNN/GUID 는 NetworkDeviceFunction 에서.
 - 전 채널 통일 canonical shape + `source` 필드. CSUS 전 Partition canonical 정규화 + realistic mock baseline.
@@ -33,21 +33,21 @@
 
 ### 회귀
 
-- pytest **699 PASS / 0 FAIL** (full suite; CSUS baseline regression registry 등록 + per-partition/canonical 신규 테스트). validate_field_dictionary PASS. Windows/Linux Jinja render harness PASS.
-- lab 부재: mock "검증됨" 주장 금지 (rule 25 R7-B). 사이트 fixture 캡처 NEXT_ACTIONS.
+- pytest **699 PASS / 0 FAIL** (full suite; CSUS baseline regression registry 등록 + per-partition/canonical 신규 테스트). validate_field_dictionary PASS. Windows/Linux Jinja render 테스트 PASS.
+- lab 부재: mock "검증됨" 주장 금지. 사이트 fixture 캡처 후속 작업.
 
 ---
 
-## 2026-05-12 — HPE CSUS 3200 / Superdome Flex RMC 멀티-노드 Redfish 수집 정식 지원 (lab 부재 — 별도 cycle)
+## 2026-05-12 — HPE CSUS 3200 / Superdome Flex RMC 멀티-노드 Redfish 수집 정식 지원 (lab 부재 — 별도 검증)
 
-### 사용자 명시 (2026-05-12)
+### 배경 (2026-05-12)
 
-- "HPE Compute Scale-up Server(CSUS) 3200 ... Redfish API를 사용한 통신은 RMC(Rack Management Controller)를 통해 수행된다 ... CSUS장비도 개더링할 수 있도록 계획해야할 듯 해. 지금 CSUS 장비를 개더링하는 방식은 이방식이 아닌것같아서 CSUS 지원하는 방식을 모두 의심해야해. 다만문제는 테스트해볼 장비가 없어서 web을 통해서 확인할 수 밖에 없다는거야."
-- AskUserQuestion 4 답변: (1) 전 Partition / Manager / Chassis 수집 (대형 변경) / (2) WebFetch + WebSearch 권위 인용으로 EXTERNAL_CONTRACTS 보강 / (3) RMC 분리 — adapter capability 기반 분기 (Additive) / (4) lab 부재 — web sources only
+- HPE Compute Scale-up Server(CSUS) 3200 의 Redfish API 통신은 RMC(Rack Management Controller)를 통해 수행된다. CSUS 장비를 개더링할 수 있도록 계획 필요. 기존 CSUS 수집 방식이 RMC 모델과 맞지 않아 CSUS 지원 방식을 전면 재검토. 테스트 장비 부재로 web 확인.
+- 결정 4건: (1) 전 Partition / Manager / Chassis 수집 (대형 변경) / (2) 권위 인용으로 외부 계약 보강 / (3) RMC 분리 — adapter capability 기반 분기 (Additive) / (4) lab 부재 — web sources only
 
 ### 컨텍스트
 
-cycle 2026-05-11 에 `hpe_csus_3200.yml` (priority=96) + `hpe_superdome_flex.yml` (priority=95) 어댑터가 web sources 기반으로 추가되었으나, **하부 라이브러리 `redfish-gather/library/redfish_gather.py` 가 단일 노드 가정**:
+`hpe_csus_3200.yml` (priority=96) + `hpe_superdome_flex.yml` (priority=95) 어댑터가 web sources 기반으로 추가되었으나, **하부 라이브러리 `redfish-gather/library/redfish_gather.py` 가 단일 노드 가정**:
 
 - `_resolve_first_member_uri` (line 714-729) — Members[0] 만 추출 → Partition1~N / per-chassis PDHC / Bay iLO5 / Expansion Chassis 누락
 - `gather_bmc` (line 1290) / `gather_system` (line 1173) — 단일 manager_uri / system_uri 인자
@@ -59,27 +59,27 @@ HPE 공식 인용 (WebSearch 2026-05-12): "supports large, partitionable systems
 ### 결정 (8종)
 
 1. **envelope 표현 — Option C**: `data.multi_node` Additive 단일 컨테이너 + 기존 9 section path 100% 보존 (`data.system`/`data.bmc`/... 변경 0)
-2. **코드 리팩토링 — 변형 1**: `gather_*_multi()` 함수 신설 + 기존 함수 그대로 유지 (rule 92 R2 / 95 R1 #11)
-3. **RMC 라벨**: adapter `vendor_notes.manager_layout` 을 `redfish_gather.py` 까지 전달 + `_classify_rmc_label` substring 매칭 (rule 12 R1 line 1308 nosec 영역)
+2. **코드 리팩토링 — 변형 1**: `gather_*_multi()` 함수 신설 + 기존 함수 그대로 유지
+3. **RMC 라벨**: adapter `vendor_notes.manager_layout` 을 `redfish_gather.py` 까지 전달 + `_classify_rmc_label` substring 매칭
 4. **precheck graceful fail**: `diagnosis.details.rmc_activation_check` + `multi_node_layout` Additive + `docs/22_rmc-activation-guide.md` 신규
 5. **mock fixture 합성**: 3-partition × 4-manager × 3-chassis (sdflexutils + DMTF v1.15 + iLO5 API ref 3-source cross-check) + README 출처 매핑
-6. **baseline 경로**: `tests/expected/redfish/hpe_csus_3200/mock_v1.json` 별도 경로 — `schema/baseline_v1/` 는 lab 도입 cycle 까지 미작성 (rule 13 R4 보호)
-7. **derived 추가**: 기존 baseline 9종 `data.multi_node: null` Additive (inject_summary_to_baselines.py 패턴 재사용)
-8. **NEXT_ACTIONS C1~C8 등재**: rule 50 R2 단계 10 + rule 96 R1-C 의무 (사이트 fixture / baseline / lab cycle / vault / Product 실측 / Member ID 실측 / Oem schema 실측 / 활성화 요구 실측)
+6. **baseline 경로**: `tests/expected/redfish/hpe_csus_3200/mock_v1.json` 별도 경로 — `schema/baseline_v1/` 는 lab 도입 시까지 미작성 (실측 baseline 보호)
+7. **derived 추가**: 기존 baseline 9종 `data.multi_node: null` Additive (summary inject 패턴 재사용)
+8. **후속 작업 등재**: 사이트 fixture / baseline / lab 검증 / vault / Product 실측 / Member ID 실측 / Oem schema 실측 / 활성화 요구 실측
 
 ### 대안 거절 사유
 
 | 대안 | 거절 사유 |
 |---|---|
-| `data.<section>` 을 list 로 전환 (Option B) | 호환성 0% — 호출자 (Jenkins 콜백 / 포털) 폭파. rule 92 R2 / 96 R1-B 위반 |
+| `data.<section>` 을 list 로 전환 (Option B) | 호환성 0% — 호출자 (Jenkins 콜백 / 포털) 폭파 |
 | 기존 `gather_*` 함수에 `multi=True` 옵션 + 내부 분기 (변형 2) | 분기 복잡도 + 단위 테스트 부담 |
-| 단일 노드 함수 deprecation + 일괄 전환 (변형 3) | 13 vendor 회귀 영향 — rule 92 R2 / rule 95 R1 #11 위반. 절대 채택 불가 |
-| `bmc.manager_type` 신 보조 필드 추가 | `data.<section>.<field>` 추가 — rule 96 R1-B 위반 (호환성 cycle 외 별도 schema cycle 의무) |
-| `schema/baseline_v1/hpe_csus_3200_baseline.json` 합성 추가 | rule 13 R4 실측 baseline 보호 위반 |
+| 단일 노드 함수 deprecation + 일괄 전환 (변형 3) | 13 vendor 회귀 영향. 절대 채택 불가 |
+| `bmc.manager_type` 신 보조 필드 추가 | `data.<section>.<field>` 추가 — 호환성 외 별도 schema 변경 의무 |
+| `schema/baseline_v1/hpe_csus_3200_baseline.json` 합성 추가 | 실측 baseline 보호 위반 |
 
-### 갱신 (2026-05-12 — 사용자 명시 "schema 디렉터리에 추가")
+### 갱신 (2026-05-12 — schema 디렉터리에 추가)
 
-> Q6 결정 번복 — `tests/expected/` 별도 경로만 → 양쪽 모두 (schema/baseline_v1/ + schema/output_examples/ + tests/expected/) 채택.
+> 결정 번복 — `tests/expected/` 별도 경로만 → 양쪽 모두 (schema/baseline_v1/ + schema/output_examples/ + tests/expected/) 채택.
 
 | 영역 | 변경 |
 |---|---|
@@ -88,7 +88,7 @@ HPE 공식 인용 (WebSearch 2026-05-12): "supports large, partitionable systems
 | `schema/baseline_v1/README.md` | mock-derived baseline 정책 절 신설 — marker 3종 (README 표 / JSON baseline_origin / output_examples 헤더) + 자동 검사 hook 도입 후속 작업 표기. |
 | `schema/output_examples/README.md` | Redfish 표에 CSUS 3200 행 추가 (10 → 11 entries). |
 
-### 적용 변경 (Phase 0~7)
+### 적용 변경
 
 | 영역 | 변경 |
 |---|---|
@@ -102,65 +102,62 @@ HPE 공식 인용 (WebSearch 2026-05-12): "supports large, partitionable systems
 | `tests/fixtures/redfish/hpe_superdome_flex/` | Partition1/2 + Expansion 보강 |
 | `tests/expected/redfish/hpe_csus_3200/mock_v1.json` | 신규 (fixture-derived expected) |
 | `tests/redfish/test_{hpe_csus_multi_node,resolve_all_members,classify_rmc_label}.py` | 신규 3 단위 테스트 |
-| `docs/20_json-schema-fields.md` | rule 13 R7 동기화 (multi_node 절 추가) |
+| `docs/20_json-schema-fields.md` | multi_node 절 추가 (docs/20 동기화) |
 | `docs/22_rmc-activation-guide.md` | 신규 — RMC 활성화 절차 + community 7200359 트러블슈팅 |
 
 ### 검증
 
-Phase 7 SUB-7.1~7.8 — 본 cycle 종료 시 갱신 의무 (pytest 전수 / ansible-syntax-check / 6 hook).
-
 Additive 검증 체크리스트:
-- envelope 13 필드 shape 변경 0 (`pre_commit_additive_only_check.py` blocking 통과)
+- envelope 13 필드 shape 변경 0
 - sections 10 변경 0
-- field_dictionary 65 → +8~12 nice entries (`pre_commit_docs20_sync_check.py` 통과)
+- field_dictionary 65 → +8~12 nice entries
 - 13 vendor 회귀 0 (manager_layout 미정의 vendor 의 `data.multi_node = null` 외 변경 0)
 
 ### 관련
 
-- rule 13 R5/R7, rule 22, rule 12 R1, rule 50 R2 단계 10, rule 70 R8 Trigger 2+3, rule 92 R2, rule 95 R1 #11, rule 96 R1-A/B/C
-- 선례 cycle: 2026-05-11 hpe-csus-add (어댑터 신설), 2026-05-06 M-E2 (hpe_superdome_flex 신설), 2026-05-11 F2 (inject_summary_to_baselines.py derived)
+- 선례: 2026-05-11 hpe-csus-add (어댑터 신설), 2026-05-06 (hpe_superdome_flex 신설), 2026-05-11 (summary inject derived)
 - 위험 signal: HPE community 7200359 "impossible to get redfish answer from superdome flex rmc"
 
 ---
 
-## 2026-05-11 — Adapter 선택 단계 검증 + Supermicro X12 priority 일관성 fix (DRIFT-015)
+## 2026-05-11 — Adapter 선택 단계 검증 + Supermicro X12 priority 일관성 fix
 
-### 사용자 명시 (2026-05-11)
+### 배경 (2026-05-11)
 
-- "어떤 adapter 를 쓸지 결정하는 단계에서 문제 발생 이력이 있다 — 지금 잘 돼있는지 검토해라. 필요하다면 web을 모두 검색해도됨."
-- AskUserQuestion 응답: 잠재 위험 2건 fix 포함 (Recommended) + web 검색 승인
+- 어떤 adapter 를 쓸지 결정하는 단계에서 문제 발생 이력이 있어 현재 상태 점검. 필요 시 web 검색 활용.
+- 잠재 위험 2건 fix 포함 + web 검색
 
 ### 컨텍스트
 
-T-01 (commit `8c0fe0f6`, HPE DL380 Gen11 → hpe_ilo7 오선택) + DRIFT-014 (commit `1387b505`, hpe_ilo7 firmware 2-part 매치 실패) 이 RESOLVED 되었지만 사용자 검증 요청에 따라 **rule 95 R1 자동 스캔** 추가 수행. Supermicro X11~X14 priority 매트릭스에서 잠재 위험 2건 발견:
+HPE DL380 Gen11 → hpe_ilo7 오선택 (commit `8c0fe0f6`) + hpe_ilo7 firmware 2-part 매치 실패 (commit `1387b505`) 가 RESOLVED 되었지만 검증 차원에서 production 코드 점검 추가 수행. Supermicro X11~X14 priority 매트릭스에서 잠재 위험 2건 발견:
 
 1. **X12 priority 90 — 역전** (X11=100, X12=90, X13=100, X14=110)
 2. **X11~X14 firmware_patterns 부재** — model_patterns 만으로 매칭
 
-3개 Explore agent 병렬 조사 + Supermicro 공식 docs / DMTF web 검색 후 결정.
+Supermicro 공식 docs / DMTF web 검색 후 결정.
 
 ### 결정
 
-#### Phase 1 (적용 — 본 cycle)
+#### 적용 사항
 
 - **`adapters/redfish/supermicro_x12.yml` L27 `priority: 90 → 100`** (X11/X13 와 일관성). model_patterns 정확 매칭 시 결과 동일 (Additive). lab 부재라 사이트 영향 0.
-- origin 주석 갱신 — Last sync 2026-05-11 + DRIFT-015 사유 + Phase 2 보류 결정 명시.
+- origin 주석 갱신 — Last sync 2026-05-11 + 사유 + 보류분 결정 명시.
 
-#### Phase 2 (보류 — NEXT_ACTIONS 등재)
+#### 보류 사항
 
 Supermicro X11~X14 firmware_patterns 추가는 **보류**. 근거:
 
 1. **firmware empty 시 disqualify 안 됨** (`module_utils/adapter_common.py:258-267` 점검 결과 — 안전)
 2. **AST2500 (X11) vs AST2600 (X12+) firmware 형식 거의 동일** — `X.YY.ZZ` vs `0X.YY.ZZ` 만 차이. web sources 만으로 generation 분리 정확도 약함 (X11 firmware "1.73.10" 가 X12 패턴 `^0?1\.[0-9]+\.[0-9]+` 에도 매칭)
-3. **lab 부재 (rule 96 R1-A)** — 실 firmware 형식 확정 전 정규식 가설은 미스매치 시 `match_score=-9999` (graceful fallback 발생, 사고 0 이지만 기능 손실) 위험
+3. **lab 부재** — 실 firmware 형식 확정 전 정규식 가설은 미스매치 시 `match_score=-9999` (graceful fallback 발생, 사고 0 이지만 기능 손실) 위험
 
-→ Phase 2 는 사이트 BMC IP 확보 후 `capture-site-fixture` skill 로 실측 fixture 캡처 + 별도 cycle.
+→ 보류분은 사이트 BMC IP 확보 후 실측 fixture 캡처 + 별도 작업.
 
 ### 대안 거절 사유
 
 | 대안 | 거절 사유 |
 |---|---|
-| Phase 2 도 본 cycle 에 포함 (web sources 가설 적용) | lab 부재 + AST2500/AST2600 형식 거의 동일 → 사이트 미스매치 시 graceful fallback 발생. 잘못된 generation adapter 선택보다는 안전하지만 정확도 부족. 사용자 의도 ("잘 돼있는지 검토") 의 회귀 위험 회피 우선 |
+| 보류분도 함께 적용 (web sources 가설 적용) | lab 부재 + AST2500/AST2600 형식 거의 동일 → 사이트 미스매치 시 graceful fallback 발생. 잘못된 generation adapter 선택보다는 안전하지만 정확도 부족. 점검 목적 (현재 상태 검토) 의 회귀 위험 회피 우선 |
 | X12 priority 90 유지 (의도된 값일 수 있음) | 주석 부재 + X11/X13 와 일관성 깨짐. lab 도입 후 재검토 시 priority 90 의 의도 추적 불가. 일관성 우선 |
 | X12 priority 110 (X14 와 동급) | X12 가 X14 보다 우선될 이유 없음. X14 가 최신 generation 이라 110 유지 |
 
@@ -169,31 +166,28 @@ Supermicro X11~X14 firmware_patterns 추가는 **보류**. 근거:
 | 영역 | 변경 |
 |---|---|
 | `adapters/redfish/supermicro_x12.yml` | priority `90 → 100` + origin 주석 갱신 |
-| `tests/unit/test_supermicro_adapter_selection.py` | 신규 (12 시나리오 + DRIFT-015 priority 회귀 차단) |
+| `tests/unit/test_supermicro_adapter_selection.py` | 신규 (12 시나리오 + priority 회귀 차단) |
 
 ### 검증
 
-- pytest 신규 12 시나리오 + DRIFT-015 priority test PASS
-- 기존 626 회귀 영향 0 (test_adapter_selection_t01 + test_probe_facts_extraction PASS)
+- pytest 신규 12 시나리오 + priority test PASS
+- 기존 626 회귀 영향 0 (관련 회귀 PASS)
 - ansible syntax-check redfish-gather/site.yml PASS
 
 ### 관련
 
-- rule 12 R2 (adapter 점수 일관성), rule 50 R3 (priority 역전 금지) + R2 단계 10
-- rule 95 R1 #4 (adapter score 동률) + #11 (외부 계약 drift)
-- rule 96 R1-A (lab 부재 web sources) + R1-C (NEXT_ACTIONS 자동 등재)
 - `module_utils/adapter_common.py:258-287` (점수 공식)
 - `lookup_plugins/adapter_loader.py:232-237` (tie-break stable sort)
-- DRIFT-014 (직전 cycle hpe-ilo7-gen12-match-fix), T-01 (commit `8c0fe0f6`)
+- 선례: hpe-ilo7-gen12-match-fix, HPE DL380 Gen11 오선택 (commit `8c0fe0f6`)
 
 ---
 
 ## 2026-05-11 — HPE Compute Scale-up Server 3200 (CSUS 3200) adapter 추가 (lab 부재)
 
-### 사용자 명시 (2026-05-11)
-- "hpe csus 장비도 개더링이 필요하다."
-- AskUserQuestion 응답: CSUS = HPE Compute Scale-up Server 3200 / lab 부재 — web sources only / BMC 정보 모름
-- 사용자 승인 결정 3종 (priority=96 / vault profile=hpe 재사용 / OEM regex 확장 Additive) 모두 본 cycle 적용
+### 배경 (2026-05-11)
+- HPE CSUS 장비 개더링 요구 발생.
+- CSUS = HPE Compute Scale-up Server 3200 / lab 부재 — web sources only / BMC 정보 미상
+- 결정 3종 (priority=96 / vault profile=hpe 재사용 / OEM regex 확장 Additive) 모두 적용
 
 ### 컨텍스트
 
@@ -201,14 +195,14 @@ CSUS3200 매칭 패턴이 부재하여 현재 `hpe_ilo.yml` (priority=10) generi
 
 ### 결정
 
-1. **별도 adapter 파일 신설** (rule 50 R2 "새 모델 = 새 adapter") — `adapters/redfish/hpe_csus_3200.yml` 신규
-2. **priority = 96** — Superdome Flex (95) 직상, iLO 6 (100) 직하. model_patterns 분리로 ProLiant 영향 0 (rule 12 R2 일관성)
-3. **HPE 공통 OEM tasks 재사용** — `redfish-gather/tasks/vendors/hpe/{collect,normalize}_oem.yml` 의 model regex 확장 (Additive only, rule 92 R2):
+1. **별도 adapter 파일 신설** ("새 모델 = 새 adapter") — `adapters/redfish/hpe_csus_3200.yml` 신규
+2. **priority = 96** — Superdome Flex (95) 직상, iLO 6 (100) 직하. model_patterns 분리로 ProLiant 영향 0 (점수 일관성)
+3. **HPE 공통 OEM tasks 재사용** — `redfish-gather/tasks/vendors/hpe/{collect,normalize}_oem.yml` 의 model regex 확장 (Additive only):
    - 기존: `(?i)Superdome|Flex`
    - 변경: `(?i)Superdome|Flex|Compute Scale-up|CSUS`
-   - fragment field name (`oem_hpe_superdome`) 유지 — envelope shape 영향 0 (rule 13 R5)
-4. **vault profile = "hpe" 재사용** (rule 50 R2 단계 4) — 별도 `vault/redfish/hpe_csus.yml` 분리는 NEXT_ACTIONS 등재
-5. **baseline / fixture SKIP** (rule 50 R2 단계 10 — lab 부재). NEXT_ACTIONS.md 에 4 항목 등재 (rule 96 R1-C)
+   - fragment field name (`oem_hpe_superdome`) 유지 — envelope shape 영향 0
+4. **vault profile = "hpe" 재사용** — 별도 `vault/redfish/hpe_csus.yml` 분리는 후속 등재
+5. **baseline / fixture SKIP** (lab 부재). 후속 작업 4 항목 등재
 6. **firmware_patterns 추정**: `^[34]\\.[0-9]+\\..*` (RMC 3.x/4.x — Superdome Flex 2.x/3.x 후속, 사이트 실측 시 정정)
 
 ### 대안 거절 사유
@@ -216,7 +210,7 @@ CSUS3200 매칭 패턴이 부재하여 현재 `hpe_ilo.yml` (priority=10) generi
 | 대안 | 거절 사유 |
 |---|---|
 | Superdome Flex adapter 의 model_patterns 만 확장 | CSUS3200 은 DDR5 신라인 + RMC firmware 세대 다름. 펌웨어/모델 매트릭스 추적 흐려짐. Round 검증 후 별도 baseline 필요 |
-| 새 HPE sub-vendor 신설 (`hpe_csus` 별도) | HPE 동일 vendor (Manufacturer = "HPE / Hewlett Packard Enterprise"). vendor_aliases.yml 변경 불필요. **(2026-06-04 refine: 내부 canonical 은 여전히 `hpe` 로 유지하되, 출력 표시값만 `hpCsus` 로 분기 — ADR-2026-06-04 참조. 본 거절 사유는 canonical 차원에서 유효)** |
+| 새 HPE sub-vendor 신설 (`hpe_csus` 별도) | HPE 동일 vendor (Manufacturer = "HPE / Hewlett Packard Enterprise"). vendor_aliases.yml 변경 불필요. **(2026-06-04 refine: 내부 canonical 은 여전히 `hpe` 로 유지하되, 출력 표시값만 `hpCsus` 로 분기 — 본 거절 사유는 canonical 차원에서 유효)** |
 | OEM tasks 별도 분리 (collect_csus_oem.yml 신설) | Oem.Hpe namespace 동일 + PartitionInfo/FlexNodeInfo 상속. 재사용이 단순 + Additive 검증 용이 |
 
 ### 적용 변경
@@ -228,7 +222,7 @@ CSUS3200 매칭 패턴이 부재하여 현재 `hpe_ilo.yml` (priority=10) generi
 | `redfish-gather/tasks/vendors/hpe/normalize_oem.yml` | model regex 확장 (Additive) + 주석 갱신 |
 | `docs/13_redfish-live-validation.md` | 16.3 / 16.3.1 항목 추가 |
 
-### Web Sources (rule 96 R1-A — lab 부재 vendor 의무, 확인 2026-05-11)
+### Web Sources (lab 부재 vendor 의무, 확인 2026-05-11)
 
 1. [HPE CSUS 3200 FAQ](https://cdrdv2-public.intel.com/792357/FAQ%20-%20HPE%20Compute%20Scale-up%20Server%203200.pdf) — RMC + 표준 Redfish API
 2. [HPE psnow architecture and RAS](https://www.hpe.com/psnow/doc/a50009596enw) — "built on the proven HPE Superdome Flex architecture"
@@ -241,32 +235,25 @@ CSUS3200 매칭 패턴이 부재하여 현재 `hpe_ilo.yml` (priority=10) generi
 ### 검증
 
 - 정적: `ansible-playbook --syntax-check redfish-gather/site.yml` / yamllint
-- 동적: score-adapter-match mock — CSUS 3200 / ProLiant Gen11 (회귀) / Superdome Flex 280 (회귀) 각각 올바른 adapter 선택 확인
+- 동적: adapter 점수 mock — CSUS 3200 / ProLiant Gen11 (회귀) / Superdome Flex 280 (회귀) 각각 올바른 adapter 선택 확인
 - 회귀: HPE baseline (`hpe_baseline.json` — DL380 Gen11 iLO 6) 통과 (model_patterns 분리로 영향 0)
-
-### rule 70 R8 trigger 적용
-
-- trigger 1 (rule 본문 의미 변경): 0 (rule 변경 없음)
-- trigger 2 (표면 카운트 변경): 0 (하네스 surface 카운트 — adapter 카운트는 별도)
-- trigger 3 (보호 경로 정책 변경): 0
-- → ADR 의무 아님. 본 decision-log entry + VENDOR_ADAPTERS / hpe.md 갱신으로 governance trace
 
 ---
 
 ## 2026-06-04 — 출력 envelope vendor 표시값 매핑 (hpe→hp, CSUS 3200→hpCsus)
 
-### 결정 (사용자 명시)
+### 결정
 
 호출자 노출 envelope `vendor` 값을 HPE 계열 `hp`, HPE CSUS 3200 `hpCsus` 로 변경.
 **Design A — 출력 라벨만 변경**: 내부 canonical `hpe` 유지(라우팅 무손상), 출력만 data-driven
 표시 맵(`common/vars/vendor_aliases.yml` 의 `vendor_output_display`/`adapter_output_display`)으로 치환.
 
-### 범위 (사용자 결정 4건)
+### 범위 (결정 4건)
 
 | 항목 | 결정 |
 |---|---|
 | 구현 방식 | 출력 라벨만 변경 (내부 canonical 불변) |
-| hpCsus 범위 | HPE Compute Scale-up Servers 패밀리 — CSUS 3200 + Superdome Flex (둘 다 RMC 관리 scale-up). 초기 "CSUS 3200 한정" → 2026-06-04 HPE 공식 분류 web 검증 후 Superdome Flex 포함 확대 (ADR §6 amendment) |
+| hpCsus 범위 | HPE Compute Scale-up Servers 패밀리 — CSUS 3200 + Superdome Flex (둘 다 RMC 관리 scale-up). 초기 "CSUS 3200 한정" → 2026-06-04 HPE 공식 분류 web 검증 후 Superdome Flex 포함 확대 |
 | 채널 범위 | 3 채널 전체 (redfish/os/esxi) `hp` |
 | 표기 | `hpCsus` camelCase 유지 + schema enum 변경 승인 |
 
@@ -285,27 +272,27 @@ CSUS3200 매칭 패턴이 부재하여 현재 `hpe_ilo.yml` (priority=10) generi
 - pytest 748 passed / validate_field_dictionary PASS / Jinja 표시식 단위 검증 PASS
 - `ansible-playbook --syntax-check`: Windows dev box ansible 부재로 미실행 (Linux Agent/CI 수행)
 
-### 호환성 주의 (rule 96 R1-B)
+### 호환성 주의
 
 envelope `vendor` 는 외부 계약. `hpe` 로 필터링하던 다운스트림 소비자는 `hp`/`hpCsus` 로 갱신 필요.
 (본 변경 자체가 다운스트림 요구에서 출발.)
 
-### lab 도입 후 NEXT_ACTIONS 4 항목 (rule 96 R1-C)
+### lab 도입 후 후속 작업 4 항목
 
 | # | 항목 | trigger | 책임 |
 |---|---|---|---|
-| 1 | 사이트 fixture 캡처 | BMC IP 확보 | capture-site-fixture skill |
-| 2 | baseline JSON 추가 (`schema/baseline_v1/hpe_csus_3200_baseline.json`) | 실장비 검증 후 | rule 13 R4 + update-vendor-baseline skill |
-| 3 | lab 도입 cycle (`hpe-csus-3200-lab-validation` round) | 별도 round 진입 | Round 검증 + 펌웨어 매트릭스 확정 |
-| 4 | vault 분리 결정 (`vault/redfish/hpe_csus.yml`) | 사용자 명시 승인 시 | 현재 hpe 재사용 — 사용자 결정 시 분리 |
+| 1 | 사이트 fixture 캡처 | BMC IP 확보 | 사이트 fixture 캡처 |
+| 2 | baseline JSON 추가 (`schema/baseline_v1/hpe_csus_3200_baseline.json`) | 실장비 검증 후 | 실측 baseline 갱신 |
+| 3 | lab 도입 검증 (`hpe-csus-3200-lab-validation` round) | 별도 round 진입 | Round 검증 + 펌웨어 매트릭스 확정 |
+| 4 | vault 분리 결정 (`vault/redfish/hpe_csus.yml`) | 향후 승인 시 | 현재 hpe 재사용 — 향후 결정 시 분리 |
 
 ---
 
-## 2026-05-11 — HPE iLO 7 Gen12 2-part firmware version 매치 보강 (cycle hpe-ilo7-gen12-match-fix)
+## 2026-05-11 — HPE iLO 7 Gen12 2-part firmware version 매치 보강
 
 ### 컨텍스트
 
-직전 cycle `hpe-csus-add` (commit `a123b1cc`) mock 검증의 부수 발견 — mock S1
+직전 `hpe-csus-add` (commit `a123b1cc`) mock 검증의 부수 발견 — mock S1
 시나리오에서 `facts = {vendor: HPE, model: "ProLiant DL380 Gen12", firmware: "1.10"}`
 입력 시 `hpe_ilo7.yml` (priority=120) 이 매치하지 못하고 `hpe_ilo4.yml`
 (priority=50) 이 선택되는 갭 재현 확인.
@@ -324,13 +311,13 @@ Gen12 OEM 정보 (Oem.Hpe.SystemInformation 등) 수집 실패.
 
 ### 결정
 
-1. **`hpe_ilo7.yml` L43 firmware_patterns 확장 (Additive only, rule 92 R2)**:
+1. **`hpe_ilo7.yml` L43 firmware_patterns 확장 (Additive only)**:
    - 기존: `["iLO.*7", "^\\d+\\.\\d+\\.\\d+"]`
    - 변경: `["iLO.*7", "^\\d+\\.\\d+\\.\\d+", "^1\\.1[0-9]"]`
    - `^1\.1[0-9]` (1.10~1.19) 명시 — 충돌 검증:
      - iLO 4 `^1\.[0-9]` (한자리 minor 1.0~1.9): 충돌 0
      - iLO 6 `^1\.[5-9]` (한자리 minor 1.5~1.9): 충돌 0
-2. **origin 주석 보강** (rule 96 R1) — mock 갭 재현 기록 + 미래 1.20+ 2-part 사이트 실측 cycle 위임 명시
+2. **origin 주석 보강** — mock 갭 재현 기록 + 미래 1.20+ 2-part 사이트 실측 위임 명시
 3. **회귀 보존 5 시나리오 검증**:
    - S1 (1.10) → iLO 7 (fix 효과)
    - S2 (1.16.00) → iLO 7 (3-part 회귀)
@@ -364,216 +351,21 @@ Gen12 OEM 정보 (Oem.Hpe.SystemInformation 등) 수집 실패.
   - S5: SDFlex 95570 → SDFlex 280 (회귀)
 - 회귀: `pytest tests/` 590/590 PASS
 
-### rule 70 R8 trigger 적용
-
-- trigger 1 (rule 본문 의미 변경): 0
-- trigger 2 (표면 카운트 변경): 0
-- trigger 3 (보호 경로 정책 변경): 0
-- → ADR 의무 아님. 본 entry + VENDOR_ADAPTERS / CONVENTION_DRIFT 로 governance trace
-
-### 후속 (NEXT_ACTIONS — lab 도입 후)
+### 후속 (lab 도입 후)
 
 - iLO 7 Gen12 사이트 fixture 캡처 (`tests/fixtures/redfish/hpe_ilo7/` — facts.firmware 실측 형식 확정)
 - 1.20+ 2-part 변형 발견 시 firmware_patterns 추가 정정
-- 사이트 사고 발생 시 reverse regression 검토 (rule 25 R7-A-1 — 사용자 실측 > spec)
+- 사이트 사고 발생 시 reverse regression 검토 (사이트 실측 > spec)
 
 ---
 
-## 2026-05-11 — Phase 7 ticket_consistency hook BLOCKING 격상 (4/4 완료)
-
-### 사용자 명시 (2026-05-11)
-- "남아있는 작업있으면 모두 수행해라. 너가할수있는건 모두하라고. 후속작업이 생겨도 너가 할 수 있으면 다하라고"
-- AI 자율 진행 — Phase 7 ticket_consistency 격상 선행 작업 (107 ticket 6 절 변환) 자율 수행
-
-### 결정
-
-advisory hook 격상 4/4 완료 보장 위해 Phase 7 선행 작업 자율 진행:
-
-1. **hook hint 확장 (보수적)** — `pre_commit_ticket_consistency.py` REQUIRED_SECTION_HINTS 에 의미 일치하는 ticket 패턴 추가:
-   - 사용자 의도: `## 사용자 명시` 추가
-   - 작업 범위: `## 변경` / `## 우리 영향` / `## 변경 (Additive)` / `## BMC` / `## 대표 모델` 추가
-   - 분석 / 구현: `## 컨텍스트` / `## 현재 동작` / `## 구현` / `## Sources` / `## Web sources` / `## fixture 구조` 추가
-   - 결정 / 결과: `## 완료 조건` / `## 결과` / `## Vault 상태` 추가
-   - 회귀 / 검증: `## 회귀 risk` 추가
-   - 다음 지시 / 관련: `## 다음 ticket` / `## 다음 세션 첫 지시 템플릿` / `## Cold-start` 추가
-   - 각 label 의 self stub 헤더 (`## <label>` 형식) 도 hint 추가 (stub append 자기 매칭 보장)
-
-2. **잔여 56 ticket stub 변환** — hint 확장 후에도 누락 절 있는 ticket 본문 끝에 placeholder stub append:
-   - cycle 2026-05-11 Phase 7 stub: "본 ticket 은 cycle DONE 시점에 cold-start 6 절 정본 도입 전 작성. 원본 의도 / 분석 / 결정 등은 본문 + commit log + cycle CURRENT_STATE entry 참조."
-   - 본문 보존 (write history 유지) + 누락 절만 끝에 stub 추가
-
-3. **격상**: `pre_commit_ticket_consistency.py` line 225 `return 0` → `return 1` + docstring + stderr 메시지 갱신
-4. **install-git-hooks.sh** 주석 + 환경변수 안내 "cold-start 6 절" → "BLOCKING cycle 2026-05-11"
-
-### 검증
-
-- **self-test**: 11/11 PASS (hint 확장 후 재실행)
-- **전수 스캔**: 109 ticket / 위반 **0건** (Phase 7 stub 변환 후)
-- **pytest**: 587/587 PASS
-- **escape hatch**: `TICKET_CONSISTENCY_SKIP=1` 유지
-
-### rule 70 R8 trigger 적용
-
-- trigger 1 (rule 본문 의미 변경): rule 26 R10 본문 변경 0 (6 절 자체는 변경 없음 — hook hint 확장만)
-- trigger 2 (표면 카운트 변경): 0건 (hook 개수 28 유지)
-- trigger 3 (보호 경로 정책 변경): 0건
-- → ADR 의무 아님. 본 decision-log entry 만 governance trace.
-
-### 효과 — advisory hook 격상 4/4 완료
-
-| Hook | 격상 cycle | Phase |
-|---|---|---|
-| pre_commit_jinja_namespace_check | 2026-05-11 | Phase 4 |
-| pre_commit_docs20_sync_check | 2026-05-11 | Phase 5 |
-| pre_commit_status_logic_check | 2026-05-11 | Phase 6.1 |
-| pre_commit_additive_only_check | 2026-05-11 | Phase 6.2 |
-| pre_commit_ticket_consistency | 2026-05-11 | Phase 7 |
-
-→ Jinja namespace / envelope 정본 / status 매트릭스 / Additive only / cold-start 6 절 **5 영역 회귀 자동 차단** 보장.
-
-→ 모든 advisory hook BLOCKING 격상 완료. 향후 도입되는 advisory hook 은 다음 cycle 격상 패턴 동일 적용.
-
----
-
-## 2026-05-11 — advisory hook 격상 Phase 6 일괄 (2/4 + 1/4 보류)
-
-### 사용자 명시 (2026-05-11)
-- "남아있는 작업있으면 모두 수행해라" — Phase 6 남은 advisory hook 3종 단계적 격상
-
-### 결과
-
-| Hook | 결정 | 사유 |
-|---|---|---|
-| `pre_commit_status_logic_check` (rule 13 R8) | **격상 (BLOCKING)** | self-test 7/7 PASS / git log 5 cycle 위반 후보 1건 (M-A3 cosmetic — R8 Allowed 절) / escape hatch `STATUS_LOGIC_SKIP_COSMETIC=1` 적용 가능 |
-| `pre_commit_additive_only_check` (rule 92 R2 / 96 R1-B) | **격상 (BLOCKING)** | self-test 5/5 PASS / git log 5 cycle 위반 후보 2건 (모두 schema 주석 cosmetic — `ADDITIVE_SKIP_NEW_CYCLE=1` 우회) |
-| `pre_commit_ticket_consistency` (cold-start 6 절) | **격상 보류** | 기존 ticket 109 파일 전수 스캔 → **107건 위반 발견** (분석/결정 절 누락 / write-cold-start-ticket 정본 미준수). 격상 시 향후 ticket 작업 모두 차단 → 선행 작업 (107건 6 절 변환) 필요 |
-
-### 적용 변경 (각 1 commit 분리)
-
-| Hook | Commit | 변경 |
-|---|---|---|
-| status_logic | `01588650` | hook.py line 243 `return 0 → return 1` + docstring + stderr "(advisory)" → "(BLOCKING — cycle 2026-05-11 격상)" + install-git-hooks.sh 주석/환경변수 안내 |
-| additive_only | `e4c37086` | hook.py line 189 `return 0 → return 1` + docstring + stderr + install-git-hooks.sh |
-
-### 검증 (각 격상 후)
-
-- self-test PASS (status_logic 7/7 / additive_only 5/5)
-- pytest 587/587 PASS
-- escape hatch 유지 (각 hook별 SKIP / SKIP_COSMETIC / SKIP_NEW_CYCLE 환경변수)
-
-### rule 70 R8 trigger 적용
-
-- trigger 1 (rule 본문 의미 변경): 적용 없음 (rule 13 R8 / rule 92 R2 / rule 96 R1-B 본문 변경 없음 — hook 동작 변경만)
-- trigger 2 (표면 카운트 변경): 적용 없음 (hook 개수 28 유지)
-- trigger 3 (보호 경로 정책 변경): 적용 없음
-- → ADR 의무 아님. 본 decision-log entry 만 governance trace.
-
-### ticket_consistency 격상 보류 — 선행 작업 명세
-
-**선행 작업**: 기존 ticket 107건 6 절 변환 (현재 위반)
-- 위반 패턴: "분석 / 구현" + "결정 / 결과" 절 누락 (대다수)
-- 권장: 별도 cycle (ticket 6 절 변환 cycle) — 격상 후순위 유지 (multi-worker 미사용으로 cycle 운영 부담 적음)
-- 격상 조건: 선행 cycle 후 전수 스캔 위반 0 확인 시 격상
-
-### 효과 — advisory hook 격상 통계 (cycle 2026-05-11 종료 시점)
-
-| Hook | 도입 | 격상 |
-|---|---|---|
-| pre_commit_jinja_namespace_check | cycle 2026-05-07 | cycle 2026-05-11 (Phase 4) |
-| pre_commit_docs20_sync_check | cycle 2026-05-06 | cycle 2026-05-11 (Phase 5) |
-| pre_commit_status_logic_check | cycle 2026-05-06-post | cycle 2026-05-11 (Phase 6.1) |
-| pre_commit_additive_only_check | cycle 2026-05-06-post | cycle 2026-05-11 (Phase 6.2) |
-| pre_commit_ticket_consistency | cycle 2026-05-06 | 격상 보류 (107건 선행 변환 필요) |
-
-→ envelope 정본 / status 매트릭스 / Additive only / Jinja namespace 4 영역 회귀 자동 차단 보장.
-
----
-
-## 2026-05-11 — docs20_sync hook advisory → BLOCKING 격상 (advisory hook 격상 1/4)
+## 2026-05-11 — Jinja2 namespace scoping 회귀 패턴
 
 ### 컨텍스트
 
-`pre_commit_docs20_sync_check.py` 는 cycle 2026-05-06 도입 시점 advisory (exit 0) 로 운영. rule 13 R7 (envelope 정본 4종 변경 시 docs/20 동기화 의무) 자동 검증. 4 advisory hook (docs20_sync / status_logic / additive_only / ticket_consistency) 중 첫 격상 대상.
+Ansible Jinja2 `{% set var = var + ... %}` 형식의 self-reference 누적이 loop scope 안에서 의도대로 동작하지 않는 회귀가 반복 발생. per-iteration local 로 초기화되어 누적 값이 사라지는 문제.
 
-### 결정 (2026-05-11)
-
-Jinja namespace hook 동일 패턴 (cycle 2026-05-11 격상). docs20_sync 격상 기준 충족:
-
-- **운영 기간**: cycle 2026-05-06 advisory → 2026-05-11 까지 **5 cycle** (M-A1~A6 / M-B~L / M-A7 / M-A7-followup / harness-cycle)
-- **false-positive 통계**: git log 5 cycle 전수 검토 — 정본 4종 (`build_output.yml` / `build_status.yml` / `sections.yml` / `field_dictionary.yml`) 변경 commit 모두 `docs/20_json-schema-fields.md` 동반 변경 (M-A3 commit `78611714` 1건만 build_status.yml 주석 강화 → cosmetic 변경 = R7 Allowed 절 = `DOCS20_SYNC_SKIP_COSMETIC=1` 환경변수 escape hatch 적용 가능)
-- **self-test**: 6/6 PASS (정본 1개 변경 / 정본 2개 + docs/20 / 정본 외 / 빈 staged / Windows path / 정본 4종 전수)
-
-### 적용 변경 (2 파일)
-
-`pre_commit_docs20_sync_check.py` 의 반환값을 `return 0` (advisory) → `return 1` (blocking) 으로 격상 + docstring / stderr 메시지 갱신. `install-git-hooks.sh` 주석 + 환경변수 안내 갱신.
-
-### 검증
-
-- self-test 6/6 PASS (격상 후 재실행)
-- pytest 587/587 PASS
-- `DOCS20_SYNC_SKIP=1` / `DOCS20_SYNC_SKIP_COSMETIC=1` 환경변수 escape hatch 유지
-
-### rule 70 R8 trigger 적용
-
-- trigger 1 (rule 본문 의미 변경): 적용 없음 (rule 13 R7 본문 변경 없음 — hook 동작 변경만)
-- trigger 2 (표면 카운트 변경): 적용 없음 (hook 개수 28 유지)
-- trigger 3 (보호 경로 정책 변경): 적용 없음
-- → ADR 작성 의무 아님. 본 decision-log entry 만 governance trace.
-
-### 효과
-
-- 향후 PR / commit 에서 envelope 정본 4종 변경 + docs/20 동기화 누락 자동 차단
-- 호출자 시스템 계약 안정성 보장 (docs/20 = 호출자 reference 정본)
-- cosmetic 변경 (주석 / 들여쓰기만) 시 `DOCS20_SYNC_SKIP_COSMETIC=1` 명시 우회 — R7 Allowed 절 호환
-
-### 남은 advisory hook (3종 — 단계적 격상)
-
-- `pre_commit_status_logic_check` (rule 13 R8 — cycle 2026-05-06-post 도입, 격상 후보)
-- `pre_commit_additive_only_check` (rule 92 R2 / 96 R1-B — cycle 2026-05-06-post 도입, 격상 후보)
-- `pre_commit_ticket_consistency` (cold-start 6 절 — cycle 2026-05-06 도입, multi-worker 미사용으로 후순위)
-
-각각 1 cycle 추가 advisory 운영 + false-positive 0 재확인 후 단계적 격상 (Jinja / docs20_sync 패턴 동일).
-
----
-
-## 2026-05-11 — Jinja namespace hook advisory → BLOCKING 격상 (harness-cycle)
-
-### 컨텍스트
-
-`pre_commit_jinja_namespace_check.py` 는 cycle 2026-05-07 도입 시점 advisory (exit 0) 로 운영. 도입 근거 (cycle 2026-05-07-post NEXT_ACTIONS Phase 4): "1 cycle 모니터링 후 false-positive 0 시 blocking 격상 검토".
-
-### 결정 (2026-05-11)
-
-cycle 2026-05-11 harness-cycle 자기개선 단계에서 다음 기준 충족 확인 → blocking (exit 1) 격상:
-
-- **운영 기간**: cycle 2026-05-07 advisory → 2026-05-11 까지 **5 cycle** (M-A1~A6 / M-B~L / M-A7 / M-A7-followup / harness-cycle)
-- **false-positive 통계**: 141 YAML/J2 파일 전수 스캔 **0건** (cycle 2026-05-11 격상 직전 + 직후 재확인)
-- **self-test**: 9/9 PASS (cycle-016 self-ref 누적 / namespace 안전 / mutation / per-iteration local / loop-var / loop-외 / comment 안 / 중첩 self-ref / filter self-ref)
-
-### 적용 변경 (3 파일)
-
-`pre_commit_jinja_namespace_check.py` 의 반환값을 `return 0` (advisory) → `return 1` (blocking) 으로 격상 + docstring / stderr 메시지 갱신. `install-git-hooks.sh` 주석 + 환경변수 안내 갱신.
-
-### 검증
-
-- self-test 9/9 PASS (격상 후 재실행)
-- 141 YAML/J2 전수 스캔 0 blocked (격상 후 재확인)
-- `JINJA_NAMESPACE_SKIP=1` / `JINJA_NAMESPACE_SKIP_FILE=path` 환경변수 escape hatch 유지
-
-### rule 70 R8 trigger 적용
-
-- trigger 1 (rule 본문 의미 변경): 적용 없음 (rule 22 본문 변경 없음 — hook 동작 변경만)
-- trigger 2 (표면 카운트 변경): 적용 없음 (hook 개수 28 유지)
-- trigger 3 (보호 경로 정책 변경): 적용 없음
-- → ADR 작성 의무 아님. 본 decision-log entry 만 governance trace.
-
-### 효과
-
-- 향후 PR / commit 에서 Jinja2 namespace scoping 회귀 (cycle-015 / -016 / M-D2 패턴) 자동 차단
-- escape hatch (skip 환경변수) 유지 → 의도된 false-positive 발생 시 우회 가능
-- 검출 패턴: `{% set var = var + ... %}` 같은 self-reference 누적 (per-iteration local 안전)
-
-### 검출되는 대표 회귀 패턴 (cycle 2026-05-07-post 해결)
+### 검출되는 대표 회귀 패턴
 
 | # | 위치 | 사고 | 해결 |
 |---|---|---|---|
@@ -581,25 +373,28 @@ cycle 2026-05-11 harness-cycle 자기개선 단계에서 다음 기준 충족 �
 | 2 | `esxi-gather/tasks/normalize_network.yml:67` | 동일 netmask 사고 | 동일 namespace fix |
 | 3 | `os-gather/tasks/linux/gather_users.yml:77, 212` | groups 집계 의도 모호 | namespace 로 통일 (ns.groups) |
 
-향후 본 hook 으로 동일 회귀 자동 차단.
+### 결정
+
+- loop 안 누적 변수는 Jinja2 `namespace()` (`ns.val`) 로 통일 — per-iteration local self-reference (`{% set var = var + ... %}`) 금지
+- 검출 패턴: `{% set var = var + ... %}` 같은 self-reference 누적 (per-iteration local 안전)
 
 ---
 
-## 2026-05-11 — M-A7 adapter `recovery_accounts.vault_label` ↔ vault `accounts.label` 정합
+## 2026-05-11 — adapter `recovery_accounts.vault_label` ↔ vault `accounts.label` 정합
 
 ### 컨텍스트
 
-cycle 2026-05-11 M-A1~A6 (vendor default 계정 자동 생성 path 보장) 후속 검증 중 `dell_idrac10.yml` 의 declared `recovery_accounts.vault_label` (`dell_root_dellidrac1`, `dell_root_calvin`) 이 vault `dell.yml` 의 실 label (`dell_fallback_1`, `dell_fallback_2`, `dell_current`, `lab_dell_root`) 와 mismatch 발견. `account_service.yml:31-41` 의 label 우선 → username fallback chain 으로 기능 정상이지만 label 매칭 활성화 안 됨 (username fallback 으로 항상 우회). 9 vendor 전수 동일 패턴.
+vendor default 계정 자동 생성 path 보장 후속 검증 중 `dell_idrac10.yml` 의 declared `recovery_accounts.vault_label` (`dell_root_dellidrac1`, `dell_root_calvin`) 이 vault `dell.yml` 의 실 label (`dell_fallback_1`, `dell_fallback_2`, `dell_current`, `lab_dell_root`) 와 mismatch 발견. `account_service.yml:31-41` 의 label 우선 → username fallback chain 으로 기능 정상이지만 label 매칭 활성화 안 됨 (username fallback 으로 항상 우회). 9 vendor 전수 동일 패턴.
 
-### 사용자 결정 (2026-05-11)
+### 결정 (2026-05-11)
 
-**Q1: Dell/HPE/Lenovo adapter 정합 범위**
+**쟁점 1: Dell/HPE/Lenovo adapter 정합 범위**
 - 결정: **B. Vault 전수 declare 확장** (Dell 4 / HPE 3 / Lenovo 3 entry — vault 실 label 와 동일)
 - 대안 A (최소 rename) / C (현 상태 유지 + 문서화) 거절
 
-**Q2: Supermicro/Cisco/Huawei/Inspur/Fujitsu/Quanta 6 vendor 처리**
-- 결정: **A. 본 cycle 에 함께 채움** (`*_factory` 1~2 entry)
-- 대안 B (별도 cycle / lab 도입 시) 거절
+**쟁점 2: Supermicro/Cisco/Huawei/Inspur/Fujitsu/Quanta 6 vendor 처리**
+- 결정: **A. 함께 채움** (`*_factory` 1~2 entry)
+- 대안 B (별도 작업 / lab 도입 시) 거절
 
 ### 적용 변경 (29 adapter — generic 제외)
 
@@ -619,9 +414,9 @@ cycle 2026-05-11 M-A1~A6 (vendor default 계정 자동 생성 path 보장) 후�
 
 ### 원칙 준수
 
-- **Additive only** (rule 92 R2) — adapter declare entry **추가만**. 코드 로직 / collect / normalize / match 불변
-- **envelope shape 변경 0** (rule 13 R5 / rule 96 R1-B) — adapter declare 텍스트만 변경. 호출자 시스템 파싱 영향 0
-- **vault 자동 반영 영향 0** (rule 27 R6) — cacheable / fact_caching / decrypt 캐시 모두 0 유지
+- **Additive only** — adapter declare entry **추가만**. 코드 로직 / collect / normalize / match 불변
+- **envelope shape 변경 0** — adapter declare 텍스트만 변경. 호출자 시스템 파싱 영향 0
+- **vault 자동 반영 영향 0** — cacheable / fact_caching / decrypt 캐시 모두 0 유지
 
 ### 효과
 
@@ -641,10 +436,10 @@ cycle 2026-05-11 M-A1~A6 (vendor default 계정 자동 생성 path 보장) 후�
 - `redfish-gather/tasks/account_service.yml:31-41` — label 우선 → username fallback chain
 - `redfish-gather/tasks/try_one_account.yml` — 시도 체인
 
-### 후속 (별도 cycle 권장)
+### 후속 (별도 작업 권장)
 
-- **신규 회귀 테스트** — `tests/unit/test_adapter_vault_label_consistency.py` (29 adapter × declared label ∈ docs/21 §6.5 vendor 매트릭스 검증). 본 cycle 시간 제약으로 보류. 별도 ticket
-- **lab 도입 후 검증** — Huawei/Inspur/Fujitsu/Quanta + 6 generation 미검증 vendor 의 label 매칭 회귀는 lab 도입 후 NEXT_ACTIONS 후속 cycle
+- **신규 회귀 테스트** — `tests/unit/test_adapter_vault_label_consistency.py` (29 adapter × declared label ∈ docs/21 §6.5 vendor 매트릭스 검증). 시간 제약으로 보류. 별도 작업
+- **lab 도입 후 검증** — Huawei/Inspur/Fujitsu/Quanta + 6 generation 미검증 vendor 의 label 매칭 회귀는 lab 도입 후 후속 작업
 
 ---
 
@@ -652,17 +447,17 @@ cycle 2026-05-11 M-A1~A6 (vendor default 계정 자동 생성 path 보장) 후�
 
 ### 컨텍스트
 
-사용자 (hshwang1994) 명시 (2026-05-07):
+배경 (2026-05-07):
 
-> "실제 개더링할수있는 장비를 대상으로 개더링하고 그 값을 대상으로 json출력 예시를 업데이트해라. 만약 schema/baseline_v1이 json출력예시 디렉터리가 아니라면 별도로 디렉터리를 만들고 schema/baseline_v1에 생성한 파일은 지워라. 만약 의도가맞다면 업데이트만 해라. 그리고 한글로 할때 모든 json 키값에대한 설명을 주석으로 달아라."
+> 실제 개더링 가능한 장비를 대상으로 개더링하고 그 값으로 JSON 출력 예시를 갱신. schema/baseline_v1 이 JSON 출력 예시 디렉터리가 아니라면 별도 디렉터리를 만들고 schema/baseline_v1 에 추가된 파일은 제거. 의도가 맞으면 갱신만. 한글 주석으로 모든 JSON 키값 설명 첨부.
 
-직전 cycle 2026-05-06 b65e162e 가 baseline_v1 안에 한글 주석본 8개 (`*_annotated.jsonc`) 를 추가했으나, baseline_v1 정본 의도 (회귀 기준선 — Jenkins Stage 4 pytest 입력) 와 충돌. 사용자가 위치 부적합 지적.
+직전 작업 (commit b65e162e) 이 baseline_v1 안에 한글 주석본 8개 (`*_annotated.jsonc`) 를 추가했으나, baseline_v1 정본 의도 (회귀 기준선 — Jenkins Stage 4 pytest 입력) 와 충돌. 위치 부적합 확인.
 
 ### 결정
 
 **A. baseline_v1 != 출력 예시 → 신규 디렉터리** `schema/output_examples/` 신설.
 
-**B. 자격증명** — vault 사용 + 평문 노출 OK (사용자 명시 "기존 볼트를 사용하고, 그것이 평문에 담겨도된다").
+**B. 자격증명** — 기존 vault 사용 + 평문 노출 허용.
 
 **C. 실행 위치** — Jenkins 에이전트 10.100.64.155 SSH 접속 후 직접 ansible-playbook 실행. 결과 rsync 회수.
 
@@ -677,35 +472,31 @@ cycle 2026-05-11 M-A1~A6 (vendor default 계정 자동 생성 path 보장) 후�
 ### 산출물
 
 - 신설: `schema/output_examples/{README.md, 10 jsonc 파일}`
-- 삭제: `schema/baseline_v1/*_annotated.jsonc` 8개 (사용자 명시)
+- 삭제: `schema/baseline_v1/*_annotated.jsonc` 8개 (위치 부적합)
 - 보존: baseline_v1 *_baseline.json 8개 / examples *.json 4개 / sections.yml / field_dictionary.yml
 
 ### 검증
 
 - pytest 335/335 PASS
-- envelope 13 필드 / sections 10 / field_dictionary 65 — 변경 없음 (rule 13 R5 / rule 96 R1-B Additive only)
+- envelope 13 필드 / sections 10 / field_dictionary 65 — 변경 없음 (Additive only)
 - 호출자 시스템 파싱 변경 0
-
-### Evidence
-
-- `tests/evidence/2026-05-07-real-gather.md` (실행 절차 + 발견 사항 + 호출자 영향)
 
 ### 후속
 
-- 펌웨어 / 환경 변경 시 본 디렉터리 재 캡처 — `update-vendor-baseline` skill 또는 직접 갱신
-- 6개월 갱신 0건 시 stale 가능 — `EXTERNAL_CONTRACTS.md` 동기화 권장
+- 펌웨어 / 환경 변경 시 본 디렉터리 재 캡처 (실측 baseline 갱신 또는 직접 갱신)
+- 6개월 갱신 0건 시 stale 가능 — 외부 계약 동기화 권장
 
 ---
 
-## 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택)
+## 2026-05-06 — status 의도 결정 (Case A 채택)
 
 ### 컨텍스트
 
-사용자 (hshwang1994) 의심 영역 (cycle 진입 시점 명시):
+의심 영역 (status 판정 로직):
 
-> "스키마 검증 들어가자. 모든 값에 대한 스키마 검증해주되 특히 자세히 봐야할것은 개더링상태가 success failed partial 이렇게 3개로 나눠져있는것으로 보이는데, 이게 로직이 정상작동돼지않는듯함. 부분 성공이라고 하더라도 error 에는 로그가 찍히는데 success로 빠지는경우가 있음 이것은 왜이런지 확인해줘 의도된건지?"
+> 개더링 상태가 success / failed / partial 3종으로 나뉘는데, 로직이 정상 작동하지 않는 것으로 보임. 부분 성공이라도 errors 에 로그가 찍히는데 success 로 빠지는 경우가 있음 — 의도된 동작인지 확인 필요.
 
-→ M-A1 [DONE] (commit `ba003b2f`) 분석 결과: 시나리오 B (섹션 success + errors warning → overall=success) 는 **명백한 의도된 동작**. 코드 주석 3 위치가 명시:
+→ 분석 결과 (commit `ba003b2f`): 시나리오 B (섹션 success + errors warning → overall=success) 는 **명백한 의도된 동작**. 코드 주석 3 위치가 명시:
 - `os-gather/tasks/linux/gather_memory.yml:171-172` (dmidecode fallback 사유 추적)
 - `os-gather/tasks/linux/gather_network.yml:208` (lspci stderr 권한 부족 추적)
 - `esxi-gather/tasks/normalize_storage.yml:79-80` (NFS/vSAN/vVOL cap 미수집 추적)
@@ -714,80 +505,78 @@ build_status.yml 판정 로직 (정본 인라인 Jinja2): **errors[] 는 보지 
 
 ### 결정 (4 포인트)
 
-AI 자율 진행 권한 적용 (cycle 진입 시 사용자 명시 — "사용자 결정 4 포인트도 AI 합리적 default 결정 후 진행"):
+결정 4 포인트 (합리적 default 채택):
 
 | 결정 | 선택 | 근거 |
 |---|---|---|
-| (1) 시나리오 B 처리 | **B-1 (현재 동작 유지)** | M-A1 분석 — 의도된 설계 + Additive only cycle + rule 96 R1-B (envelope shape 보존) |
-| (2) errors[] severity | **(a) 유지** | rule 22 R7/R8 + rule 13 R5 + 3채널 27+ 위치 영향 → 별도 cycle 영역 |
-| (3) status_rules.yml | **(c) 유지** | DEAD CODE 명시 주석 "삭제 금지 / 향후 reserved" + rule 70 R5 보존 판정 YES |
-| (4) status enum | **(a) 3 enum 유지** | rule 13 R5 envelope 13 필드 정본 + rule 96 R1-B (호환성 외 schema 확장 별도 cycle) |
+| (1) 시나리오 B 처리 | **B-1 (현재 동작 유지)** | 의도된 설계 + Additive only + envelope shape 보존 |
+| (2) errors[] severity | **(a) 유지** | Fragment 5 변수 / 타입 + envelope 13 필드 + 3채널 27+ 위치 영향 → 별도 작업 영역 |
+| (3) status_rules.yml | **(c) 유지** | DEAD CODE 명시 주석 "삭제 금지 / 향후 reserved" |
+| (4) status enum | **(a) 3 enum 유지** | envelope 13 필드 정본 + 호환성 외 schema 확장 별도 작업 |
 
 → **Case A 채택** — 의도된 동작 명시 only (Additive 주석/문서 강화).
 
 ### 영향
 
 - 코드 동작 변경: **0건**
-- envelope 13 필드: **변경 0** (rule 13 R5 / 96 R1-B 보존)
+- envelope 13 필드: **변경 0** (보존)
 - status enum: **3종 유지** (success / partial / failed)
 - 9 vendor baseline 회귀: **영향 0**
 - 호출자 시스템 파싱: **영향 0**
-- ADR (rule 70 R8 trigger): **NO** — rule 본문 변경 없음, 표면 카운트 변동 없음 → M-A4 SKIP 가능
 
-### M-A3 작업 (다음 세션)
+### 후속 작업
 
 1. `common/tasks/normalize/build_status.yml` 헤더 주석 강화 — 시나리오 B 의도 명시 + errors[] 분리 의미 명문화 + 코드 주석 3 reference
 2. `status_rules.yml` 변경 0 (DEAD CODE 명시 주석 reference 확인만)
 3. mock fixture 1건 신규 — 시나리오 B 재현 (`status_success_with_warnings.json`)
 4. pytest 회귀 PASS 확인
-5. M-F1 (docs/20_json-schema-fields.md 신설 시) status 판정 규칙 절 포함 의무
+5. docs/20_json-schema-fields.md 신설 시 status 판정 규칙 절 포함 의무
 
-### 대안 비교 (Considered)
+### 대안 비교
 
-- **Case B (B-2 + ?)**: errors non-empty → overall=partial. 거절 이유: 모든 vendor baseline 회귀 fail (success → partial 전환), 호출자 partial 대응 로직 추가 필요, rule 96 R1-B 호환성 외 영역
-- **Case C (B-3 + (b) + (b))**: 4 enum + severity 도입. 거절 이유: envelope schema 변경 (rule 13 R5 + 92 R5 사용자 명시 승인 필요), 3채널 27+ 위치 영향, 본 cycle Additive only 영역 외 — 별도 cycle 사용자 명시 승인 후 진행 영역
+- **Case B (B-2 + ?)**: errors non-empty → overall=partial. 거절 이유: 모든 vendor baseline 회귀 fail (success → partial 전환), 호출자 partial 대응 로직 추가 필요, 호환성 외 영역
+- **Case C (B-3 + (b) + (b))**: 4 enum + severity 도입. 거절 이유: envelope schema 변경 (승인 필요), 3채널 27+ 위치 영향, Additive only 영역 외 — 별도 작업 승인 후 진행 영역
 
-### rule / 정본 참조
+### 정본 참조
 
-- rule 13 R5 (envelope 13 필드 — status 필드 정본 보존)
-- rule 22 R7/R8 (Fragment 5 변수 / 타입 정본 — 변경 안 함)
-- rule 70 R5 (문서 보존 판정 — status_rules.yml 유지)
-- rule 70 R8 (ADR trigger — Case A 는 NO → M-A4 SKIP)
-- rule 92 R2 (Additive only)
-- rule 92 R5 (schema 변경 사용자 명시 — Case C 거절 이유)
-- rule 96 R1-B (호환성 cycle 외 envelope shape 변경 자제)
+- envelope 13 필드 — status 필드 정본 보존
+- Fragment 5 변수 / 타입 정본 — 변경 안 함
+- status_rules.yml 유지 (DEAD CODE)
+- Additive only
+- schema 변경 승인 필요 — Case C 거절 이유
+- 호환성 외 envelope shape 변경 자제
 
 ---
 
-## 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta)
+## 2026-05-01 — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta)
 
 ### 컨텍스트
-사용자 (hshwang1994) 명시:
-1. 2026-05-01 1차: "신규 장비 도입할 의향이 있다 다만 테스트할 lab 장비가 없다. 일단 vault는 만들지 말고 코드 생성에 대한 티켓은 만들어라"
-2. 2026-05-01 2차 (본 cycle): "신규 밴더 추가 승인하겠다"
+배경 (2026-05-01):
+1. 신규 장비 도입 의향. 테스트할 lab 장비 부재 — vault 는 보류하고 코드 생성 작업 우선.
+2. 신규 vendor 추가 승인.
 
-cycle-019 본 cycle 에서 7-loop + 10R extended audit P1 22건 적용 후, 사용자 명시 승인으로 신규 vendor 4종 진행.
+승인에 따라 신규 vendor 4종 진행.
 
 ### 결정
-4 vendor adapter 코드 영역 진행. **vault 단계 SKIP** (lab 부재 — 사용자 명시 1차).
+4 vendor adapter 코드 영역 진행. **vault 단계 SKIP** (lab 부재).
 
-### 적용 범위 (rule 50 R2 9단계 매핑)
+### 적용 범위 (vendor 추가 절차 매핑)
 
 | 단계 | 작업 | 상태 |
 |---|---|---|
 | 1. vendor_aliases.yml 매핑 | 4 vendor alias 추가 | [OK] |
 | 2. adapter YAML 생성 | huawei_ibmc / inspur_isbmc / fujitsu_irmc / quanta_qct_bmc | [OK] |
 | 3. (선택) OEM tasks | 부재 (standard_only — 사이트 fixture 확보 후 보강) | DEFER |
-| 4. vault 생성 | vault/redfish/{vendor}.yml | **SKIP (사용자 명시)** |
+| 4. vault 생성 | vault/redfish/{vendor}.yml | **SKIP (lab 부재)** |
 | 5. baseline | schema/baseline_v1/{vendor}_baseline.json | DEFER (lab 부재) |
-| 6. ai-context | vendor 컨텍스트 문서 4종 | [OK] |
-| 7. vendor-boundary-map.yaml | huawei/inspur/fujitsu/quanta 추가 | [OK] |
+| 6. vendor 컨텍스트 | vendor 컨텍스트 문서 4종 | [OK] |
+| 7. vendor 경계 매핑 | huawei/inspur/fujitsu/quanta 추가 | [OK] |
 | 8. live-validation | docs/13_redfish-live-validation.md Round 갱신 | DEFER (lab 부재) |
 | 9. decision-log | 본 entry | [OK] |
 
 ### redfish_gather.py 동기화
 
-`_FALLBACK_VENDOR_MAP` + `_BMC_PRODUCT_HINTS` + `bmc_names` dict 모두 4 vendor 추가 (rule 12 R1 nosec 주석 보존).
+`_FALLBACK_VENDOR_MAP` + `_BMC_PRODUCT_HINTS` + `bmc_names` dict 모두 4 vendor 추가 (vendor 경계 예외 주석 보존).
 
 - `_FALLBACK_VENDOR_MAP`: 11 신 entry (huawei/inspur/fujitsu/quanta 변형 alias)
 - `_BMC_PRODUCT_HINTS`: 7 신 entry (ibmc/fusionserver/isbmc/irmc/primergy/quantagrid/quantaplex)
@@ -796,14 +585,14 @@ cycle-019 본 cycle 에서 7-loop + 10R extended audit P1 22건 적용 후, 사�
 ### 영향
 - adapter 표면: 34 → 38 (Redfish 23 → 27)
 - vendor 정규화 list: 5 → 9
-- vault 신규: 0 (사용자 명시 SKIP)
+- vault 신규: 0 (lab 부재 SKIP)
 - baseline 신규: 0 (lab 부재)
 - 운영 가능 시점: lab 또는 사이트 장비 도입 + vault 생성 시
 
 ### 부재 시 동작 (graceful degradation)
 
 - ServiceRoot 무인증 detect → vendor=huawei/inspur/fujitsu/quanta 정규화 OK
-- vault 부재 → precheck auth 단계에서 status=failed (rule 27 R4 graceful)
+- vault 부재 → precheck auth 단계에서 status=failed (graceful degradation)
 - 호출자 envelope: status=failed + errors[] = ["vault not found for vendor=<huawei|inspur|fujitsu|quanta>"]
 
 ### 사이트 도입 시 절차
@@ -811,23 +600,23 @@ cycle-019 본 cycle 에서 7-loop + 10R extended audit P1 22건 적용 후, 사�
 1. `vault/redfish/{vendor}.yml` 생성 (ansible-vault encrypt + username/password)
 2. `tests/redfish-probe/probe_redfish.py --vendor {vendor}` 실행
 3. `schema/baseline_v1/{vendor}_baseline.json` 생성
-4. `tests/evidence/<날짜>-{vendor}.md` Round 검증 기록
+4. Round 검증 기록
 5. `docs/13_redfish-live-validation.md` Round 갱신
-6. `capture-site-fixture` skill 으로 사이트 fixture 캡처
+6. 사이트 fixture 캡처
 
-### rule / 정본 참조
+### 정본 참조
 
-- rule 50 R2 (vendor 추가 9단계, vault SKIP 사용자 명시 적용)
-- rule 96 R1-A (lab 부재 — web sources 4종 1개 이상 — 4 ticket 모두 충족)
-- rule 12 R1 (vendor 경계 — _FALLBACK_VENDOR_MAP 등 nosec 보존)
-- rule 92 R5 (사용자 명시 승인 — 본 entry 가 승인 trace)
+- vendor 추가 절차 (vault SKIP 적용)
+- lab 부재 — web sources 4종 1개 이상 (4 vendor 모두 충족)
+- vendor 경계 — _FALLBACK_VENDOR_MAP 등 예외 주석 보존
+- 승인 기록 — 본 entry 가 승인 trace
 
 ---
 
 ## Round 12 (2026-04-29) — ESXi 채널 hostname / vendor / extended modules fix
 
 ### 배경
-사용자 보고: ESXi 출력 JSON 에서 `hostname=IP`, `vendor` 정규화 실패, `network.adapters / virtual_switches / storage.hbas` 빈 배열.
+관측: ESXi 출력 JSON 에서 `hostname=IP`, `vendor` 정규화 실패, `network.adapters / virtual_switches / storage.hbas` 빈 배열.
 
 ### 진단
 agent 10.100.64.154 SSH + 진단 playbook (`tests/scripts/diag_esxi_raw.yml`) 으로 raw facts 캡처.
@@ -835,7 +624,7 @@ agent 10.100.64.154 SSH + 진단 playbook (`tests/scripts/diag_esxi_raw.yml`) �
 | BUG | 원인 |
 |---|---|
 | #1 hostname=IP | `normalize_system.yml` 의 `system.fqdn = _e_ip` (ansible_hostname 미사용) |
-| #2 vendor 정규화 | Jinja2 loop scoping — cycle-016 namespace fix 잔류분 |
+| #2 vendor 정규화 | Jinja2 loop scoping — namespace fix 잔류분 |
 | #4 extended 빈 | `community.vmware 6.2.0` hosts_*_info dict key 는 hostname (IP 아님). dict list 는 `vmnic_details`/`vmhba_details` (`all` 은 string list). 매핑 키 정정: pci→location, adapter_type→type, node_wwn 등. vswitch 는 dict-of-dict |
 
 ### Fix
@@ -846,10 +635,9 @@ agent 10.100.64.154 SSH + 진단 playbook (`tests/scripts/diag_esxi_raw.yml`) �
 
 ### 검증
 - 실 호스트 esxi01 + esxi02 (10.100.64.1 / .2) 본 site.yml 실행 — NIC/vSwitch/HBA 모두 정상 채워짐
-- pytest 158/158 PASS, vendor boundary / harness consistency / ansible-syntax-check 통과
-- evidence: `tests/evidence/2026-04-29-esxi-bug-fix.md`
+- pytest 158/158 PASS, vendor 경계 / ansible-syntax-check 통과
 
-### 잔류 (별도 cycle)
+### 잔류 (별도 작업)
 - `default_gateways=[]` / `dns_servers=[]` — vmware_host_facts 미반환 / host_config_info 빈 응답 (vmware_host_dns_info 모듈 추가 필요)
 - `speed_mbps` int / "N/A" string 혼재
 - `cpu.architecture` / `max_speed_mhz` null (model 파싱 폴백 가능)
@@ -858,20 +646,20 @@ agent 10.100.64.154 SSH + 진단 playbook (`tests/scripts/diag_esxi_raw.yml`) �
 ---
 
 > [!NOTE]
-> 여기부터(§1~§13)는 2026-03~04 초기 검증 라운드 기록이다(번호순). 위쪽은 최근 결정부터의 날짜 역순 기록이다. 현재값은 `adapters/`, `schema/` 와 catalog 를 본다.
+> 여기부터(§1~§13)는 2026-03~04 초기 검증 라운드 기록이다(번호순). 위쪽은 최근 결정부터의 날짜 역순 기록이다. 현재값은 `adapters/`, `schema/` 를 본다.
 
 ## 1. 코드 점검 1차/2차 결과 요약
 
-### 1차 점검 (이전 세션)
+### 1차 점검
 - 전체 프로젝트 구조 분석
 - 보안 이슈 (no_log 누락) 식별
 - 기본 코드 품질 이슈 도출
 
-### 2차 점검 (4 배치 완료)
-- **Batch 1 (P0)**: power section 추가, hostname fallback 개선, int coercion regex 수정, vault 경고
-- **Batch 2 (P1)**: OUTPUT default 방어, 에러 메시지 개선, no_log 정리
-- **Batch 3 (P2)**: bare except → specific exceptions, no_log 제거, hostname None-safety
-- **Batch 4 (P3)**: CALLBACK_NEEDS_WHITELIST → CALLBACK_NEEDS_ENABLED
+### 2차 점검 (4 차수 완료)
+- **1차**: power section 추가, hostname fallback 개선, int coercion regex 수정, vault 경고
+- **2차**: OUTPUT default 방어, 에러 메시지 개선, no_log 정리
+- **3차**: bare except → specific exceptions, no_log 제거, hostname None-safety
+- **4차**: CALLBACK_NEEDS_WHITELIST → CALLBACK_NEEDS_ENABLED
 
 총 19개 파일, ~50개 변경사항 — 모두 검증 완료.
 
@@ -937,7 +725,7 @@ normalize에서 `| default(none)` 처리.
 
 ### Storage Controllers fallback
 - 판정 시점: `StorageControllers` 인라인 배열만 처리
-- HPE Gen11: `Controllers` 서브링크 사용 → **fallback 추가 필요** (P0-1에서 구현 완료, 8절 참조)
+- HPE Gen11: `Controllers` 서브링크 사용 → **fallback 추가 필요** (8절에서 구현 완료)
 
 ## 5. 실장비 검증으로 확정된 사항
 
@@ -960,7 +748,7 @@ normalize에서 `| default(none)` 처리.
 | HPE iLO5 차이 | iLO6과 유사할 것으로 추정 | Oem.Hpe vs Oem.Hp fallback 미검증 |
 | 다중 System member | Members[0]만 사용 | 블레이드 서버 등 미검증 |
 
-## 7. OEM 필드 보강 판정 (B2, Round 14)
+## 7. OEM 필드 보강 판정 (Round 14)
 
 > 판정일: 2026-03-25
 
@@ -994,19 +782,19 @@ OEM 구현을 재검토해야 하는 상황:
 
 ## 8. 리팩토링 이력 (실장비 검증 기반, 2026-03-18)
 
-### 완료 (P0/P1)
+### 완료
 
 | 항목 | 파일 | 내용 |
 |------|------|------|
-| P0-1 | `redfish_gather.py` | HPE Storage Controllers fallback (Controllers 서브링크 드릴다운) |
-| P0-2 | `redfish_gather.py` | gather_power() ServiceRoot 중복 호출 제거 (chassis_uri 직접 전달) |
-| P0-3 | `hpe_ilo6.yml` | HPE iLO 6 전용 adapter 신규 생성 |
-| P1-3 | `redfish_gather.py` | 벤더별 null 필드 경고 로깅 |
-| P1-4 | `redfish_gather.py` | HostName 빈 문자열 → None 변환 |
-| P1-7 | `redfish_gather.py` | MemorySummary Health → HealthRollup fallback |
-| P1-7-2 | `redfish_gather.py` | IndicatorLED → LocationIndicatorActive fallback |
+| 1 | `redfish_gather.py` | HPE Storage Controllers fallback (Controllers 서브링크 드릴다운) |
+| 2 | `redfish_gather.py` | gather_power() ServiceRoot 중복 호출 제거 (chassis_uri 직접 전달) |
+| 3 | `hpe_ilo6.yml` | HPE iLO 6 전용 adapter 신규 생성 |
+| 4 | `redfish_gather.py` | 벤더별 null 필드 경고 로깅 |
+| 5 | `redfish_gather.py` | HostName 빈 문자열 → None 변환 |
+| 6 | `redfish_gather.py` | MemorySummary Health → HealthRollup fallback |
+| 7 | `redfish_gather.py` | IndicatorLED → LocationIndicatorActive fallback |
 
-### 보류 (P1-P2)
+### 보류
 
 | 항목 | 사유 |
 |------|------|
@@ -1097,7 +885,7 @@ Round 2 이후 Network 섹션에 대해 심층 검증을 수행했다. 가상 �
 
 ### 결론
 
-Network 수집 정책을 GUIDE_FOR_AI.md에 문서화 완료. skip 패턴 확장으로 Kubernetes/tunnel/dummy 가상 인터페이스를 추가 제외하고, primary 판단 규칙과 다중 default route 처리를 명확화했다.
+Network 수집 정책을 문서화 완료. skip 패턴 확장으로 Kubernetes/tunnel/dummy 가상 인터페이스를 추가 제외하고, primary 판단 규칙과 다중 default route 처리를 명확화했다.
 
 ## 11. Network 복잡 토폴로지 실증 (Round 4, 2026-04-15)
 
@@ -1215,79 +1003,7 @@ kernel sysfs > POSIX 명령 > /proc > /etc
 
 ### 결론
 
-명령어 매트릭스 실측으로 배포판 무관 설계를 검증하고, bond 실증으로 bond master/slave/VLAN-on-bond 수집 정확성을 확인했다. source 우선순위와 운영 해석 정책을 확정하여 GUIDE_FOR_AI.md에 반영했다.
-
----
-
-## 13. Reference 종합 수집 (Round 11, 2026-04-28)
-
-### 배경
-
-새 vendor 추가 / schema 필드 보강 / OS 매핑 검증 / 회귀 비교 시 매번 실장비에 직접 접속하는 비용을 줄이고, 향후 재현/비교 가능한 raw 자산을 확보할 필요가 있었다. 사용자가 Jenkins master 2대 / agent 2대 / OS VM 6대 + bare-metal 1대 / Windows VM 1대 / BMC 11대 / ESXi 3대를 테스트 자격과 함께 제공했다.
-
-### 결정
-
-`tests/reference/` 디렉터리에 종합 reference 데이터를 보존한다. 회귀 input (`tests/fixtures/`) 및 회귀 기준선 (`schema/baseline_v1/`)과는 별개 디렉터리로 분리하여 회귀 입력 변경 위험을 피한다.
-
-수집 도구 4개를 작성:
-- `crawl_redfish_full.py` — Redfish ServiceRoot부터 모든 link 재귀 follow (Python stdlib + PyYAML)
-- `gather_os_full.py` — paramiko SSH (Linux) + pywinrm (Windows) + ansible setup
-- `gather_esxi_full.py` — paramiko SSH (esxcli/vim-cmd) + pyvmomi (vSphere API)
-- `gather_agent_env.py` — paramiko SSH 기반 환경 dump (REQUIREMENTS.md 검증)
-
-### 자격 처리
-
-자격 평문 commit 방지를 위해 `tests/reference/local/targets.yaml`을 `.gitignore`에 등록. `targets.yaml.sample`만 commit. 수집 완료 후 `targets.yaml` 삭제 권장.
-
-### 1차 수집 결과 (2026-04-28)
-
-| 채널 | 시도 | 성공 | 실패 |
-|---|---|---|---|
-| Redfish | 11 | (진행 중) | 3 (Cisco 1/3 도달 불가, Dell 32 vendor 의심) |
-| OS | 7 | 6 (Linux) | 1 (Win10 WinRM) |
-| ESXi | 3 | 3 (pyvmomi), 1 (SSH) | 0 (전체) / 2 (SSH만) |
-| Agent/Master | 4 | 4 | 0 |
-
-세부는 `tests/evidence/2026-04-28-reference-collection.md` 참조.
-
-### 발견 사항
-
-- **F1**: Dell BMC 사용자는 user=admin이 아닌 user=root (사용자 채팅 정정)
-- **F2**: 10.100.15.32가 "dell" label인데 ServiceRoot=AMI Redfish Server. 실 vendor / 자격 사용자 확인 필요 (rule 96 R2 — 외부 계약 디버깅 시 질의 우선)
-- **F3**: Cisco 10.100.15.1 HTTP 503 / 15.3 timeout. 장비 가동 상태 확인 필요
-- **F4**: Win10 WinRM 5986 미활성 + 5985 Basic 미허용 + WSL Python 3.12 ntlm-auth 라이브러리의 OpenSSL 3.0 MD4 미지원
-- **F5**: ESXi 10.100.64.1 / .3 SSH 비활성 (vSphere 기본 상태). 활성화 후 esxcli 53종 추가 수집 가능
-- **F6**: gather_agent_env.py의 sudo 명령 처리 개선 필요 (Master 153에서 ~120초 대기 발생)
-
-### 누적 통계 (BMC 진행 중 시점 기준)
-
-- 파일 수: 4420 (BMC 완료 시 ~10000 예상)
-- 디스크 사용: 43MB (BMC 완료 시 ~150-200MB 예상)
-
-### 활용
-
-1. **새 vendor 온보딩**: 그 vendor의 redfish endpoint list로 OEM path 파악 + adapter metadata `tested_against` 갱신 근거
-2. **schema 필드 추가**: cross-vendor OEM 데이터 비교
-3. **OS 매핑 검증**: cmd_dmidecode_*.txt ↔ ansible_setup ↔ field_dictionary 정합 (rule 13 R1)
-4. **REQUIREMENTS.md 검증**: agent 디렉터리의 ansible/python/collection 버전 ↔ 문서 명시
-5. **회귀 비교**: 펌웨어 / OS 업그레이드 후 동일 명령 재수집 → diff
-
-### 보존 정책 (rule 70)
-
-- 본 디렉터리는 commit 대상 (raw raw 자료 가치 큼). 단:
-  - `tests/reference/local/`은 .gitignore (자격)
-  - 민감 파일 (sshd_config / sudoers)은 commit 전 사용자 검토
-- 차후 수집 사이클마다 `tests/reference/INDEX.md` 갱신 + 본 decision-log에 Round 추가
-
-### 후속 작업
-
-- F2/F3/F4/F5/F6 follow-up (`tests/evidence/2026-04-28-reference-collection.md` 표 참조)
-- 본 reference 자료 기반의 schema 추가 / adapter metadata 보강은 별도 PR
-
-### rule / 정본 참조
-
-- rule 13 (output-schema-fields), 21 (output-baseline-fixtures), 70 (docs-and-evidence-policy), 96 (external-contract-integrity)
-- 정본: `tests/reference/README.md`, `tests/reference/INDEX.md`, `tests/evidence/2026-04-28-reference-collection.md`
+명령어 매트릭스 실측으로 배포판 무관 설계를 검증하고, bond 실증으로 bond master/slave/VLAN-on-bond 수집 정확성을 확인했다. source 우선순위와 운영 해석 정책을 확정하여 수집 정책 문서에 반영했다.
 
 ---
 
@@ -1302,5 +1018,5 @@ kernel sysfs > POSIX 명령 > /proc > /etc
 ## 본 문서를 보는 법
 
 - 시간 역순으로 누적됩니다 (최신 결정이 위쪽).
-- 각 결정은 "사용자 의심 / 분석 / 결정 / 영향 / 회귀" 5절 구조를 따릅니다.
+- 각 결정은 "배경 / 분석 / 결정 / 영향 / 회귀" 5절 구조를 따릅니다.
 - 결정의 "왜" 가 본문이고, "무엇을 했는지" 는 git log / commit 메시지로 보완됩니다.

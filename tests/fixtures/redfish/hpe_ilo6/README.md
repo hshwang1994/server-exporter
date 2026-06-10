@@ -1,4 +1,4 @@
-# HPE iLO 6 fixture — M-H2 (cycle 2026-05-07)
+# HPE iLO 6 fixture
 
 > Round 11 lab 검증 (DL380 Gen11 — `tests/fixtures/redfish/hpe/`).
 > 본 fixture 는 Storage standard + SmartStorage fallback / PowerSubsystem dual 변형 시뮬.

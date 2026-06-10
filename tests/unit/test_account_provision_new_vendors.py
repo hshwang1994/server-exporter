@@ -1,10 +1,10 @@
-"""M-B3 회귀 — account_service_provision fall-through 패턴 (신규 4 vendor + Superdome).
+"""account_service_provision fall-through 패턴 회귀 (신규 4 vendor + Superdome).
 
-cycle 2026-05-06 M-B2 매트릭스 결과 — 신규 4 vendor (Huawei/Inspur/Fujitsu/Quanta) +
+신규 4 vendor (Huawei/Inspur/Fujitsu/Quanta) +
 HPE Superdome Flex 가 모두 redfish_gather.py:2467+ 의 fall-through 표준 POST path 로
 graceful 처리되는지 정적 mock 검증.
 
-검증 항목 (M-B2 매트릭스 row 22~25 + 9):
+검증 항목:
 1. Huawei iBMC: 표준 POST 200 → 정상 생성 (fall-through standard POST path)
 2. Inspur ISBMC: 표준 POST 400 → PasswordChangeRequired retry → 201 (Lenovo retry 활용)
 3. Fujitsu iRMC: 표준 POST 200 → 정상 (PRIMERGY 표준)
@@ -12,7 +12,7 @@ graceful 처리되는지 정적 mock 검증.
 5. HPE Superdome Flex: 표준 POST 200 → 정상 (vendor='hpe' fall-through, RMC level)
 
 신규 vendor 의 OEM 분기 미등록 → fall-through 동작 검증.
-F50 phase 4 verify-fallback (DELETE+POST 재생성) 은 vendor != dell 분기 자동 적용.
+verify-fallback (DELETE+POST 재생성) 은 vendor != dell 분기 자동 적용.
 """
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def _fake_acct_get_empty(bmc_ip, u, p, t, v):
 # ── Huawei iBMC: fall-through 표준 POST 정상 ─────────────────────────────────
 
 
-def test_m_b3_huawei_ibmc_post_200_standard(monkeypatch):
+def test_huawei_ibmc_post_200_standard(monkeypatch):
     """vendor='huawei' (fall-through) + 표준 POST 201 → 정상 생성."""
     monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
 
@@ -74,7 +74,7 @@ def test_m_b3_huawei_ibmc_post_200_standard(monkeypatch):
 # ── Inspur ISBMC: 1차 400 → Lenovo retry 활용 ────────────────────────────────
 
 
-def test_m_b3_inspur_isbmc_post_400_then_retry(monkeypatch):
+def test_inspur_isbmc_post_400_then_retry(monkeypatch):
     """vendor='inspur' (fall-through) + 1차 POST 400 → PasswordChangeRequired retry 201."""
     monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
 
@@ -104,7 +104,7 @@ def test_m_b3_inspur_isbmc_post_400_then_retry(monkeypatch):
 # ── Fujitsu iRMC: PRIMERGY 표준 POST ─────────────────────────────────────────
 
 
-def test_m_b3_fujitsu_irmc_post_200_standard(monkeypatch):
+def test_fujitsu_irmc_post_200_standard(monkeypatch):
     """vendor='fujitsu' (fall-through) + 표준 POST 200 → 정상 (iRMC S5/S6 표준)."""
     monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
 
@@ -127,7 +127,7 @@ def test_m_b3_fujitsu_irmc_post_200_standard(monkeypatch):
 # ── Quanta QCT BMC: OpenBMC bmcweb 표준 ──────────────────────────────────────
 
 
-def test_m_b3_quanta_qct_bmc_post_201_openbmc(monkeypatch):
+def test_quanta_qct_bmc_post_201_openbmc(monkeypatch):
     """vendor='quanta' (fall-through) + OpenBMC bmcweb POST 201 → 정상."""
     monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
 
@@ -150,7 +150,7 @@ def test_m_b3_quanta_qct_bmc_post_201_openbmc(monkeypatch):
 # ── HPE Superdome Flex: vendor='hpe' fall-through (RMC level) ───────────────
 
 
-def test_m_b3_hpe_superdome_flex_post_200_rmc(monkeypatch):
+def test_hpe_superdome_flex_post_200_rmc(monkeypatch):
     """vendor='hpe' (Superdome Flex sub-line) — 표준 POST 200 → 정상 (RMC AccountService)."""
     monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
 
@@ -173,7 +173,7 @@ def test_m_b3_hpe_superdome_flex_post_200_rmc(monkeypatch):
 # ── 신규 vendor: HPE retry 미진입 (vendor != hpe) ────────────────────────────
 
 
-def test_m_b3_huawei_post_400_405_no_hpe_retry(monkeypatch):
+def test_huawei_post_400_405_no_hpe_retry(monkeypatch):
     """vendor='huawei' + 1차 400 + 2차 405 (PasswordChangeRequired) → HPE Oem retry 미진입 → fail."""
     monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
 
@@ -199,7 +199,7 @@ def test_m_b3_huawei_post_400_405_no_hpe_retry(monkeypatch):
     assert len(call_log) == 2, "2 회만 호출 (1차 + Lenovo retry). HPE 3차 진입 안 함"
 
 
-# ── F50 phase 4 verify-fallback: 신규 vendor 자동 적용 (vendor != dell) ─────
+# ── verify-fallback: 신규 vendor 자동 적용 (vendor != dell) ─────
 
 
 def _fake_acct_get_with_existing(bmc_ip, u, p, t, v):
@@ -217,7 +217,7 @@ def _fake_acct_get_with_existing(bmc_ip, u, p, t, v):
     return {}, accounts, []
 
 
-def test_m_b3_huawei_patch_verify_401_delete_repost_fallback(monkeypatch):
+def test_huawei_patch_verify_401_delete_repost_fallback(monkeypatch):
     """vendor='huawei' + PATCH 200 + verify 401 → DELETE+POST fallback 자동 진입 (vendor != dell)."""
     monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_with_existing)
 
@@ -252,7 +252,7 @@ def test_m_b3_huawei_patch_verify_401_delete_repost_fallback(monkeypatch):
     assert out["method"] == "delete_repost", f"method='delete_repost' 기대. 실제: {out['method']}"
 
 
-def test_m_b3_dell_patch_verify_401_no_fallback(monkeypatch):
+def test_dell_patch_verify_401_no_fallback(monkeypatch):
     """vendor='dell' + PATCH 200 + verify 401 → fallback 불가 (PATCH-only) → recovered=False."""
     monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_with_existing)
 

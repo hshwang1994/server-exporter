@@ -1,6 +1,6 @@
-"""Vendor output-display mapping regression (cycle 2026-06-04).
+"""Vendor output-display mapping regression.
 
-사용자 결정 (2026-06-04): 호출자에게 노출되는 envelope 최상위 `vendor` 값을
+배경: 호출자에게 노출되는 envelope 최상위 `vendor` 값을
 내부 canonical 'hpe' → 'hp' 로 치환하고, HPE Compute Scale-up Server 3200
 (CSUS 3200) 은 'hpCsus' 로 노출한다.
 

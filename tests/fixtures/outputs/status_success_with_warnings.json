@@ -1,10 +1,9 @@
 {
   "_fixture_meta": {
-    "purpose": "M-A3 시나리오 B 재현 — 섹션 status 모두 success + envelope.errors[] 에 warning 있음 → overall.status=success",
+    "purpose": "시나리오 B 재현 — 섹션 status 모두 success + envelope.errors[] 에 warning 있음 → overall.status=success",
     "intent_reference": "common/tasks/normalize/build_status.yml 헤더 주석 (시나리오 B 의도된 동작)",
     "trigger_reference": "os-gather/tasks/linux/gather_memory.yml:171-175 (dmidecode 권한/미존재 → total_basis=os_visible fallback, errors[] 에 사유 명시)",
-    "rule_reference": "rule 13 R5 (envelope 13 필드) / rule 96 R1-B (호환성 외 schema 확장 금지)",
-    "case": "M-A2 결정 결과 Case A — 의도 주석 강화 only (코드 동작 변경 없음)",
+    "case": "시나리오 B — 의도된 동작 (코드 동작 변경 없음)",
     "source": "fabricated mock (lab 부재 — Linux OS gather 시나리오 B 케이스)",
     "created_at": "2026-05-06",
     "expected_pytest": "envelope.status == 'success' AND envelope.errors[0].section == 'memory' AND envelope.errors[0].message contains 'dmidecode 결과 없음'"

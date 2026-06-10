@@ -1,4 +1,4 @@
-# Lenovo XCC (XCC1 + XCC2) fixture — M-H3 (cycle 2026-05-07)
+# Lenovo XCC (XCC1 + XCC2) fixture
 
 > Round 11 lab 검증 (XCC1 V2 — `tests/fixtures/redfish/lenovo/`).
 > 본 fixture 는 XCC2 (ThinkSystem V3) 변형 시뮬 — web sources only.
@@ -17,9 +17,9 @@
 
 > 이 fixture 는 최소 구성이다 (`service_root.json` + `system.json` 2개, `manager.json` 없음). 따라서 "TAOT 3.10" firmware / Power 항목은 의도한 변형이며 fixture 에 전부 수록되진 않았다 — vendor/firmware detection 검증용 최소 쌍.
 
-## HTTP 헤더 정책 (rule 25 R7-A-1)
+## HTTP 헤더 정책
 
-- cycle 2026-04-30 사이트 사고 — Accept + OData-Version + User-Agent reject
+- 사이트 사고 — Accept + OData-Version + User-Agent reject
 - "Accept만" hotfix 적용 (redfish_gather.py _get())
 - XCC1 / XCC2 모두 보수적 정책
 

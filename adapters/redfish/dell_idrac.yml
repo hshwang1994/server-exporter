@@ -1,18 +1,18 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Dell Inc. / Dell EMC
 # Firmware: iDRAC 모든 세대 (legacy iDRAC7 ~ iDRAC10)
 # Generation: idrac_legacy (generic dell fallback)
 # Generation Year: "2010-2014 (iDRAC7 시기 / legacy)"
 # Origin: Dell support.dell.com / Redfish API guide
-# Last sync: 2026-05-11 (M-H1 — generic fallback origin 보강)
+# Last sync: 2026-05-11 (generic fallback origin 보강)
 # Notes: generic dell fallback (priority=10). 세대별 미매치 시 사용.
-# Sources (rule 96 R1-A — lab 부재 legacy generation 보강):
+# Sources (lab 부재 legacy generation 보강):
 #   - https://developer.dell.com/apis/2978/versions/1/docs/   (iDRAC7 legacy)
 #   - https://www.dell.com/support/kbdoc/en-us/000178026/redfish-api-getting-started   (iDRAC general)
 # Lab status: 부재 — iDRAC10 만 사이트 검증 (iDRAC7/8/9 web sources 기반)
-# Tested against: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json + tests/evidence/ 참조
-# Storage strategy evolution (web sources, M-H1 cycle 2026-05-07):
+# 검증 기준: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json 참조
+# Storage strategy evolution (web sources):
 #   - iDRAC7 (legacy): SimpleStorage only (Storage path 미지원 또는 매우 제한적)
 #   - iDRAC8 (2.x ~ 4.x): standard storage path
 #   - iDRAC9 (4.x ~ 7.x): standard storage path + Volumes 표준 (5.x+) / 6.x+ PLDM RDE
@@ -21,7 +21,7 @@
 #   - iDRAC7/8: Power deprecated path only
 #   - iDRAC9 5.x+: PowerSubsystem 일부 지원
 #   - iDRAC10: PowerSubsystem 표준
-# Next action: lab 도입 후 별도 cycle (iDRAC7/8/9 사이트 실측 fixture 캡처)
+# Next action: lab 도입 후 iDRAC7/8/9 사이트 실측 fixture 캡처
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_dell_idrac
 channel: redfish
@@ -54,7 +54,7 @@ normalize:
 credentials:
   profile: "dell"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/dell.yml accounts 의 label 과 매핑
+  # AccountService 진입점 — vault/redfish/dell.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: dell_fallback_1, role: recovery }
     - { vault_label: dell_fallback_2, role: recovery }

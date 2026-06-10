@@ -14,7 +14,7 @@ import os
 import time
 
 # ── Config ──────────────────────────────────────────────────────────────
-# production-audit (2026-04-29): 자격증명 하드코딩 제거 — 환경변수 강제.
+# 자격증명 하드코딩 제거 — 환경변수 강제.
 # 사용 예: SE_ANSIBLE_HOST=10.100.64.166 SE_ANSIBLE_USER=cloviradmin SE_ANSIBLE_PASS=... python ...
 # 모듈 import 시점에는 검증하지 않음 (pytest collection 차단 방지). main() 실행 시 검증.
 ANSIBLE_HOST = os.environ.get("SE_ANSIBLE_HOST", "10.100.64.166")

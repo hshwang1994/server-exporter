@@ -1,12 +1,12 @@
 """
-T-01 (cycle 2026-05-11) adapter selection 회귀 — HPE DL380 Gen11 (iLO 6) 가
+adapter selection 회귀 — HPE DL380 Gen11 (iLO 6) 가
 hpe_ilo7 Gen12-only adapter 로 오선택되는 사고 차단.
 
 본 테스트는 다음 시나리오 매트릭스를 검증:
 
 | # | facts | expected adapter | 비고 |
 |---|---|---|---|
-| 1 | HPE / model=ProLiant DL380 Gen11 / firmware=1.73           | redfish_hpe_ilo6   | T-01 fix 핵심 |
+| 1 | HPE / model=ProLiant DL380 Gen11 / firmware=1.73           | redfish_hpe_ilo6   | fix 핵심 |
 | 2 | HPE / model=ProLiant DL380 Gen11 / firmware=iLO 6 v1.73    | redfish_hpe_ilo6   | manager_type 동시 |
 | 3 | HPE / model=ProLiant DL380 Gen12 / firmware=1.12.00        | redfish_hpe_ilo7   | Gen12 회귀 |
 | 4 | HPE / model=ProLiant DL380 Gen12 / firmware=1.16           | redfish_hpe_ilo7   | 2-part firmware (1387b505 회귀) |
@@ -69,7 +69,7 @@ def _select_adapter(facts: dict) -> tuple[str, int]:
 @pytest.mark.parametrize(
     "case_id,facts,expected_adapter",
     [
-        # T-01 fix 핵심 — DL380 Gen11 + iLO 6
+        # fix 핵심 — DL380 Gen11 + iLO 6
         ("hpe_gen11_ilo6_short", {"vendor": "HPE", "model": "ProLiant DL380 Gen11", "firmware": "1.73"}, "redfish_hpe_ilo6"),
         ("hpe_gen11_ilo6_full",  {"vendor": "HPE", "model": "ProLiant DL380 Gen11", "firmware": "iLO 6 v1.73"}, "redfish_hpe_ilo6"),
         # Gen12 회귀 (오선택 시도 검증 — 정상 매칭 유지)
@@ -83,7 +83,7 @@ def _select_adapter(facts: dict) -> tuple[str, int]:
         ("cisco_ucsx",   {"vendor": "Cisco", "model": "UCS-X 9508", "firmware": ""}, "redfish_cisco_ucs_xseries"),
     ],
 )
-def test_adapter_selection_t01(case_id: str, facts: dict, expected_adapter: str) -> None:
+def test_adapter_selection_models(case_id: str, facts: dict, expected_adapter: str) -> None:
     """probe_facts 로 정확한 adapter 선택 + 타 vendor 회귀 0."""
     selected, score = _select_adapter(facts)
     assert selected == expected_adapter, (
@@ -94,11 +94,11 @@ def test_adapter_selection_t01(case_id: str, facts: dict, expected_adapter: str)
 
 
 def test_hpe_gen11_pre_fix_misselect() -> None:
-    """현재 동작 검증 — facts empty 시 hpe_ilo7 가 잘못 선택됨 (T-01 사고 재현).
+    """현재 동작 검증 — facts empty 시 hpe_ilo7 가 잘못 선택됨 (사고 재현).
 
     본 테스트는 fix 의 **필요성** 증명 — empty facts 로는 hpe_ilo7 priority=120 가
     hpe_ilo6 priority=100 를 이김. probe_facts 가 model/firmware 채우면 hpe_ilo7
-    의 model_patterns Gen12-only 가 disqualify 시켜 hpe_ilo6 선택 (위 test_adapter_selection_t01
+    의 model_patterns Gen12-only 가 disqualify 시켜 hpe_ilo6 선택 (위 test_adapter_selection_models
     의 hpe_gen11_ilo6_* 케이스).
     """
     selected, _ = _select_adapter({"vendor": "HPE", "model": "", "firmware": ""})

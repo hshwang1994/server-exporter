@@ -1,7 +1,7 @@
 ---
 # esxi-gather/tasks/collect_network_extended.yml
 #
-# P4 (cycle 2026-04-29): ESXi 확장 네트워크 / 스토리지 어댑터 수집.
+# ESXi 확장 네트워크 / 스토리지 어댑터 수집.
 # vmware_host_vmnic_info / vmware_host_vmhba_info / vmware_vswitch_info /
 # vmware_portgroup_info / vmware_vmkernel_info.
 #
@@ -59,7 +59,7 @@
       failed_when: false
       no_log: true
 
-    # BUG #4 fix (cycle production-audit 후속): hosts_*_info dict 의 top-level key 는
+    # hosts_*_info dict 의 top-level key 는
     # ESXi configured hostname (예: "esxi01") — _e_ip 가 아니다.
     # 또한 진짜 dict list 는 'all' (string list) 이 아니라 'vmnic_details' / 'vmhba_details'.
     # vswitch 는 dict-of-dict (key=vswitch name, value=info).
@@ -74,7 +74,7 @@
           {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
           {%- set vmnics = (d.get(key, {}).get('vmnic_details', [])) if key else [] -%}
           {%- for n in vmnics -%}
-            {# 잔류 fix (Round 12 후속): speed_mbps int 일관성. Connected 시 int (10000),
+            {# 잔류 fix: speed_mbps int 일관성. Connected 시 int (10000),
                Disconnected 시 raw "N/A" → null. 호출자 cross-channel 일관성 보장 #}
             {%- set raw_sp = n.actual_speed | default(none) -%}
             {%- set sp_int = none -%}
@@ -98,13 +98,13 @@
             }) -%}
           {%- endfor -%}
           {{ out }}
-        # cycle 2026-05-29 (hba-ib-csus, D1=API-only): FC/iSCSI HBA 만 hbas[] 로.
+        # API-only: FC/iSCSI HBA 만 hbas[] 로.
         #   - 분류 2-signal: type + driver (lpfc/qlnativefc=FC, iscsi_vmk=iSCSI).
         #     SAS/RAID 컨트롤러 (nhpsa/lsi_mr3/smartpqi/vmw_ahci/nvme...) 는 hbas 제외 (storage controller 영역).
         #   - 구 'infiniband' in type 분기는 dead-code (vmhba type 에 InfiniBand 없음) → 제거.
         #     IB 는 _e_ext_ib (nmlx NIC best-effort 추론) 로 별도 — 아래 build vswitch task.
         #   - 누락 필드 보강: port_type / link_speed_gbps (FC speed) / source. 빈 placeholder vmhba (device 없음) skip.
-        #   source: community.vmware vmware_host_vmhba_info + Broadcom esxcli ref (EXTERNAL-CONTRACTS §3).
+        #   source: community.vmware vmware_host_vmhba_info + Broadcom esxcli ref.
         _e_ext_hbas: >-
           {%- set out = [] -%}
           {%- set d = _e_vmhba.hosts_vmhbas_info | default({}) -%}
@@ -178,11 +178,11 @@
             {%- endfor -%}
           {%- endif -%}
           {{ out }}
-        # cycle 2026-05-29 (D1=API-only): InfiniBand best-effort 추론.
+        # API-only: InfiniBand best-effort 추론.
         # ESXi 는 native IB 를 host adapter 로 노출하지 않음 (NVIDIA/VMware: SR-IOV/passthrough-to-VM 만).
         # Mellanox nmlx/mlx 드라이버 NIC 존재 시 IB/RoCE-capable 로 informational 표기 (node_guid=null,
         # note 명시 — false-positive 가능). 실 IB 포트 인벤토리는 OS 채널 (Linux ibstat/sysfs) 이 정본.
-        # source: NVIDIA ConnectX VPI on ESXi + VMware IB whitepaper (EXTERNAL-CONTRACTS §3).
+        # source: NVIDIA ConnectX VPI on ESXi + VMware IB whitepaper.
         _e_ext_ib: >-
           {%- set ib = [] -%}
           {%- for a in (_e_ext_adapters | default([])) -%}

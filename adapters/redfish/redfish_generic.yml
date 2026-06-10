@@ -1,9 +1,9 @@
 ---
-# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: DMTF Redfish standard (generic fallback)
-# Firmware: tested_against [] — DMTF Redfish 1.x 표준
+# Firmware: 검증 버전 없음 — DMTF Redfish 1.x 표준
 # Origin: DMTF Redfish Specification (https://www.dmtf.org/standards/redfish)
-# Last sync: 2026-04-27 (hshwang1994)
+# Last sync: 2026-04-27
 # Notes: priority=0 — vendor-specific adapter (dell_idrac9, hpe_ilo5, ...) 매치 실패 시 fallback.
 #        OEM 추출 없이 standard schema만 (Oem.* 미사용).
 # ──────────────────────────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ normalize:
 credentials:
   profile: ""
   fallback_profiles: []
-  # P2 AccountService 진입점 — generic fallback 은 vendor 미상이므로 recovery 미정의
+  # AccountService 진입점 — generic fallback 은 vendor 미상이므로 recovery 미정의
   recovery_accounts: []
 
 graceful_degradation:

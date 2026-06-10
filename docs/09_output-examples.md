@@ -12,7 +12,7 @@
 
 > **envelope 13 필드 작성 순서** (정본 `common/tasks/normalize/build_output.yml`):
 > `target_type, collection_method, ip, hostname, vendor, status, sections, diagnosis, meta, correlation, errors, data` + `schema_version`.
-> 실패 fallback 응답도 13 필드를 모두 채운다 (rule 13 R5).
+> 실패 fallback 응답도 13 필드를 모두 채운다.
 
 ---
 
@@ -551,5 +551,5 @@ failed/partial 응답도 envelope 13 필드를 모두 채우며, `diagnosis.fail
 |------|----|
 | `data.bmc.ip` 와 envelope 의 `ip` 가 다를 수 있나요? | 네. envelope 의 `ip` 는 호출자가 보낸 IP (보통 BMC IP), `data.bmc.ip` 는 BMC 가 자체 보고하는 IP 로 같은 의미지만 출처가 다름. |
 | `vendor` 가 `null` 인 이유? | OS 채널은 vendor 가 envelope 최상위에 채워지지 않음 (`null`). ESXi / Redfish 채널만 자동 감지. |
-| `status: success` 인데 errors[] 에 메시지가 있어요 | 정상 (rule 13 R8 시나리오 B). 비치명 경고 (예: dmidecode fallback 사용) 가 errors[] 에 기록될 수 있음 — sections 가 모두 success/not_supported 면 envelope status 는 success. |
+| `status: success` 인데 errors[] 에 메시지가 있어요 | 정상. 비치명 경고 (예: dmidecode fallback 사용) 가 errors[] 에 기록될 수 있음 — sections 가 모두 success/not_supported 면 envelope status 는 success. |
 | `diagnosis` 안에 `details` 가 채널마다 다른 키를 가져요 | 의도된 동작. `details` 는 채널별 추가 진단 정보 (os=detected_os, esxi=vsphere_endpoint/auth, redfish=redfish_version/product) 를 담는 free-form dict. 공통 6필드(reachable/port_open/protocol_supported/auth_success/failure_stage/failure_reason)는 항상 고정. |

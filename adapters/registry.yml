@@ -8,11 +8,11 @@
 # adapter_loader (lookup_plugins/adapter_loader.py)가 자동으로 인식합니다.
 # default_adapter 값은 해당 디렉토리의 YAML 파일명(확장자 제외)과 일치해야 합니다.
 # ==============================================================================
-# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: 적용 대상 없음 (3-channel 메타 인덱스)
 # Firmware: 해당 없음
 # Origin: server-exporter 정책 — adapter_loader가 adapters_dir 스캔
-# Last sync: 2026-04-27 (hshwang1994)
+# Last sync: 2026-04-27
 # Notes: 새 채널 추가 시 본 파일에 channel 항목 추가 + 해당 디렉터리 + default_adapter.
 # ──────────────────────────────────────────────────────────────────────────────
 

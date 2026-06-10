@@ -2,7 +2,7 @@
 # Round 9: OS/ESXi contract verification — live output 수집
 # 대상: Ubuntu, Windows, ESXi, RHEL(보조)
 #
-# production-audit (2026-04-29):
+# 자격증명 처리:
 #   - 자격증명 하드코딩 제거 → 환경변수에서 읽음
 #   - 자격증명이 set되지 않으면 즉시 종료 (silent fail-open 차단)
 #   - 사용 예:

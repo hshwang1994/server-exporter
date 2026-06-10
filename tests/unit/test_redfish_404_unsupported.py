@@ -1,7 +1,7 @@
-"""Regression for redfish_gather 404 → unsupported 분류 (cycle 2026-05-01).
+"""Regression — redfish_gather 404 → unsupported 분류.
 
 배경: 일부 vendor/펌웨어가 특정 endpoint(power/network_adapters 등) 자체 미응답 (HTTP 404).
-이전엔 errors[]에 'failed'로 분류되어 호출자 noise. cycle 2026-05-01 부터 404-only
+이전엔 errors[]에 'failed'로 분류되어 호출자 noise. 404-only
 errs를 unsupported list로 분리해 errors[]에서 제외 + envelope sections.{name}='not_supported'.
 
 본 테스트:

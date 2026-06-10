@@ -1,6 +1,6 @@
 ---
 # os-gather/tasks/linux/build_identifier_diagnostics.yml
-# Linux gather_system.yml에서 분리 (NEXT_ACTIONS — 2026-04-28).
+# Linux gather_system.yml에서 분리.
 #
 # 입력 (gather_system.yml에서 set_fact 완료된 변수):
 #   _l_serial_val, _l_uuid_val   — 최종 식별자 (Python 경로)

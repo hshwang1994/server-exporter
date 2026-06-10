@@ -8,7 +8,7 @@
 #   bash tests/scripts/identifier_verify.sh
 set -euo pipefail
 
-# production-audit (2026-04-29): 자격증명 환경변수 강제 — 하드코딩된 password를
+# 자격증명 환경변수 강제 — 하드코딩된 password를
 # git history에 남기지 않고, 자격증명 누락 시 silent fail-open 차단.
 : "${SE_LINUX_USER:?SE_LINUX_USER 환경변수 누락 (예: cloviradmin)}"
 : "${SE_LINUX_PASSWORD:?SE_LINUX_PASSWORD 환경변수 누락}"

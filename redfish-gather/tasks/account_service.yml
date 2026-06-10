@@ -1,7 +1,7 @@
 ---
 # redfish-gather/tasks/account_service.yml
 #
-# P2 (cycle 2026-04-28): recovery 자격으로 접속한 경우 공통계정(infraops) 자동 생성/복구.
+# recovery 자격으로 접속한 경우 공통계정(infraops) 자동 생성/복구.
 #
 # 진입 조건:
 #   - _rf_used_account.role == 'recovery'
@@ -10,20 +10,20 @@
 #
 # 동작:
 #   1. vault accounts 에서 role=primary 후보 1개 추출 → target_username/target_password
-#   2. dryrun (default ON, 사용자 결정 #4) 시 시뮬레이션만
+#   2. dryrun 시 시뮬레이션만
 #   3. dryrun OFF 시 redfish_gather mode='account_provision' 호출
 #   4. 결과를 envelope.meta.account_service 에 노출 (password 미포함)
 #
 # dryrun 변수:
-#   _rf_account_service_dryrun (default false — cycle 2026-04-30 사용자 명시 승인으로 OFF 전환)
-#   원래 default true (cycle-014 결정 — lab 잠금 위험 회피). 사용자 명시 승인으로 false 전환됨.
+#   _rf_account_service_dryrun (default false — OFF 전환됨)
+#   원래 default true (lab 잠금 위험 회피). 이후 false 로 전환됨.
 #   외부 override: -e _rf_account_service_dryrun=true (시뮬레이션 모드 강제)
 
 - name: "redfish | account_service | resolve target primary account"
   ansible.builtin.set_fact:
     _rf_target_account: >-
       {{ (_rf_accounts | default([]) | selectattr('role', 'eq', 'primary') | list | first) | default({}) }}
-    # F49 (cycle 2026-05-01): label 매칭으로 lookup 정확도 강화.
+    # label 매칭으로 lookup 정확도 강화.
     # 기존: username 만으로 lookup → Dell root 4개 / HPE admin 2개 / Lenovo USERID 2개
     #       시 첫 entry 잡혀 password mismatch (사이트 실측 사고).
     # 신: label 우선 매칭 (try_one_account.yml 가 label 까지 promote) → 정확한 entry.
@@ -39,7 +39,7 @@
              | list | first,
            true
          ) | default({}) }}
-    # cycle 2026-04-30: 사용자 명시 승인 — default false 로 전환 (실 동작)
+    # default false 로 전환 (실 동작)
     _rf_account_service_dryrun: "{{ _rf_account_service_dryrun | default(false) }}"
   no_log: true
 
@@ -63,7 +63,7 @@
           dryrun={{ _rf_account_service_dryrun }}
 
     # ── recovery 자격으로 AccountService 호출 ────────────────────────────
-    # F49 (cycle 2026-05-01): _rf_used_account_password (try_one_account.yml 가 직접 promote)
+    # _rf_used_account_password (try_one_account.yml 가 직접 promote)
     # 우선 사용. 없으면 _rf_recovery_account_resolved.password 로 fallback (label 매칭).
     # Jinja2 if/else 표현 (괄호로 우선순위 명시 — `>` 와 `| ternary` 충돌 회피).
     - name: "redfish | account_service | resolve recovery creds"

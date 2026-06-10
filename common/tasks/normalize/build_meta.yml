@@ -17,7 +17,7 @@
     _meta:
       started_at:      "{{ _started_at | default(now(utc=true).isoformat() + 'Z') }}"
       finished_at:     "{{ now(utc=true).isoformat() + 'Z' }}"
-      # 2026-04-29 fix B50: now(utc=true).timestamp() (float, microsecond) 기반 차감 — 1ms 정밀도.
+      # now(utc=true).timestamp() (float, microsecond) 기반 차감 — 1ms 정밀도.
       # 이전: now(fmt='%s') (정수 초) → duration_ms 가 항상 1000ms 배수로 절삭.
       duration_ms:     "{{ ((now(utc=true).timestamp() - (_started_epoch | default(now(utc=true).timestamp()) | float)) * 1000) | int }}"
       adapter_id:      "{{ (_selected_adapter | default({})).adapter_id | default(none) }}"

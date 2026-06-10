@@ -1,10 +1,10 @@
-"""adapter_common 점수 공식 집중 단위 테스트 (cycle 2026-06-04).
+"""adapter_common 점수 공식 집중 단위 테스트.
 
-`adapter_score` 는 server-exporter 벤더 자동 감지의 핵심 계약 (rule 12 R2 / rule 50 R3):
+`adapter_score` 는 벤더 자동 감지의 핵심 계약:
 
     score = priority × 1000 + specificity × 10 + match_score
 
-기존 test_adapter_selection_t01.py / test_supermicro_adapter_selection.py 는 실 adapter
+기존 test_adapter_selection_models.py / test_supermicro_adapter_selection.py 는 실 adapter
 시나리오로 **선택 결과**를 검증하지만, 공식 자체의 불변(priority 우세 / 불일치 disqualify /
 normalize_vendor 경계 / pattern fallback)은 직접 단위 커버가 없었다. 본 파일은 합성 입력으로
 공식의 핵심 성질을 고정한다 (실 YAML 비결합 — 순수 함수).
@@ -122,7 +122,7 @@ def test_score_formula_components():
 
 
 def test_score_priority_dominates_specificity():
-    """rule 12 R2 / 50 R3: 높은 priority 가 낮은 priority+높은 specificity 를 이긴다."""
+    """높은 priority 가 낮은 priority+높은 specificity 를 이긴다."""
     high = {"priority": 100, "match": {"vendor": ["dell"]}}
     low_specific = {"priority": 50, "match": {
         "vendor": ["dell"], "model_patterns": ["R7.*"], "firmware_patterns": [r"5\..*"]}}

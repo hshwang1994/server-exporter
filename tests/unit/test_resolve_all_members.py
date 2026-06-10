@@ -1,4 +1,4 @@
-"""ADR-2026-05-12 회귀 — `_resolve_all_member_uris` 단위 테스트 (cycle 2026-05-12).
+"""회귀 — `_resolve_all_member_uris` 단위 테스트.
 
 `_resolve_first_member_uri` 의 Additive 확장. RMC (HPE CSUS 3200 / Superdome Flex)
 단일 진입점이 N개 Manager / N개 nPartition / N개 Chassis 노출 환경에서 전수 수집.

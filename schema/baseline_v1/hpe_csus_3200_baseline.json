@@ -36,7 +36,7 @@
       "systems_uri": "/redfish/v1/Systems/",
       "multi_node_layout": "rmc_primary",
       "rmc_activation_check": true,
-      "baseline_origin": "mock-derived (lab 부재). cycle 2026-05-29 hba-ib-csus 개편 — 전 공통 섹션 채움 (storage/network/hbas/firmware + per-partition canonical). source: HPE Superdome Flex Admin Guide P/N 10-192008-Q123 (verbatim Partition0 JSON) + CSUS 3200 FAQ + DMTF + HPE/Marvell SN1610Q FC HBA. Manufacturer/Model/firmware/WWPN/chassis-id 는 DRIFT-correctable (rule 25 R7-A-1). C1 사이트 fixture 캡처 후 실측 baseline 으로 교체 의무 (NEXT_ACTIONS / rule 96 R1-C). ADR-2026-05-29."
+      "baseline_origin": "mock-derived (lab 부재). 전 공통 섹션 채움 (storage/network/hbas/firmware + per-partition canonical). source: HPE Superdome Flex Admin Guide P/N 10-192008-Q123 (verbatim Partition0 JSON) + CSUS 3200 FAQ + DMTF + HPE/Marvell SN1610Q FC HBA. Manufacturer/Model/firmware/WWPN/chassis-id 는 사이트 실측 시 정정 가능. 사이트 fixture 캡처 후 실측 baseline 으로 교체 의무."
     }
   },
   "meta": {

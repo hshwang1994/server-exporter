@@ -49,7 +49,7 @@
       {{ names }}
   no_log: true
 
-# cycle-016 (2026-04-29): ESXi 측은 datastore 단위 grouping (physical disk 정보 미수집, namespace pattern)
+# ESXi 측은 datastore 단위 grouping (physical disk 정보 미수집, namespace pattern)
 - name: "esxi | normalize storage | compute summary groups"
   ansible.builtin.set_fact:
     _e_stor_summary: >-
@@ -69,7 +69,7 @@
         datastores:      "{{ _e_norm_datastores }}"
         controllers:     []
         logical_volumes: []
-        # cycle-016: datastore 합계 기반 summary (groups 빈 배열 — physical disk 정보 미수집)
+        # datastore 합계 기반 summary (groups 빈 배열 — physical disk 정보 미수집)
         summary:         "{{ _e_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
     _sections_supported_fragment: ['storage']
     _sections_collected_fragment: >-

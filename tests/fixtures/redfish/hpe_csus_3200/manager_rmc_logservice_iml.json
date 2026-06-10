@@ -10,5 +10,5 @@
   "DateTime": "2026-06-09T12:00:00Z",
   "DateTimeLocalOffset": "+00:00",
   "Entries": {"@odata.id": "/redfish/v1/Managers/RMC/LogServices/IML/Entries"},
-  "_note": "lab 부재 — DMTF LogService 합성. rule 96 R1-A."
+  "_note": "lab 부재 — DMTF LogService 합성."
 }

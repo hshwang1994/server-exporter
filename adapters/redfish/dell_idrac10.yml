@@ -1,17 +1,17 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Dell Inc. / Dell EMC
 # Firmware: iDRAC 10 — 1.x (PowerEdge 17G 신 generation)
 # Origin: Dell support.dell.com / iDRAC 10 user guide
 # Last sync: 2026-05-01 (web sources only — lab 부재)
 # Notes: PowerEdge 17G (R470/R670/R770/R6715/R6815/R7715). 2025-Q4 ~ 2026 출하.
-# Sources (rule 96 R1-A — lab 부재):
+# Sources (lab 부재):
 #   - https://www.dell.com/support/kbdoc/en-us/000348267/poweredge-support-for-integrated-dell-remote-access-controller-10-idrac10
 #   - https://www.dell.com/support/manuals/en-us/poweredge-r670/idrac10_1.xx_ug/accessing-redfish-api
 #   - https://manuals.plus/m/7fbce549aaa0031d4694fdbdfc75e0ff395f55c288a7ea3eb491a01a930424bf (1.20.55.10 release notes)
 #   - https://www.dell.com/support/kbdoc/en-us/000356005/poweredge-recommended-bios-and-idrac10-upgrades-for-17th-gen
-# Tested against: lab 부재 (web sources only). 사용자 사이트 도입 시 fixture 캡처
-#   (capture-site-fixture skill) 후 origin 갱신.
+# 검증 기준: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처
+#   후 origin 갱신.
 # Compatibility 가정 (web sources):
 #   - manufacturer: "Dell Inc." (iDRAC9 와 동일)
 #   - Manager URI: /redfish/v1/Managers/iDRAC.Embedded.1 (iDRAC9 와 동일)
@@ -19,7 +19,7 @@
 #   - OEM namespace: Oem.Dell (iDRAC9 와 동일)
 #   - Storage Volumes / PowerSubsystem 모두 표준 (iDRAC9 와 동일)
 #   - 차이점: firmware version 형식 1.x (iDRAC9 = 4.x~7.x)
-#   - 신 endpoint 가능성 (호환성 영역 외 — F42 별도 cycle):
+#   - 신 endpoint 가능성 (호환성 영역 외 — 별도 검토):
 #     EnvironmentMetrics / MemoryMetrics / ManagerDiagnosticData
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_dell_idrac10

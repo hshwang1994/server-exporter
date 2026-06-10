@@ -1,11 +1,11 @@
-"""P0 envelope failure-mode 회귀 fixture.
+"""envelope failure-mode 회귀 fixture.
 
 목적
 ----
 3-channel (redfish/os/esxi) site.yml 의 block/rescue/always 패턴이
 모든 실패 시나리오에서 13 필드 envelope 을 출력하는지 검증한다.
 
-검증 대상 13 필드 (rule 13 R5 / rule 20 R1 정본 = build_output.yml)
+검증 대상 13 필드 (정본 = build_output.yml)
     target_type, collection_method, ip, hostname, vendor,
     status, sections, diagnosis, meta, correlation, errors, data,
     schema_version
@@ -29,7 +29,7 @@ from typing import Any
 import pytest
 
 # ---------------------------------------------------------------------------
-# 13 필드 정본 (rule 13 R5 / rule 20 R1)
+# 13 필드 정본
 # ---------------------------------------------------------------------------
 ENVELOPE_REQUIRED_KEYS: tuple[str, ...] = (
     "schema_version",
@@ -51,7 +51,7 @@ ALLOWED_STATUSES: frozenset[str] = frozenset({"success", "partial", "failed"})
 
 ALLOWED_TARGET_TYPES: frozenset[str] = frozenset({"redfish", "os", "esxi"})
 
-# 비밀값 leak 방어 (사용자 명시 password — fixture 안에 절대 포함 금지)
+# 비밀값 leak 방어 (실 password — fixture 안에 절대 포함 금지)
 SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p) for p in (
         r"Passw0rd1!",
@@ -212,7 +212,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
     ),
     "redfish__block_rescue_failed": {
         # always 블록의 hard-coded fallback (redfish-gather/site.yml:182-201)
-        # production-audit (2026-04-29): details 가 dict shape 으로 통일됨 — 호출자 TypeError 차단
+        # details 가 dict shape 으로 통일됨 — 호출자 TypeError 차단
         "schema_version": "1",
         "target_type": "redfish",
         "collection_method": "redfish_api",
@@ -265,7 +265,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
         failed=("storage", "network"),
     ),
     "os__block_rescue_failed": {
-        # production-audit (2026-04-29): details dict shape (os-gather/site.yml:308-326,475-493)
+        # details dict shape (os-gather/site.yml:308-326,475-493)
         "schema_version": "1",
         "target_type": "os",
         "collection_method": "ansible",
@@ -318,7 +318,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
         failed=("storage", "network"),
     ),
     "esxi__block_rescue_failed": {
-        # production-audit (2026-04-29): details dict shape (esxi-gather/site.yml:183-201)
+        # details dict shape (esxi-gather/site.yml:183-201)
         "schema_version": "1",
         "target_type": "esxi",
         "collection_method": "vmware",
@@ -356,7 +356,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
 # 검증 헬퍼
 # ---------------------------------------------------------------------------
 def _assert_no_secret_leak(envelope: dict[str, Any]) -> None:
-    """envelope 안에 password 원문/사용자 명시 비밀값 노출 없는지 확인."""
+    """envelope 안에 password 원문/비밀값 노출 없는지 확인."""
     serialized = json.dumps(envelope, ensure_ascii=False)
     for pattern in SECRET_VALUE_PATTERNS:
         match = pattern.search(serialized)
@@ -475,5 +475,5 @@ def test_required_keys_constant_unchanged() -> None:
     """ENVELOPE_REQUIRED_KEYS 13개 정본 — 의도치 않은 추가/삭제 회귀."""
     assert len(ENVELOPE_REQUIRED_KEYS) == 13, (
         f"13 필드 정본 변경 감지: {len(ENVELOPE_REQUIRED_KEYS)}. "
-        f"rule 13 R5 + rule 20 R1 정본은 build_output.yml — 함께 갱신 필요."
+        f"정본은 build_output.yml — 함께 갱신 필요."
     )

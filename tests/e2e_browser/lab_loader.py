@@ -1,6 +1,5 @@
 """Lab credentials loader (gitignored YAML).
 
-server-exporter cycle-014에서 도입.
 사용자가 `vault/.lab-credentials.yml` (gitignored)에 lab 자격증명 보관.
 본 모듈은 그것을 dict로 로드. 미존재 시 친절한 에러 메시지.
 """

@@ -1,6 +1,6 @@
 {
   "_origin": "https://www.supermicro.com/manuals/superserver/IPMI/IPMI_Users_Guide_X10.pdf (확인 2026-05-07)",
-  "_lab_status": "부재 — 사용자 명시 2026-05-07 Q2",
+  "_lab_status": "부재 (Supermicro 사이트 BMC 0대)",
   "_note": "web sources 기반 mock — 실 BMC 응답과 차이 가능",
   "@odata.context": "/redfish/v1/$metadata#ServiceRoot.ServiceRoot",
   "@odata.id": "/redfish/v1/",

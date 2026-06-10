@@ -1,11 +1,11 @@
-"""Regression for F49 — multi-vendor account_provision 호환성 강화 (cycle 2026-05-01).
+"""Regression — multi-vendor account_provision 호환성 강화.
 
 배경:
-  사용자 보고 — 'redfish 공통계정 생성이 안 된다'.
+  redfish 공통계정 생성 호환성 결함 관측.
   실측 (10.100.15.27 Dell, 10.100.15.31 Dell, 10.50.11.231 HPE, 10.50.11.232 Lenovo,
         10.100.15.2 Cisco) 결과:
     - HPE/Lenovo: 이미 'infraops' primary 존재 → recovery 진입 안 됨 (정상)
-    - Cisco: AccountService 표준 미지원 (not_supported — F13 이미 처리)
+    - Cisco: AccountService 표준 미지원 (not_supported — 이미 처리)
     - Dell: vault에 root username 4개 (서로 다른 password). try_one_account.yml 가
             label 까지 promote 안 함 → account_service.yml 의 vault re-lookup 이
             username 만으로 검색 → 첫 root entry (잘못된 password) 잡음 → 401.
@@ -185,7 +185,7 @@ def test_provision_dell_skip_reserved_slot1_and_retry(monkeypatch):
 
     monkeypatch.setattr(rg, "_patch", fake_patch)
 
-    # F49 추가: verify _get mock — 새 자격증명으로 실 인증 시도, 200 반환
+    # verify _get mock — 새 자격증명으로 실 인증 시도, 200 반환
     monkeypatch.setattr(rg, "_get", lambda *a, **kw: (200, {}, None))
 
     out = rg.account_service_provision(
@@ -204,7 +204,7 @@ def test_provision_dell_skip_reserved_slot1_and_retry(monkeypatch):
 
 
 def test_provision_lenovo_patch_silent_fail_delete_repost_fallback(monkeypatch):
-    """F50 phase 4 (cycle 2026-05-06): Lenovo PATCH 200 + verify 401 (권한 cache 손상)
+    """Lenovo PATCH 200 + verify 401 (권한 cache 손상)
     → DELETE + POST 재생성 fallback. 사이트 실측 (10.50.11.232 XCC SR650).
     """
     accounts = [
@@ -251,7 +251,7 @@ def test_provision_lenovo_patch_silent_fail_delete_repost_fallback(monkeypatch):
 
 
 def test_provision_dell_patch_silent_fail_no_delete_fallback(monkeypatch):
-    """F50 phase 4: Dell PATCH-only (POST 미지원) → DELETE+POST fallback 미지원.
+    """Dell PATCH-only (POST 미지원) → DELETE+POST fallback 미지원.
     PATCH 200 후 verify 401 시 errors[] 만 emit, recovered=False."""
     accounts = [
         {'slot_uri': '/redfish/v1/AccountService/Accounts/3',

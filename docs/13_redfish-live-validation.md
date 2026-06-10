@@ -9,8 +9,8 @@
 > 검증일: 2026-03-18 | 검증 방식: 직접 HTTPS 호출 (curl/Python urllib)
 
 > [!NOTE]
-> 이 문서를 읽는 법: 1~14절은 2026-03-18 3대 실장비 검증 스냅샷이다. 그 안의 "수정 필요" 표시는 검증 시점 기준이며, 이후 cycle 에서 해결된 항목이 있다 (해결 내역은 `docs/19_decision-log.md`).
-> 15~16절은 이후 lab 부재(web sources) 호환성 cycle 기록이다. 현재 adapter/vendor 전체 목록은 `adapters/redfish/` 디렉터리와 `docs/22_compatibility-matrix.md` 를 본다.
+> 이 문서를 읽는 법: 1~14절은 2026-03-18 3대 실장비 검증 스냅샷이다. 그 안의 "수정 필요" 표시는 검증 시점 기준이며, 이후 해결된 항목이 있다 (해결 내역은 `docs/19_decision-log.md`).
+> 15~16절은 이후 lab 부재(web sources) 호환성 보강 기록이다. 현재 adapter/vendor 전체 목록은 `adapters/redfish/` 디렉터리와 `docs/22_compatibility-matrix.md` 를 본다.
 
 ## 1. 대상 장비
 
@@ -334,12 +334,12 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 |------------|----------|-----------|----------|
 | redfish_generic | 0 | any (fallback) | 9개 전체 |
 | redfish_dell_idrac | 10 | vendor: Dell | 9개 전체 |
-| redfish_dell_idrac8 | 50 | Dell + firmware iDRAC 8 | 9개 (power FB — cycle 2026-05-06 M-D3) |
+| redfish_dell_idrac8 | 50 | Dell + firmware iDRAC 8 | 9개 (power FB) |
 | redfish_dell_idrac9 | 100 | Dell + firmware iDRAC 9 | 9개 전체 |
 | redfish_hpe_ilo | 10 | vendor: HPE | 9개 전체 |
-| redfish_hpe_ilo4 | 50 | HPE + firmware iLO 4 | 9개 (storage/power FB — cycle 2026-05-06 M-D3) |
+| redfish_hpe_ilo4 | 50 | HPE + firmware iLO 4 | 9개 (storage/power FB) |
 | redfish_hpe_ilo5 | 100 | HPE + firmware iLO 5 | 9개 전체 |
-| redfish_lenovo_imm2 | 50 | Lenovo + firmware IMM2 | 9개 (storage/power FB — cycle 2026-05-06 M-D3) |
+| redfish_lenovo_imm2 | 50 | Lenovo + firmware IMM2 | 9개 (storage/power FB) |
 | redfish_lenovo_xcc | 100 | Lenovo + firmware XCC | 9개 전체 |
 | redfish_supermicro_bmc | 10 | vendor: Supermicro | 9개 전체 |
 | redfish_supermicro_x9 | 50 | Supermicro + model X9 | 6개 |
@@ -353,7 +353,7 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 | HPE DL380 Gen11 | "iLO 6 v1.73" | **redfish_hpe_ilo6** (iLO 6 전용 adapter) | 100 |
 | Dell R740 | "4.00.00.00" | **redfish_dell_idrac9** (^[4-7]\. 패턴 매칭) | 100 |
 
-> 해결됨: hpe_ilo6.yml adapter가 추가되었다 (docs/19_decision-log.md P0-3).
+> 해결됨: hpe_ilo6.yml adapter가 추가되었다 (docs/19_decision-log.md 참조).
 
 ## 13. Payload 심층 분석 — 벤더 간 차이점 10건
 
@@ -380,38 +380,37 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 - 다른 세대 장비 (Gen10, R640 등) 검증
 - 다중 Chassis member 처리 (이번 검증에서는 Members[0] 기준 동작만 확인했다)
 
-## 15. cycle 2026-05-06 — 무 lab 환경 호환성 cycle (M-cycle)
+## 15. 무 lab 환경 호환성 작업
 
-### 15-1. 사용자 명시 (2026-05-06)
+### 15-1. 배경 (2026-05-06)
 
-> "lab 접속 가능 장비 없음 → 프로젝트 코드를 모든 vendor / 모든 장비에 호환되도록 작성. 실 검증은 향후."
+> lab 접속 가능 장비 없음 → 프로젝트 코드를 모든 vendor / 모든 장비에 호환되도록 작성. 실 검증은 향후.
 
-### 15-2. M-cycle 결과
+### 15-2. 결과
 
 | 영역 | 결과 |
 |---|---|
-| status 로직 (M-A) | Case A 채택 (의도 주석 강화 only) — pytest 13건 추가 (총 294 PASS) |
-| account_service (M-B) | 9 vendor 매트릭스 25 row 정적 검증 — Gap 0, BLOCK 1 (Supermicro X9) |
-| vault 자동 반영 (M-C) | YES (다음 ansible run 부터) — cacheable 0 / fact_caching 0 / gather_facts: no |
-| 호환성 매트릭스 (M-D) | 240 cell 전수 분류 — M-D 분석 시점 OK 27 / OK★ 167 / FB 9 / GAP 7 / BLOCK 6 / N/A 24 (W1~W6 적용 후 현재 36/157/14/3/6/24 — docs/22) |
-| Superdome 추가 (M-E) | hpe_superdome_flex.yml (priority=95 → 현재 101, lab 부재 web sources 14건) |
-| docs/20 신설 (M-F) | envelope 13 + sections 10 + field_dictionary 83 정본 + 3채널 비교 |
-| 학습 추출 (M-G) | (cycle 종료 시) |
+| status 로직 | Case A 채택 (의도 주석 강화 only) — pytest 13건 추가 (총 294 PASS) |
+| account_service | 9 vendor 매트릭스 25 row 정적 검증 — Gap 0, BLOCK 1 (Supermicro X9) |
+| vault 자동 반영 | YES (다음 ansible run 부터) — cacheable 0 / fact_caching 0 / gather_facts: no |
+| 호환성 매트릭스 | 240 cell 전수 분류 — 분석 시점 OK 27 / OK★ 167 / FB 9 / GAP 7 / BLOCK 6 / N/A 24 (호환성 활성화 적용 후 현재 36/157/14/3/6/24 — docs/22) |
+| Superdome 추가 | hpe_superdome_flex.yml (priority=95 → 현재 101, lab 부재 web sources 14건) |
+| docs/20 신설 | envelope 13 + sections 10 + field_dictionary 83 정본 + 3채널 비교 |
 
-### 15-3. M-D3 W1~W6 호환성 활성화 (2026-05-06)
+### 15-3. 호환성 활성화 (2026-05-06)
 
-| 작업 | 영향 adapter | 변경 |
+| # | 영향 adapter | 변경 |
 |---|---|---|
-| W1 | dell_idrac8.yml | `+ power` capabilities 추가 (cycle 2026-05-01 PowerSubsystem fallback 활용) |
-| W2 | hpe_ilo4.yml | `+ storage` (A1 SimpleStorage fallback 활용) |
-| W3 | hpe_ilo4.yml | `+ power` (A2 PowerSubsystem→Power) |
-| W4 | lenovo_imm2.yml | `+ storage` (A1) |
-| W5 | lenovo_imm2.yml | `+ power` (A2) |
-| W6 | huawei/inspur/fujitsu/quanta_*.yml | `- users` 4 곳 제거 (sections.yml channels=[os] 정합) |
+| 1 | dell_idrac8.yml | `+ power` capabilities 추가 (PowerSubsystem fallback 활용) |
+| 2 | hpe_ilo4.yml | `+ storage` (A1 SimpleStorage fallback 활용) |
+| 3 | hpe_ilo4.yml | `+ power` (A2 PowerSubsystem→Power) |
+| 4 | lenovo_imm2.yml | `+ storage` (A1) |
+| 5 | lenovo_imm2.yml | `+ power` (A2) |
+| 6 | huawei/inspur/fujitsu/quanta_*.yml | `- users` 4 곳 제거 (sections.yml channels=[os] 정합) |
 
-→ **9 라인 변경 (Additive only — rule 92 R2)** + pytest 294/294 PASS + envelope 13 필드 변경 0.
+→ **9 라인 변경 (Additive only)** + pytest 294/294 PASS + envelope 13 필드 변경 0.
 
-### 15-4. HPE Superdome Flex 추가 (M-E2)
+### 15-4. HPE Superdome Flex 추가
 
 | 항목 | 내용 |
 |---|---|
@@ -422,27 +421,26 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 | OEM | Oem.Hpe (기존 HPE OEM 재사용) |
 | vault | hpe (별도 불필요) |
 | Legacy 처리 | Superdome 2/Integrity → `redfish_generic.yml`. Superdome X → `hpe_ilo4.yml` |
-| sources | vendor docs 6 + DMTF 2 + GitHub 6 = 14건 (rule 96 R1-A) |
+| sources | vendor docs 6 + DMTF 2 + GitHub 6 = 14건 |
 | lab | 부재 — 사이트 실측 시 정정 가능 |
 
 ### 15-5. 후속 lab 도입 시 작업
 
-- Supermicro X9 6 cell BLOCK 해제 (capture-site-fixture skill)
-- Superdome Flex multi-partition 전수 수집 (별도 cycle)
+- Supermicro X9 6 cell BLOCK 해제 (사이트 fixture 캡처)
+- Superdome Flex multi-partition 전수 수집 (별도 검증)
 - Lenovo XCC v3 OpenBMC 1.17.0 reverse regression fixture (사이트 fixture)
 - Cisco UCS X-Series IMM 모드 (Intersight) 통합
 
 ---
 
-## 16. cycle 2026-05-07 — all-vendor-coverage (Phase 1/2/3)
+## 16. all-vendor-coverage
 
-> cycle 2026-05-07-all-vendor-coverage Phase 3 M-L4 — 38 ticket 통합 + 사이트 검증 4 + lab 부재 명시.
-> Worker: W5 (Phase 3). Phase 1 (23 ticket) + Phase 2 (5 ticket) + Phase 3 (7 ticket) = 38 ticket.
+> 사이트 검증 4 vendor + lab 부재 영역 명시.
 
 ### 16.1 Round 2026-05-07 — 사이트 검증 4 vendor × 1 generation
 
-> 본 Round 는 사용자 사이트 BMC 1대 이상 보유 vendor / generation 의 실 검증 결과.
-> 검증 commit: `0a485823` (cycle 2026-05-06 multi-session-compatibility 종료 commit).
+> 본 Round 는 사이트 BMC 1대 이상 보유 vendor / generation 의 실 검증 결과.
+> 검증 commit: `0a485823` (호환성 검증 종료 commit).
 
 #### 결과 매트릭스
 
@@ -450,7 +448,7 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 |---|---|---|---|---|
 | Dell | iDRAC10 | 5대 (10.100.15.27 / 28 / 31 / 33 / 34) | `0a485823` | [PASS] — 8 Redfish endpoint 모두 SUCCESS |
 | HPE | iLO6 | 1대 (10.50.11.231) | `0a485823` | [PASS] |
-| Lenovo | XCC3 | 1대 (10.50.11.232) | `0a485823` | [PASS] — Accept-only header 정책 (cycle 2026-04-30 reverse regression) |
+| Lenovo | XCC3 | 1대 (10.50.11.232) | `0a485823` | [PASS] — Accept-only header 정책 (reverse regression) |
 | Cisco | UCS X-series | 1대 (10.100.15.2) | `0a485823` | [PASS] — standalone CIMC |
 
 #### 검증 항목
@@ -459,50 +457,50 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 - 8 Redfish + 7 OS + 3 ESXi 통합 검증 commit `0a485823` 에 PASS 기록
 - 본 검증 시점 baseline_v1 4 vendor (Dell/HPE/Lenovo/Cisco) 갱신
 
-#### 사이트 사고 / 학습 (cycle 2026-04-30 reverse regression)
+#### 사이트 사고 / 학습 (reverse regression)
 
 - Lenovo XCC3 펌웨어 1.17.0 — Accept + OData-Version + User-Agent 추가 시 reject
-- "Accept 만" 으로 hotfix (rule 25 R7-A-1 — 사용자 실측 > spec)
+- "Accept 만" 으로 hotfix (사이트 실측 > spec)
 - 본 정책은 다른 사이트 (Lenovo XCC2 / iLO5+ / Supermicro X12+) 도 동일 가능성 — 보수적 header 정책 의무
 
-### 16.2 lab 부재 영역 (cycle 2026-05-07 명시)
+### 16.2 lab 부재 영역
 
-> 사용자 명시 (2026-05-07 Q2/Q3): Supermicro 사이트 BMC 0대 + Huawei/Inspur/Fujitsu/Quanta lab 도입 timeline 장기 (미정).
-> 본 영역 코드 path 는 web sources 기반 (rule 96 R1-A) — 사이트 도입 시 별도 cycle 검증.
+> 배경 (2026-05-07): Supermicro 사이트 BMC 0대 + Huawei/Inspur/Fujitsu/Quanta lab 도입 timeline 장기 (미정).
+> 본 영역 코드 path 는 web sources 기반 — 사이트 도입 시 별도 검증.
 
 #### lab 부재 vendor / generation 매트릭스
 
-| vendor | generation | lab status | 코드 path | NEXT_ACTIONS 등재 |
+| vendor | generation | lab status | 코드 path | 후속 등재 |
 |---|---|---|---|---|
-| Dell | iDRAC7 (legacy) | 부재 | adapter dell_idrac.yml + M-H1 mock | [PENDING] — Dell iDRAC7 lab cycle |
-| Dell | iDRAC8 | 부재 | adapter dell_idrac8.yml + M-H1 mock | [PENDING] (PowerSubsystem fallback W1 검증) |
-| Dell | iDRAC9 | 부재 | adapter dell_idrac9.yml + M-H1 mock (3 variants — 3.x/5.x/7.x) | [PENDING] |
+| Dell | iDRAC7 (legacy) | 부재 | adapter dell_idrac.yml + mock | [PENDING] — Dell iDRAC7 lab 검증 |
+| Dell | iDRAC8 | 부재 | adapter dell_idrac8.yml + mock | [PENDING] (PowerSubsystem fallback 검증) |
+| Dell | iDRAC9 | 부재 | adapter dell_idrac9.yml + mock (3 variants — 3.x/5.x/7.x) | [PENDING] |
 | HPE | iLO (legacy 1/2/3) | 부재 (Redfish 미지원) | adapter hpe_ilo.yml + IPMI fallback 별도 검토 | [SKIP] |
-| HPE | iLO4 | 부재 | adapter hpe_ilo4.yml + M-H2 mock | [PENDING] (SimpleStorage W2 + Power W3 검증) |
-| HPE | iLO5 | 부재 | adapter hpe_ilo5.yml + M-H2 mock | [PENDING] |
-| HPE | iLO6 | partial (Round 11 + 사이트 Gen12) | adapter hpe_ilo6.yml + M-H2 mock | [PENDING] (PowerSubsystem dual + SmartStorage fallback) |
-| HPE | Superdome Flex (Gen 1/2 + 280) | 부재 | adapter hpe_superdome_flex.yml (priority=95 → 현재 101, docs/10 §3.5) + M-G1 OEM 분기 + M-G2 mock | [PENDING] (RMC + Partition0 + iLO5 dual-manager) |
+| HPE | iLO4 | 부재 | adapter hpe_ilo4.yml + mock | [PENDING] (SimpleStorage + Power 검증) |
+| HPE | iLO5 | 부재 | adapter hpe_ilo5.yml + mock | [PENDING] |
+| HPE | iLO6 | partial (Round 11 + 사이트 Gen12) | adapter hpe_ilo6.yml + mock | [PENDING] (PowerSubsystem dual + SmartStorage fallback) |
+| HPE | Superdome Flex (Gen 1/2 + 280) | 부재 | adapter hpe_superdome_flex.yml (priority=95 → 현재 101, docs/10 §3.5) + OEM 분기 + mock | [PENDING] (RMC + Partition0 + iLO5 dual-manager) |
 | Lenovo | BMC (IBM 시기) | 부재 (Redfish 미지원) | adapter lenovo_bmc.yml | [SKIP] |
 | Lenovo | IMM (legacy) | 부재 (Redfish 미지원) | (별도 분기 없음 — lenovo_bmc fallback) | [SKIP] |
-| Lenovo | IMM2 | 부재 | adapter lenovo_imm2.yml + M-H3 mock | [PENDING] (SimpleStorage W4 + Power W5 검증) |
-| Lenovo | XCC | 부재 | adapter lenovo_xcc.yml (firmware_patterns XCC + XCC2) + M-H3 mock | [PENDING] |
+| Lenovo | IMM2 | 부재 | adapter lenovo_imm2.yml + mock | [PENDING] (SimpleStorage + Power 검증) |
+| Lenovo | XCC | 부재 | adapter lenovo_xcc.yml (firmware_patterns XCC + XCC2) + mock | [PENDING] |
 | Lenovo | XCC2 | 부재 | (위 동일) | [PENDING] |
 | Cisco | BMC (legacy) | 부재 (Redfish 미지원) | adapter cisco_bmc.yml | [SKIP] |
-| Cisco | CIMC C-series 1.x ~ 4.x | partial (M4 lab tested) | adapter cisco_cimc.yml (firmware_patterns 4.x~6.x) + M-H4 mock (4 variants) | [PENDING] (M5~M8 web sources only) |
-| Cisco | UCS S-series | 부재 | adapter cisco_cimc.yml (model_patterns UCS-S3260) | [PENDING] (M-H4 — Storage 강화 검증) |
-| Cisco | UCS B-series | 부재 (UCS Manager 매개) | adapter cisco_cimc.yml + 별도 cycle | [PENDING] — UCS Manager 통합 cycle |
-| Supermicro | BMC (legacy) ~ X14 (7 gen) | 부재 (Q2 — 사이트 0대) | adapter 8개 + OEM tasks 보강 (M-B2) + mock (M-B4) | [PENDING] — Supermicro lab 도입 cycle |
-| Supermicro | H11 ~ H14 (AMD) | 부재 | adapter X11~X14 model_patterns 확장 (M-B3) | [PENDING] |
-| Supermicro | **X10 (cycle 2026-05-07 신설)** | 부재 | adapter supermicro_x10.yml (priority=75 — M-B1) | [PENDING] |
-| Supermicro | **ARS (ARM, cycle 2026-05-07 신설)** | 부재 | adapter supermicro_ars.yml (priority=80 — M-B3) | [PENDING] |
-| **HPE** | **Compute Scale-up Server 3200 (CSUS 3200, cycle 2026-05-11 신설)** | **부재 (lab 도입 시 별도 cycle)** | **adapter hpe_csus_3200.yml (priority=96 → 현재 102, docs/10 §3.5) + HPE OEM tasks 재사용 (regex 확장 Additive)** | **[PENDING]** |
-| Huawei | iBMC 1.x ~ 5.x + Atlas | 부재 (cycle 2026-05-01 명시) | adapter huawei_ibmc.yml (M-C1) + OEM tasks (M-C2) + mock (M-C3) | [PENDING] |
-| Inspur | ISBMC | 부재 (cycle 2026-05-01) | adapter inspur_isbmc.yml + OEM tasks (M-D1) + mock (M-D2) | [PENDING] |
+| Cisco | CIMC C-series 1.x ~ 4.x | partial (M4 lab tested) | adapter cisco_cimc.yml (firmware_patterns 4.x~6.x) + mock (4 variants) | [PENDING] (M5~M8 web sources only) |
+| Cisco | UCS S-series | 부재 | adapter cisco_cimc.yml (model_patterns UCS-S3260) | [PENDING] (Storage 강화 검증) |
+| Cisco | UCS B-series | 부재 (UCS Manager 매개) | adapter cisco_cimc.yml + 별도 검증 | [PENDING] — UCS Manager 통합 검증 |
+| Supermicro | BMC (legacy) ~ X14 (7 gen) | 부재 (사이트 0대) | adapter 8개 + OEM tasks 보강 + mock | [PENDING] — Supermicro lab 도입 검증 |
+| Supermicro | H11 ~ H14 (AMD) | 부재 | adapter X11~X14 model_patterns 확장 | [PENDING] |
+| Supermicro | **X10 (신설)** | 부재 | adapter supermicro_x10.yml (priority=75) | [PENDING] |
+| Supermicro | **ARS (ARM, 신설)** | 부재 | adapter supermicro_ars.yml (priority=80) | [PENDING] |
+| **HPE** | **Compute Scale-up Server 3200 (CSUS 3200, 신설)** | **부재 (lab 도입 시 별도 검증)** | **adapter hpe_csus_3200.yml (priority=96 → 현재 102, docs/10 §3.5) + HPE OEM tasks 재사용 (regex 확장 Additive)** | **[PENDING]** |
+| Huawei | iBMC 1.x ~ 5.x + Atlas | 부재 | adapter huawei_ibmc.yml + OEM tasks + mock | [PENDING] |
+| Inspur | ISBMC | 부재 | adapter inspur_isbmc.yml + OEM tasks + mock | [PENDING] |
 | Fujitsu | iRMC S2 | 부재 (Redfish 미지원 가능성) | adapter fujitsu_irmc.yml (firmware_patterns) | [SKIP] |
-| Fujitsu | iRMC S4 / S5 / S6 | 부재 (cycle 2026-05-01) | (위 동일) + OEM tasks (M-E2) + mock (M-E3) | [PENDING] |
-| Quanta | QCT BMC (S/D/T/J) | 부재 (cycle 2026-05-01) | adapter quanta_qct_bmc.yml + OEM tasks (M-F1) + mock (M-F2) | [PENDING] |
+| Fujitsu | iRMC S4 / S5 / S6 | 부재 | (위 동일) + OEM tasks + mock | [PENDING] |
+| Quanta | QCT BMC (S/D/T/J) | 부재 | adapter quanta_qct_bmc.yml + OEM tasks + mock | [PENDING] |
 
-### 16.3 web sources 의무 (rule 96 R1-A)
+### 16.3 web sources 의무
 
 본 lab 부재 영역의 모든 adapter / OEM tasks / mock 은 다음 sources 기반:
 
@@ -513,38 +511,36 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 | GitHub community / issue | Inspur / Quanta / Huawei / Fujitsu (영문 docs 약함 영역) |
 | 사이트 실측 | 본 Round 16.1 (Dell/HPE/Lenovo/Cisco × 1 generation) |
 
-cycle 2026-05-07 M-K1 검증: 30/30 adapter origin 주석 일관성 PASS.
+검증: 30/30 adapter origin 주석 일관성 PASS.
 
-### 16.3.1 cycle 2026-05-11 hpe-csus-add 추가 (lab 부재)
+### 16.3.1 hpe-csus-add 추가 (lab 부재)
 
-사용자 요청 (2026-05-11): "hpe csus 장비도 개더링이 필요하다"
+배경 (2026-05-11): HPE CSUS 장비 개더링 요구 발생.
 
 - **HPE Compute Scale-up Server 3200 (CSUS 3200)** — HPE 공식 명시 *"built on the proven HPE Superdome Flex architecture"* (HPE psnow doc/a50009596enw)
 - **관리**: RMC (Rack Management Controller) primary + PDHC (per-chassis) + RMP (redundancy)
 - **Redfish**: 표준 (RMC = API host) + HPE OneView profile 동시 지원
 - **adapter**: `adapters/redfish/hpe_csus_3200.yml` (priority=96 → 현재 102 — Superdome Flex 95→101 직상, docs/10 §3.5)
 - **OEM tasks**: HPE 공통 (`redfish-gather/tasks/vendors/hpe/{collect,normalize}_oem.yml`) 재사용
-- **regex 확장**: `(?i)Superdome|Flex` → `(?i)Superdome|Flex|Compute Scale-up|CSUS` (Additive only — rule 92 R2)
-- **vault profile**: `hpe` 재사용 (사용자 명시 승인 시 향후 분리)
-- **web sources 7건** (rule 96 R1-A — adapter 헤더 origin 주석)
-- **lab 도입 후 cycle**: `hpe-csus-3200-lab-validation` round (NEXT_ACTIONS 등재 — rule 96 R1-C)
+- **regex 확장**: `(?i)Superdome|Flex` → `(?i)Superdome|Flex|Compute Scale-up|CSUS` (Additive only)
+- **vault profile**: `hpe` 재사용 (향후 분리 가능)
+- **web sources 7건** (adapter 헤더 origin 주석)
+- **lab 도입 후 검증**: `hpe-csus-3200-lab-validation` round (후속 작업 등재)
 
-### 16.4 본 cycle (2026-05-07 all-vendor-coverage) 산출 요약
+### 16.4 all-vendor-coverage 산출 요약
 
 | 항목 | 변경 |
 |---|---|
-| adapter (Redfish) | 28 → 30 (+supermicro_x10 M-B1 / +supermicro_ars M-B3) |
-| vault encrypted | 5 → 9 (+huawei M-A1 / +inspur M-A2 / +fujitsu M-A3 / +quanta M-A4) |
-| vendor OEM tasks | 4 → 9 (+cisco M-J1 / +huawei M-C2 / +inspur M-D1 / +fujitsu M-E2 / +quanta M-F1) |
+| adapter (Redfish) | 28 → 30 (+supermicro_x10 / +supermicro_ars) |
+| vault encrypted | 5 → 9 (+huawei / +inspur / +fujitsu / +quanta) |
+| vendor OEM tasks | 4 → 9 (+cisco / +huawei / +inspur / +fujitsu / +quanta) |
 | mock fixture | 4 → 22+ generation |
-| catalog 갱신 | NEXT_ACTIONS (M-L1) / VENDOR_ADAPTERS (M-L2) / COMPATIBILITY-MATRIX (M-L3) / EXTERNAL_CONTRACTS (M-K2) / docs/13 (M-L4) |
-| baseline_v1 | 변경 0 (lab 부재 vendor SKIP — rule 13 R4) |
-| schema/sections.yml + field_dictionary.yml | 변경 0 (Q7 — schema 변경 0) |
-| OEM namespace 매트릭스 | 5 → 9 vendor (M-I3 helper + M-J1 Cisco vendor task) |
-| origin 주석 일관성 (M-K1) | 30/30 PASS |
-| Phase 2 helpers | +7 (`_gather_smart_storage` / `_merge_power_dual` / `_extract_oem_unified` / `_detect_nic_ocp_slot` / `_detect_nic_sriov_capable` / `_normalize_role_id` / `_normalize_dimm_label`) |
-| redfish_gather.py | +338 lines (stdlib only — rule 10 R2) |
-| ticket | 38/38 DONE (Phase 1/2/3 통합) |
+| baseline_v1 | 변경 0 (lab 부재 vendor SKIP) |
+| schema/sections.yml + field_dictionary.yml | 변경 0 (schema 변경 0) |
+| OEM namespace 매트릭스 | 5 → 9 vendor (helper + Cisco vendor task) |
+| origin 주석 일관성 | 30/30 PASS |
+| OEM 추출 helpers | +7 (`_gather_smart_storage` / `_merge_power_dual` / `_extract_oem_unified` / `_detect_nic_ocp_slot` / `_detect_nic_sriov_capable` / `_normalize_role_id` / `_normalize_dimm_label`) |
+| redfish_gather.py | +338 lines (stdlib only) |
 
 ---
 
@@ -561,16 +557,16 @@ cycle 2026-05-07 M-K1 검증: 30/30 adapter origin 주석 일관성 PASS.
 
 | 질문 | 답 |
 |------|----|
-| 검증 결과가 baseline 과 다른데? | 펌웨어 / 모델 변경으로 응답이 달라졌는지 먼저 확인. 변경이 정당하면 baseline_v2/ 로 새 정답지 도입 (rule 13 R4). |
+| 검증 결과가 baseline 과 다른데? | 펌웨어 / 모델 변경으로 응답이 달라졌는지 먼저 확인. 변경이 정당하면 baseline_v2/ 로 새 정답지 도입. |
 | 새 펌웨어는 어디서 raw 응답을 캡처? | `tests/redfish-probe/probe_redfish.py` 또는 `deep_probe_redfish.py` 로 endpoint 별 응답 수집. |
 | 미검증 벤더의 어댑터를 도입해도 되나? | 가능하지만 호환성 매트릭스에 "미검증" 으로 표시 필요. 실장비 검증 후 baseline 업데이트 권장. |
 
-## CSUS 3200 / HBA·InfiniBand — lab 부재 (cycle 2026-05-29)
+## CSUS 3200 / HBA·InfiniBand — lab 부재
 
 | 대상 | 상태 | 비고 |
 |---|---|---|
-| HPE CSUS 3200 | **mock baseline (미검증)** | cycle 2026-05-29 에 전 공통 섹션 realistic mock 작성 (FC HBA + RAID1 SATA + DDR5 + 3 partition). web evidence (HPE Superdome Flex Admin Guide P/N 10-192008-Q123 등). **사이트 RMC 실측 시 정정 의무** — NEXT_ACTIONS §2.2 |
-| FC HBA (전 vendor) | **미검증** | redfish/os/windows baseline 은 lab FC 부재로 빈. esxi_baseline 은 offline FC 2 (Cisco UCS VIC). NEXT_ACTIONS §2.4 |
-| InfiniBand | **미검증** | Linux sysfs 가 정본 채널. lab IB HCA 부재. NEXT_ACTIONS §2.4 |
+| HPE CSUS 3200 | **mock baseline (미검증)** | 전 공통 섹션 realistic mock 작성 (FC HBA + RAID1 SATA + DDR5 + 3 partition). web evidence (HPE Superdome Flex Admin Guide P/N 10-192008-Q123 등). **사이트 RMC 실측 시 정정 의무** |
+| FC HBA (전 vendor) | **미검증** | redfish/os/windows baseline 은 lab FC 부재로 빈. esxi_baseline 은 offline FC 2 (Cisco UCS VIC). |
+| InfiniBand | **미검증** | Linux sysfs 가 정본 채널. lab IB HCA 부재. |
 
-> mock/미검증 = pytest 통과 ≠ 사이트 실측 통과 (rule 25 R7-B). 실장비 확보 시 `capture-site-fixture` + rule 13 R4 절차로 실 baseline 교체.
+> mock/미검증 = pytest 통과 ≠ 사이트 실측 통과. 실장비 확보 시 사이트 fixture 캡처 + 실 baseline 교체 절차로 실 baseline 교체.

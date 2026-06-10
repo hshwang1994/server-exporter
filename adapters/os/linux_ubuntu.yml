@@ -1,9 +1,9 @@
 ---
-# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
+# ── Origin metadata ───────────────────────────────────────────────────────────
 # Vendor: Debian 계열 Linux (Ubuntu / Debian)
-# Firmware: tested_against ["Ubuntu 24.04"]
+# Firmware: 검증 버전 ["Ubuntu 24.04"]
 # Origin: 실 검증 — Round 4 (복잡 토폴로지 실증, docs/13_redfish-live-validation.md Round 4)
-# Last sync: 2026-04-27 (hshwang1994)
+# Last sync: 2026-04-27
 # Notes: priority=50 — linux_rhel / linux_suse와 같은 priority. distribution_patterns로 분기.
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: os_linux_ubuntu

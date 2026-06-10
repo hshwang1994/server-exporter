@@ -1,7 +1,7 @@
 ---
 # redfish-gather/tasks/try_one_account.yml
 #
-# P1 (cycle 2026-04-28): 후보 계정 1개로 redfish_gather 시도.
+# 후보 계정 1개로 redfish_gather 시도.
 # 이미 성공(_rf_collect_ok=true)이면 skip — loop 흐름의 break 시뮬레이션.
 #
 # 입력:
@@ -19,7 +19,7 @@
   block:
 
     - name: "redfish | try_account | attempt"
-      # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 인자 전달 (Additive).
+      # manager_layout 인자 전달 (Additive).
       # adapter `vendor_notes.manager_layout` 정의 vendor (HPE CSUS 3200 / Superdome
       # Flex) 만 멀티-노드 토폴로지 활성. 다른 vendor 는 빈 문자열 → 모듈이 None 처리.
       redfish_gather:
@@ -40,11 +40,11 @@
              (_rf_attempt.status | default('failed')) != 'failed' }}
       no_log: true
 
-    # F49 (cycle 2026-05-01): _rf_used_account 에서 password 분리 저장.
+    # _rf_used_account 에서 password 분리 저장.
     # 기존: _rf_used_account 에 username/label/role 만 저장 (password 의도적 미저장 — 보안).
     # 사고: account_service.yml 이 username 만으로 vault lookup → 같은 username 다중 password
     #       (Dell root 4개 / HPE admin 2개 / Lenovo USERID 2개) 시 첫 entry 잡혀 password
-    #       mismatch → AccountService GET 401 → recovered=False (사용자 보고 사고).
+    #       mismatch → AccountService GET 401 → recovered=False (관측된 사고).
     # source: 사이트 실측 (Dell 10.100.15.27 — root/Goodmit0802! 만 200, 나머지 3개 root 401).
     # fix: _rf_used_account_password 별도 set_fact (no_log:true 로 console 노출 차단).
     #      account_service.yml 에서 본 변수 직접 사용 → vault re-lookup 불필요.
@@ -61,7 +61,7 @@
         _rf_used_account_password: "{{ _try_account.password | default('') }}"
       no_log: true
 
-    # cycle 2026-04-30: 실패 시 status / 첫 error 메시지를 advisory log에 노출 (디버깅 편의).
+    # 실패 시 status / 첫 error 메시지를 advisory log에 노출 (디버깅 편의).
     # password는 자동 redact 안 되므로 명시적 필드만 출력.
     - name: "redfish | try_account | log failure (advisory)"
       when: not (_rf_attempt_ok | bool)
@@ -74,7 +74,7 @@
           vendor={{ _rf_attempt.vendor | default('?') }},
           first_error={{ (_rf_attempt.errors | default([]) | first | default({})).message | default('?') }}
 
-    # F20 (cycle 2026-05-01): BMC lockout 회피 backoff 1초 → 5초.
+    # BMC lockout 회피 backoff 1초 → 5초.
     # source: Dell iDRAC IPMI Lockout Policy (5회 fail / 5분), HPE iLO Account
     # Lockout (3회 fail), Lenovo XCC Login Lockout (5회 fail) — vendor docs.
     # multi-account vault (5 자격) × 5초 = 25초/host 추가 — Jenkins gather stage

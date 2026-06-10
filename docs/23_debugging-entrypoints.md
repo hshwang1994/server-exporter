@@ -1,6 +1,6 @@
 # 23. 디버깅 진입점 (Debugging Entrypoints)
 
-> 호출자 / Jenkins / Ansible / 외부 시스템 어디에서 무엇이 깨졌는지 1분 안에 추적할 수 있는 진입점 카탈로그. 우려 2 (디버깅 어려움) 답변.
+> 호출자 / Jenkins / Ansible / 외부 시스템 어디에서 무엇이 깨졌는지 1분 안에 추적할 수 있는 진입점 카탈로그.
 
 ## 0. 요약 매트릭스 — Stage / Section 별 진입 파일
 
@@ -11,7 +11,7 @@
 | Jenkins Stage 3 (Validate Schema) 실패 | `tests/validate_field_dictionary.py` | `schema/field_dictionary.yml` |
 | Jenkins Stage 4 (E2E Regression) 실패 | `tests/e2e/` pytest 출력 | 영향 vendor `schema/baseline_v1/` |
 | envelope 13 필드 일부 누락 | `common/tasks/normalize/build_output.yml` | `init_fragments.yml` skeleton |
-| 섹션 status 잘못됨 | `common/tasks/normalize/build_status.yml` (rule 13 R8 4 시나리오) | `build_sections.yml` |
+| 섹션 status 잘못됨 | `common/tasks/normalize/build_status.yml` (4 시나리오) | `build_sections.yml` |
 | hostname=IP 표시 (의도된 fallback) | `build_output.yml:31-33` | docs/20 fallback chain |
 | vendor 미정규화 (예: `Cisco Systems Inc`) | `common/vars/vendor_aliases.yml` | `module_utils/adapter_common.py:normalize_vendor` |
 | adapter 잘못 선택 | `lookup_plugins/adapter_loader.py` -vvv 로그 | `adapters/{channel}/*.yml` priority |
@@ -19,7 +19,7 @@
 | Linux gather 부분 실패 | `os-gather/tasks/linux/gather_*.yml` | `_l_python_mode` (preflight.yml) |
 | Windows gather 부분 실패 | `os-gather/tasks/windows/gather_*.yml` | WinRM debug — pywinrm |
 | ESXi gather 부분 실패 | `esxi-gather/tasks/collect_*.yml + normalize_*.yml` | community.vmware 모듈 출력 |
-| Precheck 4단계 어디서 막힘 | `common/library/precheck_bundle.py` + `diagnosis.details` | `debug-precheck-failure` skill |
+| Precheck 4단계 어디서 막힘 | `common/library/precheck_bundle.py` + `diagnosis.details` | `diagnosis.failure_stage` / `failure_reason` |
 | Vault 로딩 실패 | `redfish-gather/tasks/load_vault.yml` | `vault/redfish/{vendor}.yml` 존재 / 권한 |
 | Callback 실패 | `Jenkinsfile_portal` post 단계 | `callback_plugins/json_only.py` + URL 정규화 |
 | 회귀 사고 (A 고치고 B 깨짐) | `pytest tests/regression/` | `tests/regression/test_cross_channel_consistency.py` |
@@ -46,17 +46,17 @@
 
 **실패 시 확인**:
 1. `ansible -vvv` 로그에서 어느 PLAY 어느 task 가 실패했는지
-2. **fragment 침범 의심** (rule 22) → `validate-fragment-philosophy` skill
-3. **vendor 분기 의심** (rule 12) → `verify_vendor_boundary.py`
+2. **fragment 침범 의심** → 각 gather 가 자기 fragment 변수만 set 하는지 점검
+3. **vendor 분기 의심** → gather 코드에 vendor 이름 하드코딩이 없는지 점검 (분기는 adapter YAML / OEM tasks 안에서만)
 
 ### Stage 3 — Validate Schema (정합)
 
 **역할**: envelope 13 필드 + sections 10 + field_dictionary 83 정합.
 **위치**: `tests/validate_field_dictionary.py` (Jenkinsfile 193~203, Stage 'Validate Schema')
 **실패 시 확인**:
-- `schema/field_dictionary.yml` 갱신 누락 (rule 13 R1 3종 동반)
+- `schema/field_dictionary.yml` 갱신 누락 (sections.yml + field_dictionary.yml + baseline 3종 동반)
 - `schema/sections.yml` 의 sections 10 정의 누락
-- `common/tasks/normalize/build_output.yml` envelope 13 필드 (rule 13 R5)
+- `common/tasks/normalize/build_output.yml` envelope 13 필드
 
 ### Stage 4 — E2E Regression / Callback (pipeline 별)
 
@@ -68,11 +68,11 @@
 
 **실패 시 확인**:
 - pytest 출력 — 어느 baseline 어느 필드가 차이
-- callback URL 무결성 (rule 31) — `Jenkinsfile_portal` post 단계 console log
+- callback URL 무결성 — `Jenkinsfile_portal` post 단계 console log
 
 ---
 
-## 2. Fragment 정규화 과정 별 진입 (rule 22)
+## 2. Fragment 정규화 과정 별 진입
 
 전체 처리 과정 (정본: `docs/07_normalize-flow.md`):
 
@@ -85,7 +85,7 @@ merge_fragment.yml (각 gather 후 호출, fragment → 누적 변수 병합)
   ↓
 build_sections.yml → _norm_sections (섹션별 status)
   ↓
-build_status.yml → _out_status (rule 13 R8 4 시나리오 A/B/C/D)
+build_status.yml → _out_status (4 시나리오 A/B/C/D)
   ↓
 build_errors.yml → _norm_errors
   ↓
@@ -106,11 +106,11 @@ OUTPUT task → callback_plugins/json_only.py → stdout JSON
 **envelope 필드 누락 시**:
 1. `build_output.yml` 본문 (정본) 13 필드 모두 정의 확인
 2. `init_fragments.yml` skeleton 에 모든 sections 정의
-3. `build_failed_output.yml` rescue 경로도 13 필드 emit 확인 (Phase B `pre_commit_fragment_skeleton_sync.py`)
+3. `build_failed_output.yml` rescue 경로도 13 필드 emit 확인
 
 ---
 
-## 3. Adapter 선택 디버깅 (Phase C 추가)
+## 3. Adapter 선택 디버깅
 
 ### -vvv 로그 활용
 
@@ -130,14 +130,14 @@ adapter_loader: top 3 candidates (score 내림차순):
   #1 dell_idrac9 score=100345
   #2 dell_idrac score=10120
   #3 redfish_generic score=-400
-adapter_loader: 선택됨 — dell_idrac9 (score=100345) [rule 10 R5 score = priority×1000 + specificity×10 + match]
+adapter_loader: 선택됨 — dell_idrac9 (score=100345) [score = priority×1000 + specificity×10 + match]
 ```
 
 ### 의도와 다른 adapter 선택 시
 
 1. **점수 breakdown 확인** — priority / specificity / match_score 중 어느 것 때문인지
 2. **adapter YAML priority 확인** (`adapters/{channel}/*.yml` priority 키)
-3. **rule 50 R3 priority 정책표** (`docs/10_adapter-system.md` 참조):
+3. **priority 정책표** (`docs/10_adapter-system.md` 참조):
    - generic = 0
    - vendor 기본 = 10
    - 세대별 = 80~100
@@ -146,11 +146,11 @@ adapter_loader: 선택됨 — dell_idrac9 (score=100345) [rule 10 R5 score = pri
 
 ### 점수 동률 사고
 
-`adapter_loader._match_and_score` 가 stable sort 사용 → 동률 시 파일명 알파벳 오름차순 tie-break. 그러나 **동률 자체가 priority/specificity 일관성 위반 신호** (rule 10 R5).
+`adapter_loader._match_and_score` 가 stable sort 사용 → 동률 시 파일명 알파벳 오름차순 tie-break. 그러나 **동률 자체가 priority/specificity 일관성 위반 신호**.
 
 ---
 
-## 4. envelope 13 필드 디버깅 (rule 13 R5)
+## 4. envelope 13 필드 디버깅
 
 **정본**: `common/tasks/normalize/build_output.yml`
 
@@ -161,7 +161,7 @@ adapter_loader: 선택됨 — dell_idrac9 (score=100345) [rule 10 R5 score = pri
 | `ip` | site.yml 첫 set_fact (`_out_ip`) — inventory `service_ip` / `bmc_ip` |
 | `hostname` | `build_output.yml:31-33` fallback chain (system.hostname OR system.fqdn OR _out_ip) |
 | `vendor` | site.yml 의 vendor 정규화 (vendor_aliases.yml) |
-| `status` | `build_status.yml` 4 시나리오 (rule 13 R8) |
+| `status` | `build_status.yml` 4 시나리오 |
 | `sections` | `build_sections.yml` (10 sections × success/not_supported/failed) |
 | `diagnosis` | site.yml success/rescue 에서 set (`_diagnosis`) |
 | `meta` | `build_meta.yml` |
@@ -170,12 +170,12 @@ adapter_loader: 선택됨 — dell_idrac9 (score=100345) [rule 10 R5 score = pri
 | `data` | merge_fragment.yml 누적 (`_merged_data`) |
 | `schema_version` | 각 채널 `site.yml` 이 inject |
 
-**필드 누락 사고 (rule 95 R1 #2 fragment 침범 회귀)**:
+**필드 누락 사고 (fragment 침범 회귀)**:
 - 회귀 테스트: `pytest tests/regression/test_cross_channel_consistency.py::test_envelope_thirteen_fields_present`
 
 ---
 
-## 5. hostname=IP fallback 디버깅 (우려 7 답변)
+## 5. hostname=IP fallback 디버깅
 
 **의도된 동작** — 버그 아님.
 
@@ -195,15 +195,15 @@ hostname = (system.hostname OR system.fqdn) OR _out_ip
   - hostname != ip → 정상 hostname/fqdn 응답
 - 또는 `ansible-playbook -vvv` 로그에서 `_merged_data.system` 의 raw 값 확인
 
-**docs/20** 에 본 fallback 명시 (Phase E 에서 보강).
+**docs/20** 에 본 fallback 명시.
 
 ---
 
-## 6. Redfish endpoint 추적 (우려 1 가독성 답변)
+## 6. Redfish endpoint 추적
 
 **위치**: `redfish-gather/library/redfish_gather.py`
 
-**함수별 호출 endpoint** (Phase C docstring 보강 완료):
+**함수별 호출 endpoint**:
 
 | 함수 | 호출 endpoint |
 |---|---|
@@ -253,16 +253,16 @@ community.vmware 로그 → `-vvv` 출력의 `vmware_*` 모듈 응답.
 
 ---
 
-## 8. 회귀 사고 디버깅 (우려 6 답변)
+## 8. 회귀 사고 디버깅
 
 **A 고치고 B 깨지는 패턴 차단**:
 
-1. **Cross-channel envelope 회귀** (Phase A 신설): `pytest tests/regression/test_cross_channel_consistency.py`
+1. **Cross-channel envelope 회귀**: `pytest tests/regression/test_cross_channel_consistency.py`
    - 13 검증 그룹 × 9 baseline + 채널 커버리지 3 = 120 테스트 (`tests/regression/` 디렉터리 전체는 158 — HBA/IB·vendor-display·csus-mock 포함)
-2. **Jinja2 namespace 회귀 차단** (Phase B): `pre_commit_jinja_namespace_check.py`
-3. **Fragment skeleton sync 차단** (Phase B): `pre_commit_fragment_skeleton_sync.py`
-4. **사이트 fixture 캡처** (rule 21 R2): `capture-site-fixture` skill
-5. **외부 계약 drift** (rule 96)
+2. **Jinja2 namespace 회귀 차단**
+3. **Fragment skeleton sync 차단**
+4. **사이트 fixture 캡처**
+5. **외부 계약 drift** 점검
 
 **회귀 검증 명령** (PR 머지 전):
 ```bash
@@ -273,7 +273,7 @@ ansible-playbook --syntax-check os-gather/site.yml  # 3 채널 syntax
 
 ---
 
-## 9. Diagnosis 출력 디버깅 (rule 27)
+## 9. Diagnosis 출력 디버깅
 
 **정본**: `docs/12_diagnosis-output.md`
 
@@ -288,7 +288,7 @@ ansible-playbook --syntax-check os-gather/site.yml  # 3 채널 syntax
 | `failure_stage` | 실패 단계 (precheck/gather/normalize/...) |
 | `failure_reason` | 실패 사유 (auth_failed / timeout / parse_error / ...) |
 
-**precheck 디버그 skill**: `debug-precheck-failure`
+**precheck 디버그**: `diagnosis.failure_stage` / `failure_reason` 로 막힌 단계 식별
 
 ---
 
@@ -297,9 +297,9 @@ ansible-playbook --syntax-check os-gather/site.yml  # 3 채널 syntax
 - `docs/06_gather-structure.md` — 전체 구조
 - `docs/07_normalize-flow.md` — Fragment 정규화 과정
 - `docs/08_failure-handling.md` — block/rescue/always
-- `docs/10_adapter-system.md` — Adapter 점수 정책 (Phase C 확장)
+- `docs/10_adapter-system.md` — Adapter 점수 정책
 - `docs/11_precheck-module.md` — Precheck 4 단계
 - `docs/12_diagnosis-output.md` — Diagnosis 구조
 - `docs/17_jenkins-pipeline.md` — Jenkins 런타임
-- `docs/20_json-schema-fields.md` — JSON envelope 13 필드 (Phase E 확장)
+- `docs/20_json-schema-fields.md` — JSON envelope 13 필드
 - `docs/22_compatibility-matrix.md` — 호환성 매트릭스
