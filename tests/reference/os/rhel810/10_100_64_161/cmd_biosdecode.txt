@@ -1,7 +1,0 @@
-# command: biosdecode 2>&1
-# rc: 0
-# requires_root: True
-# fetched: 2026-04-28T06:43:15.310638+00:00
-#
-Goodmit0802!
-# biosdecode 3.5

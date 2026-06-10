@@ -1,9 +1,0 @@
-# command: docker version 2>&1; docker info 2>&1; docker ps -a 2>&1
-# rc: 127
-# requires_root: True
-# fetched: 2026-04-28T06:43:28.262570+00:00
-#
-Goodmit0802!
-bash: docker: command not found
-bash: docker: command not found
-bash: docker: command not found

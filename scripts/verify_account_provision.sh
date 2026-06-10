@@ -68,7 +68,7 @@ if [[ ! -f "$REPO_ROOT/.vault_pass" ]]; then
 fi
 
 # results dir
-OUT_DIR="${REPO_ROOT}/tests/evidence/account_provision_$(date +%Y%m%d_%H%M%S)"
+OUT_DIR="${REPO_ROOT}/tests/account_provision/run_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUT_DIR"
 
 echo "================================================================="

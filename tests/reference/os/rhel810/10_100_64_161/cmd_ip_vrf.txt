@@ -1,6 +1,0 @@
-# command: ip -j vrf show 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:43:04.980999+00:00
-#
-[]

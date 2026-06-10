@@ -1,7 +1,0 @@
-# command: nvme list 2>&1
-# rc: 1
-# requires_root: True
-# fetched: 2026-04-28T06:44:08.020609+00:00
-#
-Goodmit0802!
-Failed to scan topology: No such file or directory

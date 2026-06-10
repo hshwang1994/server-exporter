@@ -1,6 +1,0 @@
-# command: racadm version 2>&1; which racadm 2>&1
-# rc: 1
-# requires_root: False
-# fetched: 2026-04-28T06:44:40.049965+00:00
-#
-bash: line 1: racadm: command not found

@@ -1,5 +1,0 @@
-# command: esxcli system stats uptime get
-# rc: 0
-# fetched: 2026-04-28T12:44:04.382233+00:00
-#
-12305865587727

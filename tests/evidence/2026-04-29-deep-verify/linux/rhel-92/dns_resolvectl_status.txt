@@ -1,9 +1,0 @@
-# cmd: resolvectl status 2>&1 || systemd-resolve --status 2>&1 || echo NO_RESOLVED
-# rc: 0
-bash: resolvectl: command not found
-bash: systemd-resolve: command not found
-NO_RESOLVED
-
---- stderr ---
-Shared connection to 10.100.64.163 closed.
-

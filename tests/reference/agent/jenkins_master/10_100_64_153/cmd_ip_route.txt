@@ -1,6 +1,0 @@
-# command: ip -j route 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:49:41.132010+00:00
-#
-[{"dst":"default","gateway":"10.100.64.254","dev":"ens160","protocol":"static","flags":[]},{"dst":"10.100.64.0/24","dev":"ens160","protocol":"kernel","scope":"link","prefsrc":"10.100.64.153","flags":[]}]

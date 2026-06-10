@@ -1,9 +1,0 @@
-# command: firewall-cmd --list-all 2>&1; firewall-cmd --get-active-zones 2>&1
-# rc: 127
-# requires_root: True
-# fetched: 2026-04-28T06:44:14.518979+00:00
-#
-Goodmit0802!
-Goodmit0802!
-bash: line 1: firewall-cmd: command not found
-bash: line 1: firewall-cmd: command not found

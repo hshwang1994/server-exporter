@@ -1,6 +1,0 @@
-# command: cat /proc/cmdline
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:45:01.712950+00:00
-#
-BOOT_IMAGE=/vmlinuz-6.8.0-88-generic root=/dev/mapper/ubuntu--vg-ubuntu--lv ro

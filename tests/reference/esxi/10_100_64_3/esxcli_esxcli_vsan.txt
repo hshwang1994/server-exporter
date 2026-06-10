@@ -1,5 +1,0 @@
-# command: esxcli vsan storage list 2>&1; esxcli vsan cluster get 2>&1
-# rc: 1
-# fetched: 2026-04-28T12:45:04.281001+00:00
-#
-vSAN Clustering is not enabled on this host

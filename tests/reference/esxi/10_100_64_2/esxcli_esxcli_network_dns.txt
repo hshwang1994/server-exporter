@@ -1,6 +1,0 @@
-# command: esxcli network ip dns server list; esxcli network ip dns search list
-# rc: 0
-# fetched: 2026-04-28T12:42:34.262311+00:00
-#
-   DNSServers: 10.100.64.251
-   DNSSearch Domains: 

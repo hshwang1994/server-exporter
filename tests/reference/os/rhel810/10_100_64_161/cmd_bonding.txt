@@ -1,5 +1,0 @@
-# command: for b in /proc/net/bonding/*; do [ -f $b ] && echo '=== '$b' ===' && cat $b; done 2>/dev/null
-# rc: 1
-# requires_root: False
-# fetched: 2026-04-28T06:43:05.809306+00:00
-#

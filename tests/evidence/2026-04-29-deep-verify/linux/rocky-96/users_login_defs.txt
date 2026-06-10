@@ -1,8 +1,0 @@
-# cmd: grep -E '^UID_MIN|^UID_MAX' /etc/login.defs 2>&1 || echo ABSENT
-# rc: 0
-UID_MIN                  1000
-UID_MAX                 60000
-
---- stderr ---
-Shared connection to 10.100.64.169 closed.
-

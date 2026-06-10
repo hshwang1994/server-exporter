@@ -1,8 +1,0 @@
-# command: systemctl --failed --no-pager 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:27.684739+00:00
-#
-  UNIT LOAD ACTIVE SUB DESCRIPTION
-
-0 loaded units listed.

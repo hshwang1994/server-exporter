@@ -1,6 +1,0 @@
-# command: cat /etc/redhat-release 2>/dev/null || echo N/A
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:43:52.482345+00:00
-#
-Red Hat Enterprise Linux release 9.2 (Plow)

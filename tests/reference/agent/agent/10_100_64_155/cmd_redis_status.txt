@@ -1,8 +1,0 @@
-# command: systemctl status redis 2>&1; redis-cli ping 2>&1; redis-cli info server 2>&1 | head -20
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:45:06.584903+00:00
-#
-Unit redis.service could not be found.
-Could not connect to Redis at 127.0.0.1:6379: Connection refused
-Could not connect to Redis at 127.0.0.1:6379: Connection refused

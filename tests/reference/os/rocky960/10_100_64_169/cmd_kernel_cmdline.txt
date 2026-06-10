@@ -1,6 +1,0 @@
-# command: cat /proc/cmdline
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:45:02.209375+00:00
-#
-BOOT_IMAGE=(hd0,gpt2)/vmlinuz-5.14.0-570.58.1.el9_6.x86_64 root=/dev/mapper/rl-root ro crashkernel=1G-4G:192M,4G-64G:256M,64G-:512M resume=/dev/mapper/rl-swap rd.lvm.lv=rl/root rd.lvm.lv=rl/swap

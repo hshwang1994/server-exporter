@@ -1,9 +1,0 @@
-# command: esxcli system version get
-# rc: 0
-# fetched: 2026-04-28T12:40:25.166264+00:00
-#
-   Product: VMware ESXi
-   Version: 7.0.3
-   Build: Releasebuild-20842708
-   Update: 3
-   Patch: 65

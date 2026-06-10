@@ -1,6 +1,0 @@
-# command: ip -j tunnel show 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:05.946687+00:00
-#
-[]

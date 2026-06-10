@@ -1,8 +1,0 @@
-# command: biosdecode 2>&1
-# rc: 1
-# requires_root: True
-# fetched: 2026-04-28T06:44:31.127295+00:00
-#
-Goodmit0802!
-# biosdecode 3.3
-/dev/mem: Operation not permitted

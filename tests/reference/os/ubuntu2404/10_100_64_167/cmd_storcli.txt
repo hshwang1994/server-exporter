@@ -1,9 +1,0 @@
-# command: /opt/MegaRAID/storcli/storcli64 /call show all J 2>&1; storcli /call show all J 2>&1
-# rc: 127
-# requires_root: True
-# fetched: 2026-04-28T06:44:06.524903+00:00
-#
-Goodmit0802!
-Goodmit0802!
-bash: line 1: /opt/MegaRAID/storcli/storcli64: No such file or directory
-bash: line 1: storcli: command not found

@@ -1,7 +1,0 @@
-# command: yum repolist all 2>&1; dnf repolist all 2>&1
-# rc: 127
-# requires_root: False
-# fetched: 2026-04-28T06:44:29.694726+00:00
-#
-bash: line 1: yum: command not found
-bash: line 1: dnf: command not found

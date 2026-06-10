@@ -1,6 +1,0 @@
-# command: ip -j route 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:43:03.876679+00:00
-#
-[{"dst":"default","gateway":"10.100.64.254","dev":"ens192","protocol":"static","metric":100,"flags":[]},{"dst":"default","gateway":"10.100.64.254","dev":"ens224","protocol":"static","metric":101,"flags":[]},{"dst":"10.100.64.0/24","dev":"ens192","protocol":"kernel","scope":"link","prefsrc":"10.100.64.161","metric":100,"flags":[]},{"dst":"10.100.64.0/24","dev":"ens224","protocol":"kernel","scope":"link","prefsrc":"10.100.64.162","metric":101,"flags":[]},{"dst":"192.168.122.0/24","dev":"virbr0","protocol":"kernel","scope":"link","prefsrc":"192.168.122.1","flags":["linkdown"]}]

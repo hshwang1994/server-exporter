@@ -1,5 +1,0 @@
-# command: dpkg -l 2>/dev/null
-# rc: 127
-# requires_root: False
-# fetched: 2026-04-28T06:45:05.563697+00:00
-#

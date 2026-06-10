@@ -1,6 +1,0 @@
-# command: uname -a
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:36.933138+00:00
-#
-Linux localhost.localdomain 5.14.0-570.58.1.el9_6.x86_64 #1 SMP PREEMPT_DYNAMIC Fri Oct 31 13:55:05 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux

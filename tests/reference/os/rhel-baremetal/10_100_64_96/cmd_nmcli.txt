@@ -1,7 +1,0 @@
-# command: nmcli -t -f all device 2>&1; nmcli -t -f all connection 2>&1
-# rc: 127
-# requires_root: False
-# fetched: 2026-04-28T06:44:52.183629+00:00
-#
-bash: line 1: nmcli: command not found
-bash: line 1: nmcli: command not found

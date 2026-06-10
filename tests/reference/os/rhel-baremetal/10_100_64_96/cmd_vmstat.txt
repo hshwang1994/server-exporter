@@ -1,8 +1,0 @@
-# command: vmstat 1 1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:44.484547+00:00
-#
-procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------
- r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu
- 0  0  44544 11917016  39228 117200272    0    0   234 19987 11276    4  0  0 100  0  0  0

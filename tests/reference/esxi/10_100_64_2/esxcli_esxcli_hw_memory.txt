@@ -1,7 +1,0 @@
-# command: esxcli hardware memory get
-# rc: 0
-# fetched: 2026-04-28T12:42:10.150846+00:00
-#
-   Physical Memory: 1099394920448 Bytes
-   Reliable Memory: 0 Bytes
-   NUMA Node Count: 2

@@ -1,7 +1,0 @@
-# cmd: echo Goodmit0802! | sudo -S dmidecode -s system-manufacturer 2>&1
-# rc: 0
-VMware, Inc.
-
---- stderr ---
-Shared connection to 10.100.64.169 closed.
-

@@ -1,6 +1,0 @@
-# command: ip -j neigh 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:05.631905+00:00
-#
-[{"dst":"10.100.64.167","dev":"ens192","lladdr":"00:50:56:84:8b:b9","state":["STALE"]},{"dst":"10.100.64.254","dev":"ens192","lladdr":"00:00:0c:07:ac:40","state":["REACHABLE"]},{"dst":"10.100.64.155","dev":"ens192","lladdr":"00:50:56:84:bc:d4","state":["STALE"]},{"dst":"10.100.64.251","dev":"ens192","lladdr":"00:0c:29:db:58:e6","state":["STALE"]},{"dst":"10.100.64.253","dev":"ens192","lladdr":"e4:d3:f1:d2:f0:81","state":["STALE"]},{"dst":"10.100.64.154","dev":"ens192","lladdr":"00:50:56:84:e5:16","state":["STALE"]},{"dst":"10.100.64.252","dev":"ens192","lladdr":"fc:99:47:53:e0:81","state":["STALE"]},{"dst":"10.100.64.120","dev":"ens192","lladdr":"00:50:56:84:59:d0","state":["STALE"]}]

@@ -1,6 +1,0 @@
-# command: id jenkins 2>&1; getent passwd jenkins 2>&1
-# rc: 2
-# requires_root: False
-# fetched: 2026-04-28T06:44:17.242418+00:00
-#
-id: ‘jenkins’: no such user

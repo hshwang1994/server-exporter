@@ -1,5 +1,0 @@
-# command: rpm -qa --queryformat '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n' 2>/dev/null | sort
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:29.074854+00:00
-#

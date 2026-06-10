@@ -1,7 +1,0 @@
-# command: getenforce 2>&1; sestatus 2>&1
-# rc: 127
-# requires_root: False
-# fetched: 2026-04-28T06:45:06.097724+00:00
-#
-bash: line 1: getenforce: command not found
-bash: line 1: sestatus: command not found

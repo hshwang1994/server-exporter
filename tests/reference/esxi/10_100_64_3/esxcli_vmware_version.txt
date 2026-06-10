@@ -1,6 +1,0 @@
-# command: vmware -v; vmware -l
-# rc: 0
-# fetched: 2026-04-28T12:43:54.756511+00:00
-#
-VMware ESXi 7.0.3 build-20842708
-VMware ESXi 7.0 Update 3

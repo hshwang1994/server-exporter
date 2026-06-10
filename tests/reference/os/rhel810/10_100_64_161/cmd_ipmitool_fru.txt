@@ -1,7 +1,0 @@
-# command: ipmitool fru list 2>&1
-# rc: 127
-# requires_root: True
-# fetched: 2026-04-28T06:43:17.349581+00:00
-#
-Goodmit0802!
-bash: ipmitool: command not found

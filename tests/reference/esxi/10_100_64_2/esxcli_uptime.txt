@@ -1,5 +1,0 @@
-# command: uptime
-# rc: 0
-# fetched: 2026-04-28T12:41:57.659722+00:00
-#
- 12:34:51 up 142 days, 10:15:58, load average: 0.63, 0.65, 0.65

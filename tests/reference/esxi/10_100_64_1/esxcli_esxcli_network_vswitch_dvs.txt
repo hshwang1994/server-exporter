@@ -1,4 +1,0 @@
-# command: esxcli network vswitch dvs vmware list 2>&1
-# rc: 0
-# fetched: 2026-04-28T12:41:02.400278+00:00
-#

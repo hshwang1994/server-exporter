@@ -1,6 +1,0 @@
-# command: cat /etc/redhat-release 2>/dev/null || echo N/A
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:39.604974+00:00
-#
-N/A

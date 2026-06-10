@@ -1,8 +1,0 @@
-# cmd: ss -tnlpH 2>&1
-# rc: 0
-LISTEN 0      128    0.0.0.0:22 0.0.0.0:*
-LISTEN 0      128       [::]:22    [::]:*
-
---- stderr ---
-Shared connection to 10.100.64.169 closed.
-

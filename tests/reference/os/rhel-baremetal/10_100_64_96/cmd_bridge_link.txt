@@ -1,6 +1,0 @@
-# command: bridge -j link show 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:50.541748+00:00
-#
-[{"ifindex":2,"ifname":"eno12399np0","flags":["NO-CARRIER","BROADCAST","MULTICAST","UP"],"mtu":1500,"hwmode":"VEB"},{"ifindex":4,"ifname":"eno12409np1","flags":["BROADCAST","MULTICAST"],"mtu":1500,"hwmode":"VEB"},{"ifindex":6,"ifname":"enp190s0f0np0","flags":["BROADCAST","MULTICAST","SLAVE","UP","LOWER_UP"],"mtu":1500,"master":"bond0","hwmode":"VEPA"},{"ifindex":7,"ifname":"enp190s0f1np1","flags":["BROADCAST","MULTICAST","SLAVE","UP","LOWER_UP"],"mtu":1500,"master":"bond0","hwmode":"VEPA"},{"ifindex":151,"link":"eno12399np0","ifname":"vethe088486","flags":["BROADCAST","MULTICAST","UP","LOWER_UP"],"mtu":1500,"master":"docker0","state":"forwarding","priority":32,"cost":2}]

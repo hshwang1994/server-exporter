@@ -1,7 +1,0 @@
-# cmd: echo Goodmit0802! | sudo -S dmidecode -s system-uuid 2>&1
-# rc: 0
-[sudo] password for cloviradmin: 4c4c4544-0053-4210-8050-c7c04f4b3534
-
---- stderr ---
-Shared connection to 10.100.64.96 closed.
-

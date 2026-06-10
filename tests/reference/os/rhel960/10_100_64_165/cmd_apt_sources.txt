@@ -1,5 +1,0 @@
-# command: cat /etc/apt/sources.list 2>/dev/null; ls /etc/apt/sources.list.d/ 2>/dev/null
-# rc: 2
-# requires_root: False
-# fetched: 2026-04-28T06:44:26.614604+00:00
-#

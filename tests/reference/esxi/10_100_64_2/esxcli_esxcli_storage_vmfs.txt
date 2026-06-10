@@ -1,9 +1,0 @@
-# command: esxcli storage vmfs extent list; esxcli storage vmfs snapshot list
-# rc: 0
-# fetched: 2026-04-28T12:42:19.500099+00:00
-#
-Volume Name                                 VMFS UUID                            Extent Number  Device Name                           Partition
-------------------------------------------  -----------------------------------  -------------  ------------------------------------  ---------
-ESXi02-Local-RAID5                          67ecc266-4a382602-09f9-0027e38875cc              0  naa.6f80bcbeac326eb02f7f66c81ba3c352          8
-ESXi02-Local-RAID0                          67ecd33b-09e3e5c6-ad98-0027e38875cc              0  naa.6f80bcbeac326eb02f7f66fd1ece98e3          1
-OSDATA-67ecc265-b7007080-9cf6-0027e38875cc  67ecc265-b7007080-9cf6-0027e38875cc              0  naa.6f80bcbeac326eb02f7f66c81ba3c352          7

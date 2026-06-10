@@ -1,7 +1,0 @@
-# cmd: hostname
-# rc: 0
-gathertest-ubuntu2404
-
---- stderr ---
-Shared connection to 10.100.64.167 closed.
-

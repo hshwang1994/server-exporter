@@ -1,8 +1,0 @@
-# cmd: cat /etc/systemd/resolved.conf 2>&1 || echo ABSENT
-# rc: 0
-cat: /etc/systemd/resolved.conf: No such file or directory
-ABSENT
-
---- stderr ---
-Shared connection to 10.100.64.163 closed.
-

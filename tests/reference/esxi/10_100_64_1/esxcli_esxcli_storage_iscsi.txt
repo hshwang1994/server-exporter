@@ -1,7 +1,0 @@
-# command: esxcli iscsi adapter list 2>&1
-# rc: 0
-# fetched: 2026-04-28T12:40:48.199890+00:00
-#
-Adapter  Driver     State   UID            Description
--------  ---------  ------  -------------  -----------
-vmhba64  iscsi_vmk  online  iscsi.vmhba64  iSCSI Software Adapter

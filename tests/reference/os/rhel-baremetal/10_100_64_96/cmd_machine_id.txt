@@ -1,6 +1,0 @@
-# command: cat /etc/machine-id 2>/dev/null
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:40.382588+00:00
-#
-29cd72d680464baa9184364d27d0c36f

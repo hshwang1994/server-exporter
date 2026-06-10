@@ -1,9 +1,0 @@
-# command: esxcli system account list
-# rc: 0
-# fetched: 2026-04-28T12:40:32.659615+00:00
-#
-User ID  Description
--------  -----------
-root     Administrator
-dcui     DCUI User
-vpxuser  VMware Workstation administration account

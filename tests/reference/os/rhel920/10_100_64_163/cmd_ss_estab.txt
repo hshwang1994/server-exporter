@@ -1,8 +1,0 @@
-# command: ss -tnp state established 2>&1
-# rc: 0
-# requires_root: True
-# fetched: 2026-04-28T06:44:18.049320+00:00
-#
-Goodmit0802!
-Recv-Q    Send-Q       Local Address:Port       Peer Address:Port    Process    
-0         0            10.100.64.163:22          10.11.20.12:51888    users:(("sshd",pid=36744,fd=4),("sshd",pid=36727,fd=4))

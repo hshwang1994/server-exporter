@@ -121,7 +121,7 @@ echo "==== Build complete ===="
   </builders>
   <publishers>
     <hudson.tasks.ArtifactArchiver>
-      <artifacts>tests/evidence/account_provision_*/**</artifacts>
+      <artifacts>tests/account_provision/run_*/**</artifacts>
       <allowEmptyArchive>true</allowEmptyArchive>
       <onlyIfSuccessful>false</onlyIfSuccessful>
       <fingerprint>false</fingerprint>

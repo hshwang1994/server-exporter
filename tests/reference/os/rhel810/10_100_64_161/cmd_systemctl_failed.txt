@@ -1,7 +1,0 @@
-# command: systemctl --failed --no-pager 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:43:19.347056+00:00
-#
-0 loaded units listed. Pass --all to see loaded but inactive units, too.
-To show all installed unit files use 'systemctl list-unit-files'.

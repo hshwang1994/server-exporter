@@ -1,5 +1,0 @@
-# command: cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null | head -20
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:42.560853+00:00
-#

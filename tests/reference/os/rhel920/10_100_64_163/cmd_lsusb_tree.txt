@@ -1,5 +1,0 @@
-# command: lsusb -t
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:25.820599+00:00
-#

@@ -1,6 +1,0 @@
-# command: ip -j addr 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:17.904588+00:00
-#
-[{"ifindex":1,"ifname":"lo","flags":["LOOPBACK","UP","LOWER_UP"],"mtu":65536,"qdisc":"noqueue","operstate":"UNKNOWN","group":"default","txqlen":1000,"link_type":"loopback","address":"00:00:00:00:00:00","broadcast":"00:00:00:00:00:00","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8,"scope":"host","label":"lo","valid_life_time":4294967295,"preferred_life_time":4294967295},{"family":"inet6","local":"::1","prefixlen":128,"scope":"host","noprefixroute":true,"valid_life_time":4294967295,"preferred_life_time":4294967295}]},{"ifindex":2,"ifname":"ens160","flags":["BROADCAST","MULTICAST","UP","LOWER_UP"],"mtu":1500,"qdisc":"mq","operstate":"UP","group":"default","txqlen":1000,"link_type":"ether","address":"00:50:56:84:e5:16","broadcast":"ff:ff:ff:ff:ff:ff","altnames":["enp3s0"],"addr_info":[{"family":"inet","local":"10.100.64.154","prefixlen":24,"broadcast":"10.100.64.255","scope":"global","label":"ens160","valid_life_time":4294967295,"preferred_life_time":4294967295},{"family":"inet6","local":"fe80::250:56ff:fe84:e516","prefixlen":64,"scope":"link","valid_life_time":4294967295,"preferred_life_time":4294967295}]}]

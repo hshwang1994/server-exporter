@@ -1,5 +1,0 @@
-# command: esxcli system uuid get
-# rc: 0
-# fetched: 2026-04-28T12:43:58.091569+00:00
-#
-67ecbf14-708d-61fe-a3c6-0027e388a4a0

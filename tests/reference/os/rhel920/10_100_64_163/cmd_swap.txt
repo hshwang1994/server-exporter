@@ -1,7 +1,0 @@
-# command: swapon --show 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:03.321518+00:00
-#
-NAME      TYPE      SIZE USED PRIO
-/dev/dm-1 partition   5G   0B   -2

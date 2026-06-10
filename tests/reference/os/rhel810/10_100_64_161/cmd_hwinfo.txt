@@ -1,7 +1,0 @@
-# command: hwinfo --short 2>&1
-# rc: 127
-# requires_root: True
-# fetched: 2026-04-28T06:43:15.028102+00:00
-#
-Goodmit0802!
-bash: hwinfo: command not found

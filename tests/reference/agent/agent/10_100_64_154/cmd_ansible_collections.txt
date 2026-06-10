@@ -1,6 +1,0 @@
-# command: ansible-galaxy collection list 2>&1
-# rc: 127
-# requires_root: False
-# fetched: 2026-04-28T06:44:15.217177+00:00
-#
-bash: line 1: ansible-galaxy: command not found

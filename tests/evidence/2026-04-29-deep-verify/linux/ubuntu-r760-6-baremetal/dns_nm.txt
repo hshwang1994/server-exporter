@@ -1,6 +1,0 @@
-# cmd: nmcli dev show 2>&1 | grep -E 'IP4.DNS|IP6.DNS' | head -10 || echo NO_NMCLI
-# rc: 0
-
---- stderr ---
-Shared connection to 10.100.64.96 closed.
-

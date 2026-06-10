@@ -1,9 +1,0 @@
-# command: cat /etc/apt/sources.list 2>/dev/null; ls /etc/apt/sources.list.d/ 2>/dev/null
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:45:04.827050+00:00
-#
-# Ubuntu sources have moved to /etc/apt/sources.list.d/ubuntu.sources
-docker.sources
-ubuntu.sources
-ubuntu.sources.curtin.orig

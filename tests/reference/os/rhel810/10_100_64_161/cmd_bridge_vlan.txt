@@ -1,6 +1,0 @@
-# command: bridge -j vlan show 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:43:05.531086+00:00
-#
-[{"ifname":"virbr0","vlans":[{"vlan":1,"flags":["PVID","Egress Untagged"]}]}]

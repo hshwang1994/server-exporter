@@ -1,7 +1,0 @@
-# cmd: hostname
-# rc: 0
-localhost.localdomain
-
---- stderr ---
-Shared connection to 10.100.64.165 closed.
-

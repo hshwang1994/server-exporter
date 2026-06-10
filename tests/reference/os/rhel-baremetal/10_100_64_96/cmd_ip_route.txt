@@ -1,6 +1,0 @@
-# command: ip -j route 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:49.337356+00:00
-#
-[{"dst":"default","gateway":"172.17.100.254","dev":"eno8303","protocol":"static","flags":[]},{"dst":"10.0.0.0/8","gateway":"10.100.64.254","dev":"bond0.64","protocol":"static","flags":[]},{"dst":"10.100.64.0/24","dev":"bond0.64","protocol":"kernel","scope":"link","prefsrc":"10.100.64.96","flags":[]},{"dst":"172.16.0.0/12","gateway":"10.100.64.254","dev":"bond0.64","protocol":"static","flags":[]},{"dst":"172.17.0.0/16","dev":"docker0","protocol":"kernel","scope":"link","prefsrc":"172.17.0.1","flags":[]},{"dst":"172.17.100.0/24","dev":"eno8303","protocol":"kernel","scope":"link","prefsrc":"172.17.100.210","flags":[]},{"dst":"192.168.0.0/16","gateway":"10.100.64.254","dev":"bond0.64","protocol":"static","flags":[]}]

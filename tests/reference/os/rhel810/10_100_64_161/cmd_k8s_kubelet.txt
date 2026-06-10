@@ -1,7 +1,0 @@
-# command: systemctl status kubelet 2>&1 | head -30; kubectl version 2>&1
-# rc: 127
-# requires_root: False
-# fetched: 2026-04-28T06:43:29.521587+00:00
-#
-Unit kubelet.service could not be found.
-bash: kubectl: command not found

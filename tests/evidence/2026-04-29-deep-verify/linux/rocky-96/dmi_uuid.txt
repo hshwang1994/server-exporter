@@ -1,7 +1,0 @@
-# cmd: echo Goodmit0802! | sudo -S dmidecode -s system-uuid 2>&1
-# rc: 0
-b6f70442-7f39-9bed-4be6-dbeba3a81a8b
-
---- stderr ---
-Shared connection to 10.100.64.169 closed.
-

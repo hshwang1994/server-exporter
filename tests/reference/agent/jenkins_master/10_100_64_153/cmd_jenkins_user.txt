@@ -1,7 +1,0 @@
-# command: id jenkins 2>&1; getent passwd jenkins 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:49:40.164528+00:00
-#
-uid=110(jenkins) gid=110(jenkins) groups=110(jenkins)
-jenkins:x:110:110:Jenkins,,,:/var/lib/jenkins:/bin/bash

@@ -1,8 +1,0 @@
-# cmd: ss -unlpH 2>&1
-# rc: 0
-UNCONN 0      0         127.0.0.54:53 0.0.0.0:*
-UNCONN 0      0      127.0.0.53%lo:53 0.0.0.0:*
-
---- stderr ---
-Shared connection to 10.100.64.167 closed.
-

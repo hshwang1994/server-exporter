@@ -1,7 +1,0 @@
-# command: aa-status 2>&1
-# rc: 127
-# requires_root: True
-# fetched: 2026-04-28T06:45:08.646279+00:00
-#
-Goodmit0802!
-bash: line 1: aa-status: command not found

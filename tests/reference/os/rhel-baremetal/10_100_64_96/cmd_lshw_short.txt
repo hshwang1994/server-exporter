@@ -1,294 +1,0 @@
-# command: lshw -short 2>&1
-# rc: 0
-# requires_root: True
-# fetched: 2026-04-28T06:44:58.625427+00:00
-#
-Goodmit0802!
-
-DMI   SMP   PA-RISC       device-tree           SPD   memory      /proc/cpuinfo             CPUID     PCI (sysfs)           ISA PnP       PnP (sysfs)           PCMCIA      PCMCIA      Virtual I/O (VIRTIO) devices                            IBM Virtual I/O (VIO)                     kernel device tree (sysfs)                          USB   IDE   SCSI    NVMe    MMC   sound     graphics        input     S/390 devices             Network interfaces                  Framebuffer devices                   Display       CPUFreq       ABI   H/W path          Device         Class          Description
-===========================================================
-                                 system         PowerEdge R760 (SKU=0A6B;ModelNa
-/0                               bus            0024FG
-/0/1                             memory         64KiB BIOS
-/0/400                           processor      INTEL(R) XEON(R) SILVER 4510
-/0/400/700                       memory         960KiB L1 cache
-/0/400/701                       memory         24MiB L2 cache
-/0/400/702                       memory         30MiB L3 cache
-/0/401                           processor      INTEL(R) XEON(R) SILVER 4510
-/0/401/703                       memory         960KiB L1 cache
-/0/401/704                       memory         24MiB L2 cache
-/0/401/705                       memory         30MiB L3 cache
-/0/1000                          memory         128GiB System Memory
-/0/1000/0                        memory         16GiB DIMM Synchronous Registere
-/0/1000/1                        memory         16GiB DIMM Synchronous Registere
-/0/1000/2                        memory         16GiB DIMM Synchronous Registere
-/0/1000/3                        memory         16GiB DIMM Synchronous Registere
-/0/1000/4                        memory         [empty]
-/0/1000/5                        memory         [empty]
-/0/1000/6                        memory         [empty]
-/0/1000/7                        memory         [empty]
-/0/1000/8                        memory         [empty]
-/0/1000/9                        memory         [empty]
-/0/1000/a                        memory         [empty]
-/0/1000/b                        memory         [empty]
-/0/1000/c                        memory         [empty]
-/0/1000/d                        memory         [empty]
-/0/1000/e                        memory         [empty]
-/0/1000/f                        memory         [empty]
-/0/1000/10                       memory         16GiB DIMM Synchronous Registere
-/0/1000/11                       memory         16GiB DIMM Synchronous Registere
-/0/1000/12                       memory         16GiB DIMM Synchronous Registere
-/0/1000/13                       memory         16GiB DIMM Synchronous Registere
-/0/1000/14                       memory         [empty]
-/0/1000/15                       memory         [empty]
-/0/1000/16                       memory         [empty]
-/0/1000/17                       memory         [empty]
-/0/1000/18                       memory         [empty]
-/0/1000/19                       memory         [empty]
-/0/1000/1a                       memory         [empty]
-/0/1000/1b                       memory         [empty]
-/0/1000/1c                       memory         [empty]
-/0/1000/1d                       memory         [empty]
-/0/1000/1e                       memory         [empty]
-/0/1000/1f                       memory         [empty]
-/0/2                             generic        Ice Lake Memory Map/VT-d
-/0/3                             generic        Ice Lake Mesh 2 PCIe
-/0/4                             generic        Ice Lake RAS
-/0/6                             generic        Intel Corporation
-/0/100            /dev/fb0       bridge         Intel Corporation
-/0/100/0          /dev/nvme0     storage        Dell BOSS-N1
-/0/100/0/0        hwmon0         disk           NVMe disk
-/0/100/0/1        nvme0c0n1      disk           NVMe disk
-/0/c                             bridge         Intel Corporation
-/0/c/0            eno8303        network        NetXtreme BCM5720 Gigabit Ethern
-/0/c/0.1          eno8403        network        NetXtreme BCM5720 Gigabit Ethern
-/0/e                             bridge         Intel Corporation
-/0/e/0                           bridge         PCI Express Bridge
-/0/e/0/0          /dev/fb0       display        Integrated Matrox G200eW3 Graphi
-/0/14                            bus            Emmitsburg (C740 Family) USB 3.2
-/0/14/0           usb1           bus            xHCI Host Controller
-/0/14/0/a                        bus            Dell Integrated Hub
-/0/14/0/a/1                      bus            Dell Integrated Hub
-/0/14/0/a/4                      bus            Dell Integrated Hub
-/0/14/1           usb2           bus            xHCI Host Controller
-/0/14.2                          memory         RAM memory
-/0/101                           bridge         Intel Corporation
-/0/101/15                        generic        Intel Corporation
-/0/101/16                        communication  Intel Corporation
-/0/101/18                        storage        Sapphire Rapids SATA AHCI Contro
-/0/101/19                        storage        Sapphire Rapids SATA AHCI Contro
-/0/101/1f                        bridge         Intel Corporation
-/0/101/1f/0                      system         PnP device PNP0b00
-/0/101/1f/1                      system         PnP device PNP0c02
-/0/101/1f/2                      system         PnP device PNP0c02
-/0/101/1f/3                      system         PnP device PNP0c02
-/0/101/1f/4                      communication  PnP device PNP0501
-/0/101/1f/5                      communication  PnP device PNP0501
-/0/101/1f.4                      bus            Intel Corporation
-/0/101/1f.5                      bus            Intel Corporation
-/0/7                             generic        Ice Lake Memory Map/VT-d
-/0/8                             generic        Ice Lake Mesh 2 PCIe
-/0/9                             generic        Ice Lake RAS
-/0/b                             generic        Intel Corporation
-/0/d                             generic        Ice Lake Memory Map/VT-d
-/0/f                             generic        Ice Lake Mesh 2 PCIe
-/0/10                            generic        Ice Lake RAS
-/0/11                            generic        Intel Corporation
-/0/102                           bridge         Intel Corporation
-/0/102/0          eno12399np0    network        BCM57414 NetXtreme-E 10Gb/25Gb R
-/0/102/0.1        eno12409np1    network        BCM57414 NetXtreme-E 10Gb/25Gb R
-/0/12                            generic        Ice Lake Memory Map/VT-d
-/0/13                            generic        Ice Lake Mesh 2 PCIe
-/0/15                            generic        Ice Lake RAS
-/0/16                            generic        Intel Corporation
-/0/17                            generic        Ice Lake Memory Map/VT-d
-/0/18                            generic        Ice Lake Mesh 2 PCIe
-/0/19                            generic        Ice Lake RAS
-/0/1a                            generic        Intel Corporation
-/0/103                           bridge         Intel Corporation
-/0/103/0          scsi0          storage        Fusion-MPT 24GSAS/PCIe SAS40xx/4
-/0/103/0/0.1.0    /dev/sda       disk           11TB RAID
-/0/103/0/0.2.0    /dev/sdb       disk           1798GB RAID
-/0/103/0/0.2.0/1  /dev/sdb1      volume         209GiB EFI GPT partition
-/0/1b                            generic        Ice Lake Memory Map/VT-d
-/0/1c                            generic        Ice Lake Mesh 2 PCIe
-/0/1d                            generic        Ice Lake RAS
-/0/1e                            generic        Intel Corporation
-/0/1f                            generic        Ice Lake Memory Map/VT-d
-/0/20                            generic        Ice Lake Mesh 2 PCIe
-/0/21                            generic        Ice Lake RAS
-/0/22                            generic        Intel Corporation
-/0/23                            generic        Intel Corporation
-/0/24                            generic        Ice Lake MSM
-/0/25                            generic        Ice Lake PMON MSM
-/0/26                            generic        Intel Corporation
-/0/27                            generic        Intel Corporation
-/0/28                            generic        Intel Corporation
-/0/104                           bridge         Ice Lake IEH
-/0/104/0.5                       generic        Intel Corporation
-/0/104/1                         generic        Intel Corporation
-/0/104/1.1                       generic        Intel Corporation
-/0/104/1.2                       generic        Intel Corporation
-/0/104/2                         generic        Intel Corporation
-/0/104/2.1                       generic        Intel Corporation
-/0/104/2.2                       generic        Intel Corporation
-/0/104/5                         generic        Intel Corporation
-/0/104/5.1                       generic        Intel Corporation
-/0/104/5.2                       generic        Intel Corporation
-/0/104/6                         generic        Intel Corporation
-/0/104/6.1                       generic        Intel Corporation
-/0/104/6.2                       generic        Intel Corporation
-/0/104/c                         generic        Intel Corporation
-/0/104/d                         generic        Intel Corporation
-/0/104/e                         generic        Intel Corporation
-/0/104/f                         generic        Intel Corporation
-/0/104/1a                        generic        Intel Corporation
-/0/104/1b                        generic        Intel Corporation
-/0/104/1c                        generic        Intel Corporation
-/0/104/1d                        generic        Intel Corporation
-/0/29                            generic        Intel Corporation
-/0/2a                            generic        Intel Corporation
-/0/2b                            generic        Intel Corporation
-/0/2c                            generic        Intel Corporation
-/0/2d                            generic        Intel Corporation
-/0/2e                            generic        Intel Corporation
-/0/2f                            generic        Intel Corporation
-/0/30                            generic        Intel Corporation
-/0/31                            generic        Intel Corporation
-/0/32                            generic        Intel Corporation
-/0/33                            generic        Intel Corporation
-/0/34                            generic        Intel Corporation
-/0/35                            generic        Intel Corporation
-/0/36                            generic        Intel Corporation
-/0/37                            generic        Intel Corporation
-/0/38                            generic        Intel Corporation
-/0/39                            generic        Intel Corporation
-/0/3a                            generic        Intel Corporation
-/0/3b                            generic        Intel Corporation
-/0/3c                            generic        Intel Corporation
-/0/3d                            generic        Intel Corporation
-/0/3e                            generic        Intel Corporation
-/0/3f                            generic        Intel Corporation
-/0/40                            generic        Intel Corporation
-/0/41                            generic        Intel Corporation
-/0/42                            generic        Intel Corporation
-/0/43                            generic        Intel Corporation
-/0/44                            generic        Intel Corporation
-/0/45                            generic        Intel Corporation
-/0/46                            generic        Intel Corporation
-/0/47                            generic        Intel Corporation
-/0/48                            generic        Intel Corporation
-/0/49                            generic        Intel Corporation
-/0/4a                            generic        Intel Corporation
-/0/4b                            generic        Intel Corporation
-/0/4c                            generic        Intel Corporation
-/0/4d                            generic        Intel Corporation
-/0/4e                            generic        Intel Corporation
-/0/4f                            generic        Intel Corporation
-/0/50                            generic        Intel Corporation
-/0/51                            generic        Intel Corporation
-/0/52                            generic        Intel Corporation
-/0/53                            generic        Ice Lake Memory Map/VT-d
-/0/54                            generic        Ice Lake Mesh 2 PCIe
-/0/55                            generic        Ice Lake RAS
-/0/56                            generic        Intel Corporation
-/0/57                            generic        Ice Lake Memory Map/VT-d
-/0/58                            generic        Ice Lake Mesh 2 PCIe
-/0/59                            generic        Ice Lake RAS
-/0/5a                            generic        Intel Corporation
-/0/5b                            generic        Ice Lake Memory Map/VT-d
-/0/5c                            generic        Ice Lake Mesh 2 PCIe
-/0/5d                            generic        Ice Lake RAS
-/0/5e                            generic        Intel Corporation
-/0/5f                            generic        Ice Lake Memory Map/VT-d
-/0/60                            generic        Ice Lake Mesh 2 PCIe
-/0/61                            generic        Ice Lake RAS
-/0/62                            generic        Intel Corporation
-/0/5                             bridge         Intel Corporation
-/0/5/0            enp190s0f0np0  network        Ethernet Controller XXV710 for 2
-/0/5/0.1          enp190s0f1np1  network        Ethernet Controller XXV710 for 2
-/0/63                            generic        Ice Lake Memory Map/VT-d
-/0/64                            generic        Ice Lake Mesh 2 PCIe
-/0/65                            generic        Ice Lake RAS
-/0/66                            generic        Intel Corporation
-/0/67                            generic        Ice Lake Memory Map/VT-d
-/0/68                            generic        Ice Lake Mesh 2 PCIe
-/0/69                            generic        Ice Lake RAS
-/0/6a                            generic        Intel Corporation
-/0/6b                            generic        Ice Lake Memory Map/VT-d
-/0/6c                            generic        Ice Lake Mesh 2 PCIe
-/0/6d                            generic        Ice Lake RAS
-/0/6e                            generic        Intel Corporation
-/0/6f                            generic        Intel Corporation
-/0/70                            generic        Ice Lake MSM
-/0/71                            generic        Ice Lake PMON MSM
-/0/72                            generic        Intel Corporation
-/0/73                            generic        Intel Corporation
-/0/74                            generic        Intel Corporation
-/0/105                           bridge         Ice Lake IEH
-/0/105/0.5                       generic        Intel Corporation
-/0/105/1                         generic        Intel Corporation
-/0/105/1.1                       generic        Intel Corporation
-/0/105/1.2                       generic        Intel Corporation
-/0/105/2                         generic        Intel Corporation
-/0/105/2.1                       generic        Intel Corporation
-/0/105/2.2                       generic        Intel Corporation
-/0/105/5                         generic        Intel Corporation
-/0/105/5.1                       generic        Intel Corporation
-/0/105/5.2                       generic        Intel Corporation
-/0/105/6                         generic        Intel Corporation
-/0/105/6.1                       generic        Intel Corporation
-/0/105/6.2                       generic        Intel Corporation
-/0/105/c                         generic        Intel Corporation
-/0/105/d                         generic        Intel Corporation
-/0/105/e                         generic        Intel Corporation
-/0/105/f                         generic        Intel Corporation
-/0/105/1a                        generic        Intel Corporation
-/0/105/1b                        generic        Intel Corporation
-/0/105/1c                        generic        Intel Corporation
-/0/105/1d                        generic        Intel Corporation
-/0/0                             generic        Intel Corporation
-/0/75                            generic        Intel Corporation
-/0/76                            generic        Intel Corporation
-/0/77                            generic        Intel Corporation
-/0/78                            generic        Intel Corporation
-/0/79                            generic        Intel Corporation
-/0/7a                            generic        Intel Corporation
-/0/7b                            generic        Intel Corporation
-/0/7c                            generic        Intel Corporation
-/0/7d                            generic        Intel Corporation
-/0/7e                            generic        Intel Corporation
-/0/7f                            generic        Intel Corporation
-/0/80                            generic        Intel Corporation
-/0/81                            generic        Intel Corporation
-/0/82                            generic        Intel Corporation
-/0/83                            generic        Intel Corporation
-/0/a                             generic        Intel Corporation
-/0/84                            generic        Intel Corporation
-/0/85                            generic        Intel Corporation
-/0/86                            generic        Intel Corporation
-/0/87                            generic        Intel Corporation
-/0/88                            generic        Intel Corporation
-/0/89                            generic        Intel Corporation
-/0/8a                            generic        Intel Corporation
-/0/8b                            generic        Intel Corporation
-/0/8c                            generic        Intel Corporation
-/0/8d                            generic        Intel Corporation
-/0/8e                            generic        Intel Corporation
-/0/8f                            generic        Intel Corporation
-/0/90                            generic        Intel Corporation
-/0/91                            generic        Intel Corporation
-/0/92                            generic        Intel Corporation
-/0/93                            generic        Intel Corporation
-/0/94                            generic        Intel Corporation
-/0/95                            generic        Intel Corporation
-/0/96                            generic        Intel Corporation
-/0/97                            generic        Intel Corporation
-/0/98                            generic        Intel Corporation
-/0/99                            generic        Intel Corporation
-/0/9a                            generic        Intel Corporation
-/0/9b                            generic        Intel Corporation
-/0/9c                            generic        Intel Corporation
-/1                               power          0C8T2PA04
-/2                input0         input          Power Button
-/3                input1         input          Power Button

@@ -1,8 +1,0 @@
-# command: ls /var/lib/jenkins/jobs/ 2>&1
-# rc: 2
-# requires_root: True
-# fetched: 2026-04-28T06:44:17.581475+00:00
-#
-Goodmit0802!
-
-ls: cannot access '/var/lib/jenkins/jobs/': No such file or directory

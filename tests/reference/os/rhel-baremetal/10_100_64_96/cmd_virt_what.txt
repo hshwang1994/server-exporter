@@ -1,9 +1,0 @@
-# command: virt-what 2>&1; systemd-detect-virt 2>&1
-# rc: 1
-# requires_root: True
-# fetched: 2026-04-28T06:45:07.382762+00:00
-#
-Goodmit0802!
-
-bash: line 1: virt-what: command not found
-none

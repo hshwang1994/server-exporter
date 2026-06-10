@@ -7,9 +7,9 @@ We cannot run Jinja2 directly without ansible context, so we mirror the logic
 in Python and verify against captured raw responses + Jenkins envelope.
 
 Test data sources:
-  - tests/evidence/2026-04-29-deep-verify/redfish/hpe-dl380/power.json
-  - tests/evidence/2026-04-29-deep-verify/redfish/lenovo-sr650/power.json
-  - tests/evidence/2026-04-29-deep-verify/redfish/cisco-c220/power.json
+  - tests/fixtures/power_summary/hpe-dl380/power.json
+  - tests/fixtures/power_summary/lenovo-sr650/power.json
+  - tests/fixtures/power_summary/cisco-c220/power.json
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-EVIDENCE = REPO / "tests" / "evidence" / "2026-04-29-deep-verify" / "redfish"
+POWER_FIXTURES = REPO / "tests" / "fixtures" / "power_summary"
 
 
 def build_summary(power_data: dict) -> dict:
@@ -80,7 +80,7 @@ def build_summary(power_data: dict) -> dict:
 
 
 def load_power(label: str) -> dict:
-    p = EVIDENCE / label / "power.json"
+    p = POWER_FIXTURES / label / "power.json"
     if not p.exists():
         pytest.skip(f"raw power.json not captured for {label}")
     return json.loads(p.read_text(encoding="utf-8"))

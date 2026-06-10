@@ -1,8 +1,0 @@
-# command: racadm getsysinfo 2>&1; racadm hwinventory 2>&1
-# rc: 127
-# requires_root: True
-# fetched: 2026-04-28T06:45:01.925736+00:00
-#
-Goodmit0802!
-bash: line 1: racadm: command not found
-bash: line 1: racadm: command not found

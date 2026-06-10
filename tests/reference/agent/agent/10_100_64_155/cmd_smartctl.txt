@@ -1,6 +1,0 @@
-# command: smartctl --version 2>&1 | head -3
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:45:04.888096+00:00
-#
-bash: line 1: smartctl: command not found

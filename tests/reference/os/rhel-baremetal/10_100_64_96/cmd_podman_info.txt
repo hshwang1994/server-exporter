@@ -1,8 +1,0 @@
-# command: podman version 2>&1; podman info 2>&1; podman ps -a 2>&1
-# rc: 127
-# requires_root: False
-# fetched: 2026-04-28T06:45:08.260440+00:00
-#
-bash: line 1: podman: command not found
-bash: line 1: podman: command not found
-bash: line 1: podman: command not found

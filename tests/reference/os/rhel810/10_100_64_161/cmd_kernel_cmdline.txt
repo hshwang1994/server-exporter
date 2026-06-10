@@ -1,6 +1,0 @@
-# command: cat /proc/cmdline
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:43:17.909827+00:00
-#
-BOOT_IMAGE=(hd0,gpt2)/vmlinuz-4.18.0-553.el8_10.x86_64 root=/dev/mapper/rhel-root ro crashkernel=auto resume=/dev/mapper/rhel-swap rd.lvm.lv=rhel/root rd.lvm.lv=rhel/swap rhgb quiet

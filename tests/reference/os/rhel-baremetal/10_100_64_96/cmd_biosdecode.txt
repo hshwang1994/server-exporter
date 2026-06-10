@@ -1,9 +1,0 @@
-# command: biosdecode 2>&1
-# rc: 1
-# requires_root: True
-# fetched: 2026-04-28T06:44:59.417785+00:00
-#
-Goodmit0802!
-
-# biosdecode 3.5
-Can't read memory from /dev/mem

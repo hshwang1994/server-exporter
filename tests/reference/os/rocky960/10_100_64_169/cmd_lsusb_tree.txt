@@ -1,8 +1,0 @@
-# command: lsusb -t
-# rc: 127
-# requires_root: False
-# fetched: 2026-04-28T06:44:55.882910+00:00
-#
-
-# === stderr ===
-bash: line 1: lsusb: command not found

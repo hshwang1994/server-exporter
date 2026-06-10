@@ -1,6 +1,0 @@
-# command: ip -6 -j route 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:49.225087+00:00
-#
-[{"dst":"::1","dev":"lo","protocol":"kernel","metric":256,"flags":[],"pref":"medium"},{"dst":"fe80::/64","dev":"ens192","protocol":"kernel","metric":1024,"flags":[],"pref":"medium"},{"dst":"fe80::/64","dev":"ens224","protocol":"kernel","metric":1024,"flags":[],"pref":"medium"}]

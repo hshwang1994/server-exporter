@@ -1,6 +1,0 @@
-# command: bridge -j link show 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:43:05.251867+00:00
-#
-[]

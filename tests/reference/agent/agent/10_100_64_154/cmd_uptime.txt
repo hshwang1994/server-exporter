@@ -1,6 +1,0 @@
-# command: uptime
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:11.891102+00:00
-#
- 15:44:11 up 40 days, 21:49,  3 users,  load average: 0.02, 0.02, 0.00

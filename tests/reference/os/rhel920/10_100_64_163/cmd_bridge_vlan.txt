@@ -1,6 +1,0 @@
-# command: bridge -j vlan show 2>&1
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:16.175711+00:00
-#
-[]

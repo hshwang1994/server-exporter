@@ -1,7 +1,0 @@
-# cmd: echo Goodmit0802! | sudo -S dmidecode -s system-serial-number 2>&1
-# rc: 0
-[sudo] password for cloviradmin: GSBPK54
-
---- stderr ---
-Shared connection to 10.100.64.96 closed.
-

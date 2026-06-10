@@ -1,7 +1,0 @@
-# cmd: echo Goodmit0802! | sudo -S dmidecode -s system-serial-number 2>&1
-# rc: 0
-VMware-42 04 f7 b6 39 7f ed 9b-4b e6 db eb a3 a8 1a 8b
-
---- stderr ---
-Shared connection to 10.100.64.169 closed.
-

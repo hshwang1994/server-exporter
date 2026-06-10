@@ -1,8 +1,0 @@
-# command: free -h
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:43.091345+00:00
-#
-               total        used        free      shared  buff/cache   available
-Mem:           7.5Gi       559Mi       6.8Gi       8.0Mi       378Mi       7.0Gi
-Swap:          5.0Gi          0B       5.0Gi

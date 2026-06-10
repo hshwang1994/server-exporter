@@ -1,7 +1,0 @@
-# command: uptime; cat /proc/uptime
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:42:52.216808+00:00
-#
- 02:42:52 up 14 days,  7:07,  2 users,  load average: 0.16, 0.03, 0.01
-1235232.12 4929757.13

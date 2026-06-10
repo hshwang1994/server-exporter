@@ -1,5 +1,0 @@
-# command: esxcli hardware clock get
-# rc: 0
-# fetched: 2026-04-28T12:44:12.268155+00:00
-#
-2026-04-28T12:37:14Z

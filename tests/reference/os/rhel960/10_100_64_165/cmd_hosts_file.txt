@@ -1,7 +1,0 @@
-# command: cat /etc/hosts
-# rc: 0
-# requires_root: False
-# fetched: 2026-04-28T06:44:09.388896+00:00
-#
-127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
-::1         localhost localhost.localdomain localhost6 localhost6.localdomain6

@@ -1,8 +1,0 @@
-# command: systemctl status jenkins 2>&1; ls -la /var/lib/jenkins/ 2>&1 | head -30
-# rc: -1
-# requires_root: True
-# fetched: 2026-04-28T06:49:39.402314+00:00
-#
-
-# === stderr ===
-exec fail: 

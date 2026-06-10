@@ -1,5 +1,0 @@
-# command: smartctl --scan 2>/dev/null
-# rc: 127
-# requires_root: True
-# fetched: 2026-04-28T06:44:45.418402+00:00
-#

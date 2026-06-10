@@ -1,8 +1,0 @@
-# command: ipmitool sensor list 2>&1
-# rc: 127
-# requires_root: True
-# fetched: 2026-04-28T06:44:24.567715+00:00
-#
-Goodmit0802!
-Goodmit0802!
-bash: line 1: ipmitool: command not found

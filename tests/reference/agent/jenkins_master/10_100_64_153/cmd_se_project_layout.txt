@@ -1,7 +1,0 @@
-# command: ls -la /home/cloviradmin/server-exporter/ 2>&1; ls -la /opt/server-exporter/ 2>&1
-# rc: 2
-# requires_root: False
-# fetched: 2026-04-28T06:49:43.726151+00:00
-#
-ls: cannot access '/home/cloviradmin/server-exporter/': No such file or directory
-ls: cannot access '/opt/server-exporter/': No such file or directory

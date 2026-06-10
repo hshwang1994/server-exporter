@@ -1,9 +1,0 @@
-# command: esxcli network ip route ipv4 list; esxcli network ip route ipv6 list
-# rc: 1
-# fetched: 2026-04-28T12:40:59.020672+00:00
-#
-Network      Netmask        Gateway        Interface  Source
------------  -------------  -------------  ---------  ------
-default      0.0.0.0        10.100.64.254  vmk0       MANUAL
-10.100.64.0  255.255.255.0  0.0.0.0        vmk0       MANUAL
-Ipv6 not Enabled

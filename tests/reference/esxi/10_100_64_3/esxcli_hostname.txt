@@ -1,8 +1,0 @@
-# command: hostname; cat /etc/hostname
-# rc: 1
-# fetched: 2026-04-28T12:43:55.137529+00:00
-#
-esxi03
-
-# === stderr ===
-cat: can't open '/etc/hostname': No such file or directory

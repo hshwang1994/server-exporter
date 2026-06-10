@@ -1,8 +1,0 @@
-{
-  "_class": "org.jenkinsci.plugins.workflow.job.WorkflowRun",
-  "building": false,
-  "duration": 39517,
-  "number": 118,
-  "result": "SUCCESS",
-  "timestamp": 1777504858292
-}

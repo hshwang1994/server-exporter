@@ -1,8 +1,0 @@
-# cmd: cat /run/systemd/resolve/resolv.conf 2>&1 || echo ABSENT
-# rc: 0
-cat: /run/systemd/resolve/resolv.conf: No such file or directory
-ABSENT
-
---- stderr ---
-Shared connection to 10.100.64.163 closed.
-
