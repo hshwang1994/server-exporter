@@ -1,6 +1,6 @@
 """Cross-channel regression test fixtures.
 
-Loads all 8 baseline JSONs (5 redfish vendors + 3 OS variants) and exposes
+Loads all 9 baseline JSONs (5 redfish vendors + 3 OS variants + 1 esxi) and exposes
 them as a unified collection, so tests can validate cross-channel envelope
 consistency (13 fields fixed across channels).
 """

@@ -201,10 +201,10 @@
         "last_access_time": null
       },
       {
-        "name": "cloviradmin",
+        "name": "sysadmin",
         "uid": "1000",
         "groups": [
-          "cloviradmin",
+          "sysadmin",
           "adm",
           "cdrom",
           "sudo",
@@ -212,7 +212,7 @@
           "plugdev",
           "lxd"
         ],
-        "home": "/home/cloviradmin",
+        "home": "/home/sysadmin",
         "last_access_time": "2026-04-01T04:35:59Z"
       }
     ],

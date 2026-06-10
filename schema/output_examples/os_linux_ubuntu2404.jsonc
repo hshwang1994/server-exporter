@@ -267,7 +267,7 @@
         "home": "/root",                                   // 홈 디렉터리
         "last_access_time": null                           // 마지막 로그인 시각 (없으면 null)
       },
-      {"name": "cloviradmin", "uid": "1000", "groups": ["cloviradmin", "adm", "cdrom", "sudo", "dip", "plugdev", "lxd"], "home": "/home/cloviradmin", "last_access_time": "2026-05-06T23:46:43Z"}
+      {"name": "sysadmin", "uid": "1000", "groups": ["sysadmin", "adm", "cdrom", "sudo", "dip", "plugdev", "lxd"], "home": "/home/sysadmin", "last_access_time": "2026-05-06T23:46:43Z"}
     ],
     "firmware": []                                         // OS 채널은 firmware 빈 list
   },

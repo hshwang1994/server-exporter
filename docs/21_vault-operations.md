@@ -274,10 +274,10 @@ adapter (`adapters/redfish/{vendor}_*.yml`) 의 `credentials.recovery_accounts[*
 
 adapter `recovery_accounts` 변경은 **기존 항목을 유지하고 추가만** 하는 것을 원칙으로 한다:
 
-- **Allowed**: vault accounts 신규 추가 후 adapter 에 동일 label entry **추가**
-- **Allowed**: adapter declare entry 순서 변경 (시도 순서는 vault accounts 순서로 결정 — adapter 순서 변경은 cosmetic)
-- **Forbidden**:
-  - adapter 의 기존 label entry **삭제 / 리네임** (호환성 변경 외)
+- 허용: vault accounts 신규 추가 후 adapter 에 동일 label entry 추가
+- 허용: adapter declare entry 순서 변경 (시도 순서는 vault accounts 순서로 결정 — adapter 순서 변경은 cosmetic)
+- 금지:
+  - adapter 의 기존 label entry 삭제 / 리네임 (호환성 변경 외)
   - vault 에 존재하지 않는 label declare (회귀 테스트 차단)
   - envelope `data.bmc.account_service` shape 변경
   - 호출자 시스템 파싱 변경

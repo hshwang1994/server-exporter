@@ -208,10 +208,10 @@
         "last_access_time": null
       },
       {
-        "name": "cloviradmin",
+        "name": "sysadmin",
         "uid": "1000",
-        "groups": ["cloviradmin", "wheel"],
-        "home": "/home/cloviradmin",
+        "groups": ["sysadmin", "wheel"],
+        "home": "/home/sysadmin",
         "last_access_time": "2026-04-29T05:25:00Z"
       }
     ],

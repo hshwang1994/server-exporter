@@ -120,7 +120,7 @@
     },
     "users": [
       {"name": "root", "uid": "0", "groups": ["root"], "home": "/root", "last_access_time": null},
-      {"name": "cloviradmin", "uid": "1000", "groups": ["cloviradmin", "adm", "cdrom", "sudo", "dip", "plugdev", "lxd", "docker"], "home": "/home/cloviradmin", "last_access_time": "2026-05-06T23:46:42Z"}
+      {"name": "sysadmin", "uid": "1000", "groups": ["sysadmin", "adm", "cdrom", "sudo", "dip", "plugdev", "lxd", "docker"], "home": "/home/sysadmin", "last_access_time": "2026-05-06T23:46:42Z"}
     ],
     "storage": {
       "logical_volumes": [],                            // LVM/RAID 가상 볼륨 list

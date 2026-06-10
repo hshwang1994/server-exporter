@@ -138,7 +138,7 @@ def assert_common_structure(output: dict):
 
 
 def assert_correlation_fields(output: dict):
-    """CM-02: correlation 필드 검증 (fixture 수준).
+    """correlation 필드 검증 (fixture 수준).
 
     - system_uuid: 키 존재, 값이 있으면 UUID 형식 검증
     - serial_number: 키 존재만

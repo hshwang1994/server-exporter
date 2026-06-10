@@ -43,7 +43,7 @@ def lab_creds() -> LabCreds:
 
 @pytest.fixture(scope="session")
 def browser_context_args(browser_context_args: dict) -> dict:
-    """Self-signed cert를 가진 Jenkins / BMC / Grafana 응답을 허용."""
+    """Self-signed cert를 가진 Jenkins / BMC 응답을 허용."""
     return {
         **browser_context_args,
         "ignore_https_errors": True,

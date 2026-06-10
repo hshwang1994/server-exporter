@@ -149,7 +149,7 @@
         "home": "/root",                                   // 홈 디렉터리
         "last_access_time": null                           // 마지막 로그인 시각 (lastlog / last access). 없으면 null
       },
-      {"name": "cloviradmin", "uid": "1000", "groups": ["cloviradmin", "wheel"], "home": "/home/cloviradmin", "last_access_time": "2026-05-06T23:47:00Z"}
+      {"name": "sysadmin", "uid": "1000", "groups": ["sysadmin", "wheel"], "home": "/home/sysadmin", "last_access_time": "2026-05-06T23:47:00Z"}
     ],
     "memory": {                                            // RAM 슬롯 / 총량
       "total_mb": 8192,                                    // 전체 메모리 크기 (MB) — total_basis 가 결정
