@@ -537,7 +537,7 @@ build_status.yml 판정 로직 (정본 인라인 Jinja2): **errors[] 는 보지 
 - **Case B (B-2 + ?)**: errors non-empty → overall=partial. 거절 이유: 모든 vendor baseline 회귀 fail (success → partial 전환), 호출자 partial 대응 로직 추가 필요, 호환성 외 영역
 - **Case C (B-3 + (b) + (b))**: 4 enum + severity 도입. 거절 이유: envelope schema 변경 (승인 필요), 3채널 27+ 위치 영향, 단순 추가 범위를 넘어섬 — 별도 작업 승인 후 진행 영역
 
-### 정본 참조
+### 참고
 
 - envelope 13 필드 — status 필드 정본 보존
 - Fragment 5 변수 / 타입 정본 — 변경 안 함
@@ -569,7 +569,7 @@ build_status.yml 판정 로직 (정본 인라인 Jinja2): **errors[] 는 보지 
 | 3. (선택) OEM tasks | 부재 (standard_only — 사이트 fixture 확보 후 보강) | DEFER |
 | 4. vault 생성 | vault/redfish/{vendor}.yml | **SKIP (lab 부재)** |
 | 5. baseline | schema/baseline_v1/{vendor}_baseline.json | DEFER (lab 부재) |
-| 6. vendor 컨텍스트 | vendor 컨텍스트 문서 4종 | [OK] |
+| 6. vendor 노트 | adapter vendor_notes 4종 | [OK] |
 | 7. vendor 경계 매핑 | huawei/inspur/fujitsu/quanta 추가 | [OK] |
 | 8. live-validation | docs/13_redfish-live-validation.md Round 갱신 | DEFER (lab 부재) |
 | 9. decision-log | 본 entry | [OK] |
@@ -604,12 +604,11 @@ build_status.yml 판정 로직 (정본 인라인 Jinja2): **errors[] 는 보지 
 5. `docs/13_redfish-live-validation.md` Round 갱신
 6. 사이트 fixture 캡처
 
-### 정본 참조
+### 참고
 
 - vendor 추가 절차 (vault SKIP 적용)
 - lab 부재 — web sources 4종 1개 이상 (4 vendor 모두 충족)
 - vendor 경계 — _FALLBACK_VENDOR_MAP 등 예외 주석 보존
-- 승인 기록 — 본 entry 가 승인 trace
 
 ---
 

@@ -138,4 +138,4 @@ metadata:
   redfish_introduction: "DSP0268 v1.0+ (1.x) ~ v1.13+ (5.x)"
   origin: "https://support.huawei.com/enterprise/en/doc/EDOC1000163550/41dfb258/ibmc"
   lab_status: "부재 — web sources only (2026-05-01)"
-  next_action: "lab 도입 후 별도 검증 — generation 별 capability 실측 보정"
+  next_action: "generation 별 capability 는 실측 시 보정 대상"

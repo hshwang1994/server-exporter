@@ -351,8 +351,8 @@ def _capped(seq, section=None, errors=None):
     """무경계 collection(Members/Drives) 순회 상한 — DoS/huge-payload 방어.
 
     오염/악성/버그 BMC 가 수천 멤버를 반환하면 멤버당 _get 가 N회 네트워크 왕복(각 timeout)을
-    유발해 사실상 hang. cap 초과 시 절단 + (errors 제공 시) _err 로 명시(silent 절단 금지 —
-    ). 실 BMC 멤버 수는 cap 보다 훨씬 작아 정상 입력 결과 불변.
+    유발해 사실상 hang. cap 초과 시 절단 + (errors 제공 시) _err 로 명시(silent 절단 금지).
+    실 BMC 멤버 수는 cap 보다 훨씬 작아 정상 입력 결과 불변.
     """
     seq = seq if isinstance(seq, list) else []  # Round 4 #2: 비-list 방어 (len/slice crash 차단)
     if len(seq) > MAX_COLLECTION_MEMBERS:
