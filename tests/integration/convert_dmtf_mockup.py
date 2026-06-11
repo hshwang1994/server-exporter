@@ -134,6 +134,8 @@ def main() -> int:
     ap.add_argument("--dsp-version", default="", help="DSP2043 버전 (예: 2021.4)")
     ap.add_argument("--source-url", default="", help="DMTF dev hub mockup URL")
     ap.add_argument("--captured", default="", help="변환 일자(YYYY-MM-DD) — README 기록용")
+    ap.add_argument("--manager-layout", default=None,
+                    help="멀티노드 manager_layout (예: rmc_primary) — CSUS/Superdome 캡처 재생 시 필수")
     args = ap.parse_args()
 
     mockup_dir = Path(args.mockup_dir).resolve()
@@ -147,11 +149,18 @@ def main() -> int:
         return 2
 
     get_impl, noauth_impl, realm_impl, used = _instrumented_replayer(full)
-    output = H.run_gather(get_impl, noauth_impl, realm_impl=realm_impl)
+    output = H.run_gather(get_impl, noauth_impl, realm_impl=realm_impl,
+                          manager_layout=args.manager_layout)
 
     if not used:
         print("[FAIL] recording 이 비어 있음 — 엔진이 아무 path 도 요청 안 함.")
         return 2
+
+    # CSUS/Superdome 캡처인데 --manager-layout 없이 돌리면 multi_node 가 조용히 None →
+    # 멀티노드 토폴로지(파티션/매니저/섀시) 미수집. 운영자가 '성공'으로 오인하지 않게 안내.
+    if output.get("multi_node") is None and not args.manager_layout:
+        print("[INFO] multi_node=None (단일노드). CSUS/Superdome 등 멀티노드 장비면 "
+              "--manager-layout rmc_primary 로 재실행해야 토폴로지가 수집됩니다.")
 
     out_dir = FIXTURE_ROOT / args.name
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -62,14 +62,30 @@ python redfish_full_mirror.py -r <RMC_IP[:443]> -u <admin> -p <pw> -D csus_rmc_<
 
 ## 반출 후 — 인터넷망에서 코드 완성
 
-1. 반출 트리를 `tests/fixtures/redfish/hpe_csus_3200_real/` 에 투입.
-2. 실 raw 재생 → 우리 코드가 어디서 틀렸는지 드러냄:
+1. 반출 트리를 그대로(= `redfish/v1/.../index.json` 트리) 인터넷망으로 가져온다.
+2. 실 raw 를 오프라인 재생 → 우리 코드가 어디서 틀렸는지 드러난다:
    ```bash
-   python tests/integration/convert_dmtf_mockup.py --mockup-dir <반출트리>/redfish/v1 --name hpe_csus_3200_real ...
-   # 또는 test_csus_fixture_replay.py 의 fixture 를 실측본으로 교체 후 재생
+   # CSUS = 멀티노드 → --manager-layout rmc_primary 필수.
+   # (안 붙이면 multi_node=None 으로 토폴로지(파티션/매니저/섀시)가 수집 안 됨)
+   python tests/integration/convert_dmtf_mockup.py \
+       --mockup-dir <반출트리>/redfish/v1 --name hpe_csus_3200_real \
+       --manager-layout rmc_primary --captured <YYYY-MM-DD>
    ```
+   - 산출 `expected_output.json` 의 `multi_node`(파티션/매니저/섀시) + `data`(섹션)를 확인.
+   - 주의: `test_csus_fixture_replay.py` 는 **납작한 fixture(`glob("*.json")`)** 를 읽으므로
+     크롤러 **트리를 직접 재생하지 못한다.** 트리 재생은 위 `convert_dmtf_mockup.py` 경로만 쓴다.
+   - 회귀 검증: `tests/unit/test_full_mirror_dryrun.py` 의 `test_e2e_crawler_tree_reconstructs_csus_multinode`
+     가 이 경로(트리→멀티노드 재구성)를 합성 데이터로 잠가 둔다.
 3. 드러난 불일치(ServiceRoot.Product 문자열 / Manager·System·Chassis ID 패턴 /
-   `Oem.Hpe` schema — NEXT_ACTIONS C5/C6/C7) 를 AI 로 수정 → 회귀 고정 → baseline 승격.
+   `Oem.Hpe.PartitionInfo`·`FlexNodeInfo` schema — NEXT_ACTIONS C5/C6/C7) 를 AI 로 수정 →
+   회귀 고정 → baseline 승격.
+
+> [!NOTE]
+> **알려진 미완(실 캡처 후 마무리 대상):** CSUS OEM 추출(`Oem.Hpe.PartitionInfo` /
+> `FlexNodeInfo` / `GlobalConfiguration`)은 현재 `redfish-gather/tasks/vendors/hpe/collect_oem.yml`
+> 에만 있고 가드(`_rf_raw_collect.systems`)가 모듈 미emit 키라 **라이브에서도 안 돈다**
+> (NEXT_ACTIONS C7 / Round 16~17). 캡처한 raw 에는 이 필드들이 들어 있으므로, 실 데이터로
+> Python 추출 경로를 마저 구현하는 것이 다음 단계다.
 
 ## 한계 (read-only 스냅샷의 본질)
 

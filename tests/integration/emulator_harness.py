@@ -61,8 +61,13 @@ _REPLAY_MISS = (404, {}, "HTTP 404: Not Found (replay-miss: path not in recordin
 
 
 def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
-               user="root", pw="root_password", timeout=30, verify_ssl=False):
+               user="root", pw="root_password", timeout=30, verify_ssl=False,
+               manager_layout=None):
     """main() gather mode 흐름을 1:1 미러링해 모듈 산출 snapshot 을 반환.
+
+    manager_layout: rg._collect_all_sections / _collect_multi_node_topology 에 전달.
+        CSUS/Superdome 캡처를 멀티노드로 재생하려면 'rmc_primary' 를 넘긴다. 기본 None →
+        단일노드(기존 DMTF/표준 mockup 동작 불변, multi_node=None).
 
     get_impl / noauth_impl: rg._get / rg._get_noauth 를 대체할 transport.
         (record 시 passthrough+기록, replay 시 lookup)
@@ -107,15 +112,15 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
             ip, vendor, system_uri, manager_uri, chassis_uri,
             user, pw, timeout, verify_ssl,
             all_errors, collected, failed, unsupported,
-            manager_layout=None,
+            manager_layout=manager_layout,
             product_hint=rg._safe(service_root, "Product"),
         )
         multi_node = rg._collect_multi_node_topology(
             ip, vendor, service_root, user, pw, timeout, verify_ssl,
-            manager_layout=None,
+            manager_layout=manager_layout,
         )
-        # main() 미러링: multi_node errors 를 status 계산에 반영. 본 모듈은
-        # manager_layout=None 이라 multi_node=None → no-op 이지만 main() 흐름 1:1 유지.
+        # main() 미러링: multi_node errors 를 status 계산에 반영. manager_layout 이
+        # rmc_primary 등으로 주입되면(CSUS/Superdome) 멀티노드 토폴로지가 실제로 수집된다.
         if isinstance(multi_node, dict):
             all_errors.extend(multi_node.get('errors') or [])
         final_status, clean = rg._compute_final_status(collected, failed, all_errors)

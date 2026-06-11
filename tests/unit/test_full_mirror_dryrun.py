@@ -176,6 +176,34 @@ def test_output_preserves_odata_id(tmp_path):
     assert sr.get("@odata.id"), "본문 @odata.id 미보존 → convert_dmtf_mockup 키잉 불가"
 
 
+def test_e2e_crawler_tree_reconstructs_csus_multinode(tmp_path):
+    """캡처→코드완성 경로 검증: 크롤러 트리 → convert._load_mockup → run_gather(rmc_primary)
+    로 CSUS 멀티노드(파티션3/매니저4/섀시3)가 실제로 재구성되는지. manager_layout 배선의 핵심."""
+    from pathlib import Path
+    integ = os.path.join(REPO, "tests", "integration")
+    if integ not in sys.path:
+        sys.path.insert(0, integ)
+    import convert_dmtf_mockup as conv  # noqa: E402
+    import emulator_harness as H  # noqa: E402
+
+    # 1) 합성 CSUS 를 크롤해 트리 산출
+    out = str(tmp_path / "tree")
+    with _serve(srv.load(CSUS_FIXT)) as port:
+        assert _crawl(port, out) == 0
+    # 2) 트리 → 응답맵 (convert 의 rglob 경로 = 크롤러 출력 형식과 일치)
+    full, _nf, _sk = conv._load_mockup(Path(out))
+    assert "noauth::" in full, "ServiceRoot noauth:: 미생성"
+    # 3) manager_layout 없이 → 단일노드(기존 동작 불변)
+    gi, ni, ri, _ = conv._instrumented_replayer(full)
+    assert H.run_gather(gi, ni, realm_impl=ri)["multi_node"] is None
+    # 4) manager_layout='rmc_primary' → 멀티노드 재구성
+    gi, ni, ri, _ = conv._instrumented_replayer(full)
+    mn = H.run_gather(gi, ni, realm_impl=ri, manager_layout="rmc_primary")["multi_node"]
+    assert isinstance(mn, dict) and mn.get("enabled") is True, mn
+    s = mn["summary"]
+    assert (s["partition_count"], s["manager_count"], s["chassis_count"]) == (3, 4, 3), s
+
+
 def test_resilient_to_dead_links(tmp_path):
     """죽은 링크(404)에도 크롤은 안 죽고 살아있는 리소스만 캡처 + 404 는 기록만."""
     rmap = {
