@@ -99,6 +99,75 @@ def test_pagination_nextlink_followed(tmp_path):
     assert any("/Coll/2/" in p for p in paths), "2페이지 멤버(item2) 누락 — nextLink 미추적"
 
 
+def test_action_info_followed(tmp_path):
+    """@Redfish.ActionInfo(bare 문자열 경로)도 따라가 캡처한다 — Action 파라미터 리소스 누락 방지."""
+    rmap = {
+        "/redfish/v1": {"@odata.id": "/redfish/v1",
+                        "Systems": {"@odata.id": "/redfish/v1/Systems"}},
+        "/redfish/v1/Systems": {"@odata.id": "/redfish/v1/Systems",
+                                "Members": [{"@odata.id": "/redfish/v1/Systems/1"}]},
+        "/redfish/v1/Systems/1": {"@odata.id": "/redfish/v1/Systems/1",
+                                  "Actions": {"#ComputerSystem.Reset": {
+                                      "@Redfish.ActionInfo": "/redfish/v1/Systems/1/ResetActionInfo"}}},
+        "/redfish/v1/Systems/1/ResetActionInfo": {"@odata.id": "/redfish/v1/Systems/1/ResetActionInfo"},
+    }
+    out = str(tmp_path / "m")
+    with _serve(rmap) as port:
+        rc = _crawl(port, out)
+    assert rc == 0
+    paths = _index_paths(out)
+    assert any("/ResetActionInfo/" in p for p in paths), "@Redfish.ActionInfo 미캡처"
+
+
+def test_gzip_response_decoded(tmp_path):
+    """Content-Encoding: gzip 응답도 해제해 링크를 추출한다 (HPE iLO/CSUS 계열 — 서브트리 누락 방지)."""
+    import gzip as _gz
+    from http.server import BaseHTTPRequestHandler
+
+    bodies = {
+        "/redfish/v1": {"@odata.id": "/redfish/v1", "Systems": {"@odata.id": "/redfish/v1/Systems"}},
+        "/redfish/v1/Systems": {"@odata.id": "/redfish/v1/Systems",
+                                "Members": [{"@odata.id": "/redfish/v1/Systems/1"}]},
+        "/redfish/v1/Systems/1": {"@odata.id": "/redfish/v1/Systems/1"},
+    }
+
+    def _k(p):
+        p = p.split("#", 1)[0].rstrip("/")
+        return p or "/redfish/v1"
+
+    class GzipHandler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            b = bodies.get(_k(self.path))
+            if b is None:
+                self.send_response(404)
+                self.end_headers()
+                return
+            payload = _gz.compress(json.dumps(b).encode("utf-8"))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Encoding", "gzip")  # urllib 자동 해제 안 함 → 크롤러가 풀어야
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *a):
+            pass
+
+    httpd = HTTPServer(("127.0.0.1", 0), GzipHandler)
+    port = httpd.server_address[1]
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        out = str(tmp_path / "m")
+        rc = _crawl(port, out)
+    finally:
+        httpd.shutdown()
+    assert rc == 0
+    man = _manifest(out)
+    # gzip 이 풀려야 링크가 추출돼 Systems/1 까지 도달 = 3개. 안 풀리면 root만 = 1개.
+    assert man["fetched_ok"] == 3, man["fetched_ok"]
+    assert any("/Systems/1/" in p for p in _index_paths(out)), "gzip 응답에서 링크 추출 실패"
+
+
 def test_output_preserves_odata_id(tmp_path):
     out = str(tmp_path / "m")
     with _serve(srv.load(CSUS_FIXT)) as port:

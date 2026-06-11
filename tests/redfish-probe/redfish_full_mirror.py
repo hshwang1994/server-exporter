@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import gzip
 import json
 import os
 import re
@@ -45,7 +46,9 @@ import ssl
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import zlib
 from collections import deque
 
 # 파일시스템(특히 Windows)에서 디렉터리명에 못 쓰는 문자. 본문 @odata.id 는 보존하고
@@ -93,6 +96,19 @@ def _fetch(scheme, host, path, headers, ctx, timeout):
             raw = r.read()
             hdrs = {k: v for k, v in r.getheaders()}
             status = r.status
+        # 일부 BMC(특히 HPE iLO 계열 / CSUS RMC)는 Accept-Encoding 무관하게 gzip/deflate 로
+        # 응답한다. urllib 은 우리가 헤더를 명시하면 자동 해제하지 않으므로 직접 푼다 — 안 풀면
+        # json.loads 가 깨져 _non_json 으로 저장되고 그 안의 @odata.id 링크가 전부 누락 →
+        # 서브트리 통째 손실(요구1). 깨진 압축은 무시하고 비-JSON 으로 흘려보낸다.
+        enc = next((v for k, v in hdrs.items() if k.lower() == "content-encoding"), "").lower()
+        if raw and ("gzip" in enc or "deflate" in enc):
+            try:
+                raw = gzip.decompress(raw) if "gzip" in enc else zlib.decompress(raw)
+            except Exception:
+                try:
+                    raw = zlib.decompress(raw, -zlib.MAX_WBITS)  # raw deflate(zlib 헤더 없음)
+                except Exception:
+                    pass
         try:
             data = json.loads(raw) if raw else {}
         except Exception:
@@ -113,14 +129,20 @@ def _fetch(scheme, host, path, headers, ctx, timeout):
 def _collect_ids(obj, out: set) -> None:
     """응답 JSON 어디에 있든 모든 nav URI 를 재귀 수집(중첩 dict/list, Oem 포함).
 
-    수집 대상 두 가지 — 둘 다 GET 가능한 리소스 링크라 따라가야 정보 누락이 없다:
-      - `@odata.id`            : 일반 리소스/멤버 참조
-      - `...@odata.nextLink`   : 컬렉션 페이지네이션(다음 페이지). 안 따라가면 큰 컬렉션
-                                 (DIMM/드라이브/펌웨어 다수)의 2페이지 이후가 통째로 누락된다.
+    수집 대상 세 가지 — 모두 GET 가능한 리소스 링크라 따라가야 정보 누락이 없다:
+      - `@odata.id`              : 일반 리소스/멤버 참조
+      - `...@odata.nextLink`     : 컬렉션 페이지네이션(다음 페이지). 안 따라가면 큰 컬렉션
+                                   (DIMM/드라이브/펌웨어 다수)의 2페이지 이후가 통째로 누락.
+      - `...@Redfish.ActionInfo` : Action 파라미터 기술 리소스(예: ResetActionInfo). 값이
+                                   @odata.id 객체가 아니라 bare 문자열 경로라 별도 매칭 필요.
     """
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if isinstance(v, str) and (k == "@odata.id" or k.endswith("@odata.nextLink")):
+            if isinstance(v, str) and (
+                k == "@odata.id"
+                or k.endswith("@odata.nextLink")
+                or k.endswith("@Redfish.ActionInfo")
+            ):
                 out.add(v)
             else:
                 _collect_ids(v, out)
@@ -205,9 +227,12 @@ def main() -> int:
     st_na, hdrs_na, d_na, _ = _fetch(args.scheme, args.host, root + "/", base_headers, ctx, args.timeout)
     if st_na:
         manifest["reachable"] = True
-        with open(os.path.join(args.out, "_serviceroot_noauth.json"), "w",
-                  encoding="utf-8", newline="\n") as f:
-            json.dump({"_status": st_na, "body": d_na}, f, indent=2, ensure_ascii=False)
+        try:
+            with open(os.path.join(args.out, "_serviceroot_noauth.json"), "w",
+                      encoding="utf-8", newline="\n") as f:
+                json.dump({"_status": st_na, "body": d_na}, f, indent=2, ensure_ascii=False)
+        except OSError as _e:  # noauth 저장 실패가 BFS/manifest 까지 막으면 안 된다.
+            print(f"[WARN] _serviceroot_noauth.json save 실패: {_e}", file=sys.stderr)
         # 0b) realm 캡처(Session-only BMC 진단).
         #  - ServiceRoot 자체가 인증 게이트면 그 401/403 헤더에서 바로.
         #  - 루트가 공개면 루트에서 "발견한" 첫 링크를 무인증 GET → 401 이면.
@@ -229,16 +254,25 @@ def main() -> int:
     seen, queued = set(), set()
     q = deque([root])
     queued.add(root)
+    # 같은 장비 호스트(크로스-호스트 절대 URL 구별용). 대괄호 IPv6/포트 포함형도 hostname 만 추출.
+    _self_host = urllib.parse.urlsplit(f"//{args.host}").hostname or args.host
 
     def _enqueue(raw_id) -> None:
         """발견한 링크를 큐에 추가. 접두사 가정 없이 절대경로면 전부 따라간다(/rest/v1 등 포함).
-        경로가 아닌 값(비-URI / cross-host 절대URL)만 skip 하고 manifest 에 남겨 가시화한다."""
+        다른 호스트를 가리키는 절대 URL / 경로가 아닌 값만 skip 하고 manifest 에 남겨 가시화한다."""
         if not isinstance(raw_id, str):
+            return
+        # cross-host 절대 URL(http(s)://otherhost/...)은 같은 장비 캡처 목적상 따라가지 않는다.
+        # _norm 이 host 를 떼어 같은-호스트 요청으로 둔갑하는 것을 막고 false 404 노이즈도 차단.
+        parsed = urllib.parse.urlsplit(raw_id)
+        if parsed.scheme and parsed.hostname and parsed.hostname != _self_host:
+            if all(s.get("link") != raw_id for s in manifest["skipped"]):
+                manifest["skipped"].append({"link": raw_id, "reason": "cross-host"})
             return
         np = _norm(raw_id)
         if not np or not np.startswith("/"):
             if all(s.get("link") != raw_id for s in manifest["skipped"]):
-                manifest["skipped"].append({"link": raw_id, "reason": "non-path/cross-host"})
+                manifest["skipped"].append({"link": raw_id, "reason": "non-path"})
             return
         if np not in seen and np not in queued:
             queued.add(np)
@@ -251,7 +285,7 @@ def main() -> int:
                 continue
             seen.add(path)
 
-            fetch_path = path + "/" if path == "/redfish/v1" else path
+            fetch_path = path + "/" if path == root else path  # root 변수 사용(--root 비기본도 일관)
             status, hdrs, data, err = _fetch(args.scheme, args.host, fetch_path,
                                              auth_headers, ctx, args.timeout)
             # transient(전송계층) 실패는 1회 재시도. status 0 = HTTPError 가 아닌 네트워크 예외.
@@ -268,6 +302,8 @@ def main() -> int:
 
             if 200 <= status < 300:  # 200 외 2xx 본문도 링크 추출(서브트리 누락 방지)
                 manifest["fetched_ok"] += 1
+                if manifest["reachable"] is None:  # noauth가 transient 실패해도 BFS 2xx면 도달 확정
+                    manifest["reachable"] = True
                 if path != root:
                     manifest["auth_ok"] = True  # 보호 리소스 2xx = 인증 성공 증명
                 if path == root and isinstance(data, dict):
@@ -291,9 +327,15 @@ def main() -> int:
     finally:
         # 예외 / KeyboardInterrupt 에도 manifest 는 항상 남긴다 — 거기까지의 캡처 진단 보존.
         manifest["discovered"] = len(seen)
-        with open(os.path.join(args.out, "_manifest.json"), "w",
-                  encoding="utf-8", newline="\n") as f:
-            json.dump(manifest, f, indent=2, ensure_ascii=False, sort_keys=True)
+        if q and not manifest["truncated"]:  # 비정상 종료로 위 if q 가 안 돈 경우도 기록
+            manifest["truncated"] = len(q)
+        _mpath = os.path.join(args.out, "_manifest.json")
+        try:
+            with open(_mpath, "w", encoding="utf-8", newline="\n") as f:
+                json.dump(manifest, f, indent=2, ensure_ascii=False, sort_keys=True)
+        except Exception as _mex:  # manifest 마저 못 쓰면(디스크/경로) stderr 로라도 진단 보존.
+            print(f"[WARN] manifest write 실패 ({_mex}); stderr 로 덤프:", file=sys.stderr)
+            print(json.dumps(manifest, indent=2, ensure_ascii=False), file=sys.stderr)
 
     # 자가 진단 요약 — 현장에서 "다 떴는지" 즉시 판단.
     print("=" * 60)
@@ -311,6 +353,13 @@ def main() -> int:
         print("  [WARN] 권한 갭(401/403) - 더 높은 권한 계정 필요 가능:")
         for r in manifest["auth_failures"][:10]:
             print(f"      {r['status']}  {r['path']}")
+    if manifest["fetched_ok"] > 0 and manifest["auth_ok"] is None:
+        # 보호 리소스 2xx 0건인데 fetched_ok>0 = ServiceRoot 만 잡힌 모호한 상태.
+        # 302→HTML captive-portal redirect 나 Basic 미지원(Session-only)일 때 rc=0 으로
+        # '성공처럼' 끝날 수 있어 — 한 번뿐인 캡처에서 운영자가 오인하지 않게 명시 경고.
+        print("  [WARN] auth_ok=None - 보호 리소스 2xx 0건. 302->HTML captive-portal redirect "
+              "또는 Basic 미지원(Session-only) 가능. _serviceroot_noauth.json 의 _non_json 여부 확인.",
+              file=sys.stderr)
     if manifest.get("truncated"):
         print(f"  [WARN] CRAWL TRUNCATED - 큐에 {manifest['truncated']}개 남음. --max 올리거나 truncation 수용.")
     if manifest["fetched_ok"] == 0:

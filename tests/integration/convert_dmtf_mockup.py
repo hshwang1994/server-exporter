@@ -49,7 +49,7 @@ REPO = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO / "tests" / "fixtures" / "redfish"
 
 
-def _load_mockup(mockup_dir: Path) -> dict:
+def _load_mockup(mockup_dir: Path) -> tuple[dict[str, list], int, int]:
     """mockup 트리의 모든 index.json → {'get::<path>': [200, body, None], ...}.
 
     key 는 _p(@odata.id) — 엔진이 _get(path) 로 요청하는 path 와 동일. ServiceRoot
