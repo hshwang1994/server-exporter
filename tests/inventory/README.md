@@ -7,6 +7,7 @@
 ## baseline vs supplemental 분리 원칙
 
 ### Baseline 장비 (기준선)
+
 기존 `redfish-gather/inventory.sh` + `vault/redfish/{vendor}.yml`(ansible-vault encrypted)로 관리.
 baseline credential 변경 금지.
 
@@ -18,6 +19,7 @@ baseline credential 변경 금지.
 | Cisco | vault/redfish/cisco.yml | baseline 고정 |
 
 ### Supplemental 장비 (추가 검증)
+
 추가 evidence 수집 전용. baseline 정책을 변경하는 근거로 사용하면 안 됨.
 
 credential은 다음 방식으로만 관리:
@@ -26,6 +28,7 @@ credential은 다음 방식으로만 관리:
 3. 일회성 `--extra-vars` (디버깅 용도 한정)
 
 ### 사용 방법
+
 ```bash
 # 1. 샘플 파일을 local/로 복사
 cp tests/inventory/supplemental.sample.ini tests/inventory/local/supplemental.ini
@@ -38,6 +41,7 @@ ansible-playbook redfish-gather/site.yml -i tests/inventory/local/supplemental.i
 ```
 
 ### 주의사항
+
 - 저장소에 commit 되는 파일에 평문 자격증명을 넣지 마세요.
 - Dell R760 자격증명이 Dell baseline 과 다르다고 해서 세대별로 vault 를 쪼개면 안 됩니다 (baseline 의 의미가 깨짐).
 - supplemental 장비는 baseline 정책을 변경하는 근거가 아니라, 추가 evidence 수집용입니다.

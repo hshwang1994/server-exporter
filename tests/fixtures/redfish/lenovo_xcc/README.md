@@ -20,7 +20,7 @@
 ## HTTP 헤더 정책
 
 - 사이트 이슈 — Accept + OData-Version + User-Agent reject
-- "Accept만" 정책 적용 (redfish_gather.py _get())
+- "Accept만" 정책 적용 (`redfish_gather.py` `_get()`)
 - XCC1 / XCC2 모두 보수적 정책
 
 ## 매칭 검증

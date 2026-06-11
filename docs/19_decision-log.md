@@ -1,4 +1,4 @@
-# 의사결정 로그
+# 19. 의사결정 로그
 
 > **이 문서는** server-exporter 가 지금 모습이 된 "이유" 를 누적 기록한 결정 이력이다.
 > 누군가 "왜 이렇게 만들었는지" 또는 "전에 다른 방식으로 한 적 있는지" 가 궁금할 때 가장 먼저 검색하는 곳이다.
@@ -61,7 +61,7 @@ HPE 공식 인용 (웹 검색, 2026-05-12): "supports large, partitionable syste
 1. **envelope 표현 — Option C**: `data.multi_node` 단일 컨테이너를 추가하고 기존 9 section path (`data.system`/`data.bmc`/...) 는 그대로 유지
 2. **코드 리팩토링 — 변형 1**: `gather_*_multi()` 함수 신설 + 기존 함수 그대로 유지
 3. **RMC 라벨**: adapter `vendor_notes.manager_layout` 을 `redfish_gather.py` 까지 전달 + `_classify_rmc_label` substring 매칭
-4. **precheck graceful fail**: `diagnosis.details.rmc_activation_check` + `multi_node_layout` 추가 + `docs/22_rmc-activation-guide.md` 신규
+4. **precheck graceful fail**: `diagnosis.details.rmc_activation_check` + `multi_node_layout` 추가 + `docs/24_rmc-activation-guide.md` 신규
 5. **mock fixture 합성**: 3-partition × 4-manager × 3-chassis (sdflexutils + DMTF v1.15 + iLO5 API ref 3-source cross-check) + README 출처 매핑
 6. **baseline 경로**: `tests/expected/redfish/hpe_csus_3200/mock_v1.json` 별도 경로 — `schema/baseline_v1/` 는 lab 도입 시까지 미작성 (실측 baseline 보호)
 7. **derived 추가**: 기존 baseline 9종에 `data.multi_node: null` 추가 (summary inject 패턴 재사용)
@@ -103,7 +103,7 @@ HPE 공식 인용 (웹 검색, 2026-05-12): "supports large, partitionable syste
 | `tests/expected/redfish/hpe_csus_3200/mock_v1.json` | 신규 (fixture-derived expected) |
 | `tests/unit/test_*.py` | 신규 3 단위 테스트 (hpe_csus_multi_node / resolve_all_members / classify_rmc_label) |
 | `docs/20_json-schema-fields.md` | multi_node 절 추가 (docs/20 동기화) |
-| `docs/22_rmc-activation-guide.md` | 신규 — RMC 활성화 절차 + community 7200359 트러블슈팅 |
+| `docs/24_rmc-activation-guide.md` | 신규 — RMC 활성화 절차 + community 7200359 트러블슈팅 |
 
 ### 검증
 

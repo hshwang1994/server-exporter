@@ -34,15 +34,18 @@ Python 모듈 (`precheck_bundle.py`) 가 4단계 진단 핵심 로직을 담당�
 Ansible task (`run_precheck.yml`) 는 그 결과를 받아 `_diagnosis` 변수에 set + ansible 인벤토리와 통합하는 역할.
 
 즉 분산이 아니라 **계층 분리**:
+
 - Python: 알고리즘 (어떻게 진단)
 - Ansible: orchestration (언제 호출 + 결과 어디에 저장)
 
 ## 디버깅 진입점
 
 precheck 4단계 어디서 막혔는지 확인:
+
 ```bash
 ansible-playbook ... -vvv | grep -i precheck
 ```
+
 또는 envelope `diagnosis.details` 참조 (docs/12).
 
 ## 관련 문서

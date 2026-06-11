@@ -54,7 +54,7 @@ system_partition0.json `Boot` 에 `BootOrder` 추가 / manager_rmc.json 에 `Log
 HPE community 게시물 7200359 ("impossible to get redfish answer from superdome flex rmc"):
 - 사이트 환경에서 RMC Redfish API 비활성화 / 라이선스 부재 사례 보고
 - precheck graceful fail + `diagnosis.details.rmc_activation_check` 메타로 진단 hint 제공
-- 트러블슈팅: `docs/22_rmc-activation-guide.md` 참조
+- 트러블슈팅: `docs/24_rmc-activation-guide.md` 참조
 
 ## 한계
 

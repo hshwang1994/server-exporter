@@ -52,3 +52,9 @@ _job.json
 _lb.json
 b[0-9].log
 b[0-9][0-9].log
+
+# 로컬 개발·검토 산출물 (로컬 전용 — commit 금지)
+.claude/
+docs/ai/
+scripts/ai/
+tests/reference/

@@ -1,4 +1,4 @@
-# RMC (Rack Management Controller) Redfish 활성화 가이드
+# 24. RMC (Rack Management Controller) Redfish 활성화 가이드
 
 > HPE Compute Scale-up Server 3200 / Superdome Flex 사이트 배포 시 RMC Redfish 비활성화 / 라이선스 부재로 인한 수집 실패 진단 + 활성화 절차.
 
