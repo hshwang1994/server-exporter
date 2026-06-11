@@ -53,7 +53,8 @@ def _load_mockup(mockup_dir: Path) -> dict:
     """mockup 트리의 모든 index.json → {'get::<path>': [200, body, None], ...}.
 
     key 는 _p(@odata.id) — 엔진이 _get(path) 로 요청하는 path 와 동일. ServiceRoot
-    (@odata.id '/redfish/v1/' → _p '')는 'noauth::' + 'get::' 양쪽 등재(엔진은
+    (@odata.id '/redfish/v1')는 _p 가 '__invalid_odata_id__' 를 주므로(Round 1 #23
+    hardening — '' 미반환) _p 전에 직접 'noauth::' + 'get::' 양쪽 등재(엔진은
     ServiceRoot 를 _get_noauth 우선 조회).
     """
     full: dict[str, list] = {}
@@ -73,10 +74,15 @@ def _load_mockup(mockup_dir: Path) -> dict:
         if not isinstance(odata_id, str):
             skipped += 1
             continue
+        # ServiceRoot('/redfish/v1[/]')는 rg._p()가 '__invalid_odata_id__'를 돌려주므로
+        # (Round 1 #23 hardening — '' 미반환) _p 전에 직접 처리한다. 엔진은 ServiceRoot를
+        # _get_noauth 우선 조회하고 noauth 실패 시 _get('')로도 재시도 → 양쪽 키 등재.
+        if odata_id.rstrip("/") == "/redfish/v1":
+            full["noauth::"] = [200, body, None]
+            full["get::"] = [200, body, None]
+            continue
         key = H.rg._p(odata_id)
         full[f"get::{key}"] = [200, body, None]
-        if key == "":  # ServiceRoot
-            full["noauth::"] = [200, body, None]
     return full, len(files), skipped
 
 
