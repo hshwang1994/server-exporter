@@ -181,6 +181,15 @@ def _bracket_ipv6(host: str) -> str:
 
 
 def main() -> int:
+    # 운영망 박스가 cp949/비-UTF8 콘솔이어도 --help / 요약 print 가 죽지 않게 stdout 을 utf-8 로
+    # 먼저 고정한다(parse_args 가 --help 를 출력하기 전에). 한 번뿐인 캡처 — 인코딩 때문에
+    # 사용법/결과를 못 보는 일이 없게.
+    for _s in (sys.stdout, sys.stderr):
+        try:
+            _s.reconfigure(encoding="utf-8", errors="replace")  # py3.7+
+        except Exception:
+            pass
+
     ap = argparse.ArgumentParser(description="Redfish 전수 재귀 미러 (자동 발견)")
     ap.add_argument("--host", "-r", required=True, help="ip[:port] 또는 [ipv6]:port")
     ap.add_argument("--user", "-u", default="")
@@ -194,14 +203,6 @@ def main() -> int:
     ap.add_argument("--root", default="/redfish/v1/", help="시작 경로")
     args = ap.parse_args()
     args.host = _bracket_ipv6(args.host)
-
-    # 운영망 박스가 cp949/비-UTF8 콘솔이어도 요약 print 가 죽지 않도록 stdout 을 utf-8 로 고정.
-    # (한 번뿐인 캡처 — 출력 인코딩 때문에 결과를 못 보는 일이 없게.)
-    for _s in (sys.stdout, sys.stderr):
-        try:
-            _s.reconfigure(encoding="utf-8", errors="replace")  # py3.7+
-        except Exception:
-            pass
 
     ctx = _ctx(args.verify)
     # 보수적 헤더: Accept 만. (Lenovo XCC3 1.17.0 교훈 — OData-Version/User-Agent 동봉 시
