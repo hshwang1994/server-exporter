@@ -1,16 +1,18 @@
-"""adapter selection facts 가 실제 generation 매칭을 가능케 하는지 검증.
+"""Round 17 #9/#10 — adapter selection facts 가 실제 generation 매칭을 가능케 하는지 검증.
 
-(esxi): site.yml 이 collect_facts 전에 facts={} 로 선택 → version_patterns(^6./^7./^8.)
+#9 (esxi): site.yml 이 collect_facts 전에 facts={} 로 선택 → version_patterns(^6./^7./^8.)
    가 죽고 priority 만으로 esxi_8x 항상 선택. 수정: collect_facts 뒤로 옮겨 실제 version 전달.
-(windows): site.yml 이 facts.version 으로 ansible_os_product_type(=SKU 'server')를 넘겨
+#10 (windows): site.yml 이 facts.version 으로 ansible_os_product_type(=SKU 'server')를 넘겨
    version_patterns(2019/2022, 10.0.NNNNN)와 절대 안 맞아 generation adapter 가 죽고
    os_windows_generic 만 선택. 수정: ansible_kernel(빌드 10.0.20348.0)을 넘김.
 
 본 테스트는 실제 adapters/{esxi,os}/*.yml + adapter_common 으로 선택을 시뮬레이션해,
-'올바른 facts 를 넘기면 generation adapter 가 선택된다'(fix 의 전제)를 고정한다.
+'올바른 facts 를 넘기면 generation adapter 가 선택된다'(fix 의 전제)를 고정한다. 실제 fact
+값(ansible_kernel)은 tests/reference 캡처로 grounding.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -43,7 +45,7 @@ def _select(channel: str, facts: dict) -> str:
     return matched[0][1]
 
 
-# ── ESXi: 실제 버전이 전달되면 generation 별로 올바로 선택 ──────────────────
+# ── #9 ESXi: 실제 버전이 전달되면 generation 별로 올바로 선택 ──────────────────
 @pytest.mark.parametrize("version,expected", [
     ("8.0.2", "esxi_8x"),
     ("8.0 U2", "esxi_8x"),
@@ -61,7 +63,7 @@ def test_esxi_empty_facts_was_priority_only_bug():
     assert _select("esxi", {"version": "7.0.3"}) != _select("esxi", {})
 
 
-# ── Windows: ansible_kernel(빌드)이면 generation 선택, SKU 면 generic 으로 죽음 ──
+# ── #10 Windows: ansible_kernel(빌드)이면 generation 선택, SKU 면 generic 으로 죽음 ──
 @pytest.mark.parametrize("version,expected", [
     ("10.0.20348.0", "os_windows_2022"),   # ansible_kernel (fix)
     ("10.0.17763.5122", "os_windows_2019"),
@@ -91,13 +93,22 @@ def test_cisco_cimc_hyphenated_model_matches(model):
     assert sel == "redfish_cisco_cimc", f"{model!r} -> {sel}"
 
 
-def test_windows_kernel_vs_sku_selection_contrast():
-    """ansible_kernel(빌드 버전)은 generation 매칭, os_product_type(SKU)은 미매칭(=구 버그 재현).
+def _load_ansible_setup(path: Path) -> dict:
+    """ansible 'host | SUCCESS => { ... }' 출력에서 ansible_facts 추출."""
+    raw = path.read_text(encoding="utf-8")
+    brace = raw.index("{")
+    return json.loads(raw[brace:]).get("ansible_facts", {})
 
-    실 win2022 캡처의 ansible_kernel 은 '10.0.20348.0' 형태 → os_windows_2022 선택.
-    반면 ansible_os_product_type 의 'server' SKU 는 version_patterns 미매칭 → generic.
-    """
-    # ansible_kernel(빌드 버전)로는 generation 선택됨
-    assert _select("os", {"os_type": "windows", "version": "10.0.20348.0"}) == "os_windows_2022"
-    # os_product_type(구 fact 'server')로는 generic 으로 죽음 (사고 재현)
-    assert _select("os", {"os_type": "windows", "version": "server"}) == "os_windows_generic"
+
+def test_reference_capture_grounds_kernel_choice():
+    """실 win2022 캡처: ansible_kernel 은 generation 패턴 매칭, os_product_type 은 미매칭(=구 버그)."""
+    caps = list((REPO / "tests" / "reference" / "os" / "win2022").glob("*/setup.json"))
+    if not caps:
+        pytest.skip("win2022 reference capture 없음")
+    af = _load_ansible_setup(caps[0])
+    kernel = af.get("ansible_kernel", "")
+    sku = af.get("ansible_os_product_type", "")
+    # ansible_kernel 로는 generation 선택됨
+    assert _select("os", {"os_type": "windows", "version": kernel}) == "os_windows_2022"
+    # ansible_os_product_type(구 fact)로는 generic 으로 죽음 (사고 재현)
+    assert _select("os", {"os_type": "windows", "version": sku}) == "os_windows_generic"

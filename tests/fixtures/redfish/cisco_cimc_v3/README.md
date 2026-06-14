@@ -1,6 +1,6 @@
-# Cisco CIMC 3.x (UCS C-series M5) fixture
+# Cisco CIMC 3.x (UCS C-series M5) fixture — M-H4 (cycle 2026-05-07)
 
-> Lab 부재 — web sources only. Priority 1 fixture.
+> Lab 부재 — web sources only (rule 96 R1-A). Priority 1 fixture.
 
 ## 출처
 

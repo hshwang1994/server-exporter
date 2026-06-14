@@ -1,17 +1,17 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: HPE / Hewlett Packard Enterprise
 # Firmware: iLO 7 — 1.x (Gen12 ProLiant 신 generation)
 # Origin: HPE iLO 7 Redfish API documentation (Gen12, 2025-02 출시)
-# Last sync: 2026-05-11 (Gen12 2-part firmware "1.10" 매치 보강)
+# Last sync: 2026-05-11 (cycle hpe-ilo7-gen12-match-fix — 2-part firmware "1.10" 매치 보강)
 # Notes: ProLiant Gen12 (DL360 Gen12 / DL380 Gen12 / DL580 Gen12 / ML350 Gen12).
-# Sources (lab 부재):
+# Sources (rule 96 R1-A — lab 부재):
 #   - https://servermanagementportal.ext.hpe.com/docs/redfishservices/ilos/ilo7
 #   - https://servermanagementportal.ext.hpe.com/docs/redfishservices/ilos/ilo7/ilo7_adaptation
 #   - https://www.hpe.com/us/en/newsroom/press-release/2025/02/hpe-introduces-next-generation-proliant-servers-engineered-for-advanced-security-ai-automation-and-greater-performance.html
 #   - https://www.scribd.com/document/917390429/HPE-sd00006383en-us-HPE-ILO-7-v1-16-00-Release-Notes (1.16.00 release notes)
-# 검증 기준: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
-# Compatibility 가정 (web sources):
+# Tested against: lab 부재 (web sources only). 사용자 사이트 도입 시 fixture 캡처.
+# Compatibility 가정 (web sources, F47/F84 cycle 2026-05-01):
 #   - manufacturer: "HPE" / "Hewlett Packard Enterprise" (iLO 6 와 동일)
 #   - Manager URI: /redfish/v1/Managers/1 (iLO 6 와 동일)
 #   - System URI: /redfish/v1/Systems/1 (iLO 6 와 동일)
@@ -19,9 +19,9 @@
 #   - 차이점:
 #     * firmware version 형식 변경: "1.12.00" / "1.16.00" 형 (Major.Minor.Patch)
 #     * SecurityState: "SecureStandard" (default — iLO 6 의 HighSecurity 와 동등)
-#     * TLS 1.0/1.1 enum 제거 → server-exporter 는 TLS 1.2/1.3
+#     * TLS 1.0/1.1 enum 제거 → server-exporter 는 TLS 1.2/1.3 (F84)
 #     * Federation / SerialInterface / SCEP 제거 (server-exporter 미사용)
-#     * NetworkPorts deprecated → EthernetInterface fallback (적용 완료)
+#     * NetworkPorts deprecated → EthernetInterface fallback (F48 적용 완료)
 #     * Oem.Hpe.Firmware.Current.* deprecated → FirmwareInventory 우선
 #       (gather_firmware 가 자동 cover)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -32,14 +32,14 @@ priority: 120
 match:
   vendor: ["HPE", "Hewlett Packard Enterprise"]
   # Gen12 펌웨어 — 3-part version ("1.12.00" / "1.16.00") + "iLO 7" 시그니처.
-  # 2-part short version 매치 보강:
+  # 추가 (cycle 2026-05-11 hpe-ilo7-gen12-match-fix):
   #   - 일부 Gen12 BMC 는 2-part short version "1.10" / "1.16" 만 보고
   #     (facts.firmware 추출 path 가 Manager.FirmwareVersion 만일 때).
   #   - `^1\.1[0-9]` (1.10~1.19) 추가 — 주의: iLO 4 `^1\.[0-9]` 는 "1.1" prefix 로 1.10~1.19
-  #     도 매칭하고 iLO 6 `^1\.[5-9]` 도 일부 겹침 (정규식 중복 있음).
+  #     도 매칭하고 iLO 6 `^1\.[5-9]` 도 일부 겹침 (정규식 충돌 있음, Round 15 주석 정정).
   #     그러나 (1) priority 차등 (iLO7=120 > iLO6/iLO4) + (2) model_patterns (iLO7=Gen12 필수)
   #     로 의도된 adapter 선택 보장 — 실 기기는 generation 별 firmware format 보고하므로 충돌은 이론적.
-  #   - 미래 Gen12 firmware 1.20+ 2-part 시 본 regex 재검토 (사이트 실측).
+  #   - 미래 Gen12 firmware 1.20+ 2-part 시 본 regex 재검토 (사이트 실측 cycle).
   # 점수 메커니즘: firmware_patterns 매치 실패 + facts.firmware 비어있지 않으면
   # -9999 disqualify (module_utils/adapter_common.py adapter_match_score — firmware known but mismatch).
   firmware_patterns: ["iLO.*7", "^\\d+\\.\\d+\\.\\d+", "^1\\.1[0-9]"]
@@ -93,7 +93,7 @@ graceful_degradation:
 # - NetworkPorts deprecated → EthernetInterface (gather_network 자동 cover)
 # - Oem.Hpe.Firmware.Current.* deprecated → FirmwareInventory 우선
 # - SecurityState: "SecureStandard" default
-# - TLS 1.3 강제 가능 (minimum_version=TLSv1_2)
+# - TLS 1.3 강제 가능 (F84 — minimum_version=TLSv1_2)
 vendor_notes:
   storage_controller_method: controllers_sublink
   indicator_led_field: LocationIndicatorActive
@@ -103,4 +103,4 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "HPE iLO 7 장비 (Gen12) — Redfish 완전 지원 가정."
+  not_supported_message: "HPE iLO 7 장비 (Gen12) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."

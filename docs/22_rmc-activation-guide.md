@@ -1,5 +1,6 @@
-# 24. RMC (Rack Management Controller) Redfish 활성화 가이드
+# RMC (Rack Management Controller) Redfish 활성화 가이드
 
+> cycle 2026-05-12 (ADR-2026-05-12) 신규.
 > HPE Compute Scale-up Server 3200 / Superdome Flex 사이트 배포 시 RMC Redfish 비활성화 / 라이선스 부재로 인한 수집 실패 진단 + 활성화 절차.
 
 ## 1. RMC 란?
@@ -8,9 +9,9 @@ HPE 의 스케일업 서버 군 (CSUS 3200 / Superdome Flex / Flex 280) 은 단�
 
 > "supports large, partitionable systems managed by a **single aggregated controller like HPE Compute Scale-up Server 3200 RMC**."
 
-server-exporter 는 RMC primary 시스템의 전 Partition/Manager/Chassis 를 수집한다 (`data.multi_node` 추가 전용 컨테이너 — 기존 9 section 외에 별도로 채워지는 영역).
+server-exporter 는 cycle 2026-05-12 부터 RMC primary 시스템의 전 Partition/Manager/Chassis 를 수집한다 (ADR-2026-05-12, `data.multi_node` Additive 컨테이너).
 
-CSUS 3200 Redfish 모델 전체를 수집한다 — nPartition 별 부팅 순서(`partitions[].boot`), chassis 별 Thermal(`chassis[].thermal`, Power 와 쌍), RMC LogServices(`managers[].log_services`), CompositionService/ResourceBlocks(`multi_node.composition` — 각 ResourceBlock ↔ chassis 대응), Fabrics/FlexGrid(`multi_node.fabrics` — NUMAlink Switches+Endpoints). 상세 shape 는 `docs/20_json-schema-fields.md` 9절 (`data.multi_node` 확장 컴포넌트) 참조.
+cycle 2026-06-09 (ADR-2026-06-09) 부터 CSUS 3200 Redfish 모델 전체를 수집한다 — nPartition 별 부팅 순서(`partitions[].boot`), chassis 별 Thermal(`chassis[].thermal`, Power 와 쌍), RMC LogServices(`managers[].log_services`), CompositionService/ResourceBlocks(`multi_node.composition` — 각 ResourceBlock ↔ chassis 대응), Fabrics/FlexGrid(`multi_node.fabrics` — NUMAlink Switches+Endpoints). 상세 shape 는 `docs/20_json-schema-fields.md` 9절 (`data.multi_node` 확장 컴포넌트) 참조.
 
 ## 2. 알려진 위험 신호
 
@@ -55,7 +56,7 @@ HPE community 게시물 ([7200359 "impossible to get redfish answer from superdo
 
 ## 4. RMC Redfish 활성화 절차
 
-> sd00002765en_us (HPE Compute Scale-up Server 3200 Administration Guide) 및 [HPE Server Management Portal](https://servermanagementportal.ext.hpe.com/docs/concepts/gettingstarted) 기반. 사이트 실측 시 본 절 정정 가능.
+> sd00002765en_us (HPE Compute Scale-up Server 3200 Administration Guide) 및 [HPE Server Management Portal](https://servermanagementportal.ext.hpe.com/docs/concepts/gettingstarted) 기반. 사이트 실측 시 본 절 정정 의무.
 
 ### 4.1 라이선스 / Subscription 확인
 
@@ -94,10 +95,12 @@ curl -k -s -u <user>:<password> https://<rmc-ip>/redfish/v1/Chassis
 
 사이트에서 RMC Redfish 활성화 확인 후 server-exporter 운영자가 다음 등재:
 
-1. 실측 결과 + 환경 (펌웨어 / 라이선스 / 모델) 기록
-2. `tests/fixtures/redfish/hpe_csus_3200/` 실 응답으로 합성 fixture 교체 (lab 도입 시)
-3. `schema/baseline_v1/hpe_csus_3200_baseline.json` 교체 (현재 mock-derived → 실측 baseline)
+1. `tests/evidence/<YYYY-MM-DD>-csus-3200-site.md` — 실측 결과 + 환경 (펌웨어 / 라이선스 / 모델)
+2. `tests/fixtures/redfish/hpe_csus_3200/` 실 응답으로 합성 fixture 교체 (lab 도입 cycle)
+3. `schema/baseline_v1/hpe_csus_3200_baseline.json` 교체 (현재 mock-derived → 실측 baseline, rule 13 R4)
 4. `docs/19_decision-log.md` Round 신 항목
+
+→ NEXT_ACTIONS C1~C8 (`docs/ai/NEXT_ACTIONS.md`) 참조.
 
 ## 6. 트러블슈팅 매트릭스
 
@@ -108,12 +111,15 @@ curl -k -s -u <user>:<password> https://<rmc-ip>/redfish/v1/Chassis
 | ServiceRoot timeout | 방화벽 / TCP 443 차단 | precheck phase port 검토 |
 | Managers Members 1개만 (RMC 누락) | RMC role / namespace 권한 부족 | RMC role 권한 격상 |
 | Systems Partition0 만 응답 | nPAR 단일 partition 운영 (정상) | server-exporter `data.multi_node.summary.partition_count == 1` 노출 |
-| Oem.Hpe.PartitionInfo 부재 | RMC firmware 노출 안 함 / 정규화 mock 미일치 | 4.3 raw curl 확인 |
+| Oem.Hpe.PartitionInfo 부재 | RMC firmware 노출 안 함 / 정규화 mock 미일치 | 4.3 raw curl 확인 → NEXT_ACTIONS C7 |
 
 ## 7. 관련
 
+- ADR: `docs/ai/decisions/ADR-2026-05-12-csus-rmc-multi-node.md`
 - envelope reference: `docs/20_json-schema-fields.md` 9절 (`data.multi_node`)
 - adapter: `adapters/redfish/hpe_csus_3200.yml` / `hpe_superdome_flex.yml`
+- 외부 계약: `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` HPE 절
+- NEXT_ACTIONS: `docs/ai/NEXT_ACTIONS.md` C1~C8
 - web sources:
   - https://servermanagementportal.ext.hpe.com/docs/concepts/gettingstarted
   - https://support.hpe.com/hpesc/public/docDisplay?docId=sd00002765en_us&docLocale=en_US

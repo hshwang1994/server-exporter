@@ -1,4 +1,4 @@
-"""Unit test for PSU Critical alarm in summary + None capacity sum.
+"""Unit test for B58 (PSU Critical alarm in summary) + B59 (None capacity sum).
 
 Validates the Jinja2 summary builder logic in:
   redfish-gather/tasks/normalize_standard.yml :: _rf_power_summary
@@ -7,9 +7,9 @@ We cannot run Jinja2 directly without ansible context, so we mirror the logic
 in Python and verify against captured raw responses + Jenkins envelope.
 
 Test data sources:
-  - tests/fixtures/power_summary/hpe-dl380/power.json
-  - tests/fixtures/power_summary/lenovo-sr650/power.json
-  - tests/fixtures/power_summary/cisco-c220/power.json
+  - tests/evidence/2026-04-29-deep-verify/redfish/hpe-dl380/power.json
+  - tests/evidence/2026-04-29-deep-verify/redfish/lenovo-sr650/power.json
+  - tests/evidence/2026-04-29-deep-verify/redfish/cisco-c220/power.json
 """
 from __future__ import annotations
 
@@ -19,13 +19,13 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-POWER_FIXTURES = REPO / "tests" / "fixtures" / "power_summary"
+EVIDENCE = REPO / "tests" / "evidence" / "2026-04-29-deep-verify" / "redfish"
 
 
 def build_summary(power_data: dict) -> dict:
     """Mirror of redfish-gather/tasks/normalize_standard.yml :: _rf_power_summary.
 
-    Implements critical_count + health_rollup + capacity_unknown_count.
+    Implements B58 (critical_count + health_rollup) + B59 (capacity_unknown_count).
     """
     psus = []
     for psu in (power_data.get("PowerSupplies") or []):
@@ -80,17 +80,17 @@ def build_summary(power_data: dict) -> dict:
 
 
 def load_power(label: str) -> dict:
-    p = POWER_FIXTURES / label / "power.json"
+    p = EVIDENCE / label / "power.json"
     if not p.exists():
         pytest.skip(f"raw power.json not captured for {label}")
     return json.loads(p.read_text(encoding="utf-8"))
 
 
 # --------------------------------------------------------------------------- #
-# PSU Critical health surfaces in summary                                     #
+# B58: PSU Critical health surfaces in summary                                #
 # --------------------------------------------------------------------------- #
 
-class TestCriticalCount:
+class TestB58CriticalCount:
     def test_hpe_psu_critical_count(self):
         """HPE DL380 has PSU#1 Critical+UnavailableOffline + PSU#2 OK+Enabled."""
         s = build_summary(load_power("hpe-dl380"))
@@ -117,10 +117,10 @@ class TestCriticalCount:
 
 
 # --------------------------------------------------------------------------- #
-# PSU None capacity must not be silently summed                               #
+# B59: PSU None capacity must not be silently summed                          #
 # --------------------------------------------------------------------------- #
 
-class TestCapacityUnknown:
+class TestB59CapacityUnknown:
     def test_lenovo_psu1_none_capacity_separated(self):
         """Lenovo PSU#1 PowerCapacityWatts=null, PSU#2=750 — total should be 750
         AND capacity_unknown_count=1 (so caller knows total is partial)."""

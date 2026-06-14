@@ -29,7 +29,7 @@
 
 - name: "windows | network | interfaces"
   ansible.windows.win_shell: |
-    # primary InterfaceIndex 1회 조회 (기존: IP마다 Get-NetRoute 재호출 — O(N))
+    # production-audit (2026-04-29): primary InterfaceIndex 1회 조회 (기존: IP마다 Get-NetRoute 재호출 — O(N))
     # + interface_index 출력 → 그룹핑 키로 사용 (MAC null/이름 변동 시 NIC가 분리되는 버그 차단)
     $gw = '{{ _w_norm_net_meta.gw | default("") }}'
     $primary_idx = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
@@ -59,6 +59,8 @@
   failed_when: false
   no_log: true
 
+# Round 16: JSON null status(미surface adapter)는 'is defined' 통과 → None|lower='none' 누설.
+#           truthy 체크로 None/''/undefined 모두 'unknown' fallback (memory/cpu fix 동일 class).
 - name: "windows | network | normalize interfaces"
   ansible.builtin.set_fact:
     _w_norm_interfaces: >-
@@ -66,13 +68,13 @@
       {%- for line in (_w_iface_raw.stdout_lines | default([])) -%}
         {%- if line | trim -%}
           {%- set n = line | from_json -%}
-          {# InterfaceIndex로 그룹핑 — 단일 NIC의 multi-IP가 분리되지 않도록 #}
+          {# production-audit: InterfaceIndex로 그룹핑 — 단일 NIC의 multi-IP가 분리되지 않도록 #}
           {%- set key = (n.interface_index | default(n.mac | default(n.name))) | string -%}
-          {# prefix_length → subnet_mask 자동 계산 (Linux 일관) #}
+          {# windows-audit (2026-04-29): prefix_length → subnet_mask 자동 계산 (Linux 일관) #}
           {%- set p = n.prefix | default(0) | int -%}
           {%- set mask = none -%}
           {%- if p > 0 and p <= 32 -%}
-            {# p>0 가드(위 if)로 (1 if p==0 ...) 는 dead branch — 제거 (동작 동일) #}
+            {# Round 15: p>0 가드(위 if)로 (1 if p==0 ...) 는 dead branch — 제거 (동작 동일) #}
             {%- set bits = 4294967296 - (2 ** (32 - p)) -%}
             {%- set mask = '%d.%d.%d.%d' % ((bits // 16777216) % 256, (bits // 65536) % 256, (bits // 256) % 256, bits % 256) -%}
           {%- endif -%}
@@ -96,9 +98,7 @@
               'mac':         n.mac  | default(none),
               'mtu':         n.mtu  | default(none),
               'speed_mbps':  n.speed_mbps | default(none),
-              {# JSON null status(미surface adapter)는 'is defined' 통과 → None|lower='none'
-                 누설. truthy 체크로 None/''/undefined 모두 'unknown' fallback (memory/cpu fix 동일 class). #}
-              'link_status': (n.status | lower) if n.status else 'unknown',
+              'link_status': ('up' if (n.status | default('') | lower) in ['up','connected','linkup','active'] else ('down' if (n.status | default('') | lower) in ['down','disconnected','disabled','offline','linkdown','not present','notpresent'] else 'unknown')),
               'is_primary':  n.is_primary | default(false),
               'addresses':   [addr]
             }}) -%}
@@ -108,14 +108,14 @@
       {{ grouped.values() | list }}
   no_log: true
 
-# network.summary grouping
+# cycle-016 (2026-04-29): network.summary grouping
 - name: "windows | network | compute summary groups"
   ansible.builtin.set_fact:
     _w_net_summary: >-
       {%- set ns = namespace(groups=[], seen={}) -%}
       {%- for n in (_w_norm_interfaces | default([])) -%}
         {%- set sp = n.speed_mbps | default(none) -%}
-        {# speed 없는(null/0) NIC(disconnected/virtual)는 summary group 제외 —
+        {# Round 16: speed 없는(null/0) NIC(disconnected/virtual)는 summary group 제외 —
            Linux(gather_network.yml line 157) 와 동일 가드. 'None' 키 group 누설 차단. #}
         {%- if sp is not none and (sp | int) > 0 -%}
           {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
@@ -132,7 +132,7 @@
       {{ {'groups': ns.groups} }}
   no_log: true
 
-# Linux 와 일관 — driver_map 추가 + adapters/ports 빈 list
+# cycle-016 Phase P: Linux 와 일관 — driver_map 추가 + adapters/ports 빈 list
 - name: "windows | network | NIC driver map (Get-NetAdapter)"
   ansible.windows.win_shell: |
     Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -or $_.MediaConnectionState -eq 'Connected' } | ForEach-Object {

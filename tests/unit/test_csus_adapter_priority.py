@@ -1,17 +1,21 @@
-"""HP CSUS 3200 회귀 — vendor=hp 오선택 + hardware null 방지.
+"""HP CSUS 3200 사이트 사고 회귀 — vendor=hp 오선택 + hardware null fix.
 
-대상: HPE Compute Scale-up Server 3200 (CSUS 3200)
-수집 시 envelope vendor 는 'hpCsus' 여야 하고 data.hardware.vendor/model 은 null 이 아니어야 한다.
+cycle 2026-06-04 (사용자 사이트 실측): HPE Compute Scale-up Server 3200 (CSUS 3200)
+수집 시 envelope vendor='hp' (→ 'hpCsus' 여야 함) + data.hardware.vendor/model=null.
 
-검증 동작:
-  - 무인증 probe 벤더 감지가 "Compute Scale-up Server 3200" 시그니처를 인식.
-  - hpe_ilo6 (priority=100) 은 model_patterns 부재라 실격되지 않으므로, CSUS(102)/
-    Superdome(101) 이 iLO6 catch-all 위에 위치해 모델 매치 우선권을 가짐.
-  - _BMC_PRODUCT_HINTS 에 'compute scale-up server' / 'csus 3200' → 'hpe' (복합 키만).
-  - gather_system 이 System.Manufacturer/Model 부재 시 Chassis.Manufacturer/Model 로 폴백
-    (result 값이 None 일 때만).
+근본 원인 (워크플로 adversarial 검증 + 실 adapter 시뮬레이션):
+  - B1: 무인증 probe 벤더 감지에 "Compute Scale-up Server 3200" 시그니처 부재.
+  - B2: hpe_ilo6 (priority=100) 은 model_patterns 부재라 절대 실격 안 됨 → 구 CSUS(96)/
+        Superdome(95) 가 모델 매치해도 priority 로 패배.
+  - A1: gather_system 이 System.Manufacturer/Model 부재 시 Chassis 폴백 없음.
+
+Fix:
+  - B1: _BMC_PRODUCT_HINTS 에 'compute scale-up server' / 'csus 3200' → 'hpe' (복합 키만).
+  - B2: hpe_csus_3200 priority 96→102, hpe_superdome_flex 95→101 (iLO6 catch-all 위).
+  - A1: gather_system Chassis.Manufacturer/Model 폴백 (result 값 None 일 때만, Additive).
 
 본 테스트는 실 adapter YAML + 실 adapter_common 점수 + 실 gather_system 코드로 검증 (mock 입력).
+ADR-2026-06-04-csus-adapter-priority.
 """
 from __future__ import annotations
 
@@ -87,7 +91,7 @@ def _out_vendor(adapter_id, rf_vendor):
     return ad.get(adapter_id) or vd.get(rf_vendor, rf_vendor)
 
 
-# ── priority 일관성 ──────────────────────────────────────────────────────
+# ── B2: priority 일관성 ──────────────────────────────────────────────────────
 
 
 def test_csus_superdome_priority_above_ilo6_below_ilo7():
@@ -102,7 +106,7 @@ def test_csus_superdome_priority_above_ilo6_below_ilo7():
     )
 
 
-# ── 실 사고 시나리오 — CSUS 모델 → hpCsus 선택 (firmware 비어도) ───────
+# ── B1+B2: 실 사고 시나리오 — CSUS 모델 → hpCsus 선택 (firmware 비어도) ───────
 
 
 def test_csus_model_selects_csus_not_ilo6_firmware_empty():
@@ -127,7 +131,7 @@ def test_superdome_model_selects_superdome_firmware_empty():
     assert _out_vendor(winner, "hpe") == "hpCsus"
 
 
-# ── 회귀: 정상 HPE / Dell ──────────────────────────────────────────────────
+# ── 무회귀: 정상 HPE / Dell ──────────────────────────────────────────────────
 
 
 def test_normal_proliant_gen11_still_ilo6():
@@ -145,7 +149,7 @@ def test_normal_proliant_gen12_still_ilo7():
 
 
 def test_empty_facts_hpe_still_ilo7_unchanged():
-    """facts 전부 비면 priority 최상위 iLO7 — 이 동작을 바꾸지 않음."""
+    """facts 전부 비면 priority 최상위 iLO7 — B2 가 이 동작을 바꾸지 않음."""
     facts = {"vendor": "HPE", "model": "", "firmware": ""}
     assert _select(facts) == "redfish_hpe_ilo7"
 
@@ -157,15 +161,15 @@ def test_dell_unaffected_by_b2():
     assert _out_vendor(winner, "dell") == "dell"
 
 
-# ── 무인증 probe 벤더 감지 ───────────────────────────────────────────────
+# ── B1: 무인증 probe 벤더 감지 ───────────────────────────────────────────────
 
 
-def test_detect_csus_product_as_hpe():
+def test_b1_detect_csus_product_as_hpe():
     assert rg._detect_vendor_from_service_root({"Product": "Compute Scale-up Server 3200"}) == "hpe"
     assert rg._detect_vendor_from_service_root({"Name": "CSUS 3200 Redfish Service"}) == "hpe"
 
 
-def test_no_collision_other_vendors():
+def test_b1_no_collision_other_vendors():
     """복합 키만 추가 → 비-HPE Product/Name 와 substring 충돌 없음."""
     assert rg._detect_vendor_from_service_root({"Product": "Integrated Dell Remote Access Controller"}) == "dell"
     assert rg._detect_vendor_from_service_root({"Product": "Cisco Systems Inc"}) == "cisco"
@@ -176,7 +180,7 @@ def test_no_collision_other_vendors():
     assert "compute" not in rg._BMC_PRODUCT_HINTS
 
 
-# ── gather_system Chassis 폴백 ───────────────────────────────────────────
+# ── A1: gather_system Chassis 폴백 ───────────────────────────────────────────
 
 
 def _patch_get(monkeypatch, system_data, chassis_data):
@@ -201,7 +205,7 @@ def test_a1_chassis_fallback_fills_null_hardware(monkeypatch):
 
 
 def test_a1_does_not_override_present_values(monkeypatch):
-    """정상 Dell: System 값 존재 → Chassis 가 덮어쓰지 않음 (회귀 차단)."""
+    """정상 Dell: System 값 존재 → Chassis 가 덮어쓰지 않음 (무회귀)."""
     _patch_get(
         monkeypatch,
         {"Manufacturer": "Dell Inc.", "Model": "PowerEdge R760", "SerialNumber": "S", "UUID": "u2"},
@@ -245,7 +249,7 @@ def test_a1b_serviceroot_product_model_fallback(monkeypatch):
 
 
 def test_a1b_product_ignored_when_system_model_present(monkeypatch):
-    """정상 vendor: System.Model 존재 → product_hint 무시 (회귀 차단)."""
+    """정상 vendor: System.Model 존재 → product_hint 무시 (무회귀)."""
     _patch_get(
         monkeypatch,
         {"Manufacturer": "Dell Inc.", "Model": "PowerEdge R760", "SerialNumber": "S", "UUID": "u2"},
@@ -282,7 +286,7 @@ def test_bugc_cpu_model_fallback_jinja_render():
     # CSUS partition: per-proc 비고 ProcessorSummary.Model 만
     a = t.render(_rf_d_cpus=[], _rf_d_system={"cpu_summary": {"model": "Intel(R) Xeon(R) Gold 6142 Processor"}})
     assert a.strip() == "Intel(R) Xeon(R) Gold 6142 Processor"
-    # 정상 vendor: per-proc model 우선 (summary 무시)
+    # 정상 vendor: per-proc model 우선 (summary 무시 — 무회귀)
     b = t.render(_rf_d_cpus=[{"model": "Intel(R) Xeon(R) Gold 6430"}], _rf_d_system={"cpu_summary": {"model": "X"}})
     assert b.strip() == "Intel(R) Xeon(R) Gold 6430"
     # 둘 다 없으면 None

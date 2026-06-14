@@ -1,24 +1,24 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: Dell Inc. / Dell EMC
 # Firmware: iDRAC 8 — 2.x / 3.x / 4.x
 # Generation: idrac8
 # Generation Year: "2014-2018 (PowerEdge 13G)"
 # Redfish Introduction: "DSP0268 v1.4+"
 # Origin: Dell support.dell.com / Redfish API guide (iDRAC 8)
-# Last sync: 2026-05-11 (capability + origin 보강)
+# Last sync: 2026-05-11 (M-H1 — capability + origin 보강)
 # Notes: PowerEdge R630/R730/R930/T630 등 13G 시스템. 일부 endpoint 비표준 가능.
-# Sources (lab 부재):
+# Sources (rule 96 R1-A — lab 부재):
 #   - https://developer.dell.com/apis/2978/versions/2/docs/   (iDRAC8 spec)
 #   - https://www.dell.com/support/manuals/en-us/idrac8-lifecycle-controller-v2.30.30.30/
 #   - https://infohub.delltechnologies.com/p/poweredge-13th-generation-servers-redfish/   (13G overview)
 # Lab status: 부재 — iDRAC10 만 사이트 검증 (iDRAC8 lab 도입 시 fixture 캡처)
-# 검증 기준: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json 참조
+# Tested against: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json + tests/evidence/ 참조
 # Storage strategy: standard storage path (iDRAC8 2.30+ 부터 표준 Storage 지원)
 # Power strategy: Power deprecated path only (PowerSubsystem 미도입 시기) +
-#                 PowerSubsystem fallback 경로 지원
+#                 M-D3 W1 fallback 코드 적용 (cycle 2026-05-06 Additive only)
 # OEM namespace: Oem.Dell
-# Next action: lab 도입 후 iDRAC8 사이트 실측 fixture 캡처
+# Next action: lab 도입 후 별도 cycle (iDRAC8 사이트 실측 fixture 캡처)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_dell_idrac8
 channel: redfish
@@ -38,7 +38,7 @@ capabilities:
     - storage
     - network
     - firmware
-    - power  # PowerSubsystem fallback 경로 지원
+    - power  # M-D3 W1 (cycle 2026-05-06): cycle 2026-05-01 PowerSubsystem fallback 코드 적용 — Additive only
 
 collect:
   strategy: standard_plus_oem
@@ -52,7 +52,7 @@ normalize:
 credentials:
   profile: "dell"
   fallback_profiles: []
-  # AccountService 진입점 — vault/redfish/dell.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/redfish/dell.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: dell_fallback_1, role: recovery }
     - { vault_label: dell_fallback_2, role: recovery }

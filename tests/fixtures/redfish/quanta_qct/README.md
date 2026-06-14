@@ -1,6 +1,6 @@
 # Quanta QCT BMC mock fixture — QuantaGrid D54Q-2U (OpenBMC base)
 
-> Lab 부재 vendor mock fixture.
+> M-F2 cycle 2026-05-07-all-vendor-coverage — lab 부재 vendor mock fixture.
 
 ## 메타
 
@@ -12,7 +12,7 @@
 | Firmware | obmc-1.05 |
 | Redfish version | 1.9.0 |
 | OEM namespace | `Oem.Quanta_Computer_Inc` (System) / `Oem.OpenBmc` (Manager) |
-| Lab | 부재 — web sources 기반 |
+| Lab | 부재 — web sources 기반 (rule 96 R1-A) |
 
 ## Sources
 
@@ -46,7 +46,7 @@
 ## 검증 포인트
 
 - adapter 선택: `redfish_quanta_qct_bmc` (priority=80)
-- OEM 추출 우선순위: `Oem.Quanta_Computer_Inc` → `Oem.QCT` → `Oem.OpenBmc` (collect_oem.yml)
+- OEM 추출 우선순위: `Oem.Quanta_Computer_Inc` → `Oem.QCT` → `Oem.OpenBmc` (collect_oem.yml — M-F1)
 - Manager URI: `/redfish/v1/Managers/bmc` (OpenBMC 표준)
 - System URI: `/redfish/v1/Systems/system` (OpenBMC 표준)
 

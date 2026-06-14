@@ -64,7 +64,7 @@
     "bmc_ip": null,                                     // BMC IP (Redfish 채널만 채워짐. OS/ESXi 는 null)
     "host_ip": "10.100.64.135"                          // 호출자가 전달한 service_ip / bmc_ip
   },
-  "errors": [],                                         // 수집 중 errors (warning 수준이면 status=success 와 공존 가능)
+  "errors": [],                                         // 수집 중 errors (warning 수준이면 status=success 와 공존 가능 — rule 13 R8)
   "data": {                                             // 실제 수집된 raw 데이터 (섹션별 dict). not_supported / failed 섹션은 null 또는 빈 list
     "firmware": [],
     "memory": {
@@ -237,5 +237,5 @@
       }
     }
   },
-  "schema_version": "1"                                 // envelope schema 버전 — "1" 고정
+  "schema_version": "1"                                 // envelope schema 버전 — "1" 고정 (rule 13 R5)
 }

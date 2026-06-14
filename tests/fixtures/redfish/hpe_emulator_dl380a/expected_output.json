@@ -8,7 +8,8 @@
     "power",
     "processors",
     "storage",
-    "system"
+    "system",
+    "thermal"
   ],
   "data": {
     "bmc": {
@@ -30,7 +31,7 @@
       "health": "OK",
       "ip": "127.0.0.1",
       "last_reset_time": null,
-      "mac_address": "7C:A6:2A:40:C3:E4",
+      "mac_address": "7c:a6:2a:40:c3:e4",
       "manager_type": "BMC",
       "model": "iLO 6",
       "name": "iLO",
@@ -621,7 +622,7 @@
           "firmware_version": "28.43.1014",
           "id": "DE081000",
           "link_status": "up",
-          "mac": null,
+          "mac": "58:a2:e1:03:96:f2",
           "manufacturer": "MLNX",
           "model": "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter",
           "name": "NetworkAdapter",
@@ -637,7 +638,7 @@
         {
           "adapter_id": "DE081000",
           "adapter_model": "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter",
-          "associated_address": null,
+          "associated_address": "58:a2:e1:03:96:f2",
           "current_link_speed_mbps": 100000,
           "health": "OK",
           "link_state": "Enabled",
@@ -650,7 +651,7 @@
         {
           "adapter_id": "DE081000",
           "adapter_model": "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter",
-          "associated_address": null,
+          "associated_address": "58:a2:e1:03:96:f3",
           "current_link_speed_mbps": 100000,
           "health": "OK",
           "link_state": "Enabled",
@@ -930,7 +931,7 @@
       "cpu_summary": {
         "core_count": null,
         "count": 2,
-        "health": null,
+        "health": "OK",
         "logical_processor_count": null,
         "model": "INTEL(R) XEON(R) GOLD 6530"
       },
@@ -972,7 +973,8 @@
         "state": "Enabled"
       },
       "uuid": "39343550-3330-4D32-3244-324A30304C34"
-    }
+    },
+    "thermal": {}
   },
   "error_count": 0,
   "failed_sections": [],

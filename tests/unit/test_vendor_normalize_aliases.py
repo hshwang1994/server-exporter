@@ -1,19 +1,19 @@
-"""redfish `_normalize_vendor_from_aliases` 단위 회귀 (cross-channel reference).
+"""redfish `_normalize_vendor_from_aliases` 단위 회귀 (AR-1 cross-channel reference, 2026-06-08).
 
-배경:
-    `vendor` envelope 필드는 채널 무관 canonical 이어야 한다. redfish 경로의
+배경 (AUDIT-2026-05-29 AR-1 / rule 95 R1 / rule 50 R1):
+    `vendor` envelope 필드는 채널 무관 canonical 이어야 한다(rule 50 R1). redfish 경로의
     정규화 정본은 `_normalize_vendor_from_aliases` 인데 **직접 단위 테스트가 없었다**
-    (production code = bug 후보). 본 파일이 그 reference 동작을 고정한다.
+    (production code = bug 후보, rule 95). 본 파일이 그 reference 동작을 고정한다.
 
     그 알고리즘 = (1) 정확 매칭 → (2) **부분(substring) 매칭** → (3) 'unknown'.
     핵심은 (2): "Dell Inc"(마침표 없음) 같은 변형도 substring 으로 'dell' 로 수렴한다.
 
-    divergence (esxi 측 미해결 — Jenkins Agent 후속):
+    AR-1 divergence (esxi 측 미해결 — Jenkins Agent 후속):
         `esxi-gather/site.yml` 의 inline Jinja2 정규화는 **정확 매칭만** 하고 substring
         fallback 이 없어, 같은 "Dell Inc" 가 redfish='dell' ↔ esxi=raw('Dell Inc') 로
         divergence 한다 (envelope `vendor` 필드 채널 불일치). 본 테스트는 redfish reference
         를 잠가, esxi 가 이 동작에 맞춰 고쳐질 때의 기준선이 된다 (full parity 는
-        ansible-playbook 필요).
+        ansible-playbook 필요 → NEXT_ACTIONS AR-1).
 """
 from __future__ import annotations
 
@@ -55,9 +55,9 @@ def test_exact_alias_match(mfr_lower, canon):
     assert _norm(mfr_lower) == canon
 
 
-# ── 2차: 부분(substring) 매칭 — 핵심 (esxi 가 빠뜨린 fallback) ──────────
+# ── 2차: 부분(substring) 매칭 — AR-1 의 핵심 (esxi 가 빠뜨린 fallback) ──────────
 @pytest.mark.parametrize("mfr_lower,canon", [
-    ("dell inc", "dell"),                 # 마침표 없음 — 대표 케이스
+    ("dell inc", "dell"),                 # 마침표 없음 — AR-1 대표 케이스
     ("dell inc. poweredge r740", "dell"), # alias superstring
     ("hpe proliant dl380", "hpe"),
     ("hewlett packard enterprise company", "hpe"),
@@ -67,14 +67,14 @@ def test_exact_alias_match(mfr_lower, canon):
 def test_substring_fallback_match(mfr_lower, canon):
     """부분 매칭(2차) — 변형 문자열이 canonical 로 수렴.
 
-    이 fallback 이 redfish 에는 있고 esxi inline 에는 없다 → divergence 의 원인.
+    이 fallback 이 redfish 에는 있고 esxi inline 에는 없다 → AR-1 divergence 의 원인.
     redfish reference 가 substring 수렴함을 고정(회귀 방어 + esxi fix 기준선).
     """
     assert _norm(mfr_lower) == canon
 
 
 def test_ar1_reference_case_dell_inc_no_period():
-    """대표: 'dell inc'(마침표 없음) → redfish 는 'dell' 로 정규화.
+    """AR-1 대표: 'dell inc'(마침표 없음) → redfish 는 'dell' 로 정규화.
 
     esxi inline 은 정확 매칭만 하므로 raw('dell inc') 를 그대로 반환 → vendor 필드
     채널 divergence. 본 assert 가 redfish 기준선이며, esxi 수정 후 동일 결과여야 한다.
@@ -94,7 +94,7 @@ def test_unmatched_returns_unknown(mfr_lower):
 
 
 def test_known_vendors_all_canonical():
-    """대표 5 vendor 의 흔한 표기가 전부 canonical 로 수렴."""
+    """대표 5 vendor 의 흔한 표기가 전부 canonical 로 수렴(rule 50 R1)."""
     cases = {
         "dell inc.": "dell", "hpe": "hpe", "lenovo": "lenovo",
         "supermicro": "supermicro", "cisco": "cisco",

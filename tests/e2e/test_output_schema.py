@@ -1,7 +1,7 @@
-"""공통 출력 구조 검증.
+"""CM-02, CM-03: 공통 출력 구조 검증.
 
-- schema_version == "1"
-- correlation 필드 (system_uuid, serial_number) 존재 및 형식
+- CM-03: schema_version == "1"
+- CM-02: correlation 필드 (system_uuid, serial_number) 존재 및 형식
 - 공통: 최상위 키, meta.adapter_id 존재 및 비어 있지 않음
 """
 
@@ -30,12 +30,12 @@ class TestOutputSchema:
     """모든 baseline에 대해 공통 구조를 검증한다."""
 
     def test_common_top_keys_and_schema_version(self, baseline_path):
-        """최상위 키 + schema_version == '1' + meta.adapter_id."""
+        """CM-03: 최상위 키 + schema_version == '1' + meta.adapter_id."""
         output = load_json(baseline_path)
         assert_common_structure(output)
 
     def test_correlation_fields(self, baseline_path):
-        """correlation 필드 존재 및 UUID 형식."""
+        """CM-02: correlation 필드 존재 및 UUID 형식."""
         output = load_json(baseline_path)
         assert_correlation_fields(output)
 

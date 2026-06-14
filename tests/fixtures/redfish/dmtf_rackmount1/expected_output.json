@@ -6,7 +6,8 @@
     "network",
     "power",
     "processors",
-    "system"
+    "system",
+    "thermal"
   ],
   "data": {
     "bmc": {
@@ -27,7 +28,7 @@
       "health": "OK",
       "ip": "192.168.0.10",
       "last_reset_time": null,
-      "mac_address": "23:11:8A:33:CF:EA",
+      "mac_address": "23:11:8a:33:cf:ea",
       "manager_type": "BMC",
       "model": "Joo Janta 200",
       "name": "BMC",
@@ -346,7 +347,8 @@
         "state": "Enabled"
       },
       "uuid": "38947555-7742-3448-3784-823347823834"
-    }
+    },
+    "thermal": {}
   },
   "error_count": 2,
   "failed_sections": [

@@ -1,27 +1,27 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: HPE / Hewlett Packard Enterprise
 # Firmware: iLO 4 — 2.x (2.30+)
 # Generation: ilo4
 # Generation Year: "2014-2017 (ProLiant Gen9)"
 # Redfish Introduction: "DSP0268 v1.0+"
 # Origin: HPE iLO 4 Redfish API documentation
-# Last sync: 2026-05-11 (SmartStorage / Oem.Hp variant 매트릭스 보강)
+# Last sync: 2026-05-11 (M-H2 — SmartStorage / Oem.Hp variant 매트릭스 보강)
 # Notes: ProLiant Gen9 (DL360 Gen9 / DL380 Gen9 / ML350 Gen9 등). Redfish 부분 지원.
-# Sources (lab 부재):
+# Sources (rule 96 R1-A — lab 부재):
 #   - https://hewlettpackard.github.io/ilo-rest-api-docs/ilo4/   (iLO 4 REST API guide)
 #   - https://techlibrary.hpe.com/docs/iLO/ilo4_RESTfulAPI_GettingStarted.pdf
 #   - https://servermanagementportal.ext.hpe.com/docs/redfishservices/ilos/ilo4/
 # Lab status: 부재 — iLO 7 만 사이트 검증 (iLO 4 lab 도입 시 fixture 캡처)
 # Storage strategy: smart_storage_only (legacy SmartStorage path)
 #   - 표준 Storage path 미지원 — /Systems/{id}/SmartStorage 만 사용
-#   - SimpleStorage fallback 경로 지원
+#   - M-D3 W2 (cycle 2026-05-06): A1 SimpleStorage fallback 코드 적용 — Additive only
 # Power strategy: Power deprecated only
-#   - PowerSubsystem→Power fallback 경로 지원
+#   - M-D3 W3 (cycle 2026-05-06): A2 PowerSubsystem→Power fallback 적용 — Additive only
 # OEM namespace: Oem.Hp (iLO 4 시기 — iLO 5+ 'Oem.Hpe' rebrand 전)
 #   - HPE OEM tasks (vendors/hpe/) 가 Oem.Hp / Oem.Hpe 양쪽 fallback 처리
-# 검증 기준: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json 참조
-# Next action: lab 도입 후 iLO 4 SmartStorage path 응답 형식 확정
+# Tested against: 실장비 검증 결과는 schema/baseline_v1/<vendor>_baseline.json + tests/evidence/ 참조
+# Next action: lab 도입 후 별도 cycle (iLO 4 SmartStorage path 응답 형식 확정)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_ilo4
 channel: redfish
@@ -38,10 +38,10 @@ capabilities:
     - bmc
     - cpu
     - memory
-    - storage  # SimpleStorage fallback 경로 지원
+    - storage  # M-D3 W2 (cycle 2026-05-06): A1 SimpleStorage fallback 코드 적용 — Additive only
     - network
     - firmware
-    - power    # PowerSubsystem→Power fallback 경로 지원
+    - power    # M-D3 W3 (cycle 2026-05-06): A2 PowerSubsystem→Power fallback 적용 — Additive only
 
 collect:
   strategy: standard_plus_oem
@@ -55,7 +55,7 @@ normalize:
 credentials:
   profile: "hpe"
   fallback_profiles: []
-  # AccountService 진입점 — vault/redfish/hpe.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/redfish/hpe.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: hpe_fallback, role: recovery }
     - { vault_label: hpe_current,  role: recovery }

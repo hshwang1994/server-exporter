@@ -1,4 +1,4 @@
-"""redfish Round 16 robustness/correctness 회귀.
+"""redfish Round 16 robustness/correctness 회귀 (멀티에이전트 버그헌트).
 
   - gather_power: PowerControl 자체가 비-list 컨테이너(dict/int)일 때 crash 없이
     PSU 보존 (Round 3 #0 은 list-with-bad-element 만 커버, 컨테이너 타입은 미커버).

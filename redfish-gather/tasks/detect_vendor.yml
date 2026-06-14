@@ -49,7 +49,7 @@
     # 2026-05-11 fix: probe 무인증 시 data.bmc / data.system 이 None 가능 (HPE iLO 6 Gen11 사례).
     # `| default({}, true)` 의 두 번째 인자 true 는 None / empty / False 도 default 적용 — None.get() AttributeError 차단.
     #
-    # data.bmc/data.system 가 빈 경우 probe_facts (ServiceRoot
+    # T-01 (cycle 2026-05-11): data.bmc/data.system 가 빈 경우 probe_facts (ServiceRoot
     # 무인증 추출) fallback. HPE 한정 동작 — redfish_gather.py `_extract_probe_facts()` 가
     # vendor=='hpe' 분기에서만 model_hint/firmware_hint/manager_type 채움. Dell/Lenovo/
     # Cisco/Supermicro/Huawei/Inspur/Fujitsu/Quanta 는 probe_facts 가 {} → 기존 동작 동일.

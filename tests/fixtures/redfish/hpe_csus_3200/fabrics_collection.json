@@ -3,7 +3,7 @@
   "@odata.id": "/redfish/v1/Fabrics",
   "@odata.type": "#FabricCollection.FabricCollection",
   "Name": "Fabric Collection",
-  "_note": "lab 부재 — NUMAlink fabric 을 표준 Redfish Fabric 모델로 표현 (설명 모델).",
+  "_note": "lab 부재 — NUMAlink fabric 을 표준 Redfish Fabric 모델로 표현 (설명 모델). rule 96 R1-A.",
   "Members@odata.count": 1,
   "Members": [
     {"@odata.id": "/redfish/v1/Fabrics/FlexGrid"}

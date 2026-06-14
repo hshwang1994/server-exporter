@@ -1,5 +1,5 @@
 """
-`_extract_probe_facts()` 단위 테스트.
+T-01 (cycle 2026-05-11) `_extract_probe_facts()` 단위 테스트.
 
 `redfish_gather.py` 의 신규 함수가 HPE iLO 6 Gen11 ServiceRoot 무인증 응답에서
 model_hint / firmware_hint / manager_type 을 정확히 추출하는지 검증.
@@ -8,7 +8,7 @@ fixture: tests/fixtures/redfish/hpe_ilo6_v1_73/01_service_root.json
        (build #133 캡처 — DL380 Gen11 / iLO 6 v1.73)
 
 타 vendor (Dell/Lenovo/Cisco/Supermicro/Huawei/Inspur/Fujitsu/Quanta) 는 ServiceRoot
-가 BMC 제품명을 expose 하므로 빈 dict 반환 보장 — 기존 동작 유지.
+가 BMC 제품명을 expose 하므로 빈 dict 반환 보장 — 회귀 0.
 """
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def test_extract_probe_facts_hpe_ilo6_gen11(rfg, hpe_ilo6_service_root) -> None:
 
 
 def test_extract_probe_facts_other_vendors_empty(rfg, hpe_ilo6_service_root) -> None:
-    """타 vendor 분기 (기존 동작 유지) — 같은 root 라도 빈 dict 반환."""
+    """타 vendor 분기 (회귀 0 보장) — 같은 root 라도 빈 dict 반환."""
     for vendor in ("dell", "lenovo", "cisco", "supermicro", "huawei",
                    "inspur", "fujitsu", "quanta", "unknown"):
         facts = rfg._extract_probe_facts(hpe_ilo6_service_root, vendor)

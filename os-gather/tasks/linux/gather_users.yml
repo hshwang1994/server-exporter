@@ -68,7 +68,7 @@
             {%- set is_sys = (uid<1000 and uid!=0) or uname in ['nobody','nfsnobody']
                               or home.startswith('/var/') or home=='/nonexistent' -%}
             {%- if not is_sys or uname=='root' -%}
-              {# groups 도 namespace 에 포함 — if-block 안 redefinition 은 기존에도 정상 작동했지만 의도 명확화 #}
+              {# cycle 2026-05-07-post: groups 도 namespace 에 포함 — if-block 안 redefinition 은 기존에도 정상 작동했지만 의도 명확화 + Jinja namespace hook advisory silence #}
               {%- set ns = namespace(primary_grp='', groups=[]) -%}
               {%- for gn, gd in (getent_group|default({})).items() -%}
                 {%- if gd[1]|int == gid -%}{%- set ns.primary_grp = gn -%}{%- endif -%}
@@ -86,7 +86,7 @@
               }) -%}
             {%- endif -%}
           {%- endfor -%}
-          {# uid 는 문자열('0'/'1000') — sort(attribute='uid') 는 lexicographic
+          {# Round 16: uid 는 문자열('0'/'1000') — sort(attribute='uid') 는 lexicographic
              정렬이라 999 가 1000 뒤로(잘못) 감. int 키로 수치 정렬하되 출력 dict 에는
              보조 키를 노출하지 않음(map(attribute='u') 로 원본만 추출). #}
           {%- set _su = [] -%}
@@ -94,7 +94,7 @@
           {{ _su | sort(attribute='k') | map(attribute='u') | list }}
       no_log: true
 
-    # getent 부재 환경 (Alpine / distroless / busybox)
+    # F23 (cycle 2026-05-01): getent 부재 환경 (Alpine / distroless / busybox)
     # 에서 getent_passwd 가 undefined 또는 empty. root 는 정상 환경이면 항상
     # 존재하므로 빈 결과 = 진짜 미지원 신호 → 'not_supported' 분류 (errors[] noise
     # 차단). graceful failure 와 구분.
@@ -209,7 +209,7 @@
             {%- set is_sys = (uid < 1000 and uid != 0) or uname in ['nobody','nfsnobody']
                               or home.startswith('/var/') or home == '/nonexistent' -%}
             {%- if not is_sys or uname == 'root' -%}
-              {# groups 도 namespace 에 포함 — if-block 안 redefinition 은 기존에도 정상 작동했지만 의도 명확화 #}
+              {# cycle 2026-05-07-post: groups 도 namespace 에 포함 — if-block 안 redefinition 은 기존에도 정상 작동했지만 의도 명확화 + Jinja namespace hook advisory silence #}
               {%- set ns = namespace(primary_grp='', groups=[]) -%}
               {%- for gn, gd in (_l_raw_group | default({})).items() -%}
                 {%- if gd[1] | int == gid -%}{%- set ns.primary_grp = gn -%}{%- endif -%}
@@ -227,7 +227,7 @@
               }) -%}
             {%- endif -%}
           {%- endfor -%}
-          {# uid 는 문자열('0'/'1000') — sort(attribute='uid') 는 lexicographic
+          {# Round 16: uid 는 문자열('0'/'1000') — sort(attribute='uid') 는 lexicographic
              정렬이라 999 가 1000 뒤로(잘못) 감. int 키로 수치 정렬하되 출력 dict 에는
              보조 키를 노출하지 않음(map(attribute='u') 로 원본만 추출). #}
           {%- set _su = [] -%}
@@ -235,7 +235,7 @@
           {{ _su | sort(attribute='k') | map(attribute='u') | list }}
       no_log: true
 
-    # raw 경로에서도 getent 명령 부재 시 _l_raw_passwd
+    # F23 (cycle 2026-05-01): raw 경로에서도 getent 명령 부재 시 _l_raw_passwd
      # 빈 dict. root 는 정상 환경이면 항상 응답 → 빈 결과 = 진짜 미지원.
     - name: "linux | users | build fragment (raw)"
       ansible.builtin.set_fact:

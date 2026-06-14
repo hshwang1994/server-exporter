@@ -1,8 +1,8 @@
-"""adapter_common fault-injection 회귀.
+"""adapter_common fault-injection 회귀 (Round 1 멀티에이전트 검출 — rule 95 R1).
 
 배경: adapter 선택은 벤더 자동 감지의 핵심. probe_facts(외부 BMC ServiceRoot 유래)나
 내부 adapter YAML 의 오염 값이 loader 전체를 죽이거나 잘못된 매칭을 유발할 수 있다.
-confirmed:
+Round 1 적대적 검증 confirmed:
   - #4 normalize_vendor: 비-str vendor(BMC Manufacturer=숫자) → .strip() AttributeError
   - #3 pattern_match_any: 비-str pattern → re.search/.lower() crash
   - #5 adapter_score: priority='high' → int() ValueError (loader 전체 실패)
@@ -82,7 +82,7 @@ def test_normalize_vendor_whitespace_only_returns_none():
 
 # Round 12 — adapter_common string-method/scalar sweep
 def test_adapter_matches_non_str_os_type():
-    """os_type 가 비-str(int) → os_type.lower() AttributeError 방어."""
+    """os_type 가 비-str(int) → os_type.lower() AttributeError 방어 (UNWRAPPED P0)."""
     adapter = {"match": {"os_type": 123}}
     assert adapter_matches(adapter, {"detected_os": "linux"}) in (True, False)  # 가드 전: int.lower
 

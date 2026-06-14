@@ -1,6 +1,6 @@
 # common/tasks/normalize/ — Fragment 정규화 빌더
 
-> 각 gather 가 자기 fragment 만 만들고 (Fragment 철학), 본 디렉터리의 빌더들이 fragment → 누적 변수 → envelope 13 필드 로 조립.
+> 각 gather 가 자기 fragment 만 만들고 (rule 22), 본 디렉터리의 빌더들이 fragment → 누적 변수 → envelope 13 필드 (rule 13 R5) 로 조립.
 
 ## 8 빌더 역할표
 
@@ -9,7 +9,7 @@
 | `init_fragments.yml` | (없음) | `_merged_data` 빈 skeleton + 누적 list 5개 | gather 시작 시 누적 변수 초기화 (의무 호출) |
 | `merge_fragment.yml` | `_data_fragment` + 5 fragment list | `_merged_data` + 5 누적 list 갱신 | 각 gather 후 fragment → 누적 변수 병합 (의무 호출) |
 | `build_sections.yml` | `_all_sec_supported / collected / failed / unsupported` | `_norm_sections` (10 sections × success/failed/not_supported) | 섹션별 status 매트릭스 |
-| `build_status.yml` | `_norm_sections`, `_norm_errors` | `_out_status` (success/partial/failed) | 4 시나리오 A/B/C/D |
+| `build_status.yml` | `_norm_sections`, `_norm_errors` | `_out_status` (success/partial/failed) | 4 시나리오 A/B/C/D (rule 13 R8) |
 | `build_errors.yml` | `_all_errors` | `_norm_errors` (정규화된 errors 리스트) | error 정규화 + dedup |
 | `build_meta.yml` | `_started_at`, `_selected_adapter`, ansible_version 등 | `_meta` (started_at / finished_at / duration_ms / adapter_id / adapter_version / ansible_version) | meta 6 필드 |
 | `build_correlation.yml` | `_merged_data.system`, `_out_ip` 등 | `_correlation` (serial_number / system_uuid / bmc_ip / host_ip) | correlation 4 필드 |
@@ -48,7 +48,14 @@ flowchart TD
   classDef cb fill:#fdd,stroke:#c33,color:#000,stroke-width:2px
 ```
 
-## Fragment 변수 정본
+## 회귀 차단 (cycle 2026-05-07 추가)
+
+3 skeleton 파일 (init_fragments / build_empty_data / build_failed_output) 의 data skeleton 동기화 검증:
+```bash
+python scripts/ai/hooks/pre_commit_fragment_skeleton_sync.py --all
+```
+
+## Fragment 변수 정본 (rule 22 R7)
 
 각 gather 가 set 하는 5 변수 (변수 이름 공통, 값으로 자기 섹션):
 - `_data_fragment` (dict)

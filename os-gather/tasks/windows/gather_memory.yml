@@ -10,8 +10,8 @@
   failed_when: false
   no_log: true
 
-# slot 단위 emit + manufacturer/part_number/serial 추가
-# SMBIOSMemoryType 매핑 확장 (DDR/DDR2/DDR3/DDR4/DDR5/LPDDR*),
+# cycle-016 Phase L/N: slot 단위 emit + manufacturer/part_number/serial 추가
+# windows-audit (2026-04-29): SMBIOSMemoryType 매핑 확장 (DDR/DDR2/DDR3/DDR4/DDR5/LPDDR*),
 #   Speed→ConfiguredClockSpeed fallback (VMware Speed=null, ConfiguredClockSpeed=4800),
 #   SerialNumber 센티널(00000000/00000001/all-zeros) → null 정규화.
 - name: "windows | memory | Win32_PhysicalMemory slots"
@@ -77,7 +77,7 @@
             {%- set cap_gb = (cap_mb / 1024) | round(0, 'floor') | int -%}
             {%- set t = s.type | default(none) -%}
             {%- set sp = s.speed_mhz | default(none) -%}
-            {# JSON null Manufacturer/PartNumber 시 'None'(문자열) 누설 방어 —
+            {# Round 16: JSON null Manufacturer/PartNumber 시 'None'(문자열) 누설 방어 —
                default('') 는 undefined 만 치환하고 None|trim 은 'None' 이 됨. slots 루프
                (line 63-64) 와 동일하게 truthy 체크 후 trim. #}
             {%- set mfr = (s.manufacturer | default(none) | trim) if s.manufacturer else none -%}
@@ -125,7 +125,7 @@
         visible_mb: "{{ ansible_memtotal_mb | default(none) }}"
         free_mb:    "{{ ansible_memfree_mb  | default(none) }}"
         slots:      "{{ _w_mem_slots | default([]) }}"
-        # Win32_PhysicalMemory 기반 group summary
+        # cycle-016 (2026-04-29): Win32_PhysicalMemory 기반 group summary
         summary:    "{{ _w_mem_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
     _sections_supported_fragment: ['memory']
     _sections_collected_fragment: ['memory']

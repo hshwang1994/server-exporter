@@ -1,9 +1,9 @@
 # dmtf_rackmount1 — DMTF 표준 mockup 오프라인 fixture
 
-> [WARN] **DMTF-mockup-derived — 실장비 아님 / baseline 아님.** 본 fixture/golden 은
-> `schema/baseline_v1/` 실측 baseline 으로 **승격 금지**. DMTF 공식 표준 mockup(가공의
-> Manufacturer="Contoso" 등)이라 실 BMC 펌웨어 동작이 아니라 **표준 스키마 준수 응답** 의
-> 파싱 회귀만 보장한다.
+> [WARN] **DMTF-mockup-derived — 실장비 아님 / baseline 아님.** rule 21 R1 /
+> rule 25 R7-B 에 따라 본 fixture/golden 은 `schema/baseline_v1/` 실측 baseline 으로
+> **승격 금지**. DMTF 공식 표준 mockup(가공의 Manufacturer="Contoso" 등)이라
+> 실 BMC 펌웨어 동작이 아니라 **표준 스키마 준수 응답** 의 파싱 회귀만 보장한다.
 
 ## 존재 이유 (커버리지 갭)
 
@@ -13,7 +13,7 @@ redfish_gather.py 의 **표준(vendor-agnostic, OEM 미사용) 추출 경로** �
 재생해 **벤더 미매치 → 표준 경로 + graceful degradation(legacy Power, SimpleStorage
 fallback 등)** 을 결정적으로 회귀한다. vendor 감지 결과 `unknown` 가 그 증거.
 
-## 출처
+## 출처 (rule 96 R1-A / rule 21 R2)
 
 - source: DMTF Redfish Mockup Bundle (DSP2043, v2021.4) — **BSD-3-Clause**
 - mockup: `public-rackmount1`

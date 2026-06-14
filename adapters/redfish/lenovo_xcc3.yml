@@ -1,11 +1,11 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: Lenovo
 # Firmware: XCC3 — OpenBMC 기반 신 generation
 # Origin: Lenovo XCC3 REST API documentation (ThinkSystem V4)
 # Last sync: 2026-05-01 (web sources only — lab 부재)
 # Notes: ThinkSystem V4 (SR630 V4 / SR650 V4 / SR680a V4 등). 2025-2026 출하.
-# Sources (lab 부재):
+# Sources (rule 96 R1-A — lab 부재):
 #   - https://lenovopress.lenovo.com/lp2273-lenovo-xclarity-controller-3-xcc3
 #   - https://lenovopress.lenovo.com/lp2273.pdf
 #   - https://pubs.lenovo.com/xcc3-restapi/
@@ -13,8 +13,8 @@
 #   - https://lenovopress.lenovo.com/lp1991-thinksystem-v3-v4-server-firmware-and-drivers-best-practices-advanced-guide
 #   - https://lenovopress.lenovo.com/lp1971-thinksystem-sr630-v4-server
 #   - https://lenovopress.lenovo.com/lp2264-thinksystem-sr680a-v4-server
-# 검증 기준: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
-# Compatibility 가정 (web sources):
+# Tested against: lab 부재 (web sources only). 사용자 사이트 도입 시 fixture 캡처.
+# Compatibility 가정 (web sources, F55/F56 cycle 2026-05-01):
 #   - manufacturer: "Lenovo" (XCC1/XCC2 와 동일)
 #   - Manager URI: /redfish/v1/Managers/1 (XCC2 와 유사)
 #   - System URI: /redfish/v1/Systems/1
@@ -24,8 +24,8 @@
 #   - FPGA firmware separate item — UpdateService/FirmwareInventory/FPGA (gather 자동 cover)
 #   - ExtendedError.1.2.2.json OEM registry 신규 (server-exporter 미사용)
 #   - UEFI/BMC 설정 이름 형식 변경 (read-only 영향 작음)
-# HTTP 헤더 정책 (2026-04-30 사이트 이슈 관측):
-#   - Accept-only 헤더 패턴 유지 (사이트 BMC 1.17.0 reject 회피)
+# HTTP 헤더 정책 (cycle 2026-04-30 사이트 사고 학습 — F57/J2):
+#   - Accept-only 헤더 패턴 유지 (사용자 사이트 BMC 1.17.0 reject 회피)
 #   - OData-Version / User-Agent 추가 금지
 #   → redfish_gather.py _get() 의 공통 정책 그대로 사용
 # ──────────────────────────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ graceful_degradation:
 # - OpenBMC 기반 — 표준 Redfish 우선, OEM 의존 감소
 # - Redfish 1.17.0 / bundle 2024.3
 # - FPGA firmware separate (FirmwareInventory 자동 cover)
-# - Accept-only 헤더 정책 (사이트 BMC 1.17.0 reject 회피)
+# - Accept-only 헤더 (cycle 2026-04-30 사이트 hotfix 패턴 준수)
 vendor_notes:
   generation: xcc3
   base_platform: openbmc
@@ -99,4 +99,4 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Lenovo XCC3 장비 (ThinkSystem V4) — Redfish 완전 지원 가정."
+  not_supported_message: "Lenovo XCC3 장비 (ThinkSystem V4) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."

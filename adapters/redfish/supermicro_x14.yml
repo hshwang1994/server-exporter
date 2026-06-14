@@ -1,15 +1,15 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: Supermicro / Super Micro Computer
 # Firmware: X14 / H14 generation BMC (AST2600 + 신 features)
 # Origin: Supermicro X14/H14 BMC documentation
 # Last sync: 2026-05-01 (web sources only — lab 부재)
 # Notes: 2024-2025 출하. Redfish 1.21.0 / bundle 2024.3.
-# Sources (lab 부재):
+# Sources (rule 96 R1-A — lab 부재):
 #   - https://www.supermicro.com/manuals/other/BMC_IPMI_X14_H14.pdf
 #   - https://www.supermicro.com/manuals/other/RedfishUserGuide.pdf
 #   - https://www.supermicro.com/support/resources/bios_ipmi.php?type=BMC
-# 검증 기준: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
+# Tested against: lab 부재 (web sources only). 사용자 사이트 도입 시 fixture 캡처.
 # Compatibility 가정:
 #   - manufacturer / Manager URI / System URI / OEM namespace 기존 X12/X13 와 동일
 #   - 신 features (server-exporter read-only 영향):
@@ -20,8 +20,8 @@
 #     * iHDT (intelligent hardware diagnostic test) — read-only 영향 없음
 #     * CPU power capping — read-only 영향 없음
 #     * Redfish 1.21.0 — server-exporter raw passthrough → 영향 없음
-# Lab status: 부재 — web sources only (사이트 BMC 0대, 2026-05-07)
-# Next action: X14/H14 (Granite Rapids / Turin) lab 도입 후 Redfish 1.21.0 신 features + CPLD APIs 검증
+# Lab status: 부재 — web sources only (rule 96 R1-A — 사이트 BMC 0대, cycle 2026-05-07 Q2)
+# Next action: X14/H14 (Granite Rapids / Turin) lab 도입 후 별도 cycle (Redfish 1.21.0 신 features + CPLD APIs 검증)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_supermicro_x14
 channel: redfish
@@ -29,7 +29,7 @@ priority: 110
 
 match:
   vendor: ["Supermicro", "Super Micro Computer, Inc.", "Super Micro Computer", "SUPERMICRO"]
-  # X14 (Intel) + H14 (AMD EPYC 신세대) — 동세대 BMC 공유
+  # X14 (Intel) + H14 (AMD EPYC 신세대) — 동세대 BMC 공유 (이미 cycle 2026-05-01 포함)
   model_patterns: ["X14", "x14", "H14", "h14"]
 
 capabilities:
@@ -56,7 +56,7 @@ normalize:
 credentials:
   profile: "supermicro"
   fallback_profiles: []
-  # AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: supermicro_factory, role: recovery }
 
@@ -80,9 +80,9 @@ vendor_notes:
   cpld_firmware_inventory: true
   power_subsystem_introduction: true     # PowerSubsystem 표준 지원 (X12+)
   storage_strategy_evolution: standard   # 표준 Storage path 지원
-# Lab status: 부재 — web sources only (Supermicro 사이트 BMC 0대)
-# Next action: lab 도입 후 capability 보정
+# Lab status: 부재 — 사용자 명시 2026-05-07 Q2 (Supermicro 사이트 BMC 0대)
+# Next action: lab 도입 후 별도 cycle — capability 보정 (rule 50 R2 단계 10)
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Supermicro X14/H14 계열 — Redfish 완전 지원 가정."
+  not_supported_message: "Supermicro X14/H14 계열 — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."

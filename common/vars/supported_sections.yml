@@ -24,6 +24,7 @@ all_sections:
   - firmware
   - users
   - power
+  - thermal          # cycle 2026-06-14 (Track 4): 온도/팬
 
 # 채널별 지원 섹션
 channel_sections:
@@ -37,6 +38,7 @@ channel_sections:
     - network
     - firmware
     - power
+    - thermal        # cycle 2026-06-14 (Track 4)
 
   os:
     - system

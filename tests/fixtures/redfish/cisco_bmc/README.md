@@ -1,6 +1,6 @@
-# Cisco BMC (legacy UCS C-series Standalone BMC) fixture
+# Cisco BMC (legacy UCS C-series Standalone BMC) fixture — M-H4 (cycle 2026-05-07)
 
-> Lab 부재 — web sources only. Legacy generation.
+> Lab 부재 — web sources only (rule 96 R1-A). Legacy generation.
 
 ## 출처
 

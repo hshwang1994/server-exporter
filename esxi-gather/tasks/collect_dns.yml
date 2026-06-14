@@ -1,7 +1,7 @@
 ---
 # esxi-gather/tasks/collect_dns.yml
 #
-# 잔류 미세 이슈 fix:
+# 잔류 미세 이슈 fix (Round 12 후속):
 #   vmware_host_facts / vmware_host_config_info 가 DNS 정보 미반환 케이스 우회.
 #   community.vmware.vmware_host_dns_info 모듈을 추가 호출하여 dns_servers / domain
 #   / search_domain 을 별도 fragment 로 받는다.
@@ -22,7 +22,7 @@
     username:       "{{ ansible_user }}"
     password:       "{{ ansible_password }}"
     validate_certs: false
-    # collect_runtime.yml + site.yml 패턴 일관 — 응답 dict 가 ESXi 구성
+    # Round 15: collect_runtime.yml + site.yml BUG#1 패턴 일관 — 응답 dict 가 ESXi 구성
     # hostname 으로 keyed 되므로 esxi_hostname 도 _e_hostname 사용 (미정의 시 _e_ip fallback).
     esxi_hostname:  "{{ _e_hostname | default(_e_ip) }}"
   register:    _e_dns_result

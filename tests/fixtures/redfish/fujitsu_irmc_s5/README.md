@@ -1,6 +1,6 @@
 # Fujitsu iRMC S5 mock fixture — PRIMERGY RX2540 M5
 
-> Lab 부재 vendor mock fixture.
+> M-E3 cycle 2026-05-07-all-vendor-coverage — lab 부재 vendor mock fixture.
 
 ## 메타
 
@@ -12,7 +12,7 @@
 | Firmware | iRMC S5 4.21F sdr 3.62 |
 | Redfish version | 1.8.0 |
 | OEM namespace | `Oem.ts_fujitsu` (primary) |
-| Lab | 부재 — web sources 기반 |
+| Lab | 부재 — web sources 기반 (rule 96 R1-A) |
 
 ## Sources
 
@@ -43,7 +43,7 @@
 
 - vendor 감지: `Fujitsu` / `FUJITSU` → `fujitsu`
 - adapter 선택: `redfish_fujitsu_irmc` (priority=80)
-- OEM namespace: `Oem.ts_fujitsu` 추출 (collect_oem.yml)
+- OEM namespace: `Oem.ts_fujitsu` 추출 (collect_oem.yml — M-E2)
 - generation: iRMC S5 (대표 generation)
 - Power schema: legacy (S5 는 PowerSubsystem 미도입 — S6 에서 도입)
 

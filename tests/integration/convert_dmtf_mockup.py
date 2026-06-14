@@ -1,7 +1,7 @@
 """DMTF Redfish 표준 mockup(DSP2043) 디렉터리 트리 → 오프라인 회귀 fixture 변환.
 
-배경:
-    본질적 제약은 lab 부재다. 특히 redfish_gather.py 의 **표준
+배경 (rule 96 R1-A / rule 21 R1 / rule 25 R7-B):
+    server-exporter 의 본질적 제약은 lab 부재다. 특히 redfish_gather.py 의 **표준
     (vendor-agnostic, OEM 미사용) 추출 경로** 는 오프라인 회귀 커버리지가 없었다 —
     기존 hpe_emulator_* 캡처는 전부 vendor=hpe(Oem.Hpe 경로), baseline 5종도 전부
     벤더 특화. OEM 확장이 전혀 없는 순수 표준 Redfish 서버는 한 번도 오프라인으로
@@ -9,7 +9,7 @@
 
     DMTF 공식 mockup(예: public-rackmount1, "Simple Rack-mounted Server")은
     `@odata.id` 경로별 `index.json` 트리이고 BSD-3-Clause 다. 이 구조는
-    test_hpe_emulator_replay 의 recording.json(`get::<path>`) 포맷에 1:1 매핑
+    test_hpe_emulator_replay 하네스의 recording.json(`get::<path>`) 포맷에 1:1 매핑
     된다 — 엔진의 `_p()`(`/redfish/v1/` prefix + trailing slash 제거)와 동일.
 
     **mockup != 실장비.** 산출 fixture/golden 은 schema/baseline_v1/ 실측 baseline 으로
@@ -172,10 +172,10 @@ def main() -> int:
     label = args.mockup_label or args.name
     readme = f"""# {args.name} — DMTF 표준 mockup 오프라인 fixture
 
-> [WARN] **DMTF-mockup-derived — 실장비 아님 / baseline 아님.** 본 fixture/golden 은
-> `schema/baseline_v1/` 실측 baseline 으로 **승격 금지**. DMTF 공식 표준 mockup(가공의
-> Manufacturer="Contoso" 등)이라 실 BMC 펌웨어 동작이 아니라 **표준 스키마 준수 응답** 의
-> 파싱 회귀만 보장한다.
+> [WARN] **DMTF-mockup-derived — 실장비 아님 / baseline 아님.** rule 21 R1 /
+> rule 25 R7-B 에 따라 본 fixture/golden 은 `schema/baseline_v1/` 실측 baseline 으로
+> **승격 금지**. DMTF 공식 표준 mockup(가공의 Manufacturer="Contoso" 등)이라
+> 실 BMC 펌웨어 동작이 아니라 **표준 스키마 준수 응답** 의 파싱 회귀만 보장한다.
 
 ## 존재 이유 (커버리지 갭)
 
@@ -185,7 +185,7 @@ redfish_gather.py 의 **표준(vendor-agnostic, OEM 미사용) 추출 경로** �
 재생해 **벤더 미매치 → 표준 경로 + graceful degradation(legacy Power, SimpleStorage
 fallback 등)** 을 결정적으로 회귀한다. vendor 감지 결과 `{output['vendor']}` 가 그 증거.
 
-## 출처
+## 출처 (rule 96 R1-A / rule 21 R2)
 
 - source: DMTF Redfish Mockup Bundle (DSP2043{', v' + args.dsp_version if args.dsp_version else ''}) — **BSD-3-Clause**
 - mockup: `{label}`

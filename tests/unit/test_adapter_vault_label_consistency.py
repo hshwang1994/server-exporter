@@ -1,19 +1,22 @@
-"""회귀 — adapter `recovery_accounts.vault_label` ↔ vendor 별 허용 label set 정합.
+"""M-A7 후속 회귀 — adapter `recovery_accounts.vault_label` ↔ vendor 별 허용 label set 정합.
 
-배경 (commit `a82afc4b`):
-  9 vendor recovery 자격 매트릭스 정착 후 30 adapter (`redfish_generic` 제외) 의
-  `recovery_accounts.vault_label` 을 vault 실 label 와 1:1 정합시킴. 본 회귀
-  테스트는 향후 adapter 추가/수정 시 drift 차단.
+배경 (cycle 2026-05-11 M-A7, commit `a82afc4b`):
+  M-A1~A6 (cycle 2026-05-11) 에서 9 vendor recovery 자격 매트릭스 정착 후
+  M-A7 에서 29 adapter (`redfish_generic` 제외) 의 `recovery_accounts.vault_label`
+  을 vault 실 label 와 1:1 정합시킴. 본 회귀 테스트는 향후 adapter 추가/수정 시
+  drift 차단.
 
 검증 항목 (정본 = `docs/21_vault-operations.md` §6.5):
-  1. 각 adapter (30) 의 `recovery_accounts` 가 비어있지 않음
+  1. 각 adapter (29) 의 `recovery_accounts` 가 비어있지 않음
   2. 각 `vault_label` 이 vendor 별 허용 set 에 포함
   3. 각 entry 에 `role: recovery` 명시
   4. vendor 는 파일명 prefix 또는 `credentials.profile` 기반
 
-검증 범위:
-  - adapter YAML 의 declare 만 정적 검증 (gather 코드는 건드리지 않음)
-  - 출력 envelope shape 와 무관
+원칙 준수:
+  - rule 13 R5 (envelope 정본) — 본 회귀는 정적 검증, envelope shape 변경 0
+  - rule 22 (Fragment) — 본 회귀는 adapter declare 만 검증, gather 코드 영향 0
+  - rule 92 R2 (Additive only) — 신규 회귀 1 파일 추가, 기존 회귀 변경 0
+  - rule 96 R1-B — 호출자 시스템 파싱 변경 0
 """
 from __future__ import annotations
 
@@ -25,7 +28,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[2]
 ADAPTERS_DIR = REPO / "adapters" / "redfish"
 
-# 정본 = docs/21_vault-operations.md §6.5
+# 정본 = docs/21_vault-operations.md §6.5 (cycle 2026-05-11 M-A7)
 VENDOR_ALLOWED_LABELS: dict[str, frozenset[str]] = {
     "dell": frozenset({
         "dell_fallback_1",
@@ -64,7 +67,7 @@ VENDOR_ALLOWED_LABELS: dict[str, frozenset[str]] = {
     }),
 }
 
-# 파일명 prefix → vendor canonical 매핑 (set membership 패턴)
+# 파일명 prefix → vendor canonical 매핑 (rule 12 R1 Allowed — set membership 패턴)
 PREFIX_TO_VENDOR: dict[str, str] = {
     "dell_": "dell",
     "hpe_": "hpe",
@@ -105,12 +108,12 @@ def _all_redfish_adapters() -> list[Path]:
 def test_adapter_directory_has_expected_count() -> None:
     """30 adapter (generic 제외) 가 존재. drift 감지 — adapter 추가/삭제 시 회귀 알림.
 
-    현재 30 adapter (hpe_csus_3200 포함).
+    cycle 2026-05-11 hpe-csus-add: 29 → 30 (hpe_csus_3200 신설).
     """
     adapters = _all_redfish_adapters()
     assert len(adapters) == 30, (
         f"adapters/redfish/ 비-generic adapter 개수 drift: {len(adapters)} (기대 30). "
-        f"adapter 추가/삭제 시 본 테스트 + docs/21 §6.5 카운트 동반 갱신."
+        f"adapter 추가/삭제 시 본 테스트 + docs/21 §6.5 + CLAUDE.md 카운트 동반 갱신."
     )
 
 
@@ -122,7 +125,7 @@ def test_vendor_allowed_labels_matrix_covers_9_vendors() -> None:
     }
 
 
-# ── 본 검증: 30 adapter × parametrize ────────────────────────────────────────
+# ── 본 검증: 29 adapter × parametrize ────────────────────────────────────────
 
 
 @pytest.mark.parametrize("adapter_path", _all_redfish_adapters(), ids=lambda p: p.name)
@@ -135,7 +138,7 @@ def test_adapter_recovery_accounts_non_empty(adapter_path: Path) -> None:
         f"{adapter_path.name}: credentials.recovery_accounts 가 list 아님 (got {type(recovery).__name__})"
     )
     assert len(recovery) >= 1, (
-        f"{adapter_path.name}: recovery_accounts 가 비어있음. 정합 위반."
+        f"{adapter_path.name}: recovery_accounts 가 비어있음. M-A7 정합 (cycle 2026-05-11) 위반."
     )
 
 

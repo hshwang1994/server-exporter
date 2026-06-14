@@ -218,7 +218,7 @@
           "mac": "6C:FE:54:3C:EC:90",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "linkdown",
+          "link_status": "down",
           "is_primary": false,
           "addresses": []
         }

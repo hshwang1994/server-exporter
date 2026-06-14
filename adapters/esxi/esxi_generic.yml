@@ -1,9 +1,9 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
 # Vendor: VMware ESXi (generic fallback)
-# Firmware: 검증 버전 없음 — 모든 버전 fallback
+# Firmware: tested_against [] — 모든 버전 fallback
 # Origin: server-exporter 정책 — 매치되는 세대 adapter 없을 때 graceful degradation
-# Last sync: 2026-04-27
+# Last sync: 2026-04-27 (hshwang1994)
 # Notes: priority=0 — 마지막 fallback. esxi_6x/7x/8x 매치 실패 시 선택.
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: esxi_generic

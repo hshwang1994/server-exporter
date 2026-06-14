@@ -1,6 +1,6 @@
 # Huawei iBMC 2.x mock fixture — FusionServer Pro RH2288 V5
 
-> Lab 부재 web sources 기반
+> cycle 2026-05-11 M-C3 — lab 부재 web sources 기반 (rule 96 R1-A)
 
 ## Vendor
 
@@ -10,7 +10,7 @@
 - BMC firmware: iBMC 2.85
 - Manager URI: `/redfish/v1/Managers/iBMC`
 
-## Web sources
+## Web sources (rule 96 R1-A)
 
 - https://support.huawei.com/enterprise/en/doc/EDOC1000163550/41dfb258/ibmc
 - https://github.com/Huawei/Huawei-iBMC-Cmdlets (Huawei 공식 PowerShell repo)
@@ -20,8 +20,9 @@
 
 ## lab 상태
 
-- **부재**
+- **부재** (사용자 명시 2026-05-01)
 - web sources 만으로 응답 형식 가정 — 사이트 fixture 도입 시 보정 의무
+- NEXT_ACTIONS 등재됨 (rule 50 R2 단계 10 / rule 96 R1-C)
 
 ## fixture 구성
 

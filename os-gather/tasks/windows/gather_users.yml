@@ -67,7 +67,7 @@
       {{ out }}
   no_log: true
 
-# Get-LocalUser / Win32_UserAccount 둘 다 미지원 환경
+# F23 (cycle 2026-05-01): Get-LocalUser / Win32_UserAccount 둘 다 미지원 환경
 # (Server Core 일부 lockdown / Nano Server 역사적 환경). win_shell rc != 0
 # 이고 결과 list 비어있으면 진짜 미지원 분류 (errors[] noise 차단).
 - name: "windows | users | build fragment"

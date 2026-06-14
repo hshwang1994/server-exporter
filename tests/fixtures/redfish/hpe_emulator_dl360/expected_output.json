@@ -8,7 +8,8 @@
     "power",
     "processors",
     "storage",
-    "system"
+    "system",
+    "thermal"
   ],
   "data": {
     "bmc": {
@@ -26,7 +27,7 @@
       "health": "OK",
       "ip": "127.0.0.1",
       "last_reset_time": null,
-      "mac_address": "5C:ED:8C:2E:56:3C",
+      "mac_address": "5c:ed:8c:2e:56:3c",
       "manager_type": "BMC",
       "model": "iLO 5",
       "name": "iLO",
@@ -501,7 +502,7 @@
           "firmware_version": "16.35.4030",
           "id": "DE080000",
           "link_status": "up",
-          "mac": null,
+          "mac": "88:e9:a4:6b:a8:ac",
           "manufacturer": "MLNX",
           "model": "Ethernet 10/25Gb 2-port SFP28 MCX512F-ACHT Adapter",
           "name": "NetworkAdapter",
@@ -517,7 +518,7 @@
         {
           "adapter_id": "DE080000",
           "adapter_model": "Ethernet 10/25Gb 2-port SFP28 MCX512F-ACHT Adapter",
-          "associated_address": null,
+          "associated_address": "88:e9:a4:6b:a8:ac",
           "current_link_speed_mbps": 25000,
           "health": "OK",
           "link_state": "Enabled",
@@ -530,7 +531,7 @@
         {
           "adapter_id": "DE080000",
           "adapter_model": "Ethernet 10/25Gb 2-port SFP28 MCX512F-ACHT Adapter",
-          "associated_address": null,
+          "associated_address": "88:e9:a4:6b:a8:ac",
           "current_link_speed_mbps": 25000,
           "health": "OK",
           "link_state": "Enabled",
@@ -661,7 +662,7 @@
       "cpu_summary": {
         "core_count": null,
         "count": 2,
-        "health": null,
+        "health": "OK",
         "logical_processor_count": null,
         "model": "Intel(R) Xeon(R) Silver 4310 CPU @ 2.10GHz"
       },
@@ -703,7 +704,8 @@
         "state": "Enabled"
       },
       "uuid": "39383250-3834-584D-5132-333930524857"
-    }
+    },
+    "thermal": {}
   },
   "error_count": 0,
   "failed_sections": [],

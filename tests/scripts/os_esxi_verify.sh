@@ -2,25 +2,25 @@
 # Round 9: OS/ESXi contract verification — live output 수집
 # 대상: Ubuntu, Windows, ESXi, RHEL(보조)
 #
-# 자격증명 처리:
+# production-audit (2026-04-29):
 #   - 자격증명 하드코딩 제거 → 환경변수에서 읽음
 #   - 자격증명이 set되지 않으면 즉시 종료 (silent fail-open 차단)
 #   - 사용 예:
-#       export SE_LINUX_USER=sysadmin SE_LINUX_PASSWORD='...'
+#       export SE_LINUX_USER=cloviradmin SE_LINUX_PASSWORD='...'
 #       export SE_WINDOWS_USER=gooddit  SE_WINDOWS_PASSWORD='...'
 #       export SE_ESXI_USER=root        SE_ESXI_PASSWORD='...'
 #       bash tests/scripts/os_esxi_verify.sh
 set -euo pipefail
 
 # 자격증명 검증 (필수)
-: "${SE_LINUX_USER:?SE_LINUX_USER 환경변수 누락 (예: sysadmin)}"
+: "${SE_LINUX_USER:?SE_LINUX_USER 환경변수 누락 (예: cloviradmin)}"
 : "${SE_LINUX_PASSWORD:?SE_LINUX_PASSWORD 환경변수 누락}"
 : "${SE_WINDOWS_USER:?SE_WINDOWS_USER 환경변수 누락 (예: gooddit)}"
 : "${SE_WINDOWS_PASSWORD:?SE_WINDOWS_PASSWORD 환경변수 누락}"
 : "${SE_ESXI_USER:?SE_ESXI_USER 환경변수 누락 (예: root)}"
 : "${SE_ESXI_PASSWORD:?SE_ESXI_PASSWORD 환경변수 누락}"
 
-PROJECT_DIR="${PROJECT_DIR:-/home/sysadmin/server-exporter}"
+PROJECT_DIR="${PROJECT_DIR:-/home/cloviradmin/server-exporter}"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp/round9_evidence}"
 mkdir -p "$OUTPUT_DIR"
 

@@ -1,6 +1,6 @@
-# Lenovo IMM2 fixture
+# Lenovo IMM2 fixture — M-H3 (cycle 2026-05-07)
 
-> Lab 부재 — web sources only.
+> Lab 부재 — web sources only (rule 96 R1-A).
 
 ## 출처
 

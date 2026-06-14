@@ -1,6 +1,6 @@
 # Huawei Atlas 800 mock fixture — AI training server
 
-> Lab 부재 web sources 기반
+> cycle 2026-05-11 M-C3 — lab 부재 web sources 기반 (rule 96 R1-A)
 
 ## Vendor
 

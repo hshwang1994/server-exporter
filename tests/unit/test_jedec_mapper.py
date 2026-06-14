@@ -1,4 +1,4 @@
-"""Unit test for jedec_mapper filter."""
+"""Unit test for jedec_mapper filter (B23 + B71 + B90 + B91)."""
 from __future__ import annotations
 
 import sys
@@ -11,7 +11,7 @@ from jedec_mapper import jedec_to_vendor
 
 
 def test_linux_dmidecode_sk_hynix():
-    """Linux dmidecode '00AD063200AD' -> 'SK hynix'."""
+    """B23: Linux dmidecode '00AD063200AD' -> 'SK hynix'."""
     assert jedec_to_vendor("00AD063200AD") == "SK hynix"
 
 
@@ -24,7 +24,7 @@ def test_linux_dmidecode_micron():
 
 
 def test_cisco_cimc_prefix_hex_samsung():
-    """Cisco CIMC '0xCE00' -> 'Samsung'."""
+    """B90: Cisco CIMC '0xCE00' -> 'Samsung'."""
     assert jedec_to_vendor("0xCE00") == "Samsung"
 
 

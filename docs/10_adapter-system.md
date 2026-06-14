@@ -107,9 +107,9 @@ score = priority × 1000  +  specificity × 10  +  match_score
 
 ---
 
-## 3.5. Priority 정책표 — 31 redfish + 7 OS + 4 ESXi
+## 3.5. Priority 정책표 — 31 redfish + 7 OS + 4 ESXi (cycle 2026-05-07 추가)
 
-새 adapter 의 priority 결정 시 다음 정책 따른다:
+새 adapter 의 priority 결정 시 다음 정책 따른다 (rule 50 R3):
 
 | 분류 | priority 범위 | 의미 | 예시 |
 |---|---:|---|---|
@@ -117,7 +117,7 @@ score = priority × 1000  +  specificity × 10  +  match_score
 | **vendor 기본** | `10` | vendor 정의는 됐으나 세대 / 모델 미특정. firmware probe 실패 시 fallback | `dell_idrac`, `hpe_ilo`, `lenovo_bmc`, `cisco_bmc`, `supermicro_bmc` |
 | **세대 (구형)** | `30~50` | 5+ 년 전 세대 (지원 종료 / 호환성 영역) | `esxi_6x`, `dell_idrac8`, `hpe_ilo4`, `lenovo_imm2`, `supermicro_x9` |
 | **세대 (메인)** | `80~100` | 운영 중 주력 세대 | `esxi_7x/8x`, `dell_idrac9`, `hpe_ilo5/6`, `lenovo_xcc`, `supermicro_x11~13`, `cisco_cimc`, lab 부재 신 vendor (`huawei_ibmc/inspur_isbmc/fujitsu_irmc/quanta_qct_bmc` = 80) |
-| **세대 (최신)** | `110~120` | 신 generation | `dell_idrac10`, `hpe_ilo7`, `lenovo_xcc3`, `supermicro_x14`, `cisco_ucs_xseries` |
+| **세대 (최신)** | `110~120` | 신 generation (cycle 2026-05-01 추가 — F41/F47/F55) | `dell_idrac10`, `hpe_ilo7`, `lenovo_xcc3`, `supermicro_x14`, `cisco_ucs_xseries` |
 | **특수 / lab 부재 보호** | `101` | 비표준 (Superdome / 비표준 폼팩터) — lab 없이 web sources 만 | `hpe_superdome_flex` |
 
 **OS / ESXi 채널** (세대 / vendor 분기 단순):
@@ -148,9 +148,9 @@ score = priority × 1000  +  specificity × 10  +  match_score
 2. 신 세대는 기존 최고 priority + 20 (역전 방지 충분한 간격)
 3. specificity 가 충분한지 확인 (`firmware_patterns` + `model_patterns` 정의)
 4. 점수 동률 시 `-vvv` 로그가 경고 → priority 조정 검토
-5. lab 부재 vendor 는 `80` 으로 시작, lab 도입 후 메인 세대 격상
+5. lab 부재 vendor (rule 96 R1-A) 는 `80` 으로 시작, lab 도입 후 메인 세대 격상
 
-상세: 새 vendor 추가 절차 (lab 부재 처리 포함) 는 `docs/14_add-new-gather.md`.
+상세: rule 50 R2 9단계 + 단계 10 (lab 부재 처리), `docs/14_add-new-gather.md`.
 
 ---
 
@@ -258,7 +258,7 @@ Python 은 **"어떻게 가져오나"**, Adapter 는 **"누구에게 무엇을 �
 
 ## 8. 디버깅 — 어느 adapter 가 뽑혔지?
 
-두 가지 방법.
+세 가지 방법.
 
 **(가) envelope 안 보기**
 ```json
@@ -269,6 +269,9 @@ Python 은 **"어떻게 가져오나"**, Adapter 는 **"누구에게 무엇을 �
 ```bash
 ansible-playbook redfish-gather/site.yml -e target_ip=10.x.x.1 -vvv 2>&1 | grep -i adapter
 ```
+
+**(다) `score-adapter-match` 절차 (skill) 사용**
+점수 충돌이 의심될 때 각 adapter 의 점수를 풀어서 보여준다.
 
 ---
 
@@ -290,7 +293,7 @@ adapter 가 매칭은 됐는데 normalize task 가 그 섹션을 못 채운 경�
 | 보고 싶은 것 | 파일 |
 |---|---|
 | 벤더 / 세대 / 섹션 호환성 한 장 표 | `docs/22_compatibility-matrix.md` |
-| 새 벤더 추가 절차 (7단계 + lab 부재 처리) | `docs/14_add-new-gather.md` |
+| 새 벤더 추가 절차 (전체 9단계) | `docs/14_add-new-gather.md` |
 | 실장비 검증 결과 | `docs/13_redfish-live-validation.md` |
 | 점수 계산 코드 | `module_utils/adapter_common.py` |
 | adapter 동적 로딩 | `lookup_plugins/adapter_loader.py` |

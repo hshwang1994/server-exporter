@@ -108,3 +108,14 @@ sections:
     description: "전원 공급 장치(PSU) 상태 및 전력 정보"
     channels: [redfish]
     empty_value: null
+
+  thermal:
+    key: thermal
+    display_name: "온도/팬 정보"
+    description: "온도 센서(Temperatures) + 팬(Fans) 상태 — Chassis/Thermal"
+    # cycle 2026-06-14 (Track 4): 단일노드 thermal 수집 (이전엔 multi_node 경로만).
+    # 미지원/미노출 벤더는 빈 {temperatures:[], fans:[]} (graceful).
+    channels: [redfish]
+    empty_value:
+      temperatures: []
+      fans: []

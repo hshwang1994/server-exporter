@@ -1,22 +1,22 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: Supermicro / Super Micro Computer
 # Firmware: X9 generation BMC (Aspeed AST2300/AST2400)
 # Origin: Supermicro X9 BMC documentation
-# Last sync: 2026-05-07 (origin 주석 강화)
+# Last sync: 2026-05-07 (M-B2 — origin 주석 강화)
 # Notes: Romley / Brickland 1st platform (2012-2014). E5-2600 v1/v2 / Xeon E7 v2.
 #   X9 BMC — Redfish 매우 제한적 (DSP0268 v1.0 초기 영역만).
 #   대다수 endpoint 미지원 (PowerSubsystem 없음, Storage 없음, OEM 확장 매우 약함).
-# Sources (lab 부재):
+# Sources (rule 96 R1-A — lab 부재):
 #   - https://www.supermicro.com/manuals/superserver/IPMI/IPMI_Users_Guide_X9.pdf
 #   - https://www.supermicro.com/support/resources/bios_ipmi.php?type=BMC
-# 검증 기준: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
-# Capability 매트릭스:
+# Tested against: lab 부재 (web sources only). 사이트 도입 시 fixture 캡처.
+# Capability 매트릭스 (cycle 2026-05-07 M-B2):
 #   - generation: x9 (2012-2014)
 #   - power_subsystem_introduction: false
 #   - storage_strategy_evolution: simple_storage (Storage 표준 path 미보장)
-# Lab status: 부재 — web sources only (Supermicro 사이트 BMC 0대)
-# Next action: lab 도입 후 capability 보정
+# Lab status: 부재 — 사용자 명시 2026-05-07 Q2 (Supermicro 사이트 BMC 0대)
+# Next action: lab 도입 후 별도 cycle — capability 보정 (rule 50 R2 단계 10)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_supermicro_x9
 channel: redfish
@@ -45,7 +45,7 @@ normalize:
 credentials:
   profile: "supermicro"
   fallback_profiles: []
-  # AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/redfish/supermicro.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: supermicro_factory, role: recovery }
 

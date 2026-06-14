@@ -1,6 +1,6 @@
 # HPE Compute Scale-up Server 3200 (CSUS 3200) Mock Fixture
 
-> Lab 부재 — web sources 합성. 사이트 실측 시 정정 가능.
+> Lab 부재 — Web Sources 합성 (rule 96 R1-A). 사이트 실측 후 정정 의무.
 
 ## 메타
 
@@ -11,10 +11,10 @@
 - **Multi-chassis**: YES (Base + Expansion1 + Expansion2 합성 시나리오 — 최대 4 chassis)
 - **Multi-manager**: YES (RMC + PDHC0 + PDHC1 + Bay1.iLO5 4-manager 합성)
 - **Firmware**: RMC 3.10.00 (추정 — 사이트 실측 시 정정)
-- **Lab**: 부재 — web sources only
-- RMC 멀티-노드 토폴로지 정식 지원
+- **Lab**: 부재 — web sources only (rule 96 R1-A)
+- **cycle**: 2026-05-12 (ADR-2026-05-12) — RMC 멀티-노드 토폴로지 정식 지원
 
-## 합성 출처 매핑
+## 합성 출처 매핑 (rule 96 R1-A)
 
 | 파일 | Source | Confidence |
 |---|---|---|
@@ -24,9 +24,9 @@
 | chassis_collection.json | DMTF Chassis v1.20 + HPE FlexNodeInfo 추정 | MED |
 | Oem.Hpe.PartitionInfo | sdflex-ironic-driver wiki + sdflexutils 1.5.1 | MED |
 
-### CSUS 3200 모델 5종 누락분 fixture
+### cycle 2026-06-09 (ADR-2026-06-09) 신규 — CSUS 3200 모델 5종 누락분 fixture
 
-> CSUS 3200 Redfish 모델 검수 → boot / thermal / power / log_services / CompositionService / Fabrics 추가.
+> 사용자 제시 CSUS 3200 Redfish 모델 검수 → boot / thermal / power / log_services / CompositionService / Fabrics 추가.
 > `test_csus_fixture_replay.py` 가 @odata.id 로 키잉해 `_collect_multi_node_topology` end-to-end 재생.
 
 | 파일 | Redfish 리소스 | Source | Confidence |
@@ -49,26 +49,26 @@ system_partition0.json `Boot` 에 `BootOrder` 추가 / manager_rmc.json 에 `Log
 - https://github.com/HewlettPackard/sdflexutils — sdflexutils 1.5.1 (Partition0 명시)
 - https://redfish.dmtf.org/schemas/DSP0266_1.15.0.html — DMTF Redfish v1.15
 
-## 위험 신호
+## 위험 신호 (rule 96 R2)
 
 HPE community 게시물 7200359 ("impossible to get redfish answer from superdome flex rmc"):
 - 사이트 환경에서 RMC Redfish API 비활성화 / 라이선스 부재 사례 보고
-- precheck graceful fail + `diagnosis.details.rmc_activation_check` 메타로 진단 hint 제공
-- 트러블슈팅: `docs/24_rmc-activation-guide.md` 참조
+- 본 server-exporter 의 precheck graceful fail + `diagnosis.details.rmc_activation_check` 메타로 진단 hint 제공
+- 트러블슈팅: `docs/22_rmc-activation-guide.md` 참조
 
 ## 한계
 
 - 사이트 실측 부재 → 모든 fixture 합성 (Confidence MED)
-- ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema → 실장비 도입 시 정정 가능
+- ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema → lab 도입 cycle 정정 의무 (`docs/ai/NEXT_ACTIONS.md` C1, C5, C6, C7)
 - pytest 통과 = 합성 fixture 통과 ≠ 사이트 실측 통과
 
-## 후속 작업
+## 후속 작업 (NEXT_ACTIONS C1~C8)
 
-- 사이트 fixture 캡처
-- baseline JSON 추가 (`schema/baseline_v1/hpe_csus_3200_baseline.json`)
-- 실장비 검증 round
-- vault 분리 결정 (`vault/redfish/hpe_csus.yml`)
-- ServiceRoot.Product 실측
-- Manager / System / Chassis Member ID 패턴 실측
-- Oem.Hpe.PartitionInfo / FlexNodeInfo / GlobalConfiguration schema 실측
-- RMC 활성화 / Subscription License 요구 실측
+- C1: 사이트 fixture 캡처 (`capture-site-fixture` skill)
+- C2: baseline JSON 추가 (`schema/baseline_v1/hpe_csus_3200_baseline.json`)
+- C3: lab 도입 cycle `hpe-csus-rmc-lab-validation` round
+- C4: vault 분리 결정 (`vault/redfish/hpe_csus.yml`)
+- C5: ServiceRoot.Product 실측
+- C6: Manager / System / Chassis Member ID 패턴 실측
+- C7: Oem.Hpe.PartitionInfo / FlexNodeInfo / GlobalConfiguration schema 실측
+- C8: RMC 활성화 / Subscription License 요구 실측

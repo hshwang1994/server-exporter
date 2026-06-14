@@ -101,7 +101,7 @@ CHANNEL_PROTOCOL_MESSAGES = {
 def tcp_check(host, port, timeout):
     """TCP 포트 연결 가능 여부 확인.
 
-    IPv4/IPv6 듀얼 스택 — 기존 AF_INET only는
+    production-audit (2026-04-29): IPv4/IPv6 듀얼 스택 — 기존 AF_INET only는
     IPv6-only 관리망 대상에 도달 불가. socket.getaddrinfo로 family를 자동 선택.
     """
     last_err = "주소 해석 실패"
@@ -110,7 +110,7 @@ def tcp_check(host, port, timeout):
     except socket.gaierror as e:
         return False, "DNS 해석 실패: {0}".format(e)
     for family, socktype, proto, _canon, sockaddr in addr_infos:
-        # socket.socket() 를 try 안으로 — IPv6 비활성 host 에서 AF_INET6
+        # Round 16: socket.socket() 를 try 안으로 — IPv6 비활성 host 에서 AF_INET6
         # 주소군에 socket() 이 OSError(EAFNOSUPPORT) 를 던지면(try 밖이면) 모듈 전체가
         # 죽음. try 안에서 잡아 다음 주소군(IPv4)으로 graceful degradation.
         sock = None
@@ -137,7 +137,7 @@ def tcp_check(host, port, timeout):
 def _build_ssl_context(verify):
     """HTTPS context — verify=False 시 self-signed BMC 인증서 허용.
 
-    구 BMC (HPE iLO4, Lenovo IMM2, 일부 iDRAC7/8 펌웨어)
+    cycle 2026-04-30: 구 BMC (HPE iLO4, Lenovo IMM2, 일부 iDRAC7/8 펌웨어)
     호환을 위해 verify=False 환경 한정으로 OpenSSL 3.x legacy renegotiation +
     weak cipher 허용. curl -k 와 동등한 관용성. 사내 BMC self-signed 망 한정.
     """
@@ -171,11 +171,11 @@ def http_get(url, timeout, verify=False, auth=None):
 
     반환: (ok, err, payload) — payload={'status_code': int, 'json': dict|None}
 
-    HTTP 406 Not Acceptable 호환 — 일부 BMC 펌웨어
+    cycle 2026-04-30: HTTP 406 Not Acceptable 호환 — 일부 BMC 펌웨어
     (HPE iLO 펌웨어 ServiceRoot RedfishVersion 1.17.0 등)이 Accept 헤더
     명시 안 된 요청을 거부.
-    OData-Version + User-Agent 추가 시 Lenovo XCC
-    일부 펌웨어가 reject (사이트 검증). Accept 헤더만 명시 — 실측 OK 패턴.
+    cycle 2026-04-30 hotfix: OData-Version + User-Agent 추가 시 Lenovo XCC
+    일부 펌웨어가 reject (사이트 검증). Accept 헤더만 명시 — 사용자 실측 OK 패턴.
     """
     ctx = _build_ssl_context(verify)
     req = urllib.request.Request(url)
@@ -184,7 +184,7 @@ def http_get(url, timeout, verify=False, auth=None):
     if auth_header:
         req.add_header("Authorization", auth_header)
     try:
-        # with 컨텍스트 매니저로 응답(소켓) 결정적 close (GC 의존 제거).
+        # Round 16: with 컨텍스트 매니저로 응답(소켓) 결정적 close (GC 의존 제거).
         # probe + auth 단계가 http_get 를 수회 호출 — 응답 미close 시 소켓 누적.
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
             body = resp.read().decode("utf-8", errors="replace")
@@ -216,7 +216,7 @@ def ssh_banner_check(host, port, timeout):
     except socket.gaierror as e:
         return False, "DNS 해석 실패: {0}".format(e), None
     for family, socktype, proto, _canon, sockaddr in addr_infos:
-        # socket.socket()/settimeout() 를 try 안으로 — IPv6 비활성 host 의
+        # Round 16: socket.socket()/settimeout() 를 try 안으로 — IPv6 비활성 host 의
         # AF_INET6 주소군에서 socket() OSError(EAFNOSUPPORT) 가 모듈을 죽이지 않게
         # (tcp_check 와 동일). 잡아서 다음 주소군(IPv4)으로 진행.
         sock = None
@@ -227,7 +227,7 @@ def ssh_banner_check(host, port, timeout):
             banner = sock.recv(256).decode("utf-8", errors="replace").strip()
             if banner.startswith("SSH-"):
                 return True, None, {"ssh_banner": banner}
-            # 빈/비-SSH 배너 → 즉시 return 대신 다음 주소군(dual-stack) 시도.
+            # Round 15: 빈/비-SSH 배너 → 즉시 return 대신 다음 주소군(dual-stack) 시도.
             # 기존엔 IPv6 가 먼저 해석되어 빈 배너 반환 시 IPv4 SSH 를 시도조차 못 함 (tcp_check 패턴 일관).
             last_err = "SSH 배너가 아닙니다: {0}".format(banner[:50])
         except Exception as e:
@@ -254,7 +254,7 @@ def probe_redfish(host, port, timeout, verify=False):
     HTTP 실패로 분류해 "Redfish 미지원"으로 오판정 → 통신 정상인 장비를
     차단. probe_esxi 의 status_code 허용 패턴을 따라 정정.
 
-    payload=None 케이스 (URLError/timeout/SSLError)
+    G5 (cycle 2026-04-30): payload=None 케이스 (URLError/timeout/SSLError)
     에 1회 retry. BMC 부팅 직후 / 일시 부하 transient 차단.
     """
     import time as _time
@@ -284,7 +284,7 @@ def probe_redfish(host, port, timeout, verify=False):
         # 401: 무인증 ServiceRoot 차단 (인증 강화 펌웨어)
         # 403: IP 화이트리스트 / 권한 부족 (BMC는 응답 중)
         # 405: Method Not Allowed — Redfish 응답하나 GET/HEAD 제한 (드물지만 일부 펌웨어)
-        # 406: Not Acceptable — Accept 헤더 협상 불일치 (http_get은
+        # 406: Not Acceptable — Accept 헤더 협상 불일치 (cycle 2026-04-30: http_get은
         #      Accept 헤더만 명시 — OData-Version/User-Agent는 Lenovo XCC reject로 제거됨.
         #      그럼에도 BMC 펌웨어가 추가 헤더 요구하는 케이스)
         # 503: BMC 일시 과부하 / 부팅 직후 — 본 수집에서 재시도 가능
@@ -317,7 +317,7 @@ def probe_os(host, port, timeout):
     처리. 이전 구현은 이를 "WinRM 미응답" 으로 오판정했음.
 
     SSH (22): banner 가 'SSH-' 로 시작하는지로 판정 — banner 차단 SSH 서버는
-    이전과 동일하게 fail (드문 케이스, 별도 검토).
+    이전과 동일하게 fail (드문 케이스, 별도 cycle 검토).
     """
     if port == 22:
         return ssh_banner_check(host, port, timeout)
@@ -442,9 +442,9 @@ def _try_redfish_auth(host, open_port, username, password, timeout_auth, verify_
         return False
     result["auth_success"] = True
     json_data = payload.get("json") if payload else None
-    if isinstance(json_data, dict):  # 비-dict JSON .get AttributeError 방어
+    if isinstance(json_data, dict):  # Round 5 #2: 비-dict JSON .get AttributeError 방어
         members = json_data.get("Members", [])
-        # 비-dict 멤버([null]/[str]) 방어 — members[0].get AttributeError 회피
+        # rule 95 R1 #2: 비-dict 멤버([null]/[str]) 방어 — members[0].get AttributeError 회피
         if members and isinstance(members[0], dict):
             result["probe_facts"]["first_system_uri"] = members[0].get("@odata.id", "")
     return True
@@ -474,7 +474,7 @@ def run_module():
     verify_ssl = module.params["verify_ssl"]
     result = _init_result(channel, ports)
 
-    # Stage 1+2: reachable + port_open (host alive 분리)
+    # Stage 1+2: reachable + port_open (rule 27 R2 — host alive 분리)
     any_response, target_port_open, open_port, port_errors = _check_ports(
         host, ports, module.params["timeout_port"]
     )

@@ -1,5 +1,5 @@
-"""`_classify_rmc_label` / `_classify_manager_role` /
-`_classify_chassis_kind` 단위 테스트.
+"""ADR-2026-05-12 회귀 — `_classify_rmc_label` / `_classify_manager_role` /
+`_classify_chassis_kind` 단위 테스트 (cycle 2026-05-12).
 
 HPE CSUS 3200 / Superdome Flex RMC primary 시스템에서 Manager / Chassis 라벨 분기:
   - RMC (Rack Management Controller) → 'RMC' / role='primary'

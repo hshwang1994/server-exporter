@@ -1,13 +1,13 @@
-"""Round 15 — 회귀 테스트.
+"""Round 15 — 멀티에이전트 적대적 버그헌트 루프 회귀 테스트.
 
-본 파일은 Round 15 검증에서 확정된 버그 fix 의 회귀 가드다.
+본 파일은 Round 15 cycle 에서 멀티에이전트 교차검증으로 확정된 버그 fix 의 회귀 가드다.
 각 테스트는 "fix 전이라면 실패, fix 후 통과" 형태로 동작을 고정한다.
 
 대상 fix:
-  - adapter_common.adapter_match_score: version/distribution/os_type 보너스 (specificity 대칭)
-  - redfish_gather._normalize_bios_date: invalid ISO (예: 2024-13-32) 생성 방지 → raw 보존
-  - redfish_gather._merge_power_dual: serial-primary dedup (다른 name 같은 serial 합침)
-  - diagnosis_mapper.build_diagnosis: 비-dict probe_facts → update() ValueError 방어
+  - F1  adapter_common.adapter_match_score: version/distribution/os_type 보너스 (specificity 대칭)
+  - F2  redfish_gather._normalize_bios_date: invalid ISO (예: 2024-13-32) 생성 방지 → raw 보존
+  - F3  redfish_gather._merge_power_dual: serial-primary dedup (다른 name 같은 serial 합침)
+  - F4  diagnosis_mapper.build_diagnosis: 비-dict probe_facts → update() ValueError 방어
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from diagnosis_mapper import build_diagnosis  # noqa: E402
 from jedec_mapper import jedec_to_vendor  # noqa: E402
 
 
-# ── adapter_match_score version/distribution/os_type 보너스 ────────────────
+# ── F1: adapter_match_score version/distribution/os_type 보너스 ────────────────
 
 def test_match_score_version_distribution_os_bonus():
     """version(+15)/distribution(+15)/os_type(+5) 매치도 match_score 보너스 (이전엔 누락)."""
@@ -60,7 +60,7 @@ def test_match_score_version_known_mismatch_disqualifies():
     assert adapter_match_score(a, {"version": "8.10"}) == -9999
 
 
-# ── _normalize_bios_date invalid ISO 방지 ────────────────────────────────
+# ── F2: _normalize_bios_date invalid ISO 방지 ────────────────────────────────
 
 def test_bios_date_valid_mmddyyyy():
     assert rg._normalize_bios_date("09/10/2024") == "2024-09-10"
@@ -95,7 +95,7 @@ def test_bios_date_none_and_na():
     assert rg._normalize_bios_date("N/A") is None
 
 
-# ── _merge_power_dual serial-primary dedup ───────────────────────────────
+# ── F3: _merge_power_dual serial-primary dedup ───────────────────────────────
 
 def test_merge_power_dual_dedup_different_names_same_serial():
     """같은 serial 을 legacy/subsystem 이 다른 name 으로 emit → 1 PSU 로 dedup."""
@@ -119,7 +119,7 @@ def test_merge_power_dual_no_serial_keeps_distinct_names():
     assert len(merged["power_supplies"]) == 2
 
 
-# ── diagnosis_mapper 비-dict probe_facts 방어 ────────────────────────────
+# ── F4: diagnosis_mapper 비-dict probe_facts 방어 ────────────────────────────
 
 def test_build_diagnosis_non_dict_probe_facts_no_crash():
     """손상된 캐시/외부 JSON 으로 probe_facts 가 문자열 → details.update() ValueError 방어."""
@@ -130,7 +130,7 @@ def test_build_diagnosis_non_dict_probe_facts_no_crash():
     assert out2["details"]["model"] == "R760"
 
 
-# ── (Round 2 fresh): gather_processors all-Absent → warning (수집실패와 구분) ─────
+# ── F5 (Round 2 fresh): gather_processors all-Absent → warning (수집실패와 구분) ─────
 
 def _fake_get_from_tree(tree):
     def fake(bmc_ip, path, username, password, timeout, verify_ssl):
@@ -169,7 +169,7 @@ def test_gather_processors_normal_no_false_warning(monkeypatch):
     assert not any("Absent" in (e.get("message") or "") for e in errors)
 
 
-# ── (Round 3 fresh): jedec_mapper bare 2-char hex ID 정규화 ─────────────────
+# ── F6 (Round 3 fresh): jedec_mapper bare 2-char hex ID 정규화 ─────────────────
 
 def test_jedec_bare_2char_hex_normalized():
     """bank-prefix 없는 2자리 JEDEC ID ('AD'/'CE'/'2C') → vendor 명 (이전엔 raw 반환)."""

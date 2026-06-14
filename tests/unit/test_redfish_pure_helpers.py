@@ -1,6 +1,6 @@
-"""redfish_gather.py 순수 헬퍼 특성화 테스트.
+"""redfish_gather.py 순수 헬퍼 특성화 테스트 (cycle 2026-06-04).
 
-외부 계약 robustness 함수들 — 펌웨어 응답 변형(non-numeric capacity,
+외부 계약(rule 96) robustness 함수들 — 펌웨어 응답 변형(non-numeric capacity,
 trailing space, 0x-prefixed JEDEC, 중첩 dict 부재 등)에 모듈이 죽지 않도록 방어하는
 순수 함수. 직접 단위 테스트가 없어(0 커버) 본 파일에서 현재 동작을 고정한다.
 
@@ -70,7 +70,7 @@ def test_safe_none_value_treated_as_missing(rfg):
     assert rfg._safe({"a": {"b": None}}, "a", "b", default="x") == "x"
 
 
-# ── _safe_int (firmware drift ValueError 가드) ───────────────────────
+# ── _safe_int (firmware drift ValueError 가드, rule 96) ───────────────────────
 
 def test_safe_int_numeric(rfg):
     assert rfg._safe_int("5") == 5
@@ -184,7 +184,7 @@ def test_normalize_link_status_down_variants(rfg):
 
 def test_normalize_link_status_dmtf_transitional_to_down(rfg):
     # DSP8010 2026.1 대조: 표준 전이 상태(Starting/Training)는 비작동 → 'down'.
-    # 기존 disabled/inactive/offline 매핑과 일관. (gap fix)
+    # 기존 disabled/inactive/offline 매핑과 일관. (cycle 2026-06-08 audit gap fix)
     assert rfg._normalize_link_status("Starting") == "down"
     assert rfg._normalize_link_status("Training") == "down"
 
@@ -199,7 +199,7 @@ def test_normalize_link_status_unknown_vendor_value_preserved(rfg):
     assert rfg._normalize_link_status("WeirdState") == "weirdstate"
 
 
-# ── _normalize_port_speed ──────────────────────────────────────
+# ── _normalize_port_speed (Round 17 #3) ──────────────────────────────────────
 # 신 Port resource(1.6+, Ports)는 CurrentSpeedGbps 만, 구 NetworkPort 는
 # CurrentLinkSpeedMbps 만 준다. Mbps 미제공 시 Gbps 에서 역산해야 유실 없음.
 def test_port_speed_ports_only_gbps_derives_mbps(rfg):
@@ -242,14 +242,17 @@ def test_port_speed_bool_gbps_ignored(rfg):
     assert gbps == 1.0   # Mbps(1000)/1000 — bool Gbps 는 무시
 
 
-def test_port_speed_zero_gbps_no_phantom_mbps(rfg):
-    """CurrentSpeedGbps=0(link down) → mbps 0 역산 안 함(기존 동작 보존: gbps=0, mbps=None)."""
+def test_port_speed_zero_gbps_unlinked_is_none(rfg):
+    """CurrentSpeedGbps=0(link down) → (None, None). SCHEMA-02(2026-06-15 HPE DL380):
+    0 은 '0Gbps 협상'이 아니라 '링크 없음' → gbps 도 None 으로 정규화해야 field_dictionary
+    (hbas link_speed_gbps 'null when unlinked') 계약 + 동일 포트 mbps(None)와 일관. mbps 도 0
+    역산 안 함(phantom mbps 방지 — 기존 의도 보존)."""
     gbps, mbps = rfg._normalize_port_speed({"CurrentSpeedGbps": 0})
-    assert gbps == 0
+    assert gbps is None   # SCHEMA-02 수정 전: 0 (계약 위반 + mbps=None 과 내부모순)
     assert mbps is None
 
 
-# ── _get / _get_noauth 성공-path decode guard ──
+# ── _get / _get_noauth 성공-path decode guard (Round 17 #18 + R18 refinement) ──
 class _FakeResp:
     def __init__(self, status, body):
         self.status = status
@@ -289,7 +292,7 @@ def test_get_empty_body_tolerant_but_nonjson_errs(rfg, monkeypatch):
 
 
 def test_port_speed_infinity_nan_no_crash(rfg):
-    """회귀: JSON Infinity/NaN(json.loads 기본 허용) Gbps → int() OverflowError/ValueError
+    """R18-1 회귀: JSON Infinity/NaN(json.loads 기본 허용) Gbps → int() OverflowError/ValueError
     로 network_adapters 섹션 전체 drop 되던 것 → _safe_int 경유로 (None,None) graceful."""
     assert rfg._normalize_port_speed({"CurrentSpeedGbps": float("inf")}) == (None, None)
     assert rfg._normalize_port_speed({"CurrentSpeedGbps": float("-inf")}) == (None, None)
@@ -301,7 +304,7 @@ def test_port_speed_infinity_nan_no_crash(rfg):
 
 
 def test_port_speed_fractional_gbps_preserved(rfg):
-    """회귀: fractional CurrentSpeedGbps(2.5GbE 등)가 _safe_int truncate(2.5→2)되던 것 →
+    """R19-2/3 회귀: fractional CurrentSpeedGbps(2.5GbE 등)가 _safe_int truncate(2.5→2)되던 것 →
     _safe_num 으로 float 보존. mbps 는 round 로 정확(2500)."""
     gbps, mbps = rfg._normalize_port_speed({"CurrentSpeedGbps": 2.5})
     assert gbps == 2.5          # 가드 전(_safe_int): 2 (손상)

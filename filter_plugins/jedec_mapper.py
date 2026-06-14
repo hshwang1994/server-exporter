@@ -5,7 +5,7 @@ Linux dmidecode -t memory emits Manufacturer in raw JEDEC format like
 '00AD063200AD' (bank 0, ID 0xAD = SK hynix). This filter normalizes those
 hex IDs to human-readable vendor names per JEP106 standard.
 
-Cisco Redfish CIMC also returns raw JEDEC like '0xCE00'.
+Fixes ticket B23/B71/B90 (Cisco Redfish CIMC also returns raw JEDEC like '0xCE00').
 
 Usage in Ansible:
     {{ slot.manufacturer | jedec_to_vendor }}
@@ -36,14 +36,14 @@ JEDEC_MAP = {
     "0xAD": "SK hynix",
     "0xCE": "Samsung",
     "0x98": "Kingston",
-    # Cisco CIMC variants (external contract)
+    # Cisco CIMC variants (rule 96 external contract)
     "0xCE00": "Samsung",
     "0xAD00": "SK hynix",
     "0x2C00": "Micron Technology",
 }
 
 # Pattern matchers
-HEX_PATTERN = re.compile(r"^[0-9A-Fa-f]{2,}$")  # bare 2-char ID('AD'/'CE') 정규화 (len<4 → id_byte=s[:2], 직접 lookup 도달)
+HEX_PATTERN = re.compile(r"^[0-9A-Fa-f]{2,}$")  # Round 15: {4,}→{2,} — bare 2-char ID('AD'/'CE') 정규화 (len<4 → id_byte=s[:2], 직접 lookup 도달)
 PREFIX_HEX_PATTERN = re.compile(r"^0x([0-9A-Fa-f]{2,})$", re.IGNORECASE)
 
 

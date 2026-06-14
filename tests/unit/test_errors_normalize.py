@@ -74,7 +74,7 @@ def test_string_blank_input_returns_empty():
 
 
 def test_char_list_keeps_meaningful_chars_drops_whitespace():
-    """관측 케이스: ['[', ']', '\\n', '}', '}'] char list 입력 시
+    """사용자 보고 케이스: ['[', ']', '\\n', '}', '}'] char list 입력 시
     whitespace char 는 trim 으로 drop, 의미있는 char 는 wrap 보존."""
     out = _merge(["[", "]", "\n", "}", "}"])
     msgs = [e["message"] for e in out]

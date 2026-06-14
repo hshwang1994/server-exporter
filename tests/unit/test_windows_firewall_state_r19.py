@@ -1,4 +1,4 @@
-"""windows gather_runtime firewall_state loop-scoping fix.
+"""Round 19 (R19-1) — windows gather_runtime firewall_state loop-scoping fix.
 
 plain `{% set any_enabled %}` 가 for-loop 밖으로 전파되지 않아 firewall_state 가 모든
 호스트에서 'inactive' 로 오보되던 것(보안 필드) → namespace 패턴으로 수정. gather_runtime.yml

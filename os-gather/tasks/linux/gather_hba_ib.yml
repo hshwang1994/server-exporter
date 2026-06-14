@@ -1,17 +1,17 @@
 ---
 # os-gather/tasks/linux/gather_hba_ib.yml
 #
-# Linux FC HBA + InfiniBand 정보 수집.
+# P4 (cycle 2026-04-29): Linux FC HBA + InfiniBand 정보 수집.
 # raw 명령으로 /sys/class/fc_host + /sys/class/infiniband 파싱.
 # 미설치 환경에서는 빈 list (graceful degradation, errors 기록 없음).
 #
 # 출력 sub-key:
 #   data.storage.hbas[]       — FC HBA (WWPN, link state, speed)
 #   data.storage.infiniband[] — InfiniBand 어댑터 (node_guid, link state, rate)
-#   data.network.driver_map   — interface → driver 매핑 (NIC 깊이)
+#   data.network.driver_map   — interface → driver 매핑 (P5 NIC 깊이)
 
 - block:
-    # WWNN(node_name) + driver + firmware 보강.
+    # cycle 2026-05-29 (hba-ib-csus, D2): WWNN(node_name) + driver + firmware 보강.
     # delimiter '|' 9 필드: FC|host|wwpn|wwnn|symbolic|state|speed|driver|firmware
     - name: "linux | hba_ib | enumerate fc_host"
       ansible.builtin.raw: |
@@ -40,7 +40,7 @@
       failed_when: false
       no_log: true
 
-    # per-port GID(port_guid) + rate + fw_ver + hca(vendor) 보강.
+    # cycle 2026-05-29 (hba-ib-csus, D2): per-port GID(port_guid) + rate + fw_ver + hca(vendor) 보강.
     # delimiter '|' 9 필드: IB|adapter|port|node_guid|gid0|state|rate|firmware|hca
     - name: "linux | hba_ib | enumerate infiniband"
       ansible.builtin.raw: |
@@ -111,7 +111,7 @@
                 'vendor':          none,
                 'driver':          parts[7] if parts[7] else none,
                 'firmware':        parts[8] if parts[8] else none,
-                'link_status':     ('up' if 'online' in st else ('down' if ('offline' in st or 'linkdown' in st or 'down' in st) else (parts[5] if parts[5] else 'unknown'))),
+                'link_status':     ('up' if 'online' in st else ('down' if ('offline' in st or 'linkdown' in st or 'down' in st) else 'unknown')),
                 'link_speed_gbps': (spdig | int) if spdig else none,
                 'port_type':       'FibreChannel',
                 'source':          'os',
@@ -135,7 +135,7 @@
                 'port':        parts[2],
                 'node_guid':   parts[3] if parts[3] else none,
                 'port_guid':   pg,
-                'link_status': ('up' if 'active' in st else ('down' if 'down' in st else (parts[5] if parts[5] else 'unknown'))),
+                'link_status': ('up' if 'active' in st else ('down' if 'down' in st else 'unknown')),
                 'rate':        rate if rate else none,
                 'rate_gbps':   (rdig | int) if rdig else none,
                 'vendor':      parts[8] if parts[8] else none,

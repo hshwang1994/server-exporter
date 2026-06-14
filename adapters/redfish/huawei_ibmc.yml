@@ -1,12 +1,12 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: Huawei
 # Firmware: iBMC (Huawei integrated BMC) — FusionServer Pro V5/V6 + Atlas AI
 # Origin: Huawei FusionServer Pro Series Documentation
-# Last sync: 2026-05-11 (generation 분기 보강, lab 부재 web sources)
+# Last sync: 2026-05-11 (M-C1 — generation 분기 보강, lab 부재 web sources)
 # Notes: FusionServer Pro V5 / V6 + Atlas (AI training). 표준 Redfish + Oem.Huawei 확장.
-#   vault 신설 완료 (2026-05-11, vault/redfish/huawei.yml).
-# Sources (lab 부재):
+#   사용자 명시 승인 (2026-05-01) — vault 신설 완료 (2026-05-11 M-A1, vault/redfish/huawei.yml).
+# Sources (rule 96 R1-A — lab 부재):
 #   - https://support.huawei.com/enterprise/en/doc/EDOC1000163550/41dfb258/ibmc
 #   - https://support.huawei.com/enterprise/en/servers/fusionserver-pro (확인 2026-05-07)
 #   - https://www.huawei.com/en/products/cloud-computing-dc/atlas (확인 2026-05-07)
@@ -14,22 +14,22 @@
 #   - https://redfish.dmtf.org/schemas/v1/ (DSP0268 v1.0 ~ v1.13 — iBMC 1.x~5.x)
 #   - https://networktelecom.ru/images/data/gallery/3071_9834_Huawei-FusionServer-Pro-V5-Rack-Server-Data-Sheet.pdf
 #   - https://manualzz.com/doc/o/1wk3dz/huawei-fusionserver-pro-2288h-v5-user-manual-9.2-logging-in-to-the-ibmc-webui
-# 검증 기준 (web sources 기반 — 사이트 fixture 도입 시 보정):
+# tested_against (web sources 기반 — 사이트 fixture 도입 시 보정):
 #   - "iBMC 1.x" (2014-2016, DSP0268 v1.0 부분, OEM 약함)
 #   - "iBMC 2.x" (2016-2019, DSP0268 v1.4+, Oem.Huawei 강화)
 #   - "iBMC 3.x" (2019-2021, DSP0268 v1.8+, PowerSubsystem 부분)
 #   - "iBMC 4.x" (2021-2023, DSP0268 v1.10+, 표준 가까움)
 #   - "iBMC 5.x" (2023+, DSP0268 v1.13+, Atlas 분기)
-# Lab status: 부재 — web sources only (2026-05-01)
-# Next action: FusionServer Pro V5/V6 + Atlas lab 도입 후 iBMC 1.x~5.x 응답 형식 + Oem.Huawei sub-namespace 검증
+# Lab status: 부재 — web sources only (rule 96 R1-A — cycle 2026-05-01 사용자 명시)
+# Next action: FusionServer Pro V5/V6 + Atlas lab 도입 후 별도 cycle (iBMC 1.x~5.x 응답 형식 + Oem.Huawei sub-namespace 검증)
 # Compatibility 가정 (web sources):
 #   - manufacturer: "Huawei" / "Huawei Technologies Co., Ltd."
 #   - Manager URI 추정: /redfish/v1/Managers/iBMC (사이트 검증 필요)
 #   - System URI: /redfish/v1/Systems/1 (표준)
 #   - OEM namespace: Oem.Huawei
 #   - 표준 Redfish 호환 + IPMI 2.0 / SNMP / DCMI 보조
-# Vault: 신설 완료 (2026-05-11) — vault/redfish/huawei.yml 존재.
-#   미생성 시 precheck auth 단계에서 status=failed (graceful degradation)
+# Vault: 신설 완료 (2026-05-11 M-A1) — vault/redfish/huawei.yml 존재.
+#   미생성 시 precheck auth 단계에서 status=failed (graceful degradation, rule 27 R4)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_huawei_ibmc
 channel: redfish
@@ -47,11 +47,11 @@ match:
     - "RH.*"          # RH2288 / RH5885 (Rack 시리즈)
     - "XH.*"          # XH628 / XH320 (Density 시리즈)
     - "BH.*"          # BH 시리즈 (블레이드)
-    # Atlas AI 서버
+    # Atlas AI 서버 (cycle 2026-05-11 M-C1 추가)
     - "Atlas.*"
     - ".*Atlas 800.*"
     - ".*Atlas 500.*"
-  # firmware_patterns 5 generation 추가 (match 조건 보강)
+  # M-C1 (cycle 2026-05-11): firmware_patterns 5 generation 추가 (Additive — match 조건 보강)
   # source: Huawei iBMC Redfish API guide (확인 2026-05-07) / DMTF DSP0268 v1.0~v1.13
   firmware_patterns:
     - "iBMC*1.*"      # iBMC 1.x (2014-2016)
@@ -71,8 +71,8 @@ capabilities:
     - network
     - firmware
     - power
-    # users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
-  # generation 별 capability 분기 명시 (web sources 가정)
+    # M-D3 W6 (cycle 2026-05-06): users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
+  # M-C1 (cycle 2026-05-11): generation 별 capability 분기 명시 (web sources 가정)
   redfish_version: "1.0+"            # iBMC 1.x 의 최소 / 5.x 는 1.13+
   power_subsystem: "conditional"      # iBMC 3.x+ 부분 지원 / 4.x+ 완전
   storage_strategy: "conditional"     # iBMC 1.x: simple_storage / 2.x+: standard
@@ -80,7 +80,7 @@ capabilities:
   oem_namespace: "Oem.Huawei"
 
 collect:
-  # strategy 변경 standard_only → standard+oem (OEM tasks dep)
+  # M-C1 (cycle 2026-05-11): strategy 변경 standard_only → standard+oem (M-C2 OEM tasks dep)
   strategy: standard+oem
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
   oem_tasks: "redfish-gather/tasks/vendors/huawei/collect_oem.yml"
@@ -89,13 +89,13 @@ collect:
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  # oem_normalize 경로 추가
+  # M-C1 (cycle 2026-05-11): oem_normalize 경로 추가 (M-C2 dep)
   oem_normalize: "redfish-gather/tasks/vendors/huawei/normalize_oem.yml"
 
 credentials:
   profile: "huawei"
   fallback_profiles: []
-  # AccountService 진입점 — vault/redfish/huawei.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
+  # P2 AccountService 진입점 — vault/redfish/huawei.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
   recovery_accounts:
     - { vault_label: huawei_factory, role: recovery }
 
@@ -112,14 +112,14 @@ vendor_notes:
   bmc_name: "iBMC"
   manager_uri_hint: "/redfish/v1/Managers/iBMC"
   oem_namespace: "Oem.Huawei"
-  vault_status: "created (2026-05-11) — vault/redfish/huawei.yml"
+  vault_status: "created (2026-05-11 M-A1) — vault/redfish/huawei.yml"
   expected_models:
     - "FusionServer Pro 2288H V5"
     - "FusionServer Pro 2288X V5"
     - "FusionServer Pro 2488H V5"
     - "FusionServer Pro 1288H V6"
     - "Atlas 800 (AI training)"
-  # generation matrix — 펌웨어 별 capability 정리 (web sources 기반)
+  # M-C1 (cycle 2026-05-11): generation matrix — 펌웨어 별 capability 정리 (web sources 기반)
   generation_matrix:
     "1.x": "DSP0268 v1.0 부분 / OEM 약함 / SimpleStorage / Power legacy"
     "2.x": "DSP0268 v1.4+ / Oem.Huawei 강화 / standard storage / Power legacy"
@@ -129,7 +129,7 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Huawei iBMC 장비 — Redfish 표준 호환 가정."
+  not_supported_message: "Huawei iBMC 장비 — Redfish 표준 호환 가정 (lab 부재 — web sources 기반)."
 
 metadata:
   vendor: huawei
@@ -137,5 +137,5 @@ metadata:
   generation_year: "2014-2024+"
   redfish_introduction: "DSP0268 v1.0+ (1.x) ~ v1.13+ (5.x)"
   origin: "https://support.huawei.com/enterprise/en/doc/EDOC1000163550/41dfb258/ibmc"
-  lab_status: "부재 — web sources only (2026-05-01)"
-  next_action: "generation 별 capability 는 실측 시 보정 대상"
+  lab_status: "부재 — 사용자 명시 2026-05-01"
+  next_action: "lab 도입 후 별도 cycle — generation 별 capability 실측 보정 (rule 50 R2 단계 10 / rule 96 R1-C)"

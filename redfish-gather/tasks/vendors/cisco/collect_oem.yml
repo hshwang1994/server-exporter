@@ -7,8 +7,8 @@
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/c/sw/api/3_0/b_Cisco_UCS_C-Series_Redfish_API_Guide_3_0.html
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/x/api/intersight/b_Cisco_Intersight_Managed_Mode_Redfish_API_Guide.html
 #   - https://github.com/CiscoUcs (community)
-# Fragment 철학 — 자기 fragment 만, 다른 gather 침범 금지
-# lab: PASS — UCS X-series (사이트 검증)
+# Fragment 철학 (rule 22) — 자기 fragment 만, 다른 gather 침범 금지
+# lab: PASS — UCS X-series (cycle 2026-05-06 사이트 검증 commit `0a485823`)
 #       부재 — UCS B-series (UCS Manager 매개) / CIMC C-series 1.x-4.x / S-series
 #
 # Oem.Cisco / Oem.Cisco_RackUnit 주요 sub-namespace (web sources):
@@ -17,7 +17,7 @@
 #   - Oem.Cisco.FaultEvents        — Cisco-specific fault aggregation
 #
 # CIMC 1.x 는 OEM 영역 약함 — rescue block 으로 graceful degradation
-# 기존 표준 섹션 안에서만 확장 — envelope 키는 그대로 유지
+# Additive only (rule 92 R2) — UCS X-series 사이트 검증 envelope shape 변경 0
 
 - name: "redfish | cisco | collect_oem — best-effort"
   block:
@@ -67,6 +67,6 @@
             severity: warning
       no_log: true
 
-# fragment 누적 병합 (merge_fragment.yml 호출 의무)
+# fragment 누적 병합 (rule 22 R3 — merge_fragment.yml 호출 의무)
 - name: "redfish | cisco | collect_oem | merge fragment"
   ansible.builtin.include_tasks: "{{ playbook_dir }}/common/tasks/normalize/merge_fragment.yml"

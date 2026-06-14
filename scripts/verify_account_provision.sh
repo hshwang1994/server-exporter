@@ -1,5 +1,5 @@
 #!/bin/bash
-# redfish account_provision 검증 자동화 스크립트.
+# F49 (cycle 2026-05-01): redfish account_provision 검증 자동화 스크립트.
 #
 # 목적:
 #   - server-exporter agent 에서 5 BMC 대상 redfish-gather 실행
@@ -68,11 +68,11 @@ if [[ ! -f "$REPO_ROOT/.vault_pass" ]]; then
 fi
 
 # results dir
-OUT_DIR="${REPO_ROOT}/tests/account_provision/run_$(date +%Y%m%d_%H%M%S)"
+OUT_DIR="${REPO_ROOT}/tests/evidence/account_provision_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUT_DIR"
 
 echo "================================================================="
-echo "redfish account_provision 검증 — dryrun=$DRYRUN"
+echo "F49 redfish account_provision 검증 — dryrun=$DRYRUN"
 echo "Targets: ${TARGETS[*]}"
 echo "Output : $OUT_DIR"
 echo "================================================================="

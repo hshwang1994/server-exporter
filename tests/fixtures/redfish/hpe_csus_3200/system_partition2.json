@@ -25,5 +25,5 @@
     "Chassis": [{"@odata.id": "/redfish/v1/Chassis/Expansion2"}],
     "ManagedBy": [{"@odata.id": "/redfish/v1/Managers/RMC"}]
   },
-  "Oem": {"Hpe": {"PartitionInfo": {"PartitionId": 2, "PartitionName": "Partition2", "Note": "lab 부재 — 합성."}}}
+  "Oem": {"Hpe": {"PartitionInfo": {"PartitionId": 2, "PartitionName": "Partition2", "Note": "lab 부재 — 합성. rule 96 R1-A."}}}
 }

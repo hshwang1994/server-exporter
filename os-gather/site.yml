@@ -206,7 +206,7 @@
     - name: "linux | gather"
       block:
 
-        # vault accounts 후보 순차 시도.
+        # P1 (cycle 2026-04-28): vault accounts 후보 순차 시도.
         # 성공 시 ansible_user/password 갱신 후 본 gather 진행.
         # 실패 시 _os_auth_ok=false → block 안에서 fail → rescue 진입.
         - name: "linux | try credentials"
@@ -262,11 +262,11 @@
         - name: "linux | gather users"
           ansible.builtin.include_tasks: tasks/linux/gather_users.yml
 
-        # FC HBA / InfiniBand / NIC driver/VLAN/bond
+        # P4 (cycle 2026-04-29): FC HBA / InfiniBand / NIC driver/VLAN/bond
         - name: "linux | gather hba_ib"
           ansible.builtin.include_tasks: tasks/linux/gather_hba_ib.yml
 
-        # 운영 런타임 (NTP/firewall/listening ports/swap)
+        # P5 (cycle 2026-04-28): 운영 런타임 (NTP/firewall/listening ports/swap)
         - name: "linux | gather runtime"
           ansible.builtin.include_tasks: tasks/linux/gather_runtime.yml
 
@@ -288,27 +288,27 @@
                 checked_ports:     [22]
                 gather_mode:       "{{ _l_python_mode | default('python_ok') }}"
                 python_version:    "{{ _l_python_version | default('') }}"
-                # meta.auth — fallback_used 노출
+                # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
                 auth:              "{{ _os_attempts_meta | default({}) }}"
 
         # ── meta & correlation ───────────────────────────────────────────
-        # vendor 정규화는 _merged_data.system.vendor (gather_system 의 emit) 기반.
+        # 2026-04-29 fix B80 (final): vendor 정규화는 _merged_data.system.vendor (gather_system 의 emit) 기반.
         # 이 set_fact 결과는 build_output.yml의 'os | normalize | set output meta (defaults preserve)' 에서 보존됨.
         - name: "linux | set output meta vars"
           ansible.builtin.set_fact:
             _out_target_type:       "os"
             _out_collection_method: "agent"
             _out_ip:                "{{ _ip }}"
-            # vendor name → canonical alias 정규화 매핑.
+            # rule 12 R1 Allowed: vendor name → canonical alias 정규화 매핑.
             # '분기 코드'가 아니라 vendor 이름 추출 dict (DMI sys_vendor → adapter 정규화 alias).
             # vendor_aliases.yml의 Ansible-runtime 외 등가물 (Linux raw fallback 컨텍스트).
             _out_vendor: >-
               {%- set v = ((_merged_data | default({})).system | default({})).vendor | default('') | string | lower | trim -%}
-              {%- if 'dell' in v -%}dell
-              {%- elif 'hpe' in v or 'hewlett' in v -%}hp{# 출력 표시값 hpe→hp (vendor_aliases.vendor_output_display mirror) #}
-              {%- elif 'lenovo' in v or v == 'ibm' -%}lenovo
-              {%- elif 'cisco' in v -%}cisco
-              {%- elif 'supermicro' in v or 'smci' in v -%}supermicro
+              {%- if 'dell' in v -%}dell{# nosec rule12-r1 #}
+              {%- elif 'hpe' in v or 'hewlett' in v -%}hp{# nosec rule12-r1 — 출력 표시값 hpe→hp (vendor_aliases.vendor_output_display mirror, 2026-06-04) #}
+              {%- elif 'lenovo' in v or v == 'ibm' -%}lenovo{# nosec rule12-r1 #}
+              {%- elif 'cisco' in v -%}cisco{# nosec rule12-r1 #}
+              {%- elif 'supermicro' in v or 'smci' in v -%}supermicro{# nosec rule12-r1 #}
               {%- elif 'vmware' in v -%}vmware
               {%- elif 'qemu' in v or 'kvm' in v or 'red hat' in v -%}qemu
               {%- elif 'microsoft' in v -%}microsoft
@@ -354,7 +354,7 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       always:
-        # 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
+        # rule 13 R5 / rule 20 R1: 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
         - name: OUTPUT
           ansible.builtin.debug:
             msg: "{{ (_output | default({
@@ -394,7 +394,7 @@
     - name: "windows | gather"
       block:
 
-        # vault accounts 후보 순차 시도 (WinRM).
+        # P1 (cycle 2026-04-28): vault accounts 후보 순차 시도 (WinRM).
         - name: "windows | try credentials"
           ansible.builtin.include_tasks: tasks/try_credentials.yml
           vars:
@@ -427,7 +427,7 @@
         - name: "windows | select adapter"
           ansible.builtin.set_fact:
             _selected_adapter: >-
-              {# ansible_os_product_type 은 SKU(server/workstation) 라
+              {# Round 17 #10: ansible_os_product_type 은 SKU(server/workstation) 라
                  version_patterns(2019/2022, 10.0.NNNNN build)와 절대 안 맞아 generation
                  adapter 가 죽고 windows_generic 만 선택됨. ansible_kernel(=빌드 10.0.20348.0)
                  을 넘겨 windows_2019/2022 가 올바로 매칭되게 한다. #}
@@ -441,7 +441,7 @@
         - name: "windows | gather system"
           ansible.builtin.include_tasks: tasks/windows/gather_system.yml
 
-        # Windows hardware section 활성화
+        # cycle-016 Phase O: Windows hardware section 활성화
         - name: "windows | gather hardware"
           ansible.builtin.include_tasks: tasks/windows/gather_hardware.yml
 
@@ -460,7 +460,7 @@
         - name: "windows | gather users"
           ansible.builtin.include_tasks: tasks/windows/gather_users.yml
 
-        # Windows runtime
+        # P5 sub-phase b (cycle 2026-04-29): Windows runtime
         - name: "windows | gather runtime"
           ansible.builtin.include_tasks: tasks/windows/gather_runtime.yml
 
@@ -480,14 +480,14 @@
                 detected_os:       "windows"
                 selected_port:     "{{ ansible_port | default(5986) }}"
                 checked_ports:     [5985, 5986]
-                # meta.auth — fallback_used 노출
+                # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
                 auth:              "{{ _os_attempts_meta | default({}) }}"
 
         # ── meta & correlation ───────────────────────────────────────────
-        # Windows도 envelope.vendor 정규화 적용.
+        # 2026-04-30 fix B80(win): Windows도 envelope.vendor 정규화 적용.
         # Linux와 달리 Windows는 data.hardware.vendor에 system manufacturer가 emit됨
         # (Win32_ComputerSystem.Manufacturer 또는 Win32_BaseBoard).
-        # vendor name → canonical alias 정규화 (분기 코드 아님).
+        # rule 12 R1 Allowed: vendor name → canonical alias 정규화 (분기 코드 아님).
         - name: "windows | set output meta vars"
           ansible.builtin.set_fact:
             _out_target_type:       "os"
@@ -495,11 +495,11 @@
             _out_ip:                "{{ _ip }}"
             _out_vendor: >-
               {%- set v = ((_merged_data | default({})).hardware | default({})).vendor | default('') | string | lower | trim -%}
-              {%- if 'dell' in v -%}dell
-              {%- elif 'hpe' in v or 'hewlett' in v -%}hp{# 출력 표시값 hpe→hp (vendor_aliases.vendor_output_display mirror) #}
-              {%- elif 'lenovo' in v or v == 'ibm' -%}lenovo
-              {%- elif 'cisco' in v -%}cisco
-              {%- elif 'supermicro' in v or 'smci' in v -%}supermicro
+              {%- if 'dell' in v -%}dell{# nosec rule12-r1 #}
+              {%- elif 'hpe' in v or 'hewlett' in v -%}hp{# nosec rule12-r1 — 출력 표시값 hpe→hp (vendor_aliases.vendor_output_display mirror, 2026-06-04) #}
+              {%- elif 'lenovo' in v or v == 'ibm' -%}lenovo{# nosec rule12-r1 #}
+              {%- elif 'cisco' in v -%}cisco{# nosec rule12-r1 #}
+              {%- elif 'supermicro' in v or 'smci' in v -%}supermicro{# nosec rule12-r1 #}
               {%- elif 'vmware' in v -%}vmware
               {%- elif 'qemu' in v or 'kvm' in v -%}qemu
               {%- elif 'microsoft' in v -%}microsoft
@@ -544,7 +544,7 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       always:
-        # 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
+        # rule 13 R5 / rule 20 R1: 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
         - name: OUTPUT
           ansible.builtin.debug:
             msg: "{{ (_output | default({

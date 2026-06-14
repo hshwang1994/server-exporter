@@ -30,8 +30,8 @@
 #   nice — 설명이 있으면 좋고 없어도 사용에 지장 없음
 #   skip — 의미가 자명해서 본 사전에 등록하지 않음 (예: hostname)
 #
-# 등록 현황 (2026-05-29): Must 39 / Nice 38 / Skip 6 = 총 83 entries
-#   (+9 Nice — storage.hbas[]/infiniband[] 서브필드. 추가형, schema_version 유지)
+# 등록 현황 (2026-06-14): Must 47 / Nice 81 / Skip 6 = 총 134 entries
+#   (cycle 2026-05-29 +9 Nice — storage.hbas[]/infiniband[] 서브필드. Additive, schema_version 유지 D3)
 #
 # 검증 (수동): tests/validate_field_dictionary.py 가 다음 5가지를 검사합니다.
 #   1) 모든 entry 에 help_ko, help_en 이 함께 있는지
@@ -111,7 +111,7 @@ fields:
       호출자 노출용 벤더 표시값. 내부 canonical(예: 'hpe')을 vendor_aliases.yml 의
       vendor_output_display / adapter_output_display 로 매핑한 결과.
       HPE 계열 → 'hp', HPE Compute Scale-up Servers (Superdome Flex + CSUS 3200) → 'hpCsus'
-      (camelCase 예외 — 2026-06-04, HPE 공식 분류 web 검증 근거). OS 채널은 hardware 미수집 시 null.
+      (camelCase 예외 — 2026-06-04 사용자 결정 + HPE 공식 분류 web 검증). OS 채널은 hardware 미수집 시 null.
       ESXi 는 hosting hardware 벤더.
     help_en: >-
       Caller-facing vendor display value: internal canonical (e.g. 'hpe') mapped
@@ -229,6 +229,93 @@ fields:
       Dell=service tag,
       Cisco=not provided (null).
 
+  # cycle 2026-06-15 (SCH-1/2, 사용자 승인): data.hardware 에 정상 emit 되나 사전 미정의이던
+  # 식별 필드 12종 등록. Must 5(vendor/model/serial/uuid/bios_version — 전 esxi+redfish baseline
+  # 보유 실측) + Nice 7. channel 은 hardware 섹션(=[esxi,redfish]) 기준, vendor OEM 전용은 [redfish].
+  hardware.vendor:
+    type: "string|null"
+    priority: must
+    channel: [esxi, redfish]
+    help_ko: "서버 제조사 (Redfish System.Manufacturer / ESXi). 예: HPE, Dell Inc., Lenovo."
+    help_en: "Server vendor (Redfish System.Manufacturer / ESXi). e.g. HPE, Dell Inc., Lenovo."
+
+  hardware.model:
+    type: "string|null"
+    priority: must
+    channel: [esxi, redfish]
+    help_ko: "서버 모델명 (Redfish System.Model). 예: HPE ProLiant Compute DL380 Gen12."
+    help_en: "Server model (Redfish System.Model). e.g. HPE ProLiant Compute DL380 Gen12."
+
+  hardware.serial:
+    type: "string|null"
+    priority: must
+    channel: [esxi, redfish]
+    help_ko: "서버 시리얼번호 (Redfish System.SerialNumber). 빈 문자열은 null 로 정규화."
+    help_en: "Server serial number (Redfish System.SerialNumber). Empty string normalized to null."
+
+  hardware.uuid:
+    type: "string|null"
+    priority: must
+    channel: [esxi, redfish]
+    help_ko: "시스템 UUID (Redfish System.UUID). BMC UUID(bmc.uuid)와 다름 — 서버 본체 식별자."
+    help_en: "System UUID (Redfish System.UUID). Differs from BMC UUID (bmc.uuid) — server chassis identifier."
+
+  hardware.bios_version:
+    type: "string|null"
+    priority: must
+    channel: [esxi, redfish]
+    help_ko: "BIOS/UEFI 펌웨어 버전 (Redfish System.BiosVersion)."
+    help_en: "BIOS/UEFI firmware version (Redfish System.BiosVersion)."
+
+  hardware.bios_date:
+    type: "string|null"
+    priority: nice
+    channel: [esxi, redfish]
+    help_ko: "BIOS 릴리스 날짜 (ISO 8601 YYYY-MM-DD 정규화). 벤더 OEM(예: HPE Oem.Hpe.Bios.Current.Date)에서 hoist. 미제공 시 null."
+    help_en: "BIOS release date (ISO 8601 YYYY-MM-DD). Hoisted from vendor OEM (e.g. HPE Oem.Hpe.Bios.Current.Date). null when absent."
+
+  hardware.asset_tag:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "자산 태그 (Redfish System.AssetTag). 미설정 시 빈 문자열→null."
+    help_en: "Asset tag (Redfish System.AssetTag). Empty→null when unset."
+
+  hardware.system_type:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "시스템 타입 (Redfish System.SystemType). 예: Physical."
+    help_en: "System type (Redfish System.SystemType). e.g. Physical."
+
+  hardware.part_number:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "서버 파트 번호 (Redfish System.PartNumber). 미제공 벤더는 null."
+    help_en: "Server part number (Redfish System.PartNumber). null for vendors that omit it."
+
+  hardware.last_reset_time:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "마지막 리셋 시각 (Redfish System.LastResetTime). 미제공 펌웨어는 null."
+    help_en: "Last reset time (Redfish System.LastResetTime). null on firmware that omits it."
+
+  hardware.boot_progress:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "부팅 진행 상태 (Redfish System.BootProgress.LastState). 예: OSRunning / None."
+    help_en: "Boot progress (Redfish System.BootProgress.LastState). e.g. OSRunning / None."
+
+  hardware.tpm:
+    type: "object|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "TPM 요약 {interface_type, firmware_version, state}. Redfish System.TrustedModules[0]에서 추출. 미장착/미제공 시 null."
+    help_en: "TPM summary {interface_type, firmware_version, state}. From Redfish System.TrustedModules[0]. null when absent."
+
   hardware.oem:
     type: "object"
     priority: must
@@ -273,32 +360,150 @@ fields:
     type: "integer|null"
     priority: must
     channel: [redfish, os]
-    # ESXi channel 제거.
+    # cycle 2026-05-11 field-channel-refinement: ESXi channel 제거.
     # 근거: esxi_baseline.json 의 installed_mb=null (ansible_memtotal_mb 만 수집,
-    # DIMM 슬롯 정보 없음). 분류 1 (수집 불가).
+    # DIMM 슬롯 정보 없음). field_usage_matrix 분류 1 (수집 불가).
     help_ko: >-
       물리적으로 장착된 메모리 용량 (MB).
       Redfish 채널에서 주로 제공. OS 채널에서는 dmidecode 권한 부족 시 null 가능.
-      ESXi 채널은 미수집 (ansible_memtotal_mb 만 제공) — channel 에서 제외.
+      ESXi 채널은 미수집 (ansible_memtotal_mb 만 제공) — channel 에서 제외 (cycle 2026-05-11).
       total_mb와 동일한 값일 수 있으나, total_basis가 다르면 의미가 다름.
     help_en: >-
       Physically installed memory capacity (MB).
       Primarily provided by Redfish. May be null in OS channel (dmidecode permission).
-      ESXi channel excluded — ansible_memtotal_mb only.
+      ESXi channel excluded (cycle 2026-05-11) — ansible_memtotal_mb only.
 
   memory.visible_mb:
     type: "integer|null"
     priority: must
     channel: [os, esxi]
-    # Redfish channel 제거.
+    # cycle 2026-05-11 field-channel-refinement: Redfish channel 제거.
     # 근거: Redfish spec 미정의 (Memory.v1_*.json 에 VisibleMiB 필드 없음).
-    # 4 redfish baseline (dell/hpe/lenovo/cisco) 모두 null. 분류 1.
+    # 4 redfish baseline (dell/hpe/lenovo/cisco) 모두 null. field_usage_matrix 분류 1.
     help_ko: >-
       운영체제 또는 하이퍼바이저가 인식하는 메모리 용량 (MB).
-      OS/ESXi 채널 전용. Redfish 는 BMC API spec 미정의 — channel 에서 제외.
+      OS/ESXi 채널 전용. Redfish 는 BMC API spec 미정의 — channel 에서 제외 (cycle 2026-05-11).
     help_en: >-
       OS or hypervisor visible memory capacity (MB).
-      OS/ESXi channels only. Redfish excluded — not defined in BMC spec.
+      OS/ESXi channels only. Redfish excluded (cycle 2026-05-11) — not defined in BMC spec.
+
+  # cycle 2026-06-14 (DELL R740 MEM-1/MEM-2): memory.total_mb + per-DIMM slots[] 문서화.
+  memory.total_mb:
+    type: "integer|null"
+    priority: must
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      총 메모리 용량 (MB). total_basis 가 산출 기준을 규정 (Redfish=physical_installed).
+      Redfish 는 per-DIMM CapacityMiB 합 또는 MemorySummary.TotalSystemMemoryGiB*1024 fallback.
+      '_mb' 키지만 Redfish 채널 값은 이진 MiB (프로젝트 컨벤션, total_basis help 참조).
+    help_en: >-
+      Total memory capacity (MB). total_basis qualifies the basis (Redfish=physical_installed).
+      Redfish = sum of per-DIMM CapacityMiB or MemorySummary.TotalSystemMemoryGiB*1024 fallback.
+
+  "memory.slots[]":
+    type: "array of object"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      장착된 DIMM 슬롯별 상세. 빈/Absent 슬롯은 제외 (장착된 모듈만). Redfish
+      /Systems/<id>/Memory/* 에서 수집.
+    help_en: >-
+      Per-installed-DIMM detail (Absent slots excluded). From Redfish /Systems/<id>/Memory/*.
+
+  "memory.slots[].capacity_mb":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "DIMM 용량 (Memory.CapacityMiB, 이진 MiB)."
+    help_en: "DIMM capacity (Memory.CapacityMiB, binary MiB)."
+
+  "memory.slots[].speed_mhz":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "DIMM 현재 동작 속도 (Memory.OperatingSpeedMhz, 현재 클럭)."
+    help_en: "DIMM current operating speed (Memory.OperatingSpeedMhz)."
+
+  "memory.slots[].type":
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "메모리 종류 (Memory.MemoryDeviceType, 예: DDR4)."
+    help_en: "Memory device type (Memory.MemoryDeviceType, e.g. DDR4)."
+
+  "memory.slots[].base_module_type":
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "모듈 폼팩터 (Memory.BaseModuleType, 예: RDIMM/UDIMM/LRDIMM)."
+    help_en: "Module form factor (Memory.BaseModuleType, e.g. RDIMM/UDIMM/LRDIMM)."
+
+  "memory.slots[].manufacturer":
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      DIMM 제조사 (Memory.Manufacturer 정규화 — 예: 'Hynix Semiconductor'→'SK hynix'
+      cross-channel canonical).
+    help_en: >-
+      DIMM manufacturer (Memory.Manufacturer canonicalized, e.g. 'Hynix Semiconductor'->'SK hynix').
+
+  "memory.slots[].part_number":
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "DIMM 파트번호 (Memory.PartNumber)."
+    help_en: "DIMM part number (Memory.PartNumber)."
+
+  "memory.slots[].rank_count":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "DIMM rank 수 (Memory.RankCount)."
+    help_en: "DIMM rank count (Memory.RankCount)."
+
+  "memory.slots[].data_width_bits":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "데이터 폭 비트 (Memory.DataWidthBits, 예: 64). bus_width_bits 와 별개."
+    help_en: "Data width bits (Memory.DataWidthBits, e.g. 64). Distinct from bus_width_bits."
+
+  "memory.slots[].bus_width_bits":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "버스 폭 비트 (Memory.BusWidthBits, 예: 72 = 64 데이터 + 8 ECC)."
+    help_en: "Bus width bits (Memory.BusWidthBits, e.g. 72 = 64 data + 8 ECC)."
+
+  "memory.slots[].error_correction":
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "ECC 방식 (Memory.ErrorCorrection, 예: MultiBitECC)."
+    help_en: "Error correction (Memory.ErrorCorrection, e.g. MultiBitECC)."
+
+  "memory.slots[].locator":
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "물리 슬롯 위치 라벨 (Memory.DeviceLocator, 예: 'DIMM A5')."
+    help_en: "Physical slot locator (Memory.DeviceLocator, e.g. 'DIMM A5')."
+
+  "memory.slots[].serial":
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "DIMM 시리얼 (Memory.SerialNumber)."
+    help_en: "DIMM serial (Memory.SerialNumber)."
+
+  "memory.slots[].health":
+    type: "string|null"
+    enum: ["OK", "Warning", "Critical"]
+    priority: nice
+    channel: [redfish]
+    help_ko: "DIMM 건강 상태 (Memory.Status.Health)."
+    help_en: "DIMM health (Memory.Status.Health)."
 
   # ──────────────────────────────────────────────────────────────────────────
   # storage
@@ -452,14 +657,18 @@ fields:
     type: "integer|null"
     priority: must
     channel: [redfish]
+    # cycle 2026-06-15 (RJ-1, 사용자 결정): 키 이름은 _mb 이나 값은 실제로 MiB(이진, ÷2^20)다.
+    # rename/십진 MB 재계산은 호출자 계약 breaking(rule 13 R5) → 키/값 유지, 단위는 문서로만 명시.
     help_ko: >-
-      논리 볼륨 용량 (MB). CapacityBytes를 1048576으로 나눈 값.
-      RAID 레벨에 따라 물리 디스크 합산 용량과 다를 수 있음.
-      예: RAID1 2×480GB → 약 457GB 볼륨.
+      논리 볼륨 용량. **주의: 키 이름은 total_mb 이나 값은 MiB(이진)다** — CapacityBytes ÷ 2^20
+      (1048576). 십진 MB(÷10^6) 아님. physical_disks 의 capacity_gb(십진 GB)와 단위계가 달라
+      합산/비교 시 주의. RAID 레벨에 따라 물리 디스크 합산 용량과 다를 수 있음 (예: RAID1 2×480GB
+      → 약 457GiB 볼륨). 이름/값은 호출자 계약 유지 위해 의도적으로 현행 유지.
     help_en: >-
-      Logical volume capacity (MB). CapacityBytes / 1048576.
-      May differ from raw physical disk total depending on RAID level.
-      Example: RAID1 2×480GB → ~457GB volume.
+      Logical volume capacity. **NOTE: despite the _mb name, the value is in MiB (binary)** —
+      CapacityBytes / 2^20 (1048576), not decimal MB (/10^6). Differs in unit system from
+      physical_disks capacity_gb (decimal GB). May differ from raw physical disk total by RAID
+      level (e.g. RAID1 2×480GB → ~457GiB). Name/value intentionally kept for caller contract.
 
   "storage.logical_volumes[].health":
     type: "string|null"
@@ -506,23 +715,23 @@ fields:
 
   "network.interfaces[].link_status":
     type: "string|null"
-    enum: ["linkup", "linkdown", "none", null]
+    enum: ["up", "down", "unknown", null]
     priority: must
     channel: [redfish, os, esxi]
+    # cycle 2026-06-14 (link_status 통일): 전 채널 canonical up/down/unknown.
+    # redfish(_normalize_link_status)/os-linux/os-windows/esxi-interfaces 코드 일치.
+    # 이전 enum ["linkup","linkdown","none"]은 코드/baseline 어느 쪽과도 불일치였음(정본=코드).
+    # redfish dell/hpe/lenovo baseline 의 linkup/linkdown/none 은 stale → 실장비 재캡처 의무.
     help_ko: >-
-      NIC 링크 상태.
-      linkup=케이블 연결됨 및 링크 활성,
-      linkdown=케이블 미연결 또는 링크 비활성,
-      none=BMC가 상태를 제공하지 않음 (HPE/Cisco System NIC에서 발생),
-      null=필드 자체 미제공.
+      NIC 링크 상태 (전 채널 통일 canonical).
+      up=링크 활성, down=링크 비활성(미연결/disabled/offline 포함),
+      unknown=상태 미제공/판별 불가 (HPE/Cisco System NIC 등), null=필드 자체 미제공.
       Redfish의 System EthernetInterfaces는 서버 NIC 하드웨어 정보이며,
       IP 주소/게이트웨이는 일반적으로 비어 있음 (OS 수준 정보이므로).
     help_en: >-
-      NIC link state.
-      linkup=cable connected and link active,
-      linkdown=no cable or link inactive,
-      none=BMC does not report status (HPE/Cisco System NICs),
-      null=field not provided.
+      NIC link state (canonical, unified across all channels).
+      up=link active, down=link inactive (incl. unplugged/disabled/offline),
+      unknown=status not reported/undeterminable (HPE/Cisco System NICs), null=field absent.
 
   # ──────────────────────────────────────────────────────────────────────────
   # power
@@ -542,6 +751,66 @@ fields:
       Enabled=powered and operating,
       UnavailableOffline=no power input or fault.
       Separate from health (OK/Warning/Critical).
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # thermal (cycle 2026-06-14 Track 4) — 온도 센서 + 팬 (Chassis/Thermal)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  "thermal.temperatures[]":
+    type: "array of object"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      온도 센서 목록. Chassis/{id}/Thermal.Temperatures (또는 신 펌웨어
+      ThermalSubsystem.ThermalMetrics.TemperatureReadingsCelsius). 미노출 시 빈 [].
+    help_en: >-
+      Temperature sensor list. From Chassis/{id}/Thermal.Temperatures (or new-firmware
+      ThermalSubsystem.ThermalMetrics.TemperatureReadingsCelsius). Empty [] when unexposed.
+
+  "thermal.temperatures[].reading_celsius":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "현재 온도 (°C, Temperature.ReadingCelsius). 문자열 응답은 int 정규화."
+    help_en: "Current temperature (°C, Temperature.ReadingCelsius). String responses normalized to int."
+
+  "thermal.temperatures[].upper_critical":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "상한 critical 임계값 (°C, UpperThresholdCritical). 신 schema 경로는 null."
+    help_en: "Upper critical threshold (°C, UpperThresholdCritical). null on new-schema path."
+
+  "thermal.temperatures[].physical_context":
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "센서 물리 위치 (PhysicalContext, 예: CPU/Intake/Exhaust/SystemBoard)."
+    help_en: "Sensor physical context (PhysicalContext, e.g. CPU/Intake/Exhaust/SystemBoard)."
+
+  "thermal.fans[]":
+    type: "array of object"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      팬 목록. Chassis/{id}/Thermal.Fans (신 펌웨어는 ThermalSubsystem.Fans). 미노출 시 빈 [].
+    help_en: >-
+      Fan list. From Chassis/{id}/Thermal.Fans (new firmware: ThermalSubsystem.Fans). Empty [] when unexposed.
+
+  "thermal.fans[].reading":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "팬 속도 수치 (Reading 또는 ReadingRPM; 신 schema 는 SpeedPercent). reading_units 와 함께 해석."
+    help_en: "Fan speed value (Reading or ReadingRPM; new schema SpeedPercent). Interpret with reading_units."
+
+  "thermal.fans[].reading_units":
+    type: "string|null"
+    enum: ["RPM", "Percent", null]
+    priority: nice
+    channel: [redfish]
+    help_ko: "팬 속도 단위 (RPM 또는 Percent). reading 값의 단위."
+    help_en: "Fan speed unit (RPM or Percent) for the reading value."
 
   # ──────────────────────────────────────────────────────────────────────────
   # cpu
@@ -566,6 +835,30 @@ fields:
   # firmware
   # ──────────────────────────────────────────────────────────────────────────
 
+  "firmware[].category":
+    type: "string"
+    priority: nice
+    channel: [redfish]
+    # cycle 2026-06-15 (SCHEMA-07): normalize_standard.yml _rf_firmware_categorized 가 id/name
+    # substring 으로 추론. hpe_csus_3200 baseline 이 이미 emit (정본). enum 은 help 참조.
+    help_ko: >-
+      펌웨어 컴포넌트 분류 (id/name 추론). 값:
+      bios/cpld/tpm/diagnostic/lifecycle/driver_pack/backplane/drive/
+      service_module/bmc/nic/storage_controller/psu/other 중 하나.
+    help_en: >-
+      Inferred firmware component category (from id/name). One of:
+      bios/cpld/tpm/diagnostic/lifecycle/driver_pack/backplane/drive/
+      service_module/bmc/nic/storage_controller/psu/other.
+
+  "firmware[].pending":
+    type: "boolean"
+    priority: nice
+    channel: [redfish]
+    # cycle 2026-06-15: gather_firmware 가 id 에 'pending' 포함 시 true (Lenovo XCC pending fw).
+    # pending=true + version=null 은 정상(의도된 보류), pending=false + version=null 은 데이터 누락.
+    help_ko: "펌웨어 적용 보류 여부 (Redfish id 에 'Pending' 포함 시 true)."
+    help_en: "Whether the firmware is pending application (id contains 'Pending')."
+
   "firmware[].component":
     type: "string|null"
     priority: must
@@ -584,7 +877,7 @@ fields:
       Raw string "null" is converted to None.
 
   # ──────────────────────────────────────────────────────────────────────────
-  # users
+  # users (DRIFT-004 cycle-006 신규)
   # ──────────────────────────────────────────────────────────────────────────
 
   "users[]":
@@ -676,6 +969,130 @@ fields:
       BMC management interface IPv4 address.
       Extracted from Manager's EthernetInterfaces.
       This is the BMC management IP, not the server OS IP.
+
+  # cycle 2026-06-14 (DELL R740 BMC-1): bmc.* 하위 필드 문서화. 모듈이 emit 하나
+  # 미문서였던 필드(호출자 계약 보강). 출처 = Manager 리소스(/Managers/<id>) + 그 자체 NIC.
+  bmc.firmware_version:
+    type: "string|null"
+    priority: must
+    channel: [redfish]
+    help_ko: >-
+      BMC(iDRAC/iLO/XCC/CIMC) 펌웨어 버전. Manager.FirmwareVersion 에서 추출
+      (FirmwareInventory 의 BMC 항목이 아닌 Manager 자체 보고 값 — 더 권위).
+    help_en: >-
+      BMC firmware version from Manager.FirmwareVersion (the Manager's own reported
+      value, not a FirmwareInventory entry).
+
+  bmc.model:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "BMC 모델 문자열 (Manager.Model, 예: '14G Monolithic')."
+    help_en: "BMC model string (Manager.Model, e.g. '14G Monolithic')."
+
+  bmc.manager_type:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "Manager 유형 (Manager.ManagerType, 예: BMC/EnclosureManager/RackManager)."
+    help_en: "Manager type (Manager.ManagerType, e.g. BMC/EnclosureManager/RackManager)."
+
+  bmc.name:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      BMC 표시명 (벤더 라벨: iDRAC/iLO/XCC/CIMC). 호출자 노출용 친화 이름이며
+      Manager.Name 원문과 다를 수 있음 (의도된 벤더 표시값).
+    help_en: >-
+      BMC display label (iDRAC/iLO/XCC/CIMC). Caller-friendly name; may differ from
+      raw Manager.Name (intended vendor label).
+
+  bmc.health:
+    type: "string|null"
+    enum: ["OK", "Warning", "Critical"]
+    priority: must
+    channel: [redfish]
+    help_ko: "BMC 자체 건강 상태 (Manager.Status.Health). 장비 하드웨어 health 와 별개."
+    help_en: "BMC self health (Manager.Status.Health). Distinct from server hardware health."
+
+  bmc.state:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "BMC 동작 상태 (Manager.Status.State, 예: Enabled)."
+    help_en: "BMC operational state (Manager.Status.State, e.g. Enabled)."
+
+  bmc.power_state:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "BMC 전원 상태 (Manager.PowerState). 서버 전원(hardware.power_state)과 다름."
+    help_en: "BMC power state (Manager.PowerState). Differs from server power (hardware.power_state)."
+
+  bmc.uuid:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      Manager UUID (Manager.UUID/ServiceIdentification). System.UUID(hardware.uuid)와
+      다른 값 — 혼동 주의 (BMC 식별자이지 서버 식별자 아님).
+    help_en: >-
+      Manager UUID (Manager.UUID). Different from System.UUID (hardware.uuid) —
+      identifies the BMC, not the server.
+
+  bmc.mac_address:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "BMC 관리 NIC 의 MAC. Manager 자체 EthernetInterface 에서 추출 (System NIC 아님)."
+    help_en: "BMC management NIC MAC, from the Manager's own EthernetInterface (not a System NIC)."
+
+  bmc.dns_name:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "BMC 호스트명 (Manager NIC 의 HostName, 예: iDRAC-<ServiceTag>)."
+    help_en: "BMC hostname (Manager NIC HostName, e.g. iDRAC-<ServiceTag>)."
+
+  bmc.datetime:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "BMC 현재 시각 ISO8601 (Manager.DateTime). datetime_offset 와 함께 해석."
+    help_en: "BMC current time ISO8601 (Manager.DateTime). Interpret with datetime_offset."
+
+  bmc.datetime_offset:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "BMC 시간대 오프셋 (Manager.DateTimeLocalOffset, 예: '-05:00')."
+    help_en: "BMC timezone offset (Manager.DateTimeLocalOffset, e.g. '-05:00')."
+
+  bmc.timezone:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "BMC 시간대 이름 (벤더 OEM, 예: 'CST6CDT'). 없으면 null."
+    help_en: "BMC timezone name (vendor OEM, e.g. 'CST6CDT'). null when absent."
+
+  bmc.last_reset_time:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: "BMC 마지막 리셋 시각 ISO8601 (벤더 OEM). 없으면 null."
+    help_en: "BMC last reset time ISO8601 (vendor OEM). null when absent."
+
+  bmc.oem:
+    type: "object"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      BMC 벤더 OEM 확장. 키 구조 벤더별 상이 (Dell: idrac_url/idrac_ipmi_version/
+      idrac_last_update_time/idrac_last_inventory_time 등). Manager.Oem.<Vendor> 에서 추출.
+    help_en: >-
+      BMC vendor OEM extension. Keys vary by vendor (Dell: idrac_url/idrac_ipmi_version/
+      idrac_last_update_time/idrac_last_inventory_time, etc.). From Manager.Oem.<Vendor>.
 
   correlation.host_ip:
     type: "string"
@@ -772,9 +1189,9 @@ fields:
     enum: ["reachable", "port", "protocol", "auth", "fallback"]
     priority: nice
     channel: [redfish, os, esxi]
-    # conditional 필드 — channel 유지.
+    # cycle 2026-05-11 field-channel-refinement: conditional 필드 — channel 유지.
     # success status baseline 에서 항상 null (실패하지 않음). 실패 status fixture
-    # 추가 시 채워짐. 자동 분류 1 (모든 baseline null) 은
+    # 추가 시 채워짐. field_usage_matrix 자동 분류 1 (모든 baseline null) 은
     # success-only baseline 한계 — conditional 분류 (channel 축소 안 함).
     help_ko: >-
       실패 시 어느 단계에서 실패했는지. **conditional 필드** — status=failed 시만 채워짐.
@@ -810,7 +1227,9 @@ fields:
   cpu.architecture:
     type: "string|null"
     priority: skip
-    channel: [os, esxi]
+    # cycle 2026-06-15 (SCHEMA-05): redfish 도 cpu.architecture emit — normalize_standard.yml:503
+    # (ProcessorArchitecture) + 5 redfish baseline 이 정본. channel 에 redfish 누락이던 것 정정.
+    channel: [redfish, os, esxi]
     help_ko: "CPU 아키텍처 (예: x86_64)."
     help_en: "CPU architecture (e.g., x86_64)."
 
@@ -888,11 +1307,15 @@ fields:
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      NIC 그룹 summary. groups[]={speed_mbps, link_type, quantity, link_up_count}.
-      같은 대역폭 NIC 의 수량 + link up 개수.
+      NIC 그룹 summary. groups[]={speed_mbps, model, manufacturer, link_type, quantity, link_up_count}
+      + adapter_count + port_count + primary_speed_mbps.
+      주의 (NETAD-1): summary.port_count 는 host EthernetInterface(=network.interfaces) 수이며,
+      network.ports[] 길이(NetworkPorts, FC 포함 물리 포트)와 다를 수 있다 — 동일시 금지.
     help_en: >-
-      NIC group summary. groups[]={speed_mbps, link_type, quantity, link_up_count}.
-      Quantity of NICs and link-up count grouped by speed.
+      NIC group summary. groups[]={speed_mbps, model, manufacturer, link_type, quantity, link_up_count}
+      + adapter_count + port_count + primary_speed_mbps.
+      Note (NETAD-1): summary.port_count counts host EthernetInterfaces (=network.interfaces),
+      which may differ from len(network.ports[]) (physical NetworkPorts incl. FC) — do not equate.
 
   # ──────────────────────────────────────────────────────────────────────────
   # NIC / HBA / InfiniBand 깊이 (어댑터 단위 / 포트 단위 정보)
@@ -962,7 +1385,7 @@ fields:
       InfiniBand adapter list. node_guid/link_status/rate. May be empty depending
       on vendor/firmware exposure (best-effort).
 
-  # ── HBA / InfiniBand 서브필드 (추가형 Nice) ──
+  # ── HBA / InfiniBand 서브필드 (cycle 2026-05-29 hba-ib-csus, Additive Nice) ──
   # 전 채널 통일 shape (canonical) — 호출자가 채널 무관하게 같은 키로 파싱.
   # source 필드로 출처 식별 (redfish / os / esxi). lab 부재 vendor 는 사이트 실측 시 정정.
 
@@ -1072,7 +1495,7 @@ fields:
     type: "object"
     priority: nice
     channel: [os, esxi]
-    # OS channel 추가 (Linux + Windows 빌더 구현).
+    # cycle 2026-05-11 field-channel-refinement F5: OS channel 추가 (Linux + Windows 빌더 구현).
     # 9 필드 통일 shape (Linux/Windows/ESXi 동일):
     #   timezone(str) / ntp_active(bool) / ntp_synchronized(bool) /
     #   firewall_tool(str) / firewall_state(str) / listening_ports(str[]) /
@@ -1096,10 +1519,10 @@ fields:
       Best-effort: null/[] when unavailable.
 
   # ──────────────────────────────────────────────────────────────────────────
-  # RMC 멀티-노드 토폴로지
+  # cycle 2026-05-12 (ADR-2026-05-12) — RMC 멀티-노드 토폴로지
   # HPE CSUS 3200 / Superdome Flex 처럼 단일 진입점이 N개 Manager / N개 nPartition /
   # N개 Chassis 노출. adapter `vendor_notes.manager_layout` 정의 vendor 만 활성.
-  # 기타 vendor 는 `data.multi_node = null` (추가 전용 — 기존 envelope 유지).
+  # 기타 13 vendor 는 `data.multi_node = null` (Additive — envelope shape 변경 0).
   # ──────────────────────────────────────────────────────────────────────────
 
   "multi_node":
@@ -1110,13 +1533,13 @@ fields:
       RMC 산하 멀티-노드 토폴로지 컨테이너. HPE CSUS 3200 / Superdome Flex 처럼 단일
       진입점이 N개 Manager / N개 nPartition / N개 Chassis 노출 환경에서 활성.
       adapter vendor_notes.manager_layout 미정의 vendor 는 null. 기존 data.system /
-      data.bmc / ... 등 9 section path 는 Partition0 representative 로 유지 (추가 전용 —
-      기존 path 유지).
+      data.bmc / ... 등 9 section path 는 Partition0 representative 로 유지 (Additive
+      only — rule 92 R2).
     help_en: >-
       RMC multi-node topology container. Active for single-aggregated-controller
       environments like HPE CSUS 3200 / Superdome Flex. null when adapter
       vendor_notes.manager_layout not defined. Existing data.system/data.bmc/...
-      paths retained as Partition0 representative (existing paths unchanged).
+      paths retained as Partition0 representative (Additive only — rule 92 R2).
 
   "multi_node.enabled":
     type: "boolean"

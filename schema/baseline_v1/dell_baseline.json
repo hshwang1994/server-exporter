@@ -71,7 +71,7 @@
           "mac": "40:A6:B7:01:CA:60",
           "mtu": null,
           "speed_mbps": 0,
-          "link_status": "linkdown",
+          "link_status": "down",
           "is_primary": false,
           "addresses": []
         },
@@ -82,7 +82,7 @@
           "mac": "40:A6:B7:01:CA:61",
           "mtu": null,
           "speed_mbps": 0,
-          "link_status": "linkdown",
+          "link_status": "down",
           "is_primary": false,
           "addresses": []
         },
@@ -93,7 +93,7 @@
           "mac": "F0:D4:E2:E6:47:0F",
           "mtu": null,
           "speed_mbps": 0,
-          "link_status": "linkup",
+          "link_status": "up",
           "is_primary": false,
           "addresses": []
         },
@@ -104,7 +104,7 @@
           "mac": "F0:D4:E2:E6:47:0C",
           "mtu": null,
           "speed_mbps": 1000,
-          "link_status": "linkup",
+          "link_status": "up",
           "is_primary": false,
           "addresses": []
         },
@@ -115,7 +115,7 @@
           "mac": "F0:D4:E2:E6:47:0D",
           "mtu": null,
           "speed_mbps": 1000,
-          "link_status": "linkup",
+          "link_status": "up",
           "is_primary": false,
           "addresses": []
         },
@@ -126,7 +126,7 @@
           "mac": "F0:D4:E2:E6:47:0E",
           "mtu": null,
           "speed_mbps": 0,
-          "link_status": "linkup",
+          "link_status": "up",
           "is_primary": false,
           "addresses": []
         },
@@ -137,7 +137,7 @@
           "mac": "F8:F2:1E:3F:83:E0",
           "mtu": null,
           "speed_mbps": 10240,
-          "link_status": "linkup",
+          "link_status": "up",
           "is_primary": false,
           "addresses": []
         },
@@ -148,7 +148,7 @@
           "mac": "F8:F2:1E:3F:83:E1",
           "mtu": null,
           "speed_mbps": 10240,
-          "link_status": "linkup",
+          "link_status": "up",
           "is_primary": false,
           "addresses": []
         }

@@ -16,7 +16,7 @@
 #   _precheck_timeout_protocol: 프로토콜 타임아웃 (기본: 15.0)
 #   _precheck_timeout_auth:     인증 타임아웃 (기본: 8.0)
 #   _precheck_timeout:          protocol/auth 공통 타임아웃 — 개별 값 미지정 시 적용.
-#                               (port 는 빠른 dead-host 감지 유지 위해 적용 제외)
+#                               (port 는 빠른 dead-host 감지 유지 위해 적용 제외 — Round 17 #4)
 #
 # 출력 변수:
 #   _precheck_result:  precheck_bundle 모듈 반환값
@@ -29,7 +29,7 @@
     host: "{{ _precheck_host }}"
     channel: "{{ _precheck_channel }}"
     ports: "{{ _precheck_ports | default(omit) }}"
-    # 호출자가 넘기는 _precheck_timeout(redfish=_rf_timeout, esxi=30) 이 기존엔
+    # Round 17 #4: 호출자가 넘기는 _precheck_timeout(redfish=_rf_timeout, esxi=30) 이 기존엔
     # 어디서도 읽히지 않아 dead → protocol/auth 가 항상 15/8 로 고정(느린 BMC 에서 false-negative).
     # protocol/auth 의 fallback 으로 연결. port 는 빠른 dead-host 감지 위해 3.0 유지(미연결).
     timeout_port: "{{ _precheck_timeout_port | default(3.0) }}"
@@ -41,7 +41,7 @@
   register: _precheck_raw
   no_log: true
 
-# failure_stage 부재 = 진단 통과 (Jinja2 expression 안 주석은 syntax error 유발 — YAML 주석으로 분리)
+# rule 95 R1 #5 ok: failure_stage 부재 = 진단 통과 (Jinja2 expression 안 주석은 syntax error 유발 — YAML 주석으로 분리)
 - name: "precheck | 진단 결과 저장"
   ansible.builtin.set_fact:
     _precheck_result: "{{ _precheck_raw }}"

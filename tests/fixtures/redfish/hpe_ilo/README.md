@@ -1,6 +1,6 @@
-# HPE iLO (legacy iLO 1/2/3) fixture
+# HPE iLO (legacy iLO 1/2/3) fixture — M-H2 (cycle 2026-05-07)
 
-> Lab 부재 — web sources only. Legacy generation.
+> Lab 부재 — web sources only (rule 96 R1-A). Legacy generation.
 
 ## 출처
 
@@ -17,4 +17,4 @@
 
 - 정상 service_root 응답 없음 → precheck protocol fail
 - vendor 추출 불가 → `hpe_ilo.yml` generic fallback (priority=10) 도 미매칭
-- diagnosis.protocol_unsupported 시나리오 (Precheck protocol 단계)
+- diagnosis.protocol_unsupported 시나리오 (rule 27 R2 단계 3)

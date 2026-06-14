@@ -58,7 +58,8 @@ vendor_aliases:
     - "CISCO"
     - "cisco"
 
-  # ── 신규 4 vendor — vault 미설정(향후 추가 가능) ─────────
+  # ── 2026-05-01 사용자 명시 승인 — F44~F47 신규 4 vendor (lab 부재) ─────────
+  # vault 단계 SKIP (사용자 명시 2026-05-01). lab/사이트 도입 시 vault 만 추가.
   huawei:
     - "Huawei"
     - "HUAWEI"
@@ -91,26 +92,27 @@ vendor_aliases:
     - "quanta"
 
 # ==============================================================================
-# 출력 표시값 override
+# 출력 표시값 override (cycle 2026-06-04 — 사용자 결정)
 # ==============================================================================
 # 호출자에게 노출되는 envelope 최상위 `vendor` 값만 치환한다.
 # 내부 canonical 키(위 vendor_aliases)는 그대로 유지 → adapter 선택 / vault 경로
 # (vault/redfish/{profile}.yml) / OEM 추출(OEM_EXTRACTORS) / account 복구 분기는
 # 모두 기존 canonical('hpe' 등) 로 라우팅되어 무손상.
 #
-# 적용 위치 (data-driven — vendor 이름 하드코딩 회피):
+# 적용 위치 (data-driven — vendor 이름 하드코딩 회피, rule 12 R1):
 #   - redfish-gather/site.yml  (_out_vendor: vendor_output_display + adapter_output_display)
 #   - esxi-gather/site.yml     (_out_vendor: vendor_output_display)
-#   - os-gather/site.yml       (raw-fallback inline 매핑 — 동일 결정값을 mirror)
+#   - os-gather/site.yml       (raw-fallback inline 매핑 — 동일 결정값을 mirror, # nosec rule12-r1)
 #
-# CSUS 계열은 별도 표시값(hpCsus)으로 노출한다.
+# 결정 근거: docs/19_decision-log.md (2026-06-04) — 이전 "CSUS 별도 vendor 불필요"
+# 결정을 사용자 지시로 supersede. ADR-2026-06-04-vendor-output-display 참조.
 
 # 내부 canonical → 호출자 노출값 (전 채널 공통)
 vendor_output_display:
   hpe: hp          # 호출자 노출값: 'hpe' → 'hp'
 
 # adapter_id 별 출력 표시값 (특정 모델 라인을 별도 vendor 값으로 노출 — vendor_output_display 보다 우선)
-# HPE "Compute Scale-up Servers" 패밀리 전체 → hpCsus (web 검증).
+# HPE "Compute Scale-up Servers" 패밀리 전체 → hpCsus (2026-06-04 web 검증 — rule 96 R1-A).
 # HPE 공식 분류상 Superdome Flex + CSUS 3200 은 동일 scale-up 패밀리 (둘 다 RMC 관리).
 # CSUS 3200 = Superdome Flex 의 successor ("built on the proven Superdome Flex architecture").
 # source: https://www.hpe.com/us/en/servers/superdome.html (페이지 제목 = "Compute Scale-up Servers")

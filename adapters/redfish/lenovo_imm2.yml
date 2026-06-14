@@ -1,31 +1,31 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: Lenovo / IBM
 # Firmware: IMM2 — 1.x / 2.x (legacy)
 # Generation: imm2
 # Generation Year: "2014-2017 (IBM xSeries → Lenovo System x 인수 후 IMM2)"
 # Redfish Introduction: "DSP0268 v1.0+"
 # Origin: Lenovo IMM2 Redfish API documentation (legacy)
-# Last sync: 2026-05-11 (capability + SimpleStorage fallback 매트릭스 보강)
+# Last sync: 2026-05-11 (M-H3 — capability + SimpleStorage fallback 매트릭스 보강)
 # Notes: 구세대 System x (IBM 인수 전후). Redfish 부분 지원.
-# Sources (lab 부재):
+# Sources (rule 96 R1-A — lab 부재):
 #   - https://pubs.lenovo.com/imm2/   (IMM2 user guide)
 #   - https://lenovopress.lenovo.com/   (System x / IMM2 archive)
 #   - https://www.ibm.com/docs/en/serverguide/   (IBM System x archive)
 # Lab status: 부재 — XCC3 만 사이트 검증 (IMM2 lab 도입 시 fixture 캡처)
 # Storage strategy: standard_with_simple_fallback
 #   - IMM2 일부 펌웨어 SimpleStorage path 만 지원 (1.x ~ 2.x 펌웨어)
-#   - SimpleStorage fallback 경로 지원
+#   - M-D3 W4 (cycle 2026-05-06): A1 SimpleStorage fallback 코드 적용 — Additive only
 # Power strategy: Power deprecated path only (PowerSubsystem 미도입 시기)
-#   - PowerSubsystem→Power fallback 경로 지원
+#   - M-D3 W5 (cycle 2026-05-06): A2 PowerSubsystem→Power fallback 적용 — Additive only
 # OEM namespace: Oem.Lenovo (IBM IMM2 → Lenovo IMM2 인수 후 동일)
 # History note: IBM IMM2 → Lenovo IMM2 (2014 System x 인수 후) — Manufacturer 'IBM' 포함
-# 검증 기준:
+# Tested against:
 #   - System x3650 M5 (IMM2 v6.x 펌웨어) — 가이드 기준선
 #   - System x3550 M5 / x3850 X6 — 동일 IMM2 계열 (펌웨어 1.x ~ 2.x)
-#   - 실장비 검증은 schema/baseline_v1/lenovo_imm2_baseline.json 참조 (해당 시)
-#   - 응답 형식 변경 발견 시: 즉시 기록
-# Next action: lab 도입 후 IMM2 SimpleStorage path 응답 형식 확정
+#   - 실장비 검증은 schema/baseline_v1/lenovo_imm2_baseline.json + tests/evidence/ 참조 (해당 시)
+#   - DRIFT 발견 시: docs/ai/catalogs/EXTERNAL_CONTRACTS.md에 즉시 기록 (rule 96 R4)
+# Next action: lab 도입 후 별도 cycle (IMM2 SimpleStorage path 응답 형식 확정)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_lenovo_imm2
 channel: redfish
@@ -42,10 +42,10 @@ capabilities:
     - bmc
     - cpu
     - memory
-    - storage  # SimpleStorage fallback 경로 지원
+    - storage  # M-D3 W4 (cycle 2026-05-06): A1 SimpleStorage fallback 코드 적용 — Additive only
     - network
     - firmware
-    - power    # PowerSubsystem→Power fallback 경로 지원
+    - power    # M-D3 W5 (cycle 2026-05-06): A2 PowerSubsystem→Power fallback 적용 — Additive only
 
 collect:
   strategy: standard_plus_oem
@@ -59,7 +59,7 @@ normalize:
 credentials:
   profile: "lenovo"
   fallback_profiles: []
-  # AccountService 진입점 — vault/redfish/lenovo.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/redfish/lenovo.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: lenovo_fallback, role: recovery }
     - { vault_label: lenovo_current,  role: recovery }

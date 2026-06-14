@@ -1,12 +1,12 @@
-"""HPE iLO 에뮬레이터 record/replay 공용 모듈.
+"""HPE iLO 에뮬레이터 record/replay 하네스 (공용 모듈).
 
-배경:
-    본질적 제약은 lab 부재다. 실측 HPE 장비는 1 대뿐
-    (DL380 Gen11, iLO6 v1.73). 본 모듈은 HPE 공식 iLO Redfish 에뮬레이터
+배경 (rule 21 R1 / rule 25 R7-B):
+    server-exporter 의 본질적 제약은 lab 부재다. 실측 HPE 장비는 1 대뿐
+    (DL380 Gen11, iLO6 v1.73). 본 하네스는 HPE 공식 iLO Redfish 에뮬레이터
     (BSD-3, v1.7.0) 를 **고품질 테스트 타깃** 으로 써서 redfish_gather.py 의
     파싱/정규화 엔진에 오프라인·결정적 회귀 안전망을 건다.
 
-    **에뮬레이터 != 실장비.** 본 모듈이 만든 fixture / golden 은
+    **에뮬레이터 != 실장비.** 본 하네스가 만든 fixture / golden 은
     schema/baseline_v1/ 실측 baseline 으로 승격하지 않는다. 전부
     tests/fixtures/redfish/hpe_emulator_* 아래 "emulator-derived" 로 라벨링.
 
@@ -119,7 +119,7 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
             ip, vendor, service_root, user, pw, timeout, verify_ssl,
             manager_layout=manager_layout,
         )
-        # main() 미러링: multi_node errors 를 status 계산에 반영. manager_layout 이
+        # main() 미러링 (Round 10): multi_node errors 를 status 계산에 반영. manager_layout 이
         # rmc_primary 등으로 주입되면(CSUS/Superdome) 멀티노드 토폴로지가 실제로 수집된다.
         if isinstance(multi_node, dict):
             all_errors.extend(multi_node.get('errors') or [])

@@ -8,7 +8,8 @@
     "power",
     "processors",
     "storage",
-    "system"
+    "system",
+    "thermal"
   ],
   "data": {
     "bmc": {
@@ -26,7 +27,7 @@
       "health": "OK",
       "ip": "127.0.0.1",
       "last_reset_time": null,
-      "mac_address": "5C:ED:8C:31:BB:C8",
+      "mac_address": "5c:ed:8c:31:bb:c8",
       "manager_type": "BMC",
       "model": "iLO 5",
       "name": "iLO",
@@ -466,7 +467,7 @@
           "firmware_version": "233.1.135.7",
           "id": "DE07A000",
           "link_status": "up",
-          "mac": null,
+          "mac": "84:16:0c:39:a1:e2",
           "manufacturer": "Broadcom",
           "model": "BCM57414",
           "name": "Network Adapter",
@@ -482,7 +483,7 @@
           "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
           "driver": null,
           "firmware": "2.11.01",
-          "link_speed_gbps": 0.0,
+          "link_speed_gbps": null,
           "link_status": "down",
           "model": "HPE SN1610Q 32Gb 2p FC HBA",
           "port_id": "1",
@@ -497,7 +498,7 @@
           "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
           "driver": null,
           "firmware": "2.11.01",
-          "link_speed_gbps": 0.0,
+          "link_speed_gbps": null,
           "link_status": "down",
           "model": "HPE SN1610Q 32Gb 2p FC HBA",
           "port_id": "2",
@@ -513,7 +514,7 @@
         {
           "adapter_id": "DE081000",
           "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
-          "associated_address": "5D:C8:EE:A5:7D:85:65:9F",
+          "associated_address": "5d:c8:ee:a5:7d:85:65:9f",
           "current_link_speed_mbps": 0,
           "health": null,
           "link_state": null,
@@ -526,7 +527,7 @@
         {
           "adapter_id": "DE081000",
           "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
-          "associated_address": "62:73:87:4F:3E:1A:0B:E3",
+          "associated_address": "62:73:87:4f:3e:1a:0b:e3",
           "current_link_speed_mbps": 0,
           "health": null,
           "link_state": null,
@@ -539,7 +540,7 @@
         {
           "adapter_id": "DE07A000",
           "adapter_model": "BCM57414",
-          "associated_address": null,
+          "associated_address": "84:16:0c:39:a1:e2",
           "current_link_speed_mbps": 25000,
           "health": "OK",
           "link_state": "Enabled",
@@ -552,7 +553,7 @@
         {
           "adapter_id": "DE07A000",
           "adapter_model": "BCM57414",
-          "associated_address": null,
+          "associated_address": "84:16:0c:39:a1:e3",
           "current_link_speed_mbps": 25000,
           "health": "OK",
           "link_state": "Enabled",
@@ -698,7 +699,7 @@
       "cpu_summary": {
         "core_count": null,
         "count": 2,
-        "health": null,
+        "health": "OK",
         "logical_processor_count": null,
         "model": "AMD EPYC 7313 16-Core Processor                "
       },
@@ -740,7 +741,8 @@
         "state": "Enabled"
       },
       "uuid": "35383350-3837-584D-5132-333730444C51"
-    }
+    },
+    "thermal": {}
   },
   "error_count": 0,
   "failed_sections": [],

@@ -2,7 +2,7 @@
 # redfish-gather/tasks/collect_standard.yml
 #
 # 표준 Redfish 수집 (벤더 공통).
-# 단일 자격 → 후보 순차 시도 (primary → secondary → recovery)
+# P1 (cycle 2026-04-28): 단일 자격 → 후보 순차 시도 (primary → secondary → recovery)
 #
 # 출력:
 #   _rf_raw_collect    : redfish_gather 결과 (성공한 후보 기준)
@@ -28,7 +28,7 @@
 - when: (_rf_accounts | default([])) | length == 0
   block:
     - name: "redfish | collect_standard | empty-credential attempt"
-      # manager_layout 인자 전달 (빈 자격 경로).
+      # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 인자 전달 (Additive — 빈 자격 경로).
       redfish_gather:
         bmc_ip:         "{{ _rf_ip }}"
         username:       ""
@@ -69,7 +69,7 @@
   no_log: true
 
 # 운영 가시성 — meta.auth 에 합쳐질 정보 (build_meta.yml 시 활용)
-# cross-channel typing — attempted_count int / fallback_used bool 명시 cast
+# production-audit (2026-04-29): cross-channel typing — attempted_count int / fallback_used bool 명시 cast
 - name: "redfish | collect_standard | record attempts meta"
   ansible.builtin.set_fact:
     _rf_attempts_meta:

@@ -1,12 +1,12 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: Quanta (QCT — Quanta Cloud Technology)
 # Firmware: OpenBMC 기반 (bmcweb 표준)
 # Origin: Quanta QCT 공식 + OpenBMC 표준
 # Last sync: 2026-05-01 (web sources only — lab 부재)
 # Notes: QuantaGrid D54Q-2U / D52BQ-2U / 기타 OpenBMC 기반 모델.
-#   vault 신설 완료 (2026-05-11, vault/redfish/quanta.yml).
-# Sources (lab 부재):
+#   사용자 명시 승인 (2026-05-01) — vault 신설 완료 (2026-05-11 M-A4, vault/redfish/quanta.yml).
+# Sources (rule 96 R1-A — lab 부재):
 #   - https://www.qct.io/product/index/Server/rackmount-server/2U-Rackmount-Server/QuantaGrid-D54Q-2U
 #   - https://www.exalit.com/storage/2023/09/D54Q-2U_v20230330.pdf
 #   - https://www.hyperscalers.com/image/catalog/00-Products/Servers/QuantaGrid-D52BQ-2U-UG%202.0%20-%20HS.pdf
@@ -19,12 +19,12 @@
 #   - OEM namespace: Oem.OpenBmc (vendor 표준 namespace) 또는 부재
 #   - OpenBMC 기반 → 표준 Redfish 우선, OEM 의존 작음
 #     (Lenovo XCC3 와 유사 — OpenBMC alignment)
-# Vault: 신설 완료 (2026-05-11)
+# Vault: 신설 완료 (2026-05-11 M-A4)
 # Note: redfish_generic.yml (priority=0) 가 OpenBMC 기반 BMC 부분 cover.
 #   본 adapter 는 vendor 시그니처 명확한 경우 우선.
-# OEM tasks 신설 (standard+oem strategy)
-# Lab status: 부재 — web sources only (2026-05-01)
-# Next action: QuantaGrid D54Q / D52BQ lab 도입 후 OpenBMC bmcweb 응답 형식 + Oem.Quanta_Computer_Inc vs Oem.QCT fallback 검증
+# M-F1 cycle 2026-05-07-all-vendor-coverage: OEM tasks 신설 (standard+oem strategy)
+# Lab status: 부재 — web sources only (rule 96 R1-A — cycle 2026-05-01 사용자 명시)
+# Next action: QuantaGrid D54Q / D52BQ lab 도입 후 별도 cycle (OpenBMC bmcweb 응답 형식 + Oem.Quanta_Computer_Inc vs Oem.QCT fallback 검증)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_quanta_qct_bmc
 channel: redfish
@@ -49,22 +49,22 @@ capabilities:
     - network
     - firmware
     - power
-    # users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
+    # M-D3 W6 (cycle 2026-05-06): users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
   oem_strategy: "standard+oem"
 
 collect:
   strategy: standard+oem
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/quanta/collect_oem.yml"
+  oem_tasks: "redfish-gather/tasks/vendors/quanta/collect_oem.yml"  # M-F1 신설
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/quanta/normalize_oem.yml"
+  oem_tasks: "redfish-gather/tasks/vendors/quanta/normalize_oem.yml"  # M-F1 신설
 
 credentials:
   profile: "quanta"
   fallback_profiles: []
-  # AccountService 진입점 — vault/redfish/quanta.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
+  # P2 AccountService 진입점 — vault/redfish/quanta.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
   recovery_accounts:
     - { vault_label: quanta_factory, role: recovery }
 
@@ -80,10 +80,10 @@ graceful_degradation:
 vendor_notes:
   bmc_name: "BMC"  # OpenBMC 기반 — 별도 표시명 없음
   base_platform: openbmc
-  oem_namespace: "Oem.Quanta_Computer_Inc"     # primary (vendor 표기)
+  oem_namespace: "Oem.Quanta_Computer_Inc"     # M-F1 primary (vendor 표기)
   oem_namespace_fallback: "Oem.QCT"            # 단축 표기 fallback
   oem_namespace_openbmc: "Oem.OpenBmc"         # OpenBMC base fallback
-  vault_status: "created (2026-05-11)"
+  vault_status: "created (2026-05-11 M-A4)"
   expected_models:
     - "QuantaGrid D54Q-2U"
     - "QuantaGrid D52BQ-2U"
@@ -91,4 +91,4 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Quanta QCT BMC 장비 (OpenBMC 기반) — Redfish 표준 호환 가정."
+  not_supported_message: "Quanta QCT BMC 장비 (OpenBMC 기반) — Redfish 표준 호환 가정 (lab 부재 — web sources 기반)."

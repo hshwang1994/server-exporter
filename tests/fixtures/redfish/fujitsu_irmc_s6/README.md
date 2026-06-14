@@ -1,6 +1,6 @@
 # Fujitsu iRMC S6 mock fixture — PRIMERGY RX2540 M7
 
-> Lab 부재 vendor mock fixture (최신 generation).
+> M-E3 cycle 2026-05-07-all-vendor-coverage — lab 부재 vendor mock fixture (최신 generation).
 
 ## 메타
 
@@ -13,7 +13,7 @@
 | Redfish version | 1.13.0 |
 | OEM namespace | `Oem.ts_fujitsu` (primary) |
 | PowerSubsystem | YES (S6 도입) |
-| Lab | 부재 — web sources 기반 |
+| Lab | 부재 — web sources 기반 (rule 96 R1-A) |
 
 ## Sources
 
@@ -43,6 +43,6 @@
 
 ## 검증 포인트
 
-- adapter 선택: `redfish_fujitsu_irmc` (firmware_patterns: `iRMC*S6*` 매칭)
+- adapter 선택: `redfish_fujitsu_irmc` (firmware_patterns: `iRMC*S6*` 매칭 — M-E1)
 - PowerSubsystem 도입 — `capabilities.power_subsystem: "conditional"` 분기 활성
-- OEM namespace `Oem.ts_fujitsu` 추출
+- OEM namespace `Oem.ts_fujitsu` 추출 (M-E2)

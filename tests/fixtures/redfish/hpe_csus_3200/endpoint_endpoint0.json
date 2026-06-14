@@ -6,5 +6,5 @@
   "Name": "FlexGrid Endpoint 0 (Base)",
   "EndpointProtocol": "PCIe",
   "Status": {"State": "Enabled", "Health": "OK"},
-  "_note": "lab 부재 — NUMAlink endpoint 합성."
+  "_note": "lab 부재 — NUMAlink endpoint 합성. rule 96 R1-A."
 }

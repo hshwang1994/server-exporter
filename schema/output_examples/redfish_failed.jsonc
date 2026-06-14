@@ -45,7 +45,7 @@
       "selected_port": 443,                             // 실제 통신 port
       "root_status_code": 503,                             // root (/redfish/v1/) HTTP 503 — Service Unavailable
       "requires_auth_at_root": false,                      // 일부 BMC 는 ServiceRoot 도 인증 요구
-      "header_negotiation_issue": false                    // Accept / OData-Version / User-Agent 협상 이슈 (lenovo XCC3 reverse regression 관련)
+      "header_negotiation_issue": false                    // Accept / OData-Version / User-Agent 협상 이슈 (rule 96 R7-A-1 lenovo XCC3 reverse regression 관련)
     }
   },
   "meta": {                                             // 수집 메타데이터 — 운영 추적 + 성능 분석
@@ -62,11 +62,11 @@
     "bmc_ip": null,                                        // 보통 host_ip 와 동일하게 채워지나 실패 시 null
     "host_ip": "10.100.15.1"                            // 호출자가 전달한 service_ip / bmc_ip
   },
-  "errors": [                                           // 수집 중 errors (warning 수준이면 status=success 와 공존 가능)
+  "errors": [                                           // 수집 중 errors (warning 수준이면 status=success 와 공존 가능 — rule 13 R8)
     {
       "section": "redfish_gather",                         // errors 가 발생한 영역
-      "message": "Redfish 수집 실패 — 인증 실패 (10.100.15.1). 네트워크/Redfish API는 정상 (Redfish ? / Unknown). vault/redfish/.yml 자격증명을 확인하세요. 시도된 계정 수: 0.",  // 한국어 사용자 가이드
-      "detail": null                                       // 추가 details (envelope shape 변경 금지)
+      "message": "Redfish 수집 실패 — 인증 실패 (10.100.15.1). 네트워크/Redfish API는 정상 (Redfish ? / Unknown). vault/redfish/.yml 자격증명을 확인하세요. 시도된 계정 수: 0.",  // 한국어 사용자 가이드 (rule 23)
+      "detail": null                                       // 추가 details (envelope shape 변경 금지 — rule 13 R5 / rule 96 R1-B)
     }
   ],
   "data": {                                                // 모든 섹션 null 또는 빈 list/dict (실패 envelope 도 13 필드 + shape 유지)

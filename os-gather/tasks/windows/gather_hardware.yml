@@ -1,10 +1,10 @@
 ---
 # os-gather/tasks/windows/gather_hardware.yml → data.hardware fragment
-# Windows hardware section 활성화 (이전 not_supported)
+# cycle-016 Phase O: Windows hardware section 활성화 (이전 not_supported)
 
 - name: "windows | hardware | Win32_ComputerSystem + Win32_BIOS"
   ansible.windows.win_shell: |
-    # VMware/Hyper-V VM은 Win32_ComputerSystem.UUID=$null.
+    # windows-audit (2026-04-29): VMware/Hyper-V VM은 Win32_ComputerSystem.UUID=$null.
     # → Win32_ComputerSystemProduct.UUID fallback (ansible_product_uuid 와 동일 source).
     # AssetTag "No Asset Tag"/"Default string" 같은 OEM placeholder 는 null 정규화.
     # ChassisTypes 정수 코드 → enum 매핑. ReleaseDate (ManagementDateTime) → ISO 일자.

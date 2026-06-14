@@ -69,7 +69,7 @@
     "bmc_ip": null,                                        // BMC IP (Redfish 만 채워짐)
     "host_ip": "10.100.64.167"                             // 호출자가 전달한 service_ip
   },
-  "errors": [],                                            // 수집 중 errors (warning 수준이면 status=success 와 공존 가능)
+  "errors": [],                                            // 수집 중 errors (warning 수준이면 status=success 와 공존 가능 — rule 13 R8)
   "data": {                                                // 실제 수집된 데이터 (섹션별)
     "storage": {                                           // 디스크 / 파일시스템 / 컨트롤러
       "logical_volumes": [],                               // LVM/RAID 가상 볼륨 (lvs/dmsetup)
@@ -173,7 +173,7 @@
           "mac": "00:50:56:84:ac:2c",                      // MAC address
           "mtu": 1500,                                     // MTU (bytes)
           "speed_mbps": 10000,                             // 링크 속도
-          "link_status": "linkup",                         // linkup / down / unknown
+          "link_status": "up",                         // linkup / down / unknown
           "is_primary": true,                              // 기본 NIC (default route 매칭)
           "addresses": [                                   // 할당된 IP list
             {
@@ -186,7 +186,7 @@
             {"family": "ipv6", "address": "fe80::250:56ff:fe84:ac2c", "prefix_length": 64, "subnet_mask": null, "gateway": null, "scope": "link"}  // scope: IPv6 범위
           ]
         },
-        {"id": "ens192", "name": "ens192", "kind": "os_nic", "mac": "00:50:56:84:8b:b9", "mtu": 1500, "speed_mbps": 10000, "link_status": "linkup", "is_primary": false, "addresses": [{"family": "ipv4", "address": "10.100.64.167", "prefix_length": 24, "subnet_mask": "255.255.255.0", "gateway": null}, {"family": "ipv6", "address": "fe80::250:56ff:fe84:8bb9", "prefix_length": 64, "subnet_mask": null, "gateway": null, "scope": "link"}]}
+        {"id": "ens192", "name": "ens192", "kind": "os_nic", "mac": "00:50:56:84:8b:b9", "mtu": 1500, "speed_mbps": 10000, "link_status": "up", "is_primary": false, "addresses": [{"family": "ipv4", "address": "10.100.64.167", "prefix_length": 24, "subnet_mask": "255.255.255.0", "gateway": null}, {"family": "ipv6", "address": "fe80::250:56ff:fe84:8bb9", "prefix_length": 64, "subnet_mask": null, "gateway": null, "scope": "link"}]}
       ],
       "adapters": [                                        // 물리 어댑터 list (PCI)
         {
@@ -267,9 +267,9 @@
         "home": "/root",                                   // 홈 디렉터리
         "last_access_time": null                           // 마지막 로그인 시각 (없으면 null)
       },
-      {"name": "sysadmin", "uid": "1000", "groups": ["sysadmin", "adm", "cdrom", "sudo", "dip", "plugdev", "lxd"], "home": "/home/sysadmin", "last_access_time": "2026-05-06T23:46:43Z"}
+      {"name": "cloviradmin", "uid": "1000", "groups": ["cloviradmin", "adm", "cdrom", "sudo", "dip", "plugdev", "lxd"], "home": "/home/cloviradmin", "last_access_time": "2026-05-06T23:46:43Z"}
     ],
     "firmware": []                                         // OS 채널은 firmware 빈 list
   },
-  "schema_version": "1"                                    // envelope schema 버전 — "1" 고정
+  "schema_version": "1"                                    // envelope schema 버전 — "1" 고정 (rule 13 R5)
 }

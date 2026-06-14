@@ -1,6 +1,6 @@
-# Supermicro X12 mock fixture
+# Supermicro X12 mock fixture (cycle 2026-05-07 M-B4)
 
-## 출처 (lab 부재)
+## 출처 (rule 96 R1-A — lab 부재)
 
 - Supermicro X12 BMC Redfish ref: `https://www.supermicro.com/manuals/other/RedfishUserGuide.pdf`
 - Supermicro firmware inventory: `https://www.supermicro.com/manuals/other/redfish-ref-guide-html/Content/general-content/firmware-inventory-update-service.htm`
@@ -10,7 +10,7 @@
 
 ## Lab 상태
 
-- 부재 — Supermicro 사이트 BMC 0대
+- 부재 — 사용자 명시 2026-05-07 Q2 (Supermicro 사이트 BMC 0대)
 - web sources 기반 mock — 실 BMC 응답과 차이 가능
 
 ## Generation 특성

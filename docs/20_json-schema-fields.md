@@ -38,7 +38,8 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
     "network": "success",
     "firmware":"success",
     "users":   "not_supported",
-    "power":   "success"
+    "power":   "success",
+    "thermal": "success"
   },
 
   "diagnosis": {
@@ -57,15 +58,18 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
     "memory":   { "total_mb": 655360, "total_basis": "physical_installed", ... },
     "storage":  { "physical_disks": [...], "logical_volumes": [...], ... },
     "network":  { "interfaces": [...], "summary": {...} },
-    "firmware": [ { "name": "BIOS", "version": "2.21.2", ... }, ... ],
+    "firmware": [ { "name": "BIOS", "version": "2.21.2", "component": "...", "updateable": true, "category": "bios", "pending": false }, ... ],
     "power":    { "power_supplies": [...], "power_control": {...} },
     "users":    [],
     "system":   { "fqdn": "LENOVO01", ... }
   },
-
   "schema_version": "1"
 }
 ```
+
+> cycle 2026-06-15 (field_dictionary 134 entries): `firmware[].category` (bios/cpld/tpm/drive/
+> backplane/nic/storage_controller/psu/... id·name 추론) + `firmware[].pending` (적용 보류) 정식 등록.
+> `cpu.architecture` 는 redfish 채널도 emit (channel=[redfish,os,esxi]).
 
 이 JSON 한 통이 보내는 메시지를 한 줄씩 풀면 이렇다.
 
@@ -92,14 +96,14 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 | `collection_method` | `agent` / `vsphere_api` / `redfish_api` | 실제로 쓴 방법. `target_type` 에 따라 자동으로 결정 |
 | `ip` | 문자열 | 호출자가 넘긴 대상 IP. Redfish 면 BMC IP, OS 면 서버 IP |
 | `hostname` | 문자열 | 풀어낸 호스트명. fallback chain: `system.hostname → system.fqdn → ip`. 상세: 8절 hostname fallback |
-| `vendor` | `dell` / `hp` / `hpCsus` / `lenovo` / `supermicro` / `cisco` / `null` | 호출자 노출 표시값. 내부 canonical(`hpe`)을 `vendor_output_display`/`adapter_output_display`(vendor_aliases.yml)로 매핑. HPE 계열→`hp`, HPE Compute Scale-up 패밀리(CSUS 3200 + Superdome Flex)→`hpCsus`(camelCase 예외). 대부분 소문자 한 단어 |
+| `vendor` | `dell` / `hp` / `hpCsus` / `lenovo` / `supermicro` / `cisco` / `null` | 호출자 노출 표시값. 내부 canonical(`hpe`)을 `vendor_output_display`/`adapter_output_display`(vendor_aliases.yml)로 매핑. HPE 계열→`hp`, HPE Compute Scale-up 패밀리(CSUS 3200 + Superdome Flex)→`hpCsus`(camelCase 예외, 2026-06-04 ADR). 대부분 소문자 한 단어 |
 
 ### 그룹 B — 결과 (2개)
 
 | 키 | 무슨 값 | 의미 |
 |---|---|---|
 | `status` | `success` / `partial` / `failed` | **수집 결과**. 장비 상태 아님 |
-| `sections` | 섹션 10개 각각 `success` / `failed` / `not_supported` | 섹션별 결과 |
+| `sections` | 섹션 11개 각각 `success` / `failed` / `not_supported` | 섹션별 결과 |
 
 `status` 가 어떻게 결정되는지는 4절에서 따로 정리.
 
@@ -121,9 +125,9 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 
 ---
 
-## 3. 섹션 10개 — 어떤 채널이 뭘 채우나
+## 3. 섹션 11개 — 어떤 채널이 뭘 채우나
 
-JSON 의 `sections` 와 `data` 는 같은 10개 키를 갖는다. 각 채널이 채울 수 있는 영역이 다르다.
+JSON 의 `sections` 와 `data` 는 같은 11개 키를 갖는다. 각 채널이 채울 수 있는 영역이 다르다.
 
 | 섹션 | 무엇 | OS | ESXi | Redfish |
 |---|---|:-:|:-:|:-:|
@@ -137,8 +141,10 @@ JSON 의 `sections` 와 `data` 는 같은 10개 키를 갖는다. 각 채널이 
 | `firmware` | 펌웨어 인벤토리 | | | O |
 | `users` | OS 로컬 계정 | O | | |
 | `power` | PSU / 전력 사용 | | | O |
+| `thermal` | 온도 센서 / 팬 (Chassis/Thermal) | | | O |
 
 (X) = `not_supported`. 그 채널 특성상 원래 못 가져오는 영역이다. 수집 실패와 다른 의미다.
+cycle 2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data.thermal` 만 채워지고 `sections.thermal` 누락 — Track4 미완. 이제 redfish 는 수집 성공 시 `success`, os/esxi 는 `not_supported`).
 
 같은 서버라도 채널별로 채워지는 영역이 다르다는 게 핵심. 예를 들어:
 - Dell 서버를 **Redfish** 로 보면 `bmc` / `firmware` / `power` 가 풍부하고 OS 정보는 없다.
@@ -251,7 +257,7 @@ if response["data"]["hardware"].get("health") == "Critical":
 }
 ```
 
-**Channel 매핑**:
+**Channel 매핑 (cycle 2026-05-11 field-channel-refinement)**:
 - `installed_mb` channel: `[redfish, os]` — ESXi 는 ansible_memtotal_mb 만 (DIMM slot 미수집) → channel 제외
 - `visible_mb` channel: `[os, esxi]` — Redfish API spec 미정의 (`Memory.v1_*.json` 에 `VisibleMiB` 없음) → channel 제외
 - `free_mb` channel: `[os]` — OS 채널 전용
@@ -290,7 +296,7 @@ controllers[*].id  ────┤
                        └─ logical_volumes[*].controller_id 에서 참조
 ```
 
-#### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand
+#### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand (cycle 2026-05-29)
 
 전 채널 (Redfish / OS Linux·Windows / ESXi) 이 **동일 canonical 키** 로 emit 한다.
 호출자는 채널 무관하게 같은 키로 파싱하고, `wwpn` / `node_guid` 로 동일 물리 장치를
@@ -331,7 +337,7 @@ controllers[*].id  ────┤
 "network": {
   "interfaces": [
     { "id": "...", "kind": "server_nic", "mac": "...", "speed_mbps": 10240,
-      "link_status": "linkup", "addresses": [...] },
+      "link_status": "up", "addresses": [...] },
     ...
   ],
   "dns_servers":      [],
@@ -340,9 +346,9 @@ controllers[*].id  ────┤
 }
 ```
 
-`link_status` 값:
-- `linkup` / `linkdown` — 정상 보고
-- `none` — BMC 가 link 상태 정보 자체를 안 줌 (HPE iLO / Cisco System NIC 등에서 종종 발생)
+`link_status` 값 (cycle 2026-06-14 전 채널 통일 canonical — 이전 linkup/linkdown/none 폐기):
+- `up` / `down` — 링크 활성 / 비활성(미연결·disabled·offline 포함)
+- `unknown` — 상태 미제공/판별 불가 (HPE iLO / Cisco System NIC 등에서 종종 발생)
 - `null` — 응답에 필드 자체가 없음
 
 ### 6.5 `data.power` (Redfish 전용)
@@ -365,6 +371,49 @@ controllers[*].id  ────┤
 
 PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. 위 예시가 그 케이스.
 
+### 6.6 `data.bmc` (Redfish 전용)
+
+> cycle 2026-06-14 (DELL R740 BMC-1): bmc 하위 필드가 field_dictionary 에 문서화됨 (이전엔 `bmc.ip` 만).
+
+```json
+"bmc": {
+  "firmware_version": "7.00.00.184",   // Manager.FirmwareVersion (FirmwareInventory 아님 — 더 권위)
+  "model": "14G Monolithic",           // Manager.Model
+  "name": "iDRAC",                      // 벤더 표시 라벨 (iDRAC/iLO/XCC/CIMC)
+  "health": "OK",                       // Manager.Status.Health (BMC 자체 — 장비 health 아님)
+  "ip": "10.x.x.x",                     // BMC 관리 NIC (Manager 자체 EthernetInterface)
+  "mac_address": "f4:02:70:...",        //  "  서버 OS NIC 아님
+  "dns_name": "iDRAC-<ServiceTag>",
+  "uuid": "3330...",                    // Manager UUID — System UUID(hardware.uuid)와 다름!
+  "datetime": "2026-06-12T01:42:11-05:00", "datetime_offset": "-05:00",
+  "oem": { "idrac_url": "https://...", "idrac_ipmi_version": "2.0", ... }
+}
+```
+
+주의: `bmc.uuid` 는 **BMC 식별자**(Manager UUID)이고 `hardware.uuid` 는 **서버 식별자**(System UUID)다.
+`bmc.firmware_version` 은 Manager 가 직접 보고하는 BMC 펌웨어로, FirmwareInventory 의 BMC 항목(때로 stale)이 아니다.
+
+### 6.7 `data.thermal` (Redfish 전용)
+
+> cycle 2026-06-14 (Track 4): 단일노드 thermal 수집 — 이전엔 multi_node(CSUS/Superdome) 경로만 수집했음.
+> Chassis/{id}/Thermal (신 펌웨어는 ThermalSubsystem). 미지원/미노출 벤더는 빈 `{temperatures:[], fans:[]}` (graceful).
+
+```json
+"thermal": {
+  "temperatures": [
+    { "name": "CPU1 Temp", "reading_celsius": 47, "health": "OK",
+      "state": "Enabled", "upper_critical": 104, "physical_context": "CPU" }
+  ],
+  "fans": [
+    { "name": "System Board Fan1", "reading": 5760, "reading_units": "RPM",
+      "health": "OK", "state": "Enabled" }
+  ]
+}
+```
+
+`reading_units` 는 `RPM`(legacy /Thermal) 또는 `Percent`(신 ThermalSubsystem.SpeedPercent). 팬 속도 비교 시
+`reading_units` 를 반드시 확인. `upper_critical` 은 legacy 경로에서만 채워지고 신 schema 경로는 null.
+
 ---
 
 ## 7. 자주 묻는 질문
@@ -386,7 +435,7 @@ Redfish 채널은 둘이 같은 게 정상이다 (BMC 를 통해 수집). OS / E
 
 ---
 
-## 8. hostname fallback chain (의도된 동작)
+## 8. hostname fallback chain (의도된 동작 — cycle 2026-05-07 보강)
 
 `envelope.hostname` 은 다음 우선순위로 결정된다 (정본: `common/tasks/normalize/build_output.yml:31-33`):
 
@@ -417,7 +466,7 @@ hostname = system.hostname  OR  system.fqdn  OR  ip_fallback
   - `True` → ip fallback 발생 (BMC 가 hostname 미응답)
   - `False` → 정상 hostname 또는 fqdn 응답
 - **상세 추적**: `ansible-playbook -vvv` 로그에서 `_merged_data.system` raw 값 확인
-- **회귀 차단**: `tests/regression/test_cross_channel_consistency.py::test_hostname_never_null` — 모든 baseline 의 hostname 이 non-null 보장
+- **회귀 차단**: `tests/regression/test_cross_channel_consistency.py::test_hostname_never_null` (cycle 2026-05-07 추가) — 모든 baseline 의 hostname 이 non-null 보장
 
 ### 왜 ip fallback 이 정상인가 (DMTF spec 근거)
 
@@ -429,15 +478,15 @@ hostname = system.hostname  OR  system.fqdn  OR  ip_fallback
 
 ### 알려진 baseline drift
 
-- `cisco_baseline.json` 은 `hostname == ip` (`10.100.15.2`, IP fallback) — `data.system.fqdn` 은 `C220-FCH2116V1V0` 로 non-null 이지만 hostname 해석이 IP 로 폴백된 상태. 후속 작업: lab Cisco UCS 실측 후 hostname/fqdn 해석 재검증 + baseline 갱신.
+- `cisco_baseline.json` 은 `hostname == ip` (`10.100.15.2`, IP fallback) — `data.system.fqdn` 은 `C220-FCH2116V1V0` 로 non-null 이지만 hostname 해석이 IP 로 폴백된 상태. 후속 작업: lab Cisco UCS 실측 후 hostname/fqdn 해석 재검증 + baseline 갱신 (`docs/ai/NEXT_ACTIONS.md` 추적).
 
 ---
 
 ## 9. RMC 멀티-노드 토폴로지 (`data.multi_node`)
 
-> HPE Compute Scale-up Server 3200 / Superdome Flex 처럼 단일 RMC (Rack Management Controller) 가 N개 chassis × N개 nPartition × 다중 Manager 를 통합 노출하는 환경 정식 지원.
+> cycle 2026-05-12 (ADR-2026-05-12) 추가. HPE Compute Scale-up Server 3200 / Superdome Flex 처럼 단일 RMC (Rack Management Controller) 가 N개 chassis × N개 nPartition × 다중 Manager 를 통합 노출하는 환경 정식 지원.
 >
-> CSUS 3200 Redfish 모델 검수 결과 누락분 5종 추가 — per-partition `boot` (부팅 순서), per-chassis `thermal` (온도/팬), per-manager `log_services` (LogServices), `multi_node.composition` (CompositionService/ResourceBlocks), `multi_node.fabrics` (Fabrics/FlexGrid Switches+Endpoints, NUMAlink). 모두 `data.multi_node` 내부 키이며, envelope 13 필드와 기존 9 section path 는 그대로 유지된다.
+> cycle 2026-06-09 (ADR-2026-06-09) 확장. CSUS 3200 Redfish 모델 검수 결과 누락분 5종 Additive 추가 — per-partition `boot` (부팅 순서), per-chassis `thermal` (온도/팬), per-manager `log_services` (LogServices), `multi_node.composition` (CompositionService/ResourceBlocks), `multi_node.fabrics` (Fabrics/FlexGrid Switches+Endpoints, NUMAlink). 모두 `data.multi_node` 내부 신 키 (envelope 13 필드 / 기존 9 section path 변경 0).
 
 ### 활성 조건
 
@@ -449,9 +498,9 @@ hostname = system.hostname  OR  system.fqdn  OR  ip_fallback
 | HPE Superdome Flex | `hpe_superdome_flex.yml` | `rmc_primary_ilo_secondary` | YES |
 | 기타 13 vendor (HPE iLO 4~7 / Dell / Cisco / Lenovo / Supermicro / Huawei / Inspur / Fujitsu / Quanta) | — | (미정의) | NO — `data.multi_node = null` |
 
-### Envelope shape (추가 전용 — 기존 path 는 그대로 유지)
+### Envelope shape (Additive only — rule 92 R2 / 96 R1-B)
 
-기존 9 section path (`data.system` / `data.bmc` / `data.cpu` / `data.memory` / `data.storage` / `data.network` / `data.firmware` / `data.power` / `data.hardware`) 는 **Partition0 representative** 로 그대로 유지된다. 기존 호출자 시스템의 파싱 방식은 바뀌지 않는다.
+기존 9 section path (`data.system` / `data.bmc` / `data.cpu` / `data.memory` / `data.storage` / `data.network` / `data.firmware` / `data.power` / `data.hardware`) 는 **Partition0 representative** 로 그대로 유지. 호출자 시스템 파싱 변경 0.
 
 ```json
 {
@@ -522,9 +571,9 @@ hostname = system.hostname  OR  system.fqdn  OR  ip_fallback
 }
 ```
 
-### 확장 컴포넌트
+### 확장 컴포넌트 (cycle 2026-06-09 — ADR-2026-06-09)
 
-CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 내부 키이다. Redfish 표준 리소스 미노출 시 graceful (boot/thermal=`{}`, log_services=`[]`, composition/fabrics=`null`).
+CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 내부 (Additive). Redfish 표준 리소스 미노출 시 graceful (boot/thermal=`{}`, log_services=`[]`, composition/fabrics=`null`).
 
 | 키 | 출처 Redfish 리소스 | 필드 | 비고 |
 |---|---|---|---|
@@ -534,20 +583,20 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | `composition` | `CompositionService` + `ResourceBlocks` | `enabled`, `state/health`, `resource_block_count`, `resource_blocks[]` (id/types/composition_state/processor_count/memory_count/`chassis[]`/`computer_systems[]`) | nPartition 조합 구조. 각 ResourceBlock ↔ chassis 대응 (설명 모델). ServiceRoot 미노출 시 `null` |
 | `fabrics` | `Fabrics` + `Fabrics/{id}` (Switches/Endpoints) | `[]` of {id/fabric_type/health/`switch_count`/`endpoint_count`/`switches[]`/`endpoints[]`} | NUMAlink FlexGrid (Switches+Endpoints, Links/Zones 미사용 — 설명 모델). ServiceRoot 미노출 시 `null` |
 
-> **Lab 부재 주의**: 위 5종은 lab 부재로 공식 문서 (DMTF DSP0266 + HPE CSUS 3200 Admin Guide + Superdome Flex 상속) 합성 검증. `fabric_type` 은 DMTF enum 에 NUMAlink 가 없어 placeholder (`PCIe`) — 사이트 실측 시 정정 가능.
+> **Lab 부재 주의**: 위 5종은 lab 부재 web sources (DMTF DSP0266 + HPE CSUS 3200 Admin Guide + Superdome Flex 상속) 합성 검증. `fabric_type` 은 DMTF enum 에 NUMAlink 가 없어 placeholder (`PCIe`) — 사이트 실측 시 정정 (NEXT_ACTIONS).
 
 ### 호출자 가이드
 
 | 시나리오 | 권장 처리 |
 |---|---|
-| 기존 호출자 (`data.system` / `data.bmc` 만 사용) | 변경 없음 — Partition0 데이터로 동일 동작 |
+| 기존 호출자 (`data.system` / `data.bmc` 만 사용) | 변경 0 — Partition0 데이터로 동일 동작 |
 | 멀티-노드 인식 호출자 | `data.multi_node != null` 확인 후 `partitions[]` / `managers[]` / `chassis[]` 순회 |
 | 확장 컴포넌트 인식 호출자 | `multi_node.composition` / `multi_node.fabrics` (null 가드) + `partitions[].boot` / `chassis[].thermal` / `managers[].log_services` 순회 |
-| 활성화 미상 진단 | `diagnosis.details.rmc_activation_check == false` 시 사이트 RMC Redfish 서비스 / Subscription 라이선스 확인 (`docs/24_rmc-activation-guide.md`) |
+| 활성화 미상 진단 | `diagnosis.details.rmc_activation_check == false` 시 사이트 RMC Redfish 서비스 / Subscription 라이선스 확인 (`docs/22_rmc-activation-guide.md`) |
 
-### Lab 부재 한계
+### Lab 부재 한계 (NEXT_ACTIONS C1~C8)
 
-현재 mock fixture 는 sdflexutils + DMTF v1.15 + iLO 5 API ref 합성. ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema 는 사이트 실측 후 정정 가능.
+현재 mock fixture 는 sdflexutils + DMTF v1.15 + iLO 5 API ref 합성. ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema 는 사이트 실측 후 정정 의무 (`docs/ai/NEXT_ACTIONS.md` C1~C8 참조).
 
 ---
 
@@ -560,6 +609,7 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | 벤더별 회귀 기준선 JSON | `schema/baseline_v1/{vendor}_baseline.json` |
 | 섹션 정의 원본 | `schema/sections.yml` |
 | 필드 사전 원본 | `schema/field_dictionary.yml` |
+| **필드 × baseline 사용 실태 매트릭스 (4 상태)** | **`docs/ai/catalogs/FIELD_USAGE_MATRIX.md` (cycle 2026-05-11 신규, 측정 대상 #13)** |
 | 출력 조립 코드 | `common/tasks/normalize/build_output.yml` |
 | 채널 처리 과정 | `docs/06_gather-structure.md`, `docs/07_normalize-flow.md` |
 | 진단 단계 상세 | `docs/11_precheck-module.md` |

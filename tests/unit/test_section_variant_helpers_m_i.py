@@ -1,11 +1,11 @@
-"""Regression — section variant helpers.
+"""Regression for cycle 2026-05-07 M-I1~I5 — section variant helpers.
 
-목적: storage SmartStorage, power dual-emit dedup, OEM namespace unified,
-NIC OCP/SR-IOV, RoleId enum / DIMM label 의 helper 함수가
-기대대로 동작하는지 검증.
+목적: M-I1 (storage SmartStorage), M-I2 (power dual-emit dedup), M-I3 (OEM
+namespace unified), M-I4 (NIC OCP/SR-IOV), M-I5 (RoleId enum / DIMM label) 의
+Additive helper 함수가 기대대로 동작하는지 + 호출자 envelope 영향 0 검증.
 
-모든 helper 는 raw dict 만 반환하며 출력 envelope 의 구조에는 관여하지 않는다.
-OEM namespace 직접 의존 영역 (Redfish API spec).
+rule 92 R2: 모든 helper 는 raw dict 만 반환. envelope shape 변경 없음.
+rule 12 R1 Allowed: OEM namespace 직접 의존 영역 (Redfish API spec).
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ import redfish_gather as rg  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# storage SmartStorage helper (HPE iLO4 legacy)
+# M-I1: storage SmartStorage helper (HPE iLO4 legacy)
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -129,7 +129,7 @@ def test_gather_storage_falls_back_to_smartstorage_when_both_404():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# power dual-emit dedup helper
+# M-I2: power dual-emit dedup helper
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -189,7 +189,7 @@ def test_merge_power_dual_pc_fallback_to_subsystem():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# bmc / firmware OEM namespace unified extractor
+# M-I3: bmc / firmware OEM namespace unified extractor
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -258,7 +258,7 @@ def test_extract_oem_unified_empty_namespace_skipped():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# NIC SR-IOV / OCP detection helpers
+# M-I4: NIC SR-IOV / OCP detection helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -316,7 +316,7 @@ def test_detect_nic_sriov_returns_none_when_unknown():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# RoleId enum / DIMM label normalization
+# M-I5: RoleId enum / DIMM label normalization
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -389,14 +389,14 @@ def test_normalize_dimm_label_none():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Smoke: helper 들이 출력 envelope 구조에 관여하지 않음
+# Smoke: envelope shape 변경 0 (rule 92 R2 Additive 검증)
 # ──────────────────────────────────────────────────────────────────────────────
 
 
 def test_helpers_do_not_export_new_envelope_keys():
-    """추가 helper 들이 모듈 top-level 에 envelope 키 영향 없음 검증.
+    """본 cycle 추가 helper 들이 모듈 top-level 에 envelope 키 영향 없음 검증.
 
-    호출자 envelope 13 필드와 data.<section>.<field> 키는 그대로 유지된다.
+    rule 92 R2: 호출자 envelope 13 필드 변경 0 / data.<section>.<field> 신규 키 추가 0.
     """
     # 새 helper 들이 모두 underscore prefix (internal only)
     new_helpers = [

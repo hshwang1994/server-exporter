@@ -23,7 +23,7 @@
   "Oem": {
     "Hpe": {
       "@odata.type": "#HpeChassisExt.v2_0_0.HpeChassisExt",
-      "FlexNodeInfo": {"NodeRole": "expansion", "NodeId": 1, "Note": "lab 부재 — 합성."}
+      "FlexNodeInfo": {"NodeRole": "expansion", "NodeId": 1, "Note": "lab 부재 — 합성. rule 96 R1-A."}
     }
   }
 }

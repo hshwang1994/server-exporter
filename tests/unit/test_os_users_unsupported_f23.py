@@ -1,8 +1,8 @@
-"""Regression — OS gather users 'not_supported' 점진 전환.
+"""Regression for F23 — OS gather users 'not_supported' 점진 전환 (cycle 2026-05-01).
 
 배경: Alpine / distroless / busybox / Server Core lockdown 등 환경에서 getent
 또는 Get-LocalUser 명령 자체 부재. 이전 동작은 _sections_failed_fragment 로
-분류 → errors[] noise. 진짜 미지원 케이스를 명시적으로
+분류 → errors[] noise. cycle 2026-05-01 부터 진짜 미지원 케이스를 명시적으로
 'not_supported' 분류 (root 항상 존재 / win32 user 항상 존재 가정으로 빈
 결과 = 진짜 미지원 신호).
 
@@ -68,7 +68,7 @@ def test_linux_python_empty_passwd_unsupported():
     res = linux_python_classify({})
     assert res['collected'] == []
     assert res['unsupported'] == ['users']
-    assert res['failed'] == []  # failed 가 아닌 unsupported
+    assert res['failed'] == []  # F23: failed 가 아닌 unsupported
 
 
 def test_linux_python_undefined_passwd_unsupported():

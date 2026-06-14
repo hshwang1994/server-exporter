@@ -68,13 +68,7 @@ server-exporter 는 다음 3가지를 호출자에게 약속한다.
 server-exporter/
 ├── Jenkinsfile              파이프라인 정의 (호출자 진입점)
 ├── Jenkinsfile_portal       포털 callback 전용 파이프라인
-├── jenkins/jobs/            Jenkins job-as-code (account_provision 검증 잡)
 ├── ansible.cfg              프로젝트 Ansible 설정
-├── callback_plugins/        json_only stdout 콜백 (ansible.cfg 등록)
-├── filter_plugins/          커스텀 Jinja 필터 (ansible.cfg 등록)
-├── lookup_plugins/          커스텀 lookup (ansible.cfg 등록)
-├── module_utils/            공용 Python 모듈 유틸 (ansible.cfg 등록)
-├── scripts/                 운영 스크립트 (vault 일괄 암호화 / account_provision 검증)
 │
 ├── vault/                   인증 정보 (ansible-vault 로 암호화)
 │   ├── linux.yml / windows.yml / esxi.yml
@@ -90,10 +84,10 @@ server-exporter/
 ├── adapters/                벤더 / 세대별 어댑터 YAML
 │   ├── redfish/             31개 (Dell / HPE / Lenovo / Supermicro / Cisco / Huawei / Inspur / Fujitsu / Quanta 9 벤더 — HPE 계열에 Superdome Flex, CSUS 3200 포함)
 │   ├── os/                  7개 (Linux / Windows 변형)
-│   └── esxi/                4개 (ESXi 6.x / 7.x / 8.x + generic)
+│   └── esxi/                4개 (ESXi 6.x / 7.x / 8.x)
 │
 ├── schema/                  표준 JSON 스키마
-│   ├── sections.yml         10 섹션 정의
+│   ├── sections.yml         11 섹션 정의
 │   ├── field_dictionary.yml 83 필드 사전 (호출자 reference)
 │   ├── fields/              채널별 필드 정의
 │   ├── examples/            success / partial / failed 예시
@@ -101,9 +95,10 @@ server-exporter/
 │
 ├── tests/                   회귀 / 검증
 │   ├── fixtures/            실장비 raw 응답
-│   └── e2e/, e2e_browser/   백엔드·브라우저 E2E
+│   ├── e2e/, e2e_browser/   백엔드·브라우저 E2E
+│   └── reference/           실장비 종합 자료
 │
-└── docs/                    설치 / 운영 / 개발 문서 (01~24)
+└── docs/                    설치 / 운영 / 개발 문서 (01~23)
 ```
 
 이렇게 나눈 이유:
@@ -212,7 +207,6 @@ server-exporter/
 ### Redfish 채널 (BMC)
 - 표준 라이브러리만 사용 (외부 패키지 의존 없음)
 - BMC 인증을 2단계로 처리: 무인증 ServiceRoot 호출 → 제조사 확인 → 해당 벤더 vault 로딩 → 재수집
-- 공통계정 자동화 (옵션): primary 계정(`infraops`)이 없어 recovery 자격으로만 접속되면 Redfish AccountService 로 `infraops` 계정을 자동 생성/복구한다 (결과는 응답 `account_service` 진단에 노출). 동작·dryrun 정책 상세는 [docs/21_vault-operations.md](docs/21_vault-operations.md), 회귀 검증 잡은 `jenkins/jobs/redfish-account-provision-verify/`.
 - 지원 벤더 (9개 + 서브라인):
   - Dell iDRAC 7 ~ 10
   - HPE iLO 4 ~ 7 + Superdome Flex / Flex 280
@@ -228,46 +222,13 @@ server-exporter/
 
 ## 다음에 읽을 문서
 
-역할별 권장 읽기 순서다. 모든 문서는 아래 [전체 문서 목록](#전체-문서-목록) 에서 번호순으로 찾을 수 있다.
-
 | 역할 | 권장 순서 |
 |------|----------|
-| 운영자 (Jenkins / 인프라) | [01](docs/01_jenkins-setup.md) → [02](docs/02_redis-install.md) → [03](docs/03_agent-setup.md) → [04](docs/04_job-registration.md) → [21](docs/21_vault-operations.md) |
-| 호출자 (외부 시스템) | [05](docs/05_inventory-json-spec.md) → [09](docs/09_output-examples.md) → [20](docs/20_json-schema-fields.md) → [12](docs/12_diagnosis-output.md) |
+| 운영자 (Jenkins / 인프라) | [01](docs/01_jenkins-setup.md) → [03](docs/03_agent-setup.md) → [04](docs/04_job-registration.md) → [21](docs/21_vault-operations.md) |
+| 호출자 (외부 시스템) | [05](docs/05_inventory-json-spec.md) → [09](docs/09_output-examples.md) → [20](docs/20_json-schema-fields.md) |
 | 개발자 (새 벤더 / 섹션 추가) | [06](docs/06_gather-structure.md) → [07](docs/07_normalize-flow.md) → [10](docs/10_adapter-system.md) → [14](docs/14_add-new-gather.md) |
 | 검증 담당 | [13](docs/13_redfish-live-validation.md) → [22](docs/22_compatibility-matrix.md) |
-| 장애 대응 / 디버깅 | [23](docs/23_debugging-entrypoints.md) → [08](docs/08_failure-handling.md) → [11](docs/11_precheck-module.md) |
 | 결정 추적 (왜 지금 이 모습?) | [19](docs/19_decision-log.md) |
 | 환경 사전 점검 | [REQUIREMENTS.md](REQUIREMENTS.md) |
 
-Fragment 기반 수집 철학과 변수 규칙, 새 gather 추가 절차는 [docs/07_normalize-flow.md](docs/07_normalize-flow.md) 와 [docs/14_add-new-gather.md](docs/14_add-new-gather.md) 참조.
-
-## 전체 문서 목록
-
-| # | 문서 | 내용 |
-|---|------|------|
-| 01 | [Jenkins 마스터 설치](docs/01_jenkins-setup.md) | Jenkins 마스터 설치·설정 |
-| 02 | [Redis 설치](docs/02_redis-install.md) | fact caching 용 Redis 설치·설정 |
-| 03 | [Agent 노드 구성](docs/03_agent-setup.md) | 수집 실행 Agent 노드 구성 |
-| 04 | [Job 등록](docs/04_job-registration.md) | Jenkins Job 등록 절차 |
-| 05 | [입력 형식](docs/05_inventory-json-spec.md) | `inventory_json` 입력 명세 (호출자) |
-| 06 | [수집 구조](docs/06_gather-structure.md) | 3 채널 수집 구조 개요 |
-| 07 | [정규화 과정](docs/07_normalize-flow.md) | Fragment 정규화 흐름 |
-| 08 | [실패 처리](docs/08_failure-handling.md) | 실패해도 같은 envelope 반환 |
-| 09 | [출력 예시](docs/09_output-examples.md) | 채널별 출력 JSON 예시 |
-| 10 | [Adapter 시스템](docs/10_adapter-system.md) | 벤더 차이를 코드 밖으로 빼낸 구조 |
-| 11 | [precheck 진단](docs/11_precheck-module.md) | 진단 4단계 — 어디서 막혔나 |
-| 12 | [응답 메타 3개](docs/12_diagnosis-output.md) | `diagnosis` / `meta` / `correlation` 의미 |
-| 13 | [실장비 검증](docs/13_redfish-live-validation.md) | Redfish 실장비 API 검증 결과 |
-| 14 | [새 Gather 추가](docs/14_add-new-gather.md) | 새 수집 추가 작업자 절차서 |
-| 16 | [OS / ESXi 매핑](docs/16_os-esxi-mapping.md) | raw → normalize → output 매핑 |
-| 17 | [파이프라인 런타임](docs/17_jenkins-pipeline.md) | 파이프라인 4-Stage 런타임 동작 |
-| 18 | [Ansible 설정](docs/18_ansible-project-config.md) | `ansible.cfg` / 환경변수 |
-| 19 | [의사결정 로그](docs/19_decision-log.md) | 왜 지금 이 구조인가 |
-| 20 | [필드 사전](docs/20_json-schema-fields.md) | envelope 13 + 섹션 10 + 필드 83 의미 |
-| 21 | [Vault 운영](docs/21_vault-operations.md) | 자격증명 관리·회전 |
-| 22 | [호환성 매트릭스](docs/22_compatibility-matrix.md) | 벤더 × 세대 × 섹션 |
-| 23 | [디버깅 진입점](docs/23_debugging-entrypoints.md) | 단계별 1분 추적 |
-| 24 | [RMC 활성화](docs/24_rmc-activation-guide.md) | HPE 스케일업 RMC Redfish 활성화 |
-
-> 15번은 과거 문서가 다른 문서로 통합되며 결번 처리되었다.
+파일 단위 상세 구조와 AI 협업 정책은 [CLAUDE.md](CLAUDE.md) 의 "파일 구조" 와 "AI 하네스 운영" 절 참조.

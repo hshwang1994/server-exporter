@@ -1,23 +1,23 @@
 """
-adapter selection 회귀 — HPE DL380 Gen11 (iLO 6) 가
-hpe_ilo7 Gen12-only adapter 로 오선택되지 않음을 검증.
+T-01 (cycle 2026-05-11) adapter selection 회귀 — HPE DL380 Gen11 (iLO 6) 가
+hpe_ilo7 Gen12-only adapter 로 오선택되는 사고 차단.
 
 본 테스트는 다음 시나리오 매트릭스를 검증:
 
 | # | facts | expected adapter | 비고 |
 |---|---|---|---|
-| 1 | HPE / model=ProLiant DL380 Gen11 / firmware=1.73           | redfish_hpe_ilo6   | Gen11 + iLO 6 |
+| 1 | HPE / model=ProLiant DL380 Gen11 / firmware=1.73           | redfish_hpe_ilo6   | T-01 fix 핵심 |
 | 2 | HPE / model=ProLiant DL380 Gen11 / firmware=iLO 6 v1.73    | redfish_hpe_ilo6   | manager_type 동시 |
-| 3 | HPE / model=ProLiant DL380 Gen12 / firmware=1.12.00        | redfish_hpe_ilo7   | Gen12 |
+| 3 | HPE / model=ProLiant DL380 Gen12 / firmware=1.12.00        | redfish_hpe_ilo7   | Gen12 회귀 |
 | 4 | HPE / model=ProLiant DL380 Gen12 / firmware=1.16           | redfish_hpe_ilo7   | 2-part firmware (1387b505 회귀) |
 | 5 | HPE / model='' / firmware=''                                | redfish_hpe_ilo7   | (현재 동작 — fallback 안 됐을 때) |
-| 6 | HPE / model=ProLiant DL380 Gen10 / firmware=2.50           | redfish_hpe_ilo5   | iLO 5 |
+| 6 | HPE / model=ProLiant DL380 Gen10 / firmware=2.50           | redfish_hpe_ilo5   | iLO 5 회귀 |
 | 7 | Dell / model='' / firmware=''                               | redfish_dell_idrac10 | priority 최상위 |
 | 8 | Lenovo / model='' / firmware=''                             | redfish_lenovo_xcc3 | priority 최상위 |
 | 9 | Cisco / model='UCS-X' / firmware=''                         | redfish_cisco_ucs_xseries | model 매치 |
 
-조건 #5 (현재 동작) 가 통과해도 무방 — 핵심 검증은 #1/#2 (probe_facts 제공 시).
-#3/#4 (Gen12) 와 #6/#7/#8/#9 (타 vendor) 는 동작 유지를 확인.
+조건 #5 (현재 동작) 가 통과해도 무방 — 본 fix 의 핵심은 #1/#2 (probe_facts 제공 시).
+#3/#4 (Gen12) 와 #6/#7/#8/#9 (타 vendor) 는 영향 없음을 확인.
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def _select_adapter(facts: dict) -> tuple[str, int]:
 @pytest.mark.parametrize(
     "case_id,facts,expected_adapter",
     [
-        # DL380 Gen11 + iLO 6
+        # T-01 fix 핵심 — DL380 Gen11 + iLO 6
         ("hpe_gen11_ilo6_short", {"vendor": "HPE", "model": "ProLiant DL380 Gen11", "firmware": "1.73"}, "redfish_hpe_ilo6"),
         ("hpe_gen11_ilo6_full",  {"vendor": "HPE", "model": "ProLiant DL380 Gen11", "firmware": "iLO 6 v1.73"}, "redfish_hpe_ilo6"),
         # Gen12 회귀 (오선택 시도 검증 — 정상 매칭 유지)
@@ -83,8 +83,8 @@ def _select_adapter(facts: dict) -> tuple[str, int]:
         ("cisco_ucsx",   {"vendor": "Cisco", "model": "UCS-X 9508", "firmware": ""}, "redfish_cisco_ucs_xseries"),
     ],
 )
-def test_adapter_selection_models(case_id: str, facts: dict, expected_adapter: str) -> None:
-    """probe_facts 로 정확한 adapter 선택 + 타 vendor 동작 유지."""
+def test_adapter_selection_t01(case_id: str, facts: dict, expected_adapter: str) -> None:
+    """probe_facts 로 정확한 adapter 선택 + 타 vendor 회귀 0."""
     selected, score = _select_adapter(facts)
     assert selected == expected_adapter, (
         f"case={case_id} facts={facts}\n"
@@ -94,16 +94,16 @@ def test_adapter_selection_models(case_id: str, facts: dict, expected_adapter: s
 
 
 def test_hpe_gen11_pre_fix_misselect() -> None:
-    """현재 동작 검증 — facts empty 시 hpe_ilo7 가 선택됨 (probe_facts 의 필요성).
+    """현재 동작 검증 — facts empty 시 hpe_ilo7 가 잘못 선택됨 (T-01 사고 재현).
 
-    empty facts 로는 hpe_ilo7 priority=120 가 hpe_ilo6 priority=100 를 이긴다.
-    probe_facts 가 model/firmware 채우면 hpe_ilo7 의 model_patterns Gen12-only 가
-    disqualify 시켜 hpe_ilo6 선택 (위 test_adapter_selection_models
+    본 테스트는 fix 의 **필요성** 증명 — empty facts 로는 hpe_ilo7 priority=120 가
+    hpe_ilo6 priority=100 를 이김. probe_facts 가 model/firmware 채우면 hpe_ilo7
+    의 model_patterns Gen12-only 가 disqualify 시켜 hpe_ilo6 선택 (위 test_adapter_selection_t01
     의 hpe_gen11_ilo6_* 케이스).
     """
     selected, _ = _select_adapter({"vendor": "HPE", "model": "", "firmware": ""})
-    # facts empty 면 hpe_ilo7 priority 우선.
+    # 본 사고는 hpe_ilo7 priority 우선 — fix 후에도 facts empty 면 동일.
     # 정상 동작: detect_vendor.yml 의 probe_facts fallback 으로 facts 채워짐 → 위 매트릭스 통과.
     assert selected == "redfish_hpe_ilo7", (
-        f"empty facts 일 때 priority 가장 높은 hpe_ilo7 선택 확인. selected={selected}"
+        f"empty facts 일 때 priority 가장 높은 hpe_ilo7 선택 — 사고 재현 확인. selected={selected}"
     )

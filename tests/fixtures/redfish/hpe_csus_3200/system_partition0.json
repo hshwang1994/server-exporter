@@ -57,7 +57,7 @@
         "PartitionName": "Partition0",
         "NumNodes": 4,
         "NumSockets": 4,
-        "Note": "lab 부재 — sdflex-ironic-driver wiki 합성."
+        "Note": "lab 부재 — sdflex-ironic-driver wiki 합성. rule 96 R1-A."
       },
       "GlobalConfiguration": {
         "OperatingMode": "nPAR",

@@ -16,7 +16,7 @@
 #   supported 섹션 중 success 가 하나도 없음           → failed
 #
 # ----------------------------------------------------------------------
-# 의도된 설계 (Case A 채택)
+# 의도된 설계 (M-A1/M-A2 분석 결과 — Case A 채택, 2026-05-06)
 # ----------------------------------------------------------------------
 # overall status 는 **섹션 status 만** 본다. envelope.errors[] 는 **보지 않는다**.
 # errors[] 는 사유 추적용 분리 영역 — overall status 판정에 영향 없음.
@@ -34,17 +34,18 @@
 #   - 섹션 자체는 정상 수집 — 호출자가 데이터를 신뢰 가능
 #   - errors[] 는 "사유 추적" 용 (warning / partial enumeration / fallback 사용 통보)
 #   - 호출자 시스템이 warning 을 분리 인식하려면 envelope.errors[] 별도 검사
-#   - envelope 13 필드 고정 (호환성 외 schema 확장 금지)
+#   - rule 13 R5 envelope 13 필드 / rule 96 R1-B (호환성 외 schema 확장 금지)
 #
 # 시나리오 B 발생 위치 (3 reference — 의도된 fallback / partial enumeration):
 #   - os-gather/tasks/linux/gather_memory.yml:171-175    (dmidecode 권한/미존재 → total_basis=os_visible fallback)
 #   - os-gather/tasks/linux/gather_network.yml:208-209   (lspci stderr 비어있지 않음 → NIC partial enumeration 가능)
 #   - esxi-gather/tasks/normalize_storage.yml:79-83      (NFS/vSAN/vVOL 등 datastore capacity 미수집)
 #
-# severity (error/warning/info) 도입 안 함 — 5 fragment 변수 / 타입 정본 영역.
+# severity (error/warning/info) 도입 안 함 — rule 22 R7/R8 (5 fragment 변수 / 타입 정본) 영역.
 # 향후 동적 정책 로딩이 필요하면 common/vars/status_rules.yml 활성화 (현재 reserved).
 #
-# 변경 시 신중 검토 필요 (envelope / schema / 호환성 외 확장 금지).
+# 변경 시 사용자 명시 승인 필수: rule 13 R5 (envelope) / rule 92 R5 (schema) / rule 96 R1-B (호환성 외).
+# 결정 reference: docs/19_decision-log.md (M-A2 / 2026-05-06)
 # ----------------------------------------------------------------------
 
 - name: "normalize | build_status"

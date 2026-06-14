@@ -8,20 +8,20 @@
 #   _all_sec_supported   : list — 지원 섹션
 #   _all_sec_collected   : list — 수집 성공 섹션
 #   _all_sec_failed      : list — 수집 실패 섹션
-#   _all_sec_unsupported : list — vendor/펌웨어 capability 미지원 섹션
+#   _all_sec_unsupported : list — vendor/펌웨어 capability 미지원 섹션 (cycle 2026-05-01)
 #                                 redfish 404 / OS 명령 부재 / ESXi API 미지원
 #
 # 출력 변수:
 #   _norm_sections : dict — 10개 섹션 각각 success|failed|not_supported
 #
 # 우선순위: not_supported > failed > success > failed(미분류)
-# _all_sec_unsupported가 명시적으로 'not_supported' 분류 (errors[] 노이즈 차단)
+# cycle 2026-05-01: _all_sec_unsupported가 명시적으로 'not_supported' 분류 (errors[] 노이즈 차단)
 
 - name: "normalize | build_sections"
   ansible.builtin.set_fact:
     _norm_sections: >-
       {%- set all_sec = ['system','hardware','bmc','cpu','memory',
-                         'storage','network','firmware','users','power'] -%}
+                         'storage','network','firmware','users','power','thermal'] -%}
       {%- set supported    = _all_sec_supported   | default([]) -%}
       {%- set collected    = _all_sec_collected   | default([]) -%}
       {%- set failed       = _all_sec_failed      | default([]) -%}

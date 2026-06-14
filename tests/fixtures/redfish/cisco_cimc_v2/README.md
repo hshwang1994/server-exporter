@@ -1,6 +1,6 @@
-# Cisco CIMC 2.x (UCS C-series M4) fixture
+# Cisco CIMC 2.x (UCS C-series M4) fixture — M-H4 (cycle 2026-05-07)
 
-> Lab 부재 — web sources only. Priority 2 fixture.
+> Lab 부재 — web sources only (rule 96 R1-A). Priority 2 fixture.
 
 ## 출처
 
@@ -23,4 +23,4 @@
 ## 주의
 
 - CIMC 2.x는 Redfish 1.4+ 표준 도입 시기로 응답 형식 호환성 변동 큼
-- 실장비 도입 후 real CIMC 2.x 응답 확정
+- lab 도입 후 별도 cycle (real CIMC 2.x 응답 확정)

@@ -11,7 +11,7 @@
 #   _sections_collected_fragment  : list  — 이번 태스크에서 수집 성공한 섹션
 #   _sections_failed_fragment     : list  — 이번 태스크에서 수집 실패한 섹션
 #   _sections_unsupported_fragment: list  — 이번 태스크에서 미지원으로 분류된 섹션
-#                                          (redfish 404 / OS 명령 부재 / ESXi API 미지원)
+#                                          (cycle 2026-05-01: redfish 404 / OS 명령 부재 / ESXi API 미지원)
 #                                          누락 시 [] 으로 처리 (back-compat)
 #   _errors_fragment              : list  — 이번 태스크의 errors
 #
@@ -20,7 +20,7 @@
 #   _all_sec_supported   : list
 #   _all_sec_collected   : list
 #   _all_sec_failed      : list
-#   _all_sec_unsupported : list
+#   _all_sec_unsupported : list (cycle 2026-05-01)
 #   _all_errors          : list
 
 - name: "normalize | merge_fragment | accumulate sections and errors"
@@ -95,7 +95,7 @@
           {%- set _ = out.update({k: merged}) -%}
         {%- elif bv is iterable and bv is not string and bv is not mapping
              and fv is iterable and fv is not string and fv is not mapping -%}
-          {#- dict 는 Jinja2 에서 iterable=True 라 list+dict 오염 시
+          {#- rule 95 R1: dict 는 Jinja2 에서 iterable=True 라 list+dict 오염 시
               `bv + fv` TypeError. mapping 제외로 정상 list+list 만 concat,
               오염(list↔dict)은 else(fv 우선)로 graceful 강등. 정상 입력 불변. -#}
           {%- set _ = out.update({k: bv + fv}) -%}

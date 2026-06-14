@@ -1,9 +1,9 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
 # Vendor: VMware ESXi 8.x
-# Firmware: 검증 버전 ["8.0", "8.0 U1", "8.0 U2"]
+# Firmware: tested_against ["8.0", "8.0 U1", "8.0 U2"]
 # Origin: 추정 — 검증 필요 (community.vmware 6.2.0 + vSphere 8.x release notes)
-# Last sync: 2026-04-27
+# Last sync: 2026-04-27 (hshwang1994)
 # Notes: 최신. priority=100 — 8.x 우선 선택.
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: esxi_8x

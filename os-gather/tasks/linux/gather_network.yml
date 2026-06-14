@@ -9,7 +9,7 @@
 # Python Path
 # =============================================================================
 - block:
-    # hardware NIC (lspci -k) 수집 — Redfish/ESXi와 키 일관성.
+    # 2026-04-29 fix B76: hardware NIC (lspci -k) 수집 — Redfish/ESXi와 키 일관성.
     # 이전: network.adapters=[] 빈 list. 호출자가 PCI NIC 모델/driver 식별 불가.
     - name: "linux | network | hardware NIC (lspci)"
       # 2026-04-30 fix: lspci -mm awk field 인덱스 정정.
@@ -83,14 +83,14 @@
               {%- if iface.startswith(p) -%}{%- set _ = skip.append(1) -%}{%- endif -%}
             {%- endfor -%}
             {%- if skip | length == 0 -%}
-              {# VLAN/bond/bridge 이름의 점/대시는 Ansible facts에서 underscore로 정규화됨 (예: bond0.4094 → ansible_bond0_4094) #}
+              {# production-audit (2026-04-29): VLAN/bond/bridge 이름의 점/대시는 Ansible facts에서 underscore로 정규화됨 (예: bond0.4094 → ansible_bond0_4094) #}
               {%- set iface_key = iface | replace('.', '_') | replace('-', '_') | replace(':', '_') -%}
               {%- set d   = hostvars[inventory_hostname]['ansible_' ~ iface_key] | default(hostvars[inventory_hostname]['ansible_' ~ iface] | default({})) -%}
               {%- set ipv4 = d.ipv4.address | default(none) if d.ipv4 is defined else none -%}
               {%- if ipv4 and ipv4 != '127.0.0.1' and d.macaddress is defined -%}
                 {%- set nm = d.ipv4.netmask | default('') if d.ipv4 is defined else '' -%}
                 {%- if nm -%}
-                  {# val 을 namespace 에 포함 — 이전에는 inner for(bit) 안 set val 이 outer scope 미반영 → /23, /30 같은 비표준 mask 잘못 계산. /24 만 우연히 정상. #}
+                  {# cycle 2026-05-07-post fix: val 을 namespace 에 포함 — 이전에는 inner for(bit) 안 set val 이 outer scope 미반영 → /23, /30 같은 비표준 mask 잘못 계산. /24 만 우연히 정상. #}
                   {%- set ns = namespace(bits=0, val=0) -%}
                   {%- for octet in nm.split('.') -%}
                     {%- set ns.val = octet | int -%}
@@ -108,7 +108,7 @@
                 {%- set is_primary = (iface == _l_norm_primary_iface) -%}
                 {%- set _speed_raw = d.speed | default(-1) -%}
                 {%- set _speed_int = (_speed_raw | int) if (_speed_raw | string | regex_replace('[^0-9-]', '') | length > 0) else -1 -%}
-                {# IPv6 addresses — ansible_facts d.ipv6 (link-local + global).
+                {# 2026-04-29 fix B68: IPv6 addresses — ansible_facts d.ipv6 (link-local + global).
                    Jinja control statements는 dict literal 안에 못 넣으므로 ipv6_addrs를 dict 앞에서 build. #}
                 {%- set ipv6_addrs = [] -%}
                 {%- for v6 in (d.ipv6 | default([])) -%}
@@ -137,7 +137,7 @@
                   'mac':         d.macaddress | default(none),
                   'mtu':         d.mtu   | default(none),
                   'speed_mbps':  _speed_int if _speed_int > 0 else none,
-                  'link_status': 'linkup' if d.get('active',false) else 'linkdown',
+                  'link_status': 'up' if d.get('active',false) else 'down',
                   'is_primary':  is_primary,
                   'addresses':   [ipv4_addr] + ipv6_addrs
                 }) -%}
@@ -147,7 +147,7 @@
           {{ out }}
       no_log: true
 
-    # network.summary group 산출 (speed_mbps 기준, namespace pattern)
+    # cycle-016 (2026-04-29): network.summary group 산출 (speed_mbps 기준, namespace pattern)
     - name: "linux | network | compute summary groups"
       ansible.builtin.set_fact:
         _l_net_summary: >-
@@ -169,7 +169,7 @@
           {{ {'groups': ns.groups} }}
       no_log: true
 
-    # 3 채널 key 일관성 — adapters / ports 빈 list 키 노출 (Linux OS 한계)
+    # cycle-016 Phase P: 3 채널 key 일관성 — adapters / ports 빈 list 키 노출 (Linux OS 한계)
     - name: "linux | network | build fragment"
       ansible.builtin.set_fact:
         _data_fragment:
@@ -182,7 +182,7 @@
               {%- endif -%}
               {{ out }}
             interfaces: "{{ _l_norm_interfaces }}"
-            # lspci -k -mm 결과로 hardware NIC adapters 채움
+            # 2026-04-29 fix B76: lspci -k -mm 결과로 hardware NIC adapters 채움
             adapters: >-
               {%- set out = [] -%}
               {%- for line in (_l_lspci_nic.stdout_lines | default([])) -%}
@@ -249,7 +249,7 @@
           addr=$(echo "$cidr" | cut -d/ -f1)
           prefix=$(echo "$cidr" | cut -sd/ -f2)
           echo "IF=${dev}|${mac}|${mtu}|${speed}|${state}|${addr:-}|${prefix:-}"
-          # IPv6 addresses (link-local + global, ::1 제외).
+          # 2026-04-29 fix B68 raw: IPv6 addresses (link-local + global, ::1 제외).
           ip -o -6 addr show dev "$dev" 2>/dev/null | while read -r _ _ _ v6cidr _; do
             v6addr=${v6cidr%/*}
             v6prefix=${v6cidr#*/}
@@ -260,7 +260,7 @@
             echo "IF6=${dev}|${v6addr}|${v6prefix}|${scope}"
           done
         done
-        # hardware NIC (lspci) — Python 미동작 환경 보완.
+        # 2026-04-30 fix B76 raw: hardware NIC (lspci) — Python 미동작 환경 보완.
         # awk -F'"' field: $2=class / $4=vendor / $6=device.
         if command -v lspci >/dev/null 2>&1; then
           lspci -k -mm -d ::0200 2>/dev/null | while IFS= read -r line; do
@@ -303,7 +303,7 @@
           {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
             {%- if line.startswith('GW_DEV=') -%}{{ line[7:] | trim }}{% endif -%}
           {%- endfor -%}
-        # IF6 (IPv6 addresses by device).
+        # 2026-04-30 fix B68 raw: IF6 (IPv6 addresses by device).
         _l_raw_ipv6_by_dev: >-
           {%- set m = {} -%}
           {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
@@ -327,7 +327,7 @@
             {%- endif -%}
           {%- endfor -%}
           {{ m }}
-        # ADAPTER (lspci PCI NIC).
+        # 2026-04-30 fix B76 raw: ADAPTER (lspci PCI NIC).
         # Python path와 동일한 schema: id, name, manufacturer, model, driver, pci.
         _l_raw_adapters: >-
           {%- set out = [] -%}
@@ -385,7 +385,7 @@
                   {%- endfor -%}
                   {%- set mask = octets | join('.') -%}
                 {%- endif -%}
-                {%- set ls = 'linkup' if state_str == 'up' else ('linkdown' if state_str == 'down' else none) -%}
+                {%- set ls = 'up' if state_str == 'up' else ('down' if state_str == 'down' else 'unknown') -%}
                 {%- set addrs = [] -%}
                 {%- if ip_addr -%}
                   {%- set _ = addrs.append({
@@ -414,7 +414,7 @@
       no_log: true
 
     - name: "linux | network | raw mark primary + inject gateway + merge IPv6"
-      # IPv6 addresses (_l_raw_ipv6_by_dev)를 interface addresses에 병합.
+      # 2026-04-30 fix B68 raw: IPv6 addresses (_l_raw_ipv6_by_dev)를 interface addresses에 병합.
       ansible.builtin.set_fact:
         _l_norm_interfaces_raw: >-
           {%- set gw     = (_l_raw_gw     | default('')) | trim -%}
@@ -472,7 +472,7 @@
               {%- endif -%}
               {{ out }}
             interfaces: "{{ _l_norm_interfaces_raw | default([]) }}"
-            # lspci 기반 hardware NIC adapters.
+            # 2026-04-30 fix B76 raw: lspci 기반 hardware NIC adapters.
             adapters:    "{{ _l_raw_adapters | default([]) }}"
             ports:       []
             summary: "{{ _l_net_summary_r | default({'groups': []}) }}"

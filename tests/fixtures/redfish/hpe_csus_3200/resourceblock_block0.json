@@ -4,7 +4,7 @@
   "@odata.type": "#ResourceBlock.v1_4_0.ResourceBlock",
   "Id": "Block0",
   "Name": "Compute Resource Block 0 (Base)",
-  "_note": "lab 부재 — ResourceBlock 0 → Chassis/Base 대응. CPU/DIMM 포함 (설명 모델).",
+  "_note": "lab 부재 — ResourceBlock 0 → Chassis/Base 대응. CPU/DIMM 포함 (설명 모델). rule 96 R1-A.",
   "ResourceBlockType": ["Compute"],
   "Status": {"State": "Enabled", "Health": "OK"},
   "CompositionStatus": {"CompositionState": "Composed", "SharingCapable": false},

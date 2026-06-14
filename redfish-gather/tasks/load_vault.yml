@@ -1,7 +1,7 @@
 ---
 # redfish-gather/tasks/load_vault.yml
 #
-# adapter 기반 vault 로딩 + accounts list 정규화
+# adapter 기반 vault 로딩 + accounts list 정규화 (P1 도입 cycle 2026-04-28)
 # vault/redfish/{profile}.yml 의 accounts 리스트 → _rf_accounts (vault file의 list 순서 그대로 사용)
 # 주: 별도 role-based 정렬 없음 — vault YAML 파일의 accounts list 순서가 곧 multi-account fallback 시도 순서.
 #     관례: list[0] = role=primary (provision target = infraops), list[1...] = role=recovery (provision 진입 자격)
@@ -60,7 +60,7 @@
     - _rf_vault_fallbacks | length > 0
 
 # ── 3. accounts 리스트 정규화 ─────────────────────────────────────────────
-# accounts 신키 우선 + legacy ansible_user/password 호환 (dual-write 마이그레이션)
+# accounts 신키 우선 + legacy ansible_user/password 호환 (P1 dual-write 마이그레이션)
 - name: "redfish | load_vault | normalize accounts"
   ansible.builtin.set_fact:
     _rf_accounts: >-

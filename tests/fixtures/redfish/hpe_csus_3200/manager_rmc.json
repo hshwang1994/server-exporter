@@ -37,7 +37,7 @@
     "Hpe": {
       "@odata.type": "#HpeRMC.v1_0_0.HpeRMC",
       "Role": "primary",
-      "Note": "lab 부재 — sdflexutils GitHub README 기반 합성."
+      "Note": "lab 부재 — sdflexutils GitHub README 기반 합성. rule 96 R1-A."
     }
   }
 }

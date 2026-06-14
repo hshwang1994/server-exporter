@@ -1,9 +1,9 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
 # Vendor: SUSE 계열 Linux (SUSE / SLES / openSUSE)
-# Firmware: 검증 버전 없음 — 추정 (실 검증 미수행)
+# Firmware: tested_against [] — 추정 (실 검증 미수행)
 # Origin: 추정 — 검증 필요 (RHEL 검증 기준 + SUSE distribution_patterns 분기)
-# Last sync: 2026-04-27
+# Last sync: 2026-04-27 (hshwang1994)
 # Notes: priority=50 — linux_rhel / linux_ubuntu와 같은 priority. distribution_patterns로 분기.
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: os_linux_suse

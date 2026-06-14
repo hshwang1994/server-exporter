@@ -60,7 +60,7 @@
               ESXi 호스트 전원, 네트워크, vSphere API(443) 포트를 확인하세요.
           when: not (_precheck_ok | bool)
 
-        # vault accounts 후보 순차 시도.
+        # P1 (cycle 2026-04-28): vault accounts 후보 순차 시도.
         - name: "esxi | try credentials"
           ansible.builtin.include_tasks: tasks/try_credentials.yml
           vars:
@@ -91,9 +91,9 @@
               가능한 원인: (1) 계정의 vSphere 권한 부족 (Read-Only / System.View 필요), (2) ESXi 펌웨어 호환성 (지원: 6.7 / 7.x / 8.x), (3) 라이선스 만료, (4) lockdown 모드.
           when: not (_e_facts_ok | bool)
 
-        # vmware_host_vmnic_info / vmware_vswitch_info /
+        # BUG #1 fix (cycle production-audit 후속): vmware_host_vmnic_info / vmware_vswitch_info /
         # vmware_portgroup_info / vmware_host_vmhba_info 의 hosts_*_info dict 는 ESXi configured
-        # hostname 을 키로 사용한다. _e_ip (IP) 로 lookup 하면 항상 빈 결과가 되는 직접 원인.
+        # hostname 을 키로 사용한다. _e_ip (IP) 로 lookup 하면 항상 빈 결과 → BUG #4 의 직접 원인.
         # 또한 system.hostname / system.fqdn 도 IP 가 아닌 ansible_hostname 을 사용해야 한다.
         - name: "esxi | resolve hostname from raw facts"
           ansible.builtin.set_fact:
@@ -101,7 +101,7 @@
           no_log: true
 
         # ── adapter 선택 (collect facts 후 — 실제 ESXi 버전으로 version_patterns 매칭) ──
-        # 기존엔 collect_facts 전에 facts={} 로 선택 → version 빈 값이라
+        # Round 17 #9: 기존엔 collect_facts 전에 facts={} 로 선택 → version 빈 값이라
         # version_patterns(^6./^7./^8.)가 죽고 priority 만으로 esxi_8x 가 항상 선택되어
         # 6.x/7.x 호스트도 adapter_candidate=esxi_8x 로 오기재. 실제 버전을 넘겨 올바로 매칭.
         - name: "esxi | select adapter"
@@ -119,7 +119,7 @@
         - name: "esxi | collect datastores"
           ansible.builtin.include_tasks: tasks/collect_datastores.yml
 
-        # 잔류 fix: vmware_host_facts/config_info 가 DNS 미반환 케이스 우회
+        # 잔류 fix (Round 12 후속): vmware_host_facts/config_info 가 DNS 미반환 케이스 우회
         - name: "esxi | collect dns"
           ansible.builtin.include_tasks: tasks/collect_dns.yml
 
@@ -132,12 +132,12 @@
         - name: "esxi | normalize storage"
           ansible.builtin.include_tasks: tasks/normalize_storage.yml
 
-        # vmnic/vmhba/vSwitch/portgroup 확장
-        - name: "esxi | collect network extended"
+        # P4 (cycle 2026-04-29): vmnic/vmhba/vSwitch/portgroup 확장
+        - name: "esxi | collect network extended (P4)"
           ansible.builtin.include_tasks: tasks/collect_network_extended.yml
 
-        # ESXi runtime (NTP/timezone/firewall) + default_gateway
-        - name: "esxi | collect runtime"
+        # 2026-04-29 fix B31/B32: ESXi runtime (NTP/timezone/firewall) + default_gateway
+        - name: "esxi | collect runtime (B31/B32)"
           ansible.builtin.include_tasks: tasks/collect_runtime.yml
 
         - name: "esxi | build_sections"
@@ -152,15 +152,15 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_errors.yml"
 
-        # vendor_aliases.yml로 정규화 (lowercase) + auth_success=true
-        # include_vars 의 'name:' 옵션은 ansible-core 2.20+ 에서
+        # cycle production-audit (2026-04-29): vendor_aliases.yml로 정규화 (lowercase) + auth_success=true
+        # 잔류 fix (Round 12 후속): include_vars 의 'name:' 옵션은 ansible-core 2.20+ 에서
         # reserved keyword 경고 (callback 차단 못하는 stderr noise). lookup('file') | from_yaml 로 우회.
         - name: "esxi | load vendor_aliases for normalization"
           ansible.builtin.set_fact:
             _e_vendor_aliases_map: "{{ lookup('file', lookup('env','REPO_ROOT') ~ '/common/vars/vendor_aliases.yml') | from_yaml }}"
 
-        # Jinja2 loop scoping —
-        # block 안의 {% set %} 는 outer 변수에 영향 없음. "9 파일 namespace pattern fix"
+        # BUG #2 fix (cycle production-audit 후속): Jinja2 loop scoping —
+        # block 안의 {% set %} 는 outer 변수에 영향 없음. cycle-016 "9 파일 namespace pattern fix"
         # 잔류분. namespace 로 outer scope 갱신.
         - name: "esxi | normalize vendor via aliases"
           ansible.builtin.set_fact:
@@ -182,16 +182,16 @@
             _out_target_type:       "esxi"
             _out_collection_method: "vsphere_api"
             _out_ip:                "{{ _e_ip }}"
-            # 출력 표시값 매핑 (hpe → hp). 내부 canonical 유지.
-            # data-driven (vendor_aliases.vendor_output_display) — vendor 하드코딩 회피.
+            # cycle 2026-06-04 (사용자 결정): 출력 표시값 매핑 (hpe → hp). 내부 canonical 유지.
+            # data-driven (vendor_aliases.vendor_output_display) — vendor 하드코딩 회피 (rule 12 R1).
             _out_vendor: >-
               {{ (_e_vendor_aliases_map.vendor_output_display | default({})).get(_e_vendor_normalized | default(''), _e_vendor_normalized | default(none)) }}
 
         - name: "esxi | enrich diagnosis with adapter"
           ansible.builtin.set_fact:
-            # meta.auth — fallback_used 노출
-            # ESXi 성공 path에서 auth_success=true 명시 (cross-channel consistency)
-            # esxi_version 추가 — Redfish/OS 채널과 trace 일관성
+            # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
+            # production-audit: ESXi 성공 path에서 auth_success=true 명시 (cross-channel consistency)
+            # 2026-04-29 fix B62: esxi_version 추가 — Redfish/OS 채널과 trace 일관성
             #  (Redfish: redfish_version / OS: detected_os+python_version / ESXi: esxi_version)
             _diagnosis: >-
               {{ _diagnosis | default({}) | combine({
@@ -244,7 +244,7 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       always:
-        # 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
+        # rule 13 R5 / rule 20 R1: 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
         - name: OUTPUT
           ansible.builtin.debug:
             msg: "{{ (_output | default({

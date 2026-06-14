@@ -3,7 +3,7 @@
   "@odata.id": "/redfish/v1/Managers/RMC/LogServices",
   "@odata.type": "#LogServiceCollection.LogServiceCollection",
   "Name": "Log Service Collection",
-  "_note": "lab 부재 — DMTF DSP0266 LogServiceCollection 합성.",
+  "_note": "lab 부재 — DMTF DSP0266 LogServiceCollection 합성. rule 96 R1-A. cycle 2026-06-09 ADR.",
   "Members@odata.count": 2,
   "Members": [
     {"@odata.id": "/redfish/v1/Managers/RMC/LogServices/IML"},

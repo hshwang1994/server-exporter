@@ -5,7 +5,7 @@
 #   - tests/e2e_browser/* (Playwright Browser E2E)
 #   - tests/redfish-probe/* (실장비 probe)
 #
-# 작성: 2026-04-29 (실장비 권한 부여 + Playwright 도입)
+# 작성: 2026-04-29 cycle-014 (실장비 권한 부여 + Playwright 도입)
 #
 # 운영 Agent (10.100.64.154/155)는 ansible-core / pywinrm / pyvmomi 등을
 # OS 패키지/시스템 venv로 관리. 본 파일은 개발 / Browser E2E 머신용.
@@ -19,7 +19,7 @@ playwright>=1.46
 pytest-playwright>=0.5
 
 # Redfish / SSH / WinRM probe (실장비)
-# Redfish는 stdlib (urllib/ssl/json) — 외부 의존 없음
+# Redfish는 stdlib (urllib/ssl/json) — 외부 의존 없음 (rule 10 R2)
 paramiko>=3.4         # Linux SSH probe (password 인증 지원)
 pywinrm>=0.5          # Windows WinRM probe (Win10 / Server 2022)
 requests>=2.32        # 일반 HTTP probe (Browser 외 시나리오)

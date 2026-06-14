@@ -5,7 +5,7 @@
 - name: "esxi | normalize network | extract dns and gw"
   ansible.builtin.set_fact:
     _e_default_gw:  "{{ _e_raw_facts.ansible_default_ipv4.gateway | default(none) }}"
-    # 잔류 fix: vmware_host_dns_info (collect_dns.yml) 결과를 1순위로,
+    # 잔류 fix (Round 12 후속): vmware_host_dns_info (collect_dns.yml) 결과를 1순위로,
     # 기존 vmware_host_config_info drill-in 을 폴백으로. dns_info 모듈은 host_name 키로
     # ip_address (DNS 서버 list) / search_domain / domain_name 정확 반환.
     _e_dns_servers: >-
@@ -19,7 +19,7 @@
         {%- endfor -%}
       {%- endif -%}
       {%- if not dns_out -%}
-        {# fallback: vmware_host_config_info drill-in #}
+        {# fallback: vmware_host_config_info drill-in (production-audit 보존) #}
         {%- set host_cfgs = (_e_raw_config | default({})).values() | list -%}
         {%- for host_cfg in host_cfgs -%}
           {%- set net_info = host_cfg.get('network_system_info', host_cfg) if host_cfg is mapping else {} -%}
@@ -55,10 +55,10 @@
                ipv4.address != '127.0.0.1' and
                not ipv4.address.startswith('169.254.') -%}
           {%- set nm = ipv4.netmask | default('') -%}
-          {# bit-counting (Linux 와 일관) — /22, /26, /28 등 비표준 prefix 지원 #}
+          {# production-audit (2026-04-29): bit-counting (Linux 와 일관) — /22, /26, /28 등 비표준 prefix 지원 #}
           {%- set pfx = none -%}
           {%- if nm -%}
-            {# val 을 namespace 에 포함 — 이전에는 inner for(bit) 안 set val 이 outer scope 미반영 → /23, /30 같은 비표준 mask 잘못 계산. /24 만 우연히 정상. #}
+            {# cycle 2026-05-07-post fix: val 을 namespace 에 포함 — 이전에는 inner for(bit) 안 set val 이 outer scope 미반영 → /23, /30 같은 비표준 mask 잘못 계산. /24 만 우연히 정상. #}
             {%- set pns = namespace(bits=0, val=0) -%}
             {%- for octet in nm.split('.') -%}
               {%- set pns.val = octet | int -%}
@@ -89,7 +89,7 @@
       {{ out }}
   no_log: true
 
-# ESXi network.summary
+# cycle-016 (2026-04-29): ESXi network.summary
 - name: "esxi | normalize network | compute summary groups"
   ansible.builtin.set_fact:
     _e_net_summary: >-
@@ -109,7 +109,7 @@
       {{ {'groups': ns.groups} }}
   no_log: true
 
-# 3 채널 key 일관성 — adapters / ports / driver_map 빈 list 키 노출
+# cycle-016 Phase P: 3 채널 key 일관성 — adapters / ports / driver_map 빈 list 키 노출
 - name: "esxi | normalize network | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:

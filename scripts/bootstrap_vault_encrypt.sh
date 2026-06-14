@@ -3,7 +3,7 @@
 # scripts/bootstrap_vault_encrypt.sh
 #
 # 평문 vault/*.yml 을 ansible-vault 로 일괄 암호화한다.
-# 정책:
+# 사용자 결정 (cycle 2026-04-28):
 #   - vault 처리 정책 = "ansible-vault encrypt 후 commit"
 #   - Jenkins credentials ID = "server-gather-vault-password" (Secret File)
 #
@@ -82,7 +82,7 @@ cat <<EOF
 
 다음 단계:
   1. git diff vault/ 로 변경 확인
-  2. git add vault/ && git commit -m "feat: vault encrypt"
+  2. git add vault/ && git commit -m "feat: vault encrypt (P0)"
   3. Jenkins credentials store 에 server-gather-vault-password (Secret File) 등록
      상세 절차: docs/01_jenkins-setup.md
 EOF

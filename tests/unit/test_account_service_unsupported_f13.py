@@ -1,11 +1,11 @@
-"""Regression — account_service_provision Cisco CIMC + 404 fallback.
+"""Regression for F13/F08 — account_service_provision Cisco CIMC + 404 fallback (cycle 2026-05-01).
 
-배경: Cisco CIMC AccountService 표준 미지원 (UCS 자체 인증). 자동 복구 로직이
-cisco vendor 시 GET 자체 실패 → noise. vendor='cisco' 분기에서
-method='not_supported' 명시 + errors[] 한 줄.
+배경: Cisco CIMC AccountService 표준 미지원 (UCS 자체 인증). cycle 2026-04-28
+P2 자동 복구 로직이 cisco vendor 시 GET 자체 실패 → noise. cycle 2026-05-01
+부터 vendor='cisco' 분기에서 method='not_supported' 명시 + errors[] 한 줄.
 
 또한 Cisco 외 vendor 도 일부 펌웨어가 AccountService 404 → _is_404_only_error
-판정으로 'not_supported' graceful 분류 (기존 cisco 분기와 별개의 경로).
+판정으로 'not_supported' graceful 분류 (Additive — 기존 cisco 분기와 별개).
 
 본 테스트:
   - vendor='cisco' → method='not_supported', recovered=False
@@ -36,7 +36,7 @@ import redfish_gather as rg  # noqa: E402
 
 
 def test_provision_cisco_post_with_id_field_succeeds(monkeypatch):
-    """vendor='cisco' POST 표준 지원 확인 (사이트 실측 10.100.15.2).
+    """F50 (cycle 2026-05-06): vendor='cisco' POST 표준 지원 확인 (사이트 실측 10.100.15.2).
 
     Cisco 변형:
       - POST /Accounts 가 'Id' 필드 (1-15) 필수

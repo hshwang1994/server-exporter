@@ -1,4 +1,4 @@
-# 17. Jenkins 파이프라인 런타임
+# Jenkins 파이프라인 런타임
 
 > **이 문서는** server-exporter 의 Jenkins 파이프라인이 실제로 어떤 단계로 실행되는지 그림과 표로 정리한다.
 > Stage 1~4 의 의무, 각 Stage 가 실패할 때 어떻게 전파되는지, 호출자에게 어떤 형식으로 결과가 돌아가는지를 한 페이지에 모았다.
@@ -27,7 +27,7 @@ parameters (loc, target_type, inventory_json)
 | Stage | 도구 | 게이트 | 비고 |
 |-------|------|--------|------|
 | Validate Schema | `python3 tests/validate_field_dictionary.py` | **FAIL** | 실패 시 빌드 FAILURE |
-| E2E Regression | `pytest tests/e2e/` + `pytest tests/integration/ -m "not live"` (별도 호출, 둘 중 하나라도 FAIL 시 stage 실패) | **FAIL** | tests/e2e=baseline/fixture 회귀, tests/integration=HPE 에뮬레이터 오프라인 회귀(에뮬레이터 불필요·완전 오프라인). 별도 호출 이유=양쪽이 top-level `conftest` 충돌. |
+| E2E Regression | `pytest tests/e2e/` + `pytest tests/integration/ -m "not live"` (별도 호출, 둘 중 하나라도 FAIL 시 stage 실패) | **FAIL** | tests/e2e=baseline/fixture 회귀, tests/integration=HPE 에뮬레이터 오프라인 회귀 하네스(2026-06-08 추가, 에뮬레이터 불필요·완전 오프라인). 별도 호출 이유=양쪽이 top-level `conftest` 충돌. |
 
 Stage 3/4는 venv Python을 사용한다 (`. /opt/ansible-env/bin/activate`).
 

@@ -1,38 +1,39 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: Lenovo
 # Firmware: XCC — XCC1 (1.x) / XCC2 (2.x) — ThinkSystem V2/V3
 # Generation: xcc (XCC1 + XCC2 통합 cover)
 # Generation Year: "2017-2024 (ThinkSystem V2 = XCC1 2017-2020 / ThinkSystem V3 = XCC2 2020-2024)"
 # Redfish Introduction: "DSP0268 v1.4+ (XCC1) ~ v1.10+ (XCC2)"
 # Origin: Lenovo XCC Redfish API documentation
-# Last sync: 2026-05-11 (XCC2 firmware_patterns 매트릭스 + header 정책 보강)
+# Last sync: 2026-05-11 (M-H3 — XCC2 firmware_patterns 매트릭스 + header 정책 보강)
 # Notes: ThinkSystem V2/V3 (SR/ST). Redfish 1.x 표준 호환.
-#   XCC3 는 lenovo_xcc3.yml (priority=120, ThinkSystem V4) 별도.
-# Sources (XCC1/XCC2 lab 부재 보강):
+#   XCC3 는 lenovo_xcc3.yml (priority=120, ThinkSystem V4) 별도 — F55/F56.
+# Sources (rule 96 R1-A — XCC1/XCC2 lab 부재 보강):
 #   - https://pubs.lenovo.com/xcc/   (XCC 종합 portal)
 #   - https://lenovopress.lenovo.com/lp1604-lenovo-xclarity-controller-xcc
 #   - https://lenovopress.lenovo.com/lp1991-thinksystem-v3-v4-server-firmware-and-drivers-best-practices-advanced-guide
-# Generation matrix (web sources):
+# Generation matrix (web sources, M-H3 cycle 2026-05-07):
 #   - XCC1 (ThinkSystem V2, 2017-2020): DSP0268 v1.4+
 #     펌웨어 prefix: "AFBT*" / "CDI*" 등 model-specific
 #   - XCC2 (ThinkSystem V3, 2020-2024): DSP0268 v1.10+
 #     펌웨어 prefix: "USX*" / "TAOT*" 등 (V3 신 모델)
-#     header 정책 보수적 — 2026-04-30 사이트 이슈 (1.17.0 reject) 동일 정책 가능
-# HTTP 헤더 정책 (2026-04-30 사이트 이슈 관측):
-#   - 사이트 XCC2 일부 펌웨어 (1.17.0) Accept + OData-Version + User-Agent reject
-#   - "Accept만" 사용 (사이트 실측 우선)
+#     header 정책 보수적 — cycle 2026-04-30 사이트 사고 (1.17.0 reject) 동일 정책 가능
+# HTTP 헤더 정책 (cycle 2026-04-30 사이트 사고 학습 — rule 25 R7-A-1):
+#   - 사용자 사이트 XCC2 일부 펌웨어 (1.17.0) Accept + OData-Version + User-Agent reject
+#   - "Accept만" 으로 hotfix (사용자 실측 > spec)
 #   - XCC1 / XCC2 모두 보수적 header 정책 의무 (redfish_gather.py _get() 공통 정책 사용)
 # OEM namespace: Oem.Lenovo (모든 세대)
-# 검증 기준 (실측 2026-04-28, Round 11):
-#   - ThinkSystem SR650 V2 × 1대 — XCC1 만 검증
+# Tested against (실측 2026-04-28, Round 11):
+#   - ThinkSystem SR650 V2 × 1대 (10.50.11.232) — XCC1 만 검증
 #   - XCC FirmwareVersion: "AFBT58B 5.70 2025-08-11"
 #   - BIOS: AFE136D
 #   - Redfish: 1.15.0
 #   - CPU: Intel Xeon Gold 6338
+#   - 데이터 경로: tests/reference/redfish/lenovo/10_50_11_232/
 #   - 주의: ServiceRoot.Vendor="Lenovo" 명시 / Oem 키 비어있음
 # Lab status: XCC1 (V2) Round 11 검증. XCC2 (V3) lab 부재 — web sources only.
-# Next action: lab 도입 후 XCC2 V3 응답 형식 확정 + header 정책 회귀
+# Next action: lab 도입 후 별도 cycle (XCC2 V3 응답 형식 확정 + header 정책 회귀)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_lenovo_xcc
 channel: redfish
@@ -42,7 +43,7 @@ match:
   vendor: ["Lenovo", "LENOVO"]
   # XCC1 / XCC2 만 cover. XCC3 는 lenovo_xcc3.yml (priority=120) 우선.
   # firmware_patterns 는 XCC + V2/V3 model 시그니처. 점수 동률 시 XCC3 priority 가 높아 자동 우선.
-  # XCC1 + XCC2 명시적 매트릭스 (단일 adapter 에서 두 세대 cover):
+  # M-H3 (cycle 2026-05-07) — XCC1 + XCC2 명시적 매트릭스 (Additive only — 새 adapter 신설 회피):
   firmware_patterns:
     - "XCC"          # XCC 모든 세대 (XCC1 + XCC2 cover. XCC3 는 lenovo_xcc3.yml 우선)
     - "AFBT*"        # XCC1 ThinkSystem V2 시기 펌웨어 prefix (e.g., AFBT58B)
@@ -77,7 +78,7 @@ normalize:
 credentials:
   profile: "lenovo"
   fallback_profiles: []
-  # AccountService 진입점 — vault/redfish/lenovo.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/redfish/lenovo.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: lenovo_fallback, role: recovery }
     - { vault_label: lenovo_current,  role: recovery }

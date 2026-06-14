@@ -1,6 +1,6 @@
-# Dell iDRAC (legacy iDRAC7) fixture
+# Dell iDRAC (legacy iDRAC7) fixture — M-H1 (cycle 2026-05-07)
 
-> Lab 부재 — web sources only
+> Lab 부재 — web sources only (rule 96 R1-A)
 
 ## 출처
 

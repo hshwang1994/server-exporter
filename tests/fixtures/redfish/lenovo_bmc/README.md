@@ -1,6 +1,6 @@
-# Lenovo BMC (legacy IBM xSeries BMC / IMM) fixture
+# Lenovo BMC (legacy IBM xSeries BMC / IMM) fixture — M-H3 (cycle 2026-05-07)
 
-> Lab 부재 — web sources only. Legacy generation.
+> Lab 부재 — web sources only (rule 96 R1-A). Legacy generation.
 
 ## 출처
 

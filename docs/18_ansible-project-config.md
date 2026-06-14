@@ -1,4 +1,4 @@
-# 18. Ansible 프로젝트 설정
+# Ansible 프로젝트 설정
 
 > **이 문서는** server-exporter 저장소가 사용하는 Ansible 의 프로젝트 고유 설정을 정리한다.
 > ansible.cfg 의 의미, 커스텀 플러그인 경로, 환경변수, vault 사용 방법, 로컬 실행 예시 등을 다룬다.

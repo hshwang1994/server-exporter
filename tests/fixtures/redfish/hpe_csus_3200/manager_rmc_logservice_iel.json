@@ -9,5 +9,5 @@
   "LogEntryType": "Event",
   "DateTime": "2026-06-09T12:00:00Z",
   "Entries": {"@odata.id": "/redfish/v1/Managers/RMC/LogServices/IEL/Entries"},
-  "_note": "lab 부재 — DMTF LogService 합성."
+  "_note": "lab 부재 — DMTF LogService 합성. rule 96 R1-A."
 }

@@ -2,18 +2,18 @@
 # redfish-gather/tasks/vendors/hpe/normalize_oem.yml
 #
 # HPE OEM 정규화 (Oem.Hpe namespace) — iLO 시리즈 + Superdome Flex + CSUS 3200
-# fragment 방식 — 자기 fragment 만 생성하고 merge_fragment 호출
+# fragment 방식 (rule 22) — 자기 fragment 만 생성하고 merge_fragment 호출
 #
-# 기존 iLO normalize placeholder 는 그대로 두고 Superdome fragment 를 추가한다.
-# Superdome Flex fragment 추가
-# HPE CSUS 3200 (Compute Scale-up Server 3200) 분기 확장
+# Additive only (rule 92 R2) — 기존 iLO normalize placeholder 변경 0 / Superdome fragment 추가만
+# M-G1 cycle 2026-05-07-all-vendor-coverage: Superdome Flex fragment 추가
+# M-CSUS3200 cycle 2026-05-11: HPE CSUS 3200 (Compute Scale-up Server 3200) 분기 확장
 #   — Superdome Flex 후속 / 동일 Oem.Hpe namespace 상속 (HPE 공식 명시)
-#   — model regex 확장 — fragment field name (oem_hpe_superdome) 유지 (envelope 키 그대로)
+#   — model regex 확장 only — fragment field name (oem_hpe_superdome) 유지 (envelope shape 영향 0)
 #
 # 원칙:
 #   - 표준 스키마 섹션 (bmc / hardware) 안의 하위 필드로 확장 (새 섹션 추가 안 함)
 #   - Superdome / CSUS 분기는 model_patterns 매칭 시만 fragment 추가 (when 조건)
-#   - 일반 iLO 시리즈 mock 은 그대로 동작
+#   - 일반 iLO 시리즈 mock 영향 0
 
 # ── 1) iLO 시리즈 OEM normalize placeholder (현행 유지) ─────────────────────────
 - name: "redfish | hpe | normalize_oem (iLO 시리즈 placeholder)"
@@ -21,8 +21,8 @@
     msg: "{{ _rf_vendor | default('unknown') }} OEM normalize: no-op (iLO 시리즈)"
   no_log: false
 
-# ── 2) Superdome Flex / CSUS 3200 fragment 추가 — model_patterns 매칭 시만 ──
-# fragment field name 은 "oem_hpe_superdome" 유지 (CSUS 3200 도 동일 Oem.Hpe 영역 — envelope 키 그대로)
+# ── 2) Superdome Flex / CSUS 3200 fragment 추가 (M-G1 + M-CSUS3200) — model_patterns 매칭 시만 ──
+# fragment field name 은 historical "oem_hpe_superdome" 유지 (CSUS 3200 도 동일 Oem.Hpe 영역 — envelope shape 영향 0)
 - name: "redfish | hpe | Superdome/CSUS fragment 생성 (모델 매칭 + OEM 영역 존재 시)"
   ansible.builtin.set_fact:
     _data_fragment:

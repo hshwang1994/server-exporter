@@ -1,11 +1,12 @@
-"""회귀 — HPE CSUS 3200 / Superdome Flex 멀티-노드 토폴로지 수집.
+"""ADR-2026-05-12 회귀 — HPE CSUS 3200 / Superdome Flex 멀티-노드 토폴로지 수집
+(cycle 2026-05-12).
 
 `gather_managers_multi` / `gather_systems_multi` / `gather_chassis_multi` /
 `_collect_multi_node_topology` 통합 동작 검증. mock HTTP 응답 (3-partition × 4-manager
 × 3-chassis 시나리오) 으로 lab 부재 환경 회귀 차단.
 
 검증 항목:
-1. manager_layout=None → multi_node=None (기존 vendor 동작 유지)
+1. manager_layout=None → multi_node=None (기존 13 vendor 영향 0)
 2. manager_layout='rmc_primary' + 멀티 manager → 전 manager 추출 + RMC primary 라벨
 3. manager_layout='rmc_primary_ilo_secondary' + RMC+PDHC+iLO5 → 라벨 분기 (RMC/PDHC/iLO)
 4. multi-partition 전수 수집 — partitions[].id 모두 추출
@@ -43,7 +44,7 @@ def _csus_response_map() -> dict:
     """CSUS 3200 합성 응답 — 3-partition × 4-manager × 3-chassis 시나리오.
 
     `_p()` 가 prefix 를 제거해 path 가 'Managers', 'Systems/Partition0' 형식.
-    source (web sources 합성): sdflexutils + DMTF v1.15 + iLO5 API ref.
+    source (rule 96 R1-A 합성): sdflexutils + DMTF v1.15 + iLO5 API ref.
     """
     return {
         # Managers 컬렉션
@@ -154,7 +155,7 @@ def _patch_get(monkeypatch, extra=None) -> None:
 
 
 def test_multi_node_topology_disabled_when_layout_none(monkeypatch) -> None:
-    """manager_layout=None → None 반환 (기존 vendor 동작 유지)."""
+    """manager_layout=None → None 반환 (기존 13 vendor 영향 0)."""
     _patch_get(monkeypatch)
     service_root = {
         "Systems":  {"@odata.id": "/redfish/v1/Systems"},
@@ -292,7 +293,7 @@ def test_gather_bmc_manager_layout_rmc_overrides_label(monkeypatch) -> None:
     assert data["name"] == "RMC"
 
 
-# ── per-partition storage/network 정규화 (canonical shape) ──
+# ── cycle 2026-05-29: per-partition storage/network 정규화 (canonical shape) ──
 
 
 def test_partition_storage_normalized_to_canonical_shape() -> None:
@@ -396,8 +397,8 @@ def test_multi_node_partition_sections_are_canonical(monkeypatch) -> None:
     assert isinstance(p0["memory"], dict) and "total_mb" in p0["memory"]
 
 
-def test_partition_cpu_normalized_gpu_filter() -> None:
-    """raw gather_processors(list) → canonical cpu (GPU 제외 + 합산 + summary)."""
+def test_partition_cpu_normalized_b01_filter() -> None:
+    """raw gather_processors(list) → canonical cpu (B01 GPU 제외 + 합산 + summary)."""
     procs = [
         {"id": "1", "model": "Intel(R) Xeon(R) Platinum 8480+",
          "manufacturer": "Intel", "total_cores": 56, "total_threads": 112,
@@ -405,7 +406,7 @@ def test_partition_cpu_normalized_gpu_filter() -> None:
         {"id": "2", "model": "Intel(R) Xeon(R) Platinum 8480+",
          "manufacturer": "Intel", "total_cores": 56, "total_threads": 112,
          "speed_mhz": 3800, "processor_type": "CPU"},
-        # GPU 는 CPU 필터로 제외되어야 함
+        # GPU 는 B01 필터로 제외되어야 함
         {"id": "GPU1", "model": "NVIDIA H100", "total_cores": 0,
          "processor_type": "GPU"},
     ]

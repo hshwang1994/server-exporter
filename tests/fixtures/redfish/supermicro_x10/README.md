@@ -1,6 +1,6 @@
-# Supermicro X10 mock fixture
+# Supermicro X10 mock fixture (cycle 2026-05-07 M-B4)
 
-## 출처 (lab 부재)
+## 출처 (rule 96 R1-A — lab 부재)
 
 - Supermicro X10 IPMI/BMC docs: `https://www.supermicro.com/manuals/superserver/IPMI/IPMI_Users_Guide_X10.pdf`
 - DMTF Redfish 표준: `https://redfish.dmtf.org/schemas/v1/` (DSP0268 v1.0~v1.6 영역)
@@ -10,9 +10,9 @@
 
 ## Lab 상태
 
-- 부재 — Supermicro 사이트 BMC 0대
+- 부재 — 사용자 명시 2026-05-07 Q2 (Supermicro 사이트 BMC 0대)
 - web sources 기반 mock — 실 BMC 응답과 차이 가능
-- 사이트 도입 시 사이트 fixture 캡처로 보정
+- 사이트 도입 시 capture-site-fixture skill 로 보정 (rule 50 R2 단계 10)
 
 ## Generation 특성
 

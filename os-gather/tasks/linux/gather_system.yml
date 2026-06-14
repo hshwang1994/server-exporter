@@ -61,7 +61,7 @@
     fi
     echo "SERIAL=${serial:-}"
     echo "UUID=${uuid:-}"
-    # vendor/model/bios sysfs (Python setup 미동작 환경 보완).
+    # 2026-04-30 fix B80 raw: vendor/model/bios sysfs (Python setup 미동작 환경 보완).
     # raw fallback path는 ansible_system_vendor 미정의이므로 _l_fb.VENDOR로 채움.
     [ -r /sys/class/dmi/id/sys_vendor ]   && echo "VENDOR=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)"   || echo "VENDOR="
     [ -r /sys/class/dmi/id/product_name ] && echo "MODEL=$(cat /sys/class/dmi/id/product_name 2>/dev/null)" || echo "MODEL="
@@ -73,7 +73,7 @@
   no_log: true
 
 # =============================================================================
-# system.runtime: timezone / ntp / firewall / listen / swap
+# system.runtime (F5 cycle 2026-05-11): timezone / ntp / firewall / listen / swap
 # 양쪽 경로 (Python + raw fallback) 모두 raw 모듈로 수집 — timedatectl/systemctl
 # 같은 명령은 raw 가 가장 robust (setup facts 미의존).
 # =============================================================================
@@ -146,7 +146,7 @@
           {%- set _ = ns.kv.update({k: v}) -%}
         {%- endif -%}
       {%- endfor -%}
-      {# listening_ports 계약은 str[] (field_dictionary + 전 baseline ["22","53"]).
+      {# Round 17 #7: listening_ports 계약은 str[] (field_dictionary + 전 baseline ["22","53"]).
          int 로 모아 숫자정렬 후 map('string') 으로 str[] 변환 (정렬은 수치, 출력은 문자열). #}
       {%- set _ = ns.kv.update({'PORTS': ns.ports | sort | unique | map('string') | list}) -%}
       {{ ns.kv }}
@@ -199,7 +199,7 @@
         {%- endif -%}
     _l_hosting_type: >-
       {%- set sdv = (_l_raw_sys.SDV | default('')) | trim | lower -%}
-      {%- set vm_signals = ['vmware','kvm','qemu','xen','hyperv','microsoft','oracle','virtualbox','docker','lxc','podman','bhyve','uml','parallels','openvz','bochs'] -%}  {# 'bochs' 추가 — python path _l_hosting_type 의 vm_signals 와 parity #}
+      {%- set vm_signals = ['vmware','kvm','qemu','xen','hyperv','microsoft','oracle','virtualbox','docker','lxc','podman','bhyve','uml','parallels','openvz','bochs'] -%}  {# Round 15: 'bochs' 추가 — python path _l_hosting_type 의 vm_signals 와 parity #}
       {%- if sdv in vm_signals -%}virtual
       {%- elif sdv == 'none' -%}baremetal
       {%- else -%}unknown
@@ -212,7 +212,7 @@
       {%- set u = (_l_raw_sys.UUID | default('')) | trim -%}
       {%- set sentinel = ['', 'NA', 'None', 'Not Specified'] -%}
       {{ u if u not in sentinel else none }}
-    # sys_vendor/product_name/bios sentinel filtering.
+    # 2026-04-30 fix B80 raw: sys_vendor/product_name/bios sentinel filtering.
     _l_raw_vendor: >-
       {%- set v = (_l_raw_sys.VENDOR | default('')) | trim -%}
       {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System manufacturer', 'Default string'] -%}
@@ -284,7 +284,7 @@
       {%- set vrole = (ansible_virtualization_role | default('')) | lower -%}
       {%- set vendor = (ansible_system_vendor | default('')) -%}
       {%- set vm_signals = ['vmware', 'kvm', 'qemu', 'xen', 'hyperv', 'microsoft', 'oracle', 'parallels', 'bhyve', 'lxc', 'docker', 'podman', 'openvz', 'virtualbox', 'bochs', 'uml'] -%}
-      {# hosting_type 판정용 OEM vendor list (set membership 패턴, 분기 아님) #}
+      {# nosec rule12-r1: hosting_type 판정용 OEM vendor list (set membership 패턴, 분기 아님) #}
       {%- set oem_vendors = ['Dell Inc.', 'HPE', 'Hewlett Packard Enterprise', 'Hewlett-Packard', 'Lenovo', 'Cisco Systems Inc', 'Supermicro', 'Fujitsu', 'Inspur'] -%}
       {%- if sdv in vm_signals -%}virtual
       {%- elif vtype in vm_signals and vrole == 'guest' -%}virtual
@@ -329,7 +329,7 @@
      (_l_uuid_from_setup | default(none)) is none)
   block:
     - name: "linux | system | DMI direct-read serial"
-      when: (_l_serial_from_setup | default(none)) is none  # serial raw fallback 진입
+      when: (_l_serial_from_setup | default(none)) is none  # rule 95 R1 R5 ok: serial raw fallback 진입
       ansible.builtin.command: cat /sys/class/dmi/id/product_serial
       become: true
       register: _l_dmi_serial_direct
@@ -338,7 +338,7 @@
       no_log: true
 
     - name: "linux | system | DMI direct-read uuid"
-      when: (_l_uuid_from_setup | default(none)) is none  # uuid raw fallback 진입
+      when: (_l_uuid_from_setup | default(none)) is none  # rule 95 R1 R5 ok: uuid raw fallback 진입
       ansible.builtin.command: cat /sys/class/dmi/id/product_uuid
       become: true
       register: _l_dmi_uuid_direct
@@ -380,7 +380,7 @@
 
 
 # identifier diagnostics (Python 경로에서만 상세 진단)
-# 별도 task 파일로 분리 — 가독성 + 파일/태스크 길이 정합.
+# 별도 task 파일로 분리 (2026-04-28) — 가독성 + rule 10 R3 정합.
 - name: "linux | system | identifier diagnostics 빌드"
   ansible.builtin.include_tasks:
     file: "{{ playbook_dir }}/tasks/linux/build_identifier_diagnostics.yml"
@@ -403,12 +403,12 @@
         fqdn:           "{{ ansible_fqdn | default(_l_fb.FQDN | default(inventory_hostname)) }}"
         serial_number:  "{{ _l_serial_val | default(none) }}"
         system_uuid:    "{{ _l_uuid_val | default(none) }}"
-        # ansible_system_vendor를 system fragment에도 emit해서
+        # 2026-04-29 fix B80: ansible_system_vendor를 system fragment에도 emit해서
         # site.yml의 envelope.vendor가 build_output 시점에 _merged_data.system.vendor로 접근.
-        # raw fallback: Python 미동작 환경(Python 3.6/RHEL 8.10)에서
+        # 2026-04-30 fix B80 raw fallback: Python 미동작 환경(Python 3.6/RHEL 8.10)에서
         # ansible_system_vendor undefined → _l_raw_vendor (sys_vendor sysfs)로 fallback.
         vendor:         "{{ ansible_system_vendor | default(_l_raw_vendor | default(none)) }}"
-        # system.runtime — 9 필드 (timezone/ntp/firewall/listen/swap)
+        # F5 cycle 2026-05-11: system.runtime — 9 필드 (timezone/ntp/firewall/listen/swap)
         # Linux raw 명령 (timedatectl/systemctl/ss/free) 결과 → _l_runtime 에 parse.
         runtime:
           timezone: >-
@@ -451,7 +451,7 @@
       {{ [] if (ansible_distribution is defined
                 or (_l_fb is defined and _l_fb.DIST is defined))
          else ['system'] }}
-    # 진단 instrumentation 제거 — root cause는 build_output.yml의
+    # 2026-04-30: B80 진단 instrumentation 제거 — root cause는 build_output.yml의
     # `_out_vendor: null` overwrite (commit 0d3058c4)였고 이미 해결됨.
     # vendor 정상 추출(asv=Dell Inc.) 호스트에서도 항상 에러로 emit되어 호출자 혼란.
     # vendor가 진짜 미정의(UNDEF)인 케이스만 진단으로 emit.

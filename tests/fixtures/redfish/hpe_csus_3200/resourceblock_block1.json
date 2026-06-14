@@ -4,7 +4,7 @@
   "@odata.type": "#ResourceBlock.v1_4_0.ResourceBlock",
   "Id": "Block1",
   "Name": "Compute Resource Block 1 (Expansion1)",
-  "_note": "lab 부재 — ResourceBlock 1 → Chassis/Expansion1 대응.",
+  "_note": "lab 부재 — ResourceBlock 1 → Chassis/Expansion1 대응. rule 96 R1-A.",
   "ResourceBlockType": ["Compute"],
   "Status": {"State": "Enabled", "Health": "OK"},
   "CompositionStatus": {"CompositionState": "Composed", "SharingCapable": false},

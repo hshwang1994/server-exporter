@@ -29,7 +29,7 @@ COMMON_TOP_KEYS = [
 # 채널별 핵심 필드
 #   - 각 채널은 자기 채널의 필드만 검증
 #   - 값이 None(null)인 경우 "키 존재"만 확인 (값 비교 안 함)
-#   - 스칼라 Must 필드 확장
+#   - P2-2 1단계: 스칼라 Must 필드 확장
 # ---------------------------------------------------------------------------
 REDFISH_CRITICAL = {
     "system": ["serial_number", "system_uuid", "vendor", "model"],
@@ -138,7 +138,7 @@ def assert_common_structure(output: dict):
 
 
 def assert_correlation_fields(output: dict):
-    """correlation 필드 검증 (fixture 수준).
+    """CM-02: correlation 필드 검증 (fixture 수준).
 
     - system_uuid: 키 존재, 값이 있으면 UUID 형식 검증
     - serial_number: 키 존재만
@@ -233,7 +233,7 @@ def assert_channel_critical_fields(output: dict, critical_fields: dict,
 #   - "section.array_key": 2단계 경로 → data[section][array_key]
 #   - "firmware": 1단계 경로 → data[firmware] (top-level 배열, section이 아님)
 #   - 배열이 비어있거나 섹션이 없으면 건너뜀 (graceful degradation)
-#   - 2단계 경로
+#   - P2-2 2단계
 # ---------------------------------------------------------------------------
 REDFISH_ARRAY_FIELDS = {
     "storage.physical_disks": ["predicted_life_percent", "id"],
@@ -332,7 +332,7 @@ def cisco_baseline():
 
 @pytest.fixture
 def rhel810_raw_fallback_baseline():
-    # Linux raw_fallback (RHEL 8.10 py3.6) baseline
+    # production-audit (2026-04-29): Linux raw_fallback (RHEL 8.10 py3.6) baseline
     return load_json(BASELINE_DIR / "rhel810_raw_fallback_baseline.json")
 
 

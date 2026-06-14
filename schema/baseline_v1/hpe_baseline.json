@@ -73,7 +73,7 @@
           "mac": "8c:84:74:e9:be:84",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "none",
+          "link_status": "unknown",
           "is_primary": false,
           "addresses": []
         },
@@ -84,7 +84,7 @@
           "mac": "8c:84:74:e9:be:85",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "none",
+          "link_status": "unknown",
           "is_primary": false,
           "addresses": []
         },
@@ -95,7 +95,7 @@
           "mac": "8c:84:74:e9:be:86",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "none",
+          "link_status": "unknown",
           "is_primary": false,
           "addresses": []
         },
@@ -106,7 +106,7 @@
           "mac": "8c:84:74:e9:be:87",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "linkup",
+          "link_status": "up",
           "is_primary": false,
           "addresses": []
         },
@@ -117,7 +117,7 @@
           "mac": "d4:f5:ef:69:87:50",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "none",
+          "link_status": "unknown",
           "is_primary": false,
           "addresses": []
         },
@@ -128,7 +128,7 @@
           "mac": "d4:f5:ef:69:87:58",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "none",
+          "link_status": "unknown",
           "is_primary": false,
           "addresses": []
         },
@@ -139,7 +139,7 @@
           "mac": "d4:f5:ef:69:85:b0",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "linkup",
+          "link_status": "up",
           "is_primary": false,
           "addresses": []
         },
@@ -150,7 +150,7 @@
           "mac": "d4:f5:ef:69:85:b8",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "linkup",
+          "link_status": "up",
           "is_primary": false,
           "addresses": []
         },
@@ -161,7 +161,7 @@
           "mac": "00:62:0b:20:3a:f0",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "none",
+          "link_status": "unknown",
           "is_primary": false,
           "addresses": []
         },
@@ -172,7 +172,7 @@
           "mac": "00:62:0b:20:3a:f1",
           "mtu": null,
           "speed_mbps": null,
-          "link_status": "none",
+          "link_status": "unknown",
           "is_primary": false,
           "addresses": []
         }

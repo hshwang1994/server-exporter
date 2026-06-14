@@ -6,8 +6,8 @@
 # source: Inspur 공식 매뉴얼 + GitHub community (확인 2026-05-07)
 #   - https://manualzz.com/doc/o/v7c5h/inspur-server-user-manual-nf5280m5-9.14-redfish
 #   - https://www.inspur.com/eportal/fileDir/defaultCurSite/resource/cms/2020/04/2020040211224398612.pdf
-# Fragment 철학 — 자기 fragment 만
-# lab: 부재 (web sources) — mock fixture 기반
+# Fragment 철학 (rule 22) — 자기 fragment 만
+# lab: 부재 (사용자 명시 2026-05-01) — mock fixture 기반 (M-D2)
 #
 # Oem.Inspur sub-namespace (web sources — Inspur OEM 영역은 다른 vendor 보다 약함):
 #   - Oem.Inspur.SystemInfo  — 시스템 추가 정보 (CPLD / BIOS 별도)
@@ -59,6 +59,6 @@
         _errors_fragment:             []   # Inspur OEM 부재는 fail 아님
       no_log: true
 
-# fragment 누적 병합 (merge_fragment.yml 호출 의무)
+# fragment 누적 병합 (rule 22 R3)
 - name: "redfish | inspur | collect_oem | merge fragment"
   ansible.builtin.include_tasks: "{{ playbook_dir }}/common/tasks/normalize/merge_fragment.yml"

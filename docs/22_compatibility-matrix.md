@@ -4,7 +4,7 @@
 
 "**내가 호출하면 어떤 섹션을 받게 될까?**" 가 궁금한 사람.
 
-호출자 시스템 개발자가 응답을 미리 예상할 때, 새로 들어온 작업자가 지원 범위를 파악할 때, GAP 영역을 찾을 때 본다.
+호출자 시스템 개발자가 응답을 미리 예상할 때, 새로 들어온 작업자가 지원 범위를 파악할 때, 다음 cycle 진입자가 GAP 영역을 찾을 때 본다.
 
 9개 벤더 × 여러 세대 × 10 섹션 = 240 칸짜리 표 한 장으로 정리되어 있다.
 
@@ -26,7 +26,7 @@
 | `OK★` | 코드 + adapter 는 있고 baseline 은 없음 | 동작 가능성 높음, 첫 사용 시 응답 확인 권장 |
 | `FB` | fallback 코드 적용됨 (옛 펌웨어 호환) | 사용 가능, 일부 필드 null 가능 |
 | `GAP` | adapter 에서 명시적으로 미지원 선언 | 응답에 `not_supported` 로 옴 |
-| `BLOCK` | lab 장비도 없고 spec 도 불명 | 미검증. 추가 작업 필요 |
+| `BLOCK` | lab 장비도 없고 spec 도 불명 | 미검증. 새 cycle 에서 추가 필요 |
 | `N/A` | 채널 자체가 그 섹션을 안 다룸 | `not_supported` 로 옴 (정상) |
 | `?` | adapter 도 없고 spec 도 불명확 | 추가 조사 필요 |
 
@@ -82,10 +82,10 @@ baseline 을 가진 lab tested 벤더 4개 (Dell iDRAC9 / HPE iLO6 / Lenovo XCC 
 | 영역 | 부재 사유 | 보완 |
 |---|---|---|
 | Dell iDRAC 7 (9 FB) | EOL 펌웨어 | 옛 펌웨어 fallback 코드로 대응 중 |
-| Dell iDRAC 8 (power FB) | PowerSubsystem fallback 적용 | lab 도입 시 baseline 캡처 |
-| HPE iLO 4 (storage/power FB) | storage/power fallback 적용 | lab 도입 시 baseline 캡처 |
-| Lenovo IMM2/XCC1 (storage/power FB) | storage/power fallback 적용 | lab 도입 시 baseline 캡처 |
-| Supermicro X9 (6 BLOCK) | EOL + lab fixture 부재 | lab 도입 시 fixture 캡처 필요 |
+| Dell iDRAC 8 (power FB) | M-D3 W1 PowerSubsystem fallback 적용 (cycle 2026-05-06) | lab 도입 시 baseline 캡처 |
+| HPE iLO 4 (storage/power FB) | M-D3 W2/W3 fallback 적용 (cycle 2026-05-06) | lab 도입 시 baseline 캡처 |
+| Lenovo IMM2/XCC1 (storage/power FB) | M-D3 W4/W5 fallback 적용 (cycle 2026-05-06) | lab 도입 시 baseline 캡처 |
+| Supermicro X9 (6 BLOCK) | EOL + lab fixture 부재 | lab 도입 cycle 에서 fixture 캡처 필요 |
 | Supermicro X9 (3 GAP) | OEM 미지원 generation | adapter capabilities 추가 후보 |
 | 신규 4 vendor (Huawei / Inspur / Fujitsu / Quanta) | lab 부재 + vault 미설정 | vendor 공식 docs / DMTF 스펙 기반으로 작성 |
 | HPE Superdome Flex | lab 부재 + sub-line | priority=101 어댑터 + web sources 14건 |
@@ -100,12 +100,12 @@ baseline 을 가진 lab tested 벤더 4개 (Dell iDRAC9 / HPE iLO6 / Lenovo XCC 
 | Baseline JSON 추가 | 해당 row `OK★` → `OK` |
 | `schema/sections.yml` 의 섹션 변경 | column 수정 |
 
-현재 수동 갱신이다 (자동 측정 도구는 없다).
+TTL 은 14일. 현재 수동 갱신이다 (자동 측정 도구는 없다).
 
 ## 칸을 격상 / 격하하는 절차
 
 - `OK★` → `OK` — 실장비 검증 후 `schema/baseline_v1/<vendor>_baseline.json` 추가
-- `GAP` → `FB` — 호환성 fallback 코드 추가 (기존 동작 유지, 추가만)
+- `GAP` → `FB` — 호환성 fallback 코드 추가 (Additive only — 기존 동작 유지)
 - `BLOCK` → `OK★` — 사이트 fixture 캡처 + adapter capabilities 명시
 - `?` → `OK★` / `GAP` — 벤더 공식 문서 / DMTF 스펙 확인 후 결정
 
@@ -117,7 +117,7 @@ baseline 을 가진 lab tested 벤더 4개 (Dell iDRAC9 / HPE iLO6 / Lenovo XCC 
 | 2026-05-01 | 신 세대 BMC 7종 + 호환성 fallback 22건 일괄 | iDRAC 7 / 10, iLO 7, XCC v3, X12~14, UCS X-Series — 신규 row |
 | 2026-05-01 | 신규 4 vendor 도입 | Huawei / Inspur / Fujitsu / Quanta — 신규 row |
 | 2026-05-01 | Lenovo XCC 권한 캐시 fix | XCC v3 auth recovery `BLOCK` → `OK★` |
-| 2026-05-06 | 호환성 fallback 9 라인 (추가만) | 칸 자체는 불변 (기존 path 유지 + 새 fallback path 추가) |
+| 2026-05-06 | 호환성 fallback 9 라인 (Additive only) | 칸 자체는 불변 (기존 path 유지 + 새 fallback path 추가) |
 | 2026-05-06 | HPE Superdome Flex 추가 | 신규 row (HPE sub-line) |
 
 ---

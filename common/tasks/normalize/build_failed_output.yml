@@ -25,7 +25,7 @@
   ansible.builtin.set_fact:
     _norm_sections: >-
       {%- set all_sec = ['system','hardware','bmc','cpu','memory',
-                         'storage','network','firmware','users','power'] -%}
+                         'storage','network','firmware','users','power','thermal'] -%}
       {%- set supported = _fail_sec_supported | default([]) -%}
       {%- set out = {} -%}
       {%- for s in all_sec -%}
@@ -36,7 +36,7 @@
         {%- endif -%}
       {%- endfor -%}
       {{ out }}
-    # default 메시지에 채널/IP 컨텍스트 포함 — "수집 실패" 단독 회피
+    # cycle-016 (2026-04-29): default 메시지에 채널/IP 컨텍스트 포함 — "수집 실패" 단독 회피
     _norm_errors:
       - section:  "{{ _fail_error_section | default('gather') }}"
         message: >-
@@ -91,6 +91,7 @@
                      'adapters':[], 'ports':[], 'virtual_switches':[],
                      'portgroups':[], 'driver_map':[],
                      'summary': {'groups': []}},
-        'users':    [], 'firmware': [], 'power': none
+        'users':    [], 'firmware': [], 'power': none,
+        'thermal':  {'temperatures': [], 'fans': []}
       })
     } }}"

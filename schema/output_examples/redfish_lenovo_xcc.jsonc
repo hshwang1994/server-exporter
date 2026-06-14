@@ -3,12 +3,12 @@
 //
 // 대상      : Lenovo ThinkSystem SR650 V2 / XCC AFBT58B 5.70 (10.50.11.232, hostname=XCC-7Z73-J30AF7LC)
 // 채널      : redfish-gather (stdlib HTTPS + Basic Auth)
-// 특이사항  : Lenovo XCC3 (XClarity Controller v3) — adapter redfish_lenovo_xcc3 (priority=120)
+// 특이사항  : Lenovo XCC3 (XClarity Controller v3) — adapter redfish_lenovo_xcc3 (priority=110)
 //             - Lenovo OEM: product_name / system_status / fru_serial / machine_type / health_summary / led_indicator
 //             - Backup BMC firmware (BMC-Backup) — Primary 와 별개 펌웨어 슬롯
 //             - Pending firmware slot (UEFI-Pending / BMC-Primary-Pending) — 다음 reboot 시 활성
 //             - hardware.health = Critical + power.summary.health_rollup = Critical (PSU1 장애)
-//             - reverse regression: Accept-only header (XCC3 1.17.0 호환)
+//             - cycle 2026-04-30 reverse regression: Accept-only header (XCC3 1.17.0 호환)
 // 캡처 일시 : 2026-05-07
 // =============================================================================
 {
@@ -68,7 +68,7 @@
     "bmc_ip": "10.50.11.232",                           // BMC IP (Redfish 채널만 채워짐. OS/ESXi 는 null)
     "host_ip": "10.50.11.232"                           // 호출자가 전달한 service_ip / bmc_ip
   },
-  "errors": [],                                         // 수집 중 errors (warning 수준이면 status=success 와 공존 가능)
+  "errors": [],                                         // 수집 중 errors (warning 수준이면 status=success 와 공존 가능 — rule 13 R8)
   "data": {                                             // 실제 수집된 raw 데이터 (섹션별 dict). not_supported / failed 섹션은 null 또는 빈 list
     "firmware": [
       {"id": "BMC-Primary", "name": "Firmware:BMC", "version": "58B-5.70", "updateable": true, "component": "BMC-AFBT-10", "pending": false, "category": "bmc"},
@@ -258,5 +258,5 @@
       }
     }
   },
-  "schema_version": "1"                                 // envelope schema 버전 — "1" 고정
+  "schema_version": "1"                                 // envelope schema 버전 — "1" 고정 (rule 13 R5)
 }

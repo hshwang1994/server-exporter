@@ -1,6 +1,6 @@
 """merge_fragment.yml data-merge 식 렌더 검증 (Jinja2 레벨 — ansible-playbook 불필요).
 
-배경:
+배경 (audit 2026-06-09 / rule 95 R1):
     merge_fragment.yml 의 data 재귀 병합은 같은 key 의 두 값이 'iterable & not string' 이면
     `bv + fv` 로 concat 한다. dict 는 Jinja2 에서 iterable=True / mapping=True 라, base 가
     list 이고 fragment 가 dict(또는 반대)인 오염 케이스에서 `list + dict` TypeError 가 난다
@@ -9,7 +9,7 @@
     가드: concat 분기에 `is not mapping` 추가 → 오염 list+dict 는 else(fv 우선)로 떨어져
     crash 없음. 정상 list+list 는 그대로 concat (불변).
 
-검증 가능: 실제 YAML 의 식을 추출해 Jinja2 로 렌더 — ansible 없이 동작 검증.
+검증 가능 (rule 24 R1): 실제 YAML 의 식을 추출해 Jinja2 로 렌더 — ansible 없이 동작 검증.
 ansible filter `union` 만 shim 으로 제공(set 합집합, a 순서 우선).
 """
 from __future__ import annotations

@@ -1,20 +1,20 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: Cisco
 # Firmware: UCS X-Series (X210c / X410c) standalone CIMC
 # Origin: Cisco UCS X-Series 공식 + Intersight Managed Mode docs
-# Last sync: 2026-05-11 (origin 일관성 보강)
-# Lab status: PASS — UCS X-series 사이트 검증 1대 (commit `0a485823`)
-# 검증 기준 (사이트 검증 2026-05-06):
-#   - UCS X-series 사이트 BMC 1대 (Round 검증)
-#   - 8 Redfish endpoint 모두 SUCCESS (commit `0a485823`)
-# Next action: 다른 X-series 모델 (X210c / X410c / Intersight IMM 모드) lab 도입 시 별도 검증
+# Last sync: 2026-05-11 (M-K1 — cycle 2026-05-07 phase 3 origin 일관성 보강)
+# Lab status: PASS — UCS X-series 사이트 검증 1대 (cycle 2026-05-06 commit `0a485823`)
+# Tested against (사이트 검증 cycle 2026-05-06):
+#   - UCS X-series 사이트 BMC 1대 (10.100.15.2 — Round 검증)
+#   - 8 Redfish endpoint 모두 SUCCESS (cycle 2026-05-06 commit `0a485823`)
+# Next action: 다른 X-series 모델 (X210c / X410c / Intersight IMM 모드) lab 도입 시 별도 cycle
 # Notes: UCS X-Series Modular System (X210c M6 / X410c M7 / X-Series M8).
 #   X-Series 는 두 모드:
 #     1) standalone — CIMC Redfish 직접 (M-series 와 유사) ← 본 adapter cover
 #     2) IMM (Intersight Managed Mode) — Intersight cloud 만 (직접 BMC 연결 불가)
-#       → server-exporter 범위 외 (별도 채널 또는 별도 검토)
-# Sources (사이트 1대 검증 완료 외 모델은 lab 부재):
+#       → server-exporter 범위 외 (별도 채널 또는 별도 cycle)
+# Sources (rule 96 R1-A — 사이트 1대 검증 완료 외 모델은 lab 부재):
 #   - https://www.cisco.com/c/en/us/support/servers-unified-computing/ucs-x-series-modular-system/series.html
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/Intersight/b_Intersight_Managed_Mode_Configuration_Guide/b_intersight_managed_mode_guide_chapter_01010.html
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/Intersight/Server-Firmware/4_3/b_intersight_server_fw_rn_4_3.html
@@ -61,7 +61,7 @@ normalize:
 credentials:
   profile: "cisco"
   fallback_profiles: []
-  # AccountService 진입점 — vault/redfish/cisco.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/redfish/cisco.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: cisco_current, role: recovery }
     - { vault_label: cisco_factory, role: recovery }
@@ -80,4 +80,4 @@ vendor_notes:
 
 diagnosis:
   protocol_name: redfish
-  not_supported_message: "Cisco UCS X-Series 장비 — standalone CIMC Redfish 가정. IMM 모드는 별도 Intersight 채널 필요."
+  not_supported_message: "Cisco UCS X-Series 장비 — standalone CIMC Redfish 가정 (lab 부재 — web sources 기반). IMM 모드는 별도 Intersight 채널 필요."

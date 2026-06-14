@@ -1,9 +1,9 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
 # Vendor: Microsoft Windows Server 2019
-# Firmware: 검증 버전 ["Build 17763 (Server 2019)"]
+# Firmware: tested_against ["Build 17763 (Server 2019)"]
 # Origin: 추정 — 검증 필요 (ansible.windows 3.3.0 + pywinrm 0.5.0 호환성)
-# Last sync: 2026-04-27
+# Last sync: 2026-04-27 (hshwang1994)
 # Notes: priority=50 — windows_2022와 같은 priority. version_patterns로 분기.
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: os_windows_2019

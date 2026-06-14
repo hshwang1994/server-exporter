@@ -1,17 +1,17 @@
 ---
 # redfish-gather/tasks/vendors/cisco/normalize_oem.yml
 #
-# Cisco OEM 정규화 — fragment 형식
+# Cisco OEM 정규화 — fragment 형식 (rule 22 R1+R7+R8)
 #
 # 원칙:
-#   - 표준 스키마 섹션 안의 하위 필드로 확장 (새 섹션 추가 최소화 — envelope 키 그대로 유지)
+#   - 표준 스키마 섹션 안의 하위 필드로 확장 (새 섹션 추가 최소화 — rule 13 R5 envelope shape 변경 0)
 #   - fragment 방식 유지 (자기 fragment 만 — 다른 gather 침범 금지)
 #   - collect_oem.yml 에서 이미 _data_fragment.bmc.oem_cisco 누적 — 본 파일은 후처리 일관성 유지
 #
-# lab: PASS — UCS X-series (사이트 검증)
-# 기존 표준 섹션 안에서만 확장 — envelope 키는 그대로 유지
+# lab: PASS — UCS X-series (cycle 2026-05-06 사이트 검증)
+# Additive only — UCS X-series 사이트 검증 envelope shape 변경 0 (rule 92 R2)
 #
-# Fragment 변수 — 자기 fragment 만:
+# Fragment 변수 (rule 22 R7) — 자기 fragment 만:
 #   _data_fragment, _sections_supported_fragment, _sections_collected_fragment,
 #   _sections_failed_fragment, _errors_fragment
 

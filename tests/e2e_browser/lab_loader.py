@@ -1,5 +1,6 @@
 """Lab credentials loader (gitignored YAML).
 
+server-exporter cycle-014에서 도입.
 사용자가 `vault/.lab-credentials.yml` (gitignored)에 lab 자격증명 보관.
 본 모듈은 그것을 dict로 로드. 미존재 시 친절한 에러 메시지.
 """
@@ -59,6 +60,6 @@ def require_lab_creds() -> LabCreds:
         raise RuntimeError(
             f"Lab credentials not found: {LAB_CREDS_PATH}\n"
             "Browser E2E and live probe tests require local lab access.\n"
-            "Provide lab inventory and credentials to enable these tests."
+            "See docs/ai/catalogs/LAB_INVENTORY.md for setup."
         )
     return creds

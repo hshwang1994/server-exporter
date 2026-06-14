@@ -3,7 +3,7 @@
   "@odata.id": "/redfish/v1/Fabrics/FlexGrid/Switches",
   "@odata.type": "#SwitchCollection.SwitchCollection",
   "Name": "Switch Collection",
-  "_note": "lab 부재 — FlexGrid Switches (NUMAlink ASIC).",
+  "_note": "lab 부재 — FlexGrid Switches (NUMAlink ASIC). rule 96 R1-A.",
   "Members@odata.count": 2,
   "Members": [
     {"@odata.id": "/redfish/v1/Fabrics/FlexGrid/Switches/Switch0"},

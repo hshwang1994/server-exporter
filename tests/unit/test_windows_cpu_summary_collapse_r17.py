@@ -1,4 +1,4 @@
-"""Windows CPU summary PS5.1 single-element-array collapse guard.
+"""Round 17 #8 — Windows CPU summary PS5.1 single-element-array collapse guard.
 
 PS5.1 `ConvertTo-Json` collapses a single-element `processors` array into a dict
 (object), not a list. gather_cpu.yml 의 summary 루프가 dict 를 [dict] 로 wrap 하지

@@ -70,7 +70,7 @@ pipeline {
     stages {
 
         // ── 1. 파라미터 검증 ──────────────────────────────────────────────────
-        // per-stage timeout 추가 — 한 stage가 30분 글로벌 타임아웃을 독차지하는 사고 방지
+        // production-audit (2026-04-29): per-stage timeout 추가 — 한 stage가 30분 글로벌 타임아웃을 독차지하는 사고 방지
         stage('Validate') {
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
@@ -127,7 +127,7 @@ pipeline {
 
         // ── 2. Ansible 실행 ───────────────────────────────────────────────────
         // P0: vault password 는 Jenkins credentials store 의 Secret File 에 등록
-        //     credentialsId='server-gather-vault-password'
+        //     credentialsId='server-gather-vault-password' (사용자 결정 cycle-012)
         //     등록 절차는 docs/01_jenkins-setup.md 참고.
         stage('Gather') {
             options { timeout(time: 20, unit: 'MINUTES') }
@@ -203,7 +203,7 @@ pipeline {
         }
 
         // ── 4. E2E Regression ─────────────────────────────────────────────────
-        // tests/e2e 가 없으면 환경 구성 오류로 간주, when fileExists 제거 → 디렉터리 부재 시 stage 강제 실패
+        // production-audit (2026-04-29): tests/e2e 가 없으면 환경 구성 오류로 간주, when fileExists 제거 → 디렉터리 부재 시 stage 강제 실패
         // baseline/fixture 기반 필드 회귀 검증
         stage('E2E Regression') {
             options { timeout(time: 5, unit: 'MINUTES') }
@@ -219,7 +219,7 @@ pipeline {
                     # E2E baseline 회귀 (필수)
                     python3 -m pytest tests/e2e/ -v --tb=short
                     RC_E2E=$?
-                    # HPE 에뮬레이터 오프라인 회귀 테스트 (별도 invocation).
+                    # HPE 에뮬레이터 오프라인 회귀 하네스 (별도 invocation).
                     #   - 에뮬레이터 불필요 (fixture 커밋됨, 완전 오프라인). live 스모크는
                     #     -m "not live" 로 제외 (SE_EMULATOR_LIVE 미설정 시 어차피 self-skip).
                     #   - tests/e2e 와 tests/integration 둘 다 top-level 'conftest' module 을
@@ -245,7 +245,7 @@ pipeline {
                 // json_only callback 이 stdout 에 JSON 을 출력하므로
                 // 호출자는 Jenkins console log 에서 JSON 라인을 파싱한다.
             }
-            // 결과 보존 — console log 외 fallback artifact
+            // production-audit (2026-04-29): 결과 보존 — console log 외 fallback artifact
             archiveArtifacts(
                 artifacts: 'gather_output*.log,results*.json',
                 allowEmptyArchive: true,

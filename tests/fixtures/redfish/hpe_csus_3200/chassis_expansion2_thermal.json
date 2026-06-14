@@ -4,7 +4,7 @@
   "@odata.type": "#Thermal.v1_7_1.Thermal",
   "Id": "Thermal",
   "Name": "CSUS 3200 Expansion2 Chassis Thermal",
-  "_note": "lab 부재 — DMTF Thermal.v1 합성.",
+  "_note": "lab 부재 — DMTF Thermal.v1 합성. rule 96 R1-A.",
   "Temperatures": [
     {"Name": "Inlet Ambient", "ReadingCelsius": 23, "PhysicalContext": "Intake", "UpperThresholdCritical": 42, "Status": {"Health": "OK", "State": "Enabled"}}
   ],

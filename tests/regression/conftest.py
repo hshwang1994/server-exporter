@@ -1,8 +1,8 @@
 """Cross-channel regression test fixtures.
 
-Loads all 9 baseline JSONs (5 redfish vendors + 3 OS variants + 1 esxi) and exposes
+Loads all 8 baseline JSONs (5 redfish vendors + 3 OS variants) and exposes
 them as a unified collection, so tests can validate cross-channel envelope
-consistency (13 fields fixed across channels).
+consistency (rule 13 R5 — 13 fields fixed across channels).
 """
 from __future__ import annotations
 
@@ -27,10 +27,10 @@ BASELINE_REGISTRY: list[tuple[str, str, str, str]] = [
     ("hpe_redfish", "redfish", "redfish_api", "hpe_baseline.json"),
     ("lenovo_redfish", "redfish", "redfish_api", "lenovo_baseline.json"),
     ("cisco_redfish", "redfish", "redfish_api", "cisco_baseline.json"),
-    # CSUS 3200 은 lab 부재 — 아래는 FABRICATED MOCK (실장비 미검증).
-    # envelope SHAPE 회귀에만 포함 (multi_node 구조 검증용). 실측 baseline 아님.
+    # cycle 2026-05-29 (hba-ib-csus): CSUS 3200 은 lab 부재 — 아래는 FABRICATED MOCK (실장비 미검증).
+    # envelope SHAPE 회귀에만 포함 (multi_node 구조 검증용). 실측 baseline 아님 (rule 25 R7-B).
     # 내부 일관성 가드: tests/regression/test_csus_mock_consistency.py
-    # 사이트 fixture 캡처 후 실측 baseline 으로 교체 가능.
+    # C1 사이트 fixture 캡처 후 실측 baseline 으로 교체 의무 (NEXT_ACTIONS / rule 96 R1-C).
     ("hpe_csus_3200_redfish_MOCK", "redfish", "redfish_api", "hpe_csus_3200_baseline.json"),
     ("ubuntu_os", "os", "agent", "ubuntu_baseline.json"),
     ("windows_os", "os", "agent", "windows_baseline.json"),

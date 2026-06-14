@@ -69,7 +69,7 @@
     "bmc_ip": null,                                     // BMC IP (Redfish 채널만 채워짐. OS/ESXi 는 null)
     "host_ip": "10.100.64.96"                           // 호출자가 전달한 service_ip / bmc_ip
   },
-  "errors": [],                                         // 수집 중 errors (warning 수준이면 status=success 와 공존 가능)
+  "errors": [],                                         // 수집 중 errors (warning 수준이면 status=success 와 공존 가능 — rule 13 R8)
   "data": {                                             // 실제 수집된 raw 데이터 (섹션별 dict). not_supported / failed 섹션은 null 또는 빈 list
     "memory": {
       "total_mb": 131072,                                  // 128 GB 베어메탈
@@ -120,7 +120,7 @@
     },
     "users": [
       {"name": "root", "uid": "0", "groups": ["root"], "home": "/root", "last_access_time": null},
-      {"name": "sysadmin", "uid": "1000", "groups": ["sysadmin", "adm", "cdrom", "sudo", "dip", "plugdev", "lxd", "docker"], "home": "/home/sysadmin", "last_access_time": "2026-05-06T23:46:42Z"}
+      {"name": "cloviradmin", "uid": "1000", "groups": ["cloviradmin", "adm", "cdrom", "sudo", "dip", "plugdev", "lxd", "docker"], "home": "/home/cloviradmin", "last_access_time": "2026-05-06T23:46:42Z"}
     ],
     "storage": {
       "logical_volumes": [],                            // LVM/RAID 가상 볼륨 list
@@ -151,8 +151,8 @@
     },
     "network": {
       "interfaces": [                                   // OS 또는 서버 NIC interface (논리 / 물리)
-        {"id": "eno8303", "name": "eno8303", "kind": "os_nic", "mac": "c4:cb:e1:dc:bc:4a", "mtu": 1500, "speed_mbps": 1000, "link_status": "linkup", "is_primary": true, "addresses": [{"family": "ipv4", "address": "172.17.100.210", "prefix_length": 24, "subnet_mask": "255.255.255.0", "gateway": "172.17.100.254"}, {"family": "ipv6", "address": "fe80::c6cb:e1ff:fedc:bc4a", "prefix_length": 64, "subnet_mask": null, "gateway": null, "scope": "link"}]},
-        {"id": "bond0.64", "name": "bond0.64", "kind": "os_nic", "mac": "7e:f6:44:87:78:d4", "mtu": 1500, "speed_mbps": 10000, "link_status": "linkup", "is_primary": false, "addresses": [{"family": "ipv4", "address": "10.100.64.96", "prefix_length": 24, "subnet_mask": "255.255.255.0", "gateway": null}, {"family": "ipv6", "address": "fe80::7cf6:44ff:fe87:78d4", "prefix_length": 64, "subnet_mask": null, "gateway": null, "scope": "link"}]}
+        {"id": "eno8303", "name": "eno8303", "kind": "os_nic", "mac": "c4:cb:e1:dc:bc:4a", "mtu": 1500, "speed_mbps": 1000, "link_status": "up", "is_primary": true, "addresses": [{"family": "ipv4", "address": "172.17.100.210", "prefix_length": 24, "subnet_mask": "255.255.255.0", "gateway": "172.17.100.254"}, {"family": "ipv6", "address": "fe80::c6cb:e1ff:fedc:bc4a", "prefix_length": 64, "subnet_mask": null, "gateway": null, "scope": "link"}]},
+        {"id": "bond0.64", "name": "bond0.64", "kind": "os_nic", "mac": "7e:f6:44:87:78:d4", "mtu": 1500, "speed_mbps": 10000, "link_status": "up", "is_primary": false, "addresses": [{"family": "ipv4", "address": "10.100.64.96", "prefix_length": 24, "subnet_mask": "255.255.255.0", "gateway": null}, {"family": "ipv6", "address": "fe80::7cf6:44ff:fe87:78d4", "prefix_length": 64, "subnet_mask": null, "gateway": null, "scope": "link"}]}
       ],
       "driver_map": [                                      // 베어메탈 — 다양한 NIC type (1G + 25G + bond + docker)
         {"name": "bond0", "driver": null, "vlan_id": null, "bond_master": null},
@@ -213,5 +213,5 @@
     },
     "bmc": null
   },
-  "schema_version": "1"                                 // envelope schema 버전 — "1" 고정
+  "schema_version": "1"                                 // envelope schema 버전 — "1" 고정 (rule 13 R5)
 }

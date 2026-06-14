@@ -30,10 +30,10 @@ def load_vendor_aliases(aliases_path):
             data = yaml.safe_load(f) or {}
         aliases = data.get("vendor_aliases", {})
         for canonical, alias_list in aliases.items():
-            if not isinstance(canonical, str):  # 비-str canonical(YAML int key) 방어
+            if not isinstance(canonical, str):  # Round 13 #0: 비-str canonical(YAML int key) 방어
                 continue
-            for alias in (alias_list if isinstance(alias_list, list) else []):  # alias_list 가 str 이면 char 순회 방지
-                if isinstance(alias, str):  # None/비-str alias 가 전체 로드를 abort 시키지 않게
+            for alias in (alias_list if isinstance(alias_list, list) else []):  # Round 9 #0: alias_list 가 str 이면 char 순회 방지
+                if isinstance(alias, str):  # Round 3 #16: None/비-str alias 가 전체 로드를 abort 시키지 않게
                     mapping[alias.strip().lower()] = canonical
     except (IOError, OSError, yaml.YAMLError, AttributeError, TypeError) as exc:
         import sys
@@ -78,8 +78,8 @@ def normalize_vendor(raw_vendor, aliases=None):
     if not raw_vendor:
         return None
 
-    v = str(raw_vendor).strip().lower()  # BMC Manufacturer 비-str(숫자) 방어
-    if not v:  # 공백-only vendor → '' 가 substring 매칭으로 오탐되는 것 방지
+    v = str(raw_vendor).strip().lower()  # rule 95 R1 #2: BMC Manufacturer 비-str(숫자) 방어
+    if not v:  # Round 9 #2: 공백-only vendor → '' 가 substring 매칭으로 오탐되는 것 방지
         return None
     flat = _flatten_aliases(aliases)
 
@@ -87,7 +87,7 @@ def normalize_vendor(raw_vendor, aliases=None):
         canonical = flat.get(v)
         if canonical:
             return canonical
-        # 부분 매칭 — forward(alias 가 v 에 포함)만.
+        # 부분 매칭 — forward(alias 가 v 에 포함)만. Round 17:
         #  (1) 역방향(v in alias) 제거 — 'inc'/'computer' 같은 짧은 입력이 긴 alias 의
         #      substring 으로 걸려 엉뚱한 vendor 로 오분류되는 것 차단
         #  (2) 짧은 alias(<3, 사실상 'hp')는 whole-word 토큰일 때만 — 'HPC Systems Inc.' 를
@@ -120,11 +120,11 @@ def pattern_match_any(patterns, value):
     """
     if not patterns or not value:
         return False
-    if not isinstance(patterns, (list, tuple)):  # scalar(str/int 등 YAML 오타) → 단일 list (순회 crash 방지)
+    if not isinstance(patterns, (list, tuple)):  # Round 12/13: scalar(str/int 등 YAML 오타) → 단일 list (순회 crash 방지)
         patterns = [patterns]
     value = str(value)
     for pattern in patterns:
-        if not isinstance(pattern, str):  # adapter YAML 비-str pattern 방어
+        if not isinstance(pattern, str):  # rule 95 R1: adapter YAML 비-str pattern 방어
             continue
         try:
             if re.search(pattern, value, re.IGNORECASE):
@@ -147,7 +147,7 @@ def adapter_matches(adapter, facts, aliases=None):
     Returns:
         bool: 모든 match 조건이 충족되면 True
     """
-    match = adapter.get("match")  # 빈 'match:'(YAML null) → {}; list/scalar 등 비-dict match(YAML 오타)도 {} (truthy non-dict 가 .get AttributeError 로 전체 lookup abort 방지)
+    match = adapter.get("match")  # Round 16: 빈 'match:'(YAML null) → {}; Round 17: list/scalar 등 비-dict match(YAML 오타)도 {} (truthy non-dict 가 .get AttributeError 로 전체 lookup abort 방지)
     if not isinstance(match, dict):
         match = {}
     if not match:
@@ -155,7 +155,7 @@ def adapter_matches(adapter, facts, aliases=None):
 
     # vendor 매칭
     vendor_patterns = match.get("vendor", [])
-    if isinstance(vendor_patterns, str):  # scalar vendor(YAML 오타) → list (char 순회 방지)
+    if isinstance(vendor_patterns, str):  # Round 12 #2: scalar vendor(YAML 오타) → list (char 순회 방지)
         vendor_patterns = [vendor_patterns]
     if vendor_patterns:
         raw_vendor = facts.get("vendor", "")
@@ -191,14 +191,14 @@ def adapter_matches(adapter, facts, aliases=None):
     os_type = match.get("os_type")
     if os_type:
         detected = facts.get("detected_os") or facts.get("os_type") or ""
-        if str(detected).lower() != str(os_type).lower():  # 비-str os_type/detected .lower 방어
+        if str(detected).lower() != str(os_type).lower():  # Round 12 #0: 비-str os_type/detected .lower 방어
             return False
 
     # 배포판 패턴 매칭
     distribution_patterns = match.get("distribution_patterns", [])
     if distribution_patterns:
         distro = facts.get("distribution", "")
-        # 빈 distribution(정보 없음)은 통과 — model/firmware 빈값 통과 정책(위 model_patterns/firmware_patterns 블록)과 동일
+        # 빈 distribution(정보 없음)은 통과 — model/firmware 빈값 통과 정책(위 model_patterns/firmware_patterns 블록)과 동일 (Round 1 #18)
         if distro and not pattern_match_any(distribution_patterns, distro):
             return False
 
@@ -206,7 +206,7 @@ def adapter_matches(adapter, facts, aliases=None):
     version_patterns = match.get("version_patterns", [])
     if version_patterns:
         version = facts.get("version", "")
-        # 빈 version(정보 없음)은 통과 — model/firmware 와 동일 정책
+        # 빈 version(정보 없음)은 통과 — model/firmware 와 동일 정책 (Round 1 #18)
         if version and not pattern_match_any(version_patterns, version):
             return False
 
@@ -221,7 +221,7 @@ def adapter_specificity(adapter):
     Returns:
         int: specificity 점수
     """
-    match = adapter.get("match")  # 빈 'match:'(YAML null) → {}; list/scalar 등 비-dict match(YAML 오타)도 {} (truthy non-dict 가 .get AttributeError 로 전체 lookup abort 방지)
+    match = adapter.get("match")  # Round 16: 빈 'match:'(YAML null) → {}; Round 17: list/scalar 등 비-dict match(YAML 오타)도 {} (truthy non-dict 가 .get AttributeError 로 전체 lookup abort 방지)
     if not isinstance(match, dict):
         match = {}
     score = 0
@@ -253,14 +253,14 @@ def adapter_match_score(adapter, facts, aliases=None):
     Returns:
         int: match 점수 (매칭 실패 시 -9999)
     """
-    match = adapter.get("match")  # 빈 'match:'(YAML null) → {}; list/scalar 등 비-dict match(YAML 오타)도 {} (truthy non-dict 가 .get AttributeError 로 전체 lookup abort 방지)
+    match = adapter.get("match")  # Round 16: 빈 'match:'(YAML null) → {}; Round 17: list/scalar 등 비-dict match(YAML 오타)도 {} (truthy non-dict 가 .get AttributeError 로 전체 lookup abort 방지)
     if not isinstance(match, dict):
         match = {}
     score = 0
 
     # vendor 매칭 보너스
     vendor_patterns = match.get("vendor", [])
-    if isinstance(vendor_patterns, str):  # scalar vendor(YAML 오타) → list (char 순회 방지)
+    if isinstance(vendor_patterns, str):  # Round 12 #2: scalar vendor(YAML 오타) → list (char 순회 방지)
         vendor_patterns = [vendor_patterns]
     if vendor_patterns:
         raw_vendor = facts.get("vendor", "")
@@ -298,7 +298,7 @@ def adapter_match_score(adapter, facts, aliases=None):
         else:
             return -9999  # firmware known but doesn't match - disqualify
 
-    # version 매칭 보너스 (adapter_specificity(+15)와 대칭 — 이전엔 match_score 누락으로
+    # version 매칭 보너스 (Round 15: adapter_specificity(+15)와 대칭 — 이전엔 match_score 누락으로
     # version_patterns 기반 adapter 가 model/firmware 기반보다 동률 tie-break 에서 불리했음)
     version_patterns = match.get("version_patterns", [])
     if version_patterns:
@@ -309,7 +309,7 @@ def adapter_match_score(adapter, facts, aliases=None):
         else:
             return -9999  # version known but doesn't match - disqualify
 
-    # distribution 매칭 보너스 (adapter_specificity(+15)와 대칭)
+    # distribution 매칭 보너스 (Round 15: adapter_specificity(+15)와 대칭)
     distribution_patterns = match.get("distribution_patterns", [])
     if distribution_patterns:
         if pattern_match_any(distribution_patterns, facts.get("distribution", "")):
@@ -319,7 +319,7 @@ def adapter_match_score(adapter, facts, aliases=None):
         else:
             return -9999  # distribution known but doesn't match - disqualify
 
-    # os_type 매칭 보너스 (adapter_specificity(+5)와 대칭 — exact match)
+    # os_type 매칭 보너스 (Round 15: adapter_specificity(+5)와 대칭 — exact match)
     os_type = match.get("os_type")
     if os_type:
         detected = facts.get("detected_os") or facts.get("os_type") or ""
@@ -341,7 +341,7 @@ def adapter_score(adapter, facts, aliases=None):
     Returns:
         int: 최종 점수 (높을수록 우선)
     """
-    try:  # adapter YAML priority 오타('high' 등) 가 loader 전체를 죽이지 않게
+    try:  # rule 95 R1: adapter YAML priority 오타('high' 등) 가 loader 전체를 죽이지 않게
         priority = int(adapter.get("priority", 0))
     except (ValueError, TypeError):
         priority = 0

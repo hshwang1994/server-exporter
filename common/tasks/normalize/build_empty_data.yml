@@ -47,4 +47,7 @@
       users:    []
       firmware: []
       power:    null
+      thermal:
+        temperatures: []
+        fans:         []
   no_log: true

@@ -1,4 +1,4 @@
-"""Unit test — Redfish /Systems/.../Processors/ has CPU + GPU mix.
+"""Unit test for B01 — Redfish /Systems/.../Processors/ has CPU + GPU mix.
 
 Validates the Jinja filter logic in:
   redfish-gather/tasks/normalize_standard.yml :: _rf_d_cpus + _rf_summary_cpu
@@ -14,7 +14,7 @@ import pytest
 
 
 def filter_cpus(procs: list[dict]) -> list[dict]:
-    """Mirror of `_rf_d_cpus` filter."""
+    """Mirror of `_rf_d_cpus` filter (B01 fix)."""
     out = []
     for p in procs:
         ptype = (p.get("processor_type") or "").strip().upper()
@@ -47,7 +47,7 @@ def build_cpu_summary(cpus: list[dict]) -> dict:
     return {"groups": groups}
 
 
-def test_excludes_gpu_from_cpu_summary():
+def test_b01_excludes_gpu_from_cpu_summary():
     """Dell r760-1 had Tesla T4 + 2× Intel Xeon Silver 4510. GPU must be excluded."""
     procs = [
         {"id": "Procs.Socket.1", "model": "Tesla T4", "manufacturer": "NVIDIA Corporation",
@@ -69,7 +69,7 @@ def test_excludes_gpu_from_cpu_summary():
     assert summary["groups"][0]["total_cores"] == 24
 
 
-def test_legacy_no_processor_type_still_counts():
+def test_b01_legacy_no_processor_type_still_counts():
     """Older BMC may not return ProcessorType — empty string treated as CPU (compat)."""
     procs = [
         {"id": "P0", "model": "Old Xeon", "total_cores": 8, "processor_type": ""},
@@ -81,7 +81,7 @@ def test_legacy_no_processor_type_still_counts():
     assert summary["groups"][0]["sockets"] == 2
 
 
-def test_excludes_accelerator_fpga_dsp():
+def test_b01_excludes_accelerator_fpga_dsp():
     """Other non-CPU types (Accelerator, FPGA, DSP) also excluded."""
     procs = [
         {"id": "C1", "model": "EPYC 9354", "total_cores": 32, "processor_type": "CPU"},
@@ -96,7 +96,7 @@ def test_excludes_accelerator_fpga_dsp():
     assert summary["groups"][0]["sockets"] == 1
 
 
-def test_only_gpu_yields_empty_cpu_summary():
+def test_b01_only_gpu_yields_empty_cpu_summary():
     """Edge: only GPUs present (no CPU) — summary.groups should be empty."""
     procs = [
         {"id": "GPU1", "model": "A100", "processor_type": "GPU"},

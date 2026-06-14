@@ -1,4 +1,4 @@
-# Dell iDRAC 9 fixture
+# Dell iDRAC 9 fixture — M-H1 (cycle 2026-05-07)
 
 > Round 11 lab 검증 (iDRAC9 7.x — `tests/fixtures/redfish/dell/`).
 > 본 fixture 는 iDRAC9 5.x (PLDM RDE + standard dual) 변형 시뮬 — web sources only.

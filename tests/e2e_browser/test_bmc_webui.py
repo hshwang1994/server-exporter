@@ -1,4 +1,4 @@
-"""BMC Web UI Browser E2E.
+"""BMC Web UI Browser E2E (cycle-016 AI-16).
 
 Covers:
   - iDRAC (Dell), iLO (HPE), XCC (Lenovo), CIMC (Cisco) Web UI 도달성

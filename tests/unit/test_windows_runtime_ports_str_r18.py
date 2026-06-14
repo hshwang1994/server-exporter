@@ -1,4 +1,4 @@
-"""windows gather_system listening_ports str[] 계약.
+"""Round 18 (R18-2) — windows gather_system listening_ports str[] 계약.
 
 gather_runtime rescue 가 {} 로 바뀌어(데이터 유실 방지) gather_system 의 runtime 이 보존될 때,
 listening_ports 가 int[](Get-NetTCPConnection LocalPort)로 새지 않도록 map('string') 적용했는지

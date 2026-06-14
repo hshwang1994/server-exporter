@@ -4,13 +4,13 @@
 #       Windows VM, ESXi, Redfish (Dell R760 BMC)
 #
 # 실행: Jenkins agent 또는 Ansible 설치된 Linux 호스트에서
-#   cd /home/sysadmin/server-exporter
+#   cd /home/cloviradmin/server-exporter
 #   bash tests/scripts/identifier_verify.sh
 set -euo pipefail
 
-# 자격증명 환경변수 강제 — 하드코딩된 password를
+# production-audit (2026-04-29): 자격증명 환경변수 강제 — 하드코딩된 password를
 # git history에 남기지 않고, 자격증명 누락 시 silent fail-open 차단.
-: "${SE_LINUX_USER:?SE_LINUX_USER 환경변수 누락 (예: sysadmin)}"
+: "${SE_LINUX_USER:?SE_LINUX_USER 환경변수 누락 (예: cloviradmin)}"
 : "${SE_LINUX_PASSWORD:?SE_LINUX_PASSWORD 환경변수 누락}"
 : "${SE_LINUX_BECOME_PASSWORD:=$SE_LINUX_PASSWORD}"
 : "${SE_WINDOWS_USER:?SE_WINDOWS_USER 환경변수 누락 (예: gooddit)}"

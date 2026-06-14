@@ -1,29 +1,29 @@
 ---
-# ── Origin metadata ───────────────────────────────────────────────────────────
+# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
 # Vendor: Cisco
 # Firmware: 모든 세대 (CIMC / UCS X-series 미매치 시 fallback)
 # Generation: bmc_legacy (generic cisco fallback)
 # Generation Year: "2009-2014 (UCS C-Series Standalone legacy BMC / CIMC 1.x ~ 3.x)"
 # Origin: Cisco UCS / CIMC Redfish API documentation / archive docs
-# Last sync: 2026-05-11 (generic fallback + legacy generation 매트릭스 보강)
+# Last sync: 2026-05-11 (M-H4 — generic fallback + legacy generation 매트릭스 보강)
 # Notes: generic Cisco fallback (priority=10). Lenovo/Dell/HPE/Supermicro와 동일 패턴.
 #   cisco_cimc.yml (priority=100)이 vendor 매치되면 우선. 본 adapter는 vendor만
 #   "Cisco"로 시작하면서 세대별 미매치인 보완 경로.
-# Sources (lab 부재 legacy generation 보강):
+# Sources (rule 96 R1-A — lab 부재 legacy generation 보강):
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/c/sw/   (Cisco UCS C-series Standalone archive)
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/c/sw/api/3_0/b_Cisco_IMC_REST_API_guide_301/m_redfish_api_examples.html
 #   - https://www.cisco.com/c/en/us/td/docs/unified_computing/ucs/c/sw/cli/config/guide/1-x/   (CIMC 1.x)
 # Lab status: 부재 — UCS X-series 만 사이트 검증 (legacy BMC + CIMC 1.x~3.x web sources 기반)
-# Protocol support matrix (web sources):
+# Protocol support matrix (web sources, M-H4 cycle 2026-05-07):
 #   - BMC legacy (2009-2014): IPMI / xml-api 우선 — Redfish 미지원 또는 v1.0 부분
 #   - CIMC 1.x (UCS M3 시기, 2013): Redfish 1.0 부분 (SimpleStorage / Power legacy)
 #   - CIMC 2.x (UCS M4 시기, 2014-2017): Redfish 1.4+ standard
 #   - CIMC 3.x (UCS M5 시기, 2017-2020): Redfish 1.6+ — cisco_cimc.yml 가 cover
 #   - CIMC 4.x ~ 6.x (UCS M5/M6/M7/M8 시기, 2020-2024): cisco_cimc.yml priority=100 우선
-# OEM strategy: standard_only (Cisco OEM tasks 디렉터리 미생성)
+# OEM strategy: standard_only (Cisco OEM tasks 디렉터리 미생성 — M-J1 dep)
 # Quirks: cisco_cimc.yml 의 Q1~Q7 참조 (fallback 처리 동일 적용).
-# 검증 기준: schema/baseline_v1/<vendor>_baseline.json 참조
-# Next action: lab 도입 후 CIMC 1.x legacy 응답 형식 확정
+# Tested against: schema/baseline_v1/<vendor>_baseline.json + tests/evidence/ 참조
+# Next action: lab 도입 후 별도 cycle (CIMC 1.x legacy 응답 형식 확정)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_cisco_bmc
 channel: redfish
@@ -54,7 +54,7 @@ normalize:
 credentials:
   profile: "cisco"
   fallback_profiles: []
-  # AccountService 진입점 — vault/redfish/cisco.yml accounts 의 label 과 매핑 (CIMC AccountService 표준 미지원 시 graceful degradation)
+  # P2 AccountService 진입점 — vault/redfish/cisco.yml accounts 의 label 과 매핑 (CIMC AccountService 표준 미지원 시 graceful degradation)
   recovery_accounts:
     - { vault_label: cisco_current, role: recovery }
     - { vault_label: cisco_factory, role: recovery }
