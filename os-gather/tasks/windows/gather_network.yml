@@ -169,6 +169,72 @@
       {{ out }}
   no_log: true
 
+# Teaming 수집 (LBFO + Switch Embedded Teaming). Teaming 없는 서버에서도 빈 [] 로 graceful.
+- name: "windows | network | teaming (LBFO + SET)"
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'SilentlyContinue'
+    function Emit($tag,$o){ if($o){ Write-Output ($tag + ' ' + ($o | ConvertTo-Json -Compress -Depth 4)) } }
+    function Has($n){ return [bool](Get-Command $n -ErrorAction SilentlyContinue) }
+    # adapter 보조 맵 (name -> mac/status/speed) — team member NIC enrichment 용
+    if (Has 'Get-NetAdapter') {
+      foreach($a in @(Get-NetAdapter)){
+        Emit 'WADP' ([PSCustomObject]@{ name=$a.Name; mac=$a.MacAddress;
+          status=[string]$a.Status;
+          speed_mbps=$(if($a.Speed){ [math]::Round($a.Speed/1000000,0) } else { $null }) })
+      }
+    }
+    # LBFO Teaming (Get-NetLbfoTeam / Get-NetLbfoTeamMember) — 모듈 없는 SKU 는 graceful skip
+    if (Has 'Get-NetLbfoTeam') {
+      foreach($t in @(Get-NetLbfoTeam)){
+        Emit 'LBFOTEAM' ([PSCustomObject]@{ name=$t.Name; teaming_mode=[string]$t.TeamingMode;
+          load_balancing=[string]$t.LoadBalancingAlgorithm; lacp_timer=[string]$t.LacpTimer;
+          status=[string]$t.Status; members=@($t.Members | ForEach-Object { [string]$_ }) })
+      }
+    }
+    if (Has 'Get-NetLbfoTeamMember') {
+      foreach($m in @(Get-NetLbfoTeamMember)){
+        Emit 'LBFOMEMBER' ([PSCustomObject]@{ name=$m.Name; team=[string]$m.Team;
+          admin_mode=[string]$m.AdministrativeMode })
+      }
+    }
+    # Switch Embedded Teaming (Get-NetSwitchTeam / Get-NetSwitchTeamMember)
+    if (Has 'Get-NetSwitchTeam') {
+      foreach($s in @(Get-NetSwitchTeam)){
+        Emit 'SETTEAM' ([PSCustomObject]@{ name=$s.Name;
+          members=@($s.Members | ForEach-Object { [string]$_ }) })
+      }
+    }
+    if (Has 'Get-NetSwitchTeamMember') {
+      foreach($sm in @(Get-NetSwitchTeamMember)){
+        Emit 'SETMEMBER' ([PSCustomObject]@{ name=$sm.Name; team=[string]$sm.Team })
+      }
+    }
+  register: _w_teams_raw
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+# Teaming 토폴로지 정규화 (filter_plugins/network_topology.py — build_windows_network)
+- name: "windows | network | normalize teaming topology"
+  ansible.builtin.set_fact:
+    _w_net_topo: "{{ _w_norm_interfaces | build_windows_network(_w_teams_raw.stdout_lines | default([])) }}"
+  no_log: true
+
+# driver_map[].bond_master 채움 (team member -> team 매핑; 비teamed 는 none 유지)
+- name: "windows | network | driver_map bond_master from teaming"
+  ansible.builtin.set_fact:
+    _w_driver_map_final: >-
+      {%- set owner = {} -%}
+      {%- for t in (_w_net_topo.teams | default([])) -%}
+        {%- for m in t.members -%}{%- set _ = owner.update({m.name: t.name}) -%}{%- endfor -%}
+      {%- endfor -%}
+      {%- set out = [] -%}
+      {%- for d in (_w_driver_map | default([])) -%}
+        {%- set _ = out.append(d | combine({'bond_master': owner.get(d.name)})) -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
+
 - name: "windows | network | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -179,10 +245,14 @@
           {%- set gw = _w_norm_net_meta.gw | default(none) -%}
           {%- if gw -%}{%- set _ = out.append({'family':'ipv4','address':gw}) -%}{%- endif -%}
           {{ out }}
-        interfaces: "{{ _w_norm_interfaces }}"
+        interfaces: "{{ _w_net_topo.interfaces }}"
         adapters:    []
         ports:       []
-        driver_map:  "{{ _w_driver_map | default([]) }}"
+        driver_map:  "{{ _w_driver_map_final | default(_w_driver_map | default([])) }}"
+        # bond/bridge 는 Windows 미해당(빈 []), teams 는 LBFO/SET (Additive — 기존 필드 불변)
+        bonds:    "{{ _w_net_topo.bonds }}"
+        bridges:  "{{ _w_net_topo.bridges }}"
+        teams:    "{{ _w_net_topo.teams }}"
         summary: "{{ _w_net_summary | default({'groups': []}) }}"
     _sections_supported_fragment: ['network']
     _sections_collected_fragment: ['network']

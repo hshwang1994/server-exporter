@@ -1361,6 +1361,160 @@ fields:
       Linux interface → driver / VLAN id / bond master mapping.
       Sourced from /sys/class/net (raw fallback).
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # network bonding / teaming / bridge 토폴로지 (cycle 2026-06-15 OS bond 보강)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  "network.bonds[]":
+    type: "object[]"
+    priority: nice
+    channel: [os]
+    # Linux bond. python_ok(shell)·raw fallback 동일 수집 (filter_plugins/network_topology.py).
+    # 소스: /sys/class/net/*/bonding + /proc/net/bonding + ip -d link (다중 소스 병합).
+    # RHEL/Rocky/Alma/CentOS/Oracle/Ubuntu/Debian/SUSE 공통. bond 없으면 빈 [].
+    help_ko: >-
+      Linux 본딩 인터페이스 목록. 각 항목:
+      name/mode/active_slave/primary/miimon/lacp_rate/xmit_hash_policy/ad_select/
+      addresses(bond 자체 IP)/slaves[]. bond 없으면 빈 []. Windows 는 teams[] 사용.
+    help_en: >-
+      Linux bonding interfaces. Each:
+      name/mode/active_slave/primary/miimon/lacp_rate/xmit_hash_policy/ad_select/
+      addresses(bond's own IP)/slaves[]. Empty [] when no bond. Windows uses teams[].
+
+  "network.bonds[].mode":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      본딩 모드 (balance-rr/active-backup/balance-xor/broadcast/802.3ad/
+      balance-tlb/balance-alb). /sys/class/net/<bond>/bonding/mode.
+    help_en: >-
+      Bonding mode (balance-rr/active-backup/balance-xor/broadcast/802.3ad/
+      balance-tlb/balance-alb). From /sys/class/net/<bond>/bonding/mode.
+
+  "network.bonds[].slaves[]":
+    type: "object[]"
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      본딩 멤버(slave) NIC. 각 항목: name/state(active|backup)/mii_status/
+      perm_hwaddr(물리 고유 MAC)/speed_mbps/link_failure_count/mtu/link_status.
+    help_en: >-
+      Bond member (slave) NICs. Each: name/state(active|backup)/mii_status/
+      perm_hwaddr(physical MAC)/speed_mbps/link_failure_count/mtu/link_status.
+
+  "network.teams[]":
+    type: "object[]"
+    priority: nice
+    channel: [os]
+    # Windows LBFO(Get-NetLbfoTeam) + SET(Get-NetSwitchTeam). team 없으면 빈 [].
+    # Linux teamd 팀도 동일 키로 노출(드묾). bond(Linux)/team(Windows) 채널 키 일관.
+    help_ko: >-
+      Windows 팀(LBFO/SET) 목록. 각 항목:
+      name/team_type(lbfo|set)/teaming_mode/load_balancing/lacp_timer/status/members[].
+      팀 없으면 빈 []. Linux 본딩은 bonds[] 사용.
+    help_en: >-
+      Windows teams (LBFO/SET). Each:
+      name/team_type(lbfo|set)/teaming_mode/load_balancing/lacp_timer/status/members[].
+      Empty [] when none. Linux bonding uses bonds[].
+
+  "network.bridges[]":
+    type: "object[]"
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      Linux 브리지 목록. 각 항목: name/members[](브리지 포트). 브리지 없으면 빈 [].
+    help_en: >-
+      Linux bridges. Each: name/members[] (bridge ports). Empty [] when none.
+
+  "network.interfaces[].bond_role":
+    type: "string|null"
+    enum: ["master", "slave", null]
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      이 인터페이스의 본딩 역할. master=bond 인터페이스(IP 보유),
+      slave=물리 멤버 NIC(보통 IP 없음). 비본딩 NIC 는 키 부재(또는 null).
+      Windows 는 team_role(master|member) 사용.
+    help_en: >-
+      Bonding role of this interface. master=bond interface (holds IP),
+      slave=physical member NIC (usually no IP). Absent/null for non-bonded NICs.
+      Windows uses team_role(master|member).
+
+  "network.interfaces[].bond_master":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: "이 slave NIC 이 속한 bond 이름. slave 가 아니면 키 부재."
+    help_en: "Bond name this slave NIC belongs to. Absent when not a slave."
+
+  "network.interfaces[].slave_state":
+    type: "string|null"
+    enum: ["active", "backup", null]
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      bond 멤버 상태 (active|backup). 802.3ad 는 보통 전 멤버 active.
+      ip -d link 의 bond_slave state 권위. slave 가 아니면 키 부재.
+    help_en: >-
+      Bond member state (active|backup). 802.3ad usually all active.
+      Authoritative from `ip -d link`. Absent when not a slave.
+
+  "network.interfaces[].bond_mode":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    # bond master 인터페이스에 인라인 노출 (bonds[].mode 와 동일값 — 편의용 미러).
+    help_ko: "bond master 인터페이스의 본딩 모드 (bonds[].mode 미러). master 아니면 키 부재."
+    help_en: "Bonding mode on the bond master interface (mirrors bonds[].mode). Absent otherwise."
+
+  "network.interfaces[].active_slave":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: "bond master 의 현재 active slave (bonds[].active_slave 미러). master 아니면 키 부재."
+    help_en: "Current active slave of the bond master (mirrors bonds[].active_slave). Absent otherwise."
+
+  "network.interfaces[].bond_slaves":
+    type: "array of string"
+    priority: nice
+    channel: [os]
+    help_ko: "bond master 의 멤버 NIC 이름 목록 (bonds[].slaves[].name 미러). master 아니면 키 부재."
+    help_en: "Member NIC names of the bond master (mirrors bonds[].slaves[].name). Absent otherwise."
+
+  "network.interfaces[].vlan_id":
+    type: "integer|null"
+    priority: nice
+    channel: [os]
+    help_ko: "VLAN 인터페이스의 VLAN ID (802.1Q). VLAN 아니면 키 부재."
+    help_en: "VLAN ID (802.1Q) of a VLAN interface. Absent when not a VLAN."
+
+  "network.interfaces[].vlan_parent":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: "VLAN 의 부모 인터페이스 (예: bond0). VLAN 아니면 키 부재."
+    help_en: "Parent interface of the VLAN (e.g. bond0). Absent when not a VLAN."
+
+  "network.interfaces[].team_role":
+    type: "string|null"
+    enum: ["master", "member", null]
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      Windows 팀 역할. master=팀 NIC(IP 보유), member=물리 멤버 NIC(IP 없음).
+      비teamed NIC 는 키 부재. Linux 본딩은 bond_role 사용.
+    help_en: >-
+      Windows team role. master=team NIC (holds IP), member=physical member NIC.
+      Absent for non-teamed NICs. Linux bonding uses bond_role.
+
+  "network.interfaces[].team_master":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: "이 member NIC 이 속한 Windows 팀 이름. member 아니면 키 부재."
+    help_en: "Windows team name this member NIC belongs to. Absent when not a member."
+
   "storage.hbas[]":
     type: "object[]"
     priority: nice

@@ -1,0 +1,15 @@
+BOND|bond1|active-backup|ens161|100|slow|layer2|ens161|stable|ens161 ens193
+BOND|bond2|active-backup|ens225|100|slow|layer2|ens225|stable|ens225 ens256
+BSLAVE|bond1|ens161|active|up|00:50:56:84:57:81|10000|0
+BSLAVE|bond1|ens193|backup|up|00:50:56:84:b6:f7|10000|0
+BSLAVE|bond2|ens225|active|up|00:50:56:84:bf:36|10000|0
+BSLAVE|bond2|ens256|backup|up|00:50:56:84:38:a4|10000|0
+SLSTATE|ens256|backup
+SLSTATE|ens225|active
+SLSTATE|ens161|active
+SLSTATE|ens193|backup
+SLMETA|bond1|ens161|1500|up|10000|00:50:56:84:57:81
+SLMETA|bond1|ens193|1500|up|10000|00:50:56:84:b6:f7
+SLMETA|bond2|ens225|1500|up|10000|00:50:56:84:bf:36
+SLMETA|bond2|ens256|1500|up|10000|00:50:56:84:38:a4
+BRIDGE|virbr0|

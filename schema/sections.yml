@@ -85,6 +85,10 @@ sections:
       virtual_switches: []
       portgroups: []
       driver_map: []
+      # 본딩(Linux) / 팀(Windows LBFO·SET) / 브리지 토폴로지 — bond/team 없으면 빈 []
+      bonds: []
+      bridges: []
+      teams: []
       # 그룹 합계 요약 (NIC 카드 / 포트 그룹 단위)
       summary: { groups: [] }
 

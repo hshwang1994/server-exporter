@@ -4,6 +4,108 @@
 #
 # Python 경로: ansible_* setup facts 기반 (기존 로직)
 # Raw fallback: ip 명령 + /sys/class/net + /etc/resolv.conf
+#
+# bond/vlan/bridge/team 토폴로지는 아래 _l_net_collector 스크립트(POSIX sh)가
+# '|' 구분 라인으로 emit → filter_plugins/network_topology.py(build_linux_network)
+# 가 파싱·정규화. python_ok 경로는 shell, raw fallback 경로는 raw 로 같은 스크립트를
+# 실행하므로 두 경로의 bond 수집 결과가 동일하다. RHEL/Rocky/Alma/CentOS/Oracle/
+# Ubuntu/Debian/SUSE 공통 (sysfs+procfs+ip 다중 소스, 일부 부재해도 graceful).
+
+# =============================================================================
+# Shared: bond/vlan/bridge/team 토폴로지 수집 스크립트 (두 경로 공용 — 단일 정의)
+# =============================================================================
+- name: "linux | network | define topology collector"
+  ansible.builtin.set_fact:
+    _l_net_collector: |
+      export LANG=C LC_ALL=C
+      # --- Bond masters: config from sysfs (모든 배포판 공통 — bonding 드라이버) ---
+      for bp in /sys/class/net/*/bonding; do
+        [ -d "$bp" ] || continue
+        b=$(basename "$(dirname "$bp")")
+        mode=$(cat "$bp/mode" 2>/dev/null | awk '{print $1}')
+        active=$(cat "$bp/active_slave" 2>/dev/null | tr -d '\n')
+        miimon=$(cat "$bp/miimon" 2>/dev/null | tr -d '\n')
+        lacp=$(cat "$bp/lacp_rate" 2>/dev/null | awk '{print $1}')
+        xmit=$(cat "$bp/xmit_hash_policy" 2>/dev/null | awk '{print $1}')
+        primary=$(cat "$bp/primary" 2>/dev/null | tr -d '\n')
+        adsel=$(cat "$bp/ad_select" 2>/dev/null | awk '{print $1}')
+        slaves=$(cat "$bp/slaves" 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')
+        echo "BOND|${b}|${mode}|${active}|${miimon}|${lacp}|${xmit}|${primary}|${adsel}|${slaves}"
+      done
+      # --- Per-slave detail from /proc/net/bonding (speed/perm/lfc/mii + AB state) ---
+      for pf in /proc/net/bonding/*; do
+        [ -f "$pf" ] || continue
+        b=$(basename "$pf")
+        awk -v b="$b" '
+          /^Currently Active Slave:/ {act=$NF}
+          /^Slave Interface:/ {sl=$3; mii=""; spd=""; lfc=""; perm=""}
+          /^MII Status:/ && sl!="" {mii=$3}
+          /^Speed:/ && sl!="" {spd=$2}
+          /^Link Failure Count:/ && sl!="" {lfc=$NF}
+          /^Permanent HW addr:/ && sl!="" {perm=$NF}
+          /^Slave queue ID:/ && sl!="" {
+            st=(sl==act)?"active":"backup";
+            print "BSLAVE|" b "|" sl "|" st "|" mii "|" perm "|" spd "|" lfc;
+            sl=""
+          }
+        ' "$pf" 2>/dev/null
+      done
+      # --- Authoritative per-slave state (전 모드, incl 802.3ad) from `ip -d link` ---
+      ip -d link show 2>/dev/null | awk '
+        /^[0-9]+:/ {ifc=$2; sub(/:$/,"",ifc); sub(/@.*/,"",ifc)}
+        /bond_slave/ {for(i=1;i<=NF;i++) if($i=="state"){print "SLSTATE|" ifc "|" tolower($(i+1))}}
+      '
+      # --- Per-slave sysfs meta (proc 부재 시에도 동작 — proc-missing/sysfs-only 방어) ---
+      for d in /sys/class/net/*; do
+        [ -e "$d/master" ] || continue
+        [ -d "$d/bonding" ] && continue
+        sl=$(basename "$d")
+        m=$(readlink "$d/master" 2>/dev/null); m=$(basename "$m")
+        [ -d "/sys/class/net/$m/bonding" ] || continue
+        mtu=$(cat "$d/mtu" 2>/dev/null | tr -d '\n')
+        oper=$(cat "$d/operstate" 2>/dev/null | tr -d '\n')
+        spd=$(cat "$d/speed" 2>/dev/null | tr -d '\n'); [ "$spd" = "-1" ] && spd=""
+        perm=$(cat "$d/bonding_slave/perm_hwaddr" 2>/dev/null | tr -d '\n')
+        echo "SLMETA|${m}|${sl}|${mtu}|${oper}|${spd}|${perm}"
+      done
+      # --- VLAN from /proc/net/vlan/config (parent + id) ---
+      if [ -f /proc/net/vlan/config ]; then
+        awk -F'\|' 'NR>2 {
+          n=$1; v=$2; p=$3;
+          gsub(/^ +| +$/,"",n); gsub(/^ +| +$/,"",v); gsub(/^ +| +$/,"",p);
+          if (n!="") print "VLANIF|" n "|" p "|" v
+        }' /proc/net/vlan/config 2>/dev/null
+      fi
+      # --- VLAN from `ip -d link` (netlink-only VLAN, /proc/net/vlan 부재 보완) ---
+      ip -d link show 2>/dev/null | awk '
+        /^[0-9]+:/ {ifc=$2; par=""; sub(/:$/,"",ifc);
+                    if (index(ifc,"@")>0){n=index(ifc,"@"); par=substr(ifc,n+1); ifc=substr(ifc,1,n-1)}}
+        /vlan protocol/ {for(i=1;i<=NF;i++) if($i=="id"){print "VLANIF|" ifc "|" par "|" $(i+1)}}
+      '
+      # --- Bridges + member ports ---
+      for brp in /sys/class/net/*/bridge; do
+        [ -d "$brp" ] || continue
+        br=$(basename "$(dirname "$brp")")
+        mem=""
+        for sp in /sys/class/net/"$br"/brif/*; do
+          [ -e "$sp" ] && mem="${mem} $(basename "$sp")"
+        done
+        mem=$(echo "$mem" | sed 's/^ *//')
+        echo "BRIDGE|${br}|${mem}"
+      done
+      # --- Linux teamd 팀 (드묾; master + member via sysfs) ---
+      for tp in /sys/class/net/*/team; do
+        [ -d "$tp" ] || continue
+        t=$(basename "$(dirname "$tp")")
+        mem=""
+        for d in /sys/class/net/*; do
+          [ -e "$d/master" ] || continue
+          m=$(readlink "$d/master" 2>/dev/null); m=$(basename "$m")
+          [ "$m" = "$t" ] && mem="${mem} $(basename "$d")"
+        done
+        echo "TEAM|${t}||$(echo "$mem" | sed 's/^ *//')"
+      done
+  no_log: true
 
 # =============================================================================
 # Python Path
@@ -46,6 +148,15 @@
           awk '/^nameserver/{print $2}' /run/systemd/resolve/resolv.conf
         fi
       register: _l_real_dns
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: "linux | network | bond/vlan/bridge topology (shell)"
+      ansible.builtin.shell: "{{ _l_net_collector }}"
+      args:
+        executable: /bin/sh
+      register: _l_topo_sh
       changed_when: false
       failed_when: false
       no_log: true
@@ -169,6 +280,14 @@
           {{ {'groups': ns.groups} }}
       no_log: true
 
+    # bond/vlan/bridge/team 토폴로지 정규화 (filter_plugins/network_topology.py).
+    # 입력: 기존 _l_norm_interfaces(IP 보유 NIC + bond master) + collector 라인.
+    # 출력: enriched interfaces(slave 물리 NIC 추가 + bond_role) + bonds/bridges/teams.
+    - name: "linux | network | normalize topology"
+      ansible.builtin.set_fact:
+        _l_net_topo: "{{ _l_norm_interfaces | build_linux_network(_l_topo_sh.stdout_lines | default([])) }}"
+      no_log: true
+
     # cycle-016 Phase P: 3 채널 key 일관성 — adapters / ports 빈 list 키 노출 (Linux OS 한계)
     - name: "linux | network | build fragment"
       ansible.builtin.set_fact:
@@ -181,7 +300,11 @@
                 {%- set _ = out.append({'family':'ipv4','address':_l_norm_default_gw}) -%}
               {%- endif -%}
               {{ out }}
-            interfaces: "{{ _l_norm_interfaces }}"
+            interfaces: "{{ _l_net_topo.interfaces }}"
+            # bond/vlan/bridge/team 토폴로지 (Additive — 기존 필드 불변)
+            bonds:    "{{ _l_net_topo.bonds }}"
+            bridges:  "{{ _l_net_topo.bridges }}"
+            teams:    "{{ _l_net_topo.teams }}"
             # 2026-04-29 fix B76: lspci -k -mm 결과로 hardware NIC adapters 채움
             adapters: >-
               {%- set out = [] -%}
@@ -271,6 +394,8 @@
             echo "ADAPTER|${slot}|${vendor}|${device}|${driver}"
           done
         fi
+        # bond/vlan/bridge/team 토폴로지 — python_ok shell 과 동일 스크립트(단일 정의).
+        {{ _l_net_collector }}
       register: _l_net_raw
       changed_when: false
       failed_when: false
@@ -459,6 +584,12 @@
           {{ {'groups': ns.groups} }}
       no_log: true
 
+    # bond/vlan/bridge/team 토폴로지 정규화 (python_ok 경로와 동일 filter).
+    - name: "linux | network | normalize topology (raw)"
+      ansible.builtin.set_fact:
+        _l_net_topo_raw: "{{ (_l_norm_interfaces_raw | default([])) | build_linux_network(_l_net_raw.stdout_lines | default([])) }}"
+      no_log: true
+
     - name: "linux | network | build fragment (raw)"
       ansible.builtin.set_fact:
         _data_fragment:
@@ -471,7 +602,11 @@
                 {%- set _ = out.append({'family':'ipv4','address':gw}) -%}
               {%- endif -%}
               {{ out }}
-            interfaces: "{{ _l_norm_interfaces_raw | default([]) }}"
+            interfaces: "{{ _l_net_topo_raw.interfaces }}"
+            # bond/vlan/bridge/team 토폴로지 (Additive — 기존 필드 불변)
+            bonds:    "{{ _l_net_topo_raw.bonds }}"
+            bridges:  "{{ _l_net_topo_raw.bridges }}"
+            teams:    "{{ _l_net_topo_raw.teams }}"
             # 2026-04-30 fix B76 raw: lspci 기반 hardware NIC adapters.
             adapters:    "{{ _l_raw_adapters | default([]) }}"
             ports:       []

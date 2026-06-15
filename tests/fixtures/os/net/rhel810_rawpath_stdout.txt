@@ -1,0 +1,30 @@
+DNS=10.100.64.251
+GW=10.100.64.254
+GW_DEV=ens192
+IF=bond1|00:50:56:84:57:81|1500|10000|up|10.100.64.169|24
+IF=bond2|00:50:56:84:bf:36|1500|10000|up|10.100.64.170|24
+IF=ens192|00:50:56:84:00:b4|1500|10000|up|10.100.64.161|24
+IF6=ens192|fe80::250:56ff:fe84:b4|64|link
+IF=ens224|00:50:56:84:2a:2a|1500|10000|up|10.100.64.162|24
+IF6=ens224|fe80::250:56ff:fe84:2a2a|64|link
+ADAPTER|04:00.0|VMware|VMXNET3 Ethernet Controller|vmxnet3
+ADAPTER|0b:00.0|VMware|VMXNET3 Ethernet Controller|vmxnet3
+ADAPTER|0c:00.0|VMware|VMXNET3 Ethernet Controller|vmxnet3
+ADAPTER|13:00.0|VMware|VMXNET3 Ethernet Controller|vmxnet3
+ADAPTER|14:00.0|VMware|VMXNET3 Ethernet Controller|vmxnet3
+ADAPTER|1b:00.0|VMware|VMXNET3 Ethernet Controller|vmxnet3
+BOND|bond1|active-backup|ens161|100|slow|layer2|ens161|stable|ens161 ens193
+BOND|bond2|active-backup|ens225|100|slow|layer2|ens225|stable|ens225 ens256
+BSLAVE|bond1|ens161|active|up|00:50:56:84:57:81|10000|0
+BSLAVE|bond1|ens193|backup|up|00:50:56:84:b6:f7|10000|0
+BSLAVE|bond2|ens225|active|up|00:50:56:84:bf:36|10000|0
+BSLAVE|bond2|ens256|backup|up|00:50:56:84:38:a4|10000|0
+SLSTATE|ens256|backup
+SLSTATE|ens225|active
+SLSTATE|ens161|active
+SLSTATE|ens193|backup
+SLMETA|bond1|ens161|1500|up|10000|00:50:56:84:57:81
+SLMETA|bond1|ens193|1500|up|10000|00:50:56:84:b6:f7
+SLMETA|bond2|ens225|1500|up|10000|00:50:56:84:bf:36
+SLMETA|bond2|ens256|1500|up|10000|00:50:56:84:38:a4
+BRIDGE|virbr0|

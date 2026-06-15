@@ -1,0 +1,277 @@
+{
+  "dns_servers": [
+    "10.100.64.251"
+  ],
+  "default_gateways": [
+    {
+      "family": "ipv4",
+      "address": "10.100.64.254"
+    }
+  ],
+  "interfaces": [
+    {
+      "id": "ens192",
+      "name": "ens192",
+      "kind": "os_nic",
+      "mac": "00:50:56:84:4c:82",
+      "mtu": 1500,
+      "speed_mbps": 10000,
+      "link_status": "up",
+      "is_primary": true,
+      "addresses": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.165",
+          "prefix_length": 24,
+          "subnet_mask": "255.255.255.0",
+          "gateway": "10.100.64.254"
+        },
+        {
+          "family": "ipv6",
+          "address": "fe80::250:56ff:fe84:4c82",
+          "prefix_length": 64,
+          "subnet_mask": null,
+          "gateway": null,
+          "scope": "link"
+        }
+      ]
+    },
+    {
+      "id": "ens224",
+      "name": "ens224",
+      "kind": "os_nic",
+      "mac": "00:50:56:84:ff:8b",
+      "mtu": 1500,
+      "speed_mbps": 10000,
+      "link_status": "up",
+      "is_primary": false,
+      "addresses": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.166",
+          "prefix_length": 24,
+          "subnet_mask": "255.255.255.0",
+          "gateway": null
+        },
+        {
+          "family": "ipv6",
+          "address": "fe80::250:56ff:fe84:ff8b",
+          "prefix_length": 64,
+          "subnet_mask": null,
+          "gateway": null,
+          "scope": "link"
+        }
+      ]
+    },
+    {
+      "id": "bond1",
+      "name": "bond1",
+      "kind": "os_nic",
+      "mac": "00:50:56:84:0b:70",
+      "mtu": 1500,
+      "speed_mbps": 10000,
+      "link_status": "up",
+      "is_primary": false,
+      "addresses": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.167",
+          "prefix_length": 24,
+          "subnet_mask": "255.255.255.0",
+          "gateway": null
+        }
+      ],
+      "bond_role": "master",
+      "bond_mode": "active-backup",
+      "active_slave": "ens161",
+      "bond_slaves": [
+        "ens161",
+        "ens193"
+      ]
+    },
+    {
+      "id": "bond2",
+      "name": "bond2",
+      "kind": "os_nic",
+      "mac": "00:50:56:84:fb:bf",
+      "mtu": 1500,
+      "speed_mbps": 10000,
+      "link_status": "up",
+      "is_primary": false,
+      "addresses": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.168",
+          "prefix_length": 24,
+          "subnet_mask": "255.255.255.0",
+          "gateway": null
+        }
+      ],
+      "bond_role": "master",
+      "bond_mode": "active-backup",
+      "active_slave": "ens225",
+      "bond_slaves": [
+        "ens225",
+        "ens256"
+      ]
+    },
+    {
+      "id": "ens161",
+      "name": "ens161",
+      "kind": "os_nic",
+      "mac": "00:50:56:84:0b:70",
+      "mtu": 1500,
+      "speed_mbps": 10000,
+      "link_status": "up",
+      "is_primary": false,
+      "addresses": [],
+      "bond_role": "slave",
+      "bond_master": "bond1",
+      "slave_state": "active"
+    },
+    {
+      "id": "ens193",
+      "name": "ens193",
+      "kind": "os_nic",
+      "mac": "00:50:56:84:23:10",
+      "mtu": 1500,
+      "speed_mbps": 10000,
+      "link_status": "up",
+      "is_primary": false,
+      "addresses": [],
+      "bond_role": "slave",
+      "bond_master": "bond1",
+      "slave_state": "backup"
+    },
+    {
+      "id": "ens225",
+      "name": "ens225",
+      "kind": "os_nic",
+      "mac": "00:50:56:84:f0:fe",
+      "mtu": 1500,
+      "speed_mbps": 10000,
+      "link_status": "up",
+      "is_primary": false,
+      "addresses": [],
+      "bond_role": "slave",
+      "bond_master": "bond2",
+      "slave_state": "active"
+    },
+    {
+      "id": "ens256",
+      "name": "ens256",
+      "kind": "os_nic",
+      "mac": "00:50:56:84:fb:bf",
+      "mtu": 1500,
+      "speed_mbps": 10000,
+      "link_status": "up",
+      "is_primary": false,
+      "addresses": [],
+      "bond_role": "slave",
+      "bond_master": "bond2",
+      "slave_state": "backup"
+    }
+  ],
+  "bonds": [
+    {
+      "name": "bond1",
+      "mode": "active-backup",
+      "active_slave": "ens161",
+      "miimon": 100,
+      "lacp_rate": "slow",
+      "xmit_hash_policy": "layer2",
+      "primary": "ens161",
+      "ad_select": "stable",
+      "slaves": [
+        {
+          "name": "ens161",
+          "state": "active",
+          "mii_status": "up",
+          "perm_hwaddr": "00:50:56:84:0b:70",
+          "speed_mbps": 10000,
+          "link_failure_count": 0,
+          "mtu": 1500,
+          "link_status": "up",
+          "bond": "bond1"
+        },
+        {
+          "name": "ens193",
+          "state": "backup",
+          "mii_status": "up",
+          "perm_hwaddr": "00:50:56:84:23:10",
+          "speed_mbps": 10000,
+          "link_failure_count": 0,
+          "mtu": 1500,
+          "link_status": "up",
+          "bond": "bond1"
+        }
+      ],
+      "addresses": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.167",
+          "prefix_length": 24,
+          "subnet_mask": "255.255.255.0",
+          "gateway": null
+        }
+      ]
+    },
+    {
+      "name": "bond2",
+      "mode": "active-backup",
+      "active_slave": "ens225",
+      "miimon": 100,
+      "lacp_rate": "slow",
+      "xmit_hash_policy": "layer2",
+      "primary": "ens225",
+      "ad_select": "stable",
+      "slaves": [
+        {
+          "name": "ens225",
+          "state": "active",
+          "mii_status": "up",
+          "perm_hwaddr": "00:50:56:84:f0:fe",
+          "speed_mbps": 10000,
+          "link_failure_count": 0,
+          "mtu": 1500,
+          "link_status": "up",
+          "bond": "bond2"
+        },
+        {
+          "name": "ens256",
+          "state": "backup",
+          "mii_status": "up",
+          "perm_hwaddr": "00:50:56:84:fb:bf",
+          "speed_mbps": 10000,
+          "link_failure_count": 0,
+          "mtu": 1500,
+          "link_status": "up",
+          "bond": "bond2"
+        }
+      ],
+      "addresses": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.168",
+          "prefix_length": 24,
+          "subnet_mask": "255.255.255.0",
+          "gateway": null
+        }
+      ]
+    }
+  ],
+  "bridges": [],
+  "teams": [],
+  "adapters": [],
+  "ports": [],
+  "summary": {
+    "groups": [
+      {
+        "speed_mbps": 10000,
+        "link_type": null,
+        "quantity": 4,
+        "link_up_count": 4
+      }
+    ]
+  }
+}

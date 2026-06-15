@@ -342,7 +342,10 @@ controllers[*].id  ────┤
   ],
   "dns_servers":      [],
   "default_gateways": [],
-  "summary":          { /* 같은 속도 NIC 묶은 집계 */ }
+  "bonds":            [],   // Linux 본딩 (cycle 2026-06-15) — bond 없으면 빈 []
+  "bridges":          [],   // Linux 브리지 — 없으면 빈 []
+  "teams":            [],   // Windows 티밍(LBFO/SET) — 없으면 빈 []
+  "summary":          { /* 같은 속도 NIC 묶은 집계 (slave NIC 미포함 — 기존과 동일) */ }
 }
 ```
 
@@ -350,6 +353,47 @@ controllers[*].id  ────┤
 - `up` / `down` — 링크 활성 / 비활성(미연결·disabled·offline 포함)
 - `unknown` — 상태 미제공/판별 불가 (HPE iLO / Cisco System NIC 등에서 종종 발생)
 - `null` — 응답에 필드 자체가 없음
+
+#### 6.4.1 본딩/티밍 토폴로지 (cycle 2026-06-15 — OS 채널, Additive)
+
+`data.network.bonds[]` (Linux). python_ok(shell)·raw fallback 두 경로 동일 수집
+(`/sys/class/net/*/bonding` + `/proc/net/bonding` + `ip -d link` 병합):
+
+```json
+"bonds": [
+  {
+    "name": "bond1", "mode": "active-backup", "active_slave": "ens161",
+    "primary": "ens161", "miimon": 100, "lacp_rate": "slow",
+    "xmit_hash_policy": "layer2", "ad_select": "stable",
+    "addresses": [ { "family": "ipv4", "address": "10.x.x.169", ... } ],  // bond 자체 IP
+    "slaves": [
+      { "name": "ens161", "state": "active", "mii_status": "up",
+        "perm_hwaddr": "00:50:56:...", "speed_mbps": 10000,
+        "link_failure_count": 0, "mtu": 1500, "link_status": "up" },
+      { "name": "ens193", "state": "backup", ... }
+    ]
+  }
+]
+```
+
+`interfaces[]` 추가(Additive) 하위 필드 — bond/team 관련 인터페이스에만 존재(일반 NIC 는 키 부재):
+- bond master: `bond_role:"master"`, `bond_mode`, `active_slave`, `bond_slaves[]`
+- 물리 slave: `bond_role:"slave"`, `bond_master`, `slave_state(active|backup)`, `addresses:[]`(IP 없음)
+- VLAN: `vlan_id`, `vlan_parent`
+- Windows team master/member: `team_role(master|member)`, `team_master`, `team_type(lbfo|set)`, `teaming_mode`, `team_members[]`
+
+`teams[]` (Windows LBFO/Get-NetLbfoTeam + SET/Get-NetSwitchTeam):
+```json
+"teams": [
+  { "name": "Team1", "team_type": "lbfo", "teaming_mode": "Lacp",
+    "load_balancing": "Dynamic", "lacp_timer": "Fast", "status": "Up",
+    "members": [ { "name": "Ethernet", "mac": "...", "admin_mode": "Active",
+                   "status": "Up", "speed_mbps": 10000 } ] }
+]
+```
+
+구조 표현: 물리 NIC 는 IP 없이 `interfaces[]` 에 노출되고 IP 는 bond/team 인터페이스에 위치한다
+(원본 `ip -br addr` 와 동일). `summary` 집계는 기존과 동일(slave 미포함)하여 호출자 호환.
 
 ### 6.5 `data.power` (Redfish 전용)
 
