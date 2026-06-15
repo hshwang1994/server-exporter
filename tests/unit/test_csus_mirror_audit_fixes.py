@@ -605,3 +605,67 @@ def test_system_oem_ilo_branch_preserved():
     assert out["_bios_date"] == "01/15/2024"
     # CSUS 키가 iLO 분기에 누설되지 않음
     assert "product_id" not in out
+
+
+# ── CSUS-R18 (F2): chassis-level OEM (#HpeH3Chassis) 수집 ─────────────────────
+
+def test_chassis_oem_hpeh3chassis_extracted():
+    """compute chassis #HpeH3Chassis OEM(물리위치/프로세서 호환성) 추출 (실 r001u01 재현)."""
+    out = rg._extract_chassis_oem({
+        "Oem": {"Hpe": {
+            "@odata.type": "#HpeH3Chassis.v1_3_0.HpeH3Chassis",
+            "OemChassisType": "Base", "PhysicalLocationString": "rack1/chassis_u1",
+            "Physloc": "FFFF010101FFFF62",
+            "ProcessorsCompatibilityKey": "PK8071305075101", "ProcessorsCompatible": True,
+        }},
+    })
+    assert out["oem_chassis_type"] == "Base"
+    assert out["physical_location"] == "rack1/chassis_u1"
+    assert out["physloc"] == "FFFF010101FFFF62"
+    assert out["processors_compatibility_key"] == "PK8071305075101"
+    assert out["processors_compatible"] is True
+
+
+def test_chassis_oem_non_hpeh3chassis_empty():
+    """RackGroup/Rack(#HpeH3Chassis 아님) / 타 벤더 / OEM 부재 → {} (Additive 회귀 안전)."""
+    assert rg._extract_chassis_oem({"Oem": {"Hpe": {"@odata.type": "#HpeRackGroup.v1_0_0"}}}) == {}
+    assert rg._extract_chassis_oem({"Manufacturer": "Dell Inc.", "Model": "PowerEdge R740"}) == {}
+    assert rg._extract_chassis_oem({}) == {}
+
+
+def test_chassis_oem_processors_compatible_false_preserved():
+    """ProcessorsCompatible=False 도 falsy-drop 없이 보존 (_safe — bool 충실)."""
+    out = rg._extract_chassis_oem({
+        "Oem": {"Hpe": {"@odata.type": "#HpeH3Chassis.v1_3_0.HpeH3Chassis",
+                        "ProcessorsCompatible": False}},
+    })
+    assert out["processors_compatible"] is False
+
+
+# ── MEM-01: CapacityMiB 부재 → None 보존 (구: or 0 날조) ──────────────────────
+
+def test_memory_missing_capacity_preserved_as_none(monkeypatch):
+    """CapacityMiB 부재 DIMM → capacity_mb=None (구: 0 으로 날조 — 누락↔0 혼동)."""
+    _patch(monkeypatch, {
+        "Systems/X/Memory": (200, {"Members": [
+            {"@odata.id": "/redfish/v1/Systems/X/Memory/D1"}]}, None),
+        "Systems/X/Memory/D1": (200, {"Id": "D1", "Status": {"State": "Enabled"}}, None),
+    })
+    out, errs = rg.gather_memory("ip", "/redfish/v1/Systems/X", *CREDS)
+    assert out["slots"][0]["capacity_mb"] is None
+
+
+def test_memory_present_capacity_unchanged(monkeypatch):
+    """CapacityMiB 보유 → 그대로 int (회귀 안전). 실측 0 도 0 보존(누락과 구분)."""
+    _patch(monkeypatch, {
+        "Systems/X/Memory": (200, {"Members": [
+            {"@odata.id": "/redfish/v1/Systems/X/Memory/D1"},
+            {"@odata.id": "/redfish/v1/Systems/X/Memory/D2"}]}, None),
+        "Systems/X/Memory/D1": (200, {"Id": "D1", "CapacityMiB": 32768}, None),
+        "Systems/X/Memory/D2": (200, {"Id": "D2", "CapacityMiB": 0}, None),
+    })
+    out, errs = rg.gather_memory("ip", "/redfish/v1/Systems/X", *CREDS)
+    caps = {s["id"]: s["capacity_mb"] for s in out["slots"]}
+    assert caps["D1"] == 32768
+    assert caps["D2"] == 0
+    assert out["total_mib"] == 32768  # 32768 + 0

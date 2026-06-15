@@ -1939,8 +1939,11 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             continue
         if _safe(mdata, 'Status', 'State') == 'Absent':
             continue
-        cap = _safe(mdata, 'CapacityMiB') or 0
-        cap_int = _safe_int(cap)
+        # MEM-01 (2026-06-15 재검수): 구 `_safe(mdata,'CapacityMiB') or 0` 은 CapacityMiB 부재(None)를
+        # 0(유효 용량)으로 날조 — 누락과 "0 MiB DIMM" 을 혼동(wrong-default). None 보존(raw 충실).
+        # 합산은 아래 `is not None` 가드가 처리. 실데이터(present DIMM 은 CapacityMiB 보유)엔 영향 0 —
+        # 부재 케이스만 0→None (cap_int=_safe_int(None)=None). present 0 은 그대로 0 보존.
+        cap_int = _safe_int(_safe(mdata, 'CapacityMiB'))
         if cap_int is not None:  # Round 2 #4: 0-capacity 도 합산(no-op이나 preserve-0 일관)
             total_mib += cap_int
         # cycle-016 Phase N: BaseModuleType / RankCount / ErrorCorrection / DataWidth 추가
@@ -3841,6 +3844,29 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
     return out
 
 
+def _extract_chassis_oem(cdata):                                              # nosec rule12-r1
+    """Chassis-level OEM 추출 — OEM @odata.type 가 self-identify 하는 vendor namespace 기준.
+
+    CSUS-R18 (2026-06-15 재검수, F2): HPE CSUS/Superdome compute chassis 는 Oem.Hpe.@odata.type=
+    #HpeH3Chassis 로 물리위치(PhysicalLocationString/Physloc) + 프로세서 호환성(ProcessorsCompatibilityKey/
+    Compatible) + OemChassisType 를 노출. 표준 Chassis 필드(manufacturer/model/serial/part_number)엔
+    없는 정보라 미수집 시 영구 손실. multi_node.chassis[] entry 에 chassis-level oem 으로 보존(Additive).
+    #HpeH3Chassis 아니면 {} (RackGroup/Rack/타 벤더 — 회귀 안전). 코드는 vendor 분기 없이 OEM
+    @odata.type 만 검사 (rule 12 R1 Allowed — Redfish OEM namespace 직접 의존, CSUS-R17 와 동일 정신).
+    """
+    oem = _safe(cdata, 'Oem', 'Hpe') or _safe(cdata, 'Oem', 'Hp') or {}        # nosec rule12-r1
+    oem_type = _str(_safe(oem, '@odata.type'))
+    if oem_type.startswith('#HpeH3Chassis'):  # nosec rule12-r1 — Redfish OEM namespace (CSUS/Superdome)
+        return {
+            'oem_chassis_type':             _safe(oem, 'OemChassisType'),
+            'physical_location':            _safe(oem, 'PhysicalLocationString'),
+            'physloc':                      _safe(oem, 'Physloc'),
+            'processors_compatibility_key': _safe(oem, 'ProcessorsCompatibilityKey'),
+            'processors_compatible':        _safe(oem, 'ProcessorsCompatible'),
+        }
+    return {}
+
+
 def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
                          timeout, verify_ssl):
     """모든 Chassis Member 별 hardware + power 수집 (cycle 2026-05-12).
@@ -3894,6 +3920,9 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
             'power':         pwr_data,
             # cycle 2026-06-09: thermal (Additive — Thermal 미노출 시 {}).
             'thermal':       thm_data,
+            # CSUS-R18 (2026-06-15 재검수, F2): chassis-level OEM (#HpeH3Chassis — 물리위치/
+            # 프로세서 호환성). 표준 필드에 없는 정보. 비-CSUS/RackGroup 은 {} (Additive).
+            'oem':           _extract_chassis_oem(cdata),
         })
         out['errors'].extend(pwr_errs)
         out['errors'].extend(thm_errs)
