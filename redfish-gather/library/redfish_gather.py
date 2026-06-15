@@ -879,6 +879,40 @@ def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, veri
     return out, st, None
 
 
+def _resolve_system_chassis_uri(bmc_ip, system_uri, default_chassis_uri,
+                                username, password, timeout, verify_ssl):
+    """System.Links.Chassis[0] 를 power/thermal/network_adapters/system 용 chassis 로 해석.
+
+    cycle 2026-06-15 (HPE CSUS 3200 실미러 검수, CSUS-R1): multi-chassis RMC aggregation
+    환경(HPE Compute Scale-up Server 3200 / Superdome Flex)에서 Chassis 컬렉션 첫 멤버는
+    집계용 RackGroup 으로 PowerSubsystem / ThermalSubsystem / NetworkAdapters 가 부재한다.
+    detect_vendor 가 `_resolve_first_member_uri(Chassis)` 로 그 RackGroup 을 chassis_uri 로
+    잡으면 power/thermal/network_adapters 가 빈 chassis 에서 수집돼 data.power={}·data.thermal={}
+    인데 collected=success (누락이 정상처럼 보임) + network_adapters=unsupported + FC HBA 소실.
+    실제 데이터는 시스템이 속한 compute chassis(예: r001u01)에 있고, 그 chassis 는
+    ComputerSystem.Links.Chassis 로 명시된다.
+
+    본 helper 는 System.Links.Chassis[0] 를 반환하고, 부재/실패 시 default_chassis_uri
+    (detect_vendor 의 첫 멤버) 로 graceful fallback 한다. 단일 chassis vendor(Dell/HPE/
+    Lenovo 실미러 검증)는 Links.Chassis[0] == Chassis 컬렉션 첫 멤버라 동작 불변 (Additive,
+    회귀 안전). PoweredBy/CooledBy 는 Dell 처럼 PSU/Fan fragment(`#/PowerSupplies/0`)를
+    가리키는 벤더가 있어 chassis URI 로 쓰지 않는다 — Links.Chassis 만 신뢰.
+
+    source (rule 96 R1-A): DMTF DSP0266 ComputerSystem.Links.Chassis (시스템이 속한 chassis).
+    Returns: chassis_uri (str) — Links.Chassis[0] 또는 default_chassis_uri.
+    """
+    if not system_uri:
+        return default_chassis_uri
+    st, data, err = _get(bmc_ip, _p(system_uri), username, password, timeout, verify_ssl)
+    if err or st != 200 or not isinstance(data, dict):
+        return default_chassis_uri
+    for link in _dicts(_safe(data, 'Links', 'Chassis')):  # 비-list/비-dict 방어 (rule 95 R1 #2)
+        uri = _safe(link, '@odata.id')
+        if uri and isinstance(uri, str):
+            return uri
+    return default_chassis_uri
+
+
 def _classify_rmc_label(manager_uri, manager_id, manager_layout, is_first=True):  # nosec rule12-r1
     """Manager URI / ID + adapter capability 기반 BMC 표시명 결정 (cycle 2026-05-12).
 
@@ -974,7 +1008,10 @@ def _classify_chassis_kind(chassis_uri, chassis_id, chassis_data):              
         if ctype == 'enclosure':
             # base / expansion 구분 안 되는 generic enclosure
             return 'enclosure'
-        if ctype in ('rackmount', 'card', 'blade'):
+        # CSUS-R5 (2026-06-15 실미러 검수): RackGroup / Rack 도 DMTF ChassisType enum.
+        # 구: multi_node.chassis[] 의 집계 chassis(RackGroup/Rack1) kind=null → ChassisType
+        # 기반으로 채워 chassis 종류 식별 가능하게 (Additive — 기존 enum 결과 불변).
+        if ctype in ('rackmount', 'card', 'blade', 'rackgroup', 'rack'):
             return ctype
     return None
 
@@ -1755,9 +1792,14 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         oem = _safe(data, 'Oem', 'Hpe') or _safe(data, 'Oem', 'Hp') or {}     # nosec rule12-r1
         # 2026-04-29 raw 검증 (10.50.11.231 iLO 6 v1.73): Manager.Oem.Hpe 에 `Type`
         # 필드 부재 — 이전 매핑은 항상 null. 의미 있는 값은 Firmware.Current.VersionString.
+        # ilo_version = iLO OEM 펌웨어 버전 (Oem.Hpe.Firmware.Current.VersionString).
+        # CSUS-R4 (2026-06-15 실미러 검수): 구 `or _safe(data,'Model')` fallback 제거 —
+        # CSUS RMC(RackManager)는 Oem.Hpe.Firmware 가 없어 Model("Compute Scale-up Server
+        # 3200, 4S XNC Base Chassis")이 'ilo_version' 에 들어가 버전 필드에 모델명이 노출됐다
+        # (호출자 오판). VersionString 부재 시 None 이 정직 — 실제 펌웨어는 bmc.firmware_version
+        # (Manager.FirmwareVersion)에 있다. iLO(VersionString 보유)는 동작 불변.
         result['oem'] = {
-            'ilo_version': (_safe(oem, 'Firmware', 'Current', 'VersionString')
-                            or _safe(data, 'Model')),
+            'ilo_version': _safe(oem, 'Firmware', 'Current', 'VersionString'),
         }
     elif vendor == 'supermicro':                                              # nosec rule12-r1
         oem = _safe(data, 'Oem', 'Supermicro') or {}                          # nosec rule12-r1
@@ -1889,7 +1931,13 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             'name':            _strip_or_none(_safe(mdata, 'Name')),
             # 'locator' 별도 키: DeviceLocator (벤더 표준 — 'A1','DIMM_A1','PROC1.DIMMA1' 등)
             # MemoryLocation.Slot 도 폴백 (Dell iDRAC 일부 펌웨어).
-            'locator':         _safe(mdata, 'DeviceLocator') or _safe(mdata, 'MemoryLocation', 'Slot'),
+            # CSUS-R12 (2026-06-15 실미러 검수): HPE CSUS 는 DeviceLocator 부재 + MemoryLocation.Slot=0
+            # (16 DIMM 전부 0, 식별 불가). Slot 이 falsy(0/None)일 때만 Location.PartLocation.ServiceLabel
+            # (예: 'rack1/chassis_u1/cpu0/dimmA0')로 보정. Slot 이 truthy 인 vendor 는 불변(Additive 회귀안전).
+            'locator':         (_safe(mdata, 'DeviceLocator')
+                                or (_safe(mdata, 'MemoryLocation', 'Slot') or None)
+                                or _safe(mdata, 'Location', 'PartLocation', 'ServiceLabel')
+                                or _safe(mdata, 'MemoryLocation', 'Slot')),
             'capacity_mb':     cap_int,
             'type':            _safe(mdata, 'MemoryDeviceType'),
             'base_module_type': _safe(mdata, 'BaseModuleType'),
@@ -2436,9 +2484,15 @@ def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
     lt = _str(link_tech).strip().lower()
     ndf_type = ''
     ndf_tech = ''
+    ndf_wwpn = None
     if isinstance(ndf, dict):
         ndf_type = _str(ndf.get('func_type')).strip().lower()
         ndf_tech = _str(ndf.get('net_dev_tech')).strip().lower()
+        # CSUS-FC1 (2026-06-15 실미러 검수): NetDevFuncType/PortProtocol 부재 펌웨어(HPE CSUS
+        # RMC — NDF 에 NetDevFuncType 없이 FibreChannel.WWPN 만 노출)에서도 FC 식별. WWPN 은
+        # FC 전용 식별자라 안전. (Node/Port GUID 는 IB 시그널로 쓰지 않는다 — ConnectX VPI 가
+        # Ethernet 모드에서도 GUID 를 노출해 Ethernet NIC 을 IB 로 오분류하기 때문.)
+        ndf_wwpn = ndf.get('wwpn')
     # IB 우선 (IB NDF 가 Ethernet 으로 오인되지 않도록)
     if lt == 'infiniband' or ndf_tech == 'infiniband' or ndf_type == 'infiniband':
         return 'InfiniBand'
@@ -2446,11 +2500,16 @@ def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
         return 'InfiniBand'
     if pp == 'FCOE' or ndf_type == 'fibrechanneloverethernet':
         return 'FCoE'
-    if pp in ('FC', 'FCP', 'FIBRECHANNEL') or ndf_type == 'fibrechannel':
+    if pp in ('FC', 'FCP', 'FIBRECHANNEL') or ndf_type == 'fibrechannel' or ndf_wwpn:
         return 'FibreChannel'
     if isinstance(pdata, dict) and isinstance(pdata.get('FibreChannel'), dict):
         return 'FibreChannel'
     if pp == 'ETHERNET' or lt == 'ethernet' or ndf_type == 'ethernet':
+        return 'Ethernet'
+    # CSUS-R8 (2026-06-15 실미러 검수): Port.Ethernet dict 존재 → Ethernet (FC/IB dict-presence 와
+    # 대칭). HPE CSUS Mellanox NIC(MCX631102)은 PortProtocol/NetDevFuncType 없이 Port.Ethernet.
+    # AssociatedMACAddresses 만 노출 → 구 코드는 port_type=None(미분류). DMTF Port.Ethernet 표준 블록.
+    if isinstance(pdata, dict) and isinstance(pdata.get('Ethernet'), dict):
         return 'Ethernet'
     return None
 
@@ -2595,6 +2654,20 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         ctrls = _safe(adata, 'Controllers', default=[]) or []
         if ctrls and isinstance(ctrls, list):
             fw_ver = _safe(ctrls[0], 'FirmwarePackageVersion')
+            # CSUS-R16 (2026-06-15 실미러 검수): FirmwarePackageVersion 부재 펌웨어(HPE CSUS NetworkAdapter)
+            # 는 어댑터 펌웨어를 Controllers[0].Links.PCIeDevices[] 가 가리키는 PCIeDevice.FirmwareVersion
+            # 에 둔다(실측 Mellanox MCX631102="26.46.3048..."). 링크추적 fallback (Additive — 표준 위치
+            # 보유 vendor 불변, PCIeDevice 도 부재 시 None 유지).
+            if not fw_ver:
+                for _pd in _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices')):
+                    _pd_uri = _safe(_pd, '@odata.id')
+                    if not _pd_uri:
+                        continue
+                    _ps, _pdata, _pe = _get(bmc_ip, _p(_pd_uri), username, password, timeout, verify_ssl)
+                    if _ps == 200 and isinstance(_pdata, dict):
+                        fw_ver = _safe(_pdata, 'FirmwareVersion')
+                        if fw_ver:
+                            break
         # 빈 placeholder NetworkAdapter 필터:
         # 일부 BMC (실측 Lenovo XCC SR650 V2)는 PCIe slot 자체를 NetworkAdapters 컬렉션에
         # 빈 entry 로 노출. Controllers[0].ControllerCapabilities.NetworkPortCount=0 또는
@@ -2631,10 +2704,16 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         }
         out['adapters'].append(adapter_info)
         adapter_idx = len(out['adapters']) - 1
+        _ports_before = len(out['ports'])  # CSUS-R6: port_count fallback 기준점
 
         # NetworkDeviceFunctions — FC WWPN/WWNN + IB GUID 식별 (cycle 2026-05-29).
         ndfs = _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl)
         ndf_by_port = {n['port_uri']: i for i, n in enumerate(ndfs) if n.get('port_uri')}
+        # CSUS-FC1 (2026-06-15 실미러 검수): NDF.Links.PhysicalPortAssignment 부재 펌웨어
+        # (HPE CSUS RMC — NDF 가 Links.PCIeFunction 만 노출)에서 NDF↔Port 매칭이 port_uri 로
+        # 안 되면 ID 일치(NDF.Id == Port.Id, 예: PCIeCard10Port1)로 fallback. 그래야 FC WWPN/WWNN
+        # (NDF.FibreChannel 에 존재)이 port 에 join 돼 fc_hbas[].wwpn 이 소실되지 않는다.
+        ndf_by_id = {n['id']: i for i, n in enumerate(ndfs) if n.get('id')}
         ndf_matched = set()
 
         # NetworkPorts (Redfish 1.5 이전) 또는 Ports (1.6+)
@@ -2669,7 +2748,11 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         if isinstance(eth_macs, list) and eth_macs:
                             assoc = eth_macs
                         else:
-                            fc_wwns = _safe(pdata, 'FibreChannel', 'AssociatedWWNs')
+                            # CSUS-FC2 (2026-06-15 실미러 검수): Port.FibreChannel 의 WWN 필드명이
+                            # 펌웨어별로 AssociatedWWNs / AssociatedWorldWideNames 로 갈린다 (HPE CSUS
+                            # RMC 는 후자). 둘 다 읽어 WWPN 소실 차단 (DMTF Port.FibreChannel).
+                            fc_wwns = (_safe(pdata, 'FibreChannel', 'AssociatedWWNs')
+                                       or _safe(pdata, 'FibreChannel', 'AssociatedWorldWideNames'))
                             if isinstance(fc_wwns, list) and fc_wwns:
                                 assoc = fc_wwns
                     # NET-2-1 (2026-06-15): MAC/WWN 을 소문자 정규화해 adapters[].mac /
@@ -2688,13 +2771,22 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     normalized_link = _normalize_link_status(_safe(pdata, 'LinkStatus'))
                     port_id = _safe(pdata, 'Id')
 
-                    # NDF join (식별 정보)
+                    # NDF join (식별 정보) — port_uri(PhysicalPortAssignment) 우선, 부재 시 ID 매칭(CSUS-FC1)
                     ndf_idx = ndf_by_port.get(_p(p_uri)) if p_uri else None
+                    if ndf_idx is None and port_id:
+                        ndf_idx = ndf_by_id.get(port_id)
                     ndf = ndfs[ndf_idx] if ndf_idx is not None else None
                     if ndf_idx is not None:
                         ndf_matched.add(ndf_idx)
 
                     cls = _classify_port_protocol(port_protocol, link_tech, ndf, pdata)
+
+                    # CSUS-R13 (2026-06-15 실미러 검수): FC 포트의 associated_address 는 port WWN(WWPN)
+                    # 이어야 한다. Port.FibreChannel.AssociatedWorldWideNames 가 [WWNN, WWPN] 다중 entry
+                    # 면 assoc[0]=WWNN 오취득 → NDF.WWPN(=fc_hbas[].wwpn 과 동일)으로 교정해 일관성 확보.
+                    # (Ethernet/IB 포트는 기존 primary_addr 유지 — ndf.wwpn 없음)
+                    if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
+                        primary_addr = ndf['wwpn']
 
                     port_info = {
                         'adapter_id':              adapter_id,
@@ -2745,6 +2837,14 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                 out['infiniband'].append(_make_ib_port(
                     adapter_id, adapter_info, ndf.get('id'),
                     'unknown', None, None, ndf))
+
+        # CSUS-R6 (2026-06-15 실미러 검수): ControllerCapabilities.NetworkPortCount 부재 펌웨어
+        # (HPE CSUS NetworkAdapter — Controllers 에 ControllerCapabilities 없음)에서 port_count=0
+        # 인데 실제 Ports 컬렉션은 2포트 → 잘못된 0. 이 어댑터에서 실제 수집된 ports 수로 보정.
+        # NetworkPortCount 보유 vendor(Dell rNDC 등)는 port_count>0 라 미발동 (Additive 회귀안전).
+        _ports_collected = len(out['ports']) - _ports_before
+        if out['adapters'][adapter_idx].get('port_count') in (0, None) and _ports_collected > 0:
+            out['adapters'][adapter_idx]['port_count'] = _ports_collected
 
     return out, errors
 
@@ -2823,6 +2923,43 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
     return fw_list, errors
 
 
+def _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
+    """TelemetryService MetricReports 에서 이 chassis 의 TotalPowerConsumedWatts (장비 권위 소비전력).
+
+    CSUS-R14 (2026-06-15 실미러 검수): HPE CSUS 는 /Power·/EnvironmentMetrics 가 없어 표준 소비전력
+    경로가 없고, 장비가 'TotalPowerConsumedWatts' 를 TelemetryService MetricReport(Id 에 chassis id
+    내장: Chassis<id>_TotalPowerConsumedWatts)로 노출한다. MetricReports 컬렉션을 순회해 이 chassis 의
+    리포트를 찾아 MetricValue 반환. PSU InputPowerWatts 합(AC 입력, ~20% 높음)보다 장비 자신의 '소비'
+    정의(591.5W)에 충실. MetricValue 는 문자열("591.5") → _safe_num 으로 파싱.
+
+    source (rule 96 R1-A): DMTF DSP0266 TelemetryService/MetricReport (MetricValues[].MetricId/MetricValue).
+    Returns: int | None
+    """
+    cid = _str(chassis_uri).rstrip('/').rsplit('/', 1)[-1] if chassis_uri else ''
+    if not cid:
+        return None
+    st, coll, err = _get(bmc_ip, 'TelemetryService/MetricReports', username, password, timeout, verify_ssl)
+    if err or st != 200:
+        return None
+    cid_l = cid.lower()
+    for m in _capped(_dicts(_safe(coll, 'Members')), 'power', None):
+        u = _safe(m, '@odata.id')
+        if not u or not isinstance(u, str):
+            continue
+        ul = u.lower()
+        if cid_l not in ul or 'totalpowerconsumed' not in ul:
+            continue
+        st2, rep, _e = _get(bmc_ip, _p(u), username, password, timeout, verify_ssl)
+        if st2 != 200 or not isinstance(rep, dict):
+            continue
+        for mv in _dicts(_safe(rep, 'MetricValues')):
+            if _str(_safe(mv, 'MetricId')).strip().lower() == 'totalpowerconsumedwatts':
+                num = _safe_num(_safe(mv, 'MetricValue'))  # "591.5" → float → int
+                if num is not None:
+                    return _safe_int(num)
+    return None
+
+
 def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
     """DMTF 2020.4 (Redfish 1.13+) PowerSubsystem fallback parser.
 
@@ -2842,6 +2979,8 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     # PowerSubsystem.PowerSupplies 컬렉션 fetch
     psu_link = _safe(ps_data, 'PowerSupplies', '@odata.id')
     psus = []
+    psu_input_total = 0          # CSUS-R10: PSU 입력전력 합 (소비전력 fallback)
+    psu_input_seen = False
     if psu_link:
         st_c, coll, _err_c = _get(bmc_ip, _p(psu_link), username, password, timeout, verify_ssl)
         if st_c == 200:
@@ -2858,10 +2997,22 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                     'serial':           _safe(mdata, 'SerialNumber'),
                     'manufacturer':     _safe(mdata, 'Manufacturer'),
                     'power_capacity_w': _safe_int(_safe(mdata, 'PowerCapacityWatts')),
-                    'firmware_version': _safe(mdata, 'FirmwareVersion'),
+                    # CSUS-R9 (2026-06-15 실미러 검수): HPE CSUS PSU 는 FirmwareVersion 부재 +
+                    # DMTF PowerSupply.Version("Release -0005")에 버전 → Version fallback (Additive).
+                    'firmware_version': _safe(mdata, 'FirmwareVersion') or _safe(mdata, 'Version'),
                     'health':           _safe(mdata, 'Status', 'Health'),
                     'state':            _safe(mdata, 'Status', 'State'),
                 })
+                # CSUS-R10: PSU.Metrics.InputPowerWatts.Reading 합산 — chassis 에 /Power·
+                # /EnvironmentMetrics 가 없어 소비전력이 PSU Metrics 에만 있는 환경(HPE CSUS) 대비.
+                metrics_link = _safe(mdata, 'Metrics', '@odata.id')
+                if metrics_link:
+                    st_mm, mm, _e_mm = _get(bmc_ip, _p(metrics_link), username, password, timeout, verify_ssl)
+                    if st_mm == 200 and isinstance(mm, dict):
+                        ipw = _safe_int(_safe(mm, 'InputPowerWatts', 'Reading'))
+                        if ipw is not None:
+                            psu_input_total += ipw
+                            psu_input_seen = True
 
     # PowerControl 은 PowerSubsystem 표준에 없음 — chassis-level 합산 또는 None
     pc_capacity = None
@@ -2897,6 +3048,17 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                 if pc_max is not None:
                     power_control['max_consumed_watts'] = pc_max
         # interval_in_min / avg_consumed_watts: EnvironmentMetrics 표준에 없음 — None 유지
+        # CSUS-R14 (2026-06-15 실미러 검수): EnvironmentMetrics 부재 시 장비 자신의 권위 소비전력
+        # (TelemetryService TotalPowerConsumedWatts, 591.5W)을 우선 사용 — PSU 입력전력 합(731W,
+        # AC 입력이라 ~24% 높음)보다 장비의 '소비' 정의에 충실. 표준 경로(EnvironmentMetrics) 보유
+        # vendor 는 위에서 이미 채워져 미발동.
+        if power_control['power_consumed_watts'] is None:
+            tpc = _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
+            if tpc is not None:
+                power_control['power_consumed_watts'] = tpc
+        # CSUS-R10: TelemetryService 도 없으면 PSU 입력전력 합으로 마지막 fallback (AC 입력 — 근사값).
+        if power_control['power_consumed_watts'] is None and psu_input_seen:
+            power_control['power_consumed_watts'] = psu_input_total
 
     return {'power_supplies': psus, 'power_control': power_control}, errors
 
@@ -3078,6 +3240,47 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
     return {'temperatures': temps, 'fans': fans}, errors
 
 
+def _fan_rpm_from_sensors(bmc_ip, chassis_uri, fan_uris, username, password, timeout, verify_ssl):
+    """Chassis/Sensors 의 ReadingType=Rotational(RPM) 센서를 Fan URI(RelatedItem)로 역인덱스.
+
+    CSUS-R11 (2026-06-15 실미러 검수): HPE CSUS Fan.v1_5 리소스는 SpeedPercent 가 없고 실
+    회전수(4410 RPM 등)가 Chassis/Sensors 컬렉션(ReadingType=Rotational)에만 있으며 Sensor.
+    RelatedItem 이 ThermalSubsystem/Fans/<id> 를 역참조한다. Fan→Sensor 정참조 링크가 없어
+    Sensors 를 순회해 reverse map 을 만든다. URI 에 'fan' 포함 센서만 GET 해 비용 제한(나머지
+    센서 skip). 미지원/미매치 시 빈 map → 호출자가 reading=null 유지(회귀 안전 — 기존 동작).
+
+    source (rule 96 R1-A): DMTF DSP0266 Sensor.v1 (Reading/ReadingUnits/ReadingType/RelatedItem).
+    Returns: {fan_uri(_p 정규화): (reading_int, units)}
+    """
+    out = {}
+    want = set(fan_uris or [])
+    if not want:
+        return out
+    st, coll, err = _get(bmc_ip, _p(chassis_uri) + '/Sensors', username, password, timeout, verify_ssl)
+    if err or st != 200:
+        return out
+    for m in _capped(_dicts(_safe(coll, 'Members')), 'thermal', None):
+        su = _safe(m, '@odata.id')
+        if not su or not isinstance(su, str) or 'fan' not in su.lower():  # 비용 제한: fan 센서만
+            continue
+        st2, sd, _e = _get(bmc_ip, _p(su), username, password, timeout, verify_ssl)
+        if st2 != 200 or not isinstance(sd, dict):
+            continue
+        if _str(_safe(sd, 'ReadingType')).strip().lower() != 'rotational':
+            continue
+        reading = _safe_int(_safe(sd, 'Reading'))
+        if reading is None:
+            continue
+        units = _safe(sd, 'ReadingUnits')
+        for ri in _dicts(_safe(sd, 'RelatedItem')):
+            ru = _safe(ri, '@odata.id')
+            if ru and isinstance(ru, str):
+                ru_p = _p(ru)
+                if ru_p in want and ru_p not in out:
+                    out[ru_p] = (reading, units)
+    return out
+
+
 def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
     """DMTF 2020.4 ThermalSubsystem fallback — /Thermal 404 시 (cycle 2026-06-09).
 
@@ -3107,6 +3310,7 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
                     'physical_context': _safe(tr, 'PhysicalContext'),
                 })
     fans = []
+    fan_uris = []  # CSUS-R11: Sensors RPM reverse-join 용 fan URI(_p) 순서 보존
     fans_link = _safe(ts, 'Fans', '@odata.id')
     if fans_link:
         fst, fcoll, _e = _get(bmc_ip, _p(fans_link), username, password, timeout, verify_ssl)
@@ -3125,6 +3329,19 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
                     'health':        _safe(fdata, 'Status', 'Health'),
                     'state':         _safe(fdata, 'Status', 'State'),
                 })
+                fan_uris.append(_p(furi))
+    # CSUS-R11 (2026-06-15 실미러 검수): Fan 리소스에 SpeedPercent 가 없어 reading=null 이면
+    # Chassis/Sensors 의 Rotational(RPM) 센서를 RelatedItem 역참조로 join 해 회전수 채움.
+    # SpeedPercent 보유 vendor 는 reading 이 이미 차 있어 미발동 (Additive 회귀안전).
+    if fans and any(f['reading'] is None for f in fans):
+        rpm_map = _fan_rpm_from_sensors(
+            bmc_ip, chassis_uri, fan_uris, username, password, timeout, verify_ssl)
+        if rpm_map:
+            for i, f in enumerate(fans):
+                if f['reading'] is None and i < len(fan_uris):
+                    hit = rpm_map.get(fan_uris[i])
+                    if hit:
+                        f['reading'], f['reading_units'] = hit[0], hit[1]
     if not temps and not fans:
         return {}, errors
     return {'temperatures': temps, 'fans': fans}, errors
@@ -3325,6 +3542,12 @@ def gather_managers_multi(bmc_ip, managers_coll_uri, vendor, username, password,
         # cycle 2026-06-09: Manager LogServices 수집 (설명 모델 "Services 와 Logs").
         logs_data, logs_errs = gather_manager_logs(
             bmc_ip, m['uri'], username, password, timeout, verify_ssl)
+        # CSUS-R15 (2026-06-15 실미러 검수): gather_bmc 의 _network_meta 는 normalize_standard.yml
+        # 이 top-level data.bmc 의 dns_servers/default_gateways 추출 후 제거하는 내부 임시 키다.
+        # multi_node.managers[].bmc 는 normalize 를 거치지 않고 verbatim 통과 → _network_meta 누설
+        # (envelope 비노출 키 위반, rule 13 R5 / 22). top-level 과 대칭으로 여기서 strip.
+        if isinstance(bmc_data, dict) and '_network_meta' in bmc_data:
+            bmc_data = {k: v for k, v in bmc_data.items() if k != '_network_meta'}
         out['managers'].append({
             'id':           m['id'],
             'uri':          m['uri'],
@@ -3539,7 +3762,7 @@ def _normalize_memory_raw(raw_mem):
 
 
 def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
-                         timeout, verify_ssl, chassis_uri=None):
+                         timeout, verify_ssl, chassis_uri=None, product_hint=None):
     """모든 Systems Member 별 gather_system + per-partition summary (cycle 2026-05-12).
 
     nPartition 환경 — 각 Partition 별 cpu / memory / storage / network 모두 수집.
@@ -3562,7 +3785,11 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
     creds = (username, password, timeout, verify_ssl)
     # Round 16: per-partition 순회도 _capped DoS 상한 (멤버당 6 GET — file 컨벤션 일관).
     for m in _capped(members, 'multi_node.partitions', out['errors']):
-        sys_data, sys_errs = gather_system(bmc_ip, m['uri'], vendor, *creds, chassis_uri)
+        # CSUS-R1 (2026-06-15 실미러 검수): partition 별 Links.Chassis 로 compute chassis 해석
+        # + product_hint 전달 → partition.system.manufacturer/model 이 top-level data.system 과
+        # 일관(구: chassis_uri/product_hint 미전달로 multi_node.partitions[].system 만 null).
+        part_chassis = _resolve_system_chassis_uri(bmc_ip, m['uri'], chassis_uri, *creds)
+        sys_data, sys_errs = gather_system(bmc_ip, m['uri'], vendor, *creds, part_chassis, product_hint)
         cpu_data, cpu_errs = gather_processors(bmc_ip, m['uri'], *creds)
         mem_data, mem_errs = gather_memory(bmc_ip, m['uri'], *creds)
         sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds)
@@ -3856,6 +4083,7 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
 
     sys_result = gather_systems_multi(
         bmc_ip, systems_uri, vendor, username, password, timeout, verify_ssl,
+        product_hint=_safe(service_root, 'Product'),
     )
     mgr_result = gather_managers_multi(
         bmc_ip, managers_uri, vendor, username, password, timeout, verify_ssl,
@@ -3926,21 +4154,28 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     """
     _run = _make_section_runner(all_errors, collected, failed, unsupported)
     creds = (username, password, timeout, verify_ssl)
+    # CSUS-R1 (cycle 2026-06-15 실미러 검수): chassis 의존 섹션(power/thermal/network_adapters/
+    # system OEM)은 System.Links.Chassis 가 가리키는 compute chassis 를 쓴다. detect_vendor 가
+    # 잡은 chassis_uri(Chassis 컬렉션 첫 멤버)는 multi-chassis RMC 환경에서 집계용 RackGroup
+    # 이라 PowerSubsystem/ThermalSubsystem/NetworkAdapters 가 비어 false-success/소실을 유발.
+    # 단일 chassis vendor 는 Links.Chassis[0] == 첫 멤버라 불변 (Additive, 회귀 안전).
+    eff_chassis_uri = _resolve_system_chassis_uri(
+        bmc_ip, system_uri, chassis_uri, username, password, timeout, verify_ssl)
     return {
-        'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, chassis_uri, product_hint),
+        'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, eff_chassis_uri, product_hint),
         'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout),
         'processors':        _run('processors', gather_processors, bmc_ip, system_uri,          *creds),
         'memory':            _run('memory',     gather_memory,     bmc_ip, system_uri,          *creds),
         'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds),
         'network':           _run('network',    gather_network,    bmc_ip, system_uri,          *creds),
         'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds),
-        'power':             _run('power',      gather_power,      bmc_ip, chassis_uri,         *creds),
+        'power':             _run('power',      gather_power,      bmc_ip, eff_chassis_uri,     *creds),
         # cycle 2026-06-14 (Track 4): 단일노드 thermal (온도 센서 + 팬). 미지원 벤더는 {} graceful.
-        'thermal':           _run('thermal',    gather_thermal,    bmc_ip, chassis_uri,         *creds),
+        'thermal':           _run('thermal',    gather_thermal,    bmc_ip, eff_chassis_uri,     *creds),
         # P4 (cycle 2026-04-28): NIC 카드 + port-level + FC HBA / InfiniBand 분류
         'network_adapters':  _run('network_adapters',
                                    gather_network_adapters_chassis,
-                                   bmc_ip, chassis_uri, *creds),
+                                   bmc_ip, eff_chassis_uri, *creds),
     }
 
 

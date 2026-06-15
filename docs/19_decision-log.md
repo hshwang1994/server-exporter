@@ -8,6 +8,33 @@
 
 > 최종 갱신: 2026-06-15
 
+## 2026-06-15 — HPE Compute Scale-up Server 3200 (CSUS 3200) 실 미러 검수: 라이브러리 fix 16건 (5-round 수렴)
+
+### 사용자 의심 / 요청
+
+- "redfish_full_mirror.py 로 실장비(HPE CSUS 3200, 4 노드) 데이터 기준 개더링 전체 검수 — 잘못 수집된 데이터/필드 매핑/타입/OEM/병합/실패처리/링크추적 오류를 버그 0 + 회귀 0 + 부작용 0 까지 반복 수정. 발견한 문제 수정 후에도 전체 재검수·회귀·신규 탐색 루프를 새 작업이 0 이 될 때까지 반복."
+
+### 분석 (5-Round 다관점 자가검증 수렴 — 실 4노드 raw provenance 1:1 대조)
+
+- 대표 root cause: **chassis 오선택**. `detect_vendor` 가 Chassis 컬렉션 첫 멤버(집계용 RackGroup — PowerSubsystem/ThermalSubsystem/NetworkAdapters 부재)를 chassis_uri 로 잡아, top-level `data.power`/`data.thermal` 이 빈 `{}` 인데 `collected=success`(누락이 정상처럼)·`network_adapters=unsupported`(false not-supported)·**FC HBA 전량 소실**. 실 compute chassis 는 `Systems/Partition0.Links.Chassis=r001u01`.
+- round 별 신규 confirmed 추세 **6→5→3→2→0** 으로 수렴. 발견 카테고리: chassis 오선택 / FC HBA WWPN 소실 / FC WWNN↔WWPN 오매핑 / port_count 잘못된 기본값(0) / PSU 펌웨어·소비전력 누락 / fan RPM 링크추적 누락 / memory locator 무용값(0) / Ethernet 미분류 / multi_node 식별필드 불일치 / ilo_version OEM 오매핑 / 내부 임시키(_network_meta) 누설 / adapter firmware 링크추적 누락.
+
+### 결정 (16건 수정 — 전부 raw 충실 + Additive only, redfish_gather.py)
+
+- R1 chassis=`System.Links.Chassis`(r001u01, `_resolve_system_chassis_uri` 신설) / FC1 NDF↔Port ID매칭 / FC2 `Port.FibreChannel.AssociatedWorldWideNames` / R3 multi_node system `product_hint` / R4 `bmc.oem.ilo_version` Manager.Model 폴백 제거 / R5 chassis kind RackGroup·Rack / R6 port_count=실 Ports 수 fallback / R8 Ethernet port_type=`Port.Ethernet` dict / R9 PSU firmware=`Version` fallback / R10 power=PSU `InputPowerWatts` 합(최후) / R11 fan RPM=`Sensors`(Rotational) `RelatedItem` 역참조 / R12 memory locator=`ServiceLabel`(Slot=0 시) / R13 FC `associated_address`=NDF.WWPN(WWNN 오취득 교정, `fc_hbas.wwpn` 일관) / R14 power=`TelemetryService` TotalPowerConsumedWatts(장비 권위값) / R15 `_network_meta` 임시키 multi_node 누설 차단 / R16 adapter firmware=`Controllers[].Links.PCIeDevices[].FirmwareVersion` fallback.
+- **gated(8건, 자율 미수정)**: CSUS baseline 실측 교체(Ansible/Linux control node 필요 — Windows 미지원), field_dictionary drift(multi_node.boot/thermal/composition/fabrics — 보호 경로), collect_oem.yml CSUS 실 필드명(HpeH3Npar — lab 필요), system.oem iLO-shaped(faithful), network list vs dict shape(envelope 계약), Rmp 관리어댑터 제외, ResourceBlock count, multi_node.chassis name. → NEXT_ACTIONS 등재.
+
+### 영향
+
+- 4 노드 전부 status=success / power consumed 591·600·1000·945W(장비 telemetry 권위값) / thermal 47~63 temp + fan RPM 10/10 / FC HBA 4·4·8·8 WWPN + Ethernet 0·0·8·8 분류 / adapter firmware(node03/04) / memory locator=ServiceLabel.
+- **cross-vendor**: R13(FC WWNN→WWPN)은 전 벤더 적용 — Dell R740 실미러 FC `associated_address` 4건이 WWNN→WWPN 으로 *교정*(기존 `assoc≠fc_hbas.wwpn` 불일치 해소, faithful). HPE emulator golden 2종(dl325/dl365 FC) faithful 재생성. 커밋 baseline 엔 해당 필드 부재로 영향 0.
+
+### 회귀
+
+- `pytest tests/` **1151 passed, 5 skipped** (baseline 1126 + 신규 `tests/unit/test_csus_mirror_audit_fixes.py` 25).
+- 타 벤더(Dell/HPE/Lenovo) 실미러 replay envelope `git stash` pre/post diff 4회 — HPE/Lenovo byte-identical, Dell 은 R13 FC assoc 만(의도). 부작용 0.
+- 증거: `tests/evidence/2026-06-15-hpe-csus3200-mirror-audit.md`.
+
 ## 2026-06-15 — HPE DL380 Gen12 실 미러 검수: thermal 섹션 배선 + 라이브러리 fix 7건
 
 ### 사용자 의심 / 요청

@@ -336,7 +336,7 @@
         {
           "adapter_id": "DE081000",
           "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
-          "associated_address": "92:84:9d:7a:9c:80:40:4c",
+          "associated_address": "92:84:9d:7a:9c:80:40:4d",
           "current_link_speed_mbps": 32000,
           "health": null,
           "link_state": null,
@@ -349,7 +349,7 @@
         {
           "adapter_id": "DE081000",
           "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
-          "associated_address": "48:63:75:52:39:97:cf:7c",
+          "associated_address": "48:63:75:52:39:97:cf:7d",
           "current_link_speed_mbps": 32000,
           "health": null,
           "link_state": null,
