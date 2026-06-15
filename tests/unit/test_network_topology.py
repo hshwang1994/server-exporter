@@ -518,6 +518,62 @@ def test_perm_hwaddr_precedence_slmeta_then_bslave():
     assert b["slaves"][0]["perm_hwaddr"] == "00:11:22:33:44:AA"  # BSLAVE fallback
 
 
+# ---------------------------------------------------------------------------
+# 실커널 검증 (RHEL 8.10 dummy 인터페이스, SSH NIC 미접촉·검증후 삭제)
+# ---------------------------------------------------------------------------
+# /sys/class/net/<bond>/bonding/mode 실제 파일값 (mode 이름 + 숫자 인덱스).
+# collector 가 awk '{print $1}' 로 첫 토큰 추출 → filter 는 그 값을 받는다.
+REAL_MODE_FILES = [
+    ("balance-rr", "balance-rr 0"), ("active-backup", "active-backup 1"),
+    ("balance-xor", "balance-xor 2"), ("broadcast", "broadcast 3"),
+    ("802.3ad", "802.3ad 4"), ("balance-tlb", "balance-tlb 5"),
+    ("balance-alb", "balance-alb 6"),
+]
+
+
+@pytest.mark.parametrize("expected,mode_file", REAL_MODE_FILES)
+def test_real_kernel_all_bond_modes(expected, mode_file):
+    """7개 bond 모드 전부 실커널 mode 파일값 → 정확한 mode 이름 파싱 (실장비 확인)."""
+    emitted = mode_file.split()[0]   # collector awk '{print $1}'
+    assert emitted == expected
+    line = "BOND|btest|%s|bd0|0|slow|layer2||stable|bd0 bd1" % emitted
+    b = parse_linux_net_topology([line])["bonds"][0]
+    assert b["mode"] == expected
+
+
+def test_real_kernel_vlan_on_bond_fixture():
+    """실커널 VLAN-on-bond 캡처: VLAN→bond 부모 연결 + bond IP / VLAN IP / slave 무IP.
+
+    실장비(RHEL 8.10)에서 /proc/net/vlan/config 가 Permission denied 였으나 ip -d link
+    소스로 VLANIF 정상 emit (다중소스 graceful). slave speed 는 dummy 라 'Unknown'→None.
+    """
+    lines = _topo_lines("bond_vlan_realkernel_topo.txt")
+    base = [
+        {"id": "btest", "name": "btest", "kind": "os_nic", "mac": None, "mtu": 1500,
+         "speed_mbps": None, "link_status": "up", "is_primary": False,
+         "addresses": [{"family": "ipv4", "address": "192.0.2.10", "prefix_length": 24,
+                        "subnet_mask": "255.255.255.0", "gateway": None}]},
+        {"id": "bvlan100", "name": "bvlan100", "kind": "os_nic", "mac": None, "mtu": 1500,
+         "speed_mbps": None, "link_status": "up", "is_primary": False,
+         "addresses": [{"family": "ipv4", "address": "198.51.100.10", "prefix_length": 24,
+                        "subnet_mask": "255.255.255.0", "gateway": None}]},
+    ]
+    net = build_linux_network(base, lines)
+    by = {i["name"]: i for i in net["interfaces"]}
+    # VLAN: bond 부모 연결 + 자체 IP 유지
+    assert by["bvlan100"]["vlan_id"] == 100
+    assert by["bvlan100"]["vlan_parent"] == "btest"
+    assert by["bvlan100"]["addresses"][0]["address"] == "198.51.100.10"
+    # bond master: IP 보유
+    assert by["btest"]["bond_role"] == "master"
+    assert by["btest"]["addresses"][0]["address"] == "192.0.2.10"
+    # 물리 slave: IP 없음, speed Unknown→None (실커널 graceful)
+    for sl in ("bd0", "bd1"):
+        assert by[sl]["bond_role"] == "slave"
+        assert by[sl]["addresses"] == []
+        assert by[sl]["speed_mbps"] is None
+
+
 def test_rhel96_expected_fixture_python_path_topology():
     """RHEL 9.6 python 경로 실 캡처 기반 기대 fixture 의 bond 토폴로지 회귀 고정."""
     net = json.loads((FIX / "rhel96_bond_network.expected.json").read_text(encoding="utf-8"))

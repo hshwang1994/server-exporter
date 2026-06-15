@@ -1,0 +1,6 @@
+BOND|btest|active-backup|bd0|0|slow|layer2||stable|bd0 bd1
+BSLAVE|btest|bd0|active|up|46:e9:09:a5:93:ad|Unknown|0
+BSLAVE|btest|bd1|backup|up|62:e3:f5:b6:91:b1|Unknown|0
+SLMETA|btest|bd0|1500|unknown||46:e9:09:a5:93:ad
+SLMETA|btest|bd1|1500|unknown||62:e3:f5:b6:91:b1
+VLANIF|bvlan100|btest|100
