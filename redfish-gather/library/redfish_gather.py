@@ -2320,9 +2320,15 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             if a.get('Address') not in (None, '0.0.0.0', '')
         ]
         # 2026-04-29 fix B13: link_status enum 정규화 — Dell linkup/linkdown / HPE NoLink / Cisco Connected/Disconnected → up/down/unknown
+        # cycle 2026-06-15 (Lenovo SR650 V4 실미러 검수): MAC 소문자 정규화 — bmc.mac_address /
+        # network_adapters.*.mac / ports.associated_address 와 case 일관(라이브러리 lowercase 규약,
+        # _normalize_wwn 독스트링). Lenovo XCC 는 System EthernetInterface MAC 을 대문자로 노출해
+        # 같은 물리 NIC 이 data.network(대문자) vs network_adapters(소문자) 로 갈렸다. raw 가
+        # colon-hex 라 .lower() 무손실.
+        _nmac = _safe(ndata, 'MACAddress')
         nics.append({
             'id': _safe(ndata, 'Id'), 'name': _safe(ndata, 'Name') or _safe(ndata, 'Id') or '',
-            'mac': _safe(ndata, 'MACAddress'), 'speed_mbps': _safe_int(_safe(ndata, 'SpeedMbps')),  # Round 2 #18: mbps int 통일
+            'mac': _nmac.lower() if isinstance(_nmac, str) else _nmac, 'speed_mbps': _safe_int(_safe(ndata, 'SpeedMbps')),  # Round 2 #18: mbps int 통일
             'mtu': _safe_int(_safe(ndata, 'MTUSize')),  # Round 6 #6: int 통일(마지막 수치 필드)
             'link_status': _normalize_link_status(_safe(ndata, 'LinkStatus')),
             'health': _safe(ndata, 'Status', 'Health'),
@@ -2776,21 +2782,25 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
         # Q-14: Dell Previous- 항목 스킵 (비활성 이전 버전)
         if fw_id and isinstance(fw_id, str) and fw_id.startswith('Previous-'):
             continue
+        # 2026-04-29 fix B43 (재확인 cycle 2026-06-15, Lenovo SR650 V4 실미러 검수): pending
+        # firmware (BMC-Primary-Pending / UEFI-Pending) 는 ID 에 'Pending' 포함, version 부재가
+        # 정상(staged 업데이트). XCC1 은 Version=null, XCC3(V4) 은 Version="" 로 노출 — 아래 Cisco
+        # 빈 슬롯 노이즈 필터('N/A'/''/'NA')가 pending 을 삼키지 않도록 먼저 식별한다.
+        is_pending = bool(fw_id and isinstance(fw_id, str) and 'pending' in fw_id.lower())
         # 2026-04-29 cisco-critical-review: Cisco CIMC 의 "N/A" 빈 슬롯 (slot-1, slot-2
         # 등 PCIe 미장착 슬롯) 노이즈 필터. Version 이 "N/A"/""/"NA" 면 firmware 컴포넌트가
         # 부재 — 호출자에게 노이즈로 전달되지 않도록 skip (기존 키 유지, list 길이만 정확).
+        # 단 pending 엔트리는 예외: 드롭하면 "업데이트 staged" 신호 유실(lenovo_baseline.json 이
+        # pending 엔트리 보존 — 정책: pending=true + version=null 은 정상). version="" → null 통일.
         ver = _safe(member, 'Version')
         if isinstance(ver, str) and ver.strip().upper() in ('N/A', 'NA', ''):
-            continue
+            if not is_pending:
+                continue
+            ver = None
         # Q-13: SoftwareId가 문자열 "null"이면 Python None으로 변환
         component = _safe(member, 'SoftwareId')
         if isinstance(component, str) and component.lower() == 'null':
             component = None
-        # 2026-04-29 fix B43: Lenovo XCC pending firmware (BMC-Primary-Pending, UEFI-Pending)는
-        # version=null + ID에 'Pending' 포함. version=null만으로는 호출자가 단순 누락인지 의도된
-        # pending 인지 모름 → pending 메타필드 추가 (정책: pending=true이고 version=null은 정상,
-        # pending=false이고 version=null은 데이터 누락).
-        is_pending = bool(fw_id and isinstance(fw_id, str) and 'pending' in fw_id.lower())
         # FW-1 dedup: status-prefix 제거 key 로 Current-/Installed- 동일 펌웨어 중복 제거.
         # prefix 없는 Id 는 key=fw_id(고유) → dedup 무영향. Previous- 는 위에서 이미 skip.
         _dedup_key = fw_id

@@ -133,7 +133,7 @@
           }
         ],
         "link_status": "up",
-        "mac": "12:44:6A:3B:04:11",
+        "mac": "12:44:6a:3b:04:11",
         "mtu": null,
         "name": "Ethernet Interface",
         "speed_mbps": 1000
@@ -150,7 +150,7 @@
           }
         ],
         "link_status": "up",
-        "mac": "AA:BB:CC:DD:EE:00",
+        "mac": "aa:bb:cc:dd:ee:00",
         "mtu": null,
         "name": "Ethernet Interface",
         "speed_mbps": 1000
@@ -167,7 +167,7 @@
           }
         ],
         "link_status": "up",
-        "mac": "12:44:6A:3B:04:11",
+        "mac": "12:44:6a:3b:04:11",
         "mtu": null,
         "name": "Ethernet Interface",
         "speed_mbps": 1000
@@ -184,7 +184,7 @@
           }
         ],
         "link_status": "unknown",
-        "mac": "AA:BB:CC:DD:EE:FE",
+        "mac": "aa:bb:cc:dd:ee:fe",
         "mtu": 1500,
         "name": "Host Ethernet Interface",
         "speed_mbps": 100
