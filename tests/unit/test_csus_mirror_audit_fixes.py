@@ -544,3 +544,64 @@ def test_adapter_firmware_prefers_package_version(monkeypatch):
     })
     out, errs = rg.gather_network_adapters_chassis("ip", "/redfish/v1/Chassis/c", *CREDS)
     assert out["adapters"][0]["firmware_version"] == "22.31.6"
+
+
+# ── CSUS-R17: system.oem #HpeH3Npar 분기 (all-null iLO 스켈레톤 날조 제거) ────────
+
+def test_system_oem_csus_hpeh3npar_extracted():
+    """#HpeH3Npar System OEM → CSUS 전용 키 추출 (구: all-null iLO 스켈레톤 + 실 OEM drop).
+
+    실 미러 node03 Systems/Partition0.Oem.Hpe 구조 재현.
+    """
+    out = rg._extract_oem_hpe({
+        "Oem": {"Hpe": {
+            "@odata.type": "#HpeH3Npar.v1_3_0.HpeH3Npar",
+            "ConsoleRouting": "default", "ConsoleRoutingCurrentBoot": "default",
+            "DCD": {"DCDVersion": "5.0-7.1"},
+            "HostOS": {"OsName": "Red Hat Enterprise Linux",
+                       "OsVersion": "8.10 (Ootpa)",
+                       "OsSysDescription": "Red Hat Enterprise Linux 8.10 (Ootpa)"},
+            "OV": {}, "ProductId": "1590PID03030201",
+        }},
+    })
+    assert out["product_id"] == "1590PID03030201"
+    assert out["console_routing"] == "default"
+    assert out["dcd_version"] == "5.0-7.1"
+    assert out["host_os_name"] == "Red Hat Enterprise Linux"
+    assert out["host_os_version"] == "8.10 (Ootpa)"
+    # iLO 전용 키(all-null 스켈레톤) 가 더 이상 생성되지 않음
+    assert "aggregate_server_health" not in out
+    assert "subsystem_health" not in out
+
+
+def test_system_oem_csus_empty_subobjects_null():
+    """node01 형태 — DCD={} / HostOS 부재 → 해당 키 null (raw 충실, 날조 없음)."""
+    out = rg._extract_oem_hpe({
+        "Oem": {"Hpe": {
+            "@odata.type": "#HpeH3Npar.v1_3_0.HpeH3Npar",
+            "ConsoleRouting": "default", "ConsoleRoutingCurrentBoot": "default",
+            "DCD": {}, "OV": {}, "ProductId": "1590PID03030201",
+        }},
+    })
+    assert out["product_id"] == "1590PID03030201"
+    assert out["dcd_version"] is None
+    assert out["host_os_name"] is None
+
+
+def test_system_oem_ilo_branch_preserved():
+    """실 iLO(@odata.type 가 #HpeH3Npar 아님) → 기존 iLO 추출 그대로 (회귀 안전)."""
+    out = rg._extract_oem_hpe({
+        "Oem": {"Hpe": {
+            "@odata.type": "#HpeServerOem.v1_0_0.HpeServerOem",
+            "PostState": "FinishedPost",
+            "AggregateHealthStatus": {"AggregateServerHealth": "OK",
+                                      "FanRedundancy": "Redundant"},
+            "Bios": {"Current": {"Date": "01/15/2024"}},
+        }},
+    })
+    assert out["post_state"] == "FinishedPost"
+    assert out["aggregate_server_health"] == "OK"
+    assert out["fan_redundancy"] == "Redundant"
+    assert out["_bios_date"] == "01/15/2024"
+    # CSUS 키가 iLO 분기에 누설되지 않음
+    assert "product_id" not in out

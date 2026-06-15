@@ -1160,8 +1160,30 @@ def _extract_oem_hpe(data):                                                   # 
     fields only (no new keys).
     Verified 2026-04-29 against HPE iLO 6 v1.73 (10.50.11.231): Bios.Current.Date
     populated; Manager.Oem.Hpe.Type field does not exist (former mapping was bug).
+
+    CSUS-R17 (2026-06-15 실미러 검수): HPE Compute Scale-up Server 3200 / Superdome Flex 의
+    System OEM 은 iLO namespace 가 아니라 #HpeH3Npar — AggregateHealthStatus / Bios.Current /
+    PostState / ServerSignature 가 전부 부재라 구 코드는 모든 값이 null 인 iLO 스켈레톤을 날조
+    (missing-looks-valid) 하면서 실 OEM(ProductId / ConsoleRouting / DCD / HostOS) 을 silent drop
+    했다. OEM @odata.type 로 분기해 CSUS 전용 키를 추출한다. iLO(@odata.type 가 #HpeH3Npar 가
+    아님 — #HpeiLO* 또는 마커 부재)는 default 분기 그대로 (Additive — 회귀 안전, rule 92 R2).
+    hardware.oem 은 field_dictionary 상 벤더 가변 object("키 구조가 벤더마다 완전히 다름")라
+    CSUS 키 추가는 계약 변경 아님 (rule 96 R1-B 위반 아님). raw 충실 — 부재 필드는 null.
     """
     oem = _safe(data, 'Oem', 'Hpe') or _safe(data, 'Oem', 'Hp') or {}         # nosec rule12-r1
+    oem_type = _str(_safe(oem, '@odata.type'))
+    if oem_type.startswith('#HpeH3Npar'):  # nosec rule12-r1 — Redfish OEM namespace (CSUS/Superdome Flex)
+        dcd = _safe(oem, 'DCD') or {}
+        host_os = _safe(oem, 'HostOS') or {}
+        return {
+            'product_id':                   _safe(oem, 'ProductId'),
+            'console_routing':              _safe(oem, 'ConsoleRouting'),
+            'console_routing_current_boot': _safe(oem, 'ConsoleRoutingCurrentBoot'),
+            'dcd_version':                  _safe(dcd, 'DCDVersion'),
+            'host_os_name':                 _safe(host_os, 'OsName'),
+            'host_os_version':              _safe(host_os, 'OsVersion'),
+            'host_os_description':          _safe(host_os, 'OsSysDescription'),
+        }
     ahs = _safe(oem, 'AggregateHealthStatus') or {}
     bios_oem = _safe(oem, 'Bios', 'Current') or {}
     return {
