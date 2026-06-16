@@ -97,7 +97,15 @@ pipeline {
         // -- 1. Validate [Agent] -----------------------------------------------
         // production-audit (2026-04-29): per-stage timeout 명시 — 글로벌 120m을 단일 stage가 독차지하지 않도록
         stage('Validate') {
-            agent { label "${params.loc}" }
+            agent {
+                node {
+                    label "${params.loc}"
+                    // 2026-06-16: 빌드별 고유 workspace. 동시 빌드(6개 동시 트리거)가 같은 디렉터리를
+                    //   checkout/clean 하며 충돌(Failed to clean workspace / AccessDenied)하던 것 차단.
+                    //   Jenkins 기본 @N 격리에만 의존하지 않고 BUILD_NUMBER 로 명시 분리.
+                    customWorkspace "gatherRedfish-${env.BUILD_NUMBER}"
+                }
+            }
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
                 script {
@@ -152,7 +160,15 @@ pipeline {
         // OUTPUT JSON 은 callback (json_only.py) 의 ANSIBLE_JSON_OUTPUT_FILE 환경변수
         // 지원으로 ${WORKSPACE}/gather_output.json 에 한 줄씩 append 된다.
         stage('Gather') {
-            agent { label "${params.loc}" }
+            agent {
+                node {
+                    label "${params.loc}"
+                    // 2026-06-16: 빌드별 고유 workspace. 동시 빌드(6개 동시 트리거)가 같은 디렉터리를
+                    //   checkout/clean 하며 충돌(Failed to clean workspace / AccessDenied)하던 것 차단.
+                    //   Jenkins 기본 @N 격리에만 의존하지 않고 BUILD_NUMBER 로 명시 분리.
+                    customWorkspace "gatherRedfish-${env.BUILD_NUMBER}"
+                }
+            }
             options { timeout(time: 60, unit: 'MINUTES') }
             environment {
                 REPO_ROOT                = "${WORKSPACE}"
@@ -225,8 +241,11 @@ pipeline {
             }
             post {
                 always {
-                    // 에이전트 workspace 에서 결과 파일 삭제
+                    // 에이전트 workspace 에서 결과 파일 삭제 + 빌드 종료 시 자기 workspace 정리.
+                    // 2026-06-16: deleteDir() — 끝난 뒤(프로세스 없음) 깨끗이 비워 다음 빌드가 쌓인
+                    //   상태로 시작하지 않게. "매번 수동 workspace 삭제"를 자동화.
                     sh 'rm -f "${WORKSPACE}/gather_output.json"'
+                    deleteDir()
                 }
             }
         }
@@ -235,7 +254,15 @@ pipeline {
         // production-audit (2026-04-29): catchError 제거 — Stage 3는 hard FAIL 게이트 (rule 80 R1).
         // schema-invalid JSON이 portal로 POST되어 호출자 시스템 파싱이 깨지는 사고 차단.
         stage('Validate Schema') {
-            agent { label "${params.loc}" }
+            agent {
+                node {
+                    label "${params.loc}"
+                    // 2026-06-16: 빌드별 고유 workspace. 동시 빌드(6개 동시 트리거)가 같은 디렉터리를
+                    //   checkout/clean 하며 충돌(Failed to clean workspace / AccessDenied)하던 것 차단.
+                    //   Jenkins 기본 @N 격리에만 의존하지 않고 BUILD_NUMBER 로 명시 분리.
+                    customWorkspace "gatherRedfish-${env.BUILD_NUMBER}"
+                }
+            }
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
                 // Round 17 #23: venv 활성화 추가 — 메인 Jenkinsfile Stage 3 와 동일하게 PyYAML 이
@@ -247,6 +274,12 @@ pipeline {
                     . /opt/ansible-env/bin/activate
                     python3 tests/validate_field_dictionary.py
                 '''
+            }
+            post {
+                always {
+                    // 2026-06-16: 이 스테이지도 agent 에서 별도 checkout → 동일하게 빌드 종료 시 정리.
+                    deleteDir()
+                }
             }
         }
 
@@ -345,8 +378,10 @@ pipeline {
             }
             post {
                 always {
-                    // 마스터 workspace 에서 결과 파일 삭제
+                    // 마스터 workspace 에서 결과 파일 삭제 + 정리.
+                    // 2026-06-16: deleteDir() — 마스터(built-in) workspace 도 빌드마다 비워 누적 방지.
                     sh 'rm -f "${WORKSPACE}/gather_output.json"'
+                    deleteDir()
                 }
             }
         }
