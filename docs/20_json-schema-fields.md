@@ -479,59 +479,63 @@ Redfish 채널은 둘이 같은 게 정상이다 (BMC 를 통해 수집). OS / E
 
 ---
 
-## 8. hostname 해석 (strict null — 2026-06-16 정책, cycle 2026-05-07 ip fallback 폐지)
+## 8. hostname 해석 (System → BMC NetworkProtocol → null, 2026-06-16 정책)
 
-`envelope.hostname` 은 다음 우선순위로 결정된다 (정본: `common/tasks/normalize/build_output.yml:31-33`):
+`envelope.hostname` 은 다음 우선순위로 결정된다 (정본: `common/tasks/normalize/build_output.yml`):
 
 ```text
-hostname = system.hostname  OR  system.fqdn  OR  null
+hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
 ```
 
-> **2026-06-16 정책 변경 (사용자 지시)**: 이전(cycle 2026-05-07)에는 hostname 미해석 시
-> `ip` 로 fallback 했으나, "없는 건 없는 것" 원칙으로 **IP fallback 을 폐지**했다. 장비가
-> hostname 을 제공하지 않으면 `hostname = null`. 주소는 별도 `ip` 필드로 항상 노출되므로
-> hostname 에 IP 를 중복 채우지 않는다.
+출처는 `diagnosis.details.hostname_source` (`system` | `bmc` | `none`) 로 표시한다.
+
+> **정책 변천**:
+> - cycle 2026-05-07: hostname 미해석 시 `ip` fallback.
+> - 2026-06-16 (사용자 지시): **IP fallback 폐지** ("없는 건 없는 것"). 단 IP 와 달리 장비에
+>   고정된 실명인 **BMC 관리 호스트명**(`Manager.NetworkProtocol.HostName/FQDN` — iLO/XCC/RMC
+>   이름)은 System.HostName 부재 시 fallback 허용. BMC 공장기본명(`ILOSGHD3KHHRP` 등)이 섞일 수
+>   있어 `hostname_source` 로 출처를 명시 — 호출자가 "OS 호스트명 vs BMC 대체값"을 구분.
 
 ### 우선순위
 
-| 순위 | 후보 | 출처 (3 채널 별) |
-|---:|---|---|
-| 1 | `data.system.hostname` | OS Linux: `ansible_hostname` / Windows: `inventory_hostname` / Redfish: `System.HostName` / ESXi: `vSphere.summary.config.name` |
-| 2 | `data.system.fqdn` | OS Linux: `ansible_fqdn` (raw fallback: `hostname -f`) / Windows: 같음 / Redfish: `System.HostName` (정규화 후) / ESXi: 같음 |
-| 3 | (없음) | 둘 다 비면 `null` — **IP fallback 안 함** |
+| 순위 | 후보 | source | 출처 (채널/벤더) |
+|---:|---|---|---|
+| 1 | `data.system.hostname` | system | OS hostname / Redfish System.HostName / ESXi config.name |
+| 2 | `data.system.fqdn` | system | OS fqdn(`hostname -f`) / Redfish System.HostName(정규화) |
+| 3 | `data.bmc.network_hostname` | bmc | Manager.NetworkProtocol.HostName/FQDN (**redfish 전용**) |
+| 4 | (없음) | none | 전부 비면 `null` — **IP fallback 안 함** |
 
-### 4 시나리오 별 동작
+### 시나리오 (실측 2026-06-16)
 
-| 시나리오 | system.hostname | system.fqdn | 결과 envelope.hostname |
-|---|---|---|---|
-| A 정상 (FQDN 있음) | `null` | `"server01.lab.local"` | `"server01.lab.local"` (fqdn) |
-| B 정상 (호스트명만) | `"server01"` | `null` | `"server01"` (hostname 우선) |
-| C 장비 HostName 미응답 (DMTF spec 권장 동작) | `null` | `null` | **`null`** (IP fallback 안 함) |
-| D Linux raw fallback (RHEL 8.10 py3.6) | `null` | `"server01.lab.local"` (raw `hostname -f`) | `"server01.lab.local"` |
+| 장비 | System.HostName | BMC NetworkProtocol | hostname | source |
+|---|---|---|---|---|
+| Dell R740 | `DELL01` | `iDRAC-J0KV603` | `DELL01` | system |
+| HPE DL380 | `""` | `ILOSGHD3KHHRP` | `ILOSGHD3KHHRP` | bmc |
+| Lenovo SR650 | (필드없음) | `XCC-7DGD-J902E57T` | `XCC-7DGD-J902E57T` | bmc |
+| CSUS node01 | `null` | `RMC7CA62A413692` | `RMC7CA62A413692` | bmc |
+| CSUS node03 | `m10mesdb11` | `M10MESDB11-RMC` | `m10mesdb11` | system |
+| Cisco C220 | `C220-FCH2116V1V0` | `null` | `C220-FCH2116V1V0` | system |
+| (System없음+BMC null) | `null` | `null` | **`null`** | none |
 
-실측 (2026-06-16): HPE DL380(System.HostName=`""`) / HPE CSUS3200(`null`) / Lenovo SR650
-(HostName 필드 부재) → 모두 시나리오 C → `hostname = null`. Dell R740(System.HostName=
-`"DELL01"`) → 시나리오 B → `"DELL01"`.
+### 벤더별 BMC fallback 동작 (중요 — 만능 아님)
+
+`Manager.NetworkProtocol.HostName` 은 DMTF 표준 optional 속성이라 벤더/세대별 populate 여부가 다르다:
+- **populate (bmc fallback 동작)**: Dell iDRAC9 / HPE iLO7·RMC / Lenovo XCC3 — 실측.
+- **null (bmc fallback 도 null)**: Cisco CIMC — 실측(reference crawl). System.HostName 으로만 채워짐.
+- **lab 부재(미확인)**: Supermicro / Huawei / Inspur / Fujitsu / Quanta + 구세대(iDRAC8 / iLO4~6 /
+  XCC2 등) — DMTF 표준상 가능하나 실측 미확인. 매트릭스:
+  `tests/evidence/2026-06-16-hostname-source-matrix.md` (lab 도입 후 검증 — NEXT_ACTIONS).
+
+구현은 **graceful**: 각 순위가 비면 다음으로, 전부 비면 null → 어느 벤더/세대든 안전.
 
 ### 호출자 주의
 
-- `hostname` 은 nullable 이다. null 이면 그 장비는 hostname 을 보고하지 않은 것 — 식별에는
-  `ip` (항상 non-null) 를 쓴다.
-- `hostname` 이 `ip` 와 같은 값이면 옛 ip-fallback 잔재(정책 위반)다 — 회귀로 차단.
-- **회귀 차단**: `tests/regression/test_cross_channel_consistency.py::test_hostname_not_ip_fallback`
-  — 모든 baseline 의 `hostname != ip` 보장 (null 은 허용).
-
-### 왜 null 이 정상인가 (DMTF spec 근거)
-
-- **Redfish**: BMC 가 `System.HostName` 을 응답하지 않는 환경 (DHCP 미사용 / hostname 미설정 /
-  OS 미설치 파티션) 다수. DMTF spec 도 HostName 을 optional + nullable 로 정의. 이때 IP 를
-  hostname 에 채우면 호출자가 "이 장비 hostname 은 IP 다" 로 오인 — 사실은 "없음".
-- **ESXi / Linux / Windows**: hostname/fqdn 둘 다 추출 불가 시(컨테이너 / minimal 이미지 등)
-  동일하게 `null`.
-
-### 알려진 baseline drift
-
-- `cisco_baseline.json` 은 `hostname == ip` (`10.100.15.2`, IP fallback) — `data.system.fqdn` 은 `C220-FCH2116V1V0` 로 non-null 이지만 hostname 해석이 IP 로 폴백된 상태. 후속 작업: lab Cisco UCS 실측 후 hostname/fqdn 해석 재검증 + baseline 갱신 (`docs/ai/NEXT_ACTIONS.md` 추적).
+- `hostname` 은 nullable. `hostname_source == 'bmc'` 면 그 값은 **서버 OS 호스트명이 아니라
+  관리 컨트롤러(BMC) 이름** — 식별엔 쓰되 OS hostname 으로 단정 금지.
+- `hostname == ip` 는 금지(옛 ip-fallback 잔재). 회귀:
+  `test_cross_channel_consistency.py::test_hostname_not_ip_fallback` +
+  `test_hostname_fallback_chain.py` (체인 정본 + IP 미참조) +
+  `test_real_capture_replay.py::test_bmc_network_hostname_collected`.
 
 ---
 

@@ -93,6 +93,21 @@ class TestRealCaptureReplay:
                 f"{case_dir.name}: data.{section} 누락/비어있음"
             )
 
+    def test_bmc_network_hostname_collected(self, replay_case):
+        """2026-06-16: Manager.NetworkProtocol.HostName/FQDN 수집 (hostname fallback 소스).
+
+        실측 4대 BMC 는 모두 NetworkProtocol.HostName populate (iDRAC-J0KV603 / ILOSGHD3KHHRP /
+        RMC7CA62A413692 / XCC-7DGD-J902E57T). vendor-agnostic 수집 회귀. (Cisco CIMC 처럼
+        null 인 vendor 는 graceful — 본 fixture 4대엔 없음.)
+        """
+        result, _golden, case_dir = replay_case
+        bmc = result["data"].get("bmc") or {}
+        nh = bmc.get("network_hostname")
+        assert isinstance(nh, str) and nh.strip(), (
+            f"{case_dir.name}: bmc.network_hostname 미수집 ({nh!r}) — NetworkProtocol 수집 회귀"
+        )
+        assert nh != "10.0.0.1", f"{case_dir.name}: network_hostname 이 IP — 오수집"
+
     def test_hostname_not_ip(self, replay_case):
         """2026-06-16 정책: data.system.hostname 이 ip 와 같으면 안 됨 (null 허용).
 

@@ -33,6 +33,7 @@
       "manufacturer": null,
       "model": "Joo Janta 200",
       "name": "BMC",
+      "network_hostname": null,
       "oem": {},
       "part_number": null,
       "power_state": "On",

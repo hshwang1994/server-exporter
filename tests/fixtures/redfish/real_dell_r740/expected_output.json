@@ -32,6 +32,7 @@
       "manufacturer": null,
       "model": "14G Monolithic",
       "name": "iDRAC",
+      "network_hostname": "iDRAC-J0KV603",
       "oem": {
         "idrac_ipmi_version": "2.0",
         "idrac_last_inventory_time": "2026-06-11T11:10:44+00:00",

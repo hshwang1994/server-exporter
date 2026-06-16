@@ -32,6 +32,7 @@
       "manufacturer": null,
       "model": "Lenovo Xclarity Controller 3",
       "name": "XCC",
+      "network_hostname": "XCC-7DGD-J902E57T",
       "oem": {
         "release_name": "bhs_gp_w2w3"
       },

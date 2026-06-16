@@ -1768,6 +1768,10 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         'ip':               None,
         'mac_address':      None,
         'dns_name':         None,
+        # 2026-06-16: BMC 관리 호스트명 (Manager.NetworkProtocol.HostName/FQDN). System.HostName
+        # 부재 시 hostname fallback 소스. DMTF ManagerNetworkProtocol 표준이라 vendor-agnostic.
+        # 단 vendor/세대별로 populate 여부 다름 (Cisco CIMC 등은 null) → graceful (None 유지).
+        'network_hostname': None,
         'datetime':         _safe(data, 'DateTime'),
         'datetime_offset':  _safe(data, 'DateTimeLocalOffset'),
         'oem': {},
@@ -1833,6 +1837,18 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         'static_name_servers': bmc_static_name_servers,
         'ipv4_gateways':       bmc_gateways,
     }
+
+    # 2026-06-16: Manager.NetworkProtocol.HostName/FQDN — BMC 관리 호스트명 수집.
+    # System.HostName 부재 시 hostname fallback 소스 (build_output 우선순위 chain).
+    # DMTF ManagerNetworkProtocol 표준(HostName/FQDN optional) — vendor-agnostic.
+    # 실측: Dell iDRAC9 / HPE iLO7·RMC / Lenovo XCC3 = populate. Cisco CIMC = null → graceful.
+    np_link = _safe(data, 'NetworkProtocol', '@odata.id')
+    if np_link:
+        npst, npdata, _nperr = _get(bmc_ip, _p(np_link), username, password, timeout, verify_ssl)
+        if not _nperr and npst == 200 and isinstance(npdata, dict):
+            # FQDN 우선(도메인 포함 더 완전), 없으면 HostName. 빈 문자열 → None 정규화.
+            result['network_hostname'] = (_strip_or_none(_safe(npdata, 'FQDN'))
+                                          or _strip_or_none(_safe(npdata, 'HostName')))
 
     # 벤더별 BMC OEM 확장 (Redfish API spec)
     if vendor == 'hpe':                                                       # nosec rule12-r1

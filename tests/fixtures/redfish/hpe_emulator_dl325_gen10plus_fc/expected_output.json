@@ -36,6 +36,7 @@
       "manufacturer": null,
       "model": "iLO 5",
       "name": "iLO",
+      "network_hostname": null,
       "oem": {
         "ilo_version": "iLO 5 v2.46"
       },

@@ -2773,6 +2773,97 @@
     },
     null
   ],
+  "get::Managers/1/NetworkProtocol": [
+    200,
+    {
+      "@odata.etag": "\"9AA27618\"",
+      "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol",
+      "@odata.type": "#ManagerNetworkProtocol.v1_6_0.ManagerNetworkProtocol",
+      "DHCP": {
+        "ProtocolEnabled": true
+      },
+      "DHCPv6": {
+        "ProtocolEnabled": true
+      },
+      "Description": "The resource is used to represent the network service settings for the manager for a Redfish implementation.",
+      "FQDN": "XCC-7DGD-J902E57T",
+      "HTTPS": {
+        "Certificates": {
+          "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates"
+        },
+        "Port": 443,
+        "ProtocolEnabled": true
+      },
+      "HostName": "XCC-7DGD-J902E57T",
+      "IPMI": {
+        "Port": 0,
+        "ProtocolEnabled": false
+      },
+      "Id": "NetworkProtocol",
+      "KVMIP": {
+        "Port": 443,
+        "ProtocolEnabled": true
+      },
+      "NTP": {
+        "NTPServers": [
+          "",
+          "",
+          "",
+          ""
+        ],
+        "ProtocolEnabled": false
+      },
+      "Name": "Manager Network Protocol",
+      "Oem": {
+        "Lenovo": {
+          "@odata.type": "#LenovoManagerNetworkProtocol.v1_0_0.LenovoManagerNetworkProtocolProperties",
+          "DNS": {
+            "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/DNS"
+          },
+          "LDAPClient": {
+            "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/LDAPClient"
+          },
+          "OpenPorts": [
+            "1900",
+            "22",
+            "443",
+            "546"
+          ],
+          "SMTPClient": {
+            "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SMTPClient"
+          },
+          "SNMP": {
+            "@odata.id": "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SNMP"
+          }
+        }
+      },
+      "SNMP": {
+        "EnableSNMPv3": false,
+        "EngineId": {
+          "ArchitectureId": "58 43 43 2d 37 44 47 44 2d 4a 39 30 32 45 35 37 54",
+          "PrivateEnterpriseId": "80 00 1f 88 04"
+        },
+        "Port": 161
+      },
+      "SSDP": {
+        "NotifyIPv6Scope": "Organization",
+        "NotifyMulticastIntervalSeconds": 60,
+        "NotifyTTL": 2,
+        "Port": 1900,
+        "ProtocolEnabled": true
+      },
+      "SSH": {
+        "Port": 22,
+        "ProtocolEnabled": true
+      },
+      "Status": {
+        "Health": "OK",
+        "HealthRollup": "OK",
+        "State": "Enabled"
+      }
+    },
+    null
+  ],
   "get::Systems": [
     200,
     {

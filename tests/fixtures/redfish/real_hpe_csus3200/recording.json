@@ -5955,6 +5955,72 @@
     },
     null
   ],
+  "get::Managers/RMC/NetworkProtocol": [
+    200,
+    {
+      "@odata.etag": "\"fb13d57471ad5a21f1935034b3555e4d\"",
+      "@odata.id": "/redfish/v1/Managers/RMC/NetworkProtocol",
+      "@odata.type": "#ManagerNetworkProtocol.v1_11_0.ManagerNetworkProtocol",
+      "FQDN": null,
+      "HTTP": {
+        "@Redfish.WriteableProperties": [
+          "ProtocolEnabled"
+        ],
+        "Port": 80,
+        "ProtocolEnabled": true
+      },
+      "HTTPS": {
+        "@Redfish.WriteableProperties": [
+          "ProtocolEnabled"
+        ],
+        "Certificates": {
+          "@odata.id": "/redfish/v1/Managers/RMC/NetworkProtocol/HTTPS/Certificates"
+        },
+        "Port": 443,
+        "ProtocolEnabled": true
+      },
+      "HostName": "RMC7CA62A413692",
+      "IPMI": {
+        "@Redfish.WriteableProperties": [
+          "ProtocolEnabled"
+        ],
+        "Port": 623,
+        "ProtocolEnabled": false
+      },
+      "Id": "NetworkProtocol",
+      "NTP": {
+        "@Redfish.WriteableProperties": [
+          "NTPServers",
+          "ProtocolEnabled"
+        ],
+        "NTPServers": [
+          null
+        ],
+        "NetworkSuppliedServers": [],
+        "Port": 123,
+        "ProtocolEnabled": true
+      },
+      "Name": "RMC Network Protocol",
+      "SSH": {
+        "@Redfish.WriteableProperties": [
+          "ProtocolEnabled"
+        ],
+        "Port": 22,
+        "ProtocolEnabled": true
+      },
+      "Status": {
+        "State": "Enabled"
+      },
+      "mDNS": {
+        "@Redfish.WriteableProperties": [
+          "ProtocolEnabled"
+        ],
+        "Port": 5353,
+        "ProtocolEnabled": true
+      }
+    },
+    null
+  ],
   "get::Systems": [
     200,
     {

@@ -32,6 +32,7 @@
       "manufacturer": "HPE",
       "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
       "name": "RMC",
+      "network_hostname": "RMC7CA62A413692",
       "oem": {
         "ilo_version": null
       },
@@ -1752,6 +1753,7 @@
           "manufacturer": "HPE",
           "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
           "name": "RMC",
+          "network_hostname": "RMC7CA62A413692",
           "oem": {
             "ilo_version": null
           },

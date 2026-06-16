@@ -92,17 +92,19 @@ fields:
       Target device IP. OS=service IP, ESXi=management IP, Redfish=BMC IP.
 
   hostname:
-    type: "string"
+    type: "string|null"
     priority: must
     channel: [redfish, os, esxi]
     help_ko: >-
-      해석된 hostname. 장비가 hostname을 제공하지 않으면 null (2026-06-16 정책: IP fallback 안 함
-      — "없는 건 없는 것"). Redfish는 System.HostName 빈값/부재(HPE/Lenovo/CSUS 등)면 null.
-      주소가 필요하면 별도 ip 필드 참조.
+      해석된 hostname (2026-06-16 정책). 우선순위: System.HostName → system.fqdn →
+      BMC NetworkProtocol.HostName/FQDN → null. IP fallback 안 함. 출처는
+      diagnosis.details.hostname_source(system|bmc|none). source=bmc 면 OS 호스트명이 아니라
+      BMC(iLO/XCC/RMC) 관리명. Cisco CIMC 등 NetworkProtocol.HostName=null 이면 system 또는 null.
     help_en: >-
-      Resolved hostname. null when the device reports no hostname (2026-06-16 policy: no IP
-      fallback). Redfish yields null when System.HostName is empty/absent. Use the separate
-      ip field for the address.
+      Resolved hostname (2026-06-16 policy). Priority: System.HostName -> system.fqdn ->
+      BMC NetworkProtocol.HostName/FQDN -> null. No IP fallback. Origin in
+      diagnosis.details.hostname_source (system|bmc|none); source=bmc means the BMC management
+      name, not the OS hostname. Use the separate ip field for the address.
 
   vendor:
     type: "string|null"
@@ -1760,6 +1762,19 @@ fields:
     help_en: >-
       Per-chassis hardware/power results. Each entry: id / uri / kind / chassis_type /
       manufacturer / model / serial_number / part_number / power.
+
+  "diagnosis.details.hostname_source":
+    type: "string"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      hostname 출처 (2026-06-16). system = System.HostName/fqdn(OS 호스트명) / bmc =
+      BMC NetworkProtocol.HostName(관리 컨트롤러 이름, OS 호스트명 아님) / none = 둘 다 없어
+      hostname=null. 호출자가 hostname 을 OS 호스트명으로 단정하면 안 되는지 판단용.
+    help_en: >-
+      Origin of hostname (2026-06-16). system = System.HostName/fqdn (OS hostname) / bmc =
+      BMC NetworkProtocol.HostName (management-controller name, not the OS hostname) / none =
+      neither present, hostname=null. Lets callers know whether hostname is a true OS name.
 
   "diagnosis.details.multi_node_layout":
     type: "string|null"

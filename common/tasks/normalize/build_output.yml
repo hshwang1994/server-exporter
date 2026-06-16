@@ -22,23 +22,40 @@
 # 출력 변수:
 #   _output : dict — 최종 표준 JSON (OUTPUT 태스크로 방출)
 
-# hostname 정책 (사용자 확정 2026-06-16): System.HostName(또는 OS hostname) 이 비면 hostname=null.
-#   IP fallback 금지 — "없는 건 없는 것". 이전 `or _out_ip` 는 hostname 미설정 장비(HPE/Lenovo/
-#   CSUS 등 System.HostName 빈값/부재)에서 hostname 을 IP 로 오염시켰다(실측 4대 검증). `or none`
-#   은 fqdn 이 '' 빈문자열인 경우도 null 로 정규화. ip 는 별도 'ip' 필드로 이미 노출됨(중복 불요).
+# hostname 정책 (2026-06-16, 사용자 확정):
+#   우선순위: System.HostName(OS) → system.fqdn → BMC NetworkProtocol.HostName/FQDN → null.
+#   - IP fallback 금지 ("없는 건 없는 것"). 단 BMC 관리명(iLO/XCC/RMC)은 IP 와 달리 장비 고정
+#     실명이라 System.HostName 부재 시 fallback 허용. BMC 공장기본명(ILOSGHD3KHHRP 등)이 섞일 수
+#     있어 diagnosis.details.hostname_source(system|bmc|none) 로 출처 표시.
+#   - Cisco CIMC 등 NetworkProtocol.HostName=null vendor 는 bmc fallback 도 null → graceful.
+#   - bmc.network_hostname 은 redfish 전용. OS/ESXi 는 _merged_data.bmc 부재 → system 우선/none.
+- name: "normalize | build_output | resolve hostname + source"
+  ansible.builtin.set_fact:
+    _out_hostname: >-
+      {{ ((_merged_data.system | default({})).hostname | default(none))
+         or ((_merged_data.system | default({})).fqdn | default(none))
+         or ((_merged_data.bmc | default({})).network_hostname | default(none))
+         or none }}
+    _out_hostname_source: >-
+      {%- set _sysh = ((_merged_data.system | default({})).hostname | default(none))
+                      or ((_merged_data.system | default({})).fqdn | default(none)) -%}
+      {%- set _bmch = (_merged_data.bmc | default({})).network_hostname | default(none) -%}
+      {{ 'system' if _sysh else ('bmc' if _bmch else 'none') }}
+
 - name: "normalize | build_output"
   ansible.builtin.set_fact:
     _output: "{{ {
       'target_type':       _out_target_type,
       'collection_method': _out_collection_method,
       'ip':                _out_ip,
-      'hostname':          ((_merged_data.system | default({})).hostname | default(none))
-                           or ((_merged_data.system | default({})).fqdn | default(none))
-                           or none,
+      'hostname':          _out_hostname,
       'vendor':            (_out_vendor | default(none, true)),
       'status':            _out_status,
       'sections':          _norm_sections,
-      'diagnosis':         _diagnosis         | default(none),
+      'diagnosis':         ((_diagnosis if (_diagnosis is mapping) else {})
+                            | combine({'details':
+                                (((_diagnosis.details if (_diagnosis is mapping and _diagnosis.details is mapping) else {}))
+                                 | combine({'hostname_source': _out_hostname_source}))})),
       'meta':              _meta              | default(none),
       'correlation':       _correlation       | default(none),
       'errors':            _norm_errors,
