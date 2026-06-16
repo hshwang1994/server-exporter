@@ -39,7 +39,11 @@
     # 2026-05-11 fix: regex_search 미매치 시 None → strict conditional fail. collect_oem.yml 와 동일 정정.
     # Round 15 fix: _rf_detected_model(미정의 변수) → _rf_probe_facts.model (detect_vendor.yml set).
     - "(((_rf_probe_facts | default({})).model | default('')) | regex_search('(?i)Superdome|Flex|Compute Scale-up|CSUS')) is not none"
-    - (_hpe_superdome_partition | default({})) or (_hpe_superdome_flex_node | default({})) or (_hpe_superdome_global | default({}))
+    # 2026-06-16 fix: dict 의 'or' 체인은 boolean 이 아니라 dict 를 반환 → Ansible strict conditional FAIL
+    #   ("Conditional result ... was derived from value of type 'dict'"). CSUS/Superdome 는 앞 regex 가 True 라
+    #   이 줄이 평가되어 `{} or {} or {}` = {} (dict) → 전 채널 cascade 로 9 섹션 전부 failed 사고.
+    #   각 operand 를 `| length > 0` 로 boolean 강제 (None 안전: default({}, true)). 의도("OEM 영역 존재 시") 보존.
+    - "((_hpe_superdome_partition | default({}, true)) | length > 0) or ((_hpe_superdome_flex_node | default({}, true)) | length > 0) or ((_hpe_superdome_global | default({}, true)) | length > 0)"
 
 - name: "redfish | hpe | Superdome/CSUS fragment 누적 병합 (조건 매칭 시만)"
   ansible.builtin.include_tasks: "{{ playbook_dir }}/common/tasks/normalize/merge_fragment.yml"
@@ -47,4 +51,8 @@
     # 2026-05-11 fix: regex_search 미매치 시 None → strict conditional fail. collect_oem.yml 와 동일 정정.
     # Round 15 fix: _rf_detected_model(미정의 변수) → _rf_probe_facts.model (detect_vendor.yml set).
     - "(((_rf_probe_facts | default({})).model | default('')) | regex_search('(?i)Superdome|Flex|Compute Scale-up|CSUS')) is not none"
-    - (_hpe_superdome_partition | default({})) or (_hpe_superdome_flex_node | default({})) or (_hpe_superdome_global | default({}))
+    # 2026-06-16 fix: dict 의 'or' 체인은 boolean 이 아니라 dict 를 반환 → Ansible strict conditional FAIL
+    #   ("Conditional result ... was derived from value of type 'dict'"). CSUS/Superdome 는 앞 regex 가 True 라
+    #   이 줄이 평가되어 `{} or {} or {}` = {} (dict) → 전 채널 cascade 로 9 섹션 전부 failed 사고.
+    #   각 operand 를 `| length > 0` 로 boolean 강제 (None 안전: default({}, true)). 의도("OEM 영역 존재 시") 보존.
+    - "((_hpe_superdome_partition | default({}, true)) | length > 0) or ((_hpe_superdome_flex_node | default({}, true)) | length > 0) or ((_hpe_superdome_global | default({}, true)) | length > 0)"

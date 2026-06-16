@@ -6,7 +6,49 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-06-15
+> 최종 갱신: 2026-06-16
+
+## 2026-06-16 — CSUS 실 게더링 cascade: HPE OEM dict conditional(Bug A) + site.yml graceful degradation 복원(Bug B, redfish)
+
+### 사용자 의심 / 요청
+
+- 실 CSUS 3200 게더링 결과 11 섹션 중 users·thermal `not_supported`, 나머지 9개 전부 `failed`. errors[] 에
+  `[task: redfish | hpe | Superdome/CSUS fragment 생성 (모델 매칭 + OEM 영역 존재 시)] ... Conditional result (False) was derived from value of type 'dict' ... collect_oem.yml:101`.
+  "이거 해결해주고 — 표준 섹션은 success 떨어져야 할 텐데 success 만드는 로직이 잘못된 게 아닌가?"
+
+### 분석 (다중 에이전트 적대적 검증 — confirmed)
+
+- **트리거(Bug A)**: `redfish-gather/tasks/vendors/hpe/normalize_oem.yml:42,50` 의 `when` 둘째 조건
+  `(_hpe_superdome_partition | default({})) or (_hpe_superdome_flex_node | default({})) or (_hpe_superdome_global | default({}))`
+  — dict 의 `or` 체인은 boolean 이 아니라 dict({}) 를 반환. 일반 iLO 는 앞 regex(`Superdome|Flex|Compute Scale-up|CSUS`)가
+  False 라 short-circuit 으로 잠복. CSUS/Superdome 만 regex True → `{} or {} or {}` = {} → Ansible strict conditional FAIL.
+  (실 CSUS OEM 은 `#HpeH3Npar`/`#HpeH3Chassis` 라 구식 PartitionInfo/FlexNodeInfo 추출 결과 = {} — 정확히 빈 dict 경로에서 터짐.)
+  전 18 vendor OEM 파일 중 이 2줄만 non-boolean-safe (워크플로 전수 스캔).
+- **cascade(Bug B)**: `site.yml` 전체가 단일 block/rescue. OEM 단계가 `normalize standard`(표준 섹션을 _merged_data/_all_sec_collected 에 누적) **뒤**에 위치
+  → OEM fatal 시 block abort → rescue 가 `build_failed_output.yml` 호출. rescue 는 `_all_sec_collected` 를 **참조조차 안 하고**
+  `_fail_sec_supported`(capabilities) 전부 `failed` 마킹. `_merged_data` 는 보존 → "data 있는데 sections 전부 failed" 모순.
+  9 failed(=CSUS adapter sections_supported 9개) + 2 not_supported(users/thermal) 와 정확히 일치. 같은 단일 block/rescue 구조가 os/esxi 에도 존재(확인됨).
+- **선언 ↔ 구현 괴리**: CSUS adapter 가 `graceful_degradation.on_section_fail: continue` + `optional_sections` 선언하지만 이 설정은
+  어느 실행 코드에서도 소비 안 됨(status_rules.yml reserved). build_status.yml 판정 로직 자체는 정상 — 실패 경로에서 도달 못 할 뿐.
+
+### 결정 (Bug A 전면 / Bug B redfish 한정 — 사용자 승인 2026-06-16)
+
+- **Bug A**: normalize_oem.yml:42,50 → 각 operand `| length > 0` boolean 강제(None-safe `default({}, true)`). 의도("OEM 영역 존재 시") 보존, CSUS/Superdome only, envelope shape 불변 Additive.
+- **Bug B (redfish 한정)**: site.yml 의 collect OEM + normalize OEM 을 local block/rescue 로 감싸 비치명화. 실패 시 errors[] 에 `section: oem` 경고만 남기고(merge_fragment),
+  표준 섹션 보존 → build_sections/build_status 정상 경로. adapter `graceful_degradation` 의도 구현. `normalize standard`(핵심)·`account_service` 는 main block 유지.
+- **범위 결정**: os/esxi 동일 cascade 는 사용자 선택으로 보류 → NEXT_ACTIONS 등재.
+
+### 영향
+
+- OEM/선택 단계 실패 시 overall status: 기존 `failed`(전 섹션 failed) → `success`(시나리오 B: 표준 섹션 success + errors[] OEM 경고) 또는 `partial`(C).
+  envelope 13 필드 / 4-시나리오 매트릭스 자체는 불변 — OEM 실패가 D 가 아니라 B/C 로 올바르게 분류되도록 제어흐름 교정. 호출자 계약(rule 96 R1-B): status 관측값 변화 → docs/20 시나리오 절 + site.yml inline 주석에 반영 (build_status.yml 판정 로직 자체는 불변).
+- 성공 경로(기존 baseline cisco/dell/hpe/lenovo)는 OEM 정상 → rescue 미진입 → 동작 동일, 회귀 0.
+
+### 회귀
+
+- [확인함] 정적: YAML 파싱 OK, Jinja2 시뮬레이션 — OLD 전 케이스 dict(strict FAIL) / NEW 항상 bool. site.yml block/rescue 구조 검증.
+- [미확인] 라이브: ansible 미설치(Windows) → 실 CSUS 게더링 재현/회귀 미실행. lab 재배포 + 실 4노드(또는 오프라인 replay) 검증은 NEXT_ACTIONS.
+- [주의] 배포 동기화: 에러가 가리킨 `collect_oem.yml:101` 은 HEAD 에 없음(HEAD collect_oem.yml 은 clean) — 배포 lab 코드가 HEAD 와 다른 버전(다른 세션 미커밋 / 내부 GitLab stale) 가능. 본 수정 반영 위해 lab 배포 코드 동기화 확인 필요.
 
 ## 2026-06-15 — HPE Compute Scale-up Server 3200 (CSUS 3200) 실 미러 검수: 라이브러리 fix 16건 (5-round 수렴)
 

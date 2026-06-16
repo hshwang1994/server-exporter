@@ -165,6 +165,11 @@ cycle 2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data
 | **C. 부분 성공** | `partial` | 비어있지 않음 | 일부 `failed`, 나머지 `success`/`not_supported` | 인증은 됐는데 일부 섹션 응답이 안 옴 (예: firmware endpoint 만 timeout) |
 | **D. 실패** | `failed` | 비어있지 않음 | 거의 다 `failed` | precheck 4단계 어디서 막힘 (ping/port/protocol/auth) |
 
+> **보조(OEM) 단계 실패는 D 가 아니다 (2026-06-16, redfish).** vendor OEM 수집/정규화는 표준 섹션 수집 **뒤**에 도는 보조 단계다.
+> 여기서 예외가 나도 표준 섹션은 그대로 `success` 로 유지되고, OEM 실패는 `errors[]` 에 `section: "oem"` 경고로만 남는다
+> (→ 시나리오 B, 또는 일부 표준 섹션이 실패했으면 C). 즉 OEM 한 단계 실패가 전체를 `failed` 로 만들지 않는다.
+> (`redfish-gather/site.yml` 의 OEM local block/rescue — 과거엔 단일 top-level rescue 로 cascade 되어 표준 섹션까지 전부 `failed` 였음.)
+
 특히 **B 시나리오**가 헷갈린다. 호출자 코드에서 이렇게 짜면 안 된다.
 
 ```python

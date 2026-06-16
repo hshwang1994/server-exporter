@@ -126,15 +126,40 @@
 
         # ── vendor adapter (OEM 확장, adapter 기반) ──────────────────────
         # adapter에 oem_tasks가 정의된 경우만 실행 (하드코딩 벤더 목록 제거)
-        - name: "redfish | vendor adapter | collect OEM"
-          when: ((_selected_adapter | default({})).collect | default({})).oem_tasks | default('') != ''
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/{{ _selected_adapter.collect.oem_tasks }}"
+        #
+        # 2026-06-16 (Bug B, redfish graceful degradation 복원): OEM 수집/정규화는 보조 단계다.
+        #   여기서 예외가 나도 이미 수집·정규화된 표준 섹션(_merged_data / _all_sec_collected)을
+        #   보존하고, 비치명 경고만 errors[]에 남긴 뒤 build_sections/build_status 정상 경로로 진행한다.
+        #   (기존: 단일 top-level rescue 로 cascade → 표준 섹션까지 전부 failed [CSUS 사고]. 본 local
+        #    rescue 가 adapter capabilities.graceful_degradation.on_section_fail=continue 의도를 구현.)
+        #   결과: OEM 실패 시 overall status 는 표준 섹션 기준 success/partial + errors[] 경고
+        #   (build_status.yml 시나리오 B). OEM 한 단계 실패가 전체를 failed 로 덮던 cascade 폐지.
+        - name: "redfish | vendor adapter | OEM (graceful — 실패해도 표준 섹션 보존)"
+          block:
+            - name: "redfish | vendor adapter | collect OEM"
+              when: ((_selected_adapter | default({})).collect | default({})).oem_tasks | default('') != ''
+              ansible.builtin.include_tasks:
+                file: "{{ lookup('env','REPO_ROOT') }}/{{ _selected_adapter.collect.oem_tasks }}"
 
-        - name: "redfish | vendor adapter | normalize OEM"
-          when: ((_selected_adapter | default({})).normalize | default({})).oem_tasks | default('') != ''
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/{{ _selected_adapter.normalize.oem_tasks }}"
+            - name: "redfish | vendor adapter | normalize OEM"
+              when: ((_selected_adapter | default({})).normalize | default({})).oem_tasks | default('') != ''
+              ansible.builtin.include_tasks:
+                file: "{{ lookup('env','REPO_ROOT') }}/{{ _selected_adapter.normalize.oem_tasks }}"
+          rescue:
+            - name: "redfish | vendor adapter | OEM 비치명 실패 → 경고만 (표준 섹션 유지)"
+              ansible.builtin.set_fact:
+                _data_fragment: {}
+                _sections_supported_fragment: []
+                _sections_collected_fragment: []
+                _sections_failed_fragment: []
+                _sections_unsupported_fragment: []
+                _errors_fragment:
+                  - section: "oem"
+                    message: "[OEM 비치명] {{ ansible_failed_task.name | default('vendor OEM') }}: {{ ansible_failed_result.msg | default('OEM 수집/정규화 예외 — 표준 섹션은 정상 수집됨') }}"
+                    detail: null
+            - name: "redfish | vendor adapter | OEM 경고 누적 (merge_fragment)"
+              ansible.builtin.include_tasks:
+                file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
         # ─────────────────────────────────────────────────────────────────
 
         - name: "redfish | build_sections"
