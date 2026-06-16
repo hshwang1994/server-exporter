@@ -72,7 +72,7 @@
       'target_type':       _out_target_type       | default('unknown'),
       'collection_method': _out_collection_method | default('unknown'),
       'ip':                _out_ip                | default(inventory_hostname),
-      'hostname':          ((_merged_data | default({})).system | default({})).hostname | default(none) or _out_ip | default(inventory_hostname),
+      'hostname':          ((_merged_data | default({})).system | default({})).hostname | default(none) or ((_merged_data | default({})).system | default({})).fqdn | default(none),
       'vendor':            _out_vendor | default(none),
       'status':            'failed',
       'sections':          _norm_sections,

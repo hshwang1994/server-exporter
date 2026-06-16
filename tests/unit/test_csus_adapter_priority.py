@@ -124,6 +124,19 @@ def test_csus_model_selects_csus_firmware_present():
     assert _out_vendor(winner, "hpe") == "hpCsus"
 
 
+def test_csus_real_rmc_firmware_175_selects_csus():
+    """실측(2026-06-15 4노드 캡처): 실 RMC 펌웨어 1.75.108 도 CSUS disqualify 안 됨.
+
+    cycle 2026-06-15: firmware_patterns 에 실 1.x 추가(Additive) — 구 3.x/4.x 추정만 있었으면
+    firmware 가 채워질 경우 1.75.x 가 mismatch → -9999 오실격 위험이었음(현재는 facts.firmware 빈값이라
+    휴면이나, 방어적으로 실 펌웨어를 패턴에 반영). 실 ServiceRoot 는 firmware 빈값이므로 이중 안전.
+    """
+    facts = {"vendor": "HPE", "model": "Compute Scale-up Server 3200", "firmware": "1.75.108"}
+    winner = _select(facts)
+    assert winner == "redfish_hpe_csus_3200", f"CSUS 선택 기대, 실제 {winner}"
+    assert _out_vendor(winner, "hpe") == "hpCsus"
+
+
 def test_superdome_model_selects_superdome_firmware_empty():
     facts = {"vendor": "HPE", "model": "Superdome Flex 280", "firmware": ""}
     winner = _select(facts)

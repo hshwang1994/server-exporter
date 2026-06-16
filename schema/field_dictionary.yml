@@ -96,11 +96,13 @@ fields:
     priority: must
     channel: [redfish, os, esxi]
     help_ko: >-
-      해석된 hostname. 해석 실패 시 ip 값으로 fallback.
-      Redfish는 BMC가 hostname을 제공하지 않으면 ip와 동일할 수 있음.
+      해석된 hostname. 장비가 hostname을 제공하지 않으면 null (2026-06-16 정책: IP fallback 안 함
+      — "없는 건 없는 것"). Redfish는 System.HostName 빈값/부재(HPE/Lenovo/CSUS 등)면 null.
+      주소가 필요하면 별도 ip 필드 참조.
     help_en: >-
-      Resolved hostname. Falls back to ip when resolution fails.
-      Redfish hostname may equal ip when BMC reports no hostname.
+      Resolved hostname. null when the device reports no hostname (2026-06-16 policy: no IP
+      fallback). Redfish yields null when System.HostName is empty/absent. Use the separate
+      ip field for the address.
 
   vendor:
     type: "string|null"

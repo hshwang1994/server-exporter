@@ -5,7 +5,7 @@
   "collection_method": "redfish_api",
   "vendor": "cisco",
   "ip": "10.100.15.2",
-  "hostname": "10.100.15.2",
+  "hostname": "C220-FCH2116V1V0",
   "sections": {
     "system": "not_supported",
     "hardware": "success",

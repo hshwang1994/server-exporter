@@ -16,7 +16,25 @@ Test groups:
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+import yaml
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _canonical_sections() -> set[str]:
+    """schema/sections.yml 의 canonical 섹션 집합 (정본). 현재 11종."""
+    with open(_PROJECT_ROOT / "schema" / "sections.yml", encoding="utf-8") as f:
+        doc = yaml.safe_load(f)
+    return set((doc.get("sections") or {}).keys())
+
+
+# 알려진 stale 섹션 — 코드는 수집하나 baseline 미반영 (lab 재생성 대기).
+#   thermal: cycle 2026-06-14 (Track 4) 추가. baseline 9종이 그 이전이라 누락.
+#            lab 재생성 후 본 set 에서 제거 → xfail 이 xpass 로 뒤집혀 알림 (NEXT_ACTIONS 2026-06-16).
+KNOWN_STALE_SECTIONS: frozenset[str] = frozenset({"thermal"})
 
 # rule 13 R5 — 13-field envelope
 ENVELOPE_FIELDS: tuple[str, ...] = (
@@ -110,22 +128,27 @@ def test_collection_method_matches_target_type(baseline_envelope: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# T3 — hostname fallback chain non-null (concern 7 invariant)
+# T3 — hostname 은 절대 ip 와 같지 않다 (2026-06-16 strict-null 정책)
 # ---------------------------------------------------------------------------
-# cycle 2026-05-07-post: cisco_baseline.json hostname=null drift 보정 완료.
-# build_output.yml fallback chain (system.hostname OR system.fqdn OR ip) 의도대로
-# hostname 을 ip ("10.100.15.2") 로 보정 + evidence 기록. xfail 제거.
-# 실 lab Cisco UCS 검증은 별도 cycle (rule 13 R4).
+# 2026-06-16 (사용자 지시): hostname IP fallback 폐지 — "없는 건 없는 것".
+# 장비가 hostname 미제공 시 hostname=null (이전 cycle 2026-05-07 의 ip fallback 폐지).
+# 따라서 hostname 은 null 일 수 있고, ip 와 같은 값이면 옛 fallback 잔재(정책 위반)다.
+# 정본: common/tasks/normalize/build_output.yml:31-33 / docs/20 §8.
 
 
-def test_hostname_never_null(baseline_envelope: dict) -> None:
-    """build_output.yml fallback chain (system.hostname OR system.fqdn OR ip)
-    guarantees non-null hostname. Concern 7: if hostname == ip that is the
-    intentional ip_fallback path, not a bug."""
+def test_hostname_not_ip_fallback(baseline_envelope: dict) -> None:
+    """hostname 은 ip 와 같으면 안 된다 (옛 ip-fallback 잔재 차단). null 은 허용 —
+    장비가 hostname 미제공 시 정상적으로 null (2026-06-16 strict-null 정책)."""
     label = baseline_envelope["__label"]
     hostname = baseline_envelope.get("hostname")
-    assert hostname is not None and hostname != "", (
-        f"[{label}] hostname is empty — fallback chain broken"
+    ip = baseline_envelope.get("ip")
+    assert hostname != ip, (
+        f"[{label}] hostname=={ip!r} (ip 와 동일) — IP fallback 잔재. "
+        f"장비가 hostname 미제공이면 null 이어야 함 (2026-06-16 정책)"
+    )
+    # 빈 문자열도 금지 (null 로 정규화돼야 함 — '' 는 미정규화 잔재)
+    assert hostname != "", (
+        f"[{label}] hostname='' — '' 는 null 로 정규화돼야 함 (build_output `or none`)"
     )
 
 
@@ -164,6 +187,8 @@ def test_status_enum(baseline_envelope: dict) -> None:
 # ---------------------------------------------------------------------------
 # T6 — sections values enum
 # ---------------------------------------------------------------------------
+# (T11 — sections 완전성: schema/sections.yml 11종 전부 present — 아래 정의)
+# ---------------------------------------------------------------------------
 def test_sections_values_enum(baseline_envelope: dict) -> None:
     label = baseline_envelope["__label"]
     sections = baseline_envelope.get("sections", {})
@@ -173,6 +198,35 @@ def test_sections_values_enum(baseline_envelope: dict) -> None:
     for section_name, section_status in sections.items():
         assert section_status in VALID_SECTION_STATUS, (
             f"[{label}] sections.{section_name} invalid: {section_status!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# T11 — sections 완전성 (schema/sections.yml 11종 전부 present)
+# ---------------------------------------------------------------------------
+# 2026-06-16: thermal(2026-06-14 추가) 이 baseline 9종에 전부 누락된 stale 발견.
+# 코드는 thermal 을 정상 수집(real_* fixture 가 검증)하나 baseline 이 뒤처짐.
+# 본 테스트는 (1) 향후 새 섹션 누락 = hard fail (코드 회귀 조기 경보),
+#           (2) 알려진 stale(thermal) = xfail (가시화, suite green 유지, lab 재생성 추적).
+
+
+def test_sections_has_all_canonical(baseline_envelope: dict) -> None:
+    """모든 baseline 의 sections 는 schema/sections.yml 의 canonical 섹션을 전부 포함해야
+    한다. 누락이 KNOWN_STALE 밖이면 hard fail(코드/baseline 회귀). KNOWN_STALE(thermal)
+    누락은 xfail — lab baseline 재생성 대기 (NEXT_ACTIONS 2026-06-16)."""
+    label = baseline_envelope["__label"]
+    canonical = _canonical_sections()
+    present = set((baseline_envelope.get("sections") or {}).keys())
+    missing = canonical - present
+    hard_missing = missing - KNOWN_STALE_SECTIONS
+    assert not hard_missing, (
+        f"[{label}] sections 누락(stale 아님 — 코드/baseline 회귀 의심): {sorted(hard_missing)} "
+        f"(canonical={sorted(canonical)})"
+    )
+    if missing:
+        pytest.xfail(
+            f"[{label}] 알려진 stale 섹션 누락: {sorted(missing)} — "
+            f"lab baseline 재생성 대기 (NEXT_ACTIONS 2026-06-16 thermal staleness)"
         )
 
 

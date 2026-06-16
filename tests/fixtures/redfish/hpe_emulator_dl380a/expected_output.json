@@ -33,12 +33,15 @@
       "last_reset_time": null,
       "mac_address": "7c:a6:2a:40:c3:e4",
       "manager_type": "BMC",
+      "manufacturer": null,
       "model": "iLO 6",
       "name": "iLO",
       "oem": {
         "ilo_version": "iLO 6 v1.66"
       },
+      "part_number": null,
       "power_state": null,
+      "serial": null,
       "state": "Enabled",
       "timezone": null,
       "uuid": "96d4a4e3-b3d6-5f2a-b427-9adff13d8c8d"
@@ -679,6 +682,7 @@
           "manufacturer": "DELTA",
           "model": "P44712-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 2200,
           "serial": "BRN7452325848",
           "state": "Enabled"
@@ -689,6 +693,7 @@
           "manufacturer": "DELTA",
           "model": "P44712-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 2200,
           "serial": "SSF1371248638",
           "state": "Enabled"
@@ -699,6 +704,7 @@
           "manufacturer": "DELTA",
           "model": "P44712-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 2200,
           "serial": "BKR5813846853",
           "state": "Enabled"
@@ -709,6 +715,7 @@
           "manufacturer": "DELTA",
           "model": "P44712-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 2200,
           "serial": "ZEG0535861261",
           "state": "Enabled"

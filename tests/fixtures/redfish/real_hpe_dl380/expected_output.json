@@ -1,0 +1,1481 @@
+{
+  "collected": [
+    "bmc",
+    "firmware",
+    "memory",
+    "network",
+    "network_adapters",
+    "power",
+    "processors",
+    "storage",
+    "system",
+    "thermal"
+  ],
+  "data": {
+    "bmc": {
+      "_network_meta": {
+        "ipv4_gateways": [
+          "10.173.12.1"
+        ],
+        "name_servers": [],
+        "static_name_servers": []
+      },
+      "datetime": "2026-06-12T00:47:18Z",
+      "datetime_offset": "+00:00",
+      "dns_name": "ILOSGHD3KHHRP",
+      "firmware_version": "1.20.00 Feb 12 2026",
+      "health": "OK",
+      "ip": "10.173.12.149",
+      "last_reset_time": null,
+      "mac_address": "7c:a6:2a:87:6f:e0",
+      "manager_type": "BMC",
+      "manufacturer": null,
+      "model": "iLO 7",
+      "name": "iLO",
+      "oem": {
+        "ilo_version": "1.20.00 Feb 12 2026"
+      },
+      "part_number": null,
+      "power_state": null,
+      "serial": null,
+      "state": "Enabled",
+      "timezone": null,
+      "uuid": "5001b72b-c76e-5898-8d1e-d9c65ebc69a5"
+    },
+    "firmware": [
+      {
+        "component": "2f317b9d-c9e3-4d76-bff6-b9d0d085a952:fb2b2f91-c952-4288-8389-21dee30e0307",
+        "id": "1",
+        "name": "iLO 7",
+        "pending": false,
+        "updateable": true,
+        "version": "1.20.00 Feb 12 2026"
+      },
+      {
+        "component": "aa148d2e-6e09-453e-bc6f-63baa5f5ccc4:00000000-0000-0000-0000-000000000266:00000000-0000-0000-0000-000001553638:00000000-0000-0000-0002-000000010266",
+        "id": "2",
+        "name": "System ROM",
+        "pending": false,
+        "updateable": true,
+        "version": "U68 v1.46 (08/08/2025)"
+      },
+      {
+        "component": "b8f46d06-85db-465c-94fb-d106e61378ed:00000000-0000-0000-0000-000000000266:00000000-0000-0000-0000-000001553638:00000000-0000-0000-0002-000000010266",
+        "id": "3",
+        "name": "Intelligent Platform Abstraction Data",
+        "pending": false,
+        "updateable": true,
+        "version": "2.8.0 Build 20"
+      },
+      {
+        "component": "b1ad439a-9dd1-41c1-a496-2da9313f1f07:00000000-0000-0000-0002-000000010266",
+        "id": "4",
+        "name": "System Programmable Logic Device",
+        "pending": false,
+        "updateable": true,
+        "version": "0x12"
+      },
+      {
+        "component": "6bb86077-0275-4614-aae1-86618e8b1c27:0202b505-0002-0000-0000-0cf38db966ea",
+        "id": "5",
+        "name": "Power Supply Firmware",
+        "pending": false,
+        "updateable": true,
+        "version": "2.00"
+      },
+      {
+        "component": "6bb86077-0275-4614-aae1-86618e8b1c27:0202b505-0002-0000-0000-0cf38db966ea",
+        "id": "6",
+        "name": "Power Supply Firmware",
+        "pending": false,
+        "updateable": true,
+        "version": "2.00"
+      },
+      {
+        "component": "ac963eeb-ed78-4f36-c18c-29d85f34a0ac",
+        "id": "7",
+        "name": "Intelligent Provisioning",
+        "pending": false,
+        "updateable": true,
+        "version": "5.03.5"
+      },
+      {
+        "component": "00000000-0000-0000-0000-000000000000",
+        "id": "8",
+        "name": "HPE Smart Storage Energy Pack 1 Firmware",
+        "pending": false,
+        "updateable": false,
+        "version": "0.70"
+      },
+      {
+        "component": "00000000-0000-0000-0000-000000000000",
+        "id": "9",
+        "name": "PCIe Riser 1 Programmable Logic Device",
+        "pending": false,
+        "updateable": true,
+        "version": "10"
+      },
+      {
+        "component": "00000000-0000-0000-0000-000000000000",
+        "id": "10",
+        "name": "PCIe Riser 2 Programmable Logic Device",
+        "pending": false,
+        "updateable": true,
+        "version": "10"
+      },
+      {
+        "component": "fcbe6477-5c25-4488-b197-695bb8123b11:1118c237-4924-4fb4-a6d0-1402ac4e2c06",
+        "id": "11",
+        "name": "TPM Firmware",
+        "pending": false,
+        "updateable": false,
+        "version": "9.256"
+      },
+      {
+        "component": "a6b1a447-382a-5a4f-1000-10e2159003c8",
+        "id": "12",
+        "name": "HPE MR408i-o Gen11",
+        "pending": false,
+        "updateable": true,
+        "version": "52.32.3-6118"
+      },
+      {
+        "component": "a6b1a447-382a-5a4f-14e4-16d714e41597",
+        "id": "13",
+        "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+        "pending": false,
+        "updateable": true,
+        "version": "233.1.135.7"
+      },
+      {
+        "component": "a6b1a447-382a-5a4f-1077-2281159002d4",
+        "id": "14",
+        "name": "HPE SN1610Q 32Gb 2p FC HBA",
+        "pending": false,
+        "updateable": true,
+        "version": "2.08.05"
+      },
+      {
+        "component": "a6b1a447-382a-5a4f-14e4-16d714e41597",
+        "id": "15",
+        "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+        "pending": false,
+        "updateable": true,
+        "version": "227.1.111.0"
+      },
+      {
+        "component": "a6b1a447-382a-5a4f-14e4-16d714e41597",
+        "id": "16",
+        "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+        "pending": false,
+        "updateable": true,
+        "version": "227.1.111.0"
+      },
+      {
+        "component": "a6b1a447-382a-5a4f-1077-2281159002d4",
+        "id": "17",
+        "name": "HPE SN1610Q 32Gb 2p FC HBA",
+        "pending": false,
+        "updateable": true,
+        "version": "2.08.05"
+      },
+      {
+        "component": "a6b1a447-382a-5a4f-102b-053a159003ba",
+        "id": "18",
+        "name": "Embedded Video Controller",
+        "pending": false,
+        "updateable": false,
+        "version": "2.7"
+      },
+      {
+        "component": "f6de0320-2e0f-489a-b238-6dd8ae7c3811:4d2340a5-304f-3130-3630-30505a575348",
+        "id": "19",
+        "name": "1.60TB 22.5G SAS SSD",
+        "pending": false,
+        "updateable": true,
+        "version": "HPD3"
+      },
+      {
+        "component": "f6de0320-2e0f-489a-b238-6dd8ae7c3811:4d2340a5-304f-3130-3630-30505a575348",
+        "id": "20",
+        "name": "1.60TB 22.5G SAS SSD",
+        "pending": false,
+        "updateable": true,
+        "version": "HPD3"
+      },
+      {
+        "component": "4149ebb7-d64b-4654-b679-4280f349ea50:9675b54e-1c96-44c3-a7a1-901503000000",
+        "id": "21",
+        "name": "8 SFF 24G x1NVMe/SAS UBM3 BC BP",
+        "pending": false,
+        "updateable": true,
+        "version": "1.24"
+      },
+      {
+        "component": "4149ebb7-d64b-4654-b679-4280f349ea50:9675b54e-1c96-44c3-a7a1-901503000000",
+        "id": "22",
+        "name": "8 SFF 24G x1NVMe/SAS UBM3 BC BP",
+        "pending": false,
+        "updateable": true,
+        "version": "1.24"
+      }
+    ],
+    "memory": {
+      "slots": [
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc1dimm1",
+          "locator": "PROC 1 DIMM 1",
+          "manufacturer": "Samsung",
+          "name": "proc1dimm1",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C6A419",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc1dimm3",
+          "locator": "PROC 1 DIMM 3",
+          "manufacturer": "Samsung",
+          "name": "proc1dimm3",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C6A3E8",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc1dimm5",
+          "locator": "PROC 1 DIMM 5",
+          "manufacturer": "Samsung",
+          "name": "proc1dimm5",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C69F1A",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc1dimm7",
+          "locator": "PROC 1 DIMM 7",
+          "manufacturer": "Samsung",
+          "name": "proc1dimm7",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C698AF",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc1dimm10",
+          "locator": "PROC 1 DIMM 10",
+          "manufacturer": "Samsung",
+          "name": "proc1dimm10",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C6A3E6",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc1dimm12",
+          "locator": "PROC 1 DIMM 12",
+          "manufacturer": "Samsung",
+          "name": "proc1dimm12",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C6A3E7",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc1dimm14",
+          "locator": "PROC 1 DIMM 14",
+          "manufacturer": "Samsung",
+          "name": "proc1dimm14",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C699C2",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc1dimm16",
+          "locator": "PROC 1 DIMM 16",
+          "manufacturer": "Samsung",
+          "name": "proc1dimm16",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C6966F",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc2dimm1",
+          "locator": "PROC 2 DIMM 1",
+          "manufacturer": "SK hynix",
+          "name": "proc2dimm1",
+          "part_number": "HMCG94AHBRA480N",
+          "rank_count": 2,
+          "serial": "2D693CF8",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc2dimm3",
+          "locator": "PROC 2 DIMM 3",
+          "manufacturer": "SK hynix",
+          "name": "proc2dimm3",
+          "part_number": "HMCG94AHBRA480N",
+          "rank_count": 2,
+          "serial": "2D693AB0",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc2dimm5",
+          "locator": "PROC 2 DIMM 5",
+          "manufacturer": "Samsung",
+          "name": "proc2dimm5",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C69FCA",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc2dimm7",
+          "locator": "PROC 2 DIMM 7",
+          "manufacturer": "Samsung",
+          "name": "proc2dimm7",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C69834",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc2dimm10",
+          "locator": "PROC 2 DIMM 10",
+          "manufacturer": "Samsung",
+          "name": "proc2dimm10",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C699D9",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc2dimm12",
+          "locator": "PROC 2 DIMM 12",
+          "manufacturer": "Samsung",
+          "name": "proc2dimm12",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C698C2",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc2dimm14",
+          "locator": "PROC 2 DIMM 14",
+          "manufacturer": "Samsung",
+          "name": "proc2dimm14",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C6A162",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "MultiBitECC",
+          "health": "OK",
+          "id": "proc2dimm16",
+          "locator": "PROC 2 DIMM 16",
+          "manufacturer": "Samsung",
+          "name": "proc2dimm16",
+          "part_number": "M321R8GA0EB2-CCPKC",
+          "rank_count": 2,
+          "serial": "42C6989B",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        }
+      ],
+      "total_mib": 1048576
+    },
+    "network": [
+      {
+        "health": "OK",
+        "id": "13",
+        "ipv4": [],
+        "link_status": "up",
+        "mac": "14:23:f3:b0:7a:40",
+        "mtu": null,
+        "name": "13",
+        "speed_mbps": null
+      },
+      {
+        "health": null,
+        "id": "14",
+        "ipv4": [],
+        "link_status": "unknown",
+        "mac": "14:23:f3:b0:7a:41",
+        "mtu": null,
+        "name": "14",
+        "speed_mbps": null
+      },
+      {
+        "health": null,
+        "id": "141",
+        "ipv4": [],
+        "link_status": "unknown",
+        "mac": "14:23:f3:b0:62:f0",
+        "mtu": null,
+        "name": "141",
+        "speed_mbps": null
+      },
+      {
+        "health": null,
+        "id": "142",
+        "ipv4": [],
+        "link_status": "unknown",
+        "mac": "14:23:f3:b0:62:f1",
+        "mtu": null,
+        "name": "142",
+        "speed_mbps": null
+      },
+      {
+        "health": "OK",
+        "id": "205",
+        "ipv4": [],
+        "link_status": "up",
+        "mac": "14:23:f3:b0:61:c0",
+        "mtu": null,
+        "name": "205",
+        "speed_mbps": null
+      },
+      {
+        "health": null,
+        "id": "206",
+        "ipv4": [],
+        "link_status": "unknown",
+        "mac": "14:23:f3:b0:61:c1",
+        "mtu": null,
+        "name": "206",
+        "speed_mbps": null
+      }
+    ],
+    "network_adapters": {
+      "adapters": [
+        {
+          "firmware_version": "2.08.05",
+          "id": "DE041000",
+          "link_status": "down",
+          "mac": null,
+          "manufacturer": "Hewlett Packard Enterprise",
+          "model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "name": "HPE SN1610Q 32Gb 2p FC HBA",
+          "part_number": "R2E09A",
+          "port_count": 2,
+          "serial_number": "MY553300GW",
+          "speed_mbps": null
+        },
+        {
+          "firmware_version": "2.08.05",
+          "id": "DE044000",
+          "link_status": "down",
+          "mac": null,
+          "manufacturer": "Hewlett Packard Enterprise",
+          "model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "name": "HPE SN1610Q 32Gb 2p FC HBA",
+          "part_number": "R2E09A",
+          "port_count": 2,
+          "serial_number": "MY553300NK",
+          "speed_mbps": null
+        },
+        {
+          "firmware_version": "233.1.135.7",
+          "id": "DE040000",
+          "link_status": "up",
+          "mac": "14:23:f3:b0:7a:40",
+          "manufacturer": "Broadcom",
+          "model": "BCM57414",
+          "name": "Network Adapter",
+          "part_number": "P26264-001",
+          "port_count": 2,
+          "serial_number": "MYT5332LR9",
+          "speed_mbps": 25000
+        },
+        {
+          "firmware_version": "227.1.111.0",
+          "id": "DE042000",
+          "link_status": "down",
+          "mac": "14:23:f3:b0:62:f0",
+          "manufacturer": "Broadcom",
+          "model": "BCM57414",
+          "name": "Network Adapter",
+          "part_number": "P26264-001",
+          "port_count": 2,
+          "serial_number": "MYT5332L0S",
+          "speed_mbps": null
+        },
+        {
+          "firmware_version": "227.1.111.0",
+          "id": "DE043000",
+          "link_status": "up",
+          "mac": "14:23:f3:b0:61:c0",
+          "manufacturer": "Broadcom",
+          "model": "BCM57414",
+          "name": "Network Adapter",
+          "part_number": "P26264-001",
+          "port_count": 2,
+          "serial_number": "MYT5332KZX",
+          "speed_mbps": 25000
+        }
+      ],
+      "fc_hbas": [
+        {
+          "adapter_id": "DE041000",
+          "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "driver": null,
+          "firmware": "2.08.05",
+          "link_speed_gbps": null,
+          "link_status": "down",
+          "model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "port_id": "1",
+          "port_type": "FibreChannel",
+          "source": "redfish",
+          "vendor": "Hewlett Packard Enterprise",
+          "wwnn": "51:40:2e:c0:20:8f:39:31",
+          "wwpn": "51:40:2e:c0:20:8f:39:30"
+        },
+        {
+          "adapter_id": "DE041000",
+          "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "driver": null,
+          "firmware": "2.08.05",
+          "link_speed_gbps": null,
+          "link_status": "down",
+          "model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "port_id": "2",
+          "port_type": "FibreChannel",
+          "source": "redfish",
+          "vendor": "Hewlett Packard Enterprise",
+          "wwnn": "51:40:2e:c0:20:8f:39:33",
+          "wwpn": "51:40:2e:c0:20:8f:39:32"
+        },
+        {
+          "adapter_id": "DE044000",
+          "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "driver": null,
+          "firmware": "2.08.05",
+          "link_speed_gbps": null,
+          "link_status": "down",
+          "model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "port_id": "1",
+          "port_type": "FibreChannel",
+          "source": "redfish",
+          "vendor": "Hewlett Packard Enterprise",
+          "wwnn": "51:40:2e:c0:20:8f:3b:dd",
+          "wwpn": "51:40:2e:c0:20:8f:3b:dc"
+        },
+        {
+          "adapter_id": "DE044000",
+          "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "driver": null,
+          "firmware": "2.08.05",
+          "link_speed_gbps": null,
+          "link_status": "down",
+          "model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "port_id": "2",
+          "port_type": "FibreChannel",
+          "source": "redfish",
+          "vendor": "Hewlett Packard Enterprise",
+          "wwnn": "51:40:2e:c0:20:8f:3b:df",
+          "wwpn": "51:40:2e:c0:20:8f:3b:de"
+        }
+      ],
+      "infiniband": [],
+      "ports": [
+        {
+          "adapter_id": "DE041000",
+          "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "associated_address": "51:40:2e:c0:20:8f:39:30",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Disabled",
+          "link_status": "down",
+          "name": "Port",
+          "physical_port_number": null,
+          "port_id": "1",
+          "port_type": "FibreChannel"
+        },
+        {
+          "adapter_id": "DE041000",
+          "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "associated_address": "51:40:2e:c0:20:8f:39:32",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Disabled",
+          "link_status": "down",
+          "name": "Port",
+          "physical_port_number": null,
+          "port_id": "2",
+          "port_type": "FibreChannel"
+        },
+        {
+          "adapter_id": "DE044000",
+          "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "associated_address": "51:40:2e:c0:20:8f:3b:dc",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Disabled",
+          "link_status": "down",
+          "name": "Port",
+          "physical_port_number": null,
+          "port_id": "1",
+          "port_type": "FibreChannel"
+        },
+        {
+          "adapter_id": "DE044000",
+          "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
+          "associated_address": "51:40:2e:c0:20:8f:3b:de",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Disabled",
+          "link_status": "down",
+          "name": "Port",
+          "physical_port_number": null,
+          "port_id": "2",
+          "port_type": "FibreChannel"
+        },
+        {
+          "adapter_id": "DE040000",
+          "adapter_model": "BCM57414",
+          "associated_address": "14:23:f3:b0:7a:40",
+          "current_link_speed_mbps": 25000,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "up",
+          "name": "Ethernet Port 1",
+          "physical_port_number": null,
+          "port_id": "1",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "DE040000",
+          "adapter_model": "BCM57414",
+          "associated_address": "14:23:f3:b0:7a:41",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "down",
+          "name": "Ethernet Port 2",
+          "physical_port_number": null,
+          "port_id": "2",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "DE042000",
+          "adapter_model": "BCM57414",
+          "associated_address": "14:23:f3:b0:62:f0",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "down",
+          "name": "Ethernet Port 1",
+          "physical_port_number": null,
+          "port_id": "1",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "DE042000",
+          "adapter_model": "BCM57414",
+          "associated_address": "14:23:f3:b0:62:f1",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "down",
+          "name": "Ethernet Port 2",
+          "physical_port_number": null,
+          "port_id": "2",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "DE043000",
+          "adapter_model": "BCM57414",
+          "associated_address": "14:23:f3:b0:61:c0",
+          "current_link_speed_mbps": 25000,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "up",
+          "name": "Ethernet Port 1",
+          "physical_port_number": null,
+          "port_id": "1",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "DE043000",
+          "adapter_model": "BCM57414",
+          "associated_address": "14:23:f3:b0:61:c1",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "down",
+          "name": "Ethernet Port 2",
+          "physical_port_number": null,
+          "port_id": "2",
+          "port_type": "Ethernet"
+        }
+      ]
+    },
+    "power": {
+      "power_control": {
+        "avg_consumed_watts": 417,
+        "interval_in_min": 20,
+        "max_consumed_watts": 427,
+        "min_consumed_watts": 417,
+        "power_capacity_watts": 3200,
+        "power_consumed_watts": 417
+      },
+      "power_supplies": [
+        {
+          "firmware_version": "2.00",
+          "health": "OK",
+          "manufacturer": "LTEON",
+          "model": "P38997-B21",
+          "name": "HpeServerPowerSupply",
+          "part_number": null,
+          "power_capacity_w": 1600,
+          "serial": "5XLNR0LLLI1329",
+          "state": "Enabled"
+        },
+        {
+          "firmware_version": "2.00",
+          "health": "OK",
+          "manufacturer": "LTEON",
+          "model": "P38997-B21",
+          "name": "HpeServerPowerSupply",
+          "part_number": null,
+          "power_capacity_w": 1600,
+          "serial": "5XLNR0LLLIZCLR",
+          "state": "Enabled"
+        }
+      ]
+    },
+    "processors": [
+      {
+        "architecture": "x86",
+        "health": "OK",
+        "id": "1",
+        "instruction_set": "x86-64",
+        "manufacturer": "Intel(R) Corporation",
+        "model": "Intel(R) Xeon(R) 6527P",
+        "name": "Processors",
+        "part_number": null,
+        "processor_type": "CPU",
+        "serial_number": null,
+        "socket": "Proc 1",
+        "speed_mhz": 4000,
+        "total_cores": 24,
+        "total_threads": 48
+      },
+      {
+        "architecture": "x86",
+        "health": "OK",
+        "id": "2",
+        "instruction_set": "x86-64",
+        "manufacturer": "Intel(R) Corporation",
+        "model": "Intel(R) Xeon(R) 6527P",
+        "name": "Processors",
+        "part_number": null,
+        "processor_type": "CPU",
+        "serial_number": null,
+        "socket": "Proc 2",
+        "speed_mhz": 4000,
+        "total_cores": 24,
+        "total_threads": 48
+      }
+    ],
+    "storage": {
+      "controllers": [
+        {
+          "controller_firmware": "52.32.3-6118",
+          "controller_health": "OK",
+          "controller_manufacturer": "HPE",
+          "controller_model": "HPE MR408i-o Gen11",
+          "controller_name": "HPE MR408i-o Gen11",
+          "drives": [
+            {
+              "capacity_bytes": 1600321314816,
+              "capacity_gb": 1600.32,
+              "failure_predicted": false,
+              "health": "OK",
+              "id": "0",
+              "manufacturer": "HPE",
+              "media_type": "SSD",
+              "model": "MO001600PZWSH",
+              "name": "1.60TB 22.5G SAS SSD",
+              "predicted_life_percent": 100,
+              "protocol": "SAS",
+              "serial": "S6GRNC0YA01310"
+            },
+            {
+              "capacity_bytes": 1600321314816,
+              "capacity_gb": 1600.32,
+              "failure_predicted": false,
+              "health": "OK",
+              "id": "1",
+              "manufacturer": "HPE",
+              "media_type": "SSD",
+              "model": "MO001600PZWSH",
+              "name": "1.60TB 22.5G SAS SSD",
+              "predicted_life_percent": 100,
+              "protocol": "SAS",
+              "serial": "S6GRNC0YA00941"
+            }
+          ],
+          "health": "OK",
+          "id": "DE00B000",
+          "name": "HPE MR408i-o Gen11"
+        }
+      ],
+      "volumes": [
+        {
+          "boot_volume": null,
+          "controller_id": "DE00B000",
+          "health": "OK",
+          "id": "238",
+          "member_drive_ids": [
+            "0",
+            "1"
+          ],
+          "name": "OS",
+          "raid_level": "RAID1",
+          "state": "Enabled",
+          "total_mb": 1525664
+        }
+      ]
+    },
+    "system": {
+      "asset_tag": null,
+      "bios_date": "2025-08-08",
+      "bios_version": "U68 v1.46 (08/08/2025)",
+      "boot_progress": "None",
+      "cpu_summary": {
+        "core_count": null,
+        "count": 2,
+        "health": "OK",
+        "logical_processor_count": null,
+        "model": "Intel(R) Xeon(R) 6527P"
+      },
+      "health": "OK",
+      "hostname": null,
+      "last_reset_time": null,
+      "led_state": "Off",
+      "manufacturer": "HPE",
+      "memory_summary": {
+        "health": "OK",
+        "total_gib": 1024
+      },
+      "model": "HPE ProLiant Compute DL380 Gen12",
+      "oem": {
+        "aggregate_server_health": "OK",
+        "fan_redundancy": "Redundant",
+        "post_state": "FinishedPost",
+        "psu_redundancy": "Redundant",
+        "server_signature": null,
+        "subsystem_health": {
+          "fans": "OK",
+          "memory": "OK",
+          "network": "OK",
+          "power": "OK",
+          "processors": "OK",
+          "storage": "OK",
+          "temperatures": "OK"
+        }
+      },
+      "part_number": null,
+      "power_state": "On",
+      "serial": "SGHD3KHHRP",
+      "sku": "P73282-B21",
+      "state": "Enabled",
+      "system_type": "Physical",
+      "tpm": {
+        "firmware_version": "9.256",
+        "interface_type": "TPM2_0",
+        "state": "Enabled"
+      },
+      "uuid": "32333750-3238-4753-4844-334B48485250"
+    },
+    "thermal": {
+      "fans": [
+        {
+          "health": "OK",
+          "name": "Fan 1",
+          "reading": 15,
+          "reading_units": "Percent",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan 2",
+          "reading": 15,
+          "reading_units": "Percent",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan 3",
+          "reading": 15,
+          "reading_units": "Percent",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan 4",
+          "reading": 15,
+          "reading_units": "Percent",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan 5",
+          "reading": 15,
+          "reading_units": "Percent",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan 6",
+          "reading": 15,
+          "reading_units": "Percent",
+          "state": "Enabled"
+        }
+      ],
+      "temperatures": [
+        {
+          "health": "OK",
+          "name": "01-Inlet Ambient",
+          "physical_context": "Intake",
+          "reading_celsius": 11,
+          "state": "Enabled",
+          "upper_critical": 42
+        },
+        {
+          "health": "OK",
+          "name": "02-CPU 1 PkgTmp",
+          "physical_context": "CPU",
+          "reading_celsius": 43,
+          "state": "Enabled",
+          "upper_critical": 107
+        },
+        {
+          "health": "OK",
+          "name": "03-CPU 2 PkgTmp",
+          "physical_context": "CPU",
+          "reading_celsius": 42,
+          "state": "Enabled",
+          "upper_critical": 107
+        },
+        {
+          "health": "OK",
+          "name": "04-P1 DIMM 1-8",
+          "physical_context": "Memory",
+          "reading_celsius": 23,
+          "state": "Enabled",
+          "upper_critical": 92
+        },
+        {
+          "health": "OK",
+          "name": "05-P1 DIMM 9-16",
+          "physical_context": "Memory",
+          "reading_celsius": 27,
+          "state": "Enabled",
+          "upper_critical": 92
+        },
+        {
+          "health": "OK",
+          "name": "06-P2 DIMM 1-8",
+          "physical_context": "Memory",
+          "reading_celsius": 23,
+          "state": "Enabled",
+          "upper_critical": 92
+        },
+        {
+          "health": "OK",
+          "name": "07-P2 DIMM 9-16",
+          "physical_context": "Memory",
+          "reading_celsius": 22,
+          "state": "Enabled",
+          "upper_critical": 92
+        },
+        {
+          "health": "OK",
+          "name": "08-VR P1",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 38,
+          "state": "Enabled",
+          "upper_critical": 110
+        },
+        {
+          "health": "OK",
+          "name": "09-VR P2",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 36,
+          "state": "Enabled",
+          "upper_critical": 110
+        },
+        {
+          "health": "OK",
+          "name": "10-HD Max",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 40,
+          "state": "Enabled",
+          "upper_critical": 72
+        },
+        {
+          "health": null,
+          "name": "12-Exp Bay Drive",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 0,
+          "state": "Absent",
+          "upper_critical": null
+        },
+        {
+          "health": null,
+          "name": "13-ExpBayBoot",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 0,
+          "state": "Absent",
+          "upper_critical": null
+        },
+        {
+          "health": "OK",
+          "name": "14-Stor Batt",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 14,
+          "state": "Enabled",
+          "upper_critical": 60
+        },
+        {
+          "health": null,
+          "name": "17-Exp Bay Rear",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 0,
+          "state": "Absent",
+          "upper_critical": null
+        },
+        {
+          "health": "OK",
+          "name": "18-BMC",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 46,
+          "state": "Enabled",
+          "upper_critical": 110
+        },
+        {
+          "health": "OK",
+          "name": "19-P/S 1 Inlet",
+          "physical_context": "PowerSupply",
+          "reading_celsius": 19,
+          "state": "Enabled",
+          "upper_critical": 0
+        },
+        {
+          "health": "OK",
+          "name": "20-P/S 1",
+          "physical_context": "PowerSupply",
+          "reading_celsius": 40,
+          "state": "Enabled",
+          "upper_critical": 0
+        },
+        {
+          "health": "OK",
+          "name": "21-P/S 2 Inlet",
+          "physical_context": "PowerSupply",
+          "reading_celsius": 22,
+          "state": "Enabled",
+          "upper_critical": 0
+        },
+        {
+          "health": "OK",
+          "name": "22-P/S 2",
+          "physical_context": "PowerSupply",
+          "reading_celsius": 40,
+          "state": "Enabled",
+          "upper_critical": 0
+        },
+        {
+          "health": "OK",
+          "name": "27-E-Fuse",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 90,
+          "state": "Enabled",
+          "upper_critical": 0
+        },
+        {
+          "health": null,
+          "name": "29-OCP Box2Bay9",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 0,
+          "state": "Absent",
+          "upper_critical": null
+        },
+        {
+          "health": null,
+          "name": "30-OCP Box2Bay11",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 0,
+          "state": "Absent",
+          "upper_critical": null
+        },
+        {
+          "health": null,
+          "name": "32-OCP B",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 0,
+          "state": "Absent",
+          "upper_critical": null
+        },
+        {
+          "health": null,
+          "name": "45-PCI 6",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 0,
+          "state": "Absent",
+          "upper_critical": null
+        },
+        {
+          "health": null,
+          "name": "47-PCI 7",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 0,
+          "state": "Absent",
+          "upper_critical": null
+        },
+        {
+          "health": null,
+          "name": "49-PCI 8",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 0,
+          "state": "Absent",
+          "upper_critical": null
+        },
+        {
+          "health": "OK",
+          "name": "69-Board Inlet",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 16,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "70-P/S 2 Zone",
+          "physical_context": "PowerSupply",
+          "reading_celsius": 28,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "71-OCP 1 Zone",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 30,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "72-OCP 2 Zone",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 26,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "73-Sys Exhaust 1",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 29,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "74-Sys Exhaust 2",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 21,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "90-TcMrgn CPU 1",
+          "physical_context": "CPU",
+          "reading_celsius": 40,
+          "state": "Enabled",
+          "upper_critical": 0
+        },
+        {
+          "health": "OK",
+          "name": "91-TcMrgn CPU 2",
+          "physical_context": "CPU",
+          "reading_celsius": 40,
+          "state": "Enabled",
+          "upper_critical": 0
+        },
+        {
+          "health": "OK",
+          "name": "92-ThMrgn CPU 1",
+          "physical_context": "CPU",
+          "reading_celsius": 40,
+          "state": "Enabled",
+          "upper_critical": 70
+        },
+        {
+          "health": "OK",
+          "name": "93-ThMrgn CPU 2",
+          "physical_context": "CPU",
+          "reading_celsius": 40,
+          "state": "Enabled",
+          "upper_critical": 70
+        },
+        {
+          "health": "OK",
+          "name": "35.1-PCI 1-Network controller",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 56,
+          "state": "Enabled",
+          "upper_critical": 100
+        },
+        {
+          "health": "OK",
+          "name": "35.2-PCI 1-Connector",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 34,
+          "state": "Enabled",
+          "upper_critical": 75
+        },
+        {
+          "health": "OK",
+          "name": "35.3-PCI 1-Connector",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 30,
+          "state": "Enabled",
+          "upper_critical": 75
+        },
+        {
+          "health": "OK",
+          "name": "37.1-PCI 2-Network controller",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 45,
+          "state": "Enabled",
+          "upper_critical": 102
+        },
+        {
+          "health": "OK",
+          "name": "37.2-PCI 2-SFP+ (SFF-8432)",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 41,
+          "state": "Enabled",
+          "upper_critical": 75
+        },
+        {
+          "health": "OK",
+          "name": "37.3-PCI 2-SFP+ (SFF-8432)",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 38,
+          "state": "Enabled",
+          "upper_critical": 75
+        },
+        {
+          "health": "OK",
+          "name": "39.1-PCI 3-Network controller",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 64,
+          "state": "Enabled",
+          "upper_critical": 100
+        },
+        {
+          "health": "OK",
+          "name": "39.2-PCI 3-Connector",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 39,
+          "state": "Enabled",
+          "upper_critical": 75
+        },
+        {
+          "health": "OK",
+          "name": "39.3-PCI 3-Connector",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 37,
+          "state": "Enabled",
+          "upper_critical": 75
+        },
+        {
+          "health": "OK",
+          "name": "41.1-PCI 4-Network controller",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 49,
+          "state": "Enabled",
+          "upper_critical": 100
+        },
+        {
+          "health": "OK",
+          "name": "41.2-PCI 4-Connector",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 27,
+          "state": "Enabled",
+          "upper_critical": 75
+        },
+        {
+          "health": "OK",
+          "name": "41.3-PCI 4-Connector",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 27,
+          "state": "Enabled",
+          "upper_critical": 75
+        },
+        {
+          "health": "OK",
+          "name": "43.1-PCI 5-Network controller",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 30,
+          "state": "Enabled",
+          "upper_critical": 102
+        },
+        {
+          "health": "OK",
+          "name": "43.2-PCI 5-SFP+ (SFF-8432)",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 27,
+          "state": "Enabled",
+          "upper_critical": 75
+        },
+        {
+          "health": "OK",
+          "name": "43.3-PCI 5-SFP+ (SFF-8432)",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 27,
+          "state": "Enabled",
+          "upper_critical": 75
+        },
+        {
+          "health": "OK",
+          "name": "31.1-OCP A-I/O controller",
+          "physical_context": "SystemBoard",
+          "reading_celsius": 51,
+          "state": "Enabled",
+          "upper_critical": 110
+        }
+      ]
+    }
+  },
+  "error_count": 0,
+  "failed_sections": [],
+  "multi_node": null,
+  "probe_facts": {
+    "firmware_hint": "1.20.00",
+    "manager_type": "iLO 7",
+    "model_hint": "HPE ProLiant Compute DL380 Gen12"
+  },
+  "status": "success",
+  "unsupported_sections": [],
+  "vendor": "hpe"
+}

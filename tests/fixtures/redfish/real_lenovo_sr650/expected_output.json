@@ -1,0 +1,1351 @@
+{
+  "collected": [
+    "bmc",
+    "firmware",
+    "memory",
+    "network",
+    "network_adapters",
+    "power",
+    "processors",
+    "storage",
+    "system",
+    "thermal"
+  ],
+  "data": {
+    "bmc": {
+      "_network_meta": {
+        "ipv4_gateways": [
+          "10.173.12.1"
+        ],
+        "name_servers": [],
+        "static_name_servers": []
+      },
+      "datetime": "2026-06-12T00:53:37+00:00",
+      "datetime_offset": "+00:00",
+      "dns_name": "XCC-7DGD-J902E57T",
+      "firmware_version": "IHX414J 1.22 20250402",
+      "health": "OK",
+      "ip": "10.173.12.150",
+      "last_reset_time": "2026-06-02T07:47:06+00:00",
+      "mac_address": "c4:ef:bb:1d:43:44",
+      "manager_type": "BMC",
+      "manufacturer": null,
+      "model": "Lenovo Xclarity Controller 3",
+      "name": "XCC",
+      "oem": {
+        "release_name": "bhs_gp_w2w3"
+      },
+      "part_number": null,
+      "power_state": "On",
+      "serial": null,
+      "state": "Enabled",
+      "timezone": null,
+      "uuid": "343AFAA2-321B-11F0-911B-C4EFBB1D4346"
+    },
+    "firmware": [
+      {
+        "component": "BMC-IHX4-10",
+        "id": "BMC-Primary",
+        "name": "Firmware:BMC",
+        "pending": false,
+        "updateable": true,
+        "version": "14J-1.22"
+      },
+      {
+        "component": "BMC-IHX4-10",
+        "id": "BMC-Primary-Pending",
+        "name": "Firmware:BMC",
+        "pending": true,
+        "updateable": true,
+        "version": null
+      },
+      {
+        "component": "BMC-IHX4-10",
+        "id": "BMC-Backup",
+        "name": "Firmware:BMC",
+        "pending": false,
+        "updateable": true,
+        "version": "14J-1.22"
+      },
+      {
+        "component": "FPGA-IHFG-10",
+        "id": "HPM-FPGA",
+        "name": "Firmware:HPM-FPGA",
+        "pending": false,
+        "updateable": true,
+        "version": "04N-4.26"
+      },
+      {
+        "component": "UEFI-IHE1-6",
+        "id": "UEFI",
+        "name": "Firmware:UEFI",
+        "pending": false,
+        "updateable": true,
+        "version": "10U-1.20"
+      },
+      {
+        "component": "UEFI-IHE1-6",
+        "id": "UEFI-Pending",
+        "name": "Firmware:UEFI",
+        "pending": true,
+        "updateable": true,
+        "version": null
+      },
+      {
+        "component": "LXPM-DFL1-4",
+        "id": "LXPM",
+        "name": "Firmware:LXPM",
+        "pending": false,
+        "updateable": true,
+        "version": "06V-5.01.00"
+      },
+      {
+        "component": "DRVWN-DFL3-2",
+        "id": "LXPMWindowsDriver",
+        "name": "Firmware:LXPM-WindowsDrivers",
+        "pending": false,
+        "updateable": true,
+        "version": "06K-5.01.00"
+      },
+      {
+        "component": "DRVLN-DFL2-2",
+        "id": "LXPMLinuxDriver",
+        "name": "Firmware:LXPM-LinuxDrivers",
+        "pending": false,
+        "updateable": true,
+        "version": "06M-5.01.00"
+      },
+      {
+        "component": "LXUM-EAL5-4",
+        "id": "LXUM",
+        "name": "Firmware:LXUM",
+        "pending": false,
+        "updateable": true,
+        "version": "06J-1.12"
+      },
+      {
+        "component": "FPGA-IHFS-10",
+        "id": "SCM-FPGA",
+        "name": "Firmware:SCM-FPGA",
+        "pending": false,
+        "updateable": true,
+        "version": "02N-2.44"
+      },
+      {
+        "component": "DISK-ER3-GD480-2-10",
+        "id": "boot_drive_bay_0",
+        "name": "Firmware:Drive-ER3-GD480",
+        "pending": false,
+        "updateable": false,
+        "version": "F2M5203"
+      },
+      {
+        "component": "DISK-ER3-GD480-2-10",
+        "id": "boot_drive_bay_1",
+        "name": "Firmware:Drive-ER3-GD480",
+        "pending": false,
+        "updateable": false,
+        "version": "F2M5203"
+      },
+      {
+        "component": "DISK-MZ7L31T9HELA-00A07-2-10",
+        "id": "drive_bay_0",
+        "name": "Firmware:Drive-MZ7L31T9HELA-00A07",
+        "pending": false,
+        "updateable": false,
+        "version": "JXTG204Q"
+      },
+      {
+        "component": "DISK-MZ7L31T9HELA-00A07-2-10",
+        "id": "drive_bay_1",
+        "name": "Firmware:Drive-MZ7L31T9HELA-00A07",
+        "pending": false,
+        "updateable": false,
+        "version": "JXTG204Q"
+      },
+      {
+        "component": "DEVICE-14E4-1657-17AA-4104-13",
+        "id": "PCIeDevice_slot13_0xc0000.Bundle",
+        "name": "Firmware:DEVICE-Broadcom 5719 1GbE RJ45 4-port OCP Ethernet Adapter",
+        "pending": false,
+        "updateable": false,
+        "version": "230.0.3.1"
+      },
+      {
+        "component": "DEVICE-1000-10E2-1D49-060C-13",
+        "id": "PCIeDevice_slot1_0x590000.Bundle",
+        "name": "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter",
+        "pending": false,
+        "updateable": true,
+        "version": "52.32.0-5990"
+      },
+      {
+        "component": "DEVICE-1000-10E6-1D49-0702-13",
+        "id": "PCIeDevice_slot25_0x230000.Bundle",
+        "name": "Firmware:DEVICE-ThinkSystem M.2 RAID B540p-2HS SATA/NVMe Enablement Kit",
+        "pending": false,
+        "updateable": true,
+        "version": "52.36.0-6552"
+      },
+      {
+        "component": "DEVICE-14E4-1751-17AA-4107-13",
+        "id": "PCIeDevice_slot4_0x330000.Bundle",
+        "name": "Firmware:DEVICE-Broadcom 57504 10/25GbE SFP28 4-port PCIe Ethernet Adapter",
+        "pending": false,
+        "updateable": true,
+        "version": "232.1.132.8"
+      },
+      {
+        "component": "DEVICE-14E4-1751-17AA-4107-13",
+        "id": "PCIeDevice_slot6_0xa20000.Bundle",
+        "name": "Firmware:DEVICE-Broadcom 57504 10/25GbE SFP28 4-port PCIe Ethernet Adapter",
+        "pending": false,
+        "updateable": true,
+        "version": "232.1.132.8"
+      },
+      {
+        "component": "Bundle.Current",
+        "id": "Bundle.Current",
+        "name": "Firmware:Current",
+        "pending": false,
+        "updateable": true,
+        "version": "52.36.0-6552"
+      },
+      {
+        "component": "STOREXP-BB-10",
+        "id": "Drive_Backplane_L1HF53C0086_PSoC_0xBB",
+        "name": "Firmware-PSoC:0xBB",
+        "pending": false,
+        "updateable": true,
+        "version": "20"
+      },
+      {
+        "component": "STOREXP-BB-10",
+        "id": "Drive_Backplane_L1HF53C000G_PSoC_0xBB",
+        "name": "Firmware-PSoC:0xBB",
+        "pending": false,
+        "updateable": true,
+        "version": "20"
+      },
+      {
+        "component": "STOREXP-BA-10",
+        "id": "Drive_Backplane_L4HF62A025D_PSoC_0xBA",
+        "name": "Firmware-PSoC:0xBA",
+        "pending": false,
+        "updateable": true,
+        "version": "5"
+      },
+      {
+        "component": "POWER-ACBEa600-10",
+        "id": "PSU1",
+        "name": "POWER-PSU1",
+        "pending": false,
+        "updateable": true,
+        "version": "3.50"
+      },
+      {
+        "component": "POWER-ACBEa600-10",
+        "id": "PSU2",
+        "name": "POWER-PSU2",
+        "pending": false,
+        "updateable": true,
+        "version": "3.50"
+      }
+    ],
+    "memory": {
+      "slots": [
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "32",
+          "locator": "32",
+          "manufacturer": "Samsung",
+          "name": "DIMM 32",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016F84B8",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "30",
+          "locator": "30",
+          "manufacturer": "Samsung",
+          "name": "DIMM 30",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016F8768",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "28",
+          "locator": "28",
+          "manufacturer": "Samsung",
+          "name": "DIMM 28",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016F84FC",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "26",
+          "locator": "26",
+          "manufacturer": "Samsung",
+          "name": "DIMM 26",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016F8771",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "23",
+          "locator": "23",
+          "manufacturer": "Samsung",
+          "name": "DIMM 23",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016F8564",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "21",
+          "locator": "21",
+          "manufacturer": "Samsung",
+          "name": "DIMM 21",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E32CF",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "19",
+          "locator": "19",
+          "manufacturer": "Samsung",
+          "name": "DIMM 19",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E32DD",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "17",
+          "locator": "17",
+          "manufacturer": "Samsung",
+          "name": "DIMM 17",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E32CD",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "16",
+          "locator": "16",
+          "manufacturer": "Samsung",
+          "name": "DIMM 16",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E32EE",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "14",
+          "locator": "14",
+          "manufacturer": "Samsung",
+          "name": "DIMM 14",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E32DA",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "12",
+          "locator": "12",
+          "manufacturer": "Samsung",
+          "name": "DIMM 12",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E32DF",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "10",
+          "locator": "10",
+          "manufacturer": "Samsung",
+          "name": "DIMM 10",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E3540",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "7",
+          "locator": "7",
+          "manufacturer": "Samsung",
+          "name": "DIMM 7",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E3558",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "5",
+          "locator": "5",
+          "manufacturer": "Samsung",
+          "name": "DIMM 5",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E33A6",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "3",
+          "locator": "3",
+          "manufacturer": "Samsung",
+          "name": "DIMM 3",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E34FF",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        },
+        {
+          "base_module_type": "RDIMM",
+          "bus_width_bits": 80,
+          "capacity_mb": 65536,
+          "data_width_bits": 64,
+          "error_correction": "SingleBitECC",
+          "health": "OK",
+          "id": "1",
+          "locator": "1",
+          "manufacturer": "Samsung",
+          "name": "DIMM 1",
+          "part_number": "M321R8GA0PB2-CCPWF",
+          "rank_count": 2,
+          "serial": "80CE012513016E33A5",
+          "speed_mhz": 6400,
+          "type": "DDR5"
+        }
+      ],
+      "total_mib": 1048576
+    },
+    "network": [
+      {
+        "health": "OK",
+        "id": "ToManager",
+        "ipv4": [],
+        "link_status": "unknown",
+        "mac": "c4:ef:bb:1d:43:46",
+        "mtu": null,
+        "name": "Host Ethernet Interface",
+        "speed_mbps": null
+      },
+      {
+        "health": "OK",
+        "id": "NIC1",
+        "ipv4": [],
+        "link_status": "down",
+        "mac": "8c:84:74:ec:f4:f0",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 0
+      },
+      {
+        "health": "OK",
+        "id": "NIC2",
+        "ipv4": [],
+        "link_status": "down",
+        "mac": "8c:84:74:ec:f4:f1",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 0
+      },
+      {
+        "health": "OK",
+        "id": "NIC3",
+        "ipv4": [],
+        "link_status": "down",
+        "mac": "8c:84:74:ec:f4:f2",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 0
+      },
+      {
+        "health": "OK",
+        "id": "NIC4",
+        "ipv4": [],
+        "link_status": "down",
+        "mac": "8c:84:74:ec:f4:f3",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 0
+      },
+      {
+        "health": "OK",
+        "id": "NIC5",
+        "ipv4": [],
+        "link_status": "up",
+        "mac": "8c:84:74:52:d8:e0",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 25600
+      },
+      {
+        "health": "OK",
+        "id": "NIC6",
+        "ipv4": [],
+        "link_status": "down",
+        "mac": "8c:84:74:52:d8:e1",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 0
+      },
+      {
+        "health": "OK",
+        "id": "NIC7",
+        "ipv4": [],
+        "link_status": "down",
+        "mac": "8c:84:74:52:d8:e2",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 0
+      },
+      {
+        "health": "OK",
+        "id": "NIC8",
+        "ipv4": [],
+        "link_status": "down",
+        "mac": "8c:84:74:52:d8:e3",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 0
+      },
+      {
+        "health": "OK",
+        "id": "NIC9",
+        "ipv4": [],
+        "link_status": "up",
+        "mac": "8c:84:74:52:ef:50",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 25600
+      },
+      {
+        "health": "OK",
+        "id": "NIC10",
+        "ipv4": [],
+        "link_status": "down",
+        "mac": "8c:84:74:52:ef:51",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 0
+      },
+      {
+        "health": "OK",
+        "id": "NIC11",
+        "ipv4": [],
+        "link_status": "down",
+        "mac": "8c:84:74:52:ef:52",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 0
+      },
+      {
+        "health": "OK",
+        "id": "NIC12",
+        "ipv4": [],
+        "link_status": "down",
+        "mac": "8c:84:74:52:ef:53",
+        "mtu": null,
+        "name": "External Ethernet Interface",
+        "speed_mbps": 0
+      }
+    ],
+    "network_adapters": {
+      "adapters": [
+        {
+          "firmware_version": "230.0.3.1",
+          "id": "slot13_0xc0000",
+          "link_status": "down",
+          "mac": "8c:84:74:ec:f4:f0",
+          "manufacturer": "Broadcom Limited",
+          "model": "BCM5719",
+          "name": "Broadcom 5719 1GbE RJ45 4-port OCP Ethernet Adapter",
+          "part_number": "SN37A28309",
+          "port_count": 4,
+          "serial_number": "L0FG4CF01MF",
+          "speed_mbps": null
+        },
+        {
+          "firmware_version": "232.1.132.8",
+          "id": "slot4_0x330000",
+          "link_status": "up",
+          "mac": "8c:84:74:52:d8:e0",
+          "manufacturer": "Broadcom Limited",
+          "model": "BCM57504",
+          "name": "Broadcom 57504 10/25GbE SFP28 4-port PCIe Ethernet Adapter",
+          "part_number": "SN37B04056",
+          "port_count": 4,
+          "serial_number": "L0FG4C800EM",
+          "speed_mbps": 25000
+        },
+        {
+          "firmware_version": "232.1.132.8",
+          "id": "slot6_0xa20000",
+          "link_status": "up",
+          "mac": "8c:84:74:52:ef:50",
+          "manufacturer": "Broadcom Limited",
+          "model": "BCM57504",
+          "name": "Broadcom 57504 10/25GbE SFP28 4-port PCIe Ethernet Adapter",
+          "part_number": "SN37B04056",
+          "port_count": 4,
+          "serial_number": "L0FG4C800SL",
+          "speed_mbps": 25000
+        }
+      ],
+      "fc_hbas": [],
+      "infiniband": [],
+      "ports": [
+        {
+          "adapter_id": "slot13_0xc0000",
+          "adapter_model": "BCM5719",
+          "associated_address": "8c:84:74:ec:f4:f0",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": null,
+          "link_status": "down",
+          "name": "Physical Port 1",
+          "physical_port_number": null,
+          "port_id": "1",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot13_0xc0000",
+          "adapter_model": "BCM5719",
+          "associated_address": "8c:84:74:ec:f4:f1",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": null,
+          "link_status": "down",
+          "name": "Physical Port 2",
+          "physical_port_number": null,
+          "port_id": "2",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot13_0xc0000",
+          "adapter_model": "BCM5719",
+          "associated_address": "8c:84:74:ec:f4:f2",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": null,
+          "link_status": "down",
+          "name": "Physical Port 3",
+          "physical_port_number": null,
+          "port_id": "3",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot13_0xc0000",
+          "adapter_model": "BCM5719",
+          "associated_address": "8c:84:74:ec:f4:f3",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": null,
+          "link_status": "down",
+          "name": "Physical Port 4",
+          "physical_port_number": null,
+          "port_id": "4",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot4_0x330000",
+          "adapter_model": "BCM57504",
+          "associated_address": "8c:84:74:52:d8:e0",
+          "current_link_speed_mbps": 25000,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "up",
+          "name": "Physical Port 1",
+          "physical_port_number": null,
+          "port_id": "1",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot4_0x330000",
+          "adapter_model": "BCM57504",
+          "associated_address": "8c:84:74:52:d8:e1",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "down",
+          "name": "Physical Port 2",
+          "physical_port_number": null,
+          "port_id": "2",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot4_0x330000",
+          "adapter_model": "BCM57504",
+          "associated_address": "8c:84:74:52:d8:e2",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "down",
+          "name": "Physical Port 3",
+          "physical_port_number": null,
+          "port_id": "3",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot4_0x330000",
+          "adapter_model": "BCM57504",
+          "associated_address": "8c:84:74:52:d8:e3",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "down",
+          "name": "Physical Port 4",
+          "physical_port_number": null,
+          "port_id": "4",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot6_0xa20000",
+          "adapter_model": "BCM57504",
+          "associated_address": "8c:84:74:52:ef:50",
+          "current_link_speed_mbps": 25000,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "up",
+          "name": "Physical Port 1",
+          "physical_port_number": null,
+          "port_id": "1",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot6_0xa20000",
+          "adapter_model": "BCM57504",
+          "associated_address": "8c:84:74:52:ef:51",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "down",
+          "name": "Physical Port 2",
+          "physical_port_number": null,
+          "port_id": "2",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot6_0xa20000",
+          "adapter_model": "BCM57504",
+          "associated_address": "8c:84:74:52:ef:52",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "down",
+          "name": "Physical Port 3",
+          "physical_port_number": null,
+          "port_id": "3",
+          "port_type": "Ethernet"
+        },
+        {
+          "adapter_id": "slot6_0xa20000",
+          "adapter_model": "BCM57504",
+          "associated_address": "8c:84:74:52:ef:53",
+          "current_link_speed_mbps": null,
+          "health": "OK",
+          "link_state": "Enabled",
+          "link_status": "down",
+          "name": "Physical Port 4",
+          "physical_port_number": null,
+          "port_id": "4",
+          "port_type": "Ethernet"
+        }
+      ]
+    },
+    "power": {
+      "power_control": {
+        "avg_consumed_watts": 345,
+        "interval_in_min": 1,
+        "max_consumed_watts": 348,
+        "min_consumed_watts": 344,
+        "power_capacity_watts": 2400,
+        "power_consumed_watts": 386
+      },
+      "power_supplies": [
+        {
+          "firmware_version": "3.50",
+          "health": "OK",
+          "manufacturer": "ACBE",
+          "model": "FSP006-EL0G",
+          "name": "PSU1",
+          "part_number": "SP57B68384",
+          "power_capacity_w": 2000,
+          "serial": "A1DB4CW10DC",
+          "state": "Enabled"
+        },
+        {
+          "firmware_version": "3.50",
+          "health": "OK",
+          "manufacturer": "ACBE",
+          "model": "FSP006-EL0G",
+          "name": "PSU2",
+          "part_number": "SP57B68384",
+          "power_capacity_w": 2000,
+          "serial": "A1DB4CW10DE",
+          "state": "Enabled"
+        }
+      ]
+    },
+    "processors": [
+      {
+        "architecture": "x86",
+        "health": "OK",
+        "id": "2",
+        "instruction_set": "x86-64",
+        "manufacturer": "Intel(R) Corporation",
+        "model": "Intel(R) Xeon(R) 6724P",
+        "name": "Processor 2",
+        "part_number": "UNKNOWN",
+        "processor_type": "CPU",
+        "serial_number": "326A09469E1EDD1C",
+        "socket": "CPU 2",
+        "speed_mhz": 4300,
+        "total_cores": 16,
+        "total_threads": 32
+      },
+      {
+        "architecture": "x86",
+        "health": "OK",
+        "id": "1",
+        "instruction_set": "x86-64",
+        "manufacturer": "Intel(R) Corporation",
+        "model": "Intel(R) Xeon(R) 6724P",
+        "name": "Processor 1",
+        "part_number": "UNKNOWN",
+        "processor_type": "CPU",
+        "serial_number": "326402C621B6BE2E",
+        "socket": "CPU 1",
+        "speed_mhz": 4300,
+        "total_cores": 16,
+        "total_threads": 32
+      }
+    ],
+    "storage": {
+      "controllers": [
+        {
+          "controller_firmware": "52.32.0-5990",
+          "controller_health": "OK",
+          "controller_manufacturer": "Lenovo",
+          "controller_model": "SAS3916",
+          "controller_name": "ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter",
+          "drives": [
+            {
+              "capacity_bytes": 1918999986176,
+              "capacity_gb": 1919.0,
+              "failure_predicted": false,
+              "health": "OK",
+              "id": "drive_bay_1",
+              "manufacturer": "SAMSUNG",
+              "media_type": "SSD",
+              "model": "MZ7L31T9HELA-00A07",
+              "name": "Drive 1",
+              "predicted_life_percent": 100,
+              "protocol": "SATA",
+              "serial": "S76TNA0X602704"
+            },
+            {
+              "capacity_bytes": 1918999986176,
+              "capacity_gb": 1919.0,
+              "failure_predicted": false,
+              "health": "OK",
+              "id": "drive_bay_0",
+              "manufacturer": "SAMSUNG",
+              "media_type": "SSD",
+              "model": "MZ7L31T9HELA-00A07",
+              "name": "Drive 0",
+              "predicted_life_percent": 100,
+              "protocol": "SATA",
+              "serial": "S76TNA0X602703"
+            }
+          ],
+          "health": "OK",
+          "id": "controller_slot1",
+          "name": "ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter"
+        },
+        {
+          "controller_firmware": "52.36.0-6552",
+          "controller_health": "OK",
+          "controller_manufacturer": "Lenovo",
+          "controller_model": "SAS3808N",
+          "controller_name": "ThinkSystem M.2 RAID B540p-2HS SATA/NVMe Enablement Kit",
+          "drives": [
+            {
+              "capacity_bytes": 479559942144,
+              "capacity_gb": 479.56,
+              "failure_predicted": false,
+              "health": "OK",
+              "id": "boot_drive_bay_1",
+              "manufacturer": "SSSTC",
+              "media_type": "SSD",
+              "model": "ER3-GD480",
+              "name": "M.2 Drive 1",
+              "predicted_life_percent": 100,
+              "protocol": "SATA",
+              "serial": "0024081W0ZUH"
+            },
+            {
+              "capacity_bytes": 479559942144,
+              "capacity_gb": 479.56,
+              "failure_predicted": false,
+              "health": "OK",
+              "id": "boot_drive_bay_0",
+              "manufacturer": "SSSTC",
+              "media_type": "SSD",
+              "model": "ER3-GD480",
+              "name": "M.2 Drive 0",
+              "predicted_life_percent": 100,
+              "protocol": "SATA",
+              "serial": "0024081W0ZUK"
+            }
+          ],
+          "health": "OK",
+          "id": "controller_slot25",
+          "name": "ThinkSystem M.2 RAID B540p-2HS SATA/NVMe Enablement Kit"
+        }
+      ],
+      "volumes": [
+        {
+          "boot_volume": null,
+          "controller_id": "controller_slot25",
+          "health": "OK",
+          "id": "0",
+          "member_drive_ids": [
+            "boot_drive_bay_0",
+            "boot_drive_bay_1"
+          ],
+          "name": "VD_1",
+          "raid_level": "RAID1",
+          "state": "Enabled",
+          "total_mb": 457344
+        }
+      ]
+    },
+    "system": {
+      "asset_tag": null,
+      "bios_date": null,
+      "bios_version": "IHE110U",
+      "boot_progress": null,
+      "cpu_summary": {
+        "core_count": null,
+        "count": 2,
+        "health": "OK",
+        "logical_processor_count": null,
+        "model": null
+      },
+      "health": "Warning",
+      "hostname": null,
+      "last_reset_time": "2026-06-11T09:25:51+00:00",
+      "led_state": "Off",
+      "manufacturer": "Lenovo",
+      "memory_summary": {
+        "health": "OK",
+        "total_gib": 1024
+      },
+      "model": "ThinkSystem SR650 V4",
+      "oem": {
+        "fru_serial": null,
+        "health_summary": null,
+        "led_indicator": null,
+        "machine_level": null,
+        "machine_type": null,
+        "product_id": null,
+        "product_name": "ThinkSystem SR650 V4",
+        "system_id": null,
+        "system_status": "OSBooted"
+      },
+      "part_number": "SB27B69948",
+      "power_state": "On",
+      "serial": "J902E57T",
+      "sku": "7DGDCTO1WW",
+      "state": "Enabled",
+      "system_type": "Physical",
+      "tpm": null,
+      "uuid": "343AFAA2-321B-11F0-911B-C4EFBB1D4346"
+    },
+    "thermal": {
+      "fans": [
+        {
+          "health": "OK",
+          "name": "Fan1 Front Tach",
+          "reading": 6000,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan1 Rear Tach",
+          "reading": 4320,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan2 Front Tach",
+          "reading": 6000,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan2 Rear Tach",
+          "reading": 4320,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan3 Front Tach",
+          "reading": 5760,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan3 Rear Tach",
+          "reading": 4320,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan4 Front Tach",
+          "reading": 6000,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan4 Rear Tach",
+          "reading": 4320,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan5 Front Tach",
+          "reading": 6000,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan5 Rear Tach",
+          "reading": 4320,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan6 Front Tach",
+          "reading": 6000,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        },
+        {
+          "health": "OK",
+          "name": "Fan6 Rear Tach",
+          "reading": 4320,
+          "reading_units": "RPM",
+          "state": "Enabled"
+        }
+      ],
+      "temperatures": [
+        {
+          "health": "OK",
+          "name": "Ambient Temp",
+          "physical_context": "Board",
+          "reading_celsius": 14,
+          "state": "Enabled",
+          "upper_critical": 47
+        },
+        {
+          "health": "OK",
+          "name": "CPU1 DTS TMargin",
+          "physical_context": "CPU",
+          "reading_celsius": -69,
+          "state": "Enabled",
+          "upper_critical": 0
+        },
+        {
+          "health": "OK",
+          "name": "CPU1 Die",
+          "physical_context": "CPU",
+          "reading_celsius": 39,
+          "state": "Enabled",
+          "upper_critical": null
+        },
+        {
+          "health": "OK",
+          "name": "CPU2 DTS TMargin",
+          "physical_context": "CPU",
+          "reading_celsius": -69,
+          "state": "Enabled",
+          "upper_critical": 0
+        },
+        {
+          "health": "OK",
+          "name": "CPU2 Die",
+          "physical_context": "CPU",
+          "reading_celsius": 39,
+          "state": "Enabled",
+          "upper_critical": null
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 1 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 28,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 10 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 25,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 12 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 25,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 14 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 25,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 16 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 25,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 17 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 26,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 19 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 26,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 21 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 26,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 23 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 26,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 26 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 26,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 28 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 26,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 3 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 27,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 30 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 25,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 32 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 26,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 5 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 26,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "DIMM 7 Temp",
+          "physical_context": "Memory",
+          "reading_celsius": 25,
+          "state": "Enabled",
+          "upper_critical": 85
+        },
+        {
+          "health": "OK",
+          "name": "exhaust temp",
+          "physical_context": "Board",
+          "reading_celsius": 23,
+          "state": "Enabled",
+          "upper_critical": null
+        }
+      ]
+    }
+  },
+  "error_count": 0,
+  "failed_sections": [],
+  "multi_node": null,
+  "probe_facts": {},
+  "status": "success",
+  "unsupported_sections": [],
+  "vendor": "lenovo"
+}

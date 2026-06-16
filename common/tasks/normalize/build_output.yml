@@ -22,6 +22,10 @@
 # 출력 변수:
 #   _output : dict — 최종 표준 JSON (OUTPUT 태스크로 방출)
 
+# hostname 정책 (사용자 확정 2026-06-16): System.HostName(또는 OS hostname) 이 비면 hostname=null.
+#   IP fallback 금지 — "없는 건 없는 것". 이전 `or _out_ip` 는 hostname 미설정 장비(HPE/Lenovo/
+#   CSUS 등 System.HostName 빈값/부재)에서 hostname 을 IP 로 오염시켰다(실측 4대 검증). `or none`
+#   은 fqdn 이 '' 빈문자열인 경우도 null 로 정규화. ip 는 별도 'ip' 필드로 이미 노출됨(중복 불요).
 - name: "normalize | build_output"
   ansible.builtin.set_fact:
     _output: "{{ {
@@ -30,7 +34,7 @@
       'ip':                _out_ip,
       'hostname':          ((_merged_data.system | default({})).hostname | default(none))
                            or ((_merged_data.system | default({})).fqdn | default(none))
-                           or _out_ip,
+                           or none,
       'vendor':            (_out_vendor | default(none, true)),
       'status':            _out_status,
       'sections':          _norm_sections,

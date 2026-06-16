@@ -95,7 +95,7 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 | `target_type` | `os` / `esxi` / `redfish` | 어떤 채널로 수집했나 |
 | `collection_method` | `agent` / `vsphere_api` / `redfish_api` | 실제로 쓴 방법. `target_type` 에 따라 자동으로 결정 |
 | `ip` | 문자열 | 호출자가 넘긴 대상 IP. Redfish 면 BMC IP, OS 면 서버 IP |
-| `hostname` | 문자열 | 풀어낸 호스트명. fallback chain: `system.hostname → system.fqdn → ip`. 상세: 8절 hostname fallback |
+| `hostname` | 문자열\|null | 풀어낸 호스트명. `system.hostname → system.fqdn → null` (IP fallback 안 함, 2026-06-16). 상세: 8절 |
 | `vendor` | `dell` / `hp` / `hpCsus` / `lenovo` / `supermicro` / `cisco` / `null` | 호출자 노출 표시값. 내부 canonical(`hpe`)을 `vendor_output_display`/`adapter_output_display`(vendor_aliases.yml)로 매핑. HPE 계열→`hp`, HPE Compute Scale-up 패밀리(CSUS 3200 + Superdome Flex)→`hpCsus`(camelCase 예외, 2026-06-04 ADR). 대부분 소문자 한 단어 |
 
 ### 그룹 B — 결과 (2개)
@@ -468,8 +468,8 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 **Q. `vendor` 가 `null` 이면 어떡하나?**
 새 펌웨어 / 보지 못한 모델이라 정규화 못 했다는 뜻. `data.hardware.vendor` 에 BMC 원본 값이 들어있으니 거기서 사람이 판단해야 한다. (그리고 `common/vars/vendor_aliases.yml` 에 별칭 추가하면 다음부터는 정규화된다.)
 
-**Q. `hostname` 이 `ip` 와 같은 값이다. 버그인가?**
-아니다. DNS 역순회가 안 됐거나 BMC 가 fqdn 을 안 줘서 `ip` 로 fallback 한 **의도된 동작** 이다. 상세 fallback chain 은 8절 참조.
+**Q. `hostname` 이 `null` 이다. 버그인가?**
+아니다. 장비(BMC / OS / ESXi)가 hostname 을 제공하지 않으면 `null` 이다 (2026-06-16 정책 — "없는 건 없는 것"). **IP 로 fallback 하지 않는다.** 주소가 필요하면 별도 `ip` 필드를 본다. `hostname` 이 `ip` 와 같은 값으로 나오면 그건 옛 ip-fallback 잔재(정책 위반)다. 상세는 8절 참조.
 
 **Q. `correlation.bmc_ip` 와 `correlation.host_ip` 가 같다. 버그인가?**
 Redfish 채널은 둘이 같은 게 정상이다 (BMC 를 통해 수집). OS / ESXi 채널은 다를 수 있다 (서비스 IP 와 BMC IP 가 분리되어 있으면).
@@ -479,21 +479,26 @@ Redfish 채널은 둘이 같은 게 정상이다 (BMC 를 통해 수집). OS / E
 
 ---
 
-## 8. hostname fallback chain (의도된 동작 — cycle 2026-05-07 보강)
+## 8. hostname 해석 (strict null — 2026-06-16 정책, cycle 2026-05-07 ip fallback 폐지)
 
 `envelope.hostname` 은 다음 우선순위로 결정된다 (정본: `common/tasks/normalize/build_output.yml:31-33`):
 
 ```text
-hostname = system.hostname  OR  system.fqdn  OR  ip_fallback
+hostname = system.hostname  OR  system.fqdn  OR  null
 ```
+
+> **2026-06-16 정책 변경 (사용자 지시)**: 이전(cycle 2026-05-07)에는 hostname 미해석 시
+> `ip` 로 fallback 했으나, "없는 건 없는 것" 원칙으로 **IP fallback 을 폐지**했다. 장비가
+> hostname 을 제공하지 않으면 `hostname = null`. 주소는 별도 `ip` 필드로 항상 노출되므로
+> hostname 에 IP 를 중복 채우지 않는다.
 
 ### 우선순위
 
 | 순위 | 후보 | 출처 (3 채널 별) |
 |---:|---|---|
-| 1 | `data.system.hostname` | OS Linux: `ansible_hostname` / Windows: `inventory_hostname` / Redfish: `Manager.HostName` 또는 `System.HostName` / ESXi: `vSphere.summary.config.name` |
-| 2 | `data.system.fqdn` | OS Linux: `ansible_fqdn` (raw fallback: `hostname -f`) / Windows: 같음 / Redfish: 일부 vendor 만 / ESXi: 같음 |
-| 3 | `envelope.ip` (fallback) | 호출자가 넘긴 `service_ip` / `bmc_ip` |
+| 1 | `data.system.hostname` | OS Linux: `ansible_hostname` / Windows: `inventory_hostname` / Redfish: `System.HostName` / ESXi: `vSphere.summary.config.name` |
+| 2 | `data.system.fqdn` | OS Linux: `ansible_fqdn` (raw fallback: `hostname -f`) / Windows: 같음 / Redfish: `System.HostName` (정규화 후) / ESXi: 같음 |
+| 3 | (없음) | 둘 다 비면 `null` — **IP fallback 안 함** |
 
 ### 4 시나리오 별 동작
 
@@ -501,24 +506,28 @@ hostname = system.hostname  OR  system.fqdn  OR  ip_fallback
 |---|---|---|---|
 | A 정상 (FQDN 있음) | `null` | `"server01.lab.local"` | `"server01.lab.local"` (fqdn) |
 | B 정상 (호스트명만) | `"server01"` | `null` | `"server01"` (hostname 우선) |
-| C BMC HostName 미응답 (DMTF spec 권장 동작) | `null` | `null` | `"10.50.11.162"` (ip fallback) |
+| C 장비 HostName 미응답 (DMTF spec 권장 동작) | `null` | `null` | **`null`** (IP fallback 안 함) |
 | D Linux raw fallback (RHEL 8.10 py3.6) | `null` | `"server01.lab.local"` (raw `hostname -f`) | `"server01.lab.local"` |
 
-### 호출자가 hostname/IP 구분이 필요한 경우
+실측 (2026-06-16): HPE DL380(System.HostName=`""`) / HPE CSUS3200(`null`) / Lenovo SR650
+(HostName 필드 부재) → 모두 시나리오 C → `hostname = null`. Dell R740(System.HostName=
+`"DELL01"`) → 시나리오 B → `"DELL01"`.
 
-- **간단한 방법**: `envelope.hostname == envelope.ip` 비교
-  - `True` → ip fallback 발생 (BMC 가 hostname 미응답)
-  - `False` → 정상 hostname 또는 fqdn 응답
-- **상세 추적**: `ansible-playbook -vvv` 로그에서 `_merged_data.system` raw 값 확인
-- **회귀 차단**: `tests/regression/test_cross_channel_consistency.py::test_hostname_never_null` (cycle 2026-05-07 추가) — 모든 baseline 의 hostname 이 non-null 보장
+### 호출자 주의
 
-### 왜 ip fallback 이 정상인가 (DMTF spec 근거)
+- `hostname` 은 nullable 이다. null 이면 그 장비는 hostname 을 보고하지 않은 것 — 식별에는
+  `ip` (항상 non-null) 를 쓴다.
+- `hostname` 이 `ip` 와 같은 값이면 옛 ip-fallback 잔재(정책 위반)다 — 회귀로 차단.
+- **회귀 차단**: `tests/regression/test_cross_channel_consistency.py::test_hostname_not_ip_fallback`
+  — 모든 baseline 의 `hostname != ip` 보장 (null 은 허용).
 
-- **Redfish**: BMC 가 `Manager.HostName` 을 응답하지 않는 환경 (DHCP 미사용 / hostname 미설정) 다수 존재. DMTF spec 도 HostName 을 optional 로 정의.
-- **ESXi**: vSphere host 가 DNS 에 등록 안 된 환경 다수.
-- **Linux/Windows**: ansible_facts 가 hostname/fqdn 둘 다 추출 불가 시 (예: 컨테이너 / minimal 이미지).
+### 왜 null 이 정상인가 (DMTF spec 근거)
 
-`envelope.hostname` 을 항상 non-null 로 보장 (호출자 시스템 파싱 안전성) 위해 ip 로 fallback. 호출자가 IP 인지 hostname 인지 구분이 필요하면 위 비교 방법 사용.
+- **Redfish**: BMC 가 `System.HostName` 을 응답하지 않는 환경 (DHCP 미사용 / hostname 미설정 /
+  OS 미설치 파티션) 다수. DMTF spec 도 HostName 을 optional + nullable 로 정의. 이때 IP 를
+  hostname 에 채우면 호출자가 "이 장비 hostname 은 IP 다" 로 오인 — 사실은 "없음".
+- **ESXi / Linux / Windows**: hostname/fqdn 둘 다 추출 불가 시(컨테이너 / minimal 이미지 등)
+  동일하게 `null`.
 
 ### 알려진 baseline drift
 

@@ -3,7 +3,7 @@
 # Vendor: Lenovo
 # Firmware: XCC3 — OpenBMC 기반 신 generation
 # Origin: Lenovo XCC3 REST API documentation (ThinkSystem V4)
-# Last sync: 2026-05-01 (web sources only — lab 부재)
+# Last sync: 2026-06-15 (사이트 실 SR650 V4 미러 캡처 + replay 검증 — 구 2026-05-01 web-sources 승격)
 # Notes: ThinkSystem V4 (SR630 V4 / SR650 V4 / SR680a V4 등). 2025-2026 출하.
 # Sources (rule 96 R1-A — lab 부재):
 #   - https://lenovopress.lenovo.com/lp2273-lenovo-xclarity-controller-3-xcc3
@@ -13,13 +13,20 @@
 #   - https://lenovopress.lenovo.com/lp1991-thinksystem-v3-v4-server-firmware-and-drivers-best-practices-advanced-guide
 #   - https://lenovopress.lenovo.com/lp1971-thinksystem-sr630-v4-server
 #   - https://lenovopress.lenovo.com/lp2264-thinksystem-sr680a-v4-server
-# Tested against: lab 부재 (web sources only). 사용자 사이트 도입 시 fixture 캡처.
-# Compatibility 가정 (web sources, F55/F56 cycle 2026-05-01):
-#   - manufacturer: "Lenovo" (XCC1/XCC2 와 동일)
-#   - Manager URI: /redfish/v1/Managers/1 (XCC2 와 유사)
-#   - System URI: /redfish/v1/Systems/1
-#   - OEM namespace: Oem.Lenovo
-#   - Redfish 1.17.0 / schema bundle 2024.3 (XCC2 의 1.20.0 + 2023.3 와 schema 역전)
+# Tested against (실측 2026-06-15, 사이트 실 미러 캡처 — 상설 lab 은 부재):
+#   - Lenovo ThinkSystem SR650 V4 (BMC=XCC3) — XCC fw "IHX414J 1.22 20250402" / UEFI 10U-1.20 /
+#     RedfishVersion 1.15.0 / SN J902E57T / SKU 7DGDCTO1WW / UUID 343AFAA2-... / 2901 리소스
+#   - redfish_full_mirror.py 캡처 + replay 재생 → 라이브러리 2건 fix
+#     (FIX1 firmware pending version="" 유실 / FIX2 network MAC 대소문자). evidence: tests/evidence/2026-06-15-lenovo-sr650-v4-audit.md
+#   - adapter 선택 실측(tests/redfish-probe/verify_adapter_selection.py): Lenovo 는 ServiceRoot.Product=None →
+#     facts 빈값 → priority 로 선택 (redfish_lenovo_xcc3 score=120520; model/firmware_patterns 는 휴면) [정상].
+#   ※ 1회 read-only 스냅샷 — 쓰기/Action·펌웨어 업그레이드 후 응답 미포함 (docs/25)
+# Compatibility (web sources F55/F56 cycle 2026-05-01 + 2026-06-15 실측 확인/정정):
+#   - manufacturer: "Lenovo" (실측 확인)
+#   - Manager URI: /redfish/v1/Managers/1 (실측 확인)
+#   - System URI: /redfish/v1/Systems/1 (실측 확인)
+#   - OEM namespace: Oem.Lenovo (실측 확인 — system.oem 은 V4 가 일부 키 미노출, FruPartNumber 등 보유)
+#   - RedfishVersion 1.15.0 (실측 2026-06-15 — 구 추정 "1.17.0 / schema bundle 2024.3" 정정)
 #   - OpenBMC 기반 → Oem.Lenovo 영역이 표준 Redfish 우선 → OEM 의존 감소
 #   - FPGA firmware separate item — UpdateService/FirmwareInventory/FPGA (gather 자동 cover)
 #   - ExtendedError.1.2.2.json OEM registry 신규 (server-exporter 미사용)

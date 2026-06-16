@@ -2,7 +2,7 @@
   "target_type": "redfish",
   "collection_method": "redfish_api",
   "ip": "10.50.11.999",
-  "hostname": "csus-3200-mock",
+  "hostname": "csus-p0",
   "vendor": "hpCsus",
   "status": "success",
   "sections": {

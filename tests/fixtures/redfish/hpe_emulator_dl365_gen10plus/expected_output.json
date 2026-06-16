@@ -29,12 +29,15 @@
       "last_reset_time": null,
       "mac_address": "5c:ed:8c:31:bb:c8",
       "manager_type": "BMC",
+      "manufacturer": null,
       "model": "iLO 5",
       "name": "iLO",
       "oem": {
         "ilo_version": "iLO 5 v3.14"
       },
+      "part_number": null,
       "power_state": null,
+      "serial": null,
       "state": "Enabled",
       "timezone": null,
       "uuid": "78b77390-7f72-5876-97fc-be7f52628d17"
@@ -581,6 +584,7 @@
           "manufacturer": "LTEON",
           "model": "P38997-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 1600,
           "serial": "MAO2732545731",
           "state": "Enabled"
@@ -591,6 +595,7 @@
           "manufacturer": "LTEON",
           "model": "P38997-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 1600,
           "serial": "YWY3997598694",
           "state": "Enabled"

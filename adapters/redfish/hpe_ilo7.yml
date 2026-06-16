@@ -3,15 +3,22 @@
 # Vendor: HPE / Hewlett Packard Enterprise
 # Firmware: iLO 7 — 1.x (Gen12 ProLiant 신 generation)
 # Origin: HPE iLO 7 Redfish API documentation (Gen12, 2025-02 출시)
-# Last sync: 2026-05-11 (cycle hpe-ilo7-gen12-match-fix — 2-part firmware "1.10" 매치 보강)
+# Last sync: 2026-06-15 (사이트 실 DL380 Gen12 미러 캡처 + replay 검증 — 구 2026-05-11 web-sources 승격)
 # Notes: ProLiant Gen12 (DL360 Gen12 / DL380 Gen12 / DL580 Gen12 / ML350 Gen12).
 # Sources (rule 96 R1-A — lab 부재):
 #   - https://servermanagementportal.ext.hpe.com/docs/redfishservices/ilos/ilo7
 #   - https://servermanagementportal.ext.hpe.com/docs/redfishservices/ilos/ilo7/ilo7_adaptation
 #   - https://www.hpe.com/us/en/newsroom/press-release/2025/02/hpe-introduces-next-generation-proliant-servers-engineered-for-advanced-security-ai-automation-and-greater-performance.html
 #   - https://www.scribd.com/document/917390429/HPE-sd00006383en-us-HPE-ILO-7-v1-16-00-Release-Notes (1.16.00 release notes)
-# Tested against: lab 부재 (web sources only). 사용자 사이트 도입 시 fixture 캡처.
-# Compatibility 가정 (web sources, F47/F84 cycle 2026-05-01):
+# Tested against (실측 2026-06-15, 사이트 실 미러 캡처 — 상설 lab 은 부재):
+#   - HPE ProLiant Compute DL380 Gen12 — iLO 7 fw 1.20.00 (Feb 12 2026) / RedfishVersion 1.22.1 / 2055 리소스
+#   - 미러 도구 redfish_full_mirror.py + replay_full_mirror.py 오프라인 재생 → 라이브러리 7건 fix
+#     (cpu_summary.health rollup / NIC Ports MAC / link_speed null / partial-404 / bmc mac case / network.summary join).
+#     evidence: tests/evidence/2026-06-15-hpe-dl380-mirror-audit.md
+#   - adapter 선택 실측(tests/redfish-probe/verify_adapter_selection.py): facts model="HPE ProLiant Compute DL380 Gen12" /
+#     firmware="1.20.00"(ServiceRoot.Oem.Hpe.Manager) / manager_type="iLO 7" → redfish_hpe_ilo7 선택(score=120570) [정상].
+#   ※ 1회 read-only 스냅샷 — 쓰기/Action·펌웨어 업그레이드 후 응답 미포함 (docs/25)
+# Compatibility (web sources F47/F84 cycle 2026-05-01 + 2026-06-15 실측 일부 확인):
 #   - manufacturer: "HPE" / "Hewlett Packard Enterprise" (iLO 6 와 동일)
 #   - Manager URI: /redfish/v1/Managers/1 (iLO 6 와 동일)
 #   - System URI: /redfish/v1/Systems/1 (iLO 6 와 동일)

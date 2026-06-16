@@ -19,6 +19,15 @@
 #   - Redfish: 1.20.1
 #   - CPU: Intel Xeon Silver 4510
 #   - 데이터 경로: tests/reference/redfish/dell/10_100_15_*
+# Tested against (실측 2026-06-14, 사이트 실 미러 캡처 — iDRAC9 14G):
+#   - PowerEdge R740 (14G) — iDRAC9 fw 7.00.00.184 / ServiceTag J0KV603 / RedfishVersion 1.17.0 / 6135 리소스
+#   - redfish_full_mirror.py 캡처 + replay 재생 → 라이브러리 4건 fix (FW-1 firmware Current-/Installed- dedup 51→32 /
+#     NET-1 멀티컨트롤러 NIC port_count 합산 / STO-1 boot_volume 컨트롤러 BootVirtualDiskFQDD fallback /
+#     SYS-5 exhaust temp 0°C 보존). evidence: tests/evidence/2026-06-14-dell-r740-mirror-audit.md (적대 검증, wrong-data 0)
+#   - [선택 주의] 무인증 ServiceRoot.Product 가 BMC명("Integrated Dell Remote Access Controller")이라 facts.model/firmware
+#     가 빈값 → 실 adapter 선택은 priority 로 결정 → redfish_dell_idrac10(120)이 선택됨(idrac9 100 패배). collect/normalize
+#     tasks 는 idrac9/idrac10 동일(dell OEM)이라 수집 데이터 동일 — diagnosis 라벨만 cosmetic 차이. NEXT_ACTIONS 등재.
+#   ※ 1회 read-only 스냅샷 — 쓰기/Action·펌웨어 업그레이드 후 응답 미포함 (docs/25)
 # Storage strategy evolution (web sources, M-H1 cycle 2026-05-07):
 #   - iDRAC9 3.x ~ 4.x: standard storage path (Volumes 표준 미도입)
 #   - iDRAC9 5.x: PLDM RDE 우선 + standard fallback (dual)
@@ -27,7 +36,7 @@
 #   - iDRAC9 4.x ~ 6.x: Power deprecated + PowerSubsystem dual
 #   - iDRAC9 7.x: PowerSubsystem 우선 + Power fallback
 # OEM namespace: Oem.Dell (전 generation 동일)
-# Lab status: iDRAC9 7.x 사이트 검증 (Round 11). iDRAC9 3.x/4.x/5.x/6.x lab 부재.
+# Lab status: iDRAC9 7.x 실측 (R760 16G Round 11 + R740 14G 미러 캡처 2026-06-14). iDRAC9 3.x/4.x/5.x/6.x lab 부재.
 # Next action: iDRAC9 5.x 이전 lab 도입 시 별도 cycle (PLDM RDE 분기 검증)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_dell_idrac9

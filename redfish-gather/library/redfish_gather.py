@@ -77,6 +77,25 @@ def _safe_int(x, default=None):
         return default
 
 
+def _safe_round_int(x, default=None):
+    """소수 측정값(온도 등)을 반올림 정수로. _safe_int 의 int() 절삭과 달리 round() 사용.
+
+    2026-06-16 감사 G1: 온도 reading 을 _safe_int 로 받으면 44.7031→44 / 38.86→38 /
+    -68.75→-68 처럼 소수점 절삭(≤1° 오차)이 발생. round() 로 44.7→45 / 38.86→39 / -68.75→-69.
+    int 계약은 유지(타입 불변) — 절삭 대신 반올림만 교체. _safe_int 는 watt/capacity 등 다른
+    호출부에서 그대로 사용(회귀 0). 비-숫자/None/inf/nan → default.
+    """
+    if x is None:
+        return default
+    try:
+        f = float(x)
+    except (ValueError, TypeError, OverflowError):
+        return default
+    if f != f or f in (float('inf'), float('-inf')):  # nan/inf 흡수
+        return default
+    return int(round(f))
+
+
 def _safe_num(x, default=None):
     """유한 숫자 정규화 — int 는 int, **유한 float 는 float 로 보존**; bool/비-숫자/None/inf/nan → default.
 
@@ -1738,6 +1757,12 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         'state':            _safe(data, 'Status', 'State'),
         'power_state':      _safe(data, 'PowerState'),
         'uuid':             _safe(data, 'UUID'),
+        # 2026-06-16 감사 G4: Manager 식별 메타 (Additive). CSUS RMC raw 는 SerialNumber=
+        # SGHD3TLNDD / PartNumber=R9N70A / Manufacturer=HPE 보유했으나 미수집이었다. Manager 가
+        # 해당 필드 미제공인 vendor(대다수 iDRAC/iLO/XCC)는 None — shape 통일, 회귀 안전.
+        'serial':           _strip_or_none(_safe(data, 'SerialNumber')),
+        'part_number':      _strip_or_none(_safe(data, 'PartNumber')),
+        'manufacturer':     _strip_or_none(_safe(data, 'Manufacturer')),
         'last_reset_time':  _safe(data, 'LastResetTime'),
         'timezone':         _safe(data, 'TimeZoneName'),
         'ip':               None,
@@ -1951,6 +1976,7 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         # 2026-04-29 fix B90: Cisco CIMC가 Manufacturer를 raw JEDEC ID '0xCExx'로 emit.
         # _normalize_jedec()로 vendor 이름 정규화 (Samsung/SK hynix/Micron 등).
         # 2026-04-29 fix B09: locator (DIMM 물리 위치) 추가 — 교체 작업 시 식별용.
+        _mloc_slot = _safe(mdata, 'MemoryLocation', 'Slot')  # locator Slot 폴백용 (str cast — 아래 LOCATOR-STR)
         slots.append({
             'id':              _safe(mdata, 'Id'),
             'name':            _strip_or_none(_safe(mdata, 'Name')),
@@ -1959,10 +1985,13 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             # CSUS-R12 (2026-06-15 실미러 검수): HPE CSUS 는 DeviceLocator 부재 + MemoryLocation.Slot=0
             # (16 DIMM 전부 0, 식별 불가). Slot 이 falsy(0/None)일 때만 Location.PartLocation.ServiceLabel
             # (예: 'rack1/chassis_u1/cpu0/dimmA0')로 보정. Slot 이 truthy 인 vendor 는 불변(Additive 회귀안전).
+            # LOCATOR-STR (2026-06-15 cross-device 일관성): field_dictionary 계약 = "string|null".
+            # Lenovo(DeviceLocator 부재 + Slot=32 truthy int)는 구 코드가 int 32 누출(같은 slot id 는 str '32' 와 불일치).
+            # truthy Slot 만 str cast → Lenovo 32→'32', CSUS Slot=0 은 falsy 유지(ServiceLabel 폴백 보존), Dell/DL380 DeviceLocator 불변.
             'locator':         (_safe(mdata, 'DeviceLocator')
-                                or (_safe(mdata, 'MemoryLocation', 'Slot') or None)
+                                or (str(_mloc_slot) if _mloc_slot else None)
                                 or _safe(mdata, 'Location', 'PartLocation', 'ServiceLabel')
-                                or _safe(mdata, 'MemoryLocation', 'Slot')),
+                                or (str(_mloc_slot) if _mloc_slot is not None else None)),
             'capacity_mb':     cap_int,
             'type':            _safe(mdata, 'MemoryDeviceType'),
             'base_module_type': _safe(mdata, 'BaseModuleType'),
@@ -3021,6 +3050,8 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                     'model':            _safe(mdata, 'Model'),
                     'serial':           _safe(mdata, 'SerialNumber'),
                     'manufacturer':     _safe(mdata, 'Manufacturer'),
+                    # 2026-06-16 감사 G4 (Additive): CSUS PSU raw PartNumber=CSU2400AP-3-500 미수집이었음.
+                    'part_number':      _safe(mdata, 'PartNumber'),
                     'power_capacity_w': _safe_int(_safe(mdata, 'PowerCapacityWatts')),
                     # CSUS-R9 (2026-06-15 실미러 검수): HPE CSUS PSU 는 FirmwareVersion 부재 +
                     # DMTF PowerSupply.Version("Release -0005")에 버전 → Version fallback (Additive).
@@ -3174,6 +3205,7 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
             'model':            _safe(psu, 'Model'),
             'serial':           _safe(psu, 'SerialNumber'),
             'manufacturer':     _safe(psu, 'Manufacturer'),
+            'part_number':      _safe(psu, 'PartNumber'),  # 2026-06-16 감사 G4 (Additive)
             'power_capacity_w': psu_capacity,
             'firmware_version': _safe(psu, 'FirmwareVersion'),
             'health':           _safe(psu, 'Status', 'Health'),
@@ -3243,10 +3275,11 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
     for t in _dicts(_safe(tdata, 'Temperatures')):  # 비-list/dict 방어 (rule 95 R1 #2)
         temps.append({
             'name':             _safe(t, 'Name'),
-            'reading_celsius':  _safe_int(_safe(t, 'ReadingCelsius')),  # str '42' 방어
+            # 2026-06-16 감사 G1: 절삭(_safe_int) → 반올림(_safe_round_int). 44.7→45.
+            'reading_celsius':  _safe_round_int(_safe(t, 'ReadingCelsius')),  # str '42' 방어
             'health':           _safe(t, 'Status', 'Health'),
             'state':            _safe(t, 'Status', 'State'),
-            'upper_critical':   _safe_int(_safe(t, 'UpperThresholdCritical')),
+            'upper_critical':   _safe_round_int(_safe(t, 'UpperThresholdCritical')),
             'physical_context': _safe(t, 'PhysicalContext'),
         })
     fans = []
@@ -3328,7 +3361,8 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
             for tr in _dicts(_safe(tm, 'TemperatureReadingsCelsius')):
                 temps.append({
                     'name':             _safe(tr, 'DeviceName') or _safe(tr, 'Name'),
-                    'reading_celsius':  _safe_int(_safe(tr, 'Reading')),
+                    # 2026-06-16 감사 G1: 절삭 → 반올림. ThermalMetrics.Reading 은 float (39.3906).
+                    'reading_celsius':  _safe_round_int(_safe(tr, 'Reading')),
                     'health':           _safe(tr, 'Status', 'Health'),
                     'state':            _safe(tr, 'Status', 'State'),
                     'upper_critical':   None,
@@ -3917,6 +3951,11 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
             'model':         _safe(cdata, 'Model'),
             'serial_number': _safe(cdata, 'SerialNumber'),
             'part_number':   _safe(cdata, 'PartNumber'),
+            # 2026-06-16 감사 G4 (Additive): chassis 식별/상태 메타. CSUS r001u01 raw 는
+            # UUID(System UUID 와 다른 chassis 고유)/AssetTag/PowerState 보유했으나 미수집이었음.
+            'uuid':          _safe(cdata, 'UUID'),
+            'asset_tag':     _strip_or_none(_safe(cdata, 'AssetTag')),
+            'power_state':   _safe(cdata, 'PowerState'),
             'power':         pwr_data,
             # cycle 2026-06-09: thermal (Additive — Thermal 미노출 시 {}).
             'thermal':       thm_data,

@@ -31,12 +31,15 @@
       "last_reset_time": null,
       "mac_address": "7c:a6:2a:83:78:3c",
       "manager_type": "BMC",
+      "manufacturer": null,
       "model": "iLO 7",
       "name": "iLO",
       "oem": {
         "ilo_version": "1.13.01 May 13 2025"
       },
+      "part_number": null,
       "power_state": null,
+      "serial": null,
       "state": "Enabled",
       "timezone": null,
       "uuid": "5f8dccfb-0605-58a8-8b20-79c2be74df39"
@@ -893,6 +896,7 @@
           "manufacturer": "DELTA",
           "model": "P67252-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 2400,
           "serial": "TYN6939803021",
           "state": "Enabled"
@@ -903,6 +907,7 @@
           "manufacturer": "DELTA",
           "model": "P67252-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 2400,
           "serial": "KGI8177123548",
           "state": "Enabled"
@@ -913,6 +918,7 @@
           "manufacturer": "DELTA",
           "model": "P67252-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 2400,
           "serial": "TEK7067682439",
           "state": "Enabled"
@@ -923,6 +929,7 @@
           "manufacturer": "DELTA",
           "model": "P67252-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 2400,
           "serial": "RFV6659036217",
           "state": "Enabled"
@@ -933,6 +940,7 @@
           "manufacturer": "DELTA",
           "model": "P67252-B21",
           "name": "HpeServerPowerSupply",
+          "part_number": null,
           "power_capacity_w": 2400,
           "serial": "MRK5858353702",
           "state": "Enabled"
@@ -943,6 +951,7 @@
           "manufacturer": null,
           "model": null,
           "name": null,
+          "part_number": null,
           "power_capacity_w": null,
           "serial": null,
           "state": "Absent"
@@ -953,6 +962,7 @@
           "manufacturer": null,
           "model": null,
           "name": null,
+          "part_number": null,
           "power_capacity_w": null,
           "serial": null,
           "state": "Absent"
@@ -963,6 +973,7 @@
           "manufacturer": null,
           "model": null,
           "name": null,
+          "part_number": null,
           "power_capacity_w": null,
           "serial": null,
           "state": "Absent"

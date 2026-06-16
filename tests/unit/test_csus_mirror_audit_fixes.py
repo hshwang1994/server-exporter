@@ -381,7 +381,12 @@ def test_memory_locator_servicelabel_when_slot_zero(monkeypatch):
 
 
 def test_memory_locator_preserves_meaningful_slot(monkeypatch):
-    """MemoryLocation.Slot 이 truthy(예: 3)면 ServiceLabel 무시 — 기존 vendor 동작 불변(회귀 안전)."""
+    """MemoryLocation.Slot 이 truthy(예: 3)면 ServiceLabel 무시 — Slot 우선순위 불변.
+
+    LOCATOR-STR (2026-06-15 cross-device 일관성): locator 계약 = field_dictionary "string|null".
+    Slot 폴백은 이제 str cast ('3') — 구 int(3)은 Lenovo(Slot=32) 에서 cross-device 타입 불일치 +
+    같은 slot id(str '32')와 불일치였음. Slot 우선순위는 그대로(ServiceLabel 무시), 타입만 str 통일.
+    """
     _patch(monkeypatch, {
         "Systems/1/Memory": (200, {"Members": [{"@odata.id": "/redfish/v1/Systems/1/Memory/D3"}]}, None),
         "Systems/1/Memory/D3": (200, {
@@ -391,7 +396,7 @@ def test_memory_locator_preserves_meaningful_slot(monkeypatch):
             "Status": {"State": "Enabled", "Health": "OK"}}, None),
     })
     out, errs = rg.gather_memory("ip", "/redfish/v1/Systems/1", *CREDS)
-    assert out["slots"][0]["locator"] == 3
+    assert out["slots"][0]["locator"] == "3"
 
 
 def test_memory_locator_prefers_device_locator(monkeypatch):
@@ -406,6 +411,27 @@ def test_memory_locator_prefers_device_locator(monkeypatch):
     })
     out, errs = rg.gather_memory("ip", "/redfish/v1/Systems/1", *CREDS)
     assert out["slots"][0]["locator"] == "DIMM_A1"
+
+
+def test_memory_locator_str_when_slot_truthy_no_devicelocator(monkeypatch):
+    """LOCATOR-STR 회귀 (실 Lenovo SR650 V4 2026-06-15 실미러):
+
+    DeviceLocator 부재 + MemoryLocation.Slot=32(truthy int) → locator='32'(str), id 와 일치.
+    구 코드는 int 32 누출 → field_dictionary 계약 'string|null' 위반 + 같은 slot id(str '32') /
+    타 device(Dell 'DIMM A5' str) 와 cross-device 타입 불일치. Slot truthy 라 ServiceLabel 무시(우선순위 불변).
+    """
+    _patch(monkeypatch, {
+        "Systems/1/Memory": (200, {"Members": [{"@odata.id": "/redfish/v1/Systems/1/Memory/32"}]}, None),
+        "Systems/1/Memory/32": (200, {
+            "Id": "32", "Name": "DIMM 32", "CapacityMiB": 65536,
+            "MemoryLocation": {"Slot": 32},
+            "Location": {"PartLocation": {"ServiceLabel": "DIMM 32"}},
+            "Status": {"State": "Enabled", "Health": "OK"}}, None),
+    })
+    out, errs = rg.gather_memory("ip", "/redfish/v1/Systems/1", *CREDS)
+    assert out["slots"][0]["locator"] == "32"
+    assert isinstance(out["slots"][0]["locator"], str)
+    assert out["slots"][0]["id"] == "32"  # locator 가 id 와 타입 일치
 
 
 # ── CSUS-R8: Ethernet port_type via Port.Ethernet dict ───────────────────────

@@ -37,7 +37,7 @@
 | 영역 | 위치 | 검증 항목 |
 |---|---|---|
 | envelope 13 필드 | `tests/regression/test_cross_channel_consistency.py::test_envelope_thirteen_fields_present` | rule 13 R5 |
-| hostname fallback chain | `test_hostname_never_null` | concern 7 / build_output.yml fallback |
+| hostname strict-null (≠ip) | `test_hostname_not_ip_fallback` | 2026-06-16 정책 / build_output.yml (IP fallback 폐지) |
 | vendor canonical | `test_vendor_canonical` | rule 50 R1 |
 | status enum (4 시나리오) | `test_status_enum` | rule 13 R8 |
 | sections enum | `test_sections_values_enum` | rule 13 R1 |
