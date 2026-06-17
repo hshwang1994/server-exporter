@@ -57,6 +57,7 @@ pipeline {
             }
             options {
                 timeout(time: 2, unit: 'MINUTES')
+                // Validate 는 repo 파일을 안 읽음(파라미터 검증만) → SCM checkout 생략 (빌드당 GitLab clone 1회 절약)
                 skipDefaultCheckout(true)
             }
             steps {
@@ -122,6 +123,7 @@ pipeline {
                     customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }
+            // Gather 는 site.yml / inventory.sh / ansible.cfg 등 repo 파일을 사용 → 기본 SCM checkout 유지
             options { timeout(time: 60, unit: 'MINUTES') }
             environment {
                 REPO_ROOT                = "${WORKSPACE}"
@@ -161,12 +163,19 @@ pipeline {
                             ansible-playbook "${playbook}" -i "${inventory}" --vault-password-file="\${VAULT_PASS_FILE}"
                         """
                     }
+
+                    // Gather 완전 실패(출력 0건)면 Callback 까지 가지 말고 여기서 원인 노출.
+                    //   부분 수집(일부 호스트만 성공)은 파일에 내용이 있어 통과 → 기존 graceful 유지.
+                    def gatherOut = "${env.WORKSPACE}/gather_output.json"
+                    if (!fileExists(gatherOut) || readFile(gatherOut).length() == 0) {
+                        error "[Gather] gather_output.json 미생성/0바이트 — ansible-playbook 완전 실패 또는 출력 경로 오류"
+                    }
                 }
 
                 stash(
                     name       : 'gather-output',
                     includes   : 'gather_output.json',
-                    allowEmpty : true,
+                    allowEmpty : false,
                 )
             }
             post {
@@ -184,6 +193,7 @@ pipeline {
                     customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }
+            // Validate Schema 는 tests/validate_field_dictionary.py 등 repo 파일을 사용 → 기본 SCM checkout 유지
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
                 sh '''#!/bin/bash
@@ -204,6 +214,7 @@ pipeline {
         stage('Callback') {
             agent { label 'built-in' }
             options {
+                // Callback 은 master 노드에서 stash 결과만 사용, repo 파일 안 읽음 → SCM checkout 생략
                 skipDefaultCheckout(true)
                 timeout(time: 15, unit: 'MINUTES')
             }
@@ -252,39 +263,42 @@ pipeline {
 
                     writeFile file: 'callback_body.json', text: callbackBody
 
+                    // callbackEndpoint 는 withEnv 로 환경변수 전달(셸 명령문에 직접 넣지 않음) + Validate 입력 차단 (이중 방어).
                     def maxRetries = 3
                     def success = false
                     def lastError = ''
 
-                    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                        echo "[Callback] [${attempt}/${maxRetries}] 전송중..."
-                        def rc = sh(
-                            returnStatus: true,
-                            script: """#!/bin/bash
-                                set +x
-                                cd "\${WORKSPACE}"
-                                curl -sS -o callback_resp.txt -w '%{http_code}' --max-time 300 -X POST -H 'Content-Type: application/json' --data @callback_body.json '${callbackEndpoint}' > http_code.txt
-                            """
-                        )
-                        def httpCode = ''
-                        try {
-                            httpCode = readFile('http_code.txt').trim()
-                        } catch (Exception e) {
-                            httpCode = ''
-                        }
+                    withEnv(["CALLBACK_ENDPOINT=${callbackEndpoint}"]) {
+                        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                            echo "[Callback] [${attempt}/${maxRetries}] 전송중..."
+                            def rc = sh(
+                                returnStatus: true,
+                                script: """#!/bin/bash
+                                    set +x
+                                    cd "\${WORKSPACE}"
+                                    curl -sS -o callback_resp.txt -w '%{http_code}' --max-time 300 -X POST -H 'Content-Type: application/json' --data @callback_body.json "\${CALLBACK_ENDPOINT}" > http_code.txt
+                                """
+                            )
+                            def httpCode = ''
+                            try {
+                                httpCode = readFile('http_code.txt').trim()
+                            } catch (Exception e) {
+                                httpCode = ''
+                            }
 
-                        if (rc == 0 && httpCode ==~ /2\d\d/) {
-                            echo "[Callback] [OK] HTTP ${httpCode} (${attempt}/${maxRetries})"
-                            success = true
-                            break
-                        }
-                        lastError = (rc != 0) ? "curl 종료코드 ${rc} (연결 실패/timeout)" : "HTTP ${httpCode}"
-                        echo "[Callback] [FAIL] (${attempt}/${maxRetries}) ${lastError}"
+                            if (rc == 0 && httpCode ==~ /2\d\d/) {
+                                echo "[Callback] [OK] HTTP ${httpCode} (${attempt}/${maxRetries})"
+                                success = true
+                                break
+                            }
+                            lastError = (rc != 0) ? "curl 종료코드 ${rc} (연결 실패/timeout)" : "HTTP ${httpCode}"
+                            echo "[Callback] [FAIL] (${attempt}/${maxRetries}) ${lastError}"
 
-                        if (attempt < maxRetries) {
-                            def waitSec = attempt * 10
-                            echo "[Callback] ${waitSec}초 후 재시도"
-                            sleep(time: waitSec, unit: 'SECONDS')
+                            if (attempt < maxRetries) {
+                                def waitSec = attempt * 10
+                                echo "[Callback] ${waitSec}초 후 재시도"
+                                sleep(time: waitSec, unit: 'SECONDS')
+                            }
                         }
                     }
 
