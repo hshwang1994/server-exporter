@@ -154,6 +154,10 @@ sudo /opt/ansible-env/bin/ansible-galaxy collection install ansible.utils       
 
 ### Vault 패스워드 파일 배치 (Jenkinsfile_portal 전용)
 
+> **[임시 2026-06-17]** 현재 `Jenkinsfile_portal` 은 vault 관리 방식 결정 전까지 패스워드를 Gather 단계에
+> **임시 하드코딩**한 상태라, 아래 `VAULT_PASS_FILE` 파일을 **읽지 않는다**. vault 관리 방식이 정해지면
+> Jenkinsfile 의 임시 블록을 제거하고 아래 파일 방식으로 복귀 + **패스워드 회전**한다.
+
 > **적용 대상**: `Jenkinsfile_portal` (포털 파이프라인) 에만 해당한다. 기본 `Jenkinsfile` 은 여전히
 > Jenkins Credentials Store 의 `server-gather-vault-password` (Secret Text) 를 사용하므로 이 파일이 필요 없다.
 
