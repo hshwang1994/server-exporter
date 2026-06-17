@@ -36,6 +36,8 @@
 | `storage.physical_disks[]` | `lsblk -J` | `gather_storage.yml` | |
 | `storage.filesystems[]` | `df -BM` | `gather_storage.yml` | |
 | `network.interfaces[]` | `ansible_interfaces` + `ansible_{iface}` | `gather_network.yml` | |
+| `network.interfaces[].addresses[]` (alias/secondary) | `ip -j addr show` → `ip -o addr show` → `ifconfig -a` (다중 소스 폴백) | `gather_network.yml` + `merge_linux_addresses` | `label`/`parent_interface`/`is_alias`/`scope`/`is_secondary` Additive. bond alias(bond1:1)는 parent addresses[] 에 병합 |
+| `network.bonds[].addresses[]` | bond master 인터페이스 addresses 미러 (`build_linux_network`) | `gather_network.yml` | interfaces ↔ bonds 일관 |
 | `network.default_gateways[]` | `ansible_default_ipv4.gateway` | `gather_network.yml` | |
 | `users[]` | `getent passwd` + `last`/`lastlog` | `gather_users.yml` | |
 

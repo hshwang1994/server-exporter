@@ -23,6 +23,8 @@ from network_topology import (  # noqa: E402
     parse_linux_net_topology,
     build_linux_network,
     enrich_linux_interfaces,
+    parse_linux_addresses,
+    merge_linux_addresses,
     parse_windows_teams,
     build_windows_network,
 )
@@ -32,6 +34,10 @@ FIX = REPO / "tests" / "fixtures" / "os" / "net"
 
 def _topo_lines(name: str) -> list[str]:
     return [ln for ln in (FIX / name).read_text(encoding="utf-8").splitlines() if ln.strip()]
+
+
+def _addr_line(name: str) -> str:
+    return (FIX / name).read_text(encoding="utf-8").strip()
 
 
 def _iface(name, ip=None, mac=None, speed=10000):
@@ -581,10 +587,148 @@ def test_rhel96_expected_fixture_python_path_topology():
     b1 = next(b for b in net["bonds"] if b["name"] == "bond1")
     assert b1["mode"] == "active-backup"
     assert b1["active_slave"] == "ens161"
-    assert b1["addresses"][0]["address"] == "10.100.64.167"  # bond 에 IP
+    assert b1["addresses"][0]["address"] == "10.100.64.167"  # bond 에 IP (primary)
+    # bond alias(bond1:1) 가 parent addresses[] 에 병합 (python 경로, server 165)
+    assert b1["addresses"][1]["address"] == "10.100.10.102"
+    assert b1["addresses"][1]["label"] == "bond1:1" and b1["addresses"][1]["is_alias"] is True
     by_name = {i["name"]: i for i in net["interfaces"]}
+    assert "bond1:1" not in by_name  # alias 는 별도 인터페이스 아님
     for sl in ("ens161", "ens193", "ens225", "ens256"):
         assert by_name[sl]["bond_role"] == "slave"
         assert by_name[sl]["addresses"] == []
     assert by_name["bond1"]["bond_role"] == "master"
+    assert by_name["bond1"]["addresses"][1]["address"] == "10.100.10.102"  # iface ↔ bond 일관
     assert "bond_role" not in by_name["ens192"]  # 일반 NIC 불변
+
+
+# ===========================================================================
+# bond alias / secondary IP 수집 (parse_linux_addresses + merge_linux_addresses)
+# 실장비 캡처: 10.100.64.161(RHEL 8.10) / 10.100.64.165(RHEL 9.6) bond1:1/bond2:1
+# ===========================================================================
+def _base_bond(name, ip, gw=None):
+    return {"id": name, "name": name, "kind": "os_nic", "mac": "00:50:56:84:57:81",
+            "mtu": 1500, "speed_mbps": 10000, "link_status": "up", "is_primary": False,
+            "addresses": [{"family": "ipv4", "address": ip, "prefix_length": 24,
+                           "subnet_mask": "255.255.255.0", "gateway": gw}]}
+
+
+@pytest.mark.parametrize("fixture,bond1_primary,bond1_alias,bond2_alias", [
+    ("rhel810_addr.txt", "10.100.64.169", "10.100.10.100", "10.100.10.101"),
+    ("rhel96_addr.txt", "10.100.64.167", "10.100.10.102", "10.100.10.103"),
+])
+def test_parse_addresses_json_real_capture(fixture, bond1_primary, bond1_alias, bond2_alias):
+    """ip -j addr show 실 캡처 → bond master primary + alias(bond1:1) 정확 파싱."""
+    amap = parse_linux_addresses([_addr_line(fixture)])
+    b1 = amap["bond1"]
+    assert [a["address"] for a in b1] == [bond1_primary, bond1_alias]
+    primary, alias = b1
+    assert primary["label"] == "bond1" and primary["is_alias"] is False
+    assert primary["scope"] == "global" and primary["family"] == "ipv4"
+    assert alias["label"] == "bond1:1" and alias["is_alias"] is True
+    assert alias["parent_interface"] == "bond1" and alias["scope"] == "global"
+    assert alias["prefix_length"] == 24 and alias["subnet_mask"] == "255.255.255.0"
+    assert alias["is_secondary"] is False  # 다른 서브넷 alias → 커널 secondary 아님
+    assert amap["bond2"][1]["address"] == bond2_alias
+    # IPv6 link-local 도 수집 (label 없음 → 부모 ifname, is_alias False)
+    v6 = [a for a in amap["ens192"] if a["family"] == "ipv6"]
+    assert v6 and v6[0]["scope"] == "link" and v6[0]["is_alias"] is False
+
+
+def test_parse_addresses_tier2_ip_o():
+    """2순위 ip -o addr show 라인 파싱 — label '\\' 앞 마지막 토큰."""
+    lines = [
+        r"ADDRO|9: bond1    inet 10.100.64.169/24 brd 10.100.64.255 scope global noprefixroute bond1\       valid_lft forever preferred_lft forever",
+        r"ADDRO|9: bond1    inet 10.100.10.100/24 scope global bond1:1\       valid_lft forever preferred_lft forever",
+        r"ADDRO|2: ens192    inet6 fe80::250:56ff:fe84:b4/64 scope link noprefixroute \       valid_lft forever",
+    ]
+    amap = parse_linux_addresses(lines)
+    assert [a["address"] for a in amap["bond1"]] == ["10.100.64.169", "10.100.10.100"]
+    assert amap["bond1"][0]["is_alias"] is False and amap["bond1"][1]["is_alias"] is True
+    assert amap["bond1"][1]["label"] == "bond1:1"
+    assert amap["ens192"][0]["family"] == "ipv6" and amap["ens192"][0]["scope"] == "link"
+
+
+def test_parse_addresses_tier3_ifconfig():
+    """3순위 ifconfig -a (net-tools) — alias 는 'bond1:1:' stanza 헤더."""
+    lines = [
+        "ADDRIFC|bond1: flags=5187<UP,BROADCAST,RUNNING,MASTER,MULTICAST>  mtu 1500",
+        "ADDRIFC|        inet 10.100.64.169  netmask 255.255.255.0  broadcast 10.100.64.255",
+        "ADDRIFC|bond1:1: flags=5187<UP,BROADCAST,RUNNING,MASTER,MULTICAST>  mtu 1500",
+        "ADDRIFC|        inet 10.100.10.100  netmask 255.255.255.0  broadcast 0.0.0.0",
+    ]
+    amap = parse_linux_addresses(lines)
+    assert [a["address"] for a in amap["bond1"]] == ["10.100.64.169", "10.100.10.100"]
+    alias = amap["bond1"][1]
+    assert alias["label"] == "bond1:1" and alias["is_alias"] is True
+    assert alias["prefix_length"] == 24 and alias["subnet_mask"] == "255.255.255.0"
+
+
+def test_parse_addresses_json_beats_ip_o():
+    """ADDRJSON(1순위) 이 ADDRO(2순위) 보다 우선."""
+    lines = [
+        r"ADDRO|9: bond1    inet 10.0.0.1/24 scope global bond1\  valid_lft forever",
+        'ADDRJSON|[{"ifindex":9,"ifname":"bond1","addr_info":[{"family":"inet","local":"10.9.9.9","prefixlen":24,"scope":"global","label":"bond1"}]}]',
+    ]
+    amap = parse_linux_addresses(lines)
+    assert amap["bond1"][0]["address"] == "10.9.9.9"  # JSON 우선
+
+
+@pytest.mark.parametrize("empty", [None, [], [""], ["BOND|bond0|x"], ["ADDRJSON|"]])
+def test_parse_addresses_empty_or_garbage(empty):
+    assert parse_linux_addresses(empty) == {}
+
+
+def test_merge_appends_alias_to_parent_bond():
+    """merge: bond master 의 alias 를 parent addresses[] 에 append (신규 iface 아님)."""
+    base = [_base_bond("bond1", "10.100.64.169")]
+    merged = merge_linux_addresses(base, [_addr_line("rhel810_addr.txt")])
+    assert [i["name"] for i in merged] == ["bond1"]  # 인터페이스 수 불변 (alias 별도 생성 X)
+    addrs = merged[0]["addresses"]
+    assert [a["address"] for a in addrs] == ["10.100.64.169", "10.100.10.100"]
+    assert addrs[0]["is_alias"] is False and addrs[1]["is_alias"] is True
+    assert addrs[1]["label"] == "bond1:1" and addrs[1]["parent_interface"] == "bond1"
+
+
+def test_merge_preserves_existing_gateway_alias_gateway_none():
+    """merge: 기존 primary 의 gateway 보존, alias 는 gateway None."""
+    base = [_base_bond("bond1", "10.100.64.169", gw="10.100.64.254")]
+    merged = merge_linux_addresses(base, [_addr_line("rhel810_addr.txt")])
+    addrs = merged[0]["addresses"]
+    assert addrs[0]["gateway"] == "10.100.64.254"  # primary gateway 보존
+    assert addrs[1]["gateway"] is None             # alias gateway 없음
+
+
+def test_merge_no_addr_lines_is_additive_only():
+    """alias 없는 서버(=ADDR 라인 없음): 신규 키만 부여, 주소 수/값 불변 (back-compat)."""
+    base = [_base_bond("bond1", "10.100.64.169", gw="10.100.64.254")]
+    merged = merge_linux_addresses(base, ["BOND|bond1|active-backup|ens161|100|slow|layer2|ens161|stable|ens161 ens193"])
+    addrs = merged[0]["addresses"]
+    assert len(addrs) == 1                          # 신규 주소 추가 없음
+    assert addrs[0]["address"] == "10.100.64.169"
+    assert addrs[0]["gateway"] == "10.100.64.254"   # 기존 값 보존
+    assert addrs[0]["is_alias"] is False and addrs[0]["label"] == "bond1"  # 신규 키 default
+    assert addrs[0]["parent_interface"] == "bond1" and addrs[0]["is_secondary"] is False
+
+
+def test_merge_full_chain_mirrors_alias_to_bonds_and_keeps_slaves_empty():
+    """merge → build: alias 가 bonds[].addresses 로 mirror, slave 는 IP 없음 유지."""
+    base = [_base_bond("bond1", "10.100.64.169")]
+    topo = ["BOND|bond1|active-backup|ens161|100|slow|layer2|ens161|stable|ens161 ens193",
+            "SLSTATE|ens161|active", "SLSTATE|ens193|backup",
+            "SLMETA|bond1|ens161|1500|up|10000|aa:00", "SLMETA|bond1|ens193|1500|up|10000|aa:01"]
+    lines = topo + [_addr_line("rhel810_addr.txt")]
+    net = build_linux_network(merge_linux_addresses(base, lines), lines)
+    bond = net["bonds"][0]
+    assert [a["address"] for a in bond["addresses"]] == ["10.100.64.169", "10.100.10.100"]
+    assert bond["addresses"][1]["is_alias"] is True
+    assert bond["mode"] == "active-backup" and bond["active_slave"] == "ens161"  # 메타 불변
+    slaves = [i for i in net["interfaces"] if i.get("bond_role") == "slave"]
+    assert all(s["addresses"] == [] for s in slaves)  # slave 물리 NIC IP 없음 유지
+
+
+def test_merge_does_not_mutate_input():
+    """merge 입력 mutation 금지 (immutability)."""
+    base = [_base_bond("bond1", "10.100.64.169", gw="10.100.64.254")]
+    snapshot = json.loads(json.dumps(base))
+    merge_linux_addresses(base, [_addr_line("rhel810_addr.txt")])
+    assert base == snapshot

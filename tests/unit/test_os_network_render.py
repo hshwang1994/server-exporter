@@ -16,7 +16,7 @@ from jinja2 import Environment
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "filter_plugins"))
-from network_topology import build_linux_network  # noqa: E402
+from network_topology import build_linux_network, merge_linux_addresses  # noqa: E402
 
 NET_YML = REPO / "os-gather" / "tasks" / "linux" / "gather_network.yml"
 FIX = REPO / "tests" / "fixtures" / "os" / "net"
@@ -37,6 +37,7 @@ def _env():
     env.filters["combine"] = _combine
     env.filters["regex_replace"] = _regex_replace
     env.filters["build_linux_network"] = build_linux_network
+    env.filters["merge_linux_addresses"] = merge_linux_addresses
     return env
 
 
@@ -119,6 +120,26 @@ def test_raw_path_yaml_render_has_bonds():
     # 13 필드 호환: 기존 키 유지
     assert set(["dns_servers", "default_gateways", "interfaces", "adapters",
                 "ports", "summary"]).issubset(net.keys())
+
+    # --- bond alias IP (bond1:1 / bond2:1) — parent addresses[] 에 병합, 신규 인터페이스 아님 ---
+    iface_names = [i["name"] for i in net["interfaces"]]
+    assert "bond1:1" not in iface_names and "bond2:1" not in iface_names  # alias 는 별도 iface 아님
+    b1_if = by_name["bond1"]
+    assert [a["address"] for a in b1_if["addresses"]] == ["10.100.64.169", "10.100.10.100"]
+    primary, alias = b1_if["addresses"]
+    assert primary["is_alias"] is False and primary["label"] == "bond1"
+    assert alias["is_alias"] is True and alias["label"] == "bond1:1"
+    assert alias["parent_interface"] == "bond1" and alias["scope"] == "global"
+    assert alias["subnet_mask"] == "255.255.255.0" and alias["is_secondary"] is False
+    # bonds[].addresses 에도 동일하게 mirror (interfaces ↔ bonds 일관성)
+    assert [a["address"] for a in b1["addresses"]] == ["10.100.64.169", "10.100.10.100"]
+    assert b1["addresses"][1]["label"] == "bond1:1"
+    # 기존 bond 메타 불변 (mode/active_slave/slaves) — alias 추가가 이를 깨지 않음
+    assert b1["mode"] == "active-backup" and b1["active_slave"] == "ens161"
+    assert [s["name"] for s in b1["slaves"]] == ["ens161", "ens193"]
+    # alias 없는 NIC(ens192) 은 기존 주소 + 신규 키만 (신규 주소 추가 없음)
+    assert len(by_name["ens192"]["addresses"]) == 2  # ipv4 + ipv6 (불변)
+    assert by_name["ens192"]["addresses"][0]["is_alias"] is False
 
 
 def test_raw_path_matches_committed_expected():

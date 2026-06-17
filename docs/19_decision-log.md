@@ -6,7 +6,45 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-06-16
+> 최종 갱신: 2026-06-17
+
+## 2026-06-17 — OS Linux bond alias / secondary IP 수집 (네트워크 개더링)
+
+### 요청 / 배경
+
+- OS 네트워크 개더링이 bond master 의 primary IP 만 수집하고 alias(`bond1:1`, `bond2:1`) 를 누락.
+  python_ok 경로는 `ansible_<iface>.ipv4.address`(primary only, label/secondary 없음), raw 경로는
+  `ip -o -4 addr show dev <dev> | head -1`(첫 주소만) → 두 경로 모두 alias 손실.
+- 요청: alias IP 를 수집하되 **새 인터페이스로 만들지 말고 parent bond 의 `addresses[]` 에** 넣을 것.
+  RHEL 고정 금지 — Linux 계열 전체 동작. 테스트 대상 10.100.64.161(RHEL 8.10)/10.100.64.165(RHEL 9.6).
+
+### 결정 (What)
+
+- **수집 소스**: 공유 collector `_l_net_collector` 에 주소 블록 추가 — `ip -j addr show`(1순위, JSON)
+  → `ip -o addr show`(2순위) → `ifconfig -a`(3순위). nmcli/ifcfg 비의존(NetworkManager 부재·배포판 차이 강건).
+  python_ok shell·raw 두 경로가 같은 collector 를 실행하므로 단일 정의로 양 경로 커버.
+- **정규화**: 신규 필터 `parse_linux_addresses`/`merge_linux_addresses`(`network_topology.py`). merge 는
+  base 인터페이스의 기존 주소를 신규 5 키로 enrich(값 보존) + alias 를 parent `addresses[]` 에 append.
+  `build_linux_network` 는 **불변** — 기존 단위테스트(`net == base`, slave `addresses==[]`) 보호 위해 merge 를
+  분리 필터로 두고 yml 체인(`... | merge_linux_addresses(lines) | build_linux_network(lines)`)에서 호출.
+  bond master IP 를 `bonds[].addresses` 로 mirror 하는 기존 로직 덕에 alias 가 bonds[] 에도 자동 일관.
+- **스키마(Additive, `channel:[os]` nice)**: `label`/`parent_interface`/`is_alias`/`scope`/`is_secondary`.
+  `is_secondary` 는 커널 secondary 플래그 기반 best-effort(다른 서브넷 alias 는 false — 정상).
+
+### 결과 (Impact)
+
+- 실장비 161/165 live SSH 검증: bond1:1/bond2:1 수집, 기존 bond IP·slave·active_slave·mode 불변,
+  alias 별도 인터페이스 미생성, slave IP 없음 유지. alias 없는 NIC 결과 불변(신규 키만 Additive).
+- pytest unit+regression+e2e 1093 passed / field_dictionary·drift·vendor-boundary·harness 게이트 통과.
+- 증거: `tests/evidence/2026-06-17-bond-alias-collection.md`, docs/16·docs/20(§6.4.2).
+
+### 대안 비교 (Considered)
+
+- **(A) build_linux_network 내부에서 merge** — 기각: `net["interfaces"] == base` 등 기존 단위테스트 대량 파손.
+  merge 를 별도 필터로 분리해 기존 함수 동작 보존.
+- **(B) setup facts `ipv4_secondaries` 사용** — 기각: label/scope 부재 + python_ok 경로 한정(raw 미커버).
+  `ip -j` 단일 소스가 두 경로·label/scope 모두 충족.
+- **(C) 인터페이스/주소 레벨 필드 위치** — 주소 레벨 채택(요청 명시). cross-channel drift 는 `channel:[os]` 한정으로 수용.
 
 ## 2026-06-16 — CSUS 실 게더링 cascade: HPE OEM dict conditional(Bug A) + site.yml graceful degradation 복원(Bug B, redfish)
 

@@ -1486,6 +1486,89 @@ fields:
     help_ko: "bond master 의 멤버 NIC 이름 목록 (bonds[].slaves[].name 미러). master 아니면 키 부재."
     help_en: "Member NIC names of the bond master (mirrors bonds[].slaves[].name). Absent otherwise."
 
+  # --- addresses[] alias/secondary 메타 (Linux OS, ip -j/-o addr · ifconfig 다중 소스) ---
+  # 기존 5 키(family/address/prefix_length/subnet_mask/gateway)에 Additive 로 추가.
+  # bonds[].addresses[] 도 동일 키 (bond master 인터페이스 addresses 미러).
+  "network.interfaces[].addresses[].label":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      이 IP 의 ip addr label. alias 면 'bond1:1' 같은 'dev:N' 형태,
+      일반 주소면 부모 인터페이스명(예: bond1). Linux 전용.
+    help_en: >-
+      IP label from `ip addr`. For an alias this is the 'dev:N' form (e.g. 'bond1:1');
+      for a normal address it is the parent interface name (e.g. bond1). Linux only.
+  "network.interfaces[].addresses[].parent_interface":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      이 주소가 실제 바인딩된 인터페이스(ip 의 dev). bond alias(bond1:1)는
+      별도 인터페이스가 아니라 parent bond 의 추가 IP 이므로 parent=bond1.
+    help_en: >-
+      Interface this address is actually bound to (the `ip` dev). A bond alias
+      (bond1:1) is not a separate interface — it is an extra IP on the parent bond,
+      so parent_interface=bond1.
+  "network.interfaces[].addresses[].is_alias":
+    type: "boolean|null"
+    priority: nice
+    channel: [os]
+    help_ko: "label 이 parent_interface 와 다르면 true (예: bond1:1). 일반 주소는 false."
+    help_en: "true when label differs from parent_interface (e.g. bond1:1); false for a normal address."
+  "network.interfaces[].addresses[].scope":
+    type: "string|null"
+    enum: ["global", "link", "host", "site", null]
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      주소 범위 (ip addr 의 scope). global=라우팅 가능, link=링크 로컬(IPv6 fe80::),
+      host=호스트 로컬(loopback). 기존 IPv6 주소의 scope 와 동일 키.
+    help_en: >-
+      Address scope (from `ip addr`). global=routable, link=link-local (IPv6 fe80::),
+      host=host-local (loopback). Same key already used for IPv6 addresses.
+  "network.interfaces[].addresses[].is_secondary":
+    type: "boolean|null"
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      커널 secondary 플래그 (같은 서브넷 2번째+ IPv4 주소). 다른 서브넷 alias 는
+      secondary 가 아니므로 false. ip 가 플래그를 주지 않으면 false.
+    help_en: >-
+      Kernel secondary flag (2nd+ IPv4 in the same subnet). A different-subnet alias
+      is not a secondary, so false. false when `ip` does not emit the flag.
+  "network.bonds[].addresses[].label":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: "bond 자체 IP 의 label (bond master 인터페이스 addresses 미러). alias 면 'bondX:N'."
+    help_en: "Label of the bond's own IP (mirrors the bond master interface addresses). 'bondX:N' for an alias."
+  "network.bonds[].addresses[].parent_interface":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: "bond 자체 IP 가 바인딩된 인터페이스(=bond 이름)."
+    help_en: "Interface the bond's own IP is bound to (= the bond name)."
+  "network.bonds[].addresses[].is_alias":
+    type: "boolean|null"
+    priority: nice
+    channel: [os]
+    help_ko: "bond 자체 IP 가 alias(bondX:N)면 true. primary 면 false."
+    help_en: "true when the bond's own IP is an alias (bondX:N); false for the primary."
+  "network.bonds[].addresses[].scope":
+    type: "string|null"
+    enum: ["global", "link", "host", "site", null]
+    priority: nice
+    channel: [os]
+    help_ko: "bond 자체 IP 의 scope (global/link/host)."
+    help_en: "Scope of the bond's own IP (global/link/host)."
+  "network.bonds[].addresses[].is_secondary":
+    type: "boolean|null"
+    priority: nice
+    channel: [os]
+    help_ko: "bond 자체 IP 가 커널 secondary(같은 서브넷 2번째+ IPv4)면 true. 보통 false."
+    help_en: "true when the bond's own IP is a kernel secondary (2nd+ IPv4 in the same subnet); usually false."
+
   "network.interfaces[].vlan_id":
     type: "integer|null"
     priority: nice

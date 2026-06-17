@@ -322,6 +322,287 @@ def build_linux_network(interfaces, lines):
 
 
 # =============================================================================
+# Per-address 수집 (bond alias / secondary IP 포함) — Linux 공통, 다중 소스 3-tier
+# =============================================================================
+# collector(gather_network.yml _l_net_collector)가 emit 한 주소 라인을 파싱한다.
+# 우선순위: ADDRJSON| (ip -j addr show, 1순위 — 가장 견고) >
+#           ADDRO|     (ip -o addr show, 2순위) >
+#           ADDRIFC|   (ifconfig -a,    3순위, net-tools 부재 환경 폴백)
+# nmcli / ifcfg 파일에 의존하지 않는다 (NetworkManager 부재·배포판 차이에 강건).
+#
+# 산출 주소 레코드는 기존 5 키(family/address/prefix_length/subnet_mask/gateway)를
+# 유지하고 다음을 *추가*한다 (Additive — rule 96 R1-B):
+#   scope            : global/link/host/site (없으면 None)
+#   label            : ip 의 주소 label (alias 면 'bond1:1' 등, 없으면 부모 ifname)
+#   parent_interface : 이 주소가 실제 바인딩된 인터페이스(=ip 의 dev)
+#   is_alias         : label 이 parent_interface 와 다르면 True (예: bond1:1)
+#   is_secondary     : 커널 secondary 플래그(같은 서브넷 2번째+ IPv4). 없으면 False
+#
+# bond alias(bond1:1)는 새 인터페이스가 아니라 parent bond 의 추가 IP 이므로,
+# 별도 interfaces[] 항목을 만들지 않고 parent 의 addresses[] 에 append 한다.
+
+_ADDR_NEW_KEYS = ("scope", "label", "parent_interface", "is_alias", "is_secondary")
+# ip -o addr show 의 flag 토큰(주소 label 후보에서 제외)
+_IP_O_FLAGS = frozenset({
+    "brd", "scope", "secondary", "primary", "dynamic", "mngtmpaddr",
+    "noprefixroute", "tentative", "deprecated", "temporary", "home",
+    "nodad", "optimistic", "stable-privacy", "valid_lft", "preferred_lft",
+    "forever", "global", "link", "host", "site", "nowait",
+})
+
+
+def _prefix_to_mask(prefixlen):
+    """IPv4 prefix length → dotted subnet mask ('255.255.255.0'). 범위 밖이면 None."""
+    p = _to_int(prefixlen)
+    if p is None or p < 0 or p > 32:
+        return None
+    bits = (0xFFFFFFFF << (32 - p)) & 0xFFFFFFFF if p > 0 else 0
+    return ".".join(str((bits >> (8 * (3 - i))) & 0xFF) for i in range(4))
+
+
+def _mask_to_prefix(mask):
+    """dotted subnet mask → prefix length(int). 비정상 입력은 None (ifconfig 폴백용)."""
+    if not mask:
+        return None
+    try:
+        return sum(bin(int(o)).count("1") for o in str(mask).split("."))
+    except (ValueError, TypeError):
+        return None
+
+
+def _norm_family(fam):
+    """'inet'/'inet6' → 'ipv4'/'ipv6' (기존 출력 컨벤션 유지)."""
+    f = (fam or "").strip().lower()
+    if f in ("inet", "ipv4"):
+        return "ipv4"
+    if f in ("inet6", "ipv6"):
+        return "ipv6"
+    return f or None
+
+
+def _addr_record(ifname, family, address, prefixlen, scope, label, secondary):
+    """단일 주소 레코드 생성 (기존 5 키 + 신규 5 키). 입력 mutation 없음."""
+    fam = _norm_family(family)
+    lbl = _clean(label) or ifname
+    return {
+        "family": fam,
+        "address": address,
+        "prefix_length": _to_int(prefixlen),
+        "subnet_mask": _prefix_to_mask(prefixlen) if fam == "ipv4" else None,
+        "gateway": None,
+        "scope": _clean(scope),
+        "label": lbl,
+        "parent_interface": ifname,
+        "is_alias": bool(_clean(label)) and _clean(label) != ifname,
+        "is_secondary": bool(secondary),
+    }
+
+
+def _parse_addr_json(flat):
+    """ip -j addr show (compact JSON 한 줄) → {ifname: [addr_record]}."""
+    out = {}
+    try:
+        data = _json.loads(flat)
+    except (ValueError, TypeError):
+        return out
+    if not isinstance(data, list):
+        return out
+    for link in data:
+        if not isinstance(link, dict):
+            continue
+        ifname = _clean(link.get("ifname"))
+        if not ifname:
+            continue
+        for a in link.get("addr_info") or []:
+            if not isinstance(a, dict):
+                continue
+            local = _clean(a.get("local"))
+            if not local:
+                continue
+            out.setdefault(ifname, []).append(_addr_record(
+                ifname, a.get("family"), local, a.get("prefixlen"),
+                a.get("scope"), a.get("label"), a.get("secondary", False),
+            ))
+    return out
+
+
+def _parse_addr_o(lines):
+    """ip -o addr show 라인 → {ifname: [addr_record]} (2순위 폴백).
+
+    형식: '<idx>: <dev>  <fam> <cidr> [brd B] scope <s> [secondary] [<label>]\\ ...'
+    label 은 '\\' 앞 마지막 토큰 — primary 면 dev, alias 면 'dev:N'.
+    """
+    out = {}
+    for raw in lines:
+        if not isinstance(raw, str):
+            continue
+        head = raw.split("\\", 1)[0]
+        toks = head.split()
+        if len(toks) < 4:
+            continue
+        dev = toks[1]
+        fam = toks[2]
+        if fam not in ("inet", "inet6"):
+            continue
+        cidr = toks[3]
+        address, _, plen = cidr.partition("/")
+        rest = toks[4:]
+        scope = None
+        secondary = False
+        i = 0
+        while i < len(rest):
+            if rest[i] == "scope" and i + 1 < len(rest):
+                scope = rest[i + 1]
+                i += 2
+                continue
+            if rest[i] == "secondary":
+                secondary = True
+            i += 1
+        label = None
+        if rest:
+            last = rest[-1]
+            if last == dev or (":" in last and "/" not in last
+                               and last not in _IP_O_FLAGS):
+                label = last
+        out.setdefault(dev, []).append(
+            _addr_record(dev, fam, address, plen or None, scope, label, secondary))
+    return out
+
+
+def _parse_addr_ifconfig(lines):
+    """ifconfig -a 라인 → {ifname: [addr_record]} (3순위 폴백, net-tools).
+
+    stanza 헤더 '<label>: flags=...' 의 label(예: bond1:1)에서 부모 dev 추출.
+    """
+    out = {}
+    cur_label = None
+    cur_dev = None
+    for raw in lines:
+        if not isinstance(raw, str) or not raw:
+            continue
+        if not raw[0].isspace() and "flags=" in raw:
+            hdr = raw.split()[0].rstrip(":")
+            cur_label = hdr
+            cur_dev = hdr.split(":")[0]
+            continue
+        if cur_dev is None:
+            continue
+        s = raw.strip()
+        if s.startswith("inet6 "):
+            parts = s.split()
+            address = parts[1] if len(parts) > 1 else None
+            if not address:
+                continue
+            plen = None
+            scope = "global"
+            for j, t in enumerate(parts):
+                if t == "prefixlen" and j + 1 < len(parts):
+                    plen = parts[j + 1]
+            low = s.lower()
+            if "<link>" in low or "scopeid 0x20" in low:
+                scope = "link"
+            elif "<host>" in low or "scopeid 0x10" in low:
+                scope = "host"
+            out.setdefault(cur_dev, []).append(
+                _addr_record(cur_dev, "inet6", address, plen, scope, None, False))
+        elif s.startswith("inet "):
+            parts = s.split()
+            address = parts[1] if len(parts) > 1 else None
+            if not address:
+                continue
+            mask = None
+            for j, t in enumerate(parts):
+                if t == "netmask" and j + 1 < len(parts):
+                    mask = parts[j + 1]
+            label = cur_label if cur_label != cur_dev else None
+            out.setdefault(cur_dev, []).append(_addr_record(
+                cur_dev, "inet", address, _mask_to_prefix(mask), "global", label, False))
+    return out
+
+
+def parse_linux_addresses(lines):
+    """collector 라인 → {ifname: [addr_record]}. ADDRJSON > ADDRO > ADDRIFC 우선.
+
+    입력이 비거나 주소 라인이 없으면 {} 반환 (호출측 merge 가 default 키만 부여).
+    """
+    if not lines:
+        return {}
+    json_blobs, o_lines, ifc_lines = [], [], []
+    for ln in lines:
+        if not isinstance(ln, str):
+            continue
+        if ln.startswith("ADDRJSON|"):
+            json_blobs.append(ln[len("ADDRJSON|"):])
+        elif ln.startswith("ADDRO|"):
+            o_lines.append(ln[len("ADDRO|"):])
+        elif ln.startswith("ADDRIFC|"):
+            ifc_lines.append(ln[len("ADDRIFC|"):])
+    for blob in json_blobs:
+        m = _parse_addr_json(blob)
+        if m:
+            return m
+    if o_lines:
+        m = _parse_addr_o(o_lines)
+        if m:
+            return m
+    if ifc_lines:
+        return _parse_addr_ifconfig(ifc_lines)
+    return {}
+
+
+def merge_linux_addresses(interfaces, lines):
+    """base interfaces + collector 라인 → addresses[] 에 alias/secondary 병합 (새 리스트).
+
+    - 기존 주소: (family,address) 일치 시 신규 5 키로 enrich (기존 값 보존, gateway 유지)
+    - collector 에만 있는 주소(=alias 등): parent 인터페이스 addresses[] 에 append
+    - collector 데이터가 없는 주소: 신규 5 키를 안전한 default 로 부여 (Additive 일관성)
+    - bond master 의 addresses 에 alias 가 들어가면 build_linux_network 가 자동으로
+      bonds[].addresses 로 mirror (bond master ↔ bonds[] 일관성 자동 보장)
+    """
+    addr_map = parse_linux_addresses(lines)
+    out = []
+    for iface in interfaces or []:
+        new = dict(iface)
+        name = new.get("name")
+        collected = addr_map.get(name, [])
+        col_by_key = {}
+        for c in collected:
+            col_by_key.setdefault((c["family"], c["address"]), c)
+        seen = set()
+        merged = []
+        for a in (new.get("addresses") or []):
+            ea = dict(a)
+            key = (ea.get("family"), ea.get("address"))
+            seen.add(key)
+            c = col_by_key.get(key)
+            if c is not None:
+                if not ea.get("scope") and c.get("scope") is not None:
+                    ea["scope"] = c.get("scope")
+                elif "scope" not in ea:
+                    ea["scope"] = c.get("scope")
+                ea["label"] = c.get("label")
+                ea["parent_interface"] = c.get("parent_interface")
+                ea["is_alias"] = c.get("is_alias")
+                ea["is_secondary"] = c.get("is_secondary")
+            else:
+                ea.setdefault("scope", None)
+                ea["label"] = name
+                ea["parent_interface"] = name
+                ea["is_alias"] = False
+                ea.setdefault("is_secondary", False)
+            merged.append(ea)
+        for c in collected:
+            key = (c["family"], c["address"])
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(dict(c))
+        new["addresses"] = merged
+        out.append(new)
+    return out
+
+
+# =============================================================================
 # Windows teaming (LBFO / Switch Embedded Teaming) — gather_network.yml(windows)
 # =============================================================================
 # PowerShell 이 emit 한 'TAG {json}' 라인 파싱:
@@ -500,6 +781,8 @@ class FilterModule:
             "parse_linux_net_topology": parse_linux_net_topology,
             "enrich_linux_interfaces": enrich_linux_interfaces,
             "build_linux_network": build_linux_network,
+            "parse_linux_addresses": parse_linux_addresses,
+            "merge_linux_addresses": merge_linux_addresses,
             "parse_windows_teams": parse_windows_teams,
             "enrich_windows_interfaces": enrich_windows_interfaces,
             "build_windows_network": build_windows_network,

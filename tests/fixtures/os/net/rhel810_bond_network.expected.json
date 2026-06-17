@@ -24,7 +24,24 @@
           "address": "10.100.64.169",
           "prefix_length": 24,
           "subnet_mask": "255.255.255.0",
-          "gateway": null
+          "gateway": null,
+          "scope": "global",
+          "label": "bond1",
+          "parent_interface": "bond1",
+          "is_alias": false,
+          "is_secondary": false
+        },
+        {
+          "family": "ipv4",
+          "address": "10.100.10.100",
+          "prefix_length": 24,
+          "subnet_mask": "255.255.255.0",
+          "gateway": null,
+          "scope": "global",
+          "label": "bond1:1",
+          "parent_interface": "bond1",
+          "is_alias": true,
+          "is_secondary": false
         }
       ],
       "bond_role": "master",
@@ -50,7 +67,24 @@
           "address": "10.100.64.170",
           "prefix_length": 24,
           "subnet_mask": "255.255.255.0",
-          "gateway": null
+          "gateway": null,
+          "scope": "global",
+          "label": "bond2",
+          "parent_interface": "bond2",
+          "is_alias": false,
+          "is_secondary": false
+        },
+        {
+          "family": "ipv4",
+          "address": "10.100.10.101",
+          "prefix_length": 24,
+          "subnet_mask": "255.255.255.0",
+          "gateway": null,
+          "scope": "global",
+          "label": "bond2:1",
+          "parent_interface": "bond2",
+          "is_alias": true,
+          "is_secondary": false
         }
       ],
       "bond_role": "master",
@@ -76,7 +110,12 @@
           "address": "10.100.64.161",
           "prefix_length": 24,
           "subnet_mask": "255.255.255.0",
-          "gateway": "10.100.64.254"
+          "gateway": "10.100.64.254",
+          "scope": "global",
+          "label": "ens192",
+          "parent_interface": "ens192",
+          "is_alias": false,
+          "is_secondary": false
         },
         {
           "family": "ipv6",
@@ -84,7 +123,11 @@
           "prefix_length": 64,
           "subnet_mask": null,
           "gateway": null,
-          "scope": "link"
+          "scope": "link",
+          "label": "ens192",
+          "parent_interface": "ens192",
+          "is_alias": false,
+          "is_secondary": false
         }
       ]
     },
@@ -103,7 +146,12 @@
           "address": "10.100.64.162",
           "prefix_length": 24,
           "subnet_mask": "255.255.255.0",
-          "gateway": null
+          "gateway": null,
+          "scope": "global",
+          "label": "ens224",
+          "parent_interface": "ens224",
+          "is_alias": false,
+          "is_secondary": false
         },
         {
           "family": "ipv6",
@@ -111,7 +159,11 @@
           "prefix_length": 64,
           "subnet_mask": null,
           "gateway": null,
-          "scope": "link"
+          "scope": "link",
+          "label": "ens224",
+          "parent_interface": "ens224",
+          "is_alias": false,
+          "is_secondary": false
         }
       ]
     },
@@ -212,7 +264,24 @@
           "address": "10.100.64.169",
           "prefix_length": 24,
           "subnet_mask": "255.255.255.0",
-          "gateway": null
+          "gateway": null,
+          "scope": "global",
+          "label": "bond1",
+          "parent_interface": "bond1",
+          "is_alias": false,
+          "is_secondary": false
+        },
+        {
+          "family": "ipv4",
+          "address": "10.100.10.100",
+          "prefix_length": 24,
+          "subnet_mask": "255.255.255.0",
+          "gateway": null,
+          "scope": "global",
+          "label": "bond1:1",
+          "parent_interface": "bond1",
+          "is_alias": true,
+          "is_secondary": false
         }
       ]
     },
@@ -255,7 +324,24 @@
           "address": "10.100.64.170",
           "prefix_length": 24,
           "subnet_mask": "255.255.255.0",
-          "gateway": null
+          "gateway": null,
+          "scope": "global",
+          "label": "bond2",
+          "parent_interface": "bond2",
+          "is_alias": false,
+          "is_secondary": false
+        },
+        {
+          "family": "ipv4",
+          "address": "10.100.10.101",
+          "prefix_length": 24,
+          "subnet_mask": "255.255.255.0",
+          "gateway": null,
+          "scope": "global",
+          "label": "bond2:1",
+          "parent_interface": "bond2",
+          "is_alias": true,
+          "is_secondary": false
         }
       ]
     }

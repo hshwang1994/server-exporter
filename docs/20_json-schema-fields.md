@@ -400,6 +400,40 @@ controllers[*].id  ────┤
 구조 표현: 물리 NIC 는 IP 없이 `interfaces[]` 에 노출되고 IP 는 bond/team 인터페이스에 위치한다
 (원본 `ip -br addr` 와 동일). `summary` 집계는 기존과 동일(slave 미포함)하여 호출자 호환.
 
+#### 6.4.2 주소 alias / secondary 메타 (2026-06-17 — OS Linux, Additive)
+
+`interfaces[].addresses[]` 와 `bonds[].addresses[]` 의 각 주소 레코드는 기존 5 키
+(`family` / `address` / `prefix_length` / `subnet_mask` / `gateway`) 에 다음 5 키를 **추가**한다.
+수집 소스는 `ip -j addr show`(1순위) → `ip -o addr show`(2순위) → `ifconfig -a`(3순위) 의
+다중 소스 폴백이다(nmcli/ifcfg 비의존 — Linux 계열 공통). bond alias(`bond1:1`)는 **새 인터페이스가
+아니라** parent bond 의 추가 IP label 이므로 `interfaces[]` 에 별도 항목을 만들지 않고 parent 의
+`addresses[]` 에 append 되며, bond master 면 `bonds[].addresses[]` 에도 동일하게 mirror 된다.
+
+```json
+"addresses": [
+  { "family": "ipv4", "address": "10.100.64.169", "prefix_length": 24,
+    "subnet_mask": "255.255.255.0", "gateway": null,
+    "scope": "global", "label": "bond1",   "parent_interface": "bond1",
+    "is_alias": false, "is_secondary": false },          // primary
+  { "family": "ipv4", "address": "10.100.10.100", "prefix_length": 24,
+    "subnet_mask": "255.255.255.0", "gateway": null,
+    "scope": "global", "label": "bond1:1", "parent_interface": "bond1",
+    "is_alias": true,  "is_secondary": false }            // bond alias (bond1:1)
+]
+```
+
+| 키 | 의미 |
+|---|---|
+| `label` | `ip addr` 의 주소 label. alias 면 `bondX:N`, 일반 주소면 부모 ifname |
+| `parent_interface` | 주소가 실제 바인딩된 인터페이스(=`ip` 의 dev). alias 도 parent=bond |
+| `is_alias` | `label != parent_interface` 면 `true` (예: `bond1:1`) |
+| `scope` | `global` / `link`(IPv6 fe80::) / `host`(loopback) — 기존 IPv6 scope 와 동일 키 |
+| `is_secondary` | 커널 secondary(같은 서브넷 2번째+ IPv4). 다른 서브넷 alias 는 `false` |
+
+- **호환성**: alias 없는 서버는 주소 수/기존 값 불변, 위 5 키만 Additive 추가(호출자 파싱 영향 없음).
+- **채널**: Linux OS 전용(`channel:[os]`, priority nice). Windows/ESXi/Redfish addresses 는 기존 5 키 유지.
+- **검증**: 실장비 10.100.64.161(RHEL 8.10 raw) / 10.100.64.165(RHEL 9.6 python) — `tests/evidence/2026-06-17-bond-alias-collection.md`.
+
 ### 6.5 `data.power` (Redfish 전용)
 
 ```json

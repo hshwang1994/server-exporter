@@ -105,6 +105,22 @@
         done
         echo "TEAM|${t}||$(echo "$mem" | sed 's/^ *//')"
       done
+      # --- Per-address records (bond alias / secondary IP 포함) — Linux 공통 다중 소스 ---
+      # 우선순위: ip -j addr show (1순위) > ip -o addr show (2순위) > ifconfig -a (3순위).
+      # nmcli / ifcfg 파일 비의존 (NetworkManager 부재·배포판 차이에 강건).
+      # bond alias(bond1:1)는 새 인터페이스가 아니라 parent bond 의 추가 IP label →
+      # filter(merge_linux_addresses)가 parent 의 addresses[] 로 병합 (interfaces 신규 생성 안 함).
+      if command -v ip >/dev/null 2>&1 && ip -j addr show >/dev/null 2>&1; then
+        echo "ADDRJSON|$(ip -j addr show 2>/dev/null | tr -d '\r\n')"
+      elif command -v ip >/dev/null 2>&1; then
+        ip -o addr show 2>/dev/null | while IFS= read -r __al; do
+          echo "ADDRO|${__al}"
+        done
+      elif command -v ifconfig >/dev/null 2>&1; then
+        ifconfig -a 2>/dev/null | while IFS= read -r __al; do
+          echo "ADDRIFC|${__al}"
+        done
+      fi
   no_log: true
 
 # =============================================================================
@@ -283,9 +299,14 @@
     # bond/vlan/bridge/team 토폴로지 정규화 (filter_plugins/network_topology.py).
     # 입력: 기존 _l_norm_interfaces(IP 보유 NIC + bond master) + collector 라인.
     # 출력: enriched interfaces(slave 물리 NIC 추가 + bond_role) + bonds/bridges/teams.
+    # merge_linux_addresses: bond alias / secondary IP 를 parent addresses[] 에 병합
+    # (build_linux_network 가 bond master IP 를 bonds[].addresses 로 mirror → alias 자동 반영).
     - name: "linux | network | normalize topology"
       ansible.builtin.set_fact:
-        _l_net_topo: "{{ _l_norm_interfaces | build_linux_network(_l_topo_sh.stdout_lines | default([])) }}"
+        _l_net_topo: >-
+          {{ (_l_norm_interfaces
+              | merge_linux_addresses(_l_topo_sh.stdout_lines | default([])))
+             | build_linux_network(_l_topo_sh.stdout_lines | default([])) }}
       no_log: true
 
     # cycle-016 Phase P: 3 채널 key 일관성 — adapters / ports 빈 list 키 노출 (Linux OS 한계)
@@ -585,9 +606,13 @@
       no_log: true
 
     # bond/vlan/bridge/team 토폴로지 정규화 (python_ok 경로와 동일 filter).
+    # merge_linux_addresses: raw 경로도 동일하게 bond alias / secondary 병합.
     - name: "linux | network | normalize topology (raw)"
       ansible.builtin.set_fact:
-        _l_net_topo_raw: "{{ (_l_norm_interfaces_raw | default([])) | build_linux_network(_l_net_raw.stdout_lines | default([])) }}"
+        _l_net_topo_raw: >-
+          {{ ((_l_norm_interfaces_raw | default([]))
+              | merge_linux_addresses(_l_net_raw.stdout_lines | default([])))
+             | build_linux_network(_l_net_raw.stdout_lines | default([])) }}
       no_log: true
 
     - name: "linux | network | build fragment (raw)"
