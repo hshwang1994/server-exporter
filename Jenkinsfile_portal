@@ -102,11 +102,18 @@ pipeline {
                     label "${params.loc}"
                     // 2026-06-16: 빌드별 고유 workspace. 동시 빌드(6개 동시 트리거)가 같은 디렉터리를
                     //   checkout/clean 하며 충돌(Failed to clean workspace / AccessDenied)하던 것 차단.
-                    //   Jenkins 기본 @N 격리에만 의존하지 않고 BUILD_NUMBER 로 명시 분리.
-                    customWorkspace "gatherRedfish-${env.BUILD_NUMBER}"
+                    // 2026-06-17: gatherRedfish 하드코딩 → JOB_BASE_NAME 으로 교체. 같은 BUILD_NUMBER 라도
+                    //   job(gatherOS/gatherESXi/gatherRedfish)이 다르면 별도 디렉터리 → cross-job 동시빌드
+                    //   충돌까지 차단 + 로그에 실제 job 명시(이전엔 OS 빌드가 gatherRedfish-N 에서 돌아 혼동).
+                    customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }
-            options { timeout(time: 2, unit: 'MINUTES') }
+            options {
+                timeout(time: 2, unit: 'MINUTES')
+                // 2026-06-17: Validate 는 repo 파일을 안 읽음(파라미터 검증만) → SCM checkout 생략.
+                //   빌드당 GitLab full clone 1회 절약(Gather/Validate Schema 가 필요 시 각자 checkout).
+                skipDefaultCheckout(true)
+            }
             steps {
                 script {
                     if (!params.loc?.trim()) {
@@ -165,8 +172,10 @@ pipeline {
                     label "${params.loc}"
                     // 2026-06-16: 빌드별 고유 workspace. 동시 빌드(6개 동시 트리거)가 같은 디렉터리를
                     //   checkout/clean 하며 충돌(Failed to clean workspace / AccessDenied)하던 것 차단.
-                    //   Jenkins 기본 @N 격리에만 의존하지 않고 BUILD_NUMBER 로 명시 분리.
-                    customWorkspace "gatherRedfish-${env.BUILD_NUMBER}"
+                    // 2026-06-17: gatherRedfish 하드코딩 → JOB_BASE_NAME 으로 교체. 같은 BUILD_NUMBER 라도
+                    //   job(gatherOS/gatherESXi/gatherRedfish)이 다르면 별도 디렉터리 → cross-job 동시빌드
+                    //   충돌까지 차단 + 로그에 실제 job 명시(이전엔 OS 빌드가 gatherRedfish-N 에서 돌아 혼동).
+                    customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }
             options { timeout(time: 60, unit: 'MINUTES') }
@@ -241,10 +250,9 @@ pipeline {
             }
             post {
                 always {
-                    // 에이전트 workspace 에서 결과 파일 삭제 + 빌드 종료 시 자기 workspace 정리.
-                    // 2026-06-16: deleteDir() — 끝난 뒤(프로세스 없음) 깨끗이 비워 다음 빌드가 쌓인
-                    //   상태로 시작하지 않게. "매번 수동 workspace 삭제"를 자동화.
-                    sh 'rm -f "${WORKSPACE}/gather_output.json"'
+                    // 빌드 종료 시 자기 workspace 정리("매번 수동 삭제"를 자동화).
+                    // 2026-06-17: deleteDir() 가 workspace 전체를 비우므로 gather_output.json 도 함께
+                    //   삭제됨 → 별도 rm 불필요(중복 제거). 출력은 위 steps 의 stash 로 이미 보존됨.
                     deleteDir()
                 }
             }
@@ -259,8 +267,10 @@ pipeline {
                     label "${params.loc}"
                     // 2026-06-16: 빌드별 고유 workspace. 동시 빌드(6개 동시 트리거)가 같은 디렉터리를
                     //   checkout/clean 하며 충돌(Failed to clean workspace / AccessDenied)하던 것 차단.
-                    //   Jenkins 기본 @N 격리에만 의존하지 않고 BUILD_NUMBER 로 명시 분리.
-                    customWorkspace "gatherRedfish-${env.BUILD_NUMBER}"
+                    // 2026-06-17: gatherRedfish 하드코딩 → JOB_BASE_NAME 으로 교체. 같은 BUILD_NUMBER 라도
+                    //   job(gatherOS/gatherESXi/gatherRedfish)이 다르면 별도 디렉터리 → cross-job 동시빌드
+                    //   충돌까지 차단 + 로그에 실제 job 명시(이전엔 OS 빌드가 gatherRedfish-N 에서 돌아 혼동).
+                    customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }
             options { timeout(time: 2, unit: 'MINUTES') }
@@ -378,9 +388,9 @@ pipeline {
             }
             post {
                 always {
-                    // 마스터 workspace 에서 결과 파일 삭제 + 정리.
-                    // 2026-06-16: deleteDir() — 마스터(built-in) workspace 도 빌드마다 비워 누적 방지.
-                    sh 'rm -f "${WORKSPACE}/gather_output.json"'
+                    // 마스터(built-in) workspace 정리(빌드마다 누적 방지).
+                    // 2026-06-17: deleteDir() 가 unstash 한 gather_output.json 포함 전체를 비우므로
+                    //   별도 rm 불필요(중복 제거).
                     deleteDir()
                 }
             }
