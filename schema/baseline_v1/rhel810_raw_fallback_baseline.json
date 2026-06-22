@@ -29,7 +29,9 @@
       "adapter_candidate": "os_linux_rhel",
       "detected_os": "linux",
       "selected_port": 22,
-      "checked_ports": [22],
+      "checked_ports": [
+        22
+      ],
       "gather_mode": "raw_only",
       "python_version": "3.6.8",
       "python_path": "/usr/bin/python3"
@@ -69,7 +71,12 @@
         "ntp_synchronized": true,
         "firewall_tool": "firewalld",
         "firewall_state": "active",
-        "listening_ports": ["22", "53", "111", "631"],
+        "listening_ports": [
+          "22",
+          "53",
+          "111",
+          "631"
+        ],
         "swap_total_mb": 5119,
         "swap_used_mb": 0,
         "swap_free_mb": 5119
@@ -122,9 +129,14 @@
           ]
         }
       ],
-      "dns_servers": ["10.100.64.10"],
+      "dns_servers": [
+        "10.100.64.10"
+      ],
       "default_gateways": [
-        {"family": "ipv4", "address": "10.100.64.254"}
+        {
+          "family": "ipv4",
+          "address": "10.100.64.254"
+        }
       ],
       "bonds": [],
       "bridges": [],
@@ -138,7 +150,63 @@
             "link_up_count": 1
           }
         ]
-      }
+      },
+      "adapters": [
+        {
+          "id": "04:00.0",
+          "name": "VMXNET3 Ethernet Controller",
+          "manufacturer": "VMware",
+          "model": "VMXNET3 Ethernet Controller",
+          "driver": "vmxnet3",
+          "firmware_version": null,
+          "pci": "04:00.0"
+        },
+        {
+          "id": "0b:00.0",
+          "name": "VMXNET3 Ethernet Controller",
+          "manufacturer": "VMware",
+          "model": "VMXNET3 Ethernet Controller",
+          "driver": "vmxnet3",
+          "firmware_version": null,
+          "pci": "0b:00.0"
+        },
+        {
+          "id": "0c:00.0",
+          "name": "VMXNET3 Ethernet Controller",
+          "manufacturer": "VMware",
+          "model": "VMXNET3 Ethernet Controller",
+          "driver": "vmxnet3",
+          "firmware_version": null,
+          "pci": "0c:00.0"
+        },
+        {
+          "id": "13:00.0",
+          "name": "VMXNET3 Ethernet Controller",
+          "manufacturer": "VMware",
+          "model": "VMXNET3 Ethernet Controller",
+          "driver": "vmxnet3",
+          "firmware_version": null,
+          "pci": "13:00.0"
+        },
+        {
+          "id": "14:00.0",
+          "name": "VMXNET3 Ethernet Controller",
+          "manufacturer": "VMware",
+          "model": "VMXNET3 Ethernet Controller",
+          "driver": "vmxnet3",
+          "firmware_version": null,
+          "pci": "14:00.0"
+        },
+        {
+          "id": "1b:00.0",
+          "name": "VMXNET3 Ethernet Controller",
+          "manufacturer": "VMware",
+          "model": "VMXNET3 Ethernet Controller",
+          "driver": "vmxnet3",
+          "firmware_version": null,
+          "pci": "1b:00.0"
+        }
+      ]
     },
     "hardware": null,
     "cpu": {
@@ -177,7 +245,30 @@
           "health": null
         }
       ],
-      "controllers": [],
+      "controllers": [
+        {
+          "id": "0000:02:00.0",
+          "name": "VMware SATA AHCI controller",
+          "controller_model": "VMware SATA AHCI controller",
+          "controller_manufacturer": null,
+          "driver": "ahci",
+          "controller_type": "SATA",
+          "pci": "0000:02:00.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "0000:03:00.0",
+          "name": "VMware PVSCSI SCSI Controller",
+          "controller_model": "VMware PVSCSI SCSI Controller",
+          "controller_manufacturer": null,
+          "driver": "vmw_pvscsi",
+          "controller_type": "SAS",
+          "pci": "0000:03:00.0",
+          "health": null,
+          "drives": []
+        }
+      ],
       "logical_volumes": [],
       "filesystems": [
         {
@@ -208,14 +299,19 @@
       {
         "name": "root",
         "uid": "0",
-        "groups": ["root"],
+        "groups": [
+          "root"
+        ],
         "home": "/root",
         "last_access_time": null
       },
       {
         "name": "cloviradmin",
         "uid": "1000",
-        "groups": ["cloviradmin", "wheel"],
+        "groups": [
+          "cloviradmin",
+          "wheel"
+        ],
         "home": "/home/cloviradmin",
         "last_access_time": "2026-04-29T05:25:00Z"
       }
