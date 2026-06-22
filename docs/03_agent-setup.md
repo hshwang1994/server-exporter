@@ -152,39 +152,21 @@ sudo /opt/ansible-env/bin/ansible-galaxy collection install ansible.utils       
 > `/opt/ansible-env` 는 사용자 계정에 의존하지 않는 시스템 공용 경로다.
 > Jenkins Agent 사용자에게 읽기+실행 권한만 있으면 동작한다.
 
-### Vault 패스워드 파일 배치 (Jenkinsfile_portal 전용)
+### Vault 패스워드 (Jenkinsfile_portal — 메인 Jenkinsfile 과 동일)
 
-> **[임시 2026-06-17]** 현재 `Jenkinsfile_portal` 은 vault 관리 방식 결정 전까지 패스워드를 Gather 단계에
-> **임시 하드코딩**한 상태라, 아래 `VAULT_PASS_FILE` 파일을 **읽지 않는다**. vault 관리 방식이 정해지면
-> Jenkinsfile 의 임시 블록을 제거하고 아래 파일 방식으로 복귀 + **패스워드 회전**한다.
+> **2026-06-18 변경**: `Jenkinsfile_portal` 도 메인 `Jenkinsfile` 과 동일하게 Jenkins Credentials Store
+> 의 `server-gather-vault-password` (Secret text) 를 사용한다. 이전의 agent 로컬 `VAULT_PASS_FILE` 파일
+> 방식 / 임시 하드코딩은 폐기됐다 — **Agent 에 별도 vault 패스워드 파일을 배치할 필요가 없다.**
 
-> **적용 대상**: `Jenkinsfile_portal` (포털 파이프라인) 에만 해당한다. 기본 `Jenkinsfile` 은 여전히
-> Jenkins Credentials Store 의 `server-gather-vault-password` (Secret Text) 를 사용하므로 이 파일이 필요 없다.
+`Jenkinsfile_portal` 의 Gather 단계는 `withCredentials([string(credentialsId: 'server-gather-vault-password',
+variable: 'VAULT_PASSWORD')])` 로 패스워드를 주입받아(콘솔 마스킹), 런타임 임시파일(`mktemp`, chmod 600)에
+써서 `--vault-password-file` 로 ansible-playbook 에 넘기고, 빌드 종료 시 `trap` 으로 임시파일을 삭제한다.
 
-`Jenkinsfile_portal` 의 Gather 단계는 ansible-vault 복호화 패스워드를 **Agent 로컬 파일**에서 읽는다
-(`ansible-playbook --vault-password-file=...`). 파일 경로는 환경변수 `VAULT_PASS_FILE` 로 지정하며,
-미지정 시 기본값 `/opt/ansible-env/.vault_pass` 를 사용한다.
-
-```bash
-# vault 마스터 패스워드를 한 줄로 저장 (trailing newline 없이 — printf 사용)
-printf '%s' '<vault-master-password>' | sudo tee /opt/ansible-env/.vault_pass > /dev/null
-sudo chmod 600 /opt/ansible-env/.vault_pass
-sudo chown {서비스계정} /opt/ansible-env/.vault_pass   # Agent 서비스 계정이 읽을 수 있어야 함
-```
-
-> **[중요] 라벨에 묶인 모든 Agent 에 동일하게 배치해야 한다**
-> `Jenkinsfile_portal` 의 Validate / Gather / Validate Schema 단계는 `agent { label "${params.loc}" }`
-> (ich / chj / yi) 로 노드를 잡는다. 한 로케이션 라벨에 **Agent 가 여러 대** 붙어 있으면 빌드마다
-> 다른 Agent 가 선택될 수 있으므로, **그 라벨로 잡힐 수 있는 모든 Agent** 에 이 파일이
-> **같은 경로 + 같은 권한(600)** 으로 존재해야 한다. 한 대라도 빠지면 그 Agent 가 잡힌 빌드만
-> `gather_output.json 미생성/0바이트` 또는 `vault 패스워드 파일 없음/읽기 불가` 로 실패하는,
-> 재현이 어려운 장애가 된다.
->
-> - 파일은 **git 에 절대 commit 하지 않는다** (Agent 로컬에만 존재).
-> - 경로를 바꾸려면 전역/노드 환경변수 `VAULT_PASS_FILE` 를 해당 라벨의 **모든 Agent** 에 동일하게 설정한다.
-> - 패스워드 회전 절차는 [21_vault-operations.md](21_vault-operations.md) 참조.
-> - 보안 메모: 이 방식은 Credentials Store(콘솔 마스킹) 대비 Agent 디스크 평문 파일로 강등된 것이다.
->   운영 빌드는 `verbosity=0` 을 유지한다 (`-vv` 이상 시 vault 변수 노출 가능).
+- credential 등록 절차: [01_jenkins-setup.md](01_jenkins-setup.md) §7 (`server-gather-vault-password`, Secret text).
+  메인 `Jenkinsfile` 이 이미 같은 credential 을 사용하므로, 대개 추가 등록 작업이 필요 없다.
+- 패스워드 회전 절차: [21_vault-operations.md](21_vault-operations.md).
+- 보안: Credentials Store 가 콘솔 로그에서 패스워드를 마스킹한다. 운영 빌드는 `verbosity=0` 유지 권장
+  (`-vv` 이상 시 vault 변수 노출 가능).
 
 ---
 

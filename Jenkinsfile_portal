@@ -150,19 +150,30 @@ pipeline {
                     sh "rm -f \"${env.WORKSPACE}/gather_output.json\""
 
                     catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                        sh """#!/bin/bash
-                            set -eo pipefail
-                            cd "\${WORKSPACE}"
-                            . /opt/ansible-env/bin/activate
-                            chmod +x "${inventory}"
-                            # [임시 2026-06-17] vault 패스워드 하드코딩 — 최종 vault 관리 방식 결정 전까지만.
-                            #   결정 후: 이 블록 제거 + agent VAULT_PASS_FILE 방식 복귀(docs/03) + 패스워드 회전 필수.
-                            VAULT_TMP="\$(mktemp)"
-                            trap 'rm -f "\$VAULT_TMP"' EXIT
-                            printf '%s' 'Goodmit0802!' > "\$VAULT_TMP"
-                            chmod 600 "\$VAULT_TMP"
-                            ansible-playbook "${playbook}" -i "${inventory}" --vault-password-file="\$VAULT_TMP"
-                        """
+                        // vault 복호화 패스워드: Jenkins Credentials Store 의 Secret text
+                        //   'server-gather-vault-password' (메인 Jenkinsfile 과 동일 credential, docs/01 §7).
+                        //   withCredentials 가 $VAULT_PASSWORD 주입(콘솔 마스킹) → 런타임 임시파일(mktemp,
+                        //   chmod 600)에 써서 ansible-vault 복호화. trap 으로 빌드 종료 시 임시파일 삭제.
+                        //   Secret text 방식 — Secret File trailing newline 문제 회피.
+                        withCredentials([
+                            string(
+                                credentialsId: 'server-gather-vault-password',
+                                variable     : 'VAULT_PASSWORD',
+                            ),
+                        ]) {
+                            sh """#!/bin/bash
+                                set -eo pipefail
+                                set +x
+                                cd "\${WORKSPACE}"
+                                . /opt/ansible-env/bin/activate
+                                chmod +x "${inventory}"
+                                VAULT_TMP="\$(mktemp)"
+                                trap 'rm -f "\$VAULT_TMP"' EXIT
+                                printf '%s' "\${VAULT_PASSWORD}" > "\$VAULT_TMP"
+                                chmod 600 "\$VAULT_TMP"
+                                ansible-playbook "${playbook}" -i "${inventory}" --vault-password-file="\$VAULT_TMP"
+                            """
+                        }
                     }
 
                     // Gather 완전 실패(출력 0건)면 Callback 까지 가지 말고 여기서 원인 노출.
