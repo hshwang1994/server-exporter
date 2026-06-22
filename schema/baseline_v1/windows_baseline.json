@@ -161,6 +161,8 @@
           "id": "\\\\.\\PHYSICALDRIVE0",
           "device": "\\\\.\\PHYSICALDRIVE0",
           "model": "VMware Virtual disk SCSI Disk Device",
+          "serial": null,
+          "wwn": null,
           "total_mb": 61436,
           "media_type": "HDD",
           "protocol": null,

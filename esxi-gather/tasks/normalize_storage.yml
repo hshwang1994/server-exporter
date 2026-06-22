@@ -65,11 +65,14 @@
     _data_fragment:
       storage:
         filesystems:     []
-        physical_disks:  []
+        # 2026-06-22: esxi_disks(pyvmomi) 가 canonical physical_disks(serial/wwn 포함) 직접 생성.
+        #   datastore 와 별개 graceful — 수집 실패 시 빈 list.
+        physical_disks:  "{{ _e_raw_disks | default([]) }}"
         datastores:      "{{ _e_norm_datastores }}"
-        controllers:     []
+        # 2026-06-22 T1: storage HBA/RAID 컨트롤러 (hostBusAdapter + pciDevice vendor)
+        controllers:     "{{ _e_raw_controllers | default([]) }}"
         logical_volumes: []
-        # cycle-016: datastore 합계 기반 summary (groups 빈 배열 — physical disk 정보 미수집)
+        # cycle-016: datastore 합계 기반 summary (groups 빈 배열 — physical disk grouping 은 OS/Redfish 채널)
         summary:         "{{ _e_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
     _sections_supported_fragment: ['storage']
     _sections_collected_fragment: >-

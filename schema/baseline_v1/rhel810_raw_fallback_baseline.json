@@ -169,6 +169,8 @@
           "id": "/dev/sda",
           "device": "/dev/sda",
           "model": "Virtual disk",
+          "serial": null,
+          "wwn": null,
           "total_mb": 51200,
           "media_type": "HDD",
           "protocol": null,

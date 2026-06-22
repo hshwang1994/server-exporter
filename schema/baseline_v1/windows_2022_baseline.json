@@ -1,0 +1,593 @@
+{
+  "target_type": "os",
+  "collection_method": "agent",
+  "ip": "10.100.64.120",
+  "hostname": "WIN-TP7D9J9QKCB",
+  "vendor": "vmware",
+  "status": "success",
+  "sections": {
+    "system": "success",
+    "hardware": "success",
+    "bmc": "not_supported",
+    "cpu": "success",
+    "memory": "success",
+    "storage": "success",
+    "network": "success",
+    "firmware": "not_supported",
+    "users": "success",
+    "power": "not_supported",
+    "thermal": "not_supported"
+  },
+  "diagnosis": {
+    "reachable": true,
+    "port_open": true,
+    "protocol_supported": true,
+    "auth_success": true,
+    "failure_stage": null,
+    "failure_reason": null,
+    "details": {
+      "channel": "os",
+      "adapter_candidate": "os_windows_2022",
+      "detected_os": "windows",
+      "selected_port": "5986",
+      "checked_ports": [
+        5985,
+        5986
+      ],
+      "auth": {
+        "attempted_count": 2,
+        "used_label": "windows_fallback",
+        "used_role": "secondary",
+        "fallback_used": true
+      },
+      "hostname_source": "system"
+    }
+  },
+  "meta": {
+    "started_at": "2026-06-22T07:49:14.324213Z",
+    "finished_at": "2026-06-22T07:50:31.878709Z",
+    "duration_ms": 77532,
+    "adapter_id": "os_windows_2022",
+    "adapter_version": null,
+    "ansible_version": "2.20.3"
+  },
+  "correlation": {
+    "serial_number": "VMware-42 04 a2 40 1d 5c 63 c9-f6 0b 5f b4 72 98 d7 dd",
+    "system_uuid": "40A20442-5C1D-C963-F60B-5FB47298D7DD",
+    "bmc_ip": null,
+    "host_ip": "10.100.64.120"
+  },
+  "errors": [],
+  "data": {
+    "hardware": {
+      "vendor": "VMware, Inc.",
+      "model": "VMware7,1",
+      "serial": "VMware-42 04 a2 40 1d 5c 63 c9-f6 0b 5f b4 72 98 d7 dd",
+      "uuid": "40A20442-5C1D-C963-F60B-5FB47298D7DD",
+      "sku": null,
+      "asset_tag": null,
+      "system_family": null,
+      "chassis_type": "Other",
+      "bios_version": "VMW71.00V.18227214.B64.2106252220",
+      "bios_vendor": "VMware, Inc.",
+      "bios_date": "2021-06-25",
+      "total_memory_bytes": 8588910592,
+      "oem": {}
+    },
+    "thermal": {
+      "temperatures": [],
+      "fans": []
+    },
+    "storage": {
+      "physical_disks": [
+        {
+          "id": "\\\\.\\PHYSICALDRIVE1",
+          "device": "\\\\.\\PHYSICALDRIVE1",
+          "model": "VMware Virtual disk SCSI Disk Device",
+          "serial": "6000c295c31a6c4817cc54edfa38c1b6",
+          "wwn": "6000C295C31A6C4817CC54EDFA38C1B6",
+          "total_mb": 102398,
+          "media_type": "HDD",
+          "protocol": "SAS",
+          "health": "healthy"
+        },
+        {
+          "id": "\\\\.\\PHYSICALDRIVE0",
+          "device": "\\\\.\\PHYSICALDRIVE0",
+          "model": "VMware Virtual disk SCSI Disk Device",
+          "serial": "6000c291a8a27597a22732589449427c",
+          "wwn": "6000C291A8A27597A22732589449427C",
+          "total_mb": 102398,
+          "media_type": "HDD",
+          "protocol": "SAS",
+          "health": "healthy"
+        }
+      ],
+      "controllers": [],
+      "logical_volumes": [],
+      "filesystems": [
+        {
+          "device": "C:",
+          "mount_point": "C:\\",
+          "filesystem": "NTFS",
+          "total_mb": 101684.0,
+          "used_mb": 22231.5,
+          "available_mb": 79452.5,
+          "usage_percent": 21.9,
+          "status": "mounted"
+        },
+        {
+          "device": "E:",
+          "mount_point": "E:\\",
+          "filesystem": "NTFS",
+          "total_mb": 102383.0,
+          "used_mb": 95.80000000000291,
+          "available_mb": 102287.2,
+          "usage_percent": 0.1,
+          "status": "mounted"
+        }
+      ],
+      "hbas": [],
+      "datastores": [],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 99,
+            "model": "VMware Virtual disk SCSI Disk Device",
+            "media_type": "HDD",
+            "protocol": "SAS",
+            "quantity": 2,
+            "group_total_gb": 198
+          }
+        ],
+        "grand_total_gb": 198
+      },
+      "infiniband": [
+        {
+          "adapter": "Microsoft Network Adapter Multiplexor Driver",
+          "port": "COMPOSITEBUS\\MS_IMPLAT_MP\\{929400CA-D444-44D5-9D5C-9EB4867D1CF1}",
+          "node_guid": null,
+          "port_guid": null,
+          "link_status": "up",
+          "rate": null,
+          "rate_gbps": null,
+          "vendor": "Mellanox",
+          "firmware": null,
+          "source": "os",
+          "note": "Windows: node_guid 표준 API 부재 → null (best-effort, rule 96 R1-A)."
+        },
+        {
+          "adapter": "Microsoft Network Adapter Multiplexor Driver #2",
+          "port": "COMPOSITEBUS\\MS_IMPLAT_MP\\{BFBFDE87-4CDD-46B2-BC45-E3C5A6971252}",
+          "node_guid": null,
+          "port_guid": null,
+          "link_status": "up",
+          "rate": null,
+          "rate_gbps": null,
+          "vendor": "Mellanox",
+          "firmware": null,
+          "source": "os",
+          "note": "Windows: node_guid 표준 API 부재 → null (best-effort, rule 96 R1-A)."
+        },
+        {
+          "adapter": "Microsoft Network Adapter Multiplexor Driver #3",
+          "port": "COMPOSITEBUS\\MS_IMPLAT_MP\\{CAFED635-7A35-4993-9DD4-27679F79DF6D}",
+          "node_guid": null,
+          "port_guid": null,
+          "link_status": "up",
+          "rate": null,
+          "rate_gbps": null,
+          "vendor": "Mellanox",
+          "firmware": null,
+          "source": "os",
+          "note": "Windows: node_guid 표준 API 부재 → null (best-effort, rule 96 R1-A)."
+        }
+      ]
+    },
+    "firmware": [],
+    "users": [
+      {
+        "name": "Administrator",
+        "uid": "S-1-5-21-870309895-193348603-862427218-500",
+        "groups": [
+          "Administrators"
+        ],
+        "home": "C:\\Users\\Administrator",
+        "last_access_time": "2026-06-22T07:50:16Z"
+      },
+      {
+        "name": "cloviradmin",
+        "uid": "S-1-5-21-870309895-193348603-862427218-1000",
+        "groups": [
+          "Administrators"
+        ],
+        "home": null,
+        "last_access_time": null
+      }
+    ],
+    "network": {
+      "interfaces": [
+        {
+          "id": "Microsoft Network Adapter Multiplexor Driver #3",
+          "name": "LabTeam2",
+          "kind": "os_nic",
+          "mac": "00-50-56-84-C9-5F",
+          "mtu": 1500,
+          "speed_mbps": 20000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "192.168.200.10",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null
+            }
+          ],
+          "team_role": "master",
+          "team_type": "lbfo",
+          "teaming_mode": "SwitchIndependent",
+          "team_members": [
+            "Ethernet3",
+            "Ethernet5"
+          ]
+        },
+        {
+          "id": "Microsoft Network Adapter Multiplexor Driver #2",
+          "name": "LabTeam1 - VLAN 100",
+          "kind": "os_nic",
+          "mac": "00-50-56-84-B0-78",
+          "mtu": 1500,
+          "speed_mbps": 20000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "192.168.100.10",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null
+            }
+          ]
+        },
+        {
+          "id": "Microsoft Network Adapter Multiplexor Driver",
+          "name": "LabTeam1",
+          "kind": "os_nic",
+          "mac": "00-50-56-84-B0-78",
+          "mtu": 1500,
+          "speed_mbps": 20000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "192.168.99.10",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null
+            }
+          ],
+          "team_role": "master",
+          "team_type": "lbfo",
+          "teaming_mode": "SwitchIndependent",
+          "team_members": [
+            "Ethernet2",
+            "Ethernet1"
+          ]
+        },
+        {
+          "id": "vmxnet3 Ethernet Adapter #6",
+          "name": "Ethernet0",
+          "kind": "os_nic",
+          "mac": "00-50-56-84-CB-C9",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": true,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.120",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": "10.100.64.254"
+            }
+          ]
+        },
+        {
+          "id": "vmxnet3 Ethernet Adapter #3",
+          "name": "Ethernet4",
+          "kind": "os_nic",
+          "mac": "00-50-56-84-11-DB",
+          "mtu": 9000,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "192.168.50.41",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null
+            },
+            {
+              "family": "ipv4",
+              "address": "192.168.50.40",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null
+            }
+          ]
+        },
+        {
+          "id": "Ethernet2",
+          "name": "Ethernet2",
+          "kind": "os_nic",
+          "mac": "00-50-56-84-B0-78",
+          "mtu": null,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [],
+          "team_role": "member",
+          "team_master": "LabTeam1"
+        },
+        {
+          "id": "Ethernet1",
+          "name": "Ethernet1",
+          "kind": "os_nic",
+          "mac": "00-50-56-84-8A-33",
+          "mtu": null,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [],
+          "team_role": "member",
+          "team_master": "LabTeam1"
+        },
+        {
+          "id": "Ethernet3",
+          "name": "Ethernet3",
+          "kind": "os_nic",
+          "mac": "00-50-56-84-C9-5F",
+          "mtu": null,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [],
+          "team_role": "member",
+          "team_master": "LabTeam2"
+        },
+        {
+          "id": "Ethernet5",
+          "name": "Ethernet5",
+          "kind": "os_nic",
+          "mac": "00-50-56-84-31-52",
+          "mtu": null,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [],
+          "team_role": "member",
+          "team_master": "LabTeam2"
+        }
+      ],
+      "ports": [],
+      "portgroups": [],
+      "default_gateways": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.254"
+        }
+      ],
+      "teams": [
+        {
+          "name": "LabTeam1",
+          "team_type": "lbfo",
+          "teaming_mode": "SwitchIndependent",
+          "load_balancing": "TransportPorts",
+          "lacp_timer": null,
+          "status": "Up",
+          "members": [
+            {
+              "name": "Ethernet2",
+              "mac": "00-50-56-84-B0-78",
+              "admin_mode": "Active",
+              "status": "Up",
+              "speed_mbps": 10000
+            },
+            {
+              "name": "Ethernet1",
+              "mac": "00-50-56-84-8A-33",
+              "admin_mode": "Active",
+              "status": "Up",
+              "speed_mbps": 10000
+            }
+          ]
+        },
+        {
+          "name": "LabTeam2",
+          "team_type": "lbfo",
+          "teaming_mode": "SwitchIndependent",
+          "load_balancing": "IPAddresses",
+          "lacp_timer": null,
+          "status": "Up",
+          "members": [
+            {
+              "name": "Ethernet3",
+              "mac": "00-50-56-84-C9-5F",
+              "admin_mode": "Active",
+              "status": "Up",
+              "speed_mbps": 10000
+            },
+            {
+              "name": "Ethernet5",
+              "mac": "00-50-56-84-31-52",
+              "admin_mode": "Active",
+              "status": "Up",
+              "speed_mbps": 10000
+            }
+          ]
+        }
+      ],
+      "virtual_switches": [],
+      "dns_servers": [
+        "192.168.50.1",
+        "192.168.50.2",
+        "10.100.64.251",
+        "192.168.99.1",
+        "8.8.8.8",
+        "192.168.200.1"
+      ],
+      "summary": {
+        "groups": [
+          {
+            "speed_mbps": 20000,
+            "link_type": null,
+            "quantity": 3,
+            "link_up_count": 3
+          },
+          {
+            "speed_mbps": 10000,
+            "link_type": null,
+            "quantity": 2,
+            "link_up_count": 2
+          }
+        ]
+      },
+      "driver_map": [],
+      "bonds": [],
+      "adapters": [],
+      "bridges": []
+    },
+    "cpu": {
+      "sockets": 2,
+      "cores_physical": 4,
+      "logical_threads": 4,
+      "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+      "manufacturer": "Intel",
+      "max_speed_mhz": 2195,
+      "architecture": "x86_64",
+      "summary": {
+        "groups": [
+          {
+            "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+            "manufacturer": "Intel",
+            "max_speed_mhz": 2195,
+            "l2_cache_kb": 0,
+            "l3_cache_kb": 0,
+            "sockets": 2,
+            "cores_per_socket": 2,
+            "total_cores": 4
+          }
+        ]
+      }
+    },
+    "system": {
+      "distribution": "Microsoft Windows Server 2022 Standard",
+      "hosting_type": "virtual",
+      "serial_number": "VMware-42 04 a2 40 1d 5c 63 c9-f6 0b 5f b4 72 98 d7 dd",
+      "system_uuid": "40A20442-5C1D-C963-F60B-5FB47298D7DD",
+      "runtime": {
+        "timezone": "Asia/Seoul",
+        "ntp_active": true,
+        "ntp_synchronized": true,
+        "firewall_tool": "windows_firewall",
+        "firewall_state": "active",
+        "listening_ports": [
+          "135",
+          "139",
+          "445",
+          "5357",
+          "5985",
+          "5986",
+          "47001",
+          "49664",
+          "49665",
+          "49666",
+          "49667",
+          "49668",
+          "49669"
+        ],
+        "swap_total_mb": 1280,
+        "swap_used_mb": 0,
+        "swap_free_mb": 1280,
+        "firewall_profiles": [
+          {
+            "profile": "Domain",
+            "enabled": true,
+            "default_inbound": "NotConfigured",
+            "default_outbound": "NotConfigured"
+          },
+          {
+            "profile": "Private",
+            "enabled": true,
+            "default_inbound": "NotConfigured",
+            "default_outbound": "NotConfigured"
+          },
+          {
+            "profile": "Public",
+            "enabled": true,
+            "default_inbound": "NotConfigured",
+            "default_outbound": "NotConfigured"
+          }
+        ],
+        "pagefiles": [
+          {
+            "name": "C:\\pagefile.sys",
+            "size_mb": 1280,
+            "used_mb": 0,
+            "peak_mb": 0
+          }
+        ],
+        "ntp_last_sync": null
+      },
+      "version": "21H2",
+      "os_family": "Windows",
+      "architecture": "x86_64",
+      "fqdn": "WIN-TP7D9J9QKCB",
+      "uptime_seconds": 2316,
+      "selinux": null,
+      "kernel": "20348"
+    },
+    "memory": {
+      "total_mb": 8192,
+      "total_basis": "physical_installed",
+      "installed_mb": 8192,
+      "visible_mb": 8192,
+      "free_mb": 4264,
+      "slots": [
+        {
+          "capacity_mb": 8192,
+          "type": null,
+          "speed_mhz": null,
+          "slot": "RAM slot #0",
+          "manufacturer": "VMware Virtual RAM",
+          "part_number": "VMW-8192MB",
+          "serial": null
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 8,
+            "type": null,
+            "speed_mhz": null,
+            "manufacturer": "VMware Virtual RAM",
+            "part_number": "VMW-8192MB",
+            "quantity": 1,
+            "group_total_gb": 8
+          }
+        ],
+        "grand_total_gb": 8
+      }
+    },
+    "bmc": null,
+    "power": null
+  },
+  "schema_version": "1"
+}

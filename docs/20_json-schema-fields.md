@@ -301,6 +301,20 @@ controllers[*].id  ────┤
                        └─ logical_volumes[*].controller_id 에서 참조
 ```
 
+#### 6.3.0 `physical_disks[]` 식별자 — `serial` / `wwn` (2026-06-22)
+
+각 물리 디스크는 식별자로 `serial`(시리얼) / `wwn`(World Wide Name) 을 가진다. 둘 다 **Nice**
+(`schema/field_dictionary.yml`) 이며, OS/디스크가 제공하지 않으면 `null` (정상 — 누락 아님).
+
+| 필드 | 채널 | 수집원 |
+|---|---|---|
+| `serial` | Redfish, OS, ESXi | Redfish=`Drive.SerialNumber` / OS Linux=`lsblk SERIAL`(빈값 시 `udevadm ID_SERIAL_SHORT`) / OS Windows=`Get-PhysicalDisk.SerialNumber`(빈값 시 `Win32_DiskDrive.SerialNumber`, hex/공백 정규화) / ESXi=`ScsiLun.alternateName[SERIALNUM]` |
+| `wwn` | OS, ESXi | OS Linux=`lsblk WWN`(udev `ID_WWN`; SATA/SAS=NAA `0x...`, NVMe=`eui.`) / OS Windows=`Get-PhysicalDisk.UniqueId` (UniqueIdFormat 이 EUI64/FCPHName/SCSI Name String 일 때만) / ESXi=`ScsiLun.canonicalName`(naa.*) |
+
+- **`null` 정상 케이스**: virtio 가상디스크 / 로컬 SATA(특히 Windows WWN) / RAID 가상 디스크 일부 → best-effort.
+- redfish 는 `serial` 만 emit (디스크 `wwn` 미수집). **ESXi 는 2026-06-22부터 `physical_disks` 수집**
+  (`esxi_disks` pyvmomi 모듈 — id/device/wwn=canonicalName naa.*, serial=SERIALNUM, model=vendor+model, media_type=ssd flag).
+
 #### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand (cycle 2026-05-29)
 
 전 채널 (Redfish / OS Linux·Windows / ESXi) 이 **동일 canonical 키** 로 emit 한다.

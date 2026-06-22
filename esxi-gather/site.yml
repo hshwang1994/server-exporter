@@ -119,6 +119,10 @@
         - name: "esxi | collect datastores"
           ansible.builtin.include_tasks: tasks/collect_datastores.yml
 
+        # 2026-06-22: 물리 디스크 serial/wwn 수집 (esxi_disks 커스텀 모듈, pyvmomi)
+        - name: "esxi | collect physical disks"
+          ansible.builtin.include_tasks: tasks/collect_disks.yml
+
         # 잔류 fix (Round 12 후속): vmware_host_facts/config_info 가 DNS 미반환 케이스 우회
         - name: "esxi | collect dns"
           ansible.builtin.include_tasks: tasks/collect_dns.yml

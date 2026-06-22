@@ -29,7 +29,8 @@
           ntp_synchronized: null
           firewall_tool:    "esxi_firewall"
           firewall_state:   null
-          listening_ports:  []
+          # 2026-06-22 T1: firewall.ruleset enabled inbound 포트 (str[], OS 채널과 동일 계약)
+          listening_ports:  "{{ _e_raw_listening_ports | default([]) }}"
           swap_total_mb:    null
           swap_used_mb:     null
           swap_free_mb:     null

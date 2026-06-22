@@ -154,6 +154,24 @@
       failed_when: false
       no_log: true
 
+    # 2026-06-22 T1: NIC firmware (ethtool -i). bus-info(0000:2a:00.0) → adapters[].pci(2a:00.0) 매칭 위해
+    #   도메인(0000:) strip. device 심볼릭링크 있는 real PCI NIC 만 (bond/vlan/lo 제외). root 불필요.
+    - name: "linux | network | ethtool firmware map"
+      ansible.builtin.shell: |
+        export LANG=C LC_ALL=C
+        for d in $(ls /sys/class/net 2>/dev/null); do
+          [ -e "/sys/class/net/$d/device" ] || continue
+          inf=$(ethtool -i "$d" 2>/dev/null)
+          bi=$(printf '%s\n' "$inf" | sed -n 's/^bus-info: //p')
+          fw=$(printf '%s\n' "$inf" | sed -n 's/^firmware-version: //p')
+          [ -n "$bi" ] || continue
+          echo "ETHFW|$(echo "$bi" | sed 's/^0000://')|${fw}"
+        done
+      register: _l_ethtool_fw
+      changed_when: false
+      failed_when: false
+      no_log: true
+
     - name: "linux | network | real DNS lookup (systemd-resolved 우회)"
       ansible.builtin.shell: |
         export LANG=C LC_ALL=C
@@ -327,8 +345,16 @@
             bridges:  "{{ _l_net_topo.bridges }}"
             teams:    "{{ _l_net_topo.teams }}"
             # 2026-04-29 fix B76: lspci -k -mm 결과로 hardware NIC adapters 채움
+            # 2026-06-22 T1: ethtool firmware-version 보강 (pci 매칭)
             adapters: >-
               {%- set out = [] -%}
+              {%- set fwmap = {} -%}
+              {%- for fl in (_l_ethtool_fw.stdout_lines | default([])) -%}
+                {%- if fl.startswith('ETHFW|') -%}
+                  {%- set fp = fl.split('|') -%}
+                  {%- if fp | length >= 3 -%}{%- set _ = fwmap.update({fp[1]: (fp[2] | trim) or none}) -%}{%- endif -%}
+                {%- endif -%}
+              {%- endfor -%}
               {%- for line in (_l_lspci_nic.stdout_lines | default([])) -%}
                 {%- if line.startswith('ADAPTER|') -%}
                   {%- set parts = line.split('|') -%}
@@ -339,6 +365,7 @@
                       'manufacturer': parts[2] or none,
                       'model':        parts[3] or none,
                       'driver':       parts[4] or none,
+                      'firmware_version': fwmap.get(parts[1], none),
                       'pci':          parts[1],
                     }) -%}
                   {%- endif -%}
@@ -415,6 +442,15 @@
             echo "ADAPTER|${slot}|${vendor}|${device}|${driver}"
           done
         fi
+        # 2026-06-22 T1 raw: NIC firmware (ethtool -i), bus-info 도메인 strip
+        for d in $(ls /sys/class/net 2>/dev/null); do
+          [ -e "/sys/class/net/$d/device" ] || continue
+          inf=$(ethtool -i "$d" 2>/dev/null)
+          bi=$(printf '%s\n' "$inf" | sed -n 's/^bus-info: //p')
+          fw=$(printf '%s\n' "$inf" | sed -n 's/^firmware-version: //p')
+          [ -n "$bi" ] || continue
+          echo "ETHFW|$(echo "$bi" | sed 's/^0000://')|${fw}"
+        done
         # bond/vlan/bridge/team 토폴로지 — python_ok shell 과 동일 스크립트(단일 정의).
         {{ _l_net_collector }}
       register: _l_net_raw
@@ -477,6 +513,13 @@
         # Python path와 동일한 schema: id, name, manufacturer, model, driver, pci.
         _l_raw_adapters: >-
           {%- set out = [] -%}
+          {%- set fwmap = {} -%}
+          {%- for fl in (_l_net_raw.stdout_lines | default([])) -%}
+            {%- if fl.startswith('ETHFW|') -%}
+              {%- set fp = fl.split('|') -%}
+              {%- if fp | length >= 3 -%}{%- set _ = fwmap.update({fp[1]: (fp[2] | trim) or none}) -%}{%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
           {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
             {%- if line.startswith('ADAPTER|') -%}
               {%- set parts = line.split('|') -%}
@@ -492,6 +535,7 @@
                     'manufacturer': vendor or none,
                     'model':        device or none,
                     'driver':       driver or none,
+                    'firmware_version': fwmap.get(slot, none),
                     'pci':          slot,
                   }) -%}
                 {%- endif -%}

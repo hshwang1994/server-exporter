@@ -85,6 +85,49 @@ class TestWindowsBaseline:
         )
 
 
+class TestWindows2022Baseline:
+    """OS-WIN2022: Windows Server 2022 baseline (10.100.64.120 실측 2026-06-22).
+
+    disk serial/wwn/health 가 실 Windows 에서 populate 되는지 회귀 고정.
+    """
+
+    def test_common_structure(self, windows_2022_baseline):
+        assert_common_structure(windows_2022_baseline)
+
+    def test_adapter_id(self, windows_2022_baseline):
+        assert windows_2022_baseline["meta"]["adapter_id"] == "os_windows_2022"
+
+    def test_critical_fields(self, windows_2022_baseline):
+        assert_channel_critical_fields(
+            windows_2022_baseline, OS_CRITICAL, OS_FIELD_MAP
+        )
+
+    def test_sections_collected(self, windows_2022_baseline):
+        sections = windows_2022_baseline.get("sections", {})
+        collected = [k for k, v in sections.items() if v == "success"]
+        assert "system" in collected and "storage" in collected
+
+    def test_correlation(self, windows_2022_baseline):
+        assert_correlation_fields(windows_2022_baseline)
+
+    def test_correlation_host_ip(self, windows_2022_baseline):
+        assert_correlation_host_ip(windows_2022_baseline)
+
+    def test_array_element_fields(self, windows_2022_baseline):
+        assert_array_element_fields(
+            windows_2022_baseline, OS_ARRAY_FIELDS, "windows_2022_baseline"
+        )
+
+    def test_disk_serial_wwn_populated(self, windows_2022_baseline):
+        """실 Windows 디스크 serial/wwn 가 실제로 채워지는지 (placeholder null 아님)."""
+        disks = windows_2022_baseline["data"]["storage"]["physical_disks"]
+        assert disks, "physical_disks 비어있음"
+        for d in disks:
+            assert d.get("serial"), f"serial 미설정: {d.get('id')}"
+            assert d.get("wwn"), f"wwn 미설정: {d.get('id')}"
+            assert d.get("health") == "healthy"
+
+
 class TestRhel810RawFallback:
     """OS-RHEL810: Linux raw_fallback (Python <3.9) baseline 검증.
 

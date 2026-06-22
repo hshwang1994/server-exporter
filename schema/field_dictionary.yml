@@ -407,7 +407,7 @@ fields:
   "memory.slots[]":
     type: "array of object"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, os]
     help_ko: >-
       장착된 DIMM 슬롯별 상세. 빈/Absent 슬롯은 제외 (장착된 모듈만). Redfish
       /Systems/<id>/Memory/* 에서 수집.
@@ -417,21 +417,21 @@ fields:
   "memory.slots[].capacity_mb":
     type: "integer|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, os]
     help_ko: "DIMM 용량 (Memory.CapacityMiB, 이진 MiB)."
     help_en: "DIMM capacity (Memory.CapacityMiB, binary MiB)."
 
   "memory.slots[].speed_mhz":
     type: "integer|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, os]
     help_ko: "DIMM 현재 동작 속도 (Memory.OperatingSpeedMhz, 현재 클럭)."
     help_en: "DIMM current operating speed (Memory.OperatingSpeedMhz)."
 
   "memory.slots[].type":
     type: "string|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, os]
     help_ko: "메모리 종류 (Memory.MemoryDeviceType, 예: DDR4)."
     help_en: "Memory device type (Memory.MemoryDeviceType, e.g. DDR4)."
 
@@ -445,7 +445,7 @@ fields:
   "memory.slots[].manufacturer":
     type: "string|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, os]
     help_ko: >-
       DIMM 제조사 (Memory.Manufacturer 정규화 — 예: 'Hynix Semiconductor'→'SK hynix'
       cross-channel canonical).
@@ -455,7 +455,7 @@ fields:
   "memory.slots[].part_number":
     type: "string|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, os]
     help_ko: "DIMM 파트번호 (Memory.PartNumber)."
     help_en: "DIMM part number (Memory.PartNumber)."
 
@@ -497,7 +497,7 @@ fields:
   "memory.slots[].serial":
     type: "string|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, os]
     help_ko: "DIMM 시리얼 (Memory.SerialNumber)."
     help_en: "DIMM serial (Memory.SerialNumber)."
 
@@ -537,13 +537,66 @@ fields:
       Redfish: Drive의 Id (예: Disk.Bay.0:Enclosure.Internal.0-1:RAID.Slot.6-1).
       OS(Linux): device path (예: /dev/sda).
       OS(Windows): DeviceID (예: \\.\PhysicalDrive0).
-      ESXi: 수집하지 않음 (null).
+      ESXi: ScsiLun.canonicalName (예: naa.6f80...) — 2026-06-22부터 수집.
     help_en: >-
       Physical disk identifier. Referenced by logical_volumes[].member_drive_ids.
       Redfish: Drive Id (e.g., Disk.Bay.0:Enclosure.Internal.0-1:RAID.Slot.6-1).
       OS(Linux): device path (e.g., /dev/sda).
       OS(Windows): DeviceID (e.g., \\.\PhysicalDrive0).
-      ESXi: not collected (null).
+      ESXi: ScsiLun.canonicalName (e.g., naa.6f80...) — collected since 2026-06-22.
+
+  "storage.physical_disks[].serial":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      물리 디스크 시리얼 번호.
+      Redfish: Drive.SerialNumber.
+      OS(Linux): lsblk SERIAL (udev ID_SERIAL_SHORT) → 빈 값이면 udevadm 보강.
+      OS(Windows): Get-PhysicalDisk.SerialNumber → 빈 값이면 Win32_DiskDrive.SerialNumber (hex/공백 정규화).
+      ESXi: ScsiLun.alternateName[SERIALNUM] (없으면 serialNumber).
+      virtio 가상디스크 / 일부 SATA 는 null 가능 (best-effort).
+    help_en: >-
+      Physical disk serial number.
+      Redfish: Drive.SerialNumber.
+      OS(Linux): lsblk SERIAL (udev ID_SERIAL_SHORT), udevadm fallback.
+      OS(Windows): Get-PhysicalDisk.SerialNumber, Win32_DiskDrive.SerialNumber fallback (hex/space normalized).
+      ESXi: ScsiLun.alternateName[SERIALNUM] (serialNumber fallback).
+      May be null for virtio virtual disks / some SATA (best-effort).
+
+  "storage.physical_disks[].wwn":
+    type: "string|null"
+    priority: nice
+    channel: [os, esxi]
+    help_ko: >-
+      물리 디스크 WWN (World Wide Name).
+      OS(Linux): lsblk WWN (udev ID_WWN; SATA/SAS=NAA `0x...`, NVMe=`eui.`).
+      OS(Windows): Get-PhysicalDisk.UniqueId (UniqueIdFormat 이 EUI64/FCPHName/SCSI Name String 일 때만).
+      ESXi: ScsiLun.canonicalName (naa.*).
+      로컬 SATA · virtio 는 null 정상 (best-effort).
+    help_en: >-
+      Physical disk WWN (World Wide Name).
+      OS(Linux): lsblk WWN (udev ID_WWN; SATA/SAS NAA `0x...`, NVMe `eui.`).
+      OS(Windows): Get-PhysicalDisk.UniqueId when UniqueIdFormat is EUI64/FCPHName/SCSI Name String.
+      ESXi: ScsiLun.canonicalName (naa.*).
+      Null is normal for local SATA / virtio (best-effort).
+
+  "storage.physical_disks[].health":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, os]
+    help_ko: >-
+      물리 디스크 건강 상태.
+      Redfish: Drive.Status.Health (OK/Warning/Critical → 정규화).
+      OS(Windows): Get-PhysicalDisk.HealthStatus (Healthy/Warning/Unhealthy → healthy/warning/unhealthy).
+      OS(Linux): 현재 미수집(null) — smartctl 도입 시 채움 (NEXT_ACTIONS).
+      ESXi: ScsiLun 미노출 (null).
+    help_en: >-
+      Physical disk health status.
+      Redfish: Drive.Status.Health (OK/Warning/Critical, normalized).
+      OS(Windows): Get-PhysicalDisk.HealthStatus (Healthy/Warning/Unhealthy → healthy/warning/unhealthy).
+      OS(Linux): not collected yet (null) — pending smartctl (NEXT_ACTIONS).
+      ESXi: not exposed by ScsiLun (null).
 
   "storage.physical_disks[].predicted_life_percent":
     type: "integer|null"
@@ -559,6 +612,45 @@ fields:
       100=new drive, 0=end of life.
       null for HDD.
       HPE returns float, normalized to int (e.g., 100.0 → 100).
+
+  "storage.controllers[]":
+    type: "array of object"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      스토리지 컨트롤러 (RAID/SAS/SATA/NVMe/HBA) 목록.
+      Redfish: StorageControllers (model/firmware/health/drives).
+      OS(Linux): lspci (id=pci, controller_model=칩, driver, controller_type).
+      OS(Windows): 현재 미수집([]) — Storage Spaces 도입 시 (NEXT_ACTIONS).
+      ESXi: hostBusAdapter + pciDevice vendor (id=vmhba, driver, controller_type).
+    help_en: >-
+      Storage controllers (RAID/SAS/SATA/NVMe/HBA).
+      Redfish: StorageControllers (model/firmware/health/drives).
+      OS(Linux): lspci (id=pci, controller_model=chip, driver, controller_type).
+      OS(Windows): not collected yet ([]) — pending Storage Spaces (NEXT_ACTIONS).
+      ESXi: hostBusAdapter + pciDevice vendor (id=vmhba, driver, controller_type).
+
+  "storage.controllers[].controller_type":
+    type: "string|null"
+    priority: nice
+    channel: [os, esxi]
+    help_ko: >-
+      컨트롤러 종류. RAID/SAS/SATA/NVMe/SCSI/FC.
+      OS(Linux): lspci 클래스. ESXi: hostBusAdapter 타입(Block=SATA/Serial=SAS/FibreChannel=FC).
+    help_en: >-
+      Controller type. RAID/SAS/SATA/NVMe/SCSI/FC.
+      OS(Linux): lspci class. ESXi: hostBusAdapter type (Block=SATA/Serial=SAS/FibreChannel=FC).
+
+  "storage.controllers[].driver":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      컨트롤러 커널 드라이버. OS(Linux): lspci 'Kernel driver in use' (예: mpi3mr/ahci/nvme).
+      ESXi: hostBusAdapter.driver (예: lsi_mr3/vmw_ahci/nfnic).
+    help_en: >-
+      Controller kernel driver. OS(Linux): lspci 'Kernel driver in use' (e.g., mpi3mr/ahci/nvme).
+      ESXi: hostBusAdapter.driver (e.g., lsi_mr3/vmw_ahci/nfnic).
 
   "storage.controllers[].drives[]":
     type: "array of object"
@@ -1335,6 +1427,21 @@ fields:
     help_en: >-
       NIC card (NetworkAdapters) info. id/name/manufacturer/model/part_number/
       serial_number/firmware_version. Includes ESXi vmnic.
+
+  "network.adapters[].firmware_version":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, os]
+    help_ko: >-
+      NIC 펌웨어 버전.
+      Redfish: NetworkAdapter.Controllers.FirmwarePackageVersion.
+      OS(Linux): ethtool -i firmware-version (pci 매칭, 예: bnxt_en 229.2.52.0).
+      가상 NIC / 미노출 드라이버는 null.
+    help_en: >-
+      NIC firmware version.
+      Redfish: NetworkAdapter.Controllers.FirmwarePackageVersion.
+      OS(Linux): ethtool -i firmware-version (matched by pci, e.g., bnxt_en 229.2.52.0).
+      Null for virtual NICs / drivers not exposing it.
 
   "network.ports[]":
     type: "object[]"

@@ -238,7 +238,63 @@
       }
     },
     "storage": {
-      "controllers": [],
+      "controllers": [
+        {
+          "id": "vmhba0",
+          "name": "Wellsburg AHCI Controller",
+          "controller_model": "Wellsburg AHCI Controller",
+          "controller_manufacturer": "Intel Corporation",
+          "driver": "vmw_ahci",
+          "controller_type": "SATA",
+          "pci": "0000:00:11.4",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "vmhba1",
+          "name": "Wellsburg AHCI Controller",
+          "controller_model": "Wellsburg AHCI Controller",
+          "controller_manufacturer": "Intel Corporation",
+          "driver": "vmw_ahci",
+          "controller_type": "SATA",
+          "pci": "0000:00:1f.2",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "vmhba2",
+          "name": "Cisco UCS VIC Fnic Controller",
+          "controller_model": "Cisco UCS VIC Fnic Controller",
+          "controller_manufacturer": "Cisco Corporation",
+          "driver": "nfnic",
+          "controller_type": "FC",
+          "pci": "0000:0d:00.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "vmhba3",
+          "name": "Cisco UCS VIC Fnic Controller",
+          "controller_model": "Cisco UCS VIC Fnic Controller",
+          "controller_manufacturer": "Cisco Corporation",
+          "driver": "nfnic",
+          "controller_type": "FC",
+          "pci": "0000:0e:00.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "vmhba4",
+          "name": "MegaRAID SAS Invader Controller",
+          "controller_model": "MegaRAID SAS Invader Controller",
+          "controller_manufacturer": "Broadcom",
+          "driver": "lsi_mr3",
+          "controller_type": "SAS",
+          "pci": "0000:05:00.0",
+          "health": null,
+          "drives": []
+        }
+      ],
       "datastores": [
         {
           "name": "ESXi02-Local-RAID5",
@@ -295,7 +351,30 @@
           "source": "esxi"
         }
       ],
-      "physical_disks": [],
+      "physical_disks": [
+        {
+          "id": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
+          "device": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
+          "model": "Cisco UCSC-MRAID12G",
+          "serial": "0052c3a31bc8667f2fb06e32acbebc80",
+          "wwn": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
+          "total_mb": 6099700,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null
+        },
+        {
+          "id": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
+          "device": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
+          "model": "Cisco UCSC-MRAID12G",
+          "serial": "00e398ce1efd667f2fb06e32acbebc80",
+          "wwn": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
+          "total_mb": 10986327,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null
+        }
+      ],
       "summary": {
         "groups": [],
         "grand_total_gb": 16556

@@ -9,10 +9,52 @@
 # Python Path
 # =============================================================================
 - block:
+    # serial/wwn 추가 (2026-06-22): SERIAL/WWN 컬럼은 util-linux 2.23.2(RHEL7)부터 존재 →
+    #   지원 전 배포판(RHEL/Rocky 7~9, Ubuntu 18.04~24.04, Debian 10~12) 안전 (unknown column 위험 없음).
+    #   값은 udev db(ID_SERIAL_SHORT/ID_WWN) 기반, root 불필요.
+    #   source: https://kernel.googlesource.com/pub/scm/utils/util-linux/util-linux/+/v2.23.2/misc-utils/lsblk.c
     - name: "linux | storage | lsblk (physical disks)"
       ansible.builtin.shell: >
-        lsblk -J -b -d -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN 2>/dev/null || echo "{}"
+        lsblk -J -b -d -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL,WWN 2>/dev/null || echo "{}"
       register: _l_lsblk_raw
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    # serial/wwn 보강 (2026-06-22): lsblk 값이 비는 경우(virtio) / Ubuntu 20.04 SERIAL↔WWN 혼동 버그
+    #   (Launchpad #1950793) / RAID short-WWN 대비, udev 원천(ID_SERIAL_SHORT/ID_WWN)을 직접 조회해 보강.
+    #   udevadm 도 root 불필요·기본 설치. 'UDEV|<dev>|<serial>|<wwn>' 라인으로 emit.
+    - name: "linux | storage | udevadm serial/wwn (fallback source)"
+      ansible.builtin.shell: |
+        for d in $(lsblk -dn -o NAME 2>/dev/null); do
+          p=$(udevadm info --query=property --name="/dev/$d" 2>/dev/null)
+          s=$(printf '%s\n' "$p" | sed -n 's/^ID_SERIAL_SHORT=//p' | head -1)
+          w=$(printf '%s\n' "$p" | sed -n 's/^ID_WWN=//p' | head -1)
+          echo "UDEV|/dev/$d|$s|$w"
+        done
+      register: _l_udev_idmap
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    # 2026-06-22 T1: storage 컨트롤러 (RAID/SAS/SATA/NVMe) — lspci. root 불필요.
+    #   CTRL|<pci>|<class>|<chip name>|<driver>|<subsystem> 라인.
+    - name: "linux | storage | lspci controllers"
+      ansible.builtin.shell: |
+        lspci -Dnnk 2>/dev/null | awk '
+          /^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\./ {
+            if (addr!="" && st) printf "CTRL|%s|%s|%s|%s|%s\n", addr, cls, name, drv, subsys
+            addr=$1; rest=substr($0, index($0," ")+1)
+            st = (rest ~ /RAID bus controller|SATA controller|SAS controller|Serial Attached SCSI|Non-Volatile memory controller|SCSI storage controller|Mass storage controller/)
+            cls=rest; sub(/ \[[0-9a-f]+\]:.*/,"",cls)
+            name=rest; sub(/^[^:]*: /,"",name); sub(/ \[[0-9a-f]+:[0-9a-f]+\]( \(rev [0-9a-f]+\))?$/,"",name)
+            drv=""; subsys=""; next
+          }
+          /Kernel driver in use:/ { drv=$NF }
+          /Subsystem:/ { s=$0; sub(/^[ \t]*Subsystem: /,"",s); sub(/ \[[0-9a-f]+:[0-9a-f]+\]$/,"",s); subsys=s }
+          END { if (addr!="" && st) printf "CTRL|%s|%s|%s|%s|%s\n", addr, cls, name, drv, subsys }
+        '
+      register: _l_lspci_ctrl
       changed_when: false
       failed_when: false
       no_log: true
@@ -25,6 +67,16 @@
           {%- set out = [] -%}
           {# Round 15: 빈 stdout('')은 default('{}')를 통과(undefined만 catch) → from_json('') crash. raw path(_l_norm_physical_disks_raw)와 동일 length 가드 #}
           {%- set lsblk = (_l_lsblk_raw.stdout | from_json) if (_l_lsblk_raw.stdout | default('') | trim | length > 0) else {} -%}
+          {# serial/wwn 보강(2026-06-22): udevadm sweep을 dev→{serial,wwn} dict로 #}
+          {%- set udev = {} -%}
+          {%- for line in (_l_udev_idmap.stdout_lines | default([])) -%}
+            {%- if line.startswith('UDEV|') -%}
+              {%- set p = line.split('|') -%}
+              {%- if p | length >= 4 -%}
+                {%- set _ = udev.update({p[1]: {'serial': (p[2] | trim) or none, 'wwn': (p[3] | trim) or none}}) -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
           {%- if lsblk.blockdevices is defined -%}
             {%- for dev in lsblk.blockdevices -%}
               {%- if dev.type in ['disk'] and dev.size | int > 0 -%}
@@ -35,10 +87,16 @@
                 {%- elif _tran == 'sas' -%}{%- set _proto = 'SAS' -%}
                 {%- elif _tran == 'nvme' -%}{%- set _proto = 'NVMe' -%}
                 {%- endif -%}
+                {# lsblk SERIAL/WWN 우선, 비면 udev 원천 보강 (truthy-null 정규화는 model과 동일) #}
+                {%- set _u = udev.get(_dev_path, {}) -%}
+                {%- set _serial = (dev.serial | trim) if dev.serial else (_u.serial | default(none)) -%}
+                {%- set _wwn = (dev.wwn | trim) if dev.wwn else (_u.wwn | default(none)) -%}
                 {%- set _ = out.append({
                   'id':         _dev_path,
                   'device':     _dev_path,
                   'model':      (dev.model | trim) if dev.model else none,
+                  'serial':     _serial,
+                  'wwn':        _wwn,
                   'total_mb':   (dev.size | int / 1048576) | round(0,'floor') | int,
                   'media_type': 'HDD' if (dev.rota | default('1') | string) in ['1','true','True'] else 'SSD',
                   'protocol':   _proto,
@@ -114,6 +172,34 @@
           {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
       no_log: true
 
+    # 2026-06-22 T1: CTRL| 라인 → controllers[] (ESXi/Redfish 와 동일 shape)
+    - name: "linux | storage | normalize controllers"
+      ansible.builtin.set_fact:
+        _l_norm_controllers: >-
+          {%- set out = [] -%}
+          {%- for line in (_l_lspci_ctrl.stdout_lines | default([])) -%}
+            {%- if line.startswith('CTRL|') -%}
+              {%- set p = line.split('|') -%}
+              {%- if p | length >= 6 -%}
+                {%- set cl = (p[2] | default('')) | lower -%}
+                {%- set ct = 'RAID' if 'raid' in cl else ('NVMe' if 'non-volatile' in cl else ('SAS' if ('sas' in cl or 'serial attached' in cl) else ('SATA' if 'sata' in cl else ('SCSI' if 'scsi' in cl else none)))) -%}
+                {%- set _ = out.append({
+                  'id': p[1],
+                  'name': (p[5] | trim) if (p[5] | trim) else ((p[3] | trim) or none),
+                  'controller_model': (p[3] | trim) or none,
+                  'controller_manufacturer': none,
+                  'driver': (p[4] | trim) or none,
+                  'controller_type': ct,
+                  'pci': p[1],
+                  'health': none,
+                  'drives': []
+                }) -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+      no_log: true
+
     - name: "linux | storage | build fragment"
       ansible.builtin.set_fact:
         _data_fragment:
@@ -121,7 +207,7 @@
             filesystems:     "{{ _l_norm_filesystems }}"
             physical_disks:  "{{ _l_norm_physical_disks }}"
             datastores:      []
-            controllers:     []
+            controllers:     "{{ _l_norm_controllers | default([]) }}"
             logical_volumes: []
             summary:         "{{ _l_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
         _sections_supported_fragment: ['storage']
@@ -137,8 +223,43 @@
 - block:
     - name: "linux | storage | raw lsblk"
       ansible.builtin.raw: >
-        lsblk -J -b -d -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN 2>/dev/null || echo '{"blockdevices":[]}'
+        lsblk -J -b -d -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL,WWN 2>/dev/null || echo '{"blockdevices":[]}'
       register: _l_stor_lsblk_raw
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    # serial/wwn 보강 (raw 경로) — python 경로와 동일 'UDEV|<dev>|<serial>|<wwn>'
+    - name: "linux | storage | raw udevadm serial/wwn"
+      ansible.builtin.raw: |
+        for d in $(lsblk -dn -o NAME 2>/dev/null); do
+          p=$(udevadm info --query=property --name="/dev/$d" 2>/dev/null)
+          s=$(printf '%s\n' "$p" | sed -n 's/^ID_SERIAL_SHORT=//p' | head -1)
+          w=$(printf '%s\n' "$p" | sed -n 's/^ID_WWN=//p' | head -1)
+          echo "UDEV|/dev/$d|$s|$w"
+        done
+      register: _l_udev_idmap_raw
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    # 2026-06-22 T1: storage 컨트롤러 (raw) — lspci CTRL| 라인
+    - name: "linux | storage | raw lspci controllers"
+      ansible.builtin.raw: |
+        lspci -Dnnk 2>/dev/null | awk '
+          /^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\./ {
+            if (addr!="" && st) printf "CTRL|%s|%s|%s|%s|%s\n", addr, cls, name, drv, subsys
+            addr=$1; rest=substr($0, index($0," ")+1)
+            st = (rest ~ /RAID bus controller|SATA controller|SAS controller|Serial Attached SCSI|Non-Volatile memory controller|SCSI storage controller|Mass storage controller/)
+            cls=rest; sub(/ \[[0-9a-f]+\]:.*/,"",cls)
+            name=rest; sub(/^[^:]*: /,"",name); sub(/ \[[0-9a-f]+:[0-9a-f]+\]( \(rev [0-9a-f]+\))?$/,"",name)
+            drv=""; subsys=""; next
+          }
+          /Kernel driver in use:/ { drv=$NF }
+          /Subsystem:/ { s=$0; sub(/^[ \t]*Subsystem: /,"",s); sub(/ \[[0-9a-f]+:[0-9a-f]+\]$/,"",s); subsys=s }
+          END { if (addr!="" && st) printf "CTRL|%s|%s|%s|%s|%s\n", addr, cls, name, drv, subsys }
+        '
+      register: _l_lspci_ctrl_raw
       changed_when: false
       failed_when: false
       no_log: true
@@ -172,6 +293,16 @@
           {%- endfor -%}
           {%- set raw_json = raw_lines | join('\n') -%}
           {%- set lsblk = (raw_json | from_json) if raw_json | trim | length > 0 else {} -%}
+          {# serial/wwn 보강(raw): udevadm sweep을 dev→{serial,wwn} dict로 #}
+          {%- set udev = {} -%}
+          {%- for line in (_l_udev_idmap_raw.stdout_lines | default([])) -%}
+            {%- if line.startswith('UDEV|') -%}
+              {%- set p = line.split('|') -%}
+              {%- if p | length >= 4 -%}
+                {%- set _ = udev.update({p[1]: {'serial': (p[2] | trim) or none, 'wwn': (p[3] | trim) or none}}) -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
           {%- if lsblk.blockdevices is defined -%}
             {%- for dev in lsblk.blockdevices -%}
               {%- if dev.type | default('') in ['disk'] and (dev.size | default(0)) | int > 0 -%}
@@ -182,10 +313,15 @@
                 {%- elif _tran == 'sas' -%}{%- set _proto = 'SAS' -%}
                 {%- elif _tran == 'nvme' -%}{%- set _proto = 'NVMe' -%}
                 {%- endif -%}
+                {%- set _u = udev.get(_dev_path, {}) -%}
+                {%- set _serial = (dev.serial | trim) if dev.serial else (_u.serial | default(none)) -%}
+                {%- set _wwn = (dev.wwn | trim) if dev.wwn else (_u.wwn | default(none)) -%}
                 {%- set _ = out.append({
                   'id':         _dev_path,
                   'device':     _dev_path,
                   'model':      (dev.model | trim) if dev.model else none,
+                  'serial':     _serial,
+                  'wwn':        _wwn,
                   'total_mb':   (dev.size | int / 1048576) | round(0,'floor') | int,
                   'media_type': 'HDD' if (dev.rota | default('1') | string) in ['1','true','True'] else 'SSD',
                   'protocol':   _proto,
@@ -251,6 +387,33 @@
           {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
       no_log: true
 
+    - name: "linux | storage | normalize controllers (raw)"
+      ansible.builtin.set_fact:
+        _l_norm_controllers_raw: >-
+          {%- set out = [] -%}
+          {%- for line in (_l_lspci_ctrl_raw.stdout_lines | default([])) -%}
+            {%- if line.startswith('CTRL|') -%}
+              {%- set p = line.split('|') -%}
+              {%- if p | length >= 6 -%}
+                {%- set cl = (p[2] | default('')) | lower -%}
+                {%- set ct = 'RAID' if 'raid' in cl else ('NVMe' if 'non-volatile' in cl else ('SAS' if ('sas' in cl or 'serial attached' in cl) else ('SATA' if 'sata' in cl else ('SCSI' if 'scsi' in cl else none)))) -%}
+                {%- set _ = out.append({
+                  'id': p[1],
+                  'name': (p[5] | trim) if (p[5] | trim) else ((p[3] | trim) or none),
+                  'controller_model': (p[3] | trim) or none,
+                  'controller_manufacturer': none,
+                  'driver': (p[4] | trim) or none,
+                  'controller_type': ct,
+                  'pci': p[1],
+                  'health': none,
+                  'drives': []
+                }) -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+      no_log: true
+
     - name: "linux | storage | build fragment (raw)"
       ansible.builtin.set_fact:
         _data_fragment:
@@ -258,7 +421,7 @@
             filesystems:     "{{ _l_norm_filesystems_raw }}"
             physical_disks:  "{{ _l_norm_physical_disks_raw }}"
             datastores:      []
-            controllers:     []
+            controllers:     "{{ _l_norm_controllers_raw | default([]) }}"
             logical_volumes: []
             summary:         "{{ _l_stor_summary_r | default({'groups': [], 'grand_total_gb': 0}) }}"
         _sections_supported_fragment: ['storage']

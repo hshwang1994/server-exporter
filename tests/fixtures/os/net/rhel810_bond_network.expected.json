@@ -360,6 +360,7 @@
       "manufacturer": "VMware",
       "model": "VMXNET3 Ethernet Controller",
       "driver": "vmxnet3",
+      "firmware_version": null,
       "pci": "04:00.0"
     },
     {
@@ -368,6 +369,7 @@
       "manufacturer": "VMware",
       "model": "VMXNET3 Ethernet Controller",
       "driver": "vmxnet3",
+      "firmware_version": null,
       "pci": "0b:00.0"
     },
     {
@@ -376,6 +378,7 @@
       "manufacturer": "VMware",
       "model": "VMXNET3 Ethernet Controller",
       "driver": "vmxnet3",
+      "firmware_version": null,
       "pci": "0c:00.0"
     },
     {
@@ -384,6 +387,7 @@
       "manufacturer": "VMware",
       "model": "VMXNET3 Ethernet Controller",
       "driver": "vmxnet3",
+      "firmware_version": null,
       "pci": "13:00.0"
     },
     {
@@ -392,6 +396,7 @@
       "manufacturer": "VMware",
       "model": "VMXNET3 Ethernet Controller",
       "driver": "vmxnet3",
+      "firmware_version": null,
       "pci": "14:00.0"
     },
     {
@@ -400,6 +405,7 @@
       "manufacturer": "VMware",
       "model": "VMXNET3 Ethernet Controller",
       "driver": "vmxnet3",
+      "firmware_version": null,
       "pci": "1b:00.0"
     }
   ],

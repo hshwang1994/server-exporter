@@ -25,6 +25,29 @@
     # windows-audit (2026-04-29): PS5.1=int / PS7+=enum string 양쪽 BusType 처리.
     #   Win32_DiskDrive raw "Fixed hard disk media"는 SSD/HDD 정보 부재 → null (잘못된 추정 차단).
     #   HealthStatus 매핑 (Healthy/Warning/Unhealthy) → health 필드.
+    # serial/wwn 추가 (2026-06-22). serial: Get-PhysicalDisk 우선 → Win32_DiskDrive fallback.
+    #   일부 드라이브는 SerialNumber 를 hex 인코딩(ASCII)+공백(20) 패딩으로 반환 → 디코딩 정규화.
+    #   니블 swap 은 드라이브별로 달라 사이트 실측 전까지 미적용(주석). (MS Learn Win32_DiskDrive)
+    function Normalize-DiskSerial($v) {
+      if (-not $v) { return $null }
+      $s = ([string]$v).Trim()
+      if (-not $s) { return $null }
+      if ($s.Length -ge 8 -and ($s.Length % 2 -eq 0) -and ($s -match '^[0-9A-Fa-f]+$') -and ($s -match '20')) {
+        try {
+          $sb = New-Object System.Text.StringBuilder
+          for ($i = 0; $i -lt $s.Length; $i += 2) {
+            $b = [Convert]::ToByte($s.Substring($i, 2), 16)
+            if ($b -ge 32 -and $b -le 126) { [void]$sb.Append([char]$b) }
+          }
+          $dec = $sb.ToString().Trim()
+          if ($dec) { $s = $dec }
+        } catch { }
+      }
+      $s = $s.Trim()
+      if (-not $s -or $s -in @('NA','N/A','None','0','00000000')) { return $null }
+      return $s
+    }
+
     $physical_map = @{}
     if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
       try {
@@ -67,7 +90,11 @@
             'Unhealthy' { 'unhealthy' }
             default     { $null }
           }
-          $physical_map[[string]$_.DeviceId] = @{ media_type = $mt; bus = $bus; health = $health }
+          # serial/UniqueId(wwn 후보) 캡처
+          $serRaw = [string]$_.SerialNumber
+          $uidRaw = [string]$_.UniqueId
+          $ufRaw  = $_.UniqueIdFormat
+          $physical_map[[string]$_.DeviceId] = @{ media_type = $mt; bus = $bus; health = $health; serial = $serRaw; unique_id = $uidRaw; uid_fmt = $ufRaw }
         }
       } catch { }
     }
@@ -76,10 +103,16 @@
       $mt = $null
       $bus = $null
       $health = $null
+      $pdSerial = $null
+      $pdUid = $null
+      $pdUidFmt = $null
       if ($physical_map.ContainsKey($idx)) {
         $mt = $physical_map[$idx].media_type
         $bus = $physical_map[$idx].bus
         $health = $physical_map[$idx].health
+        $pdSerial = $physical_map[$idx].serial
+        $pdUid = $physical_map[$idx].unique_id
+        $pdUidFmt = $physical_map[$idx].uid_fmt
       }
       # Win32_DiskDrive.MediaType fallback — 진짜 SSD 정보만 매핑.
       # "Fixed hard disk media"는 SSD/HDD 구분 안 함 → null (잘못된 HDD 추정 금지).
@@ -100,9 +133,33 @@
           default { $null }
         }
       }
+      # serial: Get-PhysicalDisk 우선 → Win32_DiskDrive.SerialNumber fallback → 정규화
+      $serial = Normalize-DiskSerial $pdSerial
+      if (-not $serial) { $serial = Normalize-DiskSerial ([string]$_.SerialNumber) }
+      # wwn: UniqueId 가 WWN성 포맷(EUI64=2 / FCPHName=3 / SCSI Name String=8)일 때만 해석.
+      #   로컬 SATA 는 보통 null (best-effort). (MSFT_PhysicalDisk UniqueIdFormat 값맵)
+      $wwn = $null
+      if ($pdUid) {
+        $ufInt = if ($pdUidFmt -is [int]) { [int]$pdUidFmt } else {
+          switch -Wildcard ([string]$pdUidFmt) {
+            'EUI64'     { 2 }
+            'FCPHName'  { 3 }
+            'FCPH Name' { 3 }
+            'SCSIName*' { 8 }
+            'SCSI Name*'{ 8 }
+            default     { -1 }
+          }
+        }
+        if ($ufInt -in @(2,3,8)) {
+          $w = ([string]$pdUid).Trim()
+          if ($w) { $wwn = $w }
+        }
+      }
       [PSCustomObject]@{
         device = $_.DeviceID
         model  = $_.Model
+        serial = $serial
+        wwn    = $wwn
         total  = $_.Size
         media  = $mt
         protocol = $bus
@@ -343,6 +400,8 @@
               'id':         d.device,
               'device':     d.device,
               'model':      d.model | default(none),
+              'serial':     d.serial | default(none),
+              'wwn':        d.wwn | default(none),
               'total_mb':   total_mb,
               'media_type': d.media | default(none),
               'protocol':   d.protocol | default(none),

@@ -1,0 +1,26 @@
+---
+# esxi-gather/tasks/collect_disks.yml
+# esxi_disks (pyvmomi 커스텀 모듈) → _e_raw_disks, _e_disks_ok
+# 물리 디스크 serial/wwn 수집 (2026-06-22 신규). datastore 와 별개 — graceful(실패 시 빈 list).
+
+- name: "esxi | collect | physical disks (serial/wwn)"
+  esxi_disks:
+    hostname:       "{{ _e_ip }}"
+    username:       "{{ _e_user }}"
+    password:       "{{ _e_pass }}"
+    validate_certs: false
+  register:    _e_disks_result
+  delegate_to: localhost
+  failed_when: false
+  no_log: true
+
+- name: "esxi | collect | store raw disks/controllers/ports"
+  ansible.builtin.set_fact:
+    _e_raw_disks: "{{ _e_disks_result.physical_disks | default([]) }}"
+    # 2026-06-22 T1: storage controllers + listening_ports (firewall) 도 동일 모듈에서 수집
+    _e_raw_controllers:     "{{ _e_disks_result.controllers | default([]) }}"
+    _e_raw_listening_ports: "{{ _e_disks_result.listening_ports | default([]) }}"
+    _e_disks_ok:  "{{ (_e_disks_result is not failed)
+                      and (_e_disks_result.physical_disks is defined)
+                      and (_e_disks_result.error is not defined) }}"
+  no_log: true

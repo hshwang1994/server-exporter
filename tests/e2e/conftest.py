@@ -321,6 +321,12 @@ def windows_baseline():
 
 
 @pytest.fixture
+def windows_2022_baseline():
+    # 2026-06-22: 실 Windows Server 2022 (10.100.64.120) 실측 — disk serial/wwn/health populate
+    return load_json(BASELINE_DIR / "windows_2022_baseline.json")
+
+
+@pytest.fixture
 def esxi_baseline():
     return load_json(BASELINE_DIR / "esxi_baseline.json")
 
