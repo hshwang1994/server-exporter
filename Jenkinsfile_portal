@@ -273,44 +273,50 @@ pipeline {
 
                     echo "[Callback] body ${callbackBody.length()} bytes, hosts=${rawJsonLines.size()}"
 
-                    writeFile file: 'callback_body.json', text: callbackBody
-
-                    // callbackEndpoint 는 withEnv 로 환경변수 전달(셸 명령문에 직접 넣지 않음) + Validate 입력 차단 (이중 방어).
+                    // HTTP Request 플러그인(httpRequest 스텝)으로 POST — curl/셸 미사용.
+                    //   - 셸을 거치지 않으므로 callbackEndpoint shell 주입 위험 제거 (Validate 입력 차단과 이중 방어 유지).
+                    //   - validResponseCodes:'100:599' → 비-2xx 에도 예외 미발생, status 직접 판정 (graceful, rule 31 R2).
+                    //   - ignoreSslErrors 미설정 → SSL 검증 유지 (curl -k 미사용과 동일).
+                    //   - 재시도 3회 + backoff(attempt*10s), 최종 실패 시 unstable 은 기존 curl 동작 그대로 보존.
                     def maxRetries = 3
                     def success = false
                     def lastError = ''
 
-                    withEnv(["CALLBACK_ENDPOINT=${callbackEndpoint}"]) {
-                        for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                            echo "[Callback] [${attempt}/${maxRetries}] 전송중..."
-                            def rc = sh(
-                                returnStatus: true,
-                                script: """#!/bin/bash
-                                    set +x
-                                    cd "\${WORKSPACE}"
-                                    curl -sS -o callback_resp.txt -w '%{http_code}' --max-time 300 -X POST -H 'Content-Type: application/json' --data @callback_body.json "\${CALLBACK_ENDPOINT}" > http_code.txt
-                                """
+                    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                        echo "[Callback] [${attempt}/${maxRetries}] 전송중..."
+                        def httpCode = ''
+                        def respBody = ''
+                        try {
+                            def resp = httpRequest(
+                                url                    : callbackEndpoint,
+                                httpMode               : 'POST',
+                                contentType            : 'APPLICATION_JSON',
+                                requestBody            : callbackBody,
+                                timeout                : 300,
+                                validResponseCodes     : '100:599',
+                                consoleLogResponseBody : false,
                             )
-                            def httpCode = ''
-                            try {
-                                httpCode = readFile('http_code.txt').trim()
-                            } catch (Exception e) {
-                                httpCode = ''
-                            }
+                            httpCode = "${resp.status}"
+                            respBody = resp.content ?: ''
+                        } catch (Exception e) {
+                            lastError = "httpRequest 예외 (연결 실패/timeout): ${e.message}"
+                        }
 
-                            if (rc == 0 && httpCode ==~ /2\d\d/) {
-                                echo "[Callback] [OK] HTTP ${httpCode} (${attempt}/${maxRetries})"
-                                success = true
-                                break
-                            }
-                            lastError = (rc != 0) ? "curl 종료코드 ${rc} (연결 실패/timeout)" : "HTTP ${httpCode}"
-                            echo "[Callback] [FAIL] (${attempt}/${maxRetries}) ${lastError}"
+                        if (httpCode ==~ /2\d\d/) {
+                            echo "[Callback] [OK] HTTP ${httpCode} (${attempt}/${maxRetries})"
+                            success = true
+                            break
+                        }
+                        if (httpCode) {
+                            def snippet = (respBody.length() > 500) ? respBody.substring(0, 500) : respBody
+                            lastError = "HTTP ${httpCode}" + (snippet ? " -- ${snippet}" : "")
+                        }
+                        echo "[Callback] [FAIL] (${attempt}/${maxRetries}) ${lastError}"
 
-                            if (attempt < maxRetries) {
-                                def waitSec = attempt * 10
-                                echo "[Callback] ${waitSec}초 후 재시도"
-                                sleep(time: waitSec, unit: 'SECONDS')
-                            }
+                        if (attempt < maxRetries) {
+                            def waitSec = attempt * 10
+                            echo "[Callback] ${waitSec}초 후 재시도"
+                            sleep(time: waitSec, unit: 'SECONDS')
                         }
                     }
 
