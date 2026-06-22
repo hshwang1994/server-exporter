@@ -2,8 +2,8 @@
   "target_type": "os",
   "collection_method": "agent",
   "ip": "10.100.64.161",
-  "hostname": "rhel810-test01.gooddi.lab",
-  "vendor": null,
+  "hostname": "localhost",
+  "vendor": "vmware",
   "status": "success",
   "sections": {
     "system": "success",
@@ -15,7 +15,8 @@
     "network": "success",
     "firmware": "not_supported",
     "users": "success",
-    "power": "not_supported"
+    "power": "not_supported",
+    "thermal": "not_supported"
   },
   "diagnosis": {
     "reachable": true,
@@ -32,45 +33,217 @@
       "checked_ports": [
         22
       ],
-      "gather_mode": "raw_only",
+      "gather_mode": "python_incompatible",
       "python_version": "3.6.8",
-      "python_path": "/usr/bin/python3"
+      "auth": {
+        "attempted_count": 2,
+        "used_label": "linux_fallback",
+        "used_role": "secondary",
+        "fallback_used": true
+      },
+      "hostname_source": "system"
     }
   },
   "meta": {
-    "started_at": "2026-04-29T05:30:01.123456Z",
-    "finished_at": "2026-04-29T05:30:09.654321Z",
-    "duration_ms": 8500,
+    "started_at": "2026-06-22T08:32:30.082477Z",
+    "finished_at": "2026-06-22T08:32:41.667799Z",
+    "duration_ms": 11563,
     "adapter_id": "os_linux_rhel",
-    "adapter_version": "1.0.0",
+    "adapter_version": null,
     "ansible_version": "2.20.3"
   },
   "correlation": {
-    "serial_number": "VMware-42 0c 9d 1e 5a 7b 90 31-c4 8d 7e f0 22 19 33 ab",
-    "system_uuid": "1e9d0c42-7b5a-3190-c48d-7ef0221933ab",
+    "serial_number": "VMware-42 04 c1 6d 6a 20 76 e9-4b 2f c7 48 c1 a5 cc 83",
+    "system_uuid": "6dc10442-206a-e976-4b2f-c748c1a5cc83",
     "bmc_ip": null,
     "host_ip": "10.100.64.161"
   },
   "errors": [],
   "data": {
-    "system": {
-      "os_family": "RedHat",
-      "distribution": "RHEL",
-      "version": "8.10",
-      "kernel": "4.18.0-553.el8.x86_64",
+    "cpu": {
+      "sockets": 4,
+      "cores_physical": 4,
+      "logical_threads": 4,
+      "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+      "manufacturer": "Intel",
+      "max_speed_mhz": null,
       "architecture": "x86_64",
+      "summary": {
+        "groups": [
+          {
+            "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+            "manufacturer": "Intel",
+            "max_speed_mhz": null,
+            "l2_cache_kb": 256,
+            "l3_cache_kb": 56320,
+            "sockets": 4,
+            "cores_per_socket": 1,
+            "total_cores": 4
+          }
+        ]
+      }
+    },
+    "memory": {
+      "total_mb": 8192,
+      "total_basis": "physical_installed",
+      "installed_mb": 8192,
+      "visible_mb": 7696,
+      "free_mb": 5907,
+      "slots": [
+        {
+          "capacity_mb": 8192,
+          "type": "DRAM",
+          "speed_mhz": null,
+          "manufacturer": "VMware Virtual RAM",
+          "part_number": "VMW-8192MB"
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 8,
+            "type": "DRAM",
+            "speed_mhz": null,
+            "manufacturer": "VMware Virtual RAM",
+            "part_number": "VMW-8192MB",
+            "quantity": 1,
+            "group_total_gb": 8
+          }
+        ],
+        "grand_total_gb": 8
+      }
+    },
+    "firmware": [],
+    "storage": {
+      "controllers": [
+        {
+          "id": "0000:02:00.0",
+          "name": "VMware SATA AHCI controller",
+          "controller_model": "VMware SATA AHCI controller",
+          "controller_manufacturer": null,
+          "driver": "ahci",
+          "controller_type": "SATA",
+          "pci": "0000:02:00.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "0000:03:00.0",
+          "name": "VMware PVSCSI SCSI Controller",
+          "controller_model": "VMware PVSCSI SCSI Controller",
+          "controller_manufacturer": null,
+          "driver": "vmw_pvscsi",
+          "controller_type": "SAS",
+          "pci": "0000:03:00.0",
+          "health": null,
+          "drives": []
+        }
+      ],
+      "hbas": [],
+      "physical_disks": [
+        {
+          "id": "/dev/sda",
+          "device": "/dev/sda",
+          "model": "Virtual disk",
+          "serial": null,
+          "wwn": null,
+          "total_mb": 51200,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null
+        },
+        {
+          "id": "/dev/sdb",
+          "device": "/dev/sdb",
+          "model": "Virtual disk",
+          "serial": null,
+          "wwn": null,
+          "total_mb": 51200,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null
+        }
+      ],
+      "datastores": [],
+      "infiniband": [],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 50,
+            "model": "Virtual disk",
+            "media_type": "HDD",
+            "protocol": null,
+            "quantity": 2,
+            "group_total_gb": 100
+          }
+        ],
+        "grand_total_gb": 100
+      },
+      "filesystems": [
+        {
+          "device": "/dev/mapper/rhel-root",
+          "mount_point": "/",
+          "filesystem": "xfs",
+          "total_mb": 44430,
+          "used_mb": 5600,
+          "available_mb": 38829,
+          "usage_percent": 13.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/sda2",
+          "mount_point": "/boot",
+          "filesystem": "xfs",
+          "total_mb": 1014,
+          "used_mb": 266,
+          "available_mb": 747,
+          "usage_percent": 27.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/sda1",
+          "mount_point": "/boot/efi",
+          "filesystem": "vfat",
+          "total_mb": 598,
+          "used_mb": 5,
+          "available_mb": 593,
+          "usage_percent": 1.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/mapper/vg_data-lv_log",
+          "mount_point": "/data/log",
+          "filesystem": "xfs",
+          "total_mb": 30705,
+          "used_mb": 246,
+          "available_mb": 30458,
+          "usage_percent": 1.0,
+          "status": "mounted"
+        }
+      ],
+      "logical_volumes": []
+    },
+    "power": null,
+    "thermal": {
+      "temperatures": [],
+      "fans": []
+    },
+    "system": {
+      "version": "8.10",
+      "uptime_seconds": 5993810,
+      "os_family": "RedHat",
+      "distribution": "RedHat",
+      "kernel": "4.18.0-553.el8_10.x86_64",
+      "serial_number": "VMware-42 04 c1 6d 6a 20 76 e9-4b 2f c7 48 c1 a5 cc 83",
       "hosting_type": "virtual",
-      "uptime_seconds": 87431,
-      "selinux": "enabled",
-      "fqdn": "rhel810-test01.gooddi.lab",
-      "serial_number": "VMware-42 0c 9d 1e 5a 7b 90 31-c4 8d 7e f0 22 19 33 ab",
-      "system_uuid": "1e9d0c42-7b5a-3190-c48d-7ef0221933ab",
+      "system_uuid": "6dc10442-206a-e976-4b2f-c748c1a5cc83",
+      "architecture": "x86_64",
       "runtime": {
         "timezone": "America/New_York",
         "ntp_active": true,
         "ntp_synchronized": true,
         "firewall_tool": "firewalld",
-        "firewall_state": "active",
+        "firewall_state": "running",
         "listening_ports": [
           "22",
           "53",
@@ -80,77 +253,176 @@
         "swap_total_mb": 5119,
         "swap_used_mb": 0,
         "swap_free_mb": 5119
-      }
+      },
+      "fqdn": "localhost",
+      "selinux": "enabled",
+      "vendor": "VMware, Inc."
     },
-    "memory": {
-      "total_mb": 4096,
-      "total_basis": "physical_installed",
-      "installed_mb": 4096,
-      "visible_mb": 3886,
-      "slots": [
-        {
-          "capacity_mb": 4096,
-          "type": "DIMM",
-          "speed_mhz": null
-        }
-      ],
-      "summary": {
+    "users": [
+      {
+        "name": "root",
+        "uid": "0",
         "groups": [
-          {
-            "unit_capacity_gb": 4,
-            "type": "DIMM",
-            "quantity": 1,
-            "group_total_gb": 4
-          }
+          "root"
         ],
-        "grand_total_gb": 4
+        "home": "/root",
+        "last_access_time": null
+      },
+      {
+        "name": "cloviradmin",
+        "uid": "1000",
+        "groups": [
+          "cloviradmin",
+          "wheel"
+        ],
+        "home": "/home/cloviradmin",
+        "last_access_time": "2026-06-22T08:32:37Z"
       }
-    },
-    "power": null,
+    ],
+    "bmc": null,
     "network": {
-      "interfaces": [
+      "bonds": [
         {
-          "id": "ens192",
-          "name": "ens192",
-          "kind": "os_nic",
-          "mac": "00:50:56:84:1a:2c",
-          "mtu": 1500,
-          "speed_mbps": 10000,
-          "link_status": "up",
-          "is_primary": true,
+          "name": "bond1",
+          "mode": "active-backup",
+          "active_slave": "ens161",
+          "miimon": 100,
+          "lacp_rate": "slow",
+          "xmit_hash_policy": "layer2",
+          "primary": "ens161",
+          "ad_select": "stable",
+          "slaves": [
+            {
+              "name": "ens161",
+              "state": "active",
+              "mii_status": "up",
+              "perm_hwaddr": "00:50:56:84:57:81",
+              "speed_mbps": 10000,
+              "link_failure_count": 0,
+              "mtu": 1500,
+              "link_status": "up",
+              "bond": "bond1"
+            },
+            {
+              "name": "ens193",
+              "state": "backup",
+              "mii_status": "up",
+              "perm_hwaddr": "00:50:56:84:b6:f7",
+              "speed_mbps": 10000,
+              "link_failure_count": 0,
+              "mtu": 1500,
+              "link_status": "up",
+              "bond": "bond1"
+            }
+          ],
           "addresses": [
             {
               "family": "ipv4",
-              "address": "10.100.64.161",
+              "address": "10.100.64.169",
               "prefix_length": 24,
               "subnet_mask": "255.255.255.0",
-              "gateway": "10.100.64.254"
+              "gateway": null,
+              "scope": "global",
+              "label": "bond1",
+              "parent_interface": "bond1",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv4",
+              "address": "10.100.10.100",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null,
+              "scope": "global",
+              "label": "bond1:1",
+              "parent_interface": "bond1",
+              "is_alias": true,
+              "is_secondary": false
+            }
+          ]
+        },
+        {
+          "name": "bond2",
+          "mode": "active-backup",
+          "active_slave": "ens225",
+          "miimon": 100,
+          "lacp_rate": "slow",
+          "xmit_hash_policy": "layer2",
+          "primary": "ens225",
+          "ad_select": "stable",
+          "slaves": [
+            {
+              "name": "ens225",
+              "state": "active",
+              "mii_status": "up",
+              "perm_hwaddr": "00:50:56:84:bf:36",
+              "speed_mbps": 10000,
+              "link_failure_count": 0,
+              "mtu": 1500,
+              "link_status": "up",
+              "bond": "bond2"
+            },
+            {
+              "name": "ens256",
+              "state": "backup",
+              "mii_status": "up",
+              "perm_hwaddr": "00:50:56:84:38:a4",
+              "speed_mbps": 10000,
+              "link_failure_count": 0,
+              "mtu": 1500,
+              "link_status": "up",
+              "bond": "bond2"
+            }
+          ],
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.170",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null,
+              "scope": "global",
+              "label": "bond2",
+              "parent_interface": "bond2",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv4",
+              "address": "10.100.10.101",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null,
+              "scope": "global",
+              "label": "bond2:1",
+              "parent_interface": "bond2",
+              "is_alias": true,
+              "is_secondary": false
             }
           ]
         }
       ],
       "dns_servers": [
-        "10.100.64.10"
+        "10.100.64.251"
       ],
-      "default_gateways": [
-        {
-          "family": "ipv4",
-          "address": "10.100.64.254"
-        }
-      ],
-      "bonds": [],
-      "bridges": [],
-      "teams": [],
       "summary": {
         "groups": [
           {
             "speed_mbps": 10000,
             "link_type": null,
-            "quantity": 1,
-            "link_up_count": 1
+            "quantity": 4,
+            "link_up_count": 4
           }
         ]
       },
+      "ports": [],
+      "bridges": [
+        {
+          "name": "virbr0",
+          "members": []
+        }
+      ],
       "adapters": [
         {
           "id": "04:00.0",
@@ -206,118 +478,290 @@
           "firmware_version": null,
           "pci": "1b:00.0"
         }
-      ]
-    },
-    "hardware": null,
-    "cpu": {
-      "sockets": 2,
-      "cores_physical": 2,
-      "logical_threads": 2,
-      "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
-      "architecture": "x86_64",
-      "summary": {
-        "groups": [
-          {
-            "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
-            "manufacturer": "Intel",
-            "max_speed_mhz": null,
-            "l2_cache_kb": null,
-            "l3_cache_kb": null,
-            "sockets": 2,
-            "cores_per_socket": 1,
-            "total_cores": 2
-          }
-        ]
-      }
-    },
-    "storage": {
-      "datastores": [],
-      "physical_disks": [
+      ],
+      "portgroups": [],
+      "default_gateways": [
         {
-          "id": "/dev/sda",
-          "device": "/dev/sda",
-          "model": "Virtual disk",
-          "serial": null,
-          "wwn": null,
-          "total_mb": 51200,
-          "media_type": "HDD",
-          "protocol": null,
-          "health": null
+          "family": "ipv4",
+          "address": "10.100.64.254"
         }
       ],
-      "controllers": [
+      "virtual_switches": [],
+      "interfaces": [
         {
-          "id": "0000:02:00.0",
-          "name": "VMware SATA AHCI controller",
-          "controller_model": "VMware SATA AHCI controller",
-          "controller_manufacturer": null,
-          "driver": "ahci",
-          "controller_type": "SATA",
-          "pci": "0000:02:00.0",
-          "health": null,
-          "drives": []
+          "id": "bond1",
+          "name": "bond1",
+          "kind": "os_nic",
+          "mac": "00:50:56:84:57:81",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.169",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null,
+              "scope": "global",
+              "label": "bond1",
+              "parent_interface": "bond1",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv4",
+              "address": "10.100.10.100",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null,
+              "scope": "global",
+              "label": "bond1:1",
+              "parent_interface": "bond1",
+              "is_alias": true,
+              "is_secondary": false
+            }
+          ],
+          "bond_role": "master",
+          "bond_mode": "active-backup",
+          "active_slave": "ens161",
+          "bond_slaves": [
+            "ens161",
+            "ens193"
+          ]
         },
         {
-          "id": "0000:03:00.0",
-          "name": "VMware PVSCSI SCSI Controller",
-          "controller_model": "VMware PVSCSI SCSI Controller",
-          "controller_manufacturer": null,
-          "driver": "vmw_pvscsi",
-          "controller_type": "SAS",
-          "pci": "0000:03:00.0",
-          "health": null,
-          "drives": []
-        }
-      ],
-      "logical_volumes": [],
-      "filesystems": [
+          "id": "bond2",
+          "name": "bond2",
+          "kind": "os_nic",
+          "mac": "00:50:56:84:bf:36",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.170",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null,
+              "scope": "global",
+              "label": "bond2",
+              "parent_interface": "bond2",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv4",
+              "address": "10.100.10.101",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null,
+              "scope": "global",
+              "label": "bond2:1",
+              "parent_interface": "bond2",
+              "is_alias": true,
+              "is_secondary": false
+            }
+          ],
+          "bond_role": "master",
+          "bond_mode": "active-backup",
+          "active_slave": "ens225",
+          "bond_slaves": [
+            "ens225",
+            "ens256"
+          ]
+        },
         {
-          "device": "/dev/sda2",
-          "mount_point": "/",
-          "filesystem": "xfs",
-          "total_mb": 50000.0,
-          "used_mb": 12000.0,
-          "available_mb": 38000.0,
-          "usage_percent": 24.0,
-          "status": "mounted"
+          "id": "ens192",
+          "name": "ens192",
+          "kind": "os_nic",
+          "mac": "00:50:56:84:00:b4",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": true,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.161",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": "10.100.64.254",
+              "scope": "global",
+              "label": "ens192",
+              "parent_interface": "ens192",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv6",
+              "address": "fe80::250:56ff:fe84:b4",
+              "prefix_length": 64,
+              "subnet_mask": null,
+              "gateway": null,
+              "scope": "link",
+              "label": "ens192",
+              "parent_interface": "ens192",
+              "is_alias": false,
+              "is_secondary": false
+            }
+          ]
+        },
+        {
+          "id": "ens224",
+          "name": "ens224",
+          "kind": "os_nic",
+          "mac": "00:50:56:84:2a:2a",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.162",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null,
+              "scope": "global",
+              "label": "ens224",
+              "parent_interface": "ens224",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv6",
+              "address": "fe80::250:56ff:fe84:2a2a",
+              "prefix_length": 64,
+              "subnet_mask": null,
+              "gateway": null,
+              "scope": "link",
+              "label": "ens224",
+              "parent_interface": "ens224",
+              "is_alias": false,
+              "is_secondary": false
+            }
+          ]
+        },
+        {
+          "id": "ens161",
+          "name": "ens161",
+          "kind": "os_nic",
+          "mac": "00:50:56:84:57:81",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [],
+          "bond_role": "slave",
+          "bond_master": "bond1",
+          "slave_state": "active"
+        },
+        {
+          "id": "ens193",
+          "name": "ens193",
+          "kind": "os_nic",
+          "mac": "00:50:56:84:b6:f7",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [],
+          "bond_role": "slave",
+          "bond_master": "bond1",
+          "slave_state": "backup"
+        },
+        {
+          "id": "ens225",
+          "name": "ens225",
+          "kind": "os_nic",
+          "mac": "00:50:56:84:bf:36",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [],
+          "bond_role": "slave",
+          "bond_master": "bond2",
+          "slave_state": "active"
+        },
+        {
+          "id": "ens256",
+          "name": "ens256",
+          "kind": "os_nic",
+          "mac": "00:50:56:84:38:a4",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [],
+          "bond_role": "slave",
+          "bond_master": "bond2",
+          "slave_state": "backup"
         }
       ],
-      "summary": {
-        "groups": [
-          {
-            "unit_capacity_gb": 50,
-            "media_type": "HDD",
-            "protocol": null,
-            "quantity": 1,
-            "group_total_gb": 50
-          }
-        ],
-        "grand_total_gb": 50
-      }
+      "teams": [],
+      "driver_map": [
+        {
+          "name": "bond1",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "bond2",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "ens161",
+          "driver": "vmxnet3",
+          "vlan_id": null,
+          "bond_master": "bond1"
+        },
+        {
+          "name": "ens192",
+          "driver": "vmxnet3",
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "ens193",
+          "driver": "vmxnet3",
+          "vlan_id": null,
+          "bond_master": "bond1"
+        },
+        {
+          "name": "ens224",
+          "driver": "vmxnet3",
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "ens225",
+          "driver": "vmxnet3",
+          "vlan_id": null,
+          "bond_master": "bond2"
+        },
+        {
+          "name": "ens256",
+          "driver": "vmxnet3",
+          "vlan_id": null,
+          "bond_master": "bond2"
+        },
+        {
+          "name": "virbr0",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": null
+        }
+      ]
     },
-    "users": [
-      {
-        "name": "root",
-        "uid": "0",
-        "groups": [
-          "root"
-        ],
-        "home": "/root",
-        "last_access_time": null
-      },
-      {
-        "name": "cloviradmin",
-        "uid": "1000",
-        "groups": [
-          "cloviradmin",
-          "wheel"
-        ],
-        "home": "/home/cloviradmin",
-        "last_access_time": "2026-04-29T05:25:00Z"
-      }
-    ],
-    "bmc": null,
-    "firmware": []
+    "hardware": null
   },
   "schema_version": "1"
 }

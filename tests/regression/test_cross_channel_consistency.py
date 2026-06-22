@@ -66,7 +66,7 @@ VALID_SECTION_STATUS: frozenset[str] = frozenset(
 # 에서 'hp' (CSUS 3200 → 'hpCsus') 로 노출. 'hpe' 는 always-fallback degradation 대비 허용 유지.
 CANONICAL_VENDORS: frozenset[str | None] = frozenset(
     {
-        None,  # OS channel can be null (vendor-agnostic)
+        None,  # OS channel can be null (DMI sys_vendor 빈 값일 때)
         "dell",
         "hpe",       # 내부 canonical (always-fallback degradation 시 출력 가능)
         "hp",        # HPE 출력 표시값 (vendor_output_display)
@@ -78,6 +78,12 @@ CANONICAL_VENDORS: frozenset[str | None] = frozenset(
         "inspur",
         "fujitsu",
         "quanta",
+        # OS 채널 하이퍼바이저 vendor (os-gather/site.yml _out_vendor DMI sys_vendor 매핑).
+        # OS-on-VM 은 DMI 제조사가 하이퍼바이저 → 정상 식별값 (2026-06-22).
+        "vmware",
+        "qemu",
+        "microsoft",
+        "xen",
     }
 )
 

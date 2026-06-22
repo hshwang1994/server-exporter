@@ -139,13 +139,17 @@ class TestRhel810RawFallback:
         assert_common_structure(rhel810_raw_fallback_baseline)
 
     def test_gather_mode_raw_only(self, rhel810_raw_fallback_baseline):
-        """raw_fallback mode 진입 검증 — diagnosis.details.gather_mode == 'raw_only'."""
+        """raw_fallback mode 진입 검증 — gather_mode 가 raw 경로 값(python_ok 아님).
+
+        코드 정의값(preflight.yml): python_ok / python_missing / python_incompatible / raw_forced.
+        RHEL 8.10(py3.6)은 python_incompatible 로 raw 경로 진입 (2026-06-22 161 실측 재캡처).
+        """
         details = (
             rhel810_raw_fallback_baseline.get("diagnosis", {}).get("details", {})
         )
-        assert details.get("gather_mode") == "raw_only", (
-            f"gather_mode 'raw_only' 아님: {details.get('gather_mode')}"
-        )
+        assert details.get("gather_mode") in (
+            "python_missing", "python_incompatible", "raw_forced"
+        ), f"raw fallback mode 아님: {details.get('gather_mode')}"
         assert details.get("python_version"), "python_version 누락"
 
     def test_critical_fields(self, rhel810_raw_fallback_baseline):
