@@ -237,10 +237,13 @@
         - name: "linux | select adapter"
           ansible.builtin.set_fact:
             _selected_adapter: >-
+              {# 2026-06-22 fix: _l_distro_name(os-release NAME, preflight) 우선 — adapter 선택 시점에
+                 ansible_distribution 은 미정의(facts 미수집) + "RedHat" 형식이라 패턴 불일치 → 전 Linux 가
+                 rhel tie-break 로 오선택되던 버그. os-release NAME("Ubuntu"/"Red Hat Enterprise Linux") 사용. #}
               {{ lookup('adapter_loader',
                          channel='os',
                          facts={'os_type': 'linux',
-                                'distribution': ansible_distribution | default('')},
+                                'distribution': (_l_distro_name | default('')) or (ansible_distribution | default(''))},
                          repo_root=lookup('env','REPO_ROOT')) }}
           no_log: true
 

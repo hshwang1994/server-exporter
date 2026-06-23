@@ -35,6 +35,7 @@
     echo "HAS_LASTLOG=$(command -v lastlog >/dev/null 2>&1 && echo 1 || echo 0)"
     echo "HAS_LSCPU=$(command -v lscpu >/dev/null 2>&1 && echo 1 || echo 0)"
     echo "HAS_IP=$(command -v ip >/dev/null 2>&1 && echo 1 || echo 0)"
+    echo "OS_NAME=$( . /etc/os-release 2>/dev/null; echo "$NAME" )"
   register: _l_preflight_raw
   changed_when: false
   failed_when: false
@@ -64,6 +65,9 @@
       {%- endif -%}
     # backward compat — setup 모듈의 ansible_python_interpreter 용
     _l_python: "{{ (_l_pf.PY_PATH | default('python3')) | trim }}"
+    # 2026-06-22 fix: adapter 선택용 distribution (os-release NAME — raw-safe, gather_system 전에 필요).
+    #   ansible_distribution 은 이 시점 미정의 + "RedHat"(공백X) 형식이라 패턴("Red Hat") 불일치 → os-release NAME 사용.
+    _l_distro_name: "{{ (_l_pf.OS_NAME | default('')) | trim }}"
     # 명령 존재 플래그
     _l_has_lsblk:   "{{ ((_l_pf.HAS_LSBLK    | default('0')) | trim) == '1' }}"
     _l_has_dmi:     "{{ ((_l_pf.HAS_DMIDECODE | default('0')) | trim) == '1' }}"

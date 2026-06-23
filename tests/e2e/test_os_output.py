@@ -26,7 +26,7 @@ class TestUbuntuBaseline:
         assert_common_structure(ubuntu_baseline)
 
     def test_adapter_id(self, ubuntu_baseline):
-        assert ubuntu_baseline["meta"]["adapter_id"] == "os_linux_generic"
+        assert ubuntu_baseline["meta"]["adapter_id"] == "os_linux_ubuntu"
 
     def test_critical_fields(self, ubuntu_baseline):
         assert_channel_critical_fields(
