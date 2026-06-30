@@ -414,7 +414,7 @@ controllers[*].id  ────┤
 구조 표현: 물리 NIC 는 IP 없이 `interfaces[]` 에 노출되고 IP 는 bond/team 인터페이스에 위치한다
 (원본 `ip -br addr` 와 동일). `summary` 집계는 기존과 동일(slave 미포함)하여 호출자 호환.
 
-#### 6.4.2 주소 alias / secondary 메타 (2026-06-17 — OS Linux, Additive)
+#### 6.4.2 주소 alias / secondary 메타 (2026-06-17 OS Linux + 2026-06-30 Windows, Additive)
 
 `interfaces[].addresses[]` 와 `bonds[].addresses[]` 의 각 주소 레코드는 기존 5 키
 (`family` / `address` / `prefix_length` / `subnet_mask` / `gateway`) 에 다음 5 키를 **추가**한다.
@@ -445,8 +445,14 @@ controllers[*].id  ────┤
 | `is_secondary` | 커널 secondary(같은 서브넷 2번째+ IPv4). 다른 서브넷 alias 는 `false` |
 
 - **호환성**: alias 없는 서버는 주소 수/기존 값 불변, 위 5 키만 Additive 추가(호출자 파싱 영향 없음).
-- **채널**: Linux OS 전용(`channel:[os]`, priority nice). Windows/ESXi/Redfish addresses 는 기존 5 키 유지.
-- **검증**: 실장비 10.100.64.161(RHEL 8.10 raw) / 10.100.64.165(RHEL 9.6 python) — `tests/evidence/2026-06-17-bond-alias-collection.md`.
+- **채널**: `channel:[os]` (priority nice) — Linux + Windows 모두 채움. ESXi/Redfish addresses 는 기존 5 키 유지.
+- **Windows (2026-06-30)**: 커널 secondary 플래그 API 가 없어 controller-side 파생(best-effort).
+  - `is_secondary`: 같은 인터페이스+같은 서브넷 2번째+ IPv4 → `true` (Linux 커널 동작 모사). 예: `Ethernet4` 가
+    `192.168.50.40` + `192.168.50.41`(같은 /24) 보유 시 `.41` 이 `is_secondary:true`.
+  - `is_alias`: Windows 는 `bond1:1` 같은 alias 라벨 개념이 없어 **항상 `false`**, `label`/`parent_interface` = 인터페이스명.
+  - `scope`: 커널 scope API 부재 → 주소로 best-effort 판정(`fe80::`→`link`, `127.`→`host`, 그 외 `global`).
+- **검증**: Linux 실장비 10.100.64.161(RHEL 8.10 raw) / 10.100.64.165(RHEL 9.6 python) — `tests/evidence/2026-06-17-bond-alias-collection.md`.
+  Windows 실장비 10.100.64.120(Server 2022) — `tests/evidence/2026-06-26-windows-net-ib-driver-team-vlan.md`.
 
 ### 6.5 `data.power` (Redfish 전용)
 

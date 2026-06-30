@@ -720,8 +720,34 @@ def parse_windows_teams(lines):
     return teams
 
 
-def enrich_windows_interfaces(interfaces, teams):
-    """base interfaces + teams → enriched (team_role/team_master 추가, member NIC 추가)."""
+def parse_windows_team_nics(lines):
+    """LBFOTEAMNIC 라인 → 팀 VLAN tNIC 목록 [{name, team, vlan_id}].
+
+    팀 위 VLAN(예: 'LabTeam1 - VLAN 100')은 Linux 의 bond0.100 에 대응한다.
+    default tNIC(VlanID 없음 = 팀 자체)는 vlan_id=None 으로 들어와 enrich 시 무시된다.
+    """
+    out = []
+    for ln in (lines or []):
+        d = _wjson(ln, "LBFOTEAMNIC")
+        if not d:
+            continue
+        name = _clean(d.get("name"))
+        if not name:
+            continue
+        out.append({
+            "name": name,
+            "team": _clean(d.get("team")),
+            "vlan_id": _to_int(d.get("vlan_id")),
+        })
+    return out
+
+
+def enrich_windows_interfaces(interfaces, teams, team_nics=None):
+    """base interfaces + teams → enriched (team_role/team_master 추가, member NIC 추가).
+
+    team_nics(LBFOTEAMNIC) 가 주어지면 팀 위 VLAN tNIC 인터페이스에 vlan_id/vlan_parent 를
+    추가한다 (Linux bond0.100 의 vlan_id/vlan_parent 와 동일 키 — 채널 일관, Additive).
+    """
     base = list(interfaces or [])
     teams = teams or []
     team_by_name = {t["name"]: t for t in teams}
@@ -730,6 +756,11 @@ def enrich_windows_interfaces(interfaces, teams):
         for m in t.get("members", []):
             member_owner[m["name"]] = t["name"]
             member_detail[m["name"]] = m
+    # VLAN tNIC 만 (vlan_id 보유). default tNIC(=팀 자체, vlan_id None)는 제외.
+    vlan_by_name = {}
+    for tn in (team_nics or []):
+        if tn.get("vlan_id") is not None:
+            vlan_by_name[tn["name"]] = tn
 
     out, present = [], set()
     for iface in base:
@@ -742,6 +773,10 @@ def enrich_windows_interfaces(interfaces, teams):
             new["team_type"] = t.get("team_type")
             new["teaming_mode"] = t.get("teaming_mode")
             new["team_members"] = [m["name"] for m in t.get("members", [])]
+        if name in vlan_by_name:
+            tn = vlan_by_name[name]
+            new["vlan_id"] = tn.get("vlan_id")
+            new["vlan_parent"] = tn.get("team")
         out.append(new)
 
     for name, owner in member_owner.items():
@@ -763,13 +798,91 @@ def enrich_windows_interfaces(interfaces, teams):
     return out
 
 
+def _ipv4_net_key(address, prefix_length):
+    """IPv4 address + prefix → (network_int, prefix) 키. 비정상 입력은 None.
+
+    같은 서브넷 판정용 (is_secondary 파생). prefix 0/범위밖/비-IPv4 는 None.
+    """
+    p = _to_int(prefix_length)
+    if p is None or p < 1 or p > 32:
+        return None
+    try:
+        octs = [int(o) for o in str(address).split(".")]
+    except (ValueError, TypeError):
+        return None
+    if len(octs) != 4 or any(o < 0 or o > 255 for o in octs):
+        return None
+    ipint = (octs[0] << 24) | (octs[1] << 16) | (octs[2] << 8) | octs[3]
+    mask = (0xFFFFFFFF << (32 - p)) & 0xFFFFFFFF
+    return (ipint & mask, p)
+
+
+def _addr_scope(family, address):
+    """family/address → scope(global/link/host). Windows best-effort (커널 scope API 부재)."""
+    fam = _norm_family(family)
+    a = (address or "").lower()
+    if fam == "ipv6":
+        if a.startswith("fe80"):
+            return "link"
+        if a == "::1":
+            return "host"
+        return "global"
+    if a.startswith("127."):
+        return "host"
+    if a.startswith("169.254."):
+        return "link"
+    return "global"
+
+
+def enrich_windows_addresses(interfaces):
+    """Windows addresses[] 에 Linux 와 동일한 5키를 Additive 부여 (channel:[os] parity 완성).
+
+    - parent_interface / label = 인터페이스명 (Windows 는 'bond1:1' 같은 alias 라벨 부재)
+    - is_alias = 항상 False (Windows 는 라벨 개념 없음 — 날조 금지)
+    - scope = best-effort 파생 (커널 scope API 부재)
+    - is_secondary = 같은 인터페이스+같은 family+같은 서브넷의 2번째+ IPv4 → True.
+      Linux 커널 secondary 플래그(같은 서브넷 2번째+ IPv4)와 동일 의미를 controller-side 로
+      모사 (best-effort). 첫 주소는 False. IPv6/다른 서브넷은 False (Linux 동작 일치).
+    입력 mutation 없음 (새 dict/list 반환 — immutability).
+    """
+    out = []
+    for iface in interfaces or []:
+        new = dict(iface)
+        name = new.get("name")
+        seen_nets = {}  # (network_int, prefix) -> 등장 횟수 (IPv4 only)
+        merged = []
+        for a in (new.get("addresses") or []):
+            ea = dict(a)
+            fam = ea.get("family")
+            if ea.get("scope") is None:
+                ea["scope"] = _addr_scope(fam, ea.get("address"))
+            ea["label"] = name
+            ea["parent_interface"] = name
+            ea["is_alias"] = False
+            sec = False
+            if _norm_family(fam) == "ipv4":
+                key = _ipv4_net_key(ea.get("address"), ea.get("prefix_length"))
+                if key is not None:
+                    sec = seen_nets.get(key, 0) >= 1
+                    seen_nets[key] = seen_nets.get(key, 0) + 1
+            ea["is_secondary"] = sec
+            merged.append(ea)
+        new["addresses"] = merged
+        out.append(new)
+    return out
+
+
 def build_windows_network(interfaces, lines):
     """단일 진입점: base interfaces + PS 라인 → {interfaces, teams, bonds, bridges}.
 
     bonds/bridges 는 Windows 에 없지만 3채널 키 일관성 위해 빈 [] 노출.
+    팀 위 VLAN tNIC(LBFOTEAMNIC)은 interfaces[] 에 vlan_id/vlan_parent 로 enrich (Linux 일관).
+    addresses[] 는 Linux 와 동일한 5키(scope/label/parent_interface/is_alias/is_secondary) 부여.
     """
     teams = parse_windows_teams(lines)
-    enriched = enrich_windows_interfaces(interfaces, teams)
+    team_nics = parse_windows_team_nics(lines)
+    enriched = enrich_windows_interfaces(interfaces, teams, team_nics)
+    enriched = enrich_windows_addresses(enriched)
     return {"interfaces": enriched, "teams": teams, "bonds": [], "bridges": []}
 
 
@@ -784,6 +897,8 @@ class FilterModule:
             "parse_linux_addresses": parse_linux_addresses,
             "merge_linux_addresses": merge_linux_addresses,
             "parse_windows_teams": parse_windows_teams,
+            "parse_windows_team_nics": parse_windows_team_nics,
             "enrich_windows_interfaces": enrich_windows_interfaces,
+            "enrich_windows_addresses": enrich_windows_addresses,
             "build_windows_network": build_windows_network,
         }

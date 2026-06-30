@@ -481,7 +481,9 @@
                 channel:           "os"
                 adapter_candidate: "{{ (_selected_adapter | default({})).adapter_id | default(none) }}"
                 detected_os:       "windows"
-                selected_port:     "{{ ansible_port | default(5986) }}"
+                # selected_port 는 정수 — checked_ports([5985,5986]) / Linux SSH 경로(22) /
+                # precheck 모듈(int) 과 타입 일관. 구: 문자열 "5986" (2026-06-30 실측 불일치).
+                selected_port:     "{{ ansible_port | default(5986) | int }}"
                 checked_ports:     [5985, 5986]
                 # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
                 auth:              "{{ _os_attempts_meta | default({}) }}"

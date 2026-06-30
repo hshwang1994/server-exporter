@@ -207,6 +207,30 @@
           {{ ib }}
       no_log: true
 
+    # 2026-06-30: network.summary 를 pnic(_e_ext_adapters, 실 speed 보유) 기준으로 산출.
+    #   normalize_network 의 vmk 기반 summary(speed=none) 를 merge 시 덮어쓴다 (null 누출 정정).
+    #   null/0 speed(down NIC) 가드 — Windows/Linux 동일 패턴.
+    - name: "esxi | extended | compute summary groups (pnic)"
+      ansible.builtin.set_fact:
+        _e_ext_summary: >-
+          {%- set ns = namespace(groups=[], seen={}) -%}
+          {%- for n in (_e_ext_adapters | default([])) -%}
+            {%- set sp = n.speed_mbps | default(none) -%}
+            {%- if sp is not none and (sp | int) > 0 -%}
+              {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
+              {%- set key = sp | string -%}
+              {%- if key in ns.seen -%}
+                {%- set idx = ns.seen[key] -%}
+                {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
+              {%- else -%}
+                {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
+                {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': none, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ {'groups': ns.groups} }}
+      no_log: true
+
     - name: "esxi | extended | merge fragment"
       ansible.builtin.set_fact:
         _data_fragment:
@@ -214,6 +238,7 @@
             adapters:         "{{ _e_ext_adapters | default([]) }}"
             virtual_switches: "{{ _e_ext_vswitches | default([]) }}"
             portgroups:       "{{ _e_ext_portgroups | default([]) }}"
+            summary:          "{{ _e_ext_summary | default({'groups': []}) }}"
           storage:
             hbas:             "{{ _e_ext_hbas | default([]) }}"
             infiniband:       "{{ _e_ext_ib | default([]) }}"

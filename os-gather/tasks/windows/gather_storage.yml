@@ -244,7 +244,8 @@
     $ib = @()
     try {
       Get-NetAdapter -IncludeHidden -ErrorAction Stop | Where-Object {
-        ([string]$_.PhysicalMediaType -eq 'InfiniBand') -or ($_.NdisPhysicalMedium -eq 11)
+        (([string]$_.PhysicalMediaType -eq 'InfiniBand') -or ($_.NdisPhysicalMedium -eq 11)) -and
+        ([string]$_.InterfaceDescription -notmatch 'Multiplexor')
       } | ForEach-Object {
         $rdma = $null
         try { $r = Get-NetAdapterRdma -Name $_.Name -ErrorAction Stop; if ($r) { $rdma = [bool]$r.Enabled } } catch { }
@@ -260,7 +261,12 @@
     if ($ib.Count -eq 0) {
       try {
         Get-PnpDevice -Class Net -ErrorAction Stop | Where-Object {
-          ([string]$_.HardwareID -match 'VEN_15B3') -or ([string]$_.Service -match '^(mlx|ibal|nd)')
+          # VEN_15B3 = Mellanox PCI vendor ID (authoritative — vendor='Mellanox' 하드코딩과 일치).
+          # 구 '^(mlx|ibal|nd)' 의 'nd' 가 LBFO 팀 멀티플렉서 service 'NdisImPlatformMp' 를 오탐
+          # (2026-06-26 site 10.100.64.120 실측 — 팀 3개를 Mellanox IB 로 보고). 특정 Mellanox/IB
+          # service 로 한정 + MS_IMPLAT(팀 멀티플렉서 HWID) 제외.
+          (([string]$_.HardwareID -match 'VEN_15B3') -or ([string]$_.Service -match '^(mlx|mlnx|ibbus|ibal)')) -and
+          ([string]$_.InstanceId -notmatch 'MS_IMPLAT')
         } | ForEach-Object {
           $ib += [PSCustomObject]@{
             adapter     = [string]$_.FriendlyName
@@ -380,7 +386,7 @@
               'mount_point':   v.drive ~ ':\\',
               'filesystem':    v.fs,
               'total_mb':      total_mb,
-              'used_mb':       total_mb - free_mb,
+              'used_mb':       (total_mb - free_mb) | round(1),
               'available_mb':  free_mb,
               'usage_percent': ((total_mb - free_mb) / total_mb * 100) | round(1) if total_mb > 0 else 0,
               'status':        'mounted'

@@ -26,6 +26,8 @@ from network_topology import (  # noqa: E402
     parse_linux_addresses,
     merge_linux_addresses,
     parse_windows_teams,
+    parse_windows_team_nics,
+    enrich_windows_addresses,
     build_windows_network,
 )
 
@@ -356,7 +358,14 @@ def test_windows_no_team():
     base = [_iface("Ethernet0", "10.0.0.2", "00-11-22-33-44-55")]
     net = build_windows_network(base, ["WADP {\"name\":\"Ethernet0\",\"mac\":\"00-11-22-33-44-55\",\"status\":\"Up\",\"speed_mbps\":10000}"])
     assert net["teams"] == [] and net["bonds"] == [] and net["bridges"] == []
-    assert net["interfaces"] == base  # 비teamed → 불변
+    iface = net["interfaces"][0]
+    assert iface["name"] == "Ethernet0"
+    assert "team_role" not in iface  # 비teamed → 팀 키 미추가 (interface-level 불변)
+    # addresses 는 5키 Additive enrich (값 보존, parity 완성)
+    a = iface["addresses"][0]
+    assert a["address"] == "10.0.0.2"
+    assert a["is_alias"] is False and a["is_secondary"] is False
+    assert a["parent_interface"] == "Ethernet0" and a["scope"] == "global"
 
 
 # 16. Windows LBFO Teaming
@@ -456,6 +465,68 @@ def test_windows_malformed_lines_robust():
 
 
 # ---------------------------------------------------------------------------
+# 19. Windows 주소 5키 parity (scope/label/parent_interface/is_alias/is_secondary)
+#     channel:[os] 인데 Linux 만 구현됐던 갭 완성. 실장비 캡처: site 10.100.64.120 Ethernet4
+#     (192.168.50.40 + .41, 같은 /24) → 2번째가 is_secondary, is_alias 는 항상 False.
+# ---------------------------------------------------------------------------
+def _wifc(name, ips, prefix=24):
+    """ips = [ip,...] (같은 prefix). Windows base 5키 주소."""
+    addrs = [{"family": "ipv4", "address": ip, "prefix_length": prefix,
+              "subnet_mask": "255.255.255.0", "gateway": None} for ip in ips]
+    return {"id": name, "name": name, "kind": "os_nic", "mac": None, "mtu": 1500,
+            "speed_mbps": 10000, "link_status": "up", "is_primary": False, "addresses": addrs}
+
+
+def test_windows_addr_secondary_same_subnet():
+    # Ethernet4: 같은 /24 두 IP → 2번째만 is_secondary
+    out = enrich_windows_addresses([_wifc("Ethernet4", ["192.168.50.40", "192.168.50.41"])])
+    addrs = out[0]["addresses"]
+    assert addrs[0]["is_secondary"] is False
+    assert addrs[1]["is_secondary"] is True
+    # 공통: is_alias 항상 False, label/parent = iface, scope global
+    for a in addrs:
+        assert a["is_alias"] is False
+        assert a["label"] == "Ethernet4" and a["parent_interface"] == "Ethernet4"
+        assert a["scope"] == "global"
+
+
+def test_windows_addr_single_ip_not_secondary():
+    out = enrich_windows_addresses([_wifc("Ethernet0", ["10.100.64.120"])])
+    a = out[0]["addresses"][0]
+    assert a["is_secondary"] is False and a["is_alias"] is False
+
+
+def test_windows_addr_different_subnet_not_secondary():
+    # 다른 서브넷 두 IP → 둘 다 secondary 아님 (Linux 동작 일치)
+    out = enrich_windows_addresses([_wifc("EthX", ["10.0.1.5", "10.0.2.5"])])
+    addrs = out[0]["addresses"]
+    assert addrs[0]["is_secondary"] is False and addrs[1]["is_secondary"] is False
+
+
+def test_windows_addr_empty_addresses_noop():
+    # member NIC (addresses=[]) → 에러 없이 빈 list 유지
+    out = enrich_windows_addresses([{"name": "Ethernet2", "kind": "os_nic", "addresses": []}])
+    assert out[0]["addresses"] == []
+
+
+def test_windows_addr_end_to_end_via_build():
+    # build_windows_network 통과 시 5키가 모두 부여되는지 (팀 master 도)
+    base = [_wifc("Team1", ["10.0.0.10"])]
+    net = build_windows_network(base, LBFO_LINES)
+    a = next(i for i in net["interfaces"] if i["name"] == "Team1")["addresses"][0]
+    for k in ("scope", "label", "parent_interface", "is_alias", "is_secondary"):
+        assert k in a
+    assert a["is_alias"] is False and a["parent_interface"] == "Team1"
+
+
+def test_windows_addr_does_not_mutate_input():
+    base = [_wifc("Ethernet4", ["192.168.50.40", "192.168.50.41"])]
+    snap = json.loads(json.dumps(base))
+    enrich_windows_addresses(base)
+    assert base == snap  # 원본 불변
+
+
+# ---------------------------------------------------------------------------
 # enrich 입력 mutation 금지 (immutability)
 # ---------------------------------------------------------------------------
 def test_enrich_does_not_mutate_input():
@@ -496,6 +567,52 @@ def test_vlan_without_ip_synthesized():
     assert vlan["vlan_parent"] == "eth0"
     assert vlan["addresses"] == []
     assert vlan["mac"] is None
+
+
+# 18. Windows 팀 위 VLAN tNIC (LBFOTEAMNIC) — Linux bond0.100 대응
+#     실장비 캡처: site 10.100.64.120 (LabTeam1 + 'LabTeam1 - VLAN 100' VlanID=100)
+LBFO_VLAN_LINES = LBFO_LINES + [
+    'LBFOTEAMNIC {"name":"Team1","team":"Team1","vlan_id":null,"default":true}',
+    'LBFOTEAMNIC {"name":"Team1 - VLAN 100","team":"Team1","vlan_id":100,"default":false}',
+]
+
+
+def test_windows_parse_team_nics():
+    nics = parse_windows_team_nics(LBFO_VLAN_LINES)
+    # default tNIC + VLAN tNIC 둘 다 파싱 (enrich 단계에서 vlan_id 유무로 분기)
+    assert {n["name"] for n in nics} == {"Team1", "Team1 - VLAN 100"}
+    vlan = next(n for n in nics if n["name"] == "Team1 - VLAN 100")
+    assert vlan["vlan_id"] == 100 and vlan["team"] == "Team1"
+    default = next(n for n in nics if n["name"] == "Team1")
+    assert default["vlan_id"] is None  # default tNIC = 팀 자체 (VLAN 아님)
+
+
+def test_windows_team_vlan_enriches_interface():
+    # 'Team1 - VLAN 100' 가 자체 IP 보유한 별도 인터페이스 (Multiplexor #2)
+    base = [
+        _iface("Team1", "10.0.0.10", "00-11-22-33-44-00", speed=20000),
+        _iface("Team1 - VLAN 100", "10.0.100.10", "00-11-22-33-44-00", speed=20000),
+    ]
+    net = build_windows_network(base, LBFO_VLAN_LINES)
+    by = {i["name"]: i for i in net["interfaces"]}
+    # 팀 master 는 team_role master, VLAN 키 없음
+    assert by["Team1"]["team_role"] == "master"
+    assert "vlan_id" not in by["Team1"]
+    # VLAN tNIC: vlan_id/vlan_parent enrich (Linux bond0.100 일관)
+    assert by["Team1 - VLAN 100"]["vlan_id"] == 100
+    assert by["Team1 - VLAN 100"]["vlan_parent"] == "Team1"
+    # VLAN tNIC 는 team master/member 아님 (자체 역할 없음)
+    assert "team_role" not in by["Team1 - VLAN 100"]
+    # 자체 IP 보존
+    assert by["Team1 - VLAN 100"]["addresses"][0]["address"] == "10.0.100.10"
+
+
+def test_windows_no_team_nic_lines_is_additive_only():
+    """LBFOTEAMNIC 라인 없는 호스트(구 동작): vlan_id/vlan_parent 키 미추가 (back-compat)."""
+    base = [_iface("Team1", "10.0.0.10", "00-11-22-33-44-00")]
+    net = build_windows_network(base, LBFO_LINES)  # LBFOTEAMNIC 없음
+    master = next(i for i in net["interfaces"] if i["name"] == "Team1")
+    assert "vlan_id" not in master and "vlan_parent" not in master
 
 
 def test_windows_member_already_in_base():

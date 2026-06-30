@@ -90,20 +90,26 @@
   no_log: true
 
 # cycle-016 (2026-04-29): ESXi network.summary
+# 2026-06-30: vmk 인터페이스는 speed_mbps=none(line 79) 이라 여기서 group 산출 시 'null qty' 누출됨
+#   (site 10.100.64.2 실측: summary=[{speed:null,qty:1}]). 따라서 (1) null/0 speed 가드 추가로
+#   vmk 기반 누출 차단(→ groups=[]), (2) 실제 NIC 속도 summary 는 collect_network_extended 에서
+#   pnic(_e_ext_adapters, 실 speed 보유) 기준으로 산출해 merge 시 덮어쓴다 (Windows/Linux 동일 패턴).
 - name: "esxi | normalize network | compute summary groups"
   ansible.builtin.set_fact:
     _e_net_summary: >-
       {%- set ns = namespace(groups=[], seen={}) -%}
       {%- for n in (_e_norm_interfaces | default([])) -%}
         {%- set sp = n.speed_mbps | default(none) -%}
-        {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
-        {%- set key = sp | string -%}
-        {%- if key in ns.seen -%}
-          {%- set idx = ns.seen[key] -%}
-          {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
-        {%- else -%}
-          {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-          {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': none, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
+        {%- if sp is not none and (sp | int) > 0 -%}
+          {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
+          {%- set key = sp | string -%}
+          {%- if key in ns.seen -%}
+            {%- set idx = ns.seen[key] -%}
+            {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
+          {%- else -%}
+            {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
+            {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': none, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
+          {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
       {{ {'groups': ns.groups} }}

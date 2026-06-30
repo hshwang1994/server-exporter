@@ -1602,10 +1602,12 @@ fields:
     channel: [os]
     help_ko: >-
       이 IP 의 ip addr label. alias 면 'bond1:1' 같은 'dev:N' 형태,
-      일반 주소면 부모 인터페이스명(예: bond1). Linux 전용.
+      일반 주소면 부모 인터페이스명(예: bond1).
+      Windows 는 alias 라벨 개념이 없어 항상 인터페이스명.
     help_en: >-
       IP label from `ip addr`. For an alias this is the 'dev:N' form (e.g. 'bond1:1');
-      for a normal address it is the parent interface name (e.g. bond1). Linux only.
+      for a normal address it is the parent interface name (e.g. bond1).
+      Windows has no alias labels, so it is always the interface name.
   "network.interfaces[].addresses[].parent_interface":
     type: "string|null"
     priority: nice
@@ -1621,8 +1623,12 @@ fields:
     type: "boolean|null"
     priority: nice
     channel: [os]
-    help_ko: "label 이 parent_interface 와 다르면 true (예: bond1:1). 일반 주소는 false."
-    help_en: "true when label differs from parent_interface (e.g. bond1:1); false for a normal address."
+    help_ko: >-
+      label 이 parent_interface 와 다르면 true (예: bond1:1). 일반 주소는 false.
+      Windows 는 alias 라벨이 없어 항상 false.
+    help_en: >-
+      true when label differs from parent_interface (e.g. bond1:1); false for a normal address.
+      Windows has no alias labels, so always false.
   "network.interfaces[].addresses[].scope":
     type: "string|null"
     enum: ["global", "link", "host", "site", null]
@@ -1639,11 +1645,13 @@ fields:
     priority: nice
     channel: [os]
     help_ko: >-
-      커널 secondary 플래그 (같은 서브넷 2번째+ IPv4 주소). 다른 서브넷 alias 는
-      secondary 가 아니므로 false. ip 가 플래그를 주지 않으면 false.
+      같은 서브넷 2번째+ IPv4 주소. 다른 서브넷 alias 는 secondary 가 아니므로 false.
+      Linux 는 커널 secondary 플래그(ip addr) 직접 사용. Windows 는 커널 플래그 API 부재 →
+      같은 인터페이스+같은 서브넷 2번째+ IPv4 로 controller-side 파생 (best-effort).
     help_en: >-
-      Kernel secondary flag (2nd+ IPv4 in the same subnet). A different-subnet alias
-      is not a secondary, so false. false when `ip` does not emit the flag.
+      2nd+ IPv4 address in the same subnet. A different-subnet alias is not a secondary, so false.
+      Linux uses the kernel secondary flag (`ip addr`) directly; Windows lacks that kernel API and
+      derives it controller-side (2nd+ IPv4 on the same interface+subnet, best-effort).
   "network.bonds[].addresses[].label":
     type: "string|null"
     priority: nice

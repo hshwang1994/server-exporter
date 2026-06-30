@@ -32,8 +32,10 @@
         cores              = [int]$_.NumberOfCores
         logical            = [int]$_.NumberOfLogicalProcessors
         max_clock_mhz      = [int]$_.MaxClockSpeed
-        l2_cache_kb        = [int]$_.L2CacheSize
-        l3_cache_kb        = [int]$_.L3CacheSize
+        # [int]$null → 0 (PowerShell) 이라 미보고(null) 캐시가 0 으로 날조됨 (L2 가 VM 에서 null
+        # 인데 0 보고, 2026-06-26 site 실측) → 값 존재 시에만 cast, 없으면 null 유지 (날조 금지).
+        l2_cache_kb        = $(if ($null -ne $_.L2CacheSize) { [int]$_.L2CacheSize } else { $null })
+        l3_cache_kb        = $(if ($null -ne $_.L3CacheSize) { [int]$_.L3CacheSize } else { $null })
         processor_id       = $_.ProcessorId
         architecture_code  = [int]$_.Architecture
       }

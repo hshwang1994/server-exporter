@@ -40,12 +40,25 @@
         serial:       "{{ _e_raw_facts.ansible_product_serial | default(none) }}"
         uuid:         "{{ _e_raw_facts.ansible_uuid           | default(none) }}"
         bios_version: "{{ _e_raw_facts.ansible_bios_version   | default(none) }}"
-        bios_date:    "{{ _e_raw_facts.ansible_bios_date      | default(none) }}"
+        # 2026-06-30: field_dictionary 계약 = "ISO 8601 YYYY-MM-DD 정규화". vSphere 는
+        # "2021-02-02T09:00:00+09:00" 풀타임스탬프 반환(site 10.100.64.2 실측) → 날짜만 truncate.
+        bios_date: >-
+          {%- set raw = _e_raw_facts.ansible_bios_date | default(none) -%}
+          {%- if raw -%}{{ (raw | string).split('T')[0] }}{%- else -%}{{ none }}{%- endif -%}
       cpu:
         sockets:         "{{ _e_raw_facts.ansible_processor_count | default(none) }}"
         cores_physical:  "{{ _e_raw_facts.ansible_processor_cores | default(none) }}"
         logical_threads: "{{ _e_raw_facts.ansible_processor_vcpus | default(none) }}"
         model:           "{{ _e_raw_facts.ansible_processor       | default(none) }}"
+        # 2026-06-30: cpu 최상위 manufacturer (Windows/Linux parity — 기존엔 summary.groups 에만
+        # 있고 최상위 누락. site 10.100.64.2 실측). summary 와 동일 Intel/AMD 판정 로직.
+        manufacturer: >-
+          {%- set p = _e_raw_facts.ansible_processor | default('', boolean=true) | lower -%}
+          {%- if 'intel' in p -%}Intel
+          {%- elif 'amd' in p -%}AMD
+          {%- elif p -%}{{ (_e_raw_facts.ansible_processor | string).split()[0] | default('unknown') }}
+          {%- else -%}{{ none }}
+          {%- endif -%}
         # 잔류 fix (Round 12 후속): vmware_host_facts 가 ansible_processor_mhz 미반환 시
         # CPU model 의 "@ N.NGHz" 패턴에서 추출 (Intel/AMD 표준 표기).
         max_speed_mhz: >-
