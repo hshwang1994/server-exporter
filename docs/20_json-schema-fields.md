@@ -327,7 +327,7 @@ controllers[*].id  ────┤
 | `null` | 판정 불가 — SAN/iSCSI/NFS 루트 또는 `findmnt`/`Get-Partition` 부재 (거짓 false 를 내지 않음) |
 
 - OS Linux: `findmnt /` 로 root source → `lsblk -s` 로 하위 물리 디스크 역추적(파티션/LVM/mdadm/multipath). python_ok + raw fallback 동일 구현. root 불필요.
-- OS Windows: `%SystemDrive%` → `Get-Partition.DiskNumber` (부재 시 WMI `Win32_DiskPartition.DiskIndex` fallback). `Win32_DiskDrive.Index` 와 매칭. 물리 매칭 0건(가상디스크 등)이면 `null`.
+- OS Windows: `%SystemDrive%` → `Get-Partition.DiskNumber` (부재 시 WMI `Win32_DiskPartition.DiskIndex` fallback). `Win32_DiskDrive.Index` 와 매칭. hardware-RAID/단일디스크는 정확하나, **software-RAID/Storage Spaces/동적미러 OS 는 가상 DiskNumber 라 물리 Index 매칭이 0 → 전 디스크 `null`** (Linux 의 멤버 all-true 와 비대칭 — 거짓 false 대신 null).
 - **주의**: 기준은 **OS 루트**(`/`)이며 `/boot`·EFI 파티션이 다른 디스크에 있어도 그 디스크는 `false`. Dell BOSS-N1 같은 부팅 전용 NVMe 에 OS 가 있으면 대용량 데이터 디스크가 아니라 그 NVMe 가 `true` (예: `os_linux_baremetal_dell.jsonc`).
 
 #### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand (cycle 2026-05-29)

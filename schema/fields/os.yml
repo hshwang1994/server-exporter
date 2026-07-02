@@ -80,6 +80,9 @@ sections:
             type: string
           health:
             type: string
+          is_os_disk:
+            type: boolean
+            description: "OS 루트(/, Windows %SystemDrive%) 설치 디스크 여부. true/false/null (OS 채널 전용)"
 
   network:
     sub_sections:

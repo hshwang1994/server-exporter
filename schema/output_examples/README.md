@@ -53,7 +53,7 @@ status, sections, diagnosis, meta, correlation,
 errors, data, schema_version
 ```
 
-상세 필드 설명은 [`schema/field_dictionary.yml`](../field_dictionary.yml) 참조 (Must 47 + Nice 81 + Skip 6 = 134 entries).
+상세 필드 설명은 [`schema/field_dictionary.yml`](../field_dictionary.yml) 참조 (Must 47 + Nice 115 + Skip 6 = 168 entries, 2026-07-02 재실측).
 
 ## 5. JSONC 주석 규칙
 

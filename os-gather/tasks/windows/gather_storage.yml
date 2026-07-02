@@ -99,8 +99,10 @@
       } catch { }
     }
     # is_os_disk (2026-07-02): OS 루트($env:SystemDrive) 파티션이 속한 물리 디스크 번호 판정.
-    #   Get-Partition → DiskNumber (Storage Spaces/미러부트 대비 다중). 부재 시 WMI fallback.
-    #   Win32_DiskDrive.Index == DiskNumber. 물리 매칭 0건(가상디스크 등) → 판정불가(null, 거짓 false 방지).
+    #   Get-Partition → DiskNumber (다중 가능). 부재 시 WMI(Win32_DiskPartition.DiskIndex) fallback.
+    #   Win32_DiskDrive.Index == DiskNumber 매칭. 물리 매칭 0건 → 판정불가(null, 거짓 false 방지).
+    #   주의: Storage Spaces/동적미러 OS 는 가상 DiskNumber 라 물리 Index 매칭 0 → 전 디스크 null
+    #   (Linux 의 RAID/LVM 멤버 all-true 와 비대칭 — hardware-RAID/단일디스크만 true/false. field_dictionary 명시).
     $osDiskNumbers = @()
     $osDetermined = $false
     try {
@@ -111,7 +113,8 @@
         if ($osDiskNumbers.Count -gt 0) { $osDetermined = $true }
       }
     } catch { }
-    if (-not $osDetermined) {
+    # WMI fallback (SystemDrive 형식 가드 — WQL 문자열 주입 방지)
+    if (-not $osDetermined -and (([string]$env:SystemDrive) -match '^[A-Za-z]:$')) {
       try {
         $ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'" -ErrorAction Stop
         $parts = Get-CimAssociatedInstance -InputObject $ld -ResultClassName Win32_DiskPartition -ErrorAction Stop
@@ -119,11 +122,13 @@
         if ($nums.Count -gt 0) { $osDiskNumbers = $nums; $osDetermined = $true }
       } catch { }
     }
+    # Win32_DiskDrive 1회 열거(감사 fix: 중복 열거/TOCTOU 제거) — 매칭·emit 공용 스냅샷
+    $dd = @(Get-CimInstance Win32_DiskDrive)
     if ($osDetermined) {
-      $allIdx = @(Get-CimInstance Win32_DiskDrive | ForEach-Object { [int]$_.Index })
+      $allIdx = @($dd | ForEach-Object { [int]$_.Index })
       if (-not (@($osDiskNumbers | Where-Object { $allIdx -contains [int]$_ }).Count -gt 0)) { $osDetermined = $false }
     }
-    Get-CimInstance Win32_DiskDrive | ForEach-Object {
+    $dd | ForEach-Object {
       $idx = [string]$_.Index
       $mt = $null
       $bus = $null

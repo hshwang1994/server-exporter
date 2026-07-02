@@ -143,6 +143,17 @@ class TestWindows2022Baseline:
             assert d.get("wwn"), f"wwn 미설정: {d.get('id')}"
             assert d.get("health") == "healthy"
 
+    def test_os_disk_flag(self, windows_2022_baseline):
+        """is_os_disk (2026-07-02): PHYSICALDRIVE0=OS(true), PHYSICALDRIVE1=data(false)."""
+        disks = windows_2022_baseline["data"]["storage"]["physical_disks"]
+        assert disks, "physical_disks 비어있음"
+        for d in disks:
+            assert "is_os_disk" in d, f"is_os_disk 누락: {d.get('id')}"
+            assert d["is_os_disk"] in (True, False, None)
+        by_id = {d["id"]: d["is_os_disk"] for d in disks}
+        assert by_id.get("\\\\.\\PHYSICALDRIVE0") is True, "OS 디스크(DRIVE0) is_os_disk != true"
+        assert by_id.get("\\\\.\\PHYSICALDRIVE1") is False, "데이터 디스크(DRIVE1) is_os_disk != false"
+
 
 class TestRhel810RawFallback:
     """OS-RHEL810: Linux raw_fallback (Python <3.9) baseline 검증.
@@ -201,3 +212,14 @@ class TestRhel810RawFallback:
             OS_ARRAY_FIELDS,
             "rhel810_raw_fallback_baseline",
         )
+
+    def test_os_disk_flag(self, rhel810_raw_fallback_baseline):
+        """is_os_disk (2026-07-02): raw fallback 경로 — /dev/sda=OS(true), /dev/sdb=data(false)."""
+        disks = rhel810_raw_fallback_baseline["data"]["storage"]["physical_disks"]
+        assert disks, "physical_disks 비어있음"
+        for d in disks:
+            assert "is_os_disk" in d, f"is_os_disk 누락: {d.get('id')}"
+            assert d["is_os_disk"] in (True, False, None)
+        by_id = {d["id"]: d["is_os_disk"] for d in disks}
+        assert by_id.get("/dev/sda") is True, "OS 디스크(/dev/sda) is_os_disk != true"
+        assert by_id.get("/dev/sdb") is False, "데이터 디스크(/dev/sdb) is_os_disk != false"

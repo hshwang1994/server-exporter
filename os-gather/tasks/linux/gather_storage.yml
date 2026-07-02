@@ -38,16 +38,19 @@
       no_log: true
 
     # is_os_disk (2026-07-02): OS 루트(/)가 올라간 물리 디스크 판정. findmnt로 root source →
-    #   lsblk -s로 하위 물리 디스크까지 역추적(파티션/LVM/mdadm/multipath 멤버 모두 커버).
+    #   lsblk -s -l 로 하위 물리 디스크 역추적(파티션/LVM/mdadm/multipath 멤버 모두 커버).
+    #   -l(list) 필수: 기본 트리 모드는 NAME에 글리프(└─)를 붙여 '/dev/└─sda' 오염(감사 HIGH fix).
+    #   btrfs SOURCE 는 '/dev/sdaN[/@subvol]' → ${src%%\[*} 로 접미사 strip 후 lsblk.
     #   findmnt/lsblk는 util-linux 기본·root 불필요. 'OSDISK|/dev/<name>' 라인 emit.
     #   매핑 0건(SAN/iSCSI/NFS 루트 또는 도구 부재) → is_os_disk=null (거짓 false 안 냄).
     - name: "linux | storage | os root disk detection"
       ansible.builtin.shell: |
         src=$(findmnt -n -o SOURCE / 2>/dev/null)
         if [ -z "$src" ]; then src=$(awk '$2=="/"{print $1; exit}' /proc/mounts 2>/dev/null); fi
+        src=${src%%\[*}
         if [ -n "$src" ]; then
           rsrc=$(readlink -f "$src" 2>/dev/null || echo "$src")
-          lsblk -s -n -o NAME,TYPE "$rsrc" 2>/dev/null | awk '$2=="disk"{print "OSDISK|/dev/"$1}'
+          lsblk -s -l -n -o NAME,TYPE "$rsrc" 2>/dev/null | awk '$2=="disk"{print "OSDISK|/dev/"$1}'
         fi
       register: _l_osdisk_map
       changed_when: false
@@ -272,9 +275,10 @@
       ansible.builtin.raw: |
         src=$(findmnt -n -o SOURCE / 2>/dev/null)
         if [ -z "$src" ]; then src=$(awk '$2=="/"{print $1; exit}' /proc/mounts 2>/dev/null); fi
+        src=${src%%\[*}
         if [ -n "$src" ]; then
           rsrc=$(readlink -f "$src" 2>/dev/null || echo "$src")
-          lsblk -s -n -o NAME,TYPE "$rsrc" 2>/dev/null | awk '$2=="disk"{print "OSDISK|/dev/"$1}'
+          lsblk -s -l -n -o NAME,TYPE "$rsrc" 2>/dev/null | awk '$2=="disk"{print "OSDISK|/dev/"$1}'
         fi
       register: _l_osdisk_map_r
       changed_when: false
