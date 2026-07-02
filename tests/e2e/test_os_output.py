@@ -51,6 +51,22 @@ class TestUbuntuBaseline:
             ubuntu_baseline, OS_ARRAY_FIELDS, "ubuntu_baseline"
         )
 
+    def test_os_disk_flag(self, ubuntu_baseline):
+        """is_os_disk (2026-07-02): OS 루트 디스크가 정확히 표시되는지.
+
+        ubuntu baseline 토폴로지: /dev/sda=true(OS 루트 LVM+/boot), /dev/sdb=false.
+        """
+        disks = ubuntu_baseline["data"]["storage"]["physical_disks"]
+        assert disks, "physical_disks 비어있음"
+        for d in disks:
+            assert "is_os_disk" in d, f"is_os_disk 누락: {d.get('id')}"
+            assert d["is_os_disk"] in (True, False, None), (
+                f"is_os_disk 타입 위반: {d.get('id')}={d['is_os_disk']}"
+            )
+        by_id = {d["id"]: d["is_os_disk"] for d in disks}
+        assert by_id.get("/dev/sda") is True, "OS 디스크(/dev/sda) is_os_disk != true"
+        assert by_id.get("/dev/sdb") is False, "데이터 디스크(/dev/sdb) is_os_disk != false"
+
 
 class TestWindowsBaseline:
     """OS-04: Windows baseline 검증."""

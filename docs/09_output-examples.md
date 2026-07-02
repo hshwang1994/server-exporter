@@ -20,7 +20,7 @@
 
 ### Field Dictionary
 
-각 필드의 상세 의미, 단위, null 해석은 `schema/field_dictionary.yml`에 정의 (Must 47 + Nice 81 + Skip 6 = **134 entries**).
+각 필드의 상세 의미, 단위, null 해석은 `schema/field_dictionary.yml`에 정의 (Must 47 + Nice 115 + Skip 6 = **168 entries**, 2026-07-02 재실측).
 
 ```bash
 # 무결성 검사
@@ -55,6 +55,7 @@ python3 tests/validate_field_dictionary.py
 | `hardware.health` | string\|null | 시스템 Health — OK/Warning/Critical |
 | `hardware.power_state` | string\|null | 전원 — On/Off/PoweringOn/PoweringOff |
 | `storage.physical_disks[].serial` | string\|null | 디스크 시리얼 |
+| `storage.physical_disks[].is_os_disk` | boolean\|null | OS 설치(루트) 디스크 여부 — OS 채널 전용 |
 | `storage.physical_disks[].failure_predicted` | boolean\|null | SMART 고장 예측 |
 | `storage.physical_disks[].predicted_life_percent` | integer\|null | 수명 잔량 (0-100) |
 

@@ -33,7 +33,7 @@
 | `cpu.architecture` | `ansible_architecture` | `gather_cpu.yml` | system.architecture와 동일 값 |
 | `memory.total_mb` | `ansible_memtotal_mb` | `gather_memory.yml` | |
 | `memory.total_basis` | hardcoded `"os_visible"` | `gather_memory.yml` | |
-| `storage.physical_disks[]` | `lsblk -J` (`+SERIAL,WWN`) | `gather_storage.yml` | `serial`/`wwn` 추가(2026-06-22). 빈값 시 `udevadm info`(ID_SERIAL_SHORT/ID_WWN) 보강. virtio=null |
+| `storage.physical_disks[]` | `lsblk -J` (`+SERIAL,WWN`) | `gather_storage.yml` | `serial`/`wwn` 추가(2026-06-22). 빈값 시 `udevadm info`(ID_SERIAL_SHORT/ID_WWN) 보강. virtio=null. `is_os_disk` 추가(2026-07-02): `findmnt /`→`lsblk -s` 로 OS 루트 물리 디스크 판정(SAN/NFS 루트=null) |
 | `storage.filesystems[]` | `df -BM` | `gather_storage.yml` | |
 | `network.interfaces[]` | `ansible_interfaces` + `ansible_{iface}` | `gather_network.yml` | |
 | `network.interfaces[].addresses[]` (alias/secondary) | `ip -j addr show` → `ip -o addr show` → `ifconfig -a` (다중 소스 폴백) | `gather_network.yml` + `merge_linux_addresses` | `label`/`parent_interface`/`is_alias`/`scope`/`is_secondary` Additive. bond alias(bond1:1)는 parent addresses[] 에 병합 |
@@ -65,7 +65,7 @@
 | `cpu.architecture` | `ansible_architecture` (정규화 적용) | `gather_cpu.yml` | `'64' in _arch` 조건으로 "64비트"→"x86_64" 매핑 |
 | `memory.total_mb` | `Win32_ComputerSystem.TotalPhysicalMemory` | `gather_memory.yml` | WMI |
 | `memory.total_basis` | hardcoded `"physical_installed"` | `gather_memory.yml` | |
-| `storage.physical_disks[]` | `Win32_DiskDrive` + `Get-PhysicalDisk` | `gather_storage.yml` | WMI. `serial`/`wwn` 추가(2026-06-22): serial=Get-PhysicalDisk→Win32 fallback(hex/공백 정규화), wwn=UniqueId(UniqueIdFormat EUI64/FCPHName/SCSIName 일 때만, 로컬 SATA=null) |
+| `storage.physical_disks[]` | `Win32_DiskDrive` + `Get-PhysicalDisk` | `gather_storage.yml` | WMI. `serial`/`wwn` 추가(2026-06-22): serial=Get-PhysicalDisk→Win32 fallback(hex/공백 정규화), wwn=UniqueId(UniqueIdFormat EUI64/FCPHName/SCSIName 일 때만, 로컬 SATA=null). `is_os_disk` 추가(2026-07-02): `%SystemDrive%`→`Get-Partition.DiskNumber`(WMI fallback), `Win32_DiskDrive.Index` 매칭 |
 | `storage.filesystems[]` | `Win32_LogicalDisk` | `gather_storage.yml` | WMI |
 | `network.interfaces[]` | `Win32_NetworkAdapterConfiguration` | `gather_network.yml` | WMI |
 | `network.default_gateways[]` | `Win32_NetworkAdapterConfiguration.DefaultIPGateway` | `gather_network.yml` | WMI |

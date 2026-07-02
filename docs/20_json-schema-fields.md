@@ -315,6 +315,21 @@ controllers[*].id  ────┤
 - redfish 는 `serial` 만 emit (디스크 `wwn` 미수집). **ESXi 는 2026-06-22부터 `physical_disks` 수집**
   (`esxi_disks` pyvmomi 모듈 — id/device/wwn=canonicalName naa.*, serial=SERIALNUM, model=vendor+model, media_type=ssd flag).
 
+#### 6.3.0a `physical_disks[].is_os_disk` — OS 설치 디스크 여부 (2026-07-02)
+
+각 물리 디스크에 **OS 루트가 설치돼 있는지**를 boolean 으로 표시한다. **Nice / `boolean|null`**,
+**OS 채널 전용**(`channel: [os]` — ESXi/Redfish 는 미수집, 필드 부재).
+
+| 값 | 의미 |
+|---|---|
+| `true` | 이 디스크에 OS 루트(`/`, Windows `%SystemDrive%`)가 있음. RAID/LVM 구성 시 멤버 디스크 **모두** true |
+| `false` | 판정 성공 + 이 디스크는 OS 루트 구성에 속하지 않음 |
+| `null` | 판정 불가 — SAN/iSCSI/NFS 루트 또는 `findmnt`/`Get-Partition` 부재 (거짓 false 를 내지 않음) |
+
+- OS Linux: `findmnt /` 로 root source → `lsblk -s` 로 하위 물리 디스크 역추적(파티션/LVM/mdadm/multipath). python_ok + raw fallback 동일 구현. root 불필요.
+- OS Windows: `%SystemDrive%` → `Get-Partition.DiskNumber` (부재 시 WMI `Win32_DiskPartition.DiskIndex` fallback). `Win32_DiskDrive.Index` 와 매칭. 물리 매칭 0건(가상디스크 등)이면 `null`.
+- **주의**: 기준은 **OS 루트**(`/`)이며 `/boot`·EFI 파티션이 다른 디스크에 있어도 그 디스크는 `false`. Dell BOSS-N1 같은 부팅 전용 NVMe 에 OS 가 있으면 대용량 데이터 디스크가 아니라 그 NVMe 가 `true` (예: `os_linux_baremetal_dell.jsonc`).
+
 #### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand (cycle 2026-05-29)
 
 전 채널 (Redfish / OS Linux·Windows / ESXi) 이 **동일 canonical 키** 로 emit 한다.

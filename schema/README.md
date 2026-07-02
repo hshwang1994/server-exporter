@@ -7,7 +7,7 @@
 | 위치 | 역할 | 정본 rule |
 |---|---|---|
 | `sections.yml` | 11 sections 정의 (system/hardware/bmc/cpu/memory/storage/network/firmware/users/power/thermal) | rule 13 R1 |
-| `field_dictionary.yml` | 134 entries (47 Must + 81 Nice + 6 Skip) — 18 section prefixes | rule 13 R1 / R5 |
+| `field_dictionary.yml` | 168 entries (47 Must + 115 Nice + 6 Skip) — 18 section prefixes | rule 13 R1 / R5 |
 | `fields/` | 섹션별 필드 상세 (선택 — sections.yml 보조) | rule 13 R1 |
 | `baseline_v1/` | vendor 별 회귀 기준선 JSON (9 baseline) | rule 13 R4 / rule 21 |
 | `examples/` | success/partial/failed/not_supported 케이스 예시 JSON (4) | docs/09 |

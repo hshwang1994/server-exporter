@@ -166,7 +166,8 @@
           "total_mb": 61436,
           "media_type": "HDD",
           "protocol": null,
-          "health": null
+          "health": null,
+          "is_os_disk": true
         }
       ],
       "controllers": [],

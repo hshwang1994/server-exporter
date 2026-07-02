@@ -37,6 +37,23 @@
       failed_when: false
       no_log: true
 
+    # is_os_disk (2026-07-02): OS 루트(/)가 올라간 물리 디스크 판정. findmnt로 root source →
+    #   lsblk -s로 하위 물리 디스크까지 역추적(파티션/LVM/mdadm/multipath 멤버 모두 커버).
+    #   findmnt/lsblk는 util-linux 기본·root 불필요. 'OSDISK|/dev/<name>' 라인 emit.
+    #   매핑 0건(SAN/iSCSI/NFS 루트 또는 도구 부재) → is_os_disk=null (거짓 false 안 냄).
+    - name: "linux | storage | os root disk detection"
+      ansible.builtin.shell: |
+        src=$(findmnt -n -o SOURCE / 2>/dev/null)
+        if [ -z "$src" ]; then src=$(awk '$2=="/"{print $1; exit}' /proc/mounts 2>/dev/null); fi
+        if [ -n "$src" ]; then
+          rsrc=$(readlink -f "$src" 2>/dev/null || echo "$src")
+          lsblk -s -n -o NAME,TYPE "$rsrc" 2>/dev/null | awk '$2=="disk"{print "OSDISK|/dev/"$1}'
+        fi
+      register: _l_osdisk_map
+      changed_when: false
+      failed_when: false
+      no_log: true
+
     # 2026-06-22 T1: storage 컨트롤러 (RAID/SAS/SATA/NVMe) — lspci. root 불필요.
     #   CTRL|<pci>|<class>|<chip name>|<driver>|<subsystem> 라인.
     - name: "linux | storage | lspci controllers"
@@ -77,6 +94,12 @@
               {%- endif -%}
             {%- endif -%}
           {%- endfor -%}
+          {# is_os_disk(2026-07-02): OSDISK| 라인 → os disk device set. 0건이면 판정불가(null) #}
+          {%- set osdisks = [] -%}
+          {%- for line in (_l_osdisk_map.stdout_lines | default([])) -%}
+            {%- if line.startswith('OSDISK|') -%}{%- set _ = osdisks.append(line.split('|')[1]) -%}{%- endif -%}
+          {%- endfor -%}
+          {%- set os_known = (osdisks | length) > 0 -%}
           {%- if lsblk.blockdevices is defined -%}
             {%- for dev in lsblk.blockdevices -%}
               {%- if dev.type in ['disk'] and dev.size | int > 0 -%}
@@ -100,7 +123,8 @@
                   'total_mb':   (dev.size | int / 1048576) | round(0,'floor') | int,
                   'media_type': 'HDD' if (dev.rota | default('1') | string) in ['1','true','True'] else 'SSD',
                   'protocol':   _proto,
-                  'health':     none
+                  'health':     none,
+                  'is_os_disk': (_dev_path in osdisks) if os_known else none
                 }) -%}
               {%- endif -%}
             {%- endfor -%}
@@ -243,6 +267,20 @@
       failed_when: false
       no_log: true
 
+    # is_os_disk (raw 경로) — python 경로와 동일 'OSDISK|/dev/<name>'
+    - name: "linux | storage | raw os root disk detection"
+      ansible.builtin.raw: |
+        src=$(findmnt -n -o SOURCE / 2>/dev/null)
+        if [ -z "$src" ]; then src=$(awk '$2=="/"{print $1; exit}' /proc/mounts 2>/dev/null); fi
+        if [ -n "$src" ]; then
+          rsrc=$(readlink -f "$src" 2>/dev/null || echo "$src")
+          lsblk -s -n -o NAME,TYPE "$rsrc" 2>/dev/null | awk '$2=="disk"{print "OSDISK|/dev/"$1}'
+        fi
+      register: _l_osdisk_map_r
+      changed_when: false
+      failed_when: false
+      no_log: true
+
     # 2026-06-22 T1: storage 컨트롤러 (raw) — lspci CTRL| 라인
     - name: "linux | storage | raw lspci controllers"
       ansible.builtin.raw: |
@@ -303,6 +341,12 @@
               {%- endif -%}
             {%- endif -%}
           {%- endfor -%}
+          {# is_os_disk(raw): OSDISK| 라인 → os disk device set. 0건이면 판정불가(null) #}
+          {%- set osdisks_r = [] -%}
+          {%- for line in (_l_osdisk_map_r.stdout_lines | default([])) -%}
+            {%- if line.startswith('OSDISK|') -%}{%- set _ = osdisks_r.append(line.split('|')[1]) -%}{%- endif -%}
+          {%- endfor -%}
+          {%- set os_known_r = (osdisks_r | length) > 0 -%}
           {%- if lsblk.blockdevices is defined -%}
             {%- for dev in lsblk.blockdevices -%}
               {%- if dev.type | default('') in ['disk'] and (dev.size | default(0)) | int > 0 -%}
@@ -325,7 +369,8 @@
                   'total_mb':   (dev.size | int / 1048576) | round(0,'floor') | int,
                   'media_type': 'HDD' if (dev.rota | default('1') | string) in ['1','true','True'] else 'SSD',
                   'protocol':   _proto,
-                  'health':     none
+                  'health':     none,
+                  'is_os_disk': (_dev_path in osdisks_r) if os_known_r else none
                 }) -%}
               {%- endif -%}
             {%- endfor -%}

@@ -149,7 +149,8 @@
           "total_mb": 307196,
           "media_type": "HDD",                             // Windows MSFT_PhysicalDisk MediaType
           "protocol": "SAS",                               // BusType
-          "health": "healthy"                              // Windows MSFT_PhysicalDisk HealthStatus (Linux 는 null)
+          "health": "healthy",                             // Windows MSFT_PhysicalDisk HealthStatus (Linux 는 null)
+          "is_os_disk": true                               // OS 루트(%SystemDrive% C:) 디스크 여부 (2026-07-02, OS 채널 전용)
         }
       ],
       "datastores": [],                                 // ESXi datastore list (OS/Redfish 는 빈 list)

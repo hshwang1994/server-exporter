@@ -89,7 +89,8 @@
           "total_mb": 102398,
           "media_type": "HDD",
           "protocol": "SAS",
-          "health": "healthy"
+          "health": "healthy",
+          "is_os_disk": false
         },
         {
           "id": "\\\\.\\PHYSICALDRIVE0",
@@ -100,7 +101,8 @@
           "total_mb": 102398,
           "media_type": "HDD",
           "protocol": "SAS",
-          "health": "healthy"
+          "health": "healthy",
+          "is_os_disk": true
         }
       ],
       "controllers": [],

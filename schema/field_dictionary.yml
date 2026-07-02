@@ -30,8 +30,11 @@
 #   nice — 설명이 있으면 좋고 없어도 사용에 지장 없음
 #   skip — 의미가 자명해서 본 사전에 등록하지 않음 (예: hostname)
 #
-# 등록 현황 (2026-06-14): Must 47 / Nice 81 / Skip 6 = 총 134 entries
+# 등록 현황 (2026-07-02): Must 47 / Nice 115 / Skip 6 = 총 168 entries
 #   (cycle 2026-05-29 +9 Nice — storage.hbas[]/infiniband[] 서브필드. Additive, schema_version 유지 D3)
+#   (cycle 2026-07-02 +1 Nice — storage.physical_disks[].is_os_disk (OS 채널). Additive, schema_version 유지)
+#   NOTE(2026-07-02): 직전까지 헤더가 "Nice 81 / 134" 로 stale (실측 nice 114 → drift 33).
+#     must 47 / skip 6 은 일치했고 nice 만 additive 누적 미반영이었음. 본 갱신에서 실측(168)으로 정정.
 #
 # 검증 (수동): tests/validate_field_dictionary.py 가 다음 5가지를 검사합니다.
 #   1) 모든 entry 에 help_ko, help_en 이 함께 있는지
@@ -612,6 +615,25 @@ fields:
       100=new drive, 0=end of life.
       null for HDD.
       HPE returns float, normalized to int (e.g., 100.0 → 100).
+
+  "storage.physical_disks[].is_os_disk":
+    type: "boolean|null"
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      이 물리 디스크에 OS 루트 파일시스템(/, Windows %SystemDrive%)이 설치돼 있는지.
+      true=OS 디스크(RAID/LVM 구성 시 멤버 디스크 모두 true), false=OS 루트 아님,
+      null=판정 불가(SAN/iSCSI/NFS 루트 또는 findmnt/Get-Partition 부재).
+      OS(Linux): findmnt / → lsblk -s 로 하위 물리 디스크 역추적.
+      OS(Windows): %SystemDrive% → Get-Partition.DiskNumber (WMI fallback).
+      OS 채널 전용 — ESXi/Redfish 미수집.
+    help_en: >-
+      Whether the OS root filesystem (/, Windows %SystemDrive%) resides on this disk.
+      true=OS disk (all member disks true for RAID/LVM), false=not the OS root,
+      null=undeterminable (SAN/iSCSI/NFS root, or findmnt/Get-Partition unavailable).
+      OS(Linux): findmnt / then lsblk -s to trace underlying physical disks.
+      OS(Windows): %SystemDrive% then Get-Partition.DiskNumber (WMI fallback).
+      OS channel only — not collected on ESXi/Redfish.
 
   "storage.controllers[]":
     type: "array of object"

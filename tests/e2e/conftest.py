@@ -246,6 +246,8 @@ REDFISH_ARRAY_FIELDS = {
 OS_ARRAY_FIELDS = {
     # OS에는 predicted_life_percent / firmware / power 없음
     "network.interfaces": ["link_status"],
+    # is_os_disk (2026-07-02): OS 채널 전용 — 각 물리 디스크에 OS 루트 여부 boolean(true/false/null)
+    "storage.physical_disks": ["is_os_disk"],
 }
 
 ESXI_ARRAY_FIELDS = {

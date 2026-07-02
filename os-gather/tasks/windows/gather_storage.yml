@@ -98,6 +98,31 @@
         }
       } catch { }
     }
+    # is_os_disk (2026-07-02): OS 루트($env:SystemDrive) 파티션이 속한 물리 디스크 번호 판정.
+    #   Get-Partition → DiskNumber (Storage Spaces/미러부트 대비 다중). 부재 시 WMI fallback.
+    #   Win32_DiskDrive.Index == DiskNumber. 물리 매칭 0건(가상디스크 등) → 판정불가(null, 거짓 false 방지).
+    $osDiskNumbers = @()
+    $osDetermined = $false
+    try {
+      $sysDl = ([string]$env:SystemDrive).TrimEnd(':')
+      if (Get-Command Get-Partition -ErrorAction SilentlyContinue) {
+        $osDiskNumbers = @(Get-Partition -DriveLetter $sysDl -ErrorAction Stop |
+                           Select-Object -ExpandProperty DiskNumber -Unique)
+        if ($osDiskNumbers.Count -gt 0) { $osDetermined = $true }
+      }
+    } catch { }
+    if (-not $osDetermined) {
+      try {
+        $ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'" -ErrorAction Stop
+        $parts = Get-CimAssociatedInstance -InputObject $ld -ResultClassName Win32_DiskPartition -ErrorAction Stop
+        $nums = @($parts | ForEach-Object { [int]$_.DiskIndex } | Select-Object -Unique)
+        if ($nums.Count -gt 0) { $osDiskNumbers = $nums; $osDetermined = $true }
+      } catch { }
+    }
+    if ($osDetermined) {
+      $allIdx = @(Get-CimInstance Win32_DiskDrive | ForEach-Object { [int]$_.Index })
+      if (-not (@($osDiskNumbers | Where-Object { $allIdx -contains [int]$_ }).Count -gt 0)) { $osDetermined = $false }
+    }
     Get-CimInstance Win32_DiskDrive | ForEach-Object {
       $idx = [string]$_.Index
       $mt = $null
@@ -155,6 +180,8 @@
           if ($w) { $wwn = $w }
         }
       }
+      $is_os = $null
+      if ($osDetermined) { $is_os = [bool]($osDiskNumbers -contains [int]$_.Index) }
       [PSCustomObject]@{
         device = $_.DeviceID
         model  = $_.Model
@@ -164,6 +191,7 @@
         media  = $mt
         protocol = $bus
         health   = $health
+        is_os_disk = $is_os
       } | ConvertTo-Json -Compress
     }
   register: _w_disk_raw
@@ -411,7 +439,8 @@
               'total_mb':   total_mb,
               'media_type': d.media | default(none),
               'protocol':   d.protocol | default(none),
-              'health':     d.health | default(none)
+              'health':     d.health | default(none),
+              'is_os_disk': d.is_os_disk | default(none)
             }) -%}
           {%- endif -%}
         {%- endif -%}

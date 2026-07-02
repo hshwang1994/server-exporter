@@ -135,9 +135,9 @@
       ],
       "controllers": [],                                // RAID 컨트롤러 list
       "physical_disks": [                               // 물리 디스크 list
-        {"id": "/dev/sda", "device": "/dev/sda", "model": "RAID", "total_mb": 10984704, "media_type": "SSD", "protocol": null, "health": null},  // PERC RAID 가상 디스크
-        {"id": "/dev/sdb", "device": "/dev/sdb", "model": "RAID", "total_mb": 1715328, "media_type": "HDD", "protocol": null, "health": null},
-        {"id": "/dev/nvme0n1", "device": "/dev/nvme0n1", "model": "Dell BOSS-N1", "total_mb": 457798, "media_type": "SSD", "protocol": "NVMe", "health": null}  // BOSS = Boot Optimized Storage Solution
+        {"id": "/dev/sda", "device": "/dev/sda", "model": "RAID", "total_mb": 10984704, "media_type": "SSD", "protocol": null, "health": null, "is_os_disk": false},  // PERC RAID 가상 디스크(데이터 /ssd)
+        {"id": "/dev/sdb", "device": "/dev/sdb", "model": "RAID", "total_mb": 1715328, "media_type": "HDD", "protocol": null, "health": null, "is_os_disk": false},  // 데이터 /var
+        {"id": "/dev/nvme0n1", "device": "/dev/nvme0n1", "model": "Dell BOSS-N1", "total_mb": 457798, "media_type": "SSD", "protocol": "NVMe", "health": null, "is_os_disk": true}  // BOSS-N1 = OS 부팅 디스크(root LVM + /boot) → is_os_disk=true (sda 아님!)
       ],
       "datastores": [],                                 // ESXi datastore list (OS/Redfish 는 빈 list)
       "summary": {

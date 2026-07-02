@@ -150,7 +150,8 @@
           "total_mb": 51200,
           "media_type": "HDD",
           "protocol": null,
-          "health": null
+          "health": null,
+          "is_os_disk": true
         },
         {
           "id": "/dev/sdb",
@@ -161,7 +162,8 @@
           "total_mb": 51200,
           "media_type": "HDD",
           "protocol": null,
-          "health": null
+          "health": null,
+          "is_os_disk": false
         }
       ],
       "datastores": [],
