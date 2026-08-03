@@ -450,6 +450,17 @@
       hardware:          hardware
       bmc:               bmc
       memory:            memory
+    # cycle 2026-08-03 (NET-SEC-MAP 실발동 — 사이트 Dell 8대): 보조(auxiliary) raw 섹션.
+    # 자기 데이터는 상위 섹션의 sub-key 로 들어가지만(network.adapters/ports), 상위 섹션의
+    # **status 는 결정하지 않는다**.
+    #
+    # 배경: network(호스트 EthernetInterfaces)와 network_adapters(NIC 카드 모델/펌웨어)가
+    # 둘 다 'network' 로 collapse 되어, 보조 수집 1건 실패가 주 수집 성공을 덮고
+    # sections.network=failed → status=partial 을 만들었다 (data.network 는 정상 수집됨).
+    # build_sections 우선순위가 not_supported > failed > success 라 보조 실패/미지원이
+    # 항상 이긴다. 따라서 status 계산에서는 보조 섹션을 제외하고, 주 섹션(network)만으로
+    # 판정한다. 보조 수집 실패는 errors[] 에 그대로 남는다(시나리오 B — rule 13 R8).
+    _rf_aux_sections: ['network_adapters']
   no_log: true
 
 # ── 표준 fragment 생성 ────────────────────────────────────────────────────────
@@ -568,10 +579,13 @@
       multi_node: "{{ _rf_raw_collect.multi_node | default(none) }}"
     _sections_supported_fragment: >-
       {{ ['hardware','bmc','cpu','memory','storage','network','firmware','power','thermal'] }}
+    # cycle 2026-08-03: 세 status fragment 모두 보조 섹션(_rf_aux_sections)을 제외한다.
+    # 섹션 status 는 주 raw 섹션만으로 결정 — 보조 수집 결과는 data sub-key + errors[] 로만 반영.
     _sections_collected_fragment: >-
       {%- set out = [] -%}
       {%- set pmap = _rf_proc_map -%}
-      {%- for s in _rf_collected_raw -%}
+      {%- set aux = _rf_aux_sections | default([]) -%}
+      {%- for s in _rf_collected_raw if s not in aux -%}
         {%- set mapped = pmap.get(s, s) -%}
         {%- if mapped not in out -%}{%- set _ = out.append(mapped) -%}{%- endif -%}
       {%- endfor -%}
@@ -580,16 +594,20 @@
     _sections_failed_fragment: >-
       {%- set out = [] -%}
       {%- set pmap = _rf_proc_map -%}
-      {%- for s in _rf_failed_raw -%}
+      {%- set aux = _rf_aux_sections | default([]) -%}
+      {%- for s in _rf_failed_raw if s not in aux -%}
         {%- set mapped = pmap.get(s, s) -%}
         {%- if mapped not in out -%}{%- set _ = out.append(mapped) -%}{%- endif -%}
       {%- endfor -%}
       {{ out }}
     # cycle 2026-05-01: 404 only 섹션은 'unsupported' 분류 (errors[] 노이즈 차단)
+    # cycle 2026-08-03: 400 도 capability 부재로 분류 확장 — 보조 섹션은 여기서도 제외.
+    # (제외 안 하면 network_adapters 400 → network 가 not_supported 로 덮여 더 나쁜 마스킹)
     _sections_unsupported_fragment: >-
       {%- set out = [] -%}
       {%- set pmap = _rf_proc_map -%}
-      {%- for s in _rf_unsupported_raw -%}
+      {%- set aux = _rf_aux_sections | default([]) -%}
+      {%- for s in _rf_unsupported_raw if s not in aux -%}
         {%- set mapped = pmap.get(s, s) -%}
         {%- if mapped not in out -%}{%- set _ = out.append(mapped) -%}{%- endif -%}
       {%- endfor -%}

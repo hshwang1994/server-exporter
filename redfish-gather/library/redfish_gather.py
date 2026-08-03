@@ -371,6 +371,47 @@ def _err(section, message, detail=None):
     return {'section': section, 'message': str(message), 'detail': detail}
 
 
+# 확장 오류 정보에서 뽑을 최대 ExtendedInfo 항목 수 / 최종 문자열 길이 상한.
+# BMC 가 수십 개 항목을 반환해도 errors[].detail 이 비대해지지 않게 절단한다.
+MAX_EXTENDED_INFO_ITEMS = 3
+MAX_EXTENDED_INFO_LEN = 300
+
+
+def _extended_info(body, limit=MAX_EXTENDED_INFO_LEN):
+    """Redfish 오류 응답 body 에서 표준 확장 오류 정보를 사람이 읽을 한 줄로 축약.
+
+    cycle 2026-08-03 (사이트 Dell 8대 400 사고): 지금까지 collection GET 실패 시 status
+    코드만 남기고 body 를 버려 `detail: null` 이었다. DMTF DSP0266 은 오류 응답에
+    `error.code` / `error.message` / `error.@Message.ExtendedInfo[]` 를 정의하고, 벤더는
+    여기에 "왜 거부했는지"(미구현 / 라이선스 / 파라미터 오류)를 담는다. 이 정보를 버리면
+    같은 400 이라도 '미지원' 인지 '우리 요청 결함' 인지 구분할 근거가 envelope 에 남지
+    않는다 (rule 96 R2 — 외부 계약 확인 가능성 확보).
+
+    source (rule 96 R1-A): DMTF DSP0266 Redfish Specification — "Error responses".
+
+    Returns: 축약 문자열 또는 None (추출 가능한 정보 없음). Additive — 기존 detail=None
+    호출부 동작 불변, envelope shape 변경 0 (rule 96 R1-B).
+    """
+    if not isinstance(body, dict):
+        return None
+    err = body.get('error')
+    if not isinstance(err, dict):
+        err = body
+    parts = []
+
+    def _push(v):
+        if isinstance(v, str) and v.strip() and v.strip() not in parts:
+            parts.append(v.strip())
+
+    _push(err.get('code'))
+    _push(err.get('message'))
+    for item in _dicts(err.get('@Message.ExtendedInfo'))[:MAX_EXTENDED_INFO_ITEMS]:
+        _push(item.get('Message') or item.get('MessageId'))
+        _push(item.get('Resolution'))
+    out = ' | '.join(parts).strip()
+    return out[:limit] or None
+
+
 def _capped(seq, section=None, errors=None):
     """무경계 collection(Members/Drives) 순회 상한 — P2 DoS/huge-payload 방어.
 
@@ -2704,9 +2745,13 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
     base = _p(chassis_uri) + '/NetworkAdapters'
     st, coll, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
     if err or st != 200:
-        # 미지원 vendor 는 errors 에 기록하되 graceful degradation
+        # 미지원 vendor 는 errors 에 기록하되 graceful degradation.
+        # cycle 2026-08-03: BMC 확장 오류 정보를 detail 에 보존 — 같은 400 이라도 '미구현/
+        # 라이선스'(미지원) 인지 '요청 결함'(우리 버그) 인지 구분할 근거를 남긴다. message 는
+        # 기존 문자열 그대로라 _is_capability_missing_error 의 'HTTP 404'/'HTTP 400' 매칭 불변.
         errors.append(_err('network_adapters',
-                           f'NetworkAdapters 미지원 또는 실패: {err or st}'))
+                           f'NetworkAdapters 미지원 또는 실패: {err or st}',
+                           _extended_info(coll)))
         return out, errors
 
     for member in _dicts(_safe(coll, 'Members')):  # Round 4: 비-list/비-dict Members 방어
@@ -3458,11 +3503,12 @@ def gather_boot(bmc_ip, system_uri, username, password, timeout, verify_ssl):
 
 # ── 메인 ─────────────────────────────────────────────────────────────────────
 
-def _is_404_only_error(errs):
-    """모든 errors가 'HTTP 404' 시그널이면 True (endpoint 자체 부재 = capability 미지원).
+def _is_status_only_error(errs, codes):
+    """모든 errors 가 주어진 HTTP status 코드 시그널이면 True.
 
-    cycle 2026-05-01: 404 = "endpoint 없음 = vendor/펌웨어 미지원" — errors[] 노이즈
-    분리. 5xx / timeout / 401 / 403 과 분리해 'unsupported' 시그널로 분류.
+    매칭 패턴 2종 (기존 _is_404_only_error 의 판정 규칙을 그대로 일반화):
+      - detail 또는 message 에 'HTTP <code>' 포함
+      - message 가 '...: <code>' / '... <code>' 로 끝남 (st 정수를 그대로 넣은 경로)
     """
     if not errs:
         return False
@@ -3471,14 +3517,44 @@ def _is_404_only_error(errs):
             return False
         detail = str(e.get('detail') or '')  # Round 2 #8: 비-str detail/message → 'in' TypeError 방어
         msg = str(e.get('message') or '')
-        # 'HTTP 404' 패턴: detail에 'HTTP 404' 또는 message에 '404' 단독 정수
-        if 'HTTP 404' in detail or 'HTTP 404' in msg:
+        if any(('HTTP %s' % c) in detail or ('HTTP %s' % c) in msg for c in codes):
             continue
-        # message가 정확히 '...: 404' (st 정수 그대로) 패턴
-        if msg.endswith(': 404') or msg.endswith(' 404'):
+        if any(msg.endswith(': %s' % c) or msg.endswith(' %s' % c) for c in codes):
             continue
         return False
     return True
+
+
+def _is_404_only_error(errs):
+    """모든 errors가 'HTTP 404' 시그널이면 True (endpoint 자체 부재 = capability 미지원).
+
+    cycle 2026-05-01: 404 = "endpoint 없음 = vendor/펌웨어 미지원" — errors[] 노이즈
+    분리. 5xx / timeout / 401 / 403 과 분리해 'unsupported' 시그널로 분류.
+    """
+    return _is_status_only_error(errs, ('404',))
+
+
+def _is_capability_missing_error(errs):
+    """모든 errors 가 'capability 부재' 시그널(HTTP 404 또는 HTTP 400)이면 True.
+
+    cycle 2026-08-03 (사이트 Dell iDRAC 8대 사고): 표준상 미구현 리소스는 404 지만, 실제
+    벤더 BMC 는 미구현/미인가 sub-resource 에 **400 Bad Request** 를 반환하기도 한다
+    (실측: 사이트 Dell iDRAC RedfishVersion 1.4.0 8대 — Chassis/{id}/NetworkAdapters).
+    같은 URL 이 실 Dell R740 미러(tests/fixtures/redfish/real_dell_r740)에서는 200 이라
+    요청 형식 문제가 아니라 장비/펌웨어 차이임이 확인됐다.
+
+    404 만 unsupported 로 보면 이런 BMC 는 영구히 `failed` + errors[] 노이즈가 되어
+    호출자가 매 수집마다 partial 을 받는다.
+
+    **오분류 위험과 완화** (rule 95 R3 — 의심 드러내기): 400 은 '우리 요청이 잘못됨'을
+    뜻할 수도 있다. 그래서 본 판정은 호출부(_make_section_runner)에서 반드시
+    `_is_empty_result(val)` 와 AND 로 묶어 **collection-level 전체 실패 + 결과 완전 빈값**
+    일 때만 쓰고, 비-404 로 분류된 건은 stderr 에 원문을 남겨 Jenkins console 에서
+    추적 가능하게 한다(errors[] 에서는 드롭되므로).
+
+    source (rule 96 R1-A): DMTF DSP0266 (404=미구현 표준) + 사이트 실측(rule 25 R7-A-1).
+    """
+    return _is_status_only_error(errs, ('404', '400'))
 
 
 def _is_empty_result(val):
@@ -3515,7 +3591,15 @@ def _make_section_runner(all_errors, collected, failed, unsupported=None):
             # collection 200 + sub-멤버 404 로 *부분 수집*된 경우(val 채워짐)는 아래 일반 경로로
             # 흘려보내 collected+failed 로 잡는다 — 부분 데이터 손실이 'unsupported+success' 로
             # 은폐(누락이 정상처럼 보임)되는 것 차단.
-            if unsupported is not None and _is_404_only_error(errs) and _is_empty_result(val):
+            # cycle 2026-08-03: 404 뿐 아니라 400(벤더 미구현/미인가 응답)도 capability 부재로
+            # 분류. 단 비-404 분류는 errors[] 에서 드롭되므로 stderr 에 원문을 남긴다 —
+            # '우리 요청 결함' 인 400 이 silent 하게 not_supported 로 덮이는 것 차단(rule 95 R3).
+            if unsupported is not None and _is_capability_missing_error(errs) and _is_empty_result(val):
+                if not _is_404_only_error(errs):
+                    sys.stderr.write(
+                        "[redfish_gather] %s: capability 부재로 분류(비-404 응답) — %s\n" %
+                        (section, json.dumps(errs, ensure_ascii=False)[:500])
+                    )
                 unsupported.append(section)
                 return val
             all_errors.extend(errs)

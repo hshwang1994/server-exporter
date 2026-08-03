@@ -6,7 +6,63 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-06-17
+> 최종 갱신: 2026-08-03
+
+## 2026-08-03 — 보조 섹션(network_adapters) 실패가 network status 를 덮던 문제 + 400 분류
+
+### 요청 / 배경 (Why)
+
+- 사이트 Jenkins 빌드(DAY_1/git/소연등록redfish #1) 에서 Dell iDRAC(RedfishVersion 1.4.0) **8대 전부**
+  `status=partial`, `sections.network=failed`, `errors[]="NetworkAdapters 미지원 또는 실패: HTTP 400: Bad Request"`.
+- 그런데 같은 envelope 의 `data.network` 는 정상(interfaces 4 / default_gateways / summary.port_count 4).
+  비어 있는 건 `adapters[]` / `ports[]`(NIC 카드 모델·펌웨어) 뿐이었다. 즉 **데이터는 멀쩡한데 status 만 거짓**.
+- 사용자 질문: "지금 코드에 버그 있는건가?" → 조사 결과 **버그 2건 + 진단성 결함 1건**.
+
+### 원인 (실측 근거)
+
+1. **status 마스킹** — `redfish_gather.py` 는 `network`(주=EthernetInterfaces) 와
+   `network_adapters`(보조=Chassis NetworkAdapters) 를 별도 raw 섹션으로 보고하는데,
+   `normalize_standard.yml` `_rf_proc_map` 이 둘을 같은 `network` 로 collapse.
+   `build_sections.yml` 우선순위가 `not_supported > failed > success` 라 **보조 실패가 항상 승리**.
+   (`docs/ai/NEXT_ACTIONS.md` 에 NET-SEC-MAP(LOW, "미발동")으로 등재돼 있던 latent 결함이 실발동.)
+2. **400 = 미지원 미분류** — `_is_404_only_error` 가 404 만 capability 부재로 봤다. 벤더 BMC 는
+   미구현/미인가 리소스에 400 을 주기도 한다.
+3. **진단 근거 소실** — 실패 시 응답 body 를 버려 `errors[].detail=null`. Redfish 표준
+   `error.@Message.ExtendedInfo`(왜 거부했는지)가 사라져 '미지원' 인지 '우리 요청 결함' 인지 구분 불가.
+
+**요청 형식 문제 아님을 확인**: (a) 같은 `eff_chassis_uri` 를 쓰는 `power`/`thermal` 은 `success`,
+(b) 실 Dell R740 전수 미러(`tests/fixtures/redfish/real_dell_r740`)에서 **동일 URL 이 200**.
+→ 장비/펌웨어 차이 (rule 25 R7-A-1 사용자 실측 우선).
+
+### 결정 (What)
+
+- **A. 보조(auxiliary) 섹션 개념 도입** — `normalize_standard.yml` 에 `_rf_aux_sections: ['network_adapters']`.
+  세 status fragment(collected/failed/unsupported) **모두**에서 보조 섹션 제외 → 섹션 status 는 주 수집만으로 결정.
+  보조 실패는 `errors[]` 로만 보고(시나리오 B). **`unsupported` 에서도 제외**하는 게 핵심 —
+  안 하면 400→unsupported 확장 후 `network` 가 `not_supported` 로 덮여 failed 보다 더 나쁜 마스킹이 된다.
+- **B. capability 부재 신호에 400 추가** — 신규 `_is_capability_missing_error`(404 or 400).
+  기존 `_is_404_only_error` 는 의미 불변(back-compat, 직접 테스트 존재). **오분류 완화 2중**:
+  호출부에서 `_is_empty_result(val)` 와 AND(컬렉션 전체 실패 + 결과 완전 빈값), 비-404 분류 시 stderr 에 원문 기록.
+- **C. 확장 오류 정보 보존** — 신규 `_extended_info(body)` 가 `error.code`/`message`/`@Message.ExtendedInfo[]`
+  를 300자로 축약해 `errors[].detail` 에 기록. envelope shape 변경 0 (Additive, rule 96 R1-B).
+
+### 결과 (Impact)
+
+- 사이트 조건에서 `sections.network=success`, `status=success`, NIC 카드 상세만 비게 됨(정직한 표현).
+- envelope 13 필드 / sections 11 / field_dictionary 변경 **0** — status **값**만 바뀐다(계약 shape 불변).
+- 회귀: `pytest tests/` **1302 passed** / 5 skipped / 7 xfailed. baseline 10종 영향 0(전부 network=success 유지).
+- 신규 회귀 27건: `tests/unit/test_network_adapters_aux_status.py`(21) +
+  `tests/integration/test_site_dell_networkadapters_400.py`(6, 실 R740 미러를 400 으로 변조해 사이트 재현).
+  후자는 "수정 전 로직이면 partial 이 재현된다" 는 역가드까지 포함.
+- **미검증(정직 보고)**: 이 환경에 `ansible-playbook` CLI 부재 → YAML 은 실제 식을 Jinja2 로 렌더해 검증했고
+  전체 ansible 통합(실 site.yml)은 **Jenkins Agent 재빌드로 확인 필요**. 400 의 근본 사유(미구현/라이선스)도
+  BMC 직접 접근 불가로 **미확정** — C 적용 후 다음 빌드의 `errors[].detail` 로 확인.
+
+### 대안 비교 (Considered)
+
+- **보조 실패를 그대로 failed 유지**: 사이트가 영구 partial. 호출자가 "partial=문제"로 알람 → 노이즈. 기각.
+- **network_adapters 를 별도 섹션으로 승격**: sections 11→12 = 호출자 계약 변경(rule 13 R5). 과대. 기각.
+- **400 을 무조건 unsupported**: 진짜 요청 결함까지 은폐. `_is_empty_result` AND + stderr 로 완화해 채택.
 
 ## 2026-06-17 — OS Linux bond alias / secondary IP 수집 (네트워크 개더링)
 

@@ -144,6 +144,9 @@ JSON 의 `sections` 와 `data` 는 같은 11개 키를 갖는다. 각 채널이 
 | `thermal` | 온도 센서 / 팬 (Chassis/Thermal) | | | O |
 
 (X) = `not_supported`. 그 채널 특성상 원래 못 가져오는 영역이다. 수집 실패와 다른 의미다.
+cycle 2026-08-03: `not_supported` 판정 신호에 **HTTP 400** 추가 (기존 404 만). 표준상 미구현 리소스는 404 지만
+실제 벤더 BMC 는 미구현/미인가 리소스에 400 을 주기도 한다(실측: 사이트 Dell iDRAC 8대 `NetworkAdapters`).
+오분류를 막기 위해 **컬렉션 GET 자체 실패 + 결과가 완전히 빈 경우에만** 적용하고, 부분 수집은 그대로 `failed` 로 둔다.
 cycle 2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data.thermal` 만 채워지고 `sections.thermal` 누락 — Track4 미완. 이제 redfish 는 수집 성공 시 `success`, os/esxi 는 `not_supported`).
 
 같은 서버라도 채널별로 채워지는 영역이 다르다는 게 핵심. 예를 들어:
@@ -169,6 +172,16 @@ cycle 2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data
 > 여기서 예외가 나도 표준 섹션은 그대로 `success` 로 유지되고, OEM 실패는 `errors[]` 에 `section: "oem"` 경고로만 남는다
 > (→ 시나리오 B, 또는 일부 표준 섹션이 실패했으면 C). 즉 OEM 한 단계 실패가 전체를 `failed` 로 만들지 않는다.
 > (`redfish-gather/site.yml` 의 OEM local block/rescue — 과거엔 단일 top-level rescue 로 cascade 되어 표준 섹션까지 전부 `failed` 였음.)
+
+> **보조 수집 실패도 C 가 아니다 (2026-08-03, redfish `network`).** `network` 섹션은 두 갈래로 모은다.
+> **주** = 호스트 NIC/IP(`Systems/{id}/EthernetInterfaces`) → `data.network.interfaces[]` 등,
+> **보조** = NIC 카드 모델·펌웨어(`Chassis/{id}/NetworkAdapters`) → `data.network.adapters[]` / `ports[]`.
+> `sections.network` 는 **주 수집 결과만으로** 정해진다. 보조가 실패해도 주 수집이 됐으면 `success` 이고,
+> 사유는 `errors[]` 에 `section: "network_adapters"` 로 남는다 (→ 시나리오 B).
+> 즉 호출자가 받는 `adapters[]` 가 비어 있어도 `sections.network` 는 `success` 일 수 있다 —
+> **NIC 카드 상세가 필요하면 `sections` 가 아니라 `data.network.adapters[]` 자체를 확인**해야 한다.
+> (과거엔 보조 실패가 주 성공을 덮어 `sections.network=failed` + `status=partial` 이 됐다.
+> 사이트 Dell iDRAC 8대가 `data.network` 는 정상인데 매번 `partial` 을 받던 원인.)
 
 특히 **B 시나리오**가 헷갈린다. 호출자 코드에서 이렇게 짜면 안 된다.
 
