@@ -183,10 +183,13 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
 빌드 #5 에서 8대 중 **6대는 `hbas=0` 으로 해결, 2대(.52 / .152)는 여전히 `hbas=4`**.
 같은 NIC 모델(`BRCM 10G/GbE 2+2P 57800 rNDC`)인데 **NIC 펌웨어가 갈렸다**:
 
-| 호스트 | NIC 펌웨어 | 결과 |
-|---|---|---|
-| .51 / .53 / .54 / .151 / .153 / .154 | 15.15.08 | `hbas=0` (NDF 가 WWN 미노출) |
-| **.52 / .152** | **15.20.13** | `hbas=4` (NDF 가 MAC 파생 WWN 노출) |
+| 호스트 | NIC 펌웨어 | #4 | #5 | NDF 의 `NetDevFuncType=Ethernet` |
+|---|---|---|---|---|
+| .51 / .53 / .54 / .151 / .153 / .154 | 15.15.08 | 4 | **0** | 있음 → 강등 fix 로 해결 |
+| **.52 / .152** | **15.20.13** | 4 | **4** | 없음(또는 미인식 값) → 최후 휴리스틱까지 흘러감 |
+
+> 두 펌웨어 **모두** MAC 파생 WWN 을 노출한다(빌드 #4 실측 — 8대 전부 `hbas=4`).
+> 강등 fix 는 6대에서 실제로 효과가 있었고, NDF 가 Ethernet 신호를 주지 않는 2대에서만 실패했다.
 
 **원인**: Dell 은 NDF Id 를 `<PortId>-<funcIdx>` 로 매긴다(포트 `NIC.Integrated.1-1` ↔ NDF
 `NIC.Integrated.1-1-1`). NDF↔Port join 은 (a) `Links.PhysicalPortAssignment` (b) `NDF.Id == Port.Id`
