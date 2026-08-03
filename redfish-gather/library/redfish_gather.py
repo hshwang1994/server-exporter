@@ -2876,6 +2876,9 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         # (NDF.FibreChannel 에 존재)이 port 에 join 돼 fc_hbas[].wwpn 이 소실되지 않는다.
         ndf_by_id = {n['id']: i for i, n in enumerate(ndfs) if n.get('id')}
         ndf_matched = set()
+        # cycle 2026-08-03: port 순회에서 모은 (PortProtocol, link_tech, raw port) 컨텍스트.
+        # Port 에 join 되지 않은 NDF 를 분류할 때 '부모 포트' 신호를 물려주는 데 쓴다 (아래 참조).
+        port_ctx_by_id = {}
 
         # NetworkPorts (Redfish 1.5 이전) 또는 Ports (1.6+)
         ports_link = (_safe(adata, 'NetworkPorts', '@odata.id')
@@ -2931,6 +2934,8 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     # 2026-04-29 fix B13: ports의 link_status도 동일 enum 정규화.
                     normalized_link = _normalize_link_status(_safe(pdata, 'LinkStatus'))
                     port_id = _safe(pdata, 'Id')
+                    if port_id:
+                        port_ctx_by_id[port_id] = (port_protocol, link_tech, pdata)
 
                     # NDF join (식별 정보) — port_uri(PhysicalPortAssignment) 우선, 부재 시 ID 매칭(CSUS-FC1)
                     ndf_idx = ndf_by_port.get(_p(p_uri)) if p_uri else None
@@ -2989,7 +2994,23 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         for i, ndf in enumerate(ndfs):
             if i in ndf_matched:
                 continue
-            cls = _classify_port_protocol(None, None, ndf, None)
+            # cycle 2026-08-03 (사이트 Dell R630 실측): join 실패한 NDF 도 '부모 포트' 신호를
+            # 물려받아 분류한다. Dell 은 NDF Id 를 `<PortId>-<funcIdx>` 로 매기는데(예: 포트
+            # NIC.Integrated.1-1 ↔ NDF NIC.Integrated.1-1-1) port_uri/ID-동일 매칭이 둘 다
+            # 빗나가 orphan 이 된다. 컨텍스트 없이 분류하면 FCoE 지원 CNA 의 이더넷 기능이
+            # (MAC 파생 WWN 때문에) FC HBA 로 잡힌다 — 같은 NIC 이 펌웨어 버전에 따라 갈리는
+            # 원인이었다(실측: NIC fw 15.20.13 은 WWN 노출, 15.15.08 은 미노출).
+            # 접두 매칭은 구분자 '-' 를 요구해 `...1-1` 이 `...1-10-1` 을 삼키지 않는다.
+            nid = _str(ndf.get('id'))
+            parent = None
+            for _pid, _ctx in port_ctx_by_id.items():
+                if nid.startswith(_pid + '-'):
+                    parent = _ctx
+                    break
+            if parent is not None:
+                cls = _classify_port_protocol(parent[0], parent[1], ndf, parent[2])
+            else:
+                cls = _classify_port_protocol(None, None, ndf, None)
             if cls in ('FibreChannel', 'FCoE'):
                 out['fc_hbas'].append(_make_fc_hba(
                     adapter_id, adapter_info, ndf.get('id'), cls,

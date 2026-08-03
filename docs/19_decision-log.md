@@ -178,6 +178,29 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
 - **`storage.hbas` 에 `capability_only` 플래그 추가**: envelope 신규 키 = 호출자 계약 변경(rule 96 R1-B).
   분류 순서 교정으로 충분. 기각.
 
+#### [후속 2] 잔여 2대 — orphan NDF 가 부모 포트 신호를 못 물려받던 문제
+
+빌드 #5 에서 8대 중 **6대는 `hbas=0` 으로 해결, 2대(.52 / .152)는 여전히 `hbas=4`**.
+같은 NIC 모델(`BRCM 10G/GbE 2+2P 57800 rNDC`)인데 **NIC 펌웨어가 갈렸다**:
+
+| 호스트 | NIC 펌웨어 | 결과 |
+|---|---|---|
+| .51 / .53 / .54 / .151 / .153 / .154 | 15.15.08 | `hbas=0` (NDF 가 WWN 미노출) |
+| **.52 / .152** | **15.20.13** | `hbas=4` (NDF 가 MAC 파생 WWN 노출) |
+
+**원인**: Dell 은 NDF Id 를 `<PortId>-<funcIdx>` 로 매긴다(포트 `NIC.Integrated.1-1` ↔ NDF
+`NIC.Integrated.1-1-1`). NDF↔Port join 은 (a) `Links.PhysicalPortAssignment` (b) `NDF.Id == Port.Id`
+두 가지만 시도하는데 **둘 다 빗나가** orphan 이 된다. orphan 분류는
+`_classify_port_protocol(None, None, ndf, None)` — 포트 컨텍스트가 **전혀 없어서** 앞선 강등 fix 가
+무력화되고 최후 WWPN 휴리스틱까지 흘러가 FC 로 잡혔다.
+
+**결정**: orphan NDF 는 **부모 포트의 신호를 물려받아** 분류한다. NDF Id 가 `<PortId>-` 로 시작하면
+그 포트의 `(PortProtocol, link_tech, raw port)` 를 넘긴다. 구분자 `-` 를 요구해 `...1-1` 이
+`...1-10-1` 을 삼키지 않는다. 부모를 못 찾으면 기존 동작(CSUS 의 진짜 port-less NDF) 그대로.
+
+**결과**: 회귀 **1318 passed**, 신규 3건 추가(총 12건). 상속을 제거하면 1건 FAIL(가드 유효).
+진짜 FCoE(`NetDevFuncType=FibreChannelOverEthernet`)는 orphan 이어도 HBA 로 잡히는 것 별도 회귀로 고정.
+
 ## 2026-06-17 — OS Linux bond alias / secondary IP 수집 (네트워크 개더링)
 
 ### 요청 / 배경

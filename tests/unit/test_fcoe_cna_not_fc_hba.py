@@ -146,3 +146,74 @@ def test_site_cna_produces_no_fc_hba(monkeypatch):
     assert out["infiniband"] == []
     assert [p["port_type"] for p in out["ports"]] == ["Ethernet"]
     assert out["adapters"][0]["model"] == "BRCM 10G/GbE 2+2P 57800 rNDC"
+
+
+def _site_routes(chassis, *, ndf_link_to_port: bool, ndf_func_type):
+    """사이트 Dell R630 토폴로지 — NDF Id = `<PortId>-<funcIdx>` (예: ...1-1 ↔ ...1-1-1)."""
+    adp = chassis + "/NetworkAdapters/NIC.Integrated.1"
+    ndf = {
+        "Id": "NIC.Integrated.1-1-1",
+        # FCoE 지원 CNA 라 이더넷 기능에도 MAC 파생 WWN 이 붙는다 (실측 NIC fw 15.20.13)
+        "FibreChannel": {"WWPN": "20:01:90:b1:1c:1f:e2:8e",
+                         "WWNN": "20:00:90:b1:1c:1f:e2:8e"},
+    }
+    if ndf_func_type is not None:
+        ndf["NetDevFuncType"] = ndf_func_type
+    if ndf_link_to_port:
+        ndf["Links"] = {"PhysicalPortAssignment": {
+            "@odata.id": adp + "/NetworkPorts/NIC.Integrated.1-1"}}
+    return {
+        rg._p(chassis) + "/NetworkAdapters": (200, {"Members": [{"@odata.id": adp}]}, None),
+        rg._p(adp): (200, {
+            "Id": "NIC.Integrated.1", "Manufacturer": "Dell",
+            "Model": "BRCM 10G/GbE 2+2P 57800 rNDC",
+            "Controllers": [{"ControllerCapabilities": {"NetworkPortCount": 4},
+                             "FirmwarePackageVersion": "15.20.13"}],
+            "NetworkPorts": {"@odata.id": adp + "/NetworkPorts"},
+            "NetworkDeviceFunctions": {"@odata.id": adp + "/NetworkDeviceFunctions"},
+        }, None),
+        rg._p(adp) + "/NetworkPorts": (200, {"Members": [
+            {"@odata.id": adp + "/NetworkPorts/NIC.Integrated.1-1"}]}, None),
+        rg._p(adp) + "/NetworkPorts/NIC.Integrated.1-1": (200, {
+            "Id": "NIC.Integrated.1-1", "LinkStatus": "Down",
+            "AssociatedNetworkAddresses": ["90:b1:1c:1f:e2:8d"],
+            "Ethernet": {"AssociatedMACAddresses": ["90:b1:1c:1f:e2:8d"]},
+        }, None),
+        rg._p(adp) + "/NetworkDeviceFunctions": (200, {"Members": [
+            {"@odata.id": adp + "/NetworkDeviceFunctions/NIC.Integrated.1-1-1"}]}, None),
+        rg._p(adp) + "/NetworkDeviceFunctions/NIC.Integrated.1-1-1": (200, ndf, None),
+    }
+
+
+def test_orphan_ndf_inherits_parent_port_signal(monkeypatch):
+    """사이트 잔여 2대 재현: NDF↔Port join 실패(orphan) + NetDevFuncType 부재 + WWPN 존재.
+
+    부모 포트(`NIC.Integrated.1-1`)가 Ethernet 이므로 FC HBA 로 잡히면 안 된다.
+    (구 코드는 컨텍스트 없이 분류 → WWPN 최후 휴리스틱 → FibreChannel 오분류)
+    """
+    chassis = "/redfish/v1/Chassis/System.Embedded.1"
+    routes = _site_routes(chassis, ndf_link_to_port=False, ndf_func_type=None)
+    monkeypatch.setattr(rg, "_get",
+                        lambda ip, path, *a, **kw: routes.get(path, (404, {}, "HTTP 404: Not Found")))
+    out, _ = rg.gather_network_adapters_chassis("10.0.0.1", chassis, "u", "p", 30, False)
+    assert out["fc_hbas"] == [], "orphan NDF 가 부모 포트(Ethernet) 신호를 못 물려받음"
+    assert [p["port_type"] for p in out["ports"]] == ["Ethernet"]
+
+
+def test_orphan_ndf_with_fcoe_type_still_hba(monkeypatch):
+    """orphan 이라도 NetDevFuncType 이 FCoE 면 HBA 로 잡힌다 — 부모 상속이 진짜 FCoE 를 덮지 않음."""
+    chassis = "/redfish/v1/Chassis/System.Embedded.1"
+    routes = _site_routes(chassis, ndf_link_to_port=False,
+                          ndf_func_type="FibreChannelOverEthernet")
+    monkeypatch.setattr(rg, "_get",
+                        lambda ip, path, *a, **kw: routes.get(path, (404, {}, "HTTP 404: Not Found")))
+    out, _ = rg.gather_network_adapters_chassis("10.0.0.1", chassis, "u", "p", 30, False)
+    assert len(out["fc_hbas"]) == 1
+    assert out["fc_hbas"][0]["port_type"] == "FCoE"
+    assert out["fc_hbas"][0]["wwpn"] == "20:01:90:b1:1c:1f:e2:8e"
+
+
+def test_ndf_id_prefix_match_requires_separator():
+    """접두 매칭이 구분자 '-' 를 요구해 `...1-1` 이 `...1-10-1` 을 삼키지 않는다."""
+    assert "NIC.Integrated.1-10-1".startswith("NIC.Integrated.1-1" + "-") is False
+    assert "NIC.Integrated.1-1-1".startswith("NIC.Integrated.1-1" + "-") is True
