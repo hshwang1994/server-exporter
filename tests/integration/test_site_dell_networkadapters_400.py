@@ -9,9 +9,17 @@
     즉 보조 수집(NIC 카드 모델·펌웨어) 1건 실패가 주 수집(호스트 EthernetInterfaces) 성공을
     덮어 호출자에게 partial 을 돌려줬다.
 
-본 테스트는 실 Dell R740 전수 미러(real_dell_r740)를 재생하되 NetworkAdapters 컬렉션
-GET 만 400 으로 바꿔 사이트 조건을 만들고, 모듈 산출 → normalize fragment → build_sections
-→ build_status 의 실제 식을 그대로 태워 최종 envelope status 를 검증한다.
+근본 원인 (후속 조사):
+    사이트 장비는 PowerEdge R630(13G / iDRAC8 fw 2.7x~2.8x). 벤더 공식 API 가이드상
+    NetworkAdapters 는 `Systems/{id}/NetworkAdapters` 에 있다 — 우리가 그 펌웨어에 없는
+    Chassis 경로를 물어봐서 400 이었다(비교하던 R740 은 14G/iDRAC9 로 세대가 다름).
+    → Systems 경로 fallback 추가. 400 을 미지원으로 숨기던 중간 분류는 되돌림.
+
+본 테스트는 실 Dell R740 전수 미러(real_dell_r740)를 재생하되 NetworkAdapters 를
+  (a) 양 경로 모두 실패 (Chassis=400 / Systems 부재)      → status 는 살아남나?
+  (b) Systems 밑으로 이동 + Chassis=400 (사이트 토폴로지) → NIC 카드를 되찾나?
+두 조건으로 바꿔, 모듈 산출 → normalize fragment → build_sections → build_status 의
+실제 식을 그대로 태워 최종 envelope 을 검증한다.
 (ansible-playbook CLI 는 이 환경에 부재 — YAML 식을 Jinja2 로 직접 렌더. rule 24 R1)
 
 오프라인: recording.json 만 사용 — 네트워크 0.
@@ -98,10 +106,35 @@ def _replay(mutate=None):
                         manager_layout=meta.get("manager_layout"))
 
 
+SYS_NA_PATH = "get::Systems/System.Embedded.1/NetworkAdapters"
+
+
 def _force_na_400(recording):
-    """NetworkAdapters 컬렉션 GET 만 400 으로 — sub-member 는 요청되지 않으므로 제거."""
+    """양 경로 모두 실패: Chassis=400, Systems=미기록(replay-miss 404).
+
+    NIC 카드 정보를 어디서도 못 받는 최악 조건. 그래도 주 수집(network)은 살아야 한다.
+    """
     for key in [k for k in recording if k.startswith(NA_PATH)]:
         del recording[key]
+    recording[NA_PATH] = [400, SITE_400_BODY, "HTTP 400: Bad Request"]
+    return recording
+
+
+def _force_na_under_systems(recording):
+    """사이트 Dell R630(iDRAC8) 토폴로지 재현 — Chassis=400 이고 리소스는 Systems 밑에 있음.
+
+    실 R740 미러의 NetworkAdapters 트리를 Chassis→Systems 로 그대로 옮겨, 펌웨어가
+    리소스를 Systems 아래 두는 장비를 만든다. fallback 이 동작하면 NIC 카드가 수집된다.
+    """
+    moved = {}
+    for key in [k for k in recording if k.startswith(NA_PATH)]:
+        entry = recording.pop(key)
+        # 응답 본문의 @odata.id 도 Systems 경로로 — 안 바꾸면 멤버 추적이 옛 경로로 샌다.
+        entry = json.loads(json.dumps(entry).replace(
+            "/redfish/v1/Chassis/System.Embedded.1/NetworkAdapters",
+            "/redfish/v1/Systems/System.Embedded.1/NetworkAdapters"))
+        moved[key.replace("get::Chassis/", "get::Systems/", 1)] = entry
+    recording.update(moved)
     recording[NA_PATH] = [400, SITE_400_BODY, "HTTP 400: Bad Request"]
     return recording
 
@@ -125,10 +158,15 @@ class TestSiteDellNetworkAdapters400:
         _, status = _envelope_sections_and_status(result)
         assert status == "success"
 
-    def test_400_classified_as_capability_missing(self, site_result):
-        """400 + 결과 완전 빈값 → unsupported 분류 (failed/errors[] 노이즈 아님)."""
-        assert "network_adapters" in site_result["unsupported_sections"]
-        assert "network_adapters" not in site_result["failed_sections"]
+    def test_400_stays_visible_not_hidden_as_unsupported(self, site_result):
+        """400 은 미지원으로 숨기지 않는다 — failed 로 남아 errors[] 에서 보여야 한다.
+
+        (cycle 2026-08-03 중간에 400→unsupported 로 숨겼다가, 근거가 '경로 오류'로
+        밝혀져 되돌린 결정의 회귀 가드. 은폐 재발 방지.)
+        """
+        assert "network_adapters" not in site_result["unsupported_sections"]
+        assert "network_adapters" in site_result["failed_sections"]
+        assert site_result["error_count"] >= 1
 
     def test_primary_network_still_collected(self, site_result):
         """주 수집(호스트 EthernetInterfaces)은 영향 없음 — 사이트 envelope 과 동일."""
@@ -143,6 +181,25 @@ class TestSiteDellNetworkAdapters400:
     def test_overall_status_not_partial(self, site_result):
         """사이트 증상(status=partial)이 재현되지 않아야 한다."""
         _, status = _envelope_sections_and_status(site_result)
+        assert status == "success"
+
+    def test_systems_fallback_recovers_nic_cards(self):
+        """근본 fix: 리소스가 Systems 밑에 있는 장비에서 NIC 카드를 **실제로 수집**한다.
+
+        구 코드(Chassis 단일 경로)는 여기서 adapters=[] 로 영구 손실이었다.
+        """
+        if not (CASE / "recording.json").is_file():
+            pytest.skip("real_dell_r740 fixture 없음")
+        result = _replay(_force_na_under_systems)
+        na = result["data"]["network_adapters"]
+        assert na["adapters"], "Systems fallback 이 NIC 카드를 못 가져옴"
+        assert all(a.get("id") for a in na["adapters"])
+        # 원본(Chassis 200) 수집과 동일한 카드 집합이어야 한다 — 경로만 다를 뿐 같은 데이터
+        baseline = _replay()["data"]["network_adapters"]
+        assert sorted(a["id"] for a in na["adapters"]) == \
+               sorted(a["id"] for a in baseline["adapters"])
+        assert "network_adapters" not in result["failed_sections"]
+        _, status = _envelope_sections_and_status(result)
         assert status == "success"
 
     def test_prefix_behavior_would_have_been_partial(self, site_result):

@@ -2721,12 +2721,32 @@ def _make_ib_port(adapter_id, adapter_info, port_id, link_status, speed_gbps, pd
     }
 
 
-def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
-    """Chassis/{id}/NetworkAdapters 수집 + FC HBA / InfiniBand 분류.
+def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, timeout,
+                                    verify_ssl, system_uri=None):
+    """NetworkAdapters 수집 + FC HBA / InfiniBand 분류.
 
     NetworkAdapters         → adapters[] (NIC 카드 모델/firmware)
     Ports/NetworkPorts      → ports[]    (port-level link/speed)
     NetworkDeviceFunctions  → 식별 (FC WWPN/WWNN, IB Node/Port GUID)
+
+    **수집 경로 2종 (cycle 2026-08-03 — 사이트 Dell R630 8대 400 사고 근본원인)**:
+      1순위 `Chassis/{id}/NetworkAdapters`  — DMTF 현행 표준 위치
+      2순위 `Systems/{id}/NetworkAdapters`  — 일부 펌웨어의 구현 위치
+
+    배경: 펌웨어 세대에 따라 이 리소스의 부모가 다르다. 사이트 PowerEdge R630(13G / iDRAC8
+    fw 2.7x~2.8x)은 Chassis 경로에 **HTTP 400** 을 주는데, 벤더 공식 API 가이드는 같은
+    리소스를 `Systems/{id}/NetworkAdapters` 로 문서화한다. 즉 400 은 "장비 미지원"이 아니라
+    **우리가 그 펌웨어에 없는 경로를 물어본 것**이었다. 1순위만 시도하던 구 코드는 이런
+    장비에서 NIC 카드 정보를 영구히 못 받았다(adapters[] 항상 빈 배열).
+
+    source (rule 96 R1-A):
+      - Dell iDRAC8 Redfish API Guide 2.70.70.70 — NetworkAdapter Collection / Instance
+        = `/redfish/v1/Systems/System.Embedded.1/NetworkAdapters[/<id>]`
+      - 내부 실측: `tests/fixtures/redfish/real_dell_r740`(14G/iDRAC9) 는 Chassis 경로 200
+        → 세대별 위치 차이 확인
+
+    Additive (rule 92 R2): 1순위가 200 인 장비는 2순위를 아예 시도하지 않아 동작 100% 불변.
+    vendor 분기 없음 — 경로 후보 순회는 vendor-agnostic (rule 12 R1).
 
     분류 정본 (DMTF — cycle 2026-05-29 fix, EXTERNAL-CONTRACTS §1/§2):
       - FC : Port.PortProtocol ∈ {FC,FCP,FCoE} 또는 NDF.NetDevFuncType=FibreChannel(OverEthernet)
@@ -2739,19 +2759,34 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
     """
     out = {'adapters': [], 'ports': [], 'fc_hbas': [], 'infiniband': []}
     errors = []
-    if not chassis_uri:
+    if not chassis_uri and not system_uri:
         return out, errors
 
-    base = _p(chassis_uri) + '/NetworkAdapters'
-    st, coll, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
-    if err or st != 200:
-        # 미지원 vendor 는 errors 에 기록하되 graceful degradation.
-        # cycle 2026-08-03: BMC 확장 오류 정보를 detail 에 보존 — 같은 400 이라도 '미구현/
-        # 라이선스'(미지원) 인지 '요청 결함'(우리 버그) 인지 구분할 근거를 남긴다. message 는
-        # 기존 문자열 그대로라 _is_capability_missing_error 의 'HTTP 404'/'HTTP 400' 매칭 불변.
+    candidates = []
+    if chassis_uri:
+        candidates.append(_p(chassis_uri) + '/NetworkAdapters')
+    if system_uri:
+        alt = _p(system_uri) + '/NetworkAdapters'
+        if alt not in candidates:
+            candidates.append(alt)
+
+    coll, first_fail = None, None
+    for base in candidates:
+        st, data, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
+        if not err and st == 200:
+            coll = data
+            break
+        if first_fail is None:
+            # 표준(1순위) 경로의 실패 시그널을 보고 대상으로 삼는다 — message 문자열이
+            # 기존과 동일해야 404-only 미지원 분류(_is_404_only_error)가 불변.
+            first_fail = (err or st, _extended_info(data))
+    if coll is None:
+        sig, ext = first_fail
+        detail = 'tried: ' + ' / '.join(candidates)
+        if ext:
+            detail += ' | ' + ext
         errors.append(_err('network_adapters',
-                           f'NetworkAdapters 미지원 또는 실패: {err or st}',
-                           _extended_info(coll)))
+                           f'NetworkAdapters 미지원 또는 실패: {sig}', detail))
         return out, errors
 
     for member in _dicts(_safe(coll, 'Members')):  # Round 4: 비-list/비-dict Members 방어
@@ -3534,27 +3569,11 @@ def _is_404_only_error(errs):
     return _is_status_only_error(errs, ('404',))
 
 
-def _is_capability_missing_error(errs):
-    """모든 errors 가 'capability 부재' 시그널(HTTP 404 또는 HTTP 400)이면 True.
 
-    cycle 2026-08-03 (사이트 Dell iDRAC 8대 사고): 표준상 미구현 리소스는 404 지만, 실제
-    벤더 BMC 는 미구현/미인가 sub-resource 에 **400 Bad Request** 를 반환하기도 한다
-    (실측: 사이트 Dell iDRAC RedfishVersion 1.4.0 8대 — Chassis/{id}/NetworkAdapters).
-    같은 URL 이 실 Dell R740 미러(tests/fixtures/redfish/real_dell_r740)에서는 200 이라
-    요청 형식 문제가 아니라 장비/펌웨어 차이임이 확인됐다.
-
-    404 만 unsupported 로 보면 이런 BMC 는 영구히 `failed` + errors[] 노이즈가 되어
-    호출자가 매 수집마다 partial 을 받는다.
-
-    **오분류 위험과 완화** (rule 95 R3 — 의심 드러내기): 400 은 '우리 요청이 잘못됨'을
-    뜻할 수도 있다. 그래서 본 판정은 호출부(_make_section_runner)에서 반드시
-    `_is_empty_result(val)` 와 AND 로 묶어 **collection-level 전체 실패 + 결과 완전 빈값**
-    일 때만 쓰고, 비-404 로 분류된 건은 stderr 에 원문을 남겨 Jenkins console 에서
-    추적 가능하게 한다(errors[] 에서는 드롭되므로).
-
-    source (rule 96 R1-A): DMTF DSP0266 (404=미구현 표준) + 사이트 실측(rule 25 R7-A-1).
-    """
-    return _is_status_only_error(errs, ('404', '400'))
+# NOTE (cycle 2026-08-03): `_is_capability_missing_error`(404+400) 를 도입했다가 제거함.
+# 사이트 Dell R630(iDRAC8)의 400 은 미지원 신호가 아니라 **경로 오류**였다(벤더 공식 문서로
+# 확인 — gather_network_adapters_chassis docstring). 400 을 미지원으로 분류하면 우리 버그가
+# not_supported 로 덮인다. 400 을 미지원으로 볼 근거가 실측으로 확보되면 그때 재도입할 것.
 
 
 def _is_empty_result(val):
@@ -3591,15 +3610,12 @@ def _make_section_runner(all_errors, collected, failed, unsupported=None):
             # collection 200 + sub-멤버 404 로 *부분 수집*된 경우(val 채워짐)는 아래 일반 경로로
             # 흘려보내 collected+failed 로 잡는다 — 부분 데이터 손실이 'unsupported+success' 로
             # 은폐(누락이 정상처럼 보임)되는 것 차단.
-            # cycle 2026-08-03: 404 뿐 아니라 400(벤더 미구현/미인가 응답)도 capability 부재로
-            # 분류. 단 비-404 분류는 errors[] 에서 드롭되므로 stderr 에 원문을 남긴다 —
-            # '우리 요청 결함' 인 400 이 silent 하게 not_supported 로 덮이는 것 차단(rule 95 R3).
-            if unsupported is not None and _is_capability_missing_error(errs) and _is_empty_result(val):
-                if not _is_404_only_error(errs):
-                    sys.stderr.write(
-                        "[redfish_gather] %s: capability 부재로 분류(비-404 응답) — %s\n" %
-                        (section, json.dumps(errs, ensure_ascii=False)[:500])
-                    )
+            # cycle 2026-08-03 (되돌림): 400 을 capability 부재로 분류하던 확장을 제거했다.
+            # 사이트 Dell R630 8대의 400 은 "장비 미지원" 이 아니라 **우리가 그 펌웨어에 없는
+            # 경로를 물어본 것**이었음이 벤더 공식 문서로 확인됨(gather_network_adapters_chassis
+            # docstring). 400 을 미지원으로 분류하면 우리 쪽 경로 버그가 not_supported 로 조용히
+            # 덮인다 — 근거 없는 은폐라 되돌린다. 404(endpoint 부재)만 미지원으로 유지.
+            if unsupported is not None and _is_404_only_error(errs) and _is_empty_result(val):
                 unsupported.append(section)
                 return val
             all_errors.extend(errs)
@@ -4363,9 +4379,11 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         # cycle 2026-06-14 (Track 4): 단일노드 thermal (온도 센서 + 팬). 미지원 벤더는 {} graceful.
         'thermal':           _run('thermal',    gather_thermal,    bmc_ip, eff_chassis_uri,     *creds),
         # P4 (cycle 2026-04-28): NIC 카드 + port-level + FC HBA / InfiniBand 분류
+        # cycle 2026-08-03: system_uri 전달 — Chassis 경로 실패 시 Systems 경로 fallback
+        # (펌웨어 세대별 NetworkAdapters 부모 리소스 차이. 상세는 함수 docstring).
         'network_adapters':  _run('network_adapters',
                                    gather_network_adapters_chassis,
-                                   bmc_ip, eff_chassis_uri, *creds),
+                                   bmc_ip, eff_chassis_uri, *creds, system_uri),
     }
 
 

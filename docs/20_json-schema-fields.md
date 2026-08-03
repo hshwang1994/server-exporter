@@ -144,9 +144,9 @@ JSON 의 `sections` 와 `data` 는 같은 11개 키를 갖는다. 각 채널이 
 | `thermal` | 온도 센서 / 팬 (Chassis/Thermal) | | | O |
 
 (X) = `not_supported`. 그 채널 특성상 원래 못 가져오는 영역이다. 수집 실패와 다른 의미다.
-cycle 2026-08-03: `not_supported` 판정 신호에 **HTTP 400** 추가 (기존 404 만). 표준상 미구현 리소스는 404 지만
-실제 벤더 BMC 는 미구현/미인가 리소스에 400 을 주기도 한다(실측: 사이트 Dell iDRAC 8대 `NetworkAdapters`).
-오분류를 막기 위해 **컬렉션 GET 자체 실패 + 결과가 완전히 빈 경우에만** 적용하고, 부분 수집은 그대로 `failed` 로 둔다.
+`not_supported` 판정 신호는 **HTTP 404(엔드포인트 부재)만**이다. 400 등 다른 실패는 `failed` 로 남아 `errors[]` 에 보인다.
+(2026-08-03: 400 도 미지원으로 보려다 되돌림 — 사이트 사례의 400 은 장비 미지원이 아니라 **수집 측 경로 오류**였다.
+400 을 미지원으로 분류하면 수집 측 버그가 `not_supported` 로 조용히 덮인다.)
 cycle 2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data.thermal` 만 채워지고 `sections.thermal` 누락 — Track4 미완. 이제 redfish 는 수집 성공 시 `success`, os/esxi 는 `not_supported`).
 
 같은 서버라도 채널별로 채워지는 영역이 다르다는 게 핵심. 예를 들어:

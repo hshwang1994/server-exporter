@@ -62,7 +62,69 @@
 
 - **보조 실패를 그대로 failed 유지**: 사이트가 영구 partial. 호출자가 "partial=문제"로 알람 → 노이즈. 기각.
 - **network_adapters 를 별도 섹션으로 승격**: sections 11→12 = 호출자 계약 변경(rule 13 R5). 과대. 기각.
-- **400 을 무조건 unsupported**: 진짜 요청 결함까지 은폐. `_is_empty_result` AND + stderr 로 완화해 채택.
+- **400 을 무조건 unsupported**: 진짜 요청 결함까지 은폐. `_is_empty_result` AND + stderr 로 완화해 채택
+  → **아래 정정 절에서 철회**.
+
+---
+
+### [정정] 같은 날 후속 조사 — B 는 오판이었고 근본 원인은 **경로 오류**
+
+사용자 지적("근본 해결이 아니라 안 보이게 한 것 아니냐")을 받아 400 의 근거를 다시 조사한 결과,
+**위 (B) 결정의 전제가 틀렸음**이 확인됐다.
+
+#### 무엇이 틀렸나
+
+빌드 #3 envelope 의 `data.bmc` / `data.hardware` 실측:
+
+| 항목 | 값 (8대 전부) |
+|---|---|
+| 모델 | **PowerEdge R630** (13G) |
+| BMC 모델 | `13G Monolithic` |
+| iDRAC 펌웨어 | 2.75.100.75 / 2.80.80.80 / 2.85.85.85 / 2.86.86.86 → **iDRAC8** |
+
+벤더 공식 **iDRAC8 Redfish API Guide 2.70.70.70** 은 같은 리소스를 이렇게 문서화한다:
+
+```
+NetworkAdapter Collection : /redfish/v1/Systems/System.Embedded.1/NetworkAdapters
+NetworkAdapter Instance   : /redfish/v1/Systems/System.Embedded.1/NetworkAdapters/<id>
+```
+
+우리 코드는 `Chassis/{id}/NetworkAdapters` 만 요청했다. **400 은 "장비 미지원"이 아니라
+"그 펌웨어에 없는 경로를 물어본 결과"**였다.
+
+**원 조사의 추론 결함**: "실 Dell R740 미러에서 같은 URL 이 200" 을 근거로 "요청 형식 문제 아님"
+이라고 단정했는데, R740 은 **14G / iDRAC9** 로 세대가 다르다. 세대가 다른 장비를 대조군으로 써서
+잘못된 결론에 도달했다 (rule 95 R2 — 근거의 교차 확인 실패).
+
+#### 정정 결정 (What)
+
+- **B 철회**: `_is_capability_missing_error`(404+400) 제거, `_run` 은 `_is_404_only_error` 로 복귀.
+  400 은 다시 `failed` + `errors[]` 노출. 근거 없는 은폐 제거 — 특히 **은폐 대상이 우리 자신의 버그**였다.
+- **근본 fix 신설**: `gather_network_adapters_chassis` 에 수집 경로 후보 2종 —
+  1순위 `Chassis/{id}/NetworkAdapters`(DMTF 현행 표준) → 실패 시 2순위 `Systems/{id}/NetworkAdapters`.
+  1순위가 200 인 장비는 2순위를 **아예 시도하지 않아** 동작·왕복 100% 불변(Additive). vendor 분기 없음(rule 12 R1).
+- **A / C 유지**: 섹션 status 분리는 여전히 유효(별개의 진짜 버그). detail 보존은 진단에 필요.
+
+#### 결과 (Impact)
+
+- 사이트 R630 8대는 이제 NIC 카드 모델·펌웨어를 **실제로 수집**한다(구 코드는 `adapters[]` 영구 빈 배열).
+- 양 경로 모두 실패하는 장비는 `errors[].detail` 에 `tried: <경로1> / <경로2>` + BMC 확장 메시지가 남는다.
+- 회귀 1306 passed. 신규 가드: 400 이 다시 미지원으로 분류되면 실패하는 테스트
+  (`test_400_is_not_treated_as_unsupported` — `_is_capability_missing_error` 부활 자체를 차단).
+
+#### 대안 비교 (정정 후)
+
+- **B 유지 + fallback 추가**: fallback 이 성공하면 400 이 안 보이니 문제없다고 볼 수도 있으나, *다른* 원인의
+  400 이 계속 은폐된다. 기각.
+- **Systems 경로를 1순위로**: iDRAC9 등 현행 표준 장비의 왕복이 늘고 표준에서 멀어진다. 기각.
+- **adapter YAML 로 vendor/세대별 경로 지정**: 정확하지만 세대 오선택 문제(아래)에 의존하고 신규 vendor 마다
+  수동 등재가 필요. 경로 후보 순회가 vendor-agnostic 하고 자기수복적. 기각(향후 재검토).
+
+#### 남은 별건
+
+adapter 세대 오선택 — iDRAC8 장비인데 `redfish_dell_idrac10` 이 선택된다(무인증 probe 단계에 model/firmware
+가 비어 priority 최상위만 뽑히는 기존 이슈, NEXT_ACTIONS 등재). 본 fallback 은 adapter 와 무관하게 동작하므로
+이번 수정에는 영향 없음.
 
 ## 2026-06-17 — OS Linux bond alias / secondary IP 수집 (네트워크 개더링)
 
