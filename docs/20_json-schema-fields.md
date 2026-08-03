@@ -376,6 +376,12 @@ controllers[*].id  ────┤
 
 - `wwpn`/`wwnn`/`link_speed_gbps`/`node_guid` 는 미연결·미노출 시 `null` (정상 — error 아님).
 - `port_type` ∈ {`FibreChannel`, `FCoE`, `iSCSI`}. `source` ∈ {`redfish`, `os`, `esxi`}.
+- **FCoE 지원 CNA 는 여기 안 들어온다 (2026-08-03)**: Broadcom 57800 같은 CNA 는 *이더넷* 기능에도
+  MAC 파생 WWN 을 달고 나온다. WWN 이 있다는 이유로 HBA 로 잡으면 같은 물리 포트가
+  `network.ports[]`=Ethernet / `storage.hbas[]`=FibreChannel 로 갈리는 모순이 생긴다.
+  → 분류는 **명시 신호**(`PortProtocol` / `NetDevFuncType`)를 우선하고, WWN 존재는 명시 신호가
+  전무할 때만 쓴다. FCoE 를 실제로 설정한 장비는 `NetDevFuncType=FibreChannelOverEthernet` 을 주므로
+  정상적으로 `port_type="FCoE"` 로 잡힌다.
 - 서브필드 정의는 `schema/field_dictionary.yml` (`storage.hbas[].*` / `storage.infiniband[].*`, Nice).
 
 ### 6.4 `data.network`

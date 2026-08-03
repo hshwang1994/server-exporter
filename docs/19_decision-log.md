@@ -126,6 +126,58 @@ adapter 세대 오선택 — iDRAC8 장비인데 `redfish_dell_idrac10` 이 선�
 가 비어 priority 최상위만 뽑히는 기존 이슈, NEXT_ACTIONS 등재). 본 fallback 은 adapter 와 무관하게 동작하므로
 이번 수정에는 영향 없음.
 
+---
+
+### [후속] FCoE 지원 CNA 를 FC HBA 로 오분류하던 문제 (빌드 #4 에서 노출)
+
+#### 컨텍스트 (Why)
+
+fallback 배포 후 빌드 #4 에서 NIC 카드 데이터가 처음 들어왔다(`adapters` 1 / `ports` 4 — 목표 달성).
+그런데 같은 물리 포트 4개가 **서로 다르게 분류**되는 자기모순이 드러났다:
+
+| 위치 | 값 |
+|---|---|
+| `data.network.ports[].port_type` | `Ethernet` |
+| `data.network.summary.groups[].link_type` | `ethernet` |
+| **`data.storage.hbas[].port_type`** | **`FibreChannel`** (4건) |
+
+대상 NIC = `BRCM 10G/GbE 2+2P 57800 rNDC` — Broadcom 57800 은 **FCoE 지원 CNA** 이고, 이런 카드는
+이더넷 기능에도 MAC 파생 WWN 을 단다(실측 WWPN `20:01:90:b1:1c:1f:e2:8e` = MAC `...e2:8d` + 1).
+
+#### 원인
+
+`_classify_port_protocol` 의 CSUS-FC1 휴리스틱(`ndf_wwpn` 존재 → FibreChannel)이 **Ethernet 판정보다
+위**에 있어 명시적 Ethernet 신호를 덮어썼다. 이 휴리스틱은 원래 `NetDevFuncType` 을 아예 주지 않는
+HPE CSUS RMC 펌웨어 전용이었다(2026-06-15). 데이터가 없어 드러나지 않던 **기존 버그**가 이번에 노출됐다.
+
+#### 결정 (What)
+
+`ndf_wwpn` 휴리스틱을 함수 **맨 끝**(명시 신호 전무 시)으로 강등. 판정 우선순위:
+
+```
+InfiniBand 신호 → FCoE(NetDevFuncType) → FC(PortProtocol/NetDevFuncType) → Port.FibreChannel dict
+→ Ethernet(PortProtocol/link_tech/NetDevFuncType) → Port.Ethernet dict → [최후] NDF.WWPN → FC
+```
+
+FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEthernet` 을 주므로 위쪽 FCoE 분기에서
+잡힌다 — 본 강등의 영향 없음. CSUS 본래 케이스(명시 신호 전무 + WWPN)도 최후 분기로 보존.
+
+#### 결과 (Impact)
+
+- 사이트 R630 8대의 `storage.hbas` 는 `[]` 가 되고 `network.ports` 와 일관됨.
+- 회귀 **1315 passed**. 신규 `tests/unit/test_fcoe_cna_not_fc_hba.py` 9건 —
+  오분류 방지 3 / 진짜 FC·FCoE·IB 보존 5 / end-to-end(사이트 NIC → `fc_hbas == []`) 1.
+- 가드 유효성: 강등을 되돌리면 4건 FAIL 확인.
+- **미검증**: 사이트에서 `storage.hbas` 가 실제로 비는지 → 다음 빌드.
+
+#### 대안 비교 (Considered)
+
+- **현행 유지**: "FCoE 가능 기능 4개"도 거짓은 아니지만 `network.ports` 와의 모순이 남고, 호출자가
+  SAN 연결이 있다고 오해한다. 기각.
+- **WWPN 이 MAC 파생인지 검사**: 벤더별 파생 규칙이 달라 신뢰 불가. 기각.
+- **`storage.hbas` 에 `capability_only` 플래그 추가**: envelope 신규 키 = 호출자 계약 변경(rule 96 R1-B).
+  분류 순서 교정으로 충분. 기각.
+
 ## 2026-06-17 — OS Linux bond alias / secondary IP 수집 (네트워크 개더링)
 
 ### 요청 / 배경

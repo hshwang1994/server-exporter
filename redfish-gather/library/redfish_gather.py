@@ -2600,8 +2600,10 @@ def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
         ndf_type = _str(ndf.get('func_type')).strip().lower()
         ndf_tech = _str(ndf.get('net_dev_tech')).strip().lower()
         # CSUS-FC1 (2026-06-15 실미러 검수): NetDevFuncType/PortProtocol 부재 펌웨어(HPE CSUS
-        # RMC — NDF 에 NetDevFuncType 없이 FibreChannel.WWPN 만 노출)에서도 FC 식별. WWPN 은
-        # FC 전용 식별자라 안전. (Node/Port GUID 는 IB 시그널로 쓰지 않는다 — ConnectX VPI 가
+        # RMC — NDF 에 NetDevFuncType 없이 FibreChannel.WWPN 만 노출)에서도 FC 식별.
+        # cycle 2026-08-03: 이 휴리스틱은 함수 **맨 끝**(명시 신호 전무 시)로 강등됐다 —
+        # "WWPN 은 FC 전용 식별자" 전제가 FCoE 지원 CNA 에서 깨지기 때문(하단 주석 참조).
+        # (Node/Port GUID 는 IB 시그널로 쓰지 않는다 — ConnectX VPI 가
         # Ethernet 모드에서도 GUID 를 노출해 Ethernet NIC 을 IB 로 오분류하기 때문.)
         ndf_wwpn = ndf.get('wwpn')
     # IB 우선 (IB NDF 가 Ethernet 으로 오인되지 않도록)
@@ -2611,7 +2613,7 @@ def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
         return 'InfiniBand'
     if pp == 'FCOE' or ndf_type == 'fibrechanneloverethernet':
         return 'FCoE'
-    if pp in ('FC', 'FCP', 'FIBRECHANNEL') or ndf_type == 'fibrechannel' or ndf_wwpn:
+    if pp in ('FC', 'FCP', 'FIBRECHANNEL') or ndf_type == 'fibrechannel':
         return 'FibreChannel'
     if isinstance(pdata, dict) and isinstance(pdata.get('FibreChannel'), dict):
         return 'FibreChannel'
@@ -2622,6 +2624,15 @@ def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
     # AssociatedMACAddresses 만 노출 → 구 코드는 port_type=None(미분류). DMTF Port.Ethernet 표준 블록.
     if isinstance(pdata, dict) and isinstance(pdata.get('Ethernet'), dict):
         return 'Ethernet'
+    # CSUS-FC1 휴리스틱은 **명시 신호가 모두 없을 때만** 적용한다 (cycle 2026-08-03 강등).
+    # WWPN 존재만으로 FC 로 확정하던 위치가 Ethernet 판정보다 위에 있어, FCoE 지원 CNA
+    # (실측: 사이트 Dell R630 의 'BRCM 10G/GbE 2+2P 57800 rNDC')가 FC HBA 로 오분류됐다.
+    # 이런 CNA 는 이더넷 기능에도 MAC 파생 WWN 을 달고 나온다 — 같은 물리 포트가
+    # network.ports[]=Ethernet, storage.hbas[]=FibreChannel 로 갈리는 자기모순 발생.
+    # FCoE 가 실제로 설정된 장비는 NetDevFuncType=FibreChannelOverEthernet 을 주므로
+    # 위쪽 FCoE 분기에서 잡힌다 — 본 강등의 영향 없음.
+    if ndf_wwpn:
+        return 'FibreChannel'
     return None
 
 
