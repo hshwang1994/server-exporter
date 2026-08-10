@@ -69,8 +69,19 @@ SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
 # Sample fallback envelopes (always 블록이 만들 수 있는 형태 시뮬레이션)
 #
 # 각 fixture 는 실제 site.yml fallback envelope 의 모양을 본떠 작성.
-# 수정 시 redfish-gather/site.yml:163-181, os-gather/site.yml:278-296,
-# esxi-gather/site.yml:160-178 의 always 블록과 정합 유지 필요.
+# 수정 시 redfish-gather/site.yml:254-272, os-gather/site.yml:359-377 (linux) /
+# :548-566 (windows), esxi-gather/site.yml:246-268 의 always 블록과 정합 유지 필요.
+#
+# 2026-08-10 정정 (인용 라인 stale + diagnosis shape 오기재):
+#   - 종전 인용 라인(redfish :163-181 등)은 HEAD 에서 다른 코드(OEM graceful 블록)를 가리켰다.
+#   - 종전 fixture 는 diagnosis 를 {"precheck": {...}, "gather_mode": ..., "details": {...}}
+#     **중첩 구조**로 만들었으나, production 은 build_diagnosis()(filter_plugins/
+#     diagnosis_mapper.py:60-68)가 반환하는 **flat 구조**다
+#     ({reachable, port_open, protocol_supported, auth_success, failure_stage,
+#       failure_reason, details}). `precheck` 라는 하위 키를 만드는 production 코드는 없다
+#     (schema/baseline_v1/*.json 10건 전수 확인). 중첩 fixture 는 실제 회귀를 잡지 못한다.
+#   - collection_method 도 실제 값과 달랐다 (os: "ansible"→"agent",
+#     esxi: "vmware"→"vsphere_api" — os-gather/site.yml:152, esxi-gather/site.yml:187).
 # ---------------------------------------------------------------------------
 def _empty_sections() -> dict[str, str]:
     return {}
@@ -96,19 +107,19 @@ def _failed_envelope(
         "vendor": vendor,
         "status": "failed",
         "sections": sections,
+        # production 과 동일한 flat shape (diagnosis_mapper.build_diagnosis 반환형).
+        # 각 boolean 은 "그 단계 통과를 확인했는가" — failure_stage 이전 단계만 true.
         "diagnosis": {
-            "precheck": {
-                "reachable": failure_stage != "reachable",
-                "port_open": failure_stage not in ("reachable", "port"),
-                "protocol_supported": failure_stage
-                not in ("reachable", "port", "protocol"),
-                "auth_success": failure_stage
-                not in ("reachable", "port", "protocol", "auth"),
-                "failure_stage": failure_stage,
-                "failure_reason": failure_reason,
-            },
-            "gather_mode": "fallback",
-            "details": {},
+            "reachable": failure_stage != "reachable",
+            "port_open": failure_stage not in ("reachable", "port"),
+            "protocol_supported": failure_stage
+            not in ("reachable", "port", "protocol"),
+            # auth 는 3-값. precheck 는 Stage 4 를 수행하지 않으므로
+            # (precheck_bundle.py:546-548) 실패 경로에서 true 가 될 수 없다.
+            "auth_success": None,
+            "failure_stage": failure_stage,
+            "failure_reason": failure_reason,
+            "details": {"channel": target_type, "gather_mode": "fallback"},
         },
         "meta": {},
         "correlation": {},
@@ -143,15 +154,20 @@ def _partial_envelope(
         "vendor": vendor,
         "status": "partial",
         "sections": sections,
+        # production flat shape — 수집이 진행된 경로라 site.yml 이 auth_success 를
+        # true 로 덮어쓴 상태 (redfish-gather/site.yml:191-206 / esxi:194-210).
         "diagnosis": {
-            "precheck": {
-                "reachable": True,
-                "port_open": True,
-                "protocol_supported": True,
-                "auth_success": True,
+            "reachable": True,
+            "port_open": True,
+            "protocol_supported": True,
+            "auth_success": True,
+            "failure_stage": None,
+            "failure_reason": None,
+            "details": {
+                "channel": target_type,
+                "adapter_candidate": "redfish_dell_idrac9",
+                "gather_mode": "normal",
             },
-            "gather_mode": "normal",
-            "details": {"adapter_candidate": "redfish_dell_idrac9"},
         },
         "meta": {
             "adapter_id": "redfish_dell_idrac9",
@@ -246,21 +262,21 @@ ENVELOPES: dict[str, dict[str, Any]] = {
     # ------------------------------- OS ----------------------------------
     "os__precheck_unreachable": _failed_envelope(
         target_type="os",
-        collection_method="ansible",
+        collection_method="agent",
         failure_stage="port",
         failure_reason="SSH(22) / WinRM(5985/5986) 포트 모두 닫힘",
         sections_supported=("system", "cpu", "memory", "storage", "network", "users"),
     ),
     "os__precheck_auth_fail": _failed_envelope(
         target_type="os",
-        collection_method="ansible",
+        collection_method="agent",
         failure_stage="auth",
         failure_reason="OS 자격증명 후보 모두 실패 (1차/2차)",
         sections_supported=("system", "cpu", "memory", "storage", "network"),
     ),
     "os__collect_partial": _partial_envelope(
         target_type="os",
-        collection_method="ansible",
+        collection_method="agent",
         success=("system", "cpu", "memory"),
         failed=("storage", "network"),
     ),
@@ -268,7 +284,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
         # production-audit (2026-04-29): details dict shape (os-gather/site.yml:308-326,475-493)
         "schema_version": "1",
         "target_type": "os",
-        "collection_method": "ansible",
+        "collection_method": "agent",
         "ip": "10.100.64.10",
         "hostname": "10.100.64.10",
         "vendor": None,
@@ -299,21 +315,21 @@ ENVELOPES: dict[str, dict[str, Any]] = {
     # ------------------------------ ESXi ---------------------------------
     "esxi__precheck_unreachable": _failed_envelope(
         target_type="esxi",
-        collection_method="vmware",
+        collection_method="vsphere_api",
         failure_stage="reachable",
         failure_reason="ESXi/vCenter 호스트 도달 불가",
         sections_supported=("system", "hardware", "cpu", "memory", "storage", "network"),
     ),
     "esxi__precheck_auth_fail": _failed_envelope(
         target_type="esxi",
-        collection_method="vmware",
+        collection_method="vsphere_api",
         failure_stage="auth",
         failure_reason="ESXi 자격증명 후보 모두 실패 (1차/2차)",
         sections_supported=("system", "hardware", "cpu", "memory", "storage", "network"),
     ),
     "esxi__collect_partial": _partial_envelope(
         target_type="esxi",
-        collection_method="vmware",
+        collection_method="vsphere_api",
         success=("system", "hardware", "cpu", "memory"),
         failed=("storage", "network"),
     ),
@@ -321,7 +337,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
         # production-audit (2026-04-29): details dict shape (esxi-gather/site.yml:183-201)
         "schema_version": "1",
         "target_type": "esxi",
-        "collection_method": "vmware",
+        "collection_method": "vsphere_api",
         "ip": "10.100.64.10",
         "hostname": "10.100.64.10",
         "vendor": None,

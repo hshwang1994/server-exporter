@@ -211,21 +211,34 @@ if response["data"]["hardware"].get("health") == "Critical":
 
 ## 5. `diagnosis` — 어디서 막혔는지
 
-연결이 안 됐을 때 가장 먼저 보는 곳. precheck 4단계가 순서대로 체크되고, 막힌 단계의 boolean 이 `false` 로 찍힌다.
+연결이 안 됐을 때 가장 먼저 보는 곳. precheck 단계가 순서대로 체크되고, 막힌 단계의 boolean 이 `false` 로 찍힌다.
 
 ```json
 "diagnosis": {
-  "reachable":          true,    // 1단계: ping 응답?
-  "port_open":          false,   // 2단계: 해당 포트 (Redfish=443, SSH=22 등) 응답?
-  "protocol_supported": false,
-  "auth_success":       false,
-  "failure_stage":      "port",  // 막힌 단계 이름
-  "failure_reason":     "TCP 443 connection refused",
+  "reachable":          true,    // 1단계: TCP 응답 확인? (ICMP ping 아님 — 아래 주의 참조)
+  "port_open":          false,   // 2단계: 해당 포트 (Redfish=443, SSH=22 등) 연결 성공?
+  "protocol_supported": false,   // 3단계: 기대 프로토콜 응답? (2단계 실패 시 미수행)
+  "auth_success":       null,    // 4단계: 미수행이면 null (false 가 아니다 — 아래 주의)
+  "failure_stage":      "port",  // 실행이 멈춘 단계 이름
+  "failure_reason":     "호스트는 응답하지만 서비스 포트가 닫혀 있습니다. 방화벽 또는 서비스 미기동 가능성.",
   "details": { ... }             // 채널별 부가 정보 (선택된 adapter, BMC product 명 등)
 }
 ```
 
 읽는 법: **위에서 아래로 첫 번째 false 찍힌 단계가 실패 지점**.
+
+> **주의 1 — `reachable` 은 ICMP ping 이 아니다.** 주소를 IPv4/IPv6 양쪽으로 풀어 **실제 TCP
+> 연결을 시도**하고 그 결과로 판정한다 (`common/library/precheck_bundle.py:109-142`).
+> 핑이 막힌 관리망에서도 BMC 는 443 으로 응답하므로 ICMP 로 판정하면 정상 장비를 오판한다.
+> 연결이 **거부(RST)** 되면 호스트는 살아 있는 것이므로 `reachable=true` + `port_open=false` 가 된다.
+>
+> **주의 2 — `auth_success` 는 3-값이다.** `true`/`false` 외에 **`null`(인증 단계 미수행)** 이 있다.
+> precheck 는 인증정보를 받지 않아 4단계를 수행하지 않으므로(`precheck_bundle.py:546-548`),
+> precheck 단계에서 실패한 결과의 `auth_success` 는 **항상 `null`** 이다. 실제 인증 성공 여부는
+> 본 수집 성공 후 각 채널이 `true` 로 덮어쓴다(`redfish-gather/site.yml:191-206` 등).
+> 따라서 **`auth_success` 가 `null` 이라고 해서 인증이 실패한 것이 아니다.**
+> (OS 채널의 포트 감지 실패 경로만 예외적으로 `false` 를 넣고 있다 — `os-gather/site.yml:162`.
+> 인증을 시도하지 않은 상태이므로 의미상 `null` 이 맞고, 정정은 별도 단계로 분리돼 있다.)
 
 | `failure_stage` | 의미 | 해결 방향 |
 |---|---|---|
@@ -233,7 +246,11 @@ if response["data"]["hardware"].get("health") == "Critical":
 | `reachable` | 호스트 자체가 응답 없음 | 호스트 전원 / 네트워크 / 라우팅 |
 | `port` | 호스트는 응답하나 포트 닫힘 | 방화벽 / 서비스 미기동 / 포트 번호 오설정 |
 | `protocol` | 포트는 열렸는데 응답 형식이 이상함 | TLS 버전 / cipher / 펌웨어 버그 |
-| `auth` | 자격증명 거부됨 | 비밀번호 회전 / 계정 잠김 / 권한 부족 |
+| `auth` | 인증 단계에서 멈춤 | 비밀번호 회전 / 계정 잠김 / 권한 부족 |
+| `fallback` | `_output` 미생성 (block·rescue 모두 실패) | 수집기 내부 오류 — Jenkins console log 확인 |
+
+> `failure_stage` 는 **원인**이 아니라 **실행이 멈춘 단계**를 가리킨다. 구체적인 기술 오류는
+> `errors[].detail` 에 원문 그대로 들어간다 (예: `"port=443: 연결 시간 초과 (timeout=3.0s)"`).
 
 ---
 

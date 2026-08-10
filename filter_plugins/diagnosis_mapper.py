@@ -33,8 +33,15 @@ def build_diagnosis(precheck_result, channel, adapter_id=None):
         precheck_result = {}
 
     # cycle 2026-05-01: 사용자 명시 "신규 JSON 추가 없음 — 호환성 only" 원칙 적용.
-    # detail 정보는 envelope `errors[0].detail` 에 이미 존재. diagnosis.details 에 중복 추가 안 함.
+    # detail 정보는 envelope `errors[0].detail` 로 전달되므로 diagnosis.details 에 중복 추가 안 함.
     # (cycle 2026-04-30에 추가됐던 'detail' 키 제거 — 호환성 영역 외)
+    #
+    # 2026-08-10 정정: 위 "errors[0].detail 에 이미 존재" 전제는 2026-08-10 이전까지
+    # **성립하지 않았다.** errors[0].detail 을 채우는 변수(_fail_error_detail)를 set 하는
+    # 코드가 저장소에 하나도 없어(build_failed_output.yml:49 가 유일한 참조처) 완전 실패
+    # 경로의 detail 은 항상 null 이었다. 이제 run_precheck.yml 이 그 변수를 set 하므로
+    # 전제가 실제로 성립한다. 따라서 본 함수가 detail 을 싣지 않는 것은 여전히 옳다.
+    # (섹션 단위 gather 오류의 detail 은 예전부터 정상 전달됨 — build_errors.yml:43)
     details = {
         "channel": channel,
         "adapter_candidate": adapter_id,

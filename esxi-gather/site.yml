@@ -237,7 +237,10 @@
             _fail_sec_supported:    "{{ ((_selected_adapter | default({})).capabilities | default({})).sections_supported
                                         | default(['system','hardware','cpu','memory','storage','network']) }}"
             _fail_error_section:    "esxi_gather"
-            _fail_error_message:    "{{ ansible_failed_result.msg | default('ESXi 수집 예외') }}"
+            # 2026-08-10 (B-7): redfish-gather/site.yml 의 rescue 와 동일하게 실패 태스크명을
+            # prefix 로 포함 — json_only callback 이 fatal 태스크 출력을 차단하므로 errors[].message
+            # 가 유일한 위치 추적 단서다. 종전엔 redfish 만 prefix 가 있어 채널 간 비대칭이었다.
+            _fail_error_message:    "[task: {{ ansible_failed_task.name | default('unknown') }}] {{ ansible_failed_result.msg | default('ESXi 수집 예외') }}"
 
         - name: "esxi | rescue | build_failed_output"
           ansible.builtin.include_tasks:

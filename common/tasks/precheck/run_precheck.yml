@@ -22,6 +22,11 @@
 #   _precheck_result:  precheck_bundle 모듈 반환값
 #   _precheck_ok:      전체 진단 통과 여부 (bool)
 #   _diagnosis:        공통 diagnosis 딕셔너리
+#   _fail_error_detail: 진단 실패 시 원본 기술 오류 문자열 (없으면 none)
+#                       → build_failed_output.yml:49 이 errors[0].detail 로 emit.
+#                       2026-08-10 이전에는 이 변수를 set 하는 코드가 저장소에 하나도 없어
+#                       precheck 가 이미 확보한 상세 오류(DNS 해석 실패 / TCP timeout /
+#                       연결 거부 / HTTP status / TLS 오류)가 최종 결과에 도달하지 못했다.
 # ==============================================================================
 
 - name: "precheck | 대상 호스트 연결 진단"
@@ -56,6 +61,16 @@
 - name: "precheck | 공통 diagnosis 생성"
   ansible.builtin.set_fact:
     _diagnosis: "{{ _precheck_raw | build_diagnosis(_precheck_channel) }}"
+
+# 2026-08-10: precheck 의 detail 을 실패 경로(build_failed_output.yml:49)까지 전달.
+#   build_diagnosis() 는 detail 을 diagnosis 에 싣지 않는다 (diagnosis_mapper.py:38-42 —
+#   "errors[0].detail 에 이미 존재" 전제). 그런데 그 errors[0].detail 을 채우는
+#   _fail_error_detail 을 set 하는 코드가 저장소에 없어 전제가 성립하지 않았다.
+#   본 태스크가 그 전제를 실제로 성립시킨다 — 신규 필드/키 추가 없음(Additive 아님, 값만).
+#   precheck 성공 시 _precheck_raw.detail 은 None 이라 이후 gather 단계 실패에는 영향 없음.
+- name: "precheck | 실패 detail 을 errors[].detail 로 전달"
+  ansible.builtin.set_fact:
+    _fail_error_detail: "{{ _precheck_raw.detail | default(none) }}"
 
 - name: "precheck | 진단 실패 시 로그 출력"
   ansible.builtin.debug:

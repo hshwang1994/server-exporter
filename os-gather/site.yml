@@ -163,7 +163,10 @@
           failure_stage:      "port"
           failure_reason:     "SSH(22)/WinRM(5985/5986) 모두 응답 없음"
           details:
-            checked_ports: [22, 5985, 5986]
+            channel: "os"
+            # 2026-08-10 (B-4): 실제 검사 순서는 5986 → 5985 → 22 (PLAY 1, :40-69).
+            # 종전 [22, 5985, 5986] 은 역순이라 "22 부터 확인했다"로 오독됐다.
+            checked_ports: [5986, 5985, 22]
 
     - name: "failed-output | init fragments"
       ansible.builtin.include_tasks:
@@ -288,7 +291,10 @@
                 adapter_candidate: "{{ (_selected_adapter | default({})).adapter_id | default(none) }}"
                 detected_os:       "linux"
                 selected_port:     22
-                checked_ports:     [22]
+                # 2026-08-10 (B-4): linux 로 분류되려면 PLAY 1 에서 5986 실패 → 5985 실패 →
+                # 22 성공 순으로 **3개 모두** 시도됐어야 한다 (:40-78 의 when 조건). 종전 [22] 는
+                # 실제 검사 이력을 누락해 "22 만 확인했다"로 오독됐다.
+                checked_ports:     [5986, 5985, 22]
                 gather_mode:       "{{ _l_python_mode | default('python_ok') }}"
                 python_version:    "{{ _l_python_version | default('') }}"
                 # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
@@ -484,7 +490,11 @@
                 # selected_port 는 정수 — checked_ports([5985,5986]) / Linux SSH 경로(22) /
                 # precheck 모듈(int) 과 타입 일관. 구: 문자열 "5986" (2026-06-30 실측 불일치).
                 selected_port:     "{{ ansible_port | default(5986) | int }}"
-                checked_ports:     [5985, 5986]
+                # 2026-08-10 (B-4): PLAY 1 은 5986 을 먼저 시도하고 성공하면 **거기서 멈춘다**
+                # (:49-50 의 when: _probe_winrm_https is failed). 따라서 5986 으로 붙었으면
+                # 검사한 포트는 [5986] 하나뿐이고, 5985 로 붙었을 때만 [5986, 5985] 다.
+                # 종전 [5985, 5986] 은 순서도 내용도 실제와 달랐다.
+                checked_ports:     "{{ [5986] if ((ansible_port | default(5986) | int) == 5986) else [5986, 5985] }}"
                 # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
                 auth:              "{{ _os_attempts_meta | default({}) }}"
 

@@ -93,7 +93,21 @@
 
         # 2026-04-30: precheck/diagnosis가 이미 식별한 실패 단계에 따라 specific 메시지.
         # ServiceRoot(/redfish/v1/)는 Redfish 표준상 무인증 → protocol_supported=true이면
-        # 네트워크/방화벽/서비스 모두 정상 증명됨. 인증만 실패한 경우 vault만 안내.
+        # 네트워크/방화벽/서비스 모두 정상 증명됨.
+        #
+        # 2026-08-10 (B-8 정정): 종전 4번째 분기 조건이 `auth_success is none or not auth_success`
+        #   였는데, 이 시점의 auth_success 는 **항상 None** 이다 — precheck 는 인증정보를 받지
+        #   않아 Stage 4 를 수행하지 않고(precheck_bundle.py:546-548, 위 :41-47 이 username/
+        #   password 미전달), auth_success=true 로 덮어쓰는 태스크(:191-206)는 이 태스크보다
+        #   **뒤에** 있다. 따라서 4번째 분기가 항상 잡히고 5번째(else)는 **도달 불가능**했다.
+        #   결과: 펌웨어/OEM/endpoint 문제로 실패한 수집까지 전부 "인증 실패"로 보고됨.
+        #
+        #   또한 `_rf_collect_ok` 는 인증 테스트가 아니라 **전체 수집 결과**다
+        #   (try_one_account.yml:38-40 — `_rf_attempt.status != 'failed'`). 자격증명 불일치 /
+        #   권한 부족 / 5xx / timeout / schema 실패가 모두 이 한 값에 뭉개진다. 즉 이 지점에서
+        #   "인증 실패"를 **확정할 근거가 없다.** 확정할 수 없는 것을 단정하지 않도록 두 분기를
+        #   하나로 합치고, 확인된 사실(네트워크/API 정상)과 가능한 원인을 분리해 안내한다.
+        #   원인 확정(HTTP 401 실증 배선)은 별도 Phase 영역.
         - name: "redfish | abort if collect completely failed"
           ansible.builtin.fail:
             msg: >-
@@ -104,11 +118,12 @@
               Redfish 수집 실패 — BMC TCP/443 포트 닫힘 ({{ _rf_ip }}). 방화벽 규칙, BMC 측 HTTPS 서비스 상태를 확인하세요.
               {%- elif not (d.protocol_supported | default(false)) -%}
               Redfish 수집 실패 — BMC가 Redfish API 미응답 ({{ _rf_ip }}:443). Redfish 서비스 활성화 / BMC 펌웨어 버전 호환성을 확인하세요.
-              {%- elif (d.auth_success | default(none)) is none or not (d.auth_success | bool) -%}
-              Redfish 수집 실패 — 인증 실패 ({{ _rf_ip }}). 네트워크/Redfish API는 정상 (Redfish {{ d.details.redfish_version | default('?') }} / {{ d.details.product | default('Unknown') }}).
-              vault/redfish/{{ _rf_vendor | default('<vendor>') }}.yml 자격증명을 확인하세요. 시도된 계정 수: {{ (_rf_attempts_meta | default({})).attempted_count | default('?') }}.
               {%- else -%}
-              Redfish 수집 실패 — 인증 후 endpoint 수집 단계 실패 ({{ _rf_ip }}). 펌웨어 호환성 / OEM 경로 문제 가능. errors[] 상세 확인.
+              Redfish 수집 실패 — 인증 또는 수집 단계 실패 ({{ _rf_ip }}).
+              네트워크/포트/Redfish API 는 정상 확인됨 (Redfish {{ d.details.redfish_version | default('?') }} / {{ d.details.product | default('Unknown') }}).
+              가능한 원인: (1) 자격증명 불일치 — vault/redfish/{{ _rf_vendor | default('<vendor>') }}.yml 확인 (시도된 계정 수: {{ (_rf_attempts_meta | default({})).attempted_count | default('?') }}),
+              (2) 계정 권한 부족, (3) 펌웨어 호환성 / OEM 경로 문제.
+              정확한 사유는 errors[] 를 확인하세요.
               {%- endif -%}
           when: not (_rf_collect_ok | bool)
 
