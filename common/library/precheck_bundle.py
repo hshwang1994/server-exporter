@@ -81,6 +81,7 @@ import ssl
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 
 
 # =============================================================================
@@ -518,44 +519,150 @@ def probe_redfish(host, port, timeout, verify=False):
     return False, last_err, None
 
 
-# WS-Management(WinRM) endpoint 기본 경로. 이 프로젝트는 custom path 를 설정하지 않는다
-# (os-gather/site.yml 의 add_host 는 ansible_winrm_scheme / ansible_port 만 지정하고
-#  path 는 pywinrm 기본값 /wsman 을 쓴다). 설정이 생기면 여기서 읽도록 바꿀 것.
+# ── WS-Management Identify (WinRM Protocol 판정 정본) ──────────────────────
+#
+# 2026-08-10 (Phase 3-B 보정). 종전 판정은 응답 **헤더** 근거였다:
+#   (1) WWW-Authenticate 의 WSMAN realm, (2) Server=Microsoft-HTTPAPI + 인증 요구.
+# 둘 다 WinRM 의 Protocol Identity 를 직접 증명하지 않는다. 특히 (2) 는 http.sys 위에
+# 올라간 아무 서비스나 통과시킬 수 있어 일반 HTTP 서비스를 Windows 로 오판할 위험이 있다.
+# → **제거**하고, 실제 WS-Management Identify 요청/응답으로만 판정한다.
+#
+# 근거 (lab 부재 — rule 96 R1-A web sources):
+#   - Microsoft Learn "Detecting Whether a Remote Computer Supports WS-Management Protocol"
+#     https://learn.microsoft.com/en-us/windows/win32/winrm/
+#             detecting-whether-a-remote-computer-supports-ws-management-protocol
+#     (확인 2026-08-10) — IdentifyResponse 는 ProtocolVersion / ProductVendor /
+#     ProductVersion 을 반환하며 ProductVendor 예시는 "Microsoft Corporation".
+#   - 비인증 Identify 는 `WSMANIDENTIFY: unauthenticated` 헤더로 보낸다. 이 경우에도
+#     ProtocolVersion 과 ProductVendor 는 반환되고 ProductVersion 만 placeholder 가 된다.
+#   - SOAP envelope / DMTF wsman 네임스페이스는 설치본 pywinrm(winrm/protocol.py) 의
+#     xmlns 맵으로 교차 확인했다.
+# ※ lab 에 Windows WinRM 실장비가 없어 **실측 캡처가 아니라 규격 기반**이다.
 WINRM_ENDPOINT_PATH = "/wsman"
 
+_SOAP_ENVELOPE_NS = "http://www.w3.org/2003/05/soap-envelope"
 
-def _looks_like_wsman(payload):
-    """응답 헤더가 WS-Management(WinRM) endpoint 임을 가리키는가 → (bool, 근거).
+# 네임스페이스 URI 는 문자열 비교라 표기가 정확히 맞아야 한다. 문서/구현마다 http/https 와
+# `.xsd` 접미사 유무가 갈려 관측된 표기를 모두 허용한다 (문자열 포함 검색이 아니라
+# XML 파서가 분리한 네임스페이스와의 **완전 일치** 비교다).
+_WSMID_NAMESPACES = frozenset({
+    "http://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity.xsd",
+    "https://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity.xsd",
+    "http://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity",
+    "https://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity",
+})
 
-    2026-08-10 (Phase 3-B). **상태 코드만으로 판정하지 않는다.** 일반 웹서버나 프록시가
-    5985/5986 에 떠 있어도 200/401/403/405 는 얼마든지 나오므로, 그것만 보면 오판한다.
-    자격증명을 보내지 않고 얻을 수 있는 근거는 응답 헤더뿐이라 아래 둘만 인정한다:
+# ProtocolVersion 값은 DMTF WS-Management 프로토콜 URI 여야 한다.
+_WSMAN_PROTOCOL_PREFIXES = (
+    "http://schemas.dmtf.org/wbem/wsman/1/wsman",
+    "https://schemas.dmtf.org/wbem/wsman/1/wsman",
+)
 
-      (1) WWW-Authenticate 에 `WSMAN` 이 들어감 (`Basic realm="WSMAN"`) — 결정적
-      (2) Server 가 `Microsoft-HTTPAPI` (WinRM 이 올라가는 Windows HTTP Server API)
-          **이면서** WWW-Authenticate 가 존재 — /wsman 이 인증 보호되고 있다는 뜻
+# Windows 판정용 vendor 표기. WS-Management 는 표준이라 비-Windows 장비(BMC 등)도 구현한다.
+# "WS-Man 이 있다" 와 "Windows WinRM 이다" 는 다른 명제이므로 vendor 까지 확인한다.
+_WINRM_VENDOR_MARKER = "microsoft"
 
-    (2) 는 결정적 증거가 아니라 강한 정황이다. 완전한 WS-Man handshake 는 자격증명이
-    있어야 하고 그것은 Credential Probe 영역이라 이 단계에서 하지 않는다.
+_IDENTIFY_REQUEST = (
+    '<?xml version="1.0" encoding="utf-8"?>'
+    '<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"'
+    ' xmlns:wsmid="http://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity.xsd">'
+    "<s:Header/><s:Body><wsmid:Identify/></s:Body></s:Envelope>"
+).encode("utf-8")
+
+# XML 폭탄 방어 — 파싱 전에 본문 크기를 제한한다 (ElementTree 는 엔티티 확장 공격에 취약).
+_IDENTIFY_MAX_BYTES = 65536
+
+
+def http_post_soap(url, body, timeout, verify=False, extra_headers=None):
+    """SOAP POST — Protocol Probe 전용 최소 helper (stdlib urllib).
+
+    기존 `http_get` 은 Redfish / ESXi / OS 가 함께 쓰는 GET 전용 helper 다. Identify 를
+    위해 그것을 POST 겸용으로 변형하면 두 채널 동작에 영향이 갈 수 있어 별도로 둔다.
+    반환: (ok, err, payload) — payload={'status_code', 'body'}. 자격증명은 보내지 않는다.
     """
-    headers = (payload or {}).get("headers") or {}
-    www_auth = (headers.get("www-authenticate") or "")
-    server = (headers.get("server") or "")
-    if "wsman" in www_auth.lower():
-        return True, 'WWW-Authenticate realm=WSMAN'
-    if "microsoft-httpapi" in server.lower() and www_auth:
-        return True, "Server=Microsoft-HTTPAPI + 인증 요구"
-    return False, "WS-Management 헤더 근거 없음 (server={0})".format(
-        (server or "미제공")[:40])
+    ctx = _build_ssl_context(verify)
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Content-Type", "application/soap+xml;charset=UTF-8")
+    for name, value in (extra_headers or {}).items():
+        req.add_header(name, value)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            raw = resp.read(_IDENTIFY_MAX_BYTES)
+            return True, None, {"status_code": resp.getcode(), "body": raw}
+    except urllib.error.HTTPError as e:
+        try:
+            raw = e.read(_IDENTIFY_MAX_BYTES)
+        except Exception:
+            raw = b""
+        return False, "HTTP {0}".format(e.code), {"status_code": e.code, "body": raw}
+    except socket.timeout:
+        return False, "요청 시간 초과 (timeout={0}s)".format(timeout), None
+    except urllib.error.URLError as e:
+        return False, "연결 실패: {0}".format(str(e.reason)[:200]), None
+    except (ssl.SSLError, OSError) as e:
+        return False, str(e)[:200], None
+
+
+def parse_identify_response(raw):
+    """WS-Management IdentifyResponse 검증 → (is_wsman, vendor, 사유).
+
+    문자열 포함 검색이 아니라 **XML 파서가 분리한 네임스페이스**로 판정한다.
+      1) 본문이 정상 XML 인가
+      2) wsmanidentity 네임스페이스의 IdentifyResponse 인가
+      3) ProtocolVersion 이 DMTF WS-Management 프로토콜 URI 인가
+      4) ProductVendor 가 구조적으로 존재하는가 (Windows 판정은 호출부에서)
+    """
+    if not raw:
+        return False, None, "응답 본문 없음"
+    if len(raw) > _IDENTIFY_MAX_BYTES:
+        return False, None, "응답 본문이 상한을 초과"
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as e:
+        return False, None, "XML 파싱 실패: {0}".format(str(e)[:80])
+
+    identify = None
+    for elem in root.iter():
+        if not isinstance(elem.tag, str) or not elem.tag.startswith("{"):
+            continue
+        ns, _sep, local = elem.tag[1:].partition("}")
+        if local == "IdentifyResponse" and ns in _WSMID_NAMESPACES:
+            identify = elem
+            break
+    if identify is None:
+        return False, None, "IdentifyResponse 없음 (WS-Management 네임스페이스 불일치)"
+
+    fields = {}
+    for child in identify:
+        if not isinstance(child.tag, str) or not child.tag.startswith("{"):
+            continue
+        ns, _sep, local = child.tag[1:].partition("}")
+        if ns in _WSMID_NAMESPACES:
+            fields[local] = (child.text or "").strip()
+
+    protocol = fields.get("ProtocolVersion", "")
+    if not protocol.startswith(_WSMAN_PROTOCOL_PREFIXES):
+        return False, None, "ProtocolVersion 이 WS-Management 가 아님: {0}".format(
+            protocol[:60] or "없음")
+
+    vendor = fields.get("ProductVendor")
+    if vendor is None:
+        return False, None, "ProductVendor 없음"
+    return True, vendor, "IdentifyResponse 확인"
 
 
 def probe_os(host, port, timeout):
     """OS 채널 프로토콜 프로브 (SSH identification 또는 WinRM endpoint).
 
-    2026-08-10 (Phase 3-B): WinRM 판정을 **상태 코드 whitelist 에서 헤더 근거로** 교체했다.
-    종전 `status in (200, 401, 403, 405, 503)` 은 "/wsman 에서 아무 HTTP 응답이나 오면
-    WinRM" 과 사실상 같아, 5985/5986 에 떠 있는 일반 웹서버를 Windows 로 오판할 수 있었다.
-    (이 함수는 그동안 운영 경로에 배선돼 있지 않아 실제 오판 사고는 없었다.)
+    2026-08-10 (Phase 3-B + 보정): WinRM 판정 근거가 두 번 바뀌었다.
+      (a) 종전: `status in (200, 401, 403, 405, 503)` — "/wsman 에서 아무 HTTP 응답이나 오면
+          WinRM" 과 사실상 같아 일반 웹서버를 Windows 로 오판할 수 있었다.
+      (b) 1차 보정: 응답 헤더 근거(WSMAN realm / Microsoft-HTTPAPI + 인증요구).
+          여전히 WinRM 의 Protocol Identity 를 직접 증명하지 못한다.
+      (c) **현재**: 비인증 WS-Management Identify 를 보내고 IdentifyResponse 를 XML
+          네임스페이스 기준으로 검증한다. HTTP status / Server / WWW-Authenticate 는
+          **판정에 쓰지 않는다.**
+    (이 함수는 Phase 3-B 이전까지 운영 경로에 배선돼 있지 않아 실제 오판 사고는 없었다.)
 
     TLS 정책은 바꾸지 않는다 — Windows 수집이 `ansible_winrm_server_cert_validation: ignore`
     를 쓰므로 probe 도 verify=False 로 맞춘다. 인증서 유효성 검사와 WinRM 존재 확인은
@@ -566,15 +673,24 @@ def probe_os(host, port, timeout):
     if port in (5985, 5986):
         scheme = "https" if port == 5986 else "http"
         url = "{0}://{1}:{2}{3}".format(scheme, host, port, WINRM_ENDPOINT_PATH)
-        ok, err, payload = http_get(url, timeout, verify=False)
+        # 비인증 Identify — 자격증명을 보내지 않는다 (Credential Probe 와 분리).
+        ok, err, payload = http_post_soap(
+            url, _IDENTIFY_REQUEST, timeout, verify=False,
+            extra_headers={"WSMANIDENTIFY": "unauthenticated"},
+        )
         if payload is None:
             # 응답 자체가 없음 (TLS handshake 실패 / timeout / 연결 오류)
             return False, err or "WinRM endpoint 응답 없음", None
-        matched, why = _looks_like_wsman(payload)
-        if matched:
-            return True, None, {}
-        return False, "WinRM 응답 아님 (HTTP {0}, {1})".format(
-            payload.get("status_code"), why), None
+
+        is_wsman, vendor, why = parse_identify_response(payload.get("body"))
+        if not is_wsman:
+            return False, "WS-Management IdentifyResponse 아님 (HTTP {0}, {1})".format(
+                payload.get("status_code"), why), None
+        if _WINRM_VENDOR_MARKER not in (vendor or "").lower():
+            # WS-Management 는 표준이라 비-Windows 장비도 구현한다. Windows 로 확정하지 않는다.
+            return False, "WS-Management 는 응답하나 Windows WinRM 이 아님 (vendor={0})".format(
+                (vendor or "미제공")[:40]), None
+        return True, None, {}
     return False, "지원하지 않는 OS 포트: {0}".format(port), None
 
 

@@ -53,92 +53,170 @@ def _resp(status, headers=None, ok=False):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# WinRM 인정 — WS-Management 헤더 근거가 있을 때만
+# WinRM — WS-Management Identify 응답으로만 판정
 # ═══════════════════════════════════════════════════════════════════════════
-WSMAN_401 = {
-    "www-authenticate": 'Negotiate, Basic realm="WSMAN"',
-    "server": "Microsoft-HTTPAPI/2.0",
-}
-HTTPAPI_401 = {"www-authenticate": "Negotiate", "server": "Microsoft-HTTPAPI/2.0"}
+WSMID = "http://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity.xsd"
+
+IDENTIFY_OK = (
+    '<?xml version="1.0"?>'
+    '<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"'
+    ' xmlns:wsmid="{ns}"><s:Body><wsmid:IdentifyResponse>'
+    "<wsmid:ProtocolVersion>http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd</wsmid:ProtocolVersion>"
+    "<wsmid:ProductVendor>Microsoft Corporation</wsmid:ProductVendor>"
+    "<wsmid:ProductVersion>OS: 0.0.0 SP: 0.0 Stack:1.0</wsmid:ProductVersion>"
+    "</wsmid:IdentifyResponse></s:Body></s:Envelope>"
+).format(ns=WSMID).encode()
+
+
+def _post_returning(ok, err, payload):
+    def fake(url, body, timeout, verify=False, extra_headers=None):
+        return ok, err, payload
+
+    return fake
+
+
+def _soap(status, body, ok=True):
+    return ok, None if ok else "HTTP {0}".format(status), {
+        "status_code": status, "body": body,
+    }
 
 
 @pytest.mark.parametrize("port,scheme", [(5986, "https"), (5985, "http")])
-def test_winrm_accepted_on_wsman_realm(port, scheme):
-    """`Basic realm="WSMAN"` 은 결정적 근거."""
-    with patch.object(precheck_bundle, "http_get",
-                      _http_get_returning(*_resp(401, WSMAN_401))):
+def test_winrm_accepted_on_identify_response(port, scheme):
+    """정상 비인증 IdentifyResponse → WinRM 인정."""
+    with patch.object(precheck_bundle, "http_post_soap",
+                      _post_returning(*_soap(200, IDENTIFY_OK))):
         ok, err, facts = precheck_bundle.probe_os("192.0.2.30", port, 5.0)
     assert ok is True, err
-    assert facts == {}, "소프트웨어 버전 등 새 필드를 외부 JSON 에 싣지 않는다"
+    assert facts == {}, "raw SOAP / 버전 문자열을 외부 JSON 에 싣지 않는다"
 
 
-def test_winrm_accepted_on_httpapi_with_auth_challenge():
-    """Server=Microsoft-HTTPAPI + 인증 요구 = /wsman 이 보호되고 있다는 강한 정황."""
-    with patch.object(precheck_bundle, "http_get",
-                      _http_get_returning(*_resp(401, HTTPAPI_401))):
-        ok, err, _facts = precheck_bundle.probe_os("192.0.2.30", 5985, 5.0)
+def test_identify_request_shape():
+    """비인증 Identify 요청 형식 — SOAP POST + WSMANIDENTIFY 헤더, 자격증명 없음."""
+    seen = {}
+
+    def fake(url, body, timeout, verify=False, extra_headers=None):
+        seen.update(url=url, body=body, verify=verify, headers=extra_headers or {})
+        return _soap(200, IDENTIFY_OK)
+
+    with patch.object(precheck_bundle, "http_post_soap", fake):
+        precheck_bundle.probe_os("192.0.2.30", 5986, 5.0)
+
+    assert seen["url"] == "https://192.0.2.30:5986/wsman"
+    assert seen["headers"].get("WSMANIDENTIFY") == "unauthenticated"
+    assert b"Identify" in seen["body"] and WSMID.encode() in seen["body"]
+    assert b"Authorization" not in seen["body"]
+    assert seen["verify"] is False, (
+        "Windows 수집이 ansible_winrm_server_cert_validation: ignore 를 쓰므로 "
+        "probe 가 더 엄격하면 정상 서버가 탈락한다"
+    )
+    assert precheck_bundle.WINRM_ENDPOINT_PATH == "/wsman"
+
+
+@pytest.mark.parametrize("ns", [
+    "https://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity.xsd",
+    "http://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity",
+])
+def test_identify_namespace_variants_accepted(ns):
+    """문서/구현마다 http/https 와 .xsd 유무가 갈린다 — 관측된 표기를 모두 허용."""
+    body = IDENTIFY_OK.replace(WSMID.encode(), ns.encode())
+    with patch.object(precheck_bundle, "http_post_soap",
+                      _post_returning(*_soap(200, body))):
+        ok, err, _f = precheck_bundle.probe_os("192.0.2.30", 5985, 5.0)
     assert ok is True, err
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# False Positive 방지 (§17) — 포트 번호만 맞는 서비스를 Windows 로 보지 않는다
+# False Positive 방지 (§9) — Identify 응답이 아니면 전부 거부
 # ═══════════════════════════════════════════════════════════════════════════
-@pytest.mark.parametrize("status,headers,label", [
-    (200, {"server": "nginx/1.24.0"}, "5985 에 뜬 일반 HTTP 서버"),
-    (200, {"server": "Apache/2.4.58"}, "일반 HTTPS 서버"),
-    (404, {"server": "nginx/1.24.0"}, "경로 없음"),
-    (403, {"server": "nginx/1.24.0"}, "권한 거부"),
-    (405, {"server": "Apache/2.4.58", "allow": "GET, HEAD"}, "메서드 미지원"),
-    (503, {"server": "nginx/1.24.0"}, "서비스 불가"),
-    (401, {"www-authenticate": 'Basic realm="Restricted"',
-           "server": "nginx/1.24.0"}, "Basic 인증 붙은 일반 웹서버"),
-    (200, {}, "헤더 없음"),
+_HTML = b"<html><body>It works!</body></html>"
+_OTHER_NS_XML = (
+    '<?xml version="1.0"?><r:IdentifyResponse xmlns:r="http://example.com/other">'
+    "<r:ProtocolVersion>http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd</r:ProtocolVersion>"
+    "<r:ProductVendor>Microsoft Corporation</r:ProductVendor>"
+    "</r:IdentifyResponse>"
+).encode()
+_NO_PROTOCOL = (
+    '<?xml version="1.0"?><wsmid:IdentifyResponse xmlns:wsmid="{ns}">'
+    "<wsmid:ProductVendor>Microsoft Corporation</wsmid:ProductVendor>"
+    "</wsmid:IdentifyResponse>"
+).format(ns=WSMID).encode()
+_BAD_PROTOCOL = (
+    '<?xml version="1.0"?><wsmid:IdentifyResponse xmlns:wsmid="{ns}">'
+    "<wsmid:ProtocolVersion>http://example.com/not-wsman</wsmid:ProtocolVersion>"
+    "<wsmid:ProductVendor>Microsoft Corporation</wsmid:ProductVendor>"
+    "</wsmid:IdentifyResponse>"
+).format(ns=WSMID).encode()
+_TRUNCATED = IDENTIFY_OK[: len(IDENTIFY_OK) // 2]
+
+
+@pytest.mark.parametrize("status,body,label", [
+    (200, _HTML, "단순 HTTP 200 (일반 웹서버)"),
+    (401, b"", "단순 HTTP 401"),
+    (403, b"", "단순 HTTP 403"),
+    (404, _HTML, "/wsman 없음"),
+    (405, b"", "메서드 미지원"),
+    (500, b"", "서버 오류"),
+    (200, b'<?xml version="1.0"?><root><ok/></root>', "일반 XML"),
+    (200, _OTHER_NS_XML, "다른 네임스페이스의 IdentifyResponse"),
+    (200, _NO_PROTOCOL, "ProtocolVersion 없음"),
+    (200, _BAD_PROTOCOL, "ProtocolVersion 이 WS-Management 아님"),
+    (200, _TRUNCATED, "잘린 IdentifyResponse"),
 ])
-def test_generic_web_server_is_not_winrm(status, headers, label):
-    """종전 whitelist(200/401/403/405/503)면 전부 WinRM 으로 통과했을 응답들."""
-    with patch.object(precheck_bundle, "http_get",
-                      _http_get_returning(*_resp(status, headers, ok=(status == 200)))):
-        ok, err, facts = precheck_bundle.probe_os("192.0.2.30", 5985, 5.0)
-    assert ok is False, "{0} 을 WinRM 으로 오판하면 안 된다".format(label)
+def test_non_wsman_response_rejected(status, body, label):
+    ok = status == 200
+    with patch.object(precheck_bundle, "http_post_soap",
+                      _post_returning(*_soap(status, body, ok=ok))):
+        got, err, facts = precheck_bundle.probe_os("192.0.2.30", 5985, 5.0)
+    assert got is False, "{0} 을 WinRM 으로 오판하면 안 된다".format(label)
     assert facts is None
-    assert "WinRM 응답 아님" in err
+    assert "IdentifyResponse 아님" in err
 
 
-def test_winrm_tls_handshake_failure(monkeypatch):
+def test_header_heuristic_is_gone():
+    """헤더만으로 통과시키던 경로가 제거됐는지 — Microsoft-HTTPAPI + 401 도 거부."""
+    assert not hasattr(precheck_bundle, "_looks_like_wsman"), (
+        "헤더 heuristic 함수가 남아 있으면 안 된다"
+    )
+    with patch.object(precheck_bundle, "http_post_soap",
+                      _post_returning(False, "HTTP 401", {"status_code": 401, "body": b""})):
+        ok, _err, _f = precheck_bundle.probe_os("192.0.2.30", 5985, 5.0)
+    assert ok is False, "Microsoft-HTTPAPI / WWW-Authenticate 만으로 WinRM 판정 금지"
+
+
+def test_non_windows_wsman_device_not_windows():
+    """WS-Management 는 표준이라 비-Windows 장비도 구현한다 — Windows 로 확정하지 않는다."""
+    body = IDENTIFY_OK.replace(b"Microsoft Corporation", b"Openwsman Project")
+    with patch.object(precheck_bundle, "http_post_soap",
+                      _post_returning(*_soap(200, body))):
+        ok, err, _f = precheck_bundle.probe_os("192.0.2.30", 5985, 5.0)
+    assert ok is False
+    assert "Windows WinRM 이 아님" in err and "Openwsman" in err
+
+
+def test_xml_bomb_body_is_bounded():
+    """파싱 전에 본문 크기를 제한한다 (ElementTree 엔티티 확장 방어)."""
+    huge = b"<a>" + b"x" * (precheck_bundle._IDENTIFY_MAX_BYTES + 10) + b"</a>"
+    is_wsman, vendor, why = precheck_bundle.parse_identify_response(huge)
+    assert is_wsman is False and vendor is None
+    assert "상한" in why
+
+
+def test_winrm_tls_handshake_failure():
     """5986 TLS handshake 실패 — payload 자체가 없다."""
-    with patch.object(precheck_bundle, "http_get",
-                      _http_get_returning(False, "연결 실패: TLS handshake 오류", None)):
+    with patch.object(precheck_bundle, "http_post_soap",
+                      _post_returning(False, "연결 실패: TLS handshake 오류", None)):
         ok, err, facts = precheck_bundle.probe_os("192.0.2.30", 5986, 5.0)
     assert ok is False and facts is None
     assert "TLS" in err
 
 
 def test_winrm_timeout_real_failure():
-    with patch.object(precheck_bundle, "http_get",
-                      _http_get_returning(False, "요청 시간 초과", None)):
+    with patch.object(precheck_bundle, "http_post_soap",
+                      _post_returning(False, "요청 시간 초과", None)):
         ok, _err, facts = precheck_bundle.probe_os("192.0.2.30", 5986, 5.0)
     assert ok is False
     assert facts is None
-
-
-def test_winrm_uses_default_wsman_path():
-    """프로젝트가 custom WinRM path 를 설정하지 않으므로 기본 /wsman 을 쓴다."""
-    seen = {}
-
-    def fake(url, timeout, verify=False, auth=None):
-        seen["url"] = url
-        seen["verify"] = verify
-        return _resp(401, WSMAN_401)
-
-    with patch.object(precheck_bundle, "http_get", fake):
-        precheck_bundle.probe_os("192.0.2.30", 5986, 5.0)
-
-    assert seen["url"] == "https://192.0.2.30:5986/wsman"
-    assert seen["verify"] is False, (
-        "Windows 수집이 ansible_winrm_server_cert_validation: ignore 를 쓰므로 "
-        "probe 가 더 엄격하면 정상 서버가 탈락한다"
-    )
-    assert precheck_bundle.WINRM_ENDPOINT_PATH == "/wsman"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -239,14 +317,18 @@ def test_unsupported_port():
     assert facts is None
 
 
-def test_probe_never_leaks_credentials(monkeypatch):
-    """probe 는 자격증명을 보내지 않는다."""
+def test_probe_never_leaks_credentials():
+    """probe 는 자격증명을 보내지 않는다 (Credential Probe 와 분리)."""
     seen = {}
 
-    def fake(url, timeout, verify=False, auth=None):
-        seen["auth"] = auth
-        return _resp(401, WSMAN_401)
+    def fake(url, body, timeout, verify=False, extra_headers=None):
+        seen.update(body=body, headers=extra_headers or {})
+        return _soap(200, IDENTIFY_OK)
 
-    with patch.object(precheck_bundle, "http_get", fake):
+    with patch.object(precheck_bundle, "http_post_soap", fake):
         precheck_bundle.probe_os("192.0.2.30", 5985, 5.0)
-    assert seen["auth"] is None, "Protocol Probe 단계에서 자격증명을 보내면 안 된다"
+
+    blob = seen["body"].decode() + " " + " ".join(
+        "{0}:{1}".format(k, v) for k, v in seen["headers"].items())
+    for secret in ("Authorization", "Basic ", "password", "Cookie", "Goodmit0802!"):
+        assert secret not in blob, "Protocol Probe 에 {0} 이 실리면 안 된다".format(secret)
