@@ -54,7 +54,7 @@
         - name: "esxi | abort if precheck failed"
           ansible.builtin.fail:
             msg: >-
-              ESXi 호스트 연결 진단 실패 ({{ _e_ip }}) —
+              ESXi 호스트 연결 진단에 실패했습니다 ({{ _e_ip }}).
               단계={{ (_diagnosis | default({})).failure_stage | default('unknown') }},
               사유={{ (_diagnosis | default({})).failure_reason | default('연결 불가') }}.
               ESXi 호스트 전원, 네트워크, vSphere API(443) 포트를 확인하세요.
@@ -69,8 +69,8 @@
         - name: "esxi | abort if all credentials failed"
           ansible.builtin.fail:
             msg: >-
-              ESXi 인증 후보 {{ _e_accounts | default([]) | length }}개 모두 실패 —
-              vault/esxi.yml accounts 와 ESXi 호스트 lockdown/local user 설정을 확인하세요.
+              ESXi 자격증명 후보 {{ _e_accounts | default([]) | length }}개가 모두 실패했습니다.
+              vault/esxi.yml 의 accounts 와 ESXi 호스트의 lockdown, local user 설정을 확인하세요.
           when:
             - (_e_accounts | default([])) | length > 0
             - not (_e_auth_ok | default(false) | bool)
@@ -86,7 +86,7 @@
         - name: "esxi | abort if facts failed"
           ansible.builtin.fail:
             msg: >-
-              vmware_host_facts 수집 실패 ({{ _e_ip }}) — 인증/네트워크 모두 정상이나 vSphere API 호출 실패.
+              ESXi 정보 수집에 실패했습니다 ({{ _e_ip }}). 인증과 네트워크는 정상이나 vSphere API 호출이 실패했습니다.
               사용 계정: {{ (_e_attempts_meta | default({})).used_label | default('?') }}.
               가능한 원인: (1) 계정의 vSphere 권한 부족 (Read-Only / System.View 필요), (2) ESXi 펌웨어 호환성 (지원: 6.7 / 7.x / 8.x), (3) 라이선스 만료, (4) lockdown 모드.
           when: not (_e_facts_ok | bool)
@@ -228,6 +228,35 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       rescue:
+        # ── Portal Grid 계약 (2026-08-10 사용자 확인) — redfish rescue 와 동일 취지 ──
+        # ESXi 는 redfish 와 달리 인증 단계와 수집 단계가 **분리 관측** 가능하다:
+        #   _e_auth_ok  : try_credentials 의 자격 probe 통과 여부
+        #   _e_facts_ok : vmware_host_facts 본 수집 통과 여부
+        # 따라서 어느 단계에서 멈췄는지 확정할 수 있어 failure_stage='auth' 를 쓸 수 있다.
+        # 단 **원인**(자격 오류 / 권한 부족 / lockdown / 라이선스)은 확정 불가라
+        # (try_one_credential.yml:35 의 판정식이 이들을 구분하지 못함) auth_success 는
+        # false 로 만들지 않고 null 을 유지한다. 반대로 _e_auth_ok=true 는 실제로 인증이
+        # 통과한 것을 관측한 값이므로 true 로 기록한다.
+        - name: "esxi | rescue | Portal 표시용 failure_reason 보장"
+          ansible.builtin.set_fact:
+            _diagnosis: >-
+              {{ {'reachable': none, 'port_open': none, 'protocol_supported': none,
+                  'auth_success': none, 'failure_stage': none, 'failure_reason': none,
+                  'details': {}}
+                 | combine((_diagnosis | default({}, true))
+                           if ((_diagnosis | default({}, true)) is mapping) else {})
+                 | combine({'failure_reason':
+                     ('ESXi 호스트에 접속하지 못했습니다. 자격증명, 계정 권한, lockdown 설정을 확인하세요.'
+                      if not (_e_auth_ok | default(false) | bool)
+                      else ('ESXi 정보 수집에 실패했습니다. 계정 권한과 호스트 상태를 확인하세요.'
+                            if not (_e_facts_ok | default(false) | bool)
+                            else 'ESXi 정보를 수집하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.')),
+                   'failure_stage':
+                     ('auth' if not (_e_auth_ok | default(false) | bool) else none),
+                   'auth_success':
+                     (true if (_e_auth_ok | default(false) | bool) else none)}) }}
+          when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
+
         - name: "esxi | rescue | set failed vars"
           ansible.builtin.set_fact:
             _out_target_type:       "esxi"
@@ -263,9 +292,9 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_reason': '_output 미생성 — block/rescue 모두 실패', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 — block/rescue 모두 실패'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message':'_output 미생성 — block/rescue 모두 실패'}],
+                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],
                        'data': {}
                      })) | to_json }}"

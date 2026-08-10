@@ -154,14 +154,19 @@
         _out_vendor:            null
         _fail_sec_supported:    "{{ ['system','cpu','memory','storage','network','users'] }}"
         _fail_error_section:    "os_detect"
-        _fail_error_message:    "SSH(22)/WinRM(5985/5986) 모두 응답 없음 — 대상 서버의 방화벽, SSH/WinRM 서비스 상태, 네트워크 연결을 확인하세요."
+        _fail_error_message:    "SSH(22)/WinRM(5985, 5986) 포트가 모두 응답하지 않습니다. 대상 서버의 방화벽, SSH/WinRM 서비스 상태, 네트워크 연결을 확인하세요."
         _diagnosis:
           reachable:          false
           port_open:          false
           protocol_supported: false
-          auth_success:       false
+          # 2026-08-10: 종전 false. 이 경로는 PLAY 1 의 wait_for 3연타가 전부 실패한 것이고
+          # **인증을 시도하는 코드가 아예 실행되지 않는다** — 인증 거부를 관측한 사실이 없으므로
+          # false 는 거짓 정보다. "확인하지 못함"을 뜻하는 null 로 정정.
+          auth_success:       null
+          # failure_stage 는 원인이 아니라 **실행이 멈춘 단계**다 (사용자 확정 2026-08-10).
+          # 이 경로에서 멈춘 곳은 포트 감지 단계이므로 "port" 를 유지한다.
           failure_stage:      "port"
-          failure_reason:     "SSH(22)/WinRM(5985/5986) 모두 응답 없음"
+          failure_reason:     "SSH(22)/WinRM(5985, 5986) 모두 응답이 없습니다. 서버 전원, 네트워크, 서비스 상태를 확인하세요."
           details:
             channel: "os"
             # 2026-08-10 (B-4): 실제 검사 순서는 5986 → 5985 → 22 (PLAY 1, :40-69).
@@ -221,8 +226,8 @@
         - name: "linux | abort if all credentials failed"
           ansible.builtin.fail:
             msg: >-
-              Linux SSH 인증 후보 {{ _os_accounts | default([]) | length }}개 모두 실패 —
-              vault/linux.yml accounts 와 대상 서버 sshd 설정을 확인하세요.
+              Linux SSH 자격증명 후보 {{ _os_accounts | default([]) | length }}개가 모두 실패했습니다.
+              vault/linux.yml 의 accounts 와 대상 서버의 sshd 설정을 확인하세요.
           when:
             - (_os_accounts | default([])) | length > 0
             - not (_os_auth_ok | default(false) | bool)
@@ -343,6 +348,40 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       rescue:
+        # ── Portal Grid 계약 (2026-08-10 사용자 확인) ────────────────────
+        # Portal 은 실패 Grid 에 **diagnosis.failure_reason 만** 표시한다. 그런데 OS 채널은
+        # _diagnosis 를 **성공 경로에서만** set 하고 있어(위 "build diagnosis (success path)"),
+        # 자격 실패 / 수집 예외로 rescue 에 들어오면 build_failed_output.yml:79 의
+        # `_diagnosis | default(none)` 이 발동해 **diagnosis 전체가 null** 이 됐다.
+        # → Portal 은 빈 칸을 보여주고, 소비자가 diagnosis.* 를 참조하면 null 역참조.
+        #
+        # 값 근거 (확정 가능한 것만 적는다):
+        #   reachable / port_open = true  — PLAY 1 wait_for 가 TCP 연결 성공을 실제 관측(:40-69)
+        #   protocol_supported            — 자격 probe 가 통과했으면 SSH 로 명령이 실제 실행된
+        #                                   것이므로 true, 아니면 "관측 못 함"이라 false
+        #   auth_success                  — 통과 시 true. **실패 시 false 가 아니라 null**:
+        #                                   try_one_credential.yml:59-69 의 판정식은 잘못된 자격 /
+        #                                   연결 끊김 / timeout / 제한 쉘(nologin, rc≠0) 을 구분하지
+        #                                   못한다 → 인증 거부를 관측했다고 말할 수 없다
+        #   failure_stage                 — 실행이 멈춘 단계. 자격 probe 단계면 'auth'.
+        #                                   그 뒤(수집) 단계는 현재 enum 에 표현값이 없어 null 유지
+        - name: "linux | rescue | Portal 표시용 diagnosis 보장"
+          ansible.builtin.set_fact:
+            _diagnosis: >-
+              {%- set ok = _os_auth_ok | default(false) | bool -%}
+              {{ {'reachable': true, 'port_open': true,
+                  'protocol_supported': ok,
+                  'auth_success': (true if ok else none),
+                  'failure_stage': (none if ok else 'auth'),
+                  'failure_reason': ('Linux 정보를 수집하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.' if ok
+                                     else 'Linux 서버에 SSH로 접속하지 못했습니다. 자격증명, SSH 설정, 네트워크 상태를 확인하세요.'),
+                  'details': {'channel': 'os', 'detected_os': 'linux',
+                              'selected_port': 22, 'checked_ports': [5986, 5985, 22],
+                              'auth': (_os_attempts_meta | default({}))}
+                    | combine(((_diagnosis | default({}, true)).details)
+                              if (((_diagnosis | default({}, true)).details) is mapping) else {})} }}
+          when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
+
         - name: "linux | rescue | build failed output"
           ansible.builtin.set_fact:
             _out_target_type:       "os"
@@ -375,10 +414,10 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_reason': '_output 미생성 — block/rescue 모두 실패', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 — block/rescue 모두 실패'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message':'_output 미생성 — block/rescue 모두 실패'}],
+                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],
                        'data': {}
                      })) | to_json }}"
 
@@ -413,8 +452,8 @@
         - name: "windows | abort if all credentials failed"
           ansible.builtin.fail:
             msg: >-
-              Windows WinRM 인증 후보 {{ _os_accounts | default([]) | length }}개 모두 실패 —
-              vault/windows.yml accounts 와 대상 서버 WinRM 설정을 확인하세요.
+              Windows WinRM 자격증명 후보 {{ _os_accounts | default([]) | length }}개가 모두 실패했습니다.
+              vault/windows.yml 의 accounts 와 대상 서버의 WinRM 설정을 확인하세요.
           when:
             - (_os_accounts | default([])) | length > 0
             - not (_os_auth_ok | default(false) | bool)
@@ -539,6 +578,27 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       rescue:
+        # Portal Grid 계약 — linux rescue 와 동일 취지 / 동일 근거 (위 주석 참조).
+        # 차이: 접속 포트는 PLAY 1 이 확정한 ansible_port(5986 우선), 검사 이력도 그에 따름.
+        - name: "windows | rescue | Portal 표시용 diagnosis 보장"
+          ansible.builtin.set_fact:
+            _diagnosis: >-
+              {%- set ok = _os_auth_ok | default(false) | bool -%}
+              {%- set port = ansible_port | default(5986) | int -%}
+              {{ {'reachable': true, 'port_open': true,
+                  'protocol_supported': ok,
+                  'auth_success': (true if ok else none),
+                  'failure_stage': (none if ok else 'auth'),
+                  'failure_reason': ('Windows 정보를 수집하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.' if ok
+                                     else 'Windows 서버에 WinRM으로 접속하지 못했습니다. 자격증명과 WinRM 설정을 확인하세요.'),
+                  'details': {'channel': 'os', 'detected_os': 'windows',
+                              'selected_port': port,
+                              'checked_ports': ([5986] if port == 5986 else [5986, 5985]),
+                              'auth': (_os_attempts_meta | default({}))}
+                    | combine(((_diagnosis | default({}, true)).details)
+                              if (((_diagnosis | default({}, true)).details) is mapping) else {})} }}
+          when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
+
         - name: "windows | rescue | set failed vars"
           ansible.builtin.set_fact:
             _out_target_type:       "os"
@@ -571,9 +631,9 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_reason': '_output 미생성 — block/rescue 모두 실패', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 — block/rescue 모두 실패'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message':'_output 미생성 — block/rescue 모두 실패'}],
+                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],
                        'data': {}
                      })) | to_json }}"

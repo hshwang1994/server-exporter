@@ -99,10 +99,24 @@ CHANNEL_DEFAULT_PORTS = {
 }
 
 # 채널별 프로토콜 진단 실패 메시지
+#
+# 이 값들은 그대로 diagnosis.failure_reason 이 되고, Portal 실패 Grid 의 "실패 사유" 칸에
+# **그대로 노출된다** (2026-08-10 사용자 확인 — Portal 은 failure_reason 만 사용).
+# 따라서 (a) 짧은 사용자용 요약이어야 하고 (b) 관측하지 못한 원인을 단정하면 안 된다.
+#
+# 2026-08-10 정정: redfish 값이 "이 장비는 Redfish를 지원하지 않습니다." 였는데 이는
+#   **관측 범위를 넘는 단정**이다. 이 분기는 ServiceRoot 응답을 확인하지 못했을 때 잡히며,
+#   그 원인은 미지원 외에도 TLS 협상 실패 / 5xx / 타임아웃 / 서비스 비활성일 수 있다
+#   (probe_redfish 는 401·403·405·406·503 은 "살아있음"으로 통과시키므로 여기 도달했다는 것은
+#    그 외의 실패라는 뜻일 뿐이다). 관측 사실만 남기고 확인 방향을 안내하도록 교체.
+#
+# 문체 원칙 (2026-08-10 사용자 지시): Portal Grid 를 읽는 사람은 일반 사용자다.
+#   긴 대시(—) / 가운데점(·) 같은 특수 구분자를 쓰지 말고 완전한 한국어 문장으로 쓴다.
+#   "관측한 사실" 한 문장 + "확인할 것" 한 문장 구성을 기본으로 한다.
 CHANNEL_PROTOCOL_MESSAGES = {
-    "redfish": "이 장비는 Redfish를 지원하지 않습니다.",
-    "os": "SSH 또는 WinRM 서비스가 응답하지 않습니다.",
-    "esxi": "vSphere API endpoint가 응답하지 않습니다.",
+    "redfish": "BMC가 Redfish API 응답을 반환하지 않았습니다. Redfish 서비스 활성화 여부와 펌웨어 호환성을 확인하세요.",
+    "os": "SSH 또는 WinRM 서비스가 응답하지 않습니다. 해당 서비스의 기동 상태를 확인하세요.",
+    "esxi": "vSphere API가 응답하지 않습니다. ESXi 호스트의 서비스 상태를 확인하세요.",
 }
 
 
@@ -441,10 +455,21 @@ def _try_redfish_auth(host, open_port, username, password, timeout_auth, verify_
         url, timeout_auth, verify=verify_ssl, auth=(username, password)
     )
     if not ok:
-        result["auth_success"] = False
+        # 2026-08-10: 종전엔 실패 원인과 무관하게 auth_success=False 를 넣었다. 그러나 여기서
+        # ok=False 가 되는 원인에는 timeout / 5xx / TLS 오류도 포함된다 — 인증이 거부됐다는
+        # 관측 근거가 없는 상황까지 "인증 실패"로 확정하던 셈이다.
+        #   → BMC 가 **명시적으로 거부한 401** 을 관측했을 때만 False.
+        #   → 403 은 인증 후 권한/IP 화이트리스트 문제일 수 있어 인증 거부로 단정하지 않는다.
+        #   → 그 외에는 "확인하지 못함"인 None 유지.
+        # failure_stage 는 원인이 아니라 **실행이 멈춘 단계**이므로 어느 쪽이든 'auth'.
+        status = (payload or {}).get("status_code")
+        rejected = status == 401
+        result["auth_success"] = False if rejected else None
         result["failure_stage"] = "auth"
         result["failure_reason"] = (
-            "BMC 인증 실패: 사용자명 또는 비밀번호를 확인하세요."
+            "BMC가 자격증명을 거부했습니다(HTTP 401). 계정과 비밀번호를 확인하세요."
+            if rejected else
+            "BMC 인증 단계에서 응답을 확인하지 못했습니다. 자격증명과 BMC 상태를 확인하세요."
         )
         result["detail"] = err
         return False
@@ -490,7 +515,7 @@ def run_module():
         result["failure_stage"] = "reachable"
         result["failure_reason"] = (
             "대상 호스트에 연결할 수 없습니다. "
-            "네트워크 도달 불가 또는 호스트가 꺼져 있습니다."
+            "서버 전원 상태와 네트워크 경로를 확인하세요."
         )
         result["detail"] = "; ".join(port_errors)
         module.exit_json(**result)
@@ -498,8 +523,8 @@ def run_module():
         result["reachable"] = True
         result["failure_stage"] = "port"
         result["failure_reason"] = (
-            "호스트는 응답하지만 서비스 포트가 닫혀 있습니다. "
-            "방화벽 또는 서비스 미기동 가능성."
+            "호스트는 응답하지만 서비스 포트가 열려 있지 않습니다. "
+            "방화벽 설정과 서비스 기동 상태를 확인하세요."
         )
         result["detail"] = "; ".join(port_errors)
         module.exit_json(**result)
