@@ -117,7 +117,7 @@
               {%- elif not (d.port_open | default(false)) -%}
               Redfish 정보 수집에 실패했습니다. BMC({{ _rf_ip }})의 443 포트가 열려 있지 않습니다. 방화벽 규칙과 BMC HTTPS 서비스 상태를 확인하세요.
               {%- elif not (d.protocol_supported | default(false)) -%}
-              Redfish 정보 수집에 실패했습니다. BMC({{ _rf_ip }}:443)가 Redfish API 응답을 반환하지 않았습니다. Redfish 서비스 활성화 여부와 BMC 펌웨어 호환성을 확인하세요.
+              Redfish 정보 수집에 실패했습니다. BMC({{ _rf_ip }}:443)에서 예상한 Redfish API 응답을 확인하지 못했습니다. Redfish 서비스 활성화 여부와 BMC 펌웨어 호환성을 확인하세요.
               {%- else -%}
               Redfish 정보 수집에 실패했습니다 ({{ _rf_ip }}).
               네트워크/포트/Redfish API 는 정상 확인됨 (Redfish {{ d.details.redfish_version | default('?') }} / {{ d.details.product | default('Unknown') }}).
