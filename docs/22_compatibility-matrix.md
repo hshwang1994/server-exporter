@@ -89,6 +89,8 @@ baseline 을 가진 lab tested 벤더 4개 (Dell iDRAC9 / HPE iLO6 / Lenovo XCC 
 | Supermicro X9 (3 GAP) | OEM 미지원 generation | adapter capabilities 추가 후보 |
 | 신규 4 vendor (Huawei / Inspur / Fujitsu / Quanta) | lab 부재 + vault 미설정 | vendor 공식 docs / DMTF 스펙 기반으로 작성 |
 | HPE Superdome Flex | lab 부재 + sub-line | priority=101 어댑터 + web sources 14건 |
+| **Huawei iBMC (2026-08-10 정정)** | **어댑터가 선택조차 되지 않던 상태였음** — `firmware_patterns` 가 정규식 자리에 glob(`iBMC*3.*`)으로 작성돼 실제 `FirmwareVersion`(`3.01` / `iBMC 3.01` 등)이 전부 미매치 → `-9999` 실격 → `redfish_generic`(-400) 선택 | 정규식 정정 후 `redfish_huawei_ibmc`(score 80570) 선택 확인. **위 행의 `OK★` 는 여전히 web sources 기반 추정이며, 실장비 확보 시 재검증 대상** (회귀: `tests/unit/test_adapter_huawei_firmware_regex.py`) |
+| **Cisco OEM (2026-08-10 실측)** | `tasks/vendors/cisco/{collect,normalize}_oem.yml` 이 **어느 어댑터에서도 참조되지 않아 미실행** (cisco 3 어댑터 모두 `oem_tasks` 키 부재) | 연결 시 `data.bmc.oem_cisco` 신설 → envelope 변경 + `cisco_baseline` 갱신 동반 → **사용자 승인 사항**(rule 92 R1-B / rule 13 R4). 위 Cisco 행의 값은 표준 수집 기준이라 영향 없음 |
 
 ## 매트릭스를 갱신해야 하는 시점
 

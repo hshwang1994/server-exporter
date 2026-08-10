@@ -15,10 +15,13 @@
 #   _data_fragment, _sections_supported_fragment, _sections_collected_fragment,
 #   _sections_failed_fragment, _errors_fragment
 
+# 2026-08-10 fix: 누적 변수 이름이 `_collected_data` 로 적혀 있었으나 실제 정본은
+#   `_merged_data` (init_fragments.yml:40). 미정의 변수라 when 조건이 항상 거짓 →
+#   본 debug 가 한 번도 출력되지 않았음. 변수명 정정 + None 안전 가드(default(x, true)).
 - name: "redfish | cisco | normalize_oem — debug summary"
   ansible.builtin.debug:
     msg: >-
       Cisco OEM normalize: {{ _rf_vendor | default('unknown') }} —
-      oem_cisco keys: {{ ((_collected_data | default({})).bmc | default({})).oem_cisco | default({}) | dict2items | map(attribute='key') | list }}
+      oem_cisco keys: {{ ((_merged_data | default({})).bmc | default({}, true)).oem_cisco | default({}, true) | dict2items | map(attribute='key') | list }}
   no_log: false
-  when: (_collected_data | default({})).bmc is defined
+  when: (_merged_data | default({})).bmc is mapping

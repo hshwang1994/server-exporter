@@ -84,6 +84,14 @@ import urllib.request
 # =============================================================================
 # 채널별 기본 포트 정의
 # =============================================================================
+# 2026-08-10 실측 주의 — **"os" 채널은 production playbook 에서 호출되지 않는다.**
+#   본 모듈을 include 하는 곳은 common/tasks/precheck/run_precheck.yml 이고, 이를
+#   호출하는 곳은 redfish-gather/site.yml:46 과 esxi-gather/site.yml:51 둘뿐이다.
+#   os-gather 는 precheck_bundle 대신 site.yml PLAY 1 에서 ansible.builtin.wait_for
+#   3연타(5986 → 5985 → 22)로 OS 판별까지 함께 처리한다(os-gather/site.yml:40-81).
+#   → 아래 "os" 항목과 probe_os() / ssh_banner_check() 는 **dead code 가 아니라
+#     라이브러리 기능**이며 tests/unit/test_precheck_probe_os.py 가 회귀를 지킨다.
+#     os-gather 를 precheck 로 통합할 경우의 진입점으로 유지한다(삭제 금지).
 CHANNEL_DEFAULT_PORTS = {
     "redfish": [443],
     "os": [5986, 5985, 22],
@@ -522,6 +530,19 @@ def run_module():
         result["probe_facts"].update(facts)
 
     # Stage 4: auth_success (인증 정보 있을 때만)
+    #
+    # 2026-08-10 실측 주의 — **production 경로에서 Stage 4 는 항상 skip 된다.**
+    #   redfish-gather/site.yml:41-47 과 esxi-gather/site.yml:46-52 는 precheck 에
+    #   username/password 를 넘기지 않으므로 아래 if 가 성립하지 않고 auth_success 는
+    #   None 으로 남는다. 이는 **버그가 아니라 설계**다:
+    #     - redfish 는 Vault 2단계 로딩 구조라 precheck 시점에 아직 벤더가 확정되지
+    #       않았고 → 어느 vault 를 열지 모르므로 자격증명 자체가 존재하지 않는다
+    #       (detect_vendor.yml 이 precheck 다음에 실행된다).
+    #     - 여기서 굳이 인증을 시도하면 본 수집 전에 실패 시도가 1회 더 쌓여
+    #       BMC 계정 잠금 위험이 커진다(try_one_account.yml:77-88 의 5초 backoff 참조).
+    #   실제 인증 성공 여부는 본 수집 성공 후 site.yml 이 auth_success: true 로
+    #   덮어쓴다(redfish-gather/site.yml:191-193, esxi-gather/site.yml:200-210).
+    #   → 아래 분기는 단위 테스트 / 수동 진단(직접 invoke) 용 경로다. 유지한다.
     username = module.params.get("username")
     password = module.params.get("password")
     if username and password and channel == "redfish":

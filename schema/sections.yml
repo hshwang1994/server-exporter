@@ -2,7 +2,11 @@
 # ==============================================================================
 # sections.yml — 수집 섹션 정의 (server-exporter)
 # ==============================================================================
-# 이 파일은 server-exporter 가 수집할 수 있는 "섹션" 10종을 정의합니다.
+# 이 파일은 server-exporter 가 수집할 수 있는 "섹션" 11종을 정의합니다.
+#   system / hardware / bmc / cpu / memory / storage / network / firmware / users / power / thermal
+#   (2026-08-10 정정: 본 주석이 "10종" 으로 stale 이었다. thermal 이 cycle 2026-06-14 에
+#    추가되면서 11종이 됐으나 헤더 주석만 갱신 누락. common/vars/supported_sections.yml 의
+#    all_sections 및 common/tasks/normalize/build_sections.yml 의 대상 목록도 11종으로 일치.)
 # 출력 JSON 의 `sections` 와 `data` 필드는 본 정의를 기반으로 만들어집니다.
 #
 # 각 섹션 항목이 담는 정보:

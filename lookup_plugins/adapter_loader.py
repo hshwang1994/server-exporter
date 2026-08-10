@@ -172,7 +172,21 @@ def _match_and_score(adapters, facts, aliases, adapter_matches, adapter_score,
 
 
 def _pick_generic_fallback(adapters):
-    """generic 플래그 적용된 adapter 반환 (없으면 None)."""
+    """generic 플래그 적용된 adapter 반환 (없으면 None).
+
+    2026-08-10 실측 주의 — **현 구성에서 이 함수는 도달하지 않는다.**
+      호출 조건은 `if not matched:` 하나뿐인데(아래 run() 참조), 3채널 모두
+      generic adapter 를 갖고 있고 그것들이 항상 matched 에 들어가기 때문이다:
+        - redfish_generic.yml : `match: {}` → adapter_matches 가 즉시 True
+          (module_utils/adapter_common.py:153-154)
+        - linux_generic / windows_generic / esxi_generic : os_type / match:{} 로 통과
+      generic 은 specificity -40 (adapter_common.py:243-244) 이라 점수 -400 → 정렬
+      최하위에 머물다가, 다른 후보가 전부 -9999 로 실격되면 자연스럽게 1위가 된다.
+
+    즉 **실제 degrade 경로는 이 함수가 아니라 "점수 정렬"이다.** 이 함수는 누군가
+    generic adapter 파일을 지웠을 때만 의미가 있는 방어망이므로 남겨 둔다(삭제 금지).
+    문서/설명 자료에서 이 함수를 주 degrade 경로로 서술하면 틀린다.
+    """
     for adapter in adapters:
         if adapter.get("generic", False):
             display.v(

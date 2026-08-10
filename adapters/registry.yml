@@ -4,6 +4,13 @@
 # ==============================================================================
 # 채널별 adapter 디렉토리와 기본 adapter를 정의합니다.
 #
+# ※ 중요 (2026-08-10 실측 명시): **본 파일을 읽는 실행 코드는 없다.**
+#    adapter_loader 는 os.path.join(repo_root, "adapters", channel) 로 디렉터리를 직접
+#    조립해 glob 한다 (lookup_plugins/adapter_loader.py:106, :203). 따라서
+#      - 새 adapter 를 여기 "등록"할 필요 없음 — 파일을 디렉터리에 놓으면 즉시 인식된다.
+#      - 여기서 adapter 를 빼도 로더 동작은 바뀌지 않는다.
+#    본 파일은 **사람이 읽는 채널 인덱스**(문서용)다. 코드 계약이 아니다.
+#
 # adapter 파일은 adapters/<channel>/ 디렉토리에 YAML로 추가하면
 # adapter_loader (lookup_plugins/adapter_loader.py)가 자동으로 인식합니다.
 # default_adapter 값은 해당 디렉토리의 YAML 파일명(확장자 제외)과 일치해야 합니다.
