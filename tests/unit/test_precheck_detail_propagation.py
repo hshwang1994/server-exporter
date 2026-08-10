@@ -310,8 +310,9 @@ def test_os_port_probe_order_is_defined_by_common_precheck():
         "PLAY 1 의 wait_for 3연타는 공통 precheck 로 대체됐다"
     )
     assert "_precheck_channel:         \"os\"" in text
-    # 프로토콜 검증은 이번 범위가 아니다 — 포트가 열렸다고 SSH/WinRM 을 확인했다고 하면 안 된다
-    assert "_precheck_probe_protocol:  false" in text
+    # Phase 3-B: 포트가 열렸다고 OS 를 확정하지 않는다. 각 후보에서 실제 프로토콜까지 확인한다.
+    assert "_precheck_probe_protocol:  true" in text
+    assert "_precheck_timeout_protocol" in text, "프로토콜 probe 에 bounded timeout 필요"
 
 
 def test_check_ports_reports_actually_probed_ports():

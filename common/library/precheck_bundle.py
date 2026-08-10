@@ -292,10 +292,36 @@ def _basic_auth_header(auth):
     return "Basic " + credentials
 
 
+def _collect_headers(msg):
+    """urllib 응답 헤더 → {소문자 이름: 값}. 중복 헤더는 ', ' 로 합친다.
+
+    2026-08-10 (Phase 3-B): WinRM 판정 근거로 헤더가 필요하다. Windows 는
+    `WWW-Authenticate` 를 여러 줄로 보내므로 get_all 로 모아 합친다.
+    """
+    out = {}
+    if msg is None:
+        return out
+    try:
+        names = {k.lower() for k in msg.keys()}
+    except Exception:
+        return out
+    for name in names:
+        try:
+            values = msg.get_all(name) or []
+        except Exception:
+            values = []
+        out[name] = ", ".join(str(v) for v in values)
+    return out
+
+
 def http_get(url, timeout, verify=False, auth=None):
     """HTTP GET — urllib stdlib 단일 경로 (외부 의존 없음).
 
-    반환: (ok, err, payload) — payload={'status_code': int, 'json': dict|None}
+    반환: (ok, err, payload)
+      payload = {'status_code': int, 'json': dict|None, 'headers': {소문자: 값}}
+
+    2026-08-10 (Phase 3-B): payload 에 'headers' 를 **추가**했다. 기존 호출자는
+    'status_code' / 'json' 만 읽으므로 동작 변화 없다 (redfish / esxi 회귀 없음).
 
     cycle 2026-04-30: HTTP 406 Not Acceptable 호환 — 일부 BMC 펌웨어
     (HPE iLO 펌웨어 ServiceRoot RedfishVersion 1.17.0 등)이 Accept 헤더
@@ -315,15 +341,19 @@ def http_get(url, timeout, verify=False, auth=None):
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             status = resp.getcode()
+            headers = _collect_headers(getattr(resp, "headers", None))
         try:
             json_body = json.loads(body)
         except (ValueError, json.JSONDecodeError):
             json_body = None
-        return True, None, {"status_code": status, "json": json_body}
+        return True, None, {
+            "status_code": status, "json": json_body, "headers": headers,
+        }
     except urllib.error.HTTPError as e:
         return False, "HTTP {0}".format(e.code), {
             "status_code": e.code,
             "json": None,
+            "headers": _collect_headers(getattr(e, "headers", None)),
         }
     except socket.timeout:
         return False, "요청 시간 초과 (timeout={0}s)".format(timeout), None
@@ -334,8 +364,57 @@ def http_get(url, timeout, verify=False, auth=None):
         return False, str(e)[:200], None
 
 
+# SSH Protocol Version Exchange (RFC 4253 §4.2)
+#   - 서버는 "SSH-protoversion-softwareversion" 한 줄을 CR LF 로 끝낸다.
+#   - 그 **앞에** 다른 줄(법적 고지 등)을 보낼 수 있고, 클라이언트는 그것을 건너뛰어야 한다.
+#   - protoversion 은 2.0 (또는 하위 호환 표기 1.99) 만 유효로 본다.
+# 무제한으로 읽지 않도록 줄 수와 바이트 수를 모두 제한한다.
+_SSH_ID_MAX_LINES = 8
+_SSH_ID_MAX_BYTES = 2048
+_SSH_ID_PREFIXES = ("SSH-2.0-", "SSH-1.99-")
+
+
+def _read_ssh_identification(sock, deadline):
+    """SSH identification 줄을 찾아 반환 — 못 찾으면 None.
+
+    RFC 4253 §4.2 가 허용하는 **선행 추가 줄**을 건너뛴다. 읽는 양은
+    _SSH_ID_MAX_LINES / _SSH_ID_MAX_BYTES 로 제한한다 (무제한 수신 금지).
+    """
+    buf = b""
+    lines = 0
+    while len(buf) < _SSH_ID_MAX_BYTES and lines < _SSH_ID_MAX_LINES:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        sock.settimeout(remaining)
+        chunk = sock.recv(256)
+        if not chunk:
+            break
+        buf += chunk
+        while b"\n" in buf:
+            raw, buf = buf.split(b"\n", 1)
+            lines += 1
+            line = raw.decode("utf-8", errors="replace").strip()
+            if line.startswith(_SSH_ID_PREFIXES):
+                return line
+            if line.startswith("SSH-"):
+                # SSH 는 맞으나 우리가 아는 protoversion 이 아니다 — 그대로 알린다
+                return line
+            if lines >= _SSH_ID_MAX_LINES:
+                return None
+    return None
+
+
 def ssh_banner_check(host, port, timeout):
-    """SSH 배너 확인으로 SSH 서비스 동작 여부 검증 (IPv4/IPv6 듀얼 스택)."""
+    """SSH Protocol Identification 확인 (IPv4/IPv6 듀얼 스택).
+
+    2026-08-10 (Phase 3-B): 종전에는 첫 recv(256) 이 "SSH-" 로 시작하는지만 봤다.
+    RFC 4253 §4.2 는 identification 앞에 다른 줄을 보내는 것을 허용하므로 그런 서버를
+    놓쳤고, "SSH-" 접두사만 맞으면 통과시켜 protoversion 을 검증하지 않았다.
+    이제 선행 줄을 건너뛰고 SSH-2.0 / SSH-1.99 만 성공으로 인정한다.
+
+    자격증명을 보내지 않고 Key Exchange 도 수행하지 않는다 (Protocol 확인까지만).
+    """
     last_err = "주소 해석 실패"
     try:
         addr_infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
@@ -347,17 +426,22 @@ def ssh_banner_check(host, port, timeout):
         # (tcp_check 와 동일). 잡아서 다음 주소군(IPv4)으로 진행.
         sock = None
         try:
+            deadline = time.monotonic() + timeout
             sock = socket.socket(family, socktype, proto)
             sock.settimeout(timeout)
             sock.connect(sockaddr)
-            banner = sock.recv(256).decode("utf-8", errors="replace").strip()
-            if banner.startswith("SSH-"):
-                return True, None, {"ssh_banner": banner}
-            # Round 15: 빈/비-SSH 배너 → 즉시 return 대신 다음 주소군(dual-stack) 시도.
-            # 기존엔 IPv6 가 먼저 해석되어 빈 배너 반환 시 IPv4 SSH 를 시도조차 못 함 (tcp_check 패턴 일관).
-            last_err = "SSH 배너가 아닙니다: {0}".format(banner[:50])
+            ident = _read_ssh_identification(sock, deadline)
+            if ident is None:
+                last_err = "SSH identification 미수신"
+            elif ident.startswith(_SSH_ID_PREFIXES):
+                # facts 에 raw identification 을 싣지 않는다 — 소프트웨어 버전 문자열을
+                # 외부 JSON 에 새 필드로 노출하지 않기 위함. 실패 시 근거는 err 로만 전달.
+                return True, None, {}
+            else:
+                last_err = "지원하지 않는 SSH protoversion: {0}".format(ident[:40])
+            # Round 15: 비-SSH 응답 → 즉시 return 대신 다음 주소군(dual-stack) 시도.
         except Exception as e:
-            last_err = str(e)
+            last_err = str(e)[:120]
         finally:
             if sock is not None:
                 try:
@@ -434,35 +518,64 @@ def probe_redfish(host, port, timeout, verify=False):
     return False, last_err, None
 
 
+# WS-Management(WinRM) endpoint 기본 경로. 이 프로젝트는 custom path 를 설정하지 않는다
+# (os-gather/site.yml 의 add_host 는 ansible_winrm_scheme / ansible_port 만 지정하고
+#  path 는 pywinrm 기본값 /wsman 을 쓴다). 설정이 생기면 여기서 읽도록 바꿀 것.
+WINRM_ENDPOINT_PATH = "/wsman"
+
+
+def _looks_like_wsman(payload):
+    """응답 헤더가 WS-Management(WinRM) endpoint 임을 가리키는가 → (bool, 근거).
+
+    2026-08-10 (Phase 3-B). **상태 코드만으로 판정하지 않는다.** 일반 웹서버나 프록시가
+    5985/5986 에 떠 있어도 200/401/403/405 는 얼마든지 나오므로, 그것만 보면 오판한다.
+    자격증명을 보내지 않고 얻을 수 있는 근거는 응답 헤더뿐이라 아래 둘만 인정한다:
+
+      (1) WWW-Authenticate 에 `WSMAN` 이 들어감 (`Basic realm="WSMAN"`) — 결정적
+      (2) Server 가 `Microsoft-HTTPAPI` (WinRM 이 올라가는 Windows HTTP Server API)
+          **이면서** WWW-Authenticate 가 존재 — /wsman 이 인증 보호되고 있다는 뜻
+
+    (2) 는 결정적 증거가 아니라 강한 정황이다. 완전한 WS-Man handshake 는 자격증명이
+    있어야 하고 그것은 Credential Probe 영역이라 이 단계에서 하지 않는다.
+    """
+    headers = (payload or {}).get("headers") or {}
+    www_auth = (headers.get("www-authenticate") or "")
+    server = (headers.get("server") or "")
+    if "wsman" in www_auth.lower():
+        return True, 'WWW-Authenticate realm=WSMAN'
+    if "microsoft-httpapi" in server.lower() and www_auth:
+        return True, "Server=Microsoft-HTTPAPI + 인증 요구"
+    return False, "WS-Management 헤더 근거 없음 (server={0})".format(
+        (server or "미제공")[:40])
+
+
 def probe_os(host, port, timeout):
-    """OS 채널 프로토콜 프로브 (SSH banner 또는 WinRM endpoint).
+    """OS 채널 프로토콜 프로브 (SSH identification 또는 WinRM endpoint).
 
-    WinRM (5985/5986): /wsman 이 200/401/403/405/503 응답 시 서비스 살아있음.
-    403/503 추가 (probe_redfish 와 동일 정합): SPN 불일치/잠긴 계정 (403),
-    IIS 재시작 중 (503) 등도 endpoint 자체는 살아있음 → 본 Ansible 수집에서
-    처리. 이전 구현은 이를 "WinRM 미응답" 으로 오판정했음.
+    2026-08-10 (Phase 3-B): WinRM 판정을 **상태 코드 whitelist 에서 헤더 근거로** 교체했다.
+    종전 `status in (200, 401, 403, 405, 503)` 은 "/wsman 에서 아무 HTTP 응답이나 오면
+    WinRM" 과 사실상 같아, 5985/5986 에 떠 있는 일반 웹서버를 Windows 로 오판할 수 있었다.
+    (이 함수는 그동안 운영 경로에 배선돼 있지 않아 실제 오판 사고는 없었다.)
 
-    SSH (22): banner 가 'SSH-' 로 시작하는지로 판정 — banner 차단 SSH 서버는
-    이전과 동일하게 fail (드문 케이스, 별도 cycle 검토).
+    TLS 정책은 바꾸지 않는다 — Windows 수집이 `ansible_winrm_server_cert_validation: ignore`
+    를 쓰므로 probe 도 verify=False 로 맞춘다. 인증서 유효성 검사와 WinRM 존재 확인은
+    별개 문제이며, probe 가 더 엄격해서 정상 서버가 탈락하는 일이 없어야 한다.
     """
     if port == 22:
         return ssh_banner_check(host, port, timeout)
-    elif port in (5985, 5986):
+    if port in (5985, 5986):
         scheme = "https" if port == 5986 else "http"
-        url = "{0}://{1}:{2}/wsman".format(scheme, host, port)
+        url = "{0}://{1}:{2}{3}".format(scheme, host, port, WINRM_ENDPOINT_PATH)
         ok, err, payload = http_get(url, timeout, verify=False)
-        if ok or (payload and payload.get("status_code") in (200, 401, 403, 405, 503)):
-            facts = {
-                "transport": "winrm",
-                "scheme": scheme,
-                "port": port,
-            }
-            if payload:
-                facts["root_status_code"] = payload.get("status_code")
-            return True, None, facts
-        return False, err, None
-    else:
-        return False, "지원하지 않는 OS 포트: {0}".format(port), None
+        if payload is None:
+            # 응답 자체가 없음 (TLS handshake 실패 / timeout / 연결 오류)
+            return False, err or "WinRM endpoint 응답 없음", None
+        matched, why = _looks_like_wsman(payload)
+        if matched:
+            return True, None, {}
+        return False, "WinRM 응답 아님 (HTTP {0}, {1})".format(
+            payload.get("status_code"), why), None
+    return False, "지원하지 않는 OS 포트: {0}".format(port), None
 
 
 def probe_esxi(host, port, timeout, verify=False):
@@ -576,6 +689,44 @@ def _tcp_failure_code(kinds):
     return "TCP_CONNECT_FAILED"
 
 
+def _search_os_candidates(host, ports, timeout_port, poll_interval, timeout_proto):
+    """OS 후보 탐색 (Phase 3-B) — TCP 성공 **+ 기대 프로토콜 확인**까지 되어야 선택.
+
+    종전에는 포트가 열리기만 하면 그 포트로 OS 를 확정했다. 그러면 5986/5985/22 에 다른
+    서비스가 떠 있을 때 Windows / Linux 를 오판한다. 이제 포트가 열려도 기대 프로토콜이
+    아니면 **다음 후보로 계속 진행**한다.
+
+    반환: (selected_port, probed, tcp_open_ports, tcp_errors, tcp_kinds, proto_errors)
+      selected_port : 프로토콜까지 확인된 포트 (없으면 None)
+      probed        : 실제로 시도한 포트 (중복 없음, 순서 보존)
+      tcp_open_ports: TCP 는 열렸던 포트 (프로토콜 실패 포함)
+    """
+    selected = None
+    probed = []
+    tcp_open_ports = []
+    tcp_errors = []
+    tcp_kinds = []
+    proto_errors = []
+
+    for port in ports:
+        probed.append(port)
+        ok, err, kind = tcp_check_budget(host, port, timeout_port, poll_interval)
+        if not ok:
+            tcp_kinds.append(kind)
+            tcp_errors.append("port={0}: {1}".format(port, err))
+            continue
+
+        tcp_open_ports.append(port)
+        p_ok, p_err, _facts = probe_os(host, port, timeout_proto)
+        if p_ok:
+            selected = port
+            break
+        # 프로토콜 불일치 — 근거를 남기고 **다음 후보로 계속**
+        proto_errors.append("port={0}: {1}".format(port, p_err))
+
+    return selected, probed, tcp_open_ports, tcp_errors, tcp_kinds, proto_errors
+
+
 def _detect_os_from_port(open_port):
     """OS 채널: 포트 기반 OS 유형 + WinRM scheme 판별."""
     if open_port == 22:
@@ -635,6 +786,71 @@ def _try_redfish_auth(host, open_port, username, password, timeout_auth, verify_
     return True
 
 
+def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
+    """OS 전용 진단 흐름 (Phase 3-B) — 후보 탐색 결과를 result 로 옮기고 exit_json.
+
+    성공 우선 원칙: 앞 후보가 프로토콜 불일치여도 뒤 후보에서 확인되면 **전체 성공**이다.
+
+    모든 후보 실패 시 대표 진단:
+      - TCP 로 하나도 못 붙음 → Phase 3-A 매핑 유지 (DNS / REFUSED / CONNECT_FAILED)
+      - TCP 는 붙었는데 프로토콜을 하나도 확인 못 함 → protocol / PROTOCOL_CHECK_FAILED
+    """
+    (selected, probed, tcp_open_ports, tcp_errors, tcp_kinds,
+     proto_errors) = _search_os_candidates(
+        host, ports,
+        module.params["timeout_port"],
+        module.params["port_poll_interval"],
+        module.params["timeout_protocol"],
+    )
+    # 프로토콜 불일치로 다음 후보로 넘어간 포트도 "확인한 포트" 다
+    result["checked_ports"] = probed or ports
+    result["protocol_checked"] = True
+
+    if selected is not None:
+        os_type, scheme = _detect_os_from_port(selected)
+        result["reachable"] = True
+        result["port_open"] = True
+        result["protocol_supported"] = True   # 실제 SSH / WinRM 응답을 확인했다
+        result["selected_port"] = selected
+        result["detected_os"] = os_type
+        result["winrm_scheme"] = scheme
+        result["detected_port"] = selected
+        module.exit_json(**result)
+
+    if tcp_open_ports:
+        # 포트는 열렸으나 기대 프로토콜을 하나도 확인하지 못함
+        result["reachable"] = True
+        result["port_open"] = True
+        result["protocol_supported"] = False   # 검사했고, 확인하지 못했다
+        result["failure_stage"] = "protocol"
+        result["failure_code"] = "PROTOCOL_CHECK_FAILED"
+        result["failure_reason"] = (
+            "관리 포트에는 연결되었지만 예상한 SSH 또는 WinRM 응답을 확인하지 못했습니다. "
+            "SSH와 WinRM 서비스 설정을 확인하세요."
+        )
+        result["detail"] = "; ".join(proto_errors + tcp_errors)
+        module.exit_json(**result)
+
+    # TCP 단계에서 전부 실패 — Phase 3-A 매핑 그대로
+    if TCP_FAIL_REFUSED in tcp_kinds:
+        result["reachable"] = True
+        result["failure_stage"] = "port"
+        result["failure_code"] = "TCP_CONNECTION_REFUSED"
+        result["failure_reason"] = (
+            "호스트는 응답하지만 서비스 포트가 열려 있지 않습니다. "
+            "방화벽 설정과 서비스 기동 상태를 확인하세요."
+        )
+    else:
+        result["failure_stage"] = "reachable"
+        result["failure_code"] = _tcp_failure_code(tcp_kinds)
+        result["failure_reason"] = (
+            "대상 호스트에 연결할 수 없습니다. "
+            "서버 전원 상태와 네트워크 경로를 확인하세요."
+        )
+    result["detail"] = "; ".join(tcp_errors)
+    module.exit_json(**result)
+
+
 def run_module():
     module = AnsibleModule(
         argument_spec=dict(
@@ -671,6 +887,13 @@ def run_module():
     ports = module.params["ports"] or CHANNEL_DEFAULT_PORTS.get(channel, [])
     verify_ssl = module.params["verify_ssl"]
     result = _init_result(channel, ports)
+
+    # ── OS 후보 탐색 (Phase 3-B) ─────────────────────────────────────────
+    # OS 는 "포트가 열렸는가" 가 아니라 "기대한 관리 프로토콜이 응답하는가" 로 후보를 고른다.
+    # 아래 분기는 OS + probe_protocol=true 일 때만 타고, redfish / esxi 는 기존 흐름 그대로다.
+    if channel == "os" and module.params["probe_protocol"]:
+        _run_os_candidate_flow(module, result, host, ports, verify_ssl)
+        return   # _run_os_candidate_flow 안에서 exit_json 한다 (도달하지 않음)
 
     # Stage 1+2: reachable + port_open (rule 27 R2 — host alive 분리)
     any_response, target_port_open, open_port, port_errors, port_kinds, probed = _check_ports(

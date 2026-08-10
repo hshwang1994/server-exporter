@@ -63,7 +63,12 @@
         _precheck_host:            "{{ ansible_host | default(inventory_hostname) }}"
         _precheck_channel:         "os"
         _precheck_timeout_port:    "{{ _probe_timeout }}"
-        _precheck_probe_protocol:  false
+        # 2026-08-10 (Phase 3-B): 포트가 열렸다는 사실만으로 OS 를 확정하지 않는다.
+        # 각 후보에서 실제 SSH identification / WinRM WS-Management 응답까지 확인한다.
+        _precheck_probe_protocol:  true
+        # 프로토콜 확인용 bounded timeout. 포트 probe 예산(2초)과 별개이며, 살아 있는
+        # 포트에만 적용된다(죽은 호스트는 TCP 단계에서 끝나 추가 대기가 없다).
+        _precheck_timeout_protocol: "{{ _probe_protocol_timeout | default(5) }}"
         # 종전 wait_for 는 timeout 예산 안에서 sleep=1 간격으로 **반복 확인**했다.
         # 단발 시도로 바꾸면 "probe 시작 시점엔 닫혀 있지만 예산 안에 기동되는 서비스"가
         # 실패로 바뀐다. wait_for 기본값 sleep=1 을 그대로 써서 그 의미를 보존한다.
@@ -175,7 +180,9 @@
                   if (d.failure_code | default('')) == 'DNS_RESOLUTION_FAILED'
                   else ('SSH(22)/WinRM(5985, 5986) 관리 포트에 연결하지 못했습니다. 일부 연결 시도에서 연결 거부 응답이 확인되었습니다. 서비스 기동 상태와 네트워크 정책을 확인하세요.'
                         if (d.failure_stage | default('')) == 'port'
-                        else 'SSH(22)/WinRM(5985, 5986) 모두 응답이 없습니다. 서버 전원, 네트워크, 서비스 상태를 확인하세요.'))}) }}
+                        else ('관리 포트에는 연결되었지만 예상한 SSH 또는 WinRM 응답을 확인하지 못했습니다. SSH와 WinRM 서비스 설정을 확인하세요.'
+                              if (d.failure_stage | default('')) == 'protocol'
+                              else 'SSH(22)/WinRM(5985, 5986) 모두 응답이 없습니다. 서버 전원, 네트워크, 서비스 상태를 확인하세요.')))}) }}
 
     - name: "failed-output | init fragments"
       ansible.builtin.include_tasks:
