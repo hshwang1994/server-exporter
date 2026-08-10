@@ -208,7 +208,7 @@ def _run_precheck(monkeypatch, channel: str, connect_exc=None, http=None) -> dic
         params = dict(host="192.0.2.10", channel=channel, ports=[], timeout_port=3.0,
                       timeout_protocol=15.0, timeout_auth=8.0,
                       username=None, password=None, verify_ssl=False,
-                      probe_protocol=True)
+                      probe_protocol=True, port_poll_interval=0.0)
         def exit_json(self, **kw): raise _ExitJson(kw)
 
     monkeypatch.setattr(pb, "AnsibleModule", lambda **_kw: _Fake())
@@ -414,7 +414,10 @@ def test_os_portfail_reason_matches_observation():
     dns = _os_portfail_diag("reachable", "DNS_RESOLUTION_FAILED")["failure_reason"]
 
     assert "응답이 없습니다" in no_resp
-    assert "서버는 응답하지만" in refused, "RST 관측 시 '모두 응답이 없습니다' 는 사실과 다르다"
+    # RST 는 중간 방화벽/보안 장비가 낼 수도 있어 "서버가 응답했다"고 단정하지 않는다.
+    # 관측한 사실(연결 거부 응답 확인)까지만 표현한다.
+    assert "연결 거부 응답이 확인되었습니다" in refused
+    assert "서버는 응답하지만" not in refused, "RST 를 서버 자체 응답으로 확정하면 안 된다"
     assert "주소를 확인하지 못했습니다" in dns, (
         "주소 해석 실패는 패킷을 보낸 적도 없다. '응답이 없습니다' 는 사실과 다르다"
     )

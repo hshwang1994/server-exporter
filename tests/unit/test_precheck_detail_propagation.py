@@ -78,6 +78,7 @@ def _run(monkeypatch, *, channel="redfish", ports=None, **overrides) -> dict:
         "password": None,
         "verify_ssl": False,
         "probe_protocol": True,
+        "port_poll_interval": 0.0,
     }
     params.update(overrides)
     monkeypatch.setattr(pb, "AnsibleModule", lambda **_kw: _FakeModule(params))

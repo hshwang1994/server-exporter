@@ -46,6 +46,9 @@
     # 종전 os-gather 의 wait_for 기반 감지가 TCP 개방만 확인했고, 이번 통합 범위는 구조
     # 정렬이지 SSH/WinRM 실제 프로토콜 검증 도입이 아니기 때문이다. 미지정 시 true(기존 동작).
     probe_protocol: "{{ _precheck_probe_protocol | default(true) }}"
+    # 2026-08-10 (Phase 3-A 보정): 포트당 재시도 간격. 미지정 시 0 = 단일 시도(기존 동작).
+    # OS 만 wait_for 의 폴링 의미를 보존하려고 1.0 을 넘긴다.
+    port_poll_interval: "{{ _precheck_port_poll_interval | default(0.0) }}"
   delegate_to: localhost
   register: _precheck_raw
   no_log: true

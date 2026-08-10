@@ -75,8 +75,10 @@ author:
 from ansible.module_utils.basic import AnsibleModule
 import base64
 import json
+import math
 import socket
 import ssl
+import time
 import urllib.error
 import urllib.request
 
@@ -185,6 +187,77 @@ def tcp_check(host, port, timeout):
     """tcp_check_ex 의 (ok, err) 2-튜플 래퍼 — 기존 호출자/테스트 호환용."""
     ok, err, _kind = tcp_check_ex(host, port, timeout)
     return ok, err
+
+
+# ansible.builtin.wait_for(state=started, port=...) 의 기본값 (실측 — ansible 2.19.9
+# modules/wait_for.py argument_spec: connect_timeout=5, sleep=1).
+# os-gather 는 이 모듈로 관리 포트를 확인했고 sleep / connect_timeout 을 지정한 적이 없다.
+_WAIT_FOR_CONNECT_TIMEOUT = 5.0
+_WAIT_FOR_SLEEP = 1.0
+
+
+def _dominant_kind(kinds):
+    """여러 시도의 실패 종류 → **대표 종류** (관측의 강도 순).
+
+    마지막 오류 문자열 하나로 원인을 정하면 시도 순서에 따라 결과가 흔들린다.
+    구조화된 kind 만 보고 결정한다. 우선순위 근거는 _tcp_failure_code 와 동일하다.
+    """
+    if TCP_FAIL_DNS in kinds:
+        return TCP_FAIL_DNS
+    if TCP_FAIL_REFUSED in kinds:
+        return TCP_FAIL_REFUSED
+    if TCP_FAIL_TIMEOUT in kinds:
+        return TCP_FAIL_TIMEOUT
+    return TCP_FAIL_OTHER
+
+
+def tcp_check_budget(host, port, budget, poll_interval,
+                     connect_timeout=_WAIT_FOR_CONNECT_TIMEOUT):
+    """시간 예산 안에서 연결 가능 여부를 **반복 확인** — (ok, err, kind).
+
+    2026-08-10 (Phase 3-A 보정): os-gather 는 종전에 `ansible.builtin.wait_for` 로 포트를
+    확인했다. wait_for(state=started) 는 단발 연결이 아니라 **timeout 예산 안에서 폴링**한다
+    (실측 — modules/wait_for.py:619-628):
+
+        end = start + timeout
+        while now < end:
+            create_connection(..., min(connect_timeout, ceil(end - now)))   # 성공 시 종료
+            time.sleep(sleep)
+
+    Phase 3-A 최초 전환에서 이를 1회 시도로 바꿔, "probe 시작 시점엔 닫혀 있지만 예산 안에
+    기동되는 서비스"가 실패로 바뀌는 회귀가 생겼다. 본 함수가 그 의미를 되돌린다.
+
+    poll_interval 이 0 이하면 **단일 시도**(기존 redfish/esxi 동작)로 되돌아간다 —
+    두 채널의 probe 횟수·타임아웃을 바꾸지 않기 위해서다.
+    """
+    if not poll_interval or poll_interval <= 0:
+        return tcp_check_ex(host, port, budget)
+
+    deadline = time.monotonic() + budget
+    errs = []
+    kinds = []
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        # wait_for 와 동일: 남은 예산을 올림한 값과 connect_timeout 중 작은 쪽
+        ok, err, kind = tcp_check_ex(
+            host, port, min(connect_timeout, math.ceil(remaining)))
+        if ok:
+            return True, None, None
+        errs.append(err)
+        kinds.append(kind)
+        if deadline - time.monotonic() <= 0:
+            break
+        time.sleep(poll_interval)
+
+    if not kinds:
+        # 예산이 0 이하라 한 번도 시도하지 못한 경우 — 최소 1회는 시도한다
+        return tcp_check_ex(host, port, budget)
+    kind = _dominant_kind(kinds)
+    # 대표 종류에 해당하는 **마지막** 오류 문자열을 증거로 남긴다
+    err = next((e for e, k in zip(reversed(errs), reversed(kinds)) if k == kind), errs[-1])
+    return False, err, kind
 
 
 def _build_ssl_context(verify):
@@ -442,7 +515,7 @@ def _init_result(channel, ports):
     return result
 
 
-def _check_ports(host, ports, timeout_port):
+def _check_ports(host, ports, timeout_port, poll_interval=0.0):
     """Stage 1+2: 포트 순회 → (any_response, target_port_open, open_port, port_errors, kinds, probed).
 
     probed 는 **실제로 순차 probe 를 수행한 포트 목록**이다 (성공 시 거기서 멈추므로
@@ -460,8 +533,10 @@ def _check_ports(host, ports, timeout_port):
     kinds = []
     probed = []
     for port in ports:
+        # 한 포트를 예산 안에서 여러 번 시도해도 probed 에는 **한 번만** 넣는다
+        # (checked_ports 는 "어떤 포트를 확인했나" 이지 "몇 번 시도했나"가 아니다).
         probed.append(port)
-        ok, err, kind = tcp_check_ex(host, port, timeout_port)
+        ok, err, kind = tcp_check_budget(host, port, timeout_port, poll_interval)
         if ok:
             any_response = True
             target_port_open = True
@@ -582,6 +657,11 @@ def run_module():
             #   — 즉 "포트가 열렸으니 프로토콜도 된다"고 **거짓으로 표시하지 않는다.**
             #   redfish / esxi 는 기본값 true 라 동작 불변.
             probe_protocol=dict(type="bool", default=True),
+            # 2026-08-10 (Phase 3-A 보정): 포트당 재시도 간격(초).
+            #   0 이면 단일 시도 — redfish / esxi 의 기존 동작이며 기본값이다.
+            #   OS 는 종전 wait_for 의 폴링 의미를 보존하려고 1.0(wait_for sleep 기본값)을
+            #   명시 전달한다. 예산(timeout_port)은 그대로라 총 대기 시간은 늘지 않는다.
+            port_poll_interval=dict(type="float", default=0.0),
         ),
         supports_check_mode=True,
     )
@@ -594,7 +674,8 @@ def run_module():
 
     # Stage 1+2: reachable + port_open (rule 27 R2 — host alive 분리)
     any_response, target_port_open, open_port, port_errors, port_kinds, probed = _check_ports(
-        host, ports, module.params["timeout_port"]
+        host, ports, module.params["timeout_port"],
+        poll_interval=module.params["port_poll_interval"],
     )
     # checked_ports 는 **실제로 순차 probe 를 수행한 포트**다 (구성된 전체 목록이 아니다).
     # 성공 시 거기서 멈추므로 OS 채널은 [5986] / [5986,5985] / [5986,5985,22] 로 달라진다.

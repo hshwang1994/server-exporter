@@ -48,7 +48,8 @@ class _ExitJson(Exception):
         self.result = result
 
 
-def run_os_precheck(monkeypatch, port_results, *, timeout_port=2.0, ports=None):
+def run_os_precheck(monkeypatch, port_results, *, timeout_port=2.0, ports=None,
+                    poll_interval=0.0):
     """port_results: {port: 'ok'|'timeout'|'refused'|'dns'|'other'}"""
     seen: list[tuple[int, float]] = []
 
@@ -71,7 +72,8 @@ def run_os_precheck(monkeypatch, port_results, *, timeout_port=2.0, ports=None):
         params = dict(host="192.0.2.30", channel="os", ports=ports or [],
                       timeout_port=timeout_port, timeout_protocol=15.0, timeout_auth=8.0,
                       username=None, password=None, verify_ssl=False,
-                      probe_protocol=False)   # OS 는 프로토콜 검증을 하지 않는다
+                      probe_protocol=False,   # OS 는 프로토콜 검증을 하지 않는다
+                      port_poll_interval=poll_interval)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
@@ -251,7 +253,7 @@ def test_other_channels_still_probe_protocol(monkeypatch, channel):
     class _Fake:
         params = dict(host="192.0.2.10", channel=channel, ports=[], timeout_port=3.0,
                       timeout_protocol=15.0, timeout_auth=8.0, username=None, password=None,
-                      verify_ssl=False, probe_protocol=True)
+                      verify_ssl=False, probe_protocol=True, port_poll_interval=0.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
