@@ -42,6 +42,10 @@
     timeout_auth: "{{ _precheck_timeout_auth | default(_precheck_timeout | default(8.0)) }}"
     username: "{{ _precheck_username | default(omit) }}"
     password: "{{ _precheck_password | default(omit) }}"
+    # 2026-08-10 (Phase 3-A): OS 채널은 Stage 3(프로토콜 확인)을 수행하지 않는다.
+    # 종전 os-gather 의 wait_for 기반 감지가 TCP 개방만 확인했고, 이번 통합 범위는 구조
+    # 정렬이지 SSH/WinRM 실제 프로토콜 검증 도입이 아니기 때문이다. 미지정 시 true(기존 동작).
+    probe_protocol: "{{ _precheck_probe_protocol | default(true) }}"
   delegate_to: localhost
   register: _precheck_raw
   no_log: true
@@ -50,11 +54,17 @@
 - name: "precheck | 진단 결과 저장"
   ansible.builtin.set_fact:
     _precheck_result: "{{ _precheck_raw }}"
+    # 2026-08-10 (Phase 3-A): protocol 확인을 **수행한 경우에만** protocol_supported 를 요구한다.
+    #   probe_protocol=false (OS 채널) 로 부르면 protocol_checked=false 가 돌아오고,
+    #   protocol_supported 는 "확인 안 함" 을 뜻하는 초기값 False 로 남는다. 이때까지
+    #   실패로 보면 정상 OS 호스트가 전부 진단 실패가 된다.
+    #   redfish / esxi 는 protocol_checked 가 없거나 true 라 default(true) 로 조건이 그대로 유지된다.
     _precheck_ok: >-
       {{
         _precheck_raw.reachable | default(false) | bool
         and _precheck_raw.port_open | default(false) | bool
-        and _precheck_raw.protocol_supported | default(false) | bool
+        and (_precheck_raw.protocol_supported | default(false) | bool
+             or not (_precheck_raw.protocol_checked | default(true) | bool))
         and (_precheck_raw.failure_stage is none or _precheck_raw.failure_stage | default('') == '')
       }}
 

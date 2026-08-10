@@ -27,7 +27,8 @@
   gather_facts: no
   connection: local
   # 주의: PLAY 1은 add_host (run_once + loop) 사용으로 strategy: free 불가 (#23 빌드 실패)
-  # connection: local + 짧은 wait_for라 linear여도 wave 막힘 영향 작음. perf는 _probe_timeout 단축으로 대응.
+  # connection: local + 짧은 포트 probe라 linear여도 wave 막힘 영향 작음. perf는 _probe_timeout 단축으로 대응.
+  # 2026-08-10 (Phase 3-A): 포트 감지는 공통 precheck 로 통합됐다 (종전 wait_for 3연타).
 
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
@@ -37,47 +38,40 @@
 
   tasks:
 
-    - name: "detect | WinRM HTTPS (5986)"
-      ansible.builtin.wait_for:
-        host:    "{{ ansible_host | default(inventory_hostname) }}"
-        port:    5986
-        timeout: "{{ _probe_timeout }}"
-      register:      _probe_winrm_https
-      ignore_errors: yes
-      no_log: true
+    # ── 2026-08-10 (Phase 3-A): 공통 precheck 로 통합 ─────────────────────
+    # 종전에는 wait_for 3연타(5986 → 5985 → 22)로 OS 전용 감지를 했다. 다른 두 채널이
+    # 쓰는 common/tasks/precheck/run_precheck.yml 과 구조가 달라 진단 값도 별도 하드코딩
+    # 이었고(아래 PLAY 1.5), 실패 종류(거부 / 시간 초과 / 주소 해석 실패)를 구분하지 못했다.
+    #
+    # 보존한 것 (구조만 바꾸고 동작은 유지):
+    #   - 포트 순서 5986 → 5985 → 22  : precheck_bundle.CHANNEL_DEFAULT_PORTS['os'] 가 동일 순서
+    #   - 첫 성공에서 중단             : _check_ports 가 성공 즉시 break
+    #   - OS 판정 규칙                : _detect_os_from_port (22=linux / 5985·5986=windows)
+    #   - 포트당 타임아웃 2초          : timeout_port 로 명시 전달 (모듈 기본값 3.0 을 쓰지 않는다)
+    #   - 관측 위치                   : connection: local + delegate_to: localhost 모두 controller
+    #   - 재시도 없음                 : _check_ports 는 포트당 1회 시도
+    #   - 프로토콜 미검증             : probe_protocol=false (SSH/WinRM 실제 handshake 는 다음 Phase)
+    #
+    # 달라진 것 (의도된 개선):
+    #   - 실패 종류를 구조화해 관측 → failure_stage / failure_code 가 실제 관측을 반영
+    #   - checked_ports 가 실제 probe 한 포트만 담음
+    #   - 포트별 사유가 _fail_error_detail 로 보존됨
+    - name: "detect | 공통 precheck (관리 포트 순차 확인)"
+      ansible.builtin.include_tasks:
+        file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/precheck/run_precheck.yml"
+      vars:
+        _precheck_host:            "{{ ansible_host | default(inventory_hostname) }}"
+        _precheck_channel:         "os"
+        _precheck_timeout_port:    "{{ _probe_timeout }}"
+        _precheck_probe_protocol:  false
 
-    - name: "detect | WinRM HTTP (5985)"
-      when: _probe_winrm_https is failed
-      ansible.builtin.wait_for:
-        host:    "{{ ansible_host | default(inventory_hostname) }}"
-        port:    5985
-        timeout: "{{ _probe_timeout }}"
-      register:      _probe_winrm_http
-      ignore_errors: yes
-      no_log: true
-
-    - name: "detect | SSH (22)"
-      when: >
-        _probe_winrm_https is failed and
-        (_probe_winrm_http is skipped or _probe_winrm_http is failed)
-      ansible.builtin.wait_for:
-        host:    "{{ ansible_host | default(inventory_hostname) }}"
-        port:    22
-        timeout: "{{ _probe_timeout }}"
-      register:      _probe_ssh
-      ignore_errors: yes
-      no_log: true
-
+    # add_host 가 쓰는 세 fact 는 이름/타입 모두 종전과 동일하게 유지한다
+    # (_winrm_port 는 문자열 — ansible_port 전달 형태를 바꾸지 않기 위함).
     - name: "detect | set os_type"
       ansible.builtin.set_fact:
-        _detected_os: >-
-          {%- if _probe_winrm_https is succeeded
-               or (_probe_winrm_http is not skipped
-                   and _probe_winrm_http is succeeded) -%}windows
-          {%- elif _probe_ssh is not skipped and _probe_ssh is succeeded -%}linux
-          {%- else -%}unknown{%- endif -%}
-        _winrm_port:   "{{ '5986' if _probe_winrm_https is succeeded else '5985' }}"
-        _winrm_scheme: "{{ 'https' if _probe_winrm_https is succeeded else 'http' }}"
+        _detected_os:  "{{ (_precheck_raw.detected_os | default('')) or 'unknown' }}"
+        _winrm_port:   "{{ '5986' if ((_precheck_raw.detected_port | default(0)) == 5986) else '5985' }}"
+        _winrm_scheme: "{{ (_precheck_raw.winrm_scheme | default('')) or 'http' }}"
       no_log: true
 
     # ── add_host 는 인벤토리 조작 모듈이므로 암시적 run_once 동작.
@@ -155,29 +149,29 @@
         _fail_sec_supported:    "{{ ['system','cpu','memory','storage','network','users'] }}"
         _fail_error_section:    "os_detect"
         _fail_error_message:    "SSH(22)/WinRM(5985, 5986) 포트가 모두 응답하지 않습니다. 대상 서버의 방화벽, SSH/WinRM 서비스 상태, 네트워크 연결을 확인하세요."
-        _diagnosis:
-          reachable:          false
-          port_open:          false
-          protocol_supported: false
-          # 2026-08-10: 종전 false. 이 경로는 PLAY 1 의 wait_for 3연타가 전부 실패한 것이고
-          # **인증을 시도하는 코드가 아예 실행되지 않는다** — 인증 거부를 관측한 사실이 없으므로
-          # false 는 거짓 정보다. "확인하지 못함"을 뜻하는 null 로 정정.
-          auth_success:       null
-          # failure_stage 는 원인이 아니라 **실행이 멈춘 단계**다 (사용자 확정 2026-08-10).
-          # 이 경로에서 멈춘 곳은 포트 감지 단계이므로 "port" 를 유지한다.
-          failure_stage:      "port"
-          # 2026-08-10 (Phase 2) 문서화된 매핑 예외:
-          #   기본 매핑은 TCP_CONNECTION_REFUSED → port 이지만, OS 는 wait_for 만 쓰므로
-          #   RST(거부)를 관측할 수 없다. 관측한 사실은 "TCP 연결에 실패했다" 뿐이라
-          #   TCP_CONNECT_FAILED 를 쓴다. 멈춘 단계는 포트 감지 단계이므로 stage 는 port 유지.
-          #   (REFUSED 로 적으면 관측하지 않은 사실을 확정하는 것이라 금지)
-          failure_code:       "TCP_CONNECT_FAILED"
-          failure_reason:     "SSH(22)/WinRM(5985, 5986) 모두 응답이 없습니다. 서버 전원, 네트워크, 서비스 상태를 확인하세요."
-          details:
-            channel: "os"
-            # 2026-08-10 (B-4): 실제 검사 순서는 5986 → 5985 → 22 (PLAY 1, :40-69).
-            # 종전 [22, 5985, 5986] 은 역순이라 "22 부터 확인했다"로 오독됐다.
-            checked_ports: [5986, 5985, 22]
+
+    # 2026-08-10 (Phase 3-A): 종전에는 이 자리에서 _diagnosis 를 통째로 하드코딩했다.
+    # 이제 PLAY 1 의 공통 precheck 가 만든 진단(_diagnosis)이 host fact 로 그대로 넘어오므로
+    # 재작성하지 않는다 — reachable / port_open / failure_stage / failure_code /
+    # details.checked_ports 모두 **실제 관측 결과**다.
+    #   - 전 포트 무응답      → stage=reachable, code=TCP_CONNECT_FAILED
+    #   - RST 를 하나라도 관측 → stage=port,      code=TCP_CONNECTION_REFUSED
+    #   - 주소 해석 실패      → stage=reachable, code=DNS_RESOLUTION_FAILED
+    # auth_success 는 인증을 시도하지 않으므로 null 유지 (모듈 초기값).
+    #
+    # failure_reason 만 OS 문맥에 맞게 덮어쓴다. 공통 문구는 어느 포트를 봤는지 알려주지 못하고,
+    # 종전 문구("모두 응답이 없습니다")는 RST 를 관측한 경우 사실과 달라지기 때문이다.
+    - name: "failed-output | Portal 표시용 failure_reason 을 OS 문맥으로"
+      ansible.builtin.set_fact:
+        _diagnosis: >-
+          {%- set d = _diagnosis | default({}, true) -%}
+          {%- set d = d if (d is mapping) else {} -%}
+          {{ d | combine({'failure_reason':
+                 ('대상 서버의 주소를 확인하지 못했습니다. 호스트 이름과 DNS 설정을 확인하세요.'
+                  if (d.failure_code | default('')) == 'DNS_RESOLUTION_FAILED'
+                  else ('서버는 응답하지만 SSH(22)/WinRM(5985, 5986) 포트가 모두 열려 있지 않습니다. 방화벽 설정과 서비스 기동 상태를 확인하세요.'
+                        if (d.failure_stage | default('')) == 'port'
+                        else 'SSH(22)/WinRM(5985, 5986) 모두 응답이 없습니다. 서버 전원, 네트워크, 서비스 상태를 확인하세요.'))}) }}
 
     - name: "failed-output | init fragments"
       ansible.builtin.include_tasks:
@@ -304,10 +298,10 @@
                 adapter_candidate: "{{ (_selected_adapter | default({})).adapter_id | default(none) }}"
                 detected_os:       "linux"
                 selected_port:     22
-                # 2026-08-10 (B-4): linux 로 분류되려면 PLAY 1 에서 5986 실패 → 5985 실패 →
-                # 22 성공 순으로 **3개 모두** 시도됐어야 한다 (:40-78 의 when 조건). 종전 [22] 는
-                # 실제 검사 이력을 누락해 "22 만 확인했다"로 오독됐다.
-                checked_ports:     [5986, 5985, 22]
+                # 2026-08-10 (Phase 3-A): PLAY 1 의 공통 precheck 가 **실제 probe 한 포트**를
+                # 그대로 쓴다. linux 로 분류되려면 5986 실패 → 5985 실패 → 22 성공 순으로
+                # 3개 모두 시도됐어야 하므로 fallback 값도 같다.
+                checked_ports:     "{{ _precheck_raw.checked_ports | default([5986, 5985, 22]) }}"
                 gather_mode:       "{{ _l_python_mode | default('python_ok') }}"
                 python_version:    "{{ _l_python_version | default('') }}"
                 # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
@@ -385,7 +379,8 @@
                   'failure_reason': ('Linux 정보를 수집하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.' if ok
                                      else 'Linux 서버에 SSH로 접속하지 못했습니다. 자격증명, SSH 설정, 네트워크 상태를 확인하세요.'),
                   'details': {'channel': 'os', 'detected_os': 'linux',
-                              'selected_port': 22, 'checked_ports': [5986, 5985, 22],
+                              'selected_port': 22,
+                              'checked_ports': (_precheck_raw.checked_ports | default([5986, 5985, 22])),
                               'auth': (_os_attempts_meta | default({}))}
                     | combine(((_diagnosis | default({}, true)).details)
                               if (((_diagnosis | default({}, true)).details) is mapping) else {})} }}
@@ -544,7 +539,7 @@
                 # (:49-50 의 when: _probe_winrm_https is failed). 따라서 5986 으로 붙었으면
                 # 검사한 포트는 [5986] 하나뿐이고, 5985 로 붙었을 때만 [5986, 5985] 다.
                 # 종전 [5985, 5986] 은 순서도 내용도 실제와 달랐다.
-                checked_ports:     "{{ [5986] if ((ansible_port | default(5986) | int) == 5986) else [5986, 5985] }}"
+                checked_ports:     "{{ _precheck_raw.checked_ports | default([5986] if ((ansible_port | default(5986) | int) == 5986) else [5986, 5985]) }}"
                 # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
                 auth:              "{{ _os_attempts_meta | default({}) }}"
 
@@ -605,7 +600,8 @@
                                      else 'Windows 서버에 WinRM으로 접속하지 못했습니다. 자격증명과 WinRM 설정을 확인하세요.'),
                   'details': {'channel': 'os', 'detected_os': 'windows',
                               'selected_port': port,
-                              'checked_ports': ([5986] if port == 5986 else [5986, 5985]),
+                              'checked_ports': (_precheck_raw.checked_ports
+                                                 | default([5986] if port == 5986 else [5986, 5985])),
                               'auth': (_os_attempts_meta | default({}))}
                     | combine(((_diagnosis | default({}, true)).details)
                               if (((_diagnosis | default({}, true)).details) is mapping) else {})} }}

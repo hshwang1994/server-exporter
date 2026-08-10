@@ -207,7 +207,8 @@ def _run_precheck(monkeypatch, channel: str, connect_exc=None, http=None) -> dic
     class _Fake:
         params = dict(host="192.0.2.10", channel=channel, ports=[], timeout_port=3.0,
                       timeout_protocol=15.0, timeout_auth=8.0,
-                      username=None, password=None, verify_ssl=False)
+                      username=None, password=None, verify_ssl=False,
+                      probe_protocol=True)
         def exit_json(self, **kw): raise _ExitJson(kw)
 
     monkeypatch.setattr(pb, "AnsibleModule", lambda **_kw: _Fake())
@@ -370,14 +371,54 @@ def test_os_rescue_windows_checked_ports_follow_actual_port():
 # ═══════════════════════════════════════════════════════════════════════════
 # Case 11 — OS 관리 포트 전체 실패 (PLAY 1.5)
 # ═══════════════════════════════════════════════════════════════════════════
-def test_case11_os_all_ports_failure_has_reason():
-    diag = _render_diagnosis("os-gather/site.yml", "failed-output | set port-fail vars", {})
-    _assert_diagnosis_shape(diag, "C11 OS 포트 전멸")
-    _assert_grid_ready(diag["failure_reason"], "C11 OS 포트 전멸")
-    assert diag["failure_stage"] == "port", "실행이 멈춘 단계는 포트 감지 단계"
+# Phase 3-A (2026-08-10): OS 포트 전멸 진단은 공통 precheck 가 만들고, PLAY 1.5 는
+# Portal 표시 문구만 OS 문맥으로 덮어쓴다. 아래는 그 덮어쓰기 태스크를 렌더한다.
+_OS_PORTFAIL_TASK = "failed-output | Portal 표시용 failure_reason 을 OS 문맥으로"
+
+
+def _os_portfail_diag(stage: str, code: str) -> dict[str, Any]:
+    """공통 precheck 가 만든 OS 포트 전멸 진단 + PLAY 1.5 문구 덮어쓰기."""
+    base = {
+        "reachable": stage != "reachable", "port_open": False,
+        "protocol_supported": False, "auth_success": None,
+        "failure_stage": stage, "failure_code": code,
+        "failure_reason": "공통 문구",
+        "details": {"channel": "os", "checked_ports": [5986, 5985, 22],
+                    "detected_os": None, "detected_port": None},
+    }
+    return _render_diagnosis("os-gather/site.yml", _OS_PORTFAIL_TASK, {"_diagnosis": base})
+
+
+@pytest.mark.parametrize("stage,code", [
+    ("reachable", "TCP_CONNECT_FAILED"),
+    ("reachable", "DNS_RESOLUTION_FAILED"),
+    ("port", "TCP_CONNECTION_REFUSED"),
+])
+def test_case11_os_all_ports_failure_has_reason(stage, code):
+    diag = _os_portfail_diag(stage, code)
+    label = f"C11 OS 포트 전멸/{stage}"
+    _assert_diagnosis_shape(diag, label)
+    _assert_grid_ready(diag["failure_reason"], label)
+    # 공통 precheck 의 관측 결과를 그대로 보존한다 (문구만 OS 문맥으로 교체)
+    assert diag["failure_stage"] == stage, label
+    assert diag["failure_code"] == code, label
     # 인증 코드가 아예 실행되지 않는 경로 — false 는 거짓 정보
     assert diag["auth_success"] is None, "인증을 시도하지 않았으므로 false 가 아니라 null"
     assert diag["details"]["checked_ports"] == [5986, 5985, 22]
+
+
+def test_os_portfail_reason_matches_observation():
+    """관측 종류마다 문구가 달라야 한다 (사실과 어긋나는 표현 금지)."""
+    no_resp = _os_portfail_diag("reachable", "TCP_CONNECT_FAILED")["failure_reason"]
+    refused = _os_portfail_diag("port", "TCP_CONNECTION_REFUSED")["failure_reason"]
+    dns = _os_portfail_diag("reachable", "DNS_RESOLUTION_FAILED")["failure_reason"]
+
+    assert "응답이 없습니다" in no_resp
+    assert "서버는 응답하지만" in refused, "RST 관측 시 '모두 응답이 없습니다' 는 사실과 다르다"
+    assert "주소를 확인하지 못했습니다" in dns, (
+        "주소 해석 실패는 패킷을 보낸 적도 없다. '응답이 없습니다' 는 사실과 다르다"
+    )
+    assert len({no_resp, refused, dns}) == 3
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -77,6 +77,7 @@ def _run(monkeypatch, *, channel="redfish", ports=None, **overrides) -> dict:
         "username": None,
         "password": None,
         "verify_ssl": False,
+        "probe_protocol": True,
     }
     params.update(overrides)
     monkeypatch.setattr(pb, "AnsibleModule", lambda **_kw: _FakeModule(params))
@@ -294,29 +295,56 @@ def test_redfish_failure_message_has_no_dead_auth_branch():
 # ---------------------------------------------------------------------------
 # B-4 — OS checked_ports 가 실제 검사 순서와 일치하는가
 # ---------------------------------------------------------------------------
-def test_os_checked_ports_match_actual_probe_order():
-    """PLAY 1 의 실제 순서는 5986 → 5985 → 22 (os-gather/site.yml:40-69)."""
-    text = (REPO / "os-gather/site.yml").read_text(encoding="utf-8")
+def test_os_port_probe_order_is_defined_by_common_precheck():
+    """Phase 3-A: OS 포트 순서의 정본이 wait_for 3연타에서 공통 모듈로 옮겨졌다.
 
-    # 포트 감지 순서 자체가 바뀌면 아래 기대값도 함께 바뀌어야 한다
-    order = re.findall(r"^\s*port:\s*(\d+)\s*$", text, flags=re.MULTILINE)
-    assert order[:3] == ["5986", "5985", "22"], f"wait_for 순서 변경됨: {order[:3]}"
-
-    # 리터럴 checked_ports 값만 수집 (들여쓰기/정렬 공백 무시)
-    literals = re.findall(r"checked_ports:\s*(\[[^\]]*\])", text)
-    normalized = [re.sub(r"\s+", "", v) for v in literals]
-
-    # 포트 전멸 경로 + linux 성공 경로: 3개 모두 시도됨
-    assert normalized.count("[5986,5985,22]") == 2, (
-        f"포트 전멸 / linux 성공 경로의 checked_ports 가 실제 검사 이력과 어긋난다: {normalized}"
+    os-gather 는 더 이상 자체 포트 목록을 갖지 않는다. 순서는
+    precheck_bundle.CHANNEL_DEFAULT_PORTS['os'] 하나만 보면 되고, 그 값이 곧 운영 동작이다.
+    """
+    assert pb.CHANNEL_DEFAULT_PORTS["os"] == [5986, 5985, 22], (
+        "OS 관리 포트 우선순위가 바뀌면 OS Type 자동 판정 결과가 달라진다"
     )
-    # windows: 5986 성공 시 거기서 멈추므로 [5986], 5985 로 붙었을 때만 [5986, 5985]
-    assert "[5986] if ((ansible_port | default(5986) | int) == 5986) else [5986, 5985]" in text
+    text = (REPO / "os-gather/site.yml").read_text(encoding="utf-8")
+    assert "ansible.builtin.wait_for" not in text, (
+        "PLAY 1 의 wait_for 3연타는 공통 precheck 로 대체됐다"
+    )
+    assert "_precheck_channel:         \"os\"" in text
+    # 프로토콜 검증은 이번 범위가 아니다 — 포트가 열렸다고 SSH/WinRM 을 확인했다고 하면 안 된다
+    assert "_precheck_probe_protocol:  false" in text
 
-    # 역순/누락 표기 재발 차단
-    assert "[22,5985,5986]" not in normalized
-    assert "[22]" not in normalized
-    assert "[5985,5986]" not in normalized
+
+def test_check_ports_reports_actually_probed_ports():
+    """checked_ports 는 구성된 전체 목록이 아니라 **실제로 시도한** 포트다."""
+    calls = []
+
+    def fake(host, port, timeout, _open=None):
+        calls.append(port)
+        return (port == _open), (None if port == _open else "실패"), (
+            None if port == _open else pb.TCP_FAIL_TIMEOUT)
+
+    for open_port, expected in ((5986, [5986]), (5985, [5986, 5985]),
+                                (22, [5986, 5985, 22]), (None, [5986, 5985, 22])):
+        calls.clear()
+        orig = pb.tcp_check_ex
+        pb.tcp_check_ex = lambda h, p, t, _o=open_port: fake(h, p, t, _o)
+        try:
+            *_rest, probed = pb._check_ports("192.0.2.10", [5986, 5985, 22], 2.0)
+        finally:
+            pb.tcp_check_ex = orig
+        assert probed == expected, f"open_port={open_port}: {probed}"
+        assert calls == expected, "시도하지 않은 포트를 checked_ports 에 넣으면 안 된다"
+
+
+def test_os_checked_ports_come_from_precheck():
+    """os-gather 의 checked_ports 는 precheck 실측값을 쓰고, 리터럴은 fallback 으로만 남는다."""
+    text = (REPO / "os-gather/site.yml").read_text(encoding="utf-8")
+    literal_only = re.findall(r"checked_ports:\s*(\[[^\]]*\])\s*$", text, flags=re.MULTILINE)
+    assert not literal_only, f"실측 대신 리터럴을 그대로 쓰는 곳이 남아 있다: {literal_only}"
+    assert text.count("_precheck_raw.checked_ports") == 4, (
+        "linux/windows 각각의 성공 경로와 rescue 경로 4곳이 실측값을 써야 한다"
+    )
+    # 역순 표기 재발 차단 (Phase 1-A 회귀)
+    assert "[22, 5985, 5986]" not in text
 
 
 # ---------------------------------------------------------------------------

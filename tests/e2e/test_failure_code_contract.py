@@ -245,14 +245,24 @@ def test_case13_partial_does_not_force_stage_or_code():
 # ═══════════════════════════════════════════════════════════════════════════
 # Case 14 — OS 포트 전멸(문서화된 예외) / Fallback
 # ═══════════════════════════════════════════════════════════════════════════
-def test_os_port_failure_uses_connect_failed_not_refused():
-    diag = _render_diagnosis("os-gather/site.yml", "failed-output | set port-fail vars", {})
-    assert diag["failure_stage"] == "port", "실행이 멈춘 단계는 포트 감지 단계"
-    assert diag["failure_code"] == "TCP_CONNECT_FAILED", (
-        "wait_for 는 RST 를 관측하지 못한다. REFUSED 로 적으면 관측하지 않은 사실을 확정하는 것"
-    )
-    assert diag["auth_success"] is None
-    _assert_stage_code(diag, "OS 포트 전멸")
+@pytest.mark.parametrize("channel", ["os", "redfish", "esxi"])
+def test_all_ports_timeout_is_connect_failed(channel, monkeypatch):
+    """전 포트 무응답은 채널 무관 reachable + TCP_CONNECT_FAILED (UNREACHABLE 확정 금지)."""
+    result = _run_precheck(monkeypatch, channel, connect_exc=socket.timeout())
+    assert result["failure_stage"] == "reachable", channel
+    assert result["failure_code"] == "TCP_CONNECT_FAILED", channel
+    assert result["auth_success"] is None, channel
+    _assert_stage_code(result, f"{channel} 전 포트 timeout")
+
+
+def test_os_refused_now_observable(monkeypatch):
+    """Phase 3-A: OS 도 RST 를 실제로 관측한다 (Phase 2 의 매핑 예외 해소)."""
+    result = _run_precheck(monkeypatch, "os", connect_exc=ConnectionRefusedError())
+    assert result["reachable"] is True, "RST 는 호스트가 살아 있다는 증거"
+    assert result["failure_stage"] == "port"
+    assert result["failure_code"] == "TCP_CONNECTION_REFUSED"
+    assert result["auth_success"] is None
+    _assert_stage_code(result, "OS refused")
 
 
 @pytest.mark.parametrize("site", list(_FALLBACK_CTX))
@@ -350,7 +360,10 @@ def test_phase1_reason_contract_still_holds():
             "os-gather/site.yml", _OS_TASKS["linux"],
             {"_os_auth_ok": True, "_os_attempts_meta": {}})),
         ("os/port", _render_diagnosis(
-            "os-gather/site.yml", "failed-output | set port-fail vars", {})),
+            "os-gather/site.yml",
+            "failed-output | Portal 표시용 failure_reason 을 OS 문맥으로",
+            {"_diagnosis": {"failure_stage": "reachable", "failure_code": "TCP_CONNECT_FAILED",
+                            "failure_reason": None, "details": {"channel": "os"}}})),
     ]
     for label, diag in samples:
         _assert_grid_ready(diag["failure_reason"], label)

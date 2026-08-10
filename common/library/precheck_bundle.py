@@ -443,7 +443,10 @@ def _init_result(channel, ports):
 
 
 def _check_ports(host, ports, timeout_port):
-    """Stage 1+2: 포트 순회 → (any_response, target_port_open, open_port, port_errors, kinds).
+    """Stage 1+2: 포트 순회 → (any_response, target_port_open, open_port, port_errors, kinds, probed).
+
+    probed 는 **실제로 순차 probe 를 수행한 포트 목록**이다 (성공 시 거기서 멈추므로
+    구성된 전체 목록과 다를 수 있다). checked_ports 의 정본 (2026-08-10 Phase 3-A).
 
     kinds 는 실패한 포트별 TCP_FAIL_* 종류 목록이다 (성공 시 빈 목록).
     2026-08-10 (Phase 2): 종전에는 refused 판별을 `"거부" in err` 부분 문자열 검사로 했다.
@@ -455,7 +458,9 @@ def _check_ports(host, ports, timeout_port):
     open_port = None
     port_errors = []
     kinds = []
+    probed = []
     for port in ports:
+        probed.append(port)
         ok, err, kind = tcp_check_ex(host, port, timeout_port)
         if ok:
             any_response = True
@@ -467,16 +472,27 @@ def _check_ports(host, ports, timeout_port):
             any_response = True
         kinds.append(kind)
         port_errors.append("port={0}: {1}".format(port, err))
-    return any_response, target_port_open, open_port, port_errors, kinds
+    return any_response, target_port_open, open_port, port_errors, kinds, probed
 
 
 def _tcp_failure_code(kinds):
-    """TCP 실패 종류 목록 → failure_code (Phase 2 매핑).
+    """포트별 TCP 실패 종류 목록 → **대표** failure_code.
 
-    - 주소 해석 실패는 TCP 연결 시도 자체를 못 한 별도 관측이므로 우선한다.
-    - timeout / no route / 기타 OSError 는 "연결하지 못했다"는 사실만 확정할 수 있고
-      장비가 꺼졌는지 경로가 막혔는지는 알 수 없다 → TCP_CONNECT_FAILED (UNREACHABLE 아님).
-    - RST 를 실제로 관측했을 때만 TCP_CONNECTION_REFUSED.
+    포트를 여러 개 순차 probe 하면 포트마다 결과가 다를 수 있다
+    (예: 5986 timeout / 5985 refused / 22 timeout). 마지막 결과만 보고 대표를 정하면
+    probe 순서에 따라 결과가 흔들리므로, **관측의 강도** 순으로 결정한다 (2026-08-10 Phase 3-A).
+
+    선정 규칙 (결정적, 순서 무관):
+      1) 주소 해석 실패가 하나라도 있으면 DNS_RESOLUTION_FAILED
+         — DNS 는 호스트 단위라 한 포트에서 실패하면 전 포트가 같다. TCP 연결 시도 자체를
+           못 한 것이므로 가장 앞선 단계의 관측이다.
+      2) RST(거부)를 하나라도 관측했으면 TCP_CONNECTION_REFUSED
+         — "호스트가 살아 있다"는 **능동적 응답**을 실제로 본 것이라 가장 강한 관측이다.
+      3) 그 외에는 TCP_CONNECT_FAILED
+         — timeout / no route 등. "연결하지 못했다"는 사실만 확정할 수 있고 장비가
+           꺼졌는지 경로가 막혔는지는 알 수 없다 (UNREACHABLE 로 단정 금지).
+
+    포트별 원본 사유는 result['detail'] 에 "port=<n>: <사유>" 형태로 전부 보존된다.
     """
     if TCP_FAIL_DNS in kinds:
         return "DNS_RESOLUTION_FAILED"
@@ -558,6 +574,14 @@ def run_module():
             username=dict(type="str", required=False, no_log=True),
             password=dict(type="str", required=False, no_log=True),
             verify_ssl=dict(type="bool", default=False),
+            # 2026-08-10 (Phase 3-A): Stage 3(프로토콜 확인) 수행 여부.
+            #   OS 채널을 공통 precheck 로 통합하면서 필요해진 최소 확장이다. OS 는 종전에
+            #   wait_for 로 TCP 개방만 확인했고, 이번 Phase 범위는 구조 정렬이지
+            #   SSH/WinRM 실제 프로토콜 검증 도입이 아니다. probe_protocol=false 로 부르면
+            #   Stage 1+2 까지만 수행하고 protocol_supported 는 초기값(False)을 유지한다
+            #   — 즉 "포트가 열렸으니 프로토콜도 된다"고 **거짓으로 표시하지 않는다.**
+            #   redfish / esxi 는 기본값 true 라 동작 불변.
+            probe_protocol=dict(type="bool", default=True),
         ),
         supports_check_mode=True,
     )
@@ -569,9 +593,13 @@ def run_module():
     result = _init_result(channel, ports)
 
     # Stage 1+2: reachable + port_open (rule 27 R2 — host alive 분리)
-    any_response, target_port_open, open_port, port_errors, port_kinds = _check_ports(
+    any_response, target_port_open, open_port, port_errors, port_kinds, probed = _check_ports(
         host, ports, module.params["timeout_port"]
     )
+    # checked_ports 는 **실제로 순차 probe 를 수행한 포트**다 (구성된 전체 목록이 아니다).
+    # 성공 시 거기서 멈추므로 OS 채널은 [5986] / [5986,5985] / [5986,5985,22] 로 달라진다.
+    # redfish / esxi 는 포트가 [443] 하나뿐이라 값이 종전과 동일하다.
+    result["checked_ports"] = probed or ports
     if not any_response:
         result["failure_stage"] = "reachable"
         # DNS_RESOLUTION_FAILED 또는 TCP_CONNECT_FAILED — RST 를 못 봤으므로 REFUSED 는 나올 수 없다
@@ -605,6 +633,17 @@ def run_module():
         result["detected_port"] = open_port
 
     # Stage 3: protocol_supported
+    #
+    # 2026-08-10 (Phase 3-A): probe_protocol=false 면 Stage 3 자체를 수행하지 않는다.
+    #   이때 protocol_supported 는 초기값 False 로 남는다. 이는 "프로토콜이 없다"가 아니라
+    #   **"확인하지 않았다"** 는 뜻이다 (rule: 관측하지 않은 것을 true 로 만들지 않는다).
+    #   호출부가 protocol_checked=False 를 보고 이 구분을 할 수 있게 결과에 함께 싣는다
+    #   — 이 키는 build_diagnosis 가 매핑하지 않으므로 envelope 에는 나가지 않는다.
+    if not module.params["probe_protocol"]:
+        result["protocol_checked"] = False
+        module.exit_json(**result)
+
+    result["protocol_checked"] = True
     ok, err, facts = _probe_protocol(
         channel, host, open_port, module.params["timeout_protocol"], verify_ssl
     )
