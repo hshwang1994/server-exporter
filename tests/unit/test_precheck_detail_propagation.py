@@ -188,7 +188,9 @@ def test_detail_populated_on_protocol_failure(monkeypatch):
     assert result["port_open"] is True
     assert result["protocol_supported"] is False
     assert result["failure_stage"] == "protocol"
-    assert result["detail"] == "HTTP 500"
+    # Phase 4-A: evidence 에 HTTP status 를 남기되 판정 근거로는 쓰지 않는다
+    assert "HTTP 500" in result["detail"]
+    assert "ServiceRoot" in result["detail"], "무엇을 확인하지 못했는지도 남긴다"
 
 
 def test_detail_is_none_on_success(monkeypatch):
@@ -209,7 +211,7 @@ def test_detail_is_none_on_success(monkeypatch):
     monkeypatch.setattr(
         pb, "http_get",
         lambda url, timeout, verify=False, auth=None: (
-            True, None, {"status_code": 200, "json": {"RedfishVersion": "1.6.0"}}
+            True, None, {"status_code": 200, "json": {"@odata.id": "/redfish/v1", "@odata.type": "#ServiceRoot.v1_15_0.ServiceRoot", "RedfishVersion": "1.6.0"}}
         ),
     )
     result = _run(monkeypatch)

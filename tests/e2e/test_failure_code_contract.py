@@ -85,7 +85,7 @@ def _assert_stage_code(diag: dict[str, Any], label: str) -> None:
 def test_case01_success_has_null_stage_and_code(monkeypatch):
     result = _run_precheck(
         monkeypatch, "redfish",
-        http=(True, None, {"status_code": 200, "json": {"RedfishVersion": "1.6.0"}}),
+        http=(True, None, {"status_code": 200, "json": {"@odata.id": "/redfish/v1", "@odata.type": "#ServiceRoot.v1_15_0.ServiceRoot", "RedfishVersion": "1.6.0"}}),
     )
     assert "failure_code" in result, "정상 결과에도 키는 존재해야 한다"
     assert result["failure_stage"] is None

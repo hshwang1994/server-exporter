@@ -75,11 +75,17 @@ def test_auth_wellformed_member_extracts_uri(monkeypatch):
 
 
 def test_probe_redfish_non_dict_json_does_not_crash(monkeypatch):
-    """ServiceRoot 가 비-dict JSON('error' 등) 반환 → json_data.get AttributeError 방어 (UNWRAPPED P0)."""
+    """ServiceRoot 가 비-dict JSON('error' 등) 반환 → AttributeError 없이 graceful.
+
+    2026-08-10 (Phase 4-A): 종전에는 crash 만 막고 ok=True 로 통과시켰다. 이제 본문이
+    ServiceRoot 인지 구조로 판정하므로 비-dict 는 **Redfish 아님**으로 거부한다
+    (crash 방어는 그대로 유효 — 예외 없이 판정 결과만 돌려준다).
+    """
     monkeypatch.setattr(pb, "http_get",
                         lambda *a, **k: (True, None, {"status_code": 200, "json": "errorstring"}))
     ok, err, facts = pb.probe_redfish("10.0.0.1", 443, 5)  # 가드 전: str.get AttributeError
-    assert ok is True and isinstance(facts, dict)
+    assert ok is False and facts is None
+    assert "ServiceRoot 아님" in err
 
 
 def test_auth_non_dict_json_does_not_crash(monkeypatch):

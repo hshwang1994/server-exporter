@@ -279,7 +279,7 @@ def test_other_channels_do_not_use_candidate_flow(monkeypatch, channel):
     monkeypatch.setattr(
         pb, "http_get",
         lambda *_a, **_k: (True, None, {"status_code": 200,
-                                        "json": {"RedfishVersion": "1.6.0"},
+                                        "json": {"@odata.id": "/redfish/v1", "@odata.type": "#ServiceRoot.v1_15_0.ServiceRoot", "RedfishVersion": "1.6.0"},
                                         "headers": {}}))
 
     class _Fake:

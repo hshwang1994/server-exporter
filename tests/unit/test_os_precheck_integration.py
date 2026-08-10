@@ -248,7 +248,7 @@ def test_other_channels_still_probe_protocol(monkeypatch, channel):
         pb, "tcp_check_ex", lambda *_a, **_k: (True, None, None))
     monkeypatch.setattr(
         pb, "http_get",
-        lambda *_a, **_k: (True, None, {"status_code": 200, "json": {"RedfishVersion": "1.6.0"}}))
+        lambda *_a, **_k: (True, None, {"status_code": 200, "json": {"@odata.id": "/redfish/v1", "@odata.type": "#ServiceRoot.v1_15_0.ServiceRoot", "RedfishVersion": "1.6.0"}}))
 
     class _Fake:
         params = dict(host="192.0.2.10", channel=channel, ports=[], timeout_port=3.0,

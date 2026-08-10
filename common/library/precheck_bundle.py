@@ -452,67 +452,108 @@ def ssh_banner_check(host, port, timeout):
     return False, last_err, None
 
 
+# ── Redfish ServiceRoot 판정 정본 (Phase 4-A) ──────────────────────────────
+#
+# 최소 성공 조건은 DMTF 규격 + 저장소 실측 양쪽을 근거로 정했다.
+#
+# 규격 근거:
+#   - `@odata.type` / `@odata.id` 는 모든 Redfish 리소스에 필수인 payload annotation
+#     (DSP0266 Redfish Specification / DSP2046 Resource and Schema Guide).
+#   - `RedfishVersion` 은 ServiceRoot_v1.xml 에서 Edm.String + Nullable="false" 로
+#     정의된 필수 속성이다 (redfish.dmtf.org/schemas/v1/ServiceRoot_v1.xml, 확인 2026-08-10).
+#
+# 실측 근거 (2026-08-10, 저장소 fixture 전수):
+#   - tests/fixtures/redfish/*/service_root.json 28개
+#   - tests/fixtures/redfish/*/recording.json 의 `noauth::` 비인증 ServiceRoot 10개
+#     (DMTF 표준 mockup + HPE 에뮬레이터 5 + 실장비 캡처 4)
+#   → 총 38개 전수에서 @odata.type 은 `#ServiceRoot.` 로 시작하고,
+#     @odata.id 는 `/redfish/v1` 또는 `/redfish/v1/`, RedfishVersion 은 항상 존재.
+#   → 비인증 ServiceRoot 10개는 **전부 HTTP 200** 이다. 저장소 안에 ServiceRoot 에서
+#     인증을 요구하는 vendor 캡처는 하나도 없다.
+_SERVICE_ROOT_TYPE_PREFIX = "#ServiceRoot."
+_SERVICE_ROOT_ODATA_IDS = frozenset({"/redfish/v1", "/redfish/v1/"})
+
+
+def parse_service_root(json_data):
+    """Redfish ServiceRoot 검증 → (is_service_root, facts, 사유).
+
+    HTTP status 가 아니라 **응답 본문 구조**로 판정한다. 일반 웹서버가 200 + JSON 을
+    돌려줘도 ServiceRoot 시그니처가 없으면 Redfish 가 아니다.
+    """
+    if not isinstance(json_data, dict):
+        return False, None, "본문이 JSON object 가 아님 ({0})".format(
+            type(json_data).__name__)
+
+    odata_type = json_data.get("@odata.type")
+    if not isinstance(odata_type, str) or not odata_type.startswith(_SERVICE_ROOT_TYPE_PREFIX):
+        return False, None, "ServiceRoot 리소스가 아님 (@odata.type={0})".format(
+            str(odata_type)[:48] if odata_type is not None else "없음")
+
+    odata_id = json_data.get("@odata.id")
+    if not isinstance(odata_id, str) or odata_id not in _SERVICE_ROOT_ODATA_IDS:
+        return False, None, "ServiceRoot URI 불일치 (@odata.id={0})".format(
+            str(odata_id)[:48] if odata_id is not None else "없음")
+
+    version = json_data.get("RedfishVersion")
+    if not isinstance(version, str) or not version.strip():
+        return False, None, "RedfishVersion 없음"
+
+    systems = json_data.get("Systems")
+    facts = {
+        "redfish_version": version,
+        "product": json_data.get("Product"),
+        "systems_uri": systems.get("@odata.id") if isinstance(systems, dict) else None,
+    }
+    return True, facts, "ServiceRoot 확인"
+
+
 def probe_redfish(host, port, timeout, verify=False):
-    """Redfish ServiceRoot 프로브.
+    """Redfish ServiceRoot 프로브 — 실제 ServiceRoot 본문으로 판정.
 
-    ServiceRoot가 200이 아닌 HTTP 응답 (401/403/503)을 던지더라도, BMC가
-    Redfish 서비스를 응답한다는 증거 → protocol_supported=True. 인증 검증은
-    Stage 4 (auth) 또는 본 수집 (redfish_gather library의 무인증→인증
-    fallback) 에서 처리.
+    2026-08-10 (Phase 4-A): 판정 근거가 바뀌었다.
+      (a) 종전: HTTP 2xx 면 **본문을 보지 않고** 성공. 추가로 401/403/405/406/503 을
+          "BMC 가 Redfish 를 응답한다는 증거" 로 보고 성공 처리했다.
+          → 443 에 뜬 일반 HTTPS 서버가 200 + HTML/JSON 을 돌려줘도 Redfish 로 판정됐다.
+      (b) **현재**: `/redfish/v1/` 응답 본문이 ServiceRoot 인지 구조로 검증한다
+          (parse_service_root). HTTP status 는 실패 시 evidence 로만 쓰고 성공 근거로는
+          쓰지 않는다. 인증을 보내지 않으므로 401 을 받아도 auth_success 는 건드리지 않는다.
 
-    배경: 일부 BMC (HPE iLO5/6 보안 강화 펌웨어, Lenovo XCC 일부) 는
-    무인증 ServiceRoot에 401을 던진다. 이전 구현은 401/403/503을 모두
-    HTTP 실패로 분류해 "Redfish 미지원"으로 오판정 → 통신 정상인 장비를
-    차단. probe_esxi 의 status_code 허용 패턴을 따라 정정.
+    제거된 호환 예외 (운영 위험이라 최종 보고에 명시): 종전 주석은 "일부 BMC (HPE iLO5/6
+    보안 강화 펌웨어, Lenovo XCC 일부) 가 무인증 ServiceRoot 에 401 을 던진다" 를 근거로
+    401/403 을 성공 처리했다. 그러나 저장소의 비인증 ServiceRoot 캡처 10개는 전부 200 이고
+    그 주장을 뒷받침하는 fixture 는 없다. 실제로 그런 펌웨어를 만나면 이제
+    PROTOCOL_CHECK_FAILED 가 된다 (evidence 에 root_status_code 보존).
 
-    G5 (cycle 2026-04-30): payload=None 케이스 (URLError/timeout/SSLError)
-    에 1회 retry. BMC 부팅 직후 / 일시 부하 transient 차단.
+    유지된 것: URI / GET / Accept 헤더 / TLS 정책(verify=False + legacy fallback) /
+    timeout / retry(payload=None 일 때만 1회, 1초 backoff) / redirect(urllib 기본 자동 추종).
     """
     import time as _time
     url = "https://{0}:{1}/redfish/v1/".format(host, port)
 
     last_err = None
-    last_payload = None
-    for attempt in (1, 2):  # 최대 2회 시도 (1 retry)
+    for attempt in (1, 2):  # 최대 2회 시도 (1 retry) — 기존 정책 유지
         ok, err, payload = http_get(url, timeout, verify=verify)
 
         if ok:
-            json_data = payload.get("json") if payload else None
-            probe_facts = {}
-            if isinstance(json_data, dict):
-                probe_facts["redfish_version"] = json_data.get("RedfishVersion")
-                probe_facts["product"] = json_data.get("Product")
-                systems_uri = None
-                systems = json_data.get("Systems")
-                if isinstance(systems, dict):
-                    systems_uri = systems.get("@odata.id")
-                probe_facts["systems_uri"] = systems_uri
-            if attempt > 1:
-                probe_facts["retry_count"] = attempt - 1
-            return True, None, probe_facts
+            # redirect 는 urllib 이 자동 추종한다. 최종 응답 본문이 ServiceRoot 인지로만
+            # 판정하므로 "redirect 가 있었다" 는 사실 자체는 성공/실패에 관여하지 않는다.
+            is_root, facts, why = parse_service_root(
+                payload.get("json") if payload else None)
+            if is_root:
+                if attempt > 1:
+                    facts["retry_count"] = attempt - 1
+                return True, None, facts
+            return False, "Redfish ServiceRoot 아님 (HTTP {0}, {1})".format(
+                (payload or {}).get("status_code"), why), None
 
-        # HTTP 응답은 왔지만 status != 200 — 서비스 살아있고 인증/일시상태 이슈
-        # 401: 무인증 ServiceRoot 차단 (인증 강화 펌웨어)
-        # 403: IP 화이트리스트 / 권한 부족 (BMC는 응답 중)
-        # 405: Method Not Allowed — Redfish 응답하나 GET/HEAD 제한 (드물지만 일부 펌웨어)
-        # 406: Not Acceptable — Accept 헤더 협상 불일치 (cycle 2026-04-30: http_get은
-        #      Accept 헤더만 명시 — OData-Version/User-Agent는 Lenovo XCC reject로 제거됨.
-        #      그럼에도 BMC 펌웨어가 추가 헤더 요구하는 케이스)
-        # 503: BMC 일시 과부하 / 부팅 직후 — 본 수집에서 재시도 가능
-        if payload and payload.get("status_code") in (401, 403, 405, 406, 503):
-            facts = {
-                "root_status_code": payload.get("status_code"),
-                "requires_auth_at_root": payload.get("status_code") in (401, 403),
-                "header_negotiation_issue": payload.get("status_code") in (405, 406),
-            }
-            if attempt > 1:
-                facts["retry_count"] = attempt - 1
-            return True, None, facts
-
-        last_err, last_payload = err, payload
-        # payload=None (URLError/timeout/SSLError) 일 때만 retry. HTTP 응답이 온 status는 retry 불필요.
+        # HTTP 응답은 왔으나 2xx 가 아님 — status 만으로 Redfish 를 확정하지 않는다.
+        # 어떤 status 였는지는 운영자가 원인을 좁힐 수 있도록 err 에 남긴다.
         if payload is not None:
-            break
+            return False, "Redfish ServiceRoot 응답 아님 (HTTP {0})".format(
+                payload.get("status_code")), None
+
+        # payload=None (URLError/timeout/SSLError) 일 때만 retry — 기존 정책 유지
+        last_err = err
         if attempt == 1:
             _time.sleep(1)  # 1초 backoff
 

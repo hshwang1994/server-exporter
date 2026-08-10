@@ -1,13 +1,20 @@
-"""Regression for precheck_bundle.probe_redfish.
+"""probe_redfish — Redfish Protocol 판정 (Phase 4-A 이후).
 
-배경: probe_redfish가 ServiceRoot 401/403/503 응답을 "Redfish 미지원"으로
-오판정 → 통신 정상이고 인증만 필요한 BMC (HPE iLO5/6 일부, Lenovo XCC 일부)
-를 차단했음. probe_esxi (line 260) 의 status_code 허용 패턴을 따라 정정.
+이력
+----
+- 종전(~Phase 3-B): HTTP 2xx 면 **본문을 보지 않고** 성공. 추가로 401/403/405/406/503 을
+  "BMC 가 Redfish 를 응답한다는 증거" 로 보고 성공 처리했다.
+  → 443 에 뜬 일반 HTTPS 서버가 200 + HTML/JSON 을 돌려줘도 Redfish 로 판정됐다.
+- Phase 4-A (2026-08-10): `/redfish/v1/` **응답 본문이 ServiceRoot 인지** 구조로 검증한다.
+  HTTP status 는 실패 evidence 로만 쓰고 성공 근거로는 쓰지 않는다.
 
-본 테스트는:
-  - 200/JSON       → ok + probe_facts (redfish_version, systems_uri)
-  - 401/403/503    → ok + root_status_code, requires_auth_at_root (회귀 차단)
-  - 404/timeout/SSL → fail (실제 미지원/장애 — false positive 방지)
+최소 성공 조건 (규격 + 저장소 fixture 38개 실측 양쪽 근거):
+  1. JSON object
+  2. `@odata.type` 이 `#ServiceRoot.` 로 시작
+  3. `@odata.id` 가 `/redfish/v1` 또는 `/redfish/v1/`
+  4. `RedfishVersion` 이 비어 있지 않은 문자열 (ServiceRoot_v1.xml Nullable="false")
+
+vendor fixture 회귀는 `test_redfish_service_root_fixtures.py` 가 전수 검증한다.
 """
 from __future__ import annotations
 
@@ -16,13 +23,14 @@ import types
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "common" / "library"))
 
 # Windows 환경에서 ansible import 불가 (grp/pwd 부재) — top-level import 회피용 stub.
-# probe_redfish 자체는 ansible API 미사용, http_get / urllib만 사용.
 _stub_basic = types.ModuleType("ansible.module_utils.basic")
-_stub_basic.AnsibleModule = object  # placeholder, 호출되지 않음
+_stub_basic.AnsibleModule = object
 _stub_module_utils = types.ModuleType("ansible.module_utils")
 _stub_module_utils.basic = _stub_basic
 _stub_ansible = types.ModuleType("ansible")
@@ -34,114 +42,229 @@ sys.modules.setdefault("ansible.module_utils.basic", _stub_basic)
 import precheck_bundle  # noqa: E402
 
 
+SERVICE_ROOT = {
+    "@odata.context": "/redfish/v1/$metadata#ServiceRoot.ServiceRoot",
+    "@odata.id": "/redfish/v1",
+    "@odata.type": "#ServiceRoot.v1_15_0.ServiceRoot",
+    "Id": "RootService",
+    "Name": "Root Service",
+    "RedfishVersion": "1.17.0",
+    "Product": "Integrated Dell Remote Access Controller",
+    "Systems": {"@odata.id": "/redfish/v1/Systems"},
+    "Chassis": {"@odata.id": "/redfish/v1/Chassis"},
+    "Managers": {"@odata.id": "/redfish/v1/Managers"},
+}
+
+
 def _http_get_returning(ok, err, payload):
     def fake(url, timeout, verify=False, auth=None):
         return ok, err, payload
+
     return fake
 
 
-def test_service_root_200_returns_probe_facts():
-    payload = {
-        "status_code": 200,
-        "json": {
-            "RedfishVersion": "1.13.0",
-            "Product": "iDRAC",
-            "Systems": {"@odata.id": "/redfish/v1/Systems"},
-        },
+def _resp(status, json_body, ok=True):
+    return ok, None if ok else "HTTP {0}".format(status), {
+        "status_code": status, "json": json_body, "headers": {},
     }
-    with patch.object(precheck_bundle, "http_get", _http_get_returning(True, None, payload)):
-        ok, err, facts = precheck_bundle.probe_redfish("10.1.1.1", 443, 6.0)
-    assert ok is True
-    assert err is None
-    assert facts["redfish_version"] == "1.13.0"
-    assert facts["product"] == "iDRAC"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Positive — 실제 ServiceRoot
+# ═══════════════════════════════════════════════════════════════════════════
+def test_service_root_accepted_and_returns_probe_facts():
+    with patch.object(precheck_bundle, "http_get",
+                      _http_get_returning(*_resp(200, SERVICE_ROOT))):
+        ok, err, facts = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+    assert ok is True, err
+    assert facts["redfish_version"] == "1.17.0"
     assert facts["systems_uri"] == "/redfish/v1/Systems"
+    assert facts["product"] == "Integrated Dell Remote Access Controller"
 
 
-def test_service_root_401_treated_as_supported():
-    """회귀 차단: 401 = '인증 필요한 Redfish 서비스 살아있음' (미지원 아님)."""
-    payload = {"status_code": 401, "json": None}
-    with patch.object(precheck_bundle, "http_get", _http_get_returning(False, "HTTP 401", payload)):
-        ok, _, facts = precheck_bundle.probe_redfish("10.1.1.1", 443, 6.0)
-    assert ok is True
-    assert facts["root_status_code"] == 401
-    assert facts["requires_auth_at_root"] is True
+@pytest.mark.parametrize("odata_id", ["/redfish/v1", "/redfish/v1/"])
+def test_trailing_slash_variants_accepted(odata_id):
+    """실측상 vendor 마다 @odata.id 의 trailing slash 가 갈린다 (22 vs 6)."""
+    body = dict(SERVICE_ROOT, **{"@odata.id": odata_id})
+    with patch.object(precheck_bundle, "http_get",
+                      _http_get_returning(*_resp(200, body))):
+        ok, err, _f = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+    assert ok is True, err
 
 
-def test_service_root_403_treated_as_supported():
-    payload = {"status_code": 403, "json": None}
-    with patch.object(precheck_bundle, "http_get", _http_get_returning(False, "HTTP 403", payload)):
-        ok, _, facts = precheck_bundle.probe_redfish("10.1.1.1", 443, 6.0)
-    assert ok is True
-    assert facts["root_status_code"] == 403
-    assert facts["requires_auth_at_root"] is True
+@pytest.mark.parametrize("version", ["1.0.0", "1.6.0", "1.17.0", "1.22.1"])
+def test_various_redfish_versions_accepted(version):
+    body = dict(SERVICE_ROOT, RedfishVersion=version)
+    with patch.object(precheck_bundle, "http_get",
+                      _http_get_returning(*_resp(200, body))):
+        ok, err, facts = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+    assert ok is True, err
+    assert facts["redfish_version"] == version
 
 
-def test_service_root_503_treated_as_supported():
-    """503 = BMC 일시 과부하/부팅 직후 — 본 수집에서 재시도. 미지원 아님."""
-    payload = {"status_code": 503, "json": None}
-    with patch.object(precheck_bundle, "http_get", _http_get_returning(False, "HTTP 503", payload)):
-        ok, _, facts = precheck_bundle.probe_redfish("10.1.1.1", 443, 6.0)
-    assert ok is True
-    assert facts["root_status_code"] == 503
-    assert facts["requires_auth_at_root"] is False
+@pytest.mark.parametrize("odata_type", [
+    "#ServiceRoot.v1_0_2.ServiceRoot",
+    "#ServiceRoot.v1_5_1.ServiceRoot",
+    "#ServiceRoot.v1_16_1.ServiceRoot",
+])
+def test_various_serviceroot_schema_versions_accepted(odata_type):
+    """ServiceRoot 스키마 버전 차이는 허용한다."""
+    body = dict(SERVICE_ROOT, **{"@odata.type": odata_type})
+    with patch.object(precheck_bundle, "http_get",
+                      _http_get_returning(*_resp(200, body))):
+        ok, err, _f = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+    assert ok is True, err
 
 
-def test_service_root_406_treated_as_supported():
-    """회귀 차단 (cycle 2026-04-30): 406 = Accept 헤더 협상 불일치.
-    HPE iLO 펌웨어 ServiceRoot RedfishVersion 1.17.0 등 일부 BMC가 Accept 헤더
-    누락된 요청을 거부. http_get에 Accept/OData-Version 명시 + 406도 supported로 분류.
-    """
-    payload = {"status_code": 406, "json": None}
-    with patch.object(precheck_bundle, "http_get", _http_get_returning(False, "HTTP 406", payload)):
-        ok, _, facts = precheck_bundle.probe_redfish("10.1.1.1", 443, 6.0)
-    assert ok is True
-    assert facts["root_status_code"] == 406
-    assert facts["requires_auth_at_root"] is False
-    assert facts["header_negotiation_issue"] is True
+def test_probe_sends_no_credentials():
+    """Protocol Probe 는 Credential Probe 가 아니다."""
+    seen = {}
+
+    def fake(url, timeout, verify=False, auth=None):
+        seen.update(url=url, auth=auth, verify=verify)
+        return _resp(200, SERVICE_ROOT)
+
+    with patch.object(precheck_bundle, "http_get", fake):
+        precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+
+    assert seen["url"] == "https://192.0.2.10:443/redfish/v1/"
+    assert seen["auth"] is None
+    assert seen["verify"] is False, "기존 BMC TLS 호환 정책(verify=False) 유지"
 
 
-def test_service_root_405_treated_as_supported():
-    """405 = Method Not Allowed. Redfish 서비스 살아있고 GET 제한이 있는 드문 펌웨어."""
-    payload = {"status_code": 405, "json": None}
-    with patch.object(precheck_bundle, "http_get", _http_get_returning(False, "HTTP 405", payload)):
-        ok, _, facts = precheck_bundle.probe_redfish("10.1.1.1", 443, 6.0)
-    assert ok is True
-    assert facts["root_status_code"] == 405
-    assert facts["header_negotiation_issue"] is True
+# ═══════════════════════════════════════════════════════════════════════════
+# False Positive 방지 (§16) — ServiceRoot 가 아니면 전부 거부
+# ═══════════════════════════════════════════════════════════════════════════
+_GENERIC_ODATA = {
+    "@odata.context": "/api/$metadata#Products",
+    "@odata.id": "/api/Products(1)",
+    "@odata.type": "#Product.v1_0_0.Product",
+    "Name": "Widget",
+}
+_LOOKALIKE = {   # ServiceRoot 비슷하지만 최소 조건 미달
+    "@odata.id": "/redfish/v1",
+    "Id": "RootService",
+    "Name": "Root Service",
+    "RedfishVersion": "1.6.0",
+}
 
 
-def test_service_root_404_real_unsupported():
-    """404 = /redfish/v1/ 자체가 없음 → 진짜 Redfish 미지원."""
-    payload = {"status_code": 404, "json": None}
-    with patch.object(precheck_bundle, "http_get", _http_get_returning(False, "HTTP 404", payload)):
-        ok, err, facts = precheck_bundle.probe_redfish("10.1.1.1", 443, 6.0)
-    assert ok is False
-    assert err == "HTTP 404"
+@pytest.mark.parametrize("body,label", [
+    (None, "HTML 등 JSON 아님 (파싱 실패)"),
+    ({}, "빈 JSON"),
+    ({"status": "ok", "version": "1.0"}, "일반 JSON"),
+    (_GENERIC_ODATA, "Redfish 와 무관한 OData JSON"),
+    ([1, 2, 3], "JSON Array"),
+    ("errorstring", "JSON 문자열"),
+    (_LOOKALIKE, "@odata.type 없는 ServiceRoot 유사 JSON"),
+    (dict(SERVICE_ROOT, **{"@odata.id": "/api/v1"}), "@odata.id 불일치"),
+    (dict(SERVICE_ROOT, RedfishVersion=""), "RedfishVersion 빈 문자열"),
+    ({k: v for k, v in SERVICE_ROOT.items() if k != "RedfishVersion"},
+     "RedfishVersion 부재"),
+])
+def test_non_serviceroot_body_rejected(body, label):
+    """HTTP 200 이어도 본문이 ServiceRoot 가 아니면 Redfish 가 아니다."""
+    with patch.object(precheck_bundle, "http_get",
+                      _http_get_returning(*_resp(200, body))):
+        ok, err, facts = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+    assert ok is False, "{0} 을 Redfish 로 오판하면 안 된다".format(label)
     assert facts is None
+    assert "ServiceRoot 아님" in err
 
 
-def test_service_root_timeout_real_failure():
-    """timeout = 실 통신 장애. payload=None."""
-    with patch.object(precheck_bundle, "http_get", _http_get_returning(False, "요청 시간 초과 (timeout=6.0s)", None)):
-        ok, err, facts = precheck_bundle.probe_redfish("10.1.1.1", 443, 6.0)
+@pytest.mark.parametrize("status", [401, 403, 404, 405, 406, 500, 503])
+def test_http_status_alone_never_means_redfish(status):
+    """종전 whitelist(401/403/405/406/503)면 통과했을 status 를 전부 거부."""
+    with patch.object(precheck_bundle, "http_get",
+                      _http_get_returning(*_resp(status, None, ok=False))):
+        ok, err, facts = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+    assert ok is False, "HTTP {0} 만으로 Redfish 판정 금지".format(status)
+    assert facts is None
+    assert str(status) in err, "어떤 status 였는지는 evidence 로 남긴다"
+
+
+def test_probe_never_sets_auth_success():
+    """401 을 받아도 Protocol Probe 는 auth_success 를 건드리지 않는다."""
+    result = precheck_bundle._init_result("redfish", [443])
+    with patch.object(precheck_bundle, "http_get",
+                      _http_get_returning(*_resp(401, None, ok=False))):
+        ok, _err, _f = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
     assert ok is False
+    assert result["auth_success"] is None, "Protocol Probe 는 인증을 시도하지 않는다"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Transport 실패 / retry 정책 (기존 유지)
+# ═══════════════════════════════════════════════════════════════════════════
+def test_timeout_real_failure():
+    with patch.object(precheck_bundle, "http_get",
+                      _http_get_returning(False, "요청 시간 초과", None)):
+        ok, err, facts = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+    assert ok is False and facts is None
     assert "시간 초과" in err
-    assert facts is None
 
 
-def test_service_root_ssl_failure():
-    """SSL handshake 실패 = 실 장애."""
-    with patch.object(precheck_bundle, "http_get", _http_get_returning(False, "SSL: WRONG_VERSION_NUMBER", None)):
-        ok, err, facts = precheck_bundle.probe_redfish("10.1.1.1", 443, 6.0)
+def test_ssl_failure():
+    with patch.object(precheck_bundle, "http_get",
+                      _http_get_returning(False, "연결 실패: TLS handshake 오류", None)):
+        ok, err, facts = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+    assert ok is False and facts is None
+    assert "TLS" in err
+
+
+def test_retry_only_when_no_payload(monkeypatch):
+    """payload=None 일 때만 1회 retry (기존 정책 유지)."""
+    monkeypatch.setattr(precheck_bundle, "_time_sleep_patch_target", None, raising=False)
+    calls = {"n": 0}
+
+    def fake(url, timeout, verify=False, auth=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return False, "요청 시간 초과", None      # payload None → retry 대상
+        return _resp(200, SERVICE_ROOT)
+
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    with patch.object(precheck_bundle, "http_get", fake):
+        ok, err, facts = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+    assert ok is True, err
+    assert calls["n"] == 2
+    assert facts["retry_count"] == 1
+
+
+def test_no_retry_when_http_response_present(monkeypatch):
+    """HTTP 응답이 온 status 는 재시도하지 않는다 (기존 정책 유지)."""
+    calls = {"n": 0}
+
+    def fake(url, timeout, verify=False, auth=None):
+        calls["n"] += 1
+        return _resp(404, None, ok=False)
+
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    with patch.object(precheck_bundle, "http_get", fake):
+        ok, _err, _f = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
     assert ok is False
-    assert err.startswith("SSL")
-    assert facts is None
+    assert calls["n"] == 1, "HTTP 응답이 왔으면 retry 없음"
 
 
-def test_service_root_500_real_failure():
-    """500 = BMC 내부 오류, 응답 형태 깨짐 → 미지원 처리 (인증 fallback도 무의미)."""
-    payload = {"status_code": 500, "json": None}
-    with patch.object(precheck_bundle, "http_get", _http_get_returning(False, "HTTP 500", payload)):
-        ok, _, _ = precheck_bundle.probe_redfish("10.1.1.1", 443, 6.0)
+def test_non_serviceroot_200_does_not_retry(monkeypatch):
+    """200 이지만 ServiceRoot 가 아닌 경우도 재시도하지 않는다 (retry 정책 불변)."""
+    calls = {"n": 0}
+
+    def fake(url, timeout, verify=False, auth=None):
+        calls["n"] += 1
+        return _resp(200, {"hello": "world"})
+
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    with patch.object(precheck_bundle, "http_get", fake):
+        ok, _err, _f = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
     assert ok is False
+    assert calls["n"] == 1
+
+
+def test_error_evidence_is_length_bounded():
+    """Raw body 를 통째로 흘리지 않는다."""
+    huge = {"@odata.type": "#Something." + "x" * 5000}
+    with patch.object(precheck_bundle, "http_get",
+                      _http_get_returning(*_resp(200, huge))):
+        _ok, err, _f = precheck_bundle.probe_redfish("192.0.2.10", 443, 5.0)
+    assert len(err) < 200, "evidence 길이 제한"
