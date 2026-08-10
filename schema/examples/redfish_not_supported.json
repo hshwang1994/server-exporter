@@ -24,11 +24,14 @@
     "protocol_supported": false,
     "auth_success": false,
     "failure_stage": "protocol",
-    "failure_reason": "이 장비는 Redfish를 지원하지 않습니다 (iDRAC 7, IMM2, X9/X10 등 구 세대 추정).",
+    "failure_code": "PROTOCOL_CHECK_FAILED",
+    "failure_reason": "예상한 Redfish API 응답을 확인하지 못했습니다. Redfish 서비스 활성화 여부와 펌웨어 호환성을 확인하세요.",
     "details": {
       "channel": "redfish",
       "adapter_candidate": null,
-      "checked_ports": [443]
+      "checked_ports": [
+        443
+      ]
     }
   },
   "meta": {

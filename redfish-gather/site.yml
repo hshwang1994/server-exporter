@@ -246,19 +246,26 @@
         # 보여줬다. 아래 태스크가 그 구멍을 막는다.
         #   - failure_reason 이 이미 있으면 건드리지 않는다 (precheck 의 구체적 사유 보존).
         #   - 7 키 base 로 시작해 _diagnosis 미정의/비-dict 상황에서도 shape 를 보장한다.
-        #   - failure_stage 는 손대지 않는다: redfish_gather 모듈이 인증과 수집을 한 번에
-        #     수행하므로(try_one_account.yml:38-40 이 보는 값은 '전체 수집 결과') 어느 단계에서
-        #     멈췄는지 **확정할 수 없다.** 확정 못 하는 것을 적지 않는다.
-        #   - auth_success 도 손대지 않는다: 인증 거부를 관측한 근거가 없다(null 유지).
+        #   - auth_success 는 손대지 않는다: 인증 거부를 관측한 근거가 없다(null 유지).
+        #
+        # 2026-08-10 (Phase 2) 단계/코드:
+        #   여기 도달했다는 것은 precheck 를 통과했다는 뜻이다(통과 못 했으면 failure_reason 이
+        #   이미 채워져 있어 when 가드가 막는다). 따라서 실행이 멈춘 지점은 **수집 단계**다
+        #   → failure_stage='gather', failure_code='GATHER_FAILED'.
+        #   redfish_gather 모듈은 인증과 수집을 한 작업 결과로 합쳐 반환하므로
+        #   (try_one_account.yml:38-40 이 보는 값은 '전체 수집 결과'), 자격 실패인지 수집 실패인지
+        #   구분할 수 없다. 그래서 auth 단계로 낮추지도 않고 auth_success=true 로 올리지도 않는다.
         - name: "redfish | rescue | Portal 표시용 failure_reason 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
               {{ {'reachable': none, 'port_open': none, 'protocol_supported': none,
-                  'auth_success': none, 'failure_stage': none, 'failure_reason': none,
-                  'details': {}}
+                  'auth_success': none, 'failure_stage': none, 'failure_code': none,
+                  'failure_reason': none, 'details': {}}
                  | combine((_diagnosis | default({}, true))
                            if ((_diagnosis | default({}, true)) is mapping) else {})
-                 | combine({'failure_reason':
+                 | combine({'failure_stage': 'gather',
+                            'failure_code': 'GATHER_FAILED',
+                            'failure_reason':
                      ('Redfish 정보 수집에 실패했습니다. 자격증명, 계정 권한, 펌웨어 호환성을 확인하세요.'
                       if not (_rf_collect_ok | default(false) | bool)
                       else 'Redfish 데이터를 정리하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.')}) }}
@@ -304,7 +311,7 @@
                        'vendor': (((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default('')) or ((_va | default({})).vendor_output_display | default({})).get(_rf_detected_vendor | default(''), _rf_detected_vendor | default(none))),
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
                        'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],

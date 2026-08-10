@@ -125,17 +125,34 @@ CHANNEL_PROTOCOL_MESSAGES = {
 }
 
 
-def tcp_check(host, port, timeout):
-    """TCP 포트 연결 가능 여부 확인.
+# TCP 연결 실패 종류 (구조화 — 오류 문자열 파싱 대신 이 값으로 분류한다)
+#   'dns'      : 주소 해석 실패 → TCP 연결 시도 자체를 못 함
+#   'refused'  : RST 관측 → 호스트는 살아 있고 포트만 닫힘
+#   'timeout'  : 응답 없음
+#   'other'    : 그 외 OSError (no route 등)
+TCP_FAIL_DNS = "dns"
+TCP_FAIL_REFUSED = "refused"
+TCP_FAIL_TIMEOUT = "timeout"
+TCP_FAIL_OTHER = "other"
+
+
+def tcp_check_ex(host, port, timeout):
+    """TCP 포트 연결 확인 — (ok, err, kind) 3-튜플.
 
     production-audit (2026-04-29): IPv4/IPv6 듀얼 스택 — 기존 AF_INET only는
     IPv6-only 관리망 대상에 도달 불가. socket.getaddrinfo로 family를 자동 선택.
+
+    2026-08-10 (Phase 2): 실패 **종류**를 구조화해 함께 반환한다. 종전에는 호출부가
+    한국어 오류 문자열에 `"거부" in err` 같은 부분 문자열 검사를 해서 refused 를 판별했는데,
+    그런 문자열 파싱으로 failure_code 를 만들면 문구가 바뀔 때마다 분류가 깨진다.
+    반환값 kind 는 위 TCP_FAIL_* 상수 중 하나이며 failure_code 매핑의 유일한 근거다.
     """
     last_err = "주소 해석 실패"
+    last_kind = TCP_FAIL_OTHER
     try:
         addr_infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror as e:
-        return False, "DNS 해석 실패: {0}".format(e)
+        return False, "DNS 해석 실패: {0}".format(e), TCP_FAIL_DNS
     for family, socktype, proto, _canon, sockaddr in addr_infos:
         # Round 16: socket.socket() 를 try 안으로 — IPv6 비활성 host 에서 AF_INET6
         # 주소군에 socket() 이 OSError(EAFNOSUPPORT) 를 던지면(try 밖이면) 모듈 전체가
@@ -145,20 +162,29 @@ def tcp_check(host, port, timeout):
             sock = socket.socket(family, socktype, proto)
             sock.settimeout(timeout)
             sock.connect(sockaddr)
-            return True, None
+            return True, None, None
         except socket.timeout:
             last_err = "연결 시간 초과 (timeout={0}s)".format(timeout)
+            last_kind = TCP_FAIL_TIMEOUT
         except ConnectionRefusedError:
             last_err = "연결 거부됨 (port={0})".format(port)
+            last_kind = TCP_FAIL_REFUSED
         except OSError as e:
             last_err = str(e)
+            last_kind = TCP_FAIL_OTHER
         finally:
             if sock is not None:
                 try:
                     sock.close()
                 except Exception:
                     pass
-    return False, last_err
+    return False, last_err, last_kind
+
+
+def tcp_check(host, port, timeout):
+    """tcp_check_ex 의 (ok, err) 2-튜플 래퍼 — 기존 호출자/테스트 호환용."""
+    ok, err, _kind = tcp_check_ex(host, port, timeout)
+    return ok, err
 
 
 def _build_ssl_context(verify):
@@ -400,6 +426,9 @@ def _init_result(channel, ports):
         "protocol_supported": False,
         "auth_success": None,
         "failure_stage": None,
+        # 2026-08-10 (Phase 2): 시스템이 분기에 쓰는 안정 식별자.
+        # 사람이 읽는 failure_reason 과 역할을 분리한다. 실패가 없으면 None.
+        "failure_code": None,
         "failure_reason": None,
         "detail": None,
         "checked_ports": ports,
@@ -414,23 +443,46 @@ def _init_result(channel, ports):
 
 
 def _check_ports(host, ports, timeout_port):
-    """Stage 1+2: 포트 순회 → (any_response, target_port_open, open_port, port_errors)."""
+    """Stage 1+2: 포트 순회 → (any_response, target_port_open, open_port, port_errors, kinds).
+
+    kinds 는 실패한 포트별 TCP_FAIL_* 종류 목록이다 (성공 시 빈 목록).
+    2026-08-10 (Phase 2): 종전에는 refused 판별을 `"거부" in err` 부분 문자열 검사로 했다.
+    오류 문구를 한 글자만 바꿔도 판별이 조용히 깨지는 구조라 tcp_check_ex 의 구조화된
+    kind 로 교체했다. failure_code 분류도 이 kind 만 근거로 삼는다.
+    """
     any_response = False
     target_port_open = False
     open_port = None
     port_errors = []
+    kinds = []
     for port in ports:
-        ok, err = tcp_check(host, port, timeout_port)
+        ok, err, kind = tcp_check_ex(host, port, timeout_port)
         if ok:
             any_response = True
             target_port_open = True
             open_port = port
             break
         # ConnectionRefusedError → host alive 이지만 port 닫힘
-        if err and ("거부" in err or "refused" in err.lower()):
+        if kind == TCP_FAIL_REFUSED:
             any_response = True
+        kinds.append(kind)
         port_errors.append("port={0}: {1}".format(port, err))
-    return any_response, target_port_open, open_port, port_errors
+    return any_response, target_port_open, open_port, port_errors, kinds
+
+
+def _tcp_failure_code(kinds):
+    """TCP 실패 종류 목록 → failure_code (Phase 2 매핑).
+
+    - 주소 해석 실패는 TCP 연결 시도 자체를 못 한 별도 관측이므로 우선한다.
+    - timeout / no route / 기타 OSError 는 "연결하지 못했다"는 사실만 확정할 수 있고
+      장비가 꺼졌는지 경로가 막혔는지는 알 수 없다 → TCP_CONNECT_FAILED (UNREACHABLE 아님).
+    - RST 를 실제로 관측했을 때만 TCP_CONNECTION_REFUSED.
+    """
+    if TCP_FAIL_DNS in kinds:
+        return "DNS_RESOLUTION_FAILED"
+    if TCP_FAIL_REFUSED in kinds:
+        return "TCP_CONNECTION_REFUSED"
+    return "TCP_CONNECT_FAILED"
 
 
 def _detect_os_from_port(open_port):
@@ -467,10 +519,14 @@ def _try_redfish_auth(host, open_port, username, password, timeout_auth, verify_
         #   → 403 은 인증 후 권한/IP 화이트리스트 문제일 수 있어 인증 거부로 단정하지 않는다.
         #   → 그 외에는 "확인하지 못함"인 None 유지.
         # failure_stage 는 원인이 아니라 **실행이 멈춘 단계**이므로 어느 쪽이든 'auth'.
+        # 구조화된 HTTP status 를 그대로 본다 (문자열 파싱 아님 — http_get 이 payload 로 전달).
         status = (payload or {}).get("status_code")
         rejected = status == 401
         result["auth_success"] = False if rejected else None
         result["failure_stage"] = "auth"
+        # 401 이든 timeout 이든 **멈춘 단계**는 같다. 원인 확정 여부는 auth_success 가 표현한다.
+        # 403 은 인증 후 권한 부족일 수 있어 거부로 확정하지 않는다 (auth_success 는 None 유지).
+        result["failure_code"] = "AUTH_PROBE_FAILED"
         result["failure_reason"] = (
             "BMC가 자격증명을 거부했습니다(HTTP 401). 계정과 비밀번호를 확인하세요."
             if rejected else
@@ -513,11 +569,13 @@ def run_module():
     result = _init_result(channel, ports)
 
     # Stage 1+2: reachable + port_open (rule 27 R2 — host alive 분리)
-    any_response, target_port_open, open_port, port_errors = _check_ports(
+    any_response, target_port_open, open_port, port_errors, port_kinds = _check_ports(
         host, ports, module.params["timeout_port"]
     )
     if not any_response:
         result["failure_stage"] = "reachable"
+        # DNS_RESOLUTION_FAILED 또는 TCP_CONNECT_FAILED — RST 를 못 봤으므로 REFUSED 는 나올 수 없다
+        result["failure_code"] = _tcp_failure_code(port_kinds)
         result["failure_reason"] = (
             "대상 호스트에 연결할 수 없습니다. "
             "서버 전원 상태와 네트워크 경로를 확인하세요."
@@ -527,6 +585,8 @@ def run_module():
     if not target_port_open:
         result["reachable"] = True
         result["failure_stage"] = "port"
+        # 이 분기는 RST 를 관측했기에만 도달한다 (_check_ports 의 any_response 조건)
+        result["failure_code"] = "TCP_CONNECTION_REFUSED"
         result["failure_reason"] = (
             "호스트는 응답하지만 서비스 포트가 열려 있지 않습니다. "
             "방화벽 설정과 서비스 기동 상태를 확인하세요."
@@ -550,6 +610,7 @@ def run_module():
     )
     if not ok:
         result["failure_stage"] = "protocol"
+        result["failure_code"] = "PROTOCOL_CHECK_FAILED"
         result["failure_reason"] = CHANNEL_PROTOCOL_MESSAGES.get(
             channel, "프로토콜 확인 실패"
         )

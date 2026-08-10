@@ -83,6 +83,18 @@ SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
 #   - collection_method 도 실제 값과 달랐다 (os: "ansible"→"agent",
 #     esxi: "vmware"→"vsphere_api" — os-gather/site.yml:152, esxi-gather/site.yml:187).
 # ---------------------------------------------------------------------------
+# Phase 2 (2026-08-10): failure_stage -> failure_code 기본 매핑.
+# production 정본은 field_dictionary.yml + 각 site.yml 이며, 여기서는 fixture 생성용 사본이다.
+_STAGE_TO_CODE: dict[str, str] = {
+    "reachable": "TCP_CONNECT_FAILED",
+    "port": "TCP_CONNECTION_REFUSED",
+    "protocol": "PROTOCOL_CHECK_FAILED",
+    "auth": "AUTH_PROBE_FAILED",
+    "gather": "GATHER_FAILED",
+    "fallback": "OUTPUT_BUILD_FAILED",
+}
+
+
 def _empty_sections() -> dict[str, str]:
     return {}
 
@@ -118,6 +130,8 @@ def _failed_envelope(
             # (precheck_bundle.py:546-548) 실패 경로에서 true 가 될 수 없다.
             "auth_success": None,
             "failure_stage": failure_stage,
+            # Phase 2: 시스템 분기용 안정 식별자 (정상 결과에서도 키는 존재)
+            "failure_code": _STAGE_TO_CODE[failure_stage],
             "failure_reason": failure_reason,
             "details": {"channel": target_type, "gather_mode": "fallback"},
         },
@@ -162,6 +176,8 @@ def _partial_envelope(
             "protocol_supported": True,
             "auth_success": True,
             "failure_stage": None,
+            # partial 이라는 이유로 대표 stage/code 를 강제로 만들지 않는다 (build_status 정책 유지)
+            "failure_code": None,
             "failure_reason": None,
             "details": {
                 "channel": target_type,
@@ -243,10 +259,11 @@ ENVELOPES: dict[str, dict[str, Any]] = {
             "protocol_supported": None,
             "auth_success": None,
             "failure_stage": "fallback",
-            "failure_reason": "_output 미생성 — block/rescue 모두 실패",
+            "failure_code": "OUTPUT_BUILD_FAILED",
+            "failure_reason": "수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.",
             "details": {
                 "gather_mode": "fallback",
-                "reason": "_output 미생성 — block/rescue 모두 실패",
+                "reason": "_output 미생성 (block/rescue 모두 실패)",
             },
         },
         "meta": {},
@@ -254,7 +271,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
         "errors": [
             {
                 "section": "gather",
-                "message": "_output 미생성 — block/rescue 모두 실패",
+                "message": "수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.",
             }
         ],
         "data": {},
@@ -296,10 +313,11 @@ ENVELOPES: dict[str, dict[str, Any]] = {
             "protocol_supported": None,
             "auth_success": None,
             "failure_stage": "fallback",
-            "failure_reason": "_output 미생성 — block/rescue 모두 실패",
+            "failure_code": "OUTPUT_BUILD_FAILED",
+            "failure_reason": "수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.",
             "details": {
                 "gather_mode": "fallback",
-                "reason": "_output 미생성 — block/rescue 모두 실패",
+                "reason": "_output 미생성 (block/rescue 모두 실패)",
             },
         },
         "meta": {},
@@ -307,7 +325,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
         "errors": [
             {
                 "section": "gather",
-                "message": "_output 미생성 — block/rescue 모두 실패",
+                "message": "수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.",
             }
         ],
         "data": {},
@@ -349,10 +367,11 @@ ENVELOPES: dict[str, dict[str, Any]] = {
             "protocol_supported": None,
             "auth_success": None,
             "failure_stage": "fallback",
-            "failure_reason": "_output 미생성 — block/rescue 모두 실패",
+            "failure_code": "OUTPUT_BUILD_FAILED",
+            "failure_reason": "수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.",
             "details": {
                 "gather_mode": "fallback",
-                "reason": "_output 미생성 — block/rescue 모두 실패",
+                "reason": "_output 미생성 (block/rescue 모두 실패)",
             },
         },
         "meta": {},
@@ -360,7 +379,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
         "errors": [
             {
                 "section": "gather",
-                "message": "_output 미생성 — block/rescue 모두 실패",
+                "message": "수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.",
             }
         ],
         "data": {},

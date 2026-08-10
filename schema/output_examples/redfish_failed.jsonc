@@ -36,8 +36,9 @@
     "port_open": true,                                     // 443 응답
     "protocol_supported": true,                            // TLS handshake OK + JSON 응답
     "auth_success": null,                                  // 인증 시도 자체 안 됨 (root 503 으로 차단)
-    "failure_stage": null,                                 // 본 케이스는 stage 명확 안 함 (root 503 전 protocol 통과)
-    "failure_reason": null,                             // 실패 사유 한글 (성공 시 null)
+    "failure_stage":      "gather",             // 실행이 멈춘 단계 (연결·인증 통과 후 수집에서 중단)
+    "failure_code":       "GATHER_FAILED",      // 시스템 분기용 안정 식별자 (성공 시 null)
+    "failure_reason":     "Redfish 정보 수집에 실패했습니다. 자격증명, 계정 권한, 펌웨어 호환성을 확인하세요.",  // Portal Grid 표시 문구
     "details": {                                        // 채널별 추가 진단 정보
       "channel": "redfish",                             // 수집 채널 식별 (diagnosis 안에 다시 명시)
       "adapter_candidate": null,                           // adapter 매칭 안 됨 (probe 실패로 vendor 모름)
@@ -65,7 +66,7 @@
   "errors": [                                           // 수집 중 errors (warning 수준이면 status=success 와 공존 가능 — rule 13 R8)
     {
       "section": "redfish_gather",                         // errors 가 발생한 영역
-      "message": "Redfish 수집 실패 — 인증 실패 (10.100.15.1). 네트워크/Redfish API는 정상 (Redfish ? / Unknown). vault/redfish/.yml 자격증명을 확인하세요. 시도된 계정 수: 0.",  // 한국어 사용자 가이드 (rule 23)
+      "message": "Redfish 정보 수집에 실패했습니다 (10.100.15.1). 네트워크/포트/Redfish API 는 정상 확인됨 (Redfish ? / Unknown). 가능한 원인은 (1) 자격증명 불일치, (2) 계정 권한 부족, (3) 펌웨어 호환성 또는 OEM 경로 문제입니다. 자세한 기술 오류는 errors 항목을 확인하세요.",  // 한국어 사용자 가이드 (rule 23)
       "detail": null                                       // 추가 details (envelope shape 변경 금지 — rule 13 R5 / rule 96 R1-B)
     }
   ],

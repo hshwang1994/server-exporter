@@ -1309,7 +1309,10 @@ fields:
 
   diagnosis.failure_stage:
     type: "string|null"
-    enum: ["reachable", "port", "protocol", "auth", "fallback"]
+    # 2026-08-10 (Phase 2): "gather" 추가 — 연결/인증 단계를 통과한 뒤 실제 수집·정규화에서
+    # 중단된 경우. 종전에는 이 경우 null 이라 precheck 실패와 구분하려면 errors[].section
+    # 문자열을 파싱해야 했다. enum 확장(additive)이며 기존 5 값의 의미는 불변.
+    enum: ["reachable", "port", "protocol", "auth", "gather", "fallback"]
     priority: nice
     channel: [redfish, os, esxi]
     # cycle 2026-05-11 field-channel-refinement: conditional 필드 — channel 유지.
@@ -1317,15 +1320,50 @@ fields:
     # 추가 시 채워짐. field_usage_matrix 자동 분류 1 (모든 baseline null) 은
     # success-only baseline 한계 — conditional 분류 (channel 축소 안 함).
     help_ko: >-
-      실패 시 어느 단계에서 실패했는지. **conditional 필드** — status=failed 시만 채워짐.
-      reachable=호스트 도달 불가, port=서비스 포트 닫힘, protocol=프로토콜 미지원, auth=인증 실패,
-      fallback=block/rescue 모두 실패 (_output 미생성).
-      null=실패하지 않았거나 단계 확인 불가 (success status baseline 에서 항상 null).
+      **실행이 중단된 단계** (원인이 아니다). status=failed 시만 채워지는 conditional 필드.
+      reachable=대상 접근 단계, port=관리 포트 연결 확인 단계, protocol=기대 프로토콜 확인 단계,
+      auth=자격증명 확인 단계, gather=연결·인증 통과 후 수집/정규화 단계,
+      fallback=정상 결과 객체 생성 자체를 완료하지 못함.
+      null=실패하지 않았거나 전체 실패 단계가 적용되지 않는 결과.
+      실제 원인 확정 여부는 auth_success / failure_code / errors[].detail 로 표현한다.
     help_en: >-
-      Failure stage indicator. **Conditional field** — populated only when status=failed.
-      reachable=host unreachable (no TCP response), port=host up but service port closed,
-      protocol=not supported, auth=auth failed, fallback=block/rescue both failed (no _output).
-      null=no failure or stage unknown (always null in success-status baselines).
+      **Stage at which execution stopped** (not the root cause). Conditional field.
+      reachable=target reachability step, port=management port check step,
+      protocol=expected-protocol check step, auth=credential check step,
+      gather=collection/normalization step after connectivity and auth passed,
+      fallback=could not complete normal output construction.
+      null=no failure, or overall failure stage not applicable.
+      Whether the cause is confirmed is expressed by auth_success / failure_code / errors[].detail.
+
+  diagnosis.failure_code:
+    type: "string|null"
+    enum: ["DNS_RESOLUTION_FAILED", "TCP_CONNECT_FAILED", "TCP_CONNECTION_REFUSED",
+           "PROTOCOL_CHECK_FAILED", "AUTH_PROBE_FAILED", "GATHER_FAILED",
+           "OUTPUT_BUILD_FAILED"]
+    priority: nice
+    channel: [redfish, os, esxi]
+    # 2026-08-10 (Phase 2) 신설. 외부 시스템이 실패 종류로 분기할 때 문자열 메시지를 파싱하지
+    # 않도록 하는 **안정 식별자**. 정상 결과에서도 키는 존재하고 값만 null (shape 고정).
+    # Raw Exception 종류(SOCKET_TIMEOUT / SSL_ERROR / HTTP_500 등)를 code 로 만들지 않는다 —
+    # 그 정보는 errors[].detail 과 diagnosis.details 에 보존한다.
+    help_ko: >-
+      실패 종류의 안정 식별자. **conditional 필드** — status=failed 시만 채워짐.
+      DNS_RESOLUTION_FAILED=주소 해석 실패로 TCP 연결 시도 자체를 못 함,
+      TCP_CONNECT_FAILED=TCP 연결 실패 (timeout / no route 등. 장비 다운으로 확정하지 않음),
+      TCP_CONNECTION_REFUSED=명시적 TCP 거부(RST)를 관측,
+      PROTOCOL_CHECK_FAILED=기대한 프로토콜 응답 확인 실패,
+      AUTH_PROBE_FAILED=자격증명 확인 단계에서 중단 (실제 인증 거부 확정은 auth_success 가 표현),
+      GATHER_FAILED=연결·인증 통과 후 수집/정규화 실패,
+      OUTPUT_BUILD_FAILED=정상 결과 객체 생성 실패 (fallback).
+      기본 매핑은 failure_stage 와 1:1 이나, OS 채널의 포트 감지 실패만 예외로
+      stage=port + code=TCP_CONNECT_FAILED 다 (wait_for 는 RST 를 관측하지 못하기 때문).
+    help_en: >-
+      Stable identifier for the failure kind, for system-side branching without parsing
+      human-readable messages. Conditional field (populated when status=failed).
+      Raw exception kinds (socket timeout, SSL error, HTTP 500) are deliberately NOT codes;
+      that detail stays in errors[].detail and diagnosis.details.
+      Mapping to failure_stage is 1:1 except the OS port-detection path, which is
+      stage=port with code=TCP_CONNECT_FAILED because wait_for cannot observe RST.
 
   # ══════════════════════════════════════════════════════════════════════════
   # Do Not Help (skip) — 의미가 자명하여 등록하되 설명은 최소한

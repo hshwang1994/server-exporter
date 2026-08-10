@@ -70,6 +70,9 @@ def build_diagnosis(precheck_result, channel, adapter_id=None):
         "protocol_supported": precheck_result.get("protocol_supported"),
         "auth_success": precheck_result.get("auth_success"),
         "failure_stage": precheck_result.get("failure_stage"),
+        # 2026-08-10 (Phase 2): 시스템 분기용 안정 식별자. 정상 결과에서도 키는 항상 존재하고
+        # 값만 None 이다 (shape 고정 — 소비자가 키 유무로 분기하지 않게 한다).
+        "failure_code": precheck_result.get("failure_code"),
         "failure_reason": precheck_result.get("failure_reason"),
         "details": details,
     }

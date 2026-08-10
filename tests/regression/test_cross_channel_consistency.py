@@ -259,6 +259,23 @@ def test_diagnosis_has_4stage_keys(baseline_envelope: dict) -> None:
         )
 
 
+def test_diagnosis_has_failure_keys(baseline_envelope: dict) -> None:
+    """failure_stage / failure_code / failure_reason 는 성공 결과에서도 키가 존재한다.
+
+    2026-08-10 (Phase 2): failure_code 는 '실패할 때만 나타나는 선택 필드'가 아니라
+    Diagnosis Contract 의 정식 필드다. 소비자가 키 유무로 분기하지 않도록 shape 를 고정한다.
+    """
+    label = baseline_envelope["__label"]
+    diagnosis = baseline_envelope.get("diagnosis", {})
+    for key in ("failure_stage", "failure_code", "failure_reason"):
+        assert key in diagnosis, (
+            f"[{label}] diagnosis.{key} missing — Phase 2 diagnosis shape 깨짐"
+        )
+    if baseline_envelope.get("status") == "success":
+        assert diagnosis["failure_stage"] is None, f"[{label}] success 인데 failure_stage 존재"
+        assert diagnosis["failure_code"] is None, f"[{label}] success 인데 failure_code 존재"
+
+
 # ---------------------------------------------------------------------------
 # T8 — errors[] is list (rule 22 R8 fragment type)
 # ---------------------------------------------------------------------------

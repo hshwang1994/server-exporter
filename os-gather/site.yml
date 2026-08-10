@@ -166,6 +166,12 @@
           # failure_stage 는 원인이 아니라 **실행이 멈춘 단계**다 (사용자 확정 2026-08-10).
           # 이 경로에서 멈춘 곳은 포트 감지 단계이므로 "port" 를 유지한다.
           failure_stage:      "port"
+          # 2026-08-10 (Phase 2) 문서화된 매핑 예외:
+          #   기본 매핑은 TCP_CONNECTION_REFUSED → port 이지만, OS 는 wait_for 만 쓰므로
+          #   RST(거부)를 관측할 수 없다. 관측한 사실은 "TCP 연결에 실패했다" 뿐이라
+          #   TCP_CONNECT_FAILED 를 쓴다. 멈춘 단계는 포트 감지 단계이므로 stage 는 port 유지.
+          #   (REFUSED 로 적으면 관측하지 않은 사실을 확정하는 것이라 금지)
+          failure_code:       "TCP_CONNECT_FAILED"
           failure_reason:     "SSH(22)/WinRM(5985, 5986) 모두 응답이 없습니다. 서버 전원, 네트워크, 서비스 상태를 확인하세요."
           details:
             channel: "os"
@@ -290,6 +296,8 @@
               protocol_supported: true
               auth_success:       true
               failure_stage:      null
+              # 2026-08-10 (Phase 2): 정상 결과에서도 키는 존재하고 값만 null (shape 고정).
+              failure_code:       null
               failure_reason:     null
               details:
                 channel:           "os"
@@ -372,7 +380,8 @@
               {{ {'reachable': true, 'port_open': true,
                   'protocol_supported': ok,
                   'auth_success': (true if ok else none),
-                  'failure_stage': (none if ok else 'auth'),
+                  'failure_stage': ('gather' if ok else 'auth'),
+                  'failure_code': ('GATHER_FAILED' if ok else 'AUTH_PROBE_FAILED'),
                   'failure_reason': ('Linux 정보를 수집하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.' if ok
                                      else 'Linux 서버에 SSH로 접속하지 못했습니다. 자격증명, SSH 설정, 네트워크 상태를 확인하세요.'),
                   'details': {'channel': 'os', 'detected_os': 'linux',
@@ -414,7 +423,7 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
                        'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],
@@ -521,6 +530,8 @@
               protocol_supported: true
               auth_success:       true
               failure_stage:      null
+              # 2026-08-10 (Phase 2): 정상 결과에서도 키는 존재하고 값만 null (shape 고정).
+              failure_code:       null
               failure_reason:     null
               details:
                 channel:           "os"
@@ -588,7 +599,8 @@
               {{ {'reachable': true, 'port_open': true,
                   'protocol_supported': ok,
                   'auth_success': (true if ok else none),
-                  'failure_stage': (none if ok else 'auth'),
+                  'failure_stage': ('gather' if ok else 'auth'),
+                  'failure_code': ('GATHER_FAILED' if ok else 'AUTH_PROBE_FAILED'),
                   'failure_reason': ('Windows 정보를 수집하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.' if ok
                                      else 'Windows 서버에 WinRM으로 접속하지 못했습니다. 자격증명과 WinRM 설정을 확인하세요.'),
                   'details': {'channel': 'os', 'detected_os': 'windows',
@@ -631,7 +643,7 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
                        'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],

@@ -23,6 +23,7 @@
     "protocol_supported": true,
     "auth_success": true,
     "failure_stage": null,
+    "failure_code": null,
     "failure_reason": null,
     "details": {
       "channel": "redfish",
@@ -131,14 +132,142 @@
       "visible_mb": null,
       "free_mb": null,
       "slots": [
-        {"id": "proc1dimm1", "name": "proc1dimm1", "locator": "PROC1 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS01", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-        {"id": "proc1dimm5", "name": "proc1dimm5", "locator": "PROC1 DIMM5", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS02", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-        {"id": "proc2dimm1", "name": "proc2dimm1", "locator": "PROC2 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS03", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-        {"id": "proc2dimm5", "name": "proc2dimm5", "locator": "PROC2 DIMM5", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS04", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-        {"id": "proc3dimm1", "name": "proc3dimm1", "locator": "PROC3 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS05", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-        {"id": "proc3dimm5", "name": "proc3dimm5", "locator": "PROC3 DIMM5", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS06", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-        {"id": "proc4dimm1", "name": "proc4dimm1", "locator": "PROC4 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS07", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-        {"id": "proc4dimm5", "name": "proc4dimm5", "locator": "PROC4 DIMM5", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS08", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"}
+        {
+          "id": "proc1dimm1",
+          "name": "proc1dimm1",
+          "locator": "PROC1 DIMM1",
+          "capacity_mb": 262144,
+          "type": "DDR5",
+          "base_module_type": "RDIMM",
+          "speed_mhz": 4800,
+          "manufacturer": "Samsung",
+          "serial": "S0CSUS01",
+          "part_number": "M321RAGA0B40-CWMXJ",
+          "rank_count": 4,
+          "data_width_bits": 64,
+          "bus_width_bits": 72,
+          "error_correction": "MultiBitECC",
+          "health": "OK"
+        },
+        {
+          "id": "proc1dimm5",
+          "name": "proc1dimm5",
+          "locator": "PROC1 DIMM5",
+          "capacity_mb": 262144,
+          "type": "DDR5",
+          "base_module_type": "RDIMM",
+          "speed_mhz": 4800,
+          "manufacturer": "Samsung",
+          "serial": "S0CSUS02",
+          "part_number": "M321RAGA0B40-CWMXJ",
+          "rank_count": 4,
+          "data_width_bits": 64,
+          "bus_width_bits": 72,
+          "error_correction": "MultiBitECC",
+          "health": "OK"
+        },
+        {
+          "id": "proc2dimm1",
+          "name": "proc2dimm1",
+          "locator": "PROC2 DIMM1",
+          "capacity_mb": 262144,
+          "type": "DDR5",
+          "base_module_type": "RDIMM",
+          "speed_mhz": 4800,
+          "manufacturer": "Samsung",
+          "serial": "S0CSUS03",
+          "part_number": "M321RAGA0B40-CWMXJ",
+          "rank_count": 4,
+          "data_width_bits": 64,
+          "bus_width_bits": 72,
+          "error_correction": "MultiBitECC",
+          "health": "OK"
+        },
+        {
+          "id": "proc2dimm5",
+          "name": "proc2dimm5",
+          "locator": "PROC2 DIMM5",
+          "capacity_mb": 262144,
+          "type": "DDR5",
+          "base_module_type": "RDIMM",
+          "speed_mhz": 4800,
+          "manufacturer": "Samsung",
+          "serial": "S0CSUS04",
+          "part_number": "M321RAGA0B40-CWMXJ",
+          "rank_count": 4,
+          "data_width_bits": 64,
+          "bus_width_bits": 72,
+          "error_correction": "MultiBitECC",
+          "health": "OK"
+        },
+        {
+          "id": "proc3dimm1",
+          "name": "proc3dimm1",
+          "locator": "PROC3 DIMM1",
+          "capacity_mb": 262144,
+          "type": "DDR5",
+          "base_module_type": "RDIMM",
+          "speed_mhz": 4800,
+          "manufacturer": "Samsung",
+          "serial": "S0CSUS05",
+          "part_number": "M321RAGA0B40-CWMXJ",
+          "rank_count": 4,
+          "data_width_bits": 64,
+          "bus_width_bits": 72,
+          "error_correction": "MultiBitECC",
+          "health": "OK"
+        },
+        {
+          "id": "proc3dimm5",
+          "name": "proc3dimm5",
+          "locator": "PROC3 DIMM5",
+          "capacity_mb": 262144,
+          "type": "DDR5",
+          "base_module_type": "RDIMM",
+          "speed_mhz": 4800,
+          "manufacturer": "Samsung",
+          "serial": "S0CSUS06",
+          "part_number": "M321RAGA0B40-CWMXJ",
+          "rank_count": 4,
+          "data_width_bits": 64,
+          "bus_width_bits": 72,
+          "error_correction": "MultiBitECC",
+          "health": "OK"
+        },
+        {
+          "id": "proc4dimm1",
+          "name": "proc4dimm1",
+          "locator": "PROC4 DIMM1",
+          "capacity_mb": 262144,
+          "type": "DDR5",
+          "base_module_type": "RDIMM",
+          "speed_mhz": 4800,
+          "manufacturer": "Samsung",
+          "serial": "S0CSUS07",
+          "part_number": "M321RAGA0B40-CWMXJ",
+          "rank_count": 4,
+          "data_width_bits": 64,
+          "bus_width_bits": 72,
+          "error_correction": "MultiBitECC",
+          "health": "OK"
+        },
+        {
+          "id": "proc4dimm5",
+          "name": "proc4dimm5",
+          "locator": "PROC4 DIMM5",
+          "capacity_mb": 262144,
+          "type": "DDR5",
+          "base_module_type": "RDIMM",
+          "speed_mhz": 4800,
+          "manufacturer": "Samsung",
+          "serial": "S0CSUS08",
+          "part_number": "M321RAGA0B40-CWMXJ",
+          "rank_count": 4,
+          "data_width_bits": 64,
+          "bus_width_bits": 72,
+          "error_correction": "MultiBitECC",
+          "health": "OK"
+        }
       ],
       "summary": {
         "groups": [
@@ -194,8 +323,22 @@
           "controller_manufacturer": "Intel",
           "controller_health": "OK",
           "drives": [
-            {"device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK"},
-            {"device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK"}
+            {
+              "device": "480GB SATA SSD",
+              "model": "SAMSUNG MZ7L3480HBLT-00A07",
+              "total_mb": 457862,
+              "media_type": "SSD",
+              "protocol": "SATA",
+              "health": "OK"
+            },
+            {
+              "device": "480GB SATA SSD",
+              "model": "SAMSUNG MZ7L3480HBLT-00A07",
+              "total_mb": 457862,
+              "media_type": "SSD",
+              "protocol": "SATA",
+              "health": "OK"
+            }
           ]
         }
       ],
@@ -391,22 +534,130 @@
       ]
     },
     "firmware": [
-      {"id": "1", "name": "RMC Firmware", "version": "3.10.00", "updateable": true, "component": "1", "pending": false, "category": "bmc"},
-      {"id": "2", "name": "System ROM", "version": "U54 v3.10 (05/01/2026)", "updateable": true, "component": "2", "pending": false, "category": "bios"},
-      {"id": "3", "name": "PDHC Firmware", "version": "3.10.00", "updateable": true, "component": "3", "pending": false, "category": "bmc"},
-      {"id": "4", "name": "Complex Programmable Logic Device", "version": "0x21", "updateable": true, "component": "4", "pending": false, "category": "cpld"},
-      {"id": "5", "name": "HPE SN1610Q 32Gb 2p FC HBA", "version": "9.12.00", "updateable": true, "component": "5", "pending": false, "category": "other"},
-      {"id": "6", "name": "HPE Ethernet 10/25Gb 2-port SFP28 Adapter", "version": "26.35.1002", "updateable": true, "component": "6", "pending": false, "category": "nic"},
-      {"id": "7", "name": "480GB SATA SSD", "version": "JXTC404Q", "updateable": true, "component": "7", "pending": false, "category": "drive"},
-      {"id": "8", "name": "Power Supply Firmware", "version": "2.10", "updateable": true, "component": "8", "pending": false, "category": "psu"},
-      {"id": "9", "name": "TPM Firmware", "version": "1.512", "updateable": false, "component": "9", "pending": false, "category": "tpm"}
+      {
+        "id": "1",
+        "name": "RMC Firmware",
+        "version": "3.10.00",
+        "updateable": true,
+        "component": "1",
+        "pending": false,
+        "category": "bmc"
+      },
+      {
+        "id": "2",
+        "name": "System ROM",
+        "version": "U54 v3.10 (05/01/2026)",
+        "updateable": true,
+        "component": "2",
+        "pending": false,
+        "category": "bios"
+      },
+      {
+        "id": "3",
+        "name": "PDHC Firmware",
+        "version": "3.10.00",
+        "updateable": true,
+        "component": "3",
+        "pending": false,
+        "category": "bmc"
+      },
+      {
+        "id": "4",
+        "name": "Complex Programmable Logic Device",
+        "version": "0x21",
+        "updateable": true,
+        "component": "4",
+        "pending": false,
+        "category": "cpld"
+      },
+      {
+        "id": "5",
+        "name": "HPE SN1610Q 32Gb 2p FC HBA",
+        "version": "9.12.00",
+        "updateable": true,
+        "component": "5",
+        "pending": false,
+        "category": "other"
+      },
+      {
+        "id": "6",
+        "name": "HPE Ethernet 10/25Gb 2-port SFP28 Adapter",
+        "version": "26.35.1002",
+        "updateable": true,
+        "component": "6",
+        "pending": false,
+        "category": "nic"
+      },
+      {
+        "id": "7",
+        "name": "480GB SATA SSD",
+        "version": "JXTC404Q",
+        "updateable": true,
+        "component": "7",
+        "pending": false,
+        "category": "drive"
+      },
+      {
+        "id": "8",
+        "name": "Power Supply Firmware",
+        "version": "2.10",
+        "updateable": true,
+        "component": "8",
+        "pending": false,
+        "category": "psu"
+      },
+      {
+        "id": "9",
+        "name": "TPM Firmware",
+        "version": "1.512",
+        "updateable": false,
+        "component": "9",
+        "pending": false,
+        "category": "tpm"
+      }
     ],
     "power": {
       "power_supplies": [
-        {"name": "HpeServerPowerSupply", "model": "P52600-B21", "serial": "5XLCSUS0001", "manufacturer": "LTEON", "power_capacity_w": 1600, "firmware_version": "2.10", "health": "OK", "state": "Enabled"},
-        {"name": "HpeServerPowerSupply", "model": "P52600-B21", "serial": "5XLCSUS0002", "manufacturer": "LTEON", "power_capacity_w": 1600, "firmware_version": "2.10", "health": "OK", "state": "Enabled"},
-        {"name": "HpeServerPowerSupply", "model": "P52600-B21", "serial": "5XLCSUS0003", "manufacturer": "LTEON", "power_capacity_w": 1600, "firmware_version": "2.10", "health": "OK", "state": "Enabled"},
-        {"name": "HpeServerPowerSupply", "model": "P52600-B21", "serial": "5XLCSUS0004", "manufacturer": "LTEON", "power_capacity_w": 1600, "firmware_version": "2.10", "health": "OK", "state": "Enabled"}
+        {
+          "name": "HpeServerPowerSupply",
+          "model": "P52600-B21",
+          "serial": "5XLCSUS0001",
+          "manufacturer": "LTEON",
+          "power_capacity_w": 1600,
+          "firmware_version": "2.10",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "HpeServerPowerSupply",
+          "model": "P52600-B21",
+          "serial": "5XLCSUS0002",
+          "manufacturer": "LTEON",
+          "power_capacity_w": 1600,
+          "firmware_version": "2.10",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "HpeServerPowerSupply",
+          "model": "P52600-B21",
+          "serial": "5XLCSUS0003",
+          "manufacturer": "LTEON",
+          "power_capacity_w": 1600,
+          "firmware_version": "2.10",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "HpeServerPowerSupply",
+          "model": "P52600-B21",
+          "serial": "5XLCSUS0004",
+          "manufacturer": "LTEON",
+          "power_capacity_w": 1600,
+          "firmware_version": "2.10",
+          "health": "OK",
+          "state": "Enabled"
+        }
       ],
       "power_control": {
         "power_consumed_watts": 2840,
@@ -448,7 +699,11 @@
           "id": "Partition0",
           "system_uri": "/redfish/v1/Systems/Partition0",
           "boot": {
-            "boot_order": ["Boot0001", "Boot0002", "Boot0003"],
+            "boot_order": [
+              "Boot0001",
+              "Boot0002",
+              "Boot0003"
+            ],
             "boot_source_override_enabled": "Disabled",
             "boot_source_override_target": "None",
             "boot_source_override_mode": "UEFI",
@@ -477,7 +732,15 @@
             "architecture": "x86-64",
             "summary": {
               "groups": [
-                {"model": "Intel(R) Xeon(R) Platinum 8480+", "manufacturer": "Intel", "max_speed_mhz": 3800, "architecture": "x86-64", "sockets": 4, "cores_per_socket": 56, "total_cores": 224}
+                {
+                  "model": "Intel(R) Xeon(R) Platinum 8480+",
+                  "manufacturer": "Intel",
+                  "max_speed_mhz": 3800,
+                  "architecture": "x86-64",
+                  "sockets": 4,
+                  "cores_per_socket": 56,
+                  "total_cores": 224
+                }
               ]
             }
           },
@@ -488,18 +751,154 @@
             "visible_mb": null,
             "free_mb": null,
             "slots": [
-              {"id": "proc1dimm1", "name": "proc1dimm1", "locator": "PROC1 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P0-01", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc2dimm1", "name": "proc2dimm1", "locator": "PROC2 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P0-02", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc3dimm1", "name": "proc3dimm1", "locator": "PROC3 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P0-03", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc4dimm1", "name": "proc4dimm1", "locator": "PROC4 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P0-04", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc5dimm1", "name": "proc5dimm1", "locator": "PROC5 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P0-05", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc6dimm1", "name": "proc6dimm1", "locator": "PROC6 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P0-06", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc7dimm1", "name": "proc7dimm1", "locator": "PROC7 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P0-07", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc8dimm1", "name": "proc8dimm1", "locator": "PROC8 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P0-08", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"}
+              {
+                "id": "proc1dimm1",
+                "name": "proc1dimm1",
+                "locator": "PROC1 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P0-01",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc2dimm1",
+                "name": "proc2dimm1",
+                "locator": "PROC2 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P0-02",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc3dimm1",
+                "name": "proc3dimm1",
+                "locator": "PROC3 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P0-03",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc4dimm1",
+                "name": "proc4dimm1",
+                "locator": "PROC4 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P0-04",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc5dimm1",
+                "name": "proc5dimm1",
+                "locator": "PROC5 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P0-05",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc6dimm1",
+                "name": "proc6dimm1",
+                "locator": "PROC6 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P0-06",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc7dimm1",
+                "name": "proc7dimm1",
+                "locator": "PROC7 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P0-07",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc8dimm1",
+                "name": "proc8dimm1",
+                "locator": "PROC8 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P0-08",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              }
             ],
             "summary": {
               "groups": [
-                {"unit_capacity_gb": 256, "type": "DDR5", "speed_mhz": 4800, "manufacturer": "Samsung", "part_number": "M321RAGA0B40-CWMXJ", "quantity": 8, "group_total_gb": 2048}
+                {
+                  "unit_capacity_gb": 256,
+                  "type": "DDR5",
+                  "speed_mhz": 4800,
+                  "manufacturer": "Samsung",
+                  "part_number": "M321RAGA0B40-CWMXJ",
+                  "quantity": 8,
+                  "group_total_gb": 2048
+                }
               ],
               "grand_total_gb": 2048
             }
@@ -507,8 +906,30 @@
           "storage": {
             "filesystems": [],
             "physical_disks": [
-              {"id": "0", "device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "serial": "S6ESCSUS-P0-01", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK", "failure_predicted": false, "predicted_life_percent": 100},
-              {"id": "1", "device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "serial": "S6ESCSUS-P0-02", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK", "failure_predicted": false, "predicted_life_percent": 100}
+              {
+                "id": "0",
+                "device": "480GB SATA SSD",
+                "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                "serial": "S6ESCSUS-P0-01",
+                "total_mb": 457862,
+                "media_type": "SSD",
+                "protocol": "SATA",
+                "health": "OK",
+                "failure_predicted": false,
+                "predicted_life_percent": 100
+              },
+              {
+                "id": "1",
+                "device": "480GB SATA SSD",
+                "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                "serial": "S6ESCSUS-P0-02",
+                "total_mb": 457862,
+                "media_type": "SSD",
+                "protocol": "SATA",
+                "health": "OK",
+                "failure_predicted": false,
+                "predicted_life_percent": 100
+              }
             ],
             "datastores": [],
             "controllers": [
@@ -521,17 +942,51 @@
                 "controller_manufacturer": "Intel",
                 "controller_health": "OK",
                 "drives": [
-                  {"device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK"},
-                  {"device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK"}
+                  {
+                    "device": "480GB SATA SSD",
+                    "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                    "total_mb": 457862,
+                    "media_type": "SSD",
+                    "protocol": "SATA",
+                    "health": "OK"
+                  },
+                  {
+                    "device": "480GB SATA SSD",
+                    "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                    "total_mb": 457862,
+                    "media_type": "SSD",
+                    "protocol": "SATA",
+                    "health": "OK"
+                  }
                 ]
               }
             ],
             "logical_volumes": [
-              {"id": "Volume.0", "name": "OS_Mirror", "controller_id": "RSTe.Embedded.1", "member_drive_ids": ["0", "1"], "raid_level": "RAID1", "total_mb": 457320, "health": "OK", "state": "Enabled", "boot_volume": true}
+              {
+                "id": "Volume.0",
+                "name": "OS_Mirror",
+                "controller_id": "RSTe.Embedded.1",
+                "member_drive_ids": [
+                  "0",
+                  "1"
+                ],
+                "raid_level": "RAID1",
+                "total_mb": 457320,
+                "health": "OK",
+                "state": "Enabled",
+                "boot_volume": true
+              }
             ],
             "summary": {
               "groups": [
-                {"unit_capacity_gb": 447, "model": "SAMSUNG MZ7L3480HBLT-00A07", "media_type": "SSD", "protocol": "SATA", "quantity": 2, "group_total_gb": 894}
+                {
+                  "unit_capacity_gb": 447,
+                  "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                  "media_type": "SSD",
+                  "protocol": "SATA",
+                  "quantity": 2,
+                  "group_total_gb": 894
+                }
               ],
               "grand_total_gb": 894
             },
@@ -541,21 +996,49 @@
           "network": {
             "dns_servers": [],
             "default_gateways": [
-              {"family": "ipv4", "address": "10.50.11.1"}
+              {
+                "family": "ipv4",
+                "address": "10.50.11.1"
+              }
             ],
             "interfaces": [
-              {"id": "Partition0.Eth0", "name": "Partition0 Embedded NIC 1", "kind": "server_nic", "mac": "00:62:0b:20:3a:f0", "mtu": 1500, "speed_mbps": 25000, "link_status": "up", "is_primary": false, "addresses": [{"family": "ipv4", "address": "10.50.11.50", "prefix_length": null, "subnet_mask": "255.255.255.0", "gateway": "10.50.11.1", "origin": "Static"}]}
+              {
+                "id": "Partition0.Eth0",
+                "name": "Partition0 Embedded NIC 1",
+                "kind": "server_nic",
+                "mac": "00:62:0b:20:3a:f0",
+                "mtu": 1500,
+                "speed_mbps": 25000,
+                "link_status": "up",
+                "is_primary": false,
+                "addresses": [
+                  {
+                    "family": "ipv4",
+                    "address": "10.50.11.50",
+                    "prefix_length": null,
+                    "subnet_mask": "255.255.255.0",
+                    "gateway": "10.50.11.1",
+                    "origin": "Static"
+                  }
+                ]
+              }
             ],
             "adapters": [],
             "ports": [],
-            "summary": {"groups": []}
+            "summary": {
+              "groups": []
+            }
           }
         },
         {
           "id": "Partition1",
           "system_uri": "/redfish/v1/Systems/Partition1",
           "boot": {
-            "boot_order": ["Boot0001", "Boot0002", "Boot0003"],
+            "boot_order": [
+              "Boot0001",
+              "Boot0002",
+              "Boot0003"
+            ],
             "boot_source_override_enabled": "Disabled",
             "boot_source_override_target": "None",
             "boot_source_override_mode": "UEFI",
@@ -584,7 +1067,15 @@
             "architecture": "x86-64",
             "summary": {
               "groups": [
-                {"model": "Intel(R) Xeon(R) Platinum 8480+", "manufacturer": "Intel", "max_speed_mhz": 3800, "architecture": "x86-64", "sockets": 4, "cores_per_socket": 56, "total_cores": 224}
+                {
+                  "model": "Intel(R) Xeon(R) Platinum 8480+",
+                  "manufacturer": "Intel",
+                  "max_speed_mhz": 3800,
+                  "architecture": "x86-64",
+                  "sockets": 4,
+                  "cores_per_socket": 56,
+                  "total_cores": 224
+                }
               ]
             }
           },
@@ -595,18 +1086,154 @@
             "visible_mb": null,
             "free_mb": null,
             "slots": [
-              {"id": "proc1dimm1", "name": "proc1dimm1", "locator": "PROC1 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P1-01", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc2dimm1", "name": "proc2dimm1", "locator": "PROC2 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P1-02", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc3dimm1", "name": "proc3dimm1", "locator": "PROC3 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P1-03", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc4dimm1", "name": "proc4dimm1", "locator": "PROC4 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P1-04", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc5dimm1", "name": "proc5dimm1", "locator": "PROC5 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P1-05", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc6dimm1", "name": "proc6dimm1", "locator": "PROC6 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P1-06", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc7dimm1", "name": "proc7dimm1", "locator": "PROC7 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P1-07", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc8dimm1", "name": "proc8dimm1", "locator": "PROC8 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P1-08", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"}
+              {
+                "id": "proc1dimm1",
+                "name": "proc1dimm1",
+                "locator": "PROC1 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P1-01",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc2dimm1",
+                "name": "proc2dimm1",
+                "locator": "PROC2 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P1-02",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc3dimm1",
+                "name": "proc3dimm1",
+                "locator": "PROC3 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P1-03",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc4dimm1",
+                "name": "proc4dimm1",
+                "locator": "PROC4 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P1-04",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc5dimm1",
+                "name": "proc5dimm1",
+                "locator": "PROC5 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P1-05",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc6dimm1",
+                "name": "proc6dimm1",
+                "locator": "PROC6 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P1-06",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc7dimm1",
+                "name": "proc7dimm1",
+                "locator": "PROC7 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P1-07",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc8dimm1",
+                "name": "proc8dimm1",
+                "locator": "PROC8 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P1-08",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              }
             ],
             "summary": {
               "groups": [
-                {"unit_capacity_gb": 256, "type": "DDR5", "speed_mhz": 4800, "manufacturer": "Samsung", "part_number": "M321RAGA0B40-CWMXJ", "quantity": 8, "group_total_gb": 2048}
+                {
+                  "unit_capacity_gb": 256,
+                  "type": "DDR5",
+                  "speed_mhz": 4800,
+                  "manufacturer": "Samsung",
+                  "part_number": "M321RAGA0B40-CWMXJ",
+                  "quantity": 8,
+                  "group_total_gb": 2048
+                }
               ],
               "grand_total_gb": 2048
             }
@@ -614,8 +1241,30 @@
           "storage": {
             "filesystems": [],
             "physical_disks": [
-              {"id": "0", "device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "serial": "S6ESCSUS-P1-01", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK", "failure_predicted": false, "predicted_life_percent": 100},
-              {"id": "1", "device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "serial": "S6ESCSUS-P1-02", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK", "failure_predicted": false, "predicted_life_percent": 100}
+              {
+                "id": "0",
+                "device": "480GB SATA SSD",
+                "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                "serial": "S6ESCSUS-P1-01",
+                "total_mb": 457862,
+                "media_type": "SSD",
+                "protocol": "SATA",
+                "health": "OK",
+                "failure_predicted": false,
+                "predicted_life_percent": 100
+              },
+              {
+                "id": "1",
+                "device": "480GB SATA SSD",
+                "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                "serial": "S6ESCSUS-P1-02",
+                "total_mb": 457862,
+                "media_type": "SSD",
+                "protocol": "SATA",
+                "health": "OK",
+                "failure_predicted": false,
+                "predicted_life_percent": 100
+              }
             ],
             "datastores": [],
             "controllers": [
@@ -628,17 +1277,51 @@
                 "controller_manufacturer": "Intel",
                 "controller_health": "OK",
                 "drives": [
-                  {"device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK"},
-                  {"device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK"}
+                  {
+                    "device": "480GB SATA SSD",
+                    "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                    "total_mb": 457862,
+                    "media_type": "SSD",
+                    "protocol": "SATA",
+                    "health": "OK"
+                  },
+                  {
+                    "device": "480GB SATA SSD",
+                    "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                    "total_mb": 457862,
+                    "media_type": "SSD",
+                    "protocol": "SATA",
+                    "health": "OK"
+                  }
                 ]
               }
             ],
             "logical_volumes": [
-              {"id": "Volume.0", "name": "OS_Mirror", "controller_id": "RSTe.Embedded.1", "member_drive_ids": ["0", "1"], "raid_level": "RAID1", "total_mb": 457320, "health": "OK", "state": "Enabled", "boot_volume": true}
+              {
+                "id": "Volume.0",
+                "name": "OS_Mirror",
+                "controller_id": "RSTe.Embedded.1",
+                "member_drive_ids": [
+                  "0",
+                  "1"
+                ],
+                "raid_level": "RAID1",
+                "total_mb": 457320,
+                "health": "OK",
+                "state": "Enabled",
+                "boot_volume": true
+              }
             ],
             "summary": {
               "groups": [
-                {"unit_capacity_gb": 447, "model": "SAMSUNG MZ7L3480HBLT-00A07", "media_type": "SSD", "protocol": "SATA", "quantity": 2, "group_total_gb": 894}
+                {
+                  "unit_capacity_gb": 447,
+                  "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                  "media_type": "SSD",
+                  "protocol": "SATA",
+                  "quantity": 2,
+                  "group_total_gb": 894
+                }
               ],
               "grand_total_gb": 894
             },
@@ -649,18 +1332,34 @@
             "dns_servers": [],
             "default_gateways": [],
             "interfaces": [
-              {"id": "Partition1.Eth0", "name": "Partition1 Embedded NIC 1", "kind": "server_nic", "mac": "00:62:0b:20:3b:10", "mtu": 1500, "speed_mbps": 25000, "link_status": "up", "is_primary": false, "addresses": []}
+              {
+                "id": "Partition1.Eth0",
+                "name": "Partition1 Embedded NIC 1",
+                "kind": "server_nic",
+                "mac": "00:62:0b:20:3b:10",
+                "mtu": 1500,
+                "speed_mbps": 25000,
+                "link_status": "up",
+                "is_primary": false,
+                "addresses": []
+              }
             ],
             "adapters": [],
             "ports": [],
-            "summary": {"groups": []}
+            "summary": {
+              "groups": []
+            }
           }
         },
         {
           "id": "Partition2",
           "system_uri": "/redfish/v1/Systems/Partition2",
           "boot": {
-            "boot_order": ["Boot0001", "Boot0002", "Boot0003"],
+            "boot_order": [
+              "Boot0001",
+              "Boot0002",
+              "Boot0003"
+            ],
             "boot_source_override_enabled": "Disabled",
             "boot_source_override_target": "None",
             "boot_source_override_mode": "UEFI",
@@ -689,7 +1388,15 @@
             "architecture": "x86-64",
             "summary": {
               "groups": [
-                {"model": "Intel(R) Xeon(R) Platinum 8480+", "manufacturer": "Intel", "max_speed_mhz": 3800, "architecture": "x86-64", "sockets": 4, "cores_per_socket": 56, "total_cores": 224}
+                {
+                  "model": "Intel(R) Xeon(R) Platinum 8480+",
+                  "manufacturer": "Intel",
+                  "max_speed_mhz": 3800,
+                  "architecture": "x86-64",
+                  "sockets": 4,
+                  "cores_per_socket": 56,
+                  "total_cores": 224
+                }
               ]
             }
           },
@@ -700,18 +1407,154 @@
             "visible_mb": null,
             "free_mb": null,
             "slots": [
-              {"id": "proc1dimm1", "name": "proc1dimm1", "locator": "PROC1 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P2-01", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc2dimm1", "name": "proc2dimm1", "locator": "PROC2 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P2-02", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc3dimm1", "name": "proc3dimm1", "locator": "PROC3 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P2-03", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc4dimm1", "name": "proc4dimm1", "locator": "PROC4 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P2-04", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc5dimm1", "name": "proc5dimm1", "locator": "PROC5 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P2-05", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc6dimm1", "name": "proc6dimm1", "locator": "PROC6 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P2-06", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc7dimm1", "name": "proc7dimm1", "locator": "PROC7 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P2-07", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"},
-              {"id": "proc8dimm1", "name": "proc8dimm1", "locator": "PROC8 DIMM1", "capacity_mb": 262144, "type": "DDR5", "base_module_type": "RDIMM", "speed_mhz": 4800, "manufacturer": "Samsung", "serial": "S0CSUS-P2-08", "part_number": "M321RAGA0B40-CWMXJ", "rank_count": 4, "data_width_bits": 64, "bus_width_bits": 72, "error_correction": "MultiBitECC", "health": "OK"}
+              {
+                "id": "proc1dimm1",
+                "name": "proc1dimm1",
+                "locator": "PROC1 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P2-01",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc2dimm1",
+                "name": "proc2dimm1",
+                "locator": "PROC2 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P2-02",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc3dimm1",
+                "name": "proc3dimm1",
+                "locator": "PROC3 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P2-03",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc4dimm1",
+                "name": "proc4dimm1",
+                "locator": "PROC4 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P2-04",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc5dimm1",
+                "name": "proc5dimm1",
+                "locator": "PROC5 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P2-05",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc6dimm1",
+                "name": "proc6dimm1",
+                "locator": "PROC6 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P2-06",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc7dimm1",
+                "name": "proc7dimm1",
+                "locator": "PROC7 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P2-07",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              },
+              {
+                "id": "proc8dimm1",
+                "name": "proc8dimm1",
+                "locator": "PROC8 DIMM1",
+                "capacity_mb": 262144,
+                "type": "DDR5",
+                "base_module_type": "RDIMM",
+                "speed_mhz": 4800,
+                "manufacturer": "Samsung",
+                "serial": "S0CSUS-P2-08",
+                "part_number": "M321RAGA0B40-CWMXJ",
+                "rank_count": 4,
+                "data_width_bits": 64,
+                "bus_width_bits": 72,
+                "error_correction": "MultiBitECC",
+                "health": "OK"
+              }
             ],
             "summary": {
               "groups": [
-                {"unit_capacity_gb": 256, "type": "DDR5", "speed_mhz": 4800, "manufacturer": "Samsung", "part_number": "M321RAGA0B40-CWMXJ", "quantity": 8, "group_total_gb": 2048}
+                {
+                  "unit_capacity_gb": 256,
+                  "type": "DDR5",
+                  "speed_mhz": 4800,
+                  "manufacturer": "Samsung",
+                  "part_number": "M321RAGA0B40-CWMXJ",
+                  "quantity": 8,
+                  "group_total_gb": 2048
+                }
               ],
               "grand_total_gb": 2048
             }
@@ -719,8 +1562,30 @@
           "storage": {
             "filesystems": [],
             "physical_disks": [
-              {"id": "0", "device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "serial": "S6ESCSUS-P2-01", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK", "failure_predicted": false, "predicted_life_percent": 100},
-              {"id": "1", "device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "serial": "S6ESCSUS-P2-02", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK", "failure_predicted": false, "predicted_life_percent": 100}
+              {
+                "id": "0",
+                "device": "480GB SATA SSD",
+                "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                "serial": "S6ESCSUS-P2-01",
+                "total_mb": 457862,
+                "media_type": "SSD",
+                "protocol": "SATA",
+                "health": "OK",
+                "failure_predicted": false,
+                "predicted_life_percent": 100
+              },
+              {
+                "id": "1",
+                "device": "480GB SATA SSD",
+                "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                "serial": "S6ESCSUS-P2-02",
+                "total_mb": 457862,
+                "media_type": "SSD",
+                "protocol": "SATA",
+                "health": "OK",
+                "failure_predicted": false,
+                "predicted_life_percent": 100
+              }
             ],
             "datastores": [],
             "controllers": [
@@ -733,17 +1598,51 @@
                 "controller_manufacturer": "Intel",
                 "controller_health": "OK",
                 "drives": [
-                  {"device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK"},
-                  {"device": "480GB SATA SSD", "model": "SAMSUNG MZ7L3480HBLT-00A07", "total_mb": 457862, "media_type": "SSD", "protocol": "SATA", "health": "OK"}
+                  {
+                    "device": "480GB SATA SSD",
+                    "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                    "total_mb": 457862,
+                    "media_type": "SSD",
+                    "protocol": "SATA",
+                    "health": "OK"
+                  },
+                  {
+                    "device": "480GB SATA SSD",
+                    "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                    "total_mb": 457862,
+                    "media_type": "SSD",
+                    "protocol": "SATA",
+                    "health": "OK"
+                  }
                 ]
               }
             ],
             "logical_volumes": [
-              {"id": "Volume.0", "name": "OS_Mirror", "controller_id": "RSTe.Embedded.1", "member_drive_ids": ["0", "1"], "raid_level": "RAID1", "total_mb": 457320, "health": "OK", "state": "Enabled", "boot_volume": true}
+              {
+                "id": "Volume.0",
+                "name": "OS_Mirror",
+                "controller_id": "RSTe.Embedded.1",
+                "member_drive_ids": [
+                  "0",
+                  "1"
+                ],
+                "raid_level": "RAID1",
+                "total_mb": 457320,
+                "health": "OK",
+                "state": "Enabled",
+                "boot_volume": true
+              }
             ],
             "summary": {
               "groups": [
-                {"unit_capacity_gb": 447, "model": "SAMSUNG MZ7L3480HBLT-00A07", "media_type": "SSD", "protocol": "SATA", "quantity": 2, "group_total_gb": 894}
+                {
+                  "unit_capacity_gb": 447,
+                  "model": "SAMSUNG MZ7L3480HBLT-00A07",
+                  "media_type": "SSD",
+                  "protocol": "SATA",
+                  "quantity": 2,
+                  "group_total_gb": 894
+                }
               ],
               "grand_total_gb": 894
             },
@@ -754,11 +1653,23 @@
             "dns_servers": [],
             "default_gateways": [],
             "interfaces": [
-              {"id": "Partition2.Eth0", "name": "Partition2 Embedded NIC 1", "kind": "server_nic", "mac": "00:62:0b:20:3b:20", "mtu": 1500, "speed_mbps": 25000, "link_status": "up", "is_primary": false, "addresses": []}
+              {
+                "id": "Partition2.Eth0",
+                "name": "Partition2 Embedded NIC 1",
+                "kind": "server_nic",
+                "mac": "00:62:0b:20:3b:20",
+                "mtu": 1500,
+                "speed_mbps": 25000,
+                "link_status": "up",
+                "is_primary": false,
+                "addresses": []
+              }
             ],
             "adapters": [],
             "ports": [],
-            "summary": {"groups": []}
+            "summary": {
+              "groups": []
+            }
           }
         }
       ],
@@ -768,8 +1679,22 @@
           "uri": "/redfish/v1/Managers/RMC",
           "role": "primary",
           "log_services": [
-            {"id": "IML", "name": "Integrated Management Log", "overwrite_policy": "WrapsWhenFull", "service_enabled": true, "log_entry_type": "OEM", "date_time": "2026-06-09T12:00:00Z"},
-            {"id": "IEL", "name": "Integrated Event Log", "overwrite_policy": "WrapsWhenFull", "service_enabled": true, "log_entry_type": "Event", "date_time": "2026-06-09T12:00:00Z"}
+            {
+              "id": "IML",
+              "name": "Integrated Management Log",
+              "overwrite_policy": "WrapsWhenFull",
+              "service_enabled": true,
+              "log_entry_type": "OEM",
+              "date_time": "2026-06-09T12:00:00Z"
+            },
+            {
+              "id": "IEL",
+              "name": "Integrated Event Log",
+              "overwrite_policy": "WrapsWhenFull",
+              "service_enabled": true,
+              "log_entry_type": "Event",
+              "date_time": "2026-06-09T12:00:00Z"
+            }
           ],
           "bmc": {
             "name": "RMC",
@@ -820,14 +1745,53 @@
           "kind": "base",
           "thermal": {
             "temperatures": [
-              {"name": "Inlet Ambient", "reading_celsius": 22, "health": "OK", "state": "Enabled", "upper_critical": 42, "physical_context": "Intake"},
-              {"name": "CPU 1", "reading_celsius": 55, "health": "OK", "state": "Enabled", "upper_critical": 90, "physical_context": "CPU"},
-              {"name": "CPU 2", "reading_celsius": 54, "health": "OK", "state": "Enabled", "upper_critical": 90, "physical_context": "CPU"}
+              {
+                "name": "Inlet Ambient",
+                "reading_celsius": 22,
+                "health": "OK",
+                "state": "Enabled",
+                "upper_critical": 42,
+                "physical_context": "Intake"
+              },
+              {
+                "name": "CPU 1",
+                "reading_celsius": 55,
+                "health": "OK",
+                "state": "Enabled",
+                "upper_critical": 90,
+                "physical_context": "CPU"
+              },
+              {
+                "name": "CPU 2",
+                "reading_celsius": 54,
+                "health": "OK",
+                "state": "Enabled",
+                "upper_critical": 90,
+                "physical_context": "CPU"
+              }
             ],
             "fans": [
-              {"name": "Fan 1", "reading": 8000, "reading_units": "RPM", "health": "OK", "state": "Enabled"},
-              {"name": "Fan 2", "reading": 7800, "reading_units": "RPM", "health": "OK", "state": "Enabled"},
-              {"name": "Fan 3", "reading": 8100, "reading_units": "RPM", "health": "OK", "state": "Enabled"}
+              {
+                "name": "Fan 1",
+                "reading": 8000,
+                "reading_units": "RPM",
+                "health": "OK",
+                "state": "Enabled"
+              },
+              {
+                "name": "Fan 2",
+                "reading": 7800,
+                "reading_units": "RPM",
+                "health": "OK",
+                "state": "Enabled"
+              },
+              {
+                "name": "Fan 3",
+                "reading": 8100,
+                "reading_units": "RPM",
+                "health": "OK",
+                "state": "Enabled"
+              }
             ]
           },
           "chassis_type": "Enclosure",
@@ -837,8 +1801,26 @@
           "part_number": "P52340-B21",
           "power": {
             "power_supplies": [
-              {"name": "HpeServerPowerSupply", "model": "P52600-B21", "serial": "5XLCSUS0001", "manufacturer": "LTEON", "power_capacity_w": 1600, "firmware_version": "2.10", "health": "OK", "state": "Enabled"},
-              {"name": "HpeServerPowerSupply", "model": "P52600-B21", "serial": "5XLCSUS0002", "manufacturer": "LTEON", "power_capacity_w": 1600, "firmware_version": "2.10", "health": "OK", "state": "Enabled"}
+              {
+                "name": "HpeServerPowerSupply",
+                "model": "P52600-B21",
+                "serial": "5XLCSUS0001",
+                "manufacturer": "LTEON",
+                "power_capacity_w": 1600,
+                "firmware_version": "2.10",
+                "health": "OK",
+                "state": "Enabled"
+              },
+              {
+                "name": "HpeServerPowerSupply",
+                "model": "P52600-B21",
+                "serial": "5XLCSUS0002",
+                "manufacturer": "LTEON",
+                "power_capacity_w": 1600,
+                "firmware_version": "2.10",
+                "health": "OK",
+                "state": "Enabled"
+              }
             ],
             "power_control": {
               "power_consumed_watts": 1480,
@@ -856,11 +1838,30 @@
           "kind": "expansion",
           "thermal": {
             "temperatures": [
-              {"name": "Inlet Ambient", "reading_celsius": 23, "health": "OK", "state": "Enabled", "upper_critical": 42, "physical_context": "Intake"}
+              {
+                "name": "Inlet Ambient",
+                "reading_celsius": 23,
+                "health": "OK",
+                "state": "Enabled",
+                "upper_critical": 42,
+                "physical_context": "Intake"
+              }
             ],
             "fans": [
-              {"name": "Fan 1", "reading": 7900, "reading_units": "RPM", "health": "OK", "state": "Enabled"},
-              {"name": "Fan 2", "reading": 7950, "reading_units": "RPM", "health": "OK", "state": "Enabled"}
+              {
+                "name": "Fan 1",
+                "reading": 7900,
+                "reading_units": "RPM",
+                "health": "OK",
+                "state": "Enabled"
+              },
+              {
+                "name": "Fan 2",
+                "reading": 7950,
+                "reading_units": "RPM",
+                "health": "OK",
+                "state": "Enabled"
+              }
             ]
           },
           "chassis_type": "Enclosure",
@@ -870,8 +1871,26 @@
           "part_number": "P52341-B21",
           "power": {
             "power_supplies": [
-              {"name": "HpeServerPowerSupply", "model": "P52600-B21", "serial": "5XLCSUS0003", "manufacturer": "LTEON", "power_capacity_w": 1600, "firmware_version": "2.10", "health": "OK", "state": "Enabled"},
-              {"name": "HpeServerPowerSupply", "model": "P52600-B21", "serial": "5XLCSUS0004", "manufacturer": "LTEON", "power_capacity_w": 1600, "firmware_version": "2.10", "health": "OK", "state": "Enabled"}
+              {
+                "name": "HpeServerPowerSupply",
+                "model": "P52600-B21",
+                "serial": "5XLCSUS0003",
+                "manufacturer": "LTEON",
+                "power_capacity_w": 1600,
+                "firmware_version": "2.10",
+                "health": "OK",
+                "state": "Enabled"
+              },
+              {
+                "name": "HpeServerPowerSupply",
+                "model": "P52600-B21",
+                "serial": "5XLCSUS0004",
+                "manufacturer": "LTEON",
+                "power_capacity_w": 1600,
+                "firmware_version": "2.10",
+                "health": "OK",
+                "state": "Enabled"
+              }
             ],
             "power_control": {
               "power_consumed_watts": 1360,
@@ -889,11 +1908,30 @@
           "kind": "expansion",
           "thermal": {
             "temperatures": [
-              {"name": "Inlet Ambient", "reading_celsius": 23, "health": "OK", "state": "Enabled", "upper_critical": 42, "physical_context": "Intake"}
+              {
+                "name": "Inlet Ambient",
+                "reading_celsius": 23,
+                "health": "OK",
+                "state": "Enabled",
+                "upper_critical": 42,
+                "physical_context": "Intake"
+              }
             ],
             "fans": [
-              {"name": "Fan 1", "reading": 8050, "reading_units": "RPM", "health": "OK", "state": "Enabled"},
-              {"name": "Fan 2", "reading": 8000, "reading_units": "RPM", "health": "OK", "state": "Enabled"}
+              {
+                "name": "Fan 1",
+                "reading": 8050,
+                "reading_units": "RPM",
+                "health": "OK",
+                "state": "Enabled"
+              },
+              {
+                "name": "Fan 2",
+                "reading": 8000,
+                "reading_units": "RPM",
+                "health": "OK",
+                "state": "Enabled"
+              }
             ]
           },
           "chassis_type": "Enclosure",
@@ -903,8 +1941,26 @@
           "part_number": "P52341-B21",
           "power": {
             "power_supplies": [
-              {"name": "HpeServerPowerSupply", "model": "P52600-B21", "serial": "5XLCSUS0005", "manufacturer": "LTEON", "power_capacity_w": 1600, "firmware_version": "2.10", "health": "OK", "state": "Enabled"},
-              {"name": "HpeServerPowerSupply", "model": "P52600-B21", "serial": "5XLCSUS0006", "manufacturer": "LTEON", "power_capacity_w": 1600, "firmware_version": "2.10", "health": "OK", "state": "Enabled"}
+              {
+                "name": "HpeServerPowerSupply",
+                "model": "P52600-B21",
+                "serial": "5XLCSUS0005",
+                "manufacturer": "LTEON",
+                "power_capacity_w": 1600,
+                "firmware_version": "2.10",
+                "health": "OK",
+                "state": "Enabled"
+              },
+              {
+                "name": "HpeServerPowerSupply",
+                "model": "P52600-B21",
+                "serial": "5XLCSUS0006",
+                "manufacturer": "LTEON",
+                "power_capacity_w": 1600,
+                "firmware_version": "2.10",
+                "health": "OK",
+                "state": "Enabled"
+              }
             ],
             "power_control": {
               "power_consumed_watts": 1320,
@@ -923,9 +1979,60 @@
         "health": "OK",
         "resource_block_count": 3,
         "resource_blocks": [
-          {"id": "Block0", "name": "Compute Resource Block 0 (Base)", "resource_block_types": ["Compute"], "state": "Enabled", "health": "OK", "composition_state": "Composed", "processor_count": 4, "memory_count": 8, "chassis": ["/redfish/v1/Chassis/Base"], "computer_systems": ["/redfish/v1/Systems/Partition0"]},
-          {"id": "Block1", "name": "Compute Resource Block 1 (Expansion1)", "resource_block_types": ["Compute"], "state": "Enabled", "health": "OK", "composition_state": "Composed", "processor_count": 4, "memory_count": 8, "chassis": ["/redfish/v1/Chassis/Expansion1"], "computer_systems": ["/redfish/v1/Systems/Partition1"]},
-          {"id": "Block2", "name": "Compute Resource Block 2 (Expansion2)", "resource_block_types": ["Compute"], "state": "Enabled", "health": "OK", "composition_state": "Composed", "processor_count": 4, "memory_count": 8, "chassis": ["/redfish/v1/Chassis/Expansion2"], "computer_systems": ["/redfish/v1/Systems/Partition2"]}
+          {
+            "id": "Block0",
+            "name": "Compute Resource Block 0 (Base)",
+            "resource_block_types": [
+              "Compute"
+            ],
+            "state": "Enabled",
+            "health": "OK",
+            "composition_state": "Composed",
+            "processor_count": 4,
+            "memory_count": 8,
+            "chassis": [
+              "/redfish/v1/Chassis/Base"
+            ],
+            "computer_systems": [
+              "/redfish/v1/Systems/Partition0"
+            ]
+          },
+          {
+            "id": "Block1",
+            "name": "Compute Resource Block 1 (Expansion1)",
+            "resource_block_types": [
+              "Compute"
+            ],
+            "state": "Enabled",
+            "health": "OK",
+            "composition_state": "Composed",
+            "processor_count": 4,
+            "memory_count": 8,
+            "chassis": [
+              "/redfish/v1/Chassis/Expansion1"
+            ],
+            "computer_systems": [
+              "/redfish/v1/Systems/Partition1"
+            ]
+          },
+          {
+            "id": "Block2",
+            "name": "Compute Resource Block 2 (Expansion2)",
+            "resource_block_types": [
+              "Compute"
+            ],
+            "state": "Enabled",
+            "health": "OK",
+            "composition_state": "Composed",
+            "processor_count": 4,
+            "memory_count": 8,
+            "chassis": [
+              "/redfish/v1/Chassis/Expansion2"
+            ],
+            "computer_systems": [
+              "/redfish/v1/Systems/Partition2"
+            ]
+          }
         ]
       },
       "fabrics": [
@@ -938,12 +2045,36 @@
           "switch_count": 2,
           "endpoint_count": 2,
           "switches": [
-            {"id": "Switch0", "name": "FlexGrid Switch 0", "switch_type": "PCIe", "state": "Enabled", "health": "OK"},
-            {"id": "Switch1", "name": "FlexGrid Switch 1", "switch_type": "PCIe", "state": "Enabled", "health": "OK"}
+            {
+              "id": "Switch0",
+              "name": "FlexGrid Switch 0",
+              "switch_type": "PCIe",
+              "state": "Enabled",
+              "health": "OK"
+            },
+            {
+              "id": "Switch1",
+              "name": "FlexGrid Switch 1",
+              "switch_type": "PCIe",
+              "state": "Enabled",
+              "health": "OK"
+            }
           ],
           "endpoints": [
-            {"id": "Endpoint0", "name": "FlexGrid Endpoint 0 (Base)", "endpoint_protocol": "PCIe", "state": "Enabled", "health": "OK"},
-            {"id": "Endpoint1", "name": "FlexGrid Endpoint 1 (Expansion1)", "endpoint_protocol": "PCIe", "state": "Enabled", "health": "OK"}
+            {
+              "id": "Endpoint0",
+              "name": "FlexGrid Endpoint 0 (Base)",
+              "endpoint_protocol": "PCIe",
+              "state": "Enabled",
+              "health": "OK"
+            },
+            {
+              "id": "Endpoint1",
+              "name": "FlexGrid Endpoint 1 (Expansion1)",
+              "endpoint_protocol": "PCIe",
+              "state": "Enabled",
+              "health": "OK"
+            }
           ]
         }
       ]

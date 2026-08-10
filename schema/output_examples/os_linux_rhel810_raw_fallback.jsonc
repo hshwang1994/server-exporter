@@ -36,6 +36,7 @@
     "protocol_supported": true,                            // 첫 응답 형식 (SSH banner / HTTPS handshake / Redfish JSON)
     "auth_success": true,                                  // 자격증명 인증 성공
     "failure_stage": null,                                 // 실패 단계 (성공 시 null) — ping/port/protocol/auth
+    "failure_code":       null,      // 시스템 분기용 안정 식별자 (성공 시 null)
     "failure_reason": null,                                // 실패 사유 한글 (성공 시 null)
     "details": {                                           // 채널별 추가 진단
       "channel": "os",                                     // 수집 채널 식별 (diagnosis 안에 다시 명시)

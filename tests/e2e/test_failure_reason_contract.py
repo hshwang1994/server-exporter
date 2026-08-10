@@ -307,8 +307,9 @@ _ESXI_TASK = "esxi | rescue | Portal 표시용 failure_reason 보장"
 
 @pytest.mark.parametrize("auth_ok,facts_ok,label,expect_stage,expect_auth", [
     (False, False, "C5 자격 전멸",   "auth", None),
-    (True,  False, "C6 facts 실패",  None,   True),
-    (True,  True,  "C6 기타 예외",   None,   True),
+    # Phase 2 (2026-08-10): 인증 통과 후 실패는 gather 단계로 식별된다 (종전 None)
+    (True,  False, "C6 facts 실패",  "gather", True),
+    (True,  True,  "C6 기타 예외",   "gather", True),
 ])
 def test_case05_06_esxi_failure_has_reason(auth_ok, facts_ok, label, expect_stage, expect_auth):
     diag = _render_diagnosis(
@@ -347,7 +348,8 @@ def test_case07_10_os_failure_has_reason(os_type, auth_ok, label):
     if auth_ok:
         assert diag["auth_success"] is True, f"[{tag}] 자격 probe 통과는 관측된 사실"
         assert diag["protocol_supported"] is True
-        assert diag["failure_stage"] is None, f"[{tag}] 수집 단계는 현재 enum 에 표현값 없음"
+        # Phase 2 (2026-08-10): enum 에 gather 가 추가되어 수집 단계 실패를 표현할 수 있다
+        assert diag["failure_stage"] == "gather", f"[{tag}] 수집 단계 실패는 gather"
     else:
         # 요구사항 6 — 잘못된 자격 / 연결 끊김 / 제한 쉘을 구분 못 하므로 false 금지
         assert diag["auth_success"] is None, f"[{tag}] 인증 거부를 관측하지 못했다"

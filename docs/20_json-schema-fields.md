@@ -219,7 +219,8 @@ if response["data"]["hardware"].get("health") == "Critical":
   "port_open":          false,   // 2단계: 해당 포트 (Redfish=443, SSH=22 등) 연결 성공?
   "protocol_supported": false,   // 3단계: 기대 프로토콜 응답? (2단계 실패 시 미수행)
   "auth_success":       null,    // 4단계: 미수행이면 null (false 가 아니다 — 아래 주의)
-  "failure_stage":      "port",  // 실행이 멈춘 단계 이름
+  "failure_stage":      "port",  // 실행이 멈춘 단계 이름 (원인 아님)
+  "failure_code":       "TCP_CONNECTION_REFUSED",  // 시스템 분기용 안정 식별자 (성공 시 null)
   "failure_reason":     "호스트는 응답하지만 서비스 포트가 닫혀 있습니다. 방화벽 또는 서비스 미기동 가능성.",
   "details": { ... }             // 채널별 부가 정보 (선택된 adapter, BMC product 명 등)
 }
@@ -247,10 +248,33 @@ if response["data"]["hardware"].get("health") == "Critical":
 | `port` | 호스트는 응답하나 포트 닫힘 | 방화벽 / 서비스 미기동 / 포트 번호 오설정 |
 | `protocol` | 포트는 열렸는데 응답 형식이 이상함 | TLS 버전 / cipher / 펌웨어 버그 |
 | `auth` | 인증 단계에서 멈춤 | 비밀번호 회전 / 계정 잠김 / 권한 부족 |
-| `fallback` | `_output` 미생성 (block·rescue 모두 실패) | 수집기 내부 오류 — Jenkins console log 확인 |
+| `gather` | 연결·인증 통과 후 수집/정규화 단계에서 중단 | 계정 권한 / 펌웨어 호환성 / OEM 경로 |
+| `fallback` | `_output` 미생성 (block·rescue 모두 실패) | 수집기 내부 오류. Jenkins console log 확인 |
 
 > `failure_stage` 는 **원인**이 아니라 **실행이 멈춘 단계**를 가리킨다. 구체적인 기술 오류는
 > `errors[].detail` 에 원문 그대로 들어간다 (예: `"port=443: 연결 시간 초과 (timeout=3.0s)"`).
+
+### 5-1. `failure_code` — 시스템이 분기할 때 쓰는 값
+
+`failure_reason` 은 사람이 읽는 문장이라 **파싱 대상이 아니다.** 외부 시스템이 실패 종류로
+분기해야 하면 `failure_code` 를 본다. 성공/부분 성공에서는 `null` 이며, **키 자체는 항상 존재한다.**
+
+| `failure_code` | 대응 `failure_stage` | 관측한 사실 |
+|---|---|---|
+| `DNS_RESOLUTION_FAILED` | `reachable` | 주소 해석 실패로 TCP 연결 시도 자체를 못 함 |
+| `TCP_CONNECT_FAILED` | `reachable` | TCP 연결 실패 (timeout / no route 등). **장비 다운으로 확정하지 않음** |
+| `TCP_CONNECTION_REFUSED` | `port` | 명시적 TCP 거부(RST)를 관측 |
+| `PROTOCOL_CHECK_FAILED` | `protocol` | 기대한 프로토콜 응답을 확인하지 못함 |
+| `AUTH_PROBE_FAILED` | `auth` | 자격증명 확인 단계에서 중단. **인증 거부 확정은 `auth_success` 가 표현** |
+| `GATHER_FAILED` | `gather` | 연결·인증 통과 후 수집/정규화 실패 |
+| `OUTPUT_BUILD_FAILED` | `fallback` | 정상 결과 객체 생성 실패 |
+
+> **매핑 예외 1건**: OS 채널의 관리 포트 전체 실패는 `stage=port` + `code=TCP_CONNECT_FAILED` 다.
+> OS 는 `wait_for` 로만 포트를 확인해 RST 를 관측할 수 없으므로 `TCP_CONNECTION_REFUSED` 로
+> 확정할 수 없다. 멈춘 단계는 포트 감지 단계이므로 `stage` 는 `port` 를 유지한다.
+>
+> Raw Exception 종류(socket timeout / SSL 오류 / HTTP 500 등)는 code 로 만들지 않는다.
+> 그 정보는 `errors[].detail` 과 `diagnosis.details` 에 보존된다.
 
 ---
 
