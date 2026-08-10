@@ -6,6 +6,21 @@
 > **용도**: 다른 AI 가 현재 진단 체계·메시지 설계를 검토하기 위한 원천 데이터.
 > **범위 제한**: 본 문서는 조사만 한다. 코드 수정·개선안·새 스키마 제안을 포함하지 않는다.
 
+> ## [WARN] 이 문서는 **HEAD `1e8947b9` 시점의 스냅샷**이다 (2026-08-10 기준 stale)
+>
+> 이후 진단 체계 개선 작업으로 아래가 바뀌었다. **현재 동작의 정본은 코드**이며,
+> 본 문서의 해당 절은 "개선 전 상태" 기록으로만 읽는다.
+>
+> | 변경 | 본 문서에서 stale 해진 절 |
+> |---|---|
+> | Phase 1-A: `_fail_error_detail` 배선 / Redfish 분기 복구 / `checked_ports` 정합 | §4 §8 §18 |
+> | Phase 1-B: `status=failed` 에 `failure_reason` 보장 | §12 §16 |
+> | Phase 2: `failure_stage` 에 `gather` 추가 + `failure_code` 7종 도입 | §10 §16 §17 |
+> | Phase 3-A: OS 포트 감지를 공통 precheck 로 통합 (`wait_for` 3연타 제거) | §1-2 #3 §3 §5 |
+> | Phase 3-B: OS 를 SSH identification / WinRM Identify 로 판정 | §6-4 |
+> | Phase 4-A: Redfish 를 ServiceRoot **본문** 검증으로 판정 (status whitelist 제거) | §1-2 #5 §6-2 §17 |
+> | Phase 4-B: ESXi 를 vim25 SOAP `RetrieveServiceContent` **본문** 검증으로 판정 (status whitelist 제거) | §1-2 #5 §6-3 §17 (ESX-004~007) |
+
 ---
 
 ## 1. Executive Summary
@@ -323,6 +338,12 @@ TLS 완화(`verify=False` 한정, `:156-163`):
 
 ### 6-3. ESXi — `probe_esxi()` `:350-372`
 
+> [WARN] **Phase 4-B(2026-08-10)에서 이 절 전체가 stale 해졌다.** 아래 status whitelist 는
+> 제거됐다. 현재는 `/sdk` 에 vim25 `RetrieveServiceContent` 를 POST 하고 응답이
+> `{urn:vim25}RetrieveServiceContentResponse` → `returnval` → `about`(apiType/apiVersion)
+> 인지, 또는 SOAP Fault detail 이 `urn:vim25`/`urn:internalvim25` 인지로 판정한다.
+> HTTP status 는 Evidence 로만 남는다. 정본: `common/library/precheck_bundle.py`.
+
 | 항목 | 값 |
 |---|---|
 | Endpoint | `https://{host}:{port}/sdk` (`:361`) |
@@ -560,6 +581,12 @@ precheck 실패 경로는 `build_failed_output.yml:50,77` 이 `status: 'failed'`
 | ESX-005 | 443 open + /sdk 404 | true | true | **true** | null | null | null | (이후 단계) | (수집 결과) |
 | ESX-006 | 443 open + /sdk 500 | true | true | **true** | null | null | null | (이후 단계) | (수집 결과) |
 | ESX-007 | 443 open + /sdk 401·403 | true | true | **true** | null | null | null | (이후 단계) | (수집 결과) |
+
+> [WARN] **ESX-004~007 은 Phase 4-B(2026-08-10) 이후 성립하지 않는다.** status 로 판정하지
+> 않으므로 404/500/401/403 이어도 본문이 vim25 가 아니면 `protocol_supported=false` +
+> `failure_stage=protocol` + `failure_code=PROTOCOL_CHECK_FAILED` 다. 반대로 본문이 vim25
+> ServiceContent 또는 vim25 Fault 면 status 와 무관하게 통과한다. `auth_success` 는
+> 어느 경우에도 `null` 을 유지한다(Protocol Probe 는 자격증명을 보내지 않는다).
 | ESX-008 | precheck 통과 + 전 계정 인증 실패 | true | true | true | **null** | null | null | MSG-107 | failed |
 | ESX-009 | precheck·인증 통과 + vmware_host_facts 실패 | true | true | true | **null** | null | null | MSG-108 | failed |
 | ESX-010 | block/rescue 모두 실패 | null | null | null | null | `fallback` | MSG-201 | MSG-201 | failed |

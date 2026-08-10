@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+<soapenv:Body>
+<RetrieveServiceContentResponse xmlns="urn:vim25"><returnval versionId="6.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="urn:vim25"><rootFolder type="Folder">ha-folder-root</rootFolder><propertyCollector type="PropertyCollector">ha-property-collector</propertyCollector><about><name>VMware ESXi</name><fullName>VMware ESXi 6.0.0 build-3620759</fullName><vendor>VMware, Inc.</vendor><version>6.0.0</version><build>3620759</build><localeVersion>INTL</localeVersion><localeBuild>000</localeBuild><osType>vmnix-x86</osType><productLineId>embeddedEsx</productLineId><apiType>HostAgent</apiType><apiVersion>6.0</apiVersion><licenseProductName>VMware ESX Server</licenseProductName><licenseProductVersion>6.0</licenseProductVersion></about><sessionManager type="SessionManager">ha-sessionmgr</sessionManager></returnval></RetrieveServiceContentResponse>
+</soapenv:Body>
+</soapenv:Envelope>

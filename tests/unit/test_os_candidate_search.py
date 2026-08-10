@@ -38,6 +38,12 @@ sys.modules.setdefault("ansible.module_utils.basic", _b)
 
 import precheck_bundle as pb  # noqa: E402
 
+# Phase 4-B: esxi 채널 Stage 3 는 vim25 SOAP 응답을 본다 (lab 실측 AboutInfo 기반 fixture).
+_ESXI_SERVICE_CONTENT = (
+    REPO / "tests/fixtures/esxi/lab/esxi_7_0_3_service_content.xml"
+).read_bytes()
+
+
 
 class _ExitJson(Exception):
     def __init__(self, result):
@@ -281,6 +287,11 @@ def test_other_channels_do_not_use_candidate_flow(monkeypatch, channel):
         lambda *_a, **_k: (True, None, {"status_code": 200,
                                         "json": {"@odata.id": "/redfish/v1", "@odata.type": "#ServiceRoot.v1_15_0.ServiceRoot", "RedfishVersion": "1.6.0"},
                                         "headers": {}}))
+    # 2026-08-10 (Phase 4-B): esxi 는 /sdk 로 vim25 SOAP 을 POST 한다.
+    monkeypatch.setattr(
+        pb, "http_post_soap",
+        lambda *_a, **_k: (True, None, {"status_code": 200,
+                                        "body": _ESXI_SERVICE_CONTENT}))
 
     class _Fake:
         params = dict(host="192.0.2.10", channel=channel, ports=[], timeout_port=3.0,

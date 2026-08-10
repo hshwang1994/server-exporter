@@ -613,26 +613,37 @@ _IDENTIFY_REQUEST = (
 # XML 폭탄 방어 — 파싱 전에 본문 크기를 제한한다 (ElementTree 는 엔티티 확장 공격에 취약).
 _IDENTIFY_MAX_BYTES = 65536
 
+# WS-Management(Identify)는 SOAP 1.2 를 쓴다. vSphere vim25 는 SOAP 1.1 이라 다르다.
+_SOAP12_CONTENT_TYPE = "application/soap+xml;charset=UTF-8"
 
-def http_post_soap(url, body, timeout, verify=False, extra_headers=None):
+
+def http_post_soap(url, body, timeout, verify=False, extra_headers=None,
+                   content_type=_SOAP12_CONTENT_TYPE, max_bytes=_IDENTIFY_MAX_BYTES):
     """SOAP POST — Protocol Probe 전용 최소 helper (stdlib urllib).
 
     기존 `http_get` 은 Redfish / ESXi / OS 가 함께 쓰는 GET 전용 helper 다. Identify 를
     위해 그것을 POST 겸용으로 변형하면 두 채널 동작에 영향이 갈 수 있어 별도로 둔다.
     반환: (ok, err, payload) — payload={'status_code', 'body'}. 자격증명은 보내지 않는다.
+
+    2026-08-10 (Phase 4-B): `content_type` / `max_bytes` 를 인자로 뺐다. **기본값이
+    종전 상수와 동일**하므로 WinRM Identify 호출부(probe_os)의 동작은 그대로다.
+      - WS-Management 는 SOAP 1.2(application/soap+xml)를, vSphere vim25 는
+        SOAP 1.1(text/xml)을 쓴다. 한 helper 가 둘을 모두 보내려면 분기 지점이 필요하다.
+      - ServiceContent 응답은 Identify 응답보다 커서 64KB 상한으로 자르면 XML 이
+        잘려 파싱에 실패한다. 호출부가 채널에 맞는 상한을 준다.
     """
     ctx = _build_ssl_context(verify)
     req = urllib.request.Request(url, data=body, method="POST")
-    req.add_header("Content-Type", "application/soap+xml;charset=UTF-8")
+    req.add_header("Content-Type", content_type)
     for name, value in (extra_headers or {}).items():
         req.add_header(name, value)
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-            raw = resp.read(_IDENTIFY_MAX_BYTES)
+            raw = resp.read(max_bytes)
             return True, None, {"status_code": resp.getcode(), "body": raw}
     except urllib.error.HTTPError as e:
         try:
-            raw = e.read(_IDENTIFY_MAX_BYTES)
+            raw = e.read(max_bytes)
         except Exception:
             raw = b""
         return False, "HTTP {0}".format(e.code), {"status_code": e.code, "body": raw}
@@ -735,29 +746,194 @@ def probe_os(host, port, timeout):
     return False, "지원하지 않는 OS 포트: {0}".format(port), None
 
 
+# ── vSphere Web Services API (vim25 SOAP) Protocol Probe ─────────────────────
+# 2026-08-10 (Phase 4-B). 종전 판정은 `GET /sdk` 의 **HTTP status** 였다
+# (200/301/302/401/403/404/405/500/503 whitelist). 443 에서 응답만 하면 통과라
+# 일반 HTTPS 서버가 전부 "vSphere" 로 통과할 수 있었다 — status 는 Evidence 이지
+# Protocol Identity 가 아니다. → 실제 vim25 SOAP 요청/응답으로만 판정한다.
+#
+# 근거 (요청 형식은 추측하지 않고 저장소가 이미 쓰는 라이브러리에서 뽑았다):
+#   - 요청 XML: 설치본 pyVmomi 9.x 의 SoapStubAdapter.SerializeRequest 가 만들어내는
+#     RetrieveServiceContent 요청과 **바이트 단위로 같은 형태**다 (offline 생성 대조).
+#     Content-Type/SOAPAction 도 pyVmomi SoapAdapter.py InvokeMethod 의 헤더와 같다.
+#   - 무인증 호출 가능: vim.ServiceInstance.RetrieveServiceContent 의 privId 는
+#     'System.Anonymous' (pyVmomi typeinfo 실측). Broadcom vSphere Web Services API
+#     문서도 ServiceInstance 는 인증 없이 접근 가능하다고 기술한다.
+#     https://developer.broadcom.com/xapis/vsphere-web-services-api/latest/vim.ServiceInstanceContent.html
+#   - 버전 하위 호환: 메서드와 ServiceContent/AboutInfo 필수 필드는 모두
+#     vim.version.version1(API 2.0)부터 존재한다(pyVmomi typeinfo 실측) → 6.x/7.x/8.x 공통.
+#   - versionId="6.0": VMware 자체 CLI govc 의 기본값(GOVC_VIM_VERSION=6.0,
+#     GOVC_VIM_NAMESPACE=urn:vim25)과 동일하게 맞춘 값이다. 저장소 지원 하한도
+#     ESXi 6.0 이다(adapters/esxi/esxi_6x.yml). https://github.com/vmware/govmomi/blob/main/govc/README.md
+#
+# ※ 저장소에 /sdk **wire capture** 는 없다. Positive fixture 는 lab 실측 AboutInfo 값
+#   (tests/reference/esxi/*/pyvmomi_host_dump.json → config_product, ESXi 7.0.3)을
+#   pyVmomi 직렬화기로 감싼 것이다. 6.x/8.x 는 합성이며 "검증 완료" 로 취급하지 않는다.
+_VIM25_NS = "urn:vim25"
+# hostd 는 Fault detail 을 `urn:vim25` 또는 내부용 `urn:internalvim25` 로 직렬화한다.
+# 둘 다 VMware 고유 네임스페이스라 일반 SOAP 서비스와 겹치지 않는다.
+#   근거: VMware Technology Network / Broadcom community 의 실제 hostd 응답 사례
+#   (InvalidPropertyFault xmlns="urn:vim25" / ManagedObjectNotFoundFault
+#    xmlns="urn:internalvim25", 확인 2026-08-10). lab wire capture 는 없다.
+_VSPHERE_FAULT_NAMESPACES = frozenset({"urn:vim25", "urn:internalvim25"})
+_SOAP11_ENVELOPE_NS = "http://schemas.xmlsoap.org/soap/envelope/"
+_SOAP11_CONTENT_TYPE = "text/xml; charset=UTF-8"
+_VSPHERE_API_VERSION = "6.0"
+_SERVICE_CONTENT_RESPONSE = "RetrieveServiceContentResponse"
+# ServiceContent 는 관리 객체 참조 50여 개 + AboutInfo 로 보통 수 KB 다. Identify 용
+# 64KB 상한으로 자르면 XML 이 잘려 파싱에 실패하므로 별도 상한을 둔다(XML 폭탄 방어는 유지).
+_SERVICE_CONTENT_MAX_BYTES = 262144
+
+_RETRIEVE_SERVICE_CONTENT_REQUEST = (
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    '<soapenv:Envelope'
+    ' xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"'
+    ' xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"'
+    ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+    ' xmlns:xsd="http://www.w3.org/2001/XMLSchema">\n'
+    "<soapenv:Body>"
+    '<RetrieveServiceContent xmlns="urn:vim25">'
+    '<_this versionId="{0}" type="ServiceInstance">ServiceInstance</_this>'
+    "</RetrieveServiceContent>"
+    "</soapenv:Body>\n"
+    "</soapenv:Envelope>"
+).format(_VSPHERE_API_VERSION).encode("utf-8")
+
+
+def _vim_child(parent, local):
+    """vim25 네임스페이스 자식 조회 (네임스페이스 없는 표기도 허용).
+
+    판별력은 상위의 `{urn:vim25}RetrieveServiceContentResponse` 가 이미 확보한다.
+    자손까지 네임스페이스를 강제하면 직렬화 표기가 다른 구형 hostd 를 근거 없이
+    탈락시킬 수 있어, 하위 요소에서만 관대하게 본다 (오탐 위험은 늘지 않는다).
+    """
+    found = parent.find("{{{0}}}{1}".format(_VIM25_NS, local))
+    if found is None:
+        found = parent.find(local)
+    return found
+
+
+def _vim_text(parent, local):
+    node = _vim_child(parent, local)
+    if node is None or node.text is None:
+        return None
+    text = node.text.strip()
+    return text or None
+
+
+def _vim25_fault_local_name(fault):
+    """SOAP Fault 안에 vSphere 고유 네임스페이스 요소가 있으면 그 local name 을 돌려준다.
+
+    일반 SOAP 서비스의 Fault 와 구별되는 지점은 **detail 안 요소의 네임스페이스**다
+    (fault 문자열의 부분 문자열 검사가 아니다). vSphere 는 MethodFault 를
+    `urn:vim25` / `urn:internalvim25` 로 직렬화한다.
+    """
+    for elem in fault.iter():
+        tag = elem.tag
+        if not isinstance(tag, str) or not tag.startswith("{"):
+            continue
+        ns, _sep, local = tag[1:].partition("}")
+        if ns in _VSPHERE_FAULT_NAMESPACES and local:
+            return local
+    return None
+
+
+def parse_service_content(raw):
+    """vim25 RetrieveServiceContent 응답 검증 → (is_vsphere, facts, 사유).
+
+    성공 근거는 두 가지뿐이다.
+      1) `{urn:vim25}RetrieveServiceContentResponse` → `returnval` → `about` 에
+         API 2.0 부터 필수인 `apiType` / `apiVersion` 이 채워져 있다.
+      2) SOAP Fault 인데 그 안에 `urn:vim25` 네임스페이스 요소가 있다 — vSphere 자신이
+         만든 구조화 Fault 이므로 endpoint 존재의 직접 증거다. 네임스페이스가 없는
+         일반 SOAP Fault 는 구별할 수 없으므로 성공으로 쓰지 않는다.
+    HTTP status 는 어느 쪽에도 쓰지 않는다.
+    """
+    if not raw:
+        return False, None, "응답 본문 없음"
+    if len(raw) > _SERVICE_CONTENT_MAX_BYTES:
+        return False, None, "응답 본문이 상한을 초과"
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as e:
+        return False, None, "XML 파싱 실패: {0}".format(str(e)[:80])
+
+    if root.tag != "{{{0}}}Envelope".format(_SOAP11_ENVELOPE_NS):
+        return False, None, "SOAP 1.1 Envelope 아님 (root={0})".format(str(root.tag)[:60])
+
+    response = root.find(".//{{{0}}}{1}".format(_VIM25_NS, _SERVICE_CONTENT_RESPONSE))
+    if response is not None:
+        return _parse_service_content_returnval(response)
+
+    fault = root.find(".//{{{0}}}Fault".format(_SOAP11_ENVELOPE_NS))
+    if fault is not None:
+        name = _vim25_fault_local_name(fault)
+        if name:
+            return True, {"evidence": "vim25_fault", "fault": name}, "vim25 Fault"
+        return False, None, "vSphere 고유 구조가 없는 일반 SOAP Fault"
+
+    return False, None, "{0} 없음".format(_SERVICE_CONTENT_RESPONSE)
+
+
+def _parse_service_content_returnval(response):
+    """RetrieveServiceContentResponse → ServiceContent 구조 확인."""
+    returnval = _vim_child(response, "returnval")
+    if returnval is None:
+        return False, None, "returnval 없음"
+    about = _vim_child(returnval, "about")
+    if about is None:
+        return False, None, "ServiceContent.about 없음"
+    api_type = _vim_text(about, "apiType")
+    if not api_type:
+        return False, None, "about.apiType 없음"
+    api_version = _vim_text(about, "apiVersion")
+    if not api_version:
+        return False, None, "about.apiVersion 없음"
+    return True, {
+        "evidence": "service_content",
+        "api_type": api_type,
+        "api_version": api_version,
+        "product_line_id": _vim_text(about, "productLineId"),
+        "version": _vim_text(about, "version"),
+    }, "ServiceContent 확인"
+
+
 def probe_esxi(host, port, timeout, verify=False):
-    """vSphere API endpoint 프로브.
+    """vSphere Web Services API(/sdk) 프로브 — 실제 SOAP 응답으로 판정한다.
 
-    /sdk는 GET 메서드에 대해 다양한 응답을 던진다 (200/301/302/404/405/500/SOAP fault).
-    응답이 오기만 하면 vSphere 서비스 살아있음으로 판단.
-
-    401/403 추가 (probe_redfish 와 동일 정합): vCenter SSO / 인증 요구
-    환경에서 /sdk 가 401/403을 던지더라도 endpoint 자체는 살아있음 →
-    Stage 4 (auth) 또는 본 수집 (community.vmware) 에서 처리. 이전 구현은
-    이를 "vSphere endpoint 미응답" 으로 오판정했음.
+    자격증명을 보내지 않는다. 401/403 을 받아도 `auth_success` 는 건드리지 않는다
+    (Credential Probe 는 이후 단계인 esxi-gather/tasks/try_credentials.yml 책임).
+    TLS 정책 / timeout / retry 는 종전과 같다 — 요청 1회, retry 없음.
     """
     url = "https://{0}:{1}/sdk".format(host, port)
-    ok, err, payload = http_get(url, timeout, verify=verify)
-    if ok:
-        return True, None, {"vsphere_endpoint": url}
-    # 응답 오면 서비스 살아있음 — auth/일시상태 이슈는 후속 단계 책임
-    if payload and payload.get("status_code") in (200, 301, 302, 401, 403, 404, 405, 500, 503):
-        return True, None, {
-            "vsphere_endpoint": url,
-            "root_status_code": payload.get("status_code"),
-            "requires_auth_at_root": payload.get("status_code") in (401, 403),
-        }
-    return False, err, None
+    ok, err, payload = http_post_soap(
+        url, _RETRIEVE_SERVICE_CONTENT_REQUEST, timeout, verify=verify,
+        content_type=_SOAP11_CONTENT_TYPE,
+        extra_headers={
+            "SOAPAction": '"urn:vim25/{0}"'.format(_VSPHERE_API_VERSION),
+        },
+        max_bytes=_SERVICE_CONTENT_MAX_BYTES,
+    )
+    raw = (payload or {}).get("body")
+    status = (payload or {}).get("status_code")
+    if not raw:
+        # 본문 자체가 없다 — 연결 실패 / TLS 오류 / timeout / 빈 응답
+        return False, err or "vSphere API endpoint 응답 없음", None
+
+    is_vsphere, _probe, why = parse_service_content(raw)
+    if not is_vsphere:
+        detail = "vSphere ServiceContent 응답 아님 ({0})".format(why)
+        if status is not None:
+            detail = "{0} [HTTP {1}]".format(detail, status)
+        return False, detail, None
+
+    # probe_facts 는 diagnosis.details 로 그대로 나간다. 외부 계약을 늘리지 않기 위해
+    # 종전과 같은 키만 싣는다 (vsphere_endpoint, 비-200 일 때 root_status_code).
+    # 확보한 api_type / api_version 은 판정 근거로만 쓰고 envelope 에 새로 넣지 않는다.
+    facts = {"vsphere_endpoint": url}
+    if status is not None and status != 200:
+        facts["root_status_code"] = status
+    return True, None, facts
 
 
 def _init_result(channel, ports):

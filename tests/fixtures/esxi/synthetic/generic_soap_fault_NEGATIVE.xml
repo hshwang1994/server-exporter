@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+<soapenv:Body>
+<soapenv:Fault>
+<faultcode>ServerFaultCode</faultcode>
+<faultstring>Authentication required</faultstring>
+<detail><AuthenticationFault xmlns="http://example.invalid/generic-soap"><code>401</code></AuthenticationFault></detail>
+</soapenv:Fault>
+</soapenv:Body>
+</soapenv:Envelope>

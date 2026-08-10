@@ -203,6 +203,9 @@ def _run_precheck(monkeypatch, channel: str, connect_exc=None, http=None) -> dic
     monkeypatch.setattr(pb.socket, "socket", lambda *_a: _Sock())
     if http is not None:
         monkeypatch.setattr(pb, "http_get", lambda *a, **k: http)
+        # 2026-08-10 (Phase 4-B): esxi 는 Stage 3 에서 /sdk 로 vim25 SOAP 을 POST 한다.
+        # 두 채널을 같은 seam 으로 다루기 위해 함께 대체한다 (payload=None 은 양쪽 공통).
+        monkeypatch.setattr(pb, "http_post_soap", lambda *a, **k: http)
 
     class _Fake:
         params = dict(host="192.0.2.10", channel=channel, ports=[], timeout_port=3.0,
@@ -233,8 +236,9 @@ def test_case02_precheck_port_failure_has_reason(monkeypatch, channel):
 
 @pytest.mark.parametrize("channel", ["redfish", "esxi"])
 def test_case03_precheck_protocol_failure_has_reason(monkeypatch, channel):
-    # 주의: esxi 는 500 도 "endpoint 살아있음"으로 통과시킨다(probe_esxi:366). 두 채널 공통으로
-    # 프로토콜 실패가 되려면 **응답 자체가 없어야** 한다(payload=None).
+    # 응답 자체가 없는 경우(payload=None)를 쓴다 — 두 채널 공통으로 프로토콜 실패가 된다.
+    # (Phase 4-B 이후 esxi 는 HTTP 500 이어도 본문이 vim25 가 아니면 실패다. 종전 주석은
+    #  "esxi 는 500 도 통과" 였는데 그 whitelist 는 제거됐다.)
     monkeypatch.setattr("time.sleep", lambda _s: None)   # probe_redfish 의 1초 backoff 제거
     r = _run_precheck(monkeypatch, channel,
                       http=(False, "연결 실패: TLS handshake 오류", None))

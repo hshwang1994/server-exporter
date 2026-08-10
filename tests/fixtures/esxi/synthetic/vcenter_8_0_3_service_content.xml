@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+<soapenv:Body>
+<RetrieveServiceContentResponse xmlns="urn:vim25"><returnval versionId="6.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="urn:vim25"><rootFolder type="Folder">ha-folder-root</rootFolder><propertyCollector type="PropertyCollector">ha-property-collector</propertyCollector><about><name>VMware vCenter Server</name><fullName>VMware vCenter Server 8.0.3 build-24022515</fullName><vendor>VMware, Inc.</vendor><version>8.0.3</version><build>24022515</build><localeVersion>INTL</localeVersion><localeBuild>000</localeBuild><osType>linux-x64</osType><productLineId>vpx</productLineId><apiType>VirtualCenter</apiType><apiVersion>8.0.3.0</apiVersion><licenseProductName>VMware VirtualCenter Server</licenseProductName><licenseProductVersion>8.0</licenseProductVersion></about><sessionManager type="SessionManager">ha-sessionmgr</sessionManager></returnval></RetrieveServiceContentResponse>
+</soapenv:Body>
+</soapenv:Envelope>
