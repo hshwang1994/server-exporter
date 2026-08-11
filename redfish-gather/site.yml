@@ -254,20 +254,29 @@
         #   결과로 합쳐 반환하므로(try_one_account.yml 이 보는 값은 '전체 수집 결과'),
         #   기본값은 수집 단계(gather / GATHER_FAILED)이고 auth_success 는 null 을 유지한다.
         #
-        # 2026-08-11 (Phase 5-A) 인증 거부 실증:
+        # 2026-08-11 (Phase 5-A) 인증 거부 실증 — **후보 전체 집계**:
         #   redfish_gather 가 module result 에 `auth_evidence.first_auth_status` 를 싣는다.
         #   이는 **자격증명을 실은 첫 요청**이 받은 정수 HTTP status 로, 새 요청 없이
         #   기존 응답을 관측만 한 값이다(인증 시도 횟수 불변 = 계정 잠금 위험 불변).
-        #   401 이면 BMC 가 그 자격증명을 명시적으로 거부한 것이므로 실행이 멈춘 단계는
-        #   **자격 확인 단계**다 → stage='auth', auth_success=false.
-        #   403 은 인증 이후 권한 부족일 수 있어 거부로 확정하지 않는다(null 유지).
-        #   빈 자격 경로(_rf_accounts 없음)의 401 은 "등록된 자격증명 거부" 가 아니므로
-        #   _rf_attempt(실제 후보 시도)만 근거로 삼는다.
+        #   후보마다 모듈이 별도 프로세스로 실행되므로 값도 후보별로 독립이며,
+        #   try_one_account.yml 이 후보 순서대로 _rf_auth_statuses 에 누적한다.
+        #
+        #   전체를 "인증 거부" 로 확정하는 조건 (셋 다 만족해야 한다):
+        #     (1) 실제로 시도한 후보가 1개 이상이고
+        #     (2) 후보 수만큼 관측이 쌓였고 (누락된 후보가 없고)
+        #     (3) 모든 후보의 첫 인증 응답이 **401** 이다
+        #   → 하나라도 timeout / TLS / 403 / 200(인증은 통과) 이 섞이면 원인 미확정이라
+        #     auth_success 는 null 을 유지한다. 후보 하나의 401 로 전체를 단정하지 않는다.
+        #   빈 자격 경로(_rf_accounts 없음)는 (1) 에서 걸러진다 — 무자격 요청의 401 은
+        #   "등록된 자격증명 거부" 가 아니다.
         - name: "redfish | rescue | 인증 거부 실증 판정"
           ansible.builtin.set_fact:
             _rf_auth_rejected: >-
-              {{ ((_rf_attempt | default({}, true)).auth_evidence
-                  | default({}, true)).first_auth_status | default(0) | int == 401 }}
+              {%- set statuses = _rf_auth_statuses | default([]) -%}
+              {%- set attempted = (_rf_accounts | default([])) | length -%}
+              {{ attempted > 0
+                 and (statuses | length) == attempted
+                 and (statuses | select('equalto', 401) | list | length) == attempted }}
 
         - name: "redfish | rescue | Portal 표시용 failure_reason 보장"
           ansible.builtin.set_fact:

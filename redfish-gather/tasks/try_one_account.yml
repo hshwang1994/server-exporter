@@ -40,6 +40,19 @@
              (_rf_attempt.status | default('failed')) != 'failed' }}
       no_log: true
 
+    # 2026-08-11 (Phase 5-A 보정): 이 후보의 구조화 인증 관측을 누적한다.
+    #   - 새 요청을 만들지 않는다. 위 attempt 가 이미 받은 반환값만 읽는다.
+    #   - first_auth_status 는 **자격증명을 실은 첫 요청**의 정수 HTTP status 다.
+    #     인증이 통과한 뒤 하위 리소스에서 나온 401 은 여기에 담기지 않는다
+    #     (첫 요청이 200 이었다면 200 이 기록되고 덮어쓰지 않는다).
+    #   - timeout / TLS 오류처럼 status 를 못 받은 경우는 none 이 담긴다 = 원인 미확정.
+    - name: "redfish | try_account | record auth evidence"
+      ansible.builtin.set_fact:
+        _rf_auth_statuses: >-
+          {{ (_rf_auth_statuses | default([]))
+             + [ ((_rf_attempt | default({}, true)).auth_evidence
+                  | default({}, true)).first_auth_status | default(none) ] }}
+
     # F49 (cycle 2026-05-01): _rf_used_account 에서 password 분리 저장.
     # 기존: _rf_used_account 에 username/label/role 만 저장 (password 의도적 미저장 — 보안).
     # 사고: account_service.yml 이 username 만으로 vault lookup → 같은 username 다중 password

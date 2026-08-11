@@ -15,6 +15,11 @@
   ansible.builtin.set_fact:
     _rf_collect_ok: false
     _rf_used_account: {}
+    # 2026-08-11 (Phase 5-A 보정): 후보별 구조화 인증 관측 누적 리스트.
+    # 각 후보는 redfish_gather 를 **별도 모듈 프로세스**로 실행하므로
+    # auth_evidence.first_auth_status 는 그 후보 고유의 값이다. 전체 판정은
+    # 이 리스트를 모아 site.yml 이 한 곳에서 내린다 (후보 하나의 401 로 확정 금지).
+    _rf_auth_statuses: []
   no_log: true
 
 - name: "redfish | collect_standard | warn no accounts"

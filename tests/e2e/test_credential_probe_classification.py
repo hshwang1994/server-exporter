@@ -98,11 +98,15 @@ def test_redfish_auth_evidence_is_structured_not_parsed():
     lib = _text("redfish-gather/library/redfish_gather.py")
     assert "def auth_evidence(" in lib
     assert "'first_auth_status'" in lib
+    # 후보별 관측은 try_one_account 가 누적하고, 판정은 site.yml 한 곳에서 한다
+    probe = _text("redfish-gather/tasks/try_one_account.yml")
+    assert "first_auth_status" in probe and "_rf_auth_statuses" in probe
+    assert "_rf_auth_statuses: []" in _text("redfish-gather/tasks/collect_standard.yml")
     # site.yml 은 정수 비교만 한다 (문자열 검색 금지)
     site = _text("redfish-gather/site.yml")
-    assert "first_auth_status" in site
-    assert re.search(r"first_auth_status.*\|\s*int\s*==\s*401", site), (
-        "401 판정은 정수 비교여야 한다"
+    assert "_rf_auth_statuses" in site
+    assert re.search(r"select\('equalto', 401\)", site), (
+        "401 판정은 정수 비교여야 한다 (문자열 검색 금지)"
     )
     assert "'HTTP 401' in" not in site and '"HTTP 401" in' not in site
 
