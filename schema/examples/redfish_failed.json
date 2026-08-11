@@ -25,7 +25,7 @@
     "auth_success": null,
     "failure_stage": "protocol",
     "failure_code": "PROTOCOL_CHECK_FAILED",
-    "failure_reason": "관리 연결은 확인되었지만 예상한 Redfish 응답을 확인하지 못했습니다. Redfish 서비스 설정과 상태를 확인하세요.",
+    "failure_reason": "관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. 관리 서비스 설정과 상태를 확인하세요.",
     "details": {
       "channel": "redfish",
       "checked_ports": [
@@ -52,8 +52,8 @@
   "errors": [
     {
       "section": "precheck",
-      "message": "Redfish 프로토콜 핸드셰이크 실패",
-      "detail": "HTTP 404 — /redfish/v1/ 응답 없음"
+      "message": "관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. 관리 서비스 설정과 상태를 확인하세요.",
+      "detail": "HTTP 404 (/redfish/v1/ 응답 없음)"
     }
   ],
   "data": {

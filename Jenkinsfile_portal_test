@@ -1,0 +1,356 @@
+pipeline {
+
+    agent none
+
+    parameters {
+        string(
+            name        : 'loc',
+            defaultValue: '',
+            description : 'Agent 로케이션 (ich | chj | yi)'
+        )
+        choice(
+            name        : 'target_type',
+            choices     : ['os', 'esxi', 'redfish'],
+            description : '수집 대상 종류'
+        )
+        text(
+            name        : 'inventory_json',
+            defaultValue: 'not-json',
+            description : '호스트 JSON 배열 (os/esxi: service_ip, redfish: bmc_ip, fallback: ip)'
+        )
+        string(
+            name        : 'deploymentEnvironmentId',
+            defaultValue: '',
+            description : '포털 개발환경 ID'
+        )
+        string(
+            name        : 'callbackUrl',
+            defaultValue: '',
+            description : '결과 전달 Callback URL (예: http://portal.example.com)'
+        )
+        choice(
+            name        : 'verbosity',
+            choices     : ['0', '1', '2', '3', '4'],
+            description : 'Ansible verbosity (0=운영, 1~2=디버그, 3~4=깊은 진단)'
+        )
+    }
+
+    environment {
+        INVENTORY_JSON          = "${params.inventory_json}"
+        PYTHONDONTWRITEBYTECODE = '1'
+    }
+
+    options {
+        timeout(time: 120, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '100'))
+    }
+
+    stages {
+
+        // -- 1. Validate [Agent] -----------------------------------------------
+        stage('Validate') {
+            agent {
+                node {
+                    label "${params.loc}"
+                    customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
+                }
+            }
+            options {
+                timeout(time: 2, unit: 'MINUTES')
+                // Validate 는 repo 파일을 안 읽음(파라미터 검증만) → SCM checkout 생략 (빌드당 GitLab clone 1회 절약)
+                skipDefaultCheckout(true)
+            }
+            steps {
+                script {
+                    if (!params.loc?.trim()) {
+                        error "[Validate] 필수 파라미터 누락: loc"
+                    }
+
+                    def allowed = ['os', 'esxi', 'redfish']
+                    if (!allowed.contains(params.target_type?.trim())) {
+                        error "[Validate] target_type 값 오류: '${params.target_type}' -- 허용값: ${allowed}"
+                    }
+
+                    if (!params.inventory_json?.trim()) {
+                        error "[Validate] inventory_json 이 비어있습니다"
+                    }
+
+                    def hosts
+                    try {
+                        hosts = new groovy.json.JsonSlurper().parseText(params.inventory_json)
+                    } catch (Exception e) {
+                        error "[Validate] inventory_json JSON 파싱 실패: ${e.message}"
+                    }
+
+                    if (!hosts || hosts.size() == 0) {
+                        error "[Validate] inventory_json 배열이 비어있습니다"
+                    }
+
+                    def primaryKey = (params.target_type == 'redfish') ? 'bmc_ip' : 'service_ip'
+                    for (int idx = 0; idx < hosts.size(); idx++) {
+                        def host = hosts[idx]
+                        def ipVal = host[primaryKey]?.trim() ?: host['ip']?.trim()
+                        if (!ipVal) {
+                            error "[Validate] inventory_json[${idx}] '${primaryKey}' 또는 'ip' 필드 누락"
+                        }
+                    }
+
+                    if (!params.callbackUrl?.trim()) {
+                        error "[Validate] 필수 파라미터 누락: callbackUrl"
+                    }
+                    def cbUrl = params.callbackUrl.trim()
+                    if (!(cbUrl.startsWith('http://') || cbUrl.startsWith('https://'))) {
+                        error "[Validate] callbackUrl 은 http:// 또는 https:// 로 시작해야 함: ${cbUrl}"
+                    }
+                    if (cbUrl.contains("'") || cbUrl.contains('"') || cbUrl.contains('`') || cbUrl.contains('\\') || cbUrl.replaceAll(/\s/, '') != cbUrl) {
+                        error "[Validate] callbackUrl 에 허용되지 않는 문자(따옴표/백틱/역슬래시/공백) 포함 — 거부: ${cbUrl}"
+                    }
+                    if (!params.deploymentEnvironmentId?.trim()) {
+                        error "[Validate] 필수 파라미터 누락: deploymentEnvironmentId"
+                    }
+
+                    echo "[Validate] OK -- target_type=${params.target_type}, hosts=${hosts.size()}, loc=${params.loc}"
+                    echo "[Validate] callback=${params.callbackUrl}"
+                }
+            }
+        }
+
+        // -- 2. Gather [Agent] -------------------------------------------------
+        stage('Gather') {
+            agent {
+                node {
+                    label "${params.loc}"
+                    customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
+                }
+            }
+            // Gather 는 site.yml / inventory.sh / ansible.cfg 등 repo 파일을 사용 → 기본 SCM checkout 유지
+            options { timeout(time: 60, unit: 'MINUTES') }
+            environment {
+                REPO_ROOT                = "${WORKSPACE}"
+                ANSIBLE_CONFIG           = "${WORKSPACE}/ansible.cfg"
+                ANSIBLE_JSON_OUTPUT_FILE = "${WORKSPACE}/gather_output.json"
+                ANSIBLE_VERBOSITY        = "${params.verbosity}"
+            }
+            steps {
+                script {
+                    def playbookMap = [
+                        'os'     : "${WORKSPACE}/os-gather/site.yml",
+                        'esxi'   : "${WORKSPACE}/esxi-gather/site.yml",
+                        'redfish': "${WORKSPACE}/redfish-gather/site.yml",
+                    ]
+                    def inventoryMap = [
+                        'os'     : "${WORKSPACE}/os-gather/inventory.sh",
+                        'esxi'   : "${WORKSPACE}/esxi-gather/inventory.sh",
+                        'redfish': "${WORKSPACE}/redfish-gather/inventory.sh",
+                    ]
+
+                    def playbook  = playbookMap[params.target_type]
+                    def inventory = inventoryMap[params.target_type]
+                    echo "[Gather] playbook=${playbook}"
+
+                    sh "rm -f \"${env.WORKSPACE}/gather_output.json\""
+
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                        // vault 복호화 패스워드: Jenkins Credentials Store 의 Secret text
+                        //   'server-gather-vault-password' (메인 Jenkinsfile 과 동일 credential, docs/01 §7).
+                        //   withCredentials 가 $VAULT_PASSWORD 주입(콘솔 마스킹) → 런타임 임시파일(mktemp,
+                        //   chmod 600)에 써서 ansible-vault 복호화. trap 으로 빌드 종료 시 임시파일 삭제.
+                        //   Secret text 방식 — Secret File trailing newline 문제 회피.
+                        withCredentials([
+                            string(
+                                credentialsId: 'server-gather-vault-password',
+                                variable     : 'VAULT_PASSWORD',
+                            ),
+                        ]) {
+                            sh """#!/bin/bash
+                                set -eo pipefail
+                                set +x
+                                cd "\${WORKSPACE}"
+                                . /opt/ansible-env/bin/activate
+                                chmod +x "${inventory}"
+                                VAULT_TMP="\$(mktemp)"
+                                trap 'rm -f "\$VAULT_TMP"' EXIT
+                                printf '%s' "\${VAULT_PASSWORD}" > "\$VAULT_TMP"
+                                chmod 600 "\$VAULT_TMP"
+                                ansible-playbook "${playbook}" -i "${inventory}" --vault-password-file="\$VAULT_TMP"
+                            """
+                        }
+                    }
+
+                    // Gather 완전 실패(출력 0건)면 Callback 까지 가지 말고 여기서 원인 노출.
+                    //   부분 수집(일부 호스트만 성공)은 파일에 내용이 있어 통과 → 기존 graceful 유지.
+                    def gatherOut = "${env.WORKSPACE}/gather_output.json"
+                    if (!fileExists(gatherOut) || readFile(gatherOut).length() == 0) {
+                        error "[Gather] gather_output.json 미생성/0바이트 — ansible-playbook 완전 실패 또는 출력 경로 오류"
+                    }
+                }
+
+                stash(
+                    name       : 'gather-output',
+                    includes   : 'gather_output.json',
+                    allowEmpty : false,
+                )
+            }
+            post {
+                always {
+                    deleteDir()
+                }
+            }
+        }
+
+        // -- 3. Validate Schema [Agent] ----------------------------------------
+        stage('Validate Schema') {
+            agent {
+                node {
+                    label "${params.loc}"
+                    customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
+                }
+            }
+            // Validate Schema 는 tests/validate_field_dictionary.py 등 repo 파일을 사용 → 기본 SCM checkout 유지
+            options { timeout(time: 2, unit: 'MINUTES') }
+            steps {
+                sh '''#!/bin/bash
+                    set +x
+                    cd "${WORKSPACE}"
+                    . /opt/ansible-env/bin/activate
+                    python3 tests/validate_field_dictionary.py
+                '''
+            }
+            post {
+                always {
+                    deleteDir()
+                }
+            }
+        }
+
+        // -- 4. Callback [Master] ----------------------------------------------
+        stage('Callback') {
+            agent { label 'built-in' }
+            options {
+                // Callback 은 master 노드에서 stash 결과만 사용, repo 파일 안 읽음 → SCM checkout 생략
+                skipDefaultCheckout(true)
+                timeout(time: 15, unit: 'MINUTES')
+            }
+            steps {
+                script {
+                    unstash 'gather-output'
+
+                    def baseUrl = params.callbackUrl.trim().replaceAll('/+$', '')
+                    def callbackEndpoint = baseUrl + '/api/jenkins/gather/' + params.target_type.trim()
+                    echo "[Callback] POST -> ${callbackEndpoint}"
+
+                    def jsonContent = ""
+                    try {
+                        jsonContent = readFile("${WORKSPACE}/gather_output.json").trim()
+                    } catch (Exception e) {
+                        error "[Callback] gather_output.json 읽기 실패: ${e.message}"
+                    }
+
+                    if (!jsonContent) {
+                        error "[Callback] gather_output.json 이 비어있습니다 — gather 결과 미생성"
+                    }
+
+                    def rawJsonLines = []
+                    for (line in jsonContent.split('\n')) {
+                        def t = line.trim()
+                        if (t.length() > 0) {
+                            rawJsonLines.add(t)
+                        }
+                    }
+
+                    echo "[Callback] JSON 라인 ${rawJsonLines.size()}개"
+
+                    if (rawJsonLines.isEmpty()) {
+                        error "[Callback] gather_output.json 에 유효 JSON 라인 0개"
+                    }
+
+                    def gatherArray = rawJsonLines.join(',')
+
+                    def callbackBody = '{'  +
+                        '"loc":"'                        + params.loc.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('\n', '\\\\n').replaceAll('\r', '\\\\r').replaceAll('\t', '\\\\t')                        + '",' +
+                        '"deploymentEnvironmentId":"'   + params.deploymentEnvironmentId.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('\n', '\\\\n').replaceAll('\r', '\\\\r').replaceAll('\t', '\\\\t')   + '",' +
+                        '"gatherInfoJson":['             + gatherArray                                               + ']'  +
+                    '}'
+
+                    echo "[Callback] body ${callbackBody.length()} bytes, hosts=${rawJsonLines.size()}"
+
+                    // HTTP Request 플러그인(httpRequest 스텝)으로 POST — curl/셸 미사용.
+                    //   - 셸을 거치지 않으므로 callbackEndpoint shell 주입 위험 제거 (Validate 입력 차단과 이중 방어 유지).
+                    //   - validResponseCodes:'100:599' → 비-2xx 에도 예외 미발생, status 직접 판정 (graceful, rule 31 R2).
+                    //   - ignoreSslErrors 미설정 → SSL 검증 유지 (curl -k 미사용과 동일).
+                    //   - 재시도 3회 + backoff(attempt*10s), 최종 실패 시 unstable 은 기존 curl 동작 그대로 보존.
+                    def maxRetries = 3
+                    def success = false
+                    def lastError = ''
+
+                    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                        echo "[Callback] [${attempt}/${maxRetries}] 전송중..."
+                        def httpCode = ''
+                        def respBody = ''
+                        try {
+                            def resp = httpRequest(
+                                url                    : callbackEndpoint,
+                                httpMode               : 'POST',
+                                contentType            : 'APPLICATION_JSON',
+                                requestBody            : callbackBody,
+                                timeout                : 300,
+                                validResponseCodes     : '100:599',
+                                consoleLogResponseBody : false,
+                            )
+                            httpCode = "${resp.status}"
+                            respBody = resp.content ?: ''
+                        } catch (Exception e) {
+                            lastError = "httpRequest 예외 (연결 실패/timeout): ${e.message}"
+                        }
+
+                        if (httpCode ==~ /2\d\d/) {
+                            echo "[Callback] [OK] HTTP ${httpCode} (${attempt}/${maxRetries})"
+                            success = true
+                            break
+                        }
+                        if (httpCode) {
+                            def snippet = (respBody.length() > 500) ? respBody.substring(0, 500) : respBody
+                            lastError = "HTTP ${httpCode}" + (snippet ? " -- ${snippet}" : "")
+                        }
+                        echo "[Callback] [FAIL] (${attempt}/${maxRetries}) ${lastError}"
+
+                        if (attempt < maxRetries) {
+                            def waitSec = attempt * 10
+                            echo "[Callback] ${waitSec}초 후 재시도"
+                            sleep(time: waitSec, unit: 'SECONDS')
+                        }
+                    }
+
+                    if (!success) {
+                        unstable "[Callback] ${maxRetries}회 재시도 실패 -- ${lastError} (수집 결과는 console log/artifact 확인)"
+                    }
+                }
+            }
+            post {
+                always {
+                    deleteDir()
+                }
+            }
+        }
+    }
+
+    // -- Post Actions ----------------------------------------------------------
+    post {
+        always {
+            echo "[Post] ======================================================="
+            echo "[Post] 결과: ${currentBuild.currentResult}"
+            echo "[Post] 소요: ${currentBuild.durationString ?: '-'}"
+            echo "[Post] type: ${params.target_type}"
+            echo "[Post] ======================================================="
+        }
+        success {
+            echo "[Post] [OK] Gather + Callback 완료"
+        }
+        unstable {
+            echo "[Post] [WARN] 일부 단계 실패 -- 포털 확인 필요"
+        }
+        failure {
+            echo "[Post] [FAIL] 파이프라인 실패 -- 콘솔 로그 확인"
+        }
+    }
+}

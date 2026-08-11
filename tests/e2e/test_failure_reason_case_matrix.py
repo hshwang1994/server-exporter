@@ -36,6 +36,7 @@ sys.modules.setdefault("ansible.module_utils.basic", _b)
 import precheck_bundle as pb  # noqa: E402
 
 from tests.e2e.test_failure_reason_contract import (  # noqa: E402
+    FAILURE_REASONS,
     _assert_claims_match_observation,
     _assert_diagnosis_shape,
     _assert_grid_ready,
@@ -154,8 +155,8 @@ def test_reachable_stage_never_claims_communication_ok():
         diag = _run_precheck("redfish", tcp=tcp)
         reason = diag["failure_reason"]
         assert diag["reachable"] is False
-        for banned in ("통신은 되지만", "관리 연결은 확인되었지만", "서버는 응답하지만",
-                       "접속은 확인되었지만"):
+        for banned in ("통신은 되지만", "관리 포트에는 연결됐지만", "서버는 응답하지만",
+                       "접속은 확인"):
             assert banned not in reason, reason
 
 
@@ -163,12 +164,18 @@ def test_port_stage_never_claims_server_responded():
     """§5 — RST 를 최종 서버 응답으로 확정하지 않는다."""
     diag = _run_precheck("redfish", tcp=_TCP_REFUSED)
     assert diag["reachable"] is True and diag["port_open"] is False
-    for banned in ("서버는 응답하지만", "관리 연결은 확인되었지만", "접속은 확인되었지만"):
+    for banned in ("서버는 응답하지만", "관리 포트에는 연결됐지만", "접속은 확인"):
         assert banned not in diag["failure_reason"]
 
 
 def test_protocol_stage_reports_confirmed_connection():
-    """§6 — protocol 단계는 TCP 관리 연결 성공을 사용자에게 알린다."""
+    """§6 — protocol 단계는 TCP 관리 연결 성공을 사용자에게 알린다.
+
+    2026-08-11 (Phase 6-B) 기대 문구 변경: 3 채널이 같은 3번 문구를 쓴다
+    ("관리 포트에는 연결됐지만 ... 응답을 확인할 수 없습니다"). 종전에는 채널 이름
+    (Redfish / SSH 또는 WinRM / vSphere API)을 문장에 넣었는데, 사용자는 채널을 고르지
+    않고 IP 만 넘기므로 조치에 도움이 되지 않아 뺐다. 채널 정보는 errors[].detail 에 남는다.
+    """
     for channel, kwargs in (
         ("os", dict(tcp=_TCP_OK)),
         ("redfish", dict(tcp=_TCP_OK,
@@ -178,9 +185,10 @@ def test_protocol_stage_reports_confirmed_connection():
     ):
         diag = _run_precheck(channel, **kwargs)
         assert diag["port_open"] is True, channel
-        assert "관리 연결은 확인되었지만" in diag["failure_reason"], channel
+        assert diag["failure_reason"] == FAILURE_REASONS["_fr_protocol_unconfirmed"], channel
+        assert "관리 포트에는 연결됐지만" in diag["failure_reason"], channel
         # 단순 "응답이 없습니다" 로 뭉개지 않는다
-        assert "확인하지 못했습니다" in diag["failure_reason"], channel
+        assert "확인할 수 없습니다" in diag["failure_reason"], channel
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -237,68 +245,104 @@ def test_rescue_cases(label, make, stage, code, auth):
 
 
 def test_auth_stage_claims_only_protocol_level_success():
-    """§7 — 자격 후보 전멸을 '인증에 실패했습니다' 로 단정하지 않는다."""
-    for label, diag, service in (
-        ("linux", _os_diag("linux", False), "SSH"),
-        ("windows", _os_diag("windows", False), "WinRM"),
-        ("esxi", _esxi_diag(False, False), "vSphere API"),
+    """§7 — 자격 후보 전멸을 '인증에 실패했습니다' 로 단정하지 않는다.
+
+    2026-08-11 (Phase 6-B): 자격 단계 실패는 4번 문구 하나로 통일됐다
+    ("대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요."). 채널 이름을 넣어
+    "SSH 서비스는 확인되었지만" 처럼 앞 단계 성공을 나열하던 형태는 사용자 조치에 도움이
+    되지 않아 뺐다. 확인된 앞 단계는 diagnosis 의 Boolean 이 그대로 표현한다.
+    """
+    for label, diag in (
+        ("linux", _os_diag("linux", False)),
+        ("windows", _os_diag("windows", False)),
+        ("esxi", _esxi_diag(False, False)),
     ):
         reason = diag["failure_reason"]
         assert diag["auth_success"] is None, label
-        assert f"{service}는 확인되었지만" in reason or f"{service} 서비스는 확인되었지만" in reason, reason
+        assert reason == FAILURE_REASONS["_fr_credential_failed"], label
         assert "인증이 거부" not in reason, "거부를 관측하지 못했는데 단정하면 안 된다"
         assert "비밀번호가 잘못" not in reason
-        assert "접속은 확인되었지만" not in reason, "인증 성공을 암시하면 안 된다"
+        assert "접속은 확인" not in reason, "인증 성공을 암시하면 안 된다"
 
 
-def test_explicit_rejection_only_with_structured_401():
-    """§8 — 명시적 거부 문구는 구조화된 401 관측이 있을 때만."""
+def test_explicit_rejection_stays_in_machine_fields_only():
+    """§26 (2026-08-11 Phase 6-B) — 401 실증은 **기계 필드로만** 표현한다.
+
+    종전에는 401 을 관측했을 때 "인증이 거부되었습니다" 라는 별도 사용자 문장을 썼다.
+    사용자 판단: Portal 사용자가 할 일은 401 이든 timeout 이든 "자격증명과 계정 권한 확인"
+    으로 같아서 문장을 나눌 실질 가치가 없다. → 4번 문구로 통일하고, 기술 근거는
+    auth_success=false / failure_stage=auth / failure_code / errors[].detail 이 표현한다.
+    """
     rejected = _rf_diag(False, True)
     unknown = _rf_diag(False, False)
 
+    # 기계 필드는 여전히 두 경우를 구분한다 (JSON contract 불변)
     assert rejected["auth_success"] is False
-    assert "인증이 거부되었습니다" in rejected["failure_reason"]
+    assert rejected["failure_stage"] == "auth"
+    assert rejected["failure_code"] == "AUTH_PROBE_FAILED"
     assert unknown["auth_success"] is None
-    assert "인증이 거부" not in unknown["failure_reason"], (
-        "401 을 관측하지 못한 경로에서 거부를 단정하면 안 된다"
-    )
+    assert unknown["failure_stage"] == "gather"
+
+    # 사용자 문장은 동일하다
+    assert rejected["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
+    assert unknown["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
+    for diag in (rejected, unknown):
+        assert "인증이 거부" not in diag["failure_reason"], (
+            "기술 판정을 사용자 문장으로 노출하지 않는다"
+        )
 
 
 def test_gather_stage_respects_auth_success():
-    """§9 — auth_success=null 인 gather 실패는 '접속은 확인되었지만' 이라고 쓰지 않는다."""
+    """§9 — 접속 성공을 관측하지 못한 실패는 '접속은 확인됐지만' 이라고 쓰지 않는다.
+
+    redfish 는 인증과 수집을 한 값(_rf_collect_ok)으로 합쳐 반환하므로 수집이 실패하면
+    접속이 됐는지 알 수 없다 → 4번(자격증명) 문구를 쓴다. 인증 통과를 실제로 관측한
+    OS / ESXi 의 수집 실패만 5번 문구를 쓴다.
+    """
     rf = _rf_diag(False, False)
     assert rf["auth_success"] is None
-    assert "접속은 확인되었지만" not in rf["failure_reason"]
-    assert "Redfish 서비스는 확인되었지만" in rf["failure_reason"], (
-        "실제로 확인된 마지막 단계(Protocol)까지만 표현한다"
-    )
+    assert "접속은 확인" not in rf["failure_reason"]
+    assert rf["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
 
     for diag in (_os_diag("linux", True), _os_diag("windows", True), _esxi_diag(True, False)):
         assert diag["auth_success"] is True
-        assert "접속은 확인되었지만" in diag["failure_reason"]
+        assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
+        assert "대상 접속은 확인됐지만" in diag["failure_reason"]
 
 
 def test_normalization_failure_wording():
-    """§10 — 수집 성공이 확인된 경로에서만 '정보 수집 후' 라고 쓴다."""
+    """§10 (2026-08-11 Phase 6-B 기대 변경) — 정규화 실패도 5번 문구를 쓴다.
+
+    종전에는 "정보 수집 후 결과를 처리하는 중 오류가 발생했습니다" 라는 6번째 문장이 있었다.
+    사용자 확정 문구 표준은 5 문장뿐이고, 수집 뒤 처리 실패도 사용자 조치는 5번과 같다
+    (대상 상태와 수집 로그 확인). 단계 구분은 failure_stage=gather 가 유지한다.
+    """
     for diag in (_esxi_diag(True, True), _rf_diag(True, False)):
-        assert "정보 수집 후 결과를 처리하는 중" in diag["failure_reason"]
-    # 수집 성공을 확인하지 못한 경로에서는 쓰지 않는다
+        assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
+        assert diag["failure_stage"] == "gather"
+    # 접속 성공을 확인하지 못한 경로는 5번(수집 실패) 문구를 쓰지 않는다
     for diag in (_rf_diag(False, False), _esxi_diag(False, False), _os_diag("linux", False)):
-        assert "정보 수집 후" not in diag["failure_reason"]
+        assert diag["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
 
 
-def test_all_case_reasons_are_distinct_enough():
-    """같은 의미는 같은 문체, 다른 단계는 다른 문장이어야 한다 (§13)."""
+def test_all_case_reasons_use_only_the_standard_sentences():
+    """§13 (2026-08-11 Phase 6-B 기대 변경) — 문장은 **단계**로만 갈린다.
+
+    종전에는 채널 × 단계마다 서로 다른 9 문장이었다. 사용자 확정 표준은 5 문장뿐이고,
+    rescue 경로에서 나올 수 있는 것은 4번(자격증명) / 5번(수집)뿐이다. 채널 구분은
+    envelope 의 target_type / collection_method 와 errors[].detail 이 이미 표현한다.
+    """
     reasons = {label: make()["failure_reason"] for label, make, *_ in CASES_RESCUE}
-    # C10 / C12 / C16 은 Redfish 가 인증과 수집을 구분하지 못해 **의도적으로 동일**하다.
-    assert reasons["C10 Redfish 자격 실패"] == reasons["C12 Redfish HTTP 403"]
-    assert reasons["C10 Redfish 자격 실패"] == reasons["C16 Redfish 수집 실패"]
-    # C17 / C18 은 결과 처리(정규화) 실패라 채널과 무관하게 **의도적으로 동일**하다.
-    assert reasons["C17 ESXi 결과 처리 실패"] == reasons["C18 Redfish 결과 처리 실패"]
-    # 나머지는 단계/채널마다 달라야 한다
-    distinct = {reasons[k] for k in reasons if k not in
-                ("C12 Redfish HTTP 403", "C16 Redfish 수집 실패")}
-    assert len(distinct) == 9, sorted(distinct)
+    allowed = {FAILURE_REASONS["_fr_credential_failed"],
+               FAILURE_REASONS["_fr_gather_failed"]}
+    assert set(reasons.values()) <= allowed, sorted(set(reasons.values()) - allowed)
+
+    # 접속을 관측한 경로만 5번을 쓴다
+    gather_wording = FAILURE_REASONS["_fr_gather_failed"]
+    for label, make, _stage, _code, auth in CASES_RESCUE:
+        diag = make()
+        if diag["failure_reason"] == gather_wording:
+            assert diag["failure_stage"] == "gather", label
 
 
 def test_no_secrets_in_any_case():

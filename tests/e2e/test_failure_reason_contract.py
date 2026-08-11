@@ -95,12 +95,19 @@ def _task_by_name(site: str, needle: str) -> dict[str, Any]:
     raise AssertionError(f"{site} 에서 태스크를 찾지 못함: {needle!r}")
 
 
+# 2026-08-11 (Phase 6-B): 사용자 문구 정본. site.yml rescue 는 문장을 직접 쓰지 않고
+# 이 파일의 변수(_fr_*)를 참조한다 (각 play 의 vars_files). 렌더 시 그대로 주입한다.
+FAILURE_REASONS: dict[str, Any] = yaml.safe_load(
+    (REPO / "common/vars/failure_reasons.yml").read_text(encoding="utf-8")
+)
+
+
 def _render_diagnosis(site: str, task_name: str, ctx: dict[str, Any]) -> Any:
     """site.yml 의 _diagnosis set_fact 템플릿을 실제로 추출해 렌더."""
     tpl = _task_by_name(site, task_name)["ansible.builtin.set_fact"]["_diagnosis"]
     if not isinstance(tpl, str):     # 리터럴 dict (OS PLAY 1.5)
         return tpl
-    return _env().from_string(tpl).render(**ctx)
+    return _env().from_string(tpl).render(**{**FAILURE_REASONS, **ctx})
 
 
 def _render_fallback_envelopes(site: str, ctx: dict[str, Any]) -> list[dict[str, Any]]:
@@ -193,23 +200,26 @@ def _assert_grid_ready(reason: Any, label: str) -> None:
 # ---------------------------------------------------------------------------
 # §29 단계 진행 관계 — 문장이 주장하는 성공은 Machine Diagnosis 로 증명돼야 한다
 # ---------------------------------------------------------------------------
-# 왼쪽 표현이 문장에 있으면 오른쪽 관측값이 반드시 참이어야 한다.
-_CLAIM_REQUIREMENTS: tuple[tuple[str, str], ...] = (
-    ("관리 연결은 확인되었지만", "port_open"),
-    ("SSH 서비스는 확인되었지만", "protocol_supported"),
-    ("WinRM 서비스는 확인되었지만", "protocol_supported"),
-    ("Redfish 서비스는 확인되었지만", "protocol_supported"),
-    ("vSphere API는 확인되었지만", "protocol_supported"),
-    ("관리 서비스는 확인되었지만", "protocol_supported"),
-    ("접속은 확인되었지만", "auth_success"),
+# 2026-08-11 (Phase 6-B): 사용자 문구가 5 문장 표준으로 바뀌면서 주장 표현도 바뀌었다.
+# 왼쪽 표현이 문장에 있으면 오른쪽 조건이 반드시 참이어야 한다.
+#   "관리 포트에는 연결됐지만"   → port_open 을 실제로 관측했다
+#   "대상 IP 사용은 확인됐지만"  → IP presence 를 확정했다 (현재 판정 수단 부재 → 미사용)
+#   "대상 접속은 확인됐지만"     → 인증 뒤 단계(gather)까지 갔다
+#      * auth_success 가 아니라 failure_stage 로 검증한다. redfish 는 인증과 수집을 한 값으로
+#        합쳐 반환해 auth_success 를 true 로 올리지 않지만, stage=gather 자체가 "인증 단계를
+#        지났다"는 기계 판정이다.
+_CLAIM_REQUIREMENTS: tuple[tuple[str, str, Any], ...] = (
+    ("관리 포트에는 연결됐지만", "port_open", True),
+    ("대상 IP 사용은 확인됐지만", "reachable", True),
+    ("대상 접속은 확인됐지만", "failure_stage", "gather"),
 )
 
 
 def _assert_claims_match_observation(diag: dict[str, Any], label: str) -> None:
     reason = diag.get("failure_reason") or ""
-    for phrase, field in _CLAIM_REQUIREMENTS:
+    for phrase, field, expected in _CLAIM_REQUIREMENTS:
         if phrase in reason:
-            assert diag.get(field) is True, (
+            assert diag.get(field) == expected, (
                 f"[{label}] 문구가 '{phrase}' 로 앞 단계 성공을 주장하는데 "
                 f"diagnosis.{field}={diag.get(field)!r} — 관측과 모순"
             )
@@ -411,20 +421,22 @@ def test_case07_10_os_failure_has_reason(os_type, auth_ok, label):
     # Phase 3-B 이후 PLAY 1 은 SSH identification / WinRM Identify 까지 확인해야 통과한다.
     # 즉 PLAY 2/3 에 도달했다는 것 자체가 프로토콜 관측 성공을 뜻한다 (자격 결과와 무관).
     assert diag["protocol_supported"] is True, f"[{tag}] 프로토콜은 precheck 가 이미 확인했다"
+    # 2026-08-11 (Phase 6-B): 사용자 문구는 5 문장 표준만 쓴다. 채널 이름(SSH / WinRM)은
+    # 문장에서 빠지고 errors[].detail 로 내려갔다 (사용자는 채널을 고르지 않고 IP 만 넘긴다).
     if auth_ok:
         assert diag["auth_success"] is True, f"[{tag}] 자격 probe 통과는 관측된 사실"
         # Phase 2 (2026-08-10): enum 에 gather 가 추가되어 수집 단계 실패를 표현할 수 있다
         assert diag["failure_stage"] == "gather", f"[{tag}] 수집 단계 실패는 gather"
-        assert "접속은 확인되었지만" in diag["failure_reason"], (
-            f"[{tag}] 인증 성공이 관측됐으므로 그 사실을 사용자에게 알린다")
+        assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"], (
+            f"[{tag}] 인증 성공이 관측됐으므로 5번 문구(수집 실패)를 쓴다")
     else:
         # 요구사항 6 — 잘못된 자격 / 연결 끊김 / 제한 쉘을 구분 못 하므로 false 금지
         assert diag["auth_success"] is None, f"[{tag}] 인증 거부를 관측하지 못했다"
         assert diag["failure_stage"] == "auth", f"[{tag}] 실행이 멈춘 단계"
-        assert "접속은 확인되었지만" not in diag["failure_reason"], (
+        assert diag["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"], (
+            f"[{tag}] 자격 단계 실패는 4번 문구")
+        assert "접속은 확인" not in diag["failure_reason"], (
             f"[{tag}] auth_success=null 인데 접속 성공을 암시하면 안 된다")
-        expected_service = "SSH" if os_type == "linux" else "WinRM"
-        assert f"{expected_service} 서비스는 확인되었지만" in diag["failure_reason"], tag
     assert diag["details"]["channel"] == "os"
     assert diag["details"]["detected_os"] == os_type
 
@@ -512,23 +524,25 @@ def test_case11_os_all_ports_failure_has_reason(stage, code):
 
 
 def test_os_portfail_reason_matches_observation():
-    """관측 종류마다 문구가 달라야 한다 (사실과 어긋나는 표현 금지)."""
+    """2026-08-11 (Phase 6-B) 기대값 변경 — 세 관측이 **같은 문장**을 쓴다.
+
+    종전(Phase 5-A)에는 TCP timeout / RST / 주소 해석 실패를 서로 다른 세 문장으로 구분했다.
+    사용자 확정 문구 표준(§25 §33)은 이 셋을 1번 문구 하나로 합친다. 세 경우 모두 사용자가
+    할 일이 "그 IP 를 쓰는 장비가 맞는지, 경로가 열려 있는지 확인" 으로 같기 때문이다.
+    기계용 구분은 failure_code(TCP_CONNECT_FAILED / TCP_CONNECTION_REFUSED /
+    DNS_RESOLUTION_FAILED)와 errors[].detail 이 그대로 유지한다 (§28 — enum 삭제 안 함).
+    """
     no_resp = _os_portfail_diag("reachable", "TCP_CONNECT_FAILED")["failure_reason"]
     refused = _os_portfail_diag("port", "TCP_CONNECTION_REFUSED")["failure_reason"]
     dns = _os_portfail_diag("reachable", "DNS_RESOLUTION_FAILED")["failure_reason"]
 
-    # TCP 연결 미확인 — 전원이 꺼졌다거나 방화벽이 원인이라고 단정하지 않는다.
-    assert no_resp == pb.REASON_TCP_UNCONFIRMED
-    assert "관리 통신을 확인할 수 없습니다" in no_resp
-    assert "전원" not in no_resp, "관측하지 않은 원인을 단정하지 않는다"
-    # RST 는 중간 방화벽/보안 장비가 낼 수도 있어 "서버가 응답했다"고 단정하지 않는다.
-    assert refused == pb.REASON_PORT_REFUSED
+    assert {no_resp, refused, dns} == {pb.REASON_IP_UNCONFIRMED}
+    # 관측하지 않은 원인을 단정하지 않는다
+    assert "전원" not in no_resp
     assert "서버는 응답하지만" not in refused, "RST 를 서버 자체 응답으로 확정하면 안 된다"
     assert "통신은 되지만" not in refused
-    # 주소 해석 실패는 패킷을 보낸 적도 없다.
-    assert dns == pb.REASON_DNS_FAILED
-    assert "주소를 확인할 수 없습니다" in dns
-    assert len({no_resp, refused, dns}) == 3
+    # §25 §28 — Portal 은 IPv4 만 넘긴다. 주소 해석 실패에도 DNS 안내를 하지 않는다.
+    assert "DNS" not in dns and "호스트 이름" not in dns
     for reason in (no_resp, refused, dns):
         _assert_grid_ready(reason, "OS portfail")
 

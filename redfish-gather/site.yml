@@ -23,6 +23,11 @@
   # 2026-04-30 perf: dead-host 다수 inventory에서 host별 독립 진행 (linear 시 stuck host가 wave 막음)
   strategy: free
 
+  # 2026-08-11 (Phase 6-B): Portal 사용자 문구 정본 (5 문장). rescue 가 문장을 직접 쓰지 않고
+  # 이 변수를 참조한다 — precheck_bundle.REASON_* 와 동일 문자열 (drift 는 테스트가 막는다).
+  vars_files:
+    - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
+
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     _rf_ip:      "{{ ansible_host | default(inventory_hostname) }}"
@@ -129,10 +134,27 @@
 
         # ── P2 (cycle 2026-04-28): recovery 자격 사용 시 공통계정 자동 복구 ──
         # 사용자 결정 #4: dryrun ON default, lab 검증 후 OFF 전환
+        #
+        # 2026-08-11 (Phase 6-B §6 §7): 진입 조건을 좁힌다. 기능은 그대로 두고 조건만 좁힌다.
+        #   종전: "primary 로 수집이 안 됐고 recovery 로 됐다" 면 무조건 BMC 계정을 고쳤다.
+        #   문제: primary 실패의 원인은 자격증명 불일치만이 아니다. timeout / TLS / 5xx /
+        #        일시적 네트워크 단절도 같은 모양으로 보인다. 그런 상황에서 계정을 고치면
+        #        멀쩡한 공통계정의 비밀번호를 덮어쓰게 된다.
+        #   신: primary 후보가 **401 로 명시적으로 거부**됐을 때만 진입한다
+        #      (_rf_primary_auth_rejected — collect_standard.yml 이 역할 기준으로 판정).
+        #      403(권한 부족)은 제외한다 — 인증 자체는 통과했을 수 있다.
+        #
+        # 이 사실을 한 곳에서만 판정해 두고, 아래 include 의 when 과 account_service.yml 의
+        # 쓰기 모드가 같은 값을 본다 (§16 — "기본값이라서" 쓰기가 켜지는 경로를 없앤다).
+        - name: "redfish | account_service | 진입 조건 판정"
+          ansible.builtin.set_fact:
+            _rf_account_reconcile_allowed: >-
+              {{ (((_rf_used_account | default({})).role | default('primary')) == 'recovery')
+                 and (_rf_collect_ok | default(false) | bool)
+                 and (_rf_primary_auth_rejected | default(false) | bool) }}
+
         - name: "redfish | account_service (recovery → primary)"
-          when:
-            - (_rf_used_account | default({})).role | default('primary') == 'recovery'
-            - _rf_collect_ok | bool
+          when: _rf_account_reconcile_allowed | bool
           ansible.builtin.include_tasks: tasks/account_service.yml
 
         # ── normalize standard ───────────────────────────────────────────
@@ -168,10 +190,12 @@
                 _sections_collected_fragment: []
                 _sections_failed_fragment: []
                 _sections_unsupported_fragment: []
+                # 2026-08-11 (Phase 6-B / §24): Portal 은 errors[].message 를 그대로 보여준다.
+                # 태스크명 / raw 예외는 detail 로 내리고 message 는 사용자 문장만 남긴다.
                 _errors_fragment:
                   - section: "oem"
-                    message: "[OEM 비치명] {{ ansible_failed_task.name | default('vendor OEM') }}: {{ ansible_failed_result.msg | default('OEM 수집/정규화 예외 — 표준 섹션은 정상 수집됨') }}"
-                    detail: null
+                    message: "일부 제조사 확장 정보를 수집하지 못했습니다. 표준 항목은 정상 수집되었습니다."
+                    detail: "[task: {{ ansible_failed_task.name | default('vendor OEM') }}] {{ ansible_failed_result.msg | default('OEM 수집/정규화 예외') }}"
             - name: "redfish | vendor adapter | OEM 경고 누적 (merge_fragment)"
               ansible.builtin.include_tasks:
                 file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
@@ -278,6 +302,15 @@
                  and (statuses | length) == attempted
                  and (statuses | select('equalto', 401) | list | length) == attempted }}
 
+        # 2026-08-11 (Phase 6-B / §26): 사용자 문구는 5 문장 표준(common/vars/failure_reasons.yml)
+        #   중 하나만 쓴다. 문장 선택은 **collected 하나로만** 갈린다:
+        #     collected=false → 4번 (자격증명). redfish 는 인증 실패와 수집 실패를 한 값
+        #       (_rf_collect_ok)으로 합쳐 반환하므로 "접속이 확인됐다"고 말할 근거가 없다.
+        #       401 을 실증했을 때(rejected)도 사용자가 할 일은 같아서 문장을 나누지 않는다.
+        #       401 이라는 기술 근거는 auth_success=false / failure_code / errors[].detail 이 표현한다.
+        #     collected=true  → 5번 (수집은 됐고 그 뒤 처리에서 실패). 인증된 수집이 성공한
+        #       직접 관측이 있으므로 "접속은 확인됐지만" 이라고 쓸 수 있다.
+        #   stage / code / auth_success 판정은 종전 그대로다 (JSON contract 불변).
         - name: "redfish | rescue | Portal 표시용 failure_reason 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
@@ -293,11 +326,7 @@
                                              else 'GATHER_FAILED'),
                             'auth_success': (false if (rejected and not collected) else none),
                             'failure_reason':
-                     ('Redfish 서비스는 확인되었지만 인증이 거부되었습니다. 등록된 자격증명을 확인하세요.'
-                      if (rejected and not collected)
-                      else ('Redfish 서비스는 확인되었지만 정보 수집에 실패했습니다. 자격증명, 계정 권한과 수집 로그를 확인하세요.'
-                            if not collected
-                            else '정보 수집 후 결과를 처리하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.'))}) }}
+                     (_fr_gather_failed if collected else _fr_credential_failed)}) }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
         - name: "redfish | rescue | set failed vars"
@@ -316,7 +345,10 @@
                                         | default(['system','hardware','bmc','cpu','memory',
                                                    'storage','network','firmware']) }}"
             _fail_error_section:    "redfish_gather"
-            # 2026-05-11 debugging visibility: ansible_failed_task.name 을 메시지 prefix 로 포함 — json_only callback 으로 차단된 fatal task 위치 추적용.
+            # 2026-05-11 debugging visibility: ansible_failed_task.name 포함 — json_only callback 으로
+            # 차단된 fatal task 위치 추적용. 2026-08-11 (Phase 6-B) 부터 이 값은 errors[].message 가
+            # 아니라 **errors[].detail** 로 들어간다 (build_failed_output.yml). Portal 사용자 문구는
+            # diagnosis.failure_reason 을 그대로 쓴다.
             _fail_error_message:    "[task: {{ ansible_failed_task.name | default('unknown') }}] {{ ansible_failed_result.msg | default('Redfish 수집 예외') }}"
 
         - name: "redfish | rescue | build_failed_output"
@@ -343,6 +375,6 @@
                        'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],
+                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.','detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {}
                      })) | to_json }}"

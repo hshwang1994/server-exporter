@@ -16,7 +16,10 @@
 #   _out_vendor            : str|null
 #   _fail_sec_supported    : list — 이 gather 에서 지원하는 섹션 목록
 #   _fail_error_section    : str  — 에러 발생 섹션명
-#   _fail_error_message    : str  — 에러 메시지
+#   _fail_error_message    : str  — **기술 메시지** (실패 태스크명 / raw 예외). 2026-08-11 부터
+#                                   errors[].message 가 아니라 errors[].detail 로 들어간다.
+#   _fail_error_detail     : str  — 진단 원본 오류 (precheck 가 set). detail 에 함께 들어간다.
+#   _diagnosis             : dict — errors[].message 는 여기의 failure_reason 을 그대로 쓴다.
 #
 # 출력 변수:
 #   _output : dict — status=failed 인 최종 표준 JSON
@@ -36,17 +39,39 @@
         {%- endif -%}
       {%- endfor -%}
       {{ out }}
-    # cycle-016 (2026-04-29): default 메시지에 채널/IP 컨텍스트 포함 — "수집 실패" 단독 회피
+    # 2026-08-11 (Phase 6-B / §24): Portal 실패 Grid 가 실제로 읽는 값은
+    # diagnosis.failure_reason 이 아니라 **errors[].message** 다. 두 값이 다른 이야기를 하면
+    # 사용자가 보는 문장과 시스템이 보는 문장이 갈라진다.
+    #   → message 는 failure_reason 을 **그대로 복사**한다. 문구를 여기서 새로 정의하지 않는다
+    #     (문자열 정본은 common/vars/failure_reasons.yml / precheck_bundle.REASON_*).
+    #   → 기술 정보(태스크명 / 관리 포트 / HTTP status / 원본 예외)는 detail 에만 남긴다 (§34).
+    #
+    # 종전(cycle-016)에는 message 가 '수집 실패 — 채널=..., IP=...' 였고 rescue 가 넘긴
+    # '[task: ...] <raw msg>' 를 그대로 실었다. 긴 대시 / 태스크명 / IP / 포트 번호가 전부
+    # Portal Grid 에 노출되던 자리다.
     _norm_errors:
       - section:  "{{ _fail_error_section | default('gather') }}"
         message: >-
-          {{ _fail_error_message
-             | default(
-                 '수집 실패 — 채널=' ~ (_out_target_type | default('unknown'))
-                 ~ ', IP=' ~ (_out_ip | default(inventory_hostname | default('?')))
-                 ~ ' (자세한 사유는 diagnosis.failure_stage / failure_reason 참조)'
-               ) }}
-        detail:   "{{ _fail_error_detail | default(none) }}"
+          {%- set d = _diagnosis | default({}, true) -%}
+          {%- set reason = (d.failure_reason | default(none)) if (d is mapping) else none -%}
+          {%- if reason is string and (reason | trim | length) > 0 -%}
+          {{- reason | trim -}}
+          {%- else -%}
+          {{- '수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.' -}}
+          {%- endif -%}
+        # 진단 원본 오류(_fail_error_detail) + 실패 태스크/기술 메시지(_fail_error_message) 를
+        # 둘 다 보존한다. 둘 다 비어 있으면 null.
+        detail: >-
+          {%- set parts = [] -%}
+          {%- set dt = _fail_error_detail | default(none) -%}
+          {%- set ms = _fail_error_message | default(none) -%}
+          {%- if dt is string and (dt | trim | length) > 0 -%}
+          {%- set _ = parts.append(dt | trim) -%}
+          {%- endif -%}
+          {%- if ms is string and (ms | trim | length) > 0 -%}
+          {%- set _ = parts.append(ms | trim) -%}
+          {%- endif -%}
+          {{ (parts | join(' | ')) if parts else none }}
     _out_status: "failed"
 
 - name: "normalize | build_failed_output | build fallback meta & correlation"

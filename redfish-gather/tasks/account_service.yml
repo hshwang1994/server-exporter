@@ -3,21 +3,27 @@
 #
 # P2 (cycle 2026-04-28): recovery 자격으로 접속한 경우 공통계정(infraops) 자동 생성/복구.
 #
-# 진입 조건:
+# 진입 조건 (2026-08-11 Phase 6-B §6 §7 로 좁혀짐 — 판정 정본은 site.yml):
 #   - _rf_used_account.role == 'recovery'
 #   - _rf_collect_ok == true (recovery 로 1차 수집은 성공한 상태)
+#   - _rf_primary_auth_rejected == true (primary 후보가 401 로 명시 거부됨)
 #   - vault accounts 안에 role=primary 후보 1개 이상
 #
 # 동작:
 #   1. vault accounts 에서 role=primary 후보 1개 추출 → target_username/target_password
-#   2. dryrun (default ON, 사용자 결정 #4) 시 시뮬레이션만
-#   3. dryrun OFF 시 redfish_gather mode='account_provision' 호출
-#   4. 결과를 envelope.meta.account_service 에 노출 (password 미포함)
+#   2. 쓰기 모드가 아니면 시뮬레이션만
+#   3. 쓰기 모드일 때 redfish_gather mode='account_provision' 호출
+#   4. 결과를 diagnosis.details.account_service 에 노출 (password 미포함)
 #
-# dryrun 변수:
-#   _rf_account_service_dryrun (default false — cycle 2026-04-30 사용자 명시 승인으로 OFF 전환)
-#   원래 default true (cycle-014 결정 — lab 잠금 위험 회피). 사용자 명시 승인으로 false 전환됨.
-#   외부 override: -e _rf_account_service_dryrun=true (시뮬레이션 모드 강제)
+# 쓰기 모드 결정 (2026-08-11 Phase 6-B §16):
+#   종전에는 `_rf_account_service_dryrun | default(false)` 였다. 모듈 기본값은 dryrun=True 인데
+#   이 한 줄이 그것을 뒤집어서, **아무도 켠 적 없는데도** 기본값이라는 이유로 BMC 계정 쓰기가
+#   켜져 있었다 (docs/ai/AUDIT-2026-05-29.md A3 가 지적한 상태).
+#   지금은 "진입 조건이 실제로 성립했을 때만" 쓰기 모드를 명시 전달한다.
+#     - _rf_account_reconcile_allowed == true  → dryrun=false (쓰기)
+#     - 그 외                                   → dryrun=true  (시뮬레이션)
+#   사용자 override 는 그대로 존중한다: -e _rf_account_service_dryrun=true 면 언제나 시뮬레이션.
+#   (변수를 명시적으로 준 경우에만 override 로 인정한다 — 정의 여부로 구분.)
 
 - name: "redfish | account_service | resolve target primary account"
   ansible.builtin.set_fact:
@@ -39,8 +45,28 @@
              | list | first,
            true
          ) | default({}) }}
-    # cycle 2026-04-30: 사용자 명시 승인 — default false 로 전환 (실 동작)
-    _rf_account_service_dryrun: "{{ _rf_account_service_dryrun | default(false) }}"
+    # 2026-08-11 (Phase 6-B §16): 쓰기 모드는 "조건이 성립했을 때만" 켜진다.
+    # 사용자가 _rf_account_service_dryrun 을 명시했으면 그 값을 그대로 따른다.
+    _rf_account_service_dryrun_effective: >-
+      {{ (_rf_account_service_dryrun | bool)
+         if (_rf_account_service_dryrun is defined)
+         else (not (_rf_account_reconcile_allowed | default(false) | bool)) }}
+  no_log: true
+
+# 진입은 했다는 사실 자체를 남긴다 (§17). primary 후보가 없어 아래 block 을 건너뛰어도
+# "시도했고 대상이 없었다" 가 보이도록 여기서 먼저 최소값을 세운다. password 는 담지 않는다.
+- name: "redfish | account_service | record meta (attempted)"
+  ansible.builtin.set_fact:
+    _rf_account_service_meta:
+      attempted:       true
+      recovered:       false
+      method:          "noop"
+      action:          "none"
+      account_existed: false
+      verification:    "none"
+      dryrun:          "{{ _rf_account_service_dryrun_effective | bool }}"
+      slot_uri:        null
+      vendor:          "{{ _rf_vendor | default(none) }}"
   no_log: true
 
 - name: "redfish | account_service | abort if no primary target"
@@ -60,7 +86,7 @@
           account_service intent — vendor={{ _rf_vendor | default('unknown') }},
           recovery_label={{ (_rf_used_account | default({})).label | default('?') }},
           target_username={{ _rf_target_account.username }},
-          dryrun={{ _rf_account_service_dryrun }}
+          dryrun={{ _rf_account_service_dryrun_effective }}
 
     # ── recovery 자격으로 AccountService 호출 ────────────────────────────
     # F49 (cycle 2026-05-01): _rf_used_account_password (try_one_account.yml 가 직접 promote)
@@ -89,19 +115,29 @@
         target_username: "{{ _rf_target_account.username }}"
         target_password: "{{ _rf_target_account.password }}"
         target_role:     "Administrator"
-        dryrun:          "{{ _rf_account_service_dryrun | bool }}"
+        dryrun:          "{{ _rf_account_service_dryrun_effective | bool }}"
       register: _rf_acct_result
       failed_when: false
       no_log: true
 
     # production-audit (2026-04-29): bool typing 명시 cast (string "true"/"false" emit 차단)
+    #
+    # 2026-08-11 (Phase 6-B §17): 무슨 일이 있었는지 추적 가능하게 넓힌다.
+    #   기존 diagnosis.details.account_service 안쪽만 채운다 — envelope 필드는 늘리지 않는다.
+    #   담는 것: 시도했는가 / 대상 계정이 이미 있었는가 / 무엇을 했는가 / 확인됐는가 / 어느 vendor.
+    #   **비밀번호나 그 길이 같은 파생값은 절대 담지 않는다.**
     - name: "redfish | account_service | record meta"
       ansible.builtin.set_fact:
         _rf_account_service_meta:
-          recovered: "{{ ((_rf_acct_result.account_service | default({})).recovered | default(false)) | bool }}"
-          method:    "{{ (_rf_acct_result.account_service | default({})).method    | default('noop') }}"
-          dryrun:    "{{ ((_rf_acct_result.account_service | default({})).dryrun    | default(true)) | bool }}"
-          slot_uri:  "{{ (_rf_acct_result.account_service | default({})).slot_uri  | default(none) }}"
+          attempted:       true
+          recovered:       "{{ ((_rf_acct_result.account_service | default({})).recovered | default(false)) | bool }}"
+          method:          "{{ (_rf_acct_result.account_service | default({})).method    | default('noop') }}"
+          action:          "{{ (_rf_acct_result.account_service | default({})).action    | default('none') }}"
+          account_existed: "{{ ((_rf_acct_result.account_service | default({})).account_existed | default(false)) | bool }}"
+          verification:    "{{ (_rf_acct_result.account_service | default({})).verification | default('none') }}"
+          dryrun:          "{{ ((_rf_acct_result.account_service | default({})).dryrun    | default(true)) | bool }}"
+          slot_uri:        "{{ (_rf_acct_result.account_service | default({})).slot_uri  | default(none) }}"
+          vendor:          "{{ _rf_vendor | default(none) }}"
       no_log: true
 
     - name: "redfish | account_service | log result"
@@ -109,6 +145,9 @@
         msg: >-
           account_service result — recovered={{ _rf_account_service_meta.recovered }},
           method={{ _rf_account_service_meta.method }},
+          action={{ _rf_account_service_meta.action }},
+          account_existed={{ _rf_account_service_meta.account_existed }},
+          verification={{ _rf_account_service_meta.verification }},
           dryrun={{ _rf_account_service_meta.dryrun }}
 
     # ── primary 자격으로 재수집 (recovered=true, dryrun=false 일 때만) ──

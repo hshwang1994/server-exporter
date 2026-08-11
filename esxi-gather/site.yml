@@ -26,6 +26,8 @@
 
   vars_files:
     - "{{ lookup('env','REPO_ROOT') }}/vault/esxi.yml"
+    # 2026-08-11 (Phase 6-B): Portal 사용자 문구 정본 (5 문장) — rescue 가 참조한다.
+    - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
@@ -237,6 +239,11 @@
         # (try_one_credential.yml:35 의 판정식이 이들을 구분하지 못함) auth_success 는
         # false 로 만들지 않고 null 을 유지한다. 반대로 _e_auth_ok=true 는 실제로 인증이
         # 통과한 것을 관측한 값이므로 true 로 기록한다.
+        #
+        # 2026-08-11 (Phase 6-B): 사용자 문구는 5 문장 표준(common/vars/failure_reasons.yml)만
+        #   쓴다. 자격 단계 실패 → 4번, 인증 통과 후 실패(수집/정규화) → 5번.
+        #   종전에 수집 실패와 정규화 실패를 다른 문장으로 나눴는데, 사용자가 할 일이 같아서
+        #   (대상 상태와 수집 로그 확인) 5번으로 합쳤다. 단계 구분은 failure_stage 가 유지한다.
         - name: "esxi | rescue | Portal 표시용 failure_reason 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
@@ -246,11 +253,9 @@
                  | combine((_diagnosis | default({}, true))
                            if ((_diagnosis | default({}, true)) is mapping) else {})
                  | combine({'failure_reason':
-                     ('vSphere API는 확인되었지만 ESXi 호스트에 접속하지 못했습니다. 자격증명과 계정 권한을 확인하세요.'
+                     (_fr_credential_failed
                       if not (_e_auth_ok | default(false) | bool)
-                      else ('ESXi 호스트 접속은 확인되었지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.'
-                            if not (_e_facts_ok | default(false) | bool)
-                            else '정보 수집 후 결과를 처리하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.')),
+                      else _fr_gather_failed),
                    'failure_stage':
                      ('auth' if not (_e_auth_ok | default(false) | bool) else 'gather'),
                    'failure_code':
@@ -270,8 +275,9 @@
                                         | default(['system','hardware','cpu','memory','storage','network']) }}"
             _fail_error_section:    "esxi_gather"
             # 2026-08-10 (B-7): redfish-gather/site.yml 의 rescue 와 동일하게 실패 태스크명을
-            # prefix 로 포함 — json_only callback 이 fatal 태스크 출력을 차단하므로 errors[].message
-            # 가 유일한 위치 추적 단서다. 종전엔 redfish 만 prefix 가 있어 채널 간 비대칭이었다.
+            # prefix 로 포함 — json_only callback 이 fatal 태스크 출력을 차단하므로 이 값이 유일한
+            # 위치 추적 단서다. 2026-08-11 (Phase 6-B) 부터 errors[].message 가 아니라
+            # **errors[].detail** 로 들어간다 (build_failed_output.yml).
             _fail_error_message:    "[task: {{ ansible_failed_task.name | default('unknown') }}] {{ ansible_failed_result.msg | default('ESXi 수집 예외') }}"
 
         - name: "esxi | rescue | build_failed_output"
@@ -298,6 +304,6 @@
                        'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],
+                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.','detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {}
                      })) | to_json }}"

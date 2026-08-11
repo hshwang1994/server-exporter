@@ -19,7 +19,7 @@
     - Lenovo XCC (10.50.11.232) — primary 통과 (이미 infraops 존재)&#xd;
     - Cisco CIMC (10.100.15.2) — not_supported graceful&#xd;
     &#xd;
-    Vault password file: .vault_pass (Goodmit0802!)&#xd;
+    Vault password file: .vault_pass (Jenkins Credential: server-gather-vault-password)&#xd;
     소스: F49 cycle 2026-05-01 (사용자 사이트 실측 + label 매칭 fix).</description>
   <keepDependencies>false</keepDependencies>
   <properties>
@@ -97,7 +97,8 @@ cd "${WORKSPACE}"
 # .vault_pass — Jenkins credentials binding (vault-password) 권장
 # 임시: agent 의 ~/.vault_pass 또는 ENV 변수
 if [[ ! -f .vault_pass ]]; then
-  echo 'Goodmit0802!' &gt; .vault_pass
+  # 평문 금지 — Jenkins credentials binding (server-gather-vault-password) 사용
+  echo &quot;${VAULT_PASSWORD}&quot; &gt; .vault_pass
   chmod 600 .vault_pass
 fi
 

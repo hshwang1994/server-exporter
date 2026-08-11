@@ -61,8 +61,8 @@ def test_provision_lenovo_400_retry_with_password_change_required(monkeypatch):
 
     out = rg.account_service_provision(
         bmc_ip="10.50.11.232", vendor="lenovo",
-        current_username="USERID", current_password="VMware1!",
-        target_username="infraops", target_password="Passw0rd1!",
+        current_username="USERID", current_password="<recovery-pass>",
+        target_username="infraops", target_password="<target-pass>",
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=False,
     )
@@ -90,8 +90,8 @@ def test_provision_hpe_third_retry_with_oem_privileges(monkeypatch):
 
     out = rg.account_service_provision(
         bmc_ip="10.50.11.231", vendor="hpe",
-        current_username="admin", current_password="VMware1!",
-        target_username="infraops", target_password="Passw0rd1!",
+        current_username="admin", current_password="<recovery-pass>",
+        target_username="infraops", target_password="<target-pass>",
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=False,
     )
@@ -119,7 +119,7 @@ def test_provision_supermicro_first_attempt_success_no_retry(monkeypatch):
     out = rg.account_service_provision(
         bmc_ip="10.0.0.5", vendor="supermicro",
         current_username="ADMIN", current_password="ADMIN",
-        target_username="infraops", target_password="Passw0rd1!",
+        target_username="infraops", target_password="<target-pass>",
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=False,
     )
@@ -142,8 +142,8 @@ def test_provision_lenovo_500_no_retry(monkeypatch):
 
     out = rg.account_service_provision(
         bmc_ip="10.50.11.232", vendor="lenovo",
-        current_username="USERID", current_password="VMware1!",
-        target_username="infraops", target_password="Passw0rd1!",
+        current_username="USERID", current_password="<recovery-pass>",
+        target_username="infraops", target_password="<target-pass>",
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=False,
     )
@@ -190,8 +190,8 @@ def test_provision_dell_skip_reserved_slot1_and_retry(monkeypatch):
 
     out = rg.account_service_provision(
         bmc_ip="10.100.15.27", vendor="dell",
-        current_username="root", current_password="Goodmit0802!",
-        target_username="infraops", target_password="Passw0rd1!Strong",
+        current_username="root", current_password="<recovery-pass>",
+        target_username="infraops", target_password="<target-pass>",
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=False,
     )
@@ -206,6 +206,11 @@ def test_provision_dell_skip_reserved_slot1_and_retry(monkeypatch):
 def test_provision_lenovo_patch_silent_fail_delete_repost_fallback(monkeypatch):
     """F50 phase 4 (cycle 2026-05-06): Lenovo PATCH 200 + verify 401 (권한 cache 손상)
     → DELETE + POST 재생성 fallback. 사이트 실측 (10.50.11.232 XCC SR650).
+
+    2026-08-11 (Phase 6-B §11) 기대값 변경: 이 fallback 은 기존 계정을 **지우므로**
+    기본값이 off 로 바뀌었다. 사이트 실측이 증명한 동작 자체는 그대로이므로,
+    운영자가 명시적으로 켜는 경우(allow_delete_recreate=True)를 그대로 고정한다.
+    기본값(off) 경로는 바로 아래 test_...default_does_not_delete 가 따로 고정한다.
     """
     accounts = [
         {'slot_uri': '/redfish/v1/AccountService/Accounts/4',
@@ -235,10 +240,11 @@ def test_provision_lenovo_patch_silent_fail_delete_repost_fallback(monkeypatch):
 
     out = rg.account_service_provision(
         bmc_ip='10.50.11.232', vendor='lenovo',
-        current_username='USERID', current_password='VMware1!',
-        target_username='infraops', target_password='Passw0rd1!Infra',
+        current_username='USERID', current_password='<recovery-pass>',
+        target_username='infraops', target_password='<target-pass>',
         target_role='Administrator',
         timeout=30, verify_ssl=False, dryrun=False,
+        allow_delete_recreate=True,
     )
     # PATCH 1회 + verify _get + DELETE + POST 재생성 → recovered=True, method='delete_repost'
     assert len(deleted) == 1
@@ -248,6 +254,41 @@ def test_provision_lenovo_patch_silent_fail_delete_repost_fallback(monkeypatch):
     assert out['method'] == 'delete_repost'
     msgs = ' '.join(e.get('message', '') for e in out['errors'])
     assert '권한 cache 손상' in msgs
+
+
+def test_provision_lenovo_patch_verify_fail_default_does_not_delete(monkeypatch):
+    """Phase 6-B §11: 기본값(allow_delete_recreate 미지정)에서는 기존 계정을 지우지 않는다.
+
+    비밀번호 동기화 뒤 인증 확인이 안 되는 신호는 (a) 권한 cache 손상 과
+    (b) BMC 비밀번호 정책으로 적용이 안 된 silent fail 을 구분하지 못한다.
+    (b) 에서 지우면 정상 운영 중이던 계정을 잃고, DELETE 성공 후 POST 실패 시
+    관리자 계정이 0 개가 된다 (docs/ai/AUDIT-2026-05-29.md A3).
+    """
+    accounts = [
+        {'slot_uri': '/redfish/v1/AccountService/Accounts/4',
+         'id': '4', 'username': 'infraops', 'role_id': 'Administrator', 'enabled': True},
+    ]
+    monkeypatch.setattr(rg, "account_service_get", lambda *a, **k: ({}, accounts, []))
+    monkeypatch.setattr(rg, "_patch", lambda *a, **kw: (200, {}, None))
+    monkeypatch.setattr(rg, "_get", lambda *a, **kw: (401, {}, "HTTP 401"))
+    deleted, posted = [], []
+    monkeypatch.setattr(rg, "_delete", lambda *a, **k: (deleted.append(a), (204, {}, None))[1])
+    monkeypatch.setattr(rg, "_post", lambda *a, **k: (posted.append(a), (201, {}, None))[1])
+
+    out = rg.account_service_provision(
+        bmc_ip='10.50.11.232', vendor='lenovo',
+        current_username='USERID', current_password='<recovery-pass>',
+        target_username='infraops', target_password='<target-pass>',
+        target_role='Administrator',
+        timeout=30, verify_ssl=False, dryrun=False,
+    )
+
+    assert deleted == [], "기본값에서 DELETE 를 보내면 안 된다"
+    assert posted == [], "DELETE 를 안 했으므로 재생성 POST 도 없어야 한다"
+    assert out['recovered'] is False
+    assert out['method'] == 'patch_existing'
+    assert out['action'] == 'password_sync'
+    assert out['verification'] == 'failed'
 
 
 def test_provision_dell_patch_silent_fail_no_delete_fallback(monkeypatch):
@@ -265,10 +306,13 @@ def test_provision_dell_patch_silent_fail_no_delete_fallback(monkeypatch):
 
     out = rg.account_service_provision(
         bmc_ip='10.100.15.27', vendor='dell',
-        current_username='root', current_password='Goodmit0802!',
-        target_username='infraops', target_password='Passw0rd1!Infra',
+        current_username='root', current_password='<recovery-pass>',
+        target_username='infraops', target_password='<target-pass>',
         target_role='Administrator',
         timeout=30, verify_ssl=False, dryrun=False,
+        # Phase 6-B §11: fallback 기본값이 off 로 바뀌었다. 이 테스트가 고정하려는 것은
+        # "fallback 을 켜도 Dell 은 PATCH-only 라 DELETE 를 안 한다" 이므로 명시적으로 켜둔다.
+        allow_delete_recreate=True,
     )
     # Dell 분기: DELETE 호출 안 됨
     assert len(deleted_calls) == 0
@@ -307,8 +351,8 @@ def test_provision_dell_silent_fail_verify_detects(monkeypatch):
 
     out = rg.account_service_provision(
         bmc_ip="10.100.15.27", vendor="dell",
-        current_username="root", current_password="Goodmit0802!",
-        target_username="infraops", target_password="Passw0rd1!",
+        current_username="root", current_password="<recovery-pass>",
+        target_username="infraops", target_password="<target-pass>",
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=False,
     )
@@ -338,8 +382,8 @@ def test_provision_dell_no_empty_slots_after_skip(monkeypatch):
 
     out = rg.account_service_provision(
         bmc_ip="10.100.15.27", vendor="dell",
-        current_username="root", current_password="Goodmit0802!",
-        target_username="infraops", target_password="Passw0rd1!",
+        current_username="root", current_password="<recovery-pass>",
+        target_username="infraops", target_password="<target-pass>",
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=True,
     )
@@ -364,8 +408,8 @@ def test_provision_hpe_405_lenovo_retry_succeeds(monkeypatch):
 
     out = rg.account_service_provision(
         bmc_ip="10.50.11.231", vendor="hpe",
-        current_username="admin", current_password="VMware1!",
-        target_username="infraops", target_password="Passw0rd1!",
+        current_username="admin", current_password="<recovery-pass>",
+        target_username="infraops", target_password="<target-pass>",
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=False,
     )

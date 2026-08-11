@@ -365,11 +365,14 @@ def test_rst_reason_does_not_claim_server_responded():
         "RST 는 중간 방화벽/보안 장비가 생성했을 수 있어 서버 응답으로 확정 금지"
     )
     # Phase 5-A (2026-08-11): 문구는 site.yml 이 아니라 precheck_bundle 이 만든다.
-    assert "서버는 응답하지만" not in pb.REASON_PORT_REFUSED
-    assert "연결 시도가 거부되었습니다" in pb.REASON_PORT_REFUSED, (
-        "관측한 사실(연결 시도 거부)까지만 표현한다"
-    )
+    # Phase 6-B (2026-08-11): RST 도 1번 문구(IP 사용 여부 미확인)를 쓴다 — RST 를 보낸 주체가
+    # 최종 서버인지 중간 방화벽인지 확정할 수 없기 때문이다. presence 판정이 붙으면
+    # reason_for_connect_failure(True) 로 2번 문구가 나온다.
+    assert "서버는 응답하지만" not in pb.reason_for_connect_failure(None)
+    assert "서버는 응답하지만" not in pb.reason_for_connect_failure(True)
     # 거부 주체를 최종 대상으로 확정하지 않는다 (중간 네트워크 장비일 수 있다)
-    assert "대상 관리 서비스 연결이 거부" not in pb.REASON_PORT_REFUSED
+    for reason in (pb.reason_for_connect_failure(None), pb.reason_for_connect_failure(True)):
+        assert "대상 관리 서비스 연결이 거부" not in reason
+        assert "거부" not in reason, "거부 여부는 failure_code 가 표현한다 (사용자 문장 아님)"
     for banned in ("—", "·", "–"):
         assert banned not in "SSH(22)/WinRM(5985, 5986) 관리 포트에 연결하지 못했습니다."

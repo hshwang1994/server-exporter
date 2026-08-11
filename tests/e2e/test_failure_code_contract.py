@@ -365,9 +365,10 @@ def test_phase1_reason_contract_still_holds():
             "os-gather/site.yml", _OS_TASKS["linux"],
             {"_os_auth_ok": True, "_os_attempts_meta": {}})),
         # 2026-08-11 (Phase 5-A): OS 포트 실패 문구는 site.yml 이 아니라 precheck 가 만든다.
-        ("os/port", {"failure_reason": pb.REASON_TCP_UNCONFIRMED}),
-        ("os/dns", {"failure_reason": pb.REASON_DNS_FAILED}),
-        ("os/refused", {"failure_reason": pb.REASON_PORT_REFUSED}),
+        # (Phase 6-B) 세 관측이 같은 1번 문구를 쓴다 — 구분은 failure_code 가 유지한다.
+        ("os/connect-failure", {"failure_reason": pb.reason_for_connect_failure(None)}),
+        ("os/ip-in-use", {"failure_reason": pb.reason_for_connect_failure(True)}),
+        ("os/protocol", {"failure_reason": pb.CHANNEL_PROTOCOL_MESSAGES["os"]}),
     ]
     for label, diag in samples:
         _assert_grid_ready(diag["failure_reason"], label)

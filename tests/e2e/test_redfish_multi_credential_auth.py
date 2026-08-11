@@ -45,6 +45,7 @@ sys.modules.setdefault("ansible.module_utils.basic", _b)
 import redfish_gather as rg  # noqa: E402
 
 from tests.e2e.test_failure_reason_contract import (  # noqa: E402
+    FAILURE_REASONS,
     _assert_claims_match_observation,
     _assert_grid_ready,
     _env,
@@ -72,7 +73,9 @@ def _render(task_name: str, ctx: dict[str, Any]) -> Any:
     key = "_rf_auth_rejected" if task_name == _REJECT_TASK else "_diagnosis"
     env = _env()
     env.filters["select"] = _ansible_select_equalto
-    return env.from_string(tpl[key]).render(**ctx)
+    # 2026-08-11 (Phase 6-B): rescue 는 사용자 문구를 common/vars/failure_reasons.yml 에서
+    # 받는다 (play 의 vars_files). 렌더 시 동일하게 주입한다.
+    return env.from_string(tpl[key]).render(**{**FAILURE_REASONS, **ctx})
 
 
 def _decide(statuses: list[Any], *, candidates: int, collect_ok: bool = False):
@@ -115,15 +118,18 @@ def test_multi_credential_auth_success_aggregation(label, statuses, candidates,
     assert bool(rejected) is expect_reject, (
         f"[{label}] 집계 결과가 다르다 (statuses={statuses})")
 
+    # 2026-08-11 (Phase 6-B / §26): 401 실증은 **기계 필드로만** 표현한다. 사용자 문장은
+    # 거부/미확정 모두 4번(자격증명)으로 같다 — Portal 사용자의 조치가 같기 때문이다.
     if expect_reject:
         assert diag["auth_success"] is False, label
         assert diag["failure_stage"] == "auth", label
         assert diag["failure_code"] == "AUTH_PROBE_FAILED", label
-        assert "인증이 거부되었습니다" in diag["failure_reason"], label
     else:
         assert diag["auth_success"] is None, (
             f"[{label}] 원인 미확정 실패가 섞였는데 거부로 확정하면 안 된다")
-        assert "인증이 거부" not in diag["failure_reason"], label
+    if not collect_ok:
+        assert diag["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"], label
+    assert "인증이 거부" not in diag["failure_reason"], label
 
     _assert_grid_ready(diag["failure_reason"], label)
     _assert_claims_match_observation(diag, label)
@@ -138,7 +144,10 @@ def test_case7_success_path_does_not_reach_rescue():
     rejected, diag = _decide([401, 200], candidates=2, collect_ok=True)
     assert bool(rejected) is False
     assert diag["auth_success"] is None
-    assert "정보 수집 후 결과를 처리하는 중" in diag["failure_reason"]
+    # 2026-08-11 (Phase 6-B): 수집이 된 뒤의 실패는 5번 문구(수집 실패)를 쓴다.
+    # 종전의 "정보 수집 후 결과를 처리하는 중" 6번째 문장은 표준 5 문장으로 흡수됐다.
+    assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
+    assert diag["failure_stage"] == "gather"
 
 
 # ═══════════════════════════════════════════════════════════════════════════

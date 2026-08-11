@@ -103,63 +103,80 @@ CHANNEL_DEFAULT_PORTS = {
     "esxi": [443],
 }
 
-# ── Portal Grid 표시용 실패 사유 (diagnosis.failure_reason) ──────────────────
+# ── 최종 사용자 문구 표준 (2026-08-11 Phase 6-B 사용자 확정) ─────────────────
 #
-# 이 값들은 그대로 diagnosis.failure_reason 이 되고, Portal 실패 Grid 의 "실패 사유" 칸에
-# **그대로 노출된다** (2026-08-10 사용자 확인 — Portal 은 failure_reason 만 사용).
+# 이 5 문장이 Portal 실패 Grid 에 보이는 **전부**다. 같은 문장이 두 곳에 동시에 쓰인다:
+#   - diagnosis.failure_reason
+#   - errors[].message   ← Portal 실패 Grid 의 실제 소스
+# 두 값은 build_failed_output.yml 이 failure_reason 을 그대로 message 로 복사해 **항상 일치**한다
+# (문자열을 두 번 정의하지 않는다). Ansible 쪽 정본은 common/vars/failure_reasons.yml 이고
+# 본 파일의 상수와 동일해야 한다 (tests/e2e/test_errors_message_contract.py 가 drift 를 막는다).
 #
-# 작성 규칙 (2026-08-11 Phase 5-A 사용자 확정):
+# 작성 규칙:
 #   구조     : "확인된 상태" + "실패한 현재 단계" + "확인할 항목" (1~2 문장)
 #   금지     : 관리 포트 번호 / IP / HTTP status / timeout 초 / RST·SOAP·XML 같은 내부 용어 /
 #              Ansible 태스크명 / raw exception / 긴 대시(—) / 가운데점(·)
-#   앞 단계  : **실제로 관측된 성공만** 문장에 넣는다. TCP 연결 실패를 두고 "통신은 되지만"
-#              이라고 쓰지 않고, RST(거부)를 두고 "서버는 응답하지만" 이라고 쓰지 않는다
-#              (중간 방화벽이 대신 응답했을 수 있어 최종 서버 응답으로 확정할 수 없다).
-#   허용 표현: port_open=true 관측 후에만 "관리 연결은 확인되었지만",
-#              protocol_supported=true 관측 후에만 "<서비스>는 확인되었지만",
-#              auth_success=true 관측 후에만 "접속은 확인되었지만".
-#   기술 정보: 포트 목록 / 원본 오류는 errors[].message 와 errors[].detail 에 보존한다.
+#   앞 단계  : **실제로 관측된 성공만** 문장에 넣는다.
+#   기술 정보: 포트 목록 / 원본 오류 / HTTP status 는 errors[].detail 에만 보존한다 (§34).
 #
-# 2026-08-10 이전 이력: redfish 문구가 "이 장비는 Redfish를 지원하지 않습니다." 였는데
-#   관측 범위를 넘는 단정이라 교체했고, "응답을 반환하지 않았습니다" 도 응답 자체를 못 받은
-#   경우와 기대한 응답이 아닌 경우를 뭉개서 "확인하지 못했습니다" 로 교체했다.
+# 2026-08-11 (Phase 6-B) 변경 요약:
+#   - 채널 이름(Redfish / SSH / WinRM / vSphere API)을 문구에서 뺐다. 사용자는 채널을 고르지
+#     않고 IP 만 넘긴다 — 채널 어휘는 조치에 도움이 되지 않고 errors[].detail 에 남는다.
+#   - DNS / 호스트 이름 안내를 전부 제거했다 (§25 §28). Portal 은 IPv4 만 넘긴다.
+#     DNS_RESOLUTION_FAILED **enum 은 유지**한다 — 이 코드는 IPv4-only 환경에서도
+#     "IP 문자열이 IPv4 리터럴로 파싱되지 않는 경우"(오타 등)에 발생할 수 있고, 그때 사용자가
+#     할 일은 결국 "IP 사용 여부 확인" 이라 아래 1번 문구와 조치가 같다.
+#   - 인증 실패를 401 관측 여부로 두 문장으로 나누던 것을 4번 하나로 통일했다 (§26).
+#     401 이라는 기술 근거는 errors[].detail 과 auth_success=false 가 계속 표현한다.
 
-# reachable 단계 — 관리 연결 자체를 아직 확인하지 못했다.
-REASON_DNS_FAILED = (
-    "대상 서버 주소를 확인할 수 없습니다. 호스트 이름과 DNS 설정을 확인하세요."
+# 1. 대상 IP 사용 여부를 확인하지 못했다 (reachable / port 단계, presence 미확인).
+REASON_IP_UNCONFIRMED = (
+    "대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요."
 )
-REASON_TCP_UNCONFIRMED = (
-    "대상 서버의 관리 통신을 확인할 수 없습니다. 네트워크와 방화벽 설정을 확인하세요."
+# 2. IP 사용은 확인됐는데 관리 포트에 못 붙었다 (presence 확인 시).
+REASON_PORT_UNREACHABLE = (
+    "대상 IP 사용은 확인됐지만 관리 포트에 연결할 수 없습니다. "
+    "방화벽과 관리 서비스 상태를 확인하세요."
 )
-# port 단계 — 연결 거부를 관측했다. RST 를 보낸 주체가 최종 대상인지 중간 네트워크 장비인지
-# 확정할 수 없으므로 "서버는 응답하지만" 도, "대상 관리 서비스가 거부했다" 도 쓰지 않는다.
-# 관측한 사실은 "연결 시도가 거부됐다" 까지다.
-REASON_PORT_REFUSED = (
-    "관리 서비스 연결 시도가 거부되었습니다. 방화벽과 서비스 상태를 확인하세요."
+# 3. 관리 포트 연결은 됐는데 기대한 응답을 확인하지 못했다 (protocol 단계).
+REASON_PROTOCOL_UNCONFIRMED = (
+    "관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. "
+    "관리 서비스 설정과 상태를 확인하세요."
+)
+# 4. 자격증명 단계 실패 (auth 단계, 그리고 인증/수집을 구분 못 하는 경로).
+REASON_CREDENTIAL_FAILED = (
+    "대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요."
+)
+# 5. 접속까지는 확인됐고 수집에서 실패했다 (gather 단계).
+REASON_GATHER_FAILED = (
+    "대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요."
 )
 
-# protocol 단계 — TCP 관리 연결까지는 실제로 성공했으므로 그 사실을 함께 알린다.
+# protocol 단계 — 채널별로 문구를 나누지 않는다. dict 형태는 호출부/테스트 호환을 위해 유지.
 CHANNEL_PROTOCOL_MESSAGES = {
-    "redfish": (
-        "관리 연결은 확인되었지만 예상한 Redfish 응답을 확인하지 못했습니다. "
-        "Redfish 서비스 설정과 상태를 확인하세요."
-    ),
-    "os": (
-        "관리 연결은 확인되었지만 예상한 SSH 또는 WinRM 응답을 확인하지 못했습니다. "
-        "관리 서비스 설정과 상태를 확인하세요."
-    ),
-    "esxi": (
-        "관리 연결은 확인되었지만 예상한 vSphere API 응답을 확인하지 못했습니다. "
-        "ESXi 서비스 상태를 확인하세요."
-    ),
+    "redfish": REASON_PROTOCOL_UNCONFIRMED,
+    "os": REASON_PROTOCOL_UNCONFIRMED,
+    "esxi": REASON_PROTOCOL_UNCONFIRMED,
 }
 
 
-def _reason_for_tcp_failure(failure_code):
-    """reachable 단계 사유 — 주소 해석 실패와 그 밖의 연결 실패를 구분한다."""
-    if failure_code == "DNS_RESOLUTION_FAILED":
-        return REASON_DNS_FAILED
-    return REASON_TCP_UNCONFIRMED
+def reason_for_connect_failure(ip_in_use=None):
+    """관리 연결 실패(reachable / port 단계) 사유 — IP presence 판정 결과로 갈린다.
+
+    ip_in_use 는 "그 IP 를 실제로 쓰는 장비가 있는가" 에 대한 **별도 판정 결과**다.
+    본 함수는 그 결과를 받는 분기 자리만 제공하고, presence probe 자체는 만들지 않는다
+    (별도 작업 영역 — 2026-08-11 사용자 지시).
+
+        None  : 판정 수단이 아직 없다 → 1번 문구 (현재 저장소의 모든 호출부가 여기)
+        False : 사용 흔적을 찾지 못했다 → 1번 문구
+        True  : 사용 중임을 확인했다 → 2번 문구
+
+    DNS 해석 실패 / TCP timeout / RST(거부)를 문구로 구분하지 않는다. 세 경우 모두
+    사용자가 할 일은 "그 IP 를 쓰는 장비가 맞는지, 경로가 열려 있는지" 확인이고,
+    구분이 필요한 시스템은 failure_code(DNS_RESOLUTION_FAILED / TCP_CONNECT_FAILED /
+    TCP_CONNECTION_REFUSED)와 errors[].detail 을 본다.
+    """
+    return REASON_PORT_UNREACHABLE if ip_in_use is True else REASON_IP_UNCONFIRMED
 
 
 # TCP 연결 실패 종류 (구조화 — 오류 문자열 파싱 대신 이 값으로 분류한다)
@@ -1163,17 +1180,12 @@ def _try_redfish_auth(host, open_port, username, password, timeout_auth, verify_
         # 401 이든 timeout 이든 **멈춘 단계**는 같다. 원인 확정 여부는 auth_success 가 표현한다.
         # 403 은 인증 후 권한 부족일 수 있어 거부로 확정하지 않는다 (auth_success 는 None 유지).
         result["failure_code"] = "AUTH_PROBE_FAILED"
-        # 이 분기는 protocol_supported=true 를 이미 관측한 뒤에만 도달한다 →
-        # "Redfish 서비스는 확인되었지만" 이라고 쓸 수 있다 (rule: 관측한 성공만 표현).
-        result["failure_reason"] = (
-            "Redfish 서비스는 확인되었지만 인증이 거부되었습니다. "
-            "등록된 자격증명을 확인하세요."
-            if rejected else
-            # 401 이 아닌 실패(timeout / 5xx / TLS / 403)는 원인을 확정할 수 없다.
-            # 관측한 사실은 "요청을 완료하지 못했다" 까지이고, 다른 채널과 같은 어휘를 쓴다.
-            "Redfish 서비스는 확인되었지만 BMC에 접속하지 못했습니다. "
-            "자격증명과 계정 권한을 확인하세요."
-        )
+        # 2026-08-11 (Phase 6-B / §26): 401 관측 여부로 문구를 나누지 않는다.
+        #   종전엔 "인증이 거부되었습니다" 와 "접속하지 못했습니다" 두 문장이었는데,
+        #   Portal 사용자가 할 일은 두 경우 모두 "자격증명과 계정 권한 확인" 으로 같다.
+        #   401 이라는 기술 근거는 auth_success=false 와 errors[].detail(원본 오류)이 계속
+        #   표현하므로 사용자 문구는 4번 하나로 통일한다.
+        result["failure_reason"] = REASON_CREDENTIAL_FAILED
         result["detail"] = err
         return False
     result["auth_success"] = True
@@ -1228,16 +1240,16 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
         result["detail"] = "; ".join(proto_errors + tcp_errors)
         module.exit_json(**result)
 
-    # TCP 단계에서 전부 실패 — Phase 3-A 매핑 그대로
+    # TCP 단계에서 전부 실패 — Phase 3-A 의 stage / code 매핑은 그대로 두고 문구만 통일한다.
+    # (문구는 IP presence 판정으로만 갈린다 — reason_for_connect_failure 참조)
     if TCP_FAIL_REFUSED in tcp_kinds:
         result["reachable"] = True
         result["failure_stage"] = "port"
         result["failure_code"] = "TCP_CONNECTION_REFUSED"
-        result["failure_reason"] = REASON_PORT_REFUSED
     else:
         result["failure_stage"] = "reachable"
         result["failure_code"] = _tcp_failure_code(tcp_kinds)
-        result["failure_reason"] = _reason_for_tcp_failure(result["failure_code"])
+    result["failure_reason"] = reason_for_connect_failure(result.get("ip_in_use"))
     result["detail"] = "; ".join(tcp_errors)
     module.exit_json(**result)
 
@@ -1299,7 +1311,7 @@ def run_module():
         result["failure_stage"] = "reachable"
         # DNS_RESOLUTION_FAILED 또는 TCP_CONNECT_FAILED — RST 를 못 봤으므로 REFUSED 는 나올 수 없다
         result["failure_code"] = _tcp_failure_code(port_kinds)
-        result["failure_reason"] = _reason_for_tcp_failure(result["failure_code"])
+        result["failure_reason"] = reason_for_connect_failure(result.get("ip_in_use"))
         result["detail"] = "; ".join(port_errors)
         module.exit_json(**result)
     if not target_port_open:
@@ -1307,9 +1319,9 @@ def run_module():
         result["failure_stage"] = "port"
         # 이 분기는 RST 를 관측했기에만 도달한다 (_check_ports 의 any_response 조건).
         # 다만 RST 를 보낸 주체가 최종 서버인지 중간 방화벽인지는 확정할 수 없으므로
-        # 사유 문장에 "서버는 응답하지만" 같은 표현을 쓰지 않는다.
+        # RST 만으로 "IP 사용 확인"(2번 문구)으로 올리지 않는다 — presence 판정 결과를 따른다.
         result["failure_code"] = "TCP_CONNECTION_REFUSED"
-        result["failure_reason"] = REASON_PORT_REFUSED
+        result["failure_reason"] = reason_for_connect_failure(result.get("ip_in_use"))
         result["detail"] = "; ".join(port_errors)
         module.exit_json(**result)
 

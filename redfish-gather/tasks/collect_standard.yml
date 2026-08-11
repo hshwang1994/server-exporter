@@ -20,6 +20,10 @@
     # auth_evidence.first_auth_status 는 그 후보 고유의 값이다. 전체 판정은
     # 이 리스트를 모아 site.yml 이 한 곳에서 내린다 (후보 하나의 401 로 확정 금지).
     _rf_auth_statuses: []
+    # 2026-08-11 (Phase 6-B §6): 같은 관측을 후보 역할과 짝지어 담는 리스트.
+    # {'role': ..., 'label': ..., 'status': 정수 or none}
+    _rf_auth_observations: []
+    _rf_primary_auth_rejected: false
   no_log: true
 
 - name: "redfish | collect_standard | warn no accounts"
@@ -63,6 +67,24 @@
   when:
     - (_rf_accounts | default([])) | length > 0
     - not (_rf_collect_ok | default(false) | bool)
+
+# 2026-08-11 (Phase 6-B §6 §7): 공통계정(primary) 자격이 **명시적으로 거부**됐는가.
+#
+# true 가 되는 조건은 하나뿐이다: role=primary 후보의 첫 인증 응답이 **401** 이다.
+#   - 401 = BMC 가 "이 자격을 못 받겠다" 고 구조적으로 답한 것이다.
+#   - 403 은 제외한다 (§7). 403 은 인증은 통과했는데 권한이 모자란 상태일 수 있어
+#     "자격증명이 틀렸다" 로 확정할 수 없다. 여기서 계정을 손대면 멀쩡한 자격을 덮어쓴다.
+#   - timeout / TLS 오류 / transport 실패는 status 자체가 none 이라 자동으로 제외된다.
+#   - 5xx (BMC 일시 장애) 도 401 이 아니므로 제외된다.
+#   - primary 후보를 아예 시도하지 않았으면 관측이 없어 false 다.
+# status 는 정수 그대로 비교한다 (문자열 파싱 없음).
+- name: "redfish | collect_standard | primary 자격 거부 판정"
+  ansible.builtin.set_fact:
+    _rf_primary_auth_rejected: >-
+      {{ ((_rf_auth_observations | default([]))
+          | selectattr('role', 'eq', 'primary')
+          | selectattr('status', 'eq', 401)
+          | list | length) > 0 }}
 
 # vendor 정규화 (성공 후보 기준 — vendor_aliases.yml 기반, detect_vendor 가 이미 채움)
 - name: "redfish | collect_standard | set vendor"

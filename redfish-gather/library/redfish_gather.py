@@ -1328,6 +1328,17 @@ def _extract_oem_dell(data):                                                  # 
     }
 
 
+# ── 벤더별 서버 대표 시리얼 resolver (2026-08-11) ────────────────────────────
+# 표준 경로는 ComputerSystem.SerialNumber 이고 그대로 둔다(_ne('SerialNumber'), gather_system).
+# 아래 레지스트리에 등록된 vendor 만 main()/run_gather 층에서 대표 시리얼을 덮어쓴다.
+# 등록되지 않은 vendor 는 코드 경로 자체를 타지 않아 회귀 위험이 구조적으로 0이다.
+#
+# 이 판정을 gather_system 이 아니라 main() 층에 둔 이유:
+#   대표 시리얼을 못 얻었을 때 "섹션 실패"(=partial)가 아니라 "수집 실패"(=failed)로
+#   끝내야 하는데, 섹션 러너(_make_section_runner)는 partial 까지만 만들 수 있다.
+#   따라서 확정과 차단을 모두 main() 층이 책임진다.
+
+
 def _extract_oem_lenovo(data, chassis_data=None):                             # nosec rule12-r1
     """Lenovo OEM (Oem.Lenovo).
 
@@ -4545,22 +4556,46 @@ def account_service_get(bmc_ip, username, password, timeout, verify_ssl):
         if code_a != 200 or err_a:
             errors.append(_err('account_service', f'GET {slot_uri} 실패', detail=err_a or f'HTTP {code_a}'))
             continue
+        # 2026-08-11 (Phase 6-B §10): Locked 를 **읽기만** 추가한다.
+        #   목적은 "단순 password 불일치" 와 "계정이 잠김/비활성" 을 errors[] 에서 구분해
+        #   운영자가 원인을 알 수 있게 하는 것뿐이다. 자동 enable/unlock 범위는 넓히지 않는다
+        #   (기존 PATCH body 와 동일). Locked 를 아예 반환하지 않는 펌웨어는 None 이 되어
+        #   "모름" 으로 남는다 — False(잠기지 않음)로 단정하지 않는다.
         accounts.append({
             'slot_uri': slot_uri,
             'id':       _safe(acc_data, 'Id'),
             'username': _safe(acc_data, 'UserName', default=''),
             'role_id':  _safe(acc_data, 'RoleId',   default=''),
             'enabled':  bool(_safe(acc_data, 'Enabled', default=False)),
+            'locked':   _safe(acc_data, 'Locked', default=None),
         })
     return root_data, accounts, errors
 
 
 def account_service_find_user(accounts, target_username):
-    """기존 사용자 slot URI 검색. None 반환 = 미존재."""
+    """기존 사용자 slot URI 검색. None 반환 = 미존재.
+
+    주의: 첫 매칭만 반환한다. 동일 username 이 여러 slot 에 있는지 판단해야 하는
+    호출자는 account_service_find_all_users() 를 써야 한다 (Phase 6-B §12).
+    """
     for acc in accounts:
         if (acc.get('username') or '') == target_username:
             return acc
     return None
+
+
+def account_service_find_all_users(accounts, target_username):
+    """target_username 과 정확히 일치하는 slot **전부** 반환 (Phase 6-B §12).
+
+    account_service_find_user() 는 첫 매칭만 돌려주므로, 같은 username 이 여러 slot 에
+    존재하면 "어느 slot 을 고쳐야 하는지" 를 코드가 임의로 정하게 된다. 그 상태에서
+    자동 PATCH 를 하면 운영자가 의도하지 않은 slot 의 비밀번호가 바뀔 수 있다.
+    따라서 호출자는 이 함수로 개수를 먼저 확인하고, 2개 이상이면 쓰기를 중단한다.
+
+    매칭 규칙은 account_service_find_user() 와 동일한 **대소문자 구분 완전일치** 다
+    (실제 PATCH 대상을 고르는 함수와 판정 기준이 어긋나면 안 된다).
+    """
+    return [acc for acc in accounts if (acc.get('username') or '') == target_username]
 
 
 def account_service_find_empty_slot(accounts, skip_slot_ids=None):
@@ -4602,7 +4637,7 @@ def account_service_find_all_empty_slots(accounts, skip_slot_ids=None):
 def account_service_provision(
     bmc_ip, vendor, current_username, current_password,
     target_username, target_password, target_role,
-    timeout, verify_ssl, dryrun=True,
+    timeout, verify_ssl, dryrun=True, allow_delete_recreate=False,
 ):
     """공통계정(target) 생성 또는 복구.
 
@@ -4617,22 +4652,42 @@ def account_service_provision(
         timeout:          HTTP timeout
         verify_ssl:       BMC 인증서 검증
         dryrun:           True 시 실제 PATCH/POST 호출하지 않고 시뮬레이션 (default ON)
+        allow_delete_recreate:
+            기존 계정 PATCH 후 검증이 실패했을 때 DELETE + POST 로 **기존 계정을 지우고
+            다시 만드는** fallback 을 허용할지. default False = 지우지 않는다
+            (Phase 6-B §11). 상세 근거는 아래 해당 분기 주석 참조.
 
     Returns:
         dict: {
-          'recovered': bool,
-          'method':    'patch_existing' | 'patch_empty_slot' | 'post_new' | 'delete_repost' | 'noop' | 'not_supported',
-          'slot_uri':  '...' or None,
-          'dryrun':    bool,
-          'errors':    [_err(...), ...],
+          'recovered':       bool,
+          'method':          'patch_existing' | 'patch_empty_slot' | 'post_new' | 'delete_repost' | 'noop' | 'not_supported' | 'ambiguous',
+          'slot_uri':        '...' or None,
+          'dryrun':          bool,
+          'account_existed': bool,          # 대상 username 이 이미 있었는가
+          'action':          'create' | 'password_sync' | 'none' | 'ambiguous',
+          'verification':    'verified' | 'failed' | 'skipped' | 'none',
+          'errors':          [_err(...), ...],
         }
+
+    action / verification 의미 (Phase 6-B §17 — 운영 추적용):
+      action.create        신규 계정을 만들었거나 만들려 했다 (대상 계정이 없었음)
+      action.password_sync 이미 있는 계정의 비밀번호를 vault 값과 맞추려 했다
+      action.ambiguous     같은 username 이 여러 slot 이라 쓰기를 중단했다 (§12)
+      action.none          쓸 대상 자체가 없었다 (AccountService 미지원 등)
+      verification.verified 쓴 뒤 새 자격으로 실제 인증까지 확인했다
+      verification.failed   썼지만 새 자격 인증이 되지 않았다
+      verification.skipped  dryrun 이라 쓰지 않았고 따라서 확인도 하지 않았다
+      verification.none     확인 단계에 도달하지 못했다 (쓰기 실패 / POST 경로)
     """
     out = {
-        'recovered': False,
-        'method':    'noop',
-        'slot_uri':  None,
-        'dryrun':    bool(dryrun),
-        'errors':    [],
+        'recovered':       False,
+        'method':          'noop',
+        'slot_uri':        None,
+        'dryrun':          bool(dryrun),
+        'account_existed': False,
+        'action':          'none',
+        'verification':    'none',
+        'errors':          [],
     }
 
     # 1) AccountService GET
@@ -4655,6 +4710,7 @@ def account_service_provision(
     # source: redfish.dmtf.org/schemas/v1/AccountService.json (선택적 endpoint)
     if _is_404_only_error(errs):
         out['method'] = 'not_supported'
+        out['action'] = 'none'
         out['errors'].append(_err(
             'account_service',
             f'AccountService 미지원 (vendor={vendor}, HTTP 404)',
@@ -4664,12 +4720,51 @@ def account_service_provision(
     out['errors'].extend(errs)
 
     # 2) 기존 사용자 검색
-    existing = account_service_find_user(accounts, target_username)
+    #
+    # 2026-08-11 (Phase 6-B §12): **전 매칭**을 먼저 센다.
+    #   account_service_find_user() 는 첫 매칭만 돌려주므로, 같은 username 이 여러 slot 에
+    #   있으면 코드가 임의의 slot 을 골라 PATCH 하게 된다. 그러면 운영자가 보고 있던 slot 이
+    #   아닌 다른 slot 의 비밀번호가 조용히 바뀔 수 있다. 어느 쪽이 맞는지 코드가 알 수 없으므로
+    #   자동 쓰기를 중단하고 사람이 정리하도록 slot 목록만 남긴다 (값은 남기지 않는다).
+    matches = account_service_find_all_users(accounts, target_username)
+
+    if len(matches) > 1:
+        slot_ids = [('' if m.get('id') is None else str(m.get('id'))) for m in matches]
+        out['method']          = 'ambiguous'
+        out['action']          = 'ambiguous'
+        out['account_existed'] = True
+        out['errors'].append(_err(
+            'account_service',
+            '동일한 사용자 이름이 여러 계정 슬롯에 존재해 자동 처리를 중단했습니다. '
+            '중복 슬롯을 정리한 뒤 다시 시도하세요.',
+            detail='duplicate slots: ' + ', '.join(s for s in slot_ids if s),
+        ))
+        return out
+
+    existing = matches[0] if matches else None
 
     if existing:
-        out['method']   = 'patch_existing'
-        out['slot_uri'] = existing.get('slot_uri')
+        out['method']          = 'patch_existing'
+        out['action']          = 'password_sync'
+        out['account_existed'] = True
+        out['slot_uri']        = existing.get('slot_uri')
+        # §10: "단순 비밀번호 불일치" 와 "계정이 비활성/잠김" 을 구분해 남긴다.
+        #   BMC 가 Locked 를 아예 주지 않으면 None 이라 언급하지 않는다 (모름 ≠ 잠기지 않음).
+        #   자동 enable/unlock 범위는 넓히지 않는다 — 아래 PATCH body 는 종전과 동일하다.
+        if existing.get('enabled') is False:
+            out['errors'].append(_err(
+                'account_service',
+                '대상 계정이 비활성 상태입니다. 비밀번호 불일치가 아니라 계정 비활성이 원인일 수 있습니다.',
+                detail=f'slot={existing.get("id")} Enabled=false',
+            ))
+        if existing.get('locked') is True:
+            out['errors'].append(_err(
+                'account_service',
+                '대상 계정이 잠금 상태입니다. 비밀번호 불일치가 아니라 계정 잠금이 원인일 수 있습니다.',
+                detail=f'slot={existing.get("id")} Locked=true',
+            ))
         if dryrun:
+            out['verification'] = 'skipped'
             return out
         # F50 phase 4 (cycle 2026-05-06): full body PATCH 의무 (Password + Enabled +
         # Locked + RoleId 항상 함께). 사이트 실측 (10.50.11.232 Lenovo XCC):
@@ -4720,7 +4815,38 @@ def account_service_provision(
             timeout, verify_ssl,
         )
         if verify_code == 200 and not verify_err:
-            out['recovered'] = True
+            out['recovered']    = True
+            out['verification'] = 'verified'
+            return out
+        out['verification'] = 'failed'
+        # 2026-08-11 (Phase 6-B §11): **기존 계정을 지우는 fallback 은 기본적으로 하지 않는다.**
+        #
+        # 기존 승인 근거 (그대로 유효한 부분):
+        #   docs/ai/catalogs/TEST_HISTORY.md "2026-05-06 (cycle-020 phase 4)" — 사이트 실측
+        #   (Lenovo XCC SR650 V2). 이미 존재하던 공통계정이 RoleId=Administrator / Enabled=true
+        #   인데도 모든 endpoint 가 AccessDenied 였고, Enabled 토글·RoleId 토글은 실패,
+        #   DELETE + POST 재생성만 200 으로 복구됐다. 즉 근거는 **신규 생성 한정이 아니라
+        #   기존 계정(=지금 이 경로)** 에 대한 것이다.
+        #
+        # 그럼에도 기본값을 끄는 이유:
+        #   위 실측은 "권한 cache 손상" 이라는 특정 상태에서 나온 것인데, 이 지점에서 코드가
+        #   보는 신호는 "새 자격으로의 인증이 안 된다" 뿐이다. 비밀번호가 BMC 정책에 걸려
+        #   적용되지 않은 흔한 경우(Dell Security Strengthen Policy 사례와 동일한 silent fail)도
+        #   똑같은 신호를 낸다. 둘을 구분할 수 없는 상태에서 지우면, 단순 비밀번호 동기화
+        #   실패 때문에 **정상 동작 중이던 운영 계정을 삭제**하게 된다. DELETE 성공 후 POST 가
+        #   실패하면 BMC 에 관리자 계정이 하나도 남지 않는다 (docs/ai/AUDIT-2026-05-29.md A3
+        #   가 지적한 위험이며 같은 문서가 재검토를 권고했다).
+        #
+        # 그래서 기능을 없애지 않고 **명시적 opt-in** 으로 옮겼다. 운영자가 권한 cache 손상을
+        # 확인한 뒤 allow_delete_recreate=True 로 부르면 종전 동작 그대로 복구된다.
+        if not allow_delete_recreate:
+            out['errors'].append(_err(
+                'account_service',
+                '기존 계정의 비밀번호를 맞춘 뒤 인증 확인에 실패했습니다. '
+                '계정을 지우고 다시 만드는 자동 복구는 하지 않았습니다. 계정 상태를 확인하세요.',
+                detail=(verify_err or f'verify HTTP {verify_code}')
+                       + f'; slot={existing.get("id")}; delete_recreate=disabled',
+            ))
             return out
         # 권한 손상 감지 — 운영 안전 위해 best-effort fallback.
         # vendor='dell' 은 PATCH-only (POST 미지원) → fallback 불가, errors[] 만 기록.
@@ -4772,6 +4898,9 @@ def account_service_provision(
             out['method']   = 'delete_repost'
             out['slot_uri'] = _str(_safe(post_data, '@odata.id')) or existing.get('slot_uri')  # Round 8 #4: 비-str @odata.id
             out['recovered'] = True
+            # 재생성 후 새 자격으로 다시 인증해 보지는 않는다 (요청 수를 늘리지 않기 위해).
+            # 따라서 'verified' 라고 적지 않는다 — 확인 단계에 도달하지 않았다는 뜻의 'none'.
+            out['verification'] = 'none'
         else:
             out['errors'].append(_err(
                 'account_service',
@@ -4800,8 +4929,10 @@ def account_service_provision(
             ))
             return out
         out['method']   = 'patch_empty_slot'
+        out['action']   = 'create'
         out['slot_uri'] = empty_slots[0].get('slot_uri')
         if dryrun:
+            out['verification'] = 'skipped'
             return out
         body = {
             'UserName': target_username,
@@ -4832,7 +4963,8 @@ def account_service_provision(
                 timeout, verify_ssl,
             )
             if verify_code == 200 and not verify_err:
-                out['recovered'] = True
+                out['recovered']    = True
+                out['verification'] = 'verified'
                 out['slot_uri'] = slot.get('slot_uri')
                 break
             # silent fail 감지 — slot cleanup (UserName 비우기) 후 다음 슬롯으로
@@ -4851,6 +4983,7 @@ def account_service_provision(
             )
             last_code = verify_code
         if not out['recovered']:
+            out['verification'] = 'failed'
             out['errors'].append(_err(
                 'account_service',
                 f'Dell PATCH 모든 빈 슬롯 실패 (시도={len(empty_slots[:3])})',         # nosec rule12-r1
@@ -4863,7 +4996,9 @@ def account_service_provision(
     #   RoleId 표준 enum 'Administrator' 거부 → Cisco enum 'admin'/'user'/'readonly'.
     if vendor == 'cisco':                                                     # nosec rule12-r1
         out['method'] = 'post_new'
+        out['action'] = 'create'
         if dryrun:
+            out['verification'] = 'skipped'
             return out
         # Cisco RoleId mapping
         cisco_role_map = {
@@ -4914,7 +5049,9 @@ def account_service_provision(
     #   Supermicro Redfish User Guide (RoleId Administrator/Operator/ReadOnly,
     #   password complexity 매우 엄격 — POST 400 시 password policy 위반 시그널).
     out['method'] = 'post_new'
+    out['action'] = 'create'
     if dryrun:
+        out['verification'] = 'skipped'
         return out
     body_base = {
         'UserName': target_username,
@@ -5002,6 +5139,10 @@ def main():
             target_password = dict(type='str',  default='', no_log=True),
             target_role     = dict(type='str',  default='Administrator'),
             dryrun          = dict(type='bool', default=True),
+            # 2026-08-11 (Phase 6-B §11): 기존 계정 PATCH 후 인증 확인 실패 시
+            # DELETE + POST 로 지우고 다시 만드는 fallback 의 opt-in 스위치.
+            # default False = 지우지 않는다. 근거는 account_service_provision() 주석 참조.
+            allow_delete_recreate = dict(type='bool', default=False),
             # cycle 2026-05-12 (ADR-2026-05-12): HPE CSUS 3200 / Superdome Flex
             # RMC primary 멀티-노드 토폴로지 수집 활성. adapter `vendor_notes.manager_layout`
             # 을 detect_vendor.yml → collect_standard.yml → 본 모듈까지 전달.
@@ -5044,6 +5185,7 @@ def main():
             bmc_ip, vendor, username, password,
             target_username, target_password, target_role,
             timeout, verify_ssl, dryrun=dryrun,
+            allow_delete_recreate=bool(p.get('allow_delete_recreate')),
         )
         result['errors'] = list(det_errors) + (result.get('errors') or [])
         module.exit_json(

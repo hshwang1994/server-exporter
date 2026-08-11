@@ -60,7 +60,7 @@ def test_m_b3_huawei_ibmc_post_200_standard(monkeypatch):
     out = rg.account_service_provision(
         "10.99.99.1", "huawei",
         "admin", "current_pass",
-        "infraops", "Passw0rd1!Infra", "Administrator",
+        "infraops", "<target-pass>", "Administrator",
         timeout=10, verify_ssl=False, dryrun=False,
     )
 
@@ -91,7 +91,7 @@ def test_m_b3_inspur_isbmc_post_400_then_retry(monkeypatch):
     out = rg.account_service_provision(
         "10.99.99.2", "inspur",
         "admin", "current_pass",
-        "infraops", "Passw0rd1!Infra", "Administrator",
+        "infraops", "<target-pass>", "Administrator",
         timeout=10, verify_ssl=False, dryrun=False,
     )
 
@@ -116,7 +116,7 @@ def test_m_b3_fujitsu_irmc_post_200_standard(monkeypatch):
     out = rg.account_service_provision(
         "10.99.99.3", "fujitsu",
         "admin", "current_pass",
-        "infraops", "Passw0rd1!Infra", "Administrator",
+        "infraops", "<target-pass>", "Administrator",
         timeout=10, verify_ssl=False, dryrun=False,
     )
 
@@ -139,7 +139,7 @@ def test_m_b3_quanta_qct_bmc_post_201_openbmc(monkeypatch):
     out = rg.account_service_provision(
         "10.99.99.4", "quanta",
         "admin", "current_pass",
-        "infraops", "Passw0rd1!Infra", "Administrator",
+        "infraops", "<target-pass>", "Administrator",
         timeout=10, verify_ssl=False, dryrun=False,
     )
 
@@ -162,7 +162,7 @@ def test_m_b3_hpe_superdome_flex_post_200_rmc(monkeypatch):
     out = rg.account_service_provision(
         "10.99.99.5", "hpe",  # Superdome Flex 도 vendor='hpe' (sub-line)
         "admin", "current_pass",
-        "infraops", "Passw0rd1!Infra", "Administrator",
+        "infraops", "<target-pass>", "Administrator",
         timeout=10, verify_ssl=False, dryrun=False,
     )
 
@@ -190,7 +190,7 @@ def test_m_b3_huawei_post_400_405_no_hpe_retry(monkeypatch):
     out = rg.account_service_provision(
         "10.99.99.6", "huawei",
         "admin", "current_pass",
-        "infraops", "Passw0rd1!Infra", "Administrator",
+        "infraops", "<target-pass>", "Administrator",
         timeout=10, verify_ssl=False, dryrun=False,
     )
 
@@ -218,7 +218,11 @@ def _fake_acct_get_with_existing(bmc_ip, u, p, t, v):
 
 
 def test_m_b3_huawei_patch_verify_401_delete_repost_fallback(monkeypatch):
-    """vendor='huawei' + PATCH 200 + verify 401 → DELETE+POST fallback 자동 진입 (vendor != dell)."""
+    """vendor='huawei' + PATCH 200 + verify 401 → DELETE+POST fallback (vendor != dell).
+
+    2026-08-11 (Phase 6-B §11) 기대값 변경: 이 fallback 은 기존 계정을 지우므로 기본값이
+    off 가 됐다. vendor 분기 자체는 그대로이므로 명시적 opt-in 으로 고정한다.
+    """
     monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_with_existing)
 
     def fake_patch(bmc_ip, path, body, u, p, t, v):
@@ -242,9 +246,10 @@ def test_m_b3_huawei_patch_verify_401_delete_repost_fallback(monkeypatch):
 
     out = rg.account_service_provision(
         "10.99.99.7", "huawei",
-        "admin", "current_pass",
-        "infraops", "Passw0rd1!Infra", "Administrator",
+        "admin", "<recovery-pass>",
+        "infraops", "<target-pass>", "Administrator",
         timeout=10, verify_ssl=False, dryrun=False,
+        allow_delete_recreate=True,
     )
 
     # vendor='huawei' != 'dell' → DELETE+POST 재생성 fallback 진입
@@ -267,9 +272,11 @@ def test_m_b3_dell_patch_verify_401_no_fallback(monkeypatch):
 
     out = rg.account_service_provision(
         "10.99.99.8", "dell",
-        "admin", "current_pass",
-        "infraops", "Passw0rd1!Infra", "Administrator",
+        "admin", "<recovery-pass>",
+        "infraops", "<target-pass>", "Administrator",
         timeout=10, verify_ssl=False, dryrun=False,
+        # Phase 6-B §11: fallback 기본값 off. 이 테스트는 "켜도 Dell 은 안 지운다" 를 고정한다.
+        allow_delete_recreate=True,
     )
 
     # vendor='dell' → PATCH-only, fallback 불가

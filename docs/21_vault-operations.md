@@ -36,7 +36,7 @@ server-exporter 가 SSH / WinRM / vSphere / Redfish 에 접속할 때 쓰는 **�
 | Redfish | `vault/redfish/{vendor}.yml` | BMC 자격증명 (vendor별) |
 
 **vendor 9 vault** (cycle 2026-05-11 시점 — M-A1~A6 적용 완료):
-- dell.yml, hpe.yml, lenovo.yml, supermicro.yml, cisco.yml (5 base vendor — primary infraops/Password123! 통일)
+- dell.yml, hpe.yml, lenovo.yml, supermicro.yml, cisco.yml (5 base vendor — primary `infraops` 통일, 비밀번호는 vault 안에만)
 - huawei.yml, inspur.yml, fujitsu.yml, quanta.yml (cycle 2026-05-11 신설 4 vendor — primary infraops + recovery vendor 공장 기본)
 
 ## 4. Vault 자동 반영 메커니즘 (rule 27 R6)
@@ -171,7 +171,7 @@ ansible-vault create vault/redfish/{vendor}.yml
 
 ## 6.5. 9 vendor recovery 자격 매트릭스 (cycle 2026-05-11 — M-A1~A6)
 
-> 사용자 명시 (2026-05-11): vendor 공장 기본 자격으로 vault 임시 recovery 자격을 추가. primary infraops 비밀번호 `Password123!` 통일.
+> 사용자 명시 (2026-05-11): vendor 공장 기본 자격으로 vault 임시 recovery 자격을 추가. primary `infraops` 비밀번호는 전 vendor 통일 (평문은 vault 안에만 — 2026-08-11 Phase 6-B 로 본 문서에서 제거).
 >
 > 본 매트릭스는 **공장 기본 / 매뉴얼 default** 출처. 사이트 BMC 가 customer-specific 자격으로 변경되면 recovery 는 BMC reset 후 회복 시점에만 작동.
 
@@ -180,8 +180,8 @@ ansible-vault create vault/redfish/{vendor}.yml
 | 항목 | 값 |
 |---|---|
 | primary username | `infraops` (모든 vendor 통일) |
-| primary password | `Password123!` (cycle 2026-05-11 — 사용자 명시) |
-| vault password (ansible-vault) | `Goodmit0802!` |
+| primary password | `<vault/redfish/{vendor}.yml accounts[0].password>` (평문 미기재 — 2026-08-11 Phase 6-B) |
+| vault password (ansible-vault) | `<Jenkins Credential: server-gather-vault-password>` (평문 미기재 — 2026-08-11 Phase 6-B) |
 | recovery 정책 | vendor 공장 기본 자격 + (기존) lab/사이트 운영 자격 (Additive) |
 
 ### vendor 별 recovery 자격 (공장 기본)
@@ -209,24 +209,31 @@ ansible-vault create vault/redfish/{vendor}.yml
 
 ### vendor default 계정 자동 생성 메커니즘
 
-primary `infraops/Password123!` 자격이 BMC 에 없으면 (= 사이트 BMC 초기 상태) recovery 자격으로 fallback → `account_service.yml` 가 자동으로 BMC 에 `infraops` 계정 + `Password123!` 비밀번호 + `Administrator` role 로 PATCH/POST.
+primary `infraops` 자격이 BMC 에 없으면 (= 사이트 BMC 초기 상태) recovery 자격으로 fallback → `account_service.yml` 가 자동으로 BMC 에 `infraops` 계정 + vault 의 비밀번호 + `Administrator` role 로 PATCH/POST.
 
 처리 순서:
 
 ```text
 try_one_account.yml (accounts[0] primary 시도)
-  └─ 401 (BMC 에 infraops 없음)
+  └─ 401 (BMC 에 infraops 없음) → _rf_auth_observations 에 {role:'primary', status:401} 기록
        ↓
 try_one_account.yml (accounts[1+] recovery 시도)
   └─ 200 (BMC 공장 기본 자격 → _rf_used_account.role='recovery')
        ↓
-account_service.yml (진입 조건: role='recovery' + _rf_collect_ok=true + vault 에 primary 후보 1개 이상)
+collect_standard.yml → _rf_primary_auth_rejected = true  (primary 관측이 401 일 때만)
+       ↓
+account_service.yml (진입 조건 4개 — 2026-08-11 Phase 6-B 로 좁혀짐)
+  1. _rf_used_account.role == 'recovery'
+  2. _rf_collect_ok == true
+  3. _rf_primary_auth_rejected == true   ← 401 실증. timeout/TLS/5xx/403 은 진입 안 함
+  4. vault 에 primary 후보 1개 이상
   └─ redfish_gather mode='account_provision'
-       target_username='infraops', target_password='Password123!', target_role='Administrator'
+       target_username='infraops', target_password=<vault accounts[0].password>,
+       target_role='Administrator'
        ↓
 BMC AccountService POST/PATCH → infraops 계정 생성/복구
        ↓
-다음 ansible run: primary 자격 (infraops/Password123!) 으로 정상 인증
+다음 ansible run: primary 자격 (infraops) 으로 정상 인증
 ```
 
 → **사이트 BMC 가 customer-specific 자격으로 변경된 경우**: recovery 매칭 안 됨 → BMC reset 필요 (사이트 운영자) → reset 후 공장 기본 자격 회복 시점에 자동 생성 작동.

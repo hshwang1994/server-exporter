@@ -158,9 +158,13 @@
         _out_vendor:            null
         _fail_sec_supported:    "{{ ['system','cpu','memory','storage','network','users'] }}"
         _fail_error_section:    "os_detect"
-        # 2026-08-11 (Phase 5-A): Portal Grid 용 diagnosis.failure_reason 에서 관리 포트 번호를
-        # 뺐으므로, 운영자가 필요로 하는 포트 정보는 errors[].message 가 보존한다 (역할 분리).
-        _fail_error_message:    "SSH(22), WinRM(5985, 5986) 관리 포트 연결에 실패했습니다. 대상 서비스와 방화벽 정책을 확인하세요."
+        # 2026-08-11 (Phase 6-B / §24 §25): Portal 실패 Grid 는 errors[].message 를 읽는다.
+        #   종전엔 이 값이 곧 message 여서 관리 포트 번호(22 / 5985 / 5986)가 Grid 에 그대로
+        #   노출됐다. 이제 message 는 diagnosis.failure_reason 을 그대로 쓰고(사용자 문장),
+        #   이 값은 **errors[].detail** 로 내려간다 (build_failed_output.yml).
+        #   포트별 실제 관측 오류는 precheck 가 채운 _fail_error_detail 에 이미 들어 있고,
+        #   여기서는 "어떤 포트를 확인했는지" 만 운영자용으로 덧붙인다.
+        _fail_error_message:    "확인한 관리 포트: WinRM 5986, WinRM 5985, SSH 22"
 
     # 2026-08-10 (Phase 3-A): 종전에는 이 자리에서 _diagnosis 를 통째로 하드코딩했다.
     # 이제 PLAY 1 의 공통 precheck 가 만든 진단(_diagnosis)이 host fact 로 그대로 넘어오므로
@@ -206,6 +210,8 @@
 
   vars_files:
     - "{{ lookup('env','REPO_ROOT') }}/vault/linux.yml"
+    # 2026-08-11 (Phase 6-B): Portal 사용자 문구 정본 (5 문장) — rescue 가 참조한다.
+    - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
   vars:
     _ip:      "{{ ansible_host | default(inventory_hostname) }}"
@@ -374,6 +380,11 @@
         #                                   연결 끊김 / timeout / 제한 쉘(nologin, rc≠0) 을 구분하지
         #                                   못한다 → 인증 거부를 관측했다고 말할 수 없다
         #   failure_stage                 — 실행이 멈춘 단계. 자격 probe 단계면 'auth', 그 뒤면 'gather'.
+        #   failure_reason                — 2026-08-11 (Phase 6-B): 사용자 문구 5 문장 표준만 쓴다
+        #                                   (common/vars/failure_reasons.yml). 자격 단계 실패 → 4번,
+        #                                   인증 통과 후 수집 실패 → 5번. 종전엔 채널 이름(SSH / WinRM)을
+        #                                   문장에 넣었는데, 사용자는 채널을 고르지 않고 IP 만 넘기므로
+        #                                   조치에 도움이 되지 않아 뺐다. 채널 정보는 errors[].detail 에 남는다.
         - name: "linux | rescue | Portal 표시용 diagnosis 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
@@ -383,8 +394,7 @@
                   'auth_success': (true if ok else none),
                   'failure_stage': ('gather' if ok else 'auth'),
                   'failure_code': ('GATHER_FAILED' if ok else 'AUTH_PROBE_FAILED'),
-                  'failure_reason': ('Linux 서버 접속은 확인되었지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.' if ok
-                                     else 'SSH 서비스는 확인되었지만 Linux 서버에 접속하지 못했습니다. 자격증명과 SSH 설정을 확인하세요.'),
+                  'failure_reason': (_fr_gather_failed if ok else _fr_credential_failed),
                   'details': {'channel': 'os', 'detected_os': 'linux',
                               'selected_port': 22,
                               'checked_ports': (_precheck_raw.checked_ports | default([5986, 5985, 22])),
@@ -402,7 +412,10 @@
             _fail_sec_supported:    "{{ ((_selected_adapter | default({})).capabilities | default({})).sections_supported
                                         | default(['system','cpu','memory','storage','network','users']) }}"
             _fail_error_section:    "linux_gather"
-            _fail_error_message:    "{{ ansible_failed_result.msg | default('Linux 수집 예외') }}"
+            # 2026-08-11 (Phase 6-B): raw 예외 문자열. errors[].message 가 아니라
+            # **errors[].detail** 로 들어간다 (build_failed_output.yml). 사용자 문장은
+            # diagnosis.failure_reason 을 그대로 쓴다.
+            _fail_error_message:    "[task: {{ ansible_failed_task.name | default('unknown') }}] {{ ansible_failed_result.msg | default('Linux 수집 예외') }}"
 
         - name: "linux | rescue | build_failed_output"
           ansible.builtin.include_tasks:
@@ -428,7 +441,7 @@
                        'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],
+                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.','detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {}
                      })) | to_json }}"
 
@@ -443,6 +456,8 @@
 
   vars_files:
     - "{{ lookup('env','REPO_ROOT') }}/vault/windows.yml"
+    # 2026-08-11 (Phase 6-B): Portal 사용자 문구 정본 (5 문장) — rescue 가 참조한다.
+    - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
   vars:
     _ip:      "{{ ansible_host | default(inventory_hostname) }}"
@@ -603,8 +618,7 @@
                   'auth_success': (true if ok else none),
                   'failure_stage': ('gather' if ok else 'auth'),
                   'failure_code': ('GATHER_FAILED' if ok else 'AUTH_PROBE_FAILED'),
-                  'failure_reason': ('Windows 서버 접속은 확인되었지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.' if ok
-                                     else 'WinRM 서비스는 확인되었지만 Windows 서버에 접속하지 못했습니다. 자격증명과 WinRM 설정을 확인하세요.'),
+                  'failure_reason': (_fr_gather_failed if ok else _fr_credential_failed),
                   'details': {'channel': 'os', 'detected_os': 'windows',
                               'selected_port': port,
                               'checked_ports': (_precheck_raw.checked_ports
@@ -623,7 +637,10 @@
             _fail_sec_supported:    "{{ ((_selected_adapter | default({})).capabilities | default({})).sections_supported
                                         | default(['system','cpu','memory','storage','network','users']) }}"
             _fail_error_section:    "windows_gather"
-            _fail_error_message:    "{{ ansible_failed_result.msg | default('Windows 수집 예외') }}"
+            # 2026-08-11 (Phase 6-B): raw 예외 문자열. errors[].message 가 아니라
+            # **errors[].detail** 로 들어간다 (build_failed_output.yml). 사용자 문장은
+            # diagnosis.failure_reason 을 그대로 쓴다.
+            _fail_error_message:    "[task: {{ ansible_failed_task.name | default('unknown') }}] {{ ansible_failed_result.msg | default('Windows 수집 예외') }}"
 
         - name: "windows | rescue | build_failed_output"
           ansible.builtin.include_tasks:
@@ -649,6 +666,6 @@
                        'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],
+                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.','detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {}
                      })) | to_json }}"
