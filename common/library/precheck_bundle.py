@@ -74,12 +74,14 @@ author:
 
 from ansible.module_utils.basic import AnsibleModule
 import base64
+import http.client
 import json
 import math
 import socket
 import ssl
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
@@ -663,28 +665,55 @@ def http_post_soap(url, body, timeout, verify=False, extra_headers=None,
         SOAP 1.1(text/xml)을 쓴다. 한 helper 가 둘을 모두 보내려면 분기 지점이 필요하다.
       - ServiceContent 응답은 Identify 응답보다 커서 64KB 상한으로 자르면 XML 이
         잘려 파싱에 실패한다. 호출부가 채널에 맞는 상한을 준다.
+
+    2026-08-11 (Phase 6-A 실장비 검증): 전송을 urllib 에서 **http.client 로 교체**했다.
+      실측 사고 — lab Windows(WinRM) 가 이 helper 의 Identify 요청에 **HTTP 401 + 본문 0**
+      으로 응답해 정상 Windows 호스트가 전부 프로토콜 판정 실패로 떨어졌다.
+      원인: `urllib.request` 는 헤더 이름을 두 지점에서 강제 정규화한다
+      (`Request.add_header` 의 `key.capitalize()`, `AbstractHTTPHandler.do_open` 의
+      `name.title()`). 그 결과 `WSMANIDENTIFY` 가 **`Wsmanidentify`** 로 나가고,
+      WinRM 의 비인증 Identify 처리는 이 헤더 이름을 대소문자 그대로 본다.
+      양성 대조군: 같은 호스트/같은 본문에 헤더 이름만 보존해 보내면 **HTTP 200 +
+      완전한 IdentifyResponse**(ProductVendor=Microsoft Corporation)가 돌아온다.
+      → 요청 본문 / 판정 로직(`parse_identify_response`) / timeout / retry / 인증 시도 횟수는
+        그대로 두고 **전송 계층만** 바꾼다. http.client 도 stdlib 이라 rule 10 R2 유지.
+      주의: http.client 는 redirect 를 따라가지 않는다. 두 호출부(WinRM /wsman,
+      vSphere /sdk)는 POST 이고 redirect 를 쓰지 않으며, 실장비에서 3xx 관측 0건이다.
     """
-    ctx = _build_ssl_context(verify)
-    req = urllib.request.Request(url, data=body, method="POST")
-    req.add_header("Content-Type", content_type)
-    for name, value in (extra_headers or {}).items():
-        req.add_header(name, value)
+    parts = urllib.parse.urlsplit(url)
+    host, port = parts.hostname, parts.port
+    path = parts.path or "/"
+    if parts.query:
+        path = "{0}?{1}".format(path, parts.query)
+    headers = {"Content-Type": content_type}
+    headers.update(extra_headers or {})
+
+    conn = None
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-            raw = resp.read(max_bytes)
-            return True, None, {"status_code": resp.getcode(), "body": raw}
-    except urllib.error.HTTPError as e:
-        try:
-            raw = e.read(max_bytes)
-        except Exception:
-            raw = b""
-        return False, "HTTP {0}".format(e.code), {"status_code": e.code, "body": raw}
+        if parts.scheme == "https":
+            conn = http.client.HTTPSConnection(
+                host, port or 443, timeout=timeout, context=_build_ssl_context(verify)
+            )
+        else:
+            conn = http.client.HTTPConnection(host, port or 80, timeout=timeout)
+        conn.request("POST", path, body=body, headers=headers)
+        resp = conn.getresponse()
+        raw = resp.read(max_bytes)
+        status = resp.status
+        # 종전 urllib 경로와 동일한 성공 판정 (2xx 만 ok, 그 외는 evidence 로 status 보존)
+        if 200 <= status < 300:
+            return True, None, {"status_code": status, "body": raw}
+        return False, "HTTP {0}".format(status), {"status_code": status, "body": raw}
     except socket.timeout:
         return False, "요청 시간 초과 (timeout={0}s)".format(timeout), None
-    except urllib.error.URLError as e:
-        return False, "연결 실패: {0}".format(str(e.reason)[:200]), None
-    except (ssl.SSLError, OSError) as e:
-        return False, str(e)[:200], None
+    except (ssl.SSLError, http.client.HTTPException, OSError) as e:
+        return False, "연결 실패: {0}".format(str(e)[:200]), None
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001 — close 실패가 진단을 덮지 않게
+                pass
 
 
 def parse_identify_response(raw):
