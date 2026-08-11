@@ -364,8 +364,10 @@ def test_rst_reason_does_not_claim_server_responded():
     assert "서버는 응답하지만" not in text, (
         "RST 는 중간 방화벽/보안 장비가 생성했을 수 있어 서버 응답으로 확정 금지"
     )
-    assert "일부 연결 시도에서 연결 거부 응답이 확인되었습니다" in text, (
-        "관측한 사실(연결 거부 응답)은 표현해도 된다"
+    # Phase 5-A (2026-08-11): 문구는 site.yml 이 아니라 precheck_bundle 이 만든다.
+    assert "서버는 응답하지만" not in pb.REASON_PORT_REFUSED
+    assert "연결이 거부되었습니다" in pb.REASON_PORT_REFUSED, (
+        "관측한 사실(연결 거부)은 표현해도 된다"
     )
     for banned in ("—", "·", "–"):
         assert banned not in "SSH(22)/WinRM(5985, 5986) 관리 포트에 연결하지 못했습니다."

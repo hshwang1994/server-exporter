@@ -39,9 +39,10 @@ import precheck_bundle as pb  # noqa: E402
 FIXTURES = REPO / "tests" / "fixtures" / "esxi"
 LAB_SERVICE_CONTENT = (FIXTURES / "lab" / "esxi_7_0_3_service_content.xml").read_bytes()
 
+# Phase 5-A (2026-08-11): 앞 단계(TCP 관리 연결) 성공을 함께 알리는 문장으로 통일.
 ESXI_PROTOCOL_REASON = (
-    "예상한 vSphere API 응답을 확인하지 못했습니다. "
-    "ESXi 호스트의 서비스 상태를 확인하세요."
+    "관리 연결은 확인되었지만 예상한 vSphere API 응답을 확인하지 못했습니다. "
+    "ESXi 서비스 상태를 확인하세요."
 )
 
 

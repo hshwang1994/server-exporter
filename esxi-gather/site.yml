@@ -246,11 +246,11 @@
                  | combine((_diagnosis | default({}, true))
                            if ((_diagnosis | default({}, true)) is mapping) else {})
                  | combine({'failure_reason':
-                     ('ESXi 호스트에 접속하지 못했습니다. 자격증명, 계정 권한, lockdown 설정을 확인하세요.'
+                     ('vSphere API는 확인되었지만 ESXi 호스트에 접속하지 못했습니다. 자격증명과 계정 권한을 확인하세요.'
                       if not (_e_auth_ok | default(false) | bool)
-                      else ('ESXi 정보 수집에 실패했습니다. 계정 권한과 호스트 상태를 확인하세요.'
+                      else ('ESXi 호스트 접속은 확인되었지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.'
                             if not (_e_facts_ok | default(false) | bool)
-                            else 'ESXi 정보를 수집하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.')),
+                            else '정보 수집 후 결과를 처리하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.')),
                    'failure_stage':
                      ('auth' if not (_e_auth_ok | default(false) | bool) else 'gather'),
                    'failure_code':
@@ -295,7 +295,7 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
                        'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],

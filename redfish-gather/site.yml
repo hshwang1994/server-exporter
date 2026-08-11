@@ -250,25 +250,45 @@
         #
         # 2026-08-10 (Phase 2) 단계/코드:
         #   여기 도달했다는 것은 precheck 를 통과했다는 뜻이다(통과 못 했으면 failure_reason 이
-        #   이미 채워져 있어 when 가드가 막는다). 따라서 실행이 멈춘 지점은 **수집 단계**다
-        #   → failure_stage='gather', failure_code='GATHER_FAILED'.
-        #   redfish_gather 모듈은 인증과 수집을 한 작업 결과로 합쳐 반환하므로
-        #   (try_one_account.yml:38-40 이 보는 값은 '전체 수집 결과'), 자격 실패인지 수집 실패인지
-        #   구분할 수 없다. 그래서 auth 단계로 낮추지도 않고 auth_success=true 로 올리지도 않는다.
+        #   이미 채워져 있어 when 가드가 막는다). redfish_gather 모듈은 인증과 수집을 한 작업
+        #   결과로 합쳐 반환하므로(try_one_account.yml 이 보는 값은 '전체 수집 결과'),
+        #   기본값은 수집 단계(gather / GATHER_FAILED)이고 auth_success 는 null 을 유지한다.
+        #
+        # 2026-08-11 (Phase 5-A) 인증 거부 실증:
+        #   redfish_gather 가 module result 에 `auth_evidence.first_auth_status` 를 싣는다.
+        #   이는 **자격증명을 실은 첫 요청**이 받은 정수 HTTP status 로, 새 요청 없이
+        #   기존 응답을 관측만 한 값이다(인증 시도 횟수 불변 = 계정 잠금 위험 불변).
+        #   401 이면 BMC 가 그 자격증명을 명시적으로 거부한 것이므로 실행이 멈춘 단계는
+        #   **자격 확인 단계**다 → stage='auth', auth_success=false.
+        #   403 은 인증 이후 권한 부족일 수 있어 거부로 확정하지 않는다(null 유지).
+        #   빈 자격 경로(_rf_accounts 없음)의 401 은 "등록된 자격증명 거부" 가 아니므로
+        #   _rf_attempt(실제 후보 시도)만 근거로 삼는다.
+        - name: "redfish | rescue | 인증 거부 실증 판정"
+          ansible.builtin.set_fact:
+            _rf_auth_rejected: >-
+              {{ ((_rf_attempt | default({}, true)).auth_evidence
+                  | default({}, true)).first_auth_status | default(0) | int == 401 }}
+
         - name: "redfish | rescue | Portal 표시용 failure_reason 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
+              {%- set rejected = _rf_auth_rejected | default(false) | bool -%}
+              {%- set collected = _rf_collect_ok | default(false) | bool -%}
               {{ {'reachable': none, 'port_open': none, 'protocol_supported': none,
                   'auth_success': none, 'failure_stage': none, 'failure_code': none,
                   'failure_reason': none, 'details': {}}
                  | combine((_diagnosis | default({}, true))
                            if ((_diagnosis | default({}, true)) is mapping) else {})
-                 | combine({'failure_stage': 'gather',
-                            'failure_code': 'GATHER_FAILED',
+                 | combine({'failure_stage': ('auth' if (rejected and not collected) else 'gather'),
+                            'failure_code': ('AUTH_PROBE_FAILED' if (rejected and not collected)
+                                             else 'GATHER_FAILED'),
+                            'auth_success': (false if (rejected and not collected) else none),
                             'failure_reason':
-                     ('Redfish 정보 수집에 실패했습니다. 자격증명, 계정 권한, 펌웨어 호환성을 확인하세요.'
-                      if not (_rf_collect_ok | default(false) | bool)
-                      else 'Redfish 데이터를 정리하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.')}) }}
+                     ('Redfish 서비스는 확인되었지만 인증이 거부되었습니다. 등록된 자격증명을 확인하세요.'
+                      if (rejected and not collected)
+                      else ('Redfish 서비스는 확인되었지만 정보 수집에 실패했습니다. 자격증명, 계정 권한과 수집 로그를 확인하세요.'
+                            if not collected
+                            else '정보 수집 후 결과를 처리하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.'))}) }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
         - name: "redfish | rescue | set failed vars"
@@ -311,7 +331,7 @@
                        'vendor': (((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default('')) or ((_va | default({})).vendor_output_display | default({})).get(_rf_detected_vendor | default(''), _rf_detected_vendor | default(none))),
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
                        'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],

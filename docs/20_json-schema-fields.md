@@ -221,7 +221,7 @@ if response["data"]["hardware"].get("health") == "Critical":
   "auth_success":       null,    // 4단계: 미수행이면 null (false 가 아니다 — 아래 주의)
   "failure_stage":      "port",  // 실행이 멈춘 단계 이름 (원인 아님)
   "failure_code":       "TCP_CONNECTION_REFUSED",  // 시스템 분기용 안정 식별자 (성공 시 null)
-  "failure_reason":     "호스트는 응답하지만 서비스 포트가 닫혀 있습니다. 방화벽 또는 서비스 미기동 가능성.",
+  "failure_reason":     "대상 관리 서비스 연결이 거부되었습니다. 방화벽과 서비스 상태를 확인하세요.",
   "details": { ... }             // 채널별 부가 정보 (선택된 adapter, BMC product 명 등)
 }
 ```

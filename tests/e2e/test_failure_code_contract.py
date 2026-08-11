@@ -350,7 +350,12 @@ def test_phase1_reason_contract_still_holds():
     samples = [
         ("redfish/gather", _render_diagnosis(
             "redfish-gather/site.yml", _RF_TASK,
-            {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None}, "_rf_collect_ok": False})),
+            {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
+             "_rf_collect_ok": False, "_rf_auth_rejected": False})),
+        ("redfish/auth-rejected", _render_diagnosis(
+            "redfish-gather/site.yml", _RF_TASK,
+            {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
+             "_rf_collect_ok": False, "_rf_auth_rejected": True})),
         ("esxi/auth", _render_diagnosis(
             "esxi-gather/site.yml", _ESXI_TASK,
             {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None,
@@ -359,11 +364,10 @@ def test_phase1_reason_contract_still_holds():
         ("linux/gather", _render_diagnosis(
             "os-gather/site.yml", _OS_TASKS["linux"],
             {"_os_auth_ok": True, "_os_attempts_meta": {}})),
-        ("os/port", _render_diagnosis(
-            "os-gather/site.yml",
-            "failed-output | Portal 표시용 failure_reason 을 OS 문맥으로",
-            {"_diagnosis": {"failure_stage": "reachable", "failure_code": "TCP_CONNECT_FAILED",
-                            "failure_reason": None, "details": {"channel": "os"}}})),
+        # 2026-08-11 (Phase 5-A): OS 포트 실패 문구는 site.yml 이 아니라 precheck 가 만든다.
+        ("os/port", {"failure_reason": pb.REASON_TCP_UNCONFIRMED}),
+        ("os/dns", {"failure_reason": pb.REASON_DNS_FAILED}),
+        ("os/refused", {"failure_reason": pb.REASON_PORT_REFUSED}),
     ]
     for label, diag in samples:
         _assert_grid_ready(diag["failure_reason"], label)

@@ -139,6 +139,36 @@ _FORBIDDEN_SEPARATORS = ("—", "·", "–")
 # 사용자에게 아무 의미 없는 내부 잡음 (Grid 에 그대로 나가면 안 됨)
 _LEAKY_TOKENS = ("Traceback", "ansible_failed", "{{", "}}", "None", "null")
 
+# 2026-08-11 (Phase 5-A) 사용자 확정 — Portal Grid 문구에서 금지되는 것들.
+#   숫자 전체를 막는 일반 정규식은 쓰지 않는다(§26). 실제로 쓰는 관리 포트만 막는다.
+_MANAGEMENT_PORTS = ("22", "443", "5985", "5986")
+# 내부 구현 용어 / 프로토콜 저수준 용어 / 변수명
+_INTERNAL_TERMS = (
+    "RST", "SYN", "SOAP", "XML", "Namespace", "ServiceRoot", "ServiceContent",
+    "_output", "rescue", "wait_for", "set_fact", "task:", "Exception",
+    "urllib", "pyVmomi", "vim25", "Output Builder", "IdentifyResponse",
+)
+
+
+def _assert_no_ports(reason: str, label: str) -> None:
+    """§26 — Portal Grid 문구에 관리 포트 번호가 들어가면 안 된다."""
+    for port in _MANAGEMENT_PORTS:
+        assert port not in reason, (
+            f"[{label}] failure_reason 에 관리 포트 번호 {port} 노출 — "
+            f"포트는 errors[].message / detail 에만 남긴다: {reason!r}"
+        )
+
+
+def _assert_no_technical_noise(reason: str, label: str) -> None:
+    """§2 / §27 — HTTP status, timeout 초, 내부 기술 용어, 태스크명 금지."""
+    assert not re.search(r"HTTP\s*\d{3}", reason), (
+        f"[{label}] failure_reason 에 HTTP status 노출: {reason!r}")
+    assert not re.search(r"\b\d+(\.\d+)?\s*(초|s\b|sec)", reason), (
+        f"[{label}] failure_reason 에 timeout 초 값 노출: {reason!r}")
+    for term in _INTERNAL_TERMS:
+        assert term not in reason, (
+            f"[{label}] failure_reason 에 내부 기술 용어 {term!r} 노출: {reason!r}")
+
 
 def _assert_grid_ready(reason: Any, label: str) -> None:
     assert isinstance(reason, str), f"[{label}] failure_reason 이 문자열이 아님: {reason!r}"
@@ -156,6 +186,33 @@ def _assert_grid_ready(reason: Any, label: str) -> None:
     )
     # 원문 기술 오류 통째로 싣기 금지 (errors[].detail 영역)
     assert len(reason) <= 200, f"[{label}] failure_reason 이 너무 김 ({len(reason)}자): {reason!r}"
+    _assert_no_ports(reason, label)
+    _assert_no_technical_noise(reason, label)
+
+
+# ---------------------------------------------------------------------------
+# §29 단계 진행 관계 — 문장이 주장하는 성공은 Machine Diagnosis 로 증명돼야 한다
+# ---------------------------------------------------------------------------
+# 왼쪽 표현이 문장에 있으면 오른쪽 관측값이 반드시 참이어야 한다.
+_CLAIM_REQUIREMENTS: tuple[tuple[str, str], ...] = (
+    ("관리 연결은 확인되었지만", "port_open"),
+    ("SSH 서비스는 확인되었지만", "protocol_supported"),
+    ("WinRM 서비스는 확인되었지만", "protocol_supported"),
+    ("Redfish 서비스는 확인되었지만", "protocol_supported"),
+    ("vSphere API는 확인되었지만", "protocol_supported"),
+    ("관리 서비스는 확인되었지만", "protocol_supported"),
+    ("접속은 확인되었지만", "auth_success"),
+)
+
+
+def _assert_claims_match_observation(diag: dict[str, Any], label: str) -> None:
+    reason = diag.get("failure_reason") or ""
+    for phrase, field in _CLAIM_REQUIREMENTS:
+        if phrase in reason:
+            assert diag.get(field) is True, (
+                f"[{label}] 문구가 '{phrase}' 로 앞 단계 성공을 주장하는데 "
+                f"diagnosis.{field}={diag.get(field)!r} — 관측과 모순"
+            )
 
 
 def _assert_diagnosis_shape(diag: Any, label: str) -> None:
@@ -348,18 +405,26 @@ def test_case07_10_os_failure_has_reason(os_type, auth_ok, label):
 
     _assert_diagnosis_shape(diag, tag)
     _assert_grid_ready(diag["failure_reason"], tag)
-    # PLAY 1 wait_for 가 TCP 연결 성공을 실제 관측한 경로다
+    _assert_claims_match_observation(diag, tag)
+    # PLAY 1 precheck 가 TCP 연결 성공을 실제 관측한 경로다
     assert diag["reachable"] is True and diag["port_open"] is True, tag
+    # Phase 3-B 이후 PLAY 1 은 SSH identification / WinRM Identify 까지 확인해야 통과한다.
+    # 즉 PLAY 2/3 에 도달했다는 것 자체가 프로토콜 관측 성공을 뜻한다 (자격 결과와 무관).
+    assert diag["protocol_supported"] is True, f"[{tag}] 프로토콜은 precheck 가 이미 확인했다"
     if auth_ok:
         assert diag["auth_success"] is True, f"[{tag}] 자격 probe 통과는 관측된 사실"
-        assert diag["protocol_supported"] is True
         # Phase 2 (2026-08-10): enum 에 gather 가 추가되어 수집 단계 실패를 표현할 수 있다
         assert diag["failure_stage"] == "gather", f"[{tag}] 수집 단계 실패는 gather"
+        assert "접속은 확인되었지만" in diag["failure_reason"], (
+            f"[{tag}] 인증 성공이 관측됐으므로 그 사실을 사용자에게 알린다")
     else:
         # 요구사항 6 — 잘못된 자격 / 연결 끊김 / 제한 쉘을 구분 못 하므로 false 금지
         assert diag["auth_success"] is None, f"[{tag}] 인증 거부를 관측하지 못했다"
-        assert diag["protocol_supported"] is False
         assert diag["failure_stage"] == "auth", f"[{tag}] 실행이 멈춘 단계"
+        assert "접속은 확인되었지만" not in diag["failure_reason"], (
+            f"[{tag}] auth_success=null 인데 접속 성공을 암시하면 안 된다")
+        expected_service = "SSH" if os_type == "linux" else "WinRM"
+        assert f"{expected_service} 서비스는 확인되었지만" in diag["failure_reason"], tag
     assert diag["details"]["channel"] == "os"
     assert diag["details"]["detected_os"] == os_type
 
@@ -375,22 +440,57 @@ def test_os_rescue_windows_checked_ports_follow_actual_port():
 # ═══════════════════════════════════════════════════════════════════════════
 # Case 11 — OS 관리 포트 전체 실패 (PLAY 1.5)
 # ═══════════════════════════════════════════════════════════════════════════
-# Phase 3-A (2026-08-10): OS 포트 전멸 진단은 공통 precheck 가 만들고, PLAY 1.5 는
-# Portal 표시 문구만 OS 문맥으로 덮어쓴다. 아래는 그 덮어쓰기 태스크를 렌더한다.
-_OS_PORTFAIL_TASK = "failed-output | Portal 표시용 failure_reason 을 OS 문맥으로"
+# Phase 5-A (2026-08-11): PLAY 1.5 의 문구 덮어쓰기 태스크를 **제거**했다. 종전 문구는
+# 관리 포트 번호를 Portal Grid 에 그대로 노출했고, 전 포트 무응답을 "모두 응답이 없습니다"
+# 로 단정했다. 이제 공통 precheck 가 관측 종류에 맞는 사용자 문장을 직접 만들고 PLAY 1.5 는
+# 그 값을 그대로 쓴다. 따라서 아래 검증도 **모듈 실제 실행 결과**를 본다.
+_OS_PORTFAIL_TASK_REMOVED = "Portal 표시용 failure_reason 을 OS 문맥으로"
 
 
 def _os_portfail_diag(stage: str, code: str) -> dict[str, Any]:
-    """공통 precheck 가 만든 OS 포트 전멸 진단 + PLAY 1.5 문구 덮어쓰기."""
-    base = {
-        "reachable": stage != "reachable", "port_open": False,
-        "protocol_supported": False, "auth_success": None,
-        "failure_stage": stage, "failure_code": code,
-        "failure_reason": "공통 문구",
-        "details": {"channel": "os", "checked_ports": [5986, 5985, 22],
-                    "detected_os": None, "detected_port": None},
-    }
-    return _render_diagnosis("os-gather/site.yml", _OS_PORTFAIL_TASK, {"_diagnosis": base})
+    """OS 포트 전멸 경로를 precheck_bundle 로 실제 실행해 진단을 얻는다."""
+    kind = {
+        "TCP_CONNECT_FAILED": (False, "연결 시간 초과", pb.TCP_FAIL_TIMEOUT),
+        "DNS_RESOLUTION_FAILED": (False, "DNS 해석 실패", pb.TCP_FAIL_DNS),
+        "TCP_CONNECTION_REFUSED": (False, "연결 거부됨", pb.TCP_FAIL_REFUSED),
+    }[code]
+
+    import unittest.mock as _mock
+    fake = _mock.patch.object(pb, "tcp_check_budget", lambda *_a, **_k: kind)
+
+    class _Fake:
+        params = dict(host="192.0.2.30", channel="os", ports=[], timeout_port=2.0,
+                      timeout_protocol=5.0, timeout_auth=8.0, username=None,
+                      password=None, verify_ssl=False, probe_protocol=True,
+                      port_poll_interval=1.0)
+
+        def exit_json(self, **kw):
+            raise _ExitJson(kw)
+
+    with fake, _mock.patch.object(pb, "AnsibleModule", lambda **_kw: _Fake()):
+        with pytest.raises(_ExitJson) as exc:
+            pb.run_module()
+    raw = exc.value.result
+    assert raw["failure_stage"] == stage and raw["failure_code"] == code
+    return pb_build_diagnosis(raw)
+
+
+def pb_build_diagnosis(raw: dict[str, Any]) -> dict[str, Any]:
+    """filter_plugins/diagnosis_mapper 의 build_diagnosis 를 그대로 사용."""
+    sys.path.insert(0, str(REPO / "filter_plugins"))
+    from diagnosis_mapper import build_diagnosis  # noqa: E402
+    return build_diagnosis(raw, "os")
+
+
+def test_os_portfail_override_task_is_gone():
+    """§26 — 관리 포트 번호를 Grid 에 노출하던 덮어쓰기 태스크가 다시 생기면 실패."""
+    text = (REPO / "os-gather/site.yml").read_text(encoding="utf-8")
+    for play in _plays("os-gather/site.yml"):
+        for task in _iter_tasks(play.get("tasks", [])):
+            assert _OS_PORTFAIL_TASK_REMOVED not in (task.get("name") or ""), (
+                "PLAY 1.5 의 failure_reason 덮어쓰기가 되살아났다 — 포트 번호 노출 회귀 위험"
+            )
+    assert "SSH(22)/WinRM(5985, 5986) 관리 포트에 연결하지 못했습니다" not in text
 
 
 @pytest.mark.parametrize("stage,code", [
@@ -417,15 +517,20 @@ def test_os_portfail_reason_matches_observation():
     refused = _os_portfail_diag("port", "TCP_CONNECTION_REFUSED")["failure_reason"]
     dns = _os_portfail_diag("reachable", "DNS_RESOLUTION_FAILED")["failure_reason"]
 
-    assert "응답이 없습니다" in no_resp
+    # TCP 연결 미확인 — 전원이 꺼졌다거나 방화벽이 원인이라고 단정하지 않는다.
+    assert no_resp == pb.REASON_TCP_UNCONFIRMED
+    assert "관리 통신을 확인할 수 없습니다" in no_resp
+    assert "전원" not in no_resp, "관측하지 않은 원인을 단정하지 않는다"
     # RST 는 중간 방화벽/보안 장비가 낼 수도 있어 "서버가 응답했다"고 단정하지 않는다.
-    # 관측한 사실(연결 거부 응답 확인)까지만 표현한다.
-    assert "연결 거부 응답이 확인되었습니다" in refused
+    assert refused == pb.REASON_PORT_REFUSED
     assert "서버는 응답하지만" not in refused, "RST 를 서버 자체 응답으로 확정하면 안 된다"
-    assert "주소를 확인하지 못했습니다" in dns, (
-        "주소 해석 실패는 패킷을 보낸 적도 없다. '응답이 없습니다' 는 사실과 다르다"
-    )
+    assert "통신은 되지만" not in refused
+    # 주소 해석 실패는 패킷을 보낸 적도 없다.
+    assert dns == pb.REASON_DNS_FAILED
+    assert "주소를 확인할 수 없습니다" in dns
     assert len({no_resp, refused, dns}) == 3
+    for reason in (no_resp, refused, dns):
+        _assert_grid_ready(reason, "OS portfail")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

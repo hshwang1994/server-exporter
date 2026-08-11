@@ -50,7 +50,8 @@
     #   - 포트당 타임아웃 2초          : timeout_port 로 명시 전달 (모듈 기본값 3.0 을 쓰지 않는다)
     #   - 관측 위치                   : connection: local + delegate_to: localhost 모두 controller
     #   - 재시도 없음                 : _check_ports 는 포트당 1회 시도
-    #   - 프로토콜 미검증             : probe_protocol=false (SSH/WinRM 실제 handshake 는 다음 Phase)
+    #   (Phase 3-A 당시의 "프로토콜 미검증" 항목은 Phase 3-B 에서 해제됐다 — 아래
+    #    _precheck_probe_protocol: true 가 SSH identification / WinRM Identify 를 실제로 확인한다.)
     #
     # 달라진 것 (의도된 개선):
     #   - 실패 종류를 구조화해 관측 → failure_stage / failure_code 가 실제 관측을 반영
@@ -157,7 +158,9 @@
         _out_vendor:            null
         _fail_sec_supported:    "{{ ['system','cpu','memory','storage','network','users'] }}"
         _fail_error_section:    "os_detect"
-        _fail_error_message:    "SSH(22)/WinRM(5985, 5986) 포트가 모두 응답하지 않습니다. 대상 서버의 방화벽, SSH/WinRM 서비스 상태, 네트워크 연결을 확인하세요."
+        # 2026-08-11 (Phase 5-A): Portal Grid 용 diagnosis.failure_reason 에서 관리 포트 번호를
+        # 뺐으므로, 운영자가 필요로 하는 포트 정보는 errors[].message 가 보존한다 (역할 분리).
+        _fail_error_message:    "SSH(22), WinRM(5985, 5986) 관리 포트 연결에 실패했습니다. 대상 서비스와 방화벽 정책을 확인하세요."
 
     # 2026-08-10 (Phase 3-A): 종전에는 이 자리에서 _diagnosis 를 통째로 하드코딩했다.
     # 이제 PLAY 1 의 공통 precheck 가 만든 진단(_diagnosis)이 host fact 로 그대로 넘어오므로
@@ -168,21 +171,12 @@
     #   - 주소 해석 실패      → stage=reachable, code=DNS_RESOLUTION_FAILED
     # auth_success 는 인증을 시도하지 않으므로 null 유지 (모듈 초기값).
     #
-    # failure_reason 만 OS 문맥에 맞게 덮어쓴다. 공통 문구는 어느 포트를 봤는지 알려주지 못하고,
-    # 종전 문구("모두 응답이 없습니다")는 RST 를 관측한 경우 사실과 달라지기 때문이다.
-    - name: "failed-output | Portal 표시용 failure_reason 을 OS 문맥으로"
-      ansible.builtin.set_fact:
-        _diagnosis: >-
-          {%- set d = _diagnosis | default({}, true) -%}
-          {%- set d = d if (d is mapping) else {} -%}
-          {{ d | combine({'failure_reason':
-                 ('대상 서버의 주소를 확인하지 못했습니다. 호스트 이름과 DNS 설정을 확인하세요.'
-                  if (d.failure_code | default('')) == 'DNS_RESOLUTION_FAILED'
-                  else ('SSH(22)/WinRM(5985, 5986) 관리 포트에 연결하지 못했습니다. 일부 연결 시도에서 연결 거부 응답이 확인되었습니다. 서비스 기동 상태와 네트워크 정책을 확인하세요.'
-                        if (d.failure_stage | default('')) == 'port'
-                        else ('관리 포트에는 연결되었지만 예상한 SSH 또는 WinRM 응답을 확인하지 못했습니다. SSH와 WinRM 서비스 설정을 확인하세요.'
-                              if (d.failure_stage | default('')) == 'protocol'
-                              else 'SSH(22)/WinRM(5985, 5986) 모두 응답이 없습니다. 서버 전원, 네트워크, 서비스 상태를 확인하세요.')))}) }}
+    # 2026-08-11 (Phase 5-A): failure_reason 덮어쓰기를 **제거**했다.
+    #   종전 문구는 관리 포트 번호(22 / 5985 / 5986)를 Portal Grid 에 그대로 노출했고,
+    #   전 포트 무응답 경우를 "모두 응답이 없습니다" 로 단정했다. 이제 precheck 가
+    #   실제 관측(DNS 실패 / 연결 미확인 / 연결 거부 / 프로토콜 미확인)에 맞는 사용자 문장을
+    #   직접 만든다(precheck_bundle.REASON_* / CHANNEL_PROTOCOL_MESSAGES). 포트 번호는
+    #   errors[].message 와 errors[].detail 에만 남는다.
 
     - name: "failed-output | init fragments"
       ansible.builtin.include_tasks:
@@ -369,26 +363,28 @@
         # → Portal 은 빈 칸을 보여주고, 소비자가 diagnosis.* 를 참조하면 null 역참조.
         #
         # 값 근거 (확정 가능한 것만 적는다):
-        #   reachable / port_open = true  — PLAY 1 wait_for 가 TCP 연결 성공을 실제 관측(:40-69)
-        #   protocol_supported            — 자격 probe 가 통과했으면 SSH 로 명령이 실제 실행된
-        #                                   것이므로 true, 아니면 "관측 못 함"이라 false
+        #   reachable / port_open = true  — PLAY 1 precheck 가 TCP 연결 성공을 실제 관측
+        #   protocol_supported    = true  — 2026-08-11 (Phase 5-A) 정정. 종전엔 자격 probe 결과를
+        #                                   그대로 썼는데(ok 이면 true), Phase 3-B 이후 PLAY 1 이
+        #                                   **SSH identification 을 실제로 확인**해야만 여기까지
+        #                                   오므로 자격 결과와 무관하게 관측된 사실이다
+        #                                   (os-gather PLAY 1 은 _precheck_probe_protocol: true).
         #   auth_success                  — 통과 시 true. **실패 시 false 가 아니라 null**:
-        #                                   try_one_credential.yml:59-69 의 판정식은 잘못된 자격 /
+        #                                   try_one_credential.yml 의 판정식은 잘못된 자격 /
         #                                   연결 끊김 / timeout / 제한 쉘(nologin, rc≠0) 을 구분하지
         #                                   못한다 → 인증 거부를 관측했다고 말할 수 없다
-        #   failure_stage                 — 실행이 멈춘 단계. 자격 probe 단계면 'auth'.
-        #                                   그 뒤(수집) 단계는 현재 enum 에 표현값이 없어 null 유지
+        #   failure_stage                 — 실행이 멈춘 단계. 자격 probe 단계면 'auth', 그 뒤면 'gather'.
         - name: "linux | rescue | Portal 표시용 diagnosis 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
               {%- set ok = _os_auth_ok | default(false) | bool -%}
               {{ {'reachable': true, 'port_open': true,
-                  'protocol_supported': ok,
+                  'protocol_supported': true,
                   'auth_success': (true if ok else none),
                   'failure_stage': ('gather' if ok else 'auth'),
                   'failure_code': ('GATHER_FAILED' if ok else 'AUTH_PROBE_FAILED'),
-                  'failure_reason': ('Linux 정보를 수집하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.' if ok
-                                     else 'Linux 서버에 SSH로 접속하지 못했습니다. 자격증명, SSH 설정, 네트워크 상태를 확인하세요.'),
+                  'failure_reason': ('Linux 서버 접속은 확인되었지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.' if ok
+                                     else 'SSH 서비스는 확인되었지만 Linux 서버에 접속하지 못했습니다. 자격증명과 SSH 설정을 확인하세요.'),
                   'details': {'channel': 'os', 'detected_os': 'linux',
                               'selected_port': 22,
                               'checked_ports': (_precheck_raw.checked_ports | default([5986, 5985, 22])),
@@ -429,7 +425,7 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
                        'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],
@@ -603,12 +599,12 @@
               {%- set ok = _os_auth_ok | default(false) | bool -%}
               {%- set port = ansible_port | default(5986) | int -%}
               {{ {'reachable': true, 'port_open': true,
-                  'protocol_supported': ok,
+                  'protocol_supported': true,
                   'auth_success': (true if ok else none),
                   'failure_stage': ('gather' if ok else 'auth'),
                   'failure_code': ('GATHER_FAILED' if ok else 'AUTH_PROBE_FAILED'),
-                  'failure_reason': ('Windows 정보를 수집하는 중 오류가 발생했습니다. 수집 로그를 확인하세요.' if ok
-                                     else 'Windows 서버에 WinRM으로 접속하지 못했습니다. 자격증명과 WinRM 설정을 확인하세요.'),
+                  'failure_reason': ('Windows 서버 접속은 확인되었지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.' if ok
+                                     else 'WinRM 서비스는 확인되었지만 Windows 서버에 접속하지 못했습니다. 자격증명과 WinRM 설정을 확인하세요.'),
                   'details': {'channel': 'os', 'detected_os': 'windows',
                               'selected_port': port,
                               'checked_ports': (_precheck_raw.checked_ports
@@ -650,7 +646,7 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
                        'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 수집기 내부 오류이므로 실행 로그를 확인하세요.'}],

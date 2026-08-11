@@ -101,31 +101,61 @@ CHANNEL_DEFAULT_PORTS = {
     "esxi": [443],
 }
 
-# 채널별 프로토콜 진단 실패 메시지
+# ── Portal Grid 표시용 실패 사유 (diagnosis.failure_reason) ──────────────────
 #
 # 이 값들은 그대로 diagnosis.failure_reason 이 되고, Portal 실패 Grid 의 "실패 사유" 칸에
 # **그대로 노출된다** (2026-08-10 사용자 확인 — Portal 은 failure_reason 만 사용).
-# 따라서 (a) 짧은 사용자용 요약이어야 하고 (b) 관측하지 못한 원인을 단정하면 안 된다.
 #
-# 2026-08-10 정정: redfish 값이 "이 장비는 Redfish를 지원하지 않습니다." 였는데 이는
-#   **관측 범위를 넘는 단정**이다. 이 분기는 ServiceRoot 응답을 확인하지 못했을 때 잡히며,
-#   그 원인은 미지원 외에도 TLS 협상 실패 / 5xx / 타임아웃 / 서비스 비활성일 수 있다
-#   (probe_redfish 는 401·403·405·406·503 은 "살아있음"으로 통과시키므로 여기 도달했다는 것은
-#    그 외의 실패라는 뜻일 뿐이다). 관측 사실만 남기고 확인 방향을 안내하도록 교체.
+# 작성 규칙 (2026-08-11 Phase 5-A 사용자 확정):
+#   구조     : "확인된 상태" + "실패한 현재 단계" + "확인할 항목" (1~2 문장)
+#   금지     : 관리 포트 번호 / IP / HTTP status / timeout 초 / RST·SOAP·XML 같은 내부 용어 /
+#              Ansible 태스크명 / raw exception / 긴 대시(—) / 가운데점(·)
+#   앞 단계  : **실제로 관측된 성공만** 문장에 넣는다. TCP 연결 실패를 두고 "통신은 되지만"
+#              이라고 쓰지 않고, RST(거부)를 두고 "서버는 응답하지만" 이라고 쓰지 않는다
+#              (중간 방화벽이 대신 응답했을 수 있어 최종 서버 응답으로 확정할 수 없다).
+#   허용 표현: port_open=true 관측 후에만 "관리 연결은 확인되었지만",
+#              protocol_supported=true 관측 후에만 "<서비스>는 확인되었지만",
+#              auth_success=true 관측 후에만 "접속은 확인되었지만".
+#   기술 정보: 포트 목록 / 원본 오류는 errors[].message 와 errors[].detail 에 보존한다.
 #
-# 문체 원칙 (2026-08-10 사용자 지시): Portal Grid 를 읽는 사람은 일반 사용자다.
-#   긴 대시(—) / 가운데점(·) 같은 특수 구분자를 쓰지 말고 완전한 한국어 문장으로 쓴다.
-#   "관측한 사실" 한 문장 + "확인할 것" 한 문장 구성을 기본으로 한다.
-#
-# 2026-08-10 재정정: "응답을 반환하지 않았습니다" 도 여전히 관측보다 강한 표현이다.
-#   이 분기는 HTTP 응답 자체는 받았지만 기대한 프로토콜 응답으로 판정하지 못한 경우에도
-#   잡힌다(예: 허용 status 목록 밖의 코드). "응답이 아예 없었다"는 사실과 "기대한 프로토콜
-#   응답을 확인하지 못했다"는 사실을 구분해, 후자만 진술하도록 교체.
+# 2026-08-10 이전 이력: redfish 문구가 "이 장비는 Redfish를 지원하지 않습니다." 였는데
+#   관측 범위를 넘는 단정이라 교체했고, "응답을 반환하지 않았습니다" 도 응답 자체를 못 받은
+#   경우와 기대한 응답이 아닌 경우를 뭉개서 "확인하지 못했습니다" 로 교체했다.
+
+# reachable 단계 — 관리 연결 자체를 아직 확인하지 못했다.
+REASON_DNS_FAILED = (
+    "대상 서버 주소를 확인할 수 없습니다. 호스트 이름과 DNS 설정을 확인하세요."
+)
+REASON_TCP_UNCONFIRMED = (
+    "대상 서버의 관리 통신을 확인할 수 없습니다. 네트워크와 방화벽 설정을 확인하세요."
+)
+# port 단계 — 연결 거부를 관측했다. "서버는 응답하지만" 이라고 쓰지 않는다.
+REASON_PORT_REFUSED = (
+    "대상 관리 서비스 연결이 거부되었습니다. 방화벽과 서비스 상태를 확인하세요."
+)
+
+# protocol 단계 — TCP 관리 연결까지는 실제로 성공했으므로 그 사실을 함께 알린다.
 CHANNEL_PROTOCOL_MESSAGES = {
-    "redfish": "예상한 Redfish API 응답을 확인하지 못했습니다. Redfish 서비스 활성화 여부와 펌웨어 호환성을 확인하세요.",
-    "os": "예상한 SSH 또는 WinRM 응답을 확인하지 못했습니다. 해당 서비스의 기동 상태를 확인하세요.",
-    "esxi": "예상한 vSphere API 응답을 확인하지 못했습니다. ESXi 호스트의 서비스 상태를 확인하세요.",
+    "redfish": (
+        "관리 연결은 확인되었지만 예상한 Redfish 응답을 확인하지 못했습니다. "
+        "Redfish 서비스 설정과 상태를 확인하세요."
+    ),
+    "os": (
+        "관리 연결은 확인되었지만 예상한 SSH 또는 WinRM 응답을 확인하지 못했습니다. "
+        "관리 서비스 설정과 상태를 확인하세요."
+    ),
+    "esxi": (
+        "관리 연결은 확인되었지만 예상한 vSphere API 응답을 확인하지 못했습니다. "
+        "ESXi 서비스 상태를 확인하세요."
+    ),
 }
+
+
+def _reason_for_tcp_failure(failure_code):
+    """reachable 단계 사유 — 주소 해석 실패와 그 밖의 연결 실패를 구분한다."""
+    if failure_code == "DNS_RESOLUTION_FAILED":
+        return REASON_DNS_FAILED
+    return REASON_TCP_UNCONFIRMED
 
 
 # TCP 연결 실패 종류 (구조화 — 오류 문자열 파싱 대신 이 값으로 분류한다)
@@ -1102,10 +1132,14 @@ def _try_redfish_auth(host, open_port, username, password, timeout_auth, verify_
         # 401 이든 timeout 이든 **멈춘 단계**는 같다. 원인 확정 여부는 auth_success 가 표현한다.
         # 403 은 인증 후 권한 부족일 수 있어 거부로 확정하지 않는다 (auth_success 는 None 유지).
         result["failure_code"] = "AUTH_PROBE_FAILED"
+        # 이 분기는 protocol_supported=true 를 이미 관측한 뒤에만 도달한다 →
+        # "Redfish 서비스는 확인되었지만" 이라고 쓸 수 있다 (rule: 관측한 성공만 표현).
         result["failure_reason"] = (
-            "BMC가 자격증명을 거부했습니다(HTTP 401). 계정과 비밀번호를 확인하세요."
+            "Redfish 서비스는 확인되었지만 인증이 거부되었습니다. "
+            "등록된 자격증명을 확인하세요."
             if rejected else
-            "BMC 인증 단계에서 응답을 확인하지 못했습니다. 자격증명과 BMC 상태를 확인하세요."
+            "Redfish 서비스는 확인되었지만 인증 결과를 확인하지 못했습니다. "
+            "자격증명과 계정 권한을 확인하세요."
         )
         result["detail"] = err
         return False
@@ -1157,10 +1191,7 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
         result["protocol_supported"] = False   # 검사했고, 확인하지 못했다
         result["failure_stage"] = "protocol"
         result["failure_code"] = "PROTOCOL_CHECK_FAILED"
-        result["failure_reason"] = (
-            "관리 포트에는 연결되었지만 예상한 SSH 또는 WinRM 응답을 확인하지 못했습니다. "
-            "SSH와 WinRM 서비스 설정을 확인하세요."
-        )
+        result["failure_reason"] = CHANNEL_PROTOCOL_MESSAGES["os"]
         result["detail"] = "; ".join(proto_errors + tcp_errors)
         module.exit_json(**result)
 
@@ -1169,17 +1200,11 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
         result["reachable"] = True
         result["failure_stage"] = "port"
         result["failure_code"] = "TCP_CONNECTION_REFUSED"
-        result["failure_reason"] = (
-            "호스트는 응답하지만 서비스 포트가 열려 있지 않습니다. "
-            "방화벽 설정과 서비스 기동 상태를 확인하세요."
-        )
+        result["failure_reason"] = REASON_PORT_REFUSED
     else:
         result["failure_stage"] = "reachable"
         result["failure_code"] = _tcp_failure_code(tcp_kinds)
-        result["failure_reason"] = (
-            "대상 호스트에 연결할 수 없습니다. "
-            "서버 전원 상태와 네트워크 경로를 확인하세요."
-        )
+        result["failure_reason"] = _reason_for_tcp_failure(result["failure_code"])
     result["detail"] = "; ".join(tcp_errors)
     module.exit_json(**result)
 
@@ -1241,21 +1266,17 @@ def run_module():
         result["failure_stage"] = "reachable"
         # DNS_RESOLUTION_FAILED 또는 TCP_CONNECT_FAILED — RST 를 못 봤으므로 REFUSED 는 나올 수 없다
         result["failure_code"] = _tcp_failure_code(port_kinds)
-        result["failure_reason"] = (
-            "대상 호스트에 연결할 수 없습니다. "
-            "서버 전원 상태와 네트워크 경로를 확인하세요."
-        )
+        result["failure_reason"] = _reason_for_tcp_failure(result["failure_code"])
         result["detail"] = "; ".join(port_errors)
         module.exit_json(**result)
     if not target_port_open:
         result["reachable"] = True
         result["failure_stage"] = "port"
-        # 이 분기는 RST 를 관측했기에만 도달한다 (_check_ports 의 any_response 조건)
+        # 이 분기는 RST 를 관측했기에만 도달한다 (_check_ports 의 any_response 조건).
+        # 다만 RST 를 보낸 주체가 최종 서버인지 중간 방화벽인지는 확정할 수 없으므로
+        # 사유 문장에 "서버는 응답하지만" 같은 표현을 쓰지 않는다.
         result["failure_code"] = "TCP_CONNECTION_REFUSED"
-        result["failure_reason"] = (
-            "호스트는 응답하지만 서비스 포트가 열려 있지 않습니다. "
-            "방화벽 설정과 서비스 기동 상태를 확인하세요."
-        )
+        result["failure_reason"] = REASON_PORT_REFUSED
         result["detail"] = "; ".join(port_errors)
         module.exit_json(**result)
 

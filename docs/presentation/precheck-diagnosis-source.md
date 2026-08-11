@@ -20,6 +20,7 @@
 > | Phase 3-B: OS 를 SSH identification / WinRM Identify 로 판정 | §6-4 |
 > | Phase 4-A: Redfish 를 ServiceRoot **본문** 검증으로 판정 (status whitelist 제거) | §1-2 #5 §6-2 §17 |
 > | Phase 4-B: ESXi 를 vim25 SOAP `RetrieveServiceContent` **본문** 검증으로 판정 (status whitelist 제거) | §1-2 #5 §6-3 §17 (ESX-004~007) |
+> | Phase 5-A: `failure_reason` 을 Portal Grid 용 문장으로 전면 교체(관리 포트 번호 제거, 앞 단계 성공 표현), Redfish 만 구조화 401 로 `auth_success=false` | §9 §12 §16 §17 (MSG-001~005r 전부) |
 
 ---
 

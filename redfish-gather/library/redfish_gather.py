@@ -211,7 +211,39 @@ def _ctx(verify_ssl):
 def _auth(username, password):
     return 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()
 
+# ── 인증 응답 관측 (2026-08-11 Phase 5-A) ──────────────────────────────────────
+# 자격증명을 실은 요청이 받은 **첫 HTTP status** 만 기록한다.
+#   - 새 요청을 만들지 않는다. 이미 보내는 요청의 반환값만 본다 → 인증 시도 횟수 불변
+#     (계정 잠금 위험이 커지지 않는다).
+#   - 문자열 파싱이 아니다. urllib 이 준 정수 status 를 그대로 쓴다.
+#   - 이 값은 module result 의 `auth_evidence` 로만 나가고 외부 envelope 을 늘리지 않는다.
+#     site.yml 이 401(명시적 거부)일 때만 auth_success=false 로 쓴다. 403 은 인증 이후
+#     권한 부족일 수 있어 거부로 확정하지 않는다.
+_AUTH_OBSERVATION = {'first_status': None}
+
+
+def _reset_auth_observation():
+    _AUTH_OBSERVATION['first_status'] = None
+
+
+def _record_auth_status(status):
+    if _AUTH_OBSERVATION['first_status'] is None and isinstance(status, int) and status:
+        _AUTH_OBSERVATION['first_status'] = status
+
+
+def auth_evidence():
+    """module result 로 내보낼 구조화 인증 관측값 (문자열 파싱 없음)."""
+    return {'first_auth_status': _AUTH_OBSERVATION['first_status']}
+
+
 def _get(bmc_ip, path, username, password, timeout, verify_ssl):
+    """인증 GET — 반환 status 를 _record_auth_status 로 관측만 한다(요청 수 불변)."""
+    status, data, err = _get_impl(bmc_ip, path, username, password, timeout, verify_ssl)
+    _record_auth_status(status)
+    return status, data, err
+
+
+def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     # cycle 2026-04-30 hotfix: User-Agent 추가가 Lenovo XCC 일부 펌웨어 reject 유발 (사이트 검증).
     # Accept + OData-Version 만 유지 (cycle 전부터 동작 검증된 헤더 셋).
@@ -4983,6 +5015,10 @@ def main():
     if not HAS_URLLIB:
         module.fail_json(msg='Python urllib 를 import 할 수 없습니다')
 
+    # Phase 5-A: 인증 관측은 invocation 단위다. Ansible 은 매 실행마다 새 프로세스지만
+    # 테스트는 한 프로세스에서 main() 을 여러 번 부르므로 명시적으로 초기화한다.
+    _reset_auth_observation()
+
     p = module.params
     bmc_ip, username, password = p['bmc_ip'], p['username'], p['password']
     timeout, verify_ssl = p['timeout'], p['verify_ssl']
@@ -5043,7 +5079,7 @@ def main():
             changed=False, status='failed', vendor=vendor,
             collected=[], failed_sections=['all'], unsupported_sections=[],
             errors=all_errors, data={}, probe_facts=probe_facts,
-            multi_node=None,
+            multi_node=None, auth_evidence=auth_evidence(),
         )
 
     result_data = _collect_all_sections(
@@ -5074,7 +5110,7 @@ def main():
         collected=clean, failed_sections=list(set(failed)),
         unsupported_sections=list(set(unsupported)),
         errors=all_errors, data=result_data, probe_facts=probe_facts,
-        multi_node=multi_node,
+        multi_node=multi_node, auth_evidence=auth_evidence(),
     )
 
 

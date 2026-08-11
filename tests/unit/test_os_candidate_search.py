@@ -160,7 +160,10 @@ def test_case12_open_ports_but_no_protocol(monkeypatch):
     assert result["failure_code"] == "PROTOCOL_CHECK_FAILED"
     assert result["detected_os"] is None, "프로토콜 미확인이면 OS 를 확정하지 않는다"
     assert result["checked_ports"] == [5986, 5985, 22]
-    assert "관리 포트에는 연결되었지만" in result["failure_reason"]
+    assert "관리 연결은 확인되었지만" in result["failure_reason"]
+    assert "SSH 또는 WinRM" in result["failure_reason"]
+    for port in ("22", "5985", "5986"):
+        assert port not in result["failure_reason"], "Portal 문구에 관리 포트 노출 금지"
     for port in (5986, 5985, 22):
         assert "port={0}".format(port) in result["detail"], "포트별 근거 보존"
 
