@@ -290,7 +290,7 @@ if response["data"]["hardware"].get("health") == "Critical":
 "hardware": {
   "vendor":       "Dell Inc.",        // BMC 가 보고한 원본 manufacturer (정규화 안 한 값)
   "model":        "PowerEdge R740",
-  "serial":       "CNIVC009CP0282",
+  "serial":       "2BJ8033",          // Dell 은 ServiceRoot.Oem.Dell.ServiceTag (2026-08-11 교정)
   "uuid":         "4c4c4544-...",
   "sku":          "2BJ8033",          // 벤더마다 의미 다름 (Dell=서비스 태그 / HPE=파트번호 / Lenovo=CTO 주문)
   "bios_version": "2.21.2",

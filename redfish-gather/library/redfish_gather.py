@@ -1338,6 +1338,63 @@ def _extract_oem_dell(data):                                                  # 
 #   끝내야 하는데, 섹션 러너(_make_section_runner)는 partial 까지만 만들 수 있다.
 #   따라서 확정과 차단을 모두 main() 층이 책임진다.
 
+def _resolve_serial_dell(service_root, refetch=None):                         # nosec rule12-r1
+    """Dell 서버 대표 시리얼 = Service Tag (ServiceRoot.Oem.Dell.ServiceTag 단일 정본).
+
+    사용자 결정 (2026-08-11): 다른 시리얼 후보로 폴백하지 않는다. 못 얻으면 수집을 실패시킨다.
+
+    원천 선택 근거 (rule 96 R1-A):
+      - Dell iDRAC9 Redfish API Guide "Table 70. Properties for DellServiceRoot" 가
+        ServiceTag 를 "System Service Tag" 로 정의한다 (확인 2026-08-11). 후보 4종
+        (ServiceTag / DellSystem.NodeID / DellSystem.ChassisServiceTag / SKU) 중
+        Dell 이 명시적으로 문서화한 유일한 필드이고, 문구가 chassis 가 아니라 System 스코프다.
+      - ChassisServiceTag 는 Dell System Info Profile(DCIM1048) 이 "the service tag for the
+        modular enclosure chassis" 로 정의 → 모듈러(블레이드)에서는 enclosure 를 가리킨다.
+      - ComputerSystem.SerialNumber 는 보드 제조 시리얼이다. 동일 R760 실측에서 SMBIOS
+        Type 2(Baseboard) 문자열 '.GSBPK54.CNIVC0048R0159.' 의 뒷부분과 일치하고
+        Type 1(System)/Type 3(Chassis) 에는 나타나지 않는다
+        (tests/evidence/2026-04-29-deep-verify/linux/ubuntu-r760-6-baremetal/dmi_*.txt).
+
+    refetch: callable() -> service_root dict | None
+        _fetch_service_root 는 무인증 GET 이 200 이면 인증 GET 을 하지 않는다. 무인증 응답이
+        200 이면서 OEM 블록만 빠지는 펌웨어면 Service Tag 를 '없음' 으로 오판하게 되므로,
+        1차 조회에서 못 찾은 경우에 한해 인증 ServiceRoot 를 1회 재조회한다.
+        (같은 Guide 가 /redfish/v1 의 DellServiceRoot 를 "GET requires Login" 으로 적는다.)
+
+    Returns: (service_tag, None) | (None, 실패사유)
+    """
+    # 이 프로젝트가 이미 invalid 로 정의한 식별자 값의 합집합 — 새로 정의하지 않는다.
+    #   os-gather/tasks/linux/gather_system.yml:209    (serial 센티널 5종)
+    #   os-gather/tasks/windows/gather_hardware.yml:53 (BIOS serial 센티널 8종)
+    # 원본 PowerShell 목록이 대소문자 무시라 그 의미를 보존해 upper() 비교한다.
+    # 빈 문자열/공백은 _strip_or_none 이 이미 None 으로 정규화하므로 목록에 넣지 않는다.
+    invalid_values = ('NA', 'N/A', 'NONE', 'NOT SPECIFIED', 'TO BE FILLED BY O.E.M.',
+                      'SYSTEM SERIAL NUMBER', '0', '00000000')
+
+    def _pick(root):
+        tag = _strip_or_none(_safe(root, 'Oem', 'Dell', 'ServiceTag'))         # nosec rule12-r1
+        if tag is None:
+            return None, ('서버 대표 시리얼을 확인하지 못했습니다 — '              # nosec rule12-r1
+                          'ServiceRoot.Oem.Dell.ServiceTag 없음')              # nosec rule12-r1
+        if not isinstance(tag, str):
+            return None, ('서버 대표 시리얼을 확인하지 못했습니다 — '              # nosec rule12-r1
+                          'ServiceRoot.Oem.Dell.ServiceTag 가 문자열이 아님')    # nosec rule12-r1
+        if tag.strip().upper() in invalid_values:
+            return None, ('서버 대표 시리얼을 확인하지 못했습니다 — '              # nosec rule12-r1
+                          'ServiceRoot.Oem.Dell.ServiceTag 가 무효값(%r)' % tag)  # nosec rule12-r1
+        return tag, None
+
+    tag, err = _pick(service_root)
+    if err is not None and refetch is not None:
+        tag, err = _pick(refetch())
+    return tag, err
+
+
+# vendor → 대표 시리얼 resolver. 미등록 vendor 는 표준 SerialNumber 경로를 그대로 쓴다.
+_SERIAL_RESOLVERS = {                                                         # nosec rule12-r1
+    'dell': _resolve_serial_dell,                                             # nosec rule12-r1
+}
+
 
 def _extract_oem_lenovo(data, chassis_data=None):                             # nosec rule12-r1
     """Lenovo OEM (Oem.Lenovo).
@@ -5224,6 +5281,32 @@ def main():
             multi_node=None, auth_evidence=auth_evidence(),
         )
 
+    # 2026-08-11: 대표 시리얼 resolver 가 등록된 vendor 는 그 값을 **필수값**으로 다룬다.
+    # 못 얻으면 다른 시리얼 후보로 대체하지 않고 수집 자체를 실패시킨다 (사용자 결정).
+    # 미등록 vendor 는 _serial_resolver 가 None 이라 이 블록과 아래 확정 블록을 통째로 건너뛴다.
+    _serial_resolver = _SERIAL_RESOLVERS.get(vendor)
+    _forced_serial = None
+    if _serial_resolver is not None:
+        def _reauth_service_root():
+            """인증 ServiceRoot 1회 재조회 — 1차(무인증 우선) 조회에서 못 찾았을 때만 호출된다."""
+            if not username:
+                return None
+            st_r, root_r, err_r = _get(bmc_ip, '', username, password, timeout, verify_ssl)
+            if err_r or st_r != 200 or not isinstance(root_r, dict):
+                return None
+            return root_r
+
+        _forced_serial, _serial_err = _serial_resolver(
+            service_root, refetch=_reauth_service_root)
+        if _serial_err is not None:
+            all_errors.append(_err('system', _serial_err))
+            module.exit_json(
+                changed=False, status='failed', vendor=vendor,
+                collected=[], failed_sections=['all'], unsupported_sections=[],
+                errors=all_errors, data={}, probe_facts=probe_facts,
+                multi_node=None, auth_evidence=auth_evidence(),
+            )
+
     result_data = _collect_all_sections(
         bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         username, password, timeout, verify_ssl,
@@ -5232,6 +5315,24 @@ def main():
         # A1b (2026-06-04): ServiceRoot.Product 를 hardware.model fallback 로 전달 (check_redfish 동일).
         product_hint=_safe(service_root, 'Product'),
     )
+
+    # 대표 시리얼 확정. gather_system 의 SerialNumber 값을 마지막에 덮어쓴다.
+    # system 섹션을 못 얻었으면 대표 시리얼을 실을 자리가 없다 → partial 로 내보내면
+    # hardware.serial=null 인 '정상' 결과가 되므로, 그 경로는 정상 결과로 반환하지 않는다.
+    if _serial_resolver is not None:
+        _sys_section = result_data.get('system')
+        if isinstance(_sys_section, dict) and _sys_section:
+            _sys_section['serial'] = _forced_serial
+        else:
+            all_errors.append(_err(
+                'system',
+                '서버 대표 시리얼을 결과에 실을 수 없습니다 — system 섹션 수집 실패'))
+            module.exit_json(
+                changed=False, status='failed', vendor=vendor,
+                collected=[], failed_sections=['all'], unsupported_sections=[],
+                errors=all_errors, data={}, probe_facts=probe_facts,
+                multi_node=None, auth_evidence=auth_evidence(),
+            )
 
     # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 정의 vendor 만 multi_node 수집.
     # None / 미정의 vendor — 13 vendor 영향 0 (Additive only).

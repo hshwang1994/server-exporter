@@ -75,9 +75,9 @@ tests/fixtures/outputs/           # e2e representative output (raw fixture와 �
 |------|------|-----|--------|-------------|
 | Lenovo | ThinkSystem SR650 V2 | XCC 5.70 | J30AF7LC | 1.15.0 |
 | HPE | ProLiant DL380 Gen11 | iLO 6 1.73 | SGH504HNZK | 1.20.0 |
-| Dell | PowerEdge R740 | iDRAC 9 4.00 | CNIVC009CP0282 | 1.6.0 |
+| Dell | PowerEdge R740 | iDRAC 9 4.00 | 2BJ8033 (Service Tag) | 1.6.0 |
 | Cisco | TA-UNODE-G1 | CIMC 4.1(2g) | FCH2116V1V0 | 1.2.0 |
-| Dell (R760) | PowerEdge R760 | iDRAC (Gen16) | CNIVC004950455 | 1.20.1 |
+| Dell (R760) | PowerEdge R760 | iDRAC (Gen16) | 64CXJ54 (Service Tag) | 1.20.1 |
 
 ## 4. Fixture 파일 수
 
@@ -110,7 +110,7 @@ assert dell_sys['Model'] == 'PowerEdge R740'
 {
   "manufacturer": "Dell Inc.",
   "model": "PowerEdge R740",
-  "serial": "CNIVC009CP0282",
+  "serial": "2BJ8033",
   "sku": "2BJ8033",
   "uuid": "4c4c4544-0042-4a10-8038-b2c04f303333",
   "hostname": "LENOVO01",

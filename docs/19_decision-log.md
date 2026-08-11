@@ -6,7 +6,64 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-08-03
+> 최종 갱신: 2026-08-11
+
+## 2026-08-11 — Dell 대표 시리얼을 Service Tag 로 교정 (1차, Dell 단독)
+
+### 요청 / 배경 (Why)
+
+- 사전 조사(`docs/ai/SERIAL-NUMBER-TRACE-2026-08-11.md`)에서 동일 Dell R760 1대의 채널 간 시리얼이
+  달랐다. Redfish `CNIVC0048R0159` ↔ Linux `GSBPK54` → `correlation.serial_number` 로 두 채널 결과를
+  매칭할 수 없었다 (Cisco 는 SAME 이라 Dell 만의 문제).
+- 사용자 지시: Dell 만 1차 교정. schema 변경 금지, 새 필드 금지, 다른 벤더 무변경.
+
+### 원인 (실측 근거)
+
+- Dell iDRAC 의 `ComputerSystem.SerialNumber` 는 **보드 제조 시리얼**이다. 같은 장비 SMBIOS 에서
+  그 값은 **Type 2(Baseboard)** 문자열 `.GSBPK54.CNIVC0048R0159.` 안에만 나타나고
+  Type 1(System)·Type 3(Chassis) 에는 없다. OS 가 읽는 값은 Type 1 = `GSBPK54` (Service Tag).
+- 실장비 7대 전수에서 `SerialNumber` ≠ Service Tag 가 일관되게 확인됐다.
+
+### 결정 (What)
+
+- Dell 대표 시리얼 원천 = **`ServiceRoot.Oem.Dell.ServiceTag` 단일 정본**. 폴백 없음.
+  - 선택 근거: Dell iDRAC9 Redfish API Guide "Table 70. Properties for DellServiceRoot" 가
+    이 필드를 **"System Service Tag"** 로 정의한다. 후보 4종 중 Dell 공식 정의가 있는 유일한 필드다.
+  - `ChassisServiceTag` 미채택: Dell System Info Profile(DCIM1048) 이 *"the service tag for the
+    modular enclosure chassis"* 로 정의 → 모듈러에서 enclosure 를 가리킨다.
+  - `SKU` 미채택: DMTF 정의는 일반 SKU. Dell 이 Service Tag 라고 문서화한 적 없음 (값만 같음).
+  - `NodeID` 미채택: Redfish 스키마·프로파일 정의 없음.
+- **확보 실패 시 수집 실패.** Dell 시리얼은 필수값이라 null 로 success/partial 을 내보내지 않는다.
+  기존 실패 계약 재사용 — 신규 `failure_stage` / `failure_code` 를 만들지 않았다
+  (`gather` / `GATHER_FAILED`).
+- 구현 위치는 `main()` 층이다. 섹션 러너(`_make_section_runner`)로는 `partial` 까지만 만들 수 있어
+  "수집 실패" 를 표현할 수 없기 때문이다. adapter 의 `critical_sections` 는 **읽는 코드가 없어**
+  (dead config) 승격 수단이 되지 못한다.
+
+### 영향 (Impact)
+
+- envelope 13 필드 / sections / field_dictionary entry 추가·삭제 **0**. 배선 무변경.
+- Dell 은 `hardware.serial` == `hardware.sku` == `hardware.oem.chassis_service_tag` 로 같아진다
+  (전부 기존 필드). 보드 제조 시리얼 `CNIVC…` 는 envelope 에서 사라진다 — 새 필드 금지 지시에 따른
+  의도적 미보존.
+- 비-Dell 전 벤더는 `_SERIAL_RESOLVERS` 미등록이라 코드 경로 자체를 타지 않는다.
+- **리스크**: iDRAC7/8 은 `DellServiceRoot` 문서화가 없어 미노출 시 수집이 실패한다(실기기 미검증).
+  Dell 모듈러도 미검증. 둘 다 NEXT_ACTIONS 등재.
+
+### 회귀
+
+- unit 1186 / e2e 416 / integration 200 / regression 169 passed. 3 게이트 PASS.
+- Dell 기준선 3종만 갱신(전부 재생 산출값), 비-Dell baseline 9종 + 실미러 골든 3종 무변경.
+- ⚠ ansible 부재로 실제 playbook end-to-end envelope 은 미검증 (lab 이월).
+
+### 관련
+
+- rule 12 (adapter-vendor-boundary), 13 (output-schema-fields), 21 (output-baseline-fixtures),
+  92 (dependency-and-regression-gate), 96 (external-contract-integrity)
+- 정본: `docs/ai/SERIAL-NUMBER-TRACE-2026-08-11.md` Part III,
+  `tests/evidence/2026-08-11-dell-serial-service-tag.md`
+
+---
 
 ## 2026-08-03 — 보조 섹션(network_adapters) 실패가 network status 를 덮던 문제 + 400 분류
 

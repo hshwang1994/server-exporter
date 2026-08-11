@@ -64,7 +64,7 @@
     "ansible_version": "2.20.3"                         // 실행 ansible 버전
   },
   "correlation": {                                      // 상관관계 식별자 — 여러 채널에서 같은 장비 매칭
-    "serial_number": "CNIVC004950455",                     // Dell System Service Tag (Hardware.serial)
+    "serial_number": "64CXJ54",                            // Dell Service Tag (data.hardware.serial 복사본)
     "system_uuid": "4c4c4544-0034-4310-8058-b6c04f4a3534", // System UUID
     "bmc_ip": "10.100.15.27",                              // Redfish 채널 — BMC IP
     "host_ip": "10.100.15.27"                              // 호출자 inventory_json bmc_ip
@@ -185,7 +185,7 @@
     "hardware": {                                          // Redfish 가 가장 풍부 — Hardware (System) 정보
       "vendor": "Dell Inc.",                               // System.Manufacturer 원본 (envelope vendor 는 정규화 "dell")
       "model": "PowerEdge R760",                           // System.Model
-      "serial": "CNIVC004950455",                          // System.SerialNumber (Dell Service Tag)
+      "serial": "64CXJ54",                                 // ServiceRoot.Oem.Dell.ServiceTag (Dell Service Tag)
       "uuid": "4c4c4544-0034-4310-8058-b6c04f4a3534",
       "sku": "64CXJ54",                                    // System.SKU
       "bios_version": "2.3.5",                          // BIOS 버전

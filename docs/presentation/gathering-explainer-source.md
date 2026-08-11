@@ -769,7 +769,7 @@ ansible-playbook <절차서> -i <대상목록 스크립트> --vault-password-fil
 | 7 | `sections` | **항목별 상태 11개** | `{"system":"not_supported","hardware":"success",...}` |
 | 8 | `diagnosis` | **어디까지 통했는지 진단 결과** | 아래 10-3 |
 | 9 | `meta` | 실행 정보 | `{"started_at":...,"duration_ms":106000,"adapter_id":"redfish_dell_idrac9",...}` |
-| 10 | `correlation` | 장비를 다른 시스템과 맞춰 볼 식별자 | `{"serial_number":"CNIVC009CP0282","system_uuid":"4c4c4544-...","bmc_ip":...,"host_ip":...}` |
+| 10 | `correlation` | 장비를 다른 시스템과 맞춰 볼 식별자 | `{"serial_number":"2BJ8033","system_uuid":"4c4c4544-...","bmc_ip":...,"host_ip":...}` |
 | 11 | `errors` | 오류·경고 목록 | `[]` |
 | 12 | `data` | **실제 수집한 내용 전부** | 아래 10-2 |
 | 13 | `schema_version` | 결과 형식 버전 | `"1"` |

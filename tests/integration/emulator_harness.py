@@ -108,6 +108,35 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
                 "error_count": len(all_errors),
             }
 
+        # main() 미러링 (2026-08-11): 대표 시리얼 resolver 가 등록된 vendor 는 그 값이 필수값이다.
+        # 못 얻으면 다른 시리얼 후보로 대체하지 않고 실패로 끝낸다. 미등록 vendor 는 영향 0.
+        serial_resolver = rg._SERIAL_RESOLVERS.get(vendor)
+        forced_serial = None
+        if serial_resolver is not None:
+            def _reauth_service_root():
+                if not user:
+                    return None
+                st_r, root_r, err_r = rg._get(ip, "", user, pw, timeout, verify_ssl)
+                if err_r or st_r != 200 or not isinstance(root_r, dict):
+                    return None
+                return root_r
+
+            forced_serial, serial_err = serial_resolver(
+                service_root, refetch=_reauth_service_root)
+            if serial_err is not None:
+                all_errors.append(rg._err("system", serial_err))
+                return {
+                    "vendor": vendor,
+                    "status": "failed",
+                    "collected": [],
+                    "failed_sections": ["all"],
+                    "unsupported_sections": [],
+                    "data": {},
+                    "multi_node": None,
+                    "probe_facts": probe_facts,
+                    "error_count": len(all_errors),
+                }
+
         data = rg._collect_all_sections(
             ip, vendor, system_uri, manager_uri, chassis_uri,
             user, pw, timeout, verify_ssl,
@@ -115,6 +144,28 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
             manager_layout=manager_layout,
             product_hint=rg._safe(service_root, "Product"),
         )
+
+        # main() 미러링: 대표 시리얼 확정 + 실을 자리가 없으면 정상 결과로 반환하지 않는다.
+        if serial_resolver is not None:
+            sys_section = data.get("system")
+            if isinstance(sys_section, dict) and sys_section:
+                sys_section["serial"] = forced_serial
+            else:
+                all_errors.append(rg._err(
+                    "system",
+                    "서버 대표 시리얼을 결과에 실을 수 없습니다 — system 섹션 수집 실패"))
+                return {
+                    "vendor": vendor,
+                    "status": "failed",
+                    "collected": [],
+                    "failed_sections": ["all"],
+                    "unsupported_sections": [],
+                    "data": {},
+                    "multi_node": None,
+                    "probe_facts": probe_facts,
+                    "error_count": len(all_errors),
+                }
+
         multi_node = rg._collect_multi_node_topology(
             ip, vendor, service_root, user, pw, timeout, verify_ssl,
             manager_layout=manager_layout,

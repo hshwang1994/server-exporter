@@ -419,7 +419,7 @@ python3 tests/validate_field_dictionary.py
     "adapter_version": "1.0.0", "ansible_version": "2.20.3"
   },
   "correlation": {
-    "serial_number": "CNIVC009CP0282", "system_uuid": "4c4c4544-0042-4a10-8038-b2c04f303333",
+    "serial_number": "2BJ8033", "system_uuid": "4c4c4544-0042-4a10-8038-b2c04f303333",
     "bmc_ip": "10.x.x.162", "host_ip": "10.x.x.162"
   },
   "errors": [],
@@ -429,7 +429,7 @@ python3 tests/validate_field_dictionary.py
       "architecture": null, "uptime_seconds": null, "selinux": null, "fqdn": "R740-1"
     },
     "hardware": {
-      "vendor": "Dell Inc.", "model": "PowerEdge R740", "serial": "CNIVC009CP0282",
+      "vendor": "Dell Inc.", "model": "PowerEdge R740", "serial": "2BJ8033",
       "uuid": "4c4c4544-0042-4a10-8038-b2c04f303333", "sku": "2BJ8033",
       "bios_version": "2.21.2", "bios_date": null, "power_state": "On", "health": "Critical",
       "oem": {

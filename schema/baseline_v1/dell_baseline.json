@@ -46,7 +46,7 @@
     "ansible_version": "2.20.3"
   },
   "correlation": {
-    "serial_number": "CNIVC009CP0282",
+    "serial_number": "2BJ8033",
     "system_uuid": "4c4c4544-0042-4a10-8038-b2c04f303333",
     "bmc_ip": "10.50.11.162",
     "host_ip": "10.50.11.162"
@@ -419,7 +419,7 @@
     "hardware": {
       "vendor": "Dell Inc.",
       "model": "PowerEdge R740",
-      "serial": "CNIVC009CP0282",
+      "serial": "2BJ8033",
       "uuid": "4c4c4544-0042-4a10-8038-b2c04f303333",
       "sku": "2BJ8033",
       "bios_version": "2.21.2",

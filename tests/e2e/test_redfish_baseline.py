@@ -7,11 +7,15 @@
   4. adapter_id 기대값 일치
 """
 
+import pytest
+
 from conftest import (
     assert_array_element_fields,
     assert_channel_critical_fields,
     assert_common_structure,
     assert_hardware_oem_is_object,
+    load_json,
+    PROJECT_ROOT,
     REDFISH_ARRAY_FIELDS,
     REDFISH_CRITICAL,
     REDFISH_FIELD_MAP,
@@ -124,3 +128,58 @@ class TestDellR760Output:
         assert_array_element_fields(
             dell_r760_output, REDFISH_ARRAY_FIELDS, "dell_r760_output"
         )
+
+
+class TestDellServiceTagIsRepresentativeSerial:
+    """Dell 1차 교정 (2026-08-11): 최종 envelope 의 서버 대표 시리얼 = Dell Service Tag.
+
+    사용자 지시 — data.hardware.serial 와 correlation.serial_number 가 둘 다
+    ServiceRoot.Oem.Dell.ServiceTag 와 같은지 최종 JSON 기준으로 확인한다.
+    기대값은 하드코딩하지 않고 대응하는 raw fixture 의 ServiceRoot 에서 읽어 비교한다.
+    """
+
+    @staticmethod
+    def _service_tag(raw_fixture_dir):
+        root = load_json(
+            PROJECT_ROOT / "tests" / "fixtures" / "redfish" / raw_fixture_dir
+            / "service_root.json"
+        )
+        tag = ((root.get("Oem") or {}).get("Dell") or {}).get("ServiceTag")
+        assert tag, "%s/service_root.json 에 Oem.Dell.ServiceTag 없음" % raw_fixture_dir
+        return tag
+
+    @pytest.mark.parametrize(
+        "envelope_name,raw_fixture_dir",
+        [("dell_baseline", "dell"), ("dell_r760_output", "dell_r760")],
+    )
+    def test_both_serial_fields_equal_service_tag(
+        self, request, envelope_name, raw_fixture_dir
+    ):
+        envelope = request.getfixturevalue(envelope_name)
+        expected = self._service_tag(raw_fixture_dir)
+        hardware_serial = envelope["data"]["hardware"]["serial"]
+        correlation_serial = envelope["correlation"]["serial_number"]
+        assert hardware_serial == expected, (
+            "%s: data.hardware.serial 이 Service Tag 와 다름" % envelope_name
+        )
+        assert correlation_serial == expected, (
+            "%s: correlation.serial_number 가 Service Tag 와 다름" % envelope_name
+        )
+        assert hardware_serial == correlation_serial
+
+    @pytest.mark.parametrize(
+        "envelope_name", ["dell_baseline", "dell_r760_output"]
+    )
+    def test_board_serial_is_not_the_representative_serial(
+        self, request, envelope_name
+    ):
+        """보드 제조 시리얼(`CNIVC…`)이 대표 시리얼 자리에 남아 있지 않다."""
+        envelope = request.getfixturevalue(envelope_name)
+        for path, value in (
+            ("data.hardware.serial", envelope["data"]["hardware"]["serial"]),
+            ("correlation.serial_number", envelope["correlation"]["serial_number"]),
+        ):
+            assert not str(value).startswith("CNIVC"), (
+                "%s: %s 에 보드 제조 시리얼이 남아 있음 (%r)"
+                % (envelope_name, path, value)
+            )

@@ -66,7 +66,7 @@
 |------|--------|-----|------|-------------|------|
 | Manufacturer | "Lenovo" | "HPE" | "Dell Inc." | `Manufacturer` | OK — 3사 모두 존재 |
 | Model | "ThinkSystem SR650 V2" | "ProLiant DL380 Gen11" | "PowerEdge R740" | `Model` | OK |
-| SerialNumber | "J30AF7LC" | "SGH504HNZK" | "CNIVC009CP0282" | `SerialNumber` | OK |
+| 대표 시리얼 | "J30AF7LC" | "SGH504HNZK" | "2BJ8033" | Lenovo/HPE=`SerialNumber` / Dell=`ServiceRoot.Oem.Dell.ServiceTag` (2026-08-11 교정) | OK |
 | SKU | "7Z73CTO1WW" | "P52534-B21" | "2BJ8033" | `SKU` | OK |
 | UUID | OK | OK | OK | `UUID` | OK |
 | HostName | "XCC-7Z73-J30AF7LC" | "" (빈 문자열) | "LENOVO01" | `HostName` | **주의**: HPE는 빈 문자열 |

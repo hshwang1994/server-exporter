@@ -258,8 +258,17 @@ fields:
     type: "string|null"
     priority: must
     channel: [esxi, redfish]
-    help_ko: "서버 시리얼번호 (Redfish System.SerialNumber). 빈 문자열은 null 로 정규화."
-    help_en: "Server serial number (Redfish System.SerialNumber). Empty string normalized to null."
+    help_ko: >-
+      서버 대표 시리얼번호. 기본 원천은 Redfish System.SerialNumber 이고 빈 문자열은 null 로 정규화.
+      단 Dell 은 예외 — System.SerialNumber 가 보드 제조 시리얼(CNIVC…)이라 OS SMBIOS Type 1 값과
+      달라서, ServiceRoot.Oem.Dell.ServiceTag (Dell Service Tag) 를 쓴다. Dell 은 이 값을 필수로
+      보고 확보하지 못하면 다른 후보로 대체하지 않고 수집을 실패시킨다 (2026-08-11 교정).
+    help_en: >-
+      Representative server serial. Default source is Redfish System.SerialNumber; empty string
+      normalized to null. Dell is the exception — its System.SerialNumber is a board manufacturing
+      serial (CNIVC…) that differs from the OS SMBIOS Type 1 value, so ServiceRoot.Oem.Dell.ServiceTag
+      (Dell Service Tag) is used. For Dell this value is mandatory: if it cannot be obtained the
+      collection fails rather than falling back to another candidate (corrected 2026-08-11).
 
   hardware.uuid:
     type: "string|null"
