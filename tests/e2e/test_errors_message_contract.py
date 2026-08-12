@@ -43,6 +43,7 @@ from tests.e2e.test_failure_reason_contract import (
     _plays,
     _render_diagnosis,
     _render_fallback_envelopes,
+    render_redfish_rescue,
     _task_by_name,
 )
 
@@ -92,8 +93,10 @@ def _error_templates() -> dict[str, str]:
 
 def _render_error(ctx: dict[str, Any]) -> dict[str, Any]:
     tpl = _error_templates()
+    # 2026-08-12: build_failed_output.yml 의 fallback 문장이 리터럴이 아니라 정본 변수
+    #   (_fr_output_build_failed)를 참조하므로 vars_files 로드분을 함께 주입한다.
     return {
-        key: _env().from_string(text).render(**ctx)
+        key: _env().from_string(text).render(**{**FAILURE_REASONS, **ctx})
         for key, text in tpl.items()
     }
 
@@ -102,8 +105,7 @@ def _render_error(ctx: dict[str, Any]) -> dict[str, Any]:
 # 실패 경로 표본 — 각 채널의 rescue 가 만든 진단 + 그 채널이 넘기는 기술 문자열
 # ---------------------------------------------------------------------------
 def _rf_diag(collect_ok: bool, rejected: bool) -> dict[str, Any]:
-    return _render_diagnosis(
-        "redfish-gather/site.yml", _RF_TASK,
+    return render_redfish_rescue(
         {"_diagnosis": dict(_PRECHECK_OK), "_rf_collect_ok": collect_ok,
          "_rf_auth_rejected": rejected})
 
@@ -292,6 +294,10 @@ _CANONICAL = {
     "_fr_protocol_unconfirmed": "REASON_PROTOCOL_UNCONFIRMED",
     "_fr_credential_failed": "REASON_CREDENTIAL_FAILED",
     "_fr_gather_failed": "REASON_GATHER_FAILED",
+    # 2026-08-12: envelope fallback 전용 문장(OUTPUT_BUILD_FAILED). 종전에는 이 문장이
+    # site.yml always 블록 8곳 + build_failed_output.yml + json_only.py 에 리터럴로
+    # 흩어져 있었다. 정본을 failure_reasons.yml 로 옮기고 drift 를 여기서 막는다.
+    "_fr_output_build_failed": "REASON_OUTPUT_BUILD_FAILED",
 }
 
 
@@ -303,12 +309,32 @@ def test_failure_reason_sources_do_not_drift(yaml_key, py_name):
     )
 
 
-def test_failure_reasons_yaml_has_exactly_the_five_sentences():
+def test_failure_reasons_yaml_has_exactly_the_canonical_sentences():
+    """정본 문장 집합 = 사용자 표준 5 문장 + envelope fallback 1 문장.
+
+    5 문장은 precheck / rescue 가 쓰는 사용자 대표 사유이고, 6번째(_fr_output_build_failed)는
+    결과 객체 자체를 만들지 못한 경우(OUTPUT_BUILD_FAILED)의 문장이다. 추가/삭제는 사용자 확정
+    사항이라 여기서 집합 자체를 고정한다.
+    """
     assert set(FAILURE_REASONS) == set(_CANONICAL), (
-        "사용자 문구 표준은 5 문장이다. 추가/삭제는 사용자 확정이 필요하다."
+        "사용자 문구 표준 집합이 바뀌었다. 추가/삭제는 사용자 확정이 필요하다."
     )
     for key, text in FAILURE_REASONS.items():
         _assert_grid_ready(text, f"failure_reasons.yml:{key}")
+
+
+def test_no_site_yml_hardcodes_a_canonical_sentence():
+    """정본 문장을 site.yml 이 리터럴로 다시 적지 않는다 (H2 회귀 차단).
+
+    종전에는 '수집 결과를 생성하지 못했습니다…' 가 always 블록마다 diagnosis.failure_reason 과
+    errors[0].message 두 자리에 **따로** 적혀 있어(3파일 8곳) 한쪽만 고치면 즉시 어긋났다.
+    """
+    for site in ("redfish-gather/site.yml", "esxi-gather/site.yml", "os-gather/site.yml"):
+        text = (REPO / site).read_text(encoding="utf-8")
+        for key, sentence in FAILURE_REASONS.items():
+            assert sentence not in text, (
+                f"{site} 에 정본 문장이 하드코딩됐다 ({key}) — 변수 참조로 바꿀 것"
+            )
 
 
 @pytest.mark.parametrize("key,text", sorted(FAILURE_REASONS.items()))
@@ -319,27 +345,56 @@ def test_standard_sentences_have_no_dns_guidance(key, text):
 
 
 def test_precheck_bundle_emits_only_standard_sentences():
-    """precheck 가 만드는 사유도 5 문장 표준 밖으로 나가지 않는다."""
+    """precheck 가 만드는 사유도 정본 문장 밖으로 나가지 않는다."""
     standard = set(FAILURE_REASONS.values())
-    produced = set(pb.CHANNEL_PROTOCOL_MESSAGES.values()) | {
-        pb.reason_for_connect_failure(None),
-        pb.reason_for_connect_failure(False),
-        pb.reason_for_connect_failure(True),
-        pb.REASON_CREDENTIAL_FAILED,
-        pb.REASON_GATHER_FAILED,
-    }
+    produced = set(pb.CHANNEL_PROTOCOL_MESSAGES.values()) \
+        | set(pb.REASON_BY_FAILURE_CODE.values()) \
+        | {pb.REASON_CREDENTIAL_FAILED, pb.REASON_GATHER_FAILED}
     assert produced <= standard, sorted(produced - standard)
 
 
-def test_presence_branch_point_exists_and_defaults_to_unconfirmed():
-    """§25 §33 — IP presence 판정 결과를 받을 자리는 있고, 미확인이면 1번 문구다.
+# 2026-08-12: failure_code → 문장 매핑이 **유일한** 문장 선택 경로다.
+#   종전에는 존재하지 않는 presence 판정(ip_in_use)이 문장을 갈랐고, RST 를 실제로 관측해
+#   TCP_CONNECTION_REFUSED 로 확정한 상황에서도 1번 문구("IP 사용 여부를 확인하세요")가
+#   나갔다 (H3). 이제 관측된 code 를 그대로 따른다.
+@pytest.mark.parametrize("code,expected", [
+    ("DNS_RESOLUTION_FAILED", "_fr_ip_unconfirmed"),
+    ("TCP_CONNECT_FAILED", "_fr_ip_unconfirmed"),
+    ("TCP_CONNECTION_REFUSED", "_fr_port_unreachable"),
+    ("PROTOCOL_CHECK_FAILED", "_fr_protocol_unconfirmed"),
+    ("AUTH_PROBE_FAILED", "_fr_credential_failed"),
+    ("GATHER_FAILED", "_fr_gather_failed"),
+    ("OUTPUT_BUILD_FAILED", "_fr_output_build_failed"),
+])
+def test_failure_code_maps_to_exactly_one_sentence(code, expected):
+    assert pb.reason_for_failure_code(code) == FAILURE_REASONS[expected]
 
-    presence probe 자체는 별도 작업 영역이므로 여기서 만들지 않는다. 현재 저장소의 모든
-    호출부는 판정값이 없어 None 을 넘기고, 그때 1번 문구가 나오는 것이 계약이다.
+
+def test_failure_code_mapping_covers_every_enum_value():
+    """diagnosis.failure_code enum 7종이 전부 문장을 갖는다 (누락 시 1번으로 조용히 퇴화 방지)."""
+    enum_values = {
+        "DNS_RESOLUTION_FAILED", "TCP_CONNECT_FAILED", "TCP_CONNECTION_REFUSED",
+        "PROTOCOL_CHECK_FAILED", "AUTH_PROBE_FAILED", "GATHER_FAILED",
+        "OUTPUT_BUILD_FAILED",
+    }
+    assert set(pb.REASON_BY_FAILURE_CODE) == enum_values
+
+
+def test_no_ip_presence_probe_is_implemented():
+    """§25 §33 — IP presence 판정(ICMP / IPAM / ARP)은 만들지 않는다는 결정을 고정한다.
+
+    종전에는 presence 결과를 받는 자리(`ip_in_use`)만 있고 채우는 코드가 없어서, 표준 5 문장 중
+    하나가 실사용 0 인 채로 남아 있었다. 그 자리를 없애고 관측된 failure_code 로 문장을 정한다.
     """
-    assert pb.reason_for_connect_failure(None) == pb.REASON_IP_UNCONFIRMED
-    assert pb.reason_for_connect_failure(False) == pb.REASON_IP_UNCONFIRMED
-    assert pb.reason_for_connect_failure(True) == pb.REASON_PORT_UNREACHABLE
+    assert not hasattr(pb, "reason_for_connect_failure"), (
+        "presence 기반 문장 분기가 되살아났다 — 문장은 failure_code 에서만 파생한다"
+    )
+    source = (REPO / "common" / "library" / "precheck_bundle.py").read_text(encoding="utf-8")
+    for line in source.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        assert "ip_in_use" not in line, f"presence 판정 잔재: {line!r}"
 
 
 def test_site_yml_rescues_reference_shared_constants_not_literals():
@@ -362,15 +417,207 @@ def test_site_yml_rescues_reference_shared_constants_not_literals():
 @pytest.mark.parametrize("site", ["redfish-gather/site.yml", "esxi-gather/site.yml",
                                   "os-gather/site.yml"])
 def test_site_yml_loads_failure_reason_vars_where_needed(site):
-    """정본 변수를 쓰는 play 는 반드시 그 vars_files 를 로드한다 (미정의 변수 방지)."""
+    """정본 변수를 쓰는 play 는 반드시 그 vars_files 를 로드한다 (미정의 변수 방지).
+
+    2026-08-12: play 본문에 `_fr_` 가 없어도 **include 로 들어오는 공통 태스크**가 쓰면
+    같은 위험이다. `build_output.yml`(_fr_gather_failed) / `build_failed_output.yml`
+    (_fr_output_build_failed) 를 include 하는 play 도 대상에 넣는다.
+    미로드면 undefined → 태스크 실패 → **그 호스트의 envelope 전량 소실**이다.
+    """
     for play in _plays(site):
-        uses = "_fr_" in yaml.safe_dump(play.get("tasks", []), allow_unicode=True)
-        if not uses:
+        blob = yaml.safe_dump(play.get("tasks", []), allow_unicode=True)
+        needs = ("_fr_" in blob
+                 or "build_output.yml" in blob
+                 or "build_failed_output.yml" in blob)
+        if not needs:
             continue
         files = " ".join(play.get("vars_files", []))
         assert "common/vars/failure_reasons.yml" in files, (
-            f"{site} 의 play '{play.get('name')}' 가 _fr_* 를 쓰는데 vars_files 미로드"
+            f"{site} 의 play '{play.get('name')}' 가 _fr_* 를 (직접 또는 include 로) 쓰는데 "
+            f"vars_files 미로드 — undefined 로 envelope 이 통째로 사라진다"
         )
+
+
+def test_section_message_vars_are_loaded_where_used():
+    """_sm_* 정본을 쓰는 태스크 파일을 include 하는 play 는 section_messages.yml 을 로드한다."""
+    users = [p for p in REPO.rglob("*.yml")
+             if "common/vars" not in p.as_posix() and "docs/" not in p.as_posix()
+             and "_sm_" in p.read_text(encoding="utf-8")]
+    assert users, "_sm_* 사용처를 하나도 찾지 못했다 (테스트가 무의미해짐)"
+    for site in ("redfish-gather/site.yml", "esxi-gather/site.yml", "os-gather/site.yml"):
+        site_dir = (REPO / site).parent
+        # 이 site 아래에서 _sm_* 를 쓰는 파일이 있으면 play 가 정본을 로드해야 한다
+        local = [u for u in users if site_dir in u.parents or u == (REPO / site)]
+        if not local:
+            continue
+        loaded = any("common/vars/section_messages.yml" in " ".join(p.get("vars_files", []))
+                     for p in _plays(site))
+        assert loaded, (
+            f"{site} 아래 {[str(u.relative_to(REPO)) for u in local]} 가 _sm_* 를 쓰는데 "
+            f"어떤 play 도 section_messages.yml 을 로드하지 않는다"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# H1 — rescue 진입이 누적된 섹션 오류를 통째로 버리지 않는다
+# ═══════════════════════════════════════════════════════════════════════════
+def _keep_template() -> str:
+    tasks = list(yaml.safe_load_all((REPO / _BUILD_FAILED).read_text(encoding="utf-8")))[0]
+    for task in _iter_tasks(tasks):
+        tpl = (task.get("ansible.builtin.set_fact") or {}).get("_fail_errors")
+        if isinstance(tpl, str):
+            return tpl
+    raise AssertionError(f"{_BUILD_FAILED} 에서 _fail_errors 템플릿을 찾지 못함")
+
+
+def _render_kept(rep, all_errors):
+    sys.path.insert(0, str(REPO / "filter_plugins"))
+    from errors_normalizer import normalize_errors  # noqa: PLC0415
+
+    env = _env()
+    env.filters["normalize_errors"] = normalize_errors
+    return env.from_string(_keep_template()).render(
+        **{**FAILURE_REASONS, "_norm_errors": rep, "_all_errors": all_errors})
+
+
+_REP = [{"section": "gather", "message": FAILURE_REASONS["_fr_gather_failed"], "detail": "raw"}]
+
+
+def test_failed_envelope_keeps_representative_error_first():
+    kept = _render_kept(_REP, [])
+    assert kept[0]["message"] == FAILURE_REASONS["_fr_gather_failed"], (
+        "대표 Fatal Error 는 항상 errors[0] 이어야 한다 (Portal 이 첫 원소만 읽어도 동작 불변)"
+    )
+
+
+def test_failed_envelope_preserves_accumulated_section_errors():
+    """종전에는 rescue 진입 순간 식별자 진단 / OEM 경고 / 섹션 실패가 통째로 사라졌다."""
+    accumulated = [
+        {"section": "system", "message": "시스템 제조번호를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요."},
+        {"section": "cpu", "message": "CPU 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요.",
+         "detail": "Processor /x 실패: 401"},
+    ]
+    kept = _render_kept(_REP, accumulated)
+    messages = [e["message"] for e in kept]
+    assert messages[0] == FAILURE_REASONS["_fr_gather_failed"]
+    for src in accumulated:
+        assert src["message"] in messages, f"섹션 오류가 사라졌다: {src['message']!r}"
+
+
+def test_failed_envelope_deduplicates_representative_sentence():
+    """대표 원소와 **완전히 같은** 원소만 두 번 보여주지 않는다.
+
+    2026-08-12: 중복 판정 기준을 message 단독 → (message, detail) 로 좁혔다.
+    섹션 message 가 섹션당 고정 문장으로 통일된 뒤로 message 는 원소 식별자가 아니라서,
+    message 만 보고 버리면 그 원소의 유일한 1차 증거인 detail 이 함께 사라진다.
+    """
+    exact_dup = [{"section": "gather", "message": _REP[0]["message"], "detail": _REP[0]["detail"]}]
+    assert len(_render_kept(_REP, exact_dup)) == 1
+
+
+def test_failed_envelope_caps_error_count():
+    """Portal Grid 가 과도한 행으로 채워지지 않도록 상한을 둔다 — 단 조용히 자르지 않는다."""
+    many = [{"section": "cpu", "message": f"항목 {i} 수집에 실패했습니다. 로그를 확인하세요."}
+            for i in range(30)]
+    kept = _render_kept(_REP, many)
+    assert len(kept) == 11, "상한 10건 + 절단 사실 1건"
+    assert "표시하지 않은 오류" in kept[-1]["detail"], (
+        "잘렸다는 사실이 남아야 한다 (rule 70 — silent 절단 금지)"
+    )
+
+
+def test_failed_envelope_keeps_distinct_details_even_with_same_message():
+    """섹션 message 가 고정 문장이라 message 만으로 중복 판정하면 유일한 증거가 사라진다."""
+    same_msg = _REP[0]["message"]
+    accumulated = [{"section": "cpu", "message": same_msg, "detail": "IMPORTANT EVIDENCE"}]
+    kept = _render_kept(_REP, accumulated)
+    assert any((e.get("detail") or "").find("IMPORTANT EVIDENCE") >= 0 for e in kept), kept
+
+
+def test_failed_envelope_errors_all_have_usable_messages():
+    """보존한 원소도 message 계약(비지 않은 문자열)을 지킨다."""
+    messy = [{"section": "cpu"}, {"section": "memory", "message": None}, 42, None]
+    kept = _render_kept(_REP, messy)
+    for entry in kept:
+        assert isinstance(entry["message"], str) and entry["message"].strip()
+        assert entry["detail"] is None or isinstance(entry["detail"], str)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# H12 — status=failed 인데 failure_* 가 전부 null 인 envelope 을 만들지 않는다
+# ═══════════════════════════════════════════════════════════════════════════
+_BUILD_OUTPUT = "common/tasks/normalize/build_output.yml"
+_ENSURE_TASK = "build_output | ensure failed diagnosis"
+
+
+def _ensure_failed_task() -> dict[str, Any]:
+    tasks = list(yaml.safe_load_all((REPO / _BUILD_OUTPUT).read_text(encoding="utf-8")))[0]
+    for task in _iter_tasks(tasks):
+        if _ENSURE_TASK in (task.get("name") or ""):
+            return task
+    raise AssertionError(f"{_BUILD_OUTPUT} 에서 '{_ENSURE_TASK}' 태스크를 찾지 못함")
+
+
+def _render_ensure(diag, status):
+    task = _ensure_failed_task()
+    tpl = task["ansible.builtin.set_fact"]["_diagnosis"]
+    return _env().from_string(tpl).render(
+        **{**FAILURE_REASONS, "_diagnosis": diag, "_out_status": status})
+
+
+def _ensure_guard_fires(diag, status) -> bool:
+    conds = _ensure_failed_task()["when"]
+    for cond in conds:
+        got = _env().from_string("{{ " + cond + " }}").render(
+            **{**FAILURE_REASONS, "_diagnosis": diag, "_out_status": status})
+        if got is not True:
+            return False
+    return True
+
+
+_SUCCESS_PATH_DIAG = {
+    "reachable": True, "port_open": True, "protocol_supported": True,
+    "auth_success": True, "failure_stage": None, "failure_code": None,
+    "failure_reason": None, "details": {"channel": "os"},
+}
+
+
+def test_normal_path_failed_status_gets_failure_fields():
+    """정상 build_output 경로로 status=failed 가 되는 케이스 (supported 0건 / success 0건).
+
+    이 경로는 rescue 가 아니라서 rescue 의 when 가드가 닿지 않는다. 종전에는 성공 경로
+    diagnosis(failure_* 전부 null)가 그대로 실려 CLAUDE.md §9 를 정면으로 깼다.
+    """
+    assert _ensure_guard_fires(_SUCCESS_PATH_DIAG, "failed") is True
+    diag = _render_ensure(_SUCCESS_PATH_DIAG, "failed")
+    assert diag["failure_stage"] == "gather"
+    assert diag["failure_code"] == "GATHER_FAILED"
+    assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
+    _assert_grid_ready(diag["failure_reason"], "build_output/failed")
+    # 앞 단계 관측은 보존한다
+    assert diag["reachable"] is True and diag["port_open"] is True
+    # 인증 거부를 관측한 근거가 없으므로 손대지 않는다
+    assert diag["auth_success"] is True
+    assert diag["details"] == {"channel": "os"}
+
+
+@pytest.mark.parametrize("status", ["success", "partial"])
+def test_success_and_partial_are_untouched(status):
+    assert _ensure_guard_fires(_SUCCESS_PATH_DIAG, status) is False
+
+
+def test_precheck_reason_is_not_overwritten():
+    diag = {**_SUCCESS_PATH_DIAG, "failure_stage": "protocol",
+            "failure_code": "PROTOCOL_CHECK_FAILED",
+            "failure_reason": FAILURE_REASONS["_fr_protocol_unconfirmed"]}
+    assert _ensure_guard_fires(diag, "failed") is False
+
+
+def test_ensure_failed_diagnosis_keeps_eight_key_shape():
+    """_diagnosis 가 비-mapping 이어도 8키 shape 를 잃지 않는다 (NEW-2)."""
+    diag = _render_ensure(None, "failed")
+    assert set(diag) == {"reachable", "port_open", "protocol_supported", "auth_success",
+                         "failure_stage", "failure_code", "failure_reason", "details"}
 
 
 def test_no_secrets_in_rendered_errors():

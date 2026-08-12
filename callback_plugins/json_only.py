@@ -106,9 +106,21 @@ _REASON_CREDENTIAL_FAILED = (
 _REASON_GATHER_FAILED = (
     '대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.'
 )
-# 결과 객체 자체를 만들지 못한 경우. site.yml 3종의 always 블록 fallback 과 **같은 문장**이다
-# (표준 5 문장에는 없는 6번째 자리 — 정본은 각 site.yml 의 always 블록).
+# 결과 객체 자체를 만들지 못한 경우. site.yml 3종의 always 블록 fallback 과 **같은 문장**이다.
+# 2026-08-12: 정본이 `common/vars/failure_reasons.yml:_fr_output_build_failed` 로 옮겨졌다.
+#   종전에는 이 문장이 site.yml always 블록마다 두 자리(diagnosis.failure_reason /
+#   errors[0].message)에 리터럴로 있어 3 채널 8곳을 동시에 고쳐야 했다. 이제 site.yml 은
+#   정본 변수를 참조하고, 이 파일만 값을 복제한다(아래 "복제 이유" 참조).
 _REASON_NO_OUTPUT = '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.'
+
+# 복제 이유 (YAML 런타임 로드를 채택하지 않은 근거, 2026-08-12)
+# ---------------------------------------------------------------
+# 정본 YAML 을 import 시점에 읽어 오면 파일 부재 / 권한 / 파싱 오류 어느 하나에도
+# 모듈 import 가 터진다. stdout_callback 은 import 실패 시 플러그인 자체가 올라가지 않고,
+# 그러면 **모든 대상의 envelope 이 stdout 에 하나도 나가지 않는다**(Portal 수신 전량 파손).
+# 즉 문구 동기화라는 작은 이득을 위해 출력 경로 전체를 단일 장애점으로 만드는 교환이다.
+# 그래서 값은 복제하고, 정본과의 drift 는 테스트가 막는다
+# (tests/unit/test_callback_envelope_reconcile.py::TestCanonicalReasonsDoNotDrift).
 
 
 def _is_truthy(value):
@@ -133,6 +145,15 @@ class CallbackModule(CallbackBase):
         self._hosts = {}
         self._playbook_channel = None
         self._reconcile = not _is_truthy(os.getenv('JSON_ONLY_NO_RECONCILE', ''))
+        if not self._reconcile:
+            # 비상 스위치가 켜지면 envelope 소실 방지 장치가 통째로 꺼진다. 그 사실이
+            # 아무 데도 안 남으면 "대상 2개를 넣었는데 결과가 1개" 를 나중에 코드가 아니라
+            # 추측으로 찾게 된다. stdout(호출자가 파싱하는 면)은 건드리지 않고
+            # stderr 로만 1줄 남긴다 — envelope 개수/내용에 영향 0.
+            sys.stderr.write(
+                '[json_only] NOTICE: JSON_ONLY_NO_RECONCILE 이 켜져 있어 envelope 보충이 '
+                '꺼졌다. 수집 도중 대상이 unreachable 이 되면 그 대상의 결과가 누락된다.\n'
+            )
 
     # ── 내부 유틸 ────────────────────────────────────────────────────────────
 
@@ -174,15 +195,24 @@ class CallbackModule(CallbackBase):
                 )
 
     def _emit_error(self, error_type, message, host=None, task=None):
-        payload = {
-            'error_type': error_type,
-            'message':    str(message),
-        }
+        """진단을 stderr 에 **평문 한 줄**로 남긴다.
+
+        2026-08-12: 종전에는 이 함수가 stderr 로 `message` 키를 가진 JSON 을 냈다.
+        메인 `Jenkinsfile` 은 호출자가 console log 를 **라인 단위로 파싱**하는 전제로
+        동작하는데(Jenkinsfile:245-246), stdout envelope 과 키 이름이 겹치는 JSON 이
+        같은 로그에 섞이면 진단 줄이 결과 envelope 으로 오인될 수 있다.
+        그래서 이 파일이 이미 쓰던 `[json_only] ...` 평문 형식으로 통일한다.
+        stdout 에 나가는 것은 오직 envelope JSON 뿐이라는 성질을 유지하기 위함이다.
+        """
+        line = '[json_only] {}: {}'.format(error_type, message)
+        context = []
         if host:
-            payload['host'] = host
+            context.append('host={}'.format(host))
         if task:
-            payload['task'] = task
-        self._emit(payload, file=sys.stderr)
+            context.append('task={}'.format(task))
+        if context:
+            line += ' ({})'.format(', '.join(context))
+        sys.stderr.write(line + '\n')
 
     # ── 호스트 lifecycle 추적 (envelope 보충용) ──────────────────────────────
 
@@ -240,6 +270,11 @@ class CallbackModule(CallbackBase):
                 'auth_proven':  False,
                 # 치명 unreachable (ignore_unreachable=false → 호스트가 play 에서 제거됨)
                 'lost':         False,
+                # 관측된 **기술 근거** (사용자 문장 아님 — errors[].detail 로만 나간다).
+                #   fail_detail  : precheck 가 포트별로 실제 관측한 원본 오류
+                #   fail_message : rescue 가 남긴 실패 태스크/예외 요약
+                'fail_detail':  None,
+                'fail_message': None,
             }
             self._hosts[host_name] = ctx
         return ctx
@@ -287,7 +322,12 @@ class CallbackModule(CallbackBase):
                 ctx['diagnosis'] = diag
         for key, slot in (('_out_target_type', 'target_type'),
                           ('_out_collection_method', 'collection_method'),
-                          ('_out_ip', 'ip')):
+                          ('_out_ip', 'ip'),
+                          # precheck / rescue 가 남긴 기술 근거. 정상 경로에서는
+                          # build_failed_output.yml:64-74 가 errors[].detail 로 싣는데,
+                          # 보충 경로는 그 태스크를 못 거치므로 여기서 직접 붙든다.
+                          ('_fail_error_detail', 'fail_detail'),
+                          ('_fail_error_message', 'fail_message')):
             if facts.get(key):
                 ctx[slot] = str(facts[key])
 
@@ -418,7 +458,10 @@ class CallbackModule(CallbackBase):
                     and diagnosis['failure_reason'].strip()):
                 diagnosis['failure_reason'] = _REASON_NO_OUTPUT
             err_section = 'precheck'
-            err_detail = 'envelope reconciled by callback; precheck diagnosis preserved'
+            # precheck 가 포트별로 실제 관측한 오류를 앞에 둔다. 고정 문자열만 남기면
+            # "어느 포트에서 무엇을 봤는가" 라는 유일한 1차 증거가 사라진다.
+            err_detail = self._compose_detail(
+                ctx, 'envelope reconciled by callback; precheck diagnosis preserved')
         elif ctx.get('lost') and ctx.get('auth_proven'):
             # (2) 인증 통과 후 수집 도중 연결 끊김
             diagnosis = self._diagnosis(observed, details, True,
@@ -461,6 +504,21 @@ class CallbackModule(CallbackBase):
         }
 
     @staticmethod
+    def _compose_detail(ctx, fixed):
+        """관측된 기술 근거 + 콜백이 덧붙이는 고정 문자열 → errors[].detail 문자열.
+
+        결합 규칙(' | ')은 정상 경로인 `build_failed_output.yml:64-74` 와 같다.
+        사용자 문장은 message 에만, 기술 근거는 detail 에만 둔다.
+        """
+        parts = []
+        for slot in ('fail_detail', 'fail_message'):
+            value = ctx.get(slot)
+            if isinstance(value, str) and value.strip():
+                parts.append(value.strip())
+        parts.append(fixed)
+        return ' | '.join(parts)
+
+    @staticmethod
     def _diagnosis(observed, details, auth_success, stage, code, reason):
         """precheck 가 관측한 앞 단계 결과는 보존하고, 뒷 단계만 채운다."""
         return {
@@ -472,6 +530,36 @@ class CallbackModule(CallbackBase):
             'failure_code':       code,
             'failure_reason':     reason,
             'details':            details,
+        }
+
+    def _minimal_envelope(self, host_name):
+        """조립이 실패했을 때의 최후 수단 envelope.
+
+        관측값 해석을 전부 포기하고 분기 (4) 값으로 고정한다
+        (fallback / OUTPUT_BUILD_FAILED / `_REASON_NO_OUTPUT`). "결과 객체를 만들지
+        못했다" 는 상황 그 자체이므로 의미가 맞다. 13 필드의 **순서와 구성은 정본과 같다**
+        (rule 13 R5 / build_output.yml).
+        """
+        channel = getattr(self, '_playbook_channel', None)
+        target_type, collection_method = _CHANNEL_ENVELOPE.get(channel, (channel, None))
+        return {
+            'schema_version':    '1',
+            'target_type':       target_type,
+            'collection_method': collection_method,
+            'ip':                host_name,
+            'hostname':          host_name,
+            'vendor':            None,
+            'status':            'failed',
+            'sections':          {},
+            'diagnosis':         self._diagnosis(
+                {}, {}, None, 'fallback', 'OUTPUT_BUILD_FAILED', _REASON_NO_OUTPUT),
+            'meta':              {},
+            'correlation':       {},
+            'errors':            [{'section': 'gather',
+                                   'message': _REASON_NO_OUTPUT,
+                                   'detail':  'envelope reconciled by callback; '
+                                              'fallback envelope build failed'}],
+            'data':              {},
         }
 
     def _reconcile_missing_envelopes(self, stats):
@@ -488,15 +576,31 @@ class CallbackModule(CallbackBase):
             ctx = self._hosts.get(host_name)
             if ctx is None or ctx.get('emitted'):
                 continue
-            envelope = self._build_fallback_envelope(host_name, ctx)
-            self._emit(envelope)
-            ctx['emitted'] = True
-            # 관측 가시성 — stdout JSON 과 분리된 stderr 로만 남긴다.
-            self._emit_error(
-                error_type='envelope_reconciled',
-                message=envelope['diagnosis']['failure_code'],
-                host=host_name,
-            )
+            # ── per-host 격리 ────────────────────────────────────────────────
+            # 종전에는 이 루프 전체가 v2_playbook_on_stats 의 try 하나에만 감싸여 있어,
+            # 첫 호스트 처리 중 예외가 나면 **남은 미방출 호스트 전부**가 envelope 을
+            # 잃었다 (보충 장치가 오히려 대량 소실 지점이 된다). 호스트 하나의 실패는
+            # 그 호스트로 가둔다. 바깥 try 는 2중 방어로 그대로 둔다.
+            try:
+                envelope = self._build_fallback_envelope(host_name, ctx)
+            except Exception as e:                          # noqa: BLE001
+                envelope = self._minimal_envelope(host_name)
+                sys.stderr.write(
+                    '[json_only] WARNING: envelope 조립 실패 — 최소 envelope 으로 대체 '
+                    '(host={}, reason={})\n'.format(host_name, type(e).__name__))
+            try:
+                self._emit(envelope)
+                ctx['emitted'] = True
+                # 관측 가시성 — stdout JSON 과 분리된 stderr 로만 남긴다.
+                self._emit_error(
+                    error_type='envelope_reconciled',
+                    message=envelope['diagnosis']['failure_code'],
+                    host=host_name,
+                )
+            except Exception as e:                          # noqa: BLE001
+                sys.stderr.write(
+                    '[json_only] WARNING: envelope 보충 출력 실패 '
+                    '(host={}, reason={})\n'.format(host_name, type(e).__name__))
         self._hosts = {}
 
     # ── 억제할 이벤트 (아무것도 출력하지 않음) ──────────────────────────────

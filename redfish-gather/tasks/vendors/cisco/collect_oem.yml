@@ -62,9 +62,14 @@
         _sections_collected_fragment: []
         _sections_failed_fragment:    []
         _errors_fragment:
+            # 2026-08-12 (M2): 사용자 문장에서 관측하지 않은 추측(펌웨어 세대 추정)과
+            # 내부 용어(graceful degradation)를 뺐다. 근거는 detail 로 내린다.
+            # `severity: warning` 은 제거했다 — 정규화가 section/message/detail 3키만
+            # 남기므로 **envelope 에 도달한 적이 없는 죽은 키**였다. warning/error 구분을
+            # 도입하려면 errors[] 원소 shape 변경이라 사용자 확정이 필요하다.
           - section: bmc
-            message: "Cisco OEM 영역 일부 미수집 (CIMC 1.x / UCS Manager 매개 가능성 — graceful degradation)"
-            severity: warning
+            message: "일부 제조사 확장 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+            detail: "vendor=cisco; oem collect/normalize rescue; CIMC 1.x or UCS Manager managed 가능성"
       no_log: true
 
 # fragment 누적 병합 (rule 22 R3 — merge_fragment.yml 호출 의무)

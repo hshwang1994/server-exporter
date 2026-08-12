@@ -88,8 +88,10 @@
         - name: "esxi | abort if facts failed"
           ansible.builtin.fail:
             msg: >-
-              ESXi 정보 수집에 실패했습니다 ({{ _e_ip }}). 인증과 네트워크는 정상이나 vSphere API 호출이 실패했습니다.
-              사용 계정: {{ (_e_attempts_meta | default({})).used_label | default('?') }}.
+              ESXi 정보 수집에 실패했습니다 ({{ _e_ip }}).
+              사용 계정: {{ (_e_attempts_meta | default({})).used_label | default('?') }},
+              시도 후보: {{ (_e_attempts_meta | default({})).attempted_count | default(0) }},
+              자격 probe 통과: {{ _e_auth_ok | default(false) }}.
               가능한 원인: (1) 계정의 vSphere 권한 부족 (Read-Only / System.View 필요), (2) ESXi 펌웨어 호환성 (지원: 6.7 / 7.x / 8.x), (3) 라이선스 만료, (4) lockdown 모드.
           when: not (_e_facts_ok | bool)
 
@@ -202,7 +204,9 @@
             _diagnosis: >-
               {{ _diagnosis | default({}) | combine({
                    'auth_success': true,
-                   'details': ((_diagnosis | default({})).details if ((_diagnosis | default({})).details is mapping) else {}) | combine({
+                   'details': ((_diagnosis | default({})).details | default({})
+                                if (((_diagnosis | default({})).details | default({})) is mapping)
+                                else {}) | combine({
                      'adapter_candidate': (_selected_adapter | default({})).adapter_id | default(none),
                      'auth': _e_attempts_meta | default({}),
                      'esxi_version': _e_raw_facts.ansible_distribution_version | default(none),
@@ -244,25 +248,33 @@
         #   쓴다. 자격 단계 실패 → 4번, 인증 통과 후 실패(수집/정규화) → 5번.
         #   종전에 수집 실패와 정규화 실패를 다른 문장으로 나눴는데, 사용자가 할 일이 같아서
         #   (대상 상태와 수집 로그 확인) 5번으로 합쳤다. 단계 구분은 failure_stage 가 유지한다.
+        # 2026-08-12 (C6): 자격 후보가 0건이면 try_credentials 의 iterate 가 통째로 skip 되어
+        #   _e_auth_ok 가 '관측한 적 없음' 인데도 false 로 남는다. 그 상태에서 이후 단계가
+        #   실패하면 stage=auth + 4번 문장(자격증명)이 나가는데, 같은 errors 원소의 detail 은
+        #   "인증과 네트워크는 정상" 이라고 말해 서로 반대되는 이야기가 된다.
+        #   vmware_host_facts 가 실제로 facts 를 돌려준 것(_e_facts_ok)은 인증 통과의 직접
+        #   관측이므로 함께 본다.
         - name: "esxi | rescue | Portal 표시용 failure_reason 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
+              {%- set ok = (_e_auth_ok | default(false) | bool)
+                           or (_e_facts_ok | default(false) | bool) -%}
               {{ {'reachable': none, 'port_open': none, 'protocol_supported': none,
                   'auth_success': none, 'failure_stage': none, 'failure_code': none,
                   'failure_reason': none, 'details': {}}
                  | combine((_diagnosis | default({}, true))
                            if ((_diagnosis | default({}, true)) is mapping) else {})
-                 | combine({'failure_reason':
-                     (_fr_credential_failed
-                      if not (_e_auth_ok | default(false) | bool)
-                      else _fr_gather_failed),
-                   'failure_stage':
-                     ('auth' if not (_e_auth_ok | default(false) | bool) else 'gather'),
-                   'failure_code':
-                     ('AUTH_PROBE_FAILED' if not (_e_auth_ok | default(false) | bool)
-                      else 'GATHER_FAILED'),
-                   'auth_success':
-                     (true if (_e_auth_ok | default(false) | bool) else none)}) }}
+                 | combine({'failure_reason': (_fr_gather_failed if ok else _fr_credential_failed),
+                            'failure_stage':  ('gather' if ok else 'auth'),
+                            'failure_code':   ('GATHER_FAILED' if ok else 'AUTH_PROBE_FAILED'),
+                            'auth_success':   (true if ok else none),
+                            'details':
+                              {'channel': 'esxi',
+                               'auth': (_e_attempts_meta | default({}))}
+                              | combine(((_diagnosis | default({}, true)).details | default({}))
+                                        if (((_diagnosis | default({}, true)).details | default({}))
+                                            is mapping)
+                                        else {})}) }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
         - name: "esxi | rescue | set failed vars"
@@ -301,9 +313,9 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_output_build_failed, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.','detail':'_output 미생성 (block/rescue 모두 실패)'}],
+                       'errors': [{'section':'gather','message': _fr_output_build_failed,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {}
                      })) | to_json }}"

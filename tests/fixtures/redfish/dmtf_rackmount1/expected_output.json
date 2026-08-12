@@ -6,6 +6,7 @@
     "network",
     "power",
     "processors",
+    "storage",
     "system",
     "thermal"
   ],
@@ -355,13 +356,11 @@
     },
     "thermal": {}
   },
-  "error_count": 2,
-  "failed_sections": [
-    "storage"
-  ],
+  "error_count": 1,
+  "failed_sections": [],
   "multi_node": null,
   "probe_facts": {},
-  "status": "partial",
+  "status": "success",
   "unsupported_sections": [
     "network_adapters"
   ],

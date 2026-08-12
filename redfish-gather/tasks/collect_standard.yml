@@ -24,6 +24,10 @@
     # {'role': ..., 'label': ..., 'status': 정수 or none}
     _rf_auth_observations: []
     _rf_primary_auth_rejected: false
+    # 2026-08-12 (N41): 실패한 후보의 근거를 rescue 까지 나르는 리스트.
+    # try_one_account.yml 이 후보마다 1건씩 append 하고, site.yml rescue 가
+    # errors[].detail 로 합류시킨다 (message 는 5문장 정본 그대로).
+    _rf_failed_attempt_notes: []
   no_log: true
 
 - name: "redfish | collect_standard | warn no accounts"
@@ -54,6 +58,18 @@
         _rf_collect_ok: >-
           {{ _rf_raw_collect is not failed and
              (_rf_raw_collect.status | default('failed')) != 'failed' }}
+      no_log: true
+
+    # 2026-08-12 (N41): 빈 자격 경로도 실패 근거를 남긴다 (후보 경로와 동일 형식).
+    - name: "redfish | collect_standard | record failure evidence (empty creds)"
+      when: not (_rf_collect_ok | bool)
+      ansible.builtin.set_fact:
+        _rf_failed_attempt_notes: >-
+          {{ (_rf_failed_attempt_notes | default([]))
+             + [ 'no-credential: status='
+                 ~ (_rf_raw_collect.status | default('?'))
+                 ~ ' err=' ~ ((_rf_raw_collect.errors | default([]) | first | default({})).message
+                              | default('-')) ] }}
       no_log: true
 
 # 후보 순차 시도 — 성공 시 loop iteration 자체 skip (include_tasks 호출 안 됨).

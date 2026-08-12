@@ -378,7 +378,11 @@
         _sections_collected_fragment: ['network']
         _sections_failed_fragment:    []
         # LOW-9: lspci stderr 비어있지 않으면 권한 부족/partial enumeration 의심 — errors[] 에 명시.
-        _errors_fragment: "{{ [{'section':'network','message':('lspci stderr (NIC partial 가능): ' ~ (_l_lspci_nic.stderr | default('') | truncate(200))),'detail':{'rc':(_l_lspci_nic.rc | default(none))}}] if ((_l_lspci_nic.stderr | default('') | trim | length) > 0) else [] }}"
+        # H4 (2026-08-12): 종전에는 대상 서버가 뱉은 stderr 원문이 그대로 message 에 실려
+        #   Portal Grid 에 임의 영문/경로 문자열이 노출됐다. message 는 고정 한국어 문장으로
+        #   두고 stderr 원문·rc 는 detail(문자열) 로 옮긴다. 섹션은 계속 성공이므로
+        #   _sections_failed_fragment 는 건드리지 않는다 (경고성 오류).
+        _errors_fragment: "{{ [{'section':'network','message':'네트워크 카드 상세 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.','detail':('source=lspci; rc=' ~ (_l_lspci_nic.rc | default('none')) ~ '; stderr=' ~ ((_l_lspci_nic.stderr | default('') | replace('\n', ' ') | trim | truncate(500, true)) or 'none'))}] if ((_l_lspci_nic.stderr | default('') | trim | length) > 0) else [] }}"
       no_log: true
   when: _l_python_mode == 'python_ok'
 
@@ -649,6 +653,17 @@
           {{ {'groups': ns.groups} }}
       no_log: true
 
+    # N12 (2026-08-12): raw 경로 수집 성공 판정을 한 곳에서 결정한다.
+    #   종전에는 같은 조건식이 _sections_collected_fragment / _sections_failed_fragment 두 곳에
+    #   복제돼 있었고, errors 는 무조건 [] 였다 → 섹션이 failed 인데 사유가 없는 결과가 나왔다.
+    #   판정 변수 하나를 세 자리가 함께 참조해 "failed 면 errors 1건" 을 구조적으로 보장한다.
+    - name: "linux | network | raw 수집 성공 판정"
+      ansible.builtin.set_fact:
+        _l_net_raw_ok: >-
+          {{ ((_l_norm_interfaces_raw | default([]) | length) > 0)
+             or ((_l_raw_dns | default([]) | length) > 0) }}
+      no_log: true
+
     # bond/vlan/bridge/team 토폴로지 정규화 (python_ok 경로와 동일 filter).
     # merge_linux_addresses: raw 경로도 동일하게 bond alias / secondary 병합.
     - name: "linux | network | normalize topology (raw)"
@@ -681,13 +696,10 @@
             ports:       []
             summary: "{{ _l_net_summary_r | default({'groups': []}) }}"
         _sections_supported_fragment: ['network']
-        _sections_collected_fragment: >-
-          {{ ['network'] if (_l_norm_interfaces_raw | default([]) | length > 0
-                             or _l_raw_dns | default([]) | length > 0) else [] }}
-        _sections_failed_fragment: >-
-          {{ [] if (_l_norm_interfaces_raw | default([]) | length > 0
-                    or _l_raw_dns | default([]) | length > 0) else ['network'] }}
-        _errors_fragment: []
+        _sections_collected_fragment: "{{ ['network'] if (_l_net_raw_ok | default(false) | bool) else [] }}"
+        _sections_failed_fragment:    "{{ [] if (_l_net_raw_ok | default(false) | bool) else ['network'] }}"
+        # N12: 섹션이 failed 가 되는 바로 그 조건에서 errors 1건을 함께 만든다.
+        _errors_fragment: "{{ [] if (_l_net_raw_ok | default(false) | bool) else [{'section':'network','message':'네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=ip,sysfs,resolv_conf; cause=no_interface_and_no_dns; rc=' ~ (_l_net_raw.rc | default('none')))}] }}"
       no_log: true
   when: _l_python_mode != 'python_ok'
 

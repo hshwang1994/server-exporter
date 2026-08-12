@@ -170,8 +170,11 @@
         _sections_failed_fragment:    []
         # LOW-1 fix: dmidecode 권한/미존재로 total_basis=os_visible fallback 시
         # 사용자가 사유 추적 가능하도록 errors[] 에 명시. 정상 수집은 빈 list.
+        # H7 (2026-08-12): message 에 있던 내부 필드명(total_basis) / 명령어(dmidecode) 를
+        #   detail 로 옮기고 사용자 문장만 남긴다. data.memory.total_basis 필드 자체는 불변
+        #   (호출자 계약).
         _errors_fragment: >-
-          {{ [{'section':'memory','message':'dmidecode 결과 없음 — total_basis=os_visible fallback (권한 부족 또는 dmidecode 미존재)','detail':{'rc':_l_mem_phys_raw.rc | default(none)}}]
+          {{ [{'section':'memory','message':'메모리 총 용량을 물리 설치량이 아닌 운영체제 인식 값으로 수집했습니다. 수집 계정의 권한을 확인하세요.','detail':('field=total_basis; value=os_visible; source=dmidecode; rc=' ~ (_l_mem_phys_raw.rc | default('none')))}]
              if ((_l_mem_phys_raw.stdout | default('') | trim | length) == 0) else [] }}
       no_log: true
   when: _l_python_mode == 'python_ok'

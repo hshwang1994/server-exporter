@@ -1,13 +1,18 @@
 ---
 # common/vars/failure_reasons.yml
 #
-# 최종 사용자 문구 표준 (2026-08-11 Phase 6-B 사용자 확정) — Ansible 쪽 **정본**.
+# 최종 사용자 문구 표준 — Ansible 쪽 **정본**.
 #
-# 이 5 문장이 Portal 실패 Grid 에 보이는 전부다. 같은 문장이 두 곳에 동시에 나간다:
+# 이 문장들이 Portal 실패 Grid 에 보이는 전부다. 같은 문장이 두 곳에 동시에 나간다:
 #   - diagnosis.failure_reason
 #   - errors[].message   ← Portal 실패 Grid 의 실제 소스
 # 두 값은 common/tasks/normalize/build_failed_output.yml 이 failure_reason 을 그대로
-# message 로 복사해 **항상 일치**한다. 문자열을 두 번 정의하지 않는다.
+# message 로 복사해 **status=failed envelope 에서 항상 일치**한다.
+#
+# 주의 (2026-08-12): "항상 일치" 는 **완전 실패(status=failed) 경로에 한정**된다.
+#   status=partial / success 의 섹션 단위 errors[].message 는 섹션 의미를 유지해야 하므로
+#   이 문장들로 통일하지 않는다. 그 경로의 failure_reason 은 null 이다.
+#   섹션 문구 품질 기준은 tests/e2e/test_section_message_contract.py 가 강제한다.
 #
 # Python 쪽 정본은 common/library/precheck_bundle.py 의 REASON_* 상수이며 본 파일과
 # 글자까지 동일해야 한다. drift 는 tests/e2e/test_errors_message_contract.py 가 막는다.
@@ -18,14 +23,28 @@
 #   기술 정보는 errors[].detail 에만 보존한다 (§34).
 #
 # 사용처:
-#   redfish-gather/site.yml, esxi-gather/site.yml, os-gather/site.yml 의 rescue 블록
+#   redfish-gather/site.yml, esxi-gather/site.yml, os-gather/site.yml 의 rescue / always 블록
 #   (각 play 의 vars_files 로 로드)
 
-# 1. 대상 IP 사용 여부를 확인하지 못했다 (reachable / port 단계, presence 미확인).
+# ── failure_code → 문장 매핑 (정본) ────────────────────────────────────────────
+#   DNS_RESOLUTION_FAILED  → 1
+#   TCP_CONNECT_FAILED     → 1
+#   TCP_CONNECTION_REFUSED → 2
+#   PROTOCOL_CHECK_FAILED  → 3
+#   AUTH_PROBE_FAILED      → 4
+#   GATHER_FAILED          → 5
+#   OUTPUT_BUILD_FAILED    → 6
+# 문장은 **관측된 failure_code** 에서 파생된다. 다른 조건으로 따로 갈리지 않게 해서
+# stage / code / message 가 서로 다른 이야기를 하는 상황을 구조적으로 없앤다.
+
+# 1. 연결 자체를 확인하지 못했다 (reachable 단계 — timeout / no route / 주소 해석 실패).
 _fr_ip_unconfirmed: "대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요."
 
-# 2. IP 사용은 확인됐는데 관리 포트에 못 붙었다 (presence 확인 시).
-_fr_port_unreachable: "대상 IP 사용은 확인됐지만 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요."
+# 2. 관리 포트가 명시적으로 거부됐다 (port 단계 — 연결 거부를 실제로 관측).
+#    2026-08-12 (사용자 확정): 종전 문구 "대상 IP 사용은 확인됐지만 ..." 는 IP presence 판정을
+#    전제하는데 이 저장소는 그런 판정을 하지 않는다(ICMP / IPAM / ARP 미도입). 관측한 사실만
+#    말하도록 바꿨다 — "관리 포트에 연결할 수 없다".
+_fr_port_unreachable: "대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요."
 
 # 3. 관리 포트 연결은 됐는데 기대한 응답을 확인하지 못했다 (protocol 단계).
 _fr_protocol_unconfirmed: "관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. 관리 서비스 설정과 상태를 확인하세요."
@@ -35,3 +54,10 @@ _fr_credential_failed: "대상에 접속할 수 없습니다. 자격증명과 �
 
 # 5. 접속까지는 확인됐고 수집에서 실패했다 (gather 단계).
 _fr_gather_failed: "대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요."
+
+# 6. 결과 객체 자체를 만들지 못했다 (fallback 단계 — OUTPUT_BUILD_FAILED).
+#    2026-08-12: 종전에는 이 문장이 각 site.yml always 블록 6곳 + build_failed_output.yml +
+#    callback_plugins/json_only.py 에 리터럴로 흩어져 있었다. 여기로 모은다.
+#    (build_failed_output.yml 에 있던 7번째 문장 "수집에 실패했습니다. 대상 상태와 수집 로그를
+#     확인하세요." 는 5번과 뒷부분이 같은데 의미가 반대라 폐지하고 이 문장으로 흡수했다.)
+_fr_output_build_failed: "수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요."

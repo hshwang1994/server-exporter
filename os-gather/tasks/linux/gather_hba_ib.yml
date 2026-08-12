@@ -188,10 +188,15 @@
         _sections_supported_fragment: []
         _sections_collected_fragment: []
         _sections_failed_fragment:    []
+        # M1 / NEW-3 (2026-08-12): message 는 사용자 문장으로, 기술 근거는 detail 문자열로.
+        #   section 은 schema 11 섹션 이름을 쓴다 (종전 linux_hba_ib 는 Portal 이 섹션별로
+        #   오류를 묶을 때 어디에도 붙지 않았다). detail 은 빈 문자열 대신 none 을 쓴다.
         _errors_fragment:
-          - section: linux_hba_ib
-            message: "fc_host / infiniband / driver_map 수집 실패 (best-effort skip)"
-            detail:  "{{ ansible_failed_result.msg | default('') }}"
+          - section: storage
+            message: "스토리지 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+            detail: >-
+              {{ 'scope=fc_host,infiniband,nic_driver_map; cause=task_failed; msg='
+                 ~ ((ansible_failed_result.msg | default('') | string | trim) or 'none') }}
       no_log: true
 
 - name: "linux | hba_ib | merge fragment"

@@ -2,6 +2,16 @@
 # esxi-gather/tasks/collect_disks.yml
 # esxi_disks (pyvmomi 커스텀 모듈) → _e_raw_disks, _e_disks_ok
 # 물리 디스크 serial/wwn 수집 (2026-06-22 신규). datastore 와 별개 — graceful(실패 시 빈 list).
+#
+# 2026-08-12 (N36): _e_disks_ok 를 만들어 두고 소비하는 곳이 저장소 전체에 0건이었다.
+#   즉 물리 디스크 / 컨트롤러 / 방화벽 포트 수집이 통째로 실패해도 envelope 에는 빈 list 만
+#   남고 errors[] 에는 아무 흔적이 없었다 (침묵 실패). 모듈이 파트 단위로 실패를 알려주므로
+#   (failed_parts / part_errors) 여기서 errors[] 로 승격한다.
+#
+#   섹션 status 는 바꾸지 않는다. datastore 는 성공했는데 물리 디스크만 실패한 부분 실패에서
+#   storage 섹션 전체를 failed 로 강등하면 과잉이다 — _sections_*_fragment 는 비워 둔다.
+#   (파트 → 섹션: physical_disks / controllers → storage, listening_ports → system.
+#    세 정보 모두 ESXi 가 항상 제공하므로 "정상 미제공" 이 아니라 수집 실패로 본다.)
 
 - name: "esxi | collect | physical disks (serial/wwn)"
   esxi_disks:
@@ -23,4 +33,46 @@
     _e_disks_ok:  "{{ (_e_disks_result is not failed)
                       and (_e_disks_result.physical_disks is defined)
                       and (_e_disks_result.error is not defined) }}"
+    # 실패 파트 목록. 구버전 모듈(failed_parts 미반환)이 섞여도 error 키만으로 최소 판정한다.
+    _e_disks_failed_parts: >-
+      {{ _e_disks_result.failed_parts
+         | default(['connect'] if (_e_disks_result.error is defined) else []) }}
+    # 기술 근거 — errors[].detail 전용. 사용자 문장에는 넣지 않는다.
+    _e_disks_err: >-
+      {{ (_e_disks_result.error | default('', true) | string | trim)
+         | default(none, true) }}
   no_log: true
+
+- name: "esxi | collect | build disks errors fragment"
+  ansible.builtin.set_fact:
+    _data_fragment: {}
+    _sections_supported_fragment:   []
+    _sections_collected_fragment:   []
+    _sections_failed_fragment:      []
+    _errors_fragment: >-
+      {%- set parts = _e_disks_failed_parts | default([]) -%}
+      {%- set connect = 'connect' in parts -%}
+      {%- set hit_storage = connect or ('physical_disks' in parts) or ('controllers' in parts) -%}
+      {%- set hit_system  = connect or ('listening_ports' in parts) -%}
+      {%- set out = [] -%}
+      {%- if hit_storage -%}
+        {%- set _ = out.append({
+          'section': 'storage',
+          'message': '스토리지 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+          'detail':  _e_disks_err | default(none)}) -%}
+      {%- endif -%}
+      {%- if hit_system -%}
+        {%- set _ = out.append({
+          'section': 'system',
+          'message': '서버 기본 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+          'detail':  _e_disks_err | default(none)}) -%}
+      {%- endif -%}
+      {{ out }}
+  when: (_e_disks_failed_parts | default([]) | length) > 0
+  no_log: true
+
+# rule 22: _errors_fragment 를 set 한 자리 뒤에는 반드시 merge 가 온다 (같은 when 으로 짝을 맞춘다).
+- name: "esxi | collect | merge disks errors fragment"
+  ansible.builtin.include_tasks:
+    file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
+  when: (_e_disks_failed_parts | default([]) | length) > 0

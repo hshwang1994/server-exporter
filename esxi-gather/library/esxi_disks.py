@@ -160,6 +160,22 @@ def _build_listening_ports(content):
     return [str(p) for p in sorted(ports)]
 
 
+def _safe_build(part, fn, content, part_errors):
+    """빌더 하나의 실패가 나머지 파트까지 삼키지 않게 격리한다.
+
+    2026-08-12 (N36): 종전에는 main() 의 단일 try 가 세 빌더를 모두 감싸고 있어서
+    listening_ports 하나가 죽으면 이미 만들어 둔 physical_disks / controllers 까지
+    통째로 빈 list 로 반환됐고, 호출자는 '연결 실패' 와 '일부 파트 실패' 를 구분할 수
+    없었다. 파트 이름을 키로 사유를 모아 두면 태스크가 어느 섹션의 errors 로 올릴지
+    결정할 수 있다.
+    """
+    try:
+        return fn(content)
+    except Exception as e:
+        part_errors[part] = str(e)
+        return []
+
+
 def main():
     module = AnsibleModule(
         argument_spec=dict(
@@ -178,19 +194,47 @@ def main():
     ctx = None if p['validate_certs'] else ssl._create_unverified_context()
 
     si = None
+    # 파트 이름 → 실패 사유. 'connect' 는 접속/ServiceContent 단계 실패를 뜻한다.
+    part_errors = {}
+    connect_ok = False
+    content = None
+    disks, controllers, listening_ports = [], [], []
+
     try:
-        si = SmartConnect(host=p['hostname'], user=p['username'], pwd=p['password'],
-                          port=p['port'], sslContext=ctx)
-        content = si.RetrieveContent()
-        disks = _build_disks(content)
-        controllers = _build_controllers(content)
-        listening_ports = _build_listening_ports(content)
-        module.exit_json(changed=False, physical_disks=disks, disk_count=len(disks),
-                         controllers=controllers, listening_ports=listening_ports)
-    except Exception as e:
-        # 수집 실패는 graceful — 빈 list + error (호출 task 가 failed_when:false 로 흡수, rule 27 R4)
-        module.exit_json(changed=False, physical_disks=[], disk_count=0,
-                         controllers=[], listening_ports=[], error=str(e))
+        try:
+            si = SmartConnect(host=p['hostname'], user=p['username'], pwd=p['password'],
+                              port=p['port'], sslContext=ctx)
+            content = si.RetrieveContent()
+            connect_ok = True
+        except Exception as e:
+            # 수집 실패는 graceful — 빈 list + error (호출 task 가 failed_when:false 로 흡수, rule 27 R4)
+            part_errors['connect'] = str(e)
+
+        if connect_ok:
+            disks = _safe_build('physical_disks', _build_disks, content, part_errors)
+            controllers = _safe_build('controllers', _build_controllers, content, part_errors)
+            listening_ports = _safe_build('listening_ports', _build_listening_ports,
+                                          content, part_errors)
+
+        result = dict(
+            changed=False,
+            physical_disks=disks, disk_count=len(disks),
+            controllers=controllers, listening_ports=listening_ports,
+            # 2026-08-12 (N36): 아래 3키는 **추가만** 한 것이다 (기존 키 삭제/리네임 없음).
+            #   호출 task(collect_disks.yml)가 어느 섹션의 errors 로 올릴지 정하는 근거다.
+            #   connect_ok   : 접속 자체가 됐는지 (false 면 세 파트 모두 미수집)
+            #   failed_parts : 실패한 파트 이름 목록 (정렬 — 출력 결정성)
+            #   part_errors  : 파트 → 사유. 사용자 문장이 아니라 errors[].detail 근거다.
+            connect_ok=connect_ok,
+            failed_parts=sorted(part_errors.keys()),
+            part_errors=part_errors,
+        )
+        if part_errors:
+            # 기존 계약 유지: 'error' 키의 존재 자체가 "무언가 실패" 신호다
+            # (collect_disks.yml 의 _e_disks_ok 판정식이 이 키를 본다).
+            result['error'] = part_errors.get('connect') or '; '.join(
+                '%s: %s' % (k, v) for k, v in sorted(part_errors.items()))
+        module.exit_json(**result)
     finally:
         if si is not None:
             try:

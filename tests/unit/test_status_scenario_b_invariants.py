@@ -112,11 +112,18 @@ def test_errors_have_section_and_message(envelope: dict) -> None:
 
 
 def test_memory_warning_pattern_present(envelope: dict) -> None:
-    """gather_memory.yml:171-175 의 dmidecode fallback 패턴 재현 확인."""
+    """gather_memory.yml 의 dmidecode fallback 패턴 재현 확인.
+
+    2026-08-12 (H7): 기술 근거(dmidecode / total_basis / rc)는 ``message`` 가 아니라
+    ``detail`` 에 둔다. message 는 Portal 이 그대로 보여주는 사용자 문장이다.
+    """
     memory_errs = [e for e in envelope["errors"] if e["section"] == "memory"]
     assert memory_errs, "memory section warning 누락 (시나리오 B 핵심 trigger)"
-    assert "dmidecode" in memory_errs[0]["message"], (
-        "fallback 사유 message 가 dmidecode 키워드 포함해야 함"
+    assert "dmidecode" in memory_errs[0]["detail"], (
+        "fallback 기술 근거는 detail 에 남아야 함"
+    )
+    assert "dmidecode" not in memory_errs[0]["message"], (
+        "사용자 문장(message)에 내부 명령어가 노출되면 안 됨"
     )
 
 

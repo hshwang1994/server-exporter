@@ -41,6 +41,7 @@ from tests.e2e.test_failure_reason_contract import (  # noqa: E402
     _assert_diagnosis_shape,
     _assert_grid_ready,
     _render_diagnosis,
+    render_redfish_rescue,
 )
 
 ESXI_SERVICE_CONTENT = (
@@ -208,11 +209,18 @@ def _esxi_diag(auth_ok: bool, facts_ok: bool) -> dict[str, Any]:
          "_e_auth_ok": auth_ok, "_e_facts_ok": facts_ok})
 
 
-def _rf_diag(collect_ok: bool, rejected: bool) -> dict[str, Any]:
-    return _render_diagnosis(
-        "redfish-gather/site.yml", _RF_TASK,
+def _rf_diag(collect_ok: bool, rejected: bool, *, statuses=None) -> dict[str, Any]:
+    """redfish rescue 렌더.
+
+    2026-08-12: 자격 요청을 **보냈는지** 가 stage 를 가른다 (CLAUDE.md §9 — failure_stage 는
+    워크플로가 멈춘 위치). statuses 를 주면 그 후보들에 대해 자격 요청을 보낸 상태가 된다.
+    아무것도 주지 않으면 '자격 요청 전에 멈췄다'(adapter 선택 / vault 로드 예외 등)로 본다.
+    """
+    obs = [{"role": "primary", "label": f"c{i}", "status": st}
+           for i, st in enumerate(statuses or [])]
+    return render_redfish_rescue(
         {"_diagnosis": dict(_PRECHECK_OK), "_rf_collect_ok": collect_ok,
-         "_rf_auth_rejected": rejected})
+         "_rf_auth_rejected": rejected, "_rf_auth_observations": obs})
 
 
 CASES_RESCUE = [
@@ -220,15 +228,15 @@ CASES_RESCUE = [
     ("C7 Linux 자격 전멸",        lambda: _os_diag("linux", False),   "auth",   "AUTH_PROBE_FAILED", None),
     ("C8 Windows 자격 전멸",      lambda: _os_diag("windows", False), "auth",   "AUTH_PROBE_FAILED", None),
     ("C9 ESXi 자격 전멸",         lambda: _esxi_diag(False, False),   "auth",   "AUTH_PROBE_FAILED", None),
-    ("C10 Redfish 자격 실패",     lambda: _rf_diag(False, False),     "gather", "GATHER_FAILED",     None),
-    ("C11 Redfish HTTP 401 실증", lambda: _rf_diag(False, True),      "auth",   "AUTH_PROBE_FAILED", False),
-    ("C12 Redfish HTTP 403",      lambda: _rf_diag(False, False),     "gather", "GATHER_FAILED",     None),
+    ("C10 Redfish 자격 실패",     lambda: _rf_diag(False, False, statuses=[None]), "auth", "AUTH_PROBE_FAILED", None),
+    ("C11 Redfish HTTP 401 실증", lambda: _rf_diag(False, True, statuses=[401]), "auth", "AUTH_PROBE_FAILED", False),
+    ("C12 Redfish HTTP 403",      lambda: _rf_diag(False, False, statuses=[403]), "auth", "AUTH_PROBE_FAILED", None),
     ("C13 Linux 수집 실패",       lambda: _os_diag("linux", True),    "gather", "GATHER_FAILED",     True),
     ("C14 Windows 수집 실패",     lambda: _os_diag("windows", True),  "gather", "GATHER_FAILED",     True),
     ("C15 ESXi 수집 실패",        lambda: _esxi_diag(True, False),    "gather", "GATHER_FAILED",     True),
-    ("C16 Redfish 수집 실패",     lambda: _rf_diag(False, False),     "gather", "GATHER_FAILED",     None),
+    ("C16 Redfish 수집 실패",     lambda: _rf_diag(False, False, statuses=[500]), "auth", "AUTH_PROBE_FAILED", None),
     ("C17 ESXi 결과 처리 실패",   lambda: _esxi_diag(True, True),     "gather", "GATHER_FAILED",     True),
-    ("C18 Redfish 결과 처리 실패", lambda: _rf_diag(True, False),     "gather", "GATHER_FAILED",     None),
+    ("C18 Redfish 결과 처리 실패", lambda: _rf_diag(True, False),     "gather", "GATHER_FAILED",     True),
 ]
 
 
@@ -273,15 +281,17 @@ def test_explicit_rejection_stays_in_machine_fields_only():
     으로 같아서 문장을 나눌 실질 가치가 없다. → 4번 문구로 통일하고, 기술 근거는
     auth_success=false / failure_stage=auth / failure_code / errors[].detail 이 표현한다.
     """
-    rejected = _rf_diag(False, True)
-    unknown = _rf_diag(False, False)
+    rejected = _rf_diag(False, True, statuses=[401])
+    unknown = _rf_diag(False, False, statuses=[None])
 
     # 기계 필드는 여전히 두 경우를 구분한다 (JSON contract 불변)
     assert rejected["auth_success"] is False
     assert rejected["failure_stage"] == "auth"
     assert rejected["failure_code"] == "AUTH_PROBE_FAILED"
     assert unknown["auth_success"] is None
-    assert unknown["failure_stage"] == "gather"
+    # 2026-08-12: 원인 미확정도 **멈춘 단계는 자격 단계**다. 종전에는 stage=gather 인데
+    #   문장은 자격증명을 지목해 두 소비자가 다른 이야기를 했다 (C1).
+    assert unknown["failure_stage"] == "auth"
 
     # 사용자 문장은 동일하다
     assert rejected["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
@@ -299,7 +309,7 @@ def test_gather_stage_respects_auth_success():
     접속이 됐는지 알 수 없다 → 4번(자격증명) 문구를 쓴다. 인증 통과를 실제로 관측한
     OS / ESXi 의 수집 실패만 5번 문구를 쓴다.
     """
-    rf = _rf_diag(False, False)
+    rf = _rf_diag(False, False, statuses=[None])
     assert rf["auth_success"] is None
     assert "접속은 확인" not in rf["failure_reason"]
     assert rf["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
@@ -321,8 +331,19 @@ def test_normalization_failure_wording():
         assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
         assert diag["failure_stage"] == "gather"
     # 접속 성공을 확인하지 못한 경로는 5번(수집 실패) 문구를 쓰지 않는다
-    for diag in (_rf_diag(False, False), _esxi_diag(False, False), _os_diag("linux", False)):
+    for diag in (_rf_diag(False, False, statuses=[None]), _esxi_diag(False, False),
+                 _os_diag("linux", False)):
         assert diag["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
+
+    # 2026-08-12: 자격 요청을 **보내기 전에** 멈춘 실패는 auth 가 아니다.
+    #   adapter 선택 / vault 로드 / vendor 정규화 예외가 여기 해당한다.
+    #   precheck 는 통과했으므로 "대상 접속은 확인됐지만"(5번)이 참이고,
+    #   자격증명을 헛되이 뒤지게 만들지 않는다.
+    pre_auth = _rf_diag(False, False)
+    assert pre_auth["failure_stage"] == "gather"
+    assert pre_auth["failure_code"] == "GATHER_FAILED"
+    assert pre_auth["auth_success"] is None
+    assert pre_auth["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
 
 
 def test_all_case_reasons_use_only_the_standard_sentences():

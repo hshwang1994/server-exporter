@@ -262,11 +262,21 @@
             infiniband:       []
         _sections_supported_fragment: []
         _sections_collected_fragment: []
+        # 확장 수집이 실패해도 기본 network 정보(normalize_network.yml)는 이미 수집돼 있다.
+        # 여기서 network 를 failed 로 강등하면 과잉이라 빈 list 를 유지한다.
         _sections_failed_fragment:    []
+        # 2026-08-12 (M1/N33):
+        #   - section: 'esxi_network_extended' 는 schema 11 섹션 밖이라 Portal 이 어느 섹션에도
+        #     묶지 못했다 → 'network' 로 정규화.
+        #   - message: 개발자 용어("best-effort skip")와 커널/하이퍼바이저 내부 명칭을 빼고
+        #     사용자가 무엇을 못 받았고 무엇을 확인하면 되는지로 다시 썼다.
+        #   - detail: 빈 문자열 대신 null. 기술 근거(실패 태스크 msg)는 그대로 여기에 둔다.
         _errors_fragment:
-          - section: esxi_network_extended
-            message: "vmnic/vmhba/vSwitch/portgroup 수집 실패 (best-effort skip)"
-            detail:  "{{ ansible_failed_result.msg | default('') }}"
+          - section: network
+            message: "네트워크 어댑터와 가상 스위치 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+            detail: >-
+              {{ (ansible_failed_result.msg | default('', true) | string | trim)
+                 | default(none, true) }}
       no_log: true
 
 - name: "esxi | extended | merge fragment"

@@ -22,6 +22,32 @@
 # 출력 변수:
 #   _output : dict — 최종 표준 JSON (OUTPUT 태스크로 방출)
 
+# 2026-08-12 (H12 / N96): status=failed 인데 diagnosis.failure_* 가 전부 null 인
+# envelope 이 **정상 경로**로 만들어지던 구멍을 막는다.
+#   경로: build_sections 의 '미분류 → failed' 분기 또는 supported 섹션 0건 / success 0건
+#         → build_status 가 _out_status='failed' → 그런데 이 경로는 rescue 가 아니라
+#         정상 build_output 을 지나므로 성공 경로 diagnosis(failure_* 전부 null)가 그대로 실렸다.
+#   CLAUDE.md §9 "실패인데 failure_reason=null 인 Result 를 만들지 않는다" 위반.
+#
+# 여기서만 채운다 (3채널 최종 조립이 이 파일 하나로 수렴하므로 site.yml 4곳에 복제하지 않는다).
+# 값 근거: 이 지점에 도달했다 = precheck 를 통과하고 수집까지 진행했다 → 멈춘 단계는 gather.
+#   precheck 가 이미 사유를 채웠으면(정상적으로는 여기 도달 불가) 건드리지 않는다.
+#   auth_success 는 손대지 않는다 — 인증 거부를 관측한 근거가 없다.
+- name: "normalize | build_output | ensure failed diagnosis"
+  ansible.builtin.set_fact:
+    _diagnosis: >-
+      {{ {'reachable': none, 'port_open': none, 'protocol_supported': none,
+          'auth_success': none, 'failure_stage': none, 'failure_code': none,
+          'failure_reason': none, 'details': {}}
+         | combine((_diagnosis | default({}, true))
+                   if ((_diagnosis | default({}, true)) is mapping) else {})
+         | combine({'failure_stage':  'gather',
+                    'failure_code':   'GATHER_FAILED',
+                    'failure_reason': _fr_gather_failed}) }}
+  when:
+    - (_out_status | default('')) == 'failed'
+    - ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
+
 # hostname 정책 (2026-06-16, 사용자 확정):
 #   우선순위: System.HostName(OS) → system.fqdn → BMC NetworkProtocol.HostName/FQDN → null.
 #   - IP fallback 금지 ("없는 건 없는 것"). 단 BMC 관리명(iLO/XCC/RMC)은 IP 와 달리 장비 고정
@@ -52,9 +78,12 @@
       'vendor':            (_out_vendor | default(none, true)),
       'status':            _out_status,
       'sections':          _norm_sections,
-      'diagnosis':         ((_diagnosis if (_diagnosis is mapping) else {})
+      'diagnosis':         (((_diagnosis | default({}, true))
+                             if ((_diagnosis | default({}, true)) is mapping) else {})
                             | combine({'details':
-                                (((_diagnosis.details if (_diagnosis is mapping and _diagnosis.details is mapping) else {}))
+                                ((((_diagnosis | default({}, true)).details | default({}))
+                                  if (((_diagnosis | default({}, true)).details | default({}))
+                                      is mapping) else {})
                                  | combine({'hostname_source': _out_hostname_source}))})),
       'meta':              _meta              | default(none),
       'correlation':       _correlation       | default(none),

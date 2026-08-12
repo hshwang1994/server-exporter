@@ -82,6 +82,9 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
     Returns: dict — main() exit_json 의 gather 산출 필드 부분집합.
         list 필드는 정렬해 결정적(deterministic) 비교 가능.
     """
+    # 2026-08-12: notices 는 모듈 수준 누적이라(main() 이 진입 시 reset) 재생 케이스 간
+    # 오염을 막으려면 여기서도 초기화해야 한다. GOLDEN_KEYS 에는 없어 비교 대상은 아니다.
+    rg._reset_notices()
     saved_get, saved_noauth = rg._get, rg._get_noauth
     saved_realm = rg._probe_realm_hint
     rg._get, rg._get_noauth = get_impl, noauth_impl

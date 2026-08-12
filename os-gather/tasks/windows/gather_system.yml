@@ -157,6 +157,15 @@
 
 # 식별자 diagnostic — non-fatal, status/sections에 영향 없음
 - name: "windows | system | build identifier diagnostics"
+  # H5 (2026-08-12): Linux 와 **같은 문장** 을 쓴다. (필드 2종) x (원인 2종) 2문장 체계.
+  #   종전에는 영문 enum + "fact / source" 같은 내부 용어 + 긴 대시가 문장에 있었고,
+  #   같은 상황을 Linux 와 Windows 가 다르게 설명했다. 분기 근거는 detail 문자열로만 남긴다.
+  #   (동일 문장이 os-gather/tasks/linux/build_identifier_diagnostics.yml 에도 있다)
+  vars:
+    _id_msg_privilege_serial: "시스템 제조번호를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요."
+    _id_msg_absent_serial:    "대상이 시스템 제조번호를 제공하지 않습니다."
+    _id_msg_privilege_uuid:   "시스템 고유 식별자를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요."
+    _id_msg_absent_uuid:      "대상이 시스템 고유 식별자를 제공하지 않습니다."
   ansible.builtin.set_fact:
     _w_id_diagnostics: >-
       {%- set diags = [] -%}
@@ -165,14 +174,14 @@
       {%- set serial_defined = ansible_product_serial is defined -%}
       {%- set uuid_defined   = ansible_product_uuid is defined -%}
       {%- if serial_na and not serial_defined -%}
-        {%- set _ = diags.append({"section":"system","message":"식별자 수집 제한 (insufficient_privilege): serial_number — 권한 또는 수집 경로 제한으로 fact를 취득하지 못했습니다.","detail":"affected_fields: serial_number"}) -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_serial,"detail":"field=serial_number; cause=insufficient_privilege; tried=setup_fact"}) -%}
       {%- elif serial_na and serial_defined -%}
-        {%- set _ = diags.append({"section":"system","message":"식별자 값 미제공 (identifier_not_available): serial_number — source에서 유효한 값을 반환하지 않았습니다.","detail":"affected_fields: serial_number"}) -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_absent_serial,"detail":"field=serial_number; cause=identifier_not_available; tried=setup_fact"}) -%}
       {%- endif -%}
       {%- if uuid_na and not uuid_defined -%}
-        {%- set _ = diags.append({"section":"system","message":"식별자 수집 제한 (insufficient_privilege): system_uuid — 권한 또는 수집 경로 제한으로 fact를 취득하지 못했습니다.","detail":"affected_fields: system_uuid"}) -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_uuid,"detail":"field=system_uuid; cause=insufficient_privilege; tried=setup_fact"}) -%}
       {%- elif uuid_na and uuid_defined -%}
-        {%- set _ = diags.append({"section":"system","message":"식별자 값 미제공 (identifier_not_available): system_uuid — source에서 유효한 값을 반환하지 않았습니다.","detail":"affected_fields: system_uuid"}) -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_absent_uuid,"detail":"field=system_uuid; cause=identifier_not_available; tried=setup_fact"}) -%}
       {%- endif -%}
       {{ diags }}
   no_log: true
@@ -233,10 +242,12 @@
     _sections_failed_fragment:    []
     # rule 22 R8 — list 타입 강제. `>-` multi-block + 다중 {{ }} 분기는 Ansible
     # folded scalar 에서 string-coerce 위험이 있어 단일 expression 으로 단순화.
-    # source contract: _w_id_diagnostics 는 list of dicts. 비정상 경로 (string/
-    # mapping/None) 은 빈 list 로 drop — receiving side (merge_fragment) 의 방어
-    # 가드가 더 자세히 처리한다. 정보 손실보다 char iteration 회귀 차단이 우선.
-    _errors_fragment: "{{ _w_id_diagnostics if (_w_id_diagnostics is defined and _w_id_diagnostics is iterable and _w_id_diagnostics is not string and _w_id_diagnostics is not mapping) else [] }}"
+    # source contract: _w_id_diagnostics 는 list of dicts.
+    # N28 (2026-08-12): 비정상 경로(string / mapping / 미정의)를 종전에는 빈 list 로 통째
+    #   버렸다 — 진단이 조용히 사라져 사용자도 운영자도 사건을 알 수 없었다. 이제 내부 처리
+    #   오류 1건을 남긴다. 원본을 그대로 싣지 않으므로 과거의 char iteration 회귀는 재발하지
+    #   않는다 (수신 측 정규화 필터도 string/mapping 을 안전 처리한다).
+    _errors_fragment: "{{ _w_id_diagnostics if (_w_id_diagnostics is defined and _w_id_diagnostics is iterable and _w_id_diagnostics is not string and _w_id_diagnostics is not mapping) else [{'section':'system','message':'서버 기본 정보를 정리하는 중 내부 처리 오류가 발생했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':'field=identifier_diagnostics; cause=unexpected_render_type'}] }}"
   no_log: true
 
 - name: "windows | system | merge fragment"

@@ -110,6 +110,27 @@ def _render_diagnosis(site: str, task_name: str, ctx: dict[str, Any]) -> Any:
     return _env().from_string(tpl).render(**{**FAILURE_REASONS, **ctx})
 
 
+_RF_OUTCOME_TASK = "redfish | rescue | 자격 단계 관측 확정"
+_RF_DIAG_TASK = "redfish | rescue | Portal 표시용 failure_reason 보장"
+
+
+def render_redfish_rescue(ctx: dict[str, Any]) -> dict[str, Any]:
+    """redfish rescue 2단계를 **실제 순서대로** 렌더한다 (2026-08-12).
+
+    rescue 는 먼저 자격 단계 관측을 `_rf_auth_outcome` (passed / rejected / unknown) 으로
+    확정하고, diagnosis 4필드(stage / code / auth_success / reason)를 **그 하나에서만**
+    파생한다. 테스트가 diagnosis 만 렌더하면 outcome 이 undefined 가 되어 항상 'unknown'
+    으로 떨어지므로, 두 단계를 함께 렌더하는 진입점을 여기 둔다.
+
+    ctx 에 넣는 관측값: _rf_collect_ok / _rf_auth_rejected / _rf_auth_observations
+    """
+    tpl = _task_by_name("redfish-gather/site.yml",
+                        _RF_OUTCOME_TASK)["ansible.builtin.set_fact"]["_rf_auth_outcome"]
+    outcome = str(_env().from_string(tpl).render(**{**FAILURE_REASONS, **ctx})).strip()
+    return _render_diagnosis("redfish-gather/site.yml", _RF_DIAG_TASK,
+                             {**ctx, "_rf_auth_outcome": outcome})
+
+
 def _render_fallback_envelopes(site: str, ctx: dict[str, Any]) -> list[dict[str, Any]]:
     """always 블록 OUTPUT 의 `_output | default({...})` 를 _output 미정의 상태로 렌더.
 
@@ -126,7 +147,10 @@ def _render_fallback_envelopes(site: str, ctx: dict[str, Any]) -> list[dict[str,
             tpl = task.get("ansible.builtin.debug", {}).get("msg", "")
             if "default(" not in tpl:
                 continue
-            rendered = _env().from_string(re.sub(r"\|\s*to_json", "", tpl)).render(**ctx)
+            # 2026-08-12: always 블록이 문구를 리터럴로 적지 않고 정본 변수
+            #   (_fr_output_build_failed)를 참조하므로 vars_files 로드분을 함께 주입한다.
+            rendered = _env().from_string(re.sub(r"\|\s*to_json", "", tpl)).render(
+                **{**FAILURE_REASONS, **ctx})
             assert isinstance(rendered, dict), (
                 f"{site} fallback envelope 이 dict 가 아님: {type(rendered).__name__}"
             )
@@ -202,15 +226,19 @@ def _assert_grid_ready(reason: Any, label: str) -> None:
 # ---------------------------------------------------------------------------
 # 2026-08-11 (Phase 6-B): 사용자 문구가 5 문장 표준으로 바뀌면서 주장 표현도 바뀌었다.
 # 왼쪽 표현이 문장에 있으면 오른쪽 조건이 반드시 참이어야 한다.
-#   "관리 포트에는 연결됐지만"   → port_open 을 실제로 관측했다
-#   "대상 IP 사용은 확인됐지만"  → IP presence 를 확정했다 (현재 판정 수단 부재 → 미사용)
-#   "대상 접속은 확인됐지만"     → 인증 뒤 단계(gather)까지 갔다
+#   "관리 포트에는 연결됐지만"        → port_open 을 실제로 관측했다
+#   "관리 포트에 연결할 수 없습니다"   → port_open 이 참이 아니다 (2번 문장, 2026-08-12)
+#   "대상 접속은 확인됐지만"          → 인증 뒤 단계(gather)까지 갔다
 #      * auth_success 가 아니라 failure_stage 로 검증한다. redfish 는 인증과 수집을 한 값으로
-#        합쳐 반환해 auth_success 를 true 로 올리지 않지만, stage=gather 자체가 "인증 단계를
-#        지났다"는 기계 판정이다.
+#        합쳐 반환하던 시절의 잔재가 아니라, stage=gather 자체가 "인증 단계를 지났다"는
+#        기계 판정이기 때문이다.
+#
+# 2026-08-12: "대상 IP 사용은 확인됐지만" 항목을 제거했다. 그 문장은 IP presence 판정을
+#   전제하는데 이 저장소는 그런 판정을 만들지 않기로 확정했다(ICMP / IPAM / ARP 미도입).
+#   2번 문장이 관측 사실만 말하도록 바뀌었으므로 그에 맞는 불변식으로 교체한다.
 _CLAIM_REQUIREMENTS: tuple[tuple[str, str, Any], ...] = (
     ("관리 포트에는 연결됐지만", "port_open", True),
-    ("대상 IP 사용은 확인됐지만", "reachable", True),
+    ("관리 포트에 연결할 수 없습니다", "port_open", False),
     ("대상 접속은 확인됐지만", "failure_stage", "gather"),
 )
 
@@ -346,13 +374,14 @@ _RF_TASK = "redfish | rescue | Portal 표시용 failure_reason 보장"
 
 @pytest.mark.parametrize("collect_ok,label", [(False, "수집 실패"), (True, "정규화 예외")])
 def test_case04_redfish_post_precheck_failure_has_reason(collect_ok, label):
-    diag = _render_diagnosis("redfish-gather/site.yml", _RF_TASK,
-                             {"_diagnosis": dict(_PRECHECK_OK_DIAG),
-                              "_rf_collect_ok": collect_ok})
+    diag = render_redfish_rescue({"_diagnosis": dict(_PRECHECK_OK_DIAG),
+                                  "_rf_collect_ok": collect_ok})
     _assert_diagnosis_shape(diag, f"C4 redfish/{label}")
     _assert_grid_ready(diag["failure_reason"], f"C4 redfish/{label}")
-    # 인증 거부를 관측하지 못했으므로 false 금지
-    assert diag["auth_success"] is None
+    # 인증 **거부**를 관측하지 못했으므로 false 금지.
+    #   2026-08-12: 수집이 성공한 뒤의 실패(정규화 예외)는 인증 통과를 직접 관측한 것이므로
+    #   true 가 맞다. 관측 없는 경우만 null 이다.
+    assert diag["auth_success"] is (True if collect_ok else None)
 
 
 def test_redfish_rescue_preserves_precheck_reason():
@@ -366,7 +395,7 @@ def test_redfish_rescue_preserves_precheck_reason():
 
 def test_redfish_rescue_survives_undefined_diagnosis():
     """precheck include 자체가 실패해 _diagnosis 가 아예 없어도 7키 shape 를 보장."""
-    diag = _render_diagnosis("redfish-gather/site.yml", _RF_TASK, {"_rf_collect_ok": False})
+    diag = render_redfish_rescue({"_rf_collect_ok": False})
     _assert_diagnosis_shape(diag, "C4 redfish/_diagnosis 미정의")
     _assert_grid_ready(diag["failure_reason"], "C4 redfish/_diagnosis 미정의")
 
@@ -524,23 +553,30 @@ def test_case11_os_all_ports_failure_has_reason(stage, code):
 
 
 def test_os_portfail_reason_matches_observation():
-    """2026-08-11 (Phase 6-B) 기대값 변경 — 세 관측이 **같은 문장**을 쓴다.
+    """2026-08-12 기대값 변경 — 문장은 **관측된 failure_code 에서만** 파생된다.
 
-    종전(Phase 5-A)에는 TCP timeout / RST / 주소 해석 실패를 서로 다른 세 문장으로 구분했다.
-    사용자 확정 문구 표준(§25 §33)은 이 셋을 1번 문구 하나로 합친다. 세 경우 모두 사용자가
-    할 일이 "그 IP 를 쓰는 장비가 맞는지, 경로가 열려 있는지 확인" 으로 같기 때문이다.
-    기계용 구분은 failure_code(TCP_CONNECT_FAILED / TCP_CONNECTION_REFUSED /
-    DNS_RESOLUTION_FAILED)와 errors[].detail 이 그대로 유지한다 (§28 — enum 삭제 안 함).
+    종전(Phase 6-B)에는 TCP timeout / RST / 주소 해석 실패를 1번 문구 하나로 합쳤다.
+    그런데 RST 는 "관리 포트가 명시적으로 거부됐다" 를 실제로 관측한 것이라 조치가 다르다
+    (IP 대장 확인이 아니라 방화벽/서비스 확인). 종전 구조는 존재하지 않는 presence 판정
+    (`ip_in_use`)에 문장을 걸어 두어 REFUSED 를 확정하고도 1번 문구를 내보냈다 — H3.
+
+    신 매핑 (precheck_bundle.REASON_BY_FAILURE_CODE 정본):
+      DNS_RESOLUTION_FAILED / TCP_CONNECT_FAILED → 1번 (응답 확인 불가)
+      TCP_CONNECTION_REFUSED                     → 2번 (관리 포트 연결 불가)
+    presence probe(ICMP / IPAM / ARP)는 여전히 만들지 않는다.
     """
     no_resp = _os_portfail_diag("reachable", "TCP_CONNECT_FAILED")["failure_reason"]
     refused = _os_portfail_diag("port", "TCP_CONNECTION_REFUSED")["failure_reason"]
     dns = _os_portfail_diag("reachable", "DNS_RESOLUTION_FAILED")["failure_reason"]
 
-    assert {no_resp, refused, dns} == {pb.REASON_IP_UNCONFIRMED}
+    assert {no_resp, dns} == {pb.REASON_IP_UNCONFIRMED}
+    assert refused == pb.REASON_PORT_UNREACHABLE
     # 관측하지 않은 원인을 단정하지 않는다
     assert "전원" not in no_resp
     assert "서버는 응답하지만" not in refused, "RST 를 서버 자체 응답으로 확정하면 안 된다"
     assert "통신은 되지만" not in refused
+    # RST 는 "IP 를 쓰는 장비가 있다" 는 증명이 아니다 — presence 를 주장하지 않는다
+    assert "IP 사용은 확인" not in refused
     # §25 §28 — Portal 은 IPv4 만 넘긴다. 주소 해석 실패에도 DNS 안내를 하지 않는다.
     assert "DNS" not in dns and "호스트 이름" not in dns
     for reason in (no_resp, refused, dns):

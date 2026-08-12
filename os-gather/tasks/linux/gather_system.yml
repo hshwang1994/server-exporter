@@ -388,6 +388,14 @@
 # =============================================================================
 # Shared: fragment 조립 + merge
 # =============================================================================
+# N13: system 섹션 수집 성공 판정 — collected / failed / errors 세 자리가 이 변수 하나를 본다.
+- name: "linux | system | 수집 성공 판정"
+  ansible.builtin.set_fact:
+    _l_sys_ok: >-
+      {{ (ansible_distribution is defined)
+         or (_l_fb is defined and _l_fb.DIST is defined) }}
+  no_log: true
+
 - name: "linux | system | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -443,14 +451,12 @@
             {%- set v = (_l_runtime.SWAP_FREE | default('')) | trim -%}
             {{ (v | int) if v else none }}
     _sections_supported_fragment: ['system']
-    _sections_collected_fragment: >-
-      {{ ['system'] if (ansible_distribution is defined
-                        or (_l_fb is defined and _l_fb.DIST is defined))
-         else [] }}
-    _sections_failed_fragment: >-
-      {{ [] if (ansible_distribution is defined
-                or (_l_fb is defined and _l_fb.DIST is defined))
-         else ['system'] }}
+    # N13 (2026-08-12): 수집 성공 판정을 _l_sys_ok 한 곳에서 결정하고 collected / failed /
+    #   errors 세 자리가 그 변수를 참조한다. 종전에는 같은 조건식이 두 곳에 복제돼 있었고
+    #   errors 조건은 vendor 미정의만 봐서, system 섹션이 failed 인데 errors 가 비는 결과가
+    #   나올 수 있었다.
+    _sections_collected_fragment: "{{ ['system'] if (_l_sys_ok | bool) else [] }}"
+    _sections_failed_fragment:    "{{ [] if (_l_sys_ok | bool) else ['system'] }}"
     # 2026-04-30: B80 진단 instrumentation 제거 — root cause는 build_output.yml의
     # `_out_vendor: null` overwrite (commit 0d3058c4)였고 이미 해결됨.
     # vendor 정상 추출(asv=Dell Inc.) 호스트에서도 항상 에러로 emit되어 호출자 혼란.
@@ -461,7 +467,11 @@
     # merge_fragment.yml 의 `for e in <string>` 가 character 단위로 iterate 하면서
     # ['[', ']', '\n', '}', '}'] 5개 character 가 errors[].message 로 분해 채워졌음.
     # 단일 line Jinja expression 으로 전환 + list 타입 보존.
-    _errors_fragment: "{{ (_l_id_diagnostics | default([])) + ([{'section': 'system', 'message': 'vendor extraction failed — ansible_system_vendor undefined and _l_raw_vendor unset', 'detail': 'inv_host=' ~ inventory_hostname}] if (ansible_system_vendor is not defined and (_l_raw_vendor | default(none)) is none) else []) }}"
+    # H6 (2026-08-12): message 가 영문 + 내부 변수명이었고 detail 은 대상 IP 를 노출했다.
+    #   message 는 사용자 한국어 문장으로, 변수명 근거는 detail 로 옮겼다. IP 는 envelope.ip
+    #   에 이미 있으므로 detail 에서도 뺀다.
+    # N13: system 섹션이 failed 인 경우(_l_sys_ok=false)에도 사유 1건을 반드시 남긴다.
+    _errors_fragment: "{{ (_l_id_diagnostics | default([])) + ([{'section': 'system', 'message': '서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'field=distribution; cause=os_release_and_setup_fact_unavailable'}] if not (_l_sys_ok | bool) else []) + ([{'section': 'system', 'message': '서버 기본 정보 중 제조사 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'field=vendor; cause=vendor_source_unavailable; tried=setup_fact,dmi_sysfs'}] if (ansible_system_vendor is not defined and (_l_raw_vendor | default(none)) is none) else []) }}"
     _l_fb: "{{ _l_fb | default({}) }}"
   no_log: true
 

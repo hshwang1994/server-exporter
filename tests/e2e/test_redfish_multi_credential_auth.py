@@ -50,6 +50,7 @@ from tests.e2e.test_failure_reason_contract import (  # noqa: E402
     _assert_grid_ready,
     _env,
     _task_by_name,
+    render_redfish_rescue,
 )
 
 _SITE = "redfish-gather/site.yml"
@@ -79,14 +80,22 @@ def _render(task_name: str, ctx: dict[str, Any]) -> Any:
 
 
 def _decide(statuses: list[Any], *, candidates: int, collect_ok: bool = False):
-    """후보별 관측 리스트 → (auth_rejected, diagnosis)."""
+    """후보별 관측 리스트 → (auth_rejected, diagnosis).
+
+    2026-08-12: rescue 는 거부 판정(_rf_auth_rejected) 뒤에 자격 관측을
+    `_rf_auth_outcome` (passed / rejected / unknown) 으로 확정하고, diagnosis 4필드를
+    그 하나에서만 파생한다. try_one_account.yml 이 statuses 와 같은 순서로 쌓는
+    `_rf_auth_observations` 도 함께 만들어 실제 실행과 같은 입력을 준다.
+    """
     accounts = [{"label": f"c{i}"} for i in range(candidates)]
     rejected = _render(_REJECT_TASK,
                        {"_rf_auth_statuses": statuses, "_rf_accounts": accounts})
-    diag = _render(_DIAG_TASK,
-                   {"_diagnosis": dict(_PRECHECK_OK),
-                    "_rf_collect_ok": collect_ok,
-                    "_rf_auth_rejected": rejected})
+    observations = [{"role": "primary", "label": f"c{i}", "status": st}
+                    for i, st in enumerate(statuses)]
+    diag = render_redfish_rescue({"_diagnosis": dict(_PRECHECK_OK),
+                                  "_rf_collect_ok": collect_ok,
+                                  "_rf_auth_rejected": rejected,
+                                  "_rf_auth_observations": observations})
     return rejected, diag
 
 
@@ -124,10 +133,14 @@ def test_multi_credential_auth_success_aggregation(label, statuses, candidates,
         assert diag["auth_success"] is False, label
         assert diag["failure_stage"] == "auth", label
         assert diag["failure_code"] == "AUTH_PROBE_FAILED", label
+    elif collect_ok or any(isinstance(s, int) and 200 <= s < 400 for s in statuses):
+        # 자격을 실은 요청이 통과한 직접 관측 — 인증은 됐고 그 뒤에서 실패한 것이다
+        assert diag["auth_success"] is True, label
+        assert diag["failure_stage"] == "gather", label
     else:
         assert diag["auth_success"] is None, (
             f"[{label}] 원인 미확정 실패가 섞였는데 거부로 확정하면 안 된다")
-    if not collect_ok:
+    if not collect_ok and not any(isinstance(s, int) and 200 <= s < 400 for s in statuses):
         assert diag["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"], label
     assert "인증이 거부" not in diag["failure_reason"], label
 
@@ -143,9 +156,11 @@ def test_case7_success_path_does_not_reach_rescue():
     """
     rejected, diag = _decide([401, 200], candidates=2, collect_ok=True)
     assert bool(rejected) is False
-    assert diag["auth_success"] is None
-    # 2026-08-11 (Phase 6-B): 수집이 된 뒤의 실패는 5번 문구(수집 실패)를 쓴다.
-    # 종전의 "정보 수집 후 결과를 처리하는 중" 6번째 문장은 표준 5 문장으로 흡수됐다.
+    # 2026-08-12: 후보 B 가 200 으로 인증을 통과한 것을 실제로 관측했다.
+    #   종전에는 이 경우도 auth_success=null 이었는데, 관측된 성공을 '모름' 으로 두면
+    #   문장("대상 접속은 확인됐지만")과 Boolean 이 서로 다른 이야기를 한다.
+    assert diag["auth_success"] is True
+    # 수집이 된 뒤의 실패는 5번 문구(수집 실패)를 쓴다.
     assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
     assert diag["failure_stage"] == "gather"
 
@@ -205,7 +220,11 @@ def test_401_after_successful_auth_is_not_recorded(monkeypatch):
 
     rejected, diag = _decide([rg.auth_evidence()["first_auth_status"]], candidates=1)
     assert bool(rejected) is False
-    assert diag["auth_success"] is None
+    # 2026-08-12: 첫 인증 요청이 200 이었다 = 인증 통과를 직접 관측했다. 따라서
+    #   auth_success=true 이고 멈춘 단계는 gather 다. "하위 리소스 401 을 credential
+    #   실패로 승격하지 않는다" 는 원래 취지는 그대로 유지된다 (거부 확정 안 함).
+    assert diag["auth_success"] is True
+    assert diag["failure_stage"] == "gather"
     rg._reset_auth_observation()
 
 

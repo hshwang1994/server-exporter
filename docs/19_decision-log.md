@@ -8,6 +8,71 @@
 
 > 최종 갱신: 2026-08-11
 
+## 2026-08-12 — errors[].message 를 4계층으로 분리하고 문장을 failure_code 에서만 파생
+
+### 사용자 의심
+
+전수조사(`docs/ai/ERRORS-MESSAGE-INVENTORY-2026-08-11.md`)가 "Portal 이 읽는 값은
+`errors[].message` 인데 그 자리에 서로 다른 두 계약이 동시에 담겨 있다" 고 지적했다.
+`status=failed` 경로는 5문장으로 정제되는데, 실제로 더 흔한 `partial` / `success` 경로는
+`Processor /redfish/v1/Systems/1/Processors/CPU1 실패: 401` 같은 날것이 그대로 나갔다.
+
+### 분석 (현재 코드로 재검증)
+
+조사 주장을 그대로 믿지 않고 10개 영역을 현재 코드로 재확인했다. 확정한 근본 원인 3가지:
+
+1. **문장 선택 입력이 둘이었다.** Redfish rescue 는 같은 `set_fact` 안에서
+   `stage`/`code`/`auth_success` 를 `(rejected and not collected)` 로, `failure_reason` 만
+   `collected` 로 갈랐다. 입력이 둘이면 필연적으로 어긋난다 — `stage=gather` 인데 문장은
+   자격증명을 지목하는 결과가 **가장 흔한 실패 경로**였다. 게다가 `_rf_collect_ok` 는 인증
+   판정이 아니라 전체 수집 결과여서, 인증이 200 으로 통과해도 시리얼 확정 실패 하나로
+   자격증명 문장이 나갔다 (os/esxi 는 자격 probe 전용 관측을 쓴다 — 채널 간 근거 불일치).
+2. **존재하지 않는 판정에 문장이 걸려 있었다.** `reason_for_connect_failure(ip_in_use)` 의
+   `ip_in_use` 를 set 하는 코드가 저장소에 0건이라, RST 를 실제로 관측해
+   `TCP_CONNECTION_REFUSED` 로 확정하고도 사용자에게는 "IP 사용 여부를 확인하세요" 가 나갔다.
+   표준 문장 하나가 실사용 0이었다.
+3. **성공을 실패로 세고 있었다.** `SimpleStorage` fallback 으로 데이터를 정상 수집했는데도
+   errors 에 항목이 생겨 `if errs: failed.append(section)` 때문에 섹션이 failed →
+   overall status 가 partial 로 강등됐다. HPE iLO4 등 구세대 BMC 는 매 수집마다 partial 이었다.
+
+### 결정
+
+- **문장은 관측된 `failure_code` 에서만 파생한다** (`REASON_BY_FAILURE_CODE` 단일 매핑).
+  stage/code 를 먼저 확정하고 문장을 유도하면 자기모순이 구조적으로 불가능해진다.
+  `TCP_CONNECTION_REFUSED` → 2번 문장. 2번 문안에서 "대상 IP 사용은 확인됐지만" 을 뺐다 —
+  **presence 판정(ICMP/IPAM/ARP)을 만들지 않기로 확정**했으므로 주장할 수 없는 사실이다.
+- **Message 를 4계층으로 분리한다.** 전체 실패(6문장 중앙) / 섹션 부분 실패(섹션 의미 유지) /
+  기술 Evidence(`errors[].detail`, string|null) / 성공 fallback·정보성(`diagnosis.details.notices`).
+  섹션 오류를 5문장으로 뭉개지 않는다 — "대상에 접속할 수 없습니다" 는 접속이 된 상태에서
+  CPU 만 못 읽은 결과를 설명하지 못한다.
+- **성공한 fallback 은 error 가 아니다.** 정보를 버리지 않되 errors 에서 뺀다.
+- **신규 top-level 필드는 만들지 않았다.** `notices` 는 `diagnosis.details` 하위이고
+  (CLAUDE.md §11 이 규정한 기술 evidence / 확장 metadata 영역), `errors[]` 원소는 계속 3키다.
+  vendor OEM 이 붙이던 `severity: warning` 은 정규화가 3키만 남겨 **envelope 에 도달한 적이
+  없는 죽은 키**여서 제거했다 — warning/error 축을 도입하려면 원소 shape 변경이라 별도 승인 영역이다.
+
+### 영향
+
+- `failure_stage` 분포가 일부 `gather → auth` 로 이동한다 (Redfish, 원인 미확정 실패).
+  enum 자체는 불변이나 stage 로 집계하는 소비자가 있으면 수치가 바뀐다.
+- Redfish 실패의 `failure_reason` 분포가 4번 ↔ 5번 사이에서 이동한다 (문장 자체는 불변).
+- 구세대 BMC 의 `status` 가 `partial → success` 로 바뀐다 (성공한 fallback 을 실패로 세지 않으므로).
+- envelope 13 top-level 필드 / schema_version 불변. `errors[]` 원소 키 3개 불변.
+
+### 회귀
+
+`pytest tests/` **2094 passed / 10 skipped / 7 xfailed** (착수 전 1974 passed).
+field_dictionary PASS · schema-drift exit 0 · vendor-boundary / harness-consistency 통과.
+baseline 갱신 1건 — `tests/fixtures/redfish/dmtf_rackmount1/expected_output.json`
+(오프라인 mockup 재생 산출물. 실장비 baseline 아님).
+**실장비 / 실 Jenkins 검증은 하지 않았다** (이 환경에 ansible 미설치).
+
+정본: `tests/evidence/2026-08-12-errors-message-contract.md`,
+`docs/20_json-schema-fields.md` §4-1, `common/vars/failure_reasons.yml`,
+`common/vars/section_messages.yml`, `filter_plugins/errors_normalizer.py`.
+
+---
+
 ## 2026-08-11 — Dell 대표 시리얼을 Service Tag 로 교정 (1차, Dell 단독)
 
 ### 요청 / 배경 (Why)

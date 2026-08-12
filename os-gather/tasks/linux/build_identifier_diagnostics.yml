@@ -17,6 +17,17 @@
 
 - name: "linux | system | build identifier diagnostics"
   when: _l_python_mode == 'python_ok'
+  # H5 (2026-08-12): 식별자 진단 문장을 (필드 2종) x (원인 2종) = 2문장 체계로 축약했다.
+  #   종전에는 영문 enum(insufficient_privilege / identifier_not_available)과 Ansible 용어
+  #   (setup fact / become / DMI direct-read), 긴 대시가 Portal 문장에 그대로 실렸고,
+  #   같은 상황을 Linux 3분기 / Windows 2분기가 서로 다른 문장으로 설명했다.
+  #   이제 Linux 와 Windows 가 **같은 문장**을 쓰고, 분기 근거는 detail 문자열에만 남긴다.
+  #   (동일 문장이 os-gather/tasks/windows/gather_system.yml 에도 있다 — 함께 바꿀 것)
+  vars:
+    _id_msg_privilege_serial: "시스템 제조번호를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요."
+    _id_msg_absent_serial:    "대상이 시스템 제조번호를 제공하지 않습니다."
+    _id_msg_privilege_uuid:   "시스템 고유 식별자를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요."
+    _id_msg_absent_uuid:      "대상이 시스템 고유 식별자를 제공하지 않습니다."
   ansible.builtin.set_fact:
     _l_id_diagnostics: >-
       {%- set diags = [] -%}
@@ -28,18 +39,18 @@
       {%- set uuid_dmi_tried    = _l_dmi_uuid_direct is defined -%}
       {%- set uuid_dmi_failed   = uuid_dmi_tried and (_l_dmi_uuid_direct.rc | default(1)) != 0 -%}
       {%- if serial_na and (dmi_block_failed or serial_dmi_failed) -%}
-        {%- set _ = diags.append({"section":"system","message":"식별자 수집 제한 (insufficient_privilege): serial_number — setup fact=NA, DMI direct-read 실패. become 권한을 확인하세요.","detail":"affected_fields: serial_number, source: none"}) -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_serial,"detail":"field=serial_number; cause=insufficient_privilege; tried=setup_fact,dmi_direct"}) -%}
       {%- elif serial_na and not serial_dmi_tried -%}
-        {%- set _ = diags.append({"section":"system","message":"식별자 수집 제한 (insufficient_privilege): serial_number — setup fact 미정의, DMI fallback 미시도.","detail":"affected_fields: serial_number, source: none"}) -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_serial,"detail":"field=serial_number; cause=insufficient_privilege; tried=setup_fact"}) -%}
       {%- elif serial_na -%}
-        {%- set _ = diags.append({"section":"system","message":"식별자 값 미제공 (identifier_not_available): serial_number — setup fact 및 DMI direct-read 모두 유효한 값을 반환하지 않았습니다.","detail":"affected_fields: serial_number, source: none"}) -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_absent_serial,"detail":"field=serial_number; cause=identifier_not_available; tried=setup_fact,dmi_direct"}) -%}
       {%- endif -%}
       {%- if uuid_na and (dmi_block_failed or uuid_dmi_failed) -%}
-        {%- set _ = diags.append({"section":"system","message":"식별자 수집 제한 (insufficient_privilege): system_uuid — setup fact=NA, DMI direct-read 실패. become 권한을 확인하세요.","detail":"affected_fields: system_uuid, source: none"}) -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_uuid,"detail":"field=system_uuid; cause=insufficient_privilege; tried=setup_fact,dmi_direct"}) -%}
       {%- elif uuid_na and not uuid_dmi_tried -%}
-        {%- set _ = diags.append({"section":"system","message":"식별자 수집 제한 (insufficient_privilege): system_uuid — setup fact 미정의, DMI fallback 미시도.","detail":"affected_fields: system_uuid, source: none"}) -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_uuid,"detail":"field=system_uuid; cause=insufficient_privilege; tried=setup_fact"}) -%}
       {%- elif uuid_na -%}
-        {%- set _ = diags.append({"section":"system","message":"식별자 값 미제공 (identifier_not_available): system_uuid — setup fact 및 DMI direct-read 모두 유효한 값을 반환하지 않았습니다.","detail":"affected_fields: system_uuid, source: none"}) -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_absent_uuid,"detail":"field=system_uuid; cause=identifier_not_available; tried=setup_fact"}) -%}
       {%- endif -%}
       {{ diags }}
   no_log: true

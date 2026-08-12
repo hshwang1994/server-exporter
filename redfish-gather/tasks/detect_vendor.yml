@@ -21,6 +21,23 @@
   ignore_errors: true
   no_log: true
 
+# 2026-08-12 (N50): 무인증 probe 가 만든 errors 를 저장소 어디도 읽지 않아,
+#   "왜 벤더를 못 알아냈는지"(TLS 오류 / 404 / JSON 아님 / Systems 링크 없음)가 통째로
+#   버려졌다. 그 결과 vendor=unknown → generic adapter → vault profile 오선택 → 자격 전멸
+#   연쇄가 일어나도 최종 envelope 에 근거가 한 줄도 없었다.
+#   여기서 요약만 보존하고, rescue 가 errors[].detail 로 합류시킨다 (message 는 불변).
+- name: "redfish | detect_vendor | preserve probe evidence"
+  ansible.builtin.set_fact:
+    _rf_probe_notes: >-
+      {%- set msgs = [] -%}
+      {%- for e in (_rf_probe_result.errors | default([]))[:2] -%}
+        {%- if e is mapping and e.message is defined -%}
+          {%- set _ = msgs.append(e.message | string) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ ('probe: ' ~ (msgs | join(' | '))) if msgs else '' }}
+  no_log: true
+
 - name: "redfish | detect_vendor | normalize vendor"
   ansible.builtin.set_fact:
     _rf_detected_vendor: >-

@@ -36,10 +36,21 @@
 #   - 호출자 시스템이 warning 을 분리 인식하려면 envelope.errors[] 별도 검사
 #   - rule 13 R5 envelope 13 필드 / rule 96 R1-B (호환성 외 schema 확장 금지)
 #
-# 시나리오 B 발생 위치 (3 reference — 의도된 fallback / partial enumeration):
-#   - os-gather/tasks/linux/gather_memory.yml:171-175    (dmidecode 권한/미존재 → total_basis=os_visible fallback)
-#   - os-gather/tasks/linux/gather_network.yml:208-209   (lspci stderr 비어있지 않음 → NIC partial enumeration 가능)
-#   - esxi-gather/tasks/normalize_storage.yml:79-83      (NFS/vSAN/vVOL 등 datastore capacity 미수집)
+# 시나리오 B 발생 위치 (의도된 partial enumeration — 라인번호 대신 **변수 기준**으로 적는다.
+#   2026-08-12: 종전에는 file:line 으로 적어 두었는데 세 파일이 모두 바뀌면서 전부 stale 이
+#   됐고, gather_network 참조는 전혀 다른 코드를 가리키게 됐다. 다음 작업자가 "errors 가
+#   있는데 success" 근거를 못 찾아 시나리오 B 를 버그로 오인할 뻔했다.):
+#   - os-gather/tasks/linux/gather_memory.yml  — `_l_mem_phys_raw.stdout` 이 비었을 때의
+#       `_errors_fragment` (물리 설치량 대신 운영체제 인식 값으로 총량 수집)
+#   - os-gather/tasks/linux/gather_network.yml — `_l_lspci_nic.stderr` 가 비지 않았을 때의
+#       `_errors_fragment` (NIC 상세 일부만 열거)
+#   - esxi-gather/tasks/normalize_storage.yml  — `_e_unsized_ds` 가 비지 않았을 때의
+#       `_errors_fragment` (NFS / vSAN / vVOL 이 용량을 제공하지 않음)
+#
+# 2026-08-12: 반대 방향도 함께 고정됐다 — **성공한 fallback 은 errors[] 에 넣지 않는다.**
+#   종전에는 Redfish SimpleStorage / SmartStorage fallback 으로 데이터를 정상 수집하고도
+#   errors 가 생겨 섹션이 failed → status 가 partial 로 강등됐다(H11). 그런 사실은
+#   diagnosis.details.notices 로 간다. 즉 시나리오 B 의 errors[] 는 "실제로 못 읽은 것" 만 담는다.
 #
 # severity (error/warning/info) 도입 안 함 — rule 22 R7/R8 (5 fragment 변수 / 타입 정본) 영역.
 # 향후 동적 정책 로딩이 필요하면 common/vars/status_rules.yml 활성화 (현재 reserved).

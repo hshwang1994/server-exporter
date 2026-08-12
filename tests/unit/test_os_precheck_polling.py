@@ -365,13 +365,19 @@ def test_rst_reason_does_not_claim_server_responded():
         "RST 는 중간 방화벽/보안 장비가 생성했을 수 있어 서버 응답으로 확정 금지"
     )
     # Phase 5-A (2026-08-11): 문구는 site.yml 이 아니라 precheck_bundle 이 만든다.
-    # Phase 6-B (2026-08-11): RST 도 1번 문구(IP 사용 여부 미확인)를 쓴다 — RST 를 보낸 주체가
-    # 최종 서버인지 중간 방화벽인지 확정할 수 없기 때문이다. presence 판정이 붙으면
-    # reason_for_connect_failure(True) 로 2번 문구가 나온다.
-    assert "서버는 응답하지만" not in pb.reason_for_connect_failure(None)
-    assert "서버는 응답하지만" not in pb.reason_for_connect_failure(True)
-    # 거부 주체를 최종 대상으로 확정하지 않는다 (중간 네트워크 장비일 수 있다)
-    for reason in (pb.reason_for_connect_failure(None), pb.reason_for_connect_failure(True)):
+    # 2026-08-12: 문구는 관측된 failure_code 에서만 파생한다 (REASON_BY_FAILURE_CODE).
+    #   RST 를 관측하면 2번 문구(관리 포트 연결 불가)를 쓴다. 다만 RST 를 보낸 주체가
+    #   최종 서버인지 중간 방화벽인지는 여전히 확정할 수 없으므로, 문장이 "서버가
+    #   응답했다" 거나 "IP 사용이 확인됐다" 고 주장하지는 않는다.
+    _connect_reasons = (pb.reason_for_failure_code("TCP_CONNECT_FAILED"),
+                        pb.reason_for_failure_code("TCP_CONNECTION_REFUSED"),
+                        pb.reason_for_failure_code("DNS_RESOLUTION_FAILED"))
+    for reason in _connect_reasons:
+        assert "서버는 응답하지만" not in reason
+        assert "IP 사용은 확인" not in reason, (
+            "presence 판정을 만들지 않으므로 IP 사용 확인을 주장하지 않는다"
+        )
+        # 거부 주체를 최종 대상으로 확정하지 않는다 (중간 네트워크 장비일 수 있다)
         assert "대상 관리 서비스 연결이 거부" not in reason
         assert "거부" not in reason, "거부 여부는 failure_code 가 표현한다 (사용자 문장 아님)"
     for banned in ("—", "·", "–"):

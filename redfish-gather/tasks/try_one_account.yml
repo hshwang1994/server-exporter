@@ -88,6 +88,28 @@
 
     # cycle 2026-04-30: 실패 시 status / 첫 error 메시지를 advisory log에 노출 (디버깅 편의).
     # password는 자동 redact 안 되므로 명시적 필드만 출력.
+    # 2026-08-12 (N41 / N51 / N52 / N65): 실패 후보의 근거를 **결과에 남긴다**.
+    #   종전에는 실패한 _rf_attempt 가 다음 loop iteration 에서 덮이고 어디에도 보존되지
+    #   않았다. 전 후보가 실패하면 _rf_raw_collect 자체가 없어 normalize_standard 가 읽을
+    #   대상이 없고, abort 가 normalize 보다 앞이라 모듈 errors 는 envelope 에 0건이었다.
+    #   결과: 완전 실패 envelope 의 근거가 '[task: ...] <fail msg>' 한 줄뿐이었다.
+    #
+    #   여기서 만든 값은 rescue 가 errors[].detail 로 합류시킨다 (message 는 불변 — 5문장).
+    #   화이트리스트(role / label / status / 첫 message)만 담는다 — username / password 금지.
+    - name: "redfish | try_account | record failure evidence"
+      when: not (_rf_attempt_ok | bool)
+      ansible.builtin.set_fact:
+        _rf_failed_attempt_notes: >-
+          {{ (_rf_failed_attempt_notes | default([]))
+             + [ (_try_account.role | default('primary')) ~ '/'
+                 ~ (_try_account.label | default('unlabeled'))
+                 ~ ': status=' ~ (_rf_attempt.status | default('?'))
+                 ~ ' first_auth=' ~ (((_rf_attempt | default({}, true)).auth_evidence
+                                      | default({}, true)).first_auth_status | default('none'))
+                 ~ ' err=' ~ ((_rf_attempt.errors | default([]) | first | default({})).message
+                              | default('-')) ] }}
+      no_log: true
+
     - name: "redfish | try_account | log failure (advisory)"
       when: not (_rf_attempt_ok | bool)
       ansible.builtin.debug:

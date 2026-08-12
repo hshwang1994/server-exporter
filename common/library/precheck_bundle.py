@@ -133,9 +133,12 @@ CHANNEL_DEFAULT_PORTS = {
 REASON_IP_UNCONFIRMED = (
     "대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요."
 )
-# 2. IP 사용은 확인됐는데 관리 포트에 못 붙었다 (presence 확인 시).
+# 2. 관리 포트가 명시적으로 거부됐다 (port 단계 — 연결 거부를 실제로 관측).
+#    2026-08-12 (사용자 확정): 종전 문구 "대상 IP 사용은 확인됐지만 ..." 은 IP presence 판정을
+#    전제했는데 이 저장소는 그런 판정을 하지 않는다(ICMP / IPAM / ARP 미도입 — 사용자 지시).
+#    관측한 사실만 말하도록 바꾼다: 연결 거부를 관측했다 = 관리 포트에 붙지 못했다.
 REASON_PORT_UNREACHABLE = (
-    "대상 IP 사용은 확인됐지만 관리 포트에 연결할 수 없습니다. "
+    "대상 IP의 관리 포트에 연결할 수 없습니다. "
     "방화벽과 관리 서비스 상태를 확인하세요."
 )
 # 3. 관리 포트 연결은 됐는데 기대한 응답을 확인하지 못했다 (protocol 단계).
@@ -151,6 +154,12 @@ REASON_CREDENTIAL_FAILED = (
 REASON_GATHER_FAILED = (
     "대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요."
 )
+# 6. 결과 객체 자체를 만들지 못했다 (fallback 단계 — OUTPUT_BUILD_FAILED).
+#    precheck 는 이 문장을 내지 않는다. envelope fallback(site.yml always / callback 보충)이
+#    쓰는 문장이며, 문자열 정본을 한곳에 모아 두려고 여기에도 둔다.
+REASON_OUTPUT_BUILD_FAILED = (
+    "수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요."
+)
 
 # protocol 단계 — 채널별로 문구를 나누지 않는다. dict 형태는 호출부/테스트 호환을 위해 유지.
 CHANNEL_PROTOCOL_MESSAGES = {
@@ -159,24 +168,35 @@ CHANNEL_PROTOCOL_MESSAGES = {
     "esxi": REASON_PROTOCOL_UNCONFIRMED,
 }
 
+# ── failure_code → 사용자 문장 (단일 매핑 정본) ──────────────────────────────
+#
+# 2026-08-12: 문장은 **관측된 failure_code 에서만** 파생된다. 종전에는 문장과
+# stage/code 가 서로 다른 조건으로 갈려서(redfish rescue / precheck connect 실패)
+# 같은 결과를 Portal 과 로그가 다르게 해석했다. 매핑을 하나로 묶어 그 가능성을 없앤다.
+#
+# 특히 TCP_CONNECTION_REFUSED:
+#   종전에는 존재하지 않는 presence 판정(ip_in_use)에 문장을 걸어 둬서, RST 를 실제로
+#   관측하고 code 를 REFUSED 로 확정했는데도 사용자에게는 "IP 사용 여부를 확인하세요"(1번)
+#   가 나갔다. 이제 관측된 code 를 그대로 따라 2번(관리 포트 연결 불가)을 쓴다.
+#   presence probe(ICMP / IPAM / ARP)는 여전히 만들지 않는다 — 사용자 지시.
+REASON_BY_FAILURE_CODE = {
+    "DNS_RESOLUTION_FAILED":  REASON_IP_UNCONFIRMED,
+    "TCP_CONNECT_FAILED":     REASON_IP_UNCONFIRMED,
+    "TCP_CONNECTION_REFUSED": REASON_PORT_UNREACHABLE,
+    "PROTOCOL_CHECK_FAILED":  REASON_PROTOCOL_UNCONFIRMED,
+    "AUTH_PROBE_FAILED":      REASON_CREDENTIAL_FAILED,
+    "GATHER_FAILED":          REASON_GATHER_FAILED,
+    "OUTPUT_BUILD_FAILED":    REASON_OUTPUT_BUILD_FAILED,
+}
 
-def reason_for_connect_failure(ip_in_use=None):
-    """관리 연결 실패(reachable / port 단계) 사유 — IP presence 판정 결과로 갈린다.
 
-    ip_in_use 는 "그 IP 를 실제로 쓰는 장비가 있는가" 에 대한 **별도 판정 결과**다.
-    본 함수는 그 결과를 받는 분기 자리만 제공하고, presence probe 자체는 만들지 않는다
-    (별도 작업 영역 — 2026-08-11 사용자 지시).
+def reason_for_failure_code(failure_code):
+    """관측된 failure_code → 사용자 문장. 매핑에 없는 값은 1번(가장 보수적) 문장.
 
-        None  : 판정 수단이 아직 없다 → 1번 문구 (현재 저장소의 모든 호출부가 여기)
-        False : 사용 흔적을 찾지 못했다 → 1번 문구
-        True  : 사용 중임을 확인했다 → 2번 문구
-
-    DNS 해석 실패 / TCP timeout / RST(거부)를 문구로 구분하지 않는다. 세 경우 모두
-    사용자가 할 일은 "그 IP 를 쓰는 장비가 맞는지, 경로가 열려 있는지" 확인이고,
-    구분이 필요한 시스템은 failure_code(DNS_RESOLUTION_FAILED / TCP_CONNECT_FAILED /
-    TCP_CONNECTION_REFUSED)와 errors[].detail 을 본다.
+    호출부가 stage / code 를 먼저 확정하고 문장은 여기서 파생한다. 문장 선택 조건을
+    호출부마다 따로 쓰지 않기 위한 단일 진입점이다.
     """
-    return REASON_PORT_UNREACHABLE if ip_in_use is True else REASON_IP_UNCONFIRMED
+    return REASON_BY_FAILURE_CODE.get(failure_code, REASON_IP_UNCONFIRMED)
 
 
 # TCP 연결 실패 종류 (구조화 — 오류 문자열 파싱 대신 이 값으로 분류한다)
@@ -1185,7 +1205,8 @@ def _try_redfish_auth(host, open_port, username, password, timeout_auth, verify_
         #   Portal 사용자가 할 일은 두 경우 모두 "자격증명과 계정 권한 확인" 으로 같다.
         #   401 이라는 기술 근거는 auth_success=false 와 errors[].detail(원본 오류)이 계속
         #   표현하므로 사용자 문구는 4번 하나로 통일한다.
-        result["failure_reason"] = REASON_CREDENTIAL_FAILED
+        # 2026-08-12: 문장은 확정한 code 에서 파생한다 (REASON_BY_FAILURE_CODE 단일 매핑).
+        result["failure_reason"] = reason_for_failure_code(result["failure_code"])
         result["detail"] = err
         return False
     result["auth_success"] = True
@@ -1240,8 +1261,8 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
         result["detail"] = "; ".join(proto_errors + tcp_errors)
         module.exit_json(**result)
 
-    # TCP 단계에서 전부 실패 — Phase 3-A 의 stage / code 매핑은 그대로 두고 문구만 통일한다.
-    # (문구는 IP presence 판정으로만 갈린다 — reason_for_connect_failure 참조)
+    # TCP 단계에서 전부 실패 — stage / code 를 먼저 확정하고, 문장은 code 에서 파생한다
+    # (2026-08-12: 문장 선택 조건을 code 하나로 통일 — REASON_BY_FAILURE_CODE).
     if TCP_FAIL_REFUSED in tcp_kinds:
         result["reachable"] = True
         result["failure_stage"] = "port"
@@ -1249,7 +1270,7 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
     else:
         result["failure_stage"] = "reachable"
         result["failure_code"] = _tcp_failure_code(tcp_kinds)
-    result["failure_reason"] = reason_for_connect_failure(result.get("ip_in_use"))
+    result["failure_reason"] = reason_for_failure_code(result["failure_code"])
     result["detail"] = "; ".join(tcp_errors)
     module.exit_json(**result)
 
@@ -1311,17 +1332,18 @@ def run_module():
         result["failure_stage"] = "reachable"
         # DNS_RESOLUTION_FAILED 또는 TCP_CONNECT_FAILED — RST 를 못 봤으므로 REFUSED 는 나올 수 없다
         result["failure_code"] = _tcp_failure_code(port_kinds)
-        result["failure_reason"] = reason_for_connect_failure(result.get("ip_in_use"))
+        result["failure_reason"] = reason_for_failure_code(result["failure_code"])
         result["detail"] = "; ".join(port_errors)
         module.exit_json(**result)
     if not target_port_open:
         result["reachable"] = True
         result["failure_stage"] = "port"
         # 이 분기는 RST 를 관측했기에만 도달한다 (_check_ports 의 any_response 조건).
-        # 다만 RST 를 보낸 주체가 최종 서버인지 중간 방화벽인지는 확정할 수 없으므로
-        # RST 만으로 "IP 사용 확인"(2번 문구)으로 올리지 않는다 — presence 판정 결과를 따른다.
+        # 2026-08-12: RST 를 보낸 주체가 최종 서버인지 중간 방화벽인지는 여전히 확정할 수
+        # 없다. 그래서 2번 문구도 "IP 사용이 확인됐다" 고 말하지 않고 관측한 사실만 말한다
+        # ("관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요").
         result["failure_code"] = "TCP_CONNECTION_REFUSED"
-        result["failure_reason"] = reason_for_connect_failure(result.get("ip_in_use"))
+        result["failure_reason"] = reason_for_failure_code(result["failure_code"])
         result["detail"] = "; ".join(port_errors)
         module.exit_json(**result)
 

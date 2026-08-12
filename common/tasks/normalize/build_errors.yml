@@ -1,8 +1,19 @@
 ---
 # common/tasks/normalize/build_errors.yml
 #
-# _all_errors 누적 변수를 표준 형식으로 정리한다.
-# ※ 에러 정규화 로직은 merge_fragment.yml에도 동일하게 존재함 (상호참조).
+# _all_errors 누적 변수를 최종 표준 형식으로 정리한다.
+#
+# 2026-08-12: 정규화 로직은 filter_plugins/errors_normalizer.py (normalize_errors) 한 곳뿐이다.
+#   merge_fragment.yml 과 이 파일이 같은 필터를 부른다 — 종전처럼 같은 Jinja 를 두 벌 복제하지
+#   않는다 (M5). 필터는 멱등이라 이미 정규화된 값을 다시 넣어도 결과가 같다.
+#
+# 필터가 보장하는 것 (계약):
+#   section : 비지 않은 문자열 (없으면 'unknown')
+#   message : **항상 비지 않은 문자열**. null / '' / 키 부재 / 비-문자열은 고정 문장으로
+#             대체되고 원본은 detail 로 내려간다 (파이썬 dict repr 이 사용자 문장 자리에
+#             들어가는 경로 제거 — H10).
+#   detail  : 문자열 또는 null. dict 는 'k=v; k=v' 로 평탄화 (타입 통일 — M12).
+#   원소를 조용히 버리지 않는다 (None / 공백-only 문자열 제외).
 #
 # 입력 변수:
 #   _all_errors : list — merge_fragment 누적 errors
@@ -12,36 +23,4 @@
 
 - name: "normalize | build_errors"
   ansible.builtin.set_fact:
-    _norm_errors: >-
-      {%- set out = [] -%}
-      {#- 방어: _all_errors 가 string/dict 인 경우 character iteration 차단.
-          merge_fragment.yml 의 동일 가드와 정합. 빈 단일 char ('[', ']', '\n', '}')
-          가 errors[].message 로 분해 채워지는 회귀 차단. -#}
-      {%- set ae_raw = _all_errors | default([]) -%}
-      {%- if ae_raw is string -%}
-        {%- set ae = [{'section':'unknown','message':ae_raw,'detail':none}] if (ae_raw | trim | length > 0) else [] -%}
-      {%- elif ae_raw is mapping -%}
-        {%- set ae = [ae_raw] -%}
-      {%- elif ae_raw is iterable -%}
-        {%- set ae = ae_raw -%}
-      {%- else -%}
-        {%- set ae = [] -%}
-      {%- endif -%}
-      {%- for e in ae -%}
-        {%- if e is string -%}
-          {%- if e | trim | length > 0 -%}
-            {%- set _ = out.append({
-              'section': 'unknown',
-              'message': e,
-              'detail':  none
-            }) -%}
-          {%- endif -%}
-        {%- elif e is mapping -%}
-          {%- set _ = out.append({
-            'section': e.section | default('unknown'),
-            'message': e.message | default(e | string),
-            'detail':  e.detail  | default(none)
-          }) -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ out }}
+    _norm_errors: "{{ _all_errors | default([]) | normalize_errors }}"

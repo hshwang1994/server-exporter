@@ -30,6 +30,7 @@ from tests.e2e.test_failure_reason_contract import (
     _OS_TASKS,
     _PRECHECK_OK_DIAG,
     _RF_TASK,
+    render_redfish_rescue,
     _failed_envelopes,
     _render_diagnosis,
     _render_fallback_envelopes,
@@ -203,19 +204,50 @@ def test_case09_esxi_gather_stage(auth_ok, facts_ok, exp_stage, exp_code, exp_au
     _assert_stage_code(diag, label)
 
 
-@pytest.mark.parametrize("collect_ok", [False, True])
-def test_case10_redfish_gather_keeps_auth_unknown(collect_ok):
-    """Redfish 는 인증과 수집이 한 결과에 섞여 있어 auth 를 확정할 수 없다."""
-    diag = _render_diagnosis(
-        "redfish-gather/site.yml", _RF_TASK,
-        {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None}, "_rf_collect_ok": collect_ok})
-    label = f"redfish/collect_ok={collect_ok}"
-    assert diag["failure_stage"] == "gather", label
-    assert diag["failure_code"] == "GATHER_FAILED", label
-    assert diag["auth_success"] is None, (
-        "Gathering 실패만으로 auth_success=true 를 새로 만들지 않는다"
-    )
+# 2026-08-12 (C1 / C4): redfish rescue 의 4필드는 `_rf_auth_outcome` 하나에서 파생된다.
+#   종전에는 stage/code/auth_success 와 failure_reason 이 서로 다른 조건으로 갈려
+#   "stage=gather 인데 자격증명 문장" 같은 자기모순 결과가 정상 경로로 나갔다.
+@pytest.mark.parametrize("collect_ok,obs,exp_stage,exp_code,exp_auth", [
+    # 수집 성공 관측 → 인증은 통과한 것이 증명됨
+    (True,  [],                       "gather", "GATHER_FAILED",     True),
+    # 자격을 실은 첫 요청이 2xx → 인증 통과 관측
+    (False, [{"role": "primary", "status": 200}], "gather", "GATHER_FAILED", True),
+    # 자격 요청을 **보내기 전에** 멈췄다 (adapter 선택 / vault 로드 / vendor 정규화 예외).
+    #   CLAUDE.md §9 — failure_stage 는 워크플로가 멈춘 위치다. 시도조차 안 한 것을
+    #   auth 로 라벨링하면 사용자가 자격증명을 헛되이 뒤진다.
+    (False, [],                       "gather", "GATHER_FAILED",     None),
+    # timeout / TLS → status 미확정
+    (False, [{"role": "primary", "status": None}], "auth", "AUTH_PROBE_FAILED", None),
+    # 403 은 인증 통과 후 권한 문제일 수 있어 거부로 확정하지 않는다
+    (False, [{"role": "primary", "status": 403}], "auth", "AUTH_PROBE_FAILED", None),
+])
+def test_case10_redfish_rescue_derives_all_fields_from_auth_outcome(
+        collect_ok, obs, exp_stage, exp_code, exp_auth):
+    diag = render_redfish_rescue(
+        {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
+         "_rf_collect_ok": collect_ok, "_rf_auth_observations": obs})
+    label = f"redfish/collect_ok={collect_ok}/obs={obs}"
+    assert diag["failure_stage"] == exp_stage, label
+    assert diag["failure_code"] == exp_code, label
+    assert diag["auth_success"] is exp_auth, label
     _assert_stage_code(diag, label)
+    # 4번 문장(자격증명)은 stage=auth 와만, 5번 문장은 stage=gather 와만 짝지어진다
+    from tests.e2e.test_failure_reason_contract import FAILURE_REASONS  # noqa: PLC0415
+    expected_reason = ("_fr_gather_failed" if exp_stage == "gather"
+                       else "_fr_credential_failed")
+    assert diag["failure_reason"] == FAILURE_REASONS[expected_reason], label
+
+
+def test_case10_redfish_never_blames_credentials_after_auth_passed():
+    """인증 통과가 관측된 뒤의 수집 실패를 자격증명 문제로 표시하지 않는다 (P0-1)."""
+    from tests.e2e.test_failure_reason_contract import FAILURE_REASONS  # noqa: PLC0415
+    for ctx in ({"_rf_collect_ok": True},
+                {"_rf_collect_ok": False,
+                 "_rf_auth_observations": [{"role": "primary", "status": 200}]}):
+        diag = render_redfish_rescue({"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
+                                      **ctx})
+        assert diag["failure_reason"] != FAILURE_REASONS["_fr_credential_failed"], ctx
+        assert diag["auth_success"] is True, ctx
 
 
 @pytest.mark.parametrize("os_type", ["linux", "windows"])
@@ -348,12 +380,10 @@ def test_phase1_reason_contract_still_holds():
     from tests.e2e.test_failure_reason_contract import _assert_grid_ready  # noqa: PLC0415
 
     samples = [
-        ("redfish/gather", _render_diagnosis(
-            "redfish-gather/site.yml", _RF_TASK,
+        ("redfish/gather", render_redfish_rescue(
             {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
              "_rf_collect_ok": False, "_rf_auth_rejected": False})),
-        ("redfish/auth-rejected", _render_diagnosis(
-            "redfish-gather/site.yml", _RF_TASK,
+        ("redfish/auth-rejected", render_redfish_rescue(
             {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
              "_rf_collect_ok": False, "_rf_auth_rejected": True})),
         ("esxi/auth", _render_diagnosis(
@@ -366,8 +396,8 @@ def test_phase1_reason_contract_still_holds():
             {"_os_auth_ok": True, "_os_attempts_meta": {}})),
         # 2026-08-11 (Phase 5-A): OS 포트 실패 문구는 site.yml 이 아니라 precheck 가 만든다.
         # (Phase 6-B) 세 관측이 같은 1번 문구를 쓴다 — 구분은 failure_code 가 유지한다.
-        ("os/connect-failure", {"failure_reason": pb.reason_for_connect_failure(None)}),
-        ("os/ip-in-use", {"failure_reason": pb.reason_for_connect_failure(True)}),
+        ("os/connect-failure", {"failure_reason": pb.reason_for_failure_code("TCP_CONNECT_FAILED")}),
+        ("os/port-refused", {"failure_reason": pb.reason_for_failure_code("TCP_CONNECTION_REFUSED")}),
         ("os/protocol", {"failure_reason": pb.CHANNEL_PROTOCOL_MESSAGES["os"]}),
     ]
     for label, diag in samples:

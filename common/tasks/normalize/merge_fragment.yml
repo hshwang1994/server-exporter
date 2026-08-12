@@ -37,36 +37,14 @@
     _all_sec_unsupported: >-
       {{ (_all_sec_unsupported | default([]))
          | union(_sections_unsupported_fragment | default([])) }}
+    # 2026-08-12: 정규화 로직은 filter_plugins/errors_normalizer.py 한 곳에만 둔다.
+    #   종전에는 같은 Jinja 가 merge_fragment / build_errors / 테스트 3곳에 복제돼 있어
+    #   한쪽만 고치면 누적 단계와 최종 단계가 갈라졌다 (M5). 필터는 멱등이라 여기서 한 번,
+    #   build_errors.yml 에서 또 한 번 통과해도 결과가 같다.
+    #   보장: message 는 항상 비지 않은 문자열 / detail 은 문자열 또는 null /
+    #        string·mapping 이 아닌 원소도 조용히 버리지 않는다.
     _all_errors: >-
-      {%- set out = (_all_errors | default([])) | list -%}
-      {#- 방어: _errors_fragment 가 string / dict / None 인 경우 character iteration
-          차단. Jinja2 의 'for e in <string>' 은 char 단위로 iterate 하므로,
-          예전 버그에서 errors 가 ['[', ']', '\n', '}', '}'] 처럼 분해된 결과 발생.
-          list 가 아닌 입력은 명시적으로 list 로 wrap. -#}
-      {%- set ef_raw = _errors_fragment | default([]) -%}
-      {%- if ef_raw is string -%}
-        {%- set ef = [{'section':'unknown','message':ef_raw,'detail':none}] if (ef_raw | trim | length > 0) else [] -%}
-      {%- elif ef_raw is mapping -%}
-        {%- set ef = [ef_raw] -%}
-      {%- elif ef_raw is iterable -%}
-        {%- set ef = ef_raw -%}
-      {%- else -%}
-        {%- set ef = [] -%}
-      {%- endif -%}
-      {%- for e in ef -%}
-        {%- if e is string -%}
-          {%- if e | trim | length > 0 -%}
-            {%- set _ = out.append({'section':'unknown','message':e,'detail':none}) -%}
-          {%- endif -%}
-        {%- elif e is mapping -%}
-          {%- set _ = out.append({
-            'section': e.section | default('unknown'),
-            'message': e.message | default(e | string),
-            'detail':  e.detail  | default(none)
-          }) -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ out }}
+      {{ (_all_errors | default([])) + (_errors_fragment | default([]) | normalize_errors) }}
   no_log: true
 
 - name: "normalize | merge_fragment | merge data"

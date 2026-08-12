@@ -135,7 +135,24 @@
     _sections_supported_fragment: ['network']
     _sections_collected_fragment: ['network']
     _sections_failed_fragment:    []
-    _errors_fragment:             []
+    # 2026-08-12 (N36-c): _e_dns_ok / _e_config_ok 배선. 종전에는 두 플래그 모두 소비처가
+    #   0건이라 이름 서버 수집이 실패해도 흔적이 남지 않았다.
+    #
+    #   이름 서버는 2경로다 — dns_info(1순위) → config_info(폴백, 위 :21-31).
+    #   한쪽이 실패해도 다른 쪽이 값을 채웠으면 그것은 **성공한 fallback** 이므로 error 가
+    #   아니다. 둘 다 성공했는데 결과가 비었다면 실제로 설정이 없는 것이라 역시 error 가
+    #   아니다. 결과가 비었는데 두 경로 중 하나라도 실패한 경우에만 "미설정" 과 "수집 실패"
+    #   를 구분할 수 없으므로 error 로 승격한다.
+    #   섹션 status 는 바꾸지 않는다 (network 는 인터페이스까지 정상 수집된 상태다).
+    _errors_fragment: >-
+      {{ [{'section': 'network',
+           'message': '네트워크 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  'dns_servers=[] (dns_info ok=' ~ (_e_dns_ok | default(false)) ~
+                      ', config_info ok=' ~ (_e_config_ok | default(false)) ~ ')'}]
+         if (((_e_dns_servers | default([]) | length) == 0)
+             and not ((_e_dns_ok | default(false) | bool)
+                      and (_e_config_ok | default(false) | bool)))
+         else [] }}
   no_log: true
 
 - name: "esxi | normalize network | merge fragment"

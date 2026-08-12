@@ -145,6 +145,12 @@
   connection: local
   strategy: free
 
+  # 2026-08-12: build_failed_output.yml 이 사용자 문구 정본(_fr_output_build_failed)을
+  # 참조하므로 이 play 도 정본을 로드해야 한다. 종전에는 이 play 만 vars_files 가 없어서
+  # build_failed_output.yml 안에 문장이 하드코딩돼 있었다 (H2 의 구조적 원인).
+  vars_files:
+    - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
+
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
 
@@ -388,7 +394,13 @@
         - name: "linux | rescue | Portal 표시용 diagnosis 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
-              {%- set ok = _os_auth_ok | default(false) | bool -%}
+              {#- 2026-08-12 (C6): 자격 후보가 0건이면 _os_auth_ok 는 '관측한 적 없음' 인데도
+                  false 로 남아, 원격 명령이 실제로 실행된 뒤의 실패까지 '자격증명 확인'(4번)
+                  으로 라벨링됐다. 그 상태의 envelope 은 data 에 수집 결과가 들어 있으면서
+                  '대상에 접속할 수 없습니다' 라고 말한다. 섹션을 하나라도 수집했다는 것은
+                  원격 접속·인증이 통과했다는 직접 관측이므로 함께 본다. -#}
+              {%- set ok = (_os_auth_ok | default(false) | bool)
+                           or ((_all_sec_collected | default([]) | length) > 0) -%}
               {{ {'reachable': true, 'port_open': true,
                   'protocol_supported': true,
                   'auth_success': (true if ok else none),
@@ -399,8 +411,9 @@
                               'selected_port': 22,
                               'checked_ports': (_precheck_raw.checked_ports | default([5986, 5985, 22])),
                               'auth': (_os_attempts_meta | default({}))}
-                    | combine(((_diagnosis | default({}, true)).details)
-                              if (((_diagnosis | default({}, true)).details) is mapping) else {})} }}
+                    | combine(((_diagnosis | default({}, true)).details | default({}))
+                              if (((_diagnosis | default({}, true)).details | default({}))
+                                  is mapping) else {})} }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
         - name: "linux | rescue | build failed output"
@@ -438,10 +451,10 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_output_build_failed, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.','detail':'_output 미생성 (block/rescue 모두 실패)'}],
+                       'errors': [{'section':'gather','message': _fr_output_build_failed,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {}
                      })) | to_json }}"
 
@@ -611,7 +624,13 @@
         - name: "windows | rescue | Portal 표시용 diagnosis 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
-              {%- set ok = _os_auth_ok | default(false) | bool -%}
+              {#- 2026-08-12 (C6): 자격 후보가 0건이면 _os_auth_ok 는 '관측한 적 없음' 인데도
+                  false 로 남아, 원격 명령이 실제로 실행된 뒤의 실패까지 '자격증명 확인'(4번)
+                  으로 라벨링됐다. 그 상태의 envelope 은 data 에 수집 결과가 들어 있으면서
+                  '대상에 접속할 수 없습니다' 라고 말한다. 섹션을 하나라도 수집했다는 것은
+                  원격 접속·인증이 통과했다는 직접 관측이므로 함께 본다. -#}
+              {%- set ok = (_os_auth_ok | default(false) | bool)
+                           or ((_all_sec_collected | default([]) | length) > 0) -%}
               {%- set port = ansible_port | default(5986) | int -%}
               {{ {'reachable': true, 'port_open': true,
                   'protocol_supported': true,
@@ -624,8 +643,9 @@
                               'checked_ports': (_precheck_raw.checked_ports
                                                  | default([5986] if port == 5986 else [5986, 5985])),
                               'auth': (_os_attempts_meta | default({}))}
-                    | combine(((_diagnosis | default({}, true)).details)
-                              if (((_diagnosis | default({}, true)).details) is mapping) else {})} }}
+                    | combine(((_diagnosis | default({}, true)).details | default({}))
+                              if (((_diagnosis | default({}, true)).details | default({}))
+                                  is mapping) else {})} }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
         - name: "windows | rescue | set failed vars"
@@ -663,9 +683,9 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.', 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_output_build_failed, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message':'수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.','detail':'_output 미생성 (block/rescue 모두 실패)'}],
+                       'errors': [{'section':'gather','message': _fr_output_build_failed,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {}
                      })) | to_json }}"

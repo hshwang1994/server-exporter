@@ -1,7 +1,9 @@
 ---
 # redfish-gather/tasks/account_service.yml
 #
-# P2 (cycle 2026-04-28): recovery 자격으로 접속한 경우 공통계정(infraops) 자동 생성/복구.
+# P2 (cycle 2026-04-28): recovery 자격으로 접속한 경우 표준 관리 계정 자동 생성/복구.
+#   "표준 관리 계정" = 선택된 vendor credential profile 의 role: primary 항목이다.
+#   특정 username 문자열은 Contract 가 아니다 (CLAUDE.md §8).
 #
 # 진입 조건 (2026-08-11 Phase 6-B §6 §7 로 좁혀짐 — 판정 정본은 site.yml):
 #   - _rf_used_account.role == 'recovery'
@@ -76,6 +78,30 @@
       vault/redfish/{{ _rf_vault_profile }}.yml 갱신 후 재시도.
   when: (_rf_target_account | default({})).username | default('') == ''
 
+# 2026-08-12 (NEW-6): 위 debug 는 callback 이 캡처하지 않아 Portal 에 아무 흔적이 없다.
+#   표준 계정 후보가 등록돼 있지 않으면 recovery 계정으로 계속 수집되면서 표준 계정
+#   전환이 영구히 안 되는 상태가 **아무 신호 없이** 지속된다. 여기서 사실을 남긴다.
+#   (이 경로는 이미 "recovery 로 수집 성공 + primary 401 확정" 게이트를 통과한 뒤라
+#    오탐 가능성이 낮다.)
+- name: "redfish | account_service | no primary target 사실 기록"
+  when: (_rf_target_account | default({})).username | default('') == ''
+  block:
+    - name: "redfish | account_service | no primary target fragment"
+      ansible.builtin.set_fact:
+        _data_fragment: {}
+        _sections_supported_fragment: []
+        _sections_collected_fragment: []
+        _sections_failed_fragment: []
+        _sections_unsupported_fragment: []
+        _errors_fragment:
+          - section: "account_service"
+            message: "대상 서버에 사용할 표준 관리 계정 정보가 등록되어 있지 않습니다. 계정 설정을 확인하세요."
+            detail: "vault profile={{ _rf_vault_profile | default('unknown') }}; role=primary candidate=0"
+
+    - name: "redfish | account_service | no primary target 누적 (merge_fragment)"
+      ansible.builtin.include_tasks:
+        file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
+
 - when:
     - (_rf_target_account | default({})).username | default('') != ''
   block:
@@ -139,6 +165,75 @@
           slot_uri:        "{{ (_rf_acct_result.account_service | default({})).slot_uri  | default(none) }}"
           vendor:          "{{ _rf_vendor | default(none) }}"
       no_log: true
+
+    # ── 2026-08-12 (C3 / N49 / N71): 계정 처리 실패를 결과에 남긴다 ──────────
+    #
+    # 종전에는 이 파일에 'errors' 라는 문자열이 **0건**이었다. 모듈은
+    # redfish_gather.py 가 result['errors'] 에 25개 지점의 사유(중복 슬롯 / 계정 잠금 /
+    # 계정 비활성 / PATCH 실패 / password sync 후 재인증 실패 / DELETE+POST 실패 /
+    # 빈 슬롯 없음 / AccountService 미지원 …)를 채워 돌려주는데, 여기서 meta 8키만 읽고
+    # 나머지를 전부 버렸다. 결과: 표준 계정 복구가 왜 안 됐는지 Portal 에 0건.
+    # **계정 잠금은 재시도할수록 악화되는데** 사용자는 "자격증명 확인" 만 안내받았다.
+    #
+    # 성공 필터: recovered=true 이고 verification 이 정상이면 emit 하지 않는다.
+    #   모듈 errors 에는 '...retry 성공' 같은 **성공한 fallback 진행 노트**가 섞여 있어
+    #   그대로 배선하면 정상 복구 케이스가 실패처럼 보인다 (H11 과 같은 함정).
+    #
+    # message 는 여기서 새로 쓴다. 모듈 원문에는 Slot URI / HTTP status / 내부 slot id /
+    #   영문 vendor enum / 긴 대시가 들어 있어 사용자 문구 규칙을 위반한다.
+    #   원문 25건은 **detail 로만** 내린다. 모듈 문자열은 건드리지 않는다
+    #   (단위 테스트 6파일이 message 부분문자열을 assert 한다).
+    # dryrun 은 **실패가 아니다.** 시뮬레이션 모드에서는 의도적으로 아무것도 고치지 않으므로
+    #   recovered=false / verification='skipped' 가 정상 결과다. 이걸 실패로 세면
+    #   `-e _rf_account_service_dryrun=true` 로 확인만 하는 운영자에게 매번 거짓 오류가 나간다
+    #   (2026-08-11 lab 실측: Dell 10.100.15.28 이 정확히 이 상태였다).
+    - name: "redfish | account_service | 실패 판정"
+      ansible.builtin.set_fact:
+        _rf_acct_failed: >-
+          {{ (not (_rf_account_service_meta.dryrun | bool))
+             and not ((_rf_account_service_meta.recovered | bool)
+                      and (_rf_account_service_meta.verification in ['verified', 'none'])) }}
+
+    - name: "redfish | account_service | error fragment"
+      when: _rf_acct_failed | bool
+      ansible.builtin.set_fact:
+        _data_fragment: {}
+        _sections_supported_fragment: []
+        _sections_collected_fragment: []
+        _sections_failed_fragment: []
+        _sections_unsupported_fragment: []
+        _errors_fragment:
+          - section: "account_service"
+            # 원인별로 세 갈래까지만 나눈다 — 분기 입력은 이미 meta 에 있다.
+            message: >-
+              {%- set act = _rf_account_service_meta.action | default('none') -%}
+              {%- set mth = _rf_account_service_meta.method | default('noop') -%}
+              {%- if act == 'ambiguous' -%}
+              {{- '대상 서버에 같은 관리 계정 이름이 중복 등록되어 자동 정리를 중단했습니다. 중복 계정을 정리한 뒤 다시 시도하세요.' -}}
+              {%- elif mth == 'not_supported' -%}
+              {{- '대상 서버가 계정 관리 기능을 제공하지 않아 표준 관리 계정을 정리하지 못했습니다.' -}}
+              {%- else -%}
+              {{- _sm_overrides.account_service -}}
+              {%- endif -%}
+            # 모듈 원문은 detail 로만. account_service 항목만 취한다 —
+            # 모듈이 앞에 붙이는 vendor_detect errors 는 본 수집 경로와 중복이라 제외.
+            detail: >-
+              {%- set src = ((_rf_acct_result | default({})).account_service | default({})).errors | default([]) -%}
+              {%- set parts = [] -%}
+              {%- for e in src -%}
+                {%- if e is mapping and (e.section | default('')) == 'account_service' -%}
+                  {%- set one = [] -%}
+                  {%- if e.message is defined and e.message -%}{%- set _ = one.append(e.message | string) -%}{%- endif -%}
+                  {%- if e.detail  is defined and e.detail  -%}{%- set _ = one.append(e.detail  | string) -%}{%- endif -%}
+                  {%- if one -%}{%- set _ = parts.append(one | join(': ')) -%}{%- endif -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ (parts | join(' | '))[:1000] if parts else none }}
+
+    - name: "redfish | account_service | error fragment 누적 (merge_fragment)"
+      when: _rf_acct_failed | bool
+      ansible.builtin.include_tasks:
+        file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
 
     - name: "redfish | account_service | log result"
       ansible.builtin.debug:

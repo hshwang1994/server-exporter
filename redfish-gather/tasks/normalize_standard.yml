@@ -612,11 +612,81 @@
         {%- if mapped not in out -%}{%- set _ = out.append(mapped) -%}{%- endif -%}
       {%- endfor -%}
       {{ out }}
-    # rule 22 R8 — list 타입 강제. `>-` multi-block + 다중 {{ }} 분기는 Ansible
-    # folded scalar 에서 string-coerce 위험이 있어 단일 expression 으로 단순화.
-    # source contract: redfish_gather module 의 errors 는 list of dicts. 비정상
-    # 경로는 빈 list 로 drop — receiving side (merge_fragment) 가드가 처리.
-    _errors_fragment: "{{ _rf_raw_collect.errors if (_rf_raw_collect is defined and _rf_raw_collect.errors is defined and _rf_raw_collect.errors is iterable and _rf_raw_collect.errors is not string and _rf_raw_collect.errors is not mapping) else [] }}"
+    # 2026-08-12 (C2 / M3): 모듈이 만든 **기술 문자열을 사용자 문장으로 치환**한다.
+    #
+    #   종전에는 모듈 errors 를 무변형으로 통과시켜 status=partial / success 인 정상 수집
+    #   결과의 Portal Grid 에 다음이 그대로 실렸다:
+    #     'Processor /redfish/v1/Systems/1/Processors/CPU1 실패: 401'
+    #     'NetworkAdapters 미지원 또는 실패: HTTP 400'
+    #     '예외 발생'  (섹션명조차 없는 4글자)
+    #   failed 경로는 build_failed_output.yml 이 5문장으로 보호하는데 partial/success 경로만
+    #   날것이 나가던 비대칭이었다.
+    #
+    #   규칙:
+    #     message — 섹션 의미를 유지한 사용자 문장 (정본: common/vars/section_messages.yml).
+    #               5문장으로 뭉개지 않는다 — 섹션 오류는 전체 실패와 다른 사건이다.
+    #     detail  — 모듈 원문(message + detail)을 그대로 보존. 기술 근거는 여기에만.
+    #     section — schema 11 섹션으로 정규화 (processors→cpu, network_adapters→network 등).
+    #               종전에는 raw 이름이 그대로 나가 Portal 이 섹션별로 묶을 수 없었다.
+    #   모듈 문자열 자체는 건드리지 않는다 — _is_404_only_error 가 message 의 HTTP status 로
+    #   unsupported 를 분류하므로 모듈 쪽 문구를 바꾸면 그 분류가 깨진다.
+    _errors_fragment: >-
+      {%- set raw = _rf_raw_collect.errors
+                    if (_rf_raw_collect is defined and _rf_raw_collect.errors is defined
+                        and _rf_raw_collect.errors is iterable
+                        and _rf_raw_collect.errors is not string
+                        and _rf_raw_collect.errors is not mapping)
+                    else [] -%}
+      {#- 2026-08-12: message 를 섹션 고정 문장으로 통일하면 **같은 섹션의 오류 N건이 글자까지
+          같은 문장 N개**가 된다 (DIMM 24개가 각각 실패하면 Grid 에 동일 행 24개).
+          같은 (section, message) 는 1건으로 합치고 근거만 detail 에 이어붙인다.
+          detail 은 5건까지 + 넘으면 개수를 남긴다 (조용한 절단 금지). -#}
+      {%- set out = [] -%}
+      {%- set seen = {} -%}
+      {%- for e in raw -%}
+        {%- if e is mapping -%}
+          {%- set sraw = (e.section | default('unknown')) | string -%}
+          {%- set skey = 'multi_node' if sraw.startswith('multi_node') else sraw -%}
+          {%- set sec = _sm_section_map.get(skey, skey) -%}
+          {%- set label = _sm_labels.get(skey, _sm_labels.get(sec, '서버 정보')) -%}
+          {%- set parts = [] -%}
+          {%- set emsg = e.message | default(none) -%}
+          {%- set edet = e.detail  | default(none) -%}
+          {%- if emsg is not none and (emsg | string | trim | length) > 0 -%}
+            {%- set _ = parts.append(emsg | string | trim) -%}
+          {%- endif -%}
+          {%- if edet is mapping -%}
+            {#- dict detail 은 파이썬 repr 대신 'k=v; k=v' 로 평탄화한다 (detail 타입 통일 — M12) -#}
+            {%- if edet | length > 0 -%}
+              {%- set _ = parts.append(edet.items() | map('join', '=') | join('; ')) -%}
+            {%- endif -%}
+          {%- elif edet is not none and (edet | string | trim | length) > 0 -%}
+            {%- set _ = parts.append(edet | string | trim) -%}
+          {%- endif -%}
+          {%- set msg = _sm_overrides.get(skey, label ~ _sm_tpl_suffix ~ _sm_advice.default) -%}
+          {%- set key = sec ~ '|' ~ msg -%}
+          {%- if key in seen -%}
+            {%- set slot = seen[key] -%}
+            {%- set _ = slot.append(parts | join(' | ')) if parts else none -%}
+          {%- else -%}
+            {%- set slot = (parts | join(' | ')) if parts else none -%}
+            {%- set bucket = [slot] if slot else [] -%}
+            {%- set _ = seen.update({key: bucket}) -%}
+            {%- set _ = out.append({'section': sec, 'message': msg, '_k': key}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set final = [] -%}
+      {%- for o in out -%}
+        {%- set ds = seen[o._k] | select('string') | list -%}
+        {%- set shown = ds[:5] -%}
+        {%- set extra = (ds | length) - (shown | length) -%}
+        {%- set joined = shown | join(' | ') -%}
+        {%- set more = (' | 외 ' ~ extra ~ '건') if extra > 0 else '' -%}
+        {%- set _ = final.append({'section': o.section, 'message': o.message,
+                                  'detail': (joined ~ more) if joined else none}) -%}
+      {%- endfor -%}
+      {{ final }}
   no_log: true
 
 - name: "redfish | normalize_standard | merge fragment"

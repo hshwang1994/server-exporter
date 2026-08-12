@@ -209,6 +209,62 @@ if response["data"]["hardware"].get("health") == "Critical":
 
 ---
 
+## 4-1. `errors[]` 원소 — 무엇이 어디에 들어가나 (2026-08-12 확정)
+
+원소는 항상 이 3개 키를 갖는다. 다른 키는 없다.
+
+| 키 | 타입 | 무엇 |
+|---|---|---|
+| `section` | 문자열 | 오류가 난 영역. 수집 섹션 이름 11종 또는 수집 단계 이름 (`precheck` / `auth` / `gather` / `oem` / `vendor_detect` / `account_service` / `multi_node`). 값이 없으면 `unknown` |
+| `message` | 문자열 (**절대 비지 않음**) | 사용자에게 그대로 보여주는 한국어 문장 |
+| `detail` | 문자열 또는 `null` | 기술 근거. 객체나 배열이 아니다 |
+
+### `message` 규칙
+
+- **항상 비어 있지 않은 문자열**이다. `null` / `""` / 파이썬 자료구조 표현이 들어가는 경로는 없다.
+- 다음은 `message` 에 **넣지 않는다**. 전부 `detail` 로 간다.
+  관리 포트 번호 · HTTP 상태 코드 · 타임아웃 초 · 리소스 경로(URI) · 원본 stderr/stdout ·
+  예외 문자열 · 내부 태스크명/변수명 · 영문 내부 코드 · 대상 IP
+- **전체 실패 문장과 섹션 문장은 다르다.**
+
+| 상황 | `status` | `message` |
+|---|---|---|
+| 전체 실패 | `failed` | 표준 대표 문장 (아래 6문장 중 하나). `errors[0].message == diagnosis.failure_reason` |
+| 섹션 부분 실패 | `partial` 또는 `success` | 섹션 의미를 유지한 문장. 예: `"CPU 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요."` — 이때 `diagnosis.failure_reason` 은 `null` 이다 |
+
+전체 실패 대표 문장 6종 (정본: `common/vars/failure_reasons.yml`, `failure_code` 에서 파생):
+
+| `failure_code` | 문장 |
+|---|---|
+| `DNS_RESOLUTION_FAILED` / `TCP_CONNECT_FAILED` | 대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요. |
+| `TCP_CONNECTION_REFUSED` | 대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요. |
+| `PROTOCOL_CHECK_FAILED` | 관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. 관리 서비스 설정과 상태를 확인하세요. |
+| `AUTH_PROBE_FAILED` | 대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요. |
+| `GATHER_FAILED` | 대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요. |
+| `OUTPUT_BUILD_FAILED` | 수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요. |
+
+### `errors[]` 에 **들어가지 않는** 것
+
+- **성공한 fallback** — 예: 구형 BMC 에서 `SimpleStorage` 경로로 스토리지를 **정상 수집**한 경우.
+  데이터를 얻었으므로 실패가 아니다. 이 사실은 `diagnosis.details.notices` 에 남는다.
+  (종전에는 여기가 `errors[]` 라서 정상 수집인데도 `status` 가 `partial` 로 강등됐다.)
+- **지원하지 않는 optional 기능** — `sections.<name> = "not_supported"` 가 이미 표현한다.
+
+### 호출자 가이드
+
+```python
+# message 는 그대로 사용자에게 보여도 된다 (문자열 보장)
+for e in response["errors"]:
+    show(e["section"], e["message"])
+
+# 기술 근거가 필요하면 detail — 없을 수 있다
+    log(e.get("detail"))
+```
+
+`errors[]` 개수만으로 알람을 띄우지 않는다 (§4 시나리오 B). 알람 기준은 `status` 와 섹션 status 다.
+
+---
+
 ## 5. `diagnosis` — 어디서 막혔는지
 
 연결이 안 됐을 때 가장 먼저 보는 곳. precheck 단계가 순서대로 체크되고, 막힌 단계의 boolean 이 `false` 로 찍힌다.

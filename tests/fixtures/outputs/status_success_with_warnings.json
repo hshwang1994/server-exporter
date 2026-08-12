@@ -7,7 +7,7 @@
     "case": "M-A2 결정 결과 Case A — 의도 주석 강화 only (코드 동작 변경 없음)",
     "source": "fabricated mock (lab 부재 — Linux OS gather 시나리오 B 케이스, 사용자 결정 docs/ai/tickets/2026-05-06-multi-session-compatibility/fixes/M-A2.md)",
     "created_at": "2026-05-06",
-    "expected_pytest": "envelope.status == 'success' AND envelope.errors[0].section == 'memory' AND envelope.errors[0].message contains 'dmidecode 결과 없음'"
+    "expected_pytest": "envelope.status == 'success' AND envelope.errors[0].section == 'memory' AND envelope.errors[0].detail contains 'dmidecode' (H7 2026-08-12: 기술 근거는 message 가 아니라 detail 에 둔다)"
   },
   "target_type": "os",
   "collection_method": "ansible_ssh",
@@ -58,17 +58,13 @@
   "errors": [
     {
       "section": "memory",
-      "message": "dmidecode 결과 없음 — total_basis=os_visible fallback (권한 부족 또는 dmidecode 미존재)",
-      "detail": {
-        "rc": 1
-      }
+      "message": "메모리 총 용량을 물리 설치량이 아닌 운영체제 인식 값으로 수집했습니다. 수집 계정의 권한을 확인하세요.",
+      "detail": "field=total_basis; value=os_visible; source=dmidecode; rc=1"
     },
     {
       "section": "network",
-      "message": "lspci stderr (NIC partial 가능): pcilib: Cannot open /sys/bus/pci/devices",
-      "detail": {
-        "rc": 0
-      }
+      "message": "네트워크 카드 상세 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.",
+      "detail": "source=lspci; rc=0; stderr=pcilib: Cannot open /sys/bus/pci/devices"
     }
   ],
   "data": {

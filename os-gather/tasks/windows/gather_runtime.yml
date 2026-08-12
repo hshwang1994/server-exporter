@@ -231,11 +231,17 @@
         _data_fragment: {}
         _sections_supported_fragment: ['system']
         _sections_collected_fragment: []
-        _sections_failed_fragment:    ['system_runtime']
+        # NEW-3 (2026-08-12): 종전 값 'system_runtime' 은 schema 11 섹션이 아니라
+        #   build_sections 의 섹션 루프에 걸리지 않는 완전한 no-op 이었다 (동작 불변).
+        #   system 섹션은 gather_system 이 이미 수집했으므로 failed 로 올리지 않는다.
+        _sections_failed_fragment:    []
+        # M1: Linux 와 **같은 문장** (linux/gather_runtime.yml). OS 구분은 detail 로만 남긴다.
         _errors_fragment:
-          - section: windows_runtime
-            message: "Windows runtime 정보 수집 실패 (best-effort skip)"
-            detail:  "{{ ansible_failed_result.msg | default('') }}"
+          - section: system
+            message: "서버 기본 정보 중 운영 환경 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+            detail: >-
+              {{ 'scope=timezone,ntp,firewall,listening_ports,pagefile; os=windows; cause=task_failed; msg='
+                 ~ ((ansible_failed_result.msg | default('') | string | trim) or 'none') }}
       no_log: true
 
 - name: "windows | runtime | merge fragment"

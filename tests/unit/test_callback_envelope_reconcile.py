@@ -149,6 +149,13 @@ class Driver:
             delegate_to=None,
             result={"ansible_facts": {"_diagnosis": diagnosis or PRECHECK_OK}}))
 
+    def precheck_detail(self, ip, detail):
+        """run_precheck.yml:84-86 — precheck 가 관측한 원본 오류를 _fail_error_detail 로 전달."""
+        self.cb.v2_runner_on_ok(_Result(
+            self.hosts[ip], "precheck | 실패 detail 을 errors[].detail 로 전달",
+            connection="local", delegate_to=None,
+            result={"ansible_facts": {"_fail_error_detail": detail}}))
+
     def classify(self, ip, connection="ssh"):
         """add_host 후 호스트가 실제 연결 정보를 갖는 상태."""
         self.hosts[ip]._vars["ansible_connection"] = connection
@@ -460,7 +467,13 @@ def test_reconcile_failure_never_kills_normal_output(capsys):
 
 
 def test_reconciled_envelope_is_reported_on_stderr(capsys):
-    """운영 가시성 — 보충이 일어났다는 사실이 stderr 에 구조화되어 남는다."""
+    """운영 가시성 — 보충이 일어났다는 사실이 stderr 평문으로 남는다.
+
+    2026-08-12: 종전에는 이 진단이 stderr 로 `message` 키를 가진 **JSON** 이었다.
+    호출자는 Jenkins console log 를 라인 단위로 파싱하므로(Jenkinsfile:245-246)
+    stdout envelope 과 키가 겹치는 JSON 이 같은 로그에 섞이면 진단 줄이 결과
+    envelope 으로 오인될 수 있다. 그래서 `[json_only] ...` 평문으로 통일했다.
+    """
     d = Driver(capsys)
     ip = "192.0.2.83"
     d.precheck(ip)
@@ -470,9 +483,97 @@ def test_reconciled_envelope_is_reported_on_stderr(capsys):
     d.cb.v2_playbook_on_stats(_Stats([ip]))
     captured = capsys.readouterr()
     assert json.loads(captured.out.strip())["ip"] == ip
-    err = json.loads(captured.err.strip())
-    assert err["error_type"] == "envelope_reconciled"
-    assert err["host"] == ip and err["message"] == "GATHER_FAILED"
+
+    err = captured.err.strip()
+    assert err.startswith("[json_only] envelope_reconciled:"), err
+    assert "GATHER_FAILED" in err
+    assert f"host={ip}" in err
+    # 진단 줄이 envelope 으로 오인될 여지 자체를 없앤다 (JSON 이 아니어야 한다).
+    for line in captured.err.splitlines():
+        assert not line.lstrip().startswith("{"), f"stderr 에 JSON 줄이 남아있다: {line}"
+
+
+def test_one_host_build_failure_does_not_block_the_others(capsys, monkeypatch):
+    """한 호스트의 조립 실패가 남은 호스트의 보충까지 삼키면 안 된다 (per-host 격리).
+
+    종전에는 보충 루프 전체가 `v2_playbook_on_stats` 의 try 하나에만 감싸여 있어
+    첫 호스트에서 예외가 나면 남은 미방출 호스트 **전부**가 envelope 을 잃었다.
+    소실을 막는 장치가 오히려 대량 소실 지점이 되는 구조였다.
+    """
+    d = Driver(capsys)
+    ips = ["192.0.2.91", "192.0.2.92", "192.0.2.93"]
+    for ip in ips:
+        d.precheck(ip)
+        d.classify(ip)
+        d.remote_task(ip)
+        d.remote_task(ip, name="linux | gather cpu", unreachable=True)
+
+    original = d.cb._build_fallback_envelope
+
+    def boom(host_name, ctx):
+        if host_name == ips[0]:
+            raise RuntimeError("조립 실패 재현")
+        return original(host_name, ctx)
+
+    monkeypatch.setattr(d.cb, "_build_fallback_envelope", boom)
+
+    d.cb.v2_playbook_on_stats(_Stats(list(d.hosts)))
+    captured = capsys.readouterr()
+    envs = [json.loads(line) for line in captured.out.splitlines() if line.strip()]
+
+    assert len(envs) == 3, f"첫 호스트의 예외가 나머지를 삼켰다 (기대 3, 실제 {len(envs)})"
+    by_ip = {e["ip"]: e for e in envs}
+    assert set(by_ip) == set(ips)
+
+    degraded = by_ip[ips[0]]
+    _assert_envelope_contract(degraded, "조립 실패 degrade")
+    assert degraded["diagnosis"]["failure_stage"] == "fallback"
+    assert degraded["diagnosis"]["failure_code"] == "OUTPUT_BUILD_FAILED"
+    assert degraded["errors"][0]["message"] == degraded["diagnosis"]["failure_reason"]
+
+    for ip in ips[1:]:
+        assert by_ip[ip]["diagnosis"]["failure_code"] == "GATHER_FAILED", ip
+
+    assert "envelope 조립 실패" in captured.err, "degrade 사유가 어디에도 남지 않았다"
+
+
+def test_disabled_reconcile_leaves_a_stderr_notice(capsys, monkeypatch):
+    """비상 스위치가 켜져 있다는 사실이 stderr 로 남는다 (stdout 오염 0)."""
+    monkeypatch.setenv("JSON_ONLY_NO_RECONCILE", "1")
+    json_only.CallbackModule()
+    captured = capsys.readouterr()
+    assert captured.out == "", "고지가 stdout 을 오염시키면 호출자 파싱이 깨진다"
+    assert "JSON_ONLY_NO_RECONCILE" in captured.err
+
+
+def test_enabled_reconcile_emits_no_notice(capsys, monkeypatch):
+    """정상(보충 활성) 상태에서는 아무 잡음도 내지 않는다."""
+    monkeypatch.delenv("JSON_ONLY_NO_RECONCILE", raising=False)
+    json_only.CallbackModule()
+    captured = capsys.readouterr()
+    assert captured.out == "" and captured.err == ""
+
+
+def test_precheck_observed_detail_survives_into_errors_detail(capsys):
+    """precheck 가 포트별로 관측한 원본 오류가 보충 envelope 에서 사라지면 안 된다.
+
+    종전에는 분기(1)의 detail 이 고정 문자열로 덮어써져, 실패 원인의 유일한 1차 증거인
+    포트별 관측값이 통째로 없어졌다.
+    """
+    d = Driver(capsys)
+    ip = "192.0.2.95"
+    observed = "WinRM timeout; WinRM timeout; SSH connection refused"
+    d.precheck(ip, diagnosis=PRECHECK_PORT_FAIL)
+    d.precheck_detail(ip, observed)
+
+    env = d.finish()[0]
+    _assert_envelope_contract(env, "precheck detail 보존")
+    err = env["errors"][0]
+    assert observed in err["detail"], "precheck 가 관측한 원본 오류가 소실됐다"
+    assert "precheck diagnosis preserved" in err["detail"], "콜백 표식도 유지돼야 한다"
+    # 기술 근거는 detail 에만 — 사용자 문장은 정본 그대로다
+    assert observed not in err["message"]
+    assert err["message"] == env["diagnosis"]["failure_reason"]
 
 
 def test_successful_credential_probe_is_auth_evidence(capsys):
@@ -562,17 +663,31 @@ class TestCanonicalReasonsDoNotDrift:
             "common/vars/failure_reasons.yml:_fr_gather_failed 와 다르다"
         )
 
-    def test_no_output_sentence_matches_site_yml_always_block(self):
-        """결과 객체 생성 실패 문장은 3 채널 site.yml 의 always 블록 정본과 같다."""
-        seen = 0
+    def test_no_output_sentence_matches_canonical(self):
+        """결과 객체 생성 실패 문장의 정본은 failure_reasons.yml 이다 (2026-08-12).
+
+        종전에는 이 문장이 site.yml always 블록마다 두 자리(diagnosis.failure_reason /
+        errors[0].message)에 리터럴로 있어서 3 채널 8곳을 동시에 고쳐야 했다 (H2).
+        정본을 `_fr_output_build_failed` 로 옮겼으므로 site.yml 문자열이 아니라
+        정본 값과 비교한다.
+        """
+        assert json_only._REASON_NO_OUTPUT == \
+            _canonical_sentences()["_fr_output_build_failed"], (
+            "json_only._REASON_NO_OUTPUT 가 "
+            "common/vars/failure_reasons.yml:_fr_output_build_failed 와 다르다"
+        )
+
+    def test_site_yml_always_blocks_reference_the_canonical_variable(self):
+        """3 채널 always 블록이 문장을 리터럴로 다시 적지 않는다 (H2 회귀 차단)."""
         for site in ("os-gather", "esxi-gather", "redfish-gather"):
             text = (REPO / site / "site.yml").read_text(encoding="utf-8")
-            if json_only._REASON_NO_OUTPUT in text:
-                seen += 1
-        assert seen == 3, (
-            "json_only._REASON_NO_OUTPUT 가 3 채널 site.yml always 블록 문장과 다르다 "
-            f"(일치 {seen}/3)"
-        )
+            assert json_only._REASON_NO_OUTPUT not in text, (
+                f"{site}/site.yml 에 fallback 문장이 하드코딩됐다 — "
+                f"_fr_output_build_failed 를 참조할 것"
+            )
+            assert "_fr_output_build_failed" in text, (
+                f"{site}/site.yml always 블록이 정본 변수를 참조하지 않는다"
+            )
 
     def test_callback_defines_no_extra_user_sentences(self):
         """표준 문구 외의 한국어 사용자 문장을 콜백이 새로 만들지 않는다."""

@@ -19,4 +19,9 @@
                    | default(_e_raw_facts.ansible_datastore | default([])) }}"
     _e_ds_ok:  "{{ _e_ds_result is not failed and
                    _e_ds_result.datastores is defined }}"
+    # 2026-08-12 (C5/N32): 모듈 실패 사유는 기술 근거라 errors[].detail 로만 내려보낸다.
+    #   사용자 문장(message)에는 넣지 않는다. 빈 값이면 null.
+    _e_ds_err: >-
+      {{ (_e_ds_result.msg | default('', true) | string | trim)
+         | default(none, true) }}
   no_log: true

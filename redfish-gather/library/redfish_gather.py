@@ -236,6 +236,37 @@ def auth_evidence():
     return {'first_auth_status': _AUTH_OBSERVATION['first_status']}
 
 
+# ── 정보성 통보 (notices) — 2026-08-12 신설 ──────────────────────────────────
+#
+# "성공한 fallback" 을 errors[] 에 넣지 않는다.
+#   종전에는 SimpleStorage / SmartStorage fallback 으로 **데이터를 정상 수집했는데도**
+#   errors 에 항목이 생겼고, _make_section_runner 의 `if errs: failed.append(section)` 때문에
+#   그 섹션이 failed 로 잡혀 overall status 가 partial 로 강등됐다 (H11).
+#   HPE iLO4 같은 구세대 BMC 는 **매 수집마다** partial 로 보고됐다.
+#
+# 정보를 버리지는 않는다. module result 의 `notices` 로 내보내고
+# redfish-gather/site.yml 이 diagnosis.details.notices 에 싣는다
+# (envelope 13 top-level 필드 변경 아님 — CLAUDE.md §11 이 details 를 기술 evidence /
+#  확장 metadata 영역으로 규정한다).
+_NOTICES = []
+
+
+def _reset_notices():
+    del _NOTICES[:]
+
+
+def _notice(section, message):
+    """수집에 성공했지만 사용자/운영자가 알아둘 사실 1건. 중복은 담지 않는다."""
+    entry = {'section': section, 'message': str(message)}
+    if entry not in _NOTICES:
+        _NOTICES.append(entry)
+    return entry
+
+
+def notices():
+    return list(_NOTICES)
+
+
 def _get(bmc_ip, path, username, password, timeout, verify_ssl):
     """인증 GET — 반환 status 를 _record_auth_status 로 관측만 한다(요청 수 불변)."""
     status, data, err = _get_impl(bmc_ip, path, username, password, timeout, verify_ssl)
@@ -399,8 +430,17 @@ def _str(x):
     str 면 그대로, 아니면 '' (Round 8). `(x or '')` 와 str/None 입력에 동일 — golden 불변."""
     return x if isinstance(x, str) else ''
 
-def _err(section, message, detail=None):
-    return {'section': section, 'message': str(message), 'detail': detail}
+# 내부 분류 code — errors[] 원소에 붙되 **envelope 으로는 나가지 않는다**
+# (common/tasks/normalize 의 정규화가 section/message/detail 3키만 뽑는다).
+# 사용자 문구를 제어 로직의 키로 쓰지 않기 위한 자리다 (2026-08-12).
+_CODE_VENDOR_UNRESOLVED = 'vendor_unresolved'
+
+
+def _err(section, message, detail=None, code=None):
+    entry = {'section': section, 'message': str(message), 'detail': detail}
+    if code:
+        entry['code'] = code
+    return entry
 
 
 # 확장 오류 정보에서 뽑을 최대 ExtendedInfo 항목 수 / 최종 문자열 길이 상한.
@@ -448,14 +488,24 @@ def _capped(seq, section=None, errors=None):
     """무경계 collection(Members/Drives) 순회 상한 — P2 DoS/huge-payload 방어.
 
     오염/악성/버그 BMC 가 수천 멤버를 반환하면 멤버당 _get 가 N회 네트워크 왕복(각 timeout)을
-    유발해 사실상 hang. cap 초과 시 절단 + (errors 제공 시) _err 로 명시(silent 절단 금지 —
-    rule 70). 실 BMC 멤버 수는 cap 보다 훨씬 작아 정상 입력 결과 불변(rule 92 R2 Additive).
+    유발해 사실상 hang. cap 초과 시 절단 + _err 로 명시(silent 절단 금지 — rule 70).
+    실 BMC 멤버 수는 cap 보다 훨씬 작아 정상 입력 결과 불변(rule 92 R2 Additive).
+
+    2026-08-12 (M6): 종전에는 `errors=None` 으로 부르는 호출부(power TelemetryService,
+    thermal Sensors)에서 **절단 사실이 아무 데도 남지 않았다** — docstring 이 금지한 silent
+    절단이 실제로 두 곳에서 일어나고 있었다. 두 호출부는 (val, errors) 를 반환하지 않는
+    헬퍼 안이라 errors 리스트를 넘길 자리가 없다. 함수 시그니처를 바꾸는 대신,
+    errors 가 없으면 모듈 수준 notices 로 떨어뜨려 사실이 남게 한다.
     """
     seq = seq if isinstance(seq, list) else []  # Round 4 #2: 비-list 방어 (len/slice crash 차단)
     if len(seq) > MAX_COLLECTION_MEMBERS:
-        if errors is not None and section:
-            errors.append(_err(section,
-                f'collection 멤버 {len(seq)} > 상한 {MAX_COLLECTION_MEMBERS} — 절단(DoS 방어)'))
+        if section:
+            text = (f'collection 멤버 {len(seq)} > 상한 {MAX_COLLECTION_MEMBERS} '
+                    f'— 절단(DoS 방어)')
+            if errors is not None:
+                errors.append(_err(section, text))
+            else:
+                _notice(section, text)
         return seq[:MAX_COLLECTION_MEMBERS]
     return seq
 
@@ -1123,7 +1173,8 @@ def detect_vendor(bmc_ip, username, password, timeout, verify_ssl):
     vendor = _detect_vendor_from_service_root(root)
     if vendor is None:
         vendor = 'unknown'
-        errors.append(_err('vendor_detect', 'ServiceRoot에서 벤더 식별 불가'))
+        errors.append(_err('vendor_detect', 'ServiceRoot에서 벤더 식별 불가',
+                           code=_CODE_VENDOR_UNRESOLVED))
 
     systems_uri  = _safe(root, 'Systems',  '@odata.id')
     if not systems_uri:
@@ -1165,10 +1216,12 @@ def detect_vendor(bmc_ip, username, password, timeout, verify_ssl):
                 fb_vendor = _normalize_vendor_from_aliases(mfr.strip().lower())
                 if fb_vendor and fb_vendor != 'unknown':
                     vendor = fb_vendor
-                    # errors에서 'ServiceRoot에서 벤더 식별 불가' 제거 (해소됨)
-                    errors = [e for e in errors if 'ServiceRoot에서 벤더 식별 불가' not in (e.get('message') or '')]
-                    errors.append(_err('vendor_detect',
-                        f'{fb_label} Manufacturer fallback로 vendor={fb_vendor} 식별 (ServiceRoot 정보 부족)'))
+                    # 2026-08-12: 종전에는 **사용자 문구 부분일치**로 앞선 error 를 지웠다.
+                    #   문구를 다듬는 순간 제어 로직이 깨지는 구조라 내부 code 로 바꿨다.
+                    errors = [e for e in errors if e.get('code') != _CODE_VENDOR_UNRESOLVED]
+                    # 식별에 **성공**했으므로 error 가 아니라 notice 다 (H11).
+                    _notice('vendor_detect',
+                            f'{fb_label} Manufacturer fallback로 vendor={fb_vendor} 식별 (ServiceRoot 정보 부족)')
                     break
 
     # G6 (cycle 2026-04-30): G3까지 fail이면 401 WWW-Authenticate realm 헤더로 마지막 추정.
@@ -1176,9 +1229,9 @@ def detect_vendor(bmc_ip, username, password, timeout, verify_ssl):
         realm_vendor = _probe_realm_hint(bmc_ip, timeout, verify_ssl)
         if realm_vendor:
             vendor = realm_vendor
-            errors = [e for e in errors if 'ServiceRoot에서 벤더 식별 불가' not in (e.get('message') or '')]
-            errors.append(_err('vendor_detect',
-                f'WWW-Authenticate realm fallback로 vendor={realm_vendor} 식별 (ServiceRoot/Resources 본문 부족)'))
+            errors = [e for e in errors if e.get('code') != _CODE_VENDOR_UNRESOLVED]
+            _notice('vendor_detect',
+                    f'WWW-Authenticate realm fallback로 vendor={realm_vendor} 식별 (ServiceRoot/Resources 본문 부족)')
 
     return vendor, system_uri, manager_uri, chassis_uri, errors, root
 
@@ -2531,7 +2584,9 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         if not err2 and st2 == 200:
             use_simple = True
             coll = coll2
-            errors.append(_err('storage', 'Storage 미지원, SimpleStorage fallback 사용'))
+            # 2026-08-12 (H11): 이건 **수집에 성공한** 정보다. errors 에 넣으면
+            #   _make_section_runner 가 섹션을 failed 로 잡아 status 가 partial 로 강등된다.
+            _notice('storage', 'Storage 미지원, SimpleStorage fallback 사용')
         else:
             # cycle 2026-05-07 M-I1: SmartStorage (HPE iLO4 OEM legacy) fallback —
             # 표준/SimpleStorage 모두 404 시 HPE 구 path 시도 (Additive).
@@ -2539,7 +2594,8 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
                 bmc_ip, system_uri, username, password, timeout, verify_ssl
             )
             if ctrls:
-                errors.append(_err('storage', 'Storage/SimpleStorage 미지원, SmartStorage (HPE OEM legacy) fallback 사용'))  # nosec rule12-r1 — SmartStorage OEM path spec
+                # 2026-08-12 (H11): 성공한 fallback — errors 아님 (위 SimpleStorage 와 동일 사유)
+                _notice('storage', 'Storage/SimpleStorage 미지원, SmartStorage (HPE OEM legacy) fallback 사용')  # nosec rule12-r1 — SmartStorage OEM path spec
                 errors.extend(smart_errors)
                 return {'controllers': ctrls, 'volumes': vols}, errors
             errors.append(_err('storage', f'Storage/SimpleStorage/SmartStorage 모두 실패: {err or st}'))
@@ -2549,6 +2605,12 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
     if use_simple:
         controllers, sub_errors = _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl)
         errors.extend(sub_errors)
+        # 2026-08-12: fallback **사용 사실**은 notice 지만, fallback 이 200 을 주고도
+        #   결과가 비면 그건 성공이 아니다. errors 가 비면 _make_section_runner 가
+        #   섹션을 collected 로만 잡아 "데이터 없음" 이 아무 신호 없이 success 로 나간다.
+        if not controllers and not errors:
+            errors.append(_err('storage',
+                               'SimpleStorage 경로가 응답했지만 디스크 정보가 비어 있음'))
         return {'controllers': controllers, 'volumes': []}, errors
     controllers, volumes, sub_errors = _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl)
     errors.extend(sub_errors)
@@ -5216,6 +5278,7 @@ def main():
     # Phase 5-A: 인증 관측은 invocation 단위다. Ansible 은 매 실행마다 새 프로세스지만
     # 테스트는 한 프로세스에서 main() 을 여러 번 부르므로 명시적으로 초기화한다.
     _reset_auth_observation()
+    _reset_notices()
 
     p = module.params
     bmc_ip, username, password = p['bmc_ip'], p['username'], p['password']
@@ -5250,6 +5313,9 @@ def main():
             mode='account_provision',
             vendor=vendor,
             account_service=result,
+            # 2026-08-12: 이 모드도 detect_vendor 를 한 번 돌므로 vendor fallback 식별 같은
+            #   정보성 통보가 생길 수 있다. gather 모드와 반환 shape 을 맞춘다.
+            notices=notices(),
         )
         return
 
@@ -5278,7 +5344,7 @@ def main():
             changed=False, status='failed', vendor=vendor,
             collected=[], failed_sections=['all'], unsupported_sections=[],
             errors=all_errors, data={}, probe_facts=probe_facts,
-            multi_node=None, auth_evidence=auth_evidence(),
+            multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
         )
 
     # 2026-08-11: 대표 시리얼 resolver 가 등록된 vendor 는 그 값을 **필수값**으로 다룬다.
@@ -5304,7 +5370,7 @@ def main():
                 changed=False, status='failed', vendor=vendor,
                 collected=[], failed_sections=['all'], unsupported_sections=[],
                 errors=all_errors, data={}, probe_facts=probe_facts,
-                multi_node=None, auth_evidence=auth_evidence(),
+                multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
             )
 
     result_data = _collect_all_sections(
@@ -5331,7 +5397,7 @@ def main():
                 changed=False, status='failed', vendor=vendor,
                 collected=[], failed_sections=['all'], unsupported_sections=[],
                 errors=all_errors, data={}, probe_facts=probe_facts,
-                multi_node=None, auth_evidence=auth_evidence(),
+                multi_node=None, auth_evidence=auth_evidence(), notices=notices(),
             )
 
     # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 정의 vendor 만 multi_node 수집.
@@ -5353,7 +5419,7 @@ def main():
         collected=clean, failed_sections=list(set(failed)),
         unsupported_sections=list(set(unsupported)),
         errors=all_errors, data=result_data, probe_facts=probe_facts,
-        multi_node=multi_node, auth_evidence=auth_evidence(),
+        multi_node=multi_node, auth_evidence=auth_evidence(), notices=notices(),
     )
 
 

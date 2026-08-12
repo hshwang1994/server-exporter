@@ -1,64 +1,44 @@
-"""Regression for merge_fragment / build_errors errors normalization.
+"""errors[] 정규화 계약 — filter_plugins/errors_normalizer.normalize_errors.
 
-배경: errors 항목이 ['[', ']', '\\n', '}', '}'] 5개 character 로 분해 보고된
-회귀 사고. root cause 는 os-gather/tasks/linux/gather_system.yml:344-352 의
-`>-` block scalar 끝에 잉여 `}}` 두 글자 — Jinja expression 결과 list 가
-string 으로 coerce 된 뒤 `\\n}}` 가 concat 되어 `_errors_fragment` 가 list 가
-아닌 string ('[...]\\n}}') 으로 들어감. merge_fragment 의 `for e in <string>`
-가 character 단위로 iterate 하면서 각 char 를 errors[].message 로 wrap.
+배경 1 (2026 초): errors 항목이 ['[', ']', '\\n', '}', '}'] 5개 character 로 분해 보고된
+회귀 사고. root cause 는 `>-` block scalar 끝의 잉여 `}}` 로 Jinja expression 결과 list 가
+string 으로 coerce 된 뒤 `for e in <string>` 가 char 단위로 iterate 한 것.
 
-본 테스트는 merge_fragment + build_errors 가 string / dict / None 입력에
-대해 character iteration 을 차단하고 list of normalized dicts 를 반환하는지
-검증한다.
+배경 2 (2026-08-12): 같은 정규화 Jinja 가 merge_fragment.yml / build_errors.yml /
+이 테스트 3곳에 **통째로 복제**돼 있었다(M5). 한쪽만 고치면 누적 단계와 최종 단계가
+갈라진다. 값을 반환할 수 있는 유일한 수단인 filter plugin 으로 한 곳에 모았고,
+이 테스트는 이제 **production 함수를 직접 호출**한다 (사본 없음).
+
+배경 3 (2026-08-12): 종전 dict 분기는 `e.message | default(e | string)` 이라
+  - message 가 None      → null 그대로 통과
+  - message 가 ''        → 빈 문자열 그대로 통과
+  - message 키 자체 부재 → **파이썬 dict repr 이 사용자 문장 자리에** 노출
+셋 다 막지 못했고(H10 / N90~N93), string 도 mapping 도 아닌 원소는 흔적 없이 사라졌다(N18/N94).
 """
 from __future__ import annotations
 
-import json
-import jinja2
+import sys
+from pathlib import Path
 
-ENV = jinja2.Environment(trim_blocks=False, lstrip_blocks=False)
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "filter_plugins"))
 
-# merge_fragment.yml 의 _all_errors expression 을 추출. 변수 이름만 단순화.
-MERGE_TPL = ENV.from_string("""
-{%- set out = (prev_all | default([])) | list -%}
-{%- set ef_raw = ef | default([]) -%}
-{%- if ef_raw is string -%}
-  {%- set ef = [{'section':'unknown','message':ef_raw,'detail':none}] if (ef_raw | trim | length > 0) else [] -%}
-{%- elif ef_raw is mapping -%}
-  {%- set ef = [ef_raw] -%}
-{%- elif ef_raw is iterable -%}
-  {%- set ef = ef_raw -%}
-{%- else -%}
-  {%- set ef = [] -%}
-{%- endif -%}
-{%- for e in ef -%}
-  {%- if e is string -%}
-    {%- if e | trim | length > 0 -%}
-      {%- set _ = out.append({'section':'unknown','message':e,'detail':none}) -%}
-    {%- endif -%}
-  {%- elif e is mapping -%}
-    {%- set _ = out.append({
-      'section': e.section | default('unknown'),
-      'message': e.message | default(e | string),
-      'detail':  e.detail  | default(none)
-    }) -%}
-  {%- endif -%}
-{%- endfor -%}
-{{ out | tojson }}
-""")
+from errors_normalizer import (  # noqa: E402
+    FALLBACK_MESSAGE,
+    MAX_DETAIL_LEN,
+    normalize_errors,
+)
 
 
-def _merge(ef, prev_all=None):
-    # production (Ansible) 에서 _all_errors 는 init_fragments.yml 에 의해 [] 로
-    # 초기화되므로 None 이 될 일 없음. 표준 Jinja2 의 default filter 는 None 에
-    # default 적용 안 하므로 (Ansible 확장 default 와 차이), 테스트 helper 에서 [] 로 정규화.
-    if prev_all is None:
-        prev_all = []
-    return json.loads(MERGE_TPL.render(ef=ef, prev_all=prev_all))
+def _merge(value, prev_all=None):
+    """merge_fragment.yml 의 누적 시맨틱(`이전 + 정규화(신규)`)을 그대로 재현."""
+    return list(prev_all or []) + normalize_errors(value)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# character iteration 차단 (원 회귀)
+# ═══════════════════════════════════════════════════════════════════════════
 def test_string_input_wrapped_as_single_error():
-    """회귀 차단: string `"[]\\n}}"` 입력 시 char-iterate 안 하고 단일 error 로 wrap."""
     out = _merge("[]\n}}")
     assert len(out) == 1
     assert out[0]["section"] == "unknown"
@@ -67,42 +47,17 @@ def test_string_input_wrapped_as_single_error():
 
 
 def test_string_blank_input_returns_empty():
-    """공백/빈 문자열 입력 → 빈 list."""
     assert _merge("") == []
     assert _merge("   ") == []
     assert _merge("\n\n") == []
 
 
 def test_char_list_keeps_meaningful_chars_drops_whitespace():
-    """사용자 보고 케이스: ['[', ']', '\\n', '}', '}'] char list 입력 시
-    whitespace char 는 trim 으로 drop, 의미있는 char 는 wrap 보존."""
     out = _merge(["[", "]", "\n", "}", "}"])
-    msgs = [e["message"] for e in out]
-    assert "\n" not in msgs  # whitespace skip
-    assert msgs == ["[", "]", "}", "}"]
+    assert [e["message"] for e in out] == ["[", "]", "}", "}"]
     for e in out:
         assert e["section"] == "unknown"
         assert e["detail"] is None
-
-
-def test_normal_list_of_dicts():
-    out = _merge([
-        {"section": "storage", "message": "Drive 실패", "detail": {"status_code": 503}},
-        {"section": "network", "message": "NIC timeout"},
-    ])
-    assert len(out) == 2
-    assert out[0]["section"] == "storage"
-    assert out[0]["detail"] == {"status_code": 503}
-    assert out[1]["section"] == "network"
-    assert out[1]["detail"] is None
-
-
-def test_single_dict_input_wrapped():
-    """dict 단일 입력 → list 로 wrap."""
-    out = _merge({"section": "bmc", "message": "auth fail"})
-    assert len(out) == 1
-    assert out[0]["section"] == "bmc"
-    assert out[0]["message"] == "auth fail"
 
 
 def test_none_returns_empty():
@@ -110,35 +65,142 @@ def test_none_returns_empty():
 
 
 def test_int_returns_empty():
-    """int / float / 비-iterable → 빈 list (defensive)."""
+    """최상위 입력이 비-iterable 스칼라면 담을 정보가 없다."""
     assert _merge(42) == []
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 정상 입력
+# ═══════════════════════════════════════════════════════════════════════════
+def test_normal_list_of_dicts():
+    out = _merge([
+        {"section": "storage", "message": "Drive 실패", "detail": {"status_code": 503}},
+        {"section": "network", "message": "NIC timeout"},
+    ])
+    assert len(out) == 2
+    assert out[0]["section"] == "storage"
+    # 2026-08-12: detail 타입을 string|null 로 통일한다 (M12). dict 는 평탄화.
+    assert out[0]["detail"] == "status_code=503"
+    assert out[1]["section"] == "network"
+    assert out[1]["detail"] is None
+
+
+def test_single_dict_input_wrapped():
+    out = _merge({"section": "bmc", "message": "auth fail"})
+    assert len(out) == 1
+    assert out[0]["section"] == "bmc"
+    assert out[0]["message"] == "auth fail"
 
 
 def test_mixed_list_strings_and_dicts():
     out = _merge([
         "raw error string",
         {"section": "cpu", "message": "throttle", "detail": None},
-        "",  # 빈 string skip
-        "  ",  # whitespace skip
+        "",
+        "  ",
         {"section": "memory", "message": "ECC error"},
     ])
-    sections = [e["section"] for e in out]
-    assert sections == ["unknown", "cpu", "memory"]
+    assert [e["section"] for e in out] == ["unknown", "cpu", "memory"]
     assert out[0]["message"] == "raw error string"
 
 
 def test_accumulates_with_prev_all():
-    """이전 누적 + 신규 fragment 동시."""
     prev = [{"section": "system", "message": "first", "detail": None}]
     out = _merge([{"section": "cpu", "message": "second"}], prev_all=prev)
-    assert len(out) == 2
-    assert out[0]["message"] == "first"
-    assert out[1]["message"] == "second"
+    assert [e["message"] for e in out] == ["first", "second"]
 
 
-def test_dict_missing_keys_get_defaults():
-    """dict 입력에 section/message 누락 → 'unknown' default."""
-    out = _merge([{"detail": "raw stderr"}])
+# ═══════════════════════════════════════════════════════════════════════════
+# H10 — message 는 항상 비지 않은 문자열이다 (사용자 문장 자리에 내부 자료구조 금지)
+# ═══════════════════════════════════════════════════════════════════════════
+def test_dict_without_message_never_leaks_python_repr():
+    out = _merge([{"section": "cpu", "detail": "raw stderr"}])
     assert len(out) == 1
-    assert out[0]["section"] == "unknown"
-    assert out[0]["detail"] == "raw stderr"
+    assert out[0]["message"] == FALLBACK_MESSAGE
+    assert "{" not in out[0]["message"] and "'" not in out[0]["message"]
+    # 원본을 버리지는 않는다 — detail 로 내려간다
+    assert "raw stderr" in out[0]["detail"]
+    assert "원본 오류 기록" in out[0]["detail"]
+
+
+def test_dict_with_null_or_blank_message_is_replaced():
+    for bad in (None, "", "   ", 42, {"nested": 1}, ["a"]):
+        out = _merge([{"section": "cpu", "message": bad}])
+        assert out[0]["message"] == FALLBACK_MESSAGE, bad
+        assert isinstance(out[0]["message"], str) and out[0]["message"].strip()
+
+
+def test_message_is_always_non_empty_string_for_every_input_shape():
+    corpus = [
+        None, 42, "x", "", ["a", None, 3, {"message": None}, {"detail": "d"}],
+        {"section": None, "message": None, "detail": None},
+        [{"message": "ok"}], [[1, 2]], (1, 2),
+    ]
+    for value in corpus:
+        for entry in normalize_errors(value):
+            assert isinstance(entry["message"], str), (value, entry)
+            assert entry["message"].strip(), (value, entry)
+            assert isinstance(entry["section"], str) and entry["section"].strip()
+            assert entry["detail"] is None or isinstance(entry["detail"], str)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# N18 / N94 — string 도 mapping 도 아닌 원소를 조용히 버리지 않는다
+# ═══════════════════════════════════════════════════════════════════════════
+def test_non_string_non_mapping_elements_are_preserved_not_dropped():
+    out = _merge([42, ["a"], None])
+    # None 만 버린다 (담을 정보가 없다)
+    assert len(out) == 2
+    for entry in out:
+        assert entry["message"] == FALLBACK_MESSAGE
+        assert entry["detail"] and "원본 오류 기록" in entry["detail"]
+    assert "42" in out[0]["detail"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# detail 타입 계약 (M12 / N34 / N53)
+# ═══════════════════════════════════════════════════════════════════════════
+def test_detail_is_string_or_null_only():
+    cases = [
+        ({"section": "s", "message": "m", "detail": {"rc": 1, "cmd": "lspci"}}, "rc=1; cmd=lspci"),
+        ({"section": "s", "message": "m", "detail": ""}, None),
+        ({"section": "s", "message": "m", "detail": "  "}, None),
+        ({"section": "s", "message": "m", "detail": None}, None),
+        ({"section": "s", "message": "m", "detail": 503}, "503"),
+        ({"section": "s", "message": "m", "detail": {}}, None),
+    ]
+    for src, expected in cases:
+        assert normalize_errors([src])[0]["detail"] == expected, src
+
+
+def test_detail_is_capped():
+    out = normalize_errors([{"section": "s", "message": "m", "detail": "x" * 5000}])
+    assert len(out[0]["detail"]) <= MAX_DETAIL_LEN
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 멱등 — merge 단계와 build_errors 단계에서 두 번 통과한다
+# ═══════════════════════════════════════════════════════════════════════════
+def test_idempotent():
+    corpus = [
+        None, 42, "raw", ["[", "]", "\n"], {"section": "bmc", "message": "m"},
+        [{"detail": "d"}], [{"section": "cpu", "message": None, "detail": {"rc": 1}}],
+        [42, None, ["a"]],
+    ]
+    for value in corpus:
+        once = normalize_errors(value)
+        assert normalize_errors(once) == once, value
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# M5 — 정규화 사본이 다시 생기지 않는다
+# ═══════════════════════════════════════════════════════════════════════════
+def test_normalization_lives_in_exactly_one_place():
+    """merge_fragment / build_errors 가 각자 Jinja 로 정규화를 재구현하지 않는다."""
+    for rel in ("common/tasks/normalize/merge_fragment.yml",
+                "common/tasks/normalize/build_errors.yml"):
+        text = (REPO / rel).read_text(encoding="utf-8")
+        assert "normalize_errors" in text, f"{rel} 이 공용 필터를 쓰지 않는다"
+        assert "e.message | default" not in text, (
+            f"{rel} 에 옛 정규화 사본이 되살아났다 — 필터 한 곳만 쓴다"
+        )
