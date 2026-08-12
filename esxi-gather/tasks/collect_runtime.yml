@@ -158,7 +158,12 @@
           ntp_synchronized: "{{ _e_runtime_ntp_synced | default(none) }}"
           firewall_tool:    "esxi_firewall"
           firewall_state:   "{{ _e_runtime_firewall_state | default(none) }}"
-          listening_ports:  []
+          # 2026-08-12 버그 수정: 이 fragment 는 system.runtime **dict 전체**를 다시 만든다.
+          #   merge_fragment 는 2단계 깊이에서 dict 를 통째로 교체하므로(실측: STEP1 ['22','443','902']
+          #   -> STEP2 []), 여기서 []로 두면 collect_disks 가 수집해 normalize_system 이 넣어둔
+          #   실제 값이 항상 빈 배열로 덮어써진다. 키를 빼면 계약상 필요한 키 자체가 사라진다
+          #   (실측: STEP3 lp=MISSING). 따라서 normalize_system 과 동일한 원본을 이어받는다.
+          listening_ports:  "{{ _e_raw_listening_ports | default([]) }}"
           swap_total_mb:    null
           swap_used_mb:     null
           swap_free_mb:     null

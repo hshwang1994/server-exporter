@@ -6,7 +6,51 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-08-11
+> 최종 갱신: 2026-08-12
+
+## 2026-08-12 — Fragment 덮어쓰기 / 공통 Task include 경로 2건 수정 (실환경 검증 중 발견)
+
+### 사용자 의심
+
+"errors.message 개선이 실제 Ansible/Jenkins 런타임에서도 동작하는가. 그리고 ESXi
+listening_ports 가 항상 빈 배열이고, Redfish vendor OEM 의 merge_fragment include 경로가
+실행 시 깨지는 것 같다."
+
+### 분석
+
+pytest 만으로는 두 건 다 잡히지 않았다. 둘 다 **실제 ansible-core 실행에서만** 드러난다.
+
+1. **ESXi `listening_ports`** — `merge_fragment.yml` 은 깊이 2 에서 dict 를 통째로 교체한다.
+   `collect_runtime.yml` 이 `system.runtime` 을 다시 만들면서 `listening_ports: []` 로
+   하드코딩해, 앞서 `normalize_system.yml` 이 넣은 실제 수집값을 항상 덮어썼다.
+   실측: `STEP1 lp=['22','443','902']` → `STEP2 lp=[]`.
+   키를 빼는 방식은 불가 — `STEP3 lp=MISSING` 으로 키 자체가 사라져 envelope 계약이 깨진다.
+
+2. **Redfish vendor OEM include** — `{{ playbook_dir }}` 는 `<repo>/redfish-gather` 로
+   해석되고 그 아래엔 `common/` 이 없다. 실측: `exit=2`,
+   `Could not find or access '<repo>/redfish-gather/common/tasks/normalize/merge_fragment.yml'`.
+   해당 6개 벤더의 OEM fragment 가 **한 번도 병합되지 않았다.**
+
+### 결정
+
+- `collect_runtime.yml` 은 `normalize_system.yml` 과 **같은 원본**(`_e_raw_listening_ports`)을
+  이어받는다. runtime dict 를 통째로 다시 만드는 쪽이 그 dict 의 모든 키를 책임진다.
+- vendor OEM 6건을 저장소 정식 방식(`REPO_ROOT` 기준)으로 통일했다. 벤더별로 경로를
+  제각각 두지 않고, 이미 정상 동작하던 dell/lenovo/supermicro 및 os/esxi 채널 방식을 따랐다.
+
+### 영향
+
+- ESXi `data.system.runtime.listening_ports` 가 실제 값으로 채워진다.
+  실장비 검증(esxi02): 13개 포트 관측.
+- cisco / fujitsu / hpe / huawei / inspur / quanta 의 OEM fragment 가 실제로 병합된다.
+- envelope 13 필드 / 섹션 shape 변경 없음 (Additive 아님 — **버그 수정**).
+
+### 회귀
+
+`tests/unit/test_fragment_overwrite_and_include_paths.py` 신설. 두 버그를 각각 되돌리는
+주입 실험에서 `exit=1` 로 검출됨을 확인했다. 전체 회귀 2278 passed.
+실장비 스모크 6대상(esxi/redfish×3/linux/windows) 모두 envelope 1개 + 13필드 정합.
+상세: `tests/evidence/2026-08-12-runtime-verification-and-bugfix.md`.
 
 ## 2026-08-12 — errors[].message 를 4계층으로 분리하고 문장을 failure_code 에서만 파생
 

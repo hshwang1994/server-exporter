@@ -46,7 +46,12 @@
     - "((_hpe_superdome_partition | default({}, true)) | length > 0) or ((_hpe_superdome_flex_node | default({}, true)) | length > 0) or ((_hpe_superdome_global | default({}, true)) | length > 0)"
 
 - name: "redfish | hpe | Superdome/CSUS fragment 누적 병합 (조건 매칭 시만)"
-  ansible.builtin.include_tasks: "{{ playbook_dir }}/common/tasks/normalize/merge_fragment.yml"
+  # 2026-08-12: `{{ playbook_dir }}` 는 redfish 채널에서 `<repo>/redfish-gather` 로 해석되고
+  #   그 아래 common/ 은 존재하지 않는다. 실제 ansible-core 실행에서
+  #   "Could not find or access .../redfish-gather/common/tasks/normalize/merge_fragment.yml"
+  #   로 태스크가 실패해 **OEM fragment 가 한 번도 병합되지 않았다**.
+  #   저장소의 다른 모든 공통 태스크 호출과 같은 REPO_ROOT 기준으로 통일한다.
+  ansible.builtin.include_tasks: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
   when:
     # 2026-05-11 fix: regex_search 미매치 시 None → strict conditional fail. collect_oem.yml 와 동일 정정.
     # Round 15 fix: _rf_detected_model(미정의 변수) → _rf_probe_facts.model (detect_vendor.yml set).
