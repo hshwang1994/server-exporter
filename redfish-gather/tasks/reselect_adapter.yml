@@ -1,0 +1,87 @@
+---
+# redfish-gather/tasks/reselect_adapter.yml
+#
+# 인증으로 얻은 사실(model / firmware)로 adapter 를 다시 고른다.
+#
+# 왜 필요한가
+# -----------
+# 1차 선택(`site.yml` 의 "select adapter")은 **무인증 probe** 결과로 한다. 무인증이면
+# Systems 열거가 401 이라 모듈이 `data={}` 로 조기 반환하고
+# (`redfish_gather.py:7163-7169`), `_extract_probe_facts()` 는 HPE 한 분기만 hint 를
+# 채운다(`:1503`). 나머지 vendor 는 model/firmware 가 빈 채로 선택에 들어가는데,
+# `adapter_match_score` 는 빈 fact 를 실격이 아니라 중립으로 처리하므로
+# (`adapter_common.py:284-286`) 결국 **priority 최상위가 독식**한다.
+# 실제로 R760(iDRAC9 / FW 7.10.70.00)이 `dell_idrac10` 을, TA-UNODE-G1(CIMC)이
+# `cisco_ucs_xseries` 를 골랐다.
+#
+# ESXi 는 같은 버그를 "선택을 facts 확보 뒤로 옮겨서" 고쳤다
+# (`esxi-gather/site.yml`, Round 17 #9). Redfish 는 `manager_layout` 을 **수집 전에**
+# 알아야 해서 통째로 못 옮긴다. 그래서 1차는 그대로 두고 이 파일을 수집 뒤에 부른다.
+#
+# 어디서 부르는가 — 두 곳이다
+# ---------------------------
+#   (1) 1차 표준 수집 직후 (account_service 앞). 표준 인증이 처음부터 됐을 때 여기서 선다.
+#       계정 Family hint 도 이 시점에 고쳐진 값을 받는다.
+#   (2) 복구 후 재수집 직후. 표준 계정 비밀번호가 어긋나 있으면 1차 수집이 401 로
+#       실패하고 (1) 이 서지 않는다. 그 경우 복구가 계정을 고친 뒤 재수집이 성공하므로
+#       그때 다시 부른다. 이 두 번째 호출이 없으면 **회전 직후 수집에서 adapter_id 가
+#       계속 1차 값(틀린 값)으로 남는다** — 2026-08-13 비밀번호 회전 실측에서 확인.
+#
+# 안전
+# ----
+# model 과 firmware 가 둘 다 비면 아무것도 하지 않는다. 즉 수집이 실패한 상황에서는
+# 1차 결과가 그대로 남아 종전 동작과 완전히 같다.
+#
+# 입력: _rf_raw_collect (수집 결과), _rf_probe_facts (vendor)
+# 출력: _selected_adapter (바뀔 수 있음), _rf_adapter_first_pass (바뀐 경우 종전 값)
+
+- name: "redfish | reselect | 인증 후 facts 조립"
+  ansible.builtin.set_fact:
+    _rf_postauth_facts:
+      vendor: "{{ (_rf_probe_facts | default({})).vendor | default('') }}"
+      model: >-
+        {{ ((_rf_raw_collect.data | default({}, true)).get('system') | default({}, true)).get('model', '')
+           | default('', true) }}
+      firmware: >-
+        {{ ((_rf_raw_collect.data | default({}, true)).get('bmc') | default({}, true)).get('firmware_version', '')
+           | default('', true) }}
+  no_log: true
+
+# 종전 adapter_id 를 먼저 잡아 둔다. 재선택이 실제로 값을 바꿨는지는 아래에서 비교한다.
+- name: "redfish | reselect | 종전 adapter 기억"
+  when: >-
+    ((_rf_postauth_facts.model | default('')) | length > 0)
+    or ((_rf_postauth_facts.firmware | default('')) | length > 0)
+  ansible.builtin.set_fact:
+    _rf_adapter_before_reselect: "{{ (_selected_adapter | default({})).adapter_id | default('') }}"
+  no_log: true
+
+- name: "redfish | reselect | adapter 다시 고르기"
+  when: >-
+    ((_rf_postauth_facts.model | default('')) | length > 0)
+    or ((_rf_postauth_facts.firmware | default('')) | length > 0)
+  ansible.builtin.set_fact:
+    _selected_adapter: >-
+      {{ lookup('adapter_loader',
+                 channel='redfish',
+                 facts=_rf_postauth_facts,
+                 repo_root=lookup('env','REPO_ROOT')) }}
+  no_log: true
+
+# `_rf_adapter_first_pass` 는 **최초 1차 선택값**을 유지한다. 이 파일이 두 번 불려도
+# 두 번째 호출이 첫 번째 기록을 덮어쓰지 않게 `is not defined` 로 건다.
+- name: "redfish | reselect | 1차 값 기록 (바뀐 경우만, 최초 1회)"
+  when:
+    - _rf_adapter_before_reselect is defined
+    - _rf_adapter_first_pass is not defined
+    - _rf_adapter_before_reselect != (_selected_adapter.adapter_id | default(''))
+  ansible.builtin.set_fact:
+    _rf_adapter_first_pass: "{{ _rf_adapter_before_reselect }}"
+
+- name: "redfish | reselect | 결과"
+  when: _rf_adapter_before_reselect is defined
+  ansible.builtin.debug:
+    msg: >-
+      adapter {{ _rf_adapter_before_reselect }} -> {{ _selected_adapter.adapter_id | default('none') }}
+      (model={{ _rf_postauth_facts.model | default('') }},
+       fw={{ _rf_postauth_facts.firmware | default('') }})

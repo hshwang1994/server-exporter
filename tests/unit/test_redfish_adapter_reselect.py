@@ -89,23 +89,45 @@ def _site_text() -> str:
     return SITE.read_text(encoding="utf-8")
 
 
+RESELECT = REPO / "redfish-gather" / "tasks" / "reselect_adapter.yml"
+
+
 def test_reselect_task_exists():
-    t = _site_text()
-    assert "_rf_postauth_facts" in t, "인증 후 facts 조립 태스크가 없다"
-    assert "select adapter (2차" in t, "2차 선택 태스크가 없다"
+    assert RESELECT.is_file(), "재선택 태스크 파일이 없다"
+    t = RESELECT.read_text(encoding="utf-8")
+    assert "_rf_postauth_facts" in t, "인증 후 facts 조립이 없다"
+    assert "adapter_loader" in t, "재선택 lookup 이 없다"
 
 
-def test_reselect_runs_after_collect_and_before_account_service():
-    """순서가 계약이다.
-
-    수집 **뒤**여야 model/firmware 가 있고, `account_service` **앞**이어야
-    계정 Family hint 가 고쳐진 adapter 를 받는다.
-    """
+def test_reselect_called_after_first_collect_and_before_account_service():
+    """1회차 — 수집 **뒤**여야 model/firmware 가 있고, `account_service` **앞**이어야
+    계정 Family hint 가 고쳐진 adapter 를 받는다."""
     t = _site_text()
     i_collect = t.index('- name: "redfish | collect standard"')
-    i_resel = t.index('- name: "redfish | select adapter (2차')
+    i_resel = t.index('- name: "redfish | reselect adapter (1차 수집 후)"')
     i_acct = t.index('- name: "redfish | account_service (recovery → standard)"')
     assert i_collect < i_resel < i_acct
+
+
+def test_reselect_called_again_after_recovery_recollect():
+    """2회차 — 이게 없으면 비밀번호 회전 직후 adapter_id 가 1차 값으로 남는다.
+
+    표준 계정이 어긋나 있으면 1차 수집이 401 로 실패해 1회차 재선택이 서지 않는다.
+    복구가 계정을 고친 뒤 재수집이 성공하므로 그때 다시 불러야 한다.
+    2026-08-13 회전 실측에서 Dell 4대가 `redfish_dell_idrac10` 로 남아 드러난 구멍이다.
+    """
+    t = _site_text()
+    i_recollect = t.index('- name: "redfish | re-collect with standard account (after recovery)"')
+    i_resel2 = t.index('- name: "redfish | reselect adapter (복구 후 재수집 뒤)"')
+    i_norm = t.index('- name: "redfish | normalize standard"')
+    assert i_recollect < i_resel2 < i_norm, "2회차 재선택이 재수집 뒤 / normalize 앞에 없다"
+
+
+def test_first_pass_record_survives_second_call():
+    """재선택이 두 번 불려도 `_rf_adapter_first_pass` 는 최초 1차 값을 유지해야 한다."""
+    t = RESELECT.read_text(encoding="utf-8")
+    assert "_rf_adapter_first_pass is not defined" in t, \
+        "두 번째 호출이 1차 기록을 덮어쓴다 — 추적값이 무의미해진다"
 
 
 def test_first_pass_selection_untouched():
@@ -117,14 +139,18 @@ def test_first_pass_selection_untouched():
 
 
 def test_reselect_is_guarded_by_nonempty_facts():
-    """model/firmware 가 둘 다 비면 재선택하지 않는다."""
-    t = _site_text()
-    i = t.index('- name: "redfish | select adapter (2차')
-    body = t[i:i + 600]          # 태스크 이름 다음에 when 절이 온다
+    """model/firmware 가 둘 다 비면 재선택하지 않는다.
+
+    이 가드가 없으면 수집 실패 상황에서 빈 facts 로 다시 고르게 되고, 1차와
+    똑같은 버그(priority 독식)가 재선택 자리에서 재현된다.
+    """
+    t = RESELECT.read_text(encoding="utf-8")
+    i = t.index('- name: "redfish | reselect | adapter 다시 고르기"')
+    body = t[i:i + 500]
     assert "when:" in body, "재선택 태스크에 when 가드가 없다"
     guard = body[body.index("when:"):body.index("ansible.builtin.set_fact")]
     assert "_rf_postauth_facts.model" in guard and "_rf_postauth_facts.firmware" in guard, \
-        "빈 facts 로 재선택하면 1차와 같은 버그가 2차에서 재현된다"
+        "빈 facts 로 재선택하면 1차와 같은 버그가 재현된다"
 
 
 def test_manager_layout_still_from_first_pass():

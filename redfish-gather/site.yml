@@ -133,57 +133,13 @@
           vars:
             _rf_try_accounts: "{{ _rf_standard_accounts | default([]) }}"
 
-        # ── adapter 재선택 (인증 후 사실로) ──────────────────────────────
-        # 위의 1차 선택(:105)은 **무인증 probe** 결과로 고른 것이다. 무인증이면
-        # Systems 열거가 401 이라 모듈이 `data={}` 로 조기 반환하고
-        # (redfish_gather.py:7163-7169), `_extract_probe_facts()` 는 HPE 한 분기만
-        # hint 를 채운다(:1503). 그래서 나머지 vendor 는 model/firmware 가 빈 채로
-        # 선택에 들어가는데, `adapter_match_score` 는 빈 fact 를 실격이 아니라
-        # 중립으로 처리하므로(adapter_common.py:284-286) 결국 **priority 최상위가
-        # 독식**한다. 실제로 R760(iDRAC9, FW 7.10.70.00)이 dell_idrac10 을,
-        # TA-UNODE-G1(CIMC)이 cisco_ucs_xseries 를 골랐다.
-        #
-        # 수집이 끝난 지금은 장비가 준 model / firmware 가 있다. 그 값으로 다시 고른다.
-        # ESXi 가 같은 버그를 같은 방법으로 고쳤다 — 선택을 facts 확보 뒤로
-        # 옮겼다(esxi-gather/site.yml:132-135, Round 17 #9). Redfish 는 `manager_layout`
-        # 을 **수집 전에** 알아야 해서 통째로 못 옮기고 2단계가 된다.
-        #
-        # 1차 선택은 한 글자도 바꾸지 않는다 → manager_layout·수집 경로 영향 0.
-        # 2차는 값이 실제로 있을 때만 선다. 표준 수집이 실패한 상황(=계정 복구가
-        # 도는 상황)에는 data 가 비어 있어 조건이 거짓이고, 그러면 1차 결과가 그대로
-        # 남아 **현행 동작과 완전히 같다.**
-        - name: "redfish | adapter 재선택용 facts (인증 후)"
-          ansible.builtin.set_fact:
-            _rf_postauth_facts:
-              vendor: "{{ (_rf_probe_facts | default({})).vendor | default('') }}"
-              model: >-
-                {{ ((_rf_raw_collect.data | default({}, true)).get('system') | default({}, true)).get('model', '')
-                   | default('', true) }}
-              firmware: >-
-                {{ ((_rf_raw_collect.data | default({}, true)).get('bmc') | default({}, true)).get('firmware_version', '')
-                   | default('', true) }}
-          no_log: true
-
-        - name: "redfish | select adapter (2차 — 인증 후 사실 반영)"
-          when: >-
-            ((_rf_postauth_facts.model | default('')) | length > 0)
-            or ((_rf_postauth_facts.firmware | default('')) | length > 0)
-          ansible.builtin.set_fact:
-            _rf_adapter_first_pass: "{{ (_selected_adapter | default({})).adapter_id | default('') }}"
-            _selected_adapter: >-
-              {{ lookup('adapter_loader',
-                         channel='redfish',
-                         facts=_rf_postauth_facts,
-                         repo_root=lookup('env','REPO_ROOT')) }}
-          no_log: true
-
-        - name: "redfish | adapter 재선택 결과"
-          when: _rf_adapter_first_pass is defined
-          ansible.builtin.debug:
-            msg: >-
-              adapter {{ _rf_adapter_first_pass }} -> {{ _selected_adapter.adapter_id | default('none') }}
-              (model={{ _rf_postauth_facts.model | default('') }},
-               fw={{ _rf_postauth_facts.firmware | default('') }})
+        # ── adapter 재선택 (인증 후 사실로) — 1회차 ──────────────────────
+        # 1차 선택(:105)은 무인증 probe 결과라 model/firmware 가 비어 priority 최상위가
+        # 독식한다. 상세 근거는 tasks/reselect_adapter.yml 머리말에 있다.
+        # 표준 인증이 처음부터 됐으면 여기서 바로잡히고, 계정 Family hint 도 고쳐진
+        # 값을 받는다. 수집이 실패했으면 아무것도 하지 않고 1차 결과가 남는다.
+        - name: "redfish | reselect adapter (1차 수집 후)"
+          ansible.builtin.include_tasks: tasks/reselect_adapter.yml
 
         # ── 표준 계정 복구 (recovery → standard) ─────────────────────────
         # 2026-08-12 (Contract 재확정): 진입 조건에서 "recovery 로 수집이 됐다" 를 뺀다.
@@ -248,6 +204,18 @@
           ansible.builtin.include_tasks: tasks/collect_standard.yml
           vars:
             _rf_try_accounts: "{{ _rf_standard_accounts | default([]) }}"
+
+        # ── adapter 재선택 — 2회차 (복구 후 재수집이 성공했을 때) ────────
+        # 표준 계정 비밀번호가 어긋나 있으면 1차 수집이 401 로 실패해 위의 1회차가
+        # 서지 않는다. 복구가 계정을 고쳐 여기서 재수집이 성공했으니 이제 model /
+        # firmware 가 있다. 이 두 번째 호출이 없으면 **비밀번호 회전 직후 수집에서
+        # adapter_id 가 계속 1차 값(틀린 값)으로 남는다** — 2026-08-13 실측에서
+        # Dell 4대가 그렇게 나왔다.
+        - name: "redfish | reselect adapter (복구 후 재수집 뒤)"
+          when:
+            - _rf_account_reconcile_allowed | bool
+            - (_rf_account_service_meta | default({})).recovered | default(false) | bool
+          ansible.builtin.include_tasks: tasks/reselect_adapter.yml
 
         # 2026-04-30: precheck/diagnosis가 이미 식별한 실패 단계에 따라 specific 메시지.
         # ServiceRoot(/redfish/v1/)는 Redfish 표준상 무인증 → protocol_supported=true이면
