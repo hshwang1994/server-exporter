@@ -23,6 +23,14 @@ from unittest.mock import patch
 
 import pytest
 
+# 2026-08-12: 누출 가드가 검사 대상인 **진짜 비밀번호를 소스에 그대로** 적어 두고 있었다.
+#   가드 파일 자체가 누출 지점이라, 평문 대신 sha256 앞 8자리로 대조하는 공용 가드로
+#   바꾼다. 입력으로 넣던 실 자격증명도 합성 canary 로 바꾼다 (검사 의미는 동일).
+from tests.secret_guard import (  # noqa: E402
+    CANARY_PASSWORD, CANARY_RECOVERY, CANARY_TARGET, assert_no_secret,
+)
+
+
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "common" / "library"))
 
@@ -330,5 +338,7 @@ def test_probe_never_leaks_credentials():
 
     blob = seen["body"].decode() + " " + " ".join(
         "{0}:{1}".format(k, v) for k, v in seen["headers"].items())
-    for secret in ("Authorization", "Basic ", "password", "Cookie", "Goodmit0802!"):
+    # 알려진 실 자격증명이 섞였는지 digest 로 대조한다 (평문을 저장하지 않는 가드).
+    assert_no_secret(blob, "protocol probe 요청")
+    for secret in ("Authorization", "Basic ", "password", "Cookie", CANARY_PASSWORD):
         assert secret not in blob, "Protocol Probe 에 {0} 이 실리면 안 된다".format(secret)

@@ -96,7 +96,7 @@ vendor_aliases:
 # ==============================================================================
 # 호출자에게 노출되는 envelope 최상위 `vendor` 값만 치환한다.
 # 내부 canonical 키(위 vendor_aliases)는 그대로 유지 → adapter 선택 / vault 경로
-# (vault/redfish/{profile}.yml) / OEM 추출(OEM_EXTRACTORS) / account 복구 분기는
+# (복구 vault vault/<loc>/redfish/<vendor>.yml) / OEM 추출(OEM_EXTRACTORS) / account 복구 분기는
 # 모두 기존 canonical('hpe' 등) 로 라우팅되어 무손상.
 #
 # 적용 위치 (data-driven — vendor 이름 하드코딩 회피, rule 12 R1):

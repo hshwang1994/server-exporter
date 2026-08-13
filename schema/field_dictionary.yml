@@ -1458,30 +1458,45 @@ fields:
   diagnosis.failure_code:
     type: "string|null"
     enum: ["DNS_RESOLUTION_FAILED", "TCP_CONNECT_FAILED", "TCP_CONNECTION_REFUSED",
-           "PROTOCOL_CHECK_FAILED", "AUTH_PROBE_FAILED", "GATHER_FAILED",
-           "OUTPUT_BUILD_FAILED"]
+           "PROTOCOL_CHECK_FAILED", "AUTH_PROBE_FAILED", "CREDENTIAL_SET_UNAVAILABLE",
+           "GATHER_FAILED", "OUTPUT_BUILD_FAILED"]
     priority: nice
     channel: [redfish, os, esxi]
     # 2026-08-10 (Phase 2) 신설. 외부 시스템이 실패 종류로 분기할 때 문자열 메시지를 파싱하지
     # 않도록 하는 **안정 식별자**. 정상 결과에서도 키는 존재하고 값만 null (shape 고정).
     # Raw Exception 종류(SOCKET_TIMEOUT / SSL_ERROR / HTTP_500 등)를 code 로 만들지 않는다 —
     # 그 정보는 errors[].detail 과 diagnosis.details 에 보존한다.
+    #
+    # 2026-08-12: CREDENTIAL_SET_UNAVAILABLE 추가 (additive — 기존 7 값의 의미 불변).
+    #   Credential 선택이 Location 축을 갖게 되면서 "해당 Location/Vendor 의 credential set
+    #   자체가 없어 인증을 시도조차 못 한" 상태가 생겼다. 이것을 AUTH_PROBE_FAILED 로 뭉개면
+    #   소비 시스템이 두 상황을 구분할 수 없고, 운영자도 엉뚱한 곳(대상 장비 계정)을 뒤진다.
+    #   이름을 NOT_FOUND 가 아니라 UNAVAILABLE 로 한 이유: 이 code 는 파일 부재뿐 아니라
+    #   복호화 실패와 scope 미결정(미등록 Location 등)까지 포함한다. 파일을 찾았지만 열지
+    #   못한 경우에 NOT_FOUND 는 사실과 다르다. 또 NOT_FOUND 는 HTTP 404 로 오독되기 쉬운데,
+    #   이 저장소는 HTTP status 모양의 code 를 의도적으로 만들지 않는다(위 문단).
     help_ko: >-
       실패 종류의 안정 식별자. **conditional 필드** — status=failed 시만 채워짐.
       DNS_RESOLUTION_FAILED=주소 해석 실패로 TCP 연결 시도 자체를 못 함,
       TCP_CONNECT_FAILED=TCP 연결 실패 (timeout / no route 등. 장비 다운으로 확정하지 않음),
       TCP_CONNECTION_REFUSED=명시적 TCP 거부(RST)를 관측,
       PROTOCOL_CHECK_FAILED=기대한 프로토콜 응답 확인 실패,
-      AUTH_PROBE_FAILED=자격증명 확인 단계에서 중단 (실제 인증 거부 확정은 auth_success 가 표현),
+      AUTH_PROBE_FAILED=자격증명을 실제로 보냈으나 확인 단계에서 중단 (인증 거부 확정은 auth_success 가 표현),
+      CREDENTIAL_SET_UNAVAILABLE=해당 Location/대상의 자격증명 세트를 열 수 없어 **인증 미시도**
+      (auth_success 는 항상 null. 조치는 대상 계정이 아니라 자격증명 배치 확인),
       GATHER_FAILED=연결·인증 통과 후 수집/정규화 실패,
       OUTPUT_BUILD_FAILED=정상 결과 객체 생성 실패 (fallback).
       기본 매핑은 failure_stage 와 1:1 이나, OS 채널의 포트 감지 실패만 예외로
       stage=port + code=TCP_CONNECT_FAILED 다 (wait_for 는 RST 를 관측하지 못하기 때문).
+      CREDENTIAL_SET_UNAVAILABLE 도 stage=auth 다 — stage 는 원인이 아니라 멈춘 위치다.
     help_en: >-
       Stable identifier for the failure kind, for system-side branching without parsing
       human-readable messages. Conditional field (populated when status=failed).
       Raw exception kinds (socket timeout, SSL error, HTTP 500) are deliberately NOT codes;
       that detail stays in errors[].detail and diagnosis.details.
+      AUTH_PROBE_FAILED means credentials were actually sent; CREDENTIAL_SET_UNAVAILABLE
+      means no credential set could be opened, so authentication was never attempted
+      (auth_success is always null there).
       Mapping to failure_stage is 1:1 except the OS port-detection path, which is
       stage=port with code=TCP_CONNECT_FAILED because wait_for cannot observe RST.
 
@@ -2145,6 +2160,53 @@ fields:
     help_en: >-
       Per-chassis hardware/power results. Each entry: id / uri / kind / chassis_type /
       manufacturer / model / serial_number / part_number / power.
+
+  "diagnosis.details.credential_scope":
+    type: "string|null"
+    priority: nice
+    channel: [redfish, os, esxi]
+    # 2026-08-12 신설. Credential 선택이 Location 축을 갖게 되면서(vault/<loc>/...),
+    #   실패했을 때 **어떤 자격증명 세트를 열었는지** 를 결과만 보고 알 수 있어야 한다.
+    #   종전에는 그 정보가 envelope 어디에도 없어, 자격증명 배치 문제인지 대상 계정
+    #   문제인지 구분하려면 Jenkins 콘솔 로그를 봐야 했다.
+    #   top-level 13 필드는 건드리지 않는다 — details 는 기술 evidence / 확장 metadata
+    #   영역이다 (CLAUDE.md §11).
+    #   **Secret 이 아니다**: location / channel / vendor 조합 문자열뿐이며 username /
+    #   password / 파일 내용은 어떤 형태로도 포함되지 않는다.
+    help_ko: >-
+      사용된 자격증명 세트의 범위 식별자. 형식은 `<location>/<channel>[/<os_type|vendor>]`
+      (예: ich/os/linux, ich/esxi, ich/redfish/dell). 범위를 결정하지 못한 경우 null.
+      경로/범위 정보일 뿐이며 계정 정보는 포함하지 않는다.
+      실패 진단 시 "자격증명 배치 문제" 와 "대상 계정 문제" 를 가르는 단서로 쓴다.
+    help_en: >-
+      Scope identifier of the credential set used, formatted as
+      `<location>/<channel>[/<os_type|vendor>]` (e.g. ich/os/linux, ich/redfish/dell);
+      null when the scope could not be determined. Contains no account material —
+      only the selection axes. Use it to tell credential-placement problems apart
+      from target-account problems.
+
+  "diagnosis.details.recovery_credential_scope":
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    # 2026-08-12 신설 (Redfish 전용). 표준 수집 계정과 복구 계정은 **선택축이 다르다**:
+    #   표준  = 전역 1개          → credential_scope        = common/redfish/standard
+    #   복구  = location + vendor → recovery_credential_scope = <loc>/redfish/<vendor>
+    #   한 필드에 담으면 "무엇으로 수집했는지" 와 "무엇으로 복구를 시도했는지" 가 섞인다.
+    #   실제로 그 혼동 때문에 복구 계정으로 수집한 결과가 정상 결과로 나가고 있었다.
+    #   OS / ESXi 에는 복구 개념 자체가 없어 이 필드가 나타나지 않는다.
+    #   **Secret 이 아니다**: location / vendor 조합 문자열뿐이다.
+    help_ko: >-
+      표준 수집 계정 복구에 사용할 자격증명 세트의 범위 식별자 (Redfish 전용).
+      형식은 `<location>/redfish/<vendor>` (예: ich/redfish/dell). vendor 를 식별하지
+      못했거나 복구 세트를 정하지 못하면 null. 수집 자체는 `credential_scope`(표준 계정)
+      로 수행되며, 이 값은 복구 경로에만 쓰인다. 계정 정보는 포함하지 않는다.
+    help_en: >-
+      Scope identifier of the recovery credential set (Redfish only), formatted as
+      `<location>/redfish/<vendor>` (e.g. ich/redfish/dell); null when the vendor is
+      unidentified or no recovery scope could be determined. Gathering itself always
+      uses the standard account in `credential_scope`; this scope is used only to
+      create or repair that standard account. Contains no account material.
 
   "diagnosis.details.hostname_source":
     type: "string"

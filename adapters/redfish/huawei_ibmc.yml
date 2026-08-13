@@ -5,7 +5,7 @@
 # Origin: Huawei FusionServer Pro Series Documentation
 # Last sync: 2026-05-11 (M-C1 — generation 분기 보강, lab 부재 web sources)
 # Notes: FusionServer Pro V5 / V6 + Atlas (AI training). 표준 Redfish + Oem.Huawei 확장.
-#   사용자 명시 승인 (2026-05-01) — vault 신설 완료 (2026-05-11 M-A1, vault/redfish/huawei.yml).
+#   사용자 명시 승인 (2026-05-01) — vault 신설 완료 (2026-05-11 M-A1, vault/<loc>/redfish/huawei.yml).
 # Sources (rule 96 R1-A — lab 부재):
 #   - https://support.huawei.com/enterprise/en/doc/EDOC1000163550/41dfb258/ibmc
 #   - https://support.huawei.com/enterprise/en/servers/fusionserver-pro (확인 2026-05-07)
@@ -28,7 +28,7 @@
 #   - System URI: /redfish/v1/Systems/1 (표준)
 #   - OEM namespace: Oem.Huawei
 #   - 표준 Redfish 호환 + IPMI 2.0 / SNMP / DCMI 보조
-# Vault: 신설 완료 (2026-05-11 M-A1) — vault/redfish/huawei.yml 존재.
+# Vault: 신설 완료 (2026-05-11 M-A1) — vault/<loc>/redfish/huawei.yml 존재.
 #   미생성 시 precheck auth 단계에서 status=failed (graceful degradation, rule 27 R4)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_huawei_ibmc
@@ -108,7 +108,7 @@ normalize:
 credentials:
   profile: "huawei"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/huawei.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
+  # P2 AccountService 진입점 — vault/<loc>/redfish/huawei.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
   recovery_accounts:
     - { vault_label: huawei_factory, role: recovery }
 
@@ -125,7 +125,7 @@ vendor_notes:
   bmc_name: "iBMC"
   manager_uri_hint: "/redfish/v1/Managers/iBMC"
   oem_namespace: "Oem.Huawei"
-  vault_status: "created (2026-05-11 M-A1) — vault/redfish/huawei.yml"
+  vault_status: "created (2026-05-11 M-A1) — vault/<loc>/redfish/huawei.yml"
   expected_models:
     - "FusionServer Pro 2288H V5"
     - "FusionServer Pro 2288X V5"

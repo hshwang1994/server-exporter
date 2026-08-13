@@ -23,6 +23,14 @@ from pathlib import Path
 
 import pytest
 
+# 2026-08-12: 누출 가드가 검사 대상인 **진짜 비밀번호를 소스에 그대로** 적어 두고 있었다.
+#   가드 파일 자체가 누출 지점이라, 평문 대신 sha256 앞 8자리로 대조하는 공용 가드로
+#   바꾼다. 입력으로 넣던 실 자격증명도 합성 canary 로 바꾼다 (검사 의미는 동일).
+from tests.secret_guard import (  # noqa: E402
+    CANARY_PASSWORD, CANARY_RECOVERY, CANARY_TARGET, assert_no_secret,
+)
+
+
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "common" / "library"))
 
@@ -240,7 +248,9 @@ def test_no_retry_per_port(monkeypatch):
 def test_case18_no_credentials_in_result(monkeypatch):
     result, _ = run_os_precheck(monkeypatch, {5986: "refused", 5985: "timeout", 22: "dns"})
     blob = " ".join(str(v) for v in result.values())
-    for secret in ("password", "Passw0rd", "Goodmit0802!", "Authorization", "Basic "):
+    # 알려진 실 자격증명이 섞였는지 digest 로 대조한다 (평문을 저장하지 않는 가드).
+    assert_no_secret(blob, "precheck result")
+    for secret in ("password", "Passw0rd", CANARY_PASSWORD, "Authorization", "Basic "):
         assert secret not in blob, f"민감정보 노출: {secret!r}"
 
 

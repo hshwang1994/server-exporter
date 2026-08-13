@@ -26,7 +26,14 @@
 #     SYS-5 exhaust temp 0°C 보존). evidence: tests/evidence/2026-06-14-dell-r740-mirror-audit.md (적대 검증, wrong-data 0)
 #   - [선택 주의] 무인증 ServiceRoot.Product 가 BMC명("Integrated Dell Remote Access Controller")이라 facts.model/firmware
 #     가 빈값 → 실 adapter 선택은 priority 로 결정 → redfish_dell_idrac10(120)이 선택됨(idrac9 100 패배). collect/normalize
-#     tasks 는 idrac9/idrac10 동일(dell OEM)이라 수집 데이터 동일 — diagnosis 라벨만 cosmetic 차이. NEXT_ACTIONS 등재.
+#     tasks 는 idrac9/idrac10 동일(dell OEM)이라 **수집 데이터는 동일**. NEXT_ACTIONS 등재.
+#     ※ 2026-08-12 정정: "diagnosis 라벨만 cosmetic 차이" 는 **수집 경로에 한한 이야기**다.
+#       계정 경로에서는 cosmetic 이 아니었다 — 이 오선택이 Account Family 세대 근거로 그대로
+#       쓰여 dell_idrac10_slot_patch(reserved_slot_ids={1,2})가 선택됐고, 빈 슬롯이 2번일 때
+#       PATCH 대상 슬롯 URI 가 달라진다. 10.100.15.34 에서 차이가 안 보인 건 slot 2 를 root 가
+#       점유했기 때문이다. Family 판정은 Firmware major 기준으로 교정했고(redfish_gather.py
+#       resolve_account_family), adapter 오선택 자체는 남아 있다.
+#       evidence: tests/evidence/2026-08-12-standard-password-convergence.md §5
 #   ※ 1회 read-only 스냅샷 — 쓰기/Action·펌웨어 업그레이드 후 응답 미포함 (docs/25)
 # Storage strategy evolution (web sources, M-H1 cycle 2026-05-07):
 #   - iDRAC9 3.x ~ 4.x: standard storage path (Volumes 표준 미도입)
@@ -71,7 +78,7 @@ normalize:
 credentials:
   profile: "dell"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/dell.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/<loc>/redfish/dell.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: dell_fallback_1, role: recovery }
     - { vault_label: dell_fallback_2, role: recovery }

@@ -214,8 +214,12 @@
   # 2026-04-30 perf: stuck host (SSH connect timeout) 가 wave 막지 않도록 host별 독립 진행
   strategy: free
 
+  # 2026-08-12: vault 를 vars_files 에서 뺐다. Credential 은 이제 Location 축을 갖고
+  #   (vault/<se_location>/os/linux.yml) block 안에서 동적으로 로드한다.
+  #   vars_files 로는 이 구조를 만들 수 없다 — 경로를 템플릿하면 파일 부재 시 **play 자체가
+  #   죽어** OUTPUT 태스크에 도달하지 못하고 envelope 이 사라진다 (rule 11 위반).
+  #   block 안 include 는 실패해도 rescue 가 정상 failed envelope 을 만든다.
   vars_files:
-    - "{{ lookup('env','REPO_ROOT') }}/vault/linux.yml"
     # 2026-08-11 (Phase 6-B): Portal 사용자 문구 정본 (5 문장) — rescue 가 참조한다.
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
@@ -224,12 +228,31 @@
     _os_type: "linux"
     # SSH 비밀번호를 sudo 비밀번호로 전달 (DMI 식별자 읽기에 필요)
     # vault에 ansible_become_pass가 별도 정의되면 그 값이 우선됨
-    ansible_become_pass: "{{ ansible_become_password | default(ansible_password | default(omit)) }}"
+    # 주: 이 play var 는 try_one_credential.yml 의 host fact set_fact 에 덮여 사실상
+    #     쓰이지 않는다(기존 결함, 이번 변경 범위 밖). 값의 출처만 _cred_become_password 로 옮겼다.
+    ansible_become_pass: "{{ _cred_become_password | default(ansible_password | default(omit)) }}"
 
   tasks:
 
     - name: "linux | gather"
       block:
+
+        # Credential 선택 — (se_location, os=linux) → vault/<loc>/os/linux.yml
+        - name: "linux | resolve credentials"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/credential/resolve_and_load.yml"
+          vars:
+            _cred_target_type: "os"
+            _cred_os_type:     "linux"
+
+        - name: "linux | abort if credential set unavailable"
+          ansible.builtin.fail:
+            msg: >-
+              Credential set 을 열 수 없습니다 (scope={{ _cred_scope | default('') | ternary(_cred_scope, _cred_reason) }},
+              outcome={{ _cred_load_outcome | default('not_resolved') }}).
+              se_location 값과 해당 Location 의 vault 파일, ansible-vault 복호화 키를 확인하세요.
+          when: _cred_load_outcome | default('not_resolved') in
+                ['not_resolved', 'credential_set_missing', 'credential_set_undecryptable']
 
         # P1 (cycle 2026-04-28): vault accounts 후보 순차 시도.
         # 성공 시 ansible_user/password 갱신 후 본 gather 진행.
@@ -238,18 +261,18 @@
           ansible.builtin.include_tasks: tasks/try_credentials.yml
           vars:
             _os_type:     "linux"
-            _os_accounts: "{{ accounts | default([]) }}"
+            _os_accounts: "{{ _cred_accounts | default([]) }}"
 
         - name: "linux | abort if all credentials failed"
           ansible.builtin.fail:
             msg: >-
               Linux SSH 자격증명 후보 {{ _os_accounts | default([]) | length }}개가 모두 실패했습니다.
-              vault/linux.yml 의 accounts 와 대상 서버의 sshd 설정을 확인하세요.
+              credential scope={{ _cred_scope | default('') }} 의 accounts 와 대상 서버의 sshd 설정을 확인하세요.
           when:
             - (_os_accounts | default([])) | length > 0
             - not (_os_auth_ok | default(false) | bool)
           vars:
-            _os_accounts: "{{ accounts | default([]) }}"
+            _os_accounts: "{{ _cred_accounts | default([]) }}"
 
         - name: "linux | preflight"
           ansible.builtin.include_tasks: tasks/linux/preflight.yml
@@ -314,6 +337,10 @@
                 channel:           "os"
                 adapter_candidate: "{{ (_selected_adapter | default({})).adapter_id | default(none) }}"
                 detected_os:       "linux"
+                # 2026-08-12: 어떤 자격증명 세트로 수집했는지 (Secret 아님 — location/channel 조합).
+                #   성공 경로에도 남긴다 — 성공한 대상과 실패한 대상이 같은 세트를 썼는지
+                #   비교할 수 있어야 원인 범위를 좁힐 수 있다. Redfish / ESXi 와 동일 배치.
+                credential_scope:  "{{ (_cred_scope | default('')) or none }}"
                 selected_port:     22
                 # 2026-08-10 (Phase 3-A): PLAY 1 의 공통 precheck 가 **실제 probe 한 포트**를
                 # 그대로 쓴다. linux 로 분류되려면 5986 실패 → 5985 실패 → 22 성공 순으로
@@ -401,13 +428,25 @@
                   원격 접속·인증이 통과했다는 직접 관측이므로 함께 본다. -#}
               {%- set ok = (_os_auth_ok | default(false) | bool)
                            or ((_all_sec_collected | default([]) | length) > 0) -%}
+              {#- 2026-08-12: credential set 자체를 열지 못한 경우를 분리한다. '자격을 실어
+                  보냈는데 통하지 않았다'(AUTH_PROBE_FAILED)와 '보낼 자격이 없었다'는 운영자의
+                  조치가 다르다 (대상 계정 점검 vs vault 배치 점검). stage 는 auth 를 유지한다 —
+                  stage 는 원인이 아니라 멈춘 위치이고(CLAUDE.md §9) 멈춘 곳은 자격증명 단계다.
+                  auth_success 는 그대로 null 이다 (미시도 — false 는 명시적 거부를 뜻한다). -#}
+              {%- set cred_na = (not ok)
+                                and ((_cred_load_outcome | default(''))
+                                     in ['not_resolved', 'credential_set_missing',
+                                         'credential_set_undecryptable']) -%}
               {{ {'reachable': true, 'port_open': true,
                   'protocol_supported': true,
                   'auth_success': (true if ok else none),
                   'failure_stage': ('gather' if ok else 'auth'),
-                  'failure_code': ('GATHER_FAILED' if ok else 'AUTH_PROBE_FAILED'),
+                  'failure_code': ('GATHER_FAILED' if ok
+                                   else ('CREDENTIAL_SET_UNAVAILABLE' if cred_na
+                                         else 'AUTH_PROBE_FAILED')),
                   'failure_reason': (_fr_gather_failed if ok else _fr_credential_failed),
                   'details': {'channel': 'os', 'detected_os': 'linux',
+                              'credential_scope': (_cred_scope | default('')) or none,
                               'selected_port': 22,
                               'checked_ports': (_precheck_raw.checked_ports | default([5986, 5985, 22])),
                               'auth': (_os_attempts_meta | default({}))}
@@ -467,8 +506,8 @@
   # 2026-04-30 perf: stuck host (WinRM read/op timeout) 가 wave 막지 않도록 host별 독립 진행
   strategy: free
 
+  # 2026-08-12: vault 는 block 안에서 동적 로딩 (PLAY 2 와 같은 이유 — rule 11 envelope 보호).
   vars_files:
-    - "{{ lookup('env','REPO_ROOT') }}/vault/windows.yml"
     # 2026-08-11 (Phase 6-B): Portal 사용자 문구 정본 (5 문장) — rescue 가 참조한다.
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
@@ -481,23 +520,40 @@
     - name: "windows | gather"
       block:
 
+        # Credential 선택 — (se_location, os=windows) → vault/<loc>/os/windows.yml
+        - name: "windows | resolve credentials"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/credential/resolve_and_load.yml"
+          vars:
+            _cred_target_type: "os"
+            _cred_os_type:     "windows"
+
+        - name: "windows | abort if credential set unavailable"
+          ansible.builtin.fail:
+            msg: >-
+              Credential set 을 열 수 없습니다 (scope={{ _cred_scope | default('') | ternary(_cred_scope, _cred_reason) }},
+              outcome={{ _cred_load_outcome | default('not_resolved') }}).
+              se_location 값과 해당 Location 의 vault 파일, ansible-vault 복호화 키를 확인하세요.
+          when: _cred_load_outcome | default('not_resolved') in
+                ['not_resolved', 'credential_set_missing', 'credential_set_undecryptable']
+
         # P1 (cycle 2026-04-28): vault accounts 후보 순차 시도 (WinRM).
         - name: "windows | try credentials"
           ansible.builtin.include_tasks: tasks/try_credentials.yml
           vars:
             _os_type:     "windows"
-            _os_accounts: "{{ accounts | default([]) }}"
+            _os_accounts: "{{ _cred_accounts | default([]) }}"
 
         - name: "windows | abort if all credentials failed"
           ansible.builtin.fail:
             msg: >-
               Windows WinRM 자격증명 후보 {{ _os_accounts | default([]) | length }}개가 모두 실패했습니다.
-              vault/windows.yml 의 accounts 와 대상 서버의 WinRM 설정을 확인하세요.
+              credential scope={{ _cred_scope | default('') }} 의 accounts 와 대상 서버의 WinRM 설정을 확인하세요.
           when:
             - (_os_accounts | default([])) | length > 0
             - not (_os_auth_ok | default(false) | bool)
           vars:
-            _os_accounts: "{{ accounts | default([]) }}"
+            _os_accounts: "{{ _cred_accounts | default([]) }}"
 
         - name: "windows | setup"
           ansible.builtin.setup:
@@ -567,6 +623,10 @@
                 channel:           "os"
                 adapter_candidate: "{{ (_selected_adapter | default({})).adapter_id | default(none) }}"
                 detected_os:       "windows"
+                # 2026-08-12: 어떤 자격증명 세트로 수집했는지 (Secret 아님 — location/channel 조합).
+                #   성공 경로에도 남긴다 — 성공한 대상과 실패한 대상이 같은 세트를 썼는지
+                #   비교할 수 있어야 원인 범위를 좁힐 수 있다. Redfish / ESXi 와 동일 배치.
+                credential_scope:  "{{ (_cred_scope | default('')) or none }}"
                 # selected_port 는 정수 — checked_ports([5985,5986]) / Linux SSH 경로(22) /
                 # precheck 모듈(int) 과 타입 일관. 구: 문자열 "5986" (2026-06-30 실측 불일치).
                 selected_port:     "{{ ansible_port | default(5986) | int }}"
@@ -632,13 +692,25 @@
               {%- set ok = (_os_auth_ok | default(false) | bool)
                            or ((_all_sec_collected | default([]) | length) > 0) -%}
               {%- set port = ansible_port | default(5986) | int -%}
+              {#- 2026-08-12: credential set 자체를 열지 못한 경우를 분리한다. '자격을 실어
+                  보냈는데 통하지 않았다'(AUTH_PROBE_FAILED)와 '보낼 자격이 없었다'는 운영자의
+                  조치가 다르다 (대상 계정 점검 vs vault 배치 점검). stage 는 auth 를 유지한다 —
+                  stage 는 원인이 아니라 멈춘 위치이고(CLAUDE.md §9) 멈춘 곳은 자격증명 단계다.
+                  auth_success 는 그대로 null 이다 (미시도 — false 는 명시적 거부를 뜻한다). -#}
+              {%- set cred_na = (not ok)
+                                and ((_cred_load_outcome | default(''))
+                                     in ['not_resolved', 'credential_set_missing',
+                                         'credential_set_undecryptable']) -%}
               {{ {'reachable': true, 'port_open': true,
                   'protocol_supported': true,
                   'auth_success': (true if ok else none),
                   'failure_stage': ('gather' if ok else 'auth'),
-                  'failure_code': ('GATHER_FAILED' if ok else 'AUTH_PROBE_FAILED'),
+                  'failure_code': ('GATHER_FAILED' if ok
+                                   else ('CREDENTIAL_SET_UNAVAILABLE' if cred_na
+                                         else 'AUTH_PROBE_FAILED')),
                   'failure_reason': (_fr_gather_failed if ok else _fr_credential_failed),
                   'details': {'channel': 'os', 'detected_os': 'windows',
+                              'credential_scope': (_cred_scope | default('')) or none,
                               'selected_port': port,
                               'checked_ports': (_precheck_raw.checked_ports
                                                  | default([5986] if port == 5986 else [5986, 5985])),

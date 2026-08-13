@@ -44,7 +44,7 @@ options:
   verify_ssl: optional, bool, default false
 '''
 
-import json, socket, sys, traceback
+import json, re, socket, sys, time, traceback
 
 # ── 단위 변환 상수 (cycle 2026-06-04 R-4 — 매직넘버 명명) ──────────────────────
 # 주의: decimal(10^n) 과 binary(2^n) 는 의미가 다르므로 절대 통합 금지.
@@ -364,19 +364,27 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
 
-def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl):
-    """P2 (cycle 2026-04-28): AccountService 계정 update (PATCH /Accounts/{id})."""
+def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
+           extra_headers=None):
+    """P2 (cycle 2026-04-28): AccountService 계정 update (PATCH /Accounts/{id}).
+
+    extra_headers (2026-08-12): If-Match 를 **요구하는 Family 에서만** 실어 보낸다.
+      전 vendor 에 ETag 를 켜지 않는 이유는 모듈 상단 주석 참조 (bmcweb If-Match crash).
+    """
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     try:
         payload = json.dumps(body).encode('utf-8')
     except TypeError:  # Round 4 #4/#5: 비-직렬화 body 방어 (provision crash 차단)
         payload = json.dumps(str(body)).encode('utf-8')
-    req = urlreq.Request(url, data=payload, method='PATCH', headers={
+    headers = {
         'Authorization': _auth(username, password),
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'OData-Version': '4.0',
-    })
+    }
+    if extra_headers:
+        headers.update({k: v for k, v in extra_headers.items() if v})
+    req = urlreq.Request(url, data=payload, method='PATCH', headers=headers)
     try:
         with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout) as resp:
             raw = resp.read()
@@ -447,6 +455,219 @@ def _err(section, message, detail=None, code=None):
 # BMC 가 수십 개 항목을 반환해도 errors[].detail 이 비대해지지 않게 절단한다.
 MAX_EXTENDED_INFO_ITEMS = 3
 MAX_EXTENDED_INFO_LEN = 300
+
+# 이번 run 에서 표준 계정에 허용할 **최대 실패 인증 횟수**.
+# Dell IP Blocking 기본값(60초 창에서 3회)을 기준으로 잡는다 — 장비가 정책을 알려주지
+# 않아도 무제한으로 두지 않는다.
+ACCOUNT_DEFAULT_AUTH_BUDGET = 3
+
+
+def account_auth_budget(policy):
+    """장비가 선언한 lockout 임계에서 실패 인증 예산을 끌어온다.
+
+    **재시도를 늘리는 장치가 아니다.** 상한을 두어 검증 루프가 계정을 잠그기 전에
+    멈추게 한다. `AccountLockoutThreshold == 0` 을 "제한 없음" 으로 읽지 않는다 —
+    Dell 은 그 값이 0 이어도 IP Blocking(FailCount 3 / FailWindow 60s)이 따로 동작한다.
+    source: 02 §22/§23, 03 §22, 04 §22, 06 §21, 07 §25
+    """
+    threshold = (policy or {}).get('lockout_threshold')
+    if isinstance(threshold, int) and not isinstance(threshold, bool) and threshold > 0:
+        # 임계에 도달하기 전에 멈춘다.
+        return max(1, min(threshold - 1, ACCOUNT_DEFAULT_AUTH_BUDGET + 2))
+    return ACCOUNT_DEFAULT_AUTH_BUDGET
+
+
+# 계정 쓰기 후 재인증 확인 간격(초). 첫 시도는 지연 없이, 이후 1초 / 5초.
+# BMC 가 계정 변경을 비동기 반영하거나 직전 연결이 옛 자격으로 남아 있는 경우를 흡수한다.
+# 합계 6초 — 무한 대기가 되지 않도록 값 자체로 상한을 고정한다.
+ACCOUNT_VERIFY_DELAYS = (0, 1, 5)
+
+# 재인증 확인 총 대기 상한(초). 장비가 선언한 패널티가 아무리 길어도 이 값을 넘지 않는다.
+ACCOUNT_VERIFY_MAX_TOTAL_SECONDS = 45
+
+
+def account_verify_delays(policy):
+    """장비가 **스스로 선언한** 인증 실패 패널티보다 짧게 확인하지 않는다.
+
+    2026-08-12 사이트 실측 (HPE iLO6 / ProLiant DL380 Gen11):
+      AccountService 가 ``AuthFailureDelayTimeSeconds=10``, ``AuthFailuresBeforeDelay=1`` 을
+      선언한다. 즉 **첫 실패 직후부터** 그 계정의 인증이 10초간 막힌다. 표준 자격 인증이
+      한 번 실패한 뒤 복구하는 흐름에서는 패널티가 이미 켜져 있으므로, 고정 6초(0/1/5) 안의
+      재인증은 비밀번호를 올바로 썼더라도 전부 401 이 된다. 그러면 성공한 쓰기가
+      'verification=failed' 로 보고되고, 사람을 계정 삭제/재생성 쪽으로 몰아간다.
+
+    그래서 확인 간격을 장비가 준 값에서 끌어온다. 정책을 바꾸지 않고 **읽기만** 한다.
+    """
+    delays = list(ACCOUNT_VERIFY_DELAYS)
+    penalty = 0
+    for key in ('auth_failure_delay_seconds', 'lockout_duration'):
+        value = (policy or {}).get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value > penalty:
+            penalty = value
+    if penalty <= 0:
+        return tuple(delays)
+    remaining = ACCOUNT_VERIFY_MAX_TOTAL_SECONDS - sum(delays)
+    extra = min(penalty + 2, remaining)
+    if extra > 0:
+        delays.append(extra)
+    return tuple(delays)
+
+# 2026-08-12 (rev.2): `ACCOUNT_OPTIONAL_PATCH_PROPS` 를 제거했다. "거부되면 빼도 되는
+# 속성" 이라는 개념 자체가 추측성 재시도를 전제한다. 무엇을 보낼지는 쓰기 **전에**
+# Family Property Contract 가 정한다 (`_ACCOUNT_PROP_DEFAULTS` / `props`).
+
+_READ_ONLY_PROP_RE = re.compile(
+    r'property\s+([A-Za-z][A-Za-z0-9_]*)\s+is\s+a?\s*read[\s-]?only', re.IGNORECASE
+)
+
+# `MessageArgs` 를 "거부된 속성 이름" 으로 읽어도 되는 MessageId 접미사.
+# DSP0266 Base registry 에서 첫 인자가 property 이름인 메시지들이다. 이 목록에 없는
+# MessageId 의 MessageArgs 는 값 / 리소스 / 자유 문장일 수 있으므로 읽지 않는다.
+# 종전에는 MessageId 를 보지 않고 **모든** MessageArgs 문자열을 거부 속성으로 취급해,
+# 성공 응답에 딸려온 정보성 메시지 하나가 Password 이후 재시도에서 Enabled/RoleId 를
+# 통째로 떨어뜨릴 수 있었다.
+# source: redfish.dmtf.org/registries/Base.1.12.0.json (PropertyNotWritable /
+#         PropertyValueNotInList / PropertyUnknown 의 Arg1 = property name)
+_PROPERTY_ARG_MESSAGE_IDS = (
+    'PropertyNotWritable',
+    'PropertyReadOnly',
+    'PropertyNotUpdatable',
+    'PropertyUnknown',
+)
+_PROP_NAME_RE = re.compile(r'\A[A-Za-z][A-Za-z0-9_]*\Z')
+
+# 거부 종류. 셋을 구분해야 "왜 실패했는지" 를 사람이 알 수 있고, 무엇보다
+# **재시도해도 되는 것이 하나도 없다** 는 사실이 분명해진다.
+REJECT_READ_ONLY = 'read_only'        # 그 속성은 쓸 수 없다
+REJECT_VALUE = 'value_rejected'       # 값이 허용 형식/목록에 맞지 않다
+REJECT_POLICY = 'policy_rejected'     # 값이 장비 정책에 걸렸다 (Dell SYS474 등)
+
+# 명시적 거부로 볼 Severity. 정보성 메시지(OK)는 거부가 아니다.
+#   "모든 Warning 을 실패로 처리하는 것도 잘못" (02 §12) 이라 Severity 하나만으로 판단하지
+#   않고, 아래에서 RelatedProperties 가 **우리가 실제로 요청한 속성**을 가리킬 때만 센다.
+_REJECT_SEVERITIES = frozenset({'warning', 'critical', 'error'})
+
+# `#/Password` / `#/Attributes/Foo` 같은 RelatedProperties 항목에서 속성 이름만 뽑는다.
+# DMTF DSP0266: RelatedProperties 는 JSON Pointer fragment 다.
+_RELATED_PROP_RE = re.compile(r'\A#?/(?:.*/)?([A-Za-z][A-Za-z0-9_]*)\Z')
+
+
+def _related_property_names(item):
+    """ExtendedInfo 항목의 `RelatedProperties` → 속성 이름 목록."""
+    names = []
+    for ref in _as_list(item.get('RelatedProperties')):
+        if not isinstance(ref, str):
+            continue
+        m = _RELATED_PROP_RE.match(ref.strip())
+        if m:
+            names.append(m.group(1))
+        elif _PROP_NAME_RE.match(ref.strip()):
+            names.append(ref.strip())
+    return names
+
+
+def write_rejections(body, requested=None):
+    """쓰기 응답이 **명시적으로 거부한** 항목들. `[{property, kind, message_id, severity}]`
+
+    왜 `rejected_patch_properties()` 로 부족한가 (2026-08-12 Dell 실측):
+        Dell 은 비밀번호가 정책에 걸리면 **HTTP 200** 과 함께 다음을 돌려준다.
+            MessageId         = IDRAC.x.SYS474
+            Message           = "Unable to set the password because the password entered
+                                 does not comply to the Security Strengthen Policy standards."
+            Severity          = Warning
+            MessageArgs       = []
+            RelatedProperties = ["#/Password"]
+        종전 parser 는 (a) "그 속성은 read only" 문장과 (b) PropertyNotWritable 계열의
+        `MessageArgs` 만 읽었다. SYS474 는 둘 중 어느 것도 아니라 **성공으로 통과**했고,
+        그 뒤 재인증이 401 이 나면 원인을 "비밀번호 정책쯤" 으로 추측할 수밖에 없었다.
+        같은 응답에 `Base.1.12.Success` / `SYS413` 성공 메시지가 함께 오기 때문에
+        "성공 메시지가 있으니 성공" 도 성립하지 않는다.
+
+    `requested` 를 주면 **우리가 실제로 보낸 속성**을 가리키는 거부만 센다. 응답에 딸려온
+    다른 속성의 정보성 경고를 우리 요청의 실패로 오판하지 않기 위해서다.
+
+    source: DMTF DSP0266 (`@Message.ExtendedInfo`, `RelatedProperties`, `MessageSeverity`),
+            Dell Error and Event Message Guide (SYS474),
+            사이트 실측 (10.100.15.34 iDRAC9 / Redfish 1.20.1)
+    """
+    if not isinstance(body, dict):
+        return []
+    err = body.get('error')
+    scope = err if isinstance(err, dict) else body
+    found = []
+    seen = set()
+
+    def _add(prop, kind, msg_id, severity):
+        key = (prop, kind)
+        if key in seen:
+            return
+        seen.add(key)
+        found.append({'property': prop, 'kind': kind,
+                      'message_id': msg_id, 'severity': severity})
+
+    for item in _dicts(scope.get('@Message.ExtendedInfo')):
+        msg_id = item.get('MessageId') if isinstance(item.get('MessageId'), str) else None
+        sev = item.get('MessageSeverity') or item.get('Severity')
+        sev = sev.lower() if isinstance(sev, str) else None
+
+        # (1) 장비가 문장으로 "그 속성은 read only" 라고 말한 경우 — 가장 강한 신호다.
+        #     단 `requested` 가 주어지면 **우리가 보낸 속성**에 대한 말일 때만 센다.
+        #     보내지도 않은 속성의 경고를 우리 요청의 실패로 읽으면, 정상 쓰기가
+        #     장비의 부수 메시지 하나 때문에 실패로 둔갑한다.
+        text = item.get('Message')
+        if isinstance(text, str):
+            m = _READ_ONLY_PROP_RE.search(text)
+            if m and (requested is None or m.group(1) in requested):
+                _add(m.group(1), REJECT_READ_ONLY, msg_id, sev)
+
+        # (2) MessageId 가 "첫 인자는 property 이름" 계열일 때만 MessageArgs 를 읽는다.
+        if msg_id and any(msg_id.endswith(s) for s in _PROPERTY_ARG_MESSAGE_IDS):
+            for arg in _as_list(item.get('MessageArgs')):
+                if isinstance(arg, str) and _PROP_NAME_RE.match(arg) \
+                        and (requested is None or arg in requested):
+                    _add(arg, REJECT_READ_ONLY, msg_id, sev)
+            continue
+
+        # (3) RelatedProperties 가 우리가 요청한 속성을 가리키고 Severity 가 경고 이상이면
+        #     그것은 정보가 아니라 거부다. read_only 로 이미 잡힌 것은 위에서 처리됐다.
+        if sev in _REJECT_SEVERITIES:
+            for prop in _related_property_names(item):
+                if requested is not None and prop not in requested:
+                    continue
+                _add(prop, REJECT_POLICY, msg_id, sev)
+
+    text = scope.get('message')
+    if isinstance(text, str):
+        m = _READ_ONLY_PROP_RE.search(text)
+        if m:
+            _add(m.group(1), REJECT_READ_ONLY, None, None)
+    return found
+
+
+def rejected_patch_properties(body):
+    """쓰기 응답에서 "이 속성은 쓸 수 없다" 고 지목된 속성 이름들.
+
+    왜 필요한가 (2026-08-12 Dell 실측):
+        iDRAC10 은 `Locked` 를 포함한 계정 PATCH 에 **HTTP 200** 을 주면서 본문에
+            Base.1.12.GeneralError
+            "The property Locked is a read only property and cannot be assigned a value."
+        를 담아 **요청 전체를 거부**했다. 상태 코드만 보면 성공이고, 실제로는 Password 도
+        적용되지 않는다. 그 뒤 새 자격으로 인증하면 401 이 나오고, 코드는 원인을
+        "비밀번호 정책 미충족" 쯤으로 추측할 수밖에 없었다.
+
+        종전 코드에는 `Locked` 를 빼고 재시도하는 경로가 이미 있었지만 **HTTP 400/405
+        에서만** 켜졌다. 200 으로 거부하는 펌웨어에는 도달하지 않았다.
+
+    반환: 응답이 지목한 속성 이름 집합 (없으면 빈 set).
+    source: DMTF DSP0266 Error responses (`@Message.ExtendedInfo`, `MessageArgs`),
+            사이트 실측 (10.100.15.34 iDRAC9 / Redfish 1.20.1).
+
+    2026-08-12 (rev.2): 본문은 `write_rejections()` 로 옮겼다. 이 함수는 **read-only 거부만**
+    돌려주는 종전 계약을 유지한다 — 정책 거부(SYS474 등)는 "우리가 무엇을 요청했는지" 를
+    알아야 정확히 판정되므로 `write_rejections(body, requested)` 를 직접 써야 한다.
+    """
+    return {r['property'] for r in write_rejections(body)
+            if r['kind'] == REJECT_READ_ONLY and r['property']}
 
 
 def _extended_info(body, limit=MAX_EXTENDED_INFO_LEN):
@@ -725,6 +946,15 @@ def _normalize_vendor_from_aliases(mfr_lower):
     2차: 내장 fallback 맵
     3차: 부분 매칭 (substring)
     """
+    # 2026-08-12: 빈 입력 방어. 아래 부분 매칭의 `mfr_lower in key` 는 mfr_lower 가
+    #   '' 이면 **모든 key 에 대해 참**이라, 공백-only Manufacturer("   ") 가 dict 첫
+    #   항목의 vendor 로 확정되는 오탐이 있었다 (:1216 이 `mfr.strip().lower()` 로 호출).
+    #   종전에는 그 오탐이 adapter 선택에만 영향했지만, Credential Vault 경로가 vendor
+    #   에서 파생되면서 **다른 vendor 의 자격증명을 시도**하는 결과로 이어진다.
+    #   빈 alias 방어(`if key and ...`)는 이미 있었고 빈 입력 방어만 없었다.
+    if not mfr_lower:
+        return 'unknown'
+
     # vendor_aliases.yml 시도 (primary)
     aliases = _load_vendor_aliases_file()
     # aliases (YAML primary) 우선, fallback dict는 보조
@@ -4618,77 +4848,1232 @@ def _compute_final_status(collected, failed, errors=None):
 # HPE / Lenovo / Supermicro: POST /Accounts 표준
 # Cisco : AccountService 표준 미지원 (errors[]에 not_supported 기록 후 종료)
 
-# rule 95 R1 #4 (debugging visibility — cycle 2026-05-07 Phase H 보강):
-# vendor → 신규 계정 생성 strategy 매핑 (account_service_provision 분기 정본).
-# 본 dict 는 코드 분기를 변경하지 않음 — 의도 가시화 + log/도구가 사용.
-# source: 사이트 실측 + Dell SWC0296 + Cisco CIMC 사이트 실측 (10.100.15.2).
-_ACCOUNT_CREATE_STRATEGY = {                                                   # nosec rule12-r1
-    'dell':       'patch_slot',     # nosec rule12-r1 — PATCH /Accounts/{N=2..17}
-    'hpe':        'post_standard',  # nosec rule12-r1 — POST /AccountService/Accounts
-    'lenovo':     'post_standard',  # nosec rule12-r1
-    'supermicro': 'post_standard',  # nosec rule12-r1
-    'cisco':      'post_id_role_remap',  # nosec rule12-r1 — POST + Id 1-15 + RoleId enum remap
-    'huawei':     'post_standard',  # nosec rule12-r1 — lab 부재 / web sources
-    'inspur':     'post_standard',  # nosec rule12-r1
-    'fujitsu':    'post_standard',  # nosec rule12-r1
-    'quanta':     'post_standard',  # nosec rule12-r1
-}
+# 2026-08-12 (rev.2): vendor -> create method 표(`_ACCOUNT_CREATE_STRATEGY`)를 제거했다.
+#   production 소비자가 0건인데 `_ACCOUNT_FAMILIES` 와 **다른 답**을 담고 있었다
+#   (예: cisco -> post_id_role_remap 무조건. 실제로는 Roles 어휘에 따라
+#   cisco_bmc_dynamic 이나 generic 이 될 수 있다). 정본이 둘이면 둘 다 못 믿는다.
+#   생성 방식의 정본은 `_ACCOUNT_FAMILIES[...]['create_method']` 하나다.
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Account Capability Discovery (읽기 전용) — 2026-08-12
+#
+# 왜 필요한가:
+#   종전 계정 코드는 AccountService body 에서 `Accounts.@odata.id` 하나만 읽었다.
+#   그래서 (a) 계정 목록을 못 읽은 것과 계정이 없는 것을 구분하지 못했고,
+#   (b) 쓰기 방식을 vendor 이름만으로 정했으며, (c) 쓰기가 실패하면 다른 payload 로
+#   순차 재시도(=무작위 Write fallback)해서 어느 것이 맞는 방식인지 끝내 알 수 없었다.
+#
+#   9 Vendor 공식 조사 결과 같은 vendor 안에서도 Write 계약이 갈린다:
+#     Lenovo XCC Purley = 빈 slot PATCH / Whitley·XCC2·XCC3·TSM = Collection POST
+#     Cisco IMC = RoleId 'admin' + 명시 Id / 최신 Cisco BMC = 'Administrator' + BMC 할당 Id
+#     Supermicro X13 01.05.xx+ / X14 01.02.xx.xx+ = IPMI/Redfish 계정 분리
+#     Inspur M6 = HTTP 200 + Oem.Public.Status 0, PATCH 는 If-Match 요구
+#   따라서 **쓰기 전에 읽기만으로 Family 를 확정하고, 확정된 방식 하나만 실행**한다.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# 계정 열거 상태. 이 셋을 구분하지 못하면 "못 읽었다" 가 "없다" 로 둔갑한다.
+ENUM_COMPLETE = 'complete'
+ENUM_INCOMPLETE = 'incomplete'
+ENUM_FAILED = 'failed'
+
+# 표준 계정 존재 판정. CREATE 는 ABSENT 에서만 도달할 수 있다.
+PRESENCE_PRESENT = 'present'
+PRESENCE_ABSENT = 'absent'
+PRESENCE_UNKNOWN = 'unknown'
+PRESENCE_AMBIGUOUS = 'ambiguous'
 
 
-def _account_create_method_for_vendor(vendor):
-    """vendor → 신규 계정 생성 strategy 이름 (rule 95 R1 #4 debugging helper).
+def _get_response_etag(bmc_ip, path, username, password, timeout, verify_ssl):
+    """단일 리소스의 ETag 만 얻는다 (If-Match 가 필요한 Family 전용).
 
-    실제 분기는 account_service_provision() 본문 inline if/elif 가 수행.
-    본 함수는 가시성 / 로깅 / 도구 (-vvv 시 정상 어떻게 분기될지) 용도.
-
-    Returns: 'patch_slot' | 'post_standard' | 'post_id_role_remap' | 'unknown'
+    `_get()` 은 헤더를 돌려주지 않고, 그 시그니처는 인증 관측(_record_auth_status)
+    계약과 테스트 seam 에 묶여 있어 바꾸지 않는다. 대신 ETag 가 실제로 필요한
+    Family(현재 Inspur M6)에서만 이 함수로 1회 더 읽는다.
+    source: Inspur Redfish User Manual V1.2 §4.6 (GET → ETag → PATCH If-Match)
     """
-    return _ACCOUNT_CREATE_STRATEGY.get(vendor, 'unknown')
+    url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
+    req = urlreq.Request(url, headers={
+        'Authorization': _auth(username, password),
+        'Accept': 'application/json',
+        'OData-Version': '4.0',
+    })
+    try:
+        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout) as resp:
+            resp.read()
+            etag = resp.headers.get('ETag') if hasattr(resp, 'headers') else None
+            _record_auth_status(resp.status)
+            return etag or None
+    except urlerr.HTTPError as e:
+        _record_auth_status(e.code)
+        return None
+    except (urlerr.URLError, socket.timeout, OSError, ValueError):
+        return None
 
-def account_service_get(bmc_ip, username, password, timeout, verify_ssl):
-    """GET /redfish/v1/AccountService + Accounts 컬렉션 enumerate.
 
-    Returns: (acct_service: dict|None, accounts: list[{slot_uri, id, username, role_id, enabled}], errors)
+def _patch_account(bmc_ip, path, body, username, password, timeout, verify_ssl,
+                   headers=None):
+    """계정 PATCH 래퍼. 헤더가 필요 없을 때는 `_patch` 를 **종전 시그니처 그대로** 부른다.
+
+    이유: `_patch` 는 테스트가 monkeypatch 하는 seam 이다. 헤더 인자를 항상 넘기면
+    기존 fake 들이 전부 깨진다. If-Match 가 실제로 필요한 Family 에서만 확장 호출한다.
+    """
+    if headers:
+        return _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
+                      extra_headers=headers)
+    return _patch(bmc_ip, path, body, username, password, timeout, verify_ssl)
+
+
+def _account_policy_of(service):
+    """AccountService body → 정책 필드. 없는 값은 None 으로 남긴다(0 으로 접지 않는다)."""
+    if not isinstance(service, dict):
+        service = {}
+    def _num(key):
+        v = service.get(key)
+        return v if isinstance(v, int) and not isinstance(v, bool) else None
+    def _oem_num(key):
+        """Oem 하위 namespace 를 **이름으로 분기하지 않고** 훑어 정수 항목을 찾는다.
+
+        표준 AccountService 에는 '인증 실패 후 지연' 항목이 없어서 벤더가 Oem 에 둔다
+        (HPE: Oem.Hpe.AuthFailureDelayTimeSeconds). namespace 이름을 하드코딩하면
+        rule 12 R1 위반이자 새 벤더마다 코드가 늘어난다. 키 이름만 보고 값을 읽는다.
+        """
+        oem = service.get('Oem')
+        if not isinstance(oem, dict):
+            return None
+        for section in oem.values():
+            if isinstance(section, dict):
+                v = section.get(key)
+                if isinstance(v, int) and not isinstance(v, bool):
+                    return v
+        return None
+    supported = _safe(service, 'SupportedAccountTypes', default=None)
+
+    def _auth_methods():
+        """Oem 하위에서 인증 방식 스위치를 **이름으로 분기하지 않고** 찾는다.
+
+        upstream OpenBMC 는 `Oem.OpenBMC.AuthMethods` 에 BasicAuth/SessionToken/…
+        를 노출한다. namespace 를 하드코딩하면 rule 12 R1 위반이므로 키 이름만 본다.
+        """
+        oem = service.get('Oem')
+        if not isinstance(oem, dict):
+            return None
+        for section in oem.values():
+            if isinstance(section, dict) and isinstance(section.get('AuthMethods'), dict):
+                return {k: v for k, v in section['AuthMethods'].items()
+                        if isinstance(v, bool)}
+        return None
+
+    return {
+        'service_enabled':        _safe(service, 'ServiceEnabled', default=None),
+        'min_password_length':    _num('MinPasswordLength'),
+        'max_password_length':    _num('MaxPasswordLength'),
+        'lockout_threshold':      _num('AccountLockoutThreshold'),
+        'lockout_duration':       _num('AccountLockoutDuration'),
+        'lockout_counter_reset':  _num('AccountLockoutCounterResetAfter'),
+        # 장비가 선언한 '인증 실패 후 지연'. 재인증 확인 간격을 여기서 끌어온다.
+        'auth_failure_delay_seconds': _oem_num('AuthFailureDelayTimeSeconds'),
+        'auth_failures_before_delay': _oem_num('AuthFailuresBeforeDelay'),
+        'supported_account_types': [s for s in _as_list(supported) if isinstance(s, str)] or None,
+        # 2026-08-12 (rev.2): 인증 방식 자체가 꺼져 있을 수 있다.
+        #   Dell iDRAC9 7.30.10.50+ / iDRAC10 1.30.10.50+ 는 기본이 `Unadvertised` 이고,
+        #   Lenovo XCC3 도 `Unadvertised` 다. **Unadvertised != Disabled** 이며,
+        #   이 client 는 처음부터 Authorization 헤더를 보내므로 Unadvertised 와 호환된다.
+        #   `Disabled` 를 '비밀번호가 틀렸다' 로 오진하지 않기 위해 상태를 남긴다.
+        #   **정책을 바꾸지 않는다 — 읽기만 한다.**
+        # source: Dell KB 000437501, pubs.lenovo.com/xcc3-restapi (02 §24, 03 §23, 09 §23)
+        'http_basic_auth': _str(_safe(service, 'HTTPBasicAuth', default='')) or None,
+        'auth_methods':    _auth_methods(),
+    }
+
+
+def _account_login_interfaces(acc_data):
+    """계정 Resource 에서 **Login Interface 목록**을 관측한다 (Huawei 고유 축).
+
+    Huawei iBMC 는 Local User 마다 Web / SNMP / IPMI / SSH / SFTP / Local / **Redfish**
+    인터페이스를 개별로 켜고 끈다. 즉 계정이 있고 권한도 맞고 비밀번호도 맞는데
+    `Redfish` 가 꺼져 있으면 Redfish 인증이 실패한다. 이것을 모르면 그 실패를
+    "비밀번호 불일치" 로 오진하고 쓸데없는 Account Write 를 유발한다.
+
+    **읽기 전용이다.** 이 값을 켜는 정확한 OEM payload 는 공식 자료에서 확인되지 않았고,
+    추측해서 쓰지 않는다 (07 §12/§37). 관측해서 진단에만 쓴다.
+
+    OEM namespace 이름으로 분기하지 않고 키 이름만 본다 (rule 12 R1).
+    source: Huawei "Setting the User Interfaces for Logging to iBMC" (07 §10)
+    """
+    oem = _safe(acc_data, 'Oem', default=None)
+    if not isinstance(oem, dict):
+        return None
+    for section in oem.values():
+        if not isinstance(section, dict):
+            continue
+        for key, value in section.items():
+            if 'logininterface' not in key.replace('_', '').lower():
+                continue
+            items = [s for s in _as_list(value) if isinstance(s, str)]
+            if items:
+                return items
+    return None
+
+
+def _role_ids_from_collection(coll):
+    """Roles Collection → Role Id 목록. 각 Role 을 개별 GET 하지 않고 URI 마지막 조각을 쓴다.
+
+    RoleId 문자열을 코드가 추측하지 않기 위한 근거다. Cisco IMC 는 'admin',
+    최신 Cisco BMC 는 'Administrator', Fujitsu 는 RedfishAdmin 계열을 쓴다.
+    """
+    ids = []
+    for m in _dicts(_safe(coll, 'Members', default=[]) or []):
+        uri = _safe(m, '@odata.id')
+        if isinstance(uri, str) and uri:
+            seg = uri.rstrip('/').rsplit('/', 1)[-1]
+            if seg:
+                ids.append(seg)
+    return ids
+
+
+def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
+                             manager_uri=None, service_root=None):
+    """AccountService 를 **읽기만** 해서 Write 결정에 필요한 근거를 모은다.
+
+    Returns dict:
+      service_uri / accounts_uri / roles_uri : 실제 @odata.id (하드코딩 아님)
+      service      : AccountService body (실패 시 None — 인증 실패 판정의 정본)
+      policy       : _account_policy_of()
+      role_ids     : 지원 RoleId 목록 (없으면 [])
+      accounts     : [{slot_uri,id,username,role_id,enabled,locked,account_types,
+                       password_change_required,odata_type}]
+      member_total : Members@odata.count (없으면 len(Members))
+      member_read  : 실제로 읽어낸 member 수
+      enumeration  : complete | incomplete | failed
+      manager      : {firmware_version, model, manager_type} (manager_uri 있을 때만)
+      errors       : [_err(...)]
+
+    **enumeration 이 complete 가 아니면 호출자는 계정 부재를 확정해서는 안 된다.**
     """
     errors = []
-    code, root_data, err = _get(bmc_ip, 'AccountService', username, password, timeout, verify_ssl)
+    out = {
+        'service_uri': None, 'accounts_uri': None, 'roles_uri': None,
+        'service': None, 'policy': _account_policy_of(None), 'role_ids': [],
+        'accounts': [], 'member_total': None, 'member_read': 0,
+        'enumeration': ENUM_FAILED, 'manager': None, 'errors': errors,
+        # AccountService GET 의 HTTP status. 401(명시적 인증 거부)과 0/5xx(도달 실패)를
+        # 구분해야 lockout 예산을 옳게 쓴다 — transport 오류는 실패 카운터를 올리지 않는다.
+        'auth_status': None,
+        # ServiceRoot 본문. `RedfishVersion` 이 Family 판정 근거인 Vendor 가 있다
+        # (QCT: Legacy v1.1 / Modern v1.11 / Inhouse OpenBMC). 이미 읽은 값을 버리지 않는다.
+        'service_root': None,
+    }
+
+    # 1) ServiceRoot 가 알려주는 AccountService URI 를 우선한다.
+    #    Dell iDRAC7/8·초기 iDRAC9 는 Manager-scoped(/Managers/<id>/AccountService) 를 쓴다.
+    #    링크가 없으면 종전 하드코딩 경로로 되돌아간다 (회귀 방지).
+    root = service_root if isinstance(service_root, dict) else None
+    if root is None:
+        code_r, root_data, _err_r = _get(bmc_ip, '', username, password, timeout, verify_ssl)
+        root = root_data if code_r == 200 else None
+    out['service_root'] = root
+    svc_uri = _safe(root, 'AccountService', '@odata.id') if root else None
+    out['service_uri'] = _p(svc_uri) if isinstance(svc_uri, str) and svc_uri else 'AccountService'
+
+    # 2) AccountService 본문 — 이 GET 성공이 곧 복구 자격의 인증 시험이다.
+    code, service, err = _get(bmc_ip, out['service_uri'], username, password, timeout, verify_ssl)
+    out['auth_status'] = code
     if code != 200 or err:
-        errors.append(_err('account_service', f'GET AccountService 실패', detail=err or f'HTTP {code}'))
-        return None, [], errors
-    accounts_link = _safe(root_data, 'Accounts', '@odata.id')
+        errors.append(_err('account_service', 'GET AccountService 실패',
+                           detail=err or f'HTTP {code}'))
+        return out
+    out['service'] = service
+    out['policy'] = _account_policy_of(service)
+    out['enumeration'] = ENUM_INCOMPLETE
+
+    roles_link = _safe(service, 'Roles', '@odata.id')
+    if isinstance(roles_link, str) and roles_link:
+        out['roles_uri'] = _p(roles_link)
+        code_ro, roles_coll, err_ro = _get(
+            bmc_ip, out['roles_uri'], username, password, timeout, verify_ssl)
+        if code_ro == 200 and not err_ro:
+            out['role_ids'] = _role_ids_from_collection(roles_coll)
+        # Roles 조회 실패는 enumeration 완결성과 무관하다 (RoleId 는 fallback 이 있다).
+
+    accounts_link = _safe(service, 'Accounts', '@odata.id')
     if not accounts_link:
-        errors.append(_err('account_service', 'AccountService.Accounts 링크 없음', detail=str(root_data)[:200]))
-        return root_data, [], errors
-    code, acc_coll, err = _get(bmc_ip, _p(accounts_link), username, password, timeout, verify_ssl)
+        errors.append(_err('account_service', 'AccountService.Accounts 링크 없음',
+                           detail=str(service)[:200]))
+        return out
+    out['accounts_uri'] = _p(accounts_link)
+
+    # 3) Accounts Collection
+    code, acc_coll, err = _get(bmc_ip, out['accounts_uri'], username, password, timeout, verify_ssl)
     if code != 200 or err:
-        errors.append(_err('account_service', 'GET Accounts 컬렉션 실패', detail=err or f'HTTP {code}'))
-        return root_data, [], errors
+        errors.append(_err('account_service', 'GET Accounts 컬렉션 실패',
+                           detail=err or f'HTTP {code}'))
+        return out
+
     members = _safe(acc_coll, 'Members', default=[]) or []
-    if not isinstance(members, list):  # rule 95 R1 #2: 비-list Members → 빈 계정 (Round 1 #25)
+    if not isinstance(members, list):  # rule 95 R1 #2 (Round 1 #25)
         members = []
-    accounts = []
-    for m in _capped(members, 'account_service', errors):  # Round 6 #8: 무경계 계정 순회 DoS 방어
+    declared = _safe(acc_coll, 'Members@odata.count', default=None)
+    out['member_total'] = declared if isinstance(declared, int) and not isinstance(declared, bool) \
+        else len(members)
+
+    member_failures = 0
+    capped = _capped(members, 'account_service', errors)  # Round 6 #8: 무경계 순회 DoS 방어
+    truncated = len(capped) < len(members)
+    for m in capped:
         slot_uri = _safe(m, '@odata.id')
         if not slot_uri:
+            member_failures += 1
             continue
-        code_a, acc_data, err_a = _get(bmc_ip, _p(slot_uri), username, password, timeout, verify_ssl)
+        code_a, acc_data, err_a = _get(bmc_ip, _p(slot_uri), username, password,
+                                       timeout, verify_ssl)
         if code_a != 200 or err_a:
-            errors.append(_err('account_service', f'GET {slot_uri} 실패', detail=err_a or f'HTTP {code_a}'))
+            errors.append(_err('account_service', f'GET {slot_uri} 실패',
+                               detail=err_a or f'HTTP {code_a}'))
+            member_failures += 1
             continue
-        # 2026-08-11 (Phase 6-B §10): Locked 를 **읽기만** 추가한다.
-        #   목적은 "단순 password 불일치" 와 "계정이 잠김/비활성" 을 errors[] 에서 구분해
-        #   운영자가 원인을 알 수 있게 하는 것뿐이다. 자동 enable/unlock 범위는 넓히지 않는다
-        #   (기존 PATCH body 와 동일). Locked 를 아예 반환하지 않는 펌웨어는 None 이 되어
-        #   "모름" 으로 남는다 — False(잠기지 않음)로 단정하지 않는다.
-        accounts.append({
+        acct_types = _safe(acc_data, 'AccountTypes', default=None)
+        out['accounts'].append({
             'slot_uri': slot_uri,
             'id':       _safe(acc_data, 'Id'),
             'username': _safe(acc_data, 'UserName', default=''),
             'role_id':  _safe(acc_data, 'RoleId',   default=''),
             'enabled':  bool(_safe(acc_data, 'Enabled', default=False)),
             'locked':   _safe(acc_data, 'Locked', default=None),
+            # 2026-08-12: 최신 Lenovo XCC2/3 · Supermicro X13/X14 · Cisco BMC 는
+            #   AccountTypes 에 'Redfish' 가 없으면 계정이 있어도 Redfish 인증이 막힌다.
+            'account_types': [s for s in _as_list(acct_types) if isinstance(s, str)]
+                             if acct_types is not None else None,
+            'password_change_required': _safe(acc_data, 'PasswordChangeRequired', default=None),
+            'odata_type': _safe(acc_data, '@odata.type', default=''),
+            'has_username_key': isinstance(acc_data, dict) and 'UserName' in acc_data,
+            # 2026-08-12 (rev.2): 자동화가 건드리면 안 되는 특수 계정인가.
+            #   `HostBootstrapAccount` 는 DMTF ManagerAccount 표준 Property 이고
+            #   (schema/redfish_dmtf_2026.1/ManagerAccount.v1_14_1.json), 실미러
+            #   tests/reference/redfish/lenovo/10_50_11_232 의 계정 3개에 실제로 존재한다.
+            #   즉 **XCC3 전용 개념이 아니다.** slot id 문자열로 맞히지 않고 이 값을 본다.
+            'host_bootstrap': _safe(acc_data, 'HostBootstrapAccount', default=None),
+            # Huawei 고유 축 — 계정별 Redfish 접근 스위치 (읽기 전용, 07 §10).
+            'login_interfaces': _account_login_interfaces(acc_data),
         })
-    return root_data, accounts, errors
+    out['member_read'] = len(out['accounts'])
+
+    # 4) 완결성 판정 — 하나라도 빠지면 complete 가 아니다.
+    if member_failures == 0 and not truncated and out['member_read'] == out['member_total']:
+        out['enumeration'] = ENUM_COMPLETE
+    else:
+        errors.append(_err(
+            'account_service',
+            '계정 목록을 완전히 읽지 못했습니다. 계정 부재를 확정할 수 없습니다.',
+            detail=(f'members declared={out["member_total"]} read={out["member_read"]} '
+                    f'failures={member_failures} truncated={truncated}'),
+        ))
+
+    # 5) Manager 정보 (Firmware/Model) — Supermicro 계정분리 경계처럼 Firmware 가
+    #    Strategy 근거인 Family 가 있다. 이미 인증된 자격이라 lockout 위험이 없다.
+    if manager_uri:
+        code_m, mgr, err_m = _get(bmc_ip, _p(manager_uri), username, password,
+                                  timeout, verify_ssl)
+        if code_m == 200 and not err_m:
+            out['manager'] = {
+                'firmware_version': _str(_safe(mgr, 'FirmwareVersion', default='')) or None,
+                'model':            _str(_safe(mgr, 'Model', default='')) or None,
+                'manager_type':     _str(_safe(mgr, 'ManagerType', default='')) or None,
+            }
+    return out
+
+
+# 표준 계정 이름이 보호 대상 Resource 와 겹쳤다. 자동으로 건드리지 않는다.
+PRESENCE_PROTECTED_CONFLICT = 'protected_conflict'
+
+
+def account_is_protected(account, family=None):
+    """자동화가 **건드리면 안 되는** 특수 계정인가.
+
+    근거는 **Resource Property** 하나다: `HostBootstrapAccount == true`.
+      DMTF ManagerAccount 표준 Property 이고(schema/redfish_dmtf_2026.1/
+      ManagerAccount.v1_14_1.json), 실미러 10.50.11.232 의 계정 3개에 실제로 존재한다.
+      즉 XCC3 전용 개념이 아니다. Family 이름이나 slot 번호로 맞히지 않는다.
+
+    **Family 의 `reserved_slot_ids` 는 여기 쓰지 않는다.** 그것은 "생성할 때 이 슬롯은
+    고르지 마라"(Dell slot 1 = IPMI anonymous 등)는 뜻이지, "그 슬롯에 있는 계정은
+    고칠 수 없다" 는 뜻이 아니다. 둘을 섞으면 예약 슬롯에 정상적으로 자리 잡은 표준
+    계정을 영영 복구하지 못한다. 생성 후보 제외는 create 경로에서 따로 한다.
+
+    보호 계정은 **열거와 진단에는 그대로 남긴다.** 후보에서만 뺀다 —
+    목록에서 지워 버리면 "없는 계정" 이 되어 오히려 생성 쓰기를 유발한다.
+    """
+    if not isinstance(account, dict):
+        return False
+    return account.get('host_bootstrap') is True
+
+
+def account_presence(discovery, target_username, family=None):
+    """(state, matches) — 표준 계정이 있는가/없는가/알 수 없는가/건드리면 안 되는가.
+
+    ABSENT 는 **완전한 열거에 성공했고 그 안에 없을 때만** 확정한다.
+    403 / 5xx / timeout / 링크 부재 / member 일부 실패는 전부 UNKNOWN 이다.
+
+    표준 계정 이름이 보호 대상 Resource 와 겹치면 PROTECTED_CONFLICT 다 — 이름이 같다는
+    이유로 HostBootstrap 같은 특수 계정의 비밀번호를 바꾸는 일은 하지 않는다.
+    """
+    accounts = (discovery or {}).get('accounts') or []
+    matches = [a for a in accounts if (a.get('username') or '') == target_username]
+    protected = [a for a in matches if account_is_protected(a, family)]
+    if protected:
+        return PRESENCE_PROTECTED_CONFLICT, protected
+    if len(matches) > 1:
+        return PRESENCE_AMBIGUOUS, matches
+    if matches:
+        return PRESENCE_PRESENT, matches
+    if (discovery or {}).get('enumeration') != ENUM_COMPLETE:
+        return PRESENCE_UNKNOWN, []
+    return PRESENCE_ABSENT, []
+
+
+# ── Account Family Strategy Matrix ────────────────────────────────────────────
+# 선택 우선순위: 실제 Resource Capability → Vendor → BMC Family → Firmware →
+#                Generation/Model → Adapter hint.
+# Generation 문자열 하나만 보고 Write URI 를 고르지 않는다.
+#
+# evidence 의미:
+#   proven      = 사이트 실측으로 Write 가 확인된 Family
+#   documented  = vendor 공식 문서로 Write 계약이 확인된 Family (실장비 미검증)
+#   unverified  = 공식 Write 계약 미확보 → **현행 동작을 그대로 유지**한다
+#                 (사용자 결정 2026-08-12: 근거 부족 Family 는 현행 유지 + 라벨)
+
+# ── Property Write Contract ───────────────────────────────────────────────────
+# 왜 데이터로 두는가:
+#   같은 Property 라도 Family 마다 쓰기 가능 여부가 다르다. 9 Vendor 조사 결과:
+#     Locked                 : HPE iLO 는 속성 자체가 없고, Lenovo XCC 는 read-only,
+#                              Huawei/Cisco BMC 는 writable, TSM 도 writable
+#     PasswordChangeRequired : HPE/Cisco BMC(기존계정)/OpenBMC 는 read-only,
+#                              Lenovo XCC1 Whitley·XCC2 는 writable, XCC3 는 목록에 없음
+#     AccountTypes           : HPE 는 verify-only, Lenovo XCC2/3 는 writable
+#   이 차이를 본문 조건문으로 표현하면 Family 가 늘 때마다 분기가 늘고, 어느 Family 가
+#   무엇을 보내는지 한눈에 볼 수 없다. 그래서 **표로 선언하고 코드는 표를 읽는다.**
+#
+# 상태 5종:
+#   writable    쓸 수 있다. 단 실제 drift 가 있을 때만 보낸다(no-op write 금지).
+#   read_only   장비가 노출하지만 쓸 수 없다. 보내지 않고 대조만 한다.
+#   verify_only 쓰기 대상이 아니지만 **반드시 확인**해야 한다 (예: Redfish 접근권).
+#   unsupported 해당 Family 에 존재하지 않는다. 보내지도 대조하지도 않는다.
+#   unverified  공식 계약을 확보하지 못했다. **자동으로 쓰지 않는다.** 관측만 한다.
+#
+# 기본값 정책:
+#   최종 기본값은 `unverified` 다 — 모르는 Property 를 writable 로 가정하지 않는다.
+#   다만 이번 단계(P1)는 **행동 변화 0** 이 합격 조건이라 현재 동작을 그대로 옮긴 값을
+#   쓴다. Family 별 선언을 채운 뒤 기본값을 `unverified` 로 좁힌다(P2).
+_ACCOUNT_PROP_DEFAULTS = {
+    # 이 셋은 "표준 계정을 만든다/고친다" 는 동작 자체다. 이것까지 unverified 로 두면
+    # Reconcile 이 아무것도 하지 못한다. 근거를 확보하지 못한 Family 도 이 셋으로
+    # **한 번의 결정적 쓰기**는 수행한다 (프로젝트 UNVERIFIED 정책).
+    'Password':               {'create': 'writable',    'repair': 'writable'},
+    'RoleId':                 {'create': 'writable',    'repair': 'writable'},
+    'Enabled':                {'create': 'writable',    'repair': 'writable'},
+    # 나머지 셋은 Vendor 마다 read-only / 미지원 / writable 이 갈리고, 잘못 보내면
+    # **요청 전체가 거부**된다. 그래서 계약을 선언하지 않은 Family 에서는 보내지 않는다.
+    #   create 는 어느 Family 에서도 이 셋을 실은 적이 없다 — 그 사실을 그대로 적는다.
+    'Locked':                 {'create': 'unsupported', 'repair': 'unverified'},
+    'PasswordChangeRequired': {'create': 'unsupported', 'repair': 'unverified'},
+    'AccountTypes':           {'create': 'unsupported', 'repair': 'unverified'},
+}
+
+# 계약을 확보하지 못한 Property 의 최종 상태. P2 에서 `_ACCOUNT_PROP_DEFAULTS` 미선언
+# Property 의 기본값이 된다.
+PROP_UNVERIFIED = 'unverified'
+
+_ACCOUNT_FAMILY_DEFAULTS = {
+    'create_method':            'collection_post',
+    # 생성 대상 URI 종류. **Accounts 열거 URI 와 같은 개념이 아니다.**
+    #   accounts_collection  : discovery 가 알려준 Accounts Collection 에 POST (현행 기본)
+    #   account_service_root : AccountService 자체에 POST (최신 Supermicro 공식 계약)
+    #   account_instance     : 개별 Account URI 에 POST (Cisco IMC 3.x)
+    # 어떤 경우에도 하나를 실패하면 다른 것으로 갈아타지 않는다.
+    'create_uri':               'accounts_collection',
+    'needs_explicit_id':        False,
+    'id_range':                 None,
+    'role_map':                 {},
+    'account_types':            None,
+    # 쓰지는 않지만 **반드시 있어야 하는** AccountTypes (예: Redfish 접근권 검증).
+    'account_types_required':   None,
+    'password_change_required': None,   # None=보내지 않음 / False=명시적으로 끈다
+    'oem_privileges_namespace': None,
+    'reserved_slot_ids':        (),
+    # If-Match 는 Family 공통 boolean 이 아니라 **Operation 단위** 계약이다.
+    #   Inspur M6: Create = POST Collection (If-Match 없음)
+    #              Repair = PATCH Instance + GET ETag → If-Match
+    # 하나의 boolean 으로 두면 Create 에도 붙여야 하는 것처럼 읽힌다.
+    # source: 浪潮英信服务器 Redfish用户手册 V1.2 §4.4(Create) / §4.6(Update)
+    'if_match':                 {'create': False, 'repair': False},
+    'write_success':            'generic',
+    'evidence':                 'unverified',
+    # 비밀번호를 다른 속성과 같은 PATCH 에 담으면 조용히 버리는 Family (HPE iLO).
+    'isolated_write_patch':     False,
+    # Repair PATCH 에서 **drift 가 없는 writable 속성까지** Password 와 함께 보낼 것인가.
+    #
+    # 기본은 False = drift-only 다. 실제로 달라진 것만 쓴다.
+    #
+    # True 는 "공통 Property 를 전부 보내라" 는 뜻이 **아니다.** 그 Family 에서
+    # **writable 로 확인된 상태 Property 를 Password 와 함께 보내야만 하는 예외**를 뜻한다.
+    # Property Contract 가 read_only / verify_only / unsupported / unverified 라고 말한
+    # Property 는 full_body_patch=True Family 에서도 **절대 실리지 않는다**.
+    #
+    # True 는 LIVE 또는 공식 근거가 있는 Family 에만 명시한다. 한 Family 의 실측을
+    # 다른 Vendor/Family 의 기본 동작으로 일반화하지 않는다(rule 25 R7-A-1 의 반대 방향
+    # 오용 금지). 특히 UNVERIFIED Family 는 이 값을 상속하지 않는다.
+    'full_body_patch':          False,
+    # Family 별 Property 쓰기 계약. 미선언 Property 는 _ACCOUNT_PROP_DEFAULTS 를 따른다.
+    'props':                    {},
+}
+
+_ACCOUNT_FAMILIES = {                                                          # nosec rule12-r1
+    # Dell — slot PATCH. slot 1 = IPMI anonymous 예약. iDRAC10 은 slot 2 = root 예약.
+    # source: dell.com/.../idrac8_2.70.70.70_ug/configuring-local-users,
+    #         dell.com/.../idrac10_1.20.xx_ug/configuring-local-users (ID 1,2 reserved)
+    # Locked: GET 에는 있지만 iDRAC9 7.10.70 실측에서 read-only 로 거부됐고(200+본문),
+    #   공식 Updatable Property 목록(UserName/Password/RoleId/Enabled)에도 없다.
+    # PasswordChangeRequired: 공식 Updatable 목록에 없음 → 보내지 않는다.
+    # source: dell.com/.../idrac_3.18.18.18_redfishapiguide/manageraccount,
+    #         사이트 실측 10.100.15.34 (02 §8/§9)
+    'dell_slot_patch':          {'create_method': 'slot_patch',                # nosec rule12-r1
+                                 'reserved_slot_ids': ('1',), 'evidence': 'proven',
+                                 'props': {
+                                     'Locked': {'create': 'unsupported', 'repair': 'read_only'},
+                                     'AccountTypes': {'create': 'unsupported',
+                                                      'repair': 'verify_only'},
+                                 }},
+    'dell_idrac10_slot_patch':  {'create_method': 'slot_patch',                # nosec rule12-r1
+                                 'reserved_slot_ids': ('1', '2'), 'evidence': 'documented',
+                                 'props': {
+                                     'Locked': {'create': 'unsupported', 'repair': 'read_only'},
+                                     'AccountTypes': {'create': 'unsupported',
+                                                      'repair': 'verify_only'},
+                                 }},
+    # Cisco IMC/CIMC 4.1~6.0 — Collection POST + 명시 Id + Cisco enum RoleId.
+    # source: cisco.com/.../b_Cisco_IMC_REST_API_guide_4_1 + 사이트 실측 10.100.15.2
+    'cisco_cimc_collection_post_id': {'needs_explicit_id': True,               # nosec rule12-r1
+                                      'id_range': (2, 16),
+                                      'role_map': {'Administrator': 'admin',
+                                                   'Operator': 'user',
+                                                   'ReadOnly': 'readonly'},
+                                      'evidence': 'proven'},
+    # Cisco IMC 3.x — Collection 이 아니라 **Instance URI 에 POST** 한다.
+    #   POST /redfish/v1/AccountService/Accounts/<ID>  (body 에 Id 를 넣지 않는다)
+    # source: cisco.com/.../b_Cisco_IMC_REST_API_guide_301 (04 §4.2/§25.1)
+    'cisco_cimc3_instance_post': {'create_uri': 'account_instance',            # nosec rule12-r1
+                                  'needs_explicit_id': True,
+                                  'id_range': (2, 16),
+                                  'role_map': {'Administrator': 'admin',
+                                               'Operator': 'user',
+                                               'ReadOnly': 'readonly'},
+                                  'evidence': 'documented'},
+    # 최신 Cisco BMC (AMI MegaRAC 기반) — Id 는 BMC 가 정하고 RoleId 는 표준 이름.
+    # source: cisco.com/.../b_cisco-bmc-rest-api-guide (1.0/2.0/4.0)
+    # BMC 1.1 공식 ManagerAccount: Locked=Writable(관리자 unlock),
+    #   PasswordChangeRequired=Read Only(기존 계정), AccountTypes=Read Only.
+    #   BMC 2.0 은 Create 에서 PasswordChangeRequired:false 를 지원한다.
+    # source: cisco.com/.../b_cisco-bmc-rest-api-guide-1_1, .../2-0-1 (04 §10.3/§11.1)
+    'cisco_bmc_dynamic':        {'evidence': 'documented',                     # nosec rule12-r1
+                                 'props': {
+                                     'Locked': {'create': 'unsupported', 'repair': 'writable'},
+                                     'PasswordChangeRequired': {'create': 'writable',
+                                                                'repair': 'read_only'},
+                                     'AccountTypes': {'create': 'unsupported',
+                                                      'repair': 'verify_only'},
+                                 }},
+    # Lenovo Intel Purley XCC — slot 이 미리 만들어져 있고 UserName=='' 이 빈 슬롯이다.
+    # source: pubs.lenovo.com/xcc-restapi/create_an_account_intel_p_based_patch
+    # Purley 는 PasswordChangeRequired 자체를 제공하지 않는다. Locked 는 GET 에만 있고
+    #   공식 Account Update Property 목록에는 없다.
+    # source: pubs.lenovo.com/xcc-restapi/update_userid_password_role_properties_patch (03 §7.3)
+    'lenovo_purley_slot_patch': {'create_method': 'slot_patch',                # nosec rule12-r1
+                                 'evidence': 'documented',
+                                 'props': {
+                                     'Locked': {'create': 'unsupported', 'repair': 'read_only'},
+                                     'PasswordChangeRequired': {'create': 'unsupported',
+                                                                'repair': 'unsupported'},
+                                 }},
+    # Lenovo Whitley/AMD/XCC2/XCC3/TSM — Collection POST.
+    # PasswordChangeRequired 를 명시하지 않으면 TSM 은 default true 라 생성 직후 막힌다.
+    # source: pubs.lenovo.com/xcc-restapi/create_an_account_post,
+    #         pubs.lenovo.com/tsm/post_create_new_account
+    # Whitley/AMD 는 PasswordChangeRequired 가 공식 writable 이고, TSM 은 생략 시 true 라
+    #   Create 에서 명시해야 한다. Locked 는 XCC1 이 read-only 인데 TSM 은 writable 이라
+    #   두 계약이 이 Family 에 섞여 있다 — 근거가 갈리므로 **쓰지 않는다**(기본 unverified).
+    # source: pubs.lenovo.com/xcc-restapi/create_an_account_post,
+    #         pubs.lenovo.com/tsm/post_create_new_account, /manager_account (03 §8/§13/§14)
+    'lenovo_collection_post':   {'password_change_required': False,            # nosec rule12-r1
+                                 'evidence': 'documented',
+                                 'props': {
+                                     'PasswordChangeRequired': {'create': 'writable',
+                                                                'repair': 'writable'},
+                                 }},
+    # XCC2/XCC3 는 AccountTypes 가 공식 writable 이다. Locked 는 GET 에만 있고 Update
+    #   목록에는 없다. PasswordChangeRequired 는 XCC2 만 지원한다(XCC3 분리는 P4).
+    # source: pubs.lenovo.com/xcc2-restapi/update_userid_password_role_properties_patch,
+    #         pubs.lenovo.com/xcc3-restapi/resource_account_service_accounts (03 §10/§11/§15/§16)
+    #
+    # full_body_patch: **이 Family 한정 예외다.** 사이트 실측(10.50.11.232 Lenovo XCC)에서
+    #   Password 를 단독으로 PATCH 하자 권한 cache 가 손상됐다 — RoleId 는 Administrator 로
+    #   보이는데 /Managers 는 AccessDenied 였고, Password 를 Enabled/RoleId 와 함께 보내면
+    #   권한이 유지됐다. 그래서 이 Family 는 drift 가 없어도 그 둘을 함께 싣는다.
+    #   이 실측을 다른 Vendor/Family 의 기본 동작으로 일반화하지 않는다.
+    #   read_only/verify_only/unsupported/unverified Property 는 여기서도 실리지 않는다.
+    # source: 사이트 실측 10.50.11.232 (cycle 2026-05-06 F50 phase 4,
+    #         tests/evidence/2026-08-12-git-location-live-verification.md §3.2)
+    'lenovo_xcc2_accounttypes': {'password_change_required': False,            # nosec rule12-r1
+                                 'account_types': ('Redfish',),
+                                 'account_types_required': ('Redfish',),
+                                 'reserved_slot_ids': ('HostBootStrap',),
+                                 'full_body_patch': True,
+                                 'evidence': 'documented',
+                                 'props': {
+                                     'Locked': {'create': 'unsupported', 'repair': 'read_only'},
+                                     'PasswordChangeRequired': {'create': 'writable',
+                                                                'repair': 'writable'},
+                                     'AccountTypes': {'create': 'writable', 'repair': 'writable'},
+                                 }},
+    # XCC3 — XCC2 와 거의 같지만 **PasswordChangeRequired 가 공식 Create/Update Property
+    #   목록에 없다.** XCC2 payload 를 그대로 쓰면 미지원 속성을 보내게 된다.
+    #   HostBootstrap 은 slot id 가 아니라 HostBootstrapAccount Property 로 걸러낸다.
+    # source: pubs.lenovo.com/xcc3-restapi/create_an_account_post,
+    #         .../update_userid_password_role_properties_patch (03 §11.2/§11.3/§15)
+    'lenovo_xcc3_accounttypes': {'account_types': ('Redfish',),                # nosec rule12-r1
+                                 'account_types_required': ('Redfish',),
+                                 'full_body_patch': True,
+                                 'evidence': 'documented',
+                                 'props': {
+                                     'Locked': {'create': 'unsupported', 'repair': 'read_only'},
+                                     'PasswordChangeRequired': {'create': 'unsupported',
+                                                                'repair': 'unsupported'},
+                                     'AccountTypes': {'create': 'writable', 'repair': 'writable'},
+                                 }},
+    # HPE iLO4 — OEM namespace 가 Hpe 가 아니라 Hp 다.
+    # source: hewlettpackard.github.io/ilo-rest-api-docs/ilo4/
+    # iLO4 ManagerAccount 에는 Locked / AccountTypes 가 없다.
+    # source: hewlettpackard.github.io/ilo-rest-api-docs/ilo4/ (01 §5)
+    'hpe_ilo4':                 {'oem_privileges_namespace': 'Hp',             # nosec rule12-r1
+                                 'evidence': 'documented',
+                                 'props': {
+                                     'Locked': {'create': 'unsupported', 'repair': 'unsupported'},
+                                     'AccountTypes': {'create': 'unsupported',
+                                                      'repair': 'unsupported'},
+                                 }},
+    # HPE iLO5+ — RoleId 로 충분. source: servermanagementportal.ext.hpe.com/.../managingusers
+    #
+    # isolated_write_patch: 2026-08-12 사이트 실측 (10.50.11.231 / iLO6 /
+    #   ProLiant DL380 Gen11 / Redfish 1.20.0). 같은 계정·같은 값으로 통제 실험:
+    #     {Password} 단독            -> HTTP 400 iLO.2.36.InvalidPasswordLength (길이 검사됨)
+    #     {Password,Enabled,RoleId}  -> HTTP 200 Base.1.19.AccountModified (같은 잘못된 값인데 통과)
+    #   즉 iLO 는 Password 가 다른 속성과 함께 오면 **검사도 적용도 하지 않고 조용히 버린다.**
+    #   그런데도 응답은 200 + AccountModified 라 성공과 구분되지 않는다
+    #   (속성이 하나도 안 바뀌는 {Enabled,RoleId} PATCH 도 똑같이 AccountModified 를 준다).
+    #   그래서 이 Family 는 비밀번호를 **단독 PATCH** 로 쓴다. 무작위 재시도가 아니라
+    #   Family 가 미리 확정하는 쓰기 계약이다.
+    # PasswordChangeRequired 는 iLO5/6/7 모두 Read Only 다. AccountTypes 는 iLO6 1.64+/
+    #   iLO7 에 존재하지만 Read Only 라 **검증에만** 쓴다. Locked 는 공식 ManagerAccount
+    #   schema 에 없고 실측(iLO6 v1.73)에서 400 PropertyNotWritableOrUnknown 으로 거부됐다.
+    # source: servermanagementportal.ext.hpe.com/.../ilo6_manager_resourcedefns173,
+    #         사이트 실측 10.50.11.231 (01 §9/§10/§11)
+    'hpe_ilo5plus':             {'isolated_write_patch': True,              # nosec rule12-r1
+                                 'evidence': 'proven',
+                                 'account_types_required': ('Redfish',),
+                                 'props': {
+                                     'Locked': {'create': 'unsupported', 'repair': 'unsupported'},
+                                     'PasswordChangeRequired': {'create': 'unsupported',
+                                                                'repair': 'read_only'},
+                                     'AccountTypes': {'create': 'unsupported',
+                                                      'repair': 'verify_only'},
+                                 }},
+    # Supermicro X12/H12 계열 — 공식 Reference Guide 의 /AccountService/Accounts POST
+    # source: supermicro.com/manuals/other/redfish-ref-guide-html/.../account-service.htm
+    'supermicro_legacy':        {'evidence': 'documented'},                    # nosec rule12-r1
+    # Supermicro Gen13 01.05.xx+ / Gen14 01.02.xx.xx+ — IPMI/Redfish 계정 분리 세대.
+    # source: supermicro.com/en/support/manuals/product/software/redfish-user-guide/.../accounts.htm
+    # 최신 Add Account 는 AccountTypes 를 Create payload 로 공식 지원한다. 반면 기존 계정의
+    #   AccountTypes PATCH 는 최신 매뉴얼에서 확인되지 않아 **검증만** 한다.
+    # source: supermicro.com/en/support/manuals/.../accounts.htm (05 §9/§11/§35)
+    'supermicro_split_account': {'account_types': ('Redfish',),                # nosec rule12-r1
+                                 'account_types_required': ('Redfish',),
+                                 'evidence': 'documented',
+                                 'props': {
+                                     'AccountTypes': {'create': 'writable',
+                                                      'repair': 'verify_only'},
+                                 }},
+    # Inspur M6 / ISBMC — HTTP 200 + Oem.Public.Status 0 이어야 성공. PATCH 는 If-Match.
+    # source: 浪潮英信服务器 Redfish用户手册 V1.2 §4.4 / §4.6
+    # Create 는 Collection POST 이고 **If-Match 를 쓰지 않는다.** Repair(Instance PATCH)만
+    # GET 으로 ETag 를 받아 If-Match 로 싣는다. 두 Operation 의 계약이 서로 다르다.
+    'inspur_m6':                {'if_match': {'create': False,                 # nosec rule12-r1
+                                              'repair': True},
+                                 'write_success': 'inspur_oem_status',
+                                 'evidence': 'documented'},
+    # Huawei iBMC — Collection POST + Instance PATCH 가 2019 MM920 / 2025 Kunpeng 양쪽 공식.
+    # source: Huawei EDOC1100372764 (Kunpeng iBMC Redfish), EDOC1100105860 (MM920/921)
+    # Huawei 최신 공식 ManagerAccount 는 Locked 를 GET/PATCH 로 정의한다 — 다른 Vendor 와
+    #   달리 **실제로 잠긴 계정을 풀 수 있다.** 반대로 PasswordChangeRequired 와
+    #   AccountTypes 는 공식 table 에 없어 보내지 않는다 (Huawei 의 축은 Login Interface 다).
+    # source: Huawei EDOC1100372764 Kunpeng iBMC Redfish (07 §5/§11/§17/§18)
+    'huawei_ibmc':              {'evidence': 'documented',                     # nosec rule12-r1
+                                 'props': {
+                                     'Locked': {'create': 'unsupported', 'repair': 'writable'},
+                                     'PasswordChangeRequired': {'create': 'unsupported',
+                                                                'repair': 'unsupported'},
+                                     'AccountTypes': {'create': 'unsupported',
+                                                      'repair': 'unsupported'},
+                                 }},
+    # 공식 Write 계약 미확보 Family — 현행 동작(표준 POST + 400/405 retry 사다리)을 그대로 둔다.
+    # 대상: Fujitsu iRMC S4/S5/S6, Quanta 전 세대, Cisco UCS X-Series, Lenovo IMM2,
+    #       Supermicro X9, Inspur M5/M7, HPE CSUS/Superdome RMC, 그리고 미식별 vendor.
+    # 공식 Write 계약 미확보 Family — **한 번의 결정적 쓰기**만 한다.
+    #   2026-08-12 (rev.2): 종전의 400/405 후 PasswordChangeRequired 추가 재시도를
+    #   제거했다. 이 Family 에 속한 Vendor 들이 바로 그 재시도를 금지한 대상이다.
+    'generic_collection_post':  {'evidence': 'unverified'},
+    # ── Quanta / QCT ─────────────────────────────────────────────────────────
+    # 세 Family 로 나누는 이유는 **동작을 바꾸기 위해서가 아니라 경계를 기록하기 위해서**다.
+    #   D43K = Redfish v1.1 / D54U·S24P = Redfish v1.11 / S45Z 등 Xeon 6 = Inhouse OpenBMC.
+    #   AST2600 을 쓴다는 사실만으로 OpenBMC 로 판정하면 안 되고(09 §5), QCT Inhouse
+    #   OpenBMC 를 upstream bmcweb master 와 같다고 봐도 안 된다(09 §6).
+    #   셋 다 Account Write 계약 미확보이므로 동작은 generic 과 동일하다.
+    #   특히 AccountTypes 를 ['Redfish'] 로 보내면 upstream 은 StrictAccountTypes 오류를
+    #   낸다(Redfish+WebUI 결합) — 그래서 어느 Family 도 AccountTypes 를 쓰지 않는다.
+    # source: qct.io D43K / D54U / S24P / S45Z 제품자료 (09 §4/§5/§6/§44)
+    'qct_legacy_redfish':       {'evidence': 'unverified'},                    # nosec rule12-r1
+    'qct_modern_redfish':       {'evidence': 'unverified'},                    # nosec rule12-r1
+    'qct_inhouse_openbmc':      {'evidence': 'unverified'},                    # nosec rule12-r1
+}
+
+
+def account_family(family_id):
+    """family id → 기본값이 채워진 Family 레코드 (없는 id 는 generic 으로 접는다)."""
+    rec = dict(_ACCOUNT_FAMILY_DEFAULTS)
+    rec.update(_ACCOUNT_FAMILIES.get(family_id) or _ACCOUNT_FAMILIES['generic_collection_post'])
+    rec['id'] = family_id if family_id in _ACCOUNT_FAMILIES else 'generic_collection_post'
+    return rec
+
+
+def account_prop_contract(family, prop, operation):
+    """(Family, Property, create|repair) → 쓰기 계약 5-상태 중 하나.
+
+    Family 가 선언한 값이 우선이고, 없으면 `_ACCOUNT_PROP_DEFAULTS`, 그것도 없으면
+    `unverified` 다. **모르는 Property 를 writable 로 가정하지 않는다.**
+    """
+    declared = (family or {}).get('props') or {}
+    entry = declared.get(prop)
+    if isinstance(entry, dict) and operation in entry:
+        return entry[operation]
+    fallback = _ACCOUNT_PROP_DEFAULTS.get(prop) or {}
+    return fallback.get(operation, PROP_UNVERIFIED)
+
+
+def account_prop_writable(family, prop, operation):
+    """그 Property 를 이 Operation 에서 **보내도 되는가**.
+
+    `writable` 만 True 다. read_only / verify_only / unsupported / unverified 는
+    전부 False — 특히 `unverified` 는 "일단 보내 보고 거부되면 뺀다" 가 아니라
+    **애초에 보내지 않는다** 는 뜻이다 (추측성 재시도 금지).
+    """
+    return account_prop_contract(family, prop, operation) == 'writable'
+
+
+def account_if_match(family, operation):
+    """이 Operation 에서 If-Match 를 실어야 하는가 (Family 계약).
+
+    Family 공통 boolean 이 아니라 Operation 단위다 — Inspur M6 는 Repair 만 요구하고
+    Create 는 요구하지 않는다.
+    """
+    spec = (family or {}).get('if_match')
+    if isinstance(spec, dict):
+        return bool(spec.get(operation, False))
+    return False
+
+
+def _has_prepopulated_slots(accounts):
+    """빈 UserName slot 이 미리 깔려 있는 모델인가 (Purley / Dell slot 모델의 서명).
+
+    "UserName 이 falsy" 만으로 판단하지 않는다 — 키 자체가 없거나 GET 이 실패해
+    비어 보이는 것과 실제 빈 문자열을 구분한다 (audit M-1).
+    """
+    empties = [a for a in accounts
+               if a.get('has_username_key') and (a.get('username') or '') == '']
+    return len(accounts) >= 8 and len(empties) >= 2
+
+
+def _fw_at_least(firmware, major, minor):
+    """'01.05.12' 같은 Firmware 문자열이 major.minor 이상인가. 파싱 실패 시 None."""
+    if not isinstance(firmware, str):
+        return None
+    nums = re.findall(r'\d+', firmware)
+    if len(nums) < 2:
+        return None
+    try:
+        return (int(nums[0]), int(nums[1])) >= (major, minor)
+    except (TypeError, ValueError):
+        return None
+
+
+# ── HPE Password isolation 의 Firmware 별 근거 ────────────────────────────────
+# HPE Customer Advisory a00159600en_us (2026-05-12):
+#   iLO6 v1.73 / v1.74, iLO7 v1.19 / v1.20 에서 UserAccount PATCH 가 일부 파라미터를
+#   무시한다. 해결 버전은 iLO6 v1.75+ / iLO7 v1.21+.
+#
+# 왜 Family 를 쪼개지 않는가:
+#   쓰기 **동작**은 전 iLO5/6/7 에서 같다 — Password 단독 PATCH 는 HPE 공식 문서가
+#   지원하는 동작이고, 이 저장소는 그것을 안전 전략으로 채택한다. 갈리는 것은 동작이
+#   아니라 **그 선택의 근거 수준**이다. 그래서 Family 는 하나로 두고 근거만 분리한다.
+#
+#   이 구분을 잃으면 iLO6 v1.73 한 대에서 얻은 LIVE-PROVEN 이 iLO5 전체와 Advisory 가
+#   이미 고친 v1.75+ 까지 번진다. 그건 조사 결과를 과대표기하는 것이다.
+HPE_PATCH_ADVISORY = 'a00159600en_us'
+
+# 근거 수준 3종
+ISOLATION_LIVE_PROVEN = 'live_proven'          # 이 저장소 실장비에서 직접 재현
+ISOLATION_ADVISORY = 'advisory_derived'        # HPE 공식 Advisory 영향 Firmware
+ISOLATION_SAFETY = 'safety_strategy'           # Vendor 필수 계약이 아닌 Repository 선택
+
+_ILO_FW_RE = re.compile(r'iLO\s*(\d+)', re.IGNORECASE)
+_ILO_VER_RE = re.compile(r'v?(\d+)\.(\d+)')
+
+
+def hpe_isolation_evidence(firmware, model=None):
+    """HPE Password 단독 PATCH 의 **근거 수준**을 Firmware 로 판정한다.
+
+    반환: (isolation_basis, evidence, advisory_id)
+
+    동작(단독 PATCH 여부)은 바꾸지 않는다 — 라벨만 정확히 한다.
+    Firmware 를 읽지 못하면 과대주장하지 않고 `safety_strategy` / `documented` 로 둔다.
+    """
+    text = ' '.join(x for x in (firmware, model) if isinstance(x, str))
+    gen_m = _ILO_FW_RE.search(text)
+    gen = int(gen_m.group(1)) if gen_m else None
+    ver_m = _ILO_VER_RE.search(firmware if isinstance(firmware, str) else '')
+    ver = (int(ver_m.group(1)), int(ver_m.group(2))) if ver_m else None
+
+    if gen == 6 and ver:
+        if ver == (1, 73):
+            # 2026-08-12 사이트 실측(10.50.11.231 / DL380 Gen11)에서 직접 재현한 유일한 버전.
+            return ISOLATION_LIVE_PROVEN, 'proven', HPE_PATCH_ADVISORY
+        if ver == (1, 74):
+            return ISOLATION_ADVISORY, 'documented', HPE_PATCH_ADVISORY
+        # v1.75+ 는 Advisory 가 해결했다고 명시한 버전이다. 구버전 결함을 가정하지 않는다.
+        return ISOLATION_SAFETY, 'documented', None
+    if gen == 7 and ver:
+        if ver in ((1, 19), (1, 20)):
+            return ISOLATION_ADVISORY, 'documented', HPE_PATCH_ADVISORY
+        return ISOLATION_SAFETY, 'documented', None
+    # iLO5 전체, 세대/버전 미상 — Advisory 대상이 아니고 실측 근거도 없다.
+    return ISOLATION_SAFETY, 'documented', None
+
+
+def resolve_account_family(vendor, discovery, adapter_id=None):
+    """Write 전에 **읽기만으로** Account Family 를 확정한다.
+
+    반환: (family_record, reasons) — reasons 는 어떤 근거로 골랐는지 진단용 문자열들.
+    같은 입력에는 항상 같은 Family 를 돌려준다(결정적). 확정할 근거가 없으면
+    'generic_collection_post' 로 접어 **현행 동작을 유지**한다.
+    """
+    d = discovery or {}
+    accounts = d.get('accounts') or []
+    roles = [r.lower() for r in (d.get('role_ids') or [])]
+    mgr = d.get('manager') or {}
+    firmware = mgr.get('firmware_version')
+    hint = (adapter_id or '').lower()
+    reasons = []
+    v = (vendor or '').lower()
+
+    if v == 'dell':                                                            # nosec rule12-r1
+        # iDRAC10 은 slot 1 뿐 아니라 slot 2 도 예약이라, 세대를 잘못 잡으면 **쓰기 대상
+        # 슬롯이 달라진다.** payload 와 method 는 같지만 URI 가 갈린다.
+        #
+        # 2026-08-12 실측 사고 (10.100.15.34): 실제로는 iDRAC9 / PowerEdge R760 /
+        #   Firmware 7.10.70.00 인데 Family 가 dell_idrac10_slot_patch 로 잡혔다.
+        #   원인은 두 겹이다.
+        #     (a) Adapter 선택이 **무인증 probe** 단계라 model/firmware fact 가 비어 있고,
+        #         비어 있는 fact 는 실격이 아니라 skip 이라 priority 만으로 정해진다
+        #         (dell_idrac10 priority 120 > dell_idrac9 100). → adapter_id 가 idrac10.
+        #     (b) 여기서 그 adapter_id 를 그대로 세대 근거로 썼다. 나머지 한쪽인
+        #         Manager.Model 은 Dell 에서 '<NN>G Monolithic' 형태(이 장비는 16G)라
+        #         'idrac10' 이 절대 들어가지 않는 죽은 조건이었다. 결국 **adapter hint
+        #         단독으로** Family 가 결정됐다 — 이 함수의 계약(hint 는 마지막 순위) 위반.
+        #   이번 장비에서 관측 가능한 차이가 0 이었던 것은 slot 2 를 root 가 쓰고 있어
+        #   예약 슬롯 차이가 드러나지 않았기 때문이지, 동작이 같아서가 아니다.
+        #
+        # 그래서 세대는 **장비가 준 값**에서 정한다: Firmware major 가 유일하게 신뢰할 수
+        # 있는 신호다 (iDRAC9 = 4.x~7.x, iDRAC10 = 1.x — adapters/redfish/dell_idrac{9,10}.yml
+        # 의 firmware_patterns 와 같은 계약). Model 은 보조, hint 는 근거가 없을 때만.
+        # source: dell.com/.../idrac10_1.20.xx_ug/configuring-local-users (ID 1,2 reserved)
+        #
+        # 주의: _has_prepopulated_slots() 는 세대를 가르지 못한다. 두 Family 모두
+        #   slot_patch 이고 16 슬롯 prepopulated 는 iDRAC9/10 양쪽 모두 참이다.
+        mdl = (mgr.get('model') or '').lower()
+        fw_match = re.match(r'\s*(\d+)\.', str(firmware or ''))
+        fw_major = int(fw_match.group(1)) if fw_match else None
+        if fw_major in (4, 5, 6, 7):
+            gen10 = False                    # Firmware 가 iDRAC9 를 확정한다 — hint 보다 우선
+        elif fw_major == 1 or 'idrac10' in mdl:
+            gen10 = True
+        else:
+            gen10 = 'idrac10' in hint        # 근거 없음 → hint 는 마지막 순위
+        reasons.append(                                                        # nosec rule12-r1
+            f'vendor=dell fw_major={fw_major} model={mdl!r} '
+            f'hint_idrac10={"idrac10" in hint} '
+            f'prepopulated={_has_prepopulated_slots(accounts)} → idrac10={gen10}')
+        return account_family('dell_idrac10_slot_patch' if gen10 else 'dell_slot_patch'), reasons
+
+    if v == 'cisco':                                                           # nosec rule12-r1
+        # 실제 Role 어휘가 가장 강한 근거다. CIMC 는 admin/user/readonly,
+        # 최신 Cisco BMC 는 Administrator/Operator 를 쓴다.
+        if 'admin' in roles and 'administrator' not in roles:
+            reasons.append('roles={admin,...} → CIMC enum family')  # nosec rule12-r1
+            return account_family('cisco_cimc_collection_post_id'), reasons
+        if 'administrator' in roles:
+            reasons.append('roles contains Administrator → modern Cisco BMC family')  # nosec rule12-r1
+            return account_family('cisco_bmc_dynamic'), reasons
+        observed = {(a.get('role_id') or '').lower() for a in accounts}
+        if 'admin' in observed and 'administrator' not in observed:
+            reasons.append('existing account RoleId=admin → CIMC enum family')  # nosec rule12-r1
+            return account_family('cisco_cimc_collection_post_id'), reasons
+        if 'administrator' in observed:
+            reasons.append('existing account RoleId=Administrator → modern Cisco BMC family')  # nosec rule12-r1
+            return account_family('cisco_bmc_dynamic'), reasons
+        if 'cisco_bmc' in hint:
+            reasons.append('adapter hint cisco_bmc')
+            return account_family('cisco_bmc_dynamic'), reasons
+        if 'cimc' in hint:  # nosec rule12-r1
+            # IMC 3.x 는 Instance URI POST, 4.1+ 는 Collection POST + body Id 다.
+            # Manager Firmware major 로 가른다 — adapter hint 는 세대를 구분하지 못한다.
+            fw_major = None
+            m3 = re.match(r'\s*(\d+)\.', str(firmware or ''))
+            if m3:
+                fw_major = int(m3.group(1))
+            if fw_major == 3:
+                reasons.append('adapter hint cisco_cimc + firmware 3.x → Instance POST')  # nosec rule12-r1
+                return account_family('cisco_cimc3_instance_post'), reasons
+            reasons.append('adapter hint cisco_cimc')
+            return account_family('cisco_cimc_collection_post_id'), reasons
+        # UCS X-Series 등 근거 없는 Cisco 는 generic 으로 둔다 (추측 Write 금지).
+        reasons.append('cisco family evidence 부족 → generic 유지')  # nosec rule12-r1
+        return account_family('generic_collection_post'), reasons
+
+    if v == 'lenovo':                                                          # nosec rule12-r1
+        # 2026-08-12 (rev.2): **capability-first 로 되돌린다.** 종전에는 adapter hint 를
+        #   가장 먼저 봐서 Cisco 분기(capability > hint)와 계약이 달랐다(NEXT_ACTIONS PWC-7).
+        #   Dell iDRAC10 오분류가 보여줬듯 hint 는 무인증 probe 결과라 비어 있을 수 있고,
+        #   그때는 priority 만으로 정해진다. 장비가 준 값을 먼저 본다.
+        if 'imm2' in hint:
+            reasons.append('IMM2 는 Redfish AccountService 근거 미확보 → generic 유지')
+            return account_family('generic_collection_post'), reasons
+        # (1) 장비가 실제로 노출한 AccountTypes — XCC2/XCC3 의 서명이다.
+        exposes_account_types = any(a.get('account_types') for a in accounts)
+        # (2) HostBootstrapAccount 는 XCC2/XCC3 계열에만 나타나는 표준 Property 다.
+        has_bootstrap = any(a.get('host_bootstrap') is not None for a in accounts)
+        if exposes_account_types or has_bootstrap or 'xcc3' in hint or 'xcc2' in hint:
+            # XCC2 와 XCC3 는 PasswordChangeRequired 계약이 다르다. XCC3 근거가 있을 때만
+            # XCC3 로 좁히고, 그 외에는 XCC2(더 넓은 Property 집합) 를 쓴다.
+            if 'xcc3' in hint:
+                reasons.append('adapter hint xcc3 → PasswordChangeRequired 미지원 Family')  # nosec rule12-r1
+                return account_family('lenovo_xcc3_accounttypes'), reasons
+            reasons.append(                                                        # nosec rule12-r1
+                f'AccountTypes 관측={exposes_account_types} HostBootstrap 관측={has_bootstrap} '
+                f'hint={hint!r} → AccountTypes 지원 XCC family')
+            return account_family('lenovo_xcc2_accounttypes'), reasons
+        # (3) Purley 만 pre-populated empty slot PATCH 로 계정을 만든다. Whitley/AMD 는 POST 라
+        #     hint 가 그쪽을 가리키면 slot 관측이 있어도 Purley 로 보지 않는다.
+        not_purley_hint = any(k in hint for k in ('whitley', 'amd', 'xcc2', 'xcc3'))
+        if _has_prepopulated_slots(accounts) and not not_purley_hint:
+            reasons.append('pre-populated empty slots 관측 → XCC Purley slot PATCH')  # nosec rule12-r1
+            return account_family('lenovo_purley_slot_patch'), reasons
+        reasons.append('dynamic members → Lenovo Collection POST')  # nosec rule12-r1
+        return account_family('lenovo_collection_post'), reasons
+
+    if v == 'hpe':                                                             # nosec rule12-r1
+        if 'csus' in hint or 'superdome' in hint:
+            reasons.append('HPE RMC(CSUS/Superdome) — create payload 공식 근거 미확보 → generic 유지')  # nosec rule12-r1
+            return account_family('generic_collection_post'), reasons
+        if 'ilo4' in hint:
+            reasons.append('adapter hint ilo4 → Oem/Hp namespace')
+            return account_family('hpe_ilo4'), reasons
+        oem_keys = {k.lower() for k in (_safe(d.get('service'), 'Oem', default={}) or {}).keys()} \
+            if isinstance(_safe(d.get('service'), 'Oem', default={}), dict) else set()
+        if 'hp' in oem_keys and 'hpe' not in oem_keys:  # nosec rule12-r1
+            reasons.append('AccountService.Oem 에 Hp 만 존재 → iLO4 계열')
+            return account_family('hpe_ilo4'), reasons
+        # Family 는 하나다 — 갈리는 것은 동작이 아니라 **근거 수준**이다.
+        # Password 단독 PATCH 는 iLO5/6/7 모두에서 그대로 수행하고, 그것을
+        # LIVE-PROVEN 이라고 부를 수 있는 범위만 Firmware 로 좁힌다.
+        fam = account_family('hpe_ilo5plus')
+        basis, evidence, advisory = hpe_isolation_evidence(firmware, mgr.get('model'))
+        fam['isolation_basis'] = basis
+        fam['evidence'] = evidence
+        fam['firmware_advisory'] = advisory
+        reasons.append(                                                        # nosec rule12-r1
+            f'iLO5+ (RoleId 기반) firmware={firmware!r} '
+            f'isolation_basis={basis} evidence={evidence}'
+            + (f' advisory={advisory}' if advisory else ''))
+        return fam, reasons
+
+    if v == 'supermicro':                                                      # nosec rule12-r1
+        # 계정 분리 세대는 Generation 이 아니라 Firmware 가 경계다.
+        split = None
+        # Generation + Firmware 를 장비값으로 확정했는가 (Create URI 결정 근거).
+        gen_anchor = False
+        if any(a.get('account_types') for a in accounts):
+            split = True
+            reasons.append('기존 계정이 AccountTypes 를 노출 → 계정 분리 세대')
+        elif d.get('policy', {}).get('supported_account_types'):
+            split = True
+            reasons.append('AccountService.SupportedAccountTypes 존재 → 계정 분리 세대')
+        elif 'x13' in hint or 'x14' in hint or 'ars' in hint:
+            # 계정 분리 경계는 Generation 마다 다르다.
+            #   Gen13 01.05.xx+ / Gen14 01.02.xx.xx+ / NVIDIA Superchip 01.04.xx+
+            # source: supermicro.com/.../redfish-user-guide/.../accounts.htm (05 §10/§31)
+            if 'x13' in hint:
+                bound = (1, 5)
+            elif 'x14' in hint:
+                bound = (1, 2)
+            else:                       # ARS = NVIDIA Superchip 계열
+                bound = (1, 4)
+            newer = _fw_at_least(firmware, *bound)
+            split = bool(newer)
+            gen_anchor = bool(newer is not None)
+            reasons.append(                                                        # nosec rule12-r1
+                f'adapter hint {hint} firmware={firmware} boundary={bound} split={split}')
+        if split:
+            fam = account_family('supermicro_split_account')
+            # §3.5 Create URI 결정 규칙:
+            #   최신 공식 Add Account 는 `POST /redfish/v1/AccountService` (루트) 다.
+            #   그 계약을 쓰려면 Generation + Firmware 를 **장비가 준 값**으로 확정해야 한다.
+            #   확정하지 못하면 추측하지 않고 구 Reference Guide 계약(Accounts Collection)
+            #   하나만 쓴다. **두 URI 를 순차로 시도하는 fallback 은 만들지 않는다.**
+            # source: 05 §9/§34/§39-B
+            if gen_anchor:
+                fam['create_uri'] = 'account_service_root'
+                fam['create_uri_basis'] = 'generation+firmware'
+            else:
+                fam['create_uri'] = 'accounts_collection'
+                fam['create_uri_basis'] = 'unverified_single_strategy'
+                fam['evidence'] = 'unverified'
+            reasons.append(f'create_uri={fam["create_uri"]} basis={fam["create_uri_basis"]}')
+            return fam, reasons
+        if 'x9' in hint:
+            reasons.append('X9 는 공식 Redfish AccountService 근거 미확보 → generic 유지')
+            return account_family('generic_collection_post'), reasons
+        reasons.append('Supermicro legacy/Reference Guide family')  # nosec rule12-r1
+        return account_family('supermicro_legacy'), reasons
+
+    if v == 'inspur':                                                          # nosec rule12-r1
+        oem = _safe(d.get('service'), 'Oem', 'Public', default=None)
+        if isinstance(oem, dict) or 'm6' in hint or 'isbmc' in hint:
+            reasons.append('Oem.Public 관측 또는 M6/ISBMC hint → Inspur M6 family')
+            return account_family('inspur_m6'), reasons
+        reasons.append('Inspur M5/M7 은 공식 계약 미확보 → generic 유지')
+        return account_family('generic_collection_post'), reasons
+
+    if v == 'quanta':                                                          # nosec rule12-r1
+        # 동작은 셋 다 generic 과 같다 — 라벨로 경계를 남겨 다음 작업자가 어느 Family 의
+        # Evidence 를 모아야 하는지 알 수 있게 한다. AST2600 만으로 OpenBMC 로 판정하지
+        # 않고, QCT Inhouse OpenBMC 를 upstream bmcweb 과 동일시하지도 않는다.
+        if 'openbmc' in hint or 'xeon6' in hint or 's45z' in hint or 's25z' in hint:
+            reasons.append('QCT Inhouse OpenBMC 계열 — upstream bmcweb 과 동일시하지 않는다')
+            return account_family('qct_inhouse_openbmc'), reasons
+        redfish_ver = _str(_safe(d.get('service_root'), 'RedfishVersion', default='')) \
+            if isinstance(d.get('service_root'), dict) else ''
+        if redfish_ver.startswith('1.1.'):
+            reasons.append(f'QCT Legacy Redfish {redfish_ver}')
+            return account_family('qct_legacy_redfish'), reasons
+        if redfish_ver.startswith('1.11'):
+            reasons.append(f'QCT Modern Redfish {redfish_ver}')
+            return account_family('qct_modern_redfish'), reasons
+        reasons.append('QCT Family 근거 부족 → generic 유지 (Account Write 계약 미확보)')
+        return account_family('generic_collection_post'), reasons
+
+    if v == 'huawei':                                                          # nosec rule12-r1
+        reasons.append('Huawei iBMC Collection POST (공식 문서 근거)')
+        return account_family('huawei_ibmc'), reasons
+
+    reasons.append(f'vendor={vendor or "unknown"} — Family 근거 없음 → generic 유지')
+    return account_family('generic_collection_post'), reasons
+
+
+def choose_role_id(family, target_role, discovery):
+    """RoleId 문자열을 추측하지 않고 **장비가 지원한다고 말한 값** 중에서 고른다.
+
+    우선순위: 지원 목록의 정확한 일치 → Family role_map 결과가 지원 목록에 있음 →
+    기존 계정이 실제로 쓰고 있는 값(대소문자 무시 일치) → Family role_map → 원본.
+    """
+    supported = [r for r in ((discovery or {}).get('role_ids') or []) if isinstance(r, str)]
+    lower = {r.lower(): r for r in supported}
+    if target_role in supported:
+        return target_role
+    mapped = (family.get('role_map') or {}).get(target_role)
+    if mapped and mapped in supported:
+        return mapped
+    if target_role and target_role.lower() in lower:
+        return lower[target_role.lower()]
+    if mapped and mapped.lower() in lower:
+        return lower[mapped.lower()]
+    return mapped or target_role
+
+
+def interpret_write_response(family, code, body, err, requested=None):
+    """쓰기 응답을 Family 계약으로 해석한다. (accepted, reason)
+
+    HTTP status 하나로 통일하지 않는다:
+      - Dell 은 200 을 주면서 본문으로 요청을 거부한다 (read-only 속성 / 비밀번호 정책).
+      - Inspur M6 는 200 + Oem.Public.Status 0 이어야 성공이다.
+
+    `requested` 를 주면 우리가 실제로 보낸 속성을 가리키는 거부만 센다.
+
+    **어떤 거부 종류든 여기서 즉시 실패로 끝난다.** 속성을 빼고 다시 쓰거나 payload 를
+    바꿔 재시도하지 않는다 — 그것은 추측성 재시도이고, 9 Vendor 조사가 공통으로 금지한
+    패턴이다. 예상하지 못한 거부는 그대로 기록해서 사람이 보게 한다.
+    """
+    if err or code not in (200, 201, 204):
+        return False, (err or f'HTTP {code}')
+    rejected = write_rejections(body, requested)
+    if rejected:
+        detail = ', '.join(
+            '{0}={1}{2}'.format(r['property'] or '?', r['kind'],
+                                f"({r['message_id']})" if r['message_id'] else '')
+            for r in rejected)
+        return False, f'rejected: {detail}'
+    if family.get('write_success') == 'inspur_oem_status':
+        status = _safe(body, 'Oem', 'Public', 'Status', default=None)
+        if status is None:
+            # 응답이 OEM status 를 담지 않으면 "성공했다" 고 단정하지 않는다.
+            return True, 'vendor status absent'
+        if status != 0:
+            return False, f'Oem.Public.Status={status}'
+    return True, None
+
+
+def _create_target_uri(family, discovery, explicit_id=None):
+    """계정 **생성** 대상 URI. 열거 URI 와 같은 개념이 아니다.
+
+    2026-08-12: 종전에는 5곳 모두 리터럴 'AccountService/Accounts' 를 썼다. 열거는
+    `AccountService.Accounts.@odata.id` 를 따르면서 쓰기만 하드코딩 경로로 나가면,
+    컬렉션이 표준 경로가 아닌 펌웨어(Dell 구세대의 Manager-scoped 경로 등)에서
+    "읽기는 되는데 생성은 404" 가 된다. 링크가 없을 때만 종전 경로로 되돌아간다.
+
+    2026-08-12 (rev.2): Vendor 에 따라 **Create URI 자체가 Accounts Collection 이 아니다.**
+      최신 Supermicro : POST /redfish/v1/AccountService        (AccountService 루트)
+      Cisco IMC 3.x   : POST /redfish/v1/AccountService/Accounts/<ID>  (Instance)
+    그래서 "Accounts 를 어디서 읽었는가" 와 "어디에 만드는가" 를 분리한다.
+
+    **하나가 실패하면 다른 URI 로 갈아타지 않는다.** 어느 것을 쓸지는 쓰기 전에
+    Family 가 확정한다 (05 §34: 두 Create URI 를 fallback 으로 시도하는 것은 금지).
+    """
+    d = discovery or {}
+    accounts_uri = d.get('accounts_uri') or 'AccountService/Accounts'
+    kind = (family or {}).get('create_uri') or 'accounts_collection'
+    if kind == 'account_service_root':
+        return d.get('service_uri') or 'AccountService'
+    if kind == 'account_instance':
+        # Instance POST 는 대상 Id 가 있어야 의미가 있다. 없으면 Collection 으로 두고
+        # 호출자가 Id 미확정 실패를 그대로 보고하게 한다 (URI 를 추측하지 않는다).
+        if explicit_id is None:
+            return accounts_uri
+        return f'{accounts_uri.rstrip("/")}/{explicit_id}'
+    return accounts_uri
+
+
+def _confirm_account_state(bmc_ip, slot_uri, target_username, family,
+                           username, password, timeout, verify_ssl, out):
+    """쓰기 뒤 계정 리소스를 **다시 읽어** 실제 상태를 확인한다.
+
+    재인증(=비밀번호가 맞는가)만으로는 Role / Enabled / AccountTypes /
+    PasswordChangeRequired 가 의도대로 됐는지 알 수 없다. 여기서 확인한 사실을
+    out['post_write_state'] 에 남기고, 어긋난 항목은 errors[] 로 드러낸다.
+    이 함수는 **판정을 뒤집지 않는다** — 최종 성공 판정은 표준 자격 재인증이다.
+    """
+    if not slot_uri:
+        return
+    code, data, err = _get(bmc_ip, _p(slot_uri), username, password, timeout, verify_ssl)
+    if code != 200 or err:
+        out['errors'].append(_err(
+            'account_service', '쓰기 후 계정 상태를 다시 읽지 못했습니다.',
+            detail=err or f'HTTP {code}',
+        ))
+        return
+    acct_types = _safe(data, 'AccountTypes', default=None)
+    state = {
+        'username':     _safe(data, 'UserName', default=''),
+        'enabled':      _safe(data, 'Enabled', default=None),
+        'role_id':      _safe(data, 'RoleId', default=''),
+        'account_types': [s for s in _as_list(acct_types) if isinstance(s, str)]
+                        if acct_types is not None else None,
+        'password_change_required': _safe(data, 'PasswordChangeRequired', default=None),
+    }
+    out['post_write_state'] = state
+
+    # 없는 속성을 "틀렸다" 고 하지 않는다. 응답이 그 키를 실제로 준 경우만 비교한다.
+    mismatches = []
+    if isinstance(data, dict) and 'UserName' in data and state['username'] != target_username:
+        mismatches.append(f'UserName={state["username"]!r}')
+    if state['enabled'] is False:
+        mismatches.append('Enabled=false')
+    if state['password_change_required'] is True:
+        mismatches.append('PasswordChangeRequired=true')
+    # 2026-08-12 (rev.2): "쓰는 축" 과 "확인해야 하는 축" 을 분리한다.
+    #   HPE iLO6/7 · Cisco BMC 는 AccountTypes 가 read-only 라 쓰지 않지만, 그 계정이
+    #   Redfish 로 접근 가능한지는 **반드시 확인**해야 한다. 쓰지 않는다는 이유로 검증까지
+    #   건너뛰면 "계정은 있는데 Redfish 로는 못 쓰는" 상태를 놓친다 (01 §11, 04 §16, 05 §35).
+    want_types = set(family.get('account_types_required')
+                     or family.get('account_types') or ())
+    if want_types and state['account_types'] is not None \
+            and not want_types.issubset(set(state['account_types'])):
+        mismatches.append(f'AccountTypes={state["account_types"]}')
+    if mismatches:
+        out['errors'].append(_err(
+            'account_service',
+            '표준 계정을 만들었지만 상태가 기대와 다릅니다. 계정 설정을 확인하세요.',
+            detail='post-write state mismatch: ' + ', '.join(mismatches),
+        ))
+
+
+def build_create_payload(family, target_username, target_password, role_id,
+                         explicit_id=None):
+    """Family 가 확정된 뒤 **한 번에** 만드는 생성 payload. 순차 retry 로 채우지 않는다.
+
+    각 Property 는 Family Property Contract(`props`)가 `writable` 이라고 말할 때만 실린다.
+    read_only / unsupported / unverified Property 는 **애초에 보내지 않는다** — 보내고
+    거부되면 빼는 방식은 추측성 재시도라 금지한다.
+    """
+    body = {'UserName': target_username}
+    if account_prop_writable(family, 'Password', 'create'):
+        body['Password'] = target_password
+    if account_prop_writable(family, 'Enabled', 'create'):
+        body['Enabled'] = True
+    if account_prop_writable(family, 'RoleId', 'create'):
+        body['RoleId'] = role_id
+    if family.get('needs_explicit_id') and explicit_id is not None:
+        body['Id'] = explicit_id
+    if family.get('password_change_required') is False \
+            and account_prop_writable(family, 'PasswordChangeRequired', 'create'):
+        body['PasswordChangeRequired'] = False
+    if family.get('account_types') and account_prop_writable(family, 'AccountTypes', 'create'):
+        body['AccountTypes'] = list(family['account_types'])
+    ns = family.get('oem_privileges_namespace')
+    if ns:
+        body['Oem'] = {ns: {'Privileges': {
+            'LoginPriv': True, 'RemoteConsolePriv': True, 'UserConfigPriv': True,
+            'VirtualMediaPriv': True, 'VirtualPowerAndResetPriv': True,
+            'iLOConfigPriv': True}}}
+    return body
+
+
+def account_service_get(bmc_ip, username, password, timeout, verify_ssl):
+    """GET AccountService + Accounts 컬렉션 enumerate (호환 wrapper).
+
+    Returns: (acct_service: dict|None, accounts: list[...], errors)
+
+    2026-08-12: 본문은 account_service_discover() 로 옮겼다. 이 함수는 3-tuple 계약에
+    묶인 기존 호출자/테스트를 위해 남는다. **계정 부재를 판정하려는 호출자는 이 함수가
+    아니라 account_service_discover() + account_presence() 를 써야 한다** — 3-tuple 은
+    "열거가 완전했는가" 를 표현할 수 없어서, 조회 실패가 빈 목록과 구분되지 않는다.
+    """
+    d = account_service_discover(bmc_ip, username, password, timeout, verify_ssl)
+    return d['service'], d['accounts'], d['errors']
 
 
 def account_service_find_user(accounts, target_username):
@@ -4737,11 +6122,30 @@ def account_service_find_empty_slot(accounts, skip_slot_ids=None):
 
 
 def account_service_find_all_empty_slots(accounts, skip_slot_ids=None):
-    """빈 슬롯 모두 (slot id 정렬). PATCH 1차 실패 시 다음 슬롯 retry 용."""
+    """빈 슬롯 모두 (slot id 정렬).
+
+    2026-08-12 (audit M-1): "UserName 이 falsy" 하나로 판단하지 않는다. `_safe` 는
+    키 부재 / JSON null / 비-dict 를 전부 ''  로 접기 때문에, 그대로 두면 **읽지 못한
+    계정을 빈 슬롯으로 분류해 남의 계정을 덮어쓸 수** 있다. 열거 단계에서 `UserName`
+    키를 실제로 봤다는 사실(has_username_key)이 있는 항목만 빈 슬롯으로 인정하고,
+    Enabled 가 켜져 있으면 (이름은 비었지만 쓰이는 슬롯일 수 있으므로) 제외한다.
+    has_username_key 를 제공하지 않는 예전 호출자(테스트 fixture 포함)는 종전처럼
+    동작하도록 키가 아예 없을 때만 관대하게 취급한다.
+    """
     skip = set(skip_slot_ids or [])
+
+    def _is_empty(a):
+        if (a.get('username') or '') != '':
+            return False
+        if 'has_username_key' not in a:      # 열거 정보가 없는 예전 호출자 — 종전 판정 유지
+            return True
+        # 실제 열거 결과: UserName 키를 봤어야 하고, 이름이 비었는데 Enabled 면 쓰이는 슬롯일
+        # 수 있으므로 건드리지 않는다.
+        return bool(a.get('has_username_key')) and not a.get('enabled')
+
     empties = [
         a for a in accounts
-        if ('' if a.get('id') is None else str(a.get('id'))) not in skip and not (a.get('username') or '')
+        if ('' if a.get('id') is None else str(a.get('id'))) not in skip and _is_empty(a)
     ]
     # id 가 숫자면 숫자 정렬, 아니면 문자열 정렬
     def _key(a):
@@ -4757,6 +6161,7 @@ def account_service_provision(
     bmc_ip, vendor, current_username, current_password,
     target_username, target_password, target_role,
     timeout, verify_ssl, dryrun=True, allow_delete_recreate=False,
+    adapter_id=None, manager_uri=None, service_root=None,
 ):
     """공통계정(target) 생성 또는 복구.
 
@@ -4775,6 +6180,10 @@ def account_service_provision(
             기존 계정 PATCH 후 검증이 실패했을 때 DELETE + POST 로 **기존 계정을 지우고
             다시 만드는** fallback 을 허용할지. default False = 지우지 않는다
             (Phase 6-B §11). 상세 근거는 아래 해당 분기 주석 참조.
+        adapter_id:       선택된 Gathering Adapter id (Family 선택 **hint** — 단독 근거로
+                          쓰지 않는다. 실제 Resource Capability 가 우선한다).
+        manager_uri:      Manager @odata.id (Firmware/Model 을 Family 근거로 쓸 때).
+        service_root:     이미 읽어 둔 ServiceRoot body (있으면 재요청하지 않는다).
 
     Returns:
         dict: {
@@ -4785,6 +6194,9 @@ def account_service_provision(
           'account_existed': bool,          # 대상 username 이 이미 있었는가
           'action':          'create' | 'password_sync' | 'none' | 'ambiguous',
           'verification':    'verified' | 'failed' | 'skipped' | 'none',
+          'auth_ok':         bool,          # 복구 자격이 AccountService 인증에 성공했는가
+          'write_response_info': str|None,  # 쓰기 응답의 @Message.ExtendedInfo 축약
+          'verify_attempts': int,           # 재인증 확인 시도 횟수 (해당 경로에서만)
           'errors':          [_err(...), ...],
         }
 
@@ -4796,7 +6208,14 @@ def account_service_provision(
       verification.verified 쓴 뒤 새 자격으로 실제 인증까지 확인했다
       verification.failed   썼지만 새 자격 인증이 되지 않았다
       verification.skipped  dryrun 이라 쓰지 않았고 따라서 확인도 하지 않았다
-      verification.none     확인 단계에 도달하지 못했다 (쓰기 실패 / POST 경로)
+      verification.none     쓰기를 하지 않았다 (2026-08-12 이후 **쓰기가 있었는데
+                            'none' 인 결과는 나오지 않는다** — 모든 쓰기 경로가 재조회
+                            + 재인증까지 수행하고 verified/failed 로 확정한다)
+
+    presence (2026-08-12 신설):
+      present / absent / unknown / ambiguous
+      **unknown 에서는 어떤 쓰기도 하지 않는다.** 계정 목록을 완전히 읽지 못한 상태를
+      "계정 없음" 으로 오판해 실제 생성 쓰기를 하던 결함(audit C-1)을 구조적으로 막는다.
     """
     out = {
         'recovered':       False,
@@ -4806,13 +6225,109 @@ def account_service_provision(
         'account_existed': False,
         'action':          'none',
         'verification':    'none',
+        # 2026-08-12 (audit C-1): 계정 존재 여부의 3-상태. CREATE 는 'absent' 에서만 도달한다.
+        'presence':        PRESENCE_UNKNOWN,
+        # 확정된 Account Family 와 그 근거 / 신뢰 수준.
+        'family':          None,
+        'create_method':   None,
+        'evidence':        None,
+        'family_reasons':  [],
+        # 장비가 선언한 계정 정책 (읽기만 — 정책을 바꾸지 않는다). 비밀번호 길이 자체는
+        # 기록하지 않고 "선언 범위 안인가" 만 남긴다.
+        'policy':          None,
+        # 이번 실행에서 소비한 실패 인증 횟수 (username 별) — lockout 예산 추적.
+        'auth_budget':     {},
+        # 쓰기가 벤더 계약상 수락됐는가 (HTTP status 하나로 판단하지 않는다).
+        'write_accepted':  None,
+        'vendor_status':   None,
+        'dryrun_reason':   None,
+        # 쓰기 뒤 계정 리소스를 다시 읽어 확인한 실제 상태 (재인증과 별개 증거).
+        'post_write_state': None,
+        # 2026-08-12: 복구 자격이 **실제로 인증됐는가**. 이 값이 False 면 아래 어떤
+        # 쓰기 경로에도 들어가지 않는다 (§14 — 인증도 안 된 자격으로 BMC 계정을 건드리지 않는다).
+        'auth_ok':         False,
+        # 복구 자격이 **명시적으로 거부**됐는가 (HTTP 401). transport/timeout 과 구분한다.
+        'auth_rejected':   False,
+        # PATCH/POST 응답 body 의 @Message.ExtendedInfo 축약. 2xx 에도 벤더가 여기에
+        # "적용하지 않았다 / 정책 미충족" 을 담는다. 종전에는 body 를 통째로 버려서
+        # 쓰기가 왜 무효였는지 알 근거가 남지 않았다 (2026-08-12 Dell 사례).
+        'write_response_info': None,
+        # ── Write Convergence 단계 분리 (2026-08-12 rev.2) ────────────────────
+        # HTTP 2xx 는 transport 수락일 뿐이다. 아래 축을 각각 남겨야 "무엇까지 됐는지"
+        # 를 사람이 구분할 수 있다.
+        #   write_http_status  transport accepted
+        #   write_accepted     property accepted (벤더 계약 기준)
+        #   post_write_state   resource state converged
+        #   verification       credential fresh-auth verified
+        #   verify_resource    재인증에 실제로 사용한 리소스
+        #   (gathering 검증은 Ansible Phase 3 재수집이 담당한다)
+        'write_http_status': None,
+        'verify_resource':   None,
+        # 생성 대상 URI 와 그 종류 (Accounts Collection / AccountService 루트 / Instance).
+        'create_uri':        None,
+        'create_uri_kind':   None,
+        'create_uri_basis':  None,
+        # 정책 충돌 / 인증 예산 / 미지원 RoleId / 계정별 Redfish 접근 스위치.
+        'policy_conflict':      None,
+        'auth_budget_limit':    None,
+        'auth_budget_exhausted': False,
+        'role_id_unsupported':  False,
+        'login_interfaces':     None,
+        'write_rejections':     None,
         'errors':          [],
     }
 
-    # 1) AccountService GET
-    _, accounts, errs = account_service_get(
-        bmc_ip, current_username, current_password, timeout, verify_ssl
+    # 표준 자격으로 재인증하며 실패 횟수를 예산에 적는다.
+    #   왜 세는가: 후보 credential loop 와 슬롯 재시도가 합쳐지면 한 run 에서 같은
+    #   username 에 실패 인증이 몇 번 나가는지 아무도 모르는 상태였다. Dell IP Blocking
+    #   기본값은 60초 창에서 3회, Huawei/Lenovo 는 5회, HPE 는 3회다.
+    def _spend_auth(username):
+        out['auth_budget'][username] = out['auth_budget'].get(username, 0) + 1
+
+    # Capability Discovery 로 장비가 선언한 인증 실패 패널티를 읽은 뒤 확정된다(아래 1) 단계).
+    # 그 전에 호출될 일은 없지만, 미할당 상태가 남지 않게 기본값으로 먼저 묶어 둔다.
+    verify_schedule = ACCOUNT_VERIFY_DELAYS
+    auth_budget_limit = ACCOUNT_DEFAULT_AUTH_BUDGET
+
+    def _verify_standard_credential():
+        """쓴 뒤 표준 자격으로 실제 인증되는지 확인. (ok, code, err, attempts)
+
+        확인 대상 리소스를 결과에 남긴다 — "인증만 됐다" 와 "필요한 리소스에 실제로
+        접근된다" 는 다른 주장이고, 어느 쪽을 확인했는지 결과에서 보여야 한다.
+        """
+        out['verify_resource'] = 'Systems'
+        code_v, err_v = None, None
+        for attempt, delay in enumerate(verify_schedule):
+            # 예산을 넘기면서까지 확인하지 않는다. 여기서 더 시도하면 표준 계정을 잠근다.
+            if out['auth_budget'].get(target_username, 0) >= auth_budget_limit:
+                out['auth_budget_exhausted'] = True
+                out['errors'].append(_err(
+                    'account_service',
+                    '재인증 확인을 계정 잠금 한도 전에 중단했습니다. '
+                    '장비의 계정 잠금 정책과 표준 계정 상태를 확인하세요.',
+                    detail=(f'auth budget {auth_budget_limit} reached for standard account; '
+                            f'verified attempts={attempt}'),
+                ))
+                return False, code_v, err_v, attempt
+            if delay:
+                time.sleep(delay)
+            code_v, _, err_v = _get(bmc_ip, 'Systems', target_username, target_password,
+                                    timeout, verify_ssl)
+            if code_v == 200 and not err_v:
+                return True, code_v, None, attempt + 1
+            _spend_auth(target_username)
+        return False, code_v, err_v, len(verify_schedule)
+
+    # 1) Capability Discovery — 이 호출이 곧 복구 자격의 인증 시험이다.
+    #    2026-08-12: AccountService URI 를 하드코딩하지 않고 ServiceRoot 가 알려주는
+    #    링크를 따른다 (Dell iDRAC7/8·초기 iDRAC9 는 Manager-scoped 경로를 쓴다).
+    discovery = account_service_discover(
+        bmc_ip, current_username, current_password, timeout, verify_ssl,
+        manager_uri=manager_uri, service_root=service_root,
     )
+    acct_service = discovery['service']
+    accounts = discovery['accounts']
+    errs = discovery['errors']
 
     # F50 (cycle 2026-05-06): Cisco AccountService 실 지원 확인 (10.100.15.2 사이트 실측).
     # 이전: not_supported 분기 (cycle 2026-04-29 잘못된 결론 — Members=1 만 보고 미지원 분류).
@@ -4836,7 +6351,110 @@ def account_service_provision(
         ))
         return out
 
+    # 2026-08-12: AccountService GET 자체가 실패하면 (401 / TLS / timeout / 5xx)
+    # **여기서 끝낸다.** 종전에는 그대로 진행해서 accounts=[] 로 "대상 계정 없음" 이 되고,
+    # 신규 생성 경로로 들어가 인증도 안 된 자격으로 POST/PATCH 를 시도할 수 있었다.
+    # 복구 자격이 인증되지 않았다는 것은 복구를 할 수 없다는 뜻이지, 계정을 만들
+    # 자격이 생겼다는 뜻이 아니다.
+    #   acct_service is None ⟺ AccountService GET 실패 (account_service_get 계약).
+    out['auth_ok'] = acct_service is not None
+    # 인증이 **명시적으로 거부**됐는가 (401). timeout / TLS / 5xx 는 여기 해당하지 않는다.
+    # 후보 사이 backoff 길이를 이 값으로 정한다 — 실패 카운터를 올리지 않는 오류에
+    # 긴 대기를 걸면 정상 장비의 수집 시간만 늘어난다.
+    out['auth_rejected'] = (discovery.get('auth_status') == 401)
+    if not out['auth_ok']:
+        out['method'] = 'noop'
+        out['action'] = 'none'
+        out['errors'].extend(errs)
+        out['errors'].append(_err(
+            'account_service',
+            '복구 계정으로 계정 관리 서비스에 접근하지 못해 표준 계정 정리를 시작하지 못했습니다.',
+            detail='AccountService GET failed with recovery credential; no write attempted',
+        ))
+        return out
+
     out['errors'].extend(errs)
+
+    # 1-b) 읽어 낸 정책 / Family 를 결과에 남긴다. 정책은 **바꾸지 않는다**.
+    policy = discovery.get('policy') or {}
+    min_len, max_len = policy.get('min_password_length'), policy.get('max_password_length')
+    pw_len = len(target_password or '')
+    within = None
+    if min_len is not None or max_len is not None:
+        within = ((min_len is None or pw_len >= min_len)
+                  and (max_len is None or pw_len <= max_len))
+    out['policy'] = {
+        'min_password_length': min_len,
+        'max_password_length': max_len,
+        'lockout_threshold':   policy.get('lockout_threshold'),
+        'lockout_duration':    policy.get('lockout_duration'),
+        'auth_failure_delay_seconds': policy.get('auth_failure_delay_seconds'),
+        'supported_account_types': policy.get('supported_account_types'),
+        # 인증 방식 자체가 꺼져 있으면 비밀번호 문제로 오진하기 쉽다 — 상태만 남긴다.
+        'http_basic_auth': policy.get('http_basic_auth'),
+        'auth_methods':    policy.get('auth_methods'),
+        # 비밀번호 길이 자체는 남기지 않는다 (탐색 공간을 줄여 주는 약한 누출).
+        'within_declared_bounds': within,
+    }
+    # 재인증 확인 간격을 장비가 선언한 패널티에 맞춰 넓힌다 (정책은 읽기만 한다).
+    verify_schedule = account_verify_delays(policy)
+    out['verify_schedule_seconds'] = list(verify_schedule)
+    # 실패 인증 예산도 장비가 선언한 값에서 끌어온다 (재시도를 늘리지 않는다).
+    auth_budget_limit = account_auth_budget(policy)
+    out['auth_budget_limit'] = auth_budget_limit
+    # 2026-08-12 (rev.2): 정책 충돌을 **기계가 읽을 수 있는 상태**로 남긴다.
+    #   전역 표준 비밀번호는 하나인데 Vendor 정책은 서로 다르다. 예를 들어 Cisco IMC 의
+    #   Strong Password(max 14)와 Inspur 의 설정 가능 MinPasswordLength(최대 16)가 같은
+    #   사이트에 있으면 두 정책을 동시에 만족하는 비밀번호가 **수학적으로 존재하지 않는다.**
+    #   그것은 코드 버그가 아니라 제품 Contract 문제이므로, 무리하게 반복 Write 하지 않고
+    #   운영자가 알아볼 수 있는 상태로 노출한다.
+    #
+    #   **차단하지 않는다**(사용자 결정 2026-08-12). 정책을 완화하지도, 비밀번호를 바꾸거나
+    #   회전시키지도 않는다. 계약상 허용된 결정적 Write 를 1회 하고 실제 응답과
+    #   Fresh Auth 로 최종 판정한다.
+    if isinstance(min_len, int) and isinstance(max_len, int) and min_len > max_len:
+        out['policy_conflict'] = {'kind': 'declared_range_impossible',
+                                  'min_password_length': min_len,
+                                  'max_password_length': max_len}
+        out['errors'].append(_err(
+            'account_service',
+            '장비가 선언한 비밀번호 길이 정책이 서로 모순됩니다. 장비 정책을 확인하세요.',
+            detail=f'declared MinPasswordLength={min_len} > MaxPasswordLength={max_len}',
+        ))
+    elif within is False:
+        out['policy_conflict'] = {'kind': 'password_outside_declared_range',
+                                  'min_password_length': min_len,
+                                  'max_password_length': max_len}
+        out['errors'].append(_err(
+            'account_service',
+            '표준 계정 비밀번호가 장비가 선언한 길이 정책 범위를 벗어납니다. '
+            '쓰기는 시도하되 거부될 수 있습니다.',
+            detail=f'declared MinPasswordLength={min_len} MaxPasswordLength={max_len}',
+        ))
+
+    family, family_reasons = resolve_account_family(vendor, discovery, adapter_id)
+    out['family']         = family['id']
+    out['create_method']  = family['create_method']
+    out['evidence']       = family['evidence']
+    out['family_reasons'] = family_reasons
+    # 쓰기 동작을 고른 **근거 수준**. live_proven / advisory_derived / safety_strategy 를
+    # 구분해 남기지 않으면, 한 대에서 얻은 실측이 Vendor 전체로 번져 보인다.
+    out['isolation_basis']   = family.get('isolation_basis')
+    out['firmware_advisory'] = family.get('firmware_advisory')
+    role_id = choose_role_id(family, target_role, discovery)
+    # 2026-08-12 (rev.2): 고른 RoleId 가 장비가 선언한 목록에 없으면 그 사실을 남긴다.
+    #   Fujitsu 는 RedfishAdmin / RedfishOperator / RedfishReadOnly 라는 자체 Role 체계를
+    #   갖는데, 그것이 곧 `ManagerAccount.RoleId` literal 이라는 근거는 없다(08 §9/§29).
+    #   추측해서 바꾸지 않는다 — 보내되, 근거가 없다는 사실을 진단에 남긴다.
+    supported_roles = [r for r in (discovery.get('role_ids') or []) if isinstance(r, str)]
+    if supported_roles and role_id not in supported_roles:
+        out['role_id_unsupported'] = True
+        out['errors'].append(_err(
+            'account_service',
+            '장비가 알려 준 권한 목록에 없는 권한 이름을 사용합니다. '
+            '표준 계정의 권한 설정을 확인하세요.',
+            detail=f'RoleId={role_id!r} not in device Roles {sorted(supported_roles)}',
+        ))
 
     # 2) 기존 사용자 검색
     #
@@ -4845,9 +6463,26 @@ def account_service_provision(
     #   있으면 코드가 임의의 slot 을 골라 PATCH 하게 된다. 그러면 운영자가 보고 있던 slot 이
     #   아닌 다른 slot 의 비밀번호가 조용히 바뀔 수 있다. 어느 쪽이 맞는지 코드가 알 수 없으므로
     #   자동 쓰기를 중단하고 사람이 정리하도록 slot 목록만 남긴다 (값은 남기지 않는다).
-    matches = account_service_find_all_users(accounts, target_username)
+    presence, matches = account_presence(discovery, target_username, family)
+    out['presence'] = presence
 
-    if len(matches) > 1:
+    if presence == PRESENCE_PROTECTED_CONFLICT:
+        # 표준 계정 이름이 보호 대상 Resource 와 겹쳤다 (예: HostBootstrapAccount).
+        #   이름이 같다는 이유로 특수 계정의 비밀번호/권한을 바꾸면 호스트 부팅 경로 같은
+        #   다른 기능이 조용히 망가진다. 사람이 정리하도록 사실만 남기고 끝낸다.
+        out['method'] = 'noop'
+        out['action'] = 'none'
+        out['account_existed'] = True
+        slot_ids = [('' if m.get('id') is None else str(m.get('id'))) for m in matches]
+        out['errors'].append(_err(
+            'account_service',
+            '표준 계정 이름이 시스템 예약 계정과 겹쳐 자동 처리를 중단했습니다. '
+            '표준 계정 이름 또는 해당 슬롯을 정리한 뒤 다시 시도하세요.',
+            detail='protected accounts: ' + ', '.join(s for s in slot_ids if s),
+        ))
+        return out
+
+    if presence == PRESENCE_AMBIGUOUS:
         slot_ids = [('' if m.get('id') is None else str(m.get('id'))) for m in matches]
         out['method']          = 'ambiguous'
         out['action']          = 'ambiguous'
@@ -4857,6 +6492,23 @@ def account_service_provision(
             '동일한 사용자 이름이 여러 계정 슬롯에 존재해 자동 처리를 중단했습니다. '
             '중복 슬롯을 정리한 뒤 다시 시도하세요.',
             detail='duplicate slots: ' + ', '.join(s for s in slot_ids if s),
+        ))
+        return out
+
+    if presence == PRESENCE_UNKNOWN:
+        # 2026-08-12 (audit C-1). 계정 목록을 완전히 읽지 못했다.
+        #   "못 읽었다" 는 "없다" 가 아니다. 여기서 생성하면 이미 있는 계정을 못 본 채
+        #   같은 이름으로 만들려 들고, 최악에는 남의 슬롯을 건드린다.
+        #   Accounts 403 / 5xx / timeout / 링크 부재 / member 일부 실패가 전부 여기로 온다.
+        out['method'] = 'noop'
+        out['action'] = 'none'
+        out['errors'].append(_err(
+            'account_service',
+            '계정 목록을 완전히 확인하지 못해 표준 계정 생성을 시작하지 않았습니다. '
+            '복구 계정의 사용자 관리 권한과 계정 관리 서비스 상태를 확인하세요.',
+            detail=(f'enumeration={discovery.get("enumeration")} '
+                    f'declared={discovery.get("member_total")} '
+                    f'read={discovery.get("member_read")}; no write attempted'),
         ))
         return out
 
@@ -4882,58 +6534,186 @@ def account_service_provision(
                 '대상 계정이 잠금 상태입니다. 비밀번호 불일치가 아니라 계정 잠금이 원인일 수 있습니다.',
                 detail=f'slot={existing.get("id")} Locked=true',
             ))
+        # 2026-08-12 (rev.2): 계정별 Redfish 접근 스위치 (Huawei 고유 축).
+        #   계정이 있고 권한도 맞는데 Redfish 가 꺼져 있으면 인증이 실패한다. 그 실패를
+        #   비밀번호 문제로 오진하면 필요 없는 Account Write 가 반복된다.
+        #   **켜는 payload 는 공식 근거가 없어 구현하지 않는다** — 관측해서 알려만 준다.
+        out['login_interfaces'] = existing.get('login_interfaces')
+        if existing.get('login_interfaces') is not None \
+                and not any(s.lower() == 'redfish' for s in existing['login_interfaces']):
+            out['errors'].append(_err(
+                'account_service',
+                '대상 계정에 Redfish 접근이 허용되어 있지 않습니다. '
+                '비밀번호 문제가 아니라 계정의 접근 인터페이스 설정 문제일 수 있습니다.',
+                detail=('login interfaces='
+                        + ','.join(existing['login_interfaces'])),
+            ))
         if dryrun:
             out['verification'] = 'skipped'
             return out
-        # F50 phase 4 (cycle 2026-05-06): full body PATCH 의무 (Password + Enabled +
-        # Locked + RoleId 항상 함께). 사이트 실측 (10.50.11.232 Lenovo XCC):
-        # password 단독 PATCH 시 권한 cache 손상 (RoleId='Administrator' 표시되지만
-        # /Managers AccessDenied). full body PATCH 시 권한 유지 정상.
+        # F50 phase 4 (cycle 2026-05-06): 기본은 full body PATCH 다 (Password + Enabled +
+        # RoleId 함께). 사이트 실측 (10.50.11.232 Lenovo XCC): password 단독 PATCH 시
+        # 권한 cache 손상 (RoleId='Administrator' 표시되지만 /Managers AccessDenied).
+        # full body PATCH 시 권한 유지 정상.
         # source: 사이트 실측 + Lenovo XCC ManagerAccount.v1_8_1 동작.
-        body_full = {
-            'Password': target_password,
-            'Enabled':  True,
-            'Locked':   False,
-            'RoleId':   target_role,
-        }
-        # Round 15 fix: Cisco CIMC 는 RoleId 표준 enum ('Administrator') 거부 →
-        # vendor enum ('admin'/'user'/'readonly') remap (POST/DELETE+POST 경로와 일관).
-        # 미적용 시 PATCH 기존 사용자 HTTP 400 + fallback 미도달. source: 사이트 실측 10.100.15.2.
-        if vendor == 'cisco':                                                  # nosec rule12-r1
-            cisco_role_map = {'Administrator': 'admin', 'Operator': 'user',
-                              'ReadOnly': 'readonly'}
-            body_full['RoleId'] = cisco_role_map.get(target_role, 'admin')
-        code, _, err = _patch(
+        #
+        # 2026-08-12: Locked 를 무조건 싣던 것을 **실제로 잠겨 있을 때만** 싣도록 좁힌다.
+        #   잠기지 않은 계정에 Locked:false 를 보내는 것은 의미상 no-op 인데, 펌웨어가
+        #   이를 거부하면 요청 전체가 죽는다. 실측 4대 중 2대가 거부했다:
+        #     iLO6  -> HTTP 400 iLO.2.36.PropertyNotWritableOrUnknown ['Locked']
+        #             (ManagerAccount 에 Locked 속성 자체가 없음 → 본문 전체 거부)
+        #     XCC   -> Locked 는 노출하지만 read-only 라 거부 → drop 후 retry 로만 통과
+        #   즉 no-op 하나 때문에 쓰기를 한 번 더 쓰고 있었다 (Lockout 예산 낭비).
+        #   잠긴 계정을 푸는 경로는 그대로 살아 있다 — 그때는 Locked:false 가 실린다.
+        #
+        # 2026-08-12 (rev.2): 각 속성은 **Family Property Contract 가 writable 이라고
+        #   말할 때만** 실린다. read_only / unsupported / unverified 속성은 애초에 보내지
+        #   않는다 — 보내고 거부되면 빼는 방식은 추측성 재시도라 금지한다.
+        #
+        #   기본은 **drift-only** 다 — 실제로 달라진 것만 쓴다(9 Vendor 문서 공통 권고).
+        #   `full_body_patch=True` 는 그 Family 에서 writable 로 확인된 상태 Property 를
+        #   Password 와 **함께** 보내야만 하는 예외이고, LIVE/공식 근거가 있는 Family 에만
+        #   명시한다. 한 Family 의 실측을 다른 Vendor 의 기본 동작으로 일반화하지 않는다.
+        #   True 여도 read_only / verify_only / unsupported / unverified 는 실리지 않는다
+        #   (아래 account_prop_writable 가 먼저 걸러낸다).
+        full_body = bool(family.get('full_body_patch'))
+        body_full = {}
+        if account_prop_writable(family, 'Password', 'repair'):
+            body_full['Password'] = target_password
+        if account_prop_writable(family, 'Enabled', 'repair') \
+                and (full_body or existing.get('enabled') is not True):
+            body_full['Enabled'] = True
+        # 2026-08-12: RoleId 문자열을 vendor 이름으로 추측하지 않는다. Roles Collection
+        #   또는 기존 계정이 실제로 쓰는 값 중에서 고른다 (choose_role_id). Cisco IMC 는
+        #   'admin', 최신 Cisco BMC 는 'Administrator' 라 remap 을 고정하면 한쪽이 깨진다.
+        if account_prop_writable(family, 'RoleId', 'repair') \
+                and (full_body or (existing.get('role_id') or '') != role_id):
+            body_full['RoleId'] = role_id
+        # 최신 Lenovo XCC2/3 · Supermicro 계정분리 세대는 AccountTypes 에 Redfish 가 없으면
+        # 계정이 살아 있어도 Redfish 인증이 막힌다. Family 가 요구할 때만 함께 맞춘다.
+        if family.get('account_types') and existing.get('account_types') is not None \
+                and account_prop_writable(family, 'AccountTypes', 'repair'):
+            want = set(family['account_types'])
+            if not want.issubset(set(existing.get('account_types') or [])):
+                body_full['AccountTypes'] = sorted(
+                    set(existing.get('account_types') or []) | want)
+        # PasswordChangeRequired 가 켜져 있으면 비밀번호를 바꿔도 접근이 막힌다.
+        # 장비가 그 속성을 실제로 노출하고 **Family 계약이 writable 일 때만** 끈다.
+        #   HPE iLO5/6/7 · Cisco BMC 1.1(기존 계정) · upstream OpenBMC 는 read-only 라
+        #   여기에 실으면 요청 전체가 거부된다. 거부된 뒤 빼고 다시 쓰는 것은 금지다.
+        if existing.get('password_change_required') is True \
+                and account_prop_writable(family, 'PasswordChangeRequired', 'repair'):
+            body_full['PasswordChangeRequired'] = False
+        # 잠금 해제는 **실제로 잠겨 있을 때만** 요청한다 (위 2026-08-12 주석 참조).
+        # Locked 가 read-only 인 Family(HPE iLO / Lenovo XCC)에서는 보내지 않는다.
+        if existing.get('locked') is True and account_prop_writable(family, 'Locked', 'repair'):
+            body_full['Locked'] = False
+        patch_headers = None
+        if account_if_match(family, 'repair'):
+            # Inspur M6 공식 계약: GET 으로 ETag 를 받고 PATCH 에 If-Match 로 실어야 한다.
+            # **Repair 전용이다** — 같은 Family 의 Create(Collection POST)는 요구하지 않는다.
+            etag = _get_response_etag(bmc_ip, _p(existing['slot_uri']),
+                                      current_username, current_password, timeout, verify_ssl)
+            if etag:
+                patch_headers = {'If-Match': etag}
+        # Family 계약: 비밀번호를 다른 속성과 같은 PATCH 에 담으면 **조용히 버리는** 펌웨어가
+        # 있다 (HPE iLO — 위 _ACCOUNT_FAMILIES['hpe_ilo5plus'] 주석의 통제 실험 참조).
+        # 그런 Family 는 비밀번호를 단독으로 쓰고, 나머지 속성은 **실제로 달라진 것만**
+        # 뒤이어 쓴다. 실패 후 다른 payload 로 갈아타는 무작위 재시도가 아니라, 쓰기 전에
+        # Family 가 확정하는 순서다 (재시도 사다리 금지 원칙과 충돌하지 않는다).
+        followup_body = {}
+        if family.get('isolated_write_patch'):
+            followup = {k: v for k, v in body_full.items() if k != 'Password'}
+            if followup.get('Enabled') is True and existing.get('enabled') is True:
+                followup.pop('Enabled', None)
+            if 'RoleId' in followup and existing.get('role_id') == followup.get('RoleId'):
+                followup.pop('RoleId', None)
+            body_full = {'Password': target_password}
+            followup_body = followup
+            out['isolated_write'] = True
+        code, patch_resp, err = _patch_account(
             bmc_ip, _p(existing['slot_uri']), body_full,
-            current_username, current_password, timeout, verify_ssl,
+            current_username, current_password, timeout, verify_ssl, patch_headers,
         )
-        # 일부 펌웨어가 Locked 필드 PATCH 거부 (read-only) — Locked 빼고 1회 retry
-        if code not in (200, 204) and code in (400, 405):
-            body_no_locked = {k: v for k, v in body_full.items() if k != 'Locked'}
-            code, _, err = _patch(
-                bmc_ip, _p(existing['slot_uri']), body_no_locked,
-                current_username, current_password, timeout, verify_ssl,
-            )
-            if code in (200, 204) and not err:
-                out['errors'].append(_err(
-                    'account_service',
-                    'Locked 필드 PATCH 거부 — Locked 빼고 retry 성공 (BMC 펌웨어가 Locked read-only)',
-                ))
-        if code not in (200, 204) or err:
+        if code == 412 and account_if_match(family, 'repair'):
+            # ETag 가 그 사이 바뀐 경우만 1회 재획득 후 재시도한다 (그 외 재시도 없음).
+            # 동일 URI + 동일 Payload + 새 ETag — payload 를 바꾸는 재시도가 아니다.
+            etag = _get_response_etag(bmc_ip, _p(existing['slot_uri']),
+                                      current_username, current_password, timeout, verify_ssl)
+            if etag:
+                code, patch_resp, err = _patch_account(
+                    bmc_ip, _p(existing['slot_uri']), body_full,
+                    current_username, current_password, timeout, verify_ssl,
+                    {'If-Match': etag},
+                )
+        # 2026-08-12 (rev.2): **거부된 속성을 빼고 다시 쓰던 사다리를 제거했다.**
+        #   종전에는 400/405 이거나 본문이 read-only 를 지목하면 그 속성을 빼고 한 번 더
+        #   PATCH 했다. 이것은 "보내 보고 거부되면 뺀다" 는 추측성 재시도이고, 9 Vendor
+        #   조사가 공통으로 금지한 blind write fallback 과 같은 종류다. 무엇이 쓸 수 있는
+        #   속성인지는 **쓰기 전에** Family Property Contract 가 정한다(위 body_full 조립).
+        #   그래서 이 지점에 도달하는 거부는 "계약이 틀렸거나 펌웨어가 예상 밖" 이라는 뜻이고,
+        #   그때 할 일은 재시도가 아니라 **정확히 기록하고 실패로 끝내는 것**이다.
+        #   허용되는 다중 쓰기는 두 가지뿐이다: (a) 위 ETag 412 재시도(동일 URI·동일 payload),
+        #   (b) Family 가 쓰기 전에 확정한 deterministic sequence(HPE isolated followup).
+        # 2026-08-12: 2xx 든 4xx 든 응답 body 의 확장 오류 정보를 **먼저 건진다.**
+        #   Dell 은 PATCH 200 과 함께 @Message.ExtendedInfo 로 "무엇을 적용했는지 /
+        #   무엇을 거부했는지" 를 돌려준다. 종전에는 body 를 `_` 로 버려서, 쓰기가
+        #   수락됐는데 인증이 안 되는 상태의 원인을 알 방법이 아예 없었다.
+        out['write_response_info'] = _extended_info(patch_resp) or out.get('write_response_info')
+        # 2026-08-12: 성공 판정을 HTTP status 하나로 통일하지 않는다 (Family 계약).
+        #   Dell iDRAC10 = 200 + 본문 거부, Inspur M6 = 200 + Oem.Public.Status 0.
+        #   transport 수락(status)과 property 수락(accepted)을 각각 남긴다.
+        out['write_http_status'] = code
+        accepted, reject_reason = interpret_write_response(
+            family, code, patch_resp, err, requested=set(body_full))
+        out['write_accepted'] = accepted
+        out['vendor_status'] = reject_reason
+        out['write_rejections'] = write_rejections(patch_resp, set(body_full))
+        if not accepted:
+            # 2xx 인데 본문이 거부를 말하면 그것은 실패다. 여기서 끝내야 재인증 시도
+            # 3회를 헛돌지 않고, 원인(어느 속성이 거부됐는지)이 그대로 남는다.
             out['errors'].append(_err(
                 'account_service',
                 f'PATCH 기존 사용자 실패 (slot={existing.get("id")})',
-                detail=err or f'HTTP {code}',
+                detail=' | '.join(x for x in (
+                    reject_reason, out['write_response_info'],
+                ) if x),
             ))
             return out
+        if followup_body:
+            # 비밀번호는 이미 적용됐다. 남은 속성(권한/활성)만 맞춘다. 여기서 실패해도
+            # 비밀번호 수렴 자체를 되돌리지 않는다 — 최종 판정은 아래 재조회 + 재인증이다.
+            f_code, f_resp, f_err = _patch_account(
+                bmc_ip, _p(existing['slot_uri']), followup_body,
+                current_username, current_password, timeout, verify_ssl, patch_headers,
+            )
+            f_ok, f_reason = interpret_write_response(family, f_code, f_resp, f_err)
+            out['followup_properties'] = sorted(followup_body)
+            out['followup_accepted'] = f_ok
+            if not f_ok:
+                out['errors'].append(_err(
+                    'account_service',
+                    '표준 계정 비밀번호는 적용됐지만 계정 속성(권한/활성) 동기화는 거부됐습니다.',
+                    detail=' | '.join(x for x in (
+                        f'properties={",".join(sorted(followup_body))}',
+                        f_reason, _extended_info(f_resp),
+                    ) if x),
+                ))
         # F50 phase 4: PATCH 후 실 인증 verify — silent fail / 권한 cache 손상 감지.
         # 1차 verify: 새 자격으로 /Systems GET. 401 이면 권한 손상.
         # fallback: DELETE + POST 재생성 (Lenovo XCC 권한 cache 클린 상태 보장).
-        verify_code, _, verify_err = _get(
-            bmc_ip, 'Systems', target_username, target_password,
-            timeout, verify_ssl,
-        )
-        if verify_code == 200 and not verify_err:
+        #
+        # 2026-08-12: **즉시 1회** 만 확인하던 것을 짧은 지연 + 유한 재시도로 바꾼다.
+        #   BMC 는 계정 변경을 비동기로 반영하는 경우가 있고, 직전 요청의 연결/세션이
+        #   아직 옛 자격으로 살아 있을 수도 있다. 그 상태의 401 을 "적용 실패" 로 확정하면
+        #   멀쩡한 쓰기를 실패로 보고하고, 그 다음 단계(계정 삭제 후 재생성)로 사람을 몰아간다.
+        #   총 대기 상한은 ACCOUNT_VERIFY_DELAYS 합(=6초)으로 고정한다 — 무한 대기 금지.
+        _confirm_account_state(bmc_ip, existing.get('slot_uri'), target_username,
+                               family, current_username, current_password,
+                               timeout, verify_ssl, out)
+        ok_v, verify_code, verify_err, attempts = _verify_standard_credential()
+        out['verify_attempts'] = attempts
+        if ok_v:
             out['recovered']    = True
             out['verification'] = 'verified'
             return out
@@ -4963,8 +6743,28 @@ def account_service_provision(
                 'account_service',
                 '기존 계정의 비밀번호를 맞춘 뒤 인증 확인에 실패했습니다. '
                 '계정을 지우고 다시 만드는 자동 복구는 하지 않았습니다. 계정 상태를 확인하세요.',
-                detail=(verify_err or f'verify HTTP {verify_code}')
-                       + f'; slot={existing.get("id")}; delete_recreate=disabled',
+                detail='; '.join(x for x in (
+                    (verify_err or f'verify HTTP {verify_code}'),
+                    f'slot={existing.get("id")}',
+                    f'verify_attempts={out.get("verify_attempts")}',
+                    (f'write_response={out["write_response_info"]}'
+                     if out.get('write_response_info') else None),
+                    'delete_recreate=disabled',
+                ) if x),
+            ))
+            # 2026-08-12: 빈 슬롯 경로(patch_empty_slot)에만 있던 password 정책 힌트를
+            #   기존 계정 경로에도 둔다. 두 경로의 실패 모양(PATCH 2xx + 인증 401)이
+            #   같은데 한쪽에만 단서가 있어, 같은 사고를 두 번째 경로에서 만나면
+            #   원인 후보조차 보이지 않았다. 단정하지 않고 확인할 지점만 제시한다.
+            out['errors'].append(_err(
+                'account_service',
+                '비밀번호가 대상 장비의 암호 정책을 충족하지 못해 적용되지 않았을 수 있습니다. '
+                '장비의 암호 정책과 등록된 비밀번호를 확인하세요.',
+                detail=(
+                    'write accepted but authentication with the new credential failed; '
+                    'check BMC password strength policy (length / character classes / '
+                    'password history) against the configured value'
+                ),
             ))
             return out
         # 권한 손상 감지 — 운영 안전 위해 best-effort fallback.
@@ -4998,247 +6798,248 @@ def account_service_provision(
             return out
         # POST 재생성 (DELETE 후). PATCH existing 경로만 여기 도달하므로 표준 POST body 를
         # 만들고, vendor=='cisco' 면 RoleId enum remap + Id 필드를 추가한다.
-        body_post = {
-            'UserName': target_username,
-            'Password': target_password,
-            'Enabled':  True,
-            'RoleId':   target_role,
-        }
-        if vendor == 'cisco':                                                  # nosec rule12-r1
-            cisco_role_map = {'Administrator': 'admin', 'Operator': 'user',
-                              'ReadOnly': 'readonly'}
-            body_post['RoleId'] = cisco_role_map.get(target_role, 'admin')
-            body_post['Id'] = existing.get('id') or '2'
+        repost_id = (existing.get('id') or '2') if family.get('needs_explicit_id') else None
+        body_post = build_create_payload(
+            family, target_username, target_password, role_id,
+            explicit_id=repost_id,
+        )
         post_code, post_data, post_err = _post(
-            bmc_ip, 'AccountService/Accounts', body_post,
+            bmc_ip, _create_target_uri(family, discovery, repost_id), body_post,
             current_username, current_password, timeout, verify_ssl,
         )
-        if post_code in (200, 201, 204) and not post_err:
+        out['write_http_status'] = post_code
+        accepted_r, reason_r = interpret_write_response(family, post_code, post_data, post_err)
+        out['write_accepted'] = accepted_r
+        out['vendor_status'] = reason_r
+        if accepted_r:
+            # 삭제하고 새로 만든 계정은 **다시 확인해야 한다.** 여기서 예산이 없다는 이유로
+            # 확인을 건너뛰면, 계정을 지워 놓고 그 결과를 보지 않은 채 실패로 보고하게 된다.
+            # 예산의 목적은 헛도는 재시도로 계정을 잠그는 것을 막는 것이지, 방금 만든 계정의
+            # 검증을 막는 것이 아니다. 그래서 이 한 번의 확인 몫만 상한을 올린다.
+            auth_budget_limit += len(verify_schedule)
+            out['auth_budget_limit'] = auth_budget_limit
             out['method']   = 'delete_repost'
             out['slot_uri'] = _str(_safe(post_data, '@odata.id')) or existing.get('slot_uri')  # Round 8 #4: 비-str @odata.id
-            out['recovered'] = True
-            # 재생성 후 새 자격으로 다시 인증해 보지는 않는다 (요청 수를 늘리지 않기 위해).
-            # 따라서 'verified' 라고 적지 않는다 — 확인 단계에 도달하지 않았다는 뜻의 'none'.
-            out['verification'] = 'none'
+            # 2026-08-12: 재생성 뒤에도 반드시 재조회 + 재인증까지 한다. 종전에는
+            #   'none'(확인 안 함)을 성공으로 인정해, 실제로 못 쓰는 계정이 복구됨으로
+            #   보고될 수 있었다 (audit H-1).
+            _confirm_account_state(bmc_ip, out['slot_uri'], target_username, family,
+                                   current_username, current_password, timeout, verify_ssl, out)
+            ok_r, vcode_r, verr_r, attempts_r = _verify_standard_credential()
+            out['verify_attempts'] = attempts_r
+            out['recovered']    = bool(ok_r)
+            out['verification'] = 'verified' if ok_r else 'failed'
+            if not ok_r:
+                out['errors'].append(_err(
+                    'account_service',
+                    'DELETE+POST 재생성 후 표준 계정 인증에 실패했습니다.',
+                    detail=verr_r or f'verify HTTP {vcode_r}',
+                ))
         else:
             out['errors'].append(_err(
                 'account_service',
                 'DELETE+POST 재생성 실패',
-                detail=post_err or f'HTTP {post_code}',
+                detail=reason_r or post_err or f'HTTP {post_code}',
             ))
         return out
 
-    # 3) 신규 생성 — vendor 분기 (Dell=slot PATCH, 그 외=POST)
-    if vendor == 'dell':                                                      # nosec rule12-r1
-        # F49 (cycle 2026-05-06): Dell iDRAC9 사이트 실측 사고 매트릭스.
-        # 1. slot 1 = anonymous reserved (UserName='', Enabled=false). PATCH 거부.
-        # 2. UserName + Password + Enabled + RoleId 동시 PATCH 시 HTTP 200 응답
-        #    하지만 BMC 가 password 가 Security Strengthen Policy 미충족이면 silent
-        #    fail. Enabled/RoleId 도 'username or password is blank' 로 거부 (실제
-        #    password 미적용). 응답 코드만 보면 안 됨.
-        # 3. 따라서 PATCH 후 새 자격으로 실 인증 시도 → silent-fail 감지.
-        # source: 사이트 실측 (10.100.15.27 iDRAC9 7.10.70.00) + Dell SWC0296
-        #         "user name or password is blank" + Security Strengthen Policy.
+    # ── 3) 신규 생성 — Family Strategy ─────────────────────────────────────
+    #
+    # 2026-08-12: vendor 이름 분기 + 실패 시 다음 payload 로 순차 재시도(무작위 Write
+    # fallback)를 걷어냈다. 읽기 단계에서 Family 를 확정했으므로 **검증된 방식 하나만**
+    # 실행한다. 9 Vendor 공식 조사가 공통으로 금지한 패턴이 그 사다리였다:
+    #   POST 실패 → 다른 body 로 POST → 또 다른 URI 로 POST …
+    # 다만 공식 Write 계약을 확보하지 못한 Family(evidence='unverified')는 사용자 결정
+    # (2026-08-12)에 따라 **현행 동작을 그대로 유지**한다 — 근거 없이 동작을 바꾸지 않는다.
+    out['method'] = 'patch_empty_slot' if family['create_method'] == 'slot_patch' else 'post_new'
+    out['action'] = 'create'
+
+    # 생성 대상 슬롯/Id 결정 — 읽기 단계 결과만 사용한다.
+    chosen_slot = None
+    explicit_id = None
+    if family['create_method'] == 'slot_patch':
+        # Dell / Lenovo Purley: 미리 깔린 빈 슬롯에 PATCH 해서 계정을 만든다.
+        # 예약 슬롯은 Family 가 안다 (Dell slot 1, iDRAC10 은 slot 1·2).
+        # source: dell.com/.../idrac10_1.20.xx_ug/configuring-local-users,
+        #         pubs.lenovo.com/xcc-restapi/create_an_account_intel_p_based_patch
+        # 보호 계정은 Family 의 reserved id 뿐 아니라 **Resource Property** 로도 걸러낸다.
+        protected_ids = {('' if a.get('id') is None else str(a.get('id')))
+                         for a in accounts if account_is_protected(a, family)}
         empty_slots = account_service_find_all_empty_slots(
-            accounts, skip_slot_ids={'1'},
+            accounts, skip_slot_ids=set(family['reserved_slot_ids']) | protected_ids,
         )
         if not empty_slots:
             out['errors'].append(_err(
-                'account_service', 'Dell iDRAC 빈 슬롯 없음 — 사용자 정리 필요',  # nosec rule12-r1
+                'account_service',
+                '빈 계정 슬롯이 없어 표준 계정을 만들 수 없습니다. 사용하지 않는 계정을 정리하세요.',
+                detail=f'family={family["id"]} reserved={sorted(family["reserved_slot_ids"])}',
             ))
             return out
-        out['method']   = 'patch_empty_slot'
-        out['action']   = 'create'
-        out['slot_uri'] = empty_slots[0].get('slot_uri')
-        if dryrun:
-            out['verification'] = 'skipped'
-            return out
-        body = {
-            'UserName': target_username,
-            'Password': target_password,
-            'Enabled':  True,
-            'RoleId':   target_role,
-        }
-        last_err = None
-        last_code = 0
-        for slot in empty_slots[:3]:
-            code, _, err = _patch(
-                bmc_ip, _p(slot['slot_uri']), body,
-                current_username, current_password, timeout, verify_ssl,
-            )
-            if code not in (200, 204) or err:
-                last_err = err
-                last_code = code
-                out['errors'].append(_err(
-                    'account_service',
-                    f'Dell PATCH 빈 슬롯 실패 (slot={slot.get("id")}) — '            # nosec rule12-r1
-                    f'다음 빈 슬롯으로 retry',
-                    detail=err or f'HTTP {code}',
-                ))
-                continue
-            # PATCH 200 OK — 실 인증 검증 (Dell silent-fail 감지)
-            verify_code, _, verify_err = _get(
-                bmc_ip, 'Systems', target_username, target_password,
-                timeout, verify_ssl,
-            )
-            if verify_code == 200 and not verify_err:
-                out['recovered']    = True
-                out['verification'] = 'verified'
-                out['slot_uri'] = slot.get('slot_uri')
+        chosen_slot = empty_slots[0]
+        out['slot_uri'] = chosen_slot.get('slot_uri')
+    elif family['needs_explicit_id']:
+        # Cisco IMC 4.1~6.0 은 POST body 에 Id 를 요구한다 (없으면 BadRequest).
+        # 읽지 못한 슬롯을 "비어 있다" 로 세지 않는다 — 열거가 complete 인 경우만 여기 온다.
+        lo, hi = family['id_range'] or (2, 16)
+        used_ids = {('' if a.get('id') is None else str(a.get('id'))) for a in accounts}
+        # 보호 계정 번호는 '비어 있음' 으로 세지 않는다.
+        used_ids |= {('' if a.get('id') is None else str(a.get('id')))
+                     for a in accounts if account_is_protected(a, family)}
+        used_ids |= set(family['reserved_slot_ids'] or ())
+        for candidate_id in range(lo, hi):
+            if str(candidate_id) not in used_ids:
+                explicit_id = str(candidate_id)
                 break
-            # silent fail 감지 — slot cleanup (UserName 비우기) 후 다음 슬롯으로
+        if explicit_id is None:
             out['errors'].append(_err(
                 'account_service',
-                f'Dell PATCH 200 응답이지만 인증 실패 (slot={slot.get("id")}, '       # nosec rule12-r1
-                f'verify HTTP {verify_code}) — Password 가 Security Strengthen '
-                f'Policy 미충족 가능. vault password 강화 필요 (15자 이상 권장).',
-                detail=verify_err or f'verify HTTP {verify_code}',
+                '사용 가능한 계정 번호가 없어 표준 계정을 만들 수 없습니다. 계정을 정리하세요.',
+                detail=f'family={family["id"]} id_range={lo}-{hi - 1} used={sorted(used_ids)}',
             ))
-            # cleanup 시도 (best-effort)
-            _patch(
-                bmc_ip, _p(slot['slot_uri']),
-                {'UserName': '', 'Enabled': False, 'RoleId': 'None'},
-                current_username, current_password, timeout, verify_ssl,
-            )
-            last_code = verify_code
-        if not out['recovered']:
+            return out
+
+    if dryrun:
+        # dry-run 은 "무엇을 쓸 예정인지" 까지만 남긴다. 실제 쓰기 증거가 아니다.
+        out['verification'] = 'skipped'
+        return out
+
+    # ── 3-a) 빈 슬롯 PATCH 로 생성 ────────────────────────────────────────
+    if family['create_method'] == 'slot_patch':
+        body = build_create_payload(family, target_username, target_password, role_id)
+        # 2026-08-12 (lockout 예산): 슬롯을 3개까지 돌며 재시도하던 것을 **1개**로 줄인다.
+        #   종전 최악은 3슬롯 × 검증 3회 = 표준 계정에 실패 인증 9회를 20초에 발생시켰다.
+        #   Dell IP Blocking 기본값(60초 창 3회)·HPE(3회)를 이미 넘는다. 슬롯을 바꿔 가며
+        #   다시 쓰는 것은 "다른 방식으로 또 써 본다" 와 같은 종류의 시도이기도 하다.
+        code, patch_resp, err = _patch(
+            bmc_ip, _p(chosen_slot['slot_uri']), body,
+            current_username, current_password, timeout, verify_ssl,
+        )
+        out['write_response_info'] = _extended_info(patch_resp) or out['write_response_info']
+        # 2026-08-12: 생성 PATCH 응답의 본문 거부(Dell iDRAC10 의 200+read-only)를
+        #   여기서도 본다. 종전에는 기존 계정 경로에만 이 검사가 있어, 같은 펌웨어의
+        #   같은 거부를 생성 경로에서는 성공으로 읽고 넘어갔다.
+        out['write_http_status'] = code
+        accepted, reject_reason = interpret_write_response(family, code, patch_resp, err)
+        out['write_accepted'] = accepted
+        out['vendor_status'] = reject_reason
+        if not accepted:
             out['verification'] = 'failed'
             out['errors'].append(_err(
                 'account_service',
-                f'Dell PATCH 모든 빈 슬롯 실패 (시도={len(empty_slots[:3])})',         # nosec rule12-r1
-                detail=last_err or f'HTTP {last_code}',
-            ))
-        return out
-
-    # F50 (cycle 2026-05-06): Cisco CIMC POST 변형 — Id 필드 + RoleId enum mapping.
-    # source: 사이트 실측 — POST /Accounts 가 'Id' 1-15 필수 (BadRequest if absent),
-    #   RoleId 표준 enum 'Administrator' 거부 → Cisco enum 'admin'/'user'/'readonly'.
-    if vendor == 'cisco':                                                     # nosec rule12-r1
-        out['method'] = 'post_new'
-        out['action'] = 'create'
-        if dryrun:
-            out['verification'] = 'skipped'
-            return out
-        # Cisco RoleId mapping
-        cisco_role_map = {
-            'Administrator': 'admin', 'admin': 'admin',
-            'Operator': 'user',       'user': 'user',
-            'ReadOnly': 'readonly',   'readonly': 'readonly',
-        }
-        cisco_role = cisco_role_map.get(target_role, 'admin')
-        # 빈 Id 찾기 (2..15 — slot 1 은 admin reserved)
-        used_ids = {('' if a.get('id') is None else str(a.get('id'))) for a in accounts}
-        target_id = None
-        for candidate_id in range(2, 16):
-            if str(candidate_id) not in used_ids:
-                target_id = str(candidate_id)
-                break
-        if target_id is None:
-            out['errors'].append(_err(
-                'account_service',
-                'Cisco CIMC: 빈 Account Id (2-15) 없음 — 사용자 정리 필요',  # nosec rule12-r1
+                f'빈 슬롯에 표준 계정을 만들지 못했습니다 (slot={chosen_slot.get("id")}).',
+                detail=' | '.join(x for x in (
+                    reject_reason, out['write_response_info']) if x),
             ))
             return out
-        body_cisco = {
-            'Id':       target_id,
-            'UserName': target_username,
-            'Password': target_password,
-            'Enabled':  True,
-            'RoleId':   cisco_role,
-        }
-        code, resp_data, err = _post(
-            bmc_ip, 'AccountService/Accounts', body_cisco,
+        _confirm_account_state(bmc_ip, chosen_slot.get('slot_uri'), target_username, family,
+                               current_username, current_password, timeout, verify_ssl, out)
+        ok_v, verify_code, verify_err, attempts = _verify_standard_credential()
+        out['verify_attempts'] = attempts
+        if ok_v:
+            out['recovered']    = True
+            out['verification'] = 'verified'
+            return out
+        # 쓰기는 수락됐는데 그 자격으로 인증이 안 된다 — silent fail.
+        # 만들다 만 슬롯을 그대로 두지 않는다 (best-effort cleanup, 응답도 남긴다).
+        out['verification'] = 'failed'
+        out['errors'].append(_err(
+            'account_service',
+            '표준 계정 생성은 수락됐지만 그 계정으로 인증되지 않았습니다. '
+            '장비의 암호 정책과 등록된 비밀번호를 확인하세요.',
+            detail=' | '.join(x for x in (
+                (verify_err or f'verify HTTP {verify_code}'),
+                f'slot={chosen_slot.get("id")}',
+                'check BMC password strength policy (length / character classes / history)',
+                out['write_response_info'],
+            ) if x),
+        ))
+        cl_code, cl_resp, cl_err = _patch(
+            bmc_ip, _p(chosen_slot['slot_uri']),
+            {'UserName': '', 'Enabled': False, 'RoleId': 'None'},
             current_username, current_password, timeout, verify_ssl,
         )
-        if code in (200, 201, 204) and not err:
-            out['recovered'] = True
-            out['slot_uri']  = _str(_safe(resp_data, '@odata.id')) or f'/redfish/v1/AccountService/Accounts/{target_id}'  # Round 11 #3
-        else:
+        # audit M-5: 되돌리기 실패가 어디에도 남지 않던 문제. 남긴다.
+        if cl_code not in (200, 204) or cl_err:
             out['errors'].append(_err(
                 'account_service',
-                f'Cisco POST /AccountService/Accounts 실패 (Id={target_id})',  # nosec rule12-r1
-                detail=err or f'HTTP {code}',
+                '실패한 슬롯을 되돌리지 못했습니다. 해당 슬롯 상태를 확인하세요.',
+                detail=' | '.join(x for x in (
+                    cl_err or f'HTTP {cl_code}', _extended_info(cl_resp)) if x),
             ))
         return out
 
-    # HPE / Lenovo / Supermicro: POST 표준 + vendor-specific fallback retries.
-    # F49 (cycle 2026-05-01): 펌웨어별 호환성 강화 (web research 2026-05-01).
-    # source: HPE iLO5/6 docs (Oem.Hpe.Privileges 가능, RoleId 만으로도 충분),
-    #   Lenovo XCC docs (PasswordChangeRequired 선택적, 미설정 시 default false),
-    #   Supermicro Redfish User Guide (RoleId Administrator/Operator/ReadOnly,
-    #   password complexity 매우 엄격 — POST 400 시 password policy 위반 시그널).
-    out['method'] = 'post_new'
-    out['action'] = 'create'
-    if dryrun:
-        out['verification'] = 'skipped'
-        return out
-    body_base = {
-        'UserName': target_username,
-        'Password': target_password,
-        'Enabled':  True,
-        'RoleId':   target_role,
-    }
-    # 1차: 표준 body
+    # ── 3-b) POST 로 생성 ─────────────────────────────────────────────────
+    # 대상 URI 는 Family 가 확정한다 (Accounts Collection / AccountService 루트 /
+    # Account Instance). 실패해도 **다른 URI 로 갈아타지 않는다.**
+    accounts_uri = _create_target_uri(family, discovery, explicit_id)
+    out['create_uri'] = accounts_uri
+    out['create_uri_kind'] = family.get('create_uri')
+    # 최신 계약을 쓸 근거가 장비값에서 나왔는지, 근거 부족으로 구 계약 하나만 쓴 것인지.
+    out['create_uri_basis'] = family.get('create_uri_basis')
+    body_base = build_create_payload(family, target_username, target_password, role_id,
+                                     explicit_id=explicit_id)
     code, resp_data, err = _post(
-        bmc_ip, 'AccountService/Accounts', body_base,
+        bmc_ip, accounts_uri, body_base,
         current_username, current_password, timeout, verify_ssl,
     )
-    if code in (200, 201, 204) and not err:
-        out['recovered'] = True
-        out['slot_uri']  = _str(_safe(resp_data, '@odata.id')) or None  # Round 11 #4
+    out['write_http_status'] = code
+    accepted, reject_reason = interpret_write_response(
+        family, code, resp_data, err, requested=set(body_base))
+    out['write_response_info'] = _extended_info(resp_data) or out['write_response_info']
+    out['write_rejections'] = write_rejections(resp_data, set(body_base))
+
+    # 2026-08-12 (rev.2): **`PasswordChangeRequired:false` 를 덧붙여 다시 POST 하던 경로를
+    #   제거했다.** 종전에는 evidence='unverified' Family 에서만 그 사다리를 남겼는데,
+    #   바로 그 Family 들(Fujitsu / Quanta / Cisco X-Series / Lenovo IMM2 / Supermicro X9 /
+    #   Inspur M5·M7 / HPE RMC)이 공식 조사에서 **하나같이 이 재시도를 금지**한 대상이다.
+    #     05 §19/§39-D, 06 §17/§31-F, 07 §17/§40-E, 08 §17/§32-C, 09 §19/§45-D
+    #   UNVERIFIED 의 뜻은 "여러 번 시도해 본다" 가 아니라
+    #     read-only discovery → 완전 열거 → **한 번의 결정적 쓰기** → 재조회 → 재인증
+    #   이다. 계약을 모르면 추측하지 말고 한 번 쓰고 결과를 그대로 보고한다.
+
+    out['write_accepted'] = accepted
+    out['vendor_status'] = reject_reason
+    if not accepted:
+        out['verification'] = 'failed'
+        out['errors'].append(_err(
+            'account_service',
+            '표준 계정 생성 요청이 거부됐습니다.',
+            detail=' | '.join(x for x in (
+                f'POST {accounts_uri}', f'family={family["id"]}',
+                reject_reason, out['write_response_info']) if x),
+        ))
         return out
 
-    # 2차 retry: 400/405 — Lenovo PasswordChangeRequired 명시 (일부 XCC 펌웨어 요구)
-    # source: pubs.lenovo.com/xcc-restapi/create_an_account_post (PasswordChangeRequired
-    #   default true → 호출자가 false 로 명시해야 즉시 사용 가능).
-    if code in (400, 405):                                                    # nosec rule12-r1
-        body_lenovo = dict(body_base, PasswordChangeRequired=False)
-        code2, resp2, err2 = _post(
-            bmc_ip, 'AccountService/Accounts', body_lenovo,
-            current_username, current_password, timeout, verify_ssl,
-        )
-        if code2 in (200, 201, 204) and not err2:
-            out['recovered'] = True
-            out['slot_uri']  = _str(_safe(resp2, '@odata.id')) or None  # Round 11 #5
-            out['errors'].append(_err(
-                'account_service',
-                'POST 1차 실패 → PasswordChangeRequired:false 추가 후 retry 성공 '
-                '(Lenovo XCC password policy)',  # nosec rule12-r1
-            ))
-            return out
-        # 3차 retry: HPE Oem.Hpe.Privileges (HPE iLO 일부 펌웨어가 RoleId 단독 거부 보고).
-        # source: HewlettPackard/ilo-rest-api-docs add_user_account.py.
-        if vendor == 'hpe':                                                   # nosec rule12-r1
-            body_hpe = dict(body_base)
-            body_hpe['Oem'] = {'Hpe': {'Privileges': {'LoginPriv': True,    # nosec rule12-r1
-                                                      'RemoteConsolePriv': True,
-                                                      'UserConfigPriv': True,
-                                                      'VirtualMediaPriv': True,
-                                                      'VirtualPowerAndResetPriv': True,
-                                                      'iLOConfigPriv': True}}}
-            code3, resp3, err3 = _post(
-                bmc_ip, 'AccountService/Accounts', body_hpe,
-                current_username, current_password, timeout, verify_ssl,
-            )
-            if code3 in (200, 201, 204) and not err3:
-                out['recovered'] = True
-                out['slot_uri']  = _str(_safe(resp3, '@odata.id')) or None  # Round 11 #6
-                out['errors'].append(_err(
-                    'account_service',
-                    'POST 1차 실패 → Oem.Hpe.Privileges 추가 후 retry 성공',  # nosec rule12-r1
-                ))
-                return out
-            err = err3 or err
-            code = code3 or code
-        else:
-            err = err2 or err
-            code = code2 or code
+    # 생성된 리소스의 정본은 응답이 알려준 @odata.id 다 (번호/이름을 추측하지 않는다).
+    created_uri = _str(_safe(resp_data, '@odata.id')) or None
+    if not created_uri:
+        # 응답이 위치를 알려주지 않으면 다시 열거해서 찾는다 — 그래도 추측하지 않는다.
+        recheck = account_service_discover(bmc_ip, current_username, current_password,
+                                           timeout, verify_ssl,
+                                           service_root=discovery.get('service'))
+        again = [a for a in (recheck.get('accounts') or [])
+                 if (a.get('username') or '') == target_username]
+        created_uri = again[0].get('slot_uri') if len(again) == 1 else None
+    out['slot_uri'] = created_uri
 
-    # 모든 retry 실패
+    # 2026-08-12 (audit H-1): POST 2xx 만으로 recovered=true 를 반환하던 경로를 없앤다.
+    #   Cisco 공식 문서조차 Create 뒤 "Verifying the User" 를 별도 단계로 제시한다.
+    _confirm_account_state(bmc_ip, created_uri, target_username, family,
+                           current_username, current_password, timeout, verify_ssl, out)
+    ok_v, verify_code, verify_err, attempts = _verify_standard_credential()
+    out['verify_attempts'] = attempts
+    if ok_v:
+        out['recovered']    = True
+        out['verification'] = 'verified'
+        return out
+    out['verification'] = 'failed'
     out['errors'].append(_err(
         'account_service',
-        'POST /AccountService/Accounts 실패 (모든 vendor fallback 시도 후)',
-        detail=err or f'HTTP {code}',
+        '표준 계정을 만들었지만 그 계정으로 인증되지 않았습니다. '
+        '장비의 암호 정책과 계정 상태를 확인하세요.',
+        detail=' | '.join(x for x in (
+            (verify_err or f'verify HTTP {verify_code}'),
+            f'family={family["id"]}', out['write_response_info']) if x),
     ))
     return out
 
@@ -5268,6 +7069,10 @@ def main():
             # None 시 기존 13 vendor 영향 0 (Additive only — rule 92 R2).
             #   Allowed values: None / 'rmc_primary' / 'rmc_primary_ilo_secondary'
             manager_layout  = dict(type='str',  default=None, required=False),
+            # 2026-08-12: Account Family 선택 **hint**. 단독 근거로 쓰지 않는다 —
+            #   실제 Resource Capability 가 우선하고, adapter 이름은 동률을 깰 때만 쓴다.
+            #   (Supermicro 계정분리 세대 / Lenovo XCC 세대 / HPE RMC 구분 등)
+            adapter_id      = dict(type='str',  default=None, required=False),
         ),
         supports_check_mode=True,
     )
@@ -5297,8 +7102,20 @@ def main():
                 msg='mode=account_provision 시 target_username/target_password 필수'
             )
 
-        # detect_vendor 로 vendor 정규화 (분기 라우팅 용도)
-        vendor, _, _, _, det_errors, _ = detect_vendor(
+        # 2026-08-12 (audit H-2): `supports_check_mode=True` 를 선언해 두고 module.check_mode 를
+        #   한 번도 읽지 않아, `ansible-playbook --check` 로 **실제 PATCH/POST 가 나갔다.**
+        #   여기서 dryrun 과 OR 로 묶어 --check 가 쓰기 0건을 보장하게 한다.
+        dryrun_reason = None
+        if module.check_mode and not dryrun:
+            dryrun_reason = 'check_mode'
+        elif dryrun:
+            dryrun_reason = 'parameter'
+        dryrun = bool(dryrun) or bool(module.check_mode)
+
+        # detect_vendor 로 vendor 정규화 (분기 라우팅 용도).
+        #   manager_uri / service_root 는 여기서 이미 얻으므로 Family 판단에 재사용한다
+        #   (추가 요청 없이 Firmware/Model 근거를 확보하기 위해).
+        vendor, _, mgr_uri, _, det_errors, svc_root = detect_vendor(
             bmc_ip, username, password, timeout, verify_ssl
         )
         result = account_service_provision(
@@ -5306,7 +7123,11 @@ def main():
             target_username, target_password, target_role,
             timeout, verify_ssl, dryrun=dryrun,
             allow_delete_recreate=bool(p.get('allow_delete_recreate')),
+            adapter_id=p.get('adapter_id'),
+            manager_uri=mgr_uri,
+            service_root=svc_root,
         )
+        result['dryrun_reason'] = dryrun_reason
         result['errors'] = list(det_errors) + (result.get('errors') or [])
         module.exit_json(
             changed=bool(result.get('recovered')),

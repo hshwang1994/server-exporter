@@ -20,6 +20,8 @@
 from __future__ import annotations
 
 import sys
+
+import pytest
 import types
 from pathlib import Path
 
@@ -39,23 +41,52 @@ sys.modules.setdefault("ansible.module_utils.basic", _stub_basic)
 
 import redfish_gather as rg  # noqa: E402
 
+# 2026-08-12: provision 이 account_service_get → account_service_discover 로 옮겨졌다.
+# 기존 3-tuple fake 를 discovery dict 로 감싸는 공용 seam (tests/unit/account_seam.py).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from account_seam import as_discovery as _as_discovery_raw  # noqa: E402
+
+
+def _as_discovery(fn, **overrides):
+    return _as_discovery_raw(fn, rg, **overrides)
+
+
+@pytest.fixture(autouse=True)
+def _default_write_verify_seam(monkeypatch):
+    """2026-08-12 (audit H-1): 이제 **모든** 계정 쓰기 경로가 재조회 + 표준 자격 재인증을
+    수행한다. 종전 POST 경로는 2xx 만으로 성공을 보고했다.
+
+    그래서 쓰기 seam 만 stub 하던 테스트가 실제 네트워크로 나가게 된다. 여기서 기본
+    검증 seam 을 성공으로 깔아 둔다. 개별 테스트가 다시 setattr 하면 그쪽이 이긴다.
+    """
+    monkeypatch.setattr(rg, "_get", lambda *a, **k: (200, {}, None))
+    monkeypatch.setattr(rg, "_get_response_etag", lambda *a, **k: None)
+    monkeypatch.setattr(rg.time, "sleep", lambda *_: None)
+
+
 
 def _fake_acct_get_empty(bmc_ip, u, p, t, v):
     """기존 사용자 없음 (post_new 분기로 라우팅)."""
     return {}, [], []
 
 
-def test_provision_lenovo_400_retry_with_password_change_required(monkeypatch):
-    """vendor='lenovo' + 1차 POST 400 → PasswordChangeRequired:false 추가 retry 200."""
-    monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
+def test_provision_lenovo_sends_password_change_required_on_first_post(monkeypatch):
+    """Lenovo 는 **처음부터** PasswordChangeRequired:false 를 실어 보낸다.
+
+    2026-08-12 변경: 종전에는 표준 body 로 POST 하고 400/405 를 받으면 그때
+    PasswordChangeRequired 를 붙여 다시 POST 했다(= 실패 후 다른 payload 로 재시도).
+    Lenovo 공식 문서는 이 속성을 create payload 로 정의하고 TSM 은 미지정 시
+    default true 라 생성 직후 접근이 막힌다. 그래서 Family 가 확정되면 한 번에 보낸다.
+    source: pubs.lenovo.com/xcc-restapi/create_an_account_post,
+            pubs.lenovo.com/tsm/post_create_new_account
+    """
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(_fake_acct_get_empty))
 
     call_log = []
 
     def fake_post(bmc_ip, path, body, u, p, t, v):
         call_log.append(dict(body))
-        if "PasswordChangeRequired" in body:
-            return 201, {"@odata.id": "/redfish/v1/AccountService/Accounts/3"}, None
-        return 400, {"error": "password policy"}, "HTTP 400: Bad Request"
+        return 201, {"@odata.id": "/redfish/v1/AccountService/Accounts/3"}, None
 
     monkeypatch.setattr(rg, "_post", fake_post)
 
@@ -68,22 +99,24 @@ def test_provision_lenovo_400_retry_with_password_change_required(monkeypatch):
     )
     assert out["recovered"] is True
     assert out["method"] == "post_new"
-    # 2번 호출됐고 두 번째 호출에 PasswordChangeRequired:false 포함
-    assert len(call_log) == 2
-    assert "PasswordChangeRequired" not in call_log[0]
-    assert call_log[1].get("PasswordChangeRequired") is False
+    assert out["family"] == "lenovo_collection_post"
+    assert len(call_log) == 1, "쓰기를 두 번 보내면 안 된다 (Write fallback 금지)"
+    assert call_log[0].get("PasswordChangeRequired") is False
 
 
-def test_provision_hpe_third_retry_with_oem_privileges(monkeypatch):
-    """vendor='hpe' + 1차 400 + 2차 (PasswordChangeRequired) 400 → Oem.Hpe.Privileges retry 201."""
-    monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
+def test_provision_hpe_ilo5plus_posts_roleid_only_once(monkeypatch):
+    """iLO5+ 는 RoleId 만으로 충분하다 — 실패해도 다른 payload 로 다시 쓰지 않는다.
+
+    2026-08-12 변경: 종전 3단 retry 사다리(표준 → PasswordChangeRequired → Oem.Hpe)를
+    제거했다. 9 Vendor 공식 조사가 공통으로 금지한 '무작위 Write fallback' 이다.
+    source: servermanagementportal.ext.hpe.com/docs/redfishservices/ilos/supplementdocuments/managingusers
+    """
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(_fake_acct_get_empty))
 
     call_log = []
 
     def fake_post(bmc_ip, path, body, u, p, t, v):
         call_log.append(dict(body))
-        if "Oem" in body and "Hpe" in body.get("Oem", {}):
-            return 201, {"@odata.id": "/redfish/v1/AccountService/Accounts/5"}, None
         return 400, {}, "HTTP 400: Bad Request"
 
     monkeypatch.setattr(rg, "_post", fake_post)
@@ -95,18 +128,46 @@ def test_provision_hpe_third_retry_with_oem_privileges(monkeypatch):
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=False,
     )
-    assert out["recovered"] is True
-    assert out["method"] == "post_new"
-    # 3번 호출 (base + lenovo retry + hpe oem retry)
-    assert len(call_log) == 3
-    assert "Oem" in call_log[2]
-    assert "Hpe" in call_log[2]["Oem"]
-    assert "Privileges" in call_log[2]["Oem"]["Hpe"]
+    assert out["recovered"] is False
+    assert out["family"] == "hpe_ilo5plus"
+    assert len(call_log) == 1, "실패 후 다른 payload 로 다시 쓰면 안 된다"
+    assert "Oem" not in call_log[0]
+
+
+def test_provision_hpe_ilo4_uses_hp_namespace_not_hpe(monkeypatch):
+    """iLO4 의 공식 OEM namespace 는 `Hpe` 가 아니라 `Hp` 다.
+
+    종전 코드는 3차 retry 에서 `Oem.Hpe.Privileges` 만 보냈다 — iLO4 에는 맞지 않는다.
+    source: hewlettpackard.github.io/ilo-rest-api-docs/ilo4/ (Oem/Hp/Privileges)
+    """
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(_fake_acct_get_empty))
+
+    call_log = []
+
+    def fake_post(bmc_ip, path, body, u, p, t, v):
+        call_log.append(dict(body))
+        return 201, {"@odata.id": "/redfish/v1/AccountService/Accounts/5"}, None
+
+    monkeypatch.setattr(rg, "_post", fake_post)
+
+    out = rg.account_service_provision(
+        bmc_ip="10.50.11.231", vendor="hpe",
+        current_username="admin", current_password="<recovery-pass>",
+        target_username="infraops", target_password="<target-pass>",
+        target_role="Administrator",
+        timeout=30, verify_ssl=False, dryrun=False,
+        adapter_id="redfish_hpe_ilo4",
+    )
+    assert out["family"] == "hpe_ilo4"
+    assert len(call_log) == 1
+    assert "Hp" in call_log[0]["Oem"], "iLO4 에 Hpe namespace 를 보내면 안 된다"
+    assert "Hpe" not in call_log[0]["Oem"]
+    assert "Privileges" in call_log[0]["Oem"]["Hp"]
 
 
 def test_provision_supermicro_first_attempt_success_no_retry(monkeypatch):
     """vendor='supermicro' + 1차 성공 → retry 없이 바로 종료."""
-    monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(_fake_acct_get_empty))
 
     call_count = {"n": 0}
 
@@ -130,7 +191,7 @@ def test_provision_supermicro_first_attempt_success_no_retry(monkeypatch):
 
 def test_provision_lenovo_500_no_retry(monkeypatch):
     """vendor='lenovo' + 1차 POST 500 → 400/405 가 아니므로 retry 없음. recovered=False."""
-    monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(_fake_acct_get_empty))
 
     call_log = []
 
@@ -150,8 +211,10 @@ def test_provision_lenovo_500_no_retry(monkeypatch):
     assert out["recovered"] is False
     # 1번만 호출 (500 은 retry 트리거 아님)
     assert len(call_log) == 1
-    msgs = [e.get("message", "") for e in out["errors"]]
-    assert any("POST /AccountService/Accounts" in m for m in msgs)
+    # 사용자 문장에는 URI/HTTP 를 넣지 않는다 — 기술 증거는 detail 에 둔다 (rule 10).
+    joined = " ".join(f'{e.get("message", "")} {e.get("detail", "")}' for e in out["errors"])
+    assert "AccountService/Accounts" in joined
+    assert "HTTP 500" in joined
 
 
 def test_provision_dell_skip_reserved_slot1_and_retry(monkeypatch):
@@ -173,7 +236,7 @@ def test_provision_dell_skip_reserved_slot1_and_retry(monkeypatch):
     def fake_acct_get(bmc_ip, u, p, t, v):
         return {}, accounts, []
 
-    monkeypatch.setattr(rg, "account_service_get", fake_acct_get)
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(fake_acct_get))
 
     patched_slots = []
 
@@ -220,12 +283,16 @@ def test_provision_lenovo_patch_silent_fail_delete_repost_fallback(monkeypatch):
     def fake_acct_get(bmc_ip, u, p, t, v):
         return {}, accounts, []
 
-    monkeypatch.setattr(rg, "account_service_get", fake_acct_get)
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(fake_acct_get))
     monkeypatch.setattr(rg, "_patch", lambda *a, **kw: (200, {}, None))
-    # verify 401 (권한 cache 손상 시뮬)
-    monkeypatch.setattr(rg, "_get", lambda *a, **kw: (401, {}, "HTTP 401"))
     deleted = []
     posted = []
+
+    # 권한 cache 손상 시뮬: 재생성 전에는 401, DELETE+POST 로 다시 만든 뒤에는 200.
+    # 2026-08-12: 재생성 경로도 반드시 재인증까지 확인한다 (audit H-1) — 그래서
+    #   "지우고 다시 만들면 된다" 를 표현하려면 재생성 후 인증이 되어야 한다.
+    monkeypatch.setattr(rg, "_get",
+                        lambda *a, **kw: (200, {}, None) if posted else (401, {}, "HTTP 401"))
 
     def fake_delete(bmc_ip, path, u, p, t, v):
         deleted.append(path)
@@ -268,7 +335,7 @@ def test_provision_lenovo_patch_verify_fail_default_does_not_delete(monkeypatch)
         {'slot_uri': '/redfish/v1/AccountService/Accounts/4',
          'id': '4', 'username': 'infraops', 'role_id': 'Administrator', 'enabled': True},
     ]
-    monkeypatch.setattr(rg, "account_service_get", lambda *a, **k: ({}, accounts, []))
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(lambda *a, **k: ({}, accounts, [])))
     monkeypatch.setattr(rg, "_patch", lambda *a, **kw: (200, {}, None))
     monkeypatch.setattr(rg, "_get", lambda *a, **kw: (401, {}, "HTTP 401"))
     deleted, posted = [], []
@@ -298,7 +365,7 @@ def test_provision_dell_patch_silent_fail_no_delete_fallback(monkeypatch):
         {'slot_uri': '/redfish/v1/AccountService/Accounts/3',
          'id': '3', 'username': 'infraops', 'role_id': 'Administrator', 'enabled': True},
     ]
-    monkeypatch.setattr(rg, "account_service_get", lambda *a, **k: ({}, accounts, []))
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(lambda *a, **k: ({}, accounts, [])))
     monkeypatch.setattr(rg, "_patch", lambda *a, **k: (200, {}, None))
     monkeypatch.setattr(rg, "_get", lambda *a, **k: (401, {}, "HTTP 401"))
     deleted_calls = []
@@ -321,8 +388,15 @@ def test_provision_dell_patch_silent_fail_no_delete_fallback(monkeypatch):
     assert 'Dell iDRAC PATCH-only' in msgs
 
 
-def test_provision_dell_silent_fail_verify_detects(monkeypatch):
-    """vendor='dell' + PATCH 200 OK 이지만 verify 401 (silent fail) → 다음 슬롯 retry."""
+def test_provision_dell_silent_fail_stops_at_one_slot(monkeypatch):
+    """PATCH 200 인데 그 자격으로 인증이 안 되면 **거기서 멈춘다** (슬롯 순회 금지).
+
+    2026-08-12 변경 (lockout 예산): 종전에는 빈 슬롯을 최대 3개까지 돌며 같은 비밀번호로
+    다시 쓰고 매번 3회씩 검증해, 표준 계정에 실패 인증을 최대 9회 / 약 20초에 발생시켰다.
+    Dell IP Blocking 기본값은 60초 창에서 3회다(FailCount=3 / FailWindow=60 / PenaltyTime=60).
+    슬롯을 바꿔 다시 쓰는 것은 '다른 방식으로 또 써 본다' 와 같은 종류의 시도이기도 하다.
+    source: dell.com/.../idrac10_1.xx_scg/network-security-configuration
+    """
     accounts = [
         {'slot_uri': '/redfish/v1/AccountService/Accounts/1',
          'id': '1', 'username': '', 'role_id': 'None', 'enabled': False},
@@ -335,19 +409,15 @@ def test_provision_dell_silent_fail_verify_detects(monkeypatch):
     def fake_acct_get(bmc_ip, u, p, t, v):
         return {}, accounts, []
 
-    monkeypatch.setattr(rg, "account_service_get", fake_acct_get)
-    monkeypatch.setattr(rg, "_patch", lambda *a, **kw: (200, {}, None))
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(fake_acct_get))
+    patched = []
 
-    # 1차 verify (slot 3) = 401 silent fail, 2차 verify (slot 4) = 200 ok
-    verify_calls = {"n": 0}
-
-    def fake_get(bmc_ip, path, u, p, t, v):
-        verify_calls["n"] += 1
-        if verify_calls["n"] == 1:
-            return 401, {}, "HTTP 401: Unauthorized"
+    def fake_patch(bmc_ip, path, body, u, p, t, v):
+        patched.append((path, dict(body)))
         return 200, {}, None
 
-    monkeypatch.setattr(rg, "_get", fake_get)
+    monkeypatch.setattr(rg, "_patch", fake_patch)
+    monkeypatch.setattr(rg, "_get", lambda *a, **kw: (401, {}, "HTTP 401: Unauthorized"))
 
     out = rg.account_service_provision(
         bmc_ip="10.100.15.27", vendor="dell",
@@ -356,12 +426,17 @@ def test_provision_dell_silent_fail_verify_detects(monkeypatch):
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=False,
     )
-    # slot 4 에서 verify 200 → recovered=True
-    assert out["recovered"] is True
-    assert out["slot_uri"] == "/redfish/v1/AccountService/Accounts/4"
-    # silent fail 메시지 errors[] 에 기록
-    msgs = " ".join(e.get("message", "") for e in out["errors"])
-    assert "silent" in msgs.lower() or "Security Strengthen Policy" in msgs or "verify HTTP" in msgs
+    assert out["recovered"] is False
+    assert out["verification"] == "failed"
+    # 계정 생성 쓰기는 **한 슬롯에만** 나갔다 (그 뒤 PATCH 는 되돌리기 cleanup 1회).
+    create_writes = [p for p, b in patched if b.get("UserName") == "infraops"]
+    assert create_writes == ["AccountService/Accounts/3"]   # _p() 가 /redfish/v1 접두사를 뗀다
+    cleanup = [b for p, b in patched if b.get("UserName") == ""]
+    assert len(cleanup) == 1, "실패한 슬롯을 되돌리지 않았다"
+    # 표준 계정에 대한 실패 인증은 ACCOUNT_VERIFY_DELAYS 횟수를 넘지 않는다.
+    assert out["auth_budget"].get("infraops") == len(rg.ACCOUNT_VERIFY_DELAYS)
+    msgs = " ".join(f'{e.get("message", "")} {e.get("detail", "")}' for e in out["errors"])
+    assert "암호 정책" in msgs or "verify HTTP" in msgs
 
 
 def test_provision_dell_no_empty_slots_after_skip(monkeypatch):
@@ -378,7 +453,7 @@ def test_provision_dell_no_empty_slots_after_skip(monkeypatch):
     def fake_acct_get(bmc_ip, u, p, t, v):
         return {}, accounts, []
 
-    monkeypatch.setattr(rg, "account_service_get", fake_acct_get)
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(fake_acct_get))
 
     out = rg.account_service_provision(
         bmc_ip="10.100.15.27", vendor="dell",
@@ -389,30 +464,48 @@ def test_provision_dell_no_empty_slots_after_skip(monkeypatch):
     )
     assert out["recovered"] is False
     msgs = [e.get("message", "") for e in out["errors"]]
-    assert any("빈 슬롯 없음" in m for m in msgs)
+    assert any("빈 계정 슬롯이 없어" in m for m in msgs)
 
 
-def test_provision_hpe_405_lenovo_retry_succeeds(monkeypatch):
-    """vendor='hpe' + 1차 405 → 2차 PasswordChangeRequired retry 201 (HPE OEM 까지 안 감)."""
-    monkeypatch.setattr(rg, "account_service_get", _fake_acct_get_empty)
+def test_unverified_family_writes_once_and_never_retries(monkeypatch):
+    """공식 Write 계약을 확보하지 못한 Family 도 **한 번만 쓴다.**
+
+    2026-08-12 (rev.2) 반전. 종전 이 테스트는 "UNVERIFIED Family 는 400/405 뒤
+    `PasswordChangeRequired:false` 를 덧붙여 한 번 더 POST 한다" 를 고정하고 있었다.
+    그런데 그 Family 에 속한 Vendor 들(Fujitsu / Quanta / Cisco X-Series / Lenovo IMM2 /
+    Supermicro X9 / Inspur M5·M7 / HPE RMC)이 공식 조사에서 **하나같이 바로 그 재시도를
+    금지**했다.
+        05 §19/§39-D, 06 §17/§31-F, 07 §17/§40-E, 08 §17/§32-C, 09 §19/§45-D
+
+    UNVERIFIED 의 뜻은 "여러 번 시도해 본다" 가 아니다:
+        read-only discovery → 완전 열거 → **한 번의 결정적 쓰기** → 재조회 → 재인증
+    계약을 모르면 추측하지 말고 한 번 쓰고 결과를 그대로 보고한다.
+    """
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(_fake_acct_get_empty))
 
     call_log = []
 
     def fake_post(bmc_ip, path, body, u, p, t, v):
         call_log.append(dict(body))
-        if "PasswordChangeRequired" in body and "Oem" not in body:
+        # 종전이라면 2차 요청에서 성공했을 응답. 이제 2차 요청 자체가 없어야 한다.
+        if "PasswordChangeRequired" in body:
             return 200, {"@odata.id": "/redfish/v1/AccountService/Accounts/4"}, None
         return 405, {}, "HTTP 405: Method Not Allowed"
 
     monkeypatch.setattr(rg, "_post", fake_post)
 
     out = rg.account_service_provision(
-        bmc_ip="10.50.11.231", vendor="hpe",
+        bmc_ip="10.0.0.9", vendor="fujitsu",
         current_username="admin", current_password="<recovery-pass>",
         target_username="infraops", target_password="<target-pass>",
         target_role="Administrator",
         timeout=30, verify_ssl=False, dryrun=False,
     )
-    assert out["recovered"] is True
-    # 2번 호출만 (Oem retry 까지 안 감)
-    assert len(call_log) == 2
+    assert out["family"] == "generic_collection_post"
+    assert out["evidence"] == "unverified"
+    assert len(call_log) == 1, "UNVERIFIED Family 가 추측성 2차 Write 를 했다"
+    assert "PasswordChangeRequired" not in call_log[0], \
+        "계약 근거가 없는 속성을 추측해서 보냈다"
+    # 한 번의 쓰기가 거부됐으므로 실패다. 성공으로 둔갑시키지 않는다.
+    assert out["recovered"] is False
+    assert out["write_accepted"] is False

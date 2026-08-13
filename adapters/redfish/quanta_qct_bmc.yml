@@ -5,7 +5,7 @@
 # Origin: Quanta QCT 공식 + OpenBMC 표준
 # Last sync: 2026-05-01 (web sources only — lab 부재)
 # Notes: QuantaGrid D54Q-2U / D52BQ-2U / 기타 OpenBMC 기반 모델.
-#   사용자 명시 승인 (2026-05-01) — vault 신설 완료 (2026-05-11 M-A4, vault/redfish/quanta.yml).
+#   사용자 명시 승인 (2026-05-01) — vault 신설 완료 (2026-05-11 M-A4, vault/<loc>/redfish/quanta.yml).
 # Sources (rule 96 R1-A — lab 부재):
 #   - https://www.qct.io/product/index/Server/rackmount-server/2U-Rackmount-Server/QuantaGrid-D54Q-2U
 #   - https://www.exalit.com/storage/2023/09/D54Q-2U_v20230330.pdf
@@ -64,7 +64,7 @@ normalize:
 credentials:
   profile: "quanta"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/quanta.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
+  # P2 AccountService 진입점 — vault/<loc>/redfish/quanta.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
   recovery_accounts:
     - { vault_label: quanta_factory, role: recovery }
 

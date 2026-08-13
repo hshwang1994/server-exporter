@@ -71,9 +71,9 @@ normalize:
   # top-level data.* 는 Partition0 representative — 전 partition 은 data.multi_node 에 노출 (ADR-2026-05-12).
 
 credentials:
-  profile: "hpe"  # vault/redfish/hpe.yml 재사용 (M-E1 결정 (a) HPE sub-line)
+  profile: "hpe"  # vault/<loc>/redfish/hpe.yml 재사용 (M-E1 결정 (a) HPE sub-line)
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/hpe.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/<loc>/redfish/hpe.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: hpe_fallback, role: recovery }
     - { vault_label: hpe_current,  role: recovery }

@@ -240,6 +240,7 @@ if response["data"]["hardware"].get("health") == "Critical":
 | `TCP_CONNECTION_REFUSED` | 대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요. |
 | `PROTOCOL_CHECK_FAILED` | 관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. 관리 서비스 설정과 상태를 확인하세요. |
 | `AUTH_PROBE_FAILED` | 대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요. |
+| `CREDENTIAL_SET_UNAVAILABLE` | 대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요. *(4번 문장 재사용 — 아래 5-1 참조)* |
 | `GATHER_FAILED` | 대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요. |
 | `OUTPUT_BUILD_FAILED` | 수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요. |
 
@@ -278,7 +279,7 @@ for e in response["errors"]:
   "failure_stage":      "port",  // 실행이 멈춘 단계 이름 (원인 아님)
   "failure_code":       "TCP_CONNECTION_REFUSED",  // 시스템 분기용 안정 식별자 (성공 시 null)
   "failure_reason":     "대상 관리 서비스 연결이 거부되었습니다. 방화벽과 서비스 상태를 확인하세요.",
-  "details": { ... }             // 채널별 부가 정보 (선택된 adapter, BMC product 명 등)
+  "details": { ... }             // 채널별 부가 정보 (선택된 adapter, BMC product 명, credential_scope 등)
 }
 ```
 
@@ -321,9 +322,38 @@ for e in response["errors"]:
 | `TCP_CONNECT_FAILED` | `reachable` | TCP 연결 실패 (timeout / no route 등). **장비 다운으로 확정하지 않음** |
 | `TCP_CONNECTION_REFUSED` | `port` | 명시적 TCP 거부(RST)를 관측 |
 | `PROTOCOL_CHECK_FAILED` | `protocol` | 기대한 프로토콜 응답을 확인하지 못함 |
-| `AUTH_PROBE_FAILED` | `auth` | 자격증명 확인 단계에서 중단. **인증 거부 확정은 `auth_success` 가 표현** |
+| `AUTH_PROBE_FAILED` | `auth` | **자격증명을 실제로 보냈고** 확인 단계에서 중단. 인증 거부 확정은 `auth_success` 가 표현 |
+| `CREDENTIAL_SET_UNAVAILABLE` | `auth` | 자격증명 세트를 열 수 없어 **인증을 시도조차 못 함** (`auth_success` 는 항상 `null`) |
 | `GATHER_FAILED` | `gather` | 연결·인증 통과 후 수집/정규화 실패 |
 | `OUTPUT_BUILD_FAILED` | `fallback` | 정상 결과 객체 생성 실패 |
+
+> **`AUTH_PROBE_FAILED` 와 `CREDENTIAL_SET_UNAVAILABLE` 의 차이** (2026-08-12 신설)
+>
+> 사용자 문장은 같지만(4번) **운영자가 확인할 곳이 다르다.**
+>
+> | | `AUTH_PROBE_FAILED` | `CREDENTIAL_SET_UNAVAILABLE` |
+> |---|---|---|
+> | 무슨 일이 있었나 | 자격을 실어 보냈는데 통하지 않았다 | 보낼 자격 자체가 없었다 |
+> | `auth_success` | `false`(명시적 거부) 또는 `null`(원인 미확정) | **항상 `null`** (미시도) |
+> | 확인할 곳 | 대상 장비의 계정 / 권한 / 잠금 | 자격증명 배치 (해당 Location 의 세트 존재·복호화) |
+> | 대표 상황 | 401 거부, timeout, TLS 오류, 403 | Location 미전달·미등록, 세트 파일 부재, 복호화 실패 |
+>
+> `stage` 는 둘 다 `auth` 다 — `failure_stage` 는 원인이 아니라 **멈춘 위치**이고,
+> 멈춘 곳은 두 경우 모두 자격증명 단계다.
+> 어떤 세트를 열었는지는 `diagnosis.details.credential_scope` 로 확인한다.
+
+> **Credential scope 두 개 — Redfish 만** (2026-08-12)
+>
+> Redfish 는 계정 축이 둘이라 `details` 에 scope 가 둘 나온다.
+>
+> | 필드 | 값 | 무엇인가 | 채널 |
+> |---|---|---|---|
+> | `credential_scope` | `common/redfish/standard` | **실제 인증·수집에 쓴** 표준 수집 계정. Location / Vendor 와 무관한 전역 1개 | 3채널 (OS/ESXi 는 `<loc>/os/<type>`, `<loc>/esxi`) |
+> | `recovery_credential_scope` | `<loc>/redfish/<vendor>` | 표준 계정을 **만들거나 되살리기 위한** 복구 계정 범위. 수집에는 쓰지 않는다 | Redfish 전용 |
+>
+> 최종 수집은 **반드시** 표준 계정으로 수행된다. 복구 계정으로 수집한 결과가
+> 정상 결과로 나가는 경로는 없다 — 복구가 확인되면 표준 계정으로 **재수집**한다.
+> `diagnosis.details.auth.used_role` 이 `recovery` 인 성공 결과는 존재할 수 없다.
 
 > **매핑 예외 1건**: OS 채널의 관리 포트 전체 실패는 `stage=port` + `code=TCP_CONNECT_FAILED` 다.
 > OS 는 `wait_for` 로만 포트를 확인해 RST 를 관측할 수 없으므로 `TCP_CONNECTION_REFUSED` 로

@@ -179,14 +179,24 @@ CHANNEL_PROTOCOL_MESSAGES = {
 #   관측하고 code 를 REFUSED 로 확정했는데도 사용자에게는 "IP 사용 여부를 확인하세요"(1번)
 #   가 나갔다. 이제 관측된 code 를 그대로 따라 2번(관리 포트 연결 불가)을 쓴다.
 #   presence probe(ICMP / IPAM / ARP)는 여전히 만들지 않는다 — 사용자 지시.
+# CREDENTIAL_SET_UNAVAILABLE (2026-08-12 신설):
+#   해당 Location/Vendor 의 credential set 을 열지 못해 **인증을 시도조차 못 했다.**
+#   AUTH_PROBE_FAILED 와 반드시 구분한다 —
+#     AUTH_PROBE_FAILED         : 자격을 실어 보냈는데 통하지 않았다 (auth_success=false|null)
+#     CREDENTIAL_SET_UNAVAILABLE: 보낼 자격 자체가 없었다        (auth_success=null 고정)
+#   조치가 다르다: 전자는 대상 계정 점검, 후자는 vault 배치 점검.
+#   precheck 는 이 code 를 내지 않는다 (인증정보를 받지 않는다). 각 채널 rescue 가 낸다.
+#   사용자 문장은 4번을 재사용한다 — 운영자가 할 일이 결국 "자격증명 설정 확인" 으로 같아서
+#   문장을 늘리지 않는다 (Portal 5문장 집합 불변). 구분은 code 와 detail 이 표현한다.
 REASON_BY_FAILURE_CODE = {
-    "DNS_RESOLUTION_FAILED":  REASON_IP_UNCONFIRMED,
-    "TCP_CONNECT_FAILED":     REASON_IP_UNCONFIRMED,
-    "TCP_CONNECTION_REFUSED": REASON_PORT_UNREACHABLE,
-    "PROTOCOL_CHECK_FAILED":  REASON_PROTOCOL_UNCONFIRMED,
-    "AUTH_PROBE_FAILED":      REASON_CREDENTIAL_FAILED,
-    "GATHER_FAILED":          REASON_GATHER_FAILED,
-    "OUTPUT_BUILD_FAILED":    REASON_OUTPUT_BUILD_FAILED,
+    "DNS_RESOLUTION_FAILED":      REASON_IP_UNCONFIRMED,
+    "TCP_CONNECT_FAILED":         REASON_IP_UNCONFIRMED,
+    "TCP_CONNECTION_REFUSED":     REASON_PORT_UNREACHABLE,
+    "PROTOCOL_CHECK_FAILED":      REASON_PROTOCOL_UNCONFIRMED,
+    "AUTH_PROBE_FAILED":          REASON_CREDENTIAL_FAILED,
+    "CREDENTIAL_SET_UNAVAILABLE": REASON_CREDENTIAL_FAILED,
+    "GATHER_FAILED":              REASON_GATHER_FAILED,
+    "OUTPUT_BUILD_FAILED":        REASON_OUTPUT_BUILD_FAILED,
 }
 
 

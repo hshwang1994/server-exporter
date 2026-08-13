@@ -67,6 +67,40 @@
         - name: "redfish | detect vendor"
           ansible.builtin.include_tasks: tasks/detect_vendor.yml
 
+        # ── Credential 선택 (2026-08-12) ─────────────────────────────────
+        # (se_location, canonical vendor) → vault/<loc>/redfish/<vendor>.yml
+        #
+        # adapter 선택 **앞**에 둔다. 데이터 의존은 이미 끊겼지만, 순서를 앞에 두면
+        # "adapter 결과를 볼 수 없으므로 참조할 수 없다" 가 구조로 강제된다.
+        # 종전에는 adapter 의 `credentials.profile` 이 vault 를 골랐다 —
+        # Adapter(어떻게 수집하는가) 와 Credential(누구로 인증하는가) 이 결합돼 있었다.
+        - name: "redfish | resolve credentials"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/credential/resolve_and_load_redfish.yml"
+          vars:
+            _cred_target_type: "redfish"
+            _cred_vendor: "{{ _rf_detected_vendor | default('') }}"
+
+        - name: "redfish | load vault"
+          ansible.builtin.include_tasks: tasks/load_vault.yml
+
+        # 표준 수집 계정을 못 열면 Redfish 수집은 성립하지 않는다 — 여기서 명시적으로 끝낸다.
+        #   `vendor_unresolved`(vendor 미식별)는 **표준 계정과 무관**하다. 표준 계정은 전역
+        #   이라 vendor 를 몰라도 열 수 있으므로 여기서 멈추지 않는다. 그 경우 복구만
+        #   불가능하고, 정체 미상 장비에 대한 빈 자격 best-effort 도 그대로 유지된다.
+        #   복구 세트 부재는 여기서 실패로 만들지 않는다 — 표준 인증이 성공하면 아무 영향이 없다.
+        - name: "redfish | abort if credential set unavailable"
+          ansible.builtin.fail:
+            msg: >-
+              Credential set 을 열 수 없습니다
+              (standard scope={{ _cred_scope | default('') | ternary(_cred_scope, _cred_reason) }},
+              outcome={{ _cred_standard_outcome | default('not_resolved') }}).
+              se_location 값과 vault/common/redfish/standard.yml, ansible-vault 복호화 키를 확인하세요.
+          when: >-
+            (_cred_reason | default('unknown_location')) not in ['resolved', 'vendor_unresolved']
+            or (_cred_standard_outcome | default('not_resolved'))
+               in ['credential_set_missing', 'credential_set_undecryptable']
+
         # ── select adapter (Phase 2) ─────────────────────────────────────
         - name: "redfish | select adapter"
           ansible.builtin.set_fact:
@@ -91,13 +125,77 @@
             _rf_adapter_manager_layout: >-
               {{ ((_selected_adapter | default({})).vendor_notes | default({})).manager_layout | default('') }}
 
-        # ── load vault (adapter 기반) ────────────────────────────────────
-        - name: "redfish | load vault"
-          ansible.builtin.include_tasks: tasks/load_vault.yml
-
-        # ── collect standard ─────────────────────────────────────────────
+        # ── Phase 1: 표준 수집 계정으로 수집 ─────────────────────────────
+        # 표준 계정은 전역 1개다 (vault/common/redfish/standard.yml).
+        # 복구 계정은 여기 들어오지 않는다 — 복구 계정으로 수집하는 경로는 없다.
         - name: "redfish | collect standard"
           ansible.builtin.include_tasks: tasks/collect_standard.yml
+          vars:
+            _rf_try_accounts: "{{ _rf_standard_accounts | default([]) }}"
+
+        # ── 표준 계정 복구 (recovery → standard) ─────────────────────────
+        # 2026-08-12 (Contract 재확정): 진입 조건에서 "recovery 로 수집이 됐다" 를 뺀다.
+        #   복구 계정으로는 애초에 수집하지 않으므로 그 사실이 존재할 수 없다.
+        #   대신 "표준 수집이 실패했고, 표준 자격이 401 로 명시 거부됐고, 복구 후보가 있다" 로 본다.
+        #
+        # 2026-08-11 (Phase 6-B §6 §7): 401 한정은 그대로 유지한다. primary 실패 원인은
+        #   자격증명 불일치만이 아니다 — timeout / TLS / 5xx / 일시 단절도 같은 모양이다.
+        #   403(권한 부족)도 제외한다: 인증 자체는 통과했을 수 있어, 여기서 계정을 손대면
+        #   멀쩡한 표준 계정 비밀번호를 덮어쓴다.
+        #
+        # 이 값 하나를 account_service.yml 의 쓰기 모드도 함께 본다
+        # (§16 — "기본값이라서" 쓰기가 켜지는 경로를 없앤다).
+        - name: "redfish | account_service | 진입 조건 판정"
+          ansible.builtin.set_fact:
+            _rf_account_reconcile_allowed: >-
+              {{ (not (_rf_collect_ok | default(false) | bool))
+                 and (_rf_primary_auth_rejected | default(false) | bool)
+                 and ((_rf_recovery_accounts | default([])) | length > 0) }}
+
+        - name: "redfish | account_service (recovery → standard)"
+          when: _rf_account_reconcile_allowed | bool
+          ansible.builtin.include_tasks: tasks/account_service.yml
+
+        # 표준 자격이 거부됐는데 복구 세트가 없으면 **복구할 방법이 없다**는 사실을 남긴다.
+        # 이 상태는 결과만 보면 "그냥 인증 실패" 와 구분되지 않는다. 운영자가 해야 할 일이
+        # 다르다 — 전자는 해당 Location/Vendor 복구 자격을 배치해야 하고, 후자는 표준
+        # 계정 비밀번호를 맞춰야 한다. failure_code 를 새로 만들지 않고 근거만 분리한다.
+        - name: "redfish | recovery set unavailable 사실 기록"
+          when:
+            - not (_rf_collect_ok | default(false) | bool)
+            - _rf_primary_auth_rejected | default(false) | bool
+            - (_rf_recovery_accounts | default([])) | length == 0
+          block:
+            - name: "redfish | recovery set unavailable fragment"
+              ansible.builtin.set_fact:
+                _data_fragment: {}
+                _sections_supported_fragment: []
+                _sections_collected_fragment: []
+                _sections_failed_fragment: []
+                _sections_unsupported_fragment: []
+                _errors_fragment:
+                  - section: "account_service"
+                    message: "{{ _fr_credential_failed }}"
+                    detail: >-
+                      standard credential rejected and no recovery credential set available
+                      (recovery scope={{ _rf_recovery_scope | default('') | ternary(_rf_recovery_scope, _cred_reason | default('unresolved')) }},
+                      outcome={{ _cred_recovery_outcome | default('not_resolved') }})
+
+            - name: "redfish | recovery set unavailable 누적 (merge_fragment)"
+              ansible.builtin.include_tasks:
+                file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
+
+        # ── Phase 3: 표준 계정으로 재인증 + 재수집 ───────────────────────
+        # 복구가 **실제로 확인**됐을 때만 (§9 — write 2xx 는 성공이 아니다).
+        # 여기서 성공해야 비로소 "표준 계정으로 수집했다" 가 된다.
+        - name: "redfish | re-collect with standard account (after recovery)"
+          when:
+            - _rf_account_reconcile_allowed | bool
+            - (_rf_account_service_meta | default({})).recovered | default(false) | bool
+            - not ((_rf_account_service_meta | default({})).dryrun | default(true) | bool)
+          ansible.builtin.include_tasks: tasks/collect_standard.yml
+          vars:
+            _rf_try_accounts: "{{ _rf_standard_accounts | default([]) }}"
 
         # 2026-04-30: precheck/diagnosis가 이미 식별한 실패 단계에 따라 specific 메시지.
         # ServiceRoot(/redfish/v1/)는 Redfish 표준상 무인증 → protocol_supported=true이면
@@ -129,36 +227,26 @@
               {%- else -%}
               Redfish 정보 수집에 실패했습니다 ({{ _rf_ip }}).
               네트워크/포트/Redfish API 는 정상 확인됨 (Redfish {{ d.details.redfish_version | default('?') }} / {{ d.details.product | default('Unknown') }}).
-              가능한 원인은 (1) 자격증명 불일치 (vault/redfish/{{ _rf_vendor | default('<vendor>') }}.yml, 시도된 계정 수 {{ (_rf_attempts_meta | default({})).attempted_count | default('?') }}개),
+              가능한 원인은 (1) 자격증명 불일치 (credential scope={{ _cred_scope | default('?') }}, 시도된 계정 수 {{ (_rf_attempts_meta | default({})).attempted_count | default('?') }}개),
               (2) 계정 권한 부족, (3) 펌웨어 호환성 또는 OEM 경로 문제입니다.
               자세한 기술 오류는 errors 항목을 확인하세요.
               {%- endif -%}
           when: not (_rf_collect_ok | bool)
 
-        # ── P2 (cycle 2026-04-28): recovery 자격 사용 시 공통계정 자동 복구 ──
-        # 사용자 결정 #4: dryrun ON default, lab 검증 후 OFF 전환
-        #
-        # 2026-08-11 (Phase 6-B §6 §7): 진입 조건을 좁힌다. 기능은 그대로 두고 조건만 좁힌다.
-        #   종전: "primary 로 수집이 안 됐고 recovery 로 됐다" 면 무조건 BMC 계정을 고쳤다.
-        #   문제: primary 실패의 원인은 자격증명 불일치만이 아니다. timeout / TLS / 5xx /
-        #        일시적 네트워크 단절도 같은 모양으로 보인다. 그런 상황에서 계정을 고치면
-        #        멀쩡한 공통계정의 비밀번호를 덮어쓰게 된다.
-        #   신: primary 후보가 **401 로 명시적으로 거부**됐을 때만 진입한다
-        #      (_rf_primary_auth_rejected — collect_standard.yml 이 역할 기준으로 판정).
-        #      403(권한 부족)은 제외한다 — 인증 자체는 통과했을 수 있다.
-        #
-        # 이 사실을 한 곳에서만 판정해 두고, 아래 include 의 when 과 account_service.yml 의
-        # 쓰기 모드가 같은 값을 본다 (§16 — "기본값이라서" 쓰기가 켜지는 경로를 없앤다).
-        - name: "redfish | account_service | 진입 조건 판정"
-          ansible.builtin.set_fact:
-            _rf_account_reconcile_allowed: >-
-              {{ (((_rf_used_account | default({})).role | default('primary')) == 'recovery')
-                 and (_rf_collect_ok | default(false) | bool)
-                 and (_rf_primary_auth_rejected | default(false) | bool) }}
-
-        - name: "redfish | account_service (recovery → primary)"
-          when: _rf_account_reconcile_allowed | bool
-          ansible.builtin.include_tasks: tasks/account_service.yml
+        # ── 최종 수집 주체 검증 (2026-08-12 Contract) ────────────────────
+        # "표준 계정으로 수집했다" 가 성립하지 않으면 성공이 아니다.
+        # 복구 계정으로 수집하는 경로는 위에서 구조적으로 제거했지만, 향후 누군가
+        # collect_standard 에 복구 후보를 넘기는 순간 조용히 되살아난다. 여기서 못 박는다.
+        #   허용: primary(표준 계정) / anonymous(정체 미상 장비 무인증 best-effort)
+        #   금지: recovery
+        - name: "redfish | abort if final gathering not by standard account"
+          ansible.builtin.fail:
+            msg: >-
+              Redfish 정보 수집에 실패했습니다 ({{ _rf_ip }}).
+              표준 수집 계정으로 수집을 완료하지 못했습니다
+              (사용된 계정 역할={{ (_rf_used_account | default({})).role | default('unknown') }}).
+              표준 계정 상태와 자격증명을 확인하세요.
+          when: ((_rf_used_account | default({})).role | default('primary')) == 'recovery'
 
         # ── normalize standard ───────────────────────────────────────────
         - name: "redfish | normalize standard"
@@ -246,6 +334,8 @@
                                 if (((_diagnosis | default({}, true)).details | default({}))
                                     is mapping) else {}) | combine({
                      'adapter_candidate': _selected_adapter.adapter_id | default(none),
+                     'credential_scope': (_cred_scope | default('')) or none,
+                     'recovery_credential_scope': (_cred_recovery_scope | default('')) or none,
                      'auth': _rf_attempts_meta | default({}),
                      'account_service': _rf_account_service_meta | default({}),
                      'multi_node_layout': (_rf_adapter_manager_layout | default('')) or none,
@@ -310,9 +400,18 @@
         #   "등록된 자격증명 거부" 가 아니다.
         - name: "redfish | rescue | 인증 거부 실증 판정"
           ansible.builtin.set_fact:
+            #
+            # 2026-08-12 (audit C-2): `attempted` 를 `_rf_accounts`(표준+복구 **병합**)
+            #   길이로 세던 것을 `_rf_standard_accounts` 로 바로잡는다.
+            #   `_rf_auth_statuses` 는 표준 후보에서만 쌓이는데(try_one_account.yml 의
+            #   loop 대상이 `_rf_standard_accounts`) 분모만 복구 후보까지 세고 있었다.
+            #   결과: **복구 후보가 하나라도 있으면** 두 수가 영영 같아지지 않아
+            #   auth_success 가 false 로 확정되지 못했다. 계정 쓰기를 정당화한 바로 그
+            #   401 이 envelope 에 남지 않는, 정확히 reconcile 이 가능한 상황에서만
+            #   진단이 비는 구조였다.
             _rf_auth_rejected: >-
               {%- set statuses = _rf_auth_statuses | default([]) -%}
-              {%- set attempted = (_rf_accounts | default([])) | length -%}
+              {%- set attempted = (_rf_standard_accounts | default([])) | length -%}
               {{ attempted > 0
                  and (statuses | length) == attempted
                  and (statuses | select('equalto', 401) | list | length) == attempted }}
@@ -348,12 +447,23 @@
               {%- set ok_obs = st | select('ge', 200) | select('lt', 400) | list | length -%}
               {%- set tried = ((_rf_auth_observations | default([])) | length)
                               + ((_rf_failed_attempt_notes | default([])) | length) -%}
+              {#- 2026-08-12: credential set 자체를 열지 못한 경우를 별도 관측값으로 분리한다.
+                  '인증을 시도했는데 거부됐다'(rejected)와 '인증을 시도조차 못 했다'를 같은
+                  code 로 만들면 소비 시스템이 구분할 수 없다. 후보가 0개이고 credential set
+                  로딩이 실패했을 때만 성립한다 (vendor 미상은 여기 해당하지 않는다 — 그 경로는
+                  빈 자격 1회 시도로 가므로 tried > 0 이 된다). -#}
+              {%- set cred_na = ((_cred_load_outcome | default(''))
+                                 in ['not_resolved', 'credential_set_missing',
+                                     'credential_set_undecryptable'])
+                                and ((_cred_reason | default('')) != 'vendor_unresolved') -%}
               {%- if (_rf_collect_ok | default(false) | bool) or ok_obs > 0 -%}
               passed
               {%- elif _rf_auth_rejected | default(false) | bool -%}
               rejected
               {%- elif tried > 0 -%}
               unknown
+              {%- elif cred_na -%}
+              credential_unavailable
               {%- else -%}
               not_attempted
               {%- endif -%}
@@ -364,6 +474,15 @@
         #   rejected      → auth / AUTH_PROBE_FAILED / false / 4번. 401 실증을 함께 남긴다.
         #   unknown       → auth / AUTH_PROBE_FAILED / null / 4번. 자격 요청은 보냈지만
         #                   원인을 확정하지 못했다 (timeout / TLS / 403 / 5xx).
+        #   credential_unavailable
+        #                 → auth / CREDENTIAL_SET_UNAVAILABLE / null / 4번 (2026-08-12 신설).
+        #                   해당 Location/Vendor 의 credential set 을 열지 못해 **인증을 시도조차
+        #                   못 했다.** AUTH_PROBE_FAILED 와 반드시 구분한다 — 후자는 자격을 실어
+        #                   보냈는데 통하지 않은 것이고, 이것은 보낼 자격 자체가 없던 것이다.
+        #                   운영자의 조치도 다르다 (BMC 계정 점검 vs vault 배치 점검).
+        #                   stage 는 auth 를 유지한다 — stage 는 원인이 아니라 **멈춘 위치**이고
+        #                   (CLAUDE.md §9) 멈춘 곳은 자격증명 단계가 맞다.
+        #                   auth_success 는 null 이다 (미시도). false 는 '구조화된 명시적 거부'다.
         #   not_attempted → gather / GATHER_FAILED / null / 5번. 자격 요청 자체를 보내기
         #                   **전에** 멈췄다 (adapter 선택 / vault 로드 / vendor 정규화 예외 등).
         #                   CLAUDE.md §9 — failure_stage 는 '워크플로가 멈춘 위치' 다.
@@ -383,7 +502,9 @@
                            if ((_diagnosis | default({}, true)) is mapping) else {})
                  | combine({'failure_stage': ('gather' if at_gather else 'auth'),
                             'failure_code': ('GATHER_FAILED' if at_gather
-                                             else 'AUTH_PROBE_FAILED'),
+                                             else ('CREDENTIAL_SET_UNAVAILABLE'
+                                                   if outcome == 'credential_unavailable'
+                                                   else 'AUTH_PROBE_FAILED')),
                             'auth_success': (true if outcome == 'passed'
                                              else (false if outcome == 'rejected' else none)),
                             'failure_reason': (_fr_gather_failed if at_gather
@@ -392,7 +513,13 @@
                                         if (((_diagnosis | default({}, true)).details | default({}))
                                             is mapping)
                                         else {})
-                                       | combine({'notices':
+                                       | combine({'credential_scope': (_cred_scope | default('')) or none,
+                                                  'recovery_credential_scope':
+                                                    (_cred_recovery_scope | default('')) or none,
+                                                  'auth': _rf_attempts_meta | default({}),
+                                                  'account_service':
+                                                    _rf_account_service_meta | default({}),
+                                                  'notices':
                                            ((_rf_raw_collect | default({})).notices | default([]))})}) }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 

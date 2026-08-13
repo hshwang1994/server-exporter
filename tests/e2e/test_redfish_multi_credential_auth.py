@@ -87,9 +87,16 @@ def _decide(statuses: list[Any], *, candidates: int, collect_ok: bool = False):
     그 하나에서만 파생한다. try_one_account.yml 이 statuses 와 같은 순서로 쌓는
     `_rf_auth_observations` 도 함께 만들어 실제 실행과 같은 입력을 준다.
     """
-    accounts = [{"label": f"c{i}"} for i in range(candidates)]
+    # 2026-08-12 (audit C-2): 분모는 **표준 후보** 수다. `_rf_auth_statuses` 가
+    #   표준 후보에서만 쌓이므로(try_one_account.yml 의 loop 대상이 `_rf_standard_accounts`)
+    #   분모도 같은 배열이어야 한다. 종전에는 표준+복구 병합 배열을 셌고, 그래서
+    #   복구 후보가 하나라도 있으면 auth_success 가 영영 false 로 확정되지 못했다.
+    accounts = [{"label": f"c{i}", "role": "primary"} for i in range(candidates)]
     rejected = _render(_REJECT_TASK,
-                       {"_rf_auth_statuses": statuses, "_rf_accounts": accounts})
+                       {"_rf_auth_statuses": statuses,
+                        "_rf_standard_accounts": accounts,
+                        # 복구 후보가 섞여 있어도 판정이 흔들리지 않아야 한다.
+                        "_rf_accounts": accounts + [{"label": "rec", "role": "recovery"}]})
     observations = [{"role": "primary", "label": f"c{i}", "status": st}
                     for i, st in enumerate(statuses)]
     diag = render_redfish_rescue({"_diagnosis": dict(_PRECHECK_OK),
@@ -261,3 +268,26 @@ def test_no_string_parsing_in_aggregation():
     assert "select('equalto', 401)" in block
     for banned in ("'HTTP 401'", '"HTTP 401"', "regex_search", "search(", "in msg"):
         assert banned not in block, banned
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# audit C-2 회귀 — 복구 후보가 있어도 401 실증이 사라지면 안 된다
+# ═══════════════════════════════════════════════════════════════════════════
+@pytest.mark.parametrize("recovery_count", [0, 1, 4])
+def test_recovery_candidates_do_not_erase_the_401_evidence(recovery_count):
+    """복구 후보 수가 몇이든 표준 후보가 전부 401 이면 인증 거부로 확정된다.
+
+    2026-08-12 (audit C-2): 분모를 표준+복구 병합 배열로 세는 바람에, **복구가 가능한
+    상황에서만** (=복구 후보가 존재할 때만) auth_success 가 null 로 남았다. 계정 쓰기를
+    정당화한 바로 그 401 이 결과에 안 남는, 가장 필요한 자리에서 진단이 비는 구조였다.
+    실제 Dell 구성이 표준 1 + 복구 4 라 이 경로가 상시 발동했다.
+    """
+    standard = [{"label": "std", "role": "primary"}]
+    recovery = [{"label": f"rec{i}", "role": "recovery"} for i in range(recovery_count)]
+    rejected = _render(_REJECT_TASK, {
+        "_rf_auth_statuses": [401],
+        "_rf_standard_accounts": standard,
+        "_rf_accounts": standard + recovery,
+    })
+    assert bool(rejected) is True, (
+        f"복구 후보 {recovery_count} 개 때문에 401 실증이 사라졌다")

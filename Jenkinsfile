@@ -171,12 +171,21 @@ pipeline {
                                     chmod 600 "${vaultPassFile}"
                                     chmod +x "${inventory}"
                                 """
+                                // 2026-08-12: Credential 선택이 Location 축을 갖게 되면서
+                                //   se_location extra-var 가 없으면 어떤 vault 도 열리지 않는다.
+                                //   이 파이프라인은 운영 대상이 아니고 삭제 예정이지만(E2E Regression
+                                //   게이트 이관 방안 확정 전까지 보류), 남아 있는 동안 깨진 상태로
+                                //   두지 않기 위해 최소 전달만 추가한다.
+                                //   주의: 이 파일은 pipeline top-level `agent { label "${params.loc}" }`
+                                //   구조라 Jenkinsfile_portal 의 'Resolve Location' 처럼 **agent 할당
+                                //   이전에** 미등록 Location 을 걸러낼 수 없다. 잘못된 loc 은 여전히
+                                //   노드 대기로 나타난다. 운영 경로는 Jenkinsfile_portal 이다.
                                 ansiblePlaybook(
                                     playbook    : playbook,
                                     inventory   : inventory,
                                     installation: 'ansible',
                                     colorized   : true,
-                                    extras      : "--vault-password-file=\"${vaultPassFile}\"",
+                                    extras      : "--vault-password-file=\"${vaultPassFile}\" -e se_location=\"${params.loc}\"",
                                 )
                             } finally {
                                 sh "rm -f \"${vaultPassFile}\" || true"

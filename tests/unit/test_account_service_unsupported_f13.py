@@ -15,6 +15,16 @@ P2 자동 복구 로직이 cisco vendor 시 GET 자체 실패 → noise. cycle 2
 from __future__ import annotations
 
 import sys
+
+import pytest
+
+# 2026-08-12: 누출 가드가 검사 대상인 **진짜 비밀번호를 소스에 그대로** 적어 두고 있었다.
+#   가드 파일 자체가 누출 지점이라, 평문 대신 sha256 앞 8자리로 대조하는 공용 가드로
+#   바꾼다. 입력으로 넣던 실 자격증명도 합성 canary 로 바꾼다 (검사 의미는 동일).
+from tests.secret_guard import (  # noqa: E402
+    CANARY_PASSWORD, CANARY_RECOVERY, CANARY_TARGET, assert_no_secret,
+)
+
 import types
 from pathlib import Path
 
@@ -34,6 +44,29 @@ sys.modules.setdefault("ansible.module_utils.basic", _stub_basic)
 
 import redfish_gather as rg  # noqa: E402
 
+# 2026-08-12: provision 이 account_service_get → account_service_discover 로 옮겨졌다.
+# 기존 3-tuple fake 를 discovery dict 로 감싸는 공용 seam (tests/unit/account_seam.py).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from account_seam import as_discovery as _as_discovery_raw  # noqa: E402
+
+
+def _as_discovery(fn, **overrides):
+    return _as_discovery_raw(fn, rg, **overrides)
+
+
+@pytest.fixture(autouse=True)
+def _default_write_verify_seam(monkeypatch):
+    """2026-08-12 (audit H-1): 이제 **모든** 계정 쓰기 경로가 재조회 + 표준 자격 재인증을
+    수행한다. 종전 POST 경로는 2xx 만으로 성공을 보고했다.
+
+    그래서 쓰기 seam 만 stub 하던 테스트가 실제 네트워크로 나가게 된다. 여기서 기본
+    검증 seam 을 성공으로 깔아 둔다. 개별 테스트가 다시 setattr 하면 그쪽이 이긴다.
+    """
+    monkeypatch.setattr(rg, "_get", lambda *a, **k: (200, {}, None))
+    monkeypatch.setattr(rg, "_get_response_etag", lambda *a, **k: None)
+    monkeypatch.setattr(rg.time, "sleep", lambda *_: None)
+
+
 
 def test_provision_cisco_post_with_id_field_succeeds(monkeypatch):
     """F50 (cycle 2026-05-06): vendor='cisco' POST 표준 지원 확인 (사이트 실측 10.100.15.2).
@@ -51,7 +84,7 @@ def test_provision_cisco_post_with_id_field_succeeds(monkeypatch):
     def fake_acct_get(bmc_ip, u, p, t, v):
         return {}, accounts, []
 
-    monkeypatch.setattr(rg, 'account_service_get', fake_acct_get)
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(fake_acct_get))
 
     posted_bodies = []
 
@@ -63,8 +96,8 @@ def test_provision_cisco_post_with_id_field_succeeds(monkeypatch):
 
     out = rg.account_service_provision(
         bmc_ip='10.100.15.2', vendor='cisco',
-        current_username='admin', current_password='Goodmit1!',
-        target_username='infraops', target_password='Passw0rd1!Infra',
+        current_username='admin', current_password='zzz-canary-recovery-zzz',
+        target_username='infraops', target_password='zzz-canary-target-zzzInfra',
         target_role='Administrator',
         timeout=30, verify_ssl=False, dryrun=False,
     )
@@ -79,17 +112,17 @@ def test_provision_cisco_post_with_id_field_succeeds(monkeypatch):
 
 def test_provision_cisco_dryrun_no_post_call(monkeypatch):
     """vendor='cisco' + dryrun=True → POST 호출 안 함."""
-    monkeypatch.setattr(rg, 'account_service_get', lambda *a, **k: ({}, [
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(lambda *a, **k: ({}, [
         {'slot_uri': '/redfish/v1/AccountService/Accounts/1', 'id': '1',
          'username': 'admin', 'role_id': 'admin', 'enabled': True}
-    ], []))
+    ], [])))
     posted = []
     monkeypatch.setattr(rg, '_post', lambda *a, **k: (posted.append(a), (201, {}, None))[1])
 
     out = rg.account_service_provision(
         bmc_ip='10.100.15.2', vendor='cisco',
-        current_username='admin', current_password='Goodmit1!',
-        target_username='infraops', target_password='Passw0rd1!Infra',
+        current_username='admin', current_password='zzz-canary-recovery-zzz',
+        target_username='infraops', target_password='zzz-canary-target-zzzInfra',
         target_role='Administrator',
         timeout=30, verify_ssl=False, dryrun=True,
     )
@@ -105,18 +138,22 @@ def test_provision_cisco_no_empty_id_returns_error(monkeypatch):
          'id': str(i), 'username': f'user{i}', 'role_id': 'admin', 'enabled': True}
         for i in range(1, 16)
     ]
-    monkeypatch.setattr(rg, 'account_service_get', lambda *a, **k: ({}, accounts, []))
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(lambda *a, **k: ({}, accounts, [])))
 
     out = rg.account_service_provision(
         bmc_ip='10.100.15.2', vendor='cisco',
-        current_username='admin', current_password='Goodmit1!',
-        target_username='infraops', target_password='Passw0rd1!Infra',
+        current_username='admin', current_password='zzz-canary-recovery-zzz',
+        target_username='infraops', target_password='zzz-canary-target-zzzInfra',
         target_role='Administrator',
         timeout=30, verify_ssl=False, dryrun=False,
     )
     assert out['recovered'] is False
+    # 2026-08-12: 사용자 문장에서 vendor 이름/Id 범위 같은 내부정보를 뺐다 (rule 10).
+    #   기술 증거는 detail 로 옮겼다.
     msgs = ' '.join(e.get('message', '') for e in out['errors'])
-    assert '빈 Account Id' in msgs
+    details = ' '.join(str(e.get('detail') or '') for e in out['errors'])
+    assert '사용 가능한 계정 번호가 없어' in msgs
+    assert 'id_range=2-15' in details
 
 
 def test_provision_hpe_404_returns_not_supported(monkeypatch):
@@ -129,7 +166,7 @@ def test_provision_hpe_404_returns_not_supported(monkeypatch):
              'detail': 'HTTP 404: Not Found'}
         ]
 
-    monkeypatch.setattr(rg, 'account_service_get', fake_acct_get)
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(fake_acct_get))
 
     out = rg.account_service_provision(
         bmc_ip='10.0.0.1', vendor='hpe',
@@ -153,7 +190,7 @@ def test_provision_hpe_500_does_not_route_to_unsupported(monkeypatch):
              'detail': 'HTTP 500: Internal Server Error'}
         ]
 
-    monkeypatch.setattr(rg, 'account_service_get', fake_acct_get)
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(fake_acct_get))
 
     out = rg.account_service_provision(
         bmc_ip='10.0.0.1', vendor='hpe',
@@ -180,7 +217,7 @@ def test_provision_dell_normal_flow_unaffected(monkeypatch):
         ]
         return {}, accounts, []
 
-    monkeypatch.setattr(rg, 'account_service_get', fake_acct_get)
+    monkeypatch.setattr(rg, "account_service_discover", _as_discovery(fake_acct_get))
 
     out = rg.account_service_provision(
         bmc_ip='10.0.0.1', vendor='dell',

@@ -27,13 +27,20 @@
 #   (각 play 의 vars_files 로 로드)
 
 # ── failure_code → 문장 매핑 (정본) ────────────────────────────────────────────
-#   DNS_RESOLUTION_FAILED  → 1
-#   TCP_CONNECT_FAILED     → 1
-#   TCP_CONNECTION_REFUSED → 2
-#   PROTOCOL_CHECK_FAILED  → 3
-#   AUTH_PROBE_FAILED      → 4
-#   GATHER_FAILED          → 5
-#   OUTPUT_BUILD_FAILED    → 6
+#   DNS_RESOLUTION_FAILED      → 1
+#   TCP_CONNECT_FAILED         → 1
+#   TCP_CONNECTION_REFUSED     → 2
+#   PROTOCOL_CHECK_FAILED      → 3
+#   AUTH_PROBE_FAILED          → 4
+#   CREDENTIAL_SET_UNAVAILABLE → 4   (2026-08-12 신설 — 아래 주석)
+#   GATHER_FAILED              → 5
+#   OUTPUT_BUILD_FAILED        → 6
+#
+# CREDENTIAL_SET_UNAVAILABLE 가 4번을 **재사용**하는 이유:
+#   운영자가 할 일이 결국 "자격증명 설정 확인" 으로 AUTH_PROBE_FAILED 와 같다. 문장을
+#   늘리지 않아 Portal 5문장 집합이 불변이다. 두 상황의 구분(자격을 보냈는데 거부됐다 vs
+#   보낼 자격이 없었다)은 **code 와 errors[].detail** 이 표현한다 — 이것이 code / message /
+#   detail 3층 분리의 목적 그대로다.
 # 문장은 **관측된 failure_code** 에서 파생된다. 다른 조건으로 따로 갈리지 않게 해서
 # stage / code / message 가 서로 다른 이야기를 하는 상황을 구조적으로 없앤다.
 

@@ -1,0 +1,48 @@
+---
+# ==============================================================================
+# locations.yml — Location 정본 (Credential 선택 1번째 축)
+# ==============================================================================
+# Credential 선택 Contract:
+#     OS      = location + os_type   (linux | windows)
+#     ESXi    = location
+#     Redfish = location + vendor    (vendor_aliases.yml 의 canonical 키)
+#   Generation / Model / Firmware / OS 버전은 **선택축이 아니다.**
+#
+# 이 파일이 존재하는 이유:
+#   Location 문자열이 코드(Playbook / Python / Jenkinsfile)에 하드코딩되지 않게 한다.
+#   Location 추가 = 아래 3줄 + `vault/<id>/` 디렉터리. **코드 수정 0줄.**
+#
+# `id` 와 `agent_label` 을 분리하는 이유:
+#   지금 두 값이 같다는 사실을 계약으로 굳히지 않는다. Jenkins 는 `agent_label` 만 보고,
+#   Vault 경로와 `credential_scope` 는 Location ID 만 본다. Jenkins agent 를 개편해도
+#   Credential 경로가 따라 흔들리지 않는다.
+#
+# 소비처:
+#   - Jenkinsfile_portal 'Resolve Location' stage (readYaml — 미등록 Location 즉시 실패)
+#   - lookup_plugins/credential_resolver.py (known_locations)
+#
+# 확장 절차 (새 Location `newdc`):
+#   1. 아래에 `newdc: { agent_label: newdc }` 추가
+#   2. vault/newdc/{os/linux.yml, os/windows.yml, esxi.yml, redfish/<vendor>.yml} 생성 + 암호화
+#   3. Jenkins 에 해당 label agent 등록
+#
+# 제약 (tests/unit/test_location_registry.py 가 강제):
+#   - Location ID 는 `[a-z0-9_-]+` — 경로 조각으로 그대로 쓰이므로 경로 주입이 불가능해야 한다
+#   - `agent_label` 필수
+# ==============================================================================
+
+locations:
+  ich:
+    agent_label: ich
+
+  chj:
+    agent_label: chj
+
+  yi:
+    agent_label: yi
+
+  # 2026-08-12: 사내 테스트 환경의 4번째 Location.
+  #   이름이 `git` 이지만 Git 전용 노드도, Location Resolve 전용 노드도 **아니다.**
+  #   ich/chj/yi 와 완전히 동등한 하나의 Location 이며 같은 규칙으로 vault/git/ 을 쓴다.
+  git:
+    agent_label: git

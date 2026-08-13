@@ -363,6 +363,9 @@ def test_precheck_bundle_emits_only_standard_sentences():
     ("TCP_CONNECTION_REFUSED", "_fr_port_unreachable"),
     ("PROTOCOL_CHECK_FAILED", "_fr_protocol_unconfirmed"),
     ("AUTH_PROBE_FAILED", "_fr_credential_failed"),
+    # 4번 문장 재사용 — 운영자가 할 일이 같다("자격증명 설정 확인"). Portal 문장 집합 불변.
+    # 두 상황의 구분은 code 와 errors[].detail 이 한다 (3층 분리의 목적 그대로).
+    ("CREDENTIAL_SET_UNAVAILABLE", "_fr_credential_failed"),
     ("GATHER_FAILED", "_fr_gather_failed"),
     ("OUTPUT_BUILD_FAILED", "_fr_output_build_failed"),
 ])
@@ -371,13 +374,21 @@ def test_failure_code_maps_to_exactly_one_sentence(code, expected):
 
 
 def test_failure_code_mapping_covers_every_enum_value():
-    """diagnosis.failure_code enum 7종이 전부 문장을 갖는다 (누락 시 1번으로 조용히 퇴화 방지)."""
-    enum_values = {
-        "DNS_RESOLUTION_FAILED", "TCP_CONNECT_FAILED", "TCP_CONNECTION_REFUSED",
-        "PROTOCOL_CHECK_FAILED", "AUTH_PROBE_FAILED", "GATHER_FAILED",
-        "OUTPUT_BUILD_FAILED",
-    }
-    assert set(pb.REASON_BY_FAILURE_CODE) == enum_values
+    """failure_code enum 전량이 문장을 갖는다 (누락 시 1번으로 조용히 퇴화하는 것 방지).
+
+    개수를 세지 않고 **field_dictionary 의 enum 과 직접 대조**한다 — 두 곳에 값 목록을
+    복제해 두면 한쪽만 늘어나도 이 테스트가 통과해 버린다.
+    """
+    fd = yaml.safe_load(
+        (REPO / "schema" / "field_dictionary.yml").read_text(encoding="utf-8")
+    )
+    fields = fd.get("fields", fd)
+    enum_values = set(fields["diagnosis.failure_code"]["enum"])
+    assert set(pb.REASON_BY_FAILURE_CODE) == enum_values, (
+        "REASON_BY_FAILURE_CODE 와 field_dictionary enum 이 어긋났다: "
+        f"매핑만={sorted(set(pb.REASON_BY_FAILURE_CODE) - enum_values)}, "
+        f"enum만={sorted(enum_values - set(pb.REASON_BY_FAILURE_CODE))}"
+    )
 
 
 def test_no_ip_presence_probe_is_implemented():

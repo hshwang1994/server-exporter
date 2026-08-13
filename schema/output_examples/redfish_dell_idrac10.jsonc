@@ -8,7 +8,7 @@
 //             - sections 8/10 success: system / users 미지원 (Redfish 채널 특성)
 //             - 풍부한 OEM 필드 (Dell.idrac_*, Dell.lifecycle_*, Dell.chassis_service_tag)
 //             - cycle 2026-05-06 F49: Dell iDRAC9 7.10+ Security Strengthen Policy (15자 이상)
-//               primary 인증 = infraops/Passw0rd1!Infra (vault recovery list 와 다름)
+//               primary 인증 = infraops/__REDACTED__Infra (vault recovery list 와 다름)
 // 캡처 일시 : 2026-05-07
 // =============================================================================
 {

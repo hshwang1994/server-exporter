@@ -28,16 +28,152 @@ server-exporter 가 SSH / WinRM / vSphere / Redfish 에 접속할 때 쓰는 **�
 
 ## 3. Vault 종류
 
-| 채널 | vault 파일 | 용도 |
-|---|---|---|
-| Linux | `vault/linux.yml` | SSH 자격증명 (host 공통) |
-| Windows | `vault/windows.yml` | WinRM 자격증명 (host 공통) |
-| ESXi | `vault/esxi.yml` | vSphere 자격증명 (host 공통) |
-| Redfish | `vault/redfish/{vendor}.yml` | BMC 자격증명 (vendor별) |
+### 3.1 현재 코드가 여는 경로 (2026-08-12~) — Location 축
 
-**vendor 9 vault** (cycle 2026-05-11 시점 — M-A1~A6 적용 완료):
-- dell.yml, hpe.yml, lenovo.yml, supermicro.yml, cisco.yml (5 base vendor — primary `infraops` 통일, 비밀번호는 vault 안에만)
-- huawei.yml, inspur.yml, fujitsu.yml, quanta.yml (cycle 2026-05-11 신설 4 vendor — primary infraops + recovery vendor 공장 기본)
+Credential 선택 Contract:
+
+```
+OS      = location + os_type   →  vault/<location>/os/<linux|windows>.yml
+ESXi    = location             →  vault/<location>/esxi.yml
+Redfish 표준 = 전역           →  vault/common/redfish/standard.yml      (수집에 쓰는 계정)
+Redfish 복구 = location+vendor →  vault/<location>/redfish/<vendor>.yml  (표준 계정 복구용)
+```
+
+Generation / Model / Firmware 는 **선택축이 아니다** (세대를 아는 시점이 인증 이후라 순환이다).
+
+디렉터리 깊이 = 선택축 개수. ESXi 만 평 파일인 이유는 2번째 축이 없기 때문이다.
+
+| 채널 | 경로 | 선택축 |
+|---|---|---|
+| Linux | `vault/<loc>/os/linux.yml` | location + os_type |
+| Windows | `vault/<loc>/os/windows.yml` | location + os_type |
+| ESXi | `vault/<loc>/esxi.yml` | location |
+| Redfish (표준 수집) | `vault/common/redfish/standard.yml` | **없음 — 전역 1벌** |
+| Redfish (복구) | `vault/<loc>/redfish/<vendor>.yml` | location + vendor (canonical 9종) |
+
+- `<location>` 은 `common/vars/locations.yml` 에 등록된 ID 만 쓸 수 있다. Jenkins 가
+  `-e se_location=<id>` 로 전달하고, resolver 가 registry 에 없는 값이면 **경로를 만들지 않는다.**
+- `<vendor>` 는 `common/vars/vendor_aliases.yml` 의 canonical 키만 쓸 수 있다.
+- **다른 Location / 다른 Vendor 로 넘어가는 폴백 경로는 코드에 존재하지 않는다.**
+  `ich + dell` 이 실패해도 `chj + dell` 이나 `ich + hpe` 를 시도하지 않는다.
+
+**vendor 9종**: dell / hpe / lenovo / supermicro / cisco / huawei / inspur / fujitsu / quanta
+
+### 3.2 이전 flat 경로 (2026-08-12 삭제 완료)
+
+| 채널 | 이전 경로 |
+|---|---|
+| Linux | `vault/linux.yml` |
+| Windows | `vault/windows.yml` |
+| ESXi | `vault/esxi.yml` |
+| Redfish | `vault/redfish/{vendor}.yml` |
+
+**현재 코드는 이 경로를 읽지 않는다.** 런타임 폴백도 없다 — 신규 경로가 준비되지 않으면
+"조용히 옛 파일로 성공" 하는 대신 명시적으로 실패한다
+(`failure_code=CREDENTIAL_SET_UNAVAILABLE`). 이관 실패를 감추지 않기 위한 의도된 설계다.
+
+**2026-08-12 삭제 완료.** 실장비 6대 재검증 후 제거했고, 제거 후에도 정상 수집을 확인했다
+(`tests/evidence/2026-08-12-redfish-standard-account-separation.md`).
+`vault/.lab-credentials.yml` 은 resolver 대상이 아니라 유지한다.
+이전 동작 복원이 필요하면 git 이력에서 되살린다.
+
+### 3.3 Location 추가 절차
+
+1. `common/vars/locations.yml` 에 3줄 추가 (`<id>: { agent_label: <label> }`)
+2. `vault/<id>/...` 생성 + 암호화
+3. Jenkins 에 해당 label agent 등록
+
+**코드 수정 0줄.** Python / Playbook / Jenkinsfile 어느 것도 바뀌지 않는다.
+
+### 3.3.1 Redfish 는 계정 축이 둘이다 (2026-08-12)
+
+```
+vault/common/redfish/standard.yml   ← 표준 수집 계정 (role: primary 1개) — **전역 1벌**
+vault/<loc>/redfish/<vendor>.yml    ← 복구 계정 (role: recovery 만)
+```
+
+- **표준 수집 계정**: 모든 Location + 모든 Vendor 공통. 최종 Gathering 은 **반드시** 이
+  계정으로 수행된다. 이 파일 하나만 고치면 전 사이트·전 벤더에 반영된다.
+- **복구 계정**: 목적이 수집이 아니라 **표준 계정을 만들거나 되살리는 것**이다.
+  Location + Vendor 별로 다르다.
+- 복구 계정으로 수집한 결과가 정상 결과로 나가는 경로는 **없다.** 복구가 확인되면
+  표준 계정으로 재인증·재수집한다.
+- 복구 vault 에 `role: primary` 나 legacy `ansible_user` 를 두지 마라 — 표준 계정
+  중복이 되고, 코드는 그것을 표준 대용으로 쓰지 않는다.
+
+OS / ESXi 는 축이 하나뿐이라 구조가 그대로다 (`<loc>/os/<type>`, `<loc>/esxi`).
+
+비밀번호를 바꿀 때: 표준 계정은 `vault/common/redfish/standard.yml` **1곳**,
+복구 계정은 해당 Location+Vendor 파일만 고친다.
+
+### 3.4 flat → Location 이관 절차 (4단계)
+
+> **현재 상태 (2026-08-12)**: 4 Location (`ich / chj / yi / git`) × 12 = 48개 +
+> 전역 표준 1개 = **49개**. flat 12개는 삭제됐다.
+> 복구 자격은 아직 **4곳이 같은 값**이다 (Pilot 단계). 아래 절차는 **운영 값으로
+> 분리할 때**의 정본이다.
+> Pilot 결과: `tests/evidence/2026-08-12-location-vault-jenkins-pilot.md`,
+> 표준/복구 분리: `tests/evidence/2026-08-12-redfish-standard-account-separation.md`
+>
+> **Pilot 예외가 정당했던 이유**: Pilot 의 검증 목표는 값이 아니라 **경로 분기**
+> (`loc` → agent label → `se_location` → vault 경로 → 복호화 → 인증) 였다. 값을 4벌로
+> 새로 만들면 값 오타와 경로 버그가 뒤섞여 원인 분리가 안 된다. 값을 고정해 두면
+> `credential_scope` 차이만으로 경로 동작을 판정할 수 있다.
+> **운영 전환 시에는 이 예외를 쓰지 마라** — 아래 1단계대로 신규 작성한다.
+
+Location 별 실제 계정 값이 서로 다를 수 있으므로 이관은 **파일 이동이 아니라 신규 작성**이다.
+기존 flat vault 를 3벌 복사하는 것은 잘못된 값을 3곳에 심는 일이다.
+
+**1단계 — 신규 Vault 작성** (운영 담당자)
+
+```bash
+# Location × 채널별 실제 계정 값을 확정한 뒤 각각 신규 생성
+mkdir -p vault/<loc>/os vault/<loc>/redfish
+ansible-vault create vault/<loc>/os/linux.yml
+ansible-vault create vault/<loc>/esxi.yml
+ansible-vault create vault/<loc>/redfish/dell.yml
+# ... 필요한 vendor 만큼
+```
+
+파일 내부 스키마는 **바뀌지 않았다** (§6). 바뀐 것은 파일이 놓이는 경로뿐이다.
+`accounts` 배열 **순서 = 인증 시도 순서**다 — 코드가 재정렬하지 않는다.
+
+**2단계 — 구조 / 암호화 검증**
+
+```bash
+# 어떤 경로가 아직 비었는지 (복호화 없이)
+python scripts/ai/vault_decrypt_check.py --layout-only
+
+# 복호화 + accounts 스키마 + role + label 정합 (Secret 값은 출력하지 않는다)
+SE_VAULT_PASSWORD='<마스터 키>' python scripts/ai/vault_decrypt_check.py
+```
+
+> `scripts/ai/vault_decrypt_check.py` 는 `.gitignore` 대상 **로컬 도구**다 (cycle-018 결정 —
+> 당시 마스터 키가 코드에 하드코딩돼 있었다). 2026-08-12 에 하드코딩을 제거하고 키를
+> `SE_VAULT_PASSWORD` / `--password-file` 로만 받도록 바꿨다. gitignore 해제 여부는
+> 사용자 결정 사항으로 남겨 두었으므로, fresh clone 에는 이 파일이 없을 수 있다.
+
+검사 항목: `$ANSIBLE_VAULT` 헤더 / 복호화 성공 / `accounts[]` 각 항목의
+`username·password·label·role` / `role ∈ {primary, recovery, secondary}` /
+`primary` 1개 이상 / Redfish label 이 vendor 허용 집합(§6.5)과 정합 /
+`accounts[0].role != primary` 경고.
+
+**3단계 — 실장비 Pilot**
+
+Location 1곳 × 채널별 1대씩 실제 수집을 돌려 확인한다:
+
+- `diagnosis.details.credential_scope` 가 기대 값인가 (`<loc>/os/linux` 등)
+- 요청 target 수 == 결과 envelope 수 (rule 11)
+- 실패 경로: 없는 Location 으로 빌드 → `Resolve Location` stage 에서 즉시 실패
+  (agent 대기 없음)
+
+**Unit test 통과는 실장비 검증이 아니다.**
+
+**4단계 — flat vault 제거** (별도 커밋)
+
+3단계가 확인된 뒤에만. 삭제 대상: `vault/linux.yml`, `vault/windows.yml`,
+`vault/esxi.yml`, `vault/redfish/*.yml` 9개.
+(`vault/.lab-credentials.yml` 은 제외 — resolver 대상이 아닌 lab 전용 평문 파일)
 
 ## 4. Vault 자동 반영 메커니즘 (rule 27 R6)
 
@@ -48,21 +184,21 @@ vault 변경 시 다음 run 자동 반영을 보장하는 3 단서. 회전 후 /
 #### 단서 1: include_vars cacheable 옵션 부재
 
 ```bash
-grep -rn 'cacheable' redfish-gather/tasks/load_vault.yml
+grep -rn 'cacheable' common/tasks/credential/
 # 기대: 0 결과
 ```
 
 - `cacheable: yes` 시 fact_cache (Redis) 에 host facts 로 저장 → 다음 run 에서도 stale vault 사용 위험
-- 정본: `redfish-gather/tasks/load_vault.yml:29-36` (`include_vars` 호출에 `cacheable` 옵션 없음 — 매 run 디스크 read)
+- 정본: `common/tasks/credential/load_one.yml` (`include_vars` 호출에 `cacheable` 옵션 없음 — 매 run 디스크 read)
 
 #### 단서 2: set_fact host facts 미등록
 
 ```bash
-grep -rn 'cacheable' redfish-gather/tasks/load_vault.yml common/tasks/normalize/
+grep -rn 'cacheable' common/tasks/credential/ redfish-gather/tasks/ common/tasks/normalize/
 # 기대: 0 결과
 ```
 
-- `_rf_accounts` / `_rf_vault_data` 변수는 task scope 만
+- `_cl_vault_data` / `_cred_accounts` / `_rf_accounts` 변수는 task scope 만
 - host facts (`ansible_facts.*`) 또는 `cacheable: yes` 등록 금지
 - 정본: `redfish-gather/tasks/load_vault.yml:64-81` (`set_fact` 에 `cacheable` 옵션 없음)
 
@@ -222,11 +358,15 @@ try_one_account.yml (accounts[1+] recovery 시도)
        ↓
 collect_standard.yml → _rf_primary_auth_rejected = true  (primary 관측이 401 일 때만)
        ↓
-account_service.yml (진입 조건 4개 — 2026-08-11 Phase 6-B 로 좁혀짐)
-  1. _rf_used_account.role == 'recovery'
-  2. _rf_collect_ok == true
-  3. _rf_primary_auth_rejected == true   ← 401 실증. timeout/TLS/5xx/403 은 진입 안 함
-  4. vault 에 primary 후보 1개 이상
+account_service.yml (진입 조건 — 정본은 redfish-gather/site.yml)
+  [정정 2026-08-13] 종전 4개 조건 서술은 stale 이다. 특히 1·2번은 현재 코드와 반대다 —
+  복구 계정으로 수집한 결과는 정상 결과가 될 수 없으므로 `_rf_used_account.role` 은
+  진입 조건이 아니고, `_rf_collect_ok` 는 **false** 일 때만 진입한다.
+
+  현재 정본 (site.yml `_rf_account_reconcile_allowed`):
+  1. _rf_collect_ok == false              ← 표준 계정으로 수집이 실패했다
+  2. _rf_primary_auth_rejected == true    ← 401 실증. timeout/TLS/5xx/403 은 진입 안 함
+  3. 해당 Location+Vendor 의 recovery 후보 1개 이상
   └─ redfish_gather mode='account_provision'
        target_username='infraops', target_password=<vault accounts[0].password>,
        target_role='Administrator'
@@ -240,8 +380,12 @@ BMC AccountService POST/PATCH → infraops 계정 생성/복구
 
 ### dryrun 정책
 
-- `_rf_account_service_dryrun` (default `false` — cycle 2026-04-30 사용자 명시 승인으로 OFF 전환)
-- override: `-e _rf_account_service_dryrun=true` (시뮬레이션 모드 강제)
+- `_rf_account_service_dryrun` — [정정 2026-08-13] 고정 기본값 `false` 가 아니다.
+  변수를 **주지 않으면** `not _rf_account_reconcile_allowed` 에서 파생된다. 즉
+  진입 조건이 성립했을 때만 실쓰기이고 그 외에는 시뮬레이션이다
+  (정본: `redfish-gather/tasks/account_service.yml` `_rf_account_service_dryrun_effective`).
+- override: `-e _rf_account_service_dryrun=true` (변수를 명시했을 때만 override 로 인정)
+- `ansible-playbook --check` 도 dryrun 으로 접힌다 (module.check_mode → dryrun)
 - 신규 사이트 BMC 1대 처음 적용 시 권장: dryrun ON 으로 시뮬레이션 1회 → dryrun OFF 로 실 적용
 
 ## 6.6. adapter label naming convention (cycle 2026-05-11 — M-A7)

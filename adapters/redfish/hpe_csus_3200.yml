@@ -127,9 +127,9 @@ normalize:
   # 각 entry 가 cpu/memory/storage/network 정규화 결과 보유. top-level data.* 는 Partition0 representative.
 
 credentials:
-  profile: "hpe"  # vault/redfish/hpe.yml 재사용 (rule 50 R2 단계 4 — vault 분리는 NEXT_ACTIONS 등재)
+  profile: "hpe"  # 2026-08-12: 더 이상 vault 선택에 쓰이지 않는다 (Phase B 에서 제거 예정)
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/hpe.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/<loc>/redfish/hpe.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: hpe_fallback, role: recovery }
     - { vault_label: hpe_current,  role: recovery }

@@ -55,7 +55,7 @@ normalize:
 credentials:
   profile: "hpe"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/hpe.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/<loc>/redfish/hpe.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: hpe_fallback, role: recovery }
     - { vault_label: hpe_current,  role: recovery }

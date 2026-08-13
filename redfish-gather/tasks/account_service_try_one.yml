@@ -1,0 +1,95 @@
+---
+# redfish-gather/tasks/account_service_try_one.yml
+#
+# 복구 후보 1개로 표준 계정 정리를 시도한다. 이미 인증된 후보를 찾았으면 skip
+# (loop break 시뮬레이션 — try_one_account.yml 와 같은 패턴).
+#
+# 입력:
+#   _try_recovery      : { username, password, label, role } — recovery vault 의 한 항목
+#   _rf_target_account : 표준 계정 (전역 vault 의 role=primary)
+#   _rf_account_service_dryrun_effective : 쓰기 여부
+#
+# 출력:
+#   _rf_acct_result         : 모듈 반환값 (인증에 성공한 후보의 것)
+#   _rf_acct_auth_ok        : 이 후보가 AccountService 인증에 성공했는가
+#   _rf_acct_recovery_label : 성공한 후보의 label (Secret 아님)
+#
+# **이 파일은 수집을 하지 않는다.** 복구 계정으로 서버 정보를 모으는 경로는 없다.
+
+- when: not (_rf_acct_auth_ok | default(false) | bool)
+  block:
+
+    - name: "redfish | account_service | invoke"
+      redfish_gather:
+        bmc_ip:          "{{ _rf_ip }}"
+        username:        "{{ _try_recovery.username | default('') }}"
+        password:        "{{ _try_recovery.password | default('') }}"
+        timeout:         "{{ _rf_timeout }}"
+        verify_ssl:      false
+        mode:            "account_provision"
+        target_username: "{{ _rf_target_account.username }}"
+        target_password: "{{ _rf_target_account.password }}"
+        target_role:     "Administrator"
+        dryrun:          "{{ _rf_account_service_dryrun_effective | bool }}"
+        # 2026-08-12: Account Family 선택 **hint**. 단독 근거가 아니다 — 모듈은 실제
+        #   Resource Capability(Roles 어휘 / pre-populated slot / AccountTypes / Firmware)를
+        #   먼저 보고, adapter 이름은 그것만으로 갈리지 않을 때만 쓴다.
+        #   예: Lenovo XCC2·XCC3 (AccountTypes 필요), HPE iLO4 (Oem/Hp), HPE RMC(CSUS/Superdome).
+        adapter_id:      "{{ (_selected_adapter | default({})).adapter_id | default(omit) }}"
+      register: _rf_acct_attempt
+      failed_when: false
+      no_log: true
+
+    # 모듈이 AccountService GET 에 성공했는가 = 이 복구 자격이 실제로 통했는가.
+    # 인증 실패 후보의 결과는 채택하지 않는다 — 다음 후보로 넘어간다.
+    - name: "redfish | account_service | evaluate recovery auth"
+      ansible.builtin.set_fact:
+        _rf_acct_attempt_auth_ok: >-
+          {{ ((_rf_acct_attempt.account_service | default({})).auth_ok | default(false)) | bool }}
+      no_log: true
+
+    - name: "redfish | account_service | adopt authenticated recovery result"
+      when: _rf_acct_attempt_auth_ok | bool
+      ansible.builtin.set_fact:
+        _rf_acct_result: "{{ _rf_acct_attempt }}"
+        _rf_acct_auth_ok: true
+        _rf_acct_recovery_label: "{{ _try_recovery.label | default('unlabeled') }}"
+      no_log: true
+
+    # 마지막 후보까지 인증이 안 되면 근거가 남아야 한다. 인증 실패 후보의 결과도
+    # (채택하지는 않되) 마지막 것을 보관해 errors[].detail 에 실린다.
+    - name: "redfish | account_service | keep last unauthenticated result"
+      when: not (_rf_acct_attempt_auth_ok | bool)
+      ansible.builtin.set_fact:
+        _rf_acct_result: "{{ _rf_acct_attempt }}"
+      no_log: true
+
+    - name: "redfish | account_service | log recovery attempt"
+      ansible.builtin.debug:
+        msg: >-
+          recovery attempt — label={{ _try_recovery.label | default('unlabeled') }},
+          auth_ok={{ _rf_acct_attempt_auth_ok }},
+          method={{ (_rf_acct_attempt.account_service | default({})).method | default('?') }},
+          verification={{ (_rf_acct_attempt.account_service | default({})).verification | default('?') }}
+
+    # BMC lockout 회피 — 인증이 **거부된** 후보 뒤에는 간격을 둔다.
+    #
+    # 2026-08-12: 5초는 부족하다는 것이 공식 문서로 확인됐다.
+    #   Dell iDRAC10 IP Blocking 기본값: FailCount=3 / FailWindow=60s / PenaltyTime=60s
+    #     → 5초 간격이면 3연속 실패가 같은 60초 창에 들어가 차단된다.
+    #   Huawei iBMC: 5회 연속 실패 → 5분 잠금.  HPE iLO: 3회.  Lenovo XCC: 5회.
+    #   실제 Dell 복구 후보는 4개가 전부 username 'root' 라 이 위험이 가장 크다.
+    #   source: dell.com/.../idrac10_1.xx_scg/network-security-configuration,
+    #           Huawei iBMC User Guide (Accessing the iBMC CLI)
+    #
+    # **인증 거부(auth_success=false 로 관측된 경우)에만** 긴 간격을 쓴다.
+    #   timeout / TLS / transport 오류는 실패 카운터를 올리지 않으므로 종전 5초를 유지한다
+    #   — 정상 장비의 실행시간에 영향을 주지 않기 위해서다.
+    - name: "redfish | account_service | backoff on recovery auth failure"
+      when: not (_rf_acct_attempt_auth_ok | bool)
+      ansible.builtin.command: >-
+        sleep {{ _rf_auth_backoff_seconds | default(65)
+                 if (((_rf_acct_attempt.account_service | default({})).auth_rejected | default(false)) | bool)
+                 else (_rf_transport_backoff_seconds | default(5)) }}
+      delegate_to: localhost
+      changed_when: false

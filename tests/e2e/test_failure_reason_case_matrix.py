@@ -20,6 +20,14 @@ from unittest.mock import patch
 
 import pytest
 
+# 2026-08-12: 누출 가드가 검사 대상인 **진짜 비밀번호를 소스에 그대로** 적어 두고 있었다.
+#   가드 파일 자체가 누출 지점이라, 평문 대신 sha256 앞 8자리로 대조하는 공용 가드로
+#   바꾼다. 입력으로 넣던 실 자격증명도 합성 canary 로 바꾼다 (검사 의미는 동일).
+from tests.secret_guard import (  # noqa: E402
+    CANARY_PASSWORD, CANARY_RECOVERY, CANARY_TARGET, assert_no_secret,
+)
+
+
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "common" / "library"))
 
@@ -369,6 +377,7 @@ def test_all_case_reasons_use_only_the_standard_sentences():
 def test_no_secrets_in_any_case():
     for label, make, *_ in CASES_RESCUE:
         blob = str(make())
-        for secret in ("password", "Passw0rd", "Goodmit0802!", "Authorization",
+        assert_no_secret(blob, f"[{label}] envelope")
+        for secret in ("password", "Passw0rd", CANARY_PASSWORD, "Authorization",
                        "Cookie", "Basic ", "token"):
             assert secret not in blob, f"[{label}] 민감정보 노출: {secret}"

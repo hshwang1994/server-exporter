@@ -21,6 +21,14 @@ import socket
 from typing import Any
 
 import pytest
+
+# 2026-08-12: 누출 가드가 검사 대상인 **진짜 비밀번호를 소스에 그대로** 적어 두고 있었다.
+#   가드 파일 자체가 누출 지점이라, 평문 대신 sha256 앞 8자리로 대조하는 공용 가드로
+#   바꾼다. 입력으로 넣던 실 자격증명도 합성 canary 로 바꾼다 (검사 의미는 동일).
+from tests.secret_guard import (  # noqa: E402
+    CANARY_PASSWORD, CANARY_RECOVERY, CANARY_TARGET, assert_no_secret,
+)
+
 import yaml
 
 from tests.e2e.test_failure_reason_contract import (
@@ -51,6 +59,10 @@ ALLOWED_CODES: frozenset[str] = frozenset({
     "TCP_CONNECTION_REFUSED",
     "PROTOCOL_CHECK_FAILED",
     "AUTH_PROBE_FAILED",
+    # 2026-08-12: Credential 선택이 Location 축을 갖게 되면서 "자격 세트 자체가 없어
+    #   인증을 시도조차 못 했다" 가 별도 상태가 됐다. AUTH_PROBE_FAILED 로 뭉개면
+    #   소비 시스템이 두 상황을 구분할 수 없다.
+    "CREDENTIAL_SET_UNAVAILABLE",
     "GATHER_FAILED",
     "OUTPUT_BUILD_FAILED",
 })
@@ -64,6 +76,9 @@ CODE_TO_STAGES: dict[str, frozenset[str]] = {
     "TCP_CONNECTION_REFUSED": frozenset({"port"}),
     "PROTOCOL_CHECK_FAILED":  frozenset({"protocol"}),
     "AUTH_PROBE_FAILED":      frozenset({"auth"}),
+    # stage 는 원인이 아니라 **멈춘 위치**다 (CLAUDE.md §9). 자격 세트를 못 열어 멈춘
+    # 곳도 자격증명 단계이므로 auth 다. 원인 구분은 code 와 auth_success 가 표현한다.
+    "CREDENTIAL_SET_UNAVAILABLE": frozenset({"auth"}),
     "GATHER_FAILED":          frozenset({"gather"}),
     "OUTPUT_BUILD_FAILED":    frozenset({"fallback"}),
 }
@@ -164,6 +179,131 @@ def test_case06_08_auth_probe_and_401_403(status, expect_auth, note, monkeypatch
         f"{label}: auth_success 기대 {expect_auth!r}, 실제 {result['auth_success']!r}"
     )
     _assert_stage_code(result, label)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-08-12: "자격을 보냈는데 통하지 않았다" ↔ "보낼 자격 자체가 없었다"
+#
+# Credential 선택이 Location 축을 갖게 되면서(vault/<loc>/...) 후자가 실제로 발생한다:
+# se_location 미전달 / 미등록 Location / 해당 Location vault 파일 부재 / 복호화 실패.
+# 두 상황을 같은 code 로 만들면 소비 시스템이 구분할 수 없고, 운영자도 엉뚱한 곳
+# (대상 장비 계정)을 뒤진다. 아래가 그 구분을 고정한다.
+#
+# 공통: stage 는 둘 다 auth (멈춘 위치는 자격증명 단계로 같다),
+#       auth_success 는 둘 다 None (어느 쪽도 '명시적 거부' 를 관측하지 않았다),
+#       사용자 문장도 같다 (4번) — 구분은 **code 와 detail** 이 한다.
+# ═══════════════════════════════════════════════════════════════════════════
+_CRED_UNAVAILABLE_OUTCOMES = [
+    "not_resolved",                  # se_location 미전달 / 미등록 Location / vendor 미결정
+    "credential_set_missing",        # 해당 Location 의 vault 파일 부재
+    "credential_set_undecryptable",  # 파일은 있으나 복호화 실패
+]
+
+
+@pytest.mark.parametrize("outcome", _CRED_UNAVAILABLE_OUTCOMES)
+def test_credential_set_unavailable_is_distinct_from_auth_probe_failed(outcome):
+    """3채널 모두 CREDENTIAL_SET_UNAVAILABLE 을 낸다 (AUTH_PROBE_FAILED 로 뭉개지 않는다)."""
+    esxi = _render_diagnosis(
+        "esxi-gather/site.yml", _ESXI_TASK,
+        {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None, "details": {"channel": "esxi"}},
+         "_e_auth_ok": False, "_e_facts_ok": False, "_cred_load_outcome": outcome})
+    assert esxi["failure_code"] == "CREDENTIAL_SET_UNAVAILABLE", f"esxi/{outcome}"
+    assert esxi["failure_stage"] == "auth", f"esxi/{outcome}"
+    assert esxi["auth_success"] is None, f"esxi/{outcome}"
+    _assert_stage_code(esxi, f"esxi/{outcome}")
+
+    for os_type in ("linux", "windows"):
+        ctx: dict[str, Any] = {
+            "_os_auth_ok": False, "_os_attempts_meta": {}, "_cred_load_outcome": outcome,
+        }
+        if os_type == "windows":
+            ctx["ansible_port"] = "5986"
+        diag = _render_diagnosis("os-gather/site.yml", _OS_TASKS[os_type], ctx)
+        label = f"{os_type}/{outcome}"
+        assert diag["failure_code"] == "CREDENTIAL_SET_UNAVAILABLE", label
+        assert diag["failure_stage"] == "auth", label
+        assert diag["auth_success"] is None, label
+        _assert_stage_code(diag, label)
+
+    rf = render_redfish_rescue(
+        {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
+         "_rf_collect_ok": False, "_rf_auth_observations": [],
+         "_cred_load_outcome": outcome, "_cred_reason": "resolved"})
+    assert rf["failure_code"] == "CREDENTIAL_SET_UNAVAILABLE", f"redfish/{outcome}"
+    assert rf["failure_stage"] == "auth", f"redfish/{outcome}"
+    assert rf["auth_success"] is None, f"redfish/{outcome}"
+    _assert_stage_code(rf, f"redfish/{outcome}")
+
+
+def test_credential_set_loaded_still_yields_auth_probe_failed():
+    """자격 세트를 정상으로 열었는데 전멸했다면 그것은 AUTH_PROBE_FAILED 다 (오분류 방지)."""
+    for outcome in ("loaded", "empty_accounts"):
+        esxi = _render_diagnosis(
+            "esxi-gather/site.yml", _ESXI_TASK,
+            {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None,
+                            "details": {"channel": "esxi"}},
+             "_e_auth_ok": False, "_e_facts_ok": False, "_cred_load_outcome": outcome})
+        assert esxi["failure_code"] == "AUTH_PROBE_FAILED", outcome
+
+
+def test_redfish_vendor_unresolved_is_not_credential_unavailable():
+    """vendor 미상은 credential set 문제가 아니다 — 빈 자격 best-effort 경로를 유지한다.
+
+    이 경로에서 CREDENTIAL_SET_UNAVAILABLE 을 내면 '자격증명을 배치하라' 고 안내하게
+    되는데, 실제로는 장비 정체를 식별하지 못한 것이라 조치가 다르다.
+    """
+    rf = render_redfish_rescue(
+        {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
+         "_rf_collect_ok": False, "_rf_auth_observations": [],
+         "_cred_load_outcome": "not_resolved", "_cred_reason": "vendor_unresolved"})
+    assert rf["failure_code"] != "CREDENTIAL_SET_UNAVAILABLE"
+
+
+def test_missing_cred_outcome_does_not_invent_credential_failure():
+    """`_cred_load_outcome` 이 아예 없으면 credential set 문제라고 단정하지 않는다.
+
+    관측하지 못한 것을 단정하지 않는다는 원칙. 변수가 없다는 것은 resolve 단계에
+    도달조차 못했다는 뜻일 수 있고, 그것을 '자격 세트 부재' 로 보고하면 거짓이다.
+    """
+    esxi = _render_diagnosis(
+        "esxi-gather/site.yml", _ESXI_TASK,
+        {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None,
+                        "details": {"channel": "esxi"}},
+         "_e_auth_ok": False, "_e_facts_ok": False})
+    assert esxi["failure_code"] == "AUTH_PROBE_FAILED"
+
+
+def test_credential_scope_is_exposed_in_diagnosis_details():
+    """실패한 경우에도 **어떤 credential set 을 썼는지** envelope 으로 알 수 있어야 한다.
+
+    종전에는 실패 원인이 자격증명인지 판단할 때 어떤 vault 를 열었는지 알 방법이 없었다.
+    location/channel/vendor 조합 문자열이며 Secret 이 아니다.
+    """
+    diag = _render_diagnosis(
+        "os-gather/site.yml", _OS_TASKS["linux"],
+        {"_os_auth_ok": False, "_os_attempts_meta": {}, "_cred_scope": "ich/os/linux"})
+    assert diag["details"]["credential_scope"] == "ich/os/linux"
+
+    esxi = _render_diagnosis(
+        "esxi-gather/site.yml", _ESXI_TASK,
+        {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None,
+                        "details": {"channel": "esxi"}},
+         "_e_auth_ok": False, "_e_facts_ok": False, "_cred_scope": "ich/esxi"})
+    assert esxi["details"]["credential_scope"] == "ich/esxi"
+
+    rf = render_redfish_rescue(
+        {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
+         "_rf_collect_ok": False, "_rf_auth_observations": [],
+         "_cred_scope": "ich/redfish/dell"})
+    assert rf["details"]["credential_scope"] == "ich/redfish/dell"
+
+
+def test_credential_scope_is_null_when_unresolved():
+    """scope 를 못 정했으면 빈 문자열이 아니라 null 이다 (소비자가 '있다' 로 오독하지 않게)."""
+    diag = _render_diagnosis(
+        "os-gather/site.yml", _OS_TASKS["linux"],
+        {"_os_auth_ok": False, "_os_attempts_meta": {}, "_cred_scope": ""})
+    assert diag["details"]["credential_scope"] is None
 
 
 def test_credential_exhaustion_never_claims_auth_false():
@@ -366,9 +506,11 @@ def test_auth_detail_carries_no_credentials(monkeypatch):
         pb, "http_get",
         lambda *_a, **_k: (False, "HTTP 401", {"status_code": 401, "json": None}),
     )
-    pb._try_redfish_auth("192.0.2.10", 443, "svc_admin", "Goodmit0802!", 8.0, False, result)
+    pb._try_redfish_auth("192.0.2.10", 443, "svc_admin", "zzz-canary-password-zzz", 8.0, False, result)
     blob = " ".join(str(result.get(k)) for k in ("detail", "failure_reason", "failure_code"))
-    for secret in ("Goodmit0802!", "svc_admin", "Basic ", "password="):
+    # 알려진 실 자격증명이 섞였는지 digest 로 대조한다 (평문을 저장하지 않는 가드).
+    assert_no_secret(blob, "auth detail")
+    for secret in (CANARY_PASSWORD, "svc_admin", "Basic ", "password="):
         assert secret not in blob, f"민감정보 노출: {secret!r}"
 
 

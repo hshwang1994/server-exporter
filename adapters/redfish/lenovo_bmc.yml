@@ -55,7 +55,7 @@ normalize:
 credentials:
   profile: "lenovo"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/lenovo.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/<loc>/redfish/lenovo.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: lenovo_fallback, role: recovery }
     - { vault_label: lenovo_current,  role: recovery }

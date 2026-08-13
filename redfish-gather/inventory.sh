@@ -5,7 +5,7 @@
 INVENTORY_JSON 환경변수 또는 .inventory_input.json 파일을 파싱하여
 Ansible 동적 인벤토리를 생성한다.
 inventory_json 에는 IP 만 전달. 벤더는 Redfish Manufacturer 로 자동 감지.
-계정은 vault/redfish/{vendor}.yml 에서 로딩.
+계정은 표준=vault/common/redfish/standard.yml, 복구=vault/<loc>/redfish/<vendor>.yml 에서 로딩.
 IP 필드: bmc_ip (1순위) → ip (fallback)
 
 우선순위:

@@ -73,5 +73,5 @@ b[0-9][0-9].log
 
 # vault 복호화 헬퍼 (개인 도구 — 하드코딩 자격 leak 차단)
 # scripts/ai/vault_decrypt_check.py 는 cycle-018 (2026-05-01) 결정으로 .gitignore
-# 사유: line 97 fallback password "Goodmit0802!" 평문 — git 추적 시 자격 재leak
+# 사유: line 97 fallback password "__REDACTED__" 평문 — git 추적 시 자격 재leak
 scripts/ai/vault_decrypt_check.py

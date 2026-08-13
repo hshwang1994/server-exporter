@@ -52,7 +52,7 @@ normalize:
 credentials:
   profile: "dell"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/redfish/dell.yml accounts 의 label 과 매핑
+  # P2 AccountService 진입점 — vault/<loc>/redfish/dell.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: dell_fallback_1, role: recovery }
     - { vault_label: dell_fallback_2, role: recovery }

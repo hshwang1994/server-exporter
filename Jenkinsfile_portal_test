@@ -47,11 +47,51 @@ pipeline {
 
     stages {
 
+        // -- 0. Resolve Location [Controller] ----------------------------------
+        // 2026-08-12: Location 을 Credential 선택축으로 쓰기 시작하면서 신설.
+        //
+        // 왜 controller 에서, 왜 맨 앞인가:
+        //   종전에는 첫 stage 의 agent 자체가 `label "${params.loc}"` 이라, loc 이 오타면
+        //   **검증 코드가 실행되기도 전에** 노드 할당 단계에서 멈춰 대기했다. 원인도 안 보였다.
+        //   registry 를 controller 에서 먼저 읽어 미등록 Location 을 즉시 실패시킨다.
+        //
+        //   Location 목록은 common/vars/locations.yml 하나뿐이다 (Jenkins 설정에 복제하지
+        //   않는다 — 두 정본이 되면 drift 가 생긴다). 그래서 이 stage 는 SCM checkout 이
+        //   필요하고, skipDefaultCheckout 을 두지 않는다.
+        stage('Resolve Location') {
+            agent { label 'built-in' }
+            options { timeout(time: 2, unit: 'MINUTES') }
+            steps {
+                script {
+                    def key = params.loc?.trim()
+                    if (!key) {
+                        error "[Resolve Location] 필수 파라미터 누락: loc"
+                    }
+                    def reg = readYaml file: 'common/vars/locations.yml'
+                    def known = (reg?.locations ?: [:])
+                    def entry = known[key]
+                    if (!entry) {
+                        error "[Resolve Location] 등록되지 않은 Location: '${key}' " +
+                              "— 허용: ${known.keySet().sort()}. " +
+                              "새 Location 은 common/vars/locations.yml 에 등록하세요."
+                    }
+                    if (!entry.agent_label?.trim()) {
+                        error "[Resolve Location] Location '${key}' 에 agent_label 이 없습니다 " +
+                              "— common/vars/locations.yml 을 확인하세요."
+                    }
+                    env.SE_LOCATION    = key
+                    env.SE_AGENT_LABEL = entry.agent_label.trim()
+                    echo "[Resolve Location] ${key} -> agent label '${env.SE_AGENT_LABEL}'"
+                }
+            }
+            post { always { deleteDir() } }
+        }
+
         // -- 1. Validate [Agent] -----------------------------------------------
         stage('Validate') {
             agent {
                 node {
-                    label "${params.loc}"
+                    label "${env.SE_AGENT_LABEL}"
                     customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }
@@ -119,7 +159,7 @@ pipeline {
         stage('Gather') {
             agent {
                 node {
-                    label "${params.loc}"
+                    label "${env.SE_AGENT_LABEL}"
                     customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }
@@ -131,6 +171,11 @@ pipeline {
                 ANSIBLE_JSON_OUTPUT_FILE = "${WORKSPACE}/gather_output.json"
                 ANSIBLE_VERBOSITY        = "${params.verbosity}"
             }
+            // se_location 은 extra-vars 로 넘긴다 (환경변수 아님).
+            //   환경변수는 미설정 시 lookup('env',...) 가 조용히 '' 를 돌려주는데,
+            //   Credential 범위를 정하는 값이 조용히 빈 문자열이 되면 잘못된(또는 없는)
+            //   vault 를 가리킨다. extra-vars 는 Ansible 변수 우선순위 최상위라
+            //   play/role 기본값에 가려지지도 않고, 콘솔 명령줄에 남아 감사도 된다.
             steps {
                 script {
                     def playbookMap = [
@@ -172,7 +217,7 @@ pipeline {
                                 trap 'rm -f "\$VAULT_TMP"' EXIT
                                 printf '%s' "\${VAULT_PASSWORD}" > "\$VAULT_TMP"
                                 chmod 600 "\$VAULT_TMP"
-                                ansible-playbook "${playbook}" -i "${inventory}" --vault-password-file="\$VAULT_TMP"
+                                ansible-playbook "${playbook}" -i "${inventory}" --vault-password-file="\$VAULT_TMP" -e se_location="${env.SE_LOCATION}"
                             """
                         }
                     }
@@ -202,7 +247,7 @@ pipeline {
         stage('Validate Schema') {
             agent {
                 node {
-                    label "${params.loc}"
+                    label "${env.SE_AGENT_LABEL}"
                     customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }

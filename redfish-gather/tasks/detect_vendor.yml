@@ -38,31 +38,18 @@
       {{ ('probe: ' ~ (msgs | join(' | '))) if msgs else '' }}
   no_log: true
 
+# 2026-08-12: 인라인 Jinja2 정규화를 `canonical_vendor` 필터로 대체했다.
+#   종전에는 정규화 구현이 3개(redfish_gather.py / 이 파일 / adapter_common.py)였고,
+#   Credential Vault 경로가 vendor 에서 파생되는 구조로 바뀌면서 그 차이가 곧
+#   **자격증명 오선택**이 된다. 알고리즘 정본을 `adapter_common.normalize_vendor`
+#   하나로 모으고 여기서는 그것을 호출만 한다 (filter_plugins/vendor_normalizer.py).
+#   동치성은 tests/unit/test_vendor_normalizer_sot.py 가 상시 검증한다.
+#   반환값은 vendor_aliases.yml 의 canonical 키 집합 또는 'unknown' 으로 **보장**된다.
 - name: "redfish | detect_vendor | normalize vendor"
   ansible.builtin.set_fact:
     _rf_detected_vendor: >-
-      {%- set raw = _rf_probe_result.vendor | default('') | trim | lower -%}
-      {%- set found = namespace(canon='unknown') -%}
-      {#- 1) 정확 매칭 우선 -#}
-      {%- for canonical, alias_list in (_va.vendor_aliases | default({})).items() -%}
-        {%- for alias in alias_list -%}
-          {%- if alias | lower == raw and found.canon == 'unknown' -%}
-            {%- set found.canon = canonical -%}
-          {%- endif -%}
-        {%- endfor -%}
-      {%- endfor -%}
-      {#- 2) 부분 매칭 fallback (Manufacturer 표기 변형 흡수: "Dell Inc" 마침표 누락 등) -#}
-      {%- if found.canon == 'unknown' and raw -%}
-        {%- for canonical, alias_list in (_va.vendor_aliases | default({})).items() -%}
-          {%- for alias in alias_list -%}
-            {%- set al = alias | lower -%}
-            {%- if al and (al in raw or raw in al) and found.canon == 'unknown' -%}
-              {%- set found.canon = canonical -%}
-            {%- endif -%}
-          {%- endfor -%}
-        {%- endfor -%}
-      {%- endif -%}
-      {{ found.canon | default('unknown') }}
+      {{ (_rf_probe_result.vendor | default(''))
+         | canonical_vendor(_va.vendor_aliases | default({})) }}
     # 2026-05-11 fix: probe 무인증 시 data.bmc / data.system 이 None 가능 (HPE iLO 6 Gen11 사례).
     # `| default({}, true)` 의 두 번째 인자 true 는 None / empty / False 도 default 적용 — None.get() AttributeError 차단.
     #

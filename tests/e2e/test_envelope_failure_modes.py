@@ -28,6 +28,14 @@ from typing import Any
 
 import pytest
 
+# 2026-08-12: 누출 가드가 검사 대상인 **진짜 비밀번호를 소스에 그대로** 적어 두고 있었다.
+#   가드 파일 자체가 누출 지점이라, 평문 대신 sha256 앞 8자리로 대조하는 공용 가드로
+#   바꾼다. 입력으로 넣던 실 자격증명도 합성 canary 로 바꾼다 (검사 의미는 동일).
+from tests.secret_guard import (  # noqa: E402
+    CANARY_PASSWORD, CANARY_RECOVERY, CANARY_TARGET, assert_no_secret,
+)
+
+
 # ---------------------------------------------------------------------------
 # 13 필드 정본 (rule 13 R5 / rule 20 R1)
 # ---------------------------------------------------------------------------
@@ -54,11 +62,8 @@ ALLOWED_TARGET_TYPES: frozenset[str] = frozenset({"redfish", "os", "esxi"})
 # 비밀값 leak 방어 (사용자 명시 password — fixture 안에 절대 포함 금지)
 SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p) for p in (
-        r"Passw0rd1!",
-        r"Goodmit0802!",
-        r"Dellidrac1!",
-        r"hpinvent1!",
-        r"VMware1!",
+        r"zzz-canary-target-zzz",
+        r"zzz-canary-password-zzz",
         # generic patterns: password=..., "password":"<val>" 형식
         r"password\s*[=:]\s*[^\s\"',}]{4,}",
     )
@@ -393,6 +398,8 @@ ENVELOPES: dict[str, dict[str, Any]] = {
 def _assert_no_secret_leak(envelope: dict[str, Any]) -> None:
     """envelope 안에 password 원문/사용자 명시 비밀값 노출 없는지 확인."""
     serialized = json.dumps(envelope, ensure_ascii=False)
+    # 알려진 실 자격증명이 섞였는지 digest 로 대조한다 (평문을 저장하지 않는 가드).
+    assert_no_secret(serialized, "envelope")
     for pattern in SECRET_VALUE_PATTERNS:
         match = pattern.search(serialized)
         assert match is None, (

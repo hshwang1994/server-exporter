@@ -1,61 +1,54 @@
 ---
 # redfish-gather/tasks/account_service.yml
 #
-# P2 (cycle 2026-04-28): recovery 자격으로 접속한 경우 표준 관리 계정 자동 생성/복구.
-#   "표준 관리 계정" = 선택된 vendor credential profile 의 role: primary 항목이다.
-#   특정 username 문자열은 Contract 가 아니다 (CLAUDE.md §8).
+# 표준 수집 계정(Standard Gathering Account) 생성 / 복구.
 #
-# 진입 조건 (2026-08-11 Phase 6-B §6 §7 로 좁혀짐 — 판정 정본은 site.yml):
-#   - _rf_used_account.role == 'recovery'
-#   - _rf_collect_ok == true (recovery 로 1차 수집은 성공한 상태)
-#   - _rf_primary_auth_rejected == true (primary 후보가 401 로 명시 거부됨)
-#   - vault accounts 안에 role=primary 후보 1개 이상
+# 2026-08-12 (Contract 재확정) — **복구 계정으로는 수집하지 않는다.**
+#   종전 흐름: 표준 401 → recovery 로 **수집 성공** → 그 데이터를 결과로 내보냄 →
+#              그 뒤에 계정 정리 시도. 정리가 실패해도 결과는 status=success 였다.
+#              즉 "복구 계정으로 수집한 결과" 가 정상 결과로 나갔다.
+#   현재 흐름: 표준 401 → recovery 는 **인증과 계정 정리에만** 쓴다 → 표준 계정으로
+#              재인증/재수집이 되어야 비로소 성공이다 (재수집은 site.yml Phase 3).
+#
+#   복구 계정의 목적은 수집이 아니라 표준 계정을 만들거나 되살리는 것이다.
+#   이 파일은 그 목적 외의 일을 하지 않는다.
+#
+# 진입 조건 (판정 정본은 site.yml):
+#   - 표준 계정 수집 실패
+#   - 표준(primary) 후보가 401 로 **명시적으로 거부**됨 (403/timeout/5xx 제외)
+#   - 해당 Location + Vendor 의 recovery 후보 1개 이상
 #
 # 동작:
-#   1. vault accounts 에서 role=primary 후보 1개 추출 → target_username/target_password
-#   2. 쓰기 모드가 아니면 시뮬레이션만
-#   3. 쓰기 모드일 때 redfish_gather mode='account_provision' 호출
-#   4. 결과를 diagnosis.details.account_service 에 노출 (password 미포함)
+#   1. 표준 vault 의 role=primary 항목 → target_username / target_password
+#   2. recovery 후보를 **vault 배열 순서대로** 시도. 각 후보로 account_provision 호출.
+#      모듈이 AccountService 인증에 실패하면(auth_ok=false) 쓰기를 하지 않고 다음 후보로.
+#   3. 결과를 diagnosis.details.account_service 에 노출 (password 미포함)
 #
-# 쓰기 모드 결정 (2026-08-11 Phase 6-B §16):
-#   종전에는 `_rf_account_service_dryrun | default(false)` 였다. 모듈 기본값은 dryrun=True 인데
-#   이 한 줄이 그것을 뒤집어서, **아무도 켠 적 없는데도** 기본값이라는 이유로 BMC 계정 쓰기가
-#   켜져 있었다 (docs/ai/AUDIT-2026-05-29.md A3 가 지적한 상태).
-#   지금은 "진입 조건이 실제로 성립했을 때만" 쓰기 모드를 명시 전달한다.
-#     - _rf_account_reconcile_allowed == true  → dryrun=false (쓰기)
-#     - 그 외                                   → dryrun=true  (시뮬레이션)
-#   사용자 override 는 그대로 존중한다: -e _rf_account_service_dryrun=true 면 언제나 시뮬레이션.
+# 쓰기 모드:
+#   - _rf_account_reconcile_allowed == true → dryrun=false (쓰기)
+#   - 그 외                                  → dryrun=true  (시뮬레이션)
+#   사용자 override 존중: -e _rf_account_service_dryrun=true 면 언제나 시뮬레이션.
 #   (변수를 명시적으로 준 경우에만 override 로 인정한다 — 정의 여부로 구분.)
+#   Account Write 는 제품의 의도된 기능이다. 기본적으로 막지 않는다.
 
 - name: "redfish | account_service | resolve target primary account"
   ansible.builtin.set_fact:
+    # 표준 계정은 전역 vault(vault/common/redfish/standard.yml)에서만 온다.
+    # Location/Vendor vault 의 primary 를 대용하지 않는다 (§14).
     _rf_target_account: >-
-      {{ (_rf_accounts | default([]) | selectattr('role', 'eq', 'primary') | list | first) | default({}) }}
-    # F49 (cycle 2026-05-01): label 매칭으로 lookup 정확도 강화.
-    # 기존: username 만으로 lookup → Dell root 4개 / HPE admin 2개 / Lenovo USERID 2개
-    #       시 첫 entry 잡혀 password mismatch (사이트 실측 사고).
-    # 신: label 우선 매칭 (try_one_account.yml 가 label 까지 promote) → 정확한 entry.
-    #     fallback: label 매칭 0건 시 username 매칭 (legacy_single 등 backward-compat).
-    _rf_recovery_account_resolved: >-
-      {{ (
-           _rf_accounts | default([])
-             | selectattr('label','eq', (_rf_used_account | default({})).label | default(''))
-             | list | first
-         ) | default(
-           _rf_accounts | default([])
-             | selectattr('username','eq', (_rf_used_account | default({})).username | default(''))
-             | list | first,
-           true
-         ) | default({}) }}
+      {{ (_rf_standard_accounts | default([]) | selectattr('role', 'eq', 'primary')
+          | list | first) | default({}) }}
     # 2026-08-11 (Phase 6-B §16): 쓰기 모드는 "조건이 성립했을 때만" 켜진다.
-    # 사용자가 _rf_account_service_dryrun 을 명시했으면 그 값을 그대로 따른다.
     _rf_account_service_dryrun_effective: >-
       {{ (_rf_account_service_dryrun | bool)
          if (_rf_account_service_dryrun is defined)
          else (not (_rf_account_reconcile_allowed | default(false) | bool)) }}
+    _rf_acct_result: {}
+    _rf_acct_auth_ok: false
+    _rf_acct_recovery_label: ""
   no_log: true
 
-# 진입은 했다는 사실 자체를 남긴다 (§17). primary 후보가 없어 아래 block 을 건너뛰어도
+# 진입은 했다는 사실 자체를 남긴다 (§17). 아래 block 을 건너뛰어도
 # "시도했고 대상이 없었다" 가 보이도록 여기서 먼저 최소값을 세운다. password 는 담지 않는다.
 - name: "redfish | account_service | record meta (attempted)"
   ansible.builtin.set_fact:
@@ -69,20 +62,60 @@
       dryrun:          "{{ _rf_account_service_dryrun_effective | bool }}"
       slot_uri:        null
       vendor:          "{{ _rf_vendor | default(none) }}"
+      auth_ok:         false
+      recovery_label:  null
+      recovery_scope:  "{{ _rf_recovery_scope | default('') or none }}"
+      # 2026-08-12: 아래 block 을 건너뛴 경우에도 shape 이 같도록 기본값을 세운다.
+      presence:        "unknown"
+      family:          null
+      create_method:   null
+      evidence:        null
+      write_accepted:  null
+      vendor_status:   null
+      verify_attempts: null
+      dropped_properties: null
+      policy:          null
+      auth_budget:     {}
+      dryrun_reason:   null
+      # 2026-08-12: 비밀번호를 단독 PATCH 로 쓰는 Family 인지 / 뒤이어 맞춘 속성은 무엇인지 /
+      #   재인증 확인 간격을 장비 선언값으로 얼마나 늘렸는지.
+      isolated_write: null
+      followup_properties: null
+      followup_accepted: null
+      verify_schedule_seconds: null
+      # 2026-08-12 (rev.2): Write Convergence 단계 분리.
+      #   HTTP 2xx 는 transport 수락일 뿐이라 write_accepted(=property 수락) 와 나눠 남긴다.
+      #   create_uri 는 Accounts 열거 URI 와 다른 개념이라 어디에 만들었는지 따로 남긴다.
+      write_http_status: null
+      verify_resource: null
+      create_uri: null
+      create_uri_kind: null
+      create_uri_basis: null
+      # policy_conflict: 전역 표준 비밀번호와 장비 정책이 구조적으로 충돌하는가.
+      #   자동 완화도 자동 회전도 하지 않는다 — 운영자가 알아볼 수 있게 상태만 남긴다.
+      policy_conflict: null
+      auth_budget_limit: null
+      auth_budget_exhausted: null
+      role_id_unsupported: null
+      # login_interfaces: 계정별 Redfish 접근 스위치 (Huawei 고유 축, 읽기 전용).
+      login_interfaces: null
+      # isolation_basis: Password 단독 PATCH 를 고른 근거 수준.
+      #   live_proven(실장비 재현) / advisory_derived(벤더 Advisory) / safety_strategy(저장소 선택)
+      isolation_basis: null
+      firmware_advisory: null
+      write_rejections: null
   no_log: true
 
 - name: "redfish | account_service | abort if no primary target"
   ansible.builtin.debug:
     msg: >-
-      account_service skip — vault accounts 에 role=primary 후보 없음.
-      vault/redfish/{{ _rf_vault_profile }}.yml 갱신 후 재시도.
+      account_service skip — 표준 계정 세트에 role=primary 후보 없음.
+      standard scope={{ _rf_vault_scope | default('?') }} 확인 후 재시도.
   when: (_rf_target_account | default({})).username | default('') == ''
 
 # 2026-08-12 (NEW-6): 위 debug 는 callback 이 캡처하지 않아 Portal 에 아무 흔적이 없다.
-#   표준 계정 후보가 등록돼 있지 않으면 recovery 계정으로 계속 수집되면서 표준 계정
-#   전환이 영구히 안 되는 상태가 **아무 신호 없이** 지속된다. 여기서 사실을 남긴다.
-#   (이 경로는 이미 "recovery 로 수집 성공 + primary 401 확정" 게이트를 통과한 뒤라
-#    오탐 가능성이 낮다.)
+#   표준 계정 후보가 등록돼 있지 않으면 표준 계정 전환이 영구히 안 되는 상태가
+#   **아무 신호 없이** 지속된다. 여기서 사실을 남긴다.
 - name: "redfish | account_service | no primary target 사실 기록"
   when: (_rf_target_account | default({})).username | default('') == ''
   block:
@@ -96,7 +129,7 @@
         _errors_fragment:
           - section: "account_service"
             message: "대상 서버에 사용할 표준 관리 계정 정보가 등록되어 있지 않습니다. 계정 설정을 확인하세요."
-            detail: "vault profile={{ _rf_vault_profile | default('unknown') }}; role=primary candidate=0"
+            detail: "standard credential scope={{ _rf_vault_scope | default('unknown') }}; role=primary candidate=0"
 
     - name: "redfish | account_service | no primary target 누적 (merge_fragment)"
       ansible.builtin.include_tasks:
@@ -110,47 +143,27 @@
       ansible.builtin.debug:
         msg: >-
           account_service intent — vendor={{ _rf_vendor | default('unknown') }},
-          recovery_label={{ (_rf_used_account | default({})).label | default('?') }},
+          standard_scope={{ _rf_vault_scope | default('?') }},
+          recovery_scope={{ _rf_recovery_scope | default('?') }},
+          recovery_candidates={{ _rf_recovery_accounts | default([]) | length }},
           target_username={{ _rf_target_account.username }},
           dryrun={{ _rf_account_service_dryrun_effective }}
 
-    # ── recovery 자격으로 AccountService 호출 ────────────────────────────
-    # F49 (cycle 2026-05-01): _rf_used_account_password (try_one_account.yml 가 직접 promote)
-    # 우선 사용. 없으면 _rf_recovery_account_resolved.password 로 fallback (label 매칭).
-    # Jinja2 if/else 표현 (괄호로 우선순위 명시 — `>` 와 `| ternary` 충돌 회피).
-    - name: "redfish | account_service | resolve recovery creds"
-      ansible.builtin.set_fact:
-        _rf_acct_recovery_user: >-
-          {{ ((_rf_used_account | default({})).username | default(''))
-             if ((_rf_used_account_password | default('')) | length > 0)
-             else (_rf_recovery_account_resolved.username | default('')) }}
-        _rf_acct_recovery_pass: >-
-          {{ (_rf_used_account_password | default(''))
-             if ((_rf_used_account_password | default('')) | length > 0)
-             else (_rf_recovery_account_resolved.password | default('')) }}
-      no_log: true
-
-    - name: "redfish | account_service | invoke"
-      redfish_gather:
-        bmc_ip:          "{{ _rf_ip }}"
-        username:        "{{ _rf_acct_recovery_user }}"
-        password:        "{{ _rf_acct_recovery_pass }}"
-        timeout:         "{{ _rf_timeout }}"
-        verify_ssl:      false
-        mode:            "account_provision"
-        target_username: "{{ _rf_target_account.username }}"
-        target_password: "{{ _rf_target_account.password }}"
-        target_role:     "Administrator"
-        dryrun:          "{{ _rf_account_service_dryrun_effective | bool }}"
-      register: _rf_acct_result
-      failed_when: false
-      no_log: true
+    # ── recovery 후보를 vault 배열 순서대로 시도 ─────────────────────────────
+    # 인증되는 후보를 찾을 때까지만. 인증 실패 후보로는 아무것도 쓰지 않는다
+    # (모듈이 auth_ok=false 로 돌려주고 쓰기 경로에 들어가지 않는다).
+    - name: "redfish | account_service | try recovery accounts in order"
+      ansible.builtin.include_tasks: account_service_try_one.yml
+      loop: "{{ _rf_recovery_accounts | default([]) }}"
+      loop_control:
+        loop_var: _try_recovery
+        label: "{{ _try_recovery.label | default('unlabeled') }}"
+      when: not (_rf_acct_auth_ok | default(false) | bool)
 
     # production-audit (2026-04-29): bool typing 명시 cast (string "true"/"false" emit 차단)
     #
     # 2026-08-11 (Phase 6-B §17): 무슨 일이 있었는지 추적 가능하게 넓힌다.
     #   기존 diagnosis.details.account_service 안쪽만 채운다 — envelope 필드는 늘리지 않는다.
-    #   담는 것: 시도했는가 / 대상 계정이 이미 있었는가 / 무엇을 했는가 / 확인됐는가 / 어느 vendor.
     #   **비밀번호나 그 길이 같은 파생값은 절대 담지 않는다.**
     - name: "redfish | account_service | record meta"
       ansible.builtin.set_fact:
@@ -164,35 +177,79 @@
           dryrun:          "{{ ((_rf_acct_result.account_service | default({})).dryrun    | default(true)) | bool }}"
           slot_uri:        "{{ (_rf_acct_result.account_service | default({})).slot_uri  | default(none) }}"
           vendor:          "{{ _rf_vendor | default(none) }}"
+          auth_ok:         "{{ (_rf_acct_auth_ok | default(false)) | bool }}"
+          recovery_label:  "{{ _rf_acct_recovery_label | default('') or none }}"
+          recovery_scope:  "{{ _rf_recovery_scope | default('') or none }}"
+          # 쓰기 응답의 확장 정보 — 2xx 인데 적용이 안 된 경우의 유일한 단서.
+          write_response:  "{{ (_rf_acct_result.account_service | default({})).write_response_info | default(none) }}"
+          # ── 2026-08-12 추가 (Additive only — envelope 13 필드 불변) ──────────
+          # 왜 늘리나: "왜 그렇게 판단했는지" 가 결과에 없어서, 실패가 나면 매번 Jenkins
+          #   콘솔을 열어야 했다. 아래 값들은 전부 진단 근거이며 비밀은 담지 않는다.
+          # presence: 계정이 있었나/없었나/**알 수 없었나**. unknown 이면 쓰기 0건이다.
+          presence:        "{{ (_rf_acct_result.account_service | default({})).presence | default('unknown') }}"
+          # family: 어떤 BMC Family 계약으로 썼는가. evidence 는 그 근거 수준.
+          family:          "{{ (_rf_acct_result.account_service | default({})).family | default(none) }}"
+          create_method:   "{{ (_rf_acct_result.account_service | default({})).create_method | default(none) }}"
+          evidence:        "{{ (_rf_acct_result.account_service | default({})).evidence | default(none) }}"
+          # write_accepted: 벤더 계약 기준으로 쓰기가 수락됐는가 (HTTP status 아님).
+          write_accepted:  "{{ (_rf_acct_result.account_service | default({})).write_accepted | default(none) }}"
+          vendor_status:   "{{ (_rf_acct_result.account_service | default({})).vendor_status | default(none) }}"
+          verify_attempts: "{{ (_rf_acct_result.account_service | default({})).verify_attempts | default(none) }}"
+          dropped_properties: "{{ (_rf_acct_result.account_service | default({})).dropped_properties | default(none) }}"
+          # policy: 장비가 선언한 계정 정책. **비밀번호 길이는 담지 않는다** —
+          #   범위 안인지 여부(boolean)만 담는다.
+          policy:          "{{ (_rf_acct_result.account_service | default({})).policy | default(none) }}"
+          # auth_budget: 이번 실행에서 소비한 실패 인증 횟수 (username 별). lockout 추적용.
+          auth_budget:     "{{ (_rf_acct_result.account_service | default({})).auth_budget | default({}) }}"
+          dryrun_reason:   "{{ (_rf_acct_result.account_service | default({})).dryrun_reason | default(none) }}"
+          # isolated_write: 비밀번호를 다른 속성과 묶으면 조용히 버리는 Family 라
+          #   단독 PATCH 로 썼는가. followup_* 는 그 뒤 맞춘 속성과 그 결과.
+          isolated_write: "{{ (_rf_acct_result.account_service | default({})).isolated_write | default(none) }}"
+          followup_properties: "{{ (_rf_acct_result.account_service | default({})).followup_properties | default(none) }}"
+          followup_accepted: "{{ (_rf_acct_result.account_service | default({})).followup_accepted | default(none) }}"
+          # verify_schedule_seconds: 장비가 선언한 인증 실패 패널티에 맞춰 넓힌 재확인 간격.
+          verify_schedule_seconds: "{{ (_rf_acct_result.account_service | default({})).verify_schedule_seconds | default(none) }}"
+          # write_http_status: transport 수락. write_accepted(=property 수락) 와 별개 축이다.
+          write_http_status: "{{ (_rf_acct_result.account_service | default({})).write_http_status | default(none) }}"
+          # verify_resource: 표준 자격 재인증에 실제로 사용한 리소스.
+          verify_resource: "{{ (_rf_acct_result.account_service | default({})).verify_resource | default(none) }}"
+          # create_uri / create_uri_kind: 어디에 만들었는가. Accounts 열거 URI 와 다른 개념이다.
+          create_uri: "{{ (_rf_acct_result.account_service | default({})).create_uri | default(none) }}"
+          create_uri_kind: "{{ (_rf_acct_result.account_service | default({})).create_uri_kind | default(none) }}"
+          # create_uri_basis: 최신 Create 계약을 쓸 근거가 장비값에서 나왔는가.
+          create_uri_basis: "{{ (_rf_acct_result.account_service | default({})).create_uri_basis | default(none) }}"
+          # policy_conflict: 장비 정책과 전역 표준 비밀번호가 구조적으로 맞지 않는 상태.
+          policy_conflict: "{{ (_rf_acct_result.account_service | default({})).policy_conflict | default(none) }}"
+          # auth_budget_*: 계정 잠금 전에 멈췄는가 (재시도를 늘리는 값이 아니다).
+          auth_budget_limit: "{{ (_rf_acct_result.account_service | default({})).auth_budget_limit | default(none) }}"
+          auth_budget_exhausted: "{{ (_rf_acct_result.account_service | default({})).auth_budget_exhausted | default(none) }}"
+          # role_id_unsupported: 장비가 알려 준 Roles 목록에 없는 권한 이름을 썼는가.
+          role_id_unsupported: "{{ (_rf_acct_result.account_service | default({})).role_id_unsupported | default(none) }}"
+          # login_interfaces: 계정에 Redfish 접근이 켜져 있는가 (Huawei). 읽기 전용.
+          login_interfaces: "{{ (_rf_acct_result.account_service | default({})).login_interfaces | default(none) }}"
+          # isolation_basis: 이 Family 의 쓰기 방식을 무슨 근거로 골랐는가.
+          #   실장비 실측(live_proven)과 벤더 Advisory 추론(advisory_derived)을 합치지 않는다.
+          isolation_basis: "{{ (_rf_acct_result.account_service | default({})).isolation_basis | default(none) }}"
+          firmware_advisory: "{{ (_rf_acct_result.account_service | default({})).firmware_advisory | default(none) }}"
+          # write_rejections: 장비가 지목한 거부 항목 (속성 / 종류 / MessageId / Severity).
+          write_rejections: "{{ (_rf_acct_result.account_service | default({})).write_rejections | default(none) }}"
       no_log: true
 
     # ── 2026-08-12 (C3 / N49 / N71): 계정 처리 실패를 결과에 남긴다 ──────────
-    #
-    # 종전에는 이 파일에 'errors' 라는 문자열이 **0건**이었다. 모듈은
-    # redfish_gather.py 가 result['errors'] 에 25개 지점의 사유(중복 슬롯 / 계정 잠금 /
-    # 계정 비활성 / PATCH 실패 / password sync 후 재인증 실패 / DELETE+POST 실패 /
-    # 빈 슬롯 없음 / AccountService 미지원 …)를 채워 돌려주는데, 여기서 meta 8키만 읽고
-    # 나머지를 전부 버렸다. 결과: 표준 계정 복구가 왜 안 됐는지 Portal 에 0건.
-    # **계정 잠금은 재시도할수록 악화되는데** 사용자는 "자격증명 확인" 만 안내받았다.
-    #
-    # 성공 필터: recovered=true 이고 verification 이 정상이면 emit 하지 않는다.
-    #   모듈 errors 에는 '...retry 성공' 같은 **성공한 fallback 진행 노트**가 섞여 있어
-    #   그대로 배선하면 정상 복구 케이스가 실패처럼 보인다 (H11 과 같은 함정).
-    #
-    # message 는 여기서 새로 쓴다. 모듈 원문에는 Slot URI / HTTP status / 내부 slot id /
-    #   영문 vendor enum / 긴 대시가 들어 있어 사용자 문구 규칙을 위반한다.
-    #   원문 25건은 **detail 로만** 내린다. 모듈 문자열은 건드리지 않는다
-    #   (단위 테스트 6파일이 message 부분문자열을 assert 한다).
     # dryrun 은 **실패가 아니다.** 시뮬레이션 모드에서는 의도적으로 아무것도 고치지 않으므로
-    #   recovered=false / verification='skipped' 가 정상 결과다. 이걸 실패로 세면
-    #   `-e _rf_account_service_dryrun=true` 로 확인만 하는 운영자에게 매번 거짓 오류가 나간다
-    #   (2026-08-11 lab 실측: Dell 10.100.15.28 이 정확히 이 상태였다).
+    #   recovered=false / verification='skipped' 가 정상 결과다.
+    #
+    # 2026-08-12 (audit H-1 / D-3): `verification == 'none'` 을 성공으로 인정하던 조건을
+    #   없앤다. 종전에는 8/9 vendor 의 POST 생성이 검증 없이 recovered=true 를 돌려주고
+    #   이 줄이 그것을 성공으로 확정했다 — 실제로 쓸 수 없는 계정이 "복구됨" 으로 나갔다.
+    #   이제 모듈의 모든 쓰기 경로가 재조회 + 표준 자격 재인증까지 수행하므로,
+    #   쓰기가 있었는데 'none' 인 결과 자체가 나오지 않는다. 성공은 'verified' 뿐이다.
     - name: "redfish | account_service | 실패 판정"
       ansible.builtin.set_fact:
         _rf_acct_failed: >-
           {{ (not (_rf_account_service_meta.dryrun | bool))
              and not ((_rf_account_service_meta.recovered | bool)
-                      and (_rf_account_service_meta.verification in ['verified', 'none'])) }}
+                      and (_rf_account_service_meta.verification == 'verified')) }}
 
     - name: "redfish | account_service | error fragment"
       when: _rf_acct_failed | bool
@@ -204,11 +261,13 @@
         _sections_unsupported_fragment: []
         _errors_fragment:
           - section: "account_service"
-            # 원인별로 세 갈래까지만 나눈다 — 분기 입력은 이미 meta 에 있다.
+            # 원인별로 네 갈래까지만 나눈다 — 분기 입력은 이미 meta 에 있다.
             message: >-
               {%- set act = _rf_account_service_meta.action | default('none') -%}
               {%- set mth = _rf_account_service_meta.method | default('noop') -%}
-              {%- if act == 'ambiguous' -%}
+              {%- if not (_rf_account_service_meta.auth_ok | default(false) | bool) -%}
+              {{- '복구용 계정으로도 대상에 접속하지 못해 표준 관리 계정을 정리하지 못했습니다. 자격증명과 계정 권한을 확인하세요.' -}}
+              {%- elif act == 'ambiguous' -%}
               {{- '대상 서버에 같은 관리 계정 이름이 중복 등록되어 자동 정리를 중단했습니다. 중복 계정을 정리한 뒤 다시 시도하세요.' -}}
               {%- elif mth == 'not_supported' -%}
               {{- '대상 서버가 계정 관리 기능을 제공하지 않아 표준 관리 계정을 정리하지 못했습니다.' -}}
@@ -238,25 +297,11 @@
     - name: "redfish | account_service | log result"
       ansible.builtin.debug:
         msg: >-
-          account_service result — recovered={{ _rf_account_service_meta.recovered }},
+          account_service result — auth_ok={{ _rf_account_service_meta.auth_ok }},
+          recovery_label={{ _rf_account_service_meta.recovery_label }},
+          recovered={{ _rf_account_service_meta.recovered }},
           method={{ _rf_account_service_meta.method }},
           action={{ _rf_account_service_meta.action }},
           account_existed={{ _rf_account_service_meta.account_existed }},
           verification={{ _rf_account_service_meta.verification }},
           dryrun={{ _rf_account_service_meta.dryrun }}
-
-    # ── primary 자격으로 재수집 (recovered=true, dryrun=false 일 때만) ──
-    - when:
-        - _rf_account_service_meta.recovered | bool
-        - not (_rf_account_service_meta.dryrun | bool)
-      block:
-
-        - name: "redfish | account_service | rotate to primary creds"
-          ansible.builtin.set_fact:
-            ansible_user:     "{{ _rf_target_account.username }}"
-            ansible_password: "{{ _rf_target_account.password }}"
-            _rf_collect_ok:   false
-          no_log: true
-
-        - name: "redfish | account_service | re-collect with primary"
-          ansible.builtin.include_tasks: collect_standard.yml

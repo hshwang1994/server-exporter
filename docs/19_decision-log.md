@@ -29,7 +29,13 @@ pytest 만으로는 두 건 다 잡히지 않았다. 둘 다 **실제 ansible-co
 2. **Redfish vendor OEM include** — `{{ playbook_dir }}` 는 `<repo>/redfish-gather` 로
    해석되고 그 아래엔 `common/` 이 없다. 실측: `exit=2`,
    `Could not find or access '<repo>/redfish-gather/common/tasks/normalize/merge_fragment.yml'`.
-   해당 6개 벤더의 OEM fragment 가 **한 번도 병합되지 않았다.**
+   영향은 "fragment 미병합" 보다 크다. 이 include 는 벤더 task 최상위에 있고 site.yml 의
+   OEM block 에는 rescue 가 달려 있어, 실패가 **rescue 를 발동**시킨다. site.yml 과 동일
+   구조로 재현한 실측: `errors 1건(가짜) / OEM 데이터 소실 / collected=[]` → 수정 후
+   `errors 0 / OEM 보존 / collected=['hardware']`.
+   즉 해당 벤더는 **매 수집마다 원인 없는 OEM 오류 1건을 내면서 OEM 데이터를 잃고 있었다.**
+   adapter 전수 파싱 결과 실제 영향은 HPE 7 adapter(전 세대) / Fujitsu / Huawei / Inspur /
+   Quanta 이고, `cisco/collect_oem.yml` 은 어떤 adapter 도 참조하지 않는 dead file 이다.
 
 ### 결정
 
