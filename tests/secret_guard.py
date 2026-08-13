@@ -24,7 +24,7 @@ digest 만으로 검사하려면 길이 6~40 의 모든 부분문자열을 해�
 `admin` / `password` / `ADMIN` / `calvin` / `Admin@9000` 같은 **벤더가 공개한 공장
 기본값이자 사전 단어**는 넣지 않는다. 넣으면 산출물에 흔히 등장하는 평범한 단어까지
 누출로 잡혀 가드가 무의미해진다 (이 저장소에서 각각 627 / 433 개 파일에 등장한다).
-그 값들은 이미 `docs/21_vault-operations.md` 의 벤더 기본값 표에 공개 문서로 존재한다.
+그 값들은 이미 `docs/operate/05-vault.md` 의 벤더 기본값 표에 공개 문서로 존재한다.
 """
 from __future__ import annotations
 

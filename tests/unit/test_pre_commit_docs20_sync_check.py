@@ -45,7 +45,7 @@ def test_canonical_files_constant(hook_mod) -> None:
         "schema/field_dictionary.yml",
     }
     assert set(hook_mod.CANONICAL_FILES) == expected
-    assert hook_mod.DOCS20_PATH == "docs/20_json-schema-fields.md"
+    assert hook_mod.DOCS20_PATH == "docs/contract/03-fields.md"
 
 
 def test_canonical_files_actually_exist(hook_mod) -> None:
@@ -69,7 +69,7 @@ def test_pass_when_docs20_also_staged(hook_mod) -> None:
         [
             "schema/sections.yml",
             "schema/field_dictionary.yml",
-            "docs/20_json-schema-fields.md",
+            "docs/contract/03-fields.md",
         ]
     )
     assert violations == []

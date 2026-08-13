@@ -49,5 +49,5 @@ ansible-playbook redfish-gather/site.yml -i tests/inventory/local/supplemental.i
 | 다음 작업 | 문서 |
 |---|---|
 | 정답지 (baseline) | [`schema/baseline_v1/`](../../schema/baseline_v1/) |
-| Vault 운영 (회전 / 검증) | [docs/21_vault-operations.md](../../docs/21_vault-operations.md) |
-| 실장비 검증 절차 | [docs/13_redfish-live-validation.md](../../docs/13_redfish-live-validation.md) |
+| Vault 운영 (회전 / 검증) | [docs/operate/05-vault.md](../../docs/operate/05-vault.md) |
+| 실장비 검증 절차 | [docs/reference/live-validation.md](../../docs/reference/live-validation.md) |

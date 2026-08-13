@@ -1,6 +1,6 @@
 """계정 쓰기 계약 불변식 — 이 파일이 깨지면 계약이 깨진 것이다.
 
-`docs/ai/REDFISH_ACCOUNT_WRITE_CONTRACT_IMPLEMENTATION_PLAN_2026-08-12.md` §12.2 의
+`docs/ai/contracts/redfish-account-write.md` §12.2 의
 안전 불변식을 **Family 표 전수**에 대해 한 번에 검사한다. 개별 시나리오 테스트가
 빠뜨리는 것은 "새로 추가한 Family 가 규칙을 어기는 경우" 인데, 그건 시나리오를 하나
 더 쓰는 걸로는 못 막는다. 표 자체를 검사해야 막힌다.

@@ -9,7 +9,7 @@
 배경: Dell iDRAC 의 ComputerSystem.SerialNumber 는 보드 제조 시리얼(`CNIVC…`)이라
 SMBIOS Type 1 System Serial 과 다르다. 동일 R760 실측에서 Redfish=CNIVC0048R0159,
 Linux(/sys/class/dmi/id/product_serial)=GSBPK54 로 채널 간 매칭이 깨졌다
-(docs/ai/SERIAL-NUMBER-TRACE-2026-08-11.md §19).
+(docs/ai/contracts/serial-number.md §19).
 
 실행 층: 대표 시리얼 확정/차단은 main() 층 책임이라 `emulator_harness.run_gather`
 (= main() gather 흐름 1:1 미러) 로 구동한다. gather_system 단독 호출은 대상이 아니다.

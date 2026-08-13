@@ -37,9 +37,9 @@
 
 ## 함께 읽으면 좋은 문서
 
-- 설치 절차: [docs/01_jenkins-setup.md](docs/01_jenkins-setup.md) (Jenkins 마스터) / [docs/03_agent-setup.md](docs/03_agent-setup.md) (Agent 노드)
-- 호출자 입력 형식: [docs/05_inventory-json-spec.md](docs/05_inventory-json-spec.md)
-- 호출자 출력 형식: [docs/09_output-examples.md](docs/09_output-examples.md)
+- 설치 절차: [docs/operate/01-jenkins-master.md](docs/operate/01-jenkins-master.md) (Jenkins 마스터) / [docs/operate/02-agent-node.md](docs/operate/02-agent-node.md) (Agent 노드)
+- 호출자 입력 형식: [docs/contract/01-input.md](docs/contract/01-input.md)
+- 호출자 출력 형식: [docs/contract/02-output-envelope.md](docs/contract/02-output-envelope.md)
 
 ---
 
@@ -254,7 +254,7 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 
 > **검증 기준 Agent**: 10.100.64.154 (Ubuntu 24.04.4 LTS), 2026-03-27 확인.
 > 아래 "검증 기준" 컬럼은 해당 Agent에서 실측한 값이며, 전체 운영 환경의 표준을 의미하지 않는다.
-> 설치 절차는 [docs/03_agent-setup.md](docs/03_agent-setup.md) 참조.
+> 설치 절차는 [docs/operate/02-agent-node.md](docs/operate/02-agent-node.md) 참조.
 
 ### 4-1. 런타임 환경
 
@@ -308,7 +308,7 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 ## 6. tasks/ 구조 개요
 
 3개 gather 모두 `tasks/` 디렉터리로 수집/정규화 로직이 분리되어 있다.
-상세 구조와 처리 과정은 [docs/06_gather-structure.md](docs/06_gather-structure.md) 참조.
+상세 구조와 처리 과정은 [docs/develop/01-gather-structure.md](docs/develop/01-gather-structure.md) 참조.
 
 > `REPO_ROOT` 환경변수로 공통 태스크 경로를 참조하므로 Jenkins 에서 `REPO_ROOT=${WORKSPACE}` 설정 필수.
 
@@ -350,7 +350,7 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 - Linux: `become_password` (sudo 권한)
 - Windows: 관리자 계정 비밀번호
 
-상세 구현 (수집 우선순위 / fallback / baseline 기준) 은 [docs/16_os-esxi-mapping.md](docs/16_os-esxi-mapping.md) "식별자 수집 경로" 절 참조.
+상세 구현 (수집 우선순위 / fallback / baseline 기준) 은 [docs/develop/05-field-mapping.md](docs/develop/05-field-mapping.md) "식별자 수집 경로" 절 참조.
 
 ---
 

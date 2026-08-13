@@ -56,7 +56,7 @@
 # 향후 동적 정책 로딩이 필요하면 common/vars/status_rules.yml 활성화 (현재 reserved).
 #
 # 변경 시 사용자 명시 승인 필수: rule 13 R5 (envelope) / rule 92 R5 (schema) / rule 96 R1-B (호환성 외).
-# 결정 reference: docs/19_decision-log.md (M-A2 / 2026-05-06)
+# 결정 reference: docs/reference/decision-log.md (M-A2 / 2026-05-06)
 # ----------------------------------------------------------------------
 
 - name: "normalize | build_status"

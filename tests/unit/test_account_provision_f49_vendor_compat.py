@@ -329,7 +329,7 @@ def test_provision_lenovo_patch_verify_fail_default_does_not_delete(monkeypatch)
     비밀번호 동기화 뒤 인증 확인이 안 되는 신호는 (a) 권한 cache 손상 과
     (b) BMC 비밀번호 정책으로 적용이 안 된 silent fail 을 구분하지 못한다.
     (b) 에서 지우면 정상 운영 중이던 계정을 잃고, DELETE 성공 후 POST 실패 시
-    관리자 계정이 0 개가 된다 (docs/ai/AUDIT-2026-05-29.md A3).
+    관리자 계정이 0 개가 된다 (docs/ai/contracts/account-write-vendor-compat.md A3).
     """
     accounts = [
         {'slot_uri': '/redfish/v1/AccountService/Accounts/4',

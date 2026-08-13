@@ -52,7 +52,7 @@ flowchart TD
 
 3 skeleton 파일 (init_fragments / build_empty_data / build_failed_output) 의 data skeleton 동기화 검증:
 ```bash
-python scripts/ai/hooks/pre_commit_fragment_skeleton_sync.py --all
+python 내부 검증 스크립트 --all
 ```
 
 ## Fragment 변수 정본 (rule 22 R7)
@@ -66,7 +66,7 @@ python scripts/ai/hooks/pre_commit_fragment_skeleton_sync.py --all
 
 ## 관련 문서
 
-- `docs/07_normalize-flow.md` — 정규화 과정 정본
-- `docs/13_redfish-live-validation.md` — Round 검증
-- `docs/20_json-schema-fields.md` — envelope 13 필드 정본
+- `docs/develop/02-normalize-flow.md` — 정규화 과정 정본
+- `docs/reference/live-validation.md` — Round 검증
+- `docs/contract/03-fields.md` — envelope 13 필드 정본
 - `tests/regression/test_cross_channel_consistency.py` — 회귀 보호

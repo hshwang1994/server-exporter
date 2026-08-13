@@ -12,7 +12,7 @@ Python 으로 재현하여 mock fixture (``tests/fixtures/outputs/status_success
 reference:
     - common/tasks/normalize/build_status.yml (정본 헤더 주석)
     - os-gather/tasks/linux/gather_memory.yml:171-175 (dmidecode fallback 시 errors emit)
-    - docs/19_decision-log.md (M-A2 결정 / 2026-05-06)
+    - docs/reference/decision-log.md (M-A2 결정 / 2026-05-06)
     - rule 13 R5 (envelope 13 필드) / rule 96 R1-B (호환성 외 schema 확장 금지)
 """
 from __future__ import annotations

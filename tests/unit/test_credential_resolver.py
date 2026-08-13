@@ -1,6 +1,6 @@
 """Credential Resolver 순수 함수 단위 회귀 (2026-08-12).
 
-설계 정본: docs/ai/VAULT-CREDENTIAL-RESOLVER-DESIGN-2026-08-12.md §4, §15.1
+설계 정본: docs/ai/contracts/vault-credential-resolver.md §4, §15.1
 
 선택 Contract:
     OS      = location + os_type   (linux | windows)

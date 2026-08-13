@@ -126,7 +126,7 @@ server-exporter/
 ```
 
 호출자는 호스트명 / 자격증명 / 벤더를 보내지 않는다.
-상세 명세는 [docs/05_inventory-json-spec.md](docs/05_inventory-json-spec.md).
+상세 명세는 [docs/contract/01-input.md](docs/contract/01-input.md).
 
 ---
 
@@ -152,8 +152,8 @@ server-exporter/
 }
 ```
 
-- 각 필드 의미: [docs/20_json-schema-fields.md](docs/20_json-schema-fields.md) (정본 사전)
-- 채널별 실제 예시: [docs/09_output-examples.md](docs/09_output-examples.md)
+- 각 필드 의미: [docs/contract/03-fields.md](docs/contract/03-fields.md) (정본 사전)
+- 채널별 실제 예시: [docs/contract/02-output-envelope.md](docs/contract/02-output-envelope.md)
 - 필드 단위 lookup 메타데이터: `schema/field_dictionary.yml`
 
 ### sections 값의 의미
@@ -189,7 +189,7 @@ server-exporter/
 | Redfish 일부 섹션 미지원 | `success` 또는 `partial` | 미지원은 `not_supported` | 비어있을 수 있음 |
 | ESXi API 라이선스 부족 (Free) | `failed` | 모두 `failed` | api_unavailable |
 
-상세 로직은 [docs/08_failure-handling.md](docs/08_failure-handling.md).
+상세 로직은 [docs/contract/04-failure-and-diagnosis.md](docs/contract/04-failure-and-diagnosis.md).
 
 ---
 
@@ -214,7 +214,7 @@ server-exporter/
   - Supermicro X9 ~ X14
   - Cisco CIMC M4 ~ M8 + UCS X-Series
   - Huawei iBMC, Inspur ISBMC, Fujitsu iRMC, Quanta QCT BMC
-- Dell iDRAC 8 / HPE iLO 4 / Lenovo IMM2 는 fallback adapter 로 storage/power 까지 거의 모든 섹션을 수집한다 (일부 필드 `null` 가능 — FB). Supermicro X9 만 storage/firmware/power 를 `not_supported` 로 보고한다. 세대별 상세는 [docs/22_compatibility-matrix.md](docs/22_compatibility-matrix.md).
+- Dell iDRAC 8 / HPE iLO 4 / Lenovo IMM2 는 fallback adapter 로 storage/power 까지 거의 모든 섹션을 수집한다 (일부 필드 `null` 가능 — FB). Supermicro X9 만 storage/firmware/power 를 `not_supported` 로 보고한다. 세대별 상세는 [docs/reference/compatibility-matrix.md](docs/reference/compatibility-matrix.md).
 
 (약어 풀이: BMC = Baseboard Management Controller / iDRAC = Integrated Dell Remote Access Controller / iLO = Integrated Lights-Out / XCC = Lenovo XClarity Controller / CIMC = Cisco Integrated Management Controller)
 
@@ -224,11 +224,11 @@ server-exporter/
 
 | 역할 | 권장 순서 |
 |------|----------|
-| 운영자 (Jenkins / 인프라) | [01](docs/01_jenkins-setup.md) → [03](docs/03_agent-setup.md) → [04](docs/04_job-registration.md) → [21](docs/21_vault-operations.md) |
-| 호출자 (외부 시스템) | [05](docs/05_inventory-json-spec.md) → [09](docs/09_output-examples.md) → [20](docs/20_json-schema-fields.md) |
-| 개발자 (새 벤더 / 섹션 추가) | [06](docs/06_gather-structure.md) → [07](docs/07_normalize-flow.md) → [10](docs/10_adapter-system.md) → [14](docs/14_add-new-gather.md) |
-| 검증 담당 | [13](docs/13_redfish-live-validation.md) → [22](docs/22_compatibility-matrix.md) |
-| 결정 추적 (왜 지금 이 모습?) | [19](docs/19_decision-log.md) |
+| 운영자 (Jenkins / 인프라) | [01](docs/operate/01-jenkins-master.md) → [03](docs/operate/02-agent-node.md) → [04](docs/operate/03-job-registration.md) → [21](docs/operate/05-vault.md) |
+| 호출자 (외부 시스템) | [05](docs/contract/01-input.md) → [09](docs/contract/02-output-envelope.md) → [20](docs/contract/03-fields.md) |
+| 개발자 (새 벤더 / 섹션 추가) | [06](docs/develop/01-gather-structure.md) → [07](docs/develop/02-normalize-flow.md) → [10](docs/develop/03-adapter-system.md) → [14](docs/develop/04-add-vendor.md) |
+| 검증 담당 | [13](docs/reference/live-validation.md) → [22](docs/reference/compatibility-matrix.md) |
+| 결정 추적 (왜 지금 이 모습?) | [19](docs/reference/decision-log.md) |
 | 환경 사전 점검 | [REQUIREMENTS.md](REQUIREMENTS.md) |
 
-파일 단위 상세 구조와 AI 협업 정책은 [CLAUDE.md](CLAUDE.md) 의 "파일 구조" 와 "AI 하네스 운영" 절 참조.
+문서 전체 지도는 [docs/README.md](docs/README.md) 에 있다.

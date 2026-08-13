@@ -73,6 +73,6 @@ Jenkins agent (10.100.64.154/155)에서 실행 시:
 
 | 다음 작업 | 문서 |
 |---|---|
-| Jenkins 마스터 자체 설치 | [docs/01_jenkins-setup.md](../../docs/01_jenkins-setup.md) |
+| Jenkins 마스터 자체 설치 | [docs/operate/01-jenkins-master.md](../../docs/operate/01-jenkins-master.md) |
 | 회귀 테스트 (백엔드 JSON) | `tests/e2e/` |
-| 호환성 매트릭스 | [docs/22_compatibility-matrix.md](../../docs/22_compatibility-matrix.md) |
+| 호환성 매트릭스 | [docs/reference/compatibility-matrix.md](../../docs/reference/compatibility-matrix.md) |

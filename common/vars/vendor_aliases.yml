@@ -104,7 +104,7 @@ vendor_aliases:
 #   - esxi-gather/site.yml     (_out_vendor: vendor_output_display)
 #   - os-gather/site.yml       (raw-fallback inline 매핑 — 동일 결정값을 mirror, # nosec rule12-r1)
 #
-# 결정 근거: docs/19_decision-log.md (2026-06-04) — 이전 "CSUS 별도 vendor 불필요"
+# 결정 근거: docs/reference/decision-log.md (2026-06-04) — 이전 "CSUS 별도 vendor 불필요"
 # 결정을 사용자 지시로 supersede. ADR-2026-06-04-vendor-output-display 참조.
 
 # 내부 canonical → 호출자 노출값 (전 채널 공통)

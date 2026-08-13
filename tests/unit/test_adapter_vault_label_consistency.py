@@ -6,7 +6,7 @@
   을 vault 실 label 와 1:1 정합시킴. 본 회귀 테스트는 향후 adapter 추가/수정 시
   drift 차단.
 
-검증 항목 (정본 = `docs/21_vault-operations.md` §6.5):
+검증 항목 (정본 = `docs/operate/05-vault.md` §6.5):
   1. 각 adapter (29) 의 `recovery_accounts` 가 비어있지 않음
   2. 각 `vault_label` 이 vendor 별 허용 set 에 포함
   3. 각 entry 에 `role: recovery` 명시
@@ -28,7 +28,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[2]
 ADAPTERS_DIR = REPO / "adapters" / "redfish"
 
-# 정본 = docs/21_vault-operations.md §6.5 (cycle 2026-05-11 M-A7)
+# 정본 = docs/operate/05-vault.md §6.5 (cycle 2026-05-11 M-A7)
 VENDOR_ALLOWED_LABELS: dict[str, frozenset[str]] = {
     "dell": frozenset({
         "dell_fallback_1",

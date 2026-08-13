@@ -84,5 +84,5 @@ cat <<EOF
   1. git diff vault/ 로 변경 확인
   2. git add vault/ && git commit -m "feat: vault encrypt (P0)"
   3. Jenkins credentials store 에 server-gather-vault-password (Secret File) 등록
-     상세 절차: docs/01_jenkins-setup.md
+     상세 절차: docs/operate/01-jenkins-master.md
 EOF

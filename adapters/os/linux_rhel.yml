@@ -2,7 +2,7 @@
 # ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
 # Vendor: Red Hat 계열 Linux (RHEL / CentOS / Rocky / AlmaLinux / Oracle)
 # Firmware: tested_against ["RHEL 8.10", "RHEL 9.2", "RHEL 9.6", "Rocky 9.6"]
-# Origin: 실 검증 — Round 1~5 (docs/13_redfish-live-validation.md + tests/evidence/)
+# Origin: 실 검증 — Round 1~5 (docs/reference/live-validation.md + tests/evidence/)
 # Last sync: 2026-04-27 (hshwang1994)
 # Notes: priority=50 — linux_suse / linux_ubuntu와 같은 priority. distribution_patterns로 분기.
 # ──────────────────────────────────────────────────────────────────────────────

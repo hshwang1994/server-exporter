@@ -139,5 +139,5 @@ assert dell_sys['Model'] == 'PowerEdge R740'
 | 다음 작업 | 문서 |
 |---|---|
 | 회귀 기준선 (정답지) | [`schema/baseline_v1/`](../../schema/baseline_v1/) |
-| 새 벤더 fixture 추가 | [docs/14_add-new-gather.md](../../docs/14_add-new-gather.md) |
-| 실장비 검증 라운드 | [docs/13_redfish-live-validation.md](../../docs/13_redfish-live-validation.md) |
+| 새 벤더 fixture 추가 | [docs/develop/04-add-vendor.md](../../docs/develop/04-add-vendor.md) |
+| 실장비 검증 라운드 | [docs/reference/live-validation.md](../../docs/reference/live-validation.md) |

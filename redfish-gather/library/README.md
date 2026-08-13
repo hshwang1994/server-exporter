@@ -38,7 +38,7 @@
 | `account_service_provision()` 본문 | inline if/elif vendor 분기 | 사이트 실측 + 펌웨어 별 사고 매트릭스 |
 
 이 외 영역 (common / 3-channel) 의 vendor 하드코딩 금지 (rule 12 R1).
-검증: `python scripts/ai/verify_vendor_boundary.py`.
+검증: `python 내부 검증 스크립트`.
 
 ## 외부 의존성 정책 (rule 10 R2)
 
@@ -60,8 +60,8 @@
 
 ## 관련 문서
 
-- `docs/10_adapter-system.md` — Adapter 시스템 + priority 정책 (cycle 2026-05-07 보강)
-- `docs/13_redfish-live-validation.md` — 실장비 검증
-- `docs/14_add-new-gather.md` 절차 B — 신 vendor / 새 세대 추가 (cycle 2026-05-07 보강)
-- `docs/22_compatibility-matrix.md` — vendor × generation × section
-- `docs/23_debugging-entrypoints.md` — 디버깅 매트릭스 (cycle 2026-05-07 신설)
+- `docs/develop/03-adapter-system.md` — Adapter 시스템 + priority 정책 (cycle 2026-05-07 보강)
+- `docs/reference/live-validation.md` — 실장비 검증
+- `docs/develop/04-add-vendor.md` 절차 B — 신 vendor / 새 세대 추가 (cycle 2026-05-07 보강)
+- `docs/reference/compatibility-matrix.md` — vendor × generation × section
+- `docs/develop/06-debugging.md` — 디버깅 매트릭스 (cycle 2026-05-07 신설)

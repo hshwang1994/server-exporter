@@ -47,8 +47,8 @@ ansible-playbook ... -vvv | grep -i precheck
 
 ## 관련 문서
 
-- `docs/06_gather-structure.md` — 3 채널 + common 구조
-- `docs/07_normalize-flow.md` — Fragment 정규화 과정
-- `docs/11_precheck-module.md` — 4단계 진단 상세
-- `docs/23_debugging-entrypoints.md` — 디버깅 매트릭스
+- `docs/develop/01-gather-structure.md` — 3 채널 + common 구조
+- `docs/develop/02-normalize-flow.md` — Fragment 정규화 과정
+- `docs/contract/04-failure-and-diagnosis.md` — 4단계 진단 상세
+- `docs/develop/06-debugging.md` — 디버깅 매트릭스
 - `tasks/normalize/README.md` — 8 빌더 역할표

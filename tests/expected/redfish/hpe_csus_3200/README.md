@@ -15,7 +15,7 @@
 ## 출처
 
 - fixture 출처: `tests/fixtures/redfish/hpe_csus_3200/README.md` 참조 (sdflexutils + DMTF v1.15 + iLO5 API ref 합성)
-- envelope shape: `docs/20_json-schema-fields.md` 9절 (`data.multi_node`)
+- envelope shape: `docs/contract/03-fields.md` 9절 (`data.multi_node`)
 - cycle: 2026-05-12 (ADR-2026-05-12)
 
 ## 미래 작업

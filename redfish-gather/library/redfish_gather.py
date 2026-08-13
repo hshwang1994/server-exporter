@@ -6733,7 +6733,7 @@ def account_service_provision(
         #   적용되지 않은 흔한 경우(Dell Security Strengthen Policy 사례와 동일한 silent fail)도
         #   똑같은 신호를 낸다. 둘을 구분할 수 없는 상태에서 지우면, 단순 비밀번호 동기화
         #   실패 때문에 **정상 동작 중이던 운영 계정을 삭제**하게 된다. DELETE 성공 후 POST 가
-        #   실패하면 BMC 에 관리자 계정이 하나도 남지 않는다 (docs/ai/AUDIT-2026-05-29.md A3
+        #   실패하면 BMC 에 관리자 계정이 하나도 남지 않는다 (docs/ai/contracts/account-write-vendor-compat.md A3
         #   가 지적한 위험이며 같은 문서가 재검토를 권고했다).
         #
         # 그래서 기능을 없애지 않고 **명시적 opt-in** 으로 옮겼다. 운영자가 권한 cache 손상을
