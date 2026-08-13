@@ -59,15 +59,13 @@ capabilities:
   # users (AccountService) — sections.yml channels=[os] 정의 따라 Redfish 채널 미해당. capabilities 명시 안 함.
 
 collect:
-  strategy: standard_plus_oem
+  strategy: standard_only
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
   # Superdome Flex 전용 OEM tasks 신규 작성 보류 (lab 부재) — HPE 공통 OEM 재사용.
   # Partition 전용 OEM (Oem.Hpe.Partition*) 추가 시 별도 collect_superdome_oem.yml 신설.
-  oem_tasks: "redfish-gather/tasks/vendors/hpe/collect_oem.yml"
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/hpe/normalize_oem.yml"
   # top-level data.* 는 Partition0 representative — 전 partition 은 data.multi_node 에 노출 (ADR-2026-05-12).
 
 credentials:

@@ -133,6 +133,58 @@
           vars:
             _rf_try_accounts: "{{ _rf_standard_accounts | default([]) }}"
 
+        # ── adapter 재선택 (인증 후 사실로) ──────────────────────────────
+        # 위의 1차 선택(:105)은 **무인증 probe** 결과로 고른 것이다. 무인증이면
+        # Systems 열거가 401 이라 모듈이 `data={}` 로 조기 반환하고
+        # (redfish_gather.py:7163-7169), `_extract_probe_facts()` 는 HPE 한 분기만
+        # hint 를 채운다(:1503). 그래서 나머지 vendor 는 model/firmware 가 빈 채로
+        # 선택에 들어가는데, `adapter_match_score` 는 빈 fact 를 실격이 아니라
+        # 중립으로 처리하므로(adapter_common.py:284-286) 결국 **priority 최상위가
+        # 독식**한다. 실제로 R760(iDRAC9, FW 7.10.70.00)이 dell_idrac10 을,
+        # TA-UNODE-G1(CIMC)이 cisco_ucs_xseries 를 골랐다.
+        #
+        # 수집이 끝난 지금은 장비가 준 model / firmware 가 있다. 그 값으로 다시 고른다.
+        # ESXi 가 같은 버그를 같은 방법으로 고쳤다 — 선택을 facts 확보 뒤로
+        # 옮겼다(esxi-gather/site.yml:132-135, Round 17 #9). Redfish 는 `manager_layout`
+        # 을 **수집 전에** 알아야 해서 통째로 못 옮기고 2단계가 된다.
+        #
+        # 1차 선택은 한 글자도 바꾸지 않는다 → manager_layout·수집 경로 영향 0.
+        # 2차는 값이 실제로 있을 때만 선다. 표준 수집이 실패한 상황(=계정 복구가
+        # 도는 상황)에는 data 가 비어 있어 조건이 거짓이고, 그러면 1차 결과가 그대로
+        # 남아 **현행 동작과 완전히 같다.**
+        - name: "redfish | adapter 재선택용 facts (인증 후)"
+          ansible.builtin.set_fact:
+            _rf_postauth_facts:
+              vendor: "{{ (_rf_probe_facts | default({})).vendor | default('') }}"
+              model: >-
+                {{ ((_rf_raw_collect.data | default({}, true)).get('system') | default({}, true)).get('model', '')
+                   | default('', true) }}
+              firmware: >-
+                {{ ((_rf_raw_collect.data | default({}, true)).get('bmc') | default({}, true)).get('firmware_version', '')
+                   | default('', true) }}
+          no_log: true
+
+        - name: "redfish | select adapter (2차 — 인증 후 사실 반영)"
+          when: >-
+            ((_rf_postauth_facts.model | default('')) | length > 0)
+            or ((_rf_postauth_facts.firmware | default('')) | length > 0)
+          ansible.builtin.set_fact:
+            _rf_adapter_first_pass: "{{ (_selected_adapter | default({})).adapter_id | default('') }}"
+            _selected_adapter: >-
+              {{ lookup('adapter_loader',
+                         channel='redfish',
+                         facts=_rf_postauth_facts,
+                         repo_root=lookup('env','REPO_ROOT')) }}
+          no_log: true
+
+        - name: "redfish | adapter 재선택 결과"
+          when: _rf_adapter_first_pass is defined
+          ansible.builtin.debug:
+            msg: >-
+              adapter {{ _rf_adapter_first_pass }} -> {{ _selected_adapter.adapter_id | default('none') }}
+              (model={{ _rf_postauth_facts.model | default('') }},
+               fw={{ _rf_postauth_facts.firmware | default('') }})
+
         # ── 표준 계정 복구 (recovery → standard) ─────────────────────────
         # 2026-08-12 (Contract 재확정): 진입 조건에서 "recovery 로 수집이 됐다" 를 뺀다.
         #   복구 계정으로는 애초에 수집하지 않으므로 그 사실이 존재할 수 없다.
@@ -252,46 +304,27 @@
         - name: "redfish | normalize standard"
           ansible.builtin.include_tasks: tasks/normalize_standard.yml
 
-        # ── vendor adapter (OEM 확장, adapter 기반) ──────────────────────
-        # adapter에 oem_tasks가 정의된 경우만 실행 (하드코딩 벤더 목록 제거)
+        # ── vendor OEM 확장 단계는 2026-08-13 에 제거됐다 ────────────────
+        # 여기에 adapter 의 `collect.oem_tasks` / `normalize.oem_tasks` 를 include 하는
+        # block 이 있었다. 9 vendor 18개 task 파일이 붙어 있었는데 **전부 기여가 0** 이었다.
         #
-        # 2026-06-16 (Bug B, redfish graceful degradation 복원): OEM 수집/정규화는 보조 단계다.
-        #   여기서 예외가 나도 이미 수집·정규화된 표준 섹션(_merged_data / _all_sec_collected)을
-        #   보존하고, 비치명 경고만 errors[]에 남긴 뒤 build_sections/build_status 정상 경로로 진행한다.
-        #   (기존: 단일 top-level rescue 로 cascade → 표준 섹션까지 전부 failed [CSUS 사고]. 본 local
-        #    rescue 가 adapter capabilities.graceful_degradation.on_section_fail=continue 의도를 구현.)
-        #   결과: OEM 실패 시 overall status 는 표준 섹션 기준 success/partial + errors[] 경고
-        #   (build_status.yml 시나리오 B). OEM 한 단계 실패가 전체를 failed 로 덮던 cascade 폐지.
-        - name: "redfish | vendor adapter | OEM (graceful — 실패해도 표준 섹션 보존)"
-          block:
-            - name: "redfish | vendor adapter | collect OEM"
-              when: ((_selected_adapter | default({})).collect | default({})).oem_tasks | default('') != ''
-              ansible.builtin.include_tasks:
-                file: "{{ lookup('env','REPO_ROOT') }}/{{ _selected_adapter.collect.oem_tasks }}"
-
-            - name: "redfish | vendor adapter | normalize OEM"
-              when: ((_selected_adapter | default({})).normalize | default({})).oem_tasks | default('') != ''
-              ansible.builtin.include_tasks:
-                file: "{{ lookup('env','REPO_ROOT') }}/{{ _selected_adapter.normalize.oem_tasks }}"
-          rescue:
-            - name: "redfish | vendor adapter | OEM 비치명 실패 → 경고만 (표준 섹션 유지)"
-              ansible.builtin.set_fact:
-                _data_fragment: {}
-                _sections_supported_fragment: []
-                _sections_collected_fragment: []
-                _sections_failed_fragment: []
-                _sections_unsupported_fragment: []
-                # 2026-08-11 (Phase 6-B / §24): Portal 은 errors[].message 를 그대로 보여준다.
-                # 태스크명 / raw 예외는 detail 로 내리고 message 는 사용자 문장만 남긴다.
-                _errors_fragment:
-                  - section: "oem"
-                    # 2026-08-12: 다른 부분의 성공을 단언하는 절 제거 (failed envelope 에 합류 시 모순).
-                    message: "일부 제조사 확장 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
-                    detail: "[task: {{ ansible_failed_task.name | default('vendor OEM') }}] {{ ansible_failed_result.msg | default('OEM 수집/정규화 예외') }}"
-            - name: "redfish | vendor adapter | OEM 경고 누적 (merge_fragment)"
-              ansible.builtin.include_tasks:
-                file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
-        # ─────────────────────────────────────────────────────────────────
+        #   - task 들이 읽던 경로가 모듈 출력에 없다. `redfish_gather` 최상위 반환에
+        #     `systems` / `chassis` / `managers` 가 없고(`:7238-7243`), `data` 하위에도
+        #     `chassis` 가 없다(`:4793-4811`). 대문자 `'Oem'` 을 출력 키로 쓰는 곳은 0곳이다.
+        #     모듈은 소문자 `'oem'` 에 정제된 형태로만 내보낸다.
+        #   - 실장비 8대 envelope 를 확인했다. task 가 쓴다던 `data.bmc.oem_<vendor>` 키가
+        #     한 건도 없었다. 반면 라이브러리가 채우는 `data.bmc.oem` 은 전부 있었다.
+        #
+        # 즉 OEM 데이터는 이미 라이브러리 층(`_extract_oem_*`, Manager OEM)이 뽑아
+        # `data.system.oem` / `data.bmc.oem` 로 내보내고 있고, 이 단계는 그 위에 얹힌
+        # 빈 껍데기였다. CSUS/Superdome 의 multi-node 정보도 `manager_layout` 을 받은
+        # 라이브러리가 `data.multi_node` 로 채운다 — 이 단계와 무관하다.
+        #
+        # OEM 확장이 실제로 필요해지면 라이브러리의 `_extract_oem_*` 를 넓히는 쪽이
+        # 검증된 경로다 (mock·테스트가 이미 있다). Ansible task 층에서 별도 `uri` 를
+        # 부르는 방식은 인증·타임아웃·계정 잠금을 다시 다뤄야 한다.
+        #
+        # 근거: docs/ai/decisions/ADR-2026-08-13-vendor-oem-task-removal.md
 
         - name: "redfish | build_sections"
           ansible.builtin.include_tasks:
@@ -334,6 +367,10 @@
                                 if (((_diagnosis | default({}, true)).details | default({}))
                                     is mapping) else {}) | combine({
                      'adapter_candidate': _selected_adapter.adapter_id | default(none),
+                     'adapter_first_pass': (_rf_adapter_first_pass | default(''))
+                       if ((_rf_adapter_first_pass | default('')) != ''
+                           and (_rf_adapter_first_pass | default('')) != (_selected_adapter.adapter_id | default('')))
+                       else none,
                      'credential_scope': (_cred_scope | default('')) or none,
                      'recovery_credential_scope': (_cred_recovery_scope | default('')) or none,
                      'auth': _rf_attempts_meta | default({}),

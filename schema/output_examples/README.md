@@ -38,7 +38,7 @@ server-exporter가 3-channel (os / esxi / redfish) 통합 수집 후 만들어�
 
 | 파일 | 대상 | adapter |
 |---|---|---|
-| `redfish_dell_idrac10.jsonc` | Dell PowerEdge R760 / iDRAC 7.10.70.00 (10.100.15.27) | `redfish_dell_idrac10` |
+| `redfish_dell_idrac9.jsonc` | Dell PowerEdge R760 / iDRAC 7.10.70.00 (10.100.15.27) | `redfish_dell_idrac10` |
 | `redfish_hpe_ilo6.jsonc` | HPE ProLiant DL380 Gen11 / iLO 6 v1.73 (10.50.11.231) | 캡처에는 `redfish_hpe_ilo7` 로 찍혀 있다 (cycle 2026-05-11 T-01 fix 이전 캡처). 현재 코드는 `redfish_hpe_ilo6` 를 선택한다 — 재캡처 필요 |
 | **`redfish_hpe_csus_3200.jsonc`** (cycle 2026-05-12) | **HPE Compute Scale-up Server 3200 — Mock 합성 (lab 부재 / sdflexutils + DMTF v1.15 + iLO5 API ref 합성)** | `redfish_hpe_csus_3200` (priority=96 / RMC primary / data.multi_node 활성) |
 | `redfish_lenovo_xcc.jsonc` | Lenovo ThinkSystem SR650 V2 / XCC AFBT58B 5.70 (10.50.11.232) | `redfish_lenovo_xcc3` |

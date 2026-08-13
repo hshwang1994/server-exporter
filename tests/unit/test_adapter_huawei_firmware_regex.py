@@ -110,18 +110,43 @@ def test_huawei_firmware_patterns_are_regex_not_glob():
             )
 
 
-def test_huawei_normalize_oem_key_is_oem_tasks():
-    """redfish-gather/site.yml:145 가 보는 키는 normalize.oem_tasks 다.
+def test_no_adapter_declares_vendor_oem_tasks():
+    """vendor OEM task 단계는 2026-08-13 에 제거됐다 — 선언이 되살아나면 안 된다.
 
-    종전 huawei/inspur adapter 는 `oem_normalize` 로 적혀 있어 해당 normalize_oem.yml
-    이 영구 미실행이었다 (2026-08-10 fix).
+    종전에는 이 자리에서 `normalize.oem_tasks` 키 이름이 맞는지 봤다. 그 검사가
+    필요했던 이유는 huawei/inspur 가 `oem_normalize` 로 적어 두어 해당 task 가
+    영구 미실행이었기 때문이다(2026-08-10 fix). 그런데 조사해 보니 **9 vendor 18개
+    task 전부가** 모듈 출력에 없는 경로를 읽고 있어 기여가 0이었다. 실장비 8대
+    envelope 에도 그 task 들이 쓴다던 `data.bmc.oem_<vendor>` 키가 한 건도 없었다.
+
+    그래서 선언·파일·site.yml block 을 통째로 지웠다. OEM 데이터는 라이브러리
+    (`_extract_oem_*`, Manager OEM)가 `data.system.oem` / `data.bmc.oem` 로 이미
+    내보내고 있다. 확장이 필요하면 그쪽을 넓히는 게 검증된 경로다.
+
+    근거: docs/ai/decisions/ADR-2026-08-13-vendor-oem-task-removal.md
     """
-    for name in ("huawei_ibmc", "inspur_isbmc"):
-        path = os.path.join(REPO_ROOT, "adapters", "redfish", "%s.yml" % name)
-        with open(path, encoding="utf-8") as fh:
-            adapter = yaml.safe_load(fh)
-        normalize = adapter.get("normalize") or {}
-        assert "oem_normalize" not in normalize, (
-            "%s: `oem_normalize` 는 site.yml 이 보지 않는 키다 — `oem_tasks` 여야 한다." % name
-        )
-        assert normalize.get("oem_tasks"), "%s: normalize.oem_tasks 누락" % name
+    adapters_dir = os.path.join(REPO_ROOT, "adapters", "redfish")
+    offenders = []
+    for fn in sorted(os.listdir(adapters_dir)):
+        if not fn.endswith(".yml"):
+            continue
+        with open(os.path.join(adapters_dir, fn), encoding="utf-8") as fh:
+            adapter = yaml.safe_load(fh) or {}
+        for section in ("collect", "normalize"):
+            block = adapter.get(section) or {}
+            for key in ("oem_tasks", "oem_normalize"):
+                if block.get(key):
+                    offenders.append("%s: %s.%s" % (fn, section, key))
+    assert not offenders, (
+        "vendor OEM task 선언이 되살아났다 — 가리키는 파일이 없어 include 가 실패한다:\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+def test_vendor_oem_task_directory_is_gone():
+    """`redfish-gather/tasks/vendors/` 가 다시 생기면 안 된다."""
+    path = os.path.join(REPO_ROOT, "redfish-gather", "tasks", "vendors")
+    assert not os.path.exists(path), (
+        "vendor OEM task 디렉터리가 되살아났다. 되살릴 거라면 먼저 모듈 출력 키를"
+        " 확인해라 — `redfish_gather` 는 대문자 'Oem' 을 내보내지 않는다."
+    )

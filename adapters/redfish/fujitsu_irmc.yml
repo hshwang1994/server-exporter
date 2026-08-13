@@ -71,16 +71,14 @@ capabilities:
   # Generation별 보조 capabilities (web sources 기반 — 사이트 검증 시 정정)
   power_subsystem: "conditional"            # iRMC S6+ 일부 지원 / 이전 generation 은 Power legacy
   storage_strategy: "standard_with_simple_fallback"  # iRMC S2/S4 시 SimpleStorage fallback
-  oem_strategy: "standard+oem"
+  oem_strategy: "none"   # 2026-08-13: vendor OEM task 제거
 
 collect:
-  strategy: standard+oem
+  strategy: standard_only
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/fujitsu/collect_oem.yml"  # M-E2 신설
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/fujitsu/normalize_oem.yml"  # M-E2 신설
 
 credentials:
   profile: "fujitsu"

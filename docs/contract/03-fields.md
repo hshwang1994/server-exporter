@@ -11,7 +11,7 @@ server-exporter 가 던져주는 JSON 을 **받아서 쓰는 쪽** 사람들이 
 3. `status` 가 `success` 인데 `errors` 가 비어있지 않을 수 있는지 (있다)
 4. OS / ESXi / Redfish 채널마다 뭐가 다른지
 
-코드 / 주석 달린 실물 JSON 을 먼저 보고 싶으면 → `schema/output_examples/redfish_dell_idrac10.jsonc` 부터 보면 빠르다.
+코드 / 주석 달린 실물 JSON 을 먼저 보고 싶으면 → `schema/output_examples/redfish_dell_idrac9.jsonc` 부터 보면 빠르다.
 
 ---
 
@@ -366,7 +366,7 @@ for e in response["errors"]:
 
 ## 6. `data.<section>` — 알맹이는 어떻게 생겼나
 
-10개 섹션을 다 풀면 길어진다. 가장 자주 쓰이는 5개만 여기서 정리하고, 나머지는 라인별 한국어 주석본 (`schema/output_examples/redfish_dell_idrac10.jsonc`) 을 본다.
+10개 섹션을 다 풀면 길어진다. 가장 자주 쓰이는 5개만 여기서 정리하고, 나머지는 라인별 한국어 주석본 (`schema/output_examples/redfish_dell_idrac9.jsonc`) 을 본다.
 
 ### 6.1 `data.hardware`
 
@@ -881,7 +881,7 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 
 | 보고 싶은 것 | 파일 |
 |---|---|
-| 라인별 한국어 주석 달린 실물 JSON | `schema/output_examples/redfish_dell_idrac10.jsonc` |
+| 라인별 한국어 주석 달린 실물 JSON | `schema/output_examples/redfish_dell_idrac9.jsonc` |
 | 정상 / 부분 / 실패 / 미지원 4가지 케이스 JSON | `schema/examples/redfish_*.json`, `os_partial.json` |
 | 벤더별 회귀 기준선 JSON | `schema/baseline_v1/{vendor}_baseline.json` |
 | 섹션 정의 원본 | `schema/sections.yml` |

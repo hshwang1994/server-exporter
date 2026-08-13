@@ -41,13 +41,11 @@ capabilities:
     - power
 
 collect:
-  strategy: standard_plus_oem
+  strategy: standard_only
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/supermicro/collect_oem.yml"
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/supermicro/normalize_oem.yml"
 
 credentials:
   profile: "supermicro"

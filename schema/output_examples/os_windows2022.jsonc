@@ -55,7 +55,7 @@
     "started_at": "2026-05-06T23:46:38.773863Z",        // 시작 시각 (UTC ISO 8601)
     "finished_at": "2026-05-06T23:47:32.924072Z",       // 종료 시각 (UTC ISO 8601)
     "duration_ms": 54080,                               // 수집 소요 시간 (밀리초)
-    "adapter_id": "os_windows_generic",                 // Redfish NetworkAdapter @id
+    "adapter_id": "os_windows_generic",                 // 수집에 쓴 adapter
     "adapter_version": null,                            // adapter 버전 (현재 adapter YAML 미정 → null)
     "ansible_version": "2.20.3"                         // 실행 ansible 버전
   },

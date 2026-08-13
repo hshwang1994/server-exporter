@@ -19,7 +19,7 @@
 
 | 표준 JSON | 한글 주석 예시 (`schema/output_examples/`) | 채널 | 검증 시 사용된 장비 |
 |---|---|---|---|
-| `dell_baseline.json` | `redfish_dell_idrac10.jsonc` | Redfish | Dell PowerEdge R740 (iDRAC 9 / FW 4.00) |
+| `dell_baseline.json` | `redfish_dell_idrac9.jsonc` | Redfish | Dell PowerEdge R740 (iDRAC 9 / FW 4.00) |
 | `hpe_baseline.json` | `redfish_hpe_ilo6.jsonc` | Redfish | HPE ProLiant DL380 Gen11 (iLO 6 / FW 1.73) |
 | **`hpe_csus_3200_baseline.json`** (cycle 2026-05-12) | `redfish_hpe_csus_3200.jsonc` | Redfish | **HPE Compute Scale-up Server 3200 — mock-derived (lab 부재 / sdflexutils + DMTF v1.15 + iLO5 API ref 합성)** |
 | `lenovo_baseline.json` | `redfish_lenovo_xcc.jsonc` | Redfish | Lenovo ThinkSystem SR650 V2 (XCC / FW 5.70) |
@@ -48,7 +48,7 @@ mock-derived baseline 의 필수 marker (양쪽 모두):
 
 ### 한글 주석본을 보는 순서
 
-1. `schema/output_examples/redfish_dell_idrac10.jsonc` 부터 본다. Redfish 채널 전체 구조가 가장 자세히 설명되어 있다.
+1. `schema/output_examples/redfish_dell_idrac9.jsonc` 부터 본다. Redfish 채널 전체 구조가 가장 자세히 설명되어 있다.
 2. 그 다음 `esxi` / `ubuntu` / `windows` — 채널이 다르면 어떻게 달라지는지 비교한다.
 3. `hpe` / `lenovo` / `cisco` — 같은 Redfish 채널 안에서 벤더별 차이점을 본다.
 4. `rhel810_raw_fallback` — Python 이 없는 환경의 raw 모드 fallback 결과를 확인한다.

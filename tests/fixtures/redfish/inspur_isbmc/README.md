@@ -43,7 +43,7 @@
 
 - `system_1.json` → `Oem.Inspur.SystemInfo` / `NetworkInfo` → primary path
 - `system_1_underscore_variant.json` → `Oem.Inspur_System.SystemInfo` → fallback path
-  (`redfish-gather/tasks/vendors/inspur/collect_oem.yml` 의 fallback 분기 검증)
+  (라이브러리 `_extract_oem_*` (Inspur 분기) 의 fallback 분기 검증)
 
 ## NP / SA series
 

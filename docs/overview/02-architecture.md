@@ -134,8 +134,10 @@ Linux는 한 갈래가 더 있다. 대상에 Python이 없거나 3.9보다 낮�
 **어댑터 YAML** — `adapters/<채널>/` 아래에 있고 어떤 장비에 맞는지(제조사·모델·펌웨어
 패턴)와 어떤 섹션을 지원하는지를 적어 둔다. 여러 개가 맞으면 점수로 하나를 고른다.
 
-**제조사 전용 태스크** — `redfish-gather/tasks/vendors/<vendor>/`. 표준으로는 안 나오는
-확장 정보를 캐낼 때 쓴다.
+**제조사 확장 정보** — Redfish 라이브러리(`redfish-gather/library/redfish_gather.py`)의
+`_extract_oem_*` 가 `Oem.Dell` / `Oem.Hpe` 같은 제조사 영역에서 뽑아
+`data.system.oem` / `data.bmc.oem` 으로 내보낸다. 한동안 Ansible 태스크 층에도
+같은 목적의 디렉터리가 있었는데 실제로는 값이 한 번도 안 나와서 2026-08-13 에 지웠다.
 
 그래서 벤더를 늘릴 때 파이프라인이나 수집 코드를 고치지 않는다. 자세한 규칙은
 [develop/03-adapter-system.md](../develop/03-adapter-system.md)에 있다.

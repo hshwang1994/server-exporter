@@ -3,7 +3,10 @@
 //
 // 대상      : HPE ProLiant DL380 Gen11 / iLO 6 v1.73 (10.50.11.231, hostname=test0004.hynix.com)
 // 채널      : redfish-gather (stdlib HTTPS + Basic Auth)
-// 특이사항  : iLO 6 (Gen11 generation) — adapter redfish_hpe_ilo7 (priority=110)
+// 특이사항  : iLO 6 (Gen11) — adapter redfish_hpe_ilo6 (2026-08-13 실측 재수집).
+//             종전 이 예시는 redfish_hpe_ilo7 이었다. HPE 는 무인증 ServiceRoot 에서도
+//             model/firmware hint 를 얻으므로(_extract_probe_facts 의 유일한 vendor 분기)
+//             현재는 1차 선택부터 맞는다.
 //             - HPE OEM 풍부: post_state / aggregate_server_health / fan_redundancy /
 //               psu_redundancy / subsystem_health (fans/memory/network/power/processors/storage/temperatures)
 //             - hardware.health = Warning + power.summary.health_rollup = Critical
@@ -59,7 +62,7 @@
     "started_at": "2026-05-06T23:46:22.006774Z",        // 시작 시각 (UTC ISO 8601)
     "finished_at": "2026-05-06T23:48:31.702848Z",       // 종료 시각 (UTC ISO 8601)
     "duration_ms": 129615,                                 // 약 2분 (HPE iLO 가 Dell 보다 느림)
-    "adapter_id": "redfish_hpe_ilo7",                   // Redfish NetworkAdapter @id
+    "adapter_id": "redfish_hpe_ilo6",                   // 수집에 쓴 adapter
     "adapter_version": null,                            // adapter 버전 (현재 adapter YAML 미정 → null)
     "ansible_version": "2.20.3"                         // 실행 ansible 버전
   },

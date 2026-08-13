@@ -21,7 +21,7 @@ baseline credential 변경 금지.
 추가 evidence 수집 전용. baseline 정책을 변경하는 근거로 사용하면 안 됨.
 
 credential은 다음 방식으로만 관리:
-1. `tests/inventory/local/supplemental.ini` — gitignored 로컬 파일이라 저장소에는 없다.
+1. `tests/inventory/local/` 아래 supplemental ini (gitignored) — gitignored 로컬 파일이라 저장소에는 없다.
    아래 사용 방법대로 샘플에서 복사해 만든다
 2. `tests/vault/supplemental.yml` (ansible-vault encrypted)
 3. 일회성 `--extra-vars` (디버깅 용도 한정)

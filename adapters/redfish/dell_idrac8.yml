@@ -41,13 +41,11 @@ capabilities:
     - power  # M-D3 W1 (cycle 2026-05-06): cycle 2026-05-01 PowerSubsystem fallback 코드 적용 — Additive only
 
 collect:
-  strategy: standard_plus_oem
+  strategy: standard_only
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/dell/collect_oem.yml"
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/dell/normalize_oem.yml"
 
 credentials:
   profile: "dell"

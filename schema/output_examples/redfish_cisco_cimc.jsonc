@@ -3,7 +3,10 @@
 //
 // 대상      : Cisco UCS C220 M4 / CIMC 4.1(2g) (10.100.15.2, hostname=C220-FCH2116V1V0)
 // 채널      : redfish-gather (stdlib HTTPS + Basic Auth)
-// 특이사항  : Cisco UCS X-Series adapter — redfish_cisco_ucs_xseries (priority=110)
+// 특이사항  : CIMC adapter — redfish_cisco_cimc (2026-08-13 실측 재수집).
+//             종전 이 예시는 redfish_cisco_ucs_xseries 였다 — 무인증 probe 오선택이다.
+//             cisco_cimc 의 model_patterns 에 TA-UNODE.* 가 이미 있어 model 만
+//             전달되면 정확히 맞는다.
 //             - Redfish 1.2.0 (구세대 — Dell/HPE/Lenovo 1.15~1.20 보다 낮음)
 //             - 1024 GB DDR4 RAM (16 × 64GB Samsung)
 //             - 8 × SSD (RAID5 + RAID0) — 18TB+
@@ -60,7 +63,7 @@
     "started_at": "2026-05-06T23:49:27.277891Z",        // 시작 시각 (UTC ISO 8601)
     "finished_at": "2026-05-06T23:53:57.379575Z",       // 종료 시각 (UTC ISO 8601)
     "duration_ms": 270089,                                 // 4.5분 — Cisco CIMC 가 가장 느림
-    "adapter_id": "redfish_cisco_ucs_xseries",          // Redfish NetworkAdapter @id
+    "adapter_id": "redfish_cisco_cimc",                 // 수집에 쓴 adapter
     "adapter_version": null,                            // adapter 버전 (현재 adapter YAML 미정 → null)
     "ansible_version": "2.20.3"                         // 실행 ansible 버전
   },

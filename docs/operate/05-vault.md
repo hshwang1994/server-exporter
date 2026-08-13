@@ -481,7 +481,7 @@ accounts:
 
 ### 8.3 vault edit 도중 swap 파일 잔재
 
-- `vault/.swp`, `vault/<loc>/redfish/.{vendor}.yml.swp` 파일 잔재 시 절대 commit 금지
+- 편집 중 만들어지는 `.swp` 파일, `vault/<loc>/redfish/.{vendor}.yml.swp` 파일 잔재 시 절대 commit 금지
 - `.gitignore` 에 `*.swp` 등록 (이미 적용)
 
 ## 9. 검증 절차 (회전 후 의무)

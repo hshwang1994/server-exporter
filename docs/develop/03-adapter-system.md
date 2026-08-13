@@ -66,7 +66,6 @@
 [ Step 4 ] 선택된 adapter 가 시키는 대로
     - credentials.profile = "dell"  → vault/<loc>/redfish/dell.yml 로드
     - collect.standard_tasks = "redfish-gather/tasks/collect_standard.yml" 실행
-    - collect.oem_tasks      = "redfish-gather/tasks/vendors/dell/collect_oem.yml" 실행
     - normalize.standard_tasks 실행 → fragment 생성
     - capabilities.sections_supported 가 출력 sections[].not_supported 의 기준
 ```
@@ -107,7 +106,7 @@ score = priority × 1000  +  specificity × 10  +  match_score
 
 ---
 
-## 3.5. Priority 정책표 — 31 redfish + 7 OS + 4 ESXi (cycle 2026-05-07 추가)
+## 3.5. Priority 정책표
 
 새 adapter 의 priority 결정 시 다음 정책 따른다 (rule 50 R3):
 
@@ -181,11 +180,9 @@ capabilities:
 
 collect:
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  oem_tasks:      "redfish-gather/tasks/vendors/dell/collect_oem.yml"
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  oem_tasks:      "redfish-gather/tasks/vendors/dell/normalize_oem.yml"
 
 credentials:
   profile:           "dell"   # vault/<loc>/redfish/dell.yml 을 로드
@@ -221,7 +218,7 @@ fujitsu:
 
 ### 3단계 — (선택) OEM 태스크
 
-Fujitsu 만의 특이한 응답이 있으면 `redfish-gather/tasks/vendors/fujitsu/collect_oem.yml` 추가.
+Fujitsu 만의 특이한 응답이 있으면 라이브러리 `_extract_oem_*` 에 vendor 분기를 넣는다.
 
 OEM 이 필요 없으면 표준 필드만으로 충분하다. 그 경우 adapter YAML 의 `collect.oem_tasks` 를 비우면 된다.
 

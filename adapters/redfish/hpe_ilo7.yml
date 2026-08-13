@@ -71,13 +71,11 @@ capabilities:
     - power
 
 collect:
-  strategy: standard_plus_oem
+  strategy: standard_only
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/hpe/collect_oem.yml"
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/hpe/normalize_oem.yml"
 
 credentials:
   profile: "hpe"

@@ -1,0 +1,50 @@
+---
+# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
+# Vendor: VMware ESXi 9.x
+# Firmware: tested_against ["9.0.0"]
+# Origin: 실장비 실측 — lab 5대 (10.100.64.91~95, Dell PowerEdge R760 위 ESXi 9.0.0).
+#         version 문자열은 community.vmware 의 `ansible_distribution_version` 원본이고
+#         저장소가 가공하지 않는다 (esxi-gather/site.yml:141).
+# Last sync: 2026-08-13 (hshwang1994)
+# Notes: priority 는 esxi_8x 와 같은 100 이다. 더 높이면 안 된다 —
+#        tests/unit/test_adapter_selection_facts_r17.py 가 "facts 가 비면 esxi_8x" 를
+#        고정하고 있고, 그건 인증 실패로 버전을 못 얻은 상황의 계약이다. 동률이면
+#        adapter_loader 의 stable sort + 파일명 알파벳 순으로 esxi_8x 가 유지된다.
+#        버전이 9.x 로 들어오면 esxi_8x 는 version_patterns 불일치로 -9999 실격이라
+#        이 adapter 가 단독 1위가 된다. 즉 동률이어도 판정은 갈린다.
+# ──────────────────────────────────────────────────────────────────────────────
+adapter_id: esxi_9x
+channel: esxi
+priority: 100
+
+match:
+  version_patterns: ["^9\\."]
+
+capabilities:
+  sections_supported:
+    - system
+    - hardware
+    - cpu
+    - memory
+    - storage
+    - network
+
+collect:
+  collect_tasks:
+    - "esxi-gather/tasks/collect_facts.yml"
+    - "esxi-gather/tasks/collect_config.yml"
+    - "esxi-gather/tasks/collect_datastores.yml"
+  normalize_tasks:
+    - "esxi-gather/tasks/normalize_system.yml"
+    - "esxi-gather/tasks/normalize_network.yml"
+    - "esxi-gather/tasks/normalize_storage.yml"
+
+credentials:
+  profile: "esxi_default"
+  fallback_profiles: []
+
+graceful_degradation:
+  on_section_fail: continue
+  on_auth_fail: abort
+  critical_sections: [system, hardware]
+  optional_sections: [storage]

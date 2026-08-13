@@ -50,16 +50,14 @@ capabilities:
     - firmware
     - power
     # M-D3 W6 (cycle 2026-05-06): users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
-  oem_strategy: "standard+oem"
+  oem_strategy: "none"   # 2026-08-13: vendor OEM task 제거
 
 collect:
-  strategy: standard+oem
+  strategy: standard_only
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/quanta/collect_oem.yml"  # M-F1 신설
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/quanta/normalize_oem.yml"  # M-F1 신설
 
 credentials:
   profile: "quanta"

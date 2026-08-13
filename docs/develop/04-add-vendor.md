@@ -211,7 +211,7 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 | 1 | `common/vars/vendor_aliases.yml` | **의무** | vendor 정규화 실패 → adapter 매칭 실패 |
 | 2 | `adapters/{redfish,os,esxi}/{vendor}_*.yml` | **의무** | adapter_loader 가 본 vendor 인식 못 함 |
 | 3 | `redfish-gather/library/redfish_gather.py` `_OEM_EXTRACTORS` | 선택 (OEM 추출 시) | OEM 데이터 envelope `data.hardware.oem` 누락 |
-| 4 | `redfish-gather/tasks/vendors/{vendor}/collect_oem.yml + normalize_oem.yml` | 선택 (vendor 특이 endpoint 시) | vendor-specific endpoint 미수집 |
+| 4 | 라이브러리 `_extract_oem_*` 에 vendor 분기 | 선택 (vendor 특이 OEM 필요 시) | vendor-specific OEM 미수집 |
 | 5 | `schema/baseline_v1/{vendor}_baseline.json` | **의무 (실측 후)** / lab 부재 시 NEXT_ACTIONS 등재 | 회귀 테스트 미보호 → drift 가능 |
 
 `vault/<loc>/redfish/<vendor>.yml` (자격증명) + 내부 벤더 노트 `.claude/ai-context/vendors/{vendor}.md` (도메인 노트) 도 의무 (rule 50 R2 9단계).
@@ -220,7 +220,7 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 
 1. `common/vars/vendor_aliases.yml` 매핑 추가
 2. `adapters/{channel}/{vendor}_*.yml` adapter 생성 (priority 정책표 — `docs/10` 3.5절)
-3. (선택) `redfish-gather/tasks/vendors/{vendor}/` OEM tasks
+3. (선택) 라이브러리 `_extract_oem_*` 에 vendor 분기
 4. `vault/<loc>/redfish/<vendor>.yml` 생성 (ansible-vault encrypt) — lab 부재 시 placeholder + 사용자 명시 승인
 5. `schema/baseline_v1/{vendor}_baseline.json` 추가 (실장비 검증 후) — lab 부재 시 단계 10 등재
 6. 내부 벤더 노트 `.claude/ai-context/vendors/{vendor}.md` 추가
@@ -287,10 +287,8 @@ capabilities:
   sections_supported: [system, hardware, bmc, cpu, memory, storage, network, firmware, power]
 collect:
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  oem_tasks:      "redfish-gather/tasks/vendors/dell/collect_oem.yml"
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  oem_tasks:      "redfish-gather/tasks/vendors/dell/normalize_oem.yml"
 credentials:
   profile:           "dell"
 graceful_degradation:
@@ -309,7 +307,7 @@ _OEM_EXTRACTORS = {
 ```
 
 ```yaml
-# 4. redfish-gather/tasks/vendors/dell/collect_oem.yml + normalize_oem.yml
+# 4. (선택) 라이브러리 _extract_oem_* 의 vendor 분기
 # vendor 특이 endpoint 수집 (예: /redfish/v1/Dell/...)
 ```
 

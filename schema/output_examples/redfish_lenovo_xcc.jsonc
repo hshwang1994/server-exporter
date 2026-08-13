@@ -3,7 +3,9 @@
 //
 // 대상      : Lenovo ThinkSystem SR650 V2 / XCC AFBT58B 5.70 (10.50.11.232, hostname=XCC-7Z73-J30AF7LC)
 // 채널      : redfish-gather (stdlib HTTPS + Basic Auth)
-// 특이사항  : Lenovo XCC3 (XClarity Controller v3) — adapter redfish_lenovo_xcc3 (priority=110)
+// 특이사항  : Lenovo XCC (AFBT58B 5.70) — adapter redfish_lenovo_xcc (2026-08-13 실측 재수집).
+//             종전 이 예시는 redfish_lenovo_xcc3 였다 — 무인증 probe 오선택이다.
+//             XCC3 는 ThinkSystem V4 세대이고 이 장비는 SR650 V2 다.
 //             - Lenovo OEM: product_name / system_status / fru_serial / machine_type / health_summary / led_indicator
 //             - Backup BMC firmware (BMC-Backup) — Primary 와 별개 펌웨어 슬롯
 //             - Pending firmware slot (UEFI-Pending / BMC-Primary-Pending) — 다음 reboot 시 활성
@@ -59,7 +61,7 @@
     "started_at": "2026-05-06T23:46:22.629035Z",        // 시작 시각 (UTC ISO 8601)
     "finished_at": "2026-05-06T23:47:32.675317Z",       // 종료 시각 (UTC ISO 8601)
     "duration_ms": 69958,                               // 수집 소요 시간 (밀리초)
-    "adapter_id": "redfish_lenovo_xcc3",                // Redfish NetworkAdapter @id
+    "adapter_id": "redfish_lenovo_xcc",                 // 수집에 쓴 adapter
     "adapter_version": null,                            // adapter 버전 (현재 adapter YAML 미정 → null)
     "ansible_version": "2.20.3"                         // 실행 ansible 버전
   },

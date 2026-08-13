@@ -87,23 +87,18 @@ capabilities:
   redfish_version: "1.0+"            # iBMC 1.x 의 최소 / 5.x 는 1.13+
   power_subsystem: "conditional"      # iBMC 3.x+ 부분 지원 / 4.x+ 완전
   storage_strategy: "conditional"     # iBMC 1.x: simple_storage / 2.x+: standard
-  oem_strategy: "standard+oem"
+  oem_strategy: "none"   # 2026-08-13: vendor OEM task 제거
   oem_namespace: "Oem.Huawei"
 
 collect:
   # M-C1 (cycle 2026-05-11): strategy 변경 standard_only → standard+oem (M-C2 OEM tasks dep)
-  strategy: standard+oem
+  strategy: standard_only
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  oem_tasks: "redfish-gather/tasks/vendors/huawei/collect_oem.yml"
   storage_strategy: "standard_with_simple_fallback"   # iBMC 1.x 시 SimpleStorage fallback
   power_strategy: "subsystem_with_legacy_fallback"    # iBMC 3.x- 시 Power legacy fallback
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  # M-C1 (cycle 2026-05-11): OEM normalize 경로 추가 (M-C2 dep)
-  # 2026-08-10 fix: 키 이름이 `oem_normalize` 였으나 site.yml:145 는 `normalize.oem_tasks`
-  #   를 본다 → 본 파일의 normalize_oem.yml 이 한 번도 실행되지 않았음(dead path). 키 정정.
-  oem_tasks: "redfish-gather/tasks/vendors/huawei/normalize_oem.yml"
 
 credentials:
   profile: "huawei"

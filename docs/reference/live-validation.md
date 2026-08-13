@@ -523,7 +523,7 @@ cycle 2026-05-07 M-K1 검증: 30/30 adapter origin 주석 일관성 PASS (verify
 - **관리**: RMC (Rack Management Controller) primary + PDHC (per-chassis) + RMP (redundancy)
 - **Redfish**: 표준 (RMC = API host) + HPE OneView profile 동시 지원
 - **adapter**: `adapters/redfish/hpe_csus_3200.yml` (priority=96 → 현재 102 — Superdome Flex 95→101 직상, docs/10 §3.5)
-- **OEM tasks**: HPE 공통 (`redfish-gather/tasks/vendors/hpe/{collect,normalize}_oem.yml`) 재사용
+- **OEM 추출**: 라이브러리 `_extract_oem_hpe` (Ansible task 층은 2026-08-13 제거)
 - **regex 확장**: `(?i)Superdome|Flex` → `(?i)Superdome|Flex|Compute Scale-up|CSUS` (Additive only — rule 92 R2)
 - **vault profile**: `hpe` 재사용 (사용자 명시 승인 시 향후 분리)
 - **web sources 7건** (rule 96 R1-A — adapter 헤더 origin 주석)

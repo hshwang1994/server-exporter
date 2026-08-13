@@ -123,12 +123,28 @@ def test_m_e2_credentials_profile_hpe() -> None:
     )
 
 
-def test_m_e2_collect_oem_reuses_hpe() -> None:
-    """collect.oem_tasks 가 HPE 기존 OEM tasks 재사용 (Oem.Hpe namespace 동일)."""
+def test_m_e2_multi_node_comes_from_manager_layout_not_oem_task() -> None:
+    """Superdome/CSUS 의 멀티노드 정보는 vendor OEM task 가 아니라 라이브러리가 만든다.
+
+    종전에는 `collect.oem_tasks` 가 `vendors/hpe/` 를 가리키는지 봤다. 그 task 는
+    `_rf_raw_collect.systems[0].Oem.Hpe.PartitionInfo` 를 읽으려 했는데 모듈 출력에
+    `systems` 키 자체가 없어(`redfish_gather.py:7238-7243`) 한 번도 값이 나온 적이 없다.
+    baseline 에도 그 task 가 쓴다던 `data.bmc.oem_hpe_superdome` 이 없고, 대신
+    `data.multi_node` 가 있다 — `manager_layout` 을 받은 라이브러리
+    (`_collect_multi_node_topology`)가 채운 것이다.
+
+    그래서 지켜야 하는 계약은 "OEM task 를 가리키는가" 가 아니라
+    **"`vendor_notes.manager_layout` 이 살아 있는가"** 다. 이게 없으면 멀티노드가 죽는다.
+    """
     d = yaml.safe_load(ADAPTER_PATH.read_text(encoding="utf-8"))
-    oem_path = d["collect"]["oem_tasks"]
-    assert "vendors/hpe/" in oem_path, (
-        f"collect.oem_tasks 가 HPE OEM 재사용해야 함. 실제: {oem_path}"
+    layout = (d.get("vendor_notes") or {}).get("manager_layout")
+    assert layout, (
+        "vendor_notes.manager_layout 이 없다 — site.yml 이 이 값을 모듈에 넘겨야"
+        " data.multi_node 가 채워진다"
+    )
+    assert layout in ("rmc_primary", "rmc_primary_ilo_secondary"), layout
+    assert not (d.get("collect") or {}).get("oem_tasks"), (
+        "vendor OEM task 선언이 되살아났다 (2026-08-13 제거)"
     )
 
 

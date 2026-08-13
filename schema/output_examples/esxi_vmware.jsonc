@@ -38,7 +38,7 @@
     "failure_reason": null,                             // 실패 사유 한글 (성공 시 null)
     "details": {                                        // 채널별 추가 진단 정보
       "channel": "esxi",                                // 수집 채널 식별 (diagnosis 안에 다시 명시)
-      "adapter_candidate": "esxi_generic",                 // ESXi adapter 4종 (generic + 6x/7x/8x). 7.0.3 → generic (또는 esxi_7x)
+      "adapter_candidate": "esxi_7x",                 // ESXi adapter 4종 (generic + 6x/7x/8x). 7.0.3 → generic (또는 esxi_7x)
       "checked_ports": [443],                           // detect 단계 시도한 port list
       "selected_port": 443,                             // 실제 통신 port
       "vsphere_endpoint": "https://10.100.64.1:443/sdk",   // ESXi vSphere API endpoint
@@ -59,7 +59,7 @@
     "started_at": "2026-05-06T23:46:22.594704Z",        // 시작 시각 (UTC ISO 8601)
     "finished_at": "2026-05-06T23:47:37.790511Z",       // 종료 시각 (UTC ISO 8601)
     "duration_ms": 75118,                               // 수집 소요 시간 (밀리초)
-    "adapter_id": "esxi_generic",                       // Redfish NetworkAdapter @id
+    "adapter_id": "esxi_7x",                            // 수집에 쓴 adapter (7.0.3 -> esxi_7x)
     "adapter_version": null,                            // adapter 버전 (현재 adapter YAML 미정 → null)
     "ansible_version": "2.20.3"                         // 실행 ansible 버전
   },

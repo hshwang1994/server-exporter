@@ -44,4 +44,4 @@
 ## OEM 영역 검증 입력
 
 `system_1.json` → `Oem.Huawei.SystemInfo` / `SmartProvisioning` / `NetworkBindings` →
-`redfish-gather/tasks/vendors/huawei/collect_oem.yml` → `_data_fragment.bmc.oem_huawei.*`
+라이브러리 `_extract_oem_*` (Huawei 분기) → `_data_fragment.bmc.oem_huawei.*`
