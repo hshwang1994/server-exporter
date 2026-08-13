@@ -1814,7 +1814,6 @@ kernel sysfs > POSIX 명령 > /proc > /etc
 ### 발견 사항
 
 - **F1**: Dell BMC 사용자는 user=admin이 아닌 user=root (사용자 채팅 정정)
-- **F2**: 10.100.15.32가 "dell" label인데 ServiceRoot=AMI Redfish Server. 실 vendor / 자격 사용자 확인 필요 (rule 96 R2 — 외부 계약 디버깅 시 질의 우선)
 - **F3**: Cisco 10.100.15.1 HTTP 503 / 15.3 timeout. 장비 가동 상태 확인 필요
 - **F4**: Win10 WinRM 5986 미활성 + 5985 Basic 미허용 + WSL Python 3.12 ntlm-auth 라이브러리의 OpenSSL 3.0 MD4 미지원
 - **F5**: ESXi 10.100.64.1 / .3 SSH 비활성 (vSphere 기본 상태). 활성화 후 esxcli 53종 추가 수집 가능
