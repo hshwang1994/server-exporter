@@ -6,7 +6,7 @@ pipeline {
         string(
             name        : 'loc',
             defaultValue: '',
-            description : 'Agent 로케이션 (ich | chj | yi)'
+            description : 'Agent 로케이션 (ic | chj | yi)'
         )
         choice(
             name        : 'target_type',

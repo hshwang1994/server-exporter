@@ -2175,12 +2175,12 @@ fields:
     #   password / 파일 내용은 어떤 형태로도 포함되지 않는다.
     help_ko: >-
       사용된 자격증명 세트의 범위 식별자. 형식은 `<location>/<channel>[/<os_type|vendor>]`
-      (예: ich/os/linux, ich/esxi, ich/redfish/dell). 범위를 결정하지 못한 경우 null.
+      (예: ic/os/linux, ic/esxi, ic/redfish/dell). 범위를 결정하지 못한 경우 null.
       경로/범위 정보일 뿐이며 계정 정보는 포함하지 않는다.
       실패 진단 시 "자격증명 배치 문제" 와 "대상 계정 문제" 를 가르는 단서로 쓴다.
     help_en: >-
       Scope identifier of the credential set used, formatted as
-      `<location>/<channel>[/<os_type|vendor>]` (e.g. ich/os/linux, ich/redfish/dell);
+      `<location>/<channel>[/<os_type|vendor>]` (e.g. ic/os/linux, ic/redfish/dell);
       null when the scope could not be determined. Contains no account material —
       only the selection axes. Use it to tell credential-placement problems apart
       from target-account problems.
@@ -2198,12 +2198,12 @@ fields:
     #   **Secret 이 아니다**: location / vendor 조합 문자열뿐이다.
     help_ko: >-
       표준 수집 계정 복구에 사용할 자격증명 세트의 범위 식별자 (Redfish 전용).
-      형식은 `<location>/redfish/<vendor>` (예: ich/redfish/dell). vendor 를 식별하지
+      형식은 `<location>/redfish/<vendor>` (예: ic/redfish/dell). vendor 를 식별하지
       못했거나 복구 세트를 정하지 못하면 null. 수집 자체는 `credential_scope`(표준 계정)
       로 수행되며, 이 값은 복구 경로에만 쓰인다. 계정 정보는 포함하지 않는다.
     help_en: >-
       Scope identifier of the recovery credential set (Redfish only), formatted as
-      `<location>/redfish/<vendor>` (e.g. ich/redfish/dell); null when the vendor is
+      `<location>/redfish/<vendor>` (e.g. ic/redfish/dell); null when the vendor is
       unidentified or no recovery scope could be determined. Gathering itself always
       uses the standard account in `credential_scope`; this scope is used only to
       create or repair that standard account. Contains no account material.

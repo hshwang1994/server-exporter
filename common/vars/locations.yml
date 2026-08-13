@@ -32,8 +32,8 @@
 # ==============================================================================
 
 locations:
-  ich:
-    agent_label: ich
+  ic:
+    agent_label: ic
 
   chj:
     agent_label: chj
@@ -43,6 +43,6 @@ locations:
 
   # 2026-08-12: 사내 테스트 환경의 4번째 Location.
   #   이름이 `git` 이지만 Git 전용 노드도, Location Resolve 전용 노드도 **아니다.**
-  #   ich/chj/yi 와 완전히 동등한 하나의 Location 이며 같은 규칙으로 vault/git/ 을 쓴다.
+  #   ic/chj/yi 와 완전히 동등한 하나의 Location 이며 같은 규칙으로 vault/git/ 을 쓴다.
   git:
     agent_label: git

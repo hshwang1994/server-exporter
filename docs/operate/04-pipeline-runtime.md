@@ -38,7 +38,7 @@ Stage 3/4는 venv Python을 사용한다 (`. /opt/ansible-env/bin/activate`).
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---------|------|------|------|
-| `loc` | string | 필수 | 슬레이브 로케이션 (ich/chj/yi) |
+| `loc` | string | 필수 | 슬레이브 로케이션 (ic/chj/yi) |
 | `target_type` | choice | 필수 | os / esxi / redfish |
 | `inventory_json` | text | 필수 | 호출자가 전달하는 호스트 JSON 배열 (os/esxi: `service_ip`, redfish: `bmc_ip`, fallback: `ip`) |
 
@@ -112,7 +112,7 @@ ansiblePlaybook(
 
 | 항목 | 요구사항 |
 |------|---------|
-| Label | `loc` 파라미터 값 (ich/chj/yi) |
+| Label | `loc` 파라미터 값 (ic/chj/yi) |
 | 네트워크 | BMC 대역 (10.50.x.x) 접근 가능 |
 | 디스크 | workspace + ansible 로그 공간 |
 

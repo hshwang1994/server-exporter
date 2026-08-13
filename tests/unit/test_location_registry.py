@@ -5,7 +5,7 @@
     - `agent_label` 이 필수다 (Jenkins 'Resolve Location' stage 가 읽는다)
     - Location 문자열이 registry 밖(코드)에 하드코딩되지 않는다
 
-`ich/chj/yi` 같은 **값 자체를 단언하지 않는다** — Location 추가가 코드 수정 0줄이어야
+`ic/chj/yi` 같은 **값 자체를 단언하지 않는다** — Location 추가가 코드 수정 0줄이어야
 하는데, 테스트가 값을 고정하면 그 약속이 깨진다. 검증하는 것은 구조뿐이다.
 """
 from __future__ import annotations
@@ -93,7 +93,7 @@ def test_registry_is_the_only_place_locations_are_named(registry):
             continue
         text = _strip_comments(path.read_text(encoding="utf-8"))
         for loc_id in loc_ids:
-            # 단어 경계로 찾는다 — 'ich' 가 'which' 안에서 걸리면 안 된다.
+            # 단어 경계로 찾는다 — 'ic' 가 'basic' 안에서 걸리면 안 된다.
             hits = re.findall(rf"(?<![a-z0-9_]){re.escape(loc_id)}(?![a-z0-9_])", text)
             assert not hits, (
                 f"{path.relative_to(REPO)} 에 Location ID {loc_id!r} 하드코딩 "

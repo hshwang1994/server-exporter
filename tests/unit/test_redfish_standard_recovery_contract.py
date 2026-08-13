@@ -74,7 +74,7 @@ _harness = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_harness)
 _iter_tasks = _harness._iter_tasks
 
-LOCATIONS = ("ich", "chj", "yi", "git")
+LOCATIONS = ("ic", "chj", "yi", "git")
 VENDORS = ("dell", "hpe", "lenovo", "cisco", "supermicro",
            "huawei", "inspur", "fujitsu", "quanta")
 
@@ -125,7 +125,7 @@ def test_1_standard_scope_is_identical_across_locations(location):
 
 @pytest.mark.parametrize("vendor", VENDORS)
 def test_2_standard_scope_is_identical_across_vendors(vendor):
-    r = _resolve("ich", vendor)
+    r = _resolve("ic", vendor)
     assert r["standard_credential_scope"] == "common/redfish/standard"
     assert vendor not in r["standard_vault_relpath"]
 
@@ -138,15 +138,15 @@ def test_3_recovery_scope_differs_per_location():
 
 
 def test_4_recovery_scope_differs_per_vendor():
-    scopes = {v: _resolve("ich", v)["recovery_credential_scope"] for v in VENDORS}
+    scopes = {v: _resolve("ic", v)["recovery_credential_scope"] for v in VENDORS}
     assert len(set(scopes.values())) == len(VENDORS)
     for v, s in scopes.items():
-        assert s == f"ich/redfish/{v}"
+        assert s == f"ic/redfish/{v}"
 
 
 def test_vendor_unresolved_keeps_standard_but_drops_recovery():
     """vendor 미식별이어도 표준 계정은 쓸 수 있다 — 전역이라 vendor 와 무관하다."""
-    r = _resolve("ich", "not-a-vendor")
+    r = _resolve("ic", "not-a-vendor")
     assert r["standard_vault_relpath"] == "vault/common/redfish/standard.yml"
     assert r["recovery_credential_scope"] is None
     assert r["recovery_vault_relpath"] is None
@@ -453,8 +453,8 @@ def test_15_recovery_set_missing_is_recorded_not_silent():
 
 
 @pytest.mark.parametrize("a,b", [
-    (("ich", "dell"), ("chj", "dell")),   # 16: cross-location
-    (("ich", "dell"), ("ich", "hpe")),    # 17: cross-vendor
+    (("ic", "dell"), ("chj", "dell")),   # 16: cross-location
+    (("ic", "dell"), ("ic", "hpe")),    # 17: cross-vendor
 ])
 def test_16_17_no_cross_scope_reuse(a, b):
     ra, rb = _resolve(*a), _resolve(*b)
@@ -484,7 +484,7 @@ def test_18_no_flat_vault_fallback_in_production_code():
 
 def test_resolver_returns_exactly_one_path_per_scope():
     """경로 후보 list 를 돌려주지 않는다 — 여러 개면 그 자체가 fallback 이다."""
-    r = _resolve("ich", "dell")
+    r = _resolve("ic", "dell")
     for key, value in r.items():
         assert not isinstance(value, (list, tuple)), f"{key} 가 복수 값이다: {value!r}"
 
@@ -493,7 +493,7 @@ def test_resolver_returns_exactly_one_path_per_scope():
 # 19. Secret 비노출
 # ═══════════════════════════════════════════════════════════════════════════
 def test_19_resolver_returns_no_secret():
-    r = _resolve("ich", "dell")
+    r = _resolve("ic", "dell")
     blob = repr(r).lower()
     for banned in ("password", "username", "secret"):
         assert banned not in blob, f"resolver 결과에 {banned!r}"

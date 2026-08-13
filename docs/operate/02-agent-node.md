@@ -255,7 +255,7 @@ git push
 
 | 항목 | 값 | 비고 |
 |------|-----|------|
-| Name | `agent-{loc}-{dev\|ops}` | 예: `agent-ich-ops`, `agent-chj-dev` |
+| Name | `agent-{loc}-{dev\|ops}` | 예: `agent-ic-ops`, `agent-chj-dev` |
 | Description | `{로케이션} {개발\|운영} Agent` | 예: `이천 운영 Agent` |
 | Number of executors | `2` | 동시 실행 잡 수. 서버 사양에 따라 조정 |
 | Remote root directory | `/home/{서비스계정}/jenkins-agent` | Agent 워크스페이스 경로 |
@@ -270,7 +270,7 @@ Jenkinsfile 의 `agent { label "${params.loc}" }` 기준:
 
 | 슬레이브 노드 | Labels 값 |
 |-------------|----------|
-| 이천 | `ich` |
+| 이천 | `ic` |
 | 청주 | `chj` |
 | 용인 | `yi` |
 

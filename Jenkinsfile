@@ -9,7 +9,7 @@
 //   redfish → redfish-gather/site.yml
 //
 // 파라미터:
-//   loc             : 슬레이브 로케이션 Labels (ich|chj|yi)
+//   loc             : 슬레이브 로케이션 Labels (ic|chj|yi)
 //   target_type     : 수집 대상 종류 (os|esxi|redfish)
 //   inventory_json  : 호출자가 전달하는 호스트 배열 JSON
 //                     IP 필드: os/esxi → service_ip, redfish → bmc_ip (fallback: ip)
@@ -34,7 +34,7 @@ pipeline {
         string(
             name        : 'loc',
             defaultValue: '',
-            description : '슬레이브 로케이션 Labels (ich | chj | yi)'
+            description : '슬레이브 로케이션 Labels (ic | chj | yi)'
         )
         choice(
             name        : 'target_type',

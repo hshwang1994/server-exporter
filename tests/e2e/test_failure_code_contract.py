@@ -281,21 +281,21 @@ def test_credential_scope_is_exposed_in_diagnosis_details():
     """
     diag = _render_diagnosis(
         "os-gather/site.yml", _OS_TASKS["linux"],
-        {"_os_auth_ok": False, "_os_attempts_meta": {}, "_cred_scope": "ich/os/linux"})
-    assert diag["details"]["credential_scope"] == "ich/os/linux"
+        {"_os_auth_ok": False, "_os_attempts_meta": {}, "_cred_scope": "ic/os/linux"})
+    assert diag["details"]["credential_scope"] == "ic/os/linux"
 
     esxi = _render_diagnosis(
         "esxi-gather/site.yml", _ESXI_TASK,
         {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None,
                         "details": {"channel": "esxi"}},
-         "_e_auth_ok": False, "_e_facts_ok": False, "_cred_scope": "ich/esxi"})
-    assert esxi["details"]["credential_scope"] == "ich/esxi"
+         "_e_auth_ok": False, "_e_facts_ok": False, "_cred_scope": "ic/esxi"})
+    assert esxi["details"]["credential_scope"] == "ic/esxi"
 
     rf = render_redfish_rescue(
         {"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
          "_rf_collect_ok": False, "_rf_auth_observations": [],
-         "_cred_scope": "ich/redfish/dell"})
-    assert rf["details"]["credential_scope"] == "ich/redfish/dell"
+         "_cred_scope": "ic/redfish/dell"})
+    assert rf["details"]["credential_scope"] == "ic/redfish/dell"
 
 
 def test_credential_scope_is_null_when_unresolved():

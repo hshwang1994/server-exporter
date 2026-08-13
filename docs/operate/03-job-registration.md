@@ -70,7 +70,7 @@ RBAC Pattern 과 일치해야 권한이 자동 적용된다.
 
 | 파라미터 | 필수 | 설명 |
 |---------|------|------|
-| `loc` | 필수 | 어느 사이트 Agent 에서 실행할지 (`ich` / `chj` / `yi`) |
+| `loc` | 필수 | 어느 사이트 Agent 에서 실행할지 (`ic` / `chj` / `yi`) |
 | `target_type` | 자동 (Job 별 기본값) | `os` / `esxi` / `redfish` |
 | `inventory_json` | 필수 | 대상 IP 배열 (os/esxi: `service_ip`, redfish: `bmc_ip`). 형식은 [../contract/01-input.md](../contract/01-input.md) 참조 |
 

@@ -40,7 +40,7 @@ from credential_common import (  # noqa: E402
     resolve_credential_scope,
 )
 
-LOCATIONS = ("ich", "chj", "yi")
+LOCATIONS = ("ic", "chj", "yi")
 VENDORS = ("dell", "hpe", "lenovo", "supermicro", "cisco",
            "huawei", "inspur", "fujitsu", "quanta")
 
@@ -54,20 +54,20 @@ def resolve(**kw):
 # ── T1 / T3~T7: 정상 선택 ────────────────────────────────────────────────────
 @pytest.mark.parametrize("kwargs,scope,relpath", [
     # T3 OS Linux
-    (dict(location="ich", target_type="os", os_type="linux"),
-     "ich/os/linux", "vault/ich/os/linux.yml"),
+    (dict(location="ic", target_type="os", os_type="linux"),
+     "ic/os/linux", "vault/ic/os/linux.yml"),
     # T4 OS Windows
-    (dict(location="ich", target_type="os", os_type="windows"),
-     "ich/os/windows", "vault/ich/os/windows.yml"),
+    (dict(location="ic", target_type="os", os_type="windows"),
+     "ic/os/windows", "vault/ic/os/windows.yml"),
     # T5 ESXi — 선택축이 location 하나뿐이라 2번째 경로 조각이 없다
-    (dict(location="ich", target_type="esxi"),
-     "ich/esxi", "vault/ich/esxi.yml"),
+    (dict(location="ic", target_type="esxi"),
+     "ic/esxi", "vault/ic/esxi.yml"),
     # T6 Redfish Dell
-    (dict(location="ich", target_type="redfish", vendor="dell"),
-     "ich/redfish/dell", "vault/ich/redfish/dell.yml"),
+    (dict(location="ic", target_type="redfish", vendor="dell"),
+     "ic/redfish/dell", "vault/ic/redfish/dell.yml"),
     # T7 Redfish HPE
-    (dict(location="ich", target_type="redfish", vendor="hpe"),
-     "ich/redfish/hpe", "vault/ich/redfish/hpe.yml"),
+    (dict(location="ic", target_type="redfish", vendor="hpe"),
+     "ic/redfish/hpe", "vault/ic/redfish/hpe.yml"),
     # 다른 Location 도 동일 규칙
     (dict(location="chj", target_type="redfish", vendor="lenovo"),
      "chj/redfish/lenovo", "vault/chj/redfish/lenovo.yml"),
@@ -90,7 +90,7 @@ def test_scope_and_relpath_agree():
 
 
 # ── T2: 존재하지 않는 Location ───────────────────────────────────────────────
-@pytest.mark.parametrize("loc", ["nope", "ICH_TYPO", "", None, "  ", "ich2"])
+@pytest.mark.parametrize("loc", ["nope", "IC_TYPO", "", None, "  ", "ic2"])
 def test_unknown_location_makes_no_path(loc):
     r = resolve(location=loc, target_type="esxi")
     assert r["reason"] == REASON_UNKNOWN_LOCATION
@@ -100,7 +100,7 @@ def test_unknown_location_makes_no_path(loc):
 
 def test_empty_known_locations_rejects_everything():
     """registry 가 비면 어떤 Location 도 통과하지 않는다 (fail closed)."""
-    r = resolve_credential_scope("ich", "esxi", known_locations=(), known_vendors=VENDORS)
+    r = resolve_credential_scope("ic", "esxi", known_locations=(), known_vendors=VENDORS)
     assert r["reason"] == REASON_UNKNOWN_LOCATION
     assert r["vault_relpath"] is None
 
@@ -108,7 +108,7 @@ def test_empty_known_locations_rejects_everything():
 # ── T8: 지원하지 않는 Vendor ─────────────────────────────────────────────────
 @pytest.mark.parametrize("vendor", ["unknown", "", None, "contoso", "Dell Inc.", "  "])
 def test_vendor_unresolved_makes_no_path(vendor):
-    r = resolve(location="ich", target_type="redfish", vendor=vendor)
+    r = resolve(location="ic", target_type="redfish", vendor=vendor)
     assert r["reason"] == REASON_VENDOR_UNRESOLVED
     assert r["vault_relpath"] is None
     assert r["credential_scope"] is None
@@ -116,28 +116,28 @@ def test_vendor_unresolved_makes_no_path(vendor):
 
 def test_unknown_os_type():
     for bad in ("", None, "aix", "Linux2", "esxi"):
-        r = resolve(location="ich", target_type="os", os_type=bad)
+        r = resolve(location="ic", target_type="os", os_type=bad)
         assert r["reason"] == REASON_UNKNOWN_OS_TYPE
         assert r["vault_relpath"] is None
 
 
 def test_unknown_target_type():
     for bad in ("", None, "bmc", "ipmi", "os_linux", "vsphere"):
-        r = resolve(location="ich", target_type=bad)
+        r = resolve(location="ic", target_type=bad)
         assert r["reason"] == REASON_UNKNOWN_TARGET_TYPE, f"{bad!r} → {r['reason']}"
         assert r["vault_relpath"] is None
 
 
 def test_target_type_case_and_space_are_tolerated():
     """'OS ' 는 오타가 아니라 표기 차이다 — 정규화해서 받되 os_type 은 여전히 요구한다."""
-    r = resolve(location="ich", target_type="OS ", os_type="LINUX")
+    r = resolve(location="ic", target_type="OS ", os_type="LINUX")
     assert r["reason"] == REASON_RESOLVED
-    assert r["vault_relpath"] == "vault/ich/os/linux.yml"
+    assert r["vault_relpath"] == "vault/ic/os/linux.yml"
 
 
 def test_os_channel_requires_os_type():
     """os 채널에서 os_type 을 빠뜨리면 linux 로 넘겨짚지 않는다."""
-    r = resolve(location="ich", target_type="os")
+    r = resolve(location="ic", target_type="os")
     assert r["reason"] == REASON_UNKNOWN_OS_TYPE
     assert r["vault_relpath"] is None
 
@@ -145,16 +145,16 @@ def test_os_channel_requires_os_type():
 # ── T15 / T16: Location · Vendor 격리 ────────────────────────────────────────
 def test_location_isolation():
     """같은 vendor 라도 Location 이 다르면 다른 파일. 교차 참조가 없다."""
-    a = resolve(location="ich", target_type="redfish", vendor="dell")
+    a = resolve(location="ic", target_type="redfish", vendor="dell")
     b = resolve(location="chj", target_type="redfish", vendor="dell")
     assert a["vault_relpath"] != b["vault_relpath"]
     assert "chj" not in a["vault_relpath"]
-    assert "ich" not in b["vault_relpath"]
+    assert "ic" not in b["vault_relpath"]
 
 
 def test_vendor_isolation():
-    a = resolve(location="ich", target_type="redfish", vendor="dell")
-    b = resolve(location="ich", target_type="redfish", vendor="hpe")
+    a = resolve(location="ic", target_type="redfish", vendor="dell")
+    b = resolve(location="ic", target_type="redfish", vendor="hpe")
     assert a["vault_relpath"] != b["vault_relpath"]
     assert "hpe" not in a["vault_relpath"]
     assert "dell" not in b["vault_relpath"]
@@ -162,7 +162,7 @@ def test_vendor_isolation():
 
 def test_result_never_carries_alternate_candidates():
     """결과에 '다음에 시도할 다른 경로' 같은 필드가 없어야 한다 (fallback 구조 부재)."""
-    r = resolve(location="ich", target_type="redfish", vendor="dell")
+    r = resolve(location="ic", target_type="redfish", vendor="dell")
     blob = json.dumps(r).lower()
     for word in ("fallback", "candidates", "alternate", "next_"):
         assert word not in blob, f"결과에 {word!r} 가 있다 — 교차 fallback 구조 의심"
@@ -190,10 +190,10 @@ def test_generation_does_not_affect_selection(generation_ish):
     함수 시그니처에 그 축이 아예 없다는 것이 1차 증거이고, 여기서는
     호출자가 실수로 vendor 자리에 세대 문자열을 넣어도 경로를 만들지 않음을 본다.
     """
-    base = resolve(location="ich", target_type="redfish", vendor="dell")
-    assert base["vault_relpath"] == "vault/ich/redfish/dell.yml"
+    base = resolve(location="ic", target_type="redfish", vendor="dell")
+    assert base["vault_relpath"] == "vault/ic/redfish/dell.yml"
 
-    wrong = resolve(location="ich", target_type="redfish", vendor=generation_ish)
+    wrong = resolve(location="ic", target_type="redfish", vendor=generation_ish)
     assert wrong["reason"] == REASON_VENDOR_UNRESOLVED
     assert wrong["vault_relpath"] is None
 
@@ -209,9 +209,9 @@ def test_signature_has_no_generation_axis():
 # ── T19: Secret 비노출 ───────────────────────────────────────────────────────
 def test_result_contains_no_secret_keys():
     for kwargs in (
-        dict(location="ich", target_type="os", os_type="linux"),
-        dict(location="ich", target_type="esxi"),
-        dict(location="ich", target_type="redfish", vendor="dell"),
+        dict(location="ic", target_type="os", os_type="linux"),
+        dict(location="ic", target_type="esxi"),
+        dict(location="ic", target_type="redfish", vendor="dell"),
     ):
         r = resolve(**kwargs)
         blob = json.dumps(r).lower()
@@ -228,7 +228,7 @@ def test_module_never_reads_files():
 
 # ── 경로 안전성 ──────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("evil", [
-    "../../etc", "ich/../chj", "ich/redfish", ".", "..", "ich ", "i c h", "ICH/",
+    "../../etc", "ic/../chj", "ic/redfish", ".", "..", "ic ", "i c", "IC/",
 ])
 def test_path_traversal_is_impossible_via_location(evil):
     r = resolve_credential_scope(
@@ -243,11 +243,11 @@ def test_path_traversal_is_impossible_via_location(evil):
 @pytest.mark.parametrize("evil", ["../hpe", "dell/../hpe", "dell ", "a/b"])
 def test_path_traversal_is_impossible_via_vendor(evil):
     r = resolve_credential_scope(
-        "ich", "redfish", known_locations=LOCATIONS,
+        "ic", "redfish", known_locations=LOCATIONS,
         known_vendors=list(VENDORS) + [evil],
     )
     r2 = resolve_credential_scope(
-        "ich", "redfish", known_locations=LOCATIONS,
+        "ic", "redfish", known_locations=LOCATIONS,
         known_vendors=list(VENDORS) + [evil], vendor=evil,
     )
     for res in (r, r2):
@@ -256,29 +256,29 @@ def test_path_traversal_is_impossible_via_vendor(evil):
 
 
 def test_case_and_whitespace_are_normalised():
-    r = resolve(location="  ICH ", target_type=" Redfish ", vendor=" Dell ")
+    r = resolve(location="  IC ", target_type=" Redfish ", vendor=" Dell ")
     assert r["reason"] == REASON_RESOLVED
-    assert r["vault_relpath"] == "vault/ich/redfish/dell.yml"
+    assert r["vault_relpath"] == "vault/ic/redfish/dell.yml"
 
 
 def test_reason_is_always_in_enum():
-    for loc in ("ich", "bad"):
+    for loc in ("ic", "bad"):
         for tt in ("os", "esxi", "redfish", "bad"):
             r = resolve(location=loc, target_type=tt, os_type="linux", vendor="dell")
             assert r["reason"] in REASONS
 
 
 def test_selection_basis_records_the_axes_used():
-    r = resolve(location="ich", target_type="redfish", vendor="dell")
+    r = resolve(location="ic", target_type="redfish", vendor="dell")
     assert r["selection_basis"] == {
-        "location": "ich", "target_type": "redfish", "vendor": "dell",
+        "location": "ic", "target_type": "redfish", "vendor": "dell",
     }
-    e = resolve(location="ich", target_type="esxi")
+    e = resolve(location="ic", target_type="esxi")
     assert "vendor" not in e["selection_basis"] and "os_type" not in e["selection_basis"]
 
 
 def test_result_is_json_serialisable():
-    json.dumps(resolve(location="ich", target_type="redfish", vendor="dell"))
+    json.dumps(resolve(location="ic", target_type="redfish", vendor="dell"))
 
 
 # ── T20: 후보 순서 보존 (normalize_accounts) ─────────────────────────────────

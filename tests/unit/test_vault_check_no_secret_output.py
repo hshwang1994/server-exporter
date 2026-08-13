@@ -202,9 +202,9 @@ def test_empty_vault_is_a_problem():
 def test_kind_of_path():
     """표준 / 복구 / 단일 vault 를 경로로 구분한다 (2026-08-12 분리)."""
     assert _mod.kind_of("vault/common/redfish/standard.yml") == "standard"
-    assert _mod.kind_of("vault/ich/redfish/dell.yml") == "recovery"
-    assert _mod.kind_of("vault/ich/os/linux.yml") == "single"
-    assert _mod.kind_of("vault/ich/esxi.yml") == "single"
+    assert _mod.kind_of("vault/ic/redfish/dell.yml") == "recovery"
+    assert _mod.kind_of("vault/ic/os/linux.yml") == "single"
+    assert _mod.kind_of("vault/ic/esxi.yml") == "single"
     assert _mod.kind_of("vault/redfish/dell.yml") == "single"
 
 
@@ -256,7 +256,7 @@ accounts:
 
 
 def test_vendor_of_path():
-    assert _mod.vendor_of("vault/ich/redfish/dell.yml") == "dell"
+    assert _mod.vendor_of("vault/ic/redfish/dell.yml") == "dell"
     assert _mod.vendor_of("vault/redfish/hpe.yml") == "hpe"
-    assert _mod.vendor_of("vault/ich/os/linux.yml") is None
-    assert _mod.vendor_of("vault/ich/esxi.yml") is None
+    assert _mod.vendor_of("vault/ic/os/linux.yml") is None
+    assert _mod.vendor_of("vault/ic/esxi.yml") is None

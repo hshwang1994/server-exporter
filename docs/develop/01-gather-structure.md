@@ -18,7 +18,7 @@ server-exporter 는 한 서버를 3가지 시점으로 본다.
 [ 호출자 (Jenkins Job 트리거) ]
         │  inventory_json = [{ bmc_ip: "10.50.11.162" }]
         │  target_type    = "redfish"  (또는 os / esxi)
-        │  loc            = "ich"
+        │  loc            = "ic"
         ▼
 [ Jenkins 4-Stage 파이프라인 ]
         │

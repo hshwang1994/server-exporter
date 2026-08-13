@@ -113,7 +113,7 @@ server-exporter/
 
 | 파라미터 | 필수 | 설명 |
 |---------|------|------|
-| `loc` | 필수 | 어느 사이트 Agent 에서 실행할지 (예: `ich`, `chj`, `yi`) |
+| `loc` | 필수 | 어느 사이트 Agent 에서 실행할지 (예: `ic`, `chj`, `yi`) |
 | `target_type` | 필수 | `os` / `esxi` / `redfish` 중 하나 |
 | `inventory_json` | 필수 | 대상 IP 배열 (아래 예시 참조) |
 

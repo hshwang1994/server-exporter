@@ -11,7 +11,7 @@
 #   - 절대경로 생성 없음            → REPO_ROOT 결합은 load task 책임
 #   - **Secret 취급 없음**          → username / password 는 include_vars 이후에만 존재
 #   - 다른 Location / Vendor 로의 fallback 없음
-#         `ich + dell` 실패 시 `chj + dell` 이나 `ich + hpe` 를 시도하는 분기가
+#         `ic + dell` 실패 시 `chj + dell` 이나 `ic + hpe` 를 시도하는 분기가
 #         **코드에 존재하지 않는다.** 정책이 아니라 구조로 막는다.
 #   - Generation / Model / Firmware 참조 없음
 #         세대를 아는 시점이 인증 이후라 선택축으로 쓰면 순환 의존이 된다.
@@ -40,7 +40,7 @@ VAULT_ROOT = "vault"
 # ──────────────────────────────────────────────────────────────────────────────
 # 2026-08-12 Contract 확정:
 #   표준 수집 계정은 Location 과도 Vendor 와도 무관하게 **하나**다.
-#   ich+Dell / ich+HPE / chj+Dell / yi+Lenovo / git+Cisco … 전부 같은 계정이다.
+#   ic+Dell / ic+HPE / chj+Dell / yi+Lenovo / git+Cisco … 전부 같은 계정이다.
 #   따라서 경로에 location 도 vendor 도 들어가지 않는다 — 상수다.
 #
 # 왜 상수로 두는가:
