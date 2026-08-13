@@ -26,9 +26,12 @@ __metaclass__ = type
 DOCUMENTATION = r"""
 ---
 module: precheck_bundle
-short_description: 수집 전 대상 호스트 연결 상태 4단계 진단
+short_description: 수집 전 대상 호스트 연결 상태 진단
 description:
-  - ping(TCP) → port → protocol → auth 순서로 대상 호스트를 진단합니다.
+  - TCP 도달 → 프로토콜 → 인증 순서로 대상 호스트를 진단합니다.
+  - ICMP 는 쓰지 않습니다. 도달성 판정은 TCP 연결 성공 또는 RST 수신입니다.
+  - 인증 단계는 자격증명이 주어졌을 때만 돕니다. 운영 경로에서는 수집 본단계가
+    인증을 겸하므로 여기서 따로 시도하지 않습니다.
   - 각 단계의 성공/실패 여부와 실패 사유를 반환합니다.
   - controller 노드에서 실행됩니다 (delegate_to: localhost).
 options:

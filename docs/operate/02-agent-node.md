@@ -9,7 +9,7 @@
 > - ansible / 컬렉션을 업그레이드해야 할 때
 
 > **사전 준비**
-> - 본 절차 전에 [01-jenkins-master.md](01-jenkins-master.md) (마스터 설치) 가 완료되어야 합니다.
+> - 본 절차 전에 [01-jenkins-master.md](01-jenkins-master.md) (마스터 설치) 를 먼저 끝내야 합니다.
 
 > [!NOTE]
 > **Redis 는 이 프로젝트가 쓰지 않는다.** 아래에 Redis 설치·연결 절차가 있는 이유는
@@ -17,12 +17,12 @@
 > server-exporter 의 프로젝트 `ansible.cfg` 는 `gathering = explicit` 이고
 > `fact_caching` 설정이 없다. 그래서 이 파이프라인으로 수집해도 Redis 캐시는 비어 있는
 > 게 정상이다. Redis 를 쓰지 않는 환경이라면 관련 단계를 건너뛰어도 수집은 동작한다.
-> - Agent 노드는 마스터와 같은 사내망에 있어야 하며, 마스터로의 8080/tcp + Redis 6379/tcp 양방향이 필요합니다.
+> - Agent 노드는 마스터와 같은 사내망에 있어야 하며 마스터로 가는 8080/tcp + Redis 6379/tcp 양방향이 필요합니다.
 
 > **검증 기준 환경 (참고)**: Ubuntu 24.04, Python 3.12, ansible-core 2.20, Java 21 (10.100.64.154 에서 2026-03-27 확인)
 
-Jenkins Agent 는 로케이션 (이천 / 청주 / 용인) 별로 구성하며, 개발 / 운영 마스터 각각에 연결된 Agent 가 분리되어 있습니다.
-아래 절차를 각 Agent 노드마다 반복 수행합니다.
+Jenkins Agent 는 로케이션 (이천 / 청주 / 용인) 별로 구성하며 개발 / 운영 마스터에는 각각 다른 Agent 를 연결합니다.
+각 Agent 노드마다 아래 절차를 반복합니다.
 
 ---
 
@@ -90,7 +90,7 @@ apt update && apt install -y openjdk-21-jdk python3 python3-venv git jq redis-to
 ```
 
 > `redis` (RHEL) / `redis-tools` (Debian) 는 `redis-cli` 를 포함한다.
-> Agent 에서 마스터 Redis 연결 확인 시 사용한다.
+> Agent 에서 마스터 Redis 연결을 확인할 때 쓴다.
 
 ---
 
@@ -127,7 +127,7 @@ sudo /opt/ansible-env/bin/pip install pytest           # 검증 기준: 9.0.2 �
 ### Python 인터프리터 경로 확인
 
 Agent 서버에 `/usr/bin/python3` 경로로 Python 3.9 이상이 존재해야 한다 (검증 기준 Agent: 3.12.3).
-Ansible 커스텀 모듈 실행 시 이 경로를 사용한다.
+Ansible 커스텀 모듈을 실행할 때 이 경로를 쓴다.
 
 ```bash
 # 확인
@@ -137,12 +137,12 @@ ls -la /usr/bin/python3
 sudo ln -sf $(which python3) /usr/bin/python3
 ```
 
-대부분의 Linux 배포판(RHEL 8+, Ubuntu 20.04+, Rocky 8+)에서 기본 설치되어 있다.
+대부분의 Linux 배포판(RHEL 8+, Ubuntu 20.04+, Rocky 8+)에는 기본으로 들어 있다.
 
 ### Ansible Collection
 
-`pip install ansible` (풀패키지) 설치 시 아래 Collection 은 기본 포함된다.
-`ansible-core` 만 설치한 경우 수동 설치가 필요하다.
+`pip install ansible` (풀패키지) 로 설치하면 아래 Collection 이 기본으로 포함된다.
+`ansible-core` 만 설치했다면 직접 설치해야 한다.
 
 ```bash
 # 프로젝트에서 사용하는 Collection (검증 기준 Agent 버전 주석 참고)
@@ -166,11 +166,11 @@ sudo /opt/ansible-env/bin/ansible-galaxy collection install ansible.utils       
 > 방식 / 임시 하드코딩은 폐기됐다 — **Agent 에 별도 vault 패스워드 파일을 배치할 필요가 없다.**
 
 `Jenkinsfile_portal` 의 Gather 단계는 `withCredentials([string(credentialsId: 'server-gather-vault-password',
-variable: 'VAULT_PASSWORD')])` 로 패스워드를 주입받아(콘솔 마스킹), 런타임 임시파일(`mktemp`, chmod 600)에
-써서 `--vault-password-file` 로 ansible-playbook 에 넘기고, 빌드 종료 시 `trap` 으로 임시파일을 삭제한다.
+variable: 'VAULT_PASSWORD')])` 로 패스워드를 주입받는다(콘솔 마스킹). 이를 런타임 임시파일(`mktemp`, chmod 600)에
+써서 `--vault-password-file` 로 ansible-playbook 에 넘기고 빌드가 끝나면 `trap` 으로 임시파일을 삭제한다.
 
 - credential 등록 절차: [01-jenkins-master.md](01-jenkins-master.md) §7 (`server-gather-vault-password`, Secret text).
-  메인 `Jenkinsfile` 이 이미 같은 credential 을 사용하므로, 대개 추가 등록 작업이 필요 없다.
+  메인 `Jenkinsfile` 이 이미 같은 credential 을 쓰므로 추가 등록은 대개 필요 없다.
 - 패스워드 회전 절차: [05-vault.md](05-vault.md).
 - 보안: Credentials Store 가 콘솔 로그에서 패스워드를 마스킹한다. 운영 빌드는 `verbosity=0` 유지 권장
   (`-vv` 이상 시 vault 변수 노출 가능).
@@ -182,7 +182,7 @@ variable: 'VAULT_PASSWORD')])` 로 패스워드를 주입받아(콘솔 마스킹
 모든 계정에서 동일하게 적용되도록 `/etc/ansible/ansible.cfg` 에 배치한다.
 
 > **ansible.cfg 우선순위**: Ansible은 `ANSIBLE_CONFIG` 환경변수 → CWD의 `ansible.cfg` → `~/.ansible.cfg` → `/etc/ansible/ansible.cfg` 순으로 탐색한다.
-> Jenkins 빌드 시 프로젝트 루트의 `ansible.cfg`가 CWD에 위치하므로 아래 시스템 설정보다 우선 적용된다.
+> Jenkins 빌드에서는 프로젝트 루트의 `ansible.cfg`가 CWD에 있으므로 아래 시스템 설정보다 우선 적용된다.
 > 여기서 설정하는 `/etc/ansible/ansible.cfg`는 프로젝트 외부에서 Ansible을 실행할 때의 기본값이다.
 
 ```bash
@@ -216,7 +216,7 @@ EOF
 > `{Jenkins_마스터_IP}`, `{Redis비밀번호}` 는 실제 값으로 교체한 뒤 실행한다.
 
 > **범용 설정 원칙**: 이 파일은 Agent에서 실행하는 모든 프로젝트의 공통 기본값이다.
-> Ansible은 ansible.cfg를 병합하지 않고 우선순위 1개만 사용하므로,
+> Ansible은 ansible.cfg를 병합하지 않고 우선순위 1개만 쓰므로
 > 프로젝트 루트에 `ansible.cfg`가 있으면 이 시스템 설정은 무시된다.
 >
 > - **프로젝트 루트에 ansible.cfg가 있는 경우**: 해당 설정이 우선 적용된다
@@ -233,7 +233,7 @@ EOF
 Windows 에서 커밋된 `.sh` 파일은 Git 에 실행 권한(100755)이 기록되지 않아
 Jenkins checkout 후 Ansible 동적 인벤토리가 동작하지 않는다.
 
-세 채널의 동적 인벤토리 스크립트(`os-gather/inventory.sh`, `esxi-gather/inventory.sh`, `redfish-gather/inventory.sh`)를 새로 추가한 경우,
+세 채널의 동적 인벤토리 스크립트(`os-gather/inventory.sh`, `esxi-gather/inventory.sh`, `redfish-gather/inventory.sh`)를 새로 추가했다면
 아래 명령으로 실행 권한을 Git 에 기록한 뒤 커밋한다.
 
 ```bash
@@ -313,7 +313,7 @@ Jenkinsfile 의 `agent { label "${params.loc}" }` 기준:
 
 ## 10. Redis 연결 테스트
 
-[02-agent-node.md](02-agent-node.md) 의 마스터 Redis 설정이 완료된 상태에서 실행합니다.
+[02-agent-node.md](02-agent-node.md) 의 마스터 Redis 설정을 끝낸 뒤에 실행합니다.
 
 ```bash
 # Agent 에서 마스터 Redis 접속 확인

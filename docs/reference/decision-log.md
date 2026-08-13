@@ -1,6 +1,6 @@
 # 의사결정 로그
 
-> **이 문서는** server-exporter 가 지금 모습이 된 "이유" 를 누적 기록한 결정 이력이다.
+> 이 문서는 server-exporter 가 지금 모습이 된 "이유" 를 누적 기록한 결정 이력이다.
 > 누군가 "왜 이렇게 만들었는지" 또는 "전에 다른 방식으로 한 적 있는지" 가 궁금할 때 가장 먼저 검색하는 곳이다.
 >
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
@@ -18,11 +18,11 @@ listening_ports 가 항상 빈 배열이고, Redfish vendor OEM 의 merge_fragme
 
 ### 분석
 
-pytest 만으로는 두 건 다 잡히지 않았다. 둘 다 **실제 ansible-core 실행에서만** 드러난다.
+pytest 만으로는 두 건 다 잡히지 않았다. 둘 다 실제 ansible-core 실행에서만 드러난다.
 
 1. **ESXi `listening_ports`** — `merge_fragment.yml` 은 깊이 2 에서 dict 를 통째로 교체한다.
    `collect_runtime.yml` 이 `system.runtime` 을 다시 만들면서 `listening_ports: []` 로
-   하드코딩해, 앞서 `normalize_system.yml` 이 넣은 실제 수집값을 항상 덮어썼다.
+   하드코딩했다. 앞서 `normalize_system.yml` 이 넣은 실제 수집값을 항상 덮어썼다.
    실측: `STEP1 lp=['22','443','902']` → `STEP2 lp=[]`.
    키를 빼는 방식은 불가 — `STEP3 lp=MISSING` 으로 키 자체가 사라져 envelope 계약이 깨진다.
 
@@ -30,16 +30,16 @@ pytest 만으로는 두 건 다 잡히지 않았다. 둘 다 **실제 ansible-co
    해석되고 그 아래엔 `common/` 이 없다. 실측: `exit=2`,
    `Could not find or access '<repo>/redfish-gather/common/tasks/normalize/merge_fragment.yml'`.
    영향은 "fragment 미병합" 보다 크다. 이 include 는 벤더 task 최상위에 있고 site.yml 의
-   OEM block 에는 rescue 가 달려 있어, 실패가 **rescue 를 발동**시킨다. site.yml 과 동일
+   OEM block 에는 rescue 가 달려 있어 실패가 rescue 를 발동시킨다. site.yml 과 동일
    구조로 재현한 실측: `errors 1건(가짜) / OEM 데이터 소실 / collected=[]` → 수정 후
    `errors 0 / OEM 보존 / collected=['hardware']`.
-   즉 해당 벤더는 **매 수집마다 원인 없는 OEM 오류 1건을 내면서 OEM 데이터를 잃고 있었다.**
+   즉 해당 벤더는 매 수집마다 원인 없는 OEM 오류 1건을 내면서 OEM 데이터를 잃고 있었다.
    adapter 전수 파싱 결과 실제 영향은 HPE 7 adapter(전 세대) / Fujitsu / Huawei / Inspur /
    Quanta 이고, `cisco/collect_oem.yml` 은 어떤 adapter 도 참조하지 않는 dead file 이다.
 
 ### 결정
 
-- `collect_runtime.yml` 은 `normalize_system.yml` 과 **같은 원본**(`_e_raw_listening_ports`)을
+- `collect_runtime.yml` 은 `normalize_system.yml` 과 같은 원본(`_e_raw_listening_ports`)을
   이어받는다. runtime dict 를 통째로 다시 만드는 쪽이 그 dict 의 모든 키를 책임진다.
 - vendor OEM 6건을 저장소 정식 방식(`REPO_ROOT` 기준)으로 통일했다. 벤더별로 경로를
   제각각 두지 않고, 이미 정상 동작하던 dell/lenovo/supermicro 및 os/esxi 채널 방식을 따랐다.
@@ -49,7 +49,7 @@ pytest 만으로는 두 건 다 잡히지 않았다. 둘 다 **실제 ansible-co
 - ESXi `data.system.runtime.listening_ports` 가 실제 값으로 채워진다.
   실장비 검증(esxi02): 13개 포트 관측.
 - cisco / fujitsu / hpe / huawei / inspur / quanta 의 OEM fragment 가 실제로 병합된다.
-- envelope 13 필드 / 섹션 shape 변경 없음 (Additive 아님 — **버그 수정**).
+- envelope 13 필드 / 섹션 shape 변경 없음 (Additive 아님, 버그 수정).
 
 ### 회귀
 
@@ -73,33 +73,33 @@ pytest 만으로는 두 건 다 잡히지 않았다. 둘 다 **실제 ansible-co
 
 1. **문장 선택 입력이 둘이었다.** Redfish rescue 는 같은 `set_fact` 안에서
    `stage`/`code`/`auth_success` 를 `(rejected and not collected)` 로, `failure_reason` 만
-   `collected` 로 갈랐다. 입력이 둘이면 필연적으로 어긋난다 — `stage=gather` 인데 문장은
-   자격증명을 지목하는 결과가 **가장 흔한 실패 경로**였다. 게다가 `_rf_collect_ok` 는 인증
-   판정이 아니라 전체 수집 결과여서, 인증이 200 으로 통과해도 시리얼 확정 실패 하나로
+   `collected` 로 갈랐다. 입력이 둘이면 필연적으로 어긋난다. `stage=gather` 인데 문장은
+   자격증명을 지목하는 결과가 가장 흔한 실패 경로였다. 게다가 `_rf_collect_ok` 는 인증
+   판정이 아니라 전체 수집 결과여서 인증이 200 으로 통과해도 시리얼 확정 실패 하나로
    자격증명 문장이 나갔다 (os/esxi 는 자격 probe 전용 관측을 쓴다 — 채널 간 근거 불일치).
 2. **존재하지 않는 판정에 문장이 걸려 있었다.** `reason_for_connect_failure(ip_in_use)` 의
-   `ip_in_use` 를 set 하는 코드가 저장소에 0건이라, RST 를 실제로 관측해
+   `ip_in_use` 를 set 하는 코드가 저장소에 0건이다. RST 를 실제로 관측해
    `TCP_CONNECTION_REFUSED` 로 확정하고도 사용자에게는 "IP 사용 여부를 확인하세요" 가 나갔다.
    표준 문장 하나가 실사용 0이었다.
 3. **성공을 실패로 세고 있었다.** `SimpleStorage` fallback 으로 데이터를 정상 수집했는데도
-   errors 에 항목이 생겨 `if errs: failed.append(section)` 때문에 섹션이 failed →
+   errors 에 항목이 생겨 `if errs: failed.append(section)` 때문에 섹션이 failed 가 되고
    overall status 가 partial 로 강등됐다. HPE iLO4 등 구세대 BMC 는 매 수집마다 partial 이었다.
 
 ### 결정
 
 - **문장은 관측된 `failure_code` 에서만 파생한다** (`REASON_BY_FAILURE_CODE` 단일 매핑).
   stage/code 를 먼저 확정하고 문장을 유도하면 자기모순이 구조적으로 불가능해진다.
-  `TCP_CONNECTION_REFUSED` → 2번 문장. 2번 문안에서 "대상 IP 사용은 확인됐지만" 을 뺐다 —
+  `TCP_CONNECTION_REFUSED` → 2번 문장. 2번 문안에서 "대상 IP 사용은 확인됐지만" 을 뺐다.
   **presence 판정(ICMP/IPAM/ARP)을 만들지 않기로 확정**했으므로 주장할 수 없는 사실이다.
 - **Message 를 4계층으로 분리한다.** 전체 실패(6문장 중앙) / 섹션 부분 실패(섹션 의미 유지) /
   기술 Evidence(`errors[].detail`, string|null) / 성공 fallback·정보성(`diagnosis.details.notices`).
-  섹션 오류를 5문장으로 뭉개지 않는다 — "대상에 접속할 수 없습니다" 는 접속이 된 상태에서
+  섹션 오류를 5문장으로 뭉개지 않는다. "대상에 접속할 수 없습니다" 는 접속이 된 상태에서
   CPU 만 못 읽은 결과를 설명하지 못한다.
 - **성공한 fallback 은 error 가 아니다.** 정보를 버리지 않되 errors 에서 뺀다.
 - **신규 top-level 필드는 만들지 않았다.** `notices` 는 `diagnosis.details` 하위이고
   (AI 하네스 정본 §11 이 규정한 기술 evidence / 확장 metadata 영역), `errors[]` 원소는 계속 3키다.
-  vendor OEM 이 붙이던 `severity: warning` 은 정규화가 3키만 남겨 **envelope 에 도달한 적이
-  없는 죽은 키**여서 제거했다 — warning/error 축을 도입하려면 원소 shape 변경이라 별도 승인 영역이다.
+  vendor OEM 이 붙이던 `severity: warning` 은 정규화가 3키만 남겨 envelope 에 도달한 적이
+  없는 죽은 키여서 제거했다. warning/error 축을 도입하려면 원소 shape 변경이라 별도 승인 영역이다.
 
 ### 영향
 
@@ -128,14 +128,14 @@ baseline 갱신 1건 — `tests/fixtures/redfish/dmtf_rackmount1/expected_output
 ### 요청 / 배경 (Why)
 
 - 사전 조사(`내부 문서`)에서 동일 Dell R760 1대의 채널 간 시리얼이
-  달랐다. Redfish `CNIVC0048R0159` ↔ Linux `GSBPK54` → `correlation.serial_number` 로 두 채널 결과를
+  달랐다. Redfish `CNIVC0048R0159` ↔ Linux `GSBPK54` 라 `correlation.serial_number` 로 두 채널 결과를
   매칭할 수 없었다 (Cisco 는 SAME 이라 Dell 만의 문제).
 - 사용자 지시: Dell 만 1차 교정. schema 변경 금지, 새 필드 금지, 다른 벤더 무변경.
 
 ### 원인 (실측 근거)
 
-- Dell iDRAC 의 `ComputerSystem.SerialNumber` 는 **보드 제조 시리얼**이다. 같은 장비 SMBIOS 에서
-  그 값은 **Type 2(Baseboard)** 문자열 `.GSBPK54.CNIVC0048R0159.` 안에만 나타나고
+- Dell iDRAC 의 `ComputerSystem.SerialNumber` 는 보드 제조 시리얼이다. 같은 장비 SMBIOS 에서
+  그 값은 Type 2(Baseboard) 문자열 `.GSBPK54.CNIVC0048R0159.` 안에만 나타나고
   Type 1(System)·Type 3(Chassis) 에는 없다. OS 가 읽는 값은 Type 1 = `GSBPK54` (Service Tag).
 - 실장비 7대 전수에서 `SerialNumber` ≠ Service Tag 가 일관되게 확인됐다.
 
@@ -143,24 +143,24 @@ baseline 갱신 1건 — `tests/fixtures/redfish/dmtf_rackmount1/expected_output
 
 - Dell 대표 시리얼 원천 = **`ServiceRoot.Oem.Dell.ServiceTag` 단일 정본**. 폴백 없음.
   - 선택 근거: Dell iDRAC9 Redfish API Guide "Table 70. Properties for DellServiceRoot" 가
-    이 필드를 **"System Service Tag"** 로 정의한다. 후보 4종 중 Dell 공식 정의가 있는 유일한 필드다.
+    이 필드를 "System Service Tag" 로 정의한다. 후보 4종 중 Dell 공식 정의가 있는 유일한 필드다.
   - `ChassisServiceTag` 미채택: Dell System Info Profile(DCIM1048) 이 *"the service tag for the
-    modular enclosure chassis"* 로 정의 → 모듈러에서 enclosure 를 가리킨다.
+    modular enclosure chassis"* 로 정의한다. 모듈러에서 enclosure 를 가리킨다.
   - `SKU` 미채택: DMTF 정의는 일반 SKU. Dell 이 Service Tag 라고 문서화한 적 없음 (값만 같음).
   - `NodeID` 미채택: Redfish 스키마·프로파일 정의 없음.
 - **확보 실패 시 수집 실패.** Dell 시리얼은 필수값이라 null 로 success/partial 을 내보내지 않는다.
-  기존 실패 계약 재사용 — 신규 `failure_stage` / `failure_code` 를 만들지 않았다
+  기존 실패 계약을 재사용해 신규 `failure_stage` / `failure_code` 를 만들지 않았다
   (`gather` / `GATHER_FAILED`).
 - 구현 위치는 `main()` 층이다. 섹션 러너(`_make_section_runner`)로는 `partial` 까지만 만들 수 있어
-  "수집 실패" 를 표현할 수 없기 때문이다. adapter 의 `critical_sections` 는 **읽는 코드가 없어**
+  "수집 실패" 를 표현할 수 없기 때문이다. adapter 의 `critical_sections` 는 읽는 코드가 없어
   (dead config) 승격 수단이 되지 못한다.
 
 ### 영향 (Impact)
 
 - envelope 13 필드 / sections / field_dictionary entry 추가·삭제 **0**. 배선 무변경.
 - Dell 은 `hardware.serial` == `hardware.sku` == `hardware.oem.chassis_service_tag` 로 같아진다
-  (전부 기존 필드). 보드 제조 시리얼 `CNIVC…` 는 envelope 에서 사라진다 — 새 필드 금지 지시에 따른
-  의도적 미보존.
+  (전부 기존 필드). 보드 제조 시리얼 `CNIVC…` 는 envelope 에서 사라진다. 새 필드 금지 지시에 따른
+  의도적 미보존이다.
 - 비-Dell 전 벤더는 `_SERIAL_RESOLVERS` 미등록이라 코드 경로 자체를 타지 않는다.
 - **리스크**: iDRAC7/8 은 `DellServiceRoot` 문서화가 없어 미노출 시 수집이 실패한다(실기기 미검증).
   Dell 모듈러도 미검증. 둘 다 NEXT_ACTIONS 등재.
@@ -169,7 +169,7 @@ baseline 갱신 1건 — `tests/fixtures/redfish/dmtf_rackmount1/expected_output
 
 - unit 1186 / e2e 416 / integration 200 / regression 169 passed. 3 게이트 PASS.
 - Dell 기준선 3종만 갱신(전부 재생 산출값), 비-Dell baseline 9종 + 실미러 골든 3종 무변경.
-- ⚠ ansible 부재로 실제 playbook end-to-end envelope 은 미검증 (lab 이월).
+- [WARN] ansible 부재로 실제 playbook end-to-end envelope 은 미검증 (lab 이월).
 
 ### 관련
 
@@ -184,18 +184,18 @@ baseline 갱신 1건 — `tests/fixtures/redfish/dmtf_rackmount1/expected_output
 
 ### 요청 / 배경 (Why)
 
-- 사이트 Jenkins 빌드(DAY_1/git/소연등록redfish #1) 에서 Dell iDRAC(RedfishVersion 1.4.0) **8대 전부**
+- 사이트 Jenkins 빌드(DAY_1/git/소연등록redfish #1) 에서 Dell iDRAC(RedfishVersion 1.4.0) 8대 전부
   `status=partial`, `sections.network=failed`, `errors[]="NetworkAdapters 미지원 또는 실패: HTTP 400: Bad Request"`.
 - 그런데 같은 envelope 의 `data.network` 는 정상(interfaces 4 / default_gateways / summary.port_count 4).
-  비어 있는 건 `adapters[]` / `ports[]`(NIC 카드 모델·펌웨어) 뿐이었다. 즉 **데이터는 멀쩡한데 status 만 거짓**.
-- 사용자 질문: "지금 코드에 버그 있는건가?" → 조사 결과 **버그 2건 + 진단성 결함 1건**.
+  비어 있는 건 `adapters[]` / `ports[]`(NIC 카드 모델·펌웨어) 뿐이었다. 즉 데이터는 멀쩡한데 status 만 거짓이다.
+- 사용자 질문: "지금 코드에 버그 있는건가?" 조사 결과는 버그 2건 + 진단성 결함 1건이었다.
 
 ### 원인 (실측 근거)
 
 1. **status 마스킹** — `redfish_gather.py` 는 `network`(주=EthernetInterfaces) 와
-   `network_adapters`(보조=Chassis NetworkAdapters) 를 별도 raw 섹션으로 보고하는데,
-   `normalize_standard.yml` `_rf_proc_map` 이 둘을 같은 `network` 로 collapse.
-   `build_sections.yml` 우선순위가 `not_supported > failed > success` 라 **보조 실패가 항상 승리**.
+   `network_adapters`(보조=Chassis NetworkAdapters) 를 별도 raw 섹션으로 보고한다.
+   `normalize_standard.yml` `_rf_proc_map` 은 둘을 같은 `network` 로 collapse.
+   `build_sections.yml` 우선순위가 `not_supported > failed > success` 라 보조 실패가 항상 승리.
    (내부 후속 작업 목록 에 NET-SEC-MAP(LOW, "미발동")으로 등재돼 있던 latent 결함이 실발동.)
 2. **400 = 미지원 미분류** — `_is_404_only_error` 가 404 만 capability 부재로 봤다. 벤더 BMC 는
    미구현/미인가 리소스에 400 을 주기도 한다.
@@ -203,17 +203,17 @@ baseline 갱신 1건 — `tests/fixtures/redfish/dmtf_rackmount1/expected_output
    `error.@Message.ExtendedInfo`(왜 거부했는지)가 사라져 '미지원' 인지 '우리 요청 결함' 인지 구분 불가.
 
 **요청 형식 문제 아님을 확인**: (a) 같은 `eff_chassis_uri` 를 쓰는 `power`/`thermal` 은 `success`,
-(b) 실 Dell R740 전수 미러(`tests/fixtures/redfish/real_dell_r740`)에서 **동일 URL 이 200**.
-→ 장비/펌웨어 차이 (rule 25 R7-A-1 사용자 실측 우선).
+(b) 실 Dell R740 전수 미러(`tests/fixtures/redfish/real_dell_r740`)에서 동일 URL 이 200.
+장비/펌웨어 차이다 (rule 25 R7-A-1 사용자 실측 우선).
 
 ### 결정 (What)
 
 - **A. 보조(auxiliary) 섹션 개념 도입** — `normalize_standard.yml` 에 `_rf_aux_sections: ['network_adapters']`.
-  세 status fragment(collected/failed/unsupported) **모두**에서 보조 섹션 제외 → 섹션 status 는 주 수집만으로 결정.
-  보조 실패는 `errors[]` 로만 보고(시나리오 B). **`unsupported` 에서도 제외**하는 게 핵심 —
+  세 status fragment(collected/failed/unsupported) 모두에서 보조 섹션을 제외해 섹션 status 는 주 수집만으로 결정한다.
+  보조 실패는 `errors[]` 로만 보고(시나리오 B). `unsupported` 에서도 제외하는 게 핵심이다.
   안 하면 400→unsupported 확장 후 `network` 가 `not_supported` 로 덮여 failed 보다 더 나쁜 마스킹이 된다.
 - **B. capability 부재 신호에 400 추가** — 신규 `_is_capability_missing_error`(404 or 400).
-  기존 `_is_404_only_error` 는 의미 불변(back-compat, 직접 테스트 존재). **오분류 완화 2중**:
+  기존 `_is_404_only_error` 는 의미 불변(back-compat, 직접 테스트 존재). 오분류 완화 2중:
   호출부에서 `_is_empty_result(val)` 와 AND(컬렉션 전체 실패 + 결과 완전 빈값), 비-404 분류 시 stderr 에 원문 기록.
 - **C. 확장 오류 정보 보존** — 신규 `_extended_info(body)` 가 `error.code`/`message`/`@Message.ExtendedInfo[]`
   를 300자로 축약해 `errors[].detail` 에 기록. envelope shape 변경 0 (Additive, rule 96 R1-B).
@@ -221,14 +221,14 @@ baseline 갱신 1건 — `tests/fixtures/redfish/dmtf_rackmount1/expected_output
 ### 결과 (Impact)
 
 - 사이트 조건에서 `sections.network=success`, `status=success`, NIC 카드 상세만 비게 됨(정직한 표현).
-- envelope 13 필드 / sections 11 / field_dictionary 변경 **0** — status **값**만 바뀐다(계약 shape 불변).
+- envelope 13 필드 / sections 11 / field_dictionary 변경 **0** — status 값만 바뀐다(계약 shape 불변).
 - 회귀: `pytest tests/` **1302 passed** / 5 skipped / 7 xfailed. baseline 10종 영향 0(전부 network=success 유지).
 - 신규 회귀 27건: `tests/unit/test_network_adapters_aux_status.py`(21) +
   `tests/integration/test_site_dell_networkadapters_400.py`(6, 실 R740 미러를 400 으로 변조해 사이트 재현).
   후자는 "수정 전 로직이면 partial 이 재현된다" 는 역가드까지 포함.
 - **미검증(정직 보고)**: 이 환경에 `ansible-playbook` CLI 부재 → YAML 은 실제 식을 Jinja2 로 렌더해 검증했고
   전체 ansible 통합(실 site.yml)은 **Jenkins Agent 재빌드로 확인 필요**. 400 의 근본 사유(미구현/라이선스)도
-  BMC 직접 접근 불가로 **미확정** — C 적용 후 다음 빌드의 `errors[].detail` 로 확인.
+  BMC 직접 접근 불가로 **미확정**. C 적용 후 다음 빌드의 `errors[].detail` 로 확인한다.
 
 ### 대안 비교 (Considered)
 
@@ -261,32 +261,32 @@ NetworkAdapter Collection : /redfish/v1/Systems/System.Embedded.1/NetworkAdapter
 NetworkAdapter Instance   : /redfish/v1/Systems/System.Embedded.1/NetworkAdapters/<id>
 ```
 
-우리 코드는 `Chassis/{id}/NetworkAdapters` 만 요청했다. **400 은 "장비 미지원"이 아니라
-"그 펌웨어에 없는 경로를 물어본 결과"**였다.
+우리 코드는 `Chassis/{id}/NetworkAdapters` 만 요청했다. 400 은 "장비 미지원"이 아니라
+"그 펌웨어에 없는 경로를 물어본 결과"였다.
 
 **원 조사의 추론 결함**: "실 Dell R740 미러에서 같은 URL 이 200" 을 근거로 "요청 형식 문제 아님"
-이라고 단정했는데, R740 은 **14G / iDRAC9** 로 세대가 다르다. 세대가 다른 장비를 대조군으로 써서
+이라고 단정했는데 R740 은 14G / iDRAC9 로 세대가 다르다. 세대가 다른 장비를 대조군으로 써서
 잘못된 결론에 도달했다 (rule 95 R2 — 근거의 교차 확인 실패).
 
 #### 정정 결정 (What)
 
 - **B 철회**: `_is_capability_missing_error`(404+400) 제거, `_run` 은 `_is_404_only_error` 로 복귀.
-  400 은 다시 `failed` + `errors[]` 노출. 근거 없는 은폐 제거 — 특히 **은폐 대상이 우리 자신의 버그**였다.
+  400 은 다시 `failed` + `errors[]` 노출. 근거 없는 은폐를 제거했다. 특히 은폐 대상이 우리 자신의 버그였다.
 - **근본 fix 신설**: `gather_network_adapters_chassis` 에 수집 경로 후보 2종 —
   1순위 `Chassis/{id}/NetworkAdapters`(DMTF 현행 표준) → 실패 시 2순위 `Systems/{id}/NetworkAdapters`.
-  1순위가 200 인 장비는 2순위를 **아예 시도하지 않아** 동작·왕복 100% 불변(Additive). vendor 분기 없음(rule 12 R1).
+  1순위가 200 인 장비는 2순위를 아예 시도하지 않아 동작·왕복 100% 불변(Additive). vendor 분기 없음(rule 12 R1).
 - **A / C 유지**: 섹션 status 분리는 여전히 유효(별개의 진짜 버그). detail 보존은 진단에 필요.
 
 #### 결과 (Impact)
 
-- 사이트 R630 8대는 이제 NIC 카드 모델·펌웨어를 **실제로 수집**한다(구 코드는 `adapters[]` 영구 빈 배열).
+- 사이트 R630 8대는 이제 NIC 카드 모델·펌웨어를 실제로 수집한다(구 코드는 `adapters[]` 영구 빈 배열).
 - 양 경로 모두 실패하는 장비는 `errors[].detail` 에 `tried: <경로1> / <경로2>` + BMC 확장 메시지가 남는다.
 - 회귀 1306 passed. 신규 가드: 400 이 다시 미지원으로 분류되면 실패하는 테스트
   (`test_400_is_not_treated_as_unsupported` — `_is_capability_missing_error` 부활 자체를 차단).
 
 #### 대안 비교 (정정 후)
 
-- **B 유지 + fallback 추가**: fallback 이 성공하면 400 이 안 보이니 문제없다고 볼 수도 있으나, *다른* 원인의
+- **B 유지 + fallback 추가**: fallback 이 성공하면 400 이 안 보이니 문제없다고 볼 수도 있으나 *다른* 원인의
   400 이 계속 은폐된다. 기각.
 - **Systems 경로를 1순위로**: iDRAC9 등 현행 표준 장비의 왕복이 늘고 표준에서 멀어진다. 기각.
 - **adapter YAML 로 vendor/세대별 경로 지정**: 정확하지만 세대 오선택 문제(아래)에 의존하고 신규 vendor 마다
@@ -305,7 +305,7 @@ adapter 세대 오선택 — iDRAC8 장비인데 `redfish_dell_idrac10` 이 선�
 #### 컨텍스트 (Why)
 
 fallback 배포 후 빌드 #4 에서 NIC 카드 데이터가 처음 들어왔다(`adapters` 1 / `ports` 4 — 목표 달성).
-그런데 같은 물리 포트 4개가 **서로 다르게 분류**되는 자기모순이 드러났다:
+그런데 같은 물리 포트 4개가 서로 다르게 분류되는 자기모순이 드러났다:
 
 | 위치 | 값 |
 |---|---|
@@ -313,26 +313,26 @@ fallback 배포 후 빌드 #4 에서 NIC 카드 데이터가 처음 들어왔다
 | `data.network.summary.groups[].link_type` | `ethernet` |
 | **`data.storage.hbas[].port_type`** | **`FibreChannel`** (4건) |
 
-대상 NIC = `BRCM 10G/GbE 2+2P 57800 rNDC` — Broadcom 57800 은 **FCoE 지원 CNA** 이고, 이런 카드는
+대상 NIC = `BRCM 10G/GbE 2+2P 57800 rNDC` — Broadcom 57800 은 FCoE 지원 CNA 이고 이런 카드는
 이더넷 기능에도 MAC 파생 WWN 을 단다(실측 WWPN `20:01:90:b1:1c:1f:e2:8e` = MAC `...e2:8d` + 1).
 
 #### 원인
 
-`_classify_port_protocol` 의 CSUS-FC1 휴리스틱(`ndf_wwpn` 존재 → FibreChannel)이 **Ethernet 판정보다
-위**에 있어 명시적 Ethernet 신호를 덮어썼다. 이 휴리스틱은 원래 `NetDevFuncType` 을 아예 주지 않는
-HPE CSUS RMC 펌웨어 전용이었다(2026-06-15). 데이터가 없어 드러나지 않던 **기존 버그**가 이번에 노출됐다.
+`_classify_port_protocol` 의 CSUS-FC1 휴리스틱(`ndf_wwpn` 존재 → FibreChannel)이 Ethernet 판정보다
+위에 있어 명시적 Ethernet 신호를 덮어썼다. 이 휴리스틱은 원래 `NetDevFuncType` 을 아예 주지 않는
+HPE CSUS RMC 펌웨어 전용이었다(2026-06-15). 데이터가 없어 드러나지 않던 기존 버그가 이번에 노출됐다.
 
 #### 결정 (What)
 
-`ndf_wwpn` 휴리스틱을 함수 **맨 끝**(명시 신호 전무 시)으로 강등. 판정 우선순위:
+`ndf_wwpn` 휴리스틱을 함수 맨 끝(명시 신호 전무 시)으로 강등. 판정 우선순위:
 
 ```
 InfiniBand 신호 → FCoE(NetDevFuncType) → FC(PortProtocol/NetDevFuncType) → Port.FibreChannel dict
 → Ethernet(PortProtocol/link_tech/NetDevFuncType) → Port.Ethernet dict → [최후] NDF.WWPN → FC
 ```
 
-FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEthernet` 을 주므로 위쪽 FCoE 분기에서
-잡힌다 — 본 강등의 영향 없음. CSUS 본래 케이스(명시 신호 전무 + WWPN)도 최후 분기로 보존.
+FCoE 를 실제로 설정한 장비는 `NetDevFuncType=FibreChannelOverEthernet` 을 주므로 위쪽 FCoE 분기에서
+잡힌다. 본 강등의 영향은 없다. CSUS 본래 케이스(명시 신호 전무 + WWPN)도 최후 분기로 보존.
 
 #### 결과 (Impact)
 
@@ -344,7 +344,7 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
 
 #### 대안 비교 (Considered)
 
-- **현행 유지**: "FCoE 가능 기능 4개"도 거짓은 아니지만 `network.ports` 와의 모순이 남고, 호출자가
+- **현행 유지**: "FCoE 가능 기능 4개"도 거짓은 아니지만 `network.ports` 와의 모순이 남고 호출자가
   SAN 연결이 있다고 오해한다. 기각.
 - **WWPN 이 MAC 파생인지 검사**: 벤더별 파생 규칙이 달라 신뢰 불가. 기각.
 - **`storage.hbas` 에 `capability_only` 플래그 추가**: envelope 신규 키 = 호출자 계약 변경(rule 96 R1-B).
@@ -352,8 +352,8 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
 
 #### [후속 2] 잔여 2대 — orphan NDF 가 부모 포트 신호를 못 물려받던 문제
 
-빌드 #5 에서 8대 중 **6대는 `hbas=0` 으로 해결, 2대(.52 / .152)는 여전히 `hbas=4`**.
-같은 NIC 모델(`BRCM 10G/GbE 2+2P 57800 rNDC`)인데 **NIC 펌웨어가 갈렸다**:
+빌드 #5 에서 8대 중 6대는 `hbas=0` 으로 해결, 2대(.52 / .152)는 여전히 `hbas=4`.
+같은 NIC 모델(`BRCM 10G/GbE 2+2P 57800 rNDC`)인데 NIC 펌웨어가 갈렸다:
 
 | IP | NIC fw | #4 | #5 | #6 |
 |---|---|---|---|---|
@@ -366,15 +366,15 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
 > **NIC 펌웨어는 구분 요인이 아니다** — `.53` 과 `.52` 는 같은 fw 인데 #5 결과가 갈렸다.
 > (초기 기록에서 "펌웨어 차이" 로 두 번 잘못 적었다가 위 전수 대조로 반증. `tests/evidence/` 정정 절 참조.)
 > 실패한 2대의 `hbas[].port_id` 가 포트 id 아닌 **NDF id** 인 것이 orphan 경로임을 확정해 준다.
-> **왜 그 2대만** orphan 분류에서 Ethernet 신호를 못 얻었는지는 raw 미확보로 **미확정**.
+> 왜 그 2대만 orphan 분류에서 Ethernet 신호를 못 얻었는지는 raw 미확보로 **미확정**.
 
 **원인**: Dell 은 NDF Id 를 `<PortId>-<funcIdx>` 로 매긴다(포트 `NIC.Integrated.1-1` ↔ NDF
 `NIC.Integrated.1-1-1`). NDF↔Port join 은 (a) `Links.PhysicalPortAssignment` (b) `NDF.Id == Port.Id`
-두 가지만 시도하는데 **둘 다 빗나가** orphan 이 된다. orphan 분류는
-`_classify_port_protocol(None, None, ndf, None)` — 포트 컨텍스트가 **전혀 없어서** 앞선 강등 fix 가
+두 가지만 시도하는데 둘 다 빗나가 orphan 이 된다. orphan 분류는
+`_classify_port_protocol(None, None, ndf, None)` — 포트 컨텍스트가 전혀 없어서 앞선 강등 fix 가
 무력화되고 최후 WWPN 휴리스틱까지 흘러가 FC 로 잡혔다.
 
-**결정**: orphan NDF 는 **부모 포트의 신호를 물려받아** 분류한다. NDF Id 가 `<PortId>-` 로 시작하면
+**결정**: orphan NDF 는 부모 포트의 신호를 물려받아 분류한다. NDF Id 가 `<PortId>-` 로 시작하면
 그 포트의 `(PortProtocol, link_tech, raw port)` 를 넘긴다. 구분자 `-` 를 요구해 `...1-1` 이
 `...1-10-1` 을 삼키지 않는다. 부모를 못 찾으면 기존 동작(CSUS 의 진짜 port-less NDF) 그대로.
 
@@ -387,8 +387,8 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
 
 - OS 네트워크 개더링이 bond master 의 primary IP 만 수집하고 alias(`bond1:1`, `bond2:1`) 를 누락.
   python_ok 경로는 `ansible_<iface>.ipv4.address`(primary only, label/secondary 없음), raw 경로는
-  `ip -o -4 addr show dev <dev> | head -1`(첫 주소만) → 두 경로 모두 alias 손실.
-- 요청: alias IP 를 수집하되 **새 인터페이스로 만들지 말고 parent bond 의 `addresses[]` 에** 넣을 것.
+  `ip -o -4 addr show dev <dev> | head -1`(첫 주소만). 두 경로 모두 alias 를 잃는다.
+- 요청: alias IP 를 수집하되 새 인터페이스로 만들지 말고 parent bond 의 `addresses[]` 에 넣을 것.
   RHEL 고정 금지 — Linux 계열 전체 동작. 테스트 대상 10.100.64.161(RHEL 8.10)/10.100.64.165(RHEL 9.6).
 
 ### 결정 (What)
@@ -398,7 +398,7 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
   python_ok shell·raw 두 경로가 같은 collector 를 실행하므로 단일 정의로 양 경로 커버.
 - **정규화**: 신규 필터 `parse_linux_addresses`/`merge_linux_addresses`(`network_topology.py`). merge 는
   base 인터페이스의 기존 주소를 신규 5 키로 enrich(값 보존) + alias 를 parent `addresses[]` 에 append.
-  `build_linux_network` 는 **불변** — 기존 단위테스트(`net == base`, slave `addresses==[]`) 보호 위해 merge 를
+  `build_linux_network` 는 **불변**. 기존 단위테스트(`net == base`, slave `addresses==[]`) 보호 위해 merge 를
   분리 필터로 두고 yml 체인(`... | merge_linux_addresses(lines) | build_linux_network(lines)`)에서 호출.
   bond master IP 를 `bonds[].addresses` 로 mirror 하는 기존 로직 덕에 alias 가 bonds[] 에도 자동 일관.
 - **스키마(Additive, `channel:[os]` nice)**: `label`/`parent_interface`/`is_alias`/`scope`/`is_secondary`.
@@ -435,24 +435,24 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
   False 라 short-circuit 으로 잠복. CSUS/Superdome 만 regex True → `{} or {} or {}` = {} → Ansible strict conditional FAIL.
   (실 CSUS OEM 은 `#HpeH3Npar`/`#HpeH3Chassis` 라 구식 PartitionInfo/FlexNodeInfo 추출 결과 = {} — 정확히 빈 dict 경로에서 터짐.)
   전 18 vendor OEM 파일 중 이 2줄만 non-boolean-safe (워크플로 전수 스캔).
-- **cascade(Bug B)**: `site.yml` 전체가 단일 block/rescue. OEM 단계가 `normalize standard`(표준 섹션을 _merged_data/_all_sec_collected 에 누적) **뒤**에 위치
-  → OEM fatal 시 block abort → rescue 가 `build_failed_output.yml` 호출. rescue 는 `_all_sec_collected` 를 **참조조차 안 하고**
+- **cascade(Bug B)**: `site.yml` 전체가 단일 block/rescue. OEM 단계가 `normalize standard`(표준 섹션을 _merged_data/_all_sec_collected 에 누적) 뒤에 위치
+  → OEM fatal 시 block abort → rescue 가 `build_failed_output.yml` 호출. rescue 는 `_all_sec_collected` 를 참조조차 안 하고
   `_fail_sec_supported`(capabilities) 전부 `failed` 마킹. `_merged_data` 는 보존 → "data 있는데 sections 전부 failed" 모순.
   9 failed(=CSUS adapter sections_supported 9개) + 2 not_supported(users/thermal) 와 정확히 일치. 같은 단일 block/rescue 구조가 os/esxi 에도 존재(확인됨).
 - **선언 ↔ 구현 괴리**: CSUS adapter 가 `graceful_degradation.on_section_fail: continue` + `optional_sections` 선언하지만 이 설정은
-  어느 실행 코드에서도 소비 안 됨(status_rules.yml reserved). build_status.yml 판정 로직 자체는 정상 — 실패 경로에서 도달 못 할 뿐.
+  어느 실행 코드에서도 소비 안 됨(status_rules.yml reserved). build_status.yml 판정 로직 자체는 정상이다. 실패 경로에서 도달 못 할 뿐이다.
 
 ### 결정 (Bug A 전면 / Bug B redfish 한정 — 사용자 승인 2026-06-16)
 
 - **Bug A**: normalize_oem.yml:42,50 → 각 operand `| length > 0` boolean 강제(None-safe `default({}, true)`). 의도("OEM 영역 존재 시") 보존, CSUS/Superdome only, envelope shape 불변 Additive.
-- **Bug B (redfish 한정)**: site.yml 의 collect OEM + normalize OEM 을 local block/rescue 로 감싸 비치명화. 실패 시 errors[] 에 `section: oem` 경고만 남기고(merge_fragment),
+- **Bug B (redfish 한정)**: site.yml 의 collect OEM + normalize OEM 을 local block/rescue 로 감싸 비치명화. 실패 시 errors[] 에 `section: oem` 경고만 남기고(merge_fragment)
   표준 섹션 보존 → build_sections/build_status 정상 경로. adapter `graceful_degradation` 의도 구현. `normalize standard`(핵심)·`account_service` 는 main block 유지.
 - **범위 결정**: os/esxi 동일 cascade 는 사용자 선택으로 보류 → NEXT_ACTIONS 등재.
 
 ### 영향
 
 - OEM/선택 단계 실패 시 overall status: 기존 `failed`(전 섹션 failed) → `success`(시나리오 B: 표준 섹션 success + errors[] OEM 경고) 또는 `partial`(C).
-  envelope 13 필드 / 4-시나리오 매트릭스 자체는 불변 — OEM 실패가 D 가 아니라 B/C 로 올바르게 분류되도록 제어흐름 교정. 호출자 계약(rule 96 R1-B): status 관측값 변화 → docs/20 시나리오 절 + site.yml inline 주석에 반영 (build_status.yml 판정 로직 자체는 불변).
+  envelope 13 필드 / 4-시나리오 매트릭스 자체는 불변이다. OEM 실패가 D 가 아니라 B/C 로 올바르게 분류되도록 제어흐름을 교정했다. 호출자 계약(rule 96 R1-B): status 관측값 변화 → docs/20 시나리오 절 + site.yml inline 주석에 반영 (build_status.yml 판정 로직 자체는 불변).
 - 성공 경로(기존 baseline cisco/dell/hpe/lenovo)는 OEM 정상 → rescue 미진입 → 동작 동일, 회귀 0.
 
 ### 회귀
@@ -469,7 +469,7 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
 
 ### 분석 (5-Round 다관점 자가검증 수렴 — 실 4노드 raw provenance 1:1 대조)
 
-- 대표 root cause: **chassis 오선택**. `detect_vendor` 가 Chassis 컬렉션 첫 멤버(집계용 RackGroup — PowerSubsystem/ThermalSubsystem/NetworkAdapters 부재)를 chassis_uri 로 잡아, top-level `data.power`/`data.thermal` 이 빈 `{}` 인데 `collected=success`(누락이 정상처럼)·`network_adapters=unsupported`(false not-supported)·**FC HBA 전량 소실**. 실 compute chassis 는 `Systems/Partition0.Links.Chassis=r001u01`.
+- 대표 root cause: **chassis 오선택**. `detect_vendor` 가 Chassis 컬렉션 첫 멤버(집계용 RackGroup — PowerSubsystem/ThermalSubsystem/NetworkAdapters 부재)를 chassis_uri 로 잡는다. 그 결과 top-level `data.power`/`data.thermal` 이 빈 `{}` 인데 `collected=success`(누락이 정상처럼)·`network_adapters=unsupported`(false not-supported)·FC HBA 전량 소실. 실 compute chassis 는 `Systems/Partition0.Links.Chassis=r001u01`.
 - round 별 신규 confirmed 추세 **6→5→3→2→0** 으로 수렴. 발견 카테고리: chassis 오선택 / FC HBA WWPN 소실 / FC WWNN↔WWPN 오매핑 / port_count 잘못된 기본값(0) / PSU 펌웨어·소비전력 누락 / fan RPM 링크추적 누락 / memory locator 무용값(0) / Ethernet 미분류 / multi_node 식별필드 불일치 / ilo_version OEM 오매핑 / 내부 임시키(_network_meta) 누설 / adapter firmware 링크추적 누락.
 
 ### 결정 (16건 수정 — 전부 raw 충실 + Additive only, redfish_gather.py)
@@ -497,7 +497,7 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
 ### 분석 (4-Round 다관점 수렴 검수 — 실 raw 2055 리소스 provenance 대조)
 
 - 라이브러리(redfish_gather.py) 데이터 정확성 버그 6건 + normalize join 1건 확정 (round 별 confirmed 2→3→2→0 수렴).
-- **thermal status 미반영 (ATX-01/02)**: Track4(2026-06-14)가 thermal 을 schema/sections.yml + field_dictionary + 라이브러리 + supported_sections.yml + normalize_standard.yml(_sections_supported_fragment) 엔 추가했으나, 공통 builder `build_sections.yml` 의 하드코딩 `all_sec` (10) + 3 skeleton(init_fragments/build_empty_data/build_failed_output) 에는 누락 → `data.thermal` 은 채워지나 `sections.thermal` 키가 envelope 에서 사라지고 overall status 에도 미반영.
+- **thermal status 미반영 (ATX-01/02)**: Track4(2026-06-14)가 thermal 을 schema/sections.yml + field_dictionary + 라이브러리 + supported_sections.yml + normalize_standard.yml(_sections_supported_fragment) 엔 추가했으나 공통 builder `build_sections.yml` 의 하드코딩 `all_sec` (10) + 3 skeleton(init_fragments/build_empty_data/build_failed_output) 에는 누락 → `data.thermal` 은 채워지나 `sections.thermal` 키가 envelope 에서 사라지고 overall status 에도 미반영.
 
 ### 결정
 
@@ -520,8 +520,8 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
 ### 분석 (10-agent recon + web research)
 
 - **CSUS baseline 이 빈 skeleton** — cycle 2026-05-12 는 multi_node 토폴로지(id) 만 채우고 per-partition cpu/memory/storage/network 는 raw/빈 + mock 미완성.
-- **HBA/IB 분류가 dead-code** — Redfish `Port.PortType` 에 FC/IB 값 없음 (DMTF Port.v1_9_0). ESXi `'infiniband' in type` 도 dead. Windows FC 필터 없음 + IB hardcoded []. → "안 담긴다" 의 실제 원인.
-- HBA/IB schema 는 이미 v1 존재 → 구현 + 정합 문제이지 schema 신설 아님.
+- **HBA/IB 분류가 dead-code** — Redfish `Port.PortType` 에 FC/IB 값 없음 (DMTF Port.v1_9_0). ESXi `'infiniband' in type` 도 dead. Windows FC 필터 없음 + IB hardcoded []. 이것이 "안 담긴다" 의 실제 원인이다.
+- HBA/IB schema 는 이미 v1 이 있다. 구현 + 정합 문제이지 schema 신설이 아니다.
 
 ### 결정 (ADR-2026-05-29 — D1/D2/D3)
 
@@ -550,7 +550,7 @@ FCoE 를 **실제로 설정한** 장비는 `NetDevFuncType=FibreChannelOverEther
 
 ### 컨텍스트
 
-cycle 2026-05-11 에 `hpe_csus_3200.yml` (priority=96) + `hpe_superdome_flex.yml` (priority=95) 어댑터가 web sources 기반으로 추가되었으나, **하부 라이브러리 `redfish-gather/library/redfish_gather.py` 가 단일 노드 가정**:
+cycle 2026-05-11 에 `hpe_csus_3200.yml` (priority=96) + `hpe_superdome_flex.yml` (priority=95) 어댑터가 web sources 기반으로 추가되었으나 **하부 라이브러리 `redfish-gather/library/redfish_gather.py` 가 단일 노드 가정**:
 
 - `_resolve_first_member_uri` (line 714-729) — Members[0] 만 추출 → Partition1~N / per-chassis PDHC / Bay iLO5 / Expansion Chassis 누락
 - `gather_bmc` (line 1290) / `gather_system` (line 1173) — 단일 manager_uri / system_uri 인자
@@ -645,7 +645,7 @@ Additive 검증 체크리스트:
 
 ### 컨텍스트
 
-T-01 (commit `8c0fe0f6`, HPE DL380 Gen11 → hpe_ilo7 오선택) + DRIFT-014 (commit `1387b505`, hpe_ilo7 firmware 2-part 매치 실패) 이 RESOLVED 되었지만 사용자 검증 요청에 따라 **rule 95 R1 자동 스캔** 추가 수행. Supermicro X11~X14 priority 매트릭스에서 잠재 위험 2건 발견:
+T-01 (commit `8c0fe0f6`, HPE DL380 Gen11 → hpe_ilo7 오선택) + DRIFT-014 (commit `1387b505`, hpe_ilo7 firmware 2-part 매치 실패) 이 RESOLVED 되었지만 사용자 검증 요청에 따라 rule 95 R1 자동 스캔 추가 수행. Supermicro X11~X14 priority 매트릭스에서 잠재 위험 2건 발견:
 
 1. **X12 priority 90 — 역전** (X11=100, X12=90, X13=100, X14=110)
 2. **X11~X14 firmware_patterns 부재** — model_patterns 만으로 매칭
@@ -667,7 +667,7 @@ Supermicro X11~X14 firmware_patterns 추가는 **보류**. 근거:
 2. **AST2500 (X11) vs AST2600 (X12+) firmware 형식 거의 동일** — `X.YY.ZZ` vs `0X.YY.ZZ` 만 차이. web sources 만으로 generation 분리 정확도 약함 (X11 firmware "1.73.10" 가 X12 패턴 `^0?1\.[0-9]+\.[0-9]+` 에도 매칭)
 3. **lab 부재 (rule 96 R1-A)** — 실 firmware 형식 확정 전 정규식 가설은 미스매치 시 `match_score=-9999` (graceful fallback 발생, 사고 0 이지만 기능 손실) 위험
 
-→ Phase 2 는 사이트 BMC IP 확보 후 `capture-site-fixture` skill 로 실측 fixture 캡처 + 별도 cycle.
+Phase 2 는 사이트 BMC IP 확보 후 `capture-site-fixture` skill 로 실측 fixture 캡처 + 별도 cycle.
 
 ### 대안 거절 사유
 
@@ -725,7 +725,7 @@ CSUS3200 매칭 패턴이 부재하여 현재 `hpe_ilo.yml` (priority=10) generi
    - 기존: `(?i)Superdome|Flex`
    - 변경: `(?i)Superdome|Flex|Compute Scale-up|CSUS`
    - fragment field name (`oem_hpe_superdome`) 유지 — envelope shape 영향 0 (rule 13 R5)
-4. **vault profile = "hpe" 재사용** (rule 50 R2 단계 4) — 별도 `vault/redfish/hpe_csus.yml` 분리는 NEXT_ACTIONS 등재
+4. **vault profile = "hpe" 재사용** (rule 50 R2 단계 4) — 별도 `vault/<loc>/redfish/hpe_csus.yml` 분리는 NEXT_ACTIONS 등재
 5. **baseline / fixture SKIP** (rule 50 R2 단계 10 — lab 부재). NEXT_ACTIONS.md 에 4 항목 등재 (rule 96 R1-C)
 6. **firmware_patterns 추정**: `^[34]\\.[0-9]+\\..*` (RMC 3.x/4.x — Superdome Flex 2.x/3.x 후속, 사이트 실측 시 정정)
 
@@ -772,7 +772,7 @@ CSUS3200 매칭 패턴이 부재하여 현재 `hpe_ilo.yml` (priority=10) generi
 - trigger 1 (rule 본문 의미 변경): 0 (rule 변경 없음)
 - trigger 2 (표면 카운트 변경 — 내부 정책): 0 (하네스 surface 카운트 — adapter 카운트는 별도)
 - trigger 3 (보호 경로 정책 변경): 0
-- → ADR 의무 아님. 본 decision-log entry + VENDOR_ADAPTERS / hpe.md 갱신으로 governance trace
+- ADR 작성 의무는 없다. 본 decision-log entry + VENDOR_ADAPTERS / hpe.md 갱신으로 governance trace
 
 ---
 
@@ -823,7 +823,7 @@ envelope `vendor` 는 외부 계약. `hpe` 로 필터링하던 다운스트림 �
 | 1 | 사이트 fixture 캡처 | BMC IP 확보 | capture-site-fixture skill |
 | 2 | baseline JSON 추가 (`schema/baseline_v1/hpe_csus_3200_baseline.json`) | 실장비 검증 후 | rule 13 R4 + update-vendor-baseline skill |
 | 3 | lab 도입 cycle (`hpe-csus-3200-lab-validation` round) | 별도 round 진입 | Round 검증 + 펌웨어 매트릭스 확정 |
-| 4 | vault 분리 결정 (`vault/redfish/hpe_csus.yml`) | 사용자 명시 승인 시 | 현재 hpe 재사용 — 사용자 결정 시 분리 |
+| 4 | vault 분리 결정 (`vault/<loc>/redfish/hpe_csus.yml`) | 사용자 명시 승인 시 | 현재 hpe 재사용 — 사용자 결정 시 분리 |
 
 ---
 
@@ -900,11 +900,11 @@ Gen12 OEM 정보 (Oem.Hpe.SystemInformation 등) 수집 실패.
 - trigger 1 (rule 본문 의미 변경): 0
 - trigger 2 (표면 카운트 변경): 0
 - trigger 3 (보호 경로 정책 변경): 0
-- → ADR 의무 아님. 본 entry + VENDOR_ADAPTERS / CONVENTION_DRIFT 로 governance trace
+- ADR 작성 의무는 없다. 본 entry + VENDOR_ADAPTERS / CONVENTION_DRIFT 로 governance trace
 
 ### 후속 (NEXT_ACTIONS — lab 도입 후)
 
-- iLO 7 Gen12 사이트 fixture 캡처 (`tests/fixtures/redfish/hpe_ilo7/` — facts.firmware 실측 형식 확정)
+- iLO 7 Gen12 사이트 fixture 캡처 (`tests/fixtures/redfish/ 의 iLO7 디렉터리 (미생성)` — facts.firmware 실측 형식 확정)
 - 1.20+ 2-part 변형 발견 시 firmware_patterns 추가 정정
 - 사이트 사고 발생 시 reverse regression 검토 (rule 25 R7-A-1 — 사용자 실측 > spec)
 
@@ -958,7 +958,7 @@ advisory hook 격상 4/4 완료 보장 위해 Phase 7 선행 작업 자율 진�
 - trigger 1 (rule 본문 의미 변경): rule 26 R10 본문 변경 0 (6 절 자체는 변경 없음 — hook hint 확장만)
 - trigger 2 (표면 카운트 변경): 0건 (hook 개수 28 유지)
 - trigger 3 (보호 경로 정책 변경): 0건
-- → ADR 의무 아님. 본 decision-log entry 만 governance trace.
+- ADR 작성 의무는 없다. 본 decision-log entry 만 governance trace.
 
 ### 효과 — advisory hook 격상 4/4 완료
 
@@ -970,9 +970,9 @@ advisory hook 격상 4/4 완료 보장 위해 Phase 7 선행 작업 자율 진�
 | pre_commit_additive_only_check | 2026-05-11 | Phase 6.2 |
 | pre_commit_ticket_consistency | 2026-05-11 | Phase 7 |
 
-→ Jinja namespace / envelope 정본 / status 매트릭스 / Additive only / cold-start 6 절 **5 영역 회귀 자동 차단** 보장.
+Jinja namespace / envelope 정본 / status 매트릭스 / Additive only / cold-start 6 절 **5 영역 회귀 자동 차단** 보장.
 
-→ 모든 advisory hook BLOCKING 격상 완료. 향후 도입되는 advisory hook 은 다음 cycle 격상 패턴 동일 적용.
+모든 advisory hook BLOCKING 격상 완료. 향후 도입되는 advisory hook 은 다음 cycle 격상 패턴 동일 적용.
 
 ---
 
@@ -1009,7 +1009,7 @@ advisory hook 격상 4/4 완료 보장 위해 Phase 7 선행 작업 자율 진�
 - trigger 1 (rule 본문 의미 변경): 적용 없음 (rule 13 R8 / rule 92 R2 / rule 96 R1-B 본문 변경 없음 — hook 동작 변경만)
 - trigger 2 (표면 카운트 변경): 적용 없음 (hook 개수 28 유지)
 - trigger 3 (보호 경로 정책 변경): 적용 없음
-- → ADR 의무 아님. 본 decision-log entry 만 governance trace.
+- ADR 작성 의무는 없다. 본 decision-log entry 만 governance trace.
 
 ### ticket_consistency 격상 보류 — 선행 작업 명세
 
@@ -1028,7 +1028,7 @@ advisory hook 격상 4/4 완료 보장 위해 Phase 7 선행 작업 자율 진�
 | pre_commit_additive_only_check | cycle 2026-05-06-post | cycle 2026-05-11 (Phase 6.2) |
 | pre_commit_ticket_consistency | cycle 2026-05-06 | 격상 보류 (107건 선행 변환 필요) |
 
-→ envelope 정본 / status 매트릭스 / Additive only / Jinja namespace 4 영역 회귀 자동 차단 보장.
+envelope 정본 / status 매트릭스 / Additive only / Jinja namespace 4 영역 회귀 자동 차단 보장.
 
 ---
 
@@ -1068,7 +1068,7 @@ Jinja namespace hook 동일 패턴 (cycle 2026-05-11 격상). docs20_sync 격상
 - trigger 1 (rule 본문 의미 변경): 적용 없음 (rule 13 R7 본문 변경 없음 — hook 동작 변경만)
 - trigger 2 (표면 카운트 변경): 적용 없음 (hook 개수 28 유지)
 - trigger 3 (보호 경로 정책 변경): 적용 없음
-- → ADR 작성 의무 아님. 본 decision-log entry 만 governance trace.
+- ADR 작성 의무는 없다. 본 decision-log entry 만 governance trace.
 
 ### 효과
 
@@ -1120,7 +1120,7 @@ cycle 2026-05-11 harness-cycle 자기개선 단계에서 다음 기준 충족 �
 - trigger 1 (rule 본문 의미 변경): 적용 없음 (rule 22 본문 변경 없음 — hook 동작 변경만)
 - trigger 2 (표면 카운트 변경): 적용 없음 (hook 개수 28 유지)
 - trigger 3 (보호 경로 정책 변경): 적용 없음
-- → ADR 작성 의무 아님. 본 decision-log entry 만 governance trace.
+- ADR 작성 의무는 없다. 본 decision-log entry 만 governance trace.
 
 ### 효과
 
@@ -1174,7 +1174,7 @@ cycle 2026-05-11 M-A1~A6 (vendor default 계정 자동 생성 path 보장) 후�
 
 ### 원칙 준수
 
-- **Additive only** (rule 92 R2) — adapter declare entry **추가만**. 코드 로직 / collect / normalize / match 불변
+- **Additive only** (rule 92 R2) — adapter declare entry 추가만. 코드 로직 / collect / normalize / match 불변
 - **envelope shape 변경 0** (rule 13 R5 / rule 96 R1-B) — adapter declare 텍스트만 변경. 호출자 시스템 파싱 영향 0
 - **vault 자동 반영 영향 0** (rule 27 R6) — cacheable / fact_caching / decrypt 캐시 모두 0 유지
 
@@ -1215,7 +1215,7 @@ cycle 2026-05-11 M-A1~A6 (vendor default 계정 자동 생성 path 보장) 후�
 
 > "실제 개더링할수있는 장비를 대상으로 개더링하고 그 값을 대상으로 json출력 예시를 업데이트해라. 만약 schema/baseline_v1이 json출력예시 디렉터리가 아니라면 별도로 디렉터리를 만들고 schema/baseline_v1에 생성한 파일은 지워라. 만약 의도가맞다면 업데이트만 해라. 그리고 한글로 할때 모든 json 키값에대한 설명을 주석으로 달아라."
 
-직전 cycle 2026-05-06 b65e162e 가 baseline_v1 안에 한글 주석본 8개 (`*_annotated.jsonc`) 를 추가했으나, baseline_v1 정본 의도 (회귀 기준선 — Jenkins Stage 4 pytest 입력) 와 충돌. 사용자가 위치 부적합 지적.
+직전 cycle 2026-05-06 b65e162e 가 baseline_v1 안에 한글 주석본 8개 (`*_annotated.jsonc`) 를 추가했으나 baseline_v1 정본 의도 (회귀 기준선 — Jenkins Stage 4 pytest 입력) 와 충돌. 사용자가 위치 부적합 지적.
 
 ### 결정
 
@@ -1264,7 +1264,7 @@ cycle 2026-05-11 M-A1~A6 (vendor default 계정 자동 생성 path 보장) 후�
 
 > "스키마 검증 들어가자. 모든 값에 대한 스키마 검증해주되 특히 자세히 봐야할것은 개더링상태가 success failed partial 이렇게 3개로 나눠져있는것으로 보이는데, 이게 로직이 정상작동돼지않는듯함. 부분 성공이라고 하더라도 error 에는 로그가 찍히는데 success로 빠지는경우가 있음 이것은 왜이런지 확인해줘 의도된건지?"
 
-→ M-A1 [DONE] (commit `ba003b2f`) 분석 결과: 시나리오 B (섹션 success + errors warning → overall=success) 는 **명백한 의도된 동작**. 코드 주석 3 위치가 명시:
+M-A1 [DONE] (commit `ba003b2f`) 분석 결과: 시나리오 B (섹션 success + errors warning → overall=success) 는 **명백한 의도된 동작**. 코드 주석 3 위치가 명시:
 - `os-gather/tasks/linux/gather_memory.yml:171-172` (dmidecode fallback 사유 추적)
 - `os-gather/tasks/linux/gather_network.yml:208` (lspci stderr 권한 부족 추적)
 - `esxi-gather/tasks/normalize_storage.yml:79-80` (NFS/vSAN/vVOL cap 미수집 추적)
@@ -1282,7 +1282,7 @@ AI 자율 진행 권한 적용 (cycle 진입 시 사용자 명시 — "사용자
 | (3) status_rules.yml | **(c) 유지** | DEAD CODE 명시 주석 "삭제 금지 / 향후 reserved" + rule 70 R5 보존 판정 YES |
 | (4) status enum | **(a) 3 enum 유지** | rule 13 R5 envelope 13 필드 정본 + rule 96 R1-B (호환성 외 schema 확장 별도 cycle) |
 
-→ **Case A 채택** — 의도된 동작 명시 only (Additive 주석/문서 강화).
+**Case A 채택** — 의도된 동작 명시 only (Additive 주석/문서 강화).
 
 ### 영향
 
@@ -1338,7 +1338,7 @@ cycle-019 본 cycle 에서 7-loop + 10R extended audit P1 22건 적용 후, 사�
 | 1. vendor_aliases.yml 매핑 | 4 vendor alias 추가 | [OK] |
 | 2. adapter YAML 생성 | huawei_ibmc / inspur_isbmc / fujitsu_irmc / quanta_qct_bmc | [OK] |
 | 3. (선택) OEM tasks | 부재 (standard_only — 사이트 fixture 확보 후 보강) | DEFER |
-| 4. vault 생성 | vault/redfish/{vendor}.yml | **SKIP (사용자 명시)** |
+| 4. vault 생성 | vault/<loc>/redfish/<vendor>.yml | **SKIP (사용자 명시)** |
 | 5. baseline | schema/baseline_v1/{vendor}_baseline.json | DEFER (lab 부재) |
 | 6. ai-context | 내부 하네스 설정{vendor}.md 4종 | [OK] |
 | 7. vendor-boundary-map.yaml | huawei/inspur/fujitsu/quanta 추가 | [OK] |
@@ -1368,7 +1368,7 @@ cycle-019 본 cycle 에서 7-loop + 10R extended audit P1 22건 적용 후, 사�
 
 ### 사이트 도입 시 절차
 
-1. `vault/redfish/{vendor}.yml` 생성 (ansible-vault encrypt + username/password)
+1. `vault/<loc>/redfish/<vendor>.yml` 생성 (ansible-vault encrypt + username/password)
 2. `tests/redfish-probe/probe_redfish.py --vendor {vendor}` 실행
 3. `schema/baseline_v1/{vendor}_baseline.json` 생성
 4. `tests/evidence/<날짜>-{vendor}.md` Round 검증 기록
@@ -1489,7 +1489,7 @@ agent 10.100.64.154 SSH + 진단 playbook (`tests/scripts/diag_esxi_raw.yml`) �
 - Lenovo: Manager.Status.Health
 - Dell: Drive.Status.Health
 
-→ **정책**: 코드가 추출하는 모든 필드는 `_safe()` 함수로 None 반환 허용.
+**정책**: 코드가 추출하는 모든 필드는 `_safe()` 함수로 None 반환 허용.
 normalize에서 `| default(none)` 처리.
 
 ### 빈 문자열 처리
@@ -1579,7 +1579,7 @@ OEM 구현을 재검토해야 하는 상황:
 
 ### 배경
 
-Round 1에서 Linux 2-Tier Gather (Python 감지 + Raw Fallback) 기본 구현을 완료했다. Round 2에서는 5대 서버에 대해 31개 필드 전수 비교 검증을 수행했다.
+Round 1에서 Linux 2-Tier Gather (Python 감지 + Raw Fallback) 기본 구현을 완료했다. Round 2에서는 5대 서버에 대해 31개 필드를 전수 비교했다.
 
 ### SELinux 정규화 버그 수정
 
@@ -1600,14 +1600,14 @@ Round 1에서 Linux 2-Tier Gather (Python 감지 + Raw Fallback) 기본 구현�
 
 ### Memory 차이 분석 (버그 아님)
 
-RHEL 9.x / Rocky 9.6에서 Python 경로와 raw 경로 간 memory 값 차이가 발생한다. 이는 **버그가 아니라 raw 경로가 더 정확**한 결과이다.
+RHEL 9.x / Rocky 9.6에서 Python 경로와 raw 경로 간 memory 값 차이가 발생한다. 이는 버그가 아니라 raw 경로가 더 정확한 결과이다.
 
 | 경로 | 수집 방식 | 값 (예시) | 의미 |
 |------|----------|----------|------|
 | Python 경로 | `ansible_memtotal_mb` (OS 보고) | 7680 MB | 커널 예약 후 OS 가시 메모리 (`os_visible`) |
 | Raw 경로 | `dmidecode --type 17` (하드웨어 직접) | 8192 MB | 물리 장착 메모리 (`physical_installed`) |
 
-→ raw 경로의 dmidecode 기반 수집이 실제 물리 메모리를 반환하므로 하드웨어 인벤토리 용도에 더 적합하다.
+raw 경로의 dmidecode 기반 수집이 실제 물리 메모리를 반환하므로 하드웨어 인벤토리 용도에 더 적합하다.
 
 ### Ubuntu SELinux 차이 (허용)
 
@@ -1615,7 +1615,7 @@ Ubuntu 24.04에서 `selinux` 필드 차이 1건 발생:
 - Python 경로: `disabled` (Ansible이 SELinux 미설치를 disabled로 보고)
 - Raw 경로: `null` (`getenforce` 명령 미설치)
 
-→ Ubuntu는 SELinux를 기본 탑재하지 않으므로 `null` 반환이 의미적으로 정확하다. 허용 범위로 판정.
+Ubuntu는 SELinux를 기본 탑재하지 않으므로 `null` 반환이 의미적으로 정확하다. 허용 범위로 판정.
 
 ### 결론
 
@@ -1625,7 +1625,7 @@ Ubuntu 24.04에서 `selinux` 필드 차이 1건 발생:
 
 ### 배경
 
-Round 2 이후 Network 섹션에 대해 심층 검증을 수행했다. 가상 인터페이스 skip 패턴 확장, 다중 default route 동작 확인, primary 판단 규칙 명확화가 주요 내용이다.
+Round 2 이후 Network 섹션에 대해 가상 인터페이스 skip 패턴 확장, 다중 default route 동작 확인, primary 판단 규칙 명확화 세 갈래로 심층 검증했다.
 
 ### skip 패턴 확장
 
@@ -1658,13 +1658,13 @@ Round 2 이후 Network 섹션에 대해 심층 검증을 수행했다. 가상 �
 
 ### 결론
 
-Network 수집 정책을 rule 22 (fragment-philosophy)에 문서화 완료. skip 패턴 확장으로 Kubernetes/tunnel/dummy 가상 인터페이스를 추가 제외하고, primary 판단 규칙과 다중 default route 처리를 명확화했다.
+Network 수집 정책을 rule 22 (fragment-philosophy)에 문서화 완료. skip 패턴 확장으로 Kubernetes/tunnel/dummy 가상 인터페이스를 추가 제외하고 primary 판단 규칙과 다중 default route 처리를 명확히 했다.
 
 ## 11. Network 복잡 토폴로지 실증 (Round 4, 2026-04-15)
 
 ### 배경
 
-Round 3에서 skip 패턴을 확장하고 primary 판단 규칙을 명확화했다. Round 4에서는 Ubuntu 24.04에 복잡 네트워크 토폴로지를 실제 구성하여 수집 정확성을 실증했다.
+Round 3에서 skip 패턴을 확장하고 primary 판단 규칙을 명확히 했다. Round 4는 Ubuntu 24.04에 복잡 네트워크 토폴로지를 실제로 구성해 수집 결과를 대조했다.
 
 ### 실증 환경
 
@@ -1684,7 +1684,7 @@ Ubuntu 24.04 (10.100.64.167)에 아래 토폴로지를 구성:
 
 ### 발견된 문제
 
-skip 패턴(`dummy*`)이 배포 시점에 반영되지 않아 cni0, flannel.1은 skip되지 않았다 (배포 이슈). 이와 별개로, **dummy0가 bridge port(slave)임에도 수집되는 문제**를 발견했다. dummy0는 br0의 하위 포트이므로 독립 인터페이스로 수집하면 안 된다.
+skip 패턴(`dummy*`)이 배포 시점에 반영되지 않아 cni0, flannel.1은 skip되지 않았다 (배포 이슈). 이와 별개로, dummy0가 bridge port(slave)임에도 수집되는 문제를 발견했다. dummy0는 br0의 하위 포트이므로 독립 인터페이스로 수집하면 안 된다.
 
 ### 수정 내용
 
@@ -1716,13 +1716,13 @@ raw path에 bridge slave / bond slave 자동 필터를 추가했다:
 
 ### 결론
 
-복잡 토폴로지(bridge + VLAN + container NIC + policy routing)에서 수집 정확성을 실증했다. bridge slave/bond slave 자동 필터 추가로 불필요한 하위 포트 수집이 제거되었다. 4개 인터페이스만 정확히 수집되며, primary 판단도 정확하다.
+복잡 토폴로지(bridge + VLAN + container NIC + policy routing)에서도 수집은 정확했다. bridge slave/bond slave 자동 필터를 추가해 불필요한 하위 포트 수집이 사라졌다. 인터페이스 4개만 정확히 수집되고 primary 판단도 정확하다.
 
 ## 12. Network 운영 해석 기준 확정 + bond 실증 (Round 5, 2026-04-15)
 
 ### 배경
 
-Round 4까지 skip 패턴, primary 판단, bridge slave 필터를 검증했다. Round 5에서는 5대 서버 명령어 존재성 매트릭스 실측과 bond 토폴로지 실증을 수행하여 운영 해석 기준을 확정했다.
+Round 4까지 skip 패턴, primary 판단, bridge slave 필터를 검증했다. Round 5는 5대 서버 명령어 존재성 매트릭스를 실측하고 bond 토폴로지를 구성해 운영 해석 기준을 확정했다.
 
 ### 명령어 존재성 매트릭스 실측
 
@@ -1733,7 +1733,7 @@ Round 4까지 skip 패턴, primary 판단, bridge slave 필터를 검증했다. 
 - Ubuntu는 `nmcli` 미설치 (NetworkManager 미사용)
 - `ip`, `getent`, `/sys/class/net`, `/proc/*`, `/etc/os-release`는 모든 배포판에서 보장
 
-→ 배포판 무관 소스(`ip`, sysfs, `/proc`, `/etc`) 사용 전략의 정당성을 실측으로 확인했다.
+배포판 무관 소스(`ip`, sysfs, `/proc`, `/etc`) 사용 전략의 정당성을 실측으로 확인했다.
 
 ### bond 실증
 
@@ -1776,7 +1776,7 @@ kernel sysfs > POSIX 명령 > /proc > /etc
 
 ### 결론
 
-명령어 매트릭스 실측으로 배포판 무관 설계를 검증하고, bond 실증으로 bond master/slave/VLAN-on-bond 수집 정확성을 확인했다. source 우선순위와 운영 해석 정책을 확정하여 rule 22 (fragment-philosophy)에 반영했다.
+명령어 매트릭스 실측으로 배포판 무관 설계를 검증하고 bond 실증으로 bond master/slave/VLAN-on-bond 수집 정확성을 확인했다. source 우선순위와 운영 해석 정책을 확정해 rule 22 (fragment-philosophy)에 반영했다.
 
 ---
 
@@ -1784,7 +1784,7 @@ kernel sysfs > POSIX 명령 > /proc > /etc
 
 ### 배경
 
-새 vendor 추가 / schema 필드 보강 / OS 매핑 검증 / 회귀 비교 시 매번 실장비에 직접 접속하는 비용을 줄이고, 향후 재현/비교 가능한 raw 자산을 확보할 필요가 있었다. 사용자가 Jenkins master 2대 / agent 2대 / OS VM 6대 + bare-metal 1대 / Windows VM 1대 / BMC 11대 / ESXi 3대를 테스트 자격과 함께 제공했다.
+새 vendor 추가 / schema 필드 보강 / OS 매핑 검증 / 회귀 비교 시 매번 실장비에 직접 접속하는 비용을 줄이고 향후 재현/비교 가능한 raw 자산을 확보할 필요가 있었다. 사용자가 Jenkins master 2대 / agent 2대 / OS VM 6대 + bare-metal 1대 / Windows VM 1대 / BMC 11대 / ESXi 3대를 테스트 자격과 함께 제공했다.
 
 ### 결정
 

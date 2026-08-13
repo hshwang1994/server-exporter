@@ -72,7 +72,8 @@ errors, data, schema_version
 
 - 캡처 일시: 2026-05-07
 - 캡처 환경: Jenkins 에이전트 10.100.64.155 (Ansible 2.20.3 / Python 3.12 venv `/opt/ansible-env/`)
-- 자격증명: `vault/{linux,windows,esxi}.yml` + `vault/redfish/{vendor}.yml` (cycle 2026-04-29 5 vendor 통일 — primary `infraops/__REDACTED__Infra` + recovery)
+- 자격증명: 당시 평면 경로 `vault/{linux,windows,esxi}.yml` + `vault/redfish/{vendor}.yml`
+  (이 경로들은 2026-08-12 에 삭제됐다. cycle 2026-04-29 5 vendor 통일 — primary `infraops/__REDACTED__Infra` + recovery)
 - 스크립트: `tests/evidence/2026-05-07-real-gather.md` (캡처 절차 + 명령 기록)
 
 ## 8. 호출자 사용 가이드

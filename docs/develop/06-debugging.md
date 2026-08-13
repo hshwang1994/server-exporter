@@ -20,7 +20,7 @@
 | Windows gather 부분 실패 | `os-gather/tasks/windows/gather_*.yml` | WinRM debug — pywinrm |
 | ESXi gather 부분 실패 | `esxi-gather/tasks/collect_*.yml + normalize_*.yml` | community.vmware 모듈 출력 |
 | Precheck 4단계 어디서 막힘 | `common/library/precheck_bundle.py` + `diagnosis.details` | `debug-precheck-failure` skill |
-| Vault 로딩 실패 | `redfish-gather/tasks/load_vault.yml` | `vault/redfish/{vendor}.yml` 존재 / 권한 |
+| Vault 로딩 실패 | `redfish-gather/tasks/load_vault.yml` | `vault/<loc>/redfish/<vendor>.yml` 존재 / 권한 |
 | Callback 실패 | `Jenkinsfile_portal` post 단계 | `callback_plugins/json_only.py` + URL 정규화 |
 | 회귀 사고 (A 고치고 B 깨짐) | `pytest tests/regression/` | `tests/regression/test_cross_channel_consistency.py` |
 
@@ -51,11 +51,11 @@
 
 ### Stage 3 — Validate Schema (정합)
 
-**역할**: envelope 13 필드 + sections 10 + field_dictionary 83 정합.
+**역할**: envelope 13 필드 + `schema/sections.yml` 의 섹션 + `field_dictionary.yml` 항목 정합.
 **위치**: `tests/validate_field_dictionary.py` (Jenkinsfile 193~203, Stage 'Validate Schema')
 **실패 시 확인**:
 - `schema/field_dictionary.yml` 갱신 누락 (rule 13 R1 3종 동반)
-- `schema/sections.yml` 의 sections 11 정의 누락
+- `schema/sections.yml` 에 섹션 정의 누락
 - `common/tasks/normalize/build_output.yml` envelope 13 필드 (rule 13 R5)
 
 ### Stage 4 — E2E Regression / Callback (pipeline 별)

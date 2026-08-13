@@ -4,7 +4,7 @@
 
 새 벤더 / 새 세대 BMC 가 들어와도 **Python / Ansible 코드는 안 만진다.** `adapters/` 폴더에 YAML 파일 1~3장 추가하면 끝.
 
-이게 가능한 이유와, 실제로 어떤 YAML 이 어떻게 매칭되는지를 풀어본다.
+이게 가능한 이유와 실제로 어떤 YAML 이 어떻게 매칭되는지를 풀어본다.
 
 ---
 
@@ -19,7 +19,7 @@
 
 이걸 전부 Python 코드에 `if vendor == "dell": ...` 분기로 박으면, 새 벤더 들어올 때마다 코드 깊숙이 손대야 한다. 5개 벤더면 어떻게든 버틴다. 9개, 12개 늘어나면 아무도 못 읽는다.
 
-대신 **벤더 차이만 떼어내서 YAML 한 장에 적어두는 식으로 분리**한다. Python 코드는 "어떤 YAML 이 매칭되는지" 만 결정하고, **그 YAML 에 적힌 경로대로** 호출한다.
+대신 **벤더 차이만 떼어내서 YAML 한 장에 적어두는 식으로 분리**한다. Python 코드는 "어떤 YAML 이 매칭되는지" 만 결정하고 **그 YAML 에 적힌 경로대로** 호출한다.
 
 ---
 
@@ -64,7 +64,7 @@
     │
     ▼
 [ Step 4 ] 선택된 adapter 가 시키는 대로
-    - credentials.profile = "dell"  → vault/redfish/dell.yml 로드
+    - credentials.profile = "dell"  → vault/<loc>/redfish/dell.yml 로드
     - collect.standard_tasks = "redfish-gather/tasks/collect_standard.yml" 실행
     - collect.oem_tasks      = "redfish-gather/tasks/vendors/dell/collect_oem.yml" 실행
     - normalize.standard_tasks 실행 → fragment 생성
@@ -188,7 +188,7 @@ normalize:
   oem_tasks:      "redfish-gather/tasks/vendors/dell/normalize_oem.yml"
 
 credentials:
-  profile:           "dell"   # vault/redfish/dell.yml 을 로드
+  profile:           "dell"   # vault/<loc>/redfish/dell.yml 을 로드
   fallback_profiles: []
 
 graceful_degradation:
@@ -242,7 +242,7 @@ OEM 이 필요 없으면 표준 필드만으로 충분하다. 그 경우 adapter
 
 ## 7. Python 코드와 Adapter 의 역할 분리
 
-Adapter 가 모든 걸 해결하는 건 아니다. 두 계층이 각자 책임이 다르다.
+Adapter 가 모든 걸 해결하는 건 아니다. 세 계층이 각자 책임이 다르다.
 
 | 계층 | 담당 |
 |---|---|

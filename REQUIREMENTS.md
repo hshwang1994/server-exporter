@@ -69,8 +69,8 @@
 > **계정 권한 기준:**
 > - 모든 섹션을 수집하려면 sudo(become) 권한이 있는 계정을 사용해야 한다.
 > - sudo 없이도 기본 수집(hostname, OS, CPU, memory, network)은 가능하다.
-> - serial_number, system_uuid 등 DMI 정보는 `/sys/class/dmi/id/` 읽기 권한이 필요하며, 일반 사용자는 접근 불가한 경우가 많다.
-> - 권한 부족 시 해당 필드는 `null`로 반환되며, 수집 자체는 실패하지 않는다 (non-fatal).
+> - serial_number, system_uuid 등 DMI 정보는 `/sys/class/dmi/id/` 읽기 권한이 필요하며 일반 사용자는 접근 불가한 경우가 많다.
+> - 권한 부족 시 해당 필드는 `null`로 반환되며 수집 자체는 실패하지 않는다 (non-fatal).
 > - vault에 `become_password`를 포함하면 자동으로 sudo 권한 사용.
 
 > **미지원**: Python 3.8 이하 (RHEL 8 기본 Python 3.6 포함).
@@ -119,7 +119,7 @@
 > - 모든 섹션을 수집하려면 **관리자(Administrator) 권한**이 있는 계정을 사용해야 한다.
 > - 비관리자 계정으로도 기본 WMI 정보(hostname, OS, CPU, memory)는 수집 가능하다.
 > - `Get-LocalUser`, 디스크 상세, serial_number 등은 관리자 권한이 필요하다.
-> - 권한 부족 시 해당 필드는 `null`로 반환되며, 수집 자체는 실패하지 않는다 (non-fatal).
+> - 권한 부족 시 해당 필드는 `null`로 반환되며 수집 자체는 실패하지 않는다 (non-fatal).
 > - vault에 관리자 계정 정보를 포함하면 전체 수집 가능.
 
 > **미지원**: Windows Server 2008, Windows Server 2008 R2, Windows 7 이하
@@ -139,7 +139,7 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 적용 범위:
 - OS 채널 (Linux, Windows)에서만 제공한다
 - Redfish, ESXi 채널에는 적용하지 않는다
-- 물리 서버에 직접 설치된 OS는, 그 위에서 KVM/Hyper-V host 역할을 하더라도 `baremetal`로 분류한다
+- 물리 서버에 직접 설치된 OS는 그 위에서 KVM/Hyper-V host 역할을 하더라도 `baremetal`로 분류한다
 
 ---
 
@@ -222,7 +222,7 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 | Lenovo | ThinkSystem SR650 V2 | XCC | 5.70 | 1.15.0 | redfish_lenovo_xcc (P100) |
 
 > 검증 기준 장비에서 확인된 Redfish Version 범위는 1.6.0 ~ 1.20.0 이다.
-> 이 범위는 지원 범위가 아니라, 실장비 검증 시점에 확인된 값이다.
+> 이 범위는 지원 범위가 아니라 실장비 검증 시점에 확인된 값이다.
 > HPE iLO 6 은 전용 어댑터 `redfish_hpe_ilo6` (P100) 로 매칭된다 (`hpe_ilo` P10 은 미세대 fallback).
 
 **벤더별 지원/미지원 상세:**
@@ -253,7 +253,7 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 ## 4. Jenkins Agent 공통 요구사항
 
 > **검증 기준 Agent**: 10.100.64.154 (Ubuntu 24.04.4 LTS), 2026-03-27 확인.
-> 아래 "검증 기준" 컬럼은 해당 Agent에서 실측한 값이며, 전체 운영 환경의 표준을 의미하지 않는다.
+> 아래 "검증 기준" 컬럼은 해당 Agent에서 실측한 값이며 전체 운영 환경의 표준을 의미하지 않는다.
 > 설치 절차는 [docs/operate/02-agent-node.md](docs/operate/02-agent-node.md) 참조.
 
 ### 4-1. 런타임 환경
@@ -338,7 +338,7 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 ### 7-3. 권한 부족 시의 동작
 
 - 식별자 미수집은 gather 실패가 아니다. 수집 자체는 계속 진행된다 (non-fatal).
-- 식별자 필드는 `null` 로 반환되고, errors[] 에는 사유가 추가될 수 있다.
+- 식별자 필드는 `null` 로 반환되고 errors[] 에는 사유가 추가될 수 있다.
   - `insufficient_privilege` — 권한 부족으로 DMI / WMI 접근 불가
   - `identifier_not_available` — 출처 자체가 유효한 값을 제공하지 않음
 - envelope 의 `status` / `sections` 판정에는 영향 없음.
@@ -384,4 +384,4 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 | Linux 에서 sudo 권한 없는 계정 | `serial_number`, `system_uuid` 등 DMI 정보 |
 | Windows 에서 비관리자 계정 | `serial_number`, 디스크 상세, 로컬 사용자 일부 |
 
-이 표의 "차단" 환경은 호출자에게 `status: failed` 가 반환되고, "제한 지원" 환경은 정상 응답 안에서 일부 필드만 `null` 로 보인다.
+이 표의 "차단" 환경은 호출자에게 `status: failed` 가 반환되고 "제한 지원" 환경은 정상 응답 안에서 일부 필드만 `null` 로 보인다.

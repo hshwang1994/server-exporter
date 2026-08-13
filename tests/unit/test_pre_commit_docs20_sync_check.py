@@ -4,7 +4,7 @@
 (``detect_violation``) 을 직접 검증한다. git index 모킹은 하지 않고 함수 단위 시험.
 
 reference:
-    - rule 13 R7 (envelope 정본 변경 시 docs/20 동기화 의무)
+    - rule 13 R7 (envelope 정본 변경 시 `docs/contract/03-fields.md` 동기화 의무)
     - scripts/ai/hooks/pre_commit_docs20_sync_check.py (자체 ``--self-test`` 도 동일 케이스 보유)
 """
 from __future__ import annotations
@@ -49,14 +49,14 @@ def test_canonical_files_constant(hook_mod) -> None:
 
 
 def test_canonical_files_actually_exist(hook_mod) -> None:
-    """정본 4종 + docs/20 이 저장소에 실재하는지 (rule 13 R7 정합성)."""
+    """정본 4종 + `docs/contract/03-fields.md` 이 저장소에 실재하는지 (rule 13 R7 정합성)."""
     for f in hook_mod.CANONICAL_FILES:
         assert (REPO / f).is_file(), f"정본 파일 부재: {f}"
     assert (REPO / hook_mod.DOCS20_PATH).is_file()
 
 
 def test_violation_canonical_only(hook_mod) -> None:
-    """정본 1개만 변경 + docs/20 미변경 → 위반 1건."""
+    """정본 1개만 변경 + `docs/contract/03-fields.md` 미변경 → 위반 1건."""
     violations = hook_mod.detect_violation(
         ["common/tasks/normalize/build_output.yml"]
     )
@@ -64,7 +64,7 @@ def test_violation_canonical_only(hook_mod) -> None:
 
 
 def test_pass_when_docs20_also_staged(hook_mod) -> None:
-    """정본 + docs/20 동반 staged → 통과."""
+    """정본 + `docs/contract/03-fields.md` 동반 staged → 통과."""
     violations = hook_mod.detect_violation(
         [
             "schema/sections.yml",
@@ -97,7 +97,7 @@ def test_windows_path_normalization(hook_mod) -> None:
 
 
 def test_violation_all_four_canonical(hook_mod) -> None:
-    """정본 4종 모두 변경 + docs/20 미변경 → 위반 4건."""
+    """정본 4종 모두 변경 + `docs/contract/03-fields.md` 미변경 → 위반 4건."""
     staged = list(hook_mod.CANONICAL_FILES)
     violations = hook_mod.detect_violation(staged)
     assert sorted(violations) == sorted(hook_mod.CANONICAL_FILES)

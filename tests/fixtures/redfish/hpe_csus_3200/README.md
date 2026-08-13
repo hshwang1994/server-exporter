@@ -67,7 +67,7 @@ HPE community 게시물 7200359 ("impossible to get redfish answer from superdom
 - C1: 사이트 fixture 캡처 (`capture-site-fixture` skill)
 - C2: baseline JSON 추가 (`schema/baseline_v1/hpe_csus_3200_baseline.json`)
 - C3: lab 도입 cycle `hpe-csus-rmc-lab-validation` round
-- C4: vault 분리 결정 (`vault/redfish/hpe_csus.yml`)
+- C4: vault 분리 결정 (`vault/<loc>/redfish/hpe_csus.yml`)
 - C5: ServiceRoot.Product 실측
 - C6: Manager / System / Chassis Member ID 패턴 실측
 - C7: Oem.Hpe.PartitionInfo / FlexNodeInfo / GlobalConfiguration schema 실측

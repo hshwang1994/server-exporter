@@ -24,7 +24,7 @@
   connection: local
 
   vars_files:
-    - "{{ lookup('env','REPO_ROOT') }}/vault/esxi.yml"
+    - "{{ lookup('env','REPO_ROOT') }}/vault/<loc>/esxi.yml"
 
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
@@ -42,7 +42,7 @@
 
     - name: "diag | abort if auth failed"
       ansible.builtin.fail:
-        msg: "ESXi 인증 실패 — vault/esxi.yml 확인 필요"
+        msg: "ESXi 인증 실패 — vault/<loc>/esxi.yml 확인 필요"
       when:
         - (accounts | default([])) | length > 0
         - not (_e_auth_ok | default(false) | bool)

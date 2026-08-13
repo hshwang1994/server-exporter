@@ -113,7 +113,7 @@ def test_adapter_directory_has_expected_count() -> None:
     adapters = _all_redfish_adapters()
     assert len(adapters) == 30, (
         f"adapters/redfish/ 비-generic adapter 개수 drift: {len(adapters)} (기대 30). "
-        f"adapter 추가/삭제 시 본 테스트 + docs/21 §6.5 + CLAUDE.md 카운트 동반 갱신."
+        f"adapter 추가/삭제 시 본 테스트 + `docs/operate/05-vault.md` §6.5 + CLAUDE.md 카운트 동반 갱신."
     )
 
 
@@ -144,7 +144,7 @@ def test_adapter_recovery_accounts_non_empty(adapter_path: Path) -> None:
 
 @pytest.mark.parametrize("adapter_path", _all_redfish_adapters(), ids=lambda p: p.name)
 def test_adapter_recovery_labels_in_vendor_allowed_set(adapter_path: Path) -> None:
-    """각 `vault_label` 이 vendor 별 허용 set (docs/21 §6.5) 에 포함."""
+    """각 `vault_label` 이 vendor 별 허용 set (`docs/operate/05-vault.md` §6.5) 에 포함."""
     doc = _load_adapter(adapter_path)
     vendor = _detect_vendor(adapter_path, doc)
     assert vendor in VENDOR_ALLOWED_LABELS, (
@@ -157,7 +157,7 @@ def test_adapter_recovery_labels_in_vendor_allowed_set(adapter_path: Path) -> No
         label = entry.get("vault_label")
         assert label in allowed, (
             f"{adapter_path.name}: vault_label '{label}' 이 {vendor} 허용 set {sorted(allowed)} 외. "
-            f"vault/redfish/{vendor}.yml accounts label 와 정합 필요 (docs/21 §6.5)."
+            f"vault/redfish/{vendor}.yml accounts label 와 정합 필요 (`docs/operate/05-vault.md` §6.5)."
         )
 
 
@@ -184,5 +184,5 @@ def test_redfish_generic_recovery_accounts_empty() -> None:
     recovery = creds.get("recovery_accounts")
     assert recovery == [], (
         f"redfish_generic.yml: recovery_accounts 가 [] 아님 (got {recovery!r}). "
-        f"generic fallback 은 vendor 미상이므로 비워둠 (docs/21 §6.5)."
+        f"generic fallback 은 vendor 미상이므로 비워둠 (`docs/operate/05-vault.md` §6.5)."
     )

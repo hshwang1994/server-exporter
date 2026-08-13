@@ -80,7 +80,7 @@ _errors_fragment:             []          # 수집 중 본 오류 (이번엔 없
 - **자기 영역만 채운다.** CPU 담당자는 `_data_fragment` 의 `cpu` 키만 만진다. memory 키는 절대 안 만진다.
 - **누적 변수는 만지지 않는다.** `_merged_data`, `_all_sec_*`, `_all_errors` 는 편집자(merge_fragment.yml) 의 영역이다.
 
-이 규칙을 어기면 (다른 사람 페이지에 손대거나, 한 권짜리 보고서 자체를 직접 고치면) 누가 뭘 만들었는지 추적이 안 된다.
+이 규칙을 어기면 (다른 사람 페이지에 손대거나 한 권짜리 보고서 자체를 직접 고치면) 누가 뭘 만들었는지 추적이 안 된다.
 
 ---
 
@@ -108,7 +108,7 @@ _all_errors:          []
 **하는 일 4가지**
 
 1. `_merged_data` 에 `_data_fragment` 를 재귀 병합
-   - dict + dict → 1단계 재귀 병합 (top-level 키를 합치고, 같은 키의 하위 dict 도 한 단계 병합. 충돌하면 fragment 값 채택)
+   - dict + dict → 1단계 재귀 병합 (top-level 키를 합치고 같은 키의 하위 dict 도 한 단계 병합. 충돌하면 fragment 값 채택)
    - list + list → 합산
    - null + 값 → 값 채택
 2. `_all_sec_supported / collected / failed / unsupported` 에 fragment 의 섹션 list 를 union 으로 추가
@@ -174,7 +174,7 @@ merge 가 다 끝나면 누적 변수가 가득 차 있다. 이걸로 envelope �
 
 - **새 섹션 추가**: 새 gather 태스크가 fragment 5개 채우는 패턴만 따르면 끝. `merge_fragment.yml` 도 `build_*.yml` 도 안 건드린다.
 - **새 채널 추가**: 똑같이 `init_fragments.yml` → gather → `merge_fragment.yml` → `build_*.yml` 호출 한 줄만 추가하면 된다.
-- **새 벤더 추가**: 다른 차원이라 더 단순하다. 기존 fragment 패턴 그대로 가고, `adapters/` 에 YAML 만 추가한다 (docs/10).
+- **새 벤더 추가**: 다른 차원이라 더 단순하다. 기존 fragment 패턴 그대로 가고 `adapters/` 에 YAML 만 추가한다 (docs/10).
 
 같은 패턴으로 모든 변화가 흡수된다는 게 fragment 정규화의 가치다.
 

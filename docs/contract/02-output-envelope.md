@@ -34,7 +34,7 @@ Redfish는 `redfish_api`.
 
 ## status — 세 값이 어떻게 갈리나
 
-`sections`의 값만 보고 정한다. `not_supported`인 섹션은 계산에서 빼고, 남은 것 중에
+`sections`의 값만 보고 정한다. `not_supported`인 섹션은 계산에서 빼고 남은 것 중에
 
 - 남은 게 하나도 없으면 `failed`
 - 실패가 하나도 없으면 `success`
@@ -77,7 +77,7 @@ system  hardware  bmc  cpu  memory  storage  network  firmware  users  power  th
 | ESXi | system, hardware, cpu, memory, storage, network (6) |
 | Redfish | hardware, bmc, cpu, memory, storage, network, firmware, power, thermal (9) |
 
-두 가지가 눈에 띌 것이다.
+두 가지가 눈에 띈다.
 
 **Redfish에는 `system`이 없다.** `sections.system`은 `not_supported`로 나온다. 그런데
 `data.system`에는 값이 들어 있다 — 대부분 `null`이고 `fqdn` 정도만 채워진다. 수집
@@ -86,8 +86,8 @@ system  hardware  bmc  cpu  memory  storage  network  firmware  users  power  th
 `sections`를 기준으로 판단하는 편이 안전하다.
 
 **Windows만 `hardware`가 나온다.** 스키마 정의(`schema/sections.yml`)는 `hardware`를
-ESXi·Redfish 전용으로 적어 두었지만, Windows 수집이 이 섹션을 채운다. 정의와 동작이
-어긋난 상태이고, 실제 동작은 위 표대로다.
+ESXi·Redfish 전용으로 적어 두었지만 Windows 수집이 이 섹션을 채운다. 정의와 동작이
+어긋난 상태이고 실제 동작은 위 표대로다.
 
 ## diagnosis — 어디까지 갔는지
 
@@ -124,7 +124,7 @@ ESXi·Redfish 전용으로 적어 두었지만, Windows 수집이 이 섹션을 
 { "section": "memory", "message": "사용자에게 보일 문장", "detail": "기술 근거 또는 null" }
 ```
 
-`message`는 절대 비지 않는다. 화면에 그대로 띄울 수 있는 한국어 문장이고, 포트 번호나
+`message`는 절대 비지 않는다. 화면에 그대로 띄울 수 있는 한국어 문장이고 포트 번호나
 HTTP 상태 같은 내부 사정은 들어가지 않는다. 그런 건 `detail`에 간다.
 
 ## meta
@@ -179,7 +179,7 @@ HTTP 상태 같은 내부 사정은 들어가지 않는다. 그런 건 `detail`�
 
 ## hostname 이 비는 경우
 
-`data.system.hostname` → `data.system.fqdn` → `data.bmc.network_hostname` 순으로 찾고,
+`data.system.hostname` → `data.system.fqdn` → `data.bmc.network_hostname` 순으로 찾고
 셋 다 없으면 `null`이다. **IP로 대체하지 않는다.** 어느 것에서 왔는지는
 `diagnosis.details.hostname_source`에 `system` / `bmc` / `none`으로 적힌다.
 

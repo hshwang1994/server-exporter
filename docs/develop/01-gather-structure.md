@@ -41,7 +41,7 @@ server-exporter 는 한 서버를 3가지 시점으로 본다.
         [ 호출자가 console log 파싱 또는 artifact 로 수령 ]
 ```
 
-핵심: **호출자는 IP 만 넘긴다.** 자격증명은 Ansible vault 에서 자동 로딩되고, 벤더는 BMC 가 보고하는 manufacturer 로 자동 감지된다.
+핵심: **호출자는 IP 만 넘긴다.** 자격증명은 Ansible vault 에서 자동 로딩되고 벤더는 BMC 가 보고하는 manufacturer 로 자동 감지된다.
 
 ---
 
@@ -135,7 +135,7 @@ Linux 는 환경에 따라 두 가지 모드로 동작한다.
 | Python 모드 | Python 3.9+ 설치됨 | setup / shell / command / getent 풀가동 |
 | Raw fallback | Python 미설치 또는 3.8 이하 | `raw` 모듈만 + 컨트롤러에서 Jinja2 파싱 |
 
-`SE_FORCE_LINUX_RAW_FALLBACK=true` 로 강제 raw 모드도 가능 (디버깅용). 6개 섹션 모두 raw 모드로도 수집 가능하며, 출력 JSON 형식은 100% 동일하다.
+`SE_FORCE_LINUX_RAW_FALLBACK=true` 로 강제 raw 모드도 가능 (디버깅용). 6개 섹션 모두 raw 모드로도 수집 가능하며 출력 JSON 형식은 100% 동일하다.
 
 ---
 
@@ -162,16 +162,16 @@ ESXi 는 `community.vmware` 컬렉션 + `pyvmomi` 9.0.0 의존. Agent 환경 설
 
 ## 6. redfish-gather
 
-세 채널 중 가장 단계가 많다. Redfish 는 무인증 ServiceRoot 호출로 벤더를 먼저 알아내고, 그 결과로 자격증명을 동적으로 로드한다.
+세 채널 중 가장 단계가 많다. Redfish 는 무인증 ServiceRoot 호출로 벤더를 먼저 알아내고 그 결과로 자격증명을 동적으로 로드한다.
 
 ```text
 site.yml (Play 1개)
   init_fragments
-  precheck_bundle              → 4단계 진단 (ping → port 443 → /redfish/v1/ → Basic Auth)
+  precheck_bundle              → 진단 (TCP 443 → /redfish/v1/ 응답 확인)
   tasks/detect_vendor.yml      → BMC manufacturer → vendor_aliases.yml 거쳐 정규화
                                  → _rf_detected_vendor = "dell" / "hpe" / ...
   adapter_loader (redfish)     → _selected_adapter = (예) redfish_dell_idrac9
-  tasks/load_vault.yml         → vault/redfish/dell.yml 등 동적 로드
+  tasks/load_vault.yml         → vault/<loc>/redfish/dell.yml 등 동적 로드
   tasks/collect_standard.yml   → 표준 endpoint 호출 (Systems / Chassis / Managers / Storage / ...)
                                  → Storage 실패 시 SimpleStorage 로 fallback
   tasks/normalize_standard.yml → 표준 fragment 생성 → merge
@@ -206,11 +206,11 @@ storage
 
 | 벤더 | 매칭 adapter | vault |
 |---|---|---|
-| Dell | `redfish_dell_idrac9` 외 | `vault/redfish/dell.yml` |
-| HPE | `redfish_hpe_ilo6` 외 | `vault/redfish/hpe.yml` |
-| Lenovo | `redfish_lenovo_xcc` 외 | `vault/redfish/lenovo.yml` |
-| Supermicro | `redfish_supermicro_*` | `vault/redfish/supermicro.yml` |
-| Cisco | `redfish_cisco_cimc` | `vault/redfish/cisco.yml` |
+| Dell | `redfish_dell_idrac9` 외 | `vault/<loc>/redfish/dell.yml` |
+| HPE | `redfish_hpe_ilo6` 외 | `vault/<loc>/redfish/hpe.yml` |
+| Lenovo | `redfish_lenovo_xcc` 외 | `vault/<loc>/redfish/lenovo.yml` |
+| Supermicro | `redfish_supermicro_*` | `vault/<loc>/redfish/supermicro.yml` |
+| Cisco | `redfish_cisco_cimc` | `vault/<loc>/redfish/cisco.yml` |
 
 신규 벤더 (Huawei / Inspur / Fujitsu / Quanta / HPE Superdome) 도 adapter 가 등록되어 있으나 lab 부재로 미검증. 상세는 `docs/reference/live-validation.md`.
 

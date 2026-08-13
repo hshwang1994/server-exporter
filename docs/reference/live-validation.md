@@ -1,15 +1,15 @@
 # Redfish 실장비 API 검증 결과
 
-> **이 문서는** 실제 BMC 장비를 대상으로 Redfish API 호출을 검증한 결과를 누적 기록한 문서다.
-> 새 펌웨어 / 새 모델이 들어왔을 때 "어떤 endpoint 가 응답하는지", "OEM 영역이 어떻게 다른지" 를 비교할 때 참고한다.
+> 이 문서는 실제 BMC 장비를 대상으로 Redfish API 호출을 검증한 결과를 누적 기록한다.
+> 새 펌웨어 / 새 모델이 들어왔을 때 "어떤 endpoint 가 응답하는지", "OEM 영역이 어떻게 다른지" 를 비교하는 데 참고한다.
 >
-> 회귀 검증 단위(Round)별로 결과를 추가하며, 검증 시점의 정확한 펌웨어 버전과 응답 차이를 보존한다.
+> 회귀 검증 단위(Round)별로 결과를 추가하며 검증 시점의 정확한 펌웨어 버전과 응답 차이를 보존한다.
 > 펌웨어 업그레이드 후 응답이 달라지면 이 문서가 비교 기준이 된다.
 
 > 검증일: 2026-03-18 | 검증 방식: 직접 HTTPS 호출 (curl/Python urllib)
 
 > [!NOTE]
-> 이 문서를 읽는 법: 1~14절은 2026-03-18 3대 실장비 검증 스냅샷이다. 그 안의 "수정 필요" 표시는 검증 시점 기준이며, 이후 cycle 에서 해결된 항목이 있다 (해결 내역은 `docs/reference/decision-log.md`).
+> 이 문서를 읽는 법: 1~14절은 2026-03-18 3대 실장비 검증 스냅샷이다. 그 안의 "수정 필요" 표시는 검증 시점 기준이며 이후 cycle 에서 해결된 항목이 있다 (해결 내역은 `docs/reference/decision-log.md`).
 > 15~16절은 이후 lab 부재(web sources) 호환성 cycle 기록이다. 현재 adapter/vendor 전체 목록은 `adapters/redfish/` 디렉터리와 `docs/reference/compatibility-matrix.md` 를 본다.
 
 ## 1. 대상 장비
@@ -291,7 +291,7 @@ detect_vendor → gather_system → gather_bmc → gather_processors →
 gather_memory → gather_storage → gather_network → gather_firmware → gather_power
 ```
 
-**검증 결과**: detect_vendor() 단계에서 system_uri와 manager_uri를 함께 확보하므로, 이후 수집 단계의 중복 조회를 줄일 수 있다.
+**검증 결과**: detect_vendor() 단계에서 system_uri와 manager_uri를 함께 확보하므로 이후 수집 단계의 중복 조회를 줄일 수 있다.
 
 **개선 제안**: gather_power()가 ServiceRoot를 다시 조회하여 Chassis URI를 얻는데, detect_vendor에서 이미
 ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출 1회 절약 가능.
@@ -357,7 +357,7 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 
 ## 13. Payload 심층 분석 — 벤더 간 차이점 10건
 
-실장비 JSON fixture 심층 비교에서 발견된 정규화 코드에 직접 영향을 주는 차이점:
+실장비 JSON fixture 심층 비교에서 발견한 차이점 중 정규화 코드에 직접 영향을 주는 항목:
 
 | # | 항목 | Lenovo | HPE | Dell | 코드 영향 |
 |---|------|--------|-----|------|----------|

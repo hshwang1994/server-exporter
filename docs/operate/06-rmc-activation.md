@@ -25,7 +25,7 @@ HPE community 게시물 ([7200359 "impossible to get redfish answer from superdo
 
 ## 3. server-exporter 자동 진단
 
-`adapter.vendor_notes.manager_layout` 가 `rmc_primary` 또는 `rmc_primary_ilo_secondary` 인 vendor 에 대해 다음 진단 메타가 envelope 에 자동 노출:
+`adapter.vendor_notes.manager_layout` 가 `rmc_primary` 또는 `rmc_primary_ilo_secondary` 인 vendor 에는 다음 진단 메타가 envelope 에 자동 노출:
 
 ```json
 {
@@ -67,7 +67,7 @@ CSUS 3200 / Superdome Flex RMC Redfish API 는 일부 펌웨어 / 라이선스 �
 
 ### 4.2 RMC Web GUI 로 활성화
 
-기본적으로 RMC 는 표준 Redfish API host 로 동작하지만, 일부 환경에서 명시 enable 필요:
+기본적으로 RMC 는 표준 Redfish API host 로 동작하지만 일부 환경에서 명시 enable 필요:
 
 1. RMC Web GUI 로그인 (`https://<rmc-ip>/`)
 2. **System Management** → **Network Services** → **Redfish API** 활성화 확인
@@ -106,7 +106,7 @@ curl -k -s -u <user>:<password> https://<rmc-ip>/redfish/v1/Chassis
 
 | 증상 | 의심 원인 | 진단 |
 |---|---|---|
-| ServiceRoot 401 | 자격증명 오류 / role 부족 | vault/redfish/hpe.yml 점검 |
+| ServiceRoot 401 | 자격증명 오류 / role 부족 | vault/<loc>/redfish/hpe.yml 점검 |
 | ServiceRoot 404 | RMC Redfish API 비활성 | 4.2 Web GUI 확인 |
 | ServiceRoot timeout | 방화벽 / TCP 443 차단 | precheck phase port 검토 |
 | Managers Members 1개만 (RMC 누락) | RMC role / namespace 권한 부족 | RMC role 권한 격상 |

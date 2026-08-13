@@ -111,7 +111,7 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 
 | 키 | 무슨 값 | 의미 |
 |---|---|---|
-| `diagnosis` | 객체 | precheck 4단계 (ping → port → protocol → auth) 결과. 어디서 막혔는지 |
+| `diagnosis` | 객체 | precheck 진단(TCP 도달 → 프로토콜 → 인증) 결과. 어디서 막혔는지 |
 | `meta` | 객체 | 시작/종료 시각, 소요 시간, 사용된 adapter ID |
 | `errors` | 배열 | 수집 중 발생한 오류 목록. 정상이면 `[]` |
 | `correlation` | 객체 | 시리얼 / UUID / IP — 다른 시스템 데이터와 묶을 때 쓰는 키들 |

@@ -165,8 +165,8 @@ GitLab 레포지토리 checkout 에 사용하는 계정.
 
 ### server-gather-vault-password (vault 복호화용)
 
-저장소의 `vault/*.yml` 파일들은 ansible-vault 로 암호화된 상태로 commit 됩니다.
-Jenkins 가 ansible-playbook 을 실행할 때 이 credential 로 vault 를 복호화합니다.
+저장소의 `vault/*.yml` 파일들은 ansible-vault 로 암호화된 상태로 commit 된다.
+Jenkins 가 ansible-playbook 을 실행할 때 이 credential 로 vault 를 복호화한다.
 
 | 항목 | 값 |
 |------|----|
@@ -177,16 +177,16 @@ Jenkins 가 ansible-playbook 을 실행할 때 이 credential 로 vault 를 복�
 **등록 절차**
 
 1. 운영자가 vault 마스터 패스워드를 결정한다.
-2. 로컬 작업자 PC 에서 그 패스워드를 한 줄짜리 `.vault_pass` 파일로 두고 `bash scripts/bootstrap_vault_encrypt.sh` 로 `vault/*.yml` 을 일괄 encrypt 후 commit 한다.
+2. 로컬 작업자 PC 에서 그 패스워드를 한 줄짜리 `.vault_pass` 파일로 둔다. `bash scripts/bootstrap_vault_encrypt.sh` 로 `vault/*.yml` 을 일괄 encrypt 한 뒤 commit 한다.
 3. 같은 패스워드 문자열을 Jenkins credentials store 에 **Secret text** 로 등록한다 (ID `server-gather-vault-password`).
-4. `.vault_pass` 는 `.gitignore` 에 의해 절대 commit 되지 않는다 — 로컬 작업자 PC 에만 둔다.
+4. `.vault_pass` 는 `.gitignore` 에 걸려 절대 commit 되지 않는다 — 로컬 작업자 PC 에만 둔다.
 
 **Jenkins 빌드 동작**
 
 `withCredentials([string(credentialsId: 'server-gather-vault-password', variable: 'VAULT_PASSWORD')])`
 가 `$VAULT_PASSWORD` 를 주입한다. Pipeline 이 그 값을 임시 파일(`.vault_pass_tmp`, chmod 600)에 써서
 `--vault-password-file` 로 ansible-playbook 에 넘기고, 빌드 종료 시 임시 파일을 삭제한다.
-패스워드 값은 콘솔 로그에 자동 마스킹됩니다.
+패스워드 값은 콘솔 로그에 자동 마스킹된다.
 
 **검증 (로컬)**
 
@@ -198,20 +198,20 @@ ansible-playbook --vault-password-file=.vault_pass redfish-gather/site.yml -i ..
 **[CRIT] 본 credential 미등록 시 발생하는 오류**
 
 이 credential 이 Jenkins 에 등록되지 않은 상태에서 빌드를 실행하면
-다음 오류로 빌드가 즉시 실패합니다.
+다음 오류로 빌드가 즉시 실패한다.
 
 ```text
 Could not find credentials entry with ID 'server-gather-vault-password'
 ```
 
-새 Jenkins 환경 초기 셋업 시 본 절차를 가장 먼저 수행하세요.
+새 Jenkins 환경 초기 셋업 시 본 절차를 가장 먼저 수행한다.
 
 ---
 
 ## 8. RBAC 권한 설정
 
-Role Strategy Plugin 으로 Job 단위 접근 권한을 제어합니다.
-Job 이름이 패턴과 일치하면 권한이 자동 적용되므로, 신규 Job 추가 시 별도 권한 설정이 필요 없습니다.
+Role Strategy Plugin 으로 Job 단위 접근 권한을 제어한다.
+Job 이름이 패턴과 일치하면 권한이 자동 적용되므로 신규 Job 추가 시 별도 권한 설정이 필요 없다.
 
 ### RBAC 가 하는 일 (한 줄 요약)
 

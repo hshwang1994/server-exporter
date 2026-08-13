@@ -139,7 +139,7 @@ def test_collection_method_matches_target_type(baseline_envelope: dict) -> None:
 # 2026-06-16 (사용자 지시): hostname IP fallback 폐지 — "없는 건 없는 것".
 # 장비가 hostname 미제공 시 hostname=null (이전 cycle 2026-05-07 의 ip fallback 폐지).
 # 따라서 hostname 은 null 일 수 있고, ip 와 같은 값이면 옛 fallback 잔재(정책 위반)다.
-# 정본: common/tasks/normalize/build_output.yml:31-33 / docs/20 §8.
+# 정본: common/tasks/normalize/build_output.yml:31-33 / `docs/contract/03-fields.md` §8.
 
 
 def test_hostname_not_ip_fallback(baseline_envelope: dict) -> None:
@@ -250,7 +250,7 @@ def test_diagnosis_is_dict(baseline_envelope: dict) -> None:
 
 def test_diagnosis_has_4stage_keys(baseline_envelope: dict) -> None:
     """precheck 4-stage keys must be present in success path
-    (rule 27 — ping → port → protocol → auth)."""
+    (rule 27 — TCP 도달 → 프로토콜 → 인증)."""
     label = baseline_envelope["__label"]
     diagnosis = baseline_envelope.get("diagnosis", {})
     for key in ("reachable", "port_open", "protocol_supported", "auth_success"):

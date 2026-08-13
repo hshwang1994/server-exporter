@@ -84,7 +84,7 @@ def test_trivial_vendor_defaults_are_not_in_the_table():
     """`admin` / `password` 같은 공개 기본값을 넣으면 가드가 무의미해진다.
 
     이 저장소에서 각각 627 / 433 개 파일에 등장한다 — 넣는 순간 모든 산출물이
-    '누출' 로 잡혀 가드를 꺼 버리게 된다. 공개 기본값은 docs/21 의 벤더 표로 관리한다.
+    '누출' 로 잡혀 가드를 꺼 버리게 된다. 공개 기본값은 `docs/operate/05-vault.md` 의 벤더 표로 관리한다.
     """
     for trivial in ("admin", "ADMIN", "password", "Password", "root",
                     "calvin", "Admin@9000", "USERID"):

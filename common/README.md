@@ -7,7 +7,7 @@
 ```text
 common/
 ├── library/                    # Python 모듈 (Ansible custom modules)
-│   └── precheck_bundle.py     # 4단계 진단 (ping → port → protocol → auth)
+│   └── precheck_bundle.py     # 진단 (TCP 도달 → 프로토콜 → 인증)
 ├── tasks/
 │   ├── precheck/
 │   │   └── run_precheck.yml   # precheck_bundle 호출 + diagnosis 생성

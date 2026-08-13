@@ -16,7 +16,7 @@
            그 포트의 port_type 이 Ethernet 이면 안 된다.        ← 2026-08-03 사고를 잡는 가드
     INV-2  hbas[] 항목의 port_type 은 FC 계열(FibreChannel/FCoE/iSCSI)이어야 한다.
     INV-3  infiniband[] 항목이 매핑된 포트는 InfiniBand 여야 한다.
-    INV-4  ports[].port_type 은 문서화된 enum 안이어야 한다 (docs/20 §6.3.1).
+    INV-4  ports[].port_type 은 문서화된 enum 안이어야 한다 (`docs/contract/03-fields.md` §6.3.1).
 
 적용 대상:
     (a) recording.json 을 가진 **모든** replay fixture — 실장비 미러 4종(Dell iDRAC9 / HPE DL380
@@ -38,7 +38,7 @@ REPO = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO / "tests" / "fixtures" / "redfish"
 BASELINE_ROOT = REPO / "schema" / "baseline_v1"
 
-# docs/20 §6.3.1 — 분류 결과 enum. None/빈값은 '미분류'로 허용(구 펌웨어 raw 보존 경로).
+# `docs/contract/03-fields.md` §6.3.1 — 분류 결과 enum. None/빈값은 '미분류'로 허용(구 펌웨어 raw 보존 경로).
 PORT_TYPE_ENUM = {"FibreChannel", "FCoE", "iSCSI", "InfiniBand", "Ethernet"}
 FC_LIKE = {"FibreChannel", "FCoE", "iSCSI"}
 

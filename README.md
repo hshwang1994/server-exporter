@@ -1,7 +1,7 @@
 # server-exporter — 서버 정보 수집 파이프라인
 
 > **한 줄 요약**
-> 호출자가 IP만 알려주면, 이 파이프라인이 OS / VMware ESXi / 서버 BMC 세 경로 중 하나로 접근해 표준 JSON 으로 정보를 돌려준다.
+> 호출자가 IP만 알려주면 이 파이프라인이 OS / VMware ESXi / 서버 BMC 세 경로 중 하나로 접근해 표준 JSON 으로 정보를 돌려준다.
 
 > 검증 기준 환경 및 최소 요구사항은 [REQUIREMENTS.md](REQUIREMENTS.md) 참조.
 
@@ -51,10 +51,10 @@ Jenkins Job (server-exporter.{os,esxi,redfish}-gather)
 server-exporter 는 다음 3가지를 호출자에게 약속한다.
 
 1. **호출자는 IP 만 보낸다.** 자격증명 / 호스트명 / 벤더 정보는 호출자 책임이 아니다.
-   계정은 vault 에 보관되고, OS 종류와 BMC 제조사(Manufacturer) 는 파이프라인이 자동으로 감지한다.
+   계정은 vault 에 보관되고 OS 종류와 BMC 제조사(Manufacturer) 는 파이프라인이 자동으로 감지한다.
 
 2. **응답 형식은 어떤 상황에도 동일하다.** 네트워크 단절 / 인증 실패 / 일부 섹션 실패 같은
-   모든 실패 상황에서도 `schema_version: "1"` 을 가진 같은 envelope 가 반환된다.
+   모든 실패 상황에서도 `schema_version: "1"` 이 붙은 같은 envelope 가 반환된다.
    호출자는 envelope 의 `status` 와 `errors` 만 보고 처리하면 된다.
 
 3. **새 벤더 / 새 세대 추가는 코드 수정 없이 가능하다.** Adapter YAML 1~3개 추가만으로 끝난다.
@@ -105,7 +105,7 @@ server-exporter/
 - **gather 채널 분리** — Linux 이슈가 ESXi 수집에 영향을 주지 않게 한다.
 - **common 분리** — 3 채널이 같은 JSON 을 만들도록 정규화 로직을 한 곳에 둔다.
 - **adapters 분리** — 벤더 변경이 gather 코드에 침입하지 않게 한다.
-- **schema 분리** — 호출자 계약(필드 의미)이 코드와 독립적으로 보존된다.
+- **schema 분리** — 호출자 계약(필드 의미)을 코드와 독립적으로 보존한다.
 
 ---
 
@@ -132,7 +132,7 @@ server-exporter/
 
 ## 표준 응답 (Output)
 
-호출자는 다음 13 필드의 JSON envelope 를 받는다. 어떤 채널이든, 어떤 결과든 형식은 같다.
+호출자는 다음 13 필드의 JSON envelope 를 받는다. 어떤 채널이든 어떤 결과든 형식은 같다.
 
 ```jsonc
 {

@@ -50,7 +50,7 @@ RBAC Pattern 과 일치해야 권한이 자동 적용된다.
 | `{프로젝트명}.esxi-gather` | `Jenkinsfile` | `esxi` |
 | `{프로젝트명}.redfish-gather` | `Jenkinsfile` | `redfish` |
 
-> Script Path 는 모두 `Jenkinsfile` 이다. 각 gather 디렉토리에는 별도 Jenkinsfile 이 없다.
+> Script Path 는 모두 `Jenkinsfile` 이다. 각 gather 디렉토리에는 별도 `Jenkinsfile` 이 없다.
 
 ### 인프라 자동화 Script Path (참고)
 

@@ -1,6 +1,6 @@
 # 16. OS / ESXi raw → normalize → output 매핑 표
 
-> **이 문서는** OS (Linux / Windows) 와 ESXi 채널에서 원본(raw) 데이터가 표준 JSON 의 어느 필드로 들어가는지를 한 줄씩 매핑한 참조표다.
+> 이 문서는 OS (Linux / Windows) 와 ESXi 채널에서 원본(raw) 데이터가 표준 JSON 의 어느 필드로 들어가는지를 한 줄씩 매핑한 참조표다.
 >
 > 새 필드를 추가하거나, 어떤 raw 소스가 어떤 output 필드를 만드는지 추적할 때 이 표를 검색한다.
 > "어떤 ansible facts / shell 명령 / WMI 쿼리 결과가 무엇으로 변환되는지" 가 한눈에 보인다.
@@ -160,7 +160,7 @@
 
 # Linux 수집 상세
 
-아래는 Linux 채널이 각 값을 어디서 어떻게 얻는지에 대한 상세다. Python 경로와 raw
+아래는 Linux 채널이 각 값을 어디서 어떻게 얻는지 정리한 상세다. Python 경로와 raw
 경로가 같은 필드를 서로 다른 소스에서 만들기 때문에, 값이 어긋날 때 어느 쪽을 보고
 있는지 아는 게 중요하다.
 
@@ -179,7 +179,7 @@
 | Python 경로 | `ansible_default_ipv4.interface` = primary |
 | Raw 경로 | `ip route show default \| head -1`의 `dev` 필드 = primary (lowest metric wins) |
 
-양쪽 모두 **"IPv4 default route가 걸린 인터페이스 = primary"** 원칙이다.
+양쪽 모두 "IPv4 default route가 걸린 인터페이스 = primary" 원칙이다.
 
 - **bond master**에 default route가 걸리면 bond master가 primary
 - **bridge**에 default route가 걸리면 bridge가 primary
@@ -250,23 +250,23 @@
 
 | 명령/소스 | 패키지 | RHEL 8 | RHEL 9 | Rocky 9 | Ubuntu 24 | SLES 15 | gather 사용 | fallback |
 |-----------|--------|--------|--------|---------|-----------|---------|------------|---------|
-| `ip` | iproute | ✅ | ✅ | ✅ | ✅ | ✅ | 핵심 (addr/route/link) | 없음 — 필수 |
-| `getent` | glibc-common | ✅ | ✅ | ✅ | ✅ | ✅ | users 수집 | 없음 — 필수 |
-| `lsblk` | util-linux | ✅ | ✅ | ✅ | ✅ | ✅ | storage 물리디스크 | 빈 배열 반환 |
-| `df` | coreutils | ✅ | ✅ | ✅ | ✅ | ✅ | storage 파일시스템 | 빈 배열 반환 |
-| `getenforce` | libselinux-utils | ✅ | ✅ | ✅ | ❌ | ❌ | system.selinux | null |
-| `lastlog` | shadow-utils/login | ✅ | ✅ | ✅ | ✅ | ✅ | users.last_access_time | last → utmpdump |
-| `utmpdump` | util-linux | ✅ | ✅ | ✅ | ✅ | ✅ | users 3차 fallback | null |
-| `systemd-detect-virt` | systemd | ✅ | ✅ | ✅ | ✅ | ✅ | system.hosting_type | unknown |
-| `dmidecode` | dmidecode | ✅ | ✅ | ✅ | ✅ | ✅ | memory, serial/uuid | 권한 의존 |
-| `resolvectl` | systemd-resolved | ✅(8) | ❌(9) | ❌ | ✅ | ❌ | 미사용 (참고용) | — |
-| `nmcli` | NetworkManager | ✅ | ✅ | ✅ | ❌ | ❌ | 미사용 | — |
-| `networkctl` | systemd | ❌ | ❌ | ❌ | ✅ | ❌ | 미사용 | — |
-| `/sys/class/net/*` | kernel sysfs | ✅ | ✅ | ✅ | ✅ | ✅ | network 핵심 (mac/mtu/speed/state/master) | — |
-| `/proc/cpuinfo` | kernel | ✅ | ✅ | ✅ | ✅ | ✅ | cpu 수집 | — |
-| `/proc/meminfo` | kernel | ✅ | ✅ | ✅ | ✅ | ✅ | memory 수집 | — |
-| `/etc/os-release` | filesystem | ✅ | ✅ | ✅ | ✅ | ✅ | system 수집 | — |
-| `/etc/resolv.conf` | filesystem | ✅ | ✅ | ✅ | ✅ | ✅ | dns_servers | — |
+| `ip` | iproute | [OK] | [OK] | [OK] | [OK] | [OK] | 핵심 (addr/route/link) | 없음 — 필수 |
+| `getent` | glibc-common | [OK] | [OK] | [OK] | [OK] | [OK] | users 수집 | 없음 — 필수 |
+| `lsblk` | util-linux | [OK] | [OK] | [OK] | [OK] | [OK] | storage 물리디스크 | 빈 배열 반환 |
+| `df` | coreutils | [OK] | [OK] | [OK] | [OK] | [OK] | storage 파일시스템 | 빈 배열 반환 |
+| `getenforce` | libselinux-utils | [OK] | [OK] | [OK] | [NG] | [NG] | system.selinux | null |
+| `lastlog` | shadow-utils/login | [OK] | [OK] | [OK] | [OK] | [OK] | users.last_access_time | last → utmpdump |
+| `utmpdump` | util-linux | [OK] | [OK] | [OK] | [OK] | [OK] | users 3차 fallback | null |
+| `systemd-detect-virt` | systemd | [OK] | [OK] | [OK] | [OK] | [OK] | system.hosting_type | unknown |
+| `dmidecode` | dmidecode | [OK] | [OK] | [OK] | [OK] | [OK] | memory, serial/uuid | 권한 의존 |
+| `resolvectl` | systemd-resolved | [OK](8) | [NG](9) | [NG] | [OK] | [NG] | 미사용 (참고용) | — |
+| `nmcli` | NetworkManager | [OK] | [OK] | [OK] | [NG] | [NG] | 미사용 | — |
+| `networkctl` | systemd | [NG] | [NG] | [NG] | [OK] | [NG] | 미사용 | — |
+| `/sys/class/net/*` | kernel sysfs | [OK] | [OK] | [OK] | [OK] | [OK] | network 핵심 (mac/mtu/speed/state/master) | — |
+| `/proc/cpuinfo` | kernel | [OK] | [OK] | [OK] | [OK] | [OK] | cpu 수집 | — |
+| `/proc/meminfo` | kernel | [OK] | [OK] | [OK] | [OK] | [OK] | memory 수집 | — |
+| `/etc/os-release` | filesystem | [OK] | [OK] | [OK] | [OK] | [OK] | system 수집 | — |
+| `/etc/resolv.conf` | filesystem | [OK] | [OK] | [OK] | [OK] | [OK] | dns_servers | — |
 
 - SLES 15 값은 공식 문서 기준 예측 (실증 미완)
 - `ip`, `getent`, `/sys/class/net`, `/proc/*`, `/etc/os-release`는 모든 배포판에서 보장

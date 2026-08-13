@@ -1,7 +1,7 @@
 # 25. 운영망 Redfish 전수 캡처 런북 (1회 반입용)
 
-> **언제 쓰나**: 실 BMC/RMC(특히 HPE CSUS 3200 / Superdome RMC)가 운영망에만 있고, 그
-> 망은 접근이 제한돼 **딱 한 번만** 데이터를 빼올 수 있을 때. 인터넷망에는 장비가 없으니,
+> **언제 쓰나**: 실 BMC/RMC(특히 HPE CSUS 3200 / Superdome RMC)가 운영망에만 있고 그
+> 망은 접근이 제한돼 **딱 한 번만** 데이터를 빼올 수 있을 때. 인터넷망에는 장비가 없으니
 > 여기서 만든 캡처 도구를 운영망에 반입 → 전 트리 raw 를 뽑아 반출 → 다시 인터넷망에서
 > AI 로 개더링 코드를 완성한다.
 
@@ -84,7 +84,7 @@ python redfish_full_mirror.py -r <RMC_IP[:443]> -u <admin> -p <pw> -D csus_rmc_<
 > **알려진 미완(실 캡처 후 마무리 대상):** CSUS OEM 추출(`Oem.Hpe.PartitionInfo` /
 > `FlexNodeInfo` / `GlobalConfiguration`)은 현재 `redfish-gather/tasks/vendors/hpe/collect_oem.yml`
 > 에만 있고 가드(`_rf_raw_collect.systems`)가 모듈 미emit 키라 **라이브에서도 안 돈다**
-> (NEXT_ACTIONS C7 / Round 16~17). 캡처한 raw 에는 이 필드들이 들어 있으므로, 실 데이터로
+> (NEXT_ACTIONS C7 / Round 16~17). 캡처한 raw 에는 이 필드들이 들어 있으므로 실 데이터로
 > Python 추출 경로를 마저 구현하는 것이 다음 단계다.
 
 ## 한계 (read-only 스냅샷의 본질)
