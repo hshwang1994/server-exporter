@@ -23,6 +23,11 @@ pipeline {
             description : '포털 개발환경 ID'
         )
         string(
+            name        : 'eventUuid',
+            defaultValue: '',
+            description : '포털 이벤트 UUID (결과 Callback body 에 그대로 반환)'
+        )
+        string(
             name        : 'callbackUrl',
             defaultValue: '',
             description : '결과 전달 Callback URL (예: http://portal.example.com)'
@@ -46,17 +51,6 @@ pipeline {
 
     stages {
 
-        // -- 0. Resolve Location [Controller] ----------------------------------
-        // 2026-08-12: Location 을 Credential 선택축으로 쓰기 시작하면서 신설.
-        //
-        // 왜 controller 에서, 왜 맨 앞인가:
-        //   종전에는 첫 stage 의 agent 자체가 `label "${params.loc}"` 이라, loc 이 오타면
-        //   **검증 코드가 실행되기도 전에** 노드 할당 단계에서 멈춰 대기했다. 원인도 안 보였다.
-        //   registry 를 controller 에서 먼저 읽어 미등록 Location 을 즉시 실패시킨다.
-        //
-        //   Location 목록은 common/vars/locations.yml 하나뿐이다 (Jenkins 설정에 복제하지
-        //   않는다 — 두 정본이 되면 drift 가 생긴다). 그래서 이 stage 는 SCM checkout 이
-        //   필요하고, skipDefaultCheckout 을 두지 않는다.
         stage('Resolve Location') {
             agent { label 'built-in' }
             options { timeout(time: 2, unit: 'MINUTES') }
@@ -86,7 +80,6 @@ pipeline {
             post { always { deleteDir() } }
         }
 
-        // -- 1. Validate [Agent] -----------------------------------------------
         stage('Validate') {
             agent {
                 node {
@@ -96,7 +89,6 @@ pipeline {
             }
             options {
                 timeout(time: 2, unit: 'MINUTES')
-                // Validate 는 repo 파일을 안 읽음(파라미터 검증만) → SCM checkout 생략 (빌드당 GitLab clone 1회 절약)
                 skipDefaultCheckout(true)
             }
             steps {
@@ -154,7 +146,6 @@ pipeline {
             }
         }
 
-        // -- 2. Gather [Agent] -------------------------------------------------
         stage('Gather') {
             agent {
                 node {
@@ -162,7 +153,6 @@ pipeline {
                     customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }
-            // Gather 는 site.yml / inventory.sh / ansible.cfg 등 repo 파일을 사용 → 기본 SCM checkout 유지
             options { timeout(time: 60, unit: 'MINUTES') }
             environment {
                 REPO_ROOT                = "${WORKSPACE}"
@@ -170,11 +160,6 @@ pipeline {
                 ANSIBLE_JSON_OUTPUT_FILE = "${WORKSPACE}/gather_output.json"
                 ANSIBLE_VERBOSITY        = "${params.verbosity}"
             }
-            // se_location 은 extra-vars 로 넘긴다 (환경변수 아님).
-            //   환경변수는 미설정 시 lookup('env',...) 가 조용히 '' 를 돌려주는데,
-            //   Credential 범위를 정하는 값이 조용히 빈 문자열이 되면 잘못된(또는 없는)
-            //   vault 를 가리킨다. extra-vars 는 Ansible 변수 우선순위 최상위라
-            //   play/role 기본값에 가려지지도 않고, 콘솔 명령줄에 남아 감사도 된다.
             steps {
                 script {
                     def playbookMap = [
@@ -195,11 +180,6 @@ pipeline {
                     sh "rm -f \"${env.WORKSPACE}/gather_output.json\""
 
                     catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                        // vault 복호화 패스워드: Jenkins Credentials Store 의 Secret text
-                        //   'server-gather-vault-password' (메인 Jenkinsfile 과 동일 credential, docs/01 §7).
-                        //   withCredentials 가 $VAULT_PASSWORD 주입(콘솔 마스킹) → 런타임 임시파일(mktemp,
-                        //   chmod 600)에 써서 ansible-vault 복호화. trap 으로 빌드 종료 시 임시파일 삭제.
-                        //   Secret text 방식 — Secret File trailing newline 문제 회피.
                         withCredentials([
                             string(
                                 credentialsId: 'server-gather-vault-password',
@@ -221,8 +201,6 @@ pipeline {
                         }
                     }
 
-                    // Gather 완전 실패(출력 0건)면 Callback 까지 가지 말고 여기서 원인 노출.
-                    //   부분 수집(일부 호스트만 성공)은 파일에 내용이 있어 통과 → 기존 graceful 유지.
                     def gatherOut = "${env.WORKSPACE}/gather_output.json"
                     if (!fileExists(gatherOut) || readFile(gatherOut).length() == 0) {
                         error "[Gather] gather_output.json 미생성/0바이트 — ansible-playbook 완전 실패 또는 출력 경로 오류"
@@ -242,7 +220,6 @@ pipeline {
             }
         }
 
-        // -- 3. Validate Schema [Agent] ----------------------------------------
         stage('Validate Schema') {
             agent {
                 node {
@@ -250,7 +227,6 @@ pipeline {
                     customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }
-            // Validate Schema 는 tests/validate_field_dictionary.py 등 repo 파일을 사용 → 기본 SCM checkout 유지
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
                 sh '''#!/bin/bash
@@ -267,11 +243,9 @@ pipeline {
             }
         }
 
-        // -- 4. Callback [Master] ----------------------------------------------
         stage('Callback') {
             agent { label 'built-in' }
             options {
-                // Callback 은 master 노드에서 stash 결과만 사용, repo 파일 안 읽음 → SCM checkout 생략
                 skipDefaultCheckout(true)
                 timeout(time: 15, unit: 'MINUTES')
             }
@@ -313,16 +287,12 @@ pipeline {
                     def callbackBody = '{'  +
                         '"loc":"'                        + params.loc.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('\n', '\\\\n').replaceAll('\r', '\\\\r').replaceAll('\t', '\\\\t')                        + '",' +
                         '"deploymentEnvironmentId":"'   + params.deploymentEnvironmentId.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('\n', '\\\\n').replaceAll('\r', '\\\\r').replaceAll('\t', '\\\\t')   + '",' +
+                        '"eventUuid":"'                 + (params.eventUuid ?: '').replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('\n', '\\\\n').replaceAll('\r', '\\\\r').replaceAll('\t', '\\\\t')   + '",' +
                         '"gatherInfoJson":['             + gatherArray                                               + ']'  +
                     '}'
 
                     echo "[Callback] body ${callbackBody.length()} bytes, hosts=${rawJsonLines.size()}"
 
-                    // HTTP Request 플러그인(httpRequest 스텝)으로 POST — curl/셸 미사용.
-                    //   - 셸을 거치지 않으므로 callbackEndpoint shell 주입 위험 제거 (Validate 입력 차단과 이중 방어 유지).
-                    //   - validResponseCodes:'100:599' → 비-2xx 에도 예외 미발생, status 직접 판정 (graceful, rule 31 R2).
-                    //   - ignoreSslErrors 미설정 → SSL 검증 유지 (curl -k 미사용과 동일).
-                    //   - 재시도 3회 + backoff(attempt*10s), 최종 실패 시 unstable 은 기존 curl 동작 그대로 보존.
                     def maxRetries = 3
                     def success = false
                     def lastError = ''
@@ -378,7 +348,6 @@ pipeline {
         }
     }
 
-    // -- Post Actions ----------------------------------------------------------
     post {
         always {
             echo "[Post] ======================================================="
