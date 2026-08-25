@@ -19,7 +19,7 @@
 
 - name: "esxi-gather"
   hosts: all
-  gather_facts: no
+  gather_facts: false
   connection: local
   # 2026-04-30 perf: dead-host 다수 inventory에서 host별 독립 진행 (linear 시 stuck host가 wave 막음)
   strategy: free

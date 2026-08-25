@@ -24,7 +24,7 @@
 
 - name: "os-gather | detect"
   hosts: all
-  gather_facts: no
+  gather_facts: false
   connection: local
   # 주의: PLAY 1은 add_host (run_once + loop) 사용으로 strategy: free 불가 (#23 빌드 실패)
   # connection: local + 짧은 포트 probe라 linear여도 wave 막힘 영향 작음. perf는 _probe_timeout 단축으로 대응.
@@ -141,7 +141,7 @@
 
 - name: "os-gather | failed-output"
   hosts: _os_failed
-  gather_facts: no
+  gather_facts: false
   connection: local
   strategy: free
 
@@ -209,8 +209,8 @@
 
 - name: "os-gather | linux"
   hosts: _os_linux
-  gather_facts: no
-  become: no
+  gather_facts: false
+  become: false
   # 2026-04-30 perf: stuck host (SSH connect timeout) 가 wave 막지 않도록 host별 독립 진행
   strategy: free
 
@@ -502,7 +502,7 @@
 
 - name: "os-gather | windows"
   hosts: _os_windows
-  gather_facts: no
+  gather_facts: false
   # 2026-04-30 perf: stuck host (WinRM read/op timeout) 가 wave 막지 않도록 host별 독립 진행
   strategy: free
 
