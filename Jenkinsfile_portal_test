@@ -23,12 +23,12 @@ pipeline {
             defaultValue: '',
             description : '포털 개발환경 ID'
         )
-        choice(
+        text(
             name        : 'install_os_type',
             defaultValue: '',
             description : 'install_os_type'
         )
-        choice(
+        text(
             name        : 'os_image',
             defaultValue: '',
             description : 'os_image'
