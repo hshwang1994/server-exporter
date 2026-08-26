@@ -1,5 +1,29 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-08-27 — OS 채널 CSUS 3200 nPartition 시리얼 접미사 정규화 회귀
+
+| 항목 | 결과 |
+|---|---|
+| `pytest tests/unit` | **2131 passed**, 1 skipped (종전 2130 → +1 파일 79건 중 기존 중복 제외) |
+| 신규 테스트 파일 | `tests/unit/test_csus_partition_serial.py` — **79 passed** |
+| `pytest tests/regression` | 169 passed, 7 xfailed |
+| `pytest tests/e2e` | 558 passed, 28 skipped |
+| `pytest tests/integration -m "not live"` | 243 passed, 3 skipped |
+| Jinja 렌더 회귀 | 신규 task 3종을 `NativeEnvironment`(= `jinja2_native=True` 등가)로 렌더해 **값 + 타입** 확인. 비-CSUS 입력은 변경 전후 결과가 전부 동일 (숫자 시리얼의 int 변환은 `resolve identifiers` 단계에서 이미 발생하는 기존 동작) |
+| `output_schema_drift_check` / `envelope_change_check` / `pre_commit_additive_only_check` | 전부 exit 0 (envelope 13 필드 무변경) |
+| `pre_commit_jinja_compile_check` / `pre_commit_jinja_namespace_check` / `pre_commit_regex_search_conditional_check` / `pre_commit_fragment_skeleton_sync` / `pre_commit_harness_drift` | 전부 exit 0 |
+| `verify_harness_consistency` | exit 0 |
+| `verify_vendor_boundary` | exit 2 — **기준선과 동일**. 2건 모두 `redfish-gather/library/redfish_gather.py`(iLO / XCC)로 이번 변경 이전부터 존재. os-gather 신규 위반 0건 (stash 대조 확인) |
+| `validate_field_dictionary.py` | RESULT: PASS (8/8, 실패 0) |
+| YAML parse / `py_compile` | 변경 YAML 3종 + `serial_normalizer.py` 전부 OK |
+| `ansible-playbook --syntax-check` | **미실행 — 환경 제약** (Windows 세션에 ansible 미설치). YAML parse + 저장소 전수 Jinja compile 회귀(`test_section_message_contract`)로 대체 |
+| **실장비** | **미실행** — CSUS 3200 lab 부재. OS 측 DMI 표기 실측이 후속 (NEXT_ACTIONS CSUS-OS-1) |
+
+목데이터 근거: `tests/fixtures/redfish/real_hpe_csus3200/recording.json`
+(`Systems/Partition0.SerialNumber="SGHD3TLNDD-000"` / `Chassis/r001u01` =
+`HPE` + `"Compute Scale-up Server 3200, 4S XNC Base Chassis"` + `"SGHD3TLNDD"`)
+→ 정규화 결과가 물리 Chassis 시리얼과 일치함을 테스트가 직접 대조한다.
+
 ## 2026-08-14 — Location ID `ich` → `ic` 개명 회귀
 
 | 항목 | 결과 |

@@ -1,5 +1,15 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## OS 채널 CSUS 3200 시리얼 정규화 후속 (2026-08-27)
+
+> 정본: `filter_plugins/serial_normalizer.py`, `tests/unit/test_csus_partition_serial.py`
+
+| # | 항목 | 상태 | 내용 |
+|---|---|---|---|
+| CSUS-OS-1 | **CSUS 3200 의 OS 측 DMI 표기 실측** | `[PENDING / lab 부재]` | `cat /sys/class/dmi/id/{sys_vendor,product_name,product_serial}` 1회. 현재 model 패턴은 Redfish 미러 캡처 표기(`Compute Scale-up Server 3200…`)를 그대로 쓴다. DMI 표기가 다르면 `CSUS3200_MODEL_PATTERNS` 를 Additive 로 확장해야 정규화가 실제로 동작한다 (미매치 시 동작은 무해한 no-op) |
+| CSUS-OS-2 | 파티션 번호 3자리 가정 확인 | `[PENDING / lab 부재]` | 접미사 패턴을 `-[0-9]{3}` 로 고정했다 (실측 `-000`). 4자리 이상을 쓰는 펌웨어가 확인되면 패턴 확장 필요 |
+| CSUS-OS-3 | OS ↔ Redfish 시리얼 표기 차이 | `[INFO / 의도됨]` | 같은 장비를 OS 로 보면 `SGHD3TLNDD`, Redfish 로 보면 `SGHD3TLNDD-000`. 이번 요구 범위가 OS 채널이라 의도된 차이다. 호출자가 채널 간 매칭을 하게 되면 정책 재확인 필요 |
+
 ## Location ID `ich` → `ic` 개명 후속 (2026-08-14)
 
 > 정본: `common/vars/locations.yml`, `vault/ic/`

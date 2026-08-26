@@ -1,5 +1,33 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-08-27 — OS 채널 CSUS 3200 nPartition 시리얼 접미사 정규화
+
+> 후속: `docs/ai/NEXT_ACTIONS.md` CSUS-OS-1
+
+- HPE Compute Scale-up Server 3200 은 OS 안에서 읽는 SMBIOS Type 1 System Serial 이
+  `<물리 시리얼>-<파티션번호 3자리>` 형식이다 (`SGHD3TLNDD-000`). 자산 관리 시스템은 물리
+  시리얼(`SGHD3TLNDD`)로 서버를 관리하므로 그대로 내보내면 같은 서버가 다른 시리얼로 판정된다.
+  **OS 채널에서만** 접미사를 뗀다.
+- 새 필터 `filter_plugins/serial_normalizer.py` 하나에 벤더 지식을 모았다.
+  `normalize_os_serial(serial, vendor, model)` 은 **세 조건을 모두** 만족할 때만 값을 바꾼다:
+  vendor 가 HPE alias 완전 일치 · model 이 CSUS 3200 패턴 매칭 · 시리얼이 `-[0-9]{3}` 로 종료.
+  하나라도 어긋나면 입력을 **글자 그대로** 돌려준다. `split('-')[0]` 같은 절단은 쓰지 않는다.
+- 호출부 3곳(`linux/gather_system.yml`, `windows/gather_system.yml`,
+  `windows/gather_hardware.yml`)은 필터만 부르고 vendor 이름을 모른다 — rule 12 R1 유지
+  (`verify_vendor_boundary.py` 기본 모드 위반 증감 0).
+- vendor / model 은 시리얼과 **같은 원천**에서 읽는다. Linux = DMI `sys_vendor` /
+  `product_name` (setup fact → raw 경로 동일 sysfs), Windows = `Win32_ComputerSystem`.
+  둘 다 판정에만 쓰는 task 범위 변수다 — **envelope 필드 추가 0, schema 변경 0**.
+- 필터 안의 alias / model pattern 은 저장소 정본(`common/vars/vendor_aliases.yml`,
+  `adapters/redfish/hpe_csus_3200.yml`)의 미러이고 drift 가드 테스트가 상시 비교한다.
+- Redfish / ESXi 채널은 무변경이다. Redfish `data.hardware.serial` 은 여전히
+  `Systems/Partition0.SerialNumber` 원문(`SGHD3TLNDD-000`)이다
+  (`docs/ai/contracts/serial-number.md` 29-6). 즉 같은 장비를 OS 로 보면 `SGHD3TLNDD`,
+  Redfish 로 보면 `SGHD3TLNDD-000` 이다 — 요구 범위가 OS 채널이라 의도된 차이다.
+- **아직 확인 못 한 것**: CSUS 3200 의 **OS 측 DMI 값**(`sys_vendor` / `product_name`)
+  실측이 없다. 모델 패턴은 2026-06-15 사이트 실 4노드 Redfish 미러 캡처의 표기를 그대로 썼다.
+  사이트 DMI 표기가 다르면 패턴 미매치 → **정규화가 일어나지 않는다**(무해한 no-op).
+
 ## 일자: 2026-08-14 — Location ID `ich` → `ic` 개명
 
 > 후속: `docs/ai/NEXT_ACTIONS.md` LOC-1 ~ LOC-3

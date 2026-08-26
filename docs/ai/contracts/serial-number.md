@@ -766,8 +766,9 @@ flowchart TD
 | 1순위 | Ansible setup fact `ansible_product_serial` (`os-gather/tasks/linux/gather_system.yml:316-318`) |
 | 2순위 | `cat /sys/class/dmi/id/product_serial` (`become: true`) (`:331-338`) |
 | raw fallback 경로 | `/sys/class/dmi/id/product_serial` 직접 read, 불가 시 `sudo -n cat` (`:52-56`) |
-| 최종 결정 | `:357-367` → `:404` |
+| 최종 결정 | `resolve identifiers` (`:355-379`) → `build fragment` (`:430`) |
 | 센티널 | `'' / NA / None / Not Specified / To Be Filled By O.E.M.` → `null` (`:358`) |
+| **nPartition 접미사 정규화** | `normalize serial` (`:388-397`) — `resolve identifiers` **뒤**, fragment **앞**. `normalize_os_serial` 필터 (30절) |
 
 **SMBIOS 타입별 사용 여부 (실측 확인)**
 
@@ -793,8 +794,9 @@ flowchart TD
 
 | 항목 | 내용 |
 |---|---|
-| envelope 필드 1 | `data.system.serial_number` ← `ansible_product_serial` (`os-gather/tasks/windows/gather_system.yml:85-87` → `:193`) |
-| envelope 필드 2 | `data.hardware.serial` ← `Get-CimInstance Win32_BIOS` 의 `SerialNumber` 우선, 없으면 `ansible_product_serial` (`windows/gather_hardware.yml:52-53` → `:91`) |
+| envelope 필드 1 | `data.system.serial_number` ← `ansible_product_serial` (`os-gather/tasks/windows/gather_system.yml:83-90` → `:217`) |
+| envelope 필드 2 | `data.hardware.serial` ← `Get-CimInstance Win32_BIOS` 의 `SerialNumber` 우선, 없으면 `ansible_product_serial` (`windows/gather_hardware.yml:64` → `:107`) |
+| **nPartition 접미사 정규화** | 두 필드 모두 적용. `windows/gather_system.yml:100-106` (`_w_serial_val`) / `windows/gather_hardware.yml:88-97` (`_w_hw_serial`). 폴백값은 이미 정규화된 값이라 **이중 적용하지 않는다** (30절) |
 | `correlation` 이 쓰는 값 | `data.hardware.serial` (`data.hardware` 가 dict 이므로 — 9절) |
 | 센티널 | `'' / NA / N/A / None / Not Specified / To Be Filled By O.E.M. / System Serial Number / 0 / 00000000` → `null` (`gather_hardware.yml:53`) |
 
@@ -1251,7 +1253,10 @@ Dell 서버 시리얼은 필수값이므로 `null` 인 채로 success/partial �
 | Supermicro / Huawei / Inspur / Fujitsu / Quanta | 〃 | 없음 |
 | UNKNOWN (vendor 미식별) | 〃 | 없음 |
 
-**HPE CSUS 3200 의 `SGHD3TLNDD-000`** 도 이번 작업에서 **변경하지 않았다.**
+**HPE CSUS 3200 의 `SGHD3TLNDD-000`** 도 이번(2026-08-11 Dell) 작업에서 **변경하지 않았다.**
+
+> [INFO] 2026-08-27 갱신 — Redfish 는 지금도 그대로 `SGHD3TLNDD-000` 이다. 다만 **OS 채널만**
+> 파티션 접미사를 떼도록 바뀌었다 (30절). 두 채널의 표기가 갈리는 것은 의도된 결과다.
 실미러 골든(`real_hpe_dl380` / `real_lenovo_sr650` / `real_hpe_csus3200`) 3종은 재생성 없이
 그대로 통과했고, 비-Dell baseline 9종도 무변경이다.
 
@@ -1299,3 +1304,92 @@ Dell iDRAC7/8 Redfish API Guide(2.30~2.70) 목차에는 `DellServiceRoot` 자체
 또한 교정 후 Dell envelope 에서 보드 제조 시리얼(`CNIVC…`)은 **어디에도 남지 않는다.**
 보존하려면 새 필드가 필요한데 이번 지시가 이를 금지해 의도적으로 미보존한다
 (`hardware.sku` / `hardware.oem.chassis_service_tag` 는 기존 필드라 값 그대로 유지된다).
+
+---
+
+## 30. OS 채널 CSUS 3200 nPartition 접미사 정규화 (2026-08-27)
+
+### 30-1. 무엇을 왜
+
+HPE Compute Scale-up Server 3200 은 nPartition(nPar) 장비다. OS 안에서 읽는 SMBIOS Type 1
+System Serial 이 `<물리 시리얼>-<파티션번호 3자리>` 형식이다.
+
+| 원천 | 값 |
+|---|---|
+| 물리 장비 (`Chassis/r001u01`, `Managers/RMC`) | `SGHD3TLNDD` |
+| `Systems/Partition0` (`SystemType=PhysicallyPartitioned`) | `SGHD3TLNDD-000` |
+| Partition0 의 OS DMI `product_serial` | `SGHD3TLNDD-000` |
+
+자산 관리 시스템은 **물리 장비 시리얼**로 서버를 관리한다. 접미사가 붙은 값을 그대로 내보내면
+같은 서버가 서로 다른 시리얼로 판정된다. 운영 전제상 CSUS 3200 1대당 파티션 1개만 쓰므로
+(물리 장비 ↔ OS 서버 1:1) 파티션 번호를 별도 식별자로 보존할 필요가 없다.
+
+`-000` 은 오염된 값이 아니라 **정상 값**이다. 그래서 "잘못된 값 교정"이 아니라 **표시 기준
+변경**이고, 적용 범위를 OS 채널로 한정했다.
+
+### 30-2. 적용 범위
+
+| 채널 | 필드 | 정규화 |
+|---|---|---|
+| OS / Linux | `data.system.serial_number` | **적용** |
+| OS / Windows | `data.system.serial_number`, `data.hardware.serial` | **적용** |
+| Redfish | `data.hardware.serial` | **미적용** — `Systems/Partition0.SerialNumber` 원문 유지 |
+| ESXi | `data.hardware.serial` | **미적용** |
+
+`correlation.serial_number` 는 `data.hardware.serial` → `data.system.serial_number` 순으로
+파생되므로(9절) OS 채널에서는 자동으로 정규화된 값을 받는다.
+
+> [WARN] 같은 장비를 OS 로 보면 `SGHD3TLNDD`, Redfish 로 보면 `SGHD3TLNDD-000` 이다.
+> 채널 간 시리얼 매칭을 하는 호출자는 이 차이를 알고 있어야 한다.
+
+### 30-3. 발동 조건 (셋을 모두 만족할 때만)
+
+정본: `filter_plugins/serial_normalizer.py` :: `normalize_os_serial(serial, vendor, model)`
+
+| # | 조건 | 판정 값 |
+|---|---|---|
+| 1 | vendor 가 HPE alias 에 **완전 일치** (lower + 공백 정규화 후) | Linux `sys_vendor` / Windows `Win32_ComputerSystem.Manufacturer` |
+| 2 | model 이 CSUS 3200 패턴에 매칭 (`re.search` + IGNORECASE) | Linux `product_name` / Windows `Win32_ComputerSystem.Model` |
+| 3 | 시리얼이 `-[0-9]{3}` 로 종료 (앞 base 1자 이상) | 시리얼 자체 |
+
+하나라도 어긋나면 **입력을 글자 그대로** 반환한다. trim 도 하지 않는다.
+`split('-')[0]` 같은 광범위 절단은 쓰지 않는다.
+
+두 상수는 저장소 정본의 **미러**이고 drift 가드가 상시 비교한다:
+
+| 상수 | 정본 |
+|---|---|
+| `CSUS3200_VENDOR_ALIASES` | `common/vars/vendor_aliases.yml` :: `vendor_aliases.hpe` |
+| `CSUS3200_MODEL_PATTERNS` | `adapters/redfish/hpe_csus_3200.yml` :: `match.model_patterns` |
+
+### 30-4. 경계 동작
+
+| 입력 (vendor / model / serial) | 출력 | 왜 |
+|---|---|---|
+| HPE / CSUS 3200 / `SGHD3TLNDD-000` | `SGHD3TLNDD` | 3조건 충족 |
+| HPE / CSUS 3200 / `SGHD3TLNDD-001` | `SGHD3TLNDD` | 파티션 번호 무관 |
+| HPE / ProLiant DL380 Gen11 / `CZ12345678` | `CZ12345678` | model 미매치 |
+| HPE / ProLiant DL360 Gen10 / `ABC-123` | `ABC-123` | model 미매치 (하이픈 있어도 안 자름) |
+| Dell / PowerEdge R760 / `ABCDEF-000` | `ABCDEF-000` | vendor 미매치 |
+| HPE / CSUS 3200 / `SGHD3TLNDD-ABC` | `SGHD3TLNDD-ABC` | 접미사 형식 아님 |
+| HPE / CSUS 3200 / `SGHD3TLNDD-0000` | `SGHD3TLNDD-0000` | 4자리 |
+| HPE / CSUS 3200 / `-000` | `-000` | base 없음 |
+| HPE / CSUS 3200 / `AB-123-000` | `AB-123` | 마지막 한 덩어리만 |
+| vendor 또는 model 미확보 | 입력 그대로 | fail-safe |
+
+### 30-5. schema 영향
+
+**없다.** envelope 13 필드 무변경, 새 필드 0개다. `product_serial_raw` / `partition_serial` /
+`physical_serial` 같은 보존용 필드를 만들지 않았다 — 정규화 전 원문은 envelope 어디에도 남지
+않는다. vendor / model 은 판정용 task 범위 변수(`_l_vendor_hint` 등)이며 fragment 로 나가지 않는다.
+
+### 30-6. 검증 / 한계
+
+`tests/unit/test_csus_partition_serial.py` (79건) — 요구 케이스 6종 + vendor/model/접미사 축
+경계 + 입력 방어 + 미러 drift 가드 + 실제 task YAML 렌더 회귀 + 실 목데이터
+(`tests/fixtures/redfish/real_hpe_csus3200/recording.json`) 대조.
+
+**한계**: CSUS 3200 의 **OS 측 DMI 표기**(`sys_vendor` / `product_name`) 실측이 없다.
+model 패턴은 2026-06-15 사이트 실 4노드 Redfish 미러 캡처의 표기를 그대로 쓴다. 사이트 DMI
+표기가 다르면 조건 2가 미매치라 **정규화가 일어나지 않는다** — 무해한 no-op 이고, 실측 후
+패턴을 Additive 로 확장하면 된다 (`docs/ai/NEXT_ACTIONS.md` CSUS-OS-1).
