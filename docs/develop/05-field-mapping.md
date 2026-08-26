@@ -24,7 +24,7 @@
 | `system.selinux` | `ansible_selinux.status` | `gather_system.yml` | |
 | `system.hosting_type` | `systemd-detect-virt` + `ansible_virtualization_type/role` + `ansible_system_vendor` | `gather_system.yml` | OS 채널 전용. enum: virtual/baremetal/unknown |
 | `system.fqdn` | `ansible_fqdn` | `gather_system.yml` | |
-| `system.serial_number` | setup fact → DMI direct-read fallback (`become: true`) | `gather_system.yml` | setup fact가 NA일 경우 `/sys/class/dmi/id/product_serial` 직접 읽기. become 필수 |
+| `system.serial_number` | setup fact → DMI direct-read fallback (`become: true`) → nPartition 접미사 정규화 | `gather_system.yml` | setup fact가 NA일 경우 `/sys/class/dmi/id/product_serial` 직접 읽기. become 필수. 마지막에 파티션 접미사 정규화 (아래 별도 절) |
 | `system.system_uuid` | setup fact → DMI direct-read fallback (`become: true`) | `gather_system.yml` | setup fact가 NA일 경우 `/sys/class/dmi/id/product_uuid` 직접 읽기. cross-channel 연결 키 |
 | `cpu.sockets` | `ansible_processor_count` | `gather_cpu.yml` | |
 | `cpu.cores_physical` | `shell grep "cpu cores" × sockets` | `gather_cpu.yml` | |
@@ -56,7 +56,7 @@
 | `system.selinux` | N/A | `gather_system.yml` | Windows에는 SELinux 없음 → null |
 | `system.hosting_type` | `Win32_ComputerSystem` (Model, Manufacturer, HypervisorPresent) | `gather_system.yml` | OS 채널 전용. enum: virtual/baremetal/unknown |
 | `system.fqdn` | `ansible_fqdn` | `gather_system.yml` | WMI |
-| `system.serial_number` | `ansible_product_serial` (WMI/setup) | `gather_system.yml` | NA/빈값→null 정규화 |
+| `system.serial_number` | `ansible_product_serial` (WMI/setup) | `gather_system.yml` | NA/빈값→null 정규화 + nPartition 접미사 정규화 (아래 별도 절) |
 | `system.system_uuid` | `ansible_product_uuid` (WMI/setup) | `gather_system.yml` | NA/빈값→null 정규화. cross-channel 연결 키 |
 | `cpu.sockets` | `Win32_Processor` (WMI) | `gather_cpu.yml` | WMI |
 | `cpu.cores_physical` | `Win32_Processor.NumberOfCores` | `gather_cpu.yml` | WMI |
@@ -117,6 +117,43 @@
 - `become_password` 제공 시: `/sys/class/dmi/id/product_serial`, `/sys/class/dmi/id/product_uuid` 직접 읽기
 - `become_password` 미제공 시: block/rescue로 격리, null + `insufficient_privilege` diagnostic
 - 어느 경우든 status는 success (식별자 수집 실패는 non-fatal)
+
+### nPartition 시리얼 접미사 정규화 (OS 채널 전용)
+
+HPE Compute Scale-up Server 3200 은 파티션(nPartition) 장비다. OS 안에서 읽는 시스템
+시리얼에 파티션 번호가 접미사로 붙는다.
+
+```
+물리 장비 시리얼                       SGHD3TLNDD
+Partition0 의 OS DMI product_serial    SGHD3TLNDD-000
+```
+
+자산 관리는 물리 장비 시리얼 기준이라, OS 채널은 이 접미사를 떼고 내보낸다.
+구현은 `filter_plugins/serial_normalizer.py` 의 `normalize_os_serial` 필터 하나뿐이고,
+`os-gather` 의 세 곳(Linux `system.serial_number`, Windows `system.serial_number`,
+Windows `hardware.serial`)이 이 필터를 부른다.
+
+**세 조건을 모두 만족할 때만** 값이 바뀐다.
+
+| 조건 | 판정에 쓰는 값 |
+|------|----------------|
+| 제조사가 HPE 계열 | Linux `/sys/class/dmi/id/sys_vendor`, Windows `Win32_ComputerSystem.Manufacturer` |
+| 모델이 Compute Scale-up Server 3200 계열 | Linux `/sys/class/dmi/id/product_name`, Windows `Win32_ComputerSystem.Model` |
+| 시리얼이 하이픈 + 숫자 3자리로 끝남 | `-000`, `-001` … |
+
+하나라도 어긋나면 시리얼을 **글자 그대로** 돌려준다. 하이픈만 보고 뒤를 자르는 일은 없다.
+
+| 입력 (제조사 / 모델 / 시리얼) | 출력 |
+|---|---|
+| HPE / Compute Scale-up Server 3200 / `SGHD3TLNDD-000` | `SGHD3TLNDD` |
+| HPE / ProLiant DL380 Gen11 / `CZ12345678` | `CZ12345678` (그대로) |
+| HPE / ProLiant DL360 Gen10 / `ABC-123` | `ABC-123` (그대로) |
+| Dell / PowerEdge R760 / `ABCDEF-000` | `ABCDEF-000` (그대로) |
+| HPE / Compute Scale-up Server 3200 / `SGHD3TLNDD-ABC` | `SGHD3TLNDD-ABC` (그대로) |
+
+Redfish 채널은 이 정규화를 적용하지 않는다. Redfish `hardware.serial` 은
+`Systems/Partition0` 의 `SerialNumber` 원문(`SGHD3TLNDD-000`)을 유지한다. 같은 장비라도
+OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이다.
 
 ---
 

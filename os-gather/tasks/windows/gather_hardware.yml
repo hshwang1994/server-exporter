@@ -81,6 +81,21 @@
       {%- endif -%}
   no_log: true
 
+# nPartition 접미사 정규화 (2026-08-27) — gather_system 과 동일 규칙.
+#   BIOS 시리얼(Win32_BIOS.SerialNumber)에도 같은 정규화를 적용한다. 폴백값 _w_serial_val 은
+#   gather_system 에서 **이미 정규화**된 값이라 다시 통과시키지 않는다 — 이중 적용 시
+#   'AB-123-000' 같은 값이 두 번 잘린다.
+- name: "windows | hardware | normalize serial (nPartition 접미사)"
+  vars:
+    _w_hw_vendor_hint: "{{ _w_hw_data.vendor | default('', true) }}"
+    _w_hw_model_hint: "{{ _w_hw_data.model | default('', true) }}"
+  ansible.builtin.set_fact:
+    _w_hw_serial: >-
+      {{ (_w_hw_data.bios_serial | default(none)
+          | normalize_os_serial(_w_hw_vendor_hint, _w_hw_model_hint))
+         or (_w_serial_val | default(none)) }}
+  no_log: true
+
 - name: "windows | hardware | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -88,7 +103,8 @@
         vendor:       "{{ _w_hw_data.vendor       | default(none) }}"
         model:        "{{ _w_hw_data.model        | default(none) }}"
         # serial/uuid fallback chain: BIOS/CIM → gather_system 의 ansible facts 정규값
-        serial:       "{{ _w_hw_data.bios_serial | default(none) or _w_serial_val | default(none) }}"
+        # serial 은 위 "normalize serial" 이 정규화까지 끝낸 값 (nPartition 접미사 처리)
+        serial:       "{{ _w_hw_serial | default(none) }}"
         uuid:         "{{ _w_hw_data.uuid        | default(none) or _w_uuid_val   | default(none) }}"
         sku:          null
         asset_tag:    "{{ _w_hw_data.asset_tag    | default(none) }}"
