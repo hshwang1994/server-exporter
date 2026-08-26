@@ -694,6 +694,15 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 **Q. `correlation.bmc_ip` 와 `correlation.host_ip` 가 같다. 버그인가?**
 Redfish 채널은 둘이 같은 게 정상이다 (BMC 를 통해 수집). OS / ESXi 채널은 다를 수 있다 (서비스 IP 와 BMC IP 가 분리되어 있으면).
 
+**Q. 같은 장비인데 OS 채널과 Redfish 채널의 시리얼이 다르다. 버그인가?**
+HPE Compute Scale-up Server 3200 이라면 정상이다. 이 장비는 파티션(nPartition) 구조라 시스템
+시리얼이 `<물리 시리얼>-<파티션번호 3자리>` 형식이다 (`SGHD3TLNDD-000`). **OS 채널은 물리 장비
+시리얼 기준으로 맞추려고 이 접미사를 뗀 값(`SGHD3TLNDD`)** 을 내보내고, Redfish 채널은
+`Systems/Partition0` 의 원문(`SGHD3TLNDD-000`)을 그대로 유지한다. 그 외 장비는 두 채널 모두
+수집한 값을 손대지 않는다 — 접미사 제거는 제조사·모델·접미사 형식 세 조건을 모두 만족할 때만
+일어나므로, 시리얼에 하이픈이 정상적으로 들어간 다른 장비는 영향을 받지 않는다.
+자세한 규칙은 `docs/develop/05-field-mapping.md` 의 "nPartition 시리얼 접미사 정규화" 절을 본다.
+
 **Q. `schema_version` 이 바뀔 수 있나?**
 바뀐다. 하지만 envelope 13 필드의 의미가 깨지는 변경이면 `"2"` 로 올라가고, 사람이 명시 승인을 해야 한다. 이전 버전 호환은 보장되지 않으니 호출 시 항상 schema_version 을 같이 본다.
 
