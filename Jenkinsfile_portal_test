@@ -15,23 +15,20 @@ pipeline {
         )
         text(
             name        : 'inventory_json',
-            defaultValue: '',
+            defaultValue: '''[
+                {
+                    "service_ip": "",
+                    "install_os_type": "",
+                    "version": "",
+                    "os_image": ""
+                }
+            ]''',
             description : '호스트 JSON 배열 (os/esxi: service_ip, redfish: bmc_ip, fallback: ip)'
         )
         string(
             name        : 'deploymentEnvironmentId',
             defaultValue: '',
             description : '포털 개발환경 ID'
-        )
-        text(
-            name        : 'install_os_type',
-            defaultValue: '',
-            description : 'install_os_type'
-        )
-        text(
-            name        : 'os_image',
-            defaultValue: '',
-            description : 'os_image'
         )
         string(
             name        : 'callbackUrl',
