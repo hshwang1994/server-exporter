@@ -22,14 +22,14 @@ server-exporter/
 │   ├── library/             # precheck_bundle.py (4단계 진단)
 │   ├── tasks/normalize/     # init_fragments / merge_fragment / build_*.yml (10개)
 │   └── vars/                # vendor_aliases.yml + supported_sections.yml
-├── filter_plugins/          # diagnosis_mapper.py + field_mapper.py
+├── filter_plugins/          # Jinja2 필터 (diagnosis_mapper / vendor_normalizer / serial_normalizer 등)
 ├── lookup_plugins/          # adapter_loader.py
 ├── module_utils/            # adapter_common.py
 ├── os-gather/               # 4-Play (포트감지 → 감지실패 OUTPUT → Linux → Windows)
 ├── esxi-gather/             # 1-Play (community.vmware)
 ├── redfish-gather/          # 1-Play (precheck → detect → adapter → collect → normalize)
-│   ├── library/redfish_gather.py    (stdlib only — cycle-017 B5 _endpoint_with_fallback helper 도입)
-│   └── tasks/vendors/{vendor}/      (OEM tasks — dell/hpe/lenovo/supermicro)
+│   └── library/redfish_gather.py    (stdlib only — vendor OEM 추출은 여기 _extract_oem_*)
+│                                    ※ tasks/vendors/{vendor}/ 는 2026-08-13 제거 (기여 0)
 ├── schema/
 │   ├── sections.yml         # 11 섹션 정의
 │   ├── field_dictionary.yml # 항목별 priority = Must / Nice / Skip (개수는 세지 않는다 — rule 00)
