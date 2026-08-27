@@ -22,6 +22,7 @@ pipeline {
                     "version": "",
                     "os_image": "",
                     "businessCategoryPrimaryCode": "",
+                    "physical_purpose": "",
                     "model": "",
                     "adgVip": ""
                 }
