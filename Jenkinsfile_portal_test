@@ -25,7 +25,7 @@ pipeline {
                     "physical_purpose": "",
                     "model": "",
                     "adgVip": "",
-                    "vendor": "",
+                    "vendor": ""
                 }
             ]''',
             description : '호스트 JSON 배열 (os/esxi: service_ip, redfish: bmc_ip, fallback: ip)'
