@@ -1,5 +1,29 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-01 — OS Windows 자격증명 교체 (git 제외 3 Location)
+
+- 사용자 지시로 `vault/{chj,ic,yi}/os/windows.yml` 의 Windows 계정을 교체했다.
+  username 을 `administrator` 로, password 를 사용자 제공값으로 바꿨다.
+  **`vault/git/os/windows.yml` 은 지시대로 건드리지 않았다** — 이 파일은 이미
+  `administrator` 를 쓰고 있고 password 는 별개 값이라 3 Location 과 다르다.
+- `locations.yml` 정본이 정의한 Location 은 `chj / git / ic / yi` 4개다.
+  `git` 을 뺀 나머지가 정확히 3개이므로 대상 누락은 없다
+  (`resolve_credential_scope()` 로 4 Location 전수 경로 판정 확인).
+- **평문 구조는 이전과 같다.** `accounts[]` 1개(label `windows_current`, role `primary`)
+  + legacy `ansible_user` / `ansible_password` 동기. 값만 바뀌었고 키 추가·삭제 0.
+  `normalize_accounts()` 가 이전과 같이 후보 1개를 돌려준다.
+- 코드·schema·envelope 무변경이다. Windows 계정 이름을 쓰는 코드가 없기 때문에
+  (자격은 전부 vault → `_cred_accounts` 경로로만 흐른다) 분기 영향도 0이다.
+- 검증: `vault_decrypt_check.py` 로 vault 49개 전량 복호화 + 구조 검증 통과(exit 0).
+  변경 3파일은 기록 후 디스크에서 다시 읽어 복호화 대조까지 했다.
+  `git diff --stat -- vault/git/` 0 으로 제외 대상 불변을 확인했다.
+- **이 세션에서 못 한 것**: 실 Windows 호스트 WinRM 인증은 시도하지 않았다. 대상 장비에
+  `administrator` 계정과 새 password 가 실제로 존재하는지는 저장소 밖 사실이다.
+  Jenkins 로 os 채널을 한 번 돌려 `used_label=windows_current` / `fallback_used=false`
+  를 확인하기 전까지 실장비 검증은 미완이다.
+- `vault/.lab-credentials.yml` 은 손대지 않았다. gitignore 대상이고 vault resolver 가
+  읽지 않는 lab 대상 목록이라 이번 계정 교체와 축이 다르다.
+
 ## 일자: 2026-08-27 — OS 채널 CSUS 3200 nPartition 시리얼 접미사 정규화
 
 > 후속: `docs/ai/NEXT_ACTIONS.md` CSUS-OS-1
