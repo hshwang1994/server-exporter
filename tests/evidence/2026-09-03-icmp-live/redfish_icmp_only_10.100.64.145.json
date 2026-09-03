@@ -1,0 +1,100 @@
+{
+  "target_type": "redfish",
+  "collection_method": "redfish_api",
+  "ip": "10.100.64.145",
+  "hostname": null,
+  "vendor": null,
+  "status": "failed",
+  "sections": {
+    "system": "failed",
+    "hardware": "failed",
+    "bmc": "failed",
+    "cpu": "failed",
+    "memory": "failed",
+    "storage": "failed",
+    "network": "failed",
+    "firmware": "failed",
+    "users": "not_supported",
+    "power": "not_supported",
+    "thermal": "not_supported"
+  },
+  "diagnosis": {
+    "reachable": true,
+    "port_open": false,
+    "protocol_supported": false,
+    "auth_success": null,
+    "failure_stage": "port",
+    "failure_code": "TCP_CONNECT_FAILED",
+    "failure_reason": "대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요.",
+    "details": {
+      "channel": "redfish",
+      "adapter_candidate": null,
+      "checked_ports": [
+        443
+      ],
+      "hostname_source": "none"
+    }
+  },
+  "meta": {
+    "started_at": "2026-09-03T11:02:11.785333Z",
+    "finished_at": "2026-09-03T11:02:13.691057Z",
+    "duration_ms": null,
+    "adapter_id": null,
+    "adapter_version": null,
+    "ansible_version": "2.20.3"
+  },
+  "correlation": {
+    "serial_number": null,
+    "system_uuid": null,
+    "bmc_ip": null,
+    "host_ip": "10.100.64.145"
+  },
+  "errors": [
+    {
+      "section": "redfish_gather",
+      "message": "대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요.",
+      "detail": "port=443: [Errno 113] No route to host; icmp: Echo Reply 확인 | [task: redfish | abort if precheck failed] Redfish 호스트 연결 진단에 실패했습니다 (10.100.64.145). 단계=port, 사유=대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요.. BMC 전원, 네트워크, Redfish API(443) 포트를 확인하세요."
+    }
+  ],
+  "data": {
+    "system": null,
+    "hardware": null,
+    "bmc": null,
+    "cpu": null,
+    "memory": null,
+    "storage": {
+      "filesystems": [],
+      "physical_disks": [],
+      "datastores": [],
+      "controllers": [],
+      "logical_volumes": [],
+      "hbas": [],
+      "infiniband": [],
+      "summary": {
+        "groups": [],
+        "grand_total_gb": 0
+      }
+    },
+    "network": {
+      "dns_servers": [],
+      "default_gateways": [],
+      "interfaces": [],
+      "adapters": [],
+      "ports": [],
+      "virtual_switches": [],
+      "portgroups": [],
+      "driver_map": [],
+      "summary": {
+        "groups": []
+      }
+    },
+    "users": [],
+    "firmware": [],
+    "power": null,
+    "thermal": {
+      "temperatures": [],
+      "fans": []
+    }
+  },
+  "schema_version": "1"
+}

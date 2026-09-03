@@ -16,7 +16,13 @@
 | `python -m py_compile common/library/precheck_bundle.py` | OK |
 | YAML parse (`run_precheck.yml`, 3 channel `site.yml`, `field_dictionary.yml`, `failure_reasons.yml`) | OK |
 | `ansible-playbook --syntax-check` | **로컬 미실행 — 환경 제약** (Windows 개발 PC 의 ansible CLI 가 `OSError WinError 87` 로 기동 불가). Jinja2 인라인 템플릿 컴파일은 `tests/e2e/test_section_message_contract.py` 가 대체 검증 |
-| 실장비 | **미실행** — `docs/ai/NEXT_ACTIONS.md` RE-1~RE-3 |
+| 실장비 (러너 10.100.64.154 직접 실행) | **4/4 확인** — 증거 `tests/evidence/2026-09-03-icmp-reachability-live.md` |
+| RE-1 `ping` 가용성 | `cap_net_raw=ep` 로 비특권 동작. `ping_group_range = 1 0` → **비특권 ICMP 소켓 방식이었으면 실패**했을 조건 (구현 선택 실측 확인) |
+| RE-2 ICMP만 응답 (redfish/.145, 관리 443 DROP) | `reachable=true` / `stage=port` / `TCP_CONNECT_FAILED` / 2번 문장. 종전이면 1번 문장이 나갔을 상황 |
+| RE-2 TCP·ICMP 무응답 (os/.163) | `TARGET_UNREACHABLE` / 1번 문장(종전과 동일) / `detail` 에 `icmp: 응답 없음 (rc=1)` |
+| RE-2 ICMP 차단 + TCP 정상 (os/.120 Windows) | precheck 정상 통과 (`reachable/port/protocol` 전부 true) — **Gate 아님 실측 확인** |
+| RE-3 dead host 예산 | ICMP on 8.62·8.75s ↔ off 7.69·7.50s → **+1.0~1.1초/대** (설계값 일치) |
+| Jenkins 파이프라인 빌드 | **미실행** — 하네스 권한 게이트로 빌드 트리거 차단. 사용자 승인 대기 |
 
 ## 2026-09-03 — 실장비 검증 (Jenkins `clovirone-server-gather` #190~#196, 운영 파이프라인 Jenkinsfile_portal)
 

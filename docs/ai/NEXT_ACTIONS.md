@@ -7,10 +7,11 @@
 
 | # | 항목 | 상태 | 내용 |
 |---|---|---|---|
-| RE-1 | **Jenkins Agent 의 `ping` 가용성 확인** | `[TODO / 실장비]` | controller(에이전트)에서 비특권 계정으로 `ping -c 1 -n -W 1 -w 1 <ip>` 가 rc=0 을 내는지 1회. 없거나 권한이 없으면 ICMP 근거를 못 얻어 판정이 종전(TCP 전용)과 같아진다 — 그 사실은 `errors[].detail` 의 `icmp:` 항목에 남는다. 실패 시 대안은 `SOCK_DGRAM+IPPROTO_ICMP` 2-tier 구현 (ADR 대안 F) |
-| RE-2 | 방화벽 DROP 구간 실측 | `[TODO / 실장비]` | 관리 포트 TCP 가 DROP 되고 ICMP 는 열린 대상에서 `reachable=true` / `stage=port` / `TCP_CONNECT_FAILED` / 2번 문장이 나오는지 확인. 이번 변경의 목적 그 자체라 실장비 확인 전에는 "동작 확인" 이라고 말할 수 없다 |
-| RE-3 | dead host 배치 wall-clock | `[TODO / 실장비]` | 무응답 대상 N대 실행에서 증가폭이 예상(+1초/대) 범위인지. 초과하면 `_precheck_timeout_icmp` 를 낮추거나 `_precheck_icmp_probe: false` 로 끈다 |
+| RE-1 | Jenkins Agent 의 `ping` 가용성 확인 | `[DONE 2026-09-03]` | `jenkins-agent-ops`(10.100.64.154): `/usr/bin/ping` 이 `cap_net_raw=ep` 로 비특권 동작. `net.ipv4.ping_group_range = 1 0` (비활성) — **ADR 대안 F(비특권 ICMP 소켓)를 골랐다면 이 에이전트에서 동작하지 않았다.** 구현 선택이 실측으로 확인됨 |
+| RE-2 | 방화벽 DROP 구간 실측 | `[DONE 2026-09-03]` | 10.100.64.145(RHEL 9.6 VM — ICMP 열림, 443/5985/5986 DROP)에서 `reachable=true` / `stage=port` / `TCP_CONNECT_FAILED` / 2번 문장 확인. 반대 케이스 2건도 함께: .163(TCP·ICMP 무응답) → `TARGET_UNREACHABLE`, .120(Windows, ICMP 차단 + TCP 정상) → precheck 정상 통과(Gate 아님). 증거 `tests/evidence/2026-09-03-icmp-reachability-live.md` |
+| RE-3 | dead host wall-clock | `[DONE 2026-09-03]` | .163 단독 precheck 4회: ICMP on 8.62·8.75s ↔ off 7.69·7.50s → **+1.0~1.1초/대**. 설계값(Echo 1회 / 기본 1초)과 일치 |
 | RE-4 | **Portal 소비자 이행 안내** | `[TODO / 사용자]` | `failure_code == "TCP_CONNECT_FAILED"` 로 "대상 무응답" 을 분기하던 코드가 Portal 에 있으면 `TARGET_UNREACHABLE` 을 받도록 갱신해야 한다. 사용자 문장(`failure_reason` / `errors[].message`)은 불변이라 표시 전용 화면은 영향 없다 |
+| RE-5 | **Jenkins 파이프라인 빌드** | `[BLOCKED / 사용자 승인]` | 러너에서 Gather stage 와 동일 명령을 재현해 4케이스를 확인했으나, `clovirone-server-gather` 잡 트리거는 하네스 권한 게이트에 막혔다. Stage 1(Validate) / Stage 3(Validate Schema) / Stage 4(Callback) 는 아직 이번 변경으로 돌지 않았다 |
 
 ## OS / ESXi 게더링 전수 검수 후속 (2026-09-03)
 
