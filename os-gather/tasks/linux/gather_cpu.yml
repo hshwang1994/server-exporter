@@ -40,6 +40,20 @@
   failed_when: false
   no_log: true
 
+# 2026-09-03 실측(build #190, R760 Silver 4510): cpufreq base_frequency 가 없고 브랜드 문자열에 GHz 표기도 없으면
+#   정격 클럭이 null 이었다. SMBIOS Type 4 의 "Current Speed"(정격) / "Max Speed"(최대) 를 3순위 fallback 으로 쓴다.
+#   dmidecode 는 root 가 필요하므로 별도 task 로 분리 — become 실패가 위 raw 수집을 삼키지 않게 한다.
+- name: "linux | cpu | raw dmi processor speed (become)"
+  ansible.builtin.raw: |
+    dmidecode -t processor 2>/dev/null | awk -F': ' '
+      /Current Speed:/ && !cur { sub(/ MHz/,"",$2); gsub(/ /,"",$2); print "DMI_CUR_MHZ=" $2; cur=1 }
+      /Max Speed:/     && !mx  { sub(/ MHz/,"",$2); gsub(/ /,"",$2); print "DMI_MAX_MHZ=" $2; mx=1 }'
+  become: true
+  register: _l_cpu_dmi_raw
+  changed_when: false
+  failed_when: false
+  no_log: true
+
 - name: "linux | cpu | parse"
   ansible.builtin.set_fact:
     _l_cpu_parsed: >-
@@ -75,22 +89,22 @@
       {%- elif v -%}{{ v }}
       {%- else -%}{{ none }}
       {%- endif -%}
-    # 정격(base) 클럭: cpufreq base_frequency(kHz) → 브랜드 문자열 "@ 2.20GHz" → null
+    # 정격(base) 클럭: cpufreq base_frequency(kHz) → 브랜드 문자열 "@ 2.20GHz" → SMBIOS Current Speed → null
     _l_cpu_base_mhz: >-
       {%- set bk = (_l_cpu_parsed.CPU_BASE_KHZ | default('')) | trim -%}
       {%- set model = (_l_cpu_parsed.CPU_MODEL | default('')) | trim -%}
       {%- set ghz = model | regex_replace('^.*@\\s*([0-9]+(?:\\.[0-9]+)?)\\s*GHz.*$', '\\1') -%}
       {%- if bk.isdigit() and (bk | int) > 0 -%}{{ ((bk | int) / 1000) | int }}
       {%- elif ghz != model and (ghz | regex_replace('[0-9.]', '') | length) == 0 -%}{{ ((ghz | float) * 1000) | round(0, 'common') | int }}
-      {%- else -%}{{ none }}
+      {%- else -%}{%- set dns = namespace(v='') -%}{%- for l in (_l_cpu_dmi_raw.stdout_lines | default([])) -%}{%- if (l | string).startswith('DMI_CUR_MHZ=') and not dns.v -%}{%- set dns.v = (l | string).split('=', 1)[1] | trim -%}{%- endif -%}{%- endfor -%}{{ (dns.v | int) if (dns.v.isdigit() and (dns.v | int) > 0) else none }}
       {%- endif -%}
-    # 터보 최대: lscpu 'CPU max MHz' → cpufreq cpuinfo_max_freq(kHz) → null
+    # 터보 최대: lscpu 'CPU max MHz' → cpufreq cpuinfo_max_freq(kHz) → SMBIOS Max Speed → null
     _l_cpu_turbo_mhz: >-
       {%- set m = (_l_cpu_parsed.CPU_MAX_MHZ | default('')) | trim -%}
       {%- set mk = (_l_cpu_parsed.CPU_MAX_KHZ | default('')) | trim -%}
       {%- if m and (m | regex_replace('[0-9.]', '') | length) == 0 and (m | float) > 0 -%}{{ (m | float) | int }}
       {%- elif mk.isdigit() and (mk | int) > 0 -%}{{ ((mk | int) / 1000) | int }}
-      {%- else -%}{{ none }}
+      {%- else -%}{%- set dns = namespace(v='') -%}{%- for l in (_l_cpu_dmi_raw.stdout_lines | default([])) -%}{%- if (l | string).startswith('DMI_MAX_MHZ=') and not dns.v -%}{%- set dns.v = (l | string).split('=', 1)[1] | trim -%}{%- endif -%}{%- endfor -%}{{ (dns.v | int) if (dns.v.isdigit() and (dns.v | int) > 0) else none }}
       {%- endif -%}
   no_log: true
 

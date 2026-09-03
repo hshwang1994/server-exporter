@@ -287,7 +287,8 @@ def _build_host_info(content, hostname=None):
         # ── CPU: 정격 클럭(hz) / 제조사 ──
         ci = getattr(hw, 'cpuInfo', None) if hw is not None else None
         hz = getattr(ci, 'hz', None) if ci is not None else None
-        info['cpu_mhz'] = int(int(hz) // 1000000) if hz else None
+        # vSphere summary.hardware.cpuMhz 와 같은 값이 되도록 반올림 (실측 hz=2194999xxx → 2195, 절삭하면 2194)
+        info['cpu_mhz'] = int(round(int(hz) / 1000000.0)) if hz else None
         info['cpu_packages'] = getattr(ci, 'numCpuPackages', None) if ci is not None else None
         info['cpu_cores'] = getattr(ci, 'numCpuCores', None) if ci is not None else None
         info['cpu_threads'] = getattr(ci, 'numCpuThreads', None) if ci is not None else None

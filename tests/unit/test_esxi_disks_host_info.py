@@ -36,7 +36,8 @@ def _host(gateway_on_host: bool):
     pci = [NS(id="0000:3b:00.0", vendorName="Example Silicon Corp", deviceName="Ethernet Controller X710"),
            NS(id="0000:3b:00.1", vendorName="Example Silicon Corp", deviceName="Ethernet Controller X710")]
     hw = NS(pciDevice=pci,
-            cpuInfo=NS(hz=2195000000, numCpuPackages=2, numCpuCores=44, numCpuThreads=88),
+            # 실측(esxi01) hz=2194999xxx — 절삭하면 2194, vSphere 가 보여주는 cpuMhz 는 2195 → 반올림
+            cpuInfo=NS(hz=2194999936, numCpuPackages=2, numCpuCores=44, numCpuThreads=88),
             cpuPkg=[NS(vendor="intel", description="Example CPU @ 2.20GHz")],
             biosInfo=NS(biosVersion="1.2.3", releaseDate=datetime(2021, 2, 2, 9, 0)),
             systemInfo=NS(uuid="9f0190b1-ce56-d44e-a1dd-6571daaedad7", serialNumber="SER123", vendor="Example Systems Inc", model="Rack-1"))
