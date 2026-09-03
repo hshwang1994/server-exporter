@@ -1,5 +1,31 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-03 — reachable 판정에 ICMP Echo OR 조건 추가 (사용자 지시)
+
+> 결정 근거: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`,
+> `docs/reference/decision-log.md` 2026-09-03. 후속: `docs/ai/NEXT_ACTIONS.md` RE-1~RE-4.
+
+- **도달성 = 관리 TCP 응답 OR ICMP Echo 응답.** `precheck_bundle._resolve_reachability` 가 정본.
+  TCP 를 먼저 보고 **전 포트 무응답일 때만** ICMP Echo 1회(`icmp_check`, `ping` 명령)를 확인한다.
+  TCP 가 응답하면(연결 성공/RST) ICMP 는 호출조차 되지 않는다 — 성공·RST 경로 예산 증가 0.
+- **ICMP 는 Gate 가 아니다.** 무응답 / 차단 / `ping` 부재 / 권한 부족을 "근거 없음" 하나로 취급해
+  판정이 종전(TCP 전용)과 같아진다. ICMP 전용 `failure_code` / `failure_stage` 없음.
+  `icmp_probe=false`(`_precheck_icmp_probe`)로 완전히 끌 수 있다.
+- **failure_code 9개** (8 → 9): `TARGET_UNREACHABLE` 신설(`stage=reachable`, TCP·ICMP 모두 무응답),
+  `TCP_CONNECT_FAILED` 는 `stage=port` 로 범위 축소(ICMP 는 응답, 관리 TCP 만 무응답 — 방화벽 DROP).
+  문장 매핑: `TARGET_UNREACHABLE`→1번(종전과 동일), `TCP_CONNECT_FAILED`→**2번으로 이동**
+  (ICMP 로 존재가 확인된 대상에게 "IP 사용 여부" 를 묻지 않는다). 표준 5문장 집합은 불변.
+- **envelope shape 불변**: 최상위 13 필드 / `diagnosis` 7키 + `details` 그대로. ICMP 관측 근거는
+  `errors[].detail` 문자열에만 붙는다 (`icmp: Echo Reply 확인` / `icmp: 응답 없음 (rc=1)`).
+- 변경 파일: `common/library/precheck_bundle.py`(+163줄), `common/tasks/precheck/run_precheck.yml`,
+  `schema/field_dictionary.yml`(enum + help), `common/vars/failure_reasons.yml`(매핑 주석),
+  3 channel `site.yml`(주석만), rule 27 / rule 10 / `CLAUDE.md` §7 §9, `docs/contract/{02,03,04}`,
+  `docs/overview/02-architecture.md`, `docs/develop/06-debugging.md`.
+- **회귀**: `tests/unit/test_precheck_icmp_reachability.py` 신설(24), 기존 precheck 하네스 10곳은
+  `tests/precheck_stub.py` 로 ICMP 결과 주입(실 `ping` 금지). 전체 **3312 passed / 0 failed**.
+- **실장비 미검증**: 오프라인 회귀까지만 확인했다. Agent `ping` 가용성 / 방화벽 DROP 구간 실측 /
+  dead host wall-clock 은 RE-1~RE-3.
+
 ## 일자: 2026-09-03 — OS(Linux/Windows) / ESXi 게더링 전수 검수 후속 (37건 정정, Redfish 제외)
 
 > 결정 근거: `docs/reference/decision-log.md` 2026-09-03 항목. 후속: `docs/ai/NEXT_ACTIONS.md` GA-1~GA-6.

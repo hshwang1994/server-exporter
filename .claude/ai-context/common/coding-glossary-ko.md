@@ -23,7 +23,7 @@
 
 | 용어 | 풀이 |
 |---|---|
-| **Precheck** | `common/library/precheck_bundle.py` 의 진단 절차. TCP 도달·포트를 한 번에 판정하고 프로토콜을 확인한다. **ICMP 는 쓰지 않는다.** 인증 단계는 운영에서 실행되지 않는다. |
+| **Precheck** | `common/library/precheck_bundle.py` 의 진단 절차. TCP 도달·포트를 한 번에 판정하고 프로토콜을 확인한다. 도달성은 **TCP 응답 OR ICMP Echo 응답** 이며 ICMP 는 TCP 전멸 시 1회만 보는 보조 근거다(Gate 아님). 인증 단계는 운영에서 실행되지 않는다. |
 | **Vault 2단계 로딩** | Redfish 특화. 1단계 무인증으로 ServiceRoot detect → vendor 결정 → 2단계 vendor vault 로드 후 인증으로 재수집. |
 | **Linux 2-tier gather** | preflight.yml에서 `_l_python_mode` 자동 감지. `python_ok` (Python 3.9+) / `python_missing` / `python_incompatible` / `raw_forced`. raw 경로는 dmidecode 기반. |
 | **Diagnosis** | 출력 envelope의 `diagnosis` 필드. 각 단계 결과 + gather_mode + python_version 등 메타. |

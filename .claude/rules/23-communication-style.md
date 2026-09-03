@@ -56,7 +56,7 @@
 | `Adapter` | "Adapter (벤더/세대별 YAML)" |
 | `Adapter 점수` | "Adapter 점수 (priority×1000 + specificity×10 + match)" |
 | `3-channel` | "3-채널 (os/esxi/redfish 통합 수집)" |
-| `Precheck` | "사전 진단 (TCP 도달 → 프로토콜 → 인증. ICMP 미사용)" |
+| `Precheck` | "사전 진단 (도달[TCP 응답 OR ICMP 응답] → 프로토콜 → 인증)" |
 | `Vault 2단계` | "Vault 2단계 로딩 (무인증 detect → vendor vault → 인증 수집)" |
 | `Linux 2-tier` | "Linux 2-tier (Python ok / raw fallback)" |
 | `Sections 11` | "11 섹션 (system/hardware/bmc/cpu/memory/storage/network/firmware/users/power/thermal)" |

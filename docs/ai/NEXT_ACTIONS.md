@@ -1,5 +1,17 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## reachable ICMP OR 판정 후속 (2026-09-03)
+
+> 정본: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`, rule 27 R1,
+> `tests/unit/test_precheck_icmp_reachability.py`
+
+| # | 항목 | 상태 | 내용 |
+|---|---|---|---|
+| RE-1 | **Jenkins Agent 의 `ping` 가용성 확인** | `[TODO / 실장비]` | controller(에이전트)에서 비특권 계정으로 `ping -c 1 -n -W 1 -w 1 <ip>` 가 rc=0 을 내는지 1회. 없거나 권한이 없으면 ICMP 근거를 못 얻어 판정이 종전(TCP 전용)과 같아진다 — 그 사실은 `errors[].detail` 의 `icmp:` 항목에 남는다. 실패 시 대안은 `SOCK_DGRAM+IPPROTO_ICMP` 2-tier 구현 (ADR 대안 F) |
+| RE-2 | 방화벽 DROP 구간 실측 | `[TODO / 실장비]` | 관리 포트 TCP 가 DROP 되고 ICMP 는 열린 대상에서 `reachable=true` / `stage=port` / `TCP_CONNECT_FAILED` / 2번 문장이 나오는지 확인. 이번 변경의 목적 그 자체라 실장비 확인 전에는 "동작 확인" 이라고 말할 수 없다 |
+| RE-3 | dead host 배치 wall-clock | `[TODO / 실장비]` | 무응답 대상 N대 실행에서 증가폭이 예상(+1초/대) 범위인지. 초과하면 `_precheck_timeout_icmp` 를 낮추거나 `_precheck_icmp_probe: false` 로 끈다 |
+| RE-4 | **Portal 소비자 이행 안내** | `[TODO / 사용자]` | `failure_code == "TCP_CONNECT_FAILED"` 로 "대상 무응답" 을 분기하던 코드가 Portal 에 있으면 `TARGET_UNREACHABLE` 을 받도록 갱신해야 한다. 사용자 문장(`failure_reason` / `errors[].message`)은 불변이라 표시 전용 화면은 영향 없다 |
+
 ## OS / ESXi 게더링 전수 검수 후속 (2026-09-03)
 
 > 정본: `docs/reference/decision-log.md` 2026-09-03, `tests/unit/test_gather_identity_render.py`

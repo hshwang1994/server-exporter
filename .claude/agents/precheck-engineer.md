@@ -1,6 +1,6 @@
 ---
 name: precheck-engineer
-description: precheck_bundle.py 진단(TCP 도달 → 프로토콜 → 인증, ICMP 미사용) 전문. **호출 시점**: precheck 실패 디버깅 / Vault 2단계 로딩 검증 / classify-precheck-layer 분류.
+description: precheck_bundle.py 진단(도달[TCP 응답 OR ICMP 응답] → 프로토콜 → 인증) 전문. **호출 시점**: precheck 실패 디버깅 / Vault 2단계 로딩 검증 / classify-precheck-layer 분류.
 tools: ["Read", "Grep", "Glob", "Bash"]
 model: sonnet
 ---

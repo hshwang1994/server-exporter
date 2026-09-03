@@ -47,11 +47,13 @@ Redfish: `TCP 443 -> ServiceRoot -> Vendor Detection -> Adapter Selection -> Cre
 Redfish Credential은 축이 2개다. **Standard Gathering Account는 전역 1벌**(`vault/common/redfish/standard.yml`)이며 Location도 Vendor도 보지 않는다. **Recovery Account만 Location×Vendor**(`vault/<loc>/redfish/<vendor>.yml`)다. Vendor 확인이 필요한 것은 Recovery 쪽이다. Vendor 미식별이어도 Standard 인증은 시도한다.
 
 ## 7. Precheck Contract
-ICMP Ping은 필수 Connectivity Gate가 아니다. ICMP가 차단되어 있어도 실제 관리 포트 통신이 가능하면 Gathering은 진행해야 한다.
+`reachable`은 **관리 TCP 응답 OR ICMP Echo 응답**이다 (2026-09-03 사용자 지시). 관리 TCP를 먼저 보고, TCP가 아무 응답도 주지 않았을 때만 ICMP Echo를 1회 확인한다.
+ICMP Ping은 **Gate가 아니다.** ICMP가 차단되어 있어도 관리 포트 통신이 가능하면 Gathering은 진행한다. ICMP 무응답만으로 실패시키지 않으며 ICMP 전용 `failure_code`도 만들지 않는다. ICMP를 앞단 필수 관문으로 되돌리지 않는다.
+판정: 관리 TCP 연결 성공 또는 RST 관측 -> `reachable=true`. TCP 무응답이어도 ICMP Echo Reply -> `reachable=true` + `port` 단계 실패. TCP·ICMP 모두 무응답일 때만 `reachable=false`.
+`reachable=true`인데 관리 포트를 열지 못했으면 기존 흐름대로 `port` 단계 실패다. `protocol -> auth -> gather -> fallback` 흐름은 변경 없다.
 원칙: TCP 연결 성공과 Protocol 확인 성공은 별개, Timeout만 보고 IP 미사용 단정 금지, Connection Refused만 보고 최종 장비 직접 응답 단정 금지.
-Hostname, IPv6, IPAM, ARP, ICMP 기반 별도 Discovery를 요구 없이 추가하지 않는다.
+Hostname, IPv6, IPAM, ARP 기반 별도 Discovery를 요구 없이 추가하지 않는다.
 Precheck 목적은 단순 Alive 판정이 아니라 TCP, Protocol, Authentication, Gathering 실패를 구분하는 것이다.
-오래된 `ping -> port -> protocol -> auth` 설명을 보고 ICMP Gate를 다시 구현하지 않는다.
 
 ## 8. Redfish Standard Account / Recovery
 표준 Gathering Account를 특정 Username 문자열로 하드코딩하지 않는다.
@@ -72,7 +74,8 @@ Delete/Recreate 보호 정책 임의 완화 금지. Dry-run은 예정 Action 확
 
 ## 9. Diagnosis Contract
 유효한 `failure_stage`: `reachable`, `port`, `protocol`, `auth`, `gather`, `fallback`.
-Stable `failure_code`: `DNS_RESOLUTION_FAILED`, `TCP_CONNECT_FAILED`, `TCP_CONNECTION_REFUSED`, `PROTOCOL_CHECK_FAILED`, `AUTH_PROBE_FAILED`, `GATHER_FAILED`, `OUTPUT_BUILD_FAILED`.
+Stable `failure_code`: `DNS_RESOLUTION_FAILED`, `TARGET_UNREACHABLE`, `TCP_CONNECT_FAILED`, `TCP_CONNECTION_REFUSED`, `PROTOCOL_CHECK_FAILED`, `AUTH_PROBE_FAILED`, `GATHER_FAILED`, `OUTPUT_BUILD_FAILED`.
+`TARGET_UNREACHABLE`(stage=`reachable`)은 TCP·ICMP 모두 무응답이고, `TCP_CONNECT_FAILED`(stage=`port`)는 ICMP는 응답하는데 관리 TCP 포트만 무응답인 경우다. 둘 다 장비 다운 확정이 아니다.
 Success: `failure_stage=null`, `failure_code=null`, `failure_reason=null`.
 Failed: `failure_stage`, `failure_code`, `failure_reason`이 모두 존재해야 하며 실패인데 `failure_reason=null`인 Result를 만들지 않는다.
 `failure_stage`는 Root Cause가 아니라 Workflow가 멈춘 위치다.

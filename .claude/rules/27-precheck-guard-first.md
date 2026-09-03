@@ -2,6 +2,7 @@
 
 > 본 수집 전에 도달성·프로토콜을 확인하고, 실패 지점을 `diagnosis` 에 남긴다.
 > 목적은 단순 alive 판정이 아니라 TCP·프로토콜·인증·수집 실패를 **구분**하는 것이다.
+> 도달성은 **관리 TCP 응답 OR ICMP Echo 응답** 이다 (2026-09-03 — ICMP 는 Gate 가 아니다).
 
 ## 적용 대상
 
@@ -11,13 +12,18 @@
 
 ## 현재 관찰된 현실
 
-`common/library/precheck_bundle.py` 실측 (2026-08-13).
+`common/library/precheck_bundle.py` 실측 (2026-09-03).
 
-- **ICMP 는 구현 자체가 없다.** 소켓도, `ping` 프로세스 호출도 없다. 코드가 두 곳에서
-  그 이유를 명시한다 — `:138`, `:181` "presence probe(ICMP / IPAM / ARP)는 만들지 않는다 — 사용자 지시".
-  그래서 `reachable` 은 **TCP 핸드셰이크가 됐거나 RST 를 받았다**는 뜻이지 ICMP 응답이 아니다.
+- **ICMP 는 TCP 뒤에 붙는 보조 근거다.** 2026-09-03 사용자 지시로 도달성이
+  "관리 TCP 응답 OR ICMP Echo 응답" 이 됐다 (`_resolve_reachability`). 종전에는 ICMP 구현
+  자체가 없었고, 그 결정의 이유("ICMP 로 판정하면 정상 장비를 죽은 것으로 오판한다")는
+  **호출 순서**로 그대로 보존된다 — TCP 가 응답하면 ICMP 는 호출조차 되지 않는다.
+  구현은 `ping` 명령 1회(stdlib subprocess)다. raw socket 은 root 권한이 필요하고 비특권
+  대안(SOCK_DGRAM+IPPROTO_ICMP)은 커널 `net.ipv4.ping_group_range` 에 좌우돼 에이전트마다
+  갈리기 때문이다. `ping` 부재/권한 부족이면 "근거 없음" 으로 떨어져 판정이 종전과 같아진다.
 - `reachable` 과 `port_open` 은 **한 번의 TCP 연결 순회로 함께 판정**된다 (`_check_ports`).
-  단계가 둘로 나뉘어 순차 실행되는 게 아니다.
+  단계가 둘로 나뉘어 순차 실행되는 게 아니다. ICMP 는 그 순회가 **전부 무응답으로 끝났을
+  때만** 1회 소비된다 (성공 경로·RST 경로의 예산 증가 0).
 - **인증 단계는 운영에서 실행되지 않는다.** `precheck_bundle.py:1399-1410` 이 측정 결과를
   기록해 뒀다 — 어떤 채널도 precheck 에 자격증명을 넘기지 않는다. Redfish 는 이 시점에
   제조사가 미확정이라 금고를 못 열고, 억지로 인증하면 본 수집 전에 실패 시도가 쌓여
@@ -32,19 +38,39 @@
 
   | 판정 | 실제로 하는 일 | 실패 시 `failure_stage` |
   |---|---|---|
-  | `reachable` + `port_open` | 채널 기본 포트를 TCP connect. 첫 성공에서 중단. RST 를 받으면 "살아 있고 포트가 닫힘" | `reachable` / `port` |
+  | `reachable` + `port_open` | 채널 기본 포트를 TCP connect. 첫 성공에서 중단. RST 를 받으면 "살아 있고 포트가 닫힘". **전 포트 무응답이면 ICMP Echo 1회** | `reachable` / `port` |
   | `protocol_supported` | redfish=ServiceRoot GET 상태코드, os=SSH 배너 또는 무인증 WS-Man Identify, esxi=vSphere 응답 | `protocol` |
   | `auth_success` | redfish 전용이며 자격증명이 넘어온 경우만. **운영 경로에서는 실행되지 않는다** | `auth` |
 
-  기본 포트 — redfish `[443]`, esxi `[443]`, os `[5986, 5985, 22]`.
+  기본 포트 — redfish `[443]`, esxi `[443]`, os `[5986, 5985, 22]`. ICMP 도입으로 포트 후보를
+  바꾸지 않았다.
 
-- **Forbidden**: ICMP / IPAM / ARP 기반 presence probe 를 추가하는 것. 관리망에서 ICMP 가
-  막혀 있어도 BMC 는 443 으로 답한다. ICMP 로 판정하면 정상 장비를 죽은 것으로 오판한다.
+  도달성 판정표 (`_resolve_reachability` 정본):
+
+  | 관측 | `reachable` | `failure_stage` | `failure_code` |
+  |---|---|---|---|
+  | TCP 연결 성공 | true | — | `null` |
+  | TCP 거부(RST) | true | `port` | `TCP_CONNECTION_REFUSED` |
+  | TCP 무응답 + ICMP 응답 | true | `port` | `TCP_CONNECT_FAILED` |
+  | TCP 무응답 + ICMP 무응답 | false | `reachable` | `TARGET_UNREACHABLE` |
+  | 주소 해석 실패 | false | `reachable` | `DNS_RESOLUTION_FAILED` |
+
+- **Allowed**: ICMP Echo 를 **TCP 뒤의 보조 근거로** 쓰는 것 (2026-09-03 사용자 지시).
+  `icmp_probe=false` 로 끄면 종전(TCP 전용) 판정으로 되돌아간다.
+- **Forbidden**: ICMP 를 **앞단 Gate 로** 만드는 것 — TCP 보다 먼저 보거나, ICMP 무응답만으로
+  reachable 을 실패시키는 것. 관리망에서 ICMP 가 막혀 있어도 BMC 는 443 으로 답한다.
+  ICMP 를 관문으로 쓰면 정상 장비를 죽은 것으로 오판한다.
+- **Forbidden**: `ICMP_CONNECT_FAILED` 같은 ICMP 전용 `failure_code` / `failure_stage` 신설.
+  ICMP 는 도달 근거를 더할 뿐 실패를 만들지 않는다.
+- **Forbidden**: IPAM / ARP 기반 presence probe 추가, ICMP 를 포트마다 반복 전송(예산 증가).
 - **Forbidden**: timeout 만 보고 "IP 미사용" 으로 단정, Connection Refused 만 보고
-  "장비가 직접 응답했다" 고 단정.
-- **Why**: `CLAUDE.md` §7 이 요구하는 계약이다. 이 규칙 본문이 예전에 "ping → port →
-  protocol → auth" 라고 적어 두는 바람에, 정본이 "그 설명 보고 ICMP Gate 를 다시 구현하지
-  말라" 고 따로 경고해야 했다.
+  "장비가 직접 응답했다" 고 단정. `TARGET_UNREACHABLE` 도 "장비 다운" 확정이 아니라
+  "우리가 쓴 probe(TCP·ICMP)로 응답을 못 봤다" 는 관측이다.
+- **Why**: `CLAUDE.md` §7 이 요구하는 계약이다. ICMP 를 금지했던 이유는 "핑으로 **판정**하면
+  안 된다" 였지 "핑을 보면 안 된다" 가 아니었다. OR 조건 + TCP 우선 호출이 그 이유를 그대로
+  지키면서, 반대 방향 오판(방화벽이 관리 포트 TCP 를 DROP 하는 구간에서 살아 있는 장비를
+  `reachable` 실패로 떨어뜨리던 것)을 없앤다.
+  근거 ADR: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`
 
 ### R2. OS 채널은 후보 포트를 끝까지 훑는다
 
@@ -118,7 +144,8 @@ vault 파일 변경 시 다음 ansible 실행에서 자동 반영 보장. 의심
 
 ## 금지 패턴
 
-- ICMP / IPAM / ARP presence probe 추가 — R1
+- ICMP 를 앞단 Gate 로 만들기 / ICMP 무응답만으로 실패 / ICMP 전용 code 신설 — R1
+- IPAM / ARP presence probe 추가 — R1
 - timeout 만 보고 IP 미사용 단정 / OS 후보 포트를 프로토콜 확인 없이 채택 — R1, R2
 - 삭제된 평면 vault 경로 사용 — R3
 - 일부 실패 시 전체 abort — R4
@@ -127,7 +154,7 @@ vault 파일 변경 시 다음 ansible 실행에서 자동 반영 보장. 의심
 
 ## 리뷰 포인트
 
-- [ ] precheck 판정 순서와 ICMP 미사용
+- [ ] precheck 판정 순서 (TCP 먼저, ICMP 는 TCP 전멸 시 1회) 와 OR 판정표 준수
 - [ ] 각 단계 실패 시 diagnosis.details 기록
 - [ ] Redfish 표준 vault 는 전역, 복구만 loc×vendor
 - [ ] graceful degradation 설계

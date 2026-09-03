@@ -1,6 +1,6 @@
 ---
 name: debug-precheck-failure
-description: 진단(TCP 도달 → 프로토콜 → 인증, ICMP 미사용) 어디서 막혔는지 분석. precheck_bundle.py 결과의 diagnosis.details를 해석하고 구체적 해결 방향 제시. 사용자가 "포트는 열렸는데 protocol 실패", "auth 단계에서 막힘", "precheck 실패 원인" 등 요청 시. - precheck 실패 발생 / graceful degradation 했지만 일부 데이터 누락 / 새 BMC 응답 없음
+description: 진단(도달[TCP 응답 OR ICMP 응답] → 프로토콜 → 인증) 어디서 막혔는지 분석. precheck_bundle.py 결과의 diagnosis.details를 해석하고 구체적 해결 방향 제시. 사용자가 "포트는 열렸는데 protocol 실패", "auth 단계에서 막힘", "precheck 실패 원인" 등 요청 시. - precheck 실패 발생 / graceful degradation 했지만 일부 데이터 누락 / 새 BMC 응답 없음
 ---
 
 # debug-precheck-failure
@@ -13,7 +13,7 @@ server-exporter의 4단계 진단(`common/library/precheck_bundle.py`) 어느 �
 
 | 단계 | 책임 | 일반적 실패 원인 |
 |---|---|---|
-| 1. ping | ICMP / TCP SYN으로 host 도달성 | 네트워크 / firewall / VLAN |
+| 1. 도달 | 관리 TCP 응답(연결/RST) **OR** ICMP Echo 응답. TCP 가 전멸했을 때만 ICMP 1회 | 네트워크 / firewall / VLAN |
 | 2. port | target_type별 포트 (SSH 22 / WinRM 5985-5986 / vSphere 443 / Redfish 443) | 서비스 미기동 / firewall |
 | 3. protocol | TCP 응답 + 첫 응답 형식 (HTTPS handshake / SSH banner / Redfish JSON) | TLS 버전 / cipher suite / 잘못된 protocol |
 | 4. auth | 자격증명으로 인증 | vault 자격증명 잘못 / 사용자 잠김 / privilege 부족 |
@@ -55,17 +55,24 @@ server-exporter의 4단계 진단(`common/library/precheck_bundle.py`) 어느 �
 
 ## 절차
 
-### Step 1: ping 실패
+### Step 1: 도달 실패 (`TARGET_UNREACHABLE`)
+
+TCP 도 ICMP 도 응답이 없었다는 뜻이다. 둘 중 하나라도 답했으면 이 단계가 아니다.
 
 ```bash
-ping -c 3 <target_ip>
-# 또는 (방화벽으로 ICMP 차단 시)
-nc -zv <target_ip> <port>
+nc -zv <target_ip> <port>    # 관리 포트 — 이게 먼저다
+ping -c 3 <target_ip>        # ICMP — 보조 근거
 ```
 
 원인:
 - 네트워크 / VLAN 분리 → Agent 노드 라우팅 확인
-- ICMP 차단 → TCP SYN으로 대체
+- 전원 off / IP 미사용 (단, 이 관측만으로 **확정하지 않는다**)
+- 방화벽이 TCP·ICMP 를 모두 DROP
+
+`stage=port` + `TCP_CONNECT_FAILED` 로 나왔다면 **ICMP 는 답했다는 뜻**이다 —
+장비는 있고 관리 포트만 막힌 상태이므로 방화벽 정책과 관리 서비스부터 본다.
+controller 에 `ping` 이 없거나 권한이 없으면 ICMP 근거를 못 얻는다 —
+그 사실은 `errors[].detail` 의 `icmp:` 항목에 남는다.
 
 ### Step 2: port 실패
 

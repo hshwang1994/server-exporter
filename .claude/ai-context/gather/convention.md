@@ -122,8 +122,11 @@ priority:
 ## 7. 4단계 Precheck (precheck_bundle.py)
 
 ```
-TCP 도달/포트 → 프로토콜 → 인증(운영 미실행). ICMP 미사용
+도달/포트(TCP 응답 OR ICMP 응답) → 프로토콜 → 인증(운영 미실행)
 ```
+
+ICMP 는 Gate 가 아니다 — TCP 가 응답하면 호출조차 하지 않고, TCP 전 포트 무응답일 때만
+Echo 1회를 본다 (rule 27 R1).
 
 각 단계 실패 시 `diagnosis.details`에 어디서 막혔는지 기록 + graceful degradation.
 

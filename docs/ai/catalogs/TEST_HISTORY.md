@@ -1,5 +1,23 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-03 — reachable ICMP OR 판정 회귀 (오프라인)
+
+> 정본: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`
+
+| 항목 | 결과 |
+|---|---|
+| `pytest tests/ --ignore=tests/e2e_browser` (전수) | **3312 passed**, 10 skipped, 7 xfailed |
+| `pytest tests/unit/test_precheck_icmp_reachability.py` (신설) | 24 passed — OR 판정 / Gate 아님(TCP 응답 시 ICMP 미호출) / RST·DNS 경로 skip / 예산 1회 / 전용 code 금지 / envelope shape 불변 |
+| 변경 전 기준선 대비 | 3269 → 3312 (+43: ICMP 24 + 채널별 OR 케이스 + 문장 매핑) |
+| `python scripts/ai/hooks/output_schema_drift_check.py` | exit 0 — sections=11 fd_paths=192 |
+| `python scripts/ai/verify_harness_consistency.py` | 통과 (rules 28 / skills 47 / agents 47 / policies 7) |
+| `python scripts/ai/check_project_map_drift.py` | fingerprint 일치 |
+| `python scripts/ai/verify_vendor_boundary.py` | exit 0 (기존 advisory 2건 — 본 변경과 무관) |
+| `python -m py_compile common/library/precheck_bundle.py` | OK |
+| YAML parse (`run_precheck.yml`, 3 channel `site.yml`, `field_dictionary.yml`, `failure_reasons.yml`) | OK |
+| `ansible-playbook --syntax-check` | **로컬 미실행 — 환경 제약** (Windows 개발 PC 의 ansible CLI 가 `OSError WinError 87` 로 기동 불가). Jinja2 인라인 템플릿 컴파일은 `tests/e2e/test_section_message_contract.py` 가 대체 검증 |
+| 실장비 | **미실행** — `docs/ai/NEXT_ACTIONS.md` RE-1~RE-3 |
+
 ## 2026-09-03 — 실장비 검증 (Jenkins `clovirone-server-gather` #190~#196, 운영 파이프라인 Jenkinsfile_portal)
 
 > 증거: `tests/evidence/2026-09-03-os-esxi-live-verification.md` + 원본 envelope `tests/evidence/2026-09-03-live/*.json`

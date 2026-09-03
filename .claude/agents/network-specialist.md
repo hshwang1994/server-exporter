@@ -22,7 +22,7 @@ model: opus
 - **SSH**: ssh-rsa / rsa-sha2-512 / KexAlgorithms / paramiko / OpenSSH client
 - **WinRM**: NTLM / Kerberos / Basic / HTTPS 5986 / HTTP 5985
 - **InfiniBand**: Mellanox (NVIDIA) ConnectX / IPoIB / RDMA / ibstat / mlxconfig
-- **port / firewall**: precheck 진단(TCP 도달 → 프로토콜 → 인증. ICMP 는 쓰지 않는다)
+- **port / firewall**: precheck 진단(도달[TCP 응답 OR ICMP 응답] → 프로토콜 → 인증)
 
 ## 작업 절차
 1. 통신 단계 식별 (precheck failure_stage)

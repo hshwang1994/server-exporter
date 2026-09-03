@@ -81,7 +81,7 @@ sequenceDiagram
 ```
 
 그릴 때 자주 쓰는 도메인 흐름 — Jenkins 4-Stage, 3채널 수집,
-precheck 진단(TCP 도달 → 프로토콜 → 인증. ICMP 는 쓰지 않는다),
+precheck 진단(도달[TCP 응답 OR ICMP 응답] → 프로토콜 → 인증),
 Redfish 표준 계정 인증과 복구, adapter 자동 선택.
 
 ## 검수

@@ -14,7 +14,7 @@ server-exporter의 검증 / 차단 logic을 적절한 layer에 배치. 너무 �
 | Layer | 위치 | 검증 종류 |
 |---|---|---|
 | 1. Jenkins Stage 1 (Validate) | Jenkinsfile | 입력 형식 (JSON 파싱 / IP 형식 / target_type 값) |
-| 2a. precheck ping | precheck_bundle.py | 호스트 도달성 (ICMP / TCP SYN) |
+| 2a. precheck 도달 | precheck_bundle.py | 호스트 도달성 (관리 TCP 응답 OR ICMP Echo 응답) |
 | 2b. precheck port | precheck_bundle.py | target_type별 port 응답 (SSH 22 / WinRM 5985-5986 / vSphere 443 / Redfish 443) |
 | 2c. precheck protocol | precheck_bundle.py | TCP 응답 + 첫 응답 형식 |
 | 2d. precheck auth | precheck_bundle.py | 자격증명 인증 |
