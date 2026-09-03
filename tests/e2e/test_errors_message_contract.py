@@ -359,7 +359,10 @@ def test_precheck_bundle_emits_only_standard_sentences():
 #   나갔다 (H3). 이제 관측된 code 를 그대로 따른다.
 @pytest.mark.parametrize("code,expected", [
     ("DNS_RESOLUTION_FAILED", "_fr_ip_unconfirmed"),
-    ("TCP_CONNECT_FAILED", "_fr_ip_unconfirmed"),
+    ("TARGET_UNREACHABLE", "_fr_ip_unconfirmed"),
+    # 2026-09-03: ICMP 로 도달이 확인된 상태(TCP_CONNECT_FAILED)에 1번 문구("IP 사용 여부를
+    #   확인하세요")를 쓰면 사실과 어긋난다. 운영자가 볼 곳은 방화벽/관리 서비스이므로 2번.
+    ("TCP_CONNECT_FAILED", "_fr_port_unreachable"),
     ("TCP_CONNECTION_REFUSED", "_fr_port_unreachable"),
     ("PROTOCOL_CHECK_FAILED", "_fr_protocol_unconfirmed"),
     ("AUTH_PROBE_FAILED", "_fr_credential_failed"),
@@ -391,11 +394,18 @@ def test_failure_code_mapping_covers_every_enum_value():
     )
 
 
-def test_no_ip_presence_probe_is_implemented():
-    """§25 §33 — IP presence 판정(ICMP / IPAM / ARP)은 만들지 않는다는 결정을 고정한다.
+def test_sentence_selection_stays_failure_code_only():
+    """문장은 **관측된 failure_code 에서만** 파생한다 (2026-09-03 갱신).
 
-    종전에는 presence 결과를 받는 자리(`ip_in_use`)만 있고 채우는 코드가 없어서, 표준 5 문장 중
-    하나가 실사용 0 인 채로 남아 있었다. 그 자리를 없애고 관측된 failure_code 로 문장을 정한다.
+    종전 이름은 test_no_ip_presence_probe_is_implemented 였고 "ICMP 는 만들지 않는다" 를
+    고정했다. 2026-09-03 사용자 지시로 reachable 판정에 ICMP Echo 가 **OR 조건으로**
+    들어왔으므로 그 부분은 더 이상 유효하지 않다. 그러나 이 테스트가 실제로 지키던 것은
+    "presence 추정으로 사용자 문장을 갈라 쓰지 않는다" 이며, 그 계약은 그대로다:
+
+      - 문장 선택 진입점은 reason_for_failure_code 하나뿐이다.
+      - `ip_in_use` 같은 **판정 결과를 받아만 두고 채우지 않는 자리**를 다시 만들지 않는다.
+        (ICMP 결과는 그런 자리가 아니라 failure_code 를 직접 결정하고 소멸한다.)
+      - ICMP 는 실패를 만들지 않으므로 ICMP 전용 문장도 code 도 없다.
     """
     assert not hasattr(pb, "reason_for_connect_failure"), (
         "presence 기반 문장 분기가 되살아났다 — 문장은 failure_code 에서만 파생한다"
@@ -406,6 +416,26 @@ def test_no_ip_presence_probe_is_implemented():
         if stripped.startswith("#"):
             continue
         assert "ip_in_use" not in line, f"presence 판정 잔재: {line!r}"
+    # ICMP 는 근거만 더한다 — 전용 사용자 문장을 만들지 않는다 (Portal 5문장 집합 불변).
+    assert len(set(FAILURE_REASONS.values())) == len(FAILURE_REASONS), "문장 중복 정의"
+    for code, sentence in pb.REASON_BY_FAILURE_CODE.items():
+        assert sentence in set(FAILURE_REASONS.values()), code
+
+
+def test_icmp_probe_is_not_a_gate():
+    """ICMP 는 앞단 Gate 가 아니다 — TCP 응답 경로에서는 호출조차 되지 않는다.
+
+    2026-09-03 사용자 지시의 핵심 경계다. ICMP 를 Gate 로 만들면 ICMP 가 차단된 관리망의
+    정상 장비가 전부 도달 실패로 뒤집힌다 (CLAUDE.md §7).
+    """
+    import inspect
+    src = inspect.getsource(pb._resolve_reachability)
+    assert "icmp_check" in src, "ICMP 확인 지점이 사라졌다"
+    # 호출부는 'TCP 가 아무 응답도 주지 않은' 경로 두 곳뿐이다.
+    module_src = (REPO / "common" / "library" / "precheck_bundle.py").read_text(encoding="utf-8")
+    call_lines = [ln.strip() for ln in module_src.splitlines()
+                  if "_resolve_reachability(" in ln and "def " not in ln]
+    assert len(call_lines) == 2, f"_resolve_reachability 호출부가 늘었다: {call_lines}"
 
 
 def test_site_yml_rescues_reference_shared_constants_not_literals():

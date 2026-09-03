@@ -176,9 +176,10 @@
     # 이제 PLAY 1 의 공통 precheck 가 만든 진단(_diagnosis)이 host fact 로 그대로 넘어오므로
     # 재작성하지 않는다 — reachable / port_open / failure_stage / failure_code /
     # details.checked_ports 모두 **실제 관측 결과**다.
-    #   - 전 포트 무응답      → stage=reachable, code=TCP_CONNECT_FAILED
-    #   - RST 를 하나라도 관측 → stage=port,      code=TCP_CONNECTION_REFUSED
-    #   - 주소 해석 실패      → stage=reachable, code=DNS_RESOLUTION_FAILED
+    #   - 전 포트 무응답 + ICMP 무응답 → stage=reachable, code=TARGET_UNREACHABLE
+    #   - 전 포트 무응답 + ICMP 응답   → stage=port,      code=TCP_CONNECT_FAILED
+    #   - RST 를 하나라도 관측         → stage=port,      code=TCP_CONNECTION_REFUSED
+    #   - 주소 해석 실패               → stage=reachable, code=DNS_RESOLUTION_FAILED
     # auth_success 는 인증을 시도하지 않으므로 null 유지 (모듈 초기값).
     #
     # 2026-08-11 (Phase 5-A): failure_reason 덮어쓰기를 **제거**했다.

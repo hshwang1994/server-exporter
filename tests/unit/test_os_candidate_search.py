@@ -46,6 +46,8 @@ sys.modules.setdefault("ansible.module_utils.basic", _b)
 
 import precheck_bundle as pb  # noqa: E402
 
+from tests.precheck_stub import ICMP_REPLY, ICMP_SILENT, silence_icmp  # noqa: E402
+
 # Phase 4-B: esxi 채널 Stage 3 는 vim25 SOAP 응답을 본다 (lab 실측 AboutInfo 기반 fixture).
 _ESXI_SERVICE_CONTENT = (
     REPO / "tests/fixtures/esxi/lab/esxi_7_0_3_service_content.xml"
@@ -60,8 +62,11 @@ class _ExitJson(Exception):
 
 
 def run_os(monkeypatch, tcp, proto, *, timeout_port=2.0, timeout_proto=5.0,
-           poll_interval=1.0):
-    """tcp: {port: 'ok'|'timeout'|'refused'|'dns'} / proto: {port: True|False}"""
+           poll_interval=1.0, icmp=ICMP_SILENT):
+    """tcp: {port: 'ok'|'timeout'|'refused'|'dns'} / proto: {port: True|False}
+
+    2026-09-03: TCP 전멸 시 소비되는 ICMP 결과를 주입한다 (실 ping 금지).
+    """
     tcp_calls: list[int] = []
     proto_calls: list[tuple[int, float]] = []
 
@@ -84,12 +89,14 @@ def run_os(monkeypatch, tcp, proto, *, timeout_port=2.0, timeout_proto=5.0,
 
     monkeypatch.setattr(pb, "tcp_check_budget", fake_tcp)
     monkeypatch.setattr(pb, "probe_os", fake_proto)
+    silence_icmp(monkeypatch, pb, icmp)
 
     class _Fake:
         params = dict(host="192.0.2.30", channel="os", ports=[], timeout_port=timeout_port,
                       timeout_protocol=timeout_proto, timeout_auth=8.0,
                       username=None, password=None, verify_ssl=False,
-                      probe_protocol=True, port_poll_interval=poll_interval)
+                      probe_protocol=True, port_poll_interval=poll_interval,
+                      icmp_probe=True, timeout_icmp=1.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
@@ -191,7 +198,7 @@ def test_partial_open_and_protocol_fail(monkeypatch):
 # Case 11 — TCP 단계 전멸 (Phase 3-A 매핑 유지)
 # ═══════════════════════════════════════════════════════════════════════════
 @pytest.mark.parametrize("tcp,exp_stage,exp_code", [
-    ({}, "reachable", "TCP_CONNECT_FAILED"),
+    ({}, "reachable", "TARGET_UNREACHABLE"),
     ({5986: "refused", 5985: "refused", 22: "refused"}, "port", "TCP_CONNECTION_REFUSED"),
     ({5986: "timeout", 5985: "refused", 22: "timeout"}, "port", "TCP_CONNECTION_REFUSED"),
     ({5986: "dns", 5985: "dns", 22: "dns"}, "reachable", "DNS_RESOLUTION_FAILED"),
@@ -240,11 +247,13 @@ def test_port_polling_preserved(monkeypatch):
 
     monkeypatch.setattr(pb, "tcp_check_budget", fake_tcp)
     monkeypatch.setattr(pb, "probe_os", lambda *_a: (False, "x", None))
+    silence_icmp(monkeypatch, pb)
 
     class _Fake:
         params = dict(host="192.0.2.30", channel="os", ports=[], timeout_port=2.0,
                       timeout_protocol=5.0, timeout_auth=8.0, username=None, password=None,
-                      verify_ssl=False, probe_protocol=True, port_poll_interval=1.0)
+                      verify_ssl=False, probe_protocol=True, port_poll_interval=1.0,
+                      icmp_probe=True, timeout_icmp=1.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
@@ -311,7 +320,8 @@ def test_other_channels_do_not_use_candidate_flow(monkeypatch, channel):
     class _Fake:
         params = dict(host="192.0.2.10", channel=channel, ports=[], timeout_port=3.0,
                       timeout_protocol=15.0, timeout_auth=8.0, username=None, password=None,
-                      verify_ssl=False, probe_protocol=True, port_poll_interval=0.0)
+                      verify_ssl=False, probe_protocol=True, port_poll_interval=0.0,
+                      icmp_probe=True, timeout_icmp=1.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
@@ -338,7 +348,8 @@ def test_os_with_probe_protocol_false_keeps_phase3a_flow(monkeypatch):
     class _Fake:
         params = dict(host="192.0.2.30", channel="os", ports=[], timeout_port=2.0,
                       timeout_protocol=5.0, timeout_auth=8.0, username=None, password=None,
-                      verify_ssl=False, probe_protocol=False, port_poll_interval=1.0)
+                      verify_ssl=False, probe_protocol=False, port_poll_interval=1.0,
+                      icmp_probe=True, timeout_icmp=1.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)

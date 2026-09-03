@@ -74,8 +74,14 @@ maxmemory-policy allkeys-lru
 | Agent | 대상서버 Linux/ESXi | 22 | TCP | SSH |
 | Agent | 대상서버 Windows | 5985/5986 | TCP | WinRM |
 | Agent | 대상서버 Redfish | 443 | TCP | BMC HTTPS API |
+| Agent | 대상서버 전체 | — | ICMP Echo | 도달성 보조 확인 (선택) |
 
 > Redis(6379) 는 내부망만 오픈. 외부 차단 필수.
+>
+> ICMP 는 **선택**이다. 열려 있으면 관리 포트 TCP 가 방화벽에서 조용히 버려지는 구간에서
+> "장비는 살아 있고 관리 포트만 막혔다" 를 구분해 준다 (실패가 `reachable` 이 아니라 `port`
+> 단계가 되고, 안내 문장도 방화벽·관리 서비스를 가리킨다). 막혀 있어도 수집은 종전대로
+> 동작한다 — ICMP 는 관문이 아니라 보조 근거다.
 
 ---
 
@@ -83,14 +89,24 @@ maxmemory-policy allkeys-lru
 
 ```bash
 # RHEL 계열
-yum install -y java-21-openjdk python3 git jq redis
+yum install -y java-21-openjdk python3 git jq redis iputils
 
 # Debian 계열
-apt update && apt install -y openjdk-21-jdk python3 python3-venv git jq redis-tools
+apt update && apt install -y openjdk-21-jdk python3 python3-venv git jq redis-tools iputils-ping
 ```
 
 > `redis` (RHEL) / `redis-tools` (Debian) 는 `redis-cli` 를 포함한다.
 > Agent 에서 마스터 Redis 연결을 확인할 때 쓴다.
+>
+> `iputils` / `iputils-ping` 은 도달성 보조 확인용 `ping` 이다. 사전 진단이 관리 포트 TCP 로
+> 아무 응답도 못 받았을 때만 Echo 를 1회 보낸다. 서비스 계정(비특권)으로 아래가 되면 준비 완료다.
+>
+> ```bash
+> sudo -u {서비스계정} ping -c 1 -n -W 1 -w 1 <대상IP>; echo "rc=$?"
+> ```
+>
+> 없거나 권한이 부족해도 수집은 그대로 동작한다 — 도달 판정이 종전처럼 TCP 전용이 되고,
+> 그 사실이 결과의 `errors[].detail` 에 `icmp: 확인 불가 ...` 로 남는다.
 
 ---
 

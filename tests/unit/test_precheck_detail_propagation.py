@@ -53,6 +53,8 @@ sys.modules.setdefault("ansible.module_utils.basic", _stub_basic)
 
 import precheck_bundle as pb  # noqa: E402
 
+from tests.precheck_stub import ICMP_REPLY, ICMP_SILENT, silence_icmp  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # run_module() 구동용 최소 AnsibleModule 대역
@@ -73,7 +75,8 @@ class _FakeModule:
         raise _ExitJson(kwargs)
 
 
-def _run(monkeypatch, *, channel="redfish", ports=None, **overrides) -> dict:
+def _run(monkeypatch, *, channel="redfish", ports=None, icmp=ICMP_SILENT,
+         **overrides) -> dict:
     """run_module() 을 1회 실행하고 exit_json 결과 dict 를 반환."""
     params = {
         "host": "192.0.2.10",
@@ -87,8 +90,12 @@ def _run(monkeypatch, *, channel="redfish", ports=None, **overrides) -> dict:
         "verify_ssl": False,
         "probe_protocol": True,
         "port_poll_interval": 0.0,
+        "icmp_probe": True,
+        "timeout_icmp": 1.0,
     }
     params.update(overrides)
+    # 2026-09-03: TCP 전멸 시 소비되는 ICMP 결과를 주입한다 (실 ping 금지).
+    silence_icmp(monkeypatch, pb, icmp)
     monkeypatch.setattr(pb, "AnsibleModule", lambda **_kw: _FakeModule(params))
     with pytest.raises(_ExitJson) as exc:
         pb.run_module()

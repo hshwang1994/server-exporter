@@ -31,6 +31,8 @@ from tests.secret_guard import (  # noqa: E402
 
 import yaml
 
+from tests.precheck_stub import ICMP_REPLY, ICMP_SILENT  # noqa: E402
+
 from tests.e2e.test_failure_reason_contract import (
     REPO,
     _ESXI_TASK,
@@ -55,6 +57,12 @@ ALLOWED_STAGES: frozenset[str] = frozenset(
 
 ALLOWED_CODES: frozenset[str] = frozenset({
     "DNS_RESOLUTION_FAILED",
+    # 2026-09-03: reachable 이 "관리 TCP 응답 OR ICMP Echo 응답" 이 되면서, 종전
+    #   TCP_CONNECT_FAILED 하나가 겸하던 두 상황이 갈렸다.
+    #     TARGET_UNREACHABLE : TCP 도 ICMP 도 무응답            (stage=reachable)
+    #     TCP_CONNECT_FAILED : ICMP 는 응답, 관리 TCP 만 무응답 (stage=port)
+    #   ICMP 전용 code 는 만들지 않는다 — ICMP 는 도달 근거를 더할 뿐 실패를 만들지 않는다.
+    "TARGET_UNREACHABLE",
     "TCP_CONNECT_FAILED",
     "TCP_CONNECTION_REFUSED",
     "PROTOCOL_CHECK_FAILED",
@@ -67,12 +75,14 @@ ALLOWED_CODES: frozenset[str] = frozenset({
     "OUTPUT_BUILD_FAILED",
 })
 
-# code -> 허용 stage. 기본은 1:1 이며 **문서화된 예외 1건**만 추가로 허용한다.
-#   OS 포트 감지 실패: wait_for 는 RST 를 관측하지 못해 REFUSED 를 쓸 수 없다. 관측한 사실은
-#   "TCP 연결에 실패했다" 뿐이고, 실행이 멈춘 단계는 포트 감지 단계이므로 stage=port 다.
+# code -> 허용 stage. code 와 stage 는 1:1 이다.
+#   2026-09-03: TCP_CONNECT_FAILED 의 허용 stage 에서 reachable 을 **뺐다**. ICMP 응답으로
+#   도달이 확인된 상태에서만 이 code 가 나오므로, 멈춘 위치는 언제나 관리 포트 단계다.
+#   TCP·ICMP 모두 무응답인 경우는 TARGET_UNREACHABLE 이 맡는다.
 CODE_TO_STAGES: dict[str, frozenset[str]] = {
     "DNS_RESOLUTION_FAILED":  frozenset({"reachable"}),
-    "TCP_CONNECT_FAILED":     frozenset({"reachable", "port"}),
+    "TARGET_UNREACHABLE":     frozenset({"reachable"}),
+    "TCP_CONNECT_FAILED":     frozenset({"port"}),
     "TCP_CONNECTION_REFUSED": frozenset({"port"}),
     "PROTOCOL_CHECK_FAILED":  frozenset({"protocol"}),
     "AUTH_PROBE_FAILED":      frozenset({"auth"}),
@@ -127,13 +137,56 @@ def test_case02_dns_failure(monkeypatch):
     (socket.timeout(), "timeout"),
     (OSError("EHOSTUNREACH"), "no route"),
 ])
-def test_case03_tcp_connect_failed_not_unreachable(exc, label, monkeypatch):
-    """timeout / no route 를 '장비 다운'으로 확정하지 않는다 (UNREACHABLE 금지)."""
+def test_case03_no_response_is_target_unreachable_not_device_down(exc, label, monkeypatch):
+    """timeout / no route + ICMP 무응답 → TARGET_UNREACHABLE.
+
+    2026-09-03 이름 변경 (종전 TCP_CONNECT_FAILED). 이 code 는 "우리가 쓴 probe(TCP·ICMP)
+    로 응답을 보지 못했다" 는 **관측**이지 "장비가 꺼졌다" 는 **확정**이 아니다. 그 경계를
+    아래 assertion 이 계속 지킨다 — 사용자 문장이 전원/다운을 주장하면 실패한다.
+    """
     result = _run_precheck(monkeypatch, "redfish", connect_exc=exc)
     assert result["failure_stage"] == "reachable", label
-    assert result["failure_code"] == "TCP_CONNECT_FAILED", label
+    assert result["failure_code"] == "TARGET_UNREACHABLE", label
     assert result["auth_success"] is None
+    for banned in ("전원", "다운", "꺼졌"):
+        assert banned not in result["failure_reason"], (
+            f"[{label}] 관측하지 않은 원인을 단정한다: {result['failure_reason']!r}"
+        )
     _assert_stage_code(result, f"C3 {label}")
+
+
+@pytest.mark.parametrize("exc,label", [
+    (socket.timeout(), "timeout"),
+    (OSError("EHOSTUNREACH"), "no route"),
+])
+def test_case03b_icmp_reply_moves_failure_to_port_stage(exc, label, monkeypatch):
+    """TCP 무응답이어도 ICMP Echo Reply 가 오면 도달은 성립한다 (2026-09-03).
+
+    reachable = TCP 응답 OR ICMP 응답. 도달이 확인된 뒤 막힌 곳은 관리 포트이므로
+    stage=port + TCP_CONNECT_FAILED 이고, 사용자 문장도 "IP 사용 여부" 가 아니라
+    "관리 포트 / 방화벽 확인" 으로 바뀐다.
+    """
+    result = _run_precheck(monkeypatch, "redfish", connect_exc=exc, icmp=ICMP_REPLY)
+    assert result["reachable"] is True, label
+    assert result["port_open"] is False, "도달했다고 관리 포트가 열린 것은 아니다"
+    assert result["failure_stage"] == "port", label
+    assert result["failure_code"] == "TCP_CONNECT_FAILED", label
+    assert result["failure_reason"] == pb.REASON_PORT_UNREACHABLE, label
+    assert "icmp" in (result["detail"] or ""), "ICMP 관측 근거가 detail 에 남아야 한다"
+    _assert_stage_code(result, f"C3b {label}")
+
+
+def test_icmp_failure_never_creates_its_own_code(monkeypatch):
+    """ICMP 는 실패를 만들지 않는다 — 전용 failure_code / stage 가 생기면 실패."""
+    result = _run_precheck(monkeypatch, "redfish", connect_exc=socket.timeout(),
+                           icmp=(False, "icmp: 확인 불가 (ping 명령 없음)"))
+    # ping 을 아예 못 쓰는 환경이어도 판정은 종전(TCP 전용)과 같아야 한다
+    assert result["failure_stage"] == "reachable"
+    assert result["failure_code"] == "TARGET_UNREACHABLE"
+    assert "ICMP" not in result["failure_code"]
+    assert result["failure_reason"] == pb.REASON_IP_UNCONFIRMED
+    for code in ALLOWED_CODES:
+        assert "ICMP" not in code, f"ICMP 전용 code 가 생겼다: {code}"
 
 
 def test_case04_connection_refused(monkeypatch):
@@ -418,13 +471,25 @@ def test_case13_partial_does_not_force_stage_or_code():
 # Case 14 — OS 포트 전멸(문서화된 예외) / Fallback
 # ═══════════════════════════════════════════════════════════════════════════
 @pytest.mark.parametrize("channel", ["os", "redfish", "esxi"])
-def test_all_ports_timeout_is_connect_failed(channel, monkeypatch):
-    """전 포트 무응답은 채널 무관 reachable + TCP_CONNECT_FAILED (UNREACHABLE 확정 금지)."""
+def test_all_ports_timeout_is_target_unreachable(channel, monkeypatch):
+    """전 포트 무응답 + ICMP 무응답은 채널 무관 reachable + TARGET_UNREACHABLE."""
     result = _run_precheck(monkeypatch, channel, connect_exc=socket.timeout())
     assert result["failure_stage"] == "reachable", channel
-    assert result["failure_code"] == "TCP_CONNECT_FAILED", channel
+    assert result["failure_code"] == "TARGET_UNREACHABLE", channel
     assert result["auth_success"] is None, channel
     _assert_stage_code(result, f"{channel} 전 포트 timeout")
+
+
+@pytest.mark.parametrize("channel", ["os", "redfish", "esxi"])
+def test_all_ports_timeout_with_icmp_reply_is_port_stage(channel, monkeypatch):
+    """ICMP OR 판정은 3 채널 공통이다 (OS 후보 탐색 경로 포함)."""
+    result = _run_precheck(monkeypatch, channel, connect_exc=socket.timeout(),
+                           icmp=ICMP_REPLY)
+    assert result["reachable"] is True, channel
+    assert result["port_open"] is False, channel
+    assert result["failure_stage"] == "port", channel
+    assert result["failure_code"] == "TCP_CONNECT_FAILED", channel
+    _assert_stage_code(result, f"{channel} 전 포트 timeout + ICMP 응답")
 
 
 def test_os_refused_now_observable(monkeypatch):
@@ -538,6 +603,7 @@ def test_phase1_reason_contract_still_holds():
             {"_os_auth_ok": True, "_os_attempts_meta": {}})),
         # 2026-08-11 (Phase 5-A): OS 포트 실패 문구는 site.yml 이 아니라 precheck 가 만든다.
         # (Phase 6-B) 세 관측이 같은 1번 문구를 쓴다 — 구분은 failure_code 가 유지한다.
+        ("os/unreachable", {"failure_reason": pb.reason_for_failure_code("TARGET_UNREACHABLE")}),
         ("os/connect-failure", {"failure_reason": pb.reason_for_failure_code("TCP_CONNECT_FAILED")}),
         ("os/port-refused", {"failure_reason": pb.reason_for_failure_code("TCP_CONNECTION_REFUSED")}),
         ("os/protocol", {"failure_reason": pb.CHANNEL_PROTOCOL_MESSAGES["os"]}),

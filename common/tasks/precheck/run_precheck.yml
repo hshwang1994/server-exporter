@@ -17,6 +17,9 @@
 #   _precheck_timeout_auth:     인증 타임아웃 (기본: 8.0)
 #   _precheck_timeout:          protocol/auth 공통 타임아웃 — 개별 값 미지정 시 적용.
 #                               (port 는 빠른 dead-host 감지 유지 위해 적용 제외 — Round 17 #4)
+#   _precheck_icmp_probe:       TCP 전 포트 무응답일 때 ICMP Echo 로 도달성을 한 번 더
+#                               확인할지 (기본 true — 모듈 기본값). false 면 종전 TCP 전용.
+#   _precheck_timeout_icmp:     ICMP Echo 1회 타임아웃 (기본 1.0). TCP 무응답 경로에서만 소비.
 #
 # 출력 변수:
 #   _precheck_result:  precheck_bundle 모듈 반환값
@@ -49,6 +52,13 @@
     # 2026-08-10 (Phase 3-A 보정): 포트당 재시도 간격. 미지정 시 0 = 단일 시도(기존 동작).
     # OS 만 wait_for 의 폴링 의미를 보존하려고 1.0 을 넘긴다.
     port_poll_interval: "{{ _precheck_port_poll_interval | default(0.0) }}"
+    # 2026-09-03 (사용자 지시): reachable = 관리 TCP 응답 OR ICMP Echo 응답.
+    #   기본값 정본은 모듈 argument_spec(icmp_probe=true / timeout_icmp=1.0)이라 여기서는
+    #   omit 로 넘긴다 — 값을 두 곳에 적어 두면 한쪽만 바뀌어도 조용히 어긋난다.
+    #   ICMP 는 Gate 가 아니다: TCP 가 응답하면 호출 자체가 없고, ICMP 무응답은
+    #   아무것도 실패시키지 않는다 (전용 failure_code 없음).
+    icmp_probe: "{{ _precheck_icmp_probe | default(omit) }}"
+    timeout_icmp: "{{ _precheck_timeout_icmp | default(omit) }}"
   delegate_to: localhost
   register: _precheck_raw
   no_log: true

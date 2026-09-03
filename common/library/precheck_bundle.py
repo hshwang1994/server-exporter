@@ -6,7 +6,7 @@
 # 수집 전 대상 호스트의 연결 상태를 4단계로 진단합니다.
 #
 # 단계:
-#   1. reachable   — TCP 포트 연결로 호스트 도달 가능성 확인
+#   1. reachable   — 대상 도달 가능성 확인 (관리 TCP 응답 OR ICMP Echo 응답)
 #   2. port_open   — 채널별 서비스 포트 확인 (443/22/5985/5986)
 #   3. protocol_supported — 프로토콜 핸드셰이크 (Redfish/SSH banner/vSphere)
 #   4. auth_success — 인증 시도 (선택적)
@@ -29,7 +29,10 @@ module: precheck_bundle
 short_description: 수집 전 대상 호스트 연결 상태 진단
 description:
   - TCP 도달 → 프로토콜 → 인증 순서로 대상 호스트를 진단합니다.
-  - ICMP 는 쓰지 않습니다. 도달성 판정은 TCP 연결 성공 또는 RST 수신입니다.
+  - 도달성(reachable)은 "관리 TCP 응답 OR ICMP Echo 응답" 으로 판정합니다.
+    TCP 를 먼저 보고, TCP 가 아무 응답도 주지 않았을 때만 ICMP 를 한 번 더 확인합니다.
+  - ICMP 는 앞단 Gate 가 아닙니다. ICMP 가 막혀 있어도 TCP 가 답하면 그대로 통과하고,
+    ICMP 무응답만으로 실패시키지 않으며 ICMP 전용 failure_code 도 만들지 않습니다.
   - 인증 단계는 자격증명이 주어졌을 때만 돕니다. 운영 경로에서는 수집 본단계가
     인증을 겸하므로 여기서 따로 시도하지 않습니다.
   - 각 단계의 성공/실패 여부와 실패 사유를 반환합니다.
@@ -61,6 +64,16 @@ options:
     description: 인증 시도 타임아웃 (초)
     type: float
     default: 8.0
+  icmp_probe:
+    description:
+      - TCP 가 전 포트 무응답일 때 ICMP Echo 로 도달성을 한 번 더 확인할지 여부.
+      - false 면 종전(TCP 전용) 판정으로 되돌아갑니다.
+    type: bool
+    default: true
+  timeout_icmp:
+    description: ICMP Echo 1회 타임아웃 (초). TCP 무응답 경로에서만 소비됩니다.
+    type: float
+    default: 1.0
   username:
     description: 인증 사용자명 (선택)
     type: str
@@ -82,6 +95,8 @@ import json
 import math
 import socket
 import ssl
+import subprocess
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -181,7 +196,16 @@ CHANNEL_PROTOCOL_MESSAGES = {
 #   종전에는 존재하지 않는 presence 판정(ip_in_use)에 문장을 걸어 둬서, RST 를 실제로
 #   관측하고 code 를 REFUSED 로 확정했는데도 사용자에게는 "IP 사용 여부를 확인하세요"(1번)
 #   가 나갔다. 이제 관측된 code 를 그대로 따라 2번(관리 포트 연결 불가)을 쓴다.
-#   presence probe(ICMP / IPAM / ARP)는 여전히 만들지 않는다 — 사용자 지시.
+# 2026-09-03 (사용자 지시 — reachable 판정에 ICMP OR 도입):
+#   reachable 은 이제 "관리 TCP 응답 OR ICMP Echo 응답" 이다. 그래서 두 code 의 의미가
+#   아래처럼 갈린다. 문장 매핑도 그 관측을 그대로 따른다.
+#     TARGET_UNREACHABLE : TCP 도 ICMP 도 응답이 없었다 → 1번(IP 사용 여부 확인)
+#     TCP_CONNECT_FAILED : ICMP 는 응답했는데 관리 TCP 포트만 조용하다(RST 도 없음)
+#                          → 2번(관리 포트 연결 불가. 방화벽/관리 서비스 확인)
+#   종전에는 TCP_CONNECT_FAILED 하나가 두 상황을 겸했고 문장은 늘 1번이었다. 그래서
+#   **서버는 살아 있는데 방화벽이 관리 포트를 DROP** 하는 구간에서 운영자에게
+#   "IP 사용 여부를 확인하세요" 가 나가, 정작 봐야 할 방화벽 대신 엉뚱한 곳을 보게 했다.
+#   ICMP 로 존재가 확인된 이상 1번은 사실과 어긋나므로 2번으로 옮긴다.
 # CREDENTIAL_SET_UNAVAILABLE (2026-08-12 신설):
 #   해당 Location/Vendor 의 credential set 을 열지 못해 **인증을 시도조차 못 했다.**
 #   AUTH_PROBE_FAILED 와 반드시 구분한다 —
@@ -193,7 +217,8 @@ CHANNEL_PROTOCOL_MESSAGES = {
 #   문장을 늘리지 않는다 (Portal 5문장 집합 불변). 구분은 code 와 detail 이 표현한다.
 REASON_BY_FAILURE_CODE = {
     "DNS_RESOLUTION_FAILED":      REASON_IP_UNCONFIRMED,
-    "TCP_CONNECT_FAILED":         REASON_IP_UNCONFIRMED,
+    "TARGET_UNREACHABLE":         REASON_IP_UNCONFIRMED,
+    "TCP_CONNECT_FAILED":         REASON_PORT_UNREACHABLE,
     "TCP_CONNECTION_REFUSED":     REASON_PORT_UNREACHABLE,
     "PROTOCOL_CHECK_FAILED":      REASON_PROTOCOL_UNCONFIRMED,
     "AUTH_PROBE_FAILED":          REASON_CREDENTIAL_FAILED,
@@ -272,6 +297,79 @@ def tcp_check(host, port, timeout):
     """tcp_check_ex 의 (ok, err) 2-튜플 래퍼 — 기존 호출자/테스트 호환용."""
     ok, err, _kind = tcp_check_ex(host, port, timeout)
     return ok, err
+
+
+# ── ICMP Echo — reachable 판정의 **보조 근거** (Gate 아님) ────────────────────
+#
+# 2026-09-03 (사용자 지시): reachable 을 "관리 TCP 응답 OR ICMP Echo 응답" 으로 넓힌다.
+#   종전에는 관리 TCP 포트의 응답(연결 성공 또는 RST)만 도달 근거였다. 그래서 서버는 살아
+#   있는데 방화벽이 관리 포트 TCP 를 DROP 하는 구간이 stage=reachable 로 떨어졌고,
+#   운영자에게는 "IP 사용 여부를 확인하세요" 가 나갔다 — 실제로 봐야 할 곳은 방화벽이다.
+#
+# 이 확장이 지키는 경계 (CLAUDE.md §7 의 원래 취지 그대로다):
+#   - ICMP 는 **앞단 Gate 가 아니다.** TCP 를 먼저 보고, TCP 가 아무 응답도 주지 않았을
+#     때만 마지막으로 한 번 더 물어본다. ICMP 가 막혀 있어도 TCP 가 답하면 그대로 통과다.
+#   - ICMP 실패는 **아무것도 실패시키지 않는다.** 무응답 / 미지원 / ping 부재 / 권한 부족을
+#     구분 없이 "추가 근거 없음" 으로만 취급하고, ICMP 전용 failure_code 도 만들지 않는다.
+#   - 성공 경로와 RST 경로에서는 **호출 자체를 하지 않는다** → 그 두 경로의 예산 증가 0.
+#     소비되는 경우에도 Echo 1회(기본 1초)뿐이다.
+#
+# raw socket 이 아니라 `ping` 명령을 쓰는 이유:
+#   ICMP raw socket 은 CAP_NET_RAW(root)가 필요하고, 비특권 대안인 SOCK_DGRAM+IPPROTO_ICMP
+#   는 커널 net.ipv4.ping_group_range 설정에 좌우돼 에이전트마다 되고 안 되고가 갈린다.
+#   배포판 `ping` 은 setuid/capability 가 붙어 있어 비특권 계정에서 그대로 동작하고,
+#   외부 파이썬 의존도 늘지 않는다 (rule 10 R2 — stdlib subprocess).
+#   `ping` 이 아예 없는 환경이면 "확인 불가" 로 떨어져 판정이 종전(TCP 전용)과 같아진다.
+_ICMP_DEFAULT_TIMEOUT = 1.0
+# subprocess 자체의 하드 타임아웃 여유 (ping 이 자기 deadline 을 못 지킬 때의 상한).
+_ICMP_SPAWN_MARGIN = 1.0
+
+
+def _icmp_command(host, timeout):
+    """플랫폼별 'Echo 1회' ping 명령.
+
+    이름 역조회(-n)를 꺼서 DNS 때문에 예산이 늘지 않게 한다. 운영 controller 는 Linux
+    (Jenkins Agent)이며 win/darwin 분기는 개발 환경에서 같은 코드를 돌리기 위한 것이다.
+    """
+    millis = max(1, int(timeout * 1000))
+    secs = max(1, int(math.ceil(timeout)))
+    if sys.platform.startswith("win"):
+        return ["ping", "-n", "1", "-w", str(millis), host]
+    if sys.platform == "darwin":
+        return ["ping", "-c", "1", "-n", "-W", str(millis), "-t", str(secs), host]
+    return ["ping", "-c", "1", "-n", "-W", str(secs), "-w", str(secs), host]
+
+
+def icmp_check(host, timeout=_ICMP_DEFAULT_TIMEOUT):
+    """ICMP Echo 1회 — (replied, note).
+
+    replied=True 는 **Echo Reply 를 실제로 관측했을 때만**이다.
+    False 는 "이번 확인으로는 근거를 얻지 못했다" 이지 "장비가 죽었다" 가 아니다
+    (차단 / 미지원 / ping 부재 / 권한 부족이 모두 여기로 들어온다).
+    note 는 errors[].detail 에 남길 기술 증거 문자열이다 — 사용자 문장이 아니다.
+    """
+    try:
+        proc = subprocess.run(
+            _icmp_command(host, timeout),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=timeout + _ICMP_SPAWN_MARGIN,
+        )
+    except FileNotFoundError:
+        return False, "icmp: 확인 불가 (ping 명령 없음)"
+    except subprocess.TimeoutExpired:
+        return False, "icmp: 응답 없음 (timeout={0}s)".format(timeout)
+    except OSError as e:
+        return False, "icmp: 확인 불가 ({0})".format(e)
+
+    if proc.returncode != 0:
+        return False, "icmp: 응답 없음 (rc={0})".format(proc.returncode)
+    # Windows ping 은 중간 라우터가 보낸 'Destination host unreachable' 에도 rc=0 을 준다.
+    # Echo Reply 였는지 TTL 표기로 한 번 더 확인한다 (Linux ping 은 rc 만으로 충분).
+    if sys.platform.startswith("win"):
+        stdout = (proc.stdout or b"").lower()
+        if b"ttl=" not in stdout:
+            return False, "icmp: 응답 없음 (Echo Reply 아님)"
+    return True, "icmp: Echo Reply 확인"
 
 
 # ansible.builtin.wait_for(state=started, port=...) 의 기본값 (실측 — ansible 2.19.9
@@ -1120,9 +1218,12 @@ def _tcp_failure_code(kinds):
            못 한 것이므로 가장 앞선 단계의 관측이다.
       2) RST(거부)를 하나라도 관측했으면 TCP_CONNECTION_REFUSED
          — "호스트가 살아 있다"는 **능동적 응답**을 실제로 본 것이라 가장 강한 관측이다.
-      3) 그 외에는 TCP_CONNECT_FAILED
-         — timeout / no route 등. "연결하지 못했다"는 사실만 확정할 수 있고 장비가
-           꺼졌는지 경로가 막혔는지는 알 수 없다 (UNREACHABLE 로 단정 금지).
+      3) 그 외에는 TARGET_UNREACHABLE (timeout / no route 등)
+         — **잠정값이다.** 2026-09-03 부터 이 결과는 _resolve_reachability 가 ICMP 를
+           한 번 더 확인한 뒤에 최종 확정된다. ICMP Echo Reply 가 오면 도달은 성립하고
+           실패는 port 단계(TCP_CONNECT_FAILED)로 내려간다.
+           확정된 TARGET_UNREACHABLE 도 "장비가 꺼졌다" 는 뜻이 아니라 "우리가 쓴 어떤
+           probe(TCP·ICMP)로도 응답을 보지 못했다" 는 뜻이다.
 
     포트별 원본 사유는 result['detail'] 에 "port=<n>: <사유>" 형태로 전부 보존된다.
     """
@@ -1130,7 +1231,50 @@ def _tcp_failure_code(kinds):
         return "DNS_RESOLUTION_FAILED"
     if TCP_FAIL_REFUSED in kinds:
         return "TCP_CONNECTION_REFUSED"
-    return "TCP_CONNECT_FAILED"
+    return "TARGET_UNREACHABLE"
+
+
+def _resolve_reachability(module, host, kinds):
+    """TCP 가 아무 응답도 주지 않은 뒤의 **최종 도달성 판정** — (reachable, stage, code, note).
+
+    reachable = TCP 응답 OR ICMP 응답 (2026-09-03 사용자 지시). 이 함수는 그 OR 의
+    오른쪽만 담당한다 — TCP 가 응답한 경우 호출부가 이미 reachable 을 확정하고 여기로
+    오지 않으므로, ICMP 는 성공 경로와 RST 경로의 예산을 전혀 쓰지 않는다.
+
+      DNS 해석 실패        → 보낼 주소 자체가 없다. ICMP 도 무의미하므로 종전 그대로.
+      ICMP Echo Reply 관측 → reachable=true. 다만 관리 포트는 열지 못했으니 실패 단계는
+                             기존 흐름 그대로 port 다 (code=TCP_CONNECT_FAILED).
+      그 외                → TCP·ICMP 모두 무응답 = TARGET_UNREACHABLE (stage=reachable).
+
+    icmp_probe=false 이거나 ping 을 쓸 수 없는 환경이면 "근거 없음" 이 되어 판정이
+    종전(TCP 전용)과 같아진다 — ICMP 는 실패를 **추가하지 않는다.**
+    """
+    code = _tcp_failure_code(kinds)
+    if code == "DNS_RESOLUTION_FAILED":
+        return False, "reachable", code, None
+    if code == "TCP_CONNECTION_REFUSED":
+        # 호출부가 이미 걸러내는 경로다. 방어적으로만 둔다 (RST = 능동 응답 = 도달).
+        return True, "port", code, None
+    if not module.params.get("icmp_probe", True):
+        return False, "reachable", code, None
+
+    replied, note = icmp_check(
+        host, module.params.get("timeout_icmp", _ICMP_DEFAULT_TIMEOUT))
+    if replied:
+        return True, "port", "TCP_CONNECT_FAILED", note
+    return False, "reachable", "TARGET_UNREACHABLE", note
+
+
+def _join_detail(port_errors, icmp_note=None):
+    """기술 증거 조립 — 포트별 사유 + (확인했다면) ICMP 관측 결과.
+
+    envelope shape 은 건드리지 않는다. ICMP 근거는 errors[].detail 로만 나간다
+    (사용자 문장·diagnosis 키를 늘리지 않는다 — CLAUDE.md §10 §11).
+    """
+    parts = list(port_errors)
+    if icmp_note:
+        parts.append(icmp_note)
+    return "; ".join(parts)
 
 
 def _search_os_candidates(host, ports, timeout_port, poll_interval, timeout_proto):
@@ -1276,15 +1420,21 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
 
     # TCP 단계에서 전부 실패 — stage / code 를 먼저 확정하고, 문장은 code 에서 파생한다
     # (2026-08-12: 문장 선택 조건을 code 하나로 통일 — REASON_BY_FAILURE_CODE).
+    # 2026-09-03: RST 를 못 본 경우에만 ICMP 로 도달성을 한 번 더 확인한다
+    #             (RST 는 이미 능동 응답이라 ICMP 를 쓸 이유가 없다).
+    icmp_note = None
     if TCP_FAIL_REFUSED in tcp_kinds:
         result["reachable"] = True
         result["failure_stage"] = "port"
         result["failure_code"] = "TCP_CONNECTION_REFUSED"
     else:
-        result["failure_stage"] = "reachable"
-        result["failure_code"] = _tcp_failure_code(tcp_kinds)
+        reachable, stage, code, icmp_note = _resolve_reachability(
+            module, host, tcp_kinds)
+        result["reachable"] = reachable
+        result["failure_stage"] = stage
+        result["failure_code"] = code
     result["failure_reason"] = reason_for_failure_code(result["failure_code"])
-    result["detail"] = "; ".join(tcp_errors)
+    result["detail"] = _join_detail(tcp_errors, icmp_note)
     module.exit_json(**result)
 
 
@@ -1315,6 +1465,13 @@ def run_module():
             #   OS 는 종전 wait_for 의 폴링 의미를 보존하려고 1.0(wait_for sleep 기본값)을
             #   명시 전달한다. 예산(timeout_port)은 그대로라 총 대기 시간은 늘지 않는다.
             port_poll_interval=dict(type="float", default=0.0),
+            # 2026-09-03 (사용자 지시): reachable = TCP 응답 OR ICMP 응답.
+            #   기본 true. false 로 부르면 ICMP 를 확인하지 않아 종전(TCP 전용) 판정이 된다.
+            #   ICMP 는 TCP 전 포트 무응답일 때만 소비되므로 성공 경로의 예산은 그대로다.
+            icmp_probe=dict(type="bool", default=True),
+            # ICMP Echo 1회 타임아웃. 포트 예산(timeout_port)과 별개이며, 이 값이 실제로
+            # 소비되는 경우는 "TCP 전 포트 무응답" 한 가지뿐이다.
+            timeout_icmp=dict(type="float", default=_ICMP_DEFAULT_TIMEOUT),
         ),
         supports_check_mode=True,
     )
@@ -1342,11 +1499,17 @@ def run_module():
     # redfish / esxi 는 포트가 [443] 하나뿐이라 값이 종전과 동일하다.
     result["checked_ports"] = probed or ports
     if not any_response:
-        result["failure_stage"] = "reachable"
-        # DNS_RESOLUTION_FAILED 또는 TCP_CONNECT_FAILED — RST 를 못 봤으므로 REFUSED 는 나올 수 없다
-        result["failure_code"] = _tcp_failure_code(port_kinds)
-        result["failure_reason"] = reason_for_failure_code(result["failure_code"])
-        result["detail"] = "; ".join(port_errors)
+        # TCP 는 아무 응답도 주지 않았다. 여기서 끝내지 않고 ICMP 를 한 번 더 확인한다
+        # (2026-09-03 — reachable = TCP 응답 OR ICMP 응답). RST 를 못 봤으므로
+        # REFUSED 는 나올 수 없고, 남는 값은 DNS_RESOLUTION_FAILED / TARGET_UNREACHABLE /
+        # (ICMP 가 답한 경우) stage=port + TCP_CONNECT_FAILED 셋뿐이다.
+        reachable, stage, code, icmp_note = _resolve_reachability(
+            module, host, port_kinds)
+        result["reachable"] = reachable
+        result["failure_stage"] = stage
+        result["failure_code"] = code
+        result["failure_reason"] = reason_for_failure_code(code)
+        result["detail"] = _join_detail(port_errors, icmp_note)
         module.exit_json(**result)
     if not target_port_open:
         result["reachable"] = True

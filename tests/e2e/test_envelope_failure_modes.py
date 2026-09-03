@@ -91,7 +91,9 @@ SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
 # Phase 2 (2026-08-10): failure_stage -> failure_code 기본 매핑.
 # production 정본은 field_dictionary.yml + 각 site.yml 이며, 여기서는 fixture 생성용 사본이다.
 _STAGE_TO_CODE: dict[str, str] = {
-    "reachable": "TCP_CONNECT_FAILED",
+    # 2026-09-03: reachable 단계 실패 = TCP·ICMP 모두 무응답 → TARGET_UNREACHABLE.
+    #   (ICMP 만 응답한 경우는 stage=port + TCP_CONNECT_FAILED 로 내려간다.)
+    "reachable": "TARGET_UNREACHABLE",
     "port": "TCP_CONNECTION_REFUSED",
     "protocol": "PROTOCOL_CHECK_FAILED",
     "auth": "AUTH_PROBE_FAILED",

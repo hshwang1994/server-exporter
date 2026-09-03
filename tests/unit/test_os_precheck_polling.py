@@ -41,6 +41,8 @@ sys.modules.setdefault("ansible.module_utils.basic", _b)
 
 import precheck_bundle as pb  # noqa: E402
 
+from tests.precheck_stub import ICMP_SILENT, silence_icmp  # noqa: E402
+
 
 class _ExitJson(Exception):
     def __init__(self, result):
@@ -305,7 +307,8 @@ def test_other_channels_keep_single_attempt(monkeypatch, channel):
     class _Fake:
         params = dict(host="192.0.2.10", channel=channel, ports=[], timeout_port=3.0,
                       timeout_protocol=15.0, timeout_auth=8.0, username=None, password=None,
-                      verify_ssl=False, probe_protocol=True, port_poll_interval=0.0)
+                      verify_ssl=False, probe_protocol=True, port_poll_interval=0.0,
+                      icmp_probe=True, timeout_icmp=1.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
@@ -329,7 +332,8 @@ def test_os_channel_uses_polling_end_to_end(clock, monkeypatch):
     class _Fake:
         params = dict(host="192.0.2.30", channel="os", ports=[], timeout_port=2.0,
                       timeout_protocol=15.0, timeout_auth=8.0, username=None, password=None,
-                      verify_ssl=False, probe_protocol=False, port_poll_interval=1.0)
+                      verify_ssl=False, probe_protocol=False, port_poll_interval=1.0,
+                      icmp_probe=True, timeout_icmp=1.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
@@ -369,7 +373,8 @@ def test_rst_reason_does_not_claim_server_responded():
     #   RST 를 관측하면 2번 문구(관리 포트 연결 불가)를 쓴다. 다만 RST 를 보낸 주체가
     #   최종 서버인지 중간 방화벽인지는 여전히 확정할 수 없으므로, 문장이 "서버가
     #   응답했다" 거나 "IP 사용이 확인됐다" 고 주장하지는 않는다.
-    _connect_reasons = (pb.reason_for_failure_code("TCP_CONNECT_FAILED"),
+    _connect_reasons = (pb.reason_for_failure_code("TARGET_UNREACHABLE"),
+                        pb.reason_for_failure_code("TCP_CONNECT_FAILED"),
                         pb.reason_for_failure_code("TCP_CONNECTION_REFUSED"),
                         pb.reason_for_failure_code("DNS_RESOLUTION_FAILED"))
     for reason in _connect_reasons:

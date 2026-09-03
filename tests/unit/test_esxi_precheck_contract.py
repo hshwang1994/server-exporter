@@ -36,6 +36,8 @@ sys.modules.setdefault("ansible.module_utils.basic", _b)
 
 import precheck_bundle as pb  # noqa: E402
 
+from tests.precheck_stub import ICMP_REPLY, ICMP_SILENT, silence_icmp  # noqa: E402
+
 FIXTURES = REPO / "tests" / "fixtures" / "esxi"
 LAB_SERVICE_CONTENT = (FIXTURES / "lab" / "esxi_7_0_3_service_content.xml").read_bytes()
 
@@ -51,7 +53,10 @@ class _ExitJson(Exception):
         self.result = result
 
 
-def run_esxi(monkeypatch, *, tcp_ok=True, post=None, timeout_protocol=30.0):
+def run_esxi(monkeypatch, *, tcp_ok=True, post=None, timeout_protocol=30.0,
+             icmp=ICMP_SILENT):
+    # 2026-09-03: TCP 전멸 시에만 소비되는 ICMP 확인 결과를 주입한다 (실 ping 금지).
+    silence_icmp(monkeypatch, pb, icmp)
     monkeypatch.setattr(
         pb, "tcp_check_ex",
         lambda *_a, **_k: (True, None, None) if tcp_ok
@@ -63,7 +68,8 @@ def run_esxi(monkeypatch, *, tcp_ok=True, post=None, timeout_protocol=30.0):
         params = dict(host="192.0.2.10", channel="esxi", ports=[], timeout_port=3.0,
                       timeout_protocol=timeout_protocol, timeout_auth=8.0,
                       username=None, password=None, verify_ssl=False,
-                      probe_protocol=True, port_poll_interval=0.0)
+                      probe_protocol=True, port_poll_interval=0.0,
+                      icmp_probe=True, timeout_icmp=1.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
@@ -170,6 +176,29 @@ def test_tcp_failure_mapping_unchanged(monkeypatch):
     assert result["port_open"] is False
     assert result["protocol_supported"] is False
     assert result["failure_stage"] == "reachable"
+    # 2026-09-03: TCP·ICMP 모두 무응답 → TARGET_UNREACHABLE (종전 TCP_CONNECT_FAILED).
+    assert result["failure_code"] == "TARGET_UNREACHABLE"
+    assert result["auth_success"] is None
+
+
+def test_tcp_failure_with_icmp_reply_stops_at_port_stage(monkeypatch):
+    """2026-09-03: ICMP 가 답해도 프로토콜 probe 로 넘어가지는 않는다.
+
+    도달이 확인됐을 뿐 관리 포트(443)는 열지 못했으므로 vSphere SOAP 을 보낼 소켓이 없다.
+    실패 단계만 reachable → port 로 내려간다.
+    """
+    calls = {"n": 0}
+
+    def never(*_a, **_k):
+        calls["n"] += 1
+        raise AssertionError("포트를 열지 못했는데 Protocol Probe 를 보내면 안 된다")
+
+    result = run_esxi(monkeypatch, tcp_ok=False, post=never, icmp=ICMP_REPLY)
+    assert calls["n"] == 0
+    assert result["reachable"] is True
+    assert result["port_open"] is False
+    assert result["protocol_supported"] is False
+    assert result["failure_stage"] == "port"
     assert result["failure_code"] == "TCP_CONNECT_FAILED"
     assert result["auth_success"] is None
 

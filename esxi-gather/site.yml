@@ -4,7 +4,7 @@
 #
 # 흐름:
 #   init_fragments
-#   → run_precheck       (4단계 진단)
+#   → run_precheck       (도달[TCP 응답 OR ICMP 응답]→port→protocol→auth)
 #   → select_adapter     (adapter_loader)
 #   → collect_facts      (_e_raw_facts, _e_facts_ok)
 #   → collect_config     (_e_raw_config, _e_config_ok)
