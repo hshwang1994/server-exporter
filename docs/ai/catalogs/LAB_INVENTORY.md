@@ -53,7 +53,7 @@ ESXi는 하이퍼바이저가 본 SMBIOS(`ansible_product_serial`), Linux는 DMI
 | HPE iLO6 | 10.50.11.231 | ProLiant DL380 Gen11 |
 | Lenovo XCC | 10.50.11.232 | |
 | Windows | 10.100.64.120 | |
-| Linux VM | 10.100.64.156 / .161 / .165 | .161은 Python 3.6 — raw fallback 검증 대상 |
+| Linux VM | 10.100.64.161(RHEL 8.10, Python 3.6 raw fallback) / .165(RHEL 9.6) / .145(RHEL 9.6) / .156(Ubuntu 24.04 `cicd-gitlab`) | 2026-09-03 실측 정정: .167/.169 는 별도 장비가 아니라 .165/.161 의 bond1 IP. .163(RHEL 9.2) 은 TCP 무응답. RHEL 10 / Rocky 없음 |
 | Jenkins master | 10.100.64.152 / .153 | |
 | Jenkins agent | 10.100.64.154 / .155 | agent는 `ic/chj/yi/git` 4 label을 모두 갖는다 |
 

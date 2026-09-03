@@ -79,8 +79,10 @@ enum / int 타입 / ESXi gateway·is_primary 등 25~42 항목을 자동 대조�
 
 ## 4. 남은 것
 
-- **baseline 10건 미갱신**: `schema/baseline_v1/README.md` 는 "본 폴더 JSON 은 수정하지 않는다" 이고 rule 13 R4 는 실장비 검증 후 갱신
-  절차를 둔다 — 두 정본이 충돌하므로 갱신 여부는 **사용자 결정**. 갱신에 쓸 원본 envelope 은 §5 까지 포함해
-  `tests/evidence/2026-09-03-live/` 에 있다 (`rhel810_raw_fallback` ← .161, `windows_2022` ← .120, `ubuntu` ← .167, `esxi` ← .2).
+- **baseline 갱신은 사용자 결정 대기 (GA-2)**: `schema/baseline_v1/README.md`(in-place 덮어쓰기 금지, 새 응답은 `baseline_v2/`) 와
+  rule 13 R4 / 21 R1(실장비 검증 후 `baseline_v1/*.json` 갱신) 이 충돌한다. 제안은 rule 13 R4 정본화 + README 문구 정정.
+  대응표 — `rhel810_raw_fallback` ← `build196_rhel810_raw_10.100.64.161.json`, `windows_2022` ← `build192_win2022_10.100.64.120.json`,
+  `esxi` ← `build195_esxi02_10.100.64.2.json`, `ubuntu` ← `build199_ubuntu2404_vm_10.100.64.156.json` (모두 최신 코드 기준 값).
+  `windows_baseline.json`(Windows 10) 은 대상 장비가 없어 삭제/유지 결정 필요.
 - 미수집: Windows 2대째(10.100.64.135, 자격 미검증), ESXi 9.0 R760 5대(자격 미제공), Redfish 채널(이번 범위 밖).
 - `ansible-playbook --syntax-check` 는 Windows 세션 제약으로 로컬 미실행 — Jenkins Agent 에서 실제 실행으로 대체됐다.

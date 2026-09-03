@@ -1,0 +1,898 @@
+{
+  "target_type": "os",
+  "collection_method": "agent",
+  "ip": "10.100.64.96",
+  "hostname": "r760-6",
+  "vendor": "dell",
+  "status": "success",
+  "sections": {
+    "system": "success",
+    "hardware": "success",
+    "bmc": "not_supported",
+    "cpu": "success",
+    "memory": "success",
+    "storage": "success",
+    "network": "success",
+    "firmware": "not_supported",
+    "users": "success",
+    "power": "not_supported",
+    "thermal": "not_supported"
+  },
+  "diagnosis": {
+    "reachable": true,
+    "port_open": true,
+    "protocol_supported": true,
+    "auth_success": true,
+    "failure_stage": null,
+    "failure_code": null,
+    "failure_reason": null,
+    "details": {
+      "channel": "os",
+      "adapter_candidate": "os_linux_ubuntu",
+      "detected_os": "linux",
+      "credential_scope": "git/os/linux",
+      "selected_port": 22,
+      "checked_ports": [
+        5986,
+        5985,
+        22
+      ],
+      "gather_mode": "python_ok",
+      "python_version": "3.12.3",
+      "auth": {
+        "attempted_count": 1,
+        "used_label": "linux_current",
+        "used_role": "primary",
+        "fallback_used": false
+      },
+      "hostname_source": "system"
+    }
+  },
+  "meta": {
+    "started_at": "2026-09-03T03:38:40.933885Z",
+    "finished_at": "2026-09-03T03:38:57.622068Z",
+    "duration_ms": 16660,
+    "adapter_id": "os_linux_ubuntu",
+    "adapter_version": null,
+    "ansible_version": "2.20.3"
+  },
+  "correlation": {
+    "serial_number": "GSBPK54",
+    "system_uuid": "4c4c4544-0053-4210-8050-c7c04f4b3534",
+    "bmc_ip": null,
+    "host_ip": "10.100.64.96"
+  },
+  "errors": [],
+  "data": {
+    "users": [
+      {
+        "name": "root",
+        "uid": "0",
+        "groups": [
+          "root"
+        ],
+        "home": "/root",
+        "last_access_time": null
+      },
+      {
+        "name": "cloviradmin",
+        "uid": "1000",
+        "groups": [
+          "cloviradmin",
+          "adm",
+          "cdrom",
+          "sudo",
+          "dip",
+          "plugdev",
+          "lxd",
+          "docker",
+          "microk8s"
+        ],
+        "home": "/home/cloviradmin",
+        "last_access_time": "2026-09-03T03:38:52Z"
+      }
+    ],
+    "firmware": [],
+    "power": null,
+    "storage": {
+      "infiniband": [],
+      "datastores": [],
+      "logical_volumes": [],
+      "filesystems": [
+        {
+          "device": "/dev/mapper/ubuntu--vg-ubuntu--lv",
+          "mount_point": "/",
+          "filesystem": "ext4",
+          "total_mb": 446438,
+          "used_mb": 11238,
+          "available_mb": 412449,
+          "usage_percent": 3.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/nvme0n1p2",
+          "mount_point": "/boot",
+          "filesystem": "ext4",
+          "total_mb": 1945,
+          "used_mb": 196,
+          "available_mb": 1630,
+          "usage_percent": 11.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/sda",
+          "mount_point": "/ssd",
+          "filesystem": "xfs",
+          "total_mb": 10982666,
+          "used_mb": 5179544,
+          "available_mb": 5803121,
+          "usage_percent": 48.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/nvme0n1p1",
+          "mount_point": "/boot/efi",
+          "filesystem": "vfat",
+          "total_mb": 1072,
+          "used_mb": 6,
+          "available_mb": 1066,
+          "usage_percent": 1.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/sdb1",
+          "mount_point": "/var",
+          "filesystem": "ext4",
+          "total_mb": 1687303,
+          "used_mb": 51097,
+          "available_mb": 1550424,
+          "usage_percent": 4.0,
+          "status": "mounted"
+        }
+      ],
+      "controllers": [
+        {
+          "id": "0000:00:18.0",
+          "name": "Sapphire Rapids SATA AHCI Controller",
+          "controller_model": "Sapphire Rapids SATA AHCI Controller",
+          "controller_manufacturer": "Intel Corporation",
+          "driver": "ahci",
+          "controller_type": "SATA",
+          "pci": "0000:00:18.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "0000:00:19.0",
+          "name": "Sapphire Rapids SATA AHCI Controller",
+          "controller_model": "Sapphire Rapids SATA AHCI Controller",
+          "controller_manufacturer": "Intel Corporation",
+          "driver": "ahci",
+          "controller_type": "SATA",
+          "pci": "0000:00:19.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "0000:01:00.0",
+          "name": "BOSS-N1 Monolithic",
+          "controller_model": "88NR2241 Non-Volatile memory controller",
+          "controller_manufacturer": "Marvell Technology Group Ltd.",
+          "driver": "nvme",
+          "controller_type": "NVMe",
+          "pci": "0000:01:00.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "0000:52:00.0",
+          "name": "PERC H965i Front",
+          "controller_model": "Fusion-MPT 24GSAS/PCIe SAS40xx/41xx",
+          "controller_manufacturer": "Broadcom / LSI",
+          "driver": "mpi3mr",
+          "controller_type": "RAID",
+          "pci": "0000:52:00.0",
+          "health": null,
+          "drives": []
+        }
+      ],
+      "hbas": [],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 10727,
+            "model": "RAID",
+            "media_type": "SSD",
+            "protocol": null,
+            "quantity": 1,
+            "group_total_gb": 10727
+          },
+          {
+            "unit_capacity_gb": 1675,
+            "model": "RAID",
+            "media_type": "HDD",
+            "protocol": null,
+            "quantity": 1,
+            "group_total_gb": 1675
+          },
+          {
+            "unit_capacity_gb": 447,
+            "model": "Dell BOSS-N1",
+            "media_type": "SSD",
+            "protocol": "NVMe",
+            "quantity": 1,
+            "group_total_gb": 447
+          }
+        ],
+        "grand_total_gb": 12849
+      },
+      "physical_disks": [
+        {
+          "id": "/dev/sda",
+          "device": "/dev/sda",
+          "model": "RAID",
+          "serial": "00e0faed649a980a6900653b7780e04e",
+          "wwn": "0x6f4ee080773b6500690a989a64edfae0",
+          "total_mb": 10984704,
+          "media_type": "SSD",
+          "protocol": null,
+          "health": null,
+          "is_os_disk": false
+        },
+        {
+          "id": "/dev/sdb",
+          "device": "/dev/sdb",
+          "model": "RAID",
+          "serial": "0021b319c1d8980a6900653b7780e04e",
+          "wwn": "0x6f4ee080773b6500690a98d8c119b321",
+          "total_mb": 1715328,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null,
+          "is_os_disk": false
+        },
+        {
+          "id": "/dev/nvme0n1",
+          "device": "/dev/nvme0n1",
+          "model": "Dell BOSS-N1",
+          "serial": "CN0WW56VFCP0049K01Y0",
+          "wwn": "eui.0050434d07000001",
+          "total_mb": 457798,
+          "media_type": "SSD",
+          "protocol": "NVMe",
+          "health": null,
+          "is_os_disk": true
+        }
+      ]
+    },
+    "hardware": {
+      "vendor": "Dell Inc.",
+      "model": "PowerEdge R760",
+      "serial": "GSBPK54",
+      "uuid": "4c4c4544-0053-4210-8050-c7c04f4b3534",
+      "bios_version": "2.3.5",
+      "bios_date": "2024-09-10"
+    },
+    "bmc": null,
+    "thermal": {
+      "temperatures": [],
+      "fans": []
+    },
+    "system": {
+      "os_family": "Debian",
+      "distribution": "Ubuntu",
+      "version": "24.04",
+      "kernel": "6.8.0-88-generic",
+      "architecture": "x86_64",
+      "hostname": "r760-6",
+      "fqdn": null,
+      "hosting_type": "baremetal",
+      "uptime_seconds": 23323837,
+      "selinux": "disabled",
+      "serial_number": "GSBPK54",
+      "system_uuid": "4c4c4544-0053-4210-8050-c7c04f4b3534",
+      "vendor": "Dell Inc.",
+      "runtime": {
+        "timezone": "Etc/UTC",
+        "ntp_active": true,
+        "ntp_synchronized": true,
+        "firewall_tool": "ufw",
+        "firewall_state": "inactive",
+        "listening_ports": [
+          "22",
+          "25",
+          "53",
+          "111",
+          "143",
+          "443",
+          "465",
+          "587",
+          "993",
+          "1521",
+          "2049",
+          "5500",
+          "8080",
+          "8081",
+          "33829",
+          "34431",
+          "35545",
+          "39865",
+          "40845",
+          "44623",
+          "50969",
+          "52027",
+          "54483",
+          "60383"
+        ],
+        "swap_total_mb": 8191,
+        "swap_used_mb": 755,
+        "swap_free_mb": 7436
+      }
+    },
+    "memory": {
+      "total_mb": 131072,
+      "total_basis": "physical_installed",
+      "installed_mb": 131072,
+      "visible_mb": 128410,
+      "free_mb": 120078,
+      "slots": [
+        {
+          "capacity_mb": 16384,
+          "type": "DDR5",
+          "speed_mhz": 5600,
+          "manufacturer": "SK hynix",
+          "part_number": "HMCG78AGBRA190N",
+          "serial": "46FB6227",
+          "locator": "A1"
+        },
+        {
+          "capacity_mb": 16384,
+          "type": "DDR5",
+          "speed_mhz": 5600,
+          "manufacturer": "SK hynix",
+          "part_number": "HMCG78AGBRA190N",
+          "serial": "46FB6CC7",
+          "locator": "A2"
+        },
+        {
+          "capacity_mb": 16384,
+          "type": "DDR5",
+          "speed_mhz": 5600,
+          "manufacturer": "SK hynix",
+          "part_number": "HMCG78AGBRA190N",
+          "serial": "46FB6239",
+          "locator": "A3"
+        },
+        {
+          "capacity_mb": 16384,
+          "type": "DDR5",
+          "speed_mhz": 5600,
+          "manufacturer": "SK hynix",
+          "part_number": "HMCG78AGBRA190N",
+          "serial": "46FB626E",
+          "locator": "A4"
+        },
+        {
+          "capacity_mb": 16384,
+          "type": "DDR5",
+          "speed_mhz": 5600,
+          "manufacturer": "SK hynix",
+          "part_number": "HMCG78AGBRA190N",
+          "serial": "46FB61D3",
+          "locator": "B1"
+        },
+        {
+          "capacity_mb": 16384,
+          "type": "DDR5",
+          "speed_mhz": 5600,
+          "manufacturer": "SK hynix",
+          "part_number": "HMCG78AGBRA190N",
+          "serial": "46FB6C23",
+          "locator": "B2"
+        },
+        {
+          "capacity_mb": 16384,
+          "type": "DDR5",
+          "speed_mhz": 5600,
+          "manufacturer": "SK hynix",
+          "part_number": "HMCG78AGBRA190N",
+          "serial": "46FB6235",
+          "locator": "B3"
+        },
+        {
+          "capacity_mb": 16384,
+          "type": "DDR5",
+          "speed_mhz": 5600,
+          "manufacturer": "SK hynix",
+          "part_number": "HMCG78AGBRA190N",
+          "serial": "46FB6C33",
+          "locator": "B4"
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 16,
+            "type": "DDR5",
+            "speed_mhz": 5600,
+            "manufacturer": "SK hynix",
+            "part_number": "HMCG78AGBRA190N",
+            "quantity": 8,
+            "group_total_gb": 128
+          }
+        ],
+        "grand_total_gb": 128
+      }
+    },
+    "network": {
+      "default_gateways": [
+        {
+          "family": "ipv4",
+          "address": "172.17.100.254"
+        }
+      ],
+      "adapters": [
+        {
+          "id": "02:00.0",
+          "name": "NetXtreme BCM5720 Gigabit Ethernet PCIe",
+          "manufacturer": "Broadcom Inc. and subsidiaries",
+          "model": "NetXtreme BCM5720 Gigabit Ethernet PCIe",
+          "driver": "tg3",
+          "firmware_version": "FFV22.91.5 bc 5720-v1.39",
+          "pci": "02:00.0"
+        },
+        {
+          "id": "02:00.1",
+          "name": "NetXtreme BCM5720 Gigabit Ethernet PCIe",
+          "manufacturer": "Broadcom Inc. and subsidiaries",
+          "model": "NetXtreme BCM5720 Gigabit Ethernet PCIe",
+          "driver": "tg3",
+          "firmware_version": "FFV22.91.5 bc 5720-v1.39",
+          "pci": "02:00.1"
+        },
+        {
+          "id": "2a:00.0",
+          "name": "BCM57414 NetXtreme-E 10Gb/25Gb RDMA Ethernet Controller",
+          "manufacturer": "Broadcom Inc. and subsidiaries",
+          "model": "BCM57414 NetXtreme-E 10Gb/25Gb RDMA Ethernet Controller",
+          "driver": "bnxt_en",
+          "firmware_version": "229.2.52.0/pkg 22.92.06.10",
+          "pci": "2a:00.0"
+        },
+        {
+          "id": "2a:00.1",
+          "name": "BCM57414 NetXtreme-E 10Gb/25Gb RDMA Ethernet Controller",
+          "manufacturer": "Broadcom Inc. and subsidiaries",
+          "model": "BCM57414 NetXtreme-E 10Gb/25Gb RDMA Ethernet Controller",
+          "driver": "bnxt_en",
+          "firmware_version": "229.2.52.0/pkg 22.92.06.10",
+          "pci": "2a:00.1"
+        },
+        {
+          "id": "be:00.0",
+          "name": "Ethernet Controller XXV710 for 25GbE SFP28",
+          "manufacturer": "Intel Corporation",
+          "model": "Ethernet Controller XXV710 for 25GbE SFP28",
+          "driver": "i40e",
+          "firmware_version": "8.40 0x8000b1fb 20.5.16",
+          "pci": "be:00.0"
+        },
+        {
+          "id": "be:00.1",
+          "name": "Ethernet Controller XXV710 for 25GbE SFP28",
+          "manufacturer": "Intel Corporation",
+          "model": "Ethernet Controller XXV710 for 25GbE SFP28",
+          "driver": "i40e",
+          "firmware_version": "8.40 0x8000b1fb 20.5.16",
+          "pci": "be:00.1"
+        }
+      ],
+      "portgroups": [],
+      "ports": [],
+      "interfaces": [
+        {
+          "id": "bond0",
+          "name": "bond0",
+          "kind": "os_nic",
+          "mac": "7e:f6:44:87:78:d4",
+          "mtu": 9000,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [
+            {
+              "family": "ipv6",
+              "address": "fe80::7cf6:44ff:fe87:78d4",
+              "prefix_length": 64,
+              "subnet_mask": null,
+              "gateway": null,
+              "scope": "link",
+              "label": "bond0",
+              "parent_interface": "bond0",
+              "is_alias": false,
+              "is_secondary": false
+            }
+          ],
+          "bond_role": "master",
+          "bond_mode": "active-backup",
+          "active_slave": "enp190s0f0np0",
+          "bond_slaves": [
+            "enp190s0f0np0",
+            "enp190s0f1np1"
+          ]
+        },
+        {
+          "id": "bond0.64",
+          "name": "bond0.64",
+          "kind": "os_nic",
+          "mac": "7e:f6:44:87:78:d4",
+          "mtu": 9000,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.96",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": null,
+              "scope": "global",
+              "label": "bond0.64",
+              "parent_interface": "bond0.64",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv6",
+              "address": "fe80::7cf6:44ff:fe87:78d4",
+              "prefix_length": 64,
+              "subnet_mask": null,
+              "gateway": null,
+              "scope": "link",
+              "label": "bond0.64",
+              "parent_interface": "bond0.64",
+              "is_alias": false,
+              "is_secondary": false
+            }
+          ],
+          "vlan_id": 64,
+          "vlan_parent": "bond0"
+        },
+        {
+          "id": "eno12399np0",
+          "name": "eno12399np0",
+          "kind": "os_nic",
+          "mac": "14:23:f2:f4:a0:c0",
+          "mtu": 1500,
+          "speed_mbps": null,
+          "link_status": "down",
+          "is_primary": false,
+          "addresses": []
+        },
+        {
+          "id": "eno12409np1",
+          "name": "eno12409np1",
+          "kind": "os_nic",
+          "mac": "14:23:f2:f4:a0:c1",
+          "mtu": 1500,
+          "speed_mbps": null,
+          "link_status": "down",
+          "is_primary": false,
+          "addresses": []
+        },
+        {
+          "id": "eno8303",
+          "name": "eno8303",
+          "kind": "os_nic",
+          "mac": "c4:cb:e1:dc:bc:4a",
+          "mtu": 1500,
+          "speed_mbps": 1000,
+          "link_status": "up",
+          "is_primary": true,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "172.17.100.210",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": "172.17.100.254",
+              "scope": "global",
+              "label": "eno8303",
+              "parent_interface": "eno8303",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv6",
+              "address": "fe80::c6cb:e1ff:fedc:bc4a",
+              "prefix_length": 64,
+              "subnet_mask": null,
+              "gateway": null,
+              "scope": "link",
+              "label": "eno8303",
+              "parent_interface": "eno8303",
+              "is_alias": false,
+              "is_secondary": false
+            }
+          ]
+        },
+        {
+          "id": "eno8403",
+          "name": "eno8403",
+          "kind": "os_nic",
+          "mac": "c4:cb:e1:dc:bc:4b",
+          "mtu": 1500,
+          "speed_mbps": null,
+          "link_status": "down",
+          "is_primary": false,
+          "addresses": []
+        },
+        {
+          "id": "vxlan.calico",
+          "name": "vxlan.calico",
+          "kind": "os_nic",
+          "mac": "66:a8:da:fa:fb:7e",
+          "mtu": 1450,
+          "speed_mbps": 10000,
+          "link_status": "unknown",
+          "is_primary": false,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.1.145.0",
+              "prefix_length": 32,
+              "subnet_mask": "255.255.255.255",
+              "gateway": null,
+              "scope": "global",
+              "label": "vxlan.calico",
+              "parent_interface": "vxlan.calico",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv6",
+              "address": "fe80::64a8:daff:fefa:fb7e",
+              "prefix_length": 64,
+              "subnet_mask": null,
+              "gateway": null,
+              "scope": "link",
+              "label": "vxlan.calico",
+              "parent_interface": "vxlan.calico",
+              "is_alias": false,
+              "is_secondary": false
+            }
+          ]
+        },
+        {
+          "id": "enp190s0f0np0",
+          "name": "enp190s0f0np0",
+          "kind": "os_nic",
+          "mac": "3c:fd:fe:c9:9f:f0",
+          "mtu": 9000,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [],
+          "bond_role": "slave",
+          "bond_master": "bond0",
+          "slave_state": "active"
+        },
+        {
+          "id": "enp190s0f1np1",
+          "name": "enp190s0f1np1",
+          "kind": "os_nic",
+          "mac": "3c:fd:fe:c9:9f:f1",
+          "mtu": 9000,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": false,
+          "addresses": [],
+          "bond_role": "slave",
+          "bond_master": "bond0",
+          "slave_state": "backup"
+        }
+      ],
+      "teams": [],
+      "virtual_switches": [],
+      "driver_map": [
+        {
+          "name": "bond0",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "bond0.64",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "cali1e3d1fb7938",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "docker0",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "eno12399np0",
+          "driver": "bnxt_en",
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "eno12409np1",
+          "driver": "bnxt_en",
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "eno8303",
+          "driver": "tg3",
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "eno8403",
+          "driver": "tg3",
+          "vlan_id": null,
+          "bond_master": null
+        },
+        {
+          "name": "enp190s0f0np0",
+          "driver": "i40e",
+          "vlan_id": null,
+          "bond_master": "bond0"
+        },
+        {
+          "name": "enp190s0f1np1",
+          "driver": "i40e",
+          "vlan_id": null,
+          "bond_master": "bond0"
+        },
+        {
+          "name": "veth05a75d6",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": "docker0"
+        },
+        {
+          "name": "veth7865276",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": "docker0"
+        },
+        {
+          "name": "vethaf73b62",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": "docker0"
+        },
+        {
+          "name": "vethc0f3512",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": "docker0"
+        },
+        {
+          "name": "vxlan.calico",
+          "driver": null,
+          "vlan_id": null,
+          "bond_master": null
+        }
+      ],
+      "bonds": [
+        {
+          "name": "bond0",
+          "mode": "active-backup",
+          "active_slave": "enp190s0f0np0",
+          "miimon": 0,
+          "lacp_rate": "slow",
+          "xmit_hash_policy": "layer2",
+          "primary": null,
+          "ad_select": "stable",
+          "slaves": [
+            {
+              "name": "enp190s0f0np0",
+              "state": "active",
+              "mii_status": "up",
+              "perm_hwaddr": "3c:fd:fe:c9:9f:f0",
+              "speed_mbps": 10000,
+              "link_failure_count": 0,
+              "mtu": 9000,
+              "link_status": "up",
+              "bond": "bond0"
+            },
+            {
+              "name": "enp190s0f1np1",
+              "state": "backup",
+              "mii_status": "up",
+              "perm_hwaddr": "3c:fd:fe:c9:9f:f1",
+              "speed_mbps": 10000,
+              "link_failure_count": 0,
+              "mtu": 9000,
+              "link_status": "up",
+              "bond": "bond0"
+            }
+          ],
+          "addresses": [
+            {
+              "family": "ipv6",
+              "address": "fe80::7cf6:44ff:fe87:78d4",
+              "prefix_length": 64,
+              "subnet_mask": null,
+              "gateway": null,
+              "scope": "link",
+              "label": "bond0",
+              "parent_interface": "bond0",
+              "is_alias": false,
+              "is_secondary": false
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "speed_mbps": 10000,
+            "link_type": null,
+            "quantity": 3,
+            "link_up_count": 2
+          },
+          {
+            "speed_mbps": 1000,
+            "link_type": null,
+            "quantity": 1,
+            "link_up_count": 1
+          }
+        ]
+      },
+      "dns_servers": [
+        "10.100.64.251"
+      ],
+      "bridges": [
+        {
+          "name": "docker0",
+          "members": [
+            "veth05a75d6",
+            "veth7865276",
+            "vethaf73b62",
+            "vethc0f3512"
+          ]
+        }
+      ]
+    },
+    "cpu": {
+      "sockets": 2,
+      "cores_physical": 24,
+      "logical_threads": 48,
+      "model": "INTEL(R) XEON(R) SILVER 4510",
+      "manufacturer": "Intel",
+      "max_speed_mhz": 2400,
+      "turbo_max_mhz": 4100,
+      "architecture": "x86_64",
+      "summary": {
+        "groups": [
+          {
+            "model": "INTEL(R) XEON(R) SILVER 4510",
+            "manufacturer": "Intel",
+            "max_speed_mhz": 2400,
+            "turbo_max_mhz": 4100,
+            "l2_cache_kb": 24576,
+            "l3_cache_kb": 30720,
+            "sockets": 2,
+            "cores_per_socket": 12,
+            "total_cores": 24
+          }
+        ]
+      }
+    }
+  },
+  "schema_version": "1"
+}
