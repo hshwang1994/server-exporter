@@ -315,3 +315,23 @@ def test_linux_turbo_below_base_is_null(base, turbo, expected):
     assert _render(frag["turbo_max_mhz"], ctx) == expected
     groups = _render(frag["summary"], ctx)["groups"]
     assert groups[0]["turbo_max_mhz"] == expected
+
+
+def _regex_replace(value, pattern, repl="", *_a, **_k):
+    return re.sub(pattern, repl, str(value))
+
+
+@pytest.mark.parametrize("dmi_lines,base,turbo", [
+    (["DMI_CUR_MHZ=2400", "DMI_MAX_MHZ=4100"], 2400, 4100),   # R760 실측
+    (["DMI_CUR_MHZ=2200", "DMI_MAX_MHZ=30000"], 2200, None),  # VMware 가상 SMBIOS 자리표시자 (build #197)
+    (["DMI_CUR_MHZ=0", "DMI_MAX_MHZ=0"], None, None),
+    ([], None, None),
+])
+def test_linux_smbios_clock_fallback_plausibility(dmi_lines, base, turbo):
+    """cpufreq·브랜드 문자열이 없을 때 SMBIOS Current/Max Speed 를 쓰되 100~10000 MHz 만 인정한다."""
+    sf = _task(LINUX_CPU, "linux | cpu | compute")["ansible.builtin.set_fact"]
+    env = _env()
+    env.filters["regex_replace"] = _regex_replace
+    ctx = {"_l_cpu_parsed": {"CPU_MODEL": "INTEL(R) XEON(R) SILVER 4510"}, "_l_cpu_dmi_raw": {"stdout_lines": dmi_lines}}
+    assert env.from_string(sf["_l_cpu_base_mhz"]).render(**ctx) == base
+    assert env.from_string(sf["_l_cpu_turbo_mhz"]).render(**ctx) == turbo
