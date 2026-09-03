@@ -68,6 +68,18 @@
 - 정본: `docs/contract/03-fields.md` §3/§4/§6.1/§8, `docs/develop/05-field-mapping.md`.
 
 
+### 실장비 검증 (같은 날 후속)
+
+사용자 질문 "버그 0 인가, 실제 서버에서도 게더링했나, Jenkins 로도 했나" — 그 시점까지는 pytest 와 표현식 렌더 검증뿐이었다.
+운영 파이프라인(`clovirone-server-gather`, Jenkinsfile_portal) 으로 7 빌드(#190~#196) 를 돌렸다:
+RHEL 8.10 raw fallback / RHEL 9.6 / Dell R760 베어메탈 / Windows Server 2022 / ESXi 7.0.3 ×2 전부 `success`,
+무응답 장비 1대는 새 계약의 실패 envelope. 렌더 테스트가 못 잡은 6건이 실장비에서 드러나 같은 날 정정했다
+(`0076ca67`, `d38bc31b`): cpufreq 도 브랜드 GHz 표기도 없는 CPU 의 정격 클럭(SMBIOS Current Speed), Windows 팀 멤버 NIC 의
+MAC 원문, Windows IPv6 zone 접미사, ESXi vmk 링크 상태 근거, hz 절삭, VM SMBIOS 의 정격보다 낮은 "Max Speed".
+교훈: 참조 캡처 기반 렌더 테스트는 값 계약을 고정하지만, **참조에 없는 경로(SMBIOS 만 있는 베어메탈 / 팀 멤버 NIC / VM SMBIOS)** 는
+실장비로만 드러난다 — 앞으로 계약 변경은 렌더 테스트 + Jenkins 실장비 1회를 한 묶음으로 본다.
+증거: `tests/evidence/2026-09-03-os-esxi-live-verification.md`.
+
 ## 2026-08-12 — Fragment 덮어쓰기 / 공통 Task include 경로 2건 수정 (실환경 검증 중 발견)
 
 ### 사용자 의심

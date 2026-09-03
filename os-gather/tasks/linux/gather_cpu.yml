@@ -165,7 +165,10 @@
         model:           "{{ _l_cpu_model | default(none) }}"
         manufacturer:    "{{ _l_cpu_manufacturer | default(none) }}"
         max_speed_mhz:   "{{ _l_cpu_base_mhz | default(none) }}"
-        turbo_max_mhz:   "{{ _l_cpu_turbo_mhz | default(none) }}"
+        # 2026-09-03 실측(build #194, VMware VM): SMBIOS Max Speed 가 정격보다 낮게(2093 < 2200) 보고된다.
+        #   정격보다 낮은 "터보" 는 값이 아니므로 null (turbo >= base 일 때만 신뢰).
+        turbo_max_mhz: >-
+          {%- set t = _l_cpu_turbo_mhz | default(none) -%}{%- set b = _l_cpu_base_mhz | default(none) -%}{{ t if (t is not none and (b is none or (t | int) >= (b | int))) else none }}
         architecture:    "{{ ((_l_cpu_parsed.CPU_ARCH | default('')) | trim) or none }}"
         summary: >-
           {%- set model = _l_cpu_model | default(none) -%}
@@ -176,7 +179,7 @@
               'model': model,
               'manufacturer': _l_cpu_manufacturer | default(none),
               'max_speed_mhz': _l_cpu_base_mhz | default(none),
-              'turbo_max_mhz': _l_cpu_turbo_mhz | default(none),
+              'turbo_max_mhz': ((_l_cpu_turbo_mhz | default(none)) if ((_l_cpu_turbo_mhz | default(none)) is not none and ((_l_cpu_base_mhz | default(none)) is none or ((_l_cpu_turbo_mhz | default(none)) | int) >= ((_l_cpu_base_mhz | default(none)) | int))) else none),
               'l2_cache_kb': _l_cpu_l2_kb | default(none),
               'l3_cache_kb': _l_cpu_l3_kb | default(none),
               'sockets': s,
