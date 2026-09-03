@@ -294,3 +294,24 @@ def test_esxi_hosting_type_is_hypervisor_and_runtime_keys_seeded():
     assert frag["system"]["hosting_type"] == "hypervisor"
     assert frag["cpu"]["turbo_max_mhz"] is None
     assert frag["system"]["runtime"]["ntp_synchronized"] is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Linux cpu — 터보가 정격보다 낮으면 null (실측 build #194: VMware SMBIOS Max Speed 2093 < 2200)
+# ═══════════════════════════════════════════════════════════════════════════
+LINUX_CPU = REPO / "os-gather" / "tasks" / "linux" / "gather_cpu.yml"
+
+
+@pytest.mark.parametrize("base,turbo,expected", [
+    (2400, 4100, 4100),   # R760 실측: 정격 2400 / 터보 4100
+    (2200, 2093, None),   # VM 실측: SMBIOS Max Speed 가 정격보다 낮음 → 값 아님
+    (None, 3000, 3000),   # 정격을 모르면 터보는 그대로
+    (2200, None, None),
+])
+def test_linux_turbo_below_base_is_null(base, turbo, expected):
+    frag = _task(LINUX_CPU, "linux | cpu | build fragment")["ansible.builtin.set_fact"]["_data_fragment"]["cpu"]
+    ctx = {"_l_cpu_base_mhz": base, "_l_cpu_turbo_mhz": turbo, "_l_cpu_model": "x", "_l_cpu_sockets": 1,
+           "_l_cpu_cps": 1, "_l_cpu_manufacturer": "Intel", "_l_cpu_l2_kb": None, "_l_cpu_l3_kb": None}
+    assert _render(frag["turbo_max_mhz"], ctx) == expected
+    groups = _render(frag["summary"], ctx)["groups"]
+    assert groups[0]["turbo_max_mhz"] == expected
