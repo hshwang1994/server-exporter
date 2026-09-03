@@ -1,5 +1,19 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## OS / ESXi 게더링 전수 검수 후속 (2026-09-03)
+
+> 정본: `docs/reference/decision-log.md` 2026-09-03, `tests/unit/test_gather_identity_render.py`
+
+| # | 항목 | 상태 | 내용 |
+|---|---|---|---|
+| GA-1 | **실장비 재수집 + 참조 캡처 대조** | `[CRIT / lab]` | Linux 3대(python 1회 + `SE_FORCE_LINUX_RAW_FALLBACK=true` 1회), R760 bare-metal, Windows 1대, ESXi 1대. `tests/reference/*` 원본과 필드별 대조표를 `tests/evidence/2026-09-xx-os-esxi-recollect.md` 에 남긴다. 이번 변경은 렌더 테스트만 통과했고 실장비 0건 |
+| GA-2 | **baseline 10건 재생성** | `[CRIT / lab]` | 값 형식이 바뀐 필드(MAC/WWPN/UUID 소문자·colon, l2/l3 소켓당, Linux max_speed 정격, ESXi storage.summary LUN 기준, Windows filesystems int / health / interfaces[].id) 는 현 baseline 과 다르다. 재수집 결과로 갱신하고 수동 편집 이력(`8aa06f18`, `82926268`) 을 끊는다. `windows_baseline.json`(2026-04-01, hardware not_supported) 은 stale — 정리 여부 결정 |
+| GA-3 | ESXi `host_info` 파트 실장비 확인 | `[PENDING / lab]` | `ipRouteConfig.defaultGateway` / vnic `ipRouteSpec` 폴백 / pnic↔pciDevice 매핑 / `quickStats.uptime` 이 사이트 ESXi 7.0.3 에서 값이 오는지. pyvmomi dump 로는 존재를 확인했다 |
+| GA-4 | Windows 시리얼 디코딩 조건 실측 | `[PENDING / lab]` | `Normalize-DiskSerial` 은 이제 "전 바이트 인쇄 가능 + hex 밖 문자 포함" 일 때만 디코딩한다. hex 인코딩 시리얼을 내는 드라이브 실측 1건으로 확인 |
+| GA-5 | Windows `Get-NetAdapterHardwareInfo` / `Get-PnpDevice` 권한 | `[PENDING / lab]` | 수집 계정이 관리자가 아닐 때 adapters[] 가 비는지(빈 배열은 error 아님) 확인 |
+| GA-6 | Redfish 채널 동일 검수 | `[TODO]` | 이번 범위는 OS/ESXi. Redfish `system.hostname/fqdn` 소스, `cpu.max_speed_mhz`(MaxSpeedMHz 의미), UUID 바이트 순서(uuid_equal 로 대조 가능) 를 같은 기준으로 본다 |
+| GA-7 | pre-commit placeholder 가드 승격 | `[TODO / 하네스]` | `scripts/ai/hooks/pre_commit_placeholder_fallback_check.py` 는 advisory. 사이클 1회 무위반 확인 후 blocking 검토 |
+
 ## OS 채널 CSUS 3200 시리얼 정규화 후속 (2026-08-27)
 
 > 정본: `filter_plugins/serial_normalizer.py`, `tests/unit/test_csus_partition_serial.py`

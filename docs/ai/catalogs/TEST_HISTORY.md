@@ -1,5 +1,31 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-03 — OS(Linux/Windows) / ESXi 게더링 전수 검수 후속 (37건 정정) 회귀
+
+| 항목 | 결과 |
+|---|---|
+| `pytest tests/ --ignore=tests/e2e_browser` (전수) | **3265 passed**, 10 skipped, 7 xfailed (변경 전 기준선 2873 passed → 신규 테스트 7 파일 반영) |
+| `pytest tests/unit` | 2222 passed |
+| `pytest tests/regression` | 169 passed, 7 xfailed |
+| `pytest tests/e2e` | 631 passed, 6 skipped |
+| `pytest tests/integration -m "not live"` | 243 passed, 3 skipped |
+| 신규 테스트 | `test_identity_normalizer.py`(30) / `test_gather_identity_render.py`(21) / `test_always_fallback_envelope.py`(3) / `test_failed_output_partial_and_hostname.py`(6) / `test_field_dictionary_channel_emit.py`(8) / `test_cross_channel_uuid_equal.py`(2) / `test_esxi_disks_host_info.py`(4) |
+| 갱신 테스트 | `test_os_network_render.py`(raw 단일 구현 + normalize_mac) / `test_esxi_section_errors.py`(host_info 스텁, 인터페이스 컨텍스트, 섹션 failed 케이스) / `test_windows_runtime_ports_str_r18.py`(gather_runtime 정본) / `test_windows_firewall_state_r19.py`(빈 프로필 = null) / `test_envelope_failure_modes.py`(hostname null 허용 + `hostname != ip`) |
+| `tests/validate_field_dictionary.py` | RESULT: PASS (8/8 — 신규 3 path 는 예시 미포함 WARN) |
+| `output_schema_drift_check` | exit 0 (sections=11 / fd_paths=192) |
+| `envelope_change_check` | advisory 1건 — `diagnosis.auth_success` 후보(기존 사전 항목, 이번 변경 무관). envelope 13 필드 무변경 |
+| `pre_commit_jinja_compile_check --all --blocking` / `pre_commit_jinja_namespace_check` / `pre_commit_fragment_skeleton_sync` | 전부 exit 0 |
+| `pre_commit_placeholder_fallback_check --all` (신규 advisory) | self-test PASS, 저장소 전수 0건 |
+| `verify_harness_consistency` | exit 0 (rules 28 / skills 47 / agents 47 / policies 7) |
+| `verify_vendor_boundary` | exit 2 — **기준선과 동일** 2건(`redfish_gather.py` iLO/XCC), OS/ESXi 신규 위반 0 |
+| YAML parse / `py_compile` | 변경 YAML 45종 + `esxi_disks.py` + `identity_normalizer.py` OK |
+| `ansible-playbook --syntax-check` | **미실행 — 환경 제약** (Windows 세션 ansible-core 2.21.3 CLI 진입부 `os.get_blocking` 예외). YAML parse + 저장소 전수 Jinja compile + 표현식 렌더 테스트로 대체 |
+| **실장비** | **미실행** — Linux(python/raw) / Windows / ESXi / R760 bare-metal 재수집 0건. baseline 10건 미재생성 (NEXT_ACTIONS GA-1 / GA-2) |
+
+값 대조 근거: `tests/reference/os/{rhel-baremetal,win2022,rhel810,ubuntu2404}` 캡처와
+`tests/reference/esxi/10_100_64_1/pyvmomi_host_dump.json` (cpuMhz=2195 / dnsConfig.hostName=esxi01 /
+vnic ipRouteSpec.defaultGateway=10.100.64.254) 을 렌더 테스트 입력으로 썼다.
+
 ## 2026-08-27 — OS 채널 CSUS 3200 nPartition 시리얼 접미사 정규화 회귀
 
 | 항목 | 결과 |

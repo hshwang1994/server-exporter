@@ -84,7 +84,8 @@ write_hook "pre-commit" \
     "pre_commit_jinja_namespace_check.py" \
     "pre_commit_fragment_skeleton_sync.py" \
     "pre_commit_regex_search_conditional_check.py" \
-    "pre_commit_jinja_compile_check.py"
+    "pre_commit_jinja_compile_check.py" \
+    "pre_commit_placeholder_fallback_check.py"
 
 write_hook "commit-msg" \
     "commit_msg_check.py"
@@ -120,3 +121,5 @@ echo "  REGEX_WHEN_SKIP=1             — pre_commit_regex_search_conditional_ch
 echo "  REGEX_WHEN_BLOCKING=1         — advisory → blocking 격상 (1주 안정 후 사용)"
 echo "  JINJA_COMPILE_SKIP=1          — pre_commit_jinja_compile_check skip (inline Jinja2 컴파일, advisory)"
 echo "  JINJA_COMPILE_BLOCKING=1      — advisory → blocking 격상 (false positive 불가 — 즉시 격상 안전)"
+echo "  PLACEHOLDER_FALLBACK_SKIP=1   — pre_commit_placeholder_fallback_check skip (IP 대체 / 0·unknown placeholder, advisory 2026-09-03)"
+echo "  PLACEHOLDER_FALLBACK_BLOCKING=1 — advisory → blocking 격상"

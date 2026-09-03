@@ -1,5 +1,33 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-03 — OS(Linux/Windows) / ESXi 게더링 전수 검수 후속 (37건 정정, Redfish 제외)
+
+> 결정 근거: `docs/reference/decision-log.md` 2026-09-03 항목. 후속: `docs/ai/NEXT_ACTIONS.md` GA-1~GA-6.
+
+- **hostname 계약**: `system.hostname`(짧은 이름) + `system.fqdn`(hostname + 설정 도메인, 없으면 null).
+  Linux `uname -n`/`hostname -d`, Windows `DNSHostName` + AD 도메인/DNS 접미사, ESXi `dnsConfig.hostName/domainName`.
+  IP 대체는 rescue(`build_failed_output.yml`) 와 `always` 최종 fallback 까지 제거 — `hostname: null` + `hostname_source`.
+- **Linux 는 raw 명령 단일 구현**: `gather_system/cpu/memory/storage/network.yml` 을 다시 썼다. setup fact 는 system 필드
+  1순위로만 쓰고 hardware/cpu/memory/storage/network 는 raw 명령(dmidecode/lscpu/lsblk/df/ip) 결과를 python·raw 공통 판정식으로
+  만든다. `gather_runtime.yml` 은 삭제 (runtime 이중 구현 제거). hardware 섹션(vendor/model/serial/uuid/bios) 을 낸다.
+- **Windows**: `gather_system.yml`(hostname/fqdn/kernel/version/architecture/hosting_type — OEM 목록 없음),
+  `gather_hardware.yml`(sku, 수집 판정), `gather_cpu.yml`(캐시 0→null, turbo null), `gather_memory.yml`(JEDEC, null 정합),
+  `gather_storage.yml`(int MB, 시리얼 디코딩 조건 강화, health OK/Warning/Critical, IB 벤더),
+  `gather_network.yml`(id=어댑터 이름, IPv6, adapters[], MAC 정규화), `gather_runtime.yml`(단일 구현, tri-state, rescue all-null).
+- **ESXi**: `esxi_disks.py` 에 `host_info` 파트(dnsConfig / ipRouteConfig / vnic IPv6 / pnic↔pciDevice / cpuInfo.hz / uptime).
+  `normalize_system.yml`(hostname/fqdn/정격 클럭/arch 추론/uptime null), `normalize_network.yml`(gateway/is_primary/IPv6/MAC),
+  `normalize_storage.yml`(summary = LUN 기준), `collect_runtime.yml`(gateway 경로 제거, `.get()|default` None 버그 제거,
+  ntp_synchronized null, firewall enum), `collect_network_extended.yml`(adapters 키 통일, WWN 정규화, HBA vendor).
+- **공통**: `common/tasks/normalize/resolve_vendor.yml` 신설(envelope.vendor 단일 경로, 미등록 제조사 null),
+  `build_failed_output.yml`(성공 섹션 보존 + partial, hostname 체인, correlation 파생), `build_correlation.yml`(uuid 정규화),
+  `filter_plugins/identity_normalizer.py`(normalize_mac / normalize_wwn / normalize_uuid / uuid_byteswap / uuid_equal),
+  `supported_sections.yml` + `adapters/os/*.yml` + `schema/sections.yml` 에 hardware(os).
+- **schema**: `field_dictionary.yml` +16 항목 / channel·enum 정정 (Must 52 / Nice 134 / Skip 6 = 192), `fields/{common,os,esxi}.yml`,
+  `examples/os_partial.json` 정정(hostname IP / bare_metal / uid int / 10 섹션).
+- **미실행 / 남은 것**: 실장비 재수집 0건 (Linux python·raw, Windows, ESXi, R760 bare-metal 전부 lab 필요).
+  baseline 10건 미재생성 — 값 형식이 바뀐 필드(MAC/WWPN/UUID/캐시/클럭/summary/health) 는 재수집 전까지 baseline 과 다르다.
+  `ansible-playbook --syntax-check` 는 Windows 세션 환경 제약으로 미실행 (YAML parse + Jinja 전수 compile + 렌더 테스트로 대체).
+
 ## 일자: 2026-09-01 — OS Windows 자격증명 교체 (git 제외 3 Location)
 
 - 사용자 지시로 `vault/{chj,ic,yi}/os/windows.yml` 의 Windows 계정을 교체했다.

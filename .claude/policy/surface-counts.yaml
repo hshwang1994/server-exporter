@@ -1,9 +1,9 @@
-# Harness 표면 카운트 — pre-commit drift 감지용
+# Hardness 표면 카운트 — pre-commit drift 감지용
 # scripts/ai/hooks/pre_commit_harness_drift.py --update 로 갱신
 
 agents: 47
 commands: 3
-hooks: 27
+hooks: 28
 policies: 7
 roles: 6
 rules: 28
