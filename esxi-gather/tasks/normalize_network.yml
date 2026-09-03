@@ -8,6 +8,8 @@
 #   - is_primary = 게이트웨이 장치(gatewayDevice) 와 같은 vmk. 장치가 없으면 게이트웨이와 같은 서브넷의 vmk.
 #   - IPv6 주소(vnic ipV6Config) 를 addresses[] 에 family=ipv6 로 함께 낸다 (Linux 와 동일 shape).
 #   - MAC 은 normalize_mac (소문자 colon).
+#   - vmk link_status: vmware_host_facts 는 vmk 링크 상태를 주지 않는다. 수집에 쓴 IP(_e_ip) 를 가진 vmk 는
+#     통신이 됐으므로 up 이 확실하고, 나머지는 unknown (실측 2026-09-03 build #191: 관리 vmk0 가 down 으로 나왔다).
 
 - name: "esxi | normalize network | extract dns and gw"
   ansible.builtin.set_fact:
@@ -118,7 +120,7 @@
             'mac':         (d.get('macaddress', none) or vn.get('mac', none)) | normalize_mac,
             'mtu':         d.get('mtu', none) if d.get('mtu', none) is not none else vn.get('mtu', none),
             'speed_mbps':  none,
-            'link_status': 'up' if d.get('active', false) else 'down',
+            'link_status': ('up' if (ipv4.address == (_e_ip | default('')) or d.get('active', false)) else 'unknown'),
             'is_primary':  ins.primary,
             'addresses':   addrs
           }) -%}

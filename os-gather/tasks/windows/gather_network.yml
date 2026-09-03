@@ -94,11 +94,12 @@
             {%- set mask = '%d.%d.%d.%d' % ((bits // 16777216) % 256, (bits // 65536) % 256, (bits // 256) % 256, bits % 256) -%}
           {%- endif -%}
           {%- if fam == 'ipv6' -%}
-            {%- set a6 = (n.address | default('')) | lower -%}
+            {# Windows 는 link-local 에 zone index(%<ifindex>) 를 붙여 준다 — 주소 값이 아니므로 뗀다 (실측 build #190: fe80::...%23) #}
+            {%- set a6 = ((n.address | default('')) | string).split('%')[0] | lower -%}
             {%- set scope = 'link' if a6.startswith('fe80') else ('host' if a6 == '::1' else 'global') -%}
             {%- set addr = {
                 'family':        'ipv6',
-                'address':       n.address,
+                'address':       a6,
                 'prefix_length': (p if p > 0 else none),
                 'subnet_mask':   none,
                 'scope':         scope,
@@ -260,7 +261,9 @@
     # adapter 보조 맵 (name -> mac/status/speed) — team member NIC enrichment 용
     if (Has 'Get-NetAdapter') {
       foreach($a in @(Get-NetAdapter)){
-        Emit 'WADP' ([PSCustomObject]@{ name=$a.Name; mac=$a.MacAddress;
+        # 2026-09-03 실측(build #190): 팀 멤버 NIC 는 이 맵의 MAC 이 그대로 나가므로 여기서 소문자 colon 으로 맞춘다
+        Emit 'WADP' ([PSCustomObject]@{ name=$a.Name;
+          mac=$(if($a.MacAddress){ ([string]$a.MacAddress).Replace('-',':').ToLower() } else { $null });
           status=[string]$a.Status;
           speed_mbps=$(if($a.Speed){ [math]::Round($a.Speed/1000000,0) } else { $null }) })
       }
