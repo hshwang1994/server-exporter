@@ -24,9 +24,14 @@
   `supported_sections.yml` + `adapters/os/*.yml` + `schema/sections.yml` 에 hardware(os).
 - **schema**: `field_dictionary.yml` +16 항목 / channel·enum 정정 (Must 52 / Nice 134 / Skip 6 = 192), `fields/{common,os,esxi}.yml`,
   `examples/os_partial.json` 정정(hostname IP / bare_metal / uid int / 10 섹션).
-- **미실행 / 남은 것**: 실장비 재수집 0건 (Linux python·raw, Windows, ESXi, R760 bare-metal 전부 lab 필요).
-  baseline 10건 미재생성 — 값 형식이 바뀐 필드(MAC/WWPN/UUID/캐시/클럭/summary/health) 는 재수집 전까지 baseline 과 다르다.
-  `ansible-playbook --syntax-check` 는 Windows 세션 환경 제약으로 미실행 (YAML parse + Jinja 전수 compile + 렌더 테스트로 대체).
+- **실장비 검증 완료 (같은 날, Jenkins #190~#196)**: RHEL 8.10 raw fallback / RHEL 9.6 / Dell R760 베어메탈 / Windows Server 2022 /
+  ESXi 7.0.3 ×2 — 전부 `status=success`, 자동 계약 점검 이슈 0. 실장비에서만 드러난 6건은 같은 날 후속 커밋으로 정정했다:
+  `0076ca67`(SMBIOS Current/Max Speed 3순위 클럭 fallback, Windows 팀 멤버 MAC·IPv6 zone, ESXi cpu_mhz 반올림·vmk link_status 근거),
+  `d38bc31b`(정격보다 낮은 터보는 null). 무응답 장비(.163)의 실패 envelope 도 새 계약대로 나왔다.
+  증거: `tests/evidence/2026-09-03-os-esxi-live-verification.md` (+ `2026-09-03-live/*.json`).
+- **남은 것**: baseline 10건 미재생성 — `schema/baseline_v1/README.md`(수정 금지) 와 rule 13 R4(실장비 검증 후 갱신) 가 충돌해
+  **사용자 결정 대기** (갱신용 원본 envelope 은 evidence 디렉터리에 있다). lab 목록의 .167/.169 는 Ubuntu/Rocky 가 아니라 RHEL VM 의
+  bond IP 였다 (목록 정정 필요). `ansible-playbook --syntax-check` 로컬 미실행은 Jenkins Agent 실행으로 대체됐다.
 
 ## 일자: 2026-09-01 — OS Windows 자격증명 교체 (git 제외 3 Location)
 

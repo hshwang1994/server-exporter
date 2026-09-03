@@ -1,5 +1,23 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-03 — 실장비 검증 (Jenkins `clovirone-server-gather` #190~#196, 운영 파이프라인 Jenkinsfile_portal)
+
+> 증거: `tests/evidence/2026-09-03-os-esxi-live-verification.md` + 원본 envelope `tests/evidence/2026-09-03-live/*.json`
+
+| 빌드 | 커밋 | 대상 | 결과 |
+|---|---|---|---|
+| #190 | `1fb2ae16` | os ×4: RHEL 8.10(raw fallback) / RHEL 9.6 / Dell R760 베어메탈 Ubuntu 24.04 / Windows Server 2022 | 4/4 success. 계약 점검 이슈 4건(Windows 팀 멤버 MAC 대시, IPv6 `%zone`, R760 정격 클럭 null, ESXi 값 2건) |
+| #191 | `1fb2ae16` | esxi: 10.100.64.1 (7.0.3) | success, 이슈 0 (정격 2194 절삭·vmk0 down 지적) |
+| #192 / #193 | `0076ca67` | os: R760 + Windows / esxi: 10.100.64.1 | 전부 success, 이슈 0 — 4건 정정 확인 |
+| #194 | `0076ca67` | os ×3: .163(무응답) / .167 / .169 | .163 실패 envelope 이 새 계약대로(hostname null, 11 섹션, 표준 문장). .167/.169 는 .165/.161 VM 의 bond IP (lab 목록 오류). VM turbo 2093<2200 발견 → `d38bc31b` |
+| #195 | `0076ca67` | esxi: 10.100.64.2 (esxi02, baseline 대상 장비) | success, 이슈 0. FC WWPN 소문자 colon, HBA vendor, UUID ↔ Redfish `uuid_equal` 일치 |
+| #196 | `d38bc31b` | os: .161 raw VM + .96 R760 (turbo 가드 재검증) | 2/2 success, 이슈 0 — VM turbo `null`, R760 2400/4100 |
+| `pytest tests/ --ignore=tests/e2e_browser` (d38bc31b) | — | — | **3269 passed, 10 skipped, 7 xfailed (2026-09-03, d38bc31b)** |
+| Jenkins Stage 3 (Validate Schema) | — | 7 빌드 | 전부 통과 (WARN 은 예시 미포함 advisory) |
+| Stage 4 Callback | — | 7 빌드 | 더미 URL(192.0.2.1) → 408 → **UNSTABLE 은 의도된 결과** (rule 31 R2) |
+
+**Jenkins 체크아웃 SHA 확인**: 각 빌드 콘솔의 Gather stage `Checking out Revision` = 대상 커밋 (rule 14). Agent `jenkins-agent-ops`, ansible-core 2.20.3.
+
 ## 2026-09-03 — OS(Linux/Windows) / ESXi 게더링 전수 검수 후속 (37건 정정) 회귀
 
 | 항목 | 결과 |

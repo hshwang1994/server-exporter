@@ -6,13 +6,14 @@
 
 | # | 항목 | 상태 | 내용 |
 |---|---|---|---|
-| GA-1 | **실장비 재수집 + 참조 캡처 대조** | `[CRIT / lab]` | Linux 3대(python 1회 + `SE_FORCE_LINUX_RAW_FALLBACK=true` 1회), R760 bare-metal, Windows 1대, ESXi 1대. `tests/reference/*` 원본과 필드별 대조표를 `tests/evidence/2026-09-xx-os-esxi-recollect.md` 에 남긴다. 이번 변경은 렌더 테스트만 통과했고 실장비 0건 |
-| GA-2 | **baseline 10건 재생성** | `[CRIT / lab]` | 값 형식이 바뀐 필드(MAC/WWPN/UUID 소문자·colon, l2/l3 소켓당, Linux max_speed 정격, ESXi storage.summary LUN 기준, Windows filesystems int / health / interfaces[].id) 는 현 baseline 과 다르다. 재수집 결과로 갱신하고 수동 편집 이력(`8aa06f18`, `82926268`) 을 끊는다. `windows_baseline.json`(2026-04-01, hardware not_supported) 은 stale — 정리 여부 결정 |
-| GA-3 | ESXi `host_info` 파트 실장비 확인 | `[PENDING / lab]` | `ipRouteConfig.defaultGateway` / vnic `ipRouteSpec` 폴백 / pnic↔pciDevice 매핑 / `quickStats.uptime` 이 사이트 ESXi 7.0.3 에서 값이 오는지. pyvmomi dump 로는 존재를 확인했다 |
-| GA-4 | Windows 시리얼 디코딩 조건 실측 | `[PENDING / lab]` | `Normalize-DiskSerial` 은 이제 "전 바이트 인쇄 가능 + hex 밖 문자 포함" 일 때만 디코딩한다. hex 인코딩 시리얼을 내는 드라이브 실측 1건으로 확인 |
-| GA-5 | Windows `Get-NetAdapterHardwareInfo` / `Get-PnpDevice` 권한 | `[PENDING / lab]` | 수집 계정이 관리자가 아닐 때 adapters[] 가 비는지(빈 배열은 error 아님) 확인 |
+| GA-1 | 실장비 재수집 + 참조 캡처 대조 | `[DONE 2026-09-03]` | Jenkins #190~#196: RHEL 8.10 raw(.161) / RHEL 9.6(.165) / R760 베어메탈(.96) / Windows 2022(.120) / ESXi 7.0.3(.1, .2) 전부 success, 이슈 0. 증거 `tests/evidence/2026-09-03-os-esxi-live-verification.md`. **미수집**: Ubuntu 24.04 VM(lab 목록의 .167 은 RHEL VM bond IP — 실제 Ubuntu 호스트 부재), Windows .135(자격 미검증), ESXi 9.0 R760 ×5(자격 미제공) |
+| GA-2 | **baseline 갱신 여부** | `[DECISION / 사용자]` | `schema/baseline_v1/README.md` 는 "본 폴더 JSON 수정 금지(새 정답지는 별도 폴더)", rule 13 R4 는 "실장비 검증 후 갱신" — 정본 충돌이라 AI 가 임의로 덮어쓰지 않았다. 갱신에 쓸 실장비 envelope 은 준비됨: `rhel810_raw_fallback` ← `2026-09-03-live/build190_rhel810_raw_10.100.64.161.json`, `windows_2022` ← `build192_win2022_10.100.64.120.json`, `esxi` ← `build195_esxi02_10.100.64.2.json`. `ubuntu_baseline.json` 대상 장비는 lab 에 없어 갱신 불가. 승인 시 3파일 교체 + baseline 회귀 재실행 |
+| GA-3 | ESXi `host_info` 파트 실장비 확인 | `[DONE 2026-09-03]` | esxi01/02 실측: gateway 10.100.64.254 + gatewayDevice→is_primary, pnic 제조사/모델, cpuInfo.hz 2195, uptime, dnsConfig.hostName 전부 값 확인 (#193/#195) |
+| GA-4 | Windows 시리얼 디코딩 조건 실측 | `[PARTIAL]` | #192: NAA 32-hex 시리얼(`6000c295…`) 이 변조 없이 보존됨을 확인. hex 인코딩 ASCII 시리얼을 내는 실제 드라이브 케이스는 lab 에 없어 미확인 |
+| GA-5 | Windows `Get-NetAdapterHardwareInfo` / `Get-PnpDevice` 권한 | `[DONE / 관리자 계정]` | #192: adapters[] 6개(PCI 주소·제조사·드라이버 버전) 수집. 비관리자 계정 케이스는 lab 계정이 관리자라 미확인 |
 | GA-6 | Redfish 채널 동일 검수 | `[TODO]` | 이번 범위는 OS/ESXi. Redfish `system.hostname/fqdn` 소스, `cpu.max_speed_mhz`(MaxSpeedMHz 의미), UUID 바이트 순서(uuid_equal 로 대조 가능) 를 같은 기준으로 본다 |
 | GA-7 | pre-commit placeholder 가드 승격 | `[TODO / 하네스]` | `scripts/ai/hooks/pre_commit_placeholder_fallback_check.py` 는 advisory. 사이클 1회 무위반 확인 후 blocking 검토 |
+| GA-8 | lab 대상 목록 정정 | `[TODO / 운영자]` | `vault/.lab-credentials.yml`(gitignore) 의 `os_targets_linux` .167("ubuntu2404") / .169("rocky960") 는 실측상 .165 / .161 RHEL VM 의 bond1 IP 다. 실제 Ubuntu 24.04 / Rocky 9.6 호스트 IP 를 다시 받아야 GA-2 의 `ubuntu_baseline` 갱신이 가능 |
 
 ## OS 채널 CSUS 3200 시리얼 정규화 후속 (2026-08-27)
 

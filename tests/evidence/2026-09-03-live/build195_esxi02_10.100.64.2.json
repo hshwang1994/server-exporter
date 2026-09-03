@@ -1,0 +1,493 @@
+{
+  "target_type": "esxi",
+  "collection_method": "vsphere_api",
+  "ip": "10.100.64.2",
+  "hostname": "esxi02",
+  "vendor": "cisco",
+  "status": "success",
+  "sections": {
+    "system": "success",
+    "hardware": "success",
+    "bmc": "not_supported",
+    "cpu": "success",
+    "memory": "success",
+    "storage": "success",
+    "network": "success",
+    "firmware": "not_supported",
+    "users": "not_supported",
+    "power": "not_supported",
+    "thermal": "not_supported"
+  },
+  "diagnosis": {
+    "reachable": true,
+    "port_open": true,
+    "protocol_supported": true,
+    "auth_success": true,
+    "failure_stage": null,
+    "failure_code": null,
+    "failure_reason": null,
+    "details": {
+      "channel": "esxi",
+      "adapter_candidate": "esxi_7x",
+      "checked_ports": [
+        443
+      ],
+      "selected_port": 443,
+      "vsphere_endpoint": "https://10.100.64.2:443/sdk",
+      "credential_scope": "git/esxi",
+      "auth": {
+        "attempted_count": 1,
+        "used_label": "esxi_current",
+        "used_role": "primary",
+        "fallback_used": false
+      },
+      "esxi_version": "7.0.3",
+      "esxi_build": "20842708",
+      "product": "VMware ESXi",
+      "hostname_source": "system"
+    }
+  },
+  "meta": {
+    "started_at": "2026-09-03T03:27:31.999731Z",
+    "finished_at": "2026-09-03T03:28:04.304231Z",
+    "duration_ms": 32271,
+    "adapter_id": "esxi_7x",
+    "adapter_version": null,
+    "ansible_version": "2.20.3"
+  },
+  "correlation": {
+    "serial_number": "FCH2116V1V0",
+    "system_uuid": "9f0190b1-ce56-d44e-a1dd-6571daaedad7",
+    "bmc_ip": null,
+    "host_ip": "10.100.64.2"
+  },
+  "errors": [],
+  "data": {
+    "firmware": [],
+    "thermal": {
+      "temperatures": [],
+      "fans": []
+    },
+    "storage": {
+      "datastores": [
+        {
+          "name": "ESXi02-Local-RAID5",
+          "type": "VMFS",
+          "total_mb": 5968384,
+          "free_mb": 936628,
+          "used_mb": 5031756,
+          "usage_percent": 84.3,
+          "accessible": true
+        },
+        {
+          "name": "ESXi02-Local-RAID0",
+          "type": "VMFS",
+          "total_mb": 10986240,
+          "free_mb": 458421,
+          "used_mb": 10527819,
+          "usage_percent": 95.8,
+          "accessible": true
+        }
+      ],
+      "filesystems": [],
+      "logical_volumes": [],
+      "controllers": [
+        {
+          "id": "vmhba0",
+          "name": "Wellsburg AHCI Controller",
+          "controller_model": "Wellsburg AHCI Controller",
+          "controller_manufacturer": "Intel Corporation",
+          "driver": "vmw_ahci",
+          "controller_type": "SATA",
+          "pci": "0000:00:11.4",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "vmhba1",
+          "name": "Wellsburg AHCI Controller",
+          "controller_model": "Wellsburg AHCI Controller",
+          "controller_manufacturer": "Intel Corporation",
+          "driver": "vmw_ahci",
+          "controller_type": "SATA",
+          "pci": "0000:00:1f.2",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "vmhba2",
+          "name": "Cisco UCS VIC Fnic Controller",
+          "controller_model": "Cisco UCS VIC Fnic Controller",
+          "controller_manufacturer": "Cisco Corporation",
+          "driver": "nfnic",
+          "controller_type": "FC",
+          "pci": "0000:0d:00.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "vmhba3",
+          "name": "Cisco UCS VIC Fnic Controller",
+          "controller_model": "Cisco UCS VIC Fnic Controller",
+          "controller_manufacturer": "Cisco Corporation",
+          "driver": "nfnic",
+          "controller_type": "FC",
+          "pci": "0000:0e:00.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "vmhba4",
+          "name": "MegaRAID SAS Invader Controller",
+          "controller_model": "MegaRAID SAS Invader Controller",
+          "controller_manufacturer": "Broadcom",
+          "driver": "lsi_mr3",
+          "controller_type": "SAS",
+          "pci": "0000:05:00.0",
+          "health": null,
+          "drives": []
+        }
+      ],
+      "hbas": [
+        {
+          "name": "vmhba2",
+          "driver": "nfnic",
+          "model": "Cisco UCS VIC Fnic Controller",
+          "vendor": "Cisco Corporation",
+          "firmware": null,
+          "adapter_type": "Fibre Channel",
+          "link_status": "down",
+          "wwpn": "20:00:00:27:e3:6c:a6:6e",
+          "wwnn": "10:00:00:27:e3:6c:a6:6e",
+          "link_speed_gbps": 0,
+          "port_type": "FibreChannel",
+          "pci": "0000:0d:00.0",
+          "bus": 13,
+          "source": "esxi"
+        },
+        {
+          "name": "vmhba3",
+          "driver": "nfnic",
+          "model": "Cisco UCS VIC Fnic Controller",
+          "vendor": "Cisco Corporation",
+          "firmware": null,
+          "adapter_type": "Fibre Channel",
+          "link_status": "down",
+          "wwpn": "20:00:00:27:e3:6c:a6:6f",
+          "wwnn": "10:00:00:27:e3:6c:a6:6f",
+          "link_speed_gbps": 0,
+          "port_type": "FibreChannel",
+          "pci": "0000:0e:00.0",
+          "bus": 14,
+          "source": "esxi"
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 5956,
+            "model": "Cisco UCSC-MRAID12G",
+            "media_type": "HDD",
+            "protocol": null,
+            "quantity": 1,
+            "group_total_gb": 5956
+          },
+          {
+            "unit_capacity_gb": 10728,
+            "model": "Cisco UCSC-MRAID12G",
+            "media_type": "HDD",
+            "protocol": null,
+            "quantity": 1,
+            "group_total_gb": 10728
+          }
+        ],
+        "grand_total_gb": 16684
+      },
+      "infiniband": [],
+      "physical_disks": [
+        {
+          "id": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
+          "device": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
+          "model": "Cisco UCSC-MRAID12G",
+          "serial": "0052c3a31bc8667f2fb06e32acbebc80",
+          "wwn": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
+          "total_mb": 6099700,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null
+        },
+        {
+          "id": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
+          "device": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
+          "model": "Cisco UCSC-MRAID12G",
+          "serial": "00e398ce1efd667f2fb06e32acbebc80",
+          "wwn": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
+          "total_mb": 10986327,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null
+        }
+      ]
+    },
+    "cpu": {
+      "sockets": 2,
+      "cores_physical": 44,
+      "logical_threads": 88,
+      "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+      "manufacturer": "Intel",
+      "max_speed_mhz": 2195,
+      "turbo_max_mhz": null,
+      "architecture": "x86_64",
+      "summary": {
+        "groups": [
+          {
+            "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+            "manufacturer": "Intel",
+            "max_speed_mhz": 2195,
+            "turbo_max_mhz": null,
+            "l2_cache_kb": null,
+            "l3_cache_kb": null,
+            "architecture": "x86_64",
+            "sockets": 2,
+            "cores_per_socket": 22,
+            "total_cores": 44
+          }
+        ]
+      }
+    },
+    "bmc": null,
+    "memory": {
+      "total_mb": 1048464,
+      "total_basis": "hypervisor_visible",
+      "installed_mb": null,
+      "visible_mb": 1048464,
+      "free_mb": 469370,
+      "slots": [],
+      "summary": {
+        "groups": [],
+        "grand_total_gb": 1024
+      }
+    },
+    "power": null,
+    "hardware": {
+      "vendor": "Cisco Systems Inc",
+      "model": "TA-UNODE-G1",
+      "serial": "FCH2116V1V0",
+      "uuid": "9f0190b1-ce56-d44e-a1dd-6571daaedad7",
+      "bios_version": "C220M4.4.1.2c.0.0202211901",
+      "bios_date": "2021-02-02"
+    },
+    "network": {
+      "virtual_switches": [
+        {
+          "name": "vSwitch0",
+          "num_ports": 128,
+          "mtu": 9000,
+          "pnics": [
+            "vmnic4",
+            "vmnic3"
+          ],
+          "portgroups": [
+            "10.100.64.0/24",
+            "VM Network",
+            "Trunk",
+            "Management Network"
+          ]
+        }
+      ],
+      "default_gateways": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.254"
+        }
+      ],
+      "driver_map": [],
+      "dns_servers": [
+        "10.100.64.251"
+      ],
+      "adapters": [
+        {
+          "id": "0000:01:00.0",
+          "name": "vmnic0",
+          "manufacturer": "Intel(R)",
+          "model": "I350 Gigabit Network Connection",
+          "driver": "igbn",
+          "firmware_version": null,
+          "pci": "0000:01:00.0",
+          "mac": "00:27:e3:88:75:cc",
+          "link_status": "up",
+          "speed_mbps": 1000,
+          "duplex": "Full Duplex"
+        },
+        {
+          "id": "0000:01:00.1",
+          "name": "vmnic1",
+          "manufacturer": "Intel(R)",
+          "model": "I350 Gigabit Network Connection",
+          "driver": "igbn",
+          "firmware_version": null,
+          "pci": "0000:01:00.1",
+          "mac": "00:27:e3:88:75:cd",
+          "link_status": "down",
+          "speed_mbps": null,
+          "duplex": null
+        },
+        {
+          "id": "0000:0b:00.0",
+          "name": "vmnic2",
+          "manufacturer": "Cisco Systems Inc",
+          "model": "Cisco VIC Ethernet NIC",
+          "driver": "nenic",
+          "firmware_version": null,
+          "pci": "0000:0b:00.0",
+          "mac": "00:27:e3:6c:a6:6c",
+          "link_status": "up",
+          "speed_mbps": 10000,
+          "duplex": "Full Duplex"
+        },
+        {
+          "id": "0000:0c:00.0",
+          "name": "vmnic3",
+          "manufacturer": "Cisco Systems Inc",
+          "model": "Cisco VIC Ethernet NIC",
+          "driver": "nenic",
+          "firmware_version": null,
+          "pci": "0000:0c:00.0",
+          "mac": "00:27:e3:6c:a6:6d",
+          "link_status": "up",
+          "speed_mbps": 10000,
+          "duplex": "Full Duplex"
+        },
+        {
+          "id": "0000:86:00.0",
+          "name": "vmnic4",
+          "manufacturer": "Cisco Systems Inc",
+          "model": "Cisco VIC Ethernet NIC",
+          "driver": "nenic",
+          "firmware_version": null,
+          "pci": "0000:86:00.0",
+          "mac": "00:27:e3:6c:dc:8d",
+          "link_status": "up",
+          "speed_mbps": 10000,
+          "duplex": "Full Duplex"
+        },
+        {
+          "id": "0000:87:00.0",
+          "name": "vmnic5",
+          "manufacturer": "Cisco Systems Inc",
+          "model": "Cisco VIC Ethernet NIC",
+          "driver": "nenic",
+          "firmware_version": null,
+          "pci": "0000:87:00.0",
+          "mac": "00:27:e3:6c:dc:8e",
+          "link_status": "down",
+          "speed_mbps": null,
+          "duplex": null
+        }
+      ],
+      "portgroups": [
+        {
+          "portgroup": "10.100.64.0/24",
+          "vlan_id": 64,
+          "vswitch": "vSwitch0"
+        },
+        {
+          "portgroup": "VM Network",
+          "vlan_id": 64,
+          "vswitch": "vSwitch0"
+        },
+        {
+          "portgroup": "Trunk",
+          "vlan_id": 4095,
+          "vswitch": "vSwitch0"
+        },
+        {
+          "portgroup": "Management Network",
+          "vlan_id": 64,
+          "vswitch": "vSwitch0"
+        }
+      ],
+      "ports": [],
+      "summary": {
+        "groups": [
+          {
+            "speed_mbps": 1000,
+            "link_type": null,
+            "quantity": 1,
+            "link_up_count": 1
+          },
+          {
+            "speed_mbps": 10000,
+            "link_type": null,
+            "quantity": 3,
+            "link_up_count": 3
+          }
+        ]
+      },
+      "interfaces": [
+        {
+          "id": "vmk0",
+          "name": "vmk0",
+          "kind": "vmkernel",
+          "mac": "00:27:e3:6c:a6:6d",
+          "mtu": 1500,
+          "speed_mbps": null,
+          "link_status": "up",
+          "is_primary": true,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.2",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": "10.100.64.254"
+            }
+          ]
+        }
+      ]
+    },
+    "system": {
+      "os_family": "VMware ESXi",
+      "vendor": "Cisco Systems Inc",
+      "kernel": "20842708",
+      "uptime_seconds": 23331547,
+      "fqdn": null,
+      "hosting_type": "hypervisor",
+      "serial_number": "FCH2116V1V0",
+      "version": "7.0.3",
+      "distribution": "VMware ESXi",
+      "selinux": null,
+      "hostname": "esxi02",
+      "architecture": "x86_64",
+      "runtime": {
+        "timezone": "UTC",
+        "ntp_active": false,
+        "ntp_synchronized": null,
+        "firewall_tool": "esxi_firewall",
+        "firewall_state": "active",
+        "listening_ports": [
+          "22",
+          "68",
+          "80",
+          "161",
+          "443",
+          "902",
+          "5988",
+          "5989",
+          "8000",
+          "8300",
+          "8301",
+          "8302",
+          "9080"
+        ],
+        "swap_total_mb": null,
+        "swap_used_mb": null,
+        "swap_free_mb": null,
+        "ntp_servers": []
+      },
+      "system_uuid": "9f0190b1-ce56-d44e-a1dd-6571daaedad7"
+    },
+    "users": []
+  },
+  "schema_version": "1"
+}
