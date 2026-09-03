@@ -1,332 +1,205 @@
 ---
 # os-gather/tasks/linux/gather_memory.yml
-# 물리 메모리 수집 (dmidecode 우선, /proc/meminfo fallback)
-# → data.memory fragment 생성
+# 물리 메모리 수집 (dmidecode 우선, /proc/meminfo fallback) → data.memory fragment 생성
 #
-# Python 경로: shell(dmidecode) + setup facts(memtotal/memfree)
-# Raw fallback: /proc/meminfo + dmidecode (raw only)
+# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-12/13/14/15):
+#   - Python / raw 두 경로가 **같은 raw 명령 + 같은 판정식**을 쓴다 (종전: python 은 MemFree 로
+#     조용히 의미 변경, raw 는 0 으로 대체, raw 는 dmidecode 실패 경고를 내지 않았다).
+#   - slots[] 에 serial / locator 추가 (dmidecode 가 주는 값 — Windows 와 같은 키).
+#   - 값을 못 구하면 null. 0 으로 대체하지 않는다. 섹션 status 는 실제 결과로.
+#   - grand_total_gb 는 반올림 (1048464 MB 가 1023 GB 로 절삭되던 것 정정).
 
-# =============================================================================
-# Python Path
-# =============================================================================
-- block:
-    - name: "linux | memory | physical (dmidecode total)"
-      ansible.builtin.shell: |
-        export LANG=C LC_ALL=C
-        if command -v dmidecode >/dev/null 2>&1; then
-          dmidecode -t memory 2>/dev/null \
+- name: "linux | memory | raw gather (/proc/meminfo + dmidecode)"
+  become: true
+  ansible.builtin.raw: |
+    export LANG=C LC_ALL=C
+    echo "MEM_TOTAL_KB=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null)"
+    echo "MEM_AVAIL_KB=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null)"
+    if command -v dmidecode >/dev/null 2>&1; then
+      echo "DMIDECODE=present"
+      out=$(dmidecode -t memory 2>/dev/null)
+      if [ -z "$out" ] && command -v sudo >/dev/null 2>&1; then
+        out=$(sudo -n dmidecode -t memory 2>/dev/null || true)
+      fi
+      if [ -n "$out" ]; then
+        echo "DMIDECODE_OK=yes"
+        phys=$(printf '%s\n' "$out" \
           | grep -E "^[[:space:]]*Size:" \
           | grep -v "No Module Installed" \
-          | awk '{
-              if ($3=="GB")       sum+=$2*1024;
-              else if ($3=="MB")  sum+=$2;
-              else if ($3=="KB")  sum+=$2/1024;
-              else if ($3=="B")   sum+=$2/1048576;
-            } END{print int(sum)}'
-        else
-          echo ""
-        fi
-      become: true
-      register: _l_mem_phys_raw
-      changed_when: false
-      failed_when: false
-      no_log: true
+          | awk '{if($3=="GB")s+=$2*1024;else if($3=="MB")s+=$2;else if($3=="KB")s+=$2/1024} END{print int(s)}')
+        echo "MEM_PHYS_MB=${phys:-}"
+        printf '%s\n' "$out" | awk '
+          BEGIN{ in_dev=0; size=""; type=""; speed=""; mfr=""; pn=""; sn=""; loc=""; }
+          /^Memory Device/ { in_dev=1; size=""; type=""; speed=""; mfr=""; pn=""; sn=""; loc=""; next }
+          in_dev && /^[[:space:]]*Size:/ {
+            if ($2 == "No" || $2 == "Volatile") next;
+            if ($3=="GB") size_mb = $2 * 1024;
+            else if ($3=="MB") size_mb = $2;
+            else if ($3=="KB") size_mb = int($2 / 1024);
+            else size_mb = 0;
+            size = size_mb;
+          }
+          in_dev && /^[[:space:]]*Type:/ && !/Type Detail/ { type=$2; }
+          in_dev && /^[[:space:]]*Speed:/ && !/Configured/ { speed=$2; }
+          in_dev && /^[[:space:]]*Manufacturer:/ {
+            s=$0; sub(/^[[:space:]]*Manufacturer:[[:space:]]*/,"",s);
+            gsub(/[|]/,"_",s); mfr=s;
+          }
+          in_dev && /^[[:space:]]*Part Number:/ {
+            s=$0; sub(/^[[:space:]]*Part Number:[[:space:]]*/,"",s);
+            gsub(/[|]/,"_",s); pn=s;
+          }
+          in_dev && /^[[:space:]]*Serial Number:/ {
+            s=$0; sub(/^[[:space:]]*Serial Number:[[:space:]]*/,"",s);
+            gsub(/[|]/,"_",s); sn=s;
+          }
+          in_dev && /^[[:space:]]*Locator:/ && !/Bank Locator/ {
+            s=$0; sub(/^[[:space:]]*Locator:[[:space:]]*/,"",s);
+            gsub(/[|]/,"_",s); loc=s;
+          }
+          in_dev && /^$/ {
+            if (size != "" && size > 0) printf "SLOT|%s|%s|%s|%s|%s|%s|%s\n", size, type, speed, mfr, pn, sn, loc;
+            in_dev=0; size=""; type=""; speed=""; mfr=""; pn=""; sn=""; loc="";
+          }
+          END {
+            if (in_dev && size != "" && size > 0) printf "SLOT|%s|%s|%s|%s|%s|%s|%s\n", size, type, speed, mfr, pn, sn, loc;
+          }
+        '
+      else
+        echo "DMIDECODE_OK=no"
+      fi
+    else
+      echo "DMIDECODE=absent"
+    fi
+  register: _l_mem_raw_result
+  changed_when: false
+  failed_when: false
+  no_log: true
 
-    # cycle-016 Phase L: slot 단위 dmidecode → manufacturer/part_number 도 emit
-    - name: "linux | memory | physical (dmidecode slots)"
-      ansible.builtin.shell: |
-        if command -v dmidecode >/dev/null 2>&1; then
-          dmidecode -t memory 2>/dev/null | awk '
-            BEGIN{ in_dev=0; size=""; type=""; speed=""; mfr=""; pn=""; }
-            /^Memory Device/ { in_dev=1; size=""; type=""; speed=""; mfr=""; pn=""; next }
-            in_dev && /^[[:space:]]*Size:/ {
-              if ($2 == "No" || $2 == "Volatile") next;
-              if ($3=="GB") size_mb = $2 * 1024;
-              else if ($3=="MB") size_mb = $2;
-              else if ($3=="KB") size_mb = int($2 / 1024);
-              else size_mb = 0;
-              size = size_mb;
-            }
-            in_dev && /^[[:space:]]*Type:/ && !/Type Detail/ { type=$2; }
-            in_dev && /^[[:space:]]*Speed:/ && !/Configured/ { speed=$2; }
-            in_dev && /^[[:space:]]*Manufacturer:/ {
-              s=$0; sub(/^[[:space:]]*Manufacturer:[[:space:]]*/,"",s);
-              gsub(/[|]/,"_",s); mfr=s;
-            }
-            in_dev && /^[[:space:]]*Part Number:/ {
-              s=$0; sub(/^[[:space:]]*Part Number:[[:space:]]*/,"",s);
-              gsub(/[|]/,"_",s); pn=s;
-            }
-            in_dev && /^$/ {
-              if (size != "" && size > 0) printf "SLOT|%s|%s|%s|%s|%s\n", size, type, speed, mfr, pn;
-              in_dev=0; size=""; type=""; speed=""; mfr=""; pn="";
-            }
-          '
-        fi
-      become: true
-      register: _l_mem_slots_raw
-      changed_when: false
-      failed_when: false
-      no_log: true
+- name: "linux | memory | parse"
+  ansible.builtin.set_fact:
+    _l_mem_rp: >-
+      {{ dict(_l_mem_raw_result.stdout_lines | default([])
+              | select('search', '=')
+              | map('split', '=', 1)
+              | list) }}
+    # 2026-04-29 fix B23: dmidecode Manufacturer는 raw JEDEC ID hex (예: '00AD063200AD').
+    # jedec_to_vendor 필터로 정규화 (00AD -> 'SK hynix', 00CE -> 'Samsung').
+    _l_mem_slots: >-
+      {%- set out = [] -%}
+      {%- set sentinel = ['', 'Unknown', 'Not Specified', 'NO DIMM', 'None', 'Not Available', 'To Be Filled By O.E.M.'] -%}
+      {%- for line in (_l_mem_raw_result.stdout_lines | default([])) -%}
+        {%- if line.startswith('SLOT|') -%}
+          {%- set parts = line.split('|') -%}
+          {%- if parts | length >= 4 -%}
+            {%- set cap = parts[1] | trim -%}
+            {%- set t = parts[2] | trim if (parts[2] | trim) not in sentinel else none -%}
+            {%- set sp = (parts[3] | default('')) | regex_replace('[^0-9]', '') -%}
+            {%- set mfr_raw = (parts[4] | trim) if (parts | length >= 5 and (parts[4] | trim) not in sentinel) else none -%}
+            {%- set pn = (parts[5] | trim) if (parts | length >= 6 and (parts[5] | trim) not in sentinel) else none -%}
+            {%- set sn = (parts[6] | trim) if (parts | length >= 7 and (parts[6] | trim) not in sentinel) else none -%}
+            {%- set loc = (parts[7] | trim) if (parts | length >= 8 and (parts[7] | trim) not in sentinel) else none -%}
+            {%- if sn is not none and ((sn | regex_replace('0', '') | length) == 0) -%}{%- set sn = none -%}{%- endif -%}
+            {%- set _ = out.append({
+              'capacity_mb': (cap | int) if cap.isdigit() else none,
+              'type': t,
+              'speed_mhz': (sp | int) if sp else none,
+              'manufacturer': mfr_raw | jedec_to_vendor,
+              'part_number': pn,
+              'serial': sn,
+              'locator': loc
+            }) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
 
-    - name: "linux | memory | parse slots + grouping"
-      ansible.builtin.set_fact:
-        # 2026-04-29 fix B23: dmidecode Manufacturer는 raw JEDEC ID hex (예: '00AD063200AD').
-        # jedec_to_vendor 필터로 정규화 (00AD -> 'SK hynix', 00CE -> 'Samsung').
-        _l_mem_slots: >-
-          {%- set out = [] -%}
-          {%- for line in (_l_mem_slots_raw.stdout_lines | default([])) -%}
-            {%- if line.startswith('SLOT|') -%}
-              {%- set parts = line.split('|') -%}
-              {%- if parts | length >= 4 -%}
-                {%- set cap = parts[1] | int -%}
-                {%- set t = parts[2] if (parts[2] | length) > 0 and parts[2] != 'Unknown' else none -%}
-                {%- set sp = parts[3] | regex_replace('[^0-9]', '') -%}
-                {%- set mfr_raw = parts[4] if (parts | length >= 5 and parts[4] | length > 0 and parts[4] != 'Unknown' and parts[4] != 'Not Specified') else none -%}
-                {%- set pn = parts[5] if (parts | length >= 6 and parts[5] | length > 0 and parts[5] != 'Unknown' and parts[5] != 'Not Specified') else none -%}
-                {%- set _ = out.append({
-                  'capacity_mb': cap,
-                  'type': t,
-                  'speed_mhz': (sp | int) if sp else none,
-                  'manufacturer': mfr_raw | jedec_to_vendor,
-                  'part_number': pn | trim if pn else none
-                }) -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-      no_log: true
+# cycle-016 Phase L: groups 에 manufacturer + part_number 추가 (사용자 "부실" 피드백)
+- name: "linux | memory | compute summary groups"
+  ansible.builtin.set_fact:
+    _l_mem_summary: >-
+      {%- set ns = namespace(groups=[], seen={}, total=0) -%}
+      {%- for s in (_l_mem_slots | default([])) -%}
+        {%- if (s.capacity_mb | default(0)) and (s.capacity_mb | int) > 0 -%}
+          {%- set cap_gb = ((s.capacity_mb | int) / 1024) | round(0, 'common') | int -%}
+          {%- set t = s.type | default(none) -%}
+          {%- set sp = s.speed_mhz | default(none) -%}
+          {%- set mfr = s.manufacturer | default(none) -%}
+          {%- set pn = s.part_number | default(none) -%}
+          {%- set key = (cap_gb|string)~'|'~(t|string)~'|'~(sp|string)~'|'~(mfr|string)~'|'~(pn|string) -%}
+          {%- if key in ns.seen -%}
+            {%- set idx = ns.seen[key] -%}
+            {%- set q = ns.groups[idx].quantity + 1 -%}
+            {%- set _ = ns.groups[idx].update({'quantity': q, 'group_total_gb': q * cap_gb}) -%}
+          {%- else -%}
+            {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
+            {%- set _ = ns.groups.append({'unit_capacity_gb': cap_gb, 'type': t, 'speed_mhz': sp, 'manufacturer': mfr, 'part_number': pn, 'quantity': 1, 'group_total_gb': cap_gb}) -%}
+          {%- endif -%}
+          {%- set ns.total = ns.total + cap_gb -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
+      {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('')) | trim -%}
+      {%- set fb_mb = (phys | int) if (phys.isdigit() and (phys | int) > 0) else (((vis_kb | int) / 1024) if vis_kb.isdigit() else 0) -%}
+      {%- set fallback_total = (fb_mb / 1024) | round(0, 'common') | int -%}
+      {{ {'groups': ns.groups, 'grand_total_gb': ns.total if ns.total > 0 else fallback_total} }}
+  no_log: true
 
-    # cycle-016 Phase L: groups 에 manufacturer + part_number 추가 (사용자 "부실" 피드백)
-    - name: "linux | memory | compute summary groups"
-      ansible.builtin.set_fact:
-        _l_mem_summary: >-
-          {%- set ns = namespace(groups=[], seen={}, total=0) -%}
-          {%- for s in (_l_mem_slots | default([])) -%}
-            {%- if s.capacity_mb > 0 -%}
-              {%- set cap_gb = (s.capacity_mb / 1024) | round(0, 'floor') | int -%}
-              {%- set t = s.type | default(none) -%}
-              {%- set sp = s.speed_mhz | default(none) -%}
-              {%- set mfr = s.manufacturer | default(none) -%}
-              {%- set pn = s.part_number | default(none) -%}
-              {%- set key = (cap_gb|string)~'|'~(t|string)~'|'~(sp|string)~'|'~(mfr|string)~'|'~(pn|string) -%}
-              {%- if key in ns.seen -%}
-                {%- set idx = ns.seen[key] -%}
-                {%- set q = ns.groups[idx].quantity + 1 -%}
-                {%- set _ = ns.groups[idx].update({'quantity': q, 'group_total_gb': q * cap_gb}) -%}
-              {%- else -%}
-                {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-                {%- set _ = ns.groups.append({'unit_capacity_gb': cap_gb, 'type': t, 'speed_mhz': sp, 'manufacturer': mfr, 'part_number': pn, 'quantity': 1, 'group_total_gb': cap_gb}) -%}
-              {%- endif -%}
-              {%- set ns.total = ns.total + cap_gb -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {%- set fallback_mb = (_l_mem_phys_raw.stdout | trim | int) if (_l_mem_phys_raw.stdout | trim | length > 0) else (ansible_memtotal_mb | default(0) | int) -%}
-          {%- set fallback_total = (fallback_mb / 1024) | round(0, 'floor') | int -%}
-          {{ {'groups': ns.groups, 'grand_total_gb': ns.total if ns.total > 0 else fallback_total} }}
-      no_log: true
-
-    # production-audit (2026-04-29 후속): free_mb 의 의미를 raw 경로와 통일.
-    # ansible_memfree_mb = MemFree (cache/buffer 미포함) 라 사용자 직관과 다름.
-    # raw 경로는 MemAvailable 사용 — Python 경로도 동일하게 MemAvailable 추출.
-    - name: "linux | memory | get MemAvailable"
-      ansible.builtin.shell: "awk '/^MemAvailable:/{print $2}' /proc/meminfo"
-      register: _l_mem_avail_kb
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "linux | memory | build fragment"
-      ansible.builtin.set_fact:
-        _l_mem_phys_ok: >-
-          {{ _l_mem_phys_raw.stdout | trim | length > 0
-             and _l_mem_phys_raw.stdout | trim | int > 0 }}
-        _data_fragment:
-          memory:
-            total_mb: >-
-              {{ _l_mem_phys_raw.stdout | trim | int
-                 if (_l_mem_phys_raw.stdout | trim | length > 0
-                     and _l_mem_phys_raw.stdout | trim | int > 0)
-                 else (ansible_memtotal_mb | default(0)) }}
-            total_basis: >-
-              {{ 'physical_installed'
-                 if (_l_mem_phys_raw.stdout | trim | length > 0
-                     and _l_mem_phys_raw.stdout | trim | int > 0)
-                 else 'os_visible' }}
-            installed_mb: >-
-              {{ _l_mem_phys_raw.stdout | trim | int
-                 if (_l_mem_phys_raw.stdout | trim | length > 0
-                     and _l_mem_phys_raw.stdout | trim | int > 0)
-                 else none }}
-            visible_mb:  "{{ ansible_memtotal_mb | default(none) }}"
-            free_mb: >-
-              {%- set avail = (_l_mem_avail_kb.stdout | default('') | trim) -%}
-              {{ ((avail | int) / 1024) | round(0,'floor') | int if avail else (ansible_memfree_mb | default(none)) }}
-            slots:       "{{ _l_mem_slots | default([]) }}"
-            # cycle-016 (2026-04-29): dmidecode slot 단위 group summary
-            summary: "{{ _l_mem_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
-        _sections_supported_fragment: ['memory']
-        _sections_collected_fragment: ['memory']
-        _sections_failed_fragment:    []
-        # LOW-1 fix: dmidecode 권한/미존재로 total_basis=os_visible fallback 시
-        # 사용자가 사유 추적 가능하도록 errors[] 에 명시. 정상 수집은 빈 list.
-        # H7 (2026-08-12): message 에 있던 내부 필드명(total_basis) / 명령어(dmidecode) 를
-        #   detail 로 옮기고 사용자 문장만 남긴다. data.memory.total_basis 필드 자체는 불변
-        #   (호출자 계약).
-        _errors_fragment: >-
-          {{ [{'section':'memory','message':'메모리 총 용량을 물리 설치량이 아닌 운영체제 인식 값으로 수집했습니다. 수집 계정의 권한을 확인하세요.','detail':('field=total_basis; value=os_visible; source=dmidecode; rc=' ~ (_l_mem_phys_raw.rc | default('none')))}]
-             if ((_l_mem_phys_raw.stdout | default('') | trim | length) == 0) else [] }}
-      no_log: true
-  when: _l_python_mode == 'python_ok'
-
-# =============================================================================
-# Raw Fallback Path — /proc/meminfo + dmidecode (raw only)
-# =============================================================================
-- block:
-    # cycle-016 후속 (HIGH-1 fix): raw fallback path 도 become: true (sudo dmidecode)
-    - name: "linux | memory | raw gather"
-      become: true
-      ansible.builtin.raw: |
-        echo "MEM_TOTAL_KB=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}')"
-        echo "MEM_AVAIL_KB=$(grep MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}')"
-        phys=0
-        if command -v dmidecode >/dev/null 2>&1; then
-          phys=$(dmidecode -t memory 2>/dev/null \
-            | grep -E "^[[:space:]]*Size:" \
-            | grep -v "No Module Installed" \
-            | awk '{if($3=="GB")s+=$2*1024;else if($3=="MB")s+=$2;else if($3=="KB")s+=$2/1024} END{print int(s)}' 2>/dev/null)
-        fi
-        if [ "${phys:-0}" = "0" ] && command -v sudo >/dev/null 2>&1; then
-          phys=$(sudo -n dmidecode -t memory 2>/dev/null \
-            | grep -E "^[[:space:]]*Size:" \
-            | grep -v "No Module Installed" \
-            | awk '{if($3=="GB")s+=$2*1024;else if($3=="MB")s+=$2;else if($3=="KB")s+=$2/1024} END{print int(s)}' 2>/dev/null)
-        fi
-        echo "MEM_PHYS_MB=${phys:-0}"
-        # cycle-016 (2026-04-29) + production-audit 후속: slot 단위 emit (raw fallback) — Python 경로와 동일하게 manufacturer/part_number 포함
-        if command -v dmidecode >/dev/null 2>&1; then
-          dmidecode -t memory 2>/dev/null | awk '
-            BEGIN{ in_dev=0; size=""; type=""; speed=""; mfr=""; pn=""; }
-            /^Memory Device/ { in_dev=1; size=""; type=""; speed=""; mfr=""; pn=""; next }
-            in_dev && /^[[:space:]]*Size:/ {
-              if ($2 == "No" || $2 == "Volatile") next;
-              if ($3=="GB") size_mb = $2 * 1024;
-              else if ($3=="MB") size_mb = $2;
-              else if ($3=="KB") size_mb = int($2 / 1024);
-              else size_mb = 0;
-              size = size_mb;
-            }
-            in_dev && /^[[:space:]]*Type:/ && !/Type Detail/ { type=$2; }
-            in_dev && /^[[:space:]]*Speed:/ && !/Configured/ { speed=$2; }
-            in_dev && /^[[:space:]]*Manufacturer:/ {
-              s=$0; sub(/^[[:space:]]*Manufacturer:[[:space:]]*/,"",s);
-              gsub(/[|]/,"_",s); mfr=s;
-            }
-            in_dev && /^[[:space:]]*Part Number:/ {
-              s=$0; sub(/^[[:space:]]*Part Number:[[:space:]]*/,"",s);
-              gsub(/[|]/,"_",s); pn=s;
-            }
-            in_dev && /^$/ {
-              if (size != "" && size > 0) printf "SLOT|%s|%s|%s|%s|%s\n", size, type, speed, mfr, pn;
-              in_dev=0; size=""; type=""; speed=""; mfr=""; pn="";
-            }
-          '
-        fi
-      register: _l_mem_raw_result
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "linux | memory | parse raw"
-      ansible.builtin.set_fact:
-        _l_mem_rp: >-
-          {{ dict(_l_mem_raw_result.stdout_lines | default([])
-                  | select('search', '=')
-                  | map('split', '=', 1)
-                  | list) }}
-        _l_mem_slots_r: >-
-          {# 2026-04-29 fix B91: raw fallback path도 jedec_to_vendor 적용 (Python path와 동일).
-             RHEL 8.10/Python 3.6 환경에서 dmidecode raw '00AD063200AD' → 'SK hynix' 정규화. #}
-          {%- set out = [] -%}
-          {%- for line in (_l_mem_raw_result.stdout_lines | default([])) -%}
-            {%- if line.startswith('SLOT|') -%}
-              {%- set parts = line.split('|') -%}
-              {%- if parts | length >= 4 -%}
-                {%- set cap = parts[1] | int -%}
-                {%- set t = parts[2] if (parts[2] | length) > 0 and parts[2] != 'Unknown' else none -%}
-                {%- set sp = parts[3] | regex_replace('[^0-9]', '') -%}
-                {%- set mfr_raw = parts[4] if (parts | length >= 5 and parts[4] | length > 0 and parts[4] != 'Unknown' and parts[4] != 'Not Specified') else none -%}
-                {%- set pn = parts[5] if (parts | length >= 6 and parts[5] | length > 0 and parts[5] != 'Unknown' and parts[5] != 'Not Specified') else none -%}
-                {%- set _ = out.append({
-                  'capacity_mb': cap,
-                  'type': t,
-                  'speed_mhz': (sp | int) if sp else none,
-                  'manufacturer': mfr_raw | jedec_to_vendor,
-                  'part_number': pn | trim if pn else none
-                }) -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-      no_log: true
-
-    - name: "linux | memory | compute summary groups (raw)"
-      ansible.builtin.set_fact:
-        _l_mem_summary_r: >-
-          {%- set ns = namespace(groups=[], seen={}, total=0) -%}
-          {%- for s in (_l_mem_slots_r | default([])) -%}
-            {%- if s.capacity_mb > 0 -%}
-              {%- set cap_gb = (s.capacity_mb / 1024) | round(0, 'floor') | int -%}
-              {%- set t = s.type | default(none) -%}
-              {%- set sp = s.speed_mhz | default(none) -%}
-              {%- set mfr = s.manufacturer | default(none) -%}
-              {%- set pn = s.part_number | default(none) -%}
-              {%- set key = (cap_gb|string)~'|'~(t|string)~'|'~(sp|string)~'|'~(mfr|string)~'|'~(pn|string) -%}
-              {%- if key in ns.seen -%}
-                {%- set idx = ns.seen[key] -%}
-                {%- set q = ns.groups[idx].quantity + 1 -%}
-                {%- set _ = ns.groups[idx].update({'quantity': q, 'group_total_gb': q * cap_gb}) -%}
-              {%- else -%}
-                {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-                {%- set _ = ns.groups.append({'unit_capacity_gb': cap_gb, 'type': t, 'speed_mhz': sp, 'manufacturer': mfr, 'part_number': pn, 'quantity': 1, 'group_total_gb': cap_gb}) -%}
-              {%- endif -%}
-              {%- set ns.total = ns.total + cap_gb -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('0')) | trim | int -%}
-          {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('0')) | trim | int -%}
-          {%- set fallback_v = phys if phys > 0 else (vis_kb / 1024) | round(0, 'floor') | int -%}
-          {%- set fallback_total = (fallback_v / 1024) | round(0, 'floor') | int -%}
-          {{ {'groups': ns.groups, 'grand_total_gb': ns.total if ns.total > 0 else fallback_total} }}
-      no_log: true
-
-    - name: "linux | memory | build fragment (raw)"
-      ansible.builtin.set_fact:
-        _data_fragment:
-          memory:
-            total_mb: >-
-              {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('0')) | trim | int -%}
-              {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('0')) | trim | int -%}
-              {{ phys if phys > 0 else (vis_kb / 1024) | round(0,'floor') | int }}
-            total_basis: >-
-              {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('0')) | trim | int -%}
-              {{ 'physical_installed' if phys > 0 else 'os_visible' }}
-            installed_mb: >-
-              {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('0')) | trim | int -%}
-              {{ phys if phys > 0 else none }}
-            visible_mb: >-
-              {{ ((_l_mem_rp.MEM_TOTAL_KB | default('0')) | trim | int / 1024) | round(0,'floor') | int }}
-            free_mb: >-
-              {{ ((_l_mem_rp.MEM_AVAIL_KB | default('0')) | trim | int / 1024) | round(0,'floor') | int }}
-            slots: "{{ _l_mem_slots_r | default([]) }}"
-            # cycle-016 (2026-04-29): dmidecode slot 단위 group summary (raw)
-            summary: "{{ _l_mem_summary_r | default({'groups': [], 'grand_total_gb': 0}) }}"
-        _sections_supported_fragment: ['memory']
-        _sections_collected_fragment: ['memory']
-        _sections_failed_fragment:    []
-        _errors_fragment:             []
-      no_log: true
-  when: _l_python_mode != 'python_ok'
+- name: "linux | memory | build fragment"
+  ansible.builtin.set_fact:
+    _l_mem_phys_ok: >-
+      {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
+      {{ phys.isdigit() and (phys | int) > 0 }}
+    _data_fragment:
+      memory:
+        total_mb: >-
+          {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
+          {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('')) | trim -%}
+          {%- if phys.isdigit() and (phys | int) > 0 -%}{{ phys | int }}
+          {%- elif vis_kb.isdigit() and (vis_kb | int) > 0 -%}{{ ((vis_kb | int) / 1024) | round(0, 'floor') | int }}
+          {%- else -%}{{ none }}
+          {%- endif -%}
+        total_basis: >-
+          {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
+          {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('')) | trim -%}
+          {%- if phys.isdigit() and (phys | int) > 0 -%}physical_installed
+          {%- elif vis_kb.isdigit() and (vis_kb | int) > 0 -%}os_visible
+          {%- else -%}{{ none }}
+          {%- endif -%}
+        installed_mb: >-
+          {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
+          {{ (phys | int) if (phys.isdigit() and (phys | int) > 0) else none }}
+        visible_mb: >-
+          {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('')) | trim -%}
+          {{ (((vis_kb | int) / 1024) | round(0, 'floor') | int) if (vis_kb.isdigit() and (vis_kb | int) > 0) else none }}
+        # MemAvailable (cache/buffer 포함 가용량). 없는 커널(<3.14)이면 null — MemFree 로 바꿔치지 않는다.
+        free_mb: >-
+          {%- set av = (_l_mem_rp.MEM_AVAIL_KB | default('')) | trim -%}
+          {{ (((av | int) / 1024) | round(0, 'floor') | int) if av.isdigit() else none }}
+        slots:       "{{ _l_mem_slots | default([]) }}"
+        summary:     "{{ _l_mem_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
+    _sections_supported_fragment: ['memory']
+    _sections_collected_fragment: >-
+      {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
+      {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('')) | trim -%}
+      {{ ['memory'] if ((phys.isdigit() and (phys | int) > 0) or (vis_kb.isdigit() and (vis_kb | int) > 0)) else [] }}
+    _sections_failed_fragment: >-
+      {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
+      {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('')) | trim -%}
+      {{ [] if ((phys.isdigit() and (phys | int) > 0) or (vis_kb.isdigit() and (vis_kb | int) > 0)) else ['memory'] }}
+    # LOW-1 / H7: dmidecode 권한/미존재로 os_visible fallback 시 사유를 errors[] 에 남긴다 (시나리오 B).
+    # 메모리 총량 자체를 못 구하면 섹션 failed + 사유 1건.
+    _errors_fragment: >-
+      {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
+      {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('')) | trim -%}
+      {%- set phys_ok = phys.isdigit() and (phys | int) > 0 -%}
+      {%- set vis_ok = vis_kb.isdigit() and (vis_kb | int) > 0 -%}
+      {%- if phys_ok -%}{{ [] }}
+      {%- elif vis_ok -%}{{ [{'section':'memory','message':'메모리 총 용량을 물리 설치량이 아닌 운영체제 인식 값으로 수집했습니다. 수집 계정의 권한을 확인하세요.','detail':('field=total_basis; value=os_visible; source=dmidecode; state=' ~ (_l_mem_rp.DMIDECODE | default('unknown')) ~ '; rc=' ~ (_l_mem_raw_result.rc | default('none')))}] }}
+      {%- else -%}{{ [{'section':'memory','message':'메모리 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=/proc/meminfo,dmidecode; cause=no_output; rc=' ~ (_l_mem_raw_result.rc | default('none')))}] }}
+      {%- endif -%}
+  no_log: true
 
 # =============================================================================
 # Shared: merge

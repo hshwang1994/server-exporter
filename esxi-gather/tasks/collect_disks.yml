@@ -10,8 +10,12 @@
 #
 #   섹션 status 는 바꾸지 않는다. datastore 는 성공했는데 물리 디스크만 실패한 부분 실패에서
 #   storage 섹션 전체를 failed 로 강등하면 과잉이다 — _sections_*_fragment 는 비워 둔다.
-#   (파트 → 섹션: physical_disks / controllers → storage, listening_ports → system.
-#    세 정보 모두 ESXi 가 항상 제공하므로 "정상 미제공" 이 아니라 수집 실패로 본다.)
+#   (파트 → 섹션: physical_disks / controllers → storage, listening_ports / host_info → system.
+#    네 정보 모두 ESXi 가 항상 제공하므로 "정상 미제공" 이 아니라 수집 실패로 본다.)
+#
+# 2026-09-03: host_info 파트 추가 — dnsConfig(hostname/domain) / ipRouteConfig(gateway) /
+#   vnic IPv6 / pnic 제조사·모델 / cpuInfo.hz / quickStats.uptime. normalize_system /
+#   normalize_network / collect_network_extended 가 _e_raw_host 로 읽는다.
 
 - name: "esxi | collect | physical disks (serial/wwn)"
   esxi_disks:
@@ -19,6 +23,7 @@
     username:       "{{ _e_user }}"
     password:       "{{ _e_pass }}"
     validate_certs: false
+    esxi_hostname:  "{{ _e_hostname | default(none, true) }}"
   register:    _e_disks_result
   delegate_to: localhost
   failed_when: false
@@ -30,6 +35,10 @@
     # 2026-06-22 T1: storage controllers + listening_ports (firewall) 도 동일 모듈에서 수집
     _e_raw_controllers:     "{{ _e_disks_result.controllers | default([]) }}"
     _e_raw_listening_ports: "{{ _e_disks_result.listening_ports | default([]) }}"
+    # 2026-09-03: 식별/네트워크/CPU 보강 (mapping 이 아니면 빈 dict — 구버전 모듈 호환)
+    _e_raw_host: >-
+      {{ (_e_disks_result.host_info | default({}))
+         if ((_e_disks_result.host_info | default({})) is mapping) else {} }}
     _e_disks_ok:  "{{ (_e_disks_result is not failed)
                       and (_e_disks_result.physical_disks is defined)
                       and (_e_disks_result.error is not defined) }}"
@@ -53,7 +62,7 @@
       {%- set parts = _e_disks_failed_parts | default([]) -%}
       {%- set connect = 'connect' in parts -%}
       {%- set hit_storage = connect or ('physical_disks' in parts) or ('controllers' in parts) -%}
-      {%- set hit_system  = connect or ('listening_ports' in parts) -%}
+      {%- set hit_system  = connect or ('listening_ports' in parts) or ('host_info' in parts) -%}
       {%- set out = [] -%}
       {%- if hit_storage -%}
         {%- set _ = out.append({

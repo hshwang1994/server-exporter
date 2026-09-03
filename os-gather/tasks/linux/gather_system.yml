@@ -1,16 +1,26 @@
 ---
 # os-gather/tasks/linux/gather_system.yml
-# OS 기본 정보 수집 → data.system fragment 생성
+# OS 기본 정보 수집 → data.system + data.hardware fragment 생성
 #
-# Python 경로: setup module + command(systemd-detect-virt, DMI)
-# Raw fallback: /etc/os-release + uname + getenforce + DMI sysfs (raw only)
+# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-01/02/03/05/07/08/12/14/31/32/33):
+#   - raw gather 는 **두 경로 모두** 실행한다. python 경로는 setup facts 를 1순위로 쓰고
+#     같은 raw 결과를 fallback 으로 쓴다 → 같은 필드가 경로에 따라 다른 의미를 갖지 않는다.
+#   - system.hostname = OS 가 설정한 짧은 이름(nodename 의 첫 label). system.fqdn = hostname +
+#     domain, 도메인이 없으면 **null**. 어느 쪽도 IP 로 대체하지 않는다.
+#   - data.hardware(vendor/model/serial/uuid/bios_version/bios_date) 를 Linux 도 emit 한다
+#     (Windows/ESXi 와 같은 계약). 종전에는 raw 경로가 읽고도 버렸다.
+#   - hosting_type 판정식은 한 벌 (systemd-detect-virt 1순위, facts 보조) — 경로 무관 동일 답.
+#   - selinux 는 모드(enforcing/permissive/disabled/null) — schema/fields/os.yml 과 일치.
+#   - system.runtime 은 이 파일이 **단일 구현**이다 (gather_runtime.yml 은 삭제). 모르면 null,
+#     목록 절단 없음, 도구별 enum 차이 없음(active/inactive/null).
+#   - 값을 못 구하면 null. 0 / '' / IP / 'unknown' 문자열로 대체하지 않는다.
 #
 # 출력:
-#   _data_fragment               → {system: {...}}
-#   _sections_supported_fragment → ['system']
-#   _sections_collected_fragment → ['system'] or []
-#   _sections_failed_fragment    → [] or ['system']
-#   _errors_fragment             → [] (정상) or [식별자 진단 / vendor 추출 실패 errors]
+#   _data_fragment               → {system: {...}, hardware: {...}}
+#   _sections_supported_fragment → ['system', 'hardware']
+#   _sections_collected_fragment → 실제 수집 결과에 따라
+#   _sections_failed_fragment    → 실제 수집 결과에 따라
+#   _errors_fragment             → [] (정상) or [식별자 진단 / 수집 실패 errors]
 
 - name: "linux | system | init fallback vars"
   ansible.builtin.set_fact:
@@ -18,27 +28,50 @@
   no_log: true
 
 # =============================================================================
-# Raw-Only System Gather (Python 미사용 경로)
-# 전체 system 정보를 단일 raw 호출로 수집
+# Python 경로: setup facts (1순위)
 # =============================================================================
-- name: "linux | system | raw-only gather (no python)"
-  when: _l_python_mode != 'python_ok'
+- name: "linux | system | setup"
+  when: _l_python_mode == 'python_ok'
+  ansible.builtin.setup:
+    gather_subset: ['hardware', 'network', 'virtual', 'distribution']
+  vars:
+    ansible_python_interpreter: "{{ _l_python | default('python3') }}"
+  register: _l_setup_result
+  failed_when: false
+  no_log: true
+
+# setup 이 실제로 facts 를 돌려줬는지 (python_ok 인데 setup 만 실패하는 경우가 있다 —
+# 그때도 아래 raw 결과가 같은 필드를 같은 의미로 채운다).
+- name: "linux | system | setup 성공 판정"
+  ansible.builtin.set_fact:
+    _l_setup_ok: >-
+      {{ (_l_python_mode == 'python_ok')
+         and ((_l_setup_result | default({})).ansible_facts is defined) }}
+  no_log: true
+
+# =============================================================================
+# Raw gather — 두 경로 공통 (os-release / uname / hostname / selinux / DMI sysfs)
+# =============================================================================
+- name: "linux | system | raw gather (os-release/uname/hostname/dmi)"
   become: true
   ansible.builtin.raw: |
-    export LANG=C
+    export LANG=C LC_ALL=C
     . /etc/os-release 2>/dev/null || true
     echo "OS_ID=${ID:-}"
     echo "OS_ID_LIKE=${ID_LIKE:-}"
     echo "OS_VERSION=${VERSION_ID:-}"
-    echo "OS_PRETTY=${PRETTY_NAME:-unknown}"
+    echo "OS_PRETTY=${PRETTY_NAME:-}"
     echo "KERNEL=$(uname -r 2>/dev/null)"
     echo "ARCH=$(uname -m 2>/dev/null)"
-    echo "FQDN=$(hostname -f 2>/dev/null || hostname 2>/dev/null)"
-    echo "UPTIME=$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo 0)"
+    # hostname: 커널 nodename (resolver 무관 — OS 에 설정된 값 그대로). 짧은 이름/도메인은
+    # Jinja 에서 첫 label 로 나눈다. domain 은 nodename 에 점이 없을 때만 resolver 에 묻는다.
+    echo "NODENAME=$(uname -n 2>/dev/null)"
+    echo "DOMAIN=$(hostname -d 2>/dev/null)"
+    echo "UPTIME=$(awk '{print int($1)}' /proc/uptime 2>/dev/null)"
     if command -v getenforce >/dev/null 2>&1; then
       echo "SELINUX=$(getenforce 2>/dev/null | tr '[:upper:]' '[:lower:]')"
     elif [ -f /etc/selinux/config ]; then
-      echo "SELINUX=$(grep -m1 '^SELINUX=' /etc/selinux/config 2>/dev/null | cut -d= -f2)"
+      echo "SELINUX=$(grep -m1 '^SELINUX=' /etc/selinux/config 2>/dev/null | cut -d= -f2 | tr '[:upper:]' '[:lower:]')"
     else
       echo "SELINUX="
     fi
@@ -47,50 +80,52 @@
     else
       echo "SDV="
     fi
-    serial=""
-    uuid=""
-    if [ -r /sys/class/dmi/id/product_serial ]; then
-      serial=$(cat /sys/class/dmi/id/product_serial 2>/dev/null)
-    elif command -v sudo >/dev/null 2>&1; then
-      serial=$(sudo -n cat /sys/class/dmi/id/product_serial 2>/dev/null || true)
-    fi
-    if [ -r /sys/class/dmi/id/product_uuid ]; then
-      uuid=$(cat /sys/class/dmi/id/product_uuid 2>/dev/null)
-    elif command -v sudo >/dev/null 2>&1; then
-      uuid=$(sudo -n cat /sys/class/dmi/id/product_uuid 2>/dev/null || true)
-    fi
-    echo "SERIAL=${serial:-}"
-    echo "UUID=${uuid:-}"
-    # 2026-04-30 fix B80 raw: vendor/model/bios sysfs (Python setup 미동작 환경 보완).
-    # raw fallback path는 ansible_system_vendor 미정의이므로 _l_fb.VENDOR로 채움.
-    [ -r /sys/class/dmi/id/sys_vendor ]   && echo "VENDOR=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)"   || echo "VENDOR="
-    [ -r /sys/class/dmi/id/product_name ] && echo "MODEL=$(cat /sys/class/dmi/id/product_name 2>/dev/null)" || echo "MODEL="
-    [ -r /sys/class/dmi/id/bios_version ] && echo "BIOS_VERSION=$(cat /sys/class/dmi/id/bios_version 2>/dev/null)" || echo "BIOS_VERSION="
-    [ -r /sys/class/dmi/id/bios_date ]    && echo "BIOS_DATE=$(cat /sys/class/dmi/id/bios_date 2>/dev/null)"    || echo "BIOS_DATE="
+    for f in product_serial product_uuid sys_vendor product_name bios_version bios_date; do
+      v=""
+      if [ -r /sys/class/dmi/id/$f ]; then
+        v=$(cat /sys/class/dmi/id/$f 2>/dev/null)
+      elif command -v sudo >/dev/null 2>&1; then
+        v=$(sudo -n cat /sys/class/dmi/id/$f 2>/dev/null || true)
+      fi
+      echo "DMI_$(echo $f | tr '[:lower:]' '[:upper:]')=$v"
+    done
   register: _l_raw_sys_result
   changed_when: false
   failed_when: false
   no_log: true
 
+- name: "linux | system | parse raw results"
+  ansible.builtin.set_fact:
+    _l_raw_sys: >-
+      {{ dict(_l_raw_sys_result.stdout_lines | default([])
+              | select('search', '=')
+              | map('split', '=', 1)
+              | list) }}
+  no_log: true
+
 # =============================================================================
-# system.runtime (F5 cycle 2026-05-11): timezone / ntp / firewall / listen / swap
-# 양쪽 경로 (Python + raw fallback) 모두 raw 모듈로 수집 — timedatectl/systemctl
-# 같은 명령은 raw 가 가장 robust (setup facts 미의존).
+# system.runtime — 단일 구현 (timezone / ntp / firewall / listen / swap)
+# 두 경로 모두 raw 모듈 — timedatectl/systemctl 같은 명령은 raw 가 가장 robust.
+# 모르면 null: 명령 부재 시 값을 비워 보낸다 (0 / false 로 단정하지 않는다).
 # =============================================================================
 - name: "linux | system | gather runtime (timezone/ntp/firewall/listen/swap)"
   become: true
   ansible.builtin.raw: |
-    export LANG=C
+    export LANG=C LC_ALL=C
     TZ=$(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || (readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||') || echo "")
     echo "TZ=${TZ}"
     NTPSYNC=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo "")
     echo "NTPSYNC=${NTPSYNC}"
-    NTPACTIVE="no"
-    for svc in chronyd chrony ntpd systemd-timesyncd ntp; do
-      if systemctl is-active $svc 2>/dev/null | grep -q "^active$"; then
-        NTPACTIVE="yes"; break
-      fi
-    done
+    if command -v systemctl >/dev/null 2>&1; then
+      NTPACTIVE="no"
+      for svc in chronyd chrony ntpd systemd-timesyncd ntp; do
+        if systemctl is-active $svc 2>/dev/null | grep -q "^active$"; then
+          NTPACTIVE="yes"; break
+        fi
+      done
+    else
+      NTPACTIVE=""
+    fi
     echo "NTPACTIVE=${NTPACTIVE}"
     FW_TOOL=""
     FW_STATE=""
@@ -120,11 +155,17 @@
       netstat -tln 2>/dev/null | awk 'NR>2 {print $4}' | awk -F: '{print $NF}' | grep -E '^[0-9]+$' | sort -un
     fi
     echo "PORTS_END"
-    SWAP_LINE=$(free -m 2>/dev/null | awk 'tolower($1) ~ /^swap/' || true)
-    if [ -z "$SWAP_LINE" ]; then SWAP_LINE="Swap: 0 0 0"; fi
-    echo "SWAP_TOTAL=$(echo $SWAP_LINE | awk '{print $2}')"
-    echo "SWAP_USED=$(echo $SWAP_LINE | awk '{print $3}')"
-    echo "SWAP_FREE=$(echo $SWAP_LINE | awk '{print $4}')"
+    if command -v free >/dev/null 2>&1; then
+      SWAP_LINE=$(free -m 2>/dev/null | awk 'tolower($1) ~ /^swap/' || true)
+      if [ -z "$SWAP_LINE" ]; then SWAP_LINE="Swap: 0 0 0"; fi
+      echo "SWAP_TOTAL=$(echo $SWAP_LINE | awk '{print $2}')"
+      echo "SWAP_USED=$(echo $SWAP_LINE | awk '{print $3}')"
+      echo "SWAP_FREE=$(echo $SWAP_LINE | awk '{print $4}')"
+    else
+      echo "SWAP_TOTAL="
+      echo "SWAP_USED="
+      echo "SWAP_FREE="
+    fi
   register: _l_runtime_raw
   changed_when: false
   failed_when: false
@@ -152,18 +193,10 @@
       {{ ns.kv }}
   no_log: true
 
-- name: "linux | system | parse raw results"
-  when: _l_python_mode != 'python_ok'
-  ansible.builtin.set_fact:
-    _l_raw_sys: >-
-      {{ dict(_l_raw_sys_result.stdout_lines | default([])
-              | select('search', '=')
-              | map('split', '=', 1)
-              | list) }}
-  no_log: true
-
+# =============================================================================
+# raw 파생값 — 두 경로 공통 (python 경로에서는 setup facts 의 fallback)
+# =============================================================================
 - name: "linux | system | set raw-derived variables"
-  when: _l_python_mode != 'python_ok'
   ansible.builtin.set_fact:
     _l_fb:
       DIST: >-
@@ -175,125 +208,92 @@
         {%- elif id == 'debian' -%}Debian
         {%- elif id == 'fedora' -%}Fedora
         {%- elif id == 'almalinux' -%}AlmaLinux
-        {%- else -%}{{ (_l_raw_sys.OS_PRETTY | default(id)) | trim }}
+        {%- elif id == 'ol' -%}OracleLinux
+        {%- elif id == 'sles' -%}SLES
+        {%- elif id in ['opensuse-leap', 'opensuse-tumbleweed', 'opensuse'] -%}openSUSE
+        {%- elif id == 'amzn' -%}Amazon
+        {%- elif id -%}{{ id | title }}
+        {%- else -%}{{ (_l_raw_sys.OS_PRETTY | default('')) | trim }}
         {%- endif -%}
       OS_FAMILY: >-
         {%- set like = (_l_raw_sys.OS_ID_LIKE | default('')) | trim | lower -%}
         {%- set id = (_l_raw_sys.OS_ID | default('')) | trim | lower -%}
-        {%- if 'rhel' in like or id in ['rhel','centos','rocky','almalinux','fedora','oracle'] -%}RedHat
+        {%- if 'rhel' in like or 'fedora' in like or id in ['rhel','centos','rocky','almalinux','fedora','ol','oracle','amzn'] -%}RedHat
         {%- elif 'debian' in like or id in ['debian','ubuntu','mint'] -%}Debian
         {%- elif 'suse' in like or id in ['sles','opensuse','opensuse-leap','opensuse-tumbleweed'] -%}Suse
-        {%- else -%}{{ like.split()[0] | default(id) | title if like else id | title }}
-        {%- endif -%}
-      OS_VERSION: "{{ (_l_raw_sys.OS_VERSION | default('')) | trim }}"
-      KERNEL: "{{ (_l_raw_sys.KERNEL | default('')) | trim }}"
-      ARCH: "{{ (_l_raw_sys.ARCH | default('')) | trim }}"
-      UPTIME: "{{ (_l_raw_sys.UPTIME | default('0')) | trim }}"
-      FQDN: "{{ (_l_raw_sys.FQDN | default(inventory_hostname)) | trim }}"
-      SELINUX: >-
-        {%- set sel = (_l_raw_sys.SELINUX | default('')) | trim | lower -%}
-        {%- if sel in ['enforcing', 'permissive'] -%}enabled
-        {%- elif sel == 'disabled' -%}disabled
-        {%- elif sel and sel != 'n/a' -%}{{ sel }}
+        {%- elif like -%}{{ like.split()[0] | title }}
+        {%- elif id -%}{{ id | title }}
         {%- else -%}{{ none }}
         {%- endif -%}
-    _l_hosting_type: >-
-      {%- set sdv = (_l_raw_sys.SDV | default('')) | trim | lower -%}
-      {%- set vm_signals = ['vmware','kvm','qemu','xen','hyperv','microsoft','oracle','virtualbox','docker','lxc','podman','bhyve','uml','parallels','openvz','bochs'] -%}  {# Round 15: 'bochs' 추가 — python path _l_hosting_type 의 vm_signals 와 parity #}
-      {%- if sdv in vm_signals -%}virtual
-      {%- elif sdv == 'none' -%}baremetal
-      {%- else -%}unknown
-      {%- endif -%}
-    _l_serial_from_setup: >-
-      {%- set s = (_l_raw_sys.SERIAL | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.'] -%}
+      OS_VERSION: "{{ ((_l_raw_sys.OS_VERSION | default('')) | trim) or none }}"
+      KERNEL: "{{ ((_l_raw_sys.KERNEL | default('')) | trim) or none }}"
+      ARCH: "{{ ((_l_raw_sys.ARCH | default('')) | trim) or none }}"
+      UPTIME: "{{ ((_l_raw_sys.UPTIME | default('')) | trim) or none }}"
+      NODENAME: "{{ ((_l_raw_sys.NODENAME | default('')) | trim) or none }}"
+      DOMAIN: "{{ ((_l_raw_sys.DOMAIN | default('')) | trim) or none }}"
+      SELINUX: >-
+        {%- set sel = (_l_raw_sys.SELINUX | default('')) | trim | lower -%}
+        {%- if sel in ['enforcing', 'permissive', 'disabled'] -%}{{ sel }}
+        {%- else -%}{{ none }}
+        {%- endif -%}
+      SDV: "{{ ((_l_raw_sys.SDV | default('')) | trim | lower) or none }}"
+    _l_raw_serial: >-
+      {%- set s = (_l_raw_sys.DMI_PRODUCT_SERIAL | default('')) | trim -%}
+      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string', '0', '00000000'] -%}
       {{ s if s not in sentinel else none }}
-    _l_uuid_from_setup: >-
-      {%- set u = (_l_raw_sys.UUID | default('')) | trim -%}
+    _l_raw_uuid: >-
+      {%- set u = (_l_raw_sys.DMI_PRODUCT_UUID | default('')) | trim -%}
       {%- set sentinel = ['', 'NA', 'None', 'Not Specified'] -%}
       {{ u if u not in sentinel else none }}
-    # 2026-04-30 fix B80 raw: sys_vendor/product_name/bios sentinel filtering.
     _l_raw_vendor: >-
-      {%- set v = (_l_raw_sys.VENDOR | default('')) | trim -%}
+      {%- set v = (_l_raw_sys.DMI_SYS_VENDOR | default('')) | trim -%}
       {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System manufacturer', 'Default string'] -%}
       {{ v if v not in sentinel else none }}
     _l_raw_model: >-
-      {%- set m = (_l_raw_sys.MODEL | default('')) | trim -%}
+      {%- set m = (_l_raw_sys.DMI_PRODUCT_NAME | default('')) | trim -%}
       {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Product Name', 'Default string'] -%}
       {{ m if m not in sentinel else none }}
-    _l_raw_bios_version: "{{ ((_l_raw_sys.BIOS_VERSION | default('')) | trim) or none }}"
-    _l_raw_bios_date:    "{{ ((_l_raw_sys.BIOS_DATE | default('')) | trim) or none }}"
+    _l_raw_bios_version: >-
+      {%- set b = (_l_raw_sys.DMI_BIOS_VERSION | default('')) | trim -%}
+      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'Default string'] -%}
+      {{ b if b not in sentinel else none }}
+    _l_raw_bios_date: "{{ ((_l_raw_sys.DMI_BIOS_DATE | default('')) | trim) or none }}"
+  no_log: true
+
+# raw-only 경로: setup fact 가 없으므로 raw DMI 값이 곧 "setup 값" 자리에 들어간다
+# (identifier diagnostics 는 python 경로에서만 돌기 때문에 이 변수는 resolve 단계 입력이다).
+- name: "linux | system | identifiers from raw (no setup facts)"
+  when: not (_l_setup_ok | bool)
+  ansible.builtin.set_fact:
+    _l_serial_from_setup: "{{ _l_raw_serial | default(none) }}"
+    _l_uuid_from_setup: "{{ _l_raw_uuid | default(none) }}"
     _l_id_diagnostics: []
   no_log: true
 
 # =============================================================================
-# Python Path (기존 로직)
+# hosting_type — 한 벌의 판정식 (경로 무관)
+#   1) systemd-detect-virt: 가상화 종류 → virtual, 'none' → baremetal
+#   2) (python) ansible_virtualization_type/role 보조: guest → virtual, host → baremetal
+#   3) 그 외 → unknown (근거 부족)
 # =============================================================================
-- name: "linux | system | setup"
-  when: _l_python_mode == 'python_ok'
-  ansible.builtin.setup:
-    gather_subset: ['hardware', 'network', 'virtual', 'distribution']
-  vars:
-    ansible_python_interpreter: "{{ _l_python | default('python3') }}"
-  register: _l_setup_result
-  failed_when: false
-  no_log: true
-
-- name: "linux | system | raw fallback"
-  when: >
-    _l_python_mode == 'python_ok' and
-    (_l_setup_result is failed or
-     (_l_setup_result.ansible_facts is not defined))
-  ansible.builtin.raw: |
-    export LANG=C
-    echo "DIST=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || cat /etc/redhat-release 2>/dev/null || echo unknown)"
-    echo "KERNEL=$(uname -r)"
-    echo "ARCH=$(uname -m)"
-    echo "UPTIME=$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo 0)"
-  register: _l_raw_result
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: "linux | system | parse raw fallback"
-  when: >
-    _l_python_mode == 'python_ok' and
-    (_l_setup_result is failed or
-     (_l_setup_result.ansible_facts is not defined))
-  ansible.builtin.set_fact:
-    _l_fb: "{{ dict(_l_raw_result.stdout_lines | default([])
-                    | select('search','=')
-                    | map('split','=',1)
-                    | list) }}"
-  no_log: true
-
-- name: "linux | system | systemd-detect-virt"
-  when: _l_python_mode == 'python_ok'
-  ansible.builtin.command: systemd-detect-virt
-  register: _l_sdv_result
-  changed_when: false
-  failed_when: false
-  no_log: true
-
 - name: "linux | system | determine hosting_type"
-  when: _l_python_mode == 'python_ok'
   ansible.builtin.set_fact:
     _l_hosting_type: >-
-      {%- set sdv = (_l_sdv_result.stdout | default('')) | trim | lower -%}
+      {%- set sdv = (_l_fb.SDV | default('', true)) | lower -%}
       {%- set vtype = (ansible_virtualization_type | default('')) | lower -%}
       {%- set vrole = (ansible_virtualization_role | default('')) | lower -%}
-      {%- set vendor = (ansible_system_vendor | default('')) -%}
-      {%- set vm_signals = ['vmware', 'kvm', 'qemu', 'xen', 'hyperv', 'microsoft', 'oracle', 'parallels', 'bhyve', 'lxc', 'docker', 'podman', 'openvz', 'virtualbox', 'bochs', 'uml'] -%}
-      {# nosec rule12-r1: hosting_type 판정용 OEM vendor list (set membership 패턴, 분기 아님) #}
-      {%- set oem_vendors = ['Dell Inc.', 'HPE', 'Hewlett Packard Enterprise', 'Hewlett-Packard', 'Lenovo', 'Cisco Systems Inc', 'Supermicro', 'Fujitsu', 'Inspur'] -%}
+      {%- set vm_signals = ['vmware', 'kvm', 'qemu', 'xen', 'hyperv', 'microsoft', 'oracle', 'parallels', 'bhyve', 'lxc', 'lxc-libvirt', 'docker', 'podman', 'openvz', 'virtualbox', 'bochs', 'uml', 'systemd-nspawn', 'wsl', 'zvm', 'powervm', 'amazon', 'google', 'apple', 'sre', 'acrn', 'rkt', 'proot', 'pouch'] -%}
       {%- if sdv in vm_signals -%}virtual
+      {%- elif sdv == 'none' -%}baremetal
       {%- elif vtype in vm_signals and vrole == 'guest' -%}virtual
-      {%- elif sdv == 'none' and vrole == 'host' and vendor in oem_vendors -%}baremetal
+      {%- elif vrole == 'host' -%}baremetal
       {%- else -%}unknown
       {%- endif -%}
   no_log: true
 
-# DMI 접근성 precheck
+# =============================================================================
+# Python 경로 식별자 — setup fact → DMI direct-read(become) → raw DMI
+# =============================================================================
 - name: "linux | system | DMI serial precheck"
   when: _l_python_mode == 'python_ok'
   ansible.builtin.command: test -r /sys/class/dmi/id/product_serial
@@ -311,10 +311,10 @@
   no_log: true
 
 - name: "linux | system | check setup fact identifiers"
-  when: _l_python_mode == 'python_ok'
+  when: _l_setup_ok | bool
   ansible.builtin.set_fact:
     _l_serial_from_setup: >-
-      {{ none if (ansible_product_serial | default('')) in ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.']
+      {{ none if (ansible_product_serial | default('')) in ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string', '0', '00000000']
          else (ansible_product_serial | default(none)) }}
     _l_uuid_from_setup: >-
       {{ none if (ansible_product_uuid | default('')) in ['', 'NA', 'None', 'Not Specified']
@@ -351,17 +351,19 @@
         _l_dmi_fallback_failed: true
       no_log: true
 
-# 최종 식별자 결정 — setup fact → DMI direct-read → raw-derived → null
+# 최종 식별자 결정 — setup fact → DMI direct-read → raw DMI(sudo -n) → null
 - name: "linux | system | resolve identifiers"
   ansible.builtin.set_fact:
     _l_serial_val: >-
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.'] -%}
+      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string', '0', '00000000'] -%}
       {%- if (_l_serial_from_setup | default(none)) is not none -%}
         {{ _l_serial_from_setup }}
       {%- elif (_l_dmi_serial_direct is defined) and (_l_dmi_serial_direct.rc | default(1)) == 0
               and (_l_dmi_serial_direct.stdout | default('') | trim) not in sentinel
               and (_l_dmi_serial_direct.stdout | default('') | trim | length) > 0 -%}
         {{ _l_dmi_serial_direct.stdout | trim }}
+      {%- elif (_l_raw_serial | default(none)) is not none -%}
+        {{ _l_raw_serial }}
       {%- else -%}
         {{ none }}
       {%- endif -%}
@@ -373,8 +375,38 @@
               and (_l_dmi_uuid_direct.stdout | default('') | trim) not in sentinel
               and (_l_dmi_uuid_direct.stdout | default('') | trim | length) > 0 -%}
         {{ _l_dmi_uuid_direct.stdout | trim }}
+      {%- elif (_l_raw_uuid | default(none)) is not none -%}
+        {{ _l_raw_uuid }}
       {%- else -%}
         {{ none }}
+      {%- endif -%}
+  no_log: true
+
+# 하드웨어 식별 — setup fact(sentinel 적용) → raw DMI. hardware 섹션과 시리얼 정규화 힌트 공용.
+#   bios_date: DMI/setup 은 MM/DD/YYYY — ISO(YYYY-MM-DD) 로 정규화 (Windows/ESXi 와 같은 형식).
+- name: "linux | system | resolve hardware identity"
+  ansible.builtin.set_fact:
+    _l_hw_vendor: >-
+      {%- set v = (ansible_system_vendor | default('')) | trim -%}
+      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System manufacturer', 'Default string'] -%}
+      {{ v if (v not in sentinel) else (_l_raw_vendor | default(none)) }}
+    _l_hw_model: >-
+      {%- set m = (ansible_product_name | default('')) | trim -%}
+      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Product Name', 'Default string'] -%}
+      {{ m if (m not in sentinel) else (_l_raw_model | default(none)) }}
+    _l_hw_bios_version: >-
+      {%- set b = (ansible_bios_version | default('')) | trim -%}
+      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'Default string'] -%}
+      {{ b if (b not in sentinel) else (_l_raw_bios_version | default(none)) }}
+    _l_hw_bios_date: >-
+      {%- set d = ((ansible_bios_date | default('')) | trim) or (_l_raw_bios_date | default('', true)) -%}
+      {%- set d = d | string | trim -%}
+      {%- if d | regex_search('^[0-9]{2}/[0-9]{2}/[0-9]{4}$') is not none -%}
+        {{ d[6:10] ~ '-' ~ d[0:2] ~ '-' ~ d[3:5] }}
+      {%- elif d | regex_search('^[0-9]{4}-[0-9]{2}-[0-9]{2}') is not none -%}
+        {{ d[0:10] }}
+      {%- elif d -%}{{ d }}
+      {%- else -%}{{ none }}
       {%- endif -%}
   no_log: true
 
@@ -383,35 +415,58 @@
 #   "<물리 시리얼>-<파티션번호 3자리>" 형식이다 (SGHD3TLNDD-000). 자산 관리 기준은 물리
 #   시리얼이라 접미사를 뗀다. vendor + model + 접미사 패턴 셋을 모두 만족할 때만 동작하고,
 #   그 외에는 입력을 글자 그대로 돌려준다 (filter_plugins/serial_normalizer.py).
-#   hint 두 개는 시리얼과 같은 원천(DMI)에서 온 값이며 판정에만 쓴다 — task 범위 변수라
-#   fragment 로 나가지 않는다 (schema 무변경).
 - name: "linux | system | normalize serial (nPartition 접미사)"
   vars:
-    # Python 경로 = setup fact(sys_vendor / product_name), raw 경로 = 같은 sysfs 직접 read
+    # 판정 힌트: resolve hardware identity 결과 → setup fact(sys_vendor / product_name) → raw sysfs
     _l_vendor_hint: >-
-      {{ ansible_system_vendor | default(_l_raw_vendor | default('', true), true) }}
+      {{ _l_hw_vendor | default(ansible_system_vendor | default(_l_raw_vendor | default('', true), true), true) }}
     _l_model_hint: >-
-      {{ ansible_product_name | default(_l_raw_model | default('', true), true) }}
+      {{ _l_hw_model | default(ansible_product_name | default(_l_raw_model | default('', true), true), true) }}
   ansible.builtin.set_fact:
     _l_serial_val: "{{ _l_serial_val | normalize_os_serial(_l_vendor_hint, _l_model_hint) }}"
   no_log: true
 
-
 # identifier diagnostics (Python 경로에서만 상세 진단)
-# 별도 task 파일로 분리 (2026-04-28) — 가독성 + rule 10 R3 정합.
 - name: "linux | system | identifier diagnostics 빌드"
   ansible.builtin.include_tasks:
     file: "{{ playbook_dir }}/tasks/linux/build_identifier_diagnostics.yml"
 
 # =============================================================================
-# Shared: fragment 조립 + merge
+# hostname / fqdn — nodename 기반 (resolver 결과가 아니다)
+#   short  = nodename 첫 label
+#   domain = nodename 에 점이 있으면 그 뒤, 없으면 resolver(ansible_domain / hostname -d)
+#   fqdn   = short.domain — domain 이 없으면 null (짧은 이름을 FQDN 자리에 넣지 않는다)
+# =============================================================================
+- name: "linux | system | resolve hostname / fqdn"
+  ansible.builtin.set_fact:
+    _l_hostname_short: >-
+      {%- set n = ((ansible_nodename | default('')) | trim) or (_l_fb.NODENAME | default('', true)) -%}
+      {%- set n = (n | string | trim) -%}
+      {{ (n.split('.')[0]) if n else none }}
+    _l_fqdn: >-
+      {%- set n = ((ansible_nodename | default('')) | trim) or (_l_fb.NODENAME | default('', true)) -%}
+      {%- set n = (n | string | trim) -%}
+      {%- set short = (n.split('.')[0]) if n else '' -%}
+      {%- set dom = (n.split('.', 1)[1]) if ('.' in n) else (((ansible_domain | default('')) | trim) or (_l_fb.DOMAIN | default('', true))) -%}
+      {%- set dom = (dom | string | trim) -%}
+      {{ (short ~ '.' ~ dom) if (short and dom) else none }}
+  no_log: true
+
+# =============================================================================
+# fragment 조립 + merge
 # =============================================================================
 # N13: system 섹션 수집 성공 판정 — collected / failed / errors 세 자리가 이 변수 하나를 본다.
 - name: "linux | system | 수집 성공 판정"
   ansible.builtin.set_fact:
     _l_sys_ok: >-
       {{ (ansible_distribution is defined)
-         or (_l_fb is defined and _l_fb.DIST is defined) }}
+         or ((_l_fb.DIST | default('', true)) | string | length > 0) }}
+    _l_hw_ok: >-
+      {{ (_l_hw_vendor | default(none)) is not none
+         or (_l_hw_model | default(none)) is not none
+         or (_l_serial_val | default(none)) is not none
+         or (_l_uuid_val | default(none)) is not none
+         or (_l_hw_bios_version | default(none)) is not none }}
   no_log: true
 
 - name: "linux | system | build fragment"
@@ -423,19 +478,26 @@
         version:        "{{ ansible_distribution_version | default(_l_fb.OS_VERSION | default(none)) }}"
         kernel:         "{{ ansible_kernel         | default(_l_fb.KERNEL | default(none)) }}"
         architecture:   "{{ ansible_architecture   | default(_l_fb.ARCH | default(none)) }}"
-        hosting_type:   "{{ _l_hosting_type | default('unknown') | trim }}"
-        uptime_seconds: "{{ (ansible_uptime_seconds | default(_l_fb.UPTIME | default(0))) | int }}"
-        selinux:        "{{ (ansible_selinux | default({})).status | default(_l_fb.SELINUX | default(none)) }}"
-        fqdn:           "{{ ansible_fqdn | default(_l_fb.FQDN | default(inventory_hostname)) }}"
+        hostname:       "{{ _l_hostname_short | default(none) }}"
+        fqdn:           "{{ _l_fqdn | default(none) }}"
+        hosting_type:   "{{ (_l_hosting_type | default('', true) | trim) or none }}"
+        uptime_seconds: >-
+          {%- set u = ansible_uptime_seconds | default(_l_fb.UPTIME | default(none)) -%}
+          {%- set us = (u | string | trim) if u is not none else '' -%}
+          {{ (us | int) if us.isdigit() else none }}
+        # selinux 모드 (enforcing / permissive / disabled / null). python 경로는 ansible_selinux 의
+        # mode(활성 시) / status(disabled), raw 경로는 getenforce — 같은 어휘.
+        selinux: >-
+          {%- set st = ((ansible_selinux | default({})).status | default('')) | lower -%}
+          {%- set md = ((ansible_selinux | default({})).mode | default('')) | lower -%}
+          {%- if st == 'enabled' and md in ['enforcing', 'permissive'] -%}{{ md }}
+          {%- elif st == 'disabled' -%}disabled
+          {%- else -%}{{ _l_fb.SELINUX | default(none) }}
+          {%- endif -%}
         serial_number:  "{{ _l_serial_val | default(none) }}"
-        system_uuid:    "{{ _l_uuid_val | default(none) }}"
-        # 2026-04-29 fix B80: ansible_system_vendor를 system fragment에도 emit해서
-        # site.yml의 envelope.vendor가 build_output 시점에 _merged_data.system.vendor로 접근.
-        # 2026-04-30 fix B80 raw fallback: Python 미동작 환경(Python 3.6/RHEL 8.10)에서
-        # ansible_system_vendor undefined → _l_raw_vendor (sys_vendor sysfs)로 fallback.
-        vendor:         "{{ ansible_system_vendor | default(_l_raw_vendor | default(none)) }}"
-        # F5 cycle 2026-05-11: system.runtime — 9 필드 (timezone/ntp/firewall/listen/swap)
-        # Linux raw 명령 (timedatectl/systemctl/ss/free) 결과 → _l_runtime 에 parse.
+        system_uuid:    "{{ (_l_uuid_val | default(none)) | normalize_uuid }}"
+        # vendor: hardware.vendor 와 같은 값 (종전 호환 — envelope.vendor 는 hardware.vendor 를 쓴다).
+        vendor:         "{{ _l_hw_vendor | default(none) }}"
         runtime:
           timezone: >-
             {%- set tz = (_l_runtime.TZ | default('')) | trim -%}
@@ -457,40 +519,32 @@
             {{ v if v else none }}
           firewall_state: >-
             {%- set v = (_l_runtime.FW_STATE | default('')) | trim -%}
-            {{ v if v else none }}
+            {{ v if v in ['active', 'inactive'] else none }}
           listening_ports: "{{ _l_runtime.PORTS | default([]) }}"
           swap_total_mb: >-
             {%- set v = (_l_runtime.SWAP_TOTAL | default('')) | trim -%}
-            {{ (v | int) if (v and v != '0') else (0 if v == '0' else none) }}
+            {{ (v | int) if v.isdigit() else none }}
           swap_used_mb: >-
             {%- set v = (_l_runtime.SWAP_USED | default('')) | trim -%}
-            {{ (v | int) if v else none }}
+            {{ (v | int) if v.isdigit() else none }}
           swap_free_mb: >-
             {%- set v = (_l_runtime.SWAP_FREE | default('')) | trim -%}
-            {{ (v | int) if v else none }}
-    _sections_supported_fragment: ['system']
-    # N13 (2026-08-12): 수집 성공 판정을 _l_sys_ok 한 곳에서 결정하고 collected / failed /
-    #   errors 세 자리가 그 변수를 참조한다. 종전에는 같은 조건식이 두 곳에 복제돼 있었고
-    #   errors 조건은 vendor 미정의만 봐서, system 섹션이 failed 인데 errors 가 비는 결과가
-    #   나올 수 있었다.
-    _sections_collected_fragment: "{{ ['system'] if (_l_sys_ok | bool) else [] }}"
-    _sections_failed_fragment:    "{{ [] if (_l_sys_ok | bool) else ['system'] }}"
-    # 2026-04-30: B80 진단 instrumentation 제거 — root cause는 build_output.yml의
-    # `_out_vendor: null` overwrite (commit 0d3058c4)였고 이미 해결됨.
-    # vendor 정상 추출(asv=Dell Inc.) 호스트에서도 항상 에러로 emit되어 호출자 혼란.
-    # vendor가 진짜 미정의(UNDEF)인 케이스만 진단으로 emit.
-    # ROOT CAUSE FIX: 이전 코드는 `>-` block scalar 끝에 잉여 `}}` 두 글자가
-    # 있어, Jinja expression 결과 list 가 string 으로 coerce 된 뒤 `\n}}` 가 concat
-    # 되어 `_errors_fragment` 가 list 가 아닌 string ('[...]\n}}') 로 들어감.
-    # merge_fragment.yml 의 `for e in <string>` 가 character 단위로 iterate 하면서
-    # ['[', ']', '\n', '}', '}'] 5개 character 가 errors[].message 로 분해 채워졌음.
-    # 단일 line Jinja expression 으로 전환 + list 타입 보존.
-    # H6 (2026-08-12): message 가 영문 + 내부 변수명이었고 detail 은 대상 IP 를 노출했다.
-    #   message 는 사용자 한국어 문장으로, 변수명 근거는 detail 로 옮겼다. IP 는 envelope.ip
-    #   에 이미 있으므로 detail 에서도 뺀다.
-    # N13: system 섹션이 failed 인 경우(_l_sys_ok=false)에도 사유 1건을 반드시 남긴다.
-    _errors_fragment: "{{ (_l_id_diagnostics | default([])) + ([{'section': 'system', 'message': '서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'field=distribution; cause=os_release_and_setup_fact_unavailable'}] if not (_l_sys_ok | bool) else []) + ([{'section': 'system', 'message': '서버 기본 정보 중 제조사 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'field=vendor; cause=vendor_source_unavailable; tried=setup_fact,dmi_sysfs'}] if (ansible_system_vendor is not defined and (_l_raw_vendor | default(none)) is none) else []) }}"
-    _l_fb: "{{ _l_fb | default({}) }}"
+            {{ (v | int) if v.isdigit() else none }}
+      # 2026-09-03: Linux 도 hardware 섹션을 emit — Windows(gather_hardware.yml)/ESXi 와 같은 키.
+      hardware:
+        vendor:       "{{ _l_hw_vendor | default(none) }}"
+        model:        "{{ _l_hw_model | default(none) }}"
+        serial:       "{{ _l_serial_val | default(none) }}"
+        uuid:         "{{ (_l_uuid_val | default(none)) | normalize_uuid }}"
+        bios_version: "{{ _l_hw_bios_version | default(none) }}"
+        bios_date:    "{{ _l_hw_bios_date | default(none) }}"
+    _sections_supported_fragment: ['system', 'hardware']
+    _sections_collected_fragment: >-
+      {{ (['system'] if (_l_sys_ok | bool) else []) + (['hardware'] if (_l_hw_ok | bool) else []) }}
+    _sections_failed_fragment: >-
+      {{ ([] if (_l_sys_ok | bool) else ['system']) + ([] if (_l_hw_ok | bool) else ['hardware']) }}
+    # 식별자 진단(python 경로) + 섹션 실패 사유. 실패인데 errors 가 비는 결과를 만들지 않는다.
+    _errors_fragment: "{{ (_l_id_diagnostics | default([])) + ([{'section': 'system', 'message': '서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'field=distribution; cause=os_release_and_setup_fact_unavailable'}] if not (_l_sys_ok | bool) else []) + ([{'section': 'hardware', 'message': '하드웨어 정보 수집에 실패했습니다. 수집 계정의 권한을 확인하세요.', 'detail': 'field=vendor,model,serial,uuid,bios_version; cause=dmi_unavailable; tried=setup_fact,dmi_sysfs'}] if not (_l_hw_ok | bool) else []) }}"
   no_log: true
 
 - name: "linux | system | merge fragment"

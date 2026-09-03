@@ -9,6 +9,18 @@
 channel: esxi
 
 sections:
+  system:
+    extra_fields:
+      hosting_type:
+        type: string
+        display_name: "호스팅 유형"
+        description: "ESXi 채널은 항상 hypervisor"
+        enum: [hypervisor]
+      hostname:
+        type: string
+        display_name: "호스트명"
+        description: "dnsConfig.hostName (짧은 이름). fqdn 은 hostname + dnsConfig.domainName, 도메인 없으면 null"
+
   hardware:
     fields:
       vendor:

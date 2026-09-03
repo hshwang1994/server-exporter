@@ -14,9 +14,15 @@ sections:
       hosting_type:
         type: string
         display_name: "호스팅 유형"
-        description: "virtual / baremetal / unknown"
-        note: "OS 채널 전용. Redfish/ESXi에는 적용하지 않음"
+        description: "virtual / baremetal / unknown (ESXi 채널은 항상 hypervisor)"
+        note: "Linux: systemd-detect-virt(+DMI/virtualization fact). Windows: VM 신호 + HypervisorPresent + Hyper-V 역할. OEM 제조사 목록에 의존하지 않는다 (2026-09-03)"
         enum: [virtual, baremetal, unknown]
+      vendor:
+        type: string
+        display_name: "시스템 제조사(원문)"
+        description: "DMI sys_vendor / Win32_ComputerSystem.Manufacturer 원문. envelope.vendor 는 이 값을 vendor_aliases 로 정규화한 표시값"
+        note: "hardware.vendor 와 같은 원문"
+
       serial_number:
         type: string
         display_name: "시리얼 번호"
@@ -31,7 +37,37 @@ sections:
         type: string
         display_name: "SELinux 상태"
         description: "SELinux 모드 (enforcing/permissive/disabled/null)"
-        note: "Linux 전용. Windows는 항상 null"
+        note: "Linux 전용 (ansible_selinux.mode / getenforce). Windows는 항상 null"
+
+  hardware:
+    fields:
+      vendor:
+        type: string
+        display_name: "벤더"
+        description: "Linux: DMI sys_vendor (setup fact → /sys/class/dmi/id). Windows: Win32_ComputerSystem.Manufacturer"
+      model:
+        type: string
+        display_name: "모델"
+        description: "Linux: DMI product_name. Windows: Win32_ComputerSystem.Model"
+      serial:
+        type: string
+        display_name: "시리얼"
+        description: "system.serial_number 와 같은 값 (nPartition 접미사 정규화 포함)"
+      uuid:
+        type: string
+        display_name: "UUID"
+        description: "소문자 8-4-4-4-12 정규화 (normalize_uuid)"
+      bios_version:
+        type: string
+        display_name: "BIOS 버전"
+      bios_date:
+        type: string
+        display_name: "BIOS 날짜"
+        description: "YYYY-MM-DD (DMI MM/DD/YYYY → 변환)"
+      sku:
+        type: string
+        display_name: "SKU"
+        note: "Windows 전용 (SystemSKUNumber). Linux 는 미수집(null)"
 
   storage:
     sub_sections:
@@ -75,11 +111,12 @@ sections:
             type: integer
           media_type:
             type: string
-            description: "HDD 또는 SSD"
+            description: "HDD / SSD / SCM. 판정 근거(lsblk rota / MSFT_PhysicalDisk.MediaType) 가 없으면 null"
           protocol:
             type: string
           health:
             type: string
+            description: "OK / Warning / Critical / null (Windows HealthStatus 매핑, Linux 는 null) — Redfish 와 같은 어휘 (2026-09-03)"
           is_os_disk:
             type: boolean
             description: "OS 루트(/, Windows %SystemDrive%) 설치 디스크 여부. true/false/null (OS 채널 전용)"
@@ -91,13 +128,18 @@ sections:
         item_fields:
           id:
             type: string
+            description: "장치명 (Linux devname / Windows 어댑터 이름) — name 과 같은 축 (2026-09-03)"
           name:
             type: string
+          description:
+            type: string
+            description: "Windows InterfaceDescription (Linux 는 미제공)"
           kind:
             type: string
             description: "os_nic (OS 채널에서 수집된 인터페이스)"
           mac:
             type: string
+            description: "소문자 colon 6 octet 정규화 (normalize_mac)"
           mtu:
             type: integer
           speed_mbps:
@@ -119,6 +161,15 @@ sections:
                 type: string
               gateway:
                 type: string
+              scope:
+                type: string
+                description: "IPv6 주소 범위 global / link / host / site (IPv4 는 키 없음)"
+              scope:
+                type: string
+                description: "IPv6 주소 범위 global / link / host / site (IPv4 는 키 없음)"
+              scope:
+                type: string
+                description: "IPv6 주소 범위 global / link / host / site (IPv4 는 키 없음)"
 
   users:
     display_name: "시스템 사용자 목록"

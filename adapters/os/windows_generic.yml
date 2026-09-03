@@ -17,6 +17,7 @@ match:
 capabilities:
   sections_supported:
     - system
+    - hardware
     - cpu
     - memory
     - storage

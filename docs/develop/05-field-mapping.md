@@ -20,25 +20,30 @@
 | `system.version` | `ansible_distribution_version` | `gather_system.yml` | |
 | `system.kernel` | `ansible_kernel` | `gather_system.yml` | |
 | `system.architecture` | `ansible_architecture` | `gather_system.yml` | |
-| `system.uptime_seconds` | `ansible_uptime_seconds \| int` | `gather_system.yml` | |
-| `system.selinux` | `ansible_selinux.status` | `gather_system.yml` | |
-| `system.hosting_type` | `systemd-detect-virt` + `ansible_virtualization_type/role` + `ansible_system_vendor` | `gather_system.yml` | OS 채널 전용. enum: virtual/baremetal/unknown |
-| `system.fqdn` | `ansible_fqdn` | `gather_system.yml` | |
+| `system.uptime_seconds` | `ansible_uptime_seconds` → raw `/proc/uptime` | `gather_system.yml` | 모르면 null (0 placeholder 금지, 2026-09-03) |
+| `system.selinux` | `ansible_selinux.mode`(enabled 일 때) / `.status` → raw `getenforce` | `gather_system.yml` | enforcing / permissive / disabled / null (2026-09-03 — 종전 enabled/disabled) |
+| `system.hosting_type` | `systemd-detect-virt` → `ansible_virtualization_type/role` | `gather_system.yml` | python/raw 동일 판정식, OEM 제조사 목록 없음 (2026-09-03). enum: virtual/baremetal/unknown |
+| `system.hostname` | `ansible_nodename` → raw `uname -n` (첫 라벨) | `gather_system.yml` | 2026-09-03 신설. IP 대체 금지 |
+| `system.fqdn` | hostname + (`uname -n` 도메인부 → `ansible_domain` → raw `hostname -d`) | `gather_system.yml` | 도메인 없으면 null. resolver(`ansible_fqdn`) 미사용 (2026-09-03) |
+| `hardware.vendor / model / serial / uuid / bios_version / bios_date` | setup fact → `/sys/class/dmi/id/*` (become) | `gather_system.yml` | 2026-09-03 신설 — OS 채널 hardware 섹션. bios_date MM/DD/YYYY → YYYY-MM-DD, uuid 소문자 |
 | `system.serial_number` | setup fact → DMI direct-read fallback (`become: true`) → nPartition 접미사 정규화 | `gather_system.yml` | setup fact가 NA일 경우 `/sys/class/dmi/id/product_serial` 직접 읽기. become 필수. 마지막에 파티션 접미사 정규화 (아래 별도 절) |
 | `system.system_uuid` | setup fact → DMI direct-read fallback (`become: true`) | `gather_system.yml` | setup fact가 NA일 경우 `/sys/class/dmi/id/product_uuid` 직접 읽기. cross-channel 연결 키 |
-| `cpu.sockets` | `ansible_processor_count` | `gather_cpu.yml` | |
-| `cpu.cores_physical` | `shell grep "cpu cores" × sockets` | `gather_cpu.yml` | |
-| `cpu.logical_threads` | `ansible_processor_vcpus` | `gather_cpu.yml` | |
-| `cpu.model` | `shell grep "model name"` | `gather_cpu.yml` | |
+| `cpu.sockets` | `/proc/cpuinfo physical id` 종류 수 → `lscpu Socket(s)` | `gather_cpu.yml` | raw 단일 구현 (2026-09-03). 모르면 null (1 placeholder 금지) |
+| `cpu.cores_physical` | `cpu cores` × sockets | `gather_cpu.yml` | 둘 중 하나라도 모르면 null |
+| `cpu.logical_threads` | `/proc/cpuinfo processor` 수 | `gather_cpu.yml` | |
+| `cpu.model` | `/proc/cpuinfo model name` | `gather_cpu.yml` | |
+| `cpu.max_speed_mhz` | cpufreq `base_frequency` → 브랜드 `@ N.NNGHz` | `gather_cpu.yml` | 정격 클럭 (2026-09-03 3채널 통일). 터보는 `cpu.turbo_max_mhz` (`lscpu CPU max MHz` / `cpuinfo_max_freq`) |
+| `cpu.summary.groups[].l2_cache_kb / l3_cache_kb` | `lscpu` L2/L3 (`(N instances)` 합계는 소켓 수로 나눔) → `/proc/cpuinfo cache size` | `gather_cpu.yml` | 소켓당 KB (2026-09-03) |
 | `cpu.architecture` | `ansible_architecture` | `gather_cpu.yml` | system.architecture와 동일 값 |
-| `memory.total_mb` | `ansible_memtotal_mb` | `gather_memory.yml` | |
-| `memory.total_basis` | hardcoded `"os_visible"` | `gather_memory.yml` | |
+| `memory.total_mb` | `dmidecode -t memory` 설치 합 → `/proc/meminfo MemTotal` | `gather_memory.yml` | 둘 다 없으면 null |
+| `memory.total_basis` | 실제 소스 판정 (`physical_installed` / `os_visible` / null) | `gather_memory.yml` | 2026-09-03 정정 (종전 문서: hardcoded) |
+| `memory.slots[].serial / locator` | `dmidecode` Serial Number / Locator | `gather_memory.yml` | 2026-09-03 추가 |
 | `storage.physical_disks[]` | `lsblk -J` (`+SERIAL,WWN`) | `gather_storage.yml` | `serial`/`wwn` 추가(2026-06-22). 빈값 시 `udevadm info`(ID_SERIAL_SHORT/ID_WWN) 보강. virtio=null. `is_os_disk` 추가(2026-07-02): `findmnt /`→`lsblk -s` 로 OS 루트 물리 디스크 판정(SAN/NFS 루트=null) |
-| `storage.filesystems[]` | `df -BM` | `gather_storage.yml` | |
-| `network.interfaces[]` | `ansible_interfaces` + `ansible_{iface}` | `gather_network.yml` | |
+| `storage.filesystems[]` | `df -P -T -k` (`/dev/*` + 네트워크 FS) | `gather_storage.yml` | 정수 MB, used = df Used (2026-09-03 raw 단일 구현) |
+| `network.interfaces[]` | `/sys/class/net` + `ip -o addr` (IPv4/IPv6, scope) | `gather_network.yml` | raw 단일 구현 (2026-09-03) — IP 없는 물리 포트 포함, link_status=operstate, MAC 소문자 colon |
 | `network.interfaces[].addresses[]` (alias/secondary) | `ip -j addr show` → `ip -o addr show` → `ifconfig -a` (다중 소스 폴백) | `gather_network.yml` + `merge_linux_addresses` | `label`/`parent_interface`/`is_alias`/`scope`/`is_secondary` Additive. bond alias(bond1:1)는 parent addresses[] 에 병합 |
 | `network.bonds[].addresses[]` | bond master 인터페이스 addresses 미러 (`build_linux_network`) | `gather_network.yml` | interfaces ↔ bonds 일관 |
-| `network.default_gateways[]` | `ansible_default_ipv4.gateway` | `gather_network.yml` | |
+| `network.default_gateways[]` | `ip route show default` | `gather_network.yml` | |
 | `users[]` | `getent passwd` + `last`/`lastlog` | `gather_users.yml` | |
 
 ---
@@ -49,26 +54,30 @@
 |---|---|---|---|
 | `system.os_family` | `ansible_os_family` (setup) | `gather_system.yml` | WMI |
 | `system.distribution` | `ansible_distribution` | `gather_system.yml` | WMI |
-| `system.version` | `ansible_distribution_version` | `gather_system.yml` | WMI |
-| `system.kernel` | `ansible_kernel` | `gather_system.yml` | WMI |
-| `system.architecture` | `ansible_architecture` (정규화 적용) | `gather_system.yml` | "64비트"/"64-bit"/"AMD64"→"x86_64" 매핑 |
-| `system.uptime_seconds` | `ansible_uptime_seconds \| int` | `gather_system.yml` | WMI |
+| `system.version` | 레지스트리 `DisplayVersion` → `ReleaseId` → `Win32_OperatingSystem.Version` | `gather_system.yml` | 2026-09-03: null(정의됨) fallback 정정 |
+| `system.kernel` | `Win32_OperatingSystem.BuildNumber` | `gather_system.yml` | 문자열. 없으면 null (종전 "None" 문자열) |
+| `system.architecture` | `ansible_architecture2` → `OSArchitecture` | `gather_system.yml` | x86_64 / aarch64 / x86 (2026-09-03 — ARM64 오분류 정정) |
+| `system.uptime_seconds` | `ansible_uptime_seconds` → `LastBootUpTime` 차 | `gather_system.yml` | 모르면 null |
 | `system.selinux` | N/A | `gather_system.yml` | Windows에는 SELinux 없음 → null |
-| `system.hosting_type` | `Win32_ComputerSystem` (Model, Manufacturer, HypervisorPresent) | `gather_system.yml` | OS 채널 전용. enum: virtual/baremetal/unknown |
-| `system.fqdn` | `ansible_fqdn` | `gather_system.yml` | WMI |
+| `system.hosting_type` | `Win32_ComputerSystem` Model/Manufacturer VM 신호 + `HypervisorPresent` + Hyper-V `vmms` 역할 | `gather_system.yml` | OEM 제조사 목록 없음 (2026-09-03). enum: virtual/baremetal/unknown |
+| `system.hostname` | `Win32_ComputerSystem.DNSHostName` → `COMPUTERNAME` | `gather_system.yml` | 2026-09-03 신설 |
+| `system.fqdn` | hostname + (AD `Domain` / Tcpip `Domain`·`NV Domain` 접미사) | `gather_system.yml` | 도메인 없으면 null (2026-09-03) |
+| `hardware.*` | `Win32_ComputerSystem` / `Win32_BIOS` / `Win32_SystemEnclosure` | `gather_hardware.yml` | OS 채널 정식 섹션 (2026-09-03). sku=SystemSKUNumber, uuid 소문자 |
 | `system.serial_number` | `ansible_product_serial` (WMI/setup) | `gather_system.yml` | NA/빈값→null 정규화 + nPartition 접미사 정규화 (아래 별도 절) |
 | `system.system_uuid` | `ansible_product_uuid` (WMI/setup) | `gather_system.yml` | NA/빈값→null 정규화. cross-channel 연결 키 |
 | `cpu.sockets` | `Win32_Processor` (WMI) | `gather_cpu.yml` | WMI |
 | `cpu.cores_physical` | `Win32_Processor.NumberOfCores` | `gather_cpu.yml` | WMI |
 | `cpu.logical_threads` | `Win32_Processor.NumberOfLogicalProcessors` | `gather_cpu.yml` | WMI |
 | `cpu.model` | `Win32_Processor.Name` | `gather_cpu.yml` | WMI |
+| `cpu.max_speed_mhz` | `Win32_Processor.MaxClockSpeed` | `gather_cpu.yml` | 정격 클럭. `turbo_max_mhz` 는 null (WMI 미제공). L2/L3 캐시 0 → null |
 | `cpu.architecture` | `ansible_architecture` (정규화 적용) | `gather_cpu.yml` | `'64' in _arch` 조건으로 "64비트"→"x86_64" 매핑 |
-| `memory.total_mb` | `Win32_ComputerSystem.TotalPhysicalMemory` | `gather_memory.yml` | WMI |
-| `memory.total_basis` | hardcoded `"physical_installed"` | `gather_memory.yml` | |
+| `memory.total_mb` | `Win32_PhysicalMemory` Capacity 합 → `ansible_memtotal_mb` | `gather_memory.yml` | 둘 다 없으면 null. `slots[].manufacturer` JEDEC 코드 → 제조사 (2026-09-03) |
+| `memory.total_basis` | 실제 소스 판정 (`physical_installed` / `os_visible` / null) | `gather_memory.yml` | 2026-09-03 정정 |
 | `storage.physical_disks[]` | `Win32_DiskDrive` + `Get-PhysicalDisk` | `gather_storage.yml` | WMI. `serial`/`wwn` 추가(2026-06-22): serial=Get-PhysicalDisk→Win32 fallback(hex/공백 정규화), wwn=UniqueId(UniqueIdFormat EUI64/FCPHName/SCSIName 일 때만, 로컬 SATA=null). `is_os_disk` 추가(2026-07-02): `%SystemDrive%`→`Get-Partition.DiskNumber`(WMI fallback), `Win32_DiskDrive.Index` 매칭 |
-| `storage.filesystems[]` | `Win32_LogicalDisk` | `gather_storage.yml` | WMI |
-| `network.interfaces[]` | `Win32_NetworkAdapterConfiguration` | `gather_network.yml` | WMI |
-| `network.default_gateways[]` | `Win32_NetworkAdapterConfiguration.DefaultIPGateway` | `gather_network.yml` | WMI |
+| `storage.filesystems[]` | `Get-Volume` (드라이브 문자 있는 볼륨) | `gather_storage.yml` | 정수 MB (2026-09-03 — 종전 float). physical_disks health OK/Warning/Critical |
+| `network.interfaces[]` | `Get-NetIPAddress` (IPv4+IPv6) + `Get-NetAdapter` | `gather_network.yml` | id=어댑터 이름, description=InterfaceDescription, MAC 소문자 colon (2026-09-03) |
+| `network.adapters[]` | `Get-NetAdapter -Physical` + `Get-NetAdapterHardwareInfo` + PnP 제조사 | `gather_network.yml` | 2026-09-03 신설 (Linux 와 같은 키) |
+| `network.default_gateways[]` | `Get-NetRoute 0.0.0.0/0` + `::/0` | `gather_network.yml` | |
 | `users[]` | `Win32_UserAccount` + `Win32_NetworkLoginProfile` | `gather_users.yml` | WMI |
 
 ---
@@ -81,26 +90,30 @@
 | `system.distribution` | `vmware_host_facts` → `ansible_distribution` | `normalize_system.yml` | vSphere API |
 | `system.version` | `vmware_host_facts` → `ansible_distribution_version` | `normalize_system.yml` | vSphere API |
 | `system.kernel` | `vmware_host_facts` → build number | `normalize_system.yml` | vSphere API |
-| `system.architecture` | `vmware_host_facts` → `ansible_machine` | `normalize_system.yml` | `ansible_machine` 없으면 `x86_64` 기본 (ESXi 7.x/8.x 모두 x86_64) |
-| `system.uptime_seconds` | `vmware_host_facts` → uptime | `normalize_system.yml` | vSphere API |
+| `system.architecture` | `ansible_machine` → CPU 제조사(Intel/AMD ⇒ x86_64) → null | `normalize_system.yml` | 리터럴 `x86_64` 대체 금지 (2026-09-03) |
+| `system.uptime_seconds` | `esxi_disks.host_info.uptime_seconds` (quickStats.uptime) → `ansible_uptime` | `normalize_system.yml` | 0 / 미제공은 null |
 | `system.selinux` | N/A | `normalize_system.yml` | ESXi에는 SELinux 없음 → null |
-| `system.fqdn` | `vmware_host_facts` → FQDN | `normalize_system.yml` | vSphere API |
+| `system.hostname` | `esxi_disks.host_info.hostname` (dnsConfig.hostName) → `ansible_hostname` | `normalize_system.yml` | 짧은 이름 |
+| `system.fqdn` | hostname + (dnsConfig.domainName → dns_info.domain_name) | `normalize_system.yml` | 도메인 없으면 null (종전: short name 을 그대로 냈다) |
 | `hardware.vendor` | `vmware_host_facts` → `ansible_system_vendor` | `normalize_system.yml` | vSphere API |
 | `hardware.model` | `vmware_host_facts` → `ansible_product_name` | `normalize_system.yml` | vSphere API |
 | `hardware.serial` | `vmware_host_facts` → `ansible_product_serial` | `normalize_system.yml` | vSphere API |
-| `hardware.uuid` | `vmware_host_facts` → `ansible_product_uuid` | `normalize_system.yml` | vSphere API |
+| `hardware.uuid` | `vmware_host_facts` → `ansible_uuid` (소문자 정규화) | `normalize_system.yml` | 2026-09-03 정정 (종전 문서: ansible_product_uuid) |
 | `hardware.bios_version` | `vmware_host_facts` → `ansible_bios_version` | `normalize_system.yml` | vSphere API |
 | `hardware.bios_date` | `vmware_host_facts` → `ansible_bios_date` | `normalize_system.yml` | vSphere API |
 | `cpu.sockets` | `vmware_host_facts` → `ansible_processor_count` | `normalize_system.yml` | vSphere API |
 | `cpu.cores_physical` | `vmware_host_facts` → `ansible_processor_cores` | `normalize_system.yml` | vSphere API |
 | `cpu.logical_threads` | `vmware_host_facts` → `ansible_processor_vcpus` | `normalize_system.yml` | vSphere API |
 | `cpu.model` | `vmware_host_facts` → processor model | `normalize_system.yml` | vSphere API |
-| `cpu.architecture` | `vmware_host_facts` → `ansible_machine` | `normalize_system.yml` | system.architecture와 동일 — 없으면 `x86_64` 기본 |
+| `cpu.max_speed_mhz` | `esxi_disks.host_info.cpu_mhz` (cpuInfo.hz) → `ansible_processor_mhz` → 브랜드 문자열 | `normalize_system.yml` | 정격 클럭 (2026-09-03). `turbo_max_mhz` null |
+| `cpu.architecture` | system.architecture 와 동일 | `normalize_system.yml` | 리터럴 대체 금지 |
 | `memory.total_mb` | `vmware_host_facts` → `ansible_memtotal_mb` | `normalize_system.yml` | vSphere API |
 | `memory.total_basis` | hardcoded `"hypervisor_visible"` | `normalize_system.yml` | |
 | `storage.datastores[]` | `vmware_host_facts` → datastore info | `normalize_storage.yml` | vSphere API |
-| `network.interfaces[]` | `vmware_host_facts` → vmkernel interfaces | `normalize_network.yml` | vSphere API |
-| `network.default_gateways[]` | `ansible_default_ipv4.gateway` (보통 미반환) | `normalize_network.yml` | vSphere schema 가 보통 ansible_default_ipv4 를 안 줘서 `[]` 유지. ESXi는 vmkernel 기반 네트워크 모델이라 host-level default gateway 의미가 OS와 다름 |
+| `storage.summary` | `physical_disks`(LUN) 기준 | `normalize_storage.yml` | 3채널 통일 (2026-09-03 — 종전 datastore 합계) |
+| `network.interfaces[]` | `vmware_host_facts` vmk + `host_info.vnics` (IPv6) | `normalize_network.yml` | is_primary = gatewayDevice / 게이트웨이 서브넷 (2026-09-03), MAC 소문자 colon |
+| `network.adapters[]` | `vmware_host_vmnic_info` + `host_info.pnics` (pciDevice 제조사/모델) | `collect_network_extended.yml` | OS 와 같은 키 (id/name/manufacturer/model/driver/firmware_version/pci) |
+| `network.default_gateways[]` | `esxi_disks.host_info.default_gateway` (ipRouteConfig → vnic ipRouteSpec) | `normalize_network.yml` | 2026-09-03: pyvmomi 직접 조회. 종전 `ansible_default_ipv4` 는 vmware_host_facts 가 주지 않아 항상 `[]` 였다 |
 
 ---
 

@@ -124,9 +124,11 @@
         # vmware_portgroup_info / vmware_host_vmhba_info 의 hosts_*_info dict 는 ESXi configured
         # hostname 을 키로 사용한다. _e_ip (IP) 로 lookup 하면 항상 빈 결과 → BUG #4 의 직접 원인.
         # 또한 system.hostname / system.fqdn 도 IP 가 아닌 ansible_hostname 을 사용해야 한다.
+        # 2026-09-03 (B-01): 값이 없으면 null — IP 로 대체하지 않는다. 모듈의 esxi_hostname 인자로는
+        #   `_e_hostname | default(_e_ip, true)` 를 넘긴다 (API 인자일 뿐 envelope 에 나가지 않는다).
         - name: "esxi | resolve hostname from raw facts"
           ansible.builtin.set_fact:
-            _e_hostname: "{{ _e_raw_facts.ansible_hostname | default(_e_ip) }}"
+            _e_hostname: "{{ _e_raw_facts.ansible_hostname | default(none, true) or none }}"
           no_log: true
 
         # ── adapter 선택 (collect facts 후 — 실제 ESXi 버전으로 version_patterns 매칭) ──
@@ -185,40 +187,18 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_errors.yml"
 
-        # cycle production-audit (2026-04-29): vendor_aliases.yml로 정규화 (lowercase) + auth_success=true
-        # 잔류 fix (Round 12 후속): include_vars 의 'name:' 옵션은 ansible-core 2.20+ 에서
-        # reserved keyword 경고 (callback 차단 못하는 stderr noise). lookup('file') | from_yaml 로 우회.
-        - name: "esxi | load vendor_aliases for normalization"
-          ansible.builtin.set_fact:
-            _e_vendor_aliases_map: "{{ lookup('file', lookup('env','REPO_ROOT') ~ '/common/vars/vendor_aliases.yml') | from_yaml }}"
-
-        # BUG #2 fix (cycle production-audit 후속): Jinja2 loop scoping —
-        # block 안의 {% set %} 는 outer 변수에 영향 없음. cycle-016 "9 파일 namespace pattern fix"
-        # 잔류분. namespace 로 outer scope 갱신.
-        - name: "esxi | normalize vendor via aliases"
-          ansible.builtin.set_fact:
-            _e_vendor_normalized: >-
-              {%- set raw = (_e_raw_facts.ansible_system_vendor | default('')) | trim -%}
-              {%- set raw_lower = raw | lower -%}
-              {%- set ns = namespace(canonical=none) -%}
-              {%- for canon, aliases in (_e_vendor_aliases_map.vendor_aliases | default({})).items() -%}
-                {%- for a in aliases -%}
-                  {%- if a | lower == raw_lower -%}
-                    {%- set ns.canonical = canon -%}
-                  {%- endif -%}
-                {%- endfor -%}
-              {%- endfor -%}
-              {{ ns.canonical if ns.canonical else (raw if raw else none) }}
-
+        # 2026-09-03: envelope.vendor 는 common/tasks/normalize/resolve_vendor.yml 한 곳에서
+        # data.hardware.vendor → vendor_aliases.yml 정본으로 결정한다 (OS 채널과 동일 경로).
+        # 종전 인라인 구현은 alias 정확일치 실패 시 raw 제조사 문자열을 그대로 envelope 에 냈다 (B-07).
         - name: "esxi | set output meta"
           ansible.builtin.set_fact:
             _out_target_type:       "esxi"
             _out_collection_method: "vsphere_api"
             _out_ip:                "{{ _e_ip }}"
-            # cycle 2026-06-04 (사용자 결정): 출력 표시값 매핑 (hpe → hp). 내부 canonical 유지.
-            # data-driven (vendor_aliases.vendor_output_display) — vendor 하드코딩 회피 (rule 12 R1).
-            _out_vendor: >-
-              {{ (_e_vendor_aliases_map.vendor_output_display | default({})).get(_e_vendor_normalized | default(''), _e_vendor_normalized | default(none)) }}
+
+        - name: "esxi | resolve vendor"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/resolve_vendor.yml"
 
         - name: "esxi | enrich diagnosis with adapter"
           ansible.builtin.set_fact:
@@ -315,12 +295,16 @@
                                         else {})}) }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
+        # 2026-09-03 (B-36): 예외 전에 확정한 제조사를 버리지 않는다 — 같은 resolve_vendor 경로.
+        - name: "esxi | rescue | resolve vendor"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/resolve_vendor.yml"
+
         - name: "esxi | rescue | set failed vars"
           ansible.builtin.set_fact:
             _out_target_type:       "esxi"
             _out_collection_method: "vsphere_api"
             _out_ip:                "{{ _e_ip }}"
-            _out_vendor:            null
             _fail_sec_supported:    "{{ ((_selected_adapter | default({})).capabilities | default({})).sections_supported
                                         | default(['system','hardware','cpu','memory','storage','network']) }}"
             _fail_error_section:    "esxi_gather"
@@ -340,6 +324,8 @@
 
       always:
         # rule 13 R5 / rule 20 R1: 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
+        # 2026-09-03 (B-01/B-04): hostname 은 IP 로 대체하지 않는다(null). sections/meta/correlation/data 는
+        #   rescue 경로(build_failed_output.yml)와 같은 shape — 호출자가 실패 종류에 따라 다른 모양을 보지 않는다.
         - name: OUTPUT
           ansible.builtin.debug:
             msg: "{{ (_output | default({
@@ -347,13 +333,13 @@
                        'target_type': 'esxi',
                        'collection_method': 'vsphere_api',
                        'ip': _e_ip | default(inventory_hostname),
-                       'hostname': _e_ip | default(inventory_hostname),
+                       'hostname': none,
                        'vendor': none,
                        'status': 'failed',
-                       'sections': {},
+                       'sections': {'system': 'failed', 'hardware': 'failed', 'bmc': 'not_supported', 'cpu': 'failed', 'memory': 'failed', 'storage': 'failed', 'network': 'failed', 'firmware': 'not_supported', 'users': 'not_supported', 'power': 'not_supported', 'thermal': 'not_supported'},
                        'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_output_build_failed, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
-                       'meta': {},
-                       'correlation': {},
+                       'meta': {'started_at': none, 'finished_at': none, 'duration_ms': none, 'adapter_id': none, 'adapter_version': none, 'ansible_version': none},
+                       'correlation': {'serial_number': none, 'system_uuid': none, 'bmc_ip': none, 'host_ip': _e_ip | default(none)},
                        'errors': [{'section':'gather','message': _fr_output_build_failed,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
-                       'data': {}
+                       'data': {'system': none, 'hardware': none, 'bmc': none, 'cpu': none, 'memory': none, 'storage': {'filesystems': [], 'physical_disks': [], 'datastores': [], 'controllers': [], 'logical_volumes': [], 'hbas': [], 'infiniband': [], 'summary': {'groups': [], 'grand_total_gb': 0}}, 'network': {'dns_servers': [], 'default_gateways': [], 'interfaces': [], 'adapters': [], 'ports': [], 'virtual_switches': [], 'portgroups': [], 'driver_map': [], 'summary': {'groups': []}}, 'users': [], 'firmware': [], 'power': none, 'thermal': {'temperatures': [], 'fans': []}}
                      })) | to_json }}"

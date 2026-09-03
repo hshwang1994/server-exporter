@@ -3,12 +3,12 @@
   "target_type": "os",
   "collection_method": "agent",
   "ip": "10.10.1.20",
-  "hostname": "10.10.1.20",
-  "vendor": null,
+  "hostname": "server01",
+  "vendor": "dell",
   "status": "partial",
   "sections": {
     "system": "success",
-    "hardware": "not_supported",
+    "hardware": "success",
     "bmc": "not_supported",
     "cpu": "success",
     "memory": "success",
@@ -16,7 +16,8 @@
     "network": "success",
     "firmware": "not_supported",
     "users": "success",
-    "power": "not_supported"
+    "power": "not_supported",
+    "thermal": "not_supported"
   },
   "diagnosis": {
     "reachable": true,
@@ -33,7 +34,8 @@
         22
       ],
       "detected_os": "linux",
-      "detected_port": 22
+      "detected_port": 22,
+      "hostname_source": "system"
     }
   },
   "meta": {
@@ -45,16 +47,16 @@
     "ansible_version": "2.19.1"
   },
   "correlation": {
-    "serial_number": null,
-    "system_uuid": null,
+    "serial_number": "ABCDEF1",
+    "system_uuid": "4c4c4544-0042-4a10-8038-b2c04f303333",
     "bmc_ip": null,
     "host_ip": "10.10.1.20"
   },
   "errors": [
     {
       "section": "storage",
-      "message": "스토리지 수집 실패: lsblk 명령어를 찾을 수 없습니다.",
-      "detail": "lsblk: command not found"
+      "message": "스토리지 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.",
+      "detail": "source=lsblk,df; cause=no_output; rc=127"
     }
   ],
   "data": {
@@ -66,8 +68,9 @@
       "architecture": "x86_64",
       "uptime_seconds": 8640000,
       "selinux": "enforcing",
+      "hostname": "server01",
       "fqdn": "server01.example.com",
-      "hosting_type": "bare_metal",
+      "hosting_type": "baremetal",
       "runtime": {
         "timezone": "Asia/Seoul",
         "ntp_active": true,
@@ -80,20 +83,38 @@
         "swap_total_mb": 8192,
         "swap_used_mb": 0,
         "swap_free_mb": 8192
-      }
+      },
+      "serial_number": "ABCDEF1",
+      "system_uuid": "4c4c4544-0042-4a10-8038-b2c04f303333",
+      "vendor": "Dell Inc."
     },
-    "hardware": null,
+    "hardware": {
+      "vendor": "Dell Inc.",
+      "model": "PowerEdge R760",
+      "serial": "ABCDEF1",
+      "uuid": "4c4c4544-0042-4a10-8038-b2c04f303333",
+      "bios_version": "2.3.5",
+      "bios_date": "2024-09-10"
+    },
     "bmc": null,
     "cpu": {
       "sockets": 2,
       "cores_physical": 32,
       "logical_threads": 64,
       "model": "Intel(R) Xeon(R) Gold 6338 CPU @ 2.00GHz",
+      "manufacturer": "Intel",
+      "max_speed_mhz": 2000,
+      "turbo_max_mhz": 3200,
       "architecture": "x86_64",
       "summary": {
         "groups": [
           {
             "model": "Intel(R) Xeon(R) Gold 6338 CPU @ 2.00GHz",
+            "manufacturer": "Intel",
+            "max_speed_mhz": 2000,
+            "turbo_max_mhz": 3200,
+            "l2_cache_kb": 40960,
+            "l3_cache_kb": 49152,
             "sockets": 2,
             "cores_per_socket": 16,
             "total_cores": 32
@@ -106,6 +127,7 @@
       "total_basis": "physical_installed",
       "installed_mb": 262144,
       "visible_mb": 261800,
+      "free_mb": 120000,
       "slots": [],
       "summary": {
         "groups": [],
@@ -139,19 +161,23 @@
       "interfaces": [],
       "driver_map": [
         {
-          "interface": "eth0",
+          "name": "eth0",
           "driver": "i40e",
-          "version": "2.22.18"
+          "driver_version": "2.22.18",
+          "vlan_id": null,
+          "bond_master": null
         }
       ],
       "summary": {
         "groups": []
-      }
+      },
+      "adapters": [],
+      "ports": []
     },
     "users": [
       {
         "name": "root",
-        "uid": 0,
+        "uid": "0",
         "groups": [
           "root"
         ],
@@ -161,6 +187,10 @@
       }
     ],
     "firmware": null,
-    "power": null
+    "power": null,
+    "thermal": {
+      "temperatures": [],
+      "fans": []
+    }
   }
 }

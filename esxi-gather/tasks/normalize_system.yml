@@ -1,29 +1,107 @@
 ---
 # esxi-gather/tasks/normalize_system.yml
-# _e_raw_facts → system/hardware/cpu/memory fragment
+# _e_raw_facts (+ _e_raw_host) → system/hardware/cpu/memory fragment
+#
+# 2026-09-03 (OS/ESXi 전수 검수 후속):
+#   - system.hostname = dnsConfig.hostName (short), system.fqdn = hostname.domain (도메인 없으면 null).
+#     종전에는 둘 다 ansible_hostname 이었고, 실패 시 IP 로 대체했다 (B-01/B-03).
+#   - cpu.max_speed_mhz = cpuInfo.hz(정격). 종전에는 브랜드 문자열 "@ N.NGHz" 파싱 (B-10).
+#   - uptime_seconds / architecture / cores 는 모르면 null — 0 / 'x86_64' 리터럴 대체 금지 (B-32/B-35).
+#   - 채널 공통 cpu.summary.groups 키 (turbo_max_mhz / l2_cache_kb / l3_cache_kb) 를 null 로 노출.
+
+- name: "esxi | normalize system | derive identity"
+  ansible.builtin.set_fact:
+    # short hostname: dnsConfig.hostName → ansible_hostname → null.  "a.b.c" 형태면 첫 라벨만.
+    _e_sys_short: >-
+      {%- set h = (_e_raw_host | default({})).hostname | default(none) -%}
+      {%- set h = h if h else (_e_raw_facts.ansible_hostname | default(none)) -%}
+      {%- set h = (h | string | trim) if h else '' -%}
+      {{ (h.split('.')[0]) if h else none }}
+    # 도메인: dnsConfig.domainName → dns_info.domain_name → ansible_hostname 의 '.' 뒷부분 → null
+    _e_sys_domain: >-
+      {%- set d = (_e_raw_host | default({})).domain_name | default(none) -%}
+      {%- if not d -%}
+        {%- set dns_dict = _e_raw_dns | default({}) -%}
+        {%- if dns_dict is mapping and (dns_dict | length > 0) -%}
+          {%- set entry = dns_dict[(dns_dict.keys() | list | first)] -%}
+          {%- set d = entry.domain_name | default(none) if entry is mapping else none -%}
+        {%- endif -%}
+      {%- endif -%}
+      {%- if not d -%}
+        {%- set h = (_e_raw_facts.ansible_hostname | default('') | string | trim) -%}
+        {%- set d = h.split('.', 1)[1] if ('.' in h) else none -%}
+      {%- endif -%}
+      {{ (d | string | trim) if d else none }}
+  no_log: true
+
+- name: "esxi | normalize system | derive cpu/uptime"
+  ansible.builtin.set_fact:
+    _e_sys_fqdn: >-
+      {%- set s = _e_sys_short | default(none) -%}
+      {%- set d = _e_sys_domain | default(none) -%}
+      {{ (s ~ '.' ~ d) if (s and d) else none }}
+    _e_cpu_model: "{{ (_e_raw_facts.ansible_processor | default(none, true)) or none }}"
+    _e_cpu_manufacturer: >-
+      {%- set v = ((_e_raw_host | default({})).cpu_vendor | default('', true)) | lower -%}
+      {%- set p = (_e_raw_facts.ansible_processor | default('', true)) | lower -%}
+      {%- if 'intel' in v or 'intel' in p -%}Intel
+      {%- elif 'amd' in v or 'amd' in p -%}AMD
+      {%- elif p -%}{{ (_e_raw_facts.ansible_processor | string).split()[0] }}
+      {%- else -%}{{ none }}
+      {%- endif -%}
+    # 정격 클럭: cpuInfo.hz → ansible_processor_mhz → 브랜드 문자열 "@ N.NNGHz"(정격 표기) → null
+    _e_cpu_base_mhz: >-
+      {%- set hz = (_e_raw_host | default({})).cpu_mhz | default(none) -%}
+      {%- if hz is not none and (hz | string).isdigit() and (hz | int) > 0 -%}{{ hz | int }}
+      {%- else -%}
+        {%- set raw_mhz = _e_raw_facts.ansible_processor_mhz | default(none) -%}
+        {%- if raw_mhz -%}{{ raw_mhz | int }}
+        {%- else -%}
+          {%- set m = (_e_raw_facts.ansible_processor | default('', true)) | regex_search('@\s*([0-9.]+)\s*GHz', '\\1') -%}
+          {%- if m -%}{{ ((m | first | float) * 1000) | int }}{%- else -%}{{ none }}{%- endif -%}
+        {%- endif -%}
+      {%- endif -%}
+    # 아키텍처: ansible_machine → CPU 제조사(Intel/AMD = x86_64) → null. 'x86_64' 무조건 리터럴 금지.
+    _e_arch: >-
+      {%- set m = _e_raw_facts.ansible_machine | default(none) -%}
+      {%- set v = ((_e_raw_host | default({})).cpu_vendor | default('', true)) | lower -%}
+      {%- set p = (_e_raw_facts.ansible_processor | default('', true)) | lower -%}
+      {%- if m -%}{{ m }}
+      {%- elif 'intel' in v or 'amd' in v or 'intel' in p or 'amd' in p -%}x86_64
+      {%- else -%}{{ none }}
+      {%- endif -%}
+    _e_uptime: >-
+      {%- set u = (_e_raw_host | default({})).uptime_seconds | default(none) -%}
+      {%- if u is not none and (u | string).isdigit() -%}{{ u | int }}
+      {%- else -%}
+        {%- set f = _e_raw_facts.ansible_uptime | default(none) -%}
+        {{ (f | int) if (f is not none and (f | string).isdigit() and (f | int) > 0) else none }}
+      {%- endif -%}
+    _e_cpu_sockets: "{{ _e_raw_facts.ansible_processor_count | default(none) }}"
+    _e_cpu_cores:   "{{ _e_raw_facts.ansible_processor_cores | default(none) }}"
+    _e_cpu_threads: "{{ _e_raw_facts.ansible_processor_vcpus | default(none) }}"
+  no_log: true
 
 - name: "esxi | normalize system | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
       # cycle-016 Phase P: 3 채널 일관성 — system.runtime 노출 (Linux/Windows 와 동일 키)
-      # BUG #1 fix: hostname / fqdn 을 ansible_hostname (ESXi configured name) 으로.
-      # 이전: fqdn=_e_ip (= IP), hostname 키 자체 누락 → build_output.yml 이 IP 폴백.
       system:
         os_family:      "VMware ESXi"
         distribution:   "VMware ESXi"
         version:        "{{ _e_raw_facts.ansible_distribution_version | default(none) }}"
         kernel:         "{{ _e_raw_facts.ansible_distribution_build   | default(none) }}"
-        # 잔류 fix (Round 12 후속): vmware_host_facts 가 ansible_machine 미반환 시 x86_64 기본
-        architecture: >-
-          {%- set m = _e_raw_facts.ansible_machine | default(none) -%}
-          {{ m if m else 'x86_64' }}
-        uptime_seconds: "{{ (_e_raw_facts.ansible_uptime               | default(0)) | int }}"
+        architecture:   "{{ _e_arch | default(none) }}"
+        uptime_seconds: "{{ _e_uptime | default(none) }}"
         selinux:        null
-        hostname:       "{{ _e_hostname | default(_e_ip) }}"
-        fqdn:           "{{ _e_hostname | default(_e_ip) }}"
+        hostname:       "{{ _e_sys_short | default(none) }}"
+        fqdn:           "{{ _e_sys_fqdn | default(none) }}"
         hosting_type:   "hypervisor"
+        serial_number:  "{{ _e_raw_facts.ansible_product_serial | default(none) }}"
+        system_uuid:    "{{ (_e_raw_facts.ansible_uuid | default(none)) | normalize_uuid }}"
+        vendor:         "{{ _e_raw_facts.ansible_system_vendor | default(none) }}"
         runtime:
-          # ESXi 는 vmware_host_facts 에서 제한적 — 기술적 가능 영역만
+          # 값은 collect_runtime.yml 이 단일 구현이다 (같은 키를 dict 통째로 교체). 여기서는 키만 자리를 잡는다.
           timezone:         null
           ntp_active:       null
           ntp_synchronized: null
@@ -34,11 +112,12 @@
           swap_total_mb:    null
           swap_used_mb:     null
           swap_free_mb:     null
+          ntp_servers:      []
       hardware:
         vendor:       "{{ _e_raw_facts.ansible_system_vendor  | default(none) }}"
         model:        "{{ _e_raw_facts.ansible_product_name   | default(none) }}"
         serial:       "{{ _e_raw_facts.ansible_product_serial | default(none) }}"
-        uuid:         "{{ _e_raw_facts.ansible_uuid           | default(none) }}"
+        uuid:         "{{ (_e_raw_facts.ansible_uuid | default(none)) | normalize_uuid }}"
         bios_version: "{{ _e_raw_facts.ansible_bios_version   | default(none) }}"
         # 2026-06-30: field_dictionary 계약 = "ISO 8601 YYYY-MM-DD 정규화". vSphere 는
         # "2021-02-02T09:00:00+09:00" 풀타임스탬프 반환(site 10.100.64.2 실측) → 날짜만 truncate.
@@ -46,77 +125,60 @@
           {%- set raw = _e_raw_facts.ansible_bios_date | default(none) -%}
           {%- if raw -%}{{ (raw | string).split('T')[0] }}{%- else -%}{{ none }}{%- endif -%}
       cpu:
-        sockets:         "{{ _e_raw_facts.ansible_processor_count | default(none) }}"
-        cores_physical:  "{{ _e_raw_facts.ansible_processor_cores | default(none) }}"
-        logical_threads: "{{ _e_raw_facts.ansible_processor_vcpus | default(none) }}"
-        model:           "{{ _e_raw_facts.ansible_processor       | default(none) }}"
-        # 2026-06-30: cpu 최상위 manufacturer (Windows/Linux parity — 기존엔 summary.groups 에만
-        # 있고 최상위 누락. site 10.100.64.2 실측). summary 와 동일 Intel/AMD 판정 로직.
-        manufacturer: >-
-          {%- set p = _e_raw_facts.ansible_processor | default('', boolean=true) | lower -%}
-          {%- if 'intel' in p -%}Intel
-          {%- elif 'amd' in p -%}AMD
-          {%- elif p -%}{{ (_e_raw_facts.ansible_processor | string).split()[0] | default('unknown') }}
-          {%- else -%}{{ none }}
-          {%- endif -%}
-        # 잔류 fix (Round 12 후속): vmware_host_facts 가 ansible_processor_mhz 미반환 시
-        # CPU model 의 "@ N.NGHz" 패턴에서 추출 (Intel/AMD 표준 표기).
-        max_speed_mhz: >-
-          {%- set raw_mhz = _e_raw_facts.ansible_processor_mhz | default(none) -%}
-          {%- if raw_mhz -%}{{ raw_mhz }}
+        sockets:         "{{ _e_cpu_sockets | default(none) }}"
+        cores_physical:  "{{ _e_cpu_cores | default(none) }}"
+        logical_threads: "{{ _e_cpu_threads | default(none) }}"
+        model:           "{{ _e_cpu_model | default(none) }}"
+        manufacturer:    "{{ _e_cpu_manufacturer | default(none) }}"
+        max_speed_mhz:   "{{ _e_cpu_base_mhz | default(none) }}"
+        # vSphere API 는 터보 클럭을 제공하지 않는다.
+        turbo_max_mhz:   null
+        architecture:    "{{ _e_arch | default(none) }}"
+        summary: >-
+          {%- set model = _e_cpu_model | default(none) -%}
+          {%- set s = _e_cpu_sockets | default(none) -%}
+          {%- set c = _e_cpu_cores | default(none) -%}
+          {%- set cps = ((c | int) // (s | int)) if (s is not none and c is not none and (s | int) > 0) else none -%}
+          {%- if model is not none -%}
+            {{ {'groups': [{
+              'model': model,
+              'manufacturer': _e_cpu_manufacturer | default(none),
+              'max_speed_mhz': _e_cpu_base_mhz | default(none),
+              'turbo_max_mhz': none,
+              'l2_cache_kb': none,
+              'l3_cache_kb': none,
+              'architecture': _e_arch | default(none),
+              'sockets': (s | int) if s is not none else none,
+              'cores_per_socket': cps,
+              'total_cores': (c | int) if c is not none else none
+            }]} }}
           {%- else -%}
-            {%- set m = (_e_raw_facts.ansible_processor | default('')) | regex_search('@\s*([0-9.]+)\s*GHz', '\\1') -%}
-            {%- if m -%}{{ ((m | first | float) * 1000) | int }}{%- else -%}{{ none }}{%- endif -%}
+            {{ {'groups': []} }}
           {%- endif -%}
-        # ansible_machine 미반환 시 x86_64 기본 (ESXi 7.x 는 모두 x86_64 — Apple/ARM 서버 미지원)
-        architecture: >-
-          {%- set m = _e_raw_facts.ansible_machine | default(none) -%}
-          {{ m if m else 'x86_64' }}
-        # cycle-016 Phase O: ESXi cpu.summary.groups 에 max_speed_mhz / manufacturer / architecture 추가
-        summary:
-          groups:
-            - model:            "{{ _e_raw_facts.ansible_processor | default('unknown') }}"
-              manufacturer: >-
-                {%- set p = _e_raw_facts.ansible_processor | default('', boolean=true) | lower -%}
-                {%- if 'intel' in p -%}Intel
-                {%- elif 'amd' in p -%}AMD
-                {%- elif p -%}{{ (_e_raw_facts.ansible_processor | string).split()[0] | default('unknown') }}
-                {%- else -%}{{ none }}
-                {%- endif -%}
-              max_speed_mhz: >-
-                {%- set raw_mhz = _e_raw_facts.ansible_processor_mhz | default(none) -%}
-                {%- if raw_mhz -%}{{ raw_mhz }}
-                {%- else -%}
-                  {%- set m = (_e_raw_facts.ansible_processor | default('', boolean=true)) | regex_search('@\s*([0-9.]+)\s*GHz', '\\1') -%}
-                  {%- if m -%}{{ ((m | first | float) * 1000) | int }}{%- else -%}{{ none }}{%- endif -%}
-                {%- endif -%}
-              architecture: >-
-                {%- set m = _e_raw_facts.ansible_machine | default(none) -%}
-                {{ m if m else 'x86_64' }}
-              sockets:          "{{ _e_raw_facts.ansible_processor_count | default(0) | int }}"
-              cores_per_socket: >-
-                {%- set s = (_e_raw_facts.ansible_processor_count | default(0) | int) -%}
-                {%- set c = (_e_raw_facts.ansible_processor_cores | default(0) | int) -%}
-                {{ (c // s) if s > 0 else 0 }}
-              total_cores:      "{{ _e_raw_facts.ansible_processor_cores | default(0) | int }}"
       memory:
         total_mb:     "{{ _e_raw_facts.ansible_memtotal_mb | default(none) }}"
-        total_basis:  "hypervisor_visible"
+        total_basis:  "{{ 'hypervisor_visible' if (_e_raw_facts.ansible_memtotal_mb | default(none)) is not none else none }}"
         installed_mb: null
         visible_mb:   "{{ _e_raw_facts.ansible_memtotal_mb | default(none) }}"
         free_mb:      "{{ _e_raw_facts.ansible_memfree_mb  | default(none) }}"
         slots:        []
         # cycle-016 (2026-04-29): ESXi 는 DIMM slot 정보 미수집 — grand_total 만
+        # 2026-09-03 (B-15): floor 절삭 → 반올림 (1 TB = 1048464 MB 가 1023 이 아니라 1024)
         summary:
           groups: []
           grand_total_gb: >-
-            {{ ((_e_raw_facts.ansible_memtotal_mb | default(0) | int) / 1024) | round(0, 'floor') | int }}
+            {%- set t = _e_raw_facts.ansible_memtotal_mb | default(none) -%}
+            {{ ((t | int) / 1024) | round(0, 'common') | int if (t is not none and (t | string).isdigit()) else none }}
     _sections_supported_fragment: ['system','hardware','cpu','memory']
     _sections_collected_fragment: >-
       {{ ['system','hardware','cpu','memory'] if _e_facts_ok | bool else [] }}
     _sections_failed_fragment: >-
       {{ [] if _e_facts_ok | bool else ['system','hardware','cpu','memory'] }}
-    _errors_fragment: []
+    _errors_fragment: >-
+      {{ [] if _e_facts_ok | bool else [{
+           'section': 'system',
+           'message': '서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  'source=vmware_host_facts; cause=no_facts'}] }}
   no_log: true
 
 - name: "esxi | normalize system | merge fragment"

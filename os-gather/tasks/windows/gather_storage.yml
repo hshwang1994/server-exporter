@@ -1,5 +1,13 @@
 ---
 # os-gather/tasks/windows/gather_storage.yml → data.storage fragment
+#
+# 2026-09-03 (OS/ESXi 전수 검수 후속):
+#   - filesystems[] 용량은 정수 MB (종전 float + 부동소수 오차 — B-16). Linux 와 같은 계산(used = total - free).
+#   - Normalize-DiskSerial: 디코딩 결과의 **모든 바이트가 인쇄 가능** 할 때만 디코딩 결과를 쓴다.
+#     종전 조건("hex 이고 '20' 을 포함") 은 NAA/RAID 계열 32-hex 시리얼을 의미 없는 짧은 문자열로 바꿨다 (B-19).
+#   - physical_disks[].health: OK / Warning / Critical / null (Redfish 와 같은 어휘 — B-18).
+#   - infiniband[].vendor: 드라이버 공급자 / PnP 제조사에서 읽는다 (종전 'Mellanox' 하드코딩 — B-23).
+#   - 디스크도 볼륨도 못 읽으면 섹션 failed + 사유 (종전 collected 하드코딩 — B-12).
 
 - name: "windows | storage | volumes"
   ansible.windows.win_shell: |
@@ -24,23 +32,28 @@
     # MediaType을 HDD/SSD enum으로 정규화. 기존 raw WMI string ("Fixed hard disk media") 누출 차단.
     # windows-audit (2026-04-29): PS5.1=int / PS7+=enum string 양쪽 BusType 처리.
     #   Win32_DiskDrive raw "Fixed hard disk media"는 SSD/HDD 정보 부재 → null (잘못된 추정 차단).
-    #   HealthStatus 매핑 (Healthy/Warning/Unhealthy) → health 필드.
+    #   HealthStatus 매핑 (Healthy/Warning/Unhealthy) → health 필드 (OK/Warning/Critical).
     # serial/wwn 추가 (2026-06-22). serial: Get-PhysicalDisk 우선 → Win32_DiskDrive fallback.
     #   일부 드라이브는 SerialNumber 를 hex 인코딩(ASCII)+공백(20) 패딩으로 반환 → 디코딩 정규화.
-    #   니블 swap 은 드라이브별로 달라 사이트 실측 전까지 미적용(주석). (MS Learn Win32_DiskDrive)
+    #   2026-09-03: 디코딩은 모든 바이트가 인쇄 가능(0x20~0x7E) 하고 결과에 hex 밖 문자가 하나라도 있을 때만.
+    #   그렇지 않으면(NAA 식별자처럼 우연히 hex 인 진짜 시리얼) 원문을 보존한다.
     function Normalize-DiskSerial($v) {
       if (-not $v) { return $null }
       $s = ([string]$v).Trim()
       if (-not $s) { return $null }
-      if ($s.Length -ge 8 -and ($s.Length % 2 -eq 0) -and ($s -match '^[0-9A-Fa-f]+$') -and ($s -match '20')) {
+      if ($s.Length -ge 8 -and ($s.Length % 2 -eq 0) -and ($s -match '^[0-9A-Fa-f]+$')) {
         try {
           $sb = New-Object System.Text.StringBuilder
+          $allPrintable = $true
           for ($i = 0; $i -lt $s.Length; $i += 2) {
             $b = [Convert]::ToByte($s.Substring($i, 2), 16)
-            if ($b -ge 32 -and $b -le 126) { [void]$sb.Append([char]$b) }
+            if ($b -lt 32 -or $b -gt 126) { $allPrintable = $false; break }
+            [void]$sb.Append([char]$b)
           }
-          $dec = $sb.ToString().Trim()
-          if ($dec) { $s = $dec }
+          if ($allPrintable) {
+            $dec = $sb.ToString().Trim()
+            if ($dec -and ($dec -notmatch '^[0-9A-Fa-f]+$')) { $s = $dec }
+          }
         } catch { }
       }
       $s = $s.Trim()
@@ -82,12 +95,12 @@
                      default { $null }
                    }
                  }
-          # HealthStatus: "Healthy", "Warning", "Unhealthy", "Unknown"
+          # HealthStatus: "Healthy", "Warning", "Unhealthy", "Unknown" → OK / Warning / Critical / null
           $hs = [string]$_.HealthStatus
           $health = switch ($hs) {
-            'Healthy'   { 'healthy' }
-            'Warning'   { 'warning' }
-            'Unhealthy' { 'unhealthy' }
+            'Healthy'   { 'OK' }
+            'Warning'   { 'Warning' }
+            'Unhealthy' { 'Critical' }
             default     { $null }
           }
           # serial/UniqueId(wwn 후보) 캡처
@@ -272,6 +285,8 @@
 # Get-NetAdapter PhysicalMediaType=InfiniBand / NdisPhysicalMedium=11 (authoritative) +
 # Get-PnpDevice VEN_15B3 (Mellanox) fallback. node_guid 는 Windows 표준 API 부재 → null (날조 금지).
 # source: MS docs Get-NetAdapter / OID_GEN_PHYSICAL_MEDIUM (EXTERNAL-CONTRACTS §4). lab 부재.
+# 2026-09-03: vendor 는 DriverProvider(1차) / PnP Manufacturer(2차) 에서 읽는다. 2차 fallback 은
+#   PhysicalMediaType 이 InfiniBand 인 것만 남긴다 (Mellanox 이더넷 NIC 를 IB 로 세지 않는다 — B-23).
 - name: "windows | storage | infiniband adapters (best-effort)"
   ansible.windows.win_shell: |
     $ib = @()
@@ -288,17 +303,17 @@
           link_status = [string]$_.Status
           rate        = [string]$_.LinkSpeed
           rdma        = $rdma
+          vendor      = [string]$_.DriverProvider
         }
       }
     } catch { }
     if ($ib.Count -eq 0) {
       try {
         Get-PnpDevice -Class Net -ErrorAction Stop | Where-Object {
-          # VEN_15B3 = Mellanox PCI vendor ID (authoritative — vendor='Mellanox' 하드코딩과 일치).
-          # 구 '^(mlx|ibal|nd)' 의 'nd' 가 LBFO 팀 멀티플렉서 service 'NdisImPlatformMp' 를 오탐
-          # (2026-06-26 site 10.100.64.120 실측 — 팀 3개를 Mellanox IB 로 보고). 특정 Mellanox/IB
-          # service 로 한정 + MS_IMPLAT(팀 멀티플렉서 HWID) 제외.
-          (([string]$_.HardwareID -match 'VEN_15B3') -or ([string]$_.Service -match '^(mlx|mlnx|ibbus|ibal)')) -and
+          # VEN_15B3 = Mellanox PCI vendor ID. 구 '^(mlx|ibal|nd)' 의 'nd' 가 LBFO 팀 멀티플렉서 service
+          # 'NdisImPlatformMp' 를 오탐 (2026-06-26 site 10.100.64.120 실측 — 팀 3개를 Mellanox IB 로 보고).
+          # IB 전용 service(ibbus/ibal) 만 인정 — mlx 계열 이더넷 드라이버는 IB 근거가 아니다.
+          (([string]$_.Service -match '^(ibbus|ibal|ipoib)')) -and
           ([string]$_.InstanceId -notmatch 'MS_IMPLAT')
         } | ForEach-Object {
           $ib += [PSCustomObject]@{
@@ -307,6 +322,7 @@
             link_status = [string]$_.Status
             rate        = $null
             rdma        = $null
+            vendor      = $(if ([string]$_.HardwareID -match 'VEN_15B3') { 'Mellanox' } else { [string]$_.Manufacturer })
           }
         }
       } catch { }
@@ -353,8 +369,8 @@
         {%- set is_fc = 'fibre' in ct -%}
         {%- set is_iscsi = 'iscsi' in ct -%}
         {%- if is_fc or is_iscsi -%}
-          {%- set wwpn = p.port_addr | default(none) -%}
-          {%- set wwnn = p.node_addr | default(none) -%}
+          {%- set wwpn = (p.port_addr | default(none)) | normalize_wwn -%}
+          {%- set wwnn = (p.node_addr | default(none)) | normalize_wwn -%}
           {%- set adp = adp_by_node.get(wwnn, adp_first) -%}
           {%- set pa = pa_by_wwpn.get(wwpn, {}) -%}
           {%- set os = (p.oper_status | default('')) | lower -%}
@@ -362,10 +378,10 @@
           {%- set _ = out.append({
             'wwpn':            wwpn if is_fc else none,
             'wwnn':            wwnn if is_fc else none,
-            'model':           adp.model | default(none),
-            'vendor':          adp.manufacturer | default(none),
-            'driver':          adp.driver | default(none),
-            'firmware':        adp.firmware | default(none),
+            'model':           (adp.model | default(none, true)) or none,
+            'vendor':          (adp.manufacturer | default(none, true)) or none,
+            'driver':          (adp.driver | default(none, true)) or none,
+            'firmware':        (adp.firmware | default(none, true)) or none,
             'link_status':     link,
             'link_speed_gbps': pa.speed_gbps | default(none),
             'port_type':       'FibreChannel' if is_fc else 'iSCSI',
@@ -395,7 +411,8 @@
           'link_status': ('up' if ls in ['up', 'ok'] else ('down' if ls in ['disconnected', 'down'] else 'unknown')),
           'rate':        raw_rate,
           'rate_gbps':   rate_gbps,
-          'vendor':      'Mellanox',
+          'model':       a.adapter | default(none),
+          'vendor':      (a.vendor | default(none, true)) or none,
           'firmware':    none,
           'source':      'os',
           'note':        'Windows: node_guid 표준 API 부재 → null (best-effort, rule 96 R1-A).',
@@ -411,17 +428,20 @@
       {%- for line in (_w_vol_raw.stdout_lines | default([])) -%}
         {%- if line | trim -%}
           {%- set v = line | from_json -%}
-          {%- set total_mb = (v.total | int / 1048576) | round(1) -%}
-          {%- set free_mb  = (v.free  | int / 1048576) | round(1) -%}
+          {%- set total_b = (v.total | int) if (v.total is defined and v.total is not none) else 0 -%}
+          {%- set free_b  = (v.free  | int) if (v.free  is defined and v.free  is not none) else 0 -%}
+          {%- set total_mb = (total_b / 1048576) | round(0, 'floor') | int -%}
+          {%- set free_mb  = (free_b  / 1048576) | round(0, 'floor') | int -%}
           {%- if total_mb > 0 -%}
+            {%- set used_mb = total_mb - free_mb -%}
             {%- set _ = out.append({
               'device':        v.drive ~ ':',
               'mount_point':   v.drive ~ ':\\',
               'filesystem':    v.fs,
               'total_mb':      total_mb,
-              'used_mb':       (total_mb - free_mb) | round(1),
+              'used_mb':       used_mb,
               'available_mb':  free_mb,
-              'usage_percent': ((total_mb - free_mb) / total_mb * 100) | round(1) if total_mb > 0 else 0,
+              'usage_percent': (used_mb / total_mb * 100) | round(1),
               'status':        'mounted'
             }) -%}
           {%- endif -%}
@@ -433,12 +453,13 @@
       {%- for line in (_w_disk_raw.stdout_lines | default([])) -%}
         {%- if line | trim -%}
           {%- set d = line | from_json -%}
-          {%- set total_mb = (d.total | int / 1048576) | round(0,'floor') | int -%}
+          {%- set total_b = (d.total | int) if (d.total is defined and d.total is not none) else 0 -%}
+          {%- set total_mb = (total_b / 1048576) | round(0,'floor') | int -%}
           {%- if total_mb > 0 -%}
             {%- set _ = out.append({
               'id':         d.device,
               'device':     d.device,
-              'model':      d.model | default(none),
+              'model':      (d.model | default(none, true)) or none,
               'serial':     d.serial | default(none),
               'wwn':        d.wwn | default(none),
               'total_mb':   total_mb,
@@ -477,6 +498,7 @@
         {%- endif -%}
       {%- endfor -%}
       {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
+    _w_stor_ok: "{{ ((_w_physical_disks | default([])) | length > 0) or ((_w_norm_filesystems | default([])) | length > 0) }}"
   no_log: true
 
 - name: "windows | storage | build fragment"
@@ -494,9 +516,13 @@
         hbas:            "{{ _w_hbas | default([]) }}"
         infiniband:      "{{ _w_ib | default([]) }}"
     _sections_supported_fragment: ['storage']
-    _sections_collected_fragment: ['storage']
-    _sections_failed_fragment:    []
-    _errors_fragment:             []
+    _sections_collected_fragment: "{{ ['storage'] if (_w_stor_ok | bool) else [] }}"
+    _sections_failed_fragment:    "{{ [] if (_w_stor_ok | bool) else ['storage'] }}"
+    _errors_fragment: >-
+      {{ [] if (_w_stor_ok | bool) else [{
+           'section': 'storage',
+           'message': '스토리지 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  ('source=Get-Volume,Win32_DiskDrive; cause=no_output; rc=' ~ (_w_disk_raw.rc | default('none')))}] }}
   no_log: true
 
 - name: "windows | storage | merge fragment"

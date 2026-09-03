@@ -70,6 +70,10 @@
       ansible.builtin.set_fact:
         _e_ext_adapters: >-
           {%- set out = [] -%}
+          {%- set pnic_by_dev = {} -%}
+          {%- for hp in ((_e_raw_host | default({})).pnics | default([])) -%}
+            {%- if hp.device | default(none) -%}{%- set _ = pnic_by_dev.update({hp.device: hp}) -%}{%- endif -%}
+          {%- endfor -%}
           {%- set d = _e_vmnic.hosts_vmnics_info | default({}) -%}
           {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
           {%- set vmnics = (d.get(key, {}).get('vmnic_details', [])) if key else [] -%}
@@ -86,15 +90,23 @@
             {%- endif -%}
             {%- set raw_dup = n.actual_duplex | default(none) -%}
             {%- set dup = none if (raw_dup in ['N/A', '', none]) else raw_dup -%}
+            {# 2026-09-03 (B-29): OS 채널 adapters[] 와 같은 키 (id / name / manufacturer / model / driver /
+               firmware_version / pci) + ESXi 가 더 아는 것(mac / link_status / speed / duplex). 제조사·모델은
+               esxi_disks.host_info 의 pnic ↔ pciDevice 매핑, 없으면 vmnic_info 의 adapter 문자열. #}
+            {%- set dev = n.device | default(none) -%}
+            {%- set hp = pnic_by_dev.get(dev, {}) -%}
             {%- set _ = out.append({
-              'name':         n.device | default(none),
+              'id':           (hp.pci | default(none)) or (n.location | default(none)) or dev,
+              'name':         dev,
+              'manufacturer': hp.manufacturer | default(none),
+              'model':        (hp.model | default(none)) or (n.adapter | default(none)),
               'driver':       n.driver | default(none),
-              'mac':          n.mac    | default(none),
+              'firmware_version': none,
+              'pci':          (n.location | default(none)) or (hp.pci | default(none)),
+              'mac':          (n.mac | default(none)) | normalize_mac,
               'link_status':  ('up' if (n.status | default('') | lower) in ['connected','up','linkup','active','online'] else ('down' if (n.status | default('') | lower) in ['disconnected','down','linkdown','offline','disabled','inactive'] else 'unknown')),
               'speed_mbps':   sp_int,
               'duplex':       dup,
-              'pci':          n.location | default(none),
-              'adapter':      n.adapter  | default(none),
             }) -%}
           {%- endfor -%}
           {{ out }}
@@ -112,6 +124,11 @@
           {%- set vmhbas = (d.get(key, {}).get('vmhba_details', [])) if key else [] -%}
           {%- set fc_drivers = ['lpfc', 'qlnativefc', 'brcmnvmefc', 'qlnativefcoe'] -%}
           {%- set iscsi_drivers = ['iscsi_vmk'] -%}
+          {# 2026-09-03 (B-22): 같은 vmhba 의 controllers[].controller_manufacturer(pciDevice vendorName) 를 vendor 로 #}
+          {%- set ctrl_vendor = {} -%}
+          {%- for c in (_e_raw_controllers | default([])) -%}
+            {%- if c.id | default(none) -%}{%- set _ = ctrl_vendor.update({c.id: c.controller_manufacturer | default(none)}) -%}{%- endif -%}
+          {%- endfor -%}
           {%- for h in vmhbas -%}
             {%- set dev = h.device | default(none) -%}
             {%- set drv = (h.driver | default('')) | lower -%}
@@ -126,12 +143,12 @@
                   'name':            dev,
                   'driver':          h.driver | default(none),
                   'model':           h.model | default(none),
-                  'vendor':          none,
+                  'vendor':          ctrl_vendor.get(dev, none),
                   'firmware':        none,
                   'adapter_type':    h.type | default(none),
                   'link_status':     ('up' if (h.status | default('') | lower | trim) in ['connected','up','linkup','active','online'] else ('down' if (h.status | default('') | lower | trim) in ['disconnected','down','linkdown','offline','disabled','inactive'] else 'unknown')),
-                  'wwpn':            h.port_wwn | default(none),
-                  'wwnn':            h.node_wwn | default(none),
+                  'wwpn':            (h.port_wwn | default(none)) | normalize_wwn,
+                  'wwnn':            (h.node_wwn | default(none)) | normalize_wwn,
                   'link_speed_gbps': sp_gbps,
                   'port_type':       ('FibreChannel' if is_fc else 'iSCSI'),
                   'pci':             h.location | default(none),
@@ -197,7 +214,8 @@
                 'link_status': a.link_status | default(none),
                 'rate':        none,
                 'rate_gbps':   ((sp | int) / 1000) if (sp is number) else none,
-                'vendor':      'Mellanox',
+                'model':       a.model | default(none),
+                'vendor':      (a.manufacturer | default(none)) or 'Mellanox',
                 'firmware':    none,
                 'source':      'esxi',
                 'note':        'RoCE/IB-capable Mellanox NIC; ESXi exposes IB only via SR-IOV/passthrough (no native host IB port). OS channel (ibstat) is authoritative.',

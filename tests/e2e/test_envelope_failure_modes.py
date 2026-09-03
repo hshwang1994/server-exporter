@@ -120,7 +120,7 @@ def _failed_envelope(
         "target_type": target_type,
         "collection_method": collection_method,
         "ip": "10.100.64.10",
-        "hostname": "10.100.64.10",
+        "hostname": None,
         "vendor": vendor,
         "status": "failed",
         "sections": sections,
@@ -254,7 +254,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
         "target_type": "redfish",
         "collection_method": "redfish_api",
         "ip": "10.100.64.10",
-        "hostname": "10.100.64.10",
+        "hostname": None,
         "vendor": None,
         "status": "failed",
         "sections": {},
@@ -308,7 +308,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
         "target_type": "os",
         "collection_method": "agent",
         "ip": "10.100.64.10",
-        "hostname": "10.100.64.10",
+        "hostname": None,
         "vendor": None,
         "status": "failed",
         "sections": {},
@@ -362,7 +362,7 @@ ENVELOPES: dict[str, dict[str, Any]] = {
         "target_type": "esxi",
         "collection_method": "vsphere_api",
         "ip": "10.100.64.10",
-        "hostname": "10.100.64.10",
+        "hostname": None,
         "vendor": None,
         "status": "failed",
         "sections": {},
@@ -439,9 +439,10 @@ def _assert_envelope_shape(envelope: dict[str, Any]) -> None:
     assert isinstance(envelope["errors"], list), "errors 는 list"
     assert isinstance(envelope["data"], dict), "data 는 dict"
 
-    # 6) ip / hostname 비어 있지 않음
+    # 6) ip 는 비어 있지 않고, hostname 은 null 또는 문자열 — IP 로 대체하지 않는다 (2026-06-16 정책 / 2026-09-03 B-01)
     assert envelope["ip"], "ip 비어 있음"
-    assert envelope["hostname"], "hostname 비어 있음"
+    assert envelope["hostname"] is None or isinstance(envelope["hostname"], str), "hostname 은 null|str"
+    assert envelope["hostname"] != envelope["ip"], "hostname 이 IP 로 대체됐다 (ip-fallback 잔재)"
 
     # 7) vendor 는 None 또는 str
     assert envelope["vendor"] is None or isinstance(envelope["vendor"], str), (

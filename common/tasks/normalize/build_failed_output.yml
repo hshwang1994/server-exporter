@@ -20,20 +20,31 @@
 #                                   errors[].message 가 아니라 errors[].detail 로 들어간다.
 #   _fail_error_detail     : str  — 진단 원본 오류 (precheck 가 set). detail 에 함께 들어간다.
 #   _diagnosis             : dict — errors[].message 는 여기의 failure_reason 을 그대로 쓴다.
+#   _all_sec_collected / _all_sec_failed : list — 예외 직전까지 누적된 섹션 결과 (merge_fragment)
 #
 # 출력 변수:
-#   _output : dict — status=failed 인 최종 표준 JSON
+#   _output : dict — status=failed|partial 인 최종 표준 JSON
+#
+# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-36):
+#   - 예외 직전까지 **성공한 섹션은 success 로 남긴다**. 종전에는 supported 전부를 failed 로 표기해
+#     data 에는 값이 있는데 sections 는 failed 인 자기모순이 났다. 성공 섹션이 하나라도 있으면
+#     status=partial (시나리오 C), 없으면 failed (D).
+#   - hostname 은 build_output.yml 과 같은 체인(system.hostname → fqdn → bmc → null) 이고
+#     diagnosis.details.hostname_source 를 같이 낸다 (IP 대체 금지).
+#   - correlation 이 아직 없으면(예외가 build_correlation 이전) 누적 data 에서 만든다.
 
-- name: "normalize | build_failed_output | build sections (all failed)"
+- name: "normalize | build_failed_output | build sections"
   ansible.builtin.set_fact:
     _norm_sections: >-
       {%- set all_sec = ['system','hardware','bmc','cpu','memory',
                          'storage','network','firmware','users','power','thermal'] -%}
       {%- set supported = _fail_sec_supported | default([]) -%}
+      {%- set collected = _all_sec_collected | default([]) -%}
+      {%- set failed = _all_sec_failed | default([]) -%}
       {%- set out = {} -%}
       {%- for s in all_sec -%}
         {%- if s in supported -%}
-          {%- set _ = out.update({s: 'failed'}) -%}
+          {%- set _ = out.update({s: ('success' if (s in collected and s not in failed) else 'failed')}) -%}
         {%- else -%}
           {%- set _ = out.update({s: 'not_supported'}) -%}
         {%- endif -%}
@@ -76,7 +87,13 @@
           {%- set _ = parts.append(ms | trim) -%}
           {%- endif -%}
           {{ (parts | join(' | ')) if parts else none }}
-    _out_status: "failed"
+    # 성공 섹션이 하나라도 남아 있으면 partial (시나리오 C), 없으면 failed (D).
+    _out_status: >-
+      {%- set supported = _fail_sec_supported | default([]) -%}
+      {%- set collected = _all_sec_collected | default([]) -%}
+      {%- set failed = _all_sec_failed | default([]) -%}
+      {%- set ok = supported | select('in', collected) | reject('in', failed) | list -%}
+      {{ 'partial' if (ok | length) > 0 else 'failed' }}
 
 # 2026-08-12 (H1 / N23 / N70 / N98): 그때까지 누적된 섹션 단위 오류를 살린다.
 #   종전에는 이 파일이 `_all_errors` 를 **한 번도 참조하지 않아** rescue 진입 순간
@@ -131,12 +148,39 @@
       'adapter_version': (_selected_adapter | default({})).version | default(none),
       'ansible_version': ansible_version.full | default('unknown')
     }) }}"
-    _correlation: "{{ _correlation | default({
-      'serial_number': none,
-      'system_uuid':   none,
-      'bmc_ip':        none,
-      'host_ip':       _out_ip | default(inventory_hostname)
-    }) }}"
+    # 예외가 build_correlation 앞에서 났어도 누적 data 에 이미 있는 식별자는 낸다 (build_correlation.yml 과 같은 규칙).
+    _correlation: >-
+      {%- if _correlation is defined -%}
+        {{ _correlation }}
+      {%- else -%}
+        {%- set md = _merged_data | default({}) -%}
+        {%- set hw = md.hardware | default(none) if md is mapping else none -%}
+        {%- set sy = md.system | default(none) if md is mapping else none -%}
+        {%- set bm = md.bmc | default(none) if md is mapping else none -%}
+        {{ {'serial_number': ((hw.serial | default(none)) if hw is mapping else ((sy.serial_number | default(none)) if sy is mapping else none)),
+            'system_uuid':   (((hw.uuid | default(none)) if hw is mapping else ((sy.system_uuid | default(none)) if sy is mapping else none)) | normalize_uuid),
+            'bmc_ip':        ((bm.ip | default(none)) if bm is mapping else none),
+            'host_ip':       _out_ip | default(none)} }}
+      {%- endif -%}
+
+# hostname 정책 (2026-06-16): system.hostname → system.fqdn → bmc.network_hostname → null. IP 대체 금지.
+- name: "normalize | build_failed_output | resolve hostname + source"
+  ansible.builtin.set_fact:
+    _out_hostname: >-
+      {%- set md = _merged_data | default({}) -%}
+      {%- set sy = (md.system | default({}, true)) if md is mapping else {} -%}
+      {%- set bm = (md.bmc | default({}, true)) if md is mapping else {} -%}
+      {{ ((sy.hostname | default(none)) if sy is mapping else none)
+         or ((sy.fqdn | default(none)) if sy is mapping else none)
+         or ((bm.network_hostname | default(none)) if bm is mapping else none)
+         or none }}
+    _out_hostname_source: >-
+      {%- set md = _merged_data | default({}) -%}
+      {%- set sy = (md.system | default({}, true)) if md is mapping else {} -%}
+      {%- set bm = (md.bmc | default({}, true)) if md is mapping else {} -%}
+      {%- set sysh = ((sy.hostname | default(none)) if sy is mapping else none) or ((sy.fqdn | default(none)) if sy is mapping else none) -%}
+      {%- set bmch = (bm.network_hostname | default(none)) if bm is mapping else none -%}
+      {{ 'system' if sysh else ('bmc' if bmch else 'none') }}
 
 - name: "normalize | build_failed_output | assemble output"
   ansible.builtin.set_fact:
@@ -144,11 +188,17 @@
       'target_type':       _out_target_type       | default('unknown'),
       'collection_method': _out_collection_method | default('unknown'),
       'ip':                _out_ip                | default(inventory_hostname),
-      'hostname':          ((_merged_data | default({})).system | default({})).hostname | default(none) or ((_merged_data | default({})).system | default({})).fqdn | default(none),
-      'vendor':            _out_vendor | default(none),
-      'status':            'failed',
+      'hostname':          _out_hostname | default(none),
+      'vendor':            _out_vendor | default(none, true),
+      'status':            _out_status | default('failed'),
       'sections':          _norm_sections,
-      'diagnosis':         _diagnosis         | default(none),
+      'diagnosis':         (((_diagnosis | default({}, true))
+                             if ((_diagnosis | default({}, true)) is mapping) else {})
+                            | combine({'details':
+                                ((((_diagnosis | default({}, true)).details | default({}))
+                                  if (((_diagnosis | default({}, true)).details | default({}))
+                                      is mapping) else {})
+                                 | combine({'hostname_source': _out_hostname_source | default('none')}))})),
       'meta':              _meta              | default(none),
       'correlation':       _correlation       | default(none),
       'errors':            _fail_errors | default(_norm_errors),

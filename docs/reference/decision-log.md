@@ -6,7 +6,67 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-08-12
+> 최종 갱신: 2026-09-03
+
+## 2026-09-03 — OS(Linux/Windows) / ESXi 게더링 전수 검수 — 37건 정정
+
+### 사용자 의심
+
+"hostname 버그 하나가 아니라, Gathering 결과에서 실제 값을 잘못 가져오거나 다른 값으로 대체하거나
+가져올 수 있는 값을 누락하거나 필드 의미와 소스가 다른 문제가 더 있는지 OS / ESXi 전체를 봐 달라.
+왜 이런 버그가 자꾸 생기고 왜 테스트가 못 잡았나."
+
+### 분석
+
+코드(file:line) / 저장소 baseline / `tests/reference` 장비 원본 캡처(7대 + ESXi 1대) 를 교차 대조했다.
+확정 37건(B-01~B-37). 대표:
+
+- **IP 대체** (B-01/B-04): 3채널 모두 hostname 을 못 구하면 `inventory_hostname`(IP) 을 넣었고
+  `hostname_source` 는 `system` 이라고 거짓 보고했다. `always` 최종 fallback 은 `sections: {}` / `data: {}`.
+- **같은 이름, 다른 의미** (B-03/B-09/B-10/B-21/B-24/B-26/B-31): 같은 VM 을 python 경로로 보면
+  `fqdn=localhost.localdomain`, raw 로 보면 `localhost`. `l3_cache_kb` 는 lscpu 버전에 따라 합계/소켓당.
+  `max_speed_mhz` 는 Linux 터보 / Windows 정격 / ESXi 브랜드 문자열. `storage.summary` 는 ESXi 만 datastore 합.
+  WWPN 3가지 표기, MAC 2가지 표기. `system.runtime` 은 두 번 계산돼 뒤 것이 다른 의미로 덮어썼다.
+- **버림 / 미수집** (B-02/B-05/B-13/B-27/B-28): OS 는 `system.hostname` 을 안 냈고 Linux 는 모델·BIOS 를 버렸다.
+  Linux python 경로는 IP 없는 NIC 를 제외했다. ESXi `is_primary` 는 항상 false, gateway 는 항상 null
+  (`vmware_host_facts` 가 주지 않는 키를 읽었다).
+- **placeholder** (B-11/B-14/B-32/B-34): `sockets=1`, `total_mb=0`, `uptime=0`, `kernel="None"`,
+  `firewall_state='inactive'`(조회 실패) 처럼 "모름" 을 값으로 냈다.
+- **왜 테스트가 못 잡았나**: 데이터 평면 테스트가 키 존재·enum 만 봤고, baseline 이 자기참조 정답이며 수동 편집 이력이 있고,
+  참조 캡처(ground truth) 를 대조하는 테스트가 0건, 실패 경로 테스트가 손으로 만든 fixture 를 검사하며 `assert hostname`
+  으로 IP fallback 을 강제했다.
+
+### 결정 (사용자 확정 2026-09-03)
+
+1. `system.hostname` = 짧은 이름, `system.fqdn` = hostname + 설정 도메인(없으면 null). envelope 은
+   `hostname → fqdn → bmc → null`. **IP 대체 폐지는 실패 경로까지 적용**.
+2. `hardware` 를 OS 채널 정식 섹션으로 (sections.yml / supported_sections / adapter / field_dictionary 3종 갱신).
+3. `cpu.max_speed_mhz` = 정격(base) 클럭, `cpu.turbo_max_mhz` Additive. L2/L3 = 소켓당 KB, 모르면 null.
+4. 식별자 정규화 필터 `identity_normalizer.py` (MAC 소문자 colon / WWN colon-hex / UUID 소문자 + byteswap 대조).
+5. `storage.summary` 는 3채널 모두 physical_disks 기준. enum 통일: `firewall_state` active|inactive|null,
+   `hosting_type` + hypervisor(ESXi), `physical_disks[].health` OK|Warning|Critical|null.
+6. Linux 는 raw 명령 단일 구현(setup fact 는 system 필드 1순위로만), Windows runtime 은 `gather_runtime.yml` 단일 구현,
+   envelope.vendor 는 `common/tasks/normalize/resolve_vendor.yml` 한 곳(정본 alias → 표시값, 미등록은 null).
+7. 섹션 status 는 실제 결과로 판정 (collected 하드코딩 제거). rescue 는 성공 섹션을 보존하고 partial.
+
+### 영향
+
+- Additive 위주. 값 형식이 바뀌는 곳: MAC / WWPN / UUID 표기, `l2/l3_cache_kb` 의미, Linux `max_speed_mhz` 의미(터보→정격),
+  ESXi `storage.summary.grand_total_gb`(datastore→LUN), Windows `filesystems[].*_mb` int, `health` 어휘, `firewall_state` 어휘,
+  Windows `interfaces[].id`(설명 문자열 → 어댑터 이름). envelope 13 필드 / schema_version 무변경.
+- **baseline 10건은 재생성하지 않았다** (lab 필요 — NEXT_ACTIONS). 현재 baseline 은 위 형식 변경 이전 값이라 실장비 재수집 전까지
+  "실장비 출력 그대로" 가 아니다.
+
+### 회귀
+
+- `tests/unit/test_gather_identity_render.py` — Linux/Windows/ESXi 식별 표현식을 참조 캡처 값으로 렌더.
+- `tests/unit/test_always_fallback_envelope.py` — 3채널 `always` 표현식 렌더 (hostname null / 11 섹션 / 뼈대).
+- `tests/unit/test_failed_output_partial_and_hostname.py` — rescue partial / hostname 체인 / correlation.
+- `tests/unit/test_field_dictionary_channel_emit.py` — 선언 ↔ emit, IP 대체·placeholder 회귀 가드.
+- `tests/unit/test_cross_channel_uuid_equal.py` — 같은 장비 Redfish↔ESXi UUID 판정.
+- `tests/unit/test_esxi_disks_host_info.py` / `test_identity_normalizer.py`.
+- 정본: `docs/contract/03-fields.md` §3/§4/§6.1/§8, `docs/develop/05-field-mapping.md`.
+
 
 ## 2026-08-12 — Fragment 덮어쓰기 / 공통 Task include 경로 2건 수정 (실환경 검증 중 발견)
 

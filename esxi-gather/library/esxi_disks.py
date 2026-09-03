@@ -6,6 +6,7 @@
 #   - physical_disks (serial/wwn)   ← ScsiDisk
 #   - controllers (storage HBA/RAID) ← hostBusAdapter + pciDevice vendor (2026-06-22 T1)
 #   - listening_ports (str[])        ← firewall.ruleset enabled inbound (2026-06-22 T1)
+#   - host_info (식별/네트워크/CPU)   ← dnsConfig / ipRouteConfig / vnic / pnic / cpuInfo (2026-09-03)
 #
 # (구) 물리 디스크 전용 → 호스트 정보 수집기로 확장. 연결 1회 재사용.
 #
@@ -17,11 +18,23 @@
 #         - vendor/model/ssd/capacity
 #       를 OS/Redfish 와 동일 canonical physical_disks 스키마로 정규화한다.
 #
+# 2026-09-03 (OS/ESXi 전수 검수 후속) host_info 파트:
+#   vmware_host_facts 가 주지 않는 값만 담는다 —
+#     - dnsConfig.hostName / domainName       → system.hostname / system.fqdn (B-03)
+#     - ipRouteConfig.defaultGateway(+vnic)   → network.default_gateways / interfaces[].is_primary (B-28)
+#     - vnic ipV6Config                       → interfaces[].addresses (family=ipv6) (B-29)
+#     - pnic + pciDevice vendorName/deviceName → adapters[].manufacturer / model (B-29)
+#     - cpuInfo.hz                            → cpu.max_speed_mhz (정격, B-10)
+#     - summary.quickStats.uptime             → system.uptime_seconds (B-32)
+#   값이 없으면 키를 None 으로 둔다 (placeholder 금지).
+#
 # 의존: pyvmomi (ESXi 채널 표준 의존 — REQUIREMENTS pyvmomi 9.0.0).
 #       rule 10 R2(stdlib-only)는 redfish_gather.py / precheck_bundle.py 한정 — 본 모듈 비대상.
 #
-# source: vSphere API HostScsiDisk / ScsiLun.alternateName (HostScsiLunDurableName)
-#         https://developer.vmware.com/apis/vsphere-automation/latest/  (확인 2026-06-22, esxi01/02 실측)
+# source: vSphere API HostScsiDisk / ScsiLun.alternateName (HostScsiLunDurableName),
+#         HostNetworkInfo (dnsConfig / ipRouteConfig / vnic / pnic), HostHardwareInfo (cpuInfo / pciDevice)
+#         https://developer.vmware.com/apis/vsphere-automation/latest/
+#         (확인 2026-06-22 esxi01/02 실측, 2026-09-03 tests/reference/esxi/10_100_64_1/pyvmomi_host_dump.json 대조)
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
@@ -160,7 +173,150 @@ def _build_listening_ports(content):
     return [str(p) for p in sorted(ports)]
 
 
-def _safe_build(part, fn, content, part_errors):
+def _s(v):
+    """문자열 정리 — 빈 문자열은 None."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s or None
+
+
+def _pick_host(view, hostname):
+    """standalone ESXi 는 host 가 1개다. vCenter 경유 다중 host 면 접속 대상 이름과 같은 host 를 고른다."""
+    hosts = list(view.view)
+    if not hosts:
+        return None
+    for hs in hosts:
+        if hostname and _s(getattr(hs, 'name', None)) == _s(hostname):
+            return hs
+    return hosts[0]
+
+
+def _build_host_info(content, hostname=None):
+    """식별 / 네트워크 / CPU 보강 — vmware_host_facts 가 제공하지 않는 값만 (2026-09-03)."""
+    view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
+    try:
+        hs = _pick_host(view, hostname)
+        if hs is None:
+            return {}
+        info = {}
+        cfg = getattr(hs, 'config', None)
+        net = getattr(cfg, 'network', None) if cfg is not None else None
+        hw = getattr(hs, 'hardware', None)
+
+        # ── DNS 설정: 호스트 이름 / 도메인 (system.hostname / fqdn 의 정본) ──
+        dns = getattr(net, 'dnsConfig', None) if net is not None else None
+        info['hostname'] = _s(getattr(dns, 'hostName', None)) if dns is not None else None
+        info['domain_name'] = _s(getattr(dns, 'domainName', None)) if dns is not None else None
+        info['search_domain'] = [str(x) for x in (getattr(dns, 'searchDomain', None) or [])] if dns is not None else []
+        info['dns_servers'] = [str(x) for x in (getattr(dns, 'address', None) or [])] if dns is not None else []
+
+        # ── 기본 게이트웨이: 호스트 ipRouteConfig 우선, 없으면 vmk 별 ipRouteSpec ──
+        gw = gw_dev = gw6 = None
+        rc = getattr(net, 'ipRouteConfig', None) if net is not None else None
+        if rc is not None:
+            gw = _s(getattr(rc, 'defaultGateway', None))
+            gw_dev = _s(getattr(rc, 'gatewayDevice', None))
+            gw6 = _s(getattr(rc, 'ipV6DefaultGateway', None))
+
+        vnics = []
+        for v in ((getattr(net, 'vnic', None) or []) if net is not None else []):
+            spec = getattr(v, 'spec', None)
+            ip = getattr(spec, 'ip', None) if spec is not None else None
+            v6 = []
+            cfg6 = getattr(ip, 'ipV6Config', None) if ip is not None else None
+            for a in ((getattr(cfg6, 'ipV6Address', None) or []) if cfg6 is not None else []):
+                v6.append({
+                    'address': _s(getattr(a, 'ipAddress', None)),
+                    'prefix_length': getattr(a, 'prefixLength', None),
+                    'origin': _s(getattr(a, 'origin', None)),
+                })
+            rs = getattr(spec, 'ipRouteSpec', None) if spec is not None else None
+            vrc = getattr(rs, 'ipRouteConfig', None) if rs is not None else None
+            vgw = _s(getattr(vrc, 'defaultGateway', None)) if vrc is not None else None
+            vgw6 = _s(getattr(vrc, 'ipV6DefaultGateway', None)) if vrc is not None else None
+            dev = _s(getattr(v, 'device', None))
+            if gw is None and vgw:
+                gw = vgw
+                gw_dev = gw_dev or dev
+            if gw6 is None and vgw6:
+                gw6 = vgw6
+            vnics.append({
+                'device': dev,
+                'mac': _s(getattr(spec, 'mac', None)) if spec is not None else None,
+                'mtu': getattr(spec, 'mtu', None) if spec is not None else None,
+                'ipv4': _s(getattr(ip, 'ipAddress', None)) if ip is not None else None,
+                'subnet_mask': _s(getattr(ip, 'subnetMask', None)) if ip is not None else None,
+                'dhcp': getattr(ip, 'dhcp', None) if ip is not None else None,
+                'ipv6': v6,
+                'portgroup': _s(getattr(v, 'portgroup', None)),
+                'gateway': vgw,
+            })
+        info['default_gateway'] = gw
+        info['gateway_device'] = gw_dev
+        info['default_gateway_ipv6'] = gw6
+        info['vnics'] = vnics
+
+        # ── 물리 NIC + PCI 장치 제조사/모델 ──
+        pci_map = {}
+        try:
+            for pd in ((getattr(hw, 'pciDevice', None) or []) if hw is not None else []):
+                pid = _s(getattr(pd, 'id', None))
+                if pid:
+                    pci_map[pid] = (_s(getattr(pd, 'vendorName', None)), _s(getattr(pd, 'deviceName', None)))
+        except Exception:
+            pass
+        pnics = []
+        for p in ((getattr(net, 'pnic', None) or []) if net is not None else []):
+            ls = getattr(p, 'linkSpeed', None)   # None = link down
+            pci = _s(getattr(p, 'pci', None))
+            vend, dev_name = pci_map.get(pci, (None, None))
+            pnics.append({
+                'device': _s(getattr(p, 'device', None)),
+                'mac': _s(getattr(p, 'mac', None)),
+                'driver': _s(getattr(p, 'driver', None)),
+                'pci': pci,
+                'manufacturer': vend,
+                'model': dev_name,
+                'speed_mbps': getattr(ls, 'speedMb', None) if ls is not None else None,
+                'duplex': getattr(ls, 'duplex', None) if ls is not None else None,
+                'link_up': ls is not None,
+            })
+        info['pnics'] = pnics
+
+        # ── CPU: 정격 클럭(hz) / 제조사 ──
+        ci = getattr(hw, 'cpuInfo', None) if hw is not None else None
+        hz = getattr(ci, 'hz', None) if ci is not None else None
+        info['cpu_mhz'] = int(int(hz) // 1000000) if hz else None
+        info['cpu_packages'] = getattr(ci, 'numCpuPackages', None) if ci is not None else None
+        info['cpu_cores'] = getattr(ci, 'numCpuCores', None) if ci is not None else None
+        info['cpu_threads'] = getattr(ci, 'numCpuThreads', None) if ci is not None else None
+        pk = list((getattr(hw, 'cpuPkg', None) or []) if hw is not None else [])
+        info['cpu_vendor'] = _s(getattr(pk[0], 'vendor', None)) if pk else None
+        info['cpu_description'] = _s(getattr(pk[0], 'description', None)) if pk else None
+
+        # ── uptime / BIOS / 시스템 식별자 ──
+        qs = getattr(getattr(hs, 'summary', None), 'quickStats', None)
+        up = getattr(qs, 'uptime', None) if qs is not None else None
+        info['uptime_seconds'] = int(up) if up is not None else None
+        bi = getattr(hw, 'biosInfo', None) if hw is not None else None
+        rd = getattr(bi, 'releaseDate', None) if bi is not None else None
+        info['bios_version'] = _s(getattr(bi, 'biosVersion', None)) if bi is not None else None
+        try:
+            info['bios_date'] = rd.strftime('%Y-%m-%d') if rd is not None else None
+        except Exception:
+            info['bios_date'] = _s(rd)
+        si = getattr(hw, 'systemInfo', None) if hw is not None else None
+        info['system_uuid'] = _s(getattr(si, 'uuid', None)) if si is not None else None
+        info['serial'] = _s(getattr(si, 'serialNumber', None)) if si is not None else None
+        info['vendor'] = _s(getattr(si, 'vendor', None)) if si is not None else None
+        info['model'] = _s(getattr(si, 'model', None)) if si is not None else None
+        return info
+    finally:
+        view.Destroy()
+
+
+def _safe_build(part, fn, content, part_errors, default=None):
     """빌더 하나의 실패가 나머지 파트까지 삼키지 않게 격리한다.
 
     2026-08-12 (N36): 종전에는 main() 의 단일 try 가 세 빌더를 모두 감싸고 있어서
@@ -173,7 +329,7 @@ def _safe_build(part, fn, content, part_errors):
         return fn(content)
     except Exception as e:
         part_errors[part] = str(e)
-        return []
+        return [] if default is None else default
 
 
 def main():
@@ -184,6 +340,8 @@ def main():
             password=dict(type='str', required=True, no_log=True),
             port=dict(type='int', default=443),
             validate_certs=dict(type='bool', default=False),
+            # 2026-09-03: vCenter 경유 다중 host 에서 host_info 대상 host 를 고르는 이름 (선택).
+            esxi_hostname=dict(type='str', required=False, default=None),
         ),
         supports_check_mode=True,
     )
@@ -198,7 +356,7 @@ def main():
     part_errors = {}
     connect_ok = False
     content = None
-    disks, controllers, listening_ports = [], [], []
+    disks, controllers, listening_ports, host_info = [], [], [], {}
 
     try:
         try:
@@ -215,11 +373,15 @@ def main():
             controllers = _safe_build('controllers', _build_controllers, content, part_errors)
             listening_ports = _safe_build('listening_ports', _build_listening_ports,
                                           content, part_errors)
+            host_info = _safe_build('host_info',
+                                    lambda c: _build_host_info(c, p.get('esxi_hostname')),
+                                    content, part_errors, default={})
 
         result = dict(
             changed=False,
             physical_disks=disks, disk_count=len(disks),
             controllers=controllers, listening_ports=listening_ports,
+            host_info=host_info,
             # 2026-08-12 (N36): 아래 3키는 **추가만** 한 것이다 (기존 키 삭제/리네임 없음).
             #   호출 task(collect_disks.yml)가 어느 섹션의 errors 로 올릴지 정하는 근거다.
             #   connect_ok   : 접속 자체가 됐는지 (false 면 세 파트 모두 미수집)

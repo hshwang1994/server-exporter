@@ -95,7 +95,7 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 | `target_type` | `os` / `esxi` / `redfish` | 어떤 채널로 수집했나 |
 | `collection_method` | `agent` / `vsphere_api` / `redfish_api` | 실제로 쓴 방법. `target_type` 에 따라 자동으로 결정 |
 | `ip` | 문자열 | 호출자가 넘긴 대상 IP. Redfish 면 BMC IP, OS 면 서버 IP |
-| `hostname` | 문자열\|null | 풀어낸 호스트명. `system.hostname → system.fqdn → null` (IP fallback 안 함, 2026-06-16). 상세: 8절 |
+| `hostname` | 문자열\|null | 풀어낸 호스트명. `system.hostname → system.fqdn → bmc.network_hostname → null` (IP fallback 안 함, 2026-06-16). 실패 envelope 과 `always` 최종 fallback 도 같은 체인 (2026-09-03). 상세: 8절 |
 | `vendor` | `dell` / `hp` / `hpCsus` / `lenovo` / `supermicro` / `cisco` / `null` | 호출자 노출 표시값. 내부 canonical(`hpe`)을 `vendor_output_display`/`adapter_output_display`(vendor_aliases.yml)로 매핑. HPE 계열→`hp`, HPE Compute Scale-up 패밀리(CSUS 3200 + Superdome Flex)→`hpCsus`(camelCase 예외, 2026-06-04 ADR). 대부분 소문자 한 단어 |
 
 ### 그룹 B — 결과 (2개)
@@ -132,7 +132,7 @@ JSON 의 `sections` 와 `data` 는 같은 11개 키를 갖는다. 각 채널이 
 | 섹션 | 무엇 | OS | ESXi | Redfish |
 |---|---|:-:|:-:|:-:|
 | `system` | 운영체제 / 호스트명 / 가동시간 | O | O | (X) |
-| `hardware` | 벤더 / 모델 / 시리얼 / BIOS | | O | O |
+| `hardware` | 벤더 / 모델 / 시리얼 / BIOS | O | O | O |
 | `bmc` | iDRAC / iLO / XCC 자체 정보 | | | O |
 | `cpu` | 소켓 / 코어 / 모델 | O | O | O |
 | `memory` | 총량 / DIMM 슬롯 | O | O | O |
@@ -147,6 +147,7 @@ JSON 의 `sections` 와 `data` 는 같은 11개 키를 갖는다. 각 채널이 
 `not_supported` 판정 신호는 **HTTP 404(엔드포인트 부재)만**이다. 400 등 다른 실패는 `failed` 로 남아 `errors[]` 에 보인다.
 (2026-08-03: 400 도 미지원으로 보려다 되돌림 — 사이트 사례의 400 은 장비 미지원이 아니라 **수집 측 경로 오류**였다.
 400 을 미지원으로 분류하면 수집 측 버그가 `not_supported` 로 조용히 덮인다.)
+2026-09-03: `hardware` 를 OS 채널 정식 섹션으로 배선 — Linux 는 DMI(setup fact → `/sys/class/dmi/id`), Windows 는 `Win32_ComputerSystem`/`Win32_BIOS`. 종전에는 Windows 만 스키마 밖에서 냈고 Linux 는 모델·BIOS 를 버렸다.
 cycle 2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data.thermal` 만 채워지고 `sections.thermal` 누락 — Track4 미완. 이제 redfish 는 수집 성공 시 `success`, os/esxi 는 `not_supported`).
 
 같은 서버라도 채널별로 채워지는 영역이 다르다는 게 핵심. 예를 들어:
@@ -208,6 +209,10 @@ if response["data"]["hardware"].get("health") == "Critical":
 `errors[]` 는 **수집기가 본 비정상 신호의 기록장**이다. status 와는 별개 축이다.
 
 ---
+
+**rescue(예외) 경로도 같은 매트릭스를 따른다 (2026-09-03).** 예외 직전까지 성공한 섹션은 `success` 로 남고
+성공 섹션이 하나라도 있으면 `partial`, 없으면 `failed` 다. 종전에는 지원 섹션 전부를 `failed` 로 표기해
+`data` 에는 값이 있는데 `sections` 는 실패인 자기모순이 났다.
 
 ## 4-1. `errors[]` 원소 — 무엇이 어디에 들어가나 (2026-08-12 확정)
 
@@ -387,6 +392,12 @@ for e in response["errors"]:
 ```
 
 `health` 가 `OK` 가 아닌 이유는 **`data.power.power_supplies[]` / `data.storage` / `data.memory.slots[]`** 등을 차례로 봐야 알 수 있다. BMC 가 rollup 만 보고하고 원인은 직접 찾아야 한다.
+
+**OS 채널(2026-09-03)**: Linux / Windows 도 `hardware` 를 낸다 — `vendor` / `model` / `serial` / `uuid` / `bios_version` / `bios_date`
+(Windows 는 `sku` / `asset_tag` / `chassis_type` / `system_family` / `bios_vendor` 추가). `health` / `power_state` 는 OS 에서 알 수 없어 키가 없다.
+`uuid` 는 3채널 모두 소문자 `8-4-4-4-12` 로 정규화한다. Redfish 와 OS/ESXi 의 UUID 는 SMBIOS 바이트 순서 규약이 달라
+앞 3그룹이 반전돼 보일 수 있다 — 같은 장비 판정은 `filter_plugins/identity_normalizer.py` 의 `uuid_equal` 로 한다.
+`serial` 은 `system.serial_number` 와 같은 값이고, `envelope.vendor` 는 `hardware.vendor` 원문을 `vendor_aliases.yml` 로 정규화한 표시값이다.
 
 ### 6.2 `data.memory`
 
@@ -724,13 +735,17 @@ hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
 >   고정된 실명인 **BMC 관리 호스트명**(`Manager.NetworkProtocol.HostName/FQDN` — iLO/XCC/RMC
 >   이름)은 System.HostName 부재 시 fallback 허용. BMC 공장기본명(`ILOSGHD3KHHRP` 등)이 섞일 수
 >   있어 `hostname_source` 로 출처를 명시 — 호출자가 "OS 호스트명 vs BMC 대체값"을 구분.
+> - 2026-09-03 (OS/ESXi 전수 검수): OS 채널이 `system.hostname`(짧은 이름) 을 내기 시작했다 (종전 부재).
+>   `system.fqdn` 은 3채널 모두 **hostname + 설정 도메인** 이며 도메인이 없으면 `null` — resolver(`getfqdn`)
+>   결과가 아니다. 실패 envelope(rescue) 과 `always` 최종 fallback 도 같은 체인 + `hostname_source` 를 낸다
+>   (종전에는 이 두 경로가 IP 를 넣었다).
 
 ### 우선순위
 
 | 순위 | 후보 | source | 출처 (채널/벤더) |
 |---:|---|---|---|
-| 1 | `data.system.hostname` | system | OS hostname / Redfish System.HostName / ESXi config.name |
-| 2 | `data.system.fqdn` | system | OS fqdn(`hostname -f`) / Redfish System.HostName(정규화) |
+| 1 | `data.system.hostname` | system | Linux `uname -n` 첫 라벨 / Windows `COMPUTERNAME`(DNSHostName) / ESXi `dnsConfig.hostName` / Redfish System.HostName |
+| 2 | `data.system.fqdn` | system | hostname + 설정 도메인 (Linux `uname -n` 도메인부·`hostname -d` / Windows AD 도메인·DNS 접미사 / ESXi `dnsConfig.domainName` / Redfish System.HostName 정규화). 도메인 없으면 null |
 | 3 | `data.bmc.network_hostname` | bmc | Manager.NetworkProtocol.HostName/FQDN (**redfish 전용**) |
 | 4 | (없음) | none | 전부 비면 `null` — **IP fallback 안 함** |
 
