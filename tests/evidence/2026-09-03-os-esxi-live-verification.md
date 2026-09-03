@@ -15,6 +15,9 @@
 | #194 | `0076ca67` | os: .167(Ubuntu 24.04), .163(RHEL 9.2), .169(Rocky 9.6) | §5 |
 | #195 | `0076ca67` | esxi: 10.100.64.2 (esxi02 — `esxi_baseline.json` 대상 장비) | §5 |
 | #196 | `d38bc31b` | os: .161(RHEL 8.10 raw VM), .96(R760) — 터보 가드 재검증 | 2/2 `success`, 이슈 0 (VM turbo `null`, R760 2400/4100 유지) |
+| #197 | `43a9f155` | os: .156(lab 목록 "linux" → 실측 Ubuntu 24.04 VM `cicd-gitlab.gooddi.lab`), .163 재시도 | .156 `success`, 이슈 0 — 단 `turbo_max_mhz=30000`(L7). .163 여전히 TCP 무응답 |
+| #198 | `43a9f155` | os: 10.100.64.145 (사용자 지정 — 실측 RHEL 9.6 VM `auto-install-test12.gooddi.lab`, Python 3.9) | `success`, 이슈 0 (fqdn 은 설정 도메인 `gooddi.lab` 결합) |
+| #199 | `549f84ff` | os: .156 + .145 — SMBIOS 클럭 범위 가드 재검증 | 2/2 `success`, 이슈 0 (.156 turbo `null`, 정격 2200 유지) |
 
 점검 스크립트: 콘솔에서 envelope 을 추출해 hostname≠IP / hostname·fqdn 키 / UUID·MAC·WWN 표기 / cpu·runtime 키 /
 enum / int 타입 / ESXi gateway·is_primary 등 25~42 항목을 자동 대조했다 (세션 스크래치, 저장소 밖).
@@ -65,11 +68,14 @@ enum / int 타입 / ESXi gateway·is_primary 등 25~42 항목을 자동 대조�
 | 10.100.64.163 | `status=failed`, `failure_stage=reachable`, `TCP_CONNECT_FAILED` | 장비 무응답(5986 timeout / 5985 No route / 22 timeout). **실패 envelope 이 새 계약대로**: `hostname=null`(IP 대체 없음), 11 섹션(지원 7 = failed, hardware 포함), 표준 1번 문장, data 뼈대 |
 | 10.100.64.169 | `success`, 이슈 0 | lab 목록의 "Rocky 9.6" 이 아니라 **10.100.64.161(RHEL 8.10) VM 의 bond1 IP** — serial/UUID 가 .161 과 동일. 목록 정정 필요 |
 | 10.100.64.167 | `success`, 이슈 0 | 마찬가지로 **10.100.64.165(RHEL 9.6) VM 의 bond1 IP** ("Ubuntu 24.04" 아님). `ubuntu_baseline.json` 대상 장비는 현재 lab 목록에 없다 |
+| 10.100.64.156 (`cicd-gitlab`, Ubuntu 24.04 VM, python 경로) | `success`, 이슈 0 (#197) | hardware `VMware Virtual Platform` / BIOS 6.00, fqdn `cicd-gitlab.gooddi.lab`, cpu 2 소켓 × 1 코어. `ubuntu_baseline.json` 갱신 후보 envelope (`build197_ubuntu2404_vm_10.100.64.156.json`) |
+| 10.100.64.145 (`auto-install-test12`, RHEL 9.6 VM) | `success`, 이슈 0 (#198) | 사용자 지정 대상. l2/l3 256/56320 소켓당, selinux `enforcing`, runtime firewalld `active`, ntp false/false(설정 없음) |
 | 10.100.64.2 (esxi02) | `success`, 이슈 0 | `esxi_baseline.json` 대상 장비. hostname `esxi02`, FC HBA 2포트 WWPN 소문자 colon(`20:00:00:27:e3:6c:a6:6e`), vendor `Cisco Corporation`(컨트롤러 PCI 제조사), UUID `9f0190b1-…` = Redfish `B190019F-…` 와 `uuid_equal` 일치 |
 
 | # | 실장비에서만 드러난 것 (추가) | 정정 |
 |---|---|---|
 | L6 | VM 에서 SMBIOS `Max Speed` 2093 < 정격 2200 이 `turbo_max_mhz` 로 실림 (#194) | 정격 ≤ 터보일 때만 값 인정, 아니면 null — `d38bc31b`, #196 에서 VM `null` / R760 `4100` 확인 |
+| L7 | Ubuntu 24.04 VM(.156) `turbo_max_mhz=30000` (#197) | VMware 가상 SMBIOS 의 `Max Speed: 30000 MHz` 자리표시자 | SMBIOS 유래 클럭은 100~10000 MHz 만 인정 — `549f84ff`, #199 에서 `null` 확인 |
 
 ## 4. 남은 것
 

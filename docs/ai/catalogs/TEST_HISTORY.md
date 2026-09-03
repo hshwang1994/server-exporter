@@ -12,6 +12,9 @@
 | #194 | `0076ca67` | os ×3: .163(무응답) / .167 / .169 | .163 실패 envelope 이 새 계약대로(hostname null, 11 섹션, 표준 문장). .167/.169 는 .165/.161 VM 의 bond IP (lab 목록 오류). VM turbo 2093<2200 발견 → `d38bc31b` |
 | #195 | `0076ca67` | esxi: 10.100.64.2 (esxi02, baseline 대상 장비) | success, 이슈 0. FC WWPN 소문자 colon, HBA vendor, UUID ↔ Redfish `uuid_equal` 일치 |
 | #196 | `d38bc31b` | os: .161 raw VM + .96 R760 (turbo 가드 재검증) | 2/2 success, 이슈 0 — VM turbo `null`, R760 2400/4100 |
+| #197 | `43a9f155` | os: .156(Ubuntu 24.04 VM) + .163 | .156 success (VMware SMBIOS `Max Speed 30000` 이 turbo 로 실림 → `549f84ff`), .163 무응답 |
+| #198 | `43a9f155` | os: 10.100.64.145 (RHEL 9.6 VM, 사용자 지정) | success, 이슈 0 |
+| #199 | `549f84ff` | os: .156 + .145 (SMBIOS 클럭 범위 가드 재검증) | 2/2 success, 이슈 0 — .156 turbo `null` |
 | `pytest tests/ --ignore=tests/e2e_browser` (d38bc31b) | — | — | **3269 passed, 10 skipped, 7 xfailed (2026-09-03, d38bc31b)** |
 | Jenkins Stage 3 (Validate Schema) | — | 7 빌드 | 전부 통과 (WARN 은 예시 미포함 advisory) |
 | Stage 4 Callback | — | 7 빌드 | 더미 URL(192.0.2.1) → 408 → **UNSTABLE 은 의도된 결과** (rule 31 R2) |

@@ -1,0 +1,388 @@
+{
+  "target_type": "os",
+  "collection_method": "agent",
+  "ip": "10.100.64.156",
+  "hostname": "cicd-gitlab",
+  "vendor": "vmware",
+  "status": "success",
+  "sections": {
+    "system": "success",
+    "hardware": "success",
+    "bmc": "not_supported",
+    "cpu": "success",
+    "memory": "success",
+    "storage": "success",
+    "network": "success",
+    "firmware": "not_supported",
+    "users": "success",
+    "power": "not_supported",
+    "thermal": "not_supported"
+  },
+  "diagnosis": {
+    "reachable": true,
+    "port_open": true,
+    "protocol_supported": true,
+    "auth_success": true,
+    "failure_stage": null,
+    "failure_code": null,
+    "failure_reason": null,
+    "details": {
+      "channel": "os",
+      "adapter_candidate": "os_linux_ubuntu",
+      "detected_os": "linux",
+      "credential_scope": "git/os/linux",
+      "selected_port": 22,
+      "checked_ports": [
+        5986,
+        5985,
+        22
+      ],
+      "gather_mode": "python_ok",
+      "python_version": "3.12.3",
+      "auth": {
+        "attempted_count": 1,
+        "used_label": "linux_current",
+        "used_role": "primary",
+        "fallback_used": false
+      },
+      "hostname_source": "system"
+    }
+  },
+  "meta": {
+    "started_at": "2026-09-03T03:57:13.718731Z",
+    "finished_at": "2026-09-03T03:57:38.968882Z",
+    "duration_ms": 25195,
+    "adapter_id": "os_linux_ubuntu",
+    "adapter_version": null,
+    "ansible_version": "2.20.3"
+  },
+  "correlation": {
+    "serial_number": "VMware-42 04 ad 78 ba ca f8 8c-cb 72 b3 24 87 a2 b0 0a",
+    "system_uuid": "78ad0442-caba-8cf8-cb72-b32487a2b00a",
+    "bmc_ip": null,
+    "host_ip": "10.100.64.156"
+  },
+  "errors": [],
+  "data": {
+    "network": {
+      "adapters": [
+        {
+          "id": "03:00.0",
+          "name": "VMXNET3 Ethernet Controller",
+          "manufacturer": "VMware",
+          "model": "VMXNET3 Ethernet Controller",
+          "driver": "vmxnet3",
+          "firmware_version": null,
+          "pci": "03:00.0"
+        }
+      ],
+      "interfaces": [
+        {
+          "id": "ens160",
+          "name": "ens160",
+          "kind": "os_nic",
+          "mac": "00:50:56:84:0c:8f",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": true,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.156",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": "10.100.64.254",
+              "scope": "global",
+              "label": "ens160",
+              "parent_interface": "ens160",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv6",
+              "address": "fe80::250:56ff:fe84:c8f",
+              "prefix_length": 64,
+              "subnet_mask": null,
+              "gateway": null,
+              "scope": "link",
+              "label": "ens160",
+              "parent_interface": "ens160",
+              "is_alias": false,
+              "is_secondary": false
+            }
+          ]
+        }
+      ],
+      "virtual_switches": [],
+      "driver_map": [
+        {
+          "name": "ens160",
+          "driver": "vmxnet3",
+          "vlan_id": null,
+          "bond_master": null
+        }
+      ],
+      "teams": [],
+      "bonds": [],
+      "dns_servers": [
+        "10.100.64.251"
+      ],
+      "bridges": [],
+      "ports": [],
+      "default_gateways": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.254"
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "speed_mbps": 10000,
+            "link_type": null,
+            "quantity": 1,
+            "link_up_count": 1
+          }
+        ]
+      },
+      "portgroups": []
+    },
+    "firmware": [],
+    "bmc": null,
+    "hardware": {
+      "vendor": "VMware, Inc.",
+      "model": "VMware Virtual Platform",
+      "serial": "VMware-42 04 ad 78 ba ca f8 8c-cb 72 b3 24 87 a2 b0 0a",
+      "uuid": "78ad0442-caba-8cf8-cb72-b32487a2b00a",
+      "bios_version": "6.00",
+      "bios_date": "2020-11-12"
+    },
+    "storage": {
+      "filesystems": [
+        {
+          "device": "/dev/sda2",
+          "mount_point": "/",
+          "filesystem": "ext4",
+          "total_mb": 100217,
+          "used_mb": 18029,
+          "available_mb": 77052,
+          "usage_percent": 19.0,
+          "status": "mounted"
+        }
+      ],
+      "datastores": [],
+      "hbas": [],
+      "physical_disks": [
+        {
+          "id": "/dev/sda",
+          "device": "/dev/sda",
+          "model": "Virtual disk",
+          "serial": null,
+          "wwn": null,
+          "total_mb": 102400,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null,
+          "is_os_disk": true
+        },
+        {
+          "id": "/dev/sdb",
+          "device": "/dev/sdb",
+          "model": "Virtual disk",
+          "serial": null,
+          "wwn": null,
+          "total_mb": 204800,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null,
+          "is_os_disk": false
+        }
+      ],
+      "logical_volumes": [],
+      "infiniband": [],
+      "controllers": [
+        {
+          "id": "0000:00:10.0",
+          "name": "LSI Logic Parallel SCSI Controller (emulated)",
+          "controller_model": "53c1030 PCI-X Fusion-MPT Dual Ultra320 SCSI",
+          "controller_manufacturer": "Broadcom / LSI",
+          "driver": "mptspi",
+          "controller_type": "SCSI",
+          "pci": "0000:00:10.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "0000:02:00.0",
+          "name": "SATA AHCI controller",
+          "controller_model": "SATA AHCI controller",
+          "controller_manufacturer": "VMware",
+          "driver": "ahci",
+          "controller_type": "SATA",
+          "pci": "0000:02:00.0",
+          "health": null,
+          "drives": []
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 100,
+            "model": "Virtual disk",
+            "media_type": "HDD",
+            "protocol": null,
+            "quantity": 1,
+            "group_total_gb": 100
+          },
+          {
+            "unit_capacity_gb": 200,
+            "model": "Virtual disk",
+            "media_type": "HDD",
+            "protocol": null,
+            "quantity": 1,
+            "group_total_gb": 200
+          }
+        ],
+        "grand_total_gb": 300
+      }
+    },
+    "users": [
+      {
+        "name": "root",
+        "uid": "0",
+        "groups": [
+          "root"
+        ],
+        "home": "/root",
+        "last_access_time": null
+      },
+      {
+        "name": "cloviradmin",
+        "uid": "1000",
+        "groups": [
+          "cloviradmin",
+          "adm",
+          "cdrom",
+          "sudo",
+          "dip",
+          "plugdev",
+          "lxd"
+        ],
+        "home": "/home/cloviradmin",
+        "last_access_time": "2026-09-03T03:57:30Z"
+      }
+    ],
+    "power": null,
+    "system": {
+      "os_family": "Debian",
+      "distribution": "Ubuntu",
+      "version": "24.04",
+      "kernel": "6.8.0-100-generic",
+      "architecture": "x86_64",
+      "hostname": "cicd-gitlab",
+      "fqdn": "cicd-gitlab.gooddi.lab",
+      "hosting_type": "virtual",
+      "uptime_seconds": 17444603,
+      "selinux": "disabled",
+      "serial_number": "VMware-42 04 ad 78 ba ca f8 8c-cb 72 b3 24 87 a2 b0 0a",
+      "system_uuid": "78ad0442-caba-8cf8-cb72-b32487a2b00a",
+      "vendor": "VMware, Inc.",
+      "runtime": {
+        "timezone": "Asia/Seoul",
+        "ntp_active": true,
+        "ntp_synchronized": true,
+        "firewall_tool": "ufw",
+        "firewall_state": "inactive",
+        "listening_ports": [
+          "22",
+          "53",
+          "443",
+          "8060",
+          "8080",
+          "8082",
+          "8092",
+          "8150",
+          "8151",
+          "8153",
+          "8154",
+          "8155",
+          "9090",
+          "9093",
+          "9094",
+          "9100",
+          "9121",
+          "9168",
+          "9187",
+          "9229",
+          "9236"
+        ],
+        "swap_total_mb": 3914,
+        "swap_used_mb": 1960,
+        "swap_free_mb": 1954
+      }
+    },
+    "cpu": {
+      "sockets": 2,
+      "cores_physical": 2,
+      "logical_threads": 2,
+      "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+      "manufacturer": "Intel",
+      "max_speed_mhz": 2200,
+      "turbo_max_mhz": 30000,
+      "architecture": "x86_64",
+      "summary": {
+        "groups": [
+          {
+            "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+            "manufacturer": "Intel",
+            "max_speed_mhz": 2200,
+            "turbo_max_mhz": 30000,
+            "l2_cache_kb": 256,
+            "l3_cache_kb": 56320,
+            "sockets": 2,
+            "cores_per_socket": 1,
+            "total_cores": 2
+          }
+        ]
+      }
+    },
+    "thermal": {
+      "temperatures": [],
+      "fans": []
+    },
+    "memory": {
+      "total_mb": 4096,
+      "total_basis": "physical_installed",
+      "installed_mb": 4096,
+      "visible_mb": 3915,
+      "free_mb": 477,
+      "slots": [
+        {
+          "capacity_mb": 4096,
+          "type": "DRAM",
+          "speed_mhz": null,
+          "manufacturer": null,
+          "part_number": null,
+          "serial": null,
+          "locator": "RAM slot #0"
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 4,
+            "type": "DRAM",
+            "speed_mhz": null,
+            "manufacturer": null,
+            "part_number": null,
+            "quantity": 1,
+            "group_total_gb": 4
+          }
+        ],
+        "grand_total_gb": 4
+      }
+    }
+  },
+  "schema_version": "1"
+}
