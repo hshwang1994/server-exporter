@@ -2,272 +2,181 @@
 # os-gather/tasks/linux/gather_cpu.yml
 # CPU 정보 수집 → data.cpu fragment 생성
 #
-# Python 경로: shell + setup facts (ansible_processor_count 등)
-# Raw fallback: /proc/cpuinfo 파싱 (raw only)
+# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-09/10/11/12):
+#   - Python / raw 두 경로가 **같은 raw 명령 + 같은 판정식**을 쓴다 (종전: python 경로는
+#     ansible_processor_count 를 소켓 수로 썼는데 `physical id` 가 없는 VM 에서는 논리 CPU 수였고,
+#     raw 경로는 소켓 0 → 1, 코어 미상 → 스레드 수를 코어로 대체했다).
+#   - max_speed_mhz = **정격(base) 클럭** — cpufreq base_frequency → 브랜드 문자열 "@ N.NNGHz".
+#     터보 최대는 turbo_max_mhz 로 따로 낸다 (종전 lscpu 'CPU max MHz' = 터보를 max_speed 에 넣어
+#     Windows(정격)/ESXi(기본) 와 다른 물리량이었다).
+#   - l2_cache_kb / l3_cache_kb = **소켓당 용량**. lscpu 가 "220 MiB (4 instances)" 처럼 합계를
+#     주면 소켓 수로 나누고, 구형 lscpu 가 인스턴스당 값을 주면 L3 는 그대로, L2 는 코어 수를
+#     곱한다 (종전: util-linux 버전에 따라 같은 CPU 가 4배 다른 값).
+#   - 값을 못 구하면 null. 1 / 0 / 스레드 수로 대체하지 않는다. 섹션 status 는 실제 결과로.
 
-# =============================================================================
-# Python Path
-# =============================================================================
-- block:
-    - name: "linux | cpu | cores per socket + model + manufacturer + max speed"
-      ansible.builtin.shell: |
-        # production-audit (2026-04-29): LANG=C 강제 — non-C 로케일에서 lscpu 한국어/일본어 출력 시 regex 불일치 차단
-        export LANG=C LC_ALL=C
-        echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed 's/^ *//')"
-        echo "CPU_VENDOR=$(grep -m1 'vendor_id' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed 's/^ *//')"
-        echo "CPU_CPS=$(grep -m1 'cpu cores' /proc/cpuinfo 2>/dev/null | awk '{print $4}')"
-        # max_speed_mhz: lscpu 의 'CPU max MHz' (실제 boost 가능 클럭)
-        if command -v lscpu >/dev/null 2>&1; then
-          echo "CPU_MAX_MHZ=$(lscpu 2>/dev/null | awk -F: '/CPU max MHz/{gsub(/^ +| +$|,.*/,"",$2); print $2; exit}')"
-        else
-          echo "CPU_MAX_MHZ="
-        fi
-        # /sys/devices/system/cpu/cpu0/cpufreq 보조
-        if [ -r /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq ]; then
-          echo "CPU_MAX_KHZ=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq)"
-        else
-          echo "CPU_MAX_KHZ="
-        fi
-        # L2/L3 cache
-        if command -v lscpu >/dev/null 2>&1; then
-          echo "L2_CACHE=$(lscpu 2>/dev/null | awk -F: '/L2 cache/{gsub(/^ +| +$/,"",$2); print $2; exit}')"
-          echo "L3_CACHE=$(lscpu 2>/dev/null | awk -F: '/L3 cache/{gsub(/^ +| +$/,"",$2); print $2; exit}')"
-        fi
-      register: _l_cpu_meta_raw
-      changed_when: false
-      failed_when: false
-      no_log: true
+- name: "linux | cpu | raw gather (/proc/cpuinfo + lscpu + cpufreq)"
+  ansible.builtin.raw: |
+    export LANG=C LC_ALL=C
+    echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//')"
+    echo "CPU_VENDOR=$(grep -m1 'vendor_id' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//')"
+    echo "CPU_CPS=$(grep -m1 'cpu cores' /proc/cpuinfo 2>/dev/null | awk -F: '{gsub(/ /,"",$2); print $2}')"
+    echo "CPU_SOCKETS=$(grep 'physical id' /proc/cpuinfo 2>/dev/null | sort -u | wc -l | tr -d ' ')"
+    echo "CPU_LOGICAL=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)"
+    echo "CPU_ARCH=$(uname -m 2>/dev/null)"
+    echo "CPU_CACHE_SIZE=$(grep -m1 'cache size' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//')"
+    echo "CPU_BASE_KHZ=$(cat /sys/devices/system/cpu/cpu0/cpufreq/base_frequency 2>/dev/null)"
+    echo "CPU_MAX_KHZ=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null)"
+    if command -v lscpu >/dev/null 2>&1; then
+      lscpu 2>/dev/null | awk -F: '
+        /^Socket\(s\)/          {gsub(/^ +| +$/,"",$2); print "LSCPU_SOCKETS=" $2}
+        /^Core\(s\) per socket/ {gsub(/^ +| +$/,"",$2); print "LSCPU_CPS=" $2}
+        /^CPU max MHz/          {gsub(/^ +| +$/,"",$2); print "CPU_MAX_MHZ=" $2}
+        /^L2 cache/             {gsub(/^ +| +$/,"",$2); print "L2_CACHE=" $2}
+        /^L3 cache/             {gsub(/^ +| +$/,"",$2); print "L3_CACHE=" $2}
+      '
+    fi
+  register: _l_cpu_raw_result
+  changed_when: false
+  failed_when: false
+  no_log: true
 
-    - name: "linux | cpu | parse"
-      ansible.builtin.set_fact:
-        _l_cpu_parsed: >-
-          {{ dict(_l_cpu_meta_raw.stdout_lines | default([])
-                  | select('search', '=') | map('split', '=', 1) | list) }}
-      no_log: true
+- name: "linux | cpu | parse"
+  ansible.builtin.set_fact:
+    _l_cpu_parsed: >-
+      {{ dict(_l_cpu_raw_result.stdout_lines | default([])
+              | select('search', '=') | map('split', '=', 1) | list) }}
+  no_log: true
 
-    # cycle-016 Phase O 후속: Win 과 일관 — l2/l3_cache_kb (정수 KB) 통일
-    - name: "linux | cpu | compute summary groups"
-      ansible.builtin.set_fact:
-        _l_cpu_summary: >-
-          {%- set sockets = (ansible_processor_count | default(0) | int) -%}
-          {%- set cps = ((_l_cpu_parsed.CPU_CPS | default('0')) | trim | int) -%}
-          {%- set total_cores = cps * sockets if cps > 0 else 0 -%}
-          {%- set model = (_l_cpu_parsed.CPU_MODEL | default('')) | trim -%}
-          {%- set vendor = (_l_cpu_parsed.CPU_VENDOR | default('')) | trim -%}
-          {%- set max_mhz = (_l_cpu_parsed.CPU_MAX_MHZ | default('')) | trim -%}
-          {%- set max_mhz_int = max_mhz | float | int if max_mhz else none -%}
-          {%- if not max_mhz_int -%}
-            {%- set khz = (_l_cpu_parsed.CPU_MAX_KHZ | default('')) | trim -%}
-            {%- set max_mhz_int = (khz | int / 1000) | int if khz else none -%}
-          {%- endif -%}
-          {%- set mfr = none -%}
-          {%- if 'GenuineIntel' in vendor or 'Intel' in model -%}{%- set mfr = 'Intel' -%}
-          {%- elif 'AuthenticAMD' in vendor or 'AMD' in model -%}{%- set mfr = 'AMD' -%}
-          {%- elif vendor -%}{%- set mfr = vendor -%}
-          {%- endif -%}
-          {# l2/l3 cache 를 KB 정수로 정규화 — '48 MiB' or '1024 KiB' 같은 lscpu 표현 파싱 #}
-          {%- set l2_raw = (_l_cpu_parsed.L2_CACHE | default('')) | trim -%}
-          {%- set l3_raw = (_l_cpu_parsed.L3_CACHE | default('')) | trim -%}
-          {%- set l2_num = (l2_raw | regex_search('^[0-9]+(?:\\.[0-9]+)?')) -%}
-          {%- set l3_num = (l3_raw | regex_search('^[0-9]+(?:\\.[0-9]+)?')) -%}
-          {%- set l2_unit = (l2_raw | regex_search('(MiB|MB|KiB|KB)') | default('') | upper) -%}
-          {%- set l3_unit = (l3_raw | regex_search('(MiB|MB|KiB|KB)') | default('') | upper) -%}
-          {%- set l2_kb = none -%}
-          {%- set l3_kb = none -%}
-          {%- if l2_num -%}
-            {%- if 'M' in l2_unit -%}{%- set l2_kb = (l2_num | float * 1024) | int -%}
-            {%- else -%}{%- set l2_kb = l2_num | float | int -%}
-            {%- endif -%}
-          {%- endif -%}
-          {%- if l3_num -%}
-            {%- if 'M' in l3_unit -%}{%- set l3_kb = (l3_num | float * 1024) | int -%}
-            {%- else -%}{%- set l3_kb = l3_num | float | int -%}
-            {%- endif -%}
-          {%- endif -%}
-          {%- if model and sockets > 0 -%}
+# 판정식 한 벌 — 두 경로 공통
+- name: "linux | cpu | compute"
+  ansible.builtin.set_fact:
+    _l_cpu_sockets: >-
+      {%- set s = (_l_cpu_parsed.CPU_SOCKETS | default('')) | trim -%}
+      {%- set ls = (_l_cpu_parsed.LSCPU_SOCKETS | default('')) | trim -%}
+      {%- if s.isdigit() and (s | int) > 0 -%}{{ s | int }}
+      {%- elif ls.isdigit() and (ls | int) > 0 -%}{{ ls | int }}
+      {%- else -%}{{ none }}
+      {%- endif -%}
+    _l_cpu_cps: >-
+      {%- set c = (_l_cpu_parsed.CPU_CPS | default('')) | trim -%}
+      {%- set lc = (_l_cpu_parsed.LSCPU_CPS | default('')) | trim -%}
+      {%- if c.isdigit() and (c | int) > 0 -%}{{ c | int }}
+      {%- elif lc.isdigit() and (lc | int) > 0 -%}{{ lc | int }}
+      {%- else -%}{{ none }}
+      {%- endif -%}
+    _l_cpu_logical: >-
+      {%- set l = (_l_cpu_parsed.CPU_LOGICAL | default('')) | trim -%}
+      {{ (l | int) if (l.isdigit() and (l | int) > 0) else none }}
+    _l_cpu_model: "{{ ((_l_cpu_parsed.CPU_MODEL | default('')) | trim) or none }}"
+    _l_cpu_manufacturer: >-
+      {%- set v = (_l_cpu_parsed.CPU_VENDOR | default('')) | trim -%}
+      {%- if 'GenuineIntel' in v -%}Intel
+      {%- elif 'AuthenticAMD' in v -%}AMD
+      {%- elif v -%}{{ v }}
+      {%- else -%}{{ none }}
+      {%- endif -%}
+    # 정격(base) 클럭: cpufreq base_frequency(kHz) → 브랜드 문자열 "@ 2.20GHz" → null
+    _l_cpu_base_mhz: >-
+      {%- set bk = (_l_cpu_parsed.CPU_BASE_KHZ | default('')) | trim -%}
+      {%- set model = (_l_cpu_parsed.CPU_MODEL | default('')) | trim -%}
+      {%- set ghz = model | regex_replace('^.*@\\s*([0-9]+(?:\\.[0-9]+)?)\\s*GHz.*$', '\\1') -%}
+      {%- if bk.isdigit() and (bk | int) > 0 -%}{{ ((bk | int) / 1000) | int }}
+      {%- elif ghz != model and (ghz | regex_replace('[0-9.]', '') | length) == 0 -%}{{ ((ghz | float) * 1000) | round(0, 'common') | int }}
+      {%- else -%}{{ none }}
+      {%- endif -%}
+    # 터보 최대: lscpu 'CPU max MHz' → cpufreq cpuinfo_max_freq(kHz) → null
+    _l_cpu_turbo_mhz: >-
+      {%- set m = (_l_cpu_parsed.CPU_MAX_MHZ | default('')) | trim -%}
+      {%- set mk = (_l_cpu_parsed.CPU_MAX_KHZ | default('')) | trim -%}
+      {%- if m and (m | regex_replace('[0-9.]', '') | length) == 0 and (m | float) > 0 -%}{{ (m | float) | int }}
+      {%- elif mk.isdigit() and (mk | int) > 0 -%}{{ ((mk | int) / 1000) | int }}
+      {%- else -%}{{ none }}
+      {%- endif -%}
+  no_log: true
+
+# 캐시(소켓당 KB). lscpu 표기 두 세대를 모두 받는다.
+#   신형: "220 MiB (4 instances)" = 전체 합계 → 소켓 수로 나눔
+#   구형: "56320K" / "256K"        = 인스턴스당 → L3 는 그대로(소켓당 1개), L2 는 코어당이라 코어 수를 곱함
+#   lscpu 부재: /proc/cpuinfo 'cache size'(= 소켓당 L3) 만 사용
+- name: "linux | cpu | compute cache (per socket)"
+  ansible.builtin.set_fact:
+    _l_cpu_l2_kb: >-
+      {%- set raw = (_l_cpu_parsed.L2_CACHE | default('')) | trim -%}
+      {%- set num = raw | regex_replace('^([0-9]+(?:\\.[0-9]+)?).*$', '\\1') -%}
+      {%- set unit = (raw | regex_replace('^[0-9.]+\\s*', '')) | upper -%}
+      {%- set inst = raw | regex_replace('^.*\\(([0-9]+) instance.*$', '\\1') -%}
+      {%- set sockets = _l_cpu_sockets | default(none) -%}
+      {%- set cps = _l_cpu_cps | default(none) -%}
+      {%- if raw and num != raw and (num | regex_replace('[0-9.]', '') | length) == 0 -%}
+        {%- set kb = ((num | float) * (1048576 if unit.startswith('G') else (1024 if unit.startswith('M') else 1))) | int -%}
+        {%- if inst != raw and inst.isdigit() -%}
+          {{ (kb // (sockets | int)) if (sockets is not none and (sockets | int) > 0) else none }}
+        {%- else -%}
+          {{ (kb * (cps | int)) if (cps is not none and (cps | int) > 0) else none }}
+        {%- endif -%}
+      {%- else -%}{{ none }}
+      {%- endif -%}
+    _l_cpu_l3_kb: >-
+      {%- set raw = (_l_cpu_parsed.L3_CACHE | default('')) | trim -%}
+      {%- set num = raw | regex_replace('^([0-9]+(?:\\.[0-9]+)?).*$', '\\1') -%}
+      {%- set unit = (raw | regex_replace('^[0-9.]+\\s*', '')) | upper -%}
+      {%- set inst = raw | regex_replace('^.*\\(([0-9]+) instance.*$', '\\1') -%}
+      {%- set sockets = _l_cpu_sockets | default(none) -%}
+      {%- set cs = (_l_cpu_parsed.CPU_CACHE_SIZE | default('')) | trim -%}
+      {%- set csnum = cs | regex_replace('^([0-9]+).*$', '\\1') -%}
+      {%- if raw and num != raw and (num | regex_replace('[0-9.]', '') | length) == 0 -%}
+        {%- set kb = ((num | float) * (1048576 if unit.startswith('G') else (1024 if unit.startswith('M') else 1))) | int -%}
+        {%- if inst != raw and inst.isdigit() -%}
+          {{ (kb // (sockets | int)) if (sockets is not none and (sockets | int) > 0) else none }}
+        {%- else -%}
+          {{ kb }}
+        {%- endif -%}
+      {%- elif cs and csnum != cs and csnum.isdigit() -%}
+        {{ csnum | int }}
+      {%- else -%}{{ none }}
+      {%- endif -%}
+  no_log: true
+
+- name: "linux | cpu | build fragment"
+  ansible.builtin.set_fact:
+    _l_cpu_ok: "{{ (_l_cpu_model | default(none)) is not none or (_l_cpu_logical | default(none)) is not none }}"
+    _data_fragment:
+      cpu:
+        sockets:         "{{ _l_cpu_sockets | default(none) }}"
+        cores_physical: >-
+          {%- set s = _l_cpu_sockets | default(none) -%}
+          {%- set c = _l_cpu_cps | default(none) -%}
+          {{ ((s | int) * (c | int)) if (s is not none and c is not none) else none }}
+        logical_threads: "{{ _l_cpu_logical | default(none) }}"
+        model:           "{{ _l_cpu_model | default(none) }}"
+        manufacturer:    "{{ _l_cpu_manufacturer | default(none) }}"
+        max_speed_mhz:   "{{ _l_cpu_base_mhz | default(none) }}"
+        turbo_max_mhz:   "{{ _l_cpu_turbo_mhz | default(none) }}"
+        architecture:    "{{ ((_l_cpu_parsed.CPU_ARCH | default('')) | trim) or none }}"
+        summary: >-
+          {%- set model = _l_cpu_model | default(none) -%}
+          {%- set s = _l_cpu_sockets | default(none) -%}
+          {%- set c = _l_cpu_cps | default(none) -%}
+          {%- if model is not none -%}
             {{ {'groups': [{
               'model': model,
-              'manufacturer': mfr,
-              'max_speed_mhz': max_mhz_int,
-              'l2_cache_kb': l2_kb,
-              'l3_cache_kb': l3_kb,
-              'sockets': sockets,
-              'cores_per_socket': cps,
-              'total_cores': total_cores
+              'manufacturer': _l_cpu_manufacturer | default(none),
+              'max_speed_mhz': _l_cpu_base_mhz | default(none),
+              'turbo_max_mhz': _l_cpu_turbo_mhz | default(none),
+              'l2_cache_kb': _l_cpu_l2_kb | default(none),
+              'l3_cache_kb': _l_cpu_l3_kb | default(none),
+              'sockets': s,
+              'cores_per_socket': c,
+              'total_cores': ((s | int) * (c | int)) if (s is not none and c is not none) else none
             }]} }}
           {%- else -%}
             {{ {'groups': []} }}
           {%- endif -%}
-      no_log: true
-
-    - name: "linux | cpu | build fragment"
-      ansible.builtin.set_fact:
-        _data_fragment:
-          cpu:
-            sockets:         "{{ ansible_processor_count   | default(none) }}"
-            cores_physical:  >-
-              {%- set cps = ((_l_cpu_parsed.CPU_CPS | default('0')) | trim | int) -%}
-              {%- set sockets = ansible_processor_count | default(1) | int -%}
-              {{ (cps * sockets) if cps > 0 else none }}
-            logical_threads: "{{ ansible_processor_vcpus   | default(none) }}"
-            model:           "{{ (_l_cpu_parsed.CPU_MODEL | default('')) | trim or none }}"
-            manufacturer: >-
-              {%- set v = (_l_cpu_parsed.CPU_VENDOR | default('')) | trim -%}
-              {%- if 'GenuineIntel' in v -%}Intel
-              {%- elif 'AuthenticAMD' in v -%}AMD
-              {%- elif v -%}{{ v }}
-              {%- else -%}{{ none }}
-              {%- endif -%}
-            max_speed_mhz: >-
-              {# 2026-04-29 fix B22: VM 환경에서 ansible_processor_mhz 미노출 + lscpu 'CPU max MHz' 도 비어있을 수 있음 →
-                 /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq fallback (kHz → MHz). #}
-              {%- set m = (_l_cpu_parsed.CPU_MAX_MHZ | default('')) | trim -%}
-              {%- set mhz = (m | float | int) if m else none -%}
-              {%- if not mhz -%}
-                {%- set khz = (_l_cpu_parsed.CPU_MAX_KHZ | default('')) | trim -%}
-                {%- set mhz = (khz | int / 1000) | int if khz else none -%}
-              {%- endif -%}
-              {{ mhz }}
-            architecture:    "{{ ansible_architecture      | default(none) }}"
-            summary:         "{{ _l_cpu_summary | default({'groups': []}) }}"
-        _sections_supported_fragment: ['cpu']
-        _sections_collected_fragment: ['cpu']
-        _sections_failed_fragment:    []
-        _errors_fragment:             []
-      no_log: true
-  when: _l_python_mode == 'python_ok'
-
-# =============================================================================
-# Raw Fallback Path — /proc/cpuinfo + uname
-# =============================================================================
-- block:
-    - name: "linux | cpu | raw gather"
-      ansible.builtin.raw: |
-        export LANG=C LC_ALL=C
-        echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed 's/^ *//')"
-        echo "CPU_VENDOR=$(grep -m1 'vendor_id' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed 's/^ *//')"
-        echo "CPU_CPS=$(grep -m1 'cpu cores' /proc/cpuinfo 2>/dev/null | awk '{print $4}')"
-        echo "CPU_SOCKETS=$(grep 'physical id' /proc/cpuinfo 2>/dev/null | sort -u | wc -l)"
-        echo "CPU_LOGICAL=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || nproc 2>/dev/null || echo 0)"
-        echo "CPU_ARCH=$(uname -m 2>/dev/null)"
-        if command -v lscpu >/dev/null 2>&1; then
-          echo "CPU_MAX_MHZ=$(lscpu 2>/dev/null | awk -F: '/CPU max MHz/{gsub(/^ +| +$|,.*/,"",$2); print $2; exit}')"
-          echo "L2_CACHE=$(lscpu 2>/dev/null | awk -F: '/L2 cache/{gsub(/^ +| +$/,"",$2); print $2; exit}')"
-          echo "L3_CACHE=$(lscpu 2>/dev/null | awk -F: '/L3 cache/{gsub(/^ +| +$/,"",$2); print $2; exit}')"
-        fi
-        if [ -r /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq ]; then
-          echo "CPU_MAX_KHZ=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq)"
-        fi
-      register: _l_cpu_raw_result
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "linux | cpu | parse raw"
-      ansible.builtin.set_fact:
-        _l_cpu_parsed: >-
-          {{ dict(_l_cpu_raw_result.stdout_lines | default([])
-                  | select('search', '=')
-                  | map('split', '=', 1)
-                  | list) }}
-      no_log: true
-
-    # production-audit (2026-04-29 후속): raw fallback 도 Python 경로와 key 일관성 유지 — manufacturer/max_speed_mhz/summary 추가
-    - name: "linux | cpu | compute summary groups (raw)"
-      ansible.builtin.set_fact:
-        _l_cpu_summary_r: >-
-          {%- set sockets = ((_l_cpu_parsed.CPU_SOCKETS | default('0')) | trim | int) -%}
-          {%- set sockets = sockets if sockets > 0 else 1 -%}
-          {%- set cps = ((_l_cpu_parsed.CPU_CPS | default('0')) | trim | int) -%}
-          {%- set total_cores = cps * sockets if cps > 0 else 0 -%}
-          {%- set model = (_l_cpu_parsed.CPU_MODEL | default('')) | trim -%}
-          {%- set vendor = (_l_cpu_parsed.CPU_VENDOR | default('')) | trim -%}
-          {%- set max_mhz = (_l_cpu_parsed.CPU_MAX_MHZ | default('')) | trim -%}
-          {%- set max_mhz_int = max_mhz | float | int if max_mhz else none -%}
-          {%- if not max_mhz_int -%}
-            {%- set khz = (_l_cpu_parsed.CPU_MAX_KHZ | default('')) | trim -%}
-            {%- set max_mhz_int = (khz | int / 1000) | int if khz else none -%}
-          {%- endif -%}
-          {%- set mfr = none -%}
-          {%- if 'GenuineIntel' in vendor or 'Intel' in model -%}{%- set mfr = 'Intel' -%}
-          {%- elif 'AuthenticAMD' in vendor or 'AMD' in model -%}{%- set mfr = 'AMD' -%}
-          {%- elif vendor -%}{%- set mfr = vendor -%}
-          {%- endif -%}
-          {%- set l2_raw = (_l_cpu_parsed.L2_CACHE | default('')) | trim -%}
-          {%- set l3_raw = (_l_cpu_parsed.L3_CACHE | default('')) | trim -%}
-          {%- set l2_num = (l2_raw | regex_search('^[0-9]+(?:\\.[0-9]+)?')) -%}
-          {%- set l3_num = (l3_raw | regex_search('^[0-9]+(?:\\.[0-9]+)?')) -%}
-          {%- set l2_unit = (l2_raw | regex_search('(MiB|MB|KiB|KB)') | default('') | upper) -%}
-          {%- set l3_unit = (l3_raw | regex_search('(MiB|MB|KiB|KB)') | default('') | upper) -%}
-          {%- set l2_kb = none -%}
-          {%- set l3_kb = none -%}
-          {%- if l2_num -%}
-            {%- if 'M' in l2_unit -%}{%- set l2_kb = (l2_num | float * 1024) | int -%}
-            {%- else -%}{%- set l2_kb = l2_num | float | int -%}
-            {%- endif -%}
-          {%- endif -%}
-          {%- if l3_num -%}
-            {%- if 'M' in l3_unit -%}{%- set l3_kb = (l3_num | float * 1024) | int -%}
-            {%- else -%}{%- set l3_kb = l3_num | float | int -%}
-            {%- endif -%}
-          {%- endif -%}
-          {%- if model and sockets > 0 -%}
-            {{ {'groups': [{
-              'model': model,
-              'manufacturer': mfr,
-              'max_speed_mhz': max_mhz_int,
-              'l2_cache_kb': l2_kb,
-              'l3_cache_kb': l3_kb,
-              'sockets': sockets,
-              'cores_per_socket': cps,
-              'total_cores': total_cores
-            }]} }}
-          {%- else -%}
-            {{ {'groups': []} }}
-          {%- endif -%}
-      no_log: true
-
-    - name: "linux | cpu | build fragment (raw)"
-      ansible.builtin.set_fact:
-        _data_fragment:
-          cpu:
-            sockets: >-
-              {%- set s = (_l_cpu_parsed.CPU_SOCKETS | default('0')) | trim | int -%}
-              {{ s if s > 0 else 1 }}
-            cores_physical: >-
-              {%- set cps = (_l_cpu_parsed.CPU_CPS | default('0')) | trim | int -%}
-              {%- set sockets = (_l_cpu_parsed.CPU_SOCKETS | default('0')) | trim | int -%}
-              {%- set sockets = sockets if sockets > 0 else 1 -%}
-              {{ (cps * sockets) if cps > 0 else (_l_cpu_parsed.CPU_LOGICAL | default('0')) | trim | int }}
-            logical_threads: "{{ (_l_cpu_parsed.CPU_LOGICAL | default('0')) | trim | int }}"
-            model: >-
-              {%- set m = (_l_cpu_parsed.CPU_MODEL | default('')) | trim -%}
-              {{ m if m else none }}
-            manufacturer: >-
-              {%- set v = (_l_cpu_parsed.CPU_VENDOR | default('')) | trim -%}
-              {%- if 'GenuineIntel' in v -%}Intel
-              {%- elif 'AuthenticAMD' in v -%}AMD
-              {%- elif v -%}{{ v }}
-              {%- else -%}{{ none }}
-              {%- endif -%}
-            max_speed_mhz: >-
-              {%- set m = (_l_cpu_parsed.CPU_MAX_MHZ | default('')) | trim -%}
-              {%- set mhz = (m | float | int) if m else none -%}
-              {%- if not mhz -%}
-                {%- set khz = (_l_cpu_parsed.CPU_MAX_KHZ | default('')) | trim -%}
-                {%- set mhz = (khz | int / 1000) | int if khz else none -%}
-              {%- endif -%}
-              {{ mhz }}
-            architecture: >-
-              {%- set a = (_l_cpu_parsed.CPU_ARCH | default('')) | trim -%}
-              {{ a if a else none }}
-            summary: "{{ _l_cpu_summary_r | default({'groups': []}) }}"
-        _sections_supported_fragment: ['cpu']
-        _sections_collected_fragment: ['cpu']
-        _sections_failed_fragment:    []
-        _errors_fragment:             []
-      no_log: true
-  when: _l_python_mode != 'python_ok'
+    _sections_supported_fragment: ['cpu']
+    _sections_collected_fragment: "{{ ['cpu'] if ((_l_cpu_model | default(none)) is not none or (_l_cpu_logical | default(none)) is not none) else [] }}"
+    _sections_failed_fragment:    "{{ [] if ((_l_cpu_model | default(none)) is not none or (_l_cpu_logical | default(none)) is not none) else ['cpu'] }}"
+    _errors_fragment: "{{ [] if ((_l_cpu_model | default(none)) is not none or (_l_cpu_logical | default(none)) is not none) else [{'section': 'cpu', 'message': 'CPU 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': ('source=/proc/cpuinfo,lscpu; cause=no_output; rc=' ~ (_l_cpu_raw_result.rc | default('none')))}] }}"
+  no_log: true
 
 # =============================================================================
 # Shared: merge

@@ -1,15 +1,26 @@
 ---
 # os-gather/tasks/windows/gather_network.yml → data.network fragment
+#
+# 2026-09-03 (OS/ESXi 전수 검수 후속):
+#   - interfaces[].id = 어댑터 이름 (Linux/ESXi 의 devname 과 같은 축). 설명 문자열은 description 으로 (B-29).
+#   - MAC 은 normalize_mac (소문자 colon) — 종전 "00-50-56-.." 대시·대문자 (B-26).
+#   - IPv6 주소를 addresses[] 에 family=ipv6 로 함께 낸다 (Linux 와 같은 shape) (B-29).
+#   - adapters[] 를 채운다 (Get-NetAdapter -Physical + HardwareInfo + PnP 제조사) — Linux 와 같은 키 (B-29).
+#   - 인터페이스가 하나도 없으면 섹션 failed + 사유 (B-12).
 
 - name: "windows | network | dns and gateway"
   ansible.windows.win_shell: |
     $gw  = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
             Sort-Object RouteMetric | Select-Object -First 1).NextHop
-    $dns = @(Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    $gw6 = (Get-NetRoute -DestinationPrefix '::/0' -ErrorAction SilentlyContinue |
+            Sort-Object RouteMetric | Select-Object -First 1).NextHop
+    if ($gw6 -and ($gw6 -eq '::')) { $gw6 = $null }
+    $dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
              Where-Object { $_.ServerAddresses } |
              ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
     [PSCustomObject]@{
       gw  = $gw
+      gw6 = $gw6
       dns = $dns
     } | ConvertTo-Json -Compress
   register: _w_net_meta_raw
@@ -31,27 +42,31 @@
   ansible.windows.win_shell: |
     # production-audit (2026-04-29): primary InterfaceIndex 1회 조회 (기존: IP마다 Get-NetRoute 재호출 — O(N))
     # + interface_index 출력 → 그룹핑 키로 사용 (MAC null/이름 변동 시 NIC가 분리되는 버그 차단)
-    $gw = '{{ _w_norm_net_meta.gw | default("") }}'
+    $gw = '{{ _w_norm_net_meta.gw | default("", true) }}'
+    $gw6 = '{{ _w_norm_net_meta.gw6 | default("", true) }}'
     $primary_idx = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
                     Sort-Object RouteMetric | Select-Object -First 1).InterfaceIndex
-    Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -notlike '169.*' -and $_.IPAddress -ne '127.0.0.1' } |
+    Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -ne '::1' } |
     ForEach-Object {
       $addr    = $_
       $adapter = Get-NetAdapter -InterfaceIndex $addr.InterfaceIndex -ErrorAction SilentlyContinue
-      $isGw    = $adapter -and ($adapter.InterfaceIndex -eq $primary_idx)
+      $isGw    = [bool]($adapter -and ($adapter.InterfaceIndex -eq $primary_idx))
+      $fam     = if ([string]$addr.AddressFamily -eq 'IPv6') { 'ipv6' } else { 'ipv4' }
       [PSCustomObject]@{
-        id              = $adapter.InterfaceDescription
-        name            = $addr.InterfaceAlias
+        id              = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
+        name            = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
+        description     = $(if ($adapter) { [string]$adapter.InterfaceDescription } else { $null })
         interface_index = [int]$addr.InterfaceIndex
-        mac             = $adapter.MacAddress
-        mtu             = $adapter.MtuSize
-        speed_mbps      = $(if ($adapter.Speed) { [math]::Round($adapter.Speed / 1000000, 0) } else { $null })
-        status          = $adapter.Status
+        mac             = $(if ($adapter) { [string]$adapter.MacAddress } else { $null })
+        mtu             = $(if ($adapter) { $adapter.MtuSize } else { $null })
+        speed_mbps      = $(if ($adapter -and $adapter.Speed) { [math]::Round($adapter.Speed / 1000000, 0) } else { $null })
+        status          = $(if ($adapter) { [string]$adapter.Status } else { $null })
         is_primary      = $isGw
-        address         = $addr.IPAddress
-        prefix          = $addr.PrefixLength
-        gateway         = $(if ($isGw) { $gw } else { $null })
+        family          = $fam
+        address         = [string]$addr.IPAddress
+        prefix          = [int]$addr.PrefixLength
+        gateway         = $(if ($isGw) { if ($fam -eq 'ipv6') { $gw6 } else { $gw } } else { $null })
       } | ConvertTo-Json -Compress
     }
   register: _w_iface_raw
@@ -70,21 +85,34 @@
           {%- set n = line | from_json -%}
           {# production-audit: InterfaceIndex로 그룹핑 — 단일 NIC의 multi-IP가 분리되지 않도록 #}
           {%- set key = (n.interface_index | default(n.mac | default(n.name))) | string -%}
-          {# windows-audit (2026-04-29): prefix_length → subnet_mask 자동 계산 (Linux 일관) #}
+          {%- set fam = (n.family | default('ipv4')) | lower -%}
           {%- set p = n.prefix | default(0) | int -%}
           {%- set mask = none -%}
-          {%- if p > 0 and p <= 32 -%}
-            {# Round 15: p>0 가드(위 if)로 (1 if p==0 ...) 는 dead branch — 제거 (동작 동일) #}
+          {%- if fam == 'ipv4' and p > 0 and p <= 32 -%}
+            {# windows-audit (2026-04-29): prefix_length → subnet_mask 자동 계산 (Linux 일관) #}
             {%- set bits = 4294967296 - (2 ** (32 - p)) -%}
             {%- set mask = '%d.%d.%d.%d' % ((bits // 16777216) % 256, (bits // 65536) % 256, (bits // 256) % 256, bits % 256) -%}
           {%- endif -%}
-          {%- set addr = {
-              'family':        'ipv4',
-              'address':       n.address,
-              'prefix_length': n.prefix | default(none),
-              'subnet_mask':   mask,
-              'gateway':       n.gateway | default(none)
-          } -%}
+          {%- if fam == 'ipv6' -%}
+            {%- set a6 = (n.address | default('')) | lower -%}
+            {%- set scope = 'link' if a6.startswith('fe80') else ('host' if a6 == '::1' else 'global') -%}
+            {%- set addr = {
+                'family':        'ipv6',
+                'address':       n.address,
+                'prefix_length': (p if p > 0 else none),
+                'subnet_mask':   none,
+                'scope':         scope,
+                'gateway':       (n.gateway | default(none, true)) or none
+            } -%}
+          {%- else -%}
+            {%- set addr = {
+                'family':        'ipv4',
+                'address':       n.address,
+                'prefix_length': (p if p > 0 else none),
+                'subnet_mask':   mask,
+                'gateway':       (n.gateway | default(none, true)) or none
+            } -%}
+          {%- endif -%}
           {%- if key in grouped -%}
             {%- set _ = grouped[key]['addresses'].append(addr) -%}
             {%- if n.is_primary | default(false) -%}
@@ -92,23 +120,32 @@
             {%- endif -%}
           {%- else -%}
             {%- set _ = grouped.update({key: {
-              'id':          n.id   | default(n.name),
+              'id':          (n.id | default(none, true)) or n.name,
               'name':        n.name,
+              'description': (n.description | default(none, true)) or none,
               'kind':        'os_nic',
-              'mac':         n.mac  | default(none),
+              'mac':         (n.mac | default(none, true)) | normalize_mac,
               'mtu':         n.mtu  | default(none),
               'speed_mbps':  n.speed_mbps | default(none),
-              'link_status': ('up' if (n.status | default('') | lower) in ['up','connected','linkup','active'] else ('down' if (n.status | default('') | lower) in ['down','disconnected','disabled','offline','linkdown','not present','notpresent'] else 'unknown')),
+              'link_status': ('up' if (n.status | default('', true) | lower) in ['up','connected','linkup','active'] else ('down' if (n.status | default('', true) | lower) in ['down','disconnected','disabled','offline','linkdown','not present','notpresent'] else 'unknown')),
               'is_primary':  n.is_primary | default(false),
               'addresses':   [addr]
             }}) -%}
           {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
-      {{ grouped.values() | list }}
+      {# IPv4 주소를 앞에 (Linux 와 같은 정렬) #}
+      {%- set out = [] -%}
+      {%- for g in grouped.values() -%}
+        {%- set a4 = g.addresses | selectattr('family', 'equalto', 'ipv4') | list -%}
+        {%- set a6 = g.addresses | selectattr('family', 'equalto', 'ipv6') | list -%}
+        {%- set _ = g.update({'addresses': a4 + a6}) -%}
+        {%- set _ = out.append(g) -%}
+      {%- endfor -%}
+      {{ out }}
   no_log: true
 
-# cycle-016 Phase P: Linux 와 일관 — driver_map 추가 + adapters/ports 빈 list
+# cycle-016 Phase P: Linux 와 일관 — driver_map 추가 + adapters
 - name: "windows | network | NIC driver map (Get-NetAdapter)"
   ansible.windows.win_shell: |
     Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -or $_.MediaConnectionState -eq 'Connected' } | ForEach-Object {
@@ -142,6 +179,72 @@
             'driver_version': d.driver_version | default(none),
             'vlan_id': (d.vlan_id | int) if d.vlan_id else none,
             'bond_master': none
+          }) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
+
+# 2026-09-03 (B-29): 물리 NIC 하드웨어 인벤토리 → network.adapters[] (Linux lspci 기반 adapters[] 와 같은 키)
+- name: "windows | network | physical adapters (hardware)"
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'SilentlyContinue'
+    $hw = @{}
+    try {
+      foreach ($h in @(Get-NetAdapterHardwareInfo)) {
+        $pci = $null
+        if ($null -ne $h.Bus -and $null -ne $h.Device -and $null -ne $h.Function) {
+          $pci = ('{0:x4}:{1:x2}:{2:x2}.{3}' -f [int]$h.Segment, [int]$h.Bus, [int]$h.Device, [int]$h.Function)
+        }
+        $hw[[string]$h.Name] = $pci
+      }
+    } catch { }
+    foreach ($a in @(Get-NetAdapter -Physical)) {
+      $mfr = $null
+      try {
+        if ($a.PnPDeviceID) {
+          $pnp = Get-PnpDevice -InstanceId $a.PnPDeviceID
+          if ($pnp -and $pnp.Manufacturer) { $mfr = [string]$pnp.Manufacturer }
+        }
+      } catch { }
+      if (-not $mfr -and $a.DriverProvider -and ([string]$a.DriverProvider -ne 'Microsoft')) { $mfr = [string]$a.DriverProvider }
+      [PSCustomObject]@{
+        name         = [string]$a.Name
+        model        = [string]$a.InterfaceDescription
+        manufacturer = $mfr
+        driver       = [string]$a.DriverDescription
+        driver_version = [string]$a.DriverVersion
+        mac          = [string]$a.MacAddress
+        pci          = $(if ($hw.ContainsKey([string]$a.Name)) { $hw[[string]$a.Name] } else { $null })
+        status       = [string]$a.Status
+        speed_mbps   = $(if ($a.Speed) { [math]::Round($a.Speed / 1000000, 0) } else { $null })
+      } | ConvertTo-Json -Compress
+    }
+  register: _w_adapters_raw
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: "windows | network | parse adapters"
+  ansible.builtin.set_fact:
+    _w_adapters: >-
+      {%- set out = [] -%}
+      {%- for line in (_w_adapters_raw.stdout_lines | default([])) -%}
+        {%- if line | trim -%}
+          {%- set a = line | from_json -%}
+          {%- set pci = (a.pci | default(none, true)) or none -%}
+          {%- set _ = out.append({
+            'id':           pci if pci else (a.name | default(none)),
+            'name':         a.name | default(none),
+            'manufacturer': (a.manufacturer | default(none, true)) or none,
+            'model':        (a.model | default(none, true)) or none,
+            'driver':       (a.driver | default(none, true)) or none,
+            'driver_version': (a.driver_version | default(none, true)) or none,
+            'firmware_version': none,
+            'pci':          pci,
+            'mac':          (a.mac | default(none, true)) | normalize_mac,
+            'link_status':  ('up' if (a.status | default('', true) | lower) in ['up','connected'] else ('down' if (a.status | default('', true) | lower) in ['down','disconnected','disabled','not present','notpresent'] else 'unknown')),
+            'speed_mbps':   a.speed_mbps | default(none)
           }) -%}
         {%- endif -%}
       {%- endfor -%}
@@ -249,6 +352,7 @@
         {%- set _ = out.append(d | combine({'bond_master': owner.get(d.name)})) -%}
       {%- endfor -%}
       {{ out }}
+    _w_net_ok: "{{ ((_w_net_topo.interfaces | default([])) | length > 0) }}"
   no_log: true
 
 - name: "windows | network | build fragment"
@@ -258,11 +362,13 @@
         dns_servers: "{{ _w_norm_net_meta.dns | default([]) }}"
         default_gateways: >-
           {%- set out = [] -%}
-          {%- set gw = _w_norm_net_meta.gw | default(none) -%}
+          {%- set gw = (_w_norm_net_meta.gw | default(none, true)) or none -%}
+          {%- set gw6 = (_w_norm_net_meta.gw6 | default(none, true)) or none -%}
           {%- if gw -%}{%- set _ = out.append({'family':'ipv4','address':gw}) -%}{%- endif -%}
+          {%- if gw6 -%}{%- set _ = out.append({'family':'ipv6','address':gw6}) -%}{%- endif -%}
           {{ out }}
         interfaces: "{{ _w_net_topo.interfaces }}"
-        adapters:    []
+        adapters:    "{{ _w_adapters | default([]) }}"
         ports:       []
         driver_map:  "{{ _w_driver_map_final | default(_w_driver_map | default([])) }}"
         # bond/bridge 는 Windows 미해당(빈 []), teams 는 LBFO/SET (Additive — 기존 필드 불변)
@@ -271,9 +377,13 @@
         teams:    "{{ _w_net_topo.teams }}"
         summary: "{{ _w_net_summary | default({'groups': []}) }}"
     _sections_supported_fragment: ['network']
-    _sections_collected_fragment: ['network']
-    _sections_failed_fragment:    []
-    _errors_fragment:             []
+    _sections_collected_fragment: "{{ ['network'] if (_w_net_ok | bool) else [] }}"
+    _sections_failed_fragment:    "{{ [] if (_w_net_ok | bool) else ['network'] }}"
+    _errors_fragment: >-
+      {{ [] if (_w_net_ok | bool) else [{
+           'section': 'network',
+           'message': '네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  ('source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=' ~ (_w_iface_raw.rc | default('none')))}] }}
   no_log: true
 
 - name: "windows | network | merge fragment"

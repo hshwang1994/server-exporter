@@ -33,7 +33,9 @@ sections:
     key: hardware
     display_name: "하드웨어 정보"
     description: "벤더, 모델, 시리얼번호, BIOS 등 물리 장비 정보"
-    channels: [esxi, redfish]
+    # 2026-09-03: OS 채널 정식 지원 — Linux(DMI sysfs / setup fact) + Windows(Win32_ComputerSystem / Win32_BIOS).
+    #   종전에는 Windows 만 스키마 밖에서 emit 했고 Linux 는 모델·BIOS 를 버렸다 (B-05).
+    channels: [os, esxi, redfish]
     empty_value: null
 
   bmc:

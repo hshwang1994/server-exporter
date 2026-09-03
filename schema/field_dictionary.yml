@@ -30,7 +30,11 @@
 #   nice — 설명이 있으면 좋고 없어도 사용에 지장 없음
 #   skip — 의미가 자명해서 본 사전에 등록하지 않음 (예: hostname)
 #
-# 등록 현황 (2026-08-12 실측): Must 49 / Nice 118 / Skip 6 = 총 173 entries
+# 등록 현황 (2026-09-03 실측): Must 52 / Nice 134 / Skip 6 = 총 192 entries
+#   (2026-09-03 +16 — OS/ESXi 전수 검수 후속: system.hostname/fqdn/vendor, cpu.manufacturer/max_speed_mhz/turbo_max_mhz,
+#    cpu.summary.groups[].l2/l3_cache_kb, network.interfaces[].description/mac, network.dns_servers/default_gateways,
+#    system.runtime.firewall_state/ntp_active/ntp_synchronized/ntp_servers. Additive, schema_version 유지.)
+# (이전 표기) 2026-08-12: Must 49 / Nice 118 / Skip 6 = 총 173 entries
 #   (cycle 2026-08-12 +5 — errors[] / errors[].section / errors[].message / errors[].detail 신설.
 #    Portal 실패 Grid 가 실제로 읽는 값인데 종전까지 이 사전에 정의가 **0건**이라
 #    형식을 강제할 근거가 없었다. Additive, schema_version 유지.)
@@ -334,7 +338,7 @@ fields:
   hardware.sku:
     type: "string|null"
     priority: must
-    channel: [redfish]
+    channel: [os, redfish]
     help_ko: >-
       서버 제품 식별 번호. 벤더마다 의미가 다름.
       Lenovo=CTO 주문 번호 (예: 7Z73CTO1WW),
@@ -354,21 +358,21 @@ fields:
   hardware.vendor:
     type: "string|null"
     priority: must
-    channel: [esxi, redfish]
-    help_ko: "서버 제조사 (Redfish System.Manufacturer / ESXi). 예: HPE, Dell Inc., Lenovo."
-    help_en: "Server vendor (Redfish System.Manufacturer / ESXi). e.g. HPE, Dell Inc., Lenovo."
+    channel: [os, esxi, redfish]
+    help_ko: "서버 제조사 원문 (Redfish System.Manufacturer / ESXi systemInfo.vendor / OS DMI sys_vendor·Win32_ComputerSystem.Manufacturer). 예: HPE, Dell Inc., Lenovo. envelope.vendor 는 이 값을 vendor_aliases 로 정규화한 표시값."
+    help_en: "Raw server vendor (Redfish System.Manufacturer / ESXi systemInfo.vendor / OS DMI sys_vendor or Win32_ComputerSystem.Manufacturer). e.g. HPE, Dell Inc., Lenovo. envelope.vendor is this value normalized via vendor_aliases."
 
   hardware.model:
     type: "string|null"
     priority: must
-    channel: [esxi, redfish]
+    channel: [os, esxi, redfish]
     help_ko: "서버 모델명 (Redfish System.Model). 예: HPE ProLiant Compute DL380 Gen12."
     help_en: "Server model (Redfish System.Model). e.g. HPE ProLiant Compute DL380 Gen12."
 
   hardware.serial:
     type: "string|null"
     priority: must
-    channel: [esxi, redfish]
+    channel: [os, esxi, redfish]
     help_ko: >-
       서버 대표 시리얼번호. 기본 원천은 Redfish System.SerialNumber 이고 빈 문자열은 null 로 정규화.
       단 Dell 은 예외 — System.SerialNumber 가 보드 제조 시리얼(CNIVC…)이라 OS SMBIOS Type 1 값과
@@ -384,28 +388,28 @@ fields:
   hardware.uuid:
     type: "string|null"
     priority: must
-    channel: [esxi, redfish]
+    channel: [os, esxi, redfish]
     help_ko: "시스템 UUID (Redfish System.UUID). BMC UUID(bmc.uuid)와 다름 — 서버 본체 식별자."
     help_en: "System UUID (Redfish System.UUID). Differs from BMC UUID (bmc.uuid) — server chassis identifier."
 
   hardware.bios_version:
     type: "string|null"
     priority: must
-    channel: [esxi, redfish]
+    channel: [os, esxi, redfish]
     help_ko: "BIOS/UEFI 펌웨어 버전 (Redfish System.BiosVersion)."
     help_en: "BIOS/UEFI firmware version (Redfish System.BiosVersion)."
 
   hardware.bios_date:
     type: "string|null"
     priority: nice
-    channel: [esxi, redfish]
+    channel: [os, esxi, redfish]
     help_ko: "BIOS 릴리스 날짜 (ISO 8601 YYYY-MM-DD 정규화). 벤더 OEM(예: HPE Oem.Hpe.Bios.Current.Date)에서 hoist. 미제공 시 null."
     help_en: "BIOS release date (ISO 8601 YYYY-MM-DD). Hoisted from vendor OEM (e.g. HPE Oem.Hpe.Bios.Current.Date). null when absent."
 
   hardware.asset_tag:
     type: "string|null"
     priority: nice
-    channel: [redfish]
+    channel: [os, redfish]
     help_ko: "자산 태그 (Redfish System.AssetTag). 미설정 시 빈 문자열→null."
     help_en: "Asset tag (Redfish System.AssetTag). Empty→null when unset."
 
@@ -447,7 +451,7 @@ fields:
   hardware.oem:
     type: "object"
     priority: must
-    channel: [redfish]
+    channel: [os, redfish]
     help_ko: >-
       벤더 전용 확장 데이터. 키 구조가 벤더마다 완전히 다름.
       HPE: aggregate_server_health, subsystem_health, psu_redundancy 등.
@@ -614,7 +618,7 @@ fields:
   "memory.slots[].locator":
     type: "string|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, os]
     help_ko: "물리 슬롯 위치 라벨 (Memory.DeviceLocator, 예: 'DIMM A5')."
     help_en: "Physical slot locator (Memory.DeviceLocator, e.g. 'DIMM A5')."
 
@@ -655,7 +659,7 @@ fields:
   "storage.physical_disks[].id":
     type: "string|null"
     priority: must
-    channel: [redfish, os]
+    channel: [redfish, os, esxi]
     help_ko: >-
       물리 디스크 식별자. logical_volumes[].member_drive_ids에서 참조됨.
       Redfish: Drive의 Id (예: Disk.Bay.0:Enclosure.Internal.0-1:RAID.Slot.6-1).
@@ -707,8 +711,9 @@ fields:
 
   "storage.physical_disks[].health":
     type: "string|null"
+    enum: ["OK", "Warning", "Critical"]
     priority: nice
-    channel: [redfish, os]
+    channel: [redfish, os, esxi]
     help_ko: >-
       물리 디스크 건강 상태.
       Redfish: Drive.Status.Health (OK/Warning/Critical → 정규화).
@@ -1506,17 +1511,17 @@ fields:
 
   "storage.physical_disks[].media_type":
     type: "string|null"
-    enum: ["SSD", "HDD"]
+    enum: ["SSD", "HDD", "SCM"]
     priority: skip
-    channel: [redfish, os]
+    channel: [redfish, os, esxi]
     help_ko: "디스크 유형. SSD 또는 HDD."
     help_en: "Disk media type. SSD or HDD."
 
   "storage.physical_disks[].protocol":
     type: "string|null"
-    enum: ["SATA", "SAS", "NVMe"]
+    enum: ["SATA", "SAS", "NVMe", "SCSI", "USB", "RAID", "iSCSI", "FibreChannel", "IDE", "SD", "MMC", "HDC", "1394"]
     priority: skip
-    channel: [redfish]
+    channel: [redfish, os, esxi]
     help_ko: "디스크 연결 프로토콜."
     help_en: "Disk connection protocol."
 
@@ -1531,21 +1536,23 @@ fields:
 
   system.hosting_type:
     type: "string"
-    enum: ["virtual", "baremetal", "unknown"]
+    enum: ["virtual", "baremetal", "unknown", "hypervisor"]
     priority: must
-    channel: [os]
+    channel: [os, esxi]
     help_ko: >-
       호스팅 유형.
       virtual=가상머신(VMware/KVM/Hyper-V 등의 guest),
       baremetal=물리 서버에 직접 설치된 OS,
-      unknown=판별 근거 부족 또는 신호 충돌.
-      OS 채널 전용 필드. Redfish/ESXi에는 적용하지 않음.
+      unknown=판별 근거 부족 또는 신호 충돌,
+      hypervisor=ESXi 채널 (호스트 자체가 하이퍼바이저).
+      OS 채널은 OEM 제조사 목록 없이 판정한다 (Linux systemd-detect-virt / Windows HypervisorPresent+Hyper-V 역할, 2026-09-03).
     help_en: >-
       Hosting type.
       virtual=VM guest (VMware/KVM/Hyper-V etc.),
       baremetal=OS installed directly on physical server,
-      unknown=insufficient evidence or conflicting signals.
-      OS channel only. Not applicable to Redfish/ESXi.
+      unknown=insufficient evidence or conflicting signals,
+      hypervisor=ESXi channel (the host itself is a hypervisor).
+      OS channel decides without an OEM vendor list (Linux systemd-detect-virt / Windows HypervisorPresent + Hyper-V role, 2026-09-03).
 
   system.uptime_seconds:
     type: "integer|null"
@@ -1620,7 +1627,7 @@ fields:
   "network.adapters[]":
     type: "object[]"
     priority: nice
-    channel: [redfish, esxi]
+    channel: [redfish, os, esxi]
     help_ko: >-
       NIC 카드 (NetworkAdapters) 정보. id/name/manufacturer/model/part_number/
       serial_number/firmware_version. ESXi 의 vmnic 도 포함.
@@ -1631,7 +1638,7 @@ fields:
   "network.adapters[].firmware_version":
     type: "string|null"
     priority: nice
-    channel: [redfish, os]
+    channel: [redfish, os, esxi]
     help_ko: >-
       NIC 펌웨어 버전.
       Redfish: NetworkAdapter.Controllers.FirmwarePackageVersion.
@@ -1833,7 +1840,7 @@ fields:
     type: "string|null"
     enum: ["global", "link", "host", "site", null]
     priority: nice
-    channel: [os]
+    channel: [os, esxi]
     help_ko: >-
       주소 범위 (ip addr 의 scope). global=라우팅 가능, link=링크 로컬(IPv6 fe80::),
       host=호스트 로컬(loopback). 기존 IPv6 주소의 scope 와 동일 키.
@@ -2244,3 +2251,133 @@ fields:
       RMC Redfish API activation check. true on success / false on failure under
       manager_layout=rmc_* / null for non-RMC environments. Diagnostic hint for
       site RMC deactivation cases (cf. HPE community 7200359).
+
+  # ── 2026-09-03 OS/ESXi 전수 검수 후속 — 선언 없이 emit 되던 필드 / 의미가 채널마다 달랐던 필드 ──
+  system.hostname:
+    type: "string|null"
+    priority: must
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      짧은 호스트명 (첫 라벨). Linux uname -n / Windows COMPUTERNAME(DNSHostName) /
+      ESXi dnsConfig.hostName / Redfish System.HostName. 장비가 제공하지 않으면 null —
+      IP 로 대체하지 않는다. envelope.hostname 1순위 후보.
+    help_en: >-
+      Short host name (first label). Linux uname -n / Windows COMPUTERNAME / ESXi dnsConfig.hostName /
+      Redfish System.HostName. null when the target does not provide one — never the IP.
+      First candidate for envelope.hostname.
+
+  system.fqdn:
+    type: "string|null"
+    priority: must
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      hostname + 설정된 도메인 (Linux hostname -d / uname -n 의 도메인부, Windows AD 도메인 또는 기본 DNS 접미사,
+      ESXi dnsConfig.domainName). 도메인이 없으면 null. resolver(getfqdn) 결과가 아니다 (2026-09-03 통일).
+    help_en: >-
+      hostname + configured domain (Linux hostname -d / domain part of uname -n, Windows AD domain or primary
+      DNS suffix, ESXi dnsConfig.domainName). null when no domain is configured. Not a resolver (getfqdn) result.
+
+  system.vendor:
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: "시스템 제조사 원문 (DMI sys_vendor / Win32_ComputerSystem.Manufacturer). hardware.vendor 와 같은 값. 센티널(System manufacturer 등)은 null."
+    help_en: "Raw system vendor (DMI sys_vendor / Win32_ComputerSystem.Manufacturer). Same as hardware.vendor. Placeholders (e.g. 'System manufacturer') become null."
+
+  cpu.manufacturer:
+    type: "string|null"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: "CPU 제조사 정규화값 (Intel / AMD). Linux /proc/cpuinfo vendor_id, Windows Win32_Processor.Manufacturer, ESXi cpuPkg.vendor 또는 브랜드 문자열."
+    help_en: "Normalized CPU manufacturer (Intel / AMD). Linux /proc/cpuinfo vendor_id, Windows Win32_Processor.Manufacturer, ESXi cpuPkg.vendor or brand string."
+
+  cpu.max_speed_mhz:
+    type: "integer|null"
+    priority: must
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      정격(base) 클럭 MHz — 3채널 공통 정의 (2026-09-03). Linux cpufreq base_frequency → 브랜드 문자열 "@ N.NNGHz",
+      Windows Win32_Processor.MaxClockSpeed, ESXi cpuInfo.hz, Redfish Processor.MaxSpeedMHz(벤더 보고값).
+      터보 최대 클럭은 cpu.turbo_max_mhz. 종전 Linux 는 lscpu 'CPU max MHz'(터보) 를 냈다.
+    help_en: >-
+      Rated (base) clock in MHz — one definition across channels (2026-09-03). Linux cpufreq base_frequency
+      then brand string "@ N.NNGHz", Windows Win32_Processor.MaxClockSpeed, ESXi cpuInfo.hz, Redfish
+      Processor.MaxSpeedMHz (vendor reported). Turbo max is cpu.turbo_max_mhz.
+
+  cpu.turbo_max_mhz:
+    type: "integer|null"
+    priority: nice
+    channel: [os, esxi]
+    help_ko: "터보/부스트 최대 클럭 MHz. Linux lscpu 'CPU max MHz' / cpufreq cpuinfo_max_freq. Windows/ESXi 는 API 가 제공하지 않아 null."
+    help_en: "Turbo/boost max clock in MHz. Linux lscpu 'CPU max MHz' / cpufreq cpuinfo_max_freq. null on Windows/ESXi (not exposed by the API)."
+
+  cpu.summary.groups[].l2_cache_kb:
+    type: "integer|null"
+    priority: nice
+    channel: [os]
+    help_ko: "소켓당 L2 캐시 KB (2026-09-03 통일). Linux lscpu '(N instances)' 표기는 인스턴스 합계를 소켓 수로 나눈다. 0 이나 미보고는 null."
+    help_en: "L2 cache per socket in KB (unified 2026-09-03). Linux lscpu '(N instances)' totals are divided by socket count. 0 or unreported is null."
+
+  cpu.summary.groups[].l3_cache_kb:
+    type: "integer|null"
+    priority: nice
+    channel: [os]
+    help_ko: "소켓당 L3 캐시 KB. Linux lscpu '(N instances)' 합계는 소켓 수로 나누고, 구버전 lscpu 는 값 그대로(소켓당). fallback /proc/cpuinfo cache size."
+    help_en: "L3 cache per socket in KB. Linux lscpu '(N instances)' totals are divided by socket count; older lscpu already reports per socket. Fallback /proc/cpuinfo cache size."
+
+  network.interfaces[].description:
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: "Windows InterfaceDescription (예: 'vmxnet3 Ethernet Adapter #2'). id/name 은 어댑터 이름이다 (2026-09-03 — 종전 id 가 이 설명 문자열이었다)."
+    help_en: "Windows InterfaceDescription (e.g. 'vmxnet3 Ethernet Adapter #2'). id/name are the adapter name (2026-09-03 — id used to carry this string)."
+
+  network.interfaces[].mac:
+    type: "string|null"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: "MAC 주소 — 소문자 colon 6 octet (aa:bb:cc:dd:ee:ff) 로 정규화 (normalize_mac, 2026-09-03). 전부 0 이면 null."
+    help_en: "MAC address normalized to lowercase colon-separated 6 octets (normalize_mac, 2026-09-03). All-zero becomes null."
+
+  network.dns_servers:
+    type: "string[]"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: "설정된 DNS 서버 주소 목록 (IPv4/IPv6). Linux resolv.conf(systemd-resolved 포함), Windows Get-DnsClientServerAddress, ESXi dnsConfig.address."
+    help_en: "Configured DNS server addresses (IPv4/IPv6). Linux resolv.conf (incl. systemd-resolved), Windows Get-DnsClientServerAddress, ESXi dnsConfig.address."
+
+  network.default_gateways:
+    type: "object[]"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: "기본 게이트웨이 목록 [{family, address}]. Linux ip route default, Windows Get-NetRoute 0.0.0.0/0 및 ::/0, ESXi ipRouteConfig.defaultGateway(+ipV6DefaultGateway). is_primary 인터페이스의 addresses[].gateway 와 같은 값."
+    help_en: "Default gateways [{family, address}]. Linux ip route default, Windows Get-NetRoute 0.0.0.0/0 and ::/0, ESXi ipRouteConfig.defaultGateway (+ipV6DefaultGateway). Same value as addresses[].gateway on the primary interface."
+
+  system.runtime.firewall_state:
+    type: "string|null"
+    enum: ["active", "inactive"]
+    priority: nice
+    channel: [os, esxi]
+    help_ko: "방화벽 상태 — active / inactive / null (조회 실패). Linux firewalld/ufw/nftables/iptables, Windows 프로필 중 하나라도 Enabled, ESXi ruleset enabled. 종전 도구별 원문(running / enabled)을 통일 (2026-09-03)."
+    help_en: "Firewall state — active / inactive / null (query failed). Linux firewalld/ufw/nftables/iptables, Windows any profile Enabled, ESXi ruleset enabled. Tool-specific raw values (running / enabled) unified 2026-09-03."
+
+  system.runtime.ntp_active:
+    type: "boolean|null"
+    priority: nice
+    channel: [os, esxi]
+    help_ko: "시간 동기화 서비스 실행 여부 (Linux timedatectl NTP / chronyd·ntpd·systemd-timesyncd, Windows W32Time, ESXi ntpd). 조회 실패는 null."
+    help_en: "Whether the time sync service is running (Linux timedatectl NTP / chronyd, ntpd, systemd-timesyncd, Windows W32Time, ESXi ntpd). null when the query failed."
+
+  system.runtime.ntp_synchronized:
+    type: "boolean|null"
+    priority: nice
+    channel: [os, esxi]
+    help_ko: "시계가 실제로 동기화됐는지 (Linux timedatectl NTPSynchronized, Windows w32tm /query /source 가 외부 원본). ESXi 는 vSphere API 가 알려주지 않아 항상 null (2026-09-03 — 종전 ntpd 실행 여부를 잘못 냈다)."
+    help_en: "Whether the clock is actually synchronized (Linux timedatectl NTPSynchronized, Windows w32tm /query /source is an external source). Always null on ESXi — the vSphere API does not expose it (2026-09-03)."
+
+  system.runtime.ntp_servers:
+    type: "string[]"
+    priority: nice
+    channel: [esxi]
+    help_ko: "ESXi 에 설정된 NTP 서버 목록 (vmware_host_ntp_info). Additive."
+    help_en: "NTP servers configured on ESXi (vmware_host_ntp_info). Additive."

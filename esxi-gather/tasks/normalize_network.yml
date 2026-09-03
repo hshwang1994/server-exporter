@@ -1,10 +1,19 @@
 ---
 # esxi-gather/tasks/normalize_network.yml
-# _e_raw_facts + _e_raw_config → network fragment
+# _e_raw_facts + _e_raw_dns + _e_raw_host → network fragment
+#
+# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-28/B-29):
+#   - 기본 게이트웨이는 vSphere ipRouteConfig(_e_raw_host) 에서 읽는다. 종전에는 vmware_host_facts 가
+#     주지 않는 ansible_default_ipv4 를 봐서 is_primary 가 항상 false, gateway 가 항상 null 이었다.
+#   - is_primary = 게이트웨이 장치(gatewayDevice) 와 같은 vmk. 장치가 없으면 게이트웨이와 같은 서브넷의 vmk.
+#   - IPv6 주소(vnic ipV6Config) 를 addresses[] 에 family=ipv6 로 함께 낸다 (Linux 와 동일 shape).
+#   - MAC 은 normalize_mac (소문자 colon).
 
 - name: "esxi | normalize network | extract dns and gw"
   ansible.builtin.set_fact:
-    _e_default_gw:  "{{ _e_raw_facts.ansible_default_ipv4.gateway | default(none) }}"
+    _e_default_gw:  "{{ (_e_raw_host | default({})).default_gateway | default(none, true) or none }}"
+    _e_default_gw6: "{{ (_e_raw_host | default({})).default_gateway_ipv6 | default(none, true) or none }}"
+    _e_gw_device:   "{{ (_e_raw_host | default({})).gateway_device | default(none, true) or none }}"
     # 잔류 fix (Round 12 후속): vmware_host_dns_info (collect_dns.yml) 결과를 1순위로,
     # 기존 vmware_host_config_info drill-in 을 폴백으로. dns_info 모듈은 host_name 키로
     # ip_address (DNS 서버 list) / search_domain / domain_name 정확 반환.
@@ -13,8 +22,13 @@
       {%- set dns_dict = _e_raw_dns | default({}) -%}
       {%- if dns_dict is mapping and (dns_dict | length > 0) -%}
         {%- set first_key = (dns_dict.keys() | list | first) -%}
-        {%- set entry = dns_dict.get(first_key, {}) -%}
-        {%- for srv in (entry.ip_address | default([])) -%}
+        {%- set entry = dns_dict[first_key] -%}
+        {%- for srv in ((entry.ip_address | default([])) if entry is mapping else []) -%}
+          {%- if srv -%}{%- set _ = dns_out.append(srv | string) -%}{%- endif -%}
+        {%- endfor -%}
+      {%- endif -%}
+      {%- if not dns_out -%}
+        {%- for srv in ((_e_raw_host | default({})).dns_servers | default([])) -%}
           {%- if srv -%}{%- set _ = dns_out.append(srv | string) -%}{%- endif -%}
         {%- endfor -%}
       {%- endif -%}
@@ -23,31 +37,35 @@
         {%- set host_cfgs = (_e_raw_config | default({})).values() | list -%}
         {%- for host_cfg in host_cfgs -%}
           {%- set net_info = host_cfg.get('network_system_info', host_cfg) if host_cfg is mapping else {} -%}
-          {%- set dns_cfg = (net_info.get('dns_config') if net_info is mapping else {}) | default({}) -%}
+          {%- set dns_cfg = (net_info.get('dns_config') if net_info is mapping else {}) | default({}, true) -%}
           {%- for srv in (dns_cfg.address | default([])) -%}
             {%- if srv -%}{%- set _ = dns_out.append(srv | string) -%}{%- endif -%}
           {%- endfor -%}
         {%- endfor -%}
       {%- endif -%}
       {{ dns_out | unique | list }}
-    _e_search_domains: >-
-      {%- set out = [] -%}
-      {%- set dns_dict = _e_raw_dns | default({}) -%}
-      {%- if dns_dict is mapping and (dns_dict | length > 0) -%}
-        {%- set first_key = (dns_dict.keys() | list | first) -%}
-        {%- set entry = dns_dict.get(first_key, {}) -%}
-        {%- for sd in (entry.search_domain | default([])) -%}
-          {%- if sd -%}{%- set _ = out.append(sd | string) -%}{%- endif -%}
-        {%- endfor -%}
-      {%- endif -%}
-      {{ out }}
   no_log: true
 
 - name: "esxi | normalize network | build interfaces"
   ansible.builtin.set_fact:
     _e_norm_interfaces: >-
       {%- set out = [] -%}
-      {%- set primary = _e_raw_facts.ansible_default_ipv4.interface | default('') -%}
+      {%- set gw = _e_default_gw | default(none) -%}
+      {%- set gw_dev = _e_gw_device | default(none) -%}
+      {%- set v6_by_dev = {} -%}
+      {%- set vnic_by_dev = {} -%}
+      {%- for v in ((_e_raw_host | default({})).vnics | default([])) -%}
+        {%- if v.device | default(none) -%}
+          {%- set _ = v6_by_dev.update({v.device: (v.ipv6 | default([]))}) -%}
+          {%- set _ = vnic_by_dev.update({v.device: v}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {# 게이트웨이 IPv4 → 정수 (서브넷 포함 판정용) #}
+      {%- set gns = namespace(gw_int=none) -%}
+      {%- if gw and (gw | regex_search('^[0-9]{1,3}(\\.[0-9]{1,3}){3}$')) -%}
+        {%- set go = gw.split('.') -%}
+        {%- set gns.gw_int = (go[0] | int) * 16777216 + (go[1] | int) * 65536 + (go[2] | int) * 256 + (go[3] | int) -%}
+      {%- endif -%}
       {%- for iface in (_e_raw_facts.ansible_interfaces | default([])) -%}
         {%- set d    = _e_raw_facts.get('ansible_' ~ iface, {}) -%}
         {%- set ipv4 = d.get('ipv4', {}) -%}
@@ -56,12 +74,11 @@
                not ipv4.address.startswith('169.254.') -%}
           {%- set nm = ipv4.netmask | default('') -%}
           {# production-audit (2026-04-29): bit-counting (Linux 와 일관) — /22, /26, /28 등 비표준 prefix 지원 #}
-          {%- set pfx = none -%}
+          {%- set pns = namespace(bits=0, val=0, mask_int=0) -%}
           {%- if nm -%}
-            {# cycle 2026-05-07-post fix: val 을 namespace 에 포함 — 이전에는 inner for(bit) 안 set val 이 outer scope 미반영 → /23, /30 같은 비표준 mask 잘못 계산. /24 만 우연히 정상. #}
-            {%- set pns = namespace(bits=0, val=0) -%}
             {%- for octet in nm.split('.') -%}
               {%- set pns.val = octet | int -%}
+              {%- set pns.mask_int = pns.mask_int * 256 + (octet | int) -%}
               {%- for bit in [128,64,32,16,8,4,2,1] -%}
                 {%- if pns.val >= bit -%}
                   {%- set pns.bits = pns.bits + 1 -%}
@@ -69,20 +86,41 @@
                 {%- endif -%}
               {%- endfor -%}
             {%- endfor -%}
-            {%- set pfx = pns.bits -%}
           {%- endif -%}
-          {%- set is_p = (iface == primary) -%}
+          {%- set pfx = pns.bits if nm else none -%}
+          {# is_primary: gatewayDevice 일치 → 없으면 게이트웨이가 이 vmk 의 서브넷 안에 있는지 #}
+          {%- set ins = namespace(primary=false) -%}
+          {%- if gw_dev -%}
+            {%- set ins.primary = (iface == gw_dev) -%}
+          {%- elif gns.gw_int is not none and nm -%}
+            {%- set ao = ipv4.address.split('.') -%}
+            {%- set a_int = (ao[0] | int) * 16777216 + (ao[1] | int) * 65536 + (ao[2] | int) * 256 + (ao[3] | int) -%}
+            {%- set ins.primary = ((a_int // (4294967296 - pns.mask_int)) == (gns.gw_int // (4294967296 - pns.mask_int))) if (pns.mask_int < 4294967295) else (a_int == gns.gw_int) -%}
+          {%- endif -%}
+          {%- set addrs = [{'family':'ipv4','address':ipv4.address,
+                            'prefix_length':pfx,
+                            'subnet_mask': nm if nm else none,
+                            'gateway': gw if (ins.primary and gw) else none}] -%}
+          {%- for a6 in (v6_by_dev.get(iface, []) or []) -%}
+            {%- if a6.address | default(none) -%}
+              {%- set a6s = (a6.address | lower) -%}
+              {%- set scope = 'link' if a6s.startswith('fe80') else ('host' if a6s == '::1' else 'global') -%}
+              {%- set _ = addrs.append({'family':'ipv6','address':a6.address,
+                                        'prefix_length': a6.prefix_length | default(none),
+                                        'subnet_mask': none,
+                                        'scope': scope,
+                                        'gateway': (_e_default_gw6 | default(none)) if (ins.primary and scope == 'global') else none}) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- set vn = vnic_by_dev.get(iface, {}) -%}
           {%- set _ = out.append({
             'id':          iface, 'name': iface, 'kind': 'vmkernel',
-            'mac':         d.get('macaddress',none),
-            'mtu':         d.get('mtu',none),
+            'mac':         (d.get('macaddress', none) or vn.get('mac', none)) | normalize_mac,
+            'mtu':         d.get('mtu', none) if d.get('mtu', none) is not none else vn.get('mtu', none),
             'speed_mbps':  none,
-            'link_status': 'up' if d.get('active',false) else 'unknown',
-            'is_primary':  is_p,
-            'addresses': [{'family':'ipv4','address':ipv4.address,
-                           'prefix_length':pfx,
-                           'subnet_mask': nm if nm else none,
-                           'gateway': _e_default_gw if is_p else none}]
+            'link_status': 'up' if d.get('active', false) else 'down',
+            'is_primary':  ins.primary,
+            'addresses':   addrs
           }) -%}
         {%- endif -%}
       {%- endfor -%}
@@ -90,7 +128,7 @@
   no_log: true
 
 # cycle-016 (2026-04-29): ESXi network.summary
-# 2026-06-30: vmk 인터페이스는 speed_mbps=none(line 79) 이라 여기서 group 산출 시 'null qty' 누출됨
+# 2026-06-30: vmk 인터페이스는 speed_mbps=none 이라 여기서 group 산출 시 'null qty' 누출됨
 #   (site 10.100.64.2 실측: summary=[{speed:null,qty:1}]). 따라서 (1) null/0 speed 가드 추가로
 #   vmk 기반 누출 차단(→ groups=[]), (2) 실제 NIC 속도 summary 는 collect_network_extended 에서
 #   pnic(_e_ext_adapters, 실 speed 보유) 기준으로 산출해 merge 시 덮어쓴다 (Windows/Linux 동일 패턴).
@@ -126,6 +164,9 @@
           {%- if _e_default_gw -%}
             {%- set _ = out.append({'family':'ipv4','address':_e_default_gw}) -%}
           {%- endif -%}
+          {%- if _e_default_gw6 -%}
+            {%- set _ = out.append({'family':'ipv6','address':_e_default_gw6}) -%}
+          {%- endif -%}
           {{ out }}
         interfaces: "{{ _e_norm_interfaces }}"
         adapters:    []
@@ -133,26 +174,34 @@
         driver_map:  []
         summary: "{{ _e_net_summary | default({'groups': []}) }}"
     _sections_supported_fragment: ['network']
-    _sections_collected_fragment: ['network']
-    _sections_failed_fragment:    []
+    # 2026-09-03 (B-12): 인터페이스가 하나도 없으면 수집한 것이 아니다.
+    _sections_collected_fragment: "{{ ['network'] if ((_e_norm_interfaces | default([])) | length > 0) else [] }}"
+    _sections_failed_fragment:    "{{ [] if ((_e_norm_interfaces | default([])) | length > 0) else ['network'] }}"
     # 2026-08-12 (N36-c): _e_dns_ok / _e_config_ok 배선. 종전에는 두 플래그 모두 소비처가
     #   0건이라 이름 서버 수집이 실패해도 흔적이 남지 않았다.
     #
-    #   이름 서버는 2경로다 — dns_info(1순위) → config_info(폴백, 위 :21-31).
+    #   이름 서버는 2경로다 — dns_info(1순위) → config_info(폴백, 위).
     #   한쪽이 실패해도 다른 쪽이 값을 채웠으면 그것은 **성공한 fallback** 이므로 error 가
     #   아니다. 둘 다 성공했는데 결과가 비었다면 실제로 설정이 없는 것이라 역시 error 가
     #   아니다. 결과가 비었는데 두 경로 중 하나라도 실패한 경우에만 "미설정" 과 "수집 실패"
     #   를 구분할 수 없으므로 error 로 승격한다.
     #   섹션 status 는 바꾸지 않는다 (network 는 인터페이스까지 정상 수집된 상태다).
     _errors_fragment: >-
-      {{ [{'section': 'network',
-           'message': '네트워크 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
-           'detail':  'dns_servers=[] (dns_info ok=' ~ (_e_dns_ok | default(false)) ~
-                      ', config_info ok=' ~ (_e_config_ok | default(false)) ~ ')'}]
-         if (((_e_dns_servers | default([]) | length) == 0)
-             and not ((_e_dns_ok | default(false) | bool)
-                      and (_e_config_ok | default(false) | bool)))
-         else [] }}
+      {%- set out = [] -%}
+      {%- if (_e_norm_interfaces | default([])) | length == 0 -%}
+        {%- set _ = out.append({'section': 'network',
+             'message': '네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
+             'detail':  'source=vmware_host_facts.ansible_interfaces; cause=no_interfaces'}) -%}
+      {%- endif -%}
+      {%- if (((_e_dns_servers | default([]) | length) == 0)
+              and not ((_e_dns_ok | default(false) | bool)
+                       and (_e_config_ok | default(false) | bool))) -%}
+        {%- set _ = out.append({'section': 'network',
+             'message': '네트워크 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+             'detail':  'dns_servers=[] (dns_info ok=' ~ (_e_dns_ok | default(false)) ~
+                        ', config_info ok=' ~ (_e_config_ok | default(false)) ~ ')'}) -%}
+      {%- endif -%}
+      {{ out }}
   no_log: true
 
 - name: "esxi | normalize network | merge fragment"

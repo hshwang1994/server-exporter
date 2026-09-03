@@ -49,15 +49,34 @@
       {{ names }}
   no_log: true
 
-# cycle-016 (2026-04-29): ESXi 측은 datastore 단위 grouping (physical disk 정보 미수집, namespace pattern)
+# 2026-09-03 (B-21): storage.summary 는 3채널 모두 **physical_disks 기준** 으로 통일한다.
+#   종전 ESXi 는 datastore 합계(groups=[]) 였고 OS/Redfish 는 물리 디스크 합계라 같은 필드가 다른 양이었다.
+#   ESXi 의 physical_disks 는 vSphere 가 노출하는 LUN(RAID 논리 볼륨 포함) 이다 — group key 는 OS 와 같다
+#   (용량 / media_type / protocol / model). 물리 디스크가 하나도 없으면 datastore 합계로 대신하지 않고
+#   grand_total_gb=0, groups=[] 그대로 둔다 (다른 양을 같은 이름으로 내지 않는다).
 - name: "esxi | normalize storage | compute summary groups"
   ansible.builtin.set_fact:
     _e_stor_summary: >-
-      {%- set ns = namespace(total=0) -%}
-      {%- for ds in (_e_norm_datastores | default([])) -%}
-        {%- set ns.total = ns.total + ((ds.total_mb | default(0) | int) / 1024) | round(0, 'floor') | int -%}
+      {%- set ns = namespace(groups=[], seen={}, total=0) -%}
+      {%- for d in (_e_raw_disks | default([])) -%}
+        {%- set cap_gb = ((d.total_mb | default(0, true)) | int / 1024) | round(0, 'floor') | int -%}
+        {%- if cap_gb > 0 -%}
+          {%- set mt = d.media_type | default(none) -%}
+          {%- set pr = d.protocol | default(none) -%}
+          {%- set md = d.model | default(none) -%}
+          {%- set key = (cap_gb|string)~'|'~(mt|string)~'|'~(pr|string)~'|'~(md|string) -%}
+          {%- if key in ns.seen -%}
+            {%- set idx = ns.seen[key] -%}
+            {%- set q = ns.groups[idx].quantity + 1 -%}
+            {%- set _ = ns.groups[idx].update({'quantity': q, 'group_total_gb': q * cap_gb}) -%}
+          {%- else -%}
+            {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
+            {%- set _ = ns.groups.append({'unit_capacity_gb': cap_gb, 'model': md, 'media_type': mt, 'protocol': pr, 'quantity': 1, 'group_total_gb': cap_gb}) -%}
+          {%- endif -%}
+          {%- set ns.total = ns.total + cap_gb -%}
+        {%- endif -%}
       {%- endfor -%}
-      {{ {'groups': [], 'grand_total_gb': ns.total} }}
+      {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
   no_log: true
 
 - name: "esxi | normalize storage | build fragment"
@@ -72,7 +91,7 @@
         # 2026-06-22 T1: storage HBA/RAID 컨트롤러 (hostBusAdapter + pciDevice vendor)
         controllers:     "{{ _e_raw_controllers | default([]) }}"
         logical_volumes: []
-        # cycle-016: datastore 합계 기반 summary (groups 빈 배열 — physical disk grouping 은 OS/Redfish 채널)
+        # 2026-09-03: physical_disks(LUN) 기반 summary — OS/Redfish 와 같은 기준 (B-21)
         summary:         "{{ _e_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
     _sections_supported_fragment: ['storage']
     _sections_collected_fragment: >-

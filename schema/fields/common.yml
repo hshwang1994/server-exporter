@@ -44,10 +44,15 @@ sections:
         display_name: "가동시간(초)"
         description: "시스템 가동 시간(초)"
 
+      hostname:
+        type: string
+        display_name: "호스트명"
+        description: "OS/BMC 에 설정된 짧은 호스트명 (첫 라벨). Linux uname -n / Windows COMPUTERNAME / ESXi dnsConfig.hostName / Redfish System.HostName. 없으면 null"
+
       fqdn:
         type: string
         display_name: "FQDN"
-        description: "정규화된 도메인 이름"
+        description: "hostname + 설정된 도메인. 도메인이 없으면 null (2026-09-03 — resolver 결과가 아니라 설정값 기준)"
 
   cpu:
     fields:
@@ -66,6 +71,21 @@ sections:
       model:
         type: string
         display_name: "CPU 모델"
+
+      manufacturer:
+        type: string
+        display_name: "CPU 제조사"
+        description: "Intel / AMD 등 (브랜드 문자열·CPUID vendor 에서 정규화)"
+
+      max_speed_mhz:
+        type: integer
+        display_name: "정격 클럭(MHz)"
+        description: "정격(base) 클럭. Linux cpufreq base_frequency 또는 브랜드 문자열 '@ N.NNGHz', Windows MaxClockSpeed, ESXi cpuInfo.hz. 터보 최대는 turbo_max_mhz (2026-09-03 통일)"
+
+      turbo_max_mhz:
+        type: integer
+        display_name: "터보 최대 클럭(MHz)"
+        description: "터보/부스트 최대 클럭. Linux lscpu 'CPU max MHz' / cpuinfo_max_freq. 제공되지 않으면 null"
 
       architecture:
         type: string

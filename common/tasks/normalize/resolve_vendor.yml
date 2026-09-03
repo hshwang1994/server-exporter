@@ -1,0 +1,43 @@
+---
+# common/tasks/normalize/resolve_vendor.yml
+#
+# envelope.vendor 결정 — OS(Linux/Windows) / ESXi 공용 (Redfish 는 detect_vendor 경로를 그대로 쓴다).
+#
+# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-07):
+#   종전에는 채널마다 다른 방식이었다 — Linux/Windows 는 site.yml 인라인 substring ladder
+#   (정본 alias 인 "HP" 가 빠져 ProLiant Gen8/9 가 null), ESXi 는 alias 정확일치 후 **미등록이면
+#   raw 제조사 문자열을 그대로 envelope 에** (enum 위반). 이제 한 곳에서:
+#     data.hardware.vendor(원문) → canonical_vendor(vendor_aliases.yml) → vendor_output_display
+#   미등록 제조사는 하이퍼바이저 신호(vmware/qemu/microsoft/xen) 만 인정하고 그 외는 null.
+#
+# 입력:  _merged_data.hardware.vendor (gather 가 채운 원문. 없으면 null)
+# 출력:  _out_vendor — 정본 enum 값 또는 null
+#
+# rescue 에서도 호출한다 — 수집 도중 예외가 나도 이미 확정한 제조사를 버리지 않는다.
+
+- name: "normalize | resolve vendor | load aliases"
+  ansible.builtin.set_fact:
+    _rv_aliases: "{{ lookup('file', lookup('env','REPO_ROOT') ~ '/common/vars/vendor_aliases.yml') | from_yaml }}"
+  no_log: true
+
+- name: "normalize | resolve vendor"
+  ansible.builtin.set_fact:
+    _out_vendor: >-
+      {%- set hw = ((_merged_data | default({})).hardware | default({}, true)) or {} -%}
+      {%- set raw = hw.vendor | default(none) -%}
+      {%- set raw_s = (raw | string | trim) if raw is not none else '' -%}
+      {%- set canon = (raw_s | canonical_vendor(_rv_aliases.vendor_aliases | default({}))) if raw_s else 'unknown' -%}
+      {%- set disp = _rv_aliases.vendor_output_display | default({}) -%}
+      {# 하이퍼바이저 제조사 신호 — OS-on-VM 의 DMI 제조사는 하이퍼바이저다 (정상 식별값). #}
+      {%- set hyp = {'vmware': ['vmware'], 'qemu': ['qemu', 'kvm', 'red hat'], 'microsoft': ['microsoft'], 'xen': ['xen']} -%}
+      {%- if canon != 'unknown' -%}{{ disp.get(canon, canon) }}
+      {%- else -%}
+        {%- set ns = namespace(v=none) -%}
+        {%- for k, sigs in hyp.items() -%}
+          {%- for s in sigs -%}
+            {%- if ns.v is none and s in (raw_s | lower) -%}{%- set ns.v = k -%}{%- endif -%}
+          {%- endfor -%}
+        {%- endfor -%}
+        {{ ns.v }}
+      {%- endif -%}
+  no_log: true

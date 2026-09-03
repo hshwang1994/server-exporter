@@ -42,6 +42,7 @@ channel_sections:
 
   os:
     - system
+    - hardware        # 2026-09-03: Linux/Windows 모두 DMI/CIM 모델·BIOS·시리얼을 hardware 로 낸다
     - cpu
     - memory
     - storage

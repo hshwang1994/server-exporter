@@ -1,10 +1,19 @@
 ---
 # os-gather/tasks/windows/gather_memory.yml → data.memory fragment
+#
+# 2026-09-03 (OS/ESXi 전수 검수 후속):
+#   - total_mb: 설치량(Win32_PhysicalMemory 합) → OS 가시량(setup fact) → null. 0 placeholder 금지 (B-14).
+#     설치량을 못 읽어 OS 가시량으로 대신하면 Linux 와 같은 경고(시나리오 B) 를 남긴다.
+#   - slots[].manufacturer 는 JEDEC 코드 → 제조사 (Linux 와 같은 jedec_to_vendor) (B-13).
+#   - SMBIOSMemoryType 3(DRAM) 등 Linux dmidecode 가 내는 타입을 같은 표기로 (B-13).
+#   - 둘 다 못 읽으면 섹션 failed + 사유 (B-12).
 
 - name: "windows | memory | Win32_PhysicalMemory total"
   ansible.windows.win_shell: |
-    $mem = Get-CimInstance Win32_PhysicalMemory
-    [math]::Round(($mem | Measure-Object -Property Capacity -Sum).Sum / 1MB, 0)
+    $mem = @(Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue)
+    if ($mem.Count -gt 0) {
+      [math]::Round(($mem | Measure-Object -Property Capacity -Sum).Sum / 1MB, 0)
+    }
   register: _w_mem_raw
   changed_when: false
   failed_when: false
@@ -16,13 +25,21 @@
 #   SerialNumber 센티널(00000000/00000001/all-zeros) → null 정규화.
 - name: "windows | memory | Win32_PhysicalMemory slots"
   ansible.windows.win_shell: |
-    Get-CimInstance Win32_PhysicalMemory | ForEach-Object {
+    Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue | ForEach-Object {
       $smt = [int]$_.SMBIOSMemoryType
+      # SMBIOS Type 17 Memory Type (dmidecode 표기와 동일)
       $type = switch ($smt) {
-        18 {"DDR"} 19 {"DDR2"} 20 {"DDR2 FB-DIMM"} 22 {"DDR3"} 24 {"DDR3"}
-        26 {"DDR4"} 27 {"LPDDR"} 28 {"LPDDR2"} 29 {"LPDDR3"} 30 {"LPDDR4"}
-        34 {"DDR5"} 35 {"LPDDR5"}
+        1 {"Other"} 3 {"DRAM"} 4 {"EDRAM"} 5 {"VRAM"} 6 {"SRAM"} 7 {"RAM"} 8 {"ROM"} 9 {"Flash"}
+        10 {"EEPROM"} 11 {"FEPROM"} 12 {"EPROM"} 13 {"CDRAM"} 14 {"3DRAM"} 15 {"SDRAM"} 16 {"SGRAM"}
+        17 {"RDRAM"} 18 {"DDR"} 19 {"DDR2"} 20 {"DDR2 FB-DIMM"} 24 {"DDR3"} 25 {"FBD2"}
+        26 {"DDR4"} 27 {"LPDDR"} 28 {"LPDDR2"} 29 {"LPDDR3"} 30 {"LPDDR4"} 31 {"Logical non-volatile device"}
+        32 {"HBM"} 33 {"HBM2"} 34 {"DDR5"} 35 {"LPDDR5"} 36 {"HBM3"}
         default { $null }
+      }
+      # 구형 MemoryType(SMBIOSMemoryType 0/2=Unknown) 만 있는 경우 MemoryType 로 보강
+      if (-not $type) {
+        $mt = [int]$_.MemoryType
+        $type = switch ($mt) { 20 {"DDR"} 21 {"DDR2"} 22 {"DDR2 FB-DIMM"} 24 {"DDR3"} 26 {"DDR4"} default { $null } }
       }
       $speedRaw = if ($_.Speed -and [int]$_.Speed -gt 0) { [int]$_.Speed }
                   elseif ($_.ConfiguredClockSpeed -and [int]$_.ConfiguredClockSpeed -gt 0) { [int]$_.ConfiguredClockSpeed }
@@ -33,8 +50,9 @@
       $serNorm = if (-not $serRaw -or $serRaw -match '^0+$' -or
                      ($is_virtual_mem -and $serRaw -match '^0{6,}\d?$') -or
                      $serRaw -in @('NA','N/A','None','Not Specified','To Be Filled By O.E.M.','SerNum0','SerNum1','SerNum2','SerNum3')) { $null } else { $serRaw }
+      $cap = $(if ($_.Capacity -and [int64]$_.Capacity -gt 0) { [int]([math]::Round($_.Capacity / 1MB, 0)) } else { $null })
       [PSCustomObject]@{
-        capacity_mb  = [int]([math]::Round($_.Capacity / 1MB, 0))
+        capacity_mb  = $cap
         type         = $type
         speed_mhz    = $speedRaw
         slot         = $_.DeviceLocator
@@ -55,82 +73,98 @@
       {%- for line in (_w_mem_slots_raw.stdout_lines | default([])) -%}
         {%- if line | trim -%}
           {%- set s = line | from_json -%}
+          {%- set mfr = (s.manufacturer | trim) if s.manufacturer else none -%}
           {%- set _ = out.append({
-            'capacity_mb': s.capacity_mb | default(0) | int,
+            'capacity_mb': (s.capacity_mb | int) if (s.capacity_mb is defined and s.capacity_mb is not none) else none,
             'type': s.type | default(none),
             'speed_mhz': s.speed_mhz | default(none),
             'slot': s.slot | default(none),
-            'manufacturer': (s.manufacturer | default(none) | trim) if s.manufacturer else none,
-            'part_number': (s.part_number | default(none) | trim) if s.part_number else none,
-            'serial': (s.serial | default(none) | trim) if s.serial else none
+            'locator': s.slot | default(none),
+            'manufacturer': (mfr | jedec_to_vendor) if mfr else none,
+            'part_number': (s.part_number | trim) if s.part_number else none,
+            'serial': (s.serial | trim) if s.serial else none
           }) -%}
         {%- endif -%}
       {%- endfor -%}
       {{ out }}
+  no_log: true
+
+- name: "windows | memory | summary + totals"
+  ansible.builtin.set_fact:
     _w_mem_summary: >-
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
-      {%- for line in (_w_mem_slots_raw.stdout_lines | default([])) -%}
-        {%- if line | trim -%}
-          {%- set s = line | from_json -%}
-          {%- set cap_mb = s.capacity_mb | default(0) | int -%}
-          {%- if cap_mb > 0 -%}
-            {%- set cap_gb = (cap_mb / 1024) | round(0, 'floor') | int -%}
-            {%- set t = s.type | default(none) -%}
-            {%- set sp = s.speed_mhz | default(none) -%}
-            {# Round 16: JSON null Manufacturer/PartNumber 시 'None'(문자열) 누설 방어 —
-               default('') 는 undefined 만 치환하고 None|trim 은 'None' 이 됨. slots 루프
-               (line 63-64) 와 동일하게 truthy 체크 후 trim. #}
-            {%- set mfr = (s.manufacturer | default(none) | trim) if s.manufacturer else none -%}
-            {%- set pn = (s.part_number | default(none) | trim) if s.part_number else none -%}
-            {%- set key = (cap_gb|string)~'|'~(t|string)~'|'~(sp|string)~'|'~(mfr|string)~'|'~(pn|string) -%}
-            {%- if key in ns.seen -%}
-              {%- set idx = ns.seen[key] -%}
-              {%- set q = ns.groups[idx].quantity + 1 -%}
-              {%- set _ = ns.groups[idx].update({'quantity': q, 'group_total_gb': q * cap_gb}) -%}
-            {%- else -%}
-              {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-              {%- set _ = ns.groups.append({'unit_capacity_gb': cap_gb, 'type': t, 'speed_mhz': sp, 'manufacturer': mfr if mfr else none, 'part_number': pn if pn else none, 'quantity': 1, 'group_total_gb': cap_gb}) -%}
-            {%- endif -%}
-            {%- set ns.total = ns.total + cap_gb -%}
+      {%- for s in (_w_mem_slots | default([])) -%}
+        {%- set cap_mb = s.capacity_mb | default(none) -%}
+        {%- if cap_mb is not none and (cap_mb | int) > 0 -%}
+          {%- set cap_gb = ((cap_mb | int) / 1024) | round(0, 'common') | int -%}
+          {%- set t = s.type | default(none) -%}
+          {%- set sp = s.speed_mhz | default(none) -%}
+          {%- set mfr = s.manufacturer | default(none) -%}
+          {%- set pn = s.part_number | default(none) -%}
+          {%- set key = (cap_gb|string)~'|'~(t|string)~'|'~(sp|string)~'|'~(mfr|string)~'|'~(pn|string) -%}
+          {%- if key in ns.seen -%}
+            {%- set idx = ns.seen[key] -%}
+            {%- set q = ns.groups[idx].quantity + 1 -%}
+            {%- set _ = ns.groups[idx].update({'quantity': q, 'group_total_gb': q * cap_gb}) -%}
+          {%- else -%}
+            {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
+            {%- set _ = ns.groups.append({'unit_capacity_gb': cap_gb, 'type': t, 'speed_mhz': sp, 'manufacturer': mfr, 'part_number': pn, 'quantity': 1, 'group_total_gb': cap_gb}) -%}
           {%- endif -%}
+          {%- set ns.total = ns.total + cap_gb -%}
         {%- endif -%}
       {%- endfor -%}
-      {%- set fallback_mb = (_w_mem_raw.stdout | trim | int) if (_w_mem_raw.stdout | trim | length > 0) else (ansible_memtotal_mb | default(0) | int) -%}
-      {%- set fallback_total = (fallback_mb / 1024) | round(0, 'floor') | int -%}
-      {{ {'groups': ns.groups, 'grand_total_gb': ns.total if ns.total > 0 else fallback_total} }}
+      {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
+    _w_mem_phys_mb: >-
+      {%- set v = (_w_mem_raw.stdout | default('', true)) | string | trim -%}
+      {{ (v | int) if (v.isdigit() and (v | int) > 0) else none }}
+    _w_mem_vis_mb: >-
+      {%- set v = ansible_memtotal_mb | default(none) -%}
+      {{ (v | int) if (v is not none and (v | string).isdigit() and (v | int) > 0) else none }}
   no_log: true
 
 - name: "windows | memory | build fragment"
   ansible.builtin.set_fact:
-    _w_mem_ok: >-
-      {{ _w_mem_raw.stdout | trim | length > 0
-         and _w_mem_raw.stdout | trim | int > 0 }}
     _data_fragment:
       memory:
         total_mb: >-
-          {{ _w_mem_raw.stdout | trim | int
-             if (_w_mem_raw.stdout | trim | length > 0
-                 and _w_mem_raw.stdout | trim | int > 0)
-             else (ansible_memtotal_mb | default(0)) }}
+          {%- set p = _w_mem_phys_mb | default(none) -%}
+          {%- set v = _w_mem_vis_mb | default(none) -%}
+          {{ p if p is not none else v }}
         total_basis: >-
-          {{ 'physical_installed'
-             if (_w_mem_raw.stdout | trim | length > 0
-                 and _w_mem_raw.stdout | trim | int > 0)
-             else 'os_visible' }}
-        installed_mb: >-
-          {{ _w_mem_raw.stdout | trim | int
-             if (_w_mem_raw.stdout | trim | length > 0
-                 and _w_mem_raw.stdout | trim | int > 0)
-             else none }}
-        visible_mb: "{{ ansible_memtotal_mb | default(none) }}"
-        free_mb:    "{{ ansible_memfree_mb  | default(none) }}"
-        slots:      "{{ _w_mem_slots | default([]) }}"
-        # cycle-016 (2026-04-29): Win32_PhysicalMemory 기반 group summary
-        summary:    "{{ _w_mem_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
+          {%- set p = _w_mem_phys_mb | default(none) -%}
+          {%- set v = _w_mem_vis_mb | default(none) -%}
+          {{ 'physical_installed' if p is not none else ('os_visible' if v is not none else none) }}
+        installed_mb: "{{ _w_mem_phys_mb | default(none) }}"
+        visible_mb:   "{{ _w_mem_vis_mb | default(none) }}"
+        free_mb:      "{{ ansible_memfree_mb | default(none) }}"
+        slots:        "{{ _w_mem_slots | default([]) }}"
+        # cycle-016 (2026-04-29): Win32_PhysicalMemory 기반 group summary. 슬롯이 없으면 설치/가시 총량으로 grand_total.
+        summary: >-
+          {%- set sm = _w_mem_summary | default({'groups': [], 'grand_total_gb': 0}) -%}
+          {%- set p = _w_mem_phys_mb | default(none) -%}
+          {%- set v = _w_mem_vis_mb | default(none) -%}
+          {%- if (sm.grand_total_gb | default(0)) > 0 -%}{{ sm }}
+          {%- elif p is not none -%}{{ {'groups': sm.groups, 'grand_total_gb': ((p / 1024) | round(0, 'common') | int)} }}
+          {%- elif v is not none -%}{{ {'groups': sm.groups, 'grand_total_gb': ((v / 1024) | round(0, 'common') | int)} }}
+          {%- else -%}{{ {'groups': [], 'grand_total_gb': none} }}
+          {%- endif -%}
     _sections_supported_fragment: ['memory']
-    _sections_collected_fragment: ['memory']
-    _sections_failed_fragment:    []
-    _errors_fragment:             []
+    _sections_collected_fragment: "{{ ['memory'] if ((_w_mem_phys_mb | default(none)) is not none or (_w_mem_vis_mb | default(none)) is not none) else [] }}"
+    _sections_failed_fragment:    "{{ [] if ((_w_mem_phys_mb | default(none)) is not none or (_w_mem_vis_mb | default(none)) is not none) else ['memory'] }}"
+    # 시나리오 B: 설치량(Win32_PhysicalMemory) 을 못 읽어 OS 가시량으로 대신한 경우 경고 1건. 둘 다 없으면 실패 1건.
+    _errors_fragment: >-
+      {%- set p = _w_mem_phys_mb | default(none) -%}
+      {%- set v = _w_mem_vis_mb | default(none) -%}
+      {%- if p is not none -%}{{ [] }}
+      {%- elif v is not none -%}
+        {{ [{'section': 'memory',
+             'message': '메모리 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.',
+             'detail':  ('source=Win32_PhysicalMemory; cause=no_output; fallback=os_visible; rc=' ~ (_w_mem_raw.rc | default('none')))}] }}
+      {%- else -%}
+        {{ [{'section': 'memory',
+             'message': '메모리 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
+             'detail':  ('source=Win32_PhysicalMemory,setup; cause=no_output; rc=' ~ (_w_mem_raw.rc | default('none')))}] }}
+      {%- endif -%}
   no_log: true
 
 - name: "windows | memory | merge fragment"

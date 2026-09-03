@@ -1,20 +1,54 @@
 ---
 # os-gather/tasks/windows/gather_system.yml → data.system fragment
+#
+# 2026-09-03 (OS/ESXi 전수 검수 후속):
+#   - system.hostname(short) 을 낸다 (종전 부재 — B-02). fqdn 은 hostname + 도메인(AD 도메인 또는 기본 DNS
+#     접미사) 이며 도메인이 없으면 null. inventory_hostname(IP) 대체 금지 (B-01).
+#   - kernel 문자열 "None" / version 의 죽은 fallback / OSArchitecture 오분류 정정 (B-34).
+#   - hosting_type 은 OEM 제조사 목록 없이 판정한다 (B-08): VM 신호 → virtual,
+#     HypervisorPresent=False → baremetal, HypervisorPresent=True 이면서 Hyper-V 역할(vmms) 실행 → baremetal(호스트),
+#     HypervisorPresent=True 이고 역할 없음 → virtual, 그 외 unknown.
+#   - system.runtime 은 gather_runtime.yml 이 단일 구현이다 (종전 이중 계산 → 덮어쓰기, B-31).
+#   - uptime 은 모르면 null (0 placeholder 금지, B-32).
 
 - name: "windows | system | os version"
   ansible.windows.win_shell: |
     $os  = Get-CimInstance Win32_OperatingSystem
+    $cs  = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
     $rel = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' `
               -ErrorAction SilentlyContinue).DisplayVersion
     if (-not $rel) {
       $rel = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' `
                 -ErrorAction SilentlyContinue).ReleaseId
     }
+    # 도메인: AD 가입이면 Win32_ComputerSystem.Domain, 아니면 기본 DNS 접미사 (Tcpip\Parameters Domain / NV Domain)
+    $domain = $null
+    $partOfDomain = $false
+    if ($cs) {
+      $partOfDomain = [bool]$cs.PartOfDomain
+      if ($partOfDomain -and $cs.Domain) { $domain = [string]$cs.Domain }
+    }
+    if (-not $domain) {
+      $tcp = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -ErrorAction SilentlyContinue
+      if ($tcp) {
+        if ($tcp.Domain) { $domain = [string]$tcp.Domain }
+        elseif ($tcp.'NV Domain') { $domain = [string]$tcp.'NV Domain' }
+      }
+    }
+    $uptime = $null
+    try {
+      if ($os.LastBootUpTime) { $uptime = [int64]((Get-Date) - [datetime]$os.LastBootUpTime).TotalSeconds }
+    } catch { $uptime = $null }
     [PSCustomObject]@{
-      caption = $os.Caption
-      version = $os.Version
-      build   = $os.BuildNumber
-      rel_id  = $rel
+      caption      = $os.Caption
+      version      = $os.Version
+      build        = $os.BuildNumber
+      rel_id       = $rel
+      arch         = $os.OSArchitecture
+      hostname     = $(if ($cs -and $cs.DNSHostName) { [string]$cs.DNSHostName } else { [string]$env:COMPUTERNAME })
+      domain       = $domain
+      part_of_domain = $partOfDomain
+      uptime       = $uptime
     } | ConvertTo-Json -Compress
   register: _w_os_raw
   changed_when: false
@@ -34,10 +68,12 @@
 - name: "windows | system | hosting detection"
   ansible.windows.win_shell: |
     $cs = Get-CimInstance Win32_ComputerSystem
+    $vmms = Get-Service -Name vmms -ErrorAction SilentlyContinue
     [PSCustomObject]@{
-      Model            = $cs.Model
-      Manufacturer     = $cs.Manufacturer
+      Model             = $cs.Model
+      Manufacturer      = $cs.Manufacturer
       HypervisorPresent = [string]$cs.HypervisorPresent
+      HyperVRole        = $(if ($vmms -and $vmms.Status -eq 'Running') { 'True' } else { 'False' })
     } | ConvertTo-Json -Compress
   register: _w_hosting_raw
   changed_when: false
@@ -54,27 +90,28 @@
       {%- endif -%}
   no_log: true
 
-# hosting_type 판정:
-#   - Model/Manufacturer가 알려진 VM 패턴 → virtual
-#   - VM 패턴 아님 + HypervisorPresent=False + 물리 OEM → baremetal
-#   - 그 외 → unknown
-# baremetal 판정은 OEM Manufacturer 매치를 필수 조건으로 요구한다 (mfr in oem_mfrs).
-# OEM 목록에 없는 물리 서버는 baremetal 이 아니라 unknown 으로 분류된다.
+# hosting_type 판정 (Linux gather_system 의 systemd-detect-virt 판정과 같은 결과 집합):
+#   - Model/Manufacturer 가 알려진 VM 패턴 → virtual
+#   - HypervisorPresent=False → baremetal
+#   - HypervisorPresent=True + Hyper-V 역할(vmms) 실행 → baremetal (Hyper-V 호스트의 루트 파티션)
+#   - HypervisorPresent=True + 역할 없음 → virtual (다른 하이퍼바이저 위의 게스트)
+#   - 값을 못 읽음 → unknown
 - name: "windows | system | determine hosting_type"
   ansible.builtin.set_fact:
     _w_hosting_type: >-
-      {%- set model = (_w_hosting.Model | default('')) | string -%}
-      {%- set mfr   = (_w_hosting.Manufacturer | default('')) | string -%}
-      {%- set hyp   = (_w_hosting.HypervisorPresent | default('')) | string -%}
-      {%- set vm_models = ['Virtual Machine', 'VMware Virtual Platform', 'VirtualBox', 'KVM', 'QEMU Virtual Machine', 'Standard PC'] -%}
-      {%- set vm_mfrs   = ['VMware, Inc.', 'QEMU', 'Xen', 'Amazon EC2', 'Google', 'DigitalOcean'] -%}
-      {# nosec rule12-r1: hosting_type 판정용 OEM mfr list (set membership 패턴, 분기 아님) #}
-      {%- set oem_mfrs  = ['Dell Inc.', 'HPE', 'Hewlett Packard Enterprise', 'Lenovo', 'Cisco Systems Inc', 'Supermicro', 'Fujitsu', 'Inspur'] -%}
-      {%- set is_vm_model = model in vm_models -%}
-      {%- set is_vm_mfr   = mfr in vm_mfrs -%}
-      {%- set is_ms_vm    = (mfr == 'Microsoft Corporation' and model == 'Virtual Machine') -%}
-      {%- if is_vm_model or is_vm_mfr or is_ms_vm -%}virtual
-      {%- elif hyp == 'False' and mfr in oem_mfrs -%}baremetal
+      {%- set model = (_w_hosting.Model | default('', true)) | string | lower -%}
+      {%- set mfr   = (_w_hosting.Manufacturer | default('', true)) | string | lower -%}
+      {%- set hyp   = (_w_hosting.HypervisorPresent | default('', true)) | string | lower -%}
+      {%- set role  = (_w_hosting.HyperVRole | default('', true)) | string | lower -%}
+      {%- set vm_signals = ['virtual machine', 'vmware virtual platform', 'virtualbox', 'kvm', 'qemu', 'standard pc', 'bochs', 'xen', 'hvm domu', 'amazon ec2', 'google compute engine', 'openstack', 'parallels'] -%}
+      {%- set ns = namespace(vm=false) -%}
+      {%- for sig in vm_signals -%}
+        {%- if sig in model or sig in mfr -%}{%- set ns.vm = true -%}{%- endif -%}
+      {%- endfor -%}
+      {%- if ns.vm -%}virtual
+      {%- elif hyp == 'false' -%}baremetal
+      {%- elif hyp == 'true' and role == 'true' -%}baremetal
+      {%- elif hyp == 'true' -%}virtual
       {%- else -%}unknown
       {%- endif -%}
   no_log: true
@@ -83,11 +120,11 @@
 - name: "windows | system | resolve identifiers"
   ansible.builtin.set_fact:
     _w_serial_val: >-
-      {{ none if (ansible_product_serial | default('')) in ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.']
+      {{ none if (ansible_product_serial | default('')) in ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string']
          else (ansible_product_serial | default(none)) }}
     _w_uuid_val: >-
       {{ none if (ansible_product_uuid | default('')) in ['', 'NA', 'None', 'Not Specified']
-         else (ansible_product_uuid | default(none)) }}
+         else ((ansible_product_uuid | default(none)) | normalize_uuid) }}
   no_log: true
 
 # nPartition 접미사 정규화 (2026-08-27) — Linux 와 동일 규칙 (같은 OS 채널 계약).
@@ -103,71 +140,6 @@
     _w_model_hint: "{{ _w_hosting.Model | default('', true) }}"
   ansible.builtin.set_fact:
     _w_serial_val: "{{ _w_serial_val | normalize_os_serial(_w_vendor_hint, _w_model_hint) }}"
-  no_log: true
-
-# F5 cycle 2026-05-11: system.runtime — 9 필드 (timezone/ntp/firewall/listen/pagefile)
-# Linux 와 envelope shape 통일 — Windows pagefile 을 swap_*_mb 로 등가 표현.
-- name: "windows | system | gather runtime (timezone/ntp/firewall/listen/pagefile)"
-  ansible.windows.win_shell: |
-    $tz = $null
-    try { $tz = (Get-TimeZone -ErrorAction SilentlyContinue).Id } catch {}
-    $w32 = Get-Service W32Time -ErrorAction SilentlyContinue
-    $ntpActive = if ($w32 -and $w32.Status -eq 'Running') { 'yes' } else { 'no' }
-    $ntpSync = $null
-    try {
-      $status = w32tm /query /status 2>$null
-      if ($status -match 'Source:\s+\S') { $ntpSync = 'yes' } else { $ntpSync = 'no' }
-    } catch { $ntpSync = $null }
-    $fwAny = $false
-    try {
-      $profiles = Get-NetFirewallProfile -ErrorAction SilentlyContinue
-      if ($profiles) {
-        $fwAny = (($profiles | Where-Object { $_.Enabled -eq $true } | Measure-Object).Count) -gt 0
-      }
-    } catch {}
-    $fwState = if ($fwAny) { 'active' } else { 'inactive' }
-    $ports = @()
-    try {
-      $conns = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue
-      if ($conns) {
-        $ports = @($conns | Select-Object -ExpandProperty LocalPort | Sort-Object -Unique)
-      }
-    } catch {}
-    $pfTotal = $null; $pfUsed = $null; $pfFree = $null
-    try {
-      $pf = Get-CimInstance Win32_PageFileUsage -ErrorAction SilentlyContinue
-      if ($pf) {
-        $sumTotal = ($pf | Measure-Object -Property AllocatedBaseSize -Sum).Sum
-        $sumUsed  = ($pf | Measure-Object -Property CurrentUsage     -Sum).Sum
-        $pfTotal = [int]$sumTotal
-        $pfUsed  = [int]$sumUsed
-        $pfFree  = [int]($sumTotal - $sumUsed)
-      }
-    } catch {}
-    [PSCustomObject]@{
-      timezone         = $tz
-      ntp_active       = $ntpActive
-      ntp_synchronized = $ntpSync
-      firewall_tool    = 'windows_firewall'
-      firewall_state   = $fwState
-      listening_ports  = $ports
-      swap_total_mb    = $pfTotal
-      swap_used_mb     = $pfUsed
-      swap_free_mb     = $pfFree
-    } | ConvertTo-Json -Compress -Depth 4
-  register: _w_runtime_raw
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: "windows | system | parse runtime"
-  ansible.builtin.set_fact:
-    _w_runtime: >-
-      {%- if _w_runtime_raw.stdout is defined and (_w_runtime_raw.stdout | trim | length > 0) -%}
-      {{ _w_runtime_raw.stdout | from_json }}
-      {%- else -%}
-      {}
-      {%- endif -%}
   no_log: true
 
 # 식별자 diagnostic — non-fatal, status/sections에 영향 없음
@@ -201,60 +173,72 @@
       {{ diags }}
   no_log: true
 
+# hostname / fqdn / 수집 성공 판정
+- name: "windows | system | resolve hostname + status"
+  ansible.builtin.set_fact:
+    _w_hostname_short: >-
+      {%- set h = (_w_os_data.hostname | default('', true)) | string | trim -%}
+      {%- set h = h if h else ((ansible_hostname | default('', true)) | string | trim) -%}
+      {{ (h.split('.')[0]) if h else none }}
+    _w_domain: >-
+      {%- set d = (_w_os_data.domain | default('', true)) | string | trim -%}
+      {%- if not d -%}
+        {%- set f = (ansible_fqdn | default('', true)) | string | trim -%}
+        {%- set d = f.split('.', 1)[1] if ('.' in f) else '' -%}
+      {%- endif -%}
+      {{ d if d else none }}
+    # OS 정보(caption) 나 setup fact 중 하나라도 있어야 system 을 수집한 것이다.
+    _w_sys_ok: "{{ ((_w_os_data.caption | default('', true)) | string | trim | length > 0) or (ansible_os_name is defined) or (ansible_distribution is defined) }}"
+  no_log: true
+
 - name: "windows | system | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
       system:
         os_family:      "Windows"
-        distribution:   "{{ _w_os_data.caption  | default(none) }}"
-        version:        "{{ _w_os_data.rel_id    | default(_w_os_data.version | default(none)) }}"
-        kernel:         "{{ _w_os_data.build     | default(none) | string }}"
-        architecture:   "{{ 'x86_64' if (ansible_architecture | default('')) in ['64-bit', '64비트', 'AMD64', 'x86_64'] else ('x86' if (ansible_architecture | default('')) in ['32-bit', '32비트', 'x86'] else (ansible_architecture | default(none))) }}"
-        hosting_type:   "{{ _w_hosting_type | default('unknown') | trim }}"
-        uptime_seconds: "{{ (ansible_uptime_seconds | default(0)) | int }}"
+        distribution:   "{{ (_w_os_data.caption | default(none, true)) or (ansible_distribution | default(none)) }}"
+        # DisplayVersion(21H2 등) → ReleaseId → Win32_OperatingSystem.Version. rel_id 가 null 이면
+        # 종전 `default()` 는 발동하지 않았다 (정의된 null) — 명시 분기.
+        version: >-
+          {%- set r = (_w_os_data.rel_id | default('', true)) | string | trim -%}
+          {%- set v = (_w_os_data.version | default('', true)) | string | trim -%}
+          {{ r if r else (v if v else (ansible_distribution_version | default(none))) }}
+        # 커널 = 빌드 번호. 값이 없으면 null (종전 `| string` 이 "None" 문자열을 냈다).
+        kernel: >-
+          {%- set b = (_w_os_data.build | default('', true)) | string | trim -%}
+          {%- set k = b if b else (ansible_os_version | default(none)) -%}
+          {{ (k | string) if k is not none else none }}
+        # setup fact ansible_architecture2 (x86_64 / aarch64) → OSArchitecture 문자열 → null
+        architecture: >-
+          {%- set a2 = (ansible_architecture2 | default('', true)) | string | trim -%}
+          {%- set a = ((_w_os_data.arch | default('', true)) or (ansible_architecture | default('', true))) | string | lower -%}
+          {%- if a2 -%}{{ a2 }}
+          {%- elif 'arm' in a and '64' in a -%}aarch64
+          {%- elif 'arm' in a -%}arm
+          {%- elif '64' in a -%}x86_64
+          {%- elif '32' in a or 'x86' in a -%}x86
+          {%- else -%}{{ none }}
+          {%- endif -%}
+        hostname:       "{{ _w_hostname_short | default(none) }}"
+        fqdn: >-
+          {%- set s = _w_hostname_short | default(none) -%}
+          {%- set d = _w_domain | default(none) -%}
+          {{ (s ~ '.' ~ d) if (s and d) else none }}
+        hosting_type:   "{{ (_w_hosting_type | default('', true) | trim) or none }}"
+        uptime_seconds: >-
+          {%- set u = ansible_uptime_seconds | default(none) -%}
+          {%- if u is not none and (u | string).isdigit() -%}{{ u | int }}
+          {%- else -%}
+            {%- set u2 = _w_os_data.uptime | default(none) -%}
+            {{ (u2 | int) if (u2 is not none and (u2 | string).isdigit()) else none }}
+          {%- endif -%}
         selinux:        null
-        fqdn:           "{{ ansible_fqdn | default(inventory_hostname) }}"
         serial_number:  "{{ _w_serial_val | default(none) }}"
         system_uuid:    "{{ _w_uuid_val | default(none) }}"
-        # F5 cycle 2026-05-11: system.runtime — 9 필드 (Linux 와 envelope shape 통일)
-        # Windows pagefile = Linux swap 등가 (swap_*_mb 로 등가 표현).
-        runtime:
-          timezone: >-
-            {%- set v = (_w_runtime.timezone | default('')) | string | trim -%}
-            {{ v if v else none }}
-          ntp_active: >-
-            {%- set v = (_w_runtime.ntp_active | default('')) | string | trim -%}
-            {%- if v == 'yes' -%}{{ true }}
-            {%- elif v == 'no' -%}{{ false }}
-            {%- else -%}{{ none }}
-            {%- endif -%}
-          ntp_synchronized: >-
-            {%- set v = (_w_runtime.ntp_synchronized | default('')) | string | trim -%}
-            {%- if v == 'yes' -%}{{ true }}
-            {%- elif v == 'no' -%}{{ false }}
-            {%- else -%}{{ none }}
-            {%- endif -%}
-          firewall_tool: >-
-            {%- set v = (_w_runtime.firewall_tool | default('')) | string | trim -%}
-            {{ v if v else none }}
-          firewall_state: >-
-            {%- set v = (_w_runtime.firewall_state | default('')) | string | trim -%}
-            {{ v if v else none }}
-          # Round 18 (R18-2): str[] 계약 (gather_runtime·field_dictionary 와 동일). Get-NetTCPConnection
-          # LocalPort 는 int → map('string'). gather_runtime rescue 가 {} 로 바뀌어 이 값이 보존될 때 계약 유지.
-          listening_ports: "{{ (_w_runtime.listening_ports | default([])) | map('string') | list }}"
-          swap_total_mb: >-
-            {%- set v = _w_runtime.swap_total_mb | default(none) -%}
-            {{ (v | int) if (v is not none) else none }}
-          swap_used_mb: >-
-            {%- set v = _w_runtime.swap_used_mb | default(none) -%}
-            {{ (v | int) if (v is not none) else none }}
-          swap_free_mb: >-
-            {%- set v = _w_runtime.swap_free_mb | default(none) -%}
-            {{ (v | int) if (v is not none) else none }}
+        vendor:         "{{ _w_hosting.Manufacturer | default(none, true) or none }}"
     _sections_supported_fragment: ['system']
-    _sections_collected_fragment: ['system']
-    _sections_failed_fragment:    []
+    _sections_collected_fragment: "{{ ['system'] if (_w_sys_ok | bool) else [] }}"
+    _sections_failed_fragment:    "{{ [] if (_w_sys_ok | bool) else ['system'] }}"
     # rule 22 R8 — list 타입 강제. `>-` multi-block + 다중 {{ }} 분기는 Ansible
     # folded scalar 에서 string-coerce 위험이 있어 단일 expression 으로 단순화.
     # source contract: _w_id_diagnostics 는 list of dicts.
@@ -262,7 +246,9 @@
     #   버렸다 — 진단이 조용히 사라져 사용자도 운영자도 사건을 알 수 없었다. 이제 내부 처리
     #   오류 1건을 남긴다. 원본을 그대로 싣지 않으므로 과거의 char iteration 회귀는 재발하지
     #   않는다 (수신 측 정규화 필터도 string/mapping 을 안전 처리한다).
-    _errors_fragment: "{{ _w_id_diagnostics if (_w_id_diagnostics is defined and _w_id_diagnostics is iterable and _w_id_diagnostics is not string and _w_id_diagnostics is not mapping) else [{'section':'system','message':'서버 기본 정보를 정리하는 중 내부 처리 오류가 발생했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':'field=identifier_diagnostics; cause=unexpected_render_type'}] }}"
+    _errors_fragment: >-
+      {{ ((_w_id_diagnostics if (_w_id_diagnostics is defined and _w_id_diagnostics is iterable and _w_id_diagnostics is not string and _w_id_diagnostics is not mapping) else [{'section':'system','message':'서버 기본 정보를 정리하는 중 내부 처리 오류가 발생했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':'field=identifier_diagnostics; cause=unexpected_render_type'}])
+         + ([] if (_w_sys_ok | bool) else [{'section':'system','message':'서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=Win32_OperatingSystem; cause=no_output; rc=' ~ (_w_os_raw.rc | default('none')))}])) }}
   no_log: true
 
 - name: "windows | system | merge fragment"

@@ -1,6 +1,9 @@
 ---
 # os-gather/tasks/windows/gather_hardware.yml → data.hardware fragment
 # cycle-016 Phase O: Windows hardware section 활성화 (이전 not_supported)
+# 2026-09-03: hardware 는 OS 채널 정식 섹션이다 (schema/sections.yml channels 에 os 추가 — B-05).
+#   sku 는 SystemSKUNumber 로 채운다 (종전 null 하드코딩 — B-22). uuid 는 normalize_uuid (B-06).
+#   CIM 을 하나도 못 읽으면 섹션 failed + 사유 (종전 collected 하드코딩 — B-12).
 
 - name: "windows | hardware | Win32_ComputerSystem + Win32_BIOS"
   ansible.windows.win_shell: |
@@ -18,6 +21,10 @@
             elseif ($csp -and $csp.UUID) { $csp.UUID }
             else { $null }
     if ($uuid -in @('', '00000000-0000-0000-0000-000000000000', 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF')) { $uuid = $null }
+
+    # SKU: Win32_ComputerSystem.SystemSKUNumber (SMBIOS Type 1 SKU) → Win32_ComputerSystemProduct.SKUNumber
+    $skuRaw = if ($cs.SystemSKUNumber) { [string]$cs.SystemSKUNumber } elseif ($csp -and $csp.SKUNumber) { [string]$csp.SKUNumber } else { '' }
+    $sku = if (-not $skuRaw -or $skuRaw.Trim() -in @('','Default string','To Be Filled By O.E.M.','Not Specified','None','NA','N/A','SKU','System SKU')) { $null } else { $skuRaw.Trim() }
 
     # Asset tag sentinel filter
     $assetRaw = if ($sysenc) { [string]$sysenc.SMBIOSAssetTag } else { '' }
@@ -50,13 +57,14 @@
 
     # BIOS serial sentinel
     $biosSerRaw = [string]$bios.SerialNumber
-    $biosSer = if (-not $biosSerRaw -or $biosSerRaw -in @('NA','N/A','None','Not Specified','To Be Filled By O.E.M.','System Serial Number','0','00000000')) { $null } else { $biosSerRaw }
+    $biosSer = if (-not $biosSerRaw -or $biosSerRaw -in @('NA','N/A','None','Not Specified','To Be Filled By O.E.M.','System Serial Number','Default string','0','00000000')) { $null } else { $biosSerRaw }
 
     [PSCustomObject]@{
       vendor        = $cs.Manufacturer
       model         = $cs.Model
       system_family = $cs.SystemFamily
       uuid          = $uuid
+      sku           = $sku
       total_memory  = $cs.TotalPhysicalMemory
       bios_vendor   = $bios.Manufacturer
       bios_version  = $bios.SMBIOSBIOSVersion
@@ -94,31 +102,37 @@
       {{ (_w_hw_data.bios_serial | default(none)
           | normalize_os_serial(_w_hw_vendor_hint, _w_hw_model_hint))
          or (_w_serial_val | default(none)) }}
+    _w_hw_ok: "{{ ((_w_hw_data.vendor | default('', true)) | string | trim | length > 0) or ((_w_hw_data.model | default('', true)) | string | trim | length > 0) or ((_w_hw_data.bios_version | default('', true)) | string | trim | length > 0) }}"
   no_log: true
 
 - name: "windows | hardware | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
       hardware:
-        vendor:       "{{ _w_hw_data.vendor       | default(none) }}"
-        model:        "{{ _w_hw_data.model        | default(none) }}"
+        vendor:       "{{ _w_hw_data.vendor       | default(none, true) or none }}"
+        model:        "{{ _w_hw_data.model        | default(none, true) or none }}"
         # serial/uuid fallback chain: BIOS/CIM → gather_system 의 ansible facts 정규값
         # serial 은 위 "normalize serial" 이 정규화까지 끝낸 값 (nPartition 접미사 처리)
         serial:       "{{ _w_hw_serial | default(none) }}"
-        uuid:         "{{ _w_hw_data.uuid        | default(none) or _w_uuid_val   | default(none) }}"
-        sku:          null
-        asset_tag:    "{{ _w_hw_data.asset_tag    | default(none) }}"
-        system_family: "{{ _w_hw_data.system_family | default(none) }}"
-        chassis_type: "{{ _w_hw_data.chassis_type | default(none) }}"
-        bios_version: "{{ _w_hw_data.bios_version | default(none) }}"
-        bios_vendor:  "{{ _w_hw_data.bios_vendor  | default(none) }}"
-        bios_date:    "{{ _w_hw_data.bios_release | default(none) }}"
-        total_memory_bytes: "{{ _w_hw_data.total_memory | default(none) }}"
+        uuid:         "{{ ((_w_hw_data.uuid | default(none, true)) or (_w_uuid_val | default(none))) | normalize_uuid }}"
+        sku:          "{{ _w_hw_data.sku          | default(none, true) or none }}"
+        asset_tag:    "{{ _w_hw_data.asset_tag    | default(none, true) or none }}"
+        system_family: "{{ _w_hw_data.system_family | default(none, true) or none }}"
+        chassis_type: "{{ _w_hw_data.chassis_type | default(none, true) or none }}"
+        bios_version: "{{ _w_hw_data.bios_version | default(none, true) or none }}"
+        bios_vendor:  "{{ _w_hw_data.bios_vendor  | default(none, true) or none }}"
+        bios_date:    "{{ _w_hw_data.bios_release | default(none, true) or none }}"
+        # Win32_ComputerSystem.TotalPhysicalMemory = OS 에 보이는 물리 메모리(설치량이 아니다). 설치량은 memory.installed_mb.
+        total_memory_bytes: "{{ _w_hw_data.total_memory | default(none, true) or none }}"
         oem:          {}
     _sections_supported_fragment: ['hardware']
-    _sections_collected_fragment: ['hardware']
-    _sections_failed_fragment:    []
-    _errors_fragment:             []
+    _sections_collected_fragment: "{{ ['hardware'] if (_w_hw_ok | bool) else [] }}"
+    _sections_failed_fragment:    "{{ [] if (_w_hw_ok | bool) else ['hardware'] }}"
+    _errors_fragment: >-
+      {{ [] if (_w_hw_ok | bool) else [{
+           'section': 'hardware',
+           'message': '하드웨어 정보 수집에 실패했습니다. 수집 계정의 권한을 확인하세요.',
+           'detail':  ('source=Win32_ComputerSystem,Win32_BIOS; cause=no_output; rc=' ~ (_w_hw_raw.rc | default('none')))}] }}
   no_log: true
 
 - name: "windows | hardware | merge fragment"

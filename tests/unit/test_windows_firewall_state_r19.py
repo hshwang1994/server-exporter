@@ -43,4 +43,8 @@ def test_firewall_state_active_when_any_profile_enabled():
 
 def test_firewall_state_inactive_when_all_disabled():
     assert _render([{"enabled": False}]) == "inactive"
-    assert _render([]) == "inactive"
+
+
+def test_firewall_state_null_when_no_profile_read():
+    """2026-09-03 (B-31): 프로필을 하나도 못 읽은 것은 '방화벽 꺼짐' 이 아니다 → null."""
+    assert _render([]) is None

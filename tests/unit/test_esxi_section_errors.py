@@ -332,6 +332,8 @@ def _run_module(disks=None, controllers=None, ports=None, connect_fail=False):
     module._build_disks = disks or (lambda c: [{"id": "naa.1"}])
     module._build_controllers = controllers or (lambda c: [{"id": "vmhba0"}])
     module._build_listening_ports = ports or (lambda c: ["443"])
+    # 2026-09-03: host_info 파트(dns/gateway/pnic/cpu) 는 별도 테스트 — 여기서는 항상 성공으로 스텁
+    module._build_host_info = lambda c, h=None: {}
     try:
         module.main()
     except _ExitJson as exc:
@@ -400,7 +402,8 @@ def test_module_failed_parts_is_deterministic():
 def test_dns_error_only_when_result_empty_and_a_source_failed(
         servers, dns_ok, config_ok, expected):
     out = _errors(_NET, _NET_TASK, {
-        "_e_dns_servers": servers, "_e_dns_ok": dns_ok, "_e_config_ok": config_ok})
+        "_e_dns_servers": servers, "_e_dns_ok": dns_ok, "_e_config_ok": config_ok,
+        "_e_norm_interfaces": [{"name": "vmk0"}]})
     assert len(out) == expected, (servers, dns_ok, config_ok, out)
     for entry in out:
         _assert_section_error(entry, "network/dns")
@@ -408,9 +411,21 @@ def test_dns_error_only_when_result_empty_and_a_source_failed(
 
 
 def test_dns_error_does_not_change_section_status():
-    facts = _template(_NET, _NET_TASK, "_sections_collected_fragment")
-    assert facts == ["network"]
-    assert _template(_NET, _NET_TASK, "_sections_failed_fragment") == []
+    """인터페이스가 수집된 상태라면 DNS 오류는 섹션 status 를 바꾸지 않는다 (2026-09-03: 판정식이 인터페이스 유무를 본다)."""
+    ctx = {"_e_norm_interfaces": [{"name": "vmk0"}], "_e_dns_servers": [],
+           "_e_dns_ok": False, "_e_config_ok": False}
+    assert list(_render(_NET, _NET_TASK, "_sections_collected_fragment", ctx)) == ["network"]
+    assert list(_render(_NET, _NET_TASK, "_sections_failed_fragment", ctx)) == []
+
+
+def test_network_section_failed_when_no_interface():
+    """2026-09-03 (B-12): 인터페이스가 하나도 없으면 network 는 수집한 것이 아니다."""
+    ctx = {"_e_norm_interfaces": [], "_e_dns_servers": [], "_e_dns_ok": True, "_e_config_ok": True}
+    assert list(_render(_NET, _NET_TASK, "_sections_collected_fragment", ctx)) == []
+    assert list(_render(_NET, _NET_TASK, "_sections_failed_fragment", ctx)) == ["network"]
+    out = _errors(_NET, _NET_TASK, ctx)
+    assert len(out) == 1 and out[0]["section"] == "network"
+    _assert_section_error(out[0], "network/no-interface")
 
 
 def test_dns_flags_are_actually_consumed():

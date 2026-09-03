@@ -6,16 +6,24 @@
 # best-effort: 일부 cmdlet 미설치 / 권한 부족 시 빈 값.
 #
 # 출력 sub-key: data.system.runtime
+#
+# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-31/B-32): 이 파일이 Windows system.runtime 의 **단일 구현**이다.
+#   종전에는 gather_system.yml 이 같은 9 키를 다른 의미로 먼저 만들고 여기서 통째로 덮어썼다.
+#   - ntp_synchronized / ntp_active: 모르면 null (false 단정 금지)
+#   - firewall_state: 프로필을 하나도 못 읽으면 null (종전 'inactive' — 보안 필드 거짓 단정)
+#   - listening_ports: 상한 50 절단 제거
+#   - swap_*_mb: pagefile 조회 실패 시 null (0 placeholder 금지)
+#   - rescue: 9 키를 모두 null 로 낸다 (다른 곳이 runtime 을 만들지 않으므로 키가 사라지면 안 된다)
 
 - block:
     - name: "windows | runtime | timezone + NTP"
       ansible.windows.win_shell: |
         # windows-audit (2026-04-29):
         #   1) timezone: Windows TZ ID → IANA 매핑 (Linux 표기와 일관). 매핑 없으면 raw 유지.
-        #   2) NTP last_sync: w32tm /query /status 출력은 OS locale 의존 (en/ko/ja/...).
-        #      → registry HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Config (locale-free) 우선.
-        #      → fallback: w32tm /query /source 의 비어있지 않음 + Local CMOS Clock 아님 으로 sync 여부 추정.
-        $tzId = (Get-TimeZone).Id
+        #   2) NTP: w32tm /query /status 출력은 OS locale 의존 (en/ko/ja/...).
+        #      → w32tm /query /source (locale-free) 로 동기화 원본을 본다.
+        $tzId = $null
+        try { $tzId = (Get-TimeZone -ErrorAction Stop).Id } catch { $tzId = $null }
         $tzMap = @{
           'Korea Standard Time' = 'Asia/Seoul'
           'Tokyo Standard Time' = 'Asia/Tokyo'
@@ -37,18 +45,22 @@
           'New Zealand Standard Time' = 'Pacific/Auckland'
           'UTC' = 'UTC'
         }
-        $tzIana = if ($tzMap.ContainsKey($tzId)) { $tzMap[$tzId] } else { $tzId }
+        $tzIana = if ($tzId -and $tzMap.ContainsKey($tzId)) { $tzMap[$tzId] } else { $tzId }
 
         $svc = Get-Service -Name W32Time -ErrorAction SilentlyContinue
-        $svc_state = if ($svc) { $svc.Status.ToString() } else { '' }
+        # 서비스 조회 실패(null) 와 미실행(false) 을 구분한다.
+        $svc_running = if ($svc) { [bool]($svc.Status -eq 'Running') } else { $null }
 
-        # Locale-free sync detection
-        $source = ''
+        # Locale-free sync detection: 조회 실패 → null, 로컬 클럭/free-running → false, 외부 원본 → true
+        $source = $null
+        $is_synced = $null
         try {
           $src = w32tm /query /source 2>$null
-          if ($src) { $source = ($src | Select-Object -First 1).ToString().Trim() }
+          if ($LASTEXITCODE -eq 0 -and $src) {
+            $source = ($src | Select-Object -First 1).ToString().Trim()
+            $is_synced = [bool]($source -and $source -ne 'Local CMOS Clock' -and $source -notmatch 'Free-running')
+          }
         } catch {}
-        $is_synced = ($source -and $source -ne 'Local CMOS Clock' -and $source -notmatch 'Free-running')
 
         # last sync timestamp from w32tm (locale-aware best-effort, multiple language patterns)
         $sync = ''
@@ -78,7 +90,7 @@
         @{
           timezone      = $tzIana
           timezone_raw  = $tzId
-          w32time_state = $svc_state
+          w32time_running = $svc_running
           source        = $source
           synced        = $is_synced
           last_sync     = $sync_iso
@@ -111,7 +123,6 @@
           Get-NetTCPConnection -State Listen |
             Select-Object -ExpandProperty LocalPort -Unique |
             Sort-Object |
-            Select-Object -First 50 |
             ForEach-Object { $_ }
         }
       register:    _w_rt_ports
@@ -121,7 +132,9 @@
 
     - name: "windows | runtime | pagefile (swap)"
       ansible.windows.win_shell: |
-        Get-CimInstance Win32_PageFileUsage -ErrorAction SilentlyContinue | ForEach-Object {
+        # 조회 성공 + pagefile 없음 = 빈 출력 (합계 0 이 사실). 조회 자체 실패는 rc≠0.
+        $pf = @(Get-CimInstance Win32_PageFileUsage -ErrorAction Stop)
+        $pf | ForEach-Object {
           [PSCustomObject]@{
             name        = $_.Name
             size_mb     = [int]$_.AllocatedBaseSize
@@ -151,7 +164,7 @@
         _w_rt_ports_list: >-
           {%- set out = [] -%}
           {%- for line in (_w_rt_ports.stdout_lines | default([])) -%}
-            {%- if line | trim -%}
+            {%- if (line | trim).isdigit() -%}
               {%- set _ = out.append(line | trim | int) -%}
             {%- endif -%}
           {%- endfor -%}
@@ -164,6 +177,7 @@
             {%- endif -%}
           {%- endfor -%}
           {{ out }}
+        _w_rt_pagefile_ok: "{{ (_w_rt_pagefile.rc | default(1)) | int == 0 }}"
       no_log: true
 
     # cycle-016 Phase P 후속: Linux 와 키 일관성 통일
@@ -172,11 +186,18 @@
         _data_fragment:
           system:
             runtime:
-              timezone:         "{{ _w_rt_ntp_obj.timezone | default(none) }}"
-              ntp_active:       "{{ (_w_rt_ntp_obj.w32time_state | default('')) | lower in ['running','active'] }}"
-              # windows-audit: locale-independent (w32tm /query /source) — Korean/Japanese 서버에서도 정확
-              ntp_synchronized: "{{ _w_rt_ntp_obj.synced | default(false) | bool }}"
+              timezone:         "{{ _w_rt_ntp_obj.timezone | default(none, true) or none }}"
+              # W32Time 서비스 실행 여부. 조회 실패(null) 는 null.
+              ntp_active: >-
+                {%- set r = _w_rt_ntp_obj.w32time_running | default(none) -%}
+                {{ (r | bool) if (r is not none and (r | string | lower) in ['true','false']) else none }}
+              # windows-audit: locale-independent (w32tm /query /source) — Korean/Japanese 서버에서도 정확.
+              # 조회 실패 → null (false 단정 금지).
+              ntp_synchronized: >-
+                {%- set r = _w_rt_ntp_obj.synced | default(none) -%}
+                {{ (r | bool) if (r is not none and (r | string | lower) in ['true','false']) else none }}
               firewall_tool:    "windows_firewall"
+              # 프로필을 하나도 못 읽으면 null. 하나라도 enabled 면 active, 전부 disabled 면 inactive.
               firewall_state: >-
                 {# Round 19 (R19-1): plain set 은 for-loop 밖으로 전파되지 않아 any_enabled 가
                    항상 false → firewall_state 가 모든 호스트에서 'inactive' 오보(보안 필드).
@@ -185,7 +206,9 @@
                 {%- for fw in _w_rt_fw_list -%}
                   {%- if fw.enabled | default(false) -%}{%- set ns.any = true -%}{%- endif -%}
                 {%- endfor -%}
-                {{ 'active' if ns.any else 'inactive' }}
+                {%- if (_w_rt_fw_list | length) == 0 -%}{{ none }}
+                {%- else -%}{{ 'active' if ns.any else 'inactive' }}
+                {%- endif -%}
               listening_ports: >-
                 {%- set out = [] -%}
                 {%- for p in (_w_rt_ports_list | default([])) -%}
@@ -195,47 +218,75 @@
               # production-audit (2026-04-29): Jinja2 loop scoping 버그 수정 — namespace pattern (cycle-016 memory/storage와 일치)
               # 기존: `{% set total = total + ... %}` 는 loop 종료 시 마지막 iteration 값만 보존 → 합계가 아닌 마지막 pagefile 크기만 emit
               swap_total_mb: >-
+                {%- if not (_w_rt_pagefile_ok | bool) -%}{{ none }}
+                {%- else -%}
                 {%- set ns = namespace(t=0) -%}
                 {%- for pf in (_w_rt_pagefile_list | default([])) -%}
                   {%- set ns.t = ns.t + (pf.size_mb | default(0) | int) -%}
                 {%- endfor -%}
                 {{ ns.t }}
+                {%- endif -%}
               swap_used_mb: >-
+                {%- if not (_w_rt_pagefile_ok | bool) -%}{{ none }}
+                {%- else -%}
                 {%- set ns = namespace(u=0) -%}
                 {%- for pf in (_w_rt_pagefile_list | default([])) -%}
                   {%- set ns.u = ns.u + (pf.used_mb | default(0) | int) -%}
                 {%- endfor -%}
                 {{ ns.u }}
+                {%- endif -%}
               swap_free_mb: >-
+                {%- if not (_w_rt_pagefile_ok | bool) -%}{{ none }}
+                {%- else -%}
                 {%- set ns = namespace(t=0, u=0) -%}
                 {%- for pf in (_w_rt_pagefile_list | default([])) -%}
                   {%- set ns.t = ns.t + (pf.size_mb | default(0) | int) -%}
                   {%- set ns.u = ns.u + (pf.used_mb | default(0) | int) -%}
                 {%- endfor -%}
                 {{ ns.t - ns.u }}
+                {%- endif -%}
               # Windows-specific 부가 정보 (Linux 키 외 추가 — 일관성 유지하면서 풍부함 보존)
               firewall_profiles: "{{ _w_rt_fw_list }}"
               pagefiles:        "{{ _w_rt_pagefile_list }}"
-              ntp_last_sync:    "{{ _w_rt_ntp_obj.last_sync | default(none) }}"
+              ntp_last_sync:    "{{ _w_rt_ntp_obj.last_sync | default(none, true) or none }}"
         _sections_supported_fragment: ['system']
         _sections_collected_fragment: ['system']
         _sections_failed_fragment:    []
-        _errors_fragment:             []
+        # 네 조회 중 실패한 것이 있으면 사유를 남긴다 (섹션 status 는 유지 — 시나리오 B).
+        _errors_fragment: >-
+          {%- set failed = [] -%}
+          {%- if (_w_rt_ntp.rc | default(1)) | int != 0 -%}{%- set _ = failed.append('timezone,ntp') -%}{%- endif -%}
+          {%- if (_w_rt_fw.rc | default(1)) | int != 0 -%}{%- set _ = failed.append('firewall') -%}{%- endif -%}
+          {%- if (_w_rt_ports.rc | default(1)) | int != 0 -%}{%- set _ = failed.append('listening_ports') -%}{%- endif -%}
+          {%- if not (_w_rt_pagefile_ok | bool) -%}{%- set _ = failed.append('pagefile') -%}{%- endif -%}
+          {%- if failed -%}
+            {{ [{'section': 'system',
+                 'message': '서버 기본 정보 중 운영 환경 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+                 'detail': 'scope=' ~ (failed | join(',')) ~ '; os=windows; cause=command_failed'}] }}
+          {%- else -%}{{ [] }}
+          {%- endif -%}
       no_log: true
   rescue:
-    - name: "windows | runtime | rescue (best-effort skip — gather_system runtime 보존)"
+    - name: "windows | runtime | rescue (all-null runtime)"
       ansible.builtin.set_fact:
-        # Round 18 (R18-2): Linux #6 와 동일 — 기존엔 all-null runtime 을 emit → merge_fragment 의
-        # 2-level wholesale 교체로 gather_system 이 이미 수집한 runtime 을 통째로 덮어써 데이터 유실.
-        # 빈 fragment 를 emit 해 gather_system 의 runtime 을 보존한다.
-        _data_fragment: {}
+        # 2026-09-03: 이 파일이 runtime 의 단일 구현이므로 예외 시에도 9 키를 null 로 낸다
+        #   (키가 빠지면 호출자 계약(system.runtime 9 키) 이 깨진다). 섹션 status 는 유지한다.
+        _data_fragment:
+          system:
+            runtime:
+              timezone:         null
+              ntp_active:       null
+              ntp_synchronized: null
+              firewall_tool:    "windows_firewall"
+              firewall_state:   null
+              listening_ports:  []
+              swap_total_mb:    null
+              swap_used_mb:     null
+              swap_free_mb:     null
         _sections_supported_fragment: ['system']
         _sections_collected_fragment: []
-        # NEW-3 (2026-08-12): 종전 값 'system_runtime' 은 schema 11 섹션이 아니라
-        #   build_sections 의 섹션 루프에 걸리지 않는 완전한 no-op 이었다 (동작 불변).
-        #   system 섹션은 gather_system 이 이미 수집했으므로 failed 로 올리지 않는다.
         _sections_failed_fragment:    []
-        # M1: Linux 와 **같은 문장** (linux/gather_runtime.yml). OS 구분은 detail 로만 남긴다.
+        # M1: Linux 와 **같은 문장** (linux/gather_system.yml). OS 구분은 detail 로만 남긴다.
         _errors_fragment:
           - section: system
             message: "서버 기본 정보 중 운영 환경 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."

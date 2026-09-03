@@ -2,17 +2,23 @@
 # os-gather/tasks/linux/gather_network.yml
 # 네트워크 인터페이스 수집 → data.network fragment
 #
-# Python 경로: ansible_* setup facts 기반 (기존 로직)
-# Raw fallback: ip 명령 + /sys/class/net + /etc/resolv.conf
+# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-12/26/27/29/30):
+#   - Python / raw 두 경로가 **같은 raw 명령 + 같은 판정식**을 쓴다. 종전 python 경로는
+#     ansible_interfaces 중 IPv4 를 가진 것만 interfaces[] 에 넣어(NIC 4포트 중 IP 없는 3포트가
+#     인벤토리에서 사라짐) link_status 를 관리 up 플래그로 판정했고(케이블 빠져도 up), raw 경로는
+#     sysfs 전수 + operstate 였다. 이제 두 경로 모두 sysfs + ip 명령이다.
+#   - mac 은 normalize_mac (소문자 콜론) — Windows/ESXi 와 같은 형식.
+#   - IPv6 scope 는 `ip -o -6 addr` 의 scope 토큰 (global/link/host/site) — 주소 앞자리로 추정하지 않는다.
+#   - adapters[].name 에 'Unknown' 리터럴을 넣지 않는다 (없으면 null).
+#   - 섹션 status 는 실제 결과로 (interfaces 나 dns 가 하나라도 있어야 success).
 #
 # bond/vlan/bridge/team 토폴로지는 아래 _l_net_collector 스크립트(POSIX sh)가
 # '|' 구분 라인으로 emit → filter_plugins/network_topology.py(build_linux_network)
-# 가 파싱·정규화. python_ok 경로는 shell, raw fallback 경로는 raw 로 같은 스크립트를
-# 실행하므로 두 경로의 bond 수집 결과가 동일하다. RHEL/Rocky/Alma/CentOS/Oracle/
-# Ubuntu/Debian/SUSE 공통 (sysfs+procfs+ip 다중 소스, 일부 부재해도 graceful).
+# 가 파싱·정규화. RHEL/Rocky/Alma/CentOS/Oracle/Ubuntu/Debian/SUSE 공통
+# (sysfs+procfs+ip 다중 소스, 일부 부재해도 graceful).
 
 # =============================================================================
-# Shared: bond/vlan/bridge/team 토폴로지 수집 스크립트 (두 경로 공용 — 단일 정의)
+# Shared: bond/vlan/bridge/team 토폴로지 수집 스크립트 (단일 정의)
 # =============================================================================
 - name: "linux | network | define topology collector"
   ansible.builtin.set_fact:
@@ -124,584 +130,314 @@
   no_log: true
 
 # =============================================================================
-# Python Path
+# 수집 — 두 경로 공통 (ip 명령 + /sys/class/net + /etc/resolv.conf + lspci + ethtool)
 # =============================================================================
-- block:
-    # 2026-04-29 fix B76: hardware NIC (lspci -k) 수집 — Redfish/ESXi와 키 일관성.
-    # 이전: network.adapters=[] 빈 list. 호출자가 PCI NIC 모델/driver 식별 불가.
-    - name: "linux | network | hardware NIC (lspci)"
-      # 2026-04-30 fix: lspci -mm awk field 인덱스 정정.
-      # 형식: SLOT "class" "vendor" "device" -rRR -pPP "subvendor" "subdevice"
-      # awk -F'"' 분할 시 → $2=class / $4=vendor / $6=device / $8=subvendor
-      # 이전 코드: vendor=$6 (= device 잘못), device=$8 (= subvendor 잘못)
-      #
-      # LOW-9 fix: stderr 캡처 (2>/dev/null 제거) — 권한 부족 시 lspci 가 partial
-      # stdout 으로 NIC 일부만 enumerate 가능. stderr 비어있지 않으면 errors_fragment
-      # 에 명시해 호출자가 partial 인지 추적 가능.
-      ansible.builtin.shell: |
-        export LANG=C LC_ALL=C
-        if command -v lspci >/dev/null 2>&1; then
-          lspci -k -mm -d ::0200 | while IFS= read -r line; do
-            slot=$(echo "$line" | awk -F'"' '{print $1}' | tr -d ' ')
-            vendor=$(echo "$line" | awk -F'"' '{print $4}')
-            device=$(echo "$line" | awk -F'"' '{print $6}')
-            driver=$(lspci -k -s "$slot" | awk '/Kernel driver in use:/{print $5}')
-            echo "ADAPTER|${slot}|${vendor}|${device}|${driver}"
-          done
-        fi
-      register: _l_lspci_nic
-      changed_when: false
-      failed_when: false
-      no_log: true
+- name: "linux | network | raw gather"
+  ansible.builtin.raw: |
+    export LANG=C LC_ALL=C
+    # --- DNS (systemd-resolved 우회 — 127.0.0.53 stub 회피) ---
+    if command -v resolvectl >/dev/null 2>&1; then
+      resolvectl status 2>/dev/null | awk '/Current DNS Server:/{print "DNS_REAL="$4}'
+    fi
+    if [ -f /run/systemd/resolve/resolv.conf ]; then
+      awk '/^nameserver/{print "DNS_REAL="$2}' /run/systemd/resolve/resolv.conf
+    fi
+    grep -v '^[#;]' /etc/resolv.conf 2>/dev/null | awk '/^nameserver/{print "DNS="$2}'
+    # --- Default gateway ---
+    dg=$(ip route show default 2>/dev/null | head -1)
+    if [ -n "$dg" ]; then
+      echo "GW=$(echo "$dg" | awk '{print $3}')"
+      echo "GW_DEV=$(echo "$dg" | awk '{print $5}')"
+    fi
+    # --- Interfaces (IP 유무와 무관하게 전수 — bond slave / bridge port 는 토폴로지 필터가 채운다) ---
+    for dev in $(ls /sys/class/net/ 2>/dev/null); do
+      case "$dev" in lo|docker*|br-*|veth*|virbr*|vir*|cni*|flannel*|cali*|tunl*|dummy*|kube-*) continue;; esac
+      if [ -e "/sys/class/net/$dev/master" ] && [ ! -d "/sys/class/net/$dev/bridge" ] && [ ! -d "/sys/class/net/$dev/bonding" ]; then
+        continue
+      fi
+      mac=$(cat /sys/class/net/$dev/address 2>/dev/null)
+      [ -z "$mac" ] || [ "$mac" = "00:00:00:00:00:00" ] && continue
+      mtu=$(cat /sys/class/net/$dev/mtu 2>/dev/null || echo "")
+      speed=$(cat /sys/class/net/$dev/speed 2>/dev/null || echo "")
+      [ "$speed" = "-1" ] && speed=""
+      state=$(cat /sys/class/net/$dev/operstate 2>/dev/null || echo unknown)
+      addr_line=$(ip -o -4 addr show dev "$dev" 2>/dev/null | head -1)
+      cidr=$(echo "$addr_line" | awk '{print $4}')
+      addr=$(echo "$cidr" | cut -d/ -f1)
+      prefix=$(echo "$cidr" | cut -sd/ -f2)
+      echo "IF=${dev}|${mac}|${mtu}|${speed}|${state}|${addr:-}|${prefix:-}"
+      # IPv6 (link-local + global, ::1 제외). scope 는 ip 가 준 값 그대로 (global/link/host/site).
+      ip -o -6 addr show dev "$dev" 2>/dev/null | awk -v d="$dev" '{
+        a=""; sc="";
+        for (i=1;i<=NF;i++) { if ($i=="inet6") a=$(i+1); if ($i=="scope") sc=$(i+1) }
+        if (a=="" ) next;
+        n=split(a, ap, "/");
+        if (ap[1]=="::1") next;
+        print "IF6=" d "|" ap[1] "|" ap[2] "|" sc
+      }'
+    done
+    # --- hardware NIC (lspci -mm) + driver. awk -F'"' field: $2=class / $4=vendor / $6=device ---
+    if command -v lspci >/dev/null 2>&1; then
+      lspci -k -mm -d ::0200 | while IFS= read -r line; do
+        slot=$(echo "$line" | awk -F'"' '{print $1}' | tr -d ' ')
+        vendor=$(echo "$line" | awk -F'"' '{print $4}')
+        device=$(echo "$line" | awk -F'"' '{print $6}')
+        driver=$(lspci -k -s "$slot" 2>/dev/null | awk '/Kernel driver in use:/{print $5}')
+        echo "ADAPTER|${slot}|${vendor}|${device}|${driver}"
+      done
+    fi
+    # --- NIC firmware (ethtool -i), bus-info 도메인 strip → adapters[].pci 매칭 ---
+    for d in $(ls /sys/class/net 2>/dev/null); do
+      [ -e "/sys/class/net/$d/device" ] || continue
+      inf=$(ethtool -i "$d" 2>/dev/null)
+      bi=$(printf '%s\n' "$inf" | sed -n 's/^bus-info: //p')
+      fw=$(printf '%s\n' "$inf" | sed -n 's/^firmware-version: //p')
+      [ -n "$bi" ] || continue
+      echo "ETHFW|$(echo "$bi" | sed 's/^0000://')|${fw}"
+    done
+    # bond/vlan/bridge/team 토폴로지 — 단일 정의 스크립트 주입
+    {{ _l_net_collector }}
+  register: _l_net_raw
+  changed_when: false
+  failed_when: false
+  no_log: true
 
-    # 2026-06-22 T1: NIC firmware (ethtool -i). bus-info(0000:2a:00.0) → adapters[].pci(2a:00.0) 매칭 위해
-    #   도메인(0000:) strip. device 심볼릭링크 있는 real PCI NIC 만 (bond/vlan/lo 제외). root 불필요.
-    - name: "linux | network | ethtool firmware map"
-      ansible.builtin.shell: |
-        export LANG=C LC_ALL=C
-        for d in $(ls /sys/class/net 2>/dev/null); do
-          [ -e "/sys/class/net/$d/device" ] || continue
-          inf=$(ethtool -i "$d" 2>/dev/null)
-          bi=$(printf '%s\n' "$inf" | sed -n 's/^bus-info: //p')
-          fw=$(printf '%s\n' "$inf" | sed -n 's/^firmware-version: //p')
-          [ -n "$bi" ] || continue
-          echo "ETHFW|$(echo "$bi" | sed 's/^0000://')|${fw}"
-        done
-      register: _l_ethtool_fw
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "linux | network | real DNS lookup (systemd-resolved 우회)"
-      ansible.builtin.shell: |
-        export LANG=C LC_ALL=C
-        if command -v resolvectl >/dev/null 2>&1; then
-          resolvectl status 2>/dev/null | awk '/Current DNS Server:/{print $4}'
-        fi
-        if [ -f /run/systemd/resolve/resolv.conf ]; then
-          awk '/^nameserver/{print $2}' /run/systemd/resolve/resolv.conf
-        fi
-      register: _l_real_dns
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "linux | network | bond/vlan/bridge topology (shell)"
-      ansible.builtin.shell: "{{ _l_net_collector }}"
-      args:
-        executable: /bin/sh
-      register: _l_topo_sh
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "linux | network | set primary info"
-      ansible.builtin.set_fact:
-        _l_norm_primary_iface: "{{ (ansible_default_ipv4 | default({})).interface | default('') }}"
-        _l_norm_default_gw:    "{{ (ansible_default_ipv4 | default({})).gateway   | default(none) }}"
-        _l_norm_dns_servers: >-
-          {%- set real = [] -%}
-          {%- for line in (_l_real_dns.stdout_lines | default([])) -%}
-            {%- set s = line | trim -%}
-            {%- if s and not s.startswith('127.') and s not in real -%}
-              {%- set _ = real.append(s) -%}
+- name: "linux | network | parse raw"
+  ansible.builtin.set_fact:
+    _l_raw_dns: >-
+      {%- set real = [] -%}
+      {%- set fallback = [] -%}
+      {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('DNS_REAL=') -%}
+          {%- set s = line[9:] | trim -%}
+          {%- if s and not s.startswith('127.') and s not in real -%}
+            {%- set _ = real.append(s) -%}
+          {%- endif -%}
+        {%- elif line.startswith('DNS=') -%}
+          {%- set s = line[4:] | trim -%}
+          {%- if s and not s.startswith('127.') and s not in fallback -%}
+            {%- set _ = fallback.append(s) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ real if real else fallback }}
+    _l_raw_gw: >-
+      {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('GW=') -%}{{ line[3:] | trim }}{% endif -%}
+      {%- endfor -%}
+    _l_raw_gw_dev: >-
+      {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('GW_DEV=') -%}{{ line[7:] | trim }}{% endif -%}
+      {%- endfor -%}
+    # IF6 (IPv6 addresses by device) — scope 는 ip 명령 값 (global/link/host/site)
+    _l_raw_ipv6_by_dev: >-
+      {%- set m = {} -%}
+      {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('IF6=') -%}
+          {%- set parts = line[4:].split('|') -%}
+          {%- if parts | length >= 4 -%}
+            {%- set dev = parts[0] | trim -%}
+            {%- set v6  = parts[1] | trim -%}
+            {%- set pfx = parts[2] | trim -%}
+            {%- set scope = (parts[3] | trim) or none -%}
+            {%- if dev not in m -%}{%- set _ = m.update({dev: []}) -%}{%- endif -%}
+            {%- set _ = m[dev].append({
+              'family': 'ipv6',
+              'address': v6,
+              'prefix_length': (pfx | int) if pfx.isdigit() else none,
+              'subnet_mask': none,
+              'gateway': none,
+              'scope': scope
+            }) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ m }}
+    # ADAPTER (lspci PCI NIC) + ETHFW (ethtool firmware) — id, name, manufacturer, model, driver, firmware_version, pci
+    _l_raw_adapters: >-
+      {%- set out = [] -%}
+      {%- set fwmap = {} -%}
+      {%- for fl in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if fl.startswith('ETHFW|') -%}
+          {%- set fp = fl.split('|') -%}
+          {%- if fp | length >= 3 -%}{%- set _ = fwmap.update({fp[1]: (fp[2] | trim) or none}) -%}{%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('ADAPTER|') -%}
+          {%- set parts = line.split('|') -%}
+          {%- if parts | length >= 5 -%}
+            {%- set slot   = parts[1] | trim -%}
+            {%- set vendor = parts[2] | trim -%}
+            {%- set device = parts[3] | trim -%}
+            {%- set driver = parts[4] | trim -%}
+            {%- if slot -%}
+              {%- set _ = out.append({
+                'id':           slot,
+                'name':         device or none,
+                'manufacturer': vendor or none,
+                'model':        device or none,
+                'driver':       driver or none,
+                'firmware_version': fwmap.get(slot, none),
+                'pci':          slot,
+              }) -%}
             {%- endif -%}
-          {%- endfor -%}
-          {%- set fallback = [] -%}
-          {%- for ns in ((ansible_dns | default({})).nameservers | default([])) -%}
-            {%- set s = ns | string -%}
-            {%- if not s.startswith('127.') and s not in fallback -%}
-              {%- set _ = fallback.append(s) -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ real if real else fallback }}
-      no_log: true
-
-    - name: "linux | network | build interfaces"
-      ansible.builtin.set_fact:
-        _l_norm_interfaces: >-
-          {%- set out = [] -%}
-          {%- set skip_pfx = ['docker','br-','veth','virbr','vir','lo','cni','flannel','cali','tunl','dummy','kube-'] -%}
-          {%- for iface in (ansible_interfaces | default([])) -%}
-            {%- set skip = [] -%}
-            {%- for p in skip_pfx -%}
-              {%- if iface.startswith(p) -%}{%- set _ = skip.append(1) -%}{%- endif -%}
-            {%- endfor -%}
-            {%- if skip | length == 0 -%}
-              {# production-audit (2026-04-29): VLAN/bond/bridge 이름의 점/대시는 Ansible facts에서 underscore로 정규화됨 (예: bond0.4094 → ansible_bond0_4094) #}
-              {%- set iface_key = iface | replace('.', '_') | replace('-', '_') | replace(':', '_') -%}
-              {%- set d   = hostvars[inventory_hostname]['ansible_' ~ iface_key] | default(hostvars[inventory_hostname]['ansible_' ~ iface] | default({})) -%}
-              {%- set ipv4 = d.ipv4.address | default(none) if d.ipv4 is defined else none -%}
-              {%- if ipv4 and ipv4 != '127.0.0.1' and d.macaddress is defined -%}
-                {%- set nm = d.ipv4.netmask | default('') if d.ipv4 is defined else '' -%}
-                {%- if nm -%}
-                  {# cycle 2026-05-07-post fix: val 을 namespace 에 포함 — 이전에는 inner for(bit) 안 set val 이 outer scope 미반영 → /23, /30 같은 비표준 mask 잘못 계산. /24 만 우연히 정상. #}
-                  {%- set ns = namespace(bits=0, val=0) -%}
-                  {%- for octet in nm.split('.') -%}
-                    {%- set ns.val = octet | int -%}
-                    {%- for bit in [128,64,32,16,8,4,2,1] -%}
-                      {%- if ns.val >= bit -%}
-                        {%- set ns.bits = ns.bits + 1 -%}
-                        {%- set ns.val = ns.val - bit -%}
-                      {%- endif -%}
-                    {%- endfor -%}
-                  {%- endfor -%}
-                  {%- set prefix = ns.bits -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+    _l_raw_ifaces: >-
+      {%- set out = [] -%}
+      {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('IF=') -%}
+          {%- set parts = line[3:].split('|') -%}
+          {%- if parts | length >= 7 -%}
+            {%- set dev_name    = parts[0] | trim -%}
+            {%- set mac_addr    = parts[1] | trim -%}
+            {%- set mtu_str     = parts[2] | trim -%}
+            {%- set speed_str   = parts[3] | trim -%}
+            {%- set state_str   = parts[4] | trim -%}
+            {%- set ip_addr     = parts[5] | trim -%}
+            {%- set prefix_str  = parts[6] | trim -%}
+            {%- set mtu_val     = (mtu_str | int) if mtu_str.isdigit() else none -%}
+            {%- set speed_val   = (speed_str | int) if (speed_str.isdigit() and (speed_str | int) > 0) else none -%}
+            {%- set prefix_val  = (prefix_str | int) if prefix_str.isdigit() else none -%}
+            {%- set mask = none -%}
+            {%- if prefix_val is not none -%}
+              {%- set octets = [] -%}
+              {%- set ns = namespace(remain=prefix_val) -%}
+              {%- for _ in range(4) -%}
+                {%- if ns.remain >= 8 -%}
+                  {%- set _ = octets.append(255) -%}
+                  {%- set ns.remain = ns.remain - 8 -%}
+                {%- elif ns.remain > 0 -%}
+                  {%- set _ = octets.append(256 - (2 ** (8 - ns.remain))) -%}
+                  {%- set ns.remain = 0 -%}
                 {%- else -%}
-                  {%- set prefix = none -%}
-                {%- endif -%}
-                {%- set is_primary = (iface == _l_norm_primary_iface) -%}
-                {%- set _speed_raw = d.speed | default(-1) -%}
-                {%- set _speed_int = (_speed_raw | int) if (_speed_raw | string | regex_replace('[^0-9-]', '') | length > 0) else -1 -%}
-                {# 2026-04-29 fix B68: IPv6 addresses — ansible_facts d.ipv6 (link-local + global).
-                   Jinja control statements는 dict literal 안에 못 넣으므로 ipv6_addrs를 dict 앞에서 build. #}
-                {%- set ipv6_addrs = [] -%}
-                {%- for v6 in (d.ipv6 | default([])) -%}
-                  {%- if v6.address is defined and v6.address and v6.address != '::1' -%}
-                    {%- set _ = ipv6_addrs.append({
-                      'family':        'ipv6',
-                      'address':       v6.address,
-                      'prefix_length': (v6.prefix | int) if v6.prefix is defined else none,
-                      'subnet_mask':   none,
-                      'gateway':       none,
-                      'scope':         v6.scope | default(none)
-                    }) -%}
-                  {%- endif -%}
-                {%- endfor -%}
-                {%- set ipv4_addr = {
-                  'family':        'ipv4',
-                  'address':       ipv4,
-                  'prefix_length': prefix,
-                  'subnet_mask':   nm if nm else none,
-                  'gateway':       _l_norm_default_gw if is_primary else none
-                } -%}
-                {%- set _ = out.append({
-                  'id':          iface,
-                  'name':        iface,
-                  'kind':        'os_nic',
-                  'mac':         d.macaddress | default(none),
-                  'mtu':         d.mtu   | default(none),
-                  'speed_mbps':  _speed_int if _speed_int > 0 else none,
-                  'link_status': 'up' if d.get('active',false) else 'down',
-                  'is_primary':  is_primary,
-                  'addresses':   [ipv4_addr] + ipv6_addrs
-                }) -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-      no_log: true
-
-    # cycle-016 (2026-04-29): network.summary group 산출 (speed_mbps 기준, namespace pattern)
-    - name: "linux | network | compute summary groups"
-      ansible.builtin.set_fact:
-        _l_net_summary: >-
-          {%- set ns = namespace(groups=[], seen={}) -%}
-          {%- for n in (_l_norm_interfaces | default([])) -%}
-            {%- set sp = n.speed_mbps | default(none) -%}
-            {%- if sp is not none and (sp | int) > 0 -%}
-              {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
-              {%- set key = sp | string -%}
-              {%- if key in ns.seen -%}
-                {%- set idx = ns.seen[key] -%}
-                {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
-              {%- else -%}
-                {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-                {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': none, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ {'groups': ns.groups} }}
-      no_log: true
-
-    # bond/vlan/bridge/team 토폴로지 정규화 (filter_plugins/network_topology.py).
-    # 입력: 기존 _l_norm_interfaces(IP 보유 NIC + bond master) + collector 라인.
-    # 출력: enriched interfaces(slave 물리 NIC 추가 + bond_role) + bonds/bridges/teams.
-    # merge_linux_addresses: bond alias / secondary IP 를 parent addresses[] 에 병합
-    # (build_linux_network 가 bond master IP 를 bonds[].addresses 로 mirror → alias 자동 반영).
-    - name: "linux | network | normalize topology"
-      ansible.builtin.set_fact:
-        _l_net_topo: >-
-          {{ (_l_norm_interfaces
-              | merge_linux_addresses(_l_topo_sh.stdout_lines | default([])))
-             | build_linux_network(_l_topo_sh.stdout_lines | default([])) }}
-      no_log: true
-
-    # cycle-016 Phase P: 3 채널 key 일관성 — adapters / ports 빈 list 키 노출 (Linux OS 한계)
-    - name: "linux | network | build fragment"
-      ansible.builtin.set_fact:
-        _data_fragment:
-          network:
-            dns_servers: "{{ _l_norm_dns_servers }}"
-            default_gateways: >-
-              {%- set out = [] -%}
-              {%- if _l_norm_default_gw -%}
-                {%- set _ = out.append({'family':'ipv4','address':_l_norm_default_gw}) -%}
-              {%- endif -%}
-              {{ out }}
-            interfaces: "{{ _l_net_topo.interfaces }}"
-            # bond/vlan/bridge/team 토폴로지 (Additive — 기존 필드 불변)
-            bonds:    "{{ _l_net_topo.bonds }}"
-            bridges:  "{{ _l_net_topo.bridges }}"
-            teams:    "{{ _l_net_topo.teams }}"
-            # 2026-04-29 fix B76: lspci -k -mm 결과로 hardware NIC adapters 채움
-            # 2026-06-22 T1: ethtool firmware-version 보강 (pci 매칭)
-            adapters: >-
-              {%- set out = [] -%}
-              {%- set fwmap = {} -%}
-              {%- for fl in (_l_ethtool_fw.stdout_lines | default([])) -%}
-                {%- if fl.startswith('ETHFW|') -%}
-                  {%- set fp = fl.split('|') -%}
-                  {%- if fp | length >= 3 -%}{%- set _ = fwmap.update({fp[1]: (fp[2] | trim) or none}) -%}{%- endif -%}
+                  {%- set _ = octets.append(0) -%}
                 {%- endif -%}
               {%- endfor -%}
-              {%- for line in (_l_lspci_nic.stdout_lines | default([])) -%}
-                {%- if line.startswith('ADAPTER|') -%}
-                  {%- set parts = line.split('|') -%}
-                  {%- if parts | length >= 5 -%}
-                    {%- set _ = out.append({
-                      'id':           parts[1],
-                      'name':         parts[3] or 'Unknown',
-                      'manufacturer': parts[2] or none,
-                      'model':        parts[3] or none,
-                      'driver':       parts[4] or none,
-                      'firmware_version': fwmap.get(parts[1], none),
-                      'pci':          parts[1],
-                    }) -%}
-                  {%- endif -%}
-                {%- endif -%}
-              {%- endfor -%}
-              {{ out }}
-            ports:       []
-            summary: "{{ _l_net_summary | default({'groups': []}) }}"
-        _sections_supported_fragment: ['network']
-        _sections_collected_fragment: ['network']
-        _sections_failed_fragment:    []
-        # LOW-9: lspci stderr 비어있지 않으면 권한 부족/partial enumeration 의심 — errors[] 에 명시.
-        # H4 (2026-08-12): 종전에는 대상 서버가 뱉은 stderr 원문이 그대로 message 에 실려
-        #   Portal Grid 에 임의 영문/경로 문자열이 노출됐다. message 는 고정 한국어 문장으로
-        #   두고 stderr 원문·rc 는 detail(문자열) 로 옮긴다. 섹션은 계속 성공이므로
-        #   _sections_failed_fragment 는 건드리지 않는다 (경고성 오류).
-        _errors_fragment: "{{ [{'section':'network','message':'네트워크 카드 상세 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.','detail':('source=lspci; rc=' ~ (_l_lspci_nic.rc | default('none')) ~ '; stderr=' ~ ((_l_lspci_nic.stderr | default('') | replace('\n', ' ') | trim | truncate(500, true)) or 'none'))}] if ((_l_lspci_nic.stderr | default('') | trim | length) > 0) else [] }}"
-      no_log: true
-  when: _l_python_mode == 'python_ok'
-
-# =============================================================================
-# Raw Fallback Path — ip 명령 + /sys/class/net + /etc/resolv.conf
-# =============================================================================
-- block:
-    - name: "linux | network | raw gather"
-      ansible.builtin.raw: |
-        # --- DNS (systemd-resolved 우회 — 127.0.0.53 stub 회피) ---
-        if command -v resolvectl >/dev/null 2>&1; then
-          resolvectl status 2>/dev/null | awk '/Current DNS Server:/{print "DNS_REAL="$4}'
-        fi
-        if [ -f /run/systemd/resolve/resolv.conf ]; then
-          awk '/^nameserver/{print "DNS_REAL="$2}' /run/systemd/resolve/resolv.conf
-        fi
-        grep -v '^[#;]' /etc/resolv.conf 2>/dev/null | awk '/^nameserver/{print "DNS="$2}'
-        # --- Default gateway ---
-        dg=$(ip route show default 2>/dev/null | head -1)
-        if [ -n "$dg" ]; then
-          echo "GW=$(echo "$dg" | awk '{print $3}')"
-          echo "GW_DEV=$(echo "$dg" | awk '{print $5}')"
-        fi
-        # --- Interfaces ---
-        for dev in $(ls /sys/class/net/ 2>/dev/null); do
-          case "$dev" in lo|docker*|br-*|veth*|virbr*|vir*|cni*|flannel*|cali*|tunl*|dummy*|kube-*) continue;; esac
-          # Skip bond slave / bridge port (has master but is not the master itself)
-          if [ -e "/sys/class/net/$dev/master" ] && [ ! -d "/sys/class/net/$dev/bridge" ] && [ ! -d "/sys/class/net/$dev/bonding" ]; then
-            continue
-          fi
-          mac=$(cat /sys/class/net/$dev/address 2>/dev/null)
-          [ -z "$mac" ] || [ "$mac" = "00:00:00:00:00:00" ] && continue
-          mtu=$(cat /sys/class/net/$dev/mtu 2>/dev/null || echo 0)
-          speed=$(cat /sys/class/net/$dev/speed 2>/dev/null || echo "")
-          [ "$speed" = "-1" ] && speed=""
-          state=$(cat /sys/class/net/$dev/operstate 2>/dev/null || echo unknown)
-          addr_line=$(ip -o -4 addr show dev "$dev" 2>/dev/null | head -1)
-          cidr=$(echo "$addr_line" | awk '{print $4}')
-          addr=$(echo "$cidr" | cut -d/ -f1)
-          prefix=$(echo "$cidr" | cut -sd/ -f2)
-          echo "IF=${dev}|${mac}|${mtu}|${speed}|${state}|${addr:-}|${prefix:-}"
-          # 2026-04-29 fix B68 raw: IPv6 addresses (link-local + global, ::1 제외).
-          ip -o -6 addr show dev "$dev" 2>/dev/null | while read -r _ _ _ v6cidr _; do
-            v6addr=${v6cidr%/*}
-            v6prefix=${v6cidr#*/}
-            [ "$v6addr" = "::1" ] && continue
-            [ -z "$v6addr" ] && continue
-            scope="global"
-            case "$v6addr" in fe80*) scope="link";; fc*|fd*) scope="ula";; esac
-            echo "IF6=${dev}|${v6addr}|${v6prefix}|${scope}"
-          done
-        done
-        # 2026-04-30 fix B76 raw: hardware NIC (lspci) — Python 미동작 환경 보완.
-        # awk -F'"' field: $2=class / $4=vendor / $6=device.
-        if command -v lspci >/dev/null 2>&1; then
-          lspci -k -mm -d ::0200 2>/dev/null | while IFS= read -r line; do
-            slot=$(echo "$line" | awk -F'"' '{print $1}' | tr -d ' ')
-            vendor=$(echo "$line" | awk -F'"' '{print $4}')
-            device=$(echo "$line" | awk -F'"' '{print $6}')
-            driver=$(lspci -k -s "$slot" 2>/dev/null | awk '/Kernel driver in use:/{print $5}')
-            echo "ADAPTER|${slot}|${vendor}|${device}|${driver}"
-          done
-        fi
-        # 2026-06-22 T1 raw: NIC firmware (ethtool -i), bus-info 도메인 strip
-        for d in $(ls /sys/class/net 2>/dev/null); do
-          [ -e "/sys/class/net/$d/device" ] || continue
-          inf=$(ethtool -i "$d" 2>/dev/null)
-          bi=$(printf '%s\n' "$inf" | sed -n 's/^bus-info: //p')
-          fw=$(printf '%s\n' "$inf" | sed -n 's/^firmware-version: //p')
-          [ -n "$bi" ] || continue
-          echo "ETHFW|$(echo "$bi" | sed 's/^0000://')|${fw}"
-        done
-        # bond/vlan/bridge/team 토폴로지 — python_ok shell 과 동일 스크립트(단일 정의).
-        {{ _l_net_collector }}
-      register: _l_net_raw
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "linux | network | parse raw"
-      ansible.builtin.set_fact:
-        _l_raw_dns: >-
-          {%- set real = [] -%}
-          {%- set fallback = [] -%}
-          {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
-            {%- if line.startswith('DNS_REAL=') -%}
-              {%- set s = line[9:] | trim -%}
-              {%- if s and not s.startswith('127.') and s not in real -%}
-                {%- set _ = real.append(s) -%}
-              {%- endif -%}
-            {%- elif line.startswith('DNS=') -%}
-              {%- set s = line[4:] | trim -%}
-              {%- if s and not s.startswith('127.') and s not in fallback -%}
-                {%- set _ = fallback.append(s) -%}
-              {%- endif -%}
+              {%- set mask = octets | join('.') -%}
             {%- endif -%}
-          {%- endfor -%}
-          {{ real if real else fallback }}
-        _l_raw_gw: >-
-          {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
-            {%- if line.startswith('GW=') -%}{{ line[3:] | trim }}{% endif -%}
-          {%- endfor -%}
-        _l_raw_gw_dev: >-
-          {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
-            {%- if line.startswith('GW_DEV=') -%}{{ line[7:] | trim }}{% endif -%}
-          {%- endfor -%}
-        # 2026-04-30 fix B68 raw: IF6 (IPv6 addresses by device).
-        _l_raw_ipv6_by_dev: >-
-          {%- set m = {} -%}
-          {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
-            {%- if line.startswith('IF6=') -%}
-              {%- set parts = line[4:].split('|') -%}
-              {%- if parts | length >= 4 -%}
-                {%- set dev = parts[0] | trim -%}
-                {%- set v6  = parts[1] | trim -%}
-                {%- set pfx = parts[2] | trim -%}
-                {%- set scope = parts[3] | trim -%}
-                {%- if dev not in m -%}{%- set _ = m.update({dev: []}) -%}{%- endif -%}
-                {%- set _ = m[dev].append({
-                  'family': 'ipv6',
-                  'address': v6,
-                  'prefix_length': (pfx | int) if pfx else none,
-                  'subnet_mask': none,
-                  'gateway': none,
-                  'scope': scope
-                }) -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ m }}
-        # 2026-04-30 fix B76 raw: ADAPTER (lspci PCI NIC).
-        # Python path와 동일한 schema: id, name, manufacturer, model, driver, pci.
-        _l_raw_adapters: >-
-          {%- set out = [] -%}
-          {%- set fwmap = {} -%}
-          {%- for fl in (_l_net_raw.stdout_lines | default([])) -%}
-            {%- if fl.startswith('ETHFW|') -%}
-              {%- set fp = fl.split('|') -%}
-              {%- if fp | length >= 3 -%}{%- set _ = fwmap.update({fp[1]: (fp[2] | trim) or none}) -%}{%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
-            {%- if line.startswith('ADAPTER|') -%}
-              {%- set parts = line.split('|') -%}
-              {%- if parts | length >= 5 -%}
-                {%- set slot   = parts[1] | trim -%}
-                {%- set vendor = parts[2] | trim -%}
-                {%- set device = parts[3] | trim -%}
-                {%- set driver = parts[4] | trim -%}
-                {%- if slot -%}
-                  {%- set _ = out.append({
-                    'id':           slot,
-                    'name':         device or 'Unknown',
-                    'manufacturer': vendor or none,
-                    'model':        device or none,
-                    'driver':       driver or none,
-                    'firmware_version': fwmap.get(slot, none),
-                    'pci':          slot,
-                  }) -%}
-                {%- endif -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-        _l_raw_ifaces: >-
-          {%- set out = [] -%}
-          {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
-            {%- if line.startswith('IF=') -%}
-              {%- set parts = line[3:].split('|') -%}
-              {%- if parts | length >= 7 -%}
-                {%- set dev_name    = parts[0] | trim -%}
-                {%- set mac_addr    = parts[1] | trim -%}
-                {%- set mtu_val     = parts[2] | trim | int -%}
-                {%- set speed_str   = parts[3] | trim -%}
-                {%- set state_str   = parts[4] | trim -%}
-                {%- set ip_addr     = parts[5] | trim -%}
-                {%- set prefix_str  = parts[6] | trim -%}
-                {%- set speed_val   = speed_str | int if speed_str else none -%}
-                {%- set prefix_val  = prefix_str | int if prefix_str else none -%}
-                {%- set mask = none -%}
-                {%- if prefix_val is not none -%}
-                  {%- set octets = [] -%}
-                  {%- set ns = namespace(remain=prefix_val) -%}
-                  {%- for _ in range(4) -%}
-                    {%- if ns.remain >= 8 -%}
-                      {%- set _ = octets.append(255) -%}
-                      {%- set ns.remain = ns.remain - 8 -%}
-                    {%- elif ns.remain > 0 -%}
-                      {%- set _ = octets.append(256 - (2 ** (8 - ns.remain))) -%}
-                      {%- set ns.remain = 0 -%}
-                    {%- else -%}
-                      {%- set _ = octets.append(0) -%}
-                    {%- endif -%}
-                  {%- endfor -%}
-                  {%- set mask = octets | join('.') -%}
-                {%- endif -%}
-                {%- set ls = 'up' if state_str == 'up' else ('down' if state_str == 'down' else 'unknown') -%}
-                {%- set addrs = [] -%}
-                {%- if ip_addr -%}
-                  {%- set _ = addrs.append({
-                    'family':        'ipv4',
-                    'address':       ip_addr,
-                    'prefix_length': prefix_val,
-                    'subnet_mask':   mask,
-                    'gateway':       none
-                  }) -%}
-                {%- endif -%}
-                {%- set _ = out.append({
-                  'id':          dev_name,
-                  'name':        dev_name,
-                  'kind':        'os_nic',
-                  'mac':         mac_addr,
-                  'mtu':         mtu_val if mtu_val > 0 else none,
-                  'speed_mbps':  speed_val,
-                  'link_status': ls,
-                  'is_primary':  false,
-                  'addresses':   addrs
-                }) -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-      no_log: true
-
-    - name: "linux | network | raw mark primary + inject gateway + merge IPv6"
-      # 2026-04-30 fix B68 raw: IPv6 addresses (_l_raw_ipv6_by_dev)를 interface addresses에 병합.
-      ansible.builtin.set_fact:
-        _l_norm_interfaces_raw: >-
-          {%- set gw     = (_l_raw_gw     | default('')) | trim -%}
-          {%- set gw_dev = (_l_raw_gw_dev | default('')) | trim -%}
-          {%- set v6_map = (_l_raw_ipv6_by_dev | default({})) -%}
-          {%- set out = [] -%}
-          {%- for iface in (_l_raw_ifaces | default([])) -%}
-            {%- set is_primary = (iface.id == gw_dev) -%}
+            {%- set ls = 'up' if state_str == 'up' else ('down' if state_str == 'down' else 'unknown') -%}
             {%- set addrs = [] -%}
-            {%- for a in (iface.addresses | default([])) -%}
-              {%- set _ = addrs.append(a | combine({'gateway': gw if is_primary else none})) -%}
-            {%- endfor -%}
-            {%- for v6 in (v6_map[iface.id] | default([])) -%}
-              {%- set _ = addrs.append(v6) -%}
-            {%- endfor -%}
-            {%- set _ = out.append(iface | combine({
-              'is_primary': is_primary,
-              'addresses':  addrs
-            })) -%}
-          {%- endfor -%}
-          {{ out }}
-      no_log: true
-
-    - name: "linux | network | compute summary groups (raw)"
-      ansible.builtin.set_fact:
-        _l_net_summary_r: >-
-          {%- set ns = namespace(groups=[], seen={}) -%}
-          {%- for n in (_l_norm_interfaces_raw | default([])) -%}
-            {%- set sp = n.speed_mbps | default(none) -%}
-            {%- if sp is not none and (sp | int) > 0 -%}
-              {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
-              {%- set key = sp | string -%}
-              {%- if key in ns.seen -%}
-                {%- set idx = ns.seen[key] -%}
-                {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
-              {%- else -%}
-                {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-                {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': none, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
-              {%- endif -%}
+            {%- if ip_addr -%}
+              {%- set _ = addrs.append({
+                'family':        'ipv4',
+                'address':       ip_addr,
+                'prefix_length': prefix_val,
+                'subnet_mask':   mask,
+                'gateway':       none
+              }) -%}
             {%- endif -%}
-          {%- endfor -%}
-          {{ {'groups': ns.groups} }}
-      no_log: true
+            {%- set _ = out.append({
+              'id':          dev_name,
+              'name':        dev_name,
+              'kind':        'os_nic',
+              'mac':         mac_addr | normalize_mac,
+              'mtu':         mtu_val if (mtu_val is not none and mtu_val > 0) else none,
+              'speed_mbps':  speed_val,
+              'link_status': ls,
+              'is_primary':  false,
+              'addresses':   addrs
+            }) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
 
-    # N12 (2026-08-12): raw 경로 수집 성공 판정을 한 곳에서 결정한다.
-    #   종전에는 같은 조건식이 _sections_collected_fragment / _sections_failed_fragment 두 곳에
-    #   복제돼 있었고, errors 는 무조건 [] 였다 → 섹션이 failed 인데 사유가 없는 결과가 나왔다.
-    #   판정 변수 하나를 세 자리가 함께 참조해 "failed 면 errors 1건" 을 구조적으로 보장한다.
-    - name: "linux | network | raw 수집 성공 판정"
-      ansible.builtin.set_fact:
-        _l_net_raw_ok: >-
-          {{ ((_l_norm_interfaces_raw | default([]) | length) > 0)
-             or ((_l_raw_dns | default([]) | length) > 0) }}
-      no_log: true
+- name: "linux | network | raw mark primary + inject gateway + merge IPv6"
+  ansible.builtin.set_fact:
+    _l_norm_interfaces_raw: >-
+      {%- set gw     = (_l_raw_gw     | default('')) | trim -%}
+      {%- set gw_dev = (_l_raw_gw_dev | default('')) | trim -%}
+      {%- set v6_map = (_l_raw_ipv6_by_dev | default({})) -%}
+      {%- set out = [] -%}
+      {%- for iface in (_l_raw_ifaces | default([])) -%}
+        {%- set is_primary = (gw_dev | length > 0) and (iface.id == gw_dev) -%}
+        {%- set addrs = [] -%}
+        {%- for a in (iface.addresses | default([])) -%}
+          {%- set _ = addrs.append(a | combine({'gateway': gw if (is_primary and gw) else none})) -%}
+        {%- endfor -%}
+        {%- for v6 in (v6_map[iface.id] | default([])) -%}
+          {%- set _ = addrs.append(v6) -%}
+        {%- endfor -%}
+        {%- set _ = out.append(iface | combine({
+          'is_primary': is_primary,
+          'addresses':  addrs
+        })) -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
 
-    # bond/vlan/bridge/team 토폴로지 정규화 (python_ok 경로와 동일 filter).
-    # merge_linux_addresses: raw 경로도 동일하게 bond alias / secondary 병합.
-    - name: "linux | network | normalize topology (raw)"
-      ansible.builtin.set_fact:
-        _l_net_topo_raw: >-
-          {{ ((_l_norm_interfaces_raw | default([]))
-              | merge_linux_addresses(_l_net_raw.stdout_lines | default([])))
-             | build_linux_network(_l_net_raw.stdout_lines | default([])) }}
-      no_log: true
+# network.summary group 산출 (speed_mbps 기준). speed 미보고(가상 NIC/bond) 는 집계 제외.
+- name: "linux | network | compute summary groups (raw)"
+  ansible.builtin.set_fact:
+    _l_net_summary_r: >-
+      {%- set ns = namespace(groups=[], seen={}) -%}
+      {%- for n in (_l_norm_interfaces_raw | default([])) -%}
+        {%- set sp = n.speed_mbps | default(none) -%}
+        {%- if sp is not none and (sp | int) > 0 -%}
+          {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
+          {%- set key = sp | string -%}
+          {%- if key in ns.seen -%}
+            {%- set idx = ns.seen[key] -%}
+            {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
+          {%- else -%}
+            {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
+            {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': none, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ {'groups': ns.groups} }}
+  no_log: true
 
-    - name: "linux | network | build fragment (raw)"
-      ansible.builtin.set_fact:
-        _data_fragment:
-          network:
-            dns_servers: "{{ _l_raw_dns | default([]) }}"
-            default_gateways: >-
-              {%- set out = [] -%}
-              {%- set gw = (_l_raw_gw | default('')) | trim -%}
-              {%- if gw -%}
-                {%- set _ = out.append({'family':'ipv4','address':gw}) -%}
-              {%- endif -%}
-              {{ out }}
-            interfaces: "{{ _l_net_topo_raw.interfaces }}"
-            # bond/vlan/bridge/team 토폴로지 (Additive — 기존 필드 불변)
-            bonds:    "{{ _l_net_topo_raw.bonds }}"
-            bridges:  "{{ _l_net_topo_raw.bridges }}"
-            teams:    "{{ _l_net_topo_raw.teams }}"
-            # 2026-04-30 fix B76 raw: lspci 기반 hardware NIC adapters.
-            adapters:    "{{ _l_raw_adapters | default([]) }}"
-            ports:       []
-            summary: "{{ _l_net_summary_r | default({'groups': []}) }}"
-        _sections_supported_fragment: ['network']
-        _sections_collected_fragment: "{{ ['network'] if (_l_net_raw_ok | default(false) | bool) else [] }}"
-        _sections_failed_fragment:    "{{ [] if (_l_net_raw_ok | default(false) | bool) else ['network'] }}"
-        # N12: 섹션이 failed 가 되는 바로 그 조건에서 errors 1건을 함께 만든다.
-        _errors_fragment: "{{ [] if (_l_net_raw_ok | default(false) | bool) else [{'section':'network','message':'네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=ip,sysfs,resolv_conf; cause=no_interface_and_no_dns; rc=' ~ (_l_net_raw.rc | default('none')))}] }}"
-      no_log: true
-  when: _l_python_mode != 'python_ok'
+# N12 (2026-08-12): 수집 성공 판정을 한 곳에서 결정한다 — collected / failed / errors 세 자리가 이 변수를 본다.
+- name: "linux | network | raw 수집 성공 판정"
+  ansible.builtin.set_fact:
+    _l_net_raw_ok: >-
+      {{ ((_l_norm_interfaces_raw | default([]) | length) > 0)
+         or ((_l_raw_dns | default([]) | length) > 0) }}
+  no_log: true
+
+# bond/vlan/bridge/team 토폴로지 정규화 (filter_plugins/network_topology.py).
+# merge_linux_addresses: bond alias / secondary IP 를 parent addresses[] 에 병합.
+- name: "linux | network | normalize topology (raw)"
+  ansible.builtin.set_fact:
+    _l_net_topo_raw: >-
+      {{ ((_l_norm_interfaces_raw | default([]))
+          | merge_linux_addresses(_l_net_raw.stdout_lines | default([])))
+         | build_linux_network(_l_net_raw.stdout_lines | default([])) }}
+  no_log: true
+
+- name: "linux | network | build fragment (raw)"
+  ansible.builtin.set_fact:
+    _data_fragment:
+      network:
+        dns_servers: "{{ _l_raw_dns | default([]) }}"
+        default_gateways: >-
+          {%- set out = [] -%}
+          {%- set gw = (_l_raw_gw | default('')) | trim -%}
+          {%- if gw -%}
+            {%- set _ = out.append({'family':'ipv4','address':gw}) -%}
+          {%- endif -%}
+          {{ out }}
+        interfaces: "{{ _l_net_topo_raw.interfaces }}"
+        # bond/vlan/bridge/team 토폴로지 (Additive — 기존 필드 불변)
+        bonds:    "{{ _l_net_topo_raw.bonds }}"
+        bridges:  "{{ _l_net_topo_raw.bridges }}"
+        teams:    "{{ _l_net_topo_raw.teams }}"
+        adapters:    "{{ _l_raw_adapters | default([]) }}"
+        ports:       []
+        summary: "{{ _l_net_summary_r | default({'groups': []}) }}"
+    _sections_supported_fragment: ['network']
+    _sections_collected_fragment: "{{ ['network'] if (_l_net_raw_ok | default(false) | bool) else [] }}"
+    _sections_failed_fragment:    "{{ [] if (_l_net_raw_ok | default(false) | bool) else ['network'] }}"
+    # N12: 섹션이 failed 가 되는 바로 그 조건에서 errors 1건. LOW-9/H4: lspci stderr 가 비어있지 않으면
+    # 권한 부족/partial enumeration 의심 경고 1건 (섹션은 success 유지 — 시나리오 B).
+    _errors_fragment: "{{ ([] if (_l_net_raw_ok | default(false) | bool) else [{'section':'network','message':'네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=ip,sysfs,resolv_conf; cause=no_interface_and_no_dns; rc=' ~ (_l_net_raw.rc | default('none')))}]) + ([{'section':'network','message':'네트워크 카드 상세 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.','detail':('source=lspci; stderr=' ~ ((_l_net_raw.stderr | default('') | replace('\n', ' ') | trim | truncate(500, true)) or 'none'))}] if (('lspci' in (_l_net_raw.stderr | default(''))) and (_l_net_raw_ok | default(false) | bool)) else []) }}"
+  no_log: true
 
 # =============================================================================
 # Shared: merge

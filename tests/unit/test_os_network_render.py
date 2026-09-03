@@ -17,6 +17,7 @@ from jinja2 import Environment
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "filter_plugins"))
 from network_topology import build_linux_network, merge_linux_addresses  # noqa: E402
+from identity_normalizer import normalize_mac  # noqa: E402
 
 NET_YML = REPO / "os-gather" / "tasks" / "linux" / "gather_network.yml"
 FIX = REPO / "tests" / "fixtures" / "os" / "net"
@@ -38,6 +39,7 @@ def _env():
     env.filters["regex_replace"] = _regex_replace
     env.filters["build_linux_network"] = build_linux_network
     env.filters["merge_linux_addresses"] = merge_linux_addresses
+    env.filters["normalize_mac"] = normalize_mac   # 2026-09-03: MAC 소문자 colon 정규화 (B-26)
     return env
 
 
@@ -46,10 +48,13 @@ def _tasks():
 
 
 def _raw_block(tasks):
-    for t in tasks:
-        if "block" in t and "!= 'python_ok'" in str(t.get("when", "")):
-            return t["block"]
-    raise AssertionError("raw fallback block 미발견")
+    """2026-09-03: network 는 raw 명령 단일 구현이다 (python/raw 이중 경로 제거 — B-27).
+    종전에는 `when: != 'python_ok'` block 안에 있었고, 지금은 최상위 task 목록이 그 체인이다."""
+    flat = [t for t in tasks if isinstance(t, dict)
+            and ("ansible.builtin.set_fact" in t or "ansible.builtin.raw" in t)]
+    if not flat:
+        raise AssertionError("raw gather 체인 미발견")
+    return flat
 
 
 def _setfact(block, name_sub):
@@ -175,11 +180,6 @@ def test_collector_injects_into_raw_and_shell_without_jinja_collision():
     assert "gsub(" in rendered
     assert "{{" not in rendered          # 잔여 미해결 템플릿 없음
 
-    # python_ok shell 명령
-    for t in tasks:
-        if "block" in t and "== 'python_ok'" in str(t.get("when", "")):
-            sh = next(s["ansible.builtin.shell"] for s in t["block"]
-                      if "topology (shell)" in s.get("name", ""))
-            out = env.from_string(sh).render(_l_net_collector=collector)
-            assert "BOND|" in out and "{{" not in out
-            break
+    # 2026-09-03: python_ok 전용 shell 경로는 없다 — raw 단일 구현. 두 경로가 남아 있지 않은지 고정.
+    assert not any("block" in t and "python_ok" in str(t.get("when", "")) for t in tasks), (
+        "network gather 가 다시 python/raw 이중 경로로 갈라졌다 (B-27)")

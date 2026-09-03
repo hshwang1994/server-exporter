@@ -12,7 +12,9 @@
 
 - block:
     # cycle 2026-05-29 (hba-ib-csus, D2): WWNN(node_name) + driver + firmware 보강.
-    # delimiter '|' 9 필드: FC|host|wwpn|wwnn|symbolic|state|speed|driver|firmware
+    # 2026-09-03 (B-22/B-24): model 은 scsi_host 의 model_name(있을 때), 없으면 symbolic_name.
+    #   manufacturer 가 sysfs 에 있으면 vendor 로. WWN 은 normalize_wwn 으로 소문자 colon-hex.
+    # delimiter '|' 11 필드: FC|host|wwpn|wwnn|symbolic|state|speed|driver|firmware|model_name|manufacturer
     - name: "linux | hba_ib | enumerate fc_host"
       ansible.builtin.raw: |
         if [ -d /sys/class/fc_host ]; then
@@ -32,7 +34,14 @@
             for fwp in "$h/device/fw_version" "$h"/device/scsi_host/*/fw_version; do
               if [ -f "$fwp" ]; then fwver=$(cat "$fwp" 2>/dev/null); break; fi
             done
-            echo "FC|$host|$wwpn|$wwnn|$sym|$state|$speed|$drv|$fwver"
+            mdl=""; mfr=""
+            for mp in "$h/device/scsi_host/$host/model_name" "$h"/device/scsi_host/*/model_name "$h/device/model_name"; do
+              if [ -f "$mp" ]; then mdl=$(cat "$mp" 2>/dev/null); break; fi
+            done
+            for vp in "$h/device/scsi_host/$host/manufacturer" "$h"/device/scsi_host/*/manufacturer "$h/device/manufacturer"; do
+              if [ -f "$vp" ]; then mfr=$(cat "$vp" 2>/dev/null); break; fi
+            done
+            echo "FC|$host|$wwpn|$wwnn|$sym|$state|$speed|$drv|$fwver|$mdl|$mfr"
           done
         fi
       register: _l_fc_raw
@@ -101,14 +110,19 @@
           {%- for line in (_l_fc_raw.stdout_lines | default([])) -%}
             {%- set parts = line.split('|') -%}
             {%- if parts | length >= 9 and parts[0] == 'FC' -%}
-              {%- set spdig = (parts[6] | default('')) | regex_replace('[^0-9]', '') -%}
+              {# speed 는 "16 Gbit" / "8 Gbit" 처럼 첫 숫자 토큰만 (여러 숫자가 붙는 문자열을 이어붙이지 않는다) #}
+              {%- set spfirst = ((parts[6] | default('')) | trim).split(' ')[0] if (parts[6] | default('') | trim) else '' -%}
+              {%- set spdig = spfirst | regex_replace('[^0-9]', '') -%}
               {%- set st = (parts[5] | default('')) | lower -%}
+              {%- set mdl = (parts[9] | trim) if (parts | length >= 10 and (parts[9] | trim)) else none -%}
+              {%- set mfr = (parts[10] | trim) if (parts | length >= 11 and (parts[10] | trim)) else none -%}
               {%- set _ = out.append({
                 'host':            parts[1],
-                'wwpn':            parts[2] if parts[2] else none,
-                'wwnn':            parts[3] if parts[3] else none,
-                'model':           parts[4] if parts[4] else none,
-                'vendor':          none,
+                'wwpn':            (parts[2] | normalize_wwn) if parts[2] else none,
+                'wwnn':            (parts[3] | normalize_wwn) if parts[3] else none,
+                'model':           mdl if mdl else (parts[4] if parts[4] else none),
+                'symbolic_name':   parts[4] if parts[4] else none,
+                'vendor':          mfr,
                 'driver':          parts[7] if parts[7] else none,
                 'firmware':        parts[8] if parts[8] else none,
                 'link_status':     ('up' if 'online' in st else ('down' if ('offline' in st or 'linkdown' in st or 'down' in st) else 'unknown')),
@@ -130,6 +144,9 @@
               {%- set rfirst = (rate.split(' ')[0]) if rate else '' -%}
               {%- set rdig = rfirst | regex_replace('[^0-9]', '') -%}
               {%- set st = (parts[5] | default('')) | lower -%}
+              {# hca_type/board_id 는 모델 식별자(MT4123 / MT_0000000223) 이지 제조사가 아니다.
+                 제조사는 그 접두로만 판정(MT → Mellanox) 하고, 원문은 model 로 보존한다. #}
+              {%- set hca = (parts[8] | trim) if parts[8] else none -%}
               {%- set _ = out.append({
                 'adapter':     parts[1],
                 'port':        parts[2],
@@ -138,7 +155,8 @@
                 'link_status': ('up' if 'active' in st else ('down' if 'down' in st else 'unknown')),
                 'rate':        rate if rate else none,
                 'rate_gbps':   (rdig | int) if rdig else none,
-                'vendor':      parts[8] if parts[8] else none,
+                'model':       hca,
+                'vendor':      ('Mellanox' if (hca and (hca | upper).startswith('MT')) else none),
                 'firmware':    parts[7] if parts[7] else none,
                 'source':      'os',
               }) -%}
