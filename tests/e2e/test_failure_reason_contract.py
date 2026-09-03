@@ -30,6 +30,8 @@ import yaml
 from jinja2 import StrictUndefined
 from jinja2.nativetypes import NativeEnvironment
 
+from tests.precheck_stub import ICMP_REPLY, ICMP_SILENT, silence_icmp
+
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -282,7 +284,11 @@ class _ExitJson(Exception):
     def __init__(self, result): super().__init__("exit"); self.result = result
 
 
-def _run_precheck(monkeypatch, channel: str, connect_exc=None, http=None) -> dict:
+def _run_precheck(monkeypatch, channel: str, connect_exc=None, http=None,
+                  icmp=ICMP_SILENT) -> dict:
+    # 2026-09-03: reachable = TCP 응답 OR ICMP 응답. TCP 전멸 시 모듈이 ICMP 를 한 번 더
+    # 보므로 결과를 주입한다 (실 ping 금지). 기본값은 "응답 없음" = 종전 판정과 동일.
+    silence_icmp(monkeypatch, pb, icmp)
     monkeypatch.setattr(
         pb.socket, "getaddrinfo",
         lambda h, p, type=None: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (h, p))],
@@ -306,7 +312,8 @@ def _run_precheck(monkeypatch, channel: str, connect_exc=None, http=None) -> dic
         params = dict(host="192.0.2.10", channel=channel, ports=[], timeout_port=3.0,
                       timeout_protocol=15.0, timeout_auth=8.0,
                       username=None, password=None, verify_ssl=False,
-                      probe_protocol=True, port_poll_interval=0.0)
+                      probe_protocol=True, port_poll_interval=0.0,
+                      icmp_probe=True, timeout_icmp=1.0)
         def exit_json(self, **kw): raise _ExitJson(kw)
 
     monkeypatch.setattr(pb, "AnsibleModule", lambda **_kw: _Fake())
@@ -489,26 +496,34 @@ _OS_PORTFAIL_TASK_REMOVED = "Portal 표시용 failure_reason 을 OS 문맥으로
 
 
 def _os_portfail_diag(stage: str, code: str) -> dict[str, Any]:
-    """OS 포트 전멸 경로를 precheck_bundle 로 실제 실행해 진단을 얻는다."""
+    """OS 포트 전멸 경로를 precheck_bundle 로 실제 실행해 진단을 얻는다.
+
+    2026-09-03: TCP 전멸 뒤 ICMP 를 한 번 더 보므로 그 결과도 주입한다.
+      TARGET_UNREACHABLE → ICMP 도 무응답
+      TCP_CONNECT_FAILED → ICMP 는 응답 (도달은 성립, 관리 포트만 못 엶 → stage=port)
+    """
     kind = {
+        "TARGET_UNREACHABLE": (False, "연결 시간 초과", pb.TCP_FAIL_TIMEOUT),
         "TCP_CONNECT_FAILED": (False, "연결 시간 초과", pb.TCP_FAIL_TIMEOUT),
         "DNS_RESOLUTION_FAILED": (False, "DNS 해석 실패", pb.TCP_FAIL_DNS),
         "TCP_CONNECTION_REFUSED": (False, "연결 거부됨", pb.TCP_FAIL_REFUSED),
     }[code]
+    icmp = ICMP_REPLY if code == "TCP_CONNECT_FAILED" else ICMP_SILENT
 
     import unittest.mock as _mock
     fake = _mock.patch.object(pb, "tcp_check_budget", lambda *_a, **_k: kind)
+    fake_icmp = _mock.patch.object(pb, "icmp_check", lambda *_a, **_k: icmp)
 
     class _Fake:
         params = dict(host="192.0.2.30", channel="os", ports=[], timeout_port=2.0,
                       timeout_protocol=5.0, timeout_auth=8.0, username=None,
                       password=None, verify_ssl=False, probe_protocol=True,
-                      port_poll_interval=1.0)
+                      port_poll_interval=1.0, icmp_probe=True, timeout_icmp=1.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
 
-    with fake, _mock.patch.object(pb, "AnsibleModule", lambda **_kw: _Fake()):
+    with fake, fake_icmp, _mock.patch.object(pb, "AnsibleModule", lambda **_kw: _Fake()):
         with pytest.raises(_ExitJson) as exc:
             pb.run_module()
     raw = exc.value.result
@@ -535,8 +550,10 @@ def test_os_portfail_override_task_is_gone():
 
 
 @pytest.mark.parametrize("stage,code", [
-    ("reachable", "TCP_CONNECT_FAILED"),
+    ("reachable", "TARGET_UNREACHABLE"),
     ("reachable", "DNS_RESOLUTION_FAILED"),
+    # 2026-09-03: ICMP 는 응답하는데 관리 포트만 조용한 경우 — 도달은 성립하므로 port 단계다
+    ("port", "TCP_CONNECT_FAILED"),
     ("port", "TCP_CONNECTION_REFUSED"),
 ])
 def test_case11_os_all_ports_failure_has_reason(stage, code):
@@ -561,16 +578,20 @@ def test_os_portfail_reason_matches_observation():
     (`ip_in_use`)에 문장을 걸어 두어 REFUSED 를 확정하고도 1번 문구를 내보냈다 — H3.
 
     신 매핑 (precheck_bundle.REASON_BY_FAILURE_CODE 정본):
-      DNS_RESOLUTION_FAILED / TCP_CONNECT_FAILED → 1번 (응답 확인 불가)
-      TCP_CONNECTION_REFUSED                     → 2번 (관리 포트 연결 불가)
-    presence probe(ICMP / IPAM / ARP)는 여전히 만들지 않는다.
+      DNS_RESOLUTION_FAILED / TARGET_UNREACHABLE  → 1번 (응답 확인 불가)
+      TCP_CONNECT_FAILED / TCP_CONNECTION_REFUSED → 2번 (관리 포트 연결 불가)
+
+    2026-09-03: reachable 이 "TCP 응답 OR ICMP 응답" 이 되면서 TCP 무응답이 두 갈래로
+    나뉜다. ICMP 로 존재가 확인된 대상(TCP_CONNECT_FAILED)에게 1번("IP 사용 여부를
+    확인하세요")을 내보내면 운영자를 방화벽이 아닌 엉뚱한 곳으로 보낸다 — 그래서 2번이다.
     """
-    no_resp = _os_portfail_diag("reachable", "TCP_CONNECT_FAILED")["failure_reason"]
+    no_resp = _os_portfail_diag("reachable", "TARGET_UNREACHABLE")["failure_reason"]
+    icmp_only = _os_portfail_diag("port", "TCP_CONNECT_FAILED")["failure_reason"]
     refused = _os_portfail_diag("port", "TCP_CONNECTION_REFUSED")["failure_reason"]
     dns = _os_portfail_diag("reachable", "DNS_RESOLUTION_FAILED")["failure_reason"]
 
     assert {no_resp, dns} == {pb.REASON_IP_UNCONFIRMED}
-    assert refused == pb.REASON_PORT_UNREACHABLE
+    assert {icmp_only, refused} == {pb.REASON_PORT_UNREACHABLE}
     # 관측하지 않은 원인을 단정하지 않는다
     assert "전원" not in no_resp
     assert "서버는 응답하지만" not in refused, "RST 를 서버 자체 응답으로 확정하면 안 된다"

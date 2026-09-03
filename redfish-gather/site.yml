@@ -4,7 +4,7 @@
 #
 # 흐름:
 #   init_fragments
-#   → run_precheck       (4단계 진단: ping→port→protocol→auth)
+#   → run_precheck       (도달[TCP 응답 OR ICMP 응답]→port→protocol→auth)
 #   → detect_vendor      (_rf_detected_vendor, _rf_probe_facts)
 #   → select_adapter     (adapter_loader → _selected_adapter)
 #   → load_vault         (adapter 기반 credential profile)

@@ -43,6 +43,8 @@ sys.modules.setdefault("ansible.module_utils.basic", _b)
 
 import precheck_bundle as pb  # noqa: E402
 
+from tests.precheck_stub import ICMP_REPLY, ICMP_SILENT  # noqa: E402
+
 from tests.e2e.test_failure_reason_contract import (  # noqa: E402
     FAILURE_REASONS,
     _assert_claims_match_observation,
@@ -78,9 +80,13 @@ class _ExitJson(Exception):
 
 
 def _run_precheck(channel: str, *, tcp=None, http=None, soap=None,
-                  probe_protocol=True) -> dict[str, Any]:
-    """precheck_bundle 을 실제로 실행해 진단 dict 를 얻는다."""
-    patches = []
+                  probe_protocol=True, icmp=ICMP_SILENT) -> dict[str, Any]:
+    """precheck_bundle 을 실제로 실행해 진단 dict 를 얻는다.
+
+    2026-09-03: TCP 전멸 시 모듈이 ICMP 를 한 번 더 확인하므로 결과를 주입한다
+    (실 ping 금지). 기본값 "응답 없음" 은 종전(TCP 전용) 판정과 결과가 같다.
+    """
+    patches = [patch.object(pb, "icmp_check", lambda *_a, **_k: icmp)]
     if tcp is not None:
         patches.append(patch.object(pb, "tcp_check_ex", lambda *_a, **_k: tcp))
         patches.append(patch.object(pb, "tcp_check_budget", lambda *_a, **_k: tcp))
@@ -98,7 +104,8 @@ def _run_precheck(channel: str, *, tcp=None, http=None, soap=None,
         params = dict(host="192.0.2.10", channel=channel, ports=ports,
                       timeout_port=2.0, timeout_protocol=5.0, timeout_auth=8.0,
                       username=None, password=None, verify_ssl=False,
-                      probe_protocol=probe_protocol, port_poll_interval=0.0)
+                      probe_protocol=probe_protocol, port_poll_interval=0.0,
+                      icmp_probe=True, timeout_icmp=1.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
@@ -133,7 +140,10 @@ def _case(name):
 
 CASES_PRECHECK = [
     ("C1 DNS 실패", "redfish", dict(tcp=_TCP_DNS), "reachable", "DNS_RESOLUTION_FAILED"),
-    ("C2 TCP Timeout", "redfish", dict(tcp=_TCP_TIMEOUT), "reachable", "TCP_CONNECT_FAILED"),
+    ("C2 TCP Timeout", "redfish", dict(tcp=_TCP_TIMEOUT), "reachable", "TARGET_UNREACHABLE"),
+    # 2026-09-03: TCP 는 무응답인데 ICMP 는 응답 → 도달 성립, 실패는 port 단계로 내려간다
+    ("C2b TCP Timeout + ICMP 응답", "redfish",
+     dict(tcp=_TCP_TIMEOUT, icmp=ICMP_REPLY), "port", "TCP_CONNECT_FAILED"),
     ("C3 Connection Refused", "redfish", dict(tcp=_TCP_REFUSED), "port", "TCP_CONNECTION_REFUSED"),
     ("C4 OS Protocol 실패", "os", dict(tcp=_TCP_OK), "protocol", "PROTOCOL_CHECK_FAILED"),
     ("C5 Redfish Protocol 실패", "redfish",

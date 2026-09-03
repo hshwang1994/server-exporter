@@ -241,8 +241,8 @@ if response["data"]["hardware"].get("health") == "Critical":
 
 | `failure_code` | 문장 |
 |---|---|
-| `DNS_RESOLUTION_FAILED` / `TCP_CONNECT_FAILED` | 대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요. |
-| `TCP_CONNECTION_REFUSED` | 대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요. |
+| `DNS_RESOLUTION_FAILED` / `TARGET_UNREACHABLE` | 대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요. |
+| `TCP_CONNECT_FAILED` / `TCP_CONNECTION_REFUSED` | 대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요. |
 | `PROTOCOL_CHECK_FAILED` | 관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. 관리 서비스 설정과 상태를 확인하세요. |
 | `AUTH_PROBE_FAILED` | 대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요. |
 | `CREDENTIAL_SET_UNAVAILABLE` | 대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요. *(4번 문장 재사용 — 아래 5-1 참조)* |
@@ -324,7 +324,8 @@ for e in response["errors"]:
 | `failure_code` | 대응 `failure_stage` | 관측한 사실 |
 |---|---|---|
 | `DNS_RESOLUTION_FAILED` | `reachable` | 주소 해석 실패로 TCP 연결 시도 자체를 못 함 |
-| `TCP_CONNECT_FAILED` | `reachable` | TCP 연결 실패 (timeout / no route 등). **장비 다운으로 확정하지 않음** |
+| `TARGET_UNREACHABLE` | `reachable` | 관리 TCP 도 ICMP Echo 도 응답이 없음. **장비 다운으로 확정하지 않음** — 우리가 쓴 probe 로 응답을 못 봤다는 관측이다 |
+| `TCP_CONNECT_FAILED` | `port` | ICMP 응답으로 도달은 확인됐는데 관리 TCP 포트가 무응답 (timeout / no route, RST 미관측). 방화벽 DROP 이 대표 사례 |
 | `TCP_CONNECTION_REFUSED` | `port` | 명시적 TCP 거부(RST)를 관측 |
 | `PROTOCOL_CHECK_FAILED` | `protocol` | 기대한 프로토콜 응답을 확인하지 못함 |
 | `AUTH_PROBE_FAILED` | `auth` | **자격증명을 실제로 보냈고** 확인 단계에서 중단. 인증 거부 확정은 `auth_success` 가 표현 |
@@ -360,12 +361,29 @@ for e in response["errors"]:
 > 정상 결과로 나가는 경로는 없다 — 복구가 확인되면 표준 계정으로 **재수집**한다.
 > `diagnosis.details.auth.used_role` 이 `recovery` 인 성공 결과는 존재할 수 없다.
 
-> **매핑 예외 1건**: OS 채널의 관리 포트 전체 실패는 `stage=port` + `code=TCP_CONNECT_FAILED` 다.
-> OS 는 `wait_for` 로만 포트를 확인해 RST 를 관측할 수 없으므로 `TCP_CONNECTION_REFUSED` 로
-> 확정할 수 없다. 멈춘 단계는 포트 감지 단계이므로 `stage` 는 `port` 를 유지한다.
+> **도달성은 TCP 와 ICMP 의 OR 이다** (2026-09-03)
+>
+> `reachable` 은 "관리 TCP 응답 **또는** ICMP Echo 응답" 으로 판정한다. 관리망에서 TCP 를
+> DROP 하는 구성이 흔해, TCP 만 보면 살아 있는 장비가 `reachable` 실패로 떨어졌다.
+>
+> | 관측 | `reachable` | `failure_stage` | `failure_code` |
+> |---|---|---|---|
+> | 관리 TCP 연결 성공 | `true` | — | `null` |
+> | 관리 TCP 거부(RST) | `true` | `port` | `TCP_CONNECTION_REFUSED` |
+> | TCP 무응답 + ICMP 응답 | `true` | `port` | `TCP_CONNECT_FAILED` |
+> | TCP 무응답 + ICMP 무응답 | `false` | `reachable` | `TARGET_UNREACHABLE` |
+> | 주소 해석 실패 | `false` | `reachable` | `DNS_RESOLUTION_FAILED` |
+>
+> ICMP 는 **Gate 가 아니다.** TCP 가 응답하면 ICMP 는 확인조차 하지 않고, ICMP 무응답은
+> 그 자체로 아무것도 실패시키지 않는다 (ICMP 전용 `failure_code` 도 없다). ICMP 를 못 쓰는
+> 환경(차단·`ping` 부재·권한 부족)에서는 판정이 종전 TCP 전용과 같아진다.
+>
+> **호출자 영향**: 종전 `TCP_CONNECT_FAILED` + `stage=reachable` 로 분기하던 소비자는
+> `TARGET_UNREACHABLE` 을 함께 받도록 갱신해야 한다. 사용자 문장은 종전과 동일하다.
 >
 > Raw Exception 종류(socket timeout / SSL 오류 / HTTP 500 등)는 code 로 만들지 않는다.
-> 그 정보는 `errors[].detail` 과 `diagnosis.details` 에 보존된다.
+> 그 정보는 `errors[].detail` 과 `diagnosis.details` 에 보존된다
+> (ICMP 관측 근거도 `errors[].detail` 에만 남는다 — 봉투 shape 은 그대로다).
 
 ---
 

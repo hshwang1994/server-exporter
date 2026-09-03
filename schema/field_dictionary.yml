@@ -1446,14 +1446,16 @@ fields:
     # success-only baseline 한계 — conditional 분류 (channel 축소 안 함).
     help_ko: >-
       **실행이 중단된 단계** (원인이 아니다). status=failed 시만 채워지는 conditional 필드.
-      reachable=대상 접근 단계, port=관리 포트 연결 확인 단계, protocol=기대 프로토콜 확인 단계,
+      reachable=대상 접근 단계 (관리 TCP 응답 OR ICMP Echo 응답 — 둘 다 없을 때만 실패),
+      port=관리 포트 연결 확인 단계, protocol=기대 프로토콜 확인 단계,
       auth=자격증명 확인 단계, gather=연결·인증 통과 후 수집/정규화 단계,
       fallback=정상 결과 객체 생성 자체를 완료하지 못함.
       null=실패하지 않았거나 전체 실패 단계가 적용되지 않는 결과.
       실제 원인 확정 여부는 auth_success / failure_code / errors[].detail 로 표현한다.
     help_en: >-
       **Stage at which execution stopped** (not the root cause). Conditional field.
-      reachable=target reachability step, port=management port check step,
+      reachable=target reachability step (management TCP response OR ICMP echo reply),
+      port=management port check step,
       protocol=expected-protocol check step, auth=credential check step,
       gather=collection/normalization step after connectivity and auth passed,
       fallback=could not complete normal output construction.
@@ -1462,9 +1464,9 @@ fields:
 
   diagnosis.failure_code:
     type: "string|null"
-    enum: ["DNS_RESOLUTION_FAILED", "TCP_CONNECT_FAILED", "TCP_CONNECTION_REFUSED",
-           "PROTOCOL_CHECK_FAILED", "AUTH_PROBE_FAILED", "CREDENTIAL_SET_UNAVAILABLE",
-           "GATHER_FAILED", "OUTPUT_BUILD_FAILED"]
+    enum: ["DNS_RESOLUTION_FAILED", "TARGET_UNREACHABLE", "TCP_CONNECT_FAILED",
+           "TCP_CONNECTION_REFUSED", "PROTOCOL_CHECK_FAILED", "AUTH_PROBE_FAILED",
+           "CREDENTIAL_SET_UNAVAILABLE", "GATHER_FAILED", "OUTPUT_BUILD_FAILED"]
     priority: nice
     channel: [redfish, os, esxi]
     # 2026-08-10 (Phase 2) 신설. 외부 시스템이 실패 종류로 분기할 때 문자열 메시지를 파싱하지
@@ -1480,10 +1482,24 @@ fields:
     #   복호화 실패와 scope 미결정(미등록 Location 등)까지 포함한다. 파일을 찾았지만 열지
     #   못한 경우에 NOT_FOUND 는 사실과 다르다. 또 NOT_FOUND 는 HTTP 404 로 오독되기 쉬운데,
     #   이 저장소는 HTTP status 모양의 code 를 의도적으로 만들지 않는다(위 문단).
+    #
+    # 2026-09-03 (사용자 지시 — reachable 판정에 ICMP OR 도입): TARGET_UNREACHABLE 추가.
+    #   reachable 이 "관리 TCP 응답 OR ICMP Echo 응답" 이 되면서 종전 TCP_CONNECT_FAILED
+    #   하나가 겸하던 두 상황이 갈렸다.
+    #     TARGET_UNREACHABLE : TCP 도 ICMP 도 응답이 없다      (stage=reachable)
+    #     TCP_CONNECT_FAILED : ICMP 는 응답하는데 관리 TCP 포트만 조용하다 (stage=port)
+    #                          — 전형적인 방화벽 DROP. 이름은 그대로 두되 **범위가 좁아졌다.**
+    #   ICMP 전용 code 는 만들지 않는다. ICMP 는 도달 근거를 더할 뿐 실패를 만들지 않으므로
+    #   "ICMP 가 실패했다" 는 상태 자체가 소비 시스템에 의미가 없다.
+    #   호출자 영향: 종전 stage=reachable + TCP_CONNECT_FAILED 로 분기하던 소비자는
+    #   TARGET_UNREACHABLE 을 함께 받도록 갱신해야 한다 (사용자 문장은 종전과 동일한 1번).
     help_ko: >-
       실패 종류의 안정 식별자. **conditional 필드** — status=failed 시만 채워짐.
       DNS_RESOLUTION_FAILED=주소 해석 실패로 TCP 연결 시도 자체를 못 함,
-      TCP_CONNECT_FAILED=TCP 연결 실패 (timeout / no route 등. 장비 다운으로 확정하지 않음),
+      TARGET_UNREACHABLE=관리 TCP 도 ICMP Echo 도 응답이 없음
+      (우리가 쓴 probe 로 응답을 못 봤다는 뜻이며 장비 다운으로 확정하지 않음),
+      TCP_CONNECT_FAILED=ICMP 응답은 확인됐으나 관리 TCP 포트가 무응답 (timeout / no route.
+      RST 는 관측하지 못함 — 방화벽 DROP 이 대표 사례),
       TCP_CONNECTION_REFUSED=명시적 TCP 거부(RST)를 관측,
       PROTOCOL_CHECK_FAILED=기대한 프로토콜 응답 확인 실패,
       AUTH_PROBE_FAILED=자격증명을 실제로 보냈으나 확인 단계에서 중단 (인증 거부 확정은 auth_success 가 표현),
@@ -1491,8 +1507,9 @@ fields:
       (auth_success 는 항상 null. 조치는 대상 계정이 아니라 자격증명 배치 확인),
       GATHER_FAILED=연결·인증 통과 후 수집/정규화 실패,
       OUTPUT_BUILD_FAILED=정상 결과 객체 생성 실패 (fallback).
-      기본 매핑은 failure_stage 와 1:1 이나, OS 채널의 포트 감지 실패만 예외로
-      stage=port + code=TCP_CONNECT_FAILED 다 (wait_for 는 RST 를 관측하지 못하기 때문).
+      stage 매핑: TARGET_UNREACHABLE=reachable, TCP_CONNECT_FAILED / TCP_CONNECTION_REFUSED
+      =port. TCP_CONNECT_FAILED 는 도달은 확인됐고(ICMP) 관리 포트만 못 연 상태라
+      reachable 이 아니라 port 단계다.
       CREDENTIAL_SET_UNAVAILABLE 도 stage=auth 다 — stage 는 원인이 아니라 멈춘 위치다.
     help_en: >-
       Stable identifier for the failure kind, for system-side branching without parsing
@@ -1502,8 +1519,11 @@ fields:
       AUTH_PROBE_FAILED means credentials were actually sent; CREDENTIAL_SET_UNAVAILABLE
       means no credential set could be opened, so authentication was never attempted
       (auth_success is always null there).
-      Mapping to failure_stage is 1:1 except the OS port-detection path, which is
-      stage=port with code=TCP_CONNECT_FAILED because wait_for cannot observe RST.
+      Reachability is decided as "management TCP response OR ICMP echo reply".
+      TARGET_UNREACHABLE (stage=reachable) means neither answered; TCP_CONNECT_FAILED
+      (stage=port) means ICMP answered but the management port stayed silent, which is
+      the typical firewall-DROP case. There is no ICMP-specific failure code: ICMP can
+      only add reachability evidence, never cause a failure.
 
   # ══════════════════════════════════════════════════════════════════════════
   # Do Not Help (skip) — 의미가 자명하여 등록하되 설명은 최소한

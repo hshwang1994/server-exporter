@@ -8,6 +8,48 @@
 
 > 최종 갱신: 2026-09-03
 
+## 2026-09-03 — 도달성(reachable) 판정에 ICMP Echo 를 OR 조건으로 추가
+
+### 사용자 지시
+
+"현재는 관리 TCP 포트 응답만으로 reachable 을 판단하고 있어서, 서버는 살아 있지만 방화벽에서
+TCP 를 DROP 하는 경우 reachable 실패로 처리될 수 있다. reachable 판단에 ICMP Echo 응답을
+추가하고 TCP 와 OR 조건으로 판단하라. 단 ICMP 를 앞단의 필수 Gate 로 만들지 말고, ICMP 실패만으로
+reachable 을 실패시키지 말고, ICMP 전용 failure_code 도 만들지 말 것."
+
+### 분석
+
+종전 금지 결정(2026-08-12 — presence probe 미도입)의 근거는 **"핑으로 판정하면 443 으로 멀쩡히
+답하는 BMC 를 죽은 것으로 오판한다"** 였다. 이는 ICMP 를 **Gate 로 쓸 때**의 문제이고 지금도 참이다.
+그런데 반대 방향 오판이 남아 있었다 — 방화벽이 관리 포트 TCP 를 **DROP**(reject 아님)하면 RST 조차
+오지 않아 살아 있는 서버가 `stage=reachable` + 1번 문장("IP 사용 여부를 확인하세요")으로 떨어졌다.
+운영자가 볼 곳은 방화벽인데 IP 대장을 뒤지게 만든 셈이다.
+
+### 결정
+
+- **`reachable` = 관리 TCP 응답 OR ICMP Echo 응답.** 순서로 두 오판을 모두 막는다 — TCP 를 먼저
+  보고, TCP 가 **전 포트 무응답일 때만** ICMP Echo 1회를 확인한다. TCP 가 응답하면 ICMP 는
+  호출조차 되지 않는다(성공 경로·RST 경로 예산 증가 0).
+- **ICMP 는 실패를 만들지 않는다.** 무응답 / 차단 / `ping` 부재 / 권한 부족을 구분 없이
+  "근거 없음" 으로 취급해 판정이 종전(TCP 전용)과 같아진다. ICMP 전용 code·stage 없음.
+- **`failure_code` 를 둘로 나눴다.** `TARGET_UNREACHABLE`(신규, `stage=reachable`) = TCP·ICMP 모두
+  무응답. `TCP_CONNECT_FAILED`(유지, `stage=port` 로 범위 축소) = ICMP 는 응답하는데 관리 TCP 포트만
+  무응답. 후자의 사용자 문장을 1번 → 2번(방화벽·관리 서비스 확인)으로 옮겼다 — ICMP 로 존재가
+  확인된 대상에게 "IP 사용 여부" 를 묻는 것은 사실과 어긋난다. **표준 문장 집합 5개는 불변**이다.
+- **구현은 `ping` 명령 1회**(stdlib subprocess). raw socket 은 root 가 필요하고 비특권 대안은
+  커널 `ping_group_range` 에 좌우돼 에이전트마다 갈린다.
+- **envelope shape 불변.** ICMP 관측 근거는 `errors[].detail` 에만 붙는다 —
+  `diagnosis.details` 에 새 키를 넣지 않았다(2026-05-01 `details.detail` revert 선례).
+
+### 영향
+
+- **호출자**: 종전 `TCP_CONNECT_FAILED` 로 "대상 무응답" 을 분기하던 소비자는 `TARGET_UNREACHABLE`
+  을 함께 받도록 갱신해야 한다. `failure_reason` / `errors[].message` 는 불변이라 문장만 표시하는
+  화면은 영향 없다.
+- **운영**: dead host 1대당 최대 +1초. controller 에 `ping` 이 없으면 종전 동작 그대로다.
+- 정본: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`, rule 27 R1, `CLAUDE.md` §7.
+- **실장비 미검증** — 오프라인 회귀까지만 확인했다 (`docs/ai/NEXT_ACTIONS.md` RE-1~RE-3).
+
 ## 2026-09-03 — OS(Linux/Windows) / ESXi 게더링 전수 검수 — 37건 정정
 
 ### 사용자 의심

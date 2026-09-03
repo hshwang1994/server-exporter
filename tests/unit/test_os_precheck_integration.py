@@ -29,6 +29,7 @@ import pytest
 from tests.secret_guard import (  # noqa: E402
     CANARY_PASSWORD, CANARY_RECOVERY, CANARY_TARGET, assert_no_secret,
 )
+from tests.precheck_stub import ICMP_REPLY, ICMP_SILENT, silence_icmp  # noqa: E402
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -63,8 +64,12 @@ class _ExitJson(Exception):
 
 
 def run_os_precheck(monkeypatch, port_results, *, timeout_port=2.0, ports=None,
-                    poll_interval=0.0):
-    """port_results: {port: 'ok'|'timeout'|'refused'|'dns'|'other'}"""
+                    poll_interval=0.0, icmp=ICMP_SILENT):
+    """port_results: {port: 'ok'|'timeout'|'refused'|'dns'|'other'}
+
+    2026-09-03: TCP 전 포트 무응답이면 모듈이 ICMP 를 한 번 더 확인한다. 결과를 주입해
+    실 ping 을 띄우지 않는다 — 기본값 "응답 없음" 은 종전(TCP 전용) 판정과 결과가 같다.
+    """
     seen: list[tuple[int, float]] = []
 
     def fake_tcp(host, port, timeout):
@@ -81,13 +86,15 @@ def run_os_precheck(monkeypatch, port_results, *, timeout_port=2.0, ports=None,
         return False, "연결 시간 초과 (timeout={0}s)".format(timeout), pb.TCP_FAIL_TIMEOUT
 
     monkeypatch.setattr(pb, "tcp_check_ex", fake_tcp)
+    silence_icmp(monkeypatch, pb, icmp)
 
     class _Fake:
         params = dict(host="192.0.2.30", channel="os", ports=ports or [],
                       timeout_port=timeout_port, timeout_protocol=15.0, timeout_auth=8.0,
                       username=None, password=None, verify_ssl=False,
                       probe_protocol=False,   # OS 는 프로토콜 검증을 하지 않는다
-                      port_poll_interval=poll_interval)
+                      port_poll_interval=poll_interval,
+                      icmp_probe=True, timeout_icmp=1.0)
 
         def exit_json(self, **kw):
             raise _ExitJson(kw)
@@ -127,9 +134,22 @@ def test_case04_all_timeout(monkeypatch):
     result, _ = run_os_precheck(monkeypatch, {})
     assert result["reachable"] is False
     assert result["failure_stage"] == "reachable"
-    assert result["failure_code"] == "TCP_CONNECT_FAILED", "timeout 을 장비 다운으로 확정하지 않는다"
+    assert result["failure_code"] == "TARGET_UNREACHABLE", (
+        "TCP·ICMP 모두 무응답이라는 관측일 뿐 장비 다운으로 확정하지 않는다"
+    )
     assert result["detected_os"] is None
     assert result["checked_ports"] == [5986, 5985, 22]
+
+
+def test_case04b_all_timeout_but_icmp_replies(monkeypatch):
+    """2026-09-03: TCP 전멸이어도 ICMP 가 답하면 도달은 성립한다 (방화벽 DROP 구간)."""
+    result, _ = run_os_precheck(monkeypatch, {}, icmp=ICMP_REPLY)
+    assert result["reachable"] is True, "ICMP Echo Reply 는 도달 근거다"
+    assert result["port_open"] is False, "도달했다고 관리 포트가 열린 것은 아니다"
+    assert result["failure_stage"] == "port", "도달 뒤 막힌 곳은 관리 포트 단계다"
+    assert result["failure_code"] == "TCP_CONNECT_FAILED"
+    assert result["detected_os"] is None
+    assert result["checked_ports"] == [5986, 5985, 22], "포트 후보는 종전 그대로다"
 
 
 def test_case05_all_refused(monkeypatch):
@@ -146,8 +166,8 @@ def test_case05_all_refused(monkeypatch):
     ({5986: "timeout", 5985: "refused", 22: "timeout"}, "port", "TCP_CONNECTION_REFUSED"),
     ({5986: "refused", 5985: "timeout", 22: "timeout"}, "port", "TCP_CONNECTION_REFUSED"),
     ({5986: "timeout", 5985: "timeout", 22: "refused"}, "port", "TCP_CONNECTION_REFUSED"),
-    # RST 가 없으면 CONNECT_FAILED
-    ({5986: "timeout", 5985: "other", 22: "timeout"},   "reachable", "TCP_CONNECT_FAILED"),
+    # RST 가 없으면 (그리고 ICMP 도 무응답이면) TARGET_UNREACHABLE
+    ({5986: "timeout", 5985: "other", 22: "timeout"},   "reachable", "TARGET_UNREACHABLE"),
 ])
 def test_case06_mixed_results_use_deterministic_rule(monkeypatch, results, exp_stage, exp_code):
     """포트마다 결과가 달라도 대표 code 는 probe 순서와 무관하게 결정적이어야 한다."""

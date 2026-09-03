@@ -21,8 +21,8 @@
 
 | 값 | 여기까지는 됐다 | 여기서 막혔다 |
 |---|---|---|
-| `reachable` | — | TCP 연결 자체가 안 된다 |
-| `port` | 장비는 살아 있다 (RST를 받았다) | 그 포트가 닫혀 있다 |
+| `reachable` | — | 관리 TCP 도 ICMP 도 응답이 없다 |
+| `port` | 대상이 응답한다 (RST 또는 ICMP Echo Reply) | 관리 포트에 붙지 못한다 |
 | `protocol` | 포트는 열려 있다 | 기대한 프로토콜로 응답하지 않는다 |
 | `auth` | 프로토콜은 맞다 | 자격증명이 거부됐거나 금고를 못 열었다 |
 | `gather` | 접속과 인증은 됐다 | 정보를 캐는 중에 실패했다 |
@@ -33,13 +33,14 @@
 
 ## failure_code — 기계가 분기할 값
 
-여덟 개로 고정이다. `message`는 사람이 읽는 문장이라 다듬어질 수 있지만 이 코드는
+아홉 개로 고정이다. `message`는 사람이 읽는 문장이라 다듬어질 수 있지만 이 코드는
 호출자가 조건문에 써도 되는 안정된 값이다.
 
 | 코드 | 언제 |
 |---|---|
 | `DNS_RESOLUTION_FAILED` | 주소 해석 실패 |
-| `TCP_CONNECT_FAILED` | 연결 시도가 응답 없이 끝났다 |
+| `TARGET_UNREACHABLE` | 관리 TCP 도 ICMP 도 응답이 없다 |
+| `TCP_CONNECT_FAILED` | ICMP 는 답하는데 관리 TCP 포트가 응답 없이 끝났다 |
 | `TCP_CONNECTION_REFUSED` | RST를 받았다 — 장비는 있고 포트가 닫혔다 |
 | `PROTOCOL_CHECK_FAILED` | 포트는 열렸는데 기대한 응답이 아니다 |
 | `AUTH_PROBE_FAILED` | 자격증명이 거부됐다 |
@@ -49,6 +50,11 @@
 
 `DNS_RESOLUTION_FAILED`가 목록에 있지만 이 시스템은 IPv4만 받는다. 사용자 안내에서
 DNS나 호스트명 확인을 권하지 않는다.
+
+`TARGET_UNREACHABLE`은 2026-09-03에 추가됐다. 그 전에는 `TCP_CONNECT_FAILED` 하나가
+"아무 응답 없음"과 "관리 포트만 응답 없음"을 겸했다. 도달 판정에 ICMP가 들어오면서
+둘이 갈렸다 — **종전에 `TCP_CONNECT_FAILED` + `stage: reachable`로 분기하던 호출자는
+`TARGET_UNREACHABLE`을 받도록 고쳐야 한다.** 사용자 문장은 바뀌지 않는다.
 
 ## 사용자에게 보이는 문장
 
@@ -67,14 +73,32 @@ DNS나 호스트명 확인을 권하지 않는다.
 
 `diagnosis`의 앞 네 필드는 사전 점검 결과다. 여기서 오해하기 쉬운 지점 둘을 짚는다.
 
-**`reachable`은 핑이 아니다.** ICMP는 아예 구현되어 있지 않다
-(`common/library/precheck_bundle.py:138,181`). 관리망은 핑을 막아 두는 일이 흔한데,
-핑으로 판정하면 443으로 멀쩡히 답하는 BMC를 죽었다고 오판한다. 그래서 TCP 연결로만
-본다. `reachable: true`는 "연결이 됐거나 RST를 받았다"는 뜻이다.
+**`reachable`은 TCP와 ICMP의 OR다. 핑 게이트가 아니다.** (2026-09-03 변경)
 
-RST를 받았다는 건 장비가 살아서 거절했다는 신호다. 그래서 이 경우는 `reachable: true`,
-`port_open: false`, `failure_stage: port`가 된다. 아무 응답이 없으면 `reachable: false`,
-`failure_stage: reachable`이다.
+순서가 중요하다. 먼저 관리 TCP 포트를 본다. 연결이 되거나 RST를 받으면 거기서 끝이고
+ICMP는 **호출조차 하지 않는다**. TCP가 아무 응답도 주지 않았을 때만 마지막으로 Echo를
+한 번 보낸다.
+
+| 관측 | `reachable` | `port_open` | `failure_stage` |
+|---|---|---|---|
+| TCP 연결 성공 | `true` | `true` | — |
+| RST 수신 | `true` | `false` | `port` |
+| TCP 무응답 + Echo Reply | `true` | `false` | `port` |
+| TCP 무응답 + Echo 없음 | `false` | `false` | `reachable` |
+
+이 순서가 옛 결정("핑으로 판정하면 443으로 멀쩡히 답하는 BMC를 죽었다고 오판한다")을
+그대로 지킨다. ICMP가 막혀 있어도 TCP가 답하면 통과이고, ICMP 무응답은 그 자체로 아무것도
+실패시키지 않는다. ICMP 전용 실패 코드도 없다.
+
+반대 방향의 오판을 막는 것이 이번 변경의 목적이다. 방화벽이 관리 포트 TCP를 조용히
+버리는 구간에서는 서버가 살아 있어도 TCP만으로는 아무것도 관측되지 않아 "IP 사용 여부를
+확인하세요"가 나갔다. 운영자가 봐야 할 곳은 방화벽인데 IP 대장을 뒤지게 된다. 이제 그
+경우는 `stage: port` + "방화벽과 관리 서비스 상태를 확인하세요"가 된다.
+
+확인은 controller의 `ping` 명령으로 한다 (Echo 1회, 기본 1초). raw socket은 root 권한이
+필요하고 비특권 대안은 커널 설정에 좌우돼 에이전트마다 갈리기 때문이다. `ping`이 없거나
+권한이 없는 환경이면 "근거 없음"으로 떨어져 판정이 종전 TCP 전용과 같아진다 — 그 사실은
+`errors[].detail`에 남는다. 필요하면 `_precheck_icmp_probe: false`로 아예 끌 수 있다.
 
 **`auth_success`는 사전 점검에서 채워지지 않는다.** 실제 운영 경로에서는 사전 점검
 단계에 자격증명을 넘기지 않는다 (`precheck_bundle.py:1399-1410`). Redfish는 이 시점에

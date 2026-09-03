@@ -284,7 +284,7 @@ ansible-playbook --syntax-check os-gather/site.yml  # 3 채널 syntax
 
 | key | 의미 |
 |---|---|
-| `reachable` | ICMP / TCP SYN 도달 |
+| `reachable` | 대상 도달 — 관리 TCP 응답(연결 성공/RST) **또는** ICMP Echo 응답 |
 | `port_open` | target_type 별 port 응답 (22/5986/443) |
 | `protocol_supported` | TCP 응답 + 첫 응답 형식 (HTTPS handshake / SSH banner / Redfish JSON) |
 | `auth_success` | 자격증명으로 인증 성공 |

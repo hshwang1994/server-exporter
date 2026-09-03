@@ -28,7 +28,8 @@
 
 # ── failure_code → 문장 매핑 (정본) ────────────────────────────────────────────
 #   DNS_RESOLUTION_FAILED      → 1
-#   TCP_CONNECT_FAILED         → 1
+#   TARGET_UNREACHABLE         → 1
+#   TCP_CONNECT_FAILED         → 2   (2026-09-03 이동 — 아래 주석)
 #   TCP_CONNECTION_REFUSED     → 2
 #   PROTOCOL_CHECK_FAILED      → 3
 #   AUTH_PROBE_FAILED          → 4
@@ -44,13 +45,22 @@
 # 문장은 **관측된 failure_code** 에서 파생된다. 다른 조건으로 따로 갈리지 않게 해서
 # stage / code / message 가 서로 다른 이야기를 하는 상황을 구조적으로 없앤다.
 
-# 1. 연결 자체를 확인하지 못했다 (reachable 단계 — timeout / no route / 주소 해석 실패).
+# TCP_CONNECT_FAILED 가 1 → 2 로 옮겨간 이유 (2026-09-03 사용자 지시):
+#   reachable 판정이 "관리 TCP 응답 OR ICMP Echo 응답" 이 되면서 code 두 개로 갈렸다.
+#     TARGET_UNREACHABLE : TCP 도 ICMP 도 무응답        → 1 (IP 사용 여부부터 확인)
+#     TCP_CONNECT_FAILED : ICMP 는 응답, 관리 TCP 만 무응답 → 2 (방화벽/관리 서비스 확인)
+#   ICMP 로 존재가 확인된 대상에게 "IP 사용 여부를 확인하세요" 는 사실과 어긋나고, 운영자를
+#   방화벽이 아닌 엉뚱한 곳으로 보낸다. 문장 집합(5개)은 그대로다 — 매핑만 옮겼다.
+
+# 1. 연결 자체를 확인하지 못했다 (reachable 단계 — TCP·ICMP 무응답 / 주소 해석 실패).
 _fr_ip_unconfirmed: "대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요."
 
-# 2. 관리 포트가 명시적으로 거부됐다 (port 단계 — 연결 거부를 실제로 관측).
+# 2. 관리 포트에 붙지 못했다 (port 단계 — 거부(RST) 관측 또는 ICMP 로 도달만 확인).
 #    2026-08-12 (사용자 확정): 종전 문구 "대상 IP 사용은 확인됐지만 ..." 는 IP presence 판정을
-#    전제하는데 이 저장소는 그런 판정을 하지 않는다(ICMP / IPAM / ARP 미도입). 관측한 사실만
-#    말하도록 바꿨다 — "관리 포트에 연결할 수 없다".
+#    전제했는데 당시 저장소는 그런 판정을 하지 않았다. 관측한 사실만 말하도록 바꿨다 —
+#    "관리 포트에 연결할 수 없다". 2026-09-03 에 ICMP 도달 근거가 생겼지만 문구는 그대로 둔다:
+#    RST 를 보낸 주체가 최종 서버인지 중간 방화벽인지는 여전히 확정할 수 없고, 운영자가 할 일
+#    (방화벽·관리 서비스 확인)은 두 경우 모두 같다.
 _fr_port_unreachable: "대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요."
 
 # 3. 관리 포트 연결은 됐는데 기대한 응답을 확인하지 못했다 (protocol 단계).
