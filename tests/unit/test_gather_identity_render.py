@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -61,6 +62,7 @@ def _env():
     env.filters["combine"] = _combine
     env.filters["normalize_uuid"] = normalize_uuid
     env.filters["normalize_mac"] = normalize_mac
+    env.filters["from_json"] = json.loads
     return env
 
 
@@ -335,3 +337,68 @@ def test_linux_smbios_clock_fallback_plausibility(dmi_lines, base, turbo):
     ctx = {"_l_cpu_parsed": {"CPU_MODEL": "INTEL(R) XEON(R) SILVER 4510"}, "_l_cpu_dmi_raw": {"stdout_lines": dmi_lines}}
     assert env.from_string(sf["_l_cpu_base_mhz"]).render(**ctx) == base
     assert env.from_string(sf["_l_cpu_turbo_mhz"]).render(**ctx) == turbo
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 실장비 검증(2026-09-03, Jenkins #190~#199)에서만 드러난 항목의 회귀 잠금
+# ═══════════════════════════════════════════════════════════════════════════
+WIN_NET = REPO / "os-gather" / "tasks" / "windows" / "gather_network.yml"
+ESXI_NET = REPO / "esxi-gather" / "tasks" / "normalize_network.yml"
+
+
+def test_windows_team_member_mac_is_normalized_at_source():
+    """L2 (build #190): 팀 멤버 NIC 는 팀 토폴로지 보강(WADP 보조 맵)의 MAC 이 그대로 나간다 —
+    PowerShell emit 에서 소문자 colon 으로 맞춰야 interfaces[] / teams[].members[] 가 정규형이 된다."""
+    teaming = next(t for t in _tasks(WIN_NET) if "teaming (LBFO + SET)" in str(t.get("name", "")))
+    ps = teaming["ansible.windows.win_shell"]
+    wadp = next(line for line in ps.splitlines() if "Emit 'WADP'" in line or ("mac=" in line and "MacAddress" in line))
+    body = ps[ps.index("Emit 'WADP'"):ps.index("status=[string]$a.Status")]
+    assert ".Replace('-',':').ToLower()" in body, "WADP 보조 맵의 MAC 이 다시 원문(대시·대문자)으로 나간다 (build #190 회귀)"
+    # interfaces[] 본류도 normalize_mac 을 통과한다
+    norm = _task(WIN_NET, "windows | network | normalize interfaces")["ansible.builtin.set_fact"]["_w_norm_interfaces"]
+    assert "| normalize_mac" in norm
+
+
+def test_windows_ipv6_zone_index_is_stripped():
+    """L3 (build #190): Windows link-local 은 `fe80::…%<ifindex>` 로 온다 — 주소 값에서 zone 을 뗀다."""
+    tmpl = _task(WIN_NET, "windows | network | normalize interfaces")["ansible.builtin.set_fact"]["_w_norm_interfaces"]
+    lines = [
+        json.dumps({"id": "Ethernet0", "name": "Ethernet0", "description": "vmxnet3 Ethernet Adapter #6",
+                    "interface_index": 9, "mac": "00-50-56-84-CB-C9", "mtu": 1500, "speed_mbps": 10000, "status": "Up",
+                    "is_primary": True, "family": "ipv6", "address": "fe80::3bfa:737e:b64b:84d5%9", "prefix": 64, "gateway": None}),
+        json.dumps({"id": "Ethernet0", "name": "Ethernet0", "description": "vmxnet3 Ethernet Adapter #6",
+                    "interface_index": 9, "mac": "00-50-56-84-CB-C9", "mtu": 1500, "speed_mbps": 10000, "status": "Up",
+                    "is_primary": True, "family": "ipv4", "address": "10.100.64.120", "prefix": 24, "gateway": "10.100.64.254"}),
+    ]
+    out = _render(tmpl, {"_w_iface_raw": {"stdout_lines": lines}})
+    assert len(out) == 1
+    iface = out[0]
+    assert iface["mac"] == "00:50:56:84:cb:c9"
+    assert iface["id"] == "Ethernet0" and iface["description"] == "vmxnet3 Ethernet Adapter #6"
+    assert [a["family"] for a in iface["addresses"]] == ["ipv4", "ipv6"]          # IPv4 먼저
+    v6 = iface["addresses"][1]
+    assert v6["address"] == "fe80::3bfa:737e:b64b:84d5" and "%" not in v6["address"]
+    assert v6["scope"] == "link" and v6["prefix_length"] == 64
+    assert iface["addresses"][0]["gateway"] == "10.100.64.254" and iface["addresses"][0]["subnet_mask"] == "255.255.255.0"
+
+
+def test_esxi_management_vmk_link_status_from_connection_evidence():
+    """L4 (build #191): vmware_host_facts 는 vmk 링크 상태를 주지 않는다 — 수집에 쓴 IP 를 가진 vmk 는 up,
+    나머지는 unknown (down 으로 단정하지 않는다). is_primary 는 게이트웨이 서브넷으로 판정."""
+    tmpl = _task(ESXI_NET, "esxi | normalize network | build interfaces")["ansible.builtin.set_fact"]["_e_norm_interfaces"]
+    ctx = {
+        "_e_raw_facts": {
+            "ansible_interfaces": ["vmk0", "vmk1"],
+            "ansible_vmk0": {"ipv4": {"address": "10.100.64.1", "netmask": "255.255.255.0"}, "macaddress": "70:DF:2F:66:F7:D6", "mtu": 1500},
+            "ansible_vmk1": {"ipv4": {"address": "192.168.10.5", "netmask": "255.255.255.0"}, "macaddress": "00:50:56:aa:bb:cc", "mtu": 9000},
+        },
+        "_e_ip": "10.100.64.1", "_e_default_gw": "10.100.64.254", "_e_default_gw6": None, "_e_gw_device": None,
+        "_e_raw_host": {"vnics": [{"device": "vmk0", "ipv6": [{"address": "fe80::72df:2fff:fe66:f7d6", "prefix_length": 64}]}]},
+    }
+    out = {i["name"]: i for i in _render(tmpl, ctx)}
+    assert out["vmk0"]["link_status"] == "up" and out["vmk0"]["is_primary"] is True
+    assert out["vmk0"]["mac"] == "70:df:2f:66:f7:d6"
+    assert out["vmk0"]["addresses"][0]["gateway"] == "10.100.64.254"
+    assert out["vmk0"]["addresses"][1]["family"] == "ipv6" and out["vmk0"]["addresses"][1]["scope"] == "link"
+    assert out["vmk1"]["link_status"] == "unknown" and out["vmk1"]["is_primary"] is False
+    assert out["vmk1"]["addresses"][0]["gateway"] is None
