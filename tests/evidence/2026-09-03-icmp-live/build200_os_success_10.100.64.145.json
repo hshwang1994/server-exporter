@@ -1,0 +1,396 @@
+{
+  "target_type": "os",
+  "collection_method": "agent",
+  "ip": "10.100.64.145",
+  "hostname": "auto-install-test12",
+  "vendor": "vmware",
+  "status": "success",
+  "sections": {
+    "system": "success",
+    "hardware": "success",
+    "bmc": "not_supported",
+    "cpu": "success",
+    "memory": "success",
+    "storage": "success",
+    "network": "success",
+    "firmware": "not_supported",
+    "users": "success",
+    "power": "not_supported",
+    "thermal": "not_supported"
+  },
+  "diagnosis": {
+    "reachable": true,
+    "port_open": true,
+    "protocol_supported": true,
+    "auth_success": true,
+    "failure_stage": null,
+    "failure_code": null,
+    "failure_reason": null,
+    "details": {
+      "channel": "os",
+      "adapter_candidate": "os_linux_rhel",
+      "detected_os": "linux",
+      "credential_scope": "git/os/linux",
+      "selected_port": 22,
+      "checked_ports": [
+        5986,
+        5985,
+        22
+      ],
+      "gather_mode": "python_ok",
+      "python_version": "3.9.21",
+      "auth": {
+        "attempted_count": 1,
+        "used_label": "linux_current",
+        "used_role": "primary",
+        "fallback_used": false
+      },
+      "hostname_source": "system"
+    }
+  },
+  "meta": {
+    "started_at": "2026-09-03T11:16:31.064741Z",
+    "finished_at": "2026-09-03T11:16:47.620491Z",
+    "duration_ms": 16527,
+    "adapter_id": "os_linux_rhel",
+    "adapter_version": null,
+    "ansible_version": "2.20.3"
+  },
+  "correlation": {
+    "serial_number": "VMware-42 04 a1 53 91 4d 7f dd-f5 20 89 9b e5 76 86 3d",
+    "system_uuid": "53a10442-4d91-dd7f-f520-899be576863d",
+    "bmc_ip": null,
+    "host_ip": "10.100.64.145"
+  },
+  "errors": [],
+  "data": {
+    "memory": {
+      "total_mb": 8192,
+      "total_basis": "physical_installed",
+      "installed_mb": 8192,
+      "visible_mb": 7680,
+      "free_mb": 6679,
+      "slots": [
+        {
+          "capacity_mb": 8192,
+          "type": "DRAM",
+          "speed_mhz": null,
+          "manufacturer": "VMware Virtual RAM",
+          "part_number": "VMW-8192MB",
+          "serial": "00000001",
+          "locator": "RAM slot #0"
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 8,
+            "type": "DRAM",
+            "speed_mhz": null,
+            "manufacturer": "VMware Virtual RAM",
+            "part_number": "VMW-8192MB",
+            "quantity": 1,
+            "group_total_gb": 8
+          }
+        ],
+        "grand_total_gb": 8
+      }
+    },
+    "cpu": {
+      "sockets": 4,
+      "cores_physical": 4,
+      "logical_threads": 4,
+      "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+      "manufacturer": "Intel",
+      "max_speed_mhz": 2200,
+      "turbo_max_mhz": null,
+      "architecture": "x86_64",
+      "summary": {
+        "groups": [
+          {
+            "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+            "manufacturer": "Intel",
+            "max_speed_mhz": 2200,
+            "turbo_max_mhz": null,
+            "l2_cache_kb": 256,
+            "l3_cache_kb": 56320,
+            "sockets": 4,
+            "cores_per_socket": 1,
+            "total_cores": 4
+          }
+        ]
+      }
+    },
+    "hardware": {
+      "vendor": "VMware, Inc.",
+      "model": "VMware7,1",
+      "serial": "VMware-42 04 a1 53 91 4d 7f dd-f5 20 89 9b e5 76 86 3d",
+      "uuid": "53a10442-4d91-dd7f-f520-899be576863d",
+      "bios_version": "VMW71.00V.18227214.B64.2106252220",
+      "bios_date": "2021-06-25"
+    },
+    "storage": {
+      "filesystems": [
+        {
+          "device": "/dev/mapper/rhel-root",
+          "mount_point": "/",
+          "filesystem": "xfs",
+          "total_mb": 62228,
+          "used_mb": 5132,
+          "available_mb": 57095,
+          "usage_percent": 9.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/sda2",
+          "mount_point": "/boot",
+          "filesystem": "xfs",
+          "total_mb": 960,
+          "used_mb": 355,
+          "available_mb": 604,
+          "usage_percent": 38.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/mapper/rhel-home",
+          "mount_point": "/home",
+          "filesystem": "xfs",
+          "total_mb": 30348,
+          "used_mb": 251,
+          "available_mb": 30096,
+          "usage_percent": 1.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/sdb1",
+          "mount_point": "/data1",
+          "filesystem": "xfs",
+          "total_mb": 102334,
+          "used_mb": 745,
+          "available_mb": 101588,
+          "usage_percent": 1.0,
+          "status": "mounted"
+        },
+        {
+          "device": "/dev/sda1",
+          "mount_point": "/boot/efi",
+          "filesystem": "vfat",
+          "total_mb": 598,
+          "used_mb": 7,
+          "available_mb": 591,
+          "usage_percent": 2.0,
+          "status": "mounted"
+        }
+      ],
+      "logical_volumes": [],
+      "infiniband": [],
+      "hbas": [],
+      "datastores": [],
+      "physical_disks": [
+        {
+          "id": "/dev/sda",
+          "device": "/dev/sda",
+          "model": "Virtual disk",
+          "serial": null,
+          "wwn": null,
+          "total_mb": 102400,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null,
+          "is_os_disk": true
+        },
+        {
+          "id": "/dev/sdb",
+          "device": "/dev/sdb",
+          "model": "Virtual disk",
+          "serial": null,
+          "wwn": null,
+          "total_mb": 102400,
+          "media_type": "HDD",
+          "protocol": null,
+          "health": null,
+          "is_os_disk": false
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 100,
+            "model": "Virtual disk",
+            "media_type": "HDD",
+            "protocol": null,
+            "quantity": 2,
+            "group_total_gb": 200
+          }
+        ],
+        "grand_total_gb": 200
+      },
+      "controllers": [
+        {
+          "id": "0000:02:00.0",
+          "name": "SATA AHCI controller",
+          "controller_model": "SATA AHCI controller",
+          "controller_manufacturer": "VMware",
+          "driver": "ahci",
+          "controller_type": "SATA",
+          "pci": "0000:02:00.0",
+          "health": null,
+          "drives": []
+        },
+        {
+          "id": "0000:03:00.0",
+          "name": "PVSCSI SCSI Controller",
+          "controller_model": "PVSCSI SCSI Controller",
+          "controller_manufacturer": "VMware",
+          "driver": "vmw_pvscsi",
+          "controller_type": "SAS",
+          "pci": "0000:03:00.0",
+          "health": null,
+          "drives": []
+        }
+      ]
+    },
+    "thermal": {
+      "temperatures": [],
+      "fans": []
+    },
+    "network": {
+      "interfaces": [
+        {
+          "id": "ens192",
+          "name": "ens192",
+          "kind": "os_nic",
+          "mac": "00:50:56:84:da:47",
+          "mtu": 1500,
+          "speed_mbps": 10000,
+          "link_status": "up",
+          "is_primary": true,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.145",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": "10.100.64.254",
+              "scope": "global",
+              "label": "ens192",
+              "parent_interface": "ens192",
+              "is_alias": false,
+              "is_secondary": false
+            },
+            {
+              "family": "ipv6",
+              "address": "fe80::250:56ff:fe84:da47",
+              "prefix_length": 64,
+              "subnet_mask": null,
+              "gateway": null,
+              "scope": "link",
+              "label": "ens192",
+              "parent_interface": "ens192",
+              "is_alias": false,
+              "is_secondary": false
+            }
+          ]
+        }
+      ],
+      "dns_servers": [
+        "10.100.64.251"
+      ],
+      "bonds": [],
+      "portgroups": [],
+      "virtual_switches": [],
+      "driver_map": [
+        {
+          "name": "ens192",
+          "driver": "vmxnet3",
+          "vlan_id": null,
+          "bond_master": null
+        }
+      ],
+      "bridges": [],
+      "adapters": [
+        {
+          "id": "0b:00.0",
+          "name": "VMXNET3 Ethernet Controller",
+          "manufacturer": "VMware",
+          "model": "VMXNET3 Ethernet Controller",
+          "driver": "vmxnet3",
+          "firmware_version": null,
+          "pci": "0b:00.0"
+        }
+      ],
+      "ports": [],
+      "teams": [],
+      "default_gateways": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.254"
+        }
+      ],
+      "summary": {
+        "groups": [
+          {
+            "speed_mbps": 10000,
+            "link_type": null,
+            "quantity": 1,
+            "link_up_count": 1
+          }
+        ]
+      }
+    },
+    "bmc": null,
+    "power": null,
+    "system": {
+      "os_family": "RedHat",
+      "distribution": "RedHat",
+      "version": "9.6",
+      "kernel": "5.14.0-570.12.1.el9_6.x86_64",
+      "architecture": "x86_64",
+      "hostname": "auto-install-test12",
+      "fqdn": "auto-install-test12.gooddi.lab",
+      "hosting_type": "virtual",
+      "uptime_seconds": 85326,
+      "selinux": "enforcing",
+      "serial_number": "VMware-42 04 a1 53 91 4d 7f dd-f5 20 89 9b e5 76 86 3d",
+      "system_uuid": "53a10442-4d91-dd7f-f520-899be576863d",
+      "vendor": "VMware, Inc.",
+      "runtime": {
+        "timezone": "Asia/Seoul",
+        "ntp_active": false,
+        "ntp_synchronized": false,
+        "firewall_tool": "firewalld",
+        "firewall_state": "active",
+        "listening_ports": [
+          "22",
+          "631"
+        ],
+        "swap_total_mb": 8067,
+        "swap_used_mb": 0,
+        "swap_free_mb": 8067
+      }
+    },
+    "users": [
+      {
+        "name": "root",
+        "uid": "0",
+        "groups": [
+          "root"
+        ],
+        "home": "/root",
+        "last_access_time": "2026-04-07T06:07:36Z"
+      },
+      {
+        "name": "cloviradmin",
+        "uid": "1000",
+        "groups": [
+          "cloviradmin",
+          "wheel"
+        ],
+        "home": "/home/cloviradmin",
+        "last_access_time": "2026-09-03T11:04:31Z"
+      }
+    ],
+    "firmware": []
+  },
+  "schema_version": "1"
+}

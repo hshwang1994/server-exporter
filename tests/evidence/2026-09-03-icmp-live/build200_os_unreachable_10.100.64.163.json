@@ -1,0 +1,104 @@
+{
+  "target_type": "os",
+  "collection_method": "agent",
+  "ip": "10.100.64.163",
+  "hostname": null,
+  "vendor": null,
+  "status": "failed",
+  "sections": {
+    "system": "failed",
+    "hardware": "failed",
+    "bmc": "not_supported",
+    "cpu": "failed",
+    "memory": "failed",
+    "storage": "failed",
+    "network": "failed",
+    "firmware": "not_supported",
+    "users": "failed",
+    "power": "not_supported",
+    "thermal": "not_supported"
+  },
+  "diagnosis": {
+    "reachable": false,
+    "port_open": false,
+    "protocol_supported": false,
+    "auth_success": null,
+    "failure_stage": "reachable",
+    "failure_code": "TARGET_UNREACHABLE",
+    "failure_reason": "대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요.",
+    "details": {
+      "channel": "os",
+      "adapter_candidate": null,
+      "checked_ports": [
+        5986,
+        5985,
+        22
+      ],
+      "detected_os": null,
+      "detected_port": null,
+      "hostname_source": "none"
+    }
+  },
+  "meta": {
+    "started_at": "2026-09-03T11:16:25.880671Z",
+    "finished_at": "2026-09-03T11:16:26.388956Z",
+    "duration_ms": null,
+    "adapter_id": null,
+    "adapter_version": null,
+    "ansible_version": "2.20.3"
+  },
+  "correlation": {
+    "serial_number": null,
+    "system_uuid": null,
+    "bmc_ip": null,
+    "host_ip": "10.100.64.163"
+  },
+  "errors": [
+    {
+      "section": "os_detect",
+      "message": "대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요.",
+      "detail": "port=5986: 연결 시간 초과 (timeout=2s); port=5985: [Errno 113] No route to host; port=22: 연결 시간 초과 (timeout=2s); icmp: 응답 없음 (rc=1) | 확인한 관리 포트: WinRM 5986, WinRM 5985, SSH 22"
+    }
+  ],
+  "data": {
+    "system": null,
+    "hardware": null,
+    "bmc": null,
+    "cpu": null,
+    "memory": null,
+    "storage": {
+      "filesystems": [],
+      "physical_disks": [],
+      "datastores": [],
+      "controllers": [],
+      "logical_volumes": [],
+      "hbas": [],
+      "infiniband": [],
+      "summary": {
+        "groups": [],
+        "grand_total_gb": 0
+      }
+    },
+    "network": {
+      "dns_servers": [],
+      "default_gateways": [],
+      "interfaces": [],
+      "adapters": [],
+      "ports": [],
+      "virtual_switches": [],
+      "portgroups": [],
+      "driver_map": [],
+      "summary": {
+        "groups": []
+      }
+    },
+    "users": [],
+    "firmware": [],
+    "power": null,
+    "thermal": {
+      "temperatures": [],
+      "fans": []
+    }
+  },
+  "schema_version": "1"
+}

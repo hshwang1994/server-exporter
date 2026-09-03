@@ -1,5 +1,8 @@
 # 2026-09-03 — reachable ICMP OR 판정 실장비 검증
 
+> **§5 에 Jenkins 파이프라인 실행(#200 / #201) 결과가 있다.** 아래 §0~§3 은 그 전에
+> 러너에서 Gather stage 만 재현한 예비 실행이며, 파이프라인 결과가 상위 증거다.
+>
 > 대상 커밋: `66e8303c` (main). 정본: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`
 > 실행 위치: Jenkins Agent `jenkins-agent-ops` (10.100.64.154, Ubuntu 24.04 / kernel 6.8.0-111,
 > ansible-core 2.20.3, `/opt/ansible-env`). 계정 `cloviradmin` (비특권, sudo 그룹).
@@ -106,10 +109,58 @@ dead host(10.100.64.163) 1대, `precheck_bundle` 단독 호출 2회씩:
 → **+1.0 ~ 1.1 초 / dead host**. 설계값(Echo 1회, 기본 1초)과 일치한다.
 성공 경로·RST 경로는 ICMP 를 호출하지 않으므로 증가분이 없다 (CASE 3/4 에서 확인).
 
-## 4. 미검증
+## 4. 예비 실행의 한계 (→ §5 에서 해소)
 
-- **Jenkins 파이프라인 빌드 미실행.** 본 검증은 러너에서 `Jenkinsfile_portal` Gather stage 와
-  동일한 명령을 재현한 것이고, Stage 1(Validate) / Stage 3(Validate Schema) / Stage 4(Callback)
-  는 돌지 않았다. 파이프라인 실행은 별도로 필요하다.
-- vault 를 쓰지 않아 **본 수집 성공 경로의 end-to-end** 는 이번에 확인하지 않았다
-  (precheck 판정 구간은 자격증명 이전이라 영향 없음).
+- 러너 재현이라 Stage 1(Validate) / Stage 3(Validate Schema) / Stage 4(Callback) 는 돌지 않았다.
+- vault 를 쓰지 않아 본 수집 성공 경로의 end-to-end 를 확인하지 못했다.
+
+두 항목 모두 아래 §5 의 파이프라인 실행으로 해소됐다.
+
+## 5. Jenkins 파이프라인 실행 (정식 경로)
+
+Job `clovirone-server-gather` (`Jenkinsfile_portal`, `*/main`), Jenkins 마스터 10.100.64.152.
+
+| 빌드 | 체크아웃 | 대상 | 결과 |
+|---|---|---|---|
+| #200 | `1fd9fa6d` | `os`: .163 / .145 / .120 | UNSTABLE (더미 callback) — Gather·Validate Schema 통과, envelope 3건 |
+| #201 | `1fd9fa6d` | `redfish`: .145 | UNSTABLE (더미 callback) — envelope 1건 |
+
+Stage 전량 실행 확인: `Resolve Location` → `Validate` → `Gather` → `Validate Schema` →
+`Callback` → `Post Actions`. `UNSTABLE` 은 callback URL 이 더미(192.0.2.1)라 POST 가 실패한
+결과이며 종전 빌드와 동일한 의도된 상태다 (rule 31 R2).
+**체크아웃 SHA 는 두 빌드 모두 `1fd9fa6d679ef0c71fff915a0058d6f380ed6a82`** — push 성공이
+아니라 실제 Job 체크아웃으로 확인했다 (rule 14).
+
+### #200 — `os` 3대 (원본: `2026-09-03-icmp-live/build200_*.json`)
+
+| 대상 | status | reachable / port / proto / auth | stage / code | 비고 |
+|---|---|---|---|---|
+| 10.100.64.163 | `failed` | F / F / F / null | `reachable` / **`TARGET_UNREACHABLE`** | 1번 문장. `detail` 에 `icmp: 응답 없음 (rc=1)` |
+| 10.100.64.145 | **`success`** | T / T / T / **T** | — / — | ICMP 응답 + 5986·5985 DROP 이어도 22 로 **실수집 성공**. `adapter=os_linux_rhel`, `gather_mode=python_ok`, `credential_scope=git/os/linux` |
+| 10.100.64.120 | **`success`** | T / T / T / **T** | — / — | **ICMP 차단 장비가 정상 수집**. `checked_ports=[5986]`, `adapter=os_windows_2022`, WinRM 인증 성공 |
+
+`.145` / `.120` 는 vault 자격증명까지 태운 **본 수집 성공**이다. ICMP 도입이 성공 경로를
+건드리지 않았음을 파이프라인 end-to-end 로 확인했고, 특히 `.120` 은 ICMP 가 완전히 차단된
+실장비가 정상 수집된 사례라 "Gate 아님" 의 직접 증거다.
+
+### #201 — `redfish` / 10.100.64.145 (원본: `build201_redfish_icmp_only_10.100.64.145.json`)
+
+| 항목 | 값 |
+|---|---|
+| `status` | `failed` |
+| `diagnosis.reachable` / `port_open` | **`true`** / `false` |
+| `failure_stage` / `failure_code` | **`port`** / **`TCP_CONNECT_FAILED`** |
+| `failure_reason` = `errors[0].message` | 대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요. (2번) |
+| `errors[0].detail` | `port=443: [Errno 113] No route to host; icmp: Echo Reply 확인 \| ...` |
+| envelope | 13 필드 / 11 섹션 / `diagnosis` 키 7 + `details` — **shape 불변** |
+
+종전 코드였다면 같은 장비가 `stage=reachable` + 1번 문장("IP 사용 여부와 네트워크 상태를
+확인하세요")으로 나갔다. 방화벽을 봐야 할 상황에서 IP 대장을 뒤지게 하던 오안내가
+정식 경로에서 사라진 것을 확인했다.
+
+## 6. 남은 미검증
+
+- **Portal 소비자 이행** — `failure_code == "TCP_CONNECT_FAILED"` 로 "대상 무응답" 을 분기하던
+  코드가 있으면 `TARGET_UNREACHABLE` 을 받도록 갱신해야 한다 (NEXT_ACTIONS RE-4).
+  이 저장소 밖 영역이라 여기서 확인할 수 없다.
+- callback 수신 측 검증은 이번에도 더미 URL 이라 하지 않았다 (종전 빌드와 동일).

@@ -22,7 +22,8 @@
 | RE-2 TCP·ICMP 무응답 (os/.163) | `TARGET_UNREACHABLE` / 1번 문장(종전과 동일) / `detail` 에 `icmp: 응답 없음 (rc=1)` |
 | RE-2 ICMP 차단 + TCP 정상 (os/.120 Windows) | precheck 정상 통과 (`reachable/port/protocol` 전부 true) — **Gate 아님 실측 확인** |
 | RE-3 dead host 예산 | ICMP on 8.62·8.75s ↔ off 7.69·7.50s → **+1.0~1.1초/대** (설계값 일치) |
-| Jenkins 파이프라인 빌드 | **미실행** — 하네스 권한 게이트로 빌드 트리거 차단. 사용자 승인 대기 |
+| Jenkins 파이프라인 `clovirone-server-gather` #200 (`os`: .163/.145/.120) | UNSTABLE(더미 callback — 의도) / 체크아웃 `1fd9fa6d` / envelope 3건: `.163` = `TARGET_UNREACHABLE`, `.145` `.120` = **`success`** (vault 자격증명까지 태운 실수집). `.120` 은 ICMP 차단 장비의 정상 수집 — Gate 아님 end-to-end 증거 |
+| Jenkins 파이프라인 #201 (`redfish`: .145) | UNSTABLE(더미 callback) / 체크아웃 `1fd9fa6d` / `reachable=true` + `stage=port` + `TCP_CONNECT_FAILED` + 2번 문장. Stage 전량(Resolve Location→Validate→Gather→Validate Schema→Callback) 실행 |
 
 ## 2026-09-03 — 실장비 검증 (Jenkins `clovirone-server-gather` #190~#196, 운영 파이프라인 Jenkinsfile_portal)
 

@@ -11,7 +11,7 @@
 | RE-2 | 방화벽 DROP 구간 실측 | `[DONE 2026-09-03]` | 10.100.64.145(RHEL 9.6 VM — ICMP 열림, 443/5985/5986 DROP)에서 `reachable=true` / `stage=port` / `TCP_CONNECT_FAILED` / 2번 문장 확인. 반대 케이스 2건도 함께: .163(TCP·ICMP 무응답) → `TARGET_UNREACHABLE`, .120(Windows, ICMP 차단 + TCP 정상) → precheck 정상 통과(Gate 아님). 증거 `tests/evidence/2026-09-03-icmp-reachability-live.md` |
 | RE-3 | dead host wall-clock | `[DONE 2026-09-03]` | .163 단독 precheck 4회: ICMP on 8.62·8.75s ↔ off 7.69·7.50s → **+1.0~1.1초/대**. 설계값(Echo 1회 / 기본 1초)과 일치 |
 | RE-4 | **Portal 소비자 이행 안내** | `[TODO / 사용자]` | `failure_code == "TCP_CONNECT_FAILED"` 로 "대상 무응답" 을 분기하던 코드가 Portal 에 있으면 `TARGET_UNREACHABLE` 을 받도록 갱신해야 한다. 사용자 문장(`failure_reason` / `errors[].message`)은 불변이라 표시 전용 화면은 영향 없다 |
-| RE-5 | **Jenkins 파이프라인 빌드** | `[BLOCKED / 사용자 승인]` | 러너에서 Gather stage 와 동일 명령을 재현해 4케이스를 확인했으나, `clovirone-server-gather` 잡 트리거는 하네스 권한 게이트에 막혔다. Stage 1(Validate) / Stage 3(Validate Schema) / Stage 4(Callback) 는 아직 이번 변경으로 돌지 않았다 |
+| RE-5 | Jenkins 파이프라인 빌드 | `[DONE 2026-09-03]` | `clovirone-server-gather` #200(`os` 3대) / #201(`redfish`) — 둘 다 체크아웃 `1fd9fa6d` 확인(rule 14). Stage 전량 실행, Validate Schema 통과. `.145`/`.120` 은 vault 태운 **실수집 success**, `.163` = `TARGET_UNREACHABLE`, redfish `.145` = `stage=port` + `TCP_CONNECT_FAILED`. UNSTABLE 은 더미 callback URL 때문(rule 31 R2, 종전 빌드와 동일) |
 
 ## OS / ESXi 게더링 전수 검수 후속 (2026-09-03)
 

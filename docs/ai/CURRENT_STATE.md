@@ -23,8 +23,13 @@
   `docs/overview/02-architecture.md`, `docs/develop/06-debugging.md`.
 - **회귀**: `tests/unit/test_precheck_icmp_reachability.py` 신설(24), 기존 precheck 하네스 10곳은
   `tests/precheck_stub.py` 로 ICMP 결과 주입(실 `ping` 금지). 전체 **3312 passed / 0 failed**.
-- **실장비 미검증**: 오프라인 회귀까지만 확인했다. Agent `ping` 가용성 / 방화벽 DROP 구간 실측 /
-  dead host wall-clock 은 RE-1~RE-3.
+- **실장비 검증 완료**: Jenkins `clovirone-server-gather` #200(`os`: .163/.145/.120) + #201(`redfish`: .145),
+  둘 다 체크아웃 `1fd9fa6d` 확인. `.163` = `TARGET_UNREACHABLE`, redfish `.145`(ICMP 응답 + 443 DROP) =
+  `reachable=true` / `stage=port` / `TCP_CONNECT_FAILED` / 2번 문장. `.145`(os) `.120`(Windows, **ICMP 차단**) 은
+  vault 자격증명까지 태운 **실수집 success** — ICMP 가 Gate 가 아님이 end-to-end 로 확인됐다.
+  에이전트 `ping` 은 `cap_net_raw=ep`, `ping_group_range = 1 0` (비특권 소켓 방식이었으면 실패했을 조건).
+  dead host 예산 +1.0~1.1초/대. 증거 `tests/evidence/2026-09-03-icmp-reachability-live.md`.
+  남은 것은 Portal 소비자 이행(RE-4) 하나다.
 
 ## 일자: 2026-09-03 — OS(Linux/Windows) / ESXi 게더링 전수 검수 후속 (37건 정정, Redfish 제외)
 
