@@ -1,5 +1,23 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-14 — OS Vault 2차 infraops fallback 계정 추가 (사용자 지시)
+
+> 커밋 `15f95dca` (main). 순수 데이터 변경 — 코드/스키마/컨트랙트 변경 0.
+> 검증 기록: `tests/evidence/2026-09-14-os-vault-infraops-fallback.md`.
+
+- **8개 OS Vault `accounts[]` 재작성.** Linux `infra → infraops`, Windows `administrator → infraops`
+  (2차 = `infraops`, role `secondary`, label `{linux,windows}_fallback`). 배열 순서 = 인증 시도 순서.
+  기존 `os-gather/tasks/try_credentials.yml` fallback 구조 그대로 사용 — 새 로직/Resolver 없음.
+- **ic/chj/yi**: 1차 primary 는 기존 값과 동일(변경 없음), 2차 `infraops` 추가 + legacy 키 제거.
+- **git (전용 primary 보존 — 사용자 결정)**: Linux `cloviradmin` / Windows `administrator`(git 전용 password)
+  를 1차로 **그대로 유지**하고 2차 `infraops` 만 추가. 4 Location 이 동일 fallback 공유.
+- **legacy 키 제거**: `ansible_user`/`ansible_password`/`ansible_become_password` 삭제.
+  `accounts[]` 가 우선하고 OS become 은 후보별 `set_fact`(`try_one_credential.yml:22-25`)가 담당 → 동작 불변.
+- **검증**: `vault_decrypt_check.py` `[PASS]`, 스테이징 바이트 복호화 8/8 PASS,
+  `pytest tests/`(브라우저 제외) **3311 passed / 0 failed**, `--syntax-check os-gather` 정상.
+  실장비(SSH/WinRM 실인증)는 Jenkins `os` 게더 6 케이스로 사용자 측 확인 필요 (미완).
+- **미변경**: 코드 / Resolver / Precheck / failure contract / Jenkins / inventory / Redfish·ESXi vault.
+
 ## 일자: 2026-09-03 — reachable 판정에 ICMP Echo OR 조건 추가 (사용자 지시)
 
 > 결정 근거: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`,
