@@ -8,6 +8,47 @@
 
 > 최종 갱신: 2026-09-15
 
+## 2026-09-15 — BIOS Attributes 를 Key 이름순으로 정렬해 내보낸다 (`data.bios.current.attributes`)
+
+### 요구
+
+같은 날 추가한 BIOS Current Attributes(아래 항목)가 장비가 준 순서 그대로 나와 읽기 어렵다는 사용자 지적이 있었다.
+처음 결정은 "Key·Value·JSON 자료형 원본 보존"이었고, 구현은 순서까지 응답 그대로 두었다.
+
+### 관측
+
+같은 장비의 Current Bios 응답(저장소 캡처 2026-04-28, 저장소 fixture, Jenkins 실수집 2026-09-15)을 비교했다.
+
+| 장비 | 장비가 주는 Key 순서 |
+|---|---|
+| Dell PowerEdge R760 5대 (571개) | 이미 대소문자 구분 이름순 |
+| HPE ProLiant DL380 Gen11 (285개) | 이미 대소문자 구분 이름순 (캡처 기준) |
+| Lenovo ThinkSystem SR650 V2 (392개) | 서로 다른 시점 3건의 순서가 모두 달랐다 (같은 자리에 같은 Key 가 온 비율 0~1%, Key 집합은 같음). 연속 요청으로는 확인하지 않았다 |
+| Cisco CIMC 장비 1대 (87개) | 캡처와 실수집의 순서는 같지만 이름순도 메뉴 묶음도 아니다 |
+
+### 결정 (사용자 확정)
+
+- 수집기(`gather_bios`)가 `Attributes` 를 **Key 이름순(대소문자를 구분하는 문자열 정렬)** 으로 담는다.
+  Key 이름·개수·Value·JSON 자료형은 그대로다.
+- 대소문자 무시 정렬, 숫자 자릿값 정렬(`Slot2` 를 `Slot10` 앞에 두는 방식)은 쓰지 않는다.
+
+### 왜 이렇게 했나
+
+- 장비가 준 순서에는 지킬 의미가 없었다. Dell·HPE 는 이미 같은 규칙이고, Lenovo 는 같은 장비도 결과마다 순서가
+  달라 두 결과를 텍스트로 비교하면 거의 모든 줄이 바뀐 것처럼 보이며, Cisco 순서도 메뉴 순서가 아니다.
+  BIOS 설정 화면의 메뉴 순서는 AttributeRegistry 에 있고 수집 범위 밖이다.
+- 대소문자 구분 정렬은 Dell·HPE BMC 가 쓰는 규칙이라 두 Vendor 출력이 정렬 전과 같다. 흔한 도구의 기본 문자열
+  정렬과도 결과가 같다. 대신 소문자로 시작하는 Key(Cisco `cdnEnable`, `comSpcrEnable`)가 뒤로 간다.
+- JSON 객체의 Key 순서는 의미를 갖지 않는 정보라 원본 보존 결정(Key·Value·자료형)과 충돌하지 않는다.
+- 정렬은 모듈 한 곳에서 한다. 이후 Ansible 템플릿·`json_only` 콜백 경로는 받은 순서를 바꾸지 않는다(렌더 테스트로 확인).
+
+### 영향
+
+- **호출자**: 같은 장비는 매번 같은 Key 순서로 받는다. 그래도 순서에 기대는 처리는 하지 않는다 — 저장 방식(DB 의
+  JSON 전용 타입 등)에 따라 순서가 다시 바뀔 수 있으므로 화면 정렬은 받는 쪽에서 한다.
+- **변하지 않는 것**: 요청 수, `status` / `sections` / `errors` 판정, Ansible no_log 경계, replay golden
+  (Bios 본문이 없는 녹화라 `attributes` 는 `null`).
+
 ## 2026-09-15 — Redfish BIOS Current Attributes 수집 추가 (`data.bios.current.attributes`)
 
 ### 요구

@@ -15,7 +15,8 @@
 
 확인하는 것:
     - 선택된 ComputerSystem(Systems.Members[0]) 응답의 `Bios.@odata.id` 로 1회만 조회한다
-    - source `Attributes` 와 `data.bios.current.attributes` 가 값·자료형·개수·순서까지 같다
+    - source `Attributes` 와 `data.bios.current.attributes` 가 값·자료형·개수까지 같고 Key 는 이름순이다
+      (Dell·HPE 캡처는 장비가 이미 같은 규칙으로 정렬해 줘서 순서도 캡처와 같다. Lenovo·Cisco 는 다르다)
     - 숫자 모양 문자열은 문자열로, `null` / `""` / `0` / `false` 는 누락 없이 남는다
     - Bios 하위 리소스(Settings / Pending / SD / Oem)와 Registry 는 부르지 않는다
       (이 미러에는 그 파일들이 실제로 있어서, 잘못 부르면 응답이 돌아와 버린다)
@@ -115,12 +116,13 @@ def _type_tree(value):
 
 
 def _special_keys(attrs: dict) -> dict[str, list[str]]:
+    """값 종류별 Key 목록. 순서는 test_attributes_equal_the_capture_exactly 가 따로 본다."""
     return {
-        "null": [k for k, v in attrs.items() if v is None],
-        "empty": [k for k, v in attrs.items() if v == "" and isinstance(v, str)],
-        "zero": [k for k, v in attrs.items() if v == 0 and type(v) is int],
-        "false": [k for k, v in attrs.items() if v is False],
-        "numeric_text": [k for k, v in attrs.items() if isinstance(v, str) and _NUMERIC_TEXT.match(v)],
+        "null": sorted(k for k, v in attrs.items() if v is None),
+        "empty": sorted(k for k, v in attrs.items() if v == "" and isinstance(v, str)),
+        "zero": sorted(k for k, v in attrs.items() if v == 0 and type(v) is int),
+        "false": sorted(k for k, v in attrs.items() if v is False),
+        "numeric_text": sorted(k for k, v in attrs.items() if isinstance(v, str) and _NUMERIC_TEXT.match(v)),
     }
 
 
@@ -169,12 +171,25 @@ class TestBiosRealCaptureReplay:
         source = capture["source"]
         got = capture["result"]["data"]["bios"]["current"]["attributes"]
         assert len(got) == len(source)
-        assert list(got) == list(source)
+        assert list(got) == sorted(source)
         assert _type_tree(got) == _type_tree(source)
         assert got == source
         final = json.loads(json.dumps(capture["result"]["data"]["bios"], ensure_ascii=False))
         assert final["current"]["attributes"] == source
+        assert list(final["current"]["attributes"]) == sorted(source)
         assert _type_tree(final["current"]["attributes"]) == _type_tree(source)
+
+    def test_sorting_changes_order_only_where_the_device_did_not_sort(self, capture):
+        """정렬 규칙을 고른 근거 — Dell·HPE BMC 는 이미 대소문자 구분 이름순으로 준다.
+
+        그래서 두 Vendor 출력 순서는 정렬 전과 같고, 순서가 제각각인 Lenovo·Cisco 만 달라진다.
+        """
+        source = capture["source"]
+        got = capture["result"]["data"]["bios"]["current"]["attributes"]
+        if capture["vendor"] in ("dell", "hpe"):
+            assert list(got) == list(source)
+        else:
+            assert list(got) != list(source)
 
     def test_special_values_are_kept(self, capture):
         got = capture["result"]["data"]["bios"]["current"]["attributes"]

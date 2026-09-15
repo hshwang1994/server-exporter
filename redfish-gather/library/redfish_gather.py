@@ -2164,7 +2164,8 @@ def gather_bios(bmc_ip, bios_link, username, password, timeout, verify_ssl):
       `retrieved` 가 없으면 ComputerSystem 을 받지 못한 것이라 조회하지 않는다.
       `link` 가 비어 있으면 조회하지 않는다 — System ID 로 URI 를 조립하는 fallback 은 없다.
 
-    응답의 `Attributes` 객체를 그대로 담는다. 복사·필터·이름 변환·값 변환·개수 제한이 없다.
+    응답의 `Attributes` 를 Key 이름순(대소문자 구분 문자열 정렬)으로 다시 담는다. Value 는 원본 객체
+    그대로이고 필터·이름 변환·값 변환·개수 제한이 없다.
     Settings / Pending / SD / AttributeRegistry / OEM 하위 리소스는 호출하지 않는다.
 
     실패는 errors 로, 실패가 아닌 사실(링크 없음 / 404 / 비표준 리소스 / 빈 Attributes)은
@@ -2219,7 +2220,9 @@ def gather_bios(bmc_ip, bios_link, username, password, timeout, verify_ssl):
 
         if not attributes:
             _notice('bios', 'Bios.Attributes 가 비어 있음')
-        out['current']['attributes'] = attributes
+        # Key 이름순으로 담는다 (2026-09-15 사용자 결정). 장비가 주는 순서는 Vendor 마다 다르고
+        # 같은 장비도 수집할 때마다 달라질 수 있다. 순서만 바꾸고 Value 는 건드리지 않는다.
+        out['current']['attributes'] = {key: attributes[key] for key in sorted(attributes)}
         return out, errors
     except Exception as e:
         sys.stderr.write(

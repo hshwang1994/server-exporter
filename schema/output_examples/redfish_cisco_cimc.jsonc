@@ -252,11 +252,11 @@
     // 같은 장비의 Current Bios 실캡처(2026-04-28)에서 일부만 옮겼다. 실제 수집 결과에는 87개가 모두 들어간다.
     "bios": {
       "current": {
-        "attributes": {                                    // 장비가 돌려준 Key / Value / 자료형 원본 그대로
-          "IntelVT": "Enabled",
-          "IntelVTD": "Enabled",
+        "attributes": {                                    // Key / Value / 자료형은 장비 원본 그대로, Key 는 이름순
+          "BaudRate": "115200",                            // 숫자처럼 보여도 장비가 문자열로 주면 문자열 그대로
           "IntelHyperThread": "Enabled",
-          "BaudRate": "115200"                             // 숫자처럼 보여도 장비가 문자열로 주면 문자열 그대로
+          "IntelVT": "Enabled",
+          "IntelVTD": "Enabled"
         }
       }
     }

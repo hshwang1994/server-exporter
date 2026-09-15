@@ -2,8 +2,9 @@
 
 고정하는 계약
 -------------
-1. 성공 경로는 `data.bios.current.attributes` 하나다. 응답의 `Attributes` 객체를 그대로 담는다.
-   Key·Value·JSON 자료형이 원본과 같고, 필터·이름 변환·값 변환·개수 제한이 없다.
+1. 성공 경로는 `data.bios.current.attributes` 하나다. 응답의 `Attributes` 를 Key 이름순
+   (대소문자 구분 문자열 정렬)으로 담는다. Key·Value·JSON 자료형은 원본과 같고, 필터·이름 변환·
+   값 변환·개수 제한이 없다. 장비가 준 순서는 쓰지 않는다 — Vendor 마다 다르고 수집할 때마다 달라지기도 한다.
 2. Bios 리소스는 gather_system 이 이미 받은 ComputerSystem 응답의 `Bios.@odata.id` 로만 찾는다.
    ComputerSystem 재조회 없음, System ID 로 URI 를 조립하는 fallback 없음, BIOS GET 은 실행당 최대 1회.
 3. BIOS 는 보조(auxiliary) 데이터다. 조회 실패는 errors[](section=bios) 또는 notice 로만 남고
@@ -146,21 +147,49 @@ def _type_tree(value):
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. 원본 보존 (지시서 13.1 / 13.4)
 # ═══════════════════════════════════════════════════════════════════════════
-def test_attributes_are_the_response_object_unchanged(monkeypatch):
+def test_attributes_keep_values_and_types_in_key_name_order(monkeypatch):
     source = copy.deepcopy(PRESERVE_SAMPLE)
     out, errors, calls = _gather_bios(
         monkeypatch, {"retrieved": True, "link": BIOS},
         {BIOS_PATH: (200, _bios_body(source), None)})
 
     attrs = out["current"]["attributes"]
+    assert list(PRESERVE_SAMPLE) != sorted(PRESERVE_SAMPLE), "표본이 이미 이름순이면 정렬을 검증하지 못한다"
     assert out == {"current": {"attributes": PRESERVE_SAMPLE}}
-    assert attrs is source, "응답 Attributes 객체를 복사·재구성하지 않고 그대로 담아야 한다"
-    assert list(attrs) == list(PRESERVE_SAMPLE), "Key 개수·순서가 원본과 같아야 한다"
+    assert list(attrs) == sorted(PRESERVE_SAMPLE), "Key 는 개수 그대로, 이름순이어야 한다"
+    assert all(attrs[key] is source[key] for key in source), "Value 는 복사·변환하지 않고 원본 객체 그대로"
     assert _type_tree(attrs) == _type_tree(PRESERVE_SAMPLE)
+    assert list(source) == list(PRESERVE_SAMPLE) and source == PRESERVE_SAMPLE, "응답 dict 자체는 바꾸지 않는다"
     assert errors == [] and _bios_notices() == []
     assert calls == [BIOS_PATH]
     reparsed = json.loads(json.dumps(out, ensure_ascii=False))
     assert _type_tree(reparsed) == _type_tree(out) and reparsed == out
+    assert list(reparsed["current"]["attributes"]) == sorted(PRESERVE_SAMPLE)
+
+
+# 장비가 순서를 어떻게 주든 출력 순서는 하나다. 규칙은 대소문자 구분 문자열 정렬이다 —
+# 대문자가 소문자보다 앞이고, 숫자는 자릿값이 아니라 글자 단위로 비교한다(Slot10 이 Slot2 앞).
+_ORDER_PAIRS = [
+    ("cdnEnable", "Enabled"), ("Slot2", "Enabled"), ("Altitude", "300-M"), ("_Underscore", 1),
+    ("Zeta", None), ("ATS", "Enabled"), ("BaudRate", "115200"), ("Slot10", False),
+]
+_ORDER_EXPECTED = ["ATS", "Altitude", "BaudRate", "Slot10", "Slot2", "Zeta", "_Underscore", "cdnEnable"]
+
+
+@pytest.mark.parametrize("arrangement", ["as-listed", "reversed", "rotated"])
+def test_output_order_does_not_depend_on_response_order(monkeypatch, arrangement):
+    pairs = {"as-listed": _ORDER_PAIRS, "reversed": _ORDER_PAIRS[::-1],
+             "rotated": _ORDER_PAIRS[3:] + _ORDER_PAIRS[:3]}[arrangement]
+    source = dict(pairs)
+    out, errors, _calls = _gather_bios(
+        monkeypatch, {"retrieved": True, "link": BIOS},
+        {BIOS_PATH: (200, _bios_body(source), None)})
+
+    attrs = out["current"]["attributes"]
+    assert list(attrs) == _ORDER_EXPECTED == sorted(source)
+    assert attrs == dict(_ORDER_PAIRS) and _type_tree(attrs) == _type_tree(dict(_ORDER_PAIRS))
+    assert [key for key, _value in pairs] == list(source), "응답 dict 의 순서는 그대로 둔다"
+    assert errors == []
 
 
 def test_large_attributes_are_not_truncated_or_filtered(monkeypatch):
@@ -195,11 +224,12 @@ def test_large_attributes_are_not_truncated_or_filtered(monkeypatch):
 
     assert errors == []
     assert len(attrs) == len(source)
-    assert list(attrs) == list(source)
+    assert list(source) != sorted(source)
+    assert list(attrs) == sorted(source)
     assert _type_tree(attrs) == _type_tree(source) and attrs == source
     reparsed = json.loads(json.dumps(out, ensure_ascii=False))["current"]["attributes"]
     assert len(reparsed) == len(source) and _type_tree(reparsed) == _type_tree(source)
-    assert reparsed == source
+    assert reparsed == source and list(reparsed) == sorted(source)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -504,6 +534,7 @@ def test_same_standard_response_gives_same_bios_for_every_vendor(monkeypatch, ve
 
     assert run["data"]["bios"] == {"current": {"attributes": PRESERVE_SAMPLE}}
     assert _type_tree(run["data"]["bios"]["current"]["attributes"]) == _type_tree(PRESERVE_SAMPLE)
+    assert list(run["data"]["bios"]["current"]["attributes"]) == sorted(PRESERVE_SAMPLE)
     assert _bios_requests(run["calls"]) == [BIOS_PATH]
     assert not [e for e in run["errors"] if e.get("section") == "bios"]
 

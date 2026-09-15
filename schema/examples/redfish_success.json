@@ -292,10 +292,10 @@
       "current": {
         "attributes": {
           "BootModes_SystemBootMode": "UEFIMode",
-          "Processors_IntelVirtualizationTechnology": "Enabled",
-          "Processors_HyperThreading": "Enabled",
-          "Processors_SourceValidation": false,
           "Memory_AdvMemTestOptions": 0,
+          "Processors_HyperThreading": "Enabled",
+          "Processors_IntelVirtualizationTechnology": "Enabled",
+          "Processors_SourceValidation": false,
           "SystemRecovery_POSTWatchdogTimerValue": 5
         }
       }

@@ -722,10 +722,10 @@ ComputerSystem 을 다시 조회하지 않고, 링크가 없으면 System ID 로
 "bios": {
   "current": {
     "attributes": {
-      "BootMode": "Uefi",
-      "ProcVirtualization": "Enabled",
-      "Proc1NumCores": 12,
       "AssetTag": "",
+      "BootMode": "Uefi",
+      "Proc1NumCores": 12,
+      "ProcVirtualization": "Enabled",
       "SysPassword": null
     }
   }
@@ -740,6 +740,12 @@ ComputerSystem 을 다시 조회하지 않고, 링크가 없으면 System ID 로
 - 필터·마스킹·이름 표준화·값 변환·개수 제한이 없다. Key 집합과 개수는 Vendor / 모델 / 펌웨어마다 다르다
   (실캡처 예: Dell R760 571개, Lenovo SR650 V2 392개, HPE DL380 Gen11 285개, Cisco CIMC 장비 87개).
   **고정 컬럼으로 다루지 말고 Key/Value 목록으로 표시한다.**
+- Key 는 **이름순(대소문자를 구분하는 문자열 정렬)** 으로 담는다. 대문자가 소문자보다 앞이라 `cdnEnable` 처럼
+  소문자로 시작하는 Key 는 뒤에 오고, 숫자는 글자 단위로 비교해 `Slot10` 이 `Slot2` 앞에 온다.
+  장비가 준 순서는 쓰지 않는다 — Dell·HPE 는 원래 이 순서로 주지만 Lenovo 는 같은 장비도 수집할 때마다 순서가
+  달랐고(서로 다른 시점 3건) Cisco 는 이름순이 아니다. BIOS 설정 화면의 메뉴 순서와도 다르다.
+  JSON 객체의 Key 순서는 의미를 갖지 않으므로 받는 쪽은 순서에 기대지 않는다. 화면에 정렬이 필요하면 받는 쪽에서
+  정렬한다 — DB 의 JSON 전용 타입처럼 저장할 때 Key 순서를 바꾸는 저장소도 있다.
 - Current 값만 담는다. AttributeRegistry, `@Redfish.Settings` 가 가리키는 Settings, Pending / SD,
   Vendor OEM BIOS 하위 리소스는 수집하지 않는다. BIOS 설정 변경 기능도 없다.
 - HPE Compute Scale-up Server 처럼 System 이 여럿이면 대표 System(Partition0) 1개만 본다.

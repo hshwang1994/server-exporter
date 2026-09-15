@@ -292,12 +292,12 @@
     // 이 장비의 Bios 링크는 /redfish/v1/systems/1/bios/ (소문자) 이고, 수집기는 응답에 적힌 링크를 그대로 따라간다.
     "bios": {
       "current": {
-        "attributes": {                                    // 장비가 돌려준 Key / Value / 자료형 원본 그대로
-          "ProcVirtualization": "Enabled",
+        "attributes": {                                    // Key / Value / 자료형은 장비 원본 그대로, Key 는 이름순
+          "AdminName": "",
           "ProcHyperthreading": "Enabled",
-          "WorkloadProfile": "Virtualization-MaxPerformance",
+          "ProcVirtualization": "Enabled",
           "VlanId": 0,
-          "AdminName": ""
+          "WorkloadProfile": "Virtualization-MaxPerformance"
         }
       }
     }

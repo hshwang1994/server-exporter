@@ -372,12 +372,12 @@
     // 같은 장비의 Current Bios 실캡처(2026-04-28)에서 일부만 옮겼다. 실제 수집 결과에는 571개가 모두 들어간다.
     "bios": {
       "current": {
-        "attributes": {                                    // ComputerSystem.Bios.@odata.id 가 가리키는 Bios 리소스의 Attributes 원본
+        "attributes": {                                    // ComputerSystem.Bios.@odata.id 가 가리키는 Bios 리소스의 Attributes (값은 원본 그대로, Key 는 이름순)
+          "AssetTag": "",                                  // 빈 문자열도 그대로 남는다
           "BootMode": "Uefi",
-          "ProcVirtualization": "Enabled",
           "LogicalProc": "Enabled",
           "Proc1NumCores": 12,                             // 숫자는 숫자 그대로
-          "AssetTag": "",                                  // 빈 문자열도 그대로 남는다
+          "ProcVirtualization": "Enabled",
           "SysPassword": null                              // null 도 그대로 남는다
         }
       }

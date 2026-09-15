@@ -11,6 +11,8 @@
 
 마지막 JSON 을 다시 파싱해 source Attributes 와 **값·자료형까지** 비교한다
 (`==` 는 False 와 0, True 와 1 을 같게 보므로 자료형 트리를 따로 비교한다).
+Key 순서도 본다. 모듈이 이름순으로 정렬해 넘기므로 이 경로는 받은 순서를 바꾸면 안 된다.
+기본 표본은 재배열을 잡아내려고 일부러 이름순이 아닌 순서로 넣고, 큰 표본은 모듈 출력처럼 이름순으로 넣는다.
 
 G1 기술 경계 (사용자 결정 2026-09-15 — 문서화 전용, 제품 코드 대응 없음)
 -------------------------------------------------------------------------
@@ -146,6 +148,7 @@ def test_attributes_survive_the_whole_ansible_path_with_types():
     got = final["data"]["bios"]
     assert got == {"current": {"attributes": SAMPLE}}
     assert _type_tree(got) == _type_tree({"current": {"attributes": SAMPLE}})
+    assert list(SAMPLE) != sorted(SAMPLE), "표본이 이름순이면 재배열 여부를 확인하지 못한다"
     assert list(got["current"]["attributes"]) == list(SAMPLE)
     # 보조 데이터 — sections 에 bios 가 생기지 않는다
     assert "bios" not in final["sections"]
@@ -171,6 +174,7 @@ def test_large_attributes_survive_the_whole_ansible_path():
         key = f"Attribute_{i:04d}_" + "K" * 32
         source[key] = ("V" * 120 + str(i), i, i % 2 == 0, None, "", f"{i:05d}", i + 0.5)[kind]
     assert len(json.dumps(source)) >= 90_000
+    assert list(source) == sorted(source), "모듈 출력과 같은 이름순 표본이어야 한다"
 
     final = _render_to_final_json({"current": {"attributes": copy.deepcopy(source)}})
     attrs = final["data"]["bios"]["current"]["attributes"]

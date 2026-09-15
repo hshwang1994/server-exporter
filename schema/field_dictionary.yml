@@ -2244,6 +2244,9 @@ fields:
       VALUE_SPECIFIED_IN_NO_LOG_PARAMETER 로, 비밀번호를 포함한 문자열은 그 부분이 ******** 로
       바뀔 수 있고, 문자열로 적었을 때 비밀번호를 포함하는 숫자는 VALUE_SPECIFIED_IN_NO_LOG_PARAMETER
       문자열이 될 수 있다. 비밀번호와 무관한 값에는 영향이 없다.
+      Key 는 이름순(대소문자 구분 문자열 정렬)으로 담는다 — 장비가 준 순서는 Vendor 마다 다르고
+      같은 장비도 수집할 때마다 달라지기도 해서 쓰지 않는다. JSON 객체 순서에 기대지 말고 화면 정렬은
+      받는 쪽에서 한다.
     help_en: >-
       All Attributes of the standard Redfish Bios resource referenced by ComputerSystem
       Bios.@odata.id. Keys are device-defined names; values keep the device's original value and
@@ -2256,6 +2259,9 @@ fields:
       VALUE_SPECIFIED_IN_NO_LOG_PARAMETER, a string containing it may have that part replaced with
       ********, and a number whose text contains it may become the
       VALUE_SPECIFIED_IN_NO_LOG_PARAMETER string. Values unrelated to the password are not affected.
+      Keys are ordered by name (case-sensitive string order); the device's own order is not kept
+      because it differs by vendor and can change from one collection to the next on the same
+      device. Do not rely on JSON object order; sort on the consumer side for display.
 
   "diagnosis.details.credential_scope":
     type: "string|null"
