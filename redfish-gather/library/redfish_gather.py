@@ -442,6 +442,10 @@ def _str(x):
 # (common/tasks/normalize 의 정규화가 section/message/detail 3키만 뽑는다).
 # 사용자 문구를 제어 로직의 키로 쓰지 않기 위한 자리다 (2026-08-12).
 _CODE_VENDOR_UNRESOLVED = 'vendor_unresolved'
+# BIOS Current Attributes 는 보조(auxiliary) 데이터다 (2026-09-15). 이 code 가 붙은 오류는
+# _compute_final_status 의 401/403 판정에서 빠진다 — BIOS 조회 실패가 host status 와
+# 표준 계정 후보 재시도(try_one_account.yml)를 바꾸면 안 되기 때문이다.
+_CODE_BIOS_NON_BLOCKING = 'bios_non_blocking'
 
 
 def _err(section, message, detail=None, code=None):
@@ -1990,12 +1994,17 @@ def _extract_oem_unified(data, expected_vendor=None):                         # 
 
 
 def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verify_ssl,
-                  chassis_uri=None, product_hint=None):
+                  chassis_uri=None, product_hint=None, bios_link_out=None):
     """system 섹션 수집 (Redfish endpoints).
 
     호출 endpoint:
       - GET {system_uri}                       (예: /redfish/v1/Systems/1)
       - GET {chassis_uri} (선택, OEM 데이터 추출용 — Lenovo ProductName 등)
+
+    bios_link_out (선택, 2026-09-15): dict 를 넘기면 ComputerSystem GET 이 200 일 때
+      `retrieved=True` 와 응답 원본의 `Bios.@odata.id`(`link`) 를 기록한다.
+      gather_bios 가 ComputerSystem 을 다시 조회하지 않고 이 링크를 쓴다.
+      반환값·요청 수는 넘기지 않을 때와 같다.
 
     Returns: (data_dict, errors_list)
     """
@@ -2004,6 +2013,11 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
     if err or st != 200:
         errors.append(_err('system', f'System 수집 실패: {err or st}'))
         return {}, errors
+
+    # 가공 전에 기록한다 — 아래 가공이 예외로 끝나도 이미 받은 응답의 링크는 유효하다.
+    if bios_link_out is not None:
+        bios_link_out['retrieved'] = True
+        bios_link_out['link'] = _safe(data, 'Bios', '@odata.id')
 
     # Lenovo 등 일부 벤더는 ProductName 이 Chassis.Oem 에 위치 (System.Oem 에는 없음).
     # OEM extractor 가 chassis 데이터를 활용할 수 있도록 1회 fetch.
@@ -2133,6 +2147,88 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
     # errors에 추가하지 않아 _run()에서 failed로 분류되지 않음.
 
     return result, errors
+
+
+# 표준 Bios 리소스의 @odata.type 접두사 (DMTF Bios schema: #Bios.v1_x_x.Bios).
+# 구세대 OEM BIOS 리소스는 다른 type 을 쓰고 Attributes 구조도 달라 표준 계약 밖이다.
+_BIOS_ODATA_TYPE_PREFIX = '#Bios.'
+
+
+def gather_bios(bmc_ip, bios_link, username, password, timeout, verify_ssl):
+    """BIOS Current Attributes 수집 — 보조(auxiliary) 데이터 (2026-09-15).
+
+    호출 endpoint:
+      - GET {ComputerSystem.Bios.@odata.id}   (링크가 있을 때만 1회)
+
+    bios_link: gather_system(bios_link_out=...) 이 채운 dict.
+      `retrieved` 가 없으면 ComputerSystem 을 받지 못한 것이라 조회하지 않는다.
+      `link` 가 비어 있으면 조회하지 않는다 — System ID 로 URI 를 조립하는 fallback 은 없다.
+
+    응답의 `Attributes` 객체를 그대로 담는다. 복사·필터·이름 변환·값 변환·개수 제한이 없다.
+    Settings / Pending / SD / AttributeRegistry / OEM 하위 리소스는 호출하지 않는다.
+
+    실패는 errors 로, 실패가 아닌 사실(링크 없음 / 404 / 비표준 리소스 / 빈 Attributes)은
+    notice 로 남긴다. errors 원소에는 _CODE_BIOS_NON_BLOCKING 을 붙인다.
+    예외는 여기서 흡수한다 — 이 함수는 _run 을 거치지 않는다.
+
+    Returns: ({'current': {'attributes': dict | None}}, errors_list)
+    """
+    out = {'current': {'attributes': None}}
+    errors = []
+    try:
+        link_info = bios_link if isinstance(bios_link, dict) else {}
+        if not link_info.get('retrieved'):
+            _notice('bios', 'ComputerSystem 응답이 없어 BIOS Current Attributes 조회 안 함')
+            return out, errors
+        link = link_info.get('link')
+        if not isinstance(link, str) or not link.strip():
+            _notice('bios', 'ComputerSystem 에 Bios 링크가 없어 BIOS Current Attributes 조회 안 함')
+            return out, errors
+
+        st, data, err = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
+        if st == 404:
+            _notice('bios', 'Bios 리소스 404, BIOS Current Attributes 미수집')
+            return out, errors
+        if err or st != 200:
+            errors.append(_err('bios', 'BIOS Current Attributes 조회 실패',
+                               err or f'HTTP {st}', code=_CODE_BIOS_NON_BLOCKING))
+            return out, errors
+        if not isinstance(data, dict):
+            errors.append(_err('bios', 'BIOS 응답이 JSON 객체가 아님',
+                               f'HTTP 200: body type {type(data).__name__}',
+                               code=_CODE_BIOS_NON_BLOCKING))
+            return out, errors
+
+        # 최상위 type 만 본다. 표준 응답도 내부(@Redfish.Settings / Oem)에는 다른 type 이 있다.
+        odata_type = data.get('@odata.type')
+        if odata_type is not None and not (
+                isinstance(odata_type, str) and odata_type.startswith(_BIOS_ODATA_TYPE_PREFIX)):
+            _notice('bios', '표준 Bios 리소스가 아님(@odata.type), BIOS Current Attributes 미수집')
+            return out, errors
+
+        if 'Attributes' not in data:
+            errors.append(_err('bios', 'BIOS 응답에 Attributes 없음',
+                               'HTTP 200: Attributes missing', code=_CODE_BIOS_NON_BLOCKING))
+            return out, errors
+        attributes = data['Attributes']
+        if not isinstance(attributes, dict):
+            errors.append(_err('bios', 'BIOS Attributes 가 객체가 아님',
+                               f'HTTP 200: Attributes type {type(attributes).__name__}',
+                               code=_CODE_BIOS_NON_BLOCKING))
+            return out, errors
+
+        if not attributes:
+            _notice('bios', 'Bios.Attributes 가 비어 있음')
+        out['current']['attributes'] = attributes
+        return out, errors
+    except Exception as e:
+        sys.stderr.write(
+            "[redfish_gather] bios 예외: %s\n%s\n" %
+            (type(e).__name__, traceback.format_exc(limit=3))
+        )
+        return {'current': {'attributes': None}}, [_err(
+            'bios', '예외 발생', "%s: %s" % (type(e).__name__, str(e)[:200]),
+            code=_CODE_BIOS_NON_BLOCKING)]
 
 
 def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_ssl,
@@ -4781,6 +4877,9 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
 
     cycle 2026-05-12 (ADR-2026-05-12): `manager_layout` 옵션 인자 추가 (Additive).
     None 시 기존 동작 100% 보존. RMC primary adapter 만 `gather_bmc` 라벨 분기 활성.
+
+    2026-09-15: 반환 dict 에 `bios` 1키 추가 (BIOS Current Attributes, 보조 데이터).
+    collected / failed / unsupported 에는 넣지 않는다 — 11 섹션·status 계약 불변.
     """
     _run = _make_section_runner(all_errors, collected, failed, unsupported)
     creds = (username, password, timeout, verify_ssl)
@@ -4791,8 +4890,10 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     # 단일 chassis vendor 는 Links.Chassis[0] == 첫 멤버라 불변 (Additive, 회귀 안전).
     eff_chassis_uri = _resolve_system_chassis_uri(
         bmc_ip, system_uri, chassis_uri, username, password, timeout, verify_ssl)
-    return {
-        'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, eff_chassis_uri, product_hint),
+    # system 수집이 ComputerSystem 응답의 Bios 링크를 여기에 기록한다 (재조회 없음).
+    bios_link = {}
+    sections = {
+        'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, eff_chassis_uri, product_hint, bios_link),
         'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout),
         'processors':        _run('processors', gather_processors, bmc_ip, system_uri,          *creds),
         'memory':            _run('memory',     gather_memory,     bmc_ip, system_uri,          *creds),
@@ -4809,6 +4910,11 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                                    gather_network_adapters_chassis,
                                    bmc_ip, eff_chassis_uri, *creds, system_uri),
     }
+    # system 수집 뒤에 실행해야 bios_link 가 채워져 있다. _run 을 거치지 않는다.
+    bios, bios_errors = gather_bios(bmc_ip, bios_link, *creds)
+    all_errors.extend(bios_errors)
+    sections['bios'] = bios
+    return sections
 
 
 def _compute_final_status(collected, failed, errors=None):
@@ -4826,6 +4932,9 @@ def _compute_final_status(collected, failed, errors=None):
     if errors:
         for e in errors:
             if not isinstance(e, dict):
+                continue
+            # 2026-09-15: BIOS 보조 조회의 401/403 은 host 판정에 넣지 않는다 (구조화 code 로 식별).
+            if e.get('code') == _CODE_BIOS_NON_BLOCKING:
                 continue
             detail = str(e.get('detail') or '')  # Round 4 #11: 비-str detail(int 등) 'in' TypeError 방어
             msg = str(e.get('message') or '')

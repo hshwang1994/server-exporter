@@ -286,6 +286,20 @@
           {"model": "Intel(R) Xeon(R) Gold 6430", "manufacturer": "Intel(R) Corporation", "max_speed_mhz": 4000, "architecture": "x86", "sockets": 2, "cores_per_socket": 32, "total_cores": 64}
         ]
       }
+    },
+    // 2026-09-15 추가 — BIOS Current Attributes (보조 데이터 — sections 에는 없다).
+    // 같은 장비의 Current Bios 실캡처(2026-04-28)에서 일부만 옮겼다. 실제 수집 결과에는 285개가 모두 들어간다.
+    // 이 장비의 Bios 링크는 /redfish/v1/systems/1/bios/ (소문자) 이고, 수집기는 응답에 적힌 링크를 그대로 따라간다.
+    "bios": {
+      "current": {
+        "attributes": {                                    // 장비가 돌려준 Key / Value / 자료형 원본 그대로
+          "ProcVirtualization": "Enabled",
+          "ProcHyperthreading": "Enabled",
+          "WorkloadProfile": "Virtualization-MaxPerformance",
+          "VlanId": 0,
+          "AdminName": ""
+        }
+      }
     }
   },
   "schema_version": "1"                                 // envelope schema 버전 — "1" 고정 (rule 13 R5)

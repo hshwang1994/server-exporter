@@ -6,7 +6,57 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-09-03
+> 최종 갱신: 2026-09-15
+
+## 2026-09-15 — Redfish BIOS Current Attributes 수집 추가 (`data.bios.current.attributes`)
+
+### 요구
+
+Portal 이 Vendor 를 구분하지 않고 BIOS 설정값을 한 경로에서 읽어 화면에 표시한다. 대상은 각
+ComputerSystem 에 연결된 표준 Redfish `Bios` 리소스가 돌려주는 Current `Attributes` 전체이며,
+Key·Value·JSON 자료형을 원본 그대로 보존한다. 2026-04 에 정한 수집 범위는 `Bios` 를 제외했었다
+(아래 "미포함 엔드포인트" 표 — `BiosVersion` 만 System 에서 취득). 이번 결정으로 Current Attributes 는
+수집 대상이 됐다. Settings / Pending / Registry / OEM BIOS 리소스는 계속 제외다.
+
+### 결정 (사용자 확정)
+
+- **보조 데이터다.** `sections` 에 `bios` 를 넣지 않는다. 11 섹션, `status` 판정, rescue 섹션 계약,
+  OS·ESXi 뼈대가 그대로다.
+- **BIOS 조회 실패는 host 결과를 바꾸지 않는다.** `status` / `sections` / `failure_*` / `auth_success` /
+  다른 `data` 불변. 실패는 `errors[]` 에 `section: "bios"` 로, 실패가 아닌 사실(링크 없음 / 404 /
+  비표준 리소스 / 빈 Attributes)은 `diagnosis.details.notices` 에 남긴다.
+- **링크로만 찾는다.** 대표 ComputerSystem(`Systems.Members[0]`) 응답의 `Bios.@odata.id` 를 쓰고,
+  링크가 없으면 System ID 로 `/Bios` 를 조립하지 않는다.
+- **ComputerSystem 을 다시 조회하지 않는다.** `gather_system` 이 이미 받은 응답에서 링크를 기록하고
+  `gather_bios` 가 그 링크로 1회 조회한다(모듈 실행당 BIOS GET 최대 1회).
+- **Ansible no_log 경계는 문서로만 다룬다.** 수집 모듈의 password 는 no_log 파라미터라 그 값과 같거나
+  포함하는 결과 값이 치환될 수 있다. 비밀번호 비교·검출 로직은 넣지 않았고 필드 사전과
+  `docs/contract/03-fields.md` 6.8절에 경계를 적었다.
+- **replay golden 은 기존 녹화로만 다시 만든다.** 녹화에 Bios 본문이 없어 10개 모두
+  `data.bios = {"current": {"attributes": null}}` 1키만 늘었다. 외부 미러는 다시 뜨지 않았다.
+
+### 왜 이렇게 했나
+
+- 모듈의 최종 status 계산(`_compute_final_status`)은 `errors` 문자열에서 `HTTP 401` / `HTTP 403` 을
+  찾으면 host 를 `failed` 로 만든다. BIOS 조회 403 이 그대로 들어가면 표준 계정 후보를 다시 시도하고,
+  후보가 다 떨어지면 rescue 로 빠져 **이미 수집한 데이터를 잃는다.** 그래서 BIOS 오류에 구조화 code 를
+  붙이고 그 원소만 스캔에서 뺐다(section 이름이 아니라 code 로 구분 — 문구 파싱 아님).
+- first-class 섹션으로 만들면 섹션 목록·status·뼈대 3종·rescue 섹션표·OS/ESXi 까지 바뀐다. 요구는
+  데이터 경로 하나이므로 보조 데이터가 영향이 가장 작다.
+- 수집 전에 멈춘 실패 envelope(rescue / `always` 최종 fallback / 콜백 보충)에는 `bios` 키를 만들지
+  않았다. 모든 envelope 에 강제하려면 공통 뼈대를 바꿔야 해 OS·ESXi 에 영향이 간다(`multi_node` 와 같은 처리).
+- 기존 `_p()` 는 모든 링크에서 후행 `/` 를 지운다. BIOS 때문에 공통 helper 를 바꾸지 않았다.
+
+### 영향
+
+- **호출자**: Redfish 성공·부분 성공 결과에 `data.bios` 가 생긴다. `errors[].section` 에 `bios` 가
+  올 수 있다. envelope 13 필드·`sections`·`schema_version` 은 불변이다.
+- **요청 수**: 링크가 있으면 모듈 수집 1회당 GET 1회가 늘어난다.
+- **크기**: 장비에 따라 Attributes 가 약 100KB 까지 커질 수 있다(조사 문서의 Lenovo XCC3 기록).
+  Portal·DB 쪽 크기 한도는 확인하지 않았다.
+- **검증**: 단위·렌더·통합 테스트, 저장소 실캡처 재생(Dell R760 5대 / HPE DL380 Gen11 /
+  Lenovo SR650 V2 / Cisco CIMC 장비 1대). 운영 BMC 로 새로 수집한 검증은 아직 없다.
+  Vendor·세대별 근거 수준은 `docs/reference/compatibility-matrix.md` 참조.
 
 ## 2026-09-03 — 도달성(reachable) 판정에 ICMP Echo 를 OR 조건으로 추가
 
@@ -1577,7 +1627,7 @@ agent 10.100.64.154 SSH + 진단 playbook (`tests/scripts/diag_esxi_raw.yml`) �
 |-----------|----------|
 | Chassis/{id}/Thermal | 온도/팬 정보 — 판정 시점에 normalize 스키마 미정의. 향후 추가 고려 |
 | Managers/{id}/EthernetInterfaces | BMC NIC — system 레벨로 충분 |
-| Bios | BIOS 설정 — BiosVersion은 System에서 이미 취득 |
+| Bios | BIOS 설정 — BiosVersion은 System에서 이미 취득 (2026-09-15 변경: Current `Attributes` 는 수집한다 — 맨 위 항목) |
 | LogServices | 이벤트 로그 — 수집 범위 초과 |
 | NetworkInterfaces | NIC 상세 — EthernetInterfaces로 충분 |
 

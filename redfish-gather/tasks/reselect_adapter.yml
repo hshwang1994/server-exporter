@@ -7,8 +7,8 @@
 # -----------
 # 1차 선택(`site.yml` 의 "select adapter")은 **무인증 probe** 결과로 한다. 무인증이면
 # Systems 열거가 401 이라 모듈이 `data={}` 로 조기 반환하고
-# (`redfish_gather.py:7163-7169`), `_extract_probe_facts()` 는 HPE 한 분기만 hint 를
-# 채운다(`:1503`). 나머지 vendor 는 model/firmware 가 빈 채로 선택에 들어가는데,
+# (`redfish_gather.py:7272-7278`), `_extract_probe_facts()` 는 HPE 한 분기만 hint 를
+# 채운다(`:1507`). 나머지 vendor 는 model/firmware 가 빈 채로 선택에 들어가는데,
 # `adapter_match_score` 는 빈 fact 를 실격이 아니라 중립으로 처리하므로
 # (`adapter_common.py:284-286`) 결국 **priority 최상위가 독식**한다.
 # 실제로 R760(iDRAC9 / FW 7.10.70.00)이 `dell_idrac10` 을, TA-UNODE-G1(CIMC)이

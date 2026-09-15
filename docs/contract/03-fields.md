@@ -143,6 +143,8 @@ JSON 의 `sections` 와 `data` 는 같은 11개 키를 갖는다. 각 채널이 
 | `power` | PSU / 전력 사용 | | | O |
 | `thermal` | 온도 센서 / 팬 (Chassis/Thermal) | | | O |
 
+Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9절)와 `bios`(6.8절). 이 둘은 `sections` 에 나오지 않고 `status` 판정에도 쓰이지 않는다.
+
 (X) = `not_supported`. 그 채널 특성상 원래 못 가져오는 영역이다. 수집 실패와 다른 의미다.
 `not_supported` 판정 신호는 **HTTP 404(엔드포인트 부재)만**이다. 400 등 다른 실패는 `failed` 로 남아 `errors[]` 에 보인다.
 (2026-08-03: 400 도 미지원으로 보려다 되돌림 — 사이트 사례의 400 은 장비 미지원이 아니라 **수집 측 경로 오류**였다.
@@ -220,7 +222,7 @@ if response["data"]["hardware"].get("health") == "Critical":
 
 | 키 | 타입 | 무엇 |
 |---|---|---|
-| `section` | 문자열 | 오류가 난 영역. 수집 섹션 이름 11종 또는 수집 단계 이름 (`precheck` / `auth` / `gather` / `oem` / `vendor_detect` / `account_service` / `multi_node`). 값이 없으면 `unknown` |
+| `section` | 문자열 | 오류가 난 영역. 수집 섹션 이름 11종, 수집 단계 이름 (`precheck` / `auth` / `gather` / `oem` / `vendor_detect` / `account_service` / `multi_node`), 또는 보조 데이터 이름 `bios` (Redfish BIOS Current Attributes 조회 실패 — 6.8절). 값이 없으면 `unknown` |
 | `message` | 문자열 (**절대 비지 않음**) | 사용자에게 그대로 보여주는 한국어 문장 |
 | `detail` | 문자열 또는 `null` | 기술 근거. 객체나 배열이 아니다 |
 
@@ -706,6 +708,70 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 
 `reading_units` 는 `RPM`(legacy /Thermal) 또는 `Percent`(신 ThermalSubsystem.SpeedPercent). 팬 속도 비교 시
 `reading_units` 를 반드시 확인. `upper_critical` 은 legacy 경로에서만 채워지고 신 schema 경로는 null.
+
+### 6.8 `data.bios` (Redfish 전용 보조 데이터, 2026-09-15)
+
+BIOS 설정값이다. **섹션이 아니다** — `sections` 에 `bios` 가 없고 `status` 판정에 쓰이지 않는다.
+모든 Vendor 가 같은 경로 `data.bios.current.attributes` 를 쓴다.
+
+어디서 오나: 수집기가 대표 ComputerSystem(`Systems` 컬렉션 첫 멤버 — `data.hardware` 와 같은 System)을
+받을 때 응답의 `Bios.@odata.id` 를 기록해 두고, 그 링크로 Bios 리소스를 **1회** 조회한다.
+ComputerSystem 을 다시 조회하지 않고, 링크가 없으면 System ID 로 `/Bios` 를 조립하지 않는다.
+
+```json
+"bios": {
+  "current": {
+    "attributes": {
+      "BootMode": "Uefi",
+      "ProcVirtualization": "Enabled",
+      "Proc1NumCores": 12,
+      "AssetTag": "",
+      "SysPassword": null
+    }
+  }
+}
+```
+
+`attributes` 규칙:
+
+- 장비가 돌려준 `Attributes` **전체**다. Key 이름·Value·JSON 자료형을 바꾸지 않는다.
+  문자열 `"0"`, 숫자 `0`, `false`, 빈 문자열 `""`, `null` 은 서로 다른 값으로 그대로 남는다.
+  숫자처럼 보이는 문자열(예: `"BaudRate": "115200"`)도 문자열 그대로다.
+- 필터·마스킹·이름 표준화·값 변환·개수 제한이 없다. Key 집합과 개수는 Vendor / 모델 / 펌웨어마다 다르다
+  (실캡처 예: Dell R760 571개, Lenovo SR650 V2 392개, HPE DL380 Gen11 285개, Cisco CIMC 장비 87개).
+  **고정 컬럼으로 다루지 말고 Key/Value 목록으로 표시한다.**
+- Current 값만 담는다. AttributeRegistry, `@Redfish.Settings` 가 가리키는 Settings, Pending / SD,
+  Vendor OEM BIOS 하위 리소스는 수집하지 않는다. BIOS 설정 변경 기능도 없다.
+- HPE Compute Scale-up Server 처럼 System 이 여럿이면 대표 System(Partition0) 1개만 본다.
+  `multi_node.partitions[]` 에는 넣지 않는다.
+
+`attributes` 값과 결과:
+
+| `attributes` | 뜻 | `errors[]` 중 `section: "bios"` | `diagnosis.details.notices` 중 `section: "bios"` |
+|---|---|---|---|
+| 객체 | 정상 수집 | 없음 | 없음 |
+| `{}` | 장비가 빈 `Attributes` 를 돌려줌 | 없음 | 있음 |
+| `null` — ComputerSystem 에 `Bios` 링크 없음 / ComputerSystem 을 받지 못함 | 조회하지 않음 | 없음 | 있음 |
+| `null` — Bios 리소스 HTTP 404 | 리소스 없음 | 없음 | 있음 |
+| `null` — 응답이 표준 Bios 리소스가 아님 (최상위 `@odata.type` 이 `#Bios.` 로 시작하지 않음) | 표준 계약 밖 형식 | 없음 | 있음 |
+| `null` — timeout / 연결 오류 / HTTP 401·403·기타 4xx·5xx / JSON 아님 / `Attributes` 없음·객체 아님 | 조회 실패 | `section: "bios"` 1건 | 없음 |
+
+어느 경우든 `status`, `sections`, `diagnosis.failure_stage/code/reason`, `auth_success`, 다른 `data` 는
+**바뀌지 않는다.** BIOS 조회의 401·403 이 host 를 실패로 만들거나 표준 계정 후보 재시도를 일으키지 않는다.
+실패 `errors[]` 의 `message` 는 `"BIOS 설정 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요."` 이고
+HTTP status 같은 기술 근거는 `detail` 에 있다.
+
+수집에 들어가기 전에 멈춘 실패 envelope (rescue / `always` 최종 fallback / 콜백 보충) 에는 `data.bios` 키가 없다.
+그 경로의 `data` 는 기존 뼈대 또는 `{}` 이다 (`multi_node` 와 같다).
+
+**기술 경계 (Ansible no_log)**: 수집 모듈은 계정 비밀번호를 no_log 파라미터로 받는다. Ansible 은 모듈 결과에서
+그 비밀번호 값을 치환하므로, BIOS Attribute 값이 **수집 계정 비밀번호와 같으면** `"VALUE_SPECIFIED_IN_NO_LOG_PARAMETER"`,
+**비밀번호를 포함하면** 그 부분이 `********`, **문자열로 적었을 때 비밀번호를 포함하는 숫자**는
+`"VALUE_SPECIFIED_IN_NO_LOG_PARAMETER"` 문자열로 나올 수 있다. Key 이름과 비밀번호와 무관한 값은 영향이 없다.
+수집기는 비밀번호를 비교하거나 검출하지 않는다 (2026-09-15 결정).
+
+검증 범위: Dell / HPE / Lenovo / Cisco 는 저장소 실캡처 재생으로, 나머지 Vendor 는 표준 응답 mock 으로만 확인했다.
+Vendor·세대별 근거 수준은 `docs/reference/compatibility-matrix.md` 를 본다.
 
 ---
 

@@ -277,8 +277,8 @@
         # block 이 있었다. 9 vendor 18개 task 파일이 붙어 있었는데 **전부 기여가 0** 이었다.
         #
         #   - task 들이 읽던 경로가 모듈 출력에 없다. `redfish_gather` 최상위 반환에
-        #     `systems` / `chassis` / `managers` 가 없고(`:7238-7243`), `data` 하위에도
-        #     `chassis` 가 없다(`:4793-4811`). 대문자 `'Oem'` 을 출력 키로 쓰는 곳은 0곳이다.
+        #     `systems` / `chassis` / `managers` 가 없고(`:7347-7352`), `data` 하위에도
+        #     `chassis` 가 없다(`:4895-4917`). 대문자 `'Oem'` 을 출력 키로 쓰는 곳은 0곳이다.
         #     모듈은 소문자 `'oem'` 에 정제된 형태로만 내보낸다.
         #   - 실장비 8대 envelope 를 확인했다. task 가 쓴다던 `data.bmc.oem_<vendor>` 키가
         #     한 건도 없었다. 반면 라이브러리가 채우는 `data.bmc.oem` 은 전부 있었다.

@@ -82,7 +82,7 @@ system  hardware  bmc  cpu  memory  storage  network  firmware  users  power  th
 **Redfish에는 `system`이 없다.** `sections.system`은 `not_supported`로 나온다. 그런데
 `data.system`에는 값이 들어 있다 — 대부분 `null`이고 `fqdn` 정도만 채워진다. 수집
 코드가 내용은 넣으면서 지원 선언은 하지 않기 때문이다
-(`redfish-gather/tasks/normalize_standard.yml:470-478`, `:580-581`). 호출자는
+(`redfish-gather/tasks/normalize_standard.yml:470-478`, `:584-585`). 호출자는
 `sections`를 기준으로 판단하는 편이 안전하다.
 
 **Windows만 `hardware`가 나온다.** 스키마 정의(`schema/sections.yml`)는 `hardware`를
@@ -129,6 +129,9 @@ ESXi·Redfish 전용으로 적어 두었지만 Windows 수집이 이 섹션을 �
 
 `message`는 절대 비지 않는다. 화면에 그대로 띄울 수 있는 한국어 문장이고 포트 번호나
 HTTP 상태 같은 내부 사정은 들어가지 않는다. 그런 건 `detail`에 간다.
+
+`section`에는 섹션 이름 말고도 수집 단계 이름이나 보조 데이터 이름 `bios`가 올 수 있다.
+전체 목록은 [03-fields.md](03-fields.md) 4-1절에 있다.
 
 ## meta
 
@@ -190,6 +193,12 @@ HTTP 상태 같은 내부 사정은 들어가지 않는다. 그런 건 `detail`�
 
 섹션 이름이 그대로 키가 된다. 수집하지 못한 섹션은 그 섹션의 빈 모양으로 남는다 —
 객체인 섹션은 `null`, 배열인 섹션은 `[]`. 빈 문자열은 쓰지 않는다.
+
+Redfish 결과의 `data`에는 섹션이 아닌 보조 키가 둘 더 있다. `multi_node`(멀티 노드 장비만 채워지고
+나머지는 `null`)와 `bios`(BIOS 설정값, `data.bios.current.attributes`)다. 둘 다 `sections`에 나오지
+않고 `status` 판정에도 쓰이지 않는다. `bios`는 BIOS 조회가 실패해도 `status`와 다른 `data`를 바꾸지
+않으며, 수집에 들어가기 전에 멈춘 실패 봉투에는 키 자체가 없다. 자세한 규칙은
+[03-fields.md](03-fields.md) 6.8절에 있다.
 
 ## 다음
 
