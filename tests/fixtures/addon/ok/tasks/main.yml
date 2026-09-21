@@ -1,0 +1,11 @@
+---
+# 정상 Add-on — role filter_plugins 로드, 호출자 metadata 와 hook 이 넘긴 값 읽기
+- name: "fixture ok | result"
+  ansible.builtin.set_fact:
+    _addon_result:
+      fixture:
+        target: "{{ _addon_target }}"
+        purpose: "{{ se_host_input.physical_purpose }}"
+        note: "{{ se_host_input.note }}"
+        filter: "{{ 'x' | addon_fixture_probe }}"
+        text: "line1\nline2\n"

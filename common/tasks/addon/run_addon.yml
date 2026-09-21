@@ -1,0 +1,103 @@
+---
+# common/tasks/addon/run_addon.yml
+#
+# 고객별 추가 수집(Add-on)을 실행하는 범용 hook. 각 채널 site.yml 이 마지막 수집 뒤,
+# build_* 조립 앞에서 한 번 include 한다. 인증 · 연결은 이미 끝난 상태이고 Add-on 은 그
+# 연결을 그대로 쓴다. Add-on 자체는 별도 디렉터리의 Ansible role 이다.
+#
+# 입력:
+#   SE_ADDON_DIR (환경변수) : Add-on 디렉터리 절대경로
+#   _addon_target           : linux | windows | esxi | redfish (include 할 때 vars 로 넘긴다)
+#   se_host_input (hostvar) : 호출자가 보낸 host object (inventory.sh 가 보존)
+# Add-on 이 돌려주는 값 (이 두 변수만 읽는다):
+#   _addon_result : dict — data.addon 아래에 들어갈 namespace 들. 없으면 {}
+#   _addon_errors : list — 처리하지 못한 항목 설명. 없으면 []
+#
+# 세 경우만 구분한다.
+#   SE_ADDON_DIR 미설정                    → 아무 것도 하지 않는다 (hook 도입 전과 같은 결과)
+#   설정됐는데 <경로>/tasks/main.yml 없음   → errors[] 에 section: addon 1건. 기본 결과는 그대로
+#   설정됐고 존재                           → Add-on 실행. 결과는 data.addon, 문제는 errors[] 1건
+# 어느 경우에도 status · sections · diagnosis 는 바뀌지 않는다 (errors[] 는 status 판정에 쓰이지 않는다).
+# Add-on 전용 timeout 은 두지 않는다 (2026-09-21 결정 — 상위 Jenkins 실행 제한만 쓴다).
+# 계약 상세: docs/develop/07-addon-hook.md
+
+- name: "addon | locate"
+  ansible.builtin.set_fact:
+    _addon_dir: "{{ lookup('env', 'SE_ADDON_DIR') }}"
+
+- name: "addon | record missing add-on"
+  when:
+    - _addon_dir | length > 0
+    - not ((_addon_dir ~ '/tasks/main.yml') is file)
+  block:
+    - name: "addon | missing add-on fragment"
+      ansible.builtin.set_fact:
+        _data_fragment:                 {}
+        _sections_supported_fragment:   []
+        _sections_collected_fragment:   []
+        _sections_failed_fragment:      []
+        _sections_unsupported_fragment: []
+        _errors_fragment:
+          - section: addon
+            message: "추가 수집 구성을 찾지 못해 추가 수집을 실행하지 않았습니다. 추가 수집 설치 경로를 확인하세요."
+            detail: "SE_ADDON_DIR={{ _addon_dir }}; cause=addon_entry_not_found"
+
+    - name: "addon | merge missing add-on fragment"
+      ansible.builtin.include_tasks:
+        file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
+
+- name: "addon | run"
+  when:
+    - _addon_dir | length > 0
+    - (_addon_dir ~ '/tasks/main.yml') is file
+  # 연결이 끊긴 호스트는 block/rescue 를 건너뛰고 play 에서 빠진다. Add-on 도중 끊겨도 이미
+  # 모은 기본 수집 결과를 잃지 않도록 호스트를 유지한다 (try_one_credential.yml 과 같은 이유).
+  ignore_unreachable: true
+  block:
+    - name: "addon | reset result"
+      ansible.builtin.set_fact:
+        _addon_result: {}
+        _addon_errors: []
+
+    - name: "addon | include add-on"
+      ansible.builtin.include_role:
+        name: "{{ _addon_dir }}"
+
+    - name: "addon | result fragment"
+      ansible.builtin.set_fact:
+        _data_fragment: >-
+          {{ {'addon': _addon_result} if (_addon_result | default({}) | length > 0) else {} }}
+        _sections_supported_fragment:   []
+        _sections_collected_fragment:   []
+        _sections_failed_fragment:      []
+        _sections_unsupported_fragment: []
+        _errors_fragment: >-
+          {{ [{'section': 'addon',
+               'message': '추가 수집 중 처리하지 못한 항목이 있습니다. 추가 수집 설정과 수집 로그를 확인하세요.',
+               'detail': _addon_errors | join(' | ')}]
+             if (_addon_errors | default([]) | length > 0) else [] }}
+
+    # 맞는 rule 이 없어 합칠 것이 없으면 누적 결과를 다시 계산하지 않는다 (Add-on 이 없을 때와 동일).
+    - name: "addon | merge result fragment"
+      ansible.builtin.include_tasks:
+        file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
+      when: (_data_fragment | length > 0) or (_errors_fragment | length > 0)
+
+  rescue:
+    - name: "addon | failure fragment"
+      ansible.builtin.set_fact:
+        _data_fragment:                 {}
+        _sections_supported_fragment:   []
+        _sections_collected_fragment:   []
+        _sections_failed_fragment:      []
+        _sections_unsupported_fragment: []
+        _errors_fragment:
+          - section: addon
+            message: "추가 수집 중 오류가 발생했습니다. 추가 수집 설정과 수집 로그를 확인하세요."
+            detail: >-
+              {{ 'cause=addon_failed; task=' ~ (ansible_failed_task.name | default('')) ~ '; '
+                 ~ (ansible_failed_result.msg | default('') | string) }}
+
+    - name: "addon | merge failure fragment"
+      ansible.builtin.include_tasks:
+        file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"

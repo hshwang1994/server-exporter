@@ -71,6 +71,7 @@ server-exporter 문서는 읽는 목적에 따라 다섯 갈래로 나뉜다. �
 - [04-add-vendor.md](develop/04-add-vendor.md) — 벤더·세대 추가
 - [05-field-mapping.md](develop/05-field-mapping.md) — 원본에서 필드까지의 매핑
 - [06-debugging.md](develop/06-debugging.md) — 어디부터 볼 것인가
+- [07-addon-hook.md](develop/07-addon-hook.md) — 고객별 추가 수집(Add-on) hook 계약
 
 ### reference
 - [compatibility-matrix.md](reference/compatibility-matrix.md) — 벤더 × 세대 × 섹션 지원표

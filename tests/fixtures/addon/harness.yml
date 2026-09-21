@@ -1,0 +1,83 @@
+---
+# Add-on hook 엔진 테스트 harness — tests/integration/test_addon_hook_playbook.py 가 실행한다.
+#
+# 실제 공통 조립 코드(init_fragments → merge_fragment → run_addon.yml → build_*)와 json_only 콜백을
+# 그대로 태운다. 수집 대신 고정 fragment 하나(system 성공 + cpu 실패 → status partial)를 넣고,
+# 대상 연결은 local 이다. `-e harness_hook=false` 로 hook 을 빼면 hook 도입 전 결과가 된다.
+- name: "addon hook harness"
+  hosts: all
+  gather_facts: false
+  connection: local
+  strategy: free
+
+  vars_files:
+    - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
+
+  vars:
+    _ip: "{{ ansible_host | default(inventory_hostname) }}"
+
+  tasks:
+    - name: "harness | gather"
+      block:
+        - name: "harness | init fragments"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/init_fragments.yml"
+
+        - name: "harness | fixed gather fragment"
+          ansible.builtin.set_fact:
+            _data_fragment:
+              system:
+                hostname: harness-host
+                os_type: linux
+            _sections_supported_fragment: [system, cpu]
+            _sections_collected_fragment: [system]
+            _sections_failed_fragment: [cpu]
+            _sections_unsupported_fragment: []
+            _errors_fragment:
+              - section: cpu
+                message: "CPU 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요."
+                detail: "harness fixed error"
+
+        - name: "harness | merge gather fragment"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
+
+        # 운영 호출부(site.yml 4곳)와 같은 조건 — SE_ADDON_DIR 이 없으면 include 하지 않는다
+        - name: "harness | addon"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
+          vars:
+            _addon_target: linux
+          when:
+            - harness_hook | default(true) | bool
+            - lookup('env', 'SE_ADDON_DIR') | length > 0
+
+        - name: "harness | diagnosis and meta"
+          ansible.builtin.set_fact:
+            _diagnosis:
+              reachable: true
+              port_open: true
+              protocol_supported: true
+              auth_success: true
+              failure_stage: null
+              failure_code: null
+              failure_reason: null
+              details:
+                channel: os
+            _meta:
+              adapter_id: harness
+            _correlation:
+              host_ip: "{{ _ip }}"
+            _out_target_type: os
+            _out_collection_method: agent
+            _out_ip: "{{ _ip }}"
+            _out_vendor: null
+
+        - name: "harness | build output"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/os-gather/tasks/normalize/build_output.yml"
+
+      always:
+        - name: OUTPUT
+          ansible.builtin.debug:
+            msg: "{{ _output | default({'harness_error': 'no _output'}) | to_json }}"

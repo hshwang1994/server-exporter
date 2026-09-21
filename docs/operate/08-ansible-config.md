@@ -63,6 +63,9 @@ gather_timeout = 60
 | `REPO_ROOT` | 필수 | 프로젝트 루트 경로 (adapter/vault 로딩) | Jenkinsfile: `${WORKSPACE}` |
 | `INVENTORY_JSON` | 필수 | 호출자가 전달하는 호스트 배열 JSON (os/esxi: `service_ip`, redfish: `bmc_ip`, fallback: `ip`) | Jenkinsfile: `${params.inventory_json}` |
 | `ANSIBLE_CONFIG` | 권장 | ansible.cfg 경로 (미설정 시 CWD 기준) | Jenkins workspace 루트 |
+| `SE_ADDON_DIR` | 선택 | 고객별 추가 수집(Add-on) 디렉터리 절대경로. 없으면 추가 수집을 하지 않는다. 설정했는데 `<경로>/tasks/main.yml` 이 없으면 기본 수집은 그대로 두고 `errors[]` 에 `section: addon` 1건을 남긴다 | Agent 노드 환경변수 ([02-agent-node.md](02-agent-node.md) 노드 속성) |
+
+`SE_ADDON_DIR` 의 동작과 Add-on 과의 약속은 [develop/07-addon-hook.md](../develop/07-addon-hook.md) 에 있다.
 
 ---
 

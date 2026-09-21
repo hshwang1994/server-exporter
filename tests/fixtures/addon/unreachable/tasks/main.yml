@@ -1,0 +1,17 @@
+---
+# 실행 도중 연결이 끊기는 Add-on — 192.0.2.1(TEST-NET-1)은 응답하지 않는다.
+# hook 블록의 ignore_unreachable 가 role 안까지 이어지면 호스트가 play 에 남아 결과가 나온다.
+- name: "fixture unreachable | remote command on a lost connection"
+  ansible.builtin.raw: echo reached
+  register: _fx_raw
+  vars:
+    ansible_connection: ssh
+    ansible_host: 192.0.2.1
+    ansible_timeout: 3
+
+- name: "fixture unreachable | result"
+  ansible.builtin.set_fact:
+    _addon_result:
+      fixture:
+        reached: "{{ not (_fx_raw.unreachable | default(false)) }}"
+    _addon_errors: "{{ ['remote command not run: target unreachable'] if (_fx_raw.unreachable | default(false)) else [] }}"

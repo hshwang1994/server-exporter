@@ -1,0 +1,11 @@
+---
+# 실행 중 실패하는 Add-on — 중간 결과는 버려지고 hook 의 rescue 가 errors[] 1건을 남긴다
+- name: "fixture fail_runtime | partial result"
+  ansible.builtin.set_fact:
+    _addon_result:
+      partial:
+        x: 1
+
+- name: "fixture fail_runtime | unexpected failure"
+  ansible.builtin.fail:
+    msg: "fixture failure"
