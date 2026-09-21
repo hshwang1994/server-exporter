@@ -121,120 +121,101 @@ CHANNEL_DEFAULT_PORTS = {
     "esxi": [443],
 }
 
-# ── 최종 사용자 문구 표준 (2026-08-11 Phase 6-B 사용자 확정) ─────────────────
+# ── 최종 사용자 문구 (2026-09-21 사용자 확정 — 카탈로그 부분 복제) ──────────
 #
-# 이 5 문장이 Portal 실패 Grid 에 보이는 **전부**다. 같은 문장이 두 곳에 동시에 쓰인다:
+# 이 문장들이 Portal 실패 Grid 에 그대로 보인다. 같은 문장이 두 곳에 동시에 쓰인다:
 #   - diagnosis.failure_reason
 #   - errors[].message   ← Portal 실패 Grid 의 실제 소스
-# 두 값은 build_failed_output.yml 이 failure_reason 을 그대로 message 로 복사해 **항상 일치**한다
-# (문자열을 두 번 정의하지 않는다). Ansible 쪽 정본은 common/vars/failure_reasons.yml 이고
-# 본 파일의 상수와 동일해야 한다 (tests/e2e/test_errors_message_contract.py 가 drift 를 막는다).
+# 두 값은 build_failed_output.yml 이 failure_reason 을 그대로 message 로 복사해 항상 일치한다.
 #
-# 작성 규칙:
-#   구조     : "확인된 상태" + "실패한 현재 단계" + "확인할 항목" (1~2 문장)
+# 정본은 common/vars/failure_reasons.yml 의 `_fr_catalog` 다. 사전 점검이 내는 키만 여기에
+# 글자 그대로 복제한다 — Ansible 모듈은 실행 시 vars 파일도 필터 플러그인도 쓸 수 없다.
+# drift 는 tests/e2e/test_errors_message_contract.py 가 막는다.
+#
+# 2026-09-21: 문장을 failure_code 하나가 아니라 **(failure_code, 채널)** 로 고른다.
+#   종전(2026-08-12 ~ 09-20)에는 code 하나로 골라 TCP_CONNECT_FAILED(방화벽 차단 의심)와
+#   TCP_CONNECTION_REFUSED(서비스 중지 의심)가 같은 문장이었고, 채널 이름을 뺀 탓에
+#   "관리 포트 / 관리 서비스" 가 어느 포트·서비스인지 관리자가 알 수 없었다.
+#
+# 작성 규칙 (CLAUDE.md §10):
+#   앞 단계  : **실제로 관측된 성공만** 문장에 넣는다 ("통신은 되지만" = ICMP 응답 관측).
+#   주어     : 연결 거부의 주체(최종 서버 / 중간 방화벽)는 단정하지 않는다 (CLAUDE.md §7).
 #   금지     : 관리 포트 번호 / IP / HTTP status / timeout 초 / RST·SOAP·XML 같은 내부 용어 /
-#              Ansible 태스크명 / raw exception / 긴 대시(—) / 가운데점(·)
-#   앞 단계  : **실제로 관측된 성공만** 문장에 넣는다.
-#   기술 정보: 포트 목록 / 원본 오류 / HTTP status 는 errors[].detail 에만 보존한다 (§34).
-#
-# 2026-08-11 (Phase 6-B) 변경 요약:
-#   - 채널 이름(Redfish / SSH / WinRM / vSphere API)을 문구에서 뺐다. 사용자는 채널을 고르지
-#     않고 IP 만 넘긴다 — 채널 어휘는 조치에 도움이 되지 않고 errors[].detail 에 남는다.
-#   - DNS / 호스트 이름 안내를 전부 제거했다 (§25 §28). Portal 은 IPv4 만 넘긴다.
-#     DNS_RESOLUTION_FAILED **enum 은 유지**한다 — 이 코드는 IPv4-only 환경에서도
-#     "IP 문자열이 IPv4 리터럴로 파싱되지 않는 경우"(오타 등)에 발생할 수 있고, 그때 사용자가
-#     할 일은 결국 "IP 사용 여부 확인" 이라 아래 1번 문구와 조치가 같다.
-#   - 인증 실패를 401 관측 여부로 두 문장으로 나누던 것을 4번 하나로 통일했다 (§26).
-#     401 이라는 기술 근거는 errors[].detail 과 auth_success=false 가 계속 표현한다.
-
-# 1. 대상 IP 사용 여부를 확인하지 못했다 (reachable / port 단계, presence 미확인).
-REASON_IP_UNCONFIRMED = (
-    "대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요."
-)
-# 2. 관리 포트가 명시적으로 거부됐다 (port 단계 — 연결 거부를 실제로 관측).
-#    2026-08-12 (사용자 확정): 종전 문구 "대상 IP 사용은 확인됐지만 ..." 은 IP presence 판정을
-#    전제했는데 이 저장소는 그런 판정을 하지 않는다(ICMP / IPAM / ARP 미도입 — 사용자 지시).
-#    관측한 사실만 말하도록 바꾼다: 연결 거부를 관측했다 = 관리 포트에 붙지 못했다.
-REASON_PORT_UNREACHABLE = (
-    "대상 IP의 관리 포트에 연결할 수 없습니다. "
-    "방화벽과 관리 서비스 상태를 확인하세요."
-)
-# 3. 관리 포트 연결은 됐는데 기대한 응답을 확인하지 못했다 (protocol 단계).
-REASON_PROTOCOL_UNCONFIRMED = (
-    "관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. "
-    "관리 서비스 설정과 상태를 확인하세요."
-)
-# 4. 자격증명 단계 실패 (auth 단계, 그리고 인증/수집을 구분 못 하는 경로).
-REASON_CREDENTIAL_FAILED = (
-    "대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요."
-)
-# 5. 접속까지는 확인됐고 수집에서 실패했다 (gather 단계).
-REASON_GATHER_FAILED = (
-    "대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요."
-)
-# 6. 결과 객체 자체를 만들지 못했다 (fallback 단계 — OUTPUT_BUILD_FAILED).
-#    precheck 는 이 문장을 내지 않는다. envelope fallback(site.yml always / callback 보충)이
-#    쓰는 문장이며, 문자열 정본을 한곳에 모아 두려고 여기에도 둔다.
-REASON_OUTPUT_BUILD_FAILED = (
-    "수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요."
-)
-
-# protocol 단계 — 채널별로 문구를 나누지 않는다. dict 형태는 호출부/테스트 호환을 위해 유지.
-CHANNEL_PROTOCOL_MESSAGES = {
-    "redfish": REASON_PROTOCOL_UNCONFIRMED,
-    "os": REASON_PROTOCOL_UNCONFIRMED,
-    "esxi": REASON_PROTOCOL_UNCONFIRMED,
+#              Ansible 태스크명 / raw exception / 긴 대시 / 가운데점 / DNS·호스트 이름 안내
+#   기술 정보: 포트 목록 / 원본 오류 / HTTP status 는 errors[].detail 에만 보존한다.
+FAILURE_REASON_CATALOG = {
+    "ip_invalid": {
+        "default": "대상 IP가 올바르지 않습니다. 개더링 대상 IP를 확인하세요.",
+    },
+    "target_unreachable": {
+        "default": "대상 서버가 응답하지 않습니다. 서버 전원 상태와 네트워크 연결을 확인하세요.",
+    },
+    "port_silent": {
+        "default": "대상 서버와 통신은 되지만 관리 포트에 연결할 수 없습니다. "
+                   "방화벽과 접속 설정을 확인하세요.",
+    },
+    "port_refused": {
+        "os": "OS 접속이 거부되었습니다. 대상 서버의 OS 원격 접속 설정과 방화벽을 확인하세요.",
+        "esxi": "ESXi 접속이 거부되었습니다. 대상 서버의 ESXi 접속 설정과 방화벽을 확인하세요.",
+        "redfish": "Redfish 접속이 거부되었습니다. "
+                   "대상 장비의 Redfish 접속 설정과 방화벽을 확인하세요.",
+        "default": "관리 포트 접속이 거부되었습니다. 대상의 접속 설정과 방화벽을 확인하세요.",
+    },
+    "protocol_unconfirmed": {
+        "os": "접속한 대상에서 OS 원격 접속 응답을 확인하지 못했습니다. "
+              "대상 종류와 OS 원격 접속 설정을 확인하세요.",
+        "esxi": "접속한 대상에서 ESXi 응답을 확인하지 못했습니다. "
+                "대상 종류와 ESXi 서비스 상태를 확인하세요.",
+        "redfish": "접속한 대상에서 Redfish 응답을 확인하지 못했습니다. "
+                   "대상 종류와 Redfish 서비스 설정을 확인하세요.",
+        "default": "접속한 대상에서 필요한 응답을 확인하지 못했습니다. "
+                   "대상 종류와 접속 설정을 확인하세요.",
+    },
+    # _try_redfish_auth (수동 진단 / 단위 테스트 경로) 전용. 운영 경로는 인증을 여기서 하지 않는다.
+    "auth_unconfirmed": {
+        "os": "해당 위치({loc})의 Vault 계정으로 대상 OS에 로그인하지 못했습니다.",
+        "esxi": "해당 위치({loc})의 Vault 계정으로 대상 ESXi에 로그인하지 못했습니다.",
+        "redfish": "개더링 표준 계정으로 대상 Redfish에 인증하지 못했습니다.",
+        "default": "해당 위치({loc})의 Vault 계정으로 대상에 로그인하지 못했습니다.",
+    },
 }
 
-# ── failure_code → 사용자 문장 (단일 매핑 정본) ──────────────────────────────
-#
-# 2026-08-12: 문장은 **관측된 failure_code 에서만** 파생된다. 종전에는 문장과
-# stage/code 가 서로 다른 조건으로 갈려서(redfish rescue / precheck connect 실패)
-# 같은 결과를 Portal 과 로그가 다르게 해석했다. 매핑을 하나로 묶어 그 가능성을 없앤다.
-#
-# 특히 TCP_CONNECTION_REFUSED:
-#   종전에는 존재하지 않는 presence 판정(ip_in_use)에 문장을 걸어 둬서, RST 를 실제로
-#   관측하고 code 를 REFUSED 로 확정했는데도 사용자에게는 "IP 사용 여부를 확인하세요"(1번)
-#   가 나갔다. 이제 관측된 code 를 그대로 따라 2번(관리 포트 연결 불가)을 쓴다.
-# 2026-09-03 (사용자 지시 — reachable 판정에 ICMP OR 도입):
-#   reachable 은 이제 "관리 TCP 응답 OR ICMP Echo 응답" 이다. 그래서 두 code 의 의미가
-#   아래처럼 갈린다. 문장 매핑도 그 관측을 그대로 따른다.
-#     TARGET_UNREACHABLE : TCP 도 ICMP 도 응답이 없었다 → 1번(IP 사용 여부 확인)
-#     TCP_CONNECT_FAILED : ICMP 는 응답했는데 관리 TCP 포트만 조용하다(RST 도 없음)
-#                          → 2번(관리 포트 연결 불가. 방화벽/관리 서비스 확인)
-#   종전에는 TCP_CONNECT_FAILED 하나가 두 상황을 겸했고 문장은 늘 1번이었다. 그래서
-#   **서버는 살아 있는데 방화벽이 관리 포트를 DROP** 하는 구간에서 운영자에게
-#   "IP 사용 여부를 확인하세요" 가 나가, 정작 봐야 할 방화벽 대신 엉뚱한 곳을 보게 했다.
-#   ICMP 로 존재가 확인된 이상 1번은 사실과 어긋나므로 2번으로 옮긴다.
-# CREDENTIAL_SET_UNAVAILABLE (2026-08-12 신설):
-#   해당 Location/Vendor 의 credential set 을 열지 못해 **인증을 시도조차 못 했다.**
-#   AUTH_PROBE_FAILED 와 반드시 구분한다 —
-#     AUTH_PROBE_FAILED         : 자격을 실어 보냈는데 통하지 않았다 (auth_success=false|null)
-#     CREDENTIAL_SET_UNAVAILABLE: 보낼 자격 자체가 없었다        (auth_success=null 고정)
-#   조치가 다르다: 전자는 대상 계정 점검, 후자는 vault 배치 점검.
-#   precheck 는 이 code 를 내지 않는다 (인증정보를 받지 않는다). 각 채널 rescue 가 낸다.
-#   사용자 문장은 4번을 재사용한다 — 운영자가 할 일이 결국 "자격증명 설정 확인" 으로 같아서
-#   문장을 늘리지 않는다 (Portal 5문장 집합 불변). 구분은 code 와 detail 이 표현한다.
-REASON_BY_FAILURE_CODE = {
-    "DNS_RESOLUTION_FAILED":      REASON_IP_UNCONFIRMED,
-    "TARGET_UNREACHABLE":         REASON_IP_UNCONFIRMED,
-    "TCP_CONNECT_FAILED":         REASON_PORT_UNREACHABLE,
-    "TCP_CONNECTION_REFUSED":     REASON_PORT_UNREACHABLE,
-    "PROTOCOL_CHECK_FAILED":      REASON_PROTOCOL_UNCONFIRMED,
-    "AUTH_PROBE_FAILED":          REASON_CREDENTIAL_FAILED,
-    "CREDENTIAL_SET_UNAVAILABLE": REASON_CREDENTIAL_FAILED,
-    "GATHER_FAILED":              REASON_GATHER_FAILED,
-    "OUTPUT_BUILD_FAILED":        REASON_OUTPUT_BUILD_FAILED,
+# failure_code → 문장 키 (사전 점검이 내는 code 만). 나머지 code 의 키는 각 site.yml rescue /
+# 빌더 / callback 이 관측으로 고른다 (정본 대응표: failure_reasons.yml `_fr_code_keys`).
+#   DNS_RESOLUTION_FAILED  : IPv4 입력이라 사실상 "IP 문자열이 올바르지 않다" 다
+#                            (빈 IP 는 Jenkins Validate 가 먼저 막는다). enum 은 유지한다.
+#   TARGET_UNREACHABLE     : TCP 도 ICMP 도 무응답 (2026-09-03).
+#   TCP_CONNECT_FAILED     : ICMP 는 응답, 관리 포트만 무응답 → "통신은 되지만".
+#   TCP_CONNECTION_REFUSED : 거부 관측. 주어를 쓰지 않는다.
+#   PROTOCOL_CHECK_FAILED  : 포트는 열렸는데 기대 응답이 아님. 대상 종류가 맞아도 서비스
+#                            중지 / 응답 지연 / TLS 비호환이면 같은 code 다 — 원인을 단정하지 않는다.
+#   AUTH_PROBE_FAILED      : 운영 경로에서는 나오지 않는다 (run_module Stage 4 주석).
+PRECHECK_REASON_KEYS = {
+    "DNS_RESOLUTION_FAILED":  "ip_invalid",
+    "TARGET_UNREACHABLE":     "target_unreachable",
+    "TCP_CONNECT_FAILED":     "port_silent",
+    "TCP_CONNECTION_REFUSED": "port_refused",
+    "PROTOCOL_CHECK_FAILED":  "protocol_unconfirmed",
+    "AUTH_PROBE_FAILED":      "auth_unconfirmed",
 }
 
+# 사전 점검은 실행 위치(se_location)를 받지 않는다. {loc} 가 들어간 문장은 운영 경로에서
+# 여기서 나오지 않지만(auth 경로는 redfish 전용), 나오더라도 틀을 드러내지 않게 채운다.
+_LOC_UNKNOWN = "미지정"
 
-def reason_for_failure_code(failure_code):
-    """관측된 failure_code → 사용자 문장. 매핑에 없는 값은 1번(가장 보수적) 문장.
 
-    호출부가 stage / code 를 먼저 확정하고 문장은 여기서 파생한다. 문장 선택 조건을
-    호출부마다 따로 쓰지 않기 위한 단일 진입점이다.
+def reason_for_failure(failure_code, channel=None):
+    """관측된 (failure_code, 채널) → 사용자 문장.
+
+    호출부가 stage / code 를 먼저 확정하고 문장은 여기서 파생한다. 채널 문장이 없으면
+    default 문장을 쓴다. 매핑에 없는 code 는 가장 보수적인 '응답 없음' 문장이다.
     """
-    return REASON_BY_FAILURE_CODE.get(failure_code, REASON_IP_UNCONFIRMED)
+    entry = FAILURE_REASON_CATALOG[
+        PRECHECK_REASON_KEYS.get(failure_code, "target_unreachable")]
+    text = entry.get(channel) if channel else None
+    if text is None:
+        text = entry["default"]
+    return text.replace("{loc}", _LOC_UNKNOWN)
 
 
 # TCP 연결 실패 종류 (구조화 — 오류 문자열 파싱 대신 이 값으로 분류한다)
@@ -1357,13 +1338,10 @@ def _try_redfish_auth(host, open_port, username, password, timeout_auth, verify_
         # 401 이든 timeout 이든 **멈춘 단계**는 같다. 원인 확정 여부는 auth_success 가 표현한다.
         # 403 은 인증 후 권한 부족일 수 있어 거부로 확정하지 않는다 (auth_success 는 None 유지).
         result["failure_code"] = "AUTH_PROBE_FAILED"
-        # 2026-08-11 (Phase 6-B / §26): 401 관측 여부로 문구를 나누지 않는다.
-        #   종전엔 "인증이 거부되었습니다" 와 "접속하지 못했습니다" 두 문장이었는데,
-        #   Portal 사용자가 할 일은 두 경우 모두 "자격증명과 계정 권한 확인" 으로 같다.
-        #   401 이라는 기술 근거는 auth_success=false 와 errors[].detail(원본 오류)이 계속
-        #   표현하므로 사용자 문구는 4번 하나로 통일한다.
-        # 2026-08-12: 문장은 확정한 code 에서 파생한다 (REASON_BY_FAILURE_CODE 단일 매핑).
-        result["failure_reason"] = reason_for_failure_code(result["failure_code"])
+        # 이 경로는 운영에서 돌지 않는다(Stage 4 주석). 요청 1건의 401 로 "계정 불일치 확인"
+        # 문장(auth_rejected)을 내지 않고 미확정 문장을 쓴다 — 운영 rescue 는 표준 후보 **전원**의
+        # 401 을 봐야 거부로 확정한다. 401 이라는 근거는 auth_success=false 와 detail 이 표현한다.
+        result["failure_reason"] = reason_for_failure(result["failure_code"], "redfish")
         result["detail"] = err
         return False
     result["auth_success"] = True
@@ -1414,12 +1392,12 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
         result["protocol_supported"] = False   # 검사했고, 확인하지 못했다
         result["failure_stage"] = "protocol"
         result["failure_code"] = "PROTOCOL_CHECK_FAILED"
-        result["failure_reason"] = CHANNEL_PROTOCOL_MESSAGES["os"]
+        result["failure_reason"] = reason_for_failure(result["failure_code"], "os")
         result["detail"] = "; ".join(proto_errors + tcp_errors)
         module.exit_json(**result)
 
-    # TCP 단계에서 전부 실패 — stage / code 를 먼저 확정하고, 문장은 code 에서 파생한다
-    # (2026-08-12: 문장 선택 조건을 code 하나로 통일 — REASON_BY_FAILURE_CODE).
+    # TCP 단계에서 전부 실패 — stage / code 를 먼저 확정하고, 문장은 (code, 채널) 에서
+    # 파생한다 (reason_for_failure 단일 진입점).
     # 2026-09-03: RST 를 못 본 경우에만 ICMP 로 도달성을 한 번 더 확인한다
     #             (RST 는 이미 능동 응답이라 ICMP 를 쓸 이유가 없다).
     icmp_note = None
@@ -1433,7 +1411,7 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
         result["reachable"] = reachable
         result["failure_stage"] = stage
         result["failure_code"] = code
-    result["failure_reason"] = reason_for_failure_code(result["failure_code"])
+    result["failure_reason"] = reason_for_failure(result["failure_code"], "os")
     result["detail"] = _join_detail(tcp_errors, icmp_note)
     module.exit_json(**result)
 
@@ -1508,18 +1486,17 @@ def run_module():
         result["reachable"] = reachable
         result["failure_stage"] = stage
         result["failure_code"] = code
-        result["failure_reason"] = reason_for_failure_code(code)
+        result["failure_reason"] = reason_for_failure(code, channel)
         result["detail"] = _join_detail(port_errors, icmp_note)
         module.exit_json(**result)
     if not target_port_open:
         result["reachable"] = True
         result["failure_stage"] = "port"
         # 이 분기는 RST 를 관측했기에만 도달한다 (_check_ports 의 any_response 조건).
-        # 2026-08-12: RST 를 보낸 주체가 최종 서버인지 중간 방화벽인지는 여전히 확정할 수
-        # 없다. 그래서 2번 문구도 "IP 사용이 확인됐다" 고 말하지 않고 관측한 사실만 말한다
-        # ("관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요").
+        # RST 를 보낸 주체가 최종 서버인지 중간 방화벽인지는 확정할 수 없다. 그래서 문장은
+        # 주어 없이 관측한 사실만 말한다 ("Redfish 접속이 거부되었습니다 ... 방화벽을 확인하세요").
         result["failure_code"] = "TCP_CONNECTION_REFUSED"
-        result["failure_reason"] = reason_for_failure_code(result["failure_code"])
+        result["failure_reason"] = reason_for_failure(result["failure_code"], channel)
         result["detail"] = "; ".join(port_errors)
         module.exit_json(**result)
 
@@ -1551,9 +1528,7 @@ def run_module():
     if not ok:
         result["failure_stage"] = "protocol"
         result["failure_code"] = "PROTOCOL_CHECK_FAILED"
-        result["failure_reason"] = CHANNEL_PROTOCOL_MESSAGES.get(
-            channel, "프로토콜 확인 실패"
-        )
+        result["failure_reason"] = reason_for_failure(result["failure_code"], channel)
         result["detail"] = err
         module.exit_json(**result)
     result["protocol_supported"] = True

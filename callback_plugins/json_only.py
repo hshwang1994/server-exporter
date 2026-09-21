@@ -34,6 +34,7 @@ __metaclass__ = type
 
 import json
 import os
+import re
 import sys
 
 from ansible.plugins.callback import CallbackBase
@@ -86,32 +87,62 @@ _LOCAL_DELEGATES = frozenset({'localhost', '127.0.0.1', '::1'})
 
 # 사용자에게 그대로 보이는 문장 (Portal 실패 Grid).
 #
-# 2026-08-11 (Phase 6-B 통합): 이 파일이 문구를 **새로 정의하지 않는다.**
-#   문자열 정본은 두 곳이며 글자까지 같아야 한다:
-#     - common/vars/failure_reasons.yml      (Ansible rescue 가 참조)
-#     - common/library/precheck_bundle.py    (REASON_* — Python 정본)
-#   콜백 플러그인은 Ansible 이 자체 로더로 올리므로 위 모듈을 import 할 수 없다.
-#   그래서 값을 복제하되, drift 는 테스트가 막는다
-#   (tests/unit/test_callback_envelope_reconcile.py::TestCanonicalReasonsDoNotDrift).
+# 이 파일은 문구를 **새로 정의하지 않는다.** 정본은 common/vars/failure_reasons.yml 의
+# `_fr_catalog` 이고, 여기에는 envelope 보충 경로가 내는 키만 글자 그대로 복제한다.
+# 콜백 플러그인은 Ansible 이 자체 로더로 올리므로 정본을 import 할 수 없다.
+# drift 는 테스트가 막는다 (tests/e2e/test_errors_message_contract.py).
 #
-#   통합 전에는 이 자리에 표준 5 문장에 없는 문장 4종이 따로 있었고, errors[].message 가
-#   diagnosis.failure_reason 과 다른 문장을 담고 있었다. 보충된 envelope 만 Portal 에서
-#   다른 어휘로 보이게 되므로 정본 문구로 맞춘다.
+# 2026-09-21: 문장을 (키, 채널) 로 고른다. 종전에는 "연결이 끊겼다" 와 "인증을 못 했다" 가
+#   채널 구분 없이 한 문장씩이었다. 채널을 모르면 default 문장을 쓴다.
+#   `{loc}` 는 관측한 실행 위치(_cred_location)로 채운다 — 없으면 '미지정'.
+_FAILURE_REASON_CATALOG = {
+    # 대상 연결이 끊겼고, 그 전에 인증에 성공했다는 증거가 없다.
+    'auth_unconfirmed': {
+        'os': '해당 위치({loc})의 Vault 계정으로 대상 OS에 로그인하지 못했습니다.',
+        'esxi': '해당 위치({loc})의 Vault 계정으로 대상 ESXi에 로그인하지 못했습니다.',
+        'redfish': '개더링 표준 계정으로 대상 Redfish에 인증하지 못했습니다.',
+        'default': '해당 위치({loc})의 Vault 계정으로 대상에 로그인하지 못했습니다.',
+    },
+    # 위와 같지만 Vault 에 계정이 0개였다 (계정 없이 접속을 시도했다).
+    'loc_vault_no_account': {
+        'os': '해당 위치({loc})의 Vault에 OS용 계정이 없습니다.',
+        'esxi': '해당 위치({loc})의 Vault에 ESXi용 계정이 없습니다.',
+        'default': '해당 위치({loc})의 Vault에 계정이 없습니다.',
+    },
+    # 인증된 작업이 성공한 뒤 대상이 unreachable 이 됐다.
+    'gather_connection_lost': {
+        'default': '정보 수집 중 대상 서버와 연결이 끊겼습니다.',
+    },
+    # 결과 객체 자체를 만들지 못했다. site.yml 3종 always 블록 fallback 과 **같은 문장**이다.
+    'output_build_failed': {
+        'default': '개더링 프로젝트에서 수집 결과를 만들지 못했습니다.',
+    },
+}
 
-# 표준 4번 — 자격증명 단계 실패 (접속 자체를 확인하지 못한 경우 포함).
-_REASON_CREDENTIAL_FAILED = (
-    '대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요.'
-)
-# 표준 5번 — 접속은 확인됐고 수집에서 실패했다.
-_REASON_GATHER_FAILED = (
-    '대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.'
-)
-# 결과 객체 자체를 만들지 못한 경우. site.yml 3종의 always 블록 fallback 과 **같은 문장**이다.
-# 2026-08-12: 정본이 `common/vars/failure_reasons.yml:_fr_output_build_failed` 로 옮겨졌다.
-#   종전에는 이 문장이 site.yml always 블록마다 두 자리(diagnosis.failure_reason /
-#   errors[0].message)에 리터럴로 있어 3 채널 8곳을 동시에 고쳐야 했다. 이제 site.yml 은
-#   정본 변수를 참조하고, 이 파일만 값을 복제한다(아래 "복제 이유" 참조).
-_REASON_NO_OUTPUT = '수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요.'
+# {loc} 표시값 규칙 — filter_plugins/failure_reason.py display_location() 과 같아야 한다
+# (tests/unit/test_failure_reason_filter.py 가 두 구현의 결과를 대조한다).
+_LOC_UNSAFE = re.compile(r'[^A-Za-z0-9_.-]')
+_LOC_MAX_LEN = 40
+_LOC_EMPTY = '미지정'
+
+
+def _display_location(loc):
+    if loc is None:
+        return _LOC_EMPTY
+    text = _LOC_UNSAFE.sub('', str(loc).strip())[:_LOC_MAX_LEN]
+    return text or _LOC_EMPTY
+
+
+def _reason(key, channel=None, loc=None):
+    """보충 경로 전용 문장 선택. 채널 문장이 없으면 default."""
+    entry = _FAILURE_REASON_CATALOG[key]
+    text = entry.get(channel) if channel else None
+    if text is None:
+        text = entry['default']
+    return text.replace('{loc}', _display_location(loc))
+
+
+_REASON_NO_OUTPUT = _reason('output_build_failed')
 
 # 복제 이유 (YAML 런타임 로드를 채택하지 않은 근거, 2026-08-12)
 # ---------------------------------------------------------------
@@ -275,6 +306,11 @@ class CallbackModule(CallbackBase):
                 #   fail_message : rescue 가 남긴 실패 태스크/예외 요약
                 'fail_detail':  None,
                 'fail_message': None,
+                # 2026-09-21: 보충 문장에 필요한 관측값 (Secret 아님).
+                #   location          : 실행 위치 (문장의 {loc})
+                #   cred_load_outcome : Vault 적재 결과 (empty_accounts 면 '계정 없음' 문장)
+                'location':          None,
+                'cred_load_outcome': None,
             }
             self._hosts[host_name] = ctx
         return ctx
@@ -327,7 +363,9 @@ class CallbackModule(CallbackBase):
                           # build_failed_output.yml:64-74 가 errors[].detail 로 싣는데,
                           # 보충 경로는 그 태스크를 못 거치므로 여기서 직접 붙든다.
                           ('_fail_error_detail', 'fail_detail'),
-                          ('_fail_error_message', 'fail_message')):
+                          ('_fail_error_message', 'fail_message'),
+                          ('_cred_location', 'location'),
+                          ('_cred_load_outcome', 'cred_load_outcome')):
             if facts.get(key):
                 ctx[slot] = str(facts[key])
 
@@ -465,14 +503,20 @@ class CallbackModule(CallbackBase):
         elif ctx.get('lost') and ctx.get('auth_proven'):
             # (2) 인증 통과 후 수집 도중 연결 끊김
             diagnosis = self._diagnosis(observed, details, True,
-                                        'gather', 'GATHER_FAILED', _REASON_GATHER_FAILED)
+                                        'gather', 'GATHER_FAILED',
+                                        _reason('gather_connection_lost'))
             err_section = 'gather'
             err_detail = ('envelope reconciled by callback; host became unreachable '
                           'after an authenticated task succeeded')
         elif ctx.get('lost'):
-            # (3) 접속 자체를 확인하지 못함
+            # (3) 접속 자체를 확인하지 못함. Vault 에 계정이 0개였으면(계정 없이 시도) 그 사실을
+            #     알린다 — 관리자가 할 일이 대상 계정 점검이 아니라 Vault 계정 배치다.
+            key = ('loc_vault_no_account'
+                   if ctx.get('cred_load_outcome') == 'empty_accounts'
+                   else 'auth_unconfirmed')
             diagnosis = self._diagnosis(observed, details, None,
-                                        'auth', 'AUTH_PROBE_FAILED', _REASON_CREDENTIAL_FAILED)
+                                        'auth', 'AUTH_PROBE_FAILED',
+                                        _reason(key, channel, ctx.get('location')))
             err_section = 'auth'
             err_detail = ('envelope reconciled by callback; host unreachable with no '
                           'evidence of a successful authenticated task')

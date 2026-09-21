@@ -207,11 +207,13 @@ def test_section_message_never_asserts_success_of_other_parts(path, message):
 @pytest.mark.parametrize("path,message", _LITERAL_MESSAGES,
                          ids=[f"{p}:{m[:24]}" for p, m in _LITERAL_MESSAGES])
 def test_section_message_is_not_a_failed_path_sentence(path, message):
-    """섹션 오류를 전체 실패 5문장으로 뭉개지 않는다.
+    """섹션 오류를 전체 실패 대표 문장(카탈로그)으로 뭉개지 않는다.
 
     "대상에 접속할 수 없습니다" 는 접속이 된 상태에서 CPU 만 못 읽은 결과를 설명하지 못한다.
     """
-    assert message not in set(FAILURE_REASONS.values()), (
+    failure_sentences = {text for entry in FAILURE_REASONS["_fr_catalog"].values()
+                         for text in entry.values()}
+    assert message not in failure_sentences, (
         f"[{path}] 섹션 오류에 전체 실패 대표 문장을 썼다 — 섹션 의미를 유지할 것: {message!r}"
     )
 

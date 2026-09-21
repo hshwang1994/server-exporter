@@ -46,6 +46,7 @@ import redfish_gather as rg  # noqa: E402
 
 from tests.e2e.test_failure_reason_contract import (  # noqa: E402
     FAILURE_REASONS,
+    fr,
     _assert_claims_match_observation,
     _assert_grid_ready,
     _env,
@@ -134,8 +135,8 @@ def test_multi_credential_auth_success_aggregation(label, statuses, candidates,
     assert bool(rejected) is expect_reject, (
         f"[{label}] 집계 결과가 다르다 (statuses={statuses})")
 
-    # 2026-08-11 (Phase 6-B / §26): 401 실증은 **기계 필드로만** 표현한다. 사용자 문장은
-    # 거부/미확정 모두 4번(자격증명)으로 같다 — Portal 사용자의 조치가 같기 때문이다.
+    # 2026-09-21 (사용자 확정): 표준 후보 **전원**의 401 이 확인된 경우에만 "계정이 다르거나
+    # 권한이 없다" 문장을 쓴다. 하나라도 원인 미확정이면 "인증하지 못했다" 문장이다.
     if expect_reject:
         assert diag["auth_success"] is False, label
         assert diag["failure_stage"] == "auth", label
@@ -148,8 +149,11 @@ def test_multi_credential_auth_success_aggregation(label, statuses, candidates,
         assert diag["auth_success"] is None, (
             f"[{label}] 원인 미확정 실패가 섞였는데 거부로 확정하면 안 된다")
     if not collect_ok and not any(isinstance(s, int) and 200 <= s < 400 for s in statuses):
-        assert diag["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"], label
-    assert "인증이 거부" not in diag["failure_reason"], label
+        expected = "auth_rejected" if expect_reject else "auth_unconfirmed"
+        assert diag["failure_reason"] == fr(expected, "redfish"), label
+    if not expect_reject:
+        assert "다르거나" not in diag["failure_reason"], (
+            f"[{label}] 거부가 확정되지 않았는데 계정 불일치를 말하면 안 된다")
 
     _assert_grid_ready(diag["failure_reason"], label)
     _assert_claims_match_observation(diag, label)
@@ -165,10 +169,10 @@ def test_case7_success_path_does_not_reach_rescue():
     assert bool(rejected) is False
     # 2026-08-12: 후보 B 가 200 으로 인증을 통과한 것을 실제로 관측했다.
     #   종전에는 이 경우도 auth_success=null 이었는데, 관측된 성공을 '모름' 으로 두면
-    #   문장("대상 접속은 확인됐지만")과 Boolean 이 서로 다른 이야기를 한다.
+    #   문장("인증은 성공했지만")과 Boolean 이 서로 다른 이야기를 한다.
     assert diag["auth_success"] is True
-    # 수집이 된 뒤의 실패는 5번 문구(수집 실패)를 쓴다.
-    assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
+    # 인증이 된 뒤의 실패는 '인증은 성공했지만 정보를 가져오지 못했다' 문장이다.
+    assert diag["failure_reason"] == fr("gather_after_auth", "redfish")
     assert diag["failure_stage"] == "gather"
 
 

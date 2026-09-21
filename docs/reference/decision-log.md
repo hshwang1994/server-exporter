@@ -6,7 +6,57 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-09-15
+> 최종 갱신: 2026-09-21
+
+## 2026-09-21 — 실패 사유 문장(`failure_reason`)을 대상 종류·세부 사유별로 나눈다
+
+### 요구
+
+Portal 실패 화면의 "실패 사유"(= `diagnosis.failure_reason` = `errors[0].message`)를 관리자가 바로
+조치 대상을 알 수 있는 문장으로 바꿔 달라는 요청이 있었다. 사용자가 새 문장 체계를 직접 제시했다.
+
+### 분석
+
+종전에는 `failure_code` 9개가 문장 6개로 뭉쳐 있었다 (2026-08-12 결정 — 문장은 code 에서만 파생).
+
+- 방화벽 차단이 의심되는 `TCP_CONNECT_FAILED`(ping 응답, 관리 포트 무응답)와 서비스 중지가 의심되는
+  `TCP_CONNECTION_REFUSED`(연결 거부)가 같은 문장이었다.
+- 수집 시스템 쪽 Vault 설정 문제(`CREDENTIAL_SET_UNAVAILABLE`)와 대상 계정 문제(`AUTH_PROBE_FAILED`)가
+  같은 문장이라 관리자가 대상 서버 계정을 헛되이 확인하게 됐다.
+- 2026-08-11 에 채널 이름을 문장에서 뺀 탓에 "관리 포트 / 관리 서비스" 가 무엇인지 알 수 없었다.
+
+검토 중 코드 결함 2건을 함께 찾았다.
+
+1. Redfish 에서 실행 위치 미등록 / 표준 계정 0개 / vendor 미식별 + 표준 Vault 부재 세 경우는 인증을
+   한 번도 시도하지 않았는데 `GATHER_FAILED`("대상 접속은 확인됐지만")로 나갔다.
+2. `common/tasks/credential/load_one.yml` 의 `failed_when: false` 가 복호화 실패 표시를 지워, Vault
+   비밀번호가 없거나 틀려도 "계정 0개" 로 분류됐다 (WSL ansible-core 2.20.7 실측).
+
+### 결정 (사용자 확정)
+
+- 문장을 **`failure_code` + 대상 종류(OS / ESXi / Redfish) + 세부 사유**로 고른다. `failure_stage` /
+  `failure_code` 값은 유지한다. 문장 카탈로그 정본은 `common/vars/failure_reasons.yml` 의 `_fr_catalog`.
+- 문장 속 위치는 실제 `loc` 값으로 보인다 (값이 없으면 `미지정`).
+- 연결 거부 문장은 주어를 쓰지 않는다 (거부 신호는 중간 방화벽이 보낼 수도 있다).
+- 프로토콜 실패 문장은 "대상 종류가 틀렸다" 고 단정하지 않는다 (대상 종류가 맞아도 서비스 중지 /
+  응답 지연 / TLS 비호환이면 같은 code 다 — 2026-08-13 Cisco BMC 실측).
+- Redfish 표준 계정은 위치와 무관한 전역 Vault 이므로 "개더링 프로젝트 Vault / 개더링 표준 계정" 으로 쓴다.
+- 판정 근거가 없는 문장(OS/ESXi 계정 불일치 확인, 조회 권한 부족 확인, OS/ESXi 내부 오류)은 후속 과제로 미룬다.
+- 위 결함 2건을 바로잡는다. Redfish 세 경우는 `CREDENTIAL_SET_UNAVAILABLE` / `failure_stage: auth` 가 된다.
+
+### 왜 이렇게 했나
+
+관리자에게 필요한 것은 "누가 무엇을 고쳐야 하나" 다. code 는 이미 그 차이를 알고 있었는데 문장이
+그 정보를 버리고 있었다. 반대로 관측하지 않은 원인(거부 주체, 대상 종류 불일치, OS 계정 불일치)을
+문장에 넣으면 관리자를 엉뚱한 곳으로 보낸다. 그래서 "관측한 것만, 대상 종류 어휘로" 를 기준으로 삼았다.
+
+### 영향
+
+- 사용자 문장이 전부 바뀐다. 문장 글자로 분기하는 소비자가 있다면 영향을 받는다 (문장은 파싱 대상이 아니다).
+- Redfish 세 경우의 `failure_code` / `failure_stage` 가 바뀐다 (`GATHER_FAILED`/`gather` → `CREDENTIAL_SET_UNAVAILABLE`/`auth`).
+- Vault 복호화 실패가 이제 수집 시도 전에 멈춘다 (종전에는 계정 없이 접속을 시도했다).
+- 운영 파이프라인은 미등록 loc 를 Ansible 전에 막으므로 "위치 미등록" 문장은 Jenkins 밖 직접 실행에서만 나온다.
+- 상세 표: [../contract/03-fields.md](../contract/03-fields.md) §4-1.
 
 ## 2026-09-15 — BIOS Attributes 를 Key 이름순으로 정렬해 내보낸다 (`data.bios.current.attributes`)
 

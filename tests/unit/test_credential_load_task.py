@@ -178,6 +178,23 @@ def test_include_vars_uses_name_scope():
     assert inc.get("name") == "_cl_included"
 
 
+def test_include_vars_keeps_failure_visible_to_classify():
+    """복호화 실패가 classify 의 `_cl_load is failed` 까지 살아 있어야 한다 (2026-09-21).
+
+    `failed_when: false` 는 결과의 failed 표시를 False 로 덮어써서 `is failed` 가 항상
+    거짓이었다. 그래서 비밀번호 없음 / 불일치가 'loaded' → 계정 0개(empty_accounts) 로
+    오분류됐고, "Vault 를 읽을 수 없습니다" 문장은 한 번도 나오지 않았다
+    (WSL ansible-core 2.20.7 실측). `ignore_errors` 는 failed 표시를 보존한 채 진행한다.
+    """
+    task = _task_named("load_one | include vars")
+    assert "failed_when" not in task, (
+        "failed_when 은 failed 표시를 지워 복호화 실패를 empty_accounts 로 오분류한다")
+    assert task.get("ignore_errors") is True
+    assert task.get("register") == "_cl_load"
+    # classify 는 이 등록값의 failed 표시로 복호화 실패를 가른다
+    assert "_cl_load is failed" in _TPL_LOAD_ONE
+
+
 def test_include_vars_target_is_never_set_fact():
     """`include_vars` 의 name 을 `set_fact` 로도 쓰면 **영구히 가려진다.**
 
@@ -338,8 +355,11 @@ def test_task_never_hard_fails():
         assert "ansible.builtin.fail" not in task, (
             f"{task.get('name')!r} 가 fail 을 쓴다 — envelope 소실 위험 (rule 11)"
         )
+    # 복호화 실패도 play 를 죽이지 않는다. 2026-09-21 부터 failed_when: false 가 아니라
+    # ignore_errors 다 — failed 표시를 보존해야 classify 가 복호화 실패를 가를 수 있다
+    # (test_include_vars_keeps_failure_visible_to_classify).
     inc = _task_named("load_one | include vars")
-    assert inc.get("failed_when") is False
+    assert inc.get("ignore_errors") is True
 
 
 def test_stat_runs_on_controller():

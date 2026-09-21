@@ -236,20 +236,60 @@ if response["data"]["hardware"].get("health") == "Critical":
 
 | 상황 | `status` | `message` |
 |---|---|---|
-| 전체 실패 | `failed` | 표준 대표 문장 (아래 6문장 중 하나). `errors[0].message == diagnosis.failure_reason` |
+| 전체 실패 | `failed` | 대표 문장 (아래 문장 카탈로그 중 하나). `errors[0].message == diagnosis.failure_reason` |
 | 섹션 부분 실패 | `partial` 또는 `success` | 섹션 의미를 유지한 문장. 예: `"CPU 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요."` — 이때 `diagnosis.failure_reason` 은 `null` 이다 |
 
-전체 실패 대표 문장 6종 (정본: `common/vars/failure_reasons.yml`, `failure_code` 에서 파생):
+전체 실패 대표 문장 카탈로그 (정본: `common/vars/failure_reasons.yml` 의 `_fr_catalog`).
 
-| `failure_code` | 문장 |
-|---|---|
-| `DNS_RESOLUTION_FAILED` / `TARGET_UNREACHABLE` | 대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요. |
-| `TCP_CONNECT_FAILED` / `TCP_CONNECTION_REFUSED` | 대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요. |
-| `PROTOCOL_CHECK_FAILED` | 관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. 관리 서비스 설정과 상태를 확인하세요. |
-| `AUTH_PROBE_FAILED` | 대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요. |
-| `CREDENTIAL_SET_UNAVAILABLE` | 대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요. *(4번 문장 재사용 — 아래 5-1 참조)* |
-| `GATHER_FAILED` | 대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요. |
-| `OUTPUT_BUILD_FAILED` | 수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요. |
+**2026-09-21 변경** — 문장을 `failure_code` 하나가 아니라 **`failure_code` + 대상 종류(target_type) + 세부 사유**로
+고른다. 종전에는 9개 code 가 6문장으로 뭉쳐 방화벽 차단과 서비스 중지, Vault 설정 문제와 대상 계정 문제가
+같은 문장이었다. `failure_stage` / `failure_code` 값은 아래 한 가지 예외를 빼고 그대로다.
+`{loc}` 은 실행 위치(Jenkins `loc` 파라미터) 값으로 채워지고, 값이 없으면 `미지정` 이 보인다.
+
+| `failure_code` | 언제 | 문장 |
+|---|---|---|
+| `DNS_RESOLUTION_FAILED` | IP 문자열을 주소로 해석하지 못함 | 대상 IP가 올바르지 않습니다. 개더링 대상 IP를 확인하세요. |
+| `TARGET_UNREACHABLE` | 관리 TCP 도 ICMP 도 무응답 | 대상 서버가 응답하지 않습니다. 서버 전원 상태와 네트워크 연결을 확인하세요. |
+| `TCP_CONNECT_FAILED` | ICMP 는 응답, 관리 포트만 무응답 | 대상 서버와 통신은 되지만 관리 포트에 연결할 수 없습니다. 방화벽과 접속 설정을 확인하세요. |
+| `TCP_CONNECTION_REFUSED` | 관리 포트가 연결을 거부 (OS) | OS 접속이 거부되었습니다. 대상 서버의 OS 원격 접속 설정과 방화벽을 확인하세요. |
+|  | (ESXi) | ESXi 접속이 거부되었습니다. 대상 서버의 ESXi 접속 설정과 방화벽을 확인하세요. |
+|  | (Redfish) | Redfish 접속이 거부되었습니다. 대상 장비의 Redfish 접속 설정과 방화벽을 확인하세요. |
+| `PROTOCOL_CHECK_FAILED` | 포트는 열렸는데 기대 응답이 아님 (OS) | 접속한 대상에서 OS 원격 접속 응답을 확인하지 못했습니다. 대상 종류와 OS 원격 접속 설정을 확인하세요. |
+|  | (ESXi) | 접속한 대상에서 ESXi 응답을 확인하지 못했습니다. 대상 종류와 ESXi 서비스 상태를 확인하세요. |
+|  | (Redfish) | 접속한 대상에서 Redfish 응답을 확인하지 못했습니다. 대상 종류와 Redfish 서비스 설정을 확인하세요. |
+| `CREDENTIAL_SET_UNAVAILABLE` | 실행 위치가 등록되지 않음 | 해당 위치({loc})가 개더링 프로젝트에 등록되지 않았습니다. |
+|  | (OS/ESXi) 위치 Vault 폴더 없음 | 해당 위치({loc})에 Vault가 등록되지 않았습니다. |
+|  | (OS/ESXi) 위치 Vault 복호화 실패 | 해당 위치({loc})의 Vault를 읽을 수 없습니다. |
+|  | (OS/ESXi) 위치 폴더는 있는데 대상 종류 파일 없음 | 해당 위치({loc})의 Vault에 OS용 계정이 없습니다. / …ESXi용 계정이 없습니다. |
+|  | (Redfish) 표준 Vault 파일 없음 | 개더링 프로젝트에 Vault가 등록되지 않았습니다. |
+|  | (Redfish) 표준 Vault 복호화 실패 | 개더링 프로젝트의 Vault를 읽을 수 없습니다. |
+|  | (Redfish) 표준 계정 0개 | 개더링 프로젝트의 Vault에 Redfish 표준 계정이 없습니다. |
+| `AUTH_PROBE_FAILED` | 계정을 보냈지만 원인 미확정 (OS) | 해당 위치({loc})의 Vault 계정으로 대상 OS에 로그인하지 못했습니다. |
+|  | (ESXi) | 해당 위치({loc})의 Vault 계정으로 대상 ESXi에 로그인하지 못했습니다. |
+|  | (Redfish) | 개더링 표준 계정으로 대상 Redfish에 인증하지 못했습니다. |
+|  | (Redfish) 표준 후보 **전원** 401 확인 | 대상 Redfish 계정과 개더링 표준 계정이 다르거나 권한이 없습니다. |
+|  | Vault 계정 0개인 채로 시도 후 실패 | 위 Vault 계정 없음 문장 (OS/ESXi: 위치 Vault, Redfish: 표준 Vault) |
+| `GATHER_FAILED` | 인증 통과 후 수집 실패 (OS) | 대상 OS에는 로그인했지만 정보를 가져오지 못했습니다. |
+|  | (ESXi) | 대상 ESXi에는 로그인했지만 정보를 가져오지 못했습니다. |
+|  | (Redfish) | 대상 Redfish 인증은 성공했지만 정보를 가져오지 못했습니다. |
+|  | 수집 중 대상 연결 끊김 (인증 성공 뒤) | 정보 수집 중 대상 서버와 연결이 끊겼습니다. |
+|  | 예외 없이 끝났는데 성공 섹션 0개 | 대상 서버에서 수집된 정보가 없습니다. |
+|  | (Redfish) 계정 요청 전 수집기 내부 오류 | 개더링 프로젝트에서 정보 수집 중 오류가 발생했습니다. |
+| `OUTPUT_BUILD_FAILED` | 결과 객체 자체를 만들지 못함 | 개더링 프로젝트에서 수집 결과를 만들지 못했습니다. |
+
+> **code 가 바뀐 경우 (2026-09-21, Redfish 한정)** — 실행 위치 미등록, 표준 계정 0개(vendor 식별),
+> vendor 미식별 + 표준 Vault 부재 세 경우는 인증을 시도하지 않았는데도 종전에는 `GATHER_FAILED` /
+> `failure_stage: gather` 로 나갔다. 이제 `CREDENTIAL_SET_UNAVAILABLE` / `failure_stage: auth` 다.
+> 이 두 값으로 분기하던 소비자는 확인이 필요하다. 운영 파이프라인(`Jenkinsfile_portal`)은
+> 미등록 loc 를 Ansible 실행 전에 막으므로, 실행 위치 미등록 문장은 Jenkins 밖 직접 실행에서만 나온다.
+>
+> **Vault 복호화 실패 판정 수정 (2026-09-21)** — 종전에는 Vault 비밀번호가 없거나 틀려도
+> "계정 0개" 로 잘못 분류됐다 (`load_one.yml` 의 `failed_when: false` 가 실패 표시를 지웠다).
+> 이제 "Vault를 읽을 수 없습니다" 문장과 `CREDENTIAL_SET_UNAVAILABLE` 이 나온다.
+>
+> **아직 문장이 없는 경우** — OS/ESXi 의 계정 불일치 확인, 조회 권한 부족 확인, OS/ESXi 내부 오류 구분은
+> 지금 구조적으로 판정할 근거가 없다(거부 사실이 오류 문자열로만 온다). 이 경우는 "로그인하지 못했습니다" /
+> "로그인했지만 정보를 가져오지 못했습니다" 문장으로 나간다.
 
 ### `errors[]` 에 **들어가지 않는** 것
 
@@ -285,7 +325,7 @@ for e in response["errors"]:
   "auth_success":       null,    // 4단계: 미수행이면 null (false 가 아니다 — 아래 주의)
   "failure_stage":      "port",  // 실행이 멈춘 단계 이름 (원인 아님)
   "failure_code":       "TCP_CONNECTION_REFUSED",  // 시스템 분기용 안정 식별자 (성공 시 null)
-  "failure_reason":     "대상 관리 서비스 연결이 거부되었습니다. 방화벽과 서비스 상태를 확인하세요.",
+  "failure_reason":     "Redfish 접속이 거부되었습니다. 대상 장비의 Redfish 접속 설정과 방화벽을 확인하세요.",
   "details": { ... }             // 채널별 부가 정보 (선택된 adapter, BMC product 명, credential_scope 등)
 }
 ```
@@ -337,14 +377,14 @@ for e in response["errors"]:
 
 > **`AUTH_PROBE_FAILED` 와 `CREDENTIAL_SET_UNAVAILABLE` 의 차이** (2026-08-12 신설)
 >
-> 사용자 문장은 같지만(4번) **운영자가 확인할 곳이 다르다.**
+> **운영자가 확인할 곳이 다르다.** 2026-09-21 부터 사용자 문장도 다르다 (위 카탈로그).
 >
 > | | `AUTH_PROBE_FAILED` | `CREDENTIAL_SET_UNAVAILABLE` |
 > |---|---|---|
 > | 무슨 일이 있었나 | 자격을 실어 보냈는데 통하지 않았다 | 보낼 자격 자체가 없었다 |
 > | `auth_success` | `false`(명시적 거부) 또는 `null`(원인 미확정) | **항상 `null`** (미시도) |
 > | 확인할 곳 | 대상 장비의 계정 / 권한 / 잠금 | 자격증명 배치 (해당 Location 의 세트 존재·복호화) |
-> | 대표 상황 | 401 거부, timeout, TLS 오류, 403 | Location 미전달·미등록, 세트 파일 부재, 복호화 실패 |
+> | 대표 상황 | 401 거부, timeout, TLS 오류, 403 | Location 미전달·미등록, 세트 파일 부재, 복호화 실패, 계정 0개(시도 전) |
 >
 > `stage` 는 둘 다 `auth` 다 — `failure_stage` 는 원인이 아니라 **멈춘 위치**이고,
 > 멈춘 곳은 두 경우 모두 자격증명 단계다.

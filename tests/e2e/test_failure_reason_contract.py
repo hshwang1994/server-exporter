@@ -66,10 +66,24 @@ def _ansible_combine(base: Any, *others: Any) -> dict[str, Any]:
     return out
 
 
+def _failure_reason_filter():
+    """production 필터(filter_plugins/failure_reason.py)를 그대로 쓴다 — 대역을 만들지 않는다."""
+    import importlib.util  # noqa: PLC0415
+    spec = importlib.util.spec_from_file_location(
+        "se_failure_reason_filter", REPO / "filter_plugins" / "failure_reason.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_FR_FILTER = _failure_reason_filter()
+
+
 def _env() -> NativeEnvironment:
     env = NativeEnvironment(undefined=_ChainableUndefined)
     env.filters["bool"] = _ansible_bool
     env.filters["combine"] = _ansible_combine
+    env.filters["failure_reason"] = _FR_FILTER.failure_reason
     return env
 
 
@@ -97,11 +111,17 @@ def _task_by_name(site: str, needle: str) -> dict[str, Any]:
     raise AssertionError(f"{site} 에서 태스크를 찾지 못함: {needle!r}")
 
 
-# 2026-08-11 (Phase 6-B): 사용자 문구 정본. site.yml rescue 는 문장을 직접 쓰지 않고
-# 이 파일의 변수(_fr_*)를 참조한다 (각 play 의 vars_files). 렌더 시 그대로 주입한다.
+# 사용자 문구 카탈로그 정본. site.yml rescue 는 문장을 직접 쓰지 않고 이 파일의 변수
+# (_fr_catalog 등)를 참조한다 (각 play 의 vars_files). 렌더 시 그대로 주입한다.
 FAILURE_REASONS: dict[str, Any] = yaml.safe_load(
     (REPO / "common/vars/failure_reasons.yml").read_text(encoding="utf-8")
 )
+FR_CATALOG: dict[str, dict[str, str]] = FAILURE_REASONS["_fr_catalog"]
+
+
+def fr(key: str, channel: str | None = None, loc: str | None = None) -> str:
+    """카탈로그 문장 — production 필터와 같은 규칙(채널 없으면 default, {loc} 치환)."""
+    return _FR_FILTER.failure_reason(FR_CATALOG, key, channel, loc)
 
 
 def _render_diagnosis(site: str, task_name: str, ctx: dict[str, Any]) -> Any:
@@ -149,8 +169,8 @@ def _render_fallback_envelopes(site: str, ctx: dict[str, Any]) -> list[dict[str,
             tpl = task.get("ansible.builtin.debug", {}).get("msg", "")
             if "default(" not in tpl:
                 continue
-            # 2026-08-12: always 블록이 문구를 리터럴로 적지 않고 정본 변수
-            #   (_fr_output_build_failed)를 참조하므로 vars_files 로드분을 함께 주입한다.
+            # always 블록이 문구를 리터럴로 적지 않고 카탈로그
+            #   (_fr_catalog.output_build_failed)를 참조하므로 vars_files 로드분을 함께 주입한다.
             rendered = _env().from_string(re.sub(r"\|\s*to_json", "", tpl)).render(
                 **{**FAILURE_REASONS, **ctx})
             assert isinstance(rendered, dict), (
@@ -235,13 +255,23 @@ def _assert_grid_ready(reason: Any, label: str) -> None:
 #        합쳐 반환하던 시절의 잔재가 아니라, stage=gather 자체가 "인증 단계를 지났다"는
 #        기계 판정이기 때문이다.
 #
-# 2026-08-12: "대상 IP 사용은 확인됐지만" 항목을 제거했다. 그 문장은 IP presence 판정을
-#   전제하는데 이 저장소는 그런 판정을 만들지 않기로 확정했다(ICMP / IPAM / ARP 미도입).
-#   2번 문장이 관측 사실만 말하도록 바뀌었으므로 그에 맞는 불변식으로 교체한다.
+# 2026-09-21: 문장 카탈로그 개편에 맞춰 주장 표현을 갈아 끼웠다. 표현이 문장에 있으면
+#   오른쪽 조건이 반드시 참이어야 한다 (문장이 관측하지 않은 성공을 주장하지 못하게).
+#   "통신은 되지만"                 → ICMP 로 도달을 관측했다 + 관리 포트는 못 열었다
+#   "관리 포트에 연결할 수 없습니다" → port_open 이 참이 아니다
+#   "접속이 거부되었습니다"          → port_open 이 참이 아니다 (거부 관측)
+#   "접속한 대상에서"                → 관리 포트 연결을 실제로 관측했다
+#   "로그인했지만" / "인증은 성공했지만" → 인증 뒤 단계(gather)까지 갔다
+#   "다르거나 권한이 없습니다"       → 명시적 거부를 관측했다 (auth_success=false)
 _CLAIM_REQUIREMENTS: tuple[tuple[str, str, Any], ...] = (
-    ("관리 포트에는 연결됐지만", "port_open", True),
+    ("통신은 되지만", "reachable", True),
+    ("통신은 되지만", "port_open", False),
     ("관리 포트에 연결할 수 없습니다", "port_open", False),
-    ("대상 접속은 확인됐지만", "failure_stage", "gather"),
+    ("접속이 거부되었습니다", "port_open", False),
+    ("접속한 대상에서", "port_open", True),
+    ("로그인했지만", "failure_stage", "gather"),
+    ("인증은 성공했지만", "failure_stage", "gather"),
+    ("다르거나 권한이 없습니다", "auth_success", False),
 )
 
 
@@ -457,21 +487,20 @@ def test_case07_10_os_failure_has_reason(os_type, auth_ok, label):
     # Phase 3-B 이후 PLAY 1 은 SSH identification / WinRM Identify 까지 확인해야 통과한다.
     # 즉 PLAY 2/3 에 도달했다는 것 자체가 프로토콜 관측 성공을 뜻한다 (자격 결과와 무관).
     assert diag["protocol_supported"] is True, f"[{tag}] 프로토콜은 precheck 가 이미 확인했다"
-    # 2026-08-11 (Phase 6-B): 사용자 문구는 5 문장 표준만 쓴다. 채널 이름(SSH / WinRM)은
-    # 문장에서 빠지고 errors[].detail 로 내려갔다 (사용자는 채널을 고르지 않고 IP 만 넘긴다).
+    # 2026-09-21: 문장은 카탈로그에서 원인별로 고른다. 대상 종류 어휘(OS)를 다시 쓴다.
     if auth_ok:
         assert diag["auth_success"] is True, f"[{tag}] 자격 probe 통과는 관측된 사실"
         # Phase 2 (2026-08-10): enum 에 gather 가 추가되어 수집 단계 실패를 표현할 수 있다
         assert diag["failure_stage"] == "gather", f"[{tag}] 수집 단계 실패는 gather"
-        assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"], (
-            f"[{tag}] 인증 성공이 관측됐으므로 5번 문구(수집 실패)를 쓴다")
+        assert diag["failure_reason"] == fr("gather_after_auth", "os"), (
+            f"[{tag}] 인증 성공이 관측됐으므로 '로그인했지만 정보를 가져오지 못했다' 를 쓴다")
     else:
         # 요구사항 6 — 잘못된 자격 / 연결 끊김 / 제한 쉘을 구분 못 하므로 false 금지
         assert diag["auth_success"] is None, f"[{tag}] 인증 거부를 관측하지 못했다"
         assert diag["failure_stage"] == "auth", f"[{tag}] 실행이 멈춘 단계"
-        assert diag["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"], (
-            f"[{tag}] 자격 단계 실패는 4번 문구")
-        assert "접속은 확인" not in diag["failure_reason"], (
+        assert diag["failure_reason"] == fr("auth_unconfirmed", "os"), (
+            f"[{tag}] 원인 미확정 인증 실패 문장")
+        assert "로그인했지만" not in diag["failure_reason"], (
             f"[{tag}] auth_success=null 인데 접속 성공을 암시하면 안 된다")
     assert diag["details"]["channel"] == "os"
     assert diag["details"]["detected_os"] == os_type
@@ -577,24 +606,31 @@ def test_os_portfail_reason_matches_observation():
     (IP 대장 확인이 아니라 방화벽/서비스 확인). 종전 구조는 존재하지 않는 presence 판정
     (`ip_in_use`)에 문장을 걸어 두어 REFUSED 를 확정하고도 1번 문구를 내보냈다 — H3.
 
-    신 매핑 (precheck_bundle.REASON_BY_FAILURE_CODE 정본):
-      DNS_RESOLUTION_FAILED / TARGET_UNREACHABLE  → 1번 (응답 확인 불가)
-      TCP_CONNECT_FAILED / TCP_CONNECTION_REFUSED → 2번 (관리 포트 연결 불가)
+    2026-09-21 매핑 (precheck_bundle.PRECHECK_REASON_KEYS 정본) — code 마다 문장이 다르다:
+      DNS_RESOLUTION_FAILED  → ip_invalid         (IP 가 올바르지 않음)
+      TARGET_UNREACHABLE     → target_unreachable (응답 없음)
+      TCP_CONNECT_FAILED     → port_silent        (통신은 되지만 관리 포트 연결 불가)
+      TCP_CONNECTION_REFUSED → port_refused[os]   (OS 접속 거부 — 주어 없음)
 
     2026-09-03: reachable 이 "TCP 응답 OR ICMP 응답" 이 되면서 TCP 무응답이 두 갈래로
-    나뉜다. ICMP 로 존재가 확인된 대상(TCP_CONNECT_FAILED)에게 1번("IP 사용 여부를
-    확인하세요")을 내보내면 운영자를 방화벽이 아닌 엉뚱한 곳으로 보낸다 — 그래서 2번이다.
+    나뉜다. ICMP 로 존재가 확인된 대상(TCP_CONNECT_FAILED)에게 "응답이 없다" 를 내보내면
+    운영자를 방화벽이 아닌 엉뚱한 곳으로 보낸다.
     """
     no_resp = _os_portfail_diag("reachable", "TARGET_UNREACHABLE")["failure_reason"]
     icmp_only = _os_portfail_diag("port", "TCP_CONNECT_FAILED")["failure_reason"]
     refused = _os_portfail_diag("port", "TCP_CONNECTION_REFUSED")["failure_reason"]
     dns = _os_portfail_diag("reachable", "DNS_RESOLUTION_FAILED")["failure_reason"]
 
-    assert {no_resp, dns} == {pb.REASON_IP_UNCONFIRMED}
-    assert {icmp_only, refused} == {pb.REASON_PORT_UNREACHABLE}
-    # 관측하지 않은 원인을 단정하지 않는다
-    assert "전원" not in no_resp
+    assert no_resp == fr("target_unreachable")
+    assert dns == fr("ip_invalid")
+    assert icmp_only == fr("port_silent")
+    assert refused == fr("port_refused", "os")
+    assert len({no_resp, dns, icmp_only, refused}) == 4, "code 가 다르면 조치가 다르다"
+    # 관측하지 않은 원인을 단정하지 않는다 — 전원은 '확인하라' 는 안내일 뿐 '꺼졌다' 가 아니다
+    assert "꺼" not in no_resp
     assert "서버는 응답하지만" not in refused, "RST 를 서버 자체 응답으로 확정하면 안 된다"
+    # 거부 신호의 주체(최종 서버 / 중간 방화벽)를 단정하지 않는다 (CLAUDE.md §7)
+    assert not re.search(r"(서버|장비)[가이]\s*\S*\s*거부", refused), refused
     assert "통신은 되지만" not in refused
     # RST 는 "IP 를 쓰는 장비가 있다" 는 증명이 아니다 — presence 를 주장하지 않는다
     assert "IP 사용은 확인" not in refused
@@ -674,5 +710,6 @@ def test_user_facing_messages_use_plain_sentences(site):
 
 
 def test_precheck_bundle_reason_strings_are_plain_sentences():
-    for reason in pb.CHANNEL_PROTOCOL_MESSAGES.values():
-        _assert_grid_ready(reason, "CHANNEL_PROTOCOL_MESSAGES")
+    for key, entry in pb.FAILURE_REASON_CATALOG.items():
+        for channel, reason in entry.items():
+            _assert_grid_ready(reason.replace("{loc}", "ic"), f"precheck/{key}/{channel}")

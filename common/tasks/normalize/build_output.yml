@@ -31,6 +31,7 @@
 #
 # 여기서만 채운다 (3채널 최종 조립이 이 파일 하나로 수렴하므로 site.yml 4곳에 복제하지 않는다).
 # 값 근거: 이 지점에 도달했다 = precheck 를 통과하고 수집까지 진행했다 → 멈춘 단계는 gather.
+#   예외 없이 끝났는데 성공 섹션이 0개라는 뜻이므로 문장은 gather_no_data 다 (2026-09-21).
 #   precheck 가 이미 사유를 채웠으면(정상적으로는 여기 도달 불가) 건드리지 않는다.
 #   auth_success 는 손대지 않는다 — 인증 거부를 관측한 근거가 없다.
 - name: "normalize | build_output | ensure failed diagnosis"
@@ -43,7 +44,7 @@
                    if ((_diagnosis | default({}, true)) is mapping) else {})
          | combine({'failure_stage':  'gather',
                     'failure_code':   'GATHER_FAILED',
-                    'failure_reason': _fr_gather_failed}) }}
+                    'failure_reason': _fr_catalog.gather_no_data.default}) }}
   when:
     - (_out_status | default('')) == 'failed'
     - ((_diagnosis | default({}, true)).failure_reason | default(none)) is none

@@ -44,7 +44,7 @@ LAB_SERVICE_CONTENT = (FIXTURES / "lab" / "esxi_7_0_3_service_content.xml").read
 # Phase 6-B (2026-08-11): 사용자 확정 문구 표준 3번. 채널 이름(vSphere API)을 문장에서 뺐다
 # — 사용자는 채널을 고르지 않고 IP 만 넘기므로 조치에 도움이 되지 않는다. 채널 근거는
 # errors[].detail 과 envelope 의 target_type 이 유지한다. 정본은 precheck_bundle 상수다.
-ESXI_PROTOCOL_REASON = pb.REASON_PROTOCOL_UNCONFIRMED
+ESXI_PROTOCOL_REASON = pb.reason_for_failure("PROTOCOL_CHECK_FAILED", "esxi")
 
 
 class _ExitJson(Exception):
