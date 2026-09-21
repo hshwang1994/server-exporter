@@ -6,7 +6,58 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-09-15
+> 최종 갱신: 2026-09-21
+
+## 2026-09-21 — 고객별 추가 수집(Add-on) 확장점 추가 (`data.addon`)
+
+### 요구
+
+고객마다 추가로 확인할 항목(지정 Software 의 버전, `/etc/hosts` 의 DB IP 등)을 메인 수집 코드에 계속 넣지 않고,
+현장에서 설정 파일 하나로 고칠 수 있는 별도 모듈로 분리한다. 메인은 범용 확장점을 한 번만 열고, 이후 수집
+기능이 늘어도 메인을 고치지 않는다.
+
+### 결정 (사용자 확정)
+
+- 메인에는 범용 hook `common/tasks/addon/run_addon.yml` 하나. 4 play 가 마지막 수집 뒤 · 조립 앞에서
+  `SE_ADDON_DIR` 이 있을 때만 include 한다. Add-on 은 별도 디렉터리(`clovirone-gathering-addon`)의 Ansible role 이다.
+- Add-on 은 메인이 이미 연 연결을 그대로 쓴다. 인벤토리 · vault · 자격증명 · precheck · 접속 설정을 갖지 않는다.
+- 결과는 `data.addon`(보조 키 — `sections` · `status` 와 무관), 문제는 `errors[]` 의 `section: addon` 1건.
+- `inventory.sh` 는 호출자 host object 전체를 보존한다. 키 이름을 코드에 적지 않는다.
+- `SE_ADDON_DIR`: 미설정 → 조용히 건너뜀 / 설정했는데 경로 없음 → `errors[]` 1건 / 있으면 실행. 자동 fallback 없음.
+- Add-on 설정은 rule 목록이다. 위에서부터 처음 맞는 rule 하나만 적용한다. software 는 `name` + `command` 만이고
+  출력은 가공하지 않는다 (길이 제한 · 줄바꿈 정리 · 문자 치환 · 파싱 없음). Add-on 전용 timeout 은 두지 않는다.
+- `schema/field_dictionary.yml` 은 고치지 않는다. 런타임 검증이 없고, 검증기는 사전 → 예제 한 방향만 본다.
+
+### 왜 이렇게 했나
+
+- 고객별 분기가 메인에 쌓이지 않는다. 수집 기능이 늘어도 메인 · 스키마 · 콜백을 고칠 일이 없다.
+- Add-on 이 자체 접속을 가지면 자격증명 · precheck · fallback 을 복제해야 하고 결과 JSON 이 둘로 갈린다.
+- role 형태를 고른 이유는 role 안의 filter_plugins 가 자동 등록되기 때문이다. `/etc/hosts` 해석과 rule 선택을
+  중첩 Jinja 대신 Python 으로 둘 수 있다. 구현 전에 운영과 같은 ansible-core 2.20.3 으로 host 200개 · forks 200 ·
+  strategy free 조건에서 먼저 확인했다.
+
+### 실측 (2026-09-21, lab)
+
+- SSH 로 실행한 출력은 줄바꿈이 `\r\n` 이다 (Ansible 이 원격 명령에 터미널을 붙인다). stderr 는 순서대로 합쳐진다.
+- Windows PowerShell 5.1 은 `& { … } 2>&1` 로 합친 오류 레코드를 마지막 출력 단계에서 다시 stderr 로 보낸다.
+  `Write-Error` · 외부 프로그램 stderr · `$ErrorActionPreference = 'Stop'` 오류가 `value` 에 담기지 않는다.
+- 명령 출력에 UTF-8 이 아닌 바이트가 있으면 결과 JSON 을 쓰는 단계가 실패해 그 host 봉투가
+  `OUTPUT_BUILD_FAILED` 로 바뀐다. 기본 수집 결과까지 잃는다 (host 수는 유지).
+- 호출자 host object 에 `__ansible_` 로 시작하는 키가 있으면 인벤토리 해석 전체가 실패한다. 그런 키만 옮기지 않는다.
+- `SE_ADDON_DIR` 이 없어도 hook 안 태스크가 host 마다 평가돼 200 host 기준 수십 초가 늘었다. 호출부에서 include
+  자체를 건너뛰도록 했다.
+- 같은 코드를 여러 번 실행해도 `data` 의 키 순서가 달라진다 (merge 단계의 `union` — 기존 동작). 값은 같다.
+
+### 영향
+
+- `SE_ADDON_DIR` 미설정(현재 모든 환경): 봉투가 hook 도입 전과 같다.
+- 설정한 환경: 맞는 rule 이 있는 서버에만 `data.addon` 이 생긴다. Portal 은 키가 있는지 확인하고 읽는다.
+- `errors[].section` 에 `addon` 이 새로 올 수 있다.
+
+### 남은 결정
+
+Windows 오류 출력을 `value` 에 담는 방식, UTF-8 이 아닌 바이트 처리, Linux `\r\n` 유지 여부,
+`/etc/hosts` DB 판별 규칙(고객 실제 샘플 확인 후).
 
 ## 2026-09-15 — BIOS Attributes 를 Key 이름순으로 정렬해 내보낸다 (`data.bios.current.attributes`)
 

@@ -144,6 +144,7 @@ JSON 의 `sections` 와 `data` 는 같은 11개 키를 갖는다. 각 채널이 
 | `thermal` | 온도 센서 / 팬 (Chassis/Thermal) | | | O |
 
 Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9절)와 `bios`(6.8절). 이 둘은 `sections` 에 나오지 않고 `status` 판정에도 쓰이지 않는다.
+추가 수집(Add-on)을 쓰는 환경에서는 채널과 관계없이 보조 키 `addon` 이 붙을 수 있다. 이것도 `sections` · `status` 와 무관하다 ([02-output-envelope.md](02-output-envelope.md) data 절).
 
 (X) = `not_supported`. 그 채널 특성상 원래 못 가져오는 영역이다. 수집 실패와 다른 의미다.
 `not_supported` 판정 신호는 **HTTP 404(엔드포인트 부재)만**이다. 400 등 다른 실패는 `failed` 로 남아 `errors[]` 에 보인다.
@@ -222,7 +223,7 @@ if response["data"]["hardware"].get("health") == "Critical":
 
 | 키 | 타입 | 무엇 |
 |---|---|---|
-| `section` | 문자열 | 오류가 난 영역. 수집 섹션 이름 11종, 수집 단계 이름 (`precheck` / `auth` / `gather` / `oem` / `vendor_detect` / `account_service` / `multi_node`), 또는 보조 데이터 이름 `bios` (Redfish BIOS Current Attributes 조회 실패 — 6.8절). 값이 없으면 `unknown` |
+| `section` | 문자열 | 오류가 난 영역. 수집 섹션 이름 11종, 수집 단계 이름 (`precheck` / `auth` / `gather` / `oem` / `vendor_detect` / `account_service` / `multi_node`), 보조 데이터 이름 `bios` (Redfish BIOS Current Attributes 조회 실패 — 6.8절), 또는 추가 수집 `addon` (Add-on 경로 · 설정 · 실행 문제). 값이 없으면 `unknown` |
 | `message` | 문자열 (**절대 비지 않음**) | 사용자에게 그대로 보여주는 한국어 문장 |
 | `detail` | 문자열 또는 `null` | 기술 근거. 객체나 배열이 아니다 |
 
