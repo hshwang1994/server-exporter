@@ -35,6 +35,13 @@
 설정은 Agent 노드 환경변수로 한다 ([08-ansible-config.md](../operate/08-ansible-config.md) 3절). 절대경로를 쓴다.
 Add-on 을 Agent 에 두는 방식(checkout · 복사)은 이 저장소 범위 밖이다.
 
+설정 실수의 결과 (2.20.3 · 2.20.7 실측, 엔진 테스트로 고정):
+
+- 끝에 `/` 가 붙은 경로는 그대로 동작한다.
+- Add-on 상위 폴더 · `tasks/main.yml` 파일 자체 · 앞뒤 공백이 붙은 값은 "`tasks/main.yml` 이 없음" 과 같다.
+  `detail` 에 받은 값이 그대로 보이므로 공백도 찾을 수 있다.
+- 상대경로는 작업 디렉터리 기준으로 풀린다. Jenkins 작업 디렉터리는 빌드마다 달라 사실상 "경로 없음" 이 된다.
+
 ## 3. 주고받는 값 (변수 5개)
 
 | 방향 | 변수 | 내용 |
@@ -56,6 +63,7 @@ fragment 변수나 누적 변수를 직접 건드리지 않는다. 합칠 것이
 - 실행 도중 연결이 끊겨도 host 를 잃지 않는다 (`ignore_unreachable: true` — `try_one_credential.yml` 과 같은
   이유). 이 설정은 include 한 role · collector 안쪽 태스크까지 이어진다 (2.20.3 실측).
 - 수집에 들어가기 전에 멈춘 실패 봉투(rescue · `always` fallback · 콜백 보충)에는 `addon` 이 없다.
+- `meta.duration_ms` 에는 Add-on 실행 시간도 들어간다 (hook 이 `build_meta` 보다 앞에서 돈다).
 - `errors[]` 문장 (`message`) 은 세 가지다. 변수명 · 경로 · 원인 코드는 `detail` 에만 있다.
 
 | 경우 | `message` |
@@ -99,7 +107,9 @@ fragment 변수나 누적 변수를 직접 건드리지 않는다. 합칠 것이
 |---|---|---|
 | `tests/unit/test_inventory_passthrough.py` | host object 보존 · 문자열 감싸기 · 예약 키 제외 · 기존 오류 경로 | 어디서나 |
 | `tests/unit/test_addon_hook_contract.py` | 호출 4곳 · 경로 세 경우 · timeout 없음 · 문장 규칙 · 뼈대에 `addon` 없음 | 어디서나 |
-| `tests/integration/test_addon_hook_playbook.py` | 실제 ansible-playbook 으로 공통 조립 코드 + hook: 미설정 시 byte 동일, 경로 없음, 정상, 참고 문장, 실행 실패, 연결 끊김 | Linux / WSL |
+| `tests/integration/test_addon_hook_playbook.py` | 실제 ansible-playbook 으로 공통 조립 코드 + hook: 미설정 시 byte 동일, 경로 없음 · 상위 폴더, 끝 `/`, 정상, 참고 문장, 실행 실패, 연결 끊김 | Linux / WSL / Jenkins Agent |
+| Add-on 저장소 `tests/e2e/` (Jenkins Job) | 실제 Agent 에서 운영과 같은 명령 · vault 로 Linux · Windows · ESXi · Redfish 대상 시나리오를 돌리고, 위 엔진 테스트도 같은 Agent 에서 돌린다 | Jenkins |
 
 엔진 테스트는 `tests/fixtures/addon/` 의 합성 Add-on 과 `harness.yml` 을 쓴다. `ANSIBLE_PLAYBOOK_BIN` 으로
 다른 ansible-playbook(예: 운영과 같은 2.20.3)을 지정할 수 있다.
+Add-on 저장소: `https://10.100.64.156/root/clovirone-server-gathering-addon.git` — e2e 사용법은 그 README 6절.

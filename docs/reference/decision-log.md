@@ -56,8 +56,21 @@
 
 ### 남은 결정
 
-Windows 오류 출력을 `value` 에 담는 방식, UTF-8 이 아닌 바이트 처리, Linux `\r\n` 유지 여부,
+Windows 오류 출력을 `value` 에 담는 방식, UTF-8 이 아닌 바이트 처리,
 `/etc/hosts` DB 판별 규칙(고객 실제 샘플 확인 후).
+
+### 2026-09-22 갱신
+
+- Linux `\r\n` 은 지금 동작 그대로 둔다 (사용자 결정). 줄바꿈을 바꾸지 않는다.
+- 남은 두 결정은 원인과 추천안까지 조사했고 적용은 하지 않았다 (사용자 지시).
+  - Windows 오류 출력: `& { … } 2>&1` · `*>&1` 만으로는 `Write-Error` · 외부 프로그램 stderr 가 `value` 에 오지
+    않는다. `*>&1 | Out-String -Stream` 을 붙이면 실행 순서대로 담기고 stdout 만 내는 명령은 byte 동일하다
+    (Windows 2022 · PowerShell 5.1, 48 조합 실측). 종료 오류는 try/catch 없이는 어느 방식도 담지 못하고,
+    try/catch 로 감싸면 종료 코드가 바뀐다.
+  - UTF-8 이 아닌 바이트: 실패 지점은 콜백이 봉투 한 줄을 쓰는 순간이다. Add-on 이 결과를 돌려주기 직전
+    그 바이트만 `\xNN` 글자로 바꾸면 기본 결과가 남고 Callback 본문도 정상이다 (메인 수정 없음).
+- 실제 Jenkins Agent(ansible-core 2.20.3)에서 Add-on e2e 를 돌려 확인했다: 미설정 · 경로 오류 · 설정 실수 ·
+  연결 끊김 · 여러 host · 응답 없는 대상 · ESXi · Redfish · 수 MB 출력(SSH · WinRM 전송 후 글자 그대로).
 
 ## 2026-09-21 — 실패 사유 문장(`failure_reason`)을 대상 종류·세부 사유별로 나눈다
 
