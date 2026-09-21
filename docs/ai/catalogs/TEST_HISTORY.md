@@ -1,5 +1,25 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-21 — 고객별 추가 수집(Add-on) hook
+
+> 정본: `docs/ai/decisions/ADR-2026-09-21-gathering-addon-hook.md`, 실측 `tests/evidence/2026-09-21-addon-hook-live.md`.
+> 브랜치 `feature/gathering-addon` (worktree = `413bc039` + 이번 변경 — main 작업 트리의 다른 세션 변경은 섞이지 않음).
+
+| 항목 | 결과 |
+|---|---|
+| `pytest tests/ --ignore=tests/e2e_browser` (Windows) | **3507 passed**, 12 skipped, 7 xfailed, 0 failed (경고 4 — 기존 Jinja escape 경고) |
+| 신규 `tests/unit/test_inventory_passthrough.py` | 37 passed (Windows · WSL) |
+| 신규 `tests/unit/test_addon_hook_contract.py` | 29 passed |
+| 신규 `tests/integration/test_addon_hook_playbook.py` | 8 passed — ansible-core **2.20.3** · 2.20.7 (WSL). Windows 는 skip (Ansible 제어 노드 미지원 — CLI 가 `WinError 87` 로 기동 불가) |
+| Add-on 저장소 `python -m pytest tests` | Windows 112 passed / 10 skipped / 2 xfailed (PowerShell 5.1 오류 출력 — AO-2), WSL 119 passed / 5 skipped, 2.20.3 로 playbook 테스트 10 passed |
+| `ansible-playbook --syntax-check` 3채널 | 2.20.3 · 2.20.7 모두 rc=0 (WSL) |
+| `tests/validate_field_dictionary.py` | PASS (경고 81 — 기존) |
+| `tests/secret_guard.py` · `output_schema_drift_check.py` · `verify_harness_consistency.py` | 통과 (sections=11, rules 28 / skills 47 / agents 47 / policies 7) |
+| `verify_vendor_boundary.py` | rc=2 — 기존 2건 (`redfish_gather.py:5746` iLO, `:5890` XCC — 마지막 변경 `413bc039`). 이번 변경과 무관 |
+| `check_project_map_drift.py` | 기존 drift(`tests`) → `--update` 로 fingerprint 갱신 |
+| gate spike (2.20.3, 200 host, forks 200, free, 동시 2회) | PASS — include_role · role filter_plugins · 메인 filter 공존 · 상대 include · 미설정 skip |
+| 실장비 V1~V8 | Linux(.161 raw / .165 / .167) · Windows(.120) · ESXi(.1) · Redfish(.15.34 dry-run) — V1 · V2 · V4 · V7 PASS, V3 · V5 · V6 · V8 측정 (evidence) |
+
 ## 2026-09-03 — reachable ICMP OR 판정 회귀 (오프라인)
 
 > 정본: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`

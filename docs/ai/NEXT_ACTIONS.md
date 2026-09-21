@@ -1,5 +1,23 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## 고객별 추가 수집(Add-on) 후속 (2026-09-21)
+
+> 정본: `docs/ai/decisions/ADR-2026-09-21-gathering-addon-hook.md`, `docs/develop/07-addon-hook.md`,
+> 실측 `tests/evidence/2026-09-21-addon-hook-live.md`
+
+| # | 항목 | 상태 | 내용 |
+|---|---|---|---|
+| AO-1 | `feature/gathering-addon` → main 병합, production 승격 | `[DECISION / 사용자]` | rule 93 R2 — merge 는 사용자 승인. main 작업 트리의 다른 세션 변경과 겹치는 hunk 없음(site.yml 3개 모두 확인) |
+| AO-2 | Windows 오류 출력 합치기 | `[DECISION / 사용자]` | 실측: `& { … } 2>&1` 은 PowerShell 5.1 이 오류 레코드를 stderr 로 다시 보내 `Write-Error` · 외부 프로그램 stderr · `Stop` 오류가 `value` 에 없다. 대안 측정: `\| Out-String -Stream` 을 붙이면 비종료 오류가 PowerShell 표시 글자 그대로 들어오고(순서 유지, 긴 줄 잘림 없음) `Stop` 오류는 여전히 빠진다 |
+| AO-3 | UTF-8 이 아닌 바이트 | `[DECISION / 사용자]` | 실측: 명령 출력에 EUC-KR 바이트가 있으면 콜백이 `surrogates not allowed` 로 실패 → 콜백 보충이 `OUTPUT_BUILD_FAILED` 봉투를 내 기본 수집 결과까지 잃는다 (host 수는 유지). 사용자 조건 "재현되고 JSON 생성에 꼭 필요할 때만 검토" 에 해당 |
+| AO-4 | Linux 줄바꿈 (결정 T) | `[DECISION / 사용자]` | 실측: SSH raw 출력은 `\r\n` (PTY). 초기 구현은 Ansible 기본 그대로. 대안: software 태스크만 `ansible_ssh_use_tty: false` |
+| AO-5 | hosts DB 판별 규칙 | `[PENDING / 고객 샘플]` | 고객 `/etc/hosts` 2~3개 + 서버별 `uname -n` + 기대 `dbIpList` 확보 후 matcher 구현. 그 전에는 `hosts: true` 배포 금지 |
+| AO-6 | Add-on 원격 저장소 등록 | `[TODO / 사용자]` | 로컬 `C:\github\ClovirONE\clovirone-gathering-addon` (git, main). 원격 URL 을 받으면 등록 · push |
+| AO-7 | 운영 Agent 에 Add-on 배치 + 노드 환경변수 `SE_ADDON_DIR` | `[TODO / 운영자]` | 배치 방식은 범위 밖. 미설정이면 아무 영향 없음 |
+| AO-8 | 운영 Agent 에서 gate spike 재확인 | `[TODO]` | 2.20.3 은 WSL 고정 설치로 통과. `jenkins-agent-ops`(.154)에는 Ansible 이 없고 .155 는 키 인증 거부로 이번에 못 돌렸다 |
+| AO-9 | Portal 소비자 안내 | `[TODO / 사용자]` | `data.addon` 은 있을 때만 있다 (null-guard). `errors[].section` 에 `addon` 이 새로 올 수 있다 |
+| AO-10 | Jenkins 파이프라인 1회 | `[TODO]` | `SE_ADDON_DIR` 을 설정한 노드에서 `Jenkinsfile_portal` 로 os 1회 — Callback payload 에 `data.addon` 확인 |
+
 ## reachable ICMP OR 판정 후속 (2026-09-03)
 
 > 정본: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`, rule 27 R1,

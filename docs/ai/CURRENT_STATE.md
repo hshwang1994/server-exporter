@@ -1,5 +1,22 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-21 — 고객별 추가 수집(Add-on) 확장점 추가 (사용자 지시)
+
+> 결정 근거: `docs/ai/decisions/ADR-2026-09-21-gathering-addon-hook.md`, `docs/reference/decision-log.md` 2026-09-21.
+> 실측: `tests/evidence/2026-09-21-addon-hook-live.md`. 브랜치 `feature/gathering-addon` — main 병합은 사용자 승인 대기
+> (같은 시각 main 작업 트리에서 다른 세션이 failure_reason 작업 중이라 worktree 로 분리해 작업).
+
+- **범용 hook 1개**: `common/tasks/addon/run_addon.yml`. 4 play(Linux · Windows · ESXi · Redfish)가 마지막 수집 뒤 ·
+  조립 앞에서 `SE_ADDON_DIR` 이 있을 때만 include 한다. Add-on(별도 저장소 `clovirone-gathering-addon`, Ansible
+  role)을 `include_role` 로 실행하고 `_addon_result` → `data.addon`, `_addon_errors` → `errors[]` `section: addon` 1건.
+- **inventory.sh 3종**: 호출자 host object 전체를 hostvar `se_host_input` 으로 보존. 문자열은 `__ansible_unsafe`,
+  `__ansible_*` 예약 키만 제외 (제외하지 않으면 인벤토리 해석 전체 실패 — 실측).
+- **불변**: status · sections · diagnosis, `common/tasks/normalize/**`, `callback_plugins/**`, `schema/**`,
+  `ansible.cfg`, `vault/**`, `Jenkinsfile*`. `SE_ADDON_DIR` 미설정이면 봉투가 hook 도입 전과 byte 동일 (엔진 테스트).
+- **문서**: contract 01 · 02 · 03, `docs/develop/07-addon-hook.md`(신규), `docs/operate/08-ansible-config.md`, decision-log.
+- **결정 대기** (`NEXT_ACTIONS.md` AO): Windows 오류 출력 합치기 · UTF-8 이 아닌 바이트 · Linux `\r\n`(결정 T) ·
+  hosts DB 판별 규칙 · main 병합 / production 승격.
+
 ## 일자: 2026-09-14 — OS Vault 2차 infraops fallback 계정 추가 (사용자 지시)
 
 > 커밋 `15f95dca` (main). 순수 데이터 변경 — 코드/스키마/컨트랙트 변경 0.
