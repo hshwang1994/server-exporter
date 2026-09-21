@@ -1,0 +1,5 @@
+---
+# 맞는 rule 이 없는 Add-on — 결과도 참고 문장도 돌려주지 않는다
+- name: "fixture empty | nothing to add"
+  ansible.builtin.debug:
+    msg: "no rule matched"

@@ -130,8 +130,8 @@ ESXi·Redfish 전용으로 적어 두었지만 Windows 수집이 이 섹션을 �
 `message`는 절대 비지 않는다. 화면에 그대로 띄울 수 있는 한국어 문장이고 포트 번호나
 HTTP 상태 같은 내부 사정은 들어가지 않는다. 그런 건 `detail`에 간다.
 
-`section`에는 섹션 이름 말고도 수집 단계 이름이나 보조 데이터 이름 `bios`가 올 수 있다.
-전체 목록은 [03-fields.md](03-fields.md) 4-1절에 있다.
+`section`에는 섹션 이름 말고도 수집 단계 이름이나 보조 데이터 이름 `bios`, 추가 수집 `addon`이 올 수
+있다. 전체 목록은 [03-fields.md](03-fields.md) 4-1절에 있다.
 
 ## meta
 
@@ -199,6 +199,24 @@ Redfish 결과의 `data`에는 섹션이 아닌 보조 키가 둘 더 있다. `m
 않고 `status` 판정에도 쓰이지 않는다. `bios`는 BIOS 조회가 실패해도 `status`와 다른 `data`를 바꾸지
 않으며, 수집에 들어가기 전에 멈춘 실패 봉투에는 키 자체가 없다. 자세한 규칙은
 [03-fields.md](03-fields.md) 6.8절에 있다.
+
+추가 수집(Add-on)을 쓰는 환경에서는 채널과 관계없이 `data`에 보조 키 `addon`이 붙을 수 있다. 고객별
+설정에 맞는 서버에만 생기고 그 밖에는 키 자체가 없으니, 읽기 전에 키가 있는지 확인한다.
+
+```jsonc
+"addon": {
+  "software": { "swList":   [ { "name": "ExampleApp", "value": "ExampleApp 3.2.1\r\n" } ] },
+  "hosts":    { "dbIpList": [ { "ip": "10.10.10.11", "purpose": "backup" } ] }
+}
+```
+
+- `sections`에 나오지 않고 `status`·`diagnosis` 판정에도 쓰이지 않는다. 추가 수집이 실패해도 기본 수집
+  결과는 그대로이고, 문제는 `errors[]`에 `section: "addon"` 1건으로 남는다.
+- `swList[].value`는 명령이 출력한 글자 전체다. 자르거나 고치지 않는다. 줄바꿈도 대상에서 온 그대로라
+  Linux(SSH)·Windows 모두 `\r\n`으로 올 수 있다.
+- 안쪽 이름(`software`, `hosts` …)은 Add-on 이 정한다. 새 수집 기능이 생기면 `addon.<이름>`이 늘어난다.
+  `hosts.dbIpList`는 DB 판별 규칙이 정해지기 전까지 비어 있다.
+- 수집에 들어가기 전에 멈춘 실패 봉투에는 `addon`이 없다 (`bios`와 같은 규칙).
 
 ## 다음
 
