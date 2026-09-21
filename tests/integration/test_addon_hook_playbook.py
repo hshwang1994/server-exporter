@@ -48,8 +48,12 @@ SCENARIOS = {
     "baseline": (None, False),
     "unset": (None, True),
     "missing": ("__missing__", True),
+    # 디렉터리는 있지만 tasks/main.yml 이 없다 (Add-on 상위 폴더를 가리킨 실수)
+    "no_entry": (FIXTURES, True),
     "empty": (FIXTURES / "empty", True),
     "ok": (FIXTURES / "ok", True),
+    # 끝에 '/' 를 붙인 설정 실수 — 그대로 동작해야 한다
+    "ok_trailing_slash": (f"{FIXTURES / 'ok'}/", True),
     "bad_config": (FIXTURES / "bad_config", True),
     "fail_runtime": (FIXTURES / "fail_runtime", True),
     "unreachable": (FIXTURES / "unreachable", True),
@@ -109,8 +113,9 @@ def test_addon_with_nothing_to_add_is_byte_identical_to_no_hook(runs):
     assert runs["empty"]["raw"] == runs["baseline"]["raw"]
 
 
-def test_missing_addon_dir_adds_exactly_one_addon_error(runs):
-    for ip, env in runs["missing"]["by_ip"].items():
+@pytest.mark.parametrize("scenario", ["missing", "no_entry"])
+def test_missing_addon_dir_adds_exactly_one_addon_error(runs, scenario):
+    for ip, env in runs[scenario]["by_ip"].items():
         base = runs["baseline"]["by_ip"][ip]
         _same_except(env, base, "errors")
         assert env["errors"][:-1] == base["errors"]
@@ -119,6 +124,10 @@ def test_missing_addon_dir_adds_exactly_one_addon_error(runs):
         assert "SE_ADDON_DIR" not in added["message"] and "/" not in added["message"]
         assert "SE_ADDON_DIR=" in added["detail"] and "cause=addon_entry_not_found" in added["detail"]
         assert "addon" not in env["data"]
+
+
+def test_trailing_slash_addon_dir_behaves_like_plain_path(runs):
+    assert runs["ok_trailing_slash"]["raw"] == runs["ok"]["raw"]
 
 
 def test_addon_result_lands_only_in_data_addon(runs):
