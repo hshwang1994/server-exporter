@@ -1,0 +1,6 @@
+---
+# 설정을 읽지 못한 Add-on — 결과 없이 참고 문장만 돌려준다
+- name: "fixture bad_config | note only"
+  ansible.builtin.set_fact:
+    _addon_errors:
+      - "config.yml 을 읽지 못했습니다 (fixture)"

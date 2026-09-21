@@ -6,6 +6,7 @@ INVENTORY_JSON 환경변수 또는 .inventory_input.json 파일을 파싱하여
 Ansible 동적 인벤토리를 생성한다.
 inventory_json 에는 IP 만 전달. 계정은 vault 에서 로딩.
 IP 필드: service_ip (1순위) → ip (fallback)
+호출자가 보낸 host object 전체는 hostvar se_host_input 으로 보존한다 (Add-on 이 읽는다).
 
 우선순위:
   1. 환경변수 INVENTORY_JSON (값이 있으면 사용)
@@ -36,6 +37,23 @@ def validate_ip(ip, idx):
     """IPv4 형식 검증"""
     if not _IP_PATTERN.match(ip):
         error(f"유효하지 않은 IP 형식: '{ip}' (항목[{idx}])")
+
+def _inert(value):
+    """호출자가 보낸 값을 글자 그대로의 hostvar 로 옮긴다.
+
+    ansible-core 는 스크립트 인벤토리의 문자열을 Jinja 템플릿으로 신뢰한다.
+    문자열을 `__ansible_unsafe` 로 감싸 `{{ }}` 가 든 값도 해석되지 않게 한다.
+    `__ansible_` 로 시작하는 키는 Ansible JSON 의 예약 표식이라 옮기지 않는다 —
+    그대로 두면 인벤토리 해석이 실패해 그 빌드의 모든 대상이 결과를 잃는다.
+    """
+    if isinstance(value, str):
+        return {"__ansible_unsafe": value}
+    if isinstance(value, list):
+        return [_inert(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _inert(v) for k, v in value.items()
+                if not str(k).startswith("__ansible_")}
+    return value
 
 def load_inventory_json():
     """환경변수 → 파일 순서로 인벤토리 JSON 문자열을 가져온다."""
@@ -90,7 +108,9 @@ def main():
         if ip in seen:
             error(f"IP 가 중복됩니다: '{ip}' (항목[{idx}])")
         seen.add(ip)
-        hostvars[ip] = {"ansible_host": ip}
+        # host object 는 최상위로 펼치지 않고 한 키 아래에 둔다 — ansible_* 연결 변수나
+        # play 변수와 이름이 겹쳐도 연결에 영향이 없다.
+        hostvars[ip] = {"ansible_host": ip, "se_host_input": _inert(host)}
         host_keys.append(ip)
 
     print(json.dumps({
