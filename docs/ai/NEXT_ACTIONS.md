@@ -1,5 +1,18 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## failure_reason 문장 카탈로그 후속 (2026-09-21)
+
+> 정본: `docs/ai/decisions/ADR-2026-09-21-failure-reason-catalog.md`
+
+| ID | 할 일 | 막힌 이유 / 주체 |
+|---|---|---|
+| FR-1 | 운영 Jenkins → Portal Grid 에서 새 문장 표시 확인 (무응답 IP / 관리 포트 거부 / 틀린 비밀번호 / Vault 비밀번호 불일치 각 1건) | 실장비·Portal — 사용자 |
+| FR-2 | Portal 이 `failure_reason` 문장 글자 또는 Redfish 3경우의 `GATHER_FAILED` 로 분기하는지 확인 | Portal 담당 — 저장소 밖 |
+| FR-3 | OS/ESXi 인증 거부를 **구조적으로** 감지할 방법 검토 → 확인되면 `auth_rejected` 의 os/esxi 문장 추가 | CLAUDE.md §8 문자열 파싱 금지 — 설계 필요 |
+| FR-4 | 조회 권한 부족(인증 후 403/NoPermission) 구조적 판정 → "필요한 정보를 조회할 권한이 없습니다" 문장 | 판정 근거 부재 |
+| FR-5 | OS/ESXi 인증 뒤 예외를 대상 문제 / 수집기 내부 오류로 가르는 기준 (현재 Redfish 요청 전 예외만 `gather_internal`) | 기준 미정 |
+| FR-6 | `Jenkinsfile_portal` Resolve Location 이 미등록 loc 를 Ansible 전에 `error` 로 끝내 **envelope 0건** (Callback 미실행) — 요청 1 = envelope 1 계약과 어긋나는지 조사 | 조사 대상 (이번 변경과 무관한 기존 동작) |
+
 ## reachable ICMP OR 판정 후속 (2026-09-03)
 
 > 정본: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`, rule 27 R1,

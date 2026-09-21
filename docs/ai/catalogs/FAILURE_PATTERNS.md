@@ -416,3 +416,27 @@
 - 수정: probe 2종에 `ignore_unreachable:true` 추가 (commit `abe94783`) → unreachable host 보존 → 후보 loop 계속 → 정상 fallback 또는 graceful failed envelope. 검증: 빌드 #30 SUCCESS, 161/165 `status:success`, `auth.fallback_used:true`(infra 실패→cloviradmin 성공).
 - 재발 방지: SSH/WinRM 연결성 probe·gather task에는 `ignore_unreachable:true` 필수. json_only가 unreachable/failed를 stderr로 표면화하도록 개선은 후속(NEXT_ACTIONS).
 - 관련 rule: rule 95 R1 (의심패턴), rule 27 (precheck), rule 22 (rescue/always)
+
+## 2026-09-21 — include_vars `failed_when: false` 가 Vault 복호화 실패를 지움
+
+- 카테고리: ansible-failed-when-masks-failure
+- 발견 위치: `common/tasks/credential/load_one.yml` (`credential | load_one | include vars`)
+- 증상: Vault 비밀번호가 없거나 틀려도 `_cl_outcome=loaded` → 계정 0개 → `empty_accounts`.
+  `credential_set_undecryptable` 은 실제로 한 번도 나오지 않았다. 사용자 문장이 "계정이 없습니다" 로 나갈 뻔했다.
+- 원인: `failed_when: false` 는 결과의 `failed` 를 False 로 덮어쓴다. 바로 뒤 classify 의 `_cl_load is failed` 가 항상 거짓.
+  (WSL ansible-core 2.20.7 최소 재현: `is failed=False`, `_cl_included={}`)
+- 수정: `ignore_errors: true` (failed 표시 보존) + 회귀 테스트 `test_include_vars_keeps_failure_visible_to_classify`.
+- 재발 방지: **`failed_when: false` 뒤에 `is failed` 로 판정하는 패턴 금지.** 실패를 판정해야 하면 `ignore_errors`.
+- 관련 rule: rule 95 R1 #5 (상태 분기 혼동), CLAUDE.md §12
+
+## 2026-09-21 — Redfish 자격 판정이 시도 0회를 GATHER_FAILED 로 떨어뜨림
+
+- 카테고리: stage-misclassification
+- 발견 위치: `redfish-gather/site.yml` rescue `_rf_auth_outcome` (cred_na 조건)
+- 증상: 실행 위치 미등록 / 표준 계정 0개(vendor 식별) / vendor 미상 + 표준 Vault 부재 세 경우 인증을 시도하지
+  않았는데 `GATHER_FAILED` + "대상 접속은 확인됐지만" 이 나갔다.
+- 원인: 조건이 `_cred_load_outcome`(표준 Vault 결과)만 봤다 — 표준 Vault 는 전역이라 위치 미등록이어도 loaded,
+  `empty_accounts` 는 목록에 없음, vendor 미상이면 조건 전체가 꺼짐.
+- 수정: `unknown_location` OR 표준 결과 ∈ {missing, undecryptable, empty_accounts} OR (not_resolved AND vendor 식별).
+  회귀: `test_redfish_credential_unavailable_is_not_gather` (4 케이스) + WSL 실제 실행.
+- 관련 rule: CLAUDE.md §9 (failure_stage = 멈춘 위치), rule 13 R8

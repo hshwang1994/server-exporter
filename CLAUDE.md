@@ -74,7 +74,8 @@ Delete/Recreate 보호 정책 임의 완화 금지. Dry-run은 예정 Action 확
 
 ## 9. Diagnosis Contract
 유효한 `failure_stage`: `reachable`, `port`, `protocol`, `auth`, `gather`, `fallback`.
-Stable `failure_code`: `DNS_RESOLUTION_FAILED`, `TARGET_UNREACHABLE`, `TCP_CONNECT_FAILED`, `TCP_CONNECTION_REFUSED`, `PROTOCOL_CHECK_FAILED`, `AUTH_PROBE_FAILED`, `GATHER_FAILED`, `OUTPUT_BUILD_FAILED`.
+Stable `failure_code`: `DNS_RESOLUTION_FAILED`, `TARGET_UNREACHABLE`, `TCP_CONNECT_FAILED`, `TCP_CONNECTION_REFUSED`, `PROTOCOL_CHECK_FAILED`, `CREDENTIAL_SET_UNAVAILABLE`, `AUTH_PROBE_FAILED`, `GATHER_FAILED`, `OUTPUT_BUILD_FAILED`.
+`CREDENTIAL_SET_UNAVAILABLE`(stage=`auth`)은 Vault 계정 세트를 열지 못해 인증을 시도조차 못 한 경우, `AUTH_PROBE_FAILED`는 계정을 보냈는데 통과하지 못한 경우다.
 `TARGET_UNREACHABLE`(stage=`reachable`)은 TCP·ICMP 모두 무응답이고, `TCP_CONNECT_FAILED`(stage=`port`)는 ICMP는 응답하는데 관리 TCP 포트만 무응답인 경우다. 둘 다 장비 다운 확정이 아니다.
 Success: `failure_stage=null`, `failure_code=null`, `failure_reason=null`.
 Failed: `failure_stage`, `failure_code`, `failure_reason`이 모두 존재해야 하며 실패인데 `failure_reason=null`인 Result를 만들지 않는다.
@@ -85,12 +86,8 @@ HTTP 403, Timeout, TLS, Transport 오류를 자동으로 `auth_success=false`로
 ## 10. Portal Failure Message
 Portal Failure Grid는 `errors[].message`를 사용한다. 최종 Failed Result의 사용자 Message는 `diagnosis.failure_reason`과 동일한 중앙 정의를 사용한다.
 기술 Evidence는 `errors[].detail`에 둔다. 사용자 Message에는 Port, Timeout, HTTP Status, Raw Exception, SOAP/XML 내부정보, Task/변수명을 넣지 않는다.
-대표 메시지:
-1. `대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요.`
-2. `대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요.`
-3. `관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. 관리 서비스 설정과 상태를 확인하세요.`
-4. `대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요.`
-5. `대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.`
+문장 정본은 `common/vars/failure_reasons.yml`의 `_fr_catalog`다. 문장은 `failure_code` + 대상 종류(OS/ESXi/Redfish) + 세부 사유로 고르고, 선택은 `failure_reason` 필터(`filter_plugins/failure_reason.py`)로 한다. 복제본(`precheck_bundle.py`, `json_only.py`)은 drift 테스트가 막는다.
+문장에는 대상 종류 어휘와 실행 위치 값(`{loc}` → 실제 `loc`, 없으면 `미지정`)을 쓸 수 있다. 관측한 것만 쓴다 — 연결 거부의 주체, 대상 종류 불일치, OS/ESXi 계정 불일치처럼 구조적으로 확인하지 못한 원인은 문장에 넣지 않는다. Redfish 표준 계정은 전역 Vault라 "해당 위치의 Vault"라고 쓰지 않는다.
 IPv4-only이므로 사용자 Message에서 DNS/Hostname 확인을 안내하지 않는다. `DNS_RESOLUTION_FAILED` enum이 남아 있어도 사용자 안내를 DNS 문제로 단정하지 않는다.
 
 ## 11. Result Envelope / Cardinality

@@ -1,5 +1,31 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-21 — failure_reason 문장 카탈로그 개편 (사용자 확정)
+
+> 결정 근거: `docs/ai/decisions/ADR-2026-09-21-failure-reason-catalog.md`,
+> `docs/reference/decision-log.md` 2026-09-21. 후속: `docs/ai/NEXT_ACTIONS.md` FR-1~FR-6.
+
+- **문장 = (failure_code, 대상 종류, 세부 사유).** 정본 `common/vars/failure_reasons.yml` `_fr_catalog[키][채널]`
+  (19 키, 채널 os/esxi/redfish/default). 선택은 신규 필터 `filter_plugins/failure_reason.py` 한 곳.
+  복제본: `precheck_bundle.FAILURE_REASON_CATALOG`(사전 점검 키), `json_only._FAILURE_REASON_CATALOG`(보충 경로 키).
+  `_fr_code_keys` = code 별 허용 키 계약표(런타임 미사용). 종전 `_fr_*` 6문장 / `REASON_*` / `CHANNEL_PROTOCOL_MESSAGES` 폐지.
+- **`{loc}` = 실제 실행 위치** (`_cred_location` ← `se_location`, 없으면 `미지정`, 안전 문자 40자).
+- **failure_stage / failure_code 불변** — 예외: Redfish 시도 0회 3경우(위치 미등록 / 표준 계정 0개 /
+  vendor 미상 + 표준 Vault 부재)가 `GATHER_FAILED`/`gather` → `CREDENTIAL_SET_UNAVAILABLE`/`auth` (결함 수정).
+- **결함 수정 2**: `load_one.yml` include_vars `failed_when: false` → `ignore_errors: true`. 복호화 실패가
+  empty_accounts 로 오분류되던 것 (WSL ansible-core 2.20.7 실측). 이제 중단 게이트가 수집 전에 멈춘다.
+- **OS/ESXi Vault 원인 구분**: `resolve_and_load.yml` 이 파일 부재 시 `vault/<loc>/` 폴더 stat
+  (`_cred_location_vault_exists`) → 폴더 없음 = Vault 미등록, 폴더 있음 = 종류별 계정 없음.
+- **envelope shape 불변** (13 필드 / diagnosis 8키 / enum). 섹션 문장(section_messages.yml) 불변 —
+  단 Redfish 복구계정 부재 행은 `_sm_overrides.account_service`, errors 절단 행은 `_fr_errors_truncated`.
+- 변경 파일: `common/vars/failure_reasons.yml`, `filter_plugins/failure_reason.py`(신규),
+  `common/library/precheck_bundle.py`, `callback_plugins/json_only.py`, `common/tasks/credential/{load_one,resolve_and_load,resolve_and_load_redfish}.yml`,
+  `common/tasks/normalize/{build_output,build_failed_output}.yml`, 3 channel `site.yml`, 테스트 13파일(+1 신규),
+  `docs/contract/{03,04}`, `docs/overview/02-architecture.md`, `docs/reference/decision-log.md`, `schema/examples` 2, `schema/output_examples/redfish_failed.jsonc`, `CLAUDE.md` §9 §10.
+- **검증**: pytest 전수(브라우저 제외) 통과, 실제 Ansible Templar 렌더 22 통과, WSL `--syntax-check` 3채널 통과,
+  WSL 실제 플레이북 실행 5건(3채널 연결 거부 + Redfish 가짜 ServiceRoot 로 위치 미등록 / Vault 복호화 실패).
+  **실장비·Portal 표시는 미확인.**
+
 ## 일자: 2026-09-14 — OS Vault 2차 infraops fallback 계정 추가 (사용자 지시)
 
 > 커밋 `15f95dca` (main). 순수 데이터 변경 — 코드/스키마/컨트랙트 변경 0.

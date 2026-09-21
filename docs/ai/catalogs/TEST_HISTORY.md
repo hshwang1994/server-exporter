@@ -1,5 +1,24 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-21 — failure_reason 문장 카탈로그 개편 회귀
+
+> 정본: `docs/ai/decisions/ADR-2026-09-21-failure-reason-catalog.md`
+
+| 항목 | 결과 |
+|---|---|
+| 변경 전 기준선 `pytest tests/ --ignore=tests/e2e_browser` | 3455 passed, 10 skipped, 7 xfailed |
+| 변경 후 전수 (커밋 직전) | **3561 passed**, 10 skipped, 7 xfailed (+106) |
+| `tests/unit/test_failure_reason_filter.py` (신설) | 30 passed — 채널/default 선택, 누락 키 예외, loc 표시 규칙, callback 복제본 동치 |
+| `tests/e2e/test_errors_message_contract.py` (재설계) | 162 passed — 카탈로그 키 집합 고정, 전 문장 Grid 품질, precheck 복제본 drift, `_fr_code_keys` ↔ field_dictionary enum |
+| `tests/e2e/test_failure_reason_case_matrix.py` | 50 passed — Vault 원인 5종 × 3대상, Redfish 시도 0회 3경우 CREDENTIAL_SET_UNAVAILABLE, loc fallback |
+| `tests/e2e/test_diagnosis_template_ansible_render.py` (실제 Ansible Templar + filter_loader) | 22 passed (skip 0) |
+| `ansible-playbook --syntax-check` 3채널 | Windows CLI 는 WinError 87 → **WSL ansible-core 2.20.7 에서 통과** |
+| WSL 실제 실행 — 127.0.0.1 관리 포트 거부 (redfish / esxi / os) | 3건 모두 `TCP_CONNECTION_REFUSED` + 채널별 거부 문장, message == failure_reason, detail 보존 |
+| WSL 실제 실행 — 가짜 ServiceRoot(8443) + `se_location=nope` | `auth` / `CREDENTIAL_SET_UNAVAILABLE` / "해당 위치(nope)가 개더링 프로젝트에 등록되지 않았습니다." (종전 GATHER_FAILED) |
+| WSL 실제 실행 — 가짜 ServiceRoot + `se_location=ic`, Vault 비밀번호 없음 | 수정 전 `AUTH_PROBE_FAILED` + "…Redfish 표준 계정이 없습니다"(오분류) → 수정 후 `CREDENTIAL_SET_UNAVAILABLE` + "개더링 프로젝트의 Vault를 읽을 수 없습니다." |
+| WSL 최소 재현 — include_vars + `failed_when: false` | 비밀번호 없음·틀린 비밀번호 모두 `is failed=False` (결함 확인) / `ignore_errors: true` 로 `is failed=True` |
+| 실장비 / Portal | **미실행** — NEXT_ACTIONS FR-1 |
+
 ## 2026-09-03 — reachable ICMP OR 판정 회귀 (오프라인)
 
 > 정본: `docs/ai/decisions/ADR-2026-09-03-icmp-or-reachability.md`
