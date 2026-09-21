@@ -1,9 +1,26 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-22 — Add-on main 병합 · production · GitLab 등록 · Jenkins e2e (사용자 지시)
+
+> 후속 표: `docs/ai/NEXT_ACTIONS.md` AO-1 ~ AO-12. 실측: `tests/evidence/2026-09-21-addon-hook-live.md` 5 ~ 8절.
+
+- **병합 · 배포**: `feature/gathering-addon` 과 다른 세션의 failure_reason 작업을 main 에 병합(`014f0e20`),
+  `*.sh` LF 고정(`d6ed2278`), production 승격. Add-on 저장소는 GitLab
+  `https://10.100.64.156/root/clovirone-server-gathering-addon.git` main.
+- **Jenkins e2e Job**: `형섭/clovirone-gathering-addon-e2e` (10.100.64.153). 실제 Agent `jenkins-agent-dev`
+  (ansible-core 2.20.3)에서 운영 Job 과 같은 메인 저장소 · 명령 · vault 로 시나리오를 돌린다. FAIL 0,
+  `KNOWN` 은 결정 대기 항목(AO-2 · AO-3)뿐.
+- **추가 조사 (수정 적용 안 함 — 사용자 지시)**: AO-3 UTF-8 이 아닌 출력의 실패 지점과 추천안, AO-2 Windows
+  PowerShell 5.1 오류 스트림 48 조합 실측과 추천안. 적용은 사용자 결정 대기.
+- **테스트 보강**: 엔진 테스트에 `SE_ADDON_DIR` 설정 실수(상위 폴더 · 끝 `/`) 추가. e2e Job 이 같은 엔진 테스트를
+  실제 Agent 에서도 돌린다.
+- **결정**: Linux `\r\n` 유지(AO-4, 사용자). **결정 대기**: AO-2 · AO-3 · AO-12(Jenkins credential 설명란의 비밀번호
+  평문). AO-5 는 고객 샘플 대기.
+
 ## 일자: 2026-09-21 — 고객별 추가 수집(Add-on) 확장점 추가 (사용자 지시)
 
 > 결정 근거: `docs/ai/decisions/ADR-2026-09-21-gathering-addon-hook.md`, `docs/reference/decision-log.md` 2026-09-21.
-> 실측: `tests/evidence/2026-09-21-addon-hook-live.md`. 브랜치 `feature/gathering-addon` — main 병합은 사용자 승인 대기
+> 실측: `tests/evidence/2026-09-21-addon-hook-live.md`. 브랜치 `feature/gathering-addon` — 2026-09-22 main 병합
 > (같은 시각 main 작업 트리에서 다른 세션이 failure_reason 작업 중이라 worktree 로 분리해 작업).
 
 - **범용 hook 1개**: `common/tasks/addon/run_addon.yml`. 4 play(Linux · Windows · ESXi · Redfish)가 마지막 수집 뒤 ·
@@ -15,7 +32,7 @@
   `ansible.cfg`, `vault/**`, `Jenkinsfile*`. `SE_ADDON_DIR` 미설정이면 봉투가 hook 도입 전과 byte 동일 (엔진 테스트).
 - **문서**: contract 01 · 02 · 03, `docs/develop/07-addon-hook.md`(신규), `docs/operate/08-ansible-config.md`, decision-log.
 - **결정 대기** (`NEXT_ACTIONS.md` AO): Windows 오류 출력 합치기 · UTF-8 이 아닌 바이트 · Linux `\r\n`(결정 T) ·
-  hosts DB 판별 규칙 · main 병합 / production 승격.
+  hosts DB 판별 규칙. (main 병합 / production 승격은 2026-09-22 완료 — 위 항목)
 
 ## 일자: 2026-09-21 — failure_reason 문장 카탈로그 개편 (사용자 확정)
 

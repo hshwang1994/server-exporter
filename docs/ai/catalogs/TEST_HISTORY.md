@@ -1,5 +1,29 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-22 — Add-on Jenkins e2e · 추가 조사 · 경로 실수
+
+> 실측 `tests/evidence/2026-09-21-addon-hook-live.md` 5 ~ 8절. 메인 제품 코드 변경 없음 (테스트만 추가).
+
+| 항목 | 결과 |
+|---|---|
+| Jenkins e2e Job `형섭/clovirone-gathering-addon-e2e` #1 | FAILURE — 새 Job 첫 빌드에서 파라미터가 셸 환경변수로 안 들어옴 → Jenkinsfile 수정 |
+| Jenkins e2e #2 (Agent `jenkins-agent-dev`, ansible-core 2.20.3, 메인 `d6ed2278`) | SUCCESS — 시나리오 11개 PASS 99 / FAIL 0 / KNOWN 1 (AO-2) |
+| Jenkins e2e #3 (메인 `d6ed2278`, Add-on `db9b31e`) | SUCCESS — 시나리오 14개 PASS 116 / FAIL 0 / KNOWN 2 (AO-2 · AO-3). 수 MB 출력(Linux 2.29MB · Windows 1.19MB 등)이 실제 SSH · WinRM 전송 뒤 글자 그대로 |
+| Jenkins e2e #4 (메인 `eafddf0b`, Add-on `0dd4d7b`) | SUCCESS — PASS 116 / FAIL 0 / KNOWN 2 (s10 hosts 알림 확인 추가) |
+| Jenkins e2e #5 (Add-on `18115fe`) | SUCCESS — PASS 119 / FAIL 0 / KNOWN 2 (s04 Windows here-string · `{{ }}` 추가). 엔진 테스트 단계는 Agent 에 pytest 가 없어 건너뜀 → 수정 |
+| Jenkins e2e #6 (Add-on `9097425` — 최종) | SUCCESS — 엔진 테스트(Agent, ansible-core 2.20.3) **10 passed** (Test Result pass 10 / fail 0) + 시나리오 14개 **PASS 119 / FAIL 0 / KNOWN 2** (AO-2 · AO-3), 956초 |
+| `pytest tests/ --ignore=tests/e2e_browser` (Windows, 테스트 추가 뒤) | **3628 passed**, 11 skipped, 7 xfailed, 0 failed (경고 4 — 기존) |
+| 따로 실행 (계획서 12절): `tests/unit` · `tests/e2e` · `tests/regression` · `tests/integration -m "not live"` | 2436 passed / 723 passed 6 skipped / 169 passed 7 xfailed / 300 passed 4 skipped |
+| `validate_field_dictionary.py` · `output_schema_drift_check.py` | PASS (경고 81 — 기존) · rc=0 (sections=11) |
+| `verify_vendor_boundary.py` | rc=2 — 기존 2건 (`redfish_gather.py:5746` iLO, `:5890` XCC). 이번 변경과 무관 |
+| `ansible-playbook --syntax-check` 3채널 (WSL 2.20.7, main `eafddf0b`) | 모두 rc=0 |
+| `tests/integration/test_addon_hook_playbook.py` (상위 폴더 · 끝 `/` 추가) | 10 passed — WSL ansible-core 2.20.3 · 2.20.7 |
+| `SE_ADDON_DIR` 설정 실수 9가지 (엔진 harness) | 2.20.3 · 2.20.7 같은 결과 — 기본 결과 유지, 실행 못 하면 `errors[]` 1건 |
+| AO-3 재현 E1 / E2 (엔진 harness) | 2.20.3 · 2.20.7 같은 결과 — E1 `OUTPUT_BUILD_FAILED`, E2 기본 결과 유지 + Callback 본문 파싱 정상 |
+| AO-2 Windows 2022 `win_shell` 48 조합 · 로컬 PowerShell 5.1 | 측정 (evidence 6절) |
+| Add-on 저장소 `python -m pytest tests` | Windows 114 passed / 13 skipped / 2 xfailed (PowerShell 5.1 here-string · `{{ }}` 추가), WSL 122 passed / 7 skipped, 2.20.3 playbook 13 passed |
+| `verify_harness_consistency.py` · `check_project_map_drift.py` · `secret_guard.py` | 통과 |
+
 ## 2026-09-21 — 고객별 추가 수집(Add-on) hook
 
 > 정본: `docs/ai/decisions/ADR-2026-09-21-gathering-addon-hook.md`, 실측 `tests/evidence/2026-09-21-addon-hook-live.md`.

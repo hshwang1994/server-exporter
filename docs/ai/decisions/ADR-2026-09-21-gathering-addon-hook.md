@@ -46,9 +46,12 @@ rule 30 R3 은 "외부 호출에 timeout 명시" 를 요구하지만, 사용자�
 ### 실측으로 드러나 결정을 기다리는 것
 
 - Windows: `& { … } 2>&1` 로는 PowerShell 5.1 이 오류 레코드를 stderr 로 다시 보내 `value` 에 담기지 않는다.
+  (2026-09-22 조사 — 추천 `*>&1 | Out-String -Stream`, 적용은 사용자 결정 대기. NEXT_ACTIONS AO-2)
 - 명령 출력의 UTF-8 이 아닌 바이트는 콜백 단계에서 그 host 의 봉투 전체를 `OUTPUT_BUILD_FAILED` 로 만든다.
-- Linux(SSH) 출력 줄바꿈은 `\r\n` 이다 (결정 T).
+  (2026-09-22 조사 — 추천 Add-on 쪽 `\xNN` 글자 보존, 적용은 사용자 결정 대기. AO-3)
 - `/etc/hosts` DB 판별 규칙 — 고객 샘플 확인 후.
+
+결정된 것: Linux(SSH) 출력 줄바꿈 `\r\n` 은 그대로 둔다 (결정 T — 2026-09-22 사용자).
 
 ## 대안 비교 (Considered)
 

@@ -7,16 +7,18 @@
 
 | # | 항목 | 상태 | 내용 |
 |---|---|---|---|
-| AO-1 | `feature/gathering-addon` → main 병합, production 승격 | `[DECISION / 사용자]` | rule 93 R2 — merge 는 사용자 승인. main 작업 트리의 다른 세션 변경과 겹치는 hunk 없음(site.yml 3개 모두 확인) |
-| AO-2 | Windows 오류 출력 합치기 | `[DECISION / 사용자]` | 실측: `& { … } 2>&1` 은 PowerShell 5.1 이 오류 레코드를 stderr 로 다시 보내 `Write-Error` · 외부 프로그램 stderr · `Stop` 오류가 `value` 에 없다. 대안 측정: `\| Out-String -Stream` 을 붙이면 비종료 오류가 PowerShell 표시 글자 그대로 들어오고(순서 유지, 긴 줄 잘림 없음) `Stop` 오류는 여전히 빠진다 |
-| AO-3 | UTF-8 이 아닌 바이트 | `[DECISION / 사용자]` | 실측: 명령 출력에 EUC-KR 바이트가 있으면 콜백이 `surrogates not allowed` 로 실패 → 콜백 보충이 `OUTPUT_BUILD_FAILED` 봉투를 내 기본 수집 결과까지 잃는다 (host 수는 유지). 사용자 조건 "재현되고 JSON 생성에 꼭 필요할 때만 검토" 에 해당 |
-| AO-4 | Linux 줄바꿈 (결정 T) | `[DECISION / 사용자]` | 실측: SSH raw 출력은 `\r\n` (PTY). 초기 구현은 Ansible 기본 그대로. 대안: software 태스크만 `ansible_ssh_use_tty: false` |
+| AO-1 | `feature/gathering-addon` → main 병합, production 승격 | `[DONE 2026-09-22]` | 사용자 지시("다른 세션 작업의 병합까지 책임") — merge `014f0e20`(다른 세션 failure_reason `446d8670`·`4529cad2` 와 병합, 문서 충돌 5건은 양쪽 보존), `chore` `d6ed2278`(`*.sh` LF 고정), main push, production `31038c27 → a694a3d3` (github + gitlab) |
+| AO-2 | Windows 오류 출력 합치기 | `[DECISION / 사용자]` | 조사 완료 (Windows 2022 `win_shell` 48 조합 실측). `2>&1` · `*>&1` 만으로는 `Write-Error` · 외부 stderr 가 stdout 에 오지 않는다. `\| Out-String -Stream` 을 붙이면 실행 순서대로 들어오고 stdout 전용 출력은 byte 동일. `*>&1 \| Out-String -Stream` 은 경고 · verbose 까지 담는다. 종료 오류는 try/catch 없이는 어느 방식도 못 담고, try/catch 는 rc 를 1→0 으로 바꾼다. **추천: `& { … } *>&1 \| Out-String -Stream` + task stderr 가 있으면 errors[] 참고 문장** (적용은 사용자 결정 대기) |
+| AO-3 | UTF-8 이 아닌 바이트 | `[DECISION / 사용자]` | 조사 완료. 실패 지점 = `json_only._emit` 의 `print` (UTF-8 strict). Ansible 이 원격 바이트를 surrogate 로 보관(`surrogate_then_replace`) → 봉투 한 줄 전체가 인코딩 실패 → 콜백 예외는 경고로 삼켜지고 → 보충이 data 없는 `OUTPUT_BUILD_FAILED` 를 낸다. **추천: Add-on 이 돌려주기 직전 surrogate 바이트만 `\xNN` 글자로 (Add-on 태스크 1 + filter 1, 메인 0줄) + errors[] 참고 문장.** 실험: 결과 JSON · Callback 본문 조립 모두 정상, 기본 결과 동일 (적용은 사용자 결정 대기) |
+| AO-4 | Linux 줄바꿈 (결정 T) | `[DONE 2026-09-22 — 유지]` | 사용자 결정: `\r\n` 그대로 유지 ("AO-4 Linux `\r\n` 유지 … 그대로 유지합니다"). 실측: SSH raw 출력은 `\r\n` (PTY). 바꾸게 되면 software 태스크만 `ansible_ssh_use_tty: false` |
 | AO-5 | hosts DB 판별 규칙 | `[PENDING / 고객 샘플]` | 고객 `/etc/hosts` 2~3개 + 서버별 `uname -n` + 기대 `dbIpList` 확보 후 matcher 구현. 그 전에는 `hosts: true` 배포 금지 |
-| AO-6 | Add-on 원격 저장소 등록 | `[TODO / 사용자]` | 로컬 `C:\github\ClovirONE\clovirone-gathering-addon` (git, main). 원격 URL 을 받으면 등록 · push |
+| AO-6 | Add-on 원격 저장소 등록 | `[DONE 2026-09-22]` | `https://10.100.64.156/root/clovirone-server-gathering-addon.git` main — GitLab 초기 commit 은 병합해 보존(강제 push 없음) |
 | AO-7 | 운영 Agent 에 Add-on 배치 + 노드 환경변수 `SE_ADDON_DIR` | `[TODO / 운영자]` | 배치 방식은 범위 밖. 미설정이면 아무 영향 없음 |
-| AO-8 | 운영 Agent 에서 gate spike 재확인 | `[TODO]` | 2.20.3 은 WSL 고정 설치로 통과. `jenkins-agent-ops`(.154)에는 Ansible 이 없고 .155 는 키 인증 거부로 이번에 못 돌렸다 |
+| AO-8 | 운영 Agent 에서 gate spike 재확인 | `[DONE 2026-09-22 — 규모 시험 제외]` | Jenkins e2e Job(AO-11)이 실제 Agent `jenkins-agent-dev`(ansible-core 2.20.3 / Python 3.12.3)에서 외부 절대경로 `include_role` · role `filter_plugins` 를 실제 대상으로 확인하고, 메인 엔진 테스트도 같은 Agent 에서 돌린다. **200 host × 동시 2회 spike 는 Agent 에서 돌리지 않았다** — 공유 Agent 메모리가 7.8GB(가용 3.8GB)라 forks 200 두 벌이 운영 수집에 영향을 줄 수 있다. 규모 근거는 WSL 2.20.3 spike 뿐. 필요하면 한가한 시간에 사용자 승인 후 |
 | AO-9 | Portal 소비자 안내 | `[TODO / 사용자]` | `data.addon` 은 있을 때만 있다 (null-guard). `errors[].section` 에 `addon` 이 새로 올 수 있다 |
-| AO-10 | Jenkins 파이프라인 1회 | `[TODO]` | `SE_ADDON_DIR` 을 설정한 노드에서 `Jenkinsfile_portal` 로 os 1회 — Callback payload 에 `data.addon` 확인 |
+| AO-10 | Jenkins 파이프라인 1회 | `[PARTIAL]` | e2e Job(AO-11)이 `Jenkinsfile_portal` Gather 단계와 같은 명령 · vault 자격증명으로 수집하고, Callback 단계와 같게 줄을 이어 본문을 만들어 파싱까지 확인했다. 남은 것: 실제 `Jenkinsfile_portal` 빌드의 Callback POST 와 Portal 수신 확인 — AO-7(노드 환경변수) 뒤, Portal 측(AO-9)과 함께 |
+| AO-11 | Add-on e2e Jenkins Job | `[DONE 2026-09-22]` | `http://10.100.64.153:8080/job/형섭/job/clovirone-gathering-addon-e2e/` — Add-on 저장소 `tests/e2e/Jenkinsfile`(Pipeline from SCM, GitLab main). 결과는 빌드 설명 · "Add-on e2e 보고서"(HTML) · 보관 `results/*.jsonl`. `SE_ADDON_DIR` 은 Job 안에서만 시나리오마다 지정 (노드 설정 불변). `KNOWN` = AO-2 · AO-3 결정 대기 항목. 결과는 `tests/evidence/2026-09-21-addon-hook-live.md` 8절 |
+| AO-12 | Jenkins credential 설명란의 비밀번호 평문 | `[DECISION / 사용자]` | Jenkins Credentials 목록에서 `server-gather-vault-password` 의 설명(description)에 vault 비밀번호가 평문으로 보인다 (값은 여기 적지 않는다). 설명 수정과 회전 여부는 사용자 · 운영자 결정 — 요청 없이 회전하지 않는다 (CLAUDE.md §12) |
 
 ## failure_reason 문장 카탈로그 후속 (2026-09-21)
 
