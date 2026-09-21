@@ -19,6 +19,7 @@ Phase 3-A 최초 전환에서 이를 포트당 1회 시도로 바꿔, **probe �
 """
 from __future__ import annotations
 
+import re
 import socket
 import sys
 import types
@@ -369,21 +370,22 @@ def test_rst_reason_does_not_claim_server_responded():
         "RST 는 중간 방화벽/보안 장비가 생성했을 수 있어 서버 응답으로 확정 금지"
     )
     # Phase 5-A (2026-08-11): 문구는 site.yml 이 아니라 precheck_bundle 이 만든다.
-    # 2026-08-12: 문구는 관측된 failure_code 에서만 파생한다 (REASON_BY_FAILURE_CODE).
-    #   RST 를 관측하면 2번 문구(관리 포트 연결 불가)를 쓴다. 다만 RST 를 보낸 주체가
-    #   최종 서버인지 중간 방화벽인지는 여전히 확정할 수 없으므로, 문장이 "서버가
-    #   응답했다" 거나 "IP 사용이 확인됐다" 고 주장하지는 않는다.
-    _connect_reasons = (pb.reason_for_failure_code("TARGET_UNREACHABLE"),
-                        pb.reason_for_failure_code("TCP_CONNECT_FAILED"),
-                        pb.reason_for_failure_code("TCP_CONNECTION_REFUSED"),
-                        pb.reason_for_failure_code("DNS_RESOLUTION_FAILED"))
-    for reason in _connect_reasons:
+    # 2026-09-21: 문구는 (failure_code, 채널) 로 고른다 (precheck_bundle.reason_for_failure).
+    #   RST 를 관측하면 "OS 접속이 거부되었습니다" 를 쓴다. 다만 RST 를 보낸 주체가
+    #   최종 서버인지 중간 방화벽인지는 여전히 확정할 수 없으므로 주어를 쓰지 않고,
+    #   "서버가 응답했다" 거나 "IP 사용이 확인됐다" 고 주장하지도 않는다.
+    _connect_reasons = {code: pb.reason_for_failure(code, "os")
+                        for code in ("TARGET_UNREACHABLE", "TCP_CONNECT_FAILED",
+                                     "TCP_CONNECTION_REFUSED", "DNS_RESOLUTION_FAILED")}
+    for code, reason in _connect_reasons.items():
         assert "서버는 응답하지만" not in reason
         assert "IP 사용은 확인" not in reason, (
             "presence 판정을 만들지 않으므로 IP 사용 확인을 주장하지 않는다"
         )
         # 거부 주체를 최종 대상으로 확정하지 않는다 (중간 네트워크 장비일 수 있다)
         assert "대상 관리 서비스 연결이 거부" not in reason
-        assert "거부" not in reason, "거부 여부는 failure_code 가 표현한다 (사용자 문장 아님)"
+        assert not re.search(r"(서버|장비)[가이]\s*\S*\s*거부", reason), reason
+        if code != "TCP_CONNECTION_REFUSED":
+            assert "거부" not in reason, f"{code} 는 거부를 관측하지 않았다"
     for banned in ("—", "·", "–"):
         assert banned not in "SSH(22)/WinRM(5985, 5986) 관리 포트에 연결하지 못했습니다."

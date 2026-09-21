@@ -1,80 +1,153 @@
 ---
 # common/vars/failure_reasons.yml
 #
-# 최종 사용자 문구 표준 — Ansible 쪽 **정본**.
+# 최종 사용자 문구 카탈로그 — Ansible 쪽 **정본**.
 #
 # 이 문장들이 Portal 실패 Grid 에 보이는 전부다. 같은 문장이 두 곳에 동시에 나간다:
 #   - diagnosis.failure_reason
 #   - errors[].message   ← Portal 실패 Grid 의 실제 소스
 # 두 값은 common/tasks/normalize/build_failed_output.yml 이 failure_reason 을 그대로
 # message 로 복사해 **status=failed envelope 에서 항상 일치**한다.
+# status=partial / success 의 섹션 단위 errors[].message 는 이 카탈로그를 쓰지 않는다
+# (common/vars/section_messages.yml).
 #
-# 주의 (2026-08-12): "항상 일치" 는 **완전 실패(status=failed) 경로에 한정**된다.
-#   status=partial / success 의 섹션 단위 errors[].message 는 섹션 의미를 유지해야 하므로
-#   이 문장들로 통일하지 않는다. 그 경로의 failure_reason 은 null 이다.
-#   섹션 문구 품질 기준은 tests/e2e/test_section_message_contract.py 가 강제한다.
+# 2026-09-21 (사용자 확정 — ADR-2026-09-21-failure-reason-catalog):
+#   종전에는 failure_code 9개가 문장 6개(_fr_*)로 뭉쳐 있었다. 방화벽 차단(TCP_CONNECT_FAILED)과
+#   서비스 중지(TCP_CONNECTION_REFUSED)가 같은 문장이었고, 우리 쪽 Vault 설정 문제
+#   (CREDENTIAL_SET_UNAVAILABLE)와 대상 계정 문제(AUTH_PROBE_FAILED)도 같은 문장이었다.
+#   이제 문장은 **(failure_code, 대상 종류, 세부 사유)** 로 고른다. failure_stage / failure_code
+#   값은 그대로다 — 문장만 세분화했다.
+#   2026-08-11 의 "채널 이름을 문장에서 뺀다" 결정은 이 날짜로 뒤집혔다. 관리자는 target_type 을
+#   골라 요청하므로 OS / ESXi / Redfish 라는 어휘가 조치 대상을 좁혀 준다.
 #
-# Python 쪽 정본은 common/library/precheck_bundle.py 의 REASON_* 상수이며 본 파일과
-# 글자까지 동일해야 한다. drift 는 tests/e2e/test_errors_message_contract.py 가 막는다.
+# 구조:
+#   _fr_catalog[<키>][<채널>] = 문장
+#     채널 키: os | esxi | redfish | default (채널을 모를 때)
+#     `{loc}` 는 실행 위치 값(se_location)으로 치환된다 — 값이 없으면 "미지정".
+#   문장 선택은 filter_plugins/failure_reason.py 의 `failure_reason` 필터 한 곳에서 한다.
 #
-# 금지 (rule 20 R1 / Phase 5-A~6-B 사용자 확정):
+# 복제본 (값이 글자까지 같아야 한다 — tests/e2e/test_errors_message_contract.py 가 drift 를 막는다):
+#   - common/library/precheck_bundle.py  FAILURE_REASON_CATALOG (사전 점검이 내는 키만)
+#   - callback_plugins/json_only.py      _FAILURE_REASON_CATALOG (envelope 보충이 내는 키만)
+#
+# 금지 (CLAUDE.md §10):
 #   관리 포트 번호 / IP / HTTP status / timeout 초 / 내부 용어(RST, SOAP, XML, ServiceRoot) /
-#   Ansible 태스크명 / raw exception / 긴 대시(—) / 가운데점(·) / DNS·호스트 이름 안내.
-#   기술 정보는 errors[].detail 에만 보존한다 (§34).
+#   Ansible 태스크명·변수명 / raw exception / 긴 대시(—) / 가운데점(·) / DNS·호스트 이름 안내.
+#   기술 정보는 errors[].detail 에만 보존한다.
 #
 # 사용처:
-#   redfish-gather/site.yml, esxi-gather/site.yml, os-gather/site.yml 의 rescue / always 블록
-#   (각 play 의 vars_files 로 로드)
+#   redfish-gather/site.yml, esxi-gather/site.yml, os-gather/site.yml 의 rescue / always 블록,
+#   common/tasks/normalize/build_output.yml, build_failed_output.yml (각 play 의 vars_files 로 로드)
 
-# ── failure_code → 문장 매핑 (정본) ────────────────────────────────────────────
-#   DNS_RESOLUTION_FAILED      → 1
-#   TARGET_UNREACHABLE         → 1
-#   TCP_CONNECT_FAILED         → 2   (2026-09-03 이동 — 아래 주석)
-#   TCP_CONNECTION_REFUSED     → 2
-#   PROTOCOL_CHECK_FAILED      → 3
-#   AUTH_PROBE_FAILED          → 4
-#   CREDENTIAL_SET_UNAVAILABLE → 4   (2026-08-12 신설 — 아래 주석)
-#   GATHER_FAILED              → 5
-#   OUTPUT_BUILD_FAILED        → 6
-#
-# CREDENTIAL_SET_UNAVAILABLE 가 4번을 **재사용**하는 이유:
-#   운영자가 할 일이 결국 "자격증명 설정 확인" 으로 AUTH_PROBE_FAILED 와 같다. 문장을
-#   늘리지 않아 Portal 5문장 집합이 불변이다. 두 상황의 구분(자격을 보냈는데 거부됐다 vs
-#   보낼 자격이 없었다)은 **code 와 errors[].detail** 이 표현한다 — 이것이 code / message /
-#   detail 3층 분리의 목적 그대로다.
-# 문장은 **관측된 failure_code** 에서 파생된다. 다른 조건으로 따로 갈리지 않게 해서
-# stage / code / message 가 서로 다른 이야기를 하는 상황을 구조적으로 없앤다.
+_fr_catalog:
 
-# TCP_CONNECT_FAILED 가 1 → 2 로 옮겨간 이유 (2026-09-03 사용자 지시):
-#   reachable 판정이 "관리 TCP 응답 OR ICMP Echo 응답" 이 되면서 code 두 개로 갈렸다.
-#     TARGET_UNREACHABLE : TCP 도 ICMP 도 무응답        → 1 (IP 사용 여부부터 확인)
-#     TCP_CONNECT_FAILED : ICMP 는 응답, 관리 TCP 만 무응답 → 2 (방화벽/관리 서비스 확인)
-#   ICMP 로 존재가 확인된 대상에게 "IP 사용 여부를 확인하세요" 는 사실과 어긋나고, 운영자를
-#   방화벽이 아닌 엉뚱한 곳으로 보낸다. 문장 집합(5개)은 그대로다 — 매핑만 옮겼다.
+  # ── 사전 점검 (precheck_bundle.py 가 낸다) ─────────────────────────────────
+  # IP 문자열을 주소로 해석하지 못했다. 빈 IP 는 Jenkins Validate 가 먼저 막으므로
+  # "입력되지 않았다" 는 여기까지 오지 않는다.
+  ip_invalid:
+    default: "대상 IP가 올바르지 않습니다. 개더링 대상 IP를 확인하세요."
 
-# 1. 연결 자체를 확인하지 못했다 (reachable 단계 — TCP·ICMP 무응답 / 주소 해석 실패).
-_fr_ip_unconfirmed: "대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요."
+  # 관리 TCP 도 ICMP 도 응답이 없었다. "장비 다운 확정" 이 아니라 관측이다 (CLAUDE.md §9).
+  target_unreachable:
+    default: "대상 서버가 응답하지 않습니다. 서버 전원 상태와 네트워크 연결을 확인하세요."
 
-# 2. 관리 포트에 붙지 못했다 (port 단계 — 거부(RST) 관측 또는 ICMP 로 도달만 확인).
-#    2026-08-12 (사용자 확정): 종전 문구 "대상 IP 사용은 확인됐지만 ..." 는 IP presence 판정을
-#    전제했는데 당시 저장소는 그런 판정을 하지 않았다. 관측한 사실만 말하도록 바꿨다 —
-#    "관리 포트에 연결할 수 없다". 2026-09-03 에 ICMP 도달 근거가 생겼지만 문구는 그대로 둔다:
-#    RST 를 보낸 주체가 최종 서버인지 중간 방화벽인지는 여전히 확정할 수 없고, 운영자가 할 일
-#    (방화벽·관리 서비스 확인)은 두 경우 모두 같다.
-_fr_port_unreachable: "대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요."
+  # ICMP 는 응답했는데 관리 포트는 조용했다. "통신은 되지만" 의 근거가 ICMP Echo Reply 다.
+  port_silent:
+    default: "대상 서버와 통신은 되지만 관리 포트에 연결할 수 없습니다. 방화벽과 접속 설정을 확인하세요."
 
-# 3. 관리 포트 연결은 됐는데 기대한 응답을 확인하지 못했다 (protocol 단계).
-_fr_protocol_unconfirmed: "관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. 관리 서비스 설정과 상태를 확인하세요."
+  # 연결 거부를 관측했다. 거부 신호를 보낸 주체가 최종 서버인지 중간 방화벽인지는 확정할 수
+  # 없으므로 주어를 쓰지 않는다 (CLAUDE.md §7 — Connection Refused 만 보고 최종 장비 직접 응답 단정 금지).
+  port_refused:
+    os: "OS 접속이 거부되었습니다. 대상 서버의 OS 원격 접속 설정과 방화벽을 확인하세요."
+    esxi: "ESXi 접속이 거부되었습니다. 대상 서버의 ESXi 접속 설정과 방화벽을 확인하세요."
+    redfish: "Redfish 접속이 거부되었습니다. 대상 장비의 Redfish 접속 설정과 방화벽을 확인하세요."
+    default: "관리 포트 접속이 거부되었습니다. 대상의 접속 설정과 방화벽을 확인하세요."
 
-# 4. 자격증명 단계 실패 (auth 단계 + 인증/수집을 구분하지 못하는 경로).
-_fr_credential_failed: "대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요."
+  # 포트는 열렸는데 기대한 응답이 아니었다. 대상 종류를 잘못 고른 경우만이 아니라 대상 종류가
+  # 맞아도 서비스가 꺼졌거나 응답이 늦거나 TLS 가 맞지 않으면 같은 code 가 나온다
+  # (2026-08-13 실측: target_type 이 맞는 Cisco BMC 가 이 code). 그래서 원인을 단정하지 않는다.
+  protocol_unconfirmed:
+    os: "접속한 대상에서 OS 원격 접속 응답을 확인하지 못했습니다. 대상 종류와 OS 원격 접속 설정을 확인하세요."
+    esxi: "접속한 대상에서 ESXi 응답을 확인하지 못했습니다. 대상 종류와 ESXi 서비스 상태를 확인하세요."
+    redfish: "접속한 대상에서 Redfish 응답을 확인하지 못했습니다. 대상 종류와 Redfish 서비스 설정을 확인하세요."
+    default: "접속한 대상에서 필요한 응답을 확인하지 못했습니다. 대상 종류와 접속 설정을 확인하세요."
 
-# 5. 접속까지는 확인됐고 수집에서 실패했다 (gather 단계).
-_fr_gather_failed: "대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요."
+  # ── Vault 설정 (수집 시스템 쪽 — 대상 서버 문제가 아니다) ──────────────────
+  # OS / ESXi 는 위치별 Vault(vault/<loc>/os/<os_type>.yml, vault/<loc>/esxi.yml)를 쓴다.
+  # Redfish 표준 계정은 위치와 무관한 전역 Vault(vault/common/redfish/standard.yml)다 → project_*.
+  loc_unregistered:
+    default: "해당 위치({loc})가 개더링 프로젝트에 등록되지 않았습니다."
+  loc_vault_missing:
+    default: "해당 위치({loc})에 Vault가 등록되지 않았습니다."
+  loc_vault_unreadable:
+    default: "해당 위치({loc})의 Vault를 읽을 수 없습니다."
+  # 위치 폴더는 있는데 대상 종류 파일이 없거나, 파일은 열렸는데 계정이 0개다.
+  loc_vault_no_account:
+    os: "해당 위치({loc})의 Vault에 OS용 계정이 없습니다."
+    esxi: "해당 위치({loc})의 Vault에 ESXi용 계정이 없습니다."
+    default: "해당 위치({loc})의 Vault에 계정이 없습니다."
+  project_vault_missing:
+    default: "개더링 프로젝트에 Vault가 등록되지 않았습니다."
+  project_vault_unreadable:
+    default: "개더링 프로젝트의 Vault를 읽을 수 없습니다."
+  project_vault_no_account:
+    default: "개더링 프로젝트의 Vault에 Redfish 표준 계정이 없습니다."
 
-# 6. 결과 객체 자체를 만들지 못했다 (fallback 단계 — OUTPUT_BUILD_FAILED).
-#    2026-08-12: 종전에는 이 문장이 각 site.yml always 블록 6곳 + build_failed_output.yml +
-#    callback_plugins/json_only.py 에 리터럴로 흩어져 있었다. 여기로 모은다.
-#    (build_failed_output.yml 에 있던 7번째 문장 "수집에 실패했습니다. 대상 상태와 수집 로그를
-#     확인하세요." 는 5번과 뒷부분이 같은데 의미가 반대라 폐지하고 이 문장으로 흡수했다.)
-_fr_output_build_failed: "수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요."
+  # ── 대상 인증 ──────────────────────────────────────────────────────────────
+  # 계정을 보냈지만 통과하지 못했고, 원인(비밀번호 / 권한 / 연결)을 확정하지 못했다.
+  # Redfish 는 위치별 계정이 아니라 전역 표준 계정으로 인증한다.
+  auth_unconfirmed:
+    os: "해당 위치({loc})의 Vault 계정으로 대상 OS에 로그인하지 못했습니다."
+    esxi: "해당 위치({loc})의 Vault 계정으로 대상 ESXi에 로그인하지 못했습니다."
+    redfish: "개더링 표준 계정으로 대상 Redfish에 인증하지 못했습니다."
+    default: "해당 위치({loc})의 Vault 계정으로 대상에 로그인하지 못했습니다."
+  # 명시적 거부가 **확인된** 경우만 쓴다 (auth_success=false). 지금 구조적으로 확인할 수 있는 것은
+  # Redfish 표준 후보 전원의 401 뿐이다. OS / ESXi 는 거부 사실이 오류 문자열로만 와서
+  # 확정할 수 없다 (CLAUDE.md §8 — 문자열 Error Parsing 으로 인증 실패 추측 금지).
+  auth_rejected:
+    redfish: "대상 Redfish 계정과 개더링 표준 계정이 다르거나 권한이 없습니다."
+
+  # ── 수집 ───────────────────────────────────────────────────────────────────
+  gather_after_auth:
+    os: "대상 OS에는 로그인했지만 정보를 가져오지 못했습니다."
+    esxi: "대상 ESXi에는 로그인했지만 정보를 가져오지 못했습니다."
+    redfish: "대상 Redfish 인증은 성공했지만 정보를 가져오지 못했습니다."
+    default: "대상에는 접속했지만 정보를 가져오지 못했습니다."
+  # 인증된 작업이 성공한 뒤 대상이 unreachable 이 됐다 (callback 보충 경로).
+  gather_connection_lost:
+    default: "정보 수집 중 대상 서버와 연결이 끊겼습니다."
+  # 예외 없이 끝났지만 성공한 섹션이 0개다 (build_output.yml).
+  gather_no_data:
+    default: "대상 서버에서 수집된 정보가 없습니다."
+  # 대상에 계정 요청을 보내기 **전에** 수집기 안에서 멈췄다 (Redfish adapter 선택 등).
+  gather_internal:
+    default: "개더링 프로젝트에서 정보 수집 중 오류가 발생했습니다."
+
+  # ── 결과 조립 ──────────────────────────────────────────────────────────────
+  # 결과 객체 자체를 만들지 못했다 (site.yml always / callback 최후 수단).
+  output_build_failed:
+    default: "개더링 프로젝트에서 수집 결과를 만들지 못했습니다."
+
+# failure_code → 그 code 로 나갈 수 있는 문장 키.
+#   런타임은 이 표를 읽지 않는다 (선택은 각 생산자가 관측으로 한다). 계약 테스트가
+#   "code 와 문장이 다른 이야기를 하지 않는다" 를 검사하는 기준표다.
+#   loc_vault_no_account / project_vault_no_account 가 두 code 에 있는 이유:
+#     계정 없이도 접속을 **시도했다면** AUTH_PROBE_FAILED (OS 는 에이전트 SSH 키, Redfish 는
+#     정체 미상 장비의 무인증 best-effort), 시도조차 못 했으면 CREDENTIAL_SET_UNAVAILABLE 이다.
+_fr_code_keys:
+  DNS_RESOLUTION_FAILED:      [ip_invalid]
+  TARGET_UNREACHABLE:         [target_unreachable]
+  TCP_CONNECT_FAILED:         [port_silent]
+  TCP_CONNECTION_REFUSED:     [port_refused]
+  PROTOCOL_CHECK_FAILED:      [protocol_unconfirmed]
+  CREDENTIAL_SET_UNAVAILABLE: [loc_unregistered, loc_vault_missing, loc_vault_unreadable,
+                               loc_vault_no_account, project_vault_missing,
+                               project_vault_unreadable, project_vault_no_account]
+  AUTH_PROBE_FAILED:          [auth_unconfirmed, auth_rejected, loc_vault_no_account,
+                               project_vault_no_account]
+  GATHER_FAILED:              [gather_after_auth, gather_connection_lost, gather_no_data,
+                               gather_internal]
+  OUTPUT_BUILD_FAILED:        [output_build_failed]
+
+# errors[] 가 10건을 넘어 잘랐을 때 남기는 행의 message (failure_reason 이 아니다).
+_fr_errors_truncated: "표시하지 않은 오류가 더 있습니다."

@@ -577,6 +577,10 @@
       # None — `data.multi_node = null` 로 envelope 에 emit (13 vendor 영향 0).
       # rule 13 R5 envelope 13 필드 shape 변경 0 + rule 92 R2 Additive only + rule 96 R1-B.
       multi_node: "{{ _rf_raw_collect.multi_node | default(none) }}"
+      # 2026-09-15: BIOS Current Attributes (보조 데이터 — 섹션 status 에 넣지 않는다).
+      # 모듈이 담은 dict 를 단일 표현식으로 그대로 넘긴다. default(..., true)·truthiness 분기·
+      # combine·to_json|from_json 을 끼우면 false / 0 / "" / null 이 바뀌거나 사라질 수 있다.
+      bios: "{{ _rf_raw_collect.data.bios | default(none) }}"
     _sections_supported_fragment: >-
       {{ ['hardware','bmc','cpu','memory','storage','network','firmware','power','thermal'] }}
     # cycle 2026-08-03: 세 status fragment 모두 보조 섹션(_rf_aux_sections)을 제외한다.

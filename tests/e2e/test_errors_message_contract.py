@@ -35,6 +35,8 @@ import yaml
 
 from tests.e2e.test_failure_reason_contract import (
     FAILURE_REASONS,
+    FR_CATALOG,
+    fr,
     _assert_grid_ready,
     _assert_no_ports,
     _assert_no_technical_noise,
@@ -93,8 +95,8 @@ def _error_templates() -> dict[str, str]:
 
 def _render_error(ctx: dict[str, Any]) -> dict[str, Any]:
     tpl = _error_templates()
-    # 2026-08-12: build_failed_output.yml 의 fallback 문장이 리터럴이 아니라 정본 변수
-    #   (_fr_output_build_failed)를 참조하므로 vars_files 로드분을 함께 주입한다.
+    # build_failed_output.yml 의 fallback 문장이 리터럴이 아니라 카탈로그
+    #   (_fr_catalog.output_build_failed)를 참조하므로 vars_files 로드분을 함께 주입한다.
     return {
         key: _env().from_string(text).render(**{**FAILURE_REASONS, **ctx})
         for key, text in tpl.items()
@@ -126,13 +128,14 @@ def _os_diag(os_type: str, auth_ok: bool) -> dict[str, Any]:
 
 def _precheck_diag(channel: str, stage: str) -> dict[str, Any]:
     """precheck 단계 실패 진단 — 사유 문자열은 precheck_bundle 정본을 그대로 쓴다."""
-    reason = {
-        "reachable": pb.REASON_IP_UNCONFIRMED,
-        "port": pb.REASON_IP_UNCONFIRMED,
-        "protocol": pb.CHANNEL_PROTOCOL_MESSAGES[channel],
-        "auth": pb.REASON_CREDENTIAL_FAILED,
+    code = {
+        "reachable": "TARGET_UNREACHABLE",
+        "port": "TCP_CONNECTION_REFUSED",
+        "protocol": "PROTOCOL_CHECK_FAILED",
+        "auth": "AUTH_PROBE_FAILED",
     }[stage]
-    return {**_PRECHECK_OK, "failure_stage": stage, "failure_reason": reason}
+    return {**_PRECHECK_OK, "failure_stage": stage, "failure_code": code,
+            "failure_reason": pb.reason_for_failure(code, channel)}
 
 
 # 실제 운영에서 각 경로가 넘기는 기술 문자열 (모두 detail 로 가야 한다)
@@ -286,129 +289,154 @@ def test_fallback_envelope_message_matches_reason(site):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 문구 정본 drift — Ansible YAML ↔ Python 상수
+# 문구 카탈로그 계약 — 정본 YAML ↔ Python 복제본 / code ↔ 문장 키
 # ═══════════════════════════════════════════════════════════════════════════
-_CANONICAL = {
-    "_fr_ip_unconfirmed": "REASON_IP_UNCONFIRMED",
-    "_fr_port_unreachable": "REASON_PORT_UNREACHABLE",
-    "_fr_protocol_unconfirmed": "REASON_PROTOCOL_UNCONFIRMED",
-    "_fr_credential_failed": "REASON_CREDENTIAL_FAILED",
-    "_fr_gather_failed": "REASON_GATHER_FAILED",
-    # 2026-08-12: envelope fallback 전용 문장(OUTPUT_BUILD_FAILED). 종전에는 이 문장이
-    # site.yml always 블록 8곳 + build_failed_output.yml + json_only.py 에 리터럴로
-    # 흩어져 있었다. 정본을 failure_reasons.yml 로 옮기고 drift 를 여기서 막는다.
-    "_fr_output_build_failed": "REASON_OUTPUT_BUILD_FAILED",
+# 2026-09-21 (사용자 확정): 문장을 failure_code 하나가 아니라 (code, 대상 종류, 세부 사유) 로
+#   고른다. 종전 6문장 집합 고정 테스트를 카탈로그 키 집합 고정으로 바꿨다. 키 추가/삭제는
+#   사용자 확정 사항이다 (docs/ai/decisions/ADR-2026-09-21-failure-reason-catalog.md).
+_EXPECTED_KEYS = {
+    "ip_invalid", "target_unreachable", "port_silent", "port_refused",
+    "protocol_unconfirmed",
+    "loc_unregistered", "loc_vault_missing", "loc_vault_unreadable", "loc_vault_no_account",
+    "project_vault_missing", "project_vault_unreadable", "project_vault_no_account",
+    "auth_unconfirmed", "auth_rejected",
+    "gather_after_auth", "gather_connection_lost", "gather_no_data", "gather_internal",
+    "output_build_failed",
 }
+_CHANNELS = {"os", "esxi", "redfish", "default"}
 
 
-@pytest.mark.parametrize("yaml_key,py_name", sorted(_CANONICAL.items()))
-def test_failure_reason_sources_do_not_drift(yaml_key, py_name):
-    assert FAILURE_REASONS[yaml_key] == getattr(pb, py_name), (
-        f"문구 정본 drift — common/vars/failure_reasons.yml:{yaml_key} 와 "
-        f"precheck_bundle.{py_name} 가 다르다"
+def _catalog_texts():
+    """(키, 채널, 문장 틀) 전부."""
+    for key, entry in FR_CATALOG.items():
+        for channel, text in entry.items():
+            yield key, channel, text
+
+
+def test_catalog_has_exactly_the_confirmed_keys():
+    assert set(FR_CATALOG) == _EXPECTED_KEYS, (
+        "사용자 문구 카탈로그 키 집합이 바뀌었다. 추가/삭제는 사용자 확정이 필요하다: "
+        f"추가={sorted(set(FR_CATALOG) - _EXPECTED_KEYS)}, "
+        f"삭제={sorted(_EXPECTED_KEYS - set(FR_CATALOG))}"
     )
+    for key, entry in FR_CATALOG.items():
+        assert isinstance(entry, dict) and entry, key
+        assert set(entry) <= _CHANNELS, f"{key}: 알 수 없는 채널 {set(entry) - _CHANNELS}"
 
 
-def test_failure_reasons_yaml_has_exactly_the_canonical_sentences():
-    """정본 문장 집합 = 사용자 표준 5 문장 + envelope fallback 1 문장.
-
-    5 문장은 precheck / rescue 가 쓰는 사용자 대표 사유이고, 6번째(_fr_output_build_failed)는
-    결과 객체 자체를 만들지 못한 경우(OUTPUT_BUILD_FAILED)의 문장이다. 추가/삭제는 사용자 확정
-    사항이라 여기서 집합 자체를 고정한다.
-    """
-    assert set(FAILURE_REASONS) == set(_CANONICAL), (
-        "사용자 문구 표준 집합이 바뀌었다. 추가/삭제는 사용자 확정이 필요하다."
-    )
-    for key, text in FAILURE_REASONS.items():
-        _assert_grid_ready(text, f"failure_reasons.yml:{key}")
+@pytest.mark.parametrize("loc", ["ic", None, "", "  seoul-dc1  "])
+def test_every_catalog_sentence_is_grid_ready(loc):
+    """모든 (키, 채널) 문장이 {loc} 치환 후 Portal Grid 품질 기준을 통과한다."""
+    for key, channel, _text in _catalog_texts():
+        rendered = fr(key, None if channel == "default" else channel, loc)
+        tag = f"{key}/{channel}/loc={loc!r}"
+        _assert_grid_ready(rendered, tag)
+        assert "{loc}" not in rendered and "{" not in rendered, f"[{tag}] 틀이 남았다"
 
 
-def test_no_site_yml_hardcodes_a_canonical_sentence():
-    """정본 문장을 site.yml 이 리터럴로 다시 적지 않는다 (H2 회귀 차단).
-
-    종전에는 '수집 결과를 생성하지 못했습니다…' 가 always 블록마다 diagnosis.failure_reason 과
-    errors[0].message 두 자리에 **따로** 적혀 있어(3파일 8곳) 한쪽만 고치면 즉시 어긋났다.
-    """
-    for site in ("redfish-gather/site.yml", "esxi-gather/site.yml", "os-gather/site.yml"):
-        text = (REPO / site).read_text(encoding="utf-8")
-        for key, sentence in FAILURE_REASONS.items():
-            assert sentence not in text, (
-                f"{site} 에 정본 문장이 하드코딩됐다 ({key}) — 변수 참조로 바꿀 것"
-            )
+def test_loc_placeholder_renders_actual_location():
+    """사용자 결정 (2026-09-21) — 문장의 위치는 실제 loc 값으로 보인다. 값이 없으면 '미지정'."""
+    assert fr("loc_vault_unreadable", None, "ic") == "해당 위치(ic)의 Vault를 읽을 수 없습니다."
+    assert "해당 위치(미지정)" in fr("loc_vault_unreadable", None, "")
+    assert "해당 위치(미지정)" in fr("loc_vault_unreadable", None, None)
+    # 문장을 깨뜨리는 문자는 표시하지 않는다 (미등록 입력값이 그대로 보일 수 있다)
+    assert "{" not in fr("loc_unregistered", None, "{{ evil }}")
 
 
-@pytest.mark.parametrize("key,text", sorted(FAILURE_REASONS.items()))
+@pytest.mark.parametrize("key,channel", [
+    (k, c) for k, e in FR_CATALOG.items() for c in e if c != "default"])
+def test_channel_sentences_name_their_target_kind(key, channel):
+    """대상 종류별 문장은 그 종류 어휘를 담는다 — 채널 문장을 따로 둔 이유다."""
+    word = {"os": "OS", "esxi": "ESXi", "redfish": "Redfish"}[channel]
+    assert word in FR_CATALOG[key][channel], f"{key}/{channel}"
+
+
+def test_sentences_are_unique_across_catalog():
+    texts = [t for _k, _c, t in _catalog_texts()]
+    assert len(texts) == len(set(texts)), "같은 문장이 두 키에 있으면 원인을 구분할 수 없다"
+
+
+@pytest.mark.parametrize("key,text", sorted(
+    (f"{k}/{c}", t) for k, c, t in _catalog_texts()))
 def test_standard_sentences_have_no_dns_guidance(key, text):
     """§25 §28 — Portal 은 IPv4 만 넘긴다. DNS / 호스트 이름 안내를 쓰지 않는다."""
     for banned in ("DNS", "호스트 이름", "도메인", "이름 확인"):
         assert banned not in text, f"[{key}] DNS 계열 안내가 남아 있다: {text!r}"
 
 
-def test_precheck_bundle_emits_only_standard_sentences():
-    """precheck 가 만드는 사유도 정본 문장 밖으로 나가지 않는다."""
-    standard = set(FAILURE_REASONS.values())
-    produced = set(pb.CHANNEL_PROTOCOL_MESSAGES.values()) \
-        | set(pb.REASON_BY_FAILURE_CODE.values()) \
-        | {pb.REASON_CREDENTIAL_FAILED, pb.REASON_GATHER_FAILED}
-    assert produced <= standard, sorted(produced - standard)
+def test_precheck_catalog_copy_does_not_drift():
+    """precheck_bundle 의 부분 복제본은 정본과 글자까지 같다."""
+    for key, entry in pb.FAILURE_REASON_CATALOG.items():
+        assert key in FR_CATALOG, f"precheck 에만 있는 키 {key}"
+        assert entry == FR_CATALOG[key], (
+            f"문구 drift — common/vars/failure_reasons.yml:_fr_catalog.{key} 와 "
+            f"precheck_bundle.FAILURE_REASON_CATALOG[{key!r}] 가 다르다"
+        )
 
 
-# 2026-08-12: failure_code → 문장 매핑이 **유일한** 문장 선택 경로다.
-#   종전에는 존재하지 않는 presence 판정(ip_in_use)이 문장을 갈랐고, RST 를 실제로 관측해
-#   TCP_CONNECTION_REFUSED 로 확정한 상황에서도 1번 문구("IP 사용 여부를 확인하세요")가
-#   나갔다 (H3). 이제 관측된 code 를 그대로 따른다.
-@pytest.mark.parametrize("code,expected", [
-    ("DNS_RESOLUTION_FAILED", "_fr_ip_unconfirmed"),
-    ("TARGET_UNREACHABLE", "_fr_ip_unconfirmed"),
-    # 2026-09-03: ICMP 로 도달이 확인된 상태(TCP_CONNECT_FAILED)에 1번 문구("IP 사용 여부를
-    #   확인하세요")를 쓰면 사실과 어긋난다. 운영자가 볼 곳은 방화벽/관리 서비스이므로 2번.
-    ("TCP_CONNECT_FAILED", "_fr_port_unreachable"),
-    ("TCP_CONNECTION_REFUSED", "_fr_port_unreachable"),
-    ("PROTOCOL_CHECK_FAILED", "_fr_protocol_unconfirmed"),
-    ("AUTH_PROBE_FAILED", "_fr_credential_failed"),
-    # 4번 문장 재사용 — 운영자가 할 일이 같다("자격증명 설정 확인"). Portal 문장 집합 불변.
-    # 두 상황의 구분은 code 와 errors[].detail 이 한다 (3층 분리의 목적 그대로).
-    ("CREDENTIAL_SET_UNAVAILABLE", "_fr_credential_failed"),
-    ("GATHER_FAILED", "_fr_gather_failed"),
-    ("OUTPUT_BUILD_FAILED", "_fr_output_build_failed"),
-])
-def test_failure_code_maps_to_exactly_one_sentence(code, expected):
-    assert pb.reason_for_failure_code(code) == FAILURE_REASONS[expected]
+_CODE_KEYS = FAILURE_REASONS["_fr_code_keys"]
 
 
-def test_failure_code_mapping_covers_every_enum_value():
-    """failure_code enum 전량이 문장을 갖는다 (누락 시 1번으로 조용히 퇴화하는 것 방지).
+def test_code_key_table_covers_every_enum_value():
+    """failure_code enum 전량이 문장 키를 갖는다 (누락 시 문장이 조용히 퇴화하는 것 방지).
 
-    개수를 세지 않고 **field_dictionary 의 enum 과 직접 대조**한다 — 두 곳에 값 목록을
-    복제해 두면 한쪽만 늘어나도 이 테스트가 통과해 버린다.
+    개수를 세지 않고 **field_dictionary 의 enum 과 직접 대조**한다.
     """
     fd = yaml.safe_load(
         (REPO / "schema" / "field_dictionary.yml").read_text(encoding="utf-8")
     )
     fields = fd.get("fields", fd)
     enum_values = set(fields["diagnosis.failure_code"]["enum"])
-    assert set(pb.REASON_BY_FAILURE_CODE) == enum_values, (
-        "REASON_BY_FAILURE_CODE 와 field_dictionary enum 이 어긋났다: "
-        f"매핑만={sorted(set(pb.REASON_BY_FAILURE_CODE) - enum_values)}, "
-        f"enum만={sorted(enum_values - set(pb.REASON_BY_FAILURE_CODE))}"
+    assert set(_CODE_KEYS) == enum_values, (
+        "_fr_code_keys 와 field_dictionary enum 이 어긋났다: "
+        f"표만={sorted(set(_CODE_KEYS) - enum_values)}, "
+        f"enum만={sorted(enum_values - set(_CODE_KEYS))}"
+    )
+    listed = {k for keys in _CODE_KEYS.values() for k in keys}
+    assert listed == set(FR_CATALOG), (
+        f"code 에 매이지 않은 키={sorted(set(FR_CATALOG) - listed)}, "
+        f"카탈로그에 없는 키={sorted(listed - set(FR_CATALOG))}"
     )
 
 
-def test_sentence_selection_stays_failure_code_only():
-    """문장은 **관측된 failure_code 에서만** 파생한다 (2026-09-03 갱신).
+@pytest.mark.parametrize("code,key", sorted(pb.PRECHECK_REASON_KEYS.items()))
+@pytest.mark.parametrize("channel", ["os", "esxi", "redfish"])
+def test_precheck_code_maps_to_catalog_sentence(code, key, channel):
+    """사전 점검 문장 = 카탈로그 (키, 채널) 문장. 키는 그 code 가 허용하는 키여야 한다."""
+    assert key in _CODE_KEYS[code], f"{code} → {key} 는 _fr_code_keys 가 허용하지 않는다"
+    assert pb.reason_for_failure(code, channel) == fr(key, channel, "미지정")
 
-    종전 이름은 test_no_ip_presence_probe_is_implemented 였고 "ICMP 는 만들지 않는다" 를
-    고정했다. 2026-09-03 사용자 지시로 reachable 판정에 ICMP Echo 가 **OR 조건으로**
-    들어왔으므로 그 부분은 더 이상 유효하지 않다. 그러나 이 테스트가 실제로 지키던 것은
-    "presence 추정으로 사용자 문장을 갈라 쓰지 않는다" 이며, 그 계약은 그대로다:
 
-      - 문장 선택 진입점은 reason_for_failure_code 하나뿐이다.
-      - `ip_in_use` 같은 **판정 결과를 받아만 두고 채우지 않는 자리**를 다시 만들지 않는다.
-        (ICMP 결과는 그런 자리가 아니라 failure_code 를 직접 결정하고 소멸한다.)
-      - ICMP 는 실패를 만들지 않으므로 ICMP 전용 문장도 code 도 없다.
+def test_precheck_distinguishes_every_connect_failure():
+    """TCP 무응답(ICMP 응답) 과 거부는 조치가 달라 다른 문장이다 (2026-09-21)."""
+    for ch in ("os", "esxi", "redfish"):
+        silent = pb.reason_for_failure("TCP_CONNECT_FAILED", ch)
+        refused = pb.reason_for_failure("TCP_CONNECTION_REFUSED", ch)
+        unreachable = pb.reason_for_failure("TARGET_UNREACHABLE", ch)
+        dns = pb.reason_for_failure("DNS_RESOLUTION_FAILED", ch)
+        assert len({silent, refused, unreachable, dns}) == 4, ch
+
+
+def test_no_site_yml_hardcodes_a_catalog_sentence():
+    """정본 문장을 site.yml 이 리터럴로 다시 적지 않는다 (H2 회귀 차단)."""
+    for site in ("redfish-gather/site.yml", "esxi-gather/site.yml", "os-gather/site.yml"):
+        text = (REPO / site).read_text(encoding="utf-8")
+        for key, channel, tpl in _catalog_texts():
+            for piece in tpl.split("{loc}"):
+                if len(piece.strip()) >= 12:
+                    assert piece not in text, (
+                        f"{site} 에 정본 문장이 하드코딩됐다 ({key}/{channel}) — 카탈로그를 참조할 것"
+                    )
+
+
+def test_sentence_selection_has_no_presence_guess():
+    """문장은 관측값(code / 채널 / Vault 적재 결과)에서만 고른다.
+
+    - presence 추정 문장 분기(reason_for_connect_failure / ip_in_use)를 되살리지 않는다.
+    - ICMP 는 실패를 만들지 않으므로 ICMP 전용 문장 키도 없다.
     """
     assert not hasattr(pb, "reason_for_connect_failure"), (
-        "presence 기반 문장 분기가 되살아났다 — 문장은 failure_code 에서만 파생한다"
+        "presence 기반 문장 분기가 되살아났다"
     )
     source = (REPO / "common" / "library" / "precheck_bundle.py").read_text(encoding="utf-8")
     for line in source.splitlines():
@@ -416,10 +444,7 @@ def test_sentence_selection_stays_failure_code_only():
         if stripped.startswith("#"):
             continue
         assert "ip_in_use" not in line, f"presence 판정 잔재: {line!r}"
-    # ICMP 는 근거만 더한다 — 전용 사용자 문장을 만들지 않는다 (Portal 5문장 집합 불변).
-    assert len(set(FAILURE_REASONS.values())) == len(FAILURE_REASONS), "문장 중복 정의"
-    for code, sentence in pb.REASON_BY_FAILURE_CODE.items():
-        assert sentence in set(FAILURE_REASONS.values()), code
+    assert not any("icmp" in k for k in FR_CATALOG), "ICMP 전용 문장이 생겼다"
 
 
 def test_icmp_probe_is_not_a_gate():
@@ -439,7 +464,7 @@ def test_icmp_probe_is_not_a_gate():
 
 
 def test_site_yml_rescues_reference_shared_constants_not_literals():
-    """중복 문자열 정의 금지 — rescue 는 문장을 직접 쓰지 않고 정본 변수를 참조한다."""
+    """중복 문자열 정의 금지 — rescue 는 문장을 직접 쓰지 않고 카탈로그 필터를 쓴다."""
     targets = [
         ("redfish-gather/site.yml", _RF_TASK),
         ("esxi-gather/site.yml", _ESXI_TASK),
@@ -448,10 +473,11 @@ def test_site_yml_rescues_reference_shared_constants_not_literals():
     ]
     for site, task_name in targets:
         tpl = _task_by_name(site, task_name)["ansible.builtin.set_fact"]["_diagnosis"]
-        assert "_fr_" in tpl, f"{site}:{task_name} 이 정본 변수를 참조하지 않는다"
-        for sentence in FAILURE_REASONS.values():
+        assert "_fr_catalog | failure_reason(" in tpl, (
+            f"{site}:{task_name} 이 카탈로그 필터를 쓰지 않는다")
+        for _k, _c, sentence in _catalog_texts():
             assert sentence not in tpl, (
-                f"{site}:{task_name} 에 문구가 하드코딩됐다 — 정본 변수를 쓸 것"
+                f"{site}:{task_name} 에 문구가 하드코딩됐다 — 카탈로그를 쓸 것"
             )
 
 
@@ -521,12 +547,12 @@ def _render_kept(rep, all_errors):
         **{**FAILURE_REASONS, "_norm_errors": rep, "_all_errors": all_errors})
 
 
-_REP = [{"section": "gather", "message": FAILURE_REASONS["_fr_gather_failed"], "detail": "raw"}]
+_REP = [{"section": "gather", "message": fr("gather_after_auth", "os"), "detail": "raw"}]
 
 
 def test_failed_envelope_keeps_representative_error_first():
     kept = _render_kept(_REP, [])
-    assert kept[0]["message"] == FAILURE_REASONS["_fr_gather_failed"], (
+    assert kept[0]["message"] == _REP[0]["message"], (
         "대표 Fatal Error 는 항상 errors[0] 이어야 한다 (Portal 이 첫 원소만 읽어도 동작 불변)"
     )
 
@@ -540,7 +566,7 @@ def test_failed_envelope_preserves_accumulated_section_errors():
     ]
     kept = _render_kept(_REP, accumulated)
     messages = [e["message"] for e in kept]
-    assert messages[0] == FAILURE_REASONS["_fr_gather_failed"]
+    assert messages[0] == _REP[0]["message"]
     for src in accumulated:
         assert src["message"] in messages, f"섹션 오류가 사라졌다: {src['message']!r}"
 
@@ -565,6 +591,9 @@ def test_failed_envelope_caps_error_count():
     assert "표시하지 않은 오류" in kept[-1]["detail"], (
         "잘렸다는 사실이 남아야 한다 (rule 70 — silent 절단 금지)"
     )
+    # 절단 행은 대표 실패 문장을 빌려 쓰지 않는다 (2026-09-21 — 인증 실패 envelope 에
+    # '로그인했지만' 같은 문장이 섞이면 서로 반대되는 이야기가 된다).
+    assert kept[-1]["message"] == FAILURE_REASONS["_fr_errors_truncated"]
 
 
 def test_failed_envelope_keeps_distinct_details_even_with_same_message():
@@ -633,7 +662,8 @@ def test_normal_path_failed_status_gets_failure_fields():
     diag = _render_ensure(_SUCCESS_PATH_DIAG, "failed")
     assert diag["failure_stage"] == "gather"
     assert diag["failure_code"] == "GATHER_FAILED"
-    assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
+    # 예외 없이 끝났는데 성공 섹션이 0개 → '수집된 정보가 없다' (2026-09-21)
+    assert diag["failure_reason"] == fr("gather_no_data")
     _assert_grid_ready(diag["failure_reason"], "build_output/failed")
     # 앞 단계 관측은 보존한다
     assert diag["reachable"] is True and diag["port_open"] is True
@@ -650,7 +680,7 @@ def test_success_and_partial_are_untouched(status):
 def test_precheck_reason_is_not_overwritten():
     diag = {**_SUCCESS_PATH_DIAG, "failure_stage": "protocol",
             "failure_code": "PROTOCOL_CHECK_FAILED",
-            "failure_reason": FAILURE_REASONS["_fr_protocol_unconfirmed"]}
+            "failure_reason": fr("protocol_unconfirmed", "os")}
     assert _ensure_guard_fires(diag, "failed") is False
 
 

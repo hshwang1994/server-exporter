@@ -209,7 +209,8 @@ hostname = (system.hostname OR system.fqdn) OR _out_ip
 | 함수 | 호출 endpoint |
 |---|---|
 | `detect_vendor()` | `/redfish/v1/` (ServiceRoot 무인증) → Manufacturer 추출 |
-| `gather_system()` | `/redfish/v1/Systems/{id}` + `/Bios` (선택) |
+| `gather_system()` | `/redfish/v1/Systems/{id}` — 응답의 `Bios.@odata.id` 를 기록만 한다 (Bios 는 부르지 않음) |
+| `gather_bios()` | `{ComputerSystem.Bios.@odata.id}` 1회 (링크 있을 때만) → `data.bios.current.attributes`. 실패는 `errors[].section=bios` 또는 `diagnosis.details.notices` (host status 불변) |
 | `gather_bmc()` | `/redfish/v1/Managers/{id}` + EthernetInterfaces |
 | `gather_processors()` | `/redfish/v1/Systems/{id}/Processors` |
 | `gather_memory()` | `/redfish/v1/Systems/{id}/Memory` |

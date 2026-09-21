@@ -54,7 +54,7 @@
     # diagnosis.failure_reason 이 아니라 **errors[].message** 다. 두 값이 다른 이야기를 하면
     # 사용자가 보는 문장과 시스템이 보는 문장이 갈라진다.
     #   → message 는 failure_reason 을 **그대로 복사**한다. 문구를 여기서 새로 정의하지 않는다
-    #     (문자열 정본은 common/vars/failure_reasons.yml / precheck_bundle.REASON_*).
+    #     (문자열 정본은 common/vars/failure_reasons.yml `_fr_catalog`).
     #   → 기술 정보(태스크명 / 관리 포트 / HTTP status / 원본 예외)는 detail 에만 남긴다 (§34).
     #
     # 종전(cycle-016)에는 message 가 '수집 실패 — 채널=..., IP=...' 였고 rescue 가 넘긴
@@ -68,11 +68,9 @@
           {%- if reason is string and (reason | trim | length) > 0 -%}
           {{- reason | trim -}}
           {%- else -%}
-          {#- 2026-08-12: 종전에는 여기에 표준 문장 밖의 7번째 문장이 리터럴로 있었다
-              ('수집에 실패했습니다. …'). 5번 문장과 뒷부분이 같은데 의미는 반대라
-              사용자가 구분할 수 없었다. failure_reason 조차 만들지 못한 상태이므로
-              '결과를 만들지 못했다'는 정본 문장(_fr_output_build_failed)을 쓴다. -#}
-          {{- _fr_output_build_failed -}}
+          {#- failure_reason 조차 만들지 못한 상태이므로 '결과를 만들지 못했다'는
+              카탈로그 문장(output_build_failed)을 쓴다. 문장을 여기서 새로 정의하지 않는다. -#}
+          {{- _fr_catalog.output_build_failed.default -}}
           {%- endif -%}
         # 진단 원본 오류(_fail_error_detail) + 실패 태스크/기술 메시지(_fail_error_message) 를
         # 둘 다 보존한다. 둘 다 비어 있으면 null.
@@ -133,7 +131,7 @@
       {%- if dropped > 0 -%}
         {%- set _ = shown.append({
           'section': 'gather',
-          'message': _fr_gather_failed,
+          'message': _fr_errors_truncated,
           'detail': '표시하지 않은 오류 ' ~ dropped ~ '건 (수집 로그를 확인하세요)'}) -%}
       {%- endif -%}
       {{ shown }}

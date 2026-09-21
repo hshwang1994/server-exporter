@@ -6,7 +6,148 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-09-03
+> 최종 갱신: 2026-09-21
+
+## 2026-09-21 — 실패 사유 문장(`failure_reason`)을 대상 종류·세부 사유별로 나눈다
+
+### 요구
+
+Portal 실패 화면의 "실패 사유"(= `diagnosis.failure_reason` = `errors[0].message`)를 관리자가 바로
+조치 대상을 알 수 있는 문장으로 바꿔 달라는 요청이 있었다. 사용자가 새 문장 체계를 직접 제시했다.
+
+### 분석
+
+종전에는 `failure_code` 9개가 문장 6개로 뭉쳐 있었다 (2026-08-12 결정 — 문장은 code 에서만 파생).
+
+- 방화벽 차단이 의심되는 `TCP_CONNECT_FAILED`(ping 응답, 관리 포트 무응답)와 서비스 중지가 의심되는
+  `TCP_CONNECTION_REFUSED`(연결 거부)가 같은 문장이었다.
+- 수집 시스템 쪽 Vault 설정 문제(`CREDENTIAL_SET_UNAVAILABLE`)와 대상 계정 문제(`AUTH_PROBE_FAILED`)가
+  같은 문장이라 관리자가 대상 서버 계정을 헛되이 확인하게 됐다.
+- 2026-08-11 에 채널 이름을 문장에서 뺀 탓에 "관리 포트 / 관리 서비스" 가 무엇인지 알 수 없었다.
+
+검토 중 코드 결함 2건을 함께 찾았다.
+
+1. Redfish 에서 실행 위치 미등록 / 표준 계정 0개 / vendor 미식별 + 표준 Vault 부재 세 경우는 인증을
+   한 번도 시도하지 않았는데 `GATHER_FAILED`("대상 접속은 확인됐지만")로 나갔다.
+2. `common/tasks/credential/load_one.yml` 의 `failed_when: false` 가 복호화 실패 표시를 지워, Vault
+   비밀번호가 없거나 틀려도 "계정 0개" 로 분류됐다 (WSL ansible-core 2.20.7 실측).
+
+### 결정 (사용자 확정)
+
+- 문장을 **`failure_code` + 대상 종류(OS / ESXi / Redfish) + 세부 사유**로 고른다. `failure_stage` /
+  `failure_code` 값은 유지한다. 문장 카탈로그 정본은 `common/vars/failure_reasons.yml` 의 `_fr_catalog`.
+- 문장 속 위치는 실제 `loc` 값으로 보인다 (값이 없으면 `미지정`).
+- 연결 거부 문장은 주어를 쓰지 않는다 (거부 신호는 중간 방화벽이 보낼 수도 있다).
+- 프로토콜 실패 문장은 "대상 종류가 틀렸다" 고 단정하지 않는다 (대상 종류가 맞아도 서비스 중지 /
+  응답 지연 / TLS 비호환이면 같은 code 다 — 2026-08-13 Cisco BMC 실측).
+- Redfish 표준 계정은 위치와 무관한 전역 Vault 이므로 "개더링 프로젝트 Vault / 개더링 표준 계정" 으로 쓴다.
+- 판정 근거가 없는 문장(OS/ESXi 계정 불일치 확인, 조회 권한 부족 확인, OS/ESXi 내부 오류)은 후속 과제로 미룬다.
+- 위 결함 2건을 바로잡는다. Redfish 세 경우는 `CREDENTIAL_SET_UNAVAILABLE` / `failure_stage: auth` 가 된다.
+
+### 왜 이렇게 했나
+
+관리자에게 필요한 것은 "누가 무엇을 고쳐야 하나" 다. code 는 이미 그 차이를 알고 있었는데 문장이
+그 정보를 버리고 있었다. 반대로 관측하지 않은 원인(거부 주체, 대상 종류 불일치, OS 계정 불일치)을
+문장에 넣으면 관리자를 엉뚱한 곳으로 보낸다. 그래서 "관측한 것만, 대상 종류 어휘로" 를 기준으로 삼았다.
+
+### 영향
+
+- 사용자 문장이 전부 바뀐다. 문장 글자로 분기하는 소비자가 있다면 영향을 받는다 (문장은 파싱 대상이 아니다).
+- Redfish 세 경우의 `failure_code` / `failure_stage` 가 바뀐다 (`GATHER_FAILED`/`gather` → `CREDENTIAL_SET_UNAVAILABLE`/`auth`).
+- Vault 복호화 실패가 이제 수집 시도 전에 멈춘다 (종전에는 계정 없이 접속을 시도했다).
+- 운영 파이프라인은 미등록 loc 를 Ansible 전에 막으므로 "위치 미등록" 문장은 Jenkins 밖 직접 실행에서만 나온다.
+- 상세 표: [../contract/03-fields.md](../contract/03-fields.md) §4-1.
+
+## 2026-09-15 — BIOS Attributes 를 Key 이름순으로 정렬해 내보낸다 (`data.bios.current.attributes`)
+
+### 요구
+
+같은 날 추가한 BIOS Current Attributes(아래 항목)가 장비가 준 순서 그대로 나와 읽기 어렵다는 사용자 지적이 있었다.
+처음 결정은 "Key·Value·JSON 자료형 원본 보존"이었고, 구현은 순서까지 응답 그대로 두었다.
+
+### 관측
+
+같은 장비의 Current Bios 응답(저장소 캡처 2026-04-28, 저장소 fixture, Jenkins 실수집 2026-09-15)을 비교했다.
+
+| 장비 | 장비가 주는 Key 순서 |
+|---|---|
+| Dell PowerEdge R760 5대 (571개) | 이미 대소문자 구분 이름순 |
+| HPE ProLiant DL380 Gen11 (285개) | 이미 대소문자 구분 이름순 (캡처 기준) |
+| Lenovo ThinkSystem SR650 V2 (392개) | 서로 다른 시점 3건의 순서가 모두 달랐다 (같은 자리에 같은 Key 가 온 비율 0~1%, Key 집합은 같음). 연속 요청으로는 확인하지 않았다 |
+| Cisco CIMC 장비 1대 (87개) | 캡처와 실수집의 순서는 같지만 이름순도 메뉴 묶음도 아니다 |
+
+### 결정 (사용자 확정)
+
+- 수집기(`gather_bios`)가 `Attributes` 를 **Key 이름순(대소문자를 구분하는 문자열 정렬)** 으로 담는다.
+  Key 이름·개수·Value·JSON 자료형은 그대로다.
+- 대소문자 무시 정렬, 숫자 자릿값 정렬(`Slot2` 를 `Slot10` 앞에 두는 방식)은 쓰지 않는다.
+
+### 왜 이렇게 했나
+
+- 장비가 준 순서에는 지킬 의미가 없었다. Dell·HPE 는 이미 같은 규칙이고, Lenovo 는 같은 장비도 결과마다 순서가
+  달라 두 결과를 텍스트로 비교하면 거의 모든 줄이 바뀐 것처럼 보이며, Cisco 순서도 메뉴 순서가 아니다.
+  BIOS 설정 화면의 메뉴 순서는 AttributeRegistry 에 있고 수집 범위 밖이다.
+- 대소문자 구분 정렬은 Dell·HPE BMC 가 쓰는 규칙이라 두 Vendor 출력이 정렬 전과 같다. 흔한 도구의 기본 문자열
+  정렬과도 결과가 같다. 대신 소문자로 시작하는 Key(Cisco `cdnEnable`, `comSpcrEnable`)가 뒤로 간다.
+- JSON 객체의 Key 순서는 의미를 갖지 않는 정보라 원본 보존 결정(Key·Value·자료형)과 충돌하지 않는다.
+- 정렬은 모듈 한 곳에서 한다. 이후 Ansible 템플릿·`json_only` 콜백 경로는 받은 순서를 바꾸지 않는다(렌더 테스트로 확인).
+
+### 영향
+
+- **호출자**: 같은 장비는 매번 같은 Key 순서로 받는다. 그래도 순서에 기대는 처리는 하지 않는다 — 저장 방식(DB 의
+  JSON 전용 타입 등)에 따라 순서가 다시 바뀔 수 있으므로 화면 정렬은 받는 쪽에서 한다.
+- **변하지 않는 것**: 요청 수, `status` / `sections` / `errors` 판정, Ansible no_log 경계, replay golden
+  (Bios 본문이 없는 녹화라 `attributes` 는 `null`).
+
+## 2026-09-15 — Redfish BIOS Current Attributes 수집 추가 (`data.bios.current.attributes`)
+
+### 요구
+
+Portal 이 Vendor 를 구분하지 않고 BIOS 설정값을 한 경로에서 읽어 화면에 표시한다. 대상은 각
+ComputerSystem 에 연결된 표준 Redfish `Bios` 리소스가 돌려주는 Current `Attributes` 전체이며,
+Key·Value·JSON 자료형을 원본 그대로 보존한다. 2026-04 에 정한 수집 범위는 `Bios` 를 제외했었다
+(아래 "미포함 엔드포인트" 표 — `BiosVersion` 만 System 에서 취득). 이번 결정으로 Current Attributes 는
+수집 대상이 됐다. Settings / Pending / Registry / OEM BIOS 리소스는 계속 제외다.
+
+### 결정 (사용자 확정)
+
+- **보조 데이터다.** `sections` 에 `bios` 를 넣지 않는다. 11 섹션, `status` 판정, rescue 섹션 계약,
+  OS·ESXi 뼈대가 그대로다.
+- **BIOS 조회 실패는 host 결과를 바꾸지 않는다.** `status` / `sections` / `failure_*` / `auth_success` /
+  다른 `data` 불변. 실패는 `errors[]` 에 `section: "bios"` 로, 실패가 아닌 사실(링크 없음 / 404 /
+  비표준 리소스 / 빈 Attributes)은 `diagnosis.details.notices` 에 남긴다.
+- **링크로만 찾는다.** 대표 ComputerSystem(`Systems.Members[0]`) 응답의 `Bios.@odata.id` 를 쓰고,
+  링크가 없으면 System ID 로 `/Bios` 를 조립하지 않는다.
+- **ComputerSystem 을 다시 조회하지 않는다.** `gather_system` 이 이미 받은 응답에서 링크를 기록하고
+  `gather_bios` 가 그 링크로 1회 조회한다(모듈 실행당 BIOS GET 최대 1회).
+- **Ansible no_log 경계는 문서로만 다룬다.** 수집 모듈의 password 는 no_log 파라미터라 그 값과 같거나
+  포함하는 결과 값이 치환될 수 있다. 비밀번호 비교·검출 로직은 넣지 않았고 필드 사전과
+  `docs/contract/03-fields.md` 6.8절에 경계를 적었다.
+- **replay golden 은 기존 녹화로만 다시 만든다.** 녹화에 Bios 본문이 없어 10개 모두
+  `data.bios = {"current": {"attributes": null}}` 1키만 늘었다. 외부 미러는 다시 뜨지 않았다.
+
+### 왜 이렇게 했나
+
+- 모듈의 최종 status 계산(`_compute_final_status`)은 `errors` 문자열에서 `HTTP 401` / `HTTP 403` 을
+  찾으면 host 를 `failed` 로 만든다. BIOS 조회 403 이 그대로 들어가면 표준 계정 후보를 다시 시도하고,
+  후보가 다 떨어지면 rescue 로 빠져 **이미 수집한 데이터를 잃는다.** 그래서 BIOS 오류에 구조화 code 를
+  붙이고 그 원소만 스캔에서 뺐다(section 이름이 아니라 code 로 구분 — 문구 파싱 아님).
+- first-class 섹션으로 만들면 섹션 목록·status·뼈대 3종·rescue 섹션표·OS/ESXi 까지 바뀐다. 요구는
+  데이터 경로 하나이므로 보조 데이터가 영향이 가장 작다.
+- 수집 전에 멈춘 실패 envelope(rescue / `always` 최종 fallback / 콜백 보충)에는 `bios` 키를 만들지
+  않았다. 모든 envelope 에 강제하려면 공통 뼈대를 바꿔야 해 OS·ESXi 에 영향이 간다(`multi_node` 와 같은 처리).
+- 기존 `_p()` 는 모든 링크에서 후행 `/` 를 지운다. BIOS 때문에 공통 helper 를 바꾸지 않았다.
+
+### 영향
+
+- **호출자**: Redfish 성공·부분 성공 결과에 `data.bios` 가 생긴다. `errors[].section` 에 `bios` 가
+  올 수 있다. envelope 13 필드·`sections`·`schema_version` 은 불변이다.
+- **요청 수**: 링크가 있으면 모듈 수집 1회당 GET 1회가 늘어난다.
+- **크기**: 장비에 따라 Attributes 가 약 100KB 까지 커질 수 있다(조사 문서의 Lenovo XCC3 기록).
+  Portal·DB 쪽 크기 한도는 확인하지 않았다.
+- **검증**: 단위·렌더·통합 테스트, 저장소 실캡처 재생(Dell R760 5대 / HPE DL380 Gen11 /
+  Lenovo SR650 V2 / Cisco CIMC 장비 1대). 운영 BMC 로 새로 수집한 검증은 아직 없다.
+  Vendor·세대별 근거 수준은 `docs/reference/compatibility-matrix.md` 참조.
 
 ## 2026-09-03 — 도달성(reachable) 판정에 ICMP Echo 를 OR 조건으로 추가
 
@@ -1577,7 +1718,7 @@ agent 10.100.64.154 SSH + 진단 playbook (`tests/scripts/diag_esxi_raw.yml`) �
 |-----------|----------|
 | Chassis/{id}/Thermal | 온도/팬 정보 — 판정 시점에 normalize 스키마 미정의. 향후 추가 고려 |
 | Managers/{id}/EthernetInterfaces | BMC NIC — system 레벨로 충분 |
-| Bios | BIOS 설정 — BiosVersion은 System에서 이미 취득 |
+| Bios | BIOS 설정 — BiosVersion은 System에서 이미 취득 (2026-09-15 변경: Current `Attributes` 는 수집한다 — 맨 위 항목) |
 | LogServices | 이벤트 로그 — 수집 범위 초과 |
 | NetworkInterfaces | NIC 상세 — EthernetInterfaces로 충분 |
 

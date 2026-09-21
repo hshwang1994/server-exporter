@@ -3,13 +3,15 @@
 //
 // 대상      : Cisco UCS BMC (10.100.15.1, hostname 해석 실패 → ip 사용)
 // 채널      : redfish-gather (stdlib HTTPS + Basic Auth)
-// 특이사항  : status=failed 사례 — protocol 단계 통과했으나 root 503 (Service Unavailable)
-//             - reachable=true / port_open=true / protocol_supported=true / auth_success=null
-//             - root_status_code=503 (BMC service down 상태) → adapter 매칭 안 됨
-//             - vendor=null (probe 실패 — Manufacturer 추출 못함)
+// 특이사항  : status=failed 사례 — 443 은 열렸으나 ServiceRoot 가 503 (Service Unavailable)
+//             - reachable=true / port_open=true / protocol_supported=false / auth_success=null
+//             - 2026-09-21 갱신: 2026-05-06 캡처 당시에는 status 만 보고 protocol 을 통과시켜
+//               gather 단계로 기록됐다. 2026-08-10 부터 사전 점검이 ServiceRoot **본문**을
+//               검증하므로 같은 응답은 protocol 단계 실패(PROTOCOL_CHECK_FAILED)다.
+//             - vendor=null (제조사 식별 전 단계에서 멈춤) → adapter 미선택
 //             - 모든 섹션 status=failed (users 만 not_supported — 채널 자체 미지원)
-//             - errors[] 1건 — 인증 시도 0회 (probe 단계에서 막힘)
-//             - 호출자 가이드: 본 케이스는 BMC 자체 재기동 필요 (사용자 운영 영역)
+//             - errors[] 1건 — 인증 시도 0회 (사전 점검에서 막힘)
+//             - 호출자 가이드: BMC 의 Redfish 서비스 상태 확인 / 재기동 (사용자 운영 영역)
 // 캡처 일시 : 2026-05-07
 // =============================================================================
 {
@@ -34,26 +36,24 @@
   "diagnosis": {                                        // 4단계 진단 (precheck) 결과 + 채널별 추가 정보
     "reachable": true,                                     // 관리 포트 TCP 응답 관측 (ICMP 게이트 아님)
     "port_open": true,                                     // 443 응답
-    "protocol_supported": true,                            // TLS handshake OK + JSON 응답
-    "auth_success": null,                                  // 인증 시도 자체 안 됨 (root 503 으로 차단)
-    "failure_stage":      "gather",             // 실행이 멈춘 단계 (연결·인증 통과 후 수집에서 중단)
-    "failure_code":       "GATHER_FAILED",      // 시스템 분기용 안정 식별자 (성공 시 null)
-    "failure_reason":     "대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.",  // 표준 대표 문장 (common/vars/failure_reasons.yml:_fr_gather_failed)
+    "protocol_supported": false,                           // ServiceRoot 본문을 확인하지 못함 (503)
+    "auth_success": null,                                  // 인증 시도 자체 안 됨 (사전 점검에서 멈춤)
+    "failure_stage":      "protocol",           // 실행이 멈춘 단계
+    "failure_code":       "PROTOCOL_CHECK_FAILED",  // 시스템 분기용 안정 식별자 (성공 시 null)
+    "failure_reason":     "접속한 대상에서 Redfish 응답을 확인하지 못했습니다. 대상 종류와 Redfish 서비스 설정을 확인하세요.",  // 카탈로그 문장 (common/vars/failure_reasons.yml _fr_catalog.protocol_unconfirmed.redfish)
     "details": {                                        // 채널별 추가 진단 정보
       "channel": "redfish",                             // 수집 채널 식별 (diagnosis 안에 다시 명시)
-      "adapter_candidate": null,                           // adapter 매칭 안 됨 (probe 실패로 vendor 모름)
-      "checked_ports": [443],                           // detect 단계 시도한 port list
-      "selected_port": 443,                             // 실제 통신 port
-      "root_status_code": 503,                             // root (/redfish/v1/) HTTP 503 — Service Unavailable
-      "requires_auth_at_root": false,                      // 일부 BMC 는 ServiceRoot 도 인증 요구
-      "header_negotiation_issue": false                    // Accept / OData-Version / User-Agent 협상 이슈 (rule 96 R7-A-1 lenovo XCC3 reverse regression 관련)
+      "adapter_candidate": null,                           // adapter 선택 전 단계에서 멈춤
+      "checked_ports": [443],                           // 사전 점검이 시도한 port list
+      "selected_port": 443,                             // TCP 연결에 성공한 port
+      "hostname_source": "none"                            // hostname 을 얻지 못함 (IP 로 대체하지 않는다)
     }
   },
   "meta": {                                             // 수집 메타데이터 — 운영 추적 + 성능 분석
     "started_at": "2026-05-06T23:46:22.250801Z",        // 시작 시각 (UTC ISO 8601)
     "finished_at": "2026-05-06T23:46:52.721674Z",       // 종료 시각 (UTC ISO 8601)
     "duration_ms": null,                                   // 실패 시 null (실측 시간 30초)
-    "adapter_id": "redfish_generic",                       // probe 단계는 generic adapter 사용
+    "adapter_id": null,                                    // 사전 점검에서 멈춰 adapter 를 고르지 않았다
     "adapter_version": null,                            // adapter 버전 (현재 adapter YAML 미정 → null)
     "ansible_version": "2.20.3"                         // 실행 ansible 버전
   },
@@ -69,8 +69,8 @@
       // 2026-08-12: status=failed 에서 message 는 **diagnosis.failure_reason 과 같다.**
       //   기술 근거(대상 IP / 관리 포트 / HTTP status / 시도한 계정 수 / 원본 예외)는
       //   전부 detail 에만 둔다. Portal 은 message 를 그대로 사용자에게 보여준다.
-      "message": "대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.",
-      "detail": "[task: redfish | abort if collect completely failed] root status=503 | primary/dell_root: status=failed first_auth=none err=ServiceRoot 실패: 503"
+      "message": "접속한 대상에서 Redfish 응답을 확인하지 못했습니다. 대상 종류와 Redfish 서비스 설정을 확인하세요.",
+      "detail": "Redfish ServiceRoot 응답 아님 (HTTP 503) | [task: redfish | abort if precheck failed] Redfish 호스트 연결 진단에 실패했습니다 (10.100.15.1). 단계=protocol"
     }
   ],
   "data": {                                                // 모든 섹션 null 또는 빈 list/dict (실패 envelope 도 13 필드 + shape 유지)
@@ -102,6 +102,7 @@
     "users": [],
     "firmware": [],
     "power": null
+    // bios 키는 없다 — 수집에 들어가기 전에 멈춘 실패 envelope 은 data.bios 를 만들지 않는다 (2026-09-15)
   },
   "schema_version": "1"                                    // 실패해도 schema_version 은 "1" 유지
 }

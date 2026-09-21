@@ -51,6 +51,8 @@ _WORKFLOW_SECTIONS = {
     "multi_node", "unknown",
     # 각 채널 rescue 가 쓰는 대표 섹션 이름 (build_failed_output 의 _fail_error_section)
     "redfish_gather", "esxi_gather", "linux_gather", "windows_gather", "os_detect",
+    # 2026-09-15: Redfish BIOS Current Attributes 보조 데이터 (data.bios — sections 에는 없다)
+    "bios",
 }
 ALLOWED_SECTIONS = set(SCHEMA_SECTIONS) | _WORKFLOW_SECTIONS
 
@@ -205,11 +207,13 @@ def test_section_message_never_asserts_success_of_other_parts(path, message):
 @pytest.mark.parametrize("path,message", _LITERAL_MESSAGES,
                          ids=[f"{p}:{m[:24]}" for p, m in _LITERAL_MESSAGES])
 def test_section_message_is_not_a_failed_path_sentence(path, message):
-    """섹션 오류를 전체 실패 5문장으로 뭉개지 않는다.
+    """섹션 오류를 전체 실패 대표 문장(카탈로그)으로 뭉개지 않는다.
 
     "대상에 접속할 수 없습니다" 는 접속이 된 상태에서 CPU 만 못 읽은 결과를 설명하지 못한다.
     """
-    assert message not in set(FAILURE_REASONS.values()), (
+    failure_sentences = {text for entry in FAILURE_REASONS["_fr_catalog"].values()
+                         for text in entry.values()}
+    assert message not in failure_sentences, (
         f"[{path}] 섹션 오류에 전체 실패 대표 문장을 썼다 — 섹션 의미를 유지할 것: {message!r}"
     )
 
@@ -332,6 +336,10 @@ _MODULE_ERRORS = [
     {"section": "vendor_detect", "message": "ServiceRoot에서 벤더 식별 불가",
      "code": "vendor_unresolved"},
     {"section": "boot", "message": "system_uri 없음"},
+    # 2026-09-15: 아래 memory 중복 원소보다 앞에 둔다 — 병합돼 사라지는 원소 뒤에 오면
+    # test_redfish_error_sections_are_normalized_to_schema 의 zip 짝이 한 칸 밀린다.
+    {"section": "bios", "message": "BIOS Current Attributes 조회 실패",
+     "detail": "HTTP 403: Forbidden", "code": "bios_non_blocking"},
     {"section": "memory",
      "message": "collection 멤버 900 > 상한 512 — 절단(DoS 방어)"},
 ]
@@ -383,6 +391,12 @@ def test_redfish_error_sections_are_normalized_to_schema():
     assert by_src["log_services"] == "bmc"
     assert by_src["boot"] == "system"
     assert by_src["multi_node.managers"] == "multi_node"
+    # BIOS 는 schema 11 섹션에 대응시키지 않는다 (보조 데이터 — sections 계약 불변)
+    assert by_src["bios"] == "bios"
+    bios = [e for e in rendered if e["section"] == "bios"][0]
+    assert bios["message"] == ("BIOS 설정 정보 수집에 실패한 항목이 있습니다. "
+                               "대상 상태와 수집 로그를 확인하세요.")
+    assert "HTTP 403" in bios["detail"]
 
 
 def test_redfish_dict_detail_is_flattened_to_string():

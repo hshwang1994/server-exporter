@@ -92,6 +92,37 @@ baseline 을 가진 lab tested 벤더 4개 (Dell iDRAC9 / HPE iLO6 / Lenovo XCC 
 | **Huawei iBMC (2026-08-10 정정)** | **어댑터가 선택조차 되지 않던 상태였음** — `firmware_patterns` 가 정규식 자리에 glob(`iBMC*3.*`)으로 작성돼 실제 `FirmwareVersion`(`3.01` / `iBMC 3.01` 등)이 전부 미매치 → `-9999` 실격 → `redfish_generic`(-400) 선택 | 정규식 정정 후 `redfish_huawei_ibmc`(score 80570) 선택 확인. **위 행의 `OK★` 는 여전히 web sources 기반 추정이며, 실장비 확보 시 재검증 대상** (회귀: `tests/unit/test_adapter_huawei_firmware_regex.py`) |
 | **Cisco OEM (2026-08-10 실측)** | `tasks/vendors/cisco/{collect,normalize}_oem.yml` 이 **어느 어댑터에서도 참조되지 않아 미실행** (cisco 3 어댑터 모두 `oem_tasks` 키 부재) | 연결 시 `data.bmc.oem_cisco` 신설 → envelope 변경 + `cisco_baseline` 갱신 동반 → **사용자 승인 사항**(rule 92 R1-B / rule 13 R4). 위 Cisco 행의 값은 표준 수집 기준이라 영향 없음 |
 
+## BIOS Current Attributes (`data.bios`) — 근거 수준 (2026-09-15)
+
+`data.bios` 는 섹션이 아니라서 위 표에 칸이 없다. 코드는 Vendor 구분 없이 한 경로로 동작한다 —
+대표 ComputerSystem 응답의 `Bios.@odata.id` 로 1회 조회하고 `Attributes` 원본을 담는다.
+링크가 없거나 표준 Bios 리소스가 아니면 조회·변환하지 않고 `null` + notice 로 남긴다.
+아래 표는 **코드가 그렇게 동작한다**는 뜻이지 해당 세대를 검증했다는 뜻이 아니다.
+
+| Vendor / 계열 | 공식 자료의 표준 Current `Bios.Attributes` | 저장소 실캡처 재생 | 확인하지 못한 것 |
+|---|---|---|---|
+| Dell iDRAC8 / iDRAC9 | 확인 | PowerEdge R760 5대 (571개) 통과 | 운영 계정 조회 권한, iDRAC8 구형 펌웨어 응답 |
+| Dell iDRAC10 | BIOS Registry 상위 URI 까지만 확인 | 없음 | Current 응답, 조회 권한 |
+| HPE iLO5 / iLO6 / iLO7 | 확인 | ProLiant DL380 Gen11 (285개, 링크가 소문자·후행 `/`) 통과 | iLO5·iLO7 실응답, BIOS 조회 권한 |
+| HPE iLO4 (Gen9) | 표준 형식 아님 (OEM `HpBios`) — 계약 밖 | 없음 | 실응답. 코드는 변환하지 않는다 |
+| HPE Compute Scale-up (CSUS 3200 / Superdome Flex) | 대표 System(Partition0) 1개만 조회 | 없음 | 실응답, 다른 Partition |
+| Lenovo XCC / XCC2 / XCC3 | 확인 | ThinkSystem SR650 V2 (392개) 통과 | XCC2·XCC3 실응답 |
+| Lenovo TSM | 확인 (`/Systems/Self/Bios`) | 없음 | 실응답, 이 저장소의 TSM 수집 지원 여부 |
+| Lenovo IMM2 | 확인 불가 | 없음 | 표준 Current 제공 여부 |
+| Cisco CIMC 4.1 / 6.0 표준 | 확인 | CIMC 4.1(2g) 장비 1대 (87개, 전부 문자열) 통과 | 다른 모델 |
+| Cisco C885A M8 BMC | 확인 (공식 가이드) | 없음 | 실제 payload |
+| Cisco UCS X-Series | Current 응답 미확인 | 없음 | 응답 구조 |
+| Cisco CIMC 3.1(3) | 표준 형식 아님 (OEM `/BIOS`, `#Cisco_BiosToken`) — 계약 밖 | 없음 | 코드는 변환하지 않는다 |
+| Supermicro (Intel X10 / AMD H11 이후) | 확인 | 없음 | 실응답, X9·ARS |
+| Huawei (Kunpeng 공식 문서 범위) | 확인 | 없음 | 일부 x86·TaiShan 세대 |
+| Inspur (M6) | 확인 | 없음 | M5·G7 |
+| Fujitsu (iRMC S5) | 확인 | 없음 | iRMC S4·S6 |
+| Quanta QCT | Redfish 지원만 확인 — Current Bios 응답은 공식 자료에서 확인하지 못함 | 없음 | URI, System ID, 응답 구조 |
+
+"공식 자료" 는 Vendor 공식 문서와 DMTF 스키마 조사 결과다. "실캡처 재생" 은 저장소에 보관된 실장비
+응답을 오프라인으로 다시 돌린 결과이며 운영 계정으로 새로 수집한 것이 아니다. Vendor 값만 바꿔 같은
+표준 응답을 넣는 mock 테스트는 Vendor 독립성 확인용이고 위 표의 근거로 쓰지 않는다.
+
 ## 매트릭스를 갱신해야 하는 시점
 
 | 트리거 | 어느 칸이 바뀌나 |
@@ -121,6 +152,7 @@ TTL 은 14일. 현재 수동 갱신이다 (자동 측정 도구는 없다).
 | 2026-05-01 | Lenovo XCC 권한 캐시 fix | XCC v3 auth recovery `BLOCK` → `OK★` |
 | 2026-05-06 | 호환성 fallback 9 라인 (Additive only) | 칸 자체는 불변 (기존 path 유지 + 새 fallback path 추가) |
 | 2026-05-06 | HPE Superdome Flex 추가 | 신규 row (HPE sub-line) |
+| 2026-09-15 | BIOS Current Attributes 보조 수집 추가 (`data.bios`) | 섹션 표는 불변. 근거 수준은 별도 표 |
 
 ---
 

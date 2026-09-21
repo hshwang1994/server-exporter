@@ -46,7 +46,8 @@ import precheck_bundle as pb  # noqa: E402
 from tests.precheck_stub import ICMP_REPLY, ICMP_SILENT  # noqa: E402
 
 from tests.e2e.test_failure_reason_contract import (  # noqa: E402
-    FAILURE_REASONS,
+    FR_CATALOG,
+    fr,
     _assert_claims_match_observation,
     _assert_diagnosis_shape,
     _assert_grid_ready,
@@ -190,10 +191,9 @@ def test_port_stage_never_claims_server_responded():
 def test_protocol_stage_reports_confirmed_connection():
     """§6 — protocol 단계는 TCP 관리 연결 성공을 사용자에게 알린다.
 
-    2026-08-11 (Phase 6-B) 기대 문구 변경: 3 채널이 같은 3번 문구를 쓴다
-    ("관리 포트에는 연결됐지만 ... 응답을 확인할 수 없습니다"). 종전에는 채널 이름
-    (Redfish / SSH 또는 WinRM / vSphere API)을 문장에 넣었는데, 사용자는 채널을 고르지
-    않고 IP 만 넘기므로 조치에 도움이 되지 않아 뺐다. 채널 정보는 errors[].detail 에 남는다.
+    2026-09-21 기대 문구 변경: 채널별 문장이다 ("접속한 대상에서 Redfish 응답을 확인하지
+    못했습니다. 대상 종류와 Redfish 서비스 설정을 확인하세요."). 대상 종류가 맞아도 이 code 가
+    나오므로(서비스 중지 / 응답 지연 / TLS) "종류가 틀렸다" 고 단정하지 않는다.
     """
     for channel, kwargs in (
         ("os", dict(tcp=_TCP_OK)),
@@ -204,30 +204,32 @@ def test_protocol_stage_reports_confirmed_connection():
     ):
         diag = _run_precheck(channel, **kwargs)
         assert diag["port_open"] is True, channel
-        assert diag["failure_reason"] == FAILURE_REASONS["_fr_protocol_unconfirmed"], channel
-        assert "관리 포트에는 연결됐지만" in diag["failure_reason"], channel
+        assert diag["failure_reason"] == fr("protocol_unconfirmed", channel), channel
+        assert "접속한 대상에서" in diag["failure_reason"], channel
         # 단순 "응답이 없습니다" 로 뭉개지 않는다
-        assert "확인할 수 없습니다" in diag["failure_reason"], channel
+        assert "확인하지 못했습니다" in diag["failure_reason"], channel
+        assert "맞지 않습니다" not in diag["failure_reason"], "대상 종류 불일치를 단정하면 안 된다"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Case 7~18 — site.yml rescue 경로
 # ═══════════════════════════════════════════════════════════════════════════
-def _os_diag(os_type: str, auth_ok: bool) -> dict[str, Any]:
+def _os_diag(os_type: str, auth_ok: bool, **extra: Any) -> dict[str, Any]:
     ctx: dict[str, Any] = {"_os_auth_ok": auth_ok, "_os_attempts_meta": {"attempted_count": 2}}
     if os_type == "windows":
         ctx["ansible_port"] = "5986"
+    ctx.update(extra)
     return _render_diagnosis("os-gather/site.yml", _OS_TASKS[os_type], ctx)
 
 
-def _esxi_diag(auth_ok: bool, facts_ok: bool) -> dict[str, Any]:
+def _esxi_diag(auth_ok: bool, facts_ok: bool, **extra: Any) -> dict[str, Any]:
     return _render_diagnosis(
         "esxi-gather/site.yml", _ESXI_TASK,
         {"_diagnosis": {**_PRECHECK_OK, "details": {"channel": "esxi"}},
-         "_e_auth_ok": auth_ok, "_e_facts_ok": facts_ok})
+         "_e_auth_ok": auth_ok, "_e_facts_ok": facts_ok, **extra})
 
 
-def _rf_diag(collect_ok: bool, rejected: bool, *, statuses=None) -> dict[str, Any]:
+def _rf_diag(collect_ok: bool, rejected: bool, *, statuses=None, **extra: Any) -> dict[str, Any]:
     """redfish rescue 렌더.
 
     2026-08-12: 자격 요청을 **보냈는지** 가 stage 를 가른다 (CLAUDE.md §9 — failure_stage 는
@@ -238,7 +240,7 @@ def _rf_diag(collect_ok: bool, rejected: bool, *, statuses=None) -> dict[str, An
            for i, st in enumerate(statuses or [])]
     return render_redfish_rescue(
         {"_diagnosis": dict(_PRECHECK_OK), "_rf_collect_ok": collect_ok,
-         "_rf_auth_rejected": rejected, "_rf_auth_observations": obs})
+         "_rf_auth_rejected": rejected, "_rf_auth_observations": obs, **extra})
 
 
 CASES_RESCUE = [
@@ -271,117 +273,184 @@ def test_rescue_cases(label, make, stage, code, auth):
 
 
 def test_auth_stage_claims_only_protocol_level_success():
-    """§7 — 자격 후보 전멸을 '인증에 실패했습니다' 로 단정하지 않는다.
+    """§7 — 자격 후보 전멸을 '거부됐다' 로 단정하지 않는다.
 
-    2026-08-11 (Phase 6-B): 자격 단계 실패는 4번 문구 하나로 통일됐다
-    ("대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요."). 채널 이름을 넣어
-    "SSH 서비스는 확인되었지만" 처럼 앞 단계 성공을 나열하던 형태는 사용자 조치에 도움이
-    되지 않아 뺐다. 확인된 앞 단계는 diagnosis 의 Boolean 이 그대로 표현한다.
+    OS / ESXi 는 잘못된 자격 / 연결 끊김 / timeout / 제한 쉘을 구분하지 못한다. 그래서
+    "Vault 계정으로 로그인하지 못했습니다" 라는 관측만 말한다 (2026-09-21 채널별 문장).
     """
-    for label, diag in (
-        ("linux", _os_diag("linux", False)),
-        ("windows", _os_diag("windows", False)),
-        ("esxi", _esxi_diag(False, False)),
+    for label, diag, channel in (
+        ("linux", _os_diag("linux", False), "os"),
+        ("windows", _os_diag("windows", False), "os"),
+        ("esxi", _esxi_diag(False, False), "esxi"),
     ):
         reason = diag["failure_reason"]
         assert diag["auth_success"] is None, label
-        assert reason == FAILURE_REASONS["_fr_credential_failed"], label
-        assert "인증이 거부" not in reason, "거부를 관측하지 못했는데 단정하면 안 된다"
-        assert "비밀번호가 잘못" not in reason
-        assert "접속은 확인" not in reason, "인증 성공을 암시하면 안 된다"
+        assert reason == fr("auth_unconfirmed", channel), label
+        assert "거부" not in reason, "거부를 관측하지 못했는데 단정하면 안 된다"
+        assert "다르거나" not in reason, "계정 불일치는 확인된 경우에만 말한다"
+        assert "로그인했지만" not in reason, "인증 성공을 암시하면 안 된다"
 
 
-def test_explicit_rejection_stays_in_machine_fields_only():
-    """§26 (2026-08-11 Phase 6-B) — 401 실증은 **기계 필드로만** 표현한다.
+def test_explicit_rejection_has_its_own_sentence():
+    """2026-09-21 사용자 확정 — 401 실증은 '계정이 다르거나 권한이 없다' 문장을 쓴다.
 
-    종전에는 401 을 관측했을 때 "인증이 거부되었습니다" 라는 별도 사용자 문장을 썼다.
-    사용자 판단: Portal 사용자가 할 일은 401 이든 timeout 이든 "자격증명과 계정 권한 확인"
-    으로 같아서 문장을 나눌 실질 가치가 없다. → 4번 문구로 통일하고, 기술 근거는
-    auth_success=false / failure_stage=auth / failure_code / errors[].detail 이 표현한다.
+    종전(2026-08-11)에는 401 이든 timeout 이든 같은 문장이었다. 관리자에게는 "비밀번호를
+    맞추면 된다" 와 "원인을 더 봐야 한다" 가 다른 일이다. 확인된 경우에만 쓰므로 표준 후보
+    **전원**의 401 이 필요하다 (한 후보의 401 로 전체를 단정하지 않는다).
     """
     rejected = _rf_diag(False, True, statuses=[401])
     unknown = _rf_diag(False, False, statuses=[None])
 
-    # 기계 필드는 여전히 두 경우를 구분한다 (JSON contract 불변)
     assert rejected["auth_success"] is False
     assert rejected["failure_stage"] == "auth"
     assert rejected["failure_code"] == "AUTH_PROBE_FAILED"
     assert unknown["auth_success"] is None
-    # 2026-08-12: 원인 미확정도 **멈춘 단계는 자격 단계**다. 종전에는 stage=gather 인데
-    #   문장은 자격증명을 지목해 두 소비자가 다른 이야기를 했다 (C1).
     assert unknown["failure_stage"] == "auth"
 
-    # 사용자 문장은 동일하다
-    assert rejected["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
-    assert unknown["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
-    for diag in (rejected, unknown):
-        assert "인증이 거부" not in diag["failure_reason"], (
-            "기술 판정을 사용자 문장으로 노출하지 않는다"
-        )
+    assert rejected["failure_reason"] == fr("auth_rejected", "redfish")
+    assert unknown["failure_reason"] == fr("auth_unconfirmed", "redfish")
+    assert "다르거나" not in unknown["failure_reason"]
 
 
 def test_gather_stage_respects_auth_success():
-    """§9 — 접속 성공을 관측하지 못한 실패는 '접속은 확인됐지만' 이라고 쓰지 않는다.
-
-    redfish 는 인증과 수집을 한 값(_rf_collect_ok)으로 합쳐 반환하므로 수집이 실패하면
-    접속이 됐는지 알 수 없다 → 4번(자격증명) 문구를 쓴다. 인증 통과를 실제로 관측한
-    OS / ESXi 의 수집 실패만 5번 문구를 쓴다.
-    """
+    """§9 — 접속 성공을 관측하지 못한 실패는 '로그인했지만' 이라고 쓰지 않는다."""
     rf = _rf_diag(False, False, statuses=[None])
     assert rf["auth_success"] is None
-    assert "접속은 확인" not in rf["failure_reason"]
-    assert rf["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
+    assert "성공했지만" not in rf["failure_reason"]
+    assert rf["failure_reason"] == fr("auth_unconfirmed", "redfish")
 
-    for diag in (_os_diag("linux", True), _os_diag("windows", True), _esxi_diag(True, False)):
+    for diag, channel in ((_os_diag("linux", True), "os"), (_os_diag("windows", True), "os"),
+                          (_esxi_diag(True, False), "esxi")):
         assert diag["auth_success"] is True
-        assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
-        assert "대상 접속은 확인됐지만" in diag["failure_reason"]
+        assert diag["failure_reason"] == fr("gather_after_auth", channel)
+        assert "로그인했지만" in diag["failure_reason"]
 
 
 def test_normalization_failure_wording():
-    """§10 (2026-08-11 Phase 6-B 기대 변경) — 정규화 실패도 5번 문구를 쓴다.
-
-    종전에는 "정보 수집 후 결과를 처리하는 중 오류가 발생했습니다" 라는 6번째 문장이 있었다.
-    사용자 확정 문구 표준은 5 문장뿐이고, 수집 뒤 처리 실패도 사용자 조치는 5번과 같다
-    (대상 상태와 수집 로그 확인). 단계 구분은 failure_stage=gather 가 유지한다.
-    """
+    """수집 뒤 처리 실패도 '로그인했지만 정보를 가져오지 못했다' 다 — 관리자 조치가 같다."""
+    assert _esxi_diag(True, True)["failure_reason"] == fr("gather_after_auth", "esxi")
+    assert _rf_diag(True, False)["failure_reason"] == fr("gather_after_auth", "redfish")
     for diag in (_esxi_diag(True, True), _rf_diag(True, False)):
-        assert diag["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
         assert diag["failure_stage"] == "gather"
-    # 접속 성공을 확인하지 못한 경로는 5번(수집 실패) 문구를 쓰지 않는다
-    for diag in (_rf_diag(False, False, statuses=[None]), _esxi_diag(False, False),
-                 _os_diag("linux", False)):
-        assert diag["failure_reason"] == FAILURE_REASONS["_fr_credential_failed"]
 
     # 2026-08-12: 자격 요청을 **보내기 전에** 멈춘 실패는 auth 가 아니다.
-    #   adapter 선택 / vault 로드 / vendor 정규화 예외가 여기 해당한다.
-    #   precheck 는 통과했으므로 "대상 접속은 확인됐지만"(5번)이 참이고,
-    #   자격증명을 헛되이 뒤지게 만들지 않는다.
+    #   2026-09-21: 그 경우는 수집기 내부 오류 문장이다 (대상 계정 문제로 보내지 않는다).
     pre_auth = _rf_diag(False, False)
     assert pre_auth["failure_stage"] == "gather"
     assert pre_auth["failure_code"] == "GATHER_FAILED"
     assert pre_auth["auth_success"] is None
-    assert pre_auth["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"]
+    assert pre_auth["failure_reason"] == fr("gather_internal")
 
 
-def test_all_case_reasons_use_only_the_standard_sentences():
-    """§13 (2026-08-11 Phase 6-B 기대 변경) — 문장은 **단계**로만 갈린다.
+def test_all_rescue_reasons_come_from_the_catalog():
+    """rescue 경로 문장은 전부 카탈로그의 (키, 채널) 문장이다 — 리터럴 금지."""
+    allowed = {fr(k, c, "미지정") for k, e in FR_CATALOG.items() for c in e}
+    for label, make, *_ in CASES_RESCUE:
+        reason = make()["failure_reason"]
+        assert reason in allowed, f"[{label}] 카탈로그 밖 문장: {reason!r}"
 
-    종전에는 채널 × 단계마다 서로 다른 9 문장이었다. 사용자 확정 표준은 5 문장뿐이고,
-    rescue 경로에서 나올 수 있는 것은 4번(자격증명) / 5번(수집)뿐이다. 채널 구분은
-    envelope 의 target_type / collection_method 와 errors[].detail 이 이미 표현한다.
-    """
-    reasons = {label: make()["failure_reason"] for label, make, *_ in CASES_RESCUE}
-    allowed = {FAILURE_REASONS["_fr_credential_failed"],
-               FAILURE_REASONS["_fr_gather_failed"]}
-    assert set(reasons.values()) <= allowed, sorted(set(reasons.values()) - allowed)
 
-    # 접속을 관측한 경로만 5번을 쓴다
-    gather_wording = FAILURE_REASONS["_fr_gather_failed"]
-    for label, make, _stage, _code, auth in CASES_RESCUE:
-        diag = make()
-        if diag["failure_reason"] == gather_wording:
-            assert diag["failure_stage"] == "gather", label
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-09-21 — Vault 설정 원인 구분 (OS / ESXi) + loc 표시
+# ═══════════════════════════════════════════════════════════════════════════
+def _vault_cases():
+    # (label, ctx, 기대 code, 기대 키)
+    return [
+        ("위치 미등록", {"_cred_reason": "unknown_location", "_cred_load_outcome": "not_resolved"},
+         "CREDENTIAL_SET_UNAVAILABLE", "loc_unregistered"),
+        ("위치 Vault 없음", {"_cred_reason": "resolved",
+                            "_cred_load_outcome": "credential_set_missing",
+                            "_cred_location_vault_exists": False},
+         "CREDENTIAL_SET_UNAVAILABLE", "loc_vault_missing"),
+        ("종류 파일 없음", {"_cred_reason": "resolved",
+                           "_cred_load_outcome": "credential_set_missing",
+                           "_cred_location_vault_exists": True},
+         "CREDENTIAL_SET_UNAVAILABLE", "loc_vault_no_account"),
+        ("복호화 실패", {"_cred_reason": "resolved",
+                        "_cred_load_outcome": "credential_set_undecryptable"},
+         "CREDENTIAL_SET_UNAVAILABLE", "loc_vault_unreadable"),
+        # 계정 0개 — 계정 없이 접속을 **시도한 뒤** 실패했으므로 code 는 AUTH_PROBE_FAILED 유지
+        ("계정 0개", {"_cred_reason": "resolved", "_cred_load_outcome": "empty_accounts"},
+         "AUTH_PROBE_FAILED", "loc_vault_no_account"),
+    ]
+
+
+@pytest.mark.parametrize("target", ["linux", "windows", "esxi"])
+@pytest.mark.parametrize("label,ctx,code,key", _vault_cases(), ids=lambda v: v if isinstance(v, str) else "")
+def test_os_esxi_vault_causes_are_distinguished(target, label, ctx, code, key):
+    ctx = {**ctx, "_cred_location": "ic"}
+    if target == "esxi":
+        diag = _esxi_diag(False, False, **ctx)
+        channel = "esxi"
+    else:
+        diag = _os_diag(target, False, **ctx)
+        channel = "os"
+    tag = f"{target}/{label}"
+    _assert_grid_ready(diag["failure_reason"], tag)
+    _assert_claims_match_observation(diag, tag)
+    assert diag["failure_stage"] == "auth", tag
+    assert diag["failure_code"] == code, tag
+    assert diag["auth_success"] is None, tag
+    assert diag["failure_reason"] == fr(key, channel, "ic"), tag
+    assert "해당 위치(ic)" in diag["failure_reason"], tag
+
+
+def test_loc_falls_back_to_se_location_and_then_placeholder():
+    """_cred_location 이 없으면(자격 해석 전 예외) se_location, 그것도 없으면 '미지정'."""
+    from_extra = _os_diag("linux", False, se_location="seoul-dc1")
+    assert "해당 위치(seoul-dc1)" in from_extra["failure_reason"]
+    nothing = _os_diag("linux", False)
+    assert "해당 위치(미지정)" in nothing["failure_reason"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-09-21 — Redfish 자격 단계 판정 수정 (시도 0회가 GATHER_FAILED 로 새던 3경우)
+# ═══════════════════════════════════════════════════════════════════════════
+@pytest.mark.parametrize("label,ctx,key", [
+    # 실행 위치 미등록: 표준 vault 는 전역이라 loaded 인데 중단 게이트는 _cred_reason 으로 멈춘다
+    ("위치 미등록", {"_cred_reason": "unknown_location", "_cred_standard_outcome": "loaded",
+                    "_cred_load_outcome": "loaded"}, "loc_unregistered"),
+    # 표준 계정 0개 + vendor 식별 → 빈 자격 시도 없음
+    ("표준 계정 0개", {"_cred_reason": "resolved", "_cred_standard_outcome": "empty_accounts",
+                      "_cred_load_outcome": "empty_accounts"}, "project_vault_no_account"),
+    # vendor 미상 + 표준 vault 부재 → 중단 게이트가 수집 전에 멈춘다
+    ("vendor 미상 + 표준 없음", {"_cred_reason": "vendor_unresolved",
+                               "_cred_standard_outcome": "credential_set_missing",
+                               "_cred_load_outcome": "credential_set_missing"},
+     "project_vault_missing"),
+    ("표준 복호화 실패", {"_cred_reason": "resolved",
+                        "_cred_standard_outcome": "credential_set_undecryptable",
+                        "_cred_load_outcome": "credential_set_undecryptable"},
+     "project_vault_unreadable"),
+])
+def test_redfish_credential_unavailable_is_not_gather(label, ctx, key):
+    diag = _rf_diag(False, False, _cred_location="ic", **ctx)
+    assert diag["failure_stage"] == "auth", label
+    assert diag["failure_code"] == "CREDENTIAL_SET_UNAVAILABLE", label
+    assert diag["auth_success"] is None, label
+    assert diag["failure_reason"] == fr(key, "redfish", "ic"), label
+
+
+def test_redfish_standard_vault_is_not_called_location_vault():
+    """Redfish 표준 계정은 위치와 무관한 전역 vault 다 — '해당 위치의 Vault' 라고 쓰지 않는다."""
+    for ctx in ({"_cred_reason": "resolved", "_cred_standard_outcome": "credential_set_missing"},
+                {"_cred_reason": "resolved", "_cred_standard_outcome": "credential_set_undecryptable"},
+                {"_cred_reason": "resolved", "_cred_standard_outcome": "empty_accounts"}):
+        reason = _rf_diag(False, False, _cred_location="ic", **ctx)["failure_reason"]
+        assert "해당 위치" not in reason, reason
+        assert "개더링 프로젝트" in reason, reason
+    for statuses, rejected in (([None], False), ([401], True)):
+        reason = _rf_diag(False, rejected, statuses=statuses, _cred_location="ic")["failure_reason"]
+        assert "해당 위치" not in reason and "표준 계정" in reason, reason
+
+
+def test_redfish_anonymous_attempt_with_no_standard_account():
+    """vendor 미상이라 빈 자격으로 한 번 시도했는데 실패 — 표준 계정 부재를 알린다 (code 는 AUTH)."""
+    diag = _rf_diag(False, False, _cred_reason="vendor_unresolved",
+                    _cred_standard_outcome="empty_accounts",
+                    _rf_failed_attempt_notes=["empty-credential attempt failed"])
+    assert diag["failure_code"] == "AUTH_PROBE_FAILED"
+    assert diag["failure_reason"] == fr("project_vault_no_account", "redfish")
 
 
 def test_no_secrets_in_any_case():

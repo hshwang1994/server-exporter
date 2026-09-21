@@ -23,8 +23,8 @@
   # 2026-04-30 perf: dead-host 다수 inventory에서 host별 독립 진행 (linear 시 stuck host가 wave 막음)
   strategy: free
 
-  # 2026-08-11 (Phase 6-B): Portal 사용자 문구 정본. rescue / always 가 문장을 직접 쓰지 않고
-  # 이 변수를 참조한다 — precheck_bundle.REASON_* 와 동일 문자열 (drift 는 테스트가 막는다).
+  # Portal 사용자 문구 카탈로그(_fr_catalog). rescue / always 가 문장을 직접 쓰지 않고
+  # 이 변수를 참조한다 — precheck_bundle.FAILURE_REASON_CATALOG 와 동일 문자열 (drift 는 테스트가 막는다).
   # 2026-08-12: 섹션 단위(부분 실패) 문장 정본도 함께 로드한다. 모듈이 만든 기술 문자열은
   #   normalize_standard.yml 이 여기 라벨로 사용자 문장을 만들고 원문은 detail 로 내린다.
   vars_files:
@@ -183,7 +183,8 @@
                 _sections_unsupported_fragment: []
                 _errors_fragment:
                   - section: "account_service"
-                    message: "{{ _fr_credential_failed }}"
+                    # 2026-09-21: 대표 실패 문장(failure_reason)을 빌려 쓰지 않고 섹션 문장을 쓴다.
+                    message: "{{ _sm_overrides.account_service }}"
                     detail: >-
                       standard credential rejected and no recovery credential set available
                       (recovery scope={{ _rf_recovery_scope | default('') | ternary(_rf_recovery_scope, _cred_reason | default('unresolved')) }},
@@ -277,8 +278,8 @@
         # block 이 있었다. 9 vendor 18개 task 파일이 붙어 있었는데 **전부 기여가 0** 이었다.
         #
         #   - task 들이 읽던 경로가 모듈 출력에 없다. `redfish_gather` 최상위 반환에
-        #     `systems` / `chassis` / `managers` 가 없고(`:7238-7243`), `data` 하위에도
-        #     `chassis` 가 없다(`:4793-4811`). 대문자 `'Oem'` 을 출력 키로 쓰는 곳은 0곳이다.
+        #     `systems` / `chassis` / `managers` 가 없고(`:7347-7352`), `data` 하위에도
+        #     `chassis` 가 없다(`:4895-4917`). 대문자 `'Oem'` 을 출력 키로 쓰는 곳은 0곳이다.
         #     모듈은 소문자 `'oem'` 에 정제된 형태로만 내보낸다.
         #   - 실장비 8대 envelope 를 확인했다. task 가 쓴다던 `data.bmc.oem_<vendor>` 키가
         #     한 건도 없었다. 반면 라이브러리가 채우는 `data.bmc.oem` 은 전부 있었다.
@@ -454,13 +455,23 @@
                               + ((_rf_failed_attempt_notes | default([])) | length) -%}
               {#- 2026-08-12: credential set 자체를 열지 못한 경우를 별도 관측값으로 분리한다.
                   '인증을 시도했는데 거부됐다'(rejected)와 '인증을 시도조차 못 했다'를 같은
-                  code 로 만들면 소비 시스템이 구분할 수 없다. 후보가 0개이고 credential set
-                  로딩이 실패했을 때만 성립한다 (vendor 미상은 여기 해당하지 않는다 — 그 경로는
-                  빈 자격 1회 시도로 가므로 tried > 0 이 된다). -#}
-              {%- set cred_na = ((_cred_load_outcome | default(''))
-                                 in ['not_resolved', 'credential_set_missing',
-                                     'credential_set_undecryptable'])
-                                and ((_cred_reason | default('')) != 'vendor_unresolved') -%}
+                  code 로 만들면 소비 시스템이 구분할 수 없다.
+                  2026-09-21: 조건을 표준 vault 기준으로 바로잡았다. 종전에는 아래 세 경우가
+                  시도 0회인데도 not_attempted(GATHER_FAILED, '접속은 확인됐지만')로 떨어졌다.
+                    - 실행 위치 미등록(unknown_location): 표준 vault 는 전역이라 열려 있어
+                      outcome 이 loaded 인데 site.yml 중단 게이트는 _cred_reason 으로 멈춘다.
+                    - 표준 계정 0개(empty_accounts): vendor 를 알면 빈 자격 시도를 하지 않는다.
+                    - vendor 미상 + 표준 vault 부재: 중단 게이트가 수집 전에 멈춰 빈 자격
+                      시도가 없다 (종전 vendor_unresolved 제외 조건은 이 경우를 놓쳤다).
+                  이 분기는 passed / rejected / unknown 뒤에 오므로 **시도 0회일 때만** 닿는다.
+                  'not_resolved' 만은 vendor 미상일 때 제외한다 — vendor 미상은 장비 정체를 식별하지
+                  못한 것이지 credential set 문제가 아니다 (파일 부재 / 복호화 실패는 vendor 와 무관). -#}
+              {%- set std = _cred_standard_outcome | default(_cred_load_outcome | default('')) -%}
+              {%- set cred_na = ((_cred_reason | default('')) == 'unknown_location')
+                                or (std in ['credential_set_missing',
+                                            'credential_set_undecryptable', 'empty_accounts'])
+                                or (std == 'not_resolved'
+                                    and (_cred_reason | default('')) != 'vendor_unresolved') -%}
               {%- if (_rf_collect_ok | default(false) | bool) or ok_obs > 0 -%}
               passed
               {%- elif _rf_auth_rejected | default(false) | bool -%}
@@ -473,33 +484,59 @@
               not_attempted
               {%- endif -%}
 
-        # 사용자 문구는 5 문장 표준(common/vars/failure_reasons.yml)만 쓴다.
-        #   passed        → gather / GATHER_FAILED / auth_success=true / 5번
-        #                   ("대상 접속은 확인됐지만") — 인증된 요청 통과를 직접 관측했다.
-        #   rejected      → auth / AUTH_PROBE_FAILED / false / 4번. 401 실증을 함께 남긴다.
-        #   unknown       → auth / AUTH_PROBE_FAILED / null / 4번. 자격 요청은 보냈지만
+        # 사용자 문구는 카탈로그(common/vars/failure_reasons.yml `_fr_catalog`)에서 고른다.
+        #   passed        → gather / GATHER_FAILED / auth_success=true / gather_after_auth
+        #                   ("대상 Redfish 인증은 성공했지만") — 인증된 요청 통과를 직접 관측했다.
+        #   rejected      → auth / AUTH_PROBE_FAILED / false / auth_rejected. 표준 후보 전원의
+        #                   401 실증이 있을 때만 "계정이 다르거나 권한이 없습니다" 라고 말한다.
+        #   unknown       → auth / AUTH_PROBE_FAILED / null / auth_unconfirmed. 자격 요청은 보냈지만
         #                   원인을 확정하지 못했다 (timeout / TLS / 403 / 5xx).
+        #                   단 표준 계정이 0개였다면(정체 미상 장비의 무인증 시도만 있었다)
+        #                   project_vault_no_account — 관리자가 할 일은 표준 계정 배치다.
         #   credential_unavailable
-        #                 → auth / CREDENTIAL_SET_UNAVAILABLE / null / 4번 (2026-08-12 신설).
-        #                   해당 Location/Vendor 의 credential set 을 열지 못해 **인증을 시도조차
-        #                   못 했다.** AUTH_PROBE_FAILED 와 반드시 구분한다 — 후자는 자격을 실어
-        #                   보냈는데 통하지 않은 것이고, 이것은 보낼 자격 자체가 없던 것이다.
-        #                   운영자의 조치도 다르다 (BMC 계정 점검 vs vault 배치 점검).
+        #                 → auth / CREDENTIAL_SET_UNAVAILABLE / null (2026-08-12 신설).
+        #                   **인증을 시도조차 못 했다.** AUTH_PROBE_FAILED 와 반드시 구분한다.
+        #                   문장은 원인별로 가른다 (2026-09-21):
+        #                     실행 위치 미등록        → loc_unregistered
+        #                     표준 vault 복호화 실패  → project_vault_unreadable
+        #                     표준 계정 0개          → project_vault_no_account
+        #                     표준 vault 파일 없음    → project_vault_missing
+        #                   표준 계정은 위치와 무관한 전역 vault 라 "해당 위치의 Vault" 라고 쓰지 않는다.
         #                   stage 는 auth 를 유지한다 — stage 는 원인이 아니라 **멈춘 위치**이고
         #                   (CLAUDE.md §9) 멈춘 곳은 자격증명 단계가 맞다.
         #                   auth_success 는 null 이다 (미시도). false 는 '구조화된 명시적 거부'다.
-        #   not_attempted → gather / GATHER_FAILED / null / 5번. 자격 요청 자체를 보내기
-        #                   **전에** 멈췄다 (adapter 선택 / vault 로드 / vendor 정규화 예외 등).
+        #   not_attempted → gather / GATHER_FAILED / null / gather_internal. 자격 요청 자체를 보내기
+        #                   **전에** 수집기 안에서 멈췄다 (adapter 선택 / vendor 정규화 예외 등).
         #                   CLAUDE.md §9 — failure_stage 는 '워크플로가 멈춘 위치' 다.
         #                   인증을 시도조차 안 한 실패를 auth 로 라벨링하면 관측하지 않은 것을
         #                   단정하는 것이고, 사용자에게도 자격증명을 헛되이 뒤지게 만든다.
-        #                   precheck 는 통과했으므로(여기 도달 조건) "대상 접속은 확인됐지만"은 참이다.
-        # → 4번 문장은 stage=auth 와만, 5번 문장은 stage=gather 와만 짝지어진다.
         - name: "redfish | rescue | Portal 표시용 failure_reason 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
               {%- set outcome = _rf_auth_outcome | default('not_attempted') -%}
               {%- set at_gather = outcome in ['passed', 'not_attempted'] -%}
+              {%- set std = _cred_standard_outcome | default(_cred_load_outcome | default('')) -%}
+              {%- if outcome == 'passed' -%}
+                {%- set reason_key = 'gather_after_auth' -%}
+              {%- elif outcome == 'not_attempted' -%}
+                {%- set reason_key = 'gather_internal' -%}
+              {%- elif outcome == 'rejected' -%}
+                {%- set reason_key = 'auth_rejected' -%}
+              {%- elif outcome == 'credential_unavailable' -%}
+                {%- if (_cred_reason | default('')) == 'unknown_location' -%}
+                  {%- set reason_key = 'loc_unregistered' -%}
+                {%- elif std == 'credential_set_undecryptable' -%}
+                  {%- set reason_key = 'project_vault_unreadable' -%}
+                {%- elif std == 'empty_accounts' -%}
+                  {%- set reason_key = 'project_vault_no_account' -%}
+                {%- else -%}
+                  {%- set reason_key = 'project_vault_missing' -%}
+                {%- endif -%}
+              {%- elif std == 'empty_accounts' -%}
+                {%- set reason_key = 'project_vault_no_account' -%}
+              {%- else -%}
+                {%- set reason_key = 'auth_unconfirmed' -%}
+              {%- endif -%}
               {{ {'reachable': none, 'port_open': none, 'protocol_supported': none,
                   'auth_success': none, 'failure_stage': none, 'failure_code': none,
                   'failure_reason': none, 'details': {}}
@@ -512,8 +549,9 @@
                                                    else 'AUTH_PROBE_FAILED')),
                             'auth_success': (true if outcome == 'passed'
                                              else (false if outcome == 'rejected' else none)),
-                            'failure_reason': (_fr_gather_failed if at_gather
-                                               else _fr_credential_failed),
+                            'failure_reason': (_fr_catalog | failure_reason(
+                                                 reason_key, 'redfish',
+                                                 _cred_location | default(se_location | default('')))),
                             'details': (((_diagnosis | default({}, true)).details | default({}))
                                         if (((_diagnosis | default({}, true)).details | default({}))
                                             is mapping)
@@ -553,7 +591,7 @@
         # 2026-08-12 (N41 / N50): BMC 가 실제로 준 근거를 detail 로 살린다.
         #   종전에는 후보별 실패 status / 첫 오류와 무인증 probe 오류가 전부 버려져,
         #   완전 실패 envelope 에 "왜 실패했는지" 가 한 줄도 남지 않았다.
-        #   errors[].message 는 건드리지 않는다 (5문장 정본). 기술 근거는 detail 에만.
+        #   errors[].message 는 건드리지 않는다 (문장 카탈로그 정본). 기술 근거는 detail 에만.
         #   상한 3건 — Portal detail 비대화 방지 (모듈도 MAX_EXTENDED_INFO_* 로 절단 중).
         - name: "redfish | rescue | 실패 근거를 detail 로 합류"
           ansible.builtin.set_fact:
@@ -594,9 +632,9 @@
                        'vendor': (((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default('')) or ((_va | default({})).vendor_output_display | default({})).get(_rf_detected_vendor | default(''), _rf_detected_vendor | default(none))),
                        'status': 'failed',
                        'sections': {},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_output_build_failed, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_catalog.output_build_failed.default, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {},
                        'correlation': {},
-                       'errors': [{'section':'gather','message': _fr_output_build_failed,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
+                       'errors': [{'section':'gather','message': _fr_catalog.output_build_failed.default,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {}
                      })) | to_json }}"

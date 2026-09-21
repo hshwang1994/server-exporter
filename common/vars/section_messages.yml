@@ -46,6 +46,7 @@ _sm_labels:
   account_service:   "표준 관리 계정 정보"
   oem:               "제조사 확장 정보"
   multi_node:        "다중 노드 구성 정보"
+  bios:              "BIOS 설정 정보"
   gather:            "서버 정보"
   unknown:           "서버 정보"
 

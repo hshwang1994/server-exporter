@@ -143,6 +143,8 @@ JSON 의 `sections` 와 `data` 는 같은 11개 키를 갖는다. 각 채널이 
 | `power` | PSU / 전력 사용 | | | O |
 | `thermal` | 온도 센서 / 팬 (Chassis/Thermal) | | | O |
 
+Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9절)와 `bios`(6.8절). 이 둘은 `sections` 에 나오지 않고 `status` 판정에도 쓰이지 않는다.
+
 (X) = `not_supported`. 그 채널 특성상 원래 못 가져오는 영역이다. 수집 실패와 다른 의미다.
 `not_supported` 판정 신호는 **HTTP 404(엔드포인트 부재)만**이다. 400 등 다른 실패는 `failed` 로 남아 `errors[]` 에 보인다.
 (2026-08-03: 400 도 미지원으로 보려다 되돌림 — 사이트 사례의 400 은 장비 미지원이 아니라 **수집 측 경로 오류**였다.
@@ -220,7 +222,7 @@ if response["data"]["hardware"].get("health") == "Critical":
 
 | 키 | 타입 | 무엇 |
 |---|---|---|
-| `section` | 문자열 | 오류가 난 영역. 수집 섹션 이름 11종 또는 수집 단계 이름 (`precheck` / `auth` / `gather` / `oem` / `vendor_detect` / `account_service` / `multi_node`). 값이 없으면 `unknown` |
+| `section` | 문자열 | 오류가 난 영역. 수집 섹션 이름 11종, 수집 단계 이름 (`precheck` / `auth` / `gather` / `oem` / `vendor_detect` / `account_service` / `multi_node`), 또는 보조 데이터 이름 `bios` (Redfish BIOS Current Attributes 조회 실패 — 6.8절). 값이 없으면 `unknown` |
 | `message` | 문자열 (**절대 비지 않음**) | 사용자에게 그대로 보여주는 한국어 문장 |
 | `detail` | 문자열 또는 `null` | 기술 근거. 객체나 배열이 아니다 |
 
@@ -234,20 +236,60 @@ if response["data"]["hardware"].get("health") == "Critical":
 
 | 상황 | `status` | `message` |
 |---|---|---|
-| 전체 실패 | `failed` | 표준 대표 문장 (아래 6문장 중 하나). `errors[0].message == diagnosis.failure_reason` |
+| 전체 실패 | `failed` | 대표 문장 (아래 문장 카탈로그 중 하나). `errors[0].message == diagnosis.failure_reason` |
 | 섹션 부분 실패 | `partial` 또는 `success` | 섹션 의미를 유지한 문장. 예: `"CPU 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요."` — 이때 `diagnosis.failure_reason` 은 `null` 이다 |
 
-전체 실패 대표 문장 6종 (정본: `common/vars/failure_reasons.yml`, `failure_code` 에서 파생):
+전체 실패 대표 문장 카탈로그 (정본: `common/vars/failure_reasons.yml` 의 `_fr_catalog`).
 
-| `failure_code` | 문장 |
-|---|---|
-| `DNS_RESOLUTION_FAILED` / `TARGET_UNREACHABLE` | 대상 IP에서 응답을 확인할 수 없습니다. IP 사용 여부와 네트워크 상태를 확인하세요. |
-| `TCP_CONNECT_FAILED` / `TCP_CONNECTION_REFUSED` | 대상 IP의 관리 포트에 연결할 수 없습니다. 방화벽과 관리 서비스 상태를 확인하세요. |
-| `PROTOCOL_CHECK_FAILED` | 관리 포트에는 연결됐지만 서버 정보 수집에 필요한 응답을 확인할 수 없습니다. 관리 서비스 설정과 상태를 확인하세요. |
-| `AUTH_PROBE_FAILED` | 대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요. |
-| `CREDENTIAL_SET_UNAVAILABLE` | 대상에 접속할 수 없습니다. 자격증명과 계정 권한을 확인하세요. *(4번 문장 재사용 — 아래 5-1 참조)* |
-| `GATHER_FAILED` | 대상 접속은 확인됐지만 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요. |
-| `OUTPUT_BUILD_FAILED` | 수집 결과를 생성하지 못했습니다. 실행 로그를 확인하세요. |
+**2026-09-21 변경** — 문장을 `failure_code` 하나가 아니라 **`failure_code` + 대상 종류(target_type) + 세부 사유**로
+고른다. 종전에는 9개 code 가 6문장으로 뭉쳐 방화벽 차단과 서비스 중지, Vault 설정 문제와 대상 계정 문제가
+같은 문장이었다. `failure_stage` / `failure_code` 값은 아래 한 가지 예외를 빼고 그대로다.
+`{loc}` 은 실행 위치(Jenkins `loc` 파라미터) 값으로 채워지고, 값이 없으면 `미지정` 이 보인다.
+
+| `failure_code` | 언제 | 문장 |
+|---|---|---|
+| `DNS_RESOLUTION_FAILED` | IP 문자열을 주소로 해석하지 못함 | 대상 IP가 올바르지 않습니다. 개더링 대상 IP를 확인하세요. |
+| `TARGET_UNREACHABLE` | 관리 TCP 도 ICMP 도 무응답 | 대상 서버가 응답하지 않습니다. 서버 전원 상태와 네트워크 연결을 확인하세요. |
+| `TCP_CONNECT_FAILED` | ICMP 는 응답, 관리 포트만 무응답 | 대상 서버와 통신은 되지만 관리 포트에 연결할 수 없습니다. 방화벽과 접속 설정을 확인하세요. |
+| `TCP_CONNECTION_REFUSED` | 관리 포트가 연결을 거부 (OS) | OS 접속이 거부되었습니다. 대상 서버의 OS 원격 접속 설정과 방화벽을 확인하세요. |
+|  | (ESXi) | ESXi 접속이 거부되었습니다. 대상 서버의 ESXi 접속 설정과 방화벽을 확인하세요. |
+|  | (Redfish) | Redfish 접속이 거부되었습니다. 대상 장비의 Redfish 접속 설정과 방화벽을 확인하세요. |
+| `PROTOCOL_CHECK_FAILED` | 포트는 열렸는데 기대 응답이 아님 (OS) | 접속한 대상에서 OS 원격 접속 응답을 확인하지 못했습니다. 대상 종류와 OS 원격 접속 설정을 확인하세요. |
+|  | (ESXi) | 접속한 대상에서 ESXi 응답을 확인하지 못했습니다. 대상 종류와 ESXi 서비스 상태를 확인하세요. |
+|  | (Redfish) | 접속한 대상에서 Redfish 응답을 확인하지 못했습니다. 대상 종류와 Redfish 서비스 설정을 확인하세요. |
+| `CREDENTIAL_SET_UNAVAILABLE` | 실행 위치가 등록되지 않음 | 해당 위치({loc})가 개더링 프로젝트에 등록되지 않았습니다. |
+|  | (OS/ESXi) 위치 Vault 폴더 없음 | 해당 위치({loc})에 Vault가 등록되지 않았습니다. |
+|  | (OS/ESXi) 위치 Vault 복호화 실패 | 해당 위치({loc})의 Vault를 읽을 수 없습니다. |
+|  | (OS/ESXi) 위치 폴더는 있는데 대상 종류 파일 없음 | 해당 위치({loc})의 Vault에 OS용 계정이 없습니다. / …ESXi용 계정이 없습니다. |
+|  | (Redfish) 표준 Vault 파일 없음 | 개더링 프로젝트에 Vault가 등록되지 않았습니다. |
+|  | (Redfish) 표준 Vault 복호화 실패 | 개더링 프로젝트의 Vault를 읽을 수 없습니다. |
+|  | (Redfish) 표준 계정 0개 | 개더링 프로젝트의 Vault에 Redfish 표준 계정이 없습니다. |
+| `AUTH_PROBE_FAILED` | 계정을 보냈지만 원인 미확정 (OS) | 해당 위치({loc})의 Vault 계정으로 대상 OS에 로그인하지 못했습니다. |
+|  | (ESXi) | 해당 위치({loc})의 Vault 계정으로 대상 ESXi에 로그인하지 못했습니다. |
+|  | (Redfish) | 개더링 표준 계정으로 대상 Redfish에 인증하지 못했습니다. |
+|  | (Redfish) 표준 후보 **전원** 401 확인 | 대상 Redfish 계정과 개더링 표준 계정이 다르거나 권한이 없습니다. |
+|  | Vault 계정 0개인 채로 시도 후 실패 | 위 Vault 계정 없음 문장 (OS/ESXi: 위치 Vault, Redfish: 표준 Vault) |
+| `GATHER_FAILED` | 인증 통과 후 수집 실패 (OS) | 대상 OS에는 로그인했지만 정보를 가져오지 못했습니다. |
+|  | (ESXi) | 대상 ESXi에는 로그인했지만 정보를 가져오지 못했습니다. |
+|  | (Redfish) | 대상 Redfish 인증은 성공했지만 정보를 가져오지 못했습니다. |
+|  | 수집 중 대상 연결 끊김 (인증 성공 뒤) | 정보 수집 중 대상 서버와 연결이 끊겼습니다. |
+|  | 예외 없이 끝났는데 성공 섹션 0개 | 대상 서버에서 수집된 정보가 없습니다. |
+|  | (Redfish) 계정 요청 전 수집기 내부 오류 | 개더링 프로젝트에서 정보 수집 중 오류가 발생했습니다. |
+| `OUTPUT_BUILD_FAILED` | 결과 객체 자체를 만들지 못함 | 개더링 프로젝트에서 수집 결과를 만들지 못했습니다. |
+
+> **code 가 바뀐 경우 (2026-09-21, Redfish 한정)** — 실행 위치 미등록, 표준 계정 0개(vendor 식별),
+> vendor 미식별 + 표준 Vault 부재 세 경우는 인증을 시도하지 않았는데도 종전에는 `GATHER_FAILED` /
+> `failure_stage: gather` 로 나갔다. 이제 `CREDENTIAL_SET_UNAVAILABLE` / `failure_stage: auth` 다.
+> 이 두 값으로 분기하던 소비자는 확인이 필요하다. 운영 파이프라인(`Jenkinsfile_portal`)은
+> 미등록 loc 를 Ansible 실행 전에 막으므로, 실행 위치 미등록 문장은 Jenkins 밖 직접 실행에서만 나온다.
+>
+> **Vault 복호화 실패 판정 수정 (2026-09-21)** — 종전에는 Vault 비밀번호가 없거나 틀려도
+> "계정 0개" 로 잘못 분류됐다 (`load_one.yml` 의 `failed_when: false` 가 실패 표시를 지웠다).
+> 이제 "Vault를 읽을 수 없습니다" 문장과 `CREDENTIAL_SET_UNAVAILABLE` 이 나온다.
+>
+> **아직 문장이 없는 경우** — OS/ESXi 의 계정 불일치 확인, 조회 권한 부족 확인, OS/ESXi 내부 오류 구분은
+> 지금 구조적으로 판정할 근거가 없다(거부 사실이 오류 문자열로만 온다). 이 경우는 "로그인하지 못했습니다" /
+> "로그인했지만 정보를 가져오지 못했습니다" 문장으로 나간다.
 
 ### `errors[]` 에 **들어가지 않는** 것
 
@@ -283,7 +325,7 @@ for e in response["errors"]:
   "auth_success":       null,    // 4단계: 미수행이면 null (false 가 아니다 — 아래 주의)
   "failure_stage":      "port",  // 실행이 멈춘 단계 이름 (원인 아님)
   "failure_code":       "TCP_CONNECTION_REFUSED",  // 시스템 분기용 안정 식별자 (성공 시 null)
-  "failure_reason":     "대상 관리 서비스 연결이 거부되었습니다. 방화벽과 서비스 상태를 확인하세요.",
+  "failure_reason":     "Redfish 접속이 거부되었습니다. 대상 장비의 Redfish 접속 설정과 방화벽을 확인하세요.",
   "details": { ... }             // 채널별 부가 정보 (선택된 adapter, BMC product 명, credential_scope 등)
 }
 ```
@@ -335,14 +377,14 @@ for e in response["errors"]:
 
 > **`AUTH_PROBE_FAILED` 와 `CREDENTIAL_SET_UNAVAILABLE` 의 차이** (2026-08-12 신설)
 >
-> 사용자 문장은 같지만(4번) **운영자가 확인할 곳이 다르다.**
+> **운영자가 확인할 곳이 다르다.** 2026-09-21 부터 사용자 문장도 다르다 (위 카탈로그).
 >
 > | | `AUTH_PROBE_FAILED` | `CREDENTIAL_SET_UNAVAILABLE` |
 > |---|---|---|
 > | 무슨 일이 있었나 | 자격을 실어 보냈는데 통하지 않았다 | 보낼 자격 자체가 없었다 |
 > | `auth_success` | `false`(명시적 거부) 또는 `null`(원인 미확정) | **항상 `null`** (미시도) |
 > | 확인할 곳 | 대상 장비의 계정 / 권한 / 잠금 | 자격증명 배치 (해당 Location 의 세트 존재·복호화) |
-> | 대표 상황 | 401 거부, timeout, TLS 오류, 403 | Location 미전달·미등록, 세트 파일 부재, 복호화 실패 |
+> | 대표 상황 | 401 거부, timeout, TLS 오류, 403 | Location 미전달·미등록, 세트 파일 부재, 복호화 실패, 계정 0개(시도 전) |
 >
 > `stage` 는 둘 다 `auth` 다 — `failure_stage` 는 원인이 아니라 **멈춘 위치**이고,
 > 멈춘 곳은 두 경우 모두 자격증명 단계다.
@@ -706,6 +748,76 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 
 `reading_units` 는 `RPM`(legacy /Thermal) 또는 `Percent`(신 ThermalSubsystem.SpeedPercent). 팬 속도 비교 시
 `reading_units` 를 반드시 확인. `upper_critical` 은 legacy 경로에서만 채워지고 신 schema 경로는 null.
+
+### 6.8 `data.bios` (Redfish 전용 보조 데이터, 2026-09-15)
+
+BIOS 설정값이다. **섹션이 아니다** — `sections` 에 `bios` 가 없고 `status` 판정에 쓰이지 않는다.
+모든 Vendor 가 같은 경로 `data.bios.current.attributes` 를 쓴다.
+
+어디서 오나: 수집기가 대표 ComputerSystem(`Systems` 컬렉션 첫 멤버 — `data.hardware` 와 같은 System)을
+받을 때 응답의 `Bios.@odata.id` 를 기록해 두고, 그 링크로 Bios 리소스를 **1회** 조회한다.
+ComputerSystem 을 다시 조회하지 않고, 링크가 없으면 System ID 로 `/Bios` 를 조립하지 않는다.
+
+```json
+"bios": {
+  "current": {
+    "attributes": {
+      "AssetTag": "",
+      "BootMode": "Uefi",
+      "Proc1NumCores": 12,
+      "ProcVirtualization": "Enabled",
+      "SysPassword": null
+    }
+  }
+}
+```
+
+`attributes` 규칙:
+
+- 장비가 돌려준 `Attributes` **전체**다. Key 이름·Value·JSON 자료형을 바꾸지 않는다.
+  문자열 `"0"`, 숫자 `0`, `false`, 빈 문자열 `""`, `null` 은 서로 다른 값으로 그대로 남는다.
+  숫자처럼 보이는 문자열(예: `"BaudRate": "115200"`)도 문자열 그대로다.
+- 필터·마스킹·이름 표준화·값 변환·개수 제한이 없다. Key 집합과 개수는 Vendor / 모델 / 펌웨어마다 다르다
+  (실캡처 예: Dell R760 571개, Lenovo SR650 V2 392개, HPE DL380 Gen11 285개, Cisco CIMC 장비 87개).
+  **고정 컬럼으로 다루지 말고 Key/Value 목록으로 표시한다.**
+- Key 는 **이름순(대소문자를 구분하는 문자열 정렬)** 으로 담는다. 대문자가 소문자보다 앞이라 `cdnEnable` 처럼
+  소문자로 시작하는 Key 는 뒤에 오고, 숫자는 글자 단위로 비교해 `Slot10` 이 `Slot2` 앞에 온다.
+  장비가 준 순서는 쓰지 않는다 — Dell·HPE 는 원래 이 순서로 주지만 Lenovo 는 같은 장비도 수집할 때마다 순서가
+  달랐고(서로 다른 시점 3건) Cisco 는 이름순이 아니다. BIOS 설정 화면의 메뉴 순서와도 다르다.
+  JSON 객체의 Key 순서는 의미를 갖지 않으므로 받는 쪽은 순서에 기대지 않는다. 화면에 정렬이 필요하면 받는 쪽에서
+  정렬한다 — DB 의 JSON 전용 타입처럼 저장할 때 Key 순서를 바꾸는 저장소도 있다.
+- Current 값만 담는다. AttributeRegistry, `@Redfish.Settings` 가 가리키는 Settings, Pending / SD,
+  Vendor OEM BIOS 하위 리소스는 수집하지 않는다. BIOS 설정 변경 기능도 없다.
+- HPE Compute Scale-up Server 처럼 System 이 여럿이면 대표 System(Partition0) 1개만 본다.
+  `multi_node.partitions[]` 에는 넣지 않는다.
+
+`attributes` 값과 결과:
+
+| `attributes` | 뜻 | `errors[]` 중 `section: "bios"` | `diagnosis.details.notices` 중 `section: "bios"` |
+|---|---|---|---|
+| 객체 | 정상 수집 | 없음 | 없음 |
+| `{}` | 장비가 빈 `Attributes` 를 돌려줌 | 없음 | 있음 |
+| `null` — ComputerSystem 에 `Bios` 링크 없음 / ComputerSystem 을 받지 못함 | 조회하지 않음 | 없음 | 있음 |
+| `null` — Bios 리소스 HTTP 404 | 리소스 없음 | 없음 | 있음 |
+| `null` — 응답이 표준 Bios 리소스가 아님 (최상위 `@odata.type` 이 `#Bios.` 로 시작하지 않음) | 표준 계약 밖 형식 | 없음 | 있음 |
+| `null` — timeout / 연결 오류 / HTTP 401·403·기타 4xx·5xx / JSON 아님 / `Attributes` 없음·객체 아님 | 조회 실패 | `section: "bios"` 1건 | 없음 |
+
+어느 경우든 `status`, `sections`, `diagnosis.failure_stage/code/reason`, `auth_success`, 다른 `data` 는
+**바뀌지 않는다.** BIOS 조회의 401·403 이 host 를 실패로 만들거나 표준 계정 후보 재시도를 일으키지 않는다.
+실패 `errors[]` 의 `message` 는 `"BIOS 설정 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요."` 이고
+HTTP status 같은 기술 근거는 `detail` 에 있다.
+
+수집에 들어가기 전에 멈춘 실패 envelope (rescue / `always` 최종 fallback / 콜백 보충) 에는 `data.bios` 키가 없다.
+그 경로의 `data` 는 기존 뼈대 또는 `{}` 이다 (`multi_node` 와 같다).
+
+**기술 경계 (Ansible no_log)**: 수집 모듈은 계정 비밀번호를 no_log 파라미터로 받는다. Ansible 은 모듈 결과에서
+그 비밀번호 값을 치환하므로, BIOS Attribute 값이 **수집 계정 비밀번호와 같으면** `"VALUE_SPECIFIED_IN_NO_LOG_PARAMETER"`,
+**비밀번호를 포함하면** 그 부분이 `********`, **문자열로 적었을 때 비밀번호를 포함하는 숫자**는
+`"VALUE_SPECIFIED_IN_NO_LOG_PARAMETER"` 문자열로 나올 수 있다. Key 이름과 비밀번호와 무관한 값은 영향이 없다.
+수집기는 비밀번호를 비교하거나 검출하지 않는다 (2026-09-15 결정).
+
+검증 범위: Dell / HPE / Lenovo / Cisco 는 저장소 실캡처 재생으로, 나머지 Vendor 는 표준 응답 mock 으로만 확인했다.
+Vendor·세대별 근거 수준은 `docs/reference/compatibility-matrix.md` 를 본다.
 
 ---
 

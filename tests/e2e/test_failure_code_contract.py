@@ -142,13 +142,15 @@ def test_case03_no_response_is_target_unreachable_not_device_down(exc, label, mo
 
     2026-09-03 이름 변경 (종전 TCP_CONNECT_FAILED). 이 code 는 "우리가 쓴 probe(TCP·ICMP)
     로 응답을 보지 못했다" 는 **관측**이지 "장비가 꺼졌다" 는 **확정**이 아니다. 그 경계를
-    아래 assertion 이 계속 지킨다 — 사용자 문장이 전원/다운을 주장하면 실패한다.
+    아래 assertion 이 계속 지킨다 — 사용자 문장이 전원 차단/다운을 **주장**하면 실패한다.
+    2026-09-21: 사용자 확정 문장은 "서버 전원 상태와 네트워크 연결을 확인하세요" 로 전원을
+    **확인 항목**으로 안내한다. 안내는 허용하고 단정 표현만 막는다.
     """
     result = _run_precheck(monkeypatch, "redfish", connect_exc=exc)
     assert result["failure_stage"] == "reachable", label
     assert result["failure_code"] == "TARGET_UNREACHABLE", label
     assert result["auth_success"] is None
-    for banned in ("전원", "다운", "꺼졌"):
+    for banned in ("다운", "꺼졌", "꺼져", "전원이 꺼", "전원이 없"):
         assert banned not in result["failure_reason"], (
             f"[{label}] 관측하지 않은 원인을 단정한다: {result['failure_reason']!r}"
         )
@@ -163,15 +165,16 @@ def test_case03b_icmp_reply_moves_failure_to_port_stage(exc, label, monkeypatch)
     """TCP 무응답이어도 ICMP Echo Reply 가 오면 도달은 성립한다 (2026-09-03).
 
     reachable = TCP 응답 OR ICMP 응답. 도달이 확인된 뒤 막힌 곳은 관리 포트이므로
-    stage=port + TCP_CONNECT_FAILED 이고, 사용자 문장도 "IP 사용 여부" 가 아니라
-    "관리 포트 / 방화벽 확인" 으로 바뀐다.
+    stage=port + TCP_CONNECT_FAILED 이고, 사용자 문장도 "응답이 없다" 가 아니라
+    "통신은 되지만 관리 포트에 연결할 수 없다 / 방화벽 확인" 이다.
     """
     result = _run_precheck(monkeypatch, "redfish", connect_exc=exc, icmp=ICMP_REPLY)
     assert result["reachable"] is True, label
     assert result["port_open"] is False, "도달했다고 관리 포트가 열린 것은 아니다"
     assert result["failure_stage"] == "port", label
     assert result["failure_code"] == "TCP_CONNECT_FAILED", label
-    assert result["failure_reason"] == pb.REASON_PORT_UNREACHABLE, label
+    assert result["failure_reason"] == pb.reason_for_failure("TCP_CONNECT_FAILED", "redfish"), label
+    assert "통신은 되지만" in result["failure_reason"], label
     assert "icmp" in (result["detail"] or ""), "ICMP 관측 근거가 detail 에 남아야 한다"
     _assert_stage_code(result, f"C3b {label}")
 
@@ -184,7 +187,7 @@ def test_icmp_failure_never_creates_its_own_code(monkeypatch):
     assert result["failure_stage"] == "reachable"
     assert result["failure_code"] == "TARGET_UNREACHABLE"
     assert "ICMP" not in result["failure_code"]
-    assert result["failure_reason"] == pb.REASON_IP_UNCONFIRMED
+    assert result["failure_reason"] == pb.reason_for_failure("TARGET_UNREACHABLE", "redfish")
     for code in ALLOWED_CODES:
         assert "ICMP" not in code, f"ICMP 전용 code 가 생겼다: {code}"
 
@@ -424,22 +427,28 @@ def test_case10_redfish_rescue_derives_all_fields_from_auth_outcome(
     assert diag["failure_code"] == exp_code, label
     assert diag["auth_success"] is exp_auth, label
     _assert_stage_code(diag, label)
-    # 4번 문장(자격증명)은 stage=auth 와만, 5번 문장은 stage=gather 와만 짝지어진다
-    from tests.e2e.test_failure_reason_contract import FAILURE_REASONS  # noqa: PLC0415
-    expected_reason = ("_fr_gather_failed" if exp_stage == "gather"
-                       else "_fr_credential_failed")
-    assert diag["failure_reason"] == FAILURE_REASONS[expected_reason], label
+    # 문장 키는 관측(outcome)에서만 나온다 — 인증 통과 → gather_after_auth,
+    # 요청 전 멈춤 → gather_internal, 원인 미확정 → auth_unconfirmed (2026-09-21)
+    from tests.e2e.test_failure_reason_contract import fr  # noqa: PLC0415
+    if exp_stage == "auth":
+        expected_key = "auth_unconfirmed"
+    elif exp_auth is True:
+        expected_key = "gather_after_auth"
+    else:
+        expected_key = "gather_internal"
+    assert diag["failure_reason"] == fr(expected_key, "redfish"), label
 
 
 def test_case10_redfish_never_blames_credentials_after_auth_passed():
     """인증 통과가 관측된 뒤의 수집 실패를 자격증명 문제로 표시하지 않는다 (P0-1)."""
-    from tests.e2e.test_failure_reason_contract import FAILURE_REASONS  # noqa: PLC0415
+    from tests.e2e.test_failure_reason_contract import fr  # noqa: PLC0415
     for ctx in ({"_rf_collect_ok": True},
                 {"_rf_collect_ok": False,
                  "_rf_auth_observations": [{"role": "primary", "status": 200}]}):
         diag = render_redfish_rescue({"_diagnosis": {**_PRECHECK_OK_DIAG, "failure_code": None},
                                       **ctx})
-        assert diag["failure_reason"] != FAILURE_REASONS["_fr_credential_failed"], ctx
+        assert diag["failure_reason"] == fr("gather_after_auth", "redfish"), ctx
+        assert "계정" not in diag["failure_reason"], ctx
         assert diag["auth_success"] is True, ctx
 
 
@@ -602,11 +611,11 @@ def test_phase1_reason_contract_still_holds():
             "os-gather/site.yml", _OS_TASKS["linux"],
             {"_os_auth_ok": True, "_os_attempts_meta": {}})),
         # 2026-08-11 (Phase 5-A): OS 포트 실패 문구는 site.yml 이 아니라 precheck 가 만든다.
-        # (Phase 6-B) 세 관측이 같은 1번 문구를 쓴다 — 구분은 failure_code 가 유지한다.
-        ("os/unreachable", {"failure_reason": pb.reason_for_failure_code("TARGET_UNREACHABLE")}),
-        ("os/connect-failure", {"failure_reason": pb.reason_for_failure_code("TCP_CONNECT_FAILED")}),
-        ("os/port-refused", {"failure_reason": pb.reason_for_failure_code("TCP_CONNECTION_REFUSED")}),
-        ("os/protocol", {"failure_reason": pb.CHANNEL_PROTOCOL_MESSAGES["os"]}),
+        # (2026-09-21) 관측마다 문장이 다르다 — code 와 채널로 고른다.
+        ("os/unreachable", {"failure_reason": pb.reason_for_failure("TARGET_UNREACHABLE", "os")}),
+        ("os/connect-failure", {"failure_reason": pb.reason_for_failure("TCP_CONNECT_FAILED", "os")}),
+        ("os/port-refused", {"failure_reason": pb.reason_for_failure("TCP_CONNECTION_REFUSED", "os")}),
+        ("os/protocol", {"failure_reason": pb.reason_for_failure("PROTOCOL_CHECK_FAILED", "os")}),
     ]
     for label, diag in samples:
         _assert_grid_ready(diag["failure_reason"], label)

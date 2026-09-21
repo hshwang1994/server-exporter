@@ -127,7 +127,7 @@ PRECHECK_PORT_FAIL = {
     "reachable": True, "port_open": False, "protocol_supported": False,
     "auth_success": None, "failure_stage": "port",
     "failure_code": "TCP_CONNECTION_REFUSED",
-    "failure_reason": "대상 서버의 관리 포트가 연결을 거부했습니다. 방화벽과 관리 서비스 상태를 확인하세요.",
+    "failure_reason": "OS 접속이 거부되었습니다. 대상 서버의 OS 원격 접속 설정과 방화벽을 확인하세요.",
     "details": {"channel": "os", "checked_ports": [5986, 5985, 22]},
 }
 
@@ -155,6 +155,15 @@ class Driver:
             self.hosts[ip], "precheck | 실패 detail 을 errors[].detail 로 전달",
             connection="local", delegate_to=None,
             result={"ansible_facts": {"_fail_error_detail": detail}}))
+
+    def credentials(self, ip, location="ic", outcome="loaded"):
+        """resolve_and_load.yml 의 set_fact — 실행 위치 / Vault 적재 결과 (no_log 아님)."""
+        self.cb.v2_runner_on_ok(_Result(
+            self.hosts[ip], "credential | expose scope",
+            result={"ansible_facts": {"_cred_location": location}}))
+        self.cb.v2_runner_on_ok(_Result(
+            self.hosts[ip], "credential | classify load outcome",
+            result={"ansible_facts": {"_cred_load_outcome": outcome}}))
 
     def classify(self, ip, connection="ssh"):
         """add_host 후 호스트가 실제 연결 정보를 갖는 상태."""
@@ -290,6 +299,8 @@ def test_multi_host_one_lost_during_gather_still_yields_one_envelope_each(capsys
     assert diag["protocol_supported"] is True
     assert diag["details"]["checked_ports"] == [5986, 5985, 22]
     assert diag["details"]["channel"] == "os"
+    # 2026-09-21: '연결이 끊겼다' 는 관측을 그대로 말한다 (로그인 성공 뒤의 소실)
+    assert diag["failure_reason"] == _catalog("gather_connection_lost")
 
 
 def test_unreachable_before_any_remote_success_is_auth_stage(capsys):
@@ -298,6 +309,7 @@ def test_unreachable_before_any_remote_success_is_auth_stage(capsys):
     ip = "192.0.2.41"
     d.precheck(ip)
     d.classify(ip)
+    d.credentials(ip, location="ic", outcome="loaded")
     d.credential_probe(ip, reachable=False)     # ignore_unreachable → 호스트 유지
     d.remote_task(ip, unreachable=True)         # 첫 실 태스크에서 소실
 
@@ -308,6 +320,37 @@ def test_unreachable_before_any_remote_success_is_auth_stage(capsys):
     assert diag["failure_stage"] == "auth"
     assert diag["failure_code"] == "AUTH_PROBE_FAILED"
     assert diag["auth_success"] is None, "인증 '거부'를 관측한 것이 아니므로 false 로 확정하지 않는다"
+    # 2026-09-21: 관측한 실행 위치로 채운 채널별 문장
+    assert diag["failure_reason"] == _catalog("auth_unconfirmed", "os", "ic")
+    assert "해당 위치(ic)" in envs[0]["errors"][0]["message"]
+
+
+def test_unreachable_with_empty_vault_accounts_says_no_account(capsys):
+    """Vault 에 계정이 0개인 채로(계정 없이) 접속을 시도하다 잃으면 '계정 없음' 을 알린다.
+
+    code 는 AUTH_PROBE_FAILED 그대로다 — 접속 시도 자체는 했다 (에이전트 SSH 키 경로).
+    관리자가 할 일은 대상 계정 점검이 아니라 Vault 계정 배치다.
+    """
+    d = Driver(capsys)
+    ip = "192.0.2.43"
+    d.precheck(ip)
+    d.classify(ip)
+    d.credentials(ip, location="seoul-dc1", outcome="empty_accounts")
+    d.remote_task(ip, unreachable=True)
+    diag = d.finish()[0]["diagnosis"]
+    assert diag["failure_code"] == "AUTH_PROBE_FAILED"
+    assert diag["failure_reason"] == _catalog("loc_vault_no_account", "os", "seoul-dc1")
+
+
+def test_unreachable_without_location_fact_uses_placeholder(capsys):
+    """자격 해석 결과를 관측하지 못했으면 위치를 '미지정' 으로 채운다 (틀을 드러내지 않는다)."""
+    d = Driver(capsys)
+    ip = "192.0.2.44"
+    d.precheck(ip)
+    d.classify(ip)
+    d.remote_task(ip, unreachable=True)
+    reason = d.finish()[0]["diagnosis"]["failure_reason"]
+    assert "{loc}" not in reason and "해당 위치(미지정)" in reason
 
 
 def test_ignore_unreachable_probe_alone_does_not_lose_host(capsys):
@@ -636,46 +679,40 @@ def test_reconciled_envelope_carries_no_secret_material(capsys):
 _CANONICAL_YAML = REPO / "common" / "vars" / "failure_reasons.yml"
 
 
-def _canonical_sentences():
+def _canonical_catalog():
     import yaml
-    data = yaml.safe_load(_CANONICAL_YAML.read_text(encoding="utf-8"))
-    return {k: v for k, v in data.items() if isinstance(v, str)}
+    return yaml.safe_load(_CANONICAL_YAML.read_text(encoding="utf-8"))["_fr_catalog"]
+
+
+def _catalog(key, channel=None, loc=None):
+    """정본 카탈로그 문장 — 채널 없으면 default, {loc} 치환 (콜백과 같은 규칙)."""
+    entry = _canonical_catalog()[key]
+    text = entry.get(channel) if channel else None
+    if text is None:
+        text = entry["default"]
+    return text.replace("{loc}", json_only._display_location(loc))
 
 
 class TestCanonicalReasonsDoNotDrift:
-    """콜백은 문구를 새로 정의하지 않는다 — 정본 값을 복제할 뿐이다.
+    """콜백은 문구를 새로 정의하지 않는다 — 정본 카탈로그 값을 복제할 뿐이다.
 
-    콜백 플러그인은 Ansible 자체 로더로 올라가 precheck_bundle 을 import 할 수 없어
-    값을 복제한다. 복제본이 정본과 갈라지는 것을 여기서 고정한다.
+    콜백 플러그인은 Ansible 자체 로더로 올라가 정본 YAML / 필터를 import 할 수 없어
+    보충 경로가 쓰는 키만 복제한다. 복제본이 정본과 갈라지는 것을 여기서 고정한다.
     """
 
-    def test_credential_sentence_matches_canonical(self):
-        assert json_only._REASON_CREDENTIAL_FAILED == \
-            _canonical_sentences()["_fr_credential_failed"], (
-            "json_only._REASON_CREDENTIAL_FAILED 가 "
-            "common/vars/failure_reasons.yml:_fr_credential_failed 와 다르다"
-        )
-
-    def test_gather_sentence_matches_canonical(self):
-        assert json_only._REASON_GATHER_FAILED == \
-            _canonical_sentences()["_fr_gather_failed"], (
-            "json_only._REASON_GATHER_FAILED 가 "
-            "common/vars/failure_reasons.yml:_fr_gather_failed 와 다르다"
-        )
+    def test_callback_catalog_matches_canonical(self):
+        canonical = _canonical_catalog()
+        for key, entry in json_only._FAILURE_REASON_CATALOG.items():
+            assert key in canonical, f"json_only 에만 있는 키 {key}"
+            assert entry == canonical[key], (
+                f"json_only._FAILURE_REASON_CATALOG[{key!r}] 가 "
+                f"common/vars/failure_reasons.yml:_fr_catalog.{key} 와 다르다"
+            )
 
     def test_no_output_sentence_matches_canonical(self):
-        """결과 객체 생성 실패 문장의 정본은 failure_reasons.yml 이다 (2026-08-12).
-
-        종전에는 이 문장이 site.yml always 블록마다 두 자리(diagnosis.failure_reason /
-        errors[0].message)에 리터럴로 있어서 3 채널 8곳을 동시에 고쳐야 했다 (H2).
-        정본을 `_fr_output_build_failed` 로 옮겼으므로 site.yml 문자열이 아니라
-        정본 값과 비교한다.
-        """
+        """결과 객체 생성 실패 문장 — site.yml always 블록 fallback 과 같은 문장이다."""
         assert json_only._REASON_NO_OUTPUT == \
-            _canonical_sentences()["_fr_output_build_failed"], (
-            "json_only._REASON_NO_OUTPUT 가 "
-            "common/vars/failure_reasons.yml:_fr_output_build_failed 와 다르다"
-        )
+            _canonical_catalog()["output_build_failed"]["default"]
 
     def test_site_yml_always_blocks_reference_the_canonical_variable(self):
         """3 채널 always 블록이 문장을 리터럴로 다시 적지 않는다 (H2 회귀 차단)."""
@@ -683,25 +720,21 @@ class TestCanonicalReasonsDoNotDrift:
             text = (REPO / site / "site.yml").read_text(encoding="utf-8")
             assert json_only._REASON_NO_OUTPUT not in text, (
                 f"{site}/site.yml 에 fallback 문장이 하드코딩됐다 — "
-                f"_fr_output_build_failed 를 참조할 것"
+                f"_fr_catalog.output_build_failed 를 참조할 것"
             )
-            assert "_fr_output_build_failed" in text, (
-                f"{site}/site.yml always 블록이 정본 변수를 참조하지 않는다"
+            assert "_fr_catalog.output_build_failed" in text, (
+                f"{site}/site.yml always 블록이 정본 카탈로그를 참조하지 않는다"
             )
 
     def test_callback_defines_no_extra_user_sentences(self):
-        """표준 문구 외의 한국어 사용자 문장을 콜백이 새로 만들지 않는다."""
-        allowed = {
-            json_only._REASON_CREDENTIAL_FAILED,
-            json_only._REASON_GATHER_FAILED,
-            json_only._REASON_NO_OUTPUT,
-        }
+        """카탈로그 밖의 한국어 사용자 문장을 콜백이 새로 만들지 않는다."""
+        allowed = {t for e in _canonical_catalog().values() for t in e.values()}
         for name in dir(json_only):
             if not name.startswith("_REASON"):
                 continue
             value = getattr(json_only, name)
             assert value in allowed, (
-                f"json_only.{name} 이 표준에 없는 사용자 문구를 정의한다: {value!r}"
+                f"json_only.{name} 이 카탈로그에 없는 사용자 문구를 정의한다: {value!r}"
             )
 
 

@@ -12,6 +12,11 @@
     "thermal"
   ],
   "data": {
+    "bios": {
+      "current": {
+        "attributes": null
+      }
+    },
     "bmc": {
       "_network_meta": {
         "ipv4_gateways": [],

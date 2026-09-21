@@ -451,6 +451,14 @@
           ]
         }
       ]
+    },
+    // 2026-09-15 추가 — BIOS Current Attributes (보조 데이터 — sections 에는 없다).
+    // 대표 System(Systems.Members[0] = Partition0) 의 Bios 링크 1개만 조회한다. 다른 Partition 의 BIOS 는
+    // 수집하지 않고, multi_node.partitions[] 에도 넣지 않는다. 이 합성 예시에는 Bios 응답이 없어 null 이다.
+    "bios": {
+      "current": {
+        "attributes": null
+      }
     }
   },
   "schema_version": "1"                                 // envelope schema version (현재 "1" 고정 — rule 13 R5)

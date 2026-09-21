@@ -197,7 +197,8 @@ def test_tcp_silent_icmp_reply_is_reachable(channel, monkeypatch):
     assert r["port_open"] is False
     assert r["failure_stage"] == "port"
     assert r["failure_code"] == "TCP_CONNECT_FAILED"
-    assert r["failure_reason"] == pb.REASON_PORT_UNREACHABLE
+    assert r["failure_reason"] == pb.reason_for_failure("TCP_CONNECT_FAILED", channel)
+    assert "통신은 되지만" in r["failure_reason"], "ICMP 응답은 '통신은 된다' 의 근거다"
     assert r["auth_success"] is None, "인증을 시도하지 않았으므로 null"
 
 
@@ -208,7 +209,8 @@ def test_tcp_silent_icmp_silent_is_unreachable(channel, monkeypatch):
     assert r["reachable"] is False
     assert r["failure_stage"] == "reachable"
     assert r["failure_code"] == "TARGET_UNREACHABLE"
-    assert r["failure_reason"] == pb.REASON_IP_UNCONFIRMED
+    assert r["failure_reason"] == pb.reason_for_failure("TARGET_UNREACHABLE", channel)
+    assert "통신은 되지만" not in r["failure_reason"]
 
 
 def test_rst_keeps_refused_and_skips_icmp(monkeypatch):
@@ -294,5 +296,7 @@ def test_diagnosis_shape_unchanged(monkeypatch):
 
 def test_no_icmp_specific_failure_code_exists():
     """(3) ICMP 전용 code 금지 — 사용자 지시."""
-    for code in pb.REASON_BY_FAILURE_CODE:
+    for code in pb.PRECHECK_REASON_KEYS:
         assert "ICMP" not in code.upper(), f"ICMP 전용 failure_code 가 생겼다: {code}"
+    for key in pb.FAILURE_REASON_CATALOG:
+        assert "icmp" not in key.lower(), f"ICMP 전용 문장이 생겼다: {key}"

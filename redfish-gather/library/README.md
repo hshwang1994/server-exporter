@@ -14,7 +14,8 @@
 |---|---|
 | `_detect_vendor_from_service_root` | GET `/redfish/v1/` (ServiceRoot 무인증) |
 | `_extract_oem_hpe / dell / lenovo / supermicro / cisco` | (helper — vendor 별 OEM 추출) |
-| `gather_system` | GET `/redfish/v1/Systems/{id}` + Bios |
+| `gather_system` | GET `/redfish/v1/Systems/{id}` (+ OEM 보강용 Chassis). 응답의 `Bios.@odata.id` 를 `gather_bios` 에 넘긴다 |
+| `gather_bios` | GET `{ComputerSystem.Bios.@odata.id}` 1회 — 링크가 있을 때만. `Attributes` 를 Key 이름순으로 정렬해(값·자료형은 원본 그대로) `data.bios.current.attributes` 로. Settings / Pending / SD / Registry / OEM 하위는 부르지 않는다 |
 | `gather_bmc` | GET `/redfish/v1/Managers/{id}` + EthernetInterfaces |
 | `gather_processors` | GET `/redfish/v1/Systems/{id}/Processors` (collection + N) |
 | `gather_memory` | GET `/redfish/v1/Systems/{id}/Memory` (collection + N) |

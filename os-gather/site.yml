@@ -145,7 +145,7 @@
   connection: local
   strategy: free
 
-  # 2026-08-12: build_failed_output.yml 이 사용자 문구 정본(_fr_output_build_failed)을
+  # 2026-08-12: build_failed_output.yml 이 사용자 문구 카탈로그(_fr_catalog)를
   # 참조하므로 이 play 도 정본을 로드해야 한다. 종전에는 이 play 만 vars_files 가 없어서
   # build_failed_output.yml 안에 문장이 하드코딩돼 있었다 (H2 의 구조적 원인).
   vars_files:
@@ -186,8 +186,8 @@
     #   종전 문구는 관리 포트 번호(22 / 5985 / 5986)를 Portal Grid 에 그대로 노출했고,
     #   전 포트 무응답 경우를 "모두 응답이 없습니다" 로 단정했다. 이제 precheck 가
     #   실제 관측(DNS 실패 / 연결 미확인 / 연결 거부 / 프로토콜 미확인)에 맞는 사용자 문장을
-    #   직접 만든다(precheck_bundle.REASON_* / CHANNEL_PROTOCOL_MESSAGES). 포트 번호는
-    #   errors[].message 와 errors[].detail 에만 남는다.
+    #   직접 만든다(precheck_bundle.reason_for_failure — 2026-09-21 부터 채널별 문장). 포트 번호는
+    #   errors[].detail 에만 남는다.
 
     - name: "failed-output | init fragments"
       ansible.builtin.include_tasks:
@@ -221,7 +221,7 @@
   #   죽어** OUTPUT 태스크에 도달하지 못하고 envelope 이 사라진다 (rule 11 위반).
   #   block 안 include 는 실패해도 rescue 가 정상 failed envelope 을 만든다.
   vars_files:
-    # 2026-08-11 (Phase 6-B): Portal 사용자 문구 정본 (5 문장) — rescue 가 참조한다.
+    # Portal 사용자 문구 카탈로그 (_fr_catalog) — rescue / always 가 참조한다.
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
   vars:
@@ -401,16 +401,16 @@
         #                                   연결 끊김 / timeout / 제한 쉘(nologin, rc≠0) 을 구분하지
         #                                   못한다 → 인증 거부를 관측했다고 말할 수 없다
         #   failure_stage                 — 실행이 멈춘 단계. 자격 probe 단계면 'auth', 그 뒤면 'gather'.
-        #   failure_reason                — 2026-08-11 (Phase 6-B): 사용자 문구 5 문장 표준만 쓴다
-        #                                   (common/vars/failure_reasons.yml). 자격 단계 실패 → 4번,
-        #                                   인증 통과 후 수집 실패 → 5번. 종전엔 채널 이름(SSH / WinRM)을
-        #                                   문장에 넣었는데, 사용자는 채널을 고르지 않고 IP 만 넘기므로
-        #                                   조치에 도움이 되지 않아 뺐다. 채널 정보는 errors[].detail 에 남는다.
+        #   failure_reason                — 카탈로그(common/vars/failure_reasons.yml `_fr_catalog`)에서
+        #                                   원인별 키로 고른다 (2026-09-21). 인증 통과 후 실패 → gather_after_auth,
+        #                                   Vault 설정 문제 → loc_* 키, 그 외 인증 실패 → auth_unconfirmed.
+        #                                   2026-08-11 에 뺐던 대상 종류 어휘(OS)를 다시 쓴다 — 관리자는
+        #                                   target_type 을 골라 요청하므로 조치 대상을 좁혀 준다.
         - name: "linux | rescue | Portal 표시용 diagnosis 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
               {#- 2026-08-12 (C6): 자격 후보가 0건이면 _os_auth_ok 는 '관측한 적 없음' 인데도
-                  false 로 남아, 원격 명령이 실제로 실행된 뒤의 실패까지 '자격증명 확인'(4번)
+                  false 로 남아, 원격 명령이 실제로 실행된 뒤의 실패까지 '자격증명 확인'
                   으로 라벨링됐다. 그 상태의 envelope 은 data 에 수집 결과가 들어 있으면서
                   '대상에 접속할 수 없습니다' 라고 말한다. 섹션을 하나라도 수집했다는 것은
                   원격 접속·인증이 통과했다는 직접 관측이므로 함께 본다. -#}
@@ -421,10 +421,31 @@
                   조치가 다르다 (대상 계정 점검 vs vault 배치 점검). stage 는 auth 를 유지한다 —
                   stage 는 원인이 아니라 멈춘 위치이고(CLAUDE.md §9) 멈춘 곳은 자격증명 단계다.
                   auth_success 는 그대로 null 이다 (미시도 — false 는 명시적 거부를 뜻한다). -#}
+              {%- set lo = _cred_load_outcome | default('') -%}
               {%- set cred_na = (not ok)
-                                and ((_cred_load_outcome | default(''))
-                                     in ['not_resolved', 'credential_set_missing',
-                                         'credential_set_undecryptable']) -%}
+                                and (lo in ['not_resolved', 'credential_set_missing',
+                                            'credential_set_undecryptable']) -%}
+              {#- 2026-09-21: 문장은 원인별 카탈로그 키로 고른다 (common/vars/failure_reasons.yml).
+                  위치 폴더는 있는데 이 OS 종류 파일만 없으면 '계정 없음', 폴더도 없으면 'Vault 없음'.
+                  계정 0개(empty_accounts)는 계정 없이 접속을 **시도한 뒤** 실패한 것이라 code 는
+                  AUTH_PROBE_FAILED 를 유지하고 문장만 '계정 없음' 으로 알린다 (SSH 키 경로 보존). -#}
+              {%- if ok -%}
+                {%- set reason_key = 'gather_after_auth' -%}
+              {%- elif (_cred_reason | default('')) == 'unknown_location' -%}
+                {%- set reason_key = 'loc_unregistered' -%}
+              {%- elif lo == 'credential_set_missing' -%}
+                {%- set reason_key = ('loc_vault_no_account'
+                                      if (_cred_location_vault_exists | default(false) | bool)
+                                      else 'loc_vault_missing') -%}
+              {%- elif lo == 'credential_set_undecryptable' -%}
+                {%- set reason_key = 'loc_vault_unreadable' -%}
+              {%- elif lo == 'not_resolved' -%}
+                {%- set reason_key = 'loc_vault_missing' -%}
+              {%- elif lo == 'empty_accounts' -%}
+                {%- set reason_key = 'loc_vault_no_account' -%}
+              {%- else -%}
+                {%- set reason_key = 'auth_unconfirmed' -%}
+              {%- endif -%}
               {{ {'reachable': true, 'port_open': true,
                   'protocol_supported': true,
                   'auth_success': (true if ok else none),
@@ -432,7 +453,9 @@
                   'failure_code': ('GATHER_FAILED' if ok
                                    else ('CREDENTIAL_SET_UNAVAILABLE' if cred_na
                                          else 'AUTH_PROBE_FAILED')),
-                  'failure_reason': (_fr_gather_failed if ok else _fr_credential_failed),
+                  'failure_reason': (_fr_catalog | failure_reason(
+                                       reason_key, 'os',
+                                       _cred_location | default(se_location | default('')))),
                   'details': {'channel': 'os', 'detected_os': 'linux',
                               'credential_scope': (_cred_scope | default('')) or none,
                               'selected_port': 22,
@@ -484,10 +507,10 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {'system': 'failed', 'hardware': 'failed', 'bmc': 'not_supported', 'cpu': 'failed', 'memory': 'failed', 'storage': 'failed', 'network': 'failed', 'firmware': 'not_supported', 'users': 'failed', 'power': 'not_supported', 'thermal': 'not_supported'},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_output_build_failed, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_catalog.output_build_failed.default, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {'started_at': none, 'finished_at': none, 'duration_ms': none, 'adapter_id': none, 'adapter_version': none, 'ansible_version': none},
                        'correlation': {'serial_number': none, 'system_uuid': none, 'bmc_ip': none, 'host_ip': _ip | default(none)},
-                       'errors': [{'section':'gather','message': _fr_output_build_failed,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
+                       'errors': [{'section':'gather','message': _fr_catalog.output_build_failed.default,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {'system': none, 'hardware': none, 'bmc': none, 'cpu': none, 'memory': none, 'storage': {'filesystems': [], 'physical_disks': [], 'datastores': [], 'controllers': [], 'logical_volumes': [], 'hbas': [], 'infiniband': [], 'summary': {'groups': [], 'grand_total_gb': 0}}, 'network': {'dns_servers': [], 'default_gateways': [], 'interfaces': [], 'adapters': [], 'ports': [], 'virtual_switches': [], 'portgroups': [], 'driver_map': [], 'summary': {'groups': []}}, 'users': [], 'firmware': [], 'power': none, 'thermal': {'temperatures': [], 'fans': []}}
                      })) | to_json }}"
 
@@ -502,7 +525,7 @@
 
   # 2026-08-12: vault 는 block 안에서 동적 로딩 (PLAY 2 와 같은 이유 — rule 11 envelope 보호).
   vars_files:
-    # 2026-08-11 (Phase 6-B): Portal 사용자 문구 정본 (5 문장) — rescue 가 참조한다.
+    # Portal 사용자 문구 카탈로그 (_fr_catalog) — rescue / always 가 참조한다.
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
   vars:
@@ -667,7 +690,7 @@
           ansible.builtin.set_fact:
             _diagnosis: >-
               {#- 2026-08-12 (C6): 자격 후보가 0건이면 _os_auth_ok 는 '관측한 적 없음' 인데도
-                  false 로 남아, 원격 명령이 실제로 실행된 뒤의 실패까지 '자격증명 확인'(4번)
+                  false 로 남아, 원격 명령이 실제로 실행된 뒤의 실패까지 '자격증명 확인'
                   으로 라벨링됐다. 그 상태의 envelope 은 data 에 수집 결과가 들어 있으면서
                   '대상에 접속할 수 없습니다' 라고 말한다. 섹션을 하나라도 수집했다는 것은
                   원격 접속·인증이 통과했다는 직접 관측이므로 함께 본다. -#}
@@ -679,10 +702,31 @@
                   조치가 다르다 (대상 계정 점검 vs vault 배치 점검). stage 는 auth 를 유지한다 —
                   stage 는 원인이 아니라 멈춘 위치이고(CLAUDE.md §9) 멈춘 곳은 자격증명 단계다.
                   auth_success 는 그대로 null 이다 (미시도 — false 는 명시적 거부를 뜻한다). -#}
+              {%- set lo = _cred_load_outcome | default('') -%}
               {%- set cred_na = (not ok)
-                                and ((_cred_load_outcome | default(''))
-                                     in ['not_resolved', 'credential_set_missing',
-                                         'credential_set_undecryptable']) -%}
+                                and (lo in ['not_resolved', 'credential_set_missing',
+                                            'credential_set_undecryptable']) -%}
+              {#- 2026-09-21: 문장은 원인별 카탈로그 키로 고른다 (common/vars/failure_reasons.yml).
+                  위치 폴더는 있는데 이 OS 종류 파일만 없으면 '계정 없음', 폴더도 없으면 'Vault 없음'.
+                  계정 0개(empty_accounts)는 계정 없이 접속을 **시도한 뒤** 실패한 것이라 code 는
+                  AUTH_PROBE_FAILED 를 유지하고 문장만 '계정 없음' 으로 알린다 (SSH 키 경로 보존). -#}
+              {%- if ok -%}
+                {%- set reason_key = 'gather_after_auth' -%}
+              {%- elif (_cred_reason | default('')) == 'unknown_location' -%}
+                {%- set reason_key = 'loc_unregistered' -%}
+              {%- elif lo == 'credential_set_missing' -%}
+                {%- set reason_key = ('loc_vault_no_account'
+                                      if (_cred_location_vault_exists | default(false) | bool)
+                                      else 'loc_vault_missing') -%}
+              {%- elif lo == 'credential_set_undecryptable' -%}
+                {%- set reason_key = 'loc_vault_unreadable' -%}
+              {%- elif lo == 'not_resolved' -%}
+                {%- set reason_key = 'loc_vault_missing' -%}
+              {%- elif lo == 'empty_accounts' -%}
+                {%- set reason_key = 'loc_vault_no_account' -%}
+              {%- else -%}
+                {%- set reason_key = 'auth_unconfirmed' -%}
+              {%- endif -%}
               {{ {'reachable': true, 'port_open': true,
                   'protocol_supported': true,
                   'auth_success': (true if ok else none),
@@ -690,7 +734,9 @@
                   'failure_code': ('GATHER_FAILED' if ok
                                    else ('CREDENTIAL_SET_UNAVAILABLE' if cred_na
                                          else 'AUTH_PROBE_FAILED')),
-                  'failure_reason': (_fr_gather_failed if ok else _fr_credential_failed),
+                  'failure_reason': (_fr_catalog | failure_reason(
+                                       reason_key, 'os',
+                                       _cred_location | default(se_location | default('')))),
                   'details': {'channel': 'os', 'detected_os': 'windows',
                               'credential_scope': (_cred_scope | default('')) or none,
                               'selected_port': port,
@@ -743,9 +789,9 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {'system': 'failed', 'hardware': 'failed', 'bmc': 'not_supported', 'cpu': 'failed', 'memory': 'failed', 'storage': 'failed', 'network': 'failed', 'firmware': 'not_supported', 'users': 'failed', 'power': 'not_supported', 'thermal': 'not_supported'},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_output_build_failed, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_catalog.output_build_failed.default, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {'started_at': none, 'finished_at': none, 'duration_ms': none, 'adapter_id': none, 'adapter_version': none, 'ansible_version': none},
                        'correlation': {'serial_number': none, 'system_uuid': none, 'bmc_ip': none, 'host_ip': _ip | default(none)},
-                       'errors': [{'section':'gather','message': _fr_output_build_failed,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
+                       'errors': [{'section':'gather','message': _fr_catalog.output_build_failed.default,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {'system': none, 'hardware': none, 'bmc': none, 'cpu': none, 'memory': none, 'storage': {'filesystems': [], 'physical_disks': [], 'datastores': [], 'controllers': [], 'logical_volumes': [], 'hbas': [], 'infiniband': [], 'summary': {'groups': [], 'grand_total_gb': 0}}, 'network': {'dns_servers': [], 'default_gateways': [], 'interfaces': [], 'adapters': [], 'ports': [], 'virtual_switches': [], 'portgroups': [], 'driver_map': [], 'summary': {'groups': []}}, 'users': [], 'firmware': [], 'power': none, 'thermal': {'temperatures': [], 'fans': []}}
                      })) | to_json }}"

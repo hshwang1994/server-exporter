@@ -147,6 +147,10 @@ def _templar():
     if _TEMPLAR_CLS is None:  # pragma: no cover - 이 개발 환경에서만 발생
         pytest.skip("이 플랫폼에서 ansible-core 템플릿 엔진을 import 할 수 없다 "
                     "(운영 Agent 는 Linux 라 정상 동작한다)")
+    # rescue 가 쓰는 저장소 필터(failure_reason 등)를 실제 로더에 등록한다 — ansible.cfg 의
+    # filter_plugins = ./filter_plugins 와 같은 효과. 등록 실패는 조용히 넘기지 않는다.
+    from ansible.plugins.loader import filter_loader  # noqa: PLC0415
+    filter_loader.add_directory(str(REPO / "filter_plugins"))
     return _TEMPLAR_CLS(loader=None)
 
 
@@ -205,6 +209,11 @@ def _task_template(site: str, needle: str, key: str) -> str:
 
 FAILURE_REASONS: dict[str, Any] = yaml.safe_load(
     (REPO / "common/vars/failure_reasons.yml").read_text(encoding="utf-8"))
+# 카탈로그의 모든 (키, 채널) 문장 — 위치 값이 없을 때의 표시('미지정')로 채운 것.
+_CATALOG_SENTENCES = {
+    text.replace("{loc}", "미지정")
+    for entry in FAILURE_REASONS["_fr_catalog"].values() for text in entry.values()
+}
 
 # rescue diagnosis 를 만드는 3채널 4개 태스크 (여기가 실패하면 envelope 이 통째로 fallback 된다)
 _DIAG_TASKS = [
@@ -269,8 +278,8 @@ def test_rescue_diagnosis_renders_on_real_ansible_engine(site, task, shape, valu
     # status=failed 결과이므로 세 값이 모두 채워져야 한다 (CLAUDE.md §9)
     for key in ("failure_stage", "failure_code", "failure_reason"):
         assert rendered[key], f"[{site}/{shape}] {key} 가 비었다 — 실패인데 사유 없는 Result"
-    assert rendered["failure_reason"] in set(FAILURE_REASONS.values()), (
-        f"[{site}/{shape}] 표준 문장 밖: {rendered['failure_reason']!r}")
+    assert rendered["failure_reason"] in _CATALOG_SENTENCES, (
+        f"[{site}/{shape}] 카탈로그 밖 문장: {rendered['failure_reason']!r}")
 
 
 def test_errors_normalizer_filter_loads_and_works_in_ansible():
@@ -316,4 +325,5 @@ def test_build_output_failed_guard_renders_on_real_engine():
         templar.available_variables = variables
         rendered = templar.template(_trust(tpl))
         assert set(rendered) == _DIAGNOSIS_KEYS, f"[{shape}] 8키 shape 위반"
-        assert rendered["failure_reason"] == FAILURE_REASONS["_fr_gather_failed"], shape
+        assert rendered["failure_reason"] == \
+            FAILURE_REASONS["_fr_catalog"]["gather_no_data"]["default"], shape

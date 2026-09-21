@@ -259,6 +259,20 @@
       "oem": {
         "release_name": "whitley_gp_23-5"                  // Lenovo XCC 전용 — release codename
       }
+    },
+    // 2026-09-15 추가 — BIOS Current Attributes (보조 데이터 — sections 에는 없다).
+    // 같은 장비의 Current Bios 실캡처(2026-04-28)에서 일부만 옮겼다. 실제 수집 결과에는 392개가 모두 들어간다.
+    // 이 장비는 수집할 때마다 Attributes 순서가 달랐다. 수집기가 Key 이름순으로 정렬해 매번 같은 순서로 나온다.
+    "bios": {
+      "current": {
+        "attributes": {                                    // Key / Value / 자료형은 장비 원본 그대로, Key 는 이름순
+          "BootModes_SystemBootMode": "UEFIMode",
+          "Memory_AdvMemTestOptions": 0,                   // 숫자 0 도 그대로 남는다
+          "Processors_HyperThreading": "Enabled",
+          "Processors_IntelVirtualizationTechnology": "Enabled",
+          "Processors_SourceValidation": false             // Boolean false 도 그대로 남는다
+        }
+      }
     }
   },
   "schema_version": "1"                                 // envelope schema 버전 — "1" 고정 (rule 13 R5)

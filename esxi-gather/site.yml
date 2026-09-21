@@ -29,7 +29,7 @@
   #   location 하나뿐이라 2번째 경로 조각이 없다.
   #   vars_files 로 경로를 템플릿하면 파일 부재 시 play 가 죽어 envelope 이 사라진다 (rule 11).
   vars_files:
-    # 2026-08-11 (Phase 6-B): Portal 사용자 문구 정본 (5 문장) — rescue 가 참조한다.
+    # Portal 사용자 문구 카탈로그 (_fr_catalog) — rescue / always 가 참조한다.
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
   vars:
@@ -250,13 +250,13 @@
         # false 로 만들지 않고 null 을 유지한다. 반대로 _e_auth_ok=true 는 실제로 인증이
         # 통과한 것을 관측한 값이므로 true 로 기록한다.
         #
-        # 2026-08-11 (Phase 6-B): 사용자 문구는 5 문장 표준(common/vars/failure_reasons.yml)만
-        #   쓴다. 자격 단계 실패 → 4번, 인증 통과 후 실패(수집/정규화) → 5번.
-        #   종전에 수집 실패와 정규화 실패를 다른 문장으로 나눴는데, 사용자가 할 일이 같아서
-        #   (대상 상태와 수집 로그 확인) 5번으로 합쳤다. 단계 구분은 failure_stage 가 유지한다.
+        # 사용자 문구는 카탈로그(common/vars/failure_reasons.yml `_fr_catalog`)에서 원인별 키로
+        #   고른다 (2026-09-21). 인증 통과 후 실패(수집/정규화) → gather_after_auth,
+        #   Vault 설정 문제 → loc_* 키, 그 외 인증 실패 → auth_unconfirmed. 수집 실패와 정규화
+        #   실패는 관리자가 할 일이 같아 한 문장이다. 단계 구분은 failure_stage 가 유지한다.
         # 2026-08-12 (C6): 자격 후보가 0건이면 try_credentials 의 iterate 가 통째로 skip 되어
         #   _e_auth_ok 가 '관측한 적 없음' 인데도 false 로 남는다. 그 상태에서 이후 단계가
-        #   실패하면 stage=auth + 4번 문장(자격증명)이 나가는데, 같은 errors 원소의 detail 은
+        #   실패하면 stage=auth + 자격증명 문장이 나가는데, 같은 errors 원소의 detail 은
         #   "인증과 네트워크는 정상" 이라고 말해 서로 반대되는 이야기가 된다.
         #   vmware_host_facts 가 실제로 facts 를 돌려준 것(_e_facts_ok)은 인증 통과의 직접
         #   관측이므로 함께 본다.
@@ -270,16 +270,37 @@
                   auth_success 는 그대로 null 이다 (미시도). -#}
               {%- set ok = (_e_auth_ok | default(false) | bool)
                            or (_e_facts_ok | default(false) | bool) -%}
+              {%- set lo = _cred_load_outcome | default('') -%}
               {%- set cred_na = (not ok)
-                                and ((_cred_load_outcome | default(''))
-                                     in ['not_resolved', 'credential_set_missing',
-                                         'credential_set_undecryptable']) -%}
+                                and (lo in ['not_resolved', 'credential_set_missing',
+                                            'credential_set_undecryptable']) -%}
+              {#- 2026-09-21: 원인별 카탈로그 키 — os-gather rescue 와 같은 규칙이다.
+                  계정 0개(empty_accounts)는 계정 없이 시도한 뒤의 실패라 code 는 AUTH_PROBE_FAILED. -#}
+              {%- if ok -%}
+                {%- set reason_key = 'gather_after_auth' -%}
+              {%- elif (_cred_reason | default('')) == 'unknown_location' -%}
+                {%- set reason_key = 'loc_unregistered' -%}
+              {%- elif lo == 'credential_set_missing' -%}
+                {%- set reason_key = ('loc_vault_no_account'
+                                      if (_cred_location_vault_exists | default(false) | bool)
+                                      else 'loc_vault_missing') -%}
+              {%- elif lo == 'credential_set_undecryptable' -%}
+                {%- set reason_key = 'loc_vault_unreadable' -%}
+              {%- elif lo == 'not_resolved' -%}
+                {%- set reason_key = 'loc_vault_missing' -%}
+              {%- elif lo == 'empty_accounts' -%}
+                {%- set reason_key = 'loc_vault_no_account' -%}
+              {%- else -%}
+                {%- set reason_key = 'auth_unconfirmed' -%}
+              {%- endif -%}
               {{ {'reachable': none, 'port_open': none, 'protocol_supported': none,
                   'auth_success': none, 'failure_stage': none, 'failure_code': none,
                   'failure_reason': none, 'details': {}}
                  | combine((_diagnosis | default({}, true))
                            if ((_diagnosis | default({}, true)) is mapping) else {})
-                 | combine({'failure_reason': (_fr_gather_failed if ok else _fr_credential_failed),
+                 | combine({'failure_reason': (_fr_catalog | failure_reason(
+                                                  reason_key, 'esxi',
+                                                  _cred_location | default(se_location | default('')))),
                             'failure_stage':  ('gather' if ok else 'auth'),
                             'failure_code':   ('GATHER_FAILED' if ok
                                                else ('CREDENTIAL_SET_UNAVAILABLE' if cred_na
@@ -337,9 +358,9 @@
                        'vendor': none,
                        'status': 'failed',
                        'sections': {'system': 'failed', 'hardware': 'failed', 'bmc': 'not_supported', 'cpu': 'failed', 'memory': 'failed', 'storage': 'failed', 'network': 'failed', 'firmware': 'not_supported', 'users': 'not_supported', 'power': 'not_supported', 'thermal': 'not_supported'},
-                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_output_build_failed, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
+                       'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_catalog.output_build_failed.default, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
                        'meta': {'started_at': none, 'finished_at': none, 'duration_ms': none, 'adapter_id': none, 'adapter_version': none, 'ansible_version': none},
                        'correlation': {'serial_number': none, 'system_uuid': none, 'bmc_ip': none, 'host_ip': _e_ip | default(none)},
-                       'errors': [{'section':'gather','message': _fr_output_build_failed,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
+                       'errors': [{'section':'gather','message': _fr_catalog.output_build_failed.default,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
                        'data': {'system': none, 'hardware': none, 'bmc': none, 'cpu': none, 'memory': none, 'storage': {'filesystems': [], 'physical_disks': [], 'datastores': [], 'controllers': [], 'logical_volumes': [], 'hbas': [], 'infiniband': [], 'summary': {'groups': [], 'grand_total_gb': 0}}, 'network': {'dns_servers': [], 'default_gateways': [], 'interfaces': [], 'adapters': [], 'ports': [], 'virtual_switches': [], 'portgroups': [], 'driver_map': [], 'summary': {'groups': []}}, 'users': [], 'firmware': [], 'power': none, 'thermal': {'temperatures': [], 'fans': []}}
                      })) | to_json }}"

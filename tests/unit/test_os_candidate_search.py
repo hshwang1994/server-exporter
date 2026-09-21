@@ -175,10 +175,9 @@ def test_case12_open_ports_but_no_protocol(monkeypatch):
     assert result["failure_code"] == "PROTOCOL_CHECK_FAILED"
     assert result["detected_os"] is None, "프로토콜 미확인이면 OS 를 확정하지 않는다"
     assert result["checked_ports"] == [5986, 5985, 22]
-    # Phase 6-B (2026-08-11): 사용자 확정 문구 표준 3번. 채널 이름(SSH / WinRM)은 문장에서
-    # 빠지고 errors[].detail 로 내려갔다.
-    assert result["failure_reason"] == pb.REASON_PROTOCOL_UNCONFIRMED
-    assert "관리 포트에는 연결됐지만" in result["failure_reason"]
+    # 2026-09-21: 채널별 문장 (OS 원격 접속 응답 확인 불가). 포트 번호는 detail 에만.
+    assert result["failure_reason"] == pb.reason_for_failure("PROTOCOL_CHECK_FAILED", "os")
+    assert "접속한 대상에서" in result["failure_reason"]
     for port in ("22", "5985", "5986"):
         assert port not in result["failure_reason"], "Portal 문구에 관리 포트 노출 금지"
     for port in (5986, 5985, 22):

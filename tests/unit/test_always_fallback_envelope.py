@@ -45,7 +45,7 @@ def _render(tmpl: str) -> dict:
     env = NativeEnvironment()
     env.filters["to_json"] = lambda v: json.dumps(v, ensure_ascii=False)
     ctx = {"_ip": "10.0.0.9", "_e_ip": "10.0.0.9", "inventory_hostname": "10.0.0.9",
-           "_fr_output_build_failed": "결과를 만들지 못했습니다."}
+           "_fr_catalog": {"output_build_failed": {"default": "결과를 만들지 못했습니다."}}}
     rendered = env.from_string(tmpl).render(**ctx)
     return json.loads(rendered) if isinstance(rendered, str) else rendered
 
