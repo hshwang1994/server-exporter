@@ -79,6 +79,20 @@ RBAC Pattern 과 일치해야 권한이 자동 적용된다.
 
 ---
 
+## Add-on Job (고객별 추가 수집)
+
+Add-on 저장소(`https://10.100.64.156/root/clovirone-server-gathering-addon.git`, GitLab `main`)의 Jenkinsfile 2개를
+"Pipeline script from SCM" 으로 등록한다. 현재는 `형섭/` 폴더에 있다 — 공용 폴더로 옮길지는 운영 결정이다.
+
+| Job | Script Path | 용도 |
+|---|---|---|
+| `형섭/clovirone-gathering-addon-deploy` | `deploy/Jenkinsfile` | Add-on 을 Agent 의 `ADDON_HOME`(기본 `/home/cloviradmin/clovirone-gathering-addon`)에 배포한다. 링크 교체 방식이라 수집 중인 빌드에 영향이 없고 최근 5개 버전을 남긴다. `CHECK_RULE=true` 는 배포 확인용 rule 을 하나 더한다 |
+| `형섭/clovirone-gathering-addon-e2e` | `tests/e2e/Jenkinsfile` | 실제 Agent 에서 메인 수집 + Add-on 시나리오와 hook 엔진 테스트를 돌린다. lab 대상 IP 는 Job 파라미터이고, 메인 저장소 checkout 용 credential `hshwang token` 과 `server-gather-vault-password` 를 쓴다 |
+
+Add-on 을 켜는 노드 환경변수 `SE_ADDON_DIR` 은 [08-ansible-config.md](08-ansible-config.md) 3절.
+
+---
+
 ## 다음 단계
 
 | 다음 작업 | 문서 |
