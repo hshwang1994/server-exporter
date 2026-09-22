@@ -77,6 +77,26 @@
   연결 끊김 · 여러 host · 응답 없는 대상 · ESXi · Redfish · 수 MB 출력 · Windows 오류 출력 · UTF-8 이 아닌 출력),
   hook 엔진 테스트, 규모 시험(host 200 · forks 200 · 동시 2회, 최대 메모리 0.35GiB).
 
+### 2026-09-22 구조 감사 (구현 완료 뒤 계획서 대조)
+
+사용자 요청으로 구현을 원 계획서와 대조했다. 결정 — **구조는 그대로 둔다**.
+
+- target 별 디렉터리(`collectors/linux/`, `collectors/windows/`)로 나누지 않는다. target 마다 다른 것은 감싸기 태스크
+  1개씩이고 나머지(항목 준비 · 결과 조립 · 미지원 알림)는 공통이라, 나누면 공통부가 두 벌이 되고 "오타" 와
+  "이 target 미지원" 을 가르는 코드가 더 필요해진다. 재검토 조건: 한 수집 기능이 target 마다 결과 조립까지 다른
+  태스크를 3개 이상 가질 때.
+- UTF-8 이 아닌 바이트를 `\xNN` 으로 바꾸는 자리는 Add-on 쪽(`addon_text.py`)에 둔다 (2026-09-22 "메인 0줄" 결정
+  유지). 제약의 원인은 메인 콜백이라 hook 이 자연스러운 자리이지만, 두 번째 Add-on 이 생기거나 hook 을 다시 만질
+  때 옮긴다.
+- 지원하지 않는 target 에서 수집 기능은 조용히 넘기지 않고 알림 1문장을 남긴다 (계획서 문구 "아무 것도 하지
+  않는다" 를 이렇게 확정). `target` 을 빠뜨린 rule 이 ESXi · Redfish host 에 맞는 실수를 드러내기 위해서다.
+- 저장소 이름은 통일하지 않는다 — GitLab 프로젝트 `clovirone-server-gathering-addon`, 코드 · Job · Agent 경로
+  `clovirone-gathering-addon`. 문서에 같은 것이라고 적었다. 통일한다면 GitLab 쪽 이름을 바꾸는 편이 싸다.
+- `deploy/Jenkinsfile` 은 Add-on 저장소에 둔다. Agent 에는 runtime 부분만 놓이므로 runtime/배포 분리는 산출물
+  수준에서 지켜진다.
+- 고친 것: 문서(README 반영 절차 · `target` 값 4개 · Portal 계약의 `\xNN` · Windows 오류 글자)와 config 실수 알림
+  1가지(`rules:` 키가 없을 때 — `rule:` 오타).
+
 ## 2026-09-21 — 실패 사유 문장(`failure_reason`)을 대상 종류·세부 사유별로 나눈다
 
 ### 요구
