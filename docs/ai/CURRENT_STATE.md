@@ -1,5 +1,22 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-22 (4) — Add-on 사용자 관점 감사 — README 사용 설명서화 · 주석 최소화 · match 누락 알림
+
+> 배경: 사용자 요청(현장 엔지니어가 README · config.yml 만 보고 쓰는가). 구조 · 계약 불변, 새 Markdown 없음.
+> 후속 표: `docs/ai/NEXT_ACTIONS.md` AO-17 · AO-18.
+
+- **Add-on** `f59d819`(docs) · `4be4bfb`(fix) · `83cddde`(test) — GitLab main.
+  - README 를 사용 설명서 순서(무엇 → 어떻게 실행 → 기능 상태 → config 고치기 → 반영 → 결과 → 실수 표 → 알려진 동작
+    → 관리자용 → 수집 기능 추가)로 다시 씀. "~다" 체. IP · Job 이름 · Agent 경로 · 날짜 · 작업 번호 없음. 예시는 실제
+    제품명(Oracle · Tibero / Java · Tomcat / WebLogic) — 코드 · 테스트에는 여전히 Software 이름 없음.
+  - `config.yml` 주석 5줄 + 뼈대 예시 1개. runtime · 테스트 주석은 비직관적인 이유 8줄만 남기고 삭제.
+  - `addon_core.addon_plan`: match 가 없거나 빈 rule 을 `errors[]` 알림으로 드러냄(적용은 여전히 하지 않음).
+- **메인** `18b59ad9`(docs) — `docs/operate/03-job-registration.md` 에 Add-on Job 등록 위치(개인 폴더 · 저장소 URL ·
+  credential), `docs/develop/07-addon-hook.md` 참조 2곳. 메인 코드 0줄.
+- **검증**: Add-on pytest Windows 133 passed / 14 skipped, WSL role 실행 14 passed. 흔적 grep 은 배포 · e2e 파라미터
+  기본값만 남음. e2e 재실행 없음(runtime 변경은 필터 알림 1가지).
+- **사용자 몫**: AO-7 → AO-10, AO-12, AO-9, AO-5 (변동 없음). AO-17 이름 통일 · AO-18 Job 폴더 이동은 선택.
+
 ## 일자: 2026-09-22 (3) — Add-on 구조 감사 (사용자 요청 · 계획서 대조) — 구조 유지, 문서 정합
 
 > 결정: `docs/reference/decision-log.md` "2026-09-22 구조 감사". 후속 표: `docs/ai/NEXT_ACTIONS.md` AO-14 ~ AO-17.

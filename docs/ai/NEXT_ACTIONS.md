@@ -6,6 +6,8 @@
 > 실측 `tests/evidence/2026-09-21-addon-hook-live.md`
 > 구조 감사(2026-09-22): `docs/reference/decision-log.md` "2026-09-22 구조 감사" — 구조 유지, 문서 정합 +
 > config 실수 알림 1가지. 보류 항목은 AO-14 ~ AO-17
+> 사용자 관점 감사(2026-09-22): README 사용 설명서화 · 주석 최소화 · match 누락 알림 (Add-on `f59d819` · `4be4bfb` ·
+> `83cddde`, 메인 `18b59ad9`). 사용자 항목 AO-18
 
 | # | 항목 | 상태 | 내용 |
 |---|---|---|---|
@@ -26,6 +28,7 @@
 | AO-15 | hosts 구분 줄(`#__ADDON_HOSTS__`) 사용 | `[HOLD / AO-5 와 함께]` | `addon_hosts_result` 가 `lines[0]` 을 서버 이름으로 쓴다 — `uname -n` 이 비거나 여러 줄이면 틀린다. matcher(AO-5) 구현 때 구분 줄 기준으로 나눈다 (감사 B3) |
 | AO-16 | `\xNN` 치환을 메인 hook 으로 | `[HOLD / 두 번째 Add-on 또는 hook 수정 때]` | 제약의 원인은 메인 `json_only` 콜백이라 hook 이 자연스러운 자리다. 지금은 "메인 0줄" 결정대로 Add-on `addon_text.py` 에 둔다. 옮길 때는 `run_addon.yml` "include add-on" 다음에 메인 filter 1개를 두고 Add-on 의 `addon_text.py` 를 지운다 (감사 C1) |
 | AO-17 | 저장소 이름 통일 | `[TODO / 사용자 결정]` | GitLab `clovirone-server-gathering-addon` ↔ 코드 · Job · Agent 경로 `clovirone-gathering-addon`. 문서에 "같은 것" 으로 적어 두었다. 통일한다면 GitLab 프로젝트 이름을 바꾸는 쪽이 싸다(사용자 UI 1회 → Jenkins Job 2개 SCM URL · 문서 3곳). 안 해도 동작에 영향 없음 (감사 C3) |
+| AO-18 | Add-on Jenkins Job 을 개인 폴더 밖으로 | `[TODO / 사용자 결정]` | 배포 · e2e Job 이 `형섭/` 폴더에 있다. 공용 폴더로 옮기면(Jenkins UI Move) `docs/operate/03-job-registration.md` 의 Add-on Job 표를 함께 고친다. 안 옮겨도 동작에 영향 없음 |
 
 ## failure_reason 문장 카탈로그 후속 (2026-09-21)
 

@@ -1,5 +1,18 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-22 (4) — Add-on 사용자 관점 감사 (README · 주석 · match 누락 알림)
+
+> Add-on `f59d819` · `4be4bfb` · `83cddde`, 메인 `18b59ad9`(문서만).
+
+| 항목 | 결과 |
+|---|---|
+| Add-on `python -m pytest tests` (Windows) | 133 passed / 14 skipped — 신규 `test_rule_without_match_is_reported_and_later_rules_still_apply` |
+| Add-on `tests/test_playbook.py` (WSL, ansible-core 2.20.7, role 실제 실행) | 14 passed |
+| 흔적 grep (`2026-` · `AO-` · `NEXT_ACTIONS` · `사용자 결정` · `실측` · `결정대로` · `계획서` · `형섭` · `10.100.` · `cloviradmin` · `AI`) | README · config · runtime · 테스트 0건. 남은 것은 `deploy/Jenkinsfile` 의 `ADDON_HOME` 기본값과 e2e 의 lab IP 파라미터 기본값 |
+| 문체 grep (금지 표현 10종 · "습니다" · "할 수 있") | README · config 0건 — 코드가 내는 알림 문장을 인용한 "습니다" 5곳만 |
+| `scripts/ai/verify_harness_consistency.py` / `tests/secret_guard.py` | 통과 / exit 0 |
+| Agent e2e 재실행 | 없음 — runtime 변경은 `addon_plan` 의 알림 1가지. e2e s06 은 `errors[]` 1건 안에 문장이 더해질 뿐 |
+
 ## 2026-09-22 (3) — Add-on 구조 감사 · 문서 정합 · `rules` 키 알림
 
 > 결정 `docs/reference/decision-log.md` "2026-09-22 구조 감사". 메인 코드 변경 없음 (문서만) · Add-on 필터 3줄.
