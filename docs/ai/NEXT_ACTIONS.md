@@ -4,6 +4,8 @@
 
 > 정본: `docs/ai/decisions/ADR-2026-09-21-gathering-addon-hook.md`, `docs/develop/07-addon-hook.md`,
 > 실측 `tests/evidence/2026-09-21-addon-hook-live.md`
+> 구조 감사(2026-09-22): `docs/reference/decision-log.md` "2026-09-22 구조 감사" — 구조 유지, 문서 정합 +
+> config 실수 알림 1가지. 보류 항목은 AO-14 ~ AO-17
 
 | # | 항목 | 상태 | 내용 |
 |---|---|---|---|
@@ -20,6 +22,10 @@
 | AO-11 | Add-on e2e Jenkins Job | `[DONE 2026-09-22]` | `http://10.100.64.153:8080/job/형섭/job/clovirone-gathering-addon-e2e/` — Add-on 저장소 `tests/e2e/Jenkinsfile`(Pipeline from SCM, GitLab main). 결과는 빌드 설명 · "Add-on e2e 보고서"(HTML) · Test Result(엔진 테스트) · 보관 `results/*`. `SE_ADDON_DIR` 은 Job 안에서만 시나리오마다 지정 (노드 설정 불변). `SCENARIOS=all,scale` 이면 규모 시험도 돈다. 최종 #7: PASS 127 / FAIL 0 / KNOWN 0 — `tests/evidence/2026-09-21-addon-hook-live.md` 8 · 9절 |
 | AO-12 | Jenkins credential 설명란의 비밀번호 평문 | `[TODO / 사용자]` | `server-gather-vault-password` 의 설명(description)이 vault 비밀번호 그 자체다 (값은 여기 적지 않는다). API 로 고치지 않았다 — Jenkins 가 credential 설정을 비밀값을 가린(`<secret-redacted/>`) 모양으로 내주므로, 그대로 되올리면 공용 vault 비밀값이 깨져 모든 수집이 멈출 수 있다. 사용자가 화면에서 설명만 지운다 (Jenkins 관리 → Credentials → 해당 항목 → Update → Description 비움 → Save). 비밀번호 교체(회전)는 vault 재암호화 · 모든 사용처 동시 변경이 필요해 사용자 결정 (CLAUDE.md §12) |
 | AO-13 | Add-on 배포 Job | `[DONE 2026-09-22]` | `http://10.100.64.153:8080/job/형섭/job/clovirone-gathering-addon-deploy/` — GitLab main 을 받아 검사(YAML · filter import · 금지 파일) 통과 시에만 release 에 풀고 링크를 원자적으로 교체, 최근 5개 보존. `CHECK_RULE=true` 는 `addon_check: "yes"` 서버 전용 확인 rule |
+| AO-14 | 배포 Job Check 의 검사 중복 | `[HOLD]` | `deploy/Jenkinsfile` Check 가 `tests/test_layout.py`(YAML · 탭 · 금지 부품 6개 · filter import)를 inline Python 으로 다시 적었다 — 금지 부품 목록이 두 곳. e2e Jenkinsfile 의 pytest 대체 경로(workspace 에 받아 쓰고 빌드 끝에 지움)로 test_layout 을 직접 돌리게 바꾸면 한 곳이 된다. 지금은 두 곳이 같아 급하지 않다 (감사 B2) |
+| AO-15 | hosts 구분 줄(`#__ADDON_HOSTS__`) 사용 | `[HOLD / AO-5 와 함께]` | `addon_hosts_result` 가 `lines[0]` 을 서버 이름으로 쓴다 — `uname -n` 이 비거나 여러 줄이면 틀린다. matcher(AO-5) 구현 때 구분 줄 기준으로 나눈다 (감사 B3) |
+| AO-16 | `\xNN` 치환을 메인 hook 으로 | `[HOLD / 두 번째 Add-on 또는 hook 수정 때]` | 제약의 원인은 메인 `json_only` 콜백이라 hook 이 자연스러운 자리다. 지금은 "메인 0줄" 결정대로 Add-on `addon_text.py` 에 둔다. 옮길 때는 `run_addon.yml` "include add-on" 다음에 메인 filter 1개를 두고 Add-on 의 `addon_text.py` 를 지운다 (감사 C1) |
+| AO-17 | 저장소 이름 통일 | `[TODO / 사용자 결정]` | GitLab `clovirone-server-gathering-addon` ↔ 코드 · Job · Agent 경로 `clovirone-gathering-addon`. 문서에 "같은 것" 으로 적어 두었다. 통일한다면 GitLab 프로젝트 이름을 바꾸는 쪽이 싸다(사용자 UI 1회 → Jenkins Job 2개 SCM URL · 문서 3곳). 안 해도 동작에 영향 없음 (감사 C3) |
 
 ## failure_reason 문장 카탈로그 후속 (2026-09-21)
 

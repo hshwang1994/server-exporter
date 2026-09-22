@@ -1,5 +1,20 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-22 (3) — Add-on 구조 감사 (사용자 요청 · 계획서 대조) — 구조 유지, 문서 정합
+
+> 결정: `docs/reference/decision-log.md` "2026-09-22 구조 감사". 후속 표: `docs/ai/NEXT_ACTIONS.md` AO-14 ~ AO-17.
+
+- **감사 결론**: 구현은 원 계획서와 일치한다. target 별 디렉터리 분리 · 저장소 이름 통일 · `\xNN` 치환 위치 이동은
+  하지 않는다 (이유는 decision-log).
+- **고친 것 (메인 코드 0줄)**: Add-on `3b1df8e` — `config.yml` 에 `rules` 키가 없으면(`rule:` 오타) 알림 (종전엔
+  조용히 아무 것도 안 함). Add-on `30080c2` — README 반영 절차(저장소에서 고치고 배포 Job) · `target` 4값 · 미지원
+  대상 알림 · 구조도(`addon_text.py` · `deploy/` · `tests/e2e`). 메인 문서 `docs:` commit — `02-output-envelope.md`
+  (Portal 이 받는 `\xNN` · Windows 오류 글자 · `data.addon` 없이 addon 오류만 올 수 있음), `07-addon-hook.md`(미지원
+  target 은 알림 1문장 — 계약으로 확정), decision-log.
+- **확인**: Add-on 저장소 없이도 메인은 문제 없다 — 사용자 질문에 실측으로 답함 (WSL 엔진 테스트 10 passed, 계약 ·
+  인벤토리 66 passed, 메인 코드에 Add-on 경로 참조 0 — `test_addon_hook_contract.py:121` 이 오히려 금지한다).
+- **사용자 몫(변동 없음)**: AO-7 환경변수 → AO-10, AO-12, AO-9, AO-5. 새로 AO-17(이름 통일 여부)은 선택.
+
 ## 일자: 2026-09-22 (2) — Add-on AO-2 · AO-3 적용, Agent 규모 시험, 배포 Job (사용자 지시 "추천대로")
 
 > 후속 표: `docs/ai/NEXT_ACTIONS.md` AO-2 · AO-3 · AO-7 ~ AO-13. 실측: `tests/evidence/2026-09-21-addon-hook-live.md` 9절.

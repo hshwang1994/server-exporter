@@ -1,5 +1,18 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-22 (3) — Add-on 구조 감사 · 문서 정합 · `rules` 키 알림
+
+> 결정 `docs/reference/decision-log.md` "2026-09-22 구조 감사". 메인 코드 변경 없음 (문서만) · Add-on 필터 3줄.
+
+| 항목 | 결과 |
+|---|---|
+| Add-on `python -m pytest tests` (Windows, `3b1df8e` · `30080c2`) | 132 passed / 14 skipped — 신규 `test_core` 1건(`rule:` 오타 → `config.yml 에 rules 가 없습니다 (있는 키: rule)`), `test_empty_config_is_silent` 그대로 통과 |
+| 메인 `tests/integration/test_addon_hook_playbook.py` (WSL, ansible-core 2.20.7, `SE_ADDON_DIR` 없음 · Add-on 저장소 미참조) | 10 passed in 49.3s — "미설정 시 hook 도입 전과 byte 동일" 포함 (사용자 질문 "Add-on 없이도 문제 없나" 의 실측 근거) |
+| 메인 `tests/unit/test_addon_hook_contract.py` + `test_inventory_passthrough.py` (Windows) | 66 passed |
+| `scripts/ai/verify_harness_consistency.py` / `tests/secret_guard.py` | 통과 (rules 28 · skills 47 · agents 47 · policies 7) / exit 0 |
+| 메인 코드의 Add-on 저장소 참조 | 0건 (문서 제외 — `test_addon_hook_contract.py:121` 은 hook 안의 Add-on 경로를 금지하는 검사) |
+| Agent e2e · Ansible 재실행 | 하지 않음 — runtime 변경이 필터 3줄이고 단위 테스트로 덮인다. e2e s06(설정 실수)는 `rules` 키가 있어 영향 없음 |
+
 ## 2026-09-22 (2) — Add-on AO-2 · AO-3 적용, Agent 규모 시험
 
 > 실측 `tests/evidence/2026-09-21-addon-hook-live.md` 9절. 메인 코드 변경 없음 (문서만).
