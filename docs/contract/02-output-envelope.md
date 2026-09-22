@@ -214,6 +214,12 @@ Redfish 결과의 `data`에는 섹션이 아닌 보조 키가 둘 더 있다. `m
   결과는 그대로이고, 문제는 `errors[]`에 `section: "addon"` 1건으로 남는다.
 - `swList[].value`는 명령이 출력한 글자 전체다. 자르거나 고치지 않는다. 줄바꿈도 대상에서 온 그대로라
   Linux(SSH)·Windows 모두 `\r\n`으로 올 수 있다.
+- 예외 하나: 출력에 UTF-8 로 읽을 수 없는 바이트가 있으면 그 바이트만 `\xNN` 네 글자(예: `\xb0`)로 오고,
+  `errors[]`의 `section: "addon"` 항목 `detail`에 어느 항목인지 알림이 남는다. 다른 글자는 그대로다.
+- Windows 는 `Write-Error`·외부 프로그램의 stderr·경고가 PowerShell 콘솔 표시 형식 그대로 `value`에 실행
+  순서대로 섞인다. 명령을 멈춘 종료 오류의 글자는 `value`에 오지 않고 `errors[]` 알림에 첫 줄이 남는다.
+- rule 이 맞았지만 그 대상에서 실행할 수 없는 기능(ESXi·Redfish 의 `software` 등)은 `data.addon`에 생기지 않고
+  `errors[]` 알림만 남는다 — `data.addon` 없이 `section: "addon"` 오류만 올 수 있다.
 - 안쪽 이름(`software`, `hosts` …)은 Add-on 이 정한다. 새 수집 기능이 생기면 `addon.<이름>`이 늘어난다.
   `hosts.dbIpList`는 DB 판별 규칙이 정해지기 전까지 비어 있다.
 - 수집에 들어가기 전에 멈춘 실패 봉투에는 `addon`이 없다 (`bios`와 같은 규칙).

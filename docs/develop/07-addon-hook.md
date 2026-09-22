@@ -19,7 +19,10 @@
   자격증명 해석 · 후보 시도 · 재접속 코드가 Add-on 에 없다.
 - 기본 수집이 중간에 멈추면(인증 실패 등) 이 지점에 오지 않으므로 Add-on 도 실행되지 않는다.
 - ESXi · Redfish 는 연결이 `local` 이라 Add-on 태스크가 Jenkins Agent 에서 실행된다. 명령을 실행하는 수집
-  기능은 `linux` / `windows` 에서만 동작하게 만든다.
+  기능은 `linux` / `windows` 에서만 동작하게 만든다. 지원하지 않는 target 에서 수집 기능은 실행하지 않고 알림
+  1문장을 남긴다 → 그 host 의 `errors[]` 에 `section: addon` 1건, `data.addon` 에는 그 기능이 생기지 않는다.
+  rule 에 `target` 을 빼면 ESXi · Redfish host 에도 맞으므로 이 알림이 그 실수를 드러낸다 (2026-09-22 감사에서
+  계약으로 확정 — 조용히 넘기지 않는다).
 - 호출은 `SE_ADDON_DIR` 이 있을 때만 include 한다 (`when`). 없으면 host 당 건너뛴 태스크 1개로 끝난다.
 
 ## 2. 경로 — `SE_ADDON_DIR`
@@ -119,3 +122,5 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 엔진 테스트는 `tests/fixtures/addon/` 의 합성 Add-on 과 `harness.yml` 을 쓴다. `ANSIBLE_PLAYBOOK_BIN` 으로
 다른 ansible-playbook(예: 운영과 같은 2.20.3)을 지정할 수 있다.
 Add-on 저장소: `https://10.100.64.156/root/clovirone-server-gathering-addon.git` — e2e 사용법은 그 README 6절.
+GitLab 프로젝트 이름은 이 저장소 이름을 따른 것이고, 코드 · Jenkins Job · Agent 경로 · 문서에서는
+`clovirone-gathering-addon` 으로 부른다 — 같은 것이다.
