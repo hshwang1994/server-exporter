@@ -33,7 +33,8 @@
 | 있고 Add-on 이 있음 | `include_role` 로 실행 | 결과는 `data.addon`, 문제는 `errors[]` 1건 |
 
 설정은 Agent 노드 환경변수로 한다 ([08-ansible-config.md](../operate/08-ansible-config.md) 3절). 절대경로를 쓴다.
-Add-on 을 Agent 에 두는 방식(checkout · 복사)은 이 저장소 범위 밖이다.
+Add-on 을 Agent 에 두는 일은 Add-on 저장소의 배포 Job(`deploy/Jenkinsfile`)이 한다 — 검사를 통과한 버전만
+`/home/cloviradmin/clovirone-gathering-addon`(링크)으로 바꿔 끼운다. 사용법은 Add-on README 4절.
 
 설정 실수의 결과 (2.20.3 · 2.20.7 실측, 엔진 테스트로 고정):
 
@@ -54,6 +55,11 @@ Add-on 을 Agent 에 두는 방식(checkout · 복사)은 이 저장소 범위 �
 
 hook 이 `{'addon': _addon_result}` 를 `_data_fragment` 로 만들어 `merge_fragment.yml` 로 합친다. Add-on 은
 fragment 변수나 누적 변수를 직접 건드리지 않는다. 합칠 것이 없으면 merge 도 부르지 않는다.
+
+Add-on 이 지킬 것: 돌려주는 두 변수의 글자는 UTF-8 로 쓸 수 있어야 한다. 원격 출력의 UTF-8 이 아닌 바이트는
+Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜백이 그 host 봉투를 쓰지 못해 기본 결과까지 잃는다
+(6절). `clovirone-gathering-addon` 은 돌려주기 직전 그 바이트만 `\xNN` 글자로 바꾸고 `errors[]` 에 알린다
+(2026-09-22).
 
 ## 4. 봉투에 미치는 영향
 
@@ -93,9 +99,9 @@ fragment 변수나 누적 변수를 직접 건드리지 않는다. 합칠 것이
   두고, Add-on 태스크는 Add-on 테스트를 통과한 것만 배포한다.
 - Add-on 전용 timeout 은 없다 (사용자 결정). 끝나지 않는 명령은 Jenkins Gather 단계 제한(60분,
   `Jenkinsfile_portal`)까지 play 를 붙잡고, 그 빌드의 모든 host 결과가 전달되지 않는다.
-- 명령 출력에 UTF-8 로 읽을 수 없는 바이트가 있으면 콜백이 그 host 의 봉투를 쓰지 못한다
-  (`surrogates not allowed`). 콜백 보충이 `OUTPUT_BUILD_FAILED` 실패 봉투를 대신 내므로 host 수는 유지되지만
-  기본 수집 결과도 잃는다.
+- Add-on 이 돌려준 글자에 짝 없는 surrogate(원격 출력의 UTF-8 이 아닌 바이트)가 남으면 콜백이 그 host 의 봉투를
+  쓰지 못한다 (`surrogates not allowed`). 콜백 보충이 `OUTPUT_BUILD_FAILED` 실패 봉투를 대신 내므로 host 수는
+  유지되지만 기본 수집 결과도 잃는다. 그래서 3절의 약속대로 Add-on 이 돌려주기 전에 글자를 정리한다.
 - role 의 filter 와 메인 filter 이름이 같으면 한쪽이 가려진다 (2.20.3 실측에서는 메인 쪽이 쓰였다).
   Add-on filter 는 `addon_` 으로 시작한다.
 - `data` 안의 키 순서는 실행마다 다를 수 있다. `merge_fragment.yml` 의 `union` 이 문자열 hash 에 따라 순서를
