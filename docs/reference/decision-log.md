@@ -56,21 +56,26 @@
 
 ### 남은 결정
 
-Windows 오류 출력을 `value` 에 담는 방식, UTF-8 이 아닌 바이트 처리,
-`/etc/hosts` DB 판별 규칙(고객 실제 샘플 확인 후).
+`/etc/hosts` DB 판별 규칙 (고객 실제 샘플 확인 후).
 
-### 2026-09-22 갱신
+### 2026-09-22 갱신 (사용자 결정 · 적용)
 
-- Linux `\r\n` 은 지금 동작 그대로 둔다 (사용자 결정). 줄바꿈을 바꾸지 않는다.
-- 남은 두 결정은 원인과 추천안까지 조사했고 적용은 하지 않았다 (사용자 지시).
-  - Windows 오류 출력: `& { … } 2>&1` · `*>&1` 만으로는 `Write-Error` · 외부 프로그램 stderr 가 `value` 에 오지
-    않는다. `*>&1 | Out-String -Stream` 을 붙이면 실행 순서대로 담기고 stdout 만 내는 명령은 byte 동일하다
-    (Windows 2022 · PowerShell 5.1, 48 조합 실측). 종료 오류는 try/catch 없이는 어느 방식도 담지 못하고,
-    try/catch 로 감싸면 종료 코드가 바뀐다.
-  - UTF-8 이 아닌 바이트: 실패 지점은 콜백이 봉투 한 줄을 쓰는 순간이다. Add-on 이 결과를 돌려주기 직전
-    그 바이트만 `\xNN` 글자로 바꾸면 기본 결과가 남고 Callback 본문도 정상이다 (메인 수정 없음).
-- 실제 Jenkins Agent(ansible-core 2.20.3)에서 Add-on e2e 를 돌려 확인했다: 미설정 · 경로 오류 · 설정 실수 ·
-  연결 끊김 · 여러 host · 응답 없는 대상 · ESXi · Redfish · 수 MB 출력(SSH · WinRM 전송 후 글자 그대로).
+- Linux `\r\n` 은 지금 동작 그대로 둔다. 줄바꿈을 바꾸지 않는다.
+- Windows 오류 출력: 감싸기를 `& { … } *>&1 | Out-String -Stream` 으로 바꿨다. `2>&1` · `*>&1` 만으로는
+  PowerShell 5.1 이 합친 오류 레코드를 마지막 출력 단계에서 다시 stderr 로 보내 `Write-Error` · 외부 프로그램
+  stderr 가 `value` 에 오지 않았다. 이제 실행 순서대로 담기고, 오류 없이 출력만 내는 명령은 예전과 byte 동일하다
+  (Windows 2022 · PowerShell 5.1 실측 — 한 줄 · 여러 줄 문자열 · 표 · 1MB 한 줄 · 10만 줄). 명령을 멈추는 종료
+  오류는 여전히 합쳐지지 않아 그 첫 줄을 `errors[]` 알림으로 남긴다. try/catch 로 담으면 종료 코드가 바뀌어 쓰지
+  않았다.
+- UTF-8 이 아닌 바이트: 실패 지점은 콜백이 봉투 한 줄을 쓰는 순간이었고, 그 host 봉투 전체가
+  `OUTPUT_BUILD_FAILED` 로 바뀌었다. 이제 Add-on 이 결과를 돌려주기 직전 그 바이트만 `\xNN` 네 글자로 바꾸고
+  `errors[]` 에 위치를 알린다. 기본 결과는 그대로 남는다. 메인 코드는 고치지 않았고, "Add-on 이 돌려주는 글자는
+  UTF-8 로 쓸 수 있어야 한다" 를 hook 약속에 적었다 ([07-addon-hook.md](../develop/07-addon-hook.md) 3절).
+- Add-on 을 Agent 에 두는 배포 Job 을 만들었다 (검사 통과 시에만 새 버전으로 링크 교체). 운영 Agent 노드
+  환경변수 `SE_ADDON_DIR` 은 아직 등록하지 않았다 — 등록 전까지 수집 결과는 도입 전과 같다.
+- 실제 Jenkins Agent(ansible-core 2.20.3)에서 확인했다: Add-on e2e 시나리오 14개(미설정 · 경로 오류 · 설정 실수 ·
+  연결 끊김 · 여러 host · 응답 없는 대상 · ESXi · Redfish · 수 MB 출력 · Windows 오류 출력 · UTF-8 이 아닌 출력),
+  hook 엔진 테스트, 규모 시험(host 200 · forks 200 · 동시 2회, 최대 메모리 0.35GiB).
 
 ## 2026-09-21 — 실패 사유 문장(`failure_reason`)을 대상 종류·세부 사유별로 나눈다
 

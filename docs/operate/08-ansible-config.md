@@ -66,6 +66,8 @@ gather_timeout = 60
 | `SE_ADDON_DIR` | 선택 | 고객별 추가 수집(Add-on) 디렉터리 절대경로. 없으면 추가 수집을 하지 않는다. 설정했는데 `<경로>/tasks/main.yml` 이 없으면 기본 수집은 그대로 두고 `errors[]` 에 `section: addon` 1건을 남긴다 | Agent 노드 환경변수 ([02-agent-node.md](02-agent-node.md) 노드 속성) |
 
 `SE_ADDON_DIR` 의 동작과 Add-on 과의 약속은 [develop/07-addon-hook.md](../develop/07-addon-hook.md) 에 있다.
+Add-on 배포 Job 이 두는 경로는 `/home/cloviradmin/clovirone-gathering-addon` 이다 — 켤 때 이 값을 노드 환경변수로
+등록하고, 끌 때는 환경변수를 지운다 (지우면 수집 결과가 Add-on 도입 전과 같다).
 
 ---
 
