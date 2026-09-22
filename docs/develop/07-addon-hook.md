@@ -37,7 +37,7 @@
 
 설정은 Agent 노드 환경변수로 한다 ([08-ansible-config.md](../operate/08-ansible-config.md) 3절). 절대경로를 쓴다.
 Add-on 을 Agent 에 두는 일은 Add-on 저장소의 배포 Job(`deploy/Jenkinsfile`)이 한다 — 검사를 통과한 버전만
-`/home/cloviradmin/clovirone-gathering-addon`(링크)으로 바꿔 끼운다. 사용법은 Add-on README 4절.
+`/home/cloviradmin/clovirone-gathering-addon`(링크)으로 바꿔 끼운다. 사용법은 Add-on README 6절(관리자용).
 
 설정 실수의 결과 (2.20.3 · 2.20.7 실측, 엔진 테스트로 고정):
 
@@ -121,6 +121,6 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 
 엔진 테스트는 `tests/fixtures/addon/` 의 합성 Add-on 과 `harness.yml` 을 쓴다. `ANSIBLE_PLAYBOOK_BIN` 으로
 다른 ansible-playbook(예: 운영과 같은 2.20.3)을 지정할 수 있다.
-Add-on 저장소: `https://10.100.64.156/root/clovirone-server-gathering-addon.git` — e2e 사용법은 그 README 6절.
+Add-on 저장소: `https://10.100.64.156/root/clovirone-server-gathering-addon.git` — e2e 사용법은 그 저장소 `tests/e2e/run.py` 머리.
 GitLab 프로젝트 이름은 이 저장소 이름을 따른 것이고, 코드 · Jenkins Job · Agent 경로 · 문서에서는
 `clovirone-gathering-addon` 으로 부른다 — 같은 것이다.
