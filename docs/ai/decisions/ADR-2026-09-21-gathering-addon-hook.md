@@ -43,15 +43,22 @@ rule 30 R3 은 "외부 호출에 timeout 명시" 를 요구하지만, 사용자�
 - 새 수집 기능은 Add-on 안에서만 추가한다 (`tasks/collectors/<이름>.yml` → `data.addon.<이름>`).
 - 실측 근거: `tests/evidence/2026-09-21-addon-hook-live.md` (2.20.3 gate spike, 엔진 테스트, 실장비 V1~V8).
 
-### 실측으로 드러나 결정을 기다리는 것
+### 실측으로 드러나 결정한 것 (2026-09-22 사용자)
 
-- Windows: `& { … } 2>&1` 로는 PowerShell 5.1 이 오류 레코드를 stderr 로 다시 보내 `value` 에 담기지 않는다.
-  (2026-09-22 조사 — 추천 `*>&1 | Out-String -Stream`, 적용은 사용자 결정 대기. NEXT_ACTIONS AO-2)
-- 명령 출력의 UTF-8 이 아닌 바이트는 콜백 단계에서 그 host 의 봉투 전체를 `OUTPUT_BUILD_FAILED` 로 만든다.
-  (2026-09-22 조사 — 추천 Add-on 쪽 `\xNN` 글자 보존, 적용은 사용자 결정 대기. AO-3)
+- 결정 T: Linux(SSH) 출력 줄바꿈 `\r\n` 은 그대로 둔다.
+- Windows(AO-2): `& { … } 2>&1` 로는 PowerShell 5.1 이 오류 레코드를 stderr 로 다시 보내 `value` 에 담기지
+  않았다 → 감싸기를 `& { … } *>&1 | Out-String -Stream` 으로 바꾸고, 종료 오류로 stderr 가 남으면 첫 줄을
+  `errors[]` 알림으로 남긴다. 확정 사항 "허용하는 처리는 실행 단계의 stream 통합뿐" 안에서 합치는 방식만 바꿨다 —
+  `Out-String -Stream` 은 콘솔에 보이는 그대로의 글자로 내보내는 PowerShell 기본 표시이고, Message 추출 ·
+  `ForEach-Object` 변환 · parsing 은 없다 (오류 없는 출력은 byte 동일, e2e 실측).
+- UTF-8 이 아닌 바이트(AO-3): 확정 사항 "자동 치환 없음 — 실제 환경에서 재현되고 JSON 생성에 꼭 필요할 때만 검토"
+  의 조건이 충족됐다 (재현 + 그 host 봉투 전체 손실). Add-on 이 돌려주기 직전 그 바이트만 `\xNN` 글자로 바꾸고
+  위치를 알린다. 메인은 고치지 않고, "돌려주는 글자는 UTF-8 로 쓸 수 있어야 한다" 를 hook 약속에 적었다.
+
+### 남은 것
+
 - `/etc/hosts` DB 판별 규칙 — 고객 샘플 확인 후.
-
-결정된 것: Linux(SSH) 출력 줄바꿈 `\r\n` 은 그대로 둔다 (결정 T — 2026-09-22 사용자).
+- 운영 Agent 노드 환경변수 `SE_ADDON_DIR` 등록 — 사용자 (Add-on 배치는 배포 Job 으로 끝남).
 
 ## 대안 비교 (Considered)
 

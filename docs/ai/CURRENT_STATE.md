@@ -1,5 +1,20 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-22 (2) — Add-on AO-2 · AO-3 적용, Agent 규모 시험, 배포 Job (사용자 지시 "추천대로")
+
+> 후속 표: `docs/ai/NEXT_ACTIONS.md` AO-2 · AO-3 · AO-7 ~ AO-13. 실측: `tests/evidence/2026-09-21-addon-hook-live.md` 9절.
+
+- **Add-on 만 바뀌었다 (메인 코드 0줄)**: Add-on `c3c34ff` — Windows 감싸기 `& { … } *>&1 | Out-String -Stream`
+  + 종료 오류 알림(AO-2), 돌려주기 직전 비 UTF-8 바이트를 `\xNN` 글자로(AO-3). 메인은 문서만 — hook 약속에
+  "돌려주는 글자는 UTF-8 로 쓸 수 있어야 한다" 추가 (`docs/develop/07-addon-hook.md` 3절).
+- **실제 Agent 검증**: e2e #7 PASS 127 / FAIL 0 / KNOWN 0, 엔진 테스트 10 passed, 규모 시험(host 200 · forks 200 ·
+  동시 2회) PASS 8/8 · 최대 메모리 0.35GiB.
+- **배포**: 배포 Job `형섭/clovirone-gathering-addon-deploy` 로 Agent 에 배치 끝
+  (`/home/cloviradmin/clovirone-gathering-addon` → release `7dec7d2`, 기본 config). 노드 환경변수 `SE_ADDON_DIR`
+  등록은 공유 Agent 설정이라 자동 권한 검사가 막아 사용자 몫으로 남김 — 등록 전에는 영향 없음.
+- **사용자 몫**: AO-7 환경변수 등록 → AO-10 실제 `Jenkinsfile_portal` 확인, AO-12 credential 설명란 정리(API 로는
+  비밀값이 깨질 위험이 있어 하지 않음), AO-9 Portal 안내 전달, AO-5 고객 `/etc/hosts` 샘플.
+
 ## 일자: 2026-09-22 — Add-on main 병합 · production · GitLab 등록 · Jenkins e2e (사용자 지시)
 
 > 후속 표: `docs/ai/NEXT_ACTIONS.md` AO-1 ~ AO-12. 실측: `tests/evidence/2026-09-21-addon-hook-live.md` 5 ~ 8절.
@@ -14,8 +29,7 @@
   PowerShell 5.1 오류 스트림 48 조합 실측과 추천안. 적용은 사용자 결정 대기.
 - **테스트 보강**: 엔진 테스트에 `SE_ADDON_DIR` 설정 실수(상위 폴더 · 끝 `/`) 추가. e2e Job 이 같은 엔진 테스트를
   실제 Agent 에서도 돌린다.
-- **결정**: Linux `\r\n` 유지(AO-4, 사용자). **결정 대기**: AO-2 · AO-3 · AO-12(Jenkins credential 설명란의 비밀번호
-  평문). AO-5 는 고객 샘플 대기.
+- **결정**: Linux `\r\n` 유지(AO-4, 사용자). AO-2 · AO-3 는 같은 날 적용 (위 (2) 항목).
 
 ## 일자: 2026-09-21 — 고객별 추가 수집(Add-on) 확장점 추가 (사용자 지시)
 

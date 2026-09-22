@@ -20,13 +20,14 @@
 | V2 (`se_host_input` 이 `add_host` 뒤에도 남고 `{{ 7*7 }}` 이 글자 그대로) | [PASS] |
 | V3 (Linux value 줄바꿈 · stderr · 끝 개행) | 측정: `\r\n`, stderr 합쳐짐, 끝 개행 유지 — `\r\n` 은 그대로 두기로 결정 (2026-09-22 사용자, 결정 T) |
 | V4 (Add-on 도중 연결 끊김 → 기본 결과 유지) | [PASS] |
-| V5 (Windows stdout / stderr) | 측정: stdout 만 `value` 에 담긴다 — **결정 필요** |
-| V6 (UTF-8 이 아닌 바이트) | 측정: 그 host 봉투가 `OUTPUT_BUILD_FAILED` 로 바뀐다 — **결정 필요** |
+| V5 (Windows stdout / stderr) | 측정: stdout 만 `value` 에 담긴다 → 2026-09-22 감싸기 변경으로 오류도 담김 (9절) |
+| V6 (UTF-8 이 아닌 바이트) | 측정: 그 host 봉투가 `OUTPUT_BUILD_FAILED` 로 바뀐다 → 2026-09-22 `\xNN` 보존으로 기본 결과 유지 (9절) |
 | V7 (ESXi · Redfish 에 맞는 rule 없음 → 결과 불변) | [PASS] |
 | V8 (200 host 시간) | 측정 — 4절. 결과로 호출부 `when` 추가 |
 | AO-3 · AO-2 추가 조사 (2026-09-22) | 원인 · 추천안 — 5 · 6절 (사용자 지시로 수정은 적용하지 않음) |
 | `SE_ADDON_DIR` 설정 실수 (끝 `/`, 상대경로, 상위 폴더, 공백) | [PASS] 어느 경우도 기본 결과 유지 — 7절 |
-| Jenkins e2e (실제 Agent `jenkins-agent-dev`, 2.20.3) | [PASS] FAIL 0, KNOWN 은 결정 대기 항목뿐 — 8절 |
+| Jenkins e2e (실제 Agent `jenkins-agent-dev`, 2.20.3) | [PASS] FAIL 0 — 8절 |
+| AO-2 · AO-3 적용 뒤 e2e · Agent 규모 시험(host 200 · forks 200 · 동시 2회) | [PASS] PASS 127 / FAIL 0 / KNOWN 0, 규모 시험 8/8 — 9절 |
 
 ## 1. 0절 gate — 핵심 전제 검증 (2.20.3)
 
@@ -270,7 +271,8 @@ Pipeline from SCM). Agent `jenkins-agent-dev` (label `git`), ansible-core 2.20.3
 | #3 | `d6ed2278` / `db9b31e` | SUCCESS — 시나리오 14개 (s12 ~ s14 추가), PASS 116 / FAIL 0 / KNOWN 2 (AO-2 · AO-3), 888초 |
 | #4 | `eafddf0b` / `0dd4d7b` | SUCCESS — PASS 116 / FAIL 0 / KNOWN 2. s10 에 hosts 알림 확인 추가 |
 | #5 | `eafddf0b` / `18115fe` | SUCCESS — PASS 119 / FAIL 0 / KNOWN 2. s04 Windows here-string(`here a\nhere b\r\n` — 안쪽 LF 는 그대로) · `{{ 7*7 }}` 글자 그대로. 새 "엔진 테스트(Agent)" 단계는 Agent python3 에 pytest 가 없어 건너뜀 → 빌드 작업 디렉터리에만 받아 쓰도록 수정 (`9097425`) |
-| **#6 (최종)** | `eafddf0b` / `9097425` | SUCCESS — 엔진 테스트(Agent, ansible-core 2.20.3) **10 passed** (Test Result pass 10 / fail 0) + 시나리오 14개 PASS 119 / FAIL 0 / KNOWN 2 (AO-2 · AO-3), 956초 |
+| #6 | `eafddf0b` / `9097425` | SUCCESS — 엔진 테스트(Agent, ansible-core 2.20.3) **10 passed** (Test Result pass 10 / fail 0) + 시나리오 14개 PASS 119 / FAIL 0 / KNOWN 2 (AO-2 · AO-3), 956초 |
+| **#7 (최종)** | `d67005b9` / `951366d` | SUCCESS — AO-2 · AO-3 적용 뒤. 엔진 테스트 10 passed, 규모 시험 PASS 8/8, 시나리오 14개 **PASS 127 / FAIL 0 / KNOWN 0**, 1086초 (9절) |
 
 시나리오 (`clovirone-gathering-addon/tests/e2e/run.py` `SCENARIOS`)
 
@@ -293,9 +295,53 @@ style · script 가 없어 Jenkins 기본 CSP 에서도 그대로 보인다), Te
 Jenkins 는 익명 읽기가 막혀 있어(403) 브라우저로는 로그인 뒤에 보인다. 이번 확인은 REST API(빌드 설명 · 보관 파일 ·
 Test Result)와 보고서 HTTP 응답(200, `text/html;charset=utf-8`)으로 했다.
 
-## 9. 하지 못한 것
+## 9. AO-2 · AO-3 적용과 Agent 규모 시험 (2026-09-22, 사용자 결정 "추천대로")
 
-- 실제 `Jenkinsfile_portal` 빌드의 Callback POST 와 Portal 수신 확인 (AO-10 — AO-7 · AO-9 뒤).
-- 200 host · 동시 2빌드 규모의 실제 Agent 실행 — WSL 2.20.3 spike 결과만 있다.
+변경은 Add-on 저장소뿐이다 (메인 코드 0줄).
+
+- Add-on `c3c34ff`: Windows 감싸기 `& { … } *>&1 | Out-String -Stream`. 종료 오류로 task stderr 가 남으면 그 첫 줄을
+  `software '<이름>': value 에 담기지 않은 오류 출력이 있습니다 — …` 로 알린다 (Linux stderr 는 SSH 메시지 자리라 보지
+  않는다). 마지막 태스크가 `_addon_result` · `_addon_errors` 의 짝 없는 surrogate 만 `\xNN`(원래 바이트 0x80~0xFF)
+  또는 `\uXXXX` 글자로 바꾸고 위치를 알린다 (`filter_plugins/addon_text.py`).
+- Add-on `951366d`: e2e 에 규모 시험(`SCENARIOS` 에 `scale`) — MemAvailable 을 0.5초마다 보고 1GiB 아래면 중단,
+  동시 2회는 1회 사용량 ×2 가 남은 메모리 안에 여유 있게 들어갈 때만.
+- Add-on `7dec7d2`: 배포 Job (`deploy/Jenkinsfile`).
+
+로컬 PowerShell 5.1 에서 예전(`2>&1`) · 새 감싸기의 stdout 을 byte 로 비교했다: 문자열 안 LF(`a\nb`), here-string,
+끝 LF, 표(`Get-Service | Select`), 300자 한 줄, 외부 프로그램 여러 줄 — **모두 byte 동일**. (Out-String -Stream 이
+여러 줄 문자열을 줄로 나눌까 우려했으나 그렇지 않았다.)
+
+Jenkins e2e #7 (Agent `jenkins-agent-dev`, ansible-core 2.20.3, 메인 `d67005b9`, Add-on `951366d`, `SCENARIOS=all,scale`):
+**SUCCESS — 엔진 테스트 10 passed, 규모 시험 PASS 8/8, 시나리오 14개 PASS 127 / FAIL 0 / KNOWN 0**, 1086초.
+
+| 확인 | 결과 (Windows 2022 .120 · Linux .165) |
+|---|---|
+| `Write-Error 'err-text'` | `value` = `\r\nWrite-Error 'err-text'\r\n : err-text\r\nAt line:1 char:65 …` (PowerShell 오류 표시 그대로) |
+| stdout + 외부 stderr (`cmd /c 'echo err-native 1>&2'`) | `out-text\r\ncmd : err-native \r\nAt line:3 char:1 …` — 실행 순서대로 |
+| 종료 오류 (`$ErrorActionPreference='Stop'` + 없는 경로) | `value` = `before\r\n`, `errors[]` 1건: `software 'terminating': value 에 담기지 않은 오류 출력이 있습니다 — Get-Item : Cannot find path 'C:\no-such-path-xyz' …` |
+| 오류 없는 출력 (stdout · 한글 · 여러 줄 · here-string `here a\nhere b\r\n` · `{{ 7*7 }}`) | #5 (예전 감싸기)와 글자까지 같음 |
+| 수 MB (Windows 100,000줄 1,188,895자 · 1,000,002자 한 줄) | 전부 일치 |
+| 비 UTF-8 (`printf 'ok \260\241 end\n'`, Linux) | `value` = `ok \xb0\xa1 end\r\n`, `status` success, 기본 결과 s01 과 같음, `errors[]` 1건: `UTF-8 로 읽을 수 없는 바이트를 \xNN 글자로 바꿔 담았습니다: software.swList['non utf8'].value` |
+
+규모 시험 (계획서 0절 gate 를 실제 Agent 에서, host 200 · forks 200 · strategy free · local 연결)
+
+| 단계 | 실행 | 시간 | 최대 메모리 사용 (시작 가용 → 최저) | 결과 |
+|---|---|---|---|---|
+| 미설정 | 1회 | 12.8초 | 0.35GiB (6.51 → 6.16) | 실패 0 · hook 건너뜀 200/200 |
+| Add-on | 1회 | 35.6초 | 0.26GiB (6.55 → 6.28) | 실패 0 · role filter · 메인 filter(전 · 후) · 상대 include(loop 2) 200/200 |
+| Add-on | 동시 2회 | 64.2초 | 0.28GiB (6.49 → 6.22) | 두 실행 모두 위와 같음 |
+
+앞서(8절 무렵) 이 시험을 "공유 Agent 메모리 7.8GB(가용 3.8GB)에서 위험" 이라 보고 미뤘는데, WSL 에서 같은 규모를
+먼저 재 보니 동시 2회 0.79GiB 였고 Agent 에서는 0.28GiB 였다. forks 로 갈라진 작업 프로세스가 메모리를 대부분
+공유하기 때문이다.
+
+배포 (AO-7 일부): 배포 Job #1 → `/home/cloviradmin/clovirone-gathering-addon` → `…-releases/20260922-085019-7dec7d2`
+(검사 통과, 기본 config `rules: []`). 노드 환경변수 `SE_ADDON_DIR` 등록 · 임시 Callback 수신 Job 은 공유 자원
+변경이라 자동 권한 검사가 막았다 — 하지 않았다.
+
+## 10. 하지 못한 것
+
+- 운영 Agent 노드 환경변수 `SE_ADDON_DIR` 등록 (AO-7 — 사용자), 그 뒤 실제 `Jenkinsfile_portal` 빌드 확인 (AO-10).
+  Portal 수신은 Portal 측 (AO-9).
 - hosts DB matcher — 고객 샘플 전 (AO-5).
 - 수 MB `value` 가 실제 `Jenkinsfile_portal` 콘솔 · Callback POST 에 주는 부담 — e2e 는 본문 조립 · 파싱까지만 봤다.

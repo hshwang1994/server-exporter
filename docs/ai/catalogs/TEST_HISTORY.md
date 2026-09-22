@@ -1,5 +1,17 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-22 (2) — Add-on AO-2 · AO-3 적용, Agent 규모 시험
+
+> 실측 `tests/evidence/2026-09-21-addon-hook-live.md` 9절. 메인 코드 변경 없음 (문서만).
+
+| 항목 | 결과 |
+|---|---|
+| Jenkins e2e #7 (Agent `jenkins-agent-dev`, ansible-core 2.20.3, 메인 `d67005b9`, Add-on `951366d`, `all,scale`) | **SUCCESS** — 엔진 테스트 10 passed · 규모 시험 PASS 8/8 · 시나리오 14개 **PASS 127 / FAIL 0 / KNOWN 0** |
+| 규모 시험 (host 200 · forks 200 · 미설정 / 1회 / 동시 2회) | 실패 0 · 연결 끊김 0 · 200/200, 최대 메모리 0.35GiB (감시 중단 0) |
+| Add-on `python -m pytest tests` | Windows 131 passed / 14 skipped (xfail 0 — PowerShell 5.1 오류 스트림 시험이 이제 통과), WSL 135 passed / 10 skipped (2.20.7, 비 UTF-8 바이트 playbook 시험 포함) |
+| 로컬 PowerShell 5.1 예전 · 새 감싸기 stdout 비교 (6종) | 모두 byte 동일 |
+| 배포 Job `형섭/clovirone-gathering-addon-deploy` #1 | SUCCESS — 검사 통과, release `20260922-085019-7dec7d2` 로 링크 |
+
 ## 2026-09-22 — Add-on Jenkins e2e · 추가 조사 · 경로 실수
 
 > 실측 `tests/evidence/2026-09-21-addon-hook-live.md` 5 ~ 8절. 메인 제품 코드 변경 없음 (테스트만 추가).
