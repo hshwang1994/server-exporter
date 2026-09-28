@@ -51,7 +51,7 @@
 - adapter 추가/수정
 - callback (`callback_plugins/json_only.py`)
 - 출력 schema (sections.yml / field_dictionary.yml)
-- Jenkinsfile* (모든 3종)
+- `Jenkinsfile_portal`, `scripts/activate_ansible_venv.sh`
 - vault 회전
 
 체크리스트:

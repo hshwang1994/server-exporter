@@ -51,7 +51,7 @@ targets:
 
   jenkinsfile_cron:
     id: 5
-    description: "Jenkinsfile cron 표 (2종 main/portal — cycle-015에서 grafana 제거)"
+    description: "Jenkinsfile cron 표 (Jenkinsfile_portal 하나 — 2026-09-28 비운영 Jenkinsfile 삭제)"
     measure_command: "grep cron Jenkinsfile* + scheduler-change-playbook"
     storage:
       - "docs/ai/catalogs/JENKINS_PIPELINES.md"

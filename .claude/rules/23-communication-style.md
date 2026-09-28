@@ -70,7 +70,7 @@
 | `squash merge` | "squash 병합 (여러 커밋을 1개로 압축)" |
 | `force push` | "강제 푸시 (원격 이력 덮어쓰기 — 위험)" |
 | `worktree` | "작업 트리 (같은 저장소의 평행 작업 공간)" |
-| `4-Stage` | "Jenkins 4-Stage (Validate / Gather / Validate Schema / E2E Regression)" |
+| `Jenkins Stage` | "Jenkins 파이프라인 단계 (Resolve Location / Validate / Gather / Validate Schema / Callback)" |
 
 ### R3. 결정 주체(AI vs 사람) 명시
 

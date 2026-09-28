@@ -11,8 +11,8 @@
 - field_dictionary.yml: 항목마다 `priority` 가 must / nice / skip 중 하나다 (개수는 세지 않는다 — rule 00 의 세는 명령 참조).
   **런타임 코드는 이 파일을 읽지 않는다** — 테스트·CI·훅 전용이다
 - baseline_v1: vendor별 회귀 기준선
-- Jenkins Stage 3 (Validate Schema) + Stage 4가 FAIL 게이트
-  (마지막 stage 는 pipeline 별로 다르다 — `Jenkinsfile`=E2E Regression / `Jenkinsfile_portal`=Callback. 정본은 rule 80 R1-A)
+- Jenkins Stage 3 (Validate Schema) 가 FAIL 게이트, Stage 4 는 Callback (`Jenkinsfile_portal` 하나 — 정본은 rule 80 R1).
+  pytest 회귀(tests/e2e · tests/regression)는 2026-09-28 부터 Jenkins 단계가 아니라 커밋 전 로컬 검증이다
 - DB schema 없음 — 본 출력 schema가 동등 역할
 
 ## 목표 규칙
@@ -126,7 +126,7 @@
 
 - `python scripts/ai/hooks/output_schema_drift_check.py` (exit 0)
 - Jenkins Stage 3 (Validate Schema) 통과
-- Jenkins Stage 4 (E2E Regression) 통과
+- 로컬 pytest 회귀 통과 (`pytest tests/e2e tests/regression`)
 - 영향 vendor baseline 회귀
 
 ## 관련

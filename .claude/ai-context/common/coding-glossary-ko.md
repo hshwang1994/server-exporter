@@ -35,7 +35,7 @@
 | **JSON envelope** | callback_plugins/json_only.py가 출력하는 표준 13 필드 (rule 20 R1). 분석 6 분류(status/sections/data/errors/meta/diagnosis) + 라우팅·식별 7. |
 | **build_*.yml** | `common/tasks/normalize/build_{sections,status,errors,meta,correlation,output}.yml`. fragment 누적 → 최종 JSON 조립. |
 | **callback URL** | 호출자에게 결과 통지하는 URL. 공백/후행 슬래시 방어 필수 (commit 4ccc1d7). rule 31 무결성. |
-| **Jenkins 4-Stage** | Validate (입력) → Gather (ansible-playbook) → Validate Schema (field_dictionary 정합) → E2E Regression (pytest baseline). 각 Stage FAIL 게이트. |
+| **Jenkins Stage** | Resolve Location (loc 검증) → Validate (입력) → Gather (ansible-playbook) → Validate Schema (field_dictionary 정합) → Callback (호출자 통보). pytest 회귀는 커밋 전 로컬. |
 
 ## 운영
 

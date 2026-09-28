@@ -4,7 +4,7 @@
 Jenkins 파이프라인 / Ansible 실행 환경 (Agent 노드) / Vault 시크릿 / 인프라 설정. 운영 토폴로지: agent-master 분리, loc 분리 (정본 `common/vars/locations.yml`). 프로젝트 ansible.cfg 는 `gathering = explicit` 라 fact 캐싱을 쓰지 않는다.
 
 ## 주요 영역
-- `Jenkinsfile`(비운영) / `Jenkinsfile_portal`(운영, 5 stage) / `Jenkinsfile_portal_test`
+- `Jenkinsfile_portal`(운영, 5 stage) 하나 — 비운영 `Jenkinsfile` 과 `Jenkinsfile_portal_test` 는 2026-09-28 에 삭제됐다. Agent venv 는 `scripts/activate_ansible_venv.sh` 가 고른다
 - `ansible.cfg` — Ansible 프로젝트 설정 (callback / cache / collections)
 - `vault/` — `vault/<loc>/os/{linux,windows}.yml + vault/<loc>/esxi.yml` + `vault/<loc>/redfish/<vendor>.yml`
 - `tools/` — 운영 도우미 스크립트

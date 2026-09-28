@@ -7,7 +7,7 @@ description: Jenkins 빌드 / 테스트 실패 로그 분석. 4-Stage 어디서 
 
 ## 목적
 
-server-exporter Jenkins 실패 분석. 파이프라인은 `Jenkinsfile`(4 stage, 비운영) / `Jenkinsfile_portal`(5 stage, 운영) / `Jenkinsfile_portal_test`.
+server-exporter Jenkins 실패 분석. 파이프라인은 `Jenkinsfile_portal`(5 stage, 운영) 하나다 — 비운영 `Jenkinsfile` 과 `Jenkinsfile_portal_test` 는 2026-09-28 에 삭제됐다. Gather · Validate Schema 의 `[venv] ...` 실패는 `scripts/activate_ansible_venv.sh` 의 진단 줄을 본다.
 
 ## 4-Stage 실패 패턴
 

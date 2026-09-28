@@ -31,7 +31,7 @@ schema_approver:
   related_rule: ".claude/rules/13-output-schema-fields.md"
 
 jenkinsfile_approver:
-  description: "Jenkinsfile / Jenkinsfile_portal / Jenkinsfile_portal_test stage 구조 변경"
+  description: "Jenkinsfile_portal stage 구조 변경 (2026-09-28 부터 파이프라인은 하나)"
   default: "hshwang"
   fallback: "Jenkins 운영자"
   related_rule: ".claude/rules/80-ci-jenkins-policy.md"

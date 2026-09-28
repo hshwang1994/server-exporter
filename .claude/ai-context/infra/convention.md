@@ -3,30 +3,34 @@
 > Jenkins / Agent / Vault / Redis / ansible.cfg 작업 컨벤션.
 > 정본: `docs/` 문서, `docs/operate/04-pipeline-runtime.md`, `docs/operate/08-ansible-config.md`.
 
-## 1. Jenkins 파이프라인 3종
+## 1. Jenkins 파이프라인 — `Jenkinsfile_portal` 하나
 
 | Jenkinsfile | 용도 | 호출자 |
 |---|---|---|
-| `Jenkinsfile` | 메인 (3-channel 통합) | 일반 호출자 |
-| `Jenkinsfile_portal` | Portal 호출 (agent-master 망 분리: Callback은 master) | Portal |
+| `Jenkinsfile_portal` | 수집 (3-channel) + Portal Callback (agent-master 망 분리: Callback 은 controller) | Portal |
 
-각 파이프라인 4-Stage:
-1. **Validate** — 입력값 (loc / target_type / inventory_json) 검증
-2. **Gather** — ansible-playbook 실행
-3. **Validate Schema** — field_dictionary 정합 (FAIL 게이트)
-4. **E2E Regression** — pytest baseline (FAIL 게이트)
-5. **Post** — json_only callback → JSON 출력
+비운영 `Jenkinsfile`(pytest 회귀 게이트) · `Jenkinsfile_portal_test` · `test_sj` 는 2026-09-28 에 삭제됐다.
+
+Stage:
+0. **Resolve Location** (controller) — `common/vars/locations.yml` 로 `loc` 검증 → `agent_label`
+1. **Validate** (agent) — 입력값 (target_type / inventory_json / callbackUrl / deploymentEnvironmentId) 검증
+2. **Gather** (agent) — `scripts/activate_ansible_venv.sh` 로 venv 활성화 → ansible-playbook 실행 → `gather_output.json`
+3. **Validate Schema** (agent) — venv 활성화 → field_dictionary 정합 (FAIL 게이트)
+4. **Callback** (controller) — `httpRequest` POST (실패해도 UNSTABLE)
+
+pytest 회귀(tests/e2e · tests/regression)는 커밋 전 로컬 검증이다.
 
 ## 2. Agent 노드 (`docs/operate/02-agent-node.md`)
 
 운영 토폴로지:
-- master (10.100.64.154) — Jenkins controller, 검증 기준 Agent
-- agent (loc 별 label — 정본은 `common/vars/locations.yml`) — gather 실행
-- 망 분리: Ingest / Callback 단계는 master에서, gather는 agent에서
+- controller — Resolve Location / Callback 만 (Python · Ansible 불필요). lab 10.100.64.153, 신규 jenkins-prod.gooddi.lab(10.100.64.31 active)
+- agent (loc 별 label — 정본은 `common/vars/locations.yml`) — Validate / Gather / Validate Schema. lab 155(`/opt/ansible-env`),
+  신규 Runner 10.100.64.33~36(`/app/ansible-env`, 계정 `jenkins`, `/app/jenkins-agent/agent`)
+- 망 분리: Callback 단계는 controller 에서, gather 는 agent 에서
 
 Agent 요구사항:
 - ansible-core 2.20.3
-- Python 3.12.3 venv (`/opt/ansible-env/`)
+- Python 3.12 venv — `/app/ansible-env`(설치 자동화 Runner) 또는 `/opt/ansible-env`(직접 구축). 파이프라인은 `scripts/activate_ansible_venv.sh` 로 고른다
 - pip: pywinrm / pyvmomi / redis / jmespath / netaddr / lxml
 - collections: ansible.windows / community.vmware / ansible.posix / community.general / community.windows / ansible.utils
 

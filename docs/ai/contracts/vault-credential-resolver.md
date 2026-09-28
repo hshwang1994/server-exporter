@@ -892,7 +892,7 @@ schema 무변경이라는 장점이 있으나 "시도 후 거부" 와 "미시도
 ### 11.1 현재
 
 - Jenkins credential **1개**: `server-gather-vault-password`
-  (`Jenkinsfile:159`, `Jenkinsfile_portal:160`, `Jenkinsfile_portal_test:161` — 전부 동일 ID, `string` 타입)
+  (`Jenkinsfile:159`, `Jenkinsfile_portal:160`, `Jenkinsfile_portal_test:161` — 전부 동일 ID, `string` 타입. `Jenkinsfile` · `Jenkinsfile_portal_test` 는 2026-09-28 에 삭제됐다)
 - 공급 경로는 `--vault-password-file` **하나뿐**. `ansible.cfg:57` 의 `vault_password_file` 은
   주석 처리 = 비활성. `vault_id` / `vault_identity_list` 는 저장소 전체 0건.
 - vault 12개가 전부 `$ANSIBLE_VAULT;1.1;AES256` 인데, **1.1 은 vault_id 라벨이 없는 포맷**이다.
@@ -949,7 +949,7 @@ A → B 전환 시 `credential_common.py` / `credential_resolver.py` / `resolve_
 
 ### 12.1 전제 — 운영 파이프라인은 `Jenkinsfile_portal` 하나 (사용자 확정)
 
-미사용 `Jenkinsfile` 과 `Jenkinsfile_portal_test` 는 **삭제**한다.
+미사용 `Jenkinsfile` 과 `Jenkinsfile_portal_test` 는 **삭제**한다 (2026-09-28 에 삭제됐다).
 따라서 `Jenkinsfile:30` 의 pipeline top-level `agent { label "${params.loc}" }` 문제
 (어떤 stage 보다 먼저 agent 가 할당되어 Resolve Location stage 를 앞에 둘 수 없는 구조)는
 발생하지 않는다.
@@ -1000,9 +1000,9 @@ stage('Resolve Location') {
 
 `:160` 의 `withCredentials` 는 **이번에 바꾸지 않는다** (§11.3 권장안 A).
 
-### 12.4 `Jenkinsfile` / `Jenkinsfile_portal_test` 삭제의 실제 영향
+### 12.4 `Jenkinsfile` / `Jenkinsfile_portal_test` 삭제의 실제 영향 (2026-09-28 에 삭제됐다)
 
-- **`Jenkinsfile_portal_test`**: `Jenkinsfile_portal` 과 **1줄 차이**뿐이다
+- **`Jenkinsfile_portal_test`** (2026-09-28 에 삭제됐다): 당시 `Jenkinsfile_portal` 과 **1줄 차이**뿐이었다
   (`:18` `defaultValue: 'not-json'` 추가). 삭제해도 잃는 기능이 없다.
 - **`Jenkinsfile`**: 잃는 것은 **Stage 4 `E2E Regression` 하나**다
   (`:208-236`, `pytest tests/e2e/` + `pytest tests/integration/ -m "not live"`).
@@ -1274,7 +1274,7 @@ Location 별 실제 Credential **값이 서로 다르므로**(사용자 확정) 
   `filter_plugins/vendor_normalizer.py`
 - 수정: 3개 site.yml, `load_vault.yml`, `detect_vendor.yml`, `Jenkinsfile_portal`,
   `schema/field_dictionary.yml`, `docs/contract/03-fields.md`, baseline 10건
-- 삭제: `Jenkinsfile`, `Jenkinsfile_portal_test`
+- 삭제: `Jenkinsfile`, `Jenkinsfile_portal_test` (2026-09-28 에 삭제됐다)
 - 하네스·문서 갱신(§12.4)은 **별도 커밋**으로 분리 (CLAUDE.md §13)
 
 **4단계 — flat vault 제거** (별도 커밋)
@@ -1400,7 +1400,7 @@ force push / history rewrite 는 하지 않는다 (rule 93 R1).
 | 파일 | 시점 |
 |---|---|
 | `Jenkinsfile` | 3단계 |
-| `Jenkinsfile_portal_test` | 3단계 |
+| `Jenkinsfile_portal_test` (2026-09-28 에 삭제됐다) | 3단계 |
 | `vault/<loc>/os/linux.yml`, `vault/<loc>/os/windows.yml`, `vault/<loc>/esxi.yml` | 4단계 |
 | `vault/<loc>/redfish/*.yml` 9개 | 4단계 |
 

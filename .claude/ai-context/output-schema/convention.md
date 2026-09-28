@@ -85,7 +85,7 @@ stdout callback. 핵심 동작:
 3. 영향 vendor baseline (`schema/baseline_v1/{vendor}_baseline.json`) 추가/갱신
 4. `tests/fixtures/` mock 추가
 5. update-output-schema-evidence skill로 정합 검증
-6. Jenkins Stage 3 (Validate Schema) + Stage 4 (E2E Regression) 통과
+6. Jenkins Stage 3 (Validate Schema) 통과 + 로컬 pytest 회귀 통과
 
 ## 8. 자주 호출하는 Skill / Agent
 

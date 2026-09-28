@@ -8,7 +8,7 @@
 |---------|------|--------------|------|
 | Orchestration | ansible-core | 2.20.3 | 플레이북 실행 |
 | | ansible (package) | 13.4.0 | core + bundled collections |
-| Language | Python | 3.12.3 | 커스텀 모듈 / 필터 / 플러그인 (venv: /opt/ansible-env/) |
+| Language | Python | 3.12.3 | 커스텀 모듈 / 필터 / 플러그인 (venv: 설치 자동화 Runner `/app/ansible-env/` · 직접 구축 `/opt/ansible-env/` — `scripts/activate_ansible_venv.sh` 가 고른다) |
 | Runtime | Java (OpenJDK) | 21.0.10 | Jenkins Agent 실행 |
 | Template | Jinja2 | 3.1.6 | Ansible 템플릿 엔진 |
 | Protocol | SSH, WinRM, Redfish API | — | 정보 수집 |

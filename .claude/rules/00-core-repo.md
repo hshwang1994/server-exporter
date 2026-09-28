@@ -13,8 +13,8 @@
 - Ansible 2.20.3 + Python 3.12.3 + Java 21 (Jenkins Agent)
 - 멀티벤더 9종 (Dell / HPE / Lenovo / Supermicro / Cisco + Huawei / Inspur / Fujitsu / Quanta — 후 4종 lab 부재)
 - Schema 11 sections (`system hardware bmc cpu memory storage network firmware users power thermal`)
-- Jenkins pipeline: `Jenkinsfile`(비운영, 자체 주석이 삭제 예정이라 명시) / `Jenkinsfile_portal`(운영) /
-  `Jenkinsfile_portal_test`. cron·trigger 는 셋 다 없다. grafana 파이프라인은 존재하지 않는다
+- Jenkins pipeline: `Jenkinsfile_portal` 하나 (2026-09-28 에 비운영 `Jenkinsfile` · `Jenkinsfile_portal_test` · `test_sj` 는 삭제됐다).
+  cron·trigger 없음. grafana 파이프라인은 존재하지 않는다. Agent venv 는 `scripts/activate_ansible_venv.sh` 가 고른다
 
 > **세어 놓은 수는 적지 않는다.** adapter·fixture·baseline·테스트 개수, 파일 줄 수는
 > 하나만 늘어도 그 수를 든 문서가 전부 동시에 틀린다. 실제로 `field_dictionary` 항목 수가
@@ -58,7 +58,7 @@ python scripts/ai/check_project_map_drift.py
 ```
 호출자 (Jenkins Job)
   ↓
-ansible.cfg + Jenkinsfile (운영 경로는 Jenkinsfile_portal)
+ansible.cfg + Jenkinsfile_portal (+ scripts/activate_ansible_venv.sh 가 Agent venv 선택)
   ↓
 3-channel:
   ├── os-gather/site.yml (4-Play: 포트감지 → 감지실패 OUTPUT → Linux → Windows)

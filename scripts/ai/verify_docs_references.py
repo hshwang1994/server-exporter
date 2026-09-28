@@ -70,6 +70,9 @@ DOCS_SHORTHAND_RE = re.compile(r"^docs/\d+$")
 NOT_A_PATH = {
     # credential_common.py:54 REDFISH_STANDARD_SCOPE — vault 경로가 아니라 scope 문자열
     "common/redfish/standard",
+    # 2026-09-28 비운영 `Jenkinsfile` 삭제 뒤 남은 파이프라인은 `Jenkinsfile_portal` 하나다. 산문의 `Jenkinsfile` 은
+    # "파이프라인 정의 파일" 을 뜻하는 일반 어휘라 실존 검사 대상이 아니다 (`Jenkinsfile_portal` 은 계속 검사한다).
+    "Jenkinsfile",
 }
 
 # 경로 후보 추출: 공백/따옴표/괄호/백틱 으로 끊기는 경로 모양 토큰

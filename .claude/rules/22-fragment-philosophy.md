@@ -68,7 +68,7 @@
   6. `schema/sections.yml` + `schema/fields/*.yml` 추가
   7. Baseline JSON 예시 추가 + 문서 갱신
 - **Forbidden**: 위 7단계 중 일부 skip하고 PR 제출
-- **Why**: 일부 단계 누락 시 Jenkins Stage 3 (Validate Schema) 또는 Stage 4 (E2E Regression) FAIL
+- **Why**: 일부 단계 누락 시 Jenkins Stage 3 (Validate Schema) 또는 로컬 pytest 회귀(tests/e2e) FAIL
 
 ### R3. merge_fragment.yml 호출 보장
 
