@@ -1,5 +1,20 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-28 — Agent venv 경로 분리 (`scripts/activate_ansible_venv.sh`)
+
+> 코드 `8170ae7d` · 문서 `da91b274` · 하네스 `7b36aaa6` · production `e7baaa55`. 실측 `tests/evidence/2026-09-28-runner-venv-path.md`.
+
+| 항목 | 결과 |
+|---|---|
+| `pytest tests/unit/test_activate_ansible_venv.py` (Git for Windows bash) | 10 passed — env override 정상/무효, PATH 파생, stray→후보, 전부 없음 실패+센티널 미실행, 실행 모드 exit 1, 재source, python 밖 실패, LF·셸 상태 |
+| `pytest tests/unit` | 2446 passed |
+| `pytest tests/e2e` | 723 passed / 6 skipped |
+| Jenkins 선언형 린터 (lab 153) | Jenkinsfile_portal validated |
+| Runner 33~36 + lab 155 헬퍼 stdin 실행 | 양성 5/5 (`/app` source=path × 4, `/opt` source=known × 1), 음성 2종 × 5 = rc 1 |
+| lab Jenkins `clovirone-server-gather` #20 (production `e7baaa55`) | Gather·Validate Schema `[venv] /opt/ansible-env (source=path)`, envelope 4건(#18 과 동일: dell·lenovo·cisco success, HPE 10.50.11.231 TARGET_UNREACHABLE 기존 상태), Callback sink → UNSTABLE(의도) |
+| `verify_harness_consistency.py` / `verify_docs_references.py` / `check_project_map_drift.py` | 통과 / 삭제 파일 지적 0건(기존 무관 지적만) / fingerprint 일치 |
+| `ansible-playbook --syntax-check` | 미실행 — playbook 변경 없음, 로컬에 ansible 없음 |
+
 ## 2026-09-22 (4) — Add-on 사용자 관점 감사 (README · 주석 · match 누락 알림)
 
 > Add-on `f59d819` · `4be4bfb` · `83cddde`, 메인 `18b59ad9`(문서만).

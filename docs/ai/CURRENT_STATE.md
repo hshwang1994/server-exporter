@@ -1,5 +1,23 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-28 — Agent venv 경로를 파이프라인에서 분리 (`scripts/activate_ansible_venv.sh`)
+
+> 결정: `docs/reference/decision-log.md` 2026-09-28. 실측: `tests/evidence/2026-09-28-runner-venv-path.md`. 후속 표: `docs/ai/NEXT_ACTIONS.md` JV-1 ~ JV-6.
+
+- **코드** `8170ae7d`(feat) — 신규 Runner(`/app/ansible-env`)에서 `. /opt/ansible-env/bin/activate` 가 Gather 를 즉시 실패시키고
+  Validate Schema 는 시스템 python 3.9 로 조용히 통과하던 문제. venv 선택 규칙을 `scripts/activate_ansible_venv.sh` 한 파일로
+  (`SE_ANSIBLE_VENV` → PATH 의 `ansible-playbook` → `/app/ansible-env` → `/opt/ansible-env` → 실패). 호출부는
+  `Jenkinsfile_portal` Gather · Validate Schema(`set -eo pipefail` 추가), freestyle Job 사본, `verify_account_provision.sh` 각 한 줄.
+  비운영 `Jenkinsfile` · `Jenkinsfile_portal_test` · `test_sj` 삭제(사용자 결정 — pytest 회귀는 로컬), `.gitattributes` `Jenkinsfile* eol=lf`.
+- **문서** `da91b274` — `docs/operate/01·02·03·04·08`, overview/02, contract/01, develop/01·06, README, REQUIREMENTS, decision-log.
+  Job 은 `production` 브랜치(사용자가 전환) — `main` 전체 체크아웃(약 17k 파일)이 Resolve Location 2분 제한을 넘겼다.
+- **하네스** `7b36aaa6` — rule 80 R1/R1-A(단일 파이프라인 + venv 규칙), rule 00/13/22/23/40/92, infra/output-schema 컨텍스트,
+  jenkinsfile-engineer agent, JENKINS_PIPELINES 노드 표 실측 정정, `verify_docs_references.py` 는 산문의 `Jenkinsfile` 을 경로로 보지 않는다.
+- **검증**: unit 2446 · e2e 723 · 헬퍼 단위 10 · 선언형 린터 · Runner 4대 + lab 155 stdin 실행 · lab Jenkins #20(production `e7baaa55`)
+  Gather/Validate Schema `[venv] /opt/ansible-env (source=path)`, host 결과 #18 과 동일, Callback 은 sink 라 UNSTABLE(의도).
+- **보류(사용자·설치자동화 몫)**: 신규 Jenkins Runner 의 `git` 부재(I-2), `ic/chj/yi` 라벨 부재, `SE_ADDON_DIR` 경로가 `jenkins` 계정과 불일치,
+  설치 자동화 시드 사본 동기화, 154 venv 부재, lab `git/테스트 액션` Job(삭제된 `Jenkinsfile` 사용).
+
 ## 일자: 2026-09-22 (4) — Add-on 사용자 관점 감사 — README 사용 설명서화 · 주석 최소화 · match 누락 알림
 
 > 배경: 사용자 요청(현장 엔지니어가 README · config.yml 만 보고 쓰는가). 구조 · 계약 불변, 새 Markdown 없음.

@@ -1,5 +1,18 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Agent venv 경로 분리 후속 (2026-09-28)
+
+> 정본: `docs/reference/decision-log.md` 2026-09-28, `scripts/activate_ansible_venv.sh`, 실측 `tests/evidence/2026-09-28-runner-venv-path.md`
+
+| # | 항목 | 상태 | 내용 |
+|---|---|---|---|
+| JV-1 | 신규 Jenkins `clovirone-cicd/clovirone-server-gather` 1회 실행 | `[PENDING / 설치자동화 I-2 뒤]` | Runner 4대에 CLI `git` 이 없어 Agent 체크아웃 불가(다른 세션에서 `jenkins_runner_packages` 에 git 추가 중). 반영 뒤 `loc=git` · sink callback 으로 실행 → 콘솔 `[venv] /app/ansible-env … (source=path)` 확인 |
+| JV-2 | 신규 Jenkins 노드 라벨 | `[TODO / 사용자]` | Runner 라벨이 `git,linux,redfish,windows`(04 는 `git` 만) — `locations.yml` 의 `ic/chj/yi` Location 은 노드 대기가 된다. 운영 Location 을 정하고 라벨 또는 `locations.yml` 을 맞춘다 |
+| JV-3 | `SE_ADDON_DIR` 기본 경로 | `[TODO / 사용자]` | 문서·배포 Job 기본값 `/home/cloviradmin/clovirone-gathering-addon` 은 신규 Runner 의 Agent 계정 `jenkins`(홈 `/home/jenkins`)와 맞지 않는다. Add-on 을 신규 Runner 에서 켤 때 `ADDON_HOME` · 노드 환경변수를 `jenkins` 가 읽는 경로로 |
+| JV-4 | 설치 자동화 시드 사본 동기화 | `[TODO / 설치자동화 팀]` | `generated/gitlab-projects/clovirone-server-gathering` 의 Jenkinsfile 패치가 "activate 줄" 을 대상으로 한다 — 이제 그 줄이 없으므로 시드를 이번 main/production 으로 다시 뜨거나 패치를 no-op 처리 |
+| JV-5 | `jenkins-agent-ops`(154) venv 부재 | `[INFO / 사용자]` | `/opt`·`/app` 둘 다 없어 수집 불가 상태. Job 에 연결되어 있지 않아 영향 없음. 쓰려면 02-agent-node.md 5절대로 구축 |
+| JV-6 | lab `git/테스트 액션` Job | `[INFO / 사용자]` | 삭제된 `Jenkinsfile` 을 Script Path 로 쓴다 — 필요하면 `Jenkinsfile_portal` 로 바꾸거나 Job 삭제 |
+
 ## 고객별 추가 수집(Add-on) 후속 (2026-09-21)
 
 > 정본: `docs/ai/decisions/ADR-2026-09-21-gathering-addon-hook.md`, `docs/develop/07-addon-hook.md`,
