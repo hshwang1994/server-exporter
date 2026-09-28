@@ -1,8 +1,8 @@
 # 04. Jenkins Job 등록
 
-> **이 문서는** server-exporter 의 3 채널 (OS / ESXi / Redfish) 수집 Job 을 Jenkins 에 등록할 때 참고한다.
-> Job 이름 규칙, SCM 연결, target_type 파라미터 매핑까지 다룬다.
-> 신규 Jenkins 환경을 구축한 직후, 또는 새 채널이 추가됐을 때 들어와 본다.
+> **이 문서는** server-exporter 의 수집 Job 을 Jenkins 에 등록할 때 참고한다.
+> Job 이름 규칙, SCM 연결(브랜치·Script Path), 파라미터까지 다룬다.
+> 신규 Jenkins 환경을 구축한 직후, 또는 Job 을 옮길 때 들어와 본다.
 
 경로: Jenkins → New Item → Pipeline 선택
 
@@ -16,11 +16,7 @@ RBAC Pattern 과 일치해야 권한이 자동 적용된다.
 {프로젝트명}.{작업명}
 ```
 
-**수집 파이프라인 예시:**
-
-- `server-exporter.os-gather`
-- `server-exporter.esxi-gather`
-- `server-exporter.redfish-gather`
+**수집 파이프라인 예시:** `server-exporter.gather` (운영 lab 에서는 `clovirone-server-gather` 이름으로 등록돼 있다)
 
 **인프라 자동화 예시:**
 
@@ -36,21 +32,32 @@ RBAC Pattern 과 일치해야 권한이 자동 적용된다.
 |------|----|
 | Definition | Pipeline script from SCM |
 | SCM | Git |
-| Credentials | `gitlab-credentials` |
-| Branch | `*/main` |
+| Repository | 이 저장소 (GitHub 또는 사내 GitLab 미러) |
+| Credentials | 저장소 읽기 권한 credential (예: `gitlab-credentials`) |
+| Branch | `*/production` |
+| Script Path | `Jenkinsfile_portal` |
+| Lightweight checkout | 켠다 (Jenkinsfile 만 먼저 읽는다) |
 
-### 수집 파이프라인 Script Path
+### 왜 `production` 브랜치인가
 
-수집 파이프라인은 루트의 `Jenkinsfile` 을 쓴다. 3개 gather Job 모두 이 `Jenkinsfile` 을 Script Path 로 사용하고
-`target_type` 파라미터로 gather 종류를 구분한다. (루트에는 호출자 통보용 `Jenkinsfile_portal` 도 있으나 별도 callback 파이프라인이다 — docs/17 참조.)
+`production` 은 순수 수집 코드만 있는 배포 브랜치다 (`main` 에서 `.claude/`, `docs/ai/`, `scripts/ai/`,
+`tests/reference/`, `tests/evidence/` 를 뺀 것). `main` 은 참조 데이터까지 약 17k 파일이라 컨트롤러의
+'Resolve Location' 단계(2분 제한)가 체크아웃 도중 끊긴 적이 있다. 코드는 `main` 에 커밋한 뒤
+`scripts/ai/promote_to_production.sh` 로 승격한다.
 
-| Job 이름 | Script Path | target_type 기본값 |
-|----------|-------------|-------------------|
-| `{프로젝트명}.os-gather` | `Jenkinsfile` | `os` |
-| `{프로젝트명}.esxi-gather` | `Jenkinsfile` | `esxi` |
-| `{프로젝트명}.redfish-gather` | `Jenkinsfile` | `redfish` |
+### Script Path
 
-> Script Path 는 모두 `Jenkinsfile` 이다. 각 gather 디렉토리에는 별도 `Jenkinsfile` 이 없다.
+수집 파이프라인은 하나, `Jenkinsfile_portal` 이다. `target_type` 파라미터로 OS / ESXi / Redfish 를 고르므로
+채널마다 Job 을 따로 만들 필요는 없다. 채널별 Job 을 두고 싶으면 같은 Script Path 로 Job 을 만들고 Configure 에서
+`target_type` 기본값만 다르게 둔다.
+
+> 예전의 비운영 `Jenkinsfile`(pytest 회귀 게이트)과 `Jenkinsfile_portal_test` 는 2026-09-28 에 삭제됐다.
+> 이 두 이름을 Script Path 로 쓰는 Job 이 남아 있으면 `Jenkinsfile_portal` 로 바꾼다.
+
+### Agent 쪽 전제
+
+Gather 와 Validate Schema 는 Agent 에서 저장소를 체크아웃한다 — Agent 에 CLI `git` 이 있어야 한다.
+Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾는다 ([02-agent-node.md](02-agent-node.md) 5절·9절).
 
 ### 인프라 자동화 Script Path (참고)
 
@@ -64,18 +71,19 @@ RBAC Pattern 과 일치해야 권한이 자동 적용된다.
 
 ---
 
-## Job 별 파라미터 (호출자 입력)
+## Job 파라미터 (호출자 입력)
 
-3개 server-exporter Job 모두 동일한 파라미터 3종을 받습니다.
+`Jenkinsfile_portal` 이 정의하는 파라미터다. Job 을 처음 저장하고 한 번 실행하면 Jenkins 가 파라미터 UI 를 만든다.
 
 | 파라미터 | 필수 | 설명 |
 |---------|------|------|
-| `loc` | 필수 | 어느 사이트 Agent 에서 실행할지 (`ic` / `chj` / `yi`) |
-| `target_type` | 자동 (Job 별 기본값) | `os` / `esxi` / `redfish` |
+| `loc` | 필수 | 어느 사이트 Agent 에서 실행할지 — `common/vars/locations.yml` 에 등록된 Location (`ic` / `chj` / `yi` / `git`) |
+| `target_type` | 필수 (기본 `os`) | `os` / `esxi` / `redfish` |
 | `inventory_json` | 필수 | 대상 IP 배열 (os/esxi: `service_ip`, redfish: `bmc_ip`). 형식은 [../contract/01-input.md](../contract/01-input.md) 참조 |
-
-`target_type` 의 기본값은 각 Job 의 Configure 화면에서 지정한다 (esxi-gather Job 은 `esxi`, redfish-gather Job 은 `redfish`).
-`Jenkinsfile` 의 choice 파라미터 자체에는 기본값이 없어 파이프라인 기본은 첫 항목 `os` 다. 그래서 esxi/redfish Job 은 Configure 에서 기본값을 바꿔 둬야 호출자가 매번 보내지 않아도 된다.
+| `deploymentEnvironmentId` | 필수 | 포털 개발환경 ID — Callback 본문에 그대로 담긴다 |
+| `eventUuid` | 선택 | 포털 이벤트 UUID — Callback 본문에 그대로 담긴다 |
+| `callbackUrl` | 필수 | 결과를 POST 할 포털 주소 (`http://` 또는 `https://`, 따옴표·공백 불가). 경로 `/api/jenkins/gather/<target_type>` 이 뒤에 붙는다 |
+| `verbosity` | 선택 (기본 `0`) | Ansible verbosity 0~4 |
 
 ---
 
@@ -98,13 +106,16 @@ Add-on 을 켜는 노드 환경변수 `SE_ADDON_DIR` 은 [08-ansible-config.md](
 | 다음 작업 | 문서 |
 |---|---|
 | 호출자 입력 형식 자세히 | [../contract/01-input.md](../contract/01-input.md) |
-| 파이프라인 4-Stage 동작 이해 | [04-pipeline-runtime.md](04-pipeline-runtime.md) |
+| 파이프라인 단계 동작 이해 | [04-pipeline-runtime.md](04-pipeline-runtime.md) |
 | Job 동작 검증 | [../reference/live-validation.md](../reference/live-validation.md) |
 
 ## 자주 막히는 곳
 
 | 증상 | 원인 / 해결 |
 |------|------------|
-| Job 빌드 시 "Workspace not found" | Pipeline SCM 설정에서 Branch 가 `*/main` 인지 확인 |
-| RBAC 권한이 적용되지 않음 | Job 이름이 `server-exporter.os-gather` 같은 패턴과 일치하는지 확인 |
-| 같은 Jenkinsfile 인데 동작이 다름 | 각 Job 의 `target_type` 기본값이 다르기 때문에 정상 |
+| 'Resolve Location' 이 2분 제한으로 끊김 | Branch 가 `*/main` 이면 참조 데이터까지 받는다 — `*/production` 으로 |
+| `[Resolve Location] 등록되지 않은 Location` | `loc` 값이 `common/vars/locations.yml` 에 없다 |
+| Validate 뒤 "실행 노드를 기다리는 중" 이 계속됨 | `loc` 의 `agent_label` 을 가진 노드가 없다 — Manage Jenkins → Nodes 의 Labels 확인 |
+| Gather 에서 `[venv] Ansible 실행환경(venv)을 찾지 못했습니다` | Agent 의 venv 가 없거나 파이프라인이 아는 경로 밖 — [02-agent-node.md](02-agent-node.md) 5절 · 9절 |
+| Agent 체크아웃이 `git: command not found` 로 실패 | Agent 에 CLI `git` 이 없다 |
+| RBAC 권한이 적용되지 않음 | Job 이름이 `server-exporter.gather` 같은 패턴과 일치하는지 확인 |

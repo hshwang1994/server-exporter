@@ -63,6 +63,7 @@ gather_timeout = 60
 | `REPO_ROOT` | 필수 | 프로젝트 루트 경로 (adapter/vault 로딩) | Jenkinsfile: `${WORKSPACE}` |
 | `INVENTORY_JSON` | 필수 | 호출자가 전달하는 호스트 배열 JSON (os/esxi: `service_ip`, redfish: `bmc_ip`, fallback: `ip`) | Jenkinsfile: `${params.inventory_json}` |
 | `ANSIBLE_CONFIG` | 권장 | ansible.cfg 경로 (미설정 시 CWD 기준) | Jenkins workspace 루트 |
+| `SE_ANSIBLE_VENV` | 선택 | Ansible venv 루트를 명시한다. 없으면 `scripts/activate_ansible_venv.sh` 가 PATH 의 `ansible-playbook` → 알려진 경로(`/app/ansible-env`, `/opt/ansible-env`) 순으로 찾는다. 값이 있는데 `bin/activate` 가 없으면 다른 경로로 넘어가지 않고 실패한다 | Agent 노드 환경변수 ([02-agent-node.md](02-agent-node.md) 9절) |
 | `SE_ADDON_DIR` | 선택 | 고객별 추가 수집(Add-on) 디렉터리 절대경로. 없으면 추가 수집을 하지 않는다. 설정했는데 `<경로>/tasks/main.yml` 이 없으면 기본 수집은 그대로 두고 `errors[]` 에 `section: addon` 1건을 남긴다 | Agent 노드 환경변수 ([02-agent-node.md](02-agent-node.md) 노드 속성) |
 
 `SE_ADDON_DIR` 의 동작과 Add-on 과의 약속은 [develop/07-addon-hook.md](../develop/07-addon-hook.md) 에 있다.
@@ -80,9 +81,15 @@ ansible-playbook --vault-password-file .vault_pass site.yml
 # 환경변수 방식
 export ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass
 
-# Jenkins credentials binding 방식 (권장)
-withCredentials([file(credentialsId: 'vault-pass', variable: 'VAULT_PASS')]) {
-    sh "ansible-playbook --vault-password-file ${VAULT_PASS} site.yml"
+# Jenkins credentials binding 방식 (운영 — Jenkinsfile_portal Gather stage)
+# Secret text 'server-gather-vault-password' 를 mktemp 임시파일에 써서 넘기고 trap 으로 지운다.
+withCredentials([string(credentialsId: 'server-gather-vault-password', variable: 'VAULT_PASSWORD')]) {
+    sh '''
+        . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+        VAULT_TMP="$(mktemp)"; trap 'rm -f "$VAULT_TMP"' EXIT
+        printf '%s' "$VAULT_PASSWORD" > "$VAULT_TMP"; chmod 600 "$VAULT_TMP"
+        ansible-playbook redfish-gather/site.yml -i redfish-gather/inventory.sh --vault-password-file="$VAULT_TMP"
+    '''
 }
 ```
 

@@ -262,7 +262,7 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 | 항목 | 최소 | 검증 기준 Agent | 비고 |
 |------|------|----------------|------|
 | **OS** | RHEL/CentOS 7+, Ubuntu 18.04+, Rocky 8+ | Ubuntu 24.04.4 LTS | |
-| **Python** | **3.12** | 3.12.3 | venv: `/opt/ansible-env/` |
+| **Python** | **3.12** | 3.12.3 | venv: 설치 자동화 Runner `/app/ansible-env/` · 직접 구축 `/opt/ansible-env/` — 파이프라인은 `scripts/activate_ansible_venv.sh` 가 고른다 |
 | **Java** | **21** | OpenJDK 21.0.10 | Jenkins Agent 실행 |
 | **ansible-core** | **2.16** | 2.20.3 | Python 3.12 필요 시 2.16+. `ansible.builtin` 최신 필터 사용 |
 | **ansible (package)** | — | 13.4.0 | 풀패키지 설치 시 core + bundled collections 포함 |

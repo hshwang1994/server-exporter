@@ -1,46 +1,65 @@
 # Jenkins 파이프라인 런타임
 
-> 이 문서는 server-exporter 의 Jenkins 파이프라인이 실제로 어떤 단계로 실행되는지 그림과 표로 정리한다.
-> Stage 1~4 의 의무, 각 Stage 가 실패할 때 어떻게 전파되는지, 호출자에게 어떤 형식으로 결과가 돌아가는지를 한 페이지에 모았다.
+> 이 문서는 server-exporter 의 운영 파이프라인 `Jenkinsfile_portal` 이 실제로 어떤 단계로 실행되는지 정리한다.
+> 각 단계가 어느 노드에서 도는지, 어디서 실패하면 어떻게 전파되는지, 호출자에게 어떤 형식으로 결과가 돌아가는지를 한 페이지에 모았다.
 >
-> Jenkinsfile 자체를 수정해야 한다면 본 문서의 Stage 구조와 게이트 정책을 먼저 이해한 뒤 손댄다.
+> Jenkinsfile 을 수정해야 한다면 본 문서의 단계 구조와 게이트 정책을 먼저 이해한 뒤 손댄다.
 
-> 검증일: 2026-03-18
+> 검증일: 2026-09-28 (lab Jenkins `clovirone-server-gather`, `production` 브랜치)
 
-## 1. Jenkinsfile 분석 결과
+## 1. 파이프라인 구조
 
-`Jenkinsfile` 기반 — 포털 → Jenkins → Ansible → JSON stdout → 포털 파이프라인.
-
-### 파이프라인 구조
+`Jenkinsfile_portal` 은 최상위 `agent none` 이고 단계마다 노드를 고른다. 컨트롤러(`built-in`)에는 Python 도 Ansible 도 필요 없다.
 
 ```text
-parameters (loc, target_type, inventory_json)
-  → Stage 1: Validate (파라미터 검증)
-  → Stage 2: Gather (Ansible 실행)
-  → Stage 3: Validate Schema (field_dictionary.yml 정합성, FAIL 게이트)
-  → Stage 4: E2E Regression (pytest baseline/fixture 회귀 검증, FAIL 게이트)
-  → Post (결과 처리)
+parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid, callbackUrl, verbosity)
+  → Resolve Location  [컨트롤러]  loc 를 common/vars/locations.yml 로 검증 → agent_label 결정
+  → Validate          [Agent]     파라미터 형식 검증 (체크아웃 없음)
+  → Gather            [Agent]     ansible-playbook 실행 → gather_output.json → stash
+  → Validate Schema   [Agent]     field_dictionary.yml 정합 (FAIL 게이트)
+  → Callback          [컨트롤러]  unstash → 호출자에게 POST (실패해도 빌드는 UNSTABLE)
 ```
 
-### Stage 3/4 품질 게이트
+| Stage | 노드 | 하는 일 | 실패 시 |
+|-------|------|--------|--------|
+| Resolve Location | `built-in` | `readYaml common/vars/locations.yml` — 미등록 `loc` 는 노드 대기 없이 즉시 실패 | FAILURE |
+| Validate | `agent_label` 노드 | `target_type` / `inventory_json` / `callbackUrl` / `deploymentEnvironmentId` 검증 | FAILURE |
+| Gather | `agent_label` 노드 | venv 활성화 → `ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-file=<임시파일> -e se_location=<loc>` | ansible 실패는 UNSTABLE, 결과 파일 0바이트면 FAILURE |
+| Validate Schema | `agent_label` 노드 | venv 활성화 → `python3 tests/validate_field_dictionary.py` | FAILURE |
+| Callback | `built-in` | `httpRequest` POST, 3회 재시도 (10s · 20s backoff) | UNSTABLE (수집 결과는 콘솔에 남는다) |
 
-| Stage | 도구 | 게이트 | 비고 |
-|-------|------|--------|------|
-| Validate Schema | `python3 tests/validate_field_dictionary.py` | **FAIL** | 실패 시 빌드 FAILURE |
-| E2E Regression | `pytest tests/e2e/` + `pytest tests/integration/ -m "not live"` (별도 호출, 둘 중 하나라도 FAIL 시 stage 실패) | **FAIL** | tests/e2e=baseline/fixture 회귀, tests/integration=HPE 에뮬레이터 오프라인 회귀 하네스(2026-06-08 추가, 에뮬레이터 불필요·완전 오프라인). 별도 호출 이유=양쪽이 top-level `conftest` 충돌. |
+### Ansible 실행환경(venv) 선택
 
-Stage 3/4는 venv Python을 사용한다 (`. /opt/ansible-env/bin/activate`).
+Gather 와 Validate Schema 는 저장소의 `scripts/activate_ansible_venv.sh` 를 한 줄로 source 한다.
+
+```bash
+. "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+```
+
+이 스크립트가 다음 순서로 venv 를 고르고, 못 찾으면 시스템 python 으로 넘어가지 않고 Stage 를 실패시킨다.
+
+1. 노드 환경변수 `SE_ANSIBLE_VENV` (값이 있는데 틀리면 다른 경로로 넘어가지 않는다)
+2. PATH 의 `ansible-playbook` 실경로 옆의 `activate` (설치 자동화 Runner 는 `/usr/local/bin/ansible-*` 링크)
+3. 알려진 경로 `/app/ansible-env` → `/opt/ansible-env`
+
+성공하면 콘솔에 `[venv] <venv 경로> python=<버전> (source=env|path|known)` 한 줄이 남는다. 서버마다 다른 venv 경로가
+파이프라인 코드에 적히지 않는 이유가 이것이다 ([02-agent-node.md](02-agent-node.md) 5절·9절).
 
 > [!NOTE]
-> 파이프라인은 두 종류다. `Jenkinsfile` 과 `Jenkinsfile_portal` 은 Stage 1~3 이 같고 Stage 4 만 다르다 — `Jenkinsfile` = E2E Regression, `Jenkinsfile_portal` = Callback(호출자 통보). 이 문서는 `Jenkinsfile` 기준이다.
+> pytest 회귀(`tests/e2e`, `tests/integration -m "not live"`, `tests/regression`)는 Jenkins 단계가 아니다. 예전의
+> 비운영 `Jenkinsfile` 이 Stage 4 로 돌리던 것을 2026-09-28 에 파일과 함께 걷어냈다. 커밋 전 로컬에서 돌린다.
 
 ## 2. Jenkins 파라미터
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---------|------|------|------|
-| `loc` | string | 필수 | 슬레이브 로케이션 (ic/chj/yi) |
+| `loc` | string | 필수 | Location — `common/vars/locations.yml` 의 키 (ic / chj / yi / git) |
 | `target_type` | choice | 필수 | os / esxi / redfish |
 | `inventory_json` | text | 필수 | 호출자가 전달하는 호스트 JSON 배열 (os/esxi: `service_ip`, redfish: `bmc_ip`, fallback: `ip`) |
+| `deploymentEnvironmentId` | string | 필수 | 포털 개발환경 ID |
+| `eventUuid` | string | 선택 | 포털 이벤트 UUID (Callback 본문에 그대로) |
+| `callbackUrl` | string | 필수 | 결과 전달 URL — `http(s)://` 로 시작, 따옴표·백틱·역슬래시·공백 불가 |
+| `verbosity` | choice | 선택 | Ansible verbosity 0~4 (`ANSIBLE_VERBOSITY`) |
 
 ### inventory_json 형식
 ```jsonc
@@ -53,32 +72,35 @@ Stage 3/4는 venv Python을 사용한다 (`. /opt/ansible-env/bin/activate`).
 > 포털은 ip만 전달한다. 계정은 vault에서 자동 로딩된다.
 > 상세 명세는 [docs/contract/01-input.md](../contract/01-input.md) 참조.
 
-## 3. 환경변수 설정
+## 3. 환경변수
 
-Jenkinsfile에서 자동 설정:
-```groovy
-environment {
-    INVENTORY_JSON = "${params.inventory_json}"
-    REPO_ROOT      = "${WORKSPACE}"
-}
-```
+Jenkinsfile 이 설정한다.
 
-### 추가 필요 환경변수
+| 변수 | 범위 | 값 |
+|------|------|----|
+| `INVENTORY_JSON` | 전체 | `${params.inventory_json}` — `inventory.sh` 가 읽는다 |
+| `PYTHONDONTWRITEBYTECODE` | 전체 | `1` |
+| `REPO_ROOT` | Gather | `${WORKSPACE}` — adapter / vault 로딩 기준 |
+| `ANSIBLE_CONFIG` | Gather | `${WORKSPACE}/ansible.cfg` |
+| `ANSIBLE_JSON_OUTPUT_FILE` | Gather | `${WORKSPACE}/gather_output.json` — `json_only` 콜백이 envelope 을 쓴다 |
+| `ANSIBLE_VERBOSITY` | Gather | `${params.verbosity}` |
 
-| 변수 | 상태 | 필요 조치 |
-|------|----------|----------|
-| `ANSIBLE_CONFIG` | 미설정 | `${WORKSPACE}/ansible.cfg` 추가 권장 |
-| `PYTHONPATH` | 미설정 | ansible.cfg가 module_utils 경로 처리하므로 불필요 |
+노드 쪽 선택 환경변수(`SE_ANSIBLE_VENV`, `SE_ADDON_DIR`)는 [08-ansible-config.md](08-ansible-config.md) 3절.
 
 ## 4. Ansible 실행 방식
 
-```groovy
-ansiblePlaybook(
-    playbook : "${WORKSPACE}/${target_type}-gather/site.yml",
-    inventory: "${WORKSPACE}/${target_type}-gather/inventory.sh",
-    colorized: true,
-)
+플러그인(`ansiblePlaybook` 스텝)을 쓰지 않는다. `sh` 로 직접 실행한다.
+
+```bash
+. "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+chmod +x <채널>/inventory.sh
+VAULT_TMP="$(mktemp)"; trap 'rm -f "$VAULT_TMP"' EXIT
+printf '%s' "$VAULT_PASSWORD" > "$VAULT_TMP"; chmod 600 "$VAULT_TMP"
+ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-file="$VAULT_TMP" -e se_location=<loc>
 ```
+
+`VAULT_PASSWORD` 는 Jenkins credential `server-gather-vault-password`(Secret text)를 `withCredentials` 로 주입한 값이다
+(콘솔 마스킹). 등록 절차는 [01-jenkins-master.md](01-jenkins-master.md) 7절.
 
 ### 채널별 실행 경로
 
@@ -93,75 +115,38 @@ ansiblePlaybook(
 | 플러그인 | 필수 | 용도 |
 |---------|------|------|
 | Pipeline | 필수 | Declarative Pipeline |
-| AnsiColor | 필수 | `ansiColor('xterm')` |
-| Ansible | 필수 | `ansiblePlaybook` step |
-| Credentials Binding | 권장 | Vault 비밀번호 전달 |
-| Pipeline Utility Steps | 권장 | `readJSON` 사용 |
+| Pipeline Utility Steps | 필수 | `readYaml` (Resolve Location) |
+| Credentials Binding | 필수 | `withCredentials` — vault 비밀번호 |
+| HTTP Request | 필수 | `httpRequest` (Callback) |
+| Git | 필수 | SCM checkout (Agent 에 CLI `git` 필요) |
+| Ansible | 선택 | `ansiblePlaybook` 스텝을 쓰는 다른 파이프라인용 — 이 파이프라인은 쓰지 않는다 |
 
-## 6. Credentials 관리
+## 6. Credentials
 
-| ID | 타입 | 용도 | 상태 (검증 시점) |
-|----|------|------|-----------------|
-| vault-pass | Secret file | Ansible vault 복호화 | 미등록 — 등록 필요 |
-| bmc-credentials | Username/Password | BMC 인증 (선택) | 포털에서 inventory_json으로 전달 |
+| ID | 타입 | 용도 |
+|----|------|------|
+| `server-gather-vault-password` | Secret text | Ansible vault 복호화 (Gather) |
+| 저장소 읽기 credential | Username/password 또는 token | Pipeline SCM checkout |
 
 ## 7. Jenkins Agent 요구사항
 
 > Python / Java / Ansible / 패키지 버전 요건은 `REQUIREMENTS.md` 4절 참조.
-> 설치 절차는 `docs/operate/02-agent-node.md` 3-5절 참조.
+> 설치 절차는 [02-agent-node.md](02-agent-node.md).
 
 | 항목 | 요구사항 |
 |------|---------|
-| Label | `loc` 파라미터 값 (ic/chj/yi) |
-| 네트워크 | BMC 대역 (10.50.x.x) 접근 가능 |
-| 디스크 | workspace + ansible 로그 공간 |
+| Label | `common/vars/locations.yml` 의 `agent_label` (ic / chj / yi / git) |
+| venv | `/app/ansible-env` 또는 `/opt/ansible-env`, 아니면 노드 환경변수 `SE_ANSIBLE_VENV` |
+| CLI `git` | Gather · Validate Schema 의 체크아웃에 필요 |
+| 네트워크 | 대상 서버 (SSH 22 / WinRM 5985·5986 / BMC 443) 접근 가능 |
+| 디스크 | workspace + ansible 로그 공간 (빌드마다 `clovirone-server-gather-<번호>` 작업 공간을 만들고 끝나면 지운다) |
 
-## 8. 검증 시점(2026-03-18) 미완료 설정
+## 8. 결과 전달
 
-| # | 항목 | 영향 | 우선순위 |
-|---|------|------|---------|
-| 1 | `ANSIBLE_CONFIG` 미설정 | ansible.cfg가 자동 인식되지 않을 수 있음 | 높음 |
-| 2 | vault-pass credentials 미등록 | vault 사용 불가 | 중 |
-| 3 | artifact 저장 미구현 | 결과 JSON 재취득 불가 | 낮음 |
-
-### 권장 수정 (Jenkinsfile)
-
-```groovy
-environment {
-    INVENTORY_JSON  = "${params.inventory_json}"
-    REPO_ROOT       = "${WORKSPACE}"
-    ANSIBLE_CONFIG  = "${WORKSPACE}/ansible.cfg"
-}
-```
-
-```groovy
-// artifact 저장 추가 (post 블록)
-post {
-    always {
-        archiveArtifacts artifacts: 'results.json', allowEmptyArchive: true
-    }
-}
-```
-
-## 9. 실행 가능 상태 확인
-
-| 항목 | 상태 | 비고 |
-|------|------|------|
-| Jenkinsfile 구조 | [OK] 정상 | 검증 완료 |
-| 파라미터 검증 | [OK] 정상 | loc, target_type, inventory_json 검증 |
-| ansible.cfg | [OK] 생성 완료 | 2026-03-18 생성 |
-| Agent 환경 | [OK] 확인 완료 | 2026-03-27 SSH 접속 확인 (Python 3.12.3, ansible-core 2.20.3) |
-| Credentials | [WARN] 미등록 | vault-pass 등록 필요 |
-| 컬렉션 설치 | [OK] 확인 완료 | 2026-03-27 ansible-galaxy list 확인 |
-
-## 10. 준비 순서
-
-1. Jenkins agent에 Python + Ansible 설치
-2. `ansible.cfg`를 repo에 포함 (완료)
-3. Jenkinsfile에 `ANSIBLE_CONFIG` 환경변수 추가
-4. Jenkins credentials에 vault-pass 등록
-5. `ansible-galaxy collection install` 실행
-6. 테스트 빌드 실행 (redfish-gather, single host)
+- Gather 가 만든 `gather_output.json` 은 host 마다 envelope 한 줄(JSON Lines)이다. 컨트롤러가 `unstash` 해서
+  `{loc, deploymentEnvironmentId, eventUuid, gatherInfoJson:[...]}` 본문으로 `<callbackUrl>/api/jenkins/gather/<target_type>` 에 POST 한다.
+- Callback 이 3회 모두 실패하면 빌드는 UNSTABLE 이고 envelope 은 콘솔 로그에 남는다 — 수집 자체는 성공했으므로 빌드를 FAILURE 로 만들지 않는다.
+- envelope 형식은 [../contract/02-output-envelope.md](../contract/02-output-envelope.md).
 
 ---
 

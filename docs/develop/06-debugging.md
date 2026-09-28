@@ -6,10 +6,11 @@
 
 | 사고 시점 | 1차 확인 파일 | 2차 확인 |
 |---|---|---|
-| Jenkins Stage 1 (Validate) 실패 | `Jenkinsfile` 74~126 line | console log 의 `--validate-input` 결과 |
+| Jenkins Validate 실패 | `Jenkinsfile_portal` 'Validate' stage (그 앞 'Resolve Location' 은 `common/vars/locations.yml` 로 `loc` 검증) | console log 의 `[Validate]` · `[Resolve Location]` 메시지 |
 | Jenkins Stage 2 (Gather) 실패 | `os-gather/site.yml` 또는 채널별 site.yml | ansible -vvv 로그 |
 | Jenkins Stage 3 (Validate Schema) 실패 | `tests/validate_field_dictionary.py` | `schema/field_dictionary.yml` |
-| Jenkins Stage 4 (E2E Regression) 실패 | `tests/e2e/` pytest 출력 | 영향 vendor `schema/baseline_v1/` |
+| Gather / Validate Schema 가 `[venv] ...` 로 실패 | `scripts/activate_ansible_venv.sh` 메시지 (SE_ANSIBLE_VENV · PATH 의 ansible-playbook · 후보 경로) | `docs/operate/02-agent-node.md` 5절 · 9절 |
+| pytest 회귀 실패 (로컬 `pytest tests/e2e tests/regression`) | pytest 출력 | 영향 vendor `schema/baseline_v1/` |
 | envelope 13 필드 일부 누락 | `common/tasks/normalize/build_output.yml` | `init_fragments.yml` skeleton |
 | 섹션 status 잘못됨 | `common/tasks/normalize/build_status.yml` (rule 13 R8 4 시나리오) | `build_sections.yml` |
 | hostname=IP 표시 (의도된 fallback) | `build_output.yml:31-33` | docs/20 fallback chain |
@@ -26,14 +27,18 @@
 
 ---
 
-## 1. Jenkins 4-Stage 별 진입
+## 1. Jenkins Stage 별 진입 (`Jenkinsfile_portal`)
+
+### Stage 0 — Resolve Location (컨트롤러)
+
+**역할**: `loc` 가 `common/vars/locations.yml` 에 있는지 확인하고 `agent_label` 을 정한다. 미등록이면 노드 대기 없이 즉시 실패.
 
 ### Stage 1 — Validate (입력값)
 
-**역할**: loc / target_type / inventory_json 형식 검증.
-**위치**: `Jenkinsfile:74~126`
+**역할**: target_type / inventory_json / callbackUrl / deploymentEnvironmentId 형식 검증.
+**위치**: `Jenkinsfile_portal` 'Validate' stage
 **실패 시 확인**:
-- console log 의 `[Stage 1 Validate] FAIL: ...` 메시지
+- console log 의 `[Validate] ...` 메시지
 - 입력 파라미터 형식 (JSON valid? IP 형식? loc enum?)
 
 ### Stage 2 — Gather (Ansible 실행)
@@ -52,23 +57,21 @@
 ### Stage 3 — Validate Schema (정합)
 
 **역할**: envelope 13 필드 + `schema/sections.yml` 의 섹션 + `field_dictionary.yml` 항목 정합.
-**위치**: `tests/validate_field_dictionary.py` (Jenkinsfile 193~203, Stage 'Validate Schema')
+**위치**: `tests/validate_field_dictionary.py` (`Jenkinsfile_portal` 'Validate Schema' stage — venv 는 `scripts/activate_ansible_venv.sh` 가 고른다)
 **실패 시 확인**:
 - `schema/field_dictionary.yml` 갱신 누락 (rule 13 R1 3종 동반)
 - `schema/sections.yml` 에 섹션 정의 누락
 - `common/tasks/normalize/build_output.yml` envelope 13 필드 (rule 13 R5)
 
-### Stage 4 — E2E Regression / Callback (pipeline 별)
+### Stage 4 — Callback (컨트롤러)
 
-**역할**:
-- `Jenkinsfile`: pytest baseline 회귀 (영향 vendor)
-- `Jenkinsfile_portal`: 호출자 callback POST
+**역할**: 호출자 callback POST (`httpRequest`, 3회 재시도). pytest 회귀는 Jenkins 밖 — 커밋 전 로컬 `pytest tests/e2e tests/regression`.
 
-**위치**: `tests/e2e/` + `tests/regression/` + `Jenkinsfile_portal:post`
+**위치**: `Jenkinsfile_portal` 'Callback' stage
 
 **실패 시 확인**:
-- pytest 출력 — 어느 baseline 어느 필드가 차이
-- callback URL 무결성 (rule 31) — `Jenkinsfile_portal` post 단계 console log
+- callback URL 무결성 (rule 31) — `[Callback]` console log
+- pytest 출력 — 어느 baseline 어느 필드가 차이 (로컬)
 
 ---
 

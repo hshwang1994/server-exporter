@@ -127,7 +127,7 @@ environment {
 
 세 가지가 모두 비어 있거나 없으면 에러로 종료한다.
 
-> **참고** — 현재 Jenkinsfile v3 에서는 `environment` 블록에서 `INVENTORY_JSON` 을
+> **참고** — 현재 `Jenkinsfile_portal` 에서는 `environment` 블록에서 `INVENTORY_JSON` 을
 > 명시 설정하므로 실제 동작 시 1순위(대문자 환경변수) 로 전달된다.
 > 2·3순위는 `environment` 블록 없이 파라미터만 정의하거나
 > 수동 실행(writeFile) 시 fallback 으로 동작한다.

@@ -6,7 +6,51 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-09-21
+> 최종 갱신: 2026-09-28
+
+## 2026-09-28 — Agent 의 Ansible venv 경로를 파이프라인에서 떼어냄 (`scripts/activate_ansible_venv.sh`)
+
+### 요구
+
+신규 Jenkins Runner(설치 자동화 배치, RHEL 9)는 venv 가 `/app/ansible-env` 에 있고 `/opt/ansible-env` 가 없다.
+파이프라인이 `. /opt/ansible-env/bin/activate` 를 직접 적고 있어 Gather 는 즉시 실패하고, Validate Schema 는
+`set -e` 가 없어 시스템 python(3.9)으로 조용히 넘어가 통과한 것처럼 보였다. 문자열 치환이 아니라 경로가 다시 바뀌어도
+파이프라인이 그대로인 구조를 요구했다.
+
+### 결정 (사용자 확정)
+
+- venv 선택 규칙을 `scripts/activate_ansible_venv.sh` 한 파일에 둔다. 순서는 노드 환경변수 `SE_ANSIBLE_VENV` →
+  PATH 의 `ansible-playbook` 실경로 옆 `activate` → 알려진 경로(`/app/ansible-env`, `/opt/ansible-env`) → 실패.
+  `SE_ANSIBLE_VENV` 가 있는데 틀리면 다른 경로로 넘어가지 않는다. 활성화 뒤 `python3` 이 venv 밖이면 실패한다.
+- 호출부(`Jenkinsfile_portal` Gather · Validate Schema, freestyle Job 사본, `verify_account_provision.sh`)는
+  `. "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1` 한 줄이다. Validate Schema 에 `set -eo pipefail` 을 넣었다.
+- 비운영 `Jenkinsfile`(pytest 회귀 게이트)·`Jenkinsfile_portal_test`·`test_sj`(portal 의 사본)는 삭제한다. pytest 회귀는
+  커밋 전 로컬 검증으로 남는다. `.gitattributes` 에 `Jenkinsfile* text eol=lf` 를 더한다 (두 파일이 CRLF 로 저장돼 있었다).
+- Jenkins 설정(Job 브랜치 `production` 전환)과 Runner 설치 결함(git 미설치 등)은 사용자·설치 자동화 쪽에서 처리한다.
+  Job 은 하네스와 참조 데이터가 빠진 `production` 을 본다 — `main` 전체 체크아웃(약 17k 파일)이 Resolve Location 의
+  2분 제한을 넘겼다.
+
+### 왜 이렇게 했나
+
+- 설치 자동화는 Runner 마다 `/usr/local/bin/ansible-* → <venv>/bin/*` 링크와 Jenkins Tool Location 을 만든다. PATH 의
+  `ansible-playbook` 을 따라가면 배치가 또 바뀌어도 코드가 바뀌지 않는다. 설치 자동화가 시딩하는 이 저장소 사본도 같은
+  규칙을 인라인으로 쓰고 있었다 — 한 파일로 모아 정본을 저장소로 되돌린 것이다.
+- 알려진 경로 후보는 lab Agent(`/opt`, PATH 링크·노드 설정 없음)처럼 Jenkins 설정 없이도 돌아야 하는 노드를 위한 마지막 순위다.
+- Jenkins `tool` 스텝은 운영 파이프라인이 플러그인-free 이고 freestyle·수동 실행에 못 쓴다. `PATH+ANSIBLE` 만 믿으면
+  설정 누락이 조용한 시스템 python 실행으로 이어진다.
+
+### 실측 (2026-09-28)
+
+- Runner 4대(10.100.64.33~36): `[venv] /app/ansible-env python=Python 3.12.9 (source=path)`, ansible-core 2.20.3.
+  lab Agent 155: `[venv] /opt/ansible-env python=Python 3.12.3 (source=known)`. 음성(후보 없음 · `SE_ANSIBLE_VENV=/nonexistent`)은 rc=1.
+- 단위 테스트 `tests/unit/test_activate_ansible_venv.py` 10건, Jenkins 선언형 린터 통과. 실 Job 실행 결과는
+  `tests/evidence/2026-09-28-runner-venv-path.md`.
+
+### 영향 · 후속
+
+- 옛 lab Jenkins 의 `git/테스트 액션` Job 은 삭제된 `Jenkinsfile` 을 Script Path 로 써서 더는 돌지 않는다 (사용자 결정 범위).
+- 신규 Jenkins 의 Runner 는 `git` 이 없어 Agent 체크아웃이 되지 않는다 — 설치 자동화 쪽 수정 대기. 노드 라벨도 `git` 만 있어
+  `ic/chj/yi` Location 은 노드 대기가 된다.
 
 ## 2026-09-21 — 고객별 추가 수집(Add-on) 확장점 추가 (`data.addon`)
 
