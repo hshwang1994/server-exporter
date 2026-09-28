@@ -186,11 +186,13 @@ pipeline {
                                 variable     : 'VAULT_PASSWORD',
                             ),
                         ]) {
+                            // Ansible venv 는 scripts/activate_ansible_venv.sh 가 고른다
+                            //   (SE_ANSIBLE_VENV → PATH 의 ansible-playbook → 알려진 설치 경로). 못 찾으면 이 stage 는 실패한다.
                             sh """#!/bin/bash
                                 set -eo pipefail
                                 set +x
                                 cd "\${WORKSPACE}"
-                                . /opt/ansible-env/bin/activate
+                                . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
                                 chmod +x "${inventory}"
                                 VAULT_TMP="\$(mktemp)"
                                 trap 'rm -f "\$VAULT_TMP"' EXIT
@@ -229,10 +231,12 @@ pipeline {
             }
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
+                // venv 선택 규칙은 scripts/activate_ansible_venv.sh 한 곳 — 못 찾으면 시스템 python 으로 넘어가지 않고 실패한다.
                 sh '''#!/bin/bash
+                    set -eo pipefail
                     set +x
                     cd "${WORKSPACE}"
-                    . /opt/ansible-env/bin/activate
+                    . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
                     python3 tests/validate_field_dictionary.py
                 '''
             }
