@@ -51,9 +51,9 @@ flowchart TD
 세 가지를 넘긴다 — 어느 사이트에서 실행할지(`loc`), 어느 경로로 갈지(`target_type`),
 대상 IP 목록(`inventory_json`). 자격증명은 넘기지 않는다.
 
-운영 파이프라인은 `Jenkinsfile_portal`이다. 저장소에 `Jenkinsfile`도 있지만 그
-파일 자체가 주석으로 "운영 대상이 아니고 삭제 예정"이라 적어 두었다
-(`Jenkinsfile:178-183`). 회귀 게이트 이관이 끝나면 정리될 것이다.
+운영 파이프라인은 `Jenkinsfile_portal` 하나다. 예전의 비운영 `Jenkinsfile`(pytest 회귀 게이트)과 테스트용
+사본은 2026-09-28 에 지웠다. pytest 회귀는 커밋 전 로컬 검증으로 남는다. Agent 위의 Ansible 실행환경은
+`scripts/activate_ansible_venv.sh` 가 고르므로 서버마다 다른 venv 경로가 파이프라인에 적히지 않는다.
 
 ### 2. 사이트를 정한다
 

@@ -102,10 +102,9 @@ if [[ ! -f .vault_pass ]]; then
   chmod 600 .vault_pass
 fi
 
-# /opt/ansible-env activate
-if [[ -f /opt/ansible-env/bin/activate ]]; then
-  source /opt/ansible-env/bin/activate
-fi
+# Ansible venv 는 scripts/activate_ansible_venv.sh 가 고른다 (SE_ANSIBLE_VENV → PATH 의 ansible-playbook → 알려진 설치 경로).
+# 못 찾으면 시스템 python 으로 넘어가지 않고 여기서 실패한다.
+. scripts/activate_ansible_venv.sh || exit 1
 
 # verify 스크립트 실행
 chmod +x scripts/verify_account_provision.sh

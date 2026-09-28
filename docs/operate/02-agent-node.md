@@ -122,28 +122,41 @@ useradd -m -s /bin/bash {서비스계정}
 
 ## 5. Ansible 가상환경 설치
 
+venv 위치는 설치 방식에 따라 다르다. 파이프라인은 어느 쪽이든 그대로 찾는다.
+
+| 설치 방식 | venv 루트 | 비고 |
+|---|---|---|
+| 설치 자동화 `install-jenkins-runner` (RHEL 9, Agent 계정 `jenkins`) | `/app/ansible-env` | `/usr/local/bin/ansible-*` 이 venv 로 가는 링크로 함께 생긴다 |
+| 이 문서대로 직접 구축 | `/opt/ansible-env` | 아래 절차 |
+| 그 밖의 경로 | 임의 | 노드 환경변수 `SE_ANSIBLE_VENV=<venv 루트>` 를 등록한다 (9절) |
+
+> 파이프라인의 Gather · Validate Schema 는 저장소의 `scripts/activate_ansible_venv.sh` 를 source 한다.
+> 이 스크립트가 `SE_ANSIBLE_VENV` → PATH 의 `ansible-playbook` 이 가리키는 venv → 위 두 경로 순으로 찾고,
+> 못 찾으면 시스템 python 으로 넘어가지 않고 Stage 를 실패시킨다.
+
 ### Python 패키지
 
 ```bash
-sudo python3 -m venv /opt/ansible-env
-sudo /opt/ansible-env/bin/pip install --upgrade pip
-sudo /opt/ansible-env/bin/pip install 'ansible>=2.12'  # 검증 기준: ansible 13.4.0 (ansible-core 2.20.3)
-sudo /opt/ansible-env/bin/pip install redis            # 검증 기준: 7.3.0 — Ansible fact_caching Redis 백엔드
-sudo /opt/ansible-env/bin/pip install pywinrm          # 검증 기준: 0.5.0 — Windows WinRM 연결
-sudo /opt/ansible-env/bin/pip install 'pyvmomi>=7.0'   # 검증 기준: 9.0.0 — VMware ESXi API (community.vmware 의존)
-sudo /opt/ansible-env/bin/pip install jmespath         # 검증 기준: 1.1.0 — json_query 필터 (JSON 데이터 파싱)
-sudo /opt/ansible-env/bin/pip install netaddr          # 검증 기준: 1.3.0 — ipaddr 필터 (IP/서브넷 연산)
-sudo /opt/ansible-env/bin/pip install lxml             # 검증 기준: 6.0.2 — VMware 모듈 XML 파싱
-sudo /opt/ansible-env/bin/pip install pytest           # 검증 기준: 9.0.2 — E2E regression 게이트 (Jenkins Stage 4)
+VENV=/opt/ansible-env   # 직접 구축 기준. 설치 자동화 Runner 는 /app/ansible-env
+sudo python3 -m venv $VENV
+sudo $VENV/bin/pip install --upgrade pip
+sudo $VENV/bin/pip install 'ansible>=2.12'  # 검증 기준: ansible 13.4.0 (ansible-core 2.20.3)
+sudo $VENV/bin/pip install redis            # 검증 기준: 7.3.0 — Ansible fact_caching Redis 백엔드
+sudo $VENV/bin/pip install pywinrm          # 검증 기준: 0.5.0 — Windows WinRM 연결
+sudo $VENV/bin/pip install 'pyvmomi>=7.0'   # 검증 기준: 9.0.0 — VMware ESXi API (community.vmware 의존)
+sudo $VENV/bin/pip install jmespath         # 검증 기준: 1.1.0 — json_query 필터 (JSON 데이터 파싱)
+sudo $VENV/bin/pip install netaddr          # 검증 기준: 1.3.0 — ipaddr 필터 (IP/서브넷 연산)
+sudo $VENV/bin/pip install lxml             # 검증 기준: 6.0.2 — VMware 모듈 XML 파싱
+sudo $VENV/bin/pip install pytest           # 검증 기준: 9.0.2 — E2E regression 게이트 (Jenkins Stage 4)
 
 # 확인
-/opt/ansible-env/bin/ansible --version
+$VENV/bin/ansible --version
 ```
 
 ### Python 인터프리터 경로 확인
 
 Agent 서버에 `/usr/bin/python3` 경로로 Python 3.9 이상이 존재해야 한다 (검증 기준 Agent: 3.12.3).
-Ansible 커스텀 모듈을 실행할 때 이 경로를 쓴다.
+동적 인벤토리 `*-gather/inventory.sh` 가 이 경로로 실행된다 (표준 라이브러리만 쓴다). 수집 모듈은 venv 의 python 을 쓴다.
 
 ```bash
 # 확인
@@ -162,18 +175,17 @@ sudo ln -sf $(which python3) /usr/bin/python3
 
 ```bash
 # 프로젝트에서 사용하는 Collection (검증 기준 Agent 버전 주석 참고)
-sudo /opt/ansible-env/bin/ansible-galaxy collection install community.vmware    # 검증 기준: 6.2.0 — esxi-gather
-sudo /opt/ansible-env/bin/ansible-galaxy collection install ansible.windows     # 검증 기준: 3.3.0 — Windows gather
-sudo /opt/ansible-env/bin/ansible-galaxy collection install ansible.posix       # 검증 기준: 2.1.0 — Linux (cron, sysctl 등)
-sudo /opt/ansible-env/bin/ansible-galaxy collection install community.general   # 검증 기준: 12.4.0 — 범용 (timezone 등)
-sudo /opt/ansible-env/bin/ansible-galaxy collection install ansible.utils       # 검증 기준: 6.0.1 — 유틸리티 필터 (ipaddr 등)
+sudo $VENV/bin/ansible-galaxy collection install community.vmware    # 검증 기준: 6.2.0 — esxi-gather
+sudo $VENV/bin/ansible-galaxy collection install ansible.windows     # 검증 기준: 3.3.0 — Windows gather
+sudo $VENV/bin/ansible-galaxy collection install ansible.posix       # 검증 기준: 2.1.0 — Linux (cron, sysctl 등)
+sudo $VENV/bin/ansible-galaxy collection install community.general   # 검증 기준: 12.4.0 — 범용 (timezone 등)
+sudo $VENV/bin/ansible-galaxy collection install ansible.utils       # 검증 기준: 6.0.1 — 유틸리티 필터 (ipaddr 등)
 
 # 확인
-/opt/ansible-env/bin/ansible-galaxy collection list
+$VENV/bin/ansible-galaxy collection list
 ```
 
-> `/opt/ansible-env` 는 사용자 계정에 의존하지 않는 시스템 공용 경로다.
-> Jenkins Agent 사용자에게 읽기+실행 권한만 있으면 동작한다.
+> venv 는 사용자 계정에 의존하지 않는 시스템 공용 경로에 둔다. Jenkins Agent 사용자에게 읽기+실행 권한만 있으면 동작한다.
 
 ### Vault 패스워드 (Jenkinsfile_portal — 메인 Jenkinsfile 과 동일)
 
@@ -274,7 +286,7 @@ git push
 | Name | `agent-{loc}-{dev\|ops}` | 예: `agent-ic-ops`, `agent-chj-dev` |
 | Description | `{로케이션} {개발\|운영} Agent` | 예: `이천 운영 Agent` |
 | Number of executors | `2` | 동시 실행 잡 수. 서버 사양에 따라 조정 |
-| Remote root directory | `/home/{서비스계정}/jenkins-agent` | Agent 워크스페이스 경로 |
+| Remote root directory | `/home/{서비스계정}/jenkins-agent` | Agent 워크스페이스 경로. 설치 자동화 Runner 는 계정 `jenkins` · `/app/jenkins-agent/agent` |
 | Labels | 로케이션 코드 | 아래 표 참조 |
 | Usage | `Only build jobs with label expressions matching this node` | 라벨 매칭 잡만 실행 |
 | Launch method | `Launch agents via SSH` | 아래 상세 참조 |
@@ -282,13 +294,14 @@ git push
 
 ### Labels 설정
 
-Jenkinsfile 의 `agent { label "${params.loc}" }` 기준:
+`Jenkinsfile_portal` 은 `common/vars/locations.yml` 의 `agent_label` 로 노드를 고른다 (정본은 그 파일이다).
 
-| 슬레이브 노드 | Labels 값 |
+| Location | Labels 값 |
 |-------------|----------|
 | 이천 | `ic` |
 | 청주 | `chj` |
 | 용인 | `yi` |
+| 사내 테스트 | `git` |
 
 ### Launch method (SSH)
 
@@ -307,23 +320,25 @@ Jenkinsfile 의 `agent { label "${params.loc}" }` 기준:
 
 경로: Jenkins → Manage Jenkins → Nodes → {노드} → Configure → Node Properties
 
-### Environment variables
+### Environment variables (선택)
 
-| Name | Value |
-|------|-------|
-| `PATH+ANSIBLE` | `/opt/ansible-env/bin` |
+수집 파이프라인은 venv 를 `scripts/activate_ansible_venv.sh` 로 찾으므로 5절의 두 경로 중 하나에 venv 가 있으면
+노드 환경변수가 필요 없다. 다른 경로를 썼을 때만 등록한다.
 
-> `PATH+ANSIBLE` 은 Jenkins 가 기존 PATH 에 `/opt/ansible-env/bin` 을 **추가**하는 문법이다.
-> Jenkinsfile 에서 Ansible 실행 경로를 하드코딩하지 않아도 된다.
+| Name | Value | 언제 |
+|------|-------|------|
+| `SE_ANSIBLE_VENV` | venv 루트 (예: `/data/ansible-env`) | venv 가 `/app/ansible-env` · `/opt/ansible-env` 가 아닐 때. 값이 있는데 그 안에 `bin/activate` 가 없으면 다른 경로로 넘어가지 않고 실패한다 |
+| `PATH+ANSIBLE` | venv 의 `bin` (예: `/opt/ansible-env/bin`) | 선택. Jenkins 가 기존 PATH 앞에 **추가**하는 문법이라 PATH 의 `ansible-playbook` 으로도 venv 를 찾게 된다 |
+| `SE_ADDON_DIR` | Add-on 디렉터리 | 고객별 추가 수집을 켤 때 ([08-ansible-config.md](08-ansible-config.md) 3절) |
 
 ### Tool Locations
 
 | Tool | Home |
 |------|------|
-| Ansible (`ansible`) | `/opt/ansible-env/bin` |
+| Ansible (`ansible`) | Agent 의 venv `bin` (설치 자동화 Runner `/app/ansible-env/bin`, 직접 구축 `/opt/ansible-env/bin`) |
 
-> Jenkins → Manage Jenkins → Tools → Ansible 에서 등록한 경로와 동일해야 한다.
-> Agent 에서 실제로 해석되는 값이므로 Agent 의 가상환경 경로와 일치시킨다.
+> `ansiblePlaybook()` 스텝을 쓰는 파이프라인용이다. Jenkins → Manage Jenkins → Tools → Ansible 의 전역 값과
+> 다른 노드는 여기서 덮는다. 수집 파이프라인 `Jenkinsfile_portal` 은 이 값을 보지 않는다.
 
 ---
 
@@ -337,7 +352,7 @@ redis-cli -h {Jenkins_마스터_IP} -a {Redis비밀번호} ping
 # 기대 응답: PONG
 
 # Ansible fact caching 동작 확인 (json_only 는 본 프로젝트 전용 콜백이므로 default 로 우회)
-ANSIBLE_STDOUT_CALLBACK=default /opt/ansible-env/bin/ansible -m setup localhost | head -5
+ANSIBLE_STDOUT_CALLBACK=default $VENV/bin/ansible -m setup localhost | head -5
 redis-cli -h {Jenkins_마스터_IP} -a {Redis비밀번호} DBSIZE
 # 기대 응답: (integer) 1 이상  ← Redis 에 facts 가 저장됨
 ```

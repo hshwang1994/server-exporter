@@ -136,10 +136,15 @@ ufw allow 8080/tcp
 | 항목 | 값 |
 |------|----|
 | Name | `ansible` |
-| Path to ansible executables directory | `/opt/ansible-env/bin` |
+| Path to ansible executables directory | Agent 의 venv `bin` 디렉터리 — 설치 자동화 Runner 는 `/app/ansible-env/bin`, 직접 구축한 Agent 는 `/opt/ansible-env/bin` |
 
-> 이 경로는 02-agent-node.md 5절 에서 Agent 에 가상환경을 생성한 뒤 실제로 동작한다.
-> 마스터에서는 경로만 미리 등록해두면 된다.
+> 이 Tool 은 `ansiblePlaybook()` 스텝을 쓰는 파이프라인(인프라 자동화 등)이 참조한다. 노드마다 경로가 다르면
+> 노드의 Tool Locations 로 덮는다 (02-agent-node.md 9절).
+>
+> **수집 파이프라인 `Jenkinsfile_portal` 은 이 Tool 을 보지 않는다.** venv 는 저장소의
+> `scripts/activate_ansible_venv.sh` 가 Agent 위에서 고른다 — 노드 환경변수 `SE_ANSIBLE_VENV` →
+> PATH 의 `ansible-playbook` 이 가리키는 venv → 알려진 경로(`/app/ansible-env`, `/opt/ansible-env`) 순이고,
+> 못 찾으면 그 Stage 가 실패한다. 그래서 venv 경로가 바뀌어도 파이프라인 코드는 바뀌지 않는다.
 
 ---
 
@@ -256,7 +261,8 @@ Job 이름이 패턴과 일치하면 권한이 자동 적용되므로 신규 Job
 
 | 증상 | 원인 / 해결 |
 |------|------------|
-| Jenkins 가 시작은 되는데 Pipeline 빌드가 실패 | `Ansible installations` 등록 누락 — 6절 "Ansible 플러그인 경로 설정" 다시 확인 |
+| Gather / Validate Schema 가 `[venv] Ansible 실행환경(venv)을 찾지 못했습니다` 로 실패 | Agent 에 venv 가 없거나 파이프라인이 아는 경로 밖 — 02-agent-node.md 5절 · 9절 (`SE_ANSIBLE_VENV`) |
+| `ansiblePlaybook()` 스텝을 쓰는 다른 파이프라인이 실패 | `Ansible installations` 등록 누락 — 6절 "Ansible 플러그인 경로 설정" 다시 확인 |
 | `Could not find credentials entry with ID 'server-gather-vault-password'` | 7절 vault credential 등록 안 됨 |
 | Job 은 보이는데 Build 버튼이 없음 | RBAC 의 Item Role pattern 미스매치 — 8절 |
 | GitLab checkout 실패 | gitlab-credentials 의 Password 자리에 비밀번호 대신 Access Token 입력 필요 |

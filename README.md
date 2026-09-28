@@ -28,13 +28,14 @@
   │  HTTPS 443 으로 Jenkins Job 트리거
   │  파라미터: loc, target_type, inventory_json
   ▼
-Jenkins Job (server-exporter.{os,esxi,redfish}-gather)
+Jenkins Job (Jenkinsfile_portal — target_type 으로 채널 선택)
   │
-  │  4-Stage 파이프라인:
-  │   Stage 1  Validate         입력값 검증
-  │   Stage 2  Gather           ansible-playbook 실행
-  │   Stage 3  Validate Schema  필드 정합성 검증 (FAIL 게이트)
-  │   Stage 4  E2E Regression   기준선 회귀 테스트 (FAIL 게이트)
+  │  파이프라인 단계:
+  │   Resolve Location  loc → Agent 라벨 (컨트롤러)
+  │   Validate          입력값 검증 (Agent)
+  │   Gather            venv 활성화 → ansible-playbook 실행 (Agent)
+  │   Validate Schema   필드 정합성 검증 (FAIL 게이트, Agent)
+  │   Callback          호출자에게 결과 POST (컨트롤러)
   ▼
 표준 JSON envelope (schema_version: "1")
   - 13 필드 (target_type / status / sections / data / errors / diagnosis ...)
@@ -66,8 +67,7 @@ server-exporter 는 다음 3가지를 호출자에게 약속한다.
 
 ```text
 server-exporter/
-├── Jenkinsfile              파이프라인 정의 (호출자 진입점)
-├── Jenkinsfile_portal       포털 callback 전용 파이프라인
+├── Jenkinsfile_portal       파이프라인 정의 (호출자 진입점 — 수집 + Portal Callback)
 ├── ansible.cfg              프로젝트 Ansible 설정
 │
 ├── vault/                   인증 정보 (ansible-vault 로 암호화)

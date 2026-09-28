@@ -14,7 +14,7 @@
 #
 # 환경 가정:
 #   - cwd: server-exporter repo root
-#   - /opt/ansible-env/bin/activate 가능 (Jenkins agent 표준)
+#   - Ansible venv 는 scripts/activate_ansible_venv.sh 가 고른다 (SE_ANSIBLE_VENV → PATH 의 ansible-playbook → 알려진 설치 경로). 못 찾으면 실패
 #   - .vault_pass 파일 존재 (Jenkins credentials 또는 수동 작성)
 #   - inventory yaml 자동 생성
 
@@ -53,11 +53,9 @@ else
   TARGETS=("${!BMC_VENDORS[@]}")
 fi
 
-# venv activate (Jenkins agent 환경)
-if [[ -f /opt/ansible-env/bin/activate ]]; then
-  # shellcheck disable=SC1091
-  source /opt/ansible-env/bin/activate
-fi
+# venv activate — 선택 규칙은 scripts/activate_ansible_venv.sh 한 곳 (시스템 python 으로 넘어가지 않는다)
+# shellcheck disable=SC1091
+. "$REPO_ROOT/scripts/activate_ansible_venv.sh" || exit 1
 
 # .vault_pass 확인
 if [[ ! -f "$REPO_ROOT/.vault_pass" ]]; then

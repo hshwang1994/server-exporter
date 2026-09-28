@@ -20,7 +20,9 @@ server-exporter 는 한 서버를 3가지 시점으로 본다.
         │  target_type    = "redfish"  (또는 os / esxi)
         │  loc            = "ic"
         ▼
-[ Jenkins 4-Stage 파이프라인 ]
+[ Jenkins 파이프라인 (Jenkinsfile_portal) ]
+        │
+        ├─ [0] Resolve Location : loc → Agent 라벨 (컨트롤러)
         │
         ├─ [1] Validate    : 입력값 형식 점검
         │
@@ -32,7 +34,7 @@ server-exporter 는 한 서버를 3가지 시점으로 본다.
         │
         ├─ [3] Validate Schema : 출력 JSON 이 정의된 키와 일치하는지
         │
-        └─ [4] E2E Regression  : 벤더별 baseline 회귀 테스트
+        └─ [4] Callback        : 호출자에게 결과 POST (컨트롤러). 벤더별 baseline 회귀는 커밋 전 로컬 pytest
                 │
                 ▼
         [ callback plugin (json_only) 이 stdout 으로 OUTPUT JSON 만 흘려보냄 ]
@@ -240,9 +242,9 @@ storage
 | 입력 우선순위 | 출처 |
 |---|---|
 | 1순위 | `INVENTORY_JSON` 환경변수 |
-| 2순위 | `.inventory_input.json` 파일 (Jenkinsfile 의 `writeFile` 가 생성) |
+| 2순위 | `.inventory_input.json` 파일 (파이프라인이 `writeFile` 로 만들 때) |
 
-두 가지 경로를 두는 이유: Jenkins `ansiblePlaybook` 플러그인이 멀티라인 환경변수를 일부 환경에서 못 넘긴다. 파일 fallback 으로 보완.
+두 가지 경로를 두는 이유: Jenkins `ansiblePlaybook` 플러그인이 멀티라인 환경변수를 일부 환경에서 못 넘긴다. 파일 fallback 으로 보완 (현재 `Jenkinsfile_portal` 은 환경변수로 넘긴다).
 
 추가 약속:
 - `inventory_hostname = ip` 로 통일. 호스트명 사전 등록 안 한다.
