@@ -58,7 +58,7 @@ host 별 결과는 #18(변경 전)과 동일: 10.100.15.27 dell success · 10.50
 Jenkins 빌드 안에서는 `source=path` 다 — Agent 기동 셸의 PATH 에 `/opt/ansible-env/bin` 이 있다는 뜻이며, 2절의 `source=known` 은
 PATH 를 비운 실험 조건이다. 두 경로 모두 같은 venv 로 귀결됐다.
 
-## 5. 신규 Jenkins (jenkins-prod.gooddi.lab) — 보류
+## 5. 신규 Jenkins (jenkins-prod.gooddi.lab) — 통과
 
 `clovirone-cicd/clovirone-server-gather` 빌드 #3·#4(2026-09-28, 변경 전)는 컨트롤러의 Resolve Location 에서 `main` 전체 체크아웃이
 2분 제한을 넘겨 ABORTED. 사용자가 Job 브랜치를 `production` 으로 바꾸고 Runner 4대에 git 2.47.3 을 설치했다.
@@ -72,5 +72,15 @@ PATH 를 비운 실험 조건이다. 두 경로 모두 같은 venv 로 귀결됐
 | Gather | SKHynix-Jenkins-Runner03 | 체크아웃 성공(git 설치 확인) 뒤 `ERROR: Could not find credentials entry with ID 'server-gather-vault-password'` — `withCredentials` 단계라 venv 선택 전에 실패 |
 | Validate Schema · Callback | — | 건너뜀 |
 
-신규 Master 에 Secret text credential `server-gather-vault-password` 가 등록되면 같은 입력으로 재실행해 `[venv] /app/ansible-env … (source=path)` 를 확인한다
-(`docs/operate/01-jenkins-master.md` 7절). 헬퍼 자체는 2절에서 Runner 4대 모두 확인됐다.
+사용자가 신규 Master 에 Secret text `server-gather-vault-password` 를 등록한 뒤 빌드 **#8** (같은 입력):
+
+| Stage | 노드 | 결과 |
+|---|---|---|
+| Resolve Location | Jenkins(controller) | `git -> agent label 'git'` |
+| Validate | SKHynix-Jenkins-Runner01 | OK (hosts=4) |
+| Gather | SKHynix-Jenkins-Runner03 | `[venv] /app/ansible-env python=Python 3.12.9 (source=path)` → envelope 4건 |
+| Validate Schema | SKHynix-Jenkins-Runner01 | `[venv] /app/ansible-env python=Python 3.12.9 (source=path)` → 통과 |
+| Callback | Jenkins(controller) | sink 주소라 3회 재시도 실패 → UNSTABLE (의도) |
+
+host 별 결과는 lab #20 과 동일 (dell · lenovo · cisco success, HPE 10.50.11.231 TARGET_UNREACHABLE 기존 상태). 소요 7분 35초.
+같은 파이프라인이 `/app`(신규 Runner)과 `/opt`(lab Agent) 양쪽에서 코드 변경 없이 venv 를 찾는 것이 두 Jenkins 에서 확인됐다.

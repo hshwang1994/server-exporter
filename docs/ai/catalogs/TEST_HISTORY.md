@@ -12,6 +12,7 @@
 | Jenkins 선언형 린터 (lab 153) | Jenkinsfile_portal validated |
 | Runner 33~36 + lab 155 헬퍼 stdin 실행 | 양성 5/5 (`/app` source=path × 4, `/opt` source=known × 1), 음성 2종 × 5 = rc 1 |
 | lab Jenkins `clovirone-server-gather` #20 (production `e7baaa55`) | Gather·Validate Schema `[venv] /opt/ansible-env (source=path)`, envelope 4건(#18 과 동일: dell·lenovo·cisco success, HPE 10.50.11.231 TARGET_UNREACHABLE 기존 상태), Callback sink → UNSTABLE(의도) |
+| 신규 Jenkins `clovirone-cicd/clovirone-server-gather` #8 (production `e7baaa55`, Runner git 설치 + credential 등록 뒤) | Gather(Runner03)·Validate Schema(Runner01) `[venv] /app/ansible-env python=3.12.9 (source=path)`, envelope 4건 lab 과 동일, Callback sink → UNSTABLE(의도). #7 은 credential 미등록으로 Gather 진입 전 실패 |
 | `verify_harness_consistency.py` / `verify_docs_references.py` / `check_project_map_drift.py` | 통과 / 삭제 파일 지적 0건(기존 무관 지적만) / fingerprint 일치 |
 | `ansible-playbook --syntax-check` | 미실행 — playbook 변경 없음, 로컬에 ansible 없음 |
 

@@ -15,7 +15,9 @@
   jenkinsfile-engineer agent, JENKINS_PIPELINES 노드 표 실측 정정, `verify_docs_references.py` 는 산문의 `Jenkinsfile` 을 경로로 보지 않는다.
 - **검증**: unit 2446 · e2e 723 · 헬퍼 단위 10 · 선언형 린터 · Runner 4대 + lab 155 stdin 실행 · lab Jenkins #20(production `e7baaa55`)
   Gather/Validate Schema `[venv] /opt/ansible-env (source=path)`, host 결과 #18 과 동일, Callback 은 sink 라 UNSTABLE(의도).
-- **보류(사용자·설치자동화 몫)**: 신규 Jenkins Runner 의 `git` 부재(I-2), `ic/chj/yi` 라벨 부재, `SE_ADDON_DIR` 경로가 `jenkins` 계정과 불일치,
+  신규 Jenkins `clovirone-cicd/clovirone-server-gather` #8(Runner git 설치 + credential 등록 뒤): Gather(Runner03)/Validate Schema(Runner01)
+  `[venv] /app/ansible-env python=3.12.9 (source=path)`, host 결과 동일 — 두 배치 모두 코드 변경 없이 통과.
+- **보류(사용자·설치자동화 몫)**: `ic/chj/yi` 라벨 부재, `SE_ADDON_DIR` 경로가 `jenkins` 계정과 불일치,
   설치 자동화 시드 사본 동기화, 154 venv 부재, lab `git/테스트 액션` Job(삭제된 `Jenkinsfile` 사용).
 
 ## 일자: 2026-09-22 (4) — Add-on 사용자 관점 감사 — README 사용 설명서화 · 주석 최소화 · match 누락 알림
