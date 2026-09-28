@@ -6,7 +6,7 @@
 
 | # | 항목 | 상태 | 내용 |
 |---|---|---|---|
-| JV-1 | 신규 Jenkins `clovirone-cicd/clovirone-server-gather` 1회 실행 | `[PENDING / 설치자동화 I-2 뒤]` | Runner 4대에 CLI `git` 이 없어 Agent 체크아웃 불가(다른 세션에서 `jenkins_runner_packages` 에 git 추가 중). 반영 뒤 `loc=git` · sink callback 으로 실행 → 콘솔 `[venv] /app/ansible-env … (source=path)` 확인 |
+| JV-1 | 신규 Jenkins `clovirone-cicd/clovirone-server-gather` 1회 실행 | `[BLOCKED / 사용자 — credential 미등록]` | Runner 4대에 git 2.47.3 설치됨(2026-09-28 사용자). 빌드 #7(production `e7baaa55`): Resolve Location · Validate · Runner03 체크아웃까지 통과, Gather 가 `Could not find credentials entry with ID 'server-gather-vault-password'` 로 venv 단계 전에 실패. 신규 Master 에 Secret text `server-gather-vault-password`(vault 마스터 비밀번호) 등록 후 재실행 → `[venv] /app/ansible-env … (source=path)` 확인 |
 | JV-2 | 신규 Jenkins 노드 라벨 | `[TODO / 사용자]` | Runner 라벨이 `git,linux,redfish,windows`(04 는 `git` 만) — `locations.yml` 의 `ic/chj/yi` Location 은 노드 대기가 된다. 운영 Location 을 정하고 라벨 또는 `locations.yml` 을 맞춘다 |
 | JV-3 | `SE_ADDON_DIR` 기본 경로 | `[TODO / 사용자]` | 문서·배포 Job 기본값 `/home/cloviradmin/clovirone-gathering-addon` 은 신규 Runner 의 Agent 계정 `jenkins`(홈 `/home/jenkins`)와 맞지 않는다. Add-on 을 신규 Runner 에서 켤 때 `ADDON_HOME` · 노드 환경변수를 `jenkins` 가 읽는 경로로 |
 | JV-4 | 설치 자동화 시드 사본 동기화 | `[TODO / 설치자동화 팀]` | `generated/gitlab-projects/clovirone-server-gathering` 의 Jenkinsfile 패치가 "activate 줄" 을 대상으로 한다 — 이제 그 줄이 없으므로 시드를 이번 main/production 으로 다시 뜨거나 패치를 no-op 처리 |

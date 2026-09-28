@@ -61,5 +61,16 @@ PATH 를 비운 실험 조건이다. 두 경로 모두 같은 venv 로 귀결됐
 ## 5. 신규 Jenkins (jenkins-prod.gooddi.lab) — 보류
 
 `clovirone-cicd/clovirone-server-gather` 빌드 #3·#4(2026-09-28, 변경 전)는 컨트롤러의 Resolve Location 에서 `main` 전체 체크아웃이
-2분 제한을 넘겨 ABORTED. 사용자가 Job 브랜치를 `production` 으로 바꿨다. Runner 4대에 `git` 이 없어 Agent 체크아웃은 아직 불가 —
-설치 자동화(I-2, 다른 세션) 반영 뒤 1회 실행해 `[venv] /app/ansible-env … (source=path)` 를 확인한다.
+2분 제한을 넘겨 ABORTED. 사용자가 Job 브랜치를 `production` 으로 바꾸고 Runner 4대에 git 2.47.3 을 설치했다.
+
+빌드 **#7** (production `e7baaa55`, 입력은 lab #20 과 동일):
+
+| Stage | 노드 | 결과 |
+|---|---|---|
+| Resolve Location | Jenkins(controller) | `git -> agent label 'git'` — production 체크아웃이라 2분 제한 안에 끝남 (빌드 전체 41초) |
+| Validate | SKHynix-Jenkins-Runner01 | OK (hosts=4) |
+| Gather | SKHynix-Jenkins-Runner03 | 체크아웃 성공(git 설치 확인) 뒤 `ERROR: Could not find credentials entry with ID 'server-gather-vault-password'` — `withCredentials` 단계라 venv 선택 전에 실패 |
+| Validate Schema · Callback | — | 건너뜀 |
+
+신규 Master 에 Secret text credential `server-gather-vault-password` 가 등록되면 같은 입력으로 재실행해 `[venv] /app/ansible-env … (source=path)` 를 확인한다
+(`docs/operate/01-jenkins-master.md` 7절). 헬퍼 자체는 2절에서 Runner 4대 모두 확인됐다.
