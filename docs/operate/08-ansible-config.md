@@ -64,12 +64,12 @@ gather_timeout = 60
 | `INVENTORY_JSON` | 필수 | 호출자가 전달하는 호스트 배열 JSON (os/esxi: `service_ip`, redfish: `bmc_ip`, fallback: `ip`) | Jenkinsfile: `${params.inventory_json}` |
 | `ANSIBLE_CONFIG` | 권장 | ansible.cfg 경로 (미설정 시 CWD 기준) | Jenkins workspace 루트 |
 | `SE_ANSIBLE_VENV` | 선택 | Ansible venv 루트를 명시한다. 없으면 `scripts/activate_ansible_venv.sh` 가 PATH 의 `ansible-playbook` → 알려진 경로(`/app/ansible-env`, `/opt/ansible-env`) 순으로 찾는다. 값이 있는데 `bin/activate` 가 없으면 다른 경로로 넘어가지 않고 실패한다 | Agent 노드 환경변수 ([02-agent-node.md](02-agent-node.md) 9절) |
-| `SE_ADDON_DIR` | 파이프라인 내부 | 고객별 추가 수집(Add-on) 디렉터리 절대경로. 없으면 추가 수집을 하지 않는다. 설정했는데 `<경로>/tasks/main.yml` 이 없으면 기본 수집은 그대로 두고 `errors[]` 에 `section: addon` 1건을 남긴다 | Jenkinsfile Gather stage 가 `${WORKSPACE}/addon` 으로 ansible 실행에만 넘긴다 (전역 `SE_ADDON_REPO` 가 있을 때). 노드 환경변수로 두지 않는다 |
+| `ADDON_DIR` | 파이프라인 내부 | 고객별 추가 수집(Add-on) 디렉터리 절대경로. 없으면 추가 수집을 하지 않는다. 설정했는데 `<경로>/tasks/main.yml` 이 없으면 기본 수집은 그대로 두고 `errors[]` 에 `section: addon` 1건을 남긴다 | Jenkinsfile Gather stage 가 `${WORKSPACE}/addon` 으로 ansible 실행에만 넘긴다 (전역 `ADDON_REPO_URL` 이 있을 때). 노드 환경변수로 두지 않는다 |
 
-`SE_ADDON_DIR` 의 동작과 Add-on 과의 약속은 [develop/07-addon-hook.md](../develop/07-addon-hook.md) 에 있다.
-Add-on 을 켜는 것은 Jenkins 전역 환경변수 `SE_ADDON_REPO` 다 ([04-pipeline-runtime.md](04-pipeline-runtime.md) 3절) —
+`ADDON_DIR` 의 동작과 Add-on 과의 약속은 [develop/07-addon-hook.md](../develop/07-addon-hook.md) 에 있다.
+Add-on 을 켜는 것은 Jenkins 전역 환경변수 `ADDON_REPO_URL` 이다 ([04-pipeline-runtime.md](04-pipeline-runtime.md) 3절) —
 Add-on 저장소를 빌드마다 받아 가므로 Agent 에 파일을 두거나 노드 환경변수를 등록하는 일이 없다. 수동 실행(WSL · e2e)에서만
-Add-on 디렉터리 절대경로를 `SE_ADDON_DIR` 로 직접 export 한다.
+Add-on 디렉터리 절대경로를 `ADDON_DIR` 로 직접 export 한다.
 
 ---
 
