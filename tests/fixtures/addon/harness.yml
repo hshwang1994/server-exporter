@@ -42,7 +42,7 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
 
-        # 운영 호출부(site.yml 4곳)와 같은 조건 — SE_ADDON_DIR 이 없으면 include 하지 않는다
+        # 운영 호출부(site.yml 4곳)와 같은 조건 — ADDON_DIR 이 없으면 include 하지 않는다
         - name: "harness | addon"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
@@ -50,7 +50,7 @@
             _addon_target: linux
           when:
             - harness_hook | default(true) | bool
-            - lookup('env', 'SE_ADDON_DIR') | length > 0
+            - lookup('env', 'ADDON_DIR') | length > 0
 
         - name: "harness | diagnosis and meta"
           ansible.builtin.set_fact:

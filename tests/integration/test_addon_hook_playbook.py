@@ -1,7 +1,7 @@
 """Add-on hook 엔진 테스트 — 실제 ansible-playbook 으로 공통 조립 코드와 hook 을 태운다 (2026-09-21).
 
 왜 필요한가:
-    hook 의 약속은 "SE_ADDON_DIR 이 없으면 결과가 hook 도입 전과 같다" 와 "Add-on 이 무엇을 하든
+    hook 의 약속은 "ADDON_DIR 이 없으면 결과가 hook 도입 전과 같다" 와 "Add-on 이 무엇을 하든
     status · sections · diagnosis · 기존 data 는 바뀌지 않는다" 다. 이는 include_role · role
     filter_plugins · block/rescue · ignore_unreachable 같은 Ansible 실행 동작에 달려 있어 정적
     검사로는 증명되지 않는다. tests/fixtures/addon/harness.yml 이 실제 init_fragments →
@@ -44,7 +44,7 @@ HOSTS = [
     {"service_ip": "192.0.2.11", "physical_purpose": "APP", "note": "n2"},
 ]
 SCENARIOS = {
-    # 이름: (SE_ADDON_DIR, hook 포함 여부)
+    # 이름: (ADDON_DIR, hook 포함 여부)
     "baseline": (None, False),
     "unset": (None, True),
     "missing": ("__missing__", True),
@@ -66,7 +66,7 @@ def runs(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("addon_engine")
     out = {}
     for name, (addon_dir, with_hook) in SCENARIOS.items():
-        env = {k: v for k, v in os.environ.items() if k != "SE_ADDON_DIR"}
+        env = {k: v for k, v in os.environ.items() if k != "ADDON_DIR"}
         result_file = tmp / f"{name}.jsonl"
         env.update({
             "REPO_ROOT": str(REPO),
@@ -76,9 +76,9 @@ def runs(tmp_path_factory):
             "PYTHONHASHSEED": "0",
         })
         if addon_dir == "__missing__":
-            env["SE_ADDON_DIR"] = str(tmp / "no-such-addon")
+            env["ADDON_DIR"] = str(tmp / "no-such-addon")
         elif addon_dir is not None:
-            env["SE_ADDON_DIR"] = str(addon_dir)
+            env["ADDON_DIR"] = str(addon_dir)
         cmd = [PLAYBOOK_BIN, "-i", str(REPO / "os-gather" / "inventory.sh"),
                str(FIXTURES / "harness.yml")]
         if not with_hook:
@@ -121,8 +121,8 @@ def test_missing_addon_dir_adds_exactly_one_addon_error(runs, scenario):
         assert env["errors"][:-1] == base["errors"]
         added = env["errors"][-1]
         assert added["section"] == "addon"
-        assert "SE_ADDON_DIR" not in added["message"] and "/" not in added["message"]
-        assert "SE_ADDON_DIR=" in added["detail"] and "cause=addon_entry_not_found" in added["detail"]
+        assert "ADDON_DIR" not in added["message"] and "/" not in added["message"]
+        assert "ADDON_DIR=" in added["detail"] and "cause=addon_entry_not_found" in added["detail"]
         assert "addon" not in env["data"]
 
 
