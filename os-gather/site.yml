@@ -322,13 +322,13 @@
         # 같은 9 키를 다른 의미로 다시 만들어 덮어쓰던 것을 제거).
 
         # ── 고객별 추가 수집 (Add-on) ───────────────────────────────────
-        # SE_ADDON_DIR 이 없으면 include 하지 않는다. 결과는 data.addon, 문제는 errors[] 1건.
+        # ADDON_DIR 이 없으면 include 하지 않는다. 결과는 data.addon, 문제는 errors[] 1건.
         - name: "linux | addon"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
           vars:
             _addon_target: linux
-          when: lookup('env', 'SE_ADDON_DIR') | length > 0
+          when: lookup('env', 'ADDON_DIR') | length > 0
 
         # ── diagnosis (성공 경로) ───────────────────────────────────────
         - name: "linux | build diagnosis (success path)"
@@ -634,13 +634,13 @@
           ansible.builtin.include_tasks: tasks/windows/gather_runtime.yml
 
         # ── 고객별 추가 수집 (Add-on) ───────────────────────────────────
-        # SE_ADDON_DIR 이 없으면 include 하지 않는다. 결과는 data.addon, 문제는 errors[] 1건.
+        # ADDON_DIR 이 없으면 include 하지 않는다. 결과는 data.addon, 문제는 errors[] 1건.
         - name: "windows | addon"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
           vars:
             _addon_target: windows
-          when: lookup('env', 'SE_ADDON_DIR') | length > 0
+          when: lookup('env', 'ADDON_DIR') | length > 0
 
         # ── diagnosis (성공 경로) ───────────────────────────────────────
         - name: "windows | build diagnosis (success path)"

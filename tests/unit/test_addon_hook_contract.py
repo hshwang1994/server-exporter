@@ -8,8 +8,8 @@
 
 고정하는 것 (사용자 확정 2026-09-21):
     - 호출 위치: 4 play 모두 마지막 수집 뒤 · 조립(build) 앞, 각자의 target 값으로 한 번.
-      SE_ADDON_DIR 이 없으면 include 자체를 건너뛴다 (200 host 기준 실측으로 추가한 조건).
-    - 경로: SE_ADDON_DIR 하나만 본다. 자동 fallback 경로 · 특수값 없음.
+      ADDON_DIR 이 없으면 include 자체를 건너뛴다 (200 host 기준 실측으로 추가한 조건).
+    - 경로: ADDON_DIR 하나만 본다. 자동 fallback 경로 · 특수값 없음.
       미설정 → 아무 것도 안 함 / 설정했는데 tasks/main.yml 없음 → errors[] 1건 / 있으면 실행.
     - Add-on 전용 timeout 없음.
     - errors[] 문장에는 변수명 · 경로가 없고 기술 근거는 detail 에만 있다 (docs/contract/03-fields.md 4-1).
@@ -98,7 +98,7 @@ def test_each_play_calls_the_hook_exactly_once(site_rel, count):
         assert section == "tasks", "hook 은 rescue / always 가 아니라 수집 경로에만 둔다"
         assert "lookup('env','REPO_ROOT')" in _include_file(task).replace(" ", "")
         # 미설정(현재 모든 환경)이면 include 자체를 건너뛴다 — hook 안 태스크를 host 마다 평가하지 않는다
-        assert task.get("when") == "lookup('env', 'SE_ADDON_DIR') | length > 0"
+        assert task.get("when") == "lookup('env', 'ADDON_DIR') | length > 0"
 
 
 @pytest.mark.parametrize("site_rel,target,after,before", CALL_SITES,
@@ -115,8 +115,8 @@ def test_hook_sits_after_last_gather_and_before_build(site_rel, target, after, b
 # ── 경로 계약 ───────────────────────────────────────────────────────────────
 def test_addon_dir_comes_only_from_se_addon_dir():
     locate = _hook_tasks()["addon | locate"]["ansible.builtin.set_fact"]
-    assert locate == {"_addon_dir": "{{ lookup('env', 'SE_ADDON_DIR') }}"}, (
-        "SE_ADDON_DIR 외 경로(자동 fallback · 기본값 · 특수값)를 두지 않는다")
+    assert locate == {"_addon_dir": "{{ lookup('env', 'ADDON_DIR') }}"}, (
+        "ADDON_DIR 외 경로(자동 fallback · 기본값 · 특수값)를 두지 않는다")
     text = HOOK.read_text(encoding="utf-8")
     for forbidden in ("clovirone-gathering-addon", "'off'", '"off"', "../"):
         assert forbidden not in text, f"fallback 흔적 {forbidden!r}"
@@ -172,7 +172,7 @@ def test_missing_addon_error_record():
     [entry] = sf["_errors_fragment"]
     assert entry["section"] == "addon"
     detail = jinja2.Environment().from_string(entry["detail"]).render(_addon_dir="/opt/addon")
-    assert detail == "SE_ADDON_DIR=/opt/addon; cause=addon_entry_not_found"
+    assert detail == "ADDON_DIR=/opt/addon; cause=addon_entry_not_found"
 
 
 def _render(template: str, **ctx):
@@ -217,7 +217,7 @@ def test_messages_follow_the_errors_contract():
                         _addon_result={}, _addon_errors=["x"])[0]["message"]]
     for msg in messages:
         assert msg.strip()
-        for token in ("SE_ADDON_DIR", "_addon", "{{", "/", "http", "timeout", "task"):
+        for token in ("ADDON_DIR", "_addon", "{{", "/", "http", "timeout", "task"):
             assert token not in msg, f"message 에 {token!r}: {msg}"
 
 
@@ -238,3 +238,28 @@ def test_always_fallbacks_have_no_addon_key(site_rel):
         for task, _, _, section in _walk(play.get("tasks")):
             if section == "always":
                 assert "addon" not in yaml.safe_dump(task, allow_unicode=True), task.get("name")
+
+
+# ── Add-on 변수 이름 (2026-09-30) — 옛 `SE_ADDON_*` 이름은 호환용으로도 남기지 않는다 ─────────
+# 대응표는 docs/reference/decision-log.md 2026-09-30. 날짜가 박힌 과거 기록(tests/evidence 등)만 당시 이름을 쓴다.
+CURRENT_ADDON_FILES = [
+    "Jenkinsfile_portal",
+    "scripts/addon_checkout.sh",
+    "scripts/addon_askpass.sh",
+    HOOK_REL,
+    "os-gather/site.yml",
+    "esxi-gather/site.yml",
+    "redfish-gather/site.yml",
+    "tests/fixtures/addon/harness.yml",
+    "docs/develop/07-addon-hook.md",
+    "docs/operate/02-agent-node.md",
+    "docs/operate/03-job-registration.md",
+    "docs/operate/04-pipeline-runtime.md",
+    "docs/operate/08-ansible-config.md",
+]
+
+
+@pytest.mark.parametrize("rel", CURRENT_ADDON_FILES)
+def test_no_legacy_addon_variable_names(rel):
+    text = (REPO / rel).read_text(encoding="utf-8")
+    assert "SE_ADDON" not in text, f"{rel}: 옛 이름 SE_ADDON_* 대신 ADDON_REPO_URL · ADDON_REPO_REF · ADDON_DIR 등"

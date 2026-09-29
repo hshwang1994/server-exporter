@@ -6,7 +6,38 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-09-29
+> 최종 갱신: 2026-09-30
+
+## 2026-09-30 — Add-on 변수 이름 정리 (`SE_ADDON_*` → `ADDON_REPO_*` · `ADDON_DIR`)
+
+### 요구
+
+`SE_` 접두사는 처음 보는 사람이 뜻을 알기 어렵다. Add-on 을 켜려고 Jenkins 에 등록하는 이름부터 바로 읽히게 한다.
+범위는 Add-on 관련 이름만이다 — Gathering 전체의 변수 이름(`se_location` · `SE_LOCATION` · `SE_AGENT_LABEL` ·
+`SE_ANSIBLE_VENV` · `se_host_input` · 테스트용 `SE_*`)은 바꾸지 않는다 (사용자 지정).
+
+### 결정 (사용자 확정)
+
+| 옛 이름 | 새 이름 | 쓰는 곳 |
+|---|---|---|
+| `SE_ADDON_REPO` | `ADDON_REPO_URL` | Jenkins 전역 — 켤 때 필수 (운영자가 등록하는 유일한 값) |
+| `SE_ADDON_REF` | `ADDON_REPO_REF` | Jenkins 전역 — 선택, 기본 `main` |
+| `SE_ADDON_CREDENTIALS_ID` | `ADDON_REPO_CREDENTIALS_ID` | Jenkins 전역 — 선택 |
+| `SE_ADDON_SSL_VERIFY` | `ADDON_REPO_SSL_VERIFY` | Jenkins 전역 — 선택, 기본 `false` |
+| `SE_ADDON_DIR` | `ADDON_DIR` | 파이프라인 → ansible (hook 입력). `errors[].detail` 도 `ADDON_DIR=<경로>; cause=addon_entry_not_found` |
+| `SE_ADDON_USER` / `SE_ADDON_PASSWORD` | `ADDON_REPO_USER` / `ADDON_REPO_PASSWORD` | 파이프라인 내부 (`withCredentials` → `scripts/addon_askpass.sh`) |
+| `SE_ADDON_GIT_TIMEOUT` | 삭제 | `scripts/addon_checkout.sh` 의 문서화되지 않은 override 였다. git 명령당 180초 제한은 고정값으로 남는다 |
+
+- 옛 이름은 호환용으로도 읽지 않는다. 두 Jenkins 모두 옛 이름이 등록돼 있지 않아(2026-09-30 읽기 조회) 옮길 설정이 없었다.
+- Job 파라미터 `addonRef` 는 이름을 유지한다 (설명 문구만 새 이름). 파라미터를 전역 변수와 같은 이름으로 두면 빈 값이
+  전역 값을 덮는다.
+- 날짜가 박힌 과거 기록(tests/evidence 의 지난 실측, 이 문서 · CURRENT_STATE · TEST_HISTORY 의 지난 항목)은 실행 당시 이름을
+  그대로 둔다. 이 표가 대응표다. 코드 · 테스트 · 운영/개발 문서 · ADR 2건 · 규칙 · Add-on README 는 새 이름이다.
+
+### 검증
+
+- `tests/unit/test_addon_hook_contract.py` · Add-on `tests/test_layout.py` 에 옛 이름 부재 확인을 더했다 (코드 · Add-on 문서).
+- 로컬 · Jenkins 결과는 `tests/evidence/2026-09-29-addon-per-build-checkout.md` 5절, `docs/ai/catalogs/TEST_HISTORY.md` 2026-09-30.
 
 ## 2026-09-29 — Add-on 을 빌드마다 받는다: 켜기 1개 설정 · 추가 1개 파일 · Runner 무관
 

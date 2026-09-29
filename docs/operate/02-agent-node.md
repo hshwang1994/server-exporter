@@ -330,8 +330,8 @@ git push
 | `SE_ANSIBLE_VENV` | venv 루트 (예: `/data/ansible-env`) | venv 가 `/app/ansible-env` · `/opt/ansible-env` 가 아닐 때. 값이 있는데 그 안에 `bin/activate` 가 없으면 다른 경로로 넘어가지 않고 실패한다 |
 | `PATH+ANSIBLE` | venv 의 `bin` (예: `/opt/ansible-env/bin`) | 선택. Jenkins 가 기존 PATH 앞에 **추가**하는 문법이라 PATH 의 `ansible-playbook` 으로도 venv 를 찾게 된다 |
 
-고객별 추가 수집(Add-on)은 노드 설정이 필요 없다 — Jenkins 전역 환경변수 `SE_ADDON_REPO` 하나로 켜고, 파이프라인이
-빌드마다 저장소를 받아 간다 ([03-job-registration.md](03-job-registration.md) Add-on 절). 노드에 `SE_ADDON_DIR` 을 두지 않는다.
+고객별 추가 수집(Add-on)은 노드 설정이 필요 없다 — Jenkins 전역 환경변수 `ADDON_REPO_URL` 하나로 켜고, 파이프라인이
+빌드마다 저장소를 받아 간다 ([03-job-registration.md](03-job-registration.md) Add-on 절). 노드에 `ADDON_DIR` 을 두지 않는다.
 
 ### Tool Locations
 

@@ -12,4 +12,4 @@
 | `fail_runtime/` | 실행 중 실패하는 Add-on — hook 의 rescue 경로 |
 | `unreachable/` | 실행 도중 연결이 끊기는 Add-on — `ignore_unreachable` 가 role 안까지 이어지는지 확인 |
 
-각 디렉터리는 `SE_ADDON_DIR` 로 지정하는 Ansible role 형태다 (`tasks/main.yml`).
+각 디렉터리는 `ADDON_DIR` 로 지정하는 Ansible role 형태다 (`tasks/main.yml`).

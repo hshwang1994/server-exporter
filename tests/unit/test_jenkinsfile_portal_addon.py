@@ -1,9 +1,9 @@
 """Jenkinsfile_portal 의 Add-on 계약 (텍스트) — 2026-09-29 빌드별 체크아웃 구조.
 
-Add-on 은 Jenkins 전역 환경변수 SE_ADDON_REPO 하나로 켜고, Gather stage 가 빌드마다 저장소를 받아
-그 경로를 ansible 실행에만 SE_ADDON_DIR 로 넘긴다. 여기서 고정하는 것:
-  - SE_ADDON_DIR 을 정하는 곳은 Gather stage 의 withEnv 한 곳 (${WORKSPACE}/addon). stage / pipeline environment{} 에 없다
-  - SE_ADDON_REPO 가 없으면 Add-on 코드가 실행되지 않는다 (if 게이트) — 꺼진 빌드는 도입 전과 같다
+Add-on 은 Jenkins 전역 환경변수 ADDON_REPO_URL 하나로 켜고, Gather stage 가 빌드마다 저장소를 받아
+그 경로를 ansible 실행에만 ADDON_DIR 로 넘긴다. 여기서 고정하는 것:
+  - ADDON_DIR 을 정하는 곳은 Gather stage 의 withEnv 한 곳 (${WORKSPACE}/addon). stage / pipeline environment{} 에 없다
+  - ADDON_REPO_URL 이 없으면 Add-on 코드가 실행되지 않는다 (if 게이트) — 꺼진 빌드는 도입 전과 같다
   - 체크아웃은 scripts/addon_checkout.sh (fetch 흐름, retry 2회), 검사는 addon/tools/check_layout.py --targets <서버 종류>
   - 실패는 unstable("[addon] unavailable: …") — error 로 빌드를 끊지 않고, currentBuild.description 도 건드리지 않는다
   - 노드 경로 · 배포 Job · 라벨 기반 배포 · 전역 git 설정 · GIT_SSL_NO_VERIFY 의 흔적이 없다
@@ -32,19 +32,19 @@ VALIDATE = _stage("Validate")
 
 
 def test_se_addon_dir_is_set_only_for_the_ansible_run():
-    hits = [m.start() for m in re.finditer(r"SE_ADDON_DIR=", TEXT)]
-    assert len(hits) == 1, "SE_ADDON_DIR 을 정하는 곳은 한 곳"
+    hits = [m.start() for m in re.finditer(r"ADDON_DIR=", TEXT)]
+    assert len(hits) == 1, "ADDON_DIR 을 정하는 곳은 한 곳"
     line = TEXT[TEXT.rfind("\n", 0, hits[0]) + 1: TEXT.find("\n", hits[0])]
     assert "withEnv(" in line and '${addonDir}' in line and "? [" in line and ": []" in line, line
     assert 'addonDir = "${env.WORKSPACE}/addon"' in GATHER
     for block in re.findall(r"environment \{[^}]*\}", TEXT):
-        assert "SE_ADDON" not in block, "environment{} 에 두면 꺼진 빌드의 환경까지 바뀐다"
+        assert "ADDON_" not in block, "environment{} 에 두면 꺼진 빌드의 환경까지 바뀐다"
 
 
 def test_everything_is_gated_on_the_global_repo_variable():
-    assert "def addonRepo = (env.SE_ADDON_REPO ?: '').trim()" in GATHER
+    assert "def addonRepo = (env.ADDON_REPO_URL ?: '').trim()" in GATHER
     assert "if (addonRepo) {" in GATHER
-    assert "SE_ADDON_REPO" not in VALIDATE, "Validate 는 Add-on 을 모른다 — 켜지지 않은 환경에서 파라미터 검증만"
+    assert "ADDON_REPO_URL" not in VALIDATE, "Validate 는 Add-on 을 모른다 — 켜지지 않은 환경에서 파라미터 검증만"
 
 
 def test_checkout_uses_the_script_with_retry_and_optional_credentials():
@@ -58,7 +58,7 @@ def test_checkout_uses_the_script_with_retry_and_optional_credentials():
 
 
 def test_ref_resolution_order_is_param_then_global_then_main():
-    assert "(params.addonRef ?: '').trim() ?: ((env.SE_ADDON_REF ?: '').trim() ?: 'main')" in GATHER
+    assert "(params.addonRef ?: '').trim() ?: ((env.ADDON_REPO_REF ?: '').trim() ?: 'main')" in GATHER
 
 
 def test_layout_check_runs_in_the_venv_with_this_builds_targets():
@@ -80,7 +80,7 @@ def test_failure_marks_the_build_unstable_without_per_host_errors():
 def test_no_traces_of_node_paths_deploy_job_or_global_git_settings():
     # (SE_AGENT_LABEL 은 Resolve Location 의 정상 변수 — 배포 Job 의 파라미터 형태만 금지한다)
     for forbidden in ("/home/cloviradmin", "ADDON_HOME", "params.AGENT_LABEL", "'AGENT_LABEL'", "GIT_SSL_NO_VERIFY",
-                      "git config --global", "http.sslVerify", "deploy/Jenkinsfile", "SE_ADDON_DIR=/"):
+                      "git config --global", "http.sslVerify", "deploy/Jenkinsfile", "ADDON_DIR=/"):
         assert forbidden not in TEXT, forbidden
 
 

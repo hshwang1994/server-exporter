@@ -5,7 +5,7 @@ Jenkinsfile_portal Gather stage 가 부르는 스크립트를 bash + 실제 git(
   - 광고되지 않은(ref 끝이 아닌) 커밋 해시는 1차(얕은 fetch)가 거부돼도 2차(전체 fetch)로 받는다
   - 짧은 해시 · 옵션처럼 보이는 ref · '..' 가 든 ref · 없는 ref · 없는 저장소는 `[addon] unavailable:` 와 rc 1
   - 대상 디렉터리는 시작할 때 비운다 (이전 빌드 파일이 남지 않는다)
-  - SE_ADDON_SSL_VERIFY=true 도 같은 흐름 (TLS 가 없는 file:// 에서는 차이가 없다)
+  - ADDON_REPO_SSL_VERIFY=true 도 같은 흐름 (TLS 가 없는 file:// 에서는 차이가 없다)
 
 Windows 에서는 Git for Windows 의 bash 를 쓴다 (PATH 의 bash 는 WSL 일 수 있다).
 """
@@ -107,11 +107,11 @@ if [ $rc -eq 1 ] && [ -z "$out" ] && printf '%s' "$err" | grep -q '^\[addon\] un
 run "file:///$T/no-such-repo" main "$D"
 if [ $rc -eq 1 ] && [ -z "$out" ] && printf '%s' "$err" | grep -q '^\[addon\] unavailable: '; then report missing_repo_fails PASS; else report missing_repo_fails FAIL "rc=$rc out=$out err=$err"; fi
 
-SE_ADDON_SSL_VERIFY=true run "$URL" main "$D"
+ADDON_REPO_SSL_VERIFY=true run "$URL" main "$D"
 if [ $rc -eq 0 ] && [ "$(head_of)" = "$C3" ]; then report ssl_verify_true_same_flow PASS; else report ssl_verify_true_same_flow FAIL "rc=$rc out=$out err=$err"; fi
 
-u="$(SE_ADDON_USER=alice SE_ADDON_PASSWORD='s3cr3t' bash "$ASKPASS" "Username for 'https://git.example':")"
-p="$(SE_ADDON_USER=alice SE_ADDON_PASSWORD='s3cr3t' bash "$ASKPASS" "Password for 'https://alice@git.example':")"
+u="$(ADDON_REPO_USER=alice ADDON_REPO_PASSWORD='s3cr3t' bash "$ASKPASS" "Username for 'https://git.example':")"
+p="$(ADDON_REPO_USER=alice ADDON_REPO_PASSWORD='s3cr3t' bash "$ASKPASS" "Password for 'https://alice@git.example':")"
 if [ "$u" = alice ] && [ "$p" = s3cr3t ]; then report askpass_answers_from_env PASS; else report askpass_answers_from_env FAIL "u=$u p=$p"; fi
 """
 
@@ -193,5 +193,5 @@ def test_ssl_verify_is_scoped_to_the_scripts_own_git_commands():
 
 def test_askpass_never_prints_when_unset():
     text = ASKPASS.read_text(encoding="utf-8")
-    assert "SE_ADDON_USER" in text and "SE_ADDON_PASSWORD" in text
+    assert "ADDON_REPO_USER" in text and "ADDON_REPO_PASSWORD" in text
     assert "echo $" not in text and "set -x" not in text

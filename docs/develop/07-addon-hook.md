@@ -23,26 +23,26 @@
   범위다. 파일이 없는 target(지금은 ESXi · Redfish)에서는 아무 것도 하지 않고 알림도 남기지 않는다 (2026-09-29.
   종전의 "미지원 target 알림" 은 rule 의 `target` 누락 실수를 드러내기 위한 것이었고, rule 이 없어지면서 그 실수
   유형도 사라졌다). Jenkins 쪽은 그 빌드의 target 후보에 collector 가 하나도 없으면 아예 켜지 않는다 (아래 2절).
-- 호출은 `SE_ADDON_DIR` 이 있을 때만 include 한다 (`when`). 없으면 host 당 건너뛴 태스크 1개로 끝난다.
+- 호출은 `ADDON_DIR` 이 있을 때만 include 한다 (`when`). 없으면 host 당 건너뛴 태스크 1개로 끝난다.
 
-## 2. 경로 — `SE_ADDON_DIR`
+## 2. 경로 — `ADDON_DIR`
 
 `common/tasks/addon/run_addon.yml` 은 세 경우만 구분한다. 자동 fallback 경로나 특수값은 없다.
 
-| `SE_ADDON_DIR` | 동작 | 봉투 |
+| `ADDON_DIR` | 동작 | 봉투 |
 |---|---|---|
 | 없음 | Add-on 을 쓰지 않는 환경. 아무 것도 하지 않는다 | hook 도입 전과 같다 |
-| 있는데 `<경로>/tasks/main.yml` 이 없음 | Add-on 을 실행하지 않는다 | `errors[]` 에 `section: addon` 1건 (`detail`: `SE_ADDON_DIR=<경로>; cause=addon_entry_not_found`) |
+| 있는데 `<경로>/tasks/main.yml` 이 없음 | Add-on 을 실행하지 않는다 | `errors[]` 에 `section: addon` 1건 (`detail`: `ADDON_DIR=<경로>; cause=addon_entry_not_found`) |
 | 있고 Add-on 이 있음 | `include_role` 로 실행 | 결과는 `data.addon`, 문제는 `errors[]` 1건 |
 
-값은 운영에서 `Jenkinsfile_portal` Gather stage 가 정한다 (2026-09-29): Jenkins 전역 환경변수 `SE_ADDON_REPO` 가
-있으면 빌드마다 Add-on 저장소를 `${WORKSPACE}/addon` 에 받아 검사한 뒤, ansible 실행에만 `SE_ADDON_DIR` 로 넘긴다.
+값은 운영에서 `Jenkinsfile_portal` Gather stage 가 정한다 (2026-09-29): Jenkins 전역 환경변수 `ADDON_REPO_URL` 이
+있으면 빌드마다 Add-on 저장소를 `${WORKSPACE}/addon` 에 받아 검사한 뒤, ansible 실행에만 `ADDON_DIR` 로 넘긴다.
 노드 환경변수 · 배포 Job · Agent 배치는 없다 — Runner 를 늘리거나 다시 설치해도 Add-on 은 그대로다. 흐름과 전역
 변수 4개는 [04-pipeline-runtime.md](../operate/04-pipeline-runtime.md) 3절. 저장소를 받지 못하거나 검사에 실패하면
-`SE_ADDON_DIR` 을 설정하지 않고 빌드를 UNSTABLE 로 표시한다 — 저장소 문제는 host 문제가 아니므로 host 별 `errors[]`
+`ADDON_DIR` 을 설정하지 않고 빌드를 UNSTABLE 로 표시한다 — 저장소 문제는 host 문제가 아니므로 host 별 `errors[]`
 를 만들지 않는다. 수동 실행(e2e · WSL)에서는 Add-on 디렉터리 절대경로를 직접 export 한다.
 
-hook 의 세 경우 자체는 바뀌지 않았다 — "누가 `SE_ADDON_DIR` 을 정하느냐" 만 노드에서 파이프라인으로 옮겼다.
+hook 의 세 경우 자체는 바뀌지 않았다 — "누가 `ADDON_DIR` 을 정하느냐" 만 노드에서 파이프라인으로 옮겼다.
 
 설정 실수의 결과 (2.20.3 · 2.20.7 실측, 엔진 테스트로 고정):
 
@@ -55,7 +55,7 @@ hook 의 세 경우 자체는 바뀌지 않았다 — "누가 `SE_ADDON_DIR` 을
 
 | 방향 | 변수 | 내용 |
 |---|---|---|
-| 메인 → Add-on | `_addon_dir` | `SE_ADDON_DIR` 값 |
+| 메인 → Add-on | `_addon_dir` | `ADDON_DIR` 값 |
 | | `_addon_target` | `linux` / `windows` / `esxi` / `redfish` |
 | | `se_host_input` | 호출자가 보낸 host object (`inventory.sh` 가 보존, 5절). 수기 인벤토리에는 없다 → `se_host_input \| default({})` |
 | Add-on → 메인 | `_addon_result` | dict. `data.addon` 아래에 그대로 들어간다. 비어 있으면 `addon` 키를 만들지 않는다 |
@@ -123,7 +123,7 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 | `tests/unit/test_addon_hook_contract.py` | 호출 4곳 · 경로 세 경우 · timeout 없음 · 문장 규칙 · 뼈대에 `addon` 없음 | 어디서나 |
 | `tests/integration/test_addon_hook_playbook.py` | 실제 ansible-playbook 으로 공통 조립 코드 + hook: 미설정 시 byte 동일, 경로 없음 · 상위 폴더, 끝 `/`, 정상, 참고 문장, 실행 실패, 연결 끊김 | Linux / WSL / Jenkins Agent |
 | `tests/unit/test_addon_checkout.py` | `scripts/addon_checkout.sh` 를 실제 git(로컬 저장소)으로: 브랜치 · 태그 · `refs/heads/` · 40자 해시 · 광고되지 않은 해시(2차 fetch) · 짧은 해시 거부 · 옵션형 ref 거부 · 없는 ref/저장소 · 이전 파일 제거 · askpass | 어디서나 (bash + git) |
-| `tests/unit/test_jenkinsfile_portal_addon.py` | `Jenkinsfile_portal` 텍스트 계약: `SE_ADDON_DIR` 은 Gather 의 `withEnv` 한 곳 · `SE_ADDON_REPO` 게이트 · 실패는 `unstable` · 노드 경로 / 배포 Job / 전역 git 설정 흔적 0 | 어디서나 |
+| `tests/unit/test_jenkinsfile_portal_addon.py` | `Jenkinsfile_portal` 텍스트 계약: `ADDON_DIR` 은 Gather 의 `withEnv` 한 곳 · `ADDON_REPO_URL` 게이트 · 실패는 `unstable` · 노드 경로 / 배포 Job / 전역 git 설정 흔적 0 | 어디서나 |
 | Add-on 저장소 `tests/e2e/` (Jenkins Job) | 실제 Agent 에서 운영과 같은 명령 · vault 로 Linux · Windows · ESXi · Redfish 대상 시나리오를 돌리고, 위 엔진 테스트도 같은 Agent 에서 돌린다 | Jenkins |
 
 엔진 테스트는 `tests/fixtures/addon/` 의 합성 Add-on 과 `harness.yml` 을 쓴다. `ANSIBLE_PLAYBOOK_BIN` 으로

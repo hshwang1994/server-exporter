@@ -40,7 +40,7 @@ pipeline {
         string(
             name        : 'addonRef',
             defaultValue: '',
-            description : '(선택) 이 빌드에서만 쓸 Add-on 브랜치 · refs/tags/<태그> · 40자 커밋 — 비우면 전역 SE_ADDON_REF (기본 main). Add-on 은 전역 SE_ADDON_REPO 가 있을 때만 돈다'
+            description : '(선택) 이 빌드에서만 쓸 Add-on 브랜치 · refs/tags/<태그> · 40자 커밋 — 비우면 전역 ADDON_REPO_REF (기본 main). Add-on 은 전역 ADDON_REPO_URL 이 있을 때만 돈다'
         )
     }
 
@@ -190,18 +190,18 @@ pipeline {
 
                     sh "rm -f \"${env.WORKSPACE}/gather_output.json\""
 
-                    // ── Add-on (고객별 추가 수집) — Jenkins 전역 환경변수 SE_ADDON_REPO 가 있을 때만 켠다. 없으면 이 블록은
+                    // ── Add-on (고객별 추가 수집) — Jenkins 전역 환경변수 ADDON_REPO_URL 이 있을 때만 켠다. 없으면 이 블록은
                     //    아무 것도 하지 않아 수집은 Add-on 도입 전과 같다. 저장소는 빌드마다 ${WORKSPACE}/addon 에 새로 받고
-                    //    (Runner 사전 작업 · 노드 설정 없음), 그 경로를 아래 ansible 실행에만 SE_ADDON_DIR 로 넘긴다.
+                    //    (Runner 사전 작업 · 노드 설정 없음), 그 경로를 아래 ansible 실행에만 ADDON_DIR 로 넘긴다.
                     //    받지 못하거나 파일 검사에 실패하면 Add-on 없이 수집하고 빌드를 UNSTABLE 로 표시한다 —
                     //    저장소 문제는 서버 문제가 아니므로 host 별 errors[] 를 만들지 않는다.
-                    //    전역 변수: SE_ADDON_REPO(필수) · SE_ADDON_REF(기본 main) · SE_ADDON_CREDENTIALS_ID(비공개 저장소) ·
-                    //    SE_ADDON_SSL_VERIFY(기본 false — 인증서 검증 해제는 Add-on 을 받는 git 명령에만 적용).
+                    //    전역 변수: ADDON_REPO_URL(필수) · ADDON_REPO_REF(기본 main) · ADDON_REPO_CREDENTIALS_ID(비공개 저장소) ·
+                    //    ADDON_REPO_SSL_VERIFY(기본 false — 인증서 검증 해제는 Add-on 을 받는 git 명령에만 적용).
                     def addonDir  = ''
-                    def addonRepo = (env.SE_ADDON_REPO ?: '').trim()
+                    def addonRepo = (env.ADDON_REPO_URL ?: '').trim()
                     if (addonRepo) {
-                        def addonRef     = (params.addonRef ?: '').trim() ?: ((env.SE_ADDON_REF ?: '').trim() ?: 'main')
-                        def addonCred    = (env.SE_ADDON_CREDENTIALS_ID ?: '').trim()
+                        def addonRef     = (params.addonRef ?: '').trim() ?: ((env.ADDON_REPO_REF ?: '').trim() ?: 'main')
+                        def addonCred    = (env.ADDON_REPO_CREDENTIALS_ID ?: '').trim()
                         def addonTargets = ['os': 'linux,windows', 'esxi': 'esxi', 'redfish': 'redfish'][params.target_type]
                         def fetchAddon = { ->
                             sh """#!/bin/bash
@@ -216,8 +216,8 @@ pipeline {
                             retry(2) {
                                 if (addonCred) {
                                     withCredentials([usernamePassword(credentialsId: addonCred,
-                                                                      usernameVariable: 'SE_ADDON_USER',
-                                                                      passwordVariable: 'SE_ADDON_PASSWORD')]) {
+                                                                      usernameVariable: 'ADDON_REPO_USER',
+                                                                      passwordVariable: 'ADDON_REPO_PASSWORD')]) {
                                         withEnv(["GIT_ASKPASS=${env.WORKSPACE}/scripts/addon_askpass.sh"]) { fetchAddon() }
                                     }
                                 } else {
@@ -259,8 +259,8 @@ pipeline {
                         ]) {
                             // Ansible venv 는 scripts/activate_ansible_venv.sh 가 고른다
                             //   (SE_ANSIBLE_VENV → PATH 의 ansible-playbook → 알려진 설치 경로). 못 찾으면 이 stage 는 실패한다.
-                            // SE_ADDON_DIR 은 이 ansible 실행에만 준다 (stage environment{} 에 두지 않는다 — 꺼진 빌드의 환경은 종전과 같다).
-                            withEnv(addonDir ? ["SE_ADDON_DIR=${addonDir}"] : []) {
+                            // ADDON_DIR 은 이 ansible 실행에만 준다 (stage environment{} 에 두지 않는다 — 꺼진 빌드의 환경은 종전과 같다).
+                            withEnv(addonDir ? ["ADDON_DIR=${addonDir}"] : []) {
                                 sh """#!/bin/bash
                                     set -eo pipefail
                                     set +x

@@ -9,10 +9,11 @@
 # 짧은 해시는 받지 않는다 — 서버에 따라 1차가 거부돼 결과가 갈리기 때문이다.
 #
 # 환경변수
-#   SE_ADDON_SSL_VERIFY  "true" 면 TLS 인증서를 검증한다. 그 밖(기본)에는 이 스크립트가 실행하는 git 명령에만
-#                        -c http.sslVerify=false 를 붙인다 — 전역 git 설정 · 메인 저장소 체크아웃 · 다른 Job 에 영향이 없다.
-#   GIT_ASKPASS 등       자격증명은 호출자가 git 이 아는 환경변수로 넘긴다. 이 스크립트는 자격증명을 읽지도 적지도 않는다.
+#   ADDON_REPO_SSL_VERIFY  "true" 면 TLS 인증서를 검증한다. 그 밖(기본)에는 이 스크립트가 실행하는 git 명령에만
+#                          -c http.sslVerify=false 를 붙인다 — 전역 git 설정 · 메인 저장소 체크아웃 · 다른 Job 에 영향이 없다.
+#   GIT_ASKPASS 등         자격증명은 호출자가 git 이 아는 환경변수로 넘긴다. 이 스크립트는 자격증명을 읽지도 적지도 않는다.
 #
+# git 명령마다 180초 제한(timeout 이 있을 때) — 응답 없는 저장소가 빌드를 붙잡지 않는다.
 # 대상 디렉터리는 시작할 때 지운다 — 이전 빌드의 파일이 남지 않는다.
 # 성공: stdout 에 `[addon] <URL>@<ref> <해시>` 한 줄, rc 0. 실패: stderr 에 `[addon] unavailable: <사유>`, rc 1.
 set -u
@@ -37,13 +38,13 @@ fi
 command -v git >/dev/null 2>&1 || fail "git 이 없습니다"
 
 opts=()
-if [ "${SE_ADDON_SSL_VERIFY:-false}" != "true" ]; then
+if [ "${ADDON_REPO_SSL_VERIFY:-false}" != "true" ]; then
     opts=(-c http.sslVerify=false)
 fi
 export GIT_TERMINAL_PROMPT=0          # 자격증명이 없으면 묻지 않고 실패한다 (빌드가 멈추지 않는다)
 tmo=()
 if command -v timeout >/dev/null 2>&1; then
-    tmo=(timeout "${SE_ADDON_GIT_TIMEOUT:-180}")
+    tmo=(timeout 180)
 fi
 
 err="$(mktemp)"
