@@ -5,6 +5,8 @@
 - 작성: AI (Claude Code)
 - 관련 rule: 22 R1/R3 (fragment 경계 · merge 호출), 11 R4, 13 R7 (03-fields.md 동반 갱신),
   96 R1-B (새 보조 키 — 사용자 승인), 30 R3 (외부 호출 timeout — 아래 "예외")
+- 이름: 변수 이름은 2026-09-30 변경 뒤 이름으로 적었다 (대응표: `docs/reference/decision-log.md` 2026-09-30).
+- 대체: 배포 부분(배포 Job · 노드 환경변수)은 `ADR-2026-09-29-addon-per-build-checkout.md` 가 대체했다. hook 계약은 이 ADR 그대로다.
 
 ## 컨텍스트 (Why)
 
@@ -15,7 +17,7 @@
 ## 결정 (What)
 
 1. 메인에는 범용 hook `common/tasks/addon/run_addon.yml` 하나만 둔다. 4 play(Linux · Windows · ESXi ·
-   Redfish)가 마지막 수집 뒤 · 조립 앞에서 include 한다 (`SE_ADDON_DIR` 이 있을 때만).
+   Redfish)가 마지막 수집 뒤 · 조립 앞에서 include 한다 (`ADDON_DIR` 이 있을 때만).
 2. Add-on 은 별도 디렉터리(별도 저장소 `clovirone-gathering-addon`)의 Ansible role 이다. 메인이 이미 연
    연결을 그대로 쓴다 — 인벤토리 · vault · 자격증명 · precheck · 접속 코드를 복제하지 않는다.
 3. 계약은 변수 5개다: 메인 → `_addon_dir`, `_addon_target`, `se_host_input` / Add-on → `_addon_result`,
@@ -23,7 +25,7 @@
    `sections` · `diagnosis` 는 바뀌지 않는다.
 4. `inventory.sh` 3종은 호출자 host object 전체를 hostvar `se_host_input` 으로 보존한다 (키 예외 목록
    없음, 문자열은 `__ansible_unsafe`, Ansible 예약 키 `__ansible_*` 만 제외).
-5. 경로는 `SE_ADDON_DIR` 하나. 미설정 → 조용히 건너뜀 / 설정했는데 `tasks/main.yml` 없음 → `errors[]`
+5. 경로는 `ADDON_DIR` 하나. 미설정 → 조용히 건너뜀 / 설정했는데 `tasks/main.yml` 없음 → `errors[]`
    1건 / 있으면 실행. 자동 fallback 경로 · 특수값 없음.
 6. Add-on 설정은 `config.yml` 의 `rules` 하나 — 위에서부터 처음 맞는 rule 하나만 적용 (병합 없음),
    `match` 필수. software 는 `name` + `command` 만, 출력은 가공 없이 `value`.
@@ -39,7 +41,7 @@ rule 30 R3 은 "외부 호출에 timeout 명시" 를 요구하지만, 사용자�
 - 메인 변경: `inventory.sh` 3, hook 1(신규), `site.yml` include 4곳, 테스트 3(신규) + fixture, 문서.
   `common/tasks/normalize/**`, `callback_plugins/**`, `ansible.cfg`, `schema/**`, `vault/**`, `Jenkinsfile*` 는
   고치지 않았다.
-- `SE_ADDON_DIR` 미설정(현재 모든 환경): 봉투가 hook 도입 전과 byte 단위로 같다 (엔진 테스트, hash seed 고정).
+- `ADDON_DIR` 미설정(현재 모든 환경): 봉투가 hook 도입 전과 byte 단위로 같다 (엔진 테스트, hash seed 고정).
 - 새 수집 기능은 Add-on 안에서만 추가한다 (`tasks/collectors/<이름>.yml` → `data.addon.<이름>`).
 - 실측 근거: `tests/evidence/2026-09-21-addon-hook-live.md` (2.20.3 gate spike, 엔진 테스트, 실장비 V1~V8).
 
@@ -58,7 +60,7 @@ rule 30 R3 은 "외부 호출에 timeout 명시" 를 요구하지만, 사용자�
 ### 남은 것
 
 - `/etc/hosts` DB 판별 규칙 — 고객 샘플 확인 후.
-- 운영 Agent 노드 환경변수 `SE_ADDON_DIR` 등록 — 사용자 (Add-on 배치는 배포 Job 으로 끝남).
+- 운영 Agent 노드 환경변수 `ADDON_DIR` 등록 — 사용자 (Add-on 배치는 배포 Job 으로 끝남).
 
 ## 대안 비교 (Considered)
 

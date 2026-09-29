@@ -4,6 +4,8 @@
 > 코드: 메인 `3d0fbfa2`(feat) · `3bba2edf`(docs) · production `9a194619`. Add-on 저장소 `ed8f320`(로컬 commit — push 는 사용자).
 > 목적: (1) 전역 `SE_ADDON_REPO` 가 없는 빌드가 종전과 같은가, (2) 자체 서명 인증서의 내부 GitLab 을 Runner 사전 작업 없이
 > 받는가, (3) ref 세 형태(브랜치 · 태그 · 40자 해시)가 같은 흐름으로 받아지는가, (4) Add-on 엔진이 target 디렉터리로 실행 여부를 정하는가.
+> 이름: 2026-09-30 에 Add-on 변수 이름이 바뀌었다 (`ADDON_REPO_URL` · `ADDON_REPO_REF` · `ADDON_REPO_CREDENTIALS_ID` ·
+> `ADDON_REPO_SSL_VERIFY` · `ADDON_DIR`). 1 ~ 4-1b 절은 실행 당시 이름 그대로다 — 대응표는 decision-log 2026-09-30.
 
 ## 1. 로컬 검증
 
@@ -99,7 +101,27 @@ jenkins-prod 전역 변수 `SE_ADDON_REPO` 는 여전히 없다(재조회). 제�
 
 ### 4-2. 전역 변수 등록 뒤 (대기)
 
-등록 확인 뒤 진행: jenkins-prod `target_type=os` + `addonRef=verify/addon-2026-09-29` → 콘솔 `[addon] <URL>@verify/… 102e48c…` ·
-`[addon] 검사 통과: linux=['hosts', 'software'], windows=['software']` · envelope `data.addon.software`(APP host: `addon check` 만,
-DB host: `addon check` + `os release`, Windows: `addon check`) → redfish 1회(`[addon] …@main ed8f320…` 뒤 `[addon] 실행할 기능 없음`)
-→ os 1회 `addonRef` 없이(main 기본 config → 검사 통과, `data.addon` 없음).
+사용자가 jenkins-prod 에 `ADDON_REPO_URL` 을 등록하면 진행한다 (5절의 이름 변경 뒤): `target_type=os` + `addonRef=verify/addon-2026-09-29`
+→ 콘솔 `[addon] <URL>@verify/… 102e48c…` · `[addon] 검사 통과: linux=['hosts', 'software'], windows=['software']` · envelope
+`data.addon.software`(APP host: `addon check` 만, DB host: `addon check` + `os release`, Windows: `addon check`) → redfish 1회
+(`[addon] …@main <sha>` 뒤 `[addon] 실행할 기능 없음`) → os 1회 `addonRef` 없이(main 기본 config → 검사 통과, `data.addon` 없음).
+
+## 5. 2026-09-30 — Add-on 변수 이름 변경 뒤 검증
+
+대응: `SE_ADDON_REPO`→`ADDON_REPO_URL`, `SE_ADDON_REF`→`ADDON_REPO_REF`, `SE_ADDON_CREDENTIALS_ID`→`ADDON_REPO_CREDENTIALS_ID`,
+`SE_ADDON_SSL_VERIFY`→`ADDON_REPO_SSL_VERIFY`, `SE_ADDON_DIR`→`ADDON_DIR`, `SE_ADDON_USER/PASSWORD`→`ADDON_REPO_USER/PASSWORD`,
+`SE_ADDON_GIT_TIMEOUT` 삭제(180초 고정). 옛 이름은 읽지 않는다.
+
+| 항목 | 결과 |
+|---|---|
+| 메인 `pytest tests/unit tests/e2e` | 3185 passed / 35 skipped |
+| 메인 Add-on 단위 3파일(`test_addon_hook_contract` · `test_jenkinsfile_portal_addon` · `test_addon_checkout`) | 74 passed — 체크아웃 스크립트 14 케이스(`ADDON_REPO_SSL_VERIFY=true` · askpass `ADDON_REPO_USER/PASSWORD` 포함), 옛 이름 부재 13 파일 |
+| 메인 `tests/integration/test_addon_hook_playbook.py` (WSL, ansible-core 2.20.7) | 10 passed — `ADDON_DIR` 미설정 byte 동일 · 경로 없음 detail `ADDON_DIR=…; cause=addon_entry_not_found` · 정상 · 실패 · 연결 끊김 |
+| 3채널 `ansible-playbook --syntax-check` (WSL) | os · esxi · redfish 통과 |
+| Jenkins 선언형 린터 (lab 153) | "Jenkinsfile successfully validated." |
+| Add-on `python -m pytest tests` (Windows) | 181 passed / 17 skipped |
+| Add-on `tests/test_playbook.py` (WSL) | 17 passed |
+| Add-on `tools/check_layout.py . --targets linux,windows` | `[addon] 검사 통과: linux=['hosts', 'software'], windows=['software']` |
+| Jenkins 전역 변수 읽기 조회 (lab · jenkins-prod) | 둘 다 `(none)` — 옛 이름 등록 없음, 옮길 설정 없음 |
+
+Jenkins 실행 결과는 아래에 이어 적는다.

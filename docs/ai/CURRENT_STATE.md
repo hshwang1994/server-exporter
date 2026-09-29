@@ -1,5 +1,21 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-30 — Add-on 변수 이름 정리 (`SE_ADDON_*` → `ADDON_REPO_*` · `ADDON_DIR`)
+
+> 결정 · 대응표: `docs/reference/decision-log.md` 2026-09-30. 실측: `tests/evidence/2026-09-29-addon-per-build-checkout.md` 5절.
+
+- **왜**: `SE_` 접두사는 처음 보는 사람이 뜻을 알기 어렵다 (사용자 요청). 범위는 Add-on 관련 이름만 — Gathering 전체
+  변수 이름은 그대로 (사용자 지정).
+- **바뀐 이름**: Jenkins 전역 `ADDON_REPO_URL`(켤 때 필수, 유일한 등록값) · `ADDON_REPO_REF` · `ADDON_REPO_CREDENTIALS_ID` ·
+  `ADDON_REPO_SSL_VERIFY`, hook 입력 `ADDON_DIR`(`errors[].detail` 포함), 파이프라인 내부 `ADDON_REPO_USER/PASSWORD`.
+  `addon_checkout.sh` 의 숨은 timeout override 삭제(180초 고정). 옛 이름은 호환용으로도 읽지 않는다.
+- **바뀐 파일**: 메인 `Jenkinsfile_portal` · `scripts/addon_checkout.sh` · `scripts/addon_askpass.sh` · `common/tasks/addon/run_addon.yml` ·
+  3채널 `site.yml`(call site 4곳) · 테스트 4 + fixture · 운영/개발 문서 5 · ADR 2 · rule 80 · JENKINS_PIPELINES.
+  Add-on 저장소 README · e2e(run.py · Jenkinsfile 주석 · scale_spike) · test_layout. 옛 이름 부재 확인 테스트 2곳.
+- **검증**: 메인 unit+e2e 3185 passed, Add-on 단위 74 · hook 통합(WSL) 10 · 3채널 syntax-check · 선언형 린터 통과,
+  Add-on 181 passed + WSL 17 passed.
+- **대기(사용자)**: jenkins-prod 에 `ADDON_REPO_URL` 등록(AP-2) → 제가(AI) 켜진 실행 확인(AP-3).
+
 ## 일자: 2026-09-29 — Add-on 을 빌드마다 받는다 (켜기 = 전역 `SE_ADDON_REPO` 1개 · 추가 = 파일 1개 · Runner 무관)
 
 > 결정: `docs/reference/decision-log.md` 2026-09-29, `docs/ai/decisions/ADR-2026-09-29-addon-per-build-checkout.md`.

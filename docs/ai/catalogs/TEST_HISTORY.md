@@ -1,5 +1,18 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-30 — Add-on 변수 이름 정리 (`ADDON_REPO_*` · `ADDON_DIR`)
+
+> 대응표 `docs/reference/decision-log.md` 2026-09-30. 실측 `tests/evidence/2026-09-29-addon-per-build-checkout.md` 5절.
+
+| 항목 | 결과 |
+|---|---|
+| `pytest tests/unit tests/e2e` | 3185 passed / 35 skipped |
+| Add-on 단위 3파일 (hook 계약 · Jenkinsfile 계약 · 체크아웃 스크립트) | 74 passed — 옛 이름 부재 13 파일 포함 |
+| `tests/integration/test_addon_hook_playbook.py` (WSL, ansible-core 2.20.7) | 10 passed |
+| `ansible-playbook --syntax-check` 3채널 (WSL) | 통과 |
+| Jenkins 선언형 린터 (lab 153) | validated |
+| Add-on `python -m pytest tests` (Windows) / `tests/test_playbook.py` (WSL) | 181 passed · 17 skipped / 17 passed |
+
 ## 2026-09-29 — Add-on 빌드별 체크아웃 (`scripts/addon_checkout.sh` · `Jenkinsfile_portal` Gather · Add-on `ed8f320`)
 
 > 코드 `3d0fbfa2` · 문서 `3bba2edf` · production `9a194619`. 실측 `tests/evidence/2026-09-29-addon-per-build-checkout.md`.

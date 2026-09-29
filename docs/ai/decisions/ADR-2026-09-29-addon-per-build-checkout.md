@@ -1,15 +1,16 @@
 # ADR 2026-09-29 — Add-on 을 빌드마다 받는다: 켜기 1개 설정 · 추가 1개 파일 · Runner 무관
 
 - 상태: Accepted (사용자 확정 2026-09-29)
-- 대체: `ADR-2026-09-21-gathering-addon-hook.md` 의 **배포 부분**(배포 Job · `ADDON_HOME` · 노드 환경변수 `SE_ADDON_DIR`).
+- 대체: `ADR-2026-09-21-gathering-addon-hook.md` 의 **배포 부분**(배포 Job · `ADDON_HOME` · 노드 환경변수 `ADDON_DIR`).
   hook 계약(변수 5개 · 세 경우 · `errors[]` 문장 · timeout 없음)은 그대로다.
 - 정본: `docs/reference/decision-log.md` 2026-09-29, `docs/operate/04-pipeline-runtime.md` 3절, `docs/develop/07-addon-hook.md` 2절,
   Add-on 저장소 README. 실측: `tests/evidence/2026-09-29-addon-per-build-checkout.md`.
+- 이름: 변수 이름은 2026-09-30 변경 뒤 이름으로 적었다 (대응표: `docs/reference/decision-log.md` 2026-09-30).
 
 ## 컨텍스트 (Why)
 
 - 신규 Jenkins(jenkins-prod.gooddi.lab)는 `git` 라벨 Runner 가 4대다. 종전 Add-on 은 배포 Job 이 **노드 한 대**의
-  `ADDON_HOME` 에 파일을 놓고 그 노드의 환경변수 `SE_ADDON_DIR` 로 켜는 구조라, 수집이 어느 Runner 에서 도는지(Jenkins
+  `ADDON_HOME` 에 파일을 놓고 그 노드의 환경변수 `ADDON_DIR` 로 켜는 구조라, 수집이 어느 Runner 에서 도는지(Jenkins
   스케줄링)와 Add-on 코드가 거기 있는지(availability)가 묶여 있었다. lab 은 Runner 가 한 대(155 가 `ic/chj/yi/git` 전부)라
   드러나지 않았다. 신규 Runner 의 Agent 계정 `jenkins` 는 `/home/cloviradmin/...`(700) 을 읽지도 못한다 (JV-3).
 - 사용자 요구: 4대에 복사하는 땜질이 아니라 구조를 다시 세운다. 우선순위 ① 쓰기 쉬움 ② 운영하기 쉬움 ③ 추가/수정 쉬움
@@ -23,7 +24,7 @@
 | 관심사 | 담당 | 근거 |
 |---|---|---|
 | Jenkins 스케줄링 | `Jenkinsfile_portal` Resolve Location + `locations.yml.agent_label` (변경 없음) | `loc` |
-| Add-on availability | Gather stage 가 빌드마다 `scripts/addon_checkout.sh` 로 `${WORKSPACE}/addon` 에 받고 `addon/tools/check_layout.py` 로 검사한 뒤 ansible 실행에만 `withEnv(SE_ADDON_DIR)` | Jenkins 전역 `SE_ADDON_REPO` 1개 (+선택 `SE_ADDON_REF` · `SE_ADDON_CREDENTIALS_ID` · `SE_ADDON_SSL_VERIFY`) |
+| Add-on availability | Gather stage 가 빌드마다 `scripts/addon_checkout.sh` 로 `${WORKSPACE}/addon` 에 받고 `addon/tools/check_layout.py` 로 검사한 뒤 ansible 실행에만 `withEnv(ADDON_DIR)` | Jenkins 전역 `ADDON_REPO_URL` 1개 (+선택 `ADDON_REPO_REF` · `ADDON_REPO_CREDENTIALS_ID` · `ADDON_REPO_SSL_VERIFY`) |
 | Add-on resolution | Add-on 저장소 `collectors/<target>/<이름>.yml` — 디렉터리 = 지원 target, 파일 = Add-on 하나, 이름 = `data.addon.<이름>` | `_addon_target` (play 가 결정) |
 
 1. 체크아웃은 Git 플러그인이 아니라 스크립트다 (`git init` → `fetch --depth 1 origin <ref>` → 실패 시 브랜치 · 태그 전체
@@ -49,7 +50,7 @@
 - 하네스: rule 80 에 R1-B(Add-on 빌드별 체크아웃 Default/Allowed/Forbidden) 추가 — rule 70 R8 trigger 1 의 ADR 이 이 문서다.
   NEXT_ACTIONS 의 AO-7 · AO-10 · AO-13 · AO-14 · JV-3 을 AP 절이 대체한다.
 - 실측(2026-09-29): 신규 Runner01(RHEL 9, 시스템 CA 가 GitLab 자체 서명 인증서를 모름 — `curl` 000)에서 기본값(검증 안 함)으로
-  main · 40자 해시 체크아웃 성공, `SE_ADDON_SSL_VERIFY=true` 는 실패. lab 155(Ubuntu, CA 신뢰됨)는 둘 다 성공. 짧은 해시는 둘 다 거부.
+  main · 40자 해시 체크아웃 성공, `ADDON_REPO_SSL_VERIFY=true` 는 실패. lab 155(Ubuntu, CA 신뢰됨)는 둘 다 성공. 짧은 해시는 둘 다 거부.
   단위 · e2e · 린터 결과와 Jenkins 실행은 evidence 파일.
 
 ## 대안 비교 (Considered)
@@ -66,4 +67,4 @@
 ## 후속
 
 - JV-4: 설치 자동화 시드 사본은 production 전체(`git archive`)로 교체 — 설치 자동화 팀, 이번에 손대지 않음.
-- 사용자: Add-on 저장소 push, lab · 신규 Master 에 `SE_ADDON_REPO` 등록, 옛 배포 Job 삭제.
+- 사용자: Add-on 저장소 push, lab · 신규 Master 에 `ADDON_REPO_URL` 등록, 옛 배포 Job 삭제.
