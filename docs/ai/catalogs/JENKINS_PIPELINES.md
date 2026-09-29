@@ -10,7 +10,7 @@
 |---|---|---|---|
 | Resolve Location | `built-in` (controller) | `readYaml common/vars/locations.yml` → `SE_LOCATION` / `SE_AGENT_LABEL`. 미등록 `loc` 즉시 실패 | YES |
 | Validate | `SE_AGENT_LABEL` (agent, `skipDefaultCheckout`) | target_type / inventory_json / callbackUrl / deploymentEnvironmentId 검증 | YES |
-| Gather | `SE_AGENT_LABEL` (agent) | venv 활성화 → `ansible-playbook … --vault-password-file=<mktemp> -e se_location=<loc>` → `gather_output.json` stash | ansible 실패 UNSTABLE, 출력 0바이트 FAILURE |
+| Gather | `SE_AGENT_LABEL` (agent) | (전역 `SE_ADDON_REPO` 가 있으면 Add-on 체크아웃 · 검사 — 아래 절) → venv 활성화 → `ansible-playbook … --vault-password-file=<mktemp> -e se_location=<loc>` (Add-on 이 켜진 빌드만 `withEnv(SE_ADDON_DIR)`) → `gather_output.json` stash | Add-on 을 못 받으면 UNSTABLE + Add-on 없이 수집, ansible 실패 UNSTABLE, 출력 0바이트 FAILURE |
 | Validate Schema | `SE_AGENT_LABEL` (agent) | venv 활성화 → `python3 tests/validate_field_dictionary.py` | YES |
 | Callback | `built-in` (controller) | unstash → `httpRequest` POST 3회 재시도 | NO (UNSTABLE) |
 
@@ -24,6 +24,17 @@ Gather · Validate Schema 는 `. "${WORKSPACE}/scripts/activate_ansible_venv.sh"
 → 알려진 경로 `/app/ansible-env` → `/opt/ansible-env` → 실패(시스템 python 으로 넘어가지 않음).
 콘솔에 `[venv] <경로> python=<버전> (source=env|path|known)` 이 남는다. 실측: 설치 자동화 Runner 4대 = `/app`(path),
 lab Agent 155 = `/opt`(known). 정본: `scripts/activate_ansible_venv.sh`, `tests/unit/test_activate_ansible_venv.py`.
+
+## Add-on 빌드별 체크아웃 (2026-09-29)
+
+켜기는 Jenkins 전역 환경변수 `SE_ADDON_REPO` 하나 (선택 `SE_ADDON_REF`=main · `SE_ADDON_CREDENTIALS_ID` · `SE_ADDON_SSL_VERIFY`=false).
+없으면 Gather 의 Add-on 블록은 통째로 실행되지 않아 결과가 도입 전과 같다. 있으면 Gather 가
+`bash scripts/addon_checkout.sh <URL> <ref> ${WORKSPACE}/addon`(`git init` → `fetch --depth 1 <ref>` → 실패 시 전체 fetch 해석,
+`retry(2)`, 검증 해제는 그 git 명령에만 `-c http.sslVerify=false`) → venv python 으로 `addon/tools/check_layout.py addon --targets
+<서버 종류>`(os→`linux,windows` · esxi · redfish) → rc 0 이면 ansible `sh` 만 `withEnv(["SE_ADDON_DIR=${WORKSPACE}/addon"])`,
+rc 3 이면 켜지 않음(`[addon] 실행할 기능 없음`), 그 밖에는 `unstable("[addon] unavailable: …")` + Add-on 없이 수집.
+Job 파라미터 `addonRef`(선택)는 빌드 한정 ref override. 정본: `docs/operate/04-pipeline-runtime.md` 3절,
+`tests/unit/test_jenkinsfile_portal_addon.py`, `tests/unit/test_addon_checkout.py`. 노드 환경변수 · 배포 Job · `ADDON_HOME` 은 없다.
 
 ## pytest 회귀 게이트
 
@@ -51,7 +62,7 @@ Jenkins credential `server-gather-vault-password` (type: **Secret text**). `with
 | Jenkins | Job | Script Path | 브랜치 | Agent |
 |---|---|---|---|---|
 | lab 10.100.64.153 | `clovirone-server-gather` | `Jenkinsfile_portal` | `*/production` | `jenkins-agent-dev` = 10.100.64.155 (`/opt/ansible-env`, 라벨 yi/git/chj/ic/linux/windows) |
-| 신규 jenkins-prod.gooddi.lab | `clovirone-cicd/clovirone-server-gather` | `Jenkinsfile_portal` | 사용자가 `production` 으로 전환 | `SKHynix-Jenkins-Runner01~04` = 10.100.64.33~36 (`/app/ansible-env`, 라벨 git/linux/redfish/windows — `ic/chj/yi` 노드 없음, `git` 미설치) |
+| 신규 jenkins-prod.gooddi.lab | `clovirone-cicd/clovirone-server-gather` | `Jenkinsfile_portal` | `production` (사용자 전환) | `SKHynix-Jenkins-Runner01~04` = 10.100.64.33~36 (`/app/ansible-env`, 라벨 git/linux/redfish/windows — `ic/chj/yi` 노드 없음, git 2.47.3 은 2026-09-28 설치됨, 시스템 CA 가 내부 GitLab 자체 서명 인증서를 모름 → Add-on 은 기본값(검증 안 함)으로 받는다) |
 
 `main` 은 tests/reference 를 포함해 약 17k 파일이라 컨트롤러의 Resolve Location(2분 제한)이 체크아웃 도중 끊겼다
 (신규 Jenkins 빌드 #4) — Job 은 `production` 을 본다.

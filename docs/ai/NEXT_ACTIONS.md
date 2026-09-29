@@ -1,5 +1,21 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Add-on 빌드별 체크아웃 후속 (2026-09-29)
+
+> 정본: `docs/reference/decision-log.md` 2026-09-29, `docs/ai/decisions/ADR-2026-09-29-addon-per-build-checkout.md`,
+> `docs/operate/04-pipeline-runtime.md` 3절. 실측 `tests/evidence/2026-09-29-addon-per-build-checkout.md`.
+> 코드: 메인 `3d0fbfa2`(feat) · `3bba2edf`(docs) · production `9a194619`, Add-on 저장소 `ed8f320`(로컬).
+> 이 절이 AO-7 · AO-10 · AO-13 · AO-14 · JV-3 을 대체한다.
+
+| # | 항목 | 상태 | 내용 |
+|---|---|---|---|
+| AP-1 | Add-on 저장소 `ed8f320` push | `[TODO / 사용자]` | 로컬 `C:\github\ClovirONE\clovirone-gathering-addon` main → GitLab `origin/main`. push 전까지 GitLab `main` 은 옛 구조(`83cddde`: rule · `deploy/`)라 새 파이프라인의 `check_layout.py` 검사가 "파일 없음" 으로 실패한다 → 빌드 UNSTABLE + Add-on 없이 수집 (기본 수집은 정상) |
+| AP-2 | lab · 신규 Master 에 전역 `SE_ADDON_REPO` 등록 | `[TODO / 사용자]` | Jenkins 관리 → System → Global properties → `SE_ADDON_REPO=https://10.100.64.156/root/clovirone-server-gathering-addon.git`. 나머지 3개(`SE_ADDON_REF` · `SE_ADDON_CREDENTIALS_ID` · `SE_ADDON_SSL_VERIFY`)는 기본값으로 둔다 (익명 읽기 · 자체 서명 → 검증 안 함) |
+| AP-3 | Jenkins 실행 확인 (AP-1 · AP-2 뒤) | `[PENDING]` | lab `clovirone-server-gather` `target_type=os`(Linux `physical_purpose` 포함 + Windows) 1회 → 콘솔 `[addon] <URL>@main <sha>` · `[addon] 검사 통과: linux=[…]` · envelope `data.addon.software` → redfish 1회(`[addon] 실행할 기능 없음`) → 신규 Jenkins 1회(CA 없는 Runner 에서 기본값 통과). evidence 4절에 기록. Add-on e2e Job(`형섭/clovirone-gathering-addon-e2e`) 도 GitLab main 이 바뀐 뒤 1회 (시나리오 s01~s15) |
+| AP-4 | 옛 배포 Job 삭제 · lab 155 정리 | `[TODO / 사용자]` | `형섭/clovirone-gathering-addon-deploy` 는 Script Path(`deploy/Jenkinsfile`)가 사라져 더는 돌지 않는다 → 삭제. lab 155 의 `/home/cloviradmin/clovirone-gathering-addon*`(release 링크 · 폴더)은 아무 것도 읽지 않으므로 지워도 된다 |
+| AP-5 | Git 플러그인 + `withEnv(GIT_SSL_NO_VERIFY)` 실측 | `[INFO — 하지 않음]` | 체크아웃을 스크립트로 확정해 필요 없어졌다. 다시 플러그인으로 돌리려면 그때 실측 (ADR 대안 C) |
+| AP-6 | JV-4 (설치 자동화 시드) | `[TODO / 설치자동화 팀]` | 아래 JV-4 참조 — 이번 작업은 그 저장소를 건드리지 않았다. 시드에는 `scripts/addon_checkout.sh` · `addon_askpass.sh` 도 없으므로 부분 패치가 아니라 production 전체(`git archive production`)로 교체해야 한다 |
+
 ## Agent venv 경로 분리 후속 (2026-09-28)
 
 > 정본: `docs/reference/decision-log.md` 2026-09-28, `scripts/activate_ansible_venv.sh`, 실측 `tests/evidence/2026-09-28-runner-venv-path.md`
@@ -8,8 +24,8 @@
 |---|---|---|---|
 | JV-1 | 신규 Jenkins `clovirone-cicd/clovirone-server-gather` 1회 실행 | `[DONE 2026-09-28]` | Runner 4대에 git 2.47.3 설치 + 사용자가 신규 Master 에 `server-gather-vault-password` 등록. #7 은 credential 미등록으로 Gather 진입 전 실패, **#8**(production `e7baaa55`, 입력은 lab #20 과 동일): Gather(Runner03) · Validate Schema(Runner01) 모두 `[venv] /app/ansible-env python=Python 3.12.9 (source=path)`, envelope 4건 lab 과 동일, Callback sink → UNSTABLE(의도), 7분 35초 |
 | JV-2 | 신규 Jenkins 노드 라벨 | `[TODO / 사용자]` | Runner 라벨이 `git,linux,redfish,windows`(04 는 `git` 만) — `locations.yml` 의 `ic/chj/yi` Location 은 노드 대기가 된다. 운영 Location 을 정하고 라벨 또는 `locations.yml` 을 맞춘다 |
-| JV-3 | `SE_ADDON_DIR` 기본 경로 | `[TODO / 사용자]` | 문서·배포 Job 기본값 `/home/cloviradmin/clovirone-gathering-addon` 은 신규 Runner 의 Agent 계정 `jenkins`(홈 `/home/jenkins`)와 맞지 않는다. Add-on 을 신규 Runner 에서 켤 때 `ADDON_HOME` · 노드 환경변수를 `jenkins` 가 읽는 경로로 |
-| JV-4 | 설치 자동화 시드 사본 동기화 | `[TODO / 설치자동화 팀]` | `generated/gitlab-projects/clovirone-server-gathering` 의 Jenkinsfile 패치가 "activate 줄" 을 대상으로 한다 — 이제 그 줄이 없으므로 시드를 이번 main/production 으로 다시 뜨거나 패치를 no-op 처리 |
+| JV-3 | `SE_ADDON_DIR` 기본 경로 | `[DONE 2026-09-29 — 구조 변경으로 해소]` | 노드 경로 · `ADDON_HOME` · 노드 환경변수 자체가 없어졌다. Add-on 은 빌드마다 `${WORKSPACE}/addon` 에 받는다 (위 AP 절) |
+| JV-4 | 설치 자동화 시드 사본 동기화 | `[TODO / 설치자동화 팀]` | 실측(2026-09-29, 줄바꿈 정규화): production `e7baaa55` 978 파일 vs 시드 950 — 동일 822 · 다름 125(`json_only.py` · `precheck_bundle.py` · credential task · `build_output.yml` · vault 8 · schema 15 · docs 16 …) · production 에만 31(Add-on hook · `failure_reason.py` · `identity_normalizer.py` · `resolve_vendor.yml` · `activate_ansible_venv.sh` · 테스트 25) · 시드에만 3(삭제된 `Jenkinsfile` 2종 · `gather_runtime.yml`). 시드는 아직 어디에도 시딩되지 않았고(신규 GitLab 미설치, 설치 Job 빌드 0건) 신규 Jenkins 는 GitHub `production` 을 본다 — **현재 장애 아님**. 후속: ① 시드를 부분 패치가 아니라 `git archive production` 전체로 교체(이제 `addon_checkout.sh` 등도 빠져 있다) ② 정적 시드 유지 vs 새 GitLab 에 production 동기화(push URL)는 별도 구조 개선 항목. 이 저장소 쪽 작업은 없다 |
 | JV-5 | `jenkins-agent-ops`(154) venv 부재 | `[INFO / 사용자]` | `/opt`·`/app` 둘 다 없어 수집 불가 상태. Job 에 연결되어 있지 않아 영향 없음. 쓰려면 02-agent-node.md 5절대로 구축 |
 | JV-6 | lab `git/테스트 액션` Job | `[INFO / 사용자]` | 삭제된 `Jenkinsfile` 을 Script Path 로 쓴다 — 필요하면 `Jenkinsfile_portal` 로 바꾸거나 Job 삭제 |
 
@@ -30,18 +46,18 @@
 | AO-4 | Linux 줄바꿈 (결정 T) | `[DONE 2026-09-22 — 유지]` | 사용자 결정: `\r\n` 그대로 유지 ("AO-4 Linux `\r\n` 유지 … 그대로 유지합니다"). 실측: SSH raw 출력은 `\r\n` (PTY). 바꾸게 되면 software 태스크만 `ansible_ssh_use_tty: false` |
 | AO-5 | hosts DB 판별 규칙 | `[PENDING / 고객 샘플]` | 고객 `/etc/hosts` 2~3개 + 서버별 `uname -n` + 기대 `dbIpList` 확보 후 matcher 구현. 그 전에는 `hosts: true` 배포 금지 |
 | AO-6 | Add-on 원격 저장소 등록 | `[DONE 2026-09-22]` | `https://10.100.64.156/root/clovirone-server-gathering-addon.git` main — GitLab 초기 commit 은 병합해 보존(강제 push 없음) |
-| AO-7 | 운영 Agent 에 Add-on 배치 + 노드 환경변수 `SE_ADDON_DIR` | `[PARTIAL — 환경변수는 사용자]` | 배치 완료: 배포 Job `형섭/clovirone-gathering-addon-deploy`(Add-on `deploy/Jenkinsfile`) #1 → `/home/cloviradmin/clovirone-gathering-addon` → `…-releases/20260922-085019-7dec7d2` (기본 config `rules: []`). **노드 환경변수 `SE_ADDON_DIR=/home/cloviradmin/clovirone-gathering-addon` 등록은 하지 않았다** — 공유 Agent 의 모든 수집에 적용되는 설정이라 자동 권한 검사가 막았다(공유 자원 변경). 사용자가 Jenkins 노드 설정에서 등록하거나 권한을 주면 진행. 등록 전에는 아무 영향 없음 |
+| AO-7 | 운영 Agent 에 Add-on 배치 + 노드 환경변수 `SE_ADDON_DIR` | `[SUPERSEDED 2026-09-29 → AP-2]` (아래는 당시 기록) | 배치 완료: 배포 Job `형섭/clovirone-gathering-addon-deploy`(Add-on `deploy/Jenkinsfile`) #1 → `/home/cloviradmin/clovirone-gathering-addon` → `…-releases/20260922-085019-7dec7d2` (기본 config `rules: []`). **노드 환경변수 `SE_ADDON_DIR=/home/cloviradmin/clovirone-gathering-addon` 등록은 하지 않았다** — 공유 Agent 의 모든 수집에 적용되는 설정이라 자동 권한 검사가 막았다(공유 자원 변경). 사용자가 Jenkins 노드 설정에서 등록하거나 권한을 주면 진행. 등록 전에는 아무 영향 없음 |
 | AO-8 | 운영 Agent 에서 gate spike 재확인 | `[DONE 2026-09-22]` | e2e #7 의 규모 시험(`scale`, Add-on `tests/e2e/scale_spike.py`): 실제 Agent `jenkins-agent-dev`(ansible-core 2.20.3)에서 host 200 · forks 200 · strategy free — 미설정 / 1회 / 동시 2회 모두 PASS 8/8 (실패 0 · 연결 끊김 0, role filter · 메인 filter · 상대 include 200/200). 최대 메모리 사용 0.35GiB (감시 기준 1GiB, 중단 0). 엔진 테스트도 같은 Agent 에서 10 passed |
 | AO-9 | Portal 소비자 안내 | `[TODO / 사용자]` | 전달할 안내문을 2026-09-22 최종 보고에 준비했다 (Portal 팀 연락은 사용자). 요점: `data.addon` 은 있을 때만 있다(null-guard), `errors[].section` 에 `addon` 이 올 수 있고 status 는 바뀌지 않는다, `value` 는 여러 줄 · 수 MB · Linux `\r\n` · 비 UTF-8 바이트는 `\xNN` |
-| AO-10 | Jenkins 파이프라인 1회 | `[PENDING / AO-7 뒤]` | e2e Job 이 Gather 단계와 같은 명령 · vault 로 수집하고 Callback 본문 조립 · 파싱까지 확인했다. 실제 `Jenkinsfile_portal` 은 `SE_ADDON_DIR` 을 노드 환경변수로만 받으므로 AO-7 뒤에 한다: 배포 Job 을 `CHECK_RULE=true` 로 돌리고 → `clovirone-server-gather` 를 `callbackUrl=http://127.0.0.1:9`(Portal 로 보내지 않음), 서버 항목 `addon_check: "yes"` 로 실행 → 콘솔의 결과 JSON 에 `data.addon.software` 확인 → `CHECK_RULE=false` 로 재배포. Portal 수신은 Portal 측(AO-9). 임시 Callback 수신 Job(master 에서 포트 열기)은 권한 검사가 막아 만들지 않았다 |
+| AO-10 | Jenkins 파이프라인 1회 | `[SUPERSEDED 2026-09-29 → AP-3]` (아래는 당시 계획 — `CHECK_RULE` · 배포 Job 은 없어졌다) | e2e Job 이 Gather 단계와 같은 명령 · vault 로 수집하고 Callback 본문 조립 · 파싱까지 확인했다. 실제 `Jenkinsfile_portal` 은 `SE_ADDON_DIR` 을 노드 환경변수로만 받으므로 AO-7 뒤에 한다: 배포 Job 을 `CHECK_RULE=true` 로 돌리고 → `clovirone-server-gather` 를 `callbackUrl=http://127.0.0.1:9`(Portal 로 보내지 않음), 서버 항목 `addon_check: "yes"` 로 실행 → 콘솔의 결과 JSON 에 `data.addon.software` 확인 → `CHECK_RULE=false` 로 재배포. Portal 수신은 Portal 측(AO-9). 임시 Callback 수신 Job(master 에서 포트 열기)은 권한 검사가 막아 만들지 않았다 |
 | AO-11 | Add-on e2e Jenkins Job | `[DONE 2026-09-22]` | `http://10.100.64.153:8080/job/형섭/job/clovirone-gathering-addon-e2e/` — Add-on 저장소 `tests/e2e/Jenkinsfile`(Pipeline from SCM, GitLab main). 결과는 빌드 설명 · "Add-on e2e 보고서"(HTML) · Test Result(엔진 테스트) · 보관 `results/*`. `SE_ADDON_DIR` 은 Job 안에서만 시나리오마다 지정 (노드 설정 불변). `SCENARIOS=all,scale` 이면 규모 시험도 돈다. 최종 #7: PASS 127 / FAIL 0 / KNOWN 0 — `tests/evidence/2026-09-21-addon-hook-live.md` 8 · 9절 |
 | AO-12 | Jenkins credential 설명란의 비밀번호 평문 | `[TODO / 사용자]` | `server-gather-vault-password` 의 설명(description)이 vault 비밀번호 그 자체다 (값은 여기 적지 않는다). API 로 고치지 않았다 — Jenkins 가 credential 설정을 비밀값을 가린(`<secret-redacted/>`) 모양으로 내주므로, 그대로 되올리면 공용 vault 비밀값이 깨져 모든 수집이 멈출 수 있다. 사용자가 화면에서 설명만 지운다 (Jenkins 관리 → Credentials → 해당 항목 → Update → Description 비움 → Save). 비밀번호 교체(회전)는 vault 재암호화 · 모든 사용처 동시 변경이 필요해 사용자 결정 (CLAUDE.md §12) |
-| AO-13 | Add-on 배포 Job | `[DONE 2026-09-22]` | `http://10.100.64.153:8080/job/형섭/job/clovirone-gathering-addon-deploy/` — GitLab main 을 받아 검사(YAML · filter import · 금지 파일) 통과 시에만 release 에 풀고 링크를 원자적으로 교체, 최근 5개 보존. `CHECK_RULE=true` 는 `addon_check: "yes"` 서버 전용 확인 rule |
-| AO-14 | 배포 Job Check 의 검사 중복 | `[HOLD]` | `deploy/Jenkinsfile` Check 가 `tests/test_layout.py`(YAML · 탭 · 금지 부품 6개 · filter import)를 inline Python 으로 다시 적었다 — 금지 부품 목록이 두 곳. e2e Jenkinsfile 의 pytest 대체 경로(workspace 에 받아 쓰고 빌드 끝에 지움)로 test_layout 을 직접 돌리게 바꾸면 한 곳이 된다. 지금은 두 곳이 같아 급하지 않다 (감사 B2) |
+| AO-13 | Add-on 배포 Job | `[DONE 2026-09-22 → 폐지 2026-09-29, 삭제는 AP-4]` | `http://10.100.64.153:8080/job/형섭/job/clovirone-gathering-addon-deploy/` — GitLab main 을 받아 검사(YAML · filter import · 금지 파일) 통과 시에만 release 에 풀고 링크를 원자적으로 교체, 최근 5개 보존. `CHECK_RULE=true` 는 `addon_check: "yes"` 서버 전용 확인 rule |
+| AO-14 | 배포 Job Check 의 검사 중복 | `[DONE 2026-09-29 — 해소]` (`deploy/` 삭제, 검사는 Add-on `tools/check_layout.py` 한 곳 — 파이프라인과 `test_layout.py` 가 같이 쓴다. 아래는 당시 기록) | `deploy/Jenkinsfile` Check 가 `tests/test_layout.py`(YAML · 탭 · 금지 부품 6개 · filter import)를 inline Python 으로 다시 적었다 — 금지 부품 목록이 두 곳. e2e Jenkinsfile 의 pytest 대체 경로(workspace 에 받아 쓰고 빌드 끝에 지움)로 test_layout 을 직접 돌리게 바꾸면 한 곳이 된다. 지금은 두 곳이 같아 급하지 않다 (감사 B2) |
 | AO-15 | hosts 구분 줄(`#__ADDON_HOSTS__`) 사용 | `[HOLD / AO-5 와 함께]` | `addon_hosts_result` 가 `lines[0]` 을 서버 이름으로 쓴다 — `uname -n` 이 비거나 여러 줄이면 틀린다. matcher(AO-5) 구현 때 구분 줄 기준으로 나눈다 (감사 B3) |
 | AO-16 | `\xNN` 치환을 메인 hook 으로 | `[HOLD / 두 번째 Add-on 또는 hook 수정 때]` | 제약의 원인은 메인 `json_only` 콜백이라 hook 이 자연스러운 자리다. 지금은 "메인 0줄" 결정대로 Add-on `addon_text.py` 에 둔다. 옮길 때는 `run_addon.yml` "include add-on" 다음에 메인 filter 1개를 두고 Add-on 의 `addon_text.py` 를 지운다 (감사 C1) |
 | AO-17 | 저장소 이름 통일 | `[TODO / 사용자 결정]` | GitLab `clovirone-server-gathering-addon` ↔ 코드 · Job · Agent 경로 `clovirone-gathering-addon`. 문서에 "같은 것" 으로 적어 두었다. 통일한다면 GitLab 프로젝트 이름을 바꾸는 쪽이 싸다(사용자 UI 1회 → Jenkins Job 2개 SCM URL · 문서 3곳). 안 해도 동작에 영향 없음 (감사 C3) |
-| AO-18 | Add-on Jenkins Job 을 개인 폴더 밖으로 | `[TODO / 사용자 결정]` | 배포 · e2e Job 이 `형섭/` 폴더에 있다. 공용 폴더로 옮기면(Jenkins UI Move) `docs/operate/03-job-registration.md` 의 Add-on Job 표를 함께 고친다. 안 옮겨도 동작에 영향 없음 |
+| AO-18 | Add-on Jenkins Job 을 개인 폴더 밖으로 | `[TODO / 사용자 결정]` | e2e Job 이 `형섭/` 폴더에 있다 (배포 Job 은 2026-09-29 폐지). 공용 폴더로 옮기면(Jenkins UI Move) `docs/operate/03-job-registration.md` 의 Add-on Job 표를 함께 고친다. 안 옮겨도 동작에 영향 없음 |
 
 ## failure_reason 문장 카탈로그 후속 (2026-09-21)
 

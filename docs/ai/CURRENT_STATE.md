@@ -1,5 +1,31 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-09-29 — Add-on 을 빌드마다 받는다 (켜기 = 전역 `SE_ADDON_REPO` 1개 · 추가 = 파일 1개 · Runner 무관)
+
+> 결정: `docs/reference/decision-log.md` 2026-09-29, `docs/ai/decisions/ADR-2026-09-29-addon-per-build-checkout.md`.
+> 실측: `tests/evidence/2026-09-29-addon-per-build-checkout.md`. 후속 표: `docs/ai/NEXT_ACTIONS.md` AP-1 ~ AP-6.
+
+- **왜**: 신규 Jenkins 는 `git` 라벨 Runner 4대 — 배포 Job 이 노드 한 대에 파일을 놓고 그 노드 환경변수 `SE_ADDON_DIR` 로 켜는
+  구조는 스케줄링과 availability 가 묶여 있어 lab(Runner 1대)에서만 맞았다. 사용자 결정: 땜질 대신 구조 재설계, 선택 기준은
+  `target_type` 하나, Runner 사전 작업 0, 새 Add-on 은 파일 1개.
+- **메인 코드** `3d0fbfa2`(feat) — `Jenkinsfile_portal`: 파라미터 `addonRef`(선택), Validate 형식 검사, Gather 가 전역
+  `SE_ADDON_REPO` 가 있을 때만 `scripts/addon_checkout.sh`(신규, `git init` → `fetch --depth 1 <ref>` → 실패 시 전체 fetch 해석;
+  브랜치 · `refs/tags/` · 40자 해시, 짧은 해시 거부, `-c http.sslVerify=false` 를 그 git 명령에만) 로 `${WORKSPACE}/addon` 에 받고
+  `addon/tools/check_layout.py --targets <서버 종류>` 로 검사한 뒤 ansible `sh` 만 `withEnv(SE_ADDON_DIR)`. 실패 → `unstable("[addon]
+  unavailable: …")` + Add-on 없이 수집(host 별 오류 없음), collector 없는 target(rc 3) → 켜지 않음. 자격증명은
+  `withCredentials(usernamePassword)` + `GIT_ASKPASS`(`scripts/addon_askpass.sh`, 신규). hook · site.yml 4곳 · 계약 테스트 무변경.
+  테스트 신규 2: `tests/unit/test_addon_checkout.py`(bash + 실제 git 14 케이스), `tests/unit/test_jenkinsfile_portal_addon.py`(12).
+- **Add-on 저장소** `ed8f320`(로컬, push 는 사용자) — `collectors/<target>/<이름>.yml`(디렉터리 = 지원 target, 파일 = Add-on),
+  엔진 `tasks/main.yml` 은 target 디렉터리 fileglob 으로 실행 여부 결정, `addon_plan` 은 이름별 설정 붙이기(`false` 끄기 · 없으면 `{}`),
+  `config.yml` 은 rule 대신 `software: {linux: [...], windows: [...]}` + 항목별 `only`, `tools/check_layout.py`(최소 검사),
+  `deploy/` 삭제, README 재작성, 테스트 · e2e 시나리오(s01~s15) 새 모양. Windows pytest 177 passed, WSL role 실행 17 passed.
+- **문서** `3bba2edf` — `docs/operate/03·04·08`, `02-agent-node`, `contract/01`, `develop/07`, decision-log.
+- **검증**: 메인 unit+e2e 3171 passed, 선언형 린터 통과, production `9a194619` 승격(github + gitlab). 실제 Agent 실측: 신규
+  Runner01(RHEL 9, 시스템 CA 가 GitLab 자체 서명 인증서를 모름)에서 기본값으로 main · 40자 해시 체크아웃 성공, `SSL_VERIFY=true` 는
+  실패(기대) — CA 설치 없이 동작한다는 요구 확인. lab Jenkins #21(전역 변수 없음): `[addon]` 줄 없음, host 결과 #20 과 동일.
+- **대기(사용자)**: Add-on `ed8f320` push(AP-1) → lab · 신규 Master 에 `SE_ADDON_REPO` 등록(AP-2) → Jenkins 실행 확인(AP-3, 제가 진행) →
+  옛 배포 Job 삭제(AP-4). JV-4(설치 자동화 시드)는 후속만 기록.
+
 ## 일자: 2026-09-28 — Agent venv 경로를 파이프라인에서 분리 (`scripts/activate_ansible_venv.sh`)
 
 > 결정: `docs/reference/decision-log.md` 2026-09-28. 실측: `tests/evidence/2026-09-28-runner-venv-path.md`. 후속 표: `docs/ai/NEXT_ACTIONS.md` JV-1 ~ JV-6.

@@ -25,7 +25,7 @@
 |---|---|---|---|
 | 0. Resolve Location | controller (`built-in`) | `common/vars/locations.yml` 로 `loc` 검증 → `agent_label` | YES |
 | 1. Validate | agent | 입력값 (target_type / inventory_json / callbackUrl / deploymentEnvironmentId) 형식 검증 | YES |
-| 2. Gather | agent | venv 활성화 → ansible-playbook 실행 (해당 채널 site.yml) → `gather_output.json` stash | ansible 실패 UNSTABLE, 출력 0바이트 FAILURE |
+| 2. Gather | agent | (전역 `SE_ADDON_REPO` 가 있으면 Add-on 체크아웃 · 검사 — R1-B) → venv 활성화 → ansible-playbook 실행 (해당 채널 site.yml) → `gather_output.json` stash | Add-on 못 받으면 UNSTABLE + Add-on 없이 수집, ansible 실패 UNSTABLE, 출력 0바이트 FAILURE |
 | 3. Validate Schema | agent | venv 활성화 → field_dictionary 정합 (`tests/validate_field_dictionary.py`) | YES |
 | 4. Callback | controller | 호출자 통보 (`httpRequest`, rule 31 무결성) | NO (UNSTABLE) |
 
@@ -37,6 +37,22 @@
   activate 실패 뒤 시스템 python 으로 조용히 진행하기 (`set -e` 없는 `sh` 블록에서 activate 만 부르는 형태)
 - **Why**: 설치 자동화 Runner(`/app`)와 직접 구축 Agent(`/opt`)가 공존하고 배치는 또 바뀔 수 있다. 근거
   `docs/reference/decision-log.md` 2026-09-28, 검증 `tests/unit/test_activate_ansible_venv.py`
+
+### R1-B. Add-on 빌드별 체크아웃 (2026-09-29)
+
+- **Default**: Add-on 은 Jenkins 전역 환경변수 `SE_ADDON_REPO` 하나로 켠다. Gather 가 빌드마다
+  `bash scripts/addon_checkout.sh <URL> <ref> ${WORKSPACE}/addon` 으로 받고 `addon/tools/check_layout.py --targets <서버 종류>`
+  로 검사한 뒤 **ansible `sh` 만** `withEnv(["SE_ADDON_DIR=…"])` 로 감싼다. 실패는 `unstable("[addon] unavailable: …")` 이고
+  Add-on 없이 수집한다 (host 별 `errors[]` 없음). 이 빌드의 target 에 collector 가 없으면(rc 3) 켜지 않는다.
+- **Allowed**: `SE_ADDON_REF`(브랜치 · `refs/tags/<태그>` · 40자 해시) · `SE_ADDON_CREDENTIALS_ID`(usernamePassword +
+  `GIT_ASKPASS`) · `SE_ADDON_SSL_VERIFY`(기본 `false` — `-c http.sslVerify=false` 를 그 git 명령에만). Job 파라미터 `addonRef` 는
+  빌드 한정 override.
+- **Forbidden**: `SE_ADDON_DIR` 을 stage/pipeline `environment{}` 나 노드 환경변수에 두기, 배포 Job · `ADDON_HOME` · 라벨 기준 배치
+  부활, `GIT_SSL_NO_VERIFY` 전역 · `git config --global` · Runner CA 설치를 전제하기, Add-on 실패로 `error`(빌드 중단),
+  `git clone --branch`(커밋 해시 불가), 짧은 해시 허용, Add-on 선택에 `loc` · 라벨 · Runner 이름 사용.
+- **Why**: 스케줄링(`loc`)과 availability 를 분리해야 Runner 수 · 라벨 · 재설치와 무관해진다. 근거
+  `docs/ai/decisions/ADR-2026-09-29-addon-per-build-checkout.md`, 검증 `tests/unit/test_jenkinsfile_portal_addon.py` ·
+  `tests/unit/test_addon_checkout.py`.
 
 상세: `docs/ai/catalogs/JENKINS_PIPELINES.md`.
 

@@ -1,5 +1,24 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-09-29 — Add-on 빌드별 체크아웃 (`scripts/addon_checkout.sh` · `Jenkinsfile_portal` Gather · Add-on `ed8f320`)
+
+> 코드 `3d0fbfa2` · 문서 `3bba2edf` · production `9a194619`. 실측 `tests/evidence/2026-09-29-addon-per-build-checkout.md`.
+
+| 항목 | 결과 |
+|---|---|
+| Add-on `python -m pytest tests` (Windows) | 177 passed / 17 skipped (playbook 테스트는 ansible 필요) |
+| Add-on `tests/test_playbook.py` (WSL, ansible-core 2.20.7, role 실제 실행) | 17 passed — target 디렉터리 없음 · 전부 끔 · 설정 없음 · config 없음 · 실수 4종 · 깨진 config · collector 예외 격리 · 연결 끊김 · 5MB · 비 UTF-8 · `only` |
+| Add-on `tools/check_layout.py` (WSL · Windows) | rc 0 (`linux=['hosts','software'], windows=['software']`) / rc 3 (esxi) / rc 1 (경로 없음) |
+| `pytest tests/unit/test_addon_checkout.py` (Git bash + 실제 git, file:// 저장소) | 14 케이스 PASS + LF·100755·정적 계약 6건 |
+| `pytest tests/unit/test_jenkinsfile_portal_addon.py` | 12 passed |
+| `pytest tests/unit tests/e2e` | 3171 passed / 35 skipped |
+| Jenkins 선언형 린터 (lab 153) | Jenkinsfile_portal validated |
+| 실제 Agent `addon_checkout.sh` stdin 실행 (lab 155 · 신규 Runner01 33) | GitLab 자체 서명: 기본값(검증 안 함) main · 40자 해시 rc 0 양쪽, `SE_ADDON_SSL_VERIFY=true` 는 CA 없는 Runner01 에서 rc 1(기대) · 155 는 rc 0(CA 신뢰됨), 짧은 해시 rc 1 양쪽 |
+| lab Jenkins `clovirone-server-gather` #21 (production `9a194619`, 전역 변수 없음) | `[addon]` 줄 없음, envelope 4건 #20 과 동일(dell·lenovo·cisco success, HPE TARGET_UNREACHABLE 기존), Callback sink → UNSTABLE(의도), 6분 49초 |
+| Jenkins Add-on 켜진 실행 | 대기 — 사용자의 Add-on push(AP-1) · `SE_ADDON_REPO` 등록(AP-2) 뒤 (evidence 4절) |
+| `verify_harness_consistency.py` / `verify_docs_references.py` | 통과 / 이번 변경 관련 지적 0건 |
+| `ansible-playbook --syntax-check` (메인) | 미실행 — 메인 playbook 변경 없음 (hook · site.yml 무변경), 로컬에 ansible 없음 |
+
 ## 2026-09-28 — Agent venv 경로 분리 (`scripts/activate_ansible_venv.sh`)
 
 > 코드 `8170ae7d` · 문서 `da91b274` · 하네스 `7b36aaa6` · production `e7baaa55`. 실측 `tests/evidence/2026-09-28-runner-venv-path.md`.
