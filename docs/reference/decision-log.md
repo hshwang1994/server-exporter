@@ -6,7 +6,71 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-09-28
+> 최종 갱신: 2026-09-29
+
+## 2026-09-29 — Add-on 을 빌드마다 받는다: 켜기 1개 설정 · 추가 1개 파일 · Runner 무관
+
+### 요구
+
+신규 Jenkins 는 `git` 라벨 Runner 가 4대다. 종전 Add-on 은 "배포 Job 이 노드 한 대의 `ADDON_HOME` 에 파일을 놓고 그 노드의
+환경변수 `SE_ADDON_DIR` 로 켠다" 는 구조라, 어느 Runner 에서 수집이 돌지(Jenkins 스케줄링)와 Add-on 코드가 거기 있는지
+(availability)가 묶여 있었다. lab 은 Runner 가 한 대라 드러나지 않았다. 사용자 결정: 땜질(4대에 복사)이 아니라 구조를
+다시 세운다. 우선순위는 ① 쓰기 쉬움 ② 운영하기 쉬움 ③ 추가/수정 쉬움 ④ Runner 수 · 라벨 · 재설치 무관 ⑤ 단순 ⑥ 그 다음이
+보안 · 엄격함. Add-on 선택 기준은 `target_type` 하나이고 `loc` · Agent 라벨 · Runner 이름은 기준이 아니다. Portal 이 받는
+결과 계약(`data.addon` · `errors[] section: addon` · `status` 불변)은 유지한다.
+
+### 결정 (사용자 확정)
+
+- **세 관심사를 분리한다.** Jenkins 스케줄링(`loc` → `agent_label`, 변경 없음) / Add-on availability(`Jenkinsfile_portal`
+  Gather stage 가 **빌드마다** Add-on 저장소를 `${WORKSPACE}/addon` 에 받아 검사한 뒤 그 경로를 ansible 실행에만
+  `SE_ADDON_DIR` 로 넘긴다) / Add-on resolution(Add-on 저장소 `collectors/<target>/*.yml` — 디렉터리 이름 = 지원 target,
+  파일 = Add-on 하나, 파일 이름 = `data.addon.<이름>`).
+- **켜기는 Jenkins 전역 환경변수 `SE_ADDON_REPO` 하나.** 선택: `SE_ADDON_REF`(기본 `main`; 브랜치 · `refs/tags/<태그>` ·
+  40자 커밋 해시), `SE_ADDON_CREDENTIALS_ID`(비공개 저장소, Username with password), `SE_ADDON_SSL_VERIFY`(기본 `false`).
+  Job 파라미터 `addonRef` 는 그 빌드에서만 ref 를 바꾸는 용도다. 변수가 없으면 결과는 도입 전과 byte 동일하다.
+- **인증서 검증 해제는 Add-on 을 받는 git 명령에만** (`scripts/addon_checkout.sh` 가 `-c http.sslVerify=false` 를 붙인다).
+  Runner 에 CA 설치 · `git config --global` 변경 · 노드 설정이 없어 새 Runner · 재설치 Runner 가 사전 작업 없이 동작한다.
+- **체크아웃은 Git 플러그인이 아니라 스크립트다.** 플러그인은 `withEnv` 의 `GIT_SSL_NO_VERIFY` 를 git 프로세스에 넘기는지
+  오프라인에서 확정할 수 없고, 넘긴다 해도 환경변수 방식은 범위 통제가 약하다. 스크립트는 `git clone --branch` 를 쓰지 않는다
+  — `--branch` 는 커밋 해시를 받지 못한다(실측 `Remote branch <sha> not found`). `git init` → `fetch --depth 1 origin <ref>`
+  (브랜치 · 태그 · 전체 해시 모두 fetch 대상, GitHub 실측) → 실패 시 브랜치 · 태그 전체 fetch 후 해석. 짧은 해시는 서버마다
+  결과가 갈리므로 거부한다. 대상 디렉터리는 시작할 때 비운다.
+- **저장소 문제는 host 문제가 아니다.** 받지 못하거나 검사(`addon/tools/check_layout.py`)에 실패하면 `SE_ADDON_DIR` 을
+  설정하지 않고 `unstable("[addon] unavailable: …")` 만 남긴다 — 기본 수집 · Validate Schema · Callback 정상, host 별
+  `errors[]` 없음. `currentBuild.description` 은 건드리지 않는다 (지금 어디서도 쓰지 않지만 다른 용도로 남겨 둔다).
+- **이 빌드의 target 에 collector 가 없으면 켜지 않는다** (`check_layout.py --targets` rc 3 — os→`linux,windows`,
+  esxi→`esxi`, redfish→`redfish`). host 비용 0.
+- **Add-on 저장소**: rule(`match` · 첫 매치 · `collect`) 을 없애고 `config.yml` 은 기능 이름별 설정이다. `software` 는
+  서버 종류(`linux` / `windows`)별 명령 목록이고 항목마다 `only`(호출자 host 속성, 목록값 · 대소문자 무시)로 서버를 고른다.
+  `only` 는 collector 안에서 항목을 고르는 용도로만 host 속성을 쓴다 — 실행 여부는 target 만 본다. 새 Add-on 은
+  `collectors/<target>/<이름>.yml` 파일 **1개**로 끝난다: 등록 · 상수 · manifest · schema 없음. collector 계약 —
+  `_addon_settings` 는 비어 있을 수 있으며(`{}`) collector 가 안전하게 처리한다(설정 필수면 `data: null`, 아니면 기본 동작),
+  `false` 면 엔진이 부르지 않는다. `tools/check_layout.py` 는 최소 검사(YAML 문법 · `tasks/main.yml` · filter import)만 한다.
+  `deploy/` 는 삭제했다.
+- 메인 hook `common/tasks/addon/run_addon.yml` · 4 call site · 계약 테스트는 한 줄도 바꾸지 않았다.
+
+### 왜 이렇게 했나
+
+- 배포 Job 의 `AGENT_LABEL` 은 "파일을 놓을 노드" 를 고르려고 생긴 것이고, 라벨당 노드 1대일 때만 "수집이 도는 노드" 와 같다.
+  빌드마다 작업 공간에 받으면 그 결합 자체가 없어진다 — 작업 공간은 이미 빌드별이고 stage 끝에 지운다.
+- Master 전역 환경변수는 Runner 재설치 · 추가에 살아남는 유일한 자리다. 노드 환경변수는 노드마다 등록해야 하고, 신규 Runner 의
+  Agent 계정(`jenkins`)은 `/home/cloviradmin/...`(700) 을 읽지도 못했다.
+- rule 구조의 실제 쓰임(e2e 설정 8개)은 "target 별 명령 목록 + 용도별 다른 명령" 이었고 항목별 `only` 가 그대로 덮는다.
+  rule 순서 · 첫 매치 · `match` 오타(`mach:`) 같은 실수 유형이 사라진다.
+
+### 실측 · 검증 (2026-09-29)
+
+- Add-on 저장소 `ed8f320`: Windows pytest 177 passed / 17 skipped, WSL(ansible-core 2.20.7) role 실행 17 passed
+  (target 에 collector 없음 · 전부 끔 · 설정 없음 · config 없음 · 실수 알림 · collector 예외 격리 · 연결 끊김 · 5MB · 비 UTF-8).
+- 메인: `tests/unit/test_addon_checkout.py` 14 케이스(브랜치 · 태그 · `refs/heads/` · 전체 해시 · 광고되지 않은 해시 2차 fetch ·
+  짧은 해시 거부 · 옵션형 ref 거부 · 이전 파일 제거 · askpass), `tests/unit/test_jenkinsfile_portal_addon.py` 12건,
+  전체 `tests/unit tests/e2e` 3171 passed, Jenkins 선언형 린터 통과. 실 Jenkins 실행은 `tests/evidence/2026-09-29-addon-per-build-checkout.md`.
+
+### 영향 · 후속
+
+- 옛 배포 Job(`형섭/clovirone-gathering-addon-deploy`)과 lab Agent 의 `/home/cloviradmin/clovirone-gathering-addon*` 은 더는
+  쓰지 않는다 (삭제는 사용자). Add-on 을 켜려면 lab · 신규 Jenkins Master 에 `SE_ADDON_REPO` 를 등록한다 (사용자).
+- 설치 자동화의 시드 사본(JV-4)은 이번에 손대지 않았다 — production 전체(`git archive`)로 교체하는 것이 후속이다.
 
 ## 2026-09-28 — Agent 의 Ansible venv 경로를 파이프라인에서 떼어냄 (`scripts/activate_ansible_venv.sh`)
 

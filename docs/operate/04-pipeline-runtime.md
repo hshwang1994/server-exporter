@@ -12,10 +12,10 @@
 `Jenkinsfile_portal` 은 최상위 `agent none` 이고 단계마다 노드를 고른다. 컨트롤러(`built-in`)에는 Python 도 Ansible 도 필요 없다.
 
 ```text
-parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid, callbackUrl, verbosity)
+parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid, callbackUrl, verbosity, addonRef)
   → Resolve Location  [컨트롤러]  loc 를 common/vars/locations.yml 로 검증 → agent_label 결정
   → Validate          [Agent]     파라미터 형식 검증 (체크아웃 없음)
-  → Gather            [Agent]     ansible-playbook 실행 → gather_output.json → stash
+  → Gather            [Agent]     (전역 SE_ADDON_REPO 가 있으면 Add-on 체크아웃 · 검사) → ansible-playbook 실행 → gather_output.json → stash
   → Validate Schema   [Agent]     field_dictionary.yml 정합 (FAIL 게이트)
   → Callback          [컨트롤러]  unstash → 호출자에게 POST (실패해도 빌드는 UNSTABLE)
 ```
@@ -24,7 +24,7 @@ parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid
 |-------|------|--------|--------|
 | Resolve Location | `built-in` | `readYaml common/vars/locations.yml` — 미등록 `loc` 는 노드 대기 없이 즉시 실패 | FAILURE |
 | Validate | `agent_label` 노드 | `target_type` / `inventory_json` / `callbackUrl` / `deploymentEnvironmentId` 검증 | FAILURE |
-| Gather | `agent_label` 노드 | venv 활성화 → `ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-file=<임시파일> -e se_location=<loc>` | ansible 실패는 UNSTABLE, 결과 파일 0바이트면 FAILURE |
+| Gather | `agent_label` 노드 | (전역 `SE_ADDON_REPO` 가 있으면 Add-on 저장소를 `${WORKSPACE}/addon` 에 받고 검사 — 3절) → venv 활성화 → `ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-file=<임시파일> -e se_location=<loc>` | Add-on 을 받지 못하면 UNSTABLE + Add-on 없이 수집, ansible 실패는 UNSTABLE, 결과 파일 0바이트면 FAILURE |
 | Validate Schema | `agent_label` 노드 | venv 활성화 → `python3 tests/validate_field_dictionary.py` | FAILURE |
 | Callback | `built-in` | `httpRequest` POST, 3회 재시도 (10s · 20s backoff) | UNSTABLE (수집 결과는 콘솔에 남는다) |
 
@@ -60,6 +60,7 @@ Gather 와 Validate Schema 는 저장소의 `scripts/activate_ansible_venv.sh` �
 | `eventUuid` | string | 선택 | 포털 이벤트 UUID (Callback 본문에 그대로) |
 | `callbackUrl` | string | 필수 | 결과 전달 URL — `http(s)://` 로 시작, 따옴표·백틱·역슬래시·공백 불가 |
 | `verbosity` | choice | 선택 | Ansible verbosity 0~4 (`ANSIBLE_VERBOSITY`) |
+| `addonRef` | string | 선택 | 이 빌드에서만 쓸 Add-on 브랜치 · `refs/tags/<태그>` · 40자 커밋 해시. 비우면 전역 `SE_ADDON_REF`(기본 `main`). Add-on 이 켜져 있지 않으면 무시된다 — Portal 은 보내지 않는다 |
 
 ### inventory_json 형식
 ```jsonc
@@ -84,8 +85,39 @@ Jenkinsfile 이 설정한다.
 | `ANSIBLE_CONFIG` | Gather | `${WORKSPACE}/ansible.cfg` |
 | `ANSIBLE_JSON_OUTPUT_FILE` | Gather | `${WORKSPACE}/gather_output.json` — `json_only` 콜백이 envelope 을 쓴다 |
 | `ANSIBLE_VERBOSITY` | Gather | `${params.verbosity}` |
+| `SE_ADDON_DIR` | Gather 의 ansible 실행만 (`withEnv`) | `${WORKSPACE}/addon` — 전역 `SE_ADDON_REPO` 가 있고 체크아웃 · 검사를 통과한 빌드만. stage `environment{}` 에는 없다 (꺼진 빌드의 환경은 도입 전과 같다) |
 
-노드 쪽 선택 환경변수(`SE_ANSIBLE_VENV`, `SE_ADDON_DIR`)는 [08-ansible-config.md](08-ansible-config.md) 3절.
+노드 쪽 선택 환경변수(`SE_ANSIBLE_VENV`)는 [08-ansible-config.md](08-ansible-config.md) 3절.
+
+### Add-on (고객별 추가 수집) — 전역 환경변수와 Gather 안의 흐름
+
+Jenkins 관리 → System → Global properties → Environment variables. 노드 설정 · Runner 사전 작업은 없다.
+
+| 변수 | 필수 | 기본값 | 의미 |
+|---|---|---|---|
+| `SE_ADDON_REPO` | 켤 때 필수 | (없음 = 꺼짐) | Add-on 저장소 URL (`https://` · `http://` · `ssh://`) |
+| `SE_ADDON_REF` | 선택 | `main` | 브랜치 · `refs/tags/<태그>` · 40자 커밋 해시 (짧은 해시는 거부) |
+| `SE_ADDON_CREDENTIALS_ID` | 선택 | 없음 (익명) | 비공개 저장소의 Jenkins credential ID — Username with password (사용자 이름 + 토큰) |
+| `SE_ADDON_SSL_VERIFY` | 선택 | `false` | `true` 면 TLS 인증서를 검증. 기본은 검증하지 않아 자체 서명 내부 GitLab 도 Runner 에 CA 설치 없이 된다. 검증 해제는 Add-on 을 받는 git 명령에만 붙는다 (`-c http.sslVerify=false`) — 전역 git 설정 · 메인 체크아웃 · 다른 Job 무관 |
+
+`SE_ADDON_REPO` 가 없으면 아래 흐름 전체가 없다 — 결과는 Add-on 도입 전과 byte 동일하다. 있으면:
+
+1. `bash scripts/addon_checkout.sh <URL> <ref> ${WORKSPACE}/addon` — 대상 디렉터리를 비우고 ref 하나만 얕게(depth 1)
+   fetch 한다 (브랜치 · 태그 · 전체 해시 모두 같은 흐름). 서버가 해시 직접 fetch 를 막으면 브랜치 · 태그 전체를 받아
+   그 안에서 해석한다. `retry(2)`. `SE_ADDON_CREDENTIALS_ID` 가 있으면 `withCredentials` 로 받은 값을
+   `GIT_ASKPASS`(`scripts/addon_askpass.sh`)로 넘긴다 (콘솔 마스킹). ref 우선순위: `addonRef` 파라미터 → `SE_ADDON_REF` → `main`.
+2. venv 의 python3 으로 `addon/tools/check_layout.py addon --targets <서버 종류>` — 태스크 · collector YAML 문법,
+   `tasks/main.yml`, filter import. 서버 종류는 `target_type` 이 정한다: os→`linux,windows`, esxi→`esxi`, redfish→`redfish`.
+3. rc 0 → ansible 실행을 `withEnv(["SE_ADDON_DIR=${WORKSPACE}/addon"])` 로 감싼다. 콘솔 `[addon] <URL>@<ref> <커밋>`.
+   rc 3 (그 서버 종류에 collector 가 없음) → 켜지 않는다. 콘솔 `[addon] 실행할 기능 없음` (host 비용 0, UNSTABLE 아님).
+   그 밖의 실패 (URL · ref · 인증 · 인증서 · 저장소 다운 · 검사 실패) → 콘솔 `[addon] unavailable: <사유>` +
+   `unstable(...)`. `SE_ADDON_DIR` 을 설정하지 않으므로 기본 수집 · Validate Schema · Callback 은 정상이고 host 별
+   `errors[]` 에 addon 오류가 생기지 않는다 (저장소 문제는 host 문제가 아니다).
+4. 작업 공간은 빌드별(`customWorkspace`)이고 stage 끝에 `deleteDir()` 한다. 체크아웃 스크립트도 시작할 때 `addon/` 을
+   비우므로 이전 ref 의 파일이 남지 않는다.
+
+Add-on 안에서 무엇이 실행되는지(서버 종류별 collector · `config.yml`)는 Add-on 저장소 README, hook 계약은
+[../develop/07-addon-hook.md](../develop/07-addon-hook.md).
 
 ## 4. Ansible 실행 방식
 
@@ -137,7 +169,8 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
 |------|---------|
 | Label | `common/vars/locations.yml` 의 `agent_label` (ic / chj / yi / git) |
 | venv | `/app/ansible-env` 또는 `/opt/ansible-env`, 아니면 노드 환경변수 `SE_ANSIBLE_VENV` |
-| CLI `git` | Gather · Validate Schema 의 체크아웃에 필요 |
+| CLI `git` | Gather · Validate Schema 의 체크아웃, Add-on 체크아웃(`scripts/addon_checkout.sh`)에 필요 |
+| Add-on 저장소 접근 | 전역 `SE_ADDON_REPO` 를 켠 경우 Agent 에서 그 URL 에 닿아야 한다 (자체 서명 인증서는 기본값으로 통과 — CA 설치 불필요) |
 | 네트워크 | 대상 서버 (SSH 22 / WinRM 5985·5986 / BMC 443) 접근 가능 |
 | 디스크 | workspace + ansible 로그 공간 (빌드마다 `clovirone-server-gather-<번호>` 작업 공간을 만들고 끝나면 지운다) |
 

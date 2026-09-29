@@ -18,11 +18,11 @@
 - 인증과 기본 수집이 끝난 뒤, 조립(`build_*`) 직전이다. Add-on 은 이미 붙어 있는 연결을 그대로 쓴다.
   자격증명 해석 · 후보 시도 · 재접속 코드가 Add-on 에 없다.
 - 기본 수집이 중간에 멈추면(인증 실패 등) 이 지점에 오지 않으므로 Add-on 도 실행되지 않는다.
-- ESXi · Redfish 는 연결이 `local` 이라 Add-on 태스크가 Jenkins Agent 에서 실행된다. 명령을 실행하는 수집
-  기능은 `linux` / `windows` 에서만 동작하게 만든다. 지원하지 않는 target 에서 수집 기능은 실행하지 않고 알림
-  1문장을 남긴다 → 그 host 의 `errors[]` 에 `section: addon` 1건, `data.addon` 에는 그 기능이 생기지 않는다.
-  rule 에 `target` 을 빼면 ESXi · Redfish host 에도 맞으므로 이 알림이 그 실수를 드러낸다 (2026-09-22 감사에서
-  계약으로 확정 — 조용히 넘기지 않는다).
+- ESXi · Redfish 는 연결이 `local` 이라 Add-on 태스크가 Jenkins Agent 에서 실행된다. Add-on 은 `_addon_target` 값과
+  같은 이름의 디렉터리(`collectors/<target>/`)에 파일이 있는 target 에서만 수집 기능을 실행한다 — 파일 위치가 곧 지원
+  범위다. 파일이 없는 target(지금은 ESXi · Redfish)에서는 아무 것도 하지 않고 알림도 남기지 않는다 (2026-09-29.
+  종전의 "미지원 target 알림" 은 rule 의 `target` 누락 실수를 드러내기 위한 것이었고, rule 이 없어지면서 그 실수
+  유형도 사라졌다). Jenkins 쪽은 그 빌드의 target 후보에 collector 가 하나도 없으면 아예 켜지 않는다 (아래 2절).
 - 호출은 `SE_ADDON_DIR` 이 있을 때만 include 한다 (`when`). 없으면 host 당 건너뛴 태스크 1개로 끝난다.
 
 ## 2. 경로 — `SE_ADDON_DIR`
@@ -35,9 +35,14 @@
 | 있는데 `<경로>/tasks/main.yml` 이 없음 | Add-on 을 실행하지 않는다 | `errors[]` 에 `section: addon` 1건 (`detail`: `SE_ADDON_DIR=<경로>; cause=addon_entry_not_found`) |
 | 있고 Add-on 이 있음 | `include_role` 로 실행 | 결과는 `data.addon`, 문제는 `errors[]` 1건 |
 
-설정은 Agent 노드 환경변수로 한다 ([08-ansible-config.md](../operate/08-ansible-config.md) 3절). 절대경로를 쓴다.
-Add-on 을 Agent 에 두는 일은 Add-on 저장소의 배포 Job(`deploy/Jenkinsfile`)이 한다 — 검사를 통과한 버전만
-`/home/cloviradmin/clovirone-gathering-addon`(링크)으로 바꿔 끼운다. 사용법은 Add-on README 6절(관리자용).
+값은 운영에서 `Jenkinsfile_portal` Gather stage 가 정한다 (2026-09-29): Jenkins 전역 환경변수 `SE_ADDON_REPO` 가
+있으면 빌드마다 Add-on 저장소를 `${WORKSPACE}/addon` 에 받아 검사한 뒤, ansible 실행에만 `SE_ADDON_DIR` 로 넘긴다.
+노드 환경변수 · 배포 Job · Agent 배치는 없다 — Runner 를 늘리거나 다시 설치해도 Add-on 은 그대로다. 흐름과 전역
+변수 4개는 [04-pipeline-runtime.md](../operate/04-pipeline-runtime.md) 3절. 저장소를 받지 못하거나 검사에 실패하면
+`SE_ADDON_DIR` 을 설정하지 않고 빌드를 UNSTABLE 로 표시한다 — 저장소 문제는 host 문제가 아니므로 host 별 `errors[]`
+를 만들지 않는다. 수동 실행(e2e · WSL)에서는 Add-on 디렉터리 절대경로를 직접 export 한다.
+
+hook 의 세 경우 자체는 바뀌지 않았다 — "누가 `SE_ADDON_DIR` 을 정하느냐" 만 노드에서 파이프라인으로 옮겼다.
 
 설정 실수의 결과 (2.20.3 · 2.20.7 실측, 엔진 테스트로 고정):
 
@@ -117,6 +122,8 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 | `tests/unit/test_inventory_passthrough.py` | host object 보존 · 문자열 감싸기 · 예약 키 제외 · 기존 오류 경로 | 어디서나 |
 | `tests/unit/test_addon_hook_contract.py` | 호출 4곳 · 경로 세 경우 · timeout 없음 · 문장 규칙 · 뼈대에 `addon` 없음 | 어디서나 |
 | `tests/integration/test_addon_hook_playbook.py` | 실제 ansible-playbook 으로 공통 조립 코드 + hook: 미설정 시 byte 동일, 경로 없음 · 상위 폴더, 끝 `/`, 정상, 참고 문장, 실행 실패, 연결 끊김 | Linux / WSL / Jenkins Agent |
+| `tests/unit/test_addon_checkout.py` | `scripts/addon_checkout.sh` 를 실제 git(로컬 저장소)으로: 브랜치 · 태그 · `refs/heads/` · 40자 해시 · 광고되지 않은 해시(2차 fetch) · 짧은 해시 거부 · 옵션형 ref 거부 · 없는 ref/저장소 · 이전 파일 제거 · askpass | 어디서나 (bash + git) |
+| `tests/unit/test_jenkinsfile_portal_addon.py` | `Jenkinsfile_portal` 텍스트 계약: `SE_ADDON_DIR` 은 Gather 의 `withEnv` 한 곳 · `SE_ADDON_REPO` 게이트 · 실패는 `unstable` · 노드 경로 / 배포 Job / 전역 git 설정 흔적 0 | 어디서나 |
 | Add-on 저장소 `tests/e2e/` (Jenkins Job) | 실제 Agent 에서 운영과 같은 명령 · vault 로 Linux · Windows · ESXi · Redfish 대상 시나리오를 돌리고, 위 엔진 테스트도 같은 Agent 에서 돌린다 | Jenkins |
 
 엔진 테스트는 `tests/fixtures/addon/` 의 합성 Add-on 과 `harness.yml` 을 쓴다. `ANSIBLE_PLAYBOOK_BIN` 으로
