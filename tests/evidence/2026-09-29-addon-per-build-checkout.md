@@ -51,9 +51,43 @@ host 별 결과는 #20 과 동일: 10.100.15.27 dell success · 10.50.11.232 len
 `failed / TARGET_UNREACHABLE` (기존 상태). 소요 6분 49초 (#20 은 7분 2초). 콘솔 첫 줄의 `Checking out Revision 8a90c1e3 (main)` 은
 Jenkins 전역 공유 라이브러리 `clovirone-jenkins-integration-library` 의 체크아웃이며 이 저장소와 무관하다.
 
-## 4. Jenkins — 전역 `SE_ADDON_REPO` 등록 뒤 (대기)
+## 4. Jenkins — Add-on 켜진 실행 (2차, 2026-09-29 오후)
 
-사용자가 (a) Add-on 저장소 `ed8f320` 을 GitLab `main` 에 push 하고 (b) lab · 신규 Master 에 `SE_ADDON_REPO` 를 등록하면 진행한다.
-계획: lab `clovirone-server-gather` 를 `target_type=os`, Linux(`physical_purpose` 포함) + Windows 대상으로 1회 → 콘솔
-`[addon] <URL>@main <sha>` · `[addon] 검사 통과: linux=[…], windows=[…]` · envelope 의 `data.addon.software` 확인 → redfish 1회
-(`[addon] 실행할 기능 없음`, host 비용 0) → 신규 Jenkins 1회(자체 서명 → 기본값 통과). 결과는 이 절에 추가한다.
+준비 상태 실측:
+
+- Add-on 저장소: 사용자 push 가 GitLab 에 반영되지 않아(`main` 이 여전히 `83cddde3`) 제가 `ed8f320` 을 `main` 으로 push 했다.
+  검증용 브랜치 `verify/addon-2026-09-29`(`102e48c`, `config.yml` 만 다름 — `software.linux`: `addon check`=`echo addon-check-ok`,
+  `os release`=`head -2 /etc/os-release` `only: {physical_purpose: DB}`; `software.windows`: `addon check`; `hosts: false`)도 push 했다.
+  운영 `main` 의 config 는 그대로다(`hosts: false`, software 설정 없음).
+- 전역 환경변수: 두 Jenkins 모두 **`SE_ADDON_REPO` 가 없다** (script console 읽기 전용 조회 — lab `GLOBAL: (none)`, 노드 변수는
+  `PATH+ANSIBLE` 뿐 / jenkins-prod `GLOBAL: (none)`, 폴더 `clovirone-cicd` 에는 credential 속성만). `/configure` HTML 에도
+  `SE_ADDON` 0건. 사용자 등록이 저장되지 않았거나 다른 곳에 들어갔다.
+
+그 상태에서 돌린 빌드 (Add-on 블록이 실행되지 않아 **기준선**으로 남는다):
+
+| Jenkins | 빌드 | 입력 | 결과 |
+|---|---|---|---|
+| lab 153 | #22 (production `9a194619`) | `target_type=os`, `[165 APP, 161 DB, 120]`, `addonRef=verify/addon-2026-09-29` | `[addon]` 줄 없음(전역 변수 부재 → 블록 미실행), 3 host 모두 `success`, `data.addon` 없음, 194초, Callback sink → UNSTABLE(의도) |
+| jenkins-prod | #9 (production `9a194619`) | redfish, #8 과 동일 입력 (BMC 4대) | 아래 4-1 |
+
+### 4-1. jenkins-prod #9 (redfish, 전역 변수 부재)
+
+`https://jenkins-prod.gooddi.lab/job/clovirone-cicd/job/clovirone-server-gather/` 빌드 **#9** — production `9a194619`(새 파이프라인), 입력은 #8 과 동일.
+
+| Stage | 노드 | 결과 |
+|---|---|---|
+| Resolve Location | Jenkins(controller) | `git -> agent label 'git'` |
+| Validate | SKHynix-Jenkins-Runner01 | OK (hosts=4). 빌드 뒤 Job 파라미터에 `addonRef` 가 생김 |
+| Gather | SKHynix-Jenkins-Runner03 | `[addon]` 줄 없음(전역 변수 부재 → 블록 미실행) → `[venv] /app/ansible-env python=Python 3.12.9 (source=path)` → envelope 4건 |
+| Validate Schema | SKHynix-Jenkins-Runner01 | 통과 |
+| Callback | Jenkins(controller) | sink → 3회 실패 → UNSTABLE (의도) |
+
+host 별 결과는 #8 과 동일 (dell · lenovo · cisco success, HPE 10.50.11.231 `TARGET_UNREACHABLE` 기존 상태). 7분 6초 (#8 은 7분 35초).
+새 파이프라인이 신규 Runner 에서 종전과 같은 결과를 낸다는 기준선이다.
+
+### 4-2. 전역 변수 등록 뒤 (대기)
+
+등록 확인 뒤 진행: jenkins-prod `target_type=os` + `addonRef=verify/addon-2026-09-29` → 콘솔 `[addon] <URL>@verify/… 102e48c…` ·
+`[addon] 검사 통과: linux=['hosts', 'software'], windows=['software']` · envelope `data.addon.software`(APP host: `addon check` 만,
+DB host: `addon check` + `os release`, Windows: `addon check`) → redfish 1회(`[addon] …@main ed8f320…` 뒤 `[addon] 실행할 기능 없음`)
+→ os 1회 `addonRef` 없이(main 기본 config → 검사 통과, `data.addon` 없음).

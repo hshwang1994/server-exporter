@@ -9,8 +9,8 @@
 
 | # | 항목 | 상태 | 내용 |
 |---|---|---|---|
-| AP-1 | Add-on 저장소 `ed8f320` push | `[TODO / 사용자]` | 로컬 `C:\github\ClovirONE\clovirone-gathering-addon` main → GitLab `origin/main`. push 전까지 GitLab `main` 은 옛 구조(`83cddde`: rule · `deploy/`)라 새 파이프라인의 `check_layout.py` 검사가 "파일 없음" 으로 실패한다 → 빌드 UNSTABLE + Add-on 없이 수집 (기본 수집은 정상) |
-| AP-2 | lab · 신규 Master 에 전역 `SE_ADDON_REPO` 등록 | `[TODO / 사용자]` | Jenkins 관리 → System → Global properties → `SE_ADDON_REPO=https://10.100.64.156/root/clovirone-server-gathering-addon.git`. 나머지 3개(`SE_ADDON_REF` · `SE_ADDON_CREDENTIALS_ID` · `SE_ADDON_SSL_VERIFY`)는 기본값으로 둔다 (익명 읽기 · 자체 서명 → 검증 안 함) |
+| AP-1 | Add-on 저장소 `ed8f320` push | `[DONE 2026-09-29]` | 사용자 push 가 GitLab 에 반영되지 않아(`main`=`83cddde3` 그대로) 제가 `ed8f320` 을 `main` 으로 push. 검증용 브랜치 `verify/addon-2026-09-29`(`102e48c`, config 만 다름)도 push — AP-3 뒤 삭제해도 된다 |
+| AP-2 | lab · 신규 Master 에 전역 `SE_ADDON_REPO` 등록 | `[TODO / 사용자 — 2026-09-29 미반영 확인]` | 사용자가 "둘 다 등록" 했다고 했으나 읽기 전용 조회(script console) 결과 lab · jenkins-prod 모두 전역 환경변수 `(none)`, 노드 · 폴더 속성에도 없음 → lab #22 · jenkins-prod #9 콘솔에 `[addon]` 줄 0. 경로: Jenkins 관리 → System → Global properties → Environment variables → Add `SE_ADDON_REPO=https://10.100.64.156/root/clovirone-server-gathering-addon.git` → Save. 나머지 3개는 기본값. 사용자가 원하면 제가 API 로 등록 |
 | AP-3 | Jenkins 실행 확인 (AP-1 · AP-2 뒤) | `[PENDING]` | lab `clovirone-server-gather` `target_type=os`(Linux `physical_purpose` 포함 + Windows) 1회 → 콘솔 `[addon] <URL>@main <sha>` · `[addon] 검사 통과: linux=[…]` · envelope `data.addon.software` → redfish 1회(`[addon] 실행할 기능 없음`) → 신규 Jenkins 1회(CA 없는 Runner 에서 기본값 통과). evidence 4절에 기록. Add-on e2e Job(`형섭/clovirone-gathering-addon-e2e`) 도 GitLab main 이 바뀐 뒤 1회 (시나리오 s01~s15) |
 | AP-4 | 옛 배포 Job 삭제 · lab 155 정리 | `[TODO / 사용자]` | `형섭/clovirone-gathering-addon-deploy` 는 Script Path(`deploy/Jenkinsfile`)가 사라져 더는 돌지 않는다 → 삭제. lab 155 의 `/home/cloviradmin/clovirone-gathering-addon*`(release 링크 · 폴더)은 아무 것도 읽지 않으므로 지워도 된다 |
 | AP-5 | Git 플러그인 + `withEnv(GIT_SSL_NO_VERIFY)` 실측 | `[INFO — 하지 않음]` | 체크아웃을 스크립트로 확정해 필요 없어졌다. 다시 플러그인으로 돌리려면 그때 실측 (ADR 대안 C) |
