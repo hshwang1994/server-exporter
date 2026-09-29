@@ -84,20 +84,38 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 | `eventUuid` | 선택 | 포털 이벤트 UUID — Callback 본문에 그대로 담긴다 |
 | `callbackUrl` | 필수 | 결과를 POST 할 포털 주소 (`http://` 또는 `https://`, 따옴표·공백 불가). 경로 `/api/jenkins/gather/<target_type>` 이 뒤에 붙는다 |
 | `verbosity` | 선택 (기본 `0`) | Ansible verbosity 0~4 |
+| `addonRef` | 선택 (기본 비움) | 이 빌드에서만 쓸 Add-on 브랜치 · `refs/tags/<태그>` · 40자 커밋 해시. 비우면 전역 `SE_ADDON_REF`(기본 `main`). Add-on 이 켜져 있지 않으면 무시된다 (Portal 은 보내지 않는다) |
 
 ---
 
-## Add-on Job (고객별 추가 수집)
+## Add-on (고객별 추가 수집)
 
-Add-on 저장소(`https://10.100.64.156/root/clovirone-server-gathering-addon.git`, GitLab `main`)의 Jenkinsfile 2개를
-"Pipeline script from SCM" 으로 등록한다. 현재는 `형섭/` 폴더에 있다 — 공용 폴더로 옮길지는 운영 결정이다.
+수집 Job 자체가 빌드마다 Add-on 저장소를 받아 간다 — 배포 Job · Agent 배치 · 노드 환경변수가 없고, Runner 를 늘리거나
+다시 설치해도 할 일이 없다. 켜는 방법은 Jenkins 관리 → System → Global properties → Environment variables 에 전역
+변수를 등록하는 것이다.
 
-| Job | Script Path | 용도 |
-|---|---|---|
-| `형섭/clovirone-gathering-addon-deploy` | `deploy/Jenkinsfile` | Add-on 을 Agent 의 `ADDON_HOME`(기본 `/home/cloviradmin/clovirone-gathering-addon`)에 배포한다. 링크 교체 방식이라 수집 중인 빌드에 영향이 없고 최근 5개 버전을 남긴다. `CHECK_RULE=true` 는 배포 확인용 rule 을 하나 더한다 |
-| `형섭/clovirone-gathering-addon-e2e` | `tests/e2e/Jenkinsfile` | 실제 Agent 에서 메인 수집 + Add-on 시나리오와 hook 엔진 테스트를 돌린다. lab 대상 IP 는 Job 파라미터이고, 메인 저장소 checkout 용 credential `hshwang token` 과 `server-gather-vault-password` 를 쓴다 |
+| 변수 | 필수 | 기본값 | 의미 |
+|---|---|---|---|
+| `SE_ADDON_REPO` | 켤 때 필수 | (없음 = 꺼짐) | Add-on 저장소 URL — `https://10.100.64.156/root/clovirone-server-gathering-addon.git` (GitLab 프로젝트 이름이 `clovirone-server-gathering-addon` 이고 코드 · 문서에서는 `clovirone-gathering-addon` 으로 부른다 — 같은 것) |
+| `SE_ADDON_REF` | 선택 | `main` | 브랜치 · `refs/tags/<태그>` · 40자 커밋 해시 |
+| `SE_ADDON_CREDENTIALS_ID` | 선택 | 없음 (익명) | 비공개 저장소일 때 Jenkins credential ID (Username with password — 사용자 이름 + 토큰) |
+| `SE_ADDON_SSL_VERIFY` | 선택 | `false` | Add-on 을 받는 git 명령의 TLS 인증서 검증. 기본은 검증하지 않아 자체 서명 인증서의 내부 GitLab 도 Runner 에 CA 를 설치하지 않고 된다. 정식 인증서 환경에서 검증하려면 `true` |
 
-Add-on 을 켜는 노드 환경변수 `SE_ADDON_DIR` 은 [08-ansible-config.md](08-ansible-config.md) 3절.
+- 변수가 없으면 수집 결과는 Add-on 도입 전과 같다. 지우면 다음 빌드부터 꺼진다.
+- 저장소를 받지 못하거나 Add-on 파일 검사에 실패하면 그 빌드는 Add-on 없이 수집하고 UNSTABLE 로 표시된다
+  (콘솔 `[addon] unavailable: …`). 서버별 결과에는 아무 알림도 남지 않는다.
+- 동작 흐름: [04-pipeline-runtime.md](04-pipeline-runtime.md) 3절. hook 계약: [../develop/07-addon-hook.md](../develop/07-addon-hook.md).
+  설정 방법(현장용): Add-on 저장소 README.
+
+### Add-on e2e Job (선택)
+
+Add-on 저장소의 `tests/e2e/Jenkinsfile` 을 "Pipeline script from SCM" 으로 등록하면 실제 Agent 에서 메인 수집 +
+Add-on 시나리오와 hook 엔진 테스트를 돌린다. 현재 `형섭/clovirone-gathering-addon-e2e` 에 있다 — 공용 폴더로 옮길지는
+운영 결정이다. lab 대상 IP 는 Job 파라미터이고, 메인 저장소 checkout 용 credential `hshwang token` 과
+`server-gather-vault-password` 를 쓴다. `SE_ADDON_DIR` 은 시나리오마다 Job 안에서만 지정한다 (노드 설정 불변).
+
+옛 배포 Job `형섭/clovirone-gathering-addon-deploy`(Add-on `deploy/Jenkinsfile`)는 2026-09-29 에 폐지됐다 — Add-on
+저장소에 그 파일이 더는 없으므로 Job 을 지운다.
 
 ---
 
@@ -118,4 +136,5 @@ Add-on 을 켜는 노드 환경변수 `SE_ADDON_DIR` 은 [08-ansible-config.md](
 | Validate 뒤 "실행 노드를 기다리는 중" 이 계속됨 | `loc` 의 `agent_label` 을 가진 노드가 없다 — Manage Jenkins → Nodes 의 Labels 확인 |
 | Gather 에서 `[venv] Ansible 실행환경(venv)을 찾지 못했습니다` | Agent 의 venv 가 없거나 파이프라인이 아는 경로 밖 — [02-agent-node.md](02-agent-node.md) 5절 · 9절 |
 | Agent 체크아웃이 `git: command not found` 로 실패 | Agent 에 CLI `git` 이 없다 |
+| 빌드가 UNSTABLE 이고 콘솔에 `[addon] unavailable: …` | Add-on 저장소를 받지 못했거나 파일 검사에 실패했다 — 전역 `SE_ADDON_REPO` / `SE_ADDON_REF` / credential 값과 그 위 `[addon]` 줄. 기본 수집은 정상이다 |
 | RBAC 권한이 적용되지 않음 | Job 이름이 `server-exporter.gather` 같은 패턴과 일치하는지 확인 |
