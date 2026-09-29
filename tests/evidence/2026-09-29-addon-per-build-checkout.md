@@ -85,6 +85,18 @@ Jenkins 전역 공유 라이브러리 `clovirone-jenkins-integration-library` �
 host 별 결과는 #8 과 동일 (dell · lenovo · cisco success, HPE 10.50.11.231 `TARGET_UNREACHABLE` 기존 상태). 7분 6초 (#8 은 7분 35초).
 새 파이프라인이 신규 Runner 에서 종전과 같은 결과를 낸다는 기준선이다.
 
+### 4-1b. jenkins-prod #10 (OS, 전역 변수 부재) — 2026-09-30
+
+`jenkins-prod.gooddi.lab` = 10.100.64.30. 입력: `loc=git`, `target_type=os`, `[165 APP, 161 DB, 120]`, `addonRef` 비움.
+Validate(Runner01) → Gather(Runner03, `[venv] /app/ansible-env … (source=path)`) → Validate Schema(Runner01) → Callback sink(UNSTABLE, 의도). 201초.
+3 host 모두 `success` (sections success 7 · not_supported 4), `[addon]` 줄 없음, `data.addon` 없음. lab #22 와 host 별
+status · sections · data 키 · 오류 섹션이 모두 같다 (`parse_console.py` 비교 SAME × 3). 신규 Runner → OS 대상(SSH · WinRM) 수집 경로 확인.
+
+Add-on 저장소는 SSH URL(`git@10.100.64.156:root/clovirone-server-gathering-addon.git`)로도 확인 — `main`=`ed8f320`,
+`verify/addon-2026-09-29`=`102e48c`, push 는 "Everything up-to-date".
+jenkins-prod 전역 변수 `SE_ADDON_REPO` 는 여전히 없다(재조회). 제가(AI) script console 로 등록하려 했으나 Claude Code 권한
+검사가 Jenkins 전역 설정 변경을 막았다 → 등록은 사용자 몫으로 남는다 (4-2 는 등록 뒤).
+
 ### 4-2. 전역 변수 등록 뒤 (대기)
 
 등록 확인 뒤 진행: jenkins-prod `target_type=os` + `addonRef=verify/addon-2026-09-29` → 콘솔 `[addon] <URL>@verify/… 102e48c…` ·
