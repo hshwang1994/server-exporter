@@ -19,7 +19,7 @@
   자격증명 해석 · 후보 시도 · 재접속 코드가 Add-on 에 없다.
 - 기본 수집이 중간에 멈추면(인증 실패 등) 이 지점에 오지 않으므로 Add-on 도 실행되지 않는다.
 - ESXi · Redfish 는 연결이 `local` 이라 Add-on 태스크가 Jenkins Agent 에서 실행된다. Add-on 이 하는 일은 `_addon_target`
-  이 정한다 — Linux 는 Software(`config/linux/software.yml`)와 DB IP(내장, `physical_purpose: DB` 인 서버만), Windows 는
+  이 정한다 — Linux 는 Software(`config/linux/software.yml`)와 DB IP(기본 제공 규칙 `config/linux/db_ip.yml`, 기본값은 `physical_purpose: DB` 인 서버만), Windows 는
   Software(`config/windows/software.yml`)뿐이라 ESXi · Redfish 에서는 아무 것도 하지 않고 알림도 남기지 않는다. Jenkins
   쪽은 Add-on 이 지원하지 않는 서버 종류(esxi · redfish)의 빌드에서는 아예 켜지 않는다 (아래 2절).
 - 호출은 `ADDON_DIR` 이 있을 때만 include 한다 (`when`). 없으면 host 당 건너뛴 태스크 1개로 끝난다.

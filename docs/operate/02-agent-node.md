@@ -287,14 +287,15 @@ git push
 | Description | `{로케이션} {개발\|운영} Agent` | 예: `이천 운영 Agent` |
 | Number of executors | `2` | 동시 실행 잡 수. 서버 사양에 따라 조정 |
 | Remote root directory | `/home/{서비스계정}/jenkins-agent` | Agent 워크스페이스 경로. 설치 자동화 Runner 는 계정 `jenkins` · `/app/jenkins-agent/agent` |
-| Labels | 로케이션 코드 | 아래 표 참조 |
+| Labels | 로케이션 코드 + 이 노드가 수집할 target_type 의 능력 라벨 | 아래 표 참조 |
 | Usage | `Only build jobs with label expressions matching this node` | 라벨 매칭 잡만 실행 |
 | Launch method | `Launch agents via SSH` | 아래 상세 참조 |
 | Availability | `Keep this agent online as much as possible` | |
 
 ### Labels 설정
 
-`Jenkinsfile_portal` 은 `common/vars/locations.yml` 의 `agent_label` 로 노드를 고른다 (정본은 그 파일이다).
+`Jenkinsfile_portal` 은 `common/vars/locations.yml` 의 `agent_label`(Location 라벨)과 `target_type` 의 능력 라벨을 `&&` 로 이어
+노드를 고른다. 두 종류를 모두 가진 온라인 노드가 없으면 Resolve Location 에서 바로 실패한다.
 
 | Location | Labels 값 |
 |-------------|----------|
@@ -302,6 +303,14 @@ git push
 | 청주 | `chj` |
 | 용인 | `yi` |
 | 사내 테스트 | `git` |
+
+| target_type | 노드에 있어야 하는 능력 라벨 | 뜻 |
+|---|---|---|
+| `os` | `linux` 와 `windows` 둘 다 | 한 요청에 Linux · Windows 서버가 섞이므로 SSH 와 WinRM 수집이 모두 돼야 한다 |
+| `esxi` | `esxi` | vSphere API(443)로 ESXi 에 붙는다 |
+| `redfish` | `redfish` | BMC 망의 Redfish API(443)에 붙는다 |
+
+예: 이천에서 세 종류를 모두 수집하는 노드의 Labels 는 `ic linux windows esxi redfish` 다. 능력 라벨이 없는 노드에는 수집이 배정되지 않는다.
 
 ### Launch method (SSH)
 

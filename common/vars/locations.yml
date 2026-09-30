@@ -18,13 +18,15 @@
 #   Credential 경로가 따라 흔들리지 않는다.
 #
 # 소비처:
-#   - Jenkinsfile_portal 'Resolve Location' stage (readYaml — 미등록 Location 즉시 실패)
+#   - Jenkinsfile_portal 'Resolve Location' stage (readYaml — 미등록 Location 즉시 실패).
+#     agent_label 뒤에 target_type 의 능력 라벨(os: linux && windows / esxi / redfish)을 && 로 이어 노드를 고른다
+#     — 능력 라벨은 러너 규약이다 (docs/operate/02-agent-node.md 8절)
 #   - lookup_plugins/credential_resolver.py (known_locations)
 #
 # 확장 절차 (새 Location `newdc`):
 #   1. 아래에 `newdc: { agent_label: newdc }` 추가
 #   2. vault/newdc/{os/linux.yml, os/windows.yml, esxi.yml, redfish/<vendor>.yml} 생성 + 암호화
-#   3. Jenkins 에 해당 label agent 등록
+#   3. Jenkins 에 해당 label + 수집할 target_type 의 능력 라벨을 가진 agent 등록
 #
 # 제약 (tests/unit/test_location_registry.py 가 강제):
 #   - Location ID 는 `[a-z0-9_-]+` — 경로 조각으로 그대로 쓰이므로 경로 주입이 불가능해야 한다

@@ -77,9 +77,22 @@ pipeline {
                         error "[Resolve Location] Location '${key}' 에 agent_label 이 없습니다 " +
                               "— common/vars/locations.yml 을 확인하세요."
                     }
+                    // 노드는 Location 라벨과 target_type 의 능력 라벨을 모두 가진 것만 고른다 (docs/operate/02-agent-node.md 8절).
+                    //   os 는 한 inventory 에 Linux · Windows 가 섞이므로 두 라벨이 다 필요하고, esxi · redfish 는 각자의 라벨이다.
+                    def targetLabels = ['os': 'linux && windows', 'esxi': 'esxi', 'redfish': 'redfish']
+                    def targetType   = params.target_type?.trim()
+                    if (!targetLabels.containsKey(targetType)) {
+                        error "[Resolve Location] target_type 값 오류: '${params.target_type}' -- 허용값: ${targetLabels.keySet().sort()}"
+                    }
                     env.SE_LOCATION    = key
-                    env.SE_AGENT_LABEL = entry.agent_label.trim()
-                    echo "[Resolve Location] ${key} -> agent label '${env.SE_AGENT_LABEL}'"
+                    env.SE_AGENT_LABEL = "${entry.agent_label.trim()} && (${targetLabels[targetType]})"
+                    // 맞는 온라인 노드가 없으면 executor 를 기다리며 조용히 멈추는 대신 여기서 끝낸다.
+                    def nodes = nodesByLabel(label: env.SE_AGENT_LABEL)
+                    if (!nodes) {
+                        error "[Resolve Location] 라벨 '${env.SE_AGENT_LABEL}' 을 모두 가진 온라인 노드가 없습니다 " +
+                              "-- Manage Jenkins > Nodes 에서 '${key}' 노드의 라벨(${targetLabels[targetType]})을 확인하세요."
+                    }
+                    echo "[Resolve Location] ${key} + ${targetType} -> agent label '${env.SE_AGENT_LABEL}' (nodes: ${nodes.join(', ')})"
                 }
             }
             post { always { deleteDir() } }

@@ -8,6 +8,28 @@
 
 > 최종 갱신: 2026-09-30
 
+## 2026-09-30 — Jenkins 노드 선택 축을 `loc` 에서 `loc && target_type 능력 라벨` 로
+
+### 배경
+
+`Jenkinsfile_portal` 은 `common/vars/locations.yml` 의 `agent_label`(`loc`) 하나로 Validate · Gather · Validate Schema 의 노드를 골랐다.
+jenkins-prod 러너에는 인프라 팀이 능력 라벨(`linux` · `windows` · `redfish`)을 붙여 두었지만 파이프라인이 보지 않아, `git` 라벨만 있는
+Runner04 가 os 수집(#14 의 Gather)과 여러 빌드의 Validate Schema 를 받았다. 맞는 노드가 없으면 빌드는 "실행 노드를 기다리는 중" 으로
+조용히 멈췄다.
+
+### 결정
+
+- Resolve Location 이 `agent_label && (<능력 라벨>)` 로 라벨식을 만든다. 능력 라벨은 `os → linux && windows`(한 inventory 에 Linux · Windows 가
+  섞이므로 둘 다), `esxi → esxi`, `redfish → redfish` 이며 Jenkinsfile 의 상수다 (`playbookMap` 과 같은 자리). `params.target_type` 을 그대로
+  라벨로 쓰지 않는 이유는 러너 라벨 이름이 `os` 가 아니기 때문이다.
+- 맞는 온라인 노드가 없으면 `nodesByLabel`(pipeline-utility-steps)로 Resolve Location 에서 즉시 실패한다. 메시지에 라벨식과 조치를 적는다.
+- `locations.yml` 값은 그대로다. 세 agent stage 는 코드 변경 없이 같은 변수(`SE_AGENT_LABEL`)를 읽는다.
+- 운영 전제: esxi 수집이 가능한 러너에 `esxi` 라벨이 있어야 esxi 빌드가 된다 (2026-09-30 시점 어느 러너에도 없음 — 인프라 팀 작업).
+
+### 검증
+
+`tests/unit/test_jenkinsfile_portal_agent_label.py`(텍스트 계약) · Jenkins 선언형 문법 검사 · production 승격 뒤 os · redfish 실빌드.
+
 ## 2026-09-30 — Add-on 변수 이름 정리 (`SE_ADDON_*` → `ADDON_REPO_*` · `ADDON_DIR`)
 
 ### 요구
