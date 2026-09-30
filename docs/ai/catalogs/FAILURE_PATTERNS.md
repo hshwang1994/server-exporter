@@ -440,3 +440,19 @@
 - 수정: `unknown_location` OR 표준 결과 ∈ {missing, undecryptable, empty_accounts} OR (not_resolved AND vendor 식별).
   회귀: `test_redfish_credential_unavailable_is_not_gather` (4 케이스) + WSL 실제 실행.
 - 관련 rule: CLAUDE.md §9 (failure_stage = 멈춘 위치), rule 13 R8
+
+## 2026-09-30 — Ansible `fileglob` 은 디렉터리 부분의 `*` 를 풀지 않는다 (Add-on 기능 이름 검사가 빈 목록)
+
+- 카테고리: scope-miss (테스트 범위 누락)
+- 발견 위치: Add-on 저장소 `tasks/main.yml` plan 단계 (`ed8f320`, 2026-09-29 재설계) — lab Add-on e2e #8 (2026-09-30)
+- 증상: Windows 서버에서 저장소 기본 config(`hosts: false`)만으로 `errors[]` 에 "config.yml 의 'hosts' 에 해당하는 수집 기능이
+  없습니다" 가 남았다 (e2e s03 · s13 · s15 WINDOWS FAIL 3건). Add-on 을 켜면 모든 Windows 서버에 거짓 알림이 붙을 뻔했다.
+- 원인: 전체 기능 이름 목록을 `query('ansible.builtin.fileglob', <dir>/collectors/*/*.yml)` 로 만들었다. fileglob 은 파일 이름
+  부분만 glob 하고 디렉터리 부분은 `find_file_in_search_path` 로 글자 그대로 찾는다 → 늘 빈 목록 → 그 서버 종류에 없는
+  기능 이름(Linux 전용 `hosts`)을 "없는 기능" 으로 판정. 단위 테스트는 목록을 직접 넘겨 통과했고, role 실행 테스트는 Linux 만 돌렸다.
+- 수정: Add-on `6ef226a` — controller 에서 `glob` 으로 찾는 filter `addon_collector_files` 로 교체. 회귀: `test_core.py`
+  (목록 · Windows 파일로 plan), `test_playbook.py` Windows target role 실행(설정 없는 software 는 win_shell 을 부르지 않는다),
+  `test_layout.py` (plan 에 `collectors/*/` 금지).
+- 재발 방지: Ansible `fileglob` 에 디렉터리 wildcard 를 쓰지 않는다. 서버 종류별로 갈리는 로직은 role 실행 테스트를 두 종류 이상에서 돌린다.
+- 관련 rule: rule 95 R1 (의심 패턴), rule 25 R7-A (실측 검증)
+

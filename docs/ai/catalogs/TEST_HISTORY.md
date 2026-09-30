@@ -11,7 +11,9 @@
 | `tests/integration/test_addon_hook_playbook.py` (WSL, ansible-core 2.20.7) | 10 passed |
 | `ansible-playbook --syntax-check` 3채널 (WSL) | 통과 |
 | Jenkins 선언형 린터 (lab 153) | validated |
-| Add-on `python -m pytest tests` (Windows) / `tests/test_playbook.py` (WSL) | 181 passed · 17 skipped / 17 passed |
+| Add-on `python -m pytest tests` (Windows) / `tests/test_playbook.py` (WSL) | 이름 변경 뒤 181 passed · 17 skipped / 17 passed → 결함 수정(`6ef226a`) 뒤 186 passed · 18 skipped / 18 passed |
+| jenkins-prod #11 (production `afe3a90c`, 변수 없음) | OS 3대 success, #10 과 host 별 동일 |
+| lab Add-on e2e #8 → #9 | #8 PASS 137 / FAIL 3 (Windows 거짓 알림 — Add-on 결함) → 수정 뒤 #9 PASS 140 / FAIL 0, 엔진 테스트 10 passed (ansible-core 2.20.3) |
 
 ## 2026-09-29 — Add-on 빌드별 체크아웃 (`scripts/addon_checkout.sh` · `Jenkinsfile_portal` Gather · Add-on `ed8f320`)
 

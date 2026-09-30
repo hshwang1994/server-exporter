@@ -101,8 +101,8 @@ jenkins-prod 전역 변수 `SE_ADDON_REPO` 는 여전히 없다(재조회). 제�
 
 ### 4-2. 전역 변수 등록 뒤 (대기)
 
-사용자가 jenkins-prod 에 `ADDON_REPO_URL` 을 등록하면 진행한다 (5절의 이름 변경 뒤): `target_type=os` + `addonRef=verify/addon-2026-09-29`
-→ 콘솔 `[addon] <URL>@verify/… 102e48c…` · `[addon] 검사 통과: linux=['hosts', 'software'], windows=['software']` · envelope
+사용자가 jenkins-prod 에 `ADDON_REPO_URL` 을 등록하면 진행한다 (5절의 이름 변경 뒤): `target_type=os` + `addonRef=verify/addon-2026-09-30`
+→ 콘솔 `[addon] <URL>@verify/… e32d6ea…` · `[addon] 검사 통과: linux=['hosts', 'software'], windows=['software']` · envelope
 `data.addon.software`(APP host: `addon check` 만, DB host: `addon check` + `os release`, Windows: `addon check`) → redfish 1회
 (`[addon] …@main <sha>` 뒤 `[addon] 실행할 기능 없음`) → os 1회 `addonRef` 없이(main 기본 config → 검사 통과, `data.addon` 없음).
 
@@ -124,4 +124,21 @@ jenkins-prod 전역 변수 `SE_ADDON_REPO` 는 여전히 없다(재조회). 제�
 | Add-on `tools/check_layout.py . --targets linux,windows` | `[addon] 검사 통과: linux=['hosts', 'software'], windows=['software']` |
 | Jenkins 전역 변수 읽기 조회 (lab · jenkins-prod) | 둘 다 `(none)` — 옛 이름 등록 없음, 옮길 설정 없음 |
 
-Jenkins 실행 결과는 아래에 이어 적는다.
+### 5-1. Jenkins (전역 변수 없이)
+
+| Jenkins | 빌드 | 대상 | 결과 |
+|---|---|---|---|
+| jenkins-prod | #11 (production `afe3a90c`) | OS `[165 APP, 161 DB, 120]` | 3대 success, `[addon]` 줄 없음, #10 과 host 별 동일 (`parse_console.py` SAME × 3) — 이름을 바꾼 파이프라인의 꺼진 경로 |
+| lab | Add-on e2e #8 (메인 `c2dd6ed9`, Add-on `17824ba`) | 시나리오 15개 + 엔진 테스트 | 엔진 테스트 10 passed(ansible-core 2.20.3), **PASS 137 / FAIL 3**. `ADDON_DIR` 관련(s02 detail `ADDON_DIR=…` · s12 끝 `/`)은 모두 통과. FAIL 3건은 모두 Windows 의 거짓 알림 (아래 5-2) |
+| lab | Add-on e2e #9 (메인 `c2dd6ed9`, Add-on `6ef226a`) | 같음 | 엔진 테스트 10 passed, **PASS 140 / FAIL 0 / KNOWN 0**, 1102초 |
+
+### 5-2. e2e 로 드러난 결함 — Windows 에서 Linux 전용 기능 이름을 "없는 기능" 으로 알림
+
+- 증상 (e2e #8 s03 · s13 · s15 WINDOWS): 저장소 기본 config(`hosts: false`)만으로 `errors[]` detail
+  "config.yml 의 'hosts' 에 해당하는 수집 기능이 없습니다".
+- 원인: Add-on 엔진이 전체 기능 이름을 `fileglob(<dir>/collectors/*/*.yml)` 로 모았는데, Ansible `fileglob` 은 파일 이름 부분만
+  glob 하고 디렉터리 부분의 `*` 는 글자 그대로 찾는다(`find_file_in_search_path`) → 늘 빈 목록. 이름 변경과 무관한 2026-09-29 결함이다.
+- 수정: Add-on `6ef226a` — controller 에서 `glob` 으로 찾는 filter `addon_collector_files`. 회귀 테스트: 단위 3 · Windows target role
+  실행 1 · layout 1. Add-on Windows pytest 186 passed / 18 skipped, WSL role 실행 18 passed. 기록: `docs/ai/catalogs/FAILURE_PATTERNS.md` 2026-09-30.
+- 검증 브랜치: 옛 `verify/addon-2026-09-29`(`102e48c`)는 이 결함이 있는 `ed8f320` 기반이라 쓰지 않는다. 새 `verify/addon-2026-09-30`
+  (`e32d6ea` = `6ef226a` + 확인용 config)을 올렸다.

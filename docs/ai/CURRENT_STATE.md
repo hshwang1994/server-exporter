@@ -14,6 +14,9 @@
   Add-on 저장소 README · e2e(run.py · Jenkinsfile 주석 · scale_spike) · test_layout. 옛 이름 부재 확인 테스트 2곳.
 - **검증**: 메인 unit+e2e 3185 passed, Add-on 단위 74 · hook 통합(WSL) 10 · 3채널 syntax-check · 선언형 린터 통과,
   Add-on 181 passed + WSL 17 passed.
+- **Jenkins**: jenkins-prod #11(production `afe3a90c`, 변수 없음) OS 3대가 #10 과 동일. lab Add-on e2e #8 은 PASS 137 / FAIL 3 —
+  Windows 에서 Linux 전용 기능 이름(`hosts`)을 "없는 기능" 으로 알리는 2026-09-29 결함(Ansible `fileglob` 이 디렉터리 `*` 를 안 풂)을
+  드러냈다. Add-on `6ef226a` 로 수정(controller `glob` filter + 회귀 테스트 5) 뒤 e2e #9 는 PASS 140 / FAIL 0.
 - **대기(사용자)**: jenkins-prod 에 `ADDON_REPO_URL` 등록(AP-2) → 제가(AI) 켜진 실행 확인(AP-3).
 
 ## 일자: 2026-09-29 — Add-on 을 빌드마다 받는다 (켜기 = 전역 `SE_ADDON_REPO` 1개 · 추가 = 파일 1개 · Runner 무관)
