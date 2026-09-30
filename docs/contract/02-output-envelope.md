@@ -207,7 +207,7 @@ Software 설정이나 DB 서버 조건(`physical_purpose: DB` 인 Linux)에 맞�
 ```jsonc
 "addon": {
   "software": { "swList":   [ { "name": "bash", "value": "5.1.8-9.el9" },
-                              { "name": "python3", "value": "명령 실행에 실패했습니다. 설정된 command를 확인해주세요. (rc=1)" } ] },
+                              { "name": "python3", "value": "소프트웨어가 설치되지 않았습니다." } ] },
   "dbIp":     { "dbIpList": [ { "ip": "10.10.10.11", "purpose": "vip" }, { "ip": "10.10.10.201", "purpose": "scan" } ] }
 }
 ```
@@ -221,6 +221,7 @@ Software 설정이나 DB 서버 조건(`physical_purpose: DB` 인 Linux)에 맞�
   결과는 그대로다.
 - `swList[].value`는 명령 출력에서 앞뒤 공백을 지운 글자다 (줄바꿈은 `\n`). 명령이 실패해도 항목은 남고
   `value`에 아래 고정 문장 중 하나가 온다.
+  - `소프트웨어가 설치되지 않았습니다.` — rpm · dpkg 가 그 패키지가 설치되지 않았다고만 답한 경우
   - `명령을 찾을 수 없습니다. 소프트웨어 설치 여부와 command를 확인해주세요.`
   - `명령 실행에 실패했습니다. 설정된 command를 확인해주세요. (rc=N)`
   - `명령은 실행됐지만 수집된 값이 없습니다. command 출력을 확인해주세요.`
