@@ -107,15 +107,11 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 - 동작 흐름: [04-pipeline-runtime.md](04-pipeline-runtime.md) 3절. hook 계약: [../develop/07-addon-hook.md](../develop/07-addon-hook.md).
   설정 방법(현장용): Add-on 저장소 README.
 
-### Add-on e2e Job (선택)
+### Add-on 전용 Job 은 두지 않는다
 
-Add-on 저장소의 `tests/e2e/Jenkinsfile` 을 "Pipeline script from SCM" 으로 등록하면 실제 Agent 에서 메인 수집 +
-Add-on 시나리오와 hook 엔진 테스트를 돌린다. 현재 `형섭/clovirone-gathering-addon-e2e` 에 있다 — 공용 폴더로 옮길지는
-운영 결정이다. lab 대상 IP 는 Job 파라미터이고, 메인 저장소 checkout 용 credential `hshwang token` 과
-`server-gather-vault-password` 를 쓴다. `ADDON_DIR` 은 시나리오마다 Job 안에서만 지정한다 (노드 설정 불변).
-
-옛 배포 Job `형섭/clovirone-gathering-addon-deploy`(Add-on `deploy/Jenkinsfile`)는 2026-09-29 에 폐지됐다 — Add-on
-저장소에 그 파일이 더는 없으므로 Job 을 지운다.
+Add-on 을 실장비로 확인할 때도 이 수집 Job 을 `addonRef=<브랜치>` 로 실행한다 (절차: Add-on 저장소
+`docs/development.md`). 옛 Job `형섭/clovirone-gathering-addon-e2e`(Add-on `tests/e2e/Jenkinsfile`)와
+`형섭/clovirone-gathering-addon-deploy`(Add-on `deploy/Jenkinsfile`)는 Add-on 저장소에 그 파일이 더는 없으므로 지운다.
 
 ---
 

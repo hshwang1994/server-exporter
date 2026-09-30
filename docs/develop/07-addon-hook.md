@@ -18,11 +18,10 @@
 - 인증과 기본 수집이 끝난 뒤, 조립(`build_*`) 직전이다. Add-on 은 이미 붙어 있는 연결을 그대로 쓴다.
   자격증명 해석 · 후보 시도 · 재접속 코드가 Add-on 에 없다.
 - 기본 수집이 중간에 멈추면(인증 실패 등) 이 지점에 오지 않으므로 Add-on 도 실행되지 않는다.
-- ESXi · Redfish 는 연결이 `local` 이라 Add-on 태스크가 Jenkins Agent 에서 실행된다. Add-on 은 `_addon_target` 값과
-  같은 이름의 디렉터리(`collectors/<target>/`)에 파일이 있는 target 에서만 수집 기능을 실행한다 — 파일 위치가 곧 지원
-  범위다. 파일이 없는 target(지금은 ESXi · Redfish)에서는 아무 것도 하지 않고 알림도 남기지 않는다 (2026-09-29.
-  종전의 "미지원 target 알림" 은 rule 의 `target` 누락 실수를 드러내기 위한 것이었고, rule 이 없어지면서 그 실수
-  유형도 사라졌다). Jenkins 쪽은 그 빌드의 target 후보에 collector 가 하나도 없으면 아예 켜지 않는다 (아래 2절).
+- ESXi · Redfish 는 연결이 `local` 이라 Add-on 태스크가 Jenkins Agent 에서 실행된다. Add-on 은 `_addon_target` 의
+  설정 파일(`config/<target>/<기능>.yml`)이 있는 기능만 실행한다 — 설정 파일이 곧 지원 범위다. 지금은 Linux(Software ·
+  DB IP)와 Windows(Software)뿐이라 ESXi · Redfish 에서는 아무 것도 하지 않고 알림도 남기지 않는다. Jenkins 쪽은 그
+  빌드의 서버 종류에 설정 파일이 하나도 없으면 아예 켜지 않는다 (아래 2절).
 - 호출은 `ADDON_DIR` 이 있을 때만 include 한다 (`when`). 없으면 host 당 건너뛴 태스크 1개로 끝난다.
 
 ## 2. 경로 — `ADDON_DIR`
@@ -103,10 +102,12 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 ## 6. 알아둘 한계 (2026-09-21 실측)
 
 - Add-on 의 태스크 YAML 문법 오류는 rescue 로 잡히지 않고 실행 전체를 멈춘다 (`strategy/free.py` 가
-  `AnsibleParserError` 를 다시 던진다). 그래서 고객이 고치는 파일은 런타임에 읽는 `config.yml` 하나로
-  두고, Add-on 태스크는 Add-on 테스트를 통과한 것만 배포한다.
-- Add-on 전용 timeout 은 없다 (사용자 결정). 끝나지 않는 명령은 Jenkins Gather 단계 제한(60분,
-  `Jenkinsfile_portal`)까지 play 를 붙잡고, 그 빌드의 모든 host 결과가 전달되지 않는다.
+  `AnsibleParserError` 를 다시 던진다). 그래서 고객이 고치는 파일은 런타임에 읽는 설정 파일(`config/`)로
+  두고, Add-on 의 `tools/check_layout.py` 가 켜기 전에 태스크 YAML 과 설정 파일을 검사하며, Add-on 태스크는 Add-on
+  테스트를 통과한 것만 배포한다.
+- hook 에는 timeout 이 없다. 대신 Add-on 이 명령마다 제한 시간(5분)을 둔다 — Linux 는 `timeout`, Windows 는
+  `async`. 그 밖의 이유로 태스크가 끝나지 않으면 Jenkins Gather 단계 제한(60분, `Jenkinsfile_portal`)까지 play 를
+  붙잡고, 그 빌드의 모든 host 결과가 전달되지 않는다.
 - Add-on 이 돌려준 글자에 짝 없는 surrogate(원격 출력의 UTF-8 이 아닌 바이트)가 남으면 콜백이 그 host 의 봉투를
   쓰지 못한다 (`surrogates not allowed`). 콜백 보충이 `OUTPUT_BUILD_FAILED` 실패 봉투를 대신 내므로 host 수는
   유지되지만 기본 수집 결과도 잃는다. 그래서 3절의 약속대로 Add-on 이 돌려주기 전에 글자를 정리한다.
@@ -124,10 +125,11 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 | `tests/integration/test_addon_hook_playbook.py` | 실제 ansible-playbook 으로 공통 조립 코드 + hook: 미설정 시 byte 동일, 경로 없음 · 상위 폴더, 끝 `/`, 정상, 참고 문장, 실행 실패, 연결 끊김 | Linux / WSL / Jenkins Agent |
 | `tests/unit/test_addon_checkout.py` | `scripts/addon_checkout.sh` 를 실제 git(로컬 저장소)으로: 브랜치 · 태그 · `refs/heads/` · 40자 해시 · 광고되지 않은 해시(2차 fetch) · 짧은 해시 거부 · 옵션형 ref 거부 · 없는 ref/저장소 · 이전 파일 제거 · askpass | 어디서나 (bash + git) |
 | `tests/unit/test_jenkinsfile_portal_addon.py` | `Jenkinsfile_portal` 텍스트 계약: `ADDON_DIR` 은 Gather 의 `withEnv` 한 곳 · `ADDON_REPO_URL` 게이트 · 실패는 `unstable` · 노드 경로 / 배포 Job / 전역 git 설정 흔적 0 | 어디서나 |
-| Add-on 저장소 `tests/e2e/` (Jenkins Job) | 실제 Agent 에서 운영과 같은 명령 · vault 로 Linux · Windows · ESXi · Redfish 대상 시나리오를 돌리고, 위 엔진 테스트도 같은 Agent 에서 돌린다 | Jenkins |
+| Add-on 저장소 `tests/` | Add-on 자체의 판정 · 설정 검사 · 실행 틀 · role 실행 | Add-on 저장소 |
 
 엔진 테스트는 `tests/fixtures/addon/` 의 합성 Add-on 과 `harness.yml` 을 쓴다. `ANSIBLE_PLAYBOOK_BIN` 으로
 다른 ansible-playbook(예: 운영과 같은 2.20.3)을 지정할 수 있다.
-Add-on 저장소: `https://10.100.64.156/root/clovirone-server-gathering-addon.git` — e2e 사용법은 그 저장소 `tests/e2e/run.py` 머리.
+실장비 확인은 수집 Job 을 `addonRef=<브랜치>` 로 실행해 결과 JSON 을 본다.
+Add-on 저장소: `https://10.100.64.156/root/clovirone-server-gathering-addon.git` — 개발 · 실장비 확인 방법은 그 저장소 `docs/development.md`.
 GitLab 프로젝트 이름은 이 저장소 이름을 따른 것이고, 코드 · Jenkins Job · Agent 경로 · 문서에서는
 `clovirone-gathering-addon` 으로 부른다 — 같은 것이다.
