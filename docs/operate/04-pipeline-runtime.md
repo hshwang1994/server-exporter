@@ -13,7 +13,7 @@
 
 ```text
 parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid, callbackUrl, verbosity, addonRef)
-  → Resolve Location  [컨트롤러]  loc 를 common/vars/locations.yml 로 검증 → agent_label 결정
+  → Resolve Location  [컨트롤러]  loc 를 common/vars/locations.yml 로 검증, target_type 능력 라벨과 && 로 이어 노드 라벨식 결정 (맞는 온라인 노드 없으면 즉시 실패)
   → Validate          [Agent]     파라미터 형식 검증 (체크아웃 없음)
   → Gather            [Agent]     (전역 ADDON_REPO_URL 이 있으면 Add-on 체크아웃 · 검사) → ansible-playbook 실행 → gather_output.json → stash
   → Validate Schema   [Agent]     field_dictionary.yml 정합 (FAIL 게이트)
@@ -23,9 +23,9 @@ parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid
 | Stage | 노드 | 하는 일 | 실패 시 |
 |-------|------|--------|--------|
 | Resolve Location | `built-in` | `readYaml common/vars/locations.yml` — 미등록 `loc` 는 노드 대기 없이 즉시 실패 | FAILURE |
-| Validate | `agent_label` 노드 | `target_type` / `inventory_json` / `callbackUrl` / `deploymentEnvironmentId` 검증 | FAILURE |
-| Gather | `agent_label` 노드 | (전역 `ADDON_REPO_URL` 이 있으면 Add-on 저장소를 `${WORKSPACE}/addon` 에 받고 검사 — 3절) → venv 활성화 → `ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-file=<임시파일> -e se_location=<loc>` | Add-on 을 받지 못하면 UNSTABLE + Add-on 없이 수집, ansible 실패는 UNSTABLE, 결과 파일 0바이트면 FAILURE |
-| Validate Schema | `agent_label` 노드 | venv 활성화 → `python3 tests/validate_field_dictionary.py` | FAILURE |
+| Validate | `agent_label && 능력 라벨` 노드 | `target_type` / `inventory_json` / `callbackUrl` / `deploymentEnvironmentId` 검증 | FAILURE |
+| Gather | `agent_label && 능력 라벨` 노드 | (전역 `ADDON_REPO_URL` 이 있으면 Add-on 저장소를 `${WORKSPACE}/addon` 에 받고 검사 — 3절) → venv 활성화 → `ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-file=<임시파일> -e se_location=<loc>` | Add-on 을 받지 못하면 UNSTABLE + Add-on 없이 수집, ansible 실패는 UNSTABLE, 결과 파일 0바이트면 FAILURE |
+| Validate Schema | `agent_label && 능력 라벨` 노드 | venv 활성화 → `python3 tests/validate_field_dictionary.py` | FAILURE |
 | Callback | `built-in` | `httpRequest` POST, 3회 재시도 (10s · 20s backoff) | UNSTABLE (수집 결과는 콘솔에 남는다) |
 
 ### Ansible 실행환경(venv) 선택
@@ -117,7 +117,7 @@ Jenkins 관리 → System → Global properties → Environment variables. 노�
 4. 작업 공간은 빌드별(`customWorkspace`)이고 stage 끝에 `deleteDir()` 한다. 체크아웃 스크립트도 시작할 때 `addon/` 을
    비우므로 이전 ref 의 파일이 남지 않는다.
 
-Add-on 안에서 무엇이 실행되는지(Software 설정 `config/<서버 종류>/software.yml`, 내장 DB IP)는 Add-on 저장소 README, hook 계약은
+Add-on 안에서 무엇이 실행되는지(Software 설정 `config/<서버 종류>/software.yml`, DB IP 기본 규칙 `config/linux/db_ip.yml`)는 Add-on 저장소 README, hook 계약은
 [../develop/07-addon-hook.md](../develop/07-addon-hook.md).
 
 ## 4. Ansible 실행 방식
@@ -168,7 +168,7 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
 
 | 항목 | 요구사항 |
 |------|---------|
-| Label | `common/vars/locations.yml` 의 `agent_label` (ic / chj / yi / git) |
+| Label | `common/vars/locations.yml` 의 `agent_label` (ic / chj / yi / git) + 수집할 target_type 의 능력 라벨 (`os` 는 `linux` 와 `windows`, `esxi` 는 `esxi`, `redfish` 는 `redfish`) — [02-agent-node.md](02-agent-node.md) 8절 |
 | venv | `/app/ansible-env` 또는 `/opt/ansible-env`, 아니면 노드 환경변수 `SE_ANSIBLE_VENV` |
 | CLI `git` | Gather · Validate Schema 의 체크아웃, Add-on 체크아웃(`scripts/addon_checkout.sh`)에 필요 |
 | Add-on 저장소 접근 | 전역 `ADDON_REPO_URL` 을 켠 경우 Agent 에서 그 URL 에 닿아야 한다 (자체 서명 인증서는 기본값으로 통과 — CA 설치 불필요) |

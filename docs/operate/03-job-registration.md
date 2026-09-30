@@ -129,7 +129,7 @@ Add-on 을 실장비로 확인할 때도 이 수집 Job 을 `addonRef=<브랜치
 |------|------------|
 | 'Resolve Location' 이 2분 제한으로 끊김 | Branch 가 `*/main` 이면 참조 데이터까지 받는다 — `*/production` 으로 |
 | `[Resolve Location] 등록되지 않은 Location` | `loc` 값이 `common/vars/locations.yml` 에 없다 |
-| Validate 뒤 "실행 노드를 기다리는 중" 이 계속됨 | `loc` 의 `agent_label` 을 가진 노드가 없다 — Manage Jenkins → Nodes 의 Labels 확인 |
+| `[Resolve Location] 라벨 '… && (…)' 을 모두 가진 온라인 노드가 없습니다` 로 바로 실패 | `loc` 의 `agent_label` 과 `target_type` 의 능력 라벨(`os` 는 `linux`+`windows`, `esxi`, `redfish`)을 모두 가진 온라인 노드가 없다 — Manage Jenkins → Nodes 의 Labels 확인 ([02-agent-node.md](02-agent-node.md) 8절) |
 | Gather 에서 `[venv] Ansible 실행환경(venv)을 찾지 못했습니다` | Agent 의 venv 가 없거나 파이프라인이 아는 경로 밖 — [02-agent-node.md](02-agent-node.md) 5절 · 9절 |
 | Agent 체크아웃이 `git: command not found` 로 실패 | Agent 에 CLI `git` 이 없다 |
 | 빌드가 UNSTABLE 이고 콘솔에 `[addon] unavailable: …` | Add-on 저장소를 받지 못했거나 파일 검사에 실패했다 — 전역 `ADDON_REPO_URL` / `ADDON_REPO_REF` / credential 값과 그 위 `[addon]` 줄. 기본 수집은 정상이다 |
