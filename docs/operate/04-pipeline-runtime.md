@@ -106,17 +106,18 @@ Jenkins 관리 → System → Global properties → Environment variables. 노�
    fetch 한다 (브랜치 · 태그 · 전체 해시 모두 같은 흐름). 서버가 해시 직접 fetch 를 막으면 브랜치 · 태그 전체를 받아
    그 안에서 해석한다. `retry(2)`. `ADDON_REPO_CREDENTIALS_ID` 가 있으면 `withCredentials` 로 받은 값을
    `GIT_ASKPASS`(`scripts/addon_askpass.sh`)로 넘긴다 (콘솔 마스킹). ref 우선순위: `addonRef` 파라미터 → `ADDON_REPO_REF` → `main`.
-2. venv 의 python3 으로 `addon/tools/check_layout.py addon --targets <서버 종류>` — 태스크 · collector YAML 문법,
-   `tasks/main.yml`, filter import. 서버 종류는 `target_type` 이 정한다: os→`linux,windows`, esxi→`esxi`, redfish→`redfish`.
+2. venv 의 python3 으로 `addon/tools/check_layout.py addon --targets <서버 종류>` — 태스크 YAML 문법, 설정 파일
+   (`config/`)의 문법과 기본 형식, `tasks/main.yml`, filter import. 설정 작성 오류는 여기서 한 번에 막혀 서버마다
+   반복되지 않는다. 서버 종류는 `target_type` 이 정한다: os→`linux,windows`, esxi→`esxi`, redfish→`redfish`.
 3. rc 0 → ansible 실행을 `withEnv(["ADDON_DIR=${WORKSPACE}/addon"])` 로 감싼다. 콘솔 `[addon] <URL>@<ref> <커밋>`.
-   rc 3 (그 서버 종류에 collector 가 없음) → 켜지 않는다. 콘솔 `[addon] 실행할 기능 없음` (host 비용 0, UNSTABLE 아님).
+   rc 3 (그 서버 종류의 설정 파일이 없음) → 켜지 않는다. 콘솔 `[addon] 실행할 기능 없음` (host 비용 0, UNSTABLE 아님).
    그 밖의 실패 (URL · ref · 인증 · 인증서 · 저장소 다운 · 검사 실패) → 콘솔 `[addon] unavailable: <사유>` +
    `unstable(...)`. `ADDON_DIR` 을 설정하지 않으므로 기본 수집 · Validate Schema · Callback 은 정상이고 host 별
    `errors[]` 에 addon 오류가 생기지 않는다 (저장소 문제는 host 문제가 아니다).
 4. 작업 공간은 빌드별(`customWorkspace`)이고 stage 끝에 `deleteDir()` 한다. 체크아웃 스크립트도 시작할 때 `addon/` 을
    비우므로 이전 ref 의 파일이 남지 않는다.
 
-Add-on 안에서 무엇이 실행되는지(서버 종류별 collector · `config.yml`)는 Add-on 저장소 README, hook 계약은
+Add-on 안에서 무엇이 실행되는지(서버 종류별 설정 파일 `config/<서버 종류>/<기능>.yml`)는 Add-on 저장소 README, hook 계약은
 [../develop/07-addon-hook.md](../develop/07-addon-hook.md).
 
 ## 4. Ansible 실행 방식

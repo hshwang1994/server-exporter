@@ -200,28 +200,35 @@ Redfish 결과의 `data`에는 섹션이 아닌 보조 키가 둘 더 있다. `m
 않으며, 수집에 들어가기 전에 멈춘 실패 봉투에는 키 자체가 없다. 자세한 규칙은
 [03-fields.md](03-fields.md) 6.8절에 있다.
 
-추가 수집(Add-on)을 쓰는 환경에서는 채널과 관계없이 `data`에 보조 키 `addon`이 붙을 수 있다. 고객별
-설정에 맞는 서버에만 생기고 그 밖에는 키 자체가 없으니, 읽기 전에 키가 있는지 확인한다.
+추가 수집(Add-on)을 쓰는 환경에서는 `data`에 보조 키 `addon`이 붙을 수 있다. Linux·Windows 서버 가운데
+Add-on 설정에 맞는 서버에만 생기고 그 밖에는 키 자체가 없으니, 읽기 전에 키가 있는지 확인한다.
 
 ```jsonc
 "addon": {
-  "software": { "swList":   [ { "name": "ExampleApp", "value": "ExampleApp 3.2.1\r\n" } ] },
-  "hosts":    { "dbIpList": [ { "ip": "10.10.10.11", "purpose": "backup" } ] }
+  "software": { "swList":   [ { "name": "bash", "value": "5.1.8-9.el9" },
+                              { "name": "python3", "value": "명령 실행에 실패했습니다. 설정된 command를 확인해주세요. (rc=1)" } ] },
+  "dbIp":     { "dbIpList": [ { "ip": "10.10.10.11", "purpose": "vip" }, { "ip": "10.10.10.201", "purpose": "scan" } ] }
 }
 ```
 
+| 키 | 서버 | 내용 |
+|---|---|---|
+| `software.swList[]` | Linux · Windows | `{name, value}`. 설정된 명령마다 1개, 설정 순서대로 |
+| `dbIp.dbIpList[]` | Linux DB 서버 | `{ip, purpose}`. `/etc/hosts` 에서 고른 그 서버의 DB IP 와 용도(`vip`, `scan`, `backup` …) |
+
 - `sections`에 나오지 않고 `status`·`diagnosis` 판정에도 쓰이지 않는다. 추가 수집이 실패해도 기본 수집
-  결과는 그대로이고, 문제는 `errors[]`에 `section: "addon"` 1건으로 남는다.
-- `swList[].value`는 명령이 출력한 글자 전체다. 자르거나 고치지 않는다. 줄바꿈도 대상에서 온 그대로라
-  Linux(SSH)·Windows 모두 `\r\n`으로 올 수 있다.
-- 예외 하나: 출력에 UTF-8 로 읽을 수 없는 바이트가 있으면 그 바이트만 `\xNN` 네 글자(예: `\xb0`)로 오고,
-  `errors[]`의 `section: "addon"` 항목 `detail`에 어느 항목인지 알림이 남는다. 다른 글자는 그대로다.
-- Windows 는 `Write-Error`·외부 프로그램의 stderr·경고가 PowerShell 콘솔 표시 형식 그대로 `value`에 실행
-  순서대로 섞인다. 명령을 멈춘 종료 오류의 글자는 `value`에 오지 않고 `errors[]` 알림에 첫 줄이 남는다.
-- rule 이 맞았지만 그 대상에서 실행할 수 없는 기능(ESXi·Redfish 의 `software` 등)은 `data.addon`에 생기지 않고
-  `errors[]` 알림만 남는다 — `data.addon` 없이 `section: "addon"` 오류만 올 수 있다.
-- 안쪽 이름(`software`, `hosts` …)은 Add-on 이 정한다. 새 수집 기능이 생기면 `addon.<이름>`이 늘어난다.
-  `hosts.dbIpList`는 DB 판별 규칙이 정해지기 전까지 비어 있다.
+  결과는 그대로다.
+- `swList[].value`는 명령 출력에서 앞뒤 공백을 지운 글자다 (줄바꿈은 `\n`). 명령이 실패해도 항목은 남고
+  `value`에 아래 고정 문장 중 하나가 온다.
+  - `명령을 찾을 수 없습니다. 소프트웨어 설치 여부와 command를 확인해주세요.`
+  - `명령 실행에 실패했습니다. 설정된 command를 확인해주세요. (rc=N)`
+  - `명령은 실행됐지만 수집된 값이 없습니다. command 출력을 확인해주세요.`
+  - `명령이 제한 시간 안에 끝나지 않아 중단되었습니다. command를 확인해주세요.`
+  - `수집 과정에서 오류가 발생했습니다. Jenkins 로그를 확인해주세요.`
+- 출력에 UTF-8 로 읽을 수 없는 바이트가 있으면 그 바이트만 `\xNN` 네 글자(예: `\xb0`)로 온다.
+- Add-on 기능 단위의 문제(DB 서버 이름이 규칙과 다름, 수집 중 예외 등)는 `errors[]`에 `section: "addon"`
+  1건으로 남고 이유는 그 `detail`에 있다. Software 명령 하나의 실패는 `errors[]`를 만들지 않는다.
+- ESXi·Redfish 서버에는 `addon`이 생기지 않는다.
 - 수집에 들어가기 전에 멈춘 실패 봉투에는 `addon`이 없다 (`bios`와 같은 규칙).
 
 ## 다음
