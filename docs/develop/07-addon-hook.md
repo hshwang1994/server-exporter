@@ -18,10 +18,10 @@
 - 인증과 기본 수집이 끝난 뒤, 조립(`build_*`) 직전이다. Add-on 은 이미 붙어 있는 연결을 그대로 쓴다.
   자격증명 해석 · 후보 시도 · 재접속 코드가 Add-on 에 없다.
 - 기본 수집이 중간에 멈추면(인증 실패 등) 이 지점에 오지 않으므로 Add-on 도 실행되지 않는다.
-- ESXi · Redfish 는 연결이 `local` 이라 Add-on 태스크가 Jenkins Agent 에서 실행된다. Add-on 은 `_addon_target` 의
-  설정 파일(`config/<target>/<기능>.yml`)이 있는 기능만 실행한다 — 설정 파일이 곧 지원 범위다. 지금은 Linux(Software ·
-  DB IP)와 Windows(Software)뿐이라 ESXi · Redfish 에서는 아무 것도 하지 않고 알림도 남기지 않는다. Jenkins 쪽은 그
-  빌드의 서버 종류에 설정 파일이 하나도 없으면 아예 켜지 않는다 (아래 2절).
+- ESXi · Redfish 는 연결이 `local` 이라 Add-on 태스크가 Jenkins Agent 에서 실행된다. Add-on 이 하는 일은 `_addon_target`
+  이 정한다 — Linux 는 Software(`config/linux/software.yml`)와 DB IP(내장, `physical_purpose: DB` 인 서버만), Windows 는
+  Software(`config/windows/software.yml`)뿐이라 ESXi · Redfish 에서는 아무 것도 하지 않고 알림도 남기지 않는다. Jenkins
+  쪽은 Add-on 이 지원하지 않는 서버 종류(esxi · redfish)의 빌드에서는 아예 켜지 않는다 (아래 2절).
 - 호출은 `ADDON_DIR` 이 있을 때만 include 한다 (`when`). 없으면 host 당 건너뛴 태스크 1개로 끝난다.
 
 ## 2. 경로 — `ADDON_DIR`
@@ -130,6 +130,6 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 엔진 테스트는 `tests/fixtures/addon/` 의 합성 Add-on 과 `harness.yml` 을 쓴다. `ANSIBLE_PLAYBOOK_BIN` 으로
 다른 ansible-playbook(예: 운영과 같은 2.20.3)을 지정할 수 있다.
 실장비 확인은 수집 Job 을 `addonRef=<브랜치>` 로 실행해 결과 JSON 을 본다.
-Add-on 저장소: `https://10.100.64.156/root/clovirone-server-gathering-addon.git` — 개발 · 실장비 확인 방법은 그 저장소 `docs/development.md`.
+Add-on 저장소: `https://10.100.64.156/root/clovirone-server-gathering-addon.git` — 설정 · 개발 방법은 그 저장소 `README.md`.
 GitLab 프로젝트 이름은 이 저장소 이름을 따른 것이고, 코드 · Jenkins Job · Agent 경로 · 문서에서는
 `clovirone-gathering-addon` 으로 부른다 — 같은 것이다.

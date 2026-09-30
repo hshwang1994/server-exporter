@@ -110,14 +110,14 @@ Jenkins 관리 → System → Global properties → Environment variables. 노�
    (`config/`)의 문법과 기본 형식, `tasks/main.yml`, filter import. 설정 작성 오류는 여기서 한 번에 막혀 서버마다
    반복되지 않는다. 서버 종류는 `target_type` 이 정한다: os→`linux,windows`, esxi→`esxi`, redfish→`redfish`.
 3. rc 0 → ansible 실행을 `withEnv(["ADDON_DIR=${WORKSPACE}/addon"])` 로 감싼다. 콘솔 `[addon] <URL>@<ref> <커밋>`.
-   rc 3 (그 서버 종류의 설정 파일이 없음) → 켜지 않는다. 콘솔 `[addon] 실행할 기능 없음` (host 비용 0, UNSTABLE 아님).
+   rc 3 (Add-on 이 지원하지 않는 서버 종류 — esxi · redfish) → 켜지 않는다. 콘솔 `[addon] 실행할 기능 없음` (host 비용 0, UNSTABLE 아님).
    그 밖의 실패 (URL · ref · 인증 · 인증서 · 저장소 다운 · 검사 실패) → 콘솔 `[addon] unavailable: <사유>` +
    `unstable(...)`. `ADDON_DIR` 을 설정하지 않으므로 기본 수집 · Validate Schema · Callback 은 정상이고 host 별
    `errors[]` 에 addon 오류가 생기지 않는다 (저장소 문제는 host 문제가 아니다).
 4. 작업 공간은 빌드별(`customWorkspace`)이고 stage 끝에 `deleteDir()` 한다. 체크아웃 스크립트도 시작할 때 `addon/` 을
    비우므로 이전 ref 의 파일이 남지 않는다.
 
-Add-on 안에서 무엇이 실행되는지(서버 종류별 설정 파일 `config/<서버 종류>/<기능>.yml`)는 Add-on 저장소 README, hook 계약은
+Add-on 안에서 무엇이 실행되는지(Software 설정 `config/<서버 종류>/software.yml`, 내장 DB IP)는 Add-on 저장소 README, hook 계약은
 [../develop/07-addon-hook.md](../develop/07-addon-hook.md).
 
 ## 4. Ansible 실행 방식

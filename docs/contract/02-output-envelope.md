@@ -201,7 +201,8 @@ Redfish 결과의 `data`에는 섹션이 아닌 보조 키가 둘 더 있다. `m
 [03-fields.md](03-fields.md) 6.8절에 있다.
 
 추가 수집(Add-on)을 쓰는 환경에서는 `data`에 보조 키 `addon`이 붙을 수 있다. Linux·Windows 서버 가운데
-Add-on 설정에 맞는 서버에만 생기고 그 밖에는 키 자체가 없으니, 읽기 전에 키가 있는지 확인한다.
+Software 설정이나 DB 서버 조건(`physical_purpose: DB` 인 Linux)에 맞는 서버에만 생기고 그 밖에는 키 자체가 없으니,
+읽기 전에 키가 있는지 확인한다.
 
 ```jsonc
 "addon": {
