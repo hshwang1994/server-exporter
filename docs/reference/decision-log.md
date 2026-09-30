@@ -38,6 +38,9 @@
 
 - `tests/unit/test_addon_hook_contract.py` · Add-on `tests/test_layout.py` 에 옛 이름 부재 확인을 더했다 (코드 · Add-on 문서).
 - 로컬 · Jenkins 결과는 `tests/evidence/2026-09-29-addon-per-build-checkout.md` 5절, `docs/ai/catalogs/TEST_HISTORY.md` 2026-09-30.
+- lab Add-on e2e 가 이름 변경과 무관한 2026-09-29 결함을 드러냈다: Windows 서버에서 Linux 전용 기능 이름(`hosts`)을 "없는 기능" 으로
+  알렸다 (Ansible `fileglob` 은 디렉터리 부분의 `*` 를 풀지 않아 전체 기능 목록이 늘 비었다). Add-on `6ef226a` 로 고친 뒤 e2e #9
+  PASS 140 / FAIL 0. `docs/ai/catalogs/FAILURE_PATTERNS.md` 2026-09-30.
 
 ## 2026-09-29 — Add-on 을 빌드마다 받는다: 켜기 1개 설정 · 추가 1개 파일 · Runner 무관
 
