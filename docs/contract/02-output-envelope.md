@@ -200,9 +200,8 @@ Redfish 결과의 `data`에는 섹션이 아닌 보조 키가 둘 더 있다. `m
 않으며, 수집에 들어가기 전에 멈춘 실패 봉투에는 키 자체가 없다. 자세한 규칙은
 [03-fields.md](03-fields.md) 6.8절에 있다.
 
-추가 수집(Add-on)을 쓰는 환경에서는 `data`에 보조 키 `addon`이 붙을 수 있다. Linux·Windows 서버 가운데
-Software 설정이나 DB 서버 조건(hostname 에 `db` 가 들어 있는 Linux)에 맞는 서버에만 생기고 그 밖에는 키 자체가 없으니,
-읽기 전에 키가 있는지 확인한다.
+추가 수집(Add-on)을 쓰는 환경에서는 `data`에 보조 키 `addon`이 붙을 수 있다. Software 설정에 맞는 Linux·Windows 서버와
+hostname 에 `db` 가 들어 있는 Linux 서버(hosts 기능)에만 생기고 그 밖에는 키 자체가 없으니, 읽기 전에 키가 있는지 확인한다.
 
 ```jsonc
 "addon": {
@@ -215,7 +214,7 @@ Software 설정이나 DB 서버 조건(hostname 에 `db` 가 들어 있는 Linux
 | 키 | 서버 | 내용 |
 |---|---|---|
 | `software.swList[]` | Linux · Windows | `{name, value}`. 설정된 명령마다 1개, 설정 순서대로 |
-| `dbIp.dbIpList[]` | Linux DB 서버 (기본 수집 hostname 에 `db`, 대소문자 무시) | `{ip, purpose}`. `/etc/hosts` 에서 고른 그 서버의 DB IP 와 용도(`vip`, `scan`, `backup` …) |
+| `dbIp.dbIpList[]` | Linux 서버 중 hostname(`data.system.hostname`)에 `db` 가 들어 있는 서버 (대소문자 무시, Add-on hosts 기능) | `{ip, purpose}`. `/etc/hosts` 에서 고른 그 서버의 DB IP 와 용도(`vip`, `scan`, `backup` …) |
 
 - `sections`에 나오지 않고 `status`·`diagnosis` 판정에도 쓰이지 않는다. 추가 수집이 실패해도 기본 수집
   결과는 그대로다.

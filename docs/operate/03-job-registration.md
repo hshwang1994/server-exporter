@@ -89,28 +89,24 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 
 ## Add-on (고객별 추가 수집)
 
-수집 Job 자체가 빌드마다 Add-on 저장소를 받아 간다 — 배포 Job · Agent 배치 · 노드 환경변수가 없고, Runner 를 늘리거나
+수집 Job 이 빌드마다 Add-on 저장소를 받아 간다. Agent 에 따로 둘 파일이나 노드 환경변수는 없어 Runner 를 늘리거나
 다시 설치해도 할 일이 없다. 켜는 방법은 Jenkins 관리 → System → Global properties → Environment variables 에 전역
 변수를 등록하는 것이다.
 
 | 변수 | 필수 | 기본값 | 의미 |
 |---|---|---|---|
-| `ADDON_REPO_URL` | 켤 때 필수 | (없음 = 꺼짐) | Add-on 저장소 URL — `https://10.100.64.156/root/clovirone-server-gathering-addon.git` (GitLab 프로젝트 이름이 `clovirone-server-gathering-addon` 이고 코드 · 문서에서는 `clovirone-gathering-addon` 으로 부른다 — 같은 것) |
+| `ADDON_REPO_URL` | 켤 때 필수 | (없음 = 꺼짐) | Add-on 저장소 URL — `https://10.100.64.156/root/clovirone-server-gathering-addon.git` (문서에서는 `clovirone-gathering-addon` 으로 부른다) |
 | `ADDON_REPO_REF` | 선택 | `main` | 브랜치 · `refs/tags/<태그>` · 40자 커밋 해시 |
 | `ADDON_REPO_CREDENTIALS_ID` | 선택 | 없음 (익명) | 비공개 저장소일 때 Jenkins credential ID (Username with password — 사용자 이름 + 토큰) |
 | `ADDON_REPO_SSL_VERIFY` | 선택 | `false` | Add-on 을 받는 git 명령의 TLS 인증서 검증. 기본은 검증하지 않아 자체 서명 인증서의 내부 GitLab 도 Runner 에 CA 를 설치하지 않고 된다. 정식 인증서 환경에서 검증하려면 `true` |
 
-- 변수가 없으면 수집 결과는 Add-on 도입 전과 같다. 지우면 다음 빌드부터 꺼진다.
+- 변수가 없으면 Add-on 을 실행하지 않는다. 지우면 다음 빌드부터 꺼진다.
 - 저장소를 받지 못하거나 Add-on 파일 검사에 실패하면 그 빌드는 Add-on 없이 수집하고 UNSTABLE 로 표시된다
-  (콘솔 `[addon] unavailable: …`). 서버별 결과에는 아무 알림도 남지 않는다.
+  (콘솔 `[addon] unavailable: …`). 서버별 결과에는 Add-on 오류가 남지 않는다.
+- Add-on 변경은 Add-on 저장소 `main` 에 올리면 다음 수집부터 쓰인다 (`ADDON_REPO_REF` 가 기본값일 때).
+  Add-on 전용 Job 은 없고, 실장비 확인도 이 수집 Job 의 결과로 한다.
 - 동작 흐름: [04-pipeline-runtime.md](04-pipeline-runtime.md) 3절. hook 계약: [../develop/07-addon-hook.md](../develop/07-addon-hook.md).
   설정 방법(현장용): Add-on 저장소 README.
-
-### Add-on 전용 Job 은 두지 않는다
-
-Add-on 을 실장비로 확인할 때도 이 수집 Job 을 쓴다 — Add-on `main`(또는 전역 `ADDON_REPO_REF` 가 가리키는 ref)에
-반영한 뒤 다음 수집 결과를 본다. 옛 Job `형섭/clovirone-gathering-addon-e2e`(Add-on `tests/e2e/Jenkinsfile`)와
-`형섭/clovirone-gathering-addon-deploy`(Add-on `deploy/Jenkinsfile`)는 Add-on 저장소에 그 파일이 더는 없으므로 지운다.
 
 ---
 
