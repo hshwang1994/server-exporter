@@ -37,11 +37,6 @@ pipeline {
             choices     : ['0', '1', '2', '3', '4'],
             description : 'Ansible verbosity (0=운영, 1~2=디버그, 3~4=깊은 진단)'
         )
-        string(
-            name        : 'addonRef',
-            defaultValue: '',
-            description : '(선택) 이 빌드에서만 쓸 Add-on 브랜치 · refs/tags/<태그> · 40자 커밋 — 비우면 전역 ADDON_REPO_REF (기본 main). Add-on 은 전역 ADDON_REPO_URL 이 있을 때만 돈다'
-        )
     }
 
     environment {
@@ -158,12 +153,6 @@ pipeline {
                         error "[Validate] 필수 파라미터 누락: deploymentEnvironmentId"
                     }
 
-                    // addonRef (선택) — scripts/addon_checkout.sh 에 그대로 넘기므로 브랜치 · refs/tags/<태그> · 40자 커밋 해시의 글자만 허용
-                    def addonRef = (params.addonRef ?: '').trim()
-                    if (addonRef && (!(addonRef ==~ /[A-Za-z0-9._\/-]+/) || addonRef.startsWith('-') || addonRef.contains('..'))) {
-                        error "[Validate] addonRef 형식 오류: '${addonRef}' (브랜치 · refs/tags/<태그> · 40자 커밋 해시)"
-                    }
-
                     echo "[Validate] OK -- target_type=${params.target_type}, hosts=${hosts.size()}, loc=${params.loc}"
                     echo "[Validate] callback=${params.callbackUrl}"
                 }
@@ -213,7 +202,7 @@ pipeline {
                     def addonDir  = ''
                     def addonRepo = (env.ADDON_REPO_URL ?: '').trim()
                     if (addonRepo) {
-                        def addonRef     = (params.addonRef ?: '').trim() ?: ((env.ADDON_REPO_REF ?: '').trim() ?: 'main')
+                        def addonRef     = (env.ADDON_REPO_REF ?: '').trim() ?: 'main'
                         def addonCred    = (env.ADDON_REPO_CREDENTIALS_ID ?: '').trim()
                         def addonTargets = ['os': 'linux,windows', 'esxi': 'esxi', 'redfish': 'redfish'][params.target_type]
                         def fetchAddon = { ->

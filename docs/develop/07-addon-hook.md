@@ -19,7 +19,7 @@
   자격증명 해석 · 후보 시도 · 재접속 코드가 Add-on 에 없다.
 - 기본 수집이 중간에 멈추면(인증 실패 등) 이 지점에 오지 않으므로 Add-on 도 실행되지 않는다.
 - ESXi · Redfish 는 연결이 `local` 이라 Add-on 태스크가 Jenkins Agent 에서 실행된다. Add-on 이 하는 일은 `_addon_target`
-  이 정한다 — Linux 는 Software(`config/linux/software.yml`)와 DB IP(기본 제공 규칙 `config/linux/db_ip.yml`, 기본값은 `physical_purpose: DB` 인 서버만), Windows 는
+  이 정한다 — Linux 는 Software(`config/linux/software.yml`)와 DB IP(설정 없음 — 기본 수집 hostname 에 `db` 가 들어 있는 서버만), Windows 는
   Software(`config/windows/software.yml`)뿐이라 ESXi · Redfish 에서는 아무 것도 하지 않고 알림도 남기지 않는다. Jenkins
   쪽은 Add-on 이 지원하지 않는 서버 종류(esxi · redfish)의 빌드에서는 아예 켜지 않는다 (아래 2절).
 - 호출은 `ADDON_DIR` 이 있을 때만 include 한다 (`when`). 없으면 host 당 건너뛴 태스크 1개로 끝난다.
@@ -50,18 +50,19 @@ hook 의 세 경우 자체는 바뀌지 않았다 — "누가 `ADDON_DIR` 을 �
   `detail` 에 받은 값이 그대로 보이므로 공백도 찾을 수 있다.
 - 상대경로는 작업 디렉터리 기준으로 풀린다. Jenkins 작업 디렉터리는 빌드마다 달라 사실상 "경로 없음" 이 된다.
 
-## 3. 주고받는 값 (변수 5개)
+## 3. 주고받는 값
 
 | 방향 | 변수 | 내용 |
 |---|---|---|
 | 메인 → Add-on | `_addon_dir` | `ADDON_DIR` 값 |
 | | `_addon_target` | `linux` / `windows` / `esxi` / `redfish` |
 | | `se_host_input` | 호출자가 보낸 host object (`inventory.sh` 가 보존, 5절). 수기 인벤토리에는 없다 → `se_host_input \| default({})` |
+| | `_merged_data.system.hostname` | 읽기만 한다. 기본 수집이 읽은 hostname (결과의 `data.system.hostname`). Add-on 의 DB IP 판정과 Software `when.hostname_contains` 가 쓴다. 없으면 두 조건 모두 거짓 |
 | Add-on → 메인 | `_addon_result` | dict. `data.addon` 아래에 그대로 들어간다. 비어 있으면 `addon` 키를 만들지 않는다 |
 | | `_addon_errors` | 문장 목록. 있으면 `errors[]` 에 `section: addon` 1건 (`detail` = 문장들을 ` \| ` 로 이은 것) |
 
 hook 이 `{'addon': _addon_result}` 를 `_data_fragment` 로 만들어 `merge_fragment.yml` 로 합친다. Add-on 은
-fragment 변수나 누적 변수를 직접 건드리지 않는다. 합칠 것이 없으면 merge 도 부르지 않는다.
+fragment 변수나 누적 변수를 고치지 않는다 (누적 변수는 위 hostname 하나만 읽는다). 합칠 것이 없으면 merge 도 부르지 않는다.
 
 Add-on 이 지킬 것: 돌려주는 두 변수의 글자는 UTF-8 로 쓸 수 있어야 한다. 원격 출력의 UTF-8 이 아닌 바이트는
 Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜백이 그 host 봉투를 쓰지 못해 기본 결과까지 잃는다
@@ -129,7 +130,7 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 
 엔진 테스트는 `tests/fixtures/addon/` 의 합성 Add-on 과 `harness.yml` 을 쓴다. `ANSIBLE_PLAYBOOK_BIN` 으로
 다른 ansible-playbook(예: 운영과 같은 2.20.3)을 지정할 수 있다.
-실장비 확인은 수집 Job 을 `addonRef=<브랜치>` 로 실행해 결과 JSON 을 본다.
+실장비 확인은 Add-on `main` 에 반영한 뒤 수집 Job 의 결과 JSON 을 본다 (Add-on ref 는 전역 `ADDON_REPO_REF`, 기본 `main`).
 Add-on 저장소: `https://10.100.64.156/root/clovirone-server-gathering-addon.git` — 설정 · 개발 방법은 그 저장소 `README.md`.
 GitLab 프로젝트 이름은 이 저장소 이름을 따른 것이고, 코드 · Jenkins Job · Agent 경로 · 문서에서는
 `clovirone-gathering-addon` 으로 부른다 — 같은 것이다.
