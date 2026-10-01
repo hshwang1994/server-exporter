@@ -68,8 +68,8 @@ gather_timeout = 60
 
 `ADDON_DIR` 의 동작과 Add-on 과의 약속은 [develop/07-addon-hook.md](../develop/07-addon-hook.md) 에 있다.
 Add-on 을 켜는 것은 Jenkins 전역 환경변수 `ADDON_REPO_URL` 이다 ([04-pipeline-runtime.md](04-pipeline-runtime.md) 3절) —
-Add-on 저장소를 빌드마다 받아 가므로 Agent 에 파일을 두거나 노드 환경변수를 등록하는 일이 없다. 수동 실행(WSL · e2e)에서만
-Add-on 디렉터리 절대경로를 `ADDON_DIR` 로 직접 export 한다.
+Add-on 저장소를 빌드마다 받아 가므로 Agent 에 파일을 두거나 노드 환경변수를 등록하는 일이 없다. Jenkins 밖에서 직접
+실행할 때(엔진 테스트 · WSL)만 Add-on 디렉터리 절대경로를 `ADDON_DIR` 로 직접 export 한다.
 
 ---
 

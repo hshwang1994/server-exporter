@@ -84,7 +84,7 @@ Jenkinsfile 이 설정한다.
 | `ANSIBLE_CONFIG` | Gather | `${WORKSPACE}/ansible.cfg` |
 | `ANSIBLE_JSON_OUTPUT_FILE` | Gather | `${WORKSPACE}/gather_output.json` — `json_only` 콜백이 envelope 을 쓴다 |
 | `ANSIBLE_VERBOSITY` | Gather | `${params.verbosity}` |
-| `ADDON_DIR` | Gather 의 ansible 실행만 (`withEnv`) | `${WORKSPACE}/addon` — 전역 `ADDON_REPO_URL` 이 있고 체크아웃 · 검사를 통과한 빌드만. stage `environment{}` 에는 없다 (꺼진 빌드의 환경은 도입 전과 같다) |
+| `ADDON_DIR` | Gather 의 ansible 실행만 | `${WORKSPACE}/addon` — Add-on 을 켜고(아래 전역 변수) 받은 파일이 검사를 통과한 빌드에만 있다 |
 
 노드 쪽 선택 환경변수(`SE_ANSIBLE_VENV`)는 [08-ansible-config.md](08-ansible-config.md) 3절.
 
@@ -99,25 +99,22 @@ Jenkins 관리 → System → Global properties → Environment variables. 노�
 | `ADDON_REPO_CREDENTIALS_ID` | 선택 | 없음 (익명) | 비공개 저장소의 Jenkins credential ID — Username with password (사용자 이름 + 토큰) |
 | `ADDON_REPO_SSL_VERIFY` | 선택 | `false` | `true` 면 TLS 인증서를 검증. 기본은 검증하지 않아 자체 서명 내부 GitLab 도 Runner 에 CA 설치 없이 된다. 검증 해제는 Add-on 을 받는 git 명령에만 붙는다 (`-c http.sslVerify=false`) — 전역 git 설정 · 메인 체크아웃 · 다른 Job 무관 |
 
-`ADDON_REPO_URL` 이 없으면 아래 흐름 전체가 없다 — 결과는 Add-on 도입 전과 byte 동일하다. 있으면:
+`ADDON_REPO_URL` 이 없으면 Add-on 을 실행하지 않는다. 있으면 Gather 가 빌드마다 다음을 한다.
 
-1. `bash scripts/addon_checkout.sh <URL> <ref> ${WORKSPACE}/addon` — 대상 디렉터리를 비우고 ref 하나만 얕게(depth 1)
-   fetch 한다 (브랜치 · 태그 · 전체 해시 모두 같은 흐름). 서버가 해시 직접 fetch 를 막으면 브랜치 · 태그 전체를 받아
-   그 안에서 해석한다. `retry(2)`. `ADDON_REPO_CREDENTIALS_ID` 가 있으면 `withCredentials` 로 받은 값을
-   `GIT_ASKPASS`(`scripts/addon_askpass.sh`)로 넘긴다 (콘솔 마스킹). ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바꾸는 Job 파라미터는 없다.
-2. venv 의 python3 으로 `addon/tools/check_layout.py addon --targets <서버 종류>` — 태스크 YAML 문법, 설정 파일
-   (`config/`)의 문법과 기본 형식, `tasks/main.yml`, filter import. 설정 작성 오류는 여기서 한 번에 막혀 서버마다
-   반복되지 않는다. 서버 종류는 `target_type` 이 정한다: os→`linux,windows`, esxi→`esxi`, redfish→`redfish`.
-3. rc 0 → ansible 실행을 `withEnv(["ADDON_DIR=${WORKSPACE}/addon"])` 로 감싼다. 콘솔 `[addon] <URL>@<ref> <커밋>`.
-   rc 3 (Add-on 이 지원하지 않는 서버 종류 — esxi · redfish) → 켜지 않는다. 콘솔 `[addon] 실행할 기능 없음` (host 비용 0, UNSTABLE 아님).
-   그 밖의 실패 (URL · ref · 인증 · 인증서 · 저장소 다운 · 검사 실패) → 콘솔 `[addon] unavailable: <사유>` +
-   `unstable(...)`. `ADDON_DIR` 을 설정하지 않으므로 기본 수집 · Validate Schema · Callback 은 정상이고 host 별
-   `errors[]` 에 addon 오류가 생기지 않는다 (저장소 문제는 host 문제가 아니다).
-4. 작업 공간은 빌드별(`customWorkspace`)이고 stage 끝에 `deleteDir()` 한다. 체크아웃 스크립트도 시작할 때 `addon/` 을
-   비우므로 이전 ref 의 파일이 남지 않는다.
+1. Add-on 저장소의 `ADDON_REPO_REF`(기본 `main`)를 `${WORKSPACE}/addon` 에 받는다 (두 번까지 시도). 콘솔
+   `[addon] <URL>@<ref> <커밋>`.
+2. 받은 파일을 검사한다 — 설정 파일(`config/`)의 형식, 태스크 YAML 문법 등. 설정 작성 오류는 여기서 한 번에 막혀
+   서버마다 반복되지 않는다. 콘솔 `[addon] 검사 통과: linux, windows` 또는 `[addon] 검사 실패: <파일>: <이유>`.
+3. 검사를 통과하면 그 빌드의 수집에 Add-on 을 넣는다. ESXi · Redfish 빌드는 Add-on 이 할 일이 없어 켜지 않는다
+   (콘솔 `[addon] 실행할 기능 없음`, UNSTABLE 아님).
+4. 받지 못하거나(URL · ref · 인증 · 인증서 · 저장소 다운) 검사에 실패하면 콘솔에 `[addon] unavailable: <사유>` 를 남기고
+   빌드를 UNSTABLE 로 표시한 뒤 Add-on 없이 수집한다. 기본 수집 · Validate Schema · Callback 은 정상이고 서버별
+   결과(`errors[]`)에 Add-on 오류가 붙지 않는다 — 저장소 문제는 서버 문제가 아니다.
 
-Add-on 안에서 무엇이 실행되는지(Software 설정 `config/<서버 종류>/software.yml`, 설정 없는 DB IP)는 Add-on 저장소 README, hook 계약은
-[../develop/07-addon-hook.md](../develop/07-addon-hook.md).
+받은 파일은 빌드가 끝나면 작업 공간과 함께 지운다 (빌드마다 새로 받는다).
+
+Add-on 안에서 무엇이 실행되는지(Software 설정 `config/linux/software.yml` · `config/windows/software.yml`, 자동으로
+도는 hosts 기능의 DB IP 수집)는 Add-on 저장소 README, hook 계약은 [../develop/07-addon-hook.md](../develop/07-addon-hook.md).
 
 ## 4. Ansible 실행 방식
 

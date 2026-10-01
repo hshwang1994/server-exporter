@@ -295,7 +295,7 @@
         #
         # 근거: docs/ai/decisions/ADR-2026-08-13-vendor-oem-task-removal.md
 
-        # 고객별 추가 수집 (Add-on) — ADDON_DIR 이 없으면 include 하지 않는다.
+        # 고객별 추가 수집 (Add-on) — 마지막 수집 뒤 · 조립 앞에 둔다 (Add-on 결과가 조립에 들어간다).
         - name: "redfish | addon"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"

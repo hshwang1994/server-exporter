@@ -175,7 +175,7 @@
         - name: "esxi | collect runtime (B31/B32)"
           ansible.builtin.include_tasks: tasks/collect_runtime.yml
 
-        # 고객별 추가 수집 (Add-on) — ADDON_DIR 이 없으면 include 하지 않는다.
+        # 고객별 추가 수집 (Add-on) — 마지막 수집 뒤 · 조립 앞에 둔다 (Add-on 결과가 조립에 들어간다).
         - name: "esxi | addon"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"

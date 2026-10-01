@@ -183,13 +183,13 @@ def _render(template: str, **ctx):
     ({}, [], {}, 0),
     ({"software": {"swList": []}}, [], {"addon": {"software": {"swList": []}}}, 0),
     ({}, ["n1", "n2"], {}, 1),
-    ({"hosts": {"dbIpList": []}}, ["n1"], {"addon": {"hosts": {"dbIpList": []}}}, 1),
+    ({"dbIp": {"dbIpList": []}}, ["n1"], {"addon": {"dbIp": {"dbIpList": []}}}, 1),
 ])
 def test_result_fragment(result, notes, expect_data, expect_errors):
     sf = _hook_tasks()["addon | result fragment"]["ansible.builtin.set_fact"]
     data = _render(sf["_data_fragment"], _addon_result=result, _addon_errors=notes)
     errors = _render(sf["_errors_fragment"], _addon_result=result, _addon_errors=notes)
-    assert data == expect_data, "맞는 rule 이 없으면 data.addon 키 자체가 없다"
+    assert data == expect_data, "돌려준 결과가 없으면 data.addon 키 자체가 없다"
     assert len(errors) == expect_errors
     if errors:
         assert errors[0]["section"] == "addon" and errors[0]["detail"] == " | ".join(notes)

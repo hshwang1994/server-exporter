@@ -1,13 +1,12 @@
-"""inventory.sh 3종 — 호출자 host object 보존 계약 (2026-09-21).
+"""inventory.sh 3종 — 호출자 host object 보존 계약.
 
 왜 필요한가:
-    Add-on 은 `physical_purpose` 같은 호출자 metadata 로 적용 대상을 고른다. 종전 inventory.sh
-    는 IP 하나만 남기고 나머지 키를 전부 버렸다. 이제 host object 전체를 hostvar
-    `se_host_input` 한 키 아래에 그대로 보존한다. 특정 키 이름을 코드에 적지 않으므로
-    호출자가 새 키를 보내도 inventory.sh 를 다시 고칠 일이 없다.
+    Add-on 은 `physical_purpose` 같은 호출자 metadata 로 Software 항목의 실행 대상을 고른다 (when).
+    inventory.sh 는 host object 전체를 hostvar `se_host_input` 한 키 아래에 그대로 보존한다. 특정 키 이름을
+    코드에 적지 않으므로 호출자가 새 키를 보내도 inventory.sh 를 다시 고칠 일이 없다.
 
 고정하는 것:
-    - IP 선택 · IPv4 검증 · 중복 검사 · 오류 경로는 종전 그대로다.
+    - IP 선택 · IPv4 검증 · 중복 검사 · 오류 경로는 host object 보존과 관계없이 같다.
     - hostvar 는 정확히 `ansible_host` + `se_host_input` 두 개다 (연결 변수를 펼치지 않는다).
     - 문자열은 `__ansible_unsafe` 로 감싼다 — ansible-core 는 스크립트 인벤토리 문자열을
       템플릿으로 신뢰하므로, 감싸지 않으면 `{{ }}` 가 든 값이 해석돼 버린다.
