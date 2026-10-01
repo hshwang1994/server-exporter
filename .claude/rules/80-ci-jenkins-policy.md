@@ -43,10 +43,9 @@
 - **Default**: Add-on 은 Jenkins 전역 환경변수 `ADDON_REPO_URL` 하나로 켠다. Gather 가 빌드마다
   `bash scripts/addon_checkout.sh <URL> <ref> ${WORKSPACE}/addon` 으로 받고 `addon/tools/check_layout.py --targets <서버 종류>`
   로 검사한 뒤 **ansible `sh` 만** `withEnv(["ADDON_DIR=…"])` 로 감싼다. 실패는 `unstable("[addon] unavailable: …")` 이고
-  Add-on 없이 수집한다 (host 별 `errors[]` 없음). 이 빌드의 target 에 collector 가 없으면(rc 3) 켜지 않는다.
+  Add-on 없이 수집한다 (host 별 `errors[]` 없음). 이 빌드의 서버 종류를 Add-on 이 지원하지 않으면(esxi · redfish, rc 3) 켜지 않는다.
 - **Allowed**: `ADDON_REPO_REF`(브랜치 · `refs/tags/<태그>` · 40자 해시) · `ADDON_REPO_CREDENTIALS_ID`(usernamePassword +
-  `GIT_ASKPASS`) · `ADDON_REPO_SSL_VERIFY`(기본 `false` — `-c http.sslVerify=false` 를 그 git 명령에만). Job 파라미터 `addonRef` 는
-  빌드 한정 override.
+  `GIT_ASKPASS`) · `ADDON_REPO_SSL_VERIFY`(기본 `false` — `-c http.sslVerify=false` 를 그 git 명령에만).
 - **Forbidden**: `ADDON_DIR` 을 stage/pipeline `environment{}` 나 노드 환경변수에 두기, 배포 Job · `ADDON_HOME` · 라벨 기준 배치
   부활, `GIT_SSL_NO_VERIFY` 전역 · `git config --global` · Runner CA 설치를 전제하기, Add-on 실패로 `error`(빌드 중단),
   `git clone --branch`(커밋 해시 불가), 짧은 해시 허용, Add-on 선택에 `loc` · 라벨 · Runner 이름 사용.

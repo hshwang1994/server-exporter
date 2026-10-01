@@ -33,7 +33,7 @@ lab Agent 155 = `/opt`(known). 정본: `scripts/activate_ansible_venv.sh`, `test
 `retry(2)`, 검증 해제는 그 git 명령에만 `-c http.sslVerify=false`) → venv python 으로 `addon/tools/check_layout.py addon --targets
 <서버 종류>`(os→`linux,windows` · esxi · redfish) → rc 0 이면 ansible `sh` 만 `withEnv(["ADDON_DIR=${WORKSPACE}/addon"])`,
 rc 3 이면 켜지 않음(`[addon] 실행할 기능 없음`), 그 밖에는 `unstable("[addon] unavailable: …")` + Add-on 없이 수집.
-Job 파라미터 `addonRef`(선택)는 빌드 한정 ref override. 정본: `docs/operate/04-pipeline-runtime.md` 3절,
+ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바꾸는 Job 파라미터는 없다. 정본: `docs/operate/04-pipeline-runtime.md` 3절,
 `tests/unit/test_jenkinsfile_portal_addon.py`, `tests/unit/test_addon_checkout.py`. 노드 환경변수 · 배포 Job · `ADDON_HOME` 은 없다.
 
 ## pytest 회귀 게이트
