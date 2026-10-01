@@ -1,13 +1,13 @@
-"""Jenkinsfile_portal 의 Add-on 계약 (텍스트) — 2026-09-29 빌드별 체크아웃 구조.
+"""Jenkinsfile_portal 의 Add-on 계약 (텍스트).
 
 Add-on 은 Jenkins 전역 환경변수 ADDON_REPO_URL 하나로 켜고, Gather stage 가 빌드마다 저장소를 받아
 그 경로를 ansible 실행에만 ADDON_DIR 로 넘긴다. 여기서 고정하는 것:
   - ADDON_DIR 을 정하는 곳은 Gather stage 의 withEnv 한 곳 (${WORKSPACE}/addon). stage / pipeline environment{} 에 없다
-  - ADDON_REPO_URL 이 없으면 Add-on 코드가 실행되지 않는다 (if 게이트) — 꺼진 빌드는 도입 전과 같다
+  - ADDON_REPO_URL 이 없으면 Add-on 코드가 실행되지 않는다 (if 게이트)
   - 체크아웃은 scripts/addon_checkout.sh (fetch 흐름, retry 2회), 검사는 addon/tools/check_layout.py --targets <서버 종류>
   - 실패는 unstable("[addon] unavailable: …") — error 로 빌드를 끊지 않고, currentBuild.description 도 건드리지 않는다
   - 노드 경로 · 배포 Job · 라벨 기반 배포 · 전역 git 설정 · GIT_SSL_NO_VERIFY 의 흔적이 없다
-  - Add-on ref 는 전역 ADDON_REPO_REF(없으면 main) 하나다 — 빌드마다 ref 를 바꾸는 Job 파라미터(addonRef)는 없다 (2026-10-01 삭제)
+  - Add-on ref 는 전역 ADDON_REPO_REF(없으면 main) 하나다 — 빌드마다 ref 를 바꾸는 Job 파라미터는 두지 않는다
 """
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def test_layout_check_runs_in_the_venv_with_this_builds_targets():
     check = GATHER[GATHER.index("check_layout.py") - 600: GATHER.index("check_layout.py") + 80]
     assert "activate_ansible_venv.sh" in check, "PyYAML 은 venv 에 있다"
     assert 'python3 addon/tools/check_layout.py addon --targets "${addonTargets}"' in GATHER
-    assert "rc == 3" in GATHER and "실행할 기능 없음" in GATHER, "collector 가 없는 서버 종류는 켜지 않는다 (UNSTABLE 아님)"
+    assert "rc == 3" in GATHER and "실행할 기능 없음" in GATHER, "Add-on 이 지원하지 않는 서버 종류는 켜지 않는다 (UNSTABLE 아님)"
 
 
 def test_failure_marks_the_build_unstable_without_per_host_errors():

@@ -192,13 +192,9 @@ pipeline {
 
                     sh "rm -f \"${env.WORKSPACE}/gather_output.json\""
 
-                    // ── Add-on (고객별 추가 수집) — Jenkins 전역 환경변수 ADDON_REPO_URL 이 있을 때만 켠다. 없으면 이 블록은
-                    //    아무 것도 하지 않아 수집은 Add-on 도입 전과 같다. 저장소는 빌드마다 ${WORKSPACE}/addon 에 새로 받고
-                    //    (Runner 사전 작업 · 노드 설정 없음), 그 경로를 아래 ansible 실행에만 ADDON_DIR 로 넘긴다.
-                    //    받지 못하거나 파일 검사에 실패하면 Add-on 없이 수집하고 빌드를 UNSTABLE 로 표시한다 —
+                    // ── Add-on (고객별 추가 수집) — Jenkins 전역 환경변수 ADDON_REPO_URL 이 있을 때만 켠다.
+                    //    받지 못하거나 파일 검사에 실패해도 빌드를 끊지 않고 Add-on 없이 수집한다 (UNSTABLE) —
                     //    저장소 문제는 서버 문제가 아니므로 host 별 errors[] 를 만들지 않는다.
-                    //    전역 변수: ADDON_REPO_URL(필수) · ADDON_REPO_REF(기본 main) · ADDON_REPO_CREDENTIALS_ID(비공개 저장소) ·
-                    //    ADDON_REPO_SSL_VERIFY(기본 false — 인증서 검증 해제는 Add-on 을 받는 git 명령에만 적용).
                     def addonDir  = ''
                     def addonRepo = (env.ADDON_REPO_URL ?: '').trim()
                     if (addonRepo) {
@@ -230,7 +226,8 @@ pipeline {
                             problem = "저장소를 받지 못했습니다 (${addonRepo}@${addonRef}) — 위 [addon] unavailable 줄 참조"
                         }
                         if (!problem) {
-                            // 파일 검사 + 이 빌드의 서버 종류에 실행할 collector 가 있는지 (venv 의 python3 — PyYAML)
+                            // 파일 검사와 함께 Add-on 이 이 빌드의 서버 종류를 지원하는지 본다 (rc 3 = 지원 안 함).
+                            // venv 의 python3 를 쓴다 — 검사 도구에 PyYAML 이 필요하다.
                             def rc = sh(returnStatus: true, script: """#!/bin/bash
                                 set -eo pipefail
                                 set +x
@@ -261,7 +258,8 @@ pipeline {
                         ]) {
                             // Ansible venv 는 scripts/activate_ansible_venv.sh 가 고른다
                             //   (SE_ANSIBLE_VENV → PATH 의 ansible-playbook → 알려진 설치 경로). 못 찾으면 이 stage 는 실패한다.
-                            // ADDON_DIR 은 이 ansible 실행에만 준다 (stage environment{} 에 두지 않는다 — 꺼진 빌드의 환경은 종전과 같다).
+                            // ADDON_DIR 은 검사를 통과한 빌드의 이 ansible 실행에만 준다 — 값이 있으면 hook 이 그 Add-on 을 실행하므로,
+                            //   받지 못했거나 검사에 실패한 빌드에 남으면 모든 host 의 수집에 영향을 준다.
                             withEnv(addonDir ? ["ADDON_DIR=${addonDir}"] : []) {
                                 sh """#!/bin/bash
                                     set -eo pipefail

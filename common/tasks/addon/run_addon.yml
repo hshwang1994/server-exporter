@@ -1,25 +1,16 @@
 ---
 # common/tasks/addon/run_addon.yml
 #
-# 고객별 추가 수집(Add-on)을 실행하는 범용 hook. 각 채널 site.yml 이 마지막 수집 뒤,
-# build_* 조립 앞에서 한 번 include 한다. 인증 · 연결은 이미 끝난 상태이고 Add-on 은 그
-# 연결을 그대로 쓴다. Add-on 자체는 별도 디렉터리의 Ansible role 이다.
+# 고객별 추가 수집(Add-on)을 부르는 범용 hook. 각 채널 site.yml 이 마지막 수집 뒤, 조립(build_*) 앞에서 include 한다.
+# Add-on 은 별도 디렉터리의 Ansible role 이고, 인증 · 연결이 끝난 상태에서 그 연결을 그대로 쓴다.
 #
-# 입력:
-#   ADDON_DIR (환경변수)    : Add-on 디렉터리 절대경로
-#   _addon_target           : linux | windows | esxi | redfish (include 할 때 vars 로 넘긴다)
-#   se_host_input (hostvar) : 호출자가 보낸 host object (inventory.sh 가 보존)
-# Add-on 이 돌려주는 값 (이 두 변수만 읽는다):
-#   _addon_result : dict — data.addon 아래에 들어갈 namespace 들. 없으면 {}
-#   _addon_errors : list — 처리하지 못한 항목 설명. 없으면 []
+# 넘기는 값   : ADDON_DIR(환경변수), _addon_target(linux | windows | esxi | redfish), se_host_input(hostvar).
+#               Add-on 은 _merged_data.system.hostname 도 읽는다 — 이 이름이 바뀌면 Add-on 의 hosts · when.hostname_contains 가 조용히 꺼진다.
+# 돌려받는 값 : _addon_result(dict → data.addon), _addon_errors(list → errors[] 1건). 이 두 변수만 읽는다.
 #
-# 세 경우만 구분한다.
-#   ADDON_DIR 미설정                       → 아무 것도 하지 않는다 (hook 도입 전과 같은 결과)
-#   설정됐는데 <경로>/tasks/main.yml 없음   → errors[] 에 section: addon 1건. 기본 결과는 그대로
-#   설정됐고 존재                           → Add-on 실행. 결과는 data.addon, 문제는 errors[] 1건
-# 어느 경우에도 status · sections · diagnosis 는 바뀌지 않는다 (errors[] 는 status 판정에 쓰이지 않는다).
-# Add-on 전용 timeout 은 두지 않는다 (2026-09-21 결정 — 상위 Jenkins 실행 제한만 쓴다).
-# 계약 상세: docs/develop/07-addon-hook.md
+# Add-on 이 무엇을 하든 status · sections · diagnosis 는 바뀌지 않는다 — 섹션 fragment 를 만들지 않고, 실패는 rescue 가
+# errors[] 1건으로 가둔다. 전용 timeout 은 두지 않는다 — 명령별 제한은 Add-on 이, 전체 제한은 Jenkins Gather 단계가 맡는다.
+# 계약: docs/develop/07-addon-hook.md
 
 - name: "addon | locate"
   ansible.builtin.set_fact:
@@ -77,7 +68,7 @@
                'detail': _addon_errors | join(' | ')}]
              if (_addon_errors | default([]) | length > 0) else [] }}
 
-    # 맞는 rule 이 없어 합칠 것이 없으면 누적 결과를 다시 계산하지 않는다 (Add-on 이 없을 때와 동일).
+    # 돌려준 것이 없으면 merge 를 부르지 않는다 — 누적 결과를 다시 계산하지 않아 Add-on 이 없을 때와 결과가 같다.
     - name: "addon | merge result fragment"
       ansible.builtin.include_tasks:
         file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
