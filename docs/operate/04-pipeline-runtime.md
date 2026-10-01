@@ -117,7 +117,7 @@ Jenkins 관리 → System → Global properties → Environment variables. 노�
 4. 작업 공간은 빌드별(`customWorkspace`)이고 stage 끝에 `deleteDir()` 한다. 체크아웃 스크립트도 시작할 때 `addon/` 을
    비우므로 이전 ref 의 파일이 남지 않는다.
 
-Add-on 안에서 무엇이 실행되는지(Software 설정 `config/<서버 종류>/software.yml`, DB IP 기본 규칙 `config/linux/db_ip.yml`)는 Add-on 저장소 README, hook 계약은
+Add-on 안에서 무엇이 실행되는지(Software 설정 `config/<서버 종류>/software.yml`, 설정 없는 DB IP)는 Add-on 저장소 README, hook 계약은
 [../develop/07-addon-hook.md](../develop/07-addon-hook.md).
 
 ## 4. Ansible 실행 방식

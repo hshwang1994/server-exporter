@@ -201,7 +201,7 @@ Redfish 결과의 `data`에는 섹션이 아닌 보조 키가 둘 더 있다. `m
 [03-fields.md](03-fields.md) 6.8절에 있다.
 
 추가 수집(Add-on)을 쓰는 환경에서는 `data`에 보조 키 `addon`이 붙을 수 있다. Linux·Windows 서버 가운데
-Software 설정이나 DB 서버 조건(`physical_purpose: DB` 인 Linux)에 맞는 서버에만 생기고 그 밖에는 키 자체가 없으니,
+Software 설정이나 DB 서버 조건(hostname 에 `db` 가 들어 있는 Linux)에 맞는 서버에만 생기고 그 밖에는 키 자체가 없으니,
 읽기 전에 키가 있는지 확인한다.
 
 ```jsonc
@@ -215,7 +215,7 @@ Software 설정이나 DB 서버 조건(`physical_purpose: DB` 인 Linux)에 맞�
 | 키 | 서버 | 내용 |
 |---|---|---|
 | `software.swList[]` | Linux · Windows | `{name, value}`. 설정된 명령마다 1개, 설정 순서대로 |
-| `dbIp.dbIpList[]` | Linux DB 서버 | `{ip, purpose}`. `/etc/hosts` 에서 고른 그 서버의 DB IP 와 용도(`vip`, `scan`, `backup` …) |
+| `dbIp.dbIpList[]` | Linux DB 서버 (기본 수집 hostname 에 `db`, 대소문자 무시) | `{ip, purpose}`. `/etc/hosts` 에서 고른 그 서버의 DB IP 와 용도(`vip`, `scan`, `backup` …) |
 
 - `sections`에 나오지 않고 `status`·`diagnosis` 판정에도 쓰이지 않는다. 추가 수집이 실패해도 기본 수집
   결과는 그대로다.
@@ -229,7 +229,7 @@ Software 설정이나 DB 서버 조건(`physical_purpose: DB` 인 Linux)에 맞�
   - `수집 과정에서 오류가 발생했습니다. Jenkins 로그를 확인해주세요.`
   - `설정 오류: …` — Add-on 설정 항목 자체가 잘못된 경우. 수집 전 검사가 막으므로 검사를 거치지 않은 실행에서만 온다.
 - 출력에 UTF-8 로 읽을 수 없는 바이트가 있으면 그 바이트만 `\xNN` 네 글자(예: `\xb0`)로 온다.
-- Add-on 기능 단위의 문제(DB 서버 이름이 규칙과 다름, 수집 중 예외 등)는 `errors[]`에 `section: "addon"`
+- Add-on 기능 단위의 문제(`/etc/hosts` 를 읽지 못함, 수집 중 예외 등)는 `errors[]`에 `section: "addon"`
   1건으로 남고 이유는 그 `detail`에 있다. Software 명령 하나의 실패는 `errors[]`를 만들지 않는다.
 - ESXi·Redfish 서버에는 `addon`이 생기지 않는다.
 - 수집에 들어가기 전에 멈춘 실패 봉투에는 `addon`이 없다 (`bios`와 같은 규칙).
