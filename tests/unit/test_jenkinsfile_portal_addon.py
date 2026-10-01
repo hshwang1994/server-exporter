@@ -7,7 +7,7 @@ Add-on 은 Jenkins 전역 환경변수 ADDON_REPO_URL 하나로 켜고, Gather s
   - 체크아웃은 scripts/addon_checkout.sh (fetch 흐름, retry 2회), 검사는 addon/tools/check_layout.py --targets <서버 종류>
   - 실패는 unstable("[addon] unavailable: …") — error 로 빌드를 끊지 않고, currentBuild.description 도 건드리지 않는다
   - 노드 경로 · 배포 Job · 라벨 기반 배포 · 전역 git 설정 · GIT_SSL_NO_VERIFY 의 흔적이 없다
-  - addonRef 파라미터는 선택(기본 '')이고 Validate 가 형식을 검사한다
+  - Add-on ref 는 전역 ADDON_REPO_REF(없으면 main) 하나다 — 빌드마다 ref 를 바꾸는 Job 파라미터(addonRef)는 없다 (2026-10-01 삭제)
 """
 from __future__ import annotations
 
@@ -57,8 +57,8 @@ def test_checkout_uses_the_script_with_retry_and_optional_credentials():
     assert (REPO_ROOT / "scripts" / "addon_askpass.sh").is_file()
 
 
-def test_ref_resolution_order_is_param_then_global_then_main():
-    assert "(params.addonRef ?: '').trim() ?: ((env.ADDON_REPO_REF ?: '').trim() ?: 'main')" in GATHER
+def test_ref_is_the_global_variable_or_main():
+    assert "def addonRef     = (env.ADDON_REPO_REF ?: '').trim() ?: 'main'" in GATHER
 
 
 def test_layout_check_runs_in_the_venv_with_this_builds_targets():
@@ -84,12 +84,10 @@ def test_no_traces_of_node_paths_deploy_job_or_global_git_settings():
         assert forbidden not in TEXT, forbidden
 
 
-def test_addon_ref_parameter_is_optional_and_validated():
+def test_no_per_build_addon_ref_parameter():
     params = TEXT[TEXT.index("parameters {"): TEXT.index("environment {")]
-    assert "name        : 'addonRef'" in params and "defaultValue: ''" in params.split("'addonRef'")[1][:80]
-    assert "def addonRef = (params.addonRef ?: '').trim()" in VALIDATE
-    assert "addonRef.startsWith('-')" in VALIDATE and "addonRef.contains('..')" in VALIDATE
-    assert "[Validate] addonRef 형식 오류" in VALIDATE
+    assert "addonRef" not in params, "운영 Job 에 검증용 ref 파라미터를 두지 않는다"
+    assert "params.addonRef" not in TEXT and "addonRef" not in VALIDATE
 
 
 @pytest.mark.parametrize("stage", ["Resolve Location", "Validate Schema", "Callback"])

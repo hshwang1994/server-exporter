@@ -12,7 +12,7 @@
 `Jenkinsfile_portal` 은 최상위 `agent none` 이고 단계마다 노드를 고른다. 컨트롤러(`built-in`)에는 Python 도 Ansible 도 필요 없다.
 
 ```text
-parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid, callbackUrl, verbosity, addonRef)
+parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid, callbackUrl, verbosity)
   → Resolve Location  [컨트롤러]  loc 를 common/vars/locations.yml 로 검증, target_type 능력 라벨과 && 로 이어 노드 라벨식 결정 (맞는 온라인 노드 없으면 즉시 실패)
   → Validate          [Agent]     파라미터 형식 검증 (체크아웃 없음)
   → Gather            [Agent]     (전역 ADDON_REPO_URL 이 있으면 Add-on 체크아웃 · 검사) → ansible-playbook 실행 → gather_output.json → stash
@@ -60,7 +60,6 @@ Gather 와 Validate Schema 는 저장소의 `scripts/activate_ansible_venv.sh` �
 | `eventUuid` | string | 선택 | 포털 이벤트 UUID (Callback 본문에 그대로) |
 | `callbackUrl` | string | 필수 | 결과 전달 URL — `http(s)://` 로 시작, 따옴표·백틱·역슬래시·공백 불가 |
 | `verbosity` | choice | 선택 | Ansible verbosity 0~4 (`ANSIBLE_VERBOSITY`) |
-| `addonRef` | string | 선택 | 이 빌드에서만 쓸 Add-on 브랜치 · `refs/tags/<태그>` · 40자 커밋 해시. 비우면 전역 `ADDON_REPO_REF`(기본 `main`). Add-on 이 켜져 있지 않으면 무시된다 — Portal 은 보내지 않는다 |
 
 ### inventory_json 형식
 ```jsonc
@@ -105,7 +104,7 @@ Jenkins 관리 → System → Global properties → Environment variables. 노�
 1. `bash scripts/addon_checkout.sh <URL> <ref> ${WORKSPACE}/addon` — 대상 디렉터리를 비우고 ref 하나만 얕게(depth 1)
    fetch 한다 (브랜치 · 태그 · 전체 해시 모두 같은 흐름). 서버가 해시 직접 fetch 를 막으면 브랜치 · 태그 전체를 받아
    그 안에서 해석한다. `retry(2)`. `ADDON_REPO_CREDENTIALS_ID` 가 있으면 `withCredentials` 로 받은 값을
-   `GIT_ASKPASS`(`scripts/addon_askpass.sh`)로 넘긴다 (콘솔 마스킹). ref 우선순위: `addonRef` 파라미터 → `ADDON_REPO_REF` → `main`.
+   `GIT_ASKPASS`(`scripts/addon_askpass.sh`)로 넘긴다 (콘솔 마스킹). ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바꾸는 Job 파라미터는 없다.
 2. venv 의 python3 으로 `addon/tools/check_layout.py addon --targets <서버 종류>` — 태스크 YAML 문법, 설정 파일
    (`config/`)의 문법과 기본 형식, `tasks/main.yml`, filter import. 설정 작성 오류는 여기서 한 번에 막혀 서버마다
    반복되지 않는다. 서버 종류는 `target_type` 이 정한다: os→`linux,windows`, esxi→`esxi`, redfish→`redfish`.

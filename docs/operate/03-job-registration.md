@@ -84,7 +84,6 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 | `eventUuid` | 선택 | 포털 이벤트 UUID — Callback 본문에 그대로 담긴다 |
 | `callbackUrl` | 필수 | 결과를 POST 할 포털 주소 (`http://` 또는 `https://`, 따옴표·공백 불가). 경로 `/api/jenkins/gather/<target_type>` 이 뒤에 붙는다 |
 | `verbosity` | 선택 (기본 `0`) | Ansible verbosity 0~4 |
-| `addonRef` | 선택 (기본 비움) | 이 빌드에서만 쓸 Add-on 브랜치 · `refs/tags/<태그>` · 40자 커밋 해시. 비우면 전역 `ADDON_REPO_REF`(기본 `main`). Add-on 이 켜져 있지 않으면 무시된다 (Portal 은 보내지 않는다) |
 
 ---
 
@@ -109,8 +108,8 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 
 ### Add-on 전용 Job 은 두지 않는다
 
-Add-on 을 실장비로 확인할 때도 이 수집 Job 을 `addonRef=<브랜치>` 로 실행한다 (절차: Add-on 저장소
-`docs/development.md`). 옛 Job `형섭/clovirone-gathering-addon-e2e`(Add-on `tests/e2e/Jenkinsfile`)와
+Add-on 을 실장비로 확인할 때도 이 수집 Job 을 쓴다 — Add-on `main`(또는 전역 `ADDON_REPO_REF` 가 가리키는 ref)에
+반영한 뒤 다음 수집 결과를 본다. 옛 Job `형섭/clovirone-gathering-addon-e2e`(Add-on `tests/e2e/Jenkinsfile`)와
 `형섭/clovirone-gathering-addon-deploy`(Add-on `deploy/Jenkinsfile`)는 Add-on 저장소에 그 파일이 더는 없으므로 지운다.
 
 ---

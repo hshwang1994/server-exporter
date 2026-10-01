@@ -130,7 +130,7 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 
 엔진 테스트는 `tests/fixtures/addon/` 의 합성 Add-on 과 `harness.yml` 을 쓴다. `ANSIBLE_PLAYBOOK_BIN` 으로
 다른 ansible-playbook(예: 운영과 같은 2.20.3)을 지정할 수 있다.
-실장비 확인은 수집 Job 을 `addonRef=<브랜치>` 로 실행해 결과 JSON 을 본다.
+실장비 확인은 Add-on `main` 에 반영한 뒤 수집 Job 의 결과 JSON 을 본다 (Add-on ref 는 전역 `ADDON_REPO_REF`, 기본 `main`).
 Add-on 저장소: `https://10.100.64.156/root/clovirone-server-gathering-addon.git` — 설정 · 개발 방법은 그 저장소 `README.md`.
 GitLab 프로젝트 이름은 이 저장소 이름을 따른 것이고, 코드 · Jenkins Job · Agent 경로 · 문서에서는
 `clovirone-gathering-addon` 으로 부른다 — 같은 것이다.
