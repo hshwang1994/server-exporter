@@ -205,28 +205,23 @@ hostname 에 `db` 가 들어 있는 Linux 서버(hosts 기능)에만 생기고 �
 
 ```jsonc
 "addon": {
-  "software": { "swList":   [ { "name": "bash", "value": "5.1.8-9.el9" },
-                              { "name": "python3", "value": "소프트웨어가 설치되지 않았습니다." } ] },
-  "dbIp":     { "dbIpList": [ { "ip": "10.10.10.11", "purpose": "vip" }, { "ip": "10.10.10.201", "purpose": "scan" } ] }
+  "swList":   [ { "name": "bash", "value": "5.1.8-9.el9" },
+                { "name": "oracle", "value": null } ],
+  "dbIpList": [ { "ip": "10.10.10.11", "purpose": "vip" }, { "ip": "10.10.10.201", "purpose": "scan" } ]
 }
 ```
 
 | 키 | 서버 | 내용 |
 |---|---|---|
-| `software.swList[]` | Linux · Windows | `{name, value}`. 설정된 명령마다 1개, 설정 순서대로 |
-| `dbIp.dbIpList[]` | Linux 서버 중 hostname(`data.system.hostname`)에 `db` 가 들어 있는 서버 (대소문자 무시, Add-on hosts 기능) | `{ip, purpose}`. `/etc/hosts` 에서 고른 그 서버의 DB IP 와 용도(`vip`, `scan`, `backup` …) |
+| `swList[]` | Linux · Windows | `{name, value}`. 그 서버에서 실행 대상이 된 Software 마다 1개, 설정 순서대로 |
+| `dbIpList[]` | Linux 서버 중 hostname(`data.system.hostname`)에 `db` 가 들어 있는 서버 (대소문자 무시, Add-on hosts 기능) | `{ip, purpose}`. `/etc/hosts` 에서 고른 그 서버의 DB IP 와 용도(`vip`, `scan`, `backup` …) |
 
 - `sections`에 나오지 않고 `status`·`diagnosis` 판정에도 쓰이지 않는다. 추가 수집이 실패해도 기본 수집
   결과는 그대로다.
-- `swList[].value`는 명령 출력에서 앞뒤 공백을 지운 글자다 (줄바꿈은 `\n`). 명령이 실패해도 항목은 남고
-  `value`에 아래 고정 문장 중 하나가 온다.
-  - `소프트웨어가 설치되지 않았습니다.` — rpm · dpkg 가 그 패키지가 설치되지 않았다고만 답한 경우
-  - `명령을 찾을 수 없습니다. 소프트웨어 설치 여부와 command를 확인해주세요.`
-  - `명령 실행에 실패했습니다. 설정된 command를 확인해주세요. (rc=N)`
-  - `명령은 실행됐지만 수집된 값이 없습니다. command 출력을 확인해주세요.`
-  - `명령이 제한 시간 안에 끝나지 않아 중단되었습니다. command를 확인해주세요.`
-  - `수집 과정에서 오류가 발생했습니다. Jenkins 로그를 확인해주세요.`
-  - `설정 오류: …` — Add-on 설정 항목 자체가 잘못된 경우. 수집 전 검사가 막으므로 검사를 거치지 않은 실행에서만 온다.
+- `swList[].value`는 명령이 종료코드 0 으로 끝나고 출력이 있을 때 그 출력에서 앞뒤 공백을 지운 문자열이다
+  (줄바꿈은 `\n`, Windows 는 stdout 이 비어 있으면 stderr). 값을 얻지 못하면(미설치 · 명령 없음 · 종료코드 0 아님 ·
+  출력 없음 · 제한 시간 초과 · 연결 끊김 등) 항목은 남고 `value`는 JSON `null`이다. 실패 이유는 담지 않는다.
+- Software 설정의 `when` 조건에 맞지 않는 서버에서는 그 항목을 실행하지 않고 `swList`에도 넣지 않는다.
 - 출력에 UTF-8 로 읽을 수 없는 바이트가 있으면 그 바이트만 `\xNN` 네 글자(예: `\xb0`)로 온다.
 - Add-on 기능 단위의 문제(`/etc/hosts` 를 읽지 못함, 수집 중 예외 등)는 `errors[]`에 `section: "addon"`
   1건으로 남고 이유는 그 `detail`에 있다. Software 명령 하나의 실패는 `errors[]`를 만들지 않는다.

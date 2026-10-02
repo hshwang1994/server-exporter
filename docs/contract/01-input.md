@@ -53,7 +53,7 @@ target_type 에 따라 IP 필드명이 다릅니다.
 ## 4. 서버별 추가 정보 (추가 수집용)
 
 IP 외의 항목(예: `physical_purpose`)을 서버별로 함께 보내면 그대로 보존돼, 추가 수집(Add-on)이 그 서버에서
-실행할 Software 항목을 고르는 데 쓴다 (Add-on Software 설정의 `when`). DB IP 수집(Add-on hosts 기능, 결과 `dbIp`)은
+실행할 Software 항목을 고르는 데 쓴다 (Add-on Software 설정의 `when`). DB IP 수집(Add-on hosts 기능, 결과 `dbIpList`)은
 이 항목과 관계없이 서버 hostname 으로 정해진다. 추가 수집을 켤지 자체는 `target_type` 과 Jenkins 설정이 정하고 이 항목은
 관여하지 않는다. 보내지 않아도 기본 수집에는 아무 영향이 없다.
 
