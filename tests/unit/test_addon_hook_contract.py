@@ -181,9 +181,9 @@ def _render(template: str, **ctx):
 
 @pytest.mark.parametrize("result,notes,expect_data,expect_errors", [
     ({}, [], {}, 0),
-    ({"software": {"swList": []}}, [], {"addon": {"software": {"swList": []}}}, 0),
+    ({"swList": [{"name": "a", "value": None}]}, [], {"addon": {"swList": [{"name": "a", "value": None}]}}, 0),
     ({}, ["n1", "n2"], {}, 1),
-    ({"dbIp": {"dbIpList": []}}, ["n1"], {"addon": {"dbIp": {"dbIpList": []}}}, 1),
+    ({"dbIpList": []}, ["n1"], {"addon": {"dbIpList": []}}, 1),
 ])
 def test_result_fragment(result, notes, expect_data, expect_errors):
     sf = _hook_tasks()["addon | result fragment"]["ansible.builtin.set_fact"]
