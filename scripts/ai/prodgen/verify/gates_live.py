@@ -184,8 +184,14 @@ def g14_tests_overlay(ctx) -> GateResult:
             by_file[f.split("::")[0]] = by_file.get(f.split("::")[0], 0) + 1
         details = [f"pytest rc={proc.returncode}: {summary}"]
         details += [f"{k}: {v} failed/errored" for k, v in sorted(by_file.items(), key=lambda kv: -kv[1])[:25]]
+        # 수집 오류(ERROR <module>)는 짧은 요약에 사유가 없다 — 진단용으로 ERRORS 절과 꼬리를 함께 남긴다 (2026-10-03, G14 run 3 의 설명 없는 6 errors).
+        err_section = ""
+        if "= ERRORS =" in proc.stdout:
+            seg = proc.stdout.split("= ERRORS =", 1)[1]
+            err_section = seg.split("short test summary", 1)[0][-6000:]
         data = {"rc": proc.returncode, "summary": summary, "failed_count": len(failed), "failed": failed[:200],
                 "error_count": len(errors), "errors": errors[:200],
+                "errors_section": err_section, "stdout_tail": lines[-120:],
                 "overlay": "tests/, schema/, requirements-test.txt from main_sha"}
         return GateResult("G14", "PASS" if proc.returncode == 0 else "FAIL", details, data)
     finally:
