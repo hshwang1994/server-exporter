@@ -78,7 +78,7 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 
 | 파라미터 | 필수 | 설명 |
 |---------|------|------|
-| `loc` | 필수 | 어느 사이트 Agent 에서 실행할지 — `common/vars/locations.yml` 에 등록된 Location (`ic` / `chj` / `yi` / `git`) |
+| `loc` | 필수 | 어느 사이트 Agent 에서 실행할지 — `common/vars/locations.yml` 에 등록된 Location (`ic` / `cj` / `yi` / `git`) |
 | `target_type` | 필수 (기본 `os`) | `os` / `esxi` / `redfish` |
 | `inventory_json` | 필수 | 대상 IP 배열 (os/esxi: `service_ip`, redfish: `bmc_ip`). 형식은 [../contract/01-input.md](../contract/01-input.md) 참조 |
 | `deploymentEnvironmentId` | 필수 | 포털 개발환경 ID — Callback 본문에 그대로 담긴다 |
@@ -111,9 +111,9 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 
 ---
 
-## CI Job (main 전용) — `clovirone-cicd/clovirone-server-gather-ci` (2026-10-03, 등록 대기)
+## CI Job (main 전용) — `clovirone-cicd/clovirone-server-gather-ci` (2026-10-04 등록)
 
-수집 Job 에서 빠진 정적 검사(field_dictionary 정합 · pytest 회귀 · Layer A/B 동치 · 예산 공식)는 이 Job 이 맡는다. 수집 · 자격증명 · 실장비 접근은 없다.
+수집 Job 에서 빠진 정적 검사(field_dictionary 정합 · pytest 회귀 · Layer A/B 동치 · 예산 공식)와 production 생성·검증(prodgen Build/Drift/Verify, Harness Job 호출, 조건부 Promote)은 이 Job 이 맡는다. 수집 · 대상 서버 접속은 없다. 자격증명은 Prodgen Verify(린터 토큰 `se-jenkins-lint` · `server-gather-vault-password`) · Evidence Aggregate(`se-jenkins-lint`) · Prodgen Promote(push 토큰)에서만 바인딩한다.
 
 | 항목 | 값 |
 |---|---|
@@ -123,10 +123,13 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 | Script Path | `Jenkinsfile_ci` |
 | Lightweight checkout | 켬 |
 | 트리거 | 없음 (webhook 또는 수동; `pollSCM`/cron 은 승인 항목) |
-| Agent | `linux` 라벨 Runner 1대 (venv 는 `scripts/activate_ansible_venv.sh` 가 고른다); `pwsh` 는 있으면 보고만 |
+| Agent | `linux` 라벨 Runner 1대 (venv 는 `scripts/activate_ansible_venv.sh` 가 고른다); `pwsh` 가 없으면 `scripts/ai/prodgen/ci_pwsh_bootstrap.sh` 가 사용자 권한으로 `$HOME/.local/powershell` 에 준비한다(시스템 변경 없음) |
+| 파라미터 | `PROMOTE`(기본 false) · `PROMOTE_SHA` · `PROMOTE_DRY_RUN`(기본 true) · `BOOTSTRAP_BASELINE`(기본 빈 값) · `HARNESS_SCENARIOS` · `HARNESS_TREE_SCENARIOS` · `E2E_MAIN_ENTRIES` |
+| 폴더 credential | `se-jenkins-lint`(Username with password — Jenkins API 토큰, 린터·artifact 읽기) · `hshwang token`(GitHub push) · `se-gitlab-push`(GitLab push — 없으면 Promote 는 dry-run 까지만) |
 
-결과: Gate 가 exit 2(건너뛴 단계 있음)면 UNSTABLE, exit 1 이면 FAILURE. 보고서(`ci_gate` 로그 · corpus 비교 · 예산 self-test)는 artifact.
-Phase 7 의 production 생성(prodgen build/verify/promote) stage 는 이 Job 에 뒤이어 추가된다 — 그때 write credential 이 승인 항목이다.
+결과: Gate 가 exit 2(건너뛴 단계 있음)면 UNSTABLE, exit 1 이면 FAILURE(뒤 stage 는 진단용으로 계속 돌지만 Promote 는 `ci_stage_results.json` 을 읽어 원격을 바꾸지 않는다). 보고서(`ci_gate.log` · corpus 비교 · 예산 self-test · `harness_*_results.json` · `prodgen_*.json` · `prodgen_verify_report(.aggregated).json`)는 artifact. stage 표 정본은 [AI 카탈로그가 아닌 이 저장소의 `Jenkinsfile_ci` 머리말 주석]이다.
+
+같은 폴더의 **Harness Job** `clovirone-server-gather-harness`(Script Path `tests/jenkins/harness/Jenkinsfile_harness`, Branch `*/main`, 파라미터 `SCENARIO`·`MAIN_SHA`·`FUNCTIONS_SRC`·`ARTIFACT_BASE_URL`·`EXPECTED_SHA256`·`SINK_PORT`·`BOUNDED`·`LOC`·`DEPLOYMENT_ENV`)은 CI 의 Harness Driver 가 시나리오당 1빌드로 호출한다. 수집 Job 이 아니며 production 에는 없다. 정의 `jenkins/jobs/clovirone-server-gather-harness/config.xml`.
 
 ## 다음 단계
 

@@ -1,21 +1,30 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Jenkinsfile_ci — main 전용 오프라인 검증 파이프라인 (2026-10-03, Plan Phase 6 §6-4 · §9-4).
+// Jenkinsfile_ci — main 전용 검증·생성 파이프라인 (2026-10-03 Phase 6 → 2026-10-04 Astra 2~4차 R3 반영).
 //
-//   수집 파이프라인(Jenkinsfile_portal)과 별개다. 수집 · Callback · 자격증명 · 대상 서버 접속이 전혀 없다.
-//   Job: clovirone-cicd/clovirone-server-gather-ci — 일반 Pipeline(multibranch 아님) · Pipeline script from SCM ·
-//        Branch Specifier */main · Script Path Jenkinsfile_ci · Lightweight checkout. main 전용은 Job 의 Branch Specifier 로 보장한다.
-//        트리거 없음 — cron · pollSCM 을 두지 않는다(rule 80 R2). 사용자가 수동으로 돌리거나 webhook 을 Job 설정에서 붙인다.
+//   수집 파이프라인(Jenkinsfile_portal)과 별개다. 수집 · Callback · 대상 서버 접속이 없다. 자격증명은 **Prodgen Verify**(Jenkins 린터용
+//   토큰 · vault 암호 — G13/G19) · **Evidence Aggregate**(Jenkins 읽기 토큰) · **Prodgen Promote**(git push)에서만 바인딩한다
+//   (tests/unit/test_jenkinsfile_ci.py 가 stage 단위로 고정).
+//   Job: clovirone-cicd/clovirone-server-gather-ci — 일반 Pipeline(multibranch 아님) · Pipeline script from SCM · Branch Specifier */main ·
+//        Script Path Jenkinsfile_ci · Lightweight checkout. 정의: jenkins/jobs/clovirone-server-gather-ci/config.xml.
+//        트리거 없음 — 수동 실행이 기본(rule 80 R2). pollSCM/cron 은 두지 않는다(사용자가 원하면 Job 설정에서 붙인다).
 //   Runner: label linux (esxi 라벨은 쓰지 않는다). venv 는 scripts/activate_ansible_venv.sh 가 고른다 — 절대경로를 적지 않는다(rule 80 R1-A).
 //
-//   Stage
-//     Checkout         checkout scm → env.MAIN_SHA(GIT_COMMIT) 고정
-//     Toolchain        venv 활성화 · python3 / PyYAML / pytest / ansible-playbook / bash / git 버전 보고. pwsh 는 있으면 보고만(아직 필수 아님)
-//     Gate             bash scripts/ai/ci_gate.sh — exit 1 → FAILURE, exit 2(PARTIAL) → UNSTABLE + 건너뛴 단계를 콘솔에 적는다
-//     Finalize Corpus  Python 쪽: tests/scripts/finalize_corpus_check.py (Layer A 를 corpus 위에서 실행해 정답지와 대조)
-//                      Groovy 쪽: load 'scripts/jenkins/se_finalize.groovy' → case 마다 seReconcileRaw 를 돌려 같은 정답지와 대조
-//     Budget Self-test tests/unit/test_gather_budget.py + scripts/gather_budget.sh 대표 입력 3건(start=true)
-//   산출물: toolchain.txt · ci_gate.log · finalize_corpus_python.json · finalize_corpus_groovy.json · budget_selftest.jsonl
-//   계약 테스트: tests/unit/test_jenkinsfile_ci.py (stage · 옵션 · 트리거 없음 · venv 규칙 · se_finalize.groovy 와 Jenkinsfile_portal 동일성)
+//   Stage (dependency 순 — 생성 tree 를 쓰는 단계는 Build 뒤)
+//     Checkout            checkout scm → env.MAIN_SHA(GIT_COMMIT) 고정
+//     Toolchain           venv · 도구 버전 보고 · pwsh 가 없으면 사용자 권한 bootstrap(ci_pwsh_bootstrap.sh)
+//     Gate                bash scripts/ai/ci_gate.sh — exit 1 → FAILURE, exit 2(PARTIAL) → UNSTABLE
+//     Finalize Corpus     Layer A(Python) · Layer B(Groovy load) 를 corpus 정답지와 대조
+//     Budget Self-test    tests/unit/test_gather_budget.py + 대표 입력 3건
+//     Harness Driver      main 전용 Harness Job 을 시나리오별로 build(job:) — main checkout 의 함수 (별도 Job 이라 교착 없음)
+//     Prodgen Build       prodgen build --sha MAIN_SHA → prodtree/ · prodtree.tar.gz · Jenkinsfile_portal sha256 (이 빌드의 artifact)
+//     Harness (prodtree)  Harness Job 을 FUNCTIONS_SRC=artifact 로 — 생성 tree 의 같은 함수를 같은 Harness 로
+//     Prodgen Drift       origin/production 의 상태 분류(LEGACY · PROVENANCE · RESTORED_BASELINE) — bootstrap 은 BOOTSTRAP_BASELINE 하나로
+//     Prodgen Verify      G01~G20 (G13 린터 토큰 · G19 vault 암호 바인딩) → prodgen_verify_report.json(+.sha256), exit 0/2/1 = COMPLETE_PASS/PARTIAL/FAIL
+//     Evidence Aggregate  이 빌드의 Harness 결과 + 파라미터로 받은 main Job 시나리오 빌드를 e2e-evidence 로 수집 → 보고서에 집계(digest 재계산)
+//     Prodgen Promote     PROMOTE=true 일 때만. 승격 집행 조건 6항을 코드로 확인하고 prodgen promote 를 실행(기본 dry-run, 원격 변경 0)
+//   산출물: toolchain.txt · ci_gate.log · finalize_corpus_*.json · budget_selftest.jsonl · harness_*_results.json · prodgen_build.json ·
+//           prodtree.tar.gz · prodtree_portal.sha256 · prodgen_drift.json · prodgen_verify_report(.aggregated).json(+.sha256) · e2e_evidence.json ·
+//           prodgen_promote.json · ci_stage_results.json
 // ─────────────────────────────────────────────────────────────────────────────
 
 // corpus 대조 규칙 — Layer B(seReconcileRaw) 결과를 Layer A 정답지와 origin 별로 비교한다 (Python 쪽은 tests/scripts/finalize_corpus_check.py).
@@ -24,7 +33,8 @@
 //   synthetic  : 뼈대(schema_version…data 11 필드)가 같다. 진단은 Layer A 가 progress 로 세분하므로(§6-4) Layer A 도
 //                OUTPUT_BUILD_FAILED 일 때만 failure_reason · errors[0].section 까지 대조한다
 //   report     : by_origin · kept · filled 같음. dropped 는 file:line 집합(Layer A 의 corrupt_lines · truncated_tail 포함), conflicts 는 ip:chosen 집합
-//   JSON 은 양쪽 모두 groovy.json.JsonSlurper 로 읽어 비교한다(Classic 변형 생성자는 sandbox 거부 — 2026-10-03 실측) — Groovy JsonOutput 의 \\uXXXX escaping 과 Python 의 ensure_ascii=False 는 값이 같다.
+//   JSON 은 양쪽 모두 groovy.json.JsonSlurper 로 읽어 비교한다(Classic 변형 생성자는 sandbox 거부 — 2026-10-03 실측) — Groovy JsonOutput 의
+//   \\uXXXX escaping 과 Python 의 ensure_ascii=False 는 값이 같다.
 @NonCPS
 List seCorpusCompare(String caseName, Map res, String expectedFinal, String expectedReport, String expectedOrigins, Map canon) {
     def slurper = new groovy.json.JsonSlurper()
@@ -96,21 +106,47 @@ List seCorpusCompare(String caseName, Map res, String expectedFinal, String expe
     return problems
 }
 
+// Harness Job 을 시나리오별로 돌리고 결과 목록을 돌려준다 (별도 Job → disableConcurrentBuilds 아래에서도 교착 없음, 시나리오당 빌드 1개 = 격리).
+def seRunHarness(String functionsSrc, List scenarios, Map extra) {
+    List results = []
+    for (String s in scenarios) {
+        List ps = [string(name: 'SCENARIO', value: s), string(name: 'MAIN_SHA', value: env.MAIN_SHA), string(name: 'FUNCTIONS_SRC', value: functionsSrc)]
+        extra.each { k, v -> ps << string(name: k, value: v.toString()) }
+        def b = build(job: 'clovirone-cicd/clovirone-server-gather-harness', wait: true, propagate: false, parameters: ps)
+        results << [scenario: s, number: b.number, result: b.result, url: b.absoluteUrl, functions_src: functionsSrc]
+        echo "[Harness/${functionsSrc}] ${s}: #${b.number} ${b.result} ${b.absoluteUrl}"
+    }
+    return results
+}
+
 pipeline {
 
     agent { label 'linux' }
 
     options {
         disableConcurrentBuilds()
-        timeout(time: 90, unit: 'MINUTES')
+        timeout(time: 150, unit: 'MINUTES')
         skipDefaultCheckout(true)              // Checkout stage 가 한 번만 받고 GIT_COMMIT 을 MAIN_SHA 로 고정한다
         buildDiscarder(logRotator(numToKeepStr: '50'))
+    }
+
+    parameters {
+        booleanParam(name: 'PROMOTE', defaultValue: false, description: 'true 이면 Prodgen Promote stage 가 승격 집행 조건(6항)을 확인한다 — 기본 false')
+        string(name: 'PROMOTE_SHA', defaultValue: '', description: '승격 요청 SHA — env.MAIN_SHA · 보고서 binding.main_sha · rev-parse HEAD 와 모두 같아야 한다')
+        booleanParam(name: 'PROMOTE_DRY_RUN', defaultValue: true, description: 'true 이면 원격을 바꾸지 않는다(기본). 실 승격은 false + 양 원격 credential 준비')
+        string(name: 'BOOTSTRAP_BASELINE', defaultValue: '', description: '최초 승격(legacy production) 의 baseline SHA — drift-check/verify/promote 가 같은 값을 쓴다. 정상 승격은 비운다')
+        string(name: 'HARNESS_SCENARIOS', defaultValue: 'normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt,sink_5xx,outer_timeout',
+               description: 'Harness Driver 가 main checkout 의 함수로 순서대로 돌릴 시나리오(쉼표). 비우면 건너뛴다(PARTIAL)')
+        string(name: 'HARNESS_TREE_SCENARIOS', defaultValue: 'normal_success,both_fail,raw_fallback,report_corrupt',
+               description: '생성 tree(prodtree.tar.gz)의 함수로 돌릴 시나리오(쉼표). 비우면 건너뛴다(PARTIAL)')
+        string(name: 'E2E_MAIN_ENTRIES', defaultValue: '', description: 'main Job 시나리오 증거 — SCENARIO=job/path:build[:EXPECTED] 를 쉼표로 (예: S1=clovirone-cicd/clovirone-server-gather-main:7,T6=clovirone-cicd/clovirone-server-gather-main:9:UNSTABLE)')
     }
 
     environment {
         PYTHONDONTWRITEBYTECODE       = '1'
         PYTHONUTF8                    = '1'
         PIP_DISABLE_PIP_VERSION_CHECK = '1'
+        GIT_TERMINAL_PROMPT           = '0'
     }
 
     stages {
@@ -147,11 +183,14 @@ pipeline {
                         ansible-playbook --version 2>/dev/null | head -1 || echo "ansible-playbook=absent (ci_gate 가 syntax-check 를 건너뛴다)"
                         echo "bash=${BASH_VERSION}"
                         echo "git=$(git --version)"
+                        # pwsh: prodgen 의 PowerShell 주석 검증에 필요(GP-16). 없으면 사용자 권한으로 $HOME/.local/powershell 에 준비한다 — 시스템 변경 없음.
+                        eval "$(bash scripts/ai/prodgen/ci_pwsh_bootstrap.sh --env)"
                         if command -v pwsh >/dev/null 2>&1; then
-                            echo "pwsh=$(pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null || echo present)"
+                            echo "pwsh=$(pwsh -NoLogo -NoProfile -NonInteractive -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null || echo present) ($(command -v pwsh))"
                         else
-                            echo "pwsh=absent (not required yet)"
+                            echo "pwsh=absent (bootstrap failed — Prodgen Build 는 PowerShell 주석을 class B 로 보고하고 FAIL 한다)"
                         fi
+                        echo "groovy=$(command -v groovy >/dev/null 2>&1 && groovy --version 2>&1 | head -1 || echo absent)"
                     } 2>&1 | tee toolchain.txt
                 ''')
             }
@@ -169,13 +208,16 @@ pipeline {
                         exit "${PIPESTATUS[0]}"
                     ''')
                     if (rc == 0) {
+                        env.CI_STAGE_GATE = 'PASS'
                         echo '[Gate] PASS'
                     } else if (rc == 2) {
+                        env.CI_STAGE_GATE = 'PARTIAL'
                         def skipped = readFile(file: 'ci_gate.log', encoding: 'UTF-8').split('\n').findAll { it.contains('건너뜀') || it.contains('skipped') }
                         skipped.each { echo "[Gate] skipped: ${it.trim()}" }
                         unstable("[Gate] PARTIAL — 건너뛴 단계 ${skipped.size()}건 (통과로 보고하지 않는다, ci_gate.log 참조)")
                     } else {
-                        // 빌드는 FAILURE 로 두되 뒤 stage(corpus · budget)는 계속 돌려 한 빌드에서 전부 보이게 한다.
+                        env.CI_STAGE_GATE = 'FAIL'
+                        // 빌드는 FAILURE 로 두되 뒤 stage 는 계속 돌려 한 빌드에서 전부 보이게 한다 — Promote 는 stage 결과를 읽어 원격을 바꾸지 않는다.
                         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                             error "[Gate] FAIL rc=${rc} — ci_gate.log 참조"
                         }
@@ -194,12 +236,13 @@ pipeline {
                         . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
                         python3 tests/scripts/finalize_corpus_check.py --report-json finalize_corpus_python.json
                     ''')
+                    boolean corpusOk = (rcPy == 0)
                     if (rcPy != 0) {
                         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                             error "[Corpus/Python] finalize_corpus_check.py exit=${rcPy}"
                         }
                     }
-                    // ② Groovy 쪽 — Jenkinsfile_portal 과 글자까지 같은 Layer B 함수를 load 해서 같은 입력 · 같은 정답지로 대조
+                    // ② Groovy 쪽 — Jenkinsfile_portal 이 load 하는 Layer B 함수를 같은 입력 · 같은 정답지로 대조
                     def lib = load 'scripts/jenkins/se_finalize.groovy'
                     def manifests = findFiles(glob: 'tests/fixtures/finalize_corpus/*/gather_manifest.json')
                     if (manifests.length == 0) {
@@ -229,6 +272,7 @@ pipeline {
                     writeFile(file: 'finalize_corpus_groovy.json', encoding: 'UTF-8',
                               text: groovy.json.JsonOutput.toJson([main_sha: env.MAIN_SHA, cases: summary.size(), mismatches: allProblems.size(), results: summary]))
                     if (allProblems) {
+                        corpusOk = false
                         allProblems.each { echo "[Corpus/Groovy] [FAIL] ${it}" }
                         catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                             error "[Corpus/Groovy] Layer B 와 Layer A 정답지가 다르다: ${allProblems.size()}건 (finalize_corpus_groovy.json 참조)"
@@ -236,43 +280,343 @@ pipeline {
                     } else {
                         echo "[Corpus/Groovy] [OK] ${summary.size()} cases — Layer B == Layer A 정답지 (origin 규칙 기준)"
                     }
+                    env.CI_STAGE_CORPUS = corpusOk ? 'PASS' : 'FAIL'
                 }
             }
         }
 
         stage('Budget Self-test') {
             steps {
-                sh(label: 'budget', script: '''#!/bin/bash
-                    set -eo pipefail
-                    cd "${WORKSPACE}"
-                    . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
-                    # 공식의 단위 테스트(상수 · forks · waves · 남은 시간 절단 · 강제값 · 입력 불량)
-                    python3 -m pytest tests/unit/test_gather_budget.py -q -p no:cacheprovider
-                    # 이 Runner 의 vCPU 로 대표 입력 3건을 실제 스크립트에 넣어 결과 JSON 을 남긴다 — 빌드 시작 직후 가정이라 start=true 여야 한다
-                    : > budget_selftest.jsonl
-                    now="$(date +%s)"
-                    for spec in "os 3" "esxi 50" "redfish 200"; do
-                        set -- $spec
-                        out="$(SE_NOW_EPOCH="$now" SE_BUILD_START_EPOCH="$now" SE_STAGE_START_EPOCH="$now" SE_CHANNEL="$1" SE_HOSTS="$2" SE_VCPU="$(nproc 2>/dev/null || echo 2)" bash scripts/gather_budget.sh)"
-                        echo "$out" | tee -a budget_selftest.jsonl
-                        echo "$out" | grep -q '"start":true' || { echo "[Budget] start=false for channel=$1 hosts=$2"; exit 1; }
-                    done
-                ''')
+                script {
+                    def rc = sh(returnStatus: true, label: 'budget', script: '''#!/bin/bash
+                        set -eo pipefail
+                        cd "${WORKSPACE}"
+                        . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+                        # 공식의 단위 테스트(상수 · forks · waves · 남은 시간 절단 · 강제값 · 메모리 보호 · 입력 불량)
+                        python3 -m pytest tests/unit/test_gather_budget.py -q -p no:cacheprovider
+                        # 이 Runner 의 vCPU · MemAvailable 로 대표 입력 3건을 실제 스크립트에 넣어 결과 JSON 을 남긴다 — 빌드 시작 직후 가정이라 start=true 여야 한다
+                        : > budget_selftest.jsonl
+                        now="$(date +%s)"
+                        for spec in "os 3" "esxi 50" "redfish 200"; do
+                            set -- $spec
+                            out="$(SE_NOW_EPOCH="$now" SE_BUILD_START_EPOCH="$now" SE_STAGE_START_EPOCH="$now" SE_CHANNEL="$1" SE_HOSTS="$2" SE_VCPU="$(nproc 2>/dev/null || echo 2)" bash scripts/gather_budget.sh)"
+                            echo "$out" | tee -a budget_selftest.jsonl
+                            echo "$out" | grep -q '"start":true' || { echo "[Budget] start=false for channel=$1 hosts=$2"; exit 1; }
+                        done
+                    ''')
+                    env.CI_STAGE_BUDGET = (rc == 0) ? 'PASS' : 'FAIL'
+                    if (rc != 0) {
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') { error "[Budget] self-test rc=${rc}" }
+                    }
+                }
+            }
+        }
+
+        stage('Harness Driver') {
+            steps {
+                script {
+                    List scenarios = params.HARNESS_SCENARIOS.split(',').collect { it.trim() }.findAll { it }
+                    if (!scenarios) {
+                        env.CI_STAGE_HARNESS_MAIN = 'PARTIAL'
+                        unstable('[Harness] 시나리오 목록이 비어 있다 — 실행 regression 미확인(PARTIAL)')
+                    } else {
+                        List results = seRunHarness('checkout', scenarios, [:])
+                        writeFile(file: 'harness_main_results.json', encoding: 'UTF-8',
+                                  text: groovy.json.JsonOutput.toJson([main_sha: env.MAIN_SHA, functions_src: 'checkout', results: results]))
+                        List notPass = results.findAll { it.result != 'SUCCESS' }
+                        env.CI_STAGE_HARNESS_MAIN = notPass ? 'FAIL' : 'PASS'
+                        if (notPass) { unstable("[Harness] ${notPass.size()}개 시나리오가 PASS 가 아니다: ${notPass.collect { it.scenario + '=' + it.result }} (harness_main_results.json)") }
+                    }
+                }
+            }
+        }
+
+        stage('Prodgen Build') {
+            steps {
+                script {
+                    def rc = sh(returnStatus: true, label: 'prodgen build', script: '''#!/bin/bash
+                        set -o pipefail
+                        cd "${WORKSPACE}"
+                        . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+                        eval "$(bash scripts/ai/prodgen/ci_pwsh_bootstrap.sh --env)"
+                        rm -rf prodtree prodtree.tar.gz prodtree_portal.sha256
+                        python3 -m scripts.ai.prodgen --json build --sha "${MAIN_SHA}" --out "${WORKSPACE}/prodtree" > prodgen_build.json
+                        rc=$?
+                        if [ "$rc" -eq 0 ]; then
+                            tar -czf prodtree.tar.gz -C prodtree .
+                            sha256sum prodtree/Jenkinsfile_portal | cut -d' ' -f1 > prodtree_portal.sha256
+                        fi
+                        exit "$rc"
+                    ''')
+                    if (rc == 0) {
+                        env.CI_STAGE_PRODGEN_BUILD = 'PASS'
+                        env.PRODTREE_PORTAL_SHA256 = readFile(file: 'prodtree_portal.sha256', encoding: 'UTF-8').trim()
+                        // 생성 tree 는 **이 빌드의 artifact** 로 둔다 — Harness Job 은 URL 로 받아 sha256 을 대조한다 (workspace 경로를 넘기지 않는다, 이전 빌드 재사용 없음)
+                        archiveArtifacts(artifacts: 'prodgen_build.json,prodtree.tar.gz,prodtree_portal.sha256', allowEmptyArchive: false, fingerprint: false)
+                        echo "[Prodgen Build] OK — Jenkinsfile_portal sha256=${env.PRODTREE_PORTAL_SHA256}"
+                    } else {
+                        env.CI_STAGE_PRODGEN_BUILD = 'FAIL'
+                        archiveArtifacts(artifacts: 'prodgen_build.json', allowEmptyArchive: true, fingerprint: false)
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                            error "[Prodgen Build] FAIL rc=${rc} — class B 또는 분류 오류 (prodgen_build.json; pwsh 가 없으면 PowerShell 주석이 B 로 남는다 — toolchain.txt 의 pwsh= 줄)"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Harness (prodtree)') {
+            when { expression { env.CI_STAGE_PRODGEN_BUILD == 'PASS' } }
+            steps {
+                script {
+                    List scenarios = params.HARNESS_TREE_SCENARIOS.split(',').collect { it.trim() }.findAll { it }
+                    if (!scenarios) {
+                        env.CI_STAGE_HARNESS_TREE = 'PARTIAL'
+                        unstable('[Harness/prodtree] 시나리오 목록이 비어 있다 — 생성 tree 함수 미확인(PARTIAL)')
+                    } else {
+                        List results = seRunHarness('artifact', scenarios,
+                                                    [ARTIFACT_BASE_URL: "${env.BUILD_URL}artifact", EXPECTED_SHA256: env.PRODTREE_PORTAL_SHA256])
+                        writeFile(file: 'harness_tree_results.json', encoding: 'UTF-8',
+                                  text: groovy.json.JsonOutput.toJson([main_sha: env.MAIN_SHA, functions_src: 'artifact', expected_sha256: env.PRODTREE_PORTAL_SHA256, results: results]))
+                        List notPass = results.findAll { it.result != 'SUCCESS' }
+                        env.CI_STAGE_HARNESS_TREE = notPass ? 'FAIL' : 'PASS'
+                        if (notPass) { unstable("[Harness/prodtree] ${notPass.size()}개 시나리오가 PASS 가 아니다 (harness_tree_results.json)") }
+                    }
+                }
+            }
+        }
+
+        stage('Prodgen Drift') {
+            steps {
+                script {
+                    def rc = sh(returnStatus: true, label: 'prodgen drift', script: '''#!/bin/bash
+                        set -o pipefail
+                        cd "${WORKSPACE}"
+                        . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+                        eval "$(bash scripts/ai/prodgen/ci_pwsh_bootstrap.sh --env)"
+                        git fetch -q origin "+refs/heads/production:refs/remotes/origin/production" || { echo '{"ok": false, "error": "fetch origin production failed"}' > prodgen_drift.json; exit 3; }
+                        BOOT=()
+                        if [ -n "${BOOTSTRAP_BASELINE:-}" ]; then BOOT=(--bootstrap-baseline "${BOOTSTRAP_BASELINE}"); fi
+                        python3 -m scripts.ai.prodgen --json drift-check --production refs/remotes/origin/production "${BOOT[@]}" > prodgen_drift.json
+                    ''')
+                    env.CI_STAGE_PRODGEN_DRIFT = (rc == 0) ? 'PASS' : 'FAIL'
+                    if (rc != 0) {
+                        def mode = ''
+                        try { mode = readJSON(file: 'prodgen_drift.json', returnPojo: true).mode ?: '' } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) { throw fie } catch (Exception e) { mode = '?' }
+                        unstable("[Prodgen Drift] 현재 origin/production 상태 ${mode} 는 승격 가능 상태가 아니다 (LEGACY 는 BOOTSTRAP_BASELINE=<그 sha> 로만) — prodgen_drift.json")
+                    }
+                }
+            }
+        }
+
+        stage('Prodgen Verify') {
+            when { expression { env.CI_STAGE_PRODGEN_BUILD == 'PASS' } }
+            steps {
+                script {
+                    // G13(Jenkins 린터) 토큰과 G19(vault) 암호는 **이 stage 안에서만** 바인딩한다. 둘 다 mktemp 0600 파일로 넘기고 trap 으로 지운다.
+                    //   어느 쪽 credential 이 없으면 그 gate 는 SKIP → verdict PARTIAL(통과 아님) 로 남는다 — 거부가 아니라 사실 그대로다.
+                    boolean haveLint = true
+                    boolean haveVault = true
+                    def verifyBody = { String netrcArg, String vaultArg ->
+                        return sh(returnStatus: true, label: 'prodgen verify', script: """#!/bin/bash
+                            set -o pipefail
+                            set +x
+                            cd "\${WORKSPACE}"
+                            . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+                            eval "\$(bash scripts/ai/prodgen/ci_pwsh_bootstrap.sh --env)"
+                            NETRC_TMP=""; VAULT_TMP=""
+                            trap 'rm -f "\$NETRC_TMP" "\$VAULT_TMP"' EXIT
+                            ARGS=()
+                            if [ "${netrcArg}" = "yes" ]; then
+                                NETRC_TMP="\$(mktemp)"; chmod 600 "\$NETRC_TMP"
+                                printf 'machine %s login %s password %s\\n' "\$(echo "\${JENKINS_URL}" | sed -E 's#https?://([^/]+)/?.*#\\1#')" "\${LINT_USER}" "\${LINT_TOKEN}" > "\$NETRC_TMP"
+                                ARGS+=(--netrc "\$NETRC_TMP")
+                            fi
+                            if [ "${vaultArg}" = "yes" ]; then
+                                VAULT_TMP="\$(mktemp)"; chmod 600 "\$VAULT_TMP"
+                                printf '%s' "\${VAULT_PASSWORD}" > "\$VAULT_TMP"
+                                ARGS+=(--vault-password-file "\$VAULT_TMP")
+                            fi
+                            if [ -n "\${BOOTSTRAP_BASELINE:-}" ]; then ARGS+=(--bootstrap-baseline "\${BOOTSTRAP_BASELINE}"); fi
+                            python3 -m scripts.ai.prodgen --json verify --tree "\${WORKSPACE}/prodtree" --remote origin --jenkins-url "\${JENKINS_URL%/}" \\
+                                --report-out prodgen_verify_report.json --source-build-url "\${BUILD_URL}" "\${ARGS[@]}" > prodgen_verify_stdout.json
+                        """)
+                    }
+                    int rc = -1
+                    try {
+                        withCredentials([usernamePassword(credentialsId: 'se-jenkins-lint', usernameVariable: 'LINT_USER', passwordVariable: 'LINT_TOKEN'),
+                                         string(credentialsId: 'server-gather-vault-password', variable: 'VAULT_PASSWORD')]) {
+                            rc = verifyBody('yes', 'yes')
+                        }
+                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                        throw fie
+                    } catch (Exception e) {
+                        // credential 부재(CredentialNotFoundException 등) — 린터 토큰 없이 vault 만으로 다시 시도한다 (G13 SKIP → PARTIAL)
+                        haveLint = false
+                        echo "[Prodgen Verify] 린터 credential(se-jenkins-lint) 바인딩 실패 — G13 없이 실행 (PARTIAL 로 남는다): ${e.getClass().simpleName}"
+                        try {
+                            withCredentials([string(credentialsId: 'server-gather-vault-password', variable: 'VAULT_PASSWORD')]) {
+                                rc = verifyBody('no', 'yes')
+                            }
+                        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie2) {
+                            throw fie2
+                        } catch (Exception e2) {
+                            haveVault = false
+                            echo "[Prodgen Verify] vault credential 바인딩 실패 — G19 없이 실행 (PARTIAL): ${e2.getClass().simpleName}"
+                            rc = verifyBody('no', 'no')
+                        }
+                    }
+                    writeFile(file: 'prodgen_verify_env.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson([lint_credential: haveLint, vault_credential: haveVault, rc: rc]))
+                    if (rc == 0) {
+                        env.CI_STAGE_PRODGEN_VERIFY = 'PASS'
+                        echo '[Prodgen Verify] COMPLETE_PASS'
+                    } else if (rc == 2) {
+                        env.CI_STAGE_PRODGEN_VERIFY = 'PARTIAL'
+                        unstable('[Prodgen Verify] PARTIAL — 필수 gate 가 빠졌거나 SKIP (prodgen_verify_report.json 의 mandatory_missing)')
+                    } else {
+                        env.CI_STAGE_PRODGEN_VERIFY = 'FAIL'
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') { error "[Prodgen Verify] FAIL rc=${rc} — prodgen_verify_report.json" }
+                    }
+                }
+            }
+        }
+
+        stage('Evidence Aggregate') {
+            when { expression { env.CI_STAGE_PRODGEN_VERIFY in ['PASS', 'PARTIAL'] } }
+            steps {
+                script {
+                    // 이 빌드의 Harness 결과 + 파라미터로 받은 main Job 시나리오 빌드를 구조화 증거로 모아 보고서에 붙인다(digest 재계산).
+                    //   Jenkins 조회에는 린터 토큰(읽기)을 쓴다 — 없으면 집계를 건너뛰고 PARTIAL 로 남긴다.
+                    List entries = []
+                    for (String f in ['harness_main_results.json', 'harness_tree_results.json']) {
+                        if (fileExists(f)) {
+                            def r = readJSON(file: f, returnPojo: true)
+                            for (def it in (r.results ?: [])) { entries << "${it.scenario}=clovirone-cicd/clovirone-server-gather-harness:${it.number}".toString() }
+                        }
+                    }
+                    for (String e in params.E2E_MAIN_ENTRIES.split(',').collect { it.trim() }.findAll { it }) { entries << e }
+                    if (!entries) {
+                        env.CI_STAGE_EVIDENCE = 'PARTIAL'
+                        unstable('[Evidence] 수집할 증거 항목이 없다 (Harness 결과 없음 · E2E_MAIN_ENTRIES 비어 있음)')
+                    } else {
+                        writeFile(file: 'e2e_entries.txt', encoding: 'UTF-8', text: entries.join('\n') + '\n')
+                        int rc = -1
+                        try {
+                            withCredentials([usernamePassword(credentialsId: 'se-jenkins-lint', usernameVariable: 'LINT_USER', passwordVariable: 'LINT_TOKEN')]) {
+                                rc = sh(returnStatus: true, label: 'evidence', script: '''#!/bin/bash
+                                    set -o pipefail
+                                    set +x
+                                    cd "${WORKSPACE}"
+                                    . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+                                    NETRC_TMP="$(mktemp)"; chmod 600 "$NETRC_TMP"
+                                    trap 'rm -f "$NETRC_TMP"' EXIT
+                                    printf 'machine %s login %s password %s\\n' "$(echo "${JENKINS_URL}" | sed -E 's#https?://([^/]+)/?.*#\\1#')" "${LINT_USER}" "${LINT_TOKEN}" > "$NETRC_TMP"
+                                    ARGS=()
+                                    while IFS= read -r line; do [ -n "$line" ] && ARGS+=(--entry "$line"); done < e2e_entries.txt
+                                    python3 -m scripts.ai.prodgen --json e2e-evidence --jenkins-url "${JENKINS_URL%/}" --netrc "$NETRC_TMP" "${ARGS[@]}" --out e2e_evidence.json > e2e_evidence_stdout.json
+                                    python3 -m scripts.ai.prodgen --json evidence-aggregate --report prodgen_verify_report.json --evidence e2e_evidence.json --out prodgen_verify_report.aggregated.json > evidence_aggregate_stdout.json
+                                ''')
+                            }
+                        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                            throw fie
+                        } catch (Exception e) {
+                            echo "[Evidence] Jenkins 읽기 credential(se-jenkins-lint) 없음 — 증거 집계 생략: ${e.getClass().simpleName}"
+                        }
+                        env.CI_STAGE_EVIDENCE = (rc == 0) ? 'PASS' : 'PARTIAL'
+                        if (rc != 0) { unstable('[Evidence] 증거 집계 미완료 — Promote 는 집계된 보고서가 없으면 원격을 바꾸지 않는다') }
+                    }
+                }
+            }
+        }
+
+        stage('Prodgen Promote') {
+            when { expression { params.PROMOTE } }
+            steps {
+                script {
+                    // 승격 집행 조건 6항 (Astra 3차 §8-2) — 하나라도 빠지면 원격 변경 0. `branch` 조건은 쓰지 않는다(일반 Pipeline).
+                    List required = ['GATE', 'CORPUS', 'BUDGET', 'HARNESS_MAIN', 'PRODGEN_BUILD', 'HARNESS_TREE', 'PRODGEN_DRIFT', 'PRODGEN_VERIFY', 'EVIDENCE']
+                    List bad = required.findAll { (env."CI_STAGE_${it}" ?: 'not_run') != 'PASS' }.collect { "${it}=${env."CI_STAGE_${it}" ?: 'not_run'}".toString() }
+                    if (bad) { error "[Promote] 필수 stage 미통과 — 원격 변경 0: ${bad}" }
+                    if (!fileExists('prodgen_verify_report.aggregated.json')) { error '[Promote] 집계된 검증 보고서가 없다 — 원격 변경 0' }
+                    def report = readJSON(file: 'prodgen_verify_report.aggregated.json', returnPojo: true)
+                    String head = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+                    String want = params.PROMOTE_SHA?.trim()
+                    if (!(want && want == env.MAIN_SHA && env.MAIN_SHA == head && report.binding?.main_sha == head)) {
+                        error "[Promote] SHA 4값 불일치 — PROMOTE_SHA=${want} MAIN_SHA=${env.MAIN_SHA} HEAD=${head} report=${report.binding?.main_sha} — 원격 변경 0"
+                    }
+                    if (report.verdict != 'COMPLETE_PASS') { error "[Promote] 보고서 verdict ${report.verdict} — COMPLETE_PASS 만 승격 — 원격 변경 0" }
+                    // 양 원격 credential 이 모두 있어야 실 승격. GitLab 자격이 없으면 dry-run 으로만 (알려진 자격 부재로 GitHub 만 먼저 바꾸지 않는다 — §8-1)
+                    boolean haveGitlab = true
+                    try {
+                        withCredentials([usernamePassword(credentialsId: 'se-gitlab-push', usernameVariable: 'PRODGEN_GIT_USER_GITLAB', passwordVariable: 'PRODGEN_GIT_PASSWORD_GITLAB')]) {
+                            echo '[Promote] GitLab push credential 확인'
+                        }
+                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                        throw fie
+                    } catch (Exception e) {
+                        haveGitlab = false
+                        echo "[Promote] GitLab push credential(se-gitlab-push) 없음 — 실 승격 불가, dry-run 으로만 진행: ${e.getClass().simpleName}"
+                    }
+                    boolean dryRun = params.PROMOTE_DRY_RUN || !haveGitlab
+                    String remotes = haveGitlab ? 'origin,internal' : 'origin'
+                    def promoteBody = {
+                        return sh(returnStatus: true, label: 'prodgen promote', script: """#!/bin/bash
+                            set -o pipefail
+                            set +x
+                            cd "\${WORKSPACE}"
+                            . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+                            eval "\$(bash scripts/ai/prodgen/ci_pwsh_bootstrap.sh --env)"
+                            export GIT_ASKPASS="\${WORKSPACE}/scripts/ai/prodgen/git_askpass.sh"
+                            chmod +x "\$GIT_ASKPASS"
+                            if [ "${haveGitlab}" = "true" ]; then
+                                git remote get-url internal >/dev/null 2>&1 || git remote add internal https://10.100.64.156/root/server-expoter.git
+                                git config "http.https://10.100.64.156/.sslVerify" false      # URL 범위 설정 — 전역 설정이 아니다
+                            fi
+                            ARGS=(--push-remote "${remotes}" --verify-report prodgen_verify_report.aggregated.json --e2e-evidence e2e_evidence.json \\
+                                  --ci-build "\${BUILD_URL}" --source-build-url "\${BUILD_URL}")
+                            if [ -n "\${BOOTSTRAP_BASELINE:-}" ]; then ARGS+=(--bootstrap-baseline "\${BOOTSTRAP_BASELINE}"); fi
+                            if [ "${dryRun}" = "true" ]; then ARGS+=(--dry-run); fi
+                            python3 -m scripts.ai.prodgen --json promote --sha "\${MAIN_SHA}" "\${ARGS[@]}" > prodgen_promote.json
+                        """)
+                    }
+                    int rc
+                    withCredentials([usernamePassword(credentialsId: 'hshwang token', usernameVariable: 'PRODGEN_GIT_USER_GITHUB', passwordVariable: 'PRODGEN_GIT_PASSWORD_GITHUB')]) {
+                        if (haveGitlab) {
+                            withCredentials([usernamePassword(credentialsId: 'se-gitlab-push', usernameVariable: 'PRODGEN_GIT_USER_GITLAB', passwordVariable: 'PRODGEN_GIT_PASSWORD_GITLAB')]) {
+                                rc = promoteBody()
+                            }
+                        } else {
+                            rc = promoteBody()
+                        }
+                    }
+                    env.CI_STAGE_PROMOTE = (rc == 0) ? (dryRun ? 'DRY_RUN' : 'PASS') : 'FAIL'
+                    if (rc != 0) { error "[Promote] prodgen promote rc=${rc} — prodgen_promote.json (refused 사유)" }
+                    echo "[Promote] ${dryRun ? 'dry-run 미리보기 — 원격 변경 0' : '실 승격 완료 — 양 원격 ls-remote 대조는 prodgen_promote.json 의 publish'}"
+                }
             }
         }
     }
 
     post {
         always {
-            archiveArtifacts(artifacts: 'toolchain.txt,ci_gate.log,finalize_corpus_python.json,finalize_corpus_groovy.json,budget_selftest.jsonl',
+            script {
+                Map stages = [:]
+                for (String k in ['GATE', 'CORPUS', 'BUDGET', 'HARNESS_MAIN', 'PRODGEN_BUILD', 'HARNESS_TREE', 'PRODGEN_DRIFT', 'PRODGEN_VERIFY', 'EVIDENCE', 'PROMOTE']) {
+                    stages[k] = env."CI_STAGE_${k}" ?: 'not_run'
+                }
+                writeFile(file: 'ci_stage_results.json', encoding: 'UTF-8',
+                          text: groovy.json.JsonOutput.toJson([main_sha: env.MAIN_SHA, build_url: env.BUILD_URL, result: currentBuild.currentResult, stages: stages]))
+                echo "[Post] stages=${stages}"
+            }
+            archiveArtifacts(artifacts: 'toolchain.txt,ci_gate.log,finalize_corpus_python.json,finalize_corpus_groovy.json,budget_selftest.jsonl,harness_main_results.json,harness_tree_results.json,prodgen_drift.json,prodgen_verify_report.json,prodgen_verify_report.json.sha256,prodgen_verify_stdout.json,prodgen_verify_env.json,e2e_entries.txt,e2e_evidence.json,prodgen_verify_report.aggregated.json,prodgen_promote.json,ci_stage_results.json',
                              allowEmptyArchive: true, fingerprint: false)
             echo "[Post] 결과: ${currentBuild.currentResult} MAIN_SHA=${env.MAIN_SHA ?: '-'} 소요: ${currentBuild.durationString ?: '-'}"
         }
         unstable {
-            echo '[Post] [WARN] PARTIAL — 건너뛴 검증이 있다. 통과로 보고하지 않는다 (ci_gate.log 의 "건너뜀" 줄 참조)'
+            echo '[Post] [WARN] PARTIAL — 건너뛴·미확인 검증이 있다. 통과로 보고하지 않는다 (ci_stage_results.json · 각 stage 의 artifact 참조)'
         }
         failure {
-            echo '[Post] [FAIL] 검증 실패 — 콘솔 로그와 artifact(ci_gate.log · finalize_corpus_*.json) 확인'
+            echo '[Post] [FAIL] 검증 실패 — 콘솔 로그와 artifact(ci_gate.log · finalize_corpus_*.json · prodgen_*.json) 확인'
         }
     }
 }

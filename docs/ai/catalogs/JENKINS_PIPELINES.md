@@ -38,19 +38,33 @@ rc 3 이면 켜지 않음(`[addon] 실행할 기능 없음`), 그 밖에는 `uns
 ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바꾸는 Job 파라미터는 없다. 정본: `docs/operate/04-pipeline-runtime.md` 3절,
 `tests/unit/test_jenkinsfile_portal_addon.py`, `tests/unit/test_addon_checkout.py`. 노드 환경변수 · 배포 Job · `ADDON_HOME` 은 없다.
 
-## CI 진입점 `Jenkinsfile_ci` (2026-10-03, main 전용 — Job 미등록)
+## CI 진입점 `Jenkinsfile_ci` (2026-10-04, main 전용 — Job `clovirone-cicd/clovirone-server-gather-ci` 등록됨)
+
+12 stage, dependency 순. 수집 · Callback · 대상 서버 접속 없음. 자격증명은 **Prodgen Verify**(`se-jenkins-lint` 린터 토큰 · `server-gather-vault-password`) · **Evidence Aggregate**(`se-jenkins-lint` 읽기) · **Prodgen Promote**(`hshwang token` GitHub · `se-gitlab-push` GitLab)에서만 바인딩한다(`tests/unit/test_jenkinsfile_ci.py` 가 stage 단위로 고정). 각 stage 는 `env.CI_STAGE_*` 에 PASS/PARTIAL/FAIL 을 남기고 post 가 `ci_stage_results.json` 으로 archive 한다 — Promote 는 이 값을 **읽어서** 판정한다(Gate 가 FAIL 이어도 뒤 stage 는 진단용으로 계속 돈다).
 
 | Stage | 하는 일 | 실패 |
 |---|---|---|
 | Checkout | `checkout scm` → `env.MAIN_SHA = GIT_COMMIT` 고정(이후 stage 와 prodgen 입력 SHA) | FAILURE |
-| Toolchain | `. scripts/activate_ansible_venv.sh`, python3 · PyYAML · pytest · ansible-playbook · git 버전 보고, pwsh 유무 보고(필수 아님) | FAILURE |
-| Gate | `bash scripts/ai/ci_gate.sh` — compile · field_dictionary · drift · vendor boundary · harness consistency · pytest(unit+e2e+regression / integration not live) · finalize corpus(Python) · syntax-check | exit 1 FAILURE · exit 2 PARTIAL → UNSTABLE(건너뛴 단계 echo) |
-| Finalize Corpus | Python `tests/scripts/finalize_corpus_check.py`(Layer A 가 oracle) + Groovy `load 'scripts/jenkins/se_finalize.groovy'` → 14 case 비교(`seCorpusCompare`: OUTPUT origin 은 글자 비교, checkpoint/synthetic 은 필드 비교 — Layer A 의 progress 세분과 Layer B 의 `OUTPUT_BUILD_FAILED` 고정은 문서화된 차이) | FAILURE |
+| Toolchain | venv(`scripts/activate_ansible_venv.sh`) · 도구 버전 보고 · `pwsh` 가 없으면 `scripts/ai/prodgen/ci_pwsh_bootstrap.sh` 가 사용자 권한으로 `$HOME/.local/powershell` 에 준비(시스템 변경 없음) | FAILURE |
+| Gate | `bash scripts/ai/ci_gate.sh` | exit 1 FAILURE(후속 stage 계속) · exit 2 PARTIAL → UNSTABLE |
+| Finalize Corpus | Python `tests/scripts/finalize_corpus_check.py` + Groovy `load 'scripts/jenkins/se_finalize.groovy'` 14 case 비교(`seCorpusCompare`) | FAILURE |
 | Budget Self-test | `pytest tests/unit/test_gather_budget.py` + `scripts/gather_budget.sh` os/esxi/redfish `start:true` | FAILURE |
+| Harness Driver | `build(job: 'clovirone-cicd/clovirone-server-gather-harness', wait: true, propagate: false)` 를 `HARNESS_SCENARIOS` 순서대로(main checkout 의 함수) → `harness_main_results.json` | 시나리오 ≠ SUCCESS → UNSTABLE |
+| Prodgen Build | `prodgen build --sha MAIN_SHA` → `prodtree/` · `prodtree.tar.gz` · `prodtree_portal.sha256`(이 빌드의 artifact) | class B > 0 → FAILURE |
+| Harness (prodtree) | Build PASS 뒤에만. Harness Job 을 `FUNCTIONS_SRC=artifact` + `ARTIFACT_BASE_URL=${BUILD_URL}artifact` + `EXPECTED_SHA256` 로 — 생성 tree 의 같은 함수를 같은 Harness 로(`HARNESS_TREE_SCENARIOS`) | UNSTABLE |
+| Prodgen Drift | `git fetch origin +refs/heads/production:refs/remotes/origin/production` → `drift-check --production refs/remotes/origin/production [--bootstrap-baseline B]` | 승격 가능 상태 아님 → UNSTABLE |
+| Prodgen Verify | Build PASS 뒤에만. `verify --tree prodtree --remote origin --netrc <mktemp 0600> --vault-password-file <mktemp 0600> --report-out prodgen_verify_report.json --source-build-url BUILD_URL` — credential 이 없으면 그 gate 없이 실행(PARTIAL). exit 0/2/1 | 2 → UNSTABLE · 1 → FAILURE |
+| Evidence Aggregate | 이 빌드의 Harness 결과 + `E2E_MAIN_ENTRIES`(main Job 시나리오 빌드) → `prodgen e2e-evidence` → `evidence-aggregate` → `prodgen_verify_report.aggregated.json` | 미완료 → UNSTABLE |
+| Prodgen Promote | `PROMOTE=true` 일 때만. 필수 stage 전부 PASS · 집계 보고서 존재 · SHA 4값 일치(`PROMOTE_SHA`·`MAIN_SHA`·HEAD·보고서 binding) · `verdict == COMPLETE_PASS` · GitLab credential 있을 때만 양 원격 실 승격(없으면 dry-run) → `prodgen promote` | 조건 미충족 → `error`, 원격 변경 0 |
 
-- 등록: `clovirone-cicd/clovirone-server-gather-ci`, 일반 Pipeline-from-SCM(Multibranch 아님), Branch `*/main`, Script Path `Jenkinsfile_ci`, Lightweight. **사용자 몫 — 아직 Jenkins 에서 돈 적 없다.**
-- 오프라인 검증(2026-10-03): 선언형 린터 validated; `tests/unit/test_jenkinsfile_ci.py` 20 · `test_finalize_corpus.py` 35; Groovy 동치는 작업자가 Groovy 4.0.24 · 2.4.21(Java 21)로 corpus 14 case MATCH(음성 대조 4건 검출).
-- `Jenkinsfile_portal` 과 공유하는 Layer B 함수 파일 `scripts/jenkins/se_finalize.groovy` 는 production 포함 대상(Phase 7 manifest), `Jenkinsfile_ci` · corpus · `scripts/ai/**` 는 제외.
+- 파라미터: `PROMOTE`(false) · `PROMOTE_SHA` · `PROMOTE_DRY_RUN`(true) · `BOOTSTRAP_BASELINE`(빈 값) · `HARNESS_SCENARIOS`(12) · `HARNESS_TREE_SCENARIOS`(4) · `E2E_MAIN_ENTRIES`(`SCENARIO=job/path:build[:EXPECTED]`).
+- 등록: 일반 Pipeline-from-SCM(Multibranch 아님), Branch `*/main`, Script Path `Jenkinsfile_ci`, Lightweight, 트리거 없음(수동). 정의 `jenkins/jobs/clovirone-server-gather-ci/config.xml`.
+- `Jenkinsfile_portal` 과 공유하는 Layer B 함수 파일 `scripts/jenkins/se_finalize.groovy` 는 production 포함 대상, `Jenkinsfile_ci` · corpus · `scripts/ai/**` · `jenkins/**` · `tests/**` 는 제외.
+- 실행 이력은 `docs/ai/catalogs/TEST_HISTORY.md` 와 `tests/evidence/` 에 둔다(이 표는 구조만).
+
+## Harness Job `clovirone-cicd/clovirone-server-gather-harness` (2026-10-04, main 전용)
+
+Script Path `tests/jenkins/harness/Jenkinsfile_harness`(scripted), Branch `*/main`. 시나리오당 빌드 1개(`SCENARIO`), `FUNCTIONS_SRC=checkout|artifact`. `Jenkinsfile_portal` 의 최상위 함수를 `tests/jenkins/harness/build_functions.py` 가 잘라 wrapper(`archiveArtifacts`·`stash`·`unstash`·`readTrusted`·`sh`·`httpRequest`…)를 덧붙인 임시 스크립트를 `load` 하고, `callback_sink.py`(POST sink, agent) 를 향해 `sePreserveGatherOutput()` → `seFinalizeAndCallback()` 을 실제 CPS·sandbox 에서 실행한다. 판정 `harness_verdict.py` → `harness_result.json`(PASS/FAIL/PARTIAL). 운영 코드에는 장애 주입 분기가 없다. 시나리오 정의 `tests/jenkins/harness/scenarios.json`.
 
 ## pytest 회귀 게이트
 

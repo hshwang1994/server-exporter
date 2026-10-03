@@ -25,8 +25,12 @@ if ! python3 -m scripts.ai.prodgen --json build --sha "$SHA" --out "$OUT" > "${O
     echo "[preflight] build FAILED — see ${OUT}.build.json (class B list) and the messages above"
     exit 1
 fi
-if ! python3 -m scripts.ai.prodgen --json verify --tree "$OUT" --skip-live > "${OUT}.verify.json"; then
-    echo "[preflight] verify FAILED — see ${OUT}.verify.json"
-    exit 1
-fi
-echo "[preflight] OK — tree at $OUT (reports: ${OUT}.build.json, ${OUT}.verify.json)"
+# verify 종료 코드(2026-10-04): 0 COMPLETE_PASS · 2 PARTIAL(--skip-live 는 언제나 PARTIAL — 통과가 아니다) · 1 FAIL
+python3 -m scripts.ai.prodgen --json verify --tree "$OUT" --skip-live > "${OUT}.verify.json"
+rc=$?
+case "$rc" in
+    0) echo "[preflight] OK — COMPLETE_PASS, tree at $OUT (reports: ${OUT}.build.json, ${OUT}.verify.json)" ;;
+    2) echo "[preflight] PARTIAL — offline gates passed, live gates skipped (not a pass; run verify with --netrc/--vault-password-file on a Linux host or CI). tree at $OUT" ;;
+    *) echo "[preflight] verify FAILED — see ${OUT}.verify.json"; exit 1 ;;
+esac
+exit 0

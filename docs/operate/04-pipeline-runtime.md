@@ -60,7 +60,8 @@ Gather(수집과 Layer A 마무리)는 저장소의 `scripts/activate_ansible_ve
 > [!NOTE]
 > pytest 회귀(`tests/e2e`, `tests/integration -m "not live"`, `tests/regression`)와 field_dictionary 정합
 > (`tests/validate_field_dictionary.py`)은 Jenkins 수집 Job 의 단계가 아니다 (2026-10-03 부터 후자도). 커밋 전
-> `bash scripts/ai/ci_gate.sh` 가 둘 다 돌린다 (main 전용 CI 는 `Jenkinsfile_ci` 로 분리 예정 — Phase 6).
+> `bash scripts/ai/ci_gate.sh` 가 둘 다 돌린다. 같은 검사를 Jenkins 에서 돌리는 main 전용 CI Job 은 `Jenkinsfile_ci`
+> (`clovirone-cicd/clovirone-server-gather-ci`, 2026-10-04 등록 — `03-job-registration.md`) 이며 수집 Job 과 별개다.
 
 ### 시간 예산 (2026-10-03)
 
@@ -82,7 +83,7 @@ host 상한이 아니다.
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---------|------|------|------|
-| `loc` | string | 필수 | Location — `common/vars/locations.yml` 의 키 (ic / chj / yi / git) |
+| `loc` | string | 필수 | Location — `common/vars/locations.yml` 의 키 (ic / cj / yi / git) |
 | `target_type` | choice | 필수 | os / esxi / redfish |
 | `inventory_json` | text | 필수 | 호출자가 전달하는 호스트 JSON 배열 (os/esxi: `service_ip`, redfish: `bmc_ip`, fallback: `ip`) |
 | `deploymentEnvironmentId` | string | 필수 | 포털 개발환경 ID |
@@ -199,7 +200,7 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
 
 | 항목 | 요구사항 |
 |------|---------|
-| Label | `common/vars/locations.yml` 의 `agent_label` (ic / chj / yi / git) + 수집할 target_type 의 능력 라벨 (`os` 는 `linux` 와 `windows`, `esxi` 는 `esxi`, `redfish` 는 `redfish`) — [02-agent-node.md](02-agent-node.md) 8절 |
+| Label | `common/vars/locations.yml` 의 `agent_label` (ic / cj / yi / git) + 수집할 target_type 의 능력 라벨 (`os` 는 `linux` 와 `windows`, `esxi` 는 `esxi`, `redfish` 는 `redfish`) — [02-agent-node.md](02-agent-node.md) 8절 |
 | venv | `/app/ansible-env` 또는 `/opt/ansible-env`, 아니면 노드 환경변수 `SE_ANSIBLE_VENV` |
 | CLI `git` | Gather 의 체크아웃, Add-on 체크아웃(`scripts/addon_checkout.sh`)에 필요 |
 | Add-on 저장소 접근 | 전역 `ADDON_REPO_URL` 을 켠 경우 Agent 에서 그 URL 에 닿아야 한다 (자체 서명 인증서는 기본값으로 통과 — CA 설치 불필요) |

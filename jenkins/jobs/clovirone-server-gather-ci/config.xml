@@ -67,15 +67,21 @@
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
-          <name>CI_CALLBACK_SINK</name>
-          <defaultValue></defaultValue>
-          <description>Harness Driver 에 넘길 sink 기준(비우면 Harness 가 agent 에서 띄운다)</description>
+          <name>HARNESS_SCENARIOS</name>
+          <defaultValue>normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt,sink_5xx,outer_timeout</defaultValue>
+          <description>Harness Driver 가 main checkout 의 함수로 순서대로 돌릴 시나리오(쉼표). 비우면 건너뛴다(PARTIAL)</description>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
-          <name>HARNESS_SCENARIOS</name>
-          <defaultValue>normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt,sink_5xx,outer_timeout</defaultValue>
-          <description>Harness Driver 가 순서대로 돌릴 시나리오(쉼표)</description>
+          <name>HARNESS_TREE_SCENARIOS</name>
+          <defaultValue>normal_success,both_fail,raw_fallback,report_corrupt</defaultValue>
+          <description>생성 tree(prodtree.tar.gz)의 함수로 돌릴 시나리오(쉼표). 비우면 건너뛴다(PARTIAL)</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>E2E_MAIN_ENTRIES</name>
+          <defaultValue></defaultValue>
+          <description>main Job 시나리오 증거 — SCENARIO=job/path:build[:EXPECTED] 를 쉼표로 (예: S1=clovirone-cicd/clovirone-server-gather-main:7,T6=clovirone-cicd/clovirone-server-gather-main:9:UNSTABLE)</description>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
       </parameterDefinitions>

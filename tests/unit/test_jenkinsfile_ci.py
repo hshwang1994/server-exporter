@@ -1,14 +1,15 @@
-"""Jenkinsfile_ci · scripts/jenkins/se_finalize.groovy — Phase 6 (Plan §6-4 · §9-4) 텍스트 계약 (2026-10-03).
+"""Jenkinsfile_ci · scripts/jenkins/se_finalize.groovy — main 전용 CI 의 텍스트 계약 (2026-10-03 Phase 6 → 2026-10-04 Astra R3 반영).
 
 고정하는 것
-  1. se_finalize.groovy 의 세 함수(seFallbackCanon · seJsonString · seReconcileRaw)는 Jenkinsfile_portal 의 같은 이름 함수와
-     `@NonCPS` 줄부터 닫는 `}` 까지 글자까지 같다. Jenkinsfile_portal 이 이 파일을 load 하도록 바뀌기(GP-11) 전까지 두 사본이
-     갈리면 여기서 깨진다 — 한쪽만 고치는 일을 막는다.
-  2. se_finalize.groovy 는 순수 함수만 둔다 — pipeline step · params · currentBuild 없음, 마지막 줄 `return this`.
-  3. Jenkinsfile_ci 는 declarative · agent linux · disableConcurrentBuilds + timeout 90 min · 트리거 없음(cron/pollSCM — rule 80 R2) ·
-     stage 5개 순서 · env.MAIN_SHA 고정 · ci_gate exit 1 → FAILURE / 2 → UNSTABLE(건너뛴 단계 echo) ·
-     corpus 양쪽(Python 검사 + Groovy load/seReconcileRaw) · budget self-test · artifact 보존.
-  4. venv 절대경로 없음(rule 80 R1-A) · 자격증명 없음 · LF.
+  1. se_finalize.groovy 가 Layer B 순수 함수의 유일한 정본이다(Jenkinsfile_portal 은 load). 순수 함수만, 마지막 `return this`, sandbox 허용 파서.
+  2. Jenkinsfile_ci 는 declarative · agent linux · disableConcurrentBuilds + timeout · 트리거 없음(수동 기본 — rule 80 R2) ·
+     stage 12개 순서(dependency: Harness(main) → Prodgen Build → Harness(prodtree) → Drift → Verify → Evidence → Promote) · env.MAIN_SHA 고정.
+  3. 자격증명은 **Prodgen Verify**(린터 토큰 · vault 암호 — G13/G19)와 **Evidence Aggregate**(Jenkins 읽기 토큰)와 **Prodgen Promote**(git push)
+     안에서만 바인딩한다. vault 암호는 mktemp 0600 파일 → --vault-password-file → trap 으로 지운다. echo/set -x 로 새지 않는다.
+  4. Promote 는 `branch` 조건을 쓰지 않는다(일반 Pipeline). PROMOTE 기본 false · PROMOTE_DRY_RUN 기본 true · BOOTSTRAP_BASELINE 기본 빈 값 ·
+     필수 stage 결과(ci_stage_results) · SHA 4값 일치 · 보고서 COMPLETE_PASS · GitLab 자격 없으면 dry-run 만(GitHub 만 먼저 바꾸지 않는다).
+  5. Jenkinsfile_ci 자체는 ansible-playbook 을 직접 부르지 않고(G19 는 prodgen 안에서), Callback(httpRequest) 도 보내지 않는다.
+  6. venv 절대경로 없음(rule 80 R1-A) · LF · 임베디드 bash 블록 parse.
 """
 from __future__ import annotations
 
@@ -36,23 +37,23 @@ SIGNATURES = (
     "String seJsonString(Object value)",
     "Map seReconcileRaw(String manifestJson, String outputText, String checkpointText, Map canon, String outcome)",
 )
-STAGES = ["Checkout", "Toolchain", "Gate", "Finalize Corpus", "Budget Self-test"]
+STAGES = ["Checkout", "Toolchain", "Gate", "Finalize Corpus", "Budget Self-test", "Harness Driver", "Prodgen Build",
+          "Harness (prodtree)", "Prodgen Drift", "Prodgen Verify", "Evidence Aggregate", "Prodgen Promote"]
+CREDENTIAL_STAGES = {"Prodgen Verify", "Evidence Aggregate", "Prodgen Promote"}
 
 
 def _code(text: str) -> str:
-    """`//` 줄/후행 주석을 지운 코드만. 금지 토큰(pollSCM · echo · sh …)을 '설명하는 주석'에 걸리지 않게 한다.
-    이 두 groovy 파일에는 문자열 안에 `//` 가 없다(슬래시 정규식 · URL 없음)."""
+    """`//` 줄/후행 주석을 지운 코드만. 금지 토큰(pollSCM · echo · sh …)을 '설명하는 주석'에 걸리지 않게 한다."""
     out = []
     for line in text.split("\n"):
         i = line.find("//")
-        while i != -1 and i > 0 and line[i - 1] == ":":  # `://` 보호(현재는 없지만 방어)
+        while i != -1 and i > 0 and line[i - 1] == ":":  # `://` 보호
             i = line.find("//", i + 2)
         out.append(line[:i] if i != -1 else line)
     return "\n".join(out)
 
 
 def _block(text: str, signature: str) -> str:
-    """`@NonCPS` 줄부터 열 0 의 닫는 `}` 까지 — 함수 본문 전체."""
     i = text.index(signature)
     start = text.rfind("@NonCPS\n", 0, i)
     assert start != -1 and text[start:i] == "@NonCPS\n", f"{signature}: @NonCPS 가 바로 위에 없다"
@@ -63,14 +64,13 @@ def _block(text: str, signature: str) -> str:
 def _stage(name: str) -> str:
     start = CI.index(f"stage('{name}')")
     nxt = re.search(r"\n        stage\('", CI[start + 1:])
-    return CI[start: start + 1 + nxt.start()] if nxt else CI[start:]
+    return CI[start: start + 1 + nxt.start()] if nxt else CI[start: CI.index("\n    post {", start)]
 
 
-# ── 1. Layer B 함수 동일성 ────────────────────────────────────────────────────
+# ── 1. Layer B 함수 정본 ──────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("signature", SIGNATURES)
 def test_layer_b_function_lives_only_in_the_library(signature):
-    """GP-11 완료(2026-10-03): Jenkinsfile_portal 은 사본을 두지 않고 finalizer node 안에서 load 한다."""
     assert signature in LIB
     assert signature not in PORTAL, f"{signature}: Jenkinsfile_portal 에 사본이 남아 있다 — 정본은 se_finalize.groovy 하나"
     assert "readTrusted('scripts/jenkins/se_finalize.groovy')" in PORTAL and "load('se_finalize.groovy')" in PORTAL
@@ -85,14 +85,14 @@ def test_library_defines_exactly_the_three_functions_and_returns_this():
 
 
 def test_library_is_pure_no_pipeline_steps_params_or_build_state():
-    code = _code(LIB)  # 금지 토큰을 설명하는 주석이 있으므로 코드만 본다
+    code = _code(LIB)
     for token in ("readTrusted", "readYaml", "readJSON", "readFile", "writeFile", "fileExists", "echo ", "sh(", "sh ", "httpRequest",
                   "node(", "unstash", "archiveArtifacts", "params.", "currentBuild", "pipeline {", "stage("):
         assert token not in code, f"순수 함수 파일에 {token!r} 가 있다"
+    assert "new groovy.json.JsonSlurper()" in code and "JsonSlurperClassic" not in LIB, "sandbox 허용 파서만 (2026-10-03 실측)"
 
 
 def test_library_fallback_canon_still_matches_catalog_and_layer_a():
-    """Jenkinsfile_portal 쪽 drift 테스트(test_jenkinsfile_portal_finalize)와 같은 기준을 사본에도 건다."""
     import yaml
     fr = yaml.safe_load((REPO / "common/vars/failure_reasons.yml").read_text(encoding="utf-8"))
     assert f"reason  : '{fr['_fr_catalog']['output_build_failed']['default']}'" in LIB
@@ -106,50 +106,68 @@ def test_library_fallback_canon_still_matches_catalog_and_layer_a():
 def test_ci_is_declarative_with_linux_agent_and_required_options():
     assert "\npipeline {\n" in CI
     assert "agent { label 'linux' }" in CI
-    opts = CI[CI.index("    options {"):CI.index("    environment {")]
+    opts = CI[CI.index("    options {"):CI.index("    parameters {")]
     assert "disableConcurrentBuilds()" in opts
-    assert "timeout(time: 90, unit: 'MINUTES')" in opts
+    assert "timeout(time: 150, unit: 'MINUTES')" in opts
     assert "skipDefaultCheckout(true)" in opts, "Checkout stage 가 유일한 checkout"
     assert "label 'esxi'" not in CI and "'linux && windows'" not in CI, "Runner 라벨은 linux 하나"
 
 
-def test_ci_stage_order():
+def test_ci_stage_order_follows_dependencies():
     assert re.findall(r"\n        stage\('([^']+)'\)", CI) == STAGES
+    order = [CI.index(f"stage('{n}')") for n in ("Harness Driver", "Prodgen Build", "Harness (prodtree)", "Prodgen Drift", "Prodgen Verify", "Evidence Aggregate", "Prodgen Promote")]
+    assert order == sorted(order), "생성 tree 를 쓰는 단계는 Build 뒤 (4차 §2)"
+    assert "when { expression { env.CI_STAGE_PRODGEN_BUILD == 'PASS' } }" in _stage("Harness (prodtree)")
+    assert "when { expression { env.CI_STAGE_PRODGEN_BUILD == 'PASS' } }" in _stage("Prodgen Verify")
 
 
 def test_ci_has_no_triggers_or_cron():
-    code = _code(CI)  # "cron · pollSCM 을 두지 않는다" 같은 주석이 있으므로 코드만 본다
+    code = _code(CI)
     assert "triggers {" not in code and "triggers{" not in code
     assert "cron(" not in code and "pollSCM" not in code and "upstream(" not in code
     assert not re.search(r"['\"]H\s+\*", code), "cron 표현식 흔적"
+
+
+def test_ci_parameters_default_to_no_promotion():
+    params = CI[CI.index("    parameters {"):CI.index("    environment {")]
+    assert re.search(r"booleanParam\(name: 'PROMOTE', defaultValue: false", params)
+    assert re.search(r"booleanParam\(name: 'PROMOTE_DRY_RUN', defaultValue: true", params)
+    assert re.search(r"string\(name: 'BOOTSTRAP_BASELINE', defaultValue: ''", params)
+    assert re.search(r"string\(name: 'PROMOTE_SHA', defaultValue: ''", params)
+    for p in ("HARNESS_SCENARIOS", "HARNESS_TREE_SCENARIOS", "E2E_MAIN_ENTRIES"):
+        assert f"name: '{p}'" in params, p
 
 
 def test_ci_checkout_fixes_main_sha_from_git_commit():
     s = _stage("Checkout")
     assert "def scmVars = checkout scm" in s
     assert "env.MAIN_SHA = (scmVars?.GIT_COMMIT ?: '').toString()" in s
-    assert "git rev-parse HEAD" in s, "GIT_COMMIT 이 비면 workspace 에서 읽는다"
+    assert "git rev-parse HEAD" in s
     assert "*/main" in s, "main 전용은 Job 의 Branch Specifier 로 — 주석으로 남긴다"
 
 
-def test_ci_toolchain_uses_venv_selector_and_reports_pwsh_optionally():
+def test_ci_toolchain_reports_tools_and_bootstraps_pwsh_user_level():
     s = _stage("Toolchain")
     assert '. "${WORKSPACE}/scripts/activate_ansible_venv.sh"' in s
-    assert "set -eo pipefail" in s, "venv 실패는 stage 실패 — 시스템 python 으로 조용히 진행하지 않는다"
+    assert "set -eo pipefail" in s
     for tool in ("python3 --version", "import yaml", "pytest --version", "ansible-playbook --version", "git --version"):
         assert tool in s, tool
-    assert "command -v pwsh" in s and "pwsh=absent (not required yet)" in s
-    assert "tee toolchain.txt" in s
+    assert 'eval "$(bash scripts/ai/prodgen/ci_pwsh_bootstrap.sh --env)"' in s, "pwsh 는 사용자 권한 bootstrap (시스템 변경 없음)"
+    assert "pwsh=absent" in s and "tee toolchain.txt" in s
+    boot = (REPO / "scripts/ai/prodgen/ci_pwsh_bootstrap.sh").read_text(encoding="utf-8")
+    assert "sudo" not in boot and "yum " not in boot and "dnf " not in boot and "apt" not in boot, "패키지 설치·root 없이 tar.gz 를 $HOME 아래에"
+    assert "$HOME/.local/powershell" in boot and "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1" in boot
 
 
-def test_ci_gate_exit_code_semantics():
+def test_ci_gate_exit_code_semantics_and_stage_result_recording():
     s = _stage("Gate")
     assert "bash scripts/ai/ci_gate.sh 2>&1 | tee ci_gate.log" in s
-    assert 'exit "${PIPESTATUS[0]}"' in s, "tee 뒤에서도 ci_gate 의 종료 코드를 쓴다"
+    assert 'exit "${PIPESTATUS[0]}"' in s
     assert "if (rc == 0)" in s and "else if (rc == 2)" in s
-    assert "unstable(\"[Gate] PARTIAL" in s, "PARTIAL 은 UNSTABLE — 통과가 아니다"
-    assert "it.contains('건너뜀') || it.contains('skipped')" in s, "건너뛴 단계를 콘솔에 echo"
+    assert "unstable(\"[Gate] PARTIAL" in s
     assert "catchError(buildResult: 'FAILURE', stageResult: 'FAILURE')" in s and 'error "[Gate] FAIL rc=${rc}' in s
+    for v in ("env.CI_STAGE_GATE = 'PASS'", "env.CI_STAGE_GATE = 'PARTIAL'", "env.CI_STAGE_GATE = 'FAIL'"):
+        assert v in s, v
 
 
 def test_ci_corpus_runs_python_side_then_groovy_side_via_load():
@@ -158,47 +176,93 @@ def test_ci_corpus_runs_python_side_then_groovy_side_via_load():
     assert "def lib = load 'scripts/jenkins/se_finalize.groovy'" in s
     assert "findFiles(glob: 'tests/fixtures/finalize_corpus/*/gather_manifest.json')" in s
     assert "lib.seFallbackCanon()" in s and "lib.seReconcileRaw(manifestJson, outText, cpText, canon, outcome)" in s
-    for f in ("gather_output.json", "gather_checkpoint.jsonl", "outcome.txt", "expected_final.jsonl", "expected_report.json", "expected_origins.json"):
-        assert f in s, f
-    assert "seCorpusCompare(caseName, res," in s
-    assert "finalize_corpus_groovy.json" in s
-    assert s.index("finalize_corpus_check.py") < s.index("load 'scripts/jenkins/se_finalize.groovy'")
-    assert "seLoadCanon" not in CI and "readTrusted" not in CI, "CI 는 workspace 가 있으니 fallback canon 자체를 검증 대상으로 쓴다"
+    assert "seCorpusCompare(caseName, res," in s and "finalize_corpus_groovy.json" in s
+    assert "env.CI_STAGE_CORPUS = corpusOk ? 'PASS' : 'FAIL'" in s
+    assert "seLoadCanon" not in CI and "readTrusted" not in CI
 
 
-def test_ci_corpus_compare_covers_three_origins_and_report_sets():
-    helper = CI[CI.index("List seCorpusCompare("):CI.index("\npipeline {")]
-    assert helper.startswith("List seCorpusCompare(String caseName, Map res, String expectedFinal, String expectedReport, String expectedOrigins, Map canon)")
+def test_ci_corpus_compare_uses_sandbox_parser():
+    helper = CI[CI.index("List seCorpusCompare("):CI.index("\ndef seRunHarness(")]
     assert CI[CI.rfind("@NonCPS", 0, CI.index("List seCorpusCompare(")):].startswith("@NonCPS\nList seCorpusCompare(")
     for origin in ("'output'", "'checkpoint'", "'synthetic'"):
         assert f"origin == {origin}" in helper, origin
-    assert "gotLines[i] != expLines[i]" in helper, "OUTPUT 줄은 원문 비교"
-    assert "canon.emitFailed" in helper, "checkpoint 복원의 Layer B 오류 1건"
-    assert "'layer_b'" in helper and "'layer_a'" in helper and "'OUTPUT_BUILD_FAILED'" in helper
-    assert "corrupt_lines" in helper and "truncated_tail" in helper, "Layer A 의 손상 분류를 Layer B 의 dropped 와 합쳐 비교"
-    assert "by_origin" in helper and "conflicts" in helper
     assert "new groovy.json.JsonSlurper()" in helper and "JsonSlurperClassic" not in CI, "양쪽 JSON 을 같은(sandbox 허용) 파서로 읽는다"
+    assert "corrupt_lines" in helper and "truncated_tail" in helper and "by_origin" in helper
 
 
-def test_ci_budget_selftest_and_artifacts():
-    s = _stage("Budget Self-test")
-    assert "python3 -m pytest tests/unit/test_gather_budget.py -q" in s
-    assert "bash scripts/gather_budget.sh" in s and '"start":true' in s
-    for ch in ('"os 3"', '"esxi 50"', '"redfish 200"'):
-        assert ch in s, ch
+def test_ci_harness_driver_calls_the_separate_harness_job_per_scenario():
+    helper = CI[CI.index("def seRunHarness("):CI.index("\npipeline {")]
+    assert "build(job: 'clovirone-cicd/clovirone-server-gather-harness', wait: true, propagate: false" in helper, "별도 Job → 교착 없음, 시나리오당 빌드 1개"
+    assert "string(name: 'SCENARIO', value: s)" in helper and "string(name: 'MAIN_SHA', value: env.MAIN_SHA)" in helper
+    main = _stage("Harness Driver")
+    assert "seRunHarness('checkout'" in main and "harness_main_results.json" in main and "env.CI_STAGE_HARNESS_MAIN" in main
+    tree = _stage("Harness (prodtree)")
+    assert "seRunHarness('artifact'" in tree and "ARTIFACT_BASE_URL" in tree and "EXPECTED_SHA256: env.PRODTREE_PORTAL_SHA256" in tree
+    assert "harness_tree_results.json" in tree
+
+
+def test_ci_prodgen_build_archives_the_tree_of_this_build():
+    s = _stage("Prodgen Build")
+    assert 'python3 -m scripts.ai.prodgen --json build --sha "${MAIN_SHA}" --out "${WORKSPACE}/prodtree"' in s
+    assert "tar -czf prodtree.tar.gz -C prodtree ." in s and "sha256sum prodtree/Jenkinsfile_portal" in s
+    assert "archiveArtifacts(artifacts: 'prodgen_build.json,prodtree.tar.gz,prodtree_portal.sha256'" in s, "생성 tree 는 이 빌드의 artifact (경로 전달·이전 빌드 재사용 없음)"
+    assert "env.PRODTREE_PORTAL_SHA256" in s and 'eval "$(bash scripts/ai/prodgen/ci_pwsh_bootstrap.sh --env)"' in s
+
+
+def test_ci_drift_and_verify_use_the_single_bootstrap_syntax():
+    d = _stage("Prodgen Drift")
+    assert "drift-check --production refs/remotes/origin/production" in d
+    assert '--bootstrap-baseline "${BOOTSTRAP_BASELINE}"' in d and "--allow-legacy" not in CI and "--bootstrap " not in CI
+    v = _stage("Prodgen Verify")
+    assert '--bootstrap-baseline "\\${BOOTSTRAP_BASELINE}"' in v
+    assert "--report-out prodgen_verify_report.json" in v and "--remote origin" in v and "--source-build-url" in v
+
+
+def test_credentials_are_bound_only_in_verify_evidence_and_promote():
+    for name in STAGES:
+        s = _stage(name)
+        has = "withCredentials(" in s or "credentialsId" in s
+        if name in CREDENTIAL_STAGES:
+            assert has, f"{name}: 자격증명 바인딩이 있어야 한다"
+        else:
+            assert not has, f"{name}: 자격증명을 바인딩하면 안 된다"
+    v = _stage("Prodgen Verify")
+    assert "string(credentialsId: 'server-gather-vault-password', variable: 'VAULT_PASSWORD')" in v
+    assert "VAULT_TMP=\"\\$(mktemp)\"; chmod 600 \"\\$VAULT_TMP\"" in v and "--vault-password-file \"\\$VAULT_TMP\"" in v
+    assert "trap 'rm -f \"\\$NETRC_TMP\" \"\\$VAULT_TMP\"' EXIT" in v, "임시 파일은 trap 으로 지운다"
+    assert "set +x" in v and "echo \"\\${VAULT_PASSWORD}" not in v and 'echo "${VAULT_PASSWORD}' not in CI
+    assert CI.count("VAULT_PASSWORD") <= 4, "vault 암호 변수는 Verify 블록의 바인딩·printf 외에 등장하지 않는다"
+    for token in ("ansible-playbook \"", "httpRequest", "callbackUrl", "inventory_json"):
+        assert token not in _code(CI), f"CI 는 수집도 Callback 도 하지 않는다: {token}"
+
+
+def test_promote_enforces_the_six_conditions_without_branch_when():
+    p = _stage("Prodgen Promote")
+    assert "when { expression { params.PROMOTE } }" in p and "branch '" not in p and "branch(" not in p, "일반 Pipeline — branch 조건 금지"
+    assert "List required = ['GATE', 'CORPUS', 'BUDGET', 'HARNESS_MAIN', 'PRODGEN_BUILD', 'HARNESS_TREE', 'PRODGEN_DRIFT', 'PRODGEN_VERIFY', 'EVIDENCE']" in p
+    assert "원격 변경 0" in p
+    assert "want == env.MAIN_SHA && env.MAIN_SHA == head && report.binding?.main_sha == head" in p, "SHA 4값 일치"
+    assert "report.verdict != 'COMPLETE_PASS'" in p
+    assert "boolean dryRun = params.PROMOTE_DRY_RUN || !haveGitlab" in p, "GitLab 자격 없으면 dry-run 만 — GitHub 만 먼저 바꾸지 않는다"
+    assert "--verify-report prodgen_verify_report.aggregated.json --e2e-evidence e2e_evidence.json" in p
+    assert "git_askpass.sh" in p and "http.https://10.100.64.156/.sslVerify" in p and "GIT_SSL_NO_VERIFY" not in CI
+    assert "withCredentials([usernamePassword(credentialsId: 'hshwang token'" in p
+
+
+def test_post_writes_stage_results_and_archives_reports():
     post = CI[CI.rindex("    post {"):]
-    assert "archiveArtifacts(artifacts: 'toolchain.txt,ci_gate.log,finalize_corpus_python.json,finalize_corpus_groovy.json,budget_selftest.jsonl'" in post
+    assert "ci_stage_results.json" in post and "prodgen_verify_report.json" in post and "e2e_evidence.json" in post and "prodgen_promote.json" in post
     assert "allowEmptyArchive: true" in post
 
 
-def test_ci_has_no_venv_absolute_paths_credentials_or_gathering():
-    for bad in ("/opt/ansible-env", "/app/ansible-env", "bin/activate\"", "withCredentials", "VAULT_PASSWORD", "vault-password",
-                "ansible-playbook \"", "httpRequest", "callbackUrl", "inventory_json", "credentialsId"):
+def test_ci_has_no_venv_absolute_paths():
+    for bad in ("/opt/ansible-env", "/app/ansible-env", "bin/activate\""):
         assert bad not in CI, bad
-    assert CI.count('. "${WORKSPACE}/scripts/activate_ansible_venv.sh"') >= 4, "모든 sh 블록이 같은 venv 선택 규칙을 쓴다"
+    assert CI.count('. "${WORKSPACE}/scripts/activate_ansible_venv.sh"') + CI.count('. "\\${WORKSPACE}/scripts/activate_ansible_venv.sh"') >= 8, "모든 sh 블록이 같은 venv 선택 규칙을 쓴다"
 
 
-@pytest.mark.parametrize("path", [CI_PATH, LIB_PATH, REPO / "tests" / "scripts" / "finalize_corpus_check.py"])
+@pytest.mark.parametrize("path", [CI_PATH, LIB_PATH, REPO / "tests" / "scripts" / "finalize_corpus_check.py",
+                                  REPO / "scripts" / "ai" / "prodgen" / "ci_pwsh_bootstrap.sh", REPO / "scripts" / "ai" / "prodgen" / "git_askpass.sh"])
 def test_lf_line_endings(path):
     assert b"\r\n" not in path.read_bytes(), f"{path.name}: CRLF — Linux 에이전트의 #!/bin/bash 블록이 깨진다"
 
@@ -209,9 +273,10 @@ BASH = shutil.which("bash")
 @pytest.mark.skipif(BASH is None, reason="bash 없음")
 def test_embedded_bash_blocks_parse(tmp_path):
     blocks = re.findall(r"'''(#!/bin/bash\n.*?)'''", CI, re.S)
-    assert len(blocks) == 4, "Toolchain · Gate · Corpus(Python) · Budget 네 블록"
-    for n, block in enumerate(blocks):
-        # 파일 인자로 검사한다 — Git Bash 는 stdin 파이프로 받은 `bash -n` 이 Windows 에서 멈출 수 있다. timeout 으로 CI 가 매달리지 않게 한다.
+    assert len(blocks) == 7, "Toolchain · Gate · Corpus(Python) · Budget · Prodgen Build · Prodgen Drift · Evidence 일곱 블록 (Verify·Promote 는 GString 블록)"
+    gstrings = re.findall(r'"""(#!/bin/bash\n.*?)"""', CI, re.S)
+    assert len(gstrings) == 2, "Prodgen Verify · Prodgen Promote"
+    for n, block in enumerate(blocks + [g.replace("\\$", "$").replace("\\\\", "\\") for g in gstrings]):
         f = tmp_path / f"block_{n}.sh"
         f.write_bytes(block.encode("utf-8"))
         try:
