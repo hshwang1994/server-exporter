@@ -76,6 +76,17 @@
   합성 봉투의 diagnosis 에서 의도적으로 다르다(A 는 progress 세분, B 는 `OUTPUT_BUILD_FAILED`) — 비교기는 OUTPUT origin 만 글자 비교, 나머지는 공유 계약(개수 · ip 순서 ·
   뼈대 · by_origin/kept/filled · dropped · conflicts)을 본다. Job 등록은 사용자 몫이며 Jenkins 에서는 아직 돈 적 없다(Groovy 동치는 Groovy 4.0.24 · 2.4.21 로컬 실행으로 확인).
 
+### 결정 — Phase 5 규모 emulation (WSL, 실장비 0대) 에서 나온 조정
+
+- 실패 경로(loopback RST → `port/TCP_CONNECTION_REFUSED`) 10/50/100/200 host: wall ≈ 0.5–0.6 s/host(200 host 104–116 s), forks 50↔100 차이 없음, 모든 완주 30회 + 중단 6회에서
+  요청 == 결과. 프로세스 트리 PSS 피크는 fork 슬롯당 ≈ 36 MB(forks 100 ≈ 3.7 GB). → **OS forks 기본 상한 100 → 50** (`scripts/gather_budget.sh`; Runner 노드 env
+  `SE_FORKS_CAP_OS` 로 상향). Runner RAM 측정 뒤 되돌릴 수 있다(GP-18). 성공 경로 wall 은 wave 수에 비례하므로 200 host 기준 최대 ≈ 2배 늘지만 예산(300 + 240×4 = 1260 s) 안이다.
+- INT 중단 6회 중 1회에서 CPython `weakref` 콜백 안의 `KeyboardInterrupt` 가 소실돼 ansible 메인이 멈췄고 `--kill-after=90` 의 KILL 로 rc 137(`timeout_killed`) — 그래도 Layer A 가
+  kept 98 + filled 2 = 100 을 맞췄다. 90 s 유예와 rc 137 경로는 장식이 아니다. Runner(2.20.3) 재현은 미실행(GP-19).
+- progress/checkpoint 기록 비용은 같은 설정 반복 편차보다 작아 분리 불가(상한 ≈ 80 ms/host). Layer A 는 1000 host 0.21–0.24 s. `first_seen` 이벤트의 `ip: null` 은 콜백에서 ip 확정 뒤
+  기록하도록 고쳤다.
+- Redfish 에뮬레이터는 WSL 에서 불가(443 바인드 권한 없음 · 모듈 포트 고정 · 표준 vault 복호화 필요) — 성공 경로 규모 측정은 Runner 또는 실장비에서만 가능하다(GP-20).
+
 ### 검증 (오프라인)
 
 WSL(ansible-core 2.20.7): 3채널 `--syntax-check` 통과, Add-on 엔진 테스트 14 passed(hang 포함), `pytest tests/unit` 2730 passed(+ Windows P4 진행 중 파일 1 failed),

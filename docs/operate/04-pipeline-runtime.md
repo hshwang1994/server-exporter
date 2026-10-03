@@ -69,7 +69,7 @@ Gather(수집과 Layer A 마무리)는 저장소의 `scripts/activate_ansible_ve
 | 전체 | 150 분 (빌드 시작 기준) | 이 안에 Callback 까지 끝낸다 |
 | 마무리 예비 | 990 s = INT→KILL 유예 90 + Layer A 120 + archive/stash 60 + post 마무리 720 | 수집이 끝난 뒤 Callback 종료까지의 실제 경로 합 |
 | Gather stage 합산 상한 | 115 분 | agent 대기 · checkout · Add-on 준비 · 수집 · post 를 모두 포함 |
-| 수집 예산 | `clamp(300 + host_cap × waves, 600, 5400)` 과 위 두 잔여 중 **최소** — `ansible-playbook` 직전에 다시 계산 | host_cap: os/esxi 240 s, redfish 후보 수 × (540 + 65)(+복구 240); forks: os `min(H,100)`, esxi `min(H,2×vCPU)`, redfish `min(H,4×vCPU)` |
+| 수집 예산 | `clamp(300 + host_cap × waves, 600, 5400)` 과 위 두 잔여 중 **최소** — `ansible-playbook` 직전에 다시 계산 | host_cap: os/esxi 240 s, redfish 후보 수 × (540 + 65)(+복구 240); forks: os `min(H,50)`(Runner 노드 env `SE_FORKS_CAP_OS` 로 상향 — WSL 실측 슬롯당 ≈36 MB), esxi `min(H,2×vCPU)`, redfish `min(H,4×vCPU)` |
 | 최소 시작 | 120 s | 그보다 적게 남으면 수집을 시작하지 않고(`not_started_budget`) 마무리로 넘어간다 |
 | 검증용 강제값 | `gatherBudgetForceSec` | 공식 대신 쓰되 전체·stage 잔여는 넘지 못한다 |
 

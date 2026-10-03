@@ -44,6 +44,18 @@ def test_small_os_batch_uses_min_and_starts():
     assert b["budget"] == 600
 
 
+def test_os_forks_default_cap_50_and_runner_env_override():
+    """2026-10-03 Phase 5 WSL 실측(슬롯당 PSS ≈ 36 MB · forks 50↔100 wall 차이 없음) → Runner RAM 측정 전 기본 50."""
+    _, b = run(SE_CHANNEL="os", SE_HOSTS=200)
+    assert b["forks"] == 50 and b["waves"] == 4 and b["gather"] == 300 + 240 * 4
+    _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_FORKS_CAP_OS=100)
+    assert b["forks"] == 100 and b["waves"] == 2, "Runner 노드 env 로 상향"
+    _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_FORKS_CAP_OS="abc")
+    assert b["forks"] == 50, "잘못된 값은 기본 상한"
+    _, b = run(SE_CHANNEL="os", SE_HOSTS=30, SE_FORKS_CAP_OS=100)
+    assert b["forks"] == 30, "host 수가 상한보다 작으면 host 수"
+
+
 def test_redfish_large_batch_formula():
     rc, b = run(SE_CHANNEL="redfish", SE_HOSTS=200, SE_VCPU=8)
     assert b["forks"] == 32 and b["waves"] == 7 and b["host_cap"] == 605

@@ -29,7 +29,9 @@ HOST_CAP_ESXI=240
 REDFISH_DEADLINE_SEC=540
 REDFISH_BACKOFF_SEC=65
 REDFISH_ACCOUNT_SEC=240
-OS_FORKS_MAX=100
+# 2026-10-03 Phase 5 WSL 실측: fork 슬롯당 프로세스 트리 PSS ≈ 36 MB(forks 100 ≈ 3.7 GB), 실패 경로 wall 은 forks 50↔100 차이 없음.
+#   Runner RAM 을 측정하기 전까지 기본 50. Runner 노드 환경변수 SE_FORKS_CAP_OS 로 올린다 (docs/ai/NEXT_ACTIONS.md GP-18).
+OS_FORKS_MAX=50
 ESXI_FORKS_PER_VCPU=2
 REDFISH_FORKS_PER_VCPU=4
 
@@ -45,6 +47,7 @@ H="$SE_HOSTS"; [ "$H" -ge 1 ] || fail "SE_HOSTS must be >= 1"
 VCPU="${SE_VCPU:-}"
 if [ -z "$VCPU" ]; then VCPU="$(nproc 2>/dev/null || echo 2)"; fi
 is_int "$VCPU" && [ "$VCPU" -ge 1 ] || VCPU=2
+if [ -n "${SE_FORKS_CAP_OS:-}" ] && is_int "$SE_FORKS_CAP_OS" && [ "$SE_FORKS_CAP_OS" -ge 1 ]; then OS_FORKS_MAX="$SE_FORKS_CAP_OS"; fi
 CAND="${SE_REDFISH_CANDIDATES:-1}"; is_int "$CAND" && [ "$CAND" -ge 1 ] || CAND=1
 RECOV="${SE_REDFISH_RECOVERY:-0}"
 FORCE="${SE_FORCE_SEC:-}"
