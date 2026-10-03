@@ -284,11 +284,14 @@ def seFinalizeAndCallback() {
             echo "[Finalize] node wait ${tIn - tPost}s, remaining ${Math.min(hardDeadline, finalizerDeadline) - tIn}s, outcome=${outcome}, accepted=${ips.size()}"
             deleteDir()
             // ① 입력 회수: unstash → unarchive(같은 빌드의 archive) → manifest-only
+            //    source = 입력을 돌려준 **회수 매체**(stash / archive / none). 데이터 출처(OUTPUT · CHECKPOINT · 합성)는 by_origin 이 따로 적는다 —
+            //    Layer A 가 실패해 checkpoint 만 있어도 그 checkpoint 를 돌려준 매체가 source 다 (Harness #34).
             String source = 'none'
+            List recoverFiles = ['gather_final.jsonl', 'gather_finalize_report.json', 'gather_output.json', 'gather_checkpoint.jsonl']
             try {
                 boolean done = seBounded(C.RECOVER, 'unstash') {
                     unstash 'gather-output'
-                    if (fileExists('gather_final.jsonl') || fileExists('gather_output.json')) { source = 'stash' }
+                    if (fileExists('gather_final.jsonl') || fileExists('gather_output.json') || fileExists('gather_checkpoint.jsonl')) { source = 'stash' }
                 }
                 if (!done) { echo "[Finalize] unstash 상한 초과 — archive 회수로" }
             } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
@@ -299,9 +302,18 @@ def seFinalizeAndCallback() {
             if (source == 'none' && (Math.min(hardDeadline, finalizerDeadline) - seNowSec()) > (C.RECOVER + C.ASSEMBLE + C.CALLBACK_ATTEMPT)) {
                 try {
                     boolean done = seBounded(C.RECOVER, 'unarchive') {
-                        unarchive mapping: ['gather_final.jsonl': 'gather_final.jsonl', 'gather_finalize_report.json': 'gather_finalize_report.json',
-                                            'gather_output.json': 'gather_output.json', 'gather_checkpoint.jsonl': 'gather_checkpoint.jsonl']
-                        if (fileExists('gather_final.jsonl') || fileExists('gather_output.json')) { source = 'archive' }
+                        // 파일별로 회수한다 — 한 mapping 에 없는 파일(예: checkpoint 가 없는 정상 수집)이 섞이면 unarchive 가 통째로 실패해
+                        // 이미 꺼낸 파일도 source 에 반영되지 않았다 (Harness #30: "no artifacts to unarchive in gather_checkpoint.jsonl")
+                        for (String f in recoverFiles) {
+                            try {
+                                unarchive mapping: [(f): f]
+                            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                                throw fie
+                            } catch (Exception e) {
+                                echo "[Finalize] unarchive ${f}: 없음 (${e.message})"
+                            }
+                        }
+                        if (fileExists('gather_final.jsonl') || fileExists('gather_output.json') || fileExists('gather_checkpoint.jsonl')) { source = 'archive' }
                     }
                     if (!done) { echo "[Finalize] unarchive 상한 초과 — manifest 기반으로" }
                 } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {

@@ -275,3 +275,12 @@ def test_progress_and_checkpoint_env_wired_for_json_only():
 
 def test_file_has_lf_line_endings():
     assert b"\r\n" not in JENKINSFILE.read_bytes()
+
+def test_recovery_source_is_the_medium_and_unarchive_is_per_file():
+    """Harness #30/#34 (2026-10-04): 한 mapping 에 없는 파일이 섞이면 unarchive 가 통째로 실패해 꺼낸 파일이 source 에 반영되지 않았고,
+    checkpoint 만 돌려받은 경우(Layer A 실패)도 source 가 none 이었다. source = 회수 매체, by_origin = 데이터 출처."""
+    assert "for (String f in recoverFiles)" in FINALIZE and "unarchive mapping: [(f): f]" in FINALIZE, "파일별 unarchive"
+    assert FINALIZE.count("fileExists('gather_checkpoint.jsonl')) { source = 'stash' }") == 1
+    assert FINALIZE.count("fileExists('gather_checkpoint.jsonl')) { source = 'archive' }") == 1
+    per_file = FINALIZE[FINALIZE.index("for (String f in recoverFiles)"):FINALIZE.index("source = 'archive'")]
+    assert "FlowInterruptedException fie" in per_file and "throw fie" in per_file, "파일별 catch 도 interruption 은 재전파"

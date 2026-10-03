@@ -70,7 +70,7 @@ def archiveArtifacts(Map m) {
     // 주입 대상은 Gather post 의 보존 archive(gather_output.json 으로 시작하는 목록)뿐 — finalizer 의 callback_body/summary archive 는 실제로 보낸다
     if ((HARNESS.scenario in __FAIL_ARCHIVE__) && (m.artifacts ?: '').toString().startsWith('gather_output.json')) {
         HARNESS.calls << 'archiveArtifacts:injected_fail'
-        throw new IllegalStateException('harness: injected archiveArtifacts failure')
+        throw new Exception('harness: injected archiveArtifacts failure')
     }
     HARNESS.calls << 'archiveArtifacts'
     return HARNESS.outer.archiveArtifacts(m)
@@ -79,7 +79,7 @@ def archiveArtifacts(Map m) {
 def stash(Map m) {
     if ((HARNESS.scenario in __FAIL_STASH__) && m.name == 'gather-output') {
         HARNESS.calls << 'stash:injected_fail'
-        throw new IllegalStateException('harness: injected stash failure')
+        throw new Exception('harness: injected stash failure')
     }
     HARNESS.calls << 'stash'
     return HARNESS.outer.stash(m)
@@ -103,7 +103,7 @@ def unarchive(Map m) {
 def readTrusted(String path) {
     if (HARNESS.scenario in __FAIL_READTRUSTED__) {
         HARNESS.calls << ('readTrusted:injected_fail:' + path)
-        throw new IllegalStateException('harness: injected readTrusted failure for ' + path)
+        throw new Exception('harness: injected readTrusted failure for ' + path)
     }
     HARNESS.calls << ('readTrusted:' + path)
     if (HARNESS.trusted.containsKey(path)) {

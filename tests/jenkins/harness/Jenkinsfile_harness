@@ -57,7 +57,8 @@ timeout(time: 45, unit: 'MINUTES') {
         if (params.FUNCTIONS_SRC == 'artifact') {
             String base = params.ARTIFACT_BASE_URL.trim().replaceAll('/+$', '')
             if (!base) { error '[Harness] FUNCTIONS_SRC=artifact 에는 ARTIFACT_BASE_URL 이 필요하다' }
-            httpRequest(url: "${base}/prodtree.tar.gz", authentication: 'se-jenkins-lint', validResponseCodes: '200', outputFile: 'prodtree.tar.gz')
+            // ignoreSslErrors: lab Jenkins 의 자체 서명 인증서를 agent JVM 이 신뢰하지 않는다(Harness #40 PKIX). 내용은 아래 sha256(CI 가 넘긴 값)으로 대조한다.
+            httpRequest(url: "${base}/prodtree.tar.gz", authentication: 'se-jenkins-lint', ignoreSslErrors: true, validResponseCodes: '200', outputFile: 'prodtree.tar.gz')
             sh 'mkdir -p prodtree_src && tar -xzf prodtree.tar.gz -C prodtree_src && cp -a prodtree_src/. gather_ws/'
             srcFile = 'prodtree_src/Jenkinsfile_portal'
             String got = sh(returnStdout: true, script: "sha256sum ${srcFile} | cut -d' ' -f1").trim()
