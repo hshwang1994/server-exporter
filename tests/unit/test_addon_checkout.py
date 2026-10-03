@@ -172,6 +172,7 @@ def test_scripts_have_lf_line_endings_and_bash_shebang(path):
 
 
 @pytest.mark.parametrize("path", [SCRIPT, ASKPASS], ids=lambda p: p.name)
+@pytest.mark.source_text   # 저장소 메타/문서/주석 의존 — production tree overlay(G14) 제외
 def test_scripts_are_executable_in_git_index(path):
     """Jenkins 가 받은 그대로 실행한다 (GIT_ASKPASS 는 git 이 직접 실행) — 인덱스 모드가 100755 여야 한다."""
     rel = path.relative_to(REPO_ROOT).as_posix()

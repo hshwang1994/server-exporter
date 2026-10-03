@@ -404,6 +404,7 @@ CURRENT_ADDON_FILES = [
 
 
 @pytest.mark.parametrize("rel", CURRENT_ADDON_FILES)
+@pytest.mark.source_text   # 저장소 메타/문서/주석 의존 — production tree overlay(G14) 제외
 def test_no_legacy_addon_variable_names(rel):
     text = (REPO / rel).read_text(encoding="utf-8")
     assert "SE_ADDON" not in text, f"{rel}: 옛 이름 SE_ADDON_* 대신 ADDON_REPO_URL · ADDON_REPO_REF · ADDON_DIR 등"

@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.source_text   # 저장소 메타(.claude · scripts/ai · Jenkinsfile_ci · git)를 읽는다 — G14 overlay 제외
+
 REPO = Path(__file__).resolve().parents[2]
 CI_PATH = REPO / "Jenkinsfile_ci"
 LIB_PATH = REPO / "scripts" / "jenkins" / "se_finalize.groovy"

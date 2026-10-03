@@ -31,6 +31,7 @@ sys.modules.setdefault("ansible.module_utils.basic", _stub_basic)
 import redfish_gather as rg  # noqa: E402
 
 import yaml  # noqa: E402
+import pytest
 
 ALIASES_PATH = REPO / "common" / "vars" / "vendor_aliases.yml"
 ADAPTERS_DIR = REPO / "adapters" / "redfish"
@@ -120,6 +121,7 @@ def test_f44_f47_adapter_match_includes_canonical_vendor() -> None:
 # ── ai-context vendors/{name}.md 4 파일 ──────────────────────────────────────
 
 
+@pytest.mark.source_text   # 저장소 메타/문서/주석 의존 — production tree overlay(G14) 제외
 def test_f44_f47_ai_context_files_exist() -> None:
     """4 신규 vendor ai-context 파일 존재."""
     base = REPO / ".claude" / "ai-context" / "vendors"

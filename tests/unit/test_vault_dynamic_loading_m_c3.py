@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 import yaml
+import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 LOAD_VAULT = REPO / "redfish-gather" / "tasks" / "load_vault.yml"
@@ -113,6 +114,7 @@ def test_m_c3_site_yml_gather_facts_no() -> None:
 # ── (4) accounts list 정규화 로직 ────────────────────────────────────────────
 
 
+@pytest.mark.source_text   # 저장소 메타/문서/주석 의존 — production tree overlay(G14) 제외
 def test_m_c3_load_vault_normalizes_accounts_list() -> None:
     """accounts list 가 _rf_accounts 로 이어지고 순서가 보존된다 (list[0] = primary 관례)."""
     content = LOAD_VAULT.read_text(encoding="utf-8")

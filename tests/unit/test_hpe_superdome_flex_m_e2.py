@@ -37,6 +37,7 @@ sys.modules.setdefault("ansible.module_utils", _stub_module_utils)
 sys.modules.setdefault("ansible.module_utils.basic", _stub_basic)
 
 import redfish_gather as rg  # noqa: E402
+import pytest
 
 ADAPTER_PATH = REPO / "adapters" / "redfish" / "hpe_superdome_flex.yml"
 AI_CONTEXT_HPE = REPO / ".claude" / "ai-context" / "vendors" / "hpe.md"
@@ -165,6 +166,7 @@ def test_m_e2_bmc_product_hints_superdome_added() -> None:
 # ── ai-context vendors/hpe.md Superdome 절 ──────────────────────────────────
 
 
+@pytest.mark.source_text   # 저장소 메타/문서/주석 의존 — production tree overlay(G14) 제외
 def test_m_e2_ai_context_hpe_has_superdome_section() -> None:
     """ai-context vendors/hpe.md 에 Superdome 절 추가 (M-E3)."""
     content = AI_CONTEXT_HPE.read_text(encoding="utf-8")
@@ -178,6 +180,7 @@ def test_m_e2_ai_context_hpe_has_superdome_section() -> None:
 # ── vendor-boundary-map.yaml superdome_flex sub_line ────────────────────────
 
 
+@pytest.mark.source_text   # 저장소 메타/문서/주석 의존 — production tree overlay(G14) 제외
 def test_m_e2_boundary_map_has_superdome_flex_sub_line() -> None:
     """vendor-boundary-map.yaml 에 superdome_flex sub_line 명시 (M-E4)."""
     d = yaml.safe_load(BOUNDARY_MAP.read_text(encoding="utf-8"))
@@ -194,6 +197,7 @@ def test_m_e2_boundary_map_has_superdome_flex_sub_line() -> None:
 # ── adapter origin 주석 (rule 96 R1-A — web sources 14건) ───────────────────
 
 
+@pytest.mark.source_text   # 저장소 메타/문서/주석 의존 — production tree overlay(G14) 제외
 def test_m_e2_adapter_has_origin_metadata() -> None:
     """adapter YAML 에 origin metadata 주석 + web sources 명시 (rule 96 R1-A)."""
     content = ADAPTER_PATH.read_text(encoding="utf-8")

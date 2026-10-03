@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.source_text   # 저장소 메타(.claude · scripts/ai · Jenkinsfile_ci · git)를 읽는다 — G14 overlay 제외
+
 REPO = Path(__file__).resolve().parents[2]
 HOOK_PATH = REPO / "scripts" / "ai" / "hooks" / "pre_commit_docs20_sync_check.py"
 
