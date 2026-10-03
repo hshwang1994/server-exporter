@@ -400,7 +400,8 @@ def main(argv=None) -> int:
     ap.add_argument('--workspace', required=True)
     ap.add_argument('--repo-root', required=True, help='정본 YAML 을 읽을 저장소 루트 (Jenkins WORKSPACE)')
     ap.add_argument('--outcome', default='completed',
-                    help='ansible 실행 결과 분류: completed | timeout | prep_failed | not_started_budget | interrupted_unknown ...')
+                    help='ansible 실행 결과 분류: completed | timeout | timeout_killed | failed_run | prep_failed | not_started_budget | '
+                         'not_started_memory | aborted(취소·stage/global timeout) | no_agent | interrupted_unknown ...')
     ap.add_argument('--manifest', default='gather_manifest.json')
     ap.add_argument('--output', default='gather_output.json')
     ap.add_argument('--checkpoint', default='gather_checkpoint.jsonl')

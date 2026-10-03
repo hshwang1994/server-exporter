@@ -119,7 +119,13 @@ def test_budget_is_computed_by_the_script_twice_and_exec_value_is_enforced():
     assert "env.SE_GATHER_OUTCOME = 'not_started_budget'" in GATHER and "if (!exec.start)" in GATHER
     assert "SE_FORCE_SEC=${budgetForce}" in GATHER, "강제값도 스크립트를 거친다(남은 시간을 넘지 못함)"
     assert "options { timeout(time: 115, unit: 'MINUTES') }" in GATHER, "stage 합산 상한 = gather_budget.sh STAGE_LIMIT_SEC"
-    assert "env.SE_STAGE_START_EPOCH = \"${seNowSec()}\"" in GATHER
+    # R6: stage 기준점은 agent 를 얻기 전(Resolve Location 끝) — nodesByLabel 뒤, Gather 앞. node 진입 시각은 Gather 첫 statement.
+    assert "env.SE_STAGE_START_EPOCH = \"${seNowSec()}\"" in RESOLVE and RESOLVE.index("nodesByLabel(") < RESOLVE.index("env.SE_STAGE_START_EPOCH =")
+    assert "env.SE_STAGE_START_EPOCH = \"${seNowSec()}\"" not in GATHER, "Gather 안에서 기준점을 다시 찍지 않는다(대기 시간이 사라진다)"
+    assert "env.SE_NODE_ENTER_EPOCH = \"${seNowSec()}\"" in GATHER and GATHER.index("env.SE_NODE_ENTER_EPOCH") < GATHER.index("writeFile(file: 'gather_manifest.json'")
+    for field in ("pre=${", "wait_checkout=${", "prep=${"):
+        assert GATHER.count(field) == 2, f"{field} est·exec 두 로그 모두"
+    assert "wait=${" not in GATHER, "wait_checkout 은 순수 agent 대기가 아니다 — 이름으로 분명히 한다"
     assert "env.SE_BUILD_START_EPOCH = " in _stage("Validate")
 
 
@@ -128,6 +134,42 @@ def test_rc_to_outcome_mapping():
         assert f"env.SE_GATHER_OUTCOME = '{outcome}'" in GATHER, outcome
         assert rc in GATHER
     assert "env.SE_GATHER_OUTCOME = 'interrupted_unknown'" in GATHER, "아무 분기도 못 타면 중단으로 남긴다"
+    # 3차 §4-2 / §6: 취소·timeout 은 원인을 기록하고 재전파, 메모리 부족은 시간 부족과 다른 사유
+    assert "env.SE_GATHER_OUTCOME = 'aborted'" in GATHER and "env.SE_GATHER_OUTCOME = 'not_started_memory'" in GATHER
+    assert "if (exec.reason == 'not_started_memory')" in GATHER and "Runner 가용 메모리 부족" in GATHER
+
+
+def test_interruptions_are_recorded_and_rethrown_not_swallowed():
+    """3차 §4-2: catchError 기본값은 수동 중단·timeout 도 삼킨다 → catchInterruptions: false. Gather 의 interruption 경계는 outcome 을 적고
+    다시 던진다. seLoadCanon · Add-on checkout 의 일반 catch 도 interruption 을 먼저 재전파한다."""
+    assert "catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE', catchInterruptions: false)" in GATHER
+    assert "catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {" not in GATHER
+    i_abort = GATHER.index("env.SE_GATHER_OUTCOME = 'aborted'")
+    before = GATHER[max(0, i_abort - 600): i_abort]
+    after = GATHER[i_abort: i_abort + 400]
+    assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in before, "interruption 경계의 catch 안에서 기록한다"
+    assert "throw fie" in after, "기록 뒤 재전파"
+    canon = _method("def seLoadCanon")
+    assert canon.index("FlowInterruptedException fie") < canon.index("catch (Exception e)"), "정본 읽기 실패 catch 가 interruption 을 삼키지 않는다"
+    addon = GATHER[GATHER.index("def fetchAddon"):GATHER.index("if (!problem)")]
+    assert addon.index("FlowInterruptedException fie") < addon.index("catch (Exception e)")
+
+
+def test_bounded_recovery_is_opt_in_and_identity_based():
+    """3차 §4-1: 원인 클래스·경과 시간으로 판정하지 않는다. nodeId 가 우리 timeout step 과 같을 때만 지역 처리, 식별 불가는 재전파.
+    sandbox 기본값(2026-10-03 lab 실측)은 getCauses/getNodeId/getEnclosingBlocks/getId 를 모두 거부하므로 기본은 꺼져 있다."""
+    bounded = _method("boolean seBounded")
+    assert "env.SE_FINALIZER_BOUNDED" in bounded and "body()\n        return true" in bounded, "기본 off = 종전 동작"
+    assert "getContext(org.jenkinsci.plugins.workflow.graph.FlowNode)" in bounded and "seEnclosingIds(n, 2)" in bounded
+    assert "if (ownIds && seIsOwnTimeout(fie, ownIds))" in bounded and "        throw fie\n    }\n}\n" in bounded, "식별되지 않으면 재전파"
+    own = _method("boolean seIsOwnTimeout")
+    assert "ExceededTimeout" in own and "ownIds.contains(c.getNodeId()?.toString())" in own and "return false" in own
+    assert "currentTimeMillis" not in own and "currentTimeMillis" not in bounded, "경과 시간 판정 없음"
+    for call in ("seBounded(C.RECOVER, 'unstash')", "seBounded(C.RECOVER, 'unarchive')", "seBounded(C.ASSEMBLE, 'assemble')"):
+        assert call in FINALIZE, call
+    assert "leftForLib > (C.ASSEMBLE + C.CALLBACK_MIN)" in FINALIZE, "Tier 1: 조립 뒤 Callback 최소 시간이 남을 때만 적재"
+    for sig in ("FlowInterruptedException getCauses", "ExceededTimeout getNodeId", "FlowNode getEnclosingBlocks", "FlowNode getId"):
+        assert sig in TEXT, f"승인 시그니처 목록을 코드 주석에 남긴다: {sig}"
     assert "|| exit 90" in GATHER, "venv 실패 = prep_failed"
     assert "gather_output.json 미생성/0바이트" not in TEXT, "0바이트는 FAILURE 로 끊지 않고 finalizer 가 보충한다"
 
@@ -177,7 +219,8 @@ def test_finalizer_validates_lines_and_records_damage():
     seg = FINALIZE[i_read: i_read + 1800]
     assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in seg, "파싱 실패 복구와 interruption 재전파를 분리"
     assert "unrecovered = picked.missing" in FINALIZE
-    for key in ("unrecovered: unrecovered", "damage: damage", "recovery_limited: (layerB == 'unavailable' && lineCount != accepted)"):
+    for key in ("unrecovered: unrecovered", "damage: damage", "by_origin: (report.by_origin ?: null)",
+                "recovery_limited: (layerB == 'unavailable' && lineCount != accepted)"):
         assert key in FINALIZE, key
 
 
