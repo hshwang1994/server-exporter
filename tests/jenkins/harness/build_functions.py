@@ -49,7 +49,8 @@ WRAPPERS = r'''
 //   scenario: __SCENARIO__
 //   스크립트 메서드는 같은 이름의 DSL step 보다 먼저 해석된다. 실제 step 은 HARNESS.outer(바깥 WorkflowScript)로 위임한다.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
-Map HARNESS = [scenario: '__SCENARIO__', calls: [], params: [:], trusted: [:], outer: null]
+// 타입 없는 대입 = 스크립트 binding 변수 — 메서드에서 보인다 (typed 선언은 run() 의 지역변수가 돼 MissingPropertyException, Harness #5 실측)
+HARNESS = [scenario: '__SCENARIO__', calls: [], params: [:], trusted: [:], outer: null]
 
 def seHarnessInit(Object outer, Map cfg) {
     HARNESS.outer = outer
