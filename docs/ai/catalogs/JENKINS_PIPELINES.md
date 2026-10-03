@@ -64,7 +64,7 @@ ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바
 
 ## Harness Job `clovirone-cicd/clovirone-server-gather-harness` (2026-10-04, main 전용)
 
-Script Path `tests/jenkins/harness/Jenkinsfile_harness`(scripted), Branch `*/main`. 시나리오당 빌드 1개(`SCENARIO`), `FUNCTIONS_SRC=checkout|artifact`. `Jenkinsfile_portal` 의 최상위 함수를 `tests/jenkins/harness/build_functions.py` 가 잘라 wrapper(`archiveArtifacts`·`stash`·`unstash`·`readTrusted`·`sh`·`httpRequest`…)를 덧붙인 임시 스크립트를 `load` 하고, `callback_sink.py`(POST sink, agent) 를 향해 `sePreserveGatherOutput()` → `seFinalizeAndCallback()` 을 실제 CPS·sandbox 에서 실행한다. 판정 `harness_verdict.py` → `harness_result.json`(PASS/FAIL/PARTIAL). 운영 코드에는 장애 주입 분기가 없다. 시나리오 정의 `tests/jenkins/harness/scenarios.json`.
+Script Path `tests/jenkins/harness/Jenkinsfile_harness`(scripted), Branch `*/main`. 시나리오당 빌드 1개(`SCENARIO`), `FUNCTIONS_SRC=checkout|artifact`. `Jenkinsfile_portal` 의 최상위 함수를 `tests/jenkins/harness/build_functions.py` 가 잘라 wrapper(`archiveArtifacts`·`stash`·`unstash`·`readTrusted`·`sh`·`httpRequest`…)를 덧붙인 임시 스크립트를 `load` 하고, `callback_sink.py`(POST sink — **controller(built-in) 의 127.0.0.1**, finalizer 의 `httpRequest` 가 `node('built-in')` 에서 나가므로; 파일은 형제 workspace `…@sink`) 를 향해 `sePreserveGatherOutput()` → `seFinalizeAndCallback()` 을 실제 CPS·sandbox 에서 실행한다. 판정 `harness_verdict.py` → `harness_result.json`(PASS/FAIL/PARTIAL). 운영 코드에는 장애 주입 분기가 없다. 시나리오 정의 `tests/jenkins/harness/scenarios.json`.
 
 ## pytest 회귀 게이트
 

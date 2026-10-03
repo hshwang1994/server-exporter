@@ -41,7 +41,7 @@
 
 ## 3. Job 별 빌드 · checkout · 기대/관측
 
-`tests/evidence/2026-10-04-live-e2e.md` §2~§5 가 정본. 요약: main #4(`5d2a8c8e`) · #5(`0ccb89eb`) · #6(`15e684b0`) T2+T6 PASS; Harness #27/#28/#44 normal_success PASS, #29~#39 F 시나리오 10 PASS · 2 FAIL(결함 → 수정), #40~#42 prodtree FAIL(PKIX → 수정); CI #1 SUCCESS · #2 FAILURE(컴파일) · #3 FAILURE(결함 3건 발견) · #4 ABORTED · #5 UNSTABLE(Verify COMPLETE_PASS) · #6 ABORTED · **#7 SUCCESS(모든 stage PASS — Harness 12/12 · prodtree 4/4 · Verify COMPLETE_PASS · Evidence 16 항목)** · #8 PROMOTE dry-run(결과는 `live-e2e.md` §5).
+`tests/evidence/2026-10-04-live-e2e.md` §2~§5 가 정본. 요약: main #4(`5d2a8c8e`) · #5(`0ccb89eb`) · #6(`15e684b0`) T2+T6 PASS; Harness #27/#28/#44 normal_success PASS, #29~#39 F 시나리오 10 PASS · 2 FAIL(결함 → 수정), #40~#42 prodtree FAIL(PKIX → 수정); CI #1 SUCCESS · #2 FAILURE(컴파일) · #3 FAILURE(결함 3건 발견) · #4 ABORTED · #5 UNSTABLE(Verify COMPLETE_PASS) · #6 ABORTED · **#7 SUCCESS(모든 stage PASS — Harness 12/12 · prodtree 4/4 · Verify COMPLETE_PASS · Evidence 16 항목)** · #8 FAILURE(Harness normal_success 가 GitHub fetch 일시 장애로 checkout 실패 → **Promote 가 조건 ① 미충족으로 거부, 원격 변경 0**) · **#9 SUCCESS — Promote DRY_RUN**(GitLab 자격 부재 감지 → dry-run 강제; 보고서 재사용 · E2E 검사 `ok=false`(main 시나리오 증거 없음) · 미리보기 parent `4ce90a00` / tree OID `d296aa32…` / trailer Main-SHA·Tree-Hash·Verdict·Gates; 원격 변경 0).
 
 ## 4. 완료 host 데이터 보존 · Callback 요청 · HTTP 수신 · Portal 저장
 
@@ -55,7 +55,7 @@
 ## 5. 승격 · 복구 훈련 · 양 원격 상태
 
 - 승격 **미수행**. 전제 대조는 `live-e2e.md` §7. 복구 훈련은 tmp bare 원격 2개 regression(B→P1→R→P2 · 거부 8종 · 경쟁 · push-sync)만; 실 `4ce90a00` 복제 훈련은 GitLab 자격 뒤.
-- 양 원격: `origin/production 4ce90a00` · `internal/production a03c4038`(뒤처짐, `push-sync` 미실행) · main 은 양쪽 동일(`15e684b0` 이후 문서 커밋 포함).
+- 양 원격(2026-10-04 CI #9 뒤 조회): `origin/production 4ce90a00` · `internal/production 4ce90a00`(전일 `a03c4038` — 이 세션은 `push-sync` 를 실행하지 않았고 누가 옮겼는지 모른다) · main 은 양쪽 동일. CI #9 의 dry-run 전후 production ref 변화 0.
 - 부분 반영/재개: 발생 없음.
 
 ## 6. 성능 비교

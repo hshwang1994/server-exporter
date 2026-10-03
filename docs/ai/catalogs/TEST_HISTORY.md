@@ -15,6 +15,7 @@
 | Harness 첫 PASS 까지 | #4~#26 FAILURE(HARNESS binding · 정본 복사 · sink 위치 · toJson(List) · NFS .nfs* · lingering Timer) → **#27 normal_success PASS**(verdict 14/14) |
 | main Job | #4(`5d2a8c8e`) · #5(`0ccb89eb`) · #6(`15e684b0`) T2+T6: TEST-NET 2 → `TARGET_UNREACHABLE` ×2 · 13 키 · Layer A ok · Callback `127.0.0.1:9` 연결 거부 3회 관측 → `delivered=false` · `callback_body.json` 유효 · UNSTABLE; R6 `pre=5~6s wait_checkout=5s prep=2~4s` · P-1 `mem_avail_mb≈6.1 GB mem_cap=62 mem_guard=active` |
 | CI #7(`15e684b0`, 최종 후보) | **SUCCESS** — Gate PASS · Corpus 14/14 · Budget PASS · Harness Driver **12/12** · Build(192 파일 · class B 0 · `tree_hash 05ce23c3…`) · Harness(prodtree) **4/4** · Drift PASS · **Verify COMPLETE_PASS 20/20**(G14 104.4 s · G19 28.3 s) · Evidence PASS(16 항목) · Promote not_run |
+| CI #8 / #9(`15e684b0`, `PROMOTE=true` dry-run) | #8 FAILURE — Harness #60 `checkout scm` GitHub fetch rc 128(일시) → Promote 조건 ① 거부(원격 변경 0); **#9 SUCCESS — Promote DRY_RUN**(전 stage PASS · GitLab 자격 부재 감지 · 보고서 재사용 · E2E `ok=false`(main 증거 없음) · 미리보기 parent `4ce90a00` tree `d296aa32…`) |
 | Jenkins 선언형 린터 | `Jenkinsfile_ci`(it→hr 수정본) validated · `Jenkinsfile_portal`(회수 매체 수정본) validated |
 | 단위 묶음(Windows) | `test_jenkinsfile_ci` 30 · `test_jenkinsfile_portal_finalize` 20(+source_text 1) · `test_jenkinsfile_portal_preserve_and_params` · `test_harness_tools` 8 · `test_harness_callback_sink` 5 · `test_gitstore_identity` 4 · `test_verdict_evidence` 7 · `test_promotion_cycle` 4(162 s) · `test_pipeline_tmp_repo` |
 
