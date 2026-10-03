@@ -20,7 +20,8 @@ parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid
                                   → 예산 계산(scripts/gather_budget.sh — ansible 직전 재계산) → timeout --signal=INT --kill-after=90 <예산> ansible-playbook … -f <forks>
                                   → rc → outcome(completed / timeout / timeout_killed / prep_failed / not_started_budget / failed_run)
                                   post{always}: Layer A(scripts/finalize_gather_output.py: 접수 = 결과 보충) → archiveArtifacts → stash → (manifest 가 이 빌드 것일 때만) deleteDir
-  pipeline post{always} [컨트롤러, 합산 720 s]  unstash(없으면 unarchive) → Layer A 결과 또는 Groovy 최소 보충 → 호출자에게 POST(남은 예산 안 ≤3회) → callback_body.json 보존
+  pipeline post{always} [컨트롤러, 합산 720 s]  unstash(없으면 unarchive) → Layer A 결과 또는 Groovy 최소 보충(scripts/jenkins/se_finalize.groovy 를 readTrusted→load)
+                                               → 호출자에게 POST(남은 예산 안 ≤3회) → callback_body.json 보존
 ```
 
 > 2026-10-03: Validate 와 Resolve Location 은 더 이상 노드를 잡지 않는다. 종전에는 Resolve Location 이 컨트롤러에서
@@ -219,6 +220,8 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
 - Callback 은 남은 예산 안에서 최대 3회(시도별 10~120 s; 5xx · 408 · 429 · 예외만 재시도, 그 밖 4xx 는 중단; 빌드가 ABORTED 면 1회 60 s).
   2xx 는 HTTP 응답 성공이지 Portal 의 저장 증거가 아니다. 모두 실패하면 UNSTABLE 이고 본문은 `callback_body.json` artifact 로 남는다 —
   수집 자체가 성공했으면 빌드를 FAILURE 로 만들지 않는다. 합성 보충이 1건이라도 있거나 outcome 이 `completed` 가 아니면 UNSTABLE.
+- Groovy 최소 경로의 함수(`seReconcileRaw` 등)는 `scripts/jenkins/se_finalize.groovy` 하나가 정본이다 — 마무리 단계가 `readTrusted` 로 읽어 `load` 하고,
+  CI Job(`Jenkinsfile_ci`)이 같은 파일로 Python Layer A 와의 동치를 검사한다. 파일을 못 읽으면 보충 없이 있는 OUTPUT 줄만 보내고 UNSTABLE(`layerB=unavailable`)이다.
 - envelope 형식은 [../contract/02-output-envelope.md](../contract/02-output-envelope.md), 실패 봉투의 stage/code 는
   [../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md).
 

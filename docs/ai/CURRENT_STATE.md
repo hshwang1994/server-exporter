@@ -22,7 +22,12 @@
   firmware 동일 version 중복만 GET 전 제거 + 대체 fallback · NDF/WWN · C9 판정 · `mode: detect` · 200 캐시 · `deadline` · 8 MiB cap · N3 backoff 생략 — 재생 요청
   R740 168→137 · CSUS 218→134 · DL380 132→131 · SR650 124→123(추가 0); Windows BusType 표·정수형·HBA 미매칭 null·ConnectionType·속도; ESXi `endPort`·Host 선택·
   view 1회·SmartConnect timeout, P5 facts 재사용(13→12); Linux C1/C2/C7(+ 비루트 dmidecode sudo 재시도 수정, `speed_mhz` Configured 우선).
-- **진행 중(서브 작업자)**: Windows P4 win_shell 통합(20→11), Linux P3 원격 실행 통합(18→12 / 13→9), Phase 5 WSL 규모 emulation, Phase 6 `Jenkinsfile_ci` + finalize corpus.
+- **Windows P4 (완료, 실 WinRM 미실행)**: win_shell 20→11(왕복 22→13), 항목별 `{ok,error,rows,data}` JSON 문서 + parse/split 로 종전 변수 재구성(아래 체인 글자 동일),
+  `-EncodedCommand` 32,767자 한도 발견 → 주석 이동 + 30,000자 상한 테스트, GP-9 `_win_task_timeout` 180 적용(xfail 해제).
+- **Phase 6 (완료, Job 미등록)**: `Jenkinsfile_ci`(Checkout MAIN_SHA → Toolchain → Gate → Finalize Corpus(Python+Groovy) → Budget Self-test), corpus 14 case,
+  `finalize_corpus_check.py`, `ci_gate.sh` corpus 단계. GP-11: Layer B 함수를 `scripts/jenkins/se_finalize.groovy` 로 분리하고 `Jenkinsfile_portal` 은 `load`(실패 시
+  raw 줄 + UNSTABLE). 등록 절차 `docs/operate/03-job-registration.md`.
+- **진행 중(서브 작업자)**: Linux P3 원격 실행 통합(18→12 / 13→9), Phase 5 WSL 규모 emulation, Phase 7a `prodgen`(생성기 · gate · provenance).
 - **미실행(권한 차단 — 사용자 결정 대기)**: Jenkins 두 Job 실제 빌드(§10-4 · §10-5), `.33~.38` SSH, BMC/ESXi 실장비, Runner(2.20.3)에서의 timeout 동작 재확인.
   main Job #1 의 Resolve Location 2분 초과(N1)는 Phase 1.5 코드로 고쳤으나 live 확인 전이다.
 

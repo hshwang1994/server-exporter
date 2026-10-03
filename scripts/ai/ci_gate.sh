@@ -9,6 +9,7 @@
 #   bash scripts/ai/ci_gate.sh            # 전부
 #   CI_GATE_SKIP_PYTEST=1 bash scripts/ai/ci_gate.sh    # 정적 검사만
 #   CI_GATE_PYTEST_ARGS="-x" bash scripts/ai/ci_gate.sh # pytest 추가 인자
+#   CI_GATE_SKIP_CORPUS=1 bash scripts/ai/ci_gate.sh    # finalize corpus(Layer A oracle 대조) 건너뜀 — PARTIAL
 #
 # 종료 코드: 0 = 전부 통과, 1 = 하나라도 실패, 2 = 환경 부족으로 건너뛴 단계가 있음(통과 아님 — 보고에 "부분 실행" 으로 적는다)
 set -uo pipefail
@@ -41,6 +42,15 @@ run "$PY" scripts/ai/hooks/output_schema_drift_check.py
 step "vendor boundary / harness consistency"
 run "$PY" scripts/ai/verify_vendor_boundary.py
 run "$PY" scripts/ai/verify_harness_consistency.py
+
+step "finalize corpus — Layer A 를 corpus 위에서 실행해 정답지와 대조 (Python 쪽 동치 검증; Groovy 쪽은 Jenkinsfile_ci)"
+if [ "${CI_GATE_SKIP_CORPUS:-0}" = "1" ]; then
+    echo "-- [ci_gate] corpus skipped (CI_GATE_SKIP_CORPUS=1)"; skipped=1
+elif [ -f tests/scripts/finalize_corpus_check.py ] && [ -d tests/fixtures/finalize_corpus ]; then
+    run "$PY" tests/scripts/finalize_corpus_check.py
+else
+    echo "-- [ci_gate] tests/fixtures/finalize_corpus 또는 검사 스크립트 없음 — 건너뜀"; skipped=1
+fi
 
 if [ "${CI_GATE_SKIP_PYTEST:-0}" != "1" ]; then
     step "pytest offline (unit · e2e · regression · integration -m 'not live')"

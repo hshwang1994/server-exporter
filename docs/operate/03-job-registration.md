@@ -111,6 +111,23 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 
 ---
 
+## CI Job (main 전용) — `clovirone-cicd/clovirone-server-gather-ci` (2026-10-03, 등록 대기)
+
+수집 Job 에서 빠진 정적 검사(field_dictionary 정합 · pytest 회귀 · Layer A/B 동치 · 예산 공식)는 이 Job 이 맡는다. 수집 · 자격증명 · 실장비 접근은 없다.
+
+| 항목 | 값 |
+|---|---|
+| Job 종류 | 일반 Pipeline (Pipeline script from SCM) — Multibranch 가 아니다 |
+| Repository | 수집 Job 과 같은 저장소 |
+| Branch Specifier | `*/main` (main 전용 — production 에는 이 파일이 없다) |
+| Script Path | `Jenkinsfile_ci` |
+| Lightweight checkout | 켬 |
+| 트리거 | 없음 (webhook 또는 수동; `pollSCM`/cron 은 승인 항목) |
+| Agent | `linux` 라벨 Runner 1대 (venv 는 `scripts/activate_ansible_venv.sh` 가 고른다); `pwsh` 는 있으면 보고만 |
+
+결과: Gate 가 exit 2(건너뛴 단계 있음)면 UNSTABLE, exit 1 이면 FAILURE. 보고서(`ci_gate` 로그 · corpus 비교 · 예산 self-test)는 artifact.
+Phase 7 의 production 생성(prodgen build/verify/promote) stage 는 이 Job 에 뒤이어 추가된다 — 그때 write credential 이 승인 항목이다.
+
 ## 다음 단계
 
 | 다음 작업 | 문서 |

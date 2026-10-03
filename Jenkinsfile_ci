@@ -1,0 +1,278 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Jenkinsfile_ci — main 전용 오프라인 검증 파이프라인 (2026-10-03, Plan Phase 6 §6-4 · §9-4).
+//
+//   수집 파이프라인(Jenkinsfile_portal)과 별개다. 수집 · Callback · 자격증명 · 대상 서버 접속이 전혀 없다.
+//   Job: clovirone-cicd/clovirone-server-gather-ci — 일반 Pipeline(multibranch 아님) · Pipeline script from SCM ·
+//        Branch Specifier */main · Script Path Jenkinsfile_ci · Lightweight checkout. main 전용은 Job 의 Branch Specifier 로 보장한다.
+//        트리거 없음 — cron · pollSCM 을 두지 않는다(rule 80 R2). 사용자가 수동으로 돌리거나 webhook 을 Job 설정에서 붙인다.
+//   Runner: label linux (esxi 라벨은 쓰지 않는다). venv 는 scripts/activate_ansible_venv.sh 가 고른다 — 절대경로를 적지 않는다(rule 80 R1-A).
+//
+//   Stage
+//     Checkout         checkout scm → env.MAIN_SHA(GIT_COMMIT) 고정
+//     Toolchain        venv 활성화 · python3 / PyYAML / pytest / ansible-playbook / bash / git 버전 보고. pwsh 는 있으면 보고만(아직 필수 아님)
+//     Gate             bash scripts/ai/ci_gate.sh — exit 1 → FAILURE, exit 2(PARTIAL) → UNSTABLE + 건너뛴 단계를 콘솔에 적는다
+//     Finalize Corpus  Python 쪽: tests/scripts/finalize_corpus_check.py (Layer A 를 corpus 위에서 실행해 정답지와 대조)
+//                      Groovy 쪽: load 'scripts/jenkins/se_finalize.groovy' → case 마다 seReconcileRaw 를 돌려 같은 정답지와 대조
+//     Budget Self-test tests/unit/test_gather_budget.py + scripts/gather_budget.sh 대표 입력 3건(start=true)
+//   산출물: toolchain.txt · ci_gate.log · finalize_corpus_python.json · finalize_corpus_groovy.json · budget_selftest.jsonl
+//   계약 테스트: tests/unit/test_jenkinsfile_ci.py (stage · 옵션 · 트리거 없음 · venv 규칙 · se_finalize.groovy 와 Jenkinsfile_portal 동일성)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// corpus 대조 규칙 — Layer B(seReconcileRaw) 결과를 Layer A 정답지와 origin 별로 비교한다 (Python 쪽은 tests/scripts/finalize_corpus_check.py).
+//   output     : 줄 원문이 같다 (두 Layer 모두 OUTPUT 줄을 재직렬화하지 않는다)
+//   checkpoint : errors 를 뺀 12 필드가 같고 기존 errors 도 같다. 덧붙인 마지막 1건만 Layer 별 사유다 (Layer B 는 section gather + canon.emitFailed)
+//   synthetic  : 뼈대(schema_version…data 11 필드)가 같다. 진단은 Layer A 가 progress 로 세분하므로(§6-4) Layer A 도
+//                OUTPUT_BUILD_FAILED 일 때만 failure_reason · errors[0].section 까지 대조한다
+//   report     : by_origin · kept · filled 같음. dropped 는 file:line 집합(Layer A 의 corrupt_lines · truncated_tail 포함), conflicts 는 ip:chosen 집합
+//   JSON 은 양쪽 모두 JsonSlurperClassic 으로 읽어 비교한다 — Groovy JsonOutput 의 \\uXXXX escaping 과 Python 의 ensure_ascii=False 는 값이 같다.
+@NonCPS
+List seCorpusCompare(String caseName, Map res, String expectedFinal, String expectedReport, String expectedOrigins, Map canon) {
+    def slurper = new groovy.json.JsonSlurperClassic()
+    List problems = []
+    List expLines = expectedFinal.split('\n').findAll { it.trim() }.collect { it.trim() }
+    List origins = slurper.parseText(expectedOrigins)
+    Map expRep = slurper.parseText(expectedReport)
+    List gotLines = res.lines
+    Map gotRep = res.report
+    int accepted = (expRep.accepted ?: 0) as int
+    if (gotLines.size() != accepted || expLines.size() != accepted || origins.size() != accepted) {
+        problems << "${caseName}: cardinality got=${gotLines.size()} expected=${expLines.size()} origins=${origins.size()} accepted=${accepted}".toString()
+        return problems
+    }
+    List skeleton = ['schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status', 'sections', 'meta', 'correlation', 'data']
+    for (int i = 0; i < accepted; i++) {
+        String tag = "${caseName}[${i}]".toString()
+        String origin = origins[i]
+        def got = slurper.parseText(gotLines[i])
+        def exp = slurper.parseText(expLines[i])
+        if (got.ip != exp.ip) { problems << "${tag}: ip ${got.ip} != ${exp.ip}".toString(); continue }
+        if ((got.keySet() as List) != (exp.keySet() as List)) { problems << "${tag}: envelope key order ${got.keySet()}".toString() }
+        if (origin == 'output') {
+            if (gotLines[i] != expLines[i]) { problems << "${tag}: OUTPUT line is not verbatim".toString() }
+        } else if (origin == 'checkpoint') {
+            for (String k in skeleton) { if (got[k] != exp[k]) { problems << "${tag}: checkpoint field ${k} differs".toString() } }
+            if (got.diagnosis != exp.diagnosis) { problems << "${tag}: checkpoint diagnosis differs".toString() }
+            List ge = (got.errors instanceof List) ? got.errors : []
+            List ee = (exp.errors instanceof List) ? exp.errors : []
+            if (ge.size() != ee.size() || ge.isEmpty()) {
+                problems << "${tag}: errors size ${ge.size()} != ${ee.size()}".toString()
+            } else {
+                for (int j = 0; j < ge.size() - 1; j++) { if (ge[j] != ee[j]) { problems << "${tag}: errors[${j}] differs".toString() } }
+                def last = ge[ge.size() - 1]
+                if (last.section != 'gather' || last.message != canon.emitFailed) { problems << "${tag}: Layer B appended error is not gather/emitFailed".toString() }
+                if (!(ee[ee.size() - 1].section in ['gather', 'addon'])) { problems << "${tag}: Layer A appended error section ${ee[ee.size() - 1].section}".toString() }
+            }
+        } else if (origin == 'synthetic') {
+            for (String k in skeleton) { if (got[k] != exp[k]) { problems << "${tag}: synthetic field ${k} differs".toString() } }
+            if ((got.sections.keySet() as List) != (exp.sections.keySet() as List)) { problems << "${tag}: sections order".toString() }
+            def gd = got.diagnosis
+            def ed = exp.diagnosis
+            if (gd.details?.finalizer != 'layer_b' || gd.failure_stage != 'fallback' || gd.failure_code != 'OUTPUT_BUILD_FAILED') {
+                problems << "${tag}: Layer B diagnosis ${gd.failure_stage}/${gd.failure_code}/${gd.details?.finalizer}".toString()
+            }
+            if (ed.details?.finalizer != 'layer_a') { problems << "${tag}: expected line is not a Layer A synthetic envelope".toString() }
+            if (!(got.errors instanceof List) || got.errors.size() != 1 || got.errors[0].message != gd.failure_reason) {
+                problems << "${tag}: Layer B errors[] must be one entry echoing failure_reason".toString()
+            }
+            if (ed.failure_code == 'OUTPUT_BUILD_FAILED') {
+                if (gd.failure_reason != ed.failure_reason) { problems << "${tag}: failure_reason differs (fallback catalog drift)".toString() }
+                if (got.errors[0].section != exp.errors[0].section) { problems << "${tag}: errors[0].section ${got.errors[0].section} != ${exp.errors[0].section}".toString() }
+            }
+        } else {
+            problems << "${tag}: unknown origin '${origin}'".toString()
+        }
+    }
+    if (gotRep.by_origin != expRep.by_origin) { problems << "${caseName}: by_origin ${gotRep.by_origin} != ${expRep.by_origin}".toString() }
+    if ((gotRep.kept as int) != (expRep.kept as int) || (gotRep.filled as int) != (expRep.filled as int)) {
+        problems << "${caseName}: kept/filled ${gotRep.kept}/${gotRep.filled} != ${expRep.kept}/${expRep.filled}".toString()
+    }
+    Set gotDropped = gotRep.dropped.collect { "${it.file}:${it.line}".toString() } as Set
+    List expDroppedAll = (expRep.dropped ?: []) + (expRep.corrupt_lines ?: []) + (expRep.truncated_tail ?: [])
+    Set expDropped = expDroppedAll.findAll { it.file in ['output', 'checkpoint'] }.collect { "${it.file}:${it.line}".toString() } as Set
+    if (gotDropped != expDropped) { problems << "${caseName}: dropped ${gotDropped} != ${expDropped}".toString() }
+    Set gotConf = gotRep.conflicts.collect { "${it.ip}:${it.chosen}".toString() } as Set
+    Set expConf = (expRep.conflicts ?: []).collect { "${it.ip}:${it.chosen}".toString() } as Set
+    if (gotConf != expConf) { problems << "${caseName}: conflicts ${gotConf} != ${expConf}".toString() }
+    return problems
+}
+
+pipeline {
+
+    agent { label 'linux' }
+
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 90, unit: 'MINUTES')
+        skipDefaultCheckout(true)              // Checkout stage 가 한 번만 받고 GIT_COMMIT 을 MAIN_SHA 로 고정한다
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+    }
+
+    environment {
+        PYTHONDONTWRITEBYTECODE       = '1'
+        PYTHONUTF8                    = '1'
+        PIP_DISABLE_PIP_VERSION_CHECK = '1'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                script {
+                    def scmVars = checkout scm
+                    env.MAIN_SHA = (scmVars?.GIT_COMMIT ?: '').toString()
+                    if (!env.MAIN_SHA) {
+                        env.MAIN_SHA = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+                    }
+                    env.MAIN_BRANCH = (scmVars?.GIT_BRANCH ?: '').toString()
+                    currentBuild.description = "main@${env.MAIN_SHA.length() >= 10 ? env.MAIN_SHA.substring(0, 10) : env.MAIN_SHA}"
+                    echo "[Checkout] MAIN_SHA=${env.MAIN_SHA} branch=${env.MAIN_BRANCH ?: '-'} (Job 의 Branch Specifier 가 */main 이어야 한다 — main 전용 CI)"
+                }
+            }
+        }
+
+        stage('Toolchain') {
+            steps {
+                sh(label: 'toolchain', script: '''#!/bin/bash
+                    set -eo pipefail
+                    cd "${WORKSPACE}"
+                    {
+                        echo "MAIN_SHA=${MAIN_SHA:-}"
+                        echo "node=$(hostname) nproc=$(nproc 2>/dev/null || echo '?') kernel=$(uname -r)"
+                        # venv 선택은 scripts/activate_ansible_venv.sh 한 곳 — 실패하면 set -e 로 여기서 멈춘다 (시스템 python 으로 조용히 진행하지 않는다)
+                        . "${WORKSPACE}/scripts/activate_ansible_venv.sh"
+                        echo "venv=${VIRTUAL_ENV:-}"
+                        echo "python3=$(command -v python3) $(python3 --version 2>&1)"
+                        python3 -c 'import yaml; print("pyyaml=" + yaml.__version__)'
+                        python3 -m pytest --version 2>&1 | head -1 || echo "pytest=absent (ci_gate 가 PARTIAL 로 보고한다)"
+                        ansible-playbook --version 2>/dev/null | head -1 || echo "ansible-playbook=absent (ci_gate 가 syntax-check 를 건너뛴다)"
+                        echo "bash=${BASH_VERSION}"
+                        echo "git=$(git --version)"
+                        if command -v pwsh >/dev/null 2>&1; then
+                            echo "pwsh=$(pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' 2>/dev/null || echo present)"
+                        else
+                            echo "pwsh=absent (not required yet)"
+                        fi
+                    } 2>&1 | tee toolchain.txt
+                ''')
+            }
+        }
+
+        stage('Gate') {
+            steps {
+                script {
+                    // ci_gate.sh 종료 코드: 0 PASS · 1 FAIL · 2 PARTIAL(환경 부족으로 건너뛴 단계 있음 — 통과가 아니다)
+                    def rc = sh(returnStatus: true, label: 'ci_gate', script: '''#!/bin/bash
+                        set -o pipefail
+                        cd "${WORKSPACE}"
+                        . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+                        bash scripts/ai/ci_gate.sh 2>&1 | tee ci_gate.log
+                        exit "${PIPESTATUS[0]}"
+                    ''')
+                    if (rc == 0) {
+                        echo '[Gate] PASS'
+                    } else if (rc == 2) {
+                        def skipped = readFile(file: 'ci_gate.log', encoding: 'UTF-8').split('\n').findAll { it.contains('건너뜀') || it.contains('skipped') }
+                        skipped.each { echo "[Gate] skipped: ${it.trim()}" }
+                        unstable("[Gate] PARTIAL — 건너뛴 단계 ${skipped.size()}건 (통과로 보고하지 않는다, ci_gate.log 참조)")
+                    } else {
+                        // 빌드는 FAILURE 로 두되 뒤 stage(corpus · budget)는 계속 돌려 한 빌드에서 전부 보이게 한다.
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                            error "[Gate] FAIL rc=${rc} — ci_gate.log 참조"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Finalize Corpus') {
+            steps {
+                script {
+                    // ① Python 쪽 — Layer A(scripts/finalize_gather_output.py) 를 corpus 위에서 실제로 실행해 정답지와 대조
+                    def rcPy = sh(returnStatus: true, label: 'corpus python', script: '''#!/bin/bash
+                        set -o pipefail
+                        cd "${WORKSPACE}"
+                        . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+                        python3 tests/scripts/finalize_corpus_check.py --report-json finalize_corpus_python.json
+                    ''')
+                    if (rcPy != 0) {
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                            error "[Corpus/Python] finalize_corpus_check.py exit=${rcPy}"
+                        }
+                    }
+                    // ② Groovy 쪽 — Jenkinsfile_portal 과 글자까지 같은 Layer B 함수를 load 해서 같은 입력 · 같은 정답지로 대조
+                    def lib = load 'scripts/jenkins/se_finalize.groovy'
+                    def manifests = findFiles(glob: 'tests/fixtures/finalize_corpus/*/gather_manifest.json')
+                    if (manifests.length == 0) {
+                        error '[Corpus/Groovy] corpus 가 없다 (tests/fixtures/finalize_corpus/*/gather_manifest.json)'
+                    }
+                    List summary = []
+                    List allProblems = []
+                    for (int c = 0; c < manifests.length; c++) {
+                        String manifestPath = manifests[c].path
+                        String caseDir = manifestPath.substring(0, manifestPath.lastIndexOf('/'))
+                        String caseName = caseDir.substring(caseDir.lastIndexOf('/') + 1)
+                        String manifestJson = readFile(file: manifestPath, encoding: 'UTF-8')
+                        String outText = fileExists("${caseDir}/gather_output.json") ? readFile(file: "${caseDir}/gather_output.json", encoding: 'UTF-8') : ''
+                        String cpText  = fileExists("${caseDir}/gather_checkpoint.jsonl") ? readFile(file: "${caseDir}/gather_checkpoint.jsonl", encoding: 'UTF-8') : ''
+                        String outcome = readFile(file: "${caseDir}/outcome.txt", encoding: 'UTF-8').trim()
+                        Map canon = lib.seFallbackCanon()
+                        Map res = lib.seReconcileRaw(manifestJson, outText, cpText, canon, outcome)
+                        List problems = seCorpusCompare(caseName, res,
+                                                        readFile(file: "${caseDir}/expected_final.jsonl", encoding: 'UTF-8'),
+                                                        readFile(file: "${caseDir}/expected_report.json", encoding: 'UTF-8'),
+                                                        readFile(file: "${caseDir}/expected_origins.json", encoding: 'UTF-8'),
+                                                        canon)
+                        echo "[Corpus/Groovy] ${problems ? '[FAIL]' : '[OK]'} ${caseName}: lines=${res.lines.size()} by_origin=${res.report.by_origin} dropped=${res.report.dropped.size()} conflicts=${res.report.conflicts.size()} problems=${problems.size()}"
+                        summary << [case: caseName, lines: res.lines.size(), by_origin: res.report.by_origin, problems: problems]
+                        allProblems += problems
+                    }
+                    writeFile(file: 'finalize_corpus_groovy.json', encoding: 'UTF-8',
+                              text: groovy.json.JsonOutput.toJson([main_sha: env.MAIN_SHA, cases: summary.size(), mismatches: allProblems.size(), results: summary]))
+                    if (allProblems) {
+                        allProblems.each { echo "[Corpus/Groovy] [FAIL] ${it}" }
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                            error "[Corpus/Groovy] Layer B 와 Layer A 정답지가 다르다: ${allProblems.size()}건 (finalize_corpus_groovy.json 참조)"
+                        }
+                    } else {
+                        echo "[Corpus/Groovy] [OK] ${summary.size()} cases — Layer B == Layer A 정답지 (origin 규칙 기준)"
+                    }
+                }
+            }
+        }
+
+        stage('Budget Self-test') {
+            steps {
+                sh(label: 'budget', script: '''#!/bin/bash
+                    set -eo pipefail
+                    cd "${WORKSPACE}"
+                    . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
+                    # 공식의 단위 테스트(상수 · forks · waves · 남은 시간 절단 · 강제값 · 입력 불량)
+                    python3 -m pytest tests/unit/test_gather_budget.py -q -p no:cacheprovider
+                    # 이 Runner 의 vCPU 로 대표 입력 3건을 실제 스크립트에 넣어 결과 JSON 을 남긴다 — 빌드 시작 직후 가정이라 start=true 여야 한다
+                    : > budget_selftest.jsonl
+                    now="$(date +%s)"
+                    for spec in "os 3" "esxi 50" "redfish 200"; do
+                        set -- $spec
+                        out="$(SE_NOW_EPOCH="$now" SE_BUILD_START_EPOCH="$now" SE_STAGE_START_EPOCH="$now" SE_CHANNEL="$1" SE_HOSTS="$2" SE_VCPU="$(nproc 2>/dev/null || echo 2)" bash scripts/gather_budget.sh)"
+                        echo "$out" | tee -a budget_selftest.jsonl
+                        echo "$out" | grep -q '"start":true' || { echo "[Budget] start=false for channel=$1 hosts=$2"; exit 1; }
+                    done
+                ''')
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts(artifacts: 'toolchain.txt,ci_gate.log,finalize_corpus_python.json,finalize_corpus_groovy.json,budget_selftest.jsonl',
+                             allowEmptyArchive: true, fingerprint: false)
+            echo "[Post] 결과: ${currentBuild.currentResult} MAIN_SHA=${env.MAIN_SHA ?: '-'} 소요: ${currentBuild.durationString ?: '-'}"
+        }
+        unstable {
+            echo '[Post] [WARN] PARTIAL — 건너뛴 검증이 있다. 통과로 보고하지 않는다 (ci_gate.log 의 "건너뜀" 줄 참조)'
+        }
+        failure {
+            echo '[Post] [FAIL] 검증 실패 — 콘솔 로그와 artifact(ci_gate.log · finalize_corpus_*.json) 확인'
+        }
+    }
+}

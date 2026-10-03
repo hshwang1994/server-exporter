@@ -14,7 +14,9 @@
 | Windows 단위 묶음(auth evidence 18 · addon contract 46 · Jenkinsfile 4 파일 · finalize 13 · budget 8 · redfish phase2 31/phase3 10 · account · esxi reuse · progress 6) | 243 passed |
 | Windows e2e 묶음(timeout 3분류 18 · failure_reason/code/diagnosis/multi_credential/credential_scope/errors_message/case_matrix) | 402 passed · 28 skipped |
 | `tests/integration/test_request_budget.py` (Phase 3) | R740 168→137 · CSUS 218→134 · DL380 132→131 · SR650 124→123, added 0, golden 동일 |
-| Jenkins 선언형 린터 (jenkins-prod 2.528.3) | `Jenkinsfile_portal` validated (Phase 4 최종본) |
+| Jenkins 선언형 린터 (jenkins-prod 2.528.3) | `Jenkinsfile_portal` validated (Phase 4 최종본 · GP-11 load 전환본), `Jenkinsfile_ci` validated |
+| Windows P4 (`pytest tests/unit -k windows`) | 151 → 279 passed(+128: 통합 static 29 · render 57 · powershell 42); 종전 vs 신규 fragment 동일 27 시나리오, `.120` live 출력 재현, powershell.exe `-EncodedCommand` 실행 15 시나리오 동일; 타임아웃 적용 뒤 Windows 7 파일 + remote timeouts 242 passed |
+| Phase 6 (`test_jenkinsfile_ci` 20 · `test_finalize_corpus` 35 · portal finalize/agent_label/addon/params) | 59 passed(load 전환 뒤); Groovy 동치 corpus 14 MATCH(Groovy 4.0.24 · 2.4.21, 음성 대조 4건 검출 — 작업자 로컬 실행) |
 
 ## 2026-10-03 — Gathering 개선 Phase 1 baseline · Phase 1.5 (Jenkinsfile 최소 선행 변경 · ci_gate)
 

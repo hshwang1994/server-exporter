@@ -60,6 +60,22 @@
   일어나지 않았다 — 검수 중 발견); lsblk 실패 마스킹 제거 + rc/상태 분류 + 레거시 열 1회 fallback + `from_json` 가드 + df `timeout 20`; sysfs 속성 읽기 실패 마커 → storage 오류.
 - `speed_mhz` 는 세 채널 모두 "현재 동작 속도" (field_dictionary 정합, Q6 — R760 정격 5600 → 동작 4400 으로 값이 바뀔 수 있다).
 
+### 결정 — Phase 6 · P4 · GP-9 · GP-11 (같은 날 후속)
+
+- **Windows P4**: win_shell 20 → 11(WinRM 왕복 22 → 13). 합친 스크립트는 JSON 문서 하나를 내고 항목마다 `{ok, error, rows, data}` + `Invoke-SeComponent` try/catch 로
+  실패를 자기 항목에 가둔다. `parse document` / `split document` 태스크가 종전 per-call 변수(`stdout`/`stdout_lines`/`rc`)를 그대로 재구성해 아래 normalize · fragment 태스크는
+  글자까지 같다(테스트 고정). rc 규칙: 스크립트 rc≠0 이면 그것, 아니면 항목 실패 1 / 성공 0. 공유 읽기(`read_*`)의 실패는 가시화만 하고 사용 항목을 실패시키지 않는다
+  (memory `slots` · network `driver_map` 은 종전처럼 실패). `Get-NetAdapter -Physical` 은 provider 필터라 유지, `Get-NetAdapterAdvancedProperty` 는 새 데이터라 추가하지 않음.
+  **발견**: win_shell 은 스크립트를 `powershell.exe -EncodedCommand` 명령줄로 넘겨 32,767자 한도가 있다 — 종전 physical-disks 스크립트 하나가 28,159자였다. PowerShell 주석을
+  YAML 주석으로 옮겨 22,155자, 테스트가 30,000자 상한을 고정. 실 Windows(WinRM) 실행은 미실행. GP-9: 11 task + `windows | setup` 에 `_win_task_timeout | default(180)`.
+- **GP-11**: Layer B 순수 함수(`seFallbackCanon` · `seJsonString` · `seReconcileRaw`)를 `scripts/jenkins/se_finalize.groovy` 로 옮겼다. `Jenkinsfile_portal` 은 finalizer node 안에서
+  `readTrusted` → `writeFile` → `load` 하고, 실패하면 Layer B 보충 없이 raw OUTPUT 줄만 보내며 UNSTABLE(`layerB=unavailable`). 사본을 두 Jenkinsfile 에 두면 동치 검증이
+  무의미해지기 때문이다. `.gitattributes` 에 `*.groovy` · corpus `eol=lf`.
+- **Phase 6**: `Jenkinsfile_ci`(main 전용 일반 Pipeline, 트리거 없음, `MAIN_SHA` 고정, ci_gate exit 1/2 → FAILURE/UNSTABLE, corpus self-test Python+Groovy, 예산 self-test) +
+  `tests/fixtures/finalize_corpus/` 14 case(Layer A 가 oracle, `--regenerate`) + `tests/scripts/finalize_corpus_check.py` + `ci_gate.sh` corpus 단계. Layer A 와 B 는
+  합성 봉투의 diagnosis 에서 의도적으로 다르다(A 는 progress 세분, B 는 `OUTPUT_BUILD_FAILED`) — 비교기는 OUTPUT origin 만 글자 비교, 나머지는 공유 계약(개수 · ip 순서 ·
+  뼈대 · by_origin/kept/filled · dropped · conflicts)을 본다. Job 등록은 사용자 몫이며 Jenkins 에서는 아직 돈 적 없다(Groovy 동치는 Groovy 4.0.24 · 2.4.21 로컬 실행으로 확인).
+
 ### 검증 (오프라인)
 
 WSL(ansible-core 2.20.7): 3채널 `--syntax-check` 통과, Add-on 엔진 테스트 14 passed(hang 포함), `pytest tests/unit` 2730 passed(+ Windows P4 진행 중 파일 1 failed),

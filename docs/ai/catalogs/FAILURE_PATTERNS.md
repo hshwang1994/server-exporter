@@ -485,3 +485,13 @@
 - 조치: 바꾸지 않았다(로그인 판정 계약 변경 = 사용자 결정, `docs/ai/NEXT_ACTIONS.md` GP-12). P5 의 facts 재사용은 summary 스키마 키가 있을 때만 재사용해 이 결과를 쓰지 않는다.
 - 재발 방지: 모듈 결과의 "성공" 은 그 모듈이 **반드시** 돌려주는 키(스키마 표지)로 판정한다. `ansible_facts` 키 존재는 성공 증거가 아니다.
 - 관련 rule: rule 95 R1 #5, rule 25 R7-A(실측 검증)
+
+## 2026-10-03 — win_shell 스크립트는 `powershell.exe -EncodedCommand` 명령줄 32,767자 한도 안에 있어야 한다
+
+- 카테고리: external-contract-drift (실행 환경 한도)
+- 발견 위치: `os-gather/tasks/windows/gather_storage.yml` — P4(win_shell 통합) 작업 중 발견
+- 증상: 종전 physical-disks 스크립트 하나가 이미 28,159자였다. 스크립트를 합치면 한도를 넘어 WinRM 실행이 통째로 실패할 수 있었다(실장비에서는 아직 미관측).
+- 조치: PowerShell 주석을 YAML 주석으로 옮겨 코드 줄은 그대로 두고 22,155자로 줄였다. `tests/unit/test_windows_call_consolidation_static.py` 가 Windows 스크립트마다
+  30,000자 상한을 고정한다.
+- 재발 방지: win_shell 스크립트를 합치거나 늘릴 때 길이 테스트가 먼저 막는다. 설명은 YAML 주석에 둔다 (production 생성기도 스크립트 안 주석을 제거하므로 같은 방향).
+- 관련 rule: rule 10 R3(파일 길이), rule 96 R1(외부 계약 — Windows 명령줄 한도)

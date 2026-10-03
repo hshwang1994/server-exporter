@@ -11,7 +11,7 @@
 | Validate | 없음 (agent-less, 2026-10-03) | target_type / inventory_json(배열·객체 원소·IP 키) / callbackUrl / deploymentEnvironmentId 검증 → 접수 manifest `env.SE_MANIFEST_JSON` | YES |
 | Resolve Location | 없음 (agent-less, 2026-10-03) | `readYaml text: readTrusted('common/vars/locations.yml')` → `SE_LOCATION` / `SE_AGENT_LABEL`. 미등록 `loc`·온라인 노드 없음 즉시 실패 | YES |
 | Gather | `SE_AGENT_LABEL` (agent), stage 합산 상한 115 min | `gather_manifest.json` 기록 → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 체크아웃 · 검사 — 아래 절) → venv 활성화 → `scripts/gather_budget.sh` 로 예산 **재계산**(ansible 직전) → `timeout --signal=INT --kill-after=90 <예산> ansible-playbook … -f <forks> --vault-password-file=<mktemp> -e se_location=<loc>` (Add-on 이 켜진 빌드만 `withEnv(ADDON_DIR)`; `redfishAccountDryrun` 이 켜진 빌드만 `-e _rf_account_service_dryrun=true`; `gatherBudgetForceSec` 는 공식 대체) → `gather_rc.txt` + outcome → post{always} Layer A(`scripts/finalize_gather_output.py`) → `archiveArtifacts`(output · manifest · rc · progress · checkpoint · final · report · auth_evidence/**) → `stash` → manifest 가 이 빌드 것일 때만 `deleteDir` | Add-on 을 못 받으면 UNSTABLE + Add-on 없이 수집; ansible rc 는 outcome 으로만 기록(stage 를 끊지 않음) |
-| (pipeline post always) 마무리 | `built-in` (controller), `timeout(720 s){ node('built-in') }` | unstash → unarchive → `gather_final.jsonl` 우선 / Groovy 최소 보충 → 접수 = 결과 단언 → `httpRequest` POST(남은 예산 안 ≤3회) → `callback_body.json` · `finalize_summary.json` archive | NO (UNSTABLE: 전송 실패 · 합성 보충 · outcome ≠ completed) |
+| (pipeline post always) 마무리 | `built-in` (controller), `timeout(720 s){ node('built-in') }` | unstash → unarchive → `gather_final.jsonl` 우선 / Groovy 최소 보충(`readTrusted` → `load 'scripts/jenkins/se_finalize.groovy'`; 적재 실패면 raw OUTPUT 줄만 + `layerB=unavailable`) → 접수 = 결과 단언 → `httpRequest` POST(남은 예산 안 ≤3회) → `callback_body.json` · `finalize_summary.json` archive | NO (UNSTABLE: 전송 실패 · 합성 보충 · outcome ≠ completed · 라이브러리 부재) |
 
 > 2026-10-03 (Phase 4): `Validate Schema`(FAIL 게이트) 와 `Callback` stage 삭제. field_dictionary 정합은 `scripts/ai/ci_gate.sh`(커밋 전 · CI)로,
 > 결과 전달은 pipeline `post { always }` 로. 설계 정본은 Plan §6 과 `tests/unit/test_jenkinsfile_portal_finalize.py`.
@@ -37,6 +37,20 @@ lab Agent 155 = `/opt`(known). 정본: `scripts/activate_ansible_venv.sh`, `test
 rc 3 이면 켜지 않음(`[addon] 실행할 기능 없음`), 그 밖에는 `unstable("[addon] unavailable: …")` + Add-on 없이 수집.
 ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바꾸는 Job 파라미터는 없다. 정본: `docs/operate/04-pipeline-runtime.md` 3절,
 `tests/unit/test_jenkinsfile_portal_addon.py`, `tests/unit/test_addon_checkout.py`. 노드 환경변수 · 배포 Job · `ADDON_HOME` 은 없다.
+
+## CI 진입점 `Jenkinsfile_ci` (2026-10-03, main 전용 — Job 미등록)
+
+| Stage | 하는 일 | 실패 |
+|---|---|---|
+| Checkout | `checkout scm` → `env.MAIN_SHA = GIT_COMMIT` 고정(이후 stage 와 prodgen 입력 SHA) | FAILURE |
+| Toolchain | `. scripts/activate_ansible_venv.sh`, python3 · PyYAML · pytest · ansible-playbook · git 버전 보고, pwsh 유무 보고(필수 아님) | FAILURE |
+| Gate | `bash scripts/ai/ci_gate.sh` — compile · field_dictionary · drift · vendor boundary · harness consistency · pytest(unit+e2e+regression / integration not live) · finalize corpus(Python) · syntax-check | exit 1 FAILURE · exit 2 PARTIAL → UNSTABLE(건너뛴 단계 echo) |
+| Finalize Corpus | Python `tests/scripts/finalize_corpus_check.py`(Layer A 가 oracle) + Groovy `load 'scripts/jenkins/se_finalize.groovy'` → 14 case 비교(`seCorpusCompare`: OUTPUT origin 은 글자 비교, checkpoint/synthetic 은 필드 비교 — Layer A 의 progress 세분과 Layer B 의 `OUTPUT_BUILD_FAILED` 고정은 문서화된 차이) | FAILURE |
+| Budget Self-test | `pytest tests/unit/test_gather_budget.py` + `scripts/gather_budget.sh` os/esxi/redfish `start:true` | FAILURE |
+
+- 등록: `clovirone-cicd/clovirone-server-gather-ci`, 일반 Pipeline-from-SCM(Multibranch 아님), Branch `*/main`, Script Path `Jenkinsfile_ci`, Lightweight. **사용자 몫 — 아직 Jenkins 에서 돈 적 없다.**
+- 오프라인 검증(2026-10-03): 선언형 린터 validated; `tests/unit/test_jenkinsfile_ci.py` 20 · `test_finalize_corpus.py` 35; Groovy 동치는 작업자가 Groovy 4.0.24 · 2.4.21(Java 21)로 corpus 14 case MATCH(음성 대조 4건 검출).
+- `Jenkinsfile_portal` 과 공유하는 Layer B 함수 파일 `scripts/jenkins/se_finalize.groovy` 는 production 포함 대상(Phase 7 manifest), `Jenkinsfile_ci` · corpus · `scripts/ai/**` 는 제외.
 
 ## pytest 회귀 게이트
 

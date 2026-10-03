@@ -1,7 +1,8 @@
 # CI / Jenkins 정책
 
 ## 적용 대상
-- `Jenkinsfile_portal` (수집 파이프라인 정본 — 2026-09-28 부터 하나뿐), `scripts/activate_ansible_venv.sh`
+- `Jenkinsfile_portal` (수집 파이프라인 정본), `scripts/jenkins/se_finalize.groovy` (Layer B 순수 함수 — portal 과 CI 가 `load`), `scripts/activate_ansible_venv.sh`
+- `Jenkinsfile_ci` (main 전용 CI 진입점 — 2026-10-03 신설, production 제외)
 - `ansible.cfg`
 - Jenkins Job 등록 (`docs/operate/03-job-registration.md`)
 - callback URL endpoint 구성
@@ -11,7 +12,8 @@
 - Jenkins pipeline: `Jenkinsfile_portal` 하나. 비운영 `Jenkinsfile`(pytest 회귀 게이트) · `Jenkinsfile_portal_test` · `test_sj`(portal 사본)는 2026-09-28 에 삭제됐다
   (사용자 결정). pytest 회귀는 커밋 전 로컬 검증이다
 - 외부 CI 시스템 미사용 (Jenkins 단독)
-- Stage: Validate(agent 없음) / Resolve Location(agent 없음, `readTrusted`) / Gather(agent) / Validate Schema(agent) / Callback(controller) — 2026-10-03 순서·노드 변경
+- Stage: Validate(agent 없음) / Resolve Location(agent 없음, `readTrusted`) / Gather(agent) 셋 + pipeline `post { always }` 마무리(controller:
+  Layer A/B 보충 → Callback) — 2026-10-03 Phase 4. `Validate Schema` · `Callback` stage 는 삭제됐다(정합은 `scripts/ai/ci_gate.sh`)
 - Agent 의 Ansible venv 는 `scripts/activate_ansible_venv.sh` 가 고른다 (`SE_ANSIBLE_VENV` → PATH 의
   `ansible-playbook` → `/app/ansible-env` → `/opt/ansible-env` → 실패). Jenkinsfile 에 venv 절대경로를 적지 않는다
 
@@ -58,6 +60,20 @@
   `docs/ai/decisions/ADR-2026-09-29-addon-per-build-checkout.md`, 검증 `tests/unit/test_jenkinsfile_portal_addon.py` ·
   `tests/unit/test_addon_checkout.py`.
 
+### R1-C. CI 진입점 `Jenkinsfile_ci` 와 Layer B 라이브러리 (2026-10-03)
+
+- **Default**: 정적 검사 · 회귀 · 동치 검증은 수집 Job 이 아니라 **main 전용 CI Job**(`clovirone-cicd/clovirone-server-gather-ci`, 일반 Pipeline-from-SCM,
+  Branch `*/main`, Script Path `Jenkinsfile_ci`, Lightweight) 이 맡는다. Stage: Checkout(`env.MAIN_SHA = GIT_COMMIT` 고정) → Toolchain(venv 선택기 · 버전 보고 ·
+  pwsh 유무 보고) → Gate(`bash scripts/ai/ci_gate.sh`: exit 1 FAILURE · exit 2 PARTIAL=UNSTABLE) → Finalize Corpus(Python `tests/scripts/finalize_corpus_check.py`
+  + Groovy `load 'scripts/jenkins/se_finalize.groovy'` 로 같은 corpus 비교) → Budget Self-test → artifact. 트리거 없음(cron · pollSCM 금지 — R2).
+- **Default**: Layer B 순수 함수(`seFallbackCanon` · `seJsonString` · `seReconcileRaw`)의 정본은 `scripts/jenkins/se_finalize.groovy` 하나다. `Jenkinsfile_portal` 은
+  finalizer node 안에서 `readTrusted` → `writeFile` → `load` 로 읽고, 실패하면 Layer B 보충 없이 raw OUTPUT 줄만 보내며 UNSTABLE 로 남긴다(`layerB=unavailable`).
+- **Forbidden**: 두 Jenkinsfile 에 Layer B 함수 사본 두기(동치 검증이 무의미해진다), CI Job 에 수집 · 자격증명 · 실장비 접근 넣기, `Jenkinsfile_ci` 를 Multibranch 로
+  바꾸기(`when { branch }` 는 그때만 유효 — 조건은 `expression` + SHA 일치로 쓴다), production 에 `Jenkinsfile_ci` · corpus 포함.
+- **Why**: Plan §6-4(Python/Groovy 동치는 Jenkins 에서만 실행 가능) · §9-4(ci_gate 선행 → CI 얇은 래퍼 → prodgen stage 순서). 검증
+  `tests/unit/test_jenkinsfile_ci.py` · `tests/unit/test_finalize_corpus.py` · `tests/unit/test_jenkinsfile_portal_finalize.py`.
+  Job 등록은 사용자 몫(`docs/operate/03-job-registration.md`) — 등록 전까지 CI 는 오프라인 `ci_gate.sh` 로 대체하되 "PASS" 가 아니라 부분 실행으로 보고한다.
+
 상세: `docs/ai/catalogs/JENKINS_PIPELINES.md`.
 
 ### R2. cron 변경 사용자 승인
@@ -69,7 +85,7 @@
 
 ### R3. agent-master 망 분리
 
-- Callback 단계 → master (`Jenkinsfile_portal`)
+- 마무리(Layer B 보충 + Callback) → controller `built-in` (`Jenkinsfile_portal` pipeline `post { always }`)
 - gather (ansible-playbook) → agent 실행
 
 ### R4. 빌드 실패 분석
