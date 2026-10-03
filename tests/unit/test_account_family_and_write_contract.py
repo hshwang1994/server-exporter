@@ -751,13 +751,25 @@ def test_account_types_are_converged_only_when_family_requires(monkeypatch):
 
 
 def test_post_write_state_mismatch_is_surfaced(monkeypatch):
-    """재인증이 되더라도 계정 상태가 기대와 다르면 그 사실이 결과에 남는다."""
+    """재인증이 되더라도 계정 상태가 기대와 다르면 그 사실이 결과에 남고, **복구 성공으로 보고하지 않는다**.
+
+    2026-10-03 (Plan C9): 종전에는 재인증만 통과하면 recovered=true 였다(상태 불일치는 errors 에만).
+    지금은 `recovered = 재인증 성공 AND 다시 읽은 노출 속성 불일치 없음` 이고, 불일치면
+    verification='state_mismatch' 로 끝난다 — 삭제/재생성 같은 추가 쓰기로도 가지 않는다.
+    """
     out, _ = _repair(monkeypatch, _existing(),
                      reread={"UserName": "someone_else", "Enabled": True})
-    assert out["recovered"] is True          # 자격은 통했다
+    assert out["recovered"] is False, "자격은 통했지만 계정 상태가 기대와 다르면 복구가 아니다"
+    assert out["verification"] == "state_mismatch"
     assert out["post_write_state"]["username"] == "someone_else"
     joined = " ".join(f'{e.get("message")} {e.get("detail")}' for e in out["errors"])
     assert "상태가 기대와 다릅니다" in joined
+
+
+def test_post_write_state_match_recovers(monkeypatch):
+    """다시 읽은 상태가 기대와 같으면 종전대로 recovered=true / verified (C9 회귀 방지)."""
+    out, _ = _repair(monkeypatch, _existing())
+    assert out["recovered"] is True and out["verification"] == "verified"
 
 
 def test_ansible_gate_no_longer_treats_verification_none_as_success():

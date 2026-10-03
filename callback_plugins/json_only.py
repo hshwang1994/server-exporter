@@ -64,6 +64,49 @@ _CHANNEL_ENVELOPE = {
     'redfish': ('redfish', 'redfish_api'),
 }
 
+# ── 실패 envelope shape 정본 복제 (2026-10-03, Plan §7-7 / N2) ───────────────────────
+# 콜백이 보충하는 envelope 은 rescue 경로(common/tasks/normalize/build_failed_output.yml)·site.yml always
+# 와 **같은 모양**이어야 한다 — 호출자가 실패 종류에 따라 다른 모양을 보지 않는다. hostname 은 IP 로
+# 대체하지 않는다(null — 2026-09-03 B-01). 아래는 정본의 수동 복제이며 tests/unit/test_json_only_fallback_shape.py
+# 가 drift 를 잡는다.
+#   sections    : schema 11 섹션 — 채널 지원 섹션(common/vars/supported_sections.yml channel_sections)은 failed, 나머지 not_supported
+#   meta        : common/tasks/normalize/build_meta.yml 의 6 키 (값 null)
+#   correlation : common/tasks/normalize/build_correlation.yml 의 4 키 (host_ip 만 채움; redfish 는 bmc_ip 도 IP)
+#   data        : common/tasks/normalize/init_fragments.yml 의 _merged_data 뼈대
+_ALL_SECTIONS = ('system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network',
+                 'firmware', 'users', 'power', 'thermal')
+_CHANNEL_SECTIONS = {
+    'os':      ('system', 'hardware', 'cpu', 'memory', 'storage', 'network', 'users'),
+    'esxi':    ('system', 'hardware', 'cpu', 'memory', 'storage', 'network'),
+    'redfish': ('system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network',
+                'firmware', 'power', 'thermal'),
+}
+_META_KEYS = ('started_at', 'finished_at', 'duration_ms', 'adapter_id', 'adapter_version',
+              'ansible_version')
+_CORRELATION_KEYS = ('serial_number', 'system_uuid', 'bmc_ip', 'host_ip')
+_DATA_SKELETON = {
+    'system': None, 'hardware': None, 'bmc': None, 'cpu': None, 'memory': None,
+    'storage': {'filesystems': [], 'physical_disks': [], 'datastores': [], 'controllers': [],
+                'logical_volumes': [], 'hbas': [], 'infiniband': [],
+                'summary': {'groups': [], 'grand_total_gb': 0}},
+    'network': {'dns_servers': [], 'default_gateways': [], 'interfaces': [], 'adapters': [],
+                'ports': [], 'virtual_switches': [], 'portgroups': [], 'driver_map': [],
+                'summary': {'groups': []}},
+    'users': [], 'firmware': [], 'power': None, 'thermal': {'temperatures': [], 'fans': []},
+}
+
+
+def _failed_shape(channel, ip):
+    """실패 envelope 의 sections / meta / correlation / data — 정본과 같은 모양, 호출마다 새 객체."""
+    supported = set(_CHANNEL_SECTIONS.get(channel, ()))
+    return {
+        'sections':    {s: ('failed' if s in supported else 'not_supported') for s in _ALL_SECTIONS},
+        'meta':        {k: None for k in _META_KEYS},
+        'correlation': {k: (ip if k == 'host_ip' or (k == 'bmc_ip' and channel == 'redfish') else None)
+                        for k in _CORRELATION_KEYS},
+        'data':        json.loads(json.dumps(_DATA_SKELETON)),
+    }
+
 # 플레이북 파일이 있는 디렉터리 이름 → 채널. 진단(_diagnosis.details.channel)을 한 번도
 # 관측하지 못했을 때만 쓰는 최후 수단이다.
 _PLAYBOOK_DIR_CHANNEL = {
@@ -529,22 +572,23 @@ class CallbackModule(CallbackBase):
 
         err_message = diagnosis['failure_reason']
 
+        shape = _failed_shape(channel or target_type, ip)
         return {
             'schema_version':    '1',
             'target_type':       target_type,
             'collection_method': collection_method,
             'ip':                ip,
-            'hostname':          ip,
+            'hostname':          None,           # IP 로 대체하지 않는다 (2026-09-03 B-01 / 2026-10-03 N2)
             'vendor':            None,
             'status':            'failed',
-            'sections':          {},
+            'sections':          shape['sections'],
             'diagnosis':         diagnosis,
-            'meta':              {},
-            'correlation':       {},
+            'meta':              shape['meta'],
+            'correlation':       shape['correlation'],
             'errors':            [{'section': err_section,
                                    'message': err_message,
                                    'detail':  err_detail}],
-            'data':              {},
+            'data':              shape['data'],
         }
 
     @staticmethod
@@ -586,24 +630,25 @@ class CallbackModule(CallbackBase):
         """
         channel = getattr(self, '_playbook_channel', None)
         target_type, collection_method = _CHANNEL_ENVELOPE.get(channel, (channel, None))
+        shape = _failed_shape(channel, host_name)
         return {
             'schema_version':    '1',
             'target_type':       target_type,
             'collection_method': collection_method,
             'ip':                host_name,
-            'hostname':          host_name,
+            'hostname':          None,
             'vendor':            None,
             'status':            'failed',
-            'sections':          {},
+            'sections':          shape['sections'],
             'diagnosis':         self._diagnosis(
                 {}, {}, None, 'fallback', 'OUTPUT_BUILD_FAILED', _REASON_NO_OUTPUT),
-            'meta':              {},
-            'correlation':       {},
+            'meta':              shape['meta'],
+            'correlation':       shape['correlation'],
             'errors':            [{'section': 'gather',
                                    'message': _REASON_NO_OUTPUT,
                                    'detail':  'envelope reconciled by callback; '
                                               'fallback envelope build failed'}],
-            'data':              {},
+            'data':              shape['data'],
         }
 
     def _reconcile_missing_envelopes(self, stats):

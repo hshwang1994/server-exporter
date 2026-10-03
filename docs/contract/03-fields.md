@@ -95,7 +95,7 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 | `target_type` | `os` / `esxi` / `redfish` | 어떤 채널로 수집했나 |
 | `collection_method` | `agent` / `vsphere_api` / `redfish_api` | 실제로 쓴 방법. `target_type` 에 따라 자동으로 결정 |
 | `ip` | 문자열 | 호출자가 넘긴 대상 IP. Redfish 면 BMC IP, OS 면 서버 IP |
-| `hostname` | 문자열\|null | 풀어낸 호스트명. `system.hostname → system.fqdn → bmc.network_hostname → null` (IP fallback 안 함, 2026-06-16). 실패 envelope 과 `always` 최종 fallback 도 같은 체인 (2026-09-03). 상세: 8절 |
+| `hostname` | 문자열\|null | 풀어낸 호스트명. `system.hostname → system.fqdn → bmc.network_hostname → null` (IP fallback 안 함, 2026-06-16). 실패 envelope 과 `always` 최종 fallback 도 같은 체인 (2026-09-03). 2026-10-03 부터 **콜백이 보충하는 envelope 과 Redfish `always` fallback 도 같다** — `hostname=null`, `sections` 11 키(채널 지원 섹션은 `failed`, 나머지 `not_supported`), `meta` 6 키, `correlation` 4 키, `data` 빈 뼈대. 실패 종류에 따라 다른 모양을 보지 않는다. 상세: 8절 |
 | `vendor` | `dell` / `hp` / `hpCsus` / `lenovo` / `supermicro` / `cisco` / `null` | 호출자 노출 표시값. 내부 canonical(`hpe`)을 `vendor_output_display`/`adapter_output_display`(vendor_aliases.yml)로 매핑. HPE 계열→`hp`, HPE Compute Scale-up 패밀리(CSUS 3200 + Superdome Flex)→`hpCsus`(camelCase 예외, 2026-06-04 ADR). 대부분 소문자 한 단어 |
 
 ### 그룹 B — 결과 (2개)
@@ -432,6 +432,10 @@ for e in response["errors"]:
 
 ## 6. `data.<section>` — 알맹이는 어떻게 생겼나
 
+> **2026-10-03 의미 정정 (값 shape 불변)** — `data.system.runtime.listening_ports[]` 는 ESXi 에서 **방화벽 허용 inbound 규칙의
+> port** 이지 실제 listener 가 아니다 (vSphere API 로는 listener 를 볼 수 없다). 범위 규칙(`port`~`endPort`)은 시작 port 만
+> 표기하고 범위 사실은 수집기 notice 로만 남긴다. UDP 제외·범위 표기 확장은 호출자 확인 전까지 바꾸지 않는다.
+
 10개 섹션을 다 풀면 길어진다. 가장 자주 쓰이는 5개만 여기서 정리하고, 나머지는 라인별 한국어 주석본 (`schema/output_examples/redfish_dell_idrac9.jsonc`) 을 본다.
 
 ### 6.1 `data.hardware`
@@ -462,6 +466,12 @@ for e in response["errors"]:
 
 ### 6.2 `data.memory`
 
+> **2026-10-03** — (1) `slots[].speed_mhz` 는 세 채널 모두 "현재 동작 속도" 다: Redfish `OperatingSpeedMhz`, Linux 는 dmidecode
+> `Configured Memory Speed`(없으면 정격 `Speed`), Windows 는 `ConfiguredClockSpeed`(없으면 `Speed`). 단위 변환은 없다. 종전 Linux 는
+> 정격 `Speed` 를 냈으므로 같은 장비에서 값이 바뀔 수 있다(예: DDR5 정격 5600 → 동작 4400). (2) Redfish 에서 장착 DIMM 의 `CapacityMiB` 가
+> 없으면 합계를 과소집계하지 않는다 — `total_mb` 는 `System.MemorySummary` fallback, 없으면 `null`; slot 은 전부 보존(`capacity_mb: null`).
+> (3) Linux 에서 총량은 있는데 DIMM 상세가 0건이면 `errors[]` 에 memory 섹션 오류 1건이 남는다(섹션 status 는 총량 기준 `success` 유지).
+
 ```json
 "memory": {
   "total_mb":     655360,                // 합계 메모리 (이 케이스 640 GB)
@@ -491,6 +501,13 @@ for e in response["errors"]:
 같은 서버라도 channel 마다 값이 다를 수 있다 (가상화 / 불량 DIMM / BIOS 예약 영역 등으로).
 
 ### 6.3 `data.storage`
+
+> **2026-10-03** — (1) `physical_disks[].protocol` 의 enum 은 그대로다. Windows BusType 가 enum 밖(ATAPI/ATA/SSA/Virtual/
+> File Backed Virtual/Storage Spaces/SCM/UFS)이면 `null` 로 두고 원값은 storage 섹션 오류 1건의 `detail` 에 남긴다. 정수형(Int32/UInt16/
+> 숫자 문자열)과 문자열(`"SAS"`, `"Fibre Channel"`) 모두 같은 표로 매핑한다. (2) Linux `lsblk` 실패는 더 이상 빈 목록으로 가려지지
+> 않는다 — `physical_disks` 가 비면서 `errors[]` 에 storage 오류 1건(detail: rc·상태·stderr 첫 줄·/sys/block 수). filesystems 만으로
+> 섹션이 `success` 이면 "success + errors" (4절 시나리오 B) 다. (3) Windows HBA 포트가 어댑터와 매칭되지 않으면 첫 어댑터 값을 빌리지
+> 않고 `model/vendor/driver/firmware` 가 `null` 이다.
 
 스토리지는 다음 하위 list 가 있다.
 

@@ -17,6 +17,8 @@ REPO = Path(__file__).resolve().parents[2]
 SITES = {
     "os": REPO / "os-gather" / "site.yml",
     "esxi": REPO / "esxi-gather" / "site.yml",
+    # 2026-10-03 (N2 / Plan §7-7): redfish always 도 같은 shape 로 통일 — 세 채널 모두 검사한다.
+    "redfish": REPO / "redfish-gather" / "site.yml",
 }
 INIT = REPO / "common" / "tasks" / "normalize" / "init_fragments.yml"
 ALL_SECTIONS = ["system", "hardware", "bmc", "cpu", "memory", "storage", "network", "firmware", "users", "power", "thermal"]

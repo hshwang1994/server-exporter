@@ -45,6 +45,7 @@ options:
 '''
 
 import json, re, socket, sys, time, traceback
+import urllib.parse as _urlparse
 
 # ── 단위 변환 상수 (cycle 2026-06-04 R-4 — 매직넘버 명명) ──────────────────────
 # 주의: decimal(10^n) 과 binary(2^n) 는 의미가 다르므로 절대 통합 금지.
@@ -446,6 +447,12 @@ _CODE_VENDOR_UNRESOLVED = 'vendor_unresolved'
 # _compute_final_status 의 401/403 판정에서 빠진다 — BIOS 조회 실패가 host status 와
 # 표준 계정 후보 재시도(try_one_account.yml)를 바꾸면 안 되기 때문이다.
 _CODE_BIOS_NON_BLOCKING = 'bios_non_blocking'
+# 2026-10-03 (S1): 컬렉션 **멤버 수준** 하위 리소스 조회 실패(개별 DIMM / NIC / 펌웨어 멤버 /
+# nextLink 후속 페이지 등)에 붙는 code. 이 code 가 붙은 오류의 401/403 문자열은 _compute_final_status
+# 의 host 판정에서 빠진다 — 컬렉션/앵커 수준 401/403(자격 오류 신호)과 멤버 하나의 403(권한/펌웨어
+# 한계)을 구분하기 위해서다. 섹션 자체는 종전대로 failed 로 남는다(status partial).
+_CODE_NON_BLOCKING_SUBRESOURCE = 'subresource_non_blocking'
+MAX_COLLECTION_PAGES = 64              # Members@odata.nextLink 페이지 상한 (순환 · 폭주 방어)
 
 
 def _err(section, message, detail=None, code=None):
@@ -707,6 +714,87 @@ def _extended_info(body, limit=MAX_EXTENDED_INFO_LEN):
         _push(item.get('Resolution'))
     out = ' | '.join(parts).strip()
     return out[:limit] or None
+
+
+def _nextlink_path(bmc_ip, current_path, link):
+    """Members@odata.nextLink → _get() path. 링크는 **opaque URL** 로 다룬다 (2026-10-03, C5).
+
+    절대 URL · service-root 상대 · query-only 를 모두 현재 컬렉션 URL 기준으로 해석(urljoin)한다.
+    다른 origin(host) 이면 None — 그쪽으로 자격증명을 보내지 않는다. `$skip/$top` 을 계산하지 않는다.
+    """
+    if not isinstance(link, str) or not link.strip():
+        return None
+    base = 'https://%s/redfish/v1/%s' % (bmc_ip, _str(current_path).lstrip('/'))
+    try:
+        parts = _urlparse.urlsplit(_urlparse.urljoin(base, link.strip()))
+    except ValueError:
+        return None
+    host = (parts.hostname or '').lower()
+    if host != str(bmc_ip).lower().strip('[]'):
+        return None
+    if not parts.path.startswith('/redfish/v1'):
+        return None
+    rel = _p(parts.path)
+    if rel == '__invalid_odata_id__':
+        return None
+    return rel + ('?' + parts.query if parts.query else '')
+
+
+def _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
+                        section, errors):
+    """컬렉션 첫 페이지(coll, 이미 조회됨)의 Members 를 모으고 Members@odata.nextLink 를 따라간다.
+
+    - 후속 페이지 실패 / 페이지 상한 / 다른 origin 링크 / 순환: **앞 페이지 멤버는 보존**하고
+      errors(비차단 code) 또는 notice 로 남긴다 — silent 절단 금지. 그 섹션은 failed(=status partial).
+    - dict 멤버만, MAX_COLLECTION_MEMBERS 상한(_capped 와 같은 보고).
+    - Members@odata.count 가 있고 모은 수와 다르면 notice (정보 없음과 불일치를 구분).
+    errors 가 None 인 호출부(보조 헬퍼)는 notice 로만 남긴다. nextLink 가 없으면 종전과 완전히 같다.
+    """
+    members = list(_dicts(_safe(coll, 'Members')))
+    first_path = _str(path).split('?', 1)[0]
+    seen = {_str(path)}
+    cur, cur_path, pages, truncated = coll, _str(path), 1, False
+
+    def _report(msg):
+        if errors is not None:
+            errors.append(_err(section, msg, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        else:
+            _notice(section, msg)
+
+    while True:
+        link = _safe(cur, 'Members@odata.nextLink')
+        if not link:
+            break
+        nxt = _nextlink_path(bmc_ip, cur_path, link)
+        if nxt is None:
+            _report('%s: nextLink 를 따라갈 수 없음 (다른 origin 또는 형식 오류) — 앞 페이지까지 보존'
+                    % first_path)
+            truncated = True
+            break
+        if nxt in seen:
+            _report('%s: nextLink 순환 감지 — 앞 페이지까지 보존' % first_path)
+            truncated = True
+            break
+        if pages >= MAX_COLLECTION_PAGES or len(members) >= MAX_COLLECTION_MEMBERS:
+            _report('%s: 페이지 %d / 멤버 %d 상한 도달 — 절단' % (first_path, pages, len(members)))
+            truncated = True
+            break
+        st, nxt_coll, err = _get(bmc_ip, nxt, username, password, timeout, verify_ssl)
+        if err or st != 200 or not isinstance(nxt_coll, dict):
+            _report('%s: 다음 페이지 실패 (%s): %s — 앞 페이지까지 보존'
+                    % (first_path, nxt, err or st))
+            truncated = True
+            break
+        seen.add(nxt)
+        pages += 1
+        cur, cur_path = nxt_coll, nxt
+        members.extend(_dicts(_safe(nxt_coll, 'Members')))
+
+    declared = _safe(coll, 'Members@odata.count')
+    if (not truncated and isinstance(declared, int) and not isinstance(declared, bool)
+            and declared != len(members)):
+        _notice(section, '%s: Members@odata.count %d != 수집 %d' % (first_path, declared, len(members)))
+    return _capped(members, section, errors)
 
 
 def _capped(seq, section=None, errors=None):
@@ -1239,7 +1327,8 @@ def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, veri
     st, coll, err = _get(bmc_ip, _p(coll_uri), username, password, timeout, verify_ssl)
     if err or st != 200:
         return [], st, err or f'HTTP {st}'
-    raw_members = _safe(coll, 'Members') or []
+    raw_members = _collection_members(bmc_ip, _p(coll_uri), coll, username, password, timeout,
+                                      verify_ssl, 'multi_node', None)
     if not isinstance(raw_members, list):  # rule 95 R1 #2: 비-list Members 방어 (Round 2 #15)
         raw_members = []
     out = []
@@ -2312,7 +2401,8 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     if nic_link:
         nst, ncoll, nerr = _get(bmc_ip, _p(nic_link), username, password, timeout, verify_ssl)
         if not nerr and nst == 200:
-            for nm in _dicts(_safe(ncoll, 'Members')):  # Round 5: 비-list/dict 방어
+            for nm in _collection_members(bmc_ip, _p(nic_link), ncoll, username, password, timeout,
+                                          verify_ssl, 'bmc', None):
                 nuri = _safe(nm, '@odata.id')
                 if not nuri:
                     continue
@@ -2435,12 +2525,13 @@ def gather_processors(bmc_ip, system_uri, username, password, timeout, verify_ss
 
     processors = []
     _absent = 0  # Round 15: Absent/Disabled CPU 카운트 (멤버 있으나 전부 Absent 구분용)
-    for member in _dicts(_safe(coll, 'Members')):  # Round 4: 비-list/비-dict Members 방어
+    for member in _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
+                                      'processors', errors):
         uri = _safe(member, '@odata.id')
         if not uri: continue
         st, pdata, perr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if perr or st != 200:
-            errors.append(_err('processors', f'Processor {uri} 실패: {perr or st}'))
+            errors.append(_err('processors', f'Processor {uri} 실패: {perr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         if _safe(pdata, 'Status', 'State') in ('Absent', 'Disabled'):
             _absent += 1
@@ -2493,13 +2584,14 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         errors.append(_err('memory', f'Memory 컬렉션 실패: {err or st}'))
         return {'total_mib': None, 'slots': []}, errors
 
-    slots, total_mib = [], 0
-    for member in _capped(_safe(coll, 'Members') or [], 'memory', errors):
+    slots, total_mib, cap_unknown = [], 0, 0
+    for member in _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
+                                      'memory', errors):
         uri = _safe(member, '@odata.id')
         if not uri: continue
         st, mdata, merr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if merr or st != 200:
-            errors.append(_err('memory', f'Memory {uri} 실패: {merr or st}'))
+            errors.append(_err('memory', f'Memory {uri} 실패: {merr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         if _safe(mdata, 'Status', 'State') == 'Absent':
             continue
@@ -2510,6 +2602,8 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         cap_int = _safe_int(_safe(mdata, 'CapacityMiB'))
         if cap_int is not None:  # Round 2 #4: 0-capacity 도 합산(no-op이나 preserve-0 일관)
             total_mib += cap_int
+        else:
+            cap_unknown += 1
         # cycle-016 Phase N: BaseModuleType / RankCount / ErrorCorrection / DataWidth 추가
         # Phase P: 3 채널 키 일관성 — capacity_mb (이전 capacity_mib) 로 통일
         # 2026-04-29 fix B90: Cisco CIMC가 Manufacturer를 raw JEDEC ID '0xCExx'로 emit.
@@ -2547,6 +2641,17 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         })
     # Round 15 fix: 'or None' 제거 — 수집 성공 시 total_mib 는 항상 int(>=0).
     # 0 (모든 DIMM Absent/0-cap) 을 None(컬렉션 GET 실패 시 반환)과 구분 (cap_int 합산이 0-capacity 도 보존).
+    # 2026-10-03 (C5): 장착 DIMM 의 CapacityMiB 가 없으면 합계를 **과소집계하지 않는다** — 합계는 None
+    #   (상위 normalize 가 System.MemorySummary 로 1회 fallback), 확인한 slot 은 전부 보존.
+    #   일부 부재 → notice, 전부 부재 → errors(비차단 code). 종전에는 부재 DIMM 을 빼고 더한 값이 조용히 나갔다.
+    if slots and cap_unknown:
+        if cap_unknown == len(slots):
+            errors.append(_err('memory',
+                               f'CapacityMiB 부재: 장착 DIMM {len(slots)}개 모두 용량 미확인 — 합계 미산출',
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        else:
+            _notice('memory', f'CapacityMiB 부재 DIMM {cap_unknown}/{len(slots)} — 합계 미산출(slot 은 보존)')
+        total_mib = None
     return {'total_mib': total_mib, 'slots': slots}, errors
 
 
@@ -2560,7 +2665,7 @@ def _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_
             continue
         st, sdata, serr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if serr or st != 200:
-            errors.append(_err('storage', f'SimpleStorage {uri} 실패: {serr or st}'))
+            errors.append(_err('storage', f'SimpleStorage {uri} 실패: {serr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         drives = []
         for dev in _dicts(_safe(sdata, 'Devices')):  # Round 4 #1: 비-list Devices 방어
@@ -2646,7 +2751,7 @@ def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_s
             continue
         dst, ddata, derr = _get(bmc_ip, _p(d_uri), username, password, timeout, verify_ssl)
         if derr or dst != 200:
-            errors.append(_err('storage', f'Drive {d_uri} 실패: {derr or dst}'))
+            errors.append(_err('storage', f'Drive {d_uri} 실패: {derr or dst}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         # Q-09: HPE Empty Bay 필터 — CapacityBytes가 없거나 Name에 "Empty" 포함 시 스킵
         drive_name = _str(_safe(ddata, 'Name'))  # Round 11 #1: 분리형 string-method 방어
@@ -2703,13 +2808,14 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
     _boot_vd_fqdd = _safe(sdata, 'Oem', 'Dell', 'DellController', 'BootVirtualDiskFQDD')  # nosec rule12-r1
     if not (isinstance(_boot_vd_fqdd, str) and _boot_vd_fqdd.strip()):
         _boot_vd_fqdd = None
-    for v_member in _dicts(_safe(vcoll, 'Members')):  # Round 5: 비-list/dict 방어
+    for v_member in _collection_members(bmc_ip, _p(vol_link), vcoll, username, password, timeout,
+                                        verify_ssl, 'storage', errors):
         v_uri = _safe(v_member, '@odata.id')
         if not v_uri:
             continue
         vst2, vdata, verr2 = _get(bmc_ip, _p(v_uri), username, password, timeout, verify_ssl)
         if verr2 or vst2 != 200:
-            errors.append(_err('storage', f'Volume {v_uri} 실패: {verr2 or vst2}'))
+            errors.append(_err('storage', f'Volume {v_uri} 실패: {verr2 or vst2}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         # RAIDType 표준 우선, Dell VolumeType fallback
         raid_type = _safe(vdata, 'RAIDType') or _VOLUMETYPE_RAID_MAP.get(_safe(vdata, 'VolumeType'))
@@ -2775,7 +2881,7 @@ def _gather_standard_storage(bmc_ip, members, username, password, timeout, verif
             continue
         st, sdata, serr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if serr or st != 200:
-            errors.append(_err('storage', f'Storage {uri} 실패: {serr or st}'))
+            errors.append(_err('storage', f'Storage {uri} 실패: {serr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         ctrl_info, c_errs = _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout, verify_ssl)
         errors.extend(c_errs)
@@ -2829,13 +2935,14 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
         if cerr or cst != 200:
             errors.append(_err('storage', f'SmartStorage.{coll_key} 실패: {cerr or cst}'))
             continue
-        for member in _dicts(_safe(coll, 'Members')):  # Round 4: 비-list/비-dict Members 방어
+        for member in _collection_members(bmc_ip, _p(coll_link), coll, username, password, timeout,
+                                          verify_ssl, 'storage', errors):
             ctrl_uri = _safe(member, '@odata.id')
             if not ctrl_uri:
                 continue
             ctrl_st, ctrl_data, ctrl_err = _get(bmc_ip, _p(ctrl_uri), username, password, timeout, verify_ssl)
             if ctrl_err or ctrl_st != 200:
-                errors.append(_err('storage', f'SmartStorage controller {ctrl_uri} 실패: {ctrl_err or ctrl_st}'))
+                errors.append(_err('storage', f'SmartStorage controller {ctrl_uri} 실패: {ctrl_err or ctrl_st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
                 continue
             # PhysicalDrives 컬렉션 (iLO4 SmartStorage 구조)
             drives = []
@@ -2843,7 +2950,8 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
             if pd_link:
                 pst, pcoll, _perr = _get(bmc_ip, _p(pd_link), username, password, timeout, verify_ssl)
                 if pst == 200:
-                    for pd_m in _dicts(_safe(pcoll, 'Members')):  # Round 5: 비-list/dict 방어
+                    for pd_m in _collection_members(bmc_ip, _p(pd_link), pcoll, username, password,
+                                                    timeout, verify_ssl, 'storage', errors):
                         pd_uri = _safe(pd_m, '@odata.id')
                         if not pd_uri:
                             continue
@@ -2930,7 +3038,8 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             errors.append(_err('storage', f'Storage/SimpleStorage/SmartStorage 모두 실패: {err or st}'))
             return {'controllers': [], 'volumes': []}, errors
 
-    members = _dicts(_safe(coll, 'Members'))  # Round 8 #3: 비-list Members 방어
+    members = _collection_members(bmc_ip, (simple_path if use_simple else path), coll, username,
+                                  password, timeout, verify_ssl, 'storage', errors)
     if use_simple:
         controllers, sub_errors = _gather_simple_storage(bmc_ip, members, username, password, timeout, verify_ssl)
         errors.extend(sub_errors)
@@ -2956,12 +3065,13 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
         return [], errors
 
     nics = []
-    for member in _dicts(_safe(coll, 'Members')):  # Round 4: 비-list/비-dict Members 방어
+    for member in _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
+                                      'network', errors):
         uri = _safe(member, '@odata.id')
         if not uri: continue
         st, ndata, nerr = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if nerr or st != 200:
-            errors.append(_err('network', f'NIC {uri} 실패: {nerr or st}'))
+            errors.append(_err('network', f'NIC {uri} 실패: {nerr or st}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         ipv4_addrs = [
             {'address': a.get('Address'), 'subnet_mask': a.get('SubnetMask'),
@@ -3068,6 +3178,8 @@ def _normalize_wwn(value):
     hexonly = ''.join(c for c in s if c in '0123456789abcdef')
     if len(hexonly) != 16:
         return str(value).strip().lower()
+    if hexonly == '0' * 16:      # 2026-10-03 (C7): all-zero 는 식별자가 아니다 — filter_plugins/identity_normalizer 와 동일
+        return None
     return ':'.join(hexonly[i:i + 2] for i in range(0, 16, 2))
 
 
@@ -3127,27 +3239,40 @@ def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
     return None
 
 
-def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl):
+def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors=None):
     """NetworkAdapter.NetworkDeviceFunctions 수집 → 식별 dict 리스트.
 
     각 entry: {id, func_type, net_dev_tech, wwpn, wwnn, fc_id, node_guid, port_guid, port_uri}.
     port_uri = Links.PhysicalPortAssignment / PhysicalNetworkPortAssignment (정규화) — Port join 용.
     WWPN/WWNN(FC) 와 Node/Port GUID(IB) 는 Port 가 아니라 NetworkDeviceFunction 에 존재 (DMTF).
     미지원/오류 시 빈 리스트 (graceful — Port 기반 분류로 fallback).
+    2026-10-03 (C7): 404 가 아닌 실패는 errors(비차단 code) 로 드러낸다 — 종전에는 WWPN/WWNN 증거가
+    조용히 사라졌다. 404 는 미노출(정상)이라 그대로 조용히 빈 리스트.
     """
     ndfs = []
     ndf_link = _safe(adata, 'NetworkDeviceFunctions', '@odata.id')
     if not ndf_link:
         return ndfs
+    if errors is None:
+        errors = []
     st, coll, err = _get(bmc_ip, _p(ndf_link), username, password, timeout, verify_ssl)
     if err or st != 200:
+        if st != 404:
+            errors.append(_err('network_adapters',
+                               f'NetworkDeviceFunctions {ndf_link} 실패: {err or st}',
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
         return ndfs
-    for m in _dicts(_safe(coll, 'Members')):  # Round 5: 비-list/dict 방어
+    for m in _collection_members(bmc_ip, _p(ndf_link), coll, username, password, timeout, verify_ssl,
+                                 'network_adapters', errors):
         u = _safe(m, '@odata.id')
         if not u:
             continue
         s2, nd, e2 = _get(bmc_ip, _p(u), username, password, timeout, verify_ssl)
         if e2 or s2 != 200 or not isinstance(nd, dict):
+            if s2 != 404:
+                errors.append(_err('network_adapters',
+                                   f'NetworkDeviceFunction {u} 실패: {e2 or s2}',
+                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         fc = _safe(nd, 'FibreChannel') or {}
         ib = _safe(nd, 'InfiniBand') or {}
@@ -3291,13 +3416,14 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                            f'NetworkAdapters 미지원 또는 실패: {sig}', detail))
         return out, errors
 
-    for member in _dicts(_safe(coll, 'Members')):  # Round 4: 비-list/비-dict Members 방어
+    for member in _collection_members(bmc_ip, base, coll, username, password, timeout, verify_ssl,
+                                      'network_adapters', errors):
         adp_uri = _safe(member, '@odata.id')
         if not adp_uri:
             continue
         st2, adata, aerr = _get(bmc_ip, _p(adp_uri), username, password, timeout, verify_ssl)
         if aerr or st2 != 200:
-            errors.append(_err('network_adapters', f'NetworkAdapter {adp_uri} 실패: {aerr or st2}'))
+            errors.append(_err('network_adapters', f'NetworkAdapter {adp_uri} 실패: {aerr or st2}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
 
         adapter_id = _safe(adata, 'Id')
@@ -3359,7 +3485,7 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         _ports_before = len(out['ports'])  # CSUS-R6: port_count fallback 기준점
 
         # NetworkDeviceFunctions — FC WWPN/WWNN + IB GUID 식별 (cycle 2026-05-29).
-        ndfs = _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl)
+        ndfs = _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
         ndf_by_port = {n['port_uri']: i for i, n in enumerate(ndfs) if n.get('port_uri')}
         # CSUS-FC1 (2026-06-15 실미러 검수): NDF.Links.PhysicalPortAssignment 부재 펌웨어
         # (HPE CSUS RMC — NDF 가 Links.PCIeFunction 만 노출)에서 NDF↔Port 매칭이 port_uri 로
@@ -3378,9 +3504,10 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
             st3, pcoll, perr = _get(bmc_ip, _p(ports_link), username, password, timeout, verify_ssl)
             if perr or st3 != 200:
                 errors.append(_err('network_adapters',
-                                   f'Ports {ports_link} 실패: {perr or st3}'))
+                                   f'Ports {ports_link} 실패: {perr or st3}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
             else:
-                for pmember in _dicts(_safe(pcoll, 'Members')):  # Round 5: 비-list/dict 방어
+                for pmember in _collection_members(bmc_ip, _p(ports_link), pcoll, username, password,
+                                                   timeout, verify_ssl, 'network_adapters', errors):
                     p_uri = _safe(pmember, '@odata.id')
                     if not p_uri:
                         continue
@@ -3522,10 +3649,42 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
     return out, errors
 
 
+_FW_STATUS_PREFIXES = ('Installed-', 'Current-', 'Available-', 'Rollback-')  # nosec rule12-r1 — Dell FirmwareInventory Id 접두사 규약
+
+
+def _fw_dedup_key(fw_id):
+    """status 접두사를 뗀 firmware 식별 key. 접두사 없는 Id 는 자기 자신(dedup 무영향)."""
+    if not isinstance(fw_id, str):
+        return fw_id
+    for pref in _FW_STATUS_PREFIXES:
+        if fw_id.startswith(pref):
+            return fw_id[len(pref):]
+    return fw_id
+
+
+def _is_pending_fw_id(fw_id):
+    return bool(isinstance(fw_id, str) and 'pending' in fw_id.lower())
+
+
 def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
     """
     UpdateService/FirmwareInventory — 벤더 공통
     Members 에 상세 필드 없으면 개별 URI 조회 (Dell/HPE/Supermicro 모두 해당)
+
+    2026-10-03 (C6 — 규칙 통일, Plan §7-5):
+      (1) **동일 컴포넌트·동일 version 의 중복 표현만** 제거한다. Dell 의 'Installed-<SoftwareId>-<ver>__<FQDD>' /
+          'Current-…' 쌍처럼 status 접두사를 뗀 key 가 같은 멤버. 선택은 **first-seen**(멤버 순서) —
+          종전 "GET 뒤 dedup" 과 결과가 같아 firmware[].id 가 바뀌지 않는다.
+      (2) 접두사 우선순위로 "구동 펌웨어" 를 고르지 않는다 — key 에 version 이 들어 있어 다른 version 은 다른 key 이고,
+          'Installed' 가 구동 중을 뜻한다는 vendor 공통 근거가 없다(DMTF SoftwareInventory 는 Version/RelatedItem 만 정의).
+          서로 다른 version · pending · rollback · 다른 FQDD 는 모두 보존.
+      (3) dedup 과 Previous- 제외를 **GET 전**에 URI tail 로 한다 — tail 이 identity 를 담는 Dell 형식에서만 효과
+          (R740 실 미러: 멤버 GET 62 → 32). HPE 숫자 Id / Lenovo 는 tail 이 곧 Id 라 종전과 같다. 상세 조회 뒤
+          실제 Id 로 한 번 더 dedup 해 종전 동작을 보존한다.
+      (4) 선택 멤버 GET 실패 시 같은 key 의 **대체 멤버 1회** fallback. 그래도 실패면 errors(비차단 code) 로 남기고
+          stub(id 만 있는 항목)은 내보내지 않는다 — 종전에는 실패가 조용히 삼켜지고 Name/Version 없는 stub 이 나갔다.
+      (5) Members 가 Name 은 주지만 Version 이 없는 inline 멤버는 상세를 1회 조회한다(pending 식별 멤버 제외).
+          상세에도 없으면 null(정상 — 모든 null 을 오류로 보지 않는다).
     """
     path = 'UpdateService/FirmwareInventory'
     st, coll, err = _get(bmc_ip, path, username, password, timeout, verify_ssl)
@@ -3534,37 +3693,56 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
         errors.append(_err('firmware', f'FirmwareInventory 실패: {err or st}'))
         return [], errors
 
-    fw_list = []
-    # cycle 2026-06-14 (DELL R740 실 미러 검수 FW-1): Dell iDRAC FirmwareInventory 는 동일
-    # 구동 펌웨어를 'Current-<SoftwareId>-<ver>__<FQDD>' 와 'Installed-<...>__<FQDD>' 두 멤버로
-    # 중복 노출(같은 SoftwareId/Version/Name). dedup 없으면 호출자가 firmware 를 2배로 카운트
-    # (R740 실측 51 vs distinct 32). status-prefix 를 떼어낸 key(=<SoftwareId>-<ver>__<FQDD>)로
-    # dedup — 서로 다른 물리 컴포넌트(FC.Slot.1-1 vs FC.Slot.1-2)는 '__<FQDD>' 가 달라 보존,
-    # prefix 없는 Id(HPE 숫자/Lenovo) 는 자기 자신으로 정규화돼 dedup 무영향(Additive).
-    # source: Dell iDRAC FirmwareInventory (Members Id prefix 규약), R740 실 미러.
-    seen_fw_keys = set()                                                       # nosec rule12-r1
-    for member in _capped(_safe(coll, 'Members') or [], 'firmware', errors):
+    members = _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
+                                  'firmware', errors)
+
+    # pass 1 — GET 없이 멤버를 key 로 묶는다 (inline Id 우선, 없으면 URI tail).
+    groups, order = {}, []
+    for member in members:
         member_uri = _safe(member, '@odata.id')
-        # Members 에 Name/Version 없으면 개별 URI 조회 (벤더 공통)
-        if not _safe(member, 'Name') and member_uri:
-            st2, fw_data, ferr = _get(bmc_ip, _p(member_uri), username, password, timeout, verify_ssl)
-            if not ferr and st2 == 200:
-                member = fw_data
-        fw_id = _safe(member, 'Id') or (member_uri.rstrip('/').split('/')[-1]  # rstrip: 후행 슬래시 → 빈 id 방지 (Round 1 #13)
+        tail = (member_uri.rstrip('/').split('/')[-1]  # rstrip: 후행 슬래시 → 빈 id 방지 (Round 1 #13)
+                if isinstance(member_uri, str) and member_uri else None)
+        inline_id = _safe(member, 'Id')
+        pre_id = inline_id if (isinstance(inline_id, str) and inline_id) else tail
+        if isinstance(pre_id, str) and pre_id.startswith('Previous-'):  # Q-14: 비활성 이전 버전 — GET 도 하지 않는다
+            continue
+        key = _fw_dedup_key(pre_id) if pre_id is not None else id(member)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(member)
+
+    fw_list = []
+    seen_fw_keys = set()
+    for key in order:
+        chosen, last_fail = None, None
+        for cand in groups[key][:2]:                       # 첫 멤버 + 대체 멤버 1회
+            member_uri = _safe(cand, '@odata.id')
+            cand_id = _safe(cand, 'Id') or member_uri
+            need_detail = bool(member_uri) and (
+                not _safe(cand, 'Name')
+                or (_safe(cand, 'Version') is None and not _is_pending_fw_id(cand_id)))
+            data = cand
+            if need_detail:
+                st2, fw_data, ferr = _get(bmc_ip, _p(member_uri), username, password, timeout, verify_ssl)
+                if ferr or st2 != 200 or not isinstance(fw_data, dict):
+                    last_fail = (member_uri, ferr or st2)
+                    continue
+                data = fw_data
+            chosen = (data, member_uri)
+            break
+        if chosen is None:
+            uri, why = last_fail or (None, 'unknown')
+            errors.append(_err('firmware', f'FirmwareInventory 멤버 조회 실패: {uri}: {why}',
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        member, member_uri = chosen
+        fw_id = _safe(member, 'Id') or (member_uri.rstrip('/').split('/')[-1]
                                         if isinstance(member_uri, str) and member_uri else None)
-        # Q-14: Dell Previous- 항목 스킵 (비활성 이전 버전)
         if fw_id and isinstance(fw_id, str) and fw_id.startswith('Previous-'):
             continue
-        # 2026-04-29 fix B43 (재확인 cycle 2026-06-15, Lenovo SR650 V4 실미러 검수): pending
-        # firmware (BMC-Primary-Pending / UEFI-Pending) 는 ID 에 'Pending' 포함, version 부재가
-        # 정상(staged 업데이트). XCC1 은 Version=null, XCC3(V4) 은 Version="" 로 노출 — 아래 Cisco
-        # 빈 슬롯 노이즈 필터('N/A'/''/'NA')가 pending 을 삼키지 않도록 먼저 식별한다.
-        is_pending = bool(fw_id and isinstance(fw_id, str) and 'pending' in fw_id.lower())
-        # 2026-04-29 cisco-critical-review: Cisco CIMC 의 "N/A" 빈 슬롯 (slot-1, slot-2
-        # 등 PCIe 미장착 슬롯) 노이즈 필터. Version 이 "N/A"/""/"NA" 면 firmware 컴포넌트가
-        # 부재 — 호출자에게 노이즈로 전달되지 않도록 skip (기존 키 유지, list 길이만 정확).
-        # 단 pending 엔트리는 예외: 드롭하면 "업데이트 staged" 신호 유실(lenovo_baseline.json 이
-        # pending 엔트리 보존 — 정책: pending=true + version=null 은 정상). version="" → null 통일.
+        is_pending = _is_pending_fw_id(fw_id)
+        # 2026-04-29 cisco-critical-review: Cisco CIMC 의 "N/A" 빈 슬롯 노이즈 필터 (pending 은 예외, version="" → null).
         ver = _safe(member, 'Version')
         if isinstance(ver, str) and ver.strip().upper() in ('N/A', 'NA', ''):
             if not is_pending:
@@ -3574,17 +3752,11 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
         component = _safe(member, 'SoftwareId')
         if isinstance(component, str) and component.lower() == 'null':
             component = None
-        # FW-1 dedup: status-prefix 제거 key 로 Current-/Installed- 동일 펌웨어 중복 제거.
-        # prefix 없는 Id 는 key=fw_id(고유) → dedup 무영향. Previous- 는 위에서 이미 skip.
-        _dedup_key = fw_id
-        if isinstance(fw_id, str):
-            for _pref in ('Installed-', 'Current-', 'Available-', 'Rollback-'):  # nosec rule12-r1
-                if fw_id.startswith(_pref):
-                    _dedup_key = fw_id[len(_pref):]
-                    break
-        if _dedup_key in seen_fw_keys:
+        # 상세 조회 뒤 실제 Id 기준 dedup (종전 FW-1 동작 보존 — tail 과 Id 가 다른 BMC 대비).
+        post_key = _fw_dedup_key(fw_id)
+        if post_key in seen_fw_keys:
             continue
-        seen_fw_keys.add(_dedup_key)
+        seen_fw_keys.add(post_key)
         fw_list.append({
             'id':         fw_id,
             'name':       _safe(member, 'Name'),
@@ -3615,7 +3787,8 @@ def _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, ver
     if err or st != 200:
         return None
     cid_l = cid.lower()
-    for m in _capped(_dicts(_safe(coll, 'Members')), 'power', None):
+    for m in _collection_members(bmc_ip, 'TelemetryService/MetricReports', coll, username, password,
+                                 timeout, verify_ssl, 'power', None):
         u = _safe(m, '@odata.id')
         if not u or not isinstance(u, str):
             continue
@@ -3657,7 +3830,8 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     if psu_link:
         st_c, coll, _err_c = _get(bmc_ip, _p(psu_link), username, password, timeout, verify_ssl)
         if st_c == 200:
-            for member in _capped(_dicts(_safe(coll, 'Members')), 'power', errors):  # Round 4 비-list 방어 + cycle 2026-06-09 DoS 상한 (sibling 일관)
+            for member in _collection_members(bmc_ip, _p(psu_link), coll, username, password, timeout,
+                                              verify_ssl, 'power', errors):
                 m_uri = _safe(member, '@odata.id')
                 if not m_uri:
                     continue
@@ -3936,7 +4110,8 @@ def _fan_rpm_from_sensors(bmc_ip, chassis_uri, fan_uris, username, password, tim
     st, coll, err = _get(bmc_ip, _p(chassis_uri) + '/Sensors', username, password, timeout, verify_ssl)
     if err or st != 200:
         return out
-    for m in _capped(_dicts(_safe(coll, 'Members')), 'thermal', None):
+    for m in _collection_members(bmc_ip, _p(chassis_uri) + '/Sensors', coll, username, password,
+                                 timeout, verify_ssl, 'thermal', None):
         su = _safe(m, '@odata.id')
         if not su or not isinstance(su, str) or 'fan' not in su.lower():  # 비용 제한: fan 센서만
             continue
@@ -3993,7 +4168,8 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
     if fans_link:
         fst, fcoll, _e = _get(bmc_ip, _p(fans_link), username, password, timeout, verify_ssl)
         if fst == 200:
-            for fm in _capped(_dicts(_safe(fcoll, 'Members')), 'thermal', errors):  # DoS 상한 (sibling 일관)
+            for fm in _collection_members(bmc_ip, _p(fans_link), fcoll, username, password, timeout,
+                                          verify_ssl, 'thermal', errors):
                 furi = _safe(fm, '@odata.id')
                 if not furi:
                     continue
@@ -4187,7 +4363,8 @@ def gather_manager_logs(bmc_ip, manager_uri, username, password, timeout, verify
         # 404 는 noise 차단 (endpoint 부재 = 미지원)
         return [], ([] if cst == 404 else [_err('log_services', f'LogServices 컬렉션 실패: {cerr or cst}')])
     out = []
-    for m in _capped(_dicts(_safe(coll, 'Members')), 'log_services', errors):
+    for m in _collection_members(bmc_ip, _p(ls_link), coll, username, password, timeout, verify_ssl,
+                                 'log_services', errors):
         uri = _safe(m, '@odata.id')
         if not uri:
             continue
@@ -4423,14 +4600,20 @@ def _normalize_cpu_raw(procs):
     }
 
 
-def _normalize_memory_raw(raw_mem):
+def _normalize_memory_raw(raw_mem, raw_sys=None):
     """raw gather_memory {total_mib, slots} → canonical memory section (per-partition).
 
     cycle 2026-05-29: top-level normalize_standard.yml _rf_summary_memory 와 동일 grouping.
+    2026-10-03 (C5): total_mib 가 None/0 이면 **이 partition 자신의** System.MemorySummary 로만 fallback
+    (raw_sys = 그 partition 의 gather_system 결과). 상위 System 의 MemorySummary 를 partition 에 중복 적용하지 않는다.
     """
     raw_mem = raw_mem if isinstance(raw_mem, dict) else {}
     slots = raw_mem.get('slots') or []
     total_mib = raw_mem.get('total_mib')
+    if not total_mib and isinstance(raw_sys, dict):
+        _ms_gib = _safe_int(_safe(raw_sys, 'memory_summary', 'total_gib'))
+        if _ms_gib:
+            total_mib = _ms_gib * 1024
     groups, seen, total_gb = [], {}, 0
     for s in slots:
         if not isinstance(s, dict):
@@ -4502,7 +4685,7 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
             # 구: cpu=raw list / memory=raw dict / storage=raw / network=raw list
             #     → normalize 누락 (top-level 과 shape 불일치 + network 가 list).
             'cpu':        _normalize_cpu_raw(cpu_data),
-            'memory':     _normalize_memory_raw(mem_data),
+            'memory':     _normalize_memory_raw(mem_data, sys_data),
             'storage':    _normalize_storage_raw(sto_data),
             'network':    _normalize_network_raw(net_data),
             # cycle 2026-06-09: boot order (Additive — Boot 미노출 시 {}).
@@ -4645,7 +4828,8 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                 errors.append(_err('multi_node.composition',
                                    f'ResourceBlocks 컬렉션 실패: {rerr or rst}'))
         else:
-            for m in _capped(_dicts(_safe(rcoll, 'Members')), 'multi_node.composition', errors):
+            for m in _collection_members(bmc_ip, _p(rb_link), rcoll, username, password, timeout,
+                                         verify_ssl, 'multi_node.composition', errors):
                 uri = _safe(m, '@odata.id')
                 if not uri:
                     continue
@@ -4702,7 +4886,8 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
     if cerr or st != 200:
         return []
     out = []
-    for m in _capped(_dicts(_safe(coll, 'Members')), f'multi_node.fabrics.{kind}', errors):
+    for m in _collection_members(bmc_ip, _p(coll_uri), coll, username, password, timeout, verify_ssl,
+                                 f'multi_node.fabrics.{kind}', errors):
         uri = _safe(m, '@odata.id')
         if not uri:
             continue
@@ -4755,7 +4940,8 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
         return None, ([] if st == 404 else
                       [_err('multi_node.fabrics', f'Fabrics 컬렉션 실패: {ferr or st}')])
     fabrics = []
-    for m in _capped(_dicts(_safe(fcoll, 'Members')), 'multi_node.fabrics', errors):
+    for m in _collection_members(bmc_ip, _p(fab_uri), fcoll, username, password, timeout, verify_ssl,
+                                 'multi_node.fabrics', errors):
         furi = _safe(m, '@odata.id')
         if not furi:
             continue
@@ -4937,7 +5123,7 @@ def _compute_final_status(collected, failed, errors=None):
             if not isinstance(e, dict):
                 continue
             # 2026-09-15: BIOS 보조 조회의 401/403 은 host 판정에 넣지 않는다 (구조화 code 로 식별).
-            if e.get('code') == _CODE_BIOS_NON_BLOCKING:
+            if e.get('code') in (_CODE_BIOS_NON_BLOCKING, _CODE_NON_BLOCKING_SUBRESOURCE):
                 continue
             detail = str(e.get('detail') or '')  # Round 4 #11: 비-str detail(int 등) 'in' TypeError 방어
             msg = str(e.get('message') or '')
@@ -6096,17 +6282,19 @@ def _confirm_account_state(bmc_ip, slot_uri, target_username, family,
     재인증(=비밀번호가 맞는가)만으로는 Role / Enabled / AccountTypes /
     PasswordChangeRequired 가 의도대로 됐는지 알 수 없다. 여기서 확인한 사실을
     out['post_write_state'] 에 남기고, 어긋난 항목은 errors[] 로 드러낸다.
-    이 함수는 **판정을 뒤집지 않는다** — 최종 성공 판정은 표준 자격 재인증이다.
+    2026-10-03 (C9): (ok, mismatches) 를 반환한다 — ok=True(노출된 속성이 모두 기대대로) / False(불일치) /
+    None(다시 읽지 못함). 호출자는 `recovered = 재인증 성공 AND ok is not False` 로 판정한다. 노출되지 않은
+    속성은 판정에서 빠진다. 쓰기 payload · 401 게이트 · 예산은 바뀌지 않는다.
     """
     if not slot_uri:
-        return
+        return None, []
     code, data, err = _get(bmc_ip, _p(slot_uri), username, password, timeout, verify_ssl)
     if code != 200 or err:
         out['errors'].append(_err(
             'account_service', '쓰기 후 계정 상태를 다시 읽지 못했습니다.',
             detail=err or f'HTTP {code}',
         ))
-        return
+        return None, []
     acct_types = _safe(data, 'AccountTypes', default=None)
     state = {
         'username':     _safe(data, 'UserName', default=''),
@@ -6141,6 +6329,7 @@ def _confirm_account_state(bmc_ip, slot_uri, target_username, family,
             '표준 계정을 만들었지만 상태가 기대와 다릅니다. 계정 설정을 확인하세요.',
             detail='post-write state mismatch: ' + ', '.join(mismatches),
         ))
+    return (not mismatches), mismatches
 
 
 def build_create_payload(family, target_username, target_password, role_id,
@@ -6820,14 +7009,20 @@ def account_service_provision(
         #   아직 옛 자격으로 살아 있을 수도 있다. 그 상태의 401 을 "적용 실패" 로 확정하면
         #   멀쩡한 쓰기를 실패로 보고하고, 그 다음 단계(계정 삭제 후 재생성)로 사람을 몰아간다.
         #   총 대기 상한은 ACCOUNT_VERIFY_DELAYS 합(=6초)으로 고정한다 — 무한 대기 금지.
-        _confirm_account_state(bmc_ip, existing.get('slot_uri'), target_username,
-                               family, current_username, current_password,
-                               timeout, verify_ssl, out)
+        state_ok, _state_mismatch = _confirm_account_state(
+            bmc_ip, existing.get('slot_uri'), target_username,
+            family, current_username, current_password,
+            timeout, verify_ssl, out)
         ok_v, verify_code, verify_err, attempts = _verify_standard_credential()
         out['verify_attempts'] = attempts
-        if ok_v:
+        if ok_v and state_ok is not False:
             out['recovered']    = True
             out['verification'] = 'verified'
+            return out
+        if ok_v:
+            # 재인증은 됐지만 다시 읽은 계정 상태가 기대와 다르다(C9). 복구 성공으로 보고하지 않고,
+            # 삭제/재생성 같은 다음 쓰기로도 가지 않는다 (errors 에 불일치가 이미 남아 있다).
+            out['verification'] = 'state_mismatch'
             return out
         out['verification'] = 'failed'
         # 2026-08-11 (Phase 6-B §11): **기존 계정을 지우는 fallback 은 기본적으로 하지 않는다.**
@@ -6935,12 +7130,14 @@ def account_service_provision(
             # 2026-08-12: 재생성 뒤에도 반드시 재조회 + 재인증까지 한다. 종전에는
             #   'none'(확인 안 함)을 성공으로 인정해, 실제로 못 쓰는 계정이 복구됨으로
             #   보고될 수 있었다 (audit H-1).
-            _confirm_account_state(bmc_ip, out['slot_uri'], target_username, family,
-                                   current_username, current_password, timeout, verify_ssl, out)
+            state_ok_r, _mm_r = _confirm_account_state(
+                bmc_ip, out['slot_uri'], target_username, family,
+                current_username, current_password, timeout, verify_ssl, out)
             ok_r, vcode_r, verr_r, attempts_r = _verify_standard_credential()
             out['verify_attempts'] = attempts_r
-            out['recovered']    = bool(ok_r)
-            out['verification'] = 'verified' if ok_r else 'failed'
+            out['recovered']    = bool(ok_r) and state_ok_r is not False
+            out['verification'] = ('verified' if out['recovered']
+                                   else ('state_mismatch' if ok_r else 'failed'))
             if not ok_r:
                 out['errors'].append(_err(
                     'account_service',
@@ -7043,13 +7240,17 @@ def account_service_provision(
                     reject_reason, out['write_response_info']) if x),
             ))
             return out
-        _confirm_account_state(bmc_ip, chosen_slot.get('slot_uri'), target_username, family,
-                               current_username, current_password, timeout, verify_ssl, out)
+        state_ok, _state_mismatch = _confirm_account_state(
+            bmc_ip, chosen_slot.get('slot_uri'), target_username, family,
+            current_username, current_password, timeout, verify_ssl, out)
         ok_v, verify_code, verify_err, attempts = _verify_standard_credential()
         out['verify_attempts'] = attempts
-        if ok_v:
+        if ok_v and state_ok is not False:
             out['recovered']    = True
             out['verification'] = 'verified'
+            return out
+        if ok_v:
+            out['verification'] = 'state_mismatch'   # C9: 재인증 성공 + 상태 불일치 → 복구 아님, 추가 쓰기 없음
             return out
         # 쓰기는 수락됐는데 그 자격으로 인증이 안 된다 — silent fail.
         # 만들다 만 슬롯을 그대로 두지 않는다 (best-effort cleanup, 응답도 남긴다).
@@ -7136,13 +7337,17 @@ def account_service_provision(
 
     # 2026-08-12 (audit H-1): POST 2xx 만으로 recovered=true 를 반환하던 경로를 없앤다.
     #   Cisco 공식 문서조차 Create 뒤 "Verifying the User" 를 별도 단계로 제시한다.
-    _confirm_account_state(bmc_ip, created_uri, target_username, family,
-                           current_username, current_password, timeout, verify_ssl, out)
+    state_ok, _state_mismatch = _confirm_account_state(
+        bmc_ip, created_uri, target_username, family,
+        current_username, current_password, timeout, verify_ssl, out)
     ok_v, verify_code, verify_err, attempts = _verify_standard_credential()
     out['verify_attempts'] = attempts
-    if ok_v:
+    if ok_v and state_ok is not False:
         out['recovered']    = True
         out['verification'] = 'verified'
+        return out
+    if ok_v:
+        out['verification'] = 'state_mismatch'   # C9: 재인증 성공 + 상태 불일치 → 복구 아님
         return out
     out['verification'] = 'failed'
     out['errors'].append(_err(

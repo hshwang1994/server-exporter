@@ -560,8 +560,8 @@ fields:
     type: "integer|null"
     priority: nice
     channel: [redfish, os]
-    help_ko: "DIMM 현재 동작 속도 (Memory.OperatingSpeedMhz, 현재 클럭)."
-    help_en: "DIMM current operating speed (Memory.OperatingSpeedMhz)."
+    help_ko: "DIMM 현재 동작 속도 (Memory.OperatingSpeedMhz, 현재 클럭). OS 채널도 같은 의미: Linux 는 dmidecode 'Configured Memory Speed' 우선(없으면 정격 'Speed'), Windows 는 ConfiguredClockSpeed 우선(없으면 Speed) — 2026-10-03 정합. 단위 변환 없음(MT/s 표기도 숫자 그대로)."
+    help_en: "DIMM current operating speed (Memory.OperatingSpeedMhz). OS channel aligned 2026-10-03: Linux prefers dmidecode 'Configured Memory Speed' (fallback rated 'Speed'), Windows prefers ConfiguredClockSpeed (fallback Speed). No unit conversion."
 
   "memory.slots[].type":
     type: "string|null"
@@ -724,13 +724,14 @@ fields:
     help_ko: >-
       물리 디스크 건강 상태.
       Redfish: Drive.Status.Health (OK/Warning/Critical → 정규화).
-      OS(Windows): Get-PhysicalDisk.HealthStatus (Healthy/Warning/Unhealthy → healthy/warning/unhealthy).
+      OS(Windows): Get-PhysicalDisk.HealthStatus (코드 0/1/2/5 또는 Healthy/Warning/Unhealthy/Unknown → OK/Warning/Critical/null,
+      enum 과 같은 값 — 2026-09-03 실측 `OK`, 2026-10-03 정수형 코드도 같은 표).
       OS(Linux): 현재 미수집(null) — smartctl 도입 시 채움 (NEXT_ACTIONS).
       ESXi: ScsiLun 미노출 (null).
     help_en: >-
       Physical disk health status.
       Redfish: Drive.Status.Health (OK/Warning/Critical, normalized).
-      OS(Windows): Get-PhysicalDisk.HealthStatus (Healthy/Warning/Unhealthy → healthy/warning/unhealthy).
+      OS(Windows): Get-PhysicalDisk.HealthStatus (codes 0/1/2/5 or Healthy/Warning/Unhealthy/Unknown → OK/Warning/Critical/null, same enum).
       OS(Linux): not collected yet (null) — pending smartctl (NEXT_ACTIONS).
       ESXi: not exposed by ScsiLun (null).
 
@@ -1541,15 +1542,15 @@ fields:
     enum: ["SSD", "HDD", "SCM"]
     priority: skip
     channel: [redfish, os, esxi]
-    help_ko: "디스크 유형. SSD 또는 HDD."
-    help_en: "Disk media type. SSD or HDD."
+    help_ko: "디스크 유형. SSD, HDD 또는 SCM(저장 등급 메모리). Windows 는 MediaType 코드(3 HDD, 4 SSD, 5 SCM)와 문자열 모두 같은 표로 매핑하고, 알 수 없는 값은 null (2026-10-03)."
+    help_en: "Disk media type: SSD, HDD or SCM. Windows maps MediaType codes (3 HDD, 4 SSD, 5 SCM) and strings alike; unknown values are null (2026-10-03)."
 
   "storage.physical_disks[].protocol":
     type: "string|null"
     enum: ["SATA", "SAS", "NVMe", "SCSI", "USB", "RAID", "iSCSI", "FibreChannel", "IDE", "SD", "MMC", "HDC", "1394"]
     priority: skip
     channel: [redfish, os, esxi]
-    help_ko: "디스크 연결 프로토콜."
+    help_ko: "디스크 연결 프로토콜. enum 밖의 값(예: Windows BusType ATAPI/ATA/SSA/Virtual/File Backed Virtual/Storage Spaces/SCM/UFS)은 null 로 두고 원값은 storage 섹션 오류의 detail 에 남긴다 (2026-10-03). enum 확장은 별도 계약 결정."
     help_en: "Disk connection protocol."
 
   cpu.architecture:
@@ -2099,7 +2100,9 @@ fields:
       운영 런타임 정보. timezone, ntp_active/synchronized, firewall_tool/state,
       listening_ports[], swap_total/used/free_mb (9 필드 통일).
       Linux: firewalld/ufw/nftables/iptables 감지. Windows: windows_firewall + pagefile.
-      ESXi: firewall_tool="esxi_firewall" 만 (런타임 상세 미수집).
+      ESXi: firewall_tool="esxi_firewall" 만 (런타임 상세 미수집). ESXi 의 listening_ports 는
+      방화벽 **허용 inbound 규칙의 port** 이지 실제 listener 가 아니다 (vSphere API 로는 listener 를
+      볼 수 없다); 범위 규칙(port~endPort)은 시작 port 만 표기하고 범위 사실은 notice 로 남긴다 — 2026-10-03 의미 정정.
       best-effort: 수집 불가 시 null/[].
     help_en: >-
       OS runtime info — 9 unified fields. timezone, ntp_active/synchronized,
