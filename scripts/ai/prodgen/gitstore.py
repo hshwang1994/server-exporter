@@ -146,12 +146,28 @@ class GitStore:
                 except OSError:
                     pass
 
+    # Identity used when neither the environment nor git config names one. CI Runners have no user.name/user.email
+    # (CI #3 2026-10-04: "Author identity unknown" from commit-tree), and a production commit must not depend on who ran it.
+    FALLBACK_IDENTITY = {"GIT_AUTHOR_NAME": "prodgen", "GIT_AUTHOR_EMAIL": "prodgen@clovirone.local",
+                         "GIT_COMMITTER_NAME": "prodgen", "GIT_COMMITTER_EMAIL": "prodgen@clovirone.local"}
+
+    def identity_env(self) -> dict:
+        """Env vars that make commit-tree succeed: {} when git already knows an identity, FALLBACK_IDENTITY otherwise."""
+        if os.environ.get("GIT_AUTHOR_NAME") and os.environ.get("GIT_AUTHOR_EMAIL")                 and os.environ.get("GIT_COMMITTER_NAME") and os.environ.get("GIT_COMMITTER_EMAIL"):
+            return {}
+        name = self.run(["config", "--get", "user.name"], check=False, text=True).strip()
+        email = self.run(["config", "--get", "user.email"], check=False, text=True).strip()
+        if name and email:
+            return {}
+        return dict(self.FALLBACK_IDENTITY)
+
     def commit_tree(self, tree_sha: str, parents: list, message: str, env_identity=None) -> str:
         args = ["commit-tree", tree_sha]
         for p in parents:
             args += ["-p", p]
         args += ["-m", message]
-        return self.run(args, text=True, env=env_identity).strip()
+        env = dict(self.identity_env()) if env_identity is None else dict(env_identity)
+        return self.run(args, text=True, env=env or None).strip()
 
     def update_ref(self, ref: str, new_sha: str, old_sha=None) -> None:
         args = ["update-ref", ref, new_sha]
