@@ -12,6 +12,9 @@
 #   - adapters[].name 에 'Unknown' 리터럴을 넣지 않는다 (없으면 null).
 #   - 섹션 status 는 실제 결과로 (interfaces 나 dns 가 하나라도 있어야 success).
 #
+# 2026-10-03 (Plan §8-2): raw gather 첫머리에서 NIC driver map 줄(NIC|…)도 낸다 — gather_hba_ib.yml 이
+#   network.driver_map 으로 쓴다 (종전 hba_ib 의 별도 raw 1회를 없앴다). 이 파일의 파서는 NIC| 줄을 읽지 않는다.
+#
 # bond/vlan/bridge/team 토폴로지는 아래 _l_net_collector 스크립트(POSIX sh)가
 # '|' 구분 라인으로 emit → filter_plugins/network_topology.py(build_linux_network)
 # 가 파싱·정규화. RHEL/Rocky/Alma/CentOS/Oracle/Ubuntu/Debian/SUSE 공통
@@ -135,6 +138,34 @@
 - name: "linux | network | raw gather"
   timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   ansible.builtin.raw: |
+    # --- NIC driver map (Plan §8-2, 2026-10-03) — gather_hba_ib.yml 이 network.driver_map 으로 쓴다 ---
+    #   종전 gather_hba_ib.yml 의 별도 raw("NIC driver map")를 원격 실행 1회 줄이려고 여기로 옮겼다.
+    #   줄 형식 · 의미는 그대로: NIC|<iface>|<device/driver 링크 이름>|<vlan>|<master 링크 이름>.
+    #   아래 LANG=C 보다 **앞**에 둔다 — 종전 raw 는 locale 을 바꾸지 않았으므로 /sys/class/net/* glob
+    #   순서(= driver_map 순서)를 그대로 지킨다. 하위 셸이라 변수가 아래 수집으로 새지 않는다.
+    (
+      if [ -d /sys/class/net ]; then
+        for n in /sys/class/net/*; do
+          [ -d "$n" ] || continue
+          iface=$(basename "$n")
+          [ "$iface" = "lo" ] && continue
+          drv=""
+          if [ -L "$n/device/driver" ]; then
+            drv=$(basename "$(readlink "$n/device/driver")" 2>/dev/null)
+          fi
+          vlan=""
+          if [ -f "/proc/net/vlan/$iface" ]; then
+            # 커널 형식 '<if>  VID: <n>	 REORDER_HDR: …' — 이름 뒤 공백이 둘이라 -F'[ |]' 의 $2 는 늘 빈 필드였다(2026-10-03 P3 검수에서 발견, vlan_id 항상 null).
+            vlan=$(awk '/VID:/ { for (i = 1; i <= NF; i++) if ($i == "VID:") { print $(i + 1); exit } }' "/proc/net/vlan/$iface" 2>/dev/null)
+          fi
+          bond_master=""
+          if [ -f "$n/master/uevent" ]; then
+            bond_master=$(basename "$(readlink "$n/master")" 2>/dev/null)
+          fi
+          echo "NIC|$iface|$drv|$vlan|$bond_master"
+        done
+      fi
+    )
     export LANG=C LC_ALL=C
     # --- DNS (systemd-resolved 우회 — 127.0.0.53 stub 회피) ---
     if command -v resolvectl >/dev/null 2>&1; then

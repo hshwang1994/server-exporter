@@ -13,6 +13,10 @@
 ---------
 raw 본문의 ``/sys/class/{fc_host,infiniband,net}`` 를 샌드박스 트리로 치환해 실제 sh 로 실행한다.
 "읽을 수 없는 속성" 은 같은 이름의 **디렉터리**로 만든다 (``cat`` 이 실패한다 — Windows 에서도 재현된다).
+
+2026-10-03 (Plan §8-2): fc_host + infiniband 는 raw 1회(``_l_hba_raw`` — FC 구간 다음 IB 구간)이고,
+NIC driver map 줄(``NIC|``)은 gather_network.yml raw gather 첫머리가 낸다(``_l_net_raw``). 이 파일은 두 자리를
+각각 실행해 gather_hba_ib.yml 에 넣는다 — 출력 계약(위 1~3)은 그대로다.
 """
 from __future__ import annotations
 
@@ -28,6 +32,9 @@ from tests.unit.linux_raw_harness import (  # noqa: E402
     RunResult,
     Sandbox,
     assert_user_sentence,
+    iter_tasks,
+    load_tasks,
+    network_nic_block,
     raw_script,
     run_task_file,
 )
@@ -96,34 +103,35 @@ def build_sysfs(sbx: Sandbox, *, fc: bool = True, ib: bool = True,
     return root
 
 
+def _sysfs(script: str, sbx: Sandbox, root: Path) -> str:
+    for cls in ("fc_host", "infiniband", "net"):
+        script = script.replace(f"/sys/class/{cls}", sbx.p(root / cls))
+    assert "/sys/class/" not in script.replace(sbx.p(root), ""), "치환되지 않은 sysfs 경로"
+    return script
+
+
 def run_all(sbx: Sandbox, root: Path) -> dict[str, RunResult]:
-    out = {}
-    for register, name in (("_l_fc_raw", "enumerate fc_host"),
-                           ("_l_ib_raw", "enumerate infiniband"),
-                           ("_l_nicdrv_raw", "NIC driver map")):
-        script = raw_script(HBA_YML, name)
-        for cls in ("fc_host", "infiniband", "net"):
-            script = script.replace(f"/sys/class/{cls}", sbx.p(root / cls))
-        assert "/sys/class/" not in script.replace(sbx.p(root), ""), "치환되지 않은 sysfs 경로"
-        out[register] = sbx.run(script)
-    return out
+    """hba raw(fc_host + infiniband) 1회 + network raw 의 NIC driver map 블록 — 실제 두 자리."""
+    return {"_l_hba_raw": sbx.run(_sysfs(raw_script(HBA_YML, "enumerate fc_host + infiniband"), sbx, root)),
+            "_l_net_raw": sbx.run(_sysfs(network_nic_block(), sbx, root))}
 
 
 def render(results: dict[str, RunResult]):
-    run = run_task_file(HBA_YML, {k: v.register() for k, v in results.items()})
+    run = run_task_file(HBA_YML, {"_l_hba_raw": results["_l_hba_raw"].register()},
+                        ctx={"_l_net_raw": results["_l_net_raw"].register()})
     assert not run.rescued, f"rescue 로 빠졌다 — 새 Jinja 가 죽으면 안 된다: {run.rescued}"
     return run
 
 
-def err_paths(res: RunResult) -> list[str]:
-    return [row[0] for row in res.rows("ERR")]
+def err_paths(res: RunResult, cls: str | None = None) -> list[str]:
+    """ERR| 경로 (cls = 'fc_host' / 'infiniband' 이면 그 sysfs 클래스만)."""
+    return [row[0] for row in res.rows("ERR") if cls is None or f"/{cls}/" in row[0]]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 def test_clean_sysfs_has_no_err_markers_and_no_errors(sbx):
     results = run_all(sbx, build_sysfs(sbx))
-    assert err_paths(results["_l_fc_raw"]) == []
-    assert err_paths(results["_l_ib_raw"]) == []
+    assert err_paths(results["_l_hba_raw"]) == []
     run = render(results)
     assert run.ctx["_errors_fragment"] == []
     hba = run.ctx["_data_fragment"]["storage"]["hbas"][0]
@@ -144,8 +152,7 @@ def test_clean_sysfs_has_no_err_markers_and_no_errors(sbx):
 def test_absent_optional_attribute_is_not_a_read_failure(sbx):
     """드라이버가 내지 않는 속성(파일 없음)은 실패가 아니다 — hca_type 이 없으면 board_id 로."""
     results = run_all(sbx, build_sysfs(sbx, absent=("fc:symbolic_name", "ib:hca_type")))
-    assert err_paths(results["_l_fc_raw"]) == []
-    assert err_paths(results["_l_ib_raw"]) == []
+    assert err_paths(results["_l_hba_raw"]) == []
     run = render(results)
     assert run.ctx["_errors_fragment"] == []
     assert run.ctx["_data_fragment"]["storage"]["infiniband"][0]["model"] == "MT_0000000223"
@@ -155,9 +162,10 @@ def test_unreadable_fc_attributes_emit_err_and_one_error(sbx):
     root = build_sysfs(sbx, unreadable=("fc:speed", "fc:port_state"))
     results = run_all(sbx, root)
     host = sbx.p(root / "fc_host" / "host1")
-    assert sorted(err_paths(results["_l_fc_raw"])) == [f"{host}/port_state", f"{host}/speed"]
+    assert sorted(err_paths(results["_l_hba_raw"], "fc_host")) == [f"{host}/port_state", f"{host}/speed"]
+    assert err_paths(results["_l_hba_raw"], "infiniband") == []
     # 성공 marker 는 그대로 — 읽은 값만 채운다
-    fc_rows = results["_l_fc_raw"].rows("FC")
+    fc_rows = results["_l_hba_raw"].rows("FC")
     assert len(fc_rows) == 1 and fc_rows[0][1] == "0x10000090fa1b2c3d"
 
     run = render(results)
@@ -179,7 +187,10 @@ def test_unreadable_fc_attributes_emit_err_and_one_error(sbx):
 def test_fc_and_ib_failures_are_reported_as_a_single_error(sbx):
     root = build_sysfs(sbx, unreadable=("fc:speed", "ib:rate", "ib:gid0"))
     results = run_all(sbx, root)
-    assert len(err_paths(results["_l_ib_raw"])) == 2
+    assert len(err_paths(results["_l_hba_raw"], "infiniband")) == 2
+    # 한 raw 안에서도 종전 순서 그대로 — fc_host ERR 가 infiniband ERR 보다 먼저
+    paths = err_paths(results["_l_hba_raw"])
+    assert ["/fc_host/" in p for p in paths] == [True, False, False]
     run = render(results)
     errors = run.ctx["_errors_fragment"]
     assert len(errors) == 1
@@ -191,7 +202,7 @@ def test_fc_and_ib_failures_are_reported_as_a_single_error(sbx):
 
 def test_no_fc_host_or_infiniband_directory_means_no_error(sbx):
     results = run_all(sbx, build_sysfs(sbx, fc=False, ib=False))
-    assert results["_l_fc_raw"].lines == [] and results["_l_ib_raw"].lines == []
+    assert results["_l_hba_raw"].lines == []
     run = render(results)
     assert run.ctx["_errors_fragment"] == []
     assert run.ctx["_data_fragment"]["storage"]["hbas"] == []
@@ -208,8 +219,7 @@ def test_err_paths_are_capped_at_ten_and_deduplicated():
     fc_lines = [f"ERR|/sys/class/fc_host/host{i}/speed" for i in range(12)]
     fc_lines += ["ERR|/sys/class/fc_host/host0/speed"]                     # 중복
     ib_lines = [f"ERR|/sys/class/infiniband/mlx5_{i}/ports/1/rate" for i in range(3)]
-    run = run_task_file(HBA_YML, {"_l_fc_raw": _reg(fc_lines), "_l_ib_raw": _reg(ib_lines),
-                                  "_l_nicdrv_raw": _reg([])})
+    run = run_task_file(HBA_YML, {"_l_hba_raw": _reg(fc_lines + ib_lines)}, ctx={"_l_net_raw": _reg([])})
     assert not run.rescued
     errors = run.ctx["_errors_fragment"]
     assert len(errors) == 1
@@ -223,9 +233,8 @@ def test_err_paths_are_capped_at_ten_and_deduplicated():
 
 def test_err_free_output_keeps_empty_errors():
     run = run_task_file(HBA_YML, {
-        "_l_fc_raw": _reg(["FC|host1|0x10000090fa1b2c3d|0x20000090fa1b2c3d|sym|Online|16 Gbit|"
-                           "qla2xxx|8.08|QLE2692|QLogic"]),
-        "_l_ib_raw": _reg([]), "_l_nicdrv_raw": _reg([])})
+        "_l_hba_raw": _reg(["FC|host1|0x10000090fa1b2c3d|0x20000090fa1b2c3d|sym|Online|16 Gbit|"
+                            "qla2xxx|8.08|QLE2692|QLogic"])}, ctx={"_l_net_raw": _reg([])})
     assert not run.rescued
     assert run.ctx["_errors_fragment"] == []
     assert run.ctx["_data_fragment"]["storage"]["hbas"][0]["driver"] == "qla2xxx"
@@ -233,3 +242,92 @@ def test_err_free_output_keeps_empty_errors():
 
 def test_new_user_sentence_meets_portal_quality():
     assert_user_sentence(HBA_MESSAGE, "gather_hba_ib")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Plan §8-2 — 원격 실행 3 → 1 (fc_host + infiniband 1회, driver map 은 network raw 의 NIC| 줄)
+# ═══════════════════════════════════════════════════════════════════════════
+def test_hba_file_has_exactly_one_remote_task():
+    remote = [t.get("name") for t in iter_tasks(load_tasks(HBA_YML))
+              if any(k.startswith("ansible.builtin.") and k.split(".")[-1] not in ("set_fact", "include_tasks")
+                     for k in t)]
+    assert remote == ["linux | hba_ib | enumerate fc_host + infiniband"]
+
+
+def test_driver_map_reads_only_nic_rows_from_network_raw():
+    """network raw 의 다른 줄(ADAPTER| / ETHFW| / BOND| / VLANIF| / IF= …)은 driver map 에 섞이지 않는다."""
+    net_lines = ["NIC|eno1|tg3||", "IF=eno1|c4:cb:e1:dc:bc:4a|1500|1000|up|10.0.0.5|24",
+                 "ADAPTER|0000:02:00.0|Broadcom Inc.|NetXtreme BCM5720|tg3", "ETHFW|02:00.0|21.80.9",
+                 "BOND|bond0|802.3ad|||||||ens1f0 ens1f1", "VLANIF|bond0.64|bond0|64",
+                 "NIC|bond0.64|||", "NIC|vethe088486|||docker0", "NIC|ens1f0|i40e||bond0"]
+    run = run_task_file(HBA_YML, {"_l_hba_raw": _reg([])}, ctx={"_l_net_raw": _reg(net_lines)})
+    assert not run.rescued
+    assert run.ctx["_data_fragment"]["network"]["driver_map"] == [
+        {"name": "eno1", "driver": "tg3", "vlan_id": None, "bond_master": None},
+        {"name": "bond0.64", "driver": None, "vlan_id": None, "bond_master": None},
+        {"name": "vethe088486", "driver": None, "vlan_id": None, "bond_master": "docker0"},
+        {"name": "ens1f0", "driver": "i40e", "vlan_id": None, "bond_master": "bond0"},
+    ]
+    assert run.ctx["_sections_collected_fragment"] == ["network"]
+
+
+def test_driver_map_is_empty_when_network_raw_is_missing():
+    """network gather 가 돌지 않았으면(_l_net_raw 미정의) 죽지 않고 빈 목록 — 섹션 collected 에서 network 제외."""
+    run = run_task_file(HBA_YML, {"_l_hba_raw": _reg([])})
+    assert not run.rescued
+    assert run.ctx["_data_fragment"]["network"]["driver_map"] == []
+    assert run.ctx["_sections_collected_fragment"] == []
+
+
+def _can_symlink(base: Path) -> bool:
+    try:
+        (base / "_probe").symlink_to(base)
+        return True
+    except (OSError, NotImplementedError):
+        return False
+
+
+def _net_tree(sbx: Sandbox) -> Path:
+    """lo / 물리 NIC(드라이버 링크) / bond 와 slave / bridge 와 port / VLAN — 실제 sysfs 모양 (symlink)."""
+    net = sbx.root / "sys" / "class" / "net"
+    drivers = sbx.root / "sys" / "bus" / "pci" / "drivers"
+    for d in ("lo", "eno1", "ens1f0", "bond0", "bond0.64", "docker0", "veth1"):
+        (net / d).mkdir(parents=True, exist_ok=True)
+    for nic, drv in (("eno1", "tg3"), ("ens1f0", "i40e")):
+        (drivers / drv).mkdir(parents=True, exist_ok=True)
+        (net / nic / "device").mkdir()
+        (net / nic / "device" / "driver").symlink_to(drivers / drv, target_is_directory=True)
+    for master, port in (("bond0", "ens1f0"), ("docker0", "veth1")):
+        (net / master / "uevent").write_text(f"INTERFACE={master}\n", encoding="utf-8")
+        (net / port / "master").symlink_to(net / master, target_is_directory=True)
+    return net
+
+
+def test_nic_block_reads_driver_link_and_any_master(sbx):
+    """driver = device/driver 링크 이름, master = bond 뿐 아니라 bridge 도 (종전 hba raw 와 같은 규칙), lo 제외."""
+    if not _can_symlink(sbx.root):
+        pytest.skip("symlink 를 만들 수 없는 환경 (Windows 권한)")
+    net = _net_tree(sbx)
+    res = sbx.run(network_nic_block().replace("/sys/class/net", sbx.p(net)))
+    rows = {r[0]: r[1:] for r in res.rows("NIC")}
+    assert set(rows) == {"eno1", "ens1f0", "bond0", "bond0.64", "docker0", "veth1"}
+    assert rows["eno1"] == ["tg3", "", ""]
+    assert rows["ens1f0"] == ["i40e", "", "bond0"]
+    assert rows["veth1"] == ["", "", "docker0"]
+    assert rows["bond0"] == ["", "", ""]
+
+
+def test_nic_block_vlan_id_from_proc_net_vlan(sbx):
+    """2026-10-03 P3 검수에서 발견 · 수정: /proc/net/vlan/<if> 첫 줄은 커널 형식 \'<if>  VID: <n>	 REORDER_HDR: …\' 로 이름 뒤 공백이 둘이라
+    종전 awk -F\'[ |]\' 의 $2 는 빈 필드 → driver_map[].vlan_id 가 항상 null 이었다 (실캡처 rhel-baremetal bond0.64 = VLAN 64)."""
+    net = sbx.root / "sys" / "class" / "net" / "bond0.64"
+    net.mkdir(parents=True)
+    vlan_dir = sbx.root / "proc" / "net" / "vlan"
+    vlan_dir.mkdir(parents=True)
+    (vlan_dir / "bond0.64").write_text(
+        "bond0.64  VID: 64\t REORDER_HDR: 1  dev->priv_flags: 1001\n"
+        "         total frames received            0\n", encoding="utf-8")
+    script = (network_nic_block().replace("/sys/class/net", sbx.p(net.parent))
+              .replace("/proc/net/vlan", sbx.p(vlan_dir)))
+    rows = {r[0]: r[1:] for r in sbx.run(script).rows("NIC")}
+    assert rows["bond0.64"][1] == "64"
