@@ -1,5 +1,11 @@
 """C1 — Linux DIMM 파서 회귀 (os-gather/tasks/linux/gather_memory.yml).
 
+2026-10-03 (Plan §8-2): dmidecode 는 gather_system.yml raw gather 에 주입되는 공유 DMI collector
+(``_l_dmi_collector``)가 호스트당 1회(``dmidecode -t memory -t processor``) 실행한다. 이 파일의 raw 실행은
+그 collector 를, 렌더는 gather_system 의 ``_l_dmi_raw`` set_fact → gather_memory.yml 순서를 그대로 따른다.
+아래 C1 계약(marker · 단위 · 레코드 경계 · 속도 · 오류 판정)은 바뀌지 않았다. 추가로 여러 -t 출력이
+표 순서대로 섞여도(Type 4 · 6 이 메모리 레코드 사이에 끼어도) 메모리 / CPU 파서가 자기 타입만 읽는지 고정한다.
+
 무엇을 고정하나 (2026-10-03 Phase 2 C1)
 --------------------------------------
 1. dmidecode 종료 코드와 stderr 첫 줄이 별도 marker 로 남는다
@@ -37,8 +43,10 @@ from tests.unit.linux_raw_harness import (  # noqa: E402
     RunResult,
     Sandbox,
     assert_user_sentence,
-    raw_script,
+    collector_output,
+    dmi_collector_script,
     run_task_file,
+    shared_dmi_raw,
 )
 
 MEM_YML = LINUX_TASKS / "gather_memory.yml"
@@ -182,7 +190,8 @@ def install_dmidecode(sbx: Sandbox, *, stdout: str = "", stderr: str = "", rc: i
 
 
 def run_raw(sbx: Sandbox, meminfo: str = MEMINFO) -> RunResult:
-    script = raw_script(MEM_YML, "raw gather")
+    """공유 DMI collector(gather_system.yml)를 실행한다 — 종전 gather_memory raw 의 자리."""
+    script = dmi_collector_script()
     meminfo_path = sbx.data_file("meminfo", meminfo)
     res = sbx.run(script.replace("/proc/meminfo", f"'{meminfo_path}'"))
     assert sbx.leftover_tmp() == [], "stderr 임시 파일을 지우지 않았다"
@@ -190,7 +199,8 @@ def run_raw(sbx: Sandbox, meminfo: str = MEMINFO) -> RunResult:
 
 
 def render(res: RunResult) -> dict:
-    run = run_task_file(MEM_YML, {"_l_mem_raw_result": res.register()})
+    """raw gather register → gather_system ``_l_dmi_raw`` → gather_memory.yml (실제 순서)."""
+    run = run_task_file(MEM_YML, {}, ctx={"_l_dmi_raw": shared_dmi_raw(res.register())})
     assert not run.rescued
     return run.ctx
 
@@ -446,7 +456,7 @@ _SLOT = "SLOT|16384|DDR4|3200|00CE00B300CE|M393A2K43DB3-CWE|S1100|A1"
 @pytest.mark.parametrize("with_slot", [True, False], ids=["slot", "no-slot"])
 def test_zero_slot_error_appears_only_without_slot_records(with_slot):
     lines = _BASE_LINES + ([_SLOT] if with_slot else []) + ["MEM_DEVICE_RECORDS=4"]
-    ctx = render(RunResult(0, "\n".join(lines) + "\n", ""))
+    ctx = render(RunResult(0, collector_output(lines), ""))
     errors = ctx["_errors_fragment"]
     if with_slot:
         assert errors == []
@@ -463,7 +473,7 @@ def test_zero_slot_error_appears_only_without_slot_records(with_slot):
 def test_zero_slot_render_survives_missing_new_markers():
     """새 marker 가 없는 출력(구버전 스크립트 / 잘린 stdout)에서도 렌더가 죽지 않는다."""
     lines = ["MEM_TOTAL_KB=16127952", "DMIDECODE=present", "DMIDECODE_OK=yes", "MEM_PHYS_MB=8192"]
-    ctx = render(RunResult(0, "\n".join(lines) + "\n", ""))
+    ctx = render(RunResult(0, collector_output(lines), ""))
     assert [e["message"] for e in ctx["_errors_fragment"]] == [ZERO_SLOT_MESSAGE]
 
 
@@ -481,9 +491,174 @@ def test_slot_awk_program_avoids_posix_character_classes():
     (1.3.4 에서 지원). 그러면 레코드 파서만 아무것도 못 읽고, grep 기반 MEM_PHYS_MB 는 정상이라
     slots=[] 가 조용히 나간다. 공백은 ``[ \\t]`` 로 쓴다.
     """
-    script = raw_script(MEM_YML, "raw gather")
+    script = dmi_collector_script()
     programs = re.findall(r"awk '(.*?)'", script, flags=re.S)
     slot_programs = [p for p in programs if "SLOT|" in p]
     assert slot_programs, "SLOT 을 만드는 awk 프로그램을 찾지 못함"
     for program in slot_programs:
         assert "[[:" not in program
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Plan §8-2 — 공유 DMI collector (dmidecode 1회 · 타입별 파싱)
+# ═══════════════════════════════════════════════════════════════════════════
+CPU_YML = LINUX_TASKS / "gather_cpu.yml"
+REF_HOSTS = sorted({c.parent for c in REF_CAPTURES})
+MEM_TYPES = {5, 6, 16, 17}
+
+
+def _logging_dmidecode(sbx: Sandbox, stdout: str, log: Path) -> None:
+    """인자를 로그에 남기는 dmidecode shim (``$0 $*``)."""
+    out = sbx.data_file("dmi_combined.out", stdout)
+    sbx.shim_cmd("dmidecode", f"echo \"dmidecode $*\" >> '{sbx.p(log)}'\ncat '{out}'\n")
+
+
+def _records(text: str) -> tuple[list[str], list[tuple[int, str]]]:
+    """dmidecode 원문 → (머리말 줄, [(DMI type, 레코드 원문)]) — 레코드는 Handle 줄부터 다음 Handle 직전까지."""
+    header, recs, cur = [], [], None
+    for line in text.splitlines(keepends=True):
+        m = re.match(r"Handle 0x[0-9A-Fa-f]+, DMI type (\d+),", line)
+        if m:
+            cur = [int(m.group(1)), line]
+            recs.append(cur)
+        elif cur is None:
+            header.append(line)
+        else:
+            cur[1] += line
+    return header, [(t, body) for t, body in recs]
+
+
+def dmidecode_types(full_text: str, types: set[int]) -> str:
+    """``dmidecode -t ...`` 흉내 — 전체 덤프에서 요청 타입 레코드만 **표 순서대로** (실제 dmidecode 동작)."""
+    header, recs = _records(full_text)
+    head = [ln for ln in header if not re.match(r"\d+ structures occupying|Table at ", ln)]
+    return "".join(head) + "".join(body for t, body in recs if t in types)
+
+
+def cpu_oracle(processor_text: str) -> list[str]:
+    """종전 ``dmidecode -t processor | awk -F': '`` 규칙의 독립 구현 — 첫 Current/Max Speed 줄."""
+    out, seen = [], set()
+    for line in processor_text.splitlines():
+        for key, marker in (("Current Speed:", "DMI_CUR_MHZ"), ("Max Speed:", "DMI_MAX_MHZ")):
+            if key in line and marker not in seen:
+                fields = line.split(": ")
+                value = fields[1] if len(fields) > 1 else ""
+                value = value.replace(" MHz", "", 1).replace(" ", "")
+                out.append(f"{marker}={value}")
+                seen.add(marker)
+    return out
+
+
+def cpu_dmi_lines(res: RunResult) -> list[str]:
+    """gather_cpu.yml 의 select 태스크가 꺼내는 Type 4 구간 (실제 set_fact 렌더)."""
+    from tests.unit.linux_raw_harness import ansible_env, render_tree, set_fact_args  # noqa: PLC0415
+    args = set_fact_args(CPU_YML, "select shared dmi raw")
+    sel = render_tree(ansible_env(), args["_l_cpu_dmi_raw"], {"_l_dmi_raw": shared_dmi_raw(res.register())})
+    return sel["stdout_lines"]
+
+
+def _capture_body(host: Path, name: str) -> str:
+    return dmidecode_stdout(host / name)
+
+
+def test_collector_runs_dmidecode_once_with_memory_and_processor_types(sbx, tmp_path):
+    host = next(h for h in REF_HOSTS if "rhel-baremetal" in h.parts)
+    log = tmp_path / "shim.log"
+    combined = dmidecode_types(_capture_body(host, "cmd_dmidecode_full.txt"), MEM_TYPES | {4})
+    _logging_dmidecode(sbx, combined, log)
+    run_raw(sbx)
+    assert log.read_text(encoding="utf-8").splitlines() == ["dmidecode -t memory -t processor"]
+
+
+def test_type_filter_reproduces_captured_per_type_output():
+    """shim 의 타입 필터가 실제 ``dmidecode -t memory`` / ``-t processor`` 캡처와 같은 레코드를 낸다 (전제 확인)."""
+    for host in REF_HOSTS:
+        full = _capture_body(host, "cmd_dmidecode_full.txt")
+        for name, types in (("cmd_dmidecode_memory.txt", MEM_TYPES), ("cmd_dmidecode_processor.txt", {4})):
+            _, want = _records(_capture_body(host, name))
+            _, got = _records(dmidecode_types(full, types))
+            assert [b.rstrip("\n") for _, b in got] == [b.rstrip("\n") for _, b in want], (host.parts[-2], name)
+
+
+@pytest.mark.parametrize("host", REF_HOSTS, ids=[h.parts[-2] for h in REF_HOSTS])
+def test_reference_combined_output_parses_like_separate_runs(sbx, host):
+    """여러 -t 출력(Type 4 가 표 순서대로 섞임) → 메모리 결과 = 메모리 단독 결과, CPU 줄 = 종전 규칙."""
+    full = _capture_body(host, "cmd_dmidecode_full.txt")
+    install_dmidecode(sbx, stdout=dmidecode_stdout(host / "cmd_dmidecode_memory.txt"))
+    alone = run_raw(sbx)
+    install_dmidecode(sbx, stdout=dmidecode_types(full, MEM_TYPES | {4}))
+    both = run_raw(sbx)
+
+    def mem_section(res):
+        lines = res.lines
+        return lines[lines.index("DMI_MEM_BEGIN") + 1:lines.index("DMI_MEM_END")]
+
+    assert mem_section(both) == mem_section(alone)
+    assert render(both)["_data_fragment"] == render(alone)["_data_fragment"]
+    expected_cpu = cpu_oracle(_capture_body(host, "cmd_dmidecode_processor.txt"))
+    assert cpu_dmi_lines(both) == expected_cpu
+    assert cpu_dmi_lines(alone) == []          # Type 4 가 없는 출력이면 CPU 줄도 없다
+
+
+def test_memory_module_current_speed_is_not_read_as_cpu_clock(sbx):
+    """Type 6(Memory Module)의 "Current Speed: 70 ns" 가 Type 4 보다 앞에 와도 CPU 클럭이 되지 않는다."""
+    type6 = ("Handle 0x0600, DMI type 6, 12 bytes\nMemory Module Information\n\tSocket Designation: J1\n"
+             "\tBank Connections: 0 1\n\tCurrent Speed: 70 ns\n\tType: DIMM\n\tInstalled Size: 16384 MB\n"
+             "\tEnabled Size: 16384 MB\n\tError Status: OK\n")
+    type4 = ("Handle 0x0400, DMI type 4, 48 bytes\nProcessor Information\n\tSocket Designation: CPU1\n"
+             "\tType: Central Processor\n\tMax Speed: 4000 MHz\n\tCurrent Speed: 2400 MHz\n"
+             "\tManufacturer: Intel\n\tSerial Number: Not Specified\n\tPart Number: Not Specified\n")
+    text = HEADER + "\n" + type6 + "\n" + type4 + "\n" + TYPE16 + "\n" + rec("0x1100", "16 GB", locator="A1")
+    install_dmidecode(sbx, stdout=text)
+    res = run_raw(sbx)
+    assert cpu_dmi_lines(res) == ["DMI_MAX_MHZ=4000", "DMI_CUR_MHZ=2400"]
+    # Type 4 의 Manufacturer / Serial / Part Number / Type 줄이 DIMM 레코드로 새지 않는다
+    assert slot_lines(res) == ["SLOT|16384|DDR4|Unknown|00CE00B300CE|M393A2K43DB3-CWE|S1100|A1"]
+    assert res.marker("MEM_DEVICE_RECORDS") == "1"
+    assert res.marker("MEM_PHYS_MB") == "16384"     # Type 6 의 Installed/Enabled Size 는 Size: 줄이 아니다
+
+
+def test_cpu_section_empty_when_dmidecode_missing(sbx):
+    res = run_raw(sbx)                       # dmidecode shim 없음
+    assert cpu_dmi_lines(res) == []
+    assert "DMI_PROC_BEGIN" in res.lines and "DMI_PROC_END" in res.lines
+
+
+def test_sudo_retry_reruns_the_single_combined_call_at_most_once(sbx, tmp_path):
+    """비루트: 직접 1회 + sudo 재시도 1회 = 최대 2회 (종전: memory 직접+재시도 2회 + cpu 1회 = 3회)."""
+    log = tmp_path / "shim.log"
+    capture = next(c for c in REF_CAPTURES if "rhel-baremetal" in c.parts)
+    root_out = sbx.data_file("dmi_root.out", dmidecode_types(_capture_body(capture.parent, "cmd_dmidecode_full.txt"),
+                                                             MEM_TYPES | {4}))
+    user_out = sbx.data_file("dmi_user.out", NONROOT_STDOUT)
+    user_err = sbx.data_file("dmi_user.err", NONROOT_STDERR)
+    sbx.shim_cmd("dmidecode", (f"echo \"dmidecode $*\" >> '{sbx.p(log)}'\n"
+                               f"if [ -n \"$SHIM_AS_ROOT\" ]; then cat '{root_out}'; exit 0; fi\n"
+                               f"cat '{user_out}'; cat '{user_err}' >&2; exit 1\n"))
+    sbx.shim_cmd("sudo", SUDO_OK)
+    res = run_raw(sbx)
+    assert log.read_text(encoding="utf-8").splitlines() == ["dmidecode -t memory -t processor"] * 2
+    assert res.marker("DMIDECODE_RC") == "0"
+    assert len(slot_lines(res)) == 8
+    assert cpu_dmi_lines(res) == ["DMI_MAX_MHZ=4000", "DMI_CUR_MHZ=2400"]
+
+
+@pytest.mark.parametrize("rc", [0, None], ids=["rc", "no-rc"])
+def test_shared_raw_rc_reaches_memory_detail_like_the_old_register(rc):
+    """raw 결과에 rc 가 없으면 memory detail 은 종전처럼 rc=none (None 문자열이 아니다)."""
+    lines = ["MEM_TOTAL_KB=16127952", "DMIDECODE=absent", "DMIDECODE_RC=127", "DMIDECODE_ERR="]
+    reg = RunResult(0, collector_output(lines), "").register()
+    if rc is None:
+        del reg["rc"]
+    run = run_task_file(MEM_YML, {}, ctx={"_l_dmi_raw": shared_dmi_raw(reg)})
+    detail = run.ctx["_errors_fragment"][0]["detail"]
+    assert ("; rc=0;" in detail) if rc == 0 else ("; rc=none;" in detail), detail
+
+
+def test_memory_and_cpu_files_no_longer_run_dmidecode():
+    """gather_memory.yml 은 원격 태스크가 없고, gather_cpu.yml 의 원격 태스크에는 dmidecode 가 없다."""
+    from tests.unit.linux_raw_harness import iter_tasks, load_tasks  # noqa: PLC0415
+    mem_actions = [k for t in iter_tasks(load_tasks(MEM_YML)) for k in t if k.startswith("ansible.builtin.")]
+    assert set(mem_actions) <= {"ansible.builtin.set_fact", "ansible.builtin.include_tasks"}, mem_actions
+    cpu_raw = [t["ansible.builtin.raw"] for t in iter_tasks(load_tasks(CPU_YML)) if "ansible.builtin.raw" in t]
+    assert len(cpu_raw) == 1 and "dmidecode" not in cpu_raw[0]

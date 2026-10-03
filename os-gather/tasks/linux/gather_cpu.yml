@@ -43,19 +43,24 @@
 
 # 2026-09-03 실측(build #190, R760 Silver 4510): cpufreq base_frequency 가 없고 브랜드 문자열에 GHz 표기도 없으면
 #   정격 클럭이 null 이었다. SMBIOS Type 4 의 "Current Speed"(정격) / "Max Speed"(최대) 를 3순위 fallback 으로 쓴다.
-#   dmidecode 는 root 가 필요하므로 별도 task 로 분리 — become 실패가 위 raw 수집을 삼키지 않게 한다.
+#   dmidecode 는 root 가 필요하므로 위 raw 수집(become 없음)과 분리한다 — become 실패가 위 raw 수집을 삼키지 않게 한다.
 #   2026-09-03 실측(build #197, VMware VM): 가상 SMBIOS 는 Max Speed 를 30000 MHz 자리표시자로 준다 →
 #   SMBIOS 값은 100~10000 MHz 범위일 때만 클럭으로 인정한다.
-- name: "linux | cpu | raw dmi processor speed (become)"
-  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
-  ansible.builtin.raw: |
-    dmidecode -t processor 2>/dev/null | awk -F': ' '
-      /Current Speed:/ && !cur { sub(/ MHz/,"",$2); gsub(/ /,"",$2); print "DMI_CUR_MHZ=" $2; cur=1 }
-      /Max Speed:/     && !mx  { sub(/ MHz/,"",$2); gsub(/ /,"",$2); print "DMI_MAX_MHZ=" $2; mx=1 }'
-  become: true
-  register: _l_cpu_dmi_raw
-  changed_when: false
-  failed_when: false
+# 2026-10-03 (Plan §8-2): dmidecode 는 gather_system.yml 의 raw gather(become) 가 공유 DMI collector 로
+#   호스트당 **1회** 실행한다 (`dmidecode -t memory -t processor`). 여기서는 그 결과(`_l_dmi_raw`) 중
+#   Type 4 구간(DMI_PROC_BEGIN … DMI_PROC_END — DMI_CUR_MHZ / DMI_MAX_MHZ)만 꺼내 종전 register 와
+#   같은 모양(`stdout_lines`)으로 둔다. 아래 판정식은 바뀌지 않았다.
+- name: "linux | cpu | select shared dmi raw (processor 구간)"
+  ansible.builtin.set_fact:
+    _l_cpu_dmi_raw: >-
+      {%- set ns = namespace(on=false, lines=[]) -%}
+      {%- for line in ((_l_dmi_raw | default({})).stdout_lines | default([])) -%}
+        {%- if (line | trim) == 'DMI_PROC_BEGIN' -%}{%- set ns.on = true -%}
+        {%- elif (line | trim) == 'DMI_PROC_END' -%}{%- set ns.on = false -%}
+        {%- elif ns.on -%}{%- set _ = ns.lines.append(line) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ {'stdout_lines': ns.lines} }}
   no_log: true
 
 - name: "linux | cpu | parse"

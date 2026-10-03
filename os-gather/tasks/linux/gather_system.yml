@@ -15,6 +15,14 @@
 #     목록 절단 없음, 도구별 enum 차이 없음(active/inactive/null).
 #   - 값을 못 구하면 null. 0 / '' / IP / 'unknown' 문자열로 대체하지 않는다.
 #
+# 2026-10-03 (Plan §8-2 — 원격 실행 수 감축, 출력 불변):
+#   - dmidecode 는 호스트당 1회. 아래 raw gather(become) 끝에서 공유 DMI collector 가
+#     `dmidecode -t memory -t processor` 1회 + /proc/meminfo 를 읽어 `_l_dmi_raw` 로 남긴다.
+#     gather_memory.yml / gather_cpu.yml 은 그 안의 자기 구간(DMI 타입)만 파싱한다 (dmidecode 를 직접 돌리지 않는다).
+#   - 쓰이지 않던 DMI precheck(`test -r`) 2건 삭제 (N5 — 결과를 읽는 곳이 없었다).
+#   - DMI direct-read(become) 2건은 raw sysfs 읽기도 실패했을 때만 실행한다. raw gather 가 같은 파일을
+#     같은 권한(become)으로 이미 읽었으므로, raw 값이 있으면 다시 읽어도 식별자 결과가 같다.
+#
 # 출력:
 #   _data_fragment               → {system: {...}, hardware: {...}}
 #   _sections_supported_fragment → ['system', 'hardware']
@@ -25,6 +33,128 @@
 - name: "linux | system | init fallback vars"
   ansible.builtin.set_fact:
     _l_fb: {}
+  no_log: true
+
+# =============================================================================
+# 공유 DMI collector (Plan §8-2, 2026-10-03) — _l_net_collector 와 같은 "한 번 정의 · 주입" 패턴.
+#   아래 raw gather(become) 끝에 주입돼 호스트당 dmidecode 를 **1회**만 실행한다.
+#   종전에는 gather_memory(raw, become: dmidecode -t memory) 와 gather_cpu(raw, become:
+#   dmidecode -t processor) 가 각자 실행했다. 출력 구간:
+#     DMI_MEM_BEGIN  … DMI_MEM_END   — /proc/meminfo + DMI Type 5/6/16/17 (gather_memory.yml 이 읽는다)
+#     DMI_PROC_BEGIN … DMI_PROC_END  — DMI Type 4 정격/최대 클럭 (gather_cpu.yml 이 읽는다)
+#   구간 안의 marker 이름과 의미(MEM_* / DMIDECODE* / SLOT| / MEM_DEVICE_RECORDS / DMI_CUR_MHZ /
+#   DMI_MAX_MHZ)와 sudo 재시도 규칙은 종전 gather_memory / gather_cpu raw 와 같다.
+#   dmidecode 는 -t 를 여러 번 받으면 레코드를 **표 순서대로 섞어** 낸다(타입별로 묶지 않는다).
+#   그래서 각 파서 앞에서 레코드 머리줄(`Handle 0x…, DMI type N, …`)로 자기 타입만 먼저 거른다 —
+#   Type 6(Memory Module) 의 "Current Speed:" 가 CPU 클럭으로 읽히는 일이 없게 한다.
+#   본문에 Jinja 구문(중괄호 두 개 / 중괄호+% / 중괄호+#)을 넣지 않는다 — set_fact 가 한 번 렌더한다.
+# =============================================================================
+- name: "linux | system | define shared dmi collector"
+  ansible.builtin.set_fact:
+    _l_dmi_collector: |
+      export LANG=C LC_ALL=C
+      out=""; dmi_rc=""; dmi_err=""
+      echo "DMI_MEM_BEGIN"
+      echo "MEM_TOTAL_KB=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null)"
+      echo "MEM_AVAIL_KB=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null)"
+      # dmi_run: dmidecode 1회 실행 → stdout=$out, 종료 코드=$dmi_rc, stderr 첫 줄=$dmi_err.
+      #   2026-10-03 (C1): 종전에는 stderr 를 버리고 rc 도 남기지 않아 권한 거부 / 미설치 / 표 손상을
+      #   구분할 수 없었다. stderr 는 mktemp 파일로만 받는다 (mktemp 가 없으면 버린다 —
+      #   root 로 도는 태스크라 예측 가능한 /tmp 경로는 쓰지 않는다).
+      dmi_run() {
+        dmi_ef=$(mktemp 2>/dev/null) || dmi_ef=""
+        out=$("$@" 2>"${dmi_ef:-/dev/null}")
+        dmi_rc=$?
+        dmi_err=""
+        if [ -n "$dmi_ef" ]; then
+          dmi_err=$(head -n 1 "$dmi_ef" 2>/dev/null | tr -d '|\r')
+          rm -f "$dmi_ef"
+        fi
+      }
+      if command -v dmidecode >/dev/null 2>&1; then
+        echo "DMIDECODE=present"
+        dmi_run dmidecode -t memory -t processor
+        # 비루트 dmidecode 는 버전 머리말을 stdout 에 찍고 rc=1 로 끝난다 — 출력이 비었을 때만 보던 종전 조건으로는
+        # 재시도가 일어나지 않았다 (2026-10-03 C1 검수에서 발견). rc 가 0 이 아니어도 sudo 로 1회 재시도하고,
+        # sudo 도 출력이 없으면 직접 실행의 출력 · rc · stderr 를 되살린다 (실제로 관측한 근거를 지우지 않는다).
+        if { [ -z "$out" ] || [ "$dmi_rc" -ne 0 ]; } && command -v sudo >/dev/null 2>&1; then
+          direct_out=$out; direct_rc=$dmi_rc; direct_err=$dmi_err
+          dmi_run sudo -n dmidecode -t memory -t processor
+          if [ -z "$out" ] && [ -n "$direct_out" ]; then
+            out=$direct_out; dmi_rc=$direct_rc; dmi_err=$direct_err
+          fi
+        fi
+        # 출력을 실제로 만든 시도(직접 또는 sudo 재시도)의 종료 코드와 stderr 첫 줄
+        echo "DMIDECODE_RC=$dmi_rc"
+        echo "DMIDECODE_ERR=$dmi_err"
+        if [ -n "$out" ]; then
+          echo "DMIDECODE_OK=yes"
+          # 메모리 타입(5/6/16/17) 레코드만 — 레코드 밖의 줄(버전 머리말 등)과 Type 4 는 버린다.
+          mem_out=$(printf '%s\n' "$out" | awk '/^Handle /{k=($0 ~ /DMI type (5|6|16|17),/)} k')
+          # 단위: dmidecode 는 kB / MB / GB / TB 를 쓴다 (2.x 는 kB). 대소문자 무관하게 MB 로 환산.
+          phys=$(printf '%s\n' "$mem_out" \
+            | grep -E "^[[:space:]]*Size:" \
+            | grep -v "No Module Installed" \
+            | awk '{u=tolower($3); if(u=="tb")s+=$2*1048576; else if(u=="gb")s+=$2*1024; else if(u=="mb")s+=$2; else if(u=="kb")s+=$2/1024} END{print int(s)}')
+          echo "MEM_PHYS_MB=${phys:-}"
+          # DMI Type 17 레코드 파서 (2026-10-03 C1).
+          #   - 레코드는 빈 줄 또는 다음 Handle 줄에서 끝난다 (빈 줄 없이 이어진 레코드도 잃지 않는다).
+          #   - Size 는 줄 머리가 'Size:' 인 것만 (Volatile/Non-Volatile/Cache/Logical Size 제외).
+          #   - 속도는 Configured Memory Speed(구 표기 Configured Clock Speed)가 숫자면 그 값, 아니면 Speed.
+          #   - 공백은 [ \t] 로 쓴다. mawk 1.3.3 은 [[:space:]] 같은 POSIX 문자 클래스를 해석하지 못해
+          #     이 파서만 0건이 되고 grep 기반 MEM_PHYS_MB 는 정상인 상태가 된다.
+          #   - END 에서 Memory Device 레코드 수를 MEM_DEVICE_RECORDS 로 남긴다 (SLOT 0건일 때의 근거).
+          printf '%s\n' "$mem_out" | awk '
+            function flush() {
+              if (in_dev && size != "" && size > 0)
+                printf "SLOT|%s|%s|%s|%s|%s|%s|%s\n", size, type, (cspeed != "" ? cspeed : speed), mfr, pn, sn, loc;
+              in_dev=0; size=""; type=""; speed=""; cspeed=""; mfr=""; pn=""; sn=""; loc="";
+            }
+            function value(s) {
+              sub(/^[ \t]*[^:]*:[ \t]*/, "", s); gsub(/[|]/, "_", s); return s;
+            }
+            BEGIN { in_dev=0; nrec=0; size=""; type=""; speed=""; cspeed=""; mfr=""; pn=""; sn=""; loc=""; }
+            /^Handle / { flush(); next }
+            /^Memory Device/ { flush(); in_dev=1; nrec++; next }
+            /^[ \t]*$/ { flush(); next }
+            !in_dev { next }
+            /^[ \t]*Size:/ {
+              v=$2; u=tolower($3); size=0;
+              if (v ~ /^[0-9]+$/) {
+                if (u=="tb") size=v*1048576;
+                else if (u=="gb") size=v*1024;
+                else if (u=="mb") size=v+0;
+                else if (u=="kb") size=int(v/1024);
+              }
+              next
+            }
+            /^[ \t]*Type:/ { type=$2; next }
+            /^[ \t]*Speed:/ { speed=$2; next }
+            /^[ \t]*Configured (Memory|Clock) Speed:/ { if ($4 ~ /^[0-9]+$/ && $4+0 > 0) cspeed=$4; next }
+            /^[ \t]*Manufacturer:/ { mfr=value($0); next }
+            /^[ \t]*Part Number:/ { pn=value($0); next }
+            /^[ \t]*Serial Number:/ { sn=value($0); next }
+            /^[ \t]*Locator:/ { loc=value($0); next }
+            END { flush(); printf "MEM_DEVICE_RECORDS=%d\n", nrec; }
+          '
+        else
+          echo "DMIDECODE_OK=no"
+        fi
+      else
+        echo "DMIDECODE=absent"
+        echo "DMIDECODE_RC=127"
+        echo "DMIDECODE_ERR="
+      fi
+      echo "DMI_MEM_END"
+      # SMBIOS Type 4 의 "Current Speed"(정격) / "Max Speed"(최대) — gather_cpu 의 3순위 fallback.
+      #   첫 Processor 레코드 값만 (종전 `dmidecode -t processor | awk` 와 같은 규칙 · 같은 출력).
+      echo "DMI_PROC_BEGIN"
+      if [ -n "$out" ]; then
+        printf '%s\n' "$out" | awk '/^Handle /{k=($0 ~ /DMI type 4,/)} k' | awk -F': ' '
+          /Current Speed:/ && !cur { sub(/ MHz/,"",$2); gsub(/ /,"",$2); print "DMI_CUR_MHZ=" $2; cur=1 }
+          /Max Speed:/     && !mx  { sub(/ MHz/,"",$2); gsub(/ /,"",$2); print "DMI_MAX_MHZ=" $2; mx=1 }'
+      fi
+      echo "DMI_PROC_END"
   no_log: true
 
 # =============================================================================
@@ -91,6 +221,8 @@
       fi
       echo "DMI_$(echo $f | tr '[:lower:]' '[:upper:]')=$v"
     done
+    # 공유 DMI collector (위 _l_dmi_collector — memory / cpu 가 읽는다). 이 태스크의 become 을 같이 쓴다.
+    {{ _l_dmi_collector }}
   register: _l_raw_sys_result
   changed_when: false
   failed_when: false
@@ -103,6 +235,22 @@
               | select('search', '=')
               | map('split', '=', 1)
               | list) }}
+  no_log: true
+
+# 공유 DMI 결과 — DMI_MEM_BEGIN 부터 DMI_PROC_END 까지 (gather_memory.yml / gather_cpu.yml 이 자기 구간만 읽는다).
+#   rc 는 raw 결과에 있을 때만 옮긴다 (memory errors[] detail 의 `rc=` 가 종전처럼 'none' 으로 떨어지게).
+- name: "linux | system | shared dmi raw (memory / cpu 공용)"
+  ansible.builtin.set_fact:
+    _l_dmi_raw: >-
+      {%- set ns = namespace(on=false, lines=[]) -%}
+      {%- for line in (_l_raw_sys_result.stdout_lines | default([])) -%}
+        {%- if (line | trim) == 'DMI_MEM_BEGIN' -%}{%- set ns.on = true -%}{%- endif -%}
+        {%- if ns.on -%}{%- set _ = ns.lines.append(line) -%}{%- endif -%}
+        {%- if (line | trim) == 'DMI_PROC_END' -%}{%- set ns.on = false -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set out = {'stdout_lines': ns.lines} -%}
+      {%- if (_l_raw_sys_result | default({})).rc is defined -%}{%- set _ = out.update({'rc': _l_raw_sys_result.rc}) -%}{%- endif -%}
+      {{ out }}
   no_log: true
 
 # =============================================================================
@@ -296,25 +444,8 @@
 
 # =============================================================================
 # Python 경로 식별자 — setup fact → DMI direct-read(become) → raw DMI
+#   (N5, 2026-10-03: `test -r` precheck 2건 삭제 — 그 register 를 읽는 곳이 없었다)
 # =============================================================================
-- name: "linux | system | DMI serial precheck"
-  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
-  when: _l_python_mode == 'python_ok'
-  ansible.builtin.command: test -r /sys/class/dmi/id/product_serial
-  register: _l_dmi_serial_access
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: "linux | system | DMI uuid precheck"
-  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
-  when: _l_python_mode == 'python_ok'
-  ansible.builtin.command: test -r /sys/class/dmi/id/product_uuid
-  register: _l_dmi_uuid_access
-  changed_when: false
-  failed_when: false
-  no_log: true
-
 - name: "linux | system | check setup fact identifiers"
   when: _l_setup_ok | bool
   ansible.builtin.set_fact:
@@ -327,15 +458,19 @@
   no_log: true
 
 # DMI direct-read fallback (become 필요)
+#   §8-2 (2026-10-03): setup 값도 raw sysfs 값도 없을 때만 실행한다. raw gather 는 become 으로 같은
+#   파일(/sys/class/dmi/id/product_serial · product_uuid)을 이미 읽었다 — raw 값이 있으면 direct-read 가
+#   성공해도 같은 값이고 실패하면 raw 값으로 떨어지므로 결과가 같다. 건너뛴 태스크도 register 는 남는다
+#   (skipped) — 그때 식별자는 raw 값이라 진단(build_identifier_diagnostics.yml)이 만들어지지 않는다.
 - name: "linux | system | DMI direct-read fallback"
   when: >
     _l_python_mode == 'python_ok' and
-    ((_l_serial_from_setup | default(none)) is none or
-     (_l_uuid_from_setup | default(none)) is none)
+    (((_l_serial_from_setup | default(none)) is none and (_l_raw_serial | default(none)) is none) or
+     ((_l_uuid_from_setup | default(none)) is none and (_l_raw_uuid | default(none)) is none))
   block:
     - name: "linux | system | DMI direct-read serial"
       timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
-      when: (_l_serial_from_setup | default(none)) is none  # rule 95 R1 R5 ok: serial raw fallback 진입
+      when: (_l_serial_from_setup | default(none)) is none and (_l_raw_serial | default(none)) is none  # rule 95 R1 R5 ok: serial raw fallback 진입
       ansible.builtin.command: cat /sys/class/dmi/id/product_serial
       become: true
       register: _l_dmi_serial_direct
@@ -345,7 +480,7 @@
 
     - name: "linux | system | DMI direct-read uuid"
       timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
-      when: (_l_uuid_from_setup | default(none)) is none  # rule 95 R1 R5 ok: uuid raw fallback 진입
+      when: (_l_uuid_from_setup | default(none)) is none and (_l_raw_uuid | default(none)) is none  # rule 95 R1 R5 ok: uuid raw fallback 진입
       ansible.builtin.command: cat /sys/class/dmi/id/product_uuid
       become: true
       register: _l_dmi_uuid_direct

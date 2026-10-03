@@ -1,6 +1,11 @@
 """Linux raw 수집 스크립트 실행 하네스 — tests/unit 공용 (pytest 수집 대상 아님).
 
-test_linux_memory_parser / test_linux_storage_markers / test_linux_hba_ib_markers 가 쓴다.
+test_linux_memory_parser / test_linux_storage_markers / test_linux_hba_ib_markers /
+tests/e2e/test_linux_raw_scripts_shim 이 쓴다.
+
+2026-10-03 (Plan §8-2): dmidecode 는 gather_system.yml 의 raw gather 에 주입되는 공유 DMI collector
+(``_l_dmi_collector``)가 1회 실행하고, NIC driver map 줄은 gather_network.yml raw gather 첫머리가 낸다.
+``dmi_collector_script()`` · ``shared_dmi_raw()`` · ``network_nic_block()`` 가 그 자리를 꺼낸다.
 
 무엇을 재현하나
 ---------------
@@ -245,6 +250,57 @@ def set_fact_args(yml: Path, name_part: str) -> dict[str, Any]:
         if name_part in (task.get("name") or "") and "ansible.builtin.set_fact" in task:
             return task["ansible.builtin.set_fact"]
     raise AssertionError(f"{yml.name} 에서 set_fact 를 찾지 못함: {name_part!r}")
+
+
+SYSTEM_YML = LINUX_TASKS / "gather_system.yml"
+NETWORK_YML = LINUX_TASKS / "gather_network.yml"
+
+
+def assert_jinja_free(text: str, label: str) -> None:
+    """Ansible 이 한 번 렌더해도 글자 그대로인지 (= Jinja 구문이 섞이지 않았는지)."""
+    rendered = jinja2.Environment(keep_trailing_newline=True).from_string(text).render()
+    assert rendered == text, f"{label} 본문에 Jinja 구문이 섞였다"
+
+
+def dmi_collector_script() -> str:
+    """gather_system.yml 의 공유 DMI collector 본문 (set_fact ``_l_dmi_collector``).
+
+    raw gather(become) 가 ``{{ _l_dmi_collector }}`` 로 주입한다 — 주입 자리가 있는지도 확인한다.
+    """
+    text = set_fact_args(SYSTEM_YML, "define shared dmi collector")["_l_dmi_collector"]
+    assert_jinja_free(text, "gather_system.yml:_l_dmi_collector")
+    raw = next(t for t in iter_tasks(load_tasks(SYSTEM_YML))
+               if "raw gather" in (t.get("name") or "") and "ansible.builtin.raw" in t)
+    assert "{{ _l_dmi_collector }}" in raw["ansible.builtin.raw"], "raw gather 에 DMI collector 주입이 없다"
+    assert raw.get("become") is True, "DMI collector 를 싣는 raw gather 는 become 이어야 한다"
+    return text
+
+
+def shared_dmi_raw(system_register: dict[str, Any]) -> dict[str, Any]:
+    """gather_system.yml 의 ``_l_dmi_raw`` set_fact 를 그대로 렌더한다 (입력 = raw gather register)."""
+    args = set_fact_args(SYSTEM_YML, "shared dmi raw")
+    return render_tree(ansible_env(), args["_l_dmi_raw"], {"_l_raw_sys_result": system_register})
+
+
+def collector_output(mem_lines: list[str], proc_lines: list[str] = ()) -> str:
+    """공유 DMI collector 출력 모양 (구간 marker 로 감싼다) — Jinja 판정만 보는 테스트용."""
+    lines = ["DMI_MEM_BEGIN", *mem_lines, "DMI_MEM_END", "DMI_PROC_BEGIN", *proc_lines, "DMI_PROC_END"]
+    return "".join(line + "\n" for line in lines)
+
+
+def network_nic_block() -> str:
+    """gather_network.yml raw gather 첫머리의 NIC driver map 하위 셸 블록 (gather_hba_ib 가 읽는 NIC| 줄)."""
+    raw = next(t for t in iter_tasks(load_tasks(NETWORK_YML))
+               if "raw gather" in (t.get("name") or "") and "ansible.builtin.raw" in t)["ansible.builtin.raw"]
+    lines = raw.splitlines(keepends=True)
+    start = lines.index("(\n")
+    end = lines.index(")\n", start)
+    block = "".join(lines[start:end + 1])
+    assert_jinja_free(block, "gather_network.yml NIC driver map 블록")
+    assert 'echo "NIC|' in block
+    # LANG=C 보다 앞 (종전 별도 raw 처럼 세션 locale 의 glob 순서를 쓴다)
+    assert raw.index(block) < raw.index("export LANG=C LC_ALL=C")
+    return block
 
 
 # ---------------------------------------------------------------------------

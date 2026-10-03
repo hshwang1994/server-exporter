@@ -11,6 +11,14 @@
 #   data.storage.hbas[]       — FC HBA (WWPN, link state, speed)
 #   data.storage.infiniband[] — InfiniBand 어댑터 (node_guid, link state, rate)
 #   data.network.driver_map   — interface → driver 매핑 (P5 NIC 깊이)
+#
+# 2026-10-03 (Plan §8-2 — 원격 실행 3 → 1, 출력 불변):
+#   - fc_host + infiniband 를 raw 1회로 읽는다 (marker · ERR 규칙 · 출력 순서 그대로 — FC 구간 다음 IB 구간).
+#   - NIC driver map 은 따로 읽지 않는다. gather_network.yml 의 raw gather 가 같은 스크립트로 내는
+#     `NIC|<iface>|<driver>|<vlan>|<master>` 줄(`_l_net_raw`)을 쓴다 (site.yml 순서상 network 가 먼저 돈다).
+#     ethtool -i / VLANIF / BOND 줄로 다시 만들지 않은 이유: driver 는 sysfs device/driver 링크
+#     이름(mlx4_core 등 ethtool 의 driver 와 다를 수 있다), master 는 bond 뿐 아니라 bridge 도 포함,
+#     목록은 lo 를 뺀 /sys/class/net 전부라 그 줄들로는 같은 값을 되살릴 수 없다.
 
 - block:
     # cycle 2026-05-29 (hba-ib-csus, D2): WWNN(node_name) + driver + firmware 보강.
@@ -20,7 +28,7 @@
     # 2026-10-03 (C7): 속성 파일이 있는데 읽지 못하면 빈 값으로 삼키지 않고 ERR|<경로> 를 남긴다
     #   (권한 / 장치 상태로 인한 증거 소실을 드러낸다). 파일이 없는 것은 드라이버가 그 속성을 내지
     #   않는 것이라 실패가 아니다. rd <경로> → $v (실패 시 빈 값 + ERR 줄).
-    - name: "linux | hba_ib | enumerate fc_host"
+    - name: "linux | hba_ib | enumerate fc_host + infiniband"
       timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       ansible.builtin.raw: |
         rd() {
@@ -59,22 +67,10 @@
             echo "FC|$host|$wwpn|$wwnn|$sym|$state|$speed|$drv|$fwver|$mdl|$mfr"
           done
         fi
-      register: _l_fc_raw
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    # cycle 2026-05-29 (hba-ib-csus, D2): per-port GID(port_guid) + rate + fw_ver + hca(vendor) 보강.
-    # delimiter '|' 9 필드: IB|adapter|port|node_guid|gid0|state|rate|firmware|hca
-    # 2026-10-03 (C7): fc_host 와 같은 규칙 — 있는데 읽지 못한 속성은 ERR|<경로>.
-    - name: "linux | hba_ib | enumerate infiniband"
-      timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
-      ansible.builtin.raw: |
-        rd() {
-          v=""
-          [ -e "$1" ] || return 0
-          if v=$(cat "$1" 2>/dev/null); then :; else v=""; echo "ERR|$1"; fi
-        }
+        # cycle 2026-05-29 (hba-ib-csus, D2): per-port GID(port_guid) + rate + fw_ver + hca(vendor) 보강.
+        # delimiter '|' 9 필드: IB|adapter|port|node_guid|gid0|state|rate|firmware|hca
+        # 2026-10-03 (C7): fc_host 와 같은 규칙 — 있는데 읽지 못한 속성은 ERR|<경로>.
+        # (§8-2: 같은 raw 안 — 위 FC 구간 다음에 IB 구간. 변수는 매 항목 rd 로 다시 채운다)
         if [ -d /sys/class/infiniband ]; then
           for ib in /sys/class/infiniband/*; do
             [ -d "$ib" ] || continue
@@ -93,35 +89,7 @@
             done
           done
         fi
-      register: _l_ib_raw
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "linux | hba_ib | NIC driver map"
-      timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
-      ansible.builtin.raw: |
-        if [ -d /sys/class/net ]; then
-          for n in /sys/class/net/*; do
-            [ -d "$n" ] || continue
-            iface=$(basename "$n")
-            [ "$iface" = "lo" ] && continue
-            drv=""
-            if [ -L "$n/device/driver" ]; then
-              drv=$(basename "$(readlink "$n/device/driver")" 2>/dev/null)
-            fi
-            vlan=""
-            if [ -f "/proc/net/vlan/$iface" ]; then
-              vlan=$(awk -F'[ |]' '/VID:/ {print $2; exit}' "/proc/net/vlan/$iface" 2>/dev/null)
-            fi
-            bond_master=""
-            if [ -f "$n/master/uevent" ]; then
-              bond_master=$(basename "$(readlink "$n/master")" 2>/dev/null)
-            fi
-            echo "NIC|$iface|$drv|$vlan|$bond_master"
-          done
-        fi
-      register: _l_nicdrv_raw
+      register: _l_hba_raw
       changed_when: false
       failed_when: false
       no_log: true
@@ -130,7 +98,7 @@
       ansible.builtin.set_fact:
         _l_hbas_list: >-
           {%- set out = [] -%}
-          {%- for line in (_l_fc_raw.stdout_lines | default([])) -%}
+          {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
             {%- set parts = line.split('|') -%}
             {%- if parts | length >= 9 and parts[0] == 'FC' -%}
               {# speed 는 "16 Gbit" / "8 Gbit" 처럼 첫 숫자 토큰만 (여러 숫자가 붙는 문자열을 이어붙이지 않는다) #}
@@ -158,7 +126,7 @@
           {{ out }}
         _l_ib_list: >-
           {%- set out = [] -%}
-          {%- for line in (_l_ib_raw.stdout_lines | default([])) -%}
+          {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
             {%- set parts = line.split('|') -%}
             {%- if parts | length >= 9 and parts[0] == 'IB' -%}
               {%- set gidp = (parts[4] | default('')).split(':') -%}
@@ -186,19 +154,20 @@
             {%- endif -%}
           {%- endfor -%}
           {{ out }}
-        # 2026-10-03 (C7): 읽지 못한 sysfs 속성 경로 (ERR|<경로>) — 중복 제거, 나온 순서 유지.
+        # 2026-10-03 (C7): 읽지 못한 sysfs 속성 경로 (ERR|<경로>) — 중복 제거, 나온 순서 유지 (FC 구간 → IB 구간).
         _l_hba_read_errors: >-
           {%- set out = [] -%}
-          {%- for line in ((_l_fc_raw.stdout_lines | default([])) + (_l_ib_raw.stdout_lines | default([]))) -%}
+          {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
             {%- if line.startswith('ERR|') -%}
               {%- set path = line[4:] | trim -%}
               {%- if path and path not in out -%}{%- set _ = out.append(path) -%}{%- endif -%}
             {%- endif -%}
           {%- endfor -%}
           {{ out }}
+        # §8-2: NIC| 줄은 gather_network.yml raw gather 가 낸다 (_l_net_raw). 없으면(network 미실행) 빈 목록.
         _l_nic_drivers: >-
           {%- set out = [] -%}
-          {%- for line in (_l_nicdrv_raw.stdout_lines | default([])) -%}
+          {%- for line in ((_l_net_raw | default({})).stdout_lines | default([])) -%}
             {%- set parts = line.split('|') -%}
             {%- if parts | length >= 5 and parts[0] == 'NIC' -%}
               {%- set _ = out.append({
