@@ -72,8 +72,7 @@ def test_finalizer_handles_no_manifest_and_builds_contract_body():
     assert "접수 manifest 없음" in FINALIZE and "전송할 것 없음" in FINALIZE
     for key in ('"loc":', '"deploymentEnvironmentId":', '"eventUuid":', '"gatherInfoJson":['):
         assert key in FINALIZE, key
-    assert "seJsonString(" in FINALIZE and "replaceAll('\\\\\\\\'" not in TEXT, "escaping 은 JsonOutput 하나"
-    assert "groovy.json.JsonOutput.toJson(value == null ? '' : value.toString())" in TEXT
+    assert "groovy.json.JsonOutput.toJson(params.loc.trim())" in FINALIZE and "replaceAll('\\\\\\\\'" not in TEXT, "escaping 은 JsonOutput 하나"
     assert "'/api/jenkins/gather/' + params.target_type.trim()" in CALLBACK, "endpoint 계약 불변"
 
 
@@ -131,8 +130,23 @@ def test_no_agent_is_accepted_then_failed_not_a_build_error():
     assert "unstable(\"[Resolve Location] 온라인 노드 없음" in RESOLVE
 
 
+LIB = (REPO / "scripts/jenkins/se_finalize.groovy").read_text(encoding="utf-8")
+
+
+def test_portal_loads_layer_b_library_instead_of_defining_it():
+    """GP-11 (2026-10-03): Layer B 순수 함수의 정본은 scripts/jenkins/se_finalize.groovy 하나다. Jenkinsfile_portal 은 finalizer node 안에서
+    readTrusted → writeFile → load 로 읽고, 실패하면 Layer B 보충 없이(raw OUTPUT 줄만) 보내며 UNSTABLE 로 남긴다."""
+    for sig in ("Map seFallbackCanon()", "String seJsonString(", "Map seReconcileRaw("):
+        assert sig not in TEXT, f"Jenkinsfile_portal 에 {sig} 사본이 있다 — 정본은 se_finalize.groovy"
+    assert "readTrusted('scripts/jenkins/se_finalize.groovy')" in TEXT and "return load('se_finalize.groovy')" in TEXT
+    assert FINALIZE.index("node('built-in')") < FINALIZE.index("seLoadFinalizeLib()"), "load 는 workspace 가 있는 node 안에서"
+    assert "lib.seReconcileRaw(manifestJson, outText, cpText, seLoadCanon(lib), outcome)" in FINALIZE
+    assert "layerB = 'unavailable'" in FINALIZE and "layerB == 'unavailable'" in FINALIZE, "라이브러리 부재는 숨기지 않는다 (UNSTABLE)"
+    assert "FlowInterruptedException fie" in TEXT[TEXT.index("def seLoadFinalizeLib()"):TEXT.index("def seLoadCanon(")], "Abort 는 다시 던진다"
+
+
 def test_groovy_fallback_canon_matches_yaml_and_layer_a():
-    canon = TEXT[TEXT.index("Map seFallbackCanon()"):TEXT.index("String seJsonString")]
+    canon = LIB[LIB.index("Map seFallbackCanon()"):LIB.index("String seJsonString")]
     fr = yaml.safe_load((REPO / "common/vars/failure_reasons.yml").read_text(encoding="utf-8"))
     assert f"reason  : '{fr['_fr_catalog']['output_build_failed']['default']}'" in canon
     ss = yaml.safe_load((REPO / "common/vars/supported_sections.yml").read_text(encoding="utf-8"))

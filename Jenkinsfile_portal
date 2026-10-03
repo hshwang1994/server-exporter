@@ -18,111 +18,25 @@ Map seConstants() {
     ]
 }
 
-// 정본 복제 fallback — readTrusted 로 정본(YAML)을 못 읽을 때만 쓴다. drift 는 tests/unit/test_jenkinsfile_portal_finalize.py 가 잡는다.
-@NonCPS
-Map seFallbackCanon() {
-    return [
-        reason  : '개더링 프로젝트에서 수집 결과를 만들지 못했습니다.',
-        sections: ['os'     : ['system', 'hardware', 'cpu', 'memory', 'storage', 'network', 'users'],
-                   'esxi'   : ['system', 'hardware', 'cpu', 'memory', 'storage', 'network'],
-                   'redfish': ['system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network', 'firmware', 'power', 'thermal']],
-        all     : ['system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network', 'firmware', 'users', 'power', 'thermal'],
-        meta    : ['started_at', 'finished_at', 'duration_ms', 'adapter_id', 'adapter_version', 'ansible_version'],
-        corr    : ['serial_number', 'system_uuid', 'bmc_ip', 'host_ip'],
-        method  : ['os': 'agent', 'esxi': 'vsphere_api', 'redfish': 'redfish_api'],
-        skeleton: ['system': null, 'hardware': null, 'bmc': null, 'cpu': null, 'memory': null,
-                   'storage': ['filesystems': [], 'physical_disks': [], 'datastores': [], 'controllers': [], 'logical_volumes': [],
-                               'hbas': [], 'infiniband': [], 'summary': ['groups': [], 'grand_total_gb': 0]],
-                   'network': ['dns_servers': [], 'default_gateways': [], 'interfaces': [], 'adapters': [], 'ports': [],
-                               'virtual_switches': [], 'portgroups': [], 'driver_map': [], 'summary': ['groups': []]],
-                   'users': [], 'firmware': [], 'power': null, 'thermal': ['temperatures': [], 'fans': []]],
-        emitFailed: '수집은 끝났지만 결과를 내보내는 단계에서 중단되었습니다. 기본 수집 결과는 그대로입니다.',
-    ]
+// Layer B 순수 함수(seFallbackCanon · seJsonString · seReconcileRaw)의 정본은 scripts/jenkins/se_finalize.groovy 다 (2026-10-03, GP-11).
+//   Jenkinsfile_ci 의 corpus self-test 가 같은 파일을 load 해 Python Layer A 와 동치를 확인한다 — 여기 사본을 두면 두 곳이 어긋난다.
+//   readTrusted 는 Job 의 SCM(lightweight)에서 파일 하나만 읽고, load 는 workspace 가 있는 node 안에서만 된다 → finalizer node 안에서 부른다.
+//   읽기/적재에 실패하면 null — 호출자는 Layer A 결과(gather_final.jsonl)가 있으면 그것을, 없으면 raw OUTPUT 줄만 보내고 UNSTABLE 로 남긴다.
+def seLoadFinalizeLib() {
+    try {
+        writeFile(file: 'se_finalize.groovy', text: readTrusted('scripts/jenkins/se_finalize.groovy'), encoding: 'UTF-8')
+        return load('se_finalize.groovy')
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+        throw fie
+    } catch (Exception e) {
+        echo "[Finalize] se_finalize.groovy 적재 실패 — Layer B 보충 없이 진행: ${e.message}"
+        return null
+    }
 }
 
-// JSON 문자열 escaping — 종전 수동 replaceAll 대신 Groovy JsonOutput 이 특수문자 escaping 을 맡는다. 입력 거부 정책 변경이 아니다.
-@NonCPS
-String seJsonString(Object value) {
-    return groovy.json.JsonOutput.toJson(value == null ? '' : value.toString())
-}
-
-// Layer B 최소 경로 — Layer A(gather_final.jsonl) 가 없거나 실패했을 때만: OUTPUT 줄 → CHECKPOINT 줄(+gather 오류 1건) → synthetic.
-// progress 이벤트 기반 분기(GATHER_FAILED/AUTH)는 Layer A 몫이라 여기서는 하지 않는다 (보고서에 layerA 상태를 남긴다).
-@NonCPS
-Map seReconcileRaw(String manifestJson, String outputText, String checkpointText, Map canon, String outcome) {
-    def slurper  = new groovy.json.JsonSlurperClassic()
-    def manifest = slurper.parseText(manifestJson)
-    String channel = manifest.channel
-    List ips = (manifest.ips ?: []).collect { it.toString() }
-    Set accepted = ips as Set
-    def keys13 = ['schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
-                  'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'] as Set
-    Map outputs = [:]; Map checkpoints = [:]
-    List dropped = []; List conflicts = []
-    int lineNo = 0
-    for (String raw in (outputText ?: '').split('\n')) {
-        lineNo++
-        String line = raw.trim()
-        if (!line) { continue }
-        def obj = null
-        try { obj = slurper.parseText(line) } catch (Exception e) { dropped << [file: 'output', line: lineNo, reason: 'not JSON']; continue }
-        if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type != channel || !accepted.contains(obj.ip?.toString())) {
-            dropped << [file: 'output', line: lineNo, reason: 'shape/ip gate', ip: (obj instanceof Map ? obj.ip : null)]; continue
-        }
-        String ip = obj.ip.toString()
-        if (outputs.containsKey(ip) && outputs[ip] != line) { conflicts << [ip: ip, chosen: lineNo] }
-        outputs[ip] = line
-    }
-    lineNo = 0
-    for (String raw in (checkpointText ?: '').split('\n')) {
-        lineNo++
-        String line = raw.trim()
-        if (!line) { continue }
-        def obj = null
-        try { obj = slurper.parseText(line) } catch (Exception e) { dropped << [file: 'checkpoint', line: lineNo, reason: 'not JSON']; continue }
-        if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type != channel || !accepted.contains(obj.ip?.toString())) {
-            dropped << [file: 'checkpoint', line: lineNo, reason: 'shape/ip gate']; continue
-        }
-        checkpoints[obj.ip.toString()] = obj
-    }
-    List lines = []
-    int fromOutput = 0, fromCheckpoint = 0, synthetic = 0
-    Set supported = (canon.sections[channel] ?: []) as Set
-    for (String ip in ips) {
-        if (outputs.containsKey(ip)) { lines << outputs[ip]; fromOutput++; continue }
-        if (checkpoints.containsKey(ip)) {
-            def env = checkpoints[ip]
-            def errs = (env.errors instanceof List) ? new ArrayList(env.errors) : []
-            errs << [section: 'gather', message: canon.emitFailed,
-                     detail: "finalized from checkpoint by Layer B (Layer A not available); outcome=${outcome}".toString()]
-            env.errors = errs
-            lines << groovy.json.JsonOutput.toJson(env); fromCheckpoint++; continue
-        }
-        Map sections = [:]
-        for (String s in canon.all) { sections[s] = supported.contains(s) ? 'failed' : 'not_supported' }
-        Map meta = [:];  for (String k in canon.meta) { meta[k] = null }
-        Map corr = [:];  for (String k in canon.corr) { corr[k] = (k == 'host_ip' || (k == 'bmc_ip' && channel == 'redfish')) ? ip : null }
-        String detail = "envelope synthesized by Layer B from accepted manifest; outcome=${outcome}".toString()
-        Map env = [
-            schema_version: '1', target_type: channel, collection_method: canon.method[channel], ip: ip, hostname: null,
-            vendor: null, status: 'failed', sections: sections,
-            diagnosis: [reachable: null, port_open: null, protocol_supported: null, auth_success: null,
-                        failure_stage: 'fallback', failure_code: 'OUTPUT_BUILD_FAILED', failure_reason: canon.reason,
-                        details: [channel: channel, finalizer: 'layer_b', outcome: outcome]],
-            meta: meta, correlation: corr,
-            errors: [[section: 'gather', message: canon.reason, detail: detail]],
-            data: new groovy.json.JsonSlurperClassic().parseText(groovy.json.JsonOutput.toJson(canon.skeleton)),
-        ]
-        lines << groovy.json.JsonOutput.toJson(env); synthetic++
-    }
-    return [lines: lines, report: [accepted: ips.size(), kept: fromOutput + fromCheckpoint, filled: synthetic,
-                                   by_origin: [output: fromOutput, checkpoint: fromCheckpoint, synthetic: synthetic],
-                                   dropped: dropped, conflicts: conflicts, layer: 'b']]
-}
-
-// 정본 로딩 — readTrusted 는 Job 의 SCM(lightweight)에서 파일 하나씩 읽는다(workspace 불필요). 실패하면 복제 fallback.
-def seLoadCanon() {
-    Map canon = seFallbackCanon()
+// 정본 로딩 — readTrusted 는 Job 의 SCM(lightweight)에서 파일 하나씩 읽는다(workspace 불필요). 실패하면 복제 fallback(라이브러리 값).
+def seLoadCanon(def lib) {
+    Map canon = lib.seFallbackCanon()
     try {
         def fr = readYaml text: readTrusted('common/vars/failure_reasons.yml')
         def ss = readYaml text: readTrusted('common/vars/supported_sections.yml')
@@ -239,12 +153,22 @@ def seFinalizeAndCallback() {
                     layerA = 'failed'
                 }
             }
+            String layerB = 'skipped'
             if (lines == null) {
                 String outText = fileExists('gather_output.json') ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : ''
                 String cpText  = fileExists('gather_checkpoint.jsonl') ? readFile(file: 'gather_checkpoint.jsonl', encoding: 'UTF-8') : ''
-                def res = seReconcileRaw(manifestJson, outText, cpText, seLoadCanon(), outcome)
-                lines = res.lines
-                report = res.report
+                def lib = seLoadFinalizeLib()
+                if (lib != null) {
+                    def res = lib.seReconcileRaw(manifestJson, outText, cpText, seLoadCanon(lib), outcome)
+                    lines = res.lines
+                    report = res.report
+                    layerB = 'ok'
+                } else {
+                    // 라이브러리를 못 읽었다 — 보충 없이 있는 OUTPUT 줄만 보낸다 (접수 수와 다를 수 있다 → 아래 WARN + UNSTABLE)
+                    lines = outText.split('\n').findAll { it.trim() }.collect { it.trim() }
+                    report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
+                    layerB = 'unavailable'
+                }
             }
             int accepted = ips.size()
             int filled = (report.filled ?: 0) as int
@@ -252,16 +176,16 @@ def seFinalizeAndCallback() {
             if (lines.size() != accepted) {
                 echo "[Finalize] [WARN] invariant 위반: lines=${lines.size()} accepted=${accepted} — 그래도 있는 것을 보낸다"
             }
-            echo "[Finalize] accepted=${accepted} kept=${kept} filled=${filled}(synthetic) dropped=${(report.dropped ?: []).size()} conflicts=${(report.conflicts ?: []).size()} outcome=${outcome} layerA=${layerA} source=${source}"
-            // ③ body — 호출자 계약(loc / deploymentEnvironmentId / eventUuid / gatherInfoJson[]) 불변
-            String body = '{"loc":' + seJsonString(params.loc.trim()) +
-                          ',"deploymentEnvironmentId":' + seJsonString(params.deploymentEnvironmentId.trim()) +
-                          ',"eventUuid":' + seJsonString((params.eventUuid ?: '').trim()) +
+            echo "[Finalize] accepted=${accepted} kept=${kept} filled=${filled}(synthetic) dropped=${(report.dropped ?: []).size()} conflicts=${(report.conflicts ?: []).size()} outcome=${outcome} layerA=${layerA} layerB=${layerB} source=${source}"
+            // ③ body — 호출자 계약(loc / deploymentEnvironmentId / eventUuid / gatherInfoJson[]) 불변. 문자열 escaping 은 JsonOutput 하나.
+            String body = '{"loc":' + groovy.json.JsonOutput.toJson(params.loc.trim()) +
+                          ',"deploymentEnvironmentId":' + groovy.json.JsonOutput.toJson(params.deploymentEnvironmentId.trim()) +
+                          ',"eventUuid":' + groovy.json.JsonOutput.toJson((params.eventUuid ?: '').trim()) +
                           ',"gatherInfoJson":[' + lines.join(',') + ']}'
             writeFile file: 'callback_body.json', text: body, encoding: 'UTF-8'
             writeFile file: 'finalize_summary.json', encoding: 'UTF-8',
                       text: groovy.json.JsonOutput.toJson([accepted: accepted, kept: kept, filled: filled, outcome: outcome,
-                                                            layerA: layerA, source: source, node_wait_sec: tIn - tPost])
+                                                            layerA: layerA, layerB: layerB, source: source, node_wait_sec: tIn - tPost])
             lines = null
             // ④ Callback — 남은 예산 안에서
             boolean delivered = seCallback(body, hardDeadline, finalizerDeadline, C)
@@ -270,8 +194,8 @@ def seFinalizeAndCallback() {
             if (!delivered) {
                 echo "[Finalize] delivered=false — body 는 artifact callback_body.json"
                 unstable("[Finalize] Callback 전송 실패 — artifact callback_body.json 참조")
-            } else if (filled > 0 || outcome != 'completed') {
-                unstable("[Finalize] 전송은 됐지만 보충(filled=${filled}) 또는 비정상 종료(outcome=${outcome})가 있었다")
+            } else if (filled > 0 || outcome != 'completed' || layerB == 'unavailable' || lines.size() != accepted) {
+                unstable("[Finalize] 전송은 됐지만 보충(filled=${filled}) · 비정상 종료(outcome=${outcome}) · 라이브러리(layerB=${layerB}) 중 하나가 있었다")
             }
             deleteDir()
         }

@@ -10,3 +10,7 @@ tests/fixtures/redfish/hpe_emulator_*/README.md text eol=lf
 # Jenkinsfile 은 Linux 에이전트의 `sh '''#!/bin/bash` 블록으로 실행된다. CRLF 로 저장되면 셔뱅이
 # `#!/bin/bash\r` 가 되어 "bad interpreter" 로 깨진다 (2026-09-28: Jenkinsfile_portal_test·test_sj 가 그 상태였다).
 Jenkinsfile* text eol=lf
+
+# Jenkins 가 load 하는 Groovy 라이브러리와 finalize corpus(JSONL · 기대값)는 Linux agent 에서 바이트 비교된다 (2026-10-03).
+*.groovy text eol=lf
+tests/fixtures/finalize_corpus/** text eol=lf
