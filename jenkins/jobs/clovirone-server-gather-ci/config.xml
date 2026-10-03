@@ -1,0 +1,116 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job@1571.1580.v18e46842c125">
+  <actions>
+    <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobAction plugin="pipeline-model-definition@2.2293.v6e7193cec599"/>
+    <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction plugin="pipeline-model-definition@2.2293.v6e7193cec599">
+      <jobProperties>
+        <string>jenkins.model.BuildDiscarderProperty</string>
+      </jobProperties>
+      <triggers/>
+      <parameters>
+        <string>loc</string>
+        <string>deploymentEnvironmentId</string>
+        <string>target_type</string>
+        <string>inventory_json</string>
+        <string>eventUuid</string>
+        <string>callbackUrl</string>
+        <string>verbosity</string>
+      </parameters>
+      <options/>
+    </org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction>
+  </actions>
+  <description>main 전용 CI — 정적 gate · finalize corpus · budget self-test · Harness Driver · prodgen Build/Drift/Verify/Evidence Aggregate · 조건부 Promote. 운영 수집 Job 이 아니다. Script Path Jenkinsfile_ci, Branch */main, 트리거 없음(수동). 2026-10-04</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <com.dabsquared.gitlabjenkins.connection.GitLabConnectionProperty plugin="gitlab-plugin@1.9.13">
+      <gitLabConnection></gitLabConnection>
+      <jobCredentialId></jobCredentialId>
+      <useAlternativeCredential>false</useAlternativeCredential>
+    </com.dabsquared.gitlabjenkins.connection.GitLabConnectionProperty>
+    <org.bstick12.jenkinsci.plugins.leastload.LeastLoadDisabledProperty plugin="leastload@71.vb_585f7a_dc4f5">
+      <leastLoadDisabled>false</leastLoadDisabled>
+    </org.bstick12.jenkinsci.plugins.leastload.LeastLoadDisabledProperty>
+    <com.sonyericsson.rebuild.RebuildSettings plugin="rebuild@338.va_0a_b_50e29397">
+      <autoRebuild>false</autoRebuild>
+      <rebuildDisabled>false</rebuildDisabled>
+    </com.sonyericsson.rebuild.RebuildSettings>
+    <hudson.plugins.throttleconcurrents.ThrottleJobProperty plugin="throttle-concurrents@625.vc8b_e469e9a_b_c">
+      <categories class="java.util.concurrent.CopyOnWriteArrayList"/>
+      <throttleEnabled>false</throttleEnabled>
+      <throttleOption>project</throttleOption>
+      <limitOneJobWithMatchingParams>false</limitOneJobWithMatchingParams>
+      <paramsToUseForLimit></paramsToUseForLimit>
+    </hudson.plugins.throttleconcurrents.ThrottleJobProperty>
+    <org.jenkinsci.plugins.workflow.job.properties.DisableConcurrentBuildsJobProperty/>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.BooleanParameterDefinition>
+          <name>PROMOTE</name>
+          <defaultValue>false</defaultValue>
+          <description>true 이면 Prodgen Promote stage 가 승격 집행 조건(6항)을 확인한다 — 기본 false</description>
+        </hudson.model.BooleanParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>PROMOTE_SHA</name>
+          <defaultValue></defaultValue>
+          <description>승격 요청 SHA — env.MAIN_SHA · 보고서 binding.main_sha · rev-parse HEAD 와 모두 같아야 한다</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>PROMOTE_DRY_RUN</name>
+          <defaultValue>true</defaultValue>
+          <description>true 이면 원격을 바꾸지 않는다(기본). 실 승격은 false + 양 원격 credential 준비</description>
+        </hudson.model.BooleanParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>BOOTSTRAP_BASELINE</name>
+          <defaultValue></defaultValue>
+          <description>최초 승격(legacy production) 의 baseline SHA — drift-check/verify/promote 가 같은 값을 쓴다. 정상 승격은 비운다</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>CI_CALLBACK_SINK</name>
+          <defaultValue></defaultValue>
+          <description>Harness Driver 에 넘길 sink 기준(비우면 Harness 가 agent 에서 띄운다)</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>HARNESS_SCENARIOS</name>
+          <defaultValue>normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt,sink_5xx,outer_timeout</defaultValue>
+          <description>Harness Driver 가 순서대로 돌릴 시나리오(쉼표)</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+    <jenkins.model.BuildDiscarderProperty>
+      <strategy class="hudson.tasks.LogRotator">
+        <daysToKeep>-1</daysToKeep>
+        <numToKeep>100</numToKeep>
+        <artifactDaysToKeep>-1</artifactDaysToKeep>
+        <artifactNumToKeep>-1</artifactNumToKeep>
+        <removeLastBuild>false</removeLastBuild>
+      </strategy>
+    </jenkins.model.BuildDiscarderProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps@4376.v30c8c00684a_3">
+    <scm class="hudson.plugins.git.GitSCM" plugin="git@5.10.1">
+      <configVersion>2</configVersion>
+      <userRemoteConfigs>
+        <hudson.plugins.git.UserRemoteConfig>
+          <url>https://github.com/hshwang1994/server-expoter</url>
+          <credentialsId>hshwang token</credentialsId>
+        </hudson.plugins.git.UserRemoteConfig>
+      </userRemoteConfigs>
+      <branches>
+        <hudson.plugins.git.BranchSpec>
+          <name>*/main</name>
+        </hudson.plugins.git.BranchSpec>
+      </branches>
+      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+      <submoduleCfg class="empty-list"/>
+      <extensions/>
+    </scm>
+    <scriptPath>Jenkinsfile_ci</scriptPath>
+    <lightweight>true</lightweight>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

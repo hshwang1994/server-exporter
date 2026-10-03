@@ -1,0 +1,191 @@
+// tests/jenkins/harness/Jenkinsfile_harness — main 전용 실행 Harness (2026-10-04, Astra 3차 §5 · 4차 §2·§5). 운영 수집 Job 이 아니다.
+//
+//   Job: clovirone-cicd/clovirone-server-gather-harness — Pipeline from SCM(*/main) · Script Path 이 파일 · Lightweight checkout ·
+//        **시나리오당 빌드 1개**(stash 이름 · artifact 이름 · currentBuild.result 가 빌드 단위라 한 빌드에 여러 시나리오를 섞지 않는다).
+//   하는 일: Jenkinsfile_portal(main checkout 또는 CI 가 archive 한 생성 tree)의 최상위 함수를 build_functions.py 로 **글자 그대로** 잘라
+//           wrapper(장애 주입 · params 그림자 · unstable 기록)와 함께 load → fixture.py 로 현재 빌드에 맞는 입력 준비 → callback_sink.py(POST 수신) →
+//           sePreserveGatherOutput() / seFinalizeAndCallback() 을 **실제 Jenkins step 으로** 실행 → harness_verdict.py 가 PASS/FAIL/PARTIAL.
+//   운영 코드에는 장애 주입 분기가 없다. 생성 tree 의 함수도 같은 Harness 로 검증한다(FUNCTIONS_SRC=artifact).
+//   산출물: harness_result.json(판정) · harness_functions.groovy(+meta: 원본 해시) · harness_calls.json · harness_control.json ·
+//           preserve_state.json · fixture_state.json · sink/record.jsonl · observed/{finalize_summary,callback_body}.json
+
+properties([
+    disableConcurrentBuilds(),
+    buildDiscarder(logRotator(numToKeepStr: '200')),
+    parameters([
+        string(name: 'SCENARIO', defaultValue: 'normal_success', description: 'tests/jenkins/harness/scenarios.json 의 시나리오 이름'),
+        string(name: 'MAIN_SHA', defaultValue: '', description: '검증 중인 개발 main SHA X — checkout 과 다르면 중단한다(비우면 검사 안 함)'),
+        choice(name: 'FUNCTIONS_SRC', choices: ['checkout', 'artifact'], description: 'checkout = main 의 Jenkinsfile_portal · artifact = CI 빌드가 archive 한 생성 tree(prodtree.tar.gz)'),
+        string(name: 'ARTIFACT_BASE_URL', defaultValue: '', description: 'FUNCTIONS_SRC=artifact: CI 빌드 artifact 기준 URL (…/artifact)'),
+        string(name: 'EXPECTED_SHA256', defaultValue: '', description: 'FUNCTIONS_SRC=artifact: 생성 tree Jenkinsfile_portal 의 SHA-256 (CI 가 넘긴 값, 불일치면 중단)'),
+        string(name: 'SINK_PORT', defaultValue: '18080', description: 'callback_sink.py 포트(agent)'),
+        booleanParam(name: 'BOUNDED', defaultValue: false, description: 'SE_FINALIZER_BOUNDED=true — 4 시그니처가 승인된 Jenkins 에서만'),
+        string(name: 'LOC', defaultValue: 'git', description: 'Callback body 의 loc'),
+        string(name: 'DEPLOYMENT_ENV', defaultValue: 'harness', description: 'Callback body 의 deploymentEnvironmentId'),
+    ]),
+])
+
+String PRESERVE_FILES = 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json'
+
+timeout(time: 45, unit: 'MINUTES') {
+    node('linux') {
+        deleteDir()
+        String scenario = params.SCENARIO.trim()
+        Map control = [scenario: scenario, rethrown: null, sink_reachable: null, functions_source: params.FUNCTIONS_SRC]
+
+        // ── ① 소스 — main checkout (Job SCM = */main). MAIN_SHA 가 주어지면 같은 후보인지 확인한다.
+        def scmVars = checkout scm
+        String checkoutSha = (scmVars?.GIT_COMMIT ?: '').toString()
+        if (!checkoutSha) { checkoutSha = sh(returnStdout: true, script: 'git rev-parse HEAD').trim() }
+        if (params.MAIN_SHA?.trim() && params.MAIN_SHA.trim() != checkoutSha) {
+            error "[Harness] MAIN_SHA ${params.MAIN_SHA} != checkout ${checkoutSha} — 검증 중인 후보와 다른 코드다"
+        }
+        control.checkout_sha = checkoutSha
+        currentBuild.description = "${scenario} @${checkoutSha.take(10)} ${params.FUNCTIONS_SRC}"
+
+        def scenarios = readJSON(file: 'tests/jenkins/harness/scenarios.json', returnPojo: true).scenarios
+        def sc = scenarios[scenario]
+        if (sc == null) { error "[Harness] unknown scenario '${scenario}' — scenarios.json 참조" }
+
+        // gather_ws = 운영 함수가 보는 WORKSPACE(수집 workspace 의 축소판): 입력 파일 + Layer A 가 쓰는 scripts/ · common/vars/.
+        //   deleteDir() 이 Harness 파일을 지우지 않도록 하위 디렉터리로 분리한다. 생성 tree 모드에서는 그 tree 자체다.
+        String srcFile = 'Jenkinsfile_portal'
+        Map trusted = [:]
+        sh 'rm -rf gather_ws prodtree_src && mkdir -p gather_ws'
+        if (params.FUNCTIONS_SRC == 'artifact') {
+            String base = params.ARTIFACT_BASE_URL.trim().replaceAll('/+$', '')
+            if (!base) { error '[Harness] FUNCTIONS_SRC=artifact 에는 ARTIFACT_BASE_URL 이 필요하다' }
+            httpRequest(url: "${base}/prodtree.tar.gz", authentication: 'se-jenkins-lint', validResponseCodes: '200', outputFile: 'prodtree.tar.gz')
+            sh 'mkdir -p prodtree_src && tar -xzf prodtree.tar.gz -C prodtree_src && cp -a prodtree_src/. gather_ws/'
+            srcFile = 'prodtree_src/Jenkinsfile_portal'
+            String got = sh(returnStdout: true, script: "sha256sum ${srcFile} | cut -d' ' -f1").trim()
+            if (params.EXPECTED_SHA256?.trim() && got != params.EXPECTED_SHA256.trim()) {
+                error "[Harness] 생성 tree 함수 원본 해시 불일치 got=${got} expected=${params.EXPECTED_SHA256}"
+            }
+            control.artifact_base = base
+            control.source_sha256 = got
+            if (fileExists('prodtree_src/.production-provenance.json')) {
+                control.provenance = readJSON(file: 'prodtree_src/.production-provenance.json', returnPojo: true)
+            }
+            // finalizer 의 readTrusted 는 Job SCM(main)이 아니라 **이 생성 tree** 의 파일을 돌려줘야 한다 → 내용을 미리 읽어 둔다
+            for (String path in ['scripts/jenkins/se_finalize.groovy', 'common/vars/failure_reasons.yml', 'common/vars/supported_sections.yml']) {
+                if (fileExists("prodtree_src/${path}")) { trusted[path] = readFile(file: "prodtree_src/${path}", encoding: 'UTF-8') }
+            }
+        } else {
+            sh 'mkdir -p gather_ws/scripts gather_ws/common && cp -a scripts/finalize_gather_output.py scripts/activate_ansible_venv.sh gather_ws/scripts/ && cp -a common/vars gather_ws/common/'
+        }
+
+        // ── ② wrapper 를 붙인 함수 스크립트 (원본 글자 불변 — 해시 기록)
+        sh "python3 tests/jenkins/harness/build_functions.py --source ${srcFile} --scenario ${scenario} --out harness_functions.groovy --meta harness_functions_meta.json"
+        def meta = readJSON(file: 'harness_functions_meta.json', returnPojo: true)
+        control.functions_sha256 = meta.functions_sha256
+        control.source_sha256 = control.source_sha256 ?: meta.source_sha256
+        echo "[Harness] scenario=${scenario} functions_sha256=${meta.functions_sha256} source_sha256=${meta.source_sha256} defs=${meta.defs}"
+
+        // ── ③ Callback sink (agent) + controller 도달성 (httpRequest 는 controller 에서 나간다)
+        String agentIp = sh(returnStdout: true, script: "hostname -I 2>/dev/null | awk '{print \$1}'").trim()
+        String sinkPort = params.SINK_PORT.trim()
+        String sinkUrl = "http://${agentIp}:${sinkPort}"
+        Map sinkCfg = (sc.sink ?: [status: '200'])
+        sh 'mkdir -p sink && rm -f sink/record.jsonl sink/pid'
+        sh """JENKINS_NODE_COOKIE=dontKillMe nohup python3 tests/jenkins/harness/callback_sink.py --port ${sinkPort} --record "\$PWD/sink/record.jsonl" \\
+                --status '${sinkCfg.status ?: '200'}' --mode '${sinkCfg.mode ?: 'respond'}' --delay '${sinkCfg.delay ?: 0}' --pidfile "\$PWD/sink/pid" --max-seconds 2400 \\
+                > sink/sink.log 2>&1 &
+              sleep 2"""
+        try {
+            httpRequest(url: "${sinkUrl}/healthz", validResponseCodes: '200', timeout: 10)
+            control.sink_reachable = true
+            echo "[Harness] sink ${sinkUrl} — controller 에서 도달 (GET /healthz 는 도달성 확인일 뿐 Callback 증거가 아니다)"
+        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+            throw fie
+        } catch (Exception e) {
+            control.sink_reachable = false
+            echo "[Harness] controller 에서 sink(${sinkUrl}) 에 닿지 못함: ${e.message} — Callback 검증은 PARTIAL"
+        }
+
+        // ── ④ fixture — corpus case 입력 + **현재 빌드**의 manifest
+        String eventUuid = "harness-${env.BUILD_TAG}"
+        sh """python3 tests/jenkins/harness/fixture.py --scenarios tests/jenkins/harness/scenarios.json --scenario ${scenario} \\
+                --corpus tests/fixtures/finalize_corpus --workspace "\$PWD/gather_ws" --job '${env.JOB_NAME}' --number '${env.BUILD_NUMBER}' --url '${env.BUILD_URL}' \\
+                --loc '${params.LOC}' --deployment-env '${params.DEPLOYMENT_ENV}' --event-uuid '${eventUuid}' --callback-url '${sinkUrl}' --out fixture_state.json"""
+        def fx = readJSON(file: 'fixture_state.json', returnPojo: true)
+        env.SE_MANIFEST_JSON = fx.manifest_json
+        env.SE_GATHER_OUTCOME = fx.outcome
+        env.SE_BUILD_START_EPOCH = "${(long) (System.currentTimeMillis() / 1000L)}"
+        env.SE_FINALIZER_BOUNDED = params.BOUNDED ? 'true' : 'false'
+        for (String k in ['SE_PRESERVE_LAYER_A', 'SE_PRESERVE_ARCHIVED', 'SE_PRESERVE_STASHED', 'SE_PRESERVE_MANIFEST', 'SE_PRESERVE_HASRESULT']) { env."${k}" = '' }
+
+        // ── ⑤ load + init (바깥 스크립트 = 실제 step)
+        def lib = load 'harness_functions.groovy'
+        lib.seHarnessInit(this, [params  : [loc: params.LOC, deploymentEnvironmentId: params.DEPLOYMENT_ENV, eventUuid: eventUuid,
+                                            callbackUrl: sinkUrl, target_type: fx.channel],
+                                 trusted : trusted, slowSeconds: (sc.slow_seconds ?: 45)])
+        if (lib.params.callbackUrl != sinkUrl) { error '[Harness] params 그림자가 동작하지 않는다 — getParams() 해석 확인' }
+
+        // ── ⑥ 보존 — Gather post 가 하는 일을 gather_ws 에서 실제 step 으로 (Layer A · archive · stash). 주입은 wrapper 가 한다.
+        Map preserve = [:]
+        dir('gather_ws') {
+            withEnv(["WORKSPACE=${pwd()}"]) {
+                if (fx.run_preserve) {
+                    lib.sePreserveGatherOutput()
+                    preserve = [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED == 'true', stashed: env.SE_PRESERVE_STASHED == 'true',
+                                manifestOk: env.SE_PRESERVE_MANIFEST == 'true', hasResult: env.SE_PRESERVE_HASRESULT == 'true']
+                } else if (sc.layer_a_direct) {
+                    // Layer A 를 직접 돌린 뒤 변형(예: report 손상)을 적용하고 Harness 가 stash — "손상된 Layer A 결과" 입력
+                    sh "python3 scripts/finalize_gather_output.py --workspace \"\$PWD\" --repo-root \"\$PWD\" --outcome ${fx.outcome} || true"
+                    sh """python3 ../tests/jenkins/harness/fixture.py --scenarios ../tests/jenkins/harness/scenarios.json --scenario ${scenario} --corpus ../tests/fixtures/finalize_corpus \\
+                            --workspace "\$PWD" --job x --number 0 --url x --callback-url x --out ../fixture_post.json --post-layer-a"""
+                    stash(name: 'gather-output', includes: PRESERVE_FILES, allowEmpty: true)
+                } else {
+                    stash(name: 'gather-output', includes: PRESERVE_FILES, allowEmpty: true)
+                }
+            }
+        }
+        preserve.deleted = !fileExists('gather_ws/gather_manifest.json')
+        writeFile(file: 'preserve_state.json', text: groovy.json.JsonOutput.toJson(preserve), encoding: 'UTF-8')
+        echo "[Harness] preserve=${preserve}"
+
+        // ── ⑦ finalizer — 실제 timeout(720){ node('built-in') {…} }. outer_timeout 은 Harness 가 짧은 외곽 timeout 으로 감싼다.
+        control.rethrown = false
+        try {
+            if (sc.outer_timeout_seconds) {
+                timeout(time: (sc.outer_timeout_seconds as int), unit: 'SECONDS') { lib.seFinalizeAndCallback() }
+            } else {
+                lib.seFinalizeAndCallback()
+            }
+        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+            control.rethrown = true
+            echo "[Harness] interruption 이 finalizer 밖으로 전파됐다 (기대: 삼키지 않는다): ${fie.getClass().name}"
+            if (!sc.outer_timeout_seconds) { throw fie }   // 우리가 만든 외곽 timeout 이 아니면 진짜 중단이다 — 그대로 전파
+        }
+
+        // ── ⑧ 관측 수집 — finalizer 가 archive 한 요약·body 를 되가져오고, 호출 기록·제어 정보를 남긴다
+        writeFile(file: 'harness_calls.json', text: groovy.json.JsonOutput.toJson(lib.seHarnessCalls()), encoding: 'UTF-8')
+        sh 'mkdir -p observed'
+        try {
+            unarchive mapping: ['finalize_summary.json': 'observed/finalize_summary.json', 'callback_body.json': 'observed/callback_body.json']
+        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+            throw fie
+        } catch (Exception e) {
+            echo "[Harness] 요약/body unarchive 실패(finalizer 가 archive 전에 끝났을 수 있다): ${e.message}"
+        }
+        writeFile(file: 'harness_control.json', text: groovy.json.JsonOutput.toJson(control), encoding: 'UTF-8')
+        sh 'if [ -f sink/pid ]; then kill "$(cat sink/pid)" 2>/dev/null || true; fi; sleep 1; true'
+
+        // ── ⑨ 판정 — 기대 불일치는 UNSTABLE(FAIL), 관측 부족은 UNSTABLE(PARTIAL), 도구 실패는 FAILURE
+        int rc = sh(returnStatus: true, script: """python3 tests/jenkins/harness/harness_verdict.py --scenarios tests/jenkins/harness/scenarios.json --scenario ${scenario} \\
+                --summary observed/finalize_summary.json --body observed/callback_body.json --calls harness_calls.json --sink sink/record.jsonl \\
+                --preserve preserve_state.json --control harness_control.json --meta harness_functions_meta.json --out harness_result.json""")
+        archiveArtifacts(artifacts: 'harness_result.json,harness_functions.groovy,harness_functions_meta.json,harness_calls.json,harness_control.json,preserve_state.json,fixture_state.json,fixture_post.json,sink/record.jsonl,sink/sink.log,observed/*',
+                         allowEmptyArchive: true, fingerprint: false)
+        if (rc == 1) {
+            unstable("[Harness] ${scenario}: FAIL — 기대와 다르다 (harness_result.json)")
+        } else if (rc == 2) {
+            unstable("[Harness] ${scenario}: PARTIAL — 관측 부족 (harness_result.json)")
+        } else if (rc != 0) {
+            error "[Harness] verdict 도구 실패 rc=${rc}"
+        } else {
+            echo "[Harness] ${scenario}: PASS"
+        }
+    }
+}
