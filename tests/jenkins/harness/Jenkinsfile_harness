@@ -93,7 +93,12 @@ timeout(time: 45, unit: 'MINUTES') {
         Map sinkCfg = (sc.sink ?: [status: '200'])
         String sinkSrc = readFile(file: 'tests/jenkins/harness/callback_sink.py', encoding: 'UTF-8')
         sh 'mkdir -p sink && rm -f sink/record.jsonl sink/sink.log sink/pid'
+        // sink 파일은 finalizer 가 쓰는 controller workspace 의 **형제 디렉터리**(…@sink)에 둔다 — finalizer 의 deleteDir() 가 열린 파일을 지우려다
+        // NFS silly-rename(.nfs* "Device or resource busy") 으로 실패했다(Harness #17).
+        String sinkWs = ''
         node('built-in') {
+          ws("${pwd()}@sink") {
+            sinkWs = pwd()
             writeFile(file: 'callback_sink.py', text: sinkSrc, encoding: 'UTF-8')
             sh """mkdir -p sink
                   if [ -f sink/pid ]; then kill "\$(cat sink/pid)" 2>/dev/null || true; sleep 1; fi
@@ -116,7 +121,9 @@ timeout(time: 45, unit: 'MINUTES') {
                 control.sink_reachable = false
                 echo "[Harness] controller 에서 sink(${sinkUrl}) 에 닿지 못함: ${e.message} — Callback 검증은 PARTIAL"
             }
+          }
         }
+        control.sink_workspace = sinkWs
 
         // ── ④ fixture — corpus case 입력 + **현재 빌드**의 manifest
         String eventUuid = "harness-${env.BUILD_TAG}"
@@ -190,9 +197,11 @@ timeout(time: 45, unit: 'MINUTES') {
         String sinkRecord = ''
         String sinkLog = ''
         node('built-in') {
+          ws(sinkWs) {
             sh 'if [ -f sink/pid ]; then kill "$(cat sink/pid)" 2>/dev/null || true; fi; sleep 1; true'
             if (fileExists('sink/record.jsonl')) { sinkRecord = readFile(file: 'sink/record.jsonl', encoding: 'UTF-8') }
             if (fileExists('sink/sink.log')) { sinkLog = readFile(file: 'sink/sink.log', encoding: 'UTF-8') }
+          }
         }
         writeFile(file: 'sink/record.jsonl', text: sinkRecord, encoding: 'UTF-8')
         writeFile(file: 'sink/sink.log', text: sinkLog, encoding: 'UTF-8')
