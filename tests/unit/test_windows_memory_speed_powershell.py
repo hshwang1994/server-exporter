@@ -68,7 +68,19 @@ def test_parse_template_passes_speed_through():
     assert _render_slots([line])[0]["speed_mhz"] == 2933
 
 
-POWERSHELL = shutil.which("powershell.exe")
+def _usable_powershell():
+    """powershell.exe 가 PATH 에 보여도 실행이 안 되는 환경(Windows interop 이 막힌 WSL · Linux Runner)에서는 None → 실행 테스트 skip (2026-10-03)."""
+    exe = shutil.which("powershell.exe")
+    if not exe:
+        return None
+    try:
+        probe = subprocess.run([exe, "-NoProfile", "-NonInteractive", "-Command", "exit 0"], capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return exe if probe.returncode == 0 else None
+
+
+POWERSHELL = _usable_powershell()
 
 _MEM_PRELUDE = r"""
 function Get-CimInstance {

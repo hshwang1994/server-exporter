@@ -51,7 +51,19 @@ from test_windows_call_consolidation_render import (  # noqa: E402
     shared_facts,
 )
 
-POWERSHELL = shutil.which("powershell.exe")
+def _usable_powershell():
+    """powershell.exe 가 PATH 에 보여도 실행이 안 되는 환경(Windows interop 이 막힌 WSL · Linux Runner)에서는 None → 실행 테스트 skip (2026-10-03)."""
+    exe = shutil.which("powershell.exe")
+    if not exe:
+        return None
+    try:
+        probe = subprocess.run([exe, "-NoProfile", "-NonInteractive", "-Command", "exit 0"], capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return exe if probe.returncode == 0 else None
+
+
+POWERSHELL = _usable_powershell()
 pytestmark = pytest.mark.skipif(
     POWERSHELL is None,
     reason="powershell.exe 없음 — 합친 스크립트 실행 검증은 Windows 호스트에서만 돈다 "
