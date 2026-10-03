@@ -29,7 +29,7 @@ production 브랜치는 `scripts/ai/promote_to_production.sh` 가 denylist 정�
 ## 결과 (Impact)
 
 - main `f1221234` 기준 생성 tree **192 파일 · 1.04 MB**(production 983 파일 · 10.4 MB), 제거 주석 6,377 전행 + 562 꼬리, A 보존 57줄(셔뱅 9 · coding 17 · 셸 셔뱅 8 · argparse docstring 23),
-  **B 0**, G01~G13 · G15~G17 PASS, G14 는 저장소 메타를 읽는 테스트 7 파일에 `source_text` 표식을 붙인 뒤 통과 대상(최신 HEAD 재실행 결과는 `tests/evidence/2026-10-03-final-report.md`).
+  **B 0**, **G01~G17 PASS**(G14 는 저장소 메타를 읽는 테스트 7 파일에 `source_text` 표식 + overlay 수집 오류 수정 뒤 3,674 passed — `tests/evidence/2026-10-03-final-report.md` 7절).
 - **7b 보류**: 이 세션은 Jenkins 빌드를 실행할 수 없어(권한 모드) production Job canary(7c)를 돌릴 수 없다. 검증되지 않은 파이프라인(Phase 4 재설계 + Phase 1.5 입구)이 Portal 이 쓰는
   브랜치에 올라가는 것을 피하기 위해 `promote --dry-run` 까지만 한다. 재개 조건 · 명령은 `docs/operate/09-production-branch.md`.
 - rule 93 R2 예외 2 · R4, rule 24 R5, rule 90 R5, CLAUDE.md §14 의 "promote_to_production.sh 자동 승격" 문구는 prodgen 기준으로 바뀐다. `--no-verify` 예외는 필요 없어졌다

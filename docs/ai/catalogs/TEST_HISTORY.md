@@ -20,7 +20,8 @@
 | Phase 5 WSL emulation (`tests/scripts/phase5_scale_run.sh`, Ubuntu 24.04 · ansible-core 2.20.7 · Ryzen 5 5600/15 GiB) | 실패 경로 10/50/100/200 host × forks 50/100 × 3회: wall 10.6–11.0 / 24.7–37.5 / 52–68 / 104–116 s, 트리 PSS forks 10/50/100 → 0.4/1.8/3.7 GB, 2,460 envelope 13키 · 요청 == 결과; INT 6회 rc 124 ×5 · rc 137 ×1(weakref 콜백 소실) 고아 0 보충 정확; 기록 비용 Δ ≤ 노이즈; Layer A 1000 host 0.21/0.23/0.12 s; Redfish 에뮬레이터 불가 |
 | `test_gather_budget.py` (OS forks 상한 50 + `SE_FORKS_CAP_OS`) · 콜백 first_seen ip | 9 passed / 92 passed |
 | Linux P3 (`test_linux_*` 4 파일 · `test_linux_remote_consolidation` 19 · `tests/e2e/test_linux_raw_scripts_shim` 11) | WSL 153 passed(vlan_id 수정 뒤 xfail → pass); e2e 772 passed; 작업자: 6 캡처 × 6 권한 × 2 모드 432 fragment 집합 동일, 실제 play 4회 envelope 동일 |
-| prodgen (`tests/unit/prodgen` 69) | Windows 69 passed / WSL 61 passed · 8 skipped(PowerShell 파서 없음); 생성 `f1221234` 192 파일 · B 0 · G01~G13/G15~G17 PASS · G17 결정성 · 린터 validated |
+| prodgen (`tests/unit/prodgen` 69) | Windows 69 passed / WSL 61 passed · 8 skipped(PowerShell 파서 없음); 생성 `dcfbfded`~`25bb5343` 192 파일 · 1,035,135 B · tree `49bd0d88…` 동일 · B 0 · **G01~G17 PASS**(G14 run 5: 3674 passed · 87 skipped · 31 deselected; run 1~4 는 overlay 수집 오류 — 생성 tree 에 없는 scripts/ai·Jenkinsfile_ci import, conftest 이름 충돌 → 수정) · `promote --dry-run` parent `4ce90a00` tree `88280034` |
+| WSL `pytest tests/unit tests/e2e` 동시 실행(`-m "not source_text"`, PowerShell 테스트 probe skip) | 3747 passed, 97 skipped, 51 deselected, 4 warnings in 103.04s (0:01:43) |
 | G14 overlay 제외 표식 7 파일 | 126 passed(전체) / 75 passed · 51 deselected(`-m "not source_text"`) |
 
 ## 2026-10-03 — Gathering 개선 Phase 1 baseline · Phase 1.5 (Jenkinsfile 최소 선행 변경 · ci_gate)
