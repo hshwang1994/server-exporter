@@ -5743,7 +5743,7 @@ ISOLATION_LIVE_PROVEN = 'live_proven'          # 이 저장소 실장비에서 �
 ISOLATION_ADVISORY = 'advisory_derived'        # HPE 공식 Advisory 영향 Firmware
 ISOLATION_SAFETY = 'safety_strategy'           # Vendor 필수 계약이 아닌 Repository 선택
 
-_ILO_FW_RE = re.compile(r'iLO\s*(\d+)', re.IGNORECASE)
+_ILO_FW_RE = re.compile(r'iLO\s*(\d+)', re.IGNORECASE)   # nosec rule12-r1 — BMC family(iLO 세대) 식별, rule 12 R1 허용 영역
 _ILO_VER_RE = re.compile(r'v?(\d+)\.(\d+)')
 
 
@@ -5887,7 +5887,7 @@ def resolve_account_family(vendor, discovery, adapter_id=None):
                 return account_family('lenovo_xcc3_accounttypes'), reasons
             reasons.append(                                                        # nosec rule12-r1
                 f'AccountTypes 관측={exposes_account_types} HostBootstrap 관측={has_bootstrap} '
-                f'hint={hint!r} → AccountTypes 지원 XCC family')
+                f'hint={hint!r} → AccountTypes 지원 XCC family')  # nosec rule12-r1
             return account_family('lenovo_xcc2_accounttypes'), reasons
         # (3) Purley 만 pre-populated empty slot PATCH 로 계정을 만든다. Whitley/AMD 는 POST 라
         #     hint 가 그쪽을 가리키면 slot 관측이 있어도 Purley 로 보지 않는다.

@@ -42,7 +42,8 @@ RBAC Pattern 과 일치해야 권한이 자동 적용된다.
 
 `production` 은 순수 수집 코드만 있는 배포 브랜치다 (`main` 에서 `.claude/`, `docs/ai/`, `scripts/ai/`,
 `tests/reference/`, `tests/evidence/` 를 뺀 것). `main` 은 참조 데이터까지 약 17k 파일이라 컨트롤러의
-'Resolve Location' 단계(2분 제한)가 체크아웃 도중 끊긴 적이 있다. 코드는 `main` 에 커밋한 뒤
+'Resolve Location' 단계(2분 제한)가 체크아웃 도중 끊긴 적이 있다(2026-10-03 부터 이 단계는 `readTrusted` 로
+파일 하나만 읽어 체크아웃을 하지 않는다 — Lightweight checkout 이 켜져 있어야 한다). 코드는 `main` 에 커밋한 뒤
 `scripts/ai/promote_to_production.sh` 로 승격한다.
 
 ### Script Path
@@ -122,7 +123,8 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 
 | 증상 | 원인 / 해결 |
 |------|------------|
-| 'Resolve Location' 이 2분 제한으로 끊김 | Branch 가 `*/main` 이면 참조 데이터까지 받는다 — `*/production` 으로 |
+| 'Resolve Location' 이 2분 제한으로 끊김 | 2026-10-03 이전 Jenkinsfile: Branch 가 `*/main` 이면 참조 데이터까지 받는다 — `*/production` 으로. 이후 Jenkinsfile: `readTrusted` 가 체크아웃을 하지 않으므로 Job 의 Lightweight checkout 이 꺼져 있는지 확인 |
+| `readTrusted` 가 전체 체크아웃으로 떨어졌다는 콘솔 메시지 | Job 의 Lightweight checkout 이 꺼져 있거나 SCM 플러그인이 lightweight 를 지원하지 않는다 — Job 설정 확인 |
 | `[Resolve Location] 등록되지 않은 Location` | `loc` 값이 `common/vars/locations.yml` 에 없다 |
 | `[Resolve Location] 라벨 '… && (…)' 을 모두 가진 온라인 노드가 없습니다` 로 바로 실패 | `loc` 의 `agent_label` 과 `target_type` 의 능력 라벨(`os` 는 `linux`+`windows`, `esxi`, `redfish`)을 모두 가진 온라인 노드가 없다 — Manage Jenkins → Nodes 의 Labels 확인 ([02-agent-node.md](02-agent-node.md) 8절) |
 | Gather 에서 `[venv] Ansible 실행환경(venv)을 찾지 못했습니다` | Agent 의 venv 가 없거나 파이프라인이 아는 경로 밖 — [02-agent-node.md](02-agent-node.md) 5절 · 9절 |

@@ -12,19 +12,25 @@
 `Jenkinsfile_portal` 은 최상위 `agent none` 이고 단계마다 노드를 고른다. 컨트롤러(`built-in`)에는 Python 도 Ansible 도 필요 없다.
 
 ```text
-parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid, callbackUrl, verbosity)
-  → Resolve Location  [컨트롤러]  loc 를 common/vars/locations.yml 로 검증, target_type 능력 라벨과 && 로 이어 노드 라벨식 결정 (맞는 온라인 노드 없으면 즉시 실패)
-  → Validate          [Agent]     파라미터 형식 검증 (체크아웃 없음)
-  → Gather            [Agent]     (전역 ADDON_REPO_URL 이 있으면 Add-on 체크아웃 · 검사) → ansible-playbook 실행 → gather_output.json → stash
+parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid, callbackUrl, verbosity
+            + 검증용 redfishAccountDryrun, gatherBudgetForceSec — 기본값이면 운영 동작 불변)
+  → Validate          [agent 없음]  파라미터 형식 검증 → 접수 manifest(env SE_MANIFEST_JSON: 빌드·채널·요청 식별·접수 IP 목록)
+  → Resolve Location  [agent 없음]  readTrusted 로 common/vars/locations.yml 하나만 읽어 loc 검증, target_type 능력 라벨과 && 로 이어 노드 라벨식 결정 (맞는 온라인 노드 없으면 즉시 실패)
+  → Gather            [Agent]     manifest 를 gather_manifest.json 으로 기록 → (전역 ADDON_REPO_URL 이 있으면 Add-on 체크아웃 · 검사) → ansible-playbook 실행 → gather_output.json
+                                  post{always}: archiveArtifacts(gather_output.json · gather_manifest.json · gather_rc.txt) → stash → deleteDir — 수집이 어떻게 끝났든 완료된 host 결과는 남는다
   → Validate Schema   [Agent]     field_dictionary.yml 정합 (FAIL 게이트)
   → Callback          [컨트롤러]  unstash → 호출자에게 POST (실패해도 빌드는 UNSTABLE)
 ```
 
+> 2026-10-03: Validate 와 Resolve Location 은 더 이상 노드를 잡지 않는다. 종전에는 Resolve Location 이 컨트롤러에서
+> 저장소 **전체**를 체크아웃한 뒤 YAML 1개를 읽었고, `main`(약 17k 파일)은 2분 제한을 넘겨 끊겼다. `readTrusted` 는
+> Job 의 SCM 설정(Lightweight checkout)으로 파일 하나만 읽는다.
+
 | Stage | 노드 | 하는 일 | 실패 시 |
 |-------|------|--------|--------|
-| Resolve Location | `built-in` | `readYaml common/vars/locations.yml` — 미등록 `loc` 는 노드 대기 없이 즉시 실패 | FAILURE |
-| Validate | `agent_label && 능력 라벨` 노드 | `target_type` / `inventory_json` / `callbackUrl` / `deploymentEnvironmentId` 검증 | FAILURE |
-| Gather | `agent_label && 능력 라벨` 노드 | (전역 `ADDON_REPO_URL` 이 있으면 Add-on 저장소를 `${WORKSPACE}/addon` 에 받고 검사 — 3절) → venv 활성화 → `ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-file=<임시파일> -e se_location=<loc>` | Add-on 을 받지 못하면 UNSTABLE + Add-on 없이 수집, ansible 실패는 UNSTABLE, 결과 파일 0바이트면 FAILURE |
+| Validate | 없음 | `target_type` / `inventory_json`(JSON 배열 · 원소 객체 · `service_ip`/`bmc_ip`/`ip`) / `callbackUrl` / `deploymentEnvironmentId` 검증, 접수 manifest 를 `env.SE_MANIFEST_JSON` 으로 | FAILURE |
+| Resolve Location | 없음 | `readYaml text: readTrusted('common/vars/locations.yml')` — 미등록 `loc` 는 노드 대기 없이 즉시 실패 | FAILURE |
+| Gather | `agent_label && 능력 라벨` 노드 | `gather_manifest.json` 기록 → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 저장소를 `${WORKSPACE}/addon` 에 받고 검사 — 3절) → venv 활성화 → `ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-file=<임시파일> -e se_location=<loc>` (검증 파라미터가 켜진 빌드만 `-e _rf_account_service_dryrun=true` / `timeout --signal=INT --kill-after=90 <초>`) → rc 를 `gather_rc.txt` 에 → post{always} 보존 | Add-on 을 받지 못하면 UNSTABLE + Add-on 없이 수집, ansible 실패는 UNSTABLE, 결과 파일 0바이트면 FAILURE |
 | Validate Schema | `agent_label && 능력 라벨` 노드 | venv 활성화 → `python3 tests/validate_field_dictionary.py` | FAILURE |
 | Callback | `built-in` | `httpRequest` POST, 3회 재시도 (10s · 20s backoff) | UNSTABLE (수집 결과는 콘솔에 남는다) |
 
@@ -60,6 +66,8 @@ Gather 와 Validate Schema 는 저장소의 `scripts/activate_ansible_venv.sh` �
 | `eventUuid` | string | 선택 | 포털 이벤트 UUID (Callback 본문에 그대로) |
 | `callbackUrl` | string | 필수 | 결과 전달 URL — `http(s)://` 로 시작, 따옴표·백틱·역슬래시·공백 불가 |
 | `verbosity` | choice | 선택 | Ansible verbosity 0~4 (`ANSIBLE_VERBOSITY`) |
+| `redfishAccountDryrun` | boolean | 선택 (기본 false) | **검증용.** true 면 `-e _rf_account_service_dryrun=true` 를 넘겨 Redfish 표준 계정 복구(쓰기)를 시뮬레이션만 한다. 운영 요청은 건드리지 않는다 |
+| `gatherBudgetForceSec` | string | 선택 (기본 빈 값) | **검증용.** 정수(초)를 주면 `ansible-playbook` 을 `timeout --signal=INT --kill-after=90 <초>` 로 감싼다(rc 124/137 은 콘솔과 `gather_rc.txt` 에). 빈 값이면 종전과 같이 제한 없음 |
 
 ### inventory_json 형식
 ```jsonc

@@ -37,6 +37,17 @@ pipeline {
             choices     : ['0', '1', '2', '3', '4'],
             description : 'Ansible verbosity (0=운영, 1~2=디버그, 3~4=깊은 진단)'
         )
+        // 아래 두 파라미터는 검증 실행용이다. 기본값이면 운영 동작이 바뀌지 않는다.
+        booleanParam(
+            name        : 'redfishAccountDryrun',
+            defaultValue: false,
+            description : '검증용 — Redfish 표준 계정 복구(쓰기)를 시뮬레이션만 한다 (-e _rf_account_service_dryrun=true). 운영 기본 false'
+        )
+        string(
+            name        : 'gatherBudgetForceSec',
+            defaultValue: '',
+            description : '검증용 — 수집(ansible-playbook) 배치 상한(초). 비우면 제한 없음(운영 기본). 초과 시 INT, 90초 뒤 KILL — 완료된 host 결과는 보존'
+        )
     }
 
     environment {
@@ -51,8 +62,94 @@ pipeline {
 
     stages {
 
+        stage('Validate') {
+            // agent 없음 — 파라미터 검증만 하므로 workspace 가 필요 없다. 접수 manifest 는 env(JSON 문자열)로만 들고
+            //   Gather 가 node 를 얻은 직후 파일로 쓴다 (agent 없는 stage 에서는 writeFile 을 쓸 수 없다).
+            //   Resolve Location 보다 먼저 돈다: 구조가 틀린 요청은 노드를 고르기 전에 끝낸다.
+            options { timeout(time: 2, unit: 'MINUTES') }
+            steps {
+                script {
+                    if (!params.loc?.trim()) {
+                        error "[Validate] 필수 파라미터 누락: loc"
+                    }
+
+                    def allowed = ['os', 'esxi', 'redfish']
+                    if (!allowed.contains(params.target_type?.trim())) {
+                        error "[Validate] target_type 값 오류: '${params.target_type}' -- 허용값: ${allowed}"
+                    }
+
+                    if (!params.inventory_json?.trim()) {
+                        error "[Validate] inventory_json 이 비어있습니다"
+                    }
+
+                    def hosts
+                    try {
+                        // Classic: 결과가 Serializable 이라 CPS 경계를 넘어도 안전하다.
+                        hosts = new groovy.json.JsonSlurperClassic().parseText(params.inventory_json)
+                    } catch (Exception e) {
+                        error "[Validate] inventory_json JSON 파싱 실패: ${e.message}"
+                    }
+
+                    // 종전에도 실패하던 입력(객체·비객체 원소)을 NPE 대신 명확한 오류로 — 허용 범위는 바뀌지 않는다.
+                    if (!(hosts instanceof List)) {
+                        error "[Validate] inventory_json 은 JSON 배열이어야 합니다"
+                    }
+                    if (hosts.size() == 0) {
+                        error "[Validate] inventory_json 배열이 비어있습니다"
+                    }
+
+                    def primaryKey = (params.target_type == 'redfish') ? 'bmc_ip' : 'service_ip'
+                    def acceptedIps = []
+                    for (int idx = 0; idx < hosts.size(); idx++) {
+                        def host = hosts[idx]
+                        if (!(host instanceof Map)) {
+                            error "[Validate] inventory_json[${idx}] 은 객체여야 합니다"
+                        }
+                        def ipVal = host[primaryKey]?.toString()?.trim() ?: host['ip']?.toString()?.trim()
+                        if (!ipVal) {
+                            error "[Validate] inventory_json[${idx}] '${primaryKey}' 또는 'ip' 필드 누락"
+                        }
+                        acceptedIps.add(ipVal)
+                    }
+
+                    if (!params.callbackUrl?.trim()) {
+                        error "[Validate] 필수 파라미터 누락: callbackUrl"
+                    }
+                    def cbUrl = params.callbackUrl.trim()
+                    if (!(cbUrl.startsWith('http://') || cbUrl.startsWith('https://'))) {
+                        error "[Validate] callbackUrl 은 http:// 또는 https:// 로 시작해야 함: ${cbUrl}"
+                    }
+                    if (cbUrl.contains("'") || cbUrl.contains('"') || cbUrl.contains('`') || cbUrl.contains('\\') || cbUrl.replaceAll(/\s/, '') != cbUrl) {
+                        error "[Validate] callbackUrl 에 허용되지 않는 문자(따옴표/백틱/역슬래시/공백) 포함 — 거부: ${cbUrl}"
+                    }
+                    if (!params.deploymentEnvironmentId?.trim()) {
+                        error "[Validate] 필수 파라미터 누락: deploymentEnvironmentId"
+                    }
+
+                    // 접수 manifest — "요청 대상 1개 = 결과 1개" 대조의 정본. Gather 가 node 진입 직후 gather_manifest.json 으로 쓴다.
+                    //   비밀값 없음. env 는 CPS 가 직렬화할 수 있는 문자열이라 어느 stage/post 에서도 읽을 수 있다.
+                    env.SE_MANIFEST_JSON = groovy.json.JsonOutput.toJson([
+                        schema : 1,
+                        build  : [job: env.JOB_NAME, number: env.BUILD_NUMBER, url: env.BUILD_URL],
+                        channel: params.target_type.trim(),
+                        request: [
+                            loc                    : params.loc.trim(),
+                            deploymentEnvironmentId: params.deploymentEnvironmentId.trim(),
+                            eventUuid              : (params.eventUuid ?: '').trim(),
+                            callbackUrl            : cbUrl,
+                        ],
+                        ips    : acceptedIps,
+                    ])
+
+                    echo "[Validate] OK -- target_type=${params.target_type}, hosts=${acceptedIps.size()}, loc=${params.loc}"
+                    echo "[Validate] callback=${params.callbackUrl}"
+                }
+            }
+        }
+
         stage('Resolve Location') {
-            agent { label 'built-in' }
+            // agent 없음 — 종전에는 built-in 에서 저장소 전체를 checkout 한 뒤 YAML 1개를 읽었고, main(17.9k 파일)은 2분 제한을 넘겼다.
+            //   readTrusted 는 Job 의 SCM 설정(lightweight)으로 파일 하나만 읽는다 → workspace 도 checkout 도 없다.
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
                 script {
@@ -60,7 +157,7 @@ pipeline {
                     if (!key) {
                         error "[Resolve Location] 필수 파라미터 누락: loc"
                     }
-                    def reg = readYaml file: 'common/vars/locations.yml'
+                    def reg = readYaml text: readTrusted('common/vars/locations.yml')
                     def known = (reg?.locations ?: [:])
                     def entry = known[key]
                     if (!entry) {
@@ -82,79 +179,13 @@ pipeline {
                     env.SE_LOCATION    = key
                     env.SE_AGENT_LABEL = "${entry.agent_label.trim()} && (${targetLabels[targetType]})"
                     // 맞는 온라인 노드가 없으면 executor 를 기다리며 조용히 멈추는 대신 여기서 끝낸다.
+                    //   (접수는 끝난 요청이라 Portal 에 결과를 돌려주는 것이 맞다 — finalizer 가 들어오는 다음 단계에서 Callback 까지 잇는다.)
                     def nodes = nodesByLabel(label: env.SE_AGENT_LABEL)
                     if (!nodes) {
                         error "[Resolve Location] 라벨 '${env.SE_AGENT_LABEL}' 을 모두 가진 온라인 노드가 없습니다 " +
                               "-- Manage Jenkins > Nodes 에서 '${key}' 노드의 라벨(${targetLabels[targetType]})을 확인하세요."
                     }
                     echo "[Resolve Location] ${key} + ${targetType} -> agent label '${env.SE_AGENT_LABEL}' (nodes: ${nodes.join(', ')})"
-                }
-            }
-            post { always { deleteDir() } }
-        }
-
-        stage('Validate') {
-            agent {
-                node {
-                    label "${env.SE_AGENT_LABEL}"
-                    customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
-                }
-            }
-            options {
-                timeout(time: 2, unit: 'MINUTES')
-                skipDefaultCheckout(true)
-            }
-            steps {
-                script {
-                    if (!params.loc?.trim()) {
-                        error "[Validate] 필수 파라미터 누락: loc"
-                    }
-
-                    def allowed = ['os', 'esxi', 'redfish']
-                    if (!allowed.contains(params.target_type?.trim())) {
-                        error "[Validate] target_type 값 오류: '${params.target_type}' -- 허용값: ${allowed}"
-                    }
-
-                    if (!params.inventory_json?.trim()) {
-                        error "[Validate] inventory_json 이 비어있습니다"
-                    }
-
-                    def hosts
-                    try {
-                        hosts = new groovy.json.JsonSlurper().parseText(params.inventory_json)
-                    } catch (Exception e) {
-                        error "[Validate] inventory_json JSON 파싱 실패: ${e.message}"
-                    }
-
-                    if (!hosts || hosts.size() == 0) {
-                        error "[Validate] inventory_json 배열이 비어있습니다"
-                    }
-
-                    def primaryKey = (params.target_type == 'redfish') ? 'bmc_ip' : 'service_ip'
-                    for (int idx = 0; idx < hosts.size(); idx++) {
-                        def host = hosts[idx]
-                        def ipVal = host[primaryKey]?.trim() ?: host['ip']?.trim()
-                        if (!ipVal) {
-                            error "[Validate] inventory_json[${idx}] '${primaryKey}' 또는 'ip' 필드 누락"
-                        }
-                    }
-
-                    if (!params.callbackUrl?.trim()) {
-                        error "[Validate] 필수 파라미터 누락: callbackUrl"
-                    }
-                    def cbUrl = params.callbackUrl.trim()
-                    if (!(cbUrl.startsWith('http://') || cbUrl.startsWith('https://'))) {
-                        error "[Validate] callbackUrl 은 http:// 또는 https:// 로 시작해야 함: ${cbUrl}"
-                    }
-                    if (cbUrl.contains("'") || cbUrl.contains('"') || cbUrl.contains('`') || cbUrl.contains('\\') || cbUrl.replaceAll(/\s/, '') != cbUrl) {
-                        error "[Validate] callbackUrl 에 허용되지 않는 문자(따옴표/백틱/역슬래시/공백) 포함 — 거부: ${cbUrl}"
-                    }
-                    if (!params.deploymentEnvironmentId?.trim()) {
-                        error "[Validate] 필수 파라미터 누락: deploymentEnvironmentId"
-                    }
-
-                    echo "[Validate] OK -- target_type=${params.target_type}, hosts=${hosts.size()}, loc=${params.loc}"
-                    echo "[Validate] callback=${params.callbackUrl}"
                 }
             }
         }
@@ -190,7 +221,15 @@ pipeline {
                     def inventory = inventoryMap[params.target_type]
                     echo "[Gather] playbook=${playbook}"
 
-                    sh "rm -f \"${env.WORKSPACE}/gather_output.json\""
+                    sh "rm -f \"${env.WORKSPACE}/gather_output.json\" \"${env.WORKSPACE}/gather_rc.txt\""
+                    // 접수 manifest 파일화 — node 를 얻은 직후, 수집보다 먼저 (Validate 가 env 로 넘긴 JSON 그대로).
+                    writeFile(file: 'gather_manifest.json', text: (env.SE_MANIFEST_JSON ?: '') + '\n', encoding: 'UTF-8')
+
+                    // 검증용 배치 상한 — 비어 있으면 종전과 같이 제한 없음.
+                    def budgetForce = (params.gatherBudgetForceSec ?: '').trim()
+                    if (budgetForce && !(budgetForce ==~ /\d+/)) {
+                        error "[Gather] gatherBudgetForceSec 은 정수(초)여야 합니다: '${budgetForce}'"
+                    }
 
                     // ── Add-on (고객별 추가 수집) — Jenkins 전역 환경변수 ADDON_REPO_URL 이 있을 때만 켠다.
                     //    받지 못하거나 파일 검사에 실패해도 빌드를 끊지 않고 Add-on 없이 수집한다 (UNSTABLE) —
@@ -260,7 +299,7 @@ pipeline {
                             //   (SE_ANSIBLE_VENV → PATH 의 ansible-playbook → 알려진 설치 경로). 못 찾으면 이 stage 는 실패한다.
                             // ADDON_DIR 은 검사를 통과한 빌드의 이 ansible 실행에만 준다 — 값이 있으면 hook 이 그 Add-on 을 실행하므로,
                             //   받지 못했거나 검사에 실패한 빌드에 남으면 모든 host 의 수집에 영향을 준다.
-                            withEnv(addonDir ? ["ADDON_DIR=${addonDir}"] : []) {
+                            withEnv((addonDir ? ["ADDON_DIR=${addonDir}"] : []) + (budgetForce ? ["SE_GATHER_BUDGET_FORCE_SEC=${budgetForce}"] : [])) {
                                 sh """#!/bin/bash
                                     set -eo pipefail
                                     set +x
@@ -271,7 +310,25 @@ pipeline {
                                     trap 'rm -f "\$VAULT_TMP"' EXIT
                                     printf '%s' "\${VAULT_PASSWORD}" > "\$VAULT_TMP"
                                     chmod 600 "\$VAULT_TMP"
-                                    ansible-playbook "${playbook}" -i "${inventory}" --vault-password-file="\$VAULT_TMP" -e se_location="${env.SE_LOCATION}"
+                                    EXTRA_ARGS=()
+                                    if [ "${params.redfishAccountDryrun}" = "true" ]; then
+                                        # 검증 실행: 계정 복구 쓰기를 시뮬레이션만 한다 (account_service.yml 이 -e 를 우선한다)
+                                        EXTRA_ARGS+=(-e _rf_account_service_dryrun=true)
+                                    fi
+                                    RUNNER=()
+                                    if [ -n "\${SE_GATHER_BUDGET_FORCE_SEC:-}" ]; then
+                                        # 배치 상한: INT 로 ansible 이 자식까지 정리하게 하고, 90초 뒤에도 남으면 KILL
+                                        RUNNER=(timeout --signal=INT --kill-after=90 "\${SE_GATHER_BUDGET_FORCE_SEC}")
+                                    fi
+                                    set +e
+                                    "\${RUNNER[@]}" ansible-playbook "${playbook}" -i "${inventory}" --vault-password-file="\$VAULT_TMP" -e se_location="${env.SE_LOCATION}" "\${EXTRA_ARGS[@]}"
+                                    rc=\$?
+                                    set -e
+                                    echo "\$rc" > "\${WORKSPACE}/gather_rc.txt"
+                                    if [ "\$rc" -eq 124 ] || [ "\$rc" -eq 137 ]; then
+                                        echo "[Gather] budget exceeded (rc=\$rc, SE_GATHER_BUDGET_FORCE_SEC=\${SE_GATHER_BUDGET_FORCE_SEC}) -- 완료된 host 결과는 gather_output.json 에 남아 있다"
+                                    fi
+                                    exit "\$rc"
                                 """
                             }
                         }
@@ -283,14 +340,17 @@ pipeline {
                     }
                 }
 
-                stash(
-                    name       : 'gather-output',
-                    includes   : 'gather_output.json',
-                    allowEmpty : false,
-                )
             }
             post {
+                // 결과 보존은 수집이 어떻게 끝났든 한다 — 중단·실패한 빌드에서도 완료된 host 의 OUTPUT 줄은 남는다.
+                //   archive(빌드에 영구) + stash(Callback stage 로) 둘 다 allowEmpty: 파일이 없으면 Callback 이 그 사실을 보고한다.
                 always {
+                    archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt', allowEmptyArchive: true, fingerprint: false)
+                    stash(
+                        name       : 'gather-output',
+                        includes   : 'gather_output.json',
+                        allowEmpty : true,
+                    )
                     deleteDir()
                 }
             }

@@ -1,0 +1,114 @@
+"""Jenkinsfile_portal — 2026-10-03 Phase 1.5 최소 선행 변경의 텍스트 계약.
+
+무엇이 바뀌었나:
+  1. stage 순서 Validate → Resolve Location → Gather → Validate Schema → Callback.
+     Validate · Resolve Location 은 agent 없이 돈다 (workspace 없음 → writeFile 금지).
+  2. 접수 manifest: Validate 가 env.SE_MANIFEST_JSON(JSON 문자열)으로 만들고 Gather 가 node 진입 직후
+     gather_manifest.json 으로 파일화한다 — ansible-playbook 보다 먼저.
+  3. 검증용 파라미터 둘: redfishAccountDryrun(기본 false → -e _rf_account_service_dryrun=true 는 true 일 때만),
+     gatherBudgetForceSec(기본 '' → timeout --signal=INT --kill-after=90 은 값이 있을 때만).
+  4. Gather post{always}: archiveArtifacts → stash(allowEmpty) → deleteDir 순. steps 안의 stash 는 없다.
+     수집이 어떻게 끝나든 완료된 host 의 OUTPUT 줄은 보존된다.
+  5. inventory_json 의 구조 오류(배열 아님 · 원소가 객체 아님)는 NPE 대신 명확한 오류 — 새 거부는 없다.
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+JENKINSFILE = REPO_ROOT / "Jenkinsfile_portal"
+TEXT = JENKINSFILE.read_text(encoding="utf-8")
+
+
+def _stage(name: str) -> str:
+    start = TEXT.index(f"stage('{name}')")
+    nxt = re.search(r"\n        stage\('", TEXT[start + 1:])
+    return TEXT[start: start + 1 + nxt.start()] if nxt else TEXT[start:]
+
+
+def _params() -> str:
+    start = TEXT.index("    parameters {")
+    return TEXT[start: TEXT.index("    environment {", start)]
+
+
+VALIDATE = _stage("Validate")
+RESOLVE = _stage("Resolve Location")
+GATHER = _stage("Gather")
+PARAMS = _params()
+
+
+def test_stage_order_validate_then_resolve_then_gather():
+    order = [TEXT.index(f"stage('{n}')") for n in ("Validate", "Resolve Location", "Gather", "Validate Schema", "Callback")]
+    assert order == sorted(order), "구조가 틀린 요청은 노드를 고르기 전에 끝낸다"
+
+
+def test_validate_and_resolve_run_without_agent_or_workspace():
+    for name, stage in (("Validate", VALIDATE), ("Resolve Location", RESOLVE)):
+        assert "agent {" not in stage, name
+        assert "writeFile(" not in stage, f"{name} 에는 workspace 가 없다"
+        assert "deleteDir(" not in stage, name
+        assert "skipDefaultCheckout" not in stage, name
+        assert "timeout(time: 2, unit: 'MINUTES')" in stage, name
+
+
+def test_resolve_reads_registry_with_read_trusted_only():
+    assert "readYaml text: readTrusted('common/vars/locations.yml')" in RESOLVE
+    assert "checkout scm" not in RESOLVE and "checkout(" not in RESOLVE and "readYaml file:" not in RESOLVE
+
+
+def test_manifest_is_env_json_in_validate_and_a_file_at_gather_entry():
+    assert "env.SE_MANIFEST_JSON = groovy.json.JsonOutput.toJson([" in VALIDATE
+    for key in ("schema : 1", "build  : [job: env.JOB_NAME, number: env.BUILD_NUMBER, url: env.BUILD_URL]",
+                "channel: params.target_type.trim()", "ips    : acceptedIps"):
+        assert key in VALIDATE, key
+    assert TEXT.count("SE_MANIFEST_JSON =") == 1, "manifest 를 만드는 곳은 Validate 한 곳"
+    write = GATHER.index("writeFile(file: 'gather_manifest.json', text: (env.SE_MANIFEST_JSON ?: '') + '\\n', encoding: 'UTF-8')")
+    assert write < GATHER.index("ansible-playbook "), "manifest 파일화는 수집보다 먼저"
+    assert write > GATHER.index("steps {"), "node 를 얻은 뒤(steps 안)에 쓴다"
+
+
+def test_verification_params_default_to_production_behaviour():
+    assert re.search(r"booleanParam\(\s*name\s*:\s*'redfishAccountDryrun',\s*defaultValue:\s*false", PARAMS)
+    assert re.search(r"string\(\s*name\s*:\s*'gatherBudgetForceSec',\s*defaultValue:\s*''", PARAMS)
+
+
+def test_dryrun_flag_is_passed_only_when_the_param_is_true():
+    assert 'if [ "${params.redfishAccountDryrun}" = "true" ]; then' in GATHER
+    assert TEXT.count("EXTRA_ARGS+=(-e _rf_account_service_dryrun=true)") == 1, "넘기는 곳은 guard 안 한 곳"
+    assert TEXT.count("-e _rf_account_service_dryrun=true") == 2, "shell 의 guard 안 1곳 + 파라미터 설명 1곳 외에는 없다"
+    guard = GATHER.index('if [ "${params.redfishAccountDryrun}" = "true" ]; then')
+    assert guard < GATHER.index("EXTRA_ARGS+=(-e _rf_account_service_dryrun=true)")
+
+
+def test_budget_wrapper_is_used_only_when_the_param_is_set():
+    assert 'if [ -n "\\${SE_GATHER_BUDGET_FORCE_SEC:-}" ]; then' in GATHER
+    assert 'RUNNER=(timeout --signal=INT --kill-after=90 "\\${SE_GATHER_BUDGET_FORCE_SEC}")' in GATHER
+    assert '"\\${RUNNER[@]}" ansible-playbook' in GATHER
+    assert "budgetForce ? [\"SE_GATHER_BUDGET_FORCE_SEC=${budgetForce}\"] : []" in GATHER
+    assert "budgetForce ==~ /\\d+/" in GATHER, "정수(초)만 받는다"
+    assert 'echo "\\$rc" > "\\${WORKSPACE}/gather_rc.txt"' in GATHER
+    assert "-eq 124" in GATHER and "-eq 137" in GATHER, "timeout 의 rc 를 콘솔에 남긴다"
+
+
+def test_gather_post_preserves_output_before_deleting_the_workspace():
+    post = GATHER[GATHER.index("post {"):]
+    archive = post.index("archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt', allowEmptyArchive: true")
+    stash = re.search(r"^\s*stash\($", post, re.M).start()
+    delete = post.index("deleteDir()")
+    assert archive < stash < delete, "archive → stash → deleteDir"
+    assert "allowEmpty : true" in post
+    assert len(re.findall(r"^\s*stash\($", TEXT, re.M)) == 1, "steps 안의 stash 는 없다 — 보존은 post{always} 한 곳"
+    assert "unstash 'gather-output'" in _stage("Callback")
+
+
+def test_inventory_shape_errors_are_explicit_without_new_rejections():
+    assert "new groovy.json.JsonSlurperClassic().parseText(params.inventory_json)" in VALIDATE
+    assert "inventory_json 은 JSON 배열이어야 합니다" in VALIDATE
+    assert "은 객체여야 합니다" in VALIDATE
+    for forbidden in ("SE_MAX_HOSTS", "eventUuid 형식", "제어문자"):
+        assert forbidden not in TEXT, f"새 거부 규칙({forbidden})은 별도 계약 결정(Q2) 전에는 없다"
+
+
+def test_file_has_lf_line_endings():
+    assert b"\r\n" not in JENKINSFILE.read_bytes()
