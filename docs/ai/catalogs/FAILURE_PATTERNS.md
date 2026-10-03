@@ -456,3 +456,32 @@
 - 재발 방지: Ansible `fileglob` 에 디렉터리 wildcard 를 쓰지 않는다. 서버 종류별로 갈리는 로직은 role 실행 테스트를 두 종류 이상에서 돌린다.
 - 관련 rule: rule 95 R1 (의심 패턴), rule 25 R7-A (실측 검증)
 
+## 2026-10-03 — dmidecode sudo 재시도가 "출력이 비었을 때" 만 발동해 비루트에서 한 번도 돌지 않음
+
+- 카테고리: scope-miss (조건 가정 오류)
+- 발견 위치: `os-gather/tasks/linux/gather_memory.yml` raw 스크립트 — C1 검수(서브 작업자 strict xfail)에서 발견, `4fe9712a` 에서 수정
+- 증상: 비루트 계정의 `dmidecode -t memory` 는 버전 머리말을 stdout 에 찍고 rc=1 로 끝난다. `[ -z "$out" ]` 조건은 거짓이라 `sudo -n` 재시도가 일어나지 않았고
+  DIMM 상세가 비어 os_visible fallback 으로 떨어졌다.
+- 수정: `{ [ -z "$out" ] || [ "$dmi_rc" -ne 0 ]; }` 로 재시도, sudo 도 출력이 없으면 직접 실행의 출력 · rc · stderr 를 되살린다. 회귀:
+  `test_sudo_fallback_also_runs_when_direct_attempt_fails_with_header_output`.
+- 재발 방지: 외부 명령의 "실패" 를 stdout 유무로 판정하지 않는다 — rc 를 본다. 실패 분기는 synthetic 으로 양쪽(출력 없음 / 머리말+rc≠0)을 테스트한다.
+- 관련 rule: rule 95 R1 #5, CLAUDE.md §10(관측한 것만)
+
+## 2026-10-03 — awk `[[:space:]]` 가 mawk 1.3.3 에서 동작하지 않는다
+
+- 카테고리: external-contract-drift (도구 호환)
+- 발견 위치: `os-gather/tasks/linux/gather_memory.yml` SLOT awk (C1 작업 중) — `4fe9712a`
+- 증상: 일부 배포판의 기본 awk(mawk 1.3.3)는 POSIX 문자 클래스를 지원하지 않아 DIMM 레코드 파싱이 0건이 될 수 있다. 저장소 reference 캡처는 gawk/mawk 1.3.4 라 드러나지 않았다.
+- 수정: `[ \t]` 로 교체. 검증은 mawk 1.3.4 · gawk · dash 조합의 WSL 실행과 정적 테스트 — mawk 1.3.3 실물은 없다(추정 근거: 알려진 미지원).
+- 재발 방지: raw 스크립트의 awk/sed 는 POSIX 문자 클래스 대신 명시 집합을 쓴다.
+- 관련 rule: rule 10 R4 (raw fallback 환경), rule 96 R1-A (lab 부재 영역 근거 명시)
+
+## 2026-10-03 — ESXi 자격 probe 가 `ansible_facts` 존재만으로 로그인 성공을 판정한다 (수정 안 함 — 결정 항목)
+
+- 카테고리: scope-miss (판정 근거 과소)
+- 발견 위치: `esxi-gather/tasks/try_one_credential.yml` `_e_probe_ok` — P5 작업자가 WSL ansible-core 2.20.7 에서 관측
+- 증상: interpreter 를 고정하지 않으면 로그인에 실패한 `vmware_host_facts` 결과에도 `ansible_facts: {discovered_interpreter_python: …}` 가 실려 틀린 첫 자격이 승격됐다.
+  운영은 `esxi-gather/site.yml:36` 이 interpreter 를 고정하므로 지금은 발생하지 않는다.
+- 조치: 바꾸지 않았다(로그인 판정 계약 변경 = 사용자 결정, `docs/ai/NEXT_ACTIONS.md` GP-12). P5 의 facts 재사용은 summary 스키마 키가 있을 때만 재사용해 이 결과를 쓰지 않는다.
+- 재발 방지: 모듈 결과의 "성공" 은 그 모듈이 **반드시** 돌려주는 키(스키마 표지)로 판정한다. `ansible_facts` 키 존재는 성공 증거가 아니다.
+- 관련 rule: rule 95 R1 #5, rule 25 R7-A(실측 검증)

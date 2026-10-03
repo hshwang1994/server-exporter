@@ -1,5 +1,31 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-03 — Gathering 개선 Phase 2 · 3 · 4 (정확성 · 성능 · 예산/마무리/Callback) — 코드 수준 완료, 실환경 미검증
+
+> 결정: `docs/reference/decision-log.md` 2026-10-03 (Phase 2~4). 실측: `tests/evidence/2026-10-03-phase2-correctness.md`, `tests/evidence/2026-10-03-phase4-finalization.md`.
+> 커밋: `9f94c2ef`(Redfish 페이지네이션·펌웨어·실패 shape) · `b935b20e`(Windows BusType·HBA·DIMM 속도) · `6371ba57`(ESXi host 선택·endPort·timeout) ·
+> `a38c6339`(Redfish detect·캐시·deadline·요청 수 gate) · `4fe9712a`(Linux C1/C2/C7) · `954b1b0c`(ESXi P5 facts 재사용) · `5c2c8839`(Phase 4).
+
+- **Pipeline (Phase 4)**: stage 는 Validate → Resolve Location → Gather 셋이고 결과 전달은 pipeline `post { always }` 마무리(`timeout(720 s){ node('built-in') }`)다.
+  `Validate Schema` · `Callback` stage 삭제(정합은 `scripts/ai/ci_gate.sh`). Gather 는 `scripts/gather_budget.sh` 로 **ansible 직전** 예산을 재계산해
+  `timeout --signal=INT --kill-after=90 <예산> ansible-playbook … -f <forks>` 로 돌리고 rc → outcome 을 기록, post{always} 에서 Layer A
+  (`scripts/finalize_gather_output.py`) → archive → stash → 조건부 deleteDir. 마무리는 Layer A 결과 우선 / Groovy 최소 보충으로 접수 수 == 결과 수를 맞춰
+  남은 예산 안 ≤3회 POST. 온라인 Runner 부재 = `no_agent` 접수 후 실패 + Callback.
+- **콜백·Add-on**: `json_only` 가 host 전이 이벤트(`gather_progress.jsonl`) · `CHECKPOINT`(`gather_checkpoint.jsonl`) · manifest 대조를 기록(OUTPUT/CHECKPOINT fsync).
+  4 play 모두 조립 → `inject schema_version` → `CHECKPOINT` → Add-on → OUTPUT 순서(D8); `run_addon.yml` 은 fragment 를 만들지 않고 `_output` 의
+  data.addon · errors[] 1건 · meta.finished_at/duration_ms 에만 결합, `ADDON_START`/`ADDON_DONE` 마커, role 태스크별 `apply: timeout`(기본 300 s —
+  2026-09-21 "전용 timeout 없음" 결정을 바꿈).
+- **task timeout / 인증 증거**: Linux 120 · 자격 probe 60(+ Linux `add_host` `ansible_timeout: 15`, N6) · precheck 120 · ESXi 180 · Redfish detect 120/collect 600/
+  account 240(deadline 90/540/180). Redfish 모듈 `attempt` 인자 → `<SE_AUTH_EVIDENCE_DIR>/<ip>/<attempt_id>.json`(비밀값 없음), rescue 가 현재 attempt 파일만 읽어
+  401 / 2xx 뒤 정지(`gather`, auth true) / 증거 없음(`stopped_before_auth` → `gather`, auth null) 로 가른다. Windows win_shell 180 은 P4 뒤(strict xfail 추적).
+- **정확성·성능 (Phase 2·3)**: 실패 envelope shape 통일(json_only · redfish always); Redfish 멤버 401/403 비차단 · nextLink 페이지네이션 · memory 용량 미확인 구분 ·
+  firmware 동일 version 중복만 GET 전 제거 + 대체 fallback · NDF/WWN · C9 판정 · `mode: detect` · 200 캐시 · `deadline` · 8 MiB cap · N3 backoff 생략 — 재생 요청
+  R740 168→137 · CSUS 218→134 · DL380 132→131 · SR650 124→123(추가 0); Windows BusType 표·정수형·HBA 미매칭 null·ConnectionType·속도; ESXi `endPort`·Host 선택·
+  view 1회·SmartConnect timeout, P5 facts 재사용(13→12); Linux C1/C2/C7(+ 비루트 dmidecode sudo 재시도 수정, `speed_mhz` Configured 우선).
+- **진행 중(서브 작업자)**: Windows P4 win_shell 통합(20→11), Linux P3 원격 실행 통합(18→12 / 13→9), Phase 5 WSL 규모 emulation, Phase 6 `Jenkinsfile_ci` + finalize corpus.
+- **미실행(권한 차단 — 사용자 결정 대기)**: Jenkins 두 Job 실제 빌드(§10-4 · §10-5), `.33~.38` SSH, BMC/ESXi 실장비, Runner(2.20.3)에서의 timeout 동작 재확인.
+  main Job #1 의 Resolve Location 2분 초과(N1)는 Phase 1.5 코드로 고쳤으나 live 확인 전이다.
+
 ## 일자: 2026-10-03 — Gathering 개선 작업 Phase 1(baseline) · 1.5(최소 선행 변경)
 
 > 계획: 사용자 승인 Plan(Astra 3차 검토 조건부 통과, 2026-10-03). 실측: `tests/evidence/2026-10-03-phase1-baseline.md`.

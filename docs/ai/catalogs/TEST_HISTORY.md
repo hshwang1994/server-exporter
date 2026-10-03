@@ -1,5 +1,21 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-03 — Gathering 개선 Phase 2 · 3 · 4 (정확성 · 성능 · 예산/마무리/Callback)
+
+> 실측 `tests/evidence/2026-10-03-phase2-correctness.md` · `tests/evidence/2026-10-03-phase4-finalization.md`. live 는 권한 차단으로 미실행 — 아래는 오프라인뿐.
+
+| 항목 | 결과 |
+|---|---|
+| WSL(ansible-core 2.20.7) `pytest tests/unit` / `tests/e2e` | 2730 passed · 1 skipped · 8 xfailed(+ Windows P4 진행 중 파일 1 failed) / 761 passed · 6 skipped |
+| WSL `ansible-playbook --syntax-check` 3채널 · `pre_commit_jinja_compile_check.py --all` | 통과 |
+| WSL `tests/integration/test_addon_hook_playbook.py` | 14 passed (D8 재배치 · CHECKPOINT · 진행 이벤트 · apply.timeout 으로 `sleep 40` 3 s 절단) |
+| WSL Linux C1/C2/C7 (`test_linux_memory_parser` · `_storage_markers` · `_hba_ib_markers`) | 72 passed (sudo 재시도 수정 뒤 xfail 1 → pass) — 실제 ansible-playbook 3 시나리오(정상 · 도구 열화 · JSON 손상) 통과 |
+| WSL ESXi P5 (`test_esxi_facts_reuse` 14) + 실제 ansible-playbook fake 모듈 4 시나리오 | vmware_host_facts 호출 2→1 · 2→1 · 3→2 · 1→1, `_e_raw_facts` 29 키 동일 |
+| Windows 단위 묶음(auth evidence 18 · addon contract 46 · Jenkinsfile 4 파일 · finalize 13 · budget 8 · redfish phase2 31/phase3 10 · account · esxi reuse · progress 6) | 243 passed |
+| Windows e2e 묶음(timeout 3분류 18 · failure_reason/code/diagnosis/multi_credential/credential_scope/errors_message/case_matrix) | 402 passed · 28 skipped |
+| `tests/integration/test_request_budget.py` (Phase 3) | R740 168→137 · CSUS 218→134 · DL380 132→131 · SR650 124→123, added 0, golden 동일 |
+| Jenkins 선언형 린터 (jenkins-prod 2.528.3) | `Jenkinsfile_portal` validated (Phase 4 최종본) |
+
 ## 2026-10-03 — Gathering 개선 Phase 1 baseline · Phase 1.5 (Jenkinsfile 최소 선행 변경 · ci_gate)
 
 > 실측 `tests/evidence/2026-10-03-phase1-baseline.md`. live(Jenkins 빌드 · VM SSH · BMC) 는 권한 차단으로 미실행 — 아래는 오프라인뿐.

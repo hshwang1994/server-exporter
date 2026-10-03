@@ -10,9 +10,11 @@
 |---|---|---|---|
 | Validate | 없음 (agent-less, 2026-10-03) | target_type / inventory_json(배열·객체 원소·IP 키) / callbackUrl / deploymentEnvironmentId 검증 → 접수 manifest `env.SE_MANIFEST_JSON` | YES |
 | Resolve Location | 없음 (agent-less, 2026-10-03) | `readYaml text: readTrusted('common/vars/locations.yml')` → `SE_LOCATION` / `SE_AGENT_LABEL`. 미등록 `loc`·온라인 노드 없음 즉시 실패 | YES |
-| Gather | `SE_AGENT_LABEL` (agent) | `gather_manifest.json` 기록 → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 체크아웃 · 검사 — 아래 절) → venv 활성화 → `ansible-playbook … --vault-password-file=<mktemp> -e se_location=<loc>` (Add-on 이 켜진 빌드만 `withEnv(ADDON_DIR)`; 검증 파라미터 `redfishAccountDryrun`/`gatherBudgetForceSec` 가 켜진 빌드만 `-e _rf_account_service_dryrun=true` / `timeout --signal=INT --kill-after=90`) → `gather_rc.txt` → post{always} `archiveArtifacts` + `stash(allowEmpty)` + `deleteDir` | Add-on 을 못 받으면 UNSTABLE + Add-on 없이 수집, ansible 실패 UNSTABLE, 출력 0바이트 FAILURE |
-| Validate Schema | `SE_AGENT_LABEL` (agent) | venv 활성화 → `python3 tests/validate_field_dictionary.py` | YES |
-| Callback | `built-in` (controller) | unstash → `httpRequest` POST 3회 재시도 | NO (UNSTABLE) |
+| Gather | `SE_AGENT_LABEL` (agent), stage 합산 상한 115 min | `gather_manifest.json` 기록 → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 체크아웃 · 검사 — 아래 절) → venv 활성화 → `scripts/gather_budget.sh` 로 예산 **재계산**(ansible 직전) → `timeout --signal=INT --kill-after=90 <예산> ansible-playbook … -f <forks> --vault-password-file=<mktemp> -e se_location=<loc>` (Add-on 이 켜진 빌드만 `withEnv(ADDON_DIR)`; `redfishAccountDryrun` 이 켜진 빌드만 `-e _rf_account_service_dryrun=true`; `gatherBudgetForceSec` 는 공식 대체) → `gather_rc.txt` + outcome → post{always} Layer A(`scripts/finalize_gather_output.py`) → `archiveArtifacts`(output · manifest · rc · progress · checkpoint · final · report · auth_evidence/**) → `stash` → manifest 가 이 빌드 것일 때만 `deleteDir` | Add-on 을 못 받으면 UNSTABLE + Add-on 없이 수집; ansible rc 는 outcome 으로만 기록(stage 를 끊지 않음) |
+| (pipeline post always) 마무리 | `built-in` (controller), `timeout(720 s){ node('built-in') }` | unstash → unarchive → `gather_final.jsonl` 우선 / Groovy 최소 보충 → 접수 = 결과 단언 → `httpRequest` POST(남은 예산 안 ≤3회) → `callback_body.json` · `finalize_summary.json` archive | NO (UNSTABLE: 전송 실패 · 합성 보충 · outcome ≠ completed) |
+
+> 2026-10-03 (Phase 4): `Validate Schema`(FAIL 게이트) 와 `Callback` stage 삭제. field_dictionary 정합은 `scripts/ai/ci_gate.sh`(커밋 전 · CI)로,
+> 결과 전달은 pipeline `post { always }` 로. 설계 정본은 Plan §6 과 `tests/unit/test_jenkinsfile_portal_finalize.py`.
 
 > 종전 catalog 의 "Validate / Validate Schema = master" 표기는 코드와 달랐다. 실제 노드는 위와 같다
 > (`Jenkinsfile_portal` 의 `agent { node { label "${env.SE_AGENT_LABEL}" } }`).
@@ -38,8 +40,9 @@ ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바
 
 ## pytest 회귀 게이트
 
-Jenkins 단계가 아니다 (2026-09-28 부터). `pytest tests/e2e`, `pytest tests/integration -m "not live"`,
-`pytest tests/regression` 은 커밋 전 로컬 검증. Jenkins 의 FAIL 게이트는 Validate Schema 뿐이다.
+Jenkins 수집 Job 의 단계가 아니다 (2026-09-28 부터; 2026-10-03 부터 field_dictionary 정합도). `bash scripts/ai/ci_gate.sh` 가
+pytest(unit · e2e · regression · integration not live) · field_dictionary · drift · vendor boundary · harness consistency · syntax-check 를
+한 번에 돌린다. 수집 Job 의 FAIL 게이트는 입력 검증(Validate · Resolve Location)뿐이고 수집 이후는 결과 전달로 수렴한다.
 
 ## vault binding (cycle-012 / 2026-06-18 갱신)
 

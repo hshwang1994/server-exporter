@@ -12,9 +12,15 @@
 | GP-3 | Phase 1.5 live 확인 — main Job 1회(readTrusted lightweight 동작 · `GIT_COMMIT` 일치 · manifest/archive 생성), production Job 은 미변경 | `[HOLD / 사용자 결정]` | GP-2 와 같은 권한. 확인 전까지 Phase 1.5 종료 조건은 "오프라인 통과" 까지 |
 | GP-4 | `esxi` 라벨 노드 없음 → esxi 수집·baseline 불가 | `[TODO / 사용자 — 환경]` | Runner01~03 중 하나에 `esxi` 라벨(pyVmomi·community.vmware 는 `/app/ansible-env` 에 있어야 함, 02-agent-node.md 8절). Runner04 는 `git` 만이라 수집에 배정되지 않는다(JV-2 와 동일) |
 | GP-5 | Redfish 변경 전 비교 자료(Job 밖, 같은 collector SHA, gather 모드 읽기 전용) — Dell `10.100.15.27` · Cisco `10.100.15.2`(443 open; HPE `.231` · Lenovo `.232` 는 closed) | `[HOLD / 사용자 결정]` | GP-1 과 같은 범주로 판단해 시도하지 않음. Job baseline 은 계획대로 미실행(dry-run 강제 불가) |
-| GP-6 | Phase 2 정확성(C1~C10 ①, shape 통일) → Phase 3 성능 → Phase 4 finalizer | `[TODO / AI]` | 오프라인 구현·회귀는 권한과 무관. 각 Phase 의 실장비 동등성은 GP-1~3 해소 뒤 |
-| GP-7 | N6 — Linux `add_host` 에 `ansible_timeout: 15` | `[TODO / AI — Phase 4]` | WSL 실측: 플러그인 `ConnectTimeout=60` 이 `ssh_common_args` 의 15 보다 앞에 와 60 이 적용된다(무응답 host 67 s) |
+| GP-6 | Phase 2 정확성 → Phase 3 성능 → Phase 4 finalizer | `[WIP / AI]` | 코드 수준 완료(`9f94c2ef` … `5c2c8839`, 2026-10-03). 진행 중: Windows P4(win_shell 20→11) · Linux P3(18→12 / 13→9) · Phase 5 WSL emulation · Phase 6 `Jenkinsfile_ci`. 각 Phase 의 실장비 동등성 · §10-4 live 열은 GP-1~3 해소 뒤 |
+| GP-7 | N6 — Linux `add_host` 에 `ansible_timeout: 15` | `[DONE 2026-10-03]` | `5c2c8839` — `tests/unit/test_remote_task_timeouts.py::test_linux_add_host_sets_ansible_timeout_15`. live 효과(무응답 host 67 s → 15 s 대)는 미측정 |
 | GP-8 | 전역 `ADDON_REPO_URL` 이 켜진 상태라 Add-on 결과가 baseline 에 섞인다 | `[INFO]` | 전후 비교는 같은 Add-on 상태로 맞춘다(§10-5). 끄는 재현은 전역 변수 변경 = 승인 항목 |
+| GP-9 | Windows win_shell task `timeout` 180 s(§6-3) | `[TODO / AI — P4 뒤]` | P4(win_shell 통합) 와 같은 파일이라 충돌을 피해 미적용. `tests/unit/test_remote_task_timeouts.py` 의 Windows strict xfail 을 적용 뒤 지운다 |
+| GP-10 | Runner(ansible-core 2.20.3)에서 task timeout · `include_role apply: timeout` 동작 재확인(§6-7 (7)) | `[HOLD / 사용자 결정]` | WSL 2.20.7 실측만 있다. Runner 에서 1회 실행이 필요 — GP-2 와 같은 권한 |
+| GP-11 | `Jenkinsfile_portal` 의 Layer B 함수를 `scripts/jenkins/se_finalize.groovy` 로 옮겨 `load` 로 쓰기(Phase 6 corpus self-test 와 공유) | `[TODO / AI — Phase 6]` | Phase 6 작업자가 verbatim 사본 + 동일성 테스트를 만든다. 전환 뒤 production manifest(Phase 7)에 groovy 파일 포함 |
+| GP-12 | ESXi `_e_probe_ok` 가 `ansible_facts` 존재만으로 로그인 성공을 판정 — interpreter discovery 값만 실린 실패 결과를 통과시킬 수 있다(`esxi-gather/site.yml:36` 의 interpreter 고정으로 지금은 안전) | `[TODO / 사용자 결정]` | summary 스키마 키(`ansible_distribution_version`) 요구로 강화하면 로그인 판정 계약이 바뀐다 — `test_esxi_probe_still_uses_positive_evidence` 가 현재 식을 고정 |
+| GP-13 | `collect_dns` 를 `esxi_disks.host_info` 로 대체(ESXi 모듈 12→11) | `[HOLD / 소비자 확인]` | 출력이 같지 않다(`domain_name` ''/None, `dhcp`·`virtual_nic_device` 는 dns_info 만). `_e_dns_ok` 가 network 오류 규칙에 쓰인다 |
+| GP-14 | Add-on 태스크 timeout 이 끊은 **원격** 자식 프로세스 잔존 | `[INFO]` | WSL 실측 한계 그대로. Add-on 자체의 명령별 제한(5분)이 1차 |
 
 ## Add-on 빌드별 체크아웃 후속 (2026-09-29)
 
