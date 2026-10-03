@@ -86,7 +86,7 @@ def test_slow_checkout_and_addon_after_long_wait_consume_stage_budget():
     stage_start = T0 + 10 * 60                     # 10 분 대기 뒤 stage 시작(= node 진입)
     now = stage_start + 100 * 60                   # node 진입 뒤 준비에 100 분 (극단)
     _, b = run(SE_NOW_EPOCH=now, SE_STAGE_START_EPOCH=stage_start, SE_CHANNEL="os", SE_HOSTS=200)
-    assert b["gather"] == 780, "os 200 host: 300 + 240×2"
+    assert b["gather"] == 1260, "os 200 host: 300 + 240×4 (forks 상한 50 → 4 waves, 2026-10-03 Phase 5)"
     assert b["stage_remaining"] == 6900 - 100 * 60 - 90 - 180 == 630
     assert b["budget"] == 630 < b["gather"]
     # 준비가 더 길어져 stage 잔여가 MIN_START 아래로 → 시작하지 않는다
