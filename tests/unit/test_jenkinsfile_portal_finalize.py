@@ -132,8 +132,12 @@ def test_rc_to_outcome_mapping():
     assert "gather_output.json 미생성/0바이트" not in TEXT, "0바이트는 FAILURE 로 끊지 않고 finalizer 가 보충한다"
 
 
+PRESERVE = _method("def sePreserveGatherOutput")
+
+
 def test_gather_post_runs_layer_a_then_preserves_then_deletes_only_when_safe():
-    post = GATHER[GATHER.index("post {"):]
+    assert re.search(r"post \{\s*(//[^\n]*\n\s*)*always \{\s*script \{\s*sePreserveGatherOutput\(\)", GATHER), "Gather post{always} 는 helper 한 번"
+    post = PRESERVE
     i_a = post.index("scripts/finalize_gather_output.py")
     i_arch = post.index("archiveArtifacts(")
     i_stash = re.search(r"^\s*stash\($", post, re.M).start()   # 주석의 'stash(' 가 아니라 step 호출
@@ -144,6 +148,37 @@ def test_gather_post_runs_layer_a_then_preserves_then_deletes_only_when_safe():
     assert "gather_final.jsonl" in post and "gather_finalize_report.json" in post and "gather_progress.jsonl" in post
     assert "m?.build?.number?.toString() == env.BUILD_NUMBER" in post, "manifest 가 이 빌드 것일 때만 지운다"
     assert "workspace kept for forensics" in post
+
+
+def test_preserve_steps_are_independent_and_delete_only_after_archive():
+    """R7 (2026-10-03 Astra 2차): archive 실패가 stash 를 막지 않는다. 각 보존 시도는 독립 try/catch 이고 interruption 은 재throw.
+    workspace 는 영구 archive 성공 + 이 빌드의 manifest + 결과 파일이 있을 때만 지운다."""
+    post = PRESERVE
+    assert post.count("catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)") >= 4, "Layer A · archive · stash · manifest 각각"
+    assert post.count("throw fie") >= 4
+    assert post.index("archiveArtifacts(") < post.index("archived = true") < re.search(r"^\s*stash\($", post, re.M).start() < post.index("stashed = true")
+    assert "if (archived && manifestOk && hasResult) {" in post and post.index("if (archived && manifestOk && hasResult)") < post.index("deleteDir()")
+    assert "boolean hasResult = fileExists('gather_final.jsonl') || fileExists('gather_output.json')" in post
+    for flag in ("SE_PRESERVE_ARCHIVED", "SE_PRESERVE_STASHED", "SE_PRESERVE_MANIFEST", "SE_PRESERVE_HASRESULT", "SE_PRESERVE_LAYER_A"):
+        assert f"env.{flag}" in post, flag
+    assert "결과 보존 실패(archive·stash 모두)" in post and "archive 실패 — stash 로만 전달" in post
+    assert TEXT.count("deleteDir()") == 3, "finalizer 2 + preserve 1 — 다른 곳에서 workspace 를 지우지 않는다"
+    assert "preserve: [layerA: env.SE_PRESERVE_LAYER_A" in FINALIZE, "finalizer 요약에 보존 결과를 남긴다"
+
+
+def test_finalizer_validates_lines_and_records_damage():
+    """3차 §6: 잘린 report/JSONL 이어도 Callback body 는 유효한 envelope 만 담고, 탈락 줄·미복구 host·손상 상태를 따로 기록한다."""
+    assert "Map seFilterEnvelopeLines(List rawLines, String manifestJson)" in TEXT
+    helper = _method("Map seFilterEnvelopeLines")
+    assert "new groovy.json.JsonSlurper()" in helper and "keys13" in helper and "accepted.contains(" in helper and "missing" in helper
+    assert FINALIZE.count("seFilterEnvelopeLines(") == 2, "Layer A 결과와 raw fallback 둘 다 같은 검문"
+    assert "layerA = 'report_unreadable'" in FINALIZE and "layerA = 'incomplete'" in FINALIZE
+    i_read = FINALIZE.index("readJSON file: 'gather_finalize_report.json'")
+    seg = FINALIZE[i_read: i_read + 1800]
+    assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in seg, "파싱 실패 복구와 interruption 재전파를 분리"
+    assert "unrecovered = picked.missing" in FINALIZE
+    for key in ("unrecovered: unrecovered", "damage: damage", "recovery_limited: (layerB == 'unavailable' && lineCount != accepted)"):
+        assert key in FINALIZE, key
 
 
 def test_no_agent_is_accepted_then_failed_not_a_build_error():

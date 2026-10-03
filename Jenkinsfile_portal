@@ -97,6 +97,112 @@ boolean seCallback(String body, long hardDeadline, long finalizerDeadline, Map C
     return false
 }
 
+// 유효 envelope 줄만 고른다 — Layer A 결과(gather_final.jsonl)와 raw fallback(라이브러리 없음) 둘 다 이 문을 지난다 (2026-10-03 Astra 3차 §6).
+//   13 키 · target_type == channel · ip ∈ manifest 를 통과한 줄만 남기고(같은 ip 는 뒤 줄 우선), 접수 순서로 돌려준다.
+//   잘린 파일·깨진 줄이 Callback body 를 깨뜨리거나 host 당 1개 계약을 거짓으로 채우지 않게 하는 마지막 검문이다.
+//   순수 함수(@NonCPS) — 라이브러리(se_finalize.groovy)를 못 읽은 경로에서도 돌아야 하므로 Jenkinsfile 에 둔다. 파서는 sandbox 가 허용하는 JsonSlurper.
+@NonCPS
+Map seFilterEnvelopeLines(List rawLines, String manifestJson) {
+    def slurper = new groovy.json.JsonSlurper()
+    def manifest = slurper.parseText(manifestJson)
+    String channel = manifest.channel?.toString()
+    List ips = (manifest.ips ?: []).collect { it.toString() }
+    Set accepted = ips as Set
+    def keys13 = ['schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
+                  'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'] as Set
+    Map byIp = [:]
+    int dropped = 0
+    for (Object raw in (rawLines ?: [])) {
+        String line = raw?.toString()?.trim()
+        if (!line) { continue }
+        def obj = null
+        try { obj = slurper.parseText(line) } catch (Exception e) { dropped++; continue }
+        if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type?.toString() != channel || !accepted.contains(obj.ip?.toString())) {
+            dropped++; continue
+        }
+        byIp[obj.ip.toString()] = line
+    }
+    List lines = []
+    List missing = []
+    for (String ip in ips) {
+        if (byIp.containsKey(ip)) { lines << byIp[ip] } else { missing << ip }
+    }
+    return [lines: lines, missing: missing, dropped: dropped]
+}
+
+// Gather post{always} — 결과 보존 (R7, 2026-10-03 Astra 2차). 수집이 어떻게 끝났든 Layer A → archive → stash 를 **각각 독립적으로** 시도하고,
+//   보존 증거(영구 archive 성공 + 이 빌드의 manifest + 결과 파일)가 있을 때만 workspace 를 지운다. stash 는 전달 수단일 뿐이다
+//   (finalizer 의 unstash → unarchive 사다리가 덮는다). interruption(취소·timeout)은 어느 단계에서도 삼키지 않는다.
+def sePreserveGatherOutput() {
+    String outcome = env.SE_GATHER_OUTCOME ?: 'interrupted_unknown'
+    int layerA = -1
+    try {
+        layerA = sh(returnStatus: true, label: 'finalize layer A', script: """#!/bin/bash
+            set +e
+            cd "\${WORKSPACE}"
+            . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
+            timeout 120 python3 scripts/finalize_gather_output.py --workspace "\${WORKSPACE}" --repo-root "\${WORKSPACE}" --outcome "${outcome}"
+            exit \$?
+        """)
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+        throw fie
+    } catch (Exception e) {
+        echo "[Finalize/A] Layer A 실행 예외 — archive/stash 는 계속한다: ${e.message}"
+    }
+    echo "[Finalize/A] exit=${layerA} outcome=${outcome}"
+    boolean archived = false
+    try {
+        archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_auth_evidence/**',
+                         allowEmptyArchive: true, fingerprint: false)
+        archived = true
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+        throw fie
+    } catch (Exception e) {
+        echo "[Finalize/A] archive 실패 — stash 는 계속한다: ${e.message}"
+    }
+    boolean stashed = false
+    try {
+        stash(
+            name       : 'gather-output',
+            includes   : 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json',
+            allowEmpty : true,
+        )
+        stashed = true
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+        throw fie
+    } catch (Exception e) {
+        echo "[Finalize/A] stash 실패 — finalizer 는 archive(unarchive) 로 회수한다: ${e.message}"
+    }
+    boolean manifestOk = false
+    if (fileExists('gather_manifest.json')) {
+        try {
+            def m = readJSON file: 'gather_manifest.json'
+            manifestOk = (m?.build?.number?.toString() == env.BUILD_NUMBER)
+        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+            throw fie
+        } catch (Exception e) {
+            manifestOk = false
+        }
+    }
+    boolean hasResult = fileExists('gather_final.jsonl') || fileExists('gather_output.json')
+    env.SE_PRESERVE_LAYER_A   = "${layerA}"
+    env.SE_PRESERVE_ARCHIVED  = "${archived}"
+    env.SE_PRESERVE_STASHED   = "${stashed}"
+    env.SE_PRESERVE_MANIFEST  = "${manifestOk}"
+    env.SE_PRESERVE_HASRESULT = "${hasResult}"
+    echo "[Finalize/A] preserve archived=${archived} stashed=${stashed} manifestOk=${manifestOk} hasResult=${hasResult}"
+    if (archived && manifestOk && hasResult) {
+        deleteDir()
+    } else {
+        echo "[Finalize/A] workspace kept for forensics (archived=${archived} stashed=${stashed} manifestOk=${manifestOk} hasResult=${hasResult})"
+    }
+    if (!archived && !stashed) {
+        unstable("[Finalize/A] 결과 보존 실패(archive·stash 모두) — workspace 보관, finalizer 는 manifest 로 보충한다")
+    } else if (!archived) {
+        unstable("[Finalize/A] archive 실패 — stash 로만 전달 (영구 보존 없음)")
+    }
+}
+
 // finalization 본체 — pipeline post{always} 에서 한 번. timeout 은 node 대기와 안의 작업을 **합산**으로 제한한다.
 def seFinalizeAndCallback() {
     Map C = seConstants()
@@ -139,18 +245,37 @@ def seFinalizeAndCallback() {
                 }
             }
             // ② 줄 집합: Layer A 결과(exit 0/2) 우선 → 없으면 Layer B 최소 경로
+            //    손상 입력(3차 §6): report/JSONL 파싱 실패와 host 당 1줄 미달은 다음 유효 입력(Layer B)으로 넘기고 damage 에 적는다.
+            //    interruption(취소·timeout)은 데이터 파싱 오류와 분리해 그대로 재전파한다.
             List lines = null
             Map report = [:]
             String layerA = 'skipped'
+            List damage = []
+            List unrecovered = []
             if (fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) {
-                def rep = readJSON file: 'gather_finalize_report.json'
-                String finalText = readFile(file: 'gather_final.jsonl', encoding: 'UTF-8')
-                if ((rep.exit_code in [0, 2]) && finalText.trim()) {
-                    lines = finalText.split('\n').findAll { it.trim() }.collect { it.trim() }
-                    report = rep
-                    layerA = (rep.exit_code == 0) ? 'ok' : 'ok_with_damage'
-                } else {
-                    layerA = 'failed'
+                try {
+                    def rep = readJSON file: 'gather_finalize_report.json'
+                    String finalText = readFile(file: 'gather_final.jsonl', encoding: 'UTF-8')
+                    if ((rep.exit_code in [0, 2]) && finalText.trim()) {
+                        Map picked = seFilterEnvelopeLines(finalText.split('\n') as List, manifestJson)
+                        if (picked.lines.size() == ips.size()) {
+                            lines = picked.lines
+                            report = rep
+                            layerA = (rep.exit_code == 0) ? 'ok' : 'ok_with_damage'
+                        } else {
+                            // host 당 1줄이 아니다(잘린 파일·깨진 줄) → Layer B 가 raw 파일에서 다시 조립한다
+                            layerA = 'incomplete'
+                            damage << "layer_a_incomplete valid=${picked.lines.size()} accepted=${ips.size()} dropped=${picked.dropped}".toString()
+                        }
+                    } else {
+                        layerA = 'failed'
+                    }
+                } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                    throw fie
+                } catch (Exception e) {
+                    layerA = 'report_unreadable'
+                    damage << "layer_a_unreadable ${e.getClass().simpleName}".toString()
+                    echo "[Finalize] Layer A 결과를 읽지 못함 — Layer B 로: ${e.message}"
                 }
             }
             String layerB = 'skipped'
@@ -164,8 +289,12 @@ def seFinalizeAndCallback() {
                     report = res.report
                     layerB = 'ok'
                 } else {
-                    // 라이브러리를 못 읽었다 — 보충 없이 있는 OUTPUT 줄만 보낸다 (접수 수와 다를 수 있다 → 아래 WARN + UNSTABLE)
-                    lines = outText.split('\n').findAll { it.trim() }.collect { it.trim() }
+                    // 라이브러리를 못 읽었다 — 보충 없이, **유효한** OUTPUT 줄만 보낸다 (접수 수와 다를 수 있다 → 아래 WARN + UNSTABLE).
+                    //   깨진 줄은 버리고(dropped), 없는 host 는 unrecovered 로 남긴다 — 개수만 맞춘 무근거 데이터로 채우지 않는다.
+                    Map picked = seFilterEnvelopeLines(outText.split('\n') as List, manifestJson)
+                    lines = picked.lines
+                    unrecovered = picked.missing
+                    if (picked.dropped) { damage << "raw_dropped=${picked.dropped}".toString() }
                     report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
                     layerB = 'unavailable'
                 }
@@ -188,7 +317,11 @@ def seFinalizeAndCallback() {
             writeFile file: 'callback_body.json', text: body, encoding: 'UTF-8'
             writeFile file: 'finalize_summary.json', encoding: 'UTF-8',
                       text: groovy.json.JsonOutput.toJson([accepted: accepted, lines: lineCount, kept: kept, filled: filled, outcome: outcome,
-                                                            layerA: layerA, layerB: layerB, source: source, node_wait_sec: tIn - tPost])
+                                                            layerA: layerA, layerB: layerB, source: source, node_wait_sec: tIn - tPost,
+                                                            unrecovered: unrecovered, damage: damage,
+                                                            recovery_limited: (layerB == 'unavailable' && lineCount != accepted),
+                                                            preserve: [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED, stashed: env.SE_PRESERVE_STASHED,
+                                                                       manifestOk: env.SE_PRESERVE_MANIFEST, hasResult: env.SE_PRESERVE_HASRESULT]])
             lines = null
             // ④ Callback — 남은 예산 안에서
             boolean delivered = seCallback(body, hardDeadline, finalizerDeadline, C)
@@ -601,41 +734,10 @@ pipeline {
             }
             post {
                 // 결과 보존은 수집이 어떻게 끝났든 한다 — 중단·실패한 빌드에서도 완료된 host 의 OUTPUT 줄은 남는다.
-                //   Layer A(finalize_gather_output.py) 가 접수 manifest 기준으로 host 당 1줄의 gather_final.jsonl 을 만들고,
-                //   archive(빌드에 영구) + stash(post finalizer 로) 둘 다 allowEmpty — 파일이 없으면 finalizer 가 그 사실을 보고한다.
+                //   본문은 sePreserveGatherOutput() (R7): Layer A → archive → stash 를 각각 독립적으로 시도하고, 보존 증거가 있을 때만 deleteDir.
                 always {
                     script {
-                        def outcome = env.SE_GATHER_OUTCOME ?: 'interrupted_unknown'
-                        def layerA = sh(returnStatus: true, label: 'finalize layer A', script: """#!/bin/bash
-                            set +e
-                            cd "\${WORKSPACE}"
-                            . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
-                            timeout 120 python3 scripts/finalize_gather_output.py --workspace "\${WORKSPACE}" --repo-root "\${WORKSPACE}" --outcome "${outcome}"
-                            exit \$?
-                        """)
-                        echo "[Finalize/A] exit=${layerA} outcome=${outcome}"
-                        archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_auth_evidence/**',
-                                         allowEmptyArchive: true, fingerprint: false)
-                        stash(
-                            name       : 'gather-output',
-                            includes   : 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json',
-                            allowEmpty : true,
-                        )
-                        // 보존 성공 = 필요한 파일이 존재하고 manifest 가 이 빌드의 것일 때만 workspace 를 지운다.
-                        def manifestOk = false
-                        if (fileExists('gather_manifest.json')) {
-                            try {
-                                def m = readJSON file: 'gather_manifest.json'
-                                manifestOk = (m?.build?.number?.toString() == env.BUILD_NUMBER)
-                            } catch (Exception e) {
-                                manifestOk = false
-                            }
-                        }
-                        if (manifestOk && (fileExists('gather_final.jsonl') || fileExists('gather_output.json'))) {
-                            deleteDir()
-                        } else {
-                            echo "[Finalize/A] workspace kept for forensics (manifestOk=${manifestOk})"
-                        }
+                        sePreserveGatherOutput()
                     }
                 }
             }

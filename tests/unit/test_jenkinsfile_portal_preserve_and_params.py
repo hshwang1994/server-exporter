@@ -88,8 +88,16 @@ def test_budget_force_goes_through_the_budget_script_only():
     assert "-eq 124" in GATHER and "-eq 137" in GATHER, "timeout 의 rc 를 콘솔에 남긴다"
 
 
+def _method(name: str) -> str:
+    start = TEXT.index(f"{name}(")
+    start = TEXT.rfind("\n", 0, start) + 1
+    nxt = re.search(r"\n(?:@NonCPS\n)?(?:def |Map |String |boolean |long |pipeline \{)", TEXT[start + 1:])
+    return TEXT[start: start + 1 + nxt.start()] if nxt else TEXT[start:]
+
+
 def test_gather_post_preserves_output_before_deleting_the_workspace():
-    post = GATHER[GATHER.index("post {"):]
+    assert "sePreserveGatherOutput()" in GATHER[GATHER.index("post {"):], "Gather post{always} 는 보존 helper 를 부른다 (R7)"
+    post = _method("def sePreserveGatherOutput")
     archive = post.index("archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt")
     stash = re.search(r"^\s*stash\($", post, re.M).start()
     delete = post.index("deleteDir()")
