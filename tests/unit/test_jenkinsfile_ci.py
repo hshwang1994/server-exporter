@@ -25,6 +25,8 @@ REPO = Path(__file__).resolve().parents[2]
 CI_PATH = REPO / "Jenkinsfile_ci"
 LIB_PATH = REPO / "scripts" / "jenkins" / "se_finalize.groovy"
 PORTAL_PATH = REPO / "Jenkinsfile_portal"
+if not CI_PATH.is_file():      # production 생성 tree(G14 overlay)에는 Jenkinsfile_ci 가 없다(main 전용)
+    pytest.skip("Jenkinsfile_ci 없음 — main 전용 CI 파일", allow_module_level=True)
 CI = CI_PATH.read_text(encoding="utf-8")
 LIB = LIB_PATH.read_text(encoding="utf-8")
 PORTAL = PORTAL_PATH.read_text(encoding="utf-8")
