@@ -395,6 +395,8 @@ pipeline {
                         . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
                         eval "$(bash scripts/ai/prodgen/ci_pwsh_bootstrap.sh --env)"
                         git fetch -q origin "+refs/heads/production:refs/remotes/origin/production" || { echo '{"ok": false, "error": "fetch origin production failed"}' > prodgen_drift.json; exit 3; }
+                        # CI checkout 에는 로컬 production ref 가 없다 — G20/promote 는 "로컬 == 양 원격" 을 본다(CI #3: local absent). 원격 값으로 만든다(이 workspace 한정).
+                        git update-ref refs/heads/production "$(git rev-parse refs/remotes/origin/production)"
                         BOOT=()
                         if [ -n "${BOOTSTRAP_BASELINE:-}" ]; then BOOT=(--bootstrap-baseline "${BOOTSTRAP_BASELINE}"); fi
                         python3 -m scripts.ai.prodgen --json drift-check --production refs/remotes/origin/production "${BOOT[@]}" > prodgen_drift.json

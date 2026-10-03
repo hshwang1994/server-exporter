@@ -148,6 +148,8 @@ def build(repo_root: str, sha: str, out_dir: str, manifest_path: str, live_check
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         with open(dest, "wb") as fh:
             fh.write(out_data)
+        if entry.mode == "100755" and os.name != "nt":
+            os.chmod(dest, 0o755)   # G09 compares the filesystem exec bit on POSIX (CI #3: built on a Runner, bits were missing)
         lang = entry.language
         rem = report.removed.setdefault(lang, {"full": 0, "trailing": 0})
         rem["full"] += res.removed_full_lines

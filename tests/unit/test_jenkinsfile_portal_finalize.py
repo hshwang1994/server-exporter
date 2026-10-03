@@ -168,10 +168,15 @@ def test_bounded_recovery_is_opt_in_and_identity_based():
     for call in ("seBounded(C.RECOVER, 'unstash')", "seBounded(C.RECOVER, 'unarchive')", "seBounded(C.ASSEMBLE, 'assemble')"):
         assert call in FINALIZE, call
     assert "leftForLib > (C.ASSEMBLE + C.CALLBACK_MIN)" in FINALIZE, "Tier 1: 조립 뒤 Callback 최소 시간이 남을 때만 적재"
-    for sig in ("FlowInterruptedException getCauses", "ExceededTimeout getNodeId", "FlowNode getEnclosingBlocks", "FlowNode getId"):
-        assert sig in TEXT, f"승인 시그니처 목록을 코드 주석에 남긴다: {sig}"
     assert "|| exit 90" in GATHER, "venv 실패 = prep_failed"
     assert "gather_output.json 미생성/0바이트" not in TEXT, "0바이트는 FAILURE 로 끊지 않고 finalizer 가 보충한다"
+
+
+@pytest.mark.source_text
+def test_bounded_recovery_approval_signatures_are_documented_in_comments():
+    """승인 후보 4 시그니처는 **코드 주석**에 남긴다 — 생성 production tree 에는 주석이 없으므로 G14 overlay 에서는 제외(source_text; CI #3 G14 실패 원인)."""
+    for sig in ("FlowInterruptedException getCauses", "ExceededTimeout getNodeId", "FlowNode getEnclosingBlocks", "FlowNode getId"):
+        assert sig in TEXT, f"승인 시그니처 목록을 코드 주석에 남긴다: {sig}"
 
 
 PRESERVE = _method("def sePreserveGatherOutput")
