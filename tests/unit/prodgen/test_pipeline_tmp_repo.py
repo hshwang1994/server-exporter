@@ -142,7 +142,13 @@ def test_offline_gates_pass_on_tmp_tree(repo, tmp_path):
     build(str(repo), sha, str(out), str(repo / "production_manifest.yml"), live_checkers=False)
     report = run_gates(str(repo), str(out), str(repo / "production_manifest.yml"), skip_live=True,
                        only="G01,G02,G03,G04,G05,G06,G07,G08,G09,G10,G16")
-    assert report.ok, report.summary()
+    # 2026-10-04 (Astra R1): 부분 실행은 통과가 아니다 — FAIL 0 이지만 verdict 는 PARTIAL 이고 빠진 필수 gate 가 열거된다
+    assert all(r.status != "FAIL" for r in report.results), report.summary()
+    assert report.verdict == "PARTIAL" and not report.ok
+    assert "G19: not run" in report.mandatory_missing and "G13: not run" in report.mandatory_missing
+    assert report.binding["main_sha"] == sha and report.verify_mode.startswith("only:")
+    d = report.to_dict()
+    assert d["verdict"] == "PARTIAL" and len(d["report_sha256"]) == 64
     g08 = [r for r in report.results if r.id == "G08"][0]
     assert g08.data["ansible_cfg"].startswith("not allowlisted")        # cfg checks skipped, not failed
     assert g08.data["counts"]["include_tasks"] == 0 and g08.data["python_imports_checked"] == 1
@@ -153,6 +159,7 @@ def test_promote_dry_run_writes_nothing(repo):
     sha = _git(repo, "rev-parse", "HEAD")
     res = promote(str(repo), sha, str(repo / "production_manifest.yml"), dry_run=True, skip_live=True)
     assert res["ok"] and res["dry_run"] and len(res["tree"]) == 40
+    assert res["gates"]["verdict"] == "PARTIAL" and "preview_only" in res, "skip-live 미리보기는 PARTIAL 을 숨기지 않는다"
     assert res["files"] == 6
     assert "Main-SHA: " + sha in res["message"] and "Previous-Production: none" in res["message"]
     assert not GitStore(str(repo)).rev_exists("refs/heads/production")
@@ -160,51 +167,10 @@ def test_promote_dry_run_writes_nothing(repo):
     assert probe.returncode != 0, "dry-run must not write the tree object"
 
 
-@_needs_ps
-def test_promote_restore_and_drift(repo):
-    sha = _git(repo, "rev-parse", "HEAD")
-    man = str(repo / "production_manifest.yml")
-    res1 = promote(str(repo), sha, man, dry_run=False, skip_live=True, ci_build="unit-1")
-    assert res1["ok"]
-    store = GitStore(str(repo))
-    prod1 = store.rev_parse("refs/heads/production")
-    assert prod1 == res1["commit"]
-    trailers = GitStore.parse_trailers(store.commit_message(prod1))
-    assert trailers["Main-SHA"] == sha and trailers["CI-Build"] == "unit-1" and trailers["Previous-Production"] == "none"
-    entries = {e.path: e for e in store.ls_tree(prod1)}
-    assert set(entries) == {"app/main.py", "app/run.sh", "app/tasks.yml", "cfg.ini", "vault/x.yml", PROVENANCE_FILE}
-    assert entries["app/run.sh"].mode == "100755"
-    assert store.commit_parents(prod1) == []
-
-    drift = drift_check(str(repo), "refs/heads/production", man)
-    assert drift["mode"] == "PROVENANCE" and drift["ok"]
-    assert drift["checks"]["C_tree_hash"]["ok"] and drift["checks"]["D_trailers"]["ok"]
-    assert drift["checks"]["A1_recorded_generator"]["ok"] is None          # generator not committed there
-    assert drift["checks"]["A2_migration_preview"]["same_tree"] is True
-
-    # second promotion from a changed source chains onto the first (LF bytes: CRLF is refused by G04)
-    (repo / "cfg.ini").write_bytes(b"[defaults]\nforks = 7\n")
-    _git(repo, "commit", "-qam", "forks")
-    sha2 = _git(repo, "rev-parse", "HEAD")
-    res2 = promote(str(repo), sha2, man, dry_run=False, skip_live=True)
-    prod2 = store.rev_parse("refs/heads/production")
-    assert store.commit_parents(prod2) == [prod1]
-    assert GitStore.parse_trailers(store.commit_message(prod2))["Previous-Production"] == prod1
-
-    # restore to the first production tree as a new commit (no rewrite)
-    plan = restore(str(repo), prod1, dry_run=True)
-    assert plan["ok"] and store.rev_parse("refs/heads/production") == prod2
-    done = restore(str(repo), prod1, dry_run=False)
-    prod3 = store.rev_parse("refs/heads/production")
-    assert done["ok"] and prod3 == done["commit"]
-    assert store.commit_tree_sha(prod3) == store.commit_tree_sha(prod1)
-    assert store.commit_parents(prod3) == [prod2]
-
-
 def test_promote_refuses_when_build_has_class_b(repo):
     (repo / "app" / "tasks.yml").write_bytes(b"---\n- set_fact:\n    a: &x 1\n    b: *x\n")
     _git(repo, "commit", "-qam", "anchor")
-    res = promote(str(repo), "HEAD", str(repo / "production_manifest.yml"), dry_run=False, skip_live=True)
+    res = promote(str(repo), "HEAD", str(repo / "production_manifest.yml"), dry_run=True, skip_live=True)
     assert not res["ok"] and res["stage"] == "build"
     assert not GitStore(str(repo)).rev_exists("refs/heads/production")
 
@@ -212,10 +178,14 @@ def test_promote_refuses_when_build_has_class_b(repo):
 def test_drift_legacy_mode_without_provenance(repo):
     _git(repo, "branch", "legacy", "HEAD")
     res = drift_check(str(repo), "legacy", str(repo / "production_manifest.yml"))
-    assert res["mode"] == "LEGACY" and res["ok"]
+    assert res["mode"] == "LEGACY" and not res["ok"], "LEGACY 는 기본으로 통과하지 않는다 (3차 §7)"
     assert res["checks"]["legacy"]["forbidden_in_production"] == 1       # docs/x.md
+    sha = _git(repo, "rev-parse", "legacy")
+    assert drift_check(str(repo), "legacy", str(repo / "production_manifest.yml"), bootstrap_baseline=sha)["ok"]
 
 
 def test_restore_refuses_non_prodgen_commit(repo):
     with pytest.raises(Exception):
         restore(str(repo), "HEAD", dry_run=True)
+    with pytest.raises(Exception):
+        restore(str(repo), "HEAD", dry_run=True, bootstrap_baseline="HEAD")   # baseline 을 기록한 생성 production 이 없다

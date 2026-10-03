@@ -139,17 +139,89 @@ def g13_jenkins_linter(ctx, netrc=None, jenkins_url="https://jenkins-prod.gooddi
         except (ValueError, KeyError):
             pass
         resp = subprocess.run([curl, "-sk", "--netrc-file", netrc, "-c", jar, "-b", jar, "--max-time", "60", *headers,
+                               "-D", os.path.join(td, "headers.txt"),
                                "-X", "POST", "--data-urlencode", f"jenkinsfile@{jf}",
                                f"{base}/pipeline-model-converter/validate"], capture_output=True, text=True)
+        jenkins_version = ""
+        try:
+            with open(os.path.join(td, "headers.txt"), encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if line.lower().startswith("x-jenkins:"):
+                        jenkins_version = line.split(":", 1)[1].strip()
+        except OSError:
+            pass
     body = (resp.stdout or "").strip()
     ok = resp.returncode == 0 and "successfully validated" in body
     details = [body[:500] if body else f"curl rc={resp.returncode}, empty response"]
     if not ok and "<html" in body.lower():
         details = ["HTML response (authentication or endpoint problem); body suppressed"]
-    return GateResult("G13", "PASS" if ok else "FAIL", details, {"crumb": bool(headers)})
+    return GateResult("G13", "PASS" if ok else "FAIL", details, {"crumb": bool(headers), "jenkins_version": jenkins_version})
 
 
 # ── G14 ──────────────────────────────────────────────────────────────────────
+# 필수 실행 regression 그룹 (2026-10-04, Astra 3차 §8-3 · 4차 §3). 판정 단위는 그룹이다: 그룹의 테스트가 수집되지 않았거나(conftest
+# collect_ignore · 수집 오류) 전부 skip 이면 그 그룹은 "확인되지 않음" → G14 는 PASS 여도 partial → 보고서 verdict PARTIAL.
+# prodgen 자체 테스트(tests/unit/prodgen)는 여기 넣지 않는다 — 생성 tree 에는 prodgen 이 없어 수집되지 않는 것이 정상이고, 그 검증은
+# 개발 main 의 ci_gate.sh 가 맡는다. 선택 테스트의 skip 은 실패로 보지 않는다.
+MANDATORY_TEST_GROUPS = {
+    "runtime_regression": "tests/regression/",
+    "runtime_e2e": "tests/e2e/",
+    "budget_formula": "tests/unit/test_gather_budget.py",
+    "portal_contract": "tests/unit/test_jenkinsfile_portal_finalize.py",
+    "finalize_layer_a": "tests/unit/test_finalize_gather_output.py",
+}
+
+
+def _junit_executed(junit_path: str) -> dict:
+    """{file: {"executed": n, "skipped": m}} from a pytest junit xml (classname → path)."""
+    import xml.etree.ElementTree as ET
+    out = {}
+    try:
+        root = ET.parse(junit_path).getroot()
+    except (OSError, ET.ParseError):
+        return out
+    for tc in root.iter("testcase"):
+        fname = tc.get("file") or (tc.get("classname") or "").replace(".", "/") + ".py"
+        fname = fname.replace("\\", "/")
+        rec = out.setdefault(fname, {"executed": 0, "skipped": 0})
+        if tc.find("skipped") is not None:
+            rec["skipped"] += 1
+        else:
+            rec["executed"] += 1
+    return out
+
+
+def _mandatory_groups_status(overlay_dir: str, junit_path: str) -> tuple[dict, list]:
+    """Compare the expected test files (present in the overlay) with what the junit xml says executed."""
+    executed = _junit_executed(junit_path)
+    groups, problems = {}, []
+    for name, prefix in MANDATORY_TEST_GROUPS.items():
+        expected = []
+        full = os.path.join(overlay_dir, *prefix.split("/"))
+        if prefix.endswith(".py"):
+            if os.path.isfile(full):
+                expected = [prefix]
+        elif os.path.isdir(full):
+            for root, _dirs, files in os.walk(full):
+                for f in files:
+                    if f.startswith("test_") and f.endswith(".py"):
+                        rel = os.path.relpath(os.path.join(root, f), overlay_dir).replace("\\", "/")
+                        expected.append(rel)
+        ran = {f: v for f, v in executed.items() if any(f.endswith(e) or e.endswith(f) or f == e for e in expected)}
+        n_exec = sum(v["executed"] for v in ran.values())
+        n_skip = sum(v["skipped"] for v in ran.values())
+        missing = [e for e in expected if not any(f.endswith(e) or e.endswith(f) for f in ran)]
+        groups[name] = {"prefix": prefix, "expected_files": len(expected), "collected_files": len(ran), "executed": n_exec,
+                        "skipped": n_skip, "missing_files": missing[:20]}
+        if not expected:
+            problems.append(f"{name}: no test files under {prefix} in the overlay")
+        elif missing:
+            problems.append(f"{name}: {len(missing)} expected file(s) not collected (e.g. {missing[0]})")
+        elif n_exec == 0:
+            problems.append(f"{name}: collected but nothing executed (all {n_skip} skipped)")
+    return groups, problems
+
+
 def g14_tests_overlay(ctx) -> GateResult:
     store, prov = ctx["store"], ctx["prov"]
     td = tempfile.mkdtemp(prefix="prodgen-tests-")
@@ -170,9 +242,11 @@ def g14_tests_overlay(ctx) -> GateResult:
         # locale codec, and forcing UTF-8 on the children alone would make such tests fail spuriously.
         env = {k: v for k, v in os.environ.items() if k != "PYTHONIOENCODING"}
         env["PYTHONDONTWRITEBYTECODE"] = "1"
-        cmd = [sys.executable, "-m", "pytest", "tests/unit", "tests/e2e", "-q", "-m", "not source_text",
+        junit = os.path.join(td, "g14_junit.xml")
+        targets = [d for d in ("tests/unit", "tests/e2e", "tests/regression") if os.path.isdir(os.path.join(td, d))]
+        cmd = [sys.executable, "-m", "pytest", *targets, "-q", "-m", "not source_text",
                "-p", "no:cacheprovider", "-rfE", "--no-header", "-o", "console_output_style=classic",
-               "--continue-on-collection-errors"]
+               "--continue-on-collection-errors", f"--junitxml={junit}", "-o", "junit_family=xunit1"]
         proc = subprocess.run(cmd, cwd=td, capture_output=True, text=True, timeout=3600, env=env,
                               encoding="utf-8", errors="replace")
         lines = proc.stdout.strip().splitlines()
@@ -189,10 +263,18 @@ def g14_tests_overlay(ctx) -> GateResult:
         if "= ERRORS =" in proc.stdout:
             seg = proc.stdout.split("= ERRORS =", 1)[1]
             err_section = seg.split("short test summary", 1)[0][-6000:]
+        groups, group_problems = _mandatory_groups_status(td, junit)
         data = {"rc": proc.returncode, "summary": summary, "failed_count": len(failed), "failed": failed[:200],
                 "error_count": len(errors), "errors": errors[:200],
                 "errors_section": err_section, "stdout_tail": lines[-120:],
-                "overlay": "tests/, schema/, requirements-test.txt, pytest.ini from main_sha"}
+                "overlay": "tests/, schema/, requirements-test.txt, pytest.ini from main_sha",
+                "targets": targets, "mandatory_groups": groups}
+        if proc.returncode == 0 and group_problems:
+            data["partial"] = True
+            data["partial_reason"] = "mandatory test group(s) not confirmed: " + "; ".join(group_problems)
+            details.append("partial: " + "; ".join(group_problems))
+        else:
+            details.append("mandatory groups: " + ", ".join(f"{k}={v['executed']}" for k, v in groups.items()))
         return GateResult("G14", "PASS" if proc.returncode == 0 else "FAIL", details, data)
     finally:
         shutil.rmtree(td, ignore_errors=True)

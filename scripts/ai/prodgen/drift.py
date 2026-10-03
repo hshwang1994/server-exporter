@@ -1,18 +1,25 @@
-"""`prodgen drift-check --production <ref>`.
+"""`prodgen drift-check --production <ref> [--bootstrap-baseline <sha>]` and production *state* classification.
 
-LEGACY : the ref carries no provenance (pre-prodgen production) -> informational listing.
-C      : recompute the tree hash from the ref's blobs and compare with the provenance.
-D      : commit trailers == provenance fields.
-A1     : regenerate with the generator recorded in main history (scripts/ai/prodgen at main_sha).
-A2     : migration preview — build from main_sha with the current generator and diff.
+States (2026-10-04, Astra 3차 §7 — implemented and tested separately):
+  LEGACY             : no provenance, no restore trailers (pre-prodgen production, e.g. 4ce90a00). ok only when the caller
+                       names exactly this SHA as the bootstrap baseline (`--bootstrap-baseline <sha>` == ref). Never ok by default.
+  PROVENANCE         : `.production-provenance.json` present -> checks C (tree hash), D (trailers), A1 (recorded generator),
+                       A2 (migration preview with the current generator).
+  RESTORED_BASELINE  : no provenance but the commit is a `prodgen restore` of the legacy baseline B: trailers Restore-Of/Bootstrap-Baseline,
+                       tree OID == B's tree OID, B is an ancestor, and a generated production P1 (with provenance and the same
+                       Bootstrap-Baseline trailer) is in the history. Re-promotion is allowed with parent R and baseline B.
+  UNVERIFIED         : anything else (trailer without the tree equality, foreign tree) -> refuse.
+
+A trailer alone never passes: RESTORED_BASELINE additionally requires the exact tree OID of B and P1 in the history.
 """
 from __future__ import annotations
 
+import io
 import json
 import os
-import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 
 from . import PROVENANCE_FILE
@@ -32,28 +39,113 @@ def _ref_files(store: GitStore, sha: str) -> dict:
     return files
 
 
-def drift_check(repo_root: str, production_ref: str, manifest_path: str) -> dict:
+def is_ancestor(store: GitStore, ancestor: str, descendant: str) -> bool:
+    proc = subprocess.run(["git", "merge-base", "--is-ancestor", ancestor, descendant], cwd=store.repo_root, capture_output=True)
+    return proc.returncode == 0
+
+
+def first_prodgen_commit(store: GitStore, head: str, limit: int = 200):
+    """Walk first-parent history from head; return (sha, provenance dict, trailers) of the nearest commit with provenance."""
+    out = store.run(["rev-list", "--first-parent", f"--max-count={limit}", head], text=True).split()
+    for sha in out:
+        prov_bytes = store.cat_path(sha, PROVENANCE_FILE)
+        if prov_bytes is not None:
+            try:
+                return sha, json.loads(prov_bytes.decode("utf-8")), GitStore.parse_trailers(store.commit_message(sha))
+            except ValueError:
+                continue
+    return None, None, None
+
+
+def classify_production(store: GitStore, sha: str, bootstrap_baseline: str | None = None) -> dict:
+    """State of a production commit. `bootstrap_baseline` (SHA or ref) is the only thing that makes LEGACY acceptable."""
+    info = {"sha": sha, "state": "UNVERIFIED", "ok": False, "tree_oid": store.commit_tree_sha(sha)}
+    prov_bytes = store.cat_path(sha, PROVENANCE_FILE)
+    trailers = GitStore.parse_trailers(store.commit_message(sha))
+    info["trailers"] = {k: trailers[k] for k in sorted(trailers)}
+    if prov_bytes is not None:
+        prov = json.loads(prov_bytes.decode("utf-8"))
+        info.update({"state": "PROVENANCE", "ok": True, "main_sha": prov.get("main_sha"), "tree_hash": prov.get("tree_hash"),
+                     "bootstrap_baseline": trailers.get("Bootstrap-Baseline")})
+        return info
+    if "Restore-Of" in trailers:
+        base = trailers.get("Bootstrap-Baseline") or trailers.get("Restore-Of")
+        reasons = []
+        try:
+            base_sha = store.rev_parse(base)
+        except ProdgenError:
+            base_sha = None
+            reasons.append(f"baseline {base} is not a commit in this repository")
+        if base_sha:
+            if store.commit_tree_sha(base_sha) != info["tree_oid"]:
+                reasons.append("tree OID differs from the baseline's tree (not an exact legacy restore)")
+            if not is_ancestor(store, base_sha, sha):
+                reasons.append("baseline is not an ancestor of this commit")
+            p1, p1_prov, p1_trailers = first_prodgen_commit(store, sha)
+            if p1 is None:
+                reasons.append("no generated production (provenance) in the history")
+            elif (p1_trailers or {}).get("Bootstrap-Baseline") != base_sha:
+                reasons.append(f"generated production {p1[:12]} does not name this baseline ({(p1_trailers or {}).get('Bootstrap-Baseline')})")
+            else:
+                info["previous_generated"] = p1
+                info["previous_generated_main_sha"] = (p1_prov or {}).get("main_sha")
+        info["baseline"] = base_sha or base
+        if reasons:
+            info["reasons"] = reasons
+            return info
+        info.update({"state": "RESTORED_BASELINE", "ok": True})
+        return info
+    # legacy: no provenance, no restore trailers
+    info["state"] = "LEGACY"
+    if bootstrap_baseline:
+        try:
+            bb = store.rev_parse(bootstrap_baseline)
+        except ProdgenError:
+            bb = None
+        info["bootstrap_baseline_given"] = bootstrap_baseline
+        if bb == sha:
+            info["ok"] = True
+            info["note"] = "legacy production accepted as the explicit bootstrap baseline"
+        else:
+            info["reasons"] = [f"--bootstrap-baseline {bootstrap_baseline} does not name the current production {sha[:12]}"]
+    else:
+        info["reasons"] = ["legacy production (no provenance): a normal promotion refuses it — pass --bootstrap-baseline <this sha> for the first promotion"]
+    return info
+
+
+def previous_generated_main(store: GitStore, production_sha: str | None):
+    """Main SHA that produced the last generated production reachable from `production_sha` (for G20 ancestry). None if none."""
+    if not production_sha:
+        return None, None
+    p1, prov, _ = first_prodgen_commit(store, production_sha)
+    if p1 is None:
+        return None, None
+    return p1, (prov or {}).get("main_sha")
+
+
+def drift_check(repo_root: str, production_ref: str, manifest_path: str, bootstrap_baseline: str | None = None) -> dict:
     store = GitStore(repo_root)
     sha = store.rev_parse(production_ref)
     result = {"production": sha, "ref": production_ref, "checks": {}, "ok": False}
-    prov_bytes = store.cat_path(sha, PROVENANCE_FILE)
-    entries = store.ls_tree(sha)
-    if prov_bytes is None:
-        manifest = Manifest.load(manifest_path)
-        paths = [e.path for e in entries]
-        forbidden = sorted(p for p in paths if manifest.is_forbidden(p))
-        cls = manifest.classify(paths)
-        result["mode"] = "LEGACY"
-        result["checks"]["legacy"] = {
-            "files": len(paths), "forbidden_in_production": len(forbidden), "forbidden_sample": forbidden[:20],
-            "would_be_included": len(cls.included), "not_allowlisted": len(paths) - len(cls.included),
-            "note": "no provenance: production predates prodgen; checks C/D/A1 are not applicable",
-        }
-        result["ok"] = True
+    state = classify_production(store, sha, bootstrap_baseline)
+    result["state"] = state
+    result["mode"] = state["state"]
+    if state["state"] != "PROVENANCE":
+        if state["state"] == "LEGACY":
+            manifest = Manifest.load(manifest_path)
+            paths = [e.path for e in store.ls_tree(sha)]
+            forbidden = sorted(p for p in paths if manifest.is_forbidden(p))
+            cls = manifest.classify(paths)
+            result["checks"]["legacy"] = {
+                "files": len(paths), "forbidden_in_production": len(forbidden), "forbidden_sample": forbidden[:20],
+                "would_be_included": len(cls.included), "not_allowlisted": len(paths) - len(cls.included),
+                "note": "no provenance: production predates prodgen; checks C/D/A1 are not applicable",
+            }
+        result["ok"] = bool(state["ok"])
         return result
 
+    prov_bytes = store.cat_path(sha, PROVENANCE_FILE)
     prov = json.loads(prov_bytes.decode("utf-8"))
-    result["mode"] = "PROVENANCE"
     result["main_sha"] = prov.get("main_sha")
 
     # C — tree hash from the ref's blobs
@@ -80,7 +172,6 @@ def drift_check(repo_root: str, production_ref: str, manifest_path: str) -> dict
             gen_root = os.path.join(td, "gen")
             os.makedirs(gen_root)
             archive = store.run(["archive", "--format=tar", main_sha, "--", "scripts/ai/prodgen", "production_manifest.yml"])
-            import tarfile, io
             with tarfile.open(fileobj=io.BytesIO(archive)) as tf:
                 tf.extractall(gen_root)
             out = os.path.join(td, "tree")
