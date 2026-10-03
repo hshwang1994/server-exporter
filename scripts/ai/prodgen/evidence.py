@@ -34,7 +34,8 @@ def _curl_json(url: str, netrc: str) -> dict:
     curl = shutil.which("curl")
     if not curl:
         raise ProdgenError("curl not available for the Jenkins read")
-    proc = subprocess.run([curl, "-sk", "--netrc-file", netrc, "--max-time", "60", url], capture_output=True, text=True, encoding="utf-8")
+    # -g (--globoff): the Jenkins tree= query carries [] which curl would otherwise expand as a glob (CI #5: rc=3 "URL malformed")
+    proc = subprocess.run([curl, "-skg", "--netrc-file", netrc, "--max-time", "60", url], capture_output=True, text=True, encoding="utf-8")
     if proc.returncode != 0 or not proc.stdout.strip():
         raise ProdgenError(f"Jenkins read failed: {url} rc={proc.returncode}")
     try:

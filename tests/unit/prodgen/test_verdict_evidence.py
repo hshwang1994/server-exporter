@@ -136,3 +136,22 @@ def test_parse_entry_and_aggregate(tmp_path):
     rp.write_text(json.dumps(rep), encoding="utf-8")
     with pytest.raises(ProdgenError):
         aggregate(str(rp), [str(ep)], str(out))
+
+def test_curl_json_disables_globbing_for_bracketed_tree_queries(monkeypatch, tmp_path):
+    """CI #5 Evidence Aggregate: the Jenkins read failed with curl rc=3 because `tree=...actions[...]` was treated as a glob."""
+    import subprocess
+    from scripts.ai.prodgen import evidence as ev
+    seen = {}
+
+    def fake_run(args, **kw):
+        seen["args"] = args
+        return subprocess.CompletedProcess(args, 0, stdout='{"number": 28, "result": "SUCCESS"}', stderr="")
+
+    monkeypatch.setattr(ev.shutil, "which", lambda name: "/usr/bin/curl")
+    monkeypatch.setattr(ev.subprocess, "run", fake_run)
+    netrc = tmp_path / "netrc"
+    netrc.write_text("machine x login a password b\n", encoding="utf-8")
+    out = ev._curl_json("https://jenkins.invalid/job/x/28/api/json?tree=number,actions[parameters[name,value]]", str(netrc))
+    assert out["number"] == 28
+    flags = [a for a in seen["args"] if a.startswith("-") and not a.startswith("--")]
+    assert any("g" in f for f in flags), seen["args"]
