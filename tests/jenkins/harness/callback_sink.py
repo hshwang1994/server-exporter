@@ -185,10 +185,24 @@ def main(argv=None) -> int:
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    threading.Timer(a.max_seconds, stop).start()
+    # daemon: a non-daemon Timer kept the process alive after SIGTERM until max_seconds — the listening socket stayed open but
+    # unserviced, so the next sink could not bind and health checks hung (Harness #26 2026-10-04).
+    timer = threading.Timer(a.max_seconds, stop)
+    timer.daemon = True
+    timer.start()
     sys.stderr.write(f"[sink] listening on {a.bind}:{a.port} statuses={statuses} delay={a.delay} mode={a.mode} record={a.record}\n")
     sys.stderr.flush()
-    httpd.serve_forever()
+    try:
+        httpd.serve_forever()
+    finally:
+        httpd.server_close()          # release the port right away
+        if a.pidfile:
+            try:
+                os.unlink(a.pidfile)
+            except OSError:
+                pass
+        sys.stderr.write("[sink] stopped\n")
+        sys.stderr.flush()
     return 0
 
 

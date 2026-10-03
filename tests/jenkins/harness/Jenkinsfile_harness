@@ -102,8 +102,12 @@ timeout(time: 45, unit: 'MINUTES') {
             writeFile(file: 'callback_sink.py', text: sinkSrc, encoding: 'UTF-8')
             sh """mkdir -p sink
                   if [ -f sink/pid ]; then kill "\$(cat sink/pid)" 2>/dev/null || true; sleep 1; fi
-                  # 중단된 이전 빌드의 sink 가 같은 포트를 쥐고 있으면(열린 파일 = NFS .nfs* busy, Harness #25) 이 사용자 소유의 그 프로세스만 끝낸다
-                  pkill -u "\$(id -un)" -f "callback_sink.py --bind 127.0.0.1 --port ${sinkPort} " 2>/dev/null && sleep 1 || true
+                  # 중단된 이전 빌드의 sink 가 같은 포트를 쥐고 있으면(열린 파일 = NFS .nfs* busy, Harness #25) 이 사용자 소유의 그 프로세스만 끝낸다.
+                  # TERM 뒤에도 남아 있으면(종전 sink 는 non-daemon timer 로 lingering — Harness #26) KILL. 같은 사용자 · 같은 스크립트 · 같은 포트만.
+                  command -v pkill >/dev/null 2>&1 || echo "[Harness] pkill 없음 — 이전 sink 정리를 건너뛴다"
+                  PAT="callback_sink.py --bind 127.0.0.1 --port ${sinkPort} "
+                  if pkill -TERM -u "\$(id -un)" -f "\$PAT" 2>/dev/null; then sleep 2; fi
+                  if pkill -KILL -u "\$(id -un)" -f "\$PAT" 2>/dev/null; then echo "[Harness] 이전 sink 를 KILL 로 정리"; sleep 1; fi
                   rm -f sink/record.jsonl sink/sink.log sink/pid
                   PYBIN="\$(command -v python3 || command -v /usr/libexec/platform-python || true)"
                   echo "[Harness] controller python=\${PYBIN:-absent} \$( [ -n "\$PYBIN" ] && "\$PYBIN" --version 2>&1 )"
