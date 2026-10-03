@@ -60,7 +60,7 @@
     _sections_failed_fragment:      []
     _errors_fragment: >-
       {%- set parts = _e_disks_failed_parts | default([]) -%}
-      {%- set connect = 'connect' in parts -%}
+      {%- set connect = ('connect' in parts) or ('host_select' in parts) -%}  {# 2026-10-03 C8: host 선택 실패도 연결 실패와 같이 storage/system 오류로 #}
       {%- set hit_storage = connect or ('physical_disks' in parts) or ('controllers' in parts) -%}
       {%- set hit_system  = connect or ('listening_ports' in parts) or ('host_info' in parts) -%}
       {%- set out = [] -%}
