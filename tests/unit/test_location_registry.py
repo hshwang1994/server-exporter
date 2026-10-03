@@ -101,6 +101,44 @@ def test_registry_is_the_only_place_locations_are_named(registry):
             )
 
 
+VAULT_FILES = ("esxi.yml", "os/linux.yml", "os/windows.yml") + tuple(f"redfish/{v}.yml" for v in
+               ("cisco", "dell", "fujitsu", "hpe", "huawei", "inspur", "lenovo", "quanta", "supermicro"))
+
+
+def test_each_location_has_the_vault_layout_and_no_stale_location_dir(registry):
+    """Location 추가/개명 = registry 키 + `vault/<id>/` 디렉터리 (코드 수정 0줄). 2026-10-04 `chj` → `cj` 개명 뒤 옛 디렉터리가 남으면 안 된다."""
+    vault = REPO / "vault"
+    ids = set(registry["locations"])
+    for loc_id in ids:
+        for rel in VAULT_FILES:
+            assert (vault / loc_id / rel).is_file(), f"vault/{loc_id}/{rel} 없음 — Location {loc_id} 의 자격증명 세트가 불완전하다"
+    stale = {d.name for d in vault.iterdir() if d.is_dir() and d.name != "common"} - ids
+    assert not stale, f"registry 에 없는 vault 디렉터리: {sorted(stale)} (개명 뒤 옛 디렉터리는 지운다)"
+    assert "chj" not in ids and not (vault / "chj").exists(), "청주 Location 은 2026-10-04 부터 `cj` 다"
+
+
+def test_retired_location_id_is_not_referenced_by_runtime_or_current_docs():
+    """개명된 옛 ID(chj)는 runtime·테스트·현재형 문서에 남지 않는다. 역사 기록(tests/evidence · tests/reference · docs/ai 일자별 항목)은 제외."""
+    targets = [
+        REPO / "Jenkinsfile_portal", REPO / "module_utils" / "credential_common.py", REPO / "common" / "vars" / "locations.yml",
+        REPO / "README.md", REPO / "docs" / "operate" / "02-agent-node.md", REPO / "docs" / "operate" / "03-job-registration.md",
+        REPO / "docs" / "operate" / "04-pipeline-runtime.md", REPO / "docs" / "operate" / "05-vault.md",
+        REPO / "tests" / "unit" / "test_credential_resolver.py", REPO / "tests" / "unit" / "test_redfish_standard_recovery_contract.py",
+    ]
+    for path in targets:
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        hits = [ln for ln in text.splitlines()
+                if re.search(r"(?<![a-z0-9_])chj(?![a-z0-9_])", ln)
+                and not ln.lstrip().startswith(("#", "//", ">"))                       # 개명을 설명하는 주석/인용은 동작이 아니다
+                and "2026-10-04" not in ln and "→ `cj`" not in ln and "→ cj" not in ln]
+        assert not hits, f"{path.relative_to(REPO)}: 옛 Location ID 'chj' 가 남아 있다: {hits[:2]}"
+    for case in ("04_truncated_tail", "09_auth_proven_then_lost"):
+        for name in ("gather_manifest.json", "gather_progress.jsonl"):
+            assert "chj" not in (REPO / "tests" / "fixtures" / "finalize_corpus" / case / name).read_text(encoding="utf-8")
+
+
 def test_no_secret_material_in_registry():
     """registry 는 평문이다. 자격증명이 섞여 들어오면 안 된다."""
     text = REGISTRY.read_text(encoding="utf-8").lower()

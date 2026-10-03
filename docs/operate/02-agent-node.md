@@ -283,7 +283,7 @@ git push
 
 | 항목 | 값 | 비고 |
 |------|-----|------|
-| Name | `agent-{loc}-{dev\|ops}` | 예: `agent-ic-ops`, `agent-chj-dev` |
+| Name | `agent-{loc}-{dev\|ops}` | 예: `agent-ic-ops`, `agent-cj-dev` |
 | Description | `{로케이션} {개발\|운영} Agent` | 예: `이천 운영 Agent` |
 | Number of executors | `2` | 동시 실행 잡 수. 서버 사양에 따라 조정 |
 | Remote root directory | `/home/{서비스계정}/jenkins-agent` | Agent 워크스페이스 경로. 설치 자동화 Runner 는 계정 `jenkins` · `/app/jenkins-agent/agent` |
@@ -300,7 +300,7 @@ git push
 | Location | Labels 값 |
 |-------------|----------|
 | 이천 | `ic` |
-| 청주 | `chj` |
+| 청주 | `cj` (2026-10-04 까지 `chj`) |
 | 용인 | `yi` |
 | 사내 테스트 | `git` |
 

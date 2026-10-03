@@ -55,7 +55,7 @@ ESXi는 하이퍼바이저가 본 SMBIOS(`ansible_product_serial`), Linux는 DMI
 | Windows | 10.100.64.120 | |
 | Linux VM | 10.100.64.161(RHEL 8.10, Python 3.6 raw fallback) / .165(RHEL 9.6) / .145(RHEL 9.6) / .156(Ubuntu 24.04 `cicd-gitlab`) | 2026-09-03 실측 정정: .167/.169 는 별도 장비가 아니라 .165/.161 의 bond1 IP. .163(RHEL 9.2) 은 TCP 무응답. RHEL 10 / Rocky 없음 |
 | Jenkins master | 10.100.64.152 / .153 | |
-| Jenkins agent | 10.100.64.154 / .155 | agent는 `ic/chj/yi/git` 4 label을 모두 갖는다 |
+| Jenkins agent | 10.100.64.154 / .155 | agent는 `ic/chj/yi/git` 4 label을 모두 갖는다 (2026-10-04 부터 청주 Location 키는 `cj` — 구 agent 라벨 `chj` 는 환경 사실 기록) |
 
 > 2026-08-14: Location ID `ich` 를 `ic` 로 바꿨다 (`agent_label` 포함). **Jenkins 노드의 실제
 > label 은 아직 `ich` 다** — 재설정 전까지 `loc=ic` 잡은 Agent 를 못 잡고 대기한다.

@@ -74,7 +74,7 @@ _harness = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_harness)
 _iter_tasks = _harness._iter_tasks
 
-LOCATIONS = ("ic", "chj", "yi", "git")
+LOCATIONS = ("ic", "cj", "yi", "git")
 VENDORS = ("dell", "hpe", "lenovo", "cisco", "supermicro",
            "huawei", "inspur", "fujitsu", "quanta")
 
@@ -453,7 +453,7 @@ def test_15_recovery_set_missing_is_recorded_not_silent():
 
 
 @pytest.mark.parametrize("a,b", [
-    (("ic", "dell"), ("chj", "dell")),   # 16: cross-location
+    (("ic", "dell"), ("cj", "dell")),   # 16: cross-location
     (("ic", "dell"), ("ic", "hpe")),    # 17: cross-vendor
 ])
 def test_16_17_no_cross_scope_reuse(a, b):

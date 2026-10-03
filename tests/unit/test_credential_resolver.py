@@ -40,7 +40,7 @@ from credential_common import (  # noqa: E402
     resolve_credential_scope,
 )
 
-LOCATIONS = ("ic", "chj", "yi")
+LOCATIONS = ("ic", "cj", "yi")
 VENDORS = ("dell", "hpe", "lenovo", "supermicro", "cisco",
            "huawei", "inspur", "fujitsu", "quanta")
 
@@ -69,8 +69,8 @@ def resolve(**kw):
     (dict(location="ic", target_type="redfish", vendor="hpe"),
      "ic/redfish/hpe", "vault/ic/redfish/hpe.yml"),
     # 다른 Location 도 동일 규칙
-    (dict(location="chj", target_type="redfish", vendor="lenovo"),
-     "chj/redfish/lenovo", "vault/chj/redfish/lenovo.yml"),
+    (dict(location="cj", target_type="redfish", vendor="lenovo"),
+     "cj/redfish/lenovo", "vault/cj/redfish/lenovo.yml"),
     (dict(location="yi", target_type="os", os_type="linux"),
      "yi/os/linux", "vault/yi/os/linux.yml"),
 ])
@@ -146,9 +146,9 @@ def test_os_channel_requires_os_type():
 def test_location_isolation():
     """같은 vendor 라도 Location 이 다르면 다른 파일. 교차 참조가 없다."""
     a = resolve(location="ic", target_type="redfish", vendor="dell")
-    b = resolve(location="chj", target_type="redfish", vendor="dell")
+    b = resolve(location="cj", target_type="redfish", vendor="dell")
     assert a["vault_relpath"] != b["vault_relpath"]
-    assert "chj" not in a["vault_relpath"]
+    assert "cj" not in a["vault_relpath"]
     assert "ic" not in b["vault_relpath"]
 
 
@@ -228,7 +228,7 @@ def test_module_never_reads_files():
 
 # ── 경로 안전성 ──────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("evil", [
-    "../../etc", "ic/../chj", "ic/redfish", ".", "..", "ic ", "i c", "IC/",
+    "../../etc", "ic/../cj", "ic/redfish", ".", "..", "ic ", "i c", "IC/",
 ])
 def test_path_traversal_is_impossible_via_location(evil):
     r = resolve_credential_scope(

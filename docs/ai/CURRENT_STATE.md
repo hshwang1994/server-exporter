@@ -326,7 +326,7 @@
   username 을 `administrator` 로, password 를 사용자 제공값으로 바꿨다.
   **`vault/git/os/windows.yml` 은 지시대로 건드리지 않았다** — 이 파일은 이미
   `administrator` 를 쓰고 있고 password 는 별개 값이라 3 Location 과 다르다.
-- `locations.yml` 정본이 정의한 Location 은 `chj / git / ic / yi` 4개다.
+- `locations.yml` 정본이 정의한 Location 은 `cj / git / ic / yi` 4개다 (2026-10-04 `chj` → `cj`).
   `git` 을 뺀 나머지가 정확히 3개이므로 대상 누락은 없다
   (`resolve_credential_scope()` 로 4 Location 전수 경로 판정 확인).
 - **평문 구조는 이전과 같다.** `accounts[]` 1개(label `windows_current`, role `primary`)
@@ -381,7 +381,7 @@
 - 실제 변경은 셋뿐이다: `vault/ich/` → `vault/ic/` 디렉터리 rename(내용 무변경),
   `common/vars/locations.yml` 의 키와 label, 그리고 예시 문자열. **코드 분기는 0줄 바뀌었다** —
   Location 목록 정본이 `locations.yml` 하나라서 나머지는 전부 주석·문서·테스트 샘플값이다.
-- 4 Location (`ic / chj / yi / git`) × 12 = 48개 + 전역 표준 1개 = 49개 vault 구성 유지.
+- 4 Location (`ic / cj / yi / git`, 2026-10-04 개명) × 12 = 48개 + 전역 표준 1개 = 49개 vault 구성 유지.
   `vault_decrypt_check.py --layout-only` 로 `ic: 12/12 존재` 확인.
 - **아직 반영 안 된 것**: Jenkins 노드의 실제 Labels 는 `ich` 다. 재설정 전까지 `loc=ic` 잡은
   Agent 를 못 잡는다. 호출자가 보내는 `loc` 값도 함께 바뀌어야 한다 (저장소 밖 작업).

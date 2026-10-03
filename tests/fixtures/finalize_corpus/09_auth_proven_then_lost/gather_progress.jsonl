@@ -1,5 +1,5 @@
 {"ts": "2026-10-03T07:00:50.000000Z", "host": "203.0.113.91", "ip": "203.0.113.91", "event": "emitted"}
 {"ts": "2026-10-03T07:00:01.000000Z", "host": "203.0.113.92", "ip": "203.0.113.92", "event": "first_seen"}
-{"ts": "2026-10-03T07:00:02.000000Z", "host": "203.0.113.92", "ip": "203.0.113.92", "event": "cred_load", "outcome": "ok", "location": "chj"}
+{"ts": "2026-10-03T07:00:02.000000Z", "host": "203.0.113.92", "ip": "203.0.113.92", "event": "cred_load", "outcome": "ok", "location": "cj"}
 {"ts": "2026-10-03T07:00:05.000000Z", "host": "203.0.113.92", "ip": "203.0.113.92", "event": "auth_proven", "task": "esxi | vmware_host_facts"}
 {"ts": "2026-10-03T07:00:30.000000Z", "host": "203.0.113.92", "ip": "203.0.113.92", "event": "lost", "task": "esxi | disks", "detail": "vSphere connection lost during collection (synthetic)"}

@@ -425,7 +425,7 @@ pipeline {
         string(
             name        : 'loc',
             defaultValue: '',
-            description : 'Agent 로케이션 (ic | chj | yi)'
+            description : 'Agent 로케이션 (ic | cj | yi | git) — common/vars/locations.yml 의 키'
         )
         choice(
             name        : 'target_type',

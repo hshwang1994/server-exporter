@@ -55,7 +55,7 @@ Generation / Model / Firmware 는 **선택축이 아니다** (세대를 아는 �
   `-e se_location=<id>` 로 전달한다. resolver 는 registry 에 없는 값이면 **경로를 만들지 않는다.**
 - `<vendor>` 는 `common/vars/vendor_aliases.yml` 의 canonical 키만 쓸 수 있다.
 - **다른 Location / 다른 Vendor 로 넘어가는 폴백 경로는 코드에 존재하지 않는다.**
-  `ic + dell` 이 실패해도 `chj + dell` 이나 `ic + hpe` 를 시도하지 않는다.
+  `ic + dell` 이 실패해도 `cj + dell` 이나 `ic + hpe` 를 시도하지 않는다.
 
 **vendor 9종**: dell / hpe / lenovo / supermicro / cisco / huawei / inspur / fujitsu / quanta
 
@@ -108,7 +108,12 @@ OS / ESXi 는 축이 하나뿐이라 구조가 그대로다 (`<loc>/os/<type>`, 
 
 ### 3.4 flat → Location 이관 절차 (4단계)
 
-> **현재 상태 (2026-08-12)**: 4 Location (`ic / chj / yi / git`) × 12 = 48개 +
+> **2026-10-04 — 청주 Location `chj` → `cj`**: registry 키·`agent_label`·`vault/cj/`(12 파일, 암호문 blob 동일 · 재암호화 없음) 만 바꿨다. alias 는 두지 않았으므로
+> `loc=chj` 요청은 미등록 Location 으로 **fail-closed** 다. 반영 순서: ① 요청 `loc` 값을 만드는 쪽(공급자) 확인 ② 실 청주 Runner 에 라벨 `cj`(기존 라벨 유지)
+> ③ 전환 시각 합의·진행 중 `chj` 빌드 완료 대기 ④ 코드 반영(main → 승격) ⑤ `cj` 빌드 Resolve 성공·`chj` 요청 0건 확인 ⑥ 원복 = `git revert`/`prodgen restore` + 공급자 값 복귀.
+> alias 가 없으므로 무중단은 약속하지 않는다. 고객사 전달 자료에도 같은 내용을 적는다 (docs/operate/09).
+>
+> **현재 상태 (2026-08-12, Location 이름만 2026-10-04 기준)**: 4 Location (`ic / cj / yi / git`) × 12 = 48개 +
 > 전역 표준 1개 = **49개**. flat 12개는 삭제됐다.
 > 복구 자격은 아직 **4곳이 같은 값**이다 (Pilot 단계). 아래 절차는 **운영 값으로
 > 분리할 때**의 정본이다.

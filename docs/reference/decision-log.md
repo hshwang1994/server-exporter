@@ -8,6 +8,15 @@
 
 > 최종 갱신: 2026-10-03
 
+## 2026-10-04 — 청주 Location 키 `chj` → `cj` (사용자 결정, alias 없음)
+
+- **무엇**: `common/vars/locations.yml` 의 키·`agent_label`, `vault/chj/` → `vault/cj/`(12 파일 `git mv`, 암호문 blob 동일 · 재암호화 없음), `Jenkinsfile_portal` 의 `loc` 설명,
+  resolver 주석, 단위 테스트·finalize corpus 의 `loc` 값, 현재형 문서. 역사 기록(`tests/evidence/**`, `tests/reference/**`, docs/ai 일자별 항목)은 그대로 둔다.
+- **왜**: 사용자 지시 2026-10-03 — "포탈은 cj 인지 모름, 우리 코드와 Vault 만 cj 로 바꾸면 된다". Portal 설정은 범위 밖, 과도기 alias 도 두지 않는다.
+- **동작**: `loc=chj` 요청은 미등록 Location 으로 fail-closed(기존 미등록 경로와 동일 — 접수 manifest 없이 끝나므로 Callback 도 없다). 실 청주 Runner 는 라벨 `cj` 가 있어야 한다.
+  lab 에는 청주 Runner 가 없어 Runner03 임시 `cj` 라벨 + TEST-NET 으로 routing/실패 경로 smoke 만 본다 — 청주 실장비 성공 수집이 아니다.
+- **반영 순서/원복**: `docs/operate/05-vault.md` 2026-10-04 절. 고객사 main 에 전달되는 설정 계약 변경이므로 전달 자료(docs/operate/09)에 같은 내용을 둔다.
+
 ## 2026-10-03 — Gathering 개선 Phase 2~4: 정확성 정정 · Redfish 호출 절감 · 시간 예산 · 마무리(finalization) · Callback 재설계
 
 ### 배경
