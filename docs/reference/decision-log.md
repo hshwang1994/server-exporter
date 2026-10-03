@@ -6,7 +6,40 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-09-30
+> 최종 갱신: 2026-10-03
+
+## 2026-10-03 — 파이프라인 입구를 agent 없이: Validate → Resolve Location(`readTrusted`), 결과는 post{always} 에서 보존
+
+### 배경
+
+`clovirone-server-gather-main`(main 브랜치 Job) 첫 빌드가 Resolve Location 에서 끊겼다. 이 stage 는 컨트롤러(`built-in`)에
+agent 를 두어 Jenkins 가 저장소 **전체**를 암묵적으로 체크아웃한 뒤 `common/vars/locations.yml` 하나를 읽었는데, main 은 참조 데이터까지
+약 17k 파일이라 2분 제한을 넘겼다(production 은 983 파일이라 23초). 또 Gather 는 수집이 끝난 뒤 steps 안에서 `stash` 했으므로 결과 파일이
+0바이트거나 stage 가 중간에 끊기면 완료된 host 의 결과까지 Callback 에 닿지 못했다. 이 둘은 2026-10-03 승인된 Gathering 개선 Plan 의
+Phase 1.5(최소 선행 변경) 범위다 — 이후 Phase 의 실장비 검증이 main Job 에서 돌아야 하기 때문이다.
+
+### 결정
+
+- Validate 가 먼저, Resolve Location 이 그 다음이다. 둘 다 agent 를 잡지 않는다(파라미터 검증과 YAML 1개 읽기에 workspace 가 필요 없다).
+  Resolve Location 은 `readYaml text: readTrusted('common/vars/locations.yml')` 로 Job 의 SCM 설정(Lightweight checkout)에서 파일 하나만 읽는다.
+  구조가 틀린 요청은 노드를 고르기 전에 끝난다. 온라인 노드가 없을 때의 처리(접수 후 실패 + Callback)는 finalizer 와 함께 다음 단계에서 바꾼다.
+- Validate 는 접수 manifest(빌드·채널·요청 식별·접수 IP 목록, 비밀값 없음)를 `env.SE_MANIFEST_JSON` 으로 만든다. agent 없는 stage 에서는
+  파일을 쓸 수 없으므로 Gather 가 node 를 얻은 직후 `gather_manifest.json` 으로 기록한다. 이 파일이 "요청 1개 = 결과 1개" 대조의 정본이 된다.
+- Gather 의 결과 보존은 `post { always }` 로 옮겼다: `archiveArtifacts`(gather_output.json · gather_manifest.json · gather_rc.txt, 빈 파일 허용) →
+  `stash`(allowEmpty) → `deleteDir`. 수집이 어떻게 끝났든 완료된 host 의 OUTPUT 줄은 빌드에 남는다. 0바이트 결과의 FAILURE 판정은 그대로다.
+- 검증 실행용 파라미터 둘을 추가했고 기본값이면 운영 동작이 바뀌지 않는다. `redfishAccountDryrun`(기본 false)이 true 면
+  `-e _rf_account_service_dryrun=true` 를 넘겨 Redfish 표준 계정 복구 쓰기를 시뮬레이션만 한다 — live Redfish 검증은 이 경로로만 한다.
+  `gatherBudgetForceSec`(기본 빈 값)에 초를 주면 `ansible-playbook` 을 `timeout --signal=INT --kill-after=90` 으로 감싼다(INT 는 ansible 이 자식까지
+  정리하게 하고, KILL 은 고아를 남긴다는 WSL 실측에 따른 선택). rc 는 `gather_rc.txt` 에 남는다.
+- `inventory_json` 이 JSON 배열이 아니거나 원소가 객체가 아니면 NPE 대신 명확한 오류를 낸다. 종전에도 실패하던 입력이라 허용 범위는 바뀌지 않는다
+  (host 수 상한·식별자 형식 같은 **새** 거부는 호출자 계약 결정 뒤에만).
+
+### 검증
+
+Jenkinsfile 계약 테스트 69 passed(신규 `tests/unit/test_jenkinsfile_portal_preserve_and_params.py`), jenkins-prod 선언형 린터 validated,
+오프라인 gate `scripts/ai/ci_gate.sh` 통과(pytest 3369 + 300). **main Job 에서의 실제 확인(readTrusted 가 lightweight 로 동작하는지, Gather
+`GIT_COMMIT` 과 같은 revision 인지)은 아직 하지 못했다** — 이 세션의 실행 환경이 Jenkins 빌드 트리거를 거부했다. 확인 전까지는 "오프라인 통과" 다.
+실측 기록: `tests/evidence/2026-10-03-phase1-baseline.md`.
 
 ## 2026-09-30 — Jenkins 노드 선택 축을 `loc` 에서 `loc && target_type 능력 라벨` 로
 
