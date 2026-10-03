@@ -284,3 +284,8 @@ def test_embedded_bash_blocks_parse(tmp_path):
         except subprocess.TimeoutExpired:
             pytest.fail(f"block {n}: bash -n 가 30s 안에 끝나지 않음")
         assert r.returncode == 0, f"block {n}: {r.stderr}"
+
+def test_no_loop_variable_shadows_the_implicit_closure_parameter():
+    """CI #2 (2026-10-04) died at compile time: `for (def it in …)` inside a closure — "The current scope already contains a variable of the name it"."""
+    assert re.search(r"for \(\s*(def|\w+)\s+it\s+in", CI) is None
+    assert re.search(r"\(\s*it\s+in\s", CI) is None

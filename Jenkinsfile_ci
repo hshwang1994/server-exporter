@@ -491,10 +491,10 @@ pipeline {
                     for (String f in ['harness_main_results.json', 'harness_tree_results.json']) {
                         if (fileExists(f)) {
                             def r = readJSON(file: f, returnPojo: true)
-                            for (def it in (r.results ?: [])) { entries << "${it.scenario}=clovirone-cicd/clovirone-server-gather-harness:${it.number}".toString() }
+                            for (def hr in (r.results ?: [])) { entries << "${hr.scenario}=clovirone-cicd/clovirone-server-gather-harness:${hr.number}".toString() }
                         }
                     }
-                    for (String e in params.E2E_MAIN_ENTRIES.split(',').collect { it.trim() }.findAll { it }) { entries << e }
+                    for (String ent in params.E2E_MAIN_ENTRIES.split(',').collect { it.trim() }.findAll { it }) { entries << ent }
                     if (!entries) {
                         env.CI_STAGE_EVIDENCE = 'PARTIAL'
                         unstable('[Evidence] 수집할 증거 항목이 없다 (Harness 결과 없음 · E2E_MAIN_ENTRIES 비어 있음)')
