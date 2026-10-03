@@ -13,14 +13,56 @@
 #   - media_type: lsblk ROTA 가 null 이면 null (종전: default('1') 가 null 을 못 잡아 SSD 로 단정).
 #   - controllers[].controller_manufacturer: lspci -mm 의 vendor (종전 하드코딩 null).
 #   - 값을 못 구하면 null. 섹션 status 는 실제 결과로.
+#
+# 2026-10-03 (Phase 2 C2 — lsblk 실패 은폐 제거):
+#   - LSBLK_RC / LSBLK_ERR / SYS_BLOCK_COUNT marker, rc != 0 이면 구형 fallback 1회 (LSBLK_TXT|).
+#   - JSON 손상은 block/rescue 로 흡수 (호스트 수집 계속), lsblk 이상은 errors[] 1건 (detail 에 state).
+#   - df 는 timeout 20 으로 감싼다 (-l 은 쓰지 않는다 — NFS 포함). multipath 처리는 변경 없음 (보류).
 
 - name: "linux | storage | raw gather (lsblk/udevadm/findmnt/lspci/df)"
+  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
-    # --- physical disks (JSON 1 line) ---
+    # --- physical disks (JSON) ---
+    # 2026-10-03 (C2): lsblk 실패를 빈 JSON 으로 가리지 않는다. 종료 코드와 stderr 첫 줄을
+    #   LSBLK_RC / LSBLK_ERR 로 남긴다 (명령이 없으면 127). JSON 은 변수로 받아 줄 끝을 보장한다.
+    #   stderr 는 mktemp 파일로만 받는다 (mktemp 가 없으면 버린다 — 예측 가능한 /tmp 경로는 쓰지 않는다).
+    lsblk_rc=127; lsblk_err=""; lsblk_json=""
+    if command -v lsblk >/dev/null 2>&1; then
+      lsblk_ef=$(mktemp 2>/dev/null) || lsblk_ef=""
+      lsblk_json=$(lsblk -J -b -d -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL,WWN 2>"${lsblk_ef:-/dev/null}")
+      lsblk_rc=$?
+      if [ -n "$lsblk_ef" ]; then
+        lsblk_err=$(head -n 1 "$lsblk_ef" 2>/dev/null | tr -d '|\r')
+        rm -f "$lsblk_ef"
+      fi
+    fi
     echo "LSBLK_BEGIN"
-    lsblk -J -b -d -o NAME,SIZE,TYPE,ROTA,MODEL,TRAN,SERIAL,WWN 2>/dev/null || echo '{"blockdevices":[]}'
+    [ -n "$lsblk_json" ] && printf '%s\n' "$lsblk_json"
     echo "LSBLK_END"
+    echo "LSBLK_RC=$lsblk_rc"
+    echo "LSBLK_ERR=$lsblk_err"
+    # 구형 util-linux (-J / TRAN / WWN 미지원) 용 1회 fallback — 오래된 판에도 있는 열만 쓴다.
+    #   LSBLK_TXT|name|size(bytes)|type|rota|model  (model 은 공백을 품을 수 있어 5번째 열 이후 전부)
+    if [ "$lsblk_rc" -ne 0 ] && [ "$lsblk_rc" -ne 127 ]; then
+      lsblk -b -d -n -o NAME,SIZE,TYPE,ROTA,MODEL 2>/dev/null | awk '{
+        m = ""; for (i = 5; i <= NF; i++) m = m (i > 5 ? " " : "") $i;
+        gsub(/[|]/, "_", m);
+        printf "LSBLK_TXT|%s|%s|%s|%s|%s\n", $1, $2, $3, $4, m
+      }'
+    fi
+    # 완전성 근거: /sys/block 항목 수 (loop / ram 제외) — lsblk 의 disk 수와 견줄 수 있게 detail 에만 쓴다.
+    if [ -d /sys/block ]; then
+      n=0
+      for b in /sys/block/*; do
+        [ -e "$b" ] || continue
+        case "${b##*/}" in loop*|ram*) continue ;; esac
+        n=$((n + 1))
+      done
+      echo "SYS_BLOCK_COUNT=$n"
+    else
+      echo "SYS_BLOCK_COUNT="
+    fi
     # serial/wwn 보강 (2026-06-22): lsblk 값이 비는 경우(virtio) / Ubuntu 20.04 SERIAL↔WWN 혼동 버그
     #   (Launchpad #1950793) / RAID short-WWN 대비, udev 원천(ID_SERIAL_SHORT/ID_WWN)을 직접 조회.
     for d in $(lsblk -dn -o NAME 2>/dev/null); do
@@ -53,7 +95,14 @@
         }'
     fi
     # --- filesystems (df) — NFS/cifs idle mount 는 '-' 를 출력 → 숫자만 남긴다 ---
-    df -P -T -k 2>/dev/null | tail -n +2 | awk '{
+    #   2026-10-03 (C2): 응답 없는 네트워크 마운트에서 df 가 멈추지 않게, timeout 이 있고
+    #   'timeout 초 명령' 형식을 받으면(구형 busybox 는 -t 형식) 20초로 감싼다.
+    #   -l(로컬만)은 쓰지 않는다 — NFS 등 네트워크 파일시스템도 수집 대상이다.
+    if command -v timeout >/dev/null 2>&1 && timeout 20 true >/dev/null 2>&1; then
+      timeout 20 df -P -T -k 2>/dev/null
+    else
+      df -P -T -k 2>/dev/null
+    fi | tail -n +2 | awk '{
       gsub(/[^0-9]/,"",$3); gsub(/[^0-9]/,"",$4); gsub(/[^0-9]/,"",$5);
       total=int($3/1024); used=int($4/1024); avail=int($5/1024);
       pct=$6; gsub(/%/,"",pct); gsub(/[^0-9]/,"",pct);
@@ -64,20 +113,44 @@
   failed_when: false
   no_log: true
 
+# 2026-10-03 (C2): lsblk JSON 해석을 별도 block 으로 뺐다. JSON 이 깨져 있으면(잘린 출력 등)
+#   from_json 이 예외를 내고, 종전에는 그 예외가 set_fact 를 실패시켜 linux 블록 전체가 rescue 로
+#   빠졌다 (정상 수집한 다른 섹션까지 status=failed). 이제 rescue 가 빈 문서 + 실패 표시만 남긴다.
+#   LSBLK_RC 가 0 이 아니면 JSON 을 읽지 않는다 (구형 fallback 줄을 쓴다). marker 가 없는 출력은
+#   종전처럼 JSON 만 본다.
+- name: "linux | storage | parse lsblk json"
+  block:
+    - name: "linux | storage | parse lsblk json (from_json)"
+      ansible.builtin.set_fact:
+        _l_lsblk_doc: >-
+          {%- set ns = namespace(in_json=false, json_lines=[], rc='') -%}
+          {%- for line in (_l_stor_raw.stdout_lines | default([])) -%}
+            {%- if line | trim == 'LSBLK_BEGIN' -%}{%- set ns.in_json = true -%}
+            {%- elif line | trim == 'LSBLK_END' -%}{%- set ns.in_json = false -%}
+            {%- elif ns.in_json -%}{%- set _ = ns.json_lines.append(line) -%}
+            {%- elif line.startswith('LSBLK_RC=') -%}{%- set ns.rc = line[9:] | trim -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- set raw_json = ns.json_lines | join('\n') -%}
+          {{ (raw_json | from_json) if (ns.rc in ['', '0'] and (raw_json | trim | length) > 0) else {} }}
+        _l_lsblk_json_failed: false
+      no_log: true
+  rescue:
+    - name: "linux | storage | lsblk json malformed (호스트 수집은 계속)"
+      ansible.builtin.set_fact:
+        _l_lsblk_doc: {}
+        _l_lsblk_json_failed: true
+      no_log: true
+
 # Round 16: lsblk 가 virtio/일부 가상 disk 에 "model": null 방출 → truthy 체크로 None/''/undefined 를 none 으로.
+# 2026-10-03 (C2): JSON 장치가 없으면 구형 util-linux 용 LSBLK_TXT 줄로 만든다. serial / wwn 은
+#   JSON 경로와 같은 udev 보강값(있을 때만), protocol 은 TRAN 열이 없어 null.
 - name: "linux | storage | normalize physical disks"
   ansible.builtin.set_fact:
     _l_norm_physical_disks: >-
       {%- set out = [] -%}
-      {%- set ns = namespace(in_json=false, json_lines=[]) -%}
-      {%- for line in (_l_stor_raw.stdout_lines | default([])) -%}
-        {%- if line | trim == 'LSBLK_BEGIN' -%}{%- set ns.in_json = true -%}
-        {%- elif line | trim == 'LSBLK_END' -%}{%- set ns.in_json = false -%}
-        {%- elif ns.in_json -%}{%- set _ = ns.json_lines.append(line) -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {%- set raw_json = ns.json_lines | join('\n') -%}
-      {%- set lsblk = (raw_json | from_json) if (raw_json | trim | length > 0) else {} -%}
+      {%- set doc = _l_lsblk_doc | default({}) -%}
+      {%- set devs = doc.blockdevices if (doc is mapping and doc.blockdevices is defined and doc.blockdevices is sequence and doc.blockdevices is not string and doc.blockdevices is not mapping) else [] -%}
       {%- set udev = {} -%}
       {%- for line in (_l_stor_raw.stdout_lines | default([])) -%}
         {%- if line.startswith('UDEV|') -%}
@@ -92,8 +165,8 @@
         {%- if line.startswith('OSDISK|') -%}{%- set _ = osdisks.append(line.split('|')[1] | trim) -%}{%- endif -%}
       {%- endfor -%}
       {%- set os_known = (osdisks | length) > 0 -%}
-      {%- if lsblk.blockdevices is defined -%}
-        {%- for dev in lsblk.blockdevices -%}
+      {%- if (devs | length) > 0 -%}
+        {%- for dev in devs -%}
           {%- if (dev.type | default('')) in ['disk'] and ((dev.size | default(0)) | int) > 0 -%}
             {%- set _dev_path = '/dev/' ~ dev.name -%}
             {%- set _tran = (dev.tran | default('') | string | lower) -%}
@@ -128,8 +201,63 @@
             }) -%}
           {%- endif -%}
         {%- endfor -%}
+      {%- else -%}
+        {%- for line in (_l_stor_raw.stdout_lines | default([])) -%}
+          {%- if line.startswith('LSBLK_TXT|') -%}
+            {%- set p = line.split('|') -%}
+            {%- set _size = (p[2] | default('')) | trim -%}
+            {%- if (p | length) >= 6 and (p[3] | trim) == 'disk' and _size.isdigit() and (_size | int) > 0 -%}
+              {%- set _dev_path = '/dev/' ~ (p[1] | trim) -%}
+              {%- set _rota = (p[4] | trim) | lower -%}
+              {%- set _u = udev.get(_dev_path, {}) -%}
+              {%- set _ = out.append({
+                'id':         _dev_path,
+                'device':     _dev_path,
+                'model':      (p[5] | trim) or none,
+                'serial':     _u.serial | default(none),
+                'wwn':        _u.wwn | default(none),
+                'total_mb':   ((_size | int) / 1048576) | round(0, 'floor') | int,
+                'media_type': (('HDD' if _rota in ['1', 'true'] else 'SSD') if _rota in ['0', '1', 'true', 'false'] else none),
+                'protocol':   none,
+                'health':     none,
+                'is_os_disk': (_dev_path in osdisks) if os_known else none
+              }) -%}
+            {%- endif -%}
+          {%- endif -%}
+        {%- endfor -%}
       {%- endif -%}
       {{ out }}
+  no_log: true
+
+# 2026-10-03 (C2): lsblk 결과 분류 — errors[] 판정과 detail 근거.
+#   state: ok / empty (오류 아님) | unknown (127 미설치 또는 그 밖의 rc) / unsupported (구형 옵션·열)
+#          / permission / malformed (rc 0 인데 JSON 이 아니거나 blockdevices 목록이 없음)
+#   값은 dict 로 둔다 (문자열 fact 는 엔진에 따라 숫자로 바뀔 수 있다).
+- name: "linux | storage | classify lsblk result"
+  ansible.builtin.set_fact:
+    _l_lsblk_info: >-
+      {%- set ns = namespace(rc='', err='', sysb='') -%}
+      {%- for line in (_l_stor_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('LSBLK_RC=') -%}{%- set ns.rc = line[9:] | trim -%}
+        {%- elif line.startswith('LSBLK_ERR=') -%}{%- set ns.err = line[10:] | trim -%}
+        {%- elif line.startswith('SYS_BLOCK_COUNT=') -%}{%- set ns.sysb = line[16:] | trim -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set doc = _l_lsblk_doc | default({}) -%}
+      {%- set has_list = doc is mapping and doc.blockdevices is defined and doc.blockdevices is sequence and doc.blockdevices is not string and doc.blockdevices is not mapping -%}
+      {%- set err_l = ns.err | lower -%}
+      {%- if ns.rc == '127' -%}{%- set state = 'unknown' -%}
+      {%- elif ns.rc not in ['', '0'] -%}
+        {%- if ('invalid option' in err_l) or ('unrecognized option' in err_l) or ('unknown column' in err_l) -%}{%- set state = 'unsupported' -%}
+        {%- elif 'permission denied' in err_l -%}{%- set state = 'permission' -%}
+        {%- else -%}{%- set state = 'unknown' -%}
+        {%- endif -%}
+      {%- elif _l_lsblk_json_failed | default(false) | bool -%}{%- set state = 'malformed' -%}
+      {%- elif not has_list -%}{%- set state = 'malformed' if ns.rc == '0' else 'unknown' -%}
+      {%- elif (doc.blockdevices | length) == 0 -%}{%- set state = 'empty' -%}
+      {%- else -%}{%- set state = 'ok' -%}
+      {%- endif -%}
+      {{ {'rc': ns.rc or 'none', 'err': ns.err[:200] or 'none', 'sys_block': ns.sysb or 'unknown', 'state': state} }}
   no_log: true
 
 - name: "linux | storage | normalize filesystems"
@@ -240,7 +368,21 @@
     _sections_supported_fragment: ['storage']
     _sections_collected_fragment: "{{ ['storage'] if (((_l_norm_physical_disks | default([])) | length > 0) or ((_l_norm_filesystems | default([])) | length > 0)) else [] }}"
     _sections_failed_fragment:    "{{ [] if (((_l_norm_physical_disks | default([])) | length > 0) or ((_l_norm_filesystems | default([])) | length > 0)) else ['storage'] }}"
-    _errors_fragment: "{{ [] if (((_l_norm_physical_disks | default([])) | length > 0) or ((_l_norm_filesystems | default([])) | length > 0)) else [{'section':'storage','message':'스토리지 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=lsblk,df; cause=no_output; rc=' ~ (_l_stor_raw.rc | default('none')))}] }}"
+    # 2026-10-03 (C2): lsblk 이상(미설치 / 구형 / 권한 / JSON 손상)은 섹션 결과와 별개로 1건 남긴다.
+    #   파일시스템만 수집돼도 섹션은 success (섹션 기준 판정) + 이 1건 — 문서화된 "success + errors".
+    #   섹션 자체가 비면 기존 문장 1건만 내고 lsblk 근거는 그 detail 에 합친다 (같은 사건 2건 금지).
+    _errors_fragment: >-
+      {%- set disks = _l_norm_physical_disks | default([]) -%}
+      {%- set fss = _l_norm_filesystems | default([]) -%}
+      {%- set info = _l_lsblk_info | default({}) -%}
+      {%- set state = info.state | default('unknown') -%}
+      {%- set lsblk_bad = state in ['unknown', 'unsupported', 'permission', 'malformed'] -%}
+      {%- set lsblk_detail = 'lsblk_rc=' ~ (info.rc | default('none')) ~ '; state=' ~ state ~ '; disks=' ~ (disks | length) ~ '; sys_block=' ~ (info.sys_block | default('unknown')) ~ '; stderr=' ~ (info.err | default('none')) -%}
+      {%- if (disks | length) == 0 and (fss | length) == 0 -%}{{ [{'section':'storage','message':'스토리지 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=lsblk,df; cause=no_output; rc=' ~ (_l_stor_raw.rc | default('none')) ~ (('; ' ~ lsblk_detail) if lsblk_bad else ''))}] }}
+      {%- elif lsblk_bad and state == 'permission' -%}{{ [{'section':'storage','message':'물리 디스크 정보 수집에 실패한 항목이 있습니다. 수집 계정의 권한을 확인하세요.','detail':('source=lsblk; ' ~ lsblk_detail)}] }}
+      {%- elif lsblk_bad -%}{{ [{'section':'storage','message':'물리 디스크 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=lsblk; ' ~ lsblk_detail)}] }}
+      {%- else -%}{{ [] }}
+      {%- endif -%}
   no_log: true
 
 # =============================================================================

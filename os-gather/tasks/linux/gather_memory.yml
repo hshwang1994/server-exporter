@@ -8,68 +8,105 @@
 #   - slots[] 에 serial / locator 추가 (dmidecode 가 주는 값 — Windows 와 같은 키).
 #   - 값을 못 구하면 null. 0 으로 대체하지 않는다. 섹션 status 는 실제 결과로.
 #   - grand_total_gb 는 반올림 (1048464 MB 가 1023 GB 로 절삭되던 것 정정).
+#
+# 2026-10-03 (Phase 2 C1 — DIMM 파서):
+#   - DMIDECODE_RC / DMIDECODE_ERR(stderr 첫 줄) / MEM_DEVICE_RECORDS marker 추가 (기존 marker 불변).
+#   - Size 단위 kB/MB/GB/TB 대소문자 무관 환산, 레코드는 빈 줄 또는 다음 Handle 줄에서 종료.
+#   - slots[].speed_mhz = Configured Memory Speed 우선 (field_dictionary "현재 동작 속도"), 없으면 Speed.
+#   - 물리 총량은 있는데 SLOT 0건이면 errors[] 1건 (섹션 success 유지).
 
 - name: "linux | memory | raw gather (/proc/meminfo + dmidecode)"
+  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     echo "MEM_TOTAL_KB=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null)"
     echo "MEM_AVAIL_KB=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null)"
+    # dmi_run: dmidecode 1회 실행 → stdout=$out, 종료 코드=$dmi_rc, stderr 첫 줄=$dmi_err.
+    #   2026-10-03 (C1): 종전에는 stderr 를 버리고 rc 도 남기지 않아 권한 거부 / 미설치 / 표 손상을
+    #   구분할 수 없었다. stderr 는 mktemp 파일로만 받는다 (mktemp 가 없으면 버린다 —
+    #   root 로 도는 태스크라 예측 가능한 /tmp 경로는 쓰지 않는다).
+    dmi_run() {
+      dmi_ef=$(mktemp 2>/dev/null) || dmi_ef=""
+      out=$("$@" 2>"${dmi_ef:-/dev/null}")
+      dmi_rc=$?
+      dmi_err=""
+      if [ -n "$dmi_ef" ]; then
+        dmi_err=$(head -n 1 "$dmi_ef" 2>/dev/null | tr -d '|\r')
+        rm -f "$dmi_ef"
+      fi
+    }
     if command -v dmidecode >/dev/null 2>&1; then
       echo "DMIDECODE=present"
-      out=$(dmidecode -t memory 2>/dev/null)
-      if [ -z "$out" ] && command -v sudo >/dev/null 2>&1; then
-        out=$(sudo -n dmidecode -t memory 2>/dev/null || true)
+      dmi_run dmidecode -t memory
+      # 비루트 dmidecode 는 버전 머리말을 stdout 에 찍고 rc=1 로 끝난다 — 출력이 비었을 때만 보던 종전 조건으로는
+      # 재시도가 일어나지 않았다 (2026-10-03 C1 검수에서 발견). rc 가 0 이 아니어도 sudo 로 1회 재시도하고,
+      # sudo 도 출력이 없으면 직접 실행의 출력 · rc · stderr 를 되살린다 (실제로 관측한 근거를 지우지 않는다).
+      if { [ -z "$out" ] || [ "$dmi_rc" -ne 0 ]; } && command -v sudo >/dev/null 2>&1; then
+        direct_out=$out; direct_rc=$dmi_rc; direct_err=$dmi_err
+        dmi_run sudo -n dmidecode -t memory
+        if [ -z "$out" ] && [ -n "$direct_out" ]; then
+          out=$direct_out; dmi_rc=$direct_rc; dmi_err=$direct_err
+        fi
       fi
+      # 출력을 실제로 만든 시도(직접 또는 sudo 재시도)의 종료 코드와 stderr 첫 줄
+      echo "DMIDECODE_RC=$dmi_rc"
+      echo "DMIDECODE_ERR=$dmi_err"
       if [ -n "$out" ]; then
         echo "DMIDECODE_OK=yes"
+        # 단위: dmidecode 는 kB / MB / GB / TB 를 쓴다 (2.x 는 kB). 대소문자 무관하게 MB 로 환산.
         phys=$(printf '%s\n' "$out" \
           | grep -E "^[[:space:]]*Size:" \
           | grep -v "No Module Installed" \
-          | awk '{if($3=="GB")s+=$2*1024;else if($3=="MB")s+=$2;else if($3=="KB")s+=$2/1024} END{print int(s)}')
+          | awk '{u=tolower($3); if(u=="tb")s+=$2*1048576; else if(u=="gb")s+=$2*1024; else if(u=="mb")s+=$2; else if(u=="kb")s+=$2/1024} END{print int(s)}')
         echo "MEM_PHYS_MB=${phys:-}"
+        # DMI Type 17 레코드 파서 (2026-10-03 C1).
+        #   - 레코드는 빈 줄 또는 다음 Handle 줄에서 끝난다 (빈 줄 없이 이어진 레코드도 잃지 않는다).
+        #   - Size 는 줄 머리가 'Size:' 인 것만 (Volatile/Non-Volatile/Cache/Logical Size 제외).
+        #   - 속도는 Configured Memory Speed(구 표기 Configured Clock Speed)가 숫자면 그 값, 아니면 Speed.
+        #   - 공백은 [ \t] 로 쓴다. mawk 1.3.3 은 [[:space:]] 같은 POSIX 문자 클래스를 해석하지 못해
+        #     이 파서만 0건이 되고 grep 기반 MEM_PHYS_MB 는 정상인 상태가 된다.
+        #   - END 에서 Memory Device 레코드 수를 MEM_DEVICE_RECORDS 로 남긴다 (SLOT 0건일 때의 근거).
         printf '%s\n' "$out" | awk '
-          BEGIN{ in_dev=0; size=""; type=""; speed=""; mfr=""; pn=""; sn=""; loc=""; }
-          /^Memory Device/ { in_dev=1; size=""; type=""; speed=""; mfr=""; pn=""; sn=""; loc=""; next }
-          in_dev && /^[[:space:]]*Size:/ {
-            if ($2 == "No" || $2 == "Volatile") next;
-            if ($3=="GB") size_mb = $2 * 1024;
-            else if ($3=="MB") size_mb = $2;
-            else if ($3=="KB") size_mb = int($2 / 1024);
-            else size_mb = 0;
-            size = size_mb;
+          function flush() {
+            if (in_dev && size != "" && size > 0)
+              printf "SLOT|%s|%s|%s|%s|%s|%s|%s\n", size, type, (cspeed != "" ? cspeed : speed), mfr, pn, sn, loc;
+            in_dev=0; size=""; type=""; speed=""; cspeed=""; mfr=""; pn=""; sn=""; loc="";
           }
-          in_dev && /^[[:space:]]*Type:/ && !/Type Detail/ { type=$2; }
-          in_dev && /^[[:space:]]*Speed:/ && !/Configured/ { speed=$2; }
-          in_dev && /^[[:space:]]*Manufacturer:/ {
-            s=$0; sub(/^[[:space:]]*Manufacturer:[[:space:]]*/,"",s);
-            gsub(/[|]/,"_",s); mfr=s;
+          function value(s) {
+            sub(/^[ \t]*[^:]*:[ \t]*/, "", s); gsub(/[|]/, "_", s); return s;
           }
-          in_dev && /^[[:space:]]*Part Number:/ {
-            s=$0; sub(/^[[:space:]]*Part Number:[[:space:]]*/,"",s);
-            gsub(/[|]/,"_",s); pn=s;
+          BEGIN { in_dev=0; nrec=0; size=""; type=""; speed=""; cspeed=""; mfr=""; pn=""; sn=""; loc=""; }
+          /^Handle / { flush(); next }
+          /^Memory Device/ { flush(); in_dev=1; nrec++; next }
+          /^[ \t]*$/ { flush(); next }
+          !in_dev { next }
+          /^[ \t]*Size:/ {
+            v=$2; u=tolower($3); size=0;
+            if (v ~ /^[0-9]+$/) {
+              if (u=="tb") size=v*1048576;
+              else if (u=="gb") size=v*1024;
+              else if (u=="mb") size=v+0;
+              else if (u=="kb") size=int(v/1024);
+            }
+            next
           }
-          in_dev && /^[[:space:]]*Serial Number:/ {
-            s=$0; sub(/^[[:space:]]*Serial Number:[[:space:]]*/,"",s);
-            gsub(/[|]/,"_",s); sn=s;
-          }
-          in_dev && /^[[:space:]]*Locator:/ && !/Bank Locator/ {
-            s=$0; sub(/^[[:space:]]*Locator:[[:space:]]*/,"",s);
-            gsub(/[|]/,"_",s); loc=s;
-          }
-          in_dev && /^$/ {
-            if (size != "" && size > 0) printf "SLOT|%s|%s|%s|%s|%s|%s|%s\n", size, type, speed, mfr, pn, sn, loc;
-            in_dev=0; size=""; type=""; speed=""; mfr=""; pn=""; sn=""; loc="";
-          }
-          END {
-            if (in_dev && size != "" && size > 0) printf "SLOT|%s|%s|%s|%s|%s|%s|%s\n", size, type, speed, mfr, pn, sn, loc;
-          }
+          /^[ \t]*Type:/ { type=$2; next }
+          /^[ \t]*Speed:/ { speed=$2; next }
+          /^[ \t]*Configured (Memory|Clock) Speed:/ { if ($4 ~ /^[0-9]+$/ && $4+0 > 0) cspeed=$4; next }
+          /^[ \t]*Manufacturer:/ { mfr=value($0); next }
+          /^[ \t]*Part Number:/ { pn=value($0); next }
+          /^[ \t]*Serial Number:/ { sn=value($0); next }
+          /^[ \t]*Locator:/ { loc=value($0); next }
+          END { flush(); printf "MEM_DEVICE_RECORDS=%d\n", nrec; }
         '
       else
         echo "DMIDECODE_OK=no"
       fi
     else
       echo "DMIDECODE=absent"
+      echo "DMIDECODE_RC=127"
+      echo "DMIDECODE_ERR="
     fi
   register: _l_mem_raw_result
   changed_when: false
@@ -190,13 +227,18 @@
       {{ [] if ((phys.isdigit() and (phys | int) > 0) or (vis_kb.isdigit() and (vis_kb | int) > 0)) else ['memory'] }}
     # LOW-1 / H7: dmidecode 권한/미존재로 os_visible fallback 시 사유를 errors[] 에 남긴다 (시나리오 B).
     # 메모리 총량 자체를 못 구하면 섹션 failed + 사유 1건.
+    # 2026-10-03 (C1): 물리 총량은 구했는데(MEM_PHYS_MB > 0) DIMM 레코드를 하나도 못 읽으면 1건.
+    #   섹션은 success 유지 (총량은 맞다). dmidecode 종료 코드 / 레코드 수 / stderr 첫 줄은 detail 에만.
     _errors_fragment: >-
       {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
       {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('')) | trim -%}
       {%- set phys_ok = phys.isdigit() and (phys | int) > 0 -%}
       {%- set vis_ok = vis_kb.isdigit() and (vis_kb | int) > 0 -%}
-      {%- if phys_ok -%}{{ [] }}
-      {%- elif vis_ok -%}{{ [{'section':'memory','message':'메모리 총 용량을 물리 설치량이 아닌 운영체제 인식 값으로 수집했습니다. 수집 계정의 권한을 확인하세요.','detail':('field=total_basis; value=os_visible; source=dmidecode; state=' ~ (_l_mem_rp.DMIDECODE | default('unknown')) ~ '; rc=' ~ (_l_mem_raw_result.rc | default('none')))}] }}
+      {%- set dmi_rc = ((_l_mem_rp.DMIDECODE_RC | default('')) | trim) or 'none' -%}
+      {%- set dmi_err = (((_l_mem_rp.DMIDECODE_ERR | default('')) | trim)[:200]) or 'none' -%}
+      {%- set records = ((_l_mem_rp.MEM_DEVICE_RECORDS | default('')) | trim) or 'unknown' -%}
+      {%- if phys_ok -%}{{ [] if ((_l_mem_slots | default([])) | length) > 0 else [{'section':'memory','message':'메모리 모듈 상세 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('field=slots; source=dmidecode; dmidecode_rc=' ~ dmi_rc ~ '; records=' ~ records ~ '; installed_mb=' ~ phys ~ '; stderr=' ~ dmi_err)}] }}
+      {%- elif vis_ok -%}{{ [{'section':'memory','message':'메모리 총 용량을 물리 설치량이 아닌 운영체제 인식 값으로 수집했습니다. 수집 계정의 권한을 확인하세요.','detail':('field=total_basis; value=os_visible; source=dmidecode; state=' ~ (_l_mem_rp.DMIDECODE | default('unknown')) ~ '; rc=' ~ (_l_mem_raw_result.rc | default('none')) ~ '; dmidecode_rc=' ~ dmi_rc ~ '; stderr=' ~ dmi_err)}] }}
       {%- else -%}{{ [{'section':'memory','message':'메모리 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=/proc/meminfo,dmidecode; cause=no_output; rc=' ~ (_l_mem_raw_result.rc | default('none')))}] }}
       {%- endif -%}
   no_log: true

@@ -470,7 +470,9 @@ for e in response["errors"]:
 > `Configured Memory Speed`(없으면 정격 `Speed`), Windows 는 `ConfiguredClockSpeed`(없으면 `Speed`). 단위 변환은 없다. 종전 Linux 는
 > 정격 `Speed` 를 냈으므로 같은 장비에서 값이 바뀔 수 있다(예: DDR5 정격 5600 → 동작 4400). (2) Redfish 에서 장착 DIMM 의 `CapacityMiB` 가
 > 없으면 합계를 과소집계하지 않는다 — `total_mb` 는 `System.MemorySummary` fallback, 없으면 `null`; slot 은 전부 보존(`capacity_mb: null`).
-> (3) Linux 에서 총량은 있는데 DIMM 상세가 0건이면 `errors[]` 에 memory 섹션 오류 1건이 남는다(섹션 status 는 총량 기준 `success` 유지).
+> (3) Linux 에서 총량은 있는데 DIMM 상세가 0건이면 `errors[]` 에 memory 섹션 오류 1건이 남는다(섹션 status 는 총량 기준 `success` 유지;
+> detail 에 dmidecode 종료 코드 · 레코드 수 · stderr 첫 줄). dmidecode 가 비루트로 머리말만 찍고 rc≠0 으로 끝나면 sudo 로 1회 재시도한다.
+> dmidecode 3.2 미만의 `Configured Clock Speed` 는 `Configured Memory Speed` 와 같은 필드로 읽는다.
 
 ```json
 "memory": {
@@ -505,8 +507,11 @@ for e in response["errors"]:
 > **2026-10-03** — (1) `physical_disks[].protocol` 의 enum 은 그대로다. Windows BusType 가 enum 밖(ATAPI/ATA/SSA/Virtual/
 > File Backed Virtual/Storage Spaces/SCM/UFS)이면 `null` 로 두고 원값은 storage 섹션 오류 1건의 `detail` 에 남긴다. 정수형(Int32/UInt16/
 > 숫자 문자열)과 문자열(`"SAS"`, `"Fibre Channel"`) 모두 같은 표로 매핑한다. (2) Linux `lsblk` 실패는 더 이상 빈 목록으로 가려지지
-> 않는다 — `physical_disks` 가 비면서 `errors[]` 에 storage 오류 1건(detail: rc·상태·stderr 첫 줄·/sys/block 수). filesystems 만으로
-> 섹션이 `success` 이면 "success + errors" (4절 시나리오 B) 다. (3) Windows HBA 포트가 어댑터와 매칭되지 않으면 첫 어댑터 값을 빌리지
+> 않는다 — `lsblk -J` 가 실패하면(옵션 미지원 · 구 util-linux) 레거시 열(`NAME,SIZE,TYPE,ROTA,MODEL`) 1회 fallback 으로 목록을 만들고
+> (`serial`/`wwn` 은 udev 에서만, `protocol` 은 null), 그래도 못 만들면 `physical_disks` 가 빈다. 어느 쪽이든 `errors[]` 에 storage
+> 오류 1건(detail: `source=lsblk; lsblk_rc=; state=unknown|unsupported|permission|malformed|empty|ok; disks=; sys_block=; stderr=`).
+> 스토리지가 통째로 비면(디스크 0 · 파일시스템 0) 기존 실패 항목 하나에 lsblk 근거를 합친다. `df` 는 `timeout 20` 아래서 돈다
+> (`timeout 20 true` 가 되는 환경에서만). filesystems 만으로 섹션이 `success` 이면 "success + errors" (4절 시나리오 B) 다. (3) Windows HBA 포트가 어댑터와 매칭되지 않으면 첫 어댑터 값을 빌리지
 > 않고 `model/vendor/driver/firmware` 가 `null` 이다.
 
 스토리지는 다음 하위 list 가 있다.
@@ -590,7 +595,9 @@ controllers[*].id  ────┤
 | OS Windows | `Get-InitiatorPort` + `MSFC_*` WMI (FC 만 필터) | `Get-NetAdapter` PhysicalMediaType=InfiniBand. **node_guid 표준 API 부재 → null** |
 | ESXi | `vmware_host_vmhba_info` (FC/iSCSI, SAS/RAID 제외) | native IB 미노출 (SR-IOV/passthrough 만) → `nmlx` NIC best-effort 추론 (`note` 포함) |
 
-- `wwpn`/`wwnn`/`link_speed_gbps`/`node_guid` 는 미연결·미노출 시 `null` (정상 — error 아님).
+- `wwpn`/`wwnn`/`link_speed_gbps`/`node_guid` 는 미연결·미노출 시 `null` (정상 — error 아님). 단 Linux 에서 sysfs 속성 파일이
+  **있는데 읽지 못하면**(권한 등) storage 섹션 오류 1건이 남는다 (detail: `scope=fc_host[,infiniband]; cause=attribute_unreadable;
+  count=; paths=` 최대 10개). 속성 파일 자체가 없는 것은 오류가 아니다 (2026-10-03).
 - `port_type` ∈ {`FibreChannel`, `FCoE`, `iSCSI`}. `source` ∈ {`redfish`, `os`, `esxi`}.
 - **FCoE 지원 CNA 는 여기 안 들어온다 (2026-08-03)**: Broadcom 57800 같은 CNA 는 *이더넷* 기능에도
   MAC 파생 WWN 을 달고 나온다. WWN 이 있다는 이유로 HBA 로 잡으면 같은 물리 포트가

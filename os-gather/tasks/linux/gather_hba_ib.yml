@@ -4,6 +4,8 @@
 # P4 (cycle 2026-04-29): Linux FC HBA + InfiniBand 정보 수집.
 # raw 명령으로 /sys/class/fc_host + /sys/class/infiniband 파싱.
 # 미설치 환경에서는 빈 list (graceful degradation, errors 기록 없음).
+# 2026-10-03 (Phase 2 C7): 장치는 있는데 sysfs 속성을 읽지 못하면 ERR|<경로> marker →
+#   errors[] 1건 (section=storage, 경로 10개까지). 읽기 실패가 없으면 종전처럼 errors 없음.
 #
 # 출력 sub-key:
 #   data.storage.hbas[]       — FC HBA (WWPN, link state, speed)
@@ -15,31 +17,44 @@
     # 2026-09-03 (B-22/B-24): model 은 scsi_host 의 model_name(있을 때), 없으면 symbolic_name.
     #   manufacturer 가 sysfs 에 있으면 vendor 로. WWN 은 normalize_wwn 으로 소문자 colon-hex.
     # delimiter '|' 11 필드: FC|host|wwpn|wwnn|symbolic|state|speed|driver|firmware|model_name|manufacturer
+    # 2026-10-03 (C7): 속성 파일이 있는데 읽지 못하면 빈 값으로 삼키지 않고 ERR|<경로> 를 남긴다
+    #   (권한 / 장치 상태로 인한 증거 소실을 드러낸다). 파일이 없는 것은 드라이버가 그 속성을 내지
+    #   않는 것이라 실패가 아니다. rd <경로> → $v (실패 시 빈 값 + ERR 줄).
     - name: "linux | hba_ib | enumerate fc_host"
+      timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       ansible.builtin.raw: |
+        rd() {
+          v=""
+          [ -e "$1" ] || return 0
+          if v=$(cat "$1" 2>/dev/null); then :; else v=""; echo "ERR|$1"; fi
+        }
         if [ -d /sys/class/fc_host ]; then
           for h in /sys/class/fc_host/host*; do
             [ -d "$h" ] || continue
             host=$(basename "$h")
-            wwpn=$(cat "$h/port_name" 2>/dev/null)
-            wwnn=$(cat "$h/node_name" 2>/dev/null)
-            sym=$(cat "$h/symbolic_name" 2>/dev/null)
-            state=$(cat "$h/port_state" 2>/dev/null)
-            speed=$(cat "$h/speed" 2>/dev/null)
+            rd "$h/port_name"; wwpn=$v
+            rd "$h/node_name"; wwnn=$v
+            rd "$h/symbolic_name"; sym=$v
+            rd "$h/port_state"; state=$v
+            rd "$h/speed"; speed=$v
             drv=""
             if [ -e "$h/device/driver" ]; then
-              drv=$(basename "$(readlink -f "$h/device/driver" 2>/dev/null)" 2>/dev/null)
+              if lnk=$(readlink -f "$h/device/driver" 2>/dev/null) && [ -n "$lnk" ]; then
+                drv=$(basename "$lnk" 2>/dev/null)
+              else
+                echo "ERR|$h/device/driver"
+              fi
             fi
             fwver=""
             for fwp in "$h/device/fw_version" "$h"/device/scsi_host/*/fw_version; do
-              if [ -f "$fwp" ]; then fwver=$(cat "$fwp" 2>/dev/null); break; fi
+              if [ -f "$fwp" ]; then rd "$fwp"; fwver=$v; break; fi
             done
             mdl=""; mfr=""
             for mp in "$h/device/scsi_host/$host/model_name" "$h"/device/scsi_host/*/model_name "$h/device/model_name"; do
-              if [ -f "$mp" ]; then mdl=$(cat "$mp" 2>/dev/null); break; fi
+              if [ -f "$mp" ]; then rd "$mp"; mdl=$v; break; fi
             done
             for vp in "$h/device/scsi_host/$host/manufacturer" "$h"/device/scsi_host/*/manufacturer "$h/device/manufacturer"; do
-              if [ -f "$vp" ]; then mfr=$(cat "$vp" 2>/dev/null); break; fi
+              if [ -f "$vp" ]; then rd "$vp"; mfr=$v; break; fi
             done
             echo "FC|$host|$wwpn|$wwnn|$sym|$state|$speed|$drv|$fwver|$mdl|$mfr"
           done
@@ -51,22 +66,29 @@
 
     # cycle 2026-05-29 (hba-ib-csus, D2): per-port GID(port_guid) + rate + fw_ver + hca(vendor) 보강.
     # delimiter '|' 9 필드: IB|adapter|port|node_guid|gid0|state|rate|firmware|hca
+    # 2026-10-03 (C7): fc_host 와 같은 규칙 — 있는데 읽지 못한 속성은 ERR|<경로>.
     - name: "linux | hba_ib | enumerate infiniband"
+      timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       ansible.builtin.raw: |
+        rd() {
+          v=""
+          [ -e "$1" ] || return 0
+          if v=$(cat "$1" 2>/dev/null); then :; else v=""; echo "ERR|$1"; fi
+        }
         if [ -d /sys/class/infiniband ]; then
           for ib in /sys/class/infiniband/*; do
             [ -d "$ib" ] || continue
             adp=$(basename "$ib")
-            guid=$(cat "$ib/node_guid" 2>/dev/null)
-            fwver=$(cat "$ib/fw_ver" 2>/dev/null)
-            hca=$(cat "$ib/hca_type" 2>/dev/null)
-            [ -z "$hca" ] && hca=$(cat "$ib/board_id" 2>/dev/null)
+            rd "$ib/node_guid"; guid=$v
+            rd "$ib/fw_ver"; fwver=$v
+            rd "$ib/hca_type"; hca=$v
+            if [ -z "$hca" ]; then rd "$ib/board_id"; hca=$v; fi
             for p in "$ib"/ports/*; do
               [ -d "$p" ] || continue
               port=$(basename "$p")
-              state=$(awk '{print $2}' "$p/state" 2>/dev/null)
-              rate=$(cat "$p/rate" 2>/dev/null)
-              gid0=$(sed -n '1p' "$p/gids/0" 2>/dev/null)
+              rd "$p/state"; state=$(printf '%s\n' "$v" | awk '{print $2}')
+              rd "$p/rate"; rate=$v
+              rd "$p/gids/0"; gid0=$(printf '%s\n' "$v" | sed -n '1p')
               echo "IB|$adp|$port|$guid|$gid0|$state|$rate|$fwver|$hca"
             done
           done
@@ -77,6 +99,7 @@
       no_log: true
 
     - name: "linux | hba_ib | NIC driver map"
+      timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       ansible.builtin.raw: |
         if [ -d /sys/class/net ]; then
           for n in /sys/class/net/*; do
@@ -163,6 +186,16 @@
             {%- endif -%}
           {%- endfor -%}
           {{ out }}
+        # 2026-10-03 (C7): 읽지 못한 sysfs 속성 경로 (ERR|<경로>) — 중복 제거, 나온 순서 유지.
+        _l_hba_read_errors: >-
+          {%- set out = [] -%}
+          {%- for line in ((_l_fc_raw.stdout_lines | default([])) + (_l_ib_raw.stdout_lines | default([]))) -%}
+            {%- if line.startswith('ERR|') -%}
+              {%- set path = line[4:] | trim -%}
+              {%- if path and path not in out -%}{%- set _ = out.append(path) -%}{%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
         _l_nic_drivers: >-
           {%- set out = [] -%}
           {%- for line in (_l_nicdrv_raw.stdout_lines | default([])) -%}
@@ -192,7 +225,16 @@
           {{ (['storage'] if _l_hbas_list or _l_ib_list else [])
              + (['network'] if _l_nic_drivers else []) }}
         _sections_failed_fragment:    []
-        _errors_fragment:             []
+        # 2026-10-03 (C7): fc_host / infiniband 속성을 읽지 못했으면 1건 (경로는 10개까지 + 나머지 수).
+        #   섹션 판정은 종전 그대로 (목록이 있으면 collected) — 값이 빈 항목의 근거만 남긴다.
+        _errors_fragment: >-
+          {%- set paths = _l_hba_read_errors | default([]) -%}
+          {%- if (paths | length) == 0 -%}{{ [] }}
+          {%- else -%}
+            {%- set scope = ((['fc_host'] if (paths | select('search', '/fc_host/') | list | length) > 0 else []) + (['infiniband'] if (paths | select('search', '/infiniband/') | list | length) > 0 else [])) | join(',') -%}
+            {%- set more = (' 외 ' ~ ((paths | length) - 10) ~ '건') if (paths | length) > 10 else '' -%}
+            {{ [{'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=' ~ (scope or 'fc_host,infiniband') ~ '; cause=attribute_unreadable; count=' ~ (paths | length) ~ '; paths=' ~ (paths[:10] | join(',')) ~ more)}] }}
+          {%- endif -%}
       no_log: true
   rescue:
     - name: "linux | hba_ib | rescue (best-effort skip)"

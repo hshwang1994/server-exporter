@@ -35,11 +35,12 @@
 | `cpu.max_speed_mhz` | cpufreq `base_frequency` → 브랜드 `@ N.NNGHz` | `gather_cpu.yml` | 정격 클럭 (2026-09-03 3채널 통일). 터보는 `cpu.turbo_max_mhz` (`lscpu CPU max MHz` / `cpuinfo_max_freq`) |
 | `cpu.summary.groups[].l2_cache_kb / l3_cache_kb` | `lscpu` L2/L3 (`(N instances)` 합계는 소켓 수로 나눔) → `/proc/cpuinfo cache size` | `gather_cpu.yml` | 소켓당 KB (2026-09-03) |
 | `cpu.architecture` | `ansible_architecture` | `gather_cpu.yml` | system.architecture와 동일 값 |
-| `memory.total_mb` | `dmidecode -t memory` 설치 합 → `/proc/meminfo MemTotal` | `gather_memory.yml` | 둘 다 없으면 null |
+| `memory.total_mb` | `dmidecode -t memory` 설치 합 → `/proc/meminfo MemTotal` | `gather_memory.yml` | 둘 다 없으면 null. dmidecode 종료 코드 · stderr 첫 줄은 `DMIDECODE_RC` / `DMIDECODE_ERR` 마커로 남아 errors[].detail 에 실린다 (2026-10-03). 비루트 rc≠0 이면 sudo 1회 재시도 |
+| `memory.slots[].speed_mhz` | `dmidecode` `Configured Memory Speed`(3.2 미만 `Configured Clock Speed`) → 정격 `Speed` | `gather_memory.yml` | 현재 동작 속도 (2026-10-03, field_dictionary 정합). 단위 변환 없음 |
 | `memory.total_basis` | 실제 소스 판정 (`physical_installed` / `os_visible` / null) | `gather_memory.yml` | 2026-09-03 정정 (종전 문서: hardcoded) |
 | `memory.slots[].serial / locator` | `dmidecode` Serial Number / Locator | `gather_memory.yml` | 2026-09-03 추가 |
-| `storage.physical_disks[]` | `lsblk -J` (`+SERIAL,WWN`) | `gather_storage.yml` | `serial`/`wwn` 추가(2026-06-22). 빈값 시 `udevadm info`(ID_SERIAL_SHORT/ID_WWN) 보강. virtio=null. `is_os_disk` 추가(2026-07-02): `findmnt /`→`lsblk -s` 로 OS 루트 물리 디스크 판정(SAN/NFS 루트=null) |
-| `storage.filesystems[]` | `df -P -T -k` (`/dev/*` + 네트워크 FS) | `gather_storage.yml` | 정수 MB, used = df Used (2026-09-03 raw 단일 구현) |
+| `storage.physical_disks[]` | `lsblk -J` (`+SERIAL,WWN`) → 실패 시 레거시 `lsblk -b -d -n -o NAME,SIZE,TYPE,ROTA,MODEL` 1회 | `gather_storage.yml` | `serial`/`wwn` 추가(2026-06-22). 빈값 시 `udevadm info`(ID_SERIAL_SHORT/ID_WWN) 보강. virtio=null. `is_os_disk` 추가(2026-07-02): `findmnt /`→`lsblk -s` 로 OS 루트 물리 디스크 판정(SAN/NFS 루트=null). 2026-10-03: `LSBLK_RC`/`LSBLK_ERR`/`LSBLK_TXT`/`SYS_BLOCK_COUNT` 마커, 실패 상태(unknown/unsupported/permission/malformed)는 errors[] 1건 |
+| `storage.filesystems[]` | `df -P -T -k` (`/dev/*` + 네트워크 FS) | `gather_storage.yml` | 정수 MB, used = df Used (2026-09-03 raw 단일 구현). `timeout 20` 아래서 실행 (`timeout 20 true` 가 되는 환경, 2026-10-03) |
 | `network.interfaces[]` | `/sys/class/net` + `ip -o addr` (IPv4/IPv6, scope) | `gather_network.yml` | raw 단일 구현 (2026-09-03) — IP 없는 물리 포트 포함, link_status=operstate, MAC 소문자 colon |
 | `network.interfaces[].addresses[]` (alias/secondary) | `ip -j addr show` → `ip -o addr show` → `ifconfig -a` (다중 소스 폴백) | `gather_network.yml` + `merge_linux_addresses` | `label`/`parent_interface`/`is_alias`/`scope`/`is_secondary` Additive. bond alias(bond1:1)는 parent addresses[] 에 병합 |
 | `network.bonds[].addresses[]` | bond master 인터페이스 addresses 미러 (`build_linux_network`) | `gather_network.yml` | interfaces ↔ bonds 일관 |
@@ -187,7 +188,7 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 
 | 채널 | FC HBA 수집원 | InfiniBand 수집원 | 비고 |
 |---|---|---|---|
-| OS Linux | `/sys/class/fc_host/*` (port_name/node_name/driver/fw) | `/sys/class/infiniband/*` (node_guid/port GID/rate/fw) — **IB 정본** | raw fallback 양 모드 |
+| OS Linux | `/sys/class/fc_host/*` (port_name/node_name/driver/fw) | `/sys/class/infiniband/*` (node_guid/port GID/rate/fw) — **IB 정본** | raw fallback 양 모드. 속성 파일이 있는데 못 읽으면 `ERR|<path>` 마커 → storage errors[] 1건 (2026-10-03) |
 | OS Windows | `Get-InitiatorPort` (FC 만 필터) + `MSFC_*` WMI (model/vendor/driver/fw/speed) | `Get-NetAdapter` PhysicalMediaType=InfiniBand + `Get-PnpDevice VEN_15B3`. **node_guid=null** (표준 API 부재) | try/catch graceful |
 | ESXi | `vmware_host_vmhba_info` (type+driver 2-signal, FC/iSCSI 만 — SAS/RAID 제외) | native IB 미노출 → `nmlx` NIC best-effort 추론 (`note`) | **API-only** (SSH 미사용, D1) |
 | Redfish | `Chassis/NetworkAdapters/NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`) | `Port.LinkNetworkTechnology` / `NetworkDeviceFunction` IB GUID | 주류 BMC 는 add-in IB 거의 미노출 → OS 채널 정본 |
@@ -302,13 +303,13 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 |-----------|--------|--------|--------|---------|-----------|---------|------------|---------|
 | `ip` | iproute | [OK] | [OK] | [OK] | [OK] | [OK] | 핵심 (addr/route/link) | 없음 — 필수 |
 | `getent` | glibc-common | [OK] | [OK] | [OK] | [OK] | [OK] | users 수집 | 없음 — 필수 |
-| `lsblk` | util-linux | [OK] | [OK] | [OK] | [OK] | [OK] | storage 물리디스크 | 빈 배열 반환 |
-| `df` | coreutils | [OK] | [OK] | [OK] | [OK] | [OK] | storage 파일시스템 | 빈 배열 반환 |
+| `lsblk` | util-linux | [OK] | [OK] | [OK] | [OK] | [OK] | storage 물리디스크 | `-J` 실패 시 레거시 열 1회 → 그래도 없으면 빈 배열 + errors[] 1건 (2026-10-03) |
+| `df` | coreutils | [OK] | [OK] | [OK] | [OK] | [OK] | storage 파일시스템 | 빈 배열 반환 (`timeout 20` 아래 실행) |
 | `getenforce` | libselinux-utils | [OK] | [OK] | [OK] | [NG] | [NG] | system.selinux | null |
 | `lastlog` | shadow-utils/login | [OK] | [OK] | [OK] | [OK] | [OK] | users.last_access_time | last → utmpdump |
 | `utmpdump` | util-linux | [OK] | [OK] | [OK] | [OK] | [OK] | users 3차 fallback | null |
 | `systemd-detect-virt` | systemd | [OK] | [OK] | [OK] | [OK] | [OK] | system.hosting_type | unknown |
-| `dmidecode` | dmidecode | [OK] | [OK] | [OK] | [OK] | [OK] | memory, serial/uuid | 권한 의존 |
+| `dmidecode` | dmidecode | [OK] | [OK] | [OK] | [OK] | [OK] | memory, serial/uuid | 권한 의존 — 실패 근거(rc · stderr 첫 줄)는 errors[].detail 로 (2026-10-03) |
 | `resolvectl` | systemd-resolved | [OK](8) | [NG](9) | [NG] | [OK] | [NG] | 미사용 (참고용) | — |
 | `nmcli` | NetworkManager | [OK] | [OK] | [OK] | [NG] | [NG] | 미사용 | — |
 | `networkctl` | systemd | [NG] | [NG] | [NG] | [OK] | [NG] | 미사용 | — |
