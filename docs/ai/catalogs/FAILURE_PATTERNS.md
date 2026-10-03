@@ -518,3 +518,28 @@
   `from tests.e2e.conftest import` 로 바꾸는 것이 근본 해결(파일 수가 많아 이번 범위 밖). `pytest tests/unit tests/e2e` 를 **한 번에** 돌려 충돌을 확인한다.
 - 관련 rule: rule 40 R6(pytest 회귀), rule 95 R1
 
+
+## 2026-10-04 — prodgen 순환 테스트 1회 flaky (전체 suite 안에서만, 모듈 단독·재실행은 PASS)
+
+- 카테고리: flaky-test (원인 미확정 — 추정을 사실로 적지 않는다)
+- 발견 위치: `bash scripts/ai/ci_gate.sh` 1회차(2026-10-04, Windows, 4,061 passed) 에서 `tests/unit/prodgen/test_promotion_cycle.py::test_refusals_evidence_skiplive_remotes_and_race` 가
+  `res["stage"] == "verify"`(기대 `"e2e"`) 로 1건 실패. 같은 모듈 단독 실행(4 passed) · 단일 테스트 재실행 · 2회차 전체 gate(4,070 passed) 는 모두 PASS.
+- 의미: world fixture 는 live gate(G11~G15·G19)를 PASS 로 stub 하므로, 그 실행에서는 **실제로 도는 gate(G01~G10·G16·G17 정적, G18 drift, G20 조상·원격)** 중 하나가 FAIL/SKIP 이었다는 뜻이다.
+  어느 gate 였는지는 당시 assertion 메시지가 `res` 를 담지 않아 알 수 없다. `gates_static.py` 에는 subprocess timeout 이 없고 `ls_remote` 는 90 s 라 timeout 가설은 근거가 약하다.
+- 조치: 세 refusal assertion 에 `, res` 를 붙여 다음 재현 때 `gates.results`·`gate_details`·`refused` 가 그대로 남게 했다(`62a3d440`). 재현되면 그 gate 를 이 항목에 적는다.
+- 재발 방지: prodgen 테스트가 suite 안에서 실패하고 단독으로 통과하면 먼저 `res`/`gate_details` 를 확보한다. "다시 돌리니 됐다" 로 끝내지 않고 횟수를 기록한다(1/2 → 이번).
+- 관련 rule: rule 40 R6, rule 95 R3(의심 발견 시 드러내기), rule 25 R7-B(추정 격상 금지)
+
+## 2026-10-04 — 실제 Jenkins 에서만 드러난 것들 (Harness · CI 첫 실행 학습, append-only)
+
+- 카테고리: environment-assumption / process
+- (1) **`httpRequest` 는 node 컨텍스트의 노드에서 실행된다**(http_request 1.25). finalizer 의 Callback 은 `node('built-in')` 안이라 controller 에서 나간다. agent 에 띄운 sink 로 agent 에서 healthz 를 보고 "controller 도달" 로 적은 것이 오판(Harness #6 NoRouteToHost). → 도달성 확인은 **요청이 실제로 나가는 노드**에서.
+- (2) **sandbox 가 거부하는 흔한 호출**: `new groovy.json.JsonSlurperClassic()`, `groovy.json.JsonOutput.toJson(Object)`(List 인자), `new java.lang.IllegalStateException(String)`. 허용: `JsonSlurper`, `readJSON(returnPojo:)`, `toJson(Map)`, `writeJSON`, `new Exception(String)`. 로컬 Groovy 로는 못 잡는다 — Harness 빌드에서만 보인다.
+- (3) **CPS 컴파일**: 클로저 안 `for (def it in …)` 은 "The current scope already contains a variable of the name it"(CI #2). 선언형 린터는 통과시키지 않으므로 push 전에 `pipeline-model-converter/validate` 를 돌린다 — 이번엔 안 돌렸다.
+- (4) **controller workspace 는 NFS**: 열린 파일을 `deleteDir()` 하면 `.nfs… Device or resource busy`(Harness #17/#25). 장수 프로세스의 파일은 finalizer 가 지우는 디렉터리 밖(`ws("…@sink")`)에 둔다. 비-daemon `threading.Timer` 는 SIGTERM 뒤에도 프로세스를 살려 포트를 쥔다(#26).
+- (5) **Runner 는 git 신원이 없다**(`commit-tree` "Author identity unknown", CI #3) — prodgen 커밋은 기본 identity 로. **Runner 생성 tree 는 exec bit 가 빠진다**(build 가 POSIX chmod 안 함) — Windows 에서는 G09 가 fs 검사를 건너뛰어 못 봤다. **CI checkout 에는 로컬 `refs/heads/production` 이 없다**.
+- (6) **curl 에 Jenkins `tree=…[…]` URL 을 그대로 주면 glob 으로 해석한다**(rc=3) — `-g`. 같은 함정을 이 세션 안에서 bash 와 Python 양쪽에서 각각 밟았다.
+- (7) **main 이 움직이면 진행 중 CI 의 Harness 는 전부 `MAIN_SHA` 불일치로 실패한다**(설계대로 거부, CI #3). 검증 중에는 push 하지 않거나(이 세션은 세 번 어겼다 → CI #4/#6 중단 후 재실행), 문서 커밋은 CI 완료 뒤 한 번에.
+- (8) **프로세스 실수**: `python -m pytest … | tail -1 && git commit` — 파이프라인 종료코드는 `tail` 의 것이라 수집 오류(`pytest` import 누락)가 가려진 채 커밋·push 됐다(`20354861`, CI #4 중단). `set -o pipefail` 또는 테스트를 별도 명령으로. heredoc 에 적은 `\n` 은 `\n` 으로 접혀 테스트 리터럴에 실제 개행이 들어갔다(Write/Edit 도구로 쓴다 — 2026-10-03 에 이미 적어 둔 패턴을 또 밟았다).
+- (9) **자동 분류기 거부**: 노드 라벨 변경 + 실호스트/Portal 트리거를 **한 명령에 묶어** 요청해 어느 항목이 거부됐는지 알 수 없게 됐다. 다른 범주의 행위는 명령을 나눠 요청한다(각각 1회, 우회 없음).
+- 관련 rule: rule 25 R7-A(실측 검증), rule 95 R3, rule 80 R1

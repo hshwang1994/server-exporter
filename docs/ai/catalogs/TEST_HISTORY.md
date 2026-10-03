@@ -1,5 +1,23 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-04 — 잔여 결함 R1~R7 · Harness · CI 연결 · prodgen 강화 (Jenkins 실측 포함)
+
+> 실측 `tests/evidence/2026-10-04-residual-r1-r7.md` · `2026-10-04-live-e2e.md` · `2026-10-04-location-cj.md`. 상태 어휘 PASS/FAIL/PARTIAL/HOLD/INVALID.
+
+| 항목 | 결과 |
+|---|---|
+| 로컬 `bash scripts/ai/ci_gate.sh`(Windows) | 1회차 4,061 passed + `test_promotion_cycle.py::test_refusals…` 1 failed(flaky, 재현 안 됨 — FAILURE_PATTERNS 2026-10-04) → 2회차 **4,070 passed · 36 skipped · 7 xfailed**, corpus 14/14, field_dictionary PASS; `ansible-playbook` 없음 → syntax-check 건너뜀 = **PARTIAL(rc 2)** |
+| CI #5 Gate(Runner, `5d2a8c8e`) | **3,999 passed · 99 skipped · 7 xfailed**, corpus Python+Groovy 14/14, Budget self-test PASS |
+| CI #3 Gate(Runner) | 2 errors — `commit-tree` "Author identity unknown"(Runner 에 git 신원 없음) → `21b811b0` 기본 identity |
+| prodgen Verify (CI #3, Runner, netrc + vault) | FAIL — G09(생성 tree exec bit 누락) · G14(`test_bounded_recovery…` 가 주석 의존) · G20(CI checkout 로컬 production ref 부재 + LEGACY 미지정); **G19 PASS 28.8 s**(os/esxi/redfish 각 envelope 2, `TARGET_UNREACHABLE`), G13 PASS(`se-jenkins-lint`) |
+| prodgen Verify (CI #5, `BOOTSTRAP_BASELINE=4ce90a00…`) | **COMPLETE_PASS 20/20** — G14 PASS(106.8 s, 필수 그룹 runtime_regression 169 · runtime_e2e 743 · budget_formula 13 · portal_contract 19 · finalize_layer_a 13) · G19 PASS 29.0 s · G18/G20 PASS; `report_sha256 7b81b8b8…`, 환경 `Runner01 · Python 3.12.9 · ansible-core 2.20.3 · pwsh True · Linux 5.14.0-570.12.1.el9_6` |
+| Harness Job(main 함수, `5d2a8c8e`, CI #5 Driver) | normal_success #28 · archive_fail #29 · both_fail #31 · truncate_jsonl #32 · checkpoint_only_a #33 · layer_a_fail #35 · raw_fallback #36 · report_corrupt #37 · sink_5xx #38 · outer_timeout #39 **PASS**; stash_fail #30 · checkpoint_only_b #34 **FAIL → 운영 코드 결함 2건 수정(`0ccb89eb`)**; 생성 tree 함수 #40~#42 FAIL(agent JVM 자체 서명 PKIX → `ignoreSslErrors`) |
+| Harness 첫 PASS 까지 | #4~#26 FAILURE(HARNESS binding · 정본 복사 · sink 위치 · toJson(List) · NFS .nfs* · lingering Timer) → **#27 normal_success PASS**(verdict 14/14) |
+| main Job | #4(`5d2a8c8e`) · #5(`0ccb89eb`) · #6(`15e684b0`) T2+T6: TEST-NET 2 → `TARGET_UNREACHABLE` ×2 · 13 키 · Layer A ok · Callback `127.0.0.1:9` 연결 거부 3회 관측 → `delivered=false` · `callback_body.json` 유효 · UNSTABLE; R6 `pre=5~6s wait_checkout=5s prep=2~4s` · P-1 `mem_avail_mb≈6.1 GB mem_cap=62 mem_guard=active` |
+| CI #7(`15e684b0`, 최종 후보) | **SUCCESS** — Gate PASS · Corpus 14/14 · Budget PASS · Harness Driver **12/12** · Build(192 파일 · class B 0 · `tree_hash 05ce23c3…`) · Harness(prodtree) **4/4** · Drift PASS · **Verify COMPLETE_PASS 20/20**(G14 104.4 s · G19 28.3 s) · Evidence PASS(16 항목) · Promote not_run |
+| Jenkins 선언형 린터 | `Jenkinsfile_ci`(it→hr 수정본) validated · `Jenkinsfile_portal`(회수 매체 수정본) validated |
+| 단위 묶음(Windows) | `test_jenkinsfile_ci` 30 · `test_jenkinsfile_portal_finalize` 20(+source_text 1) · `test_jenkinsfile_portal_preserve_and_params` · `test_harness_tools` 8 · `test_harness_callback_sink` 5 · `test_gitstore_identity` 4 · `test_verdict_evidence` 7 · `test_promotion_cycle` 4(162 s) · `test_pipeline_tmp_repo` |
+
 ## 2026-10-03 — Gathering 개선 Phase 2 · 3 · 4 (정확성 · 성능 · 예산/마무리/Callback)
 
 > 실측 `tests/evidence/2026-10-03-phase2-correctness.md` · `tests/evidence/2026-10-03-phase4-finalization.md`. live 는 권한 차단으로 미실행 — 아래는 오프라인뿐.

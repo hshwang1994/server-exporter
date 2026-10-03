@@ -8,6 +8,40 @@
 
 > 최종 갱신: 2026-10-03
 
+## 2026-10-04 — 잔여 결함 R1~R7 · 승격 판정 모델 · 고객사 main 형태 실행 검증 · main 전용 Harness · CI 연결 (Astra 2~4차 검토 대응)
+
+### 사용자 의심
+
+2026-10-03 최종 보고서의 "코드 수준 완료" 가운데 CI 연결(R3)은 미구현이고, 판정 모델(R1 SKIP=PASS) · legacy 복구(R2) · 승격 원격 기준점(R4) · finalizer(`lines = null` 뒤 `lines.size()` R5 · stage 기준점 R6 · archive 가 stash 를 막는 R7)은 결함이다. 실환경은 전부 미검증이다.
+
+### 분석
+
+- 결함은 모두 현재 코드에서 재확인됐다(`verify/__init__.py` `ok = all(status != "FAIL")`, `promote.py` 로컬 ref 만, `Jenkinsfile_portal:189/197`, post{always} 한 블록 등 — Plan §2 표).
+- 텍스트 테스트는 R5 같은 실행 결함과 sandbox 거부(`JsonSlurperClassic`, `toJson(Object)`), 노드 컨텍스트(`httpRequest` 실행 위치) 를 못 잡는다. 실제 CPS·sandbox 에서 함수를 실행하는 regression 이 필요하다 — 단 운영 코드에 장애 주입 분기는 넣지 않는다.
+- 고객사는 main 하나로 운영한다(2026-10-03 사용자). 내부 production 승격과 고객사 전달은 다른 단계이며 동일성은 tree 로 본다.
+
+### 결정
+
+1. 판정 `COMPLETE_PASS / PARTIAL / FAIL`, 필수 gate G01~G20, binding + `report_sha256`, `--skip-live` 는 dry-run 만, E2E 증거를 코드로 소비, G18/G20 은 승격 직전 재실행.
+2. production 상태 LEGACY · PROVENANCE · RESTORED_BASELINE · UNVERIFIED, `--bootstrap-baseline <sha>` 단일 문법, B→P1→R→P2.
+3. 양 원격 ff 승격(사전/사후 ls-remote · 전부 성공 시 로컬 ref · `partial_push`/`push-sync`), commit identity 기본값. GitHub 만 먼저 바꾸는 경로 없음.
+4. G19 = 고객사 main 형태 clean checkout 에서 3채널 **실제 실행**(TEST-NET, 실패 조건은 관측으로).
+5. main 전용 Harness Job(시나리오당 빌드 1개 · wrapper · controller loopback sink · verdict) 으로 R5~R7 실행 regression; 생성 tree 함수도 같은 Harness.
+6. CI 12 stage, 승격 집행 조건 6항을 코드로. 상세 `docs/ai/decisions/ADR-2026-10-04-promotion-verdict-and-harness.md`.
+7. 청주 `chj → cj`(위 항목). Portal 변경 없음.
+
+### 영향
+
+- Jenkins 실측(2026-10-04): CI #5(`5d2a8c8e`) **Verify COMPLETE_PASS**(Runner · netrc · vault, G19 3채널 28.9 s). Harness normal_success PASS(#27/#28) → R5 실행 regression 충족. Harness 가 운영 결함 2건(한 mapping 의 `unarchive` 통째 실패 · `source` 의미)을 더 잡아 고쳤다(`0ccb89eb`). main #4/#5/#6 T2+T6: TEST-NET → `TARGET_UNREACHABLE`, Callback 연결 거부 관측, body 보존.
+- **승격하지 않았다**: 필수 E2E(S1·S2·S3·T5·E2E-A/A')는 노드 라벨 변경 + 실호스트·Portal 트리거가 자동 분류기에서 거부돼 HOLD/권한, GitLab push 자격(`se-gitlab-push`) 없음, `push-sync` 미실행. 재개 조건은 `tests/evidence/2026-10-04-live-e2e.md` §7.
+- 환경: `se-jenkins-lint` 폴더 credential(새 API 토큰) 생성, CI Job 정의 갱신, Runner `pwsh 7.4.6` 사용자 권한 bootstrap. Runner 노드 라벨은 바꾸지 못했다(변경 0).
+- 문서: `docs/operate/09`(main-only 전제 · 상태표 · CLI · cj · 복구 경계) · `03` · `04` · `docs/ai/catalogs/JENKINS_PIPELINES.md`.
+
+### 회귀
+
+- `tests/unit/prodgen/test_promotion_cycle.py`(B→P1→R→P2 · 거부 · 경쟁 · push-sync) · `test_verdict_evidence.py` · `test_gitstore_identity.py` · `test_jenkinsfile_ci.py`(30) · `test_jenkinsfile_portal_finalize.py`(lineCount · 기준점 · FIE 재전파 · bounded opt-in · 회수 매체) · `test_jenkinsfile_portal_preserve_and_params.py` · `test_gather_budget.py`(메모리 가드) · `test_harness_*`. 로컬 gate 4,070 passed(syntax-check 는 Windows 에 ansible 없음 → PARTIAL), CI Gate 3,999 passed(Runner).
+- 증거: `tests/evidence/2026-10-04-residual-r1-r7.md` · `-live-e2e.md` · `-location-cj.md`.
+
 ## 2026-10-04 — 청주 Location 키 `chj` → `cj` (사용자 결정, alias 없음)
 
 - **무엇**: `common/vars/locations.yml` 의 키·`agent_label`, `vault/chj/` → `vault/cj/`(12 파일 `git mv`, 암호문 blob 동일 · 재암호화 없음), `Jenkinsfile_portal` 의 `loc` 설명,

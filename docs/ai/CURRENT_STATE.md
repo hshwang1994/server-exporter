@@ -1,5 +1,24 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-04 — 잔여 결함 R1~R7 · main 전용 Harness · CI 12 stage · prodgen 판정/승격 모델 · 청주 `cj` — 코드·로컬 회귀·Jenkins 실행(일부) 완료, 승격 미수행
+
+> 결정: `docs/reference/decision-log.md` 2026-10-04 두 항목, `docs/ai/decisions/ADR-2026-10-04-promotion-verdict-and-harness.md`. 실측: `tests/evidence/2026-10-04-residual-r1-r7.md` · `-live-e2e.md` · `-location-cj.md`.
+> 2026-10-03 보고서의 "Phase 6 완료 / Phase 7a 완료 / Phase 4 finalizer 완료" 는 정정됐다 — Phase 6 은 CI 미연결(R3), 7a 는 R1·R2·R4 결함, 4 는 R5·R6·R7 결함이었다(`tests/evidence/2026-10-04-final-report.md`).
+
+- **finalizer(R5·R6·R7)**: `lineCount` 로 NPE 제거; stage 기준점은 Resolve Location 끝(`pre/wait_checkout/prep` 로그); interruption 은 어디서도 삼키지 않고 `aborted` 를 기록해 재전파; Tier 1 예산 게이트, Tier 2 `seBounded` 는 nodeId 식별이 되는 Jenkins 에서만(opt-in, 기본 재전파);
+  보존은 Layer A / archive / stash 각각 독립(`sePreserveGatherOutput`), `archived && manifestOk && hasResult` 일 때만 deleteDir; 손상 입력에도 host 당 1개 유효 JSON(`seFilterEnvelopeLines` · `unrecovered` · `damage`);
+  회수 사다리는 파일별 `unarchive` 이고 `source` 는 입력(final·output·checkpoint)을 돌려준 **매체**다(Harness #30/#34 가 잡은 결함). `not_started_memory` outcome 연결.
+- **main 전용 Harness**(`tests/jenkins/harness/`, Job `clovirone-server-gather-harness`): 시나리오당 빌드 1개, wrapper 로 장애 주입(운영 코드 변경 0), POST sink 는 **controller 127.0.0.1**(finalizer 의 httpRequest 가 built-in 에서 나간다), verdict PASS/FAIL/PARTIAL.
+  main 함수 12 시나리오 중 10 PASS + 결함 2건 수정 후 CI #7 재검증; 생성 tree 함수(`FUNCTIONS_SRC=artifact`) 는 CI artifact + sha256.
+- **prodgen**: `COMPLETE_PASS/PARTIAL/FAIL` · 필수 G01~G20 · binding/`report_sha256` · G14 필수 테스트 그룹 · `e2e-evidence`/`evidence-aggregate` · 상태 LEGACY/PROVENANCE/RESTORED_BASELINE/UNVERIFIED · `--bootstrap-baseline <sha>` · 양 원격 ff 승격(사전/사후 ls-remote · `partial_push` · `push-sync`) ·
+  `restore --push-remote` · G19 고객사 main 형태 3채널 실제 실행 · G20 · commit identity 기본값 · POSIX exec bit. **CI #5 Verify COMPLETE_PASS(Runner)**.
+- **CI**(`Jenkinsfile_ci`, 12 stage): Checkout → Toolchain(사용자 권한 `pwsh` bootstrap) → Gate → Corpus → Budget → Harness Driver → Prodgen Build → Harness(prodtree) → Drift → Verify(린터 토큰 `se-jenkins-lint` + vault) → Evidence Aggregate → Promote(6항, 기본 dry-run, GitLab 자격 없으면 dry-run 까지).
+  Job 정의 `jenkins/jobs/clovirone-server-gather-ci/config.xml`. 실행 중 main 이 움직이면 Harness 는 `MAIN_SHA` 불일치로 거부된다(설계).
+- **청주 `cj`**: registry · `vault/cj/`(blob 12 동일) · 테스트 · 문서. alias 없음 → `loc=chj` fail-closed. lab smoke(임시 라벨)는 HOLD/권한.
+- **환경(Jenkins)**: `se-jenkins-lint` 폴더 credential(새 API 토큰) 생성 · CI Job config 갱신 · Harness Job 운영 · Runner `pwsh 7.4.6`(사용자 권한). 노드 라벨 변경 0(거부). GitLab push 자격 없음.
+- **승격 미수행**: 필수 E2E(S1·S2·S3·T5·E2E-A/A') HOLD/권한, `se-gitlab-push` 없음, `push-sync` 미실행 — `docs/operate/09` §3 · `NEXT_ACTIONS` GP-21/24/25.
+- **실환경에서 PASS 한 것**: Harness normal_success(#27/#28/#44) · F 시나리오(§3) · main T2+T6(#4/#5/#6: `TARGET_UNREACHABLE` 관측 · Callback 연결 거부 관측 · body 보존) · G19(CI #3/#5) · CI Verify COMPLETE_PASS(#5).
+
 ## 일자: 2026-10-03 — Gathering 개선 Phase 2 · 3 · 4 (정확성 · 성능 · 예산/마무리/Callback) — 코드 수준 완료, 실환경 미검증
 
 > 결정: `docs/reference/decision-log.md` 2026-10-03 (Phase 2~4). 실측: `tests/evidence/2026-10-03-phase2-correctness.md`, `tests/evidence/2026-10-03-phase4-finalization.md`.
