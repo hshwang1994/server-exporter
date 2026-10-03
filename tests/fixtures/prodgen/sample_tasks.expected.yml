@@ -1,0 +1,49 @@
+---
+
+- name: "sample | plain scalars"
+  ansible.builtin.set_fact:
+    quoted: "a # b"
+    single: 'c # d'
+    url: http://example.invalid/#fragment
+    flow: [1, 2]
+    folded: >-
+      keep # this hash is data
+      second line
+    literal: |
+      # literal block content keeps its hash lines
+      value: 1
+  no_log: false
+
+
+- name: "sample | jinja comments"
+  ansible.builtin.set_fact:
+    computed: >-
+      {%- set out = [] -%}
+      {%- for item in [1, 2, 3] -%}
+        {%- set _ = out.append(item) -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: "sample | shell block"
+  ansible.builtin.raw: |
+    #!/bin/sh
+    export LANG=C
+    n=$#
+    echo "$# args" '# not a comment' "# nor this"
+    awk '{ gsub(/#/, "_"); print }' /dev/null
+    case "$1" in
+      "#"*) echo quoted-hash ;;
+    esac
+  register: _raw
+  changed_when: false
+
+- name: "sample | argv keeps hashes"
+  ansible.builtin.command: |
+    printf '%s' '# literal argument'
+
+- name: "sample | powershell block"
+  ansible.windows.win_shell: |
+    #requires -Version 5
+    $s = 'it''s # not a comment' + "x # y $(1 + 1)"
+    Get-Volume | Where-Object { $_.Size -gt 0 } | ConvertTo-Json -Compress
+  register: _ps

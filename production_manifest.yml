@@ -1,0 +1,176 @@
+# production_manifest.yml — runtime-only allowlist for the production tree (Plan Phase 7a).
+#
+# Every tracked file under `runtime_roots` at the promoted main SHA must match exactly one
+# include entry, one excluded entry (with a reason) or one ignore pattern; anything else fails
+# the build (G02). `language` is declared per entry and is never inferred from the extension.
+# `mode` is the expected git mode of the source blob and the mode written to production.
+version: 1
+production_branch: production
+main_branch: main
+
+runtime_roots:
+  - Jenkinsfile_portal
+  - ansible.cfg
+  - .gitattributes
+  - .gitignore
+  - os-gather
+  - esxi-gather
+  - redfish-gather
+  - common
+  - adapters
+  - vault
+  - callback_plugins
+  - filter_plugins
+  - lookup_plugins
+  - module_utils
+  - scripts
+
+include:
+  # ── pipeline / configuration ───────────────────────────────────────────────
+  - path: Jenkinsfile_portal
+    language: groovy
+    mode: "100644"
+  - path: scripts/jenkins/se_finalize.groovy
+    language: groovy
+    mode: "100644"
+    optional: true
+    note: present only if the finalizer is split out of Jenkinsfile_portal
+  - path: ansible.cfg
+    language: ini
+    mode: "100644"
+  - path: .gitattributes
+    language: gitmeta
+    mode: "100644"
+  - path: .gitignore
+    language: gitmeta
+    mode: "100644"
+
+  # ── dynamic inventories (Python with a shell-style name) ───────────────────
+  - glob: "{os,esxi,redfish}-gather/inventory.sh"
+    language: python
+    python_kind: inventory
+    mode: "100755"
+    shebang: "#!/usr/bin/python3"
+
+  # ── playbooks and task files ───────────────────────────────────────────────
+  - glob: "{os,esxi,redfish}-gather/site.yml"
+    language: yaml
+    mode: "100644"
+  - glob: "{os,esxi,redfish}-gather/tasks/**/*.yml"
+    language: yaml
+    mode: "100644"
+  - glob: "common/tasks/**/*.yml"
+    language: yaml
+    mode: "100644"
+  - glob: "common/vars/{failure_reasons,section_messages,locations,vendor_aliases,supported_sections}.yml"
+    language: yaml
+    mode: "100644"
+  - glob: "adapters/{redfish,os,esxi}/*.yml"
+    language: yaml
+    mode: "100644"
+
+  # ── vault (bytes unchanged, header verified) ───────────────────────────────
+  - glob: "vault/**/*.yml"
+    language: vault
+    mode: "100644"
+
+  # ── Ansible plugins (DOCUMENTATION kept: the plugin loader reads option definitions) ──
+  - path: callback_plugins/json_only.py
+    language: python
+    python_kind: plugin
+    mode: "100644"
+  - glob: "filter_plugins/*.py"
+    language: python
+    python_kind: plugin
+    mode: "100644"
+  - glob: "lookup_plugins/*.py"
+    language: python
+    python_kind: plugin
+    mode: "100644"
+  - glob: "module_utils/*.py"
+    language: python
+    python_kind: plugin
+    mode: "100644"
+
+  # ── library modules (DOCUMENTATION/RETURN/EXAMPLES/ANSIBLE_METADATA dropped) ──
+  - path: common/library/precheck_bundle.py
+    language: python
+    python_kind: library
+    mode: "100644"
+  - path: esxi-gather/library/esxi_disks.py
+    language: python
+    python_kind: library
+    mode: "100644"
+  - path: redfish-gather/library/redfish_gather.py
+    language: python
+    python_kind: library
+    mode: "100644"
+
+  # ── helper scripts ─────────────────────────────────────────────────────────
+  - path: os-gather/files/get_last_login.sh
+    language: shell
+    mode: "100644"
+    note: sourced into raw/shell blocks via lookup('file'); no shebang by design
+  - path: scripts/activate_ansible_venv.sh
+    language: shell
+    mode: "100644"
+  - path: scripts/addon_checkout.sh
+    language: shell
+    mode: "100755"
+  - path: scripts/addon_askpass.sh
+    language: shell
+    mode: "100755"
+  - path: scripts/gather_budget.sh
+    language: shell
+    mode: "100644"
+  - path: scripts/finalize_gather_output.py
+    language: python
+    python_kind: script
+    mode: "100644"
+    doc_runtime: preserve_module_docstring
+    note: argparse description reads __doc__ at runtime; the module docstring is runtime-required (class A)
+
+excluded:
+  - path: common/vars/status_rules.yml
+    reason: referenced only by a comment in build_status.yml (reserved, no runtime loader)
+  - path: adapters/registry.yml
+    reason: master index document; adapter_loader globs adapters/<channel>/*.yml directly
+  - path: scripts/bootstrap_vault_encrypt.sh
+    reason: operator tool (one-time vault bootstrap), not part of a Jenkins build
+  - path: scripts/verify_account_provision.sh
+    reason: operator verification tool, not part of a Jenkins build
+  - glob: "jenkins/**"
+    reason: operator tools (job XML) are applied on the controller, not checked out by builds
+
+ignore:
+  - "**/README.md"
+  - "scripts/ai/**"
+
+forbidden:
+  - ".claude/**"
+  - "CLAUDE.md"
+  - "docs/**"
+  - "tests/**"
+  - "schema/**"
+  - "scripts/ai/**"
+  - "jenkins/**"
+  - "requirements-test.txt"
+  - "README.md"
+  - "REQUIREMENTS.md"
+  - "Jenkinsfile_ci"
+  - "**/__pycache__/**"
+
+policy:
+  eol: lf
+  powershell_strip: true
+  strip_tool_directives: [shellcheck, noqa, nosec, pragma, type]
+  # Jinja comment removal proof: "ansible" = normalized AST equal under the templar's settings
+  # (trim_blocks=True, lstrip_blocks=False); "both" additionally requires trim_blocks=False.
+  jinja_trim_blocks: ansible
+
+toolchain:
+  python: ">=3.12,<3.14"
+  pyyaml: ">=6.0,<7"
+  jinja2: ">=3.1,<4"
+  pwsh: ">=5.1"
+  ansible-core: ">=2.16,<2.21"
