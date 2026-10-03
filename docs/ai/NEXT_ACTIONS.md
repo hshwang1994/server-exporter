@@ -1,5 +1,21 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Gathering 개선 작업 (사용자 승인 Plan 2026-10-03) — Phase 진행과 대기 항목
+
+> 정본: 승인 Plan(세션 파일) · `tests/evidence/2026-10-03-phase1-baseline.md` · `docs/ai/CURRENT_STATE.md` 2026-10-03.
+> Phase 순서: 1 baseline → 1.5 최소 선행 → 2 정확성 → 3 성능 → 4 Timeout·finalization·Callback → 5 대량·E2E → 6 Harness/CI → 7a~7d production 생성·시험 반영·검증.
+
+| # | 항목 | 상태 | 내용 |
+|---|---|---|---|
+| GP-1 | `.33~.38` SSH 읽기 전용 정찰 + RHEL 10.2 DIMM 두 트랙(§7-1) | `[HOLD / 사용자 결정]` | 세션 실행 환경(auto mode 분류기)이 "Production Reads" 로 거부. 선택지: Bash 권한 규칙 허용(ssh/sshpass → 10.100.64.33~38) / 사용자가 `!` 로 직접 실행해 결과 투입 / 미실행으로 두고 변경 후 값만 보고 |
+| GP-2 | 변경 전 production Job baseline 빌드(os: `.33~.38` + lab `.161 .96 .120`, callback `http://10.100.64.151:8080`) | `[HOLD / 사용자 결정]` | "Production Deploy" 로 거부. main Job 은 #1(a45ba808, ABORTED) 이 baseline. production 은 runtime 동등 SHA 의 #58 만 있음(신규 VM 없음) |
+| GP-3 | Phase 1.5 live 확인 — main Job 1회(readTrusted lightweight 동작 · `GIT_COMMIT` 일치 · manifest/archive 생성), production Job 은 미변경 | `[HOLD / 사용자 결정]` | GP-2 와 같은 권한. 확인 전까지 Phase 1.5 종료 조건은 "오프라인 통과" 까지 |
+| GP-4 | `esxi` 라벨 노드 없음 → esxi 수집·baseline 불가 | `[TODO / 사용자 — 환경]` | Runner01~03 중 하나에 `esxi` 라벨(pyVmomi·community.vmware 는 `/app/ansible-env` 에 있어야 함, 02-agent-node.md 8절). Runner04 는 `git` 만이라 수집에 배정되지 않는다(JV-2 와 동일) |
+| GP-5 | Redfish 변경 전 비교 자료(Job 밖, 같은 collector SHA, gather 모드 읽기 전용) — Dell `10.100.15.27` · Cisco `10.100.15.2`(443 open; HPE `.231` · Lenovo `.232` 는 closed) | `[HOLD / 사용자 결정]` | GP-1 과 같은 범주로 판단해 시도하지 않음. Job baseline 은 계획대로 미실행(dry-run 강제 불가) |
+| GP-6 | Phase 2 정확성(C1~C10 ①, shape 통일) → Phase 3 성능 → Phase 4 finalizer | `[TODO / AI]` | 오프라인 구현·회귀는 권한과 무관. 각 Phase 의 실장비 동등성은 GP-1~3 해소 뒤 |
+| GP-7 | N6 — Linux `add_host` 에 `ansible_timeout: 15` | `[TODO / AI — Phase 4]` | WSL 실측: 플러그인 `ConnectTimeout=60` 이 `ssh_common_args` 의 15 보다 앞에 와 60 이 적용된다(무응답 host 67 s) |
+| GP-8 | 전역 `ADDON_REPO_URL` 이 켜진 상태라 Add-on 결과가 baseline 에 섞인다 | `[INFO]` | 전후 비교는 같은 Add-on 상태로 맞춘다(§10-5). 끄는 재현은 전역 변수 변경 = 승인 항목 |
+
 ## Add-on 빌드별 체크아웃 후속 (2026-09-29)
 
 > 정본: `docs/reference/decision-log.md` 2026-09-29, `docs/ai/decisions/ADR-2026-09-29-addon-per-build-checkout.md`,

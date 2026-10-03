@@ -11,7 +11,7 @@
 - Jenkins pipeline: `Jenkinsfile_portal` 하나. 비운영 `Jenkinsfile`(pytest 회귀 게이트) · `Jenkinsfile_portal_test` · `test_sj`(portal 사본)는 2026-09-28 에 삭제됐다
   (사용자 결정). pytest 회귀는 커밋 전 로컬 검증이다
 - 외부 CI 시스템 미사용 (Jenkins 단독)
-- Stage: Resolve Location(controller) / Validate(agent) / Gather(agent) / Validate Schema(agent) / Callback(controller)
+- Stage: Validate(agent 없음) / Resolve Location(agent 없음, `readTrusted`) / Gather(agent) / Validate Schema(agent) / Callback(controller) — 2026-10-03 순서·노드 변경
 - Agent 의 Ansible venv 는 `scripts/activate_ansible_venv.sh` 가 고른다 (`SE_ANSIBLE_VENV` → PATH 의
   `ansible-playbook` → `/app/ansible-env` → `/opt/ansible-env` → 실패). Jenkinsfile 에 venv 절대경로를 적지 않는다
 
@@ -23,9 +23,9 @@
 
 | Stage | 노드 | 책임 | FAIL 게이트 |
 |---|---|---|---|
-| 0. Resolve Location | controller (`built-in`) | `common/vars/locations.yml` 로 `loc` 검증 → `agent_label` | YES |
-| 1. Validate | agent | 입력값 (target_type / inventory_json / callbackUrl / deploymentEnvironmentId) 형식 검증 | YES |
-| 2. Gather | agent | (전역 `ADDON_REPO_URL` 이 있으면 Add-on 체크아웃 · 검사 — R1-B) → venv 활성화 → ansible-playbook 실행 (해당 채널 site.yml) → `gather_output.json` stash | Add-on 못 받으면 UNSTABLE + Add-on 없이 수집, ansible 실패 UNSTABLE, 출력 0바이트 FAILURE |
+| 0. Validate | agent 없음 | 입력값 (target_type / inventory_json / callbackUrl / deploymentEnvironmentId) 형식 검증 → 접수 manifest `env.SE_MANIFEST_JSON` | YES |
+| 1. Resolve Location | agent 없음 | `readYaml text: readTrusted('common/vars/locations.yml')` 로 `loc` 검증 → `agent_label` (컨트롤러 전체 checkout 금지 — main 2분 초과 사고) | YES |
+| 2. Gather | agent | `gather_manifest.json` 기록 → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 체크아웃 · 검사 — R1-B) → venv 활성화 → ansible-playbook 실행 (해당 채널 site.yml; 검증 파라미터 `redfishAccountDryrun`/`gatherBudgetForceSec` 는 기본값이면 영향 없음) → post{always} `archiveArtifacts` + `stash(allowEmpty)` | Add-on 못 받으면 UNSTABLE + Add-on 없이 수집, ansible 실패 UNSTABLE, 출력 0바이트 FAILURE |
 | 3. Validate Schema | agent | venv 활성화 → field_dictionary 정합 (`tests/validate_field_dictionary.py`) | YES |
 | 4. Callback | controller | 호출자 통보 (`httpRequest`, rule 31 무결성) | NO (UNSTABLE) |
 

@@ -1,5 +1,35 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-03 — Gathering 개선 작업 Phase 1(baseline) · 1.5(최소 선행 변경)
+
+> 계획: 사용자 승인 Plan(Astra 3차 검토 조건부 통과, 2026-10-03). 실측: `tests/evidence/2026-10-03-phase1-baseline.md`.
+> 후속 표: `docs/ai/NEXT_ACTIONS.md` GP-1 ~ GP-8.
+
+- **왜**: (1) main Job 이 Resolve Location 의 컨트롤러 **전체 checkout** 으로 2분 제한을 넘겨 끊긴다(`clovirone-server-gather-main` #1 ABORTED @ a45ba808).
+  (2) 수집이 중단·실패하면 stash 전 단계라 완료된 host 결과까지 유실된다. (3) 이후 Phase 의 live 검증에 Redfish 쓰기 차단(dry-run 강제)과
+  배치 상한 파라미터가 먼저 필요하다.
+- **Jenkinsfile_portal (Phase 1.5)**: stage 순서 **Validate → Resolve Location → Gather → Validate Schema → Callback**. Validate·Resolve Location 은
+  agent 없이 돈다 — Resolve 는 `readYaml text: readTrusted('common/vars/locations.yml')` 로 파일 하나만 읽는다(checkout 0). Validate 가 접수 manifest 를
+  `env.SE_MANIFEST_JSON`(빌드·채널·요청 식별·접수 IP) 으로 만들고 Gather 가 node 진입 직후 `gather_manifest.json` 으로 쓴다. Gather `post{always}` 가
+  `archiveArtifacts(gather_output.json · gather_manifest.json · gather_rc.txt)` → `stash(allowEmpty)` → `deleteDir` — steps 안 stash 삭제.
+  검증용 파라미터 `redfishAccountDryrun`(false → true 일 때만 `-e _rf_account_service_dryrun=true`) · `gatherBudgetForceSec`('' → 값이 있을 때만
+  `timeout --signal=INT --kill-after=90`, rc 는 `gather_rc.txt`). inventory_json 이 배열이 아니거나 원소가 객체가 아니면 NPE 대신 명확한 오류(새 거부 없음).
+  온라인 Runner 부재는 아직 Resolve 에서 `error`(접수 후 실패 + Callback 은 Phase 4 finalizer 와 함께).
+- **WSL 선행 검증(§6-7)**: `include_tasks/include_role apply: {timeout}` 은 task 단위; task timeout 시 `register` 가 `timedout` 키로 채워지고
+  `failed_when: false` 는 막지 못함(`ignore_errors` 는 막음); **timeout 뒤 local 모듈 프로세스는 살아남는다**(모듈 내부 deadline 이 1차 가드);
+  `timeout --signal=INT` 종료 시 완료된 OUTPUT 줄 보존·`on_stats` 미호출·자식 정리(KILL 은 고아 잔존); SSH `ConnectTimeout` 은 플러그인 값(cfg 60)이
+  앞에 와서 `ssh_common_args` 의 15 가 무시됨(N6 확정 — `ansible_timeout` hostvar 로 고쳐야 함).
+- **오프라인 baseline**: Redfish 재생 GET 167/217/131/123(+noauth 1) — firmware 멤버 GET R740 62 · DL380 22 · SR650 26 · CSUS 2; 원격 실행 task
+  Linux python 18(+0~2)/raw 13, Windows 20(+2), ESXi 13.
+- **Jenkins 실측**: 2.528.3, Runner01~03 라벨 `git linux redfish windows`, Runner04 `git` 만, **`esxi` 라벨 노드 없음**(esxi 수집 불가 — 환경 항목).
+  플러그인 `unarchive`·`readTrusted`·`readYaml` 가용, artifact manager 기본. production #58(d549596d, runtime 동등) Stage 시간 23/1.5/170/5.8/33 s.
+- **하네스**: `scripts/ai/ci_gate.sh` 신설(compile · field_dictionary · drift · vendor boundary · harness consistency · pytest 2 묶음 · syntax-check;
+  건너뛴 단계가 있으면 PARTIAL). `redfish_gather.py` 의 기존 vendor-boundary 위반 2건(iLO 정규식 · XCC 로그)은 rule 12 의 `# nosec rule12-r1` 로 표식.
+- **검증**: Jenkinsfile 계약 테스트 69 passed(신규 `tests/unit/test_jenkinsfile_portal_preserve_and_params.py` 10), Jenkins 선언형 린터 validated,
+  ci_gate — Windows: pytest 3369 passed/35 skipped/7 xfailed + integration 300 passed/4 skipped, WSL: 3채널 syntax-check 통과.
+- **미실행(권한 차단 — 사용자 결정 대기)**: `.33~.38` SSH 읽기 전용 정찰, production Job baseline 빌드 트리거, BMC/ESXi Job 밖 읽기 전용 실행 —
+  이 세션의 auto mode 분류기가 거부(Production Reads / Production Deploy). main Job 에서의 Phase 1.5 실제 확인(readTrusted lightweight 동작)도 같은 이유로 미실행.
+
 ## 일자: 2026-09-30 — Add-on 변수 이름 정리 (`SE_ADDON_*` → `ADDON_REPO_*` · `ADDON_DIR`)
 
 > 결정 · 대응표: `docs/reference/decision-log.md` 2026-09-30. 실측: `tests/evidence/2026-09-29-addon-per-build-checkout.md` 5절.

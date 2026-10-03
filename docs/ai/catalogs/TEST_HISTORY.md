@@ -1,5 +1,19 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-03 — Gathering 개선 Phase 1 baseline · Phase 1.5 (Jenkinsfile 최소 선행 변경 · ci_gate)
+
+> 실측 `tests/evidence/2026-10-03-phase1-baseline.md`. live(Jenkins 빌드 · VM SSH · BMC) 는 권한 차단으로 미실행 — 아래는 오프라인뿐.
+
+| 항목 | 결과 |
+|---|---|
+| `bash scripts/ai/ci_gate.sh` (Windows, Python 3.13.15) | compile · field_dictionary PASS · drift 정합 · vendor boundary 0건 · harness consistency 통과; `pytest tests/unit tests/e2e tests/regression` **3369 passed / 35 skipped / 7 xfailed** (80 s); `pytest tests/integration -m "not live"` **300 passed / 4 skipped / 1 deselected**; syntax-check 건너뜀 → PARTIAL |
+| `bash scripts/ai/ci_gate.sh` (WSL, ansible-core 2.20.7, `CI_GATE_SKIP_PYTEST=1`) | 3채널 `ansible-playbook --syntax-check` 통과 |
+| Jenkinsfile 계약 테스트 4 파일 | 69 passed — 신규 `test_jenkinsfile_portal_preserve_and_params.py` 10 (stage 순서 · agent 없음 · readTrusted · manifest · 검증 파라미터 기본값 · dry-run/timeout guard · post 보존 순서 · 입력 구조 오류 · LF) |
+| Jenkins 선언형 린터 (jenkins-prod 2.528.3 `pipeline-model-converter/validate`) | Jenkinsfile_portal validated |
+| WSL §6-7 실험 (1)(2)(3)(4)(5) | apply timeout task 단위 / timeout register·failed_when·ignore_errors·자식 잔존 / INT·TERM·KILL 종료와 JSONL 보존 / `_inventory` 접근 / ConnectTimeout 순서 — 결과는 evidence §2 |
+| 오프라인 count baseline | Redfish 재생 GET 167 · 217 · 131 · 123 (+noauth 1), firmware 멤버 GET 62 · 2 · 22 · 26; 원격 실행 task Linux 18/13 · Windows 20 · ESXi 13 |
+| pytest 전체 수집 | 3,705 (수집 오류 2 = `tests/e2e_browser`, playwright 미설치 — 기존 환경 제약, ci_gate 범위 밖) |
+
 ## 2026-09-30 — Add-on 변수 이름 정리 (`ADDON_REPO_*` · `ADDON_DIR`)
 
 > 대응표 `docs/reference/decision-log.md` 2026-09-30. 실측 `tests/evidence/2026-09-29-addon-per-build-checkout.md` 5절.

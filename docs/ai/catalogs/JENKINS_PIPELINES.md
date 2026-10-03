@@ -8,9 +8,9 @@
 
 | Stage | 노드 | 하는 일 | FAIL 게이트 |
 |---|---|---|---|
-| Resolve Location | `built-in` (controller) | `readYaml common/vars/locations.yml` → `SE_LOCATION` / `SE_AGENT_LABEL`. 미등록 `loc` 즉시 실패 | YES |
-| Validate | `SE_AGENT_LABEL` (agent, `skipDefaultCheckout`) | target_type / inventory_json / callbackUrl / deploymentEnvironmentId 검증 | YES |
-| Gather | `SE_AGENT_LABEL` (agent) | (전역 `ADDON_REPO_URL` 이 있으면 Add-on 체크아웃 · 검사 — 아래 절) → venv 활성화 → `ansible-playbook … --vault-password-file=<mktemp> -e se_location=<loc>` (Add-on 이 켜진 빌드만 `withEnv(ADDON_DIR)`) → `gather_output.json` stash | Add-on 을 못 받으면 UNSTABLE + Add-on 없이 수집, ansible 실패 UNSTABLE, 출력 0바이트 FAILURE |
+| Validate | 없음 (agent-less, 2026-10-03) | target_type / inventory_json(배열·객체 원소·IP 키) / callbackUrl / deploymentEnvironmentId 검증 → 접수 manifest `env.SE_MANIFEST_JSON` | YES |
+| Resolve Location | 없음 (agent-less, 2026-10-03) | `readYaml text: readTrusted('common/vars/locations.yml')` → `SE_LOCATION` / `SE_AGENT_LABEL`. 미등록 `loc`·온라인 노드 없음 즉시 실패 | YES |
+| Gather | `SE_AGENT_LABEL` (agent) | `gather_manifest.json` 기록 → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 체크아웃 · 검사 — 아래 절) → venv 활성화 → `ansible-playbook … --vault-password-file=<mktemp> -e se_location=<loc>` (Add-on 이 켜진 빌드만 `withEnv(ADDON_DIR)`; 검증 파라미터 `redfishAccountDryrun`/`gatherBudgetForceSec` 가 켜진 빌드만 `-e _rf_account_service_dryrun=true` / `timeout --signal=INT --kill-after=90`) → `gather_rc.txt` → post{always} `archiveArtifacts` + `stash(allowEmpty)` + `deleteDir` | Add-on 을 못 받으면 UNSTABLE + Add-on 없이 수집, ansible 실패 UNSTABLE, 출력 0바이트 FAILURE |
 | Validate Schema | `SE_AGENT_LABEL` (agent) | venv 활성화 → `python3 tests/validate_field_dictionary.py` | YES |
 | Callback | `built-in` (controller) | unstash → `httpRequest` POST 3회 재시도 | NO (UNSTABLE) |
 
@@ -65,7 +65,11 @@ Jenkins credential `server-gather-vault-password` (type: **Secret text**). `with
 | 신규 jenkins-prod.gooddi.lab | `clovirone-cicd/clovirone-server-gather` | `Jenkinsfile_portal` | `production` (사용자 전환) | `SKHynix-Jenkins-Runner01~04` = 10.100.64.33~36 (`/app/ansible-env`, 라벨 git/linux/redfish/windows — `ic/chj/yi` 노드 없음, git 2.47.3 은 2026-09-28 설치됨, 시스템 CA 가 내부 GitLab 자체 서명 인증서를 모름 → Add-on 은 기본값(검증 안 함)으로 받는다) |
 
 `main` 은 tests/reference 를 포함해 약 17k 파일이라 컨트롤러의 Resolve Location(2분 제한)이 체크아웃 도중 끊겼다
-(신규 Jenkins 빌드 #4) — Job 은 `production` 을 본다.
+(신규 Jenkins 빌드 #4, `clovirone-server-gather-main` #1 @ a45ba808 도 같은 원인으로 ABORTED). 2026-10-03 부터 Resolve Location 은
+`readTrusted` 로 파일 하나만 읽어 체크아웃 자체를 하지 않는다 — main Job 에서의 실제 확인은 다음 빌드에서(미확인이면 미확인으로 적는다).
+2026-10-03 노드 실측(jenkins-prod): Runner01~03 라벨 `git linux redfish windows`(15 executor), Runner04 는 `git` 만, **`esxi` 라벨 노드 없음**
+→ `target_type=esxi` 는 Resolve Location 에서 끝난다(환경 항목). 플러그인: workflow-basic-steps(`unarchive`), workflow-multibranch(`readTrusted`),
+pipeline-utility-steps, http_request; artifact manager 는 기본 파일시스템.
 
 ## cron 인벤토리 (rule 28 #5)
 
