@@ -10,6 +10,7 @@
 #   - 프로세서를 하나도 못 읽으면 섹션 failed + 사유 (B-12).
 
 - name: "windows | cpu | collect Win32_Processor 상세"
+  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
     # windows-audit (2026-04-29): VMware/일부 BIOS는 Name 필드를 ALL CAPS로 노출
     # ("INTEL(R) XEON(R) SILVER 4510"). Linux 표기와 일관 위해 정규화.

@@ -593,6 +593,7 @@
             _os_accounts: "{{ _cred_accounts | default([]) }}"
 
         - name: "windows | setup"
+          timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
           ansible.builtin.setup:
             gather_subset: ['hardware', 'network']
           register:    _w_setup

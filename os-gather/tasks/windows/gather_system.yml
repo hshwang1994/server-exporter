@@ -10,49 +10,129 @@
 #     HypervisorPresent=True 이고 역할 없음 → virtual, 그 외 unknown.
 #   - system.runtime 은 gather_runtime.yml 이 단일 구현이다 (종전 이중 계산 → 덮어쓰기, B-31).
 #   - uptime 은 모르면 null (0 placeholder 금지, B-32).
+#
+# 2026-10-03 (P4 — Windows 원격 호출 통합, win_shell 2 → 1):
+#   - 종전 "os version" / "hosting detection" 두 호출을 스크립트 하나로 합쳤다. Win32_ComputerSystem 은
+#     한 번만 읽어(read_computer_system) 두 구성요소(os: 호스트명 · 도메인, hosting: 모델 · 하이퍼바이저) 가
+#     함께 쓴다 (Windows 채널 전체에서 Win32_ComputerSystem 을 읽는 스크립트는 이것과 gather_hardware 둘뿐).
+#   - 출력 = JSON 문서 1개, 구성요소 = { ok, error, rows, data }. 구성요소 본문에서 종료 오류가 나면
+#     그 구성요소만 ok=false + error 로 남고 다른 구성요소는 그대로 채워진다.
+#   - 공용 조회(read_*) 는 실패해도 쓰는 쪽을 실패시키지 않는다 — 종전 두 스크립트에서 이 조회들은 중간
+#     문장이라, 실패하면 그 문장만 건너뛰고 $null 로 계속 갔다 (rc 0). 조회 실패 자체는 read_* 에 남는다.
+#   - "split document" 가 문서를 종전 호출별 register 모양(_w_os_raw / _w_hosting_raw 의 stdout ·
+#     stdout_lines · rc) 으로 되돌린다. 그 아래 태스크(parse · hosting_type · 식별자 · fragment) 는 종전 그대로다.
+#     rc 는 그 구성요소가 따로 실행됐다면 냈을 값이다 — 스크립트 전체가 실패하면 그 rc,
+#     구성요소에서 종료 오류가 났으면 1 (powershell.exe -EncodedCommand 의 종료 코드), 아니면 0.
 
-- name: "windows | system | os version"
+- name: "windows | system | os version + hosting detection"
+  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
-    $os  = Get-CimInstance Win32_OperatingSystem
-    $cs  = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
-    $rel = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' `
-              -ErrorAction SilentlyContinue).DisplayVersion
-    if (-not $rel) {
+    function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
+      $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
+      $Doc[$Name] = $c
+      try { $null = & $Body $c }
+      catch { $c.ok = $false; $c.error = [string]$_.Exception.Message; if (-not $c.error) { $c.error = [string]$_ } }
+    }
+    $doc = [ordered]@{}
+    $os = $null
+    $cs = $null
+    Invoke-SeComponent $doc 'read_operating_system' {
+      param($c)
+      $script:os = Get-CimInstance Win32_OperatingSystem
+    }
+    Invoke-SeComponent $doc 'read_computer_system' {
+      param($c)
+      $script:cs = Get-CimInstance Win32_ComputerSystem
+    }
+    Invoke-SeComponent $doc 'os' {
+      param($c)
       $rel = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' `
-                -ErrorAction SilentlyContinue).ReleaseId
-    }
-    # 도메인: AD 가입이면 Win32_ComputerSystem.Domain, 아니면 기본 DNS 접미사 (Tcpip\Parameters Domain / NV Domain)
-    $domain = $null
-    $partOfDomain = $false
-    if ($cs) {
-      $partOfDomain = [bool]$cs.PartOfDomain
-      if ($partOfDomain -and $cs.Domain) { $domain = [string]$cs.Domain }
-    }
-    if (-not $domain) {
-      $tcp = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -ErrorAction SilentlyContinue
-      if ($tcp) {
-        if ($tcp.Domain) { $domain = [string]$tcp.Domain }
-        elseif ($tcp.'NV Domain') { $domain = [string]$tcp.'NV Domain' }
+                -ErrorAction SilentlyContinue).DisplayVersion
+      if (-not $rel) {
+        $rel = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' `
+                  -ErrorAction SilentlyContinue).ReleaseId
+      }
+      # 도메인: AD 가입이면 Win32_ComputerSystem.Domain, 아니면 기본 DNS 접미사 (Tcpip\Parameters Domain / NV Domain)
+      $domain = $null
+      $partOfDomain = $false
+      if ($cs) {
+        $partOfDomain = [bool]$cs.PartOfDomain
+        if ($partOfDomain -and $cs.Domain) { $domain = [string]$cs.Domain }
+      }
+      if (-not $domain) {
+        $tcp = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -ErrorAction SilentlyContinue
+        if ($tcp) {
+          if ($tcp.Domain) { $domain = [string]$tcp.Domain }
+          elseif ($tcp.'NV Domain') { $domain = [string]$tcp.'NV Domain' }
+        }
+      }
+      $uptime = $null
+      try {
+        if ($os.LastBootUpTime) { $uptime = [int64]((Get-Date) - [datetime]$os.LastBootUpTime).TotalSeconds }
+      } catch { $uptime = $null }
+      $c.data = [PSCustomObject]@{
+        caption      = $os.Caption
+        version      = $os.Version
+        build        = $os.BuildNumber
+        rel_id       = $rel
+        arch         = $os.OSArchitecture
+        hostname     = $(if ($cs -and $cs.DNSHostName) { [string]$cs.DNSHostName } else { [string]$env:COMPUTERNAME })
+        domain       = $domain
+        part_of_domain = $partOfDomain
+        uptime       = $uptime
       }
     }
-    $uptime = $null
-    try {
-      if ($os.LastBootUpTime) { $uptime = [int64]((Get-Date) - [datetime]$os.LastBootUpTime).TotalSeconds }
-    } catch { $uptime = $null }
-    [PSCustomObject]@{
-      caption      = $os.Caption
-      version      = $os.Version
-      build        = $os.BuildNumber
-      rel_id       = $rel
-      arch         = $os.OSArchitecture
-      hostname     = $(if ($cs -and $cs.DNSHostName) { [string]$cs.DNSHostName } else { [string]$env:COMPUTERNAME })
-      domain       = $domain
-      part_of_domain = $partOfDomain
-      uptime       = $uptime
-    } | ConvertTo-Json -Compress
-  register: _w_os_raw
+    Invoke-SeComponent $doc 'hosting' {
+      param($c)
+      $vmms = Get-Service -Name vmms -ErrorAction SilentlyContinue
+      $c.data = [PSCustomObject]@{
+        Model             = $cs.Model
+        Manufacturer      = $cs.Manufacturer
+        HypervisorPresent = [string]$cs.HypervisorPresent
+        HyperVRole        = $(if ($vmms -and $vmms.Status -eq 'Running') { 'True' } else { 'False' })
+      }
+    }
+    try { $doc | ConvertTo-Json -Depth 8 -Compress }
+    catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }
+  register: _w_sys_doc_raw
   changed_when: false
   failed_when: false
+  no_log: true
+
+- name: "windows | system | parse document"
+  ansible.builtin.set_fact:
+    _w_sys_doc: >-
+      {{ (_w_sys_doc_raw.stdout | default('') | trim | from_json)
+         if (_w_sys_doc_raw.stdout | default('') | trim | length > 0) else {} }}
+  no_log: true
+
+# 문서 → 종전 호출별 register 모양 (stdout / stdout_lines / rc — rc 규칙은 파일 머리말).
+#   _w_os_raw      : 종전 "os version"        — stdout = 구성요소 data 의 JSON (없으면 '')
+#   _w_hosting_raw : 종전 "hosting detection" — stdout = 구성요소 data 의 JSON (없으면 '')
+- name: "windows | system | split document"
+  ansible.builtin.set_fact:
+    _w_os_raw: >-
+      {%- set d = _w_sys_doc if (_w_sys_doc is mapping) else {} -%}
+      {%- set c = d.get('os') if (d.get('os') is mapping) else {} -%}
+      {%- set v = c.get('data') -%}
+      {%- set s = (v | to_json) if (v is mapping) else '' -%}
+      {%- set out = {'stdout': s, 'stdout_lines': ([s] if s else [])} -%}
+      {%- if _w_sys_doc_raw.rc is defined -%}
+        {%- set r = _w_sys_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
+    _w_hosting_raw: >-
+      {%- set d = _w_sys_doc if (_w_sys_doc is mapping) else {} -%}
+      {%- set c = d.get('hosting') if (d.get('hosting') is mapping) else {} -%}
+      {%- set v = c.get('data') -%}
+      {%- set s = (v | to_json) if (v is mapping) else '' -%}
+      {%- set out = {'stdout': s, 'stdout_lines': ([s] if s else [])} -%}
+      {%- if _w_sys_doc_raw.rc is defined -%}
+        {%- set r = _w_sys_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
   no_log: true
 
 - name: "windows | system | parse"
@@ -63,21 +143,6 @@
       {%- else -%}
       {}
       {%- endif -%}
-  no_log: true
-
-- name: "windows | system | hosting detection"
-  ansible.windows.win_shell: |
-    $cs = Get-CimInstance Win32_ComputerSystem
-    $vmms = Get-Service -Name vmms -ErrorAction SilentlyContinue
-    [PSCustomObject]@{
-      Model             = $cs.Model
-      Manufacturer      = $cs.Manufacturer
-      HypervisorPresent = [string]$cs.HypervisorPresent
-      HyperVRole        = $(if ($vmms -and $vmms.Status -eq 'Running') { 'True' } else { 'False' })
-    } | ConvertTo-Json -Compress
-  register: _w_hosting_raw
-  changed_when: false
-  failed_when: false
   no_log: true
 
 - name: "windows | system | parse hosting"

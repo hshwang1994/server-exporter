@@ -12,7 +12,7 @@
     - precheck_bundle `_precheck_task_timeout | default(120)`
     - redfish detect 120 (deadline 90) / collect 600 (deadline 540) / account 240 (deadline 180)
     - ESXi 모듈(community.vmware · esxi_disks) `_e_task_timeout | default(180)`
-    - Windows win_shell 180 (> ansible_winrm_read_timeout_sec 70) — P4 작업 뒤 적용 (strict xfail 로 추적)
+    - Windows win_shell/setup `_win_task_timeout | default(180)` (> ansible_winrm_read_timeout_sec 70)
 """
 from __future__ import annotations
 
@@ -70,12 +70,15 @@ def _default_of(expr):
 LINUX = [f"os-gather/tasks/linux/{n}.yml" for n in
          ("gather_cpu", "gather_hba_ib", "gather_memory", "gather_network", "gather_storage",
           "gather_system", "gather_users", "preflight")]
+# Plan §8-2 (2026-10-03): gather_memory 는 원격 명령을 실행하지 않는다 — gather_system raw gather 의
+#   공유 DMI collector 결과(_l_dmi_raw)만 파싱한다. 원격 태스크가 다시 생기면 아래 timeout 검사는 그대로 적용된다.
+LINUX_NO_REMOTE = {"os-gather/tasks/linux/gather_memory.yml"}
 
 
 @pytest.mark.parametrize("rel", LINUX)
 def test_linux_remote_tasks_have_120s_timeout(rel):
     tasks = _remote_tasks(rel)
-    assert tasks, f"{rel}: 원격 태스크를 찾지 못했다 (walker 점검)"
+    assert tasks or rel in LINUX_NO_REMOTE, f"{rel}: 원격 태스크를 찾지 못했다 (walker 점검)"
     for name, action, timeout in tasks:
         var, val = _default_of(timeout)
         assert (var, val) == ("_os_task_timeout", 120), f"{rel}: {name} ({action}) timeout={timeout!r}"
@@ -144,11 +147,21 @@ ESXI = [f"esxi-gather/tasks/{n}.yml" for n in
          "collect_network_extended", "collect_runtime", "try_one_credential")]
 
 
-@pytest.mark.xfail(strict=True, reason="P4(Windows win_shell 통합) 작업 뒤 §6-3 적용 — 적용하면 이 표식을 지운다")
 @pytest.mark.parametrize("rel", WINDOWS)
 def test_windows_remote_tasks_have_180s_timeout(rel):
-    for name, action, timeout in _remote_tasks(rel):
+    tasks = _remote_tasks(rel)
+    assert tasks, f"{rel}: 원격 태스크를 찾지 못했다"
+    for name, action, timeout in tasks:
         assert _default_of(timeout) == ("_win_task_timeout", 180), f"{rel}: {name} ({action}) timeout={timeout!r}"
+
+
+def test_windows_setup_in_site_has_180s_timeout():
+    for play in _load("os-gather/site.yml"):
+        for t in _walk(play.get("tasks")):
+            if t.get("name") == "windows | setup":
+                assert _default_of(t.get("timeout")) == ("_win_task_timeout", 180)
+                return
+    raise AssertionError("windows | setup 태스크를 찾지 못했다")
 
 
 @pytest.mark.parametrize("rel", ESXI)

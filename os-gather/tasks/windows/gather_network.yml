@@ -7,25 +7,223 @@
 #   - IPv6 주소를 addresses[] 에 family=ipv6 로 함께 낸다 (Linux 와 같은 shape) (B-29).
 #   - adapters[] 를 채운다 (Get-NetAdapter -Physical + HardwareInfo + PnP 제조사) — Linux 와 같은 키 (B-29).
 #   - 인터페이스가 하나도 없으면 섹션 failed + 사유 (B-12).
+#
+# 2026-10-03 (P4 — Windows 원격 호출 통합, win_shell 5 → 2):
+#   - 종전 "dns and gateway" / "interfaces" / "NIC driver map" / "physical adapters" 네 호출을 스냅샷
+#     스크립트 하나로 합쳤다. 팀(LBFO + SET) 은 따로 둔다 (팀 cmdlet 이 없는 SKU 가 흔하고 출력 형식이 다르다).
+#   - 스냅샷은 Get-NetRoute 를 한 번(기본 경로 0.0.0.0/0 과 ::/0 를 같이), Get-NetAdapter 를 한 번 읽어
+#     InterfaceIndex 로 색인한다. 주소마다 Get-NetAdapter 를 다시 부르지 않고(종전 O(주소 수)),
+#     기본 경로도 다시 묻지 않는다 (종전 같은 질의 2회). DNS · Get-NetIPAddress 는 한 번씩.
+#     물리 어댑터 목록은 종전처럼 Get-NetAdapter -Physical 로 받는다 — Physical 은 CIM 공급자가 해석하는
+#     질의 옵션이라 클라이언트 쪽 필터로 같은 결과를 보장할 수 없다.
+#   - 종전 interfaces 스크립트는 meta 결과(gw / gw6) 를 Jinja 로 스크립트에 끼워 넣었다. 이제 같은 값을
+#     스크립트 안에서 meta 구성요소에서 읽는다 (meta 를 못 읽었으면 종전처럼 빈 문자열).
+#   - 출력 = JSON 문서 1개, 구성요소(meta / interfaces / driver_map / adapters) = { ok, error, rows, data }.
+#     구성요소 본문에서 종료 오류가 나면 그 구성요소만 ok=false + error 로 남고 나머지는 그대로 채워진다.
+#   - 공용 조회(read_routes / read_adapters / read_dns) 는 실패를 자기 ok / error 에 남기고, 쓰는 구성요소는
+#     종전 스크립트와 같이 빈 값으로 계속 간다 (종전에는 모두 중간 문장이라 실패해도 다음 줄로 넘어갔다).
+#     driver_map 만 예외 — 종전 driver map 스크립트는 어댑터 조회가 마지막 문장이라 rc 1 이었다.
+#   - "split document" 가 문서를 종전 호출별 register 모양(_w_net_meta_raw / _w_iface_raw / _w_drvmap_raw /
+#     _w_adapters_raw 의 stdout · stdout_lines · rc) 으로 되돌린다. 그 아래 정규화 태스크는 종전 그대로다.
+#     rc 는 그 구성요소가 따로 실행됐다면 냈을 값이다 — 스크립트 전체가 실패하면 그 rc,
+#     구성요소에서 종료 오류가 났으면 1 (powershell.exe -EncodedCommand 의 종료 코드), 아니면 0.
 
-- name: "windows | network | dns and gateway"
+- name: "windows | network | snapshot (routes + adapters + addresses + dns)"
+  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
-    $gw  = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
-            Sort-Object RouteMetric | Select-Object -First 1).NextHop
-    $gw6 = (Get-NetRoute -DestinationPrefix '::/0' -ErrorAction SilentlyContinue |
-            Sort-Object RouteMetric | Select-Object -First 1).NextHop
-    if ($gw6 -and ($gw6 -eq '::')) { $gw6 = $null }
-    $dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
-             Where-Object { $_.ServerAddresses } |
-             ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
-    [PSCustomObject]@{
-      gw  = $gw
-      gw6 = $gw6
-      dns = $dns
-    } | ConvertTo-Json -Compress
-  register: _w_net_meta_raw
+    function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
+      $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
+      $Doc[$Name] = $c
+      try { $null = & $Body $c }
+      catch { $c.ok = $false; $c.error = [string]$_.Exception.Message; if (-not $c.error) { $c.error = [string]$_ } }
+    }
+    $doc = [ordered]@{}
+    # 공용 조회 — 기본 경로(IPv4 / IPv6 한 번에), 어댑터(InterfaceIndex 색인), DNS. 실패해도 쓰는 쪽은 종전처럼
+    # 빈 값으로 계속 간다 (종전 스크립트에서 모두 중간 문장이었다). 예외: driver_map 은 종전에 어댑터 조회가
+    # 마지막 문장이라 rc 1 이었으므로 같은 오류로 실패한다.
+    $routes = $null
+    $na = $null
+    $dns = $null
+    Invoke-SeComponent $doc 'read_routes' {
+      param($c)
+      $script:routes = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0','::/0' -ErrorAction SilentlyContinue)
+    }
+    Invoke-SeComponent $doc 'read_adapters' {
+      param($c)
+      $script:na = @(Get-NetAdapter -ErrorAction SilentlyContinue)
+    }
+    Invoke-SeComponent $doc 'read_dns' {
+      param($c)
+      $script:dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
+                      Where-Object { $_.ServerAddresses } |
+                      ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
+    }
+    $def4 = $routes | Where-Object { $_.DestinationPrefix -eq '0.0.0.0/0' } | Sort-Object RouteMetric | Select-Object -First 1
+    $def6 = $routes | Where-Object { $_.DestinationPrefix -eq '::/0' } | Sort-Object RouteMetric | Select-Object -First 1
+    $naByIdx = @{}
+    foreach ($a in @($na)) { if ($null -ne $a) { $naByIdx[[string]$a.InterfaceIndex] = $a } }
+    Invoke-SeComponent $doc 'meta' {
+      param($c)
+      $gw  = $def4.NextHop
+      $gw6 = $def6.NextHop
+      if ($gw6 -and ($gw6 -eq '::')) { $gw6 = $null }
+      $c.data = [PSCustomObject]@{
+        gw  = $gw
+        gw6 = $gw6
+        dns = $dns
+      }
+    }
+    # production-audit (2026-04-29): primary InterfaceIndex 1회 조회 + interface_index 출력 → 그룹핑 키
+    #   (MAC null/이름 변동 시 NIC 가 분리되는 버그 차단)
+    Invoke-SeComponent $doc 'interfaces' {
+      param($c)
+      $m = $doc['meta']
+      $gw  = if ($m.data -and $m.data.gw)  { [string]$m.data.gw }  else { '' }
+      $gw6 = if ($m.data -and $m.data.gw6) { [string]$m.data.gw6 } else { '' }
+      $primary_idx = $def4.InterfaceIndex
+      Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
+      Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -ne '::1' } |
+      ForEach-Object {
+        $addr    = $_
+        $adapter = $naByIdx[[string]$addr.InterfaceIndex]
+        $isGw    = [bool]($adapter -and ($adapter.InterfaceIndex -eq $primary_idx))
+        $fam     = if ([string]$addr.AddressFamily -eq 'IPv6') { 'ipv6' } else { 'ipv4' }
+        [void]$c.rows.Add([PSCustomObject]@{
+          id              = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
+          name            = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
+          description     = $(if ($adapter) { [string]$adapter.InterfaceDescription } else { $null })
+          interface_index = [int]$addr.InterfaceIndex
+          mac             = $(if ($adapter) { [string]$adapter.MacAddress } else { $null })
+          mtu             = $(if ($adapter) { $adapter.MtuSize } else { $null })
+          speed_mbps      = $(if ($adapter -and $adapter.Speed) { [math]::Round($adapter.Speed / 1000000, 0) } else { $null })
+          status          = $(if ($adapter) { [string]$adapter.Status } else { $null })
+          is_primary      = $isGw
+          family          = $fam
+          address         = [string]$addr.IPAddress
+          prefix          = [int]$addr.PrefixLength
+          gateway         = $(if ($isGw) { if ($fam -eq 'ipv6') { $gw6 } else { $gw } } else { $null })
+        })
+      }
+    }
+    # cycle-016 Phase P: Linux 와 일관 — driver_map (name/driver/vlan_id/bond_master). driver_date 는 수집하지 않는다
+    #   (String.ToString('yyyy-MM-dd') 예외로 driver_map 통째 [] 였던 원인 제거, 2026-06-26 site 실측).
+    Invoke-SeComponent $doc 'driver_map' {
+      param($c)
+      if (-not $doc['read_adapters'].ok) { throw $doc['read_adapters'].error }
+      $na | Where-Object { $_.Status -eq 'Up' -or $_.MediaConnectionState -eq 'Connected' } | ForEach-Object {
+        [void]$c.rows.Add([PSCustomObject]@{
+          name           = $_.Name
+          driver         = $_.DriverDescription
+          driver_version = $_.DriverVersion
+          vlan_id        = $_.VlanID
+          bond_master    = $null
+        })
+      }
+    }
+    # 2026-09-03 (B-29): 물리 NIC 하드웨어 인벤토리 → network.adapters[] (Linux lspci 기반 adapters[] 와 같은 키)
+    Invoke-SeComponent $doc 'adapters' {
+      param($c)
+      $ErrorActionPreference = 'SilentlyContinue'
+      $hw = @{}
+      try {
+        foreach ($h in @(Get-NetAdapterHardwareInfo)) {
+          $pci = $null
+          if ($null -ne $h.Bus -and $null -ne $h.Device -and $null -ne $h.Function) {
+            $pci = ('{0:x4}:{1:x2}:{2:x2}.{3}' -f [int]$h.Segment, [int]$h.Bus, [int]$h.Device, [int]$h.Function)
+          }
+          $hw[[string]$h.Name] = $pci
+        }
+      } catch { }
+      foreach ($a in @(Get-NetAdapter -Physical)) {
+        $mfr = $null
+        try {
+          if ($a.PnPDeviceID) {
+            $pnp = Get-PnpDevice -InstanceId $a.PnPDeviceID
+            if ($pnp -and $pnp.Manufacturer) { $mfr = [string]$pnp.Manufacturer }
+          }
+        } catch { }
+        if (-not $mfr -and $a.DriverProvider -and ([string]$a.DriverProvider -ne 'Microsoft')) { $mfr = [string]$a.DriverProvider }
+        [void]$c.rows.Add([PSCustomObject]@{
+          name         = [string]$a.Name
+          model        = [string]$a.InterfaceDescription
+          manufacturer = $mfr
+          driver       = [string]$a.DriverDescription
+          driver_version = [string]$a.DriverVersion
+          mac          = [string]$a.MacAddress
+          pci          = $(if ($hw.ContainsKey([string]$a.Name)) { $hw[[string]$a.Name] } else { $null })
+          status       = [string]$a.Status
+          speed_mbps   = $(if ($a.Speed) { [math]::Round($a.Speed / 1000000, 0) } else { $null })
+        })
+      }
+    }
+    try { $doc | ConvertTo-Json -Depth 8 -Compress }
+    catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }
+  register: _w_net_doc_raw
   changed_when: false
   failed_when: false
+  no_log: true
+
+- name: "windows | network | parse document"
+  ansible.builtin.set_fact:
+    _w_net_doc: >-
+      {{ (_w_net_doc_raw.stdout | default('') | trim | from_json)
+         if (_w_net_doc_raw.stdout | default('') | trim | length > 0) else {} }}
+  no_log: true
+
+# 문서 → 종전 호출별 register 모양 (stdout / stdout_lines / rc — rc 규칙은 파일 머리말).
+#   _w_net_meta_raw : 종전 "dns and gateway"   — stdout = 구성요소 data 의 JSON (없으면 '')
+#   _w_iface_raw    : 종전 "interfaces"         — stdout_lines = 주소마다 JSON 한 줄
+#   _w_drvmap_raw   : 종전 "NIC driver map"     — stdout_lines = 어댑터마다 JSON 한 줄
+#   _w_adapters_raw : 종전 "physical adapters"  — stdout_lines = 물리 어댑터마다 JSON 한 줄
+- name: "windows | network | split document"
+  ansible.builtin.set_fact:
+    _w_net_meta_raw: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set c = d.get('meta') if (d.get('meta') is mapping) else {} -%}
+      {%- set v = c.get('data') -%}
+      {%- set s = (v | to_json) if (v is mapping) else '' -%}
+      {%- set out = {'stdout': s, 'stdout_lines': ([s] if s else [])} -%}
+      {%- if _w_net_doc_raw.rc is defined -%}
+        {%- set r = _w_net_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
+    _w_iface_raw: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set c = d.get('interfaces') if (d.get('interfaces') is mapping) else {} -%}
+      {%- set rows = c.get('rows') -%}
+      {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+      {%- set lines = rows | map('to_json') | list -%}
+      {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+      {%- if _w_net_doc_raw.rc is defined -%}
+        {%- set r = _w_net_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
+    _w_drvmap_raw: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set c = d.get('driver_map') if (d.get('driver_map') is mapping) else {} -%}
+      {%- set rows = c.get('rows') -%}
+      {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+      {%- set lines = rows | map('to_json') | list -%}
+      {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+      {%- if _w_net_doc_raw.rc is defined -%}
+        {%- set r = _w_net_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
+    _w_adapters_raw: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set c = d.get('adapters') if (d.get('adapters') is mapping) else {} -%}
+      {%- set rows = c.get('rows') -%}
+      {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+      {%- set lines = rows | map('to_json') | list -%}
+      {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+      {%- if _w_net_doc_raw.rc is defined -%}
+        {%- set r = _w_net_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
   no_log: true
 
 - name: "windows | network | parse meta"
@@ -36,42 +234,6 @@
       {%- else -%}
       {}
       {%- endif -%}
-  no_log: true
-
-- name: "windows | network | interfaces"
-  ansible.windows.win_shell: |
-    # production-audit (2026-04-29): primary InterfaceIndex 1회 조회 (기존: IP마다 Get-NetRoute 재호출 — O(N))
-    # + interface_index 출력 → 그룹핑 키로 사용 (MAC null/이름 변동 시 NIC가 분리되는 버그 차단)
-    $gw = '{{ _w_norm_net_meta.gw | default("", true) }}'
-    $gw6 = '{{ _w_norm_net_meta.gw6 | default("", true) }}'
-    $primary_idx = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
-                    Sort-Object RouteMetric | Select-Object -First 1).InterfaceIndex
-    Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -ne '::1' } |
-    ForEach-Object {
-      $addr    = $_
-      $adapter = Get-NetAdapter -InterfaceIndex $addr.InterfaceIndex -ErrorAction SilentlyContinue
-      $isGw    = [bool]($adapter -and ($adapter.InterfaceIndex -eq $primary_idx))
-      $fam     = if ([string]$addr.AddressFamily -eq 'IPv6') { 'ipv6' } else { 'ipv4' }
-      [PSCustomObject]@{
-        id              = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
-        name            = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
-        description     = $(if ($adapter) { [string]$adapter.InterfaceDescription } else { $null })
-        interface_index = [int]$addr.InterfaceIndex
-        mac             = $(if ($adapter) { [string]$adapter.MacAddress } else { $null })
-        mtu             = $(if ($adapter) { $adapter.MtuSize } else { $null })
-        speed_mbps      = $(if ($adapter -and $adapter.Speed) { [math]::Round($adapter.Speed / 1000000, 0) } else { $null })
-        status          = $(if ($adapter) { [string]$adapter.Status } else { $null })
-        is_primary      = $isGw
-        family          = $fam
-        address         = [string]$addr.IPAddress
-        prefix          = [int]$addr.PrefixLength
-        gateway         = $(if ($isGw) { if ($fam -eq 'ipv6') { $gw6 } else { $gw } } else { $null })
-      } | ConvertTo-Json -Compress
-    }
-  register: _w_iface_raw
-  changed_when: false
-  failed_when: false
   no_log: true
 
 # Round 16: JSON null status(미surface adapter)는 'is defined' 통과 → None|lower='none' 누설.
@@ -146,27 +308,11 @@
       {{ out }}
   no_log: true
 
-# cycle-016 Phase P: Linux 와 일관 — driver_map 추가 + adapters
-- name: "windows | network | NIC driver map (Get-NetAdapter)"
-  ansible.windows.win_shell: |
-    Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -or $_.MediaConnectionState -eq 'Connected' } | ForEach-Object {
-      [PSCustomObject]@{
-        name           = $_.Name
-        driver         = $_.DriverDescription
-        driver_version = $_.DriverVersion
-        # driver_date 는 parse(_w_driver_map)에서 미사용(폐기) 필드였고, 값이 [string] 으로 올 때
-        # String.ToString('yyyy-MM-dd') 오버로드 예외 → ForEach 전체 중단 → driver_map 통째 []
-        # 였음 (LBFO 멀티플렉서가 string 반환, 2026-06-26 site 실측). canonical driver_map
-        # (=Linux: name/driver/vlan_id/bond_master)에 없는 필드라 수집 제거 (root cause 제거).
-        vlan_id        = $_.VlanID
-        bond_master    = $null
-      } | ConvertTo-Json -Compress
-    }
-  register: _w_drvmap_raw
-  changed_when: false
-  failed_when: false
-  no_log: true
-
+# cycle-016 Phase P: Linux 와 일관 — driver_map 추가 + adapters (수집은 위 스냅샷의 driver_map 구성요소)
+# driver_date 는 parse(_w_driver_map)에서 미사용(폐기) 필드였고, 값이 [string] 으로 올 때
+# String.ToString('yyyy-MM-dd') 오버로드 예외 → ForEach 전체 중단 → driver_map 통째 []
+# 였음 (LBFO 멀티플렉서가 string 반환, 2026-06-26 site 실측). canonical driver_map
+# (=Linux: name/driver/vlan_id/bond_master)에 없는 필드라 수집 제거 (root cause 제거).
 - name: "windows | network | parse driver_map"
   ansible.builtin.set_fact:
     _w_driver_map: >-
@@ -186,46 +332,7 @@
       {{ out }}
   no_log: true
 
-# 2026-09-03 (B-29): 물리 NIC 하드웨어 인벤토리 → network.adapters[] (Linux lspci 기반 adapters[] 와 같은 키)
-- name: "windows | network | physical adapters (hardware)"
-  ansible.windows.win_shell: |
-    $ErrorActionPreference = 'SilentlyContinue'
-    $hw = @{}
-    try {
-      foreach ($h in @(Get-NetAdapterHardwareInfo)) {
-        $pci = $null
-        if ($null -ne $h.Bus -and $null -ne $h.Device -and $null -ne $h.Function) {
-          $pci = ('{0:x4}:{1:x2}:{2:x2}.{3}' -f [int]$h.Segment, [int]$h.Bus, [int]$h.Device, [int]$h.Function)
-        }
-        $hw[[string]$h.Name] = $pci
-      }
-    } catch { }
-    foreach ($a in @(Get-NetAdapter -Physical)) {
-      $mfr = $null
-      try {
-        if ($a.PnPDeviceID) {
-          $pnp = Get-PnpDevice -InstanceId $a.PnPDeviceID
-          if ($pnp -and $pnp.Manufacturer) { $mfr = [string]$pnp.Manufacturer }
-        }
-      } catch { }
-      if (-not $mfr -and $a.DriverProvider -and ([string]$a.DriverProvider -ne 'Microsoft')) { $mfr = [string]$a.DriverProvider }
-      [PSCustomObject]@{
-        name         = [string]$a.Name
-        model        = [string]$a.InterfaceDescription
-        manufacturer = $mfr
-        driver       = [string]$a.DriverDescription
-        driver_version = [string]$a.DriverVersion
-        mac          = [string]$a.MacAddress
-        pci          = $(if ($hw.ContainsKey([string]$a.Name)) { $hw[[string]$a.Name] } else { $null })
-        status       = [string]$a.Status
-        speed_mbps   = $(if ($a.Speed) { [math]::Round($a.Speed / 1000000, 0) } else { $null })
-      } | ConvertTo-Json -Compress
-    }
-  register: _w_adapters_raw
-  changed_when: false
-  failed_when: false
-  no_log: true
-
+# 2026-09-03 (B-29): 물리 NIC 하드웨어 인벤토리 → network.adapters[] (수집은 위 스냅샷의 adapters 구성요소)
 - name: "windows | network | parse adapters"
   ansible.builtin.set_fact:
     _w_adapters: >-
@@ -254,6 +361,7 @@
 
 # Teaming 수집 (LBFO + Switch Embedded Teaming). Teaming 없는 서버에서도 빈 [] 로 graceful.
 - name: "windows | network | teaming (LBFO + SET)"
+  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
     $ErrorActionPreference = 'SilentlyContinue'
     function Emit($tag,$o){ if($o){ Write-Output ($tag + ' ' + ($o | ConvertTo-Json -Compress -Depth 4)) } }

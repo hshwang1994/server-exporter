@@ -41,7 +41,9 @@ from test_windows_storage_enum_render import (  # noqa: E402
     run_storage,
 )
 
-DISK_TASK = "windows | storage | physical disks"
+# 2026-10-03 (P4): volumes + physical disks 가 win_shell 하나로 합쳐졌다. 디스크 행은 그 문서의
+# disks 구성요소(rows) 에 있다 — 아래 _disk_rows() 가 꺼낸다.
+DISK_TASK = "windows | storage | volumes + physical disks"
 HBA_TASK = "windows | storage | initiator ports + HBA attrs"
 
 PROTOCOL_ENUM = yaml.safe_load(FIELD_DICT.read_text(encoding="utf-8"))["fields"][
@@ -195,7 +197,16 @@ def _run_powershell(script: str, tmp_dir: Path, name: str) -> list[str]:
     return [line for line in out.splitlines() if line.strip()]
 
 
+def _disk_rows(lines: list[str]) -> list[dict]:
+    """volumes + physical disks 스크립트 출력(JSON 문서 1줄) → disks 구성요소의 행 (종전 디스크당 1줄 값)."""
+    assert len(lines) == 1, lines
+    doc = json.loads(lines[0])
+    assert doc["disks"]["ok"] is True and doc["disks"]["error"] is None, doc["disks"]
+    return doc["disks"]["rows"]
+
+
 _DISK_PRELUDE = r"""
+function Get-Volume { }
 function Get-PhysicalDisk { $script:__pd }
 function Get-Partition {
   [CmdletBinding()] param([string]$DriveLetter)
@@ -279,7 +290,7 @@ def disk_runs(tmp_path_factory):
     for form in _FORMS:
         disks = _case_disks(form)
         lines = _run_powershell(_disk_script(disks), tmp, form)
-        runs[form] = (disks, [json.loads(line) for line in lines])
+        runs[form] = (disks, _disk_rows(lines))
     return runs
 
 
@@ -331,7 +342,7 @@ def test_powershell_real_host_120_inputs_render_identically(tmp_path):
          "uid": "6000C295C31A6C4817CC54EDFA38C1B6", "pd_serial": "6000c295c31a6c4817cc54edfa38c1b6",
          "model": "VMware Virtual disk SCSI Disk Device", "size": total, "iface": "SCSI", "dd_order": 0},
     ]
-    printed = [json.loads(line) for line in _run_powershell(_disk_script(disks), tmp_path, "host120")]
+    printed = _disk_rows(_run_powershell(_disk_script(disks), tmp_path, "host120"))
     out = run_storage(printed)
     ev = _evidence_120()
     assert out["storage"]["physical_disks"] == ev["physical_disks"]

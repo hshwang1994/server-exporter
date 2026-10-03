@@ -29,7 +29,9 @@ sys.path.insert(0, str(REPO / "filter_plugins"))
 from jedec_mapper import jedec_to_vendor  # noqa: E402
 
 MEM_YML = REPO / "os-gather" / "tasks" / "windows" / "gather_memory.yml"
-SLOTS_TASK = "windows | memory | Win32_PhysicalMemory slots"
+# 2026-10-03 (P4): total + slots 가 win_shell 하나로 합쳐졌다. 슬롯 행은 그 문서의 slots 구성요소(rows) 에
+# 있고, 파일의 split 태스크가 종전 `_w_mem_slots_raw.stdout_lines` (슬롯마다 JSON 한 줄) 로 되돌린다.
+SLOTS_TASK = "windows | memory | Win32_PhysicalMemory (total + slots)"
 PARSE_TASK = "windows | memory | parse slots + grouping"
 
 
@@ -109,7 +111,11 @@ def test_powershell_speed_prefers_configured_clock_speed(tmp_path):
         capture_output=True, timeout=180, check=False)
     err = proc.stderr.decode("utf-8", errors="replace")
     assert proc.returncode == 0 and not err.strip(), err
-    lines = [ln for ln in proc.stdout.decode("utf-8", errors="replace").splitlines() if ln.strip()]
+    doc_lines = [ln for ln in proc.stdout.decode("utf-8", errors="replace").splitlines() if ln.strip()]
+    assert len(doc_lines) == 1, doc_lines
+    slots = json.loads(doc_lines[0])["slots"]
+    assert slots["ok"] is True and slots["error"] is None, slots
+    lines = [json.dumps(row) for row in slots["rows"]]          # 종전 슬롯당 1줄과 같은 값
     printed = {json.loads(ln)["slot"]: json.loads(ln)["speed_mhz"] for ln in lines}
     assert printed == _EXPECTED
     rendered = {s["slot"]: s["speed_mhz"] for s in _render_slots(lines)}

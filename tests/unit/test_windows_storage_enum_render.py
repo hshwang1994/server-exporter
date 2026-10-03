@@ -65,6 +65,7 @@ def _regex_replace(value, pattern="", replacement="", ignorecase=False, multilin
 def _env():
     env = NativeEnvironment()
     env.filters["from_json"] = json.loads
+    env.filters["to_json"] = json.dumps
     env.filters["bool"] = _bool
     env.filters["regex_replace"] = _regex_replace
     env.filters["normalize_wwn"] = normalize_wwn
@@ -78,10 +79,16 @@ def _render(tmpl, ctx):
 
 
 def run_storage(disks=(), volumes=(), hba=None, ib=None, disk_rc=0):
-    """PowerShell 등록 결과 → gather_storage.yml 의 set_fact 체인(파일 순서) → fragment."""
+    """PowerShell 등록 결과 → gather_storage.yml 의 set_fact 체인(파일 순서) → fragment.
+
+    2026-10-03 (P4): volumes 와 physical disks 는 win_shell 하나(`_w_stor_doc_raw`, JSON 문서 1개) 로
+    합쳐졌다. 같은 입력(볼륨 / 디스크 한 줄씩의 값) 을 그 문서 모양으로 넣고, 파일의 split 태스크가
+    종전 `_w_vol_raw` / `_w_disk_raw` 모양으로 되돌린다. `disk_rc` 는 스크립트 rc 다.
+    """
+    doc = {"volumes": {"ok": True, "error": None, "rows": list(volumes), "data": None},
+           "disks": {"ok": True, "error": None, "rows": list(disks), "data": None}}
     ctx = {
-        "_w_vol_raw": {"stdout_lines": [json.dumps(v) for v in volumes], "rc": 0},
-        "_w_disk_raw": {"stdout_lines": [json.dumps(d) for d in disks], "rc": disk_rc},
+        "_w_stor_doc_raw": {"stdout": json.dumps(doc), "rc": disk_rc},
         "_w_hba_raw": {"stdout": json.dumps(hba) if hba is not None else ""},
         "_w_ib_raw": {"stdout": json.dumps(ib) if ib is not None else ""},
     }

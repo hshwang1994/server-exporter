@@ -14,137 +14,212 @@
 #   - listening_ports: 상한 50 절단 제거
 #   - swap_*_mb: pagefile 조회 실패 시 null (0 placeholder 금지)
 #   - rescue: 9 키를 모두 null 로 낸다 (다른 곳이 runtime 을 만들지 않으므로 키가 사라지면 안 된다)
+#
+# 2026-10-03 (P4 — Windows 원격 호출 통합, win_shell 4 → 1):
+#   - 종전 네 호출(timezone + NTP / firewall profiles / listening TCP ports / pagefile) 을 스크립트 하나로
+#     합쳤다. 출력 = JSON 문서 1개, 구성요소(ntp / firewall / ports / pagefile) = { ok, error, rows, data }.
+#     구성요소 본문에서 종료 오류가 나면 그 구성요소만 ok=false + error 로 남고 나머지는 그대로 채워진다
+#     (예: Get-NetFirewallProfile 이 예외를 던지면 firewall 만 실패, 아래 errors[] scope=firewall 은 종전과 같다).
+#   - "split document" 가 문서를 종전 호출별 register 모양(_w_rt_ntp / _w_rt_fw / _w_rt_ports / _w_rt_pagefile
+#     의 stdout · stdout_lines · rc) 으로 되돌린다. 그 아래 parse · fragment · rescue 는 종전 그대로다.
+#     rc 는 그 구성요소가 따로 실행됐다면 냈을 값이다 — 스크립트 전체가 실패하면 그 rc,
+#     구성요소에서 종료 오류가 났으면 1 (powershell.exe -EncodedCommand 의 종료 코드), 아니면 0.
+#     pagefile 조회 실패(-ErrorAction Stop) 가 rc≠0 → swap_* null 이 되는 종전 판정도 그대로 이어진다.
 
 - block:
-    - name: "windows | runtime | timezone + NTP"
+    - name: "windows | runtime | timezone + NTP + firewall + ports + pagefile"
+      timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
       ansible.windows.win_shell: |
-        # windows-audit (2026-04-29):
-        #   1) timezone: Windows TZ ID → IANA 매핑 (Linux 표기와 일관). 매핑 없으면 raw 유지.
-        #   2) NTP: w32tm /query /status 출력은 OS locale 의존 (en/ko/ja/...).
-        #      → w32tm /query /source (locale-free) 로 동기화 원본을 본다.
-        $tzId = $null
-        try { $tzId = (Get-TimeZone -ErrorAction Stop).Id } catch { $tzId = $null }
-        $tzMap = @{
-          'Korea Standard Time' = 'Asia/Seoul'
-          'Tokyo Standard Time' = 'Asia/Tokyo'
-          'China Standard Time' = 'Asia/Shanghai'
-          'Singapore Standard Time' = 'Asia/Singapore'
-          'India Standard Time' = 'Asia/Kolkata'
-          'Pacific Standard Time' = 'America/Los_Angeles'
-          'Mountain Standard Time' = 'America/Denver'
-          'Central Standard Time' = 'America/Chicago'
-          'Eastern Standard Time' = 'America/New_York'
-          'Hawaiian Standard Time' = 'Pacific/Honolulu'
-          'Alaskan Standard Time' = 'America/Anchorage'
-          'GMT Standard Time' = 'Europe/London'
-          'W. Europe Standard Time' = 'Europe/Berlin'
-          'Romance Standard Time' = 'Europe/Paris'
-          'Central European Standard Time' = 'Europe/Warsaw'
-          'Russian Standard Time' = 'Europe/Moscow'
-          'AUS Eastern Standard Time' = 'Australia/Sydney'
-          'New Zealand Standard Time' = 'Pacific/Auckland'
-          'UTC' = 'UTC'
+        function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
+          $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
+          $Doc[$Name] = $c
+          try { $null = & $Body $c }
+          catch { $c.ok = $false; $c.error = [string]$_.Exception.Message; if (-not $c.error) { $c.error = [string]$_ } }
         }
-        $tzIana = if ($tzId -and $tzMap.ContainsKey($tzId)) { $tzMap[$tzId] } else { $tzId }
-
-        $svc = Get-Service -Name W32Time -ErrorAction SilentlyContinue
-        # 서비스 조회 실패(null) 와 미실행(false) 을 구분한다.
-        $svc_running = if ($svc) { [bool]($svc.Status -eq 'Running') } else { $null }
-
-        # Locale-free sync detection: 조회 실패 → null, 로컬 클럭/free-running → false, 외부 원본 → true
-        $source = $null
-        $is_synced = $null
-        try {
-          $src = w32tm /query /source 2>$null
-          if ($LASTEXITCODE -eq 0 -and $src) {
-            $source = ($src | Select-Object -First 1).ToString().Trim()
-            $is_synced = [bool]($source -and $source -ne 'Local CMOS Clock' -and $source -notmatch 'Free-running')
+        $doc = [ordered]@{}
+        Invoke-SeComponent $doc 'ntp' {
+          param($c)
+          # windows-audit (2026-04-29):
+          #   1) timezone: Windows TZ ID → IANA 매핑 (Linux 표기와 일관). 매핑 없으면 raw 유지.
+          #   2) NTP: w32tm /query /status 출력은 OS locale 의존 (en/ko/ja/...).
+          #      → w32tm /query /source (locale-free) 로 동기화 원본을 본다.
+          $tzId = $null
+          try { $tzId = (Get-TimeZone -ErrorAction Stop).Id } catch { $tzId = $null }
+          $tzMap = @{
+            'Korea Standard Time' = 'Asia/Seoul'
+            'Tokyo Standard Time' = 'Asia/Tokyo'
+            'China Standard Time' = 'Asia/Shanghai'
+            'Singapore Standard Time' = 'Asia/Singapore'
+            'India Standard Time' = 'Asia/Kolkata'
+            'Pacific Standard Time' = 'America/Los_Angeles'
+            'Mountain Standard Time' = 'America/Denver'
+            'Central Standard Time' = 'America/Chicago'
+            'Eastern Standard Time' = 'America/New_York'
+            'Hawaiian Standard Time' = 'Pacific/Honolulu'
+            'Alaskan Standard Time' = 'America/Anchorage'
+            'GMT Standard Time' = 'Europe/London'
+            'W. Europe Standard Time' = 'Europe/Berlin'
+            'Romance Standard Time' = 'Europe/Paris'
+            'Central European Standard Time' = 'Europe/Warsaw'
+            'Russian Standard Time' = 'Europe/Moscow'
+            'AUS Eastern Standard Time' = 'Australia/Sydney'
+            'New Zealand Standard Time' = 'Pacific/Auckland'
+            'UTC' = 'UTC'
           }
-        } catch {}
+          $tzIana = if ($tzId -and $tzMap.ContainsKey($tzId)) { $tzMap[$tzId] } else { $tzId }
 
-        # last sync timestamp from w32tm (locale-aware best-effort, multiple language patterns)
-        $sync = ''
-        try {
-          $w32tm = w32tm /query /status 2>$null
-          if ($w32tm) {
-            $patterns = @(
-              'Last Successful Sync Time',
-              'Letzter erfolgreicher Synchronisierungszeitpunkt'
-            )
-            foreach ($p in $patterns) {
-              $line = ($w32tm | Select-String -SimpleMatch $p | Select-Object -First 1)
-              if ($line) {
-                $sync = ($line.ToString() -split ':\s*', 2)[1]
-                break
+          $svc = Get-Service -Name W32Time -ErrorAction SilentlyContinue
+          # 서비스 조회 실패(null) 와 미실행(false) 을 구분한다.
+          $svc_running = if ($svc) { [bool]($svc.Status -eq 'Running') } else { $null }
+
+          # Locale-free sync detection: 조회 실패 → null, 로컬 클럭/free-running → false, 외부 원본 → true
+          $source = $null
+          $is_synced = $null
+          try {
+            $src = w32tm /query /source 2>$null
+            if ($LASTEXITCODE -eq 0 -and $src) {
+              $source = ($src | Select-Object -First 1).ToString().Trim()
+              $is_synced = [bool]($source -and $source -ne 'Local CMOS Clock' -and $source -notmatch 'Free-running')
+            }
+          } catch {}
+
+          # last sync timestamp from w32tm (locale-aware best-effort, multiple language patterns)
+          $sync = ''
+          try {
+            $w32tm = w32tm /query /status 2>$null
+            if ($w32tm) {
+              $patterns = @(
+                'Last Successful Sync Time',
+                'Letzter erfolgreicher Synchronisierungszeitpunkt'
+              )
+              foreach ($p in $patterns) {
+                $line = ($w32tm | Select-String -SimpleMatch $p | Select-Object -First 1)
+                if ($line) {
+                  $sync = ($line.ToString() -split ':\s*', 2)[1]
+                  break
+                }
               }
             }
+          } catch {}
+
+          # ISO normalize: locale-aware string -> UTC ISO 8601
+          $sync_iso = $null
+          if ($sync) {
+            try { $sync_iso = ([datetime]::Parse($sync.Trim())).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') } catch {}
           }
-        } catch {}
 
-        # ISO normalize: locale-aware string -> UTC ISO 8601
-        $sync_iso = $null
-        if ($sync) {
-          try { $sync_iso = ([datetime]::Parse($sync.Trim())).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') } catch {}
-        }
-
-        @{
-          timezone      = $tzIana
-          timezone_raw  = $tzId
-          w32time_running = $svc_running
-          source        = $source
-          synced        = $is_synced
-          last_sync     = $sync_iso
-        } | ConvertTo-Json -Compress
-      register:    _w_rt_ntp
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "windows | runtime | firewall profiles"
-      ansible.windows.win_shell: |
-        if (Get-Command Get-NetFirewallProfile -ErrorAction SilentlyContinue) {
-          Get-NetFirewallProfile | ForEach-Object {
-            [PSCustomObject]@{
-              profile = $_.Name
-              enabled = [bool]$_.Enabled
-              default_inbound  = [string]$_.DefaultInboundAction
-              default_outbound = [string]$_.DefaultOutboundAction
-            } | ConvertTo-Json -Compress
+          $c.data = @{
+            timezone      = $tzIana
+            timezone_raw  = $tzId
+            w32time_running = $svc_running
+            source        = $source
+            synced        = $is_synced
+            last_sync     = $sync_iso
           }
         }
-      register:    _w_rt_fw
+        Invoke-SeComponent $doc 'firewall' {
+          param($c)
+          if (Get-Command Get-NetFirewallProfile -ErrorAction SilentlyContinue) {
+            Get-NetFirewallProfile | ForEach-Object {
+              [void]$c.rows.Add([PSCustomObject]@{
+                profile = $_.Name
+                enabled = [bool]$_.Enabled
+                default_inbound  = [string]$_.DefaultInboundAction
+                default_outbound = [string]$_.DefaultOutboundAction
+              })
+            }
+          }
+        }
+        Invoke-SeComponent $doc 'ports' {
+          param($c)
+          if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
+            Get-NetTCPConnection -State Listen |
+              Select-Object -ExpandProperty LocalPort -Unique |
+              Sort-Object |
+              ForEach-Object { [void]$c.rows.Add($_) }
+          }
+        }
+        Invoke-SeComponent $doc 'pagefile' {
+          param($c)
+          # 조회 성공 + pagefile 없음 = 빈 rows (합계 0 이 사실). 조회 자체 실패는 ok=false (종전 rc≠0).
+          $pf = @(Get-CimInstance Win32_PageFileUsage -ErrorAction Stop)
+          $pf | ForEach-Object {
+            [void]$c.rows.Add([PSCustomObject]@{
+              name        = $_.Name
+              size_mb     = [int]$_.AllocatedBaseSize
+              used_mb     = [int]$_.CurrentUsage
+              peak_mb     = [int]$_.PeakUsage
+            })
+          }
+        }
+        try { $doc | ConvertTo-Json -Depth 8 -Compress }
+        catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }
+      register:    _w_rt_doc_raw
       changed_when: false
       failed_when: false
       no_log: true
 
-    - name: "windows | runtime | listening TCP ports"
-      ansible.windows.win_shell: |
-        if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
-          Get-NetTCPConnection -State Listen |
-            Select-Object -ExpandProperty LocalPort -Unique |
-            Sort-Object |
-            ForEach-Object { $_ }
-        }
-      register:    _w_rt_ports
-      changed_when: false
-      failed_when: false
+    - name: "windows | runtime | parse document"
+      ansible.builtin.set_fact:
+        _w_rt_doc: >-
+          {{ (_w_rt_doc_raw.stdout | default('') | trim | from_json)
+             if (_w_rt_doc_raw.stdout | default('') | trim | length > 0) else {} }}
       no_log: true
 
-    - name: "windows | runtime | pagefile (swap)"
-      ansible.windows.win_shell: |
-        # 조회 성공 + pagefile 없음 = 빈 출력 (합계 0 이 사실). 조회 자체 실패는 rc≠0.
-        $pf = @(Get-CimInstance Win32_PageFileUsage -ErrorAction Stop)
-        $pf | ForEach-Object {
-          [PSCustomObject]@{
-            name        = $_.Name
-            size_mb     = [int]$_.AllocatedBaseSize
-            used_mb     = [int]$_.CurrentUsage
-            peak_mb     = [int]$_.PeakUsage
-          } | ConvertTo-Json -Compress
-        }
-      register:    _w_rt_pagefile
-      changed_when: false
-      failed_when: false
+    # 문서 → 종전 호출별 register 모양 (stdout / stdout_lines / rc — rc 규칙은 파일 머리말).
+    #   _w_rt_ntp      : 종전 "timezone + NTP"      — stdout = 구성요소 data 의 JSON (없으면 '')
+    #   _w_rt_fw       : 종전 "firewall profiles"   — stdout_lines = 프로필마다 JSON 한 줄
+    #   _w_rt_ports    : 종전 "listening TCP ports" — stdout_lines = 포트 번호 문자열 한 줄씩
+    #   _w_rt_pagefile : 종전 "pagefile (swap)"     — stdout_lines = pagefile 마다 JSON 한 줄
+    - name: "windows | runtime | split document"
+      ansible.builtin.set_fact:
+        _w_rt_ntp: >-
+          {%- set d = _w_rt_doc if (_w_rt_doc is mapping) else {} -%}
+          {%- set c = d.get('ntp') if (d.get('ntp') is mapping) else {} -%}
+          {%- set v = c.get('data') -%}
+          {%- set s = (v | to_json) if (v is mapping) else '' -%}
+          {%- set out = {'stdout': s, 'stdout_lines': ([s] if s else [])} -%}
+          {%- if _w_rt_doc_raw.rc is defined -%}
+            {%- set r = _w_rt_doc_raw.rc -%}
+            {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+          {%- endif -%}
+          {{ out }}
+        _w_rt_fw: >-
+          {%- set d = _w_rt_doc if (_w_rt_doc is mapping) else {} -%}
+          {%- set c = d.get('firewall') if (d.get('firewall') is mapping) else {} -%}
+          {%- set rows = c.get('rows') -%}
+          {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+          {%- set lines = rows | map('to_json') | list -%}
+          {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+          {%- if _w_rt_doc_raw.rc is defined -%}
+            {%- set r = _w_rt_doc_raw.rc -%}
+            {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+          {%- endif -%}
+          {{ out }}
+        _w_rt_ports: >-
+          {%- set d = _w_rt_doc if (_w_rt_doc is mapping) else {} -%}
+          {%- set c = d.get('ports') if (d.get('ports') is mapping) else {} -%}
+          {%- set rows = c.get('rows') -%}
+          {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+          {%- set lines = rows | map('string') | list -%}
+          {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+          {%- if _w_rt_doc_raw.rc is defined -%}
+            {%- set r = _w_rt_doc_raw.rc -%}
+            {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+          {%- endif -%}
+          {{ out }}
+        _w_rt_pagefile: >-
+          {%- set d = _w_rt_doc if (_w_rt_doc is mapping) else {} -%}
+          {%- set c = d.get('pagefile') if (d.get('pagefile') is mapping) else {} -%}
+          {%- set rows = c.get('rows') -%}
+          {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+          {%- set lines = rows | map('to_json') | list -%}
+          {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+          {%- if _w_rt_doc_raw.rc is defined -%}
+            {%- set r = _w_rt_doc_raw.rc -%}
+            {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+          {%- endif -%}
+          {{ out }}
       no_log: true
 
     - name: "windows | runtime | parse + build fragment"
