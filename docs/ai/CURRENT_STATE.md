@@ -27,7 +27,10 @@
 - **Phase 6 (완료, Job 미등록)**: `Jenkinsfile_ci`(Checkout MAIN_SHA → Toolchain → Gate → Finalize Corpus(Python+Groovy) → Budget Self-test), corpus 14 case,
   `finalize_corpus_check.py`, `ci_gate.sh` corpus 단계. GP-11: Layer B 함수를 `scripts/jenkins/se_finalize.groovy` 로 분리하고 `Jenkinsfile_portal` 은 `load`(실패 시
   raw 줄 + UNSTABLE). 등록 절차 `docs/operate/03-job-registration.md`.
-- **진행 중(서브 작업자)**: Linux P3 원격 실행 통합(18→12 / 13→9), Phase 5 WSL 규모 emulation, Phase 7a `prodgen`(생성기 · gate · provenance).
+- **Phase 5 (WSL emulation 완료, 실장비 0대 — `tests/evidence/2026-10-03-phase5-emulation.md`)**: 실패 경로 10~200 host wall ≈ 0.5–0.6 s/host, 요청 == 결과 36회 전부,
+  슬롯당 PSS ≈ 36 MB → **OS forks 기본 상한 50**(`SE_FORKS_CAP_OS` 로 상향), INT 6회 중 1회 weakref 콜백에서 소실 → `--kill-after=90` rc 137 경로 실증, progress 비용 노이즈 이하,
+  Layer A 1000 host 0.2 s, Redfish 에뮬레이터 불가(443 권한 · 포트 고정 · vault). json_only `first_seen` 이벤트 ip null 수정.
+- **진행 중(서브 작업자)**: Linux P3 원격 실행 통합(18→12 / 13→9), Phase 7a `prodgen`(생성기 · gate · provenance).
 - **미실행(권한 차단 — 사용자 결정 대기)**: Jenkins 두 Job 실제 빌드(§10-4 · §10-5), `.33~.38` SSH, BMC/ESXi 실장비, Runner(2.20.3)에서의 timeout 동작 재확인.
   main Job #1 의 Resolve Location 2분 초과(N1)는 Phase 1.5 코드로 고쳤으나 live 확인 전이다.
 

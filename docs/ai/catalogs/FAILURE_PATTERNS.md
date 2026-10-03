@@ -495,3 +495,13 @@
   30,000자 상한을 고정한다.
 - 재발 방지: win_shell 스크립트를 합치거나 늘릴 때 길이 테스트가 먼저 막는다. 설명은 YAML 주석에 둔다 (production 생성기도 스크립트 안 주석을 제거하므로 같은 방향).
 - 관련 rule: rule 10 R3(파일 길이), rule 96 R1(외부 계약 — Windows 명령줄 한도)
+
+## 2026-10-03 — ansible-playbook 이 SIGINT 를 CPython weakref 콜백 안에서 잃고 멈춤 (`--kill-after` 가 받아낸다)
+
+- 카테고리: external-contract-drift (실행 엔진 동작)
+- 발견 위치: Phase 5 WSL emulation `t2_int54_f100` (ansible-core 2.20.7, 100 host, PLAY 1.5 진행 중 INT) — `tests/evidence/2026-10-03-phase5-emulation.md` §Task 2
+- 증상: 6회 INT 중 1회에서 `KeyboardInterrupt` 가 weakref 콜백 안에서 발생해 "Exception ignored in …" 로 삼켜졌다. 핸들러는 살아 있던 worker 2개를 이미 죽였고
+  메인은 남은 98 host 의 OUTPUT 을 낸 뒤 2개 결과를 영원히 기다렸다. `timeout --signal=INT --kill-after=90` 의 KILL 이 rc 137(`timeout_killed`)로 끝냈다.
+- 결과: Layer A 가 kept 98 + filled 2 = 100(진단 보존)로 접수 == 결과를 맞췄다. 90 s 유예 · rc 137 매핑 · Layer A 보충이 이 경우를 위해 있다.
+- 재발 방지: 배치 제한에서 `--kill-after` 를 빼지 않는다(INT 만으로 끝난다고 가정 금지). Runner(2.20.3)에서 재현해 빈도를 확인한다(GP-19).
+- 관련 rule: CLAUDE.md §11(Envelope 보존), rule 80 R1(Gather post 보존)
