@@ -441,7 +441,7 @@ class CallbackModule(CallbackBase):
                 'cred_load_outcome': None,
             }
             self._hosts[host_name] = ctx
-            self._progress(host_name, 'first_seen')
+            ctx['_first_seen_pending'] = True     # ip 를 확정한 뒤 _track 이 first_seen 을 기록한다 (Phase 5 실측: 여기서 쓰면 ip 가 null)
         return ctx
 
     def _track(self, result, ok=False, unreachable=False):
@@ -462,6 +462,8 @@ class CallbackModule(CallbackBase):
                     ip = self._host_vars(result).get('ansible_host')
                     if ip:
                         ctx['ip'] = str(ip)
+            if ctx.pop('_first_seen_pending', False):
+                self._progress(self._host_name(result), 'first_seen', task=self._task_name(result))
 
             if unreachable and not fields.get('ignore_unreachable'):
                 # ignore_unreachable=true 인 태스크(자격 probe 등)는 호스트를 잃지 않는다.

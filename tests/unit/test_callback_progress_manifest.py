@@ -122,7 +122,7 @@ def test_host_lifecycle_events_are_appended_in_order(cb, tmp_path, capsys):
     assert [e["event"] for e in ev] == ["first_seen", "precheck", "cred_load", "auth_proven", "checkpoint", "addon_started", "addon_done", "emitted"]
     assert ev[1]["diagnosis"] == diag and ev[2]["outcome"] == "ok" and ev[2]["location"] == "git"
     assert ev[3]["task"] == "linux | preflight" and all(e["host"] == "10.0.0.1" for e in ev)
-    assert all(e["ip"] == "10.0.0.1" for e in ev[1:]), "ip 는 첫 관측 뒤 모든 줄에 실린다"
+    assert all(e["ip"] == "10.0.0.1" for e in ev), "first_seen 을 포함한 모든 줄에 ip 가 실린다 (Phase 5 실측 뒤 정정)"
     assert all(len(json.dumps(e, ensure_ascii=False)) <= 200 for e in ev if e["event"] != "precheck"), "precheck 외 줄은 200B 이하"
     # CHECKPOINT 는 stdout 으로 나가지 않고 파일에만 남는다
     out = capsys.readouterr().out.strip().splitlines()
