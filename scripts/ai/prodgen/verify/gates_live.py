@@ -236,7 +236,11 @@ def g14_tests_overlay(ctx) -> GateResult:
         with open(archive, "wb") as fh:
             fh.write(store.run(["archive", "--format=tar", prov["main_sha"], "--", "tests", "schema", "requirements-test.txt", "pytest.ini"]))
         with tarfile.open(archive) as tf:
-            tf.extractall(td)
+            # Python 3.12+ warns without an extraction filter; 'data' rejects absolute paths / links outside td (the archive is ours, from the object store)
+            if hasattr(tarfile, "data_filter"):
+                tf.extractall(td, filter="data")
+            else:
+                tf.extractall(td)
         os.unlink(archive)
         # No PYTHONIOENCODING override: tests that spawn repo scripts decode child output with the
         # locale codec, and forcing UTF-8 on the children alone would make such tests fail spuriously.
