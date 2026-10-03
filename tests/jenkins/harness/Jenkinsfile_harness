@@ -3,7 +3,7 @@
 //   Job: clovirone-cicd/clovirone-server-gather-harness — Pipeline from SCM(*/main) · Script Path 이 파일 · Lightweight checkout ·
 //        **시나리오당 빌드 1개**(stash 이름 · artifact 이름 · currentBuild.result 가 빌드 단위라 한 빌드에 여러 시나리오를 섞지 않는다).
 //   하는 일: Jenkinsfile_portal(main checkout 또는 CI 가 archive 한 생성 tree)의 최상위 함수를 build_functions.py 로 **글자 그대로** 잘라
-//           wrapper(장애 주입 · params 그림자 · unstable 기록)와 함께 load → fixture.py 로 현재 빌드에 맞는 입력 준비 → callback_sink.py(POST 수신) →
+//           wrapper(장애 주입 · params 그림자 · unstable 기록)와 함께 load → fixture.py 로 현재 빌드에 맞는 입력 준비 → callback_sink.py(POST 수신, controller loopback) →
 //           sePreserveGatherOutput() / seFinalizeAndCallback() 을 **실제 Jenkins step 으로** 실행 → harness_verdict.py 가 PASS/FAIL/PARTIAL.
 //   운영 코드에는 장애 주입 분기가 없다. 생성 tree 의 함수도 같은 Harness 로 검증한다(FUNCTIONS_SRC=artifact).
 //   산출물: harness_result.json(판정) · harness_functions.groovy(+meta: 원본 해시) · harness_calls.json · harness_control.json ·
@@ -18,7 +18,7 @@ properties([
         choice(name: 'FUNCTIONS_SRC', choices: ['checkout', 'artifact'], description: 'checkout = main 의 Jenkinsfile_portal · artifact = CI 빌드가 archive 한 생성 tree(prodtree.tar.gz)'),
         string(name: 'ARTIFACT_BASE_URL', defaultValue: '', description: 'FUNCTIONS_SRC=artifact: CI 빌드 artifact 기준 URL (…/artifact)'),
         string(name: 'EXPECTED_SHA256', defaultValue: '', description: 'FUNCTIONS_SRC=artifact: 생성 tree Jenkinsfile_portal 의 SHA-256 (CI 가 넘긴 값, 불일치면 중단)'),
-        string(name: 'SINK_PORT', defaultValue: '18080', description: 'callback_sink.py 포트(agent)'),
+        string(name: 'SINK_PORT', defaultValue: '18080', description: 'callback_sink.py 포트 — controller(built-in) 의 127.0.0.1 에 바인딩'),
         booleanParam(name: 'BOUNDED', defaultValue: false, description: 'SE_FINALIZER_BOUNDED=true — 4 시그니처가 승인된 Jenkins 에서만'),
         string(name: 'LOC', defaultValue: 'git', description: 'Callback body 의 loc'),
         string(name: 'DEPLOYMENT_ENV', defaultValue: 'harness', description: 'Callback body 의 deploymentEnvironmentId'),
@@ -74,7 +74,8 @@ timeout(time: 45, unit: 'MINUTES') {
                 if (fileExists("prodtree_src/${path}")) { trusted[path] = readFile(file: "prodtree_src/${path}", encoding: 'UTF-8') }
             }
         } else {
-            sh 'mkdir -p gather_ws/scripts gather_ws/common && cp -a scripts/finalize_gather_output.py scripts/activate_ansible_venv.sh gather_ws/scripts/ && cp -a common/vars gather_ws/common/'
+            // Layer A 가 읽는 정본: common/vars/*.yml + common/tasks/normalize/{init_fragments,build_meta,build_correlation}.yml (Harness #6: normalize 누락 → exit 3)
+            sh 'mkdir -p gather_ws/scripts gather_ws/common/tasks && cp -a scripts/finalize_gather_output.py scripts/activate_ansible_venv.sh gather_ws/scripts/ && cp -a common/vars gather_ws/common/ && cp -a common/tasks/normalize gather_ws/common/tasks/'
         }
 
         // ── ② wrapper 를 붙인 함수 스크립트 (원본 글자 불변 — 해시 기록)
@@ -84,25 +85,37 @@ timeout(time: 45, unit: 'MINUTES') {
         control.source_sha256 = control.source_sha256 ?: meta.source_sha256
         echo "[Harness] scenario=${scenario} functions_sha256=${meta.functions_sha256} source_sha256=${meta.source_sha256} defs=${meta.defs}"
 
-        // ── ③ Callback sink (agent) + controller 도달성 (httpRequest 는 controller 에서 나간다)
-        String agentIp = sh(returnStdout: true, script: "hostname -I 2>/dev/null | awk '{print \$1}'").trim()
+        // ── ③ Callback sink — **controller 의 loopback** 에서 띄운다. finalizer 의 httpRequest 는 node('built-in') 안에서 실행되므로 요청은 controller 에서
+        //      나간다(http_request 1.25 는 node 컨텍스트의 노드에서 실행). Harness #6 에서 agent 에 띄운 sink 는 agent 의 healthz 만 통과하고
+        //      controller 발 POST 는 NoRouteToHost(Runner 인바운드 거부)였다. 도달성 확인도 같은 node('built-in') 안에서 한다.
         String sinkPort = params.SINK_PORT.trim()
-        String sinkUrl = "http://${agentIp}:${sinkPort}"
+        String sinkUrl = "http://127.0.0.1:${sinkPort}"
         Map sinkCfg = (sc.sink ?: [status: '200'])
-        sh 'mkdir -p sink && rm -f sink/record.jsonl sink/pid'
-        sh """JENKINS_NODE_COOKIE=dontKillMe nohup ${PY} tests/jenkins/harness/callback_sink.py --port ${sinkPort} --record "\$PWD/sink/record.jsonl" \\
-                --status '${sinkCfg.status ?: '200'}' --mode '${sinkCfg.mode ?: 'respond'}' --delay '${sinkCfg.delay ?: 0}' --pidfile "\$PWD/sink/pid" --max-seconds 2400 \\
-                > sink/sink.log 2>&1 &
-              sleep 2"""
-        try {
-            httpRequest(url: "${sinkUrl}/healthz", validResponseCodes: '200', timeout: 10)
-            control.sink_reachable = true
-            echo "[Harness] sink ${sinkUrl} — controller 에서 도달 (GET /healthz 는 도달성 확인일 뿐 Callback 증거가 아니다)"
-        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-            throw fie
-        } catch (Exception e) {
-            control.sink_reachable = false
-            echo "[Harness] controller 에서 sink(${sinkUrl}) 에 닿지 못함: ${e.message} — Callback 검증은 PARTIAL"
+        String sinkSrc = readFile(file: 'tests/jenkins/harness/callback_sink.py', encoding: 'UTF-8')
+        sh 'mkdir -p sink && rm -f sink/record.jsonl sink/sink.log sink/pid'
+        node('built-in') {
+            writeFile(file: 'callback_sink.py', text: sinkSrc, encoding: 'UTF-8')
+            sh """mkdir -p sink
+                  if [ -f sink/pid ]; then kill "\$(cat sink/pid)" 2>/dev/null || true; sleep 1; fi
+                  rm -f sink/record.jsonl sink/sink.log sink/pid
+                  PYBIN="\$(command -v python3 || command -v /usr/libexec/platform-python || true)"
+                  echo "[Harness] controller python=\${PYBIN:-absent} \$( [ -n "\$PYBIN" ] && "\$PYBIN" --version 2>&1 )"
+                  if [ -n "\$PYBIN" ]; then
+                      JENKINS_NODE_COOKIE=dontKillMe nohup "\$PYBIN" callback_sink.py --bind 127.0.0.1 --port ${sinkPort} --record "\$PWD/sink/record.jsonl" \\
+                          --status '${sinkCfg.status ?: '200'}' --mode '${sinkCfg.mode ?: 'respond'}' --delay '${sinkCfg.delay ?: 0}' --pidfile "\$PWD/sink/pid" --max-seconds 2400 \\
+                          > sink/sink.log 2>&1 &
+                      sleep 2
+                  fi"""
+            try {
+                httpRequest(url: "${sinkUrl}/healthz", validResponseCodes: '200', timeout: 10)
+                control.sink_reachable = true
+                echo "[Harness] sink ${sinkUrl} — controller(built-in) 에서 도달 (GET /healthz 는 도달성 확인일 뿐 Callback 증거가 아니다)"
+            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                throw fie
+            } catch (Exception e) {
+                control.sink_reachable = false
+                echo "[Harness] controller 에서 sink(${sinkUrl}) 에 닿지 못함: ${e.message} — Callback 검증은 PARTIAL"
+            }
         }
 
         // ── ④ fixture — corpus case 입력 + **현재 빌드**의 manifest
@@ -162,7 +175,8 @@ timeout(time: 45, unit: 'MINUTES') {
         }
 
         // ── ⑧ 관측 수집 — finalizer 가 archive 한 요약·body 를 되가져오고, 호출 기록·제어 정보를 남긴다
-        writeFile(file: 'harness_calls.json', text: groovy.json.JsonOutput.toJson(lib.seHarnessCalls()), encoding: 'UTF-8')
+        // List 인자는 JsonOutput.toJson(Object) 로 해석돼 sandbox 가 거부한다(Harness #6) — writeJSON step 은 List/Map 모두 받는다
+        writeJSON(file: 'harness_calls.json', json: lib.seHarnessCalls())
         sh 'mkdir -p observed'
         try {
             unarchive mapping: ['finalize_summary.json': 'observed/finalize_summary.json', 'callback_body.json': 'observed/callback_body.json']
@@ -172,7 +186,16 @@ timeout(time: 45, unit: 'MINUTES') {
             echo "[Harness] 요약/body unarchive 실패(finalizer 가 archive 전에 끝났을 수 있다): ${e.message}"
         }
         writeFile(file: 'harness_control.json', text: groovy.json.JsonOutput.toJson(control), encoding: 'UTF-8')
-        sh 'if [ -f sink/pid ]; then kill "$(cat sink/pid)" 2>/dev/null || true; fi; sleep 1; true'
+        // sink 종료 + 수신 기록을 controller workspace 에서 agent 로 가져온다(verdict · archive 는 agent 의 sink/ 를 읽는다)
+        String sinkRecord = ''
+        String sinkLog = ''
+        node('built-in') {
+            sh 'if [ -f sink/pid ]; then kill "$(cat sink/pid)" 2>/dev/null || true; fi; sleep 1; true'
+            if (fileExists('sink/record.jsonl')) { sinkRecord = readFile(file: 'sink/record.jsonl', encoding: 'UTF-8') }
+            if (fileExists('sink/sink.log')) { sinkLog = readFile(file: 'sink/sink.log', encoding: 'UTF-8') }
+        }
+        writeFile(file: 'sink/record.jsonl', text: sinkRecord, encoding: 'UTF-8')
+        writeFile(file: 'sink/sink.log', text: sinkLog, encoding: 'UTF-8')
 
         // ── ⑨ 판정 — 기대 불일치는 UNSTABLE(FAIL), 관측 부족은 UNSTABLE(PARTIAL), 도구 실패는 FAILURE
         int rc = sh(returnStatus: true, script: """${PY} tests/jenkins/harness/harness_verdict.py --scenarios tests/jenkins/harness/scenarios.json --scenario ${scenario} \\

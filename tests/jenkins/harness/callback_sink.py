@@ -19,8 +19,6 @@
   - 기록 JSON 한 줄: ts, method, path, status_sent, ok, problems[], body_sha256, hosts, loc, deploymentEnvironmentId, eventUuid, bytes
 GET /healthz 는 200 "ok" — **도달성 확인용일 뿐** Callback 성공의 증거가 아니다 (기록하지 않는다).
 """
-from __future__ import annotations
-
 import argparse
 import hashlib
 import json
@@ -29,7 +27,16 @@ import signal
 import sys
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Dict, List, Optional, Set, Tuple
+
+try:
+    from http.server import ThreadingHTTPServer
+except ImportError:  # Python 3.6 (RHEL 8 platform-python) — the sink may run on the controller, whose python is not ours to choose
+    import socketserver
+
+    class ThreadingHTTPServer(socketserver.ThreadingMixIn, HTTPServer):  # type: ignore[no-redef]
+        daemon_threads = True
 
 KEYS13 = {"schema_version", "target_type", "collection_method", "ip", "hostname", "vendor", "status",
           "sections", "diagnosis", "meta", "correlation", "errors", "data"}
@@ -37,7 +44,7 @@ TARGETS = {"os", "esxi", "redfish"}
 
 
 class SinkState:
-    def __init__(self, statuses: list[int], delay: float, mode: str, record: str, expect_ips: set[str] | None):
+    def __init__(self, statuses: List[int], delay: float, mode: str, record: str, expect_ips: Optional[Set[str]]):
         self.statuses = statuses
         self.delay = delay
         self.mode = mode
@@ -62,8 +69,8 @@ class SinkState:
         sys.stderr.flush()
 
 
-def validate(path: str, raw: bytes, expect_ips: set[str] | None) -> tuple[bool, list[str], dict]:
-    problems: list[str] = []
+def validate(path: str, raw: bytes, expect_ips: Optional[Set[str]]) -> Tuple[bool, List[str], Dict]:
+    problems: List[str] = []
     info: dict = {"hosts": [], "loc": None, "deploymentEnvironmentId": None, "eventUuid": None}
     parts = path.split("?", 1)[0].strip("/").split("/")
     if len(parts) != 4 or parts[:3] != ["api", "jenkins", "gather"] or parts[3] not in TARGETS:
