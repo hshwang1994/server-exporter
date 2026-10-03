@@ -21,8 +21,11 @@
 
 # cycle-016 Phase L/N: slot 단위 emit + manufacturer/part_number/serial 추가
 # windows-audit (2026-04-29): SMBIOSMemoryType 매핑 확장 (DDR/DDR2/DDR3/DDR4/DDR5/LPDDR*),
-#   Speed→ConfiguredClockSpeed fallback (VMware Speed=null, ConfiguredClockSpeed=4800),
 #   SerialNumber 센티널(00000000/00000001/all-zeros) → null 정규화.
+# 2026-10-03 (Q6): speed_mhz 는 **현재 동작 속도** (field_dictionary memory.slots[].speed_mhz) →
+#   ConfiguredClockSpeed(> 0) 우선, 없으면 Speed(모듈 정격 최대 속도), 둘 다 없으면 null.
+#   종전에는 Speed 를 먼저 봐서 정격보다 낮게 동작하는 DIMM 이 정격 속도로 보고됐다.
+#   (VMware 처럼 Speed=null, ConfiguredClockSpeed=4800 인 경우는 종전과 같은 값.)
 - name: "windows | memory | Win32_PhysicalMemory slots"
   ansible.windows.win_shell: |
     Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue | ForEach-Object {
@@ -41,8 +44,8 @@
         $mt = [int]$_.MemoryType
         $type = switch ($mt) { 20 {"DDR"} 21 {"DDR2"} 22 {"DDR2 FB-DIMM"} 24 {"DDR3"} 26 {"DDR4"} default { $null } }
       }
-      $speedRaw = if ($_.Speed -and [int]$_.Speed -gt 0) { [int]$_.Speed }
-                  elseif ($_.ConfiguredClockSpeed -and [int]$_.ConfiguredClockSpeed -gt 0) { [int]$_.ConfiguredClockSpeed }
+      $speedRaw = if ($_.ConfiguredClockSpeed -and [int]$_.ConfiguredClockSpeed -gt 0) { [int]$_.ConfiguredClockSpeed }
+                  elseif ($_.Speed -and [int]$_.Speed -gt 0) { [int]$_.Speed }
                   else { $null }
       $serRaw = [string]$_.SerialNumber
       $mfrRaw = [string]$_.Manufacturer
