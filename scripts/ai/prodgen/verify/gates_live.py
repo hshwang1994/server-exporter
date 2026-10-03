@@ -162,7 +162,7 @@ def g14_tests_overlay(ctx) -> GateResult:
         # overlay tests/, schema/, requirements-test.txt from the object store at main_sha
         archive = os.path.join(td, "overlay.tar")
         with open(archive, "wb") as fh:
-            fh.write(store.run(["archive", "--format=tar", prov["main_sha"], "--", "tests", "schema", "requirements-test.txt"]))
+            fh.write(store.run(["archive", "--format=tar", prov["main_sha"], "--", "tests", "schema", "requirements-test.txt", "pytest.ini"]))
         with tarfile.open(archive) as tf:
             tf.extractall(td)
         os.unlink(archive)
@@ -192,7 +192,7 @@ def g14_tests_overlay(ctx) -> GateResult:
         data = {"rc": proc.returncode, "summary": summary, "failed_count": len(failed), "failed": failed[:200],
                 "error_count": len(errors), "errors": errors[:200],
                 "errors_section": err_section, "stdout_tail": lines[-120:],
-                "overlay": "tests/, schema/, requirements-test.txt from main_sha"}
+                "overlay": "tests/, schema/, requirements-test.txt, pytest.ini from main_sha"}
         return GateResult("G14", "PASS" if proc.returncode == 0 else "FAIL", details, data)
     finally:
         shutil.rmtree(td, ignore_errors=True)

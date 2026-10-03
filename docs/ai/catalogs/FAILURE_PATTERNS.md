@@ -505,3 +505,16 @@
 - 결과: Layer A 가 kept 98 + filled 2 = 100(진단 보존)로 접수 == 결과를 맞췄다. 90 s 유예 · rc 137 매핑 · Layer A 보충이 이 경우를 위해 있다.
 - 재발 방지: 배치 제한에서 `--kill-after` 를 빼지 않는다(INT 만으로 끝난다고 가정 금지). Runner(2.20.3)에서 재현해 빈도를 확인한다(GP-19).
 - 관련 rule: CLAUDE.md §11(Envelope 보존), rule 80 R1(Gather post 보존)
+
+## 2026-10-03 — tests/ 아래 새 conftest.py 가 e2e 의 `from conftest import …` 를 깨뜨림 (모듈 이름 충돌)
+
+- 카테고리: convention-drift (테스트 구조)
+- 발견 위치: prodgen G14(생성 tree + tests overlay) run 3/4 — `tests/unit/prodgen/conftest.py` 추가 뒤 `tests/e2e/test_{output_schema,os_output,logical_volumes,redfish_baseline,cisco_baseline,esxi_output}.py` 수집 오류 6건
+- 증상: `ImportError: cannot import name 'assert_array_element_fields' from 'conftest' (…/tests/unit/prodgen/conftest.py)`. pytest 는 인자 디렉터리의 conftest 를 시작 때 먼저 적재하고
+  (tests/e2e/conftest.py), 수집 중 만난 다른 conftest 를 같은 모듈 이름 `conftest` 로 다시 적재한다(패키지가 아닌 디렉터리). 그 뒤 e2e 모듈의 `from conftest import` 는 **마지막으로
+  적재된** conftest 를 가리킨다. e2e + integration 을 한 번에 돌리지 못하던 기존 현상과 같은 원인.
+- 수정: `tests/unit/prodgen/__init__.py` 를 두어 `prodgen.conftest` 로 적재되게 했다(`ae3ec9e8` 이후 커밋). G14 overlay 에 `pytest.ini` 도 포함(표식 등록).
+- 재발 방지: `tests/` 아래에 conftest.py 를 새로 두면 그 디렉터리는 **패키지(`__init__.py`)** 로 만든다. 장기적으로는 e2e 의 bare `from conftest import` 를
+  `from tests.e2e.conftest import` 로 바꾸는 것이 근본 해결(파일 수가 많아 이번 범위 밖). `pytest tests/unit tests/e2e` 를 **한 번에** 돌려 충돌을 확인한다.
+- 관련 rule: rule 40 R6(pytest 회귀), rule 95 R1
+
