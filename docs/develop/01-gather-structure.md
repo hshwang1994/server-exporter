@@ -146,7 +146,7 @@ Linux 는 환경에 따라 두 가지 모드로 동작한다.
 ```text
 site.yml (Play 1개)
   init_fragments
-  tasks/collect_facts.yml             → _e_raw_facts   (vSphere API: HostSystem facts)
+  tasks/collect_facts.yml             → _e_raw_facts   (자격 probe 의 vmware_host_facts 결과를 재사용 — 없을 때만 모듈 호출, 2026-10-03)
   tasks/collect_config.yml            → _e_raw_config  (vSphere API: HostNetworkSystem 등)
   tasks/collect_datastores.yml        → _e_raw_ds      (vSphere API: HostDatastoreSystem)
   tasks/collect_dns.yml               → DNS 보강

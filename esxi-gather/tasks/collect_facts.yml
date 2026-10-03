@@ -1,8 +1,25 @@
 ---
 # esxi-gather/tasks/collect_facts.yml
 # vmware_host_facts → _e_raw_facts, _e_facts_ok
+#
+# 2026-10-03 (P5): 자격 확인(try_one_credential.yml)이 같은 모듈 vmware_host_facts 를 같은
+#   스키마(summary — 아래 모듈 태스크의 기본값)로 이미 실행했다. 인증에 성공한 그 결과를
+#   _e_probe_facts 로 보관해 두므로, 있으면 그대로 쓰고 모듈은 다시 부르지 않는다
+#   (host 당 모듈 실행 1회 감소). 없을 때만 모듈을 부른다 — 자격 후보 0건으로 probe 를
+#   건너뛴 경우 등. 어느 경로든 _e_raw_facts / _e_facts_ok 의 모양은 같다.
+
+- name: "esxi | collect | reuse credential probe facts"
+  ansible.builtin.set_fact:
+    # summary 스키마 표지(ansible_distribution_version)가 있을 때만 재사용한다 —
+    # facts 가 아닌 dict(예: interpreter discovery 값만 실린 결과)를 쓰지 않기 위해서다.
+    _e_facts_reused: >-
+      {{ (_e_auth_ok | default(false) | bool)
+         and ((_e_probe_facts | default({})) is mapping)
+         and ('ansible_distribution_version' in (_e_probe_facts | default({}))) }}
+  no_log: true
 
 - name: "esxi | collect | vmware_host_facts"
+  timeout: "{{ _e_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   community.vmware.vmware_host_facts:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"
@@ -12,10 +29,14 @@
   delegate_to: localhost
   failed_when: false
   no_log: true
+  when: not (_e_facts_reused | bool)
 
 - name: "esxi | collect | store raw facts"
   ansible.builtin.set_fact:
-    _e_raw_facts: "{{ _e_facts_result.ansible_facts | default({}) }}"
-    _e_facts_ok:  "{{ _e_facts_result is not failed and
-                      _e_facts_result.ansible_facts is defined }}"
+    _e_raw_facts: >-
+      {{ _e_probe_facts if (_e_facts_reused | bool)
+         else (_e_facts_result.ansible_facts | default({})) }}
+    _e_facts_ok: >-
+      {{ (_e_facts_reused | bool)
+         or ((_e_facts_result is not failed) and (_e_facts_result.ansible_facts is defined)) }}
   no_log: true
