@@ -1,0 +1,31 @@
+{
+  "accepted": 1,
+  "kept": 0,
+  "filled": 1,
+  "dropped": [
+    {
+      "file": "output",
+      "line": 1,
+      "reason": "target_type 'redfish' != channel 'os'",
+      "ip": "198.51.100.111"
+    }
+  ],
+  "conflicts": [],
+  "truncated_tail": [],
+  "corrupt_lines": [],
+  "by_origin": {
+    "output": 0,
+    "checkpoint": 0,
+    "synthetic": 1
+  },
+  "outcome": "completed",
+  "rc": 0,
+  "exit_code": 2,
+  "layer": "a",
+  "channel": "os",
+  "build": {
+    "job": "clovirone-cicd/clovirone-server-gather",
+    "number": "111",
+    "url": "https://jenkins.example.invalid/job/clovirone-cicd/job/clovirone-server-gather/111/"
+  }
+}

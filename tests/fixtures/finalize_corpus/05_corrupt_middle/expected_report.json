@@ -1,0 +1,30 @@
+{
+  "accepted": 3,
+  "kept": 2,
+  "filled": 1,
+  "dropped": [],
+  "conflicts": [],
+  "truncated_tail": [],
+  "corrupt_lines": [
+    {
+      "file": "output",
+      "line": 2,
+      "preview": "{\"ip\": \"198.51.100.52\", \"status\":"
+    }
+  ],
+  "by_origin": {
+    "output": 2,
+    "checkpoint": 0,
+    "synthetic": 1
+  },
+  "outcome": "completed",
+  "rc": 0,
+  "exit_code": 2,
+  "layer": "a",
+  "channel": "os",
+  "build": {
+    "job": "clovirone-cicd/clovirone-server-gather",
+    "number": "105",
+    "url": "https://jenkins.example.invalid/job/clovirone-cicd/job/clovirone-server-gather/105/"
+  }
+}

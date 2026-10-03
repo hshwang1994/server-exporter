@@ -1,0 +1,24 @@
+{
+  "accepted": 2,
+  "kept": 0,
+  "filled": 2,
+  "dropped": [],
+  "conflicts": [],
+  "truncated_tail": [],
+  "corrupt_lines": [],
+  "by_origin": {
+    "output": 0,
+    "checkpoint": 0,
+    "synthetic": 2
+  },
+  "outcome": "prep_failed",
+  "rc": 90,
+  "exit_code": 0,
+  "layer": "a",
+  "channel": "redfish",
+  "build": {
+    "job": "clovirone-cicd/clovirone-server-gather",
+    "number": "110",
+    "url": "https://jenkins.example.invalid/job/clovirone-cicd/job/clovirone-server-gather/110/"
+  }
+}

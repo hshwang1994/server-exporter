@@ -1,0 +1,10 @@
+{"ts": "2026-10-03T07:00:50.000000Z", "host": "203.0.113.131", "ip": "203.0.113.131", "event": "emitted"}
+{"ts": "2026-10-03T07:00:51.000000Z", "host": "203.0.113.132", "ip": "203.0.113.132", "event": "emitted"}
+{"ts": "2026-10-03T07:00:52.000000Z", "host": "203.0.113.132", "ip": "203.0.113.132", "event": "emitted"}
+{"ts": "2026-10-03T07:00:01.000000Z", "host": "203.0.113.133", "ip": "203.0.113.133", "event": "first_seen"}
+{"ts": "2026-10-03T07:00:03.000000Z", "host": "203.0.113.133", "ip": "203.0.113.133", "event": "auth_proven", "task": "redfish | gather"}
+{"ts": "2026-10-03T07:00:40.000000Z", "host": "203.0.113.133", "ip": "203.0.113.133", "event": "checkpoint"}
+{"ts": "2026-10-03T07:00:41.000000Z", "host": "203.0.113.133", "ip": "203.0.113.133", "event": "addon_started", "task": "addon | run"}
+{"ts": "2026-10-03T07:00:01.000000Z", "host": "203.0.113.134", "ip": "203.0.113.134", "event": "first_seen"}
+{"ts": "2026-10-03T07:00:09.000000Z", "host": "203.0.113.134", "ip": "203.0.113.134", "event": "precheck", "task": "precheck | bundle", "diagnosis": {"reachable": true, "port_open": false, "protocol_supported": null, "auth_success": null, "failure_stage": "port", "failure_code": "TCP_CONNECTION_REFUSED", "failure_reason": "Redfish 접속이 거부되었습니다. 대상 장비의 Redfish 접속 설정과 방화벽을 확인하세요.", "details": {"channel": "redfish", "checked_ports": [443], "elapsed_ms": 9120}}}
+{"ts": "2026-10-03T07:00:01.000000Z", "host": "203.0.113.135", "ip": "203.0.113.135", "event": "first_seen"}

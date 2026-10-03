@@ -1,0 +1,24 @@
+{
+  "accepted": 1,
+  "kept": 1,
+  "filled": 0,
+  "dropped": [],
+  "conflicts": [],
+  "truncated_tail": [],
+  "corrupt_lines": [],
+  "by_origin": {
+    "output": 0,
+    "checkpoint": 1,
+    "synthetic": 0
+  },
+  "outcome": "timeout_killed",
+  "rc": 137,
+  "exit_code": 0,
+  "layer": "a",
+  "channel": "redfish",
+  "build": {
+    "job": "clovirone-cicd/clovirone-server-gather",
+    "number": "107",
+    "url": "https://jenkins.example.invalid/job/clovirone-cicd/job/clovirone-server-gather/107/"
+  }
+}

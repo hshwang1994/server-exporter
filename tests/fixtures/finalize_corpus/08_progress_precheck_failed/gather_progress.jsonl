@@ -1,0 +1,2 @@
+{"ts": "2026-10-03T07:00:01.000000Z", "host": "198.51.100.81", "ip": "198.51.100.81", "event": "first_seen"}
+{"ts": "2026-10-03T07:00:10.000000Z", "host": "198.51.100.81", "ip": "198.51.100.81", "event": "precheck", "task": "precheck | bundle", "diagnosis": {"reachable": false, "port_open": false, "protocol_supported": null, "auth_success": null, "failure_stage": "reachable", "failure_code": "TARGET_UNREACHABLE", "failure_reason": "대상 서버가 응답하지 않습니다. 서버 전원 상태와 네트워크 연결을 확인하세요.", "details": {"channel": "os", "checked_ports": [5986, 5985, 22], "elapsed_ms": 9120}}}

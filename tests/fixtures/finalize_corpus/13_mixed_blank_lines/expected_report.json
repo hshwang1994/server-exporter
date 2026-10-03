@@ -1,0 +1,52 @@
+{
+  "accepted": 5,
+  "kept": 3,
+  "filled": 2,
+  "dropped": [
+    {
+      "file": "output",
+      "line": 3,
+      "reason": "keys != 13 envelope keys (12)",
+      "ip": "203.0.113.132"
+    },
+    {
+      "file": "output",
+      "line": 6,
+      "reason": "ip '203.0.113.199' not in accepted manifest",
+      "ip": "203.0.113.199"
+    },
+    {
+      "file": "checkpoint",
+      "line": 2,
+      "reason": "ip '203.0.113.136' not in accepted manifest",
+      "ip": "203.0.113.136"
+    }
+  ],
+  "conflicts": [
+    {
+      "ip": "203.0.113.132",
+      "lines": [
+        4,
+        8
+      ],
+      "chosen": 8
+    }
+  ],
+  "truncated_tail": [],
+  "corrupt_lines": [],
+  "by_origin": {
+    "output": 2,
+    "checkpoint": 1,
+    "synthetic": 2
+  },
+  "outcome": "timeout",
+  "rc": 124,
+  "exit_code": 2,
+  "layer": "a",
+  "channel": "redfish",
+  "build": {
+    "job": "clovirone-cicd/clovirone-server-gather",
+    "number": "113",
+    "url": "https://jenkins.example.invalid/job/clovirone-cicd/job/clovirone-server-gather/113/"
+  }
+}

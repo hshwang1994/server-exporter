@@ -1,0 +1,6 @@
+{"ts": "2026-10-03T07:00:01.000000Z", "host": "198.51.100.141", "ip": "198.51.100.141", "event": "first_seen"}
+{"ts": "2026-10-03T07:00:02.000000Z", "host": "198.51.100.141", "ip": "198.51.100.141", "event": "cred_load", "outcome": "ok", "location": "ic"}
+{"ts": "2026-10-03T07:00:12.000000Z", "host": "198.51.100.141", "ip": "198.51.100.141", "event": "lost", "task": "linux | preflight", "detail": "Failed to connect to the host via ssh (synthetic)"}
+{"ts": "2026-10-03T07:00:01.000000Z", "host": "198.51.100.142", "ip": "198.51.100.142", "event": "first_seen"}
+{"ts": "2026-10-03T07:00:02.000000Z", "host": "198.51.100.142", "ip": "198.51.100.142", "event": "cred_load", "outcome": "empty_accounts", "location": "ic"}
+{"ts": "2026-10-03T07:00:12.000000Z", "host": "198.51.100.142", "ip": "198.51.100.142", "event": "lost", "task": "linux | preflight"}

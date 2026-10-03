@@ -1,0 +1,30 @@
+{
+  "accepted": 2,
+  "kept": 1,
+  "filled": 1,
+  "dropped": [],
+  "conflicts": [],
+  "truncated_tail": [
+    {
+      "file": "output",
+      "line": 2,
+      "preview": "{\"schema_version\": \"1\", \"target_type\": \"esxi\", \"collection_method\": \"vsphere_api\", \"ip\": \"203.0.113.42\", \"hostname\": \"es"
+    }
+  ],
+  "corrupt_lines": [],
+  "by_origin": {
+    "output": 1,
+    "checkpoint": 0,
+    "synthetic": 1
+  },
+  "outcome": "timeout",
+  "rc": 124,
+  "exit_code": 2,
+  "layer": "a",
+  "channel": "esxi",
+  "build": {
+    "job": "clovirone-cicd/clovirone-server-gather",
+    "number": "104",
+    "url": "https://jenkins.example.invalid/job/clovirone-cicd/job/clovirone-server-gather/104/"
+  }
+}
