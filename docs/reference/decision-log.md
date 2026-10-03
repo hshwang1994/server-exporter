@@ -87,6 +87,17 @@
   기록하도록 고쳤다.
 - Redfish 에뮬레이터는 WSL 에서 불가(443 바인드 권한 없음 · 모듈 포트 고정 · 표준 vault 복호화 필요) — 성공 경로 규모 측정은 Runner 또는 실장비에서만 가능하다(GP-20).
 
+### 결정 — Phase 7a production 생성기(prodgen) · 7b 보류
+
+- production 은 **고정 main SHA 의 object store 에서 생성한 runtime-only tree** 만 올린다(`production_manifest.yml` allowlist, 언어 명시). 설명성 주석은 언어별 제거기가 전부 제거하고
+  runtime-required(셔뱅 · coding 선언 · 플러그인 `DOCUMENTATION` · argparse 가 읽는 docstring)만 보존한다. 제거를 증명하지 못한 주석(class B)은 provenance 대신 실패 보고 → 승격 차단.
+  gate G01~G17 · drift-check · plumbing promote/restore. 상세 `docs/ai/decisions/ADR-2026-10-03-production-generation.md`, 운영 절차 `docs/operate/09-production-branch.md`.
+- main `f1221234` 기준 생성 tree 192 파일 · 1.04 MB(production 983 · 10.4 MB), 제거 6,377 전행 + 562 꼬리, A 보존 57줄, **B 0**, G01~G13 · G15~G17 PASS, G14 는 저장소 메타/주석을 읽는
+  테스트 7 파일을 `source_text` 로 표식한 뒤 재실행. `adapters/registry.yml` 은 런타임 미참조라 제외(harness 스캔 스크립트만 읽는다).
+- **7b(시험 반영) 보류**: Plan 은 7b 직후 production Job canary(7c)를 완료 조건으로 두는데 이 세션은 Jenkins 빌드를 실행할 수 없다. Phase 1.5·4 파이프라인이 Jenkins 에서 한 번도 돌지
+  않은 상태에서 Portal 이 쓰는 브랜치를 바꾸지 않는다. `promote --dry-run` 결과(parent `4ce90a00`, trailer 포함)만 남긴다. 재개 전제는 운영 문서 3절.
+- `scripts/ai/promote_to_production.sh` 는 shim(exit 1), rule 93 R2 예외 2 · R4, rule 24 R5, rule 90 R5(`--no-verify` 예외 삭제), CLAUDE.md §14 를 prodgen 기준으로 개정.
+
 ### 검증 (오프라인)
 
 WSL(ansible-core 2.20.7): 3채널 `--syntax-check` 통과, Add-on 엔진 테스트 14 passed(hang 포함), `pytest tests/unit` 2730 passed(+ Windows P4 진행 중 파일 1 failed),

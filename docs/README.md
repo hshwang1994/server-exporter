@@ -57,6 +57,7 @@ server-exporter 문서는 읽는 목적에 따라 다섯 갈래로 나뉜다. �
 - [06-rmc-activation.md](operate/06-rmc-activation.md) — HPE RMC Redfish 활성화
 - [07-onsite-capture.md](operate/07-onsite-capture.md) — 폐쇄망 반입 캡처
 - [08-ansible-config.md](operate/08-ansible-config.md) — 프로젝트 Ansible 설정
+- [09-production-branch.md](operate/09-production-branch.md) — production 브랜치 생성 · 검증 · 반영 · 복구 (prodgen)
 
 ### contract
 - [01-input.md](contract/01-input.md) — 호출자가 보내는 것
