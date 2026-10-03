@@ -90,7 +90,7 @@ def test_no_per_build_addon_ref_parameter():
     assert "params.addonRef" not in TEXT and "addonRef" not in VALIDATE
 
 
-@pytest.mark.parametrize("stage", ["Resolve Location", "Validate Schema", "Callback"])
+@pytest.mark.parametrize("stage", ["Resolve Location", "Validate"])   # 2026-10-03: Validate Schema·Callback stage 는 없다
 def test_other_stages_are_untouched_by_addon(stage):
     assert "addon" not in _stage(stage).lower()
 

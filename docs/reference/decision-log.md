@@ -8,6 +8,64 @@
 
 > 최종 갱신: 2026-10-03
 
+## 2026-10-03 — Gathering 개선 Phase 2~4: 정확성 정정 · Redfish 호출 절감 · 시간 예산 · 마무리(finalization) · Callback 재설계
+
+### 배경
+
+2026-10-03 승인 Plan(Astra 3차 검토 조건부 통과)의 Phase 2(정확성) · 3(성능) · 4(timeout · partial failure · finalization · Callback) 를
+같은 날 구현했다. 대량 host 에서 (1) 결과 보존과 Callback 이 "정상 경로" 에만 있어 일부 실패가 전체 미전달로 번지고, (2) timeout 이 작업량과
+무관하게 고정돼 있으며, (3) 채널별 중복 호출과 침묵 실패가 있었다. 모든 변경은 오프라인(단위 · 렌더 · 재생 · WSL 실제 ansible 실행)으로
+검증했고 실장비 · Jenkins 실행은 하지 못했다(세션 실행 환경이 거부 — `docs/ai/NEXT_ACTIONS.md` GP-1~5).
+
+### 결정 — Pipeline (Phase 4)
+
+- **결과 전달은 stage 가 아니라 pipeline `post { always }`** 다. `Validate Schema`(정적 FAIL 게이트) · `Callback` stage 를 없앴다. field_dictionary
+  정합은 `scripts/ai/ci_gate.sh`(커밋 전 · CI)가 맡는다 — 정적 검사가 수집 결과의 전달을 막지 않는다. 마무리는 `timeout(720 s){ node('built-in') }`
+  합산 제한 하나이고 node 진입 뒤 남은 시간으로 회수 · 조립 · Callback 예산을 다시 나눈다(단축 사다리: Layer A 생략 → unarchive 생략 → 시도 축소 → 미시도 기록).
+- **배치 제한은 셸 `timeout --signal=INT --kill-after=90`** 이고 집행값은 `ansible-playbook` **직전에 재계산**한다(`scripts/gather_budget.sh`:
+  전체 150 분 − 마무리 예비 990 s, stage 잔여(115 분) − 유예 − post, host 수 · 채널 · forks 기반 상한, 검증 강제값 중 최소; 120 s 미만이면 시작하지
+  않는다). node 진입 시 값은 로그용 예상값일 뿐이다 (Astra 3차 acceptance ①). INT 는 ansible 이 자식을 정리하고 완료된 OUTPUT 줄이 남는다는 WSL 실측에 따른 선택.
+- **2계층 마무리**: Layer A(`scripts/finalize_gather_output.py`, agent, Gather post) 가 OUTPUT → CHECKPOINT → 진행 기록 기반 합성 봉투로 접수 수 == 결과 수를
+  맞추고 보고서를 남긴다. Layer B(Groovy `@NonCPS`, 컨트롤러)는 Layer A 결과를 우선 쓰고 없을 때만 최소 경로로 같은 수를 맞춘다(진행 기록 기반 stage
+  분류는 하지 않는다 — 보고서에 남는 차이). 선택 규칙은 출처 우선순위(output > checkpoint > synthetic) → 같은 출처는 뒤 줄 우선, 상충 OUTPUT 은 conflicts 로 보고.
+- **콜백(json_only)이 진행 이벤트를 파일로 남긴다**: host 당 append JSONL(first_seen · precheck · cred_load · auth_proven · checkpoint · addon_started ·
+  addon_done · emitted · lost), OUTPUT · CHECKPOINT 줄은 flush+fsync, 접수 manifest 와 inventory 대조. 강제 종료 뒤 `on_stats` 가 돌지 않는다는 실측이 근거다.
+- **Add-on 은 조립 뒤(D8)**: 조립 → `inject schema_version` → `CHECKPOINT`(debug, 콜백이 `gather_checkpoint.jsonl` 에 보존) → Add-on → `_output` 의
+  data.addon · errors[] 1건 · meta.finished_at/duration_ms 에만 결합 → OUTPUT. status · sections · diagnosis 는 CHECKPOINT 값 그대로. hook 은 fragment 를
+  만들지 않는다. Add-on 도중 끊긴 host 는 CHECKPOINT + "추가 수집 중 처리가 중단되어 …" 1건으로 복원된다.
+  **2026-09-21 의 "Add-on 전용 timeout 을 두지 않는다" 는 바뀌었다**: role 안 태스크 각각에 `include_role apply: timeout`(기본 300 s, `_addon_task_timeout`)을
+  건다 — hang 한 태스크 하나를 끊는 2차 장치이고 role 전체 · host 상한이 아니다(WSL 실측: apply.timeout 은 task 단위; `sleep 40` 이 3 s 에 끊겨 rescue 로 감).
+- **task-level `timeout`** (개별 hang 격리, host 상한 아님): Linux raw/setup/command/shell 120 s · 자격 probe 60 s · precheck 120 s · ESXi 모듈 180 s ·
+  Redfish detect 120 / collect 600 / account 240 s(모듈 `deadline` 90 / 540 / 180 이 먼저 끝나 정상 경로에서는 register 가 남는다). Windows win_shell 180 s 는
+  P4 통합 작업 뒤 적용(strict xfail 로 추적). N6: Linux `add_host` 에 `ansible_timeout: 15` — ssh 플러그인이 cfg `timeout`(60) 을 `ssh_common_args` 보다 먼저 내보내
+  종전 `ConnectTimeout=15` 는 무시됐다(WSL `-vvvv` 실측).
+- **Redfish task timeout 뒤 인증 3분류(D7)**: 모듈이 시도(attempt)마다 `<SE_AUTH_EVIDENCE_DIR>/<ip>/<attempt_id>.json` 을 시작 즉시 status null 로 새로
+  만들고 첫 자격 응답에서 채운다(비밀값 없음 · 원자적 쓰기 · 5 s throttle). rescue 는 **현재 attempt 의 파일만** 읽어 401 → 기존 "표준 후보 전원 401" 규칙,
+  2xx 뒤 정지 → `gather/GATHER_FAILED` + auth_success true, 증거 없음 · 익명 · 식별자 불일치 → `gather/GATHER_FAILED` + auth_success null(`stopped_before_auth`,
+  문장 gather_internal). 과거 시도의 401 로 현재 시도를 분류하지 않고, 표준 계정 timeout 은 recovery 에 들어가지 않는다 (Astra 3차 acceptance ②). 새 failure code 없음.
+- 온라인 Runner 부재는 접수 후 실행 실패(outcome `no_agent`) 로 분류해 전 host `OUTPUT_BUILD_FAILED` 합성 봉투를 Callback 한다 (Q2′ 기본 방향).
+
+### 결정 — 정확성 · 성능 (Phase 2 · 3, 이미 commit 9f94c2ef · b935b20e · 6371ba57 · a38c6339 + 이번 Linux/ESXi)
+
+- 실패 envelope shape 를 `build_failed_output.yml` 모양으로 통일(json_only 보충 · redfish always). Redfish: 멤버 수준 401/403 은 host failed 판정에서 제외
+  (`_CODE_NON_BLOCKING_SUBRESOURCE`), 페이지네이션(opaque nextLink · same-origin · 순환 차단), memory 용량 미확인 구분, firmware 동일 version 중복만 GET 전 제거
+  (first-seen, id 불변) + 대체 후보 fallback + Name-only 상세 GET, NDF/WWN 정규화, `_confirm_account_state` 판정 반영(C9), `mode: detect`, 200 응답 캐시(deep copy),
+  `deadline`, 응답 8 MiB cap, 마지막 후보 뒤 backoff 생략(N3). 재생 요청 수 R740 168→137 · CSUS 218→134 · DL380 132→131 · SR650 124→123, 추가 요청 0.
+- Windows: BusType 공식 표(enum 밖 → null + detail), 정수형/문자열 통합 처리, HBA 미매칭 시 첫 어댑터 차용 금지, ConnectionType 1/2, speed 는 ConfiguredClockSpeed 우선.
+- ESXi: 존재하지 않는 `portRange` → `endPort` 읽기, Host 선택 규칙(유일 Host / 안정 식별자 / 모호 시 오류 — `hosts[0]` 금지), view 1회, `httpConnectionTimeout`
+  + SmartConnect 구간 소켓 기본 timeout. P5: 자격 probe 의 `vmware_host_facts` 결과를 `_e_probe_facts` 로 보관해 `collect_facts.yml` 이 재사용(모듈 실행 13→12;
+  `collect_dns` 는 `esxi_disks` 와 출력이 같지 않아 유지).
+- Linux C1/C2/C7: dmidecode rc · stderr 마커, kB/TB 단위, 레코드 경계(빈 줄 또는 다음 Handle), speed 는 Configured 우선(dmidecode<3.2 `Configured Clock Speed`
+  동일 취급), 총량>0 & DIMM 0 → memory 오류 1건; **비루트 dmidecode 가 머리말만 찍고 rc≠0 으로 끝나면 sudo 재시도** (종전 조건은 출력이 비었을 때만이라 재시도가
+  일어나지 않았다 — 검수 중 발견); lsblk 실패 마스킹 제거 + rc/상태 분류 + 레거시 열 1회 fallback + `from_json` 가드 + df `timeout 20`; sysfs 속성 읽기 실패 마커 → storage 오류.
+- `speed_mhz` 는 세 채널 모두 "현재 동작 속도" (field_dictionary 정합, Q6 — R760 정격 5600 → 동작 4400 으로 값이 바뀔 수 있다).
+
+### 검증 (오프라인)
+
+WSL(ansible-core 2.20.7): 3채널 `--syntax-check` 통과, Add-on 엔진 테스트 14 passed(hang 포함), `pytest tests/unit` 2730 passed(+ Windows P4 진행 중 파일 1 failed),
+`pytest tests/e2e` 761 passed. Windows: 신규 단위 · e2e(auth evidence 18 · 3분류 18 · finalize 13 · budget 8 · Jenkinsfile 계약 ~100). jenkins-prod 선언형 린터 validated.
+**실행하지 않은 것**: Jenkins 두 Job 실제 빌드(§10-4 · §10-5), `.33~.38` SSH, BMC/ESXi 실장비 — 권한 차단. "완료" 가 아니라 "코드 수준 완료 · 실환경 미검증" 이다.
+
 ## 2026-10-03 — 파이프라인 입구를 agent 없이: Validate → Resolve Location(`readTrusted`), 결과는 post{always} 에서 보존
 
 ### 배경

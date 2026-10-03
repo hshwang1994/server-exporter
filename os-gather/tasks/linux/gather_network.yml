@@ -133,6 +133,7 @@
 # 수집 — 두 경로 공통 (ip 명령 + /sys/class/net + /etc/resolv.conf + lspci + ethtool)
 # =============================================================================
 - name: "linux | network | raw gather"
+  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     # --- DNS (systemd-resolved 우회 — 127.0.0.53 stub 회피) ---

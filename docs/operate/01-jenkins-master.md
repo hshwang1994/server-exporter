@@ -261,7 +261,7 @@ Job 이름이 패턴과 일치하면 권한이 자동 적용되므로 신규 Job
 
 | 증상 | 원인 / 해결 |
 |------|------------|
-| Gather / Validate Schema 가 `[venv] Ansible 실행환경(venv)을 찾지 못했습니다` 로 실패 | Agent 에 venv 가 없거나 파이프라인이 아는 경로 밖 — 02-agent-node.md 5절 · 9절 (`SE_ANSIBLE_VENV`) |
+| Gather 가 `[venv] Ansible 실행환경(venv)을 찾지 못했습니다` 로 실패 | Agent 에 venv 가 없거나 파이프라인이 아는 경로 밖 — 02-agent-node.md 5절 · 9절 (`SE_ANSIBLE_VENV`) |
 | `ansiblePlaybook()` 스텝을 쓰는 다른 파이프라인이 실패 | `Ansible installations` 등록 누락 — 6절 "Ansible 플러그인 경로 설정" 다시 확인 |
 | `Could not find credentials entry with ID 'server-gather-vault-password'` | 7절 vault credential 등록 안 됨 |
 | Job 은 보이는데 Build 버튼이 없음 | RBAC 의 Item Role pattern 미스매치 — 8절 |

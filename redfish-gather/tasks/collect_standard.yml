@@ -33,6 +33,9 @@
     # try_one_account.yml 이 후보마다 1건씩 append 하고, site.yml rescue 가
     # errors[].detail 로 합류시킨다 (message 는 5문장 정본 그대로).
     _rf_failed_attempt_notes: "{{ _rf_failed_attempt_notes | default([]) }}"
+    # 2026-10-03 (D7): 진행 중인 시도 없음. try_one_account.yml 이 모듈 호출 직전에 채우고 결과 기록 뒤 비운다.
+    _rf_attempt_id: "{{ _rf_attempt_id | default('') }}"
+    _rf_attempt_seq: "{{ _rf_attempt_seq | default(0) }}"
   no_log: true
 
 - name: "redfish | collect_standard | warn no accounts"
@@ -56,7 +59,14 @@
 #   뭉개면 운영자가 원인(자격증명 미배치)을 볼 수 없다.
 - when: (_cred_reason | default('vendor_unresolved')) == 'vendor_unresolved'
   block:
+    - name: "redfish | collect_standard | mark anonymous attempt in flight"
+      ansible.builtin.set_fact:
+        _rf_attempt_seq: "{{ (_rf_attempt_seq | default(0) | int) + 1 }}"
+        _rf_attempt_id:  "anonymous-0-{{ (_rf_attempt_seq | default(0) | int) + 1 }}"
+      no_log: true
+
     - name: "redfish | collect_standard | empty-credential attempt"
+      timeout: "{{ _rf_task_timeout | default(600) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 인자 전달 (Additive — 빈 자격 경로).
       redfish_gather:
         bmc_ip:         "{{ _rf_ip }}"
@@ -66,12 +76,20 @@
         verify_ssl:     false
         manager_layout: "{{ _rf_adapter_manager_layout | default('') }}"
         deadline:       "{{ _rf_deadline | default(540) }}"
+        attempt:
+          evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"
+          id:           "{{ _rf_attempt_id }}"
+          build_id:     "{{ lookup('env', 'SE_BUILD_ID') }}"
+          event_uuid:   "{{ lookup('env', 'SE_EVENT_UUID') }}"
+          label:        "{{ 'no-credential' }}"
+          role:         "{{ 'anonymous' }}"
       register:    _rf_raw_collect
       failed_when: false
       no_log: true
 
     - name: "redfish | collect_standard | set ok (empty creds)"
       ansible.builtin.set_fact:
+        _rf_attempt_id: ''
         _rf_collect_ok: >-
           {{ _rf_raw_collect is not failed and
              (_rf_raw_collect.status | default('failed')) != 'failed' }}

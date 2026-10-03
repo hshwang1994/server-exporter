@@ -31,6 +31,7 @@
 # Python 경로: setup facts (1순위)
 # =============================================================================
 - name: "linux | system | setup"
+  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   when: _l_python_mode == 'python_ok'
   ansible.builtin.setup:
     gather_subset: ['hardware', 'network', 'virtual', 'distribution']
@@ -53,6 +54,7 @@
 # Raw gather — 두 경로 공통 (os-release / uname / hostname / selinux / DMI sysfs)
 # =============================================================================
 - name: "linux | system | raw gather (os-release/uname/hostname/dmi)"
+  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
@@ -109,6 +111,7 @@
 # 모르면 null: 명령 부재 시 값을 비워 보낸다 (0 / false 로 단정하지 않는다).
 # =============================================================================
 - name: "linux | system | gather runtime (timezone/ntp/firewall/listen/swap)"
+  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
@@ -295,6 +298,7 @@
 # Python 경로 식별자 — setup fact → DMI direct-read(become) → raw DMI
 # =============================================================================
 - name: "linux | system | DMI serial precheck"
+  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   when: _l_python_mode == 'python_ok'
   ansible.builtin.command: test -r /sys/class/dmi/id/product_serial
   register: _l_dmi_serial_access
@@ -303,6 +307,7 @@
   no_log: true
 
 - name: "linux | system | DMI uuid precheck"
+  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   when: _l_python_mode == 'python_ok'
   ansible.builtin.command: test -r /sys/class/dmi/id/product_uuid
   register: _l_dmi_uuid_access
@@ -329,6 +334,7 @@
      (_l_uuid_from_setup | default(none)) is none)
   block:
     - name: "linux | system | DMI direct-read serial"
+      timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       when: (_l_serial_from_setup | default(none)) is none  # rule 95 R1 R5 ok: serial raw fallback 진입
       ansible.builtin.command: cat /sys/class/dmi/id/product_serial
       become: true
@@ -338,6 +344,7 @@
       no_log: true
 
     - name: "linux | system | DMI direct-read uuid"
+      timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       when: (_l_uuid_from_setup | default(none)) is none  # rule 95 R1 R5 ok: uuid raw fallback 진입
       ansible.builtin.command: cat /sys/class/dmi/id/product_uuid
       become: true

@@ -44,7 +44,7 @@ options:
   verify_ssl: optional, bool, default false
 '''
 
-import copy, json, re, socket, sys, time, traceback
+import copy, datetime, json, os, re, socket, sys, time, traceback
 import urllib.parse as _urlparse
 
 # ── 단위 변환 상수 (cycle 2026-06-04 R-4 — 매직넘버 명명) ──────────────────────
@@ -230,11 +230,114 @@ def _reset_auth_observation():
 def _record_auth_status(status):
     if _AUTH_OBSERVATION['first_status'] is None and isinstance(status, int) and status:
         _AUTH_OBSERVATION['first_status'] = status
+        _evidence_auth_status(status)
 
 
 def auth_evidence():
     """module result 로 내보낼 구조화 인증 관측값 (문자열 파싱 없음)."""
     return {'first_auth_status': _AUTH_OBSERVATION['first_status']}
+
+
+# ── attempt 단위 인증 증거 파일 (2026-10-03, Plan §6-3 D7) ──────────────────────────
+# task timeout(backstop)으로 이 프로세스가 끊기면 Ansible 에는 register 가 남지 않는다. 그때 rescue 가 "자격 오류" 를
+# 추정하지 않도록, 모듈은 시작 즉시 `<evidence_dir>/<ip>/<attempt_id>.json` 을 status null 로 **새로** 만들고(같은 이름의
+# 이전 파일은 덮어쓴다) 자격을 실은 **첫 응답**을 받는 순간 first_auth_status 를 채운다. 파일에는 비밀값이 없다
+# (build/event/ip/attempt 식별자 · 후보 label/role · auth_mode · 첫 status · 요청 수 · 마지막 요청 경로 · 시각).
+# 쓰기는 원자적(os.replace)이고 요청마다 쓰지 않는다 — 5초에 한 번만 last_request 를 갱신한다 (첫 status 는 즉시).
+# attempt 인자가 없으면(Jenkins 밖 실행) 아무 것도 쓰지 않는다. 기록 실패는 수집을 막지 않는다.
+_EVIDENCE = {'path': None, 'data': None, 'last_write': 0.0, 'dirty': False}
+EVIDENCE_WRITE_INTERVAL = 5.0
+
+
+def _utc_now_iso():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')
+
+
+def _evidence_reset():
+    _EVIDENCE.update({'path': None, 'data': None, 'last_write': 0.0, 'dirty': False})
+
+
+def _evidence_begin(attempt, bmc_ip, username):
+    """attempt(dict: evidence_dir · id · build_id · event_uuid · label · role) → 파일 초기화. dir 또는 id 가 없으면 끔."""
+    _evidence_reset()
+    if not isinstance(attempt, dict):
+        return
+    ev_dir = str(attempt.get('evidence_dir') or '').strip()
+    att_id = str(attempt.get('id') or '').strip()
+    if not ev_dir or not att_id:
+        return
+    safe_id = re.sub(r'[^A-Za-z0-9._-]', '_', att_id)[:120]
+    safe_ip = re.sub(r'[^A-Za-z0-9._:-]', '_', str(bmc_ip))[:64]
+    _EVIDENCE['path'] = os.path.join(ev_dir, safe_ip, safe_id + '.json')
+    _EVIDENCE['data'] = {
+        'schema': 1,
+        'build_id': str(attempt.get('build_id') or ''),
+        'event_uuid': str(attempt.get('event_uuid') or ''),
+        'ip': str(bmc_ip),
+        'attempt_id': att_id,
+        'label': (str(attempt.get('label')) if attempt.get('label') is not None else None),
+        'role': (str(attempt.get('role')) if attempt.get('role') is not None else None),
+        'auth_mode': 'credentialed' if username else 'anonymous',
+        'first_auth_status': None,
+        'first_auth_at': None,
+        'started_at': _utc_now_iso(),
+        'updated_at': None,
+        'requests_sent': 0,
+        'last_request': None,
+    }
+    _evidence_write(force=True)
+
+
+def _evidence_write(force=False):
+    path, data = _EVIDENCE['path'], _EVIDENCE['data']
+    if not path or data is None:
+        return
+    now = time.monotonic()
+    if not force and (now - _EVIDENCE['last_write']) < EVIDENCE_WRITE_INTERVAL:
+        _EVIDENCE['dirty'] = True
+        return
+    data['updated_at'] = _utc_now_iso()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = '%s.tmp.%d' % (path, os.getpid())
+        with open(tmp, 'w', encoding='utf-8') as fh:
+            json.dump(data, fh, ensure_ascii=False, separators=(',', ':'))
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+        _EVIDENCE['last_write'] = now
+        _EVIDENCE['dirty'] = False
+    except OSError:
+        pass
+
+
+def _evidence_request(path):
+    """요청 1건 — 수와 마지막 경로만 (비밀값 · 응답 본문 없음). 5초 throttle."""
+    data = _EVIDENCE['data']
+    if data is None:
+        return
+    data['requests_sent'] = int(data.get('requests_sent') or 0) + 1
+    data['last_request'] = str(path)[:200]
+    _evidence_write()
+
+
+def _evidence_auth_status(status):
+    data = _EVIDENCE['data']
+    if data is None or data.get('first_auth_status') is not None:
+        return
+    data['first_auth_status'] = status
+    data['first_auth_at'] = _utc_now_iso()
+    _evidence_write(force=True)
+
+
+def _evidence_finish():
+    if _EVIDENCE['data'] is not None and _EVIDENCE['dirty']:
+        _evidence_write(force=True)
+
+
+def evidence_state():
+    """테스트 · 디버그용 — 현재 증거 파일 경로와 내용 사본."""
+    return {'path': _EVIDENCE['path'], 'data': (dict(_EVIDENCE['data']) if _EVIDENCE['data'] else None)}
 
 
 # ── 정보성 통보 (notices) — 2026-08-12 신설 ──────────────────────────────────
@@ -372,6 +475,7 @@ def _get(bmc_ip, path, username, password, timeout, verify_ssl):
 
 
 def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
+    _evidence_request(path)
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     # cycle 2026-04-30 hotfix: User-Agent 추가가 Lenovo XCC 일부 펌웨어 reject 유발 (사이트 검증).
     # Accept + OData-Version 만 유지 (cycle 전부터 동작 검증된 헤더 셋).
@@ -411,6 +515,7 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
 
 def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
     """P2 (cycle 2026-04-28): AccountService 계정 생성 (POST /Accounts)."""
+    _evidence_request(path)
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     try:
         payload = json.dumps(body).encode('utf-8')
@@ -449,6 +554,7 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
 def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
     """F50 phase 4 (cycle 2026-05-06): DELETE method 추가 — Lenovo XCC 권한 cache 손상 시
     DELETE + POST 재생성 fallback. Dell iDRAC 는 DELETE 미지원 (PATCH-only)."""
+    _evidence_request(path)
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     _invalidate_response_cache()   # P2
     req = urlreq.Request(url, method='DELETE', headers={
@@ -482,6 +588,7 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
     extra_headers (2026-08-12): If-Match 를 **요구하는 Family 에서만** 실어 보낸다.
       전 vendor 에 ETag 를 켜지 않는 이유는 모듈 상단 주석 참조 (bmcweb If-Match crash).
     """
+    _evidence_request(path)
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     try:
         payload = json.dumps(body).encode('utf-8')
@@ -1193,6 +1300,7 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
     Returns: vendor canonical name 또는 None
     """
     import re
+    _evidence_request('noauth:realm-probe')
     url = f'https://{bmc_ip}/redfish/v1/'
     req = urlreq.Request(url, headers={'Accept': 'application/json', 'OData-Version': '4.0'})
     realm_header = None
@@ -1233,6 +1341,7 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
 
 def _get_noauth(bmc_ip, path, timeout, verify_ssl):
     """인증 없이 GET 요청 (ServiceRoot 등 무인증 엔드포인트용)"""
+    _evidence_request('noauth:' + str(path))
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
     req = urlreq.Request(url, headers={
         'Accept': 'application/json',
@@ -7514,9 +7623,16 @@ def main():
             #   실제 Resource Capability 가 우선하고, adapter 이름은 동률을 깰 때만 쓴다.
             #   (Supermicro 계정분리 세대 / Lenovo XCC 세대 / HPE RMC 구분 등)
             adapter_id      = dict(type='str',  default=None, required=False),
+            # 2026-10-03 (Plan §6-3 D7): attempt 단위 인증 증거 파일. {evidence_dir, id, build_id, event_uuid, label, role}.
+            #   None 또는 evidence_dir/id 가 비면 아무 것도 쓰지 않는다 (Jenkins 밖 실행 · 종전 호출 호환).
+            attempt         = dict(type='dict', default=None, required=False),
         ),
         supports_check_mode=True,
     )
+
+    def _exit(**kw):
+        _evidence_finish()
+        module.exit_json(**kw)
 
     if not HAS_URLLIB:
         module.fail_json(msg='Python urllib 를 import 할 수 없습니다')
@@ -7530,6 +7646,7 @@ def main():
     bmc_ip, username, password = p['bmc_ip'], p['username'], p['password']
     timeout, verify_ssl = p['timeout'], p['verify_ssl']
     mode = p['mode']
+    _evidence_begin(p.get('attempt'), bmc_ip, username)
     _set_deadline(p.get('deadline'))
     # P2: 캐시는 읽기 전용 모드에서만. account_provision 은 다른 자격으로 같은 경로를 다시 읽으므로 끈다.
     _reset_response_cache(enabled=(mode in ('gather', 'detect')))
@@ -7555,7 +7672,7 @@ def main():
             if st_m == 200 and isinstance(mdata, dict):
                 data['bmc'] = {'firmware_version': _strip_or_none(_safe(mdata, 'FirmwareVersion')),
                                'model': _strip_or_none(_safe(mdata, 'Model'))}
-        module.exit_json(
+        _exit(
             changed=False, mode='detect',
             status=('success' if isinstance(service_root, dict) and service_root else 'failed'),
             vendor=vendor, collected=[], failed_sections=[], unsupported_sections=[],
@@ -7604,7 +7721,7 @@ def main():
         )
         result['dryrun_reason'] = dryrun_reason
         result['errors'] = list(det_errors) + (result.get('errors') or [])
-        module.exit_json(
+        _exit(
             changed=bool(result.get('recovered')),
             mode='account_provision',
             vendor=vendor,
@@ -7636,7 +7753,7 @@ def main():
     probe_facts = _extract_probe_facts(service_root, vendor)
 
     if not system_uri:
-        module.exit_json(
+        _exit(
             changed=False, status='failed', vendor=vendor,
             collected=[], failed_sections=['all'], unsupported_sections=[],
             errors=all_errors, data={}, probe_facts=probe_facts,
@@ -7662,7 +7779,7 @@ def main():
             service_root, refetch=_reauth_service_root)
         if _serial_err is not None:
             all_errors.append(_err('system', _serial_err))
-            module.exit_json(
+            _exit(
                 changed=False, status='failed', vendor=vendor,
                 collected=[], failed_sections=['all'], unsupported_sections=[],
                 errors=all_errors, data={}, probe_facts=probe_facts,
@@ -7689,7 +7806,7 @@ def main():
             all_errors.append(_err(
                 'system',
                 '서버 대표 시리얼을 결과에 실을 수 없습니다 — system 섹션 수집 실패'))
-            module.exit_json(
+            _exit(
                 changed=False, status='failed', vendor=vendor,
                 collected=[], failed_sections=['all'], unsupported_sections=[],
                 errors=all_errors, data={}, probe_facts=probe_facts,
@@ -7710,7 +7827,7 @@ def main():
 
     final_status, clean = _compute_final_status(collected, failed, all_errors)
 
-    module.exit_json(
+    _exit(
         changed=False, status=final_status, vendor=vendor,
         collected=clean, failed_sections=list(set(failed)),
         unsupported_sections=list(set(unsupported)),

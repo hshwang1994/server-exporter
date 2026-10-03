@@ -19,7 +19,14 @@
 - when: not (_rf_acct_auth_ok | default(false) | bool)
   block:
 
+    - name: "redfish | account_service | mark recovery attempt in flight"
+      ansible.builtin.set_fact:
+        _rf_attempt_seq: "{{ (_rf_attempt_seq | default(0) | int) + 1 }}"
+        _rf_attempt_id:  "account-{{ ansible_loop.index | default(1) }}-{{ (_rf_attempt_seq | default(0) | int) + 1 }}"
+      no_log: true
+
     - name: "redfish | account_service | invoke"
+      timeout: "{{ _rf_account_task_timeout | default(240) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       redfish_gather:
         bmc_ip:          "{{ _rf_ip }}"
         username:        "{{ _try_recovery.username | default('') }}"
@@ -37,6 +44,13 @@
         #   먼저 보고, adapter 이름은 그것만으로 갈리지 않을 때만 쓴다.
         #   예: Lenovo XCC2·XCC3 (AccountTypes 필요), HPE iLO4 (Oem/Hp), HPE RMC(CSUS/Superdome).
         adapter_id:      "{{ (_selected_adapter | default({})).adapter_id | default(omit) }}"
+        attempt:
+          evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"
+          id:           "{{ _rf_attempt_id }}"
+          build_id:     "{{ lookup('env', 'SE_BUILD_ID') }}"
+          event_uuid:   "{{ lookup('env', 'SE_EVENT_UUID') }}"
+          label:        "{{ _try_recovery.label | default('unlabeled') }}"
+          role:         "{{ 'recovery' }}"
       register: _rf_acct_attempt
       failed_when: false
       no_log: true
@@ -45,6 +59,7 @@
     # 인증 실패 후보의 결과는 채택하지 않는다 — 다음 후보로 넘어간다.
     - name: "redfish | account_service | evaluate recovery auth"
       ansible.builtin.set_fact:
+        _rf_attempt_id: ''
         _rf_acct_attempt_auth_ok: >-
           {{ ((_rf_acct_attempt.account_service | default({})).auth_ok | default(false)) | bool }}
       no_log: true

@@ -18,6 +18,7 @@
 #   normalize_network / collect_network_extended 가 _e_raw_host 로 읽는다.
 
 - name: "esxi | collect | physical disks (serial/wwn)"
+  timeout: "{{ _e_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   esxi_disks:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"

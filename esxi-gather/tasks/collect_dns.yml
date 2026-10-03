@@ -17,6 +17,7 @@
 #   }
 
 - name: "esxi | collect | vmware_host_dns_info"
+  timeout: "{{ _e_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   community.vmware.vmware_host_dns_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ ansible_user }}"

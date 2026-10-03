@@ -1,0 +1,13 @@
+---
+# 끝나지 않는 Add-on — 태스크 하나가 멈춘다. hook 의 include_role apply.timeout(테스트는 `-e _addon_task_timeout=3`)이
+# 그 태스크를 끊고 rescue 가 errors[] 1건을 남기는지, 그리고 CHECKPOINT 로 보존된 기본 결과가 그대로인지 확인한다.
+# sleep 은 control node(local 연결)에서 돈다 — 실장비에 연결하지 않는다.
+- name: "fixture hang | partial result"
+  ansible.builtin.set_fact:
+    _addon_result:
+      partial:
+        before_hang: true
+
+- name: "fixture hang | task that never finishes"
+  ansible.builtin.shell: sleep 40
+  changed_when: false

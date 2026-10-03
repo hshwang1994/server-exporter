@@ -32,6 +32,7 @@ unreachable 이 되면 Ansible 이 그 호스트를 play 에서 제거하므로 
 # 프로젝트 루트의 ansible.cfg가 callback_plugins = ./callback_plugins 로 이 파일을 참조한다.
 __metaclass__ = type
 
+import datetime
 import json
 import os
 import re
@@ -215,6 +216,18 @@ class CallbackModule(CallbackBase):
         # Plugin step (ansiblePlaybook) 에서 stdout capture 가 어려운 경우 사용.
         # stdout 출력은 그대로 유지 (호환성).
         self._output_file = os.getenv('ANSIBLE_JSON_OUTPUT_FILE', '').strip()
+        # 2026-10-03 (Plan §6-1 D4/D8): 강제 종료 뒤에는 on_stats 가 돌지 않으므로 host 전이를 **파일 이벤트**로 남긴다.
+        #   progress   : host 당 append JSONL (first_seen / precheck / cred_load / auth_proven / checkpoint / addon_started /
+        #                addon_done / emitted / lost) — 전체 snapshot 재기록 없음(H²×T 비용 회피), 줄은 짧다.
+        #   checkpoint : `CHECKPOINT` 태스크(Add-on 전 조립본 envelope)를 host 당 1줄 append (flush+fsync).
+        #   manifest   : Jenkins 가 쓴 접수 집합 — play 시작 시 inventory 와 대조해 다르면 stderr 로 알린다(대조용, 정본은 manifest).
+        #   Layer A(scripts/finalize_gather_output.py)가 이 파일들로 누락 envelope 을 보충한다.
+        self._progress_file = os.getenv('ANSIBLE_JSON_PROGRESS_FILE', '').strip()
+        self._checkpoint_file = os.getenv('ANSIBLE_JSON_CHECKPOINT_FILE', '').strip()
+        self._manifest_file = os.getenv('ANSIBLE_JSON_MANIFEST_FILE', '').strip()
+        self._checkpoint_task = os.getenv('ANSIBLE_JSON_CHECKPOINT_TASK', 'CHECKPOINT')
+        self._addon_start_task = 'ADDON_START'
+        self._addon_done_task = 'ADDON_DONE'
         # envelope 보충 상태 — 호스트명 → 관측 컨텍스트
         self._hosts = {}
         self._playbook_channel = None
@@ -259,6 +272,8 @@ class CallbackModule(CallbackBase):
             try:
                 with open(self._output_file, 'a', encoding='utf-8') as fh:
                     fh.write(line + '\n')
+                    fh.flush()
+                    os.fsync(fh.fileno())     # 강제 종료 직전의 줄도 디스크에 남긴다 (D4)
             except (OSError, IOError) as e:
                 # 파일 쓰기 실패: stdout 은 정상이라 callback 흐름은 유지하되, 파일 소비자(다운스트림)
                 # 가 빈 결과를 받는 silent data-loss 를 stderr 로 가시화 (Round 15 observability).
@@ -287,6 +302,76 @@ class CallbackModule(CallbackBase):
         if context:
             line += ' ({})'.format(', '.join(context))
         sys.stderr.write(line + '\n')
+
+    # ── 진행 이벤트 / checkpoint 파일 (Layer A 입력) ───────────────────────────
+
+    @staticmethod
+    def _now_iso():
+        return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')
+
+    @staticmethod
+    def _json_line(data):
+        """_emit 과 같은 변환 — 문자열은 JSON 으로 파싱 시도, 실패하면 문자열 그대로."""
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except (json.JSONDecodeError, ValueError):
+                pass
+        try:
+            return json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+        except TypeError:
+            return json.dumps(str(data), ensure_ascii=False, separators=(',', ':'))
+
+    def _progress(self, host_name, event, task=None, detail=None, **extra):
+        """host 전이 이벤트 1줄 append. 실패해도 본 흐름을 막지 않는다. detail 은 160자로 자른다."""
+        if not self._progress_file:
+            return
+        try:
+            ctx = self._hosts.get(host_name) or {}
+            row = {'ts': self._now_iso(), 'host': host_name, 'ip': ctx.get('ip'), 'event': event,
+                   'task': task, 'detail': (str(detail)[:160] if detail is not None else None)}
+            for k, v in extra.items():
+                if v is not None:
+                    row[k] = v
+            with open(self._progress_file, 'a', encoding='utf-8') as fh:
+                fh.write(json.dumps(row, ensure_ascii=False, separators=(',', ':'), default=str) + '\n')
+        except Exception as e:                              # noqa: BLE001
+            sys.stderr.write('[json_only] WARNING: progress 기록 실패 ({}): {}\n'.format(
+                self._progress_file, type(e).__name__))
+
+    def _checkpoint(self, result):
+        """CHECKPOINT 태스크의 msg(조립된 envelope)를 checkpoint 파일에 append (flush+fsync) + progress."""
+        res = getattr(result, 'result', None)
+        if not isinstance(res, dict):
+            res = getattr(result, '_result', None)
+        payload = res.get('msg') if isinstance(res, dict) else None
+        if payload is None and isinstance(res, dict):
+            payload = res.get('ansible_facts')
+        host = self._host_name(result)
+        if payload is None:
+            self._emit_error('checkpoint_empty', 'CHECKPOINT 태스크에 msg 가 없다', host=host)
+            return
+        if self._checkpoint_file:
+            try:
+                with open(self._checkpoint_file, 'a', encoding='utf-8') as fh:
+                    fh.write(self._json_line(payload) + '\n')
+                    fh.flush()
+                    os.fsync(fh.fileno())
+            except (OSError, IOError) as e:
+                sys.stderr.write('[json_only] WARNING: checkpoint 파일 쓰기 실패 ({}): {}\n'.format(
+                    self._checkpoint_file, type(e).__name__))
+        self._progress(host, 'checkpoint', task=self._task_name(result))
+
+    def _manifest_ips(self):
+        if not self._manifest_file:
+            return None
+        try:
+            with open(self._manifest_file, encoding='utf-8') as fh:
+                data = json.load(fh)
+            ips = data.get('ips') if isinstance(data, dict) else None
+            return [str(x) for x in ips] if isinstance(ips, list) else None
+        except Exception:                                   # noqa: BLE001
+            return None
 
     # ── 호스트 lifecycle 추적 (envelope 보충용) ──────────────────────────────
 
@@ -356,6 +441,7 @@ class CallbackModule(CallbackBase):
                 'cred_load_outcome': None,
             }
             self._hosts[host_name] = ctx
+            self._progress(host_name, 'first_seen')
         return ctx
 
     def _track(self, result, ok=False, unreachable=False):
@@ -369,21 +455,29 @@ class CallbackModule(CallbackBase):
             ctx = self._ctx(self._host_name(result))
             fields = self._task_fields(result)
 
-            if unreachable and not fields.get('ignore_unreachable'):
-                # ignore_unreachable=true 인 태스크(자격 probe 등)는 호스트를 잃지 않는다.
-                ctx['lost'] = True
-
-            if ok:
-                self._absorb_facts(ctx, result)
-                if not ctx['auth_proven'] and self._proves_authentication(result, fields):
-                    ctx['auth_proven'] = True
-
+            # ip 는 첫 이벤트 전에 확정한다 — 뒤의 progress 줄(precheck/lost/…)이 ip 를 싣기 위해서다.
             if not ctx['ip_checked']:
                 ctx['ip_checked'] = True
                 if ctx['ip'] is None:
                     ip = self._host_vars(result).get('ansible_host')
                     if ip:
                         ctx['ip'] = str(ip)
+
+            if unreachable and not fields.get('ignore_unreachable'):
+                # ignore_unreachable=true 인 태스크(자격 probe 등)는 호스트를 잃지 않는다.
+                ctx['lost'] = True
+                res = getattr(result, 'result', None)
+                if not isinstance(res, dict):
+                    res = getattr(result, '_result', None)
+                self._progress(self._host_name(result), 'lost', task=self._task_name(result),
+                               detail=(res.get('msg') if isinstance(res, dict) else None))
+
+            if ok:
+                self._absorb_facts(ctx, result)
+                if not ctx['auth_proven'] and self._proves_authentication(result, fields):
+                    ctx['auth_proven'] = True
+                    self._progress(self._host_name(result), 'auth_proven', task=self._task_name(result))
+
         except Exception:                                   # noqa: BLE001
             pass
 
@@ -399,6 +493,8 @@ class CallbackModule(CallbackBase):
             diag = self._plain(facts.get('_diagnosis'))
             if isinstance(diag, dict):
                 ctx['diagnosis'] = diag
+                # precheck 진단은 Layer A 가 (1) 분기(진단 보존)에 쓴다 — 이 이벤트만 dict 를 싣는다.
+                self._progress(self._host_name(result), 'precheck', task=self._task_name(result), diagnosis=diag)
         for key, slot in (('_out_target_type', 'target_type'),
                           ('_out_collection_method', 'collection_method'),
                           ('_out_ip', 'ip'),
@@ -411,6 +507,9 @@ class CallbackModule(CallbackBase):
                           ('_cred_load_outcome', 'cred_load_outcome')):
             if facts.get(key):
                 ctx[slot] = str(facts[key])
+        if facts.get('_cred_load_outcome') or facts.get('_cred_location'):
+            self._progress(self._host_name(result), 'cred_load', task=self._task_name(result),
+                           outcome=ctx.get('cred_load_outcome'), location=ctx.get('location'))
 
     def _proves_authentication(self, result, fields):
         """이 성공 결과가 '대상 호스트에 실제로 접속·인증했다'를 증명하는가.
@@ -444,7 +543,17 @@ class CallbackModule(CallbackBase):
 
     def v2_runner_on_ok(self, result):
         self._track(result, ok=True)
-        if self._task_name(result) != self._output_task:
+        name = self._task_name(result)
+        if name == self._checkpoint_task:
+            self._checkpoint(result)
+            return
+        if name == self._addon_start_task:
+            self._progress(self._host_name(result), 'addon_started', task=name)
+            return
+        if name == self._addon_done_task:
+            self._progress(self._host_name(result), 'addon_done', task=name)
+            return
+        if name != self._output_task:
             return
         res = result._result
         if 'msg' in res:
@@ -486,6 +595,7 @@ class CallbackModule(CallbackBase):
             return
         try:
             self._ctx(self._host_name(result))['emitted'] = True
+            self._progress(self._host_name(result), 'emitted', task=self._task_name(result))
         except Exception:                                   # noqa: BLE001
             pass
 
@@ -710,7 +820,29 @@ class CallbackModule(CallbackBase):
             # 보충 실패가 정상 출력까지 죽이면 안 된다. stderr 로만 알린다.
             self._emit_error(error_type='reconcile_failed', message=type(e).__name__)
 
-    def v2_playbook_on_play_start(self, play):            pass
+    def v2_playbook_on_play_start(self, play):
+        """play 의 inventory host 를 1회 기록한다 (manifest 대조용 — 정본은 Jenkins 가 쓴 gather_manifest.json)."""
+        if not self._progress_file and not self._manifest_file:
+            return
+        try:
+            vm = play.get_variable_manager()
+            inv = getattr(vm, '_inventory', None)
+            hosts = [h.get_name() for h in inv.get_hosts('all')] if inv is not None else None
+        except Exception:                                   # noqa: BLE001
+            hosts = None
+        if hosts is None:
+            return
+        try:
+            play_name = play.get_name()
+        except Exception:                                   # noqa: BLE001
+            play_name = None
+        self._progress(None, 'inventory', task=play_name, hosts=hosts)
+        manifest = self._manifest_ips()
+        if manifest is not None and set(manifest) != set(hosts):
+            missing = sorted(set(manifest) - set(hosts))
+            extra = sorted(set(hosts) - set(manifest))
+            sys.stderr.write('[json_only] NOTICE: inventory 와 접수 manifest 가 다르다 (manifest 에만 {} / inventory 에만 {})\n'
+                             .format(missing[:5], extra[:5]))
     def v2_playbook_on_task_start(self, task, is_conditional): pass
 
     def v2_runner_on_skipped(self, result):

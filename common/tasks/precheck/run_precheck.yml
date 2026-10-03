@@ -33,6 +33,7 @@
 # ==============================================================================
 
 - name: "precheck | 대상 호스트 연결 진단"
+  timeout: "{{ _precheck_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   precheck_bundle:
     host: "{{ _precheck_host }}"
     channel: "{{ _precheck_channel }}"

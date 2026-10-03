@@ -14,7 +14,7 @@
 #   → normalize_storage  (storage fragment → merge)
 #   → build_sections / build_status / build_errors
 #   → build_meta / build_correlation
-#   → build_output → inject schema_version → OUTPUT
+#   → build_output → inject schema_version → CHECKPOINT → Add-on → OUTPUT
 # =============================================================================
 
 - name: "esxi-gather"
@@ -175,14 +175,6 @@
         - name: "esxi | collect runtime (B31/B32)"
           ansible.builtin.include_tasks: tasks/collect_runtime.yml
 
-        # 고객별 추가 수집 (Add-on) — 마지막 수집 뒤 · 조립 앞에 둔다 (Add-on 결과가 조립에 들어간다).
-        - name: "esxi | addon"
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
-          vars:
-            _addon_target: esxi
-          when: lookup('env', 'ADDON_DIR') | length > 0
-
         - name: "esxi | build_sections"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_sections.yml"
@@ -246,6 +238,23 @@
         - name: "esxi | inject schema_version"
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
+
+        # ── CHECKPOINT → Add-on → (always) OUTPUT ─────────────────────────────
+        # 2026-10-03 (Plan §6-1 D8): 조립이 끝난 envelope 을 콜백이 gather_checkpoint.jsonl 에 보존한 **뒤** Add-on 을 돌린다.
+        #   Add-on 도중 강제 종료돼 OUTPUT 이 없는 host 는 Layer A(scripts/finalize_gather_output.py)가 이 줄로 복원한다.
+        #   이름은 콜백과 완전일치(CHECKPOINT) — 바꾸면 보존이 조용히 꺼진다. 이 debug 는 stdout 으로 나가지 않는다.
+        - name: CHECKPOINT
+          ansible.builtin.debug:
+            msg: "{{ _output | to_json }}"
+
+        # ── 고객별 추가 수집 (Add-on) ───────────────────────────────────
+        # 조립 뒤 · OUTPUT 앞에 둔다 — 결과는 run_addon.yml 이 _output 의 data.addon · errors[] · meta 시각에만 결합한다.
+        - name: "esxi | addon"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
+          vars:
+            _addon_target: esxi
+          when: lookup('env', 'ADDON_DIR') | length > 0
 
       rescue:
         # ── Portal Grid 계약 (2026-08-10 사용자 확인) — redfish rescue 와 동일 취지 ──

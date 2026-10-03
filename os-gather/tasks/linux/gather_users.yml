@@ -22,6 +22,7 @@
       no_log: true
 
     - name: "linux | users | last login times"
+      timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       ansible.builtin.shell: |
         export LANG=C LC_ALL=C
         {{ lookup('file', lookup('env', 'REPO_ROOT') + '/os-gather/files/get_last_login.sh') }}
@@ -117,6 +118,7 @@
 # =============================================================================
 - block:
     - name: "linux | users | raw getent + last logins"
+      timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       ansible.builtin.raw: |
         export LANG=C LC_ALL=C
         echo "PASSWD_START"

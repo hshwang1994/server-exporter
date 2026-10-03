@@ -12,8 +12,8 @@
 # 흐름:
 #   Play1:   포트 감지 → _os_linux / _os_windows / _os_failed 그룹으로 분류 (add_host)
 #   Play1.5: _os_failed (포트 미응답) host별 독립 OUTPUT (strategy: free)
-#   Play2:   Linux  → preflight → adapter 선택 → gather → meta → build_output
-#   Play3:   Windows → adapter 선택 → gather → meta → build_output
+#   Play2:   Linux  → preflight → adapter 선택 → gather → meta → build_output → CHECKPOINT → Add-on
+#   Play3:   Windows → adapter 선택 → gather → meta → build_output → CHECKPOINT → Add-on
 #
 # 실패 처리:
 #   포트 감지 실패 → Play1 이 _os_failed 그룹 등록 → Play1.5 에서 OUTPUT (diagnosis 포함)
@@ -107,6 +107,9 @@
         ansible_host:            "{{ hostvars[item].ansible_host | default(item) }}"
         ansible_connection:      ssh
         ansible_port:            22
+        # 2026-10-03 (N6, WSL -vvvv 실측): ssh 플러그인은 ansible.cfg `timeout`(60) 을 `-o ConnectTimeout=60` 으로
+        #   ssh_common_args 보다 **먼저** 내보내므로 아래 15 는 무시됐다. ansible_timeout 이 그 값의 정본이다.
+        ansible_timeout:         15
         ansible_ssh_common_args: >-
           -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
           -o ConnectTimeout=15 -o ServerAliveInterval=10
@@ -321,15 +324,6 @@
         # system.runtime 은 gather_system.yml 이 단일 구현이다 (2026-09-03 — 종전 gather_runtime.yml 이
         # 같은 9 키를 다른 의미로 다시 만들어 덮어쓰던 것을 제거).
 
-        # ── 고객별 추가 수집 (Add-on) ───────────────────────────────────
-        # 마지막 수집 뒤 · 조립 앞에 둔다 — Add-on 이 기본 수집 결과(hostname)를 읽고, Add-on 결과가 조립에 들어간다.
-        - name: "linux | addon"
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
-          vars:
-            _addon_target: linux
-          when: lookup('env', 'ADDON_DIR') | length > 0
-
         # ── diagnosis (성공 경로) ───────────────────────────────────────
         - name: "linux | build diagnosis (success path)"
           ansible.builtin.set_fact:
@@ -389,6 +383,23 @@
         - name: "linux | inject schema_version"
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
+
+        # ── CHECKPOINT → Add-on → (always) OUTPUT ─────────────────────────────
+        # 2026-10-03 (Plan §6-1 D8): 조립이 끝난 envelope 을 콜백이 gather_checkpoint.jsonl 에 보존한 **뒤** Add-on 을 돌린다.
+        #   Add-on 도중 강제 종료돼 OUTPUT 이 없는 host 는 Layer A(scripts/finalize_gather_output.py)가 이 줄로 복원한다.
+        #   이름은 콜백과 완전일치(CHECKPOINT) — 바꾸면 보존이 조용히 꺼진다. 이 debug 는 stdout 으로 나가지 않는다.
+        - name: CHECKPOINT
+          ansible.builtin.debug:
+            msg: "{{ _output | to_json }}"
+
+        # ── 고객별 추가 수집 (Add-on) ───────────────────────────────────
+        # 조립 뒤 · OUTPUT 앞에 둔다 — 결과는 run_addon.yml 이 _output 의 data.addon · errors[] · meta 시각에만 결합한다.
+        - name: "linux | addon"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
+          vars:
+            _addon_target: linux
+          when: lookup('env', 'ADDON_DIR') | length > 0
 
       rescue:
         # ── Portal Grid 계약 (2026-08-10 사용자 확인) ────────────────────
@@ -633,15 +644,6 @@
         - name: "windows | gather runtime"
           ansible.builtin.include_tasks: tasks/windows/gather_runtime.yml
 
-        # ── 고객별 추가 수집 (Add-on) ───────────────────────────────────
-        # 마지막 수집 뒤 · 조립 앞에 둔다 — Add-on 이 기본 수집 결과(hostname)를 읽고, Add-on 결과가 조립에 들어간다.
-        - name: "windows | addon"
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
-          vars:
-            _addon_target: windows
-          when: lookup('env', 'ADDON_DIR') | length > 0
-
         # ── diagnosis (성공 경로) ───────────────────────────────────────
         - name: "windows | build diagnosis (success path)"
           ansible.builtin.set_fact:
@@ -700,6 +702,23 @@
         - name: "windows | inject schema_version"
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
+
+        # ── CHECKPOINT → Add-on → (always) OUTPUT ─────────────────────────────
+        # 2026-10-03 (Plan §6-1 D8): 조립이 끝난 envelope 을 콜백이 gather_checkpoint.jsonl 에 보존한 **뒤** Add-on 을 돌린다.
+        #   Add-on 도중 강제 종료돼 OUTPUT 이 없는 host 는 Layer A(scripts/finalize_gather_output.py)가 이 줄로 복원한다.
+        #   이름은 콜백과 완전일치(CHECKPOINT) — 바꾸면 보존이 조용히 꺼진다. 이 debug 는 stdout 으로 나가지 않는다.
+        - name: CHECKPOINT
+          ansible.builtin.debug:
+            msg: "{{ _output | to_json }}"
+
+        # ── 고객별 추가 수집 (Add-on) ───────────────────────────────────
+        # 조립 뒤 · OUTPUT 앞에 둔다 — 결과는 run_addon.yml 이 _output 의 data.addon · errors[] · meta 시각에만 결합한다.
+        - name: "windows | addon"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
+          vars:
+            _addon_target: windows
+          when: lookup('env', 'ADDON_DIR') | length > 0
 
       rescue:
         # Portal Grid 계약 — linux rescue 와 동일 취지 / 동일 근거 (위 주석 참조).

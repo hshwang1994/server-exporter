@@ -1,3 +1,283 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// 공용 helper — pipeline{} 밖의 Groovy 메서드 (script 블록과 post 에서 부른다).
+//   2026-10-03 (Plan §6): 결과 보존·finalization·Callback 을 **파이프라인 post{always}** 로 옮겼다.
+//   어느 stage 에서 멈추든(접수 뒤) 접수 manifest 의 IP 마다 envelope 하나를 Portal 에 보내려 시도한다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 예산·finalizer 상수 (초). 수집 배치 예산 공식 자체는 scripts/gather_budget.sh 한 곳에만 있다 (여기는 finalizer 몫).
+@NonCPS
+Map seConstants() {
+    return [
+        GLOBAL           : 9000,   // options.timeout 150 min
+        FINALIZER_TOTAL  : 720,    // post{always} node 대기 120 + 회수 30 + 조립 60 + Callback 390 + 여유 120 (합산 제한 1개)
+        RECOVER          : 30,
+        ASSEMBLE         : 60,
+        CALLBACK_ATTEMPT : 120,
+        CALLBACK_MIN     : 20,     // 이보다 적게 남으면 시도하지 않고 기록만
+        ABORT_ATTEMPT    : 60,
+    ]
+}
+
+// 정본 복제 fallback — readTrusted 로 정본(YAML)을 못 읽을 때만 쓴다. drift 는 tests/unit/test_jenkinsfile_portal_finalize.py 가 잡는다.
+@NonCPS
+Map seFallbackCanon() {
+    return [
+        reason  : '개더링 프로젝트에서 수집 결과를 만들지 못했습니다.',
+        sections: ['os'     : ['system', 'hardware', 'cpu', 'memory', 'storage', 'network', 'users'],
+                   'esxi'   : ['system', 'hardware', 'cpu', 'memory', 'storage', 'network'],
+                   'redfish': ['system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network', 'firmware', 'power', 'thermal']],
+        all     : ['system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network', 'firmware', 'users', 'power', 'thermal'],
+        meta    : ['started_at', 'finished_at', 'duration_ms', 'adapter_id', 'adapter_version', 'ansible_version'],
+        corr    : ['serial_number', 'system_uuid', 'bmc_ip', 'host_ip'],
+        method  : ['os': 'agent', 'esxi': 'vsphere_api', 'redfish': 'redfish_api'],
+        skeleton: ['system': null, 'hardware': null, 'bmc': null, 'cpu': null, 'memory': null,
+                   'storage': ['filesystems': [], 'physical_disks': [], 'datastores': [], 'controllers': [], 'logical_volumes': [],
+                               'hbas': [], 'infiniband': [], 'summary': ['groups': [], 'grand_total_gb': 0]],
+                   'network': ['dns_servers': [], 'default_gateways': [], 'interfaces': [], 'adapters': [], 'ports': [],
+                               'virtual_switches': [], 'portgroups': [], 'driver_map': [], 'summary': ['groups': []]],
+                   'users': [], 'firmware': [], 'power': null, 'thermal': ['temperatures': [], 'fans': []]],
+        emitFailed: '수집은 끝났지만 결과를 내보내는 단계에서 중단되었습니다. 기본 수집 결과는 그대로입니다.',
+    ]
+}
+
+// JSON 문자열 escaping — 종전 수동 replaceAll 대신 Groovy JsonOutput 이 특수문자 escaping 을 맡는다. 입력 거부 정책 변경이 아니다.
+@NonCPS
+String seJsonString(Object value) {
+    return groovy.json.JsonOutput.toJson(value == null ? '' : value.toString())
+}
+
+// Layer B 최소 경로 — Layer A(gather_final.jsonl) 가 없거나 실패했을 때만: OUTPUT 줄 → CHECKPOINT 줄(+gather 오류 1건) → synthetic.
+// progress 이벤트 기반 분기(GATHER_FAILED/AUTH)는 Layer A 몫이라 여기서는 하지 않는다 (보고서에 layerA 상태를 남긴다).
+@NonCPS
+Map seReconcileRaw(String manifestJson, String outputText, String checkpointText, Map canon, String outcome) {
+    def slurper  = new groovy.json.JsonSlurperClassic()
+    def manifest = slurper.parseText(manifestJson)
+    String channel = manifest.channel
+    List ips = (manifest.ips ?: []).collect { it.toString() }
+    Set accepted = ips as Set
+    def keys13 = ['schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
+                  'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'] as Set
+    Map outputs = [:]; Map checkpoints = [:]
+    List dropped = []; List conflicts = []
+    int lineNo = 0
+    for (String raw in (outputText ?: '').split('\n')) {
+        lineNo++
+        String line = raw.trim()
+        if (!line) { continue }
+        def obj = null
+        try { obj = slurper.parseText(line) } catch (Exception e) { dropped << [file: 'output', line: lineNo, reason: 'not JSON']; continue }
+        if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type != channel || !accepted.contains(obj.ip?.toString())) {
+            dropped << [file: 'output', line: lineNo, reason: 'shape/ip gate', ip: (obj instanceof Map ? obj.ip : null)]; continue
+        }
+        String ip = obj.ip.toString()
+        if (outputs.containsKey(ip) && outputs[ip] != line) { conflicts << [ip: ip, chosen: lineNo] }
+        outputs[ip] = line
+    }
+    lineNo = 0
+    for (String raw in (checkpointText ?: '').split('\n')) {
+        lineNo++
+        String line = raw.trim()
+        if (!line) { continue }
+        def obj = null
+        try { obj = slurper.parseText(line) } catch (Exception e) { dropped << [file: 'checkpoint', line: lineNo, reason: 'not JSON']; continue }
+        if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type != channel || !accepted.contains(obj.ip?.toString())) {
+            dropped << [file: 'checkpoint', line: lineNo, reason: 'shape/ip gate']; continue
+        }
+        checkpoints[obj.ip.toString()] = obj
+    }
+    List lines = []
+    int fromOutput = 0, fromCheckpoint = 0, synthetic = 0
+    Set supported = (canon.sections[channel] ?: []) as Set
+    for (String ip in ips) {
+        if (outputs.containsKey(ip)) { lines << outputs[ip]; fromOutput++; continue }
+        if (checkpoints.containsKey(ip)) {
+            def env = checkpoints[ip]
+            def errs = (env.errors instanceof List) ? new ArrayList(env.errors) : []
+            errs << [section: 'gather', message: canon.emitFailed,
+                     detail: "finalized from checkpoint by Layer B (Layer A not available); outcome=${outcome}".toString()]
+            env.errors = errs
+            lines << groovy.json.JsonOutput.toJson(env); fromCheckpoint++; continue
+        }
+        Map sections = [:]
+        for (String s in canon.all) { sections[s] = supported.contains(s) ? 'failed' : 'not_supported' }
+        Map meta = [:];  for (String k in canon.meta) { meta[k] = null }
+        Map corr = [:];  for (String k in canon.corr) { corr[k] = (k == 'host_ip' || (k == 'bmc_ip' && channel == 'redfish')) ? ip : null }
+        String detail = "envelope synthesized by Layer B from accepted manifest; outcome=${outcome}".toString()
+        Map env = [
+            schema_version: '1', target_type: channel, collection_method: canon.method[channel], ip: ip, hostname: null,
+            vendor: null, status: 'failed', sections: sections,
+            diagnosis: [reachable: null, port_open: null, protocol_supported: null, auth_success: null,
+                        failure_stage: 'fallback', failure_code: 'OUTPUT_BUILD_FAILED', failure_reason: canon.reason,
+                        details: [channel: channel, finalizer: 'layer_b', outcome: outcome]],
+            meta: meta, correlation: corr,
+            errors: [[section: 'gather', message: canon.reason, detail: detail]],
+            data: new groovy.json.JsonSlurperClassic().parseText(groovy.json.JsonOutput.toJson(canon.skeleton)),
+        ]
+        lines << groovy.json.JsonOutput.toJson(env); synthetic++
+    }
+    return [lines: lines, report: [accepted: ips.size(), kept: fromOutput + fromCheckpoint, filled: synthetic,
+                                   by_origin: [output: fromOutput, checkpoint: fromCheckpoint, synthetic: synthetic],
+                                   dropped: dropped, conflicts: conflicts, layer: 'b']]
+}
+
+// 정본 로딩 — readTrusted 는 Job 의 SCM(lightweight)에서 파일 하나씩 읽는다(workspace 불필요). 실패하면 복제 fallback.
+def seLoadCanon() {
+    Map canon = seFallbackCanon()
+    try {
+        def fr = readYaml text: readTrusted('common/vars/failure_reasons.yml')
+        def ss = readYaml text: readTrusted('common/vars/supported_sections.yml')
+        if (fr?._fr_catalog?.output_build_failed?.default) { canon.reason = fr._fr_catalog.output_build_failed.default }
+        if (ss?.channel_sections) { canon.sections = ss.channel_sections; canon.all = ss.all_sections ?: canon.all }
+        canon.source = 'readTrusted'
+    } catch (Exception e) {
+        echo "[Finalize] 정본 읽기 실패 — 복제값 사용: ${e.message}"
+        canon.source = 'fallback'
+    }
+    return canon
+}
+
+long seNowSec() { return (long) (System.currentTimeMillis() / 1000L) }
+
+// Callback — 남은 예산 안에서 유한 재시도. 2xx = HTTP 응답 성공(Portal 저장 증거가 아니다). 결정적 4xx 는 중단.
+boolean seCallback(String body, long hardDeadline, long finalizerDeadline, Map C) {
+    def endpoint = params.callbackUrl.trim().replaceAll('/+$', '') + '/api/jenkins/gather/' + params.target_type.trim()
+    boolean aborted = (currentBuild.result == 'ABORTED')
+    int maxAttempts = aborted ? 1 : 3
+    echo "[Callback] POST -> ${endpoint} (attempts<=${maxAttempts}, body ${body.length()} bytes)"
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        long remaining = Math.min(hardDeadline, finalizerDeadline) - seNowSec()
+        if (remaining < C.CALLBACK_MIN) {
+            echo "[Finalize] callback not attempted: budget (remaining ${remaining}s)"
+            return false
+        }
+        int t = Math.max(10, Math.min(C.CALLBACK_ATTEMPT, (int) (remaining - 10)))
+        if (aborted) { t = Math.min(t, C.ABORT_ATTEMPT) }
+        String code = ''
+        String msg = ''
+        try {
+            def resp = httpRequest(url: endpoint, httpMode: 'POST', contentType: 'APPLICATION_JSON', requestBody: body,
+                                   timeout: t, validResponseCodes: '100:599', consoleLogResponseBody: false)
+            code = "${resp.status}"
+            msg = (resp.content ?: '')
+            if (msg.length() > 500) { msg = msg.substring(0, 500) }
+        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+            throw fie
+        } catch (Exception e) {
+            msg = "httpRequest 예외 (연결 실패/timeout): ${e.message}"
+        }
+        if (code ==~ /2\d\d/) {
+            echo "[Callback] [OK] HTTP ${code} (${attempt}/${maxAttempts})"
+            return true
+        }
+        if (code ==~ /4\d\d/ && !(code in ['408', '429'])) {
+            echo "[Callback] [FAIL] HTTP ${code} — 결정적 거부, 재시도하지 않음: ${msg}"
+            return false
+        }
+        echo "[Callback] [FAIL] (${attempt}/${maxAttempts}) ${code ? 'HTTP ' + code + ' ' : ''}${msg}"
+        if (attempt < maxAttempts) {
+            long left = Math.min(hardDeadline, finalizerDeadline) - seNowSec() - C.CALLBACK_MIN
+            int wait = (int) Math.max(0L, Math.min((long) (10 * attempt), left))
+            if (wait > 0) { echo "[Callback] ${wait}초 후 재시도"; sleep(time: wait, unit: 'SECONDS') }
+        }
+    }
+    return false
+}
+
+// finalization 본체 — pipeline post{always} 에서 한 번. timeout 은 node 대기와 안의 작업을 **합산**으로 제한한다.
+def seFinalizeAndCallback() {
+    Map C = seConstants()
+    long tPost = seNowSec()
+    String manifestJson = env.SE_MANIFEST_JSON ?: ''
+    if (!manifestJson.trim()) {
+        echo "[Finalize] not-run: 접수 manifest 없음 (Validate 전에 끝남) — 전송할 것 없음"
+        return
+    }
+    def manifest = readJSON text: manifestJson
+    List ips = manifest.ips ?: []
+    String outcome = env.SE_GATHER_OUTCOME ?: 'interrupted_unknown'
+    long buildStart = (env.SE_BUILD_START_EPOCH ?: "${tPost}").toString() as long
+    long hardDeadline = buildStart + C.GLOBAL
+    timeout(time: C.FINALIZER_TOTAL, unit: 'SECONDS') {
+        node('built-in') {
+            long tIn = seNowSec()
+            long finalizerDeadline = tPost + C.FINALIZER_TOTAL
+            echo "[Finalize] node wait ${tIn - tPost}s, remaining ${Math.min(hardDeadline, finalizerDeadline) - tIn}s, outcome=${outcome}, accepted=${ips.size()}"
+            deleteDir()
+            // ① 입력 회수: unstash → unarchive(같은 빌드의 archive) → manifest-only
+            String source = 'none'
+            try {
+                unstash 'gather-output'
+                if (fileExists('gather_final.jsonl') || fileExists('gather_output.json')) { source = 'stash' }
+            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                throw fie
+            } catch (Exception e) {
+                echo "[Finalize] unstash 실패: ${e.message}"
+            }
+            if (source == 'none' && (Math.min(hardDeadline, finalizerDeadline) - seNowSec()) > (C.RECOVER + C.ASSEMBLE + C.CALLBACK_ATTEMPT)) {
+                try {
+                    unarchive mapping: ['gather_final.jsonl': 'gather_final.jsonl', 'gather_finalize_report.json': 'gather_finalize_report.json',
+                                        'gather_output.json': 'gather_output.json', 'gather_checkpoint.jsonl': 'gather_checkpoint.jsonl']
+                    if (fileExists('gather_final.jsonl') || fileExists('gather_output.json')) { source = 'archive' }
+                } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                    throw fie
+                } catch (Exception e) {
+                    echo "[Finalize] unarchive 실패(또는 archive 없음): ${e.message}"
+                }
+            }
+            // ② 줄 집합: Layer A 결과(exit 0/2) 우선 → 없으면 Layer B 최소 경로
+            List lines = null
+            Map report = [:]
+            String layerA = 'skipped'
+            if (fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) {
+                def rep = readJSON file: 'gather_finalize_report.json'
+                String finalText = readFile(file: 'gather_final.jsonl', encoding: 'UTF-8')
+                if ((rep.exit_code in [0, 2]) && finalText.trim()) {
+                    lines = finalText.split('\n').findAll { it.trim() }.collect { it.trim() }
+                    report = rep
+                    layerA = (rep.exit_code == 0) ? 'ok' : 'ok_with_damage'
+                } else {
+                    layerA = 'failed'
+                }
+            }
+            if (lines == null) {
+                String outText = fileExists('gather_output.json') ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : ''
+                String cpText  = fileExists('gather_checkpoint.jsonl') ? readFile(file: 'gather_checkpoint.jsonl', encoding: 'UTF-8') : ''
+                def res = seReconcileRaw(manifestJson, outText, cpText, seLoadCanon(), outcome)
+                lines = res.lines
+                report = res.report
+            }
+            int accepted = ips.size()
+            int filled = (report.filled ?: 0) as int
+            int kept = (report.kept ?: (accepted - filled)) as int
+            if (lines.size() != accepted) {
+                echo "[Finalize] [WARN] invariant 위반: lines=${lines.size()} accepted=${accepted} — 그래도 있는 것을 보낸다"
+            }
+            echo "[Finalize] accepted=${accepted} kept=${kept} filled=${filled}(synthetic) dropped=${(report.dropped ?: []).size()} conflicts=${(report.conflicts ?: []).size()} outcome=${outcome} layerA=${layerA} source=${source}"
+            // ③ body — 호출자 계약(loc / deploymentEnvironmentId / eventUuid / gatherInfoJson[]) 불변
+            String body = '{"loc":' + seJsonString(params.loc.trim()) +
+                          ',"deploymentEnvironmentId":' + seJsonString(params.deploymentEnvironmentId.trim()) +
+                          ',"eventUuid":' + seJsonString((params.eventUuid ?: '').trim()) +
+                          ',"gatherInfoJson":[' + lines.join(',') + ']}'
+            writeFile file: 'callback_body.json', text: body, encoding: 'UTF-8'
+            writeFile file: 'finalize_summary.json', encoding: 'UTF-8',
+                      text: groovy.json.JsonOutput.toJson([accepted: accepted, kept: kept, filled: filled, outcome: outcome,
+                                                            layerA: layerA, source: source, node_wait_sec: tIn - tPost])
+            lines = null
+            // ④ Callback — 남은 예산 안에서
+            boolean delivered = seCallback(body, hardDeadline, finalizerDeadline, C)
+            archiveArtifacts artifacts: 'callback_body.json,finalize_summary.json,gather_final.jsonl,gather_finalize_report.json',
+                             allowEmptyArchive: true, fingerprint: false
+            if (!delivered) {
+                echo "[Finalize] delivered=false — body 는 artifact callback_body.json"
+                unstable("[Finalize] Callback 전송 실패 — artifact callback_body.json 참조")
+            } else if (filled > 0 || outcome != 'completed') {
+                unstable("[Finalize] 전송은 됐지만 보충(filled=${filled}) 또는 비정상 종료(outcome=${outcome})가 있었다")
+            }
+            deleteDir()
+        }
+    }
+}
+
 pipeline {
 
     agent none
@@ -46,7 +326,7 @@ pipeline {
         string(
             name        : 'gatherBudgetForceSec',
             defaultValue: '',
-            description : '검증용 — 수집(ansible-playbook) 배치 상한(초). 비우면 제한 없음(운영 기본). 초과 시 INT, 90초 뒤 KILL — 완료된 host 결과는 보존'
+            description : '검증용 — 수집(ansible-playbook) 배치 상한(초)을 강제한다. 비우면 scripts/gather_budget.sh 공식(host 수·채널·Runner vCPU). 남은 시간은 넘지 못한다'
         )
     }
 
@@ -56,7 +336,8 @@ pipeline {
     }
 
     options {
-        timeout(time: 120, unit: 'MINUTES')
+        // GLOBAL 150 min = Validate·Resolve ≤4 + Gather ≤115 + finalizer 12 (scripts/gather_budget.sh 상수와 같이 움직인다)
+        timeout(time: 150, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '100'))
     }
 
@@ -69,6 +350,8 @@ pipeline {
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
                 script {
+                    env.SE_BUILD_START_EPOCH = "${(long) (currentBuild.startTimeInMillis / 1000L)}"
+
                     if (!params.loc?.trim()) {
                         error "[Validate] 필수 파라미터 누락: loc"
                     }
@@ -178,34 +461,49 @@ pipeline {
                     }
                     env.SE_LOCATION    = key
                     env.SE_AGENT_LABEL = "${entry.agent_label.trim()} && (${targetLabels[targetType]})"
-                    // 맞는 온라인 노드가 없으면 executor 를 기다리며 조용히 멈추는 대신 여기서 끝낸다.
-                    //   (접수는 끝난 요청이라 Portal 에 결과를 돌려주는 것이 맞다 — finalizer 가 들어오는 다음 단계에서 Callback 까지 잇는다.)
+                    // 맞는 온라인 노드가 없으면 executor 를 기다리며 조용히 멈추는 대신 수집을 건너뛴다.
+                    //   접수는 끝난 요청이므로(Validate 통과) 빌드를 끊지 않고 outcome=no_agent 로 두면, post 의 finalizer 가
+                    //   접수 manifest 로 host 마다 실패 envelope 을 만들어 Portal 에 돌려준다 (Plan §6-5 — 접수 후 실행 인프라 실패).
                     def nodes = nodesByLabel(label: env.SE_AGENT_LABEL)
                     if (!nodes) {
-                        error "[Resolve Location] 라벨 '${env.SE_AGENT_LABEL}' 을 모두 가진 온라인 노드가 없습니다 " +
-                              "-- Manage Jenkins > Nodes 에서 '${key}' 노드의 라벨(${targetLabels[targetType]})을 확인하세요."
+                        env.SE_GATHER_OUTCOME = 'no_agent'
+                        echo "[Resolve Location] 라벨 '${env.SE_AGENT_LABEL}' 을 모두 가진 온라인 노드가 없습니다 " +
+                             "-- 수집을 건너뛰고 접수된 host 마다 실패 결과를 돌려줍니다. Manage Jenkins > Nodes 에서 '${key}' 노드의 라벨(${targetLabels[targetType]})을 확인하세요."
+                        unstable("[Resolve Location] 온라인 노드 없음 (${env.SE_AGENT_LABEL})")
+                    } else {
+                        echo "[Resolve Location] ${key} + ${targetType} -> agent label '${env.SE_AGENT_LABEL}' (nodes: ${nodes.join(', ')})"
                     }
-                    echo "[Resolve Location] ${key} + ${targetType} -> agent label '${env.SE_AGENT_LABEL}' (nodes: ${nodes.join(', ')})"
                 }
             }
         }
 
         stage('Gather') {
+            when { expression { env.SE_GATHER_OUTCOME != 'no_agent' } }
             agent {
                 node {
                     label "${env.SE_AGENT_LABEL}"
                     customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
                 }
             }
-            options { timeout(time: 60, unit: 'MINUTES') }
+            // 합산 상한 (agent 대기 포함) = scripts/gather_budget.sh STAGE_LIMIT_SEC 115 min. 집행 예산은 그 안에서 재계산한다.
+            options { timeout(time: 115, unit: 'MINUTES') }
             environment {
-                REPO_ROOT                = "${WORKSPACE}"
-                ANSIBLE_CONFIG           = "${WORKSPACE}/ansible.cfg"
-                ANSIBLE_JSON_OUTPUT_FILE = "${WORKSPACE}/gather_output.json"
-                ANSIBLE_VERBOSITY        = "${params.verbosity}"
+                REPO_ROOT                    = "${WORKSPACE}"
+                ANSIBLE_CONFIG               = "${WORKSPACE}/ansible.cfg"
+                ANSIBLE_JSON_OUTPUT_FILE     = "${WORKSPACE}/gather_output.json"
+                ANSIBLE_JSON_MANIFEST_FILE   = "${WORKSPACE}/gather_manifest.json"
+                ANSIBLE_JSON_PROGRESS_FILE   = "${WORKSPACE}/gather_progress.jsonl"
+                ANSIBLE_JSON_CHECKPOINT_FILE = "${WORKSPACE}/gather_checkpoint.jsonl"
+                // D7 — Redfish 모듈이 시도(attempt)마다 남기는 인증 증거 파일. 비밀값 없음. task timeout 뒤 rescue 가 읽는다.
+                SE_AUTH_EVIDENCE_DIR         = "${WORKSPACE}/gather_auth_evidence"
+                SE_BUILD_ID                  = "${BUILD_TAG}"
+                SE_EVENT_UUID                = "${params.eventUuid}"
+                ANSIBLE_VERBOSITY            = "${params.verbosity}"
             }
             steps {
                 script {
+                    env.SE_STAGE_START_EPOCH = "${seNowSec()}"
+                    env.SE_GATHER_OUTCOME = 'interrupted_unknown'   // 아래에서 바뀌지 않으면 중단된 것이다
                     def playbookMap = [
                         'os'     : "${WORKSPACE}/os-gather/site.yml",
                         'esxi'   : "${WORKSPACE}/esxi-gather/site.yml",
@@ -221,15 +519,26 @@ pipeline {
                     def inventory = inventoryMap[params.target_type]
                     echo "[Gather] playbook=${playbook}"
 
-                    sh "rm -f \"${env.WORKSPACE}/gather_output.json\" \"${env.WORKSPACE}/gather_rc.txt\""
+                    sh "rm -rf \"${env.WORKSPACE}/gather_output.json\" \"${env.WORKSPACE}/gather_rc.txt\" \"${env.WORKSPACE}/gather_progress.jsonl\" \"${env.WORKSPACE}/gather_checkpoint.jsonl\" \"${env.WORKSPACE}/gather_final.jsonl\" \"${env.WORKSPACE}/gather_finalize_report.json\" \"${env.WORKSPACE}/gather_auth_evidence\""
                     // 접수 manifest 파일화 — node 를 얻은 직후, 수집보다 먼저 (Validate 가 env 로 넘긴 JSON 그대로).
                     writeFile(file: 'gather_manifest.json', text: (env.SE_MANIFEST_JSON ?: '') + '\n', encoding: 'UTF-8')
 
-                    // 검증용 배치 상한 — 비어 있으면 종전과 같이 제한 없음.
+                    // 검증용 강제 상한 — 비어 있으면 scripts/gather_budget.sh 공식.
                     def budgetForce = (params.gatherBudgetForceSec ?: '').trim()
                     if (budgetForce && !(budgetForce ==~ /\d+/)) {
                         error "[Gather] gatherBudgetForceSec 은 정수(초)여야 합니다: '${budgetForce}'"
                     }
+                    def manifest = readJSON text: env.SE_MANIFEST_JSON
+                    def hostCount = (manifest.ips ?: []).size()
+                    // 예산 — node 진입 시 예상값(로그용). 집행값은 ansible 직전에 다시 계산한다 (Astra 3차 §1).
+                    def budgetEnv = ["SE_BUILD_START_EPOCH=${env.SE_BUILD_START_EPOCH}", "SE_STAGE_START_EPOCH=${env.SE_STAGE_START_EPOCH}",
+                                     "SE_CHANNEL=${params.target_type}", "SE_HOSTS=${hostCount}"] + (budgetForce ? ["SE_FORCE_SEC=${budgetForce}"] : [])
+                    def budgetScript = 'SE_NOW_EPOCH="$(date +%s)" SE_VCPU="$(nproc 2>/dev/null || echo 2)" bash scripts/gather_budget.sh'
+                    def est = null
+                    withEnv(budgetEnv) {
+                        est = readJSON text: sh(returnStdout: true, script: budgetScript, label: 'budget estimate').trim()
+                    }
+                    echo "[Budget] est gather=${est.gather} budget=${est.budget} start=${est.start} (forks=${est.forks}, waves=${est.waves}, hard_remaining=${est.hard_remaining}, stage_remaining=${est.stage_remaining})"
 
                     // ── Add-on (고객별 추가 수집) — Jenkins 전역 환경변수 ADDON_REPO_URL 이 있을 때만 켠다.
                     //    받지 못하거나 파일 검사에 실패해도 빌드를 끊지 않고 Add-on 없이 수집한다 (UNSTABLE) —
@@ -288,199 +597,115 @@ pipeline {
                         }
                     }
 
-                    catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                        withCredentials([
-                            string(
-                                credentialsId: 'server-gather-vault-password',
-                                variable     : 'VAULT_PASSWORD',
-                            ),
-                        ]) {
-                            // Ansible venv 는 scripts/activate_ansible_venv.sh 가 고른다
-                            //   (SE_ANSIBLE_VENV → PATH 의 ansible-playbook → 알려진 설치 경로). 못 찾으면 이 stage 는 실패한다.
-                            // ADDON_DIR 은 검사를 통과한 빌드의 이 ansible 실행에만 준다 — 값이 있으면 hook 이 그 Add-on 을 실행하므로,
-                            //   받지 못했거나 검사에 실패한 빌드에 남으면 모든 host 의 수집에 영향을 준다.
-                            withEnv((addonDir ? ["ADDON_DIR=${addonDir}"] : []) + (budgetForce ? ["SE_GATHER_BUDGET_FORCE_SEC=${budgetForce}"] : [])) {
-                                sh """#!/bin/bash
-                                    set -eo pipefail
-                                    set +x
-                                    cd "\${WORKSPACE}"
-                                    . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
-                                    chmod +x "${inventory}"
-                                    VAULT_TMP="\$(mktemp)"
-                                    trap 'rm -f "\$VAULT_TMP"' EXIT
-                                    printf '%s' "\${VAULT_PASSWORD}" > "\$VAULT_TMP"
-                                    chmod 600 "\$VAULT_TMP"
-                                    EXTRA_ARGS=()
-                                    if [ "${params.redfishAccountDryrun}" = "true" ]; then
-                                        # 검증 실행: 계정 복구 쓰기를 시뮬레이션만 한다 (account_service.yml 이 -e 를 우선한다)
-                                        EXTRA_ARGS+=(-e _rf_account_service_dryrun=true)
-                                    fi
-                                    RUNNER=()
-                                    if [ -n "\${SE_GATHER_BUDGET_FORCE_SEC:-}" ]; then
-                                        # 배치 상한: INT 로 ansible 이 자식까지 정리하게 하고, 90초 뒤에도 남으면 KILL
-                                        RUNNER=(timeout --signal=INT --kill-after=90 "\${SE_GATHER_BUDGET_FORCE_SEC}")
-                                    fi
-                                    set +e
-                                    "\${RUNNER[@]}" ansible-playbook "${playbook}" -i "${inventory}" --vault-password-file="\$VAULT_TMP" -e se_location="${env.SE_LOCATION}" "\${EXTRA_ARGS[@]}"
-                                    rc=\$?
-                                    set -e
-                                    echo "\$rc" > "\${WORKSPACE}/gather_rc.txt"
-                                    if [ "\$rc" -eq 124 ] || [ "\$rc" -eq 137 ]; then
-                                        echo "[Gather] budget exceeded (rc=\$rc, SE_GATHER_BUDGET_FORCE_SEC=\${SE_GATHER_BUDGET_FORCE_SEC}) -- 완료된 host 결과는 gather_output.json 에 남아 있다"
-                                    fi
-                                    exit "\$rc"
-                                """
+                    // ── 집행 예산 — ansible 직전 현재 시각으로 재계산 (준비가 길어진 만큼 gather 가 줄고 reserve 는 줄지 않는다)
+                    def exec = null
+                    withEnv(budgetEnv) {
+                        exec = readJSON text: sh(returnStdout: true, script: budgetScript, label: 'budget exec').trim()
+                    }
+                    echo "[Budget] exec gather=${exec.gather} budget=${exec.budget} start=${exec.start} reason=${exec.reason} (forks=${exec.forks}, hard_remaining=${exec.hard_remaining}, stage_remaining=${exec.stage_remaining}, wait=${(env.SE_STAGE_START_EPOCH as long) - (env.SE_BUILD_START_EPOCH as long)}s, prep=${seNowSec() - (env.SE_STAGE_START_EPOCH as long)}s)"
+                    if (!exec.start) {
+                        env.SE_GATHER_OUTCOME = 'not_started_budget'
+                        writeFile(file: 'gather_rc.txt', text: "not_started\n", encoding: 'UTF-8')
+                        unstable("[Budget] 수집을 시작하지 않음 — 남은 예산 ${exec.budget}s < MIN_START (reason=${exec.reason})")
+                    } else {
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                            withCredentials([
+                                string(
+                                    credentialsId: 'server-gather-vault-password',
+                                    variable     : 'VAULT_PASSWORD',
+                                ),
+                            ]) {
+                                // Ansible venv 는 scripts/activate_ansible_venv.sh 가 고른다
+                                //   (SE_ANSIBLE_VENV → PATH 의 ansible-playbook → 알려진 설치 경로). 못 찾으면 rc 90 (prep_failed).
+                                // ADDON_DIR 은 검사를 통과한 빌드의 이 ansible 실행에만 준다 — 값이 있으면 hook 이 그 Add-on 을 실행하므로,
+                                //   받지 못했거나 검사에 실패한 빌드에 남으면 모든 host 의 수집에 영향을 준다.
+                                withEnv((addonDir ? ["ADDON_DIR=${addonDir}"] : []) + ["SE_GATHER_BUDGET_SEC=${exec.budget}", "SE_GATHER_FORKS=${exec.forks}"]) {
+                                    def rc = sh(returnStatus: true, script: """#!/bin/bash
+                                        set -eo pipefail
+                                        set +x
+                                        cd "\${WORKSPACE}"
+                                        . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 90
+                                        chmod +x "${inventory}"
+                                        VAULT_TMP="\$(mktemp)"
+                                        trap 'rm -f "\$VAULT_TMP"' EXIT
+                                        printf '%s' "\${VAULT_PASSWORD}" > "\$VAULT_TMP"
+                                        chmod 600 "\$VAULT_TMP"
+                                        EXTRA_ARGS=()
+                                        if [ "${params.redfishAccountDryrun}" = "true" ]; then
+                                            # 검증 실행: 계정 복구 쓰기를 시뮬레이션만 한다 (account_service.yml 이 -e 를 우선한다)
+                                            EXTRA_ARGS+=(-e _rf_account_service_dryrun=true)
+                                        fi
+                                        set +e
+                                        # 배치 상한: INT 로 ansible 이 자식까지 정리하게 하고, 90초 뒤에도 남으면 KILL. 값은 직전에 재계산한 집행 예산.
+                                        timeout --signal=INT --kill-after=90 "\${SE_GATHER_BUDGET_SEC}" \\
+                                            ansible-playbook "${playbook}" -i "${inventory}" -f "\${SE_GATHER_FORKS}" --vault-password-file="\$VAULT_TMP" -e se_location="${env.SE_LOCATION}" "\${EXTRA_ARGS[@]}"
+                                        rc=\$?
+                                        set -e
+                                        echo "\$rc" > "\${WORKSPACE}/gather_rc.txt"
+                                        if [ "\$rc" -eq 124 ] || [ "\$rc" -eq 137 ]; then
+                                            echo "[Gather] budget exceeded (rc=\$rc, SE_GATHER_BUDGET_SEC=\${SE_GATHER_BUDGET_SEC}) -- 완료된 host 결과는 gather_output.json 에 남아 있다"
+                                        fi
+                                        exit "\$rc"
+                                    """)
+                                    // rc → outcome. 0/2/4/8 = ansible 이 끝까지 돌았다(host 실패·unreachable 은 envelope 에 이미 있다).
+                                    if (rc in [0, 2, 4, 8]) {
+                                        env.SE_GATHER_OUTCOME = 'completed'
+                                    } else if (rc == 124) {
+                                        env.SE_GATHER_OUTCOME = 'timeout'
+                                    } else if (rc == 137) {
+                                        env.SE_GATHER_OUTCOME = 'timeout_killed'
+                                    } else if (rc == 90) {
+                                        env.SE_GATHER_OUTCOME = 'prep_failed'
+                                    } else {
+                                        env.SE_GATHER_OUTCOME = 'failed_run'
+                                    }
+                                    if (rc != 0) {
+                                        unstable("[Gather] ansible-playbook rc=${rc} outcome=${env.SE_GATHER_OUTCOME}")
+                                    }
+                                }
                             }
                         }
                     }
-
-                    def gatherOut = "${env.WORKSPACE}/gather_output.json"
-                    if (!fileExists(gatherOut) || readFile(gatherOut).length() == 0) {
-                        error "[Gather] gather_output.json 미생성/0바이트 — ansible-playbook 완전 실패 또는 출력 경로 오류"
-                    }
                 }
-
             }
             post {
                 // 결과 보존은 수집이 어떻게 끝났든 한다 — 중단·실패한 빌드에서도 완료된 host 의 OUTPUT 줄은 남는다.
-                //   archive(빌드에 영구) + stash(Callback stage 로) 둘 다 allowEmpty: 파일이 없으면 Callback 이 그 사실을 보고한다.
+                //   Layer A(finalize_gather_output.py) 가 접수 manifest 기준으로 host 당 1줄의 gather_final.jsonl 을 만들고,
+                //   archive(빌드에 영구) + stash(post finalizer 로) 둘 다 allowEmpty — 파일이 없으면 finalizer 가 그 사실을 보고한다.
                 always {
-                    archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt', allowEmptyArchive: true, fingerprint: false)
-                    stash(
-                        name       : 'gather-output',
-                        includes   : 'gather_output.json',
-                        allowEmpty : true,
-                    )
-                    deleteDir()
-                }
-            }
-        }
-
-        stage('Validate Schema') {
-            agent {
-                node {
-                    label "${env.SE_AGENT_LABEL}"
-                    customWorkspace "${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}"
-                }
-            }
-            options { timeout(time: 2, unit: 'MINUTES') }
-            steps {
-                // venv 선택 규칙은 scripts/activate_ansible_venv.sh 한 곳 — 못 찾으면 시스템 python 으로 넘어가지 않고 실패한다.
-                sh '''#!/bin/bash
-                    set -eo pipefail
-                    set +x
-                    cd "${WORKSPACE}"
-                    . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
-                    python3 tests/validate_field_dictionary.py
-                '''
-            }
-            post {
-                always {
-                    deleteDir()
-                }
-            }
-        }
-
-        stage('Callback') {
-            agent { label 'built-in' }
-            options {
-                skipDefaultCheckout(true)
-                timeout(time: 15, unit: 'MINUTES')
-            }
-            steps {
-                script {
-                    unstash 'gather-output'
-
-                    def baseUrl = params.callbackUrl.trim().replaceAll('/+$', '')
-                    def callbackEndpoint = baseUrl + '/api/jenkins/gather/' + params.target_type.trim()
-                    echo "[Callback] POST -> ${callbackEndpoint}"
-
-                    def jsonContent = ""
-                    try {
-                        jsonContent = readFile("${WORKSPACE}/gather_output.json").trim()
-                    } catch (Exception e) {
-                        error "[Callback] gather_output.json 읽기 실패: ${e.message}"
-                    }
-
-                    if (!jsonContent) {
-                        error "[Callback] gather_output.json 이 비어있습니다 — gather 결과 미생성"
-                    }
-
-                    def rawJsonLines = []
-                    for (line in jsonContent.split('\n')) {
-                        def t = line.trim()
-                        if (t.length() > 0) {
-                            rawJsonLines.add(t)
+                    script {
+                        def outcome = env.SE_GATHER_OUTCOME ?: 'interrupted_unknown'
+                        def layerA = sh(returnStatus: true, label: 'finalize layer A', script: """#!/bin/bash
+                            set +e
+                            cd "\${WORKSPACE}"
+                            . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
+                            timeout 120 python3 scripts/finalize_gather_output.py --workspace "\${WORKSPACE}" --repo-root "\${WORKSPACE}" --outcome "${outcome}"
+                            exit \$?
+                        """)
+                        echo "[Finalize/A] exit=${layerA} outcome=${outcome}"
+                        archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_auth_evidence/**',
+                                         allowEmptyArchive: true, fingerprint: false)
+                        stash(
+                            name       : 'gather-output',
+                            includes   : 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json',
+                            allowEmpty : true,
+                        )
+                        // 보존 성공 = 필요한 파일이 존재하고 manifest 가 이 빌드의 것일 때만 workspace 를 지운다.
+                        def manifestOk = false
+                        if (fileExists('gather_manifest.json')) {
+                            try {
+                                def m = readJSON file: 'gather_manifest.json'
+                                manifestOk = (m?.build?.number?.toString() == env.BUILD_NUMBER)
+                            } catch (Exception e) {
+                                manifestOk = false
+                            }
+                        }
+                        if (manifestOk && (fileExists('gather_final.jsonl') || fileExists('gather_output.json'))) {
+                            deleteDir()
+                        } else {
+                            echo "[Finalize/A] workspace kept for forensics (manifestOk=${manifestOk})"
                         }
                     }
-
-                    echo "[Callback] JSON 라인 ${rawJsonLines.size()}개"
-
-                    if (rawJsonLines.isEmpty()) {
-                        error "[Callback] gather_output.json 에 유효 JSON 라인 0개"
-                    }
-
-                    def gatherArray = rawJsonLines.join(',')
-
-                    def callbackBody = '{'  +
-                        '"loc":"'                        + params.loc.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('\n', '\\\\n').replaceAll('\r', '\\\\r').replaceAll('\t', '\\\\t')                        + '",' +
-                        '"deploymentEnvironmentId":"'   + params.deploymentEnvironmentId.replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('\n', '\\\\n').replaceAll('\r', '\\\\r').replaceAll('\t', '\\\\t')   + '",' +
-                        '"eventUuid":"'                 + (params.eventUuid ?: '').replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"').replaceAll('\n', '\\\\n').replaceAll('\r', '\\\\r').replaceAll('\t', '\\\\t')   + '",' +
-                        '"gatherInfoJson":['             + gatherArray                                               + ']'  +
-                    '}'
-
-                    echo "[Callback] body ${callbackBody.length()} bytes, hosts=${rawJsonLines.size()}"
-
-                    def maxRetries = 3
-                    def success = false
-                    def lastError = ''
-
-                    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                        echo "[Callback] [${attempt}/${maxRetries}] 전송중..."
-                        def httpCode = ''
-                        def respBody = ''
-                        try {
-                            def resp = httpRequest(
-                                url                    : callbackEndpoint,
-                                httpMode               : 'POST',
-                                contentType            : 'APPLICATION_JSON',
-                                requestBody            : callbackBody,
-                                timeout                : 300,
-                                validResponseCodes     : '100:599',
-                                consoleLogResponseBody : false,
-                            )
-                            httpCode = "${resp.status}"
-                            respBody = resp.content ?: ''
-                        } catch (Exception e) {
-                            lastError = "httpRequest 예외 (연결 실패/timeout): ${e.message}"
-                        }
-
-                        if (httpCode ==~ /2\d\d/) {
-                            echo "[Callback] [OK] HTTP ${httpCode} (${attempt}/${maxRetries})"
-                            success = true
-                            break
-                        }
-                        if (httpCode) {
-                            def snippet = (respBody.length() > 500) ? respBody.substring(0, 500) : respBody
-                            lastError = "HTTP ${httpCode}" + (snippet ? " -- ${snippet}" : "")
-                        }
-                        echo "[Callback] [FAIL] (${attempt}/${maxRetries}) ${lastError}"
-
-                        if (attempt < maxRetries) {
-                            def waitSec = attempt * 10
-                            echo "[Callback] ${waitSec}초 후 재시도"
-                            sleep(time: waitSec, unit: 'SECONDS')
-                        }
-                    }
-
-                    if (!success) {
-                        unstable "[Callback] ${maxRetries}회 재시도 실패 -- ${lastError} (수집 결과는 console log/artifact 확인)"
-                    }
-                }
-            }
-            post {
-                always {
-                    deleteDir()
                 }
             }
         }
@@ -488,6 +713,9 @@ pipeline {
 
     post {
         always {
+            script {
+                seFinalizeAndCallback()
+            }
             echo "[Post] ======================================================="
             echo "[Post] 결과: ${currentBuild.currentResult}"
             echo "[Post] 소요: ${currentBuild.durationString ?: '-'}"
@@ -498,7 +726,7 @@ pipeline {
             echo "[Post] [OK] Gather + Callback 완료"
         }
         unstable {
-            echo "[Post] [WARN] 일부 단계 실패 -- 포털 확인 필요"
+            echo "[Post] [WARN] 일부 단계 실패 또는 보충 -- 포털 확인 필요"
         }
         failure {
             echo "[Post] [FAIL] 파이프라인 실패 -- 콘솔 로그 확인"

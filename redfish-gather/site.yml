@@ -12,7 +12,7 @@
 #   → normalize_standard (표준 fragment → merge)
 #   → vendor adapter     (OEM fragment → merge, adapter 기반 동적 로딩)
 #   → build_sections / build_status / build_errors / build_output
-#   → inject schema_version
+#   → inject schema_version → CHECKPOINT → Add-on
 #   → OUTPUT
 # =============================================================================
 
@@ -301,14 +301,6 @@
         #
         # 근거: docs/ai/decisions/ADR-2026-08-13-vendor-oem-task-removal.md
 
-        # 고객별 추가 수집 (Add-on) — 마지막 수집 뒤 · 조립 앞에 둔다 (Add-on 결과가 조립에 들어간다).
-        - name: "redfish | addon"
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
-          vars:
-            _addon_target: redfish
-          when: lookup('env', 'ADDON_DIR') | length > 0
-
         - name: "redfish | build_sections"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_sections.yml"
@@ -387,6 +379,23 @@
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
+        # ── CHECKPOINT → Add-on → (always) OUTPUT ─────────────────────────────
+        # 2026-10-03 (Plan §6-1 D8): 조립이 끝난 envelope 을 콜백이 gather_checkpoint.jsonl 에 보존한 **뒤** Add-on 을 돌린다.
+        #   Add-on 도중 강제 종료돼 OUTPUT 이 없는 host 는 Layer A(scripts/finalize_gather_output.py)가 이 줄로 복원한다.
+        #   이름은 콜백과 완전일치(CHECKPOINT) — 바꾸면 보존이 조용히 꺼진다. 이 debug 는 stdout 으로 나가지 않는다.
+        - name: CHECKPOINT
+          ansible.builtin.debug:
+            msg: "{{ _output | to_json }}"
+
+        # ── 고객별 추가 수집 (Add-on) ───────────────────────────────────
+        # 조립 뒤 · OUTPUT 앞에 둔다 — 결과는 run_addon.yml 이 _output 의 data.addon · errors[] · meta 시각에만 결합한다.
+        - name: "redfish | addon"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
+          vars:
+            _addon_target: redfish
+          when: lookup('env', 'ADDON_DIR') | length > 0
+
       rescue:
         # ── Portal Grid 계약 (2026-08-10 사용자 확인) ────────────────────
         # Portal 은 실패 Grid 의 "실패 사유" 칸에 **diagnosis.failure_reason 만** 표시한다.
@@ -418,6 +427,67 @@
         #     auth_success 는 null 을 유지한다. 후보 하나의 401 로 전체를 단정하지 않는다.
         #   빈 자격 경로(_rf_accounts 없음)는 (1) 에서 걸러진다 — 무자격 요청의 401 은
         #   "등록된 자격증명 거부" 가 아니다.
+        # 2026-10-03 (Plan §6-3 D7 — Astra 3차 acceptance): task timeout(backstop)으로 모듈이 끊기면 register 가 없다.
+        #   그 시도가 남긴 증거 파일(<SE_AUTH_EVIDENCE_DIR>/<ip>/<attempt_id>.json) **만** 읽는다 — 다른 attempt 의 파일은 이력일 뿐
+        #   현재 시도를 분류하지 않는다. build/event/ip/attempt 가 다르면 증거 없음. 익명 응답 200 은 인증 성공이 아니다.
+        #   파일은 모듈이 시작 즉시 status null 로 새로 만들고 첫 자격 응답에서 채우므로 "증거 없음" = 인증 확인 전 정지다.
+        - name: "redfish | rescue | backstop 증거 (현재 attempt 파일만)"
+          ansible.builtin.set_fact:
+            _rf_backstop_evidence: >-
+              {{ ((lookup('file', lookup('env', 'SE_AUTH_EVIDENCE_DIR') ~ '/' ~ _rf_ip ~ '/' ~ _rf_attempt_id ~ '.json',
+                          errors='ignore')
+                   if ((lookup('env', 'SE_AUTH_EVIDENCE_DIR') | length) > 0) else '')
+                  | default('', true))
+                 | parse_auth_evidence({'build_id': lookup('env', 'SE_BUILD_ID'),
+                                        'event_uuid': lookup('env', 'SE_EVENT_UUID'),
+                                        'ip': _rf_ip, 'attempt_id': _rf_attempt_id}) }}
+          when: (_rf_attempt_id | default('')) != ''
+          no_log: true
+
+        # 세 경우 (CLAUDE.md §9 — 관측한 것만 쓴다):
+        #   auth_passed   : 현재 시도의 첫 자격 응답 2xx/3xx → 관측에 넣는다 → 아래 판정이 passed (gather / auth_success true)
+        #   auth_rejected : 401 → 관측에 넣는다 → 기존 "표준 후보 전원 401" 규칙으로 rejected 또는 unknown (auth 단계, 기존대로)
+        #   before_auth   : 증거 없음 · status null · 익명 · 식별자 불일치 → stopped_before_auth (gather / auth_success null)
+        #   recovery_stopped : 복구 계정 시도(account-*) 가 멈춤 — 표준 관측은 손대지 않고 근거만 남긴다
+        #   관측은 collect-* 시도(표준 후보)만 추가한다. 401-only recovery 진입 조건은 바뀌지 않는다 (rescue 는 recovery 를 돌리지 않는다).
+        - name: "redfish | rescue | backstop 관측 반영"
+          ansible.builtin.set_fact:
+            _rf_backstop_class: >-
+              {%- set ev = _rf_backstop_evidence | default({}) -%}
+              {%- set st = ev.first_auth_status | default(none) -%}
+              {%- set proven = (ev.valid | default(false)) and (ev.credentialed | default(false)) and (st is not none) -%}
+              {%- if (_rf_attempt_id | default('')).startswith('account-') -%}recovery_stopped
+              {%- elif proven and st >= 200 and st < 400 -%}auth_passed
+              {%- elif proven and st == 401 -%}auth_rejected
+              {%- else -%}before_auth{%- endif -%}
+            _rf_auth_observations: >-
+              {%- set ev = _rf_backstop_evidence | default({}) -%}
+              {%- set st = ev.first_auth_status | default(none) -%}
+              {%- set proven = (ev.valid | default(false)) and (ev.credentialed | default(false)) and (st is not none) -%}
+              {{ (_rf_auth_observations | default([]))
+                 + ([{'role': (ev.role | default('primary', true)), 'label': (ev.label | default('unlabeled', true)), 'status': st}]
+                    if (proven and (_rf_attempt_id | default('')).startswith('collect-')) else []) }}
+            _rf_auth_statuses: >-
+              {%- set ev = _rf_backstop_evidence | default({}) -%}
+              {%- set st = ev.first_auth_status | default(none) -%}
+              {%- set proven = (ev.valid | default(false)) and (ev.credentialed | default(false)) and (st is not none) -%}
+              {{ (_rf_auth_statuses | default([]))
+                 + ([st] if (proven and (_rf_attempt_id | default('')).startswith('collect-')) else []) }}
+            _rf_failed_attempt_notes: >-
+              {%- set ev = _rf_backstop_evidence | default({}) -%}
+              {%- set st = ev.first_auth_status | default(none) -%}
+              {%- set proven = (ev.valid | default(false)) and (ev.credentialed | default(false)) and (st is not none) -%}
+              {%- if proven and st >= 200 and st < 400 -%}{%- set why = 'task timeout after auth' -%}
+              {%- elif proven -%}{%- set why = 'task timeout after auth status ' ~ st -%}
+              {%- else -%}{%- set why = 'task timeout before auth evidence (' ~ (ev.reason | default('missing')) ~ ')' -%}{%- endif -%}
+              {{ (_rf_failed_attempt_notes | default([]))
+                 + [ (ev.role | default('?', true)) ~ '/' ~ (ev.label | default(_rf_attempt_id, true))
+                     ~ ': status=task_timeout first_auth=' ~ (st if proven else 'none')
+                     ~ ' err=' ~ why
+                     ~ ((' last_request=' ~ ev.last_request) if (ev.last_request | default('')) else '') ] }}
+          when: (_rf_attempt_id | default('')) != ''
+          no_log: true
+
         - name: "redfish | rescue | 인증 거부 실증 판정"
           ansible.builtin.set_fact:
             #
@@ -490,6 +560,8 @@
               passed
               {%- elif _rf_auth_rejected | default(false) | bool -%}
               rejected
+              {%- elif (_rf_backstop_class | default('')) == 'before_auth' -%}
+              stopped_before_auth
               {%- elif tried > 0 -%}
               unknown
               {%- elif cred_na -%}
@@ -519,6 +591,10 @@
         #                   stage 는 auth 를 유지한다 — stage 는 원인이 아니라 **멈춘 위치**이고
         #                   (CLAUDE.md §9) 멈춘 곳은 자격증명 단계가 맞다.
         #                   auth_success 는 null 이다 (미시도). false 는 '구조화된 명시적 거부'다.
+        #   stopped_before_auth
+        #                 → gather / GATHER_FAILED / null / gather_internal (2026-10-03 D7). task timeout(backstop) 으로
+        #                   모듈이 끊겼는데 현재 attempt 의 증거 파일에 자격 응답이 없다 — 인증 확인 **전**에 멈췄다.
+        #                   성공도 거부도 추정하지 않는다. 과거 후보의 401 은 details/errors 이력으로만 남는다.
         #   not_attempted → gather / GATHER_FAILED / null / gather_internal. 자격 요청 자체를 보내기
         #                   **전에** 수집기 안에서 멈췄다 (adapter 선택 / vendor 정규화 예외 등).
         #                   CLAUDE.md §9 — failure_stage 는 '워크플로가 멈춘 위치' 다.
@@ -528,11 +604,11 @@
           ansible.builtin.set_fact:
             _diagnosis: >-
               {%- set outcome = _rf_auth_outcome | default('not_attempted') -%}
-              {%- set at_gather = outcome in ['passed', 'not_attempted'] -%}
+              {%- set at_gather = outcome in ['passed', 'not_attempted', 'stopped_before_auth'] -%}
               {%- set std = _cred_standard_outcome | default(_cred_load_outcome | default('')) -%}
               {%- if outcome == 'passed' -%}
                 {%- set reason_key = 'gather_after_auth' -%}
-              {%- elif outcome == 'not_attempted' -%}
+              {%- elif outcome in ['not_attempted', 'stopped_before_auth'] -%}
                 {%- set reason_key = 'gather_internal' -%}
               {%- elif outcome == 'rejected' -%}
                 {%- set reason_key = 'auth_rejected' -%}

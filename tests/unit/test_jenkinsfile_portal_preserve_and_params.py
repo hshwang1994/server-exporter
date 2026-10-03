@@ -1,14 +1,12 @@
-"""Jenkinsfile_portal — 2026-10-03 Phase 1.5 최소 선행 변경의 텍스트 계약.
+"""Jenkinsfile_portal — 2026-10-03 Phase 1.5/4 의 텍스트 계약 (접수 manifest · 검증 파라미터 · 보존).
 
-무엇이 바뀌었나:
-  1. stage 순서 Validate → Resolve Location → Gather → Validate Schema → Callback.
-     Validate · Resolve Location 은 agent 없이 돈다 (workspace 없음 → writeFile 금지).
+무엇이 고정되나:
+  1. stage 순서 Validate → Resolve Location → Gather. Validate · Resolve Location 은 agent 없이 돈다 (workspace 없음 → writeFile 금지).
   2. 접수 manifest: Validate 가 env.SE_MANIFEST_JSON(JSON 문자열)으로 만들고 Gather 가 node 진입 직후
      gather_manifest.json 으로 파일화한다 — ansible-playbook 보다 먼저.
   3. 검증용 파라미터 둘: redfishAccountDryrun(기본 false → -e _rf_account_service_dryrun=true 는 true 일 때만),
-     gatherBudgetForceSec(기본 '' → timeout --signal=INT --kill-after=90 은 값이 있을 때만).
-  4. Gather post{always}: archiveArtifacts → stash(allowEmpty) → deleteDir 순. steps 안의 stash 는 없다.
-     수집이 어떻게 끝나든 완료된 host 의 OUTPUT 줄은 보존된다.
+     gatherBudgetForceSec(기본 '' → 값이 있을 때만 SE_FORCE_SEC 로 예산 스크립트에 전달; 남은 시간을 넘지 못한다).
+  4. Gather post{always}: Layer A → archiveArtifacts → stash(allowEmpty) → deleteDir(보존 확인 뒤) 순. steps 안의 stash 는 없다.
   5. inventory_json 의 구조 오류(배열 아님 · 원소가 객체 아님)는 NPE 대신 명확한 오류 — 새 거부는 없다.
 """
 from __future__ import annotations
@@ -39,7 +37,7 @@ PARAMS = _params()
 
 
 def test_stage_order_validate_then_resolve_then_gather():
-    order = [TEXT.index(f"stage('{n}')") for n in ("Validate", "Resolve Location", "Gather", "Validate Schema", "Callback")]
+    order = [TEXT.index(f"stage('{n}')") for n in ("Validate", "Resolve Location", "Gather")]
     assert order == sorted(order), "구조가 틀린 요청은 노드를 고르기 전에 끝낸다"
 
 
@@ -81,25 +79,24 @@ def test_dryrun_flag_is_passed_only_when_the_param_is_true():
     assert guard < GATHER.index("EXTRA_ARGS+=(-e _rf_account_service_dryrun=true)")
 
 
-def test_budget_wrapper_is_used_only_when_the_param_is_set():
-    assert 'if [ -n "\\${SE_GATHER_BUDGET_FORCE_SEC:-}" ]; then' in GATHER
-    assert 'RUNNER=(timeout --signal=INT --kill-after=90 "\\${SE_GATHER_BUDGET_FORCE_SEC}")' in GATHER
-    assert '"\\${RUNNER[@]}" ansible-playbook' in GATHER
-    assert "budgetForce ? [\"SE_GATHER_BUDGET_FORCE_SEC=${budgetForce}\"] : []" in GATHER
+def test_budget_force_goes_through_the_budget_script_only():
     assert "budgetForce ==~ /\\d+/" in GATHER, "정수(초)만 받는다"
+    assert '(budgetForce ? ["SE_FORCE_SEC=${budgetForce}"] : [])' in GATHER
+    assert "SE_GATHER_BUDGET_FORCE_SEC" not in TEXT, "강제값이 timeout 에 직접 들어가지 않는다 — 스크립트가 남은 시간으로 자른다"
+    assert 'timeout --signal=INT --kill-after=90 "\\${SE_GATHER_BUDGET_SEC}"' in GATHER
     assert 'echo "\\$rc" > "\\${WORKSPACE}/gather_rc.txt"' in GATHER
     assert "-eq 124" in GATHER and "-eq 137" in GATHER, "timeout 의 rc 를 콘솔에 남긴다"
 
 
 def test_gather_post_preserves_output_before_deleting_the_workspace():
     post = GATHER[GATHER.index("post {"):]
-    archive = post.index("archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt', allowEmptyArchive: true")
+    archive = post.index("archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt")
     stash = re.search(r"^\s*stash\($", post, re.M).start()
     delete = post.index("deleteDir()")
     assert archive < stash < delete, "archive → stash → deleteDir"
     assert "allowEmpty : true" in post
     assert len(re.findall(r"^\s*stash\($", TEXT, re.M)) == 1, "steps 안의 stash 는 없다 — 보존은 post{always} 한 곳"
-    assert "unstash 'gather-output'" in _stage("Callback")
+    assert "unstash 'gather-output'" in TEXT, "finalizer 가 같은 stash 를 회수한다"
 
 
 def test_inventory_shape_errors_are_explicit_without_new_rejections():

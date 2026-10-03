@@ -16,27 +16,32 @@ parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid
             + 검증용 redfishAccountDryrun, gatherBudgetForceSec — 기본값이면 운영 동작 불변)
   → Validate          [agent 없음]  파라미터 형식 검증 → 접수 manifest(env SE_MANIFEST_JSON: 빌드·채널·요청 식별·접수 IP 목록)
   → Resolve Location  [agent 없음]  readTrusted 로 common/vars/locations.yml 하나만 읽어 loc 검증, target_type 능력 라벨과 && 로 이어 노드 라벨식 결정 (맞는 온라인 노드 없으면 즉시 실패)
-  → Gather            [Agent]     manifest 를 gather_manifest.json 으로 기록 → (전역 ADDON_REPO_URL 이 있으면 Add-on 체크아웃 · 검사) → ansible-playbook 실행 → gather_output.json
-                                  post{always}: archiveArtifacts(gather_output.json · gather_manifest.json · gather_rc.txt) → stash → deleteDir — 수집이 어떻게 끝났든 완료된 host 결과는 남는다
-  → Validate Schema   [Agent]     field_dictionary.yml 정합 (FAIL 게이트)
-  → Callback          [컨트롤러]  unstash → 호출자에게 POST (실패해도 빌드는 UNSTABLE)
+  → Gather            [Agent]     manifest 를 gather_manifest.json 으로 기록 → (전역 ADDON_REPO_URL 이 있으면 Add-on 체크아웃 · 검사)
+                                  → 예산 계산(scripts/gather_budget.sh — ansible 직전 재계산) → timeout --signal=INT --kill-after=90 <예산> ansible-playbook … -f <forks>
+                                  → rc → outcome(completed / timeout / timeout_killed / prep_failed / not_started_budget / failed_run)
+                                  post{always}: Layer A(scripts/finalize_gather_output.py: 접수 = 결과 보충) → archiveArtifacts → stash → (manifest 가 이 빌드 것일 때만) deleteDir
+  pipeline post{always} [컨트롤러, 합산 720 s]  unstash(없으면 unarchive) → Layer A 결과 또는 Groovy 최소 보충 → 호출자에게 POST(남은 예산 안 ≤3회) → callback_body.json 보존
 ```
 
 > 2026-10-03: Validate 와 Resolve Location 은 더 이상 노드를 잡지 않는다. 종전에는 Resolve Location 이 컨트롤러에서
 > 저장소 **전체**를 체크아웃한 뒤 YAML 1개를 읽었고, `main`(약 17k 파일)은 2분 제한을 넘겨 끊겼다. `readTrusted` 는
 > Job 의 SCM 설정(Lightweight checkout)으로 파일 하나만 읽는다.
+>
+> 2026-10-03 (Phase 4): `Validate Schema` 와 `Callback` stage 는 없어졌다. field_dictionary 정합은 커밋 전 `scripts/ai/ci_gate.sh`
+> (pre-commit · CI) 가 맡고, 결과 전달은 **파이프라인 `post { always }`** 의 마무리 단계가 맡는다 — stage 가 어디서 끊겨도(agent 대기
+> 초과 · ansible 강제 종료 · 1회 Abort) 실행 **경로**가 있다. 요청한 대상 1개마다 결과 1개를 보낸다: 완료된 host 는 OUTPUT 그대로,
+> Add-on 도중 끊긴 host 는 `CHECKPOINT`(조립 직후 보존본), 그 밖은 진행 기록(`gather_progress.jsonl`)에 따라 실패 봉투로 채운다 (8절).
 
 | Stage | 노드 | 하는 일 | 실패 시 |
 |-------|------|--------|--------|
 | Validate | 없음 | `target_type` / `inventory_json`(JSON 배열 · 원소 객체 · `service_ip`/`bmc_ip`/`ip`) / `callbackUrl` / `deploymentEnvironmentId` 검증, 접수 manifest 를 `env.SE_MANIFEST_JSON` 으로 | FAILURE |
 | Resolve Location | 없음 | `readYaml text: readTrusted('common/vars/locations.yml')` — 미등록 `loc` 는 노드 대기 없이 즉시 실패 | FAILURE |
-| Gather | `agent_label && 능력 라벨` 노드 | `gather_manifest.json` 기록 → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 저장소를 `${WORKSPACE}/addon` 에 받고 검사 — 3절) → venv 활성화 → `ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-file=<임시파일> -e se_location=<loc>` (검증 파라미터가 켜진 빌드만 `-e _rf_account_service_dryrun=true` / `timeout --signal=INT --kill-after=90 <초>`) → rc 를 `gather_rc.txt` 에 → post{always} 보존 | Add-on 을 받지 못하면 UNSTABLE + Add-on 없이 수집, ansible 실패는 UNSTABLE, 결과 파일 0바이트면 FAILURE |
-| Validate Schema | `agent_label && 능력 라벨` 노드 | venv 활성화 → `python3 tests/validate_field_dictionary.py` | FAILURE |
-| Callback | `built-in` | `httpRequest` POST, 3회 재시도 (10s · 20s backoff) | UNSTABLE (수집 결과는 콘솔에 남는다) |
+| Gather | `agent_label && 능력 라벨` 노드 (stage 합산 상한 115분 — agent 대기 포함) | `gather_manifest.json` 기록 → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 저장소를 `${WORKSPACE}/addon` 에 받고 검사 — 3절) → venv 활성화 → **예산 재계산**(`scripts/gather_budget.sh`: 빌드 시작 기준 전체 150분 − 마무리 예비 990 s, stage 잔여, host 수·채널·forks 기반 상한 중 최소; 120 s 미만이면 수집을 시작하지 않는다) → `timeout --signal=INT --kill-after=90 <예산> ansible-playbook <채널>/site.yml -i <채널>/inventory.sh -f <forks> --vault-password-file=<임시파일> -e se_location=<loc>` (`redfishAccountDryrun` 이 켜진 빌드만 `-e _rf_account_service_dryrun=true`) → rc 를 `gather_rc.txt` 에, outcome 을 기록 → post{always}: Layer A(`scripts/finalize_gather_output.py`) → `archiveArtifacts` → `stash` → manifest 가 이 빌드의 것일 때만 `deleteDir` | Add-on 을 받지 못하면 UNSTABLE + Add-on 없이 수집; ansible 이 비정상 종료(rc 124/137 timeout, 그 밖)여도 stage 는 끊지 않고 outcome 만 남긴다 — 결과 전달은 마무리 단계가 한다 |
+| (post) 마무리 | `built-in` — `timeout(720 s) { node('built-in') }` 합산 제한 | `unstash` → 없으면 `unarchive` → `gather_final.jsonl`(Layer A, exit 0/2) 우선, 없으면 Groovy 최소 경로(OUTPUT → CHECKPOINT+오류 1건 → 합성 실패 봉투) → `접수 수 == 결과 수` 단언 → `{loc, deploymentEnvironmentId, eventUuid, gatherInfoJson:[…]}` POST(남은 시간 안 ≤3회, 시도별 10~120 s, 4xx(408/429 제외)는 즉시 중단, ABORTED 면 1회) → `callback_body.json` · `finalize_summary.json` 보존 | 전송 실패 · 합성 보충 있음 · outcome ≠ completed → UNSTABLE. 접수 manifest 조차 없으면(Validate 전 실패) 보낼 것이 없다 |
 
 ### Ansible 실행환경(venv) 선택
 
-Gather 와 Validate Schema 는 저장소의 `scripts/activate_ansible_venv.sh` 를 한 줄로 source 한다.
+Gather(수집과 Layer A 마무리)는 저장소의 `scripts/activate_ansible_venv.sh` 를 한 줄로 source 한다.
 
 ```bash
 . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
@@ -52,8 +57,25 @@ Gather 와 Validate Schema 는 저장소의 `scripts/activate_ansible_venv.sh` �
 파이프라인 코드에 적히지 않는 이유가 이것이다 ([02-agent-node.md](02-agent-node.md) 5절·9절).
 
 > [!NOTE]
-> pytest 회귀(`tests/e2e`, `tests/integration -m "not live"`, `tests/regression`)는 Jenkins 단계가 아니다. 예전의
-> 비운영 `Jenkinsfile` 이 Stage 4 로 돌리던 것을 2026-09-28 에 파일과 함께 걷어냈다. 커밋 전 로컬에서 돌린다.
+> pytest 회귀(`tests/e2e`, `tests/integration -m "not live"`, `tests/regression`)와 field_dictionary 정합
+> (`tests/validate_field_dictionary.py`)은 Jenkins 수집 Job 의 단계가 아니다 (2026-10-03 부터 후자도). 커밋 전
+> `bash scripts/ai/ci_gate.sh` 가 둘 다 돌린다 (main 전용 CI 는 `Jenkinsfile_ci` 로 분리 예정 — Phase 6).
+
+### 시간 예산 (2026-10-03)
+
+| 상수 | 값 | 뜻 |
+|---|---|---|
+| 전체 | 150 분 (빌드 시작 기준) | 이 안에 Callback 까지 끝낸다 |
+| 마무리 예비 | 990 s = INT→KILL 유예 90 + Layer A 120 + archive/stash 60 + post 마무리 720 | 수집이 끝난 뒤 Callback 종료까지의 실제 경로 합 |
+| Gather stage 합산 상한 | 115 분 | agent 대기 · checkout · Add-on 준비 · 수집 · post 를 모두 포함 |
+| 수집 예산 | `clamp(300 + host_cap × waves, 600, 5400)` 과 위 두 잔여 중 **최소** — `ansible-playbook` 직전에 다시 계산 | host_cap: os/esxi 240 s, redfish 후보 수 × (540 + 65)(+복구 240); forks: os `min(H,100)`, esxi `min(H,2×vCPU)`, redfish `min(H,4×vCPU)` |
+| 최소 시작 | 120 s | 그보다 적게 남으면 수집을 시작하지 않고(`not_started_budget`) 마무리로 넘어간다 |
+| 검증용 강제값 | `gatherBudgetForceSec` | 공식 대신 쓰되 전체·stage 잔여는 넘지 못한다 |
+
+예산 로그는 콘솔의 `[Budget] est=…`(node 진입) 와 `[Budget] exec=…`(ansible 직전) 두 줄이다. 공식은 `scripts/gather_budget.sh` 가 정본이고
+`tests/unit/test_gather_budget.py` 가 고정한다. host 안에서는 Ansible task `timeout`(Linux 120 s · Windows 180 s · ESXi 180 s ·
+Redfish detect 120/collect 600/account 240 s, 모듈 `deadline` 은 그보다 짧게)이 hang 한 태스크 하나를 끊는다 — 이것은 개별 hang 격리이지
+host 상한이 아니다.
 
 ## 2. Jenkins 파라미터
 
@@ -90,7 +112,11 @@ Jenkinsfile 이 설정한다.
 | `PYTHONDONTWRITEBYTECODE` | 전체 | `1` |
 | `REPO_ROOT` | Gather | `${WORKSPACE}` — adapter / vault 로딩 기준 |
 | `ANSIBLE_CONFIG` | Gather | `${WORKSPACE}/ansible.cfg` |
-| `ANSIBLE_JSON_OUTPUT_FILE` | Gather | `${WORKSPACE}/gather_output.json` — `json_only` 콜백이 envelope 을 쓴다 |
+| `ANSIBLE_JSON_OUTPUT_FILE` | Gather | `${WORKSPACE}/gather_output.json` — `json_only` 콜백이 envelope 을 쓴다 (flush+fsync) |
+| `ANSIBLE_JSON_MANIFEST_FILE` | Gather | `${WORKSPACE}/gather_manifest.json` — 접수 집합. 콜백이 inventory 와 대조해 다르면 stderr 로 알린다 (2026-10-03) |
+| `ANSIBLE_JSON_PROGRESS_FILE` | Gather | `${WORKSPACE}/gather_progress.jsonl` — host 전이 이벤트(first_seen · precheck · cred_load · auth_proven · checkpoint · addon_started · addon_done · emitted · lost). Layer A 가 누락 봉투를 채울 때 읽는다 |
+| `ANSIBLE_JSON_CHECKPOINT_FILE` | Gather | `${WORKSPACE}/gather_checkpoint.jsonl` — Add-on 직전 조립본(`CHECKPOINT` 태스크) host 당 1줄 |
+| `SE_AUTH_EVIDENCE_DIR` / `SE_BUILD_ID` / `SE_EVENT_UUID` | Gather | `${WORKSPACE}/gather_auth_evidence` / `${BUILD_TAG}` / `${params.eventUuid}` — Redfish 모듈이 시도(attempt)마다 남기는 인증 증거 파일(비밀값 없음). task timeout 뒤 rescue 가 현재 시도의 파일만 읽어 401 / 인증 뒤 정지 / 확인 전 정지를 가른다 ([../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md)) |
 | `ANSIBLE_VERBOSITY` | Gather | `${params.verbosity}` |
 | `ADDON_DIR` | Gather 의 ansible 실행만 | `${WORKSPACE}/addon` — Add-on 을 켜고(아래 전역 변수) 받은 파일이 검사를 통과한 빌드에만 있다 |
 
@@ -116,7 +142,7 @@ Jenkins 관리 → System → Global properties → Environment variables. 노�
 3. 검사를 통과하면 그 빌드의 수집에 Add-on 을 넣는다. ESXi · Redfish 빌드는 Add-on 이 할 일이 없어 켜지 않는다
    (콘솔 `[addon] 실행할 기능 없음`, UNSTABLE 아님).
 4. 받지 못하거나(URL · ref · 인증 · 인증서 · 저장소 다운) 검사에 실패하면 콘솔에 `[addon] unavailable: <사유>` 를 남기고
-   빌드를 UNSTABLE 로 표시한 뒤 Add-on 없이 수집한다. 기본 수집 · Validate Schema · Callback 은 정상이고 서버별
+   빌드를 UNSTABLE 로 표시한 뒤 Add-on 없이 수집한다. 기본 수집 · 마무리(Callback) 은 정상이고 서버별
    결과(`errors[]`)에 Add-on 오류가 붙지 않는다 — 저장소 문제는 서버 문제가 아니다.
 
 받은 파일은 빌드가 끝나면 작업 공간과 함께 지운다 (빌드마다 새로 받는다).
@@ -174,17 +200,27 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
 |------|---------|
 | Label | `common/vars/locations.yml` 의 `agent_label` (ic / chj / yi / git) + 수집할 target_type 의 능력 라벨 (`os` 는 `linux` 와 `windows`, `esxi` 는 `esxi`, `redfish` 는 `redfish`) — [02-agent-node.md](02-agent-node.md) 8절 |
 | venv | `/app/ansible-env` 또는 `/opt/ansible-env`, 아니면 노드 환경변수 `SE_ANSIBLE_VENV` |
-| CLI `git` | Gather · Validate Schema 의 체크아웃, Add-on 체크아웃(`scripts/addon_checkout.sh`)에 필요 |
+| CLI `git` | Gather 의 체크아웃, Add-on 체크아웃(`scripts/addon_checkout.sh`)에 필요 |
 | Add-on 저장소 접근 | 전역 `ADDON_REPO_URL` 을 켠 경우 Agent 에서 그 URL 에 닿아야 한다 (자체 서명 인증서는 기본값으로 통과 — CA 설치 불필요) |
 | 네트워크 | 대상 서버 (SSH 22 / WinRM 5985·5986 / BMC 443) 접근 가능 |
 | 디스크 | workspace + ansible 로그 공간 (빌드마다 `clovirone-server-gather-<번호>` 작업 공간을 만들고 끝나면 지운다) |
 
 ## 8. 결과 전달
 
-- Gather 가 만든 `gather_output.json` 은 host 마다 envelope 한 줄(JSON Lines)이다. 컨트롤러가 `unstash` 해서
-  `{loc, deploymentEnvironmentId, eventUuid, gatherInfoJson:[...]}` 본문으로 `<callbackUrl>/api/jenkins/gather/<target_type>` 에 POST 한다.
-- Callback 이 3회 모두 실패하면 빌드는 UNSTABLE 이고 envelope 은 콘솔 로그에 남는다 — 수집 자체는 성공했으므로 빌드를 FAILURE 로 만들지 않는다.
-- envelope 형식은 [../contract/02-output-envelope.md](../contract/02-output-envelope.md).
+- Gather 가 만든 `gather_output.json` 은 host 마다 envelope 한 줄(JSON Lines)이다. 파이프라인 `post { always }` 의 마무리 단계
+  (컨트롤러)가 `unstash`(없으면 같은 빌드의 artifact 를 `unarchive`) 해서 `{loc, deploymentEnvironmentId, eventUuid, gatherInfoJson:[...]}`
+  본문으로 `<callbackUrl>/api/jenkins/gather/<target_type>` 에 POST 한다.
+- **요청한 대상 1개 = 결과 1개.** Gather 의 `post{always}` 가 먼저 Layer A(`scripts/finalize_gather_output.py`)로 `gather_final.jsonl` 을 만든다:
+  OUTPUT 줄(13 필드 · 접수 IP 검사) → 없는 host 는 `CHECKPOINT` 줄(Add-on 직전 조립본; Add-on 중 끊겼으면 "추가 수집 중 처리가 중단되어 …"
+  오류 1건, 아니면 "결과를 내보내는 단계에서 중단" 1건) → 그래도 없는 host 는 진행 기록으로 실패 봉투 합성(precheck 진단 보존 / 인증 뒤
+  중단 `GATHER_FAILED` auth true / 연결 끊김 `AUTH_PROBE_FAILED` / 그 밖 `OUTPUT_BUILD_FAILED`). 보고서 `gather_finalize_report.json`
+  (accepted · kept · filled · dropped · conflicts). Layer A 가 없거나 실패(exit 3)하면 컨트롤러 Groovy 가 OUTPUT → CHECKPOINT → 합성 봉투의
+  최소 경로로 같은 수를 맞춘다 (progress 기반 stage 분류는 하지 않는다 — 보고서에 남는 차이).
+- Callback 은 남은 예산 안에서 최대 3회(시도별 10~120 s; 5xx · 408 · 429 · 예외만 재시도, 그 밖 4xx 는 중단; 빌드가 ABORTED 면 1회 60 s).
+  2xx 는 HTTP 응답 성공이지 Portal 의 저장 증거가 아니다. 모두 실패하면 UNSTABLE 이고 본문은 `callback_body.json` artifact 로 남는다 —
+  수집 자체가 성공했으면 빌드를 FAILURE 로 만들지 않는다. 합성 보충이 1건이라도 있거나 outcome 이 `completed` 가 아니면 UNSTABLE.
+- envelope 형식은 [../contract/02-output-envelope.md](../contract/02-output-envelope.md), 실패 봉투의 stage/code 는
+  [../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md).
 
 ---
 

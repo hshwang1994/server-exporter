@@ -57,7 +57,7 @@ RBAC Pattern 과 일치해야 권한이 자동 적용된다.
 
 ### Agent 쪽 전제
 
-Gather 와 Validate Schema 는 Agent 에서 저장소를 체크아웃한다 — Agent 에 CLI `git` 이 있어야 한다.
+Gather 는 Agent 에서 저장소를 체크아웃한다 — Agent 에 CLI `git` 이 있어야 한다 (2026-10-03 부터 Agent 를 쓰는 stage 는 Gather 하나다).
 Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾는다 ([02-agent-node.md](02-agent-node.md) 5절·9절).
 
 ### 인프라 자동화 Script Path (참고)

@@ -21,6 +21,7 @@
 #   _e_ip / _e_user / _e_pass / _e_hostname (= ansible_hostname, 없으면 null)
 
 - name: "esxi | runtime | NTP info"
+  timeout: "{{ _e_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   community.vmware.vmware_host_ntp_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"
@@ -33,6 +34,7 @@
   no_log: true
 
 - name: "esxi | runtime | firewall info"
+  timeout: "{{ _e_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   community.vmware.vmware_host_firewall_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"
@@ -45,6 +47,7 @@
   no_log: true
 
 - name: "esxi | runtime | service info"
+  timeout: "{{ _e_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   community.vmware.vmware_host_service_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"

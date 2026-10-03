@@ -3,6 +3,7 @@
 # vmware_datastore_info → _e_raw_ds, _e_ds_ok
 
 - name: "esxi | collect | vmware_datastore_info"
+  timeout: "{{ _e_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   community.vmware.vmware_datastore_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"

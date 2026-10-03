@@ -10,13 +10,17 @@
 
 | Play | 위치 | `_addon_target` |
 |---|---|---|
-| Linux | `os-gather/site.yml` "linux \| gather hba_ib" 뒤, "linux \| build diagnosis" 앞 | `linux` |
-| Windows | `os-gather/site.yml` "windows \| gather runtime" 뒤, "windows \| build diagnosis" 앞 | `windows` |
-| ESXi | `esxi-gather/site.yml` "esxi \| collect runtime" 뒤, "esxi \| build_sections" 앞 | `esxi` |
-| Redfish | `redfish-gather/site.yml` "redfish \| normalize standard" 뒤, "redfish \| build_sections" 앞 | `redfish` |
+| Linux | `os-gather/site.yml` "linux \| inject schema_version" → `CHECKPOINT` 뒤, block 의 마지막 (그 뒤는 `always` 의 OUTPUT) | `linux` |
+| Windows | `os-gather/site.yml` "windows \| inject schema_version" → `CHECKPOINT` 뒤, block 의 마지막 | `windows` |
+| ESXi | `esxi-gather/site.yml` "esxi \| inject schema_version" → `CHECKPOINT` 뒤, block 의 마지막 | `esxi` |
+| Redfish | `redfish-gather/site.yml` "redfish \| inject schema_version" → `CHECKPOINT` 뒤, block 의 마지막 | `redfish` |
 
-- 인증과 기본 수집이 끝난 뒤, 조립(`build_*`) 직전이다. Add-on 은 이미 붙어 있는 연결을 그대로 쓴다.
-  자격증명 해석 · 후보 시도 · 재접속 코드가 Add-on 에 없다.
+- 인증과 기본 수집, 그리고 **조립(`build_*`)까지 끝난 뒤**다 (2026-10-03 — 종전에는 조립 앞이었다). Add-on 은 이미 붙어 있는
+  연결을 그대로 쓴다. 자격증명 해석 · 후보 시도 · 재접속 코드가 Add-on 에 없다.
+- 조립된 봉투는 Add-on 전에 `CHECKPOINT` 태스크(`debug: msg`)로 나가고, `json_only` 콜백이 그것을 `gather_checkpoint.jsonl`
+  에 host 당 1줄 보존한다. Add-on 도중 실행이 강제 종료돼 OUTPUT 이 없는 host 는 Jenkins 의 마무리 단계
+  (`scripts/finalize_gather_output.py`)가 이 줄로 복원한다 — 기본 수집 결과는 Add-on 이 어떻게 끝나든 남는다
+  ([04-pipeline-runtime.md](../operate/04-pipeline-runtime.md)).
 - 기본 수집이 중간에 멈추면(인증 실패 등) 이 지점에 오지 않으므로 Add-on 도 실행되지 않는다.
 - 무엇을 할지는 Add-on 이 `_addon_target` 으로 정한다. 지금 Add-on 은 Linux(Software · hosts)와 Windows(Software)
   에서만 일하고, ESXi · Redfish 에서는 아무 것도 하지 않으며 알림도 남기지 않는다. Jenkins 쪽도 Add-on 이 지원하지 않는
@@ -59,8 +63,11 @@ Jenkins 밖에서 직접 실행할 때(엔진 테스트 · WSL)는 Add-on 디렉
 | Add-on → 메인 | `_addon_result` | dict. `data.addon` 아래에 그대로 들어간다. 비어 있으면 `addon` 키를 만들지 않는다 |
 | | `_addon_errors` | 문장 목록. 있으면 `errors[]` 에 `section: addon` 1건 (`detail` = 문장들을 ` \| ` 로 이은 것) |
 
-hook 이 `{'addon': _addon_result}` 를 `_data_fragment` 로 만들어 `merge_fragment.yml` 로 합친다. Add-on 은
-fragment 변수나 누적 변수를 고치지 않는다 (누적 변수는 위 hostname 하나만 읽는다). 합칠 것이 없으면 merge 도 부르지 않는다.
+hook 은 fragment 를 만들지 않는다 (2026-10-03). 조립이 끝난 `_output` 에 직접 결합하며 손대는 곳은 세 곳뿐이다:
+`data.addon`(결과가 있을 때만 키 생성), `errors[]`(`section: addon` 1건 — `build_errors` 와 같은 `normalize_errors` 필터를
+거친다), `meta.finished_at` / `meta.duration_ms`(Add-on 종료 시각으로 갱신). Add-on 은 fragment 변수나 누적 변수를 고치지
+않는다 (누적 변수는 위 hostname 하나만 읽는다). 콜백 진행 이벤트용으로 hook 앞뒤에 `ADDON_START` / `ADDON_DONE`
+태스크(set_fact)가 있다 — 이름을 바꾸면 복원 시 "Add-on 중 중단" 과 "emit 실패" 를 구분하지 못한다.
 
 Add-on 이 지킬 것: 돌려주는 두 변수의 글자는 UTF-8 로 쓸 수 있어야 한다. 원격 출력의 UTF-8 이 아닌 바이트는
 Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜백이 그 host 봉투를 쓰지 못해 기본 결과까지 잃는다
@@ -68,13 +75,18 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 
 ## 4. 봉투에 미치는 영향
 
-- `status` · `sections` · `diagnosis` 는 바뀌지 않는다. hook 은 섹션을 만들지 않고, `errors[]` 는 `status`
-  판정에 쓰이지 않는다 ([02-normalize-flow.md](02-normalize-flow.md)).
+- `status` · `sections` · `diagnosis` 는 바뀌지 않는다. hook 은 조립이 끝난 뒤에 돌고 그 세 값에는 손대지 않는다 —
+  `CHECKPOINT` 의 값이 그대로 OUTPUT 에 실린다 ([02-normalize-flow.md](02-normalize-flow.md)).
 - Add-on 이 실행 중 실패하면 rescue 가 격리한다. 그때까지의 중간 결과는 버리고 `errors[]` 1건만 남긴다.
+  role 안 태스크 하나가 끝나지 않으면 태스크별 제한(기본 300 s, `_addon_task_timeout`)이 그 태스크를 실패시켜 같은 rescue 로 보낸다.
+- 실행 전체가 강제 종료돼 OUTPUT 을 못 낸 host 는 `CHECKPOINT` 로 복원된다. `ADDON_START` 는 있고 `ADDON_DONE` 이 없으면
+  "추가 수집 중 처리가 중단되어 추가 수집 결과가 없습니다. 기본 수집 결과는 그대로입니다." 가 `errors[]` 에 1건 붙고,
+  `ADDON_DONE` 까지 있는데 OUTPUT 이 없으면 Add-on 탓으로 적지 않는다 (emit 실패 문장).
 - 실행 도중 연결이 끊겨도 host 를 잃지 않는다 (`ignore_unreachable: true` — `try_one_credential.yml` 과 같은
   이유). 이 설정은 include 한 role 안쪽 태스크까지 이어진다.
 - 수집에 들어가기 전에 멈춘 실패 봉투(rescue · `always` fallback · 콜백 보충)에는 `addon` 이 없다.
-- `meta.duration_ms` 에는 Add-on 실행 시간도 들어간다 (hook 이 `build_meta` 보다 앞에서 돈다).
+- `meta.duration_ms` 에는 Add-on 실행 시간도 들어간다 — hook 이 Add-on 종료 시각으로 `finished_at` / `duration_ms` 를
+  갱신한다 (`CHECKPOINT` 의 값은 조립 시점까지다).
 - `errors[]` 문장 (`message`) 은 세 가지다. 변수명 · 경로 · 원인 코드는 `detail` 에만 있다.
 
 | 경우 | `message` |
@@ -103,9 +115,10 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
   `AnsibleParserError` 를 다시 던진다). 그래서 고객이 고치는 파일은 런타임에 읽는 설정 파일(`config/`)로
   두고, Add-on 의 `tools/check_layout.py` 가 켜기 전에 태스크 YAML 과 설정 파일을 검사하며, Add-on 태스크 변경은
   Add-on 테스트를 통과한 뒤 `main` 에 올린다.
-- hook 에는 timeout 이 없다. 대신 Add-on 이 명령마다 제한 시간(5분)을 둔다 — Linux 는 `timeout`, Windows 는
-  `async`. 그 밖의 이유로 태스크가 끝나지 않으면 Jenkins Gather 단계 제한(60분, `Jenkinsfile_portal`)까지 play 를
-  붙잡고, 그 빌드의 모든 host 결과가 전달되지 않는다.
+- hook 의 제한 시간은 role 안 **태스크 하나**에 대한 300 s(`include_role … apply: timeout`)뿐이다 — role 전체 · loop 누적 ·
+  host 전체 상한이 아니다. Add-on 자체의 명령별 제한(5분 — Linux 는 `timeout`, Windows 는 `async`)이 1차이고 이 제한은 그것이
+  놓친 태스크를 끊는 2차다. 끊긴 태스크의 원격 자식 프로세스는 남을 수 있다. 그래도 끝나지 않는 host 는 Jenkins Gather 단계의
+  예산(`scripts/gather_budget.sh`)이 실행 전체를 끊고, 그 host 는 `CHECKPOINT` 로 복원된다 — 다른 host 의 결과는 그대로 전달된다.
 - Add-on 이 돌려준 글자에 짝 없는 surrogate(원격 출력의 UTF-8 이 아닌 바이트)가 남으면 콜백이 그 host 의 봉투를
   쓰지 못한다 (`surrogates not allowed`). 콜백 보충이 `OUTPUT_BUILD_FAILED` 실패 봉투를 대신 내므로 host 수는
   유지되지만 기본 수집 결과도 잃는다. 그래서 3절의 약속대로 Add-on 이 돌려주기 전에 글자를 정리한다.
@@ -119,8 +132,8 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 | 테스트 | 무엇을 | 어디서 |
 |---|---|---|
 | `tests/unit/test_inventory_passthrough.py` | host object 보존 · 문자열 감싸기 · 예약 키 제외 · 기존 오류 경로 | 어디서나 |
-| `tests/unit/test_addon_hook_contract.py` | 호출 4곳 · 경로 세 경우 · timeout 없음 · 문장 규칙 · 뼈대에 `addon` 없음 | 어디서나 |
-| `tests/integration/test_addon_hook_playbook.py` | 실제 ansible-playbook 으로 공통 조립 코드 + hook: 미설정 시 byte 동일, 경로 없음 · 상위 폴더, 끝 `/`, 정상, 참고 문장, 실행 실패, 연결 끊김 | Linux / WSL / Jenkins Agent |
+| `tests/unit/test_addon_hook_contract.py` | 호출 4곳(`inject schema_version` → `CHECKPOINT` → hook 마지막) · 경로 세 경우 · 태스크별 timeout 하나뿐 · 결합이 data.addon/errors/meta 시각만 건드림 · 마커 이름 · 문장 규칙 · 뼈대에 `addon` 없음 | 어디서나 |
+| `tests/integration/test_addon_hook_playbook.py` | 실제 ansible-playbook 으로 공통 조립 코드 + CHECKPOINT + hook: 미설정 시 byte 동일, 경로 없음 · 상위 폴더, 끝 `/`, 정상, 참고 문장, 실행 실패, 연결 끊김, 끝나지 않는 태스크(timeout), checkpoint 줄 = hook 없는 OUTPUT, 진행 이벤트 순서 | Linux / WSL / Jenkins Agent |
 | `tests/unit/test_addon_checkout.py` | `scripts/addon_checkout.sh` 를 실제 git(로컬 저장소)으로: 브랜치 · 태그 · `refs/heads/` · 40자 해시 · 광고되지 않은 해시(2차 fetch) · 짧은 해시 거부 · 옵션형 ref 거부 · 없는 ref/저장소 · 이전 파일 제거 · askpass | 어디서나 (bash + git) |
 | `tests/unit/test_jenkinsfile_portal_addon.py` | `Jenkinsfile_portal` 텍스트 계약: `ADDON_DIR` 은 Gather 의 `withEnv` 한 곳 · `ADDON_REPO_URL` 게이트 · ref 는 전역 `ADDON_REPO_REF` 하나 (Job 파라미터 없음) · 실패는 `unstable` · 노드 경로 / 배포 Job / 전역 git 설정 흔적 0 | 어디서나 |
 | Add-on 저장소 `tests/` | Add-on 자체의 판정 · 설정 검사 · 실행 틀 · role 실행 | Add-on 저장소 |

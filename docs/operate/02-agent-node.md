@@ -130,7 +130,7 @@ venv 위치는 설치 방식에 따라 다르다. 파이프라인은 어느 쪽�
 | 이 문서대로 직접 구축 | `/opt/ansible-env` | 아래 절차 |
 | 그 밖의 경로 | 임의 | 노드 환경변수 `SE_ANSIBLE_VENV=<venv 루트>` 를 등록한다 (9절) |
 
-> 파이프라인의 Gather · Validate Schema 는 저장소의 `scripts/activate_ansible_venv.sh` 를 source 한다.
+> 파이프라인의 Gather 는 저장소의 `scripts/activate_ansible_venv.sh` 를 source 한다.
 > 이 스크립트가 `SE_ANSIBLE_VENV` → PATH 의 `ansible-playbook` 이 가리키는 venv → 위 두 경로 순으로 찾고,
 > 못 찾으면 시스템 python 으로 넘어가지 않고 Stage 를 실패시킨다.
 

@@ -18,7 +18,16 @@
 - when: not (_rf_collect_ok | default(false) | bool)
   block:
 
+    # 2026-10-03 (Plan §6-3 D7): 시도 식별자 `<phase>-<candidate_index>-<invocation>`. 모듈은 이 이름으로 증거 파일을 만들고,
+    #   task timeout 뒤 rescue 는 **이 attempt 의 파일만** 읽는다. 결과를 기록한 뒤 비운다 (아래 record auth evidence).
+    - name: "redfish | try_account | mark attempt in flight"
+      ansible.builtin.set_fact:
+        _rf_attempt_seq: "{{ (_rf_attempt_seq | default(0) | int) + 1 }}"
+        _rf_attempt_id:  "collect-{{ ansible_loop.index | default(1) }}-{{ (_rf_attempt_seq | default(0) | int) + 1 }}"
+      no_log: true
+
     - name: "redfish | try_account | attempt"
+      timeout: "{{ _rf_task_timeout | default(600) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 인자 전달 (Additive).
       # adapter `vendor_notes.manager_layout` 정의 vendor (HPE CSUS 3200 / Superdome
       # Flex) 만 멀티-노드 토폴로지 활성. 다른 vendor 는 빈 문자열 → 모듈이 None 처리.
@@ -30,6 +39,13 @@
         verify_ssl:     false
         manager_layout: "{{ _rf_adapter_manager_layout | default('') }}"
         deadline:       "{{ _rf_deadline | default(540) }}"
+        attempt:
+          evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"
+          id:           "{{ _rf_attempt_id }}"
+          build_id:     "{{ lookup('env', 'SE_BUILD_ID') }}"
+          event_uuid:   "{{ lookup('env', 'SE_EVENT_UUID') }}"
+          label:        "{{ _try_account.label | default('unlabeled') }}"
+          role:         "{{ _try_account.role | default('primary') }}"
       register:    _rf_attempt
       failed_when: false
       no_log: true
@@ -54,6 +70,7 @@
     #   status 는 정수 그대로다 — 문자열로 만들어 비교하지 않는다.
     - name: "redfish | try_account | record auth evidence"
       ansible.builtin.set_fact:
+        _rf_attempt_id: ''     # 결과를 기록했다 — 더는 '진행 중인 시도' 가 아니다 (D7)
         _rf_auth_statuses: >-
           {{ (_rf_auth_statuses | default([]))
              + [ ((_rf_attempt | default({}, true)).auth_evidence
