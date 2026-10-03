@@ -11,7 +11,7 @@
     tests/fixtures/redfish/hpe_emulator_* 아래 "emulator-derived" 로 라벨링.
 
 설계:
-    - record (capture): rg._get / rg._get_noauth 를 실 에뮬레이터로 passthrough
+    - record (capture): rg._get_impl / rg._get_noauth 를 실 에뮬레이터로 passthrough
       하면서 (path -> 응답) 을 기록 → recording.json.
     - replay (test): 기록된 recording.json 을 (path -> 응답) lookup 으로 주입해
       **실제** detect_vendor → _collect_all_sections → _compute_final_status 를
@@ -48,7 +48,7 @@ sys.modules.setdefault("ansible.module_utils.basic", _stub_basic)
 import redfish_gather as rg  # noqa: E402
 
 # import 시점의 "진짜" 네트워크 transport (swap 전 원본 보존).
-_REAL_GET = rg._get
+_REAL_GET = rg._get_impl          # 2026-10-03 (P2): seam 은 전송 계층(_get_impl). _get 의 캐시·인증 관측은 재생에서도 돈다
 _REAL_GET_NOAUTH = rg._get_noauth
 
 # replay 시 기록에 없는 path 응답 = 실 BMC 의 404 와 동일 형태로 반환.
@@ -69,7 +69,7 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
         CSUS/Superdome 캡처를 멀티노드로 재생하려면 'rmc_primary' 를 넘긴다. 기본 None →
         단일노드(기존 DMTF/표준 mockup 동작 불변, multi_node=None).
 
-    get_impl / noauth_impl: rg._get / rg._get_noauth 를 대체할 transport.
+    get_impl / noauth_impl: rg._get_impl / rg._get_noauth 를 대체할 transport (2026-10-03: _get 은 캐시 wrapper).
         (record 시 passthrough+기록, replay 시 lookup)
     realm_impl: rg._probe_realm_hint 를 대체할 transport (선택, 기본 None).
         vendor=unknown fixture(예: DMTF 표준 mockup, Manufacturer 가 alias 미매치)는
@@ -85,9 +85,11 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
     # 2026-08-12: notices 는 모듈 수준 누적이라(main() 이 진입 시 reset) 재생 케이스 간
     # 오염을 막으려면 여기서도 초기화해야 한다. GOLDEN_KEYS 에는 없어 비교 대상은 아니다.
     rg._reset_notices()
-    saved_get, saved_noauth = rg._get, rg._get_noauth
+    saved_get, saved_noauth = rg._get_impl, rg._get_noauth
     saved_realm = rg._probe_realm_hint
-    rg._get, rg._get_noauth = get_impl, noauth_impl
+    rg._get_impl, rg._get_noauth = get_impl, noauth_impl
+    rg._reset_response_cache(enabled=True)   # main() 과 같은 조건 (gather 모드는 캐시 on)
+    rg._set_deadline(0)
     if realm_impl is not None:
         rg._probe_realm_hint = realm_impl
     try:
@@ -196,7 +198,8 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
             "error_count": len(all_errors),
         }
     finally:
-        rg._get, rg._get_noauth = saved_get, saved_noauth
+        rg._get_impl, rg._get_noauth = saved_get, saved_noauth
+        rg._reset_response_cache(enabled=False)
         rg._probe_realm_hint = saved_realm
 
 

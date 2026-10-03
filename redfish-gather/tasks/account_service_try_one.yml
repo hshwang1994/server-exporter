@@ -26,6 +26,7 @@
         password:        "{{ _try_recovery.password | default('') }}"
         timeout:         "{{ _rf_timeout }}"
         verify_ssl:      false
+        deadline:        "{{ _rf_account_deadline | default(180) }}"
         mode:            "account_provision"
         target_username: "{{ _rf_target_account.username }}"
         target_password: "{{ _rf_target_account.password }}"
@@ -86,7 +87,9 @@
     #   timeout / TLS / transport 오류는 실패 카운터를 올리지 않으므로 종전 5초를 유지한다
     #   — 정상 장비의 실행시간에 영향을 주지 않기 위해서다.
     - name: "redfish | account_service | backoff on recovery auth failure"
-      when: not (_rf_acct_attempt_auth_ok | bool)
+      when:
+        - not (_rf_acct_attempt_auth_ok | bool)
+        - (ansible_loop is not defined) or (ansible_loop.index < ansible_loop.length)   # 2026-10-03 (N3): 마지막 후보 뒤 대기 생략
       ansible.builtin.command: >-
         sleep {{ _rf_auth_backoff_seconds | default(65)
                  if (((_rf_acct_attempt.account_service | default({})).auth_rejected | default(false)) | bool)

@@ -29,6 +29,7 @@
         timeout:        "{{ _rf_timeout }}"
         verify_ssl:     false
         manager_layout: "{{ _rf_adapter_manager_layout | default('') }}"
+        deadline:       "{{ _rf_deadline | default(540) }}"
       register:    _rf_attempt
       failed_when: false
       no_log: true
@@ -134,8 +135,12 @@
     #   피할 수 없다. 반대로 timeout / TLS / transport 오류는 실패 카운터를 올리지 않으므로
     #   종전 5초를 유지한다 — 도달 불가 장비에서 수집 시간만 늘리지 않기 위해서다.
     #   source: dell.com/.../idrac10_1.xx_scg/network-security-configuration
+    # 2026-10-03 (N3): 마지막 후보 뒤에는 기다릴 이유가 없다 — 다음 시도가 없다. 표준 계정 1벌 환경에서 401 host 마다 65초를 아낀다.
+    #   ansible_loop 는 collect_standard.yml 의 loop_control.extended 가 준다(없으면 종전처럼 항상 대기).
     - name: "redfish | try_account | backoff on failure"
-      when: not (_rf_attempt_ok | bool)
+      when:
+        - not (_rf_attempt_ok | bool)
+        - (ansible_loop is not defined) or (ansible_loop.index < ansible_loop.length)
       ansible.builtin.command: >-
         sleep {{ _rf_auth_backoff_seconds | default(65)
                  if ((_rf_attempt.auth_evidence | default({})).first_auth_status | default(0)) == 401

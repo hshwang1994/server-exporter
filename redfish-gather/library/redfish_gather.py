@@ -44,7 +44,7 @@ options:
   verify_ssl: optional, bool, default false
 '''
 
-import json, re, socket, sys, time, traceback
+import copy, json, re, socket, sys, time, traceback
 import urllib.parse as _urlparse
 
 # ── 단위 변환 상수 (cycle 2026-06-04 R-4 — 매직넘버 명명) ──────────────────────
@@ -249,6 +249,88 @@ def auth_evidence():
 # redfish-gather/site.yml 이 diagnosis.details.notices 에 싣는다
 # (envelope 13 top-level 필드 변경 아님 — CLAUDE.md §11 이 details 를 기술 evidence /
 #  확장 metadata 영역으로 규정한다).
+# ── P2 (2026-10-03): 프로세스 내 200 응답 캐시 + 모듈 호출 deadline ───────────────────────
+# 캐시는 host 1 · 자격 1벌 · 모듈 호출 1회 안에서만 산다 (main() 이 비운다). 200 + JSON dict 응답만,
+# (username, path) 키, hit 는 deep copy 를 돌려 parser 가 값을 바꿔도 다른 섹션에 번지지 않는다.
+# 쓰기(_post/_patch/_delete) 뒤에는 통째로 비운다. account_provision 모드에서는 켜지 않는다 —
+# 재인증 확인(_verify_standard_credential)이 다른 자격으로 같은 경로를 읽기 때문이다.
+# deadline 은 호출마다 재설정되는 wall-clock 기한이다: 남은 시간으로 소켓 timeout 을 줄이고, 다 쓰면
+# 요청을 보내지 않고 건너뛴다 (소켓 timeout 은 연산 단위라 느린 응답을 wall-clock 으로 끊지 못한다 —
+# 그 한계는 Ansible task timeout 이 맡는다).
+_RESPONSE_CACHE = {}
+_CACHE = {'enabled': False, 'hits': 0, 'misses': 0}
+_DEADLINE = {'at': None, 'seconds': 0, 'exceeded': False}
+
+
+class _DeadlineExceeded(OSError):
+    """deadline 경과 — 요청을 보내지 않고 건너뛴다 (urlopen 호출부의 except 체인이 받는다)."""
+
+
+class _BodyTooLarge(OSError):
+    def __init__(self, status, size):
+        super().__init__('HTTP %s: body too large (%d > %d bytes)' % (status, size, MAX_BODY_BYTES))
+        self.status = status
+
+
+def _reset_response_cache(enabled=False):
+    _RESPONSE_CACHE.clear()
+    _CACHE['enabled'] = bool(enabled)
+    _CACHE['hits'] = 0
+    _CACHE['misses'] = 0
+
+
+def _invalidate_response_cache():
+    _RESPONSE_CACHE.clear()
+
+
+def cache_stats():
+    return {'hits': _CACHE['hits'], 'misses': _CACHE['misses'], 'entries': len(_RESPONSE_CACHE)}
+
+
+def _set_deadline(seconds):
+    """seconds > 0 이면 monotonic 기한을 건다. 0/None 이면 끈다 (기본 — 하위 호환)."""
+    try:
+        seconds = int(seconds or 0)
+    except (TypeError, ValueError):
+        seconds = 0
+    _DEADLINE['seconds'] = seconds
+    _DEADLINE['at'] = (time.monotonic() + seconds) if seconds > 0 else None
+    _DEADLINE['exceeded'] = False
+
+
+def _deadline_remaining():
+    if _DEADLINE['at'] is None:
+        return None
+    return _DEADLINE['at'] - time.monotonic()
+
+
+def _effective_timeout(timeout):
+    """deadline 이 켜져 있으면 남은 시간으로 소켓 timeout 을 줄인다. 남은 시간이 없으면 요청을 보내지 않는다."""
+    rem = _deadline_remaining()
+    if rem is None:
+        return timeout
+    if rem <= 0:
+        if not _DEADLINE['exceeded']:
+            _DEADLINE['exceeded'] = True
+            _notice('gather', '모듈 deadline %ds 경과 — 이후 요청은 보내지 않고 건너뛴다' % _DEADLINE['seconds'])
+        raise _DeadlineExceeded('Deadline exceeded: request skipped')
+    return min(timeout, max(1, int(rem + 0.999)))
+
+
+def deadline_exceeded():
+    return bool(_DEADLINE['exceeded'])
+
+
+def _read_capped(resp):
+    try:
+        raw = resp.read(MAX_BODY_BYTES + 1)
+    except TypeError:            # 인자를 받지 않는 read() (테스트 대역 등) — 상한 없이 읽는다
+        raw = resp.read()
+    if len(raw) > MAX_BODY_BYTES:
+        raise _BodyTooLarge(getattr(resp, 'status', 0), len(raw))
+    return raw
+
+
 _NOTICES = []
 
 
@@ -269,9 +351,23 @@ def notices():
 
 
 def _get(bmc_ip, path, username, password, timeout, verify_ssl):
-    """인증 GET — 반환 status 를 _record_auth_status 로 관측만 한다(요청 수 불변)."""
+    """인증 GET — 반환 status 를 _record_auth_status 로 관측하고, 켜져 있으면 200 응답을 프로세스 내 캐시한다 (P2).
+
+    같은 (username, path) 의 재조회는 네트워크 없이 deep copy 를 돌려준다. 캐시는 main() 호출 단위로 비워지고
+    쓰기 뒤에는 무효화된다. 401/403/5xx/transport 실패·비-dict·디코드 실패 응답은 캐시하지 않는다.
+    """
+    key = (username, path)
+    if _CACHE['enabled']:
+        hit = _RESPONSE_CACHE.get(key)
+        if hit is not None:
+            _CACHE['hits'] += 1
+            return hit[0], copy.deepcopy(hit[1]), hit[2]
+        _CACHE['misses'] += 1
     status, data, err = _get_impl(bmc_ip, path, username, password, timeout, verify_ssl)
     _record_auth_status(status)
+    if (_CACHE['enabled'] and status == 200 and not err and isinstance(data, dict)
+            and len(_RESPONSE_CACHE) < MAX_CACHE_ENTRIES):
+        _RESPONSE_CACHE[key] = (status, copy.deepcopy(data), err)
     return status, data, err
 
 
@@ -285,13 +381,13 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout) as resp:
+        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
             # Round 17 #18: 성공 path 의 json.loads 를 지역 guard 로 감싼다.
             # 200(또는 2xx) + 빈 body 는 {}(tolerant), 비-JSON body(프록시 HTML/잘린 응답)는
             # err 설정. 둘 다 실제 status 를 보존(기존엔 함수-레벨 except 로 status 0 오보).
             # 빈 vs 비-JSON 구분: ServiceRoot 같은 detect 경로에서 malformed body 는 명확히
             # 실패로 남겨야 함(빈 {} 로 진행해 vendor=unknown 으로 새지 않게).
-            raw = resp.read()
+            raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -299,11 +395,15 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
                 data, decode_err = {}, f'HTTP {resp.status}: body not JSON'
             return resp.status, data, decode_err
     except urlerr.HTTPError as e:
-        try:    body = json.loads(e.read().decode('utf-8', errors='replace'))
+        try:    body = json.loads(e.read(MAX_BODY_BYTES + 1).decode('utf-8', errors='replace'))
         except (json.JSONDecodeError, ValueError, UnicodeDecodeError): body = {}
         return e.code, body, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
+    except _DeadlineExceeded:
+        return 0, {}, 'Deadline exceeded: request skipped'
+    except _BodyTooLarge as e:
+        return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
     except (OSError, ValueError) as e:
@@ -316,6 +416,7 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         payload = json.dumps(body).encode('utf-8')
     except TypeError:  # Round 4 #4/#5: 비-직렬화 body 방어 (provision crash 차단)
         payload = json.dumps(str(body)).encode('utf-8')
+    _invalidate_response_cache()   # P2: 쓰기 뒤 읽기는 BMC 에서 다시
     req = urlreq.Request(url, data=payload, method='POST', headers={
         'Authorization': _auth(username, password),
         'Accept': 'application/json',
@@ -323,19 +424,23 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout) as resp:
-            raw = resp.read()
+        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+            raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
             except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
                 data = {}
             return resp.status, data, None
     except urlerr.HTTPError as e:
-        try:    body_err = json.loads(e.read().decode('utf-8', errors='replace'))
+        try:    body_err = json.loads(e.read(MAX_BODY_BYTES + 1).decode('utf-8', errors='replace'))
         except (json.JSONDecodeError, ValueError, UnicodeDecodeError): body_err = {}
         return e.code, body_err, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
+    except _DeadlineExceeded:
+        return 0, {}, 'Deadline exceeded: request skipped'
+    except _BodyTooLarge as e:
+        return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
     except (OSError, ValueError) as e:
@@ -345,20 +450,25 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
     """F50 phase 4 (cycle 2026-05-06): DELETE method 추가 — Lenovo XCC 권한 cache 손상 시
     DELETE + POST 재생성 fallback. Dell iDRAC 는 DELETE 미지원 (PATCH-only)."""
     url = f'https://{bmc_ip}/redfish/v1/{path.lstrip("/")}'
+    _invalidate_response_cache()   # P2
     req = urlreq.Request(url, method='DELETE', headers={
         'Authorization': _auth(username, password),
         'Accept': 'application/json',
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout) as resp:
+        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
             return resp.status, {}, None
     except urlerr.HTTPError as e:
-        try:    body_err = json.loads(e.read().decode('utf-8', errors='replace'))
+        try:    body_err = json.loads(e.read(MAX_BODY_BYTES + 1).decode('utf-8', errors='replace'))
         except (json.JSONDecodeError, ValueError, UnicodeDecodeError): body_err = {}
         return e.code, body_err, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
+    except _DeadlineExceeded:
+        return 0, {}, 'Deadline exceeded: request skipped'
+    except _BodyTooLarge as e:
+        return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
     except (OSError, ValueError) as e:
@@ -385,21 +495,26 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
     }
     if extra_headers:
         headers.update({k: v for k, v in extra_headers.items() if v})
+    _invalidate_response_cache()   # P2
     req = urlreq.Request(url, data=payload, method='PATCH', headers=headers)
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout) as resp:
-            raw = resp.read()
+        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+            raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
             except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
                 data = {}
             return resp.status, data, None
     except urlerr.HTTPError as e:
-        try:    body_err = json.loads(e.read().decode('utf-8', errors='replace'))
+        try:    body_err = json.loads(e.read(MAX_BODY_BYTES + 1).decode('utf-8', errors='replace'))
         except (json.JSONDecodeError, ValueError, UnicodeDecodeError): body_err = {}
         return e.code, body_err, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
+    except _DeadlineExceeded:
+        return 0, {}, 'Deadline exceeded: request skipped'
+    except _BodyTooLarge as e:
+        return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
     except (OSError, ValueError) as e:
@@ -453,6 +568,8 @@ _CODE_BIOS_NON_BLOCKING = 'bios_non_blocking'
 # 한계)을 구분하기 위해서다. 섹션 자체는 종전대로 failed 로 남는다(status partial).
 _CODE_NON_BLOCKING_SUBRESOURCE = 'subresource_non_blocking'
 MAX_COLLECTION_PAGES = 64              # Members@odata.nextLink 페이지 상한 (순환 · 폭주 방어)
+MAX_BODY_BYTES = 8 * 1024 * 1024       # 2026-10-03 (P2): 응답 본문 상한 — 초과 시 status 는 보존하고 body 는 버린다
+MAX_CACHE_ENTRIES = 512                # 2026-10-03 (P2): 프로세스 내 200 응답 캐시 항목 상한
 
 
 def _err(section, message, detail=None, code=None):
@@ -1081,7 +1198,7 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
     realm_header = None
     try:
         # 무인증으로 시도 — 200이면 realm 없음 (이미 다른 단계에서 처리)
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout) as resp:
+        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
             return None
     except urlerr.HTTPError as e:
         # 401/403일 때 WWW-Authenticate 헤더에서 realm 추출
@@ -1122,10 +1239,10 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout) as resp:
+        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
             # Round 17 #18: 성공 path json.loads 지역 guard — 200+빈 body 는 {}(tolerant),
             # 비-JSON body 는 err 설정. status 0 오보 방지 + detect 경로 malformed 명확 실패.
-            raw = resp.read()
+            raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -1133,11 +1250,15 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
                 data, decode_err = {}, f'HTTP {resp.status}: body not JSON'
             return resp.status, data, decode_err
     except urlerr.HTTPError as e:
-        try:    body = json.loads(e.read().decode('utf-8', errors='replace'))
+        try:    body = json.loads(e.read(MAX_BODY_BYTES + 1).decode('utf-8', errors='replace'))
         except (json.JSONDecodeError, ValueError, UnicodeDecodeError): body = {}
         return e.code, body, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
+    except _DeadlineExceeded:
+        return 0, {}, 'Deadline exceeded: request skipped'
+    except _BodyTooLarge as e:
+        return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
     except (OSError, ValueError) as e:
@@ -5196,7 +5317,7 @@ def _get_response_etag(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout) as resp:
+        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
             resp.read()
             etag = resp.headers.get('ETag') if hasattr(resp, 'headers') else None
             _record_auth_status(resp.status)
@@ -7371,7 +7492,10 @@ def main():
             verify_ssl      = dict(type='bool', default=False),
             # P2 (cycle 2026-04-28): AccountService 통합
             mode            = dict(type='str',  default='gather',
-                                   choices=['gather', 'account_provision']),
+                                   choices=['gather', 'account_provision', 'detect']),
+            # 2026-10-03 (P2): 모듈 호출 wall-clock 기한(초). 0 = 끔(하위 호환). 남은 시간으로 소켓 timeout 을
+            #   줄이고, 다 쓰면 이후 요청을 건너뛴다 → 해당 섹션 failed, 수집된 데이터는 보존(partial).
+            deadline        = dict(type='int',  default=0),
             target_username = dict(type='str',  default=''),
             target_password = dict(type='str',  default='', no_log=True),
             target_role     = dict(type='str',  default='Administrator'),
@@ -7406,6 +7530,40 @@ def main():
     bmc_ip, username, password = p['bmc_ip'], p['username'], p['password']
     timeout, verify_ssl = p['timeout'], p['verify_ssl']
     mode = p['mode']
+    _set_deadline(p.get('deadline'))
+    # P2: 캐시는 읽기 전용 모드에서만. account_provision 은 다른 자격으로 같은 경로를 다시 읽으므로 끈다.
+    _reset_response_cache(enabled=(mode in ('gather', 'detect')))
+
+    # ── P1 (2026-10-03): detect 모드 — 식별만 한다 ────────────────────────
+    #   detect_vendor.yml 의 무인증 probe 가 종전에는 gather 모드로 돌아, Systems 를 익명 허용하는 장비에서
+    #   전 섹션(≈120~170 GET)을 수집했다. 여기서는 ServiceRoot/컬렉션 식별 + adapter 선택 힌트(System 모델,
+    #   Manager 펌웨어)만 각 1 GET 으로 얻는다. 반환 shape 은 detect_vendor.yml 이 읽는 키(vendor · data.system.model ·
+    #   data.bmc.firmware_version · probe_facts · errors)를 유지한다.
+    if mode == 'detect':
+        vendor, system_uri, manager_uri, chassis_uri, det_errors, service_root = detect_vendor(
+            bmc_ip, username, password, timeout, verify_ssl
+        )
+        probe_facts = _extract_probe_facts(service_root, vendor)
+        data = {'system': None, 'bmc': None}
+        if system_uri:
+            st_s, sdata, _e_s = _get(bmc_ip, _p(system_uri), username, password, timeout, verify_ssl)
+            if st_s == 200 and isinstance(sdata, dict):
+                data['system'] = {'model': _strip_or_none(_safe(sdata, 'Model')),
+                                  'manufacturer': _strip_or_none(_safe(sdata, 'Manufacturer'))}
+        if manager_uri:
+            st_m, mdata, _e_m = _get(bmc_ip, _p(manager_uri), username, password, timeout, verify_ssl)
+            if st_m == 200 and isinstance(mdata, dict):
+                data['bmc'] = {'firmware_version': _strip_or_none(_safe(mdata, 'FirmwareVersion')),
+                               'model': _strip_or_none(_safe(mdata, 'Model'))}
+        module.exit_json(
+            changed=False, mode='detect',
+            status=('success' if isinstance(service_root, dict) and service_root else 'failed'),
+            vendor=vendor, collected=[], failed_sections=[], unsupported_sections=[],
+            errors=list(det_errors), data=data, probe_facts=probe_facts, multi_node=None,
+            auth_evidence=auth_evidence(), notices=notices(),
+            deadline_exceeded=deadline_exceeded(), cache=cache_stats(),
+        )
+        return
 
     # ── P2: AccountService provision mode ────────────────────────────────
     if mode == 'account_provision':
@@ -7558,6 +7716,8 @@ def main():
         unsupported_sections=list(set(unsupported)),
         errors=all_errors, data=result_data, probe_facts=probe_facts,
         multi_node=multi_node, auth_evidence=auth_evidence(), notices=notices(),
+        # 2026-10-03 (P2): 모듈 내부 관측값 — envelope 13 필드에는 들어가지 않는다 (normalize 가 뽑지 않음).
+        deadline_exceeded=deadline_exceeded(), cache=cache_stats(),
     )
 
 

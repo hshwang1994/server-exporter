@@ -16,6 +16,10 @@
     password:   ""
     timeout:    "{{ _rf_timeout | default(30) }}"
     verify_ssl: false
+    # 2026-10-03 (P1): 식별만 한다 — 종전 gather 모드는 Systems 를 익명 허용하는 장비에서 전 섹션(≈120~170 GET)을 수집했다.
+    #   반환 키(vendor · data.system.model · data.bmc.firmware_version · probe_facts · errors)는 그대로다.
+    mode:       detect
+    deadline:   "{{ _rf_detect_deadline | default(90) }}"
   register:    _rf_probe_result
   failed_when: false
   ignore_errors: true

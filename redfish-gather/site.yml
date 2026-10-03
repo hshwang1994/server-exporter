@@ -35,6 +35,12 @@
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     _rf_ip:      "{{ ansible_host | default(inventory_hostname) }}"
     _rf_timeout: 30
+    # 2026-10-03 (P2, Plan §6-3): 모듈 호출 wall-clock deadline(초). 소켓 timeout(_rf_timeout)은 연산 단위라 50~150 GET 에
+    #   총 상한이 없었다. deadline 이 지나면 모듈은 이후 요청을 보내지 않고 해당 섹션을 failed 로 두어 수집한 것은 보존한다(partial).
+    #   값은 task timeout(다음 단계에서 추가)보다 엄격히 작아야 register 가 남는다. 후보마다 재설정되므로 host 상한 = 후보 수 × (deadline + backoff).
+    _rf_deadline: 540
+    _rf_detect_deadline: 90
+    _rf_account_deadline: 180
 
   tasks:
 

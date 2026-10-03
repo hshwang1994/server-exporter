@@ -157,6 +157,7 @@
       loop: "{{ _rf_recovery_accounts | default([]) }}"
       loop_control:
         loop_var: _try_recovery
+        extended: true    # 2026-10-03 (N3)
         label: "{{ _try_recovery.label | default('unlabeled') }}"
       when: not (_rf_acct_auth_ok | default(false) | bool)
 

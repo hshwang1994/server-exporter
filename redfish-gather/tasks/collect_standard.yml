@@ -65,6 +65,7 @@
         timeout:        "{{ _rf_timeout }}"
         verify_ssl:     false
         manager_layout: "{{ _rf_adapter_manager_layout | default('') }}"
+        deadline:       "{{ _rf_deadline | default(540) }}"
       register:    _rf_raw_collect
       failed_when: false
       no_log: true
@@ -109,6 +110,7 @@
   loop_control:
     loop_var: _try_account
     label:    "{{ _try_account.label | default('unlabeled') }}"
+    extended: true    # 2026-10-03 (N3): try_one_account.yml 이 마지막 후보인지 보고 backoff 를 생략한다
   when:
     - (_rf_try_accounts | default([])) | length > 0
     - not (_rf_collect_ok | default(false) | bool)
