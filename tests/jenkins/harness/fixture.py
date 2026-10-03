@@ -20,6 +20,12 @@ import shutil
 import sys
 from pathlib import Path
 
+
+def _write_lf(path, text):
+    """LF 고정 쓰기 — Path.write_text(newline=) 는 Python 3.10+ 라 Runner 시스템 python3(3.9) 에서 못 쓴다."""
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
 INPUT_FILES = ("gather_output.json", "gather_checkpoint.jsonl", "gather_progress.jsonl", "gather_rc.txt")
 
 
@@ -93,8 +99,7 @@ def main(argv=None) -> int:
 
     if a.post_layer_a:
         done = apply_mutations(ws, sc.get("mutations_after_layer_a", []))
-        Path(a.out).write_text(json.dumps({"scenario": a.scenario, "post_layer_a_mutations": done}, ensure_ascii=False, indent=2),
-                               encoding="utf-8", newline="\n")
+        _write_lf(Path(a.out), json.dumps({"scenario": a.scenario, "post_layer_a_mutations": done}, ensure_ascii=False, indent=2))
         sys.stdout.write(json.dumps({"post_layer_a_mutations": done}) + "\n")
         return 0
 
@@ -116,13 +121,13 @@ def main(argv=None) -> int:
     manifest = regenerate_manifest(case_manifest, job=a.job, number=a.number, url=a.url, loc=a.loc,
                                    deployment_env=a.deployment_env, event_uuid=a.event_uuid, callback_url=a.callback_url)
     manifest_text = json.dumps(manifest, ensure_ascii=False)
-    (ws / "gather_manifest.json").write_text(manifest_text + "\n", encoding="utf-8", newline="\n")
+    _write_lf(ws / "gather_manifest.json", manifest_text + "\n")
     mutations = apply_mutations(ws, sc.get("mutations", []))
     state = {"scenario": a.scenario, "case": sc["case"], "channel": manifest["channel"], "ips": manifest["ips"],
              "manifest_path": str(ws / "gather_manifest.json"), "files_copied": copied, "mutations": mutations,
              "manifest_json": manifest_text, "run_preserve": bool(sc.get("run_preserve", True)),
              "outcome": sc.get("outcome", "completed"), "sink": sc.get("sink", {"status": "200"})}
-    Path(a.out).write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+    _write_lf(Path(a.out), json.dumps(state, ensure_ascii=False, indent=2))
     sys.stdout.write(json.dumps({"case": sc["case"], "ips": manifest["ips"], "copied": copied, "mutations": mutations}) + "\n")
     return 0
 

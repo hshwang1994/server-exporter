@@ -25,6 +25,8 @@ properties([
     ]),
 ])
 
+// Runner 시스템 python3 는 3.9 — Harness 도구는 venv(3.12, PyYAML)에서 돈다. venv 선택은 scripts/activate_ansible_venv.sh 한 곳.
+String PY = '. "$WORKSPACE/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true; python3'
 String PRESERVE_FILES = 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json'
 
 timeout(time: 45, unit: 'MINUTES') {
@@ -76,7 +78,7 @@ timeout(time: 45, unit: 'MINUTES') {
         }
 
         // ── ② wrapper 를 붙인 함수 스크립트 (원본 글자 불변 — 해시 기록)
-        sh "python3 tests/jenkins/harness/build_functions.py --source ${srcFile} --scenario ${scenario} --out harness_functions.groovy --meta harness_functions_meta.json"
+        sh "${PY} tests/jenkins/harness/build_functions.py --source ${srcFile} --scenario ${scenario} --out harness_functions.groovy --meta harness_functions_meta.json"
         def meta = readJSON(file: 'harness_functions_meta.json', returnPojo: true)
         control.functions_sha256 = meta.functions_sha256
         control.source_sha256 = control.source_sha256 ?: meta.source_sha256
@@ -88,7 +90,7 @@ timeout(time: 45, unit: 'MINUTES') {
         String sinkUrl = "http://${agentIp}:${sinkPort}"
         Map sinkCfg = (sc.sink ?: [status: '200'])
         sh 'mkdir -p sink && rm -f sink/record.jsonl sink/pid'
-        sh """JENKINS_NODE_COOKIE=dontKillMe nohup python3 tests/jenkins/harness/callback_sink.py --port ${sinkPort} --record "\$PWD/sink/record.jsonl" \\
+        sh """JENKINS_NODE_COOKIE=dontKillMe nohup ${PY} tests/jenkins/harness/callback_sink.py --port ${sinkPort} --record "\$PWD/sink/record.jsonl" \\
                 --status '${sinkCfg.status ?: '200'}' --mode '${sinkCfg.mode ?: 'respond'}' --delay '${sinkCfg.delay ?: 0}' --pidfile "\$PWD/sink/pid" --max-seconds 2400 \\
                 > sink/sink.log 2>&1 &
               sleep 2"""
@@ -105,7 +107,7 @@ timeout(time: 45, unit: 'MINUTES') {
 
         // ── ④ fixture — corpus case 입력 + **현재 빌드**의 manifest
         String eventUuid = "harness-${env.BUILD_TAG}"
-        sh """python3 tests/jenkins/harness/fixture.py --scenarios tests/jenkins/harness/scenarios.json --scenario ${scenario} \\
+        sh """${PY} tests/jenkins/harness/fixture.py --scenarios tests/jenkins/harness/scenarios.json --scenario ${scenario} \\
                 --corpus tests/fixtures/finalize_corpus --workspace "\$PWD/gather_ws" --job '${env.JOB_NAME}' --number '${env.BUILD_NUMBER}' --url '${env.BUILD_URL}' \\
                 --loc '${params.LOC}' --deployment-env '${params.DEPLOYMENT_ENV}' --event-uuid '${eventUuid}' --callback-url '${sinkUrl}' --out fixture_state.json"""
         def fx = readJSON(file: 'fixture_state.json', returnPojo: true)
@@ -132,8 +134,8 @@ timeout(time: 45, unit: 'MINUTES') {
                                 manifestOk: env.SE_PRESERVE_MANIFEST == 'true', hasResult: env.SE_PRESERVE_HASRESULT == 'true']
                 } else if (sc.layer_a_direct) {
                     // Layer A 를 직접 돌린 뒤 변형(예: report 손상)을 적용하고 Harness 가 stash — "손상된 Layer A 결과" 입력
-                    sh "python3 scripts/finalize_gather_output.py --workspace \"\$PWD\" --repo-root \"\$PWD\" --outcome ${fx.outcome} || true"
-                    sh """python3 ../tests/jenkins/harness/fixture.py --scenarios ../tests/jenkins/harness/scenarios.json --scenario ${scenario} --corpus ../tests/fixtures/finalize_corpus \\
+                    sh "${PY} scripts/finalize_gather_output.py --workspace \"\$PWD\" --repo-root \"\$PWD\" --outcome ${fx.outcome} || true"
+                    sh """${PY} ../tests/jenkins/harness/fixture.py --scenarios ../tests/jenkins/harness/scenarios.json --scenario ${scenario} --corpus ../tests/fixtures/finalize_corpus \\
                             --workspace "\$PWD" --job x --number 0 --url x --callback-url x --out ../fixture_post.json --post-layer-a"""
                     stash(name: 'gather-output', includes: PRESERVE_FILES, allowEmpty: true)
                 } else {
@@ -173,7 +175,7 @@ timeout(time: 45, unit: 'MINUTES') {
         sh 'if [ -f sink/pid ]; then kill "$(cat sink/pid)" 2>/dev/null || true; fi; sleep 1; true'
 
         // ── ⑨ 판정 — 기대 불일치는 UNSTABLE(FAIL), 관측 부족은 UNSTABLE(PARTIAL), 도구 실패는 FAILURE
-        int rc = sh(returnStatus: true, script: """python3 tests/jenkins/harness/harness_verdict.py --scenarios tests/jenkins/harness/scenarios.json --scenario ${scenario} \\
+        int rc = sh(returnStatus: true, script: """${PY} tests/jenkins/harness/harness_verdict.py --scenarios tests/jenkins/harness/scenarios.json --scenario ${scenario} \\
                 --summary observed/finalize_summary.json --body observed/callback_body.json --calls harness_calls.json --sink sink/record.jsonl \\
                 --preserve preserve_state.json --control harness_control.json --meta harness_functions_meta.json --out harness_result.json""")
         archiveArtifacts(artifacts: 'harness_result.json,harness_functions.groovy,harness_functions_meta.json,harness_calls.json,harness_control.json,preserve_state.json,fixture_state.json,fixture_post.json,sink/record.jsonl,sink/sink.log,observed/*',

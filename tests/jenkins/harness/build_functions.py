@@ -25,6 +25,12 @@ import re
 import sys
 from pathlib import Path
 
+
+def _write_lf(path, text):
+    """LF 고정 쓰기 — Path.write_text(newline=) 는 Python 3.10+ 라 Runner 시스템 python3(3.9) 에서 못 쓴다."""
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
 FAIL_ARCHIVE = {"archive_fail", "both_fail"}
 FAIL_STASH = {"stash_fail", "both_fail"}
 FAIL_LAYER_A = {"layer_a_fail", "checkpoint_only_b"}
@@ -158,7 +164,7 @@ def build(source: Path, scenario: str, out: Path, meta_out: Path | None) -> dict
                 .replace("__FAIL_READTRUSTED__", groovy_list(FAIL_READTRUSTED))
                 .replace("__SLOW_UNSTASH__", groovy_list(SLOW_UNSTASH)))
     generated = functions.rstrip("\n") + "\n" + wrappers
-    out.write_text(generated, encoding="utf-8", newline="\n")
+    _write_lf(out, generated)
     meta = {
         "scenario": scenario,
         "source": str(source),
@@ -168,7 +174,7 @@ def build(source: Path, scenario: str, out: Path, meta_out: Path | None) -> dict
         "defs": re.findall(r"^(?:def|Map|boolean|long|List|String) (se\w+)\(", functions, re.M),
     }
     if meta_out:
-        meta_out.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+        _write_lf(meta_out, json.dumps(meta, ensure_ascii=False, indent=2))
     return meta
 
 

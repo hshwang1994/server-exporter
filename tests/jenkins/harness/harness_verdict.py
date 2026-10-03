@@ -22,6 +22,12 @@ from pathlib import Path
 EXIT_PASS, EXIT_FAIL, EXIT_PARTIAL, EXIT_TOOL = 0, 1, 2, 3
 
 
+
+def _write_lf(path, text):
+    """LF 고정 쓰기 — Path.write_text(newline=) 는 Python 3.10+ 라 Runner 시스템 python3(3.9) 에서 못 쓴다."""
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
 def _load_json(path: str | None):
     if not path:
         return None
@@ -223,7 +229,7 @@ def main(argv=None) -> int:
               "problems": [f"{c['name']}: expected {c['expected']!r} observed {c['observed']!r}" for c in failed],
               "observed": {k: v for k, v in obs.items() if k != "calls"}, "calls": obs["calls"],
               "meta": meta or {}, "note": expect.get("note", "")}
-    Path(a.out).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+    _write_lf(Path(a.out), json.dumps(result, ensure_ascii=False, indent=2))
     sys.stdout.write(f"[verdict] {a.scenario}: {verdict} checks={len(checks)} failed={len(failed)} partial={len(partial)}\n")
     for p in result["problems"]:
         sys.stdout.write(f"[verdict]   FAIL {p}\n")
