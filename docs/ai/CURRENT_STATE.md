@@ -30,7 +30,10 @@
 - **Phase 5 (WSL emulation 완료, 실장비 0대 — `tests/evidence/2026-10-03-phase5-emulation.md`)**: 실패 경로 10~200 host wall ≈ 0.5–0.6 s/host, 요청 == 결과 36회 전부,
   슬롯당 PSS ≈ 36 MB → **OS forks 기본 상한 50**(`SE_FORKS_CAP_OS` 로 상향), INT 6회 중 1회 weakref 콜백에서 소실 → `--kill-after=90` rc 137 경로 실증, progress 비용 노이즈 이하,
   Layer A 1000 host 0.2 s, Redfish 에뮬레이터 불가(443 권한 · 포트 고정 · vault). json_only `first_seen` 이벤트 ip null 수정.
-- **진행 중(서브 작업자)**: Linux P3 원격 실행 통합(18→12 / 13→9), Phase 7a `prodgen`(생성기 · gate · provenance).
+- **Linux P3 (완료)**: 원격 실행 Python 18→10 · raw 13→9(`8616ac48`), fragment 동일(6 캡처 × 6 권한 × 2 모드), driver_map `vlan_id` 항상 null 버그 수정(`5a60d420`).
+- **Phase 7a (완료, 7b 보류)**: `scripts/ai/prodgen`(`dcfbfded`) — allowlist manifest · 언어별 주석 제거(A/B) · gate G01~G17 · provenance · drift · plumbing promote/restore;
+  `f1221234` 기준 192 파일 · 1.04 MB · B 0 · G01~G13/G15~G17 PASS, G14 는 `source_text` 표식(`6937ba3a`) 뒤 재실행. production push 는 canary 불가로 보류
+  (`docs/operate/09-production-branch.md` 3절). `promote_to_production.sh` 는 shim, rule 93/24/90 · CLAUDE.md §14 개정, ADR 2건.
 - **미실행(권한 차단 — 사용자 결정 대기)**: Jenkins 두 Job 실제 빌드(§10-4 · §10-5), `.33~.38` SSH, BMC/ESXi 실장비, Runner(2.20.3)에서의 timeout 동작 재확인.
   main Job #1 의 Resolve Location 2분 초과(N1)는 Phase 1.5 코드로 고쳤으나 live 확인 전이다.
 

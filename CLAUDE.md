@@ -117,7 +117,7 @@ Credential은 기존 Vault와 Credential Profile 구조를 사용한다.
 `main`: 개발 기준 Branch, 순수 Project Code와 Harness 포함.
 `production`: 순수 Gathering 배포 Branch, Harness 제외.
 대표 production 제외 경로: `.claude/`, `CLAUDE.md`, `docs/ai/`, `scripts/ai/`, `tests/reference/`, `tests/evidence/`.
-원칙: 순수 코드/Harness 변경 가능하면 별도 Commit, `git merge main`으로 production 전체 병합 금지, 순수 Project Code는 현재 Promotion Script/정책으로 승격.
+원칙: 순수 코드/Harness 변경 가능하면 별도 Commit, `git merge main`으로 production 전체 병합 금지, production 은 `scripts/ai/prodgen`(고정 main SHA → runtime-only 생성 · gate · provenance)으로만 승격하고 승격 직후 production Job canary 를 확인한다(`docs/operate/09-production-branch.md`).
 유효한 자동 승격 범위에서는 매번 별도 승인 재요구 금지. force push와 History Rewrite 금지.
 Remote URL은 `git remote -v`로 확인하고 Push 성공만으로 Jenkins 반영 완료 판단 금지. 실제 Job의 Repository, Branch, Checkout SHA를 확인한다.
 

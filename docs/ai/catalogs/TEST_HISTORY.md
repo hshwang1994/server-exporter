@@ -19,6 +19,9 @@
 | Phase 6 (`test_jenkinsfile_ci` 20 · `test_finalize_corpus` 35 · portal finalize/agent_label/addon/params) | 59 passed(load 전환 뒤); Groovy 동치 corpus 14 MATCH(Groovy 4.0.24 · 2.4.21, 음성 대조 4건 검출 — 작업자 로컬 실행) |
 | Phase 5 WSL emulation (`tests/scripts/phase5_scale_run.sh`, Ubuntu 24.04 · ansible-core 2.20.7 · Ryzen 5 5600/15 GiB) | 실패 경로 10/50/100/200 host × forks 50/100 × 3회: wall 10.6–11.0 / 24.7–37.5 / 52–68 / 104–116 s, 트리 PSS forks 10/50/100 → 0.4/1.8/3.7 GB, 2,460 envelope 13키 · 요청 == 결과; INT 6회 rc 124 ×5 · rc 137 ×1(weakref 콜백 소실) 고아 0 보충 정확; 기록 비용 Δ ≤ 노이즈; Layer A 1000 host 0.21/0.23/0.12 s; Redfish 에뮬레이터 불가 |
 | `test_gather_budget.py` (OS forks 상한 50 + `SE_FORKS_CAP_OS`) · 콜백 first_seen ip | 9 passed / 92 passed |
+| Linux P3 (`test_linux_*` 4 파일 · `test_linux_remote_consolidation` 19 · `tests/e2e/test_linux_raw_scripts_shim` 11) | WSL 153 passed(vlan_id 수정 뒤 xfail → pass); e2e 772 passed; 작업자: 6 캡처 × 6 권한 × 2 모드 432 fragment 집합 동일, 실제 play 4회 envelope 동일 |
+| prodgen (`tests/unit/prodgen` 69) | Windows 69 passed / WSL 61 passed · 8 skipped(PowerShell 파서 없음); 생성 `f1221234` 192 파일 · B 0 · G01~G13/G15~G17 PASS · G17 결정성 · 린터 validated |
+| G14 overlay 제외 표식 7 파일 | 126 passed(전체) / 75 passed · 51 deselected(`-m "not source_text"`) |
 
 ## 2026-10-03 — Gathering 개선 Phase 1 baseline · Phase 1.5 (Jenkinsfile 최소 선행 변경 · ci_gate)
 

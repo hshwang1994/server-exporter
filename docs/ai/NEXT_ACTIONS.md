@@ -12,7 +12,7 @@
 | GP-3 | Phase 1.5 live 확인 — main Job 1회(readTrusted lightweight 동작 · `GIT_COMMIT` 일치 · manifest/archive 생성), production Job 은 미변경 | `[HOLD / 사용자 결정]` | GP-2 와 같은 권한. 확인 전까지 Phase 1.5 종료 조건은 "오프라인 통과" 까지 |
 | GP-4 | `esxi` 라벨 노드 없음 → esxi 수집·baseline 불가 | `[TODO / 사용자 — 환경]` | Runner01~03 중 하나에 `esxi` 라벨(pyVmomi·community.vmware 는 `/app/ansible-env` 에 있어야 함, 02-agent-node.md 8절). Runner04 는 `git` 만이라 수집에 배정되지 않는다(JV-2 와 동일) |
 | GP-5 | Redfish 변경 전 비교 자료(Job 밖, 같은 collector SHA, gather 모드 읽기 전용) — Dell `10.100.15.27` · Cisco `10.100.15.2`(443 open; HPE `.231` · Lenovo `.232` 는 closed) | `[HOLD / 사용자 결정]` | GP-1 과 같은 범주로 판단해 시도하지 않음. Job baseline 은 계획대로 미실행(dry-run 강제 불가) |
-| GP-6 | Phase 2 정확성 → Phase 3 성능 → Phase 4 finalizer → Phase 5 emulation → Phase 6 CI | `[WIP / AI]` | 코드 수준 완료(2026-10-03): Windows P4 · Phase 5(WSL) · Phase 6 · GP-11 완료. 진행 중: Linux P3(18→12 / 13→9) · Phase 7a prodgen. 각 Phase 의 실장비 동등성 · §10-4 live 열은 GP-1~3 해소 뒤 |
+| GP-6 | Phase 2 정확성 → 3 성능 → 4 finalizer → 5 emulation → 6 CI → 7a prodgen | `[DONE 2026-10-03 — 코드 수준]` | Linux P3(18→10 / 13→9) · Windows P4(20→11) · Phase 5(WSL) · Phase 6 · Phase 7a 완료. 실환경 수준(§10-4 live · §10-5 · 7b/7c)은 GP-1~3 · GP-21 |
 | GP-7 | N6 — Linux `add_host` 에 `ansible_timeout: 15` | `[DONE 2026-10-03]` | `5c2c8839` — `tests/unit/test_remote_task_timeouts.py::test_linux_add_host_sets_ansible_timeout_15`. live 효과(무응답 host 67 s → 15 s 대)는 미측정 |
 | GP-8 | 전역 `ADDON_REPO_URL` 이 켜진 상태라 Add-on 결과가 baseline 에 섞인다 | `[INFO]` | 전후 비교는 같은 Add-on 상태로 맞춘다(§10-5). 끄는 재현은 전역 변수 변경 = 승인 항목 |
 | GP-9 | Windows win_shell task `timeout` 180 s(§6-3) | `[DONE 2026-10-03]` | 11 win_shell + `windows | setup` 에 `_win_task_timeout | default(180)`; `test_remote_task_timeouts.py` xfail 해제. 실 WinRM 효과 미측정 |
@@ -26,6 +26,9 @@
 | GP-17 | Windows P4 실 WinRM 검증(`.120`) — 종전 빌드와 envelope 동일 · 시간 절감 측정 | `[HOLD / 사용자 결정]` | GP-2 와 같은 권한 |
 | GP-18 | Runner RAM · forks 측정 → OS forks 상한 결정 | `[TODO / 사용자 — 환경]` | WSL 실측 슬롯당 PSS ≈ 36 MB(forks 100 ≈ 3.7 GB) 라 기본을 50 으로 내렸다. Runner 에서 `free -g` 와 200 host 실행의 트리 PSS 를 재면 노드 env `SE_FORKS_CAP_OS` 로 올린다(Jenkinsfile 변경 없음) |
 | GP-19 | INT 소실 → `--kill-after=90` rc 137 경로를 Runner(ansible-core 2.20.3)에서 재현 | `[HOLD / 사용자 결정]` | WSL 6회 중 1회(weakref 콜백 안 KeyboardInterrupt 소실, 메인 hang). GP-2 와 같은 권한 |
+| GP-21 | **production 반영(7b) + canary(7c)** | `[HOLD / 사용자]` | 전제: main Job 에서 같은 SHA 1회 성공(GP-3) → `python -m scripts.ai.prodgen promote --sha <sha> --push-remote origin` → production Job canary 1회 → 실패면 `restore`. `docs/operate/09-production-branch.md` 3절. 첫 승격은 983→≈190 파일 bootstrap 이라 수집 시간대 밖 |
+| GP-22 | prodgen 결정 사항 확인 — `adapters/registry.yml` 제외(런타임 미참조), Jinja AST 동치는 Ansible templar 설정 기준(`os-gather/site.yml` 주석 2건은 trim_blocks=True 에서만 동치) | `[INFO / 사용자 확인]` | 둘 다 manifest `policy` 에 기록. 다르게 결정하면 manifest 만 바꾼다 |
+| GP-23 | driver_map `vlan_id` 수정(`5a60d420`)의 실장비 확인 — VLAN 이 있는 Linux host 1대 | `[HOLD / 사용자 결정]` | GP-1 과 같은 권한. 종전 값은 항상 null 이었다 |
 | GP-20 | Redfish 성공 경로 규모 측정 수단 | `[TODO / 사용자 결정]` | WSL 에뮬레이터는 443 바인드 권한 · 모듈 포트 고정 · 표준 vault 복호화 때문에 불가. 선택지: Runner 에서 CAP_NET_BIND_SERVICE 로 에뮬레이터 실행(환경 변경) / 실장비 BMC 4대 반복 측정(GP-5) / 모듈에 포트 인자 추가(계약 변경 — 권하지 않음) |
 
 ## Add-on 빌드별 체크아웃 후속 (2026-09-29)

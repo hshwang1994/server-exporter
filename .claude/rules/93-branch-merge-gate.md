@@ -58,16 +58,15 @@ internal remote는 별도 명시적 push용 (선택적).
   - 승인 없는 git merge
   - "로컬 merge만 하니까" — push 직전 추가 승인 필요
   - `git pull origin <다른브랜치>` (실질적 merge)
-  - `git merge main` → production (하네스 누출 — 아래 예외 2 의 production 승격은 **파일 sync 방식만**)
+  - `git merge main` → production (하네스 누출 — 아래 예외 2 의 production 승격은 **생성기(prodgen) append 커밋만**)
 - **Allowed (예외 1)**: 같은 브랜치 동기화 `git pull origin main` (현재 main에서 origin/main fetch+ff)는 자율 진행
-- **Allowed (예외 2 — production 자동 승격, 2026-06-30 사용자 명시)**: main → production 으로
-  **순수 게더링 코드(하네스 제외)** 승격은 **사용자 per-instance 승인 불요 — 자동 진행** (R6 승인 포맷 면제).
-  - 사용자 명시: "production 에 넣는건 자동이여야 한다" → 매번 묻지 말고 작업 완료 시 자동 승격.
-  - 방식: `scripts/ai/promote_to_production.sh` (파일 state sync — `git merge` 아님). 하네스 경로
-    (`.claude/, CLAUDE.md, docs/ai/, scripts/ai/, tests/reference/, tests/evidence/`)는 절대 production 에 올리지 않는다.
-  - production 은 하네스-free 라 pre-commit 훅(`scripts/ai/hooks/*`)이 물리 부재 → 본 sync 커밋은
-    `--no-verify` 정당 (rule 90 R5 "--no-verify 금지" 의 예외 — 하네스-free 브랜치 한정. 품질
-    게이트는 이미 main 에서 통과). force push 는 여전히 금지 (R1).
+- **Allowed (예외 2 — production 승격, 2026-06-30 사용자 명시 · 2026-10-03 prodgen 으로 개정)**: main → production 승격은
+  **사용자 per-instance 승인 불요**(R6 승인 포맷 면제)이되, 방식과 전제가 바뀌었다 (ADR-2026-10-03-production-generation).
+  - 방식: `python -m scripts.ai.prodgen promote --sha <main sha>` — 고정 SHA 의 object store 에서 **runtime-only tree** 를 생성해 gate(G01~G20) 통과 뒤
+    git plumbing append 커밋(trailer `Main-SHA` 등)으로 올린다. 파일 state sync(`promote_to_production.sh`)와 `git merge` 는 금지 — 종전 스크립트는 shim(exit 1).
+  - 전제(하나라도 빠지면 승격하지 않는다): gate 전부 PASS · class B 0 · drift-check 정합 · **같은 main SHA 가 main Job 에서 1회 이상 성공** · 승격 직후 production Job
+    canary 가능. canary 를 돌릴 수 없는 세션은 `--dry-run` 까지만 한다 (`docs/operate/09-production-branch.md` 3절).
+  - plumbing 커밋은 pre-commit 훅을 거치지 않으므로 `--no-verify` 예외는 더 이상 필요 없다. force push 는 여전히 금지 (R1). 되돌림은 `prodgen restore`(append).
 
 ### R3. 현재 브랜치 확인 의무
 
@@ -80,15 +79,14 @@ internal remote는 별도 명시적 push용 (선택적).
   1. 변경 파일 add (pathspec — `git add .` 금지, rule 26 R3)
   2. commit (rule 90 type prefix)
   3. push (현재 브랜치 → origin)
-  4. **production 자동 승격** (순수 게더링 코드 변경이 있을 때) — `bash scripts/ai/promote_to_production.sh`
-     실행. main 의 순수 코드(하네스 제외)를 production 으로 sync + github/gitlab push. **사용자 승인
-     불요** (R2 예외 2, 2026-06-30 사용자 명시). 순수 코드 변경이 없으면 스크립트가 자동 skip.
+  4. **production 승격** (순수 게더링 코드 변경이 있을 때) — `python -m scripts.ai.prodgen promote --sha <main sha>`
+     (R2 예외 2 의 전제가 충족될 때; 아니면 `--dry-run` 결과와 보류 사유를 보고). 순수 코드 변경이 없으면 tree hash 가 같아 no-op.
 - **Allowed**: 사용자 명시 "push 보류" / "commit만" / "production 보류" 시 해당 단계 skip
 - **Forbidden**:
   - 변경 후 commit/push 없이 세션 종료 (사용자가 명시 보류 한 경우 외)
   - rule 24 6 체크 미통과 + push 강행
-  - **순수 코드 변경 후 production 승격 누락** (사용자 명시 보류 외) — 본 누락이 "자꾸 말을
-    해줘야 하는" 사용자 불만의 원인 (2026-06-30)
+  - **순수 코드 변경 후 production 승격(또는 전제 미충족 시 `--dry-run` + 보류 사유 보고) 누락** (사용자 명시 보류 외) — 본 누락이
+    "자꾸 말을 해줘야 하는" 사용자 불만의 원인 (2026-06-30)
 - **Why**: 사용자 명시 (2026-05-01) commit+push 자동 + (2026-06-30) production 승격 자동. 분산
   협업 + 배포 브랜치 동기화 보장
 - **재검토**: 자동 push/promote hook(예: post-push) 도입 시 본 R4 를 hook 책임으로 위임

@@ -92,7 +92,7 @@
   훅을 통째로 끄면 blocking 검사까지 함께 꺼지기 때문이다. 개별 훅은 각자 문서화한
   skip 환경변수(`ADDITIVE_SKIP_NEW_CYCLE` 등)로 우회한다
 - **Forbidden**:
-  - `--no-verify` 사용. 단 rule 93 R2 예외 2(하네스-free 인 production 브랜치 sync)는 허용된다
+  - `--no-verify` 사용 (2026-10-03 부터 예외 없음 — production 커밋은 prodgen 의 git plumbing 이라 훅을 거치지 않는다)
   - blocking hook 우회
 - **Why**: advisory는 학습 목적. 강제 차단은 막대한 정지 비용
 - **재검토**: AI 자동 commit message 정합성 100% 도달 시 blocking 격상 검토
