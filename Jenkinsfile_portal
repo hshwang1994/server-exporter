@@ -171,10 +171,13 @@ def seFinalizeAndCallback() {
                 }
             }
             int accepted = ips.size()
+            // R5 (2026-10-03 Astra): 줄 수는 줄 집합이 확정된 직후·첫 사용 전에 한 번 읽어 둔다. 아래에서 lines 를 비운 뒤(메모리)
+            //   다시 lines.size() 를 부르면 정상 경로(delivered=true)에서 NPE 가 난다 — 이후 분기는 lineCount 만 쓴다.
+            int lineCount = lines.size()
             int filled = (report.filled ?: 0) as int
             int kept = (report.kept ?: (accepted - filled)) as int
-            if (lines.size() != accepted) {
-                echo "[Finalize] [WARN] invariant 위반: lines=${lines.size()} accepted=${accepted} — 그래도 있는 것을 보낸다"
+            if (lineCount != accepted) {
+                echo "[Finalize] [WARN] invariant 위반: lines=${lineCount} accepted=${accepted} — 그래도 있는 것을 보낸다"
             }
             echo "[Finalize] accepted=${accepted} kept=${kept} filled=${filled}(synthetic) dropped=${(report.dropped ?: []).size()} conflicts=${(report.conflicts ?: []).size()} outcome=${outcome} layerA=${layerA} layerB=${layerB} source=${source}"
             // ③ body — 호출자 계약(loc / deploymentEnvironmentId / eventUuid / gatherInfoJson[]) 불변. 문자열 escaping 은 JsonOutput 하나.
@@ -184,7 +187,7 @@ def seFinalizeAndCallback() {
                           ',"gatherInfoJson":[' + lines.join(',') + ']}'
             writeFile file: 'callback_body.json', text: body, encoding: 'UTF-8'
             writeFile file: 'finalize_summary.json', encoding: 'UTF-8',
-                      text: groovy.json.JsonOutput.toJson([accepted: accepted, kept: kept, filled: filled, outcome: outcome,
+                      text: groovy.json.JsonOutput.toJson([accepted: accepted, lines: lineCount, kept: kept, filled: filled, outcome: outcome,
                                                             layerA: layerA, layerB: layerB, source: source, node_wait_sec: tIn - tPost])
             lines = null
             // ④ Callback — 남은 예산 안에서
@@ -194,7 +197,7 @@ def seFinalizeAndCallback() {
             if (!delivered) {
                 echo "[Finalize] delivered=false — body 는 artifact callback_body.json"
                 unstable("[Finalize] Callback 전송 실패 — artifact callback_body.json 참조")
-            } else if (filled > 0 || outcome != 'completed' || layerB == 'unavailable' || lines.size() != accepted) {
+            } else if (filled > 0 || outcome != 'completed' || layerB == 'unavailable' || lineCount != accepted) {
                 unstable("[Finalize] 전송은 됐지만 보충(filled=${filled}) · 비정상 종료(outcome=${outcome}) · 라이브러리(layerB=${layerB}) 중 하나가 있었다")
             }
             deleteDir()
@@ -291,8 +294,12 @@ pipeline {
 
                     def hosts
                     try {
-                        // Classic: 결과가 Serializable 이라 CPS 경계를 넘어도 안전하다.
-                        hosts = new groovy.json.JsonSlurperClassic().parseText(params.inventory_json)
+                        // readJSON(returnPojo): Jenkins 스크립트 sandbox 가 허용하는 파서다 — 종전의 Classic JSON 파서 생성자(JsonSlurper 의 Classic 변형)는 sandbox 가 거부해
+                        //   2026-10-03 main #2 가 Validate 에서 끝났다(접수 manifest 없음 → Callback 0건). returnPojo 결과는 ArrayList /
+                        //   LinkedHashMap(Serializable) 이라 CPS 경계를 넘어도 안전하다.
+                        hosts = readJSON(text: params.inventory_json, returnPojo: true)
+                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                        throw fie
                     } catch (Exception e) {
                         error "[Validate] inventory_json JSON 파싱 실패: ${e.message}"
                     }

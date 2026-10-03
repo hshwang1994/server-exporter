@@ -177,7 +177,7 @@ def test_ci_corpus_compare_covers_three_origins_and_report_sets():
     assert "'layer_b'" in helper and "'layer_a'" in helper and "'OUTPUT_BUILD_FAILED'" in helper
     assert "corrupt_lines" in helper and "truncated_tail" in helper, "Layer A 의 손상 분류를 Layer B 의 dropped 와 합쳐 비교"
     assert "by_origin" in helper and "conflicts" in helper
-    assert "JsonSlurperClassic" in helper, "양쪽 JSON 을 같은 파서로 읽는다"
+    assert "new groovy.json.JsonSlurper()" in helper and "JsonSlurperClassic" not in CI, "양쪽 JSON 을 같은(sandbox 허용) 파서로 읽는다"
 
 
 def test_ci_budget_selftest_and_artifacts():

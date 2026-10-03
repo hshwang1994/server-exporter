@@ -9,6 +9,8 @@
 //     tests/unit/test_jenkinsfile_ci.py 가 두 사본을 비교해 drift 를 막는다 — Jenkinsfile_portal 이 이 파일을 `load` 하도록 바뀌기
 //     전까지는 두 곳을 **같이** 고쳐야 한다(전환은 GP-11, 조정자 몫).
 //   - 순수 함수만 둔다: pipeline step(readFile · readYaml · readTrusted · echo · sh · httpRequest …) · params · currentBuild 를 쓰지 않는다.
+//   - JSON 파서는 groovy.json.JsonSlurper 만 쓴다 — Classic 변형 생성자는 Jenkins 스크립트 sandbox 가 거부한다
+//     (2026-10-03 lab Jenkins 실측: Scripts not permitted to use new groovy.json.JsonSlurper + Classic). 승인 없이 돌아야 한다.
 //     정본 YAML 을 읽는 seLoadCanon() 은 step 을 쓰므로 Jenkinsfile_portal 에 남는다. 호출자가 canon(Map) 을 넘긴다.
 //   - 마지막 줄의 `return this` 가 있어야 `load` 가 메서드를 가진 객체를 돌려준다.
 //
@@ -50,7 +52,7 @@ String seJsonString(Object value) {
 // progress 이벤트 기반 분기(GATHER_FAILED/AUTH)는 Layer A 몫이라 여기서는 하지 않는다 (보고서에 layerA 상태를 남긴다).
 @NonCPS
 Map seReconcileRaw(String manifestJson, String outputText, String checkpointText, Map canon, String outcome) {
-    def slurper  = new groovy.json.JsonSlurperClassic()
+    def slurper  = new groovy.json.JsonSlurper()
     def manifest = slurper.parseText(manifestJson)
     String channel = manifest.channel
     List ips = (manifest.ips ?: []).collect { it.toString() }
@@ -67,7 +69,7 @@ Map seReconcileRaw(String manifestJson, String outputText, String checkpointText
         def obj = null
         try { obj = slurper.parseText(line) } catch (Exception e) { dropped << [file: 'output', line: lineNo, reason: 'not JSON']; continue }
         if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type != channel || !accepted.contains(obj.ip?.toString())) {
-            dropped << [file: 'output', line: lineNo, reason: 'shape/ip gate', ip: (obj instanceof Map ? obj.ip : null)]; continue
+            dropped << [file: 'output', line: lineNo, reason: 'shape/ip gate', ip: (obj instanceof Map ? obj.ip?.toString() : null)]; continue
         }
         String ip = obj.ip.toString()
         if (outputs.containsKey(ip) && outputs[ip] != line) { conflicts << [ip: ip, chosen: lineNo] }
@@ -111,7 +113,7 @@ Map seReconcileRaw(String manifestJson, String outputText, String checkpointText
                         details: [channel: channel, finalizer: 'layer_b', outcome: outcome]],
             meta: meta, correlation: corr,
             errors: [[section: 'gather', message: canon.reason, detail: detail]],
-            data: new groovy.json.JsonSlurperClassic().parseText(groovy.json.JsonOutput.toJson(canon.skeleton)),
+            data: new groovy.json.JsonSlurper().parseText(groovy.json.JsonOutput.toJson(canon.skeleton)),
         ]
         lines << groovy.json.JsonOutput.toJson(env); synthetic++
     }

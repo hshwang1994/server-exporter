@@ -76,6 +76,29 @@ def test_finalizer_handles_no_manifest_and_builds_contract_body():
     assert "'/api/jenkins/gather/' + params.target_type.trim()" in CALLBACK, "endpoint 계약 불변"
 
 
+def test_lines_is_not_referenced_after_it_is_nulled():
+    """R5 (2026-10-03 Astra 2차): body 조립 뒤 `lines = null` 로 비운 다음 `lines.size()` 를 다시 불러 정상 경로(delivered=true)에서
+    NPE 가 났다. 줄 수는 줄 집합 확정 직후·첫 사용 전에 lineCount 로 한 번 읽고, 이후에는 그 값만 쓴다."""
+    i_count = FINALIZE.index("int lineCount = lines.size()")
+    i_warn = FINALIZE.index("[WARN] invariant 위반")
+    m_null = re.search(r"^\s*lines = null\s*$", FINALIZE, re.M)   # 선언(List lines = null)이 아니라 비우는 문장
+    assert m_null, "lines 를 비우는 문장이 없다"
+    i_null = m_null.start()
+    assert i_count < i_warn < i_null, "lineCount 는 첫 사용(WARN) 전에 선언되고 lines 는 그 뒤에 비운다"
+    tail = FINALIZE[m_null.end():]
+    assert not re.search(r"(?<![\w.])lines\b", tail), "lines 를 비운 뒤에는 lines 를 참조하지 않는다"
+    assert "lineCount != accepted" in tail and "lines.size()" not in tail
+    assert "lines: lineCount" in FINALIZE, "finalize_summary 에 실제 줄 수를 남긴다"
+
+
+def test_runtime_groovy_uses_only_sandbox_whitelisted_json_parsers():
+    """2026-10-03 lab Jenkins 실측(Harness sandbox probe): `new groovy.json.JsonSlurper()` · `readJSON(returnPojo)` 는 허용,
+    `new groovy.json.JsonSlurperClassic()` 은 거부. 운영 Groovy(Jenkinsfile_portal · se_finalize.groovy)는 승인 없이 돌아야 한다."""
+    assert "JsonSlurperClassic" not in TEXT and "JsonSlurperClassic" not in LIB
+    assert "new groovy.json.JsonSlurper()" in LIB
+    assert "readJSON(text: params.inventory_json, returnPojo: true)" in TEXT
+
+
 def test_callback_budget_rules():
     assert "if (remaining < C.CALLBACK_MIN)" in CALLBACK and "callback not attempted: budget" in CALLBACK
     assert "Math.min(C.CALLBACK_ATTEMPT, (int) (remaining - 10))" in CALLBACK

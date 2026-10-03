@@ -24,10 +24,10 @@
 //   synthetic  : 뼈대(schema_version…data 11 필드)가 같다. 진단은 Layer A 가 progress 로 세분하므로(§6-4) Layer A 도
 //                OUTPUT_BUILD_FAILED 일 때만 failure_reason · errors[0].section 까지 대조한다
 //   report     : by_origin · kept · filled 같음. dropped 는 file:line 집합(Layer A 의 corrupt_lines · truncated_tail 포함), conflicts 는 ip:chosen 집합
-//   JSON 은 양쪽 모두 JsonSlurperClassic 으로 읽어 비교한다 — Groovy JsonOutput 의 \\uXXXX escaping 과 Python 의 ensure_ascii=False 는 값이 같다.
+//   JSON 은 양쪽 모두 groovy.json.JsonSlurper 로 읽어 비교한다(Classic 변형 생성자는 sandbox 거부 — 2026-10-03 실측) — Groovy JsonOutput 의 \\uXXXX escaping 과 Python 의 ensure_ascii=False 는 값이 같다.
 @NonCPS
 List seCorpusCompare(String caseName, Map res, String expectedFinal, String expectedReport, String expectedOrigins, Map canon) {
-    def slurper = new groovy.json.JsonSlurperClassic()
+    def slurper = new groovy.json.JsonSlurper()
     List problems = []
     List expLines = expectedFinal.split('\n').findAll { it.trim() }.collect { it.trim() }
     List origins = slurper.parseText(expectedOrigins)

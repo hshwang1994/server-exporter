@@ -100,7 +100,12 @@ def test_gather_post_preserves_output_before_deleting_the_workspace():
 
 
 def test_inventory_shape_errors_are_explicit_without_new_rejections():
-    assert "new groovy.json.JsonSlurperClassic().parseText(params.inventory_json)" in VALIDATE
+    # 2026-10-03 main #2 실측: `new JsonSlurperClassic()` 은 Jenkins sandbox 가 거부해 Validate 가 끝났다(접수 manifest 없음 → Callback 0건).
+    #   파서는 sandbox 가 허용하는 readJSON(returnPojo) 하나다. 승인(In-process Script Approval)을 전제하는 API 는 운영 파이프라인에 두지 않는다.
+    assert "hosts = readJSON(text: params.inventory_json, returnPojo: true)" in VALIDATE
+    assert "JsonSlurperClassic" not in TEXT, "sandbox 가 거부하는 생성자 — 운영 파이프라인에 두지 않는다"
+    parse = VALIDATE[VALIDATE.index("hosts = readJSON("):]
+    assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in parse[:600], "파싱 실패 처리는 interruption 을 삼키지 않는다"
     assert "inventory_json 은 JSON 배열이어야 합니다" in VALIDATE
     assert "은 객체여야 합니다" in VALIDATE
     for forbidden in ("SE_MAX_HOSTS", "eventUuid 형식", "제어문자"):
