@@ -1,5 +1,19 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-04 (4차) — 최종 실행 지시 대응 (timeout 상한 범위 · readTrusted 식별 · 증거 직접/추정 · Runner 자원 실측 · 자산 진단 · X2 → P2)
+
+| 구분 | 결과 |
+|---|---|
+| 로컬 단위(Phase A, `def22479`) | `tests/unit` + e2e + regression **4011 passed · 36 skipped · 7 xfailed**, `tests/unit/prodgen` **93 passed**(11.5 min, Windows git) |
+| 로컬 단위(X2 runtime, `d8d2bf9f`) | Jenkinsfile 텍스트 계약 · 예산 · harness · CI 테스트 PASS(constants per_fork 80 반영); Jenkins Declarative linter "successfully validated" |
+| net-probe #1(Runner02, 읽기 전용) | `.135 .145 .165` ARP INCOMPLETE · `10.100.15.3` 무응답 · `10.100.15.1` ServiceRoot 503 "Redfish Service is disabled" · `10.50.11.231` Runner 망 무응답(tracepath 10.12.1.2 뒤 끊김) · `.232` 200 |
+| perf-observe #1~#16 + main #92~#96 · production #82 | 13 host peak PSS 463 MB(worker 12 · 평균 slot 36 MB) · 18 host 620 MB · 단일 worker 최대 69 MB · 메인 python 86 MB · swap 0 · 겹침 2회 모두 다른 Runner 배치 — `tests/evidence/2026-10-04-review-c1-c6.md` §9-6 |
+| main Job X2 `ec6a494f` 12 시나리오 | X2 `e2afb2ef` #97~#108 과 X3 `ec6a494f` #109~#120 두 번 모두 12/12 계약 PASS(T5 ABORTED · T6/cj/S3 UNSTABLE · chj FAILURE 기대값) · Portal 200 · `[Trusted]` 전부 일치 |
+| CI #18(X2, PROMOTE dry-run) | SUCCESS — Gate · Corpus · Budget · Harness main 18/18 · Build · prodtree 10/10 · Drift · Verify COMPLETE_PASS 20/20(tree `de9422fb…`) · VAULT_DECRYPT · Evidence PASS(main 12 항목 전부 direct 바인딩) · Promote DRY_RUN `e2e ok, problems []`; bounded 5 PARTIAL/승인(`getNodeId` pending); Harness main 18/18 PASS · bounded 0/5 (PARTIAL/승인 — 네 번째 서명 `getNodeId` pending, 보존 단계 재전파도 Harness 가 기록) · prodtree 10/10 PASS(archive_fail · stash_fail · truncate_jsonl · checkpoint_only_a/b · layer_a_fail 포함) |
+| 실 승격 P2 | 세션 CLI `promote --sha ec6a494f … --verify-report(CI #18) --e2e-evidence --ci-stage-results --push-remote origin,internal` — 1차(00:50) G18 FAIL 로 거부(원인: 작업 PC git `core.autocrlf=true` 가 drift A1 의 `git archive` export 를 CRLF 로 → manifest 거부, GP-45; 원격 변경 0) · 2차(01:06) G14/G15/G19 FAIL 로 거부(같은 시각 PC 메모리 부족 사건으로 WSL staging·하위 프로세스 실패; 원격 변경 0) · 3차(01:17~01:28, 저장소 설정을 잠시 autocrlf=false) **COMPLETE_PASS → P2 `07ecf7ac`**: Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20(G19 WSL 3채널 실제 실행 PASS) · Gates-Reused G01~G10 G16 G17 · publish origin "accepted by remote" · internal "already at the new commit (reached via a shared push URL)"(GP-40 수정 동작 확인, partial_push 없음) · 로컬 ref 갱신 · 193 파일 · 개발 경로 0 · trailer Main-SHA `ec6a494f` · Tree-Hash `de9422fb…` · Previous-Production `1f725071` · CI-Build #18 · Verdict COMPLETE_PASS · CI-Stages verified. vault 암호 파일은 실행마다 생성·삭제. |
+| production Job(P2) 재검증 | production Job(P2 `07ecf7ac`, 11 빌드 #83~#93): 전부 checkout == P2 · 기대 결과 전부 일치(CAN-1/S1/S2/T2/Linux 15/Windows/ESXi 6/Redfish 10 SUCCESS, T6·S3 UNSTABLE 기대) — main X3 와 동일한 결과 |
+| Portal | 정상 전달(main #100 S5 · #101 S1 · #102 S4 · #106 ESXi, body 12~47 KB)의 Portal 응답은 **HTTP 200 · 본문 0 B**(JSON 확인 없음) — Harness sink 는 `{"received": true, …}` 를 돌려주므로 echo 자체는 동작한다. 세션의 통제된 중복 재전송(curl, 같은 eventUuid·body)은 200 + HTML 예외 페이지(3,047 B)였다 — 중복 거절일 가능성이 있으나 요청 헤더(Jenkins httpRequest vs curl) 차이 때문일 수도 있어 **미확정**. 저장·반영은 Portal 측 로그/DB 로만 확인 가능(GP-42) |
+
 ## 2026-10-04 (3차) — 재개 지시 대응 (전체 명부 실수집 · S3 Redfish · CI #14 · 성능 전후 · 수집기 수정)
 
 > 실측 `tests/evidence/2026-10-04-review-c1-c6.md` §5-7·§5-8 · `2026-10-04-test-server-roster.md`. 상태 어휘 PASS/FAIL/PARTIAL/HOLD/INVALID.

@@ -8,6 +8,36 @@
 
 > 최종 갱신: 2026-10-04
 
+## 2026-10-04 (4차) — 최종 실행 지시: timeout 상한의 실제 범위 · 추정과 직접 증거의 구분 · forks 메모리 상수 · 자산 진단 · Portal 응답의 의미
+
+### 사용자 의심
+- 문서는 "archive/stash 60 s · 회수 30 · 조립 60" 을 약속했는데 코드는 Layer A shell timeout 과 외곽 720 s 뿐이고 bounded 는 기본 false 다 — 실제 보장 범위가 무엇인가.
+- fail-closed 빌드의 이웃 revision 일치는 그 빌드가 읽은 Jenkinsfile 의 직접 증거가 아니다. `readTrusted` 내용 해시 대조도 코드에 없다.
+- `per_fork_mb 36` 은 WSL 실패 경로 임시값이다. HTTP 200 만으로 Portal 저장을 말하지 말라. 미해결 자산을 사용자에게 전부 넘기지 말라.
+
+### 분석
+- Declarative 소스(pipeline-model-definition `ModelInterpreter`)로 stage `options.timeout` 이 agent 할당과 stage `post` 를 감싸고, pipeline `post` 가 전역 timeout 안임을 확인 — 설계 가정과 일치. 선점 수단과 예약값은 다른 것이다.
+- sandbox 는 digest API 를 허용하지 않는다 — runtime 이 낼 수 있는 내용 식별값은 `String.hashCode`(32-bit) 뿐이고 Jenkins 자체 기록(`Obtained <path> from <SCM>`)은 revision 을 남기지 않는다.
+- Runner 실측(perf-observe): slot 당 PSS 는 Linux 평균 36 MB 이지만 Windows worker 단일 최악 69 MB; RSS 합은 공유 페이지 중복이라 상한 근거가 아니다. Jenkins LeastLoad 가 동시 Gather 를 분산해 같은 Runner 겹침은 자연 발생하지 않는다.
+- 자산: Runner 망 ARP INCOMPLETE 는 방화벽이 아니라 호스트 부재의 근거다. CIMC 503 메시지는 설정 상태의 원문이다. HPE 는 망에 따라 응답이 갈린다.
+- Portal: GET 은 HTML 예외 페이지(200)였고 중복 POST 도 200 + HTML 이었다 — 2xx 가 수신·저장 증거가 아니라는 지시 그대로다.
+
+### 결정
+1. Tier 2 상한을 보존 archive/stash(30 s 각)와 조립 전체(60 s → 최소 경로 20 s)로 넓히되 기본 모드 동작과 숫자는 바꾸지 않는다. 문서는 "예약" 과 "선점" 을 분리해 기본 모드의 보장 축소(느린 보존·회수가 합산 제한까지 끌면 Callback 을 못 보낼 수 있음)를 그대로 적는다. 승인 없이 bounded 를 켜지 않는다(고객사 설치 요구 조건 아님).
+2. 증거 수집기는 이웃 revision 바인딩을 `estimated` 로 기록하고 필수 시나리오의 바인딩으로 인정하지 않는다. 직접 증거는 BuildData 또는 트리거 측 tip 관측. `[Trusted]` 내용 대조를 추가한다. P1(X7b #88 추정 바인딩)은 당시 규칙으로 성립한 승격이므로 다시 열지 않는다.
+3. `per_fork_mb` 80(최악 slot 69 + 여유), `fixed_mb` 200 · `node_share` 40 % 유지 — 근거를 스크립트 주석과 문서에 적는다. 같은 Runner 겹침을 만들기 위해 Runner 를 offline 으로 하지 않는다.
+4. GP-36 은 측정 정의 차이로 종료(코드 변경 없음); `meta.duration_ms` 의 의미는 계약 소유자 결정으로 남긴다. P6/P8 은 미구현 종료.
+5. 자산 6건은 진단까지 하고 결정(전원·설정·범위)은 사용자에게 남긴다. BMC/노드 설정은 바꾸지 않는다.
+6. Portal 저장·중복 계약은 미확인으로 남기고, runtime 이 2xx 응답 본문 앞부분을 기록해 다음 확인의 근거를 만든다. exactly-once/outbox/queue 는 만들지 않는다.
+7. 생성 tree Harness 는 보존 실패 경로 6종을 포함한 10 으로 승격 조건에 넣는다.
+
+### 영향
+- runtime X2 `ec6a494f`(Jenkinsfile_portal · gather_budget.sh) → P2 `07ecf7ac`(tree_hash `de9422fb6c56…`, parent P1). 기본 모드 동작 불변 · 고객사 main-only 요구 조건 변화 없음.
+- CI 기본 목록: Harness main 18 · bounded 5 · prodtree 10; 파라미터 `E2E_TIP_OBSERVATIONS_JSON`. 진단 Job 둘(perf-observe · net-probe) 등록(main 전용).
+
+### 회귀
+- `tests/unit/prodgen/test_verdict_evidence.py`(추정 거부 · tip 관측 · `[Trusted]` 대조), `tests/unit/test_jenkinsfile_portal_finalize.py`(상한 범위 · seTrusted · 응답 echo), `tests/unit/test_gather_budget.py`(상수 80), `tests/unit/test_harness_tools.py` · `test_jenkinsfile_ci.py`(목록), `tests/unit/test_perf_observe_tools.py`; CI #18; main E2E X2; production P2 — `tests/evidence/2026-10-04-review-c1-c6.md` §9.
+
 ## 2026-10-04 (3차) — 재개 지시: 명부 전수 실수집 · S3 를 Redfish 로 · fail-closed 빌드의 revision 바인딩 · 승격 credential 경계
 
 ### 사용자 의심
