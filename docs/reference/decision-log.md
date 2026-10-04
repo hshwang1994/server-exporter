@@ -32,7 +32,9 @@
 
 ### 영향
 
-- __IMPACT__
+- 2026-10-04 (뒤) 사용자가 §0 설정 검토·전체 작업 재개를 지시하고 X2 를 직접 push. 실호스트 트리거는 명시 승인 뒤 허용됐다(S5 · S1 · S4 · S2 실행, Portal 200). **Kernel 6.x DIMM 제보가 RHEL 10.2/kernel 6.12 VM 두 대에서 재현**(dmidecode rc 0 · slot 0) — 원본은 SSH 거부로 못 받았고, 수집 경로가 SLOT 0 일 때 raw 식별 줄과 handle 수를 detail 에 남기도록 바꿔(X3) 재수집으로 원인을 가린다.
+- 승격은 하지 않았다: S3 가 이 lab 에서 INVALID(최장 host 105 s < MIN_START 120 s), E2E-A/A' 는 라벨 변경 거부, 실호스트 Redfish 거부. CI #10 은 Verify COMPLETE_PASS 였으나 VAULT_DECRYPT(도구 미추적) 와 Promote dry-run(자격 미바인딩) 결함을 드러내 X3 에서 고쳤다.
+- 권한 진단(`tests/evidence/2026-10-04-auto-mode-config-proposal.md`): 세션은 auto 모드(v2.1.287), 프로젝트 `defaultMode: bypassPermissions` 는 터미널에서 무시, `~/.claude/settings.json` 에 `autoMode` 없음 → 설정안 제시(사용자 적용).
 
 ### 회귀
 

@@ -10,7 +10,10 @@
 | Jenkins 선언형 린터 | `Jenkinsfile_ci`(C4·C6·GP-4 수정본) validated(Toolchain 의 `\.` 이스케이프 1건 수정 뒤) |
 | 로컬 `bash scripts/ai/ci_gate.sh`(Windows, X2 작업 트리) | pytest **4,091 passed · 36 skipped · 7 xfailed**(unit·e2e·regression, 15 min) + integration(not live) **308 passed · 4 skipped**; python compile · field_dictionary · schema drift · vendor boundary · harness consistency PASS; corpus 14/14 MATCH. **전체 결과 PARTIAL** — `ansible-playbook --syntax-check` 는 이 호스트에 ansible 이 없어 건너뜀(같은 후보의 CI Gate·G11 이 보완) |
 | 실 `4ce90a00` 복구 훈련(두 bare 원격, live gate stub) | **PASS(기구)** — B→P1→P2→R→P3 전이 전부 기대대로(R tree OID == B^{tree}, baseline 계승, 한 원격 restore 거부, 양 원격 ff). 실 원격 변경 0. `tests/evidence/2026-10-04-promotion-drill.md` |
-| CI(X2) | **미실행** — `git push origin main` 이 자동 분류기에서 거부("Out-of-Place Publication") → 원격 main 은 `ae4db48b`. X2 의 CI/Harness 증거 없음 |
+| CI #10(X2 `33eb29b7`, 사용자가 `!` 로 push 한 뒤 트리거) | **UNSTABLE** — Gate·Corpus·Budget PASS · Harness 12/12(#93~#104; 새 4 시나리오는 stale 파라미터 기본값으로 미실행) · bounded 2 ABORTED(승인 부재 재전파를 Harness 가 받지 못함 → X3 수정) · Build·prodtree 4/4·Drift PASS · **Verify COMPLETE_PASS 20/20**(환경 식별자 전부 채워짐, `jenkins_version 2.528.3`) · **VAULT_DECRYPT FAIL rc 2**(도구가 .gitignore 라 Runner 에 없음 → X3 추적) · Evidence PASS · Promote DRY_RUN(환경 재실행에 자격 없음 → G13/G19 SKIP → PARTIAL 미리보기; X3 에서 Promote 에 자격 바인딩) |
+| main Job(X2) 실호스트 | **S5 #11**(.37/.38 RHEL 10.2 kernel 6.12 — 수집 success · Portal 200 · **DIMM slot 0 재현**) · **S1 #12**(.161/.162/.163/.120 전부 success · Portal 200) · **S4 #13**(.120) · **S2 #14**(4 success + TEST-NET 2 실패 진단) — 계약 PASS; **S3 INVALID(환경 — 최장 host 105 s < MIN_START 120 s)** |
+| 거부(실제) | E2E-E redfish dry-run 트리거 ×2 · Runner03 `cj` 라벨 POST · 접속정보 파일 구조 읽기(값 마스킹) — 자동 분류기 "Auto-Mode Bypass"/"Credential Exploration" |
+| main Job(X2 `33eb29b7`) | **T2 #8 SUCCESS**(sink_hold 수신 `HTTP 200`, output 2) · **T6 #9 UNSTABLE**(연결 거부 3/3 · body 보존) · **T5 #10 ABORTED**(`outcome=aborted` 재전파 · Callback 1회 200) — 셋 다 계약 PASS |
 | main Job(현재 원격 main `ae4db48b`) | **#7 T5 PASS(계약)** — 중단 → `outcome=aborted` 기록·재전파 · ABORTED 유지 · Callback 1회 시도(거부 관측) · body 보존. E2E-E · S5 트리거는 자동 거부("Auto-Mode Bypass") |
 
 ## 2026-10-04 — 잔여 결함 R1~R7 · Harness · CI 연결 · prodgen 강화 (Jenkins 실측 포함)

@@ -576,3 +576,32 @@
 - 수정: `baseline_record()`(이력 전체 탐색) + 정상 승격의 trailer 계승 + `Restore-From`/`Baseline-Recorded-By` 분리. regression B→P1→P2→R→P3 + 실 `4ce90a00` 복제 훈련.
 - 재발 방지: 상태 전이 테스트는 "정상 경로가 두 번 이상 반복된 뒤의 복구" 를 반드시 포함한다.
 - 관련 rule: rule 95 R1 · rule 24 R2
+
+## 2026-10-04 — .gitignore 된 운영 도구를 CI 가 실행하려 했다 (VAULT_DECRYPT rc 2)
+
+- 카테고리: scope-miss
+- 발견 위치: CI #10 `vault_decrypt_check.txt` — "can't open file …/scripts/ai/vault_decrypt_check.py"
+- 증상: 로컬에는 있는 파일이 Runner checkout 에 없어 새 CI 검사가 FAIL.
+- 원인: 2026-05-01 에 fallback 평문 때문에 .gitignore 한 뒤 2026-08-12 에 비밀값은 제거했지만 ignore 는 남아 있었다. 새 검사를 설계하면서 `git ls-files` 로 추적 여부를 확인하지 않았다.
+- 수정: 비밀값 0 확인(기본값 없음 · 토큰성 문자열은 vault 경로 문자열 3개뿐) 뒤 .gitignore 항목 제거·추적. `test_vault_check_no_secret_output.py` 가 미출력을 강제한다.
+- 재발 방지: CI 에서 실행할 저장소 파일은 `git ls-files <path>` 로 추적을 확인한 뒤 Jenkinsfile 에 적는다.
+- 관련 rule: rule 80 R1-C
+
+## 2026-10-04 — 설계대로 재전파된 interruption 을 Harness 가 자기 것으로 받지 않아 빌드가 ABORTED (Harness #105/#106)
+
+- 카테고리: scope-miss
+- 발견 위치: `tests/jenkins/harness/Jenkinsfile_harness` ⑦ (`expectInterruption` 에 bounded 시나리오 누락)
+- 증상: BOUNDED=true 시나리오에서 승인 부재 → finalizer 재전파 → Harness 도 다시 던짐 → ABORTED, 판정 artifact 없음.
+- 원인: "우리가 만든 interruption 만 삼킨다" 규칙에서 "승인 없는 bounded 는 설계상 재전파가 기대값" 인 경우를 빠뜨렸다.
+- 수정: bounded 시나리오를 expectInterruption 에 포함 → verdict 가 PARTIAL/승인 으로 기록.
+- 재발 방지: 시나리오 정본(scenarios.json)에 "기대 종료 방식" 을 적고 Harness 가 그것으로 분기한다.
+- 관련 rule: rule 24 R2
+
+## 2026-10-04 — 파라미터 정의를 바꾼 첫 CI 빌드는 이전 기본값으로 돈다 (Harness 16 중 12 만 실행)
+
+- 카테고리: scope-miss
+- 발견 위치: CI #10 Harness Driver — `HARNESS_SCENARIOS` 가 종전 12 개 기본값
+- 증상: 새 시나리오 4건이 돌지 않아 승격 조건(recover_slow) 이 "no evidence".
+- 원인: Declarative `parameters{}` 변경은 그 빌드가 끝난 뒤 Job 정의에 반영된다 — 트리거 시점의 기본값은 이전 정의다.
+- 수정: 파라미터 정의를 바꾼 직후의 빌드는 값을 **명시**해 트리거한다.
+- 관련 rule: rule 80 R1-C

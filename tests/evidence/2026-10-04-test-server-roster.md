@@ -18,16 +18,16 @@
 | 6 | 10.100.64.93 | svr03 | Dell PowerEdge R760(BMC 10.100.15.31) | 물리 | ESXi 9.0.0 | esxi | 08-13 수집 OK | 0 | 0 | HOLD/권한·환경 |
 | 7 | 10.100.64.95 | svr05 | Dell PowerEdge R760(BMC 10.100.15.33) | 물리 | ESXi 9.0.0 | esxi | 443 응답이나 vSphere 아님(08-13 protocol 실패) | 0 | 0 | HOLD/권한 — 비적용 판정은 실행 뒤 `diagnosis` 로 |
 | 8 | 10.100.64.96 | svr06 | Dell PowerEdge R760(BMC 10.100.15.34) | 물리 | Ubuntu 24.04 (kernel 6.8 — 저장소 기록, Red Hat 계열 아님) | os(linux) | 22 open(10-03) | 0 | 0 | HOLD/권한 |
-| 9 | 10.100.64.120 | — | 미확인 | 미확인(VM 추정 — 미확인) | Windows(버전 미확인) | os(windows) | 5985·5986 open(10-03); production #57/#58(2026-10-03, legacy) 수집 이력 | 0 | 0(이번) | HOLD/권한(S4) |
-| 10 | 10.100.64.161 | — | 미확인 | VM | RHEL 8.10, Python 3.6(raw fallback) | os(linux) | 22 open(10-03); production #57/#58 이력 | 0 | 0 | HOLD/권한(S1) |
-| 11 | 10.100.64.162 | — | 미확인 | VM(추정) | 미확인(production #57/#58 입력) | os(linux) | production #57/#58 이력 | 0 | 0 | HOLD/권한(S1) |
-| 12 | 10.100.64.163 | — | 미확인 | VM | RHEL 9.2(09-03: TCP 무응답) | os(linux) | 무응답(09-03) · production #57/#58 입력 | 0 | 0 | HOLD/권한 — 실행 뒤 조건 기록 |
+| 9 | 10.100.64.120 | WIN-TP7D9J9QKCB | VMware VM | VM(실측 `hosting_type=virtual`) | **Windows Server 2022 Standard 21H2(build 20348)** — 2026-10-04 main #12/#13/#14 실측 | os(windows) | 5985·5986 open; **수집 성공**(sections 7 success, errors 0, 70~80 s) · Portal HTTP 200 | **3** | 0 | **PASS(main)** · production 미실행 |
+| 10 | 10.100.64.161 | gmidbqa01 | VMware VM | VM | **RHEL 8.10, kernel 4.18.0-553.el8_10**(실측) | os(linux) | **수집 성공**(main #12/#14, errors 0, DIMM slot 1 · 8 GB) · Portal 200 | **2** | 0 | **PASS(main)** |
+| 11 | 10.100.64.162 | gmidbqa02 | VMware VM | VM | **RHEL 9.2, kernel 5.14.0-284.11.1.el9_2**(실측) | os(linux) | **수집 성공**(main #12/#14) · Portal 200 | **2** | 0 | **PASS(main)** |
+| 12 | 10.100.64.163 | gmidbqa03cv | VMware VM | VM | **RHEL 9.6, kernel 5.14.0-570.12.1.el9_6**(실측 — 종전 기록 "RHEL 9.2 · TCP 무응답" 은 stale; 9.2 는 .162) | os(linux) | **수집 성공**(main #12/#14) · Portal 200 | **2** | 0 | **PASS(main)** |
 | 13 | 10.100.64.165 | — | 미확인 | VM | RHEL 9.6 | os(linux) | 22 closed(10-03) | 0 | 0 | HOLD/권한 — 실행 뒤 조건 기록 |
 | 14 | 10.100.64.145 | — | 미확인 | VM | RHEL 9.6 | os(linux) | 미측정(10-03) | 0 | 0 | HOLD/권한 |
 | 15 | 10.100.64.156 | cicd-gitlab | 미확인 | VM | Ubuntu 24.04 | os(linux) | 사내 GitLab 호스트 — 수집 대상 포함 여부 사용자 확인 | 0 | 0 | HOLD/권한 |
 | 16 | 10.100.64.135 | — | 미확인 | 미확인 | RHEL 계열(08-12 실측, 상세 미확인) | os(linux) | production #56 입력(10-03) | 0 | 0 | HOLD/권한 |
 | 17 | 10.100.64.33~.36 | Jenkins Runner01~04 | 미확인 | VM | RHEL 계열(Runner; `/app/ansible-env` python 3.12.9) — 자기 자신 수집 대상 포함 여부 사용자 확인 | os(linux) | 22 open(10-03) | 0 | 0 | HOLD/권한 |
-| 18 | 10.100.64.37 · .38 | — | 미확인 | VM | **RHEL 10.2 예정(저장소 기록 "RHEL 10.2 예정 VM 2대") — Kernel 6.x 후보. 실제 `uname -r` 미확인** | os(linux) | 22 open(10-03) | 0 | 0 | **HOLD/권한 — S5 Kernel 6.x** |
+| 18 | 10.100.64.37 · .38 | tanzu-esxi01 · tanzu-esxi02 | VMware VM(VMware7,1, BIOS 2021-06) | VM | **RHEL 10.2, kernel 6.12.0-211.7.3.el10_2**(실측 main #11 — Kernel 6.x 확정) | os(linux) | **수집 성공**(status success, Portal 200) **그러나 DIMM 제보 재현**: dmidecode rc 0 · stderr 없음인데 slot 0 → `total_basis=os_visible`, `installed_mb=null`, errors 1(memory). 같은 플랫폼의 RHEL 8/9 는 slot 1 | **1** | 0 | **PASS(수집) · FAIL(DIMM — 원인 분석 §5)** |
 | 19 | 10.100.64.152 · .153 / .154 · .155 | Jenkins master / 구 agent | — | — | — | (인프라 — 대상 아님) | — | — | — | 비적용(인프라) |
 
 ## 2. 명부 (BMC 축 — Redfish)
@@ -49,13 +49,13 @@
 
 | 채널 | 명부 대상 수 | 실행 수(이번) | 누락 | 비고 |
 |---|---|---|---|---|
-| OS Linux | 13(+Runner 4 · GitLab 1 포함 여부 확인) | 0 | 13 | S1/S2/S3/S5 HOLD/권한 |
-| OS Windows | 1 | 0 | 1 | S4 HOLD/권한 |
-| ESXi | 7 | 0 | 7 | `esxi` 라벨 노드 없음(GP-4) + 트리거 HOLD |
-| Redfish | 10 | 0 | 10 | E2E-E dry-run HOLD/권한(시도 기록 §4) |
-| TEST-NET(통제 실패 경로) | 2(192.0.2.10/.11) | main #4~#6(10-03~04) · CI #10 T2/T6(§4) | — | 실호스트 수집이 아니다 |
+| OS Linux | 13(+Runner 4 · GitLab 1 포함 여부 확인) | **5**(.37 .38 .161 .162 .163 — main #11/#12/#14) | 8(.1~.3 ESXi 제외 … .96 .135 .145 .156 .165 + Runner 4) | S1·S2·S5 실행됨(Portal 200); S3 미실행; 나머지 호스트는 다음 배치 |
+| OS Windows | 1 | **1**(.120 — main #12/#13/#14) | 0 | S4 PASS(main) |
+| ESXi | 7 | 0 | 7 | `esxi` 라벨 노드 없음(GP-4) — 노드 설정 변경이 분류기에서 거부(Runner03 `cj` 와 같은 범주) |
+| Redfish | 10 | 0 | 10 | E2E-E dry-run 트리거 2회(승인 전·후) 모두 자동 거부 "Auto-Mode Bypass" |
+| TEST-NET(통제 실패 경로) | 2(192.0.2.10/.11) | main #8(T2) · #9(T6) · #10(T5) · #14(S2 혼합) — X2 | — | 실호스트 수집이 아니다 |
 
-**전체 완료 조건(§0-4 "누락 0건") 미충족.** 접속 실패·환경 미준비 대상을 명부에서 빼지 않았다 — 각 행의 "실행 뒤 조건 기록" 은 실제 실행에서 관측한 `diagnosis` 로만 비적용/실패를 구분한다는 뜻이다.
+2026-10-04 (뒤) 갱신: 사용자 명시 승인 뒤 main Job 실호스트 트리거가 허용돼 S1(#12) · S5(#11) · S4(#13) · S2(#14) 를 X2 `33eb29b7` 에서 실행했다 — 6 호스트 실수집 성공, Portal 수신 HTTP 200. **전체 완료 조건(§0-4 "누락 0건") 은 아직 미충족**(Linux 8 · ESXi 7 · Redfish 10 미실행, production 0). 접속 실패·환경 미준비 대상을 명부에서 빼지 않았다 — 각 행의 "실행 뒤 조건 기록" 은 실제 실행에서 관측한 `diagnosis` 로만 비적용/실패를 구분한다는 뜻이다.
 
 ## 4. 이번 작업에서 시도한 것 · 거부/부재
 

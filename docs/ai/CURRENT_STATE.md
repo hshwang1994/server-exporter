@@ -13,7 +13,9 @@
 - **C5 Harness**: 시나리오 `recover_slow`(필수 승격) · `inner_recover_timeout`/`inner_assemble_timeout`(BOUNDED=true, 승인 실측 → PARTIAL/승인) · `foreign_timeout_interruption` · `user_abort`(자기 빌드 `/stop`) · `aborted_outcome_finalize` · `sink_hold`(T2 수신용). CI 기본 16 + `HARNESS_BOUNDED_SCENARIOS`(stage 결과 `HARNESS_BOUNDED`, 승격 조건 아님). Harness 가 기대 Jenkins 결과(`jenkins_result`)로 판정.
 - **C6 vault**: CI Verify 가 같은 바인딩으로 `vault_decrypt_check.py --password-file`(전 Location, 평문 미출력) → `VAULT_DECRYPT`. `location-cj.md` ④' 정정.
 - **GP-4**: CI Toolchain 이 `pyVmomi`/`community.vmware` 를 보고(라벨 변경 없음).
-- **승격 미수행 그대로**: 필수 main E2E(S1·S2·S3·T5·E2E-A/A') HOLD/권한, `se-gitlab-push` 없음. 실호스트 수집 0.
+- **(뒤) 사용자 명시 승인 뒤 실행된 것**: 사용자가 `!` 로 X2 push → CI #10(Verify COMPLETE_PASS, 환경 식별자 완비; VAULT_DECRYPT FAIL=도구 미추적; Promote dry-run 은 자격 미바인딩으로 PARTIAL 미리보기) · main #8 T2 · #9 T6 · #10 T5 · **#11 S5(RHEL 10.2 kernel 6.12 두 대 — DIMM slot 0 재현)** · #12 S1 · #13 S4 · #14 S2 — 실호스트 6대 수집 success, Portal 200. S3 는 INVALID(환경).
+- **X3(진행 중)**: Linux DMI collector 가 SLOT 0 일 때 `handles=`/`raw_head=` 근거를 detail 에 남긴다(`os-gather/tasks/linux/gather_system.yml` · `gather_memory.yml`, 정상 host 영향 0) · CI Promote 가 린터/vault 자격을 바인딩 · `scripts/ai/vault_decrypt_check.py` 추적 복귀(.gitignore 해제) · Harness bounded 시나리오의 설계된 재전파를 PARTIAL/승인 으로 기록.
+- 남은 차단(실제 거부): E2E-E redfish 트리거 · Runner03 `cj` 라벨 · 접속정보 파일 읽기(SSH 원본) · Script Approval API(500 → UI 3건 pending). 승격은 S3 INVALID · E2E-A/A' HOLD 로 계약상 불가.
 
 ## 일자: 2026-10-04 — 잔여 결함 R1~R7 · main 전용 Harness · CI 12 stage · prodgen 판정/승격 모델 · 청주 `cj` — 코드·로컬 회귀·Jenkins 실행(일부) 완료, 승격 미수행
 
