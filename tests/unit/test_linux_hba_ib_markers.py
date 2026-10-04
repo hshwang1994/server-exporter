@@ -331,3 +331,88 @@ def test_nic_block_vlan_id_from_proc_net_vlan(sbx):
               .replace("/proc/net/vlan", sbx.p(vlan_dir)))
     rows = {r[0]: r[1:] for r in sbx.run(script).rows("NIC")}
     assert rows["bond0.64"][1] == "64"
+
+
+# ── GP-23 (2026-10-05): 비루트 수집에서 /proc/net/vlan/<if> 는 읽히지 않는다 (커널 0600) ─────────────────────────────────────────────
+IP_VLAN_OUT = ("7: bond0.64@bond0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000\n"
+               "    link/ether aa:bb:cc:dd:ee:ff brd ff:ff:ff:ff:ff:ff promiscuity 0 allmulti 0 minmtu 0 maxmtu 65535\n"
+               "    vlan protocol 802.1Q id 64 <REORDER_HDR> addrgenmode eui64 numtxqueues 1 numrxqueues 1\n")
+
+
+def _vlan_net(sbx: Sandbox) -> Path:
+    """bond0.64(VLAN — uevent DEVTYPE=vlan) · eno1(물리, VLAN 아님) — 링크 없이 디렉터리만(Windows 에서도 돈다)."""
+    net = sbx.root / "sys" / "class" / "net"
+    (net / "bond0.64").mkdir(parents=True)
+    (net / "bond0.64" / "uevent").write_text("DEVTYPE=vlan\nINTERFACE=bond0.64\nIFINDEX=7\n", encoding="utf-8")
+    (net / "eno1").mkdir(parents=True)
+    (net / "eno1" / "uevent").write_text("INTERFACE=eno1\nIFINDEX=2\n", encoding="utf-8")
+    return net
+
+
+def _ip_shim(sbx: Sandbox) -> Path:
+    """`ip -d link show dev <if>` 만 답하는 shim — 호출을 기록해 VLAN 장치에서만 불렸는지 본다."""
+    calls = sbx.data / "ip_calls.txt"
+    out = sbx.data_file("ip_vlan_out.txt", IP_VLAN_OUT)
+    sbx.shim_cmd("ip", f'echo "$*" >> \'{sbx.p(calls)}\'\n'
+                       f'case "$*" in\n  "-d link show dev bond0.64") cat \'{out}\' ;;\n  *) exit 1 ;;\nesac\n')
+    return calls
+
+
+def test_nic_block_vlan_id_falls_back_to_netlink_without_proc_entry(sbx):
+    """GP-23: /proc/net/vlan 이 없거나(8021q proc 미노출) 비어 있으면 VLAN 장치(uevent DEVTYPE=vlan)에 한해 `ip -d link show dev` 의 id 를 쓴다.
+    VLAN 이 아닌 장치에는 ip 를 부르지 않는다 (원격 실행 비용 · 출력 계약 불변)."""
+    net = _vlan_net(sbx)
+    calls = _ip_shim(sbx)
+    script = (network_nic_block().replace("/sys/class/net", sbx.p(net))
+              .replace("/proc/net/vlan", sbx.p(sbx.root / "proc_absent" / "vlan")))
+    rows = {r[0]: r[1:] for r in sbx.run(script).rows("NIC")}
+    assert rows["bond0.64"][1] == "64", rows
+    assert rows["eno1"][1] == "", "VLAN 이 아닌 장치는 비어 있다"
+    assert calls.read_text(encoding="utf-8").split("\n")[:-1] == ["-d link show dev bond0.64"], "ip 는 VLAN 장치에서만"
+
+
+def test_nic_block_vlan_id_from_netlink_when_proc_entry_is_unreadable(sbx):
+    """실장비 재현 조건(2026-10-04 production #88 .96/.95): 항목은 있는데(-f 참) 비루트라 읽기 실패 → netlink 로 64.
+    Windows(chmod 무효) · root 실행에서는 읽기 실패를 만들 수 없어 건너뛴다."""
+    import os
+    net = _vlan_net(sbx)
+    vlan_dir = sbx.root / "proc" / "net" / "vlan"
+    vlan_dir.mkdir(parents=True)
+    entry = vlan_dir / "bond0.64"
+    entry.write_text("bond0.64  VID: 64\t REORDER_HDR: 1  dev->priv_flags: 1001\n", encoding="utf-8")
+    entry.chmod(0)
+    try:
+        if os.access(entry, os.R_OK):
+            pytest.skip("읽기 권한을 막을 수 없는 환경 (Windows 또는 root)")
+        calls = _ip_shim(sbx)
+        script = (network_nic_block().replace("/sys/class/net", sbx.p(net)).replace("/proc/net/vlan", sbx.p(vlan_dir)))
+        rows = {r[0]: r[1:] for r in sbx.run(script).rows("NIC")}
+        assert rows["bond0.64"][1] == "64", rows
+        assert "-d link show dev bond0.64" in calls.read_text(encoding="utf-8")
+    finally:
+        entry.chmod(0o644)
+
+
+def test_nic_block_readable_proc_entry_wins_and_netlink_is_not_called(sbx):
+    """root 수집(또는 읽기 가능한 proc)이면 종전대로 /proc 값을 쓰고 ip 는 부르지 않는다."""
+    net = _vlan_net(sbx)
+    vlan_dir = sbx.root / "proc" / "net" / "vlan"
+    vlan_dir.mkdir(parents=True)
+    (vlan_dir / "bond0.64").write_text("bond0.64  VID: 64\t REORDER_HDR: 1  dev->priv_flags: 1001\n", encoding="utf-8")
+    calls = _ip_shim(sbx)
+    script = (network_nic_block().replace("/sys/class/net", sbx.p(net)).replace("/proc/net/vlan", sbx.p(vlan_dir)))
+    rows = {r[0]: r[1:] for r in sbx.run(script).rows("NIC")}
+    assert rows["bond0.64"][1] == "64"
+    assert not calls.exists(), "proc 값이 있으면 netlink 를 부르지 않는다"
+
+
+def test_nic_block_without_ip_command_keeps_vlan_empty(tmp_path):
+    """ip 가 없는 최소 환경: 실패 없이 빈 값(null) — 종전 동작과 같다."""
+    from tests.unit.linux_raw_harness import CONTROLLED
+    sbx = Sandbox(tmp_path, hide=CONTROLLED + ("ip",))
+    net = _vlan_net(sbx)
+    script = (network_nic_block().replace("/sys/class/net", sbx.p(net))
+              .replace("/proc/net/vlan", sbx.p(sbx.root / "proc_absent" / "vlan")))
+    res = sbx.run(script)
+    rows = {r[0]: r[1:] for r in res.rows("NIC")}
+    assert rows["bond0.64"][1] == "" and res.rc == 0

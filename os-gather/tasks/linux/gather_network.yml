@@ -158,6 +158,12 @@
             # 커널 형식 '<if>  VID: <n>	 REORDER_HDR: …' — 이름 뒤 공백이 둘이라 -F'[ |]' 의 $2 는 늘 빈 필드였다(2026-10-03 P3 검수에서 발견, vlan_id 항상 null).
             vlan=$(awk '/VID:/ { for (i = 1; i <= NF; i++) if ($i == "VID:") { print $(i + 1); exit } }' "/proc/net/vlan/$iface" 2>/dev/null)
           fi
+          # /proc/net/vlan/<if> 는 커널이 0600(root 전용)으로 만든다 — 비루트 수집 계정이면 위 읽기가 실패해 비어 있다(2026-10-04 실장비 .96 .95:
+          #   interfaces[].vlan_id 64/656 인데 driver_map[].vlan_id null — GP-23). VLAN 장치(proc 항목 또는 uevent DEVTYPE=vlan)에 한해 같은 커널 값을
+          #   netlink 로 읽는다(`ip -d link`, 권한 불필요 — interfaces[].vlan_id 와 같은 근거). become 을 늘리지 않는다.
+          if [ -z "$vlan" ] && { [ -e "/proc/net/vlan/$iface" ] || grep -qs '^DEVTYPE=vlan$' "$n/uevent"; } && command -v ip >/dev/null 2>&1; then
+            vlan=$(ip -d link show dev "$iface" 2>/dev/null | awk '/vlan protocol/ { for (i = 1; i <= NF; i++) if ($i == "id") { print $(i + 1); exit } }')
+          fi
           bond_master=""
           if [ -f "$n/master/uevent" ]; then
             bond_master=$(basename "$(readlink "$n/master")" 2>/dev/null)
