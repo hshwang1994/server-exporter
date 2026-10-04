@@ -93,7 +93,7 @@ MAIN_CONTRACT = {
               "callback": "any", "loc": "cj", "outcome": {"completed"}, "envelopes": "all_failed",
               "console": ["[Resolve Location] cj + "]},
     "E2E-A2": {"desc": "폐기 Location chj 거부 — Resolve Location fail-closed", "expected": {"FAILURE"}, "hosts": None, "callback": None,
-               "loc": "chj", "console": ["[Resolve Location] 등록되지 않은 Location: 'chj'"]},
+               "loc": "chj", "console": ["[Resolve Location] 등록되지 않은 Location: 'chj'"], "fail_closed": True},
     "E2E-D": {"desc": "ESXi 성공 경로", "expected": {"SUCCESS"}, "hosts": "real", "callback": "portal", "outcome": {"completed"},
               "envelopes": "all_success", "delivered": True, "filled": 0, "target_type": "esxi"},
     "E2E-E": {"desc": "Redfish dry-run — 표준 계정 인증 · Account Write 0", "expected": {"SUCCESS"}, "hosts": "real", "callback": "portal",
@@ -290,6 +290,9 @@ def evaluate_main(scenario: str, item: dict, summary, body, manifest, console: s
                 add("kernel_major", envs and all(m is not None and m >= c["kernel_major_min"] for m in majors), majors)
     # ── console markers
     con = console or ""
+    if c.get("fail_closed"):
+        add("jenkinsfile_obtained", "Obtained Jenkinsfile_portal from" in con, "lightweight checkout marker" if "Obtained Jenkinsfile_portal from" in con else "marker missing")
+        add("stopped_before_agent", "Running on " not in con.split("[Finalize]")[0], "no agent node before finalizer" if "Running on " not in con.split("[Finalize]")[0] else "an agent ran before the refusal")
     if c.get("delivered") is True:
         add("callback_delivered", "[Callback] [OK] HTTP 2" in con, "[Callback] [OK] HTTP 2xx" if "[Callback] [OK] HTTP 2" in con else "no 2xx marker")
     elif c.get("delivered") is False:
@@ -330,12 +333,39 @@ def evaluate_harness(scenario: str, item: dict, hr, control, expected_result: st
     return checks
 
 
+def neighbour_revision(builds: list, number: int):
+    """Revision binding for a build that stopped before any agent checkout (contract `fail_closed: True` — E2E-A2:
+    Resolve Location refuses `chj` on the controller, so Jenkins records no BuildData for it; CI #14 2026-10-04).
+    The same Job's nearest earlier AND later builds that do carry a revision pin the Job's SCM tip at that time:
+    when both agree, that revision is the one the fail-closed build ran from. Any disagreement or a missing side → None.
+    `builds` = [{"number": int, "sha": str | None}, …]. Returns (sha, source) with source "neighbours:#lo,#hi"."""
+    lo = max((b for b in builds if b.get("sha") and b["number"] < number), key=lambda b: b["number"], default=None)
+    hi = min((b for b in builds if b.get("sha") and b["number"] > number), key=lambda b: b["number"], default=None)
+    if lo and hi and lo["sha"] == hi["sha"]:
+        return lo["sha"], f"neighbours:#{lo['number']},#{hi['number']}"
+    return None, None
+
+
+def _job_builds(base: str, job_path: str, netrc: str) -> list:
+    """[{"number", "sha"}] for the Job's recent builds (one read-only call)."""
+    info = _curl_json(f"{base}/{job_path}/api/json?tree=builds[number,actions[lastBuiltRevision[SHA1]]]{{0,60}}", netrc)
+    out = []
+    for b in info.get("builds", []) or []:
+        sha = None
+        for a in b.get("actions", []) or []:
+            if a.get("lastBuiltRevision"):
+                sha = a["lastBuiltRevision"].get("SHA1")
+        out.append({"number": b.get("number"), "sha": sha})
+    return out
+
+
 def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict | None = None) -> dict:
     """Read-only Jenkins collection. `harness_results` (scenario → expected Jenkins result) overrides scenarios.json / SUCCESS."""
     base = jenkins_url.rstrip("/")
     expected_results = dict(harness_expected_results())
     expected_results.update(harness_results or {})
     items = []
+    job_builds_cache: dict = {}
     for raw in entries:
         e = parse_entry(raw) if isinstance(raw, str) else raw
         job_path = "/".join(f"job/{p}" for p in e["job"].split("/"))
@@ -348,8 +378,16 @@ def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict |
             for p in a.get("parameters", []) or []:
                 params[p.get("name")] = p.get("value")
         kind = e.get("kind") or ("harness" if HARNESS_MARKER in e["job"] else "main")
+        sha_source = "build_data" if sha else None
+        if kind == "main" and not sha and (MAIN_CONTRACT.get(e["scenario"]) or {}).get("fail_closed"):
+            # fail-closed scenario: no agent checkout ever happened → bind via the Job's neighbouring builds (recorded as such)
+            builds = job_builds_cache.get(job_path)
+            if builds is None:
+                builds, _ = _try(_job_builds, base, job_path, netrc)
+                job_builds_cache[job_path] = builds if isinstance(builds, list) else []
+            sha, sha_source = neighbour_revision(job_builds_cache[job_path], int(e["build"]))
         item = {"scenario": e["scenario"], "kind": kind, "job": e["job"], "build": e["build"], "url": info.get("url") or url,
-                "result": info.get("result"), "building": info.get("building"), "checkout_sha": sha,
+                "result": info.get("result"), "building": info.get("building"), "checkout_sha": sha, "checkout_sha_source": sha_source,
                 "expected": e.get("expected"), "caller_expected": e.get("caller_expected"),
                 "params": {k: params[k] for k in ("loc", "target_type", "inventory_json", "callbackUrl", "gatherBudgetForceSec",
                                                    "redfishAccountDryrun", "SCENARIO", "MAIN_SHA", "FUNCTIONS_SRC", "BOUNDED") if k in params}}

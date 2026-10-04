@@ -6,7 +6,36 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-03
+> 최종 갱신: 2026-10-04
+
+## 2026-10-04 (3차) — 재개 지시: 명부 전수 실수집 · S3 를 Redfish 로 · fail-closed 빌드의 revision 바인딩 · 승격 credential 경계
+
+### 사용자 의심
+
+"S3 와 E2E-A/A′ 만 남았다" 는 승격 검사 기준에 한정된 표현이었다. 사용자 완료 기준에는 ESXi 7 · Redfish 10 · 도달 실패 3 · 전체 명부 정합 · bounded Harness · 성능 전후 · Portal 수신/반영 구분 · 최종 production 이 남아 있었고, S3 는 "Windows 2대 확보" 를 전제로 요구하면 안 됐다(기존 설정 `SE_FORKS_CAP_OS` 와 서로 다른 host 조합, 그 다음 승인된 Redfish 실수집으로 확인하라는 지시). 동일 이름 API 토큰 폐기·재발급은 하지 말 것.
+
+### 분석
+
+- 명부 전수를 실제로 돌리자 두 가지 기록 오류가 드러났다: `.95` 는 ESXi 가 아니라 Ubuntu 베어메탈(443 은 Traefik), E2E-D 입력에 그 host 가 있어 `all_success` 계약에 걸렸다. 수집기 쪽에는 구조적 결함이 있었다 — Resolve Location 에서 fail-closed 로 끝나는 빌드(E2E-A2)는 agent checkout 이 없어 Jenkins 가 revision 을 기록하지 않으므로 "같은 main SHA" 바인딩이 원천적으로 불가능했다.
+- S3: OS 채널은 Linux OUTPUT(+29 s) 과 Windows CHECKPOINT(+89 s) 사이가 유효 창인데 `MIN_START_SEC=120` 아래다. forks 를 1 로 낮추는 측정창은 Jenkins 노드 offline/env 변경이라 분류기가 `Node Lifecycle Operations` 로 막았다. Redfish 는 Cisco CIMC(341~353 s) 와 Dell/Lenovo(36~63 s) 의 실측 차이가 그대로 유효 창이 된다.
+- 실 승격의 마지막 경계는 코드가 아니라 **credential 의 위치**다: CI Runner 환경(보고서 환경 식별자와 일치, vault 바인딩 있음)에는 GitLab push 자격이 없고, 이 Windows 세션(양 원격 push 자격 있음)에는 vault 암호가 없어 환경 의존 gate 재실행에서 G19 가 SKIP 된다. 어느 쪽이든 사용자가 한 가지를 놓아야 한다.
+
+### 결정
+
+1. 명부 정정은 실행 `diagnosis` 로만 한다(`.95` → OS 축). 입력 결함으로 탈락한 계약은 올바른 입력으로 **재실행**(E2E-D #61)하고 이름을 바꿔 통과시키지 않는다.
+2. fail-closed 계약(`fail_closed: True`, 현재 E2E-A2 뿐)에 한해 **같은 Job 의 가장 가까운 앞·뒤 빌드가 기록한 revision 이 일치할 때만** 그 revision 으로 묶고 `checkout_sha_source` 에 출처를 적는다. 다른 시나리오는 종전 BuildData 바인딩 그대로. 계약 검사에 "Jenkinsfile 을 SCM 에서 받았고 거부 전에 agent 가 돌지 않았다" 를 추가한다.
+3. S3 는 채널 무관 계약이다. Redfish #55 가 S3 를 충족하며, OS forks 측정창은 사용자 선택 사항으로 남긴다(필수 아님). 최소 시작 예산은 낮추지 않았다.
+4. 실 승격은 사용자가 `se-gitlab-push`(CI 경로) 또는 WSL vault 암호 파일(세션 CLI 경로) 중 하나를 제공한 뒤에만 한다. 그 전까지 push 는 main 에 한정하고 production 양 원격은 `4ce90a00` 그대로 둔다.
+5. 토큰 정리는 하지 않는다(사용자 지시). Runner SSH 자격은 대화로 받아 세션 안에서만 쓰고 어디에도 적지 않는다.
+
+### 영향
+
+- `scripts/ai/prodgen/evidence.py`(수집기) + `tests/unit/prodgen/test_verdict_evidence.py`. production tree 영향 0(prodgen 은 배포 제외, tree_hash `8d0f05c3…` 불변).
+- 명부(`tests/evidence/2026-10-04-test-server-roster.md`) 전수 갱신: 대상 수 = 실행 수, 성공 27 / 미해결 6 / 비적용 1.
+
+### 회귀
+
+- `tests/unit/prodgen` 전체 PASS(`test_fail_closed_scenario_binds_to_agreeing_neighbour_builds_only` 추가). CI #15(X7) 에서 E2E-A2 가 이웃 바인딩으로 PASS 하는지 확인한다.
 
 ## 2026-10-04 (2차) — 완료 보고 검토 C1~C6: 증거 계약 · baseline 기록 탐색 · 환경 미확인 재실행 · 배포 원격 집합 · interruption Harness · vault 복호화 증거
 

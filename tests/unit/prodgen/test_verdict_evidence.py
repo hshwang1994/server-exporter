@@ -9,7 +9,7 @@ import pytest
 from scripts.ai.prodgen.common import ProdgenError
 from scripts.ai.prodgen.evidence import (MAIN_CONTRACT, REQUIRED_HARNESS, REQUIRED_HARNESS_BOUNDED, REQUIRED_HARNESS_TREE,
                                          REQUIRED_MAIN, aggregate, canonical_digest, check_evidence, evaluate_harness,
-                                         evaluate_main, parse_entry)
+                                         evaluate_main, neighbour_revision, parse_entry)
 from scripts.ai.prodgen.promote import _reuse_report
 from scripts.ai.prodgen.verify import (ENV_COMPARE_KEYS, MANDATORY_GATES, GateReport, GateResult, environment_compatible,
                                        report_digest_ok)
@@ -235,12 +235,43 @@ def test_main_contract_expected_failures_pass_when_the_behaviour_matches():
     assert "callback_delivered" in _failed(evaluate_main("T2", t2, SUMMARY_OK, body2, None, con6)), "연결 거부로 끝난 실행은 T2 가 아니라 T6 증거다"
     # E2E-A2: FAILURE + Resolve Location refusal marker + loc=chj
     a2 = _main_item(result="FAILURE", params=dict(_main_item()["params"], loc="chj"))
-    assert _failed(evaluate_main("E2E-A2", a2, None, None, None, "[Resolve Location] 등록되지 않은 Location: 'chj' (등록: ic cj yi git)")) == []
+    a2_console = "Obtained Jenkinsfile_portal from git https://x\n[Resolve Location] 등록되지 않은 Location: 'chj' (등록: ic cj yi git)\n[Finalize] node wait 1s"
+    assert _failed(evaluate_main("E2E-A2", a2, None, None, None, a2_console)) == []
+    # the refusal must happen before any agent ran, and the Jenkinsfile must have come from SCM (lightweight checkout marker)
+    assert "stopped_before_agent" in _failed(evaluate_main("E2E-A2", a2, None, None, None, "Obtained Jenkinsfile_portal from git https://x\nRunning on R01 in /w\n[Resolve Location] 등록되지 않은 Location: 'chj'"))
+    assert "jenkinsfile_obtained" in _failed(evaluate_main("E2E-A2", a2, None, None, None, "[Resolve Location] 등록되지 않은 Location: 'chj'"))
     # S5: Kernel 6.x majors from data.system.kernel
     assert _failed(evaluate_main("S5", _main_item(), SUMMARY_OK, BODY_OK, None, CONSOLE_OK)) == []
     old = {"gatherInfoJson": [dict(_envelope("10.0.0.1"), data={"system": {"kernel": "5.14.0-570.el9.x86_64"}}), _envelope("10.0.0.2")]}
     assert "kernel_major" in _failed(evaluate_main("S5", _main_item(), SUMMARY_OK, old, None, CONSOLE_OK))
     assert set(MAIN_CONTRACT) >= set(REQUIRED_MAIN)
+
+
+def test_fail_closed_scenario_binds_to_agreeing_neighbour_builds_only():
+    """E2E-A2 stops in Resolve Location before any agent checkout, so Jenkins records no revision for it (CI #14 2026-10-04:
+    `E2E-A2 … sha=None`). The Job's nearest earlier and later builds that carry a revision pin the SCM tip; the binding is
+    accepted only when both agree, is recorded as `checkout_sha_source`, and never applies to a scenario with hosts."""
+    a, b = "a" * 40, "b" * 40
+    builds = [{"number": 41, "sha": a}, {"number": 42, "sha": a}, {"number": 43, "sha": None}, {"number": 44, "sha": a}]
+    assert neighbour_revision(builds, 43) == (a, "neighbours:#42,#44")
+    assert neighbour_revision([{"number": 42, "sha": a}, {"number": 43, "sha": None}, {"number": 44, "sha": b}], 43) == (None, None), "disagreeing sides → no binding"
+    assert neighbour_revision([{"number": 43, "sha": None}, {"number": 44, "sha": a}], 43) == (None, None), "missing earlier side → no binding"
+    assert neighbour_revision([{"number": 42, "sha": a}, {"number": 43, "sha": None}], 43) == (None, None), "missing later side → no binding"
+    assert [k for k, c in MAIN_CONTRACT.items() if c.get("fail_closed")] == ["E2E-A2"], "only E2E-A2 is the fail-closed contract (T5 has no host constraint but does check out)"
+    # the contract itself demands the lightweight checkout marker and that no agent ran before the refusal
+    item = {"scenario": "E2E-A2", "result": "FAILURE", "building": False, "params": {"loc": "chj", "inventory_json": '[{"service_ip":"192.0.2.10"}]'}}
+    con_ok = "Obtained Jenkinsfile_portal from git https://x\n[Resolve Location] 등록되지 않은 Location: 'chj' — 허용: [cj, git]\n[Finalize] node wait\nRunning on Jenkins in /x"
+    checks = {c["name"]: c["ok"] for c in evaluate_main("E2E-A2", item, None, None, None, con_ok)}
+    assert checks["jenkinsfile_obtained"] and checks["stopped_before_agent"] and checks["console:[Resolve Location] 등록되지 않은 Location: 'chj'"]
+    con_agent = "Obtained Jenkinsfile_portal from git https://x\nRunning on Runner01 in /w\n[Resolve Location] 등록되지 않은 Location: 'chj'"
+    checks = {c["name"]: c["ok"] for c in evaluate_main("E2E-A2", item, None, None, None, con_agent)}
+    assert not checks["stopped_before_agent"], "an agent before the refusal is not the fail-closed path"
+    # check_evidence accepts the neighbour-bound item like any other (same main_sha), and still rejects a None sha
+    bound = {"scenario": "E2E-A2", "kind": "main", "job": "j/main", "build": 43, "result": "FAILURE", "checkout_sha": a,
+             "checkout_sha_source": "neighbours:#42,#44", "pass": True, "checks": [{"name": "jenkins_result", "ok": True}]}
+    unbound = dict(bound, **{"checkout_sha": None, "checkout_sha_source": None, "pass": False})
+    assert not [p for p in check_evidence({"items": [bound]}, a, required_main=("E2E-A2",), required_harness=(), required_harness_tree=()) if p.startswith("E2E-A2")]
+    assert [p for p in check_evidence({"items": [unbound]}, a, required_main=("E2E-A2",), required_harness=(), required_harness_tree=()) if p.startswith("E2E-A2")]
 
 
 def test_harness_contract_rejects_wrong_scenario_source_or_missing_artifacts():

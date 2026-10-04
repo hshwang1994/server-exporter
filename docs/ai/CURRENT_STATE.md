@@ -1,5 +1,18 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-04 (3차) — 재개 지시 대응: 전체 명부 실수집 완료 · S3(Redfish) · E2E-A/A′/D/E · CI #14 · 성능 전후 · 수집기 fail-closed 바인딩(X7) — 승격은 사용자 credential 대기
+
+> 정본: `tests/evidence/2026-10-04-review-c1-c6.md` §5-7·§5-8, `-test-server-roster.md`(X6 갱신), `-auto-mode-config-proposal.md`(정정판). 사용자 지시(2026-10-04): 동일 이름 API 토큰 폐기·재발급 **진행하지 않음**.
+
+- **전체 명부 실수집(main X6 `70e4ec8a`)**: OS Linux 16/16 실행(성공 13 · `TARGET_UNREACHABLE` 3 = `.135 .145 .165`) · Windows 1/1 · ESXi 7/7 실행(성공 6, `.95` 는 ESXi 가 아니라 Ubuntu 24.04 베어메탈 — OS 채널 #54 성공으로 명부 정정) · Redfish 10/10 dry-run(#53: 성공 7, `10.100.15.1` protocol · `10.100.15.3`·HPE `10.50.11.231` reachable 실패) — 누락 0, 미해결 6(자산 상태 사용자 확인 요청, 임의 제외 없음).
+- **S3**: OS 채널은 기본 forks 로 유효 창이 120 s 아래(INVALID). 기존 설정 `SE_FORKS_CAP_OS`(Runner03 노드 env) + 다른 Runner 임시 offline 측정창은 분류기 `Node Lifecycle Operations` 거부 → HOLD/권한. **Redfish 채널 #55 PASS**(forced 150 s · rc 124 · outcome timeout · kept 6 실 BMC · filled 1 · Portal 200) — 계약은 채널 무관.
+- **E2E-A #42(cj resolve) · E2E-A′ #43(chj 거부) · E2E-D #44→#61(ESXi 6 success) · E2E-E #41(dry-run, Account Write 0)** 모두 계약 PASS. T6 #47 은 controller DNS 일시 장애로 INVALID → #52 PASS.
+- **CI #14(X6) SUCCESS**: COMPLETE_PASS(tree `8d0f05c3…` 불변) · VAULT_DECRYPT PASS · Harness 16/16 + 4/4 · Promote dry-run. E2E 탈락 2건은 수집기 결함(E2E-A2: fail-closed 빌드에 BuildData 없음)과 입력 결함(E2E-D 에 `.95`) — **X7 수정**: `evidence.py` `neighbour_revision`(같은 Job 앞·뒤 빌드 revision 일치 시만, `checkout_sha_source` 기록, `fail_closed: True` 계약에 한정) + E2E-A2 검사 보강(`jenkinsfile_obtained` · `stopped_before_agent`); regression 추가(`tests/unit/prodgen` 전부 PASS).
+- **성능(GP-30)**: 같은 host 집합 교대 5회 — 총시간 191.2→151.7 s(−21 %, 대부분 Resolve Location 25.9→2.0 s), Gather 152.4→141.0 s(−7 %), Windows `.120` 97.2→74.5 s(−23 %), `.161` 12.6→14.5 s(+15 %, 재확인). Runner peak 자원은 SSH 샘플러 시리즈(§5-9)로 측정 중.
+- **Script Approval**: 요구 서명 3건 승인됨(사용자 UI) → bounded 재실행 #187/#188 이 네 번째 `ExceededTimeout getNodeId` 에서 멈춤(이제 pending, hash `dfa1e15`) → 승인 뒤 자동 재실행 대기.
+- **승격(GP-21)**: 전제 중 남은 것은 **실 push 경로의 credential** 뿐 — ① Jenkins credential `se-gitlab-push`(CI Promote 실 승격) 또는 ② WSL `~/.se_pw`(세션 CLI promote, 환경 의존 gate WSL 재실행; 이 머신은 Runner 와 환경이 달라 G19 가 vault 암호를 요구). X7 push 뒤 main E2E 12건과 CI 를 X7 에서 다시 돌려 같은 SHA 증거를 만든다.
+- Runner SSH(사용자 허용): Runner01~04 사실 기록(RHEL 9.6 · 4 vCPU · 7.5 GB · ansible-core 2.20.3 · dmidecode 3.6). 자격은 저장소·문서·로그에 적지 않는다.
+
 ## 일자: 2026-10-04 (2차) — 완료 보고 검토 C1~C6 대응: 시나리오 계약 E2E 증거 · baseline 기록 탐색 · 환경 미확인 재실행 · 배포 원격 정책 · interruption Harness · vault 복호화 검증 — 승격 미수행, 전체 완료 아님
 
 > 검토(2026-10-04, HEAD `ae4db48b`)가 1차 보고의 "코드 완료 PASS" · "Harness interruption 충족" 을 뒤집었다. 결함 6건은 모두 코드에서 재확인됐다. 정본: `tests/evidence/2026-10-04-review-c1-c6.md`, 결정 `docs/reference/decision-log.md`(2026-10-04 2차), ADR 보완절.
@@ -640,7 +653,6 @@
 - 미검증: 실장비 / 실 Jenkins / `ansible-playbook --syntax-check` (이 환경에 ansible 미설치).
   Ansible 검증은 production YAML 템플릿을 추출해 Jinja 로 렌더하는 방식이며 실제 플레이북 실행이 아니다.
 
-
 ## 일자: 2026-08-11 (o) — Phase 6-C: 실제 Jenkins Agent / lab BMC 검증
 
 > **코드 변경 0건.** Phase 6-B 결과를 실환경에서 검증만 했다.
@@ -667,7 +679,6 @@
 - 회귀: `pytest tests/` **1971 passed / 10 skipped / 7 xfailed** ·
   하네스/경계/schema-drift/envelope/cross-channel exit 0 · field_dictionary PASS.
 - Phase 6-C 완료 (빌드 트리거 1건 blocked).
-
 
 ## 일자: 2026-08-11 (o) — Dell 대표 시리얼 1차 교정 (ServiceRoot Service Tag)
 
@@ -732,7 +743,6 @@
   `schema/baseline_v1` 무변경.
 - Phase 6-B 완료. vault rotation 과 실장비 계정 검증은 미수행(사유는 위).
 
-
 ## 일자: 2026-08-11 (m) — 실환경 검증 (Phase 6-A) + WinRM 전송 버그 수정
 
 > lab 네트워크가 개발 PC 에서 직접 도달 가능함을 확인해 **실장비 검증**을 처음 수행했다.
@@ -779,7 +789,6 @@
 - 회귀: `pytest tests/` **1775 passed / 11 skipped / 7 xfailed** · Linux syntax-check 3/3 exit 0 ·
   하네스/경계/schema-drift/envelope/cross-channel exit 0 · `schema/` 무변경.
 - Phase 6-A 완료. 위 미수정 CRIT 3건은 사용자 지시 대기.
-
 
 ## 일자: 2026-08-11 (l) — Portal Grid 실패 사유 최종 정리 + 자격 실패 분류 (Phase 5-A)
 
@@ -873,7 +882,6 @@
   Stage 3(output_schema_drift) PASS / 하네스·경계·envelope·cross-channel 전부 exit 0 /
   Jinja2 239 표현식 컴파일 0 오류.
 - Phase 4-B 완료. Credential Probe 원인 세분화 / Authorization 구분 / Portal Receiver 미착수.
-
 
 ---
 

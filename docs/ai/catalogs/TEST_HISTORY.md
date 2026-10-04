@@ -1,5 +1,19 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-04 (3차) — 재개 지시 대응 (전체 명부 실수집 · S3 Redfish · CI #14 · 성능 전후 · 수집기 수정)
+
+> 실측 `tests/evidence/2026-10-04-review-c1-c6.md` §5-7·§5-8 · `2026-10-04-test-server-roster.md`. 상태 어휘 PASS/FAIL/PARTIAL/HOLD/INVALID.
+
+| 항목 | 결과 |
+|---|---|
+| main Job X6 `70e4ec8a` 시나리오 | T2 #45 · T5 #46(ABORTED=기대) · T6 #52(UNSTABLE=기대; #47 은 DNS 로 INVALID) · S5 #48(DIMM slot 1 재확인) · S1 #49 · S4 #50 · S2 #51 · E2E-A #42 · E2E-A′ #43 · E2E-D #44→**#61**(ESXi 6/6) · E2E-E #41 · Redfish 10 BMC #53 · `.95` OS #54 · **S3 Redfish #55**(forced 150 s · timeout · kept 6 · filled 1 · Portal 200) — 전부 계약 PASS(실행 기준) |
+| CI #14(X6) | **SUCCESS** — Gate·Corpus·Budget PASS · Harness 16/16 · bounded 2 PARTIAL/승인 · prodtree 4/4 · Verify COMPLETE_PASS 20/20(tree `8d0f05c3…`) · VAULT_DECRYPT PASS · Evidence PASS · Promote DRY_RUN(E2E 탈락 2 = 수집기/입력 결함 → X7) |
+| 성능 전후(같은 host 집합, 교대 5회) | production legacy #59~#63 vs main X6 #56~#60: 총 191.2→151.7 s · Gather 152.4→141.0 s · `.120` 97.2→74.5 s · `.161` 12.6→14.5 s · Portal 전부 200 |
+| 로컬 단위 | `tests/unit/prodgen/test_verdict_evidence.py` 12 PASS(+`test_fail_closed_scenario_binds_to_agreeing_neighbour_builds_only`) · `tests/unit/prodgen` 전체 PASS(X7 수정 뒤) |
+| Script Approval | 요구 3건 승인(사용자) → bounded #187/#188 PARTIAL(네 번째 `getNodeId` pending) |
+| 거부(실제) | S3 forks 측정창(노드 offline/env) `Node Lifecycle Operations` · 노드 상태 조회 `Interfere With Workloads` — 다른 경로로 추구하지 않음 |
+| Runner SSH(사용자 허용 뒤) | Runner01~04 읽기 전용 사실 + 자원 샘플러(/tmp, 종료 후 제거) — 결과 §5-9 |
+
 ## 2026-10-04 (2차) — 완료 보고 검토 C1~C6 대응 (시나리오 계약 · baseline 복구 · 환경 재실행 · 배포 정책 · interruption Harness · vault 복호화)
 
 > 실측 `tests/evidence/2026-10-04-review-c1-c6.md` · `2026-10-04-promotion-drill.md` · `2026-10-04-test-server-roster.md`. 상태 어휘 PASS/FAIL/PARTIAL/HOLD/INVALID.
@@ -698,7 +712,6 @@ Supermicro / Huawei / Inspur / Fujitsu / Quanta 는 실장비 0대.
 - **알려진 동작 차이 (보고 대상)**: `wait_for` 는 timeout 안에서 재시도(polling)하지만
   `tcp_check_ex` 는 포트당 1회 시도다. 부팅 중 서비스가 t=1.5s 에 열리는 경계 사례에서
   결과가 달라질 수 있다. 재시도 정책 변경은 이번 범위 밖이라 1회 시도를 채택했다.
-
 
 ---
 
