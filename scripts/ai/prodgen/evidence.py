@@ -44,7 +44,22 @@ REQUIRED_HARNESS_TREE = ("normal_success", "both_fail", "raw_fallback", "report_
 # Tier 2 (SE_FINALIZER_BOUNDED=true) — required only when bounded mode is enabled for the deployment; PARTIAL without Script Approval
 REQUIRED_HARNESS_BOUNDED = ("inner_recover_timeout", "inner_assemble_timeout")
 HARNESS_MARKER = "harness"
+# Harness scenarios that end in a Jenkins result other than SUCCESS by design (scenarios.json `jenkins_result`, e.g. user_abort → ABORTED).
+# Read from the repository's scenario definition when present so the collector and the CI driver judge the same expectation
+# (CI #12 dry-run: user_abort/aborted_outcome_finalize were PASS by verdict but refused here as `jenkins_result` != SUCCESS).
+HARNESS_SCENARIOS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "tests", "jenkins", "harness", "scenarios.json")
 TESTNET = ipaddress.ip_network("192.0.2.0/24")
+
+
+def harness_expected_results(path: str | None = None) -> dict:
+    """scenario → expected Jenkins result from scenarios.json (`jenkins_result`, default SUCCESS). Empty dict when unavailable."""
+    p = path or HARNESS_SCENARIOS_FILE
+    try:
+        with open(p, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return {name: str(sc.get("jenkins_result") or "SUCCESS").upper() for name, sc in (data.get("scenarios") or {}).items() if isinstance(sc, dict)}
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 # ── main Job scenario contract (정본) ─────────────────────────────────────────────
@@ -316,8 +331,10 @@ def evaluate_harness(scenario: str, item: dict, hr, control, expected_result: st
 
 
 def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict | None = None) -> dict:
-    """Read-only Jenkins collection. `harness_results` (scenario → expected Jenkins result) overrides the default SUCCESS."""
+    """Read-only Jenkins collection. `harness_results` (scenario → expected Jenkins result) overrides scenarios.json / SUCCESS."""
     base = jenkins_url.rstrip("/")
+    expected_results = dict(harness_expected_results())
+    expected_results.update(harness_results or {})
     items = []
     for raw in entries:
         e = parse_entry(raw) if isinstance(raw, str) else raw
@@ -348,7 +365,7 @@ def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict |
                 item["source_sha256"] = control.get("source_sha256")
                 item["provenance_tree_hash"] = (control.get("provenance") or {}).get("tree_hash")
                 item["bounded"] = control.get("bounded")
-            expected_result = (harness_results or {}).get(e["scenario"], "SUCCESS")
+            expected_result = expected_results.get(e["scenario"], "SUCCESS")
             item["checks"] = evaluate_harness(e["scenario"], item, hr, control, expected_result)
         else:
             summary, _ = _try(_curl_json, f"{url}/artifact/finalize_summary.json", netrc)

@@ -263,6 +263,19 @@ def test_harness_contract_rejects_wrong_scenario_source_or_missing_artifacts():
     assert "jenkins_result" in _failed(evaluate_harness("both_fail", item, hr, control, "ABORTED"))
 
 
+def test_harness_expected_jenkins_result_comes_from_scenarios_json():
+    """CI #12 dry-run: user_abort / aborted_outcome_finalize end ABORTED by design — the collector must judge them like the CI driver."""
+    from scripts.ai.prodgen.evidence import harness_expected_results
+    exp = harness_expected_results()
+    assert exp.get("user_abort") == "ABORTED" and exp.get("aborted_outcome_finalize") == "ABORTED" and exp.get("normal_success") == "SUCCESS"
+    assert harness_expected_results("/nonexistent/scenarios.json") == {}
+    item = {"scenario": "user_abort", "kind": "harness", "result": "ABORTED", "building": False, "params": {"SCENARIO": "user_abort", "FUNCTIONS_SRC": "checkout"}}
+    hr = {"scenario": "user_abort", "verdict": "PASS", "meta": {"functions_sha256": "f" * 64, "source_sha256": "s" * 64}}
+    ctl = {"functions_source": "checkout", "source_sha256": "s" * 64}
+    assert _failed(evaluate_harness("user_abort", item, hr, ctl, exp["user_abort"])) == []
+    assert "jenkins_result" in _failed(evaluate_harness("user_abort", dict(item, result="SUCCESS"), hr, ctl, exp["user_abort"])), "ABORTED 가 기대인 시나리오가 SUCCESS 로 끝나면 통과가 아니다"
+
+
 def test_parse_entry_and_aggregate(tmp_path):
     e = parse_entry("S1=clovirone-cicd/clovirone-server-gather-main:7")
     assert e["scenario"] == "S1" and e["build"] == 7 and e["kind"] == "main" and e["expected"] == "SUCCESS" and e["caller_expected"] is None
