@@ -65,7 +65,7 @@ timeout(time: 45, unit: 'MINUTES') {
     node('linux') {
         deleteDir()
         String scenario = params.SCENARIO.trim()
-        Map control = [scenario: scenario, rethrown: null, sink_reachable: null, functions_source: params.FUNCTIONS_SRC]
+        Map control = [scenario: scenario, rethrown: null, sink_reachable: null, functions_source: params.FUNCTIONS_SRC, preserve_rethrown: false]
 
         // ── ① 소스 — main checkout (Job SCM = */main). MAIN_SHA 가 주어지면 같은 후보인지 확인한다.
         def scmVars = checkout scm
@@ -223,7 +223,17 @@ timeout(time: 45, unit: 'MINUTES') {
         dir('gather_ws') {
             withEnv(["WORKSPACE=${pwd()}"]) {
                 if (fx.run_preserve) {
-                    lib.sePreserveGatherOutput()
+                    try {
+                        lib.sePreserveGatherOutput()
+                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                        // Tier 2 보존 상한(archive·stash PRESERVE_STEP) 시나리오: 승인 4 시그니처가 없으면 seBounded 가 설계대로 재전파한다 —
+                        // 기록하고 finalizer 는 건너뛴다(verdict PARTIAL/승인). bounded 가 아니면 진짜 중단이라 그대로 전파한다.
+                        if (!bounded) { throw fie }
+                        control.rethrown = true
+                        control.preserve_rethrown = true
+                        control.interruption_class = fie.getClass().name
+                        echo "[Harness] 보존 단계에서 interruption 이 전파됐다 (bounded — 승인 없으면 설계): ${fie.getClass().name}"
+                    }
                     preserve = [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED == 'true', stashed: env.SE_PRESERVE_STASHED == 'true',
                                 manifestOk: env.SE_PRESERVE_MANIFEST == 'true', hasResult: env.SE_PRESERVE_HASRESULT == 'true']
                 } else if (sc.layer_a_direct) {
@@ -252,6 +262,9 @@ timeout(time: 45, unit: 'MINUTES') {
             currentBuild.result = sc.set_result.toString()
             echo "[Harness] currentBuild.result=${currentBuild.result} (시나리오 ${scenario})"
         }
+        if (control.preserve_rethrown) {
+            echo "[Harness] 보존 단계가 재전파됐으므로 finalizer 를 실행하지 않는다 (판정은 PARTIAL/승인)"
+        } else {
         try {
             if (sc.self_abort_after) {
                 int after = sc.self_abort_after as int
@@ -276,6 +289,7 @@ timeout(time: 45, unit: 'MINUTES') {
             echo "[Harness] interruption 이 finalizer 밖으로 전파됐다 (기대: 삼키지 않는다): ${fie.getClass().name}"
             if (!expectInterruption) { throw fie }   // 우리가 만든 interruption 이 아니면 진짜 중단이다 — 그대로 전파
         }
+        }   // !preserve_rethrown
         if (sc.self_abort_after && control.rethrown) {
             currentBuild.result = 'ABORTED'          // 사용자 중단이 만든 결과를 Harness 가 되돌리지 않는다 (시나리오 기대 jenkins_result=ABORTED)
         }

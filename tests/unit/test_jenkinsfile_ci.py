@@ -73,7 +73,7 @@ def _stage(name: str) -> str:
 def test_layer_b_function_lives_only_in_the_library(signature):
     assert signature in LIB
     assert signature not in PORTAL, f"{signature}: Jenkinsfile_portal 에 사본이 남아 있다 — 정본은 se_finalize.groovy 하나"
-    assert "readTrusted('scripts/jenkins/se_finalize.groovy')" in PORTAL and "load('se_finalize.groovy')" in PORTAL
+    assert ("seTrusted('scripts/jenkins/se_finalize.groovy')" in PORTAL or "readTrusted('scripts/jenkins/se_finalize.groovy')" in PORTAL) and "load('se_finalize.groovy')" in PORTAL
 
 
 def test_library_defines_exactly_the_three_functions_and_returns_this():
@@ -134,8 +134,17 @@ def test_ci_parameters_default_to_no_promotion():
     assert re.search(r"booleanParam\(name: 'PROMOTE_DRY_RUN', defaultValue: true", params)
     assert re.search(r"string\(name: 'BOOTSTRAP_BASELINE', defaultValue: ''", params)
     assert re.search(r"string\(name: 'PROMOTE_SHA', defaultValue: ''", params)
-    for p in ("HARNESS_SCENARIOS", "HARNESS_TREE_SCENARIOS", "E2E_MAIN_ENTRIES"):
+    for p in ("HARNESS_SCENARIOS", "HARNESS_TREE_SCENARIOS", "E2E_MAIN_ENTRIES", "E2E_TIP_OBSERVATIONS_JSON"):
         assert f"name: '{p}'" in params, p
+
+
+def test_evidence_stage_passes_tip_observations_to_the_collector():
+    """2026-10-04 최종 지시 §5: fail-closed 빌드의 직접 revision 증거(트리거 측 tip 관측)를 Evidence 가 수집기에 넘긴다 — 없으면 추정만 남고
+    그 시나리오는 승격 증거로 인정되지 않는다(수집기 check_evidence)."""
+    ev = _stage("Evidence Aggregate")
+    assert "params.E2E_TIP_OBSERVATIONS_JSON" in ev and "e2e_tip_observations.json" in ev
+    assert "ARGS+=(--tip-observations e2e_tip_observations.json)" in ev
+    assert "e2e_tip_observations.json" in CI[CI.index("    post {"):]
 
 
 def test_ci_checkout_fixes_main_sha_from_git_commit():

@@ -26,6 +26,9 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
 - `truncate_jsonl` · `report_corrupt` · `raw_fallback` — 손상 입력에서도 유효한 Callback body(3차 §6)
 - `checkpoint_only_a`(정상 Layer A 가 checkpoint 복구) · `checkpoint_only_b`(Layer A 실패 뒤 Layer B 가 checkpoint 복구) · `layer_a_fail`
 - `sink_5xx` · `sink_close` — Callback 실패(통제된 조건)
+- `archive_slow` · `layer_a_read_slow`(BOUNDED=false, 운영 기본) / `inner_archive_timeout` · `inner_stash_timeout` · `inner_layer_a_read_timeout`(BOUNDED=true) —
+  2026-10-04 최종 지시 §4-3: 보존 archive/stash 상한(`PRESERVE_STEP` 30 s)과 조립 상한(`ASSEMBLE` 60 s) 안의 Layer A 결과 읽기. 기본에서는 상한 없이 완주,
+  bounded 에서는 자기 timeout 의 nodeId 로 식별해 다음 수단으로(archive → stash · stash → unarchive · 읽기 → 최소 경로 `ASSEMBLE_MIN` 20 s)
 - interruption 6 조건(3차 §4, 2026-10-04 검토 C5) — 아래 표
 - `aborted_outcome_finalize` — ABORTED 빌드(outcome=aborted)의 사후 보존·finalize: Callback 1회만 시도, 완료 host 데이터 전달, 비정상 종료 unstable
 - `sink_hold` — 판정 없음. controller loopback sink 를 `hold_seconds` 동안 열어 두어 **main Job T2**(TEST-NET, `callbackUrl=http://127.0.0.1:<SINK_PORT>`)의 Callback 수신 증거를 `sink/record.jsonl` 로 남긴다
@@ -39,6 +42,8 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
 | ④ Gather stage timeout | — (stage 본문은 함수가 아니라 Harness 가 실행하지 못한다) | main Job T5 와 같은 catch(`aborted` 기록 · 재전파) — main Job 에서 확인 | 사후 finalize 경로는 `aborted_outcome_finalize` |
 | ⑤ 사용자 중단 | `user_abort`(느린 unstash 중 자기 빌드에 `POST …/stop`) + main Job T5 | 재전파 · Callback 미시도 · Jenkins ABORTED 유지 | |
 | ⑥ 원인 미식별 interruption | `foreign_timeout_interruption`(wrapper 가 unstash 안에서 남의 timeout 2 s) | 재전파 — 자기 nodeId 가 아니면 삼키지 않는다(승인 유무 무관) | |
+| 보존 상한(archive · stash 각 30 s) | `inner_archive_timeout` · `inner_stash_timeout`(BOUNDED=true) / `archive_slow`(BOUNDED=false) | bounded: 넘긴 수단만 실패로 두고 다음 수단으로(archive→stash · stash→unarchive) / 기본: 상한 없이 완주 | 2026-10-04 최종 지시 §4-3. 보존 단계 재전파는 Harness 가 기록하고 finalizer 를 건너뛴다(PARTIAL/승인) |
+| 조립 상한 안의 Layer A 읽기 | `inner_layer_a_read_timeout`(BOUNDED=true, readFile 70 s) / `layer_a_read_slow`(BOUNDED=false) | bounded: `layerA=timeout` · 최소 경로(`ASSEMBLE_MIN` 20 s)로 OUTPUT 줄만 전송 · `damage` assemble_timeout / 기본: 완주 | 위와 같다 |
 
 ## 격리 규칙
 

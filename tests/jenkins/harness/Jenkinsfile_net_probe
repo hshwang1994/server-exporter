@@ -1,0 +1,55 @@
+// tests/jenkins/harness/Jenkinsfile_net_probe — Runner 망에서의 읽기 전용 도달성 진단 Job (main 전용, 2026-10-04 최종 실행 지시 §8-2). 운영 수집 Job 이 아니다.
+//
+//   Job: clovirone-cicd/clovirone-server-gather-net-probe — Pipeline from SCM(*/main) · Script Path 이 파일 · Lightweight checkout.
+//   목적: 미해결 자산(무응답 Linux · BMC)의 존재·경로를 **수집기가 도는 Runner 망**에서 읽기 전용으로 본다 — 워크스테이션 관측과 다를 수 있다.
+//   하는 일(대상마다): ip route get · ICMP 1회 · 관리 TCP connect(/dev/tcp, 3 s) · ARP/neighbour 상태(같은 L2 이면 호스트 존재 근거) · tracepath/traceroute(있을 때) ·
+//   BMC 는 Redfish ServiceRoot 무인증 GET 의 상태코드와 본문 앞부분. 설정 변경 · 쓰기 · 인증 시도 없음. 결과는 net_probe.txt 로 archive.
+properties([
+    buildDiscarder(logRotator(numToKeepStr: '100')),
+    parameters([
+        string(name: 'NODE_LABEL', defaultValue: 'linux', description: '실행 노드(라벨 또는 노드 이름) — 기본 linux(Runner 아무거나)'),
+        string(name: 'TARGETS', defaultValue: '', description: '쉼표로 구분한 대상 — ip 또는 ip:port[,port…] (예: 10.100.64.135:22,5985,5986 10.100.15.3:443)'),
+        booleanParam(name: 'REDFISH_ROOT', defaultValue: true, description: '443 대상에 Redfish ServiceRoot(무인증 GET /redfish/v1/) 상태코드·본문 앞부분을 읽는다'),
+    ]),
+])
+
+String targetsRaw = (params.TARGETS ?: '').trim()
+if (!targetsRaw) { error '[net-probe] TARGETS 가 필요하다' }
+if (!(targetsRaw ==~ /[0-9A-Za-z.:, \-]+/)) { error "[net-probe] TARGETS 형식 오류: ${targetsRaw}" }
+
+timeout(time: 30, unit: 'MINUTES') {
+    node((params.NODE_LABEL ?: 'linux').trim()) {
+        deleteDir()
+        checkout scm
+        currentBuild.description = "probe ${targetsRaw.take(60)}"
+        sh """#!/bin/bash
+            set -u
+            cd "\${WORKSPACE}"
+            exec > >(tee net_probe.txt) 2>&1
+            echo "[net-probe] node=\$(hostname) kernel=\$(uname -r) date=\$(date -u +%FT%TZ)"
+            echo "[net-probe] addresses:"; ip -4 -brief addr 2>/dev/null || hostname -I
+            echo "[net-probe] default route: \$(ip route show default 2>/dev/null | head -1)"
+            IFS=' ' read -r -a ENTRIES <<< "${targetsRaw.replace(',', ' ')}"
+            for ent in "\${ENTRIES[@]}"; do
+                [ -n "\$ent" ] || continue
+                ip="\${ent%%:*}"; ports="\${ent#*:}"; [ "\$ports" = "\$ent" ] && ports=""
+                echo; echo "=== \$ip"
+                echo "--- route: \$(ip route get "\$ip" 2>&1 | head -1)"
+                if ping -c 1 -W 2 "\$ip" >/dev/null 2>&1; then echo "--- icmp: reply"; else echo "--- icmp: no reply"; fi
+                echo "--- neighbour(L2): \$(ip neigh show "\$ip" 2>/dev/null | head -1)"
+                for p in \${ports//,/ }; do
+                    if timeout 3 bash -c "exec 3<>/dev/tcp/\$ip/\$p" 2>/dev/null; then echo "--- tcp \$p: connect ok"; else echo "--- tcp \$p: no connect (timeout/refused)"; fi
+                done
+                if command -v tracepath >/dev/null 2>&1; then echo "--- tracepath:"; timeout 20 tracepath -n -m 6 "\$ip" 2>&1 | head -8
+                elif command -v traceroute >/dev/null 2>&1; then echo "--- traceroute:"; timeout 20 traceroute -n -m 6 -w 1 "\$ip" 2>&1 | head -8; fi
+                if [ "${params.REDFISH_ROOT}" = "true" ] && [[ ",\$ports," == *",443,"* ]]; then
+                    code=\$(curl -sk -m 8 -o /tmp/np_body.\$\$ -w '%{http_code}' "https://\$ip/redfish/v1/" 2>/dev/null || echo "curl-fail")
+                    echo "--- redfish ServiceRoot: HTTP \$code"; head -c 400 /tmp/np_body.\$\$ 2>/dev/null; echo; rm -f /tmp/np_body.\$\$
+                    echo "--- tls subject: \$(echo | timeout 8 openssl s_client -connect "\$ip:443" 2>/dev/null | openssl x509 -noout -subject 2>/dev/null)"
+                fi
+            done
+            echo; echo "[net-probe] done"
+        """
+        archiveArtifacts(artifacts: 'net_probe.txt', allowEmptyArchive: false, fingerprint: false)
+    }
+}

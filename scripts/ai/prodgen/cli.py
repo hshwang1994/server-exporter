@@ -93,8 +93,9 @@ def cmd_push_sync(args) -> int:
 
 
 def cmd_e2e_evidence(args) -> int:
-    from .evidence import collect
-    res = collect(args.jenkins_url, args.netrc, args.entry or [])
+    from .evidence import collect, load_tip_observations
+    res = collect(args.jenkins_url, args.netrc, args.entry or [], tip_observations=load_tip_observations(args.tip_observations),
+                  repo_root=args.repo or None)
     with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(res, fh, ensure_ascii=False, indent=1, sort_keys=True)
     _emit({"items": len(res["items"]), "passed": sum(1 for i in res["items"] if i.get("pass")), "out": args.out,
@@ -183,6 +184,7 @@ def main(argv=None) -> int:
     e.add_argument("--jenkins-url", default="https://jenkins-prod.gooddi.lab")
     e.add_argument("--netrc", required=True)
     e.add_argument("--entry", action="append", help="SCENARIO=job/path:build[:EXPECTED_RESULT] (repeatable)")
+    e.add_argument("--tip-observations", help="JSON of trigger-side tip observations (direct binding for fail-closed builds; §5)")
     e.add_argument("--out", required=True)
     e.set_defaults(func=cmd_e2e_evidence)
 

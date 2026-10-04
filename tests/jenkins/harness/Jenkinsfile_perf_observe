@@ -1,0 +1,42 @@
+// tests/jenkins/harness/Jenkinsfile_perf_observe — Runner 자원 관측 Job (main 전용, 2026-10-04 최종 실행 지시 §7 · Plan §8). 운영 수집 Job 이 아니다.
+//
+//   Job: clovirone-cicd/clovirone-server-gather-perf-observe — Pipeline from SCM(*/main) · Script Path 이 파일 · Lightweight checkout.
+//   NODE_NAME 노드(Runner 이름은 그 노드만 가진 라벨)에서 perf_observe.py 를 돌려 **같은 Runner 에서 도는 Gather 빌드**의 ansible 프로세스 트리를
+//   SE_BUILD_ID 로 빌드별 귀속해 샘플링한다(PSS · RSS · 활성 worker 수 · 메인 프로세스 PSS · MemAvailable · swap · CPU). 읽기 전용(/proc).
+//   executor 하나를 쓸 뿐 Gather 배치에 영향을 주지 않는다(Runner executor 15). production tree 에는 들어가지 않는다(production_manifest forbidden tests/**).
+//   산출물: perf_observe.jsonl · perf_observe_meta.json — 집계는 tests/jenkins/harness/perf_observe_report.py.
+
+properties([
+    buildDiscarder(logRotator(numToKeepStr: '100')),
+    parameters([
+        string(name: 'NODE_NAME', defaultValue: '', description: '관측할 노드 이름(필수) — 예: SKHynix-Jenkins-Runner03'),
+        string(name: 'DURATION_SEC', defaultValue: '900', description: '최대 관측 시간(초)'),
+        string(name: 'INTERVAL_SEC', defaultValue: '2', description: '샘플 간격(초)'),
+        string(name: 'IDLE_EXIT_SEC', defaultValue: '90', description: '빌드를 한 번이라도 본 뒤 이 시간(초) 동안 아무 빌드도 없으면 종료 (0 = 끝까지)'),
+        string(name: 'TAG', defaultValue: '', description: '사람용 표식(측정 묶음 이름)'),
+    ]),
+])
+
+String nodeName = (params.NODE_NAME ?: '').trim()
+if (!nodeName) { error '[perf-observe] NODE_NAME 이 필요하다' }
+int durationSec = (params.DURATION_SEC ?: '900').trim() as int
+int intervalSec = (params.INTERVAL_SEC ?: '2').trim() as int
+int idleExitSec = (params.IDLE_EXIT_SEC ?: '90').trim() as int
+String tag = (params.TAG ?: '').trim().replaceAll(/[^A-Za-z0-9_.:-]/, '_')
+
+timeout(time: 60, unit: 'MINUTES') {
+    node(nodeName) {
+        deleteDir()
+        checkout scm
+        currentBuild.description = "${tag ?: 'perf'} @${nodeName} ${durationSec}s/${intervalSec}s"
+        sh """#!/bin/bash
+            set -eo pipefail
+            cd "\${WORKSPACE}"
+            . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
+            echo "[perf-observe] node=\$(hostname) kernel=\$(uname -r) nproc=\$(nproc) python=\$(python3 --version 2>&1)"
+            python3 tests/jenkins/harness/perf_observe.py --duration ${durationSec} --interval ${intervalSec} --idle-exit ${idleExitSec} \\
+                --out perf_observe.jsonl --meta perf_observe_meta.json --tag '${tag}'
+        """
+        archiveArtifacts(artifacts: 'perf_observe.jsonl,perf_observe_meta.json', allowEmptyArchive: false, fingerprint: false)
+    }
+}

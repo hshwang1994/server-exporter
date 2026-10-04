@@ -27,6 +27,7 @@ import datetime
 import ipaddress
 import json
 import os
+import re
 import shutil
 import subprocess
 
@@ -38,11 +39,15 @@ REQUIRED_MAIN = ("S1", "S2", "S3", "T2", "T5", "T6", "E2E-A", "E2E-A2")
 # main-function Harness (FUNCTIONS_SRC=checkout) — F1~F6 + damaged input + Callback failure + interruption (3차 §4 ①~⑥ 중 Harness 몫)
 REQUIRED_HARNESS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
                     "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx", "outer_timeout",
-                    "recover_slow", "foreign_timeout_interruption", "user_abort", "aborted_outcome_finalize")
-# generated-tree Harness (FUNCTIONS_SRC=artifact) — the same functions from the prodgen tree
-REQUIRED_HARNESS_TREE = ("normal_success", "both_fail", "raw_fallback", "report_corrupt")
+                    "recover_slow", "foreign_timeout_interruption", "user_abort", "aborted_outcome_finalize",
+                    "archive_slow", "layer_a_read_slow")
+# generated-tree Harness (FUNCTIONS_SRC=artifact) — the same functions from the prodgen tree. 2026-10-04 최종 지시 §6-1: the preservation
+# failure paths (archive_fail · stash_fail · truncate_jsonl · checkpoint_only_a/b · layer_a_fail) are required on the generated tree too.
+REQUIRED_HARNESS_TREE = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
+                         "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt")
 # Tier 2 (SE_FINALIZER_BOUNDED=true) — required only when bounded mode is enabled for the deployment; PARTIAL without Script Approval
-REQUIRED_HARNESS_BOUNDED = ("inner_recover_timeout", "inner_assemble_timeout")
+REQUIRED_HARNESS_BOUNDED = ("inner_recover_timeout", "inner_assemble_timeout", "inner_archive_timeout", "inner_stash_timeout",
+                            "inner_layer_a_read_timeout")
 HARNESS_MARKER = "harness"
 # Harness scenarios that end in a Jenkins result other than SUCCESS by design (scenarios.json `jenkins_result`, e.g. user_abort → ABORTED).
 # Read from the repository's scenario definition when present so the collector and the CI driver judge the same expectation
@@ -335,12 +340,116 @@ def evaluate_harness(scenario: str, item: dict, hr, control, expected_result: st
     return checks
 
 
+TRUSTED_RE = re.compile(r"^\[Trusted\] (\S+) len=(\d+) jhash=(-?\d+)\s*$", re.M)
+
+
+def java_string_hash(text: str) -> int:
+    """java.lang.String.hashCode() of `text` (over UTF-16 code units) — the value `Jenkinsfile_portal` seTrusted() echoes as jhash.
+    The sandbox whitelists no digest API (MessageDigest · CRC32), so a 32-bit identification hash is what the runtime can emit."""
+    h = 0
+    for ch in text:
+        o = ord(ch)
+        if o > 0xFFFF:
+            o -= 0x10000
+            for unit in (0xD800 + (o >> 10), 0xDC00 + (o & 0x3FF)):
+                h = (31 * h + unit) & 0xFFFFFFFF
+            continue
+        h = (31 * h + o) & 0xFFFFFFFF
+    return h - 0x100000000 if h >= 0x80000000 else h
+
+
+def _git_show_bytes(repo_root: str, sha: str | None, path: str):
+    git = shutil.which("git")
+    if not git or not sha:
+        return None
+    proc = subprocess.run([git, "-C", repo_root, "show", f"{sha}:{path}"], capture_output=True)
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def trusted_report(console: str, sha: str | None, repo_root: str):
+    """(trusted items, checks). Every `[Trusted] <path> len=N jhash=H` console line — emitted by seTrusted() for the content the build
+    actually received from readTrusted — is compared with `git show <sha>:<path>` of the bound revision, decoded as UTF-8 and as
+    ISO-8859-1 (the controller's default charset is not known in advance; the matching decoding is recorded). A revision whose
+    Jenkinsfile_portal emits the marker but a console without any line is a failed check; an older revision that does not emit it
+    adds no check. This identifies *which content* the build used (mixed-revision detection, Plan §0 ②) — it is not an integrity proof."""
+    items, checks = [], []
+    found = TRUSTED_RE.findall(console or "")
+    jf = _git_show_bytes(repo_root, sha, "Jenkinsfile_portal") if sha else None
+    emits = jf is not None and b"[Trusted]" in jf
+    if not found:
+        if emits:
+            checks.append({"name": "trusted_lines", "ok": False,
+                           "observed": "Jenkinsfile_portal at this revision emits [Trusted] lines but the console has none"})
+        return items, checks
+    for path, ln, jh in found:
+        rec = {"path": path, "len": int(ln), "jhash": int(jh), "match": None}
+        blob = _git_show_bytes(repo_root, sha, path) if sha else None
+        if blob is None:
+            rec["match"] = "unavailable"
+            checks.append({"name": f"trusted:{path}", "ok": False,
+                           "observed": f"len={ln} jhash={jh} — `git show {str(sha)[:12]}:{path}` unavailable, cannot compare"})
+        else:
+            match = [enc for enc, txt in (("utf-8", blob.decode("utf-8", "replace")), ("iso-8859-1", blob.decode("latin-1")))
+                     if len(txt) == int(ln) and java_string_hash(txt) == int(jh)]
+            rec["match"] = match[0] if match else "mismatch"
+            checks.append({"name": f"trusted:{path}", "ok": bool(match),
+                           "observed": f"len={ln} jhash={jh} match={match[0] if match else 'none'} (revision {str(sha)[:12]})"})
+        items.append(rec)
+    return items, checks
+
+
+def load_tip_observations(path: str | None) -> list:
+    """Trigger-side observations: [{job, build, sha_before, sha_after, before_epoch, after_epoch, remote, method}]."""
+    if not path:
+        return []
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    obs = data.get("observations") if isinstance(data, dict) else data
+    if not isinstance(obs, list):
+        raise ProdgenError(f"tip observations {path}: expected a list (or {{\"observations\": [...]}})")
+    return obs
+
+
+def _tip_observation_for(observations, job: str, build) -> dict | None:
+    for o in observations or []:
+        if isinstance(o, dict) and str(o.get("job")) == job and str(o.get("build")) == str(build):
+            return o
+    return None
+
+
+def tip_frozen_revision(obs: dict | None, build_timestamp_ms, build_duration_ms):
+    """Direct revision binding for a fail-closed build from a trigger-side observation (2026-10-04 최종 지시 §5): the Job's SCM tip
+    (`git ls-remote <remote> refs/heads/main`) read before the build was queued and again after it finished. Both readings must be
+    the same SHA and the build's [start, end] must lie inside [before, after] — lightweight checkout and readTrusted read that tip.
+    Returns (sha, "tip_frozen:ls-remote", note) or (None, None, why)."""
+    if not obs:
+        return None, None, None
+    try:
+        sha_b = str(obs.get("sha_before") or obs.get("sha") or "")
+        sha_a = str(obs.get("sha_after") or obs.get("sha") or "")
+        before, after = float(obs["before_epoch"]), float(obs["after_epoch"])
+    except (KeyError, TypeError, ValueError):
+        return None, None, "observation incomplete (sha_before/sha_after/before_epoch/after_epoch)"
+    if not sha_b or sha_b != sha_a:
+        return None, None, f"tip moved during the window ({sha_b[:12]} → {sha_a[:12]})"
+    if build_timestamp_ms is None or build_duration_ms is None:
+        return None, None, "build timestamp/duration unavailable"
+    t0 = float(build_timestamp_ms) / 1000.0
+    t1 = t0 + float(build_duration_ms) / 1000.0
+    if not (before - 1 <= t0 and t1 <= after + 1):
+        return None, None, f"build window [{int(t0)},{int(t1)}] not inside the observation window [{int(before)},{int(after)}]"
+    return sha_b, "tip_frozen:ls-remote", f"before={int(before)} after={int(after)} remote={obs.get('remote', '?')}"
+
+
 def neighbour_revision(builds: list, number: int):
     """Revision binding for a build that stopped before any agent checkout (contract `fail_closed: True` — E2E-A2:
     Resolve Location refuses `chj` on the controller, so Jenkins records no BuildData for it; CI #14 2026-10-04).
     The same Job's nearest earlier AND later builds that do carry a revision pin the Job's SCM tip at that time:
     when both agree, that revision is the one the fail-closed build ran from. Any disagreement or a missing side → None.
-    `builds` = [{"number": int, "sha": str | None}, …]. Returns (sha, source) with source "neighbours:#lo,#hi"."""
+    `builds` = [{"number": int, "sha": str | None}, …]. Returns (sha, source) with source "neighbours:#lo,#hi".
+    2026-10-04 최종 지시 §5: this is an **estimate** (recorded as binding "estimated") — agreement of the neighbours is not the build's own
+    SCM record. check_evidence() does not accept an estimate as the binding of a required scenario; the direct forms are Jenkins
+    BuildData or a tip-frozen observation (tip_frozen_revision)."""
     lo = max((b for b in builds if b.get("sha") and b["number"] < number), key=lambda b: b["number"], default=None)
     hi = min((b for b in builds if b.get("sha") and b["number"] > number), key=lambda b: b["number"], default=None)
     if lo and hi and lo["sha"] == hi["sha"]:
@@ -361,9 +470,13 @@ def _job_builds(base: str, job_path: str, netrc: str) -> list:
     return out
 
 
-def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict | None = None) -> dict:
-    """Read-only Jenkins collection. `harness_results` (scenario → expected Jenkins result) overrides scenarios.json / SUCCESS."""
+def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict | None = None,
+            tip_observations: list | None = None, repo_root: str | None = None) -> dict:
+    """Read-only Jenkins collection. `harness_results` (scenario → expected Jenkins result) overrides scenarios.json / SUCCESS.
+    `tip_observations` (load_tip_observations) give fail-closed builds a direct binding; `repo_root` is where `git show <sha>:<path>`
+    resolves the [Trusted] content comparison (default: cwd)."""
     base = jenkins_url.rstrip("/")
+    repo_root = repo_root or os.getcwd()
     expected_results = dict(harness_expected_results())
     expected_results.update(harness_results or {})
     items = []
@@ -372,7 +485,7 @@ def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict |
         e = parse_entry(raw) if isinstance(raw, str) else raw
         job_path = "/".join(f"job/{p}" for p in e["job"].split("/"))
         url = f"{base}/{job_path}/{e['build']}"
-        info = _curl_json(f"{url}/api/json?tree=number,result,building,url,actions[lastBuiltRevision[SHA1],parameters[name,value]]", netrc)
+        info = _curl_json(f"{url}/api/json?tree=number,result,building,url,timestamp,duration,actions[lastBuiltRevision[SHA1],parameters[name,value]]", netrc)
         sha, params = None, {}
         for a in info.get("actions", []) or []:
             if a.get("lastBuiltRevision"):
@@ -381,15 +494,25 @@ def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict |
                 params[p.get("name")] = p.get("value")
         kind = e.get("kind") or ("harness" if HARNESS_MARKER in e["job"] else "main")
         sha_source = "build_data" if sha else None
+        binding = "direct" if sha else None
+        tip_note = None
         if kind == "main" and not sha and (MAIN_CONTRACT.get(e["scenario"]) or {}).get("fail_closed"):
-            # fail-closed scenario: no agent checkout ever happened → bind via the Job's neighbouring builds (recorded as such)
-            builds = job_builds_cache.get(job_path)
-            if builds is None:
-                builds, _ = _try(_job_builds, base, job_path, netrc)
-                job_builds_cache[job_path] = builds if isinstance(builds, list) else []
-            sha, sha_source = neighbour_revision(job_builds_cache[job_path], int(e["build"]))
+            # fail-closed scenario: no agent checkout ever happened. Direct evidence first — a tip-frozen observation made by the trigger
+            # (same SCM tip before and after the build window) — and only then the neighbouring-build estimate, recorded as an estimate.
+            obs = _tip_observation_for(tip_observations, e["job"], e["build"])
+            sha, sha_source, tip_note = tip_frozen_revision(obs, info.get("timestamp"), info.get("duration"))
+            if sha:
+                binding = "direct"
+            else:
+                builds = job_builds_cache.get(job_path)
+                if builds is None:
+                    builds, _ = _try(_job_builds, base, job_path, netrc)
+                    job_builds_cache[job_path] = builds if isinstance(builds, list) else []
+                sha, sha_source = neighbour_revision(job_builds_cache[job_path], int(e["build"]))
+                binding = "estimated" if sha else None
         item = {"scenario": e["scenario"], "kind": kind, "job": e["job"], "build": e["build"], "url": info.get("url") or url,
                 "result": info.get("result"), "building": info.get("building"), "checkout_sha": sha, "checkout_sha_source": sha_source,
+                "binding": binding, "tip_observation": tip_note, "timestamp": info.get("timestamp"), "duration": info.get("duration"),
                 "expected": e.get("expected"), "caller_expected": e.get("caller_expected"),
                 "params": {k: params[k] for k in ("loc", "target_type", "inventory_json", "callbackUrl", "gatherBudgetForceSec",
                                                    "redfishAccountDryrun", "SCENARIO", "MAIN_SHA", "FUNCTIONS_SRC", "BOUNDED") if k in params}}
@@ -419,6 +542,11 @@ def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict |
                                   "kernel": (((x.get("data") or {}).get("system") or {}).get("kernel") if isinstance(x.get("data"), dict) else None)}
                                  for x in envs]
             item["checks"] = evaluate_main(e["scenario"], item, summary, body, manifest, console or "")
+            # §5: which helper/registry *content* this build read (seTrusted lines) vs the bound revision; fallback paths are recorded
+            item["trusted"], trusted_checks = trusted_report(console or "", sha, repo_root)
+            item["checks"].extend(trusted_checks)
+            item["canon_fallback"] = "정본 읽기 실패 — 복제값 사용" in (console or "")
+            item["layer_b_lib_unavailable"] = "se_finalize.groovy 적재 실패" in (console or "")
         item["pass"] = bool(item["checks"]) and all(ch["ok"] for ch in item["checks"]) and bool(sha)
         items.append(item)
     payload = {"collected_at": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat(),
@@ -450,9 +578,14 @@ def check_evidence(evidence: dict, main_sha: str, required_main=REQUIRED_MAIN, r
         if not items:
             problems.append(f"{sc}: no main-Job evidence")
             continue
-        good = [it for it in items if it.get("pass") and it.get("checkout_sha") == main_sha]
+        good = [it for it in items if it.get("pass") and it.get("checkout_sha") == main_sha and it.get("binding") != "estimated"]
         if not good:
-            problems.append(f"{sc}: no passing main-Job evidence for main {main_sha[:12]} ({_why(items)})")
+            est = [it for it in items if it.get("pass") and it.get("checkout_sha") == main_sha and it.get("binding") == "estimated"]
+            if est:
+                problems.append(f"{sc}: revision binding is an estimate ({est[0].get('checkout_sha_source')}) — direct evidence required "
+                                f"(Jenkins BuildData or a tip-frozen observation); an estimate is recorded, not promoted")
+            else:
+                problems.append(f"{sc}: no passing main-Job evidence for main {main_sha[:12]} ({_why(items)})")
     groups = [("main-function Harness", required_harness, "checkout"), ("generated-tree Harness", required_harness_tree, "artifact")]
     if require_bounded:
         groups.append(("bounded Harness", REQUIRED_HARNESS_BOUNDED, "checkout"))

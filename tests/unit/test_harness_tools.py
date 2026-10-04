@@ -151,8 +151,10 @@ def test_interruption_scenarios_cover_the_six_conditions_and_bounded_ones_are_pa
     names = set(SCENARIOS)
     assert {"recover_slow", "inner_recover_timeout", "inner_assemble_timeout", "outer_timeout", "foreign_timeout_interruption",
             "user_abort", "aborted_outcome_finalize"} <= names
-    for n in ("inner_recover_timeout", "inner_assemble_timeout"):
+    for n in ("inner_recover_timeout", "inner_assemble_timeout", "inner_archive_timeout", "inner_stash_timeout", "inner_layer_a_read_timeout"):
         assert SCENARIOS[n]["bounded"] and SCENARIOS[n]["probe_approvals"] and SCENARIOS[n]["expect"]["rethrown"] is False
+    for n in ("archive_slow", "layer_a_read_slow", "recover_slow"):
+        assert not SCENARIOS[n].get("bounded") and SCENARIOS[n]["expect"]["rethrown"] is False and SCENARIOS[n]["slow_seconds"] >= 45, n
     assert SCENARIOS["user_abort"]["jenkins_result"] == "ABORTED" and SCENARIOS["user_abort"]["expect_interruption"]
     assert SCENARIOS["aborted_outcome_finalize"]["outcome"] == "aborted" and SCENARIOS["aborted_outcome_finalize"]["set_result"] == "ABORTED"
     assert SCENARIOS["aborted_outcome_finalize"]["expect"]["sink_posts_max"] == 1, "ABORTED 빌드는 Callback 1회만 시도"

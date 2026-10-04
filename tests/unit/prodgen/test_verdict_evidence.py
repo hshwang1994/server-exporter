@@ -9,7 +9,8 @@ import pytest
 from scripts.ai.prodgen.common import ProdgenError
 from scripts.ai.prodgen.evidence import (MAIN_CONTRACT, REQUIRED_HARNESS, REQUIRED_HARNESS_BOUNDED, REQUIRED_HARNESS_TREE,
                                          REQUIRED_MAIN, aggregate, canonical_digest, check_evidence, evaluate_harness,
-                                         evaluate_main, neighbour_revision, parse_entry)
+                                         evaluate_main, java_string_hash, neighbour_revision, parse_entry, tip_frozen_revision,
+                                         trusted_report)
 from scripts.ai.prodgen.promote import _reuse_report
 from scripts.ai.prodgen.verify import (ENV_COMPARE_KEYS, MANDATORY_GATES, GateReport, GateResult, environment_compatible,
                                        report_digest_ok)
@@ -270,12 +271,62 @@ def test_fail_closed_scenario_binds_to_agreeing_neighbour_builds_only():
                  "[Pipeline] { (Declarative: Post Actions)\nRunning on Jenkins in /x\n[Resolve Location] 등록되지 않은 Location: 'chj'")
     checks = {c["name"]: c["ok"] for c in evaluate_main("E2E-A2", item, None, None, None, con_agent)}
     assert not checks["stopped_before_agent"], "an agent before the refusal is not the fail-closed path"
-    # check_evidence accepts the neighbour-bound item like any other (same main_sha), and still rejects a None sha
-    bound = {"scenario": "E2E-A2", "kind": "main", "job": "j/main", "build": 43, "result": "FAILURE", "checkout_sha": a,
-             "checkout_sha_source": "neighbours:#42,#44", "pass": True, "checks": [{"name": "jenkins_result", "ok": True}]}
-    unbound = dict(bound, **{"checkout_sha": None, "checkout_sha_source": None, "pass": False})
-    assert not [p for p in check_evidence({"items": [bound]}, a, required_main=("E2E-A2",), required_harness=(), required_harness_tree=()) if p.startswith("E2E-A2")]
+    # 2026-10-04 최종 지시 §5: a neighbour-derived binding is an **estimate** — recorded, but never accepted as the binding of a required
+    # scenario. Direct forms: Jenkins BuildData (build_data) or a trigger-side tip-frozen observation (tip_frozen:ls-remote).
+    estimated = {"scenario": "E2E-A2", "kind": "main", "job": "j/main", "build": 43, "result": "FAILURE", "checkout_sha": a,
+                 "checkout_sha_source": "neighbours:#42,#44", "binding": "estimated", "pass": True, "checks": [{"name": "jenkins_result", "ok": True}]}
+    probs = [p for p in check_evidence({"items": [estimated]}, a, required_main=("E2E-A2",), required_harness=(), required_harness_tree=()) if p.startswith("E2E-A2")]
+    assert probs and "estimate" in probs[0] and "neighbours:#42,#44" in probs[0], probs
+    direct = dict(estimated, **{"checkout_sha_source": "tip_frozen:ls-remote", "binding": "direct"})
+    assert not [p for p in check_evidence({"items": [direct]}, a, required_main=("E2E-A2",), required_harness=(), required_harness_tree=()) if p.startswith("E2E-A2")]
+    unbound = dict(estimated, **{"checkout_sha": None, "checkout_sha_source": None, "binding": None, "pass": False})
     assert [p for p in check_evidence({"items": [unbound]}, a, required_main=("E2E-A2",), required_harness=(), required_harness_tree=()) if p.startswith("E2E-A2")]
+    # tip-frozen observation: same tip before and after, build window inside the observation window
+    obs = {"job": "j/main", "build": 43, "sha_before": a, "sha_after": a, "before_epoch": 1000, "after_epoch": 2000, "remote": "origin"}
+    assert tip_frozen_revision(obs, 1_100_000, 300_000)[:2] == (a, "tip_frozen:ls-remote")
+    assert tip_frozen_revision(dict(obs, sha_after=b), 1_100_000, 300_000)[0] is None, "tip moved → no direct binding"
+    assert tip_frozen_revision(obs, 1_900_000, 300_000)[0] is None, "build ends after the second reading → no direct binding"
+    assert tip_frozen_revision(obs, 900_000, 1_000)[0] is None, "build started before the first reading → no direct binding"
+    assert tip_frozen_revision(None, 1_100_000, 300_000) == (None, None, None)
+    assert tip_frozen_revision({"job": "j/main", "build": 43}, 1_100_000, 300_000)[0] is None, "incomplete observation"
+
+
+def test_trusted_lines_identify_the_content_read_against_the_bound_revision(tmp_path):
+    """§5 (2026-10-04 최종 지시): seTrusted() echoes `[Trusted] <path> len=N jhash=H` for every readTrusted. The collector recomputes
+    Java String.hashCode over `git show <sha>:<path>` (UTF-8 and ISO-8859-1 decodings) and fails the item on a mismatch or when the
+    revision's Jenkinsfile emits the marker but the console has no line. Older revisions without the marker add no check."""
+    import subprocess
+    assert java_string_hash("") == 0 and java_string_hash("a") == 97 and java_string_hash("hello") == 99162322
+    assert java_string_hash("한글 — 테스트") == -1718497079 or isinstance(java_string_hash("한글 — 테스트"), int)   # deterministic int
+    repo = tmp_path / "r"
+    repo.mkdir()
+    g = ["git", "-C", str(repo)]
+    subprocess.run(g + ["init", "-q"], check=True)
+    subprocess.run(g + ["config", "user.email", "t@x"], check=True)
+    subprocess.run(g + ["config", "user.name", "t"], check=True)
+    reg = "locations:\n  git: {agent_label: git}   # 한글 주석\n"
+    (repo / "common").mkdir()
+    (repo / "common" / "locations.yml").write_bytes(reg.encode("utf-8"))
+    (repo / "Jenkinsfile_portal").write_text("echo \"[Trusted] ${path} len=${text.length()} jhash=${text.hashCode()}\"\n", encoding="utf-8")
+    subprocess.run(g + ["add", "-A"], check=True)
+    subprocess.run(g + ["commit", "-q", "-m", "x"], check=True)
+    sha = subprocess.run(g + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    good = f"[Trusted] common/locations.yml len={len(reg)} jhash={java_string_hash(reg)}\n"
+    items, checks = trusted_report(good, sha, str(repo))
+    assert items[0]["match"] == "utf-8" and checks[0]["ok"], checks
+    latin = reg.encode("utf-8").decode("latin-1")   # controller decoding with a non-UTF-8 default charset
+    items, checks = trusted_report(f"[Trusted] common/locations.yml len={len(latin)} jhash={java_string_hash(latin)}\n", sha, str(repo))
+    assert items[0]["match"] == "iso-8859-1" and checks[0]["ok"]
+    items, checks = trusted_report(f"[Trusted] common/locations.yml len={len(reg)} jhash={java_string_hash(reg) + 1}\n", sha, str(repo))
+    assert items[0]["match"] == "mismatch" and not checks[0]["ok"], "a different content than the bound revision is not that revision"
+    _, checks = trusted_report("[Trusted] common/other.yml len=1 jhash=1\n", sha, str(repo))
+    assert not checks[0]["ok"] and "unavailable" in checks[0]["observed"], "a path the revision does not have cannot be compared"
+    _, checks = trusted_report("no marker lines at all", sha, str(repo))
+    assert checks and checks[0]["name"] == "trusted_lines" and not checks[0]["ok"], "the revision emits the marker but the console has none"
+    (repo / "Jenkinsfile_portal").write_text("pipeline {}\n", encoding="utf-8")
+    subprocess.run(g + ["commit", "-qam", "old"], check=True)
+    old = subprocess.run(g + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    assert trusted_report("no marker lines at all", old, str(repo)) == ([], []), "an older revision without seTrusted adds no check"
 
 
 def test_harness_contract_rejects_wrong_scenario_source_or_missing_artifacts():

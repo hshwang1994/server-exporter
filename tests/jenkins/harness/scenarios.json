@@ -13,7 +13,8 @@
     "jenkins_result: 그 시나리오가 끝나는 Jenkins 결과(기본 SUCCESS). bounded=true 는 BOUNDED 파라미터 없이도 SE_FINALIZER_BOUNDED=true 로 돈다.",
     "probe_approvals=true 는 sandbox 승인 4 시그니처를 실측해 control.approvals 에 적는다 — 승인이 없으면 verdict 가 PARTIAL(승인) 로 둔다(FAIL 도 PASS 도 아니다).",
     "expect_interruption=true 는 Harness 가 유발한 interruption 이라 Harness 가 기록 뒤 삼킨다(그 외 interruption 은 그대로 전파).",
-    "sink_hold: 판정 없는 보조 시나리오 — controller loopback sink 를 hold_seconds 동안 열어 둔다(main Job T2 의 Callback 수신 증거용). 기록만 archive 한다."
+    "sink_hold: 판정 없는 보조 시나리오 — controller loopback sink 를 hold_seconds 동안 열어 둔다(main Job T2 의 Callback 수신 증거용). 기록만 archive 한다.",
+    "2026-10-04 최종 실행 지시 §4-3 — 보존·읽기 상한 시나리오: archive_slow · layer_a_read_slow(BOUNDED=false, 운영 기본: 상한 없이 완주) / inner_archive_timeout · inner_stash_timeout(PRESERVE_STEP 30 s) · inner_layer_a_read_timeout(ASSEMBLE 60 s → 최소 경로 ASSEMBLE_MIN 20 s)(BOUNDED=true: 자기 timeout 의 nodeId 로 식별해 다음 수단으로). 승인 4 시그니처 없으면 PARTIAL/승인. 보존 단계의 재전파는 Harness 가 기록하고 finalizer 를 건너뛴다."
   ],
   "scenarios": {
     "normal_success": {
@@ -500,6 +501,142 @@
         "note": "정보성 — sandbox 허용 API 실측만 기록"
       },
       "probe_approvals": true
+    },
+    "archive_slow": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 45,
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "layerB": "skipped",
+        "source": "stash",
+        "filled": 0,
+        "lines_eq_accepted": true,
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "unstable_count": 0,
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "최종 지시 §4-3 운영 기본(BOUNDED=false): 보존 archive 가 45 s 느려도 상한 없이 완주한다(archived · deleteDir · delivered). 상한 동작은 inner_archive_timeout(BOUNDED=true)"
+      }
+    },
+    "inner_archive_timeout": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 45,
+      "bounded": true,
+      "probe_approvals": true,
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "source": "stash",
+        "filled": 0,
+        "lines_eq_accepted": true,
+        "preserve": {
+          "archived": false,
+          "stashed": true,
+          "deleted": false
+        },
+        "unstable_contains": [
+          "archive 실패 — stash 로만 전달"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "최종 지시 §4-3 Tier 2: 보존 archive 가 PRESERVE_STEP(30 s) 을 넘기면 자기 timeout 의 nodeId 로 식별 → archived=false 로 두고 stash 는 계속 → workspace 보존 · finalizer 는 stash 로 전달. 승인 없으면 PARTIAL/승인"
+      }
+    },
+    "inner_stash_timeout": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 45,
+      "bounded": true,
+      "probe_approvals": true,
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "source": "archive",
+        "filled": 0,
+        "lines_eq_accepted": true,
+        "preserve": {
+          "archived": true,
+          "stashed": false,
+          "deleted": true
+        },
+        "unstable_count": 0,
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "최종 지시 §4-3 Tier 2: stash 가 PRESERVE_STEP(30 s) 을 넘기면 식별 → stashed=false · archive 성공이라 deleteDir · finalizer 는 unarchive 로 회수. 승인 없으면 PARTIAL/승인"
+      }
+    },
+    "layer_a_read_slow": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 45,
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "layerB": "skipped",
+        "source": "stash",
+        "filled": 0,
+        "lines_eq_accepted": true,
+        "unstable_count": 0,
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "최종 지시 §4-3 운영 기본(BOUNDED=false): finalizer 의 Layer A 결과 읽기(gather_final.jsonl)가 45 s 느려도 상한 없이 완주한다"
+      }
+    },
+    "inner_layer_a_read_timeout": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 70,
+      "bounded": true,
+      "probe_approvals": true,
+      "expect": {
+        "delivered": true,
+        "layerA": "timeout",
+        "layerB": "unavailable",
+        "source": "stash",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "damage_contains": [
+          "assemble_timeout"
+        ],
+        "unstable_contains": [
+          "전송은 됐지만"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "최종 지시 §4-3 Tier 2: Layer A 결과 읽기가 ASSEMBLE(60 s) 을 넘기면 자기 timeout 으로 식별 → 최소 경로(ASSEMBLE_MIN 20 s)가 OUTPUT 줄만 검문해 전송 · layerA=timeout · layerB=unavailable · damage assemble_timeout. 승인 없으면 PARTIAL/승인"
+      }
     }
   }
 }

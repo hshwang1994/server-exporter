@@ -4,7 +4,7 @@
 운영 코드에는 장애 주입 분기를 넣지 않는다. 대신 이 도구가
   1. Jenkinsfile_portal(main checkout 또는 생성 tree 의 사본) 에서 `pipeline {` 앞의 최상위 선언(상수·helper·seFinalizeAndCallback·
      sePreserveGatherOutput …)을 **그대로** 잘라내고,
-  2. 같은 이름의 **wrapper 메서드**(archiveArtifacts · stash · unstash · unarchive · readTrusted · sh · unstable · httpRequest) 와
+  2. 같은 이름의 **wrapper 메서드**(archiveArtifacts · stash · unstash · unarchive · readTrusted · readFile · sh · unstable · httpRequest) 와
      `getParams()`(params 그림자) 를 덧붙여 — 스크립트 메서드가 DSL step 보다 먼저 해석되므로 시나리오별로 실제 step 에 위임하거나
      예외·지연을 일으킨다 —
   3. `return this` 로 끝나는 파일을 만든다. Jenkinsfile_harness 가 `load` 한 뒤 `seHarnessInit(this, cfg)` 로 바깥 스크립트(실제 step)를 넘긴다.
@@ -38,12 +38,17 @@ FAIL_READTRUSTED = {"raw_fallback"}
 SLOW_UNSTASH = {"recover_slow", "outer_timeout", "inner_recover_timeout", "user_abort"}
 SLOW_READTRUSTED = {"inner_assemble_timeout"}                 # readTrusted 를 slowSeconds 만큼 늦춘다 (ASSEMBLE 60 s 초과용)
 FOREIGN_TIMEOUT_UNSTASH = {"foreign_timeout_interruption"}    # unstash 안에서 **남의** timeout 으로 FIE 를 만든다 (3차 §4 ⑥)
+# 2026-10-04 최종 지시 §4-3 — 보존·읽기 상한: 보존 archive / stash / finalizer 의 Layer A 결과 읽기(readFile gather_final.jsonl)를 늦춘다
+SLOW_ARCHIVE = {"archive_slow", "inner_archive_timeout"}
+SLOW_STASH = {"inner_stash_timeout"}
+SLOW_READFILE_FINAL = {"layer_a_read_slow", "inner_layer_a_read_timeout"}
 
 # 모든 시나리오 — Jenkinsfile_harness · harness_verdict.py 와 같은 목록 (scenarios.json 이 정본)
 SCENARIOS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
              "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx", "sink_close",
              "recover_slow", "outer_timeout", "inner_recover_timeout", "inner_assemble_timeout", "foreign_timeout_interruption",
-             "user_abort", "aborted_outcome_finalize", "sink_hold", "sandbox_probe")
+             "user_abort", "aborted_outcome_finalize", "sink_hold", "sandbox_probe",
+             "archive_slow", "inner_archive_timeout", "inner_stash_timeout", "layer_a_read_slow", "inner_layer_a_read_timeout")
 
 WRAPPERS = r'''
 
@@ -71,6 +76,10 @@ def seHarnessCalls() { return HARNESS.calls }
 
 def archiveArtifacts(Map m) {
     // 주입 대상은 Gather post 의 보존 archive(gather_output.json 으로 시작하는 목록)뿐 — finalizer 의 callback_body/summary archive 는 실제로 보낸다
+    if ((HARNESS.scenario in __SLOW_ARCHIVE__) && (m.artifacts ?: '').toString().startsWith('gather_output.json')) {
+        HARNESS.calls << ("archiveArtifacts:slow:" + HARNESS.slowSeconds)
+        HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
+    }
     if ((HARNESS.scenario in __FAIL_ARCHIVE__) && (m.artifacts ?: '').toString().startsWith('gather_output.json')) {
         HARNESS.calls << 'archiveArtifacts:injected_fail'
         throw new Exception('harness: injected archiveArtifacts failure')
@@ -80,6 +89,10 @@ def archiveArtifacts(Map m) {
 }
 
 def stash(Map m) {
+    if ((HARNESS.scenario in __SLOW_STASH__) && m.name == 'gather-output') {
+        HARNESS.calls << ("stash:slow:" + HARNESS.slowSeconds)
+        HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
+    }
     if ((HARNESS.scenario in __FAIL_STASH__) && m.name == 'gather-output') {
         HARNESS.calls << 'stash:injected_fail'
         throw new Exception('harness: injected stash failure')
@@ -123,6 +136,17 @@ def readTrusted(String path) {
         return HARNESS.trusted[path]      // 생성 tree 의 파일 **내용**(Harness 가 agent 에서 미리 읽어 둔다 — finalizer 는 built-in node 에서 돈다)
     }
     return HARNESS.outer.readTrusted(path)
+}
+
+// finalizer 의 Layer A 결과 읽기(readFile gather_final.jsonl)만 늦춘다 — ASSEMBLE 상한 안에 Layer A 읽기가 들어 있는지 본다 (최종 지시 §4-3)
+def readFile(Map m) {
+    if ((HARNESS.scenario in __SLOW_READFILE_FINAL__) && (m.file ?: '').toString() == 'gather_final.jsonl' && !HARNESS.slowDone) {
+        HARNESS.slowDone = true
+        HARNESS.calls << ('readFile:slow:' + HARNESS.slowSeconds)
+        HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
+    }
+    HARNESS.calls << ('readFile:' + (m.file ?: '-'))
+    return HARNESS.outer.readFile(m)
 }
 
 def sh(Map m) {
@@ -178,7 +202,10 @@ def build(source: Path, scenario: str, out: Path, meta_out: Path | None) -> dict
                 .replace("__FAIL_READTRUSTED__", groovy_list(FAIL_READTRUSTED))
                 .replace("__SLOW_UNSTASH__", groovy_list(SLOW_UNSTASH))
                 .replace("__SLOW_READTRUSTED__", groovy_list(SLOW_READTRUSTED))
-                .replace("__FOREIGN_TIMEOUT_UNSTASH__", groovy_list(FOREIGN_TIMEOUT_UNSTASH)))
+                .replace("__FOREIGN_TIMEOUT_UNSTASH__", groovy_list(FOREIGN_TIMEOUT_UNSTASH))
+                .replace("__SLOW_ARCHIVE__", groovy_list(SLOW_ARCHIVE))
+                .replace("__SLOW_STASH__", groovy_list(SLOW_STASH))
+                .replace("__SLOW_READFILE_FINAL__", groovy_list(SLOW_READFILE_FINAL)))
     generated = functions.rstrip("\n") + "\n" + wrappers
     _write_lf(out, generated)
     meta = {

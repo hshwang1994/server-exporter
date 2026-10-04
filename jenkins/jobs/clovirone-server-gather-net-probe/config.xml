@@ -1,0 +1,60 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job">
+  <description>main 전용 읽기 전용 도달성 진단 Job — 수집기가 도는 Runner 망에서 대상의 route · ICMP · 관리 TCP connect · ARP/neighbour · tracepath · Redfish ServiceRoot(무인증 GET) 를 읽어 net_probe.txt 로 남긴다. 설정 변경·쓰기·인증 시도 없음. 운영 수집 Job 이 아니다. 정의: tests/jenkins/harness/Jenkinsfile_net_probe (Branch */main). 2026-10-04 최종 실행 지시 §8-2</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>NODE_LABEL</name>
+          <defaultValue>linux</defaultValue>
+          <description>실행 노드(라벨 또는 노드 이름)</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>TARGETS</name>
+          <defaultValue></defaultValue>
+          <description>쉼표로 구분한 대상 — ip 또는 ip:port[,port…]</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>REDFISH_ROOT</name>
+          <defaultValue>true</defaultValue>
+          <description>443 대상에 Redfish ServiceRoot 무인증 GET 상태코드·본문 앞부분을 읽는다</description>
+        </hudson.model.BooleanParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+    <jenkins.model.BuildDiscarderProperty>
+      <strategy class="hudson.tasks.LogRotator">
+        <daysToKeep>-1</daysToKeep>
+        <numToKeep>100</numToKeep>
+        <artifactDaysToKeep>-1</artifactDaysToKeep>
+        <artifactNumToKeep>-1</artifactNumToKeep>
+        <removeLastBuild>false</removeLastBuild>
+      </strategy>
+    </jenkins.model.BuildDiscarderProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps">
+    <scm class="hudson.plugins.git.GitSCM" plugin="git">
+      <configVersion>2</configVersion>
+      <userRemoteConfigs>
+        <hudson.plugins.git.UserRemoteConfig>
+          <url>https://github.com/hshwang1994/server-expoter</url>
+          <credentialsId>hshwang token</credentialsId>
+        </hudson.plugins.git.UserRemoteConfig>
+      </userRemoteConfigs>
+      <branches>
+        <hudson.plugins.git.BranchSpec>
+          <name>*/main</name>
+        </hudson.plugins.git.BranchSpec>
+      </branches>
+      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+      <submoduleCfg class="empty-list"/>
+      <extensions/>
+    </scm>
+    <scriptPath>tests/jenkins/harness/Jenkinsfile_net_probe</scriptPath>
+    <lightweight>true</lightweight>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>
