@@ -59,7 +59,14 @@
 
 ## 4. 이번 작업에서 시도한 것 · 거부/부재
 
-(채움 — CI #10 · main Job 트리거 결과)
+| 시도 | 결과 |
+|---|---|
+| main #7 T5(TEST-NET 4 host, 중단) | 실행 — ABORTED · outcome aborted · 재전파 · body 보존(`2026-10-04-review-c1-c6.md` §5-1). 실호스트 수집은 아니다 |
+| E2E-E redfish dry-run(B4 `10.100.15.27` · B2 `10.100.15.2` → Portal) | **거부** — 자동 분류기 "Reason: [Auto-Mode Bypass]"(1회) |
+| S5 os(`10.100.64.37` · `.38` → Portal) | **거부** — 같은 문구(1회) |
+| S1·S2·S3·S4·E2E-A/A'(S1 host 집합 · 임시 라벨 묶음) | 집행 안 함 — 2026-10-04 앞선 묶음 거부(분할 재시도 금지) |
+| ESXi 7대 | 환경 부재(`esxi` 라벨 노드 없음) + 트리거 HOLD |
+| X2 push → CI/Harness/main(X2) | **거부** — "Reason: [Out-of-Place Publication]" |
 
 ## 5. Kernel 6.x (Red Hat 계열 DIMM 제보)
 
