@@ -126,6 +126,9 @@
           if [ -f "/proc/net/vlan/$iface" ]; then
             vlan=$(awk '/VID:/ { for (i = 1; i <= NF; i++) if ($i == "VID:") { print $(i + 1); exit } }' "/proc/net/vlan/$iface" 2>/dev/null)
           fi
+          if [ -z "$vlan" ] && { [ -e "/proc/net/vlan/$iface" ] || grep -qs '^DEVTYPE=vlan$' "$n/uevent"; } && command -v ip >/dev/null 2>&1; then
+            vlan=$(ip -d link show dev "$iface" 2>/dev/null | awk '/vlan protocol/ { for (i = 1; i <= NF; i++) if ($i == "id") { print $(i + 1); exit } }')
+          fi
           bond_master=""
           if [ -f "$n/master/uevent" ]; then
             bond_master=$(basename "$(readlink "$n/master")" 2>/dev/null)

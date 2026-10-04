@@ -6,6 +6,7 @@
   "jenkins/jobs/clovirone-server-gather-harness/config.xml": "operator tools (job XML) are applied on the controller, not checked out by builds",
   "jenkins/jobs/clovirone-server-gather-net-probe/config.xml": "operator tools (job XML) are applied on the controller, not checked out by builds",
   "jenkins/jobs/clovirone-server-gather-perf-observe/config.xml": "operator tools (job XML) are applied on the controller, not checked out by builds",
+  "jenkins/jobs/clovirone-server-gather-term-probe/config.xml": "operator tools (job XML) are applied on the controller, not checked out by builds",
   "jenkins/jobs/redfish-account-provision-verify/config.xml": "operator tools (job XML) are applied on the controller, not checked out by builds",
   "scripts/bootstrap_vault_encrypt.sh": "operator tool (one-time vault bootstrap), not part of a Jenkins build",
   "scripts/verify_account_provision.sh": "operator verification tool, not part of a Jenkins build"
@@ -1446,16 +1447,16 @@
    "source_sha256": "488325233573ae795209515a73bc3806d0f76403ca3e23556a2f74c591ea0ca9"
   },
   "os-gather/tasks/linux/gather_network.yml": {
-   "bytes": 19711,
+   "bytes": 20027,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 51,
+   "removed_lines": 54,
    "removed_trailing": 1,
-   "sha256": "7e8c5860d6bd9ab160af3f82510c7559fc56939241499c2e00c5ea03f2a64662",
-   "source_blob": "fa2d9d996a73c47859b798f1c36bf0c097410d54",
-   "source_sha256": "efa6543c5e727564b341a288b8bc3dae71e050152b8531a8e06c860ba3012e29"
+   "sha256": "1c236a0002b251dfb8628a1759deafcafc2fb2b8af6377dd53a82eadc3e3d894",
+   "source_blob": "e8fb0df23cd69e9e69a2db7ff2a23811d17544b3",
+   "source_sha256": "d05e69477dd76482a4892535e277d88899ce296a291d7c19ad95154a332358c7"
   },
   "os-gather/tasks/linux/gather_storage.yml": {
    "bytes": 17115,
@@ -2628,7 +2629,7 @@
    "source_sha256": "0fa693b93483d9429379dc265436fb412dcd84e52e509bf80f8e74025791bc30"
   }
  },
- "generator_hash": "8e183b5b3206f3c6d0abab5fa374023e20f63c477ddcaf4e826d74726017374b",
+ "generator_hash": "501cb6c7bafb8e6dbd8858ed77a9b02f98da973ed63c902e3249c52a47158db0",
  "generator_version": "1.0.0",
  "ignored": [
   ".claude/role/gather/README.md",
@@ -2800,8 +2801,8 @@
   "tests/reference/os/README.md",
   "tests/reference/redfish/README.md"
  ],
- "main_sha": "ec6a494f45bdab57f5698ac5e0b27271ac51bf48",
- "main_tree": "620e29da5639b68fc487e2102a9bc92f0807c6ed",
+ "main_sha": "17843cf00c2ee85e088e3f12f7663769031aec72",
+ "main_tree": "4e279361172f31ccade96267b0adb087741bbead",
  "manifest_sha256": "02660e89090313e141657a076c3db34f8c35cd29d428a8f3978f3a90a3f622f4",
  "policy": {
   "eol": "lf",
@@ -2817,5 +2818,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "de9422fb6c568e32652c8e6c123c21a1446d19c11b763f107557ca9b2979c0a4"
+ "tree_hash": "fd93e76b8e163bff80a13bb6a0d8976bab6900bf9ba14ec54cd3c1708070b856"
 }
