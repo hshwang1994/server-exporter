@@ -231,7 +231,10 @@ def test_credentials_are_bound_only_in_verify_evidence_and_promote():
     assert "VAULT_TMP=\"\\$(mktemp)\"; chmod 600 \"\\$VAULT_TMP\"" in v and "--vault-password-file \"\\$VAULT_TMP\"" in v
     assert "trap 'rm -f \"\\$NETRC_TMP\" \"\\$VAULT_TMP\"' EXIT" in v, "임시 파일은 trap 으로 지운다"
     assert "set +x" in v and "echo \"\\${VAULT_PASSWORD}" not in v and 'echo "${VAULT_PASSWORD}' not in CI
-    assert CI.count("VAULT_PASSWORD") <= 4, "vault 암호 변수는 Verify 블록의 바인딩·printf 외에 등장하지 않는다"
+    assert CI.count("VAULT_PASSWORD") <= 6, "vault 암호 변수는 Verify · Promote 블록의 바인딩·printf 외에 등장하지 않는다 (2026-10-04 2차: Promote 도 G19 재실행용으로 바인딩)"
+    p = _stage("Prodgen Promote")
+    assert "string(credentialsId: 'server-gather-vault-password', variable: 'VAULT_PASSWORD')" in p and "CRED_ARGS+=(--netrc" in p
+    assert "--vault-password-file \"\\$VAULT_TMP\"" in p and "trap 'rm -f \"\\$NETRC_TMP\" \"\\$VAULT_TMP\"' EXIT" in p
     for token in ("ansible-playbook \"", "httpRequest", "callbackUrl", "inventory_json"):
         assert token not in _code(CI), f"CI 는 수집도 Callback 도 하지 않는다: {token}"
 

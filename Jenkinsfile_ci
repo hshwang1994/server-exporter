@@ -617,7 +617,9 @@ pipeline {
                     }
                     boolean dryRun = params.PROMOTE_DRY_RUN || !haveGitlab
                     String remotes = haveGitlab ? 'origin,internal' : 'origin'
-                    def promoteBody = {
+                    // 린터 토큰(G13 · jenkins_version 포착) 과 vault 암호(G19) 도 Promote 에 바인딩한다 — 없으면 promote 가 환경을 "미확인" 으로 보고
+                    //   환경 의존 gate 를 재실행하는데 자격이 없어 G13/G19 가 SKIP → PARTIAL 이 된다 (CI #10 dry-run 실측). 임시 파일은 mktemp 0600 + trap.
+                    def promoteBody = { String credArg ->
                         return sh(returnStatus: true, label: 'prodgen promote', script: """#!/bin/bash
                             set -o pipefail
                             set +x
@@ -626,26 +628,49 @@ pipeline {
                             eval "\$(bash scripts/ai/prodgen/ci_pwsh_bootstrap.sh --env)"
                             export GIT_ASKPASS="\${WORKSPACE}/scripts/ai/prodgen/git_askpass.sh"
                             chmod +x "\$GIT_ASKPASS"
+                            NETRC_TMP=""; VAULT_TMP=""
+                            trap 'rm -f "\$NETRC_TMP" "\$VAULT_TMP"' EXIT
+                            CRED_ARGS=()
+                            if [ "${credArg}" = "yes" ]; then
+                                NETRC_TMP="\$(mktemp)"; chmod 600 "\$NETRC_TMP"
+                                printf 'machine %s login %s password %s\\n' "\$(echo "\${JENKINS_URL}" | sed -E 's#https?://([^/]+)/?.*#\\1#')" "\${LINT_USER}" "\${LINT_TOKEN}" > "\$NETRC_TMP"
+                                VAULT_TMP="\$(mktemp)"; chmod 600 "\$VAULT_TMP"
+                                printf '%s' "\${VAULT_PASSWORD}" > "\$VAULT_TMP"
+                                CRED_ARGS+=(--netrc "\$NETRC_TMP" --vault-password-file "\$VAULT_TMP" --jenkins-url "\${JENKINS_URL%/}")
+                            fi
                             if [ "${haveGitlab}" = "true" ]; then
                                 git remote get-url internal >/dev/null 2>&1 || git remote add internal https://10.100.64.156/root/server-expoter.git
                                 git config "http.https://10.100.64.156/.sslVerify" false      # URL 범위 설정 — 전역 설정이 아니다
                             fi
                             ARGS=(--push-remote "${remotes}" --verify-report prodgen_verify_report.aggregated.json --e2e-evidence e2e_evidence.json \\
-                                  --ci-stage-results ci_stage_results.json --ci-build "\${BUILD_URL}" --source-build-url "\${BUILD_URL}")
+                                  --ci-stage-results ci_stage_results.json --ci-build "\${BUILD_URL}" --source-build-url "\${BUILD_URL}" "\${CRED_ARGS[@]}")
                             if [ -n "\${BOOTSTRAP_BASELINE:-}" ]; then ARGS+=(--bootstrap-baseline "\${BOOTSTRAP_BASELINE}"); fi
                             if [ "${dryRun}" = "true" ]; then ARGS+=(--dry-run); fi
                             python3 -m scripts.ai.prodgen --json promote --sha "\${MAIN_SHA}" "\${ARGS[@]}" > prodgen_promote.json
                         """)
                     }
-                    int rc
-                    withCredentials([usernamePassword(credentialsId: 'hshwang token', usernameVariable: 'PRODGEN_GIT_USER_GITHUB', passwordVariable: 'PRODGEN_GIT_PASSWORD_GITHUB')]) {
-                        if (haveGitlab) {
-                            withCredentials([usernamePassword(credentialsId: 'se-gitlab-push', usernameVariable: 'PRODGEN_GIT_USER_GITLAB', passwordVariable: 'PRODGEN_GIT_PASSWORD_GITLAB')]) {
-                                rc = promoteBody()
+                    int rc = -1
+                    def runPromote = { String credArg ->
+                        withCredentials([usernamePassword(credentialsId: 'hshwang token', usernameVariable: 'PRODGEN_GIT_USER_GITHUB', passwordVariable: 'PRODGEN_GIT_PASSWORD_GITHUB')]) {
+                            if (haveGitlab) {
+                                withCredentials([usernamePassword(credentialsId: 'se-gitlab-push', usernameVariable: 'PRODGEN_GIT_USER_GITLAB', passwordVariable: 'PRODGEN_GIT_PASSWORD_GITLAB')]) {
+                                    rc = promoteBody(credArg)
+                                }
+                            } else {
+                                rc = promoteBody(credArg)
                             }
-                        } else {
-                            rc = promoteBody()
                         }
+                    }
+                    try {
+                        withCredentials([usernamePassword(credentialsId: 'se-jenkins-lint', usernameVariable: 'LINT_USER', passwordVariable: 'LINT_TOKEN'),
+                                         string(credentialsId: 'server-gather-vault-password', variable: 'VAULT_PASSWORD')]) {
+                            runPromote('yes')
+                        }
+                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                        throw fie
+                    } catch (Exception e) {
+                        echo "[Promote] 린터/vault credential 바인딩 실패 — 자격 없이 promote (환경 재확인 불가 → PARTIAL 가능): ${e.getClass().simpleName}"
+                        runPromote('no')
                     }
                     env.CI_STAGE_PROMOTE = (rc == 0) ? (dryRun ? 'DRY_RUN' : 'PASS') : 'FAIL'
                     if (rc != 0) { error "[Promote] prodgen promote rc=${rc} — prodgen_promote.json (refused 사유)" }

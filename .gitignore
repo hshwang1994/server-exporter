@@ -71,7 +71,6 @@ _lb.json
 b[0-9].log
 b[0-9][0-9].log
 
-# vault 복호화 헬퍼 (개인 도구 — 하드코딩 자격 leak 차단)
-# scripts/ai/vault_decrypt_check.py 는 cycle-018 (2026-05-01) 결정으로 .gitignore
-# 사유: line 97 fallback password "__REDACTED__" 평문 — git 추적 시 자격 재leak
-scripts/ai/vault_decrypt_check.py
+# vault 복호화 헬퍼 scripts/ai/vault_decrypt_check.py — 2026-05-01 에는 fallback password 평문 때문에 .gitignore 였다.
+# 2026-08-12 에 기본 비밀번호가 제거됐고(--password-file / SE_VAULT_PASSWORD 만), tests/unit/test_vault_check_no_secret_output.py 가
+# 비밀값 미출력을 강제한다. 2026-10-04 검토 C6: CI Verify 가 정식 바인딩으로 이 도구를 실행해야 하므로 다시 추적한다(production 제외 경로).

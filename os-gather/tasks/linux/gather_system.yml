@@ -97,6 +97,12 @@
             | grep -v "No Module Installed" \
             | awk '{u=tolower($3); if(u=="tb")s+=$2*1048576; else if(u=="gb")s+=$2*1024; else if(u=="mb")s+=$2; else if(u=="kb")s+=$2/1024} END{print int(s)}')
           echo "MEM_PHYS_MB=${phys:-}"
+          # 2026-10-04 (Kernel 6.x DIMM 제보 재현 근거): SLOT 0건의 원인을 원본으로 가릴 수 있게 Handle 종류별 개수와
+          #   메모리 레코드(Type 5/6/16/17)의 **식별 줄만**(Handle · Memory Device · Physical Memory Array · Size · Locator ·
+          #   Form Factor · Type · Maximum Capacity · Number Of Devices · Error Information Handle, 최대 24줄) marker 로 남긴다.
+          #   레코드 본문 전체는 복제하지 않는다. gather_memory.yml 은 SLOT 이 0건일 때만 이 줄들을 errors[].detail 에 싣는다.
+          echo "MEM_HANDLE_TYPES=$(printf '%s\n' "$mem_out" | awk '/^Handle /{ if (match($0, /DMI type [0-9]+/)) { t=substr($0, RSTART+9, RLENGTH-9); c[t]++ } } END { for (t in c) printf "%s:%d;", t, c[t] }')"
+          printf '%s\n' "$mem_out" | grep -E '^Handle |^Memory Device|^Physical Memory Array|^[[:space:]]*(Size|Locator|Form Factor|Type|Maximum Capacity|Number Of Devices|Error Information Handle):' | head -n 24 | tr -d '|\r' | sed 's/^/MEM_RAW|/'
           # DMI Type 17 레코드 파서 (2026-10-03 C1).
           #   - 레코드는 빈 줄 또는 다음 Handle 줄에서 끝난다 (빈 줄 없이 이어진 레코드도 잃지 않는다).
           #   - Size 는 줄 머리가 'Size:' 인 것만 (Volatile/Non-Volatile/Cache/Logical Size 제외).

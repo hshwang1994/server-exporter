@@ -477,6 +477,47 @@ def test_zero_slot_render_survives_missing_new_markers():
     assert [e["message"] for e in ctx["_errors_fragment"]] == [ZERO_SLOT_MESSAGE]
 
 
+def test_zero_slot_details_carry_handle_counts_and_raw_record_head(sbx):
+    """2026-10-04 Kernel 6.x DIMM 제보 재현(RHEL 10.2 · 6.12, dmidecode rc 0 · SLOT 0) 의 원인 분석 근거:
+    SLOT 이 0건이면 두 경고의 detail 에 Handle 종류별 개수(handles=)와 메모리 레코드 식별 줄 머리(raw_head=)가 남는다.
+    정상(SLOT 있음)에서는 marker 는 나와도 errors[] 에 실리지 않는다. 사용자 문장은 바뀌지 않는다."""
+    # ① Type 17 없음 → MEM_PHYS_MB=0 → os_visible 경고에 근거가 붙는다
+    install_dmidecode(sbx, stdout=HEADER + "\n" + TYPE16)
+    res = run_raw(sbx)
+    assert "16:1" in (res.marker("MEM_HANDLE_TYPES") or "")
+    raw = [line for line in res.lines if line.startswith("MEM_RAW|")]
+    assert raw and any("Physical Memory Array" in line for line in raw) and all("|" not in line[len("MEM_RAW|"):] for line in raw)
+    ctx = render(res)
+    err = ctx["_errors_fragment"][0]
+    assert err["message"] == OS_VISIBLE_MESSAGE
+    assert "handles=" in err["detail"] and "16:1" in err["detail"] and "records=0" in err["detail"]
+    assert "raw_head=" in err["detail"] and "Physical Memory Array" in err["detail"] and "Maximum Capacity" in err["detail"]
+    # ② Size 줄은 있는데 레코드 파서가 못 읽음 → zero-slot 경고에도 같은 근거
+    text = HEADER + "\nHandle 0x1100, DMI type 17, 84 bytes\n\tSize: 8 GB\n\tSpeed: 3200 MT/s\n"
+    install_dmidecode(sbx, stdout=text)
+    ctx = render(run_raw(sbx))
+    err = ctx["_errors_fragment"][0]
+    assert err["message"] == ZERO_SLOT_MESSAGE
+    assert "17:1" in err["detail"] and "Size: 8 GB" in err["detail"] and len(err["detail"]) < 1200
+    # ③ 정상 — SLOT 이 있으면 errors 없음(근거 줄은 detail 로 나가지 않는다)
+    install_dmidecode(sbx, stdout=capture_of(rec("0x1100", "8192 MB", speed="3200 MT/s")))
+    res = run_raw(sbx)
+    assert slot_lines(res) and [line for line in res.lines if line.startswith("MEM_RAW|")]
+    assert render(res)["_errors_fragment"] == []
+
+
+def test_raw_head_is_bounded_and_survives_missing_markers():
+    """구버전 collector 출력(새 marker 없음)에서도 렌더가 죽지 않고 handles=unknown · raw_head=none 으로 적는다; 길이는 600자 안."""
+    lines = ["MEM_TOTAL_KB=16127952", "DMIDECODE=present", "DMIDECODE_OK=yes", "MEM_PHYS_MB=8192"]
+    ctx = render(RunResult(0, collector_output(lines), ""))
+    err = ctx["_errors_fragment"][0]
+    assert "handles=unknown" in err["detail"] and "raw_head=none" in err["detail"]
+    many = lines + [f"MEM_RAW|Handle 0x{i:04x}, DMI type 17, 84 bytes" for i in range(60)]
+    ctx = render(RunResult(0, collector_output(many), ""))
+    head = ctx["_errors_fragment"][0]["detail"].split("raw_head=", 1)[1]
+    assert len(head) <= 600
+
+
 def test_new_user_sentence_meets_portal_quality():
     assert_user_sentence(ZERO_SLOT_MESSAGE, "gather_memory zero-slot")
 

@@ -245,7 +245,9 @@ timeout(time: 45, unit: 'MINUTES') {
         //    set_result(aborted_outcome_finalize): ABORTED 빌드의 사후 finalize — seCallback 의 aborted 분기(1회 시도)를 실제로 탄다.
         //    self_abort_after(user_abort): 느린 unstash 중에 Harness 가 자기 빌드에 POST /stop — 사용자 중단과 같은 interruption 이 finalizer 로 들어간다.
         //    expect_interruption 시나리오만 interruption 을 기록 뒤 삼킨다(우리가 만든 것) — 그 외는 진짜 중단이라 그대로 전파한다.
-        boolean expectInterruption = (sc.expect_interruption ?: false) || (sc.outer_timeout_seconds ?: 0) > 0
+        // bounded(Tier 2) 시나리오도 포함: 승인 4 시그니처가 없으면 finalizer 가 설계대로 재전파하므로 Harness 가 받아 기록하고 verdict 가 PARTIAL/승인 으로 둔다
+        //   (CI #10 Harness #105/#106: 전파를 그대로 두면 빌드가 ABORTED 로 끝나 판정 artifact 가 남지 않았다).
+        boolean expectInterruption = (sc.expect_interruption ?: false) || (sc.outer_timeout_seconds ?: 0) > 0 || bounded
         if (sc.set_result) {
             currentBuild.result = sc.set_result.toString()
             echo "[Harness] currentBuild.result=${currentBuild.result} (시나리오 ${scenario})"
