@@ -27,7 +27,7 @@
 | 15 | 10.100.64.156 | cicd-gitlab | VMware VM | VM | **Ubuntu 24.04, kernel 6.8.0-100-generic**(실측) | os(linux) | **수집 성공**(main #15, slot 1) · Portal 200 — 사내 GitLab 호스트 | **1** | 0 | **PASS(main)** |
 | 16 | 10.100.64.135 | — | 미확인 | 미확인 | RHEL 계열(08-12 실측) | os(linux) | main #15: **`TARGET_UNREACHABLE`** | **1(실패)** | 0 | **FAIL(reachable) — 장비 상태 확인 필요** |
 | 17 | 10.100.64.33~.36 | SKHynix-Jenkins-Runner01~04 | VMware VM | VM | **RHEL 9.6, kernel 5.14.0-570.12.1.el9_6**(실측 main #16) | os(linux) | **4대 수집 성공**(slot 1 each, errors 0) · Portal 200 | **4** | 0 | **PASS(main)** |
-| 18 | 10.100.64.37 · .38 | tanzu-esxi01 · tanzu-esxi02 | VMware VM(VMware7,1, BIOS 2021-06) | VM | **RHEL 10.2, kernel 6.12.0-211.7.3.el10_2**(실측 main #11 — Kernel 6.x 확정) | os(linux) | **수집 성공**(status success, Portal 200) **그러나 DIMM 제보 재현**: dmidecode rc 0 · stderr 없음인데 slot 0 → `total_basis=os_visible`, `installed_mb=null`, errors 1(memory). 같은 플랫폼의 RHEL 8/9 는 slot 1 | **1** | 0 | **PASS(수집) · FAIL(DIMM — 원인 분석 §5)** |
+| 18 | 10.100.64.37 · .38 | tanzu-esxi01 · tanzu-esxi02 | VMware VM(VMware7,1, BIOS 2021-06) | VM | **RHEL 10.2, kernel 6.12.0-211.7.3.el10_2**(실측 main #11 — Kernel 6.x 확정) | os(linux) | **수집 성공**(status success, Portal 200) **그러나 DIMM 제보 재현**: dmidecode rc 0 · stderr 없음인데 slot 0 → `total_basis=os_visible`, `installed_mb=null`, errors 1(memory). 같은 플랫폼의 RHEL 8/9 는 slot 1 | **3**(X2 #11 · X3 #20 · X4 #29) | 0 | **PASS** — X4 #29 에서 DIMM slot 1 · 4096 MB · physical_installed(dmidecode 3.6 IEC 단위 수정 뒤), 경고 0 |
 | 19 | 10.100.64.152 · .153 / .154 · .155 | Jenkins master / 구 agent | — | — | — | (인프라 — 대상 아님) | — | — | — | 비적용(인프라) |
 
 ## 2. 명부 (BMC 축 — Redfish)
@@ -55,7 +55,7 @@
 | Redfish | 10 | 0 | 10 | E2E-E dry-run 트리거 2회(승인 전·후) 모두 자동 거부 "Auto-Mode Bypass" |
 | TEST-NET(통제 실패 경로) | 2(192.0.2.10/.11) | main #8(T2) · #9(T6) · #10(T5) · #14(S2 혼합) — X2 | — | 실호스트 수집이 아니다 |
 
-2026-10-04 (뒤) 갱신: 사용자 명시 승인 뒤 main Job 실호스트 트리거가 허용돼 S1(#12) · S5(#11) · S4(#13) · S2(#14) 를 X2 `33eb29b7` 에서 실행했다 — 6 호스트 실수집 성공, Portal 수신 HTTP 200. **전체 완료 조건(§0-4 "누락 0건") 은 아직 미충족**(Linux 8 · ESXi 7 · Redfish 10 미실행, production 0). 접속 실패·환경 미준비 대상을 명부에서 빼지 않았다 — 각 행의 "실행 뒤 조건 기록" 은 실제 실행에서 관측한 `diagnosis` 로만 비적용/실패를 구분한다는 뜻이다.
+2026-10-04 (뒤) 갱신: X3 `515ff827` 에서 명부 배치 main #15(.96 .135 .145 .156 .165) · #16(Runner .33~.36), X4 `41fb14b9`(dmidecode 3.6 IEC 단위 수정) 에서 같은 배치 main #24 · #25 를 다시 실행 — GB 표기 host(.96 slot 8 · .156 slot 1 · Runner slot 1) 결과 불변, .135/.145/.165 는 두 번 모두 `TARGET_UNREACHABLE`. 또 사용자 명시 승인 뒤 main Job 실호스트 트리거가 허용돼 S1(#12) · S5(#11) · S4(#13) · S2(#14) 를 X2 `33eb29b7` 에서 실행했다 — 6 호스트 실수집 성공, Portal 수신 HTTP 200. **전체 완료 조건(§0-4 "누락 0건") 은 아직 미충족**(Linux 8 · ESXi 7 · Redfish 10 미실행, production 0). 접속 실패·환경 미준비 대상을 명부에서 빼지 않았다 — 각 행의 "실행 뒤 조건 기록" 은 실제 실행에서 관측한 `diagnosis` 로만 비적용/실패를 구분한다는 뜻이다.
 
 ## 4. 이번 작업에서 시도한 것 · 거부/부재
 
@@ -72,4 +72,4 @@
 
 - 후보: `10.100.64.37 · .38`(RHEL 10.2 예정 — kernel 6.12 계열로 추정되나 **미확인**). `.96`(Ubuntu 24.04, kernel 6.8)은 Red Hat 계열이 아니라 제보 재현 환경이 아니다. RHEL 9.6/kernel 5.14 자료는 재현 자료가 아니다(검토 §0-2).
 - 필요한 원본: `uname -r` · `/etc/os-release` · `dmidecode -t 17` 원문+rc+stderr · `/sys/firmware/dmi/tables/DMI` 접근 가능 여부 · `/proc/meminfo` · 같은 시점의 `data.memory`. 획득 경로는 SSH 읽기(2026-10-03 "Production Reads" 거부) 또는 main Job S5 실수집(실호스트 트리거 — HOLD/권한). 어느 쪽도 이번에 열리지 않았다.
-- 코드 쪽에서 미리 해 둔 것: `MAIN_CONTRACT["S5"]` 가 envelope 의 `data.system.kernel` major ≥ 6 을 요구해, 5.x 호스트 결과가 S5 증거로 섞이지 못하게 한다. DIMM 정확성은 원본 대조 없이는 말하지 않는다(미재현 ≠ 해결).
+- **판정(2026-10-04)**: 원인은 kernel 이 아니라 RHEL 10 의 **dmidecode 3.6 IEC 단위**(`Size: 4 GiB`) — X3 collector 가 남긴 raw_head(main #20)로 확인, X4 수정 뒤 main #29 에서 `.37/.38` slot 1 · 4096 MB · physical_installed. 다른 kernel 의존 항목(cpu · storage · network · users · hardware)은 두 VM 에서 errors 0. 베어메탈 RHEL 10(HBA/FC/WWPN/multipath/NVMe 노출)은 lab 에 없어 **미검증**으로 남긴다.
