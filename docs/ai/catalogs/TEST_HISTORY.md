@@ -12,7 +12,10 @@
 | 로컬 단위 | `tests/unit/prodgen/test_verdict_evidence.py` 12 PASS(+`test_fail_closed_scenario_binds_to_agreeing_neighbour_builds_only`) · `tests/unit/prodgen` 전체 PASS(X7 수정 뒤) |
 | Script Approval | 요구 3건 승인(사용자) → bounded #187/#188 PARTIAL(네 번째 `getNodeId` pending) |
 | 거부(실제) | S3 forks 측정창(노드 offline/env) `Node Lifecycle Operations` · 노드 상태 조회 `Interfere With Workloads` — 다른 경로로 추구하지 않음 |
-| Runner SSH(사용자 허용 뒤) | Runner01~04 읽기 전용 사실 + 자원 샘플러(/tmp, 종료 후 제거) — 결과 §5-9 |
+| Runner SSH(사용자 허용 뒤) | Runner01~04 읽기 전용 사실 + 자원 샘플러 5쌍(/tmp, 종료 후 제거): legacy 297~327 MB / 15~16 % vs X6·X7 288~332 MB / 17 %, swap 0 — §5-9·§5-10 |
+| main Job X7 `24c9fd34` 재실행 | T2 #68 · T5 #69 · T6 #70 · S5 #71(slot 1·4096) · S1 #72 · S4 #73 · S2 #74 · E2E-A #75 · E2E-A′ #76 · E2E-D #77(6/6) · E2E-E #78 · S3 #79(timeout·kept 6·filled 1) — 12/12 계약 PASS(§5-11). CI #15 는 수집기 검사 결함으로 중단 |
+| main Job X7b `ce50ccf7` 재실행 + CI #16 | T2 #80 · T5 #81 · T6 #82 · S5 #83(slot 1·4096) · S1 #84 · S4 #85 · S2 #86 · E2E-A #87 · E2E-A′ #88(neighbours:#87,#89 바인딩) · E2E-D #89(6/6) · E2E-E #90 · S3 #91(timeout·kept 6·filled 1) — 12/12 계약 PASS / CI #16: SUCCESS — COMPLETE_PASS 20/20(tree 8d0f05c3…) · VAULT_DECRYPT PASS · Harness 16/16 + prodtree 4/4 · bounded 2 PARTIAL/승인 · Promote DRY_RUN e2e ok(problems []) · parent 4ce90a00 — 실 push 는 credential 대기 |
+| 로컬 단위(X7b) | `tests/unit/prodgen` 91 PASS(E2E-A2 Gather 블록 검사 fixture 포함); 실제 #76 콘솔 6/6 검사 True |
 
 ## 2026-10-04 (2차) — 완료 보고 검토 C1~C6 대응 (시나리오 계약 · baseline 복구 · 환경 재실행 · 배포 정책 · interruption Harness · vault 복호화)
 

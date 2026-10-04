@@ -11,7 +11,8 @@
 - **성능(GP-30)**: 같은 host 집합 교대 5회 — 총시간 191.2→151.7 s(−21 %, 대부분 Resolve Location 25.9→2.0 s), Gather 152.4→141.0 s(−7 %), Windows `.120` 97.2→74.5 s(−23 %), `.161` 12.6→14.5 s(+15 %, 재확인). Runner peak 자원은 SSH 샘플러 시리즈(§5-9)로 측정 중.
 - **Script Approval**: 요구 서명 3건 승인됨(사용자 UI) → bounded 재실행 #187/#188 이 네 번째 `ExceededTimeout getNodeId` 에서 멈춤(이제 pending, hash `dfa1e15`) → 승인 뒤 자동 재실행 대기.
 - **승격(GP-21)**: 전제 중 남은 것은 **실 push 경로의 credential** 뿐 — ① Jenkins credential `se-gitlab-push`(CI Promote 실 승격) 또는 ② WSL `~/.se_pw`(세션 CLI promote, 환경 의존 gate WSL 재실행; 이 머신은 Runner 와 환경이 달라 G19 가 vault 암호를 요구). X7 push 뒤 main E2E 12건과 CI 를 X7 에서 다시 돌려 같은 SHA 증거를 만든다.
-- Runner SSH(사용자 허용): Runner01~04 사실 기록(RHEL 9.6 · 4 vCPU · 7.5 GB · ansible-core 2.20.3 · dmidecode 3.6). 자격은 저장소·문서·로그에 적지 않는다.
+- Runner SSH(사용자 허용): Runner01~04 사실 기록(RHEL 9.6 · 4 vCPU · 7.5 GB · ansible-core 2.20.3 · dmidecode 3.6) + 자원 샘플러 5쌍(peak ansible RSS 합 ≈ 290~330 MB · CPU 15~17 % · swap 0, 전후 차이 없음 — §5-9·§5-10). 자격은 저장소·문서·로그에 적지 않는다.
+- **X7 `24c9fd34` → X7b `ce50ccf7`**: X7 재실행 12/12 계약 PASS(§5-11) 뒤 E2E-A2 검사의 거짓 탈락(controller `Running on Jenkins` 을 agent 로 봄)을 Gather stage 블록 기준으로 고쳐 X7b push; CI #15(X7) 는 그 결함 때문에 내가 중단. X7b 재실행: T2 #80 · T5 #81 · T6 #82 · S5 #83(slot 1·4096) · S1 #84 · S4 #85 · S2 #86 · E2E-A #87 · E2E-A′ #88(neighbours:#87,#89 바인딩) · E2E-D #89(6/6) · E2E-E #90 · S3 #91(timeout·kept 6·filled 1) — 12/12 계약 PASS. CI #16(X7b): SUCCESS — COMPLETE_PASS 20/20(tree 8d0f05c3…) · VAULT_DECRYPT PASS · Harness 16/16 + prodtree 4/4 · bounded 2 PARTIAL/승인 · Promote DRY_RUN e2e ok(problems []) · parent 4ce90a00 — 실 push 는 credential 대기. bounded: 4번째 서명 pending(사용자 승인 대기) → 승인 뒤 bounded 2건 재실행 예정(#207/#208 PARTIAL).
 
 ## 일자: 2026-10-04 (2차) — 완료 보고 검토 C1~C6 대응: 시나리오 계약 E2E 증거 · baseline 기록 탐색 · 환경 미확인 재실행 · 배포 원격 정책 · interruption Harness · vault 복호화 검증 — 승격 미수행, 전체 완료 아님
 
