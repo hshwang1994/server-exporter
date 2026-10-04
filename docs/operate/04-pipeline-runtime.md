@@ -70,7 +70,7 @@ Gather(수집과 Layer A 마무리)는 저장소의 `scripts/activate_ansible_ve
 | 전체 | 150 분 (빌드 시작 기준) | 이 안에 Callback 까지 끝낸다 |
 | 마무리 예비 | 990 s = INT→KILL 유예 90 + Layer A 120 + archive/stash 60 + post 마무리 720 | 수집이 끝난 뒤 Callback 종료까지의 실제 경로 합 |
 | Gather stage 합산 상한 | 115 분 | agent 대기 · checkout · Add-on 준비 · 수집 · post 를 모두 포함 |
-| 수집 예산 | `clamp(300 + host_cap × waves, 600, 5400)` 과 위 두 잔여 중 **최소** — `ansible-playbook` 직전에 다시 계산 | host_cap: os/esxi 240 s, redfish 후보 수 × (540 + 65)(+복구 240); forks: os `min(H,50)`(Runner 노드 env `SE_FORKS_CAP_OS` 로 상향 — WSL 실측 슬롯당 ≈36 MB), esxi `min(H,2×vCPU)`, redfish `min(H,4×vCPU)` |
+| 수집 예산 | `clamp(300 + host_cap × waves, 600, 5400)` 과 위 두 잔여 중 **최소** — `ansible-playbook` 직전에 다시 계산 | host_cap: os/esxi 240 s, redfish 후보 수 × (540 + 65)(+복구 240); forks: os `min(H,50)`(Runner 노드 env `SE_FORKS_CAP_OS` 로 상향), esxi `min(H,2×vCPU)`, redfish `min(H,4×vCPU)`; 모두 메모리 보호 `mem_cap = floor((MemAvailable × 40 % − 200) / 80)` 으로 자른다 — 2026-10-04 Runner 실측(perf-observe): slot 당 PSS 평균 36 MB · 최악 69 MB(Windows worker) → `per_fork_mb` 80, 메인 python 최대 86 MB → `fixed_mb` 200, 같은 Runner 겹침은 미관측(LeastLoad 가 분산) → `node_share` 40 % 유지 |
 | 최소 시작 | 120 s | 그보다 적게 남으면 수집을 시작하지 않고(`not_started_budget`) 마무리로 넘어간다 |
 | 검증용 강제값 | `gatherBudgetForceSec` | 공식 대신 쓰되 전체·stage 잔여는 넘지 못한다 |
 
@@ -78,6 +78,31 @@ Gather(수집과 Layer A 마무리)는 저장소의 `scripts/activate_ansible_ve
 `tests/unit/test_gather_budget.py` 가 고정한다. host 안에서는 Ansible task `timeout`(Linux 120 s · Windows 180 s · ESXi 180 s ·
 Redfish detect 120/collect 600/account 240 s, 모듈 `deadline` 은 그보다 짧게)이 hang 한 태스크 하나를 끊는다 — 이것은 개별 hang 격리이지
 host 상한이 아니다.
+
+### 실제 상한(선점) 과 Tier 2 (2026-10-04)
+
+위 표의 "Layer A 120 + archive/stash 60" 과 finalizer 안의 "회수 30 · 조립 60" 은 **예산 배분(예약)** 이다. 실제로 그 구간을 **끊는** 수단은 모드에 따라 다르다.
+Declarative 소스(pipeline-model-definition `ModelInterpreter`)로 확인: stage `options.timeout` 은 agent 할당과 stage `post` 를 **모두** 감싸고, pipeline `post` 는 전역 `options.timeout` 안에서 돈다.
+
+| 구간 | 기본 모드(`SE_FINALIZER_BOUNDED` 미설정/false — 사내 main · production · 고객사 main-only 공통) | Tier 2(`SE_FINALIZER_BOUNDED=true` + 승인 4 서명) |
+|---|---|---|
+| Validate · Resolve Location | stage timeout 2 min 각 | 같다 |
+| Gather 전체(agent 대기 · checkout · 준비 · Add-on · 수집 · 유예 · post 보존) | stage timeout 115 min — post 포함 | 같다 |
+| 수집(ansible) | `timeout --signal=INT --kill-after=90 <budget>`; budget 은 stage 안에 유예 90 + post 180 을 **예약**한 값 | 같다 |
+| Layer A | shell `timeout 120`(step 자체 상한 없음) | 같다 |
+| 보존 archive · stash | **상한 없음** — stage 합산 안(예약 60) | 각 30 s(`PRESERVE_STEP`): 넘긴 수단만 실패로 두고 다음 수단으로(archive→stash · stash→unarchive) |
+| 마무리 전체 | `timeout(720){ node('built-in') }` 합산(node 대기 포함), 전역 150 min 안 | 같다 |
+| 회수 unstash · unarchive | 상한 없음(예약 30 + 30) | 각 30 s(`RECOVER`) |
+| 조립 — Layer A 결과 읽기·검문 → Layer B 적재(readTrusted ×3 · load · 정본 · 조립) → raw 검문 | 상한 없음(예약 60) | 60 s(`ASSEMBLE`) 하나 — 초과(자기 timeout 으로 식별된 경우만)면 최소 경로 20 s(`ASSEMBLE_MIN`): 이미 읽은 OUTPUT 줄만 검문해 전송(`layerA=timeout` · `layerB=unavailable` · `damage: assemble_timeout`); 그래도 못 끝내면 보낼 줄 없이 `unrecovered` 전부 |
+| body 결합 · 기록 | 상한 없음(입력은 위에서 확정된 줄 집합뿐) | 같다 |
+| Callback | 시도별 `min(120, 남은 시간 − 10)`, ≤ 3회(ABORTED 1회 · 60), 대기 10/20 s, 남은 시간 < 20 이면 미시도 기록 | 같다 |
+| 검산 | 720 = node 대기 120 + 회수 60 + 조립 60 + 최소 조립 20 + Callback 390 + 여유 70 · 마무리 예비 990 = 90 + 120 + 60 + 720 | |
+
+- Tier 2 의 식별 규칙: interruption 의 `ExceededTimeout.nodeId` 가 **자기 timeout step** 의 id 와 같을 때만 "상한 초과" 로 보고 다음 단계로 간다. 외곽 timeout · 사용자 취소 · 식별 불가(승인 없음 포함)는 전부 재전파하며 ABORTED 를 SUCCESS 로 바꾸지 않는다. 원인 클래스나 경과 시간으로 판정하지 않는다.
+- Tier 2 를 켜는 조건(둘 다): ① Jenkins 전역/노드/Job 환경변수 `SE_FINALIZER_BOUNDED=true` ② In-process Script Approval 에 `FlowInterruptedException getCauses` · `TimeoutStepExecution$ExceededTimeout getNodeId` · `FlowNode getEnclosingBlocks` · `FlowNode getId` 승인. 승인 없이 켜면 상한을 걸고도 식별을 못 해 재전파만 하므로(느리지만 끝날 회수까지 끊긴다) **켜지 않는다**. 기본 false 가 운영 기본이고 고객사 main-only 설치의 요구 조건이 아니다.
+- 보장 범위(기본 모드): 느린 archive/stash 나 느린 회수·조립을 **그 단계에서 선점하지 않는다.** 보장은 ① 예산이 수집 뒤 stage 안에 270 s(유예 90 + post 180)를 남기고, ② 마무리는 720 s 합산 · 전역 150 min 으로 끝나며, ③ 그 안에서 Callback 은 남은 시간을 보고 시도한다는 것이다. 느린 보존·회수가 그 합산 제한까지 끌면 Callback 을 못 보낼 수 있다 — 그것이 기본 모드에 남는 보장 축소이며, Tier 2 는 그 구간을 단계별로 끊어 다음 수단과 Callback 시간을 확보한다. Harness(`tests/jenkins/harness/`)의 `*_slow` 시나리오가 기본 모드의 완주를, `inner_*_timeout` 시나리오가 Tier 2 의 단계 전환을 실행으로 확인한다.
+- `[Trusted] <경로> len=<글자 수> jhash=<Java String.hashCode>` 콘솔 줄(2026-10-04): 빌드가 `readTrusted` 로 실제 읽은 정본(Location registry · `se_finalize.groovy` · failure reason · supported sections)의 식별값이다. 증거 수집기(`scripts/ai/prodgen/evidence.py`)가 bound revision 의 같은 파일과 대조한다(혼합 revision 탐지). sandbox 가 digest API 를 허용하지 않아 32-bit 해시다 — 무결성 증명이 아니라 내용 식별이다.
+- `[Callback] [OK] HTTP 2xx … response=<앞 200자>`: 2xx 는 HTTP 응답 증거이지 Portal 의 저장·반영 증거가 아니다. 응답 본문 앞부분을 남겨 수신 측 응답의 형태(JSON 확인 / HTML 예외 페이지)를 구분한다.
 
 ## 2. Jenkins 파라미터
 
@@ -138,7 +163,9 @@ Jenkins 관리 → System → Global properties → Environment variables. 노�
 `ADDON_REPO_URL` 이 없으면 Add-on 을 실행하지 않는다. 있으면 Gather 가 빌드마다 다음을 한다.
 
 1. Add-on 저장소의 `ADDON_REPO_REF`(기본 `main`)를 `${WORKSPACE}/addon` 에 받는다 (두 번까지 시도). 콘솔
-   `[addon] <URL>@<ref> <커밋>`.
+   `[addon] <URL>@<ref> <커밋>`. 실측(2026-10-04 production #76/#79/#80) 받기 + 검사 ≈ **2~3 s/빌드**(`[Budget] est … prep=2s` → `exec … prep=4~5s`);
+   ESXi · Redfish 빌드도 "실행할 기능 없음" 을 알기 위해 이 시간을 쓴다(지원 여부는 Add-on 저장소 안의 layout 이라 받기 전에는 알 수 없다 — 비용이 작아 그대로 둔다).
+   최악치: git 명령마다 180 s 제한 × (1차 fetch + 2차 fetch) × retry 2 ≈ 720 s+ — 이것은 `include_role` 의 태스크별 300 s 와 **다른 축**이며, 준비가 길어진 만큼 `[Budget] exec` 재계산이 수집 예산을 줄인다(마무리 예비는 줄지 않는다).
 2. 받은 파일을 검사한다 — 설정 파일(`config/`)의 형식, 태스크 YAML 문법 등. 설정 작성 오류는 여기서 한 번에 막혀
    서버마다 반복되지 않는다. 콘솔 `[addon] 검사 통과: linux, windows` 또는 `[addon] 검사 실패: <파일>: <이유>`.
 3. 검사를 통과하면 그 빌드의 수집에 Add-on 을 넣는다. ESXi · Redfish 빌드는 Add-on 이 할 일이 없어 켜지 않는다

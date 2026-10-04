@@ -20,10 +20,10 @@
 | 10 | 10.100.64.161 | gmidbqa01 | VMware VM | VM | RHEL 8.10, kernel 4.18.0-553.el8_10 | os(linux) | #12 #14 · X6 #49 #51 | **PASS(main)** — DIMM slot 1 · 8 GB |
 | 11 | 10.100.64.162 | gmidbqa02 | VMware VM | VM | RHEL 9.2, kernel 5.14.0-284.11.1.el9_2 | os(linux) | #12 #14 · X6 #49 #51 | **PASS(main)** |
 | 12 | 10.100.64.163 | gmidbqa03cv | VMware VM | VM | RHEL 9.6, kernel 5.14.0-570.12.1.el9_6 | os(linux) | #12 #14 · X6 #49 #51 | **PASS(main)** |
-| 13 | 10.100.64.165 | — | 미확인 | VM(저장소 기록) | RHEL 9.6(저장소 기록) | os(linux) | #15 · #24 | **FAIL(reachable)** — `TARGET_UNREACHABLE`(TCP 5986/5985/22 · ICMP 모두 무응답) 2회. 2026-10-04 워크스테이션 읽기 전용 probe 도 ICMP·TCP(22/5985/5986/443/3389/80) 전부 무응답. **자산 상태(전원/존재) 사용자 확인 요청** — 임의 제외하지 않는다 |
-| 14 | 10.100.64.145 | — | 미확인 | VM(저장소 기록) | RHEL 9.6(저장소 기록) | os(linux) | #15 · #24 | **FAIL(reachable)** — 위와 같은 관측(Job 2회 + 워크스테이션 probe). 자산 상태 사용자 확인 요청 |
+| 13 | 10.100.64.165 | — | 미확인 | VM(저장소 기록) | RHEL 9.6(저장소 기록) | os(linux) | #15 · #24 · production #77 | **FAIL(reachable)** — `TARGET_UNREACHABLE`(TCP 5986/5985/22 · ICMP 모두 무응답) 3회. 워크스테이션 probe 도 전부 무응답. **Runner 망 net-probe #1(2026-10-04, 같은 /24 L2)**: ARP neighbour `INCOMPLETE` · ICMP 무응답 · 22 connect 실패 · tracepath `!H` → **그 주소에 켜진 호스트가 없다**(전원 꺼짐 · 주소 변경 · 폐기 중 하나). 자산 결정은 사용자 — 임의 제외하지 않는다 |
+| 14 | 10.100.64.145 | — | 미확인 | VM(저장소 기록) | RHEL 9.6(저장소 기록) | os(linux) | #15 · #24 · production #77 | **FAIL(reachable)** — 위와 같은 관측 + net-probe #1 ARP `INCOMPLETE`(L2 에 없음). 자산 결정은 사용자 |
 | 15 | 10.100.64.156 | cicd-gitlab | VMware VM | VM | Ubuntu 24.04, kernel 6.8.0-100-generic | os(linux) | #15 · #24 | **PASS(main)** — slot 1 · 사내 GitLab 호스트 |
-| 16 | 10.100.64.135 | — | 미확인 | 미확인 | RHEL 계열(08-12 실측) | os(linux) | #15 · #24 | **FAIL(reachable)** — 위와 같은 관측. 자산 상태 사용자 확인 요청 |
+| 16 | 10.100.64.135 | — | 미확인 | 미확인 | RHEL 계열(08-12 실측) | os(linux) | #15 · #24 · production #77 | **FAIL(reachable)** — 위와 같은 관측 + net-probe #1 ARP `INCOMPLETE`(L2 에 없음). 자산 결정은 사용자 |
 | 17 | 10.100.64.33 · .34 · .35 · .36 | SKHynix-Jenkins-Runner01~04 | VMware VM | VM | RHEL 9.6, kernel 5.14.0-570.12.1.el9_6 | os(linux) | #16 · #25 | **PASS(main)** — 4대 slot 1 each · errors 0 |
 | 18 | 10.100.64.37 · .38 | tanzu-esxi01 · tanzu-esxi02 | VMware VM(VMware7,1) | VM | **RHEL 10.2, kernel 6.12.0-211.7.3.el10_2** | os(linux) | #11 · #20 · #29 · X6 #48 | **PASS(main)** — DIMM 제보 재현(#11 slot 0) → 원인 dmidecode 3.6 IEC 단위(#20 raw_head `Size: 4 GiB`) → 수정 뒤 #29 · #48 slot 1 · 4096 MB · physical_installed · 경고 0 |
 | 19 | 10.100.64.152 · .153 / .154 · .155 | Jenkins master / 구 agent | — | — | — | (인프라 — 대상 아님) | — | 비적용(인프라) |
@@ -32,15 +32,15 @@
 
 | # | BMC IP | 장비 | 벤더·BMC | main 실행 | 결과 · 상태 |
 |---|---|---|---|---|---|
-| B1 | 10.100.15.1 | esxi01 | Cisco CIMC | #53 | **FAIL(protocol)** — reachable · 443 open · `PROTOCOL_CHECK_FAILED`(ServiceRoot 응답 비정상 — 2026-08-13 관측과 일치). 장비의 Redfish 서비스 설정 확인은 사용자 몫(BMC 설정 변경 금지) |
+| B1 | 10.100.15.1 | esxi01 | Cisco CIMC(UCSC-C220-M4S, 시리얼 FCH21167GH0) | #53 · production #80 | **FAIL(protocol) = 환경(BMC 설정)** — reachable · 443 open · `PROTOCOL_CHECK_FAILED`. 2026-10-04 무인증 `GET /redfish/v1/`(워크스테이션 + Runner net-probe #1 동일): **HTTP 503 `CiscoUCS.1.0.ServiceUnavailable` "Redfish Service is disabled. Resolution: Use CIMC WebUI/CLI/XMLAPI to enable REDFISH Service."** — 수집기 결함이 아니라 CIMC 에서 Redfish 가 꺼져 있다. 켜는 것은 BMC 설정 변경(G-5 금지) → 사용자 결정 |
 | B2 | 10.100.15.2 | esxi02 | Cisco CIMC | #41 · #53 · #55(S3 의 timeout 대상 — 의도) | **PASS(main)** — adapter `redfish_cisco_cimc` · sections 9 success · 341~353 s(가장 느린 BMC) |
-| B3 | 10.100.15.3 | esxi03 | Cisco CIMC | #53 | **FAIL(reachable)** — `TARGET_UNREACHABLE`(2026-08-13 전 포트 무응답과 일치). 자산 상태 사용자 확인 요청 |
+| B3 | 10.100.15.3 | esxi03 | Cisco CIMC | #53 · production #80 | **FAIL(reachable)** — `TARGET_UNREACHABLE`(2026-08-13 과 일치). net-probe #1(Runner 망: route via 10.100.64.254, ICMP·443 무응답) + 워크스테이션 무응답 — 같은 대역의 `.1` `.2` 는 응답하므로 경로가 아니라 **그 BMC 자체**(전원 · 주소) 문제다. 자산 결정은 사용자 |
 | B4 | 10.100.15.27 | r760-1 | Dell iDRAC9 | #41 · #53 · #55 | **PASS(main)** — adapter `redfish_dell_idrac9` · 9 success · 34~41 s |
 | B5 | 10.100.15.28 | r760-2 | Dell iDRAC9 | #53 · #55 | **PASS(main)** |
 | B6 | 10.100.15.31 | r760-3 | Dell iDRAC9 | #53 · #55 | **PASS(main)** |
 | B7 | 10.100.15.33 | r760-5 | Dell iDRAC9 | #53 · #55 | **PASS(main)** |
 | B8 | 10.100.15.34 | r760-6 | Dell iDRAC9 | #53 · #55 | **PASS(main)** |
-| B9 | 10.50.11.231 | ProLiant DL380 Gen11 | HPE iLO6 | #53 | **FAIL(reachable)** — `TARGET_UNREACHABLE`(2026-10-03 443 closed 와 일치; 08-13 은 open). 자산 상태 사용자 확인 요청 |
+| B9 | 10.50.11.231 | ProLiant DL380 Gen11(iLO CN ILOSGH504HNZK) | HPE iLO6 | #53 · production #80 | **FAIL(reachable) = 경로** — Runner 망(net-probe #1: ICMP·443 무응답, tracepath 가 `10.12.2.1 → 10.12.1.2` 뒤에서 끊김)에서는 `TARGET_UNREACHABLE` 이나, **워크스테이션(10.11.11.x)에서는 ICMP 응답 · 443 open · 무인증 ServiceRoot HTTP 200(ServiceRoot v1_14_0)** — 장비는 살아 있고 Redfish 가 동작한다. 같은 대역 `.232`(Lenovo)는 Runner 에서 수집 성공이므로 **`.231` 만 Runner 망에서 막힌다**(iLO 접근 제한 또는 중간 ACL). 네트워크/iLO 담당 확인 — 설정 변경은 하지 않았다 |
 | B10 | 10.50.11.232 | XCC-7Z73-J30AF7LC | Lenovo XCC | #53 · #55 | **PASS(main)** — adapter `redfish_lenovo_xcc` · 9 success · 61~63 s |
 
 Redfish 공통 증거: 인증은 전역 표준 계정(`details.auth = {attempted_count: 1, used_label: common_infraops, used_role: primary, fallback_used: false}`, `credential_scope = common/redfish/standard`), `details.account_service = {}` — 복구/재조정 경로에 진입하지 않았으므로 **Account Write 0**(계약 "Primary 인증 성공 → Account Write 0 → Primary Gathering"). dry-run 플래그는 빌드 파라미터 `redfishAccountDryrun=True` 로 전달됐고 `Jenkinsfile_portal` 이 `-e _rf_account_service_dryrun=true` 로 넘긴다 — 재조정이 필요했다면 `account_service.dryrun` 에 기록된다(이번엔 미진입).
@@ -49,13 +49,13 @@ Redfish 공통 증거: 인증은 전역 표준 계정(`details.auth = {attempted
 
 | 채널 | 명부 대상 수 | 실행 수 | 성공 | 미해결(실행했으나 실패) | 비고 |
 |---|---|---|---|---|---|
-| OS Linux | 16(.33 .34 .35 .36 .37 .38 .95 .96 .135 .145 .156 .161 .162 .163 .165 + — `.95` 는 ESXi 축에서 OS 축으로 이동) | **16** | **13** | **3**(.135 .145 .165 — `TARGET_UNREACHABLE`, 자산 상태 확인 요청) | Kernel 6.x(.37 .38) DIMM 해결 재확인(#48) |
+| OS Linux | **15**(.33 .34 .35 .36 .37 .38 .95 .96 .135 .145 .156 .161 .162 .163 .165 — `.95` 는 ESXi 축에서 OS 축으로 이동) | **15** | **12** | **3**(.135 .145 .165 — `TARGET_UNREACHABLE`; L2 에 호스트 없음, 자산 결정 사용자) | Kernel 6.x(.37 .38) DIMM 해결 재확인(#48 · production #76). 종전 "16/13" 은 집계 오류(정정 2026-10-04 4차) |
 | OS Windows | 1(.120) | **1** | **1** | 0 | S4 PASS |
 | ESXi | 7(.1 .2 .3 .91 .92 .93 .95) | **7** | **6** | 0 — `.95` 는 **비적용**(ESXi 아님, OS 축에서 성공) | E2E-D #44, `esxi` 라벨 노드 준비 뒤 실행 |
 | Redfish | 10 | **10** | **7** | **3**(B1 protocol · B3 reachable · B9 reachable) | E2E-E #41/#53, S3 #55 — 모두 dry-run |
 | TEST-NET(통제 실패 경로) | 2(192.0.2.10 .11) | T2 #45 · T6 #52 · T5 #46 · S2 #51 · E2E-A #42 | — | — | 실호스트 수집이 아니다 |
 
-- **대상 수 = 실행 수**: 명부의 모든 호스트/BMC 를 실제로 실행했다(누락 0). 성공 27 / 미해결 6(도달 실패 5 + Redfish 프로토콜 1) / 비적용 1(.95 ESXi 축).
+- **대상 수 = 실행 수**: 명부의 모든 호스트/BMC 를 실제로 실행했다(누락 0). 적용 채널 기준 **32건 실행 = Linux 15 + Windows 1 + ESXi 6 + Redfish 10 — 성공 26 / 미해결 6**(도달 실패 5 + Redfish 프로토콜 1) / 비적용 1(.95 ESXi 축). 물리 장비 수와 채널별 대상 수는 다르다(예: R760 한 대가 OS 또는 ESXi 1건 + Redfish 1건).
 - 미해결 6건은 **진단의 증거이지 정상 수집 완료가 아니다.** Job 과 워크스테이션 양쪽에서 응답이 없거나(5), Redfish 서비스 응답이 비정상(1)이다. 장비 상태·Redfish 설정 확인과 테스트 범위 포함 여부는 **사용자 결정** — 이 세션은 설정 변경·재부팅을 하지 않고 명부에서 빼지도 않는다.
 - production Job 실행(P1 `1f725071`, 2026-10-04 19:15~19:27): Linux 15(#76 8 success · #77 4 success + `.135 .145 .165` unreachable) · Windows 1(#78) · ESXi 6(#79 전부 success) · Redfish 10(#80: 7 success · `.1` protocol · `.3`·`.231` unreachable) · S3-Redfish(#81) — **main 과 동일**(`2026-10-04-review-c1-c6.md` §5-13). 성능 기준선 빌드(#59~#70, legacy)는 별도.
 
@@ -84,7 +84,8 @@ Redfish 공통 증거: 인증은 전역 표준 계정(`details.auth = {attempted
 
 | 대상 | 관측 | 요청 |
 |---|---|---|
-| 10.100.64.135 · .145 · .165 | Job 2회 + 워크스테이션 probe 모두 ICMP·관리 TCP 무응답 | 전원/존재/네트워크 경로 확인. 폐기·범위 제외 여부 결정 |
-| BMC 10.100.15.3(Cisco) · 10.50.11.231(HPE iLO6) | `TARGET_UNREACHABLE`(443 무응답) | 전원/네트워크 확인 |
-| BMC 10.100.15.1(Cisco CIMC) | 443 open 이나 Redfish ServiceRoot 비정상 | CIMC 의 Redfish 서비스 활성 여부 확인(설정 변경은 사용자 몫) |
-| Runner01/02/04 라벨 | `cj`·`esxi` 등 추가돼 있음(이 세션 변경 아님) | 변경 주체·의도 확인; `cj` 는 임시 라벨이라 제거 대상 |
+| 10.100.64.135 · .145 · .165 | Job 3회 + 워크스테이션 probe 무응답 + **Runner 망 ARP `INCOMPLETE`(같은 L2 에 호스트 없음)** | 전원/주소 변경/폐기 중 무엇인지 확인. 범위 제외 여부 결정(이 세션은 명부에서 빼지 않았다) |
+| BMC 10.100.15.3(Cisco) | Runner · 워크스테이션 양쪽 무응답(같은 대역 `.1` `.2` 는 응답) | 전원/주소 확인 |
+| HPE iLO 10.50.11.231 | **Runner 망에서만** 무응답(워크스테이션에서는 ServiceRoot 200) · 같은 대역 `.232` 는 Runner 에서 성공 | iLO 의 IP 접근 제한 또는 10.12.x 경로의 ACL 확인(네트워크/iLO 담당) |
+| BMC 10.100.15.1(Cisco CIMC) | ServiceRoot **HTTP 503 "Redfish Service is disabled"**(CIMC 메시지 원문) | Redfish 서비스를 켤지 결정(CIMC WebUI/CLI/XMLAPI — BMC 설정 변경은 사용자 몫). 켜지 않으면 이 BMC 는 Redfish 비적용으로 분류하는 것이 맞다 |
+| Runner01/02/04 라벨 | 4차 관측: Runner01~04 모두 `esxi git cj linux redfish windows`(이 세션은 Runner03 만 변경) | 변경 주체·의도 확인; `cj` 는 임시 라벨이라 제거 대상 — 지시 뒤 Runner03 은 보관한 변경 전 설정으로 복원 |

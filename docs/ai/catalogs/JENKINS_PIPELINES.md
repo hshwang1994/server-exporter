@@ -9,7 +9,7 @@
 | Stage | 노드 | 하는 일 | FAIL 게이트 |
 |---|---|---|---|
 | Validate | 없음 (agent-less, 2026-10-03) | target_type / inventory_json(배열·객체 원소·IP 키) / callbackUrl / deploymentEnvironmentId 검증 → 접수 manifest `env.SE_MANIFEST_JSON` | YES |
-| Resolve Location | 없음 (agent-less, 2026-10-03) | `readYaml text: readTrusted('common/vars/locations.yml')` → `SE_LOCATION` / `SE_AGENT_LABEL`. 미등록 `loc`·온라인 노드 없음 즉시 실패 | YES |
+| Resolve Location | 없음 (agent-less, 2026-10-03) | `readYaml text: seTrusted('common/vars/locations.yml')`(readTrusted + `[Trusted] … len · jhash` 식별 echo, 2026-10-04) → `SE_LOCATION` / `SE_AGENT_LABEL`. 미등록 `loc` 즉시 실패 · 온라인 노드 없음은 `outcome=no_agent` | YES |
 | Gather | `SE_AGENT_LABEL` (agent), stage 합산 상한 115 min | `gather_manifest.json` 기록 → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 체크아웃 · 검사 — 아래 절) → venv 활성화 → `scripts/gather_budget.sh` 로 예산 **재계산**(ansible 직전) → `timeout --signal=INT --kill-after=90 <예산> ansible-playbook … -f <forks> --vault-password-file=<mktemp> -e se_location=<loc>` (Add-on 이 켜진 빌드만 `withEnv(ADDON_DIR)`; `redfishAccountDryrun` 이 켜진 빌드만 `-e _rf_account_service_dryrun=true`; `gatherBudgetForceSec` 는 공식 대체) → `gather_rc.txt` + outcome → post{always} Layer A(`scripts/finalize_gather_output.py`) → `archiveArtifacts`(output · manifest · rc · progress · checkpoint · final · report · auth_evidence/**) → `stash` → manifest 가 이 빌드 것일 때만 `deleteDir` | Add-on 을 못 받으면 UNSTABLE + Add-on 없이 수집; ansible rc 는 outcome 으로만 기록(stage 를 끊지 않음) |
 | (pipeline post always) 마무리 | `built-in` (controller), `timeout(720 s){ node('built-in') }` | unstash → unarchive → `gather_final.jsonl` 우선 / Groovy 최소 보충(`readTrusted` → `load 'scripts/jenkins/se_finalize.groovy'`; 적재 실패면 raw OUTPUT 줄만 + `layerB=unavailable`) → 접수 = 결과 단언 → `httpRequest` POST(남은 예산 안 ≤3회) → `callback_body.json` · `finalize_summary.json` archive | NO (UNSTABLE: 전송 실패 · 합성 보충 · outcome ≠ completed · 라이브러리 부재) |
 
@@ -49,12 +49,12 @@ ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바
 | Gate | `bash scripts/ai/ci_gate.sh` | exit 1 FAILURE(후속 stage 계속) · exit 2 PARTIAL → UNSTABLE |
 | Finalize Corpus | Python `tests/scripts/finalize_corpus_check.py` + Groovy `load 'scripts/jenkins/se_finalize.groovy'` 14 case 비교(`seCorpusCompare`) | FAILURE |
 | Budget Self-test | `pytest tests/unit/test_gather_budget.py` + `scripts/gather_budget.sh` os/esxi/redfish `start:true` | FAILURE |
-| Harness Driver | `build(job: 'clovirone-cicd/clovirone-server-gather-harness', wait: true, propagate: false)` 를 `HARNESS_SCENARIOS`(16) 순서대로(main checkout 의 함수) → `harness_main_results.json`. 기대 결과는 `scenarios.json` 의 `jenkins_result`(user_abort = ABORTED). 이어서 `HARNESS_BOUNDED_SCENARIOS`(Tier 2, BOUNDED=true) → `harness_bounded_results.json` · `HARNESS_BOUNDED`(승인 전 PARTIAL, 승격 조건 아님) | 시나리오 ≠ 기대 결과 → UNSTABLE |
+| Harness Driver | `build(job: 'clovirone-cicd/clovirone-server-gather-harness', wait: true, propagate: false)` 를 `HARNESS_SCENARIOS`(18 — 2026-10-04 `archive_slow` · `layer_a_read_slow` 추가) 순서대로(main checkout 의 함수) → `harness_main_results.json`. 기대 결과는 `scenarios.json` 의 `jenkins_result`(user_abort = ABORTED). 이어서 `HARNESS_BOUNDED_SCENARIOS`(Tier 2, BOUNDED=true, 5) → `harness_bounded_results.json` · `HARNESS_BOUNDED`(승인 전 PARTIAL, 승격 조건 아님) | 시나리오 ≠ 기대 결과 → UNSTABLE |
 | Prodgen Build | `prodgen build --sha MAIN_SHA` → `prodtree/` · `prodtree.tar.gz` · `prodtree_portal.sha256`(이 빌드의 artifact) | class B > 0 → FAILURE |
-| Harness (prodtree) | Build PASS 뒤에만. Harness Job 을 `FUNCTIONS_SRC=artifact` + `ARTIFACT_BASE_URL=${BUILD_URL}artifact` + `EXPECTED_SHA256` 로 — 생성 tree 의 같은 함수를 같은 Harness 로(`HARNESS_TREE_SCENARIOS`) | UNSTABLE |
+| Harness (prodtree) | Build PASS 뒤에만. Harness Job 을 `FUNCTIONS_SRC=artifact` + `ARTIFACT_BASE_URL=${BUILD_URL}artifact` + `EXPECTED_SHA256` 로 — 생성 tree 의 같은 함수를 같은 Harness 로(`HARNESS_TREE_SCENARIOS`, 10 — 2026-10-04 최종 지시 §6-1 로 보존 실패 경로 6종 추가) | UNSTABLE |
 | Prodgen Drift | `git fetch origin +refs/heads/production:refs/remotes/origin/production` → `drift-check --production refs/remotes/origin/production [--bootstrap-baseline B]` | 승격 가능 상태 아님 → UNSTABLE |
 | Prodgen Verify | Build PASS 뒤에만. `verify --tree prodtree --remote origin --netrc <mktemp 0600> --vault-password-file <mktemp 0600> --report-out prodgen_verify_report.json --source-build-url BUILD_URL` — credential 이 없으면 그 gate 없이 실행(PARTIAL). exit 0/2/1 | 2 → UNSTABLE · 1 → FAILURE |
-| Evidence Aggregate | 이 빌드의 Harness 결과 + `E2E_MAIN_ENTRIES`(main Job 시나리오 빌드) → `prodgen e2e-evidence`(시나리오 계약으로 판정 — 파라미터·artifact·콘솔 표식 대조) → `evidence-aggregate`(입력 digest 검증) → `prodgen_verify_report.aggregated.json` | 미완료 → UNSTABLE |
+| Evidence Aggregate | 이 빌드의 Harness 결과 + `E2E_MAIN_ENTRIES`(main Job 시나리오 빌드) [+ `E2E_TIP_OBSERVATIONS_JSON` → `--tip-observations`: fail-closed 빌드의 직접 revision 바인딩] → `prodgen e2e-evidence`(시나리오 계약으로 판정 — 파라미터·artifact·콘솔 표식 · `[Trusted]` 내용 대조; 이웃 빌드 추정은 `binding=estimated` 로 기록될 뿐 승격 증거로 인정되지 않는다) → `evidence-aggregate`(입력 digest 검증) → `prodgen_verify_report.aggregated.json` | 미완료 → UNSTABLE |
 | Prodgen Promote | `PROMOTE=true` 일 때만. 필수 stage 전부 PASS · 집계 보고서 존재 · SHA 4값 일치(`PROMOTE_SHA`·`MAIN_SHA`·HEAD·보고서 binding) · `verdict == COMPLETE_PASS` · GitLab credential 있을 때만 양 원격 실 승격(없으면 dry-run) → `prodgen promote` | 조건 미충족 → `error`, 원격 변경 0 |
 
 - 파라미터: `PROMOTE`(false) · `PROMOTE_SHA` · `PROMOTE_DRY_RUN`(true) · `BOOTSTRAP_BASELINE`(빈 값) · `HARNESS_SCENARIOS`(12) · `HARNESS_TREE_SCENARIOS`(4) · `E2E_MAIN_ENTRIES`(`SCENARIO=job/path:build[:EXPECTED]`).
@@ -65,6 +65,15 @@ ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바
 ## Harness Job `clovirone-cicd/clovirone-server-gather-harness` (2026-10-04, main 전용)
 
 Script Path `tests/jenkins/harness/Jenkinsfile_harness`(scripted), Branch `*/main`. 시나리오당 빌드 1개(`SCENARIO`), `FUNCTIONS_SRC=checkout|artifact`. `Jenkinsfile_portal` 의 최상위 함수를 `tests/jenkins/harness/build_functions.py` 가 잘라 wrapper(`archiveArtifacts`·`stash`·`unstash`·`readTrusted`·`sh`·`httpRequest`…)를 덧붙인 임시 스크립트를 `load` 하고, `callback_sink.py`(POST sink — **controller(built-in) 의 127.0.0.1**, finalizer 의 `httpRequest` 가 `node('built-in')` 에서 나가므로; 파일은 형제 workspace `…@sink`) 를 향해 `sePreserveGatherOutput()` → `seFinalizeAndCallback()` 을 실제 CPS·sandbox 에서 실행한다. 판정 `harness_verdict.py` → `harness_result.json`(PASS/FAIL/PARTIAL). 운영 코드에는 장애 주입 분기가 없다. 시나리오 정의 `tests/jenkins/harness/scenarios.json`.
+
+## 진단 Job (2026-10-04 최종 실행 지시, main 전용 · 읽기 전용)
+
+| Job | Script Path | 하는 일 |
+|---|---|---|
+| `clovirone-cicd/clovirone-server-gather-perf-observe` | `tests/jenkins/harness/Jenkinsfile_perf_observe` | `NODE_NAME` 노드에서 `perf_observe.py` 가 `/proc` 만 읽어 같은 Runner 의 Gather 빌드를 `SE_BUILD_ID` 로 귀속해 PSS(smaps_rollup) · RSS · 활성 worker 수 · 메인 프로세스 PSS · MemAvailable · swap · CPU 를 `INTERVAL_SEC` 마다 JSONL 로; `IDLE_EXIT_SEC` 뒤 자동 종료. 집계 `perf_observe_report.py` — forks 메모리 상수(`per_fork_mb` · `fixed_mb` · `node_share`) 의 실측 근거 |
+| `clovirone-cicd/clovirone-server-gather-net-probe` | `tests/jenkins/harness/Jenkinsfile_net_probe` | `TARGETS`(ip[:port,…]) 마다 route · ICMP · 관리 TCP connect · ARP/neighbour(같은 L2 의 존재 근거) · tracepath · Redfish ServiceRoot 무인증 GET 상태코드 — Runner 망에서의 무응답 자산 진단. 설정 변경 · 인증 시도 없음 |
+
+정의 `jenkins/jobs/<job>/config.xml`(2026-10-04 등록). 둘 다 `production_manifest.yml` forbidden(`tests/**` · `jenkins/**`) 이라 production 에 없다.
 
 ## pytest 회귀 게이트
 

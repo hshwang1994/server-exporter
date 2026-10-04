@@ -8,7 +8,7 @@ properties([
     buildDiscarder(logRotator(numToKeepStr: '100')),
     parameters([
         string(name: 'NODE_LABEL', defaultValue: 'linux', description: '실행 노드(라벨 또는 노드 이름) — 기본 linux(Runner 아무거나)'),
-        string(name: 'TARGETS', defaultValue: '', description: '쉼표로 구분한 대상 — ip 또는 ip:port[,port…] (예: 10.100.64.135:22,5985,5986 10.100.15.3:443)'),
+        string(name: 'TARGETS', defaultValue: '', description: '공백으로 구분한 대상 — ip 또는 ip:port[,port…] (예: 10.100.64.135:22,5985,5986 10.100.15.3:443)'),
         booleanParam(name: 'REDFISH_ROOT', defaultValue: true, description: '443 대상에 Redfish ServiceRoot(무인증 GET /redfish/v1/) 상태코드·본문 앞부분을 읽는다'),
     ]),
 ])
@@ -29,7 +29,8 @@ timeout(time: 30, unit: 'MINUTES') {
             echo "[net-probe] node=\$(hostname) kernel=\$(uname -r) date=\$(date -u +%FT%TZ)"
             echo "[net-probe] addresses:"; ip -4 -brief addr 2>/dev/null || hostname -I
             echo "[net-probe] default route: \$(ip route show default 2>/dev/null | head -1)"
-            IFS=' ' read -r -a ENTRIES <<< "${targetsRaw.replace(',', ' ')}"
+            # 대상은 공백으로, 포트는 쉼표로 구분한다 (ip:22,5985,5986 10.100.15.3:443) — 첫 실행(#1)에서 쉼표를 공백으로 바꿔 포트가 대상으로 갈라졌다
+            read -r -a ENTRIES <<< "${targetsRaw}"
             for ent in "\${ENTRIES[@]}"; do
                 [ -n "\$ent" ] || continue
                 ip="\${ent%%:*}"; ports="\${ent#*:}"; [ "\$ports" = "\$ent" ] && ports=""

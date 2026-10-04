@@ -117,8 +117,12 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
   Add-on 테스트를 통과한 뒤 `main` 에 올린다.
 - hook 의 제한 시간은 role 안 **태스크 하나**에 대한 300 s(`include_role … apply: timeout`)뿐이다 — role 전체 · loop 누적 ·
   host 전체 상한이 아니다. Add-on 자체의 명령별 제한(5분 — Linux 는 `timeout`, Windows 는 `async`)이 1차이고 이 제한은 그것이
-  놓친 태스크를 끊는 2차다. 끊긴 태스크의 원격 자식 프로세스는 남을 수 있다. 그래도 끝나지 않는 host 는 Jenkins Gather 단계의
+  놓친 태스크를 끊는 2차다. 끊긴 태스크의 원격 자식 프로세스는 남을 수 있다(실 대상 host 에서의 잔존 여부는 이 저장소의 테스트가 세지 않는다 —
+  통합 테스트는 localhost 대상이다). 그래도 끝나지 않는 host 는 Jenkins Gather 단계의
   예산(`scripts/gather_budget.sh`)이 실행 전체를 끊고, 그 host 는 `CHECKPOINT` 로 복원된다 — 다른 host 의 결과는 그대로 전달된다.
+  Add-on **준비**(`scripts/addon_checkout.sh`)의 제한은 또 다른 축이다: git 명령마다 180 s, Jenkinsfile 이 두 번 시도 → 최악 ≈ 720 s+, 실측 2~3 s/빌드
+  (`docs/operate/04-pipeline-runtime.md` Add-on 절). Runner(ansible-core 2.20.3)에서의 태스크별 timeout · 연결 끊김 · 실패 격리 동작은 CI Gate 의
+  `tests/integration/test_addon_hook_playbook.py`(실제 ansible-playbook) 가 빌드마다 실행한다(CI #16: integration 322 passed).
 - Add-on 이 돌려준 글자에 짝 없는 surrogate(원격 출력의 UTF-8 이 아닌 바이트)가 남으면 콜백이 그 host 의 봉투를
   쓰지 못한다 (`surrogates not allowed`). 콜백 보충이 `OUTPUT_BUILD_FAILED` 실패 봉투를 대신 내므로 host 수는
   유지되지만 기본 수집 결과도 잃는다. 그래서 3절의 약속대로 Add-on 이 돌려주기 전에 글자를 정리한다.

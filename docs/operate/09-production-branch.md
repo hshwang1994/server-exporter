@@ -23,6 +23,7 @@
   Runner 라벨 `linux | windows | esxi | redfish` + `common/vars/locations.yml` 의 `agent_label`(Location 별, 예: 청주 = `cj`) · Agent 의 Ansible venv(`scripts/activate_ansible_venv.sh` 가 고른다:
   `SE_ANSIBLE_VENV` → PATH 의 `ansible-playbook` → `/app/ansible-env` → `/opt/ansible-env`) · 검증 파라미터 기본값(`redfishAccountDryrun` 등은 기본값이면 영향 없음).
   `pwsh` 는 **생성 시** 도구이지 runtime 요구가 아니다. 내부 Jenkins 주소 · credential ID · Runner 이름을 고객 공통 필수값으로 새로 고정하지 않는다.
+  마무리 step 상한(Tier 2, `SE_FINALIZER_BOUNDED`)은 **기본 false** 이고 설치 요구 조건이 아니다 — 켜려면 환경변수와 In-process Script Approval 4 서명을 함께 맞춘다(`04-pipeline-runtime.md` "실제 상한(선점) 과 Tier 2").
 - 세 층을 구분해 말한다: **고객사 main 형태 깨끗한 checkout 검증(G19)** / **사내 production Job E2E** / **실제 고객사 실행**(이 저장소의 작업 범위 밖). 앞 둘이 통과해도 "고객사 실환경 검증 완료" 라고 쓰지 않는다.
 
 ## 1. 무엇이 들어가나

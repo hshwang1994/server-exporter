@@ -124,12 +124,17 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 | Lightweight checkout | 켬 |
 | 트리거 | 없음 (webhook 또는 수동; `pollSCM`/cron 은 승인 항목) |
 | Agent | `linux` 라벨 Runner 1대 (venv 는 `scripts/activate_ansible_venv.sh` 가 고른다); `pwsh` 가 없으면 `scripts/ai/prodgen/ci_pwsh_bootstrap.sh` 가 사용자 권한으로 `$HOME/.local/powershell` 에 준비한다(시스템 변경 없음) |
-| 파라미터 | `PROMOTE`(기본 false) · `PROMOTE_SHA` · `PROMOTE_DRY_RUN`(기본 true) · `BOOTSTRAP_BASELINE`(기본 빈 값) · `HARNESS_SCENARIOS` · `HARNESS_TREE_SCENARIOS` · `E2E_MAIN_ENTRIES` |
+| 파라미터 | `PROMOTE`(기본 false) · `PROMOTE_SHA` · `PROMOTE_DRY_RUN`(기본 true) · `BOOTSTRAP_BASELINE`(기본 빈 값) · `HARNESS_SCENARIOS`(18) · `HARNESS_BOUNDED_SCENARIOS`(5, Tier 2 — 승인 전 PARTIAL) · `HARNESS_TREE_SCENARIOS`(10) · `E2E_MAIN_ENTRIES` · `E2E_TIP_OBSERVATIONS_JSON`(fail-closed 빌드의 직접 revision 증거 — 트리거 측 tip 관측) |
 | 폴더 credential | `se-jenkins-lint`(Username with password — Jenkins API 토큰, 린터·artifact 읽기) · `hshwang token`(GitHub push) · `se-gitlab-push`(GitLab push — 없으면 Promote 는 dry-run 까지만) |
 
 결과: Gate 가 exit 2(건너뛴 단계 있음)면 UNSTABLE, exit 1 이면 FAILURE(뒤 stage 는 진단용으로 계속 돌지만 Promote 는 `ci_stage_results.json` 을 읽어 원격을 바꾸지 않는다). 보고서(`ci_gate.log` · corpus 비교 · 예산 self-test · `harness_*_results.json` · `prodgen_*.json` · `prodgen_verify_report(.aggregated).json`)는 artifact. stage 표 정본은 [AI 카탈로그가 아닌 이 저장소의 `Jenkinsfile_ci` 머리말 주석]이다.
 
 같은 폴더의 **Harness Job** `clovirone-server-gather-harness`(Script Path `tests/jenkins/harness/Jenkinsfile_harness`, Branch `*/main`, 파라미터 `SCENARIO`·`MAIN_SHA`·`FUNCTIONS_SRC`·`ARTIFACT_BASE_URL`·`EXPECTED_SHA256`·`SINK_PORT`·`BOUNDED`·`LOC`·`DEPLOYMENT_ENV`)은 CI 의 Harness Driver 가 시나리오당 1빌드로 호출한다. 수집 Job 이 아니며 production 에는 없다. 정의 `jenkins/jobs/clovirone-server-gather-harness/config.xml`.
+
+진단 Job 둘(2026-10-04, main 전용 · 읽기 전용 · production 에 없음): **`clovirone-server-gather-perf-observe`**(Script Path `tests/jenkins/harness/Jenkinsfile_perf_observe`; `NODE_NAME` 노드에서
+`perf_observe.py` 가 같은 Runner 의 Gather 빌드 프로세스 트리를 `SE_BUILD_ID` 로 귀속해 PSS · 활성 worker · MemAvailable · swap 을 샘플링 — forks 메모리 상수의 실측 근거) 와
+**`clovirone-server-gather-net-probe`**(Script Path `tests/jenkins/harness/Jenkinsfile_net_probe`; `TARGETS` 의 route · ICMP · 관리 TCP connect · ARP/neighbour · tracepath · Redfish ServiceRoot
+무인증 GET 을 Runner 망에서 읽어 `net_probe.txt` 로 — 무응답 자산의 존재·경로 진단). 정의 `jenkins/jobs/<job>/config.xml`.
 
 ## 다음 단계
 
