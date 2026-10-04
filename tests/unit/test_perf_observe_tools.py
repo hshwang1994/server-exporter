@@ -13,8 +13,12 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 HARNESS = REPO / "tests" / "jenkins" / "harness"
+
+pytestmark = pytest.mark.source_text   # 저장소 메타(jenkins/jobs config · Harness Jenkinsfile)를 읽는다 — G14 overlay(production tree) 제외 (CI #17 G14 실패 원인)
 
 
 def _load(name):
