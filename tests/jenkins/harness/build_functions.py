@@ -33,14 +33,17 @@ def _write_lf(path, text):
 
 FAIL_ARCHIVE = {"archive_fail", "both_fail"}
 FAIL_STASH = {"stash_fail", "both_fail"}
-FAIL_LAYER_A = {"layer_a_fail", "checkpoint_only_b"}
+FAIL_LAYER_A = {"layer_a_fail", "checkpoint_only_b", "inner_assemble_timeout"}
 FAIL_READTRUSTED = {"raw_fallback"}
-SLOW_UNSTASH = {"recover_slow", "outer_timeout"}
+SLOW_UNSTASH = {"recover_slow", "outer_timeout", "inner_recover_timeout", "user_abort"}
+SLOW_READTRUSTED = {"inner_assemble_timeout"}                 # readTrusted 를 slowSeconds 만큼 늦춘다 (ASSEMBLE 60 s 초과용)
+FOREIGN_TIMEOUT_UNSTASH = {"foreign_timeout_interruption"}    # unstash 안에서 **남의** timeout 으로 FIE 를 만든다 (3차 §4 ⑥)
 
 # 모든 시나리오 — Jenkinsfile_harness · harness_verdict.py 와 같은 목록 (scenarios.json 이 정본)
 SCENARIOS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
              "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx", "sink_close",
-             "recover_slow", "outer_timeout", "sandbox_probe")
+             "recover_slow", "outer_timeout", "inner_recover_timeout", "inner_assemble_timeout", "foreign_timeout_interruption",
+             "user_abort", "aborted_outcome_finalize", "sink_hold", "sandbox_probe")
 
 WRAPPERS = r'''
 
@@ -50,7 +53,7 @@ WRAPPERS = r'''
 //   스크립트 메서드는 같은 이름의 DSL step 보다 먼저 해석된다. 실제 step 은 HARNESS.outer(바깥 WorkflowScript)로 위임한다.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // 타입 없는 대입 = 스크립트 binding 변수 — 메서드에서 보인다 (typed 선언은 run() 의 지역변수가 돼 MissingPropertyException, Harness #5 실측)
-HARNESS = [scenario: '__SCENARIO__', calls: [], params: [:], trusted: [:], outer: null]
+HARNESS = [scenario: '__SCENARIO__', calls: [], params: [:], trusted: [:], outer: null, slowDone: false]
 
 def seHarnessInit(Object outer, Map cfg) {
     HARNESS.outer = outer
@@ -90,6 +93,11 @@ def unstash(String name) {
         HARNESS.calls << ("unstash:slow:" + HARNESS.slowSeconds)
         HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
     }
+    if (HARNESS.scenario in __FOREIGN_TIMEOUT_UNSTASH__) {
+        // 남의 timeout step(이 wrapper 의 것)이 만든 ExceededTimeout — finalizer 의 seBounded 가 자기 nodeId 로 식별하지 못하므로 재전파해야 한다
+        HARNESS.calls << 'unstash:foreign_timeout'
+        HARNESS.outer.timeout(time: 2, unit: 'SECONDS') { HARNESS.outer.sleep(time: 30, unit: 'SECONDS') }
+    }
     HARNESS.calls << 'unstash'
     return HARNESS.outer.unstash(name)
 }
@@ -104,6 +112,11 @@ def readTrusted(String path) {
     if (HARNESS.scenario in __FAIL_READTRUSTED__) {
         HARNESS.calls << ('readTrusted:injected_fail:' + path)
         throw new Exception('harness: injected readTrusted failure for ' + path)
+    }
+    if ((HARNESS.scenario in __SLOW_READTRUSTED__) && !HARNESS.slowDone) {
+        HARNESS.slowDone = true          // 첫 readTrusted 만 늦춘다 — ASSEMBLE 상한을 넘기기에 충분하다
+        HARNESS.calls << ('readTrusted:slow:' + HARNESS.slowSeconds)
+        HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
     }
     HARNESS.calls << ('readTrusted:' + path)
     if (HARNESS.trusted.containsKey(path)) {
@@ -163,7 +176,9 @@ def build(source: Path, scenario: str, out: Path, meta_out: Path | None) -> dict
                 .replace("__FAIL_STASH__", groovy_list(FAIL_STASH))
                 .replace("__FAIL_LAYER_A__", groovy_list(FAIL_LAYER_A))
                 .replace("__FAIL_READTRUSTED__", groovy_list(FAIL_READTRUSTED))
-                .replace("__SLOW_UNSTASH__", groovy_list(SLOW_UNSTASH)))
+                .replace("__SLOW_UNSTASH__", groovy_list(SLOW_UNSTASH))
+                .replace("__SLOW_READTRUSTED__", groovy_list(SLOW_READTRUSTED))
+                .replace("__FOREIGN_TIMEOUT_UNSTASH__", groovy_list(FOREIGN_TIMEOUT_UNSTASH)))
     generated = functions.rstrip("\n") + "\n" + wrappers
     _write_lf(out, generated)
     meta = {

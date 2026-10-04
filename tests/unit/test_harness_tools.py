@@ -143,3 +143,59 @@ def test_build_functions_cli_runs(tmp_path):
                         "--out", str(tmp_path / "o.groovy")], capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout)["scenario"] == "normal_success"
+
+
+
+# ── 2026-10-04 검토 C5 — interruption 시나리오 ─────────────────────────────────────────
+def test_interruption_scenarios_cover_the_six_conditions_and_bounded_ones_are_partial_without_approvals(tmp_path):
+    names = set(SCENARIOS)
+    assert {"recover_slow", "inner_recover_timeout", "inner_assemble_timeout", "outer_timeout", "foreign_timeout_interruption",
+            "user_abort", "aborted_outcome_finalize"} <= names
+    for n in ("inner_recover_timeout", "inner_assemble_timeout"):
+        assert SCENARIOS[n]["bounded"] and SCENARIOS[n]["probe_approvals"] and SCENARIOS[n]["expect"]["rethrown"] is False
+    assert SCENARIOS["user_abort"]["jenkins_result"] == "ABORTED" and SCENARIOS["user_abort"]["expect_interruption"]
+    assert SCENARIOS["aborted_outcome_finalize"]["outcome"] == "aborted" and SCENARIOS["aborted_outcome_finalize"]["set_result"] == "ABORTED"
+    assert SCENARIOS["aborted_outcome_finalize"]["expect"]["sink_posts_max"] == 1, "ABORTED 빌드는 Callback 1회만 시도"
+    assert SCENARIOS["foreign_timeout_interruption"]["expect"]["rethrown"] is True
+    # bounded scenario without the 4 approvals: rethrown → PARTIAL(승인) — not FAIL, not PASS
+    control = {"rethrown": True, "bounded": True, "sink_reachable": True,
+               "approvals": {"getEnclosingBlocks": False, "getId": False, "getCauses": True, "getNodeId": False}}
+    rc, res = _run_verdict(tmp_path, "inner_recover_timeout", control=_write(tmp_path / "c1.json", control), sink=_write(tmp_path / "k1.jsonl", ""))
+    assert rc == 2 and res["verdict"] == "PARTIAL" and any("Script Approval" in p and "getEnclosingBlocks" in p for p in res["partial"]), res
+    # with every approval present a rethrow is a real FAIL (the bound did not work)
+    control2 = dict(control, approvals={k: True for k in ("getEnclosingBlocks", "getId", "getCauses", "getNodeId")})
+    rc, res = _run_verdict(tmp_path, "inner_recover_timeout", control=_write(tmp_path / "c2.json", control2), sink=_write(tmp_path / "k2.jsonl", ""))
+    assert rc == 1 and res["verdict"] == "FAIL" and any("rethrown" in p for p in res["problems"])
+    # foreign timeout: rethrown is the expectation regardless of approvals
+    rc, res = _run_verdict(tmp_path, "foreign_timeout_interruption", control=_write(tmp_path / "c3.json", {"rethrown": True, "bounded": False, "sink_reachable": True}),
+                           sink=_write(tmp_path / "k3.jsonl", ""))
+    assert rc == 0 and res["verdict"] == "PASS"
+    rc, res = _run_verdict(tmp_path, "foreign_timeout_interruption", control=_write(tmp_path / "c4.json", {"rethrown": False, "bounded": False, "sink_reachable": True}),
+                           sink=_write(tmp_path / "k4.jsonl", ""))
+    assert rc == 1 and res["verdict"] == "FAIL", "남의 timeout 을 삼켰다면 FAIL"
+
+
+def test_verdict_checks_summary_outcome_for_aborted_finalize(tmp_path):
+    summary = {"accepted": 3, "lines": 3, "kept": 3, "filled": 0, "outcome": "completed", "layerA": "ok", "layerB": "skipped", "source": "stash",
+               "unrecovered": [], "damage": [], "by_origin": {"output": 3, "checkpoint": 0, "synthetic": 0}}
+    sink = json.dumps({"method": "POST", "status_sent": 200, "ok": True, "body_sha256": "x"}) + "\n"
+    calls = ["unstable:[Finalize] 전송은 됐지만 보충(filled=0) · 비정상 종료(outcome=aborted)"]
+    rc, res = _run_verdict(tmp_path, "aborted_outcome_finalize", summary=_write(tmp_path / "s.json", summary),
+                           calls=_write(tmp_path / "c.json", calls), sink=_write(tmp_path / "k.jsonl", sink),
+                           control=_write(tmp_path / "ctl.json", {"rethrown": False, "sink_reachable": True}))
+    assert rc == 1 and any(c["name"] == "outcome" and not c["ok"] for c in res["checks"]), "outcome=completed 는 aborted 사후 경로가 아니다"
+    rc, res = _run_verdict(tmp_path, "aborted_outcome_finalize", summary=_write(tmp_path / "s2.json", dict(summary, outcome="aborted")),
+                           calls=_write(tmp_path / "c.json", calls), sink=_write(tmp_path / "k.jsonl", sink),
+                           control=_write(tmp_path / "ctl.json", {"rethrown": False, "sink_reachable": True}))
+    assert rc == 0 and res["verdict"] == "PASS", res
+
+
+def test_wrappers_for_the_new_scenarios(tmp_path):
+    for scenario, needle in (("foreign_timeout_interruption", "HARNESS.outer.timeout(time: 2, unit: 'SECONDS')"),
+                             ("inner_assemble_timeout", "readTrusted:slow:"),
+                             ("inner_recover_timeout", "unstash:slow:")):
+        out = tmp_path / f"{scenario}.groovy"
+        build_functions.build(PORTAL, scenario, out, None)
+        text = out.read_text(encoding="utf-8")
+        assert needle in text, (scenario, needle)
+        assert f"scenario: {scenario}" in text

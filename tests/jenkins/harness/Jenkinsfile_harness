@@ -8,6 +8,8 @@
 //   운영 코드에는 장애 주입 분기가 없다. 생성 tree 의 함수도 같은 Harness 로 검증한다(FUNCTIONS_SRC=artifact).
 //   산출물: harness_result.json(판정) · harness_functions.groovy(+meta: 원본 해시) · harness_calls.json · harness_control.json ·
 //           preserve_state.json · fixture_state.json · sink/record.jsonl · observed/{finalize_summary,callback_body}.json
+//   2026-10-04 검토 C5: interruption 시나리오 — bounded(Tier 2, 승인 실측 → 없으면 PARTIAL/승인) · foreign_timeout · user_abort(자기 빌드 /stop) ·
+//           aborted_outcome_finalize(ABORTED 빌드의 사후 finalize) · sink_hold(main Job T2 의 Callback 수신 증거용 sink 유지)
 
 properties([
     disableConcurrentBuilds(),
@@ -24,6 +26,36 @@ properties([
         string(name: 'DEPLOYMENT_ENV', defaultValue: 'harness', description: 'Callback body 의 deploymentEnvironmentId'),
     ]),
 ])
+
+// sandbox 승인 실측(검토 C5) — Tier 2 가 쓰는 4 시그니처가 이 Jenkins 에서 허용되는지 **실제 호출**로 확인한다. 거부는 RejectedAccessException 으로
+//   잡혀 false 가 되고, 결과는 harness_control.json 의 approvals 에 남는다(verdict 가 PARTIAL/승인 판정에 쓴다). FlowNode 는 직렬화되지 않으므로 @NonCPS 안에서만 만진다.
+@NonCPS
+Map seHarnessProbeNode(Object node) {
+    Map r = [getEnclosingBlocks: false, getId: false, errors: [:]]
+    try {
+        def blocks = node.getEnclosingBlocks()
+        r.getEnclosingBlocks = true
+        try { blocks[0].getId(); r.getId = true } catch (Exception e2) { r.errors.getId = e2.getClass().name }
+    } catch (Exception e) {
+        r.errors.getEnclosingBlocks = e.getClass().name
+    }
+    return r
+}
+
+@NonCPS
+Map seHarnessProbeCauses(Object fie) {
+    Map r = [getCauses: false, getNodeId: false, errors: [:]]
+    try {
+        def causes = fie.getCauses()
+        r.getCauses = true
+        try {
+            for (Object c in causes) { c.getNodeId(); r.getNodeId = true }
+        } catch (Exception e2) { r.errors.getNodeId = e2.getClass().name }
+    } catch (Exception e) {
+        r.errors.getCauses = e.getClass().name
+    }
+    return r
+}
 
 // Runner 시스템 python3 는 3.9 — Harness 도구는 venv(3.12, PyYAML)에서 돈다. venv 선택은 scripts/activate_ansible_venv.sh 한 곳.
 String PY = '. "$WORKSPACE/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true; python3'
@@ -48,6 +80,10 @@ timeout(time: 45, unit: 'MINUTES') {
         def scenarios = readJSON(file: 'tests/jenkins/harness/scenarios.json', returnPojo: true).scenarios
         def sc = scenarios[scenario]
         if (sc == null) { error "[Harness] unknown scenario '${scenario}' — scenarios.json 참조" }
+        boolean bounded = params.BOUNDED || (sc.bounded ?: false)
+        boolean holdOnly = (((sc.hold_seconds ?: 0) as int) > 0)
+        control.bounded = bounded
+        control.expected_jenkins_result = (sc.jenkins_result ?: 'SUCCESS')
 
         // gather_ws = 운영 함수가 보는 WORKSPACE(수집 workspace 의 축소판): 입력 파일 + Layer A 가 쓰는 scripts/ · common/vars/.
         //   deleteDir() 이 Harness 파일을 지우지 않도록 하위 디렉터리로 분리한다. 생성 tree 모드에서는 그 tree 자체다.
@@ -132,8 +168,40 @@ timeout(time: 45, unit: 'MINUTES') {
         }
         control.sink_workspace = sinkWs
 
+        // ── ③' 승인 실측 (Tier 2 시나리오 · sandbox_probe) — 결과만 기록한다
+        if (sc.probe_approvals) {
+            Map approvals = [:]
+            try {
+                def n = getContext(org.jenkinsci.plugins.workflow.graph.FlowNode)
+                approvals.putAll(seHarnessProbeNode(n))
+                n = null
+            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                throw fie
+            } catch (Exception e) {
+                approvals.getEnclosingBlocks = false
+                approvals.probe_error = e.getClass().name
+            }
+            try {
+                timeout(time: 1, unit: 'SECONDS') { sleep(time: 5, unit: 'SECONDS') }
+            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                approvals.putAll(seHarnessProbeCauses(fie))
+            }
+            control.approvals = approvals
+            echo "[Harness] sandbox approvals: ${approvals}"
+        }
+
+        // ── ③'' sink_hold — 판정 없이 sink 만 hold_seconds 동안 유지한다 (main Job 이 callbackUrl=http://127.0.0.1:${sinkPort} 로 보낸 POST 가 record 에 남는다)
+        if (holdOnly) {
+            echo "[Harness] sink_hold: ${sinkUrl} 를 ${sc.hold_seconds}s 유지 — main Job T2 트리거는 이 사이에 한다"
+            sleep(time: (sc.hold_seconds as int), unit: 'SECONDS')
+        }
+
         // ── ④ fixture — corpus case 입력 + **현재 빌드**의 manifest
         String eventUuid = "harness-${env.BUILD_TAG}"
+        def lib = null
+        Map preserve = [:]
+        control.rethrown = false
+        if (!holdOnly) {
         sh """${PY} tests/jenkins/harness/fixture.py --scenarios tests/jenkins/harness/scenarios.json --scenario ${scenario} \\
                 --corpus tests/fixtures/finalize_corpus --workspace "\$PWD/gather_ws" --job '${env.JOB_NAME}' --number '${env.BUILD_NUMBER}' --url '${env.BUILD_URL}' \\
                 --loc '${params.LOC}' --deployment-env '${params.DEPLOYMENT_ENV}' --event-uuid '${eventUuid}' --callback-url '${sinkUrl}' --out fixture_state.json"""
@@ -141,18 +209,17 @@ timeout(time: 45, unit: 'MINUTES') {
         env.SE_MANIFEST_JSON = fx.manifest_json
         env.SE_GATHER_OUTCOME = fx.outcome
         env.SE_BUILD_START_EPOCH = "${(long) (System.currentTimeMillis() / 1000L)}"
-        env.SE_FINALIZER_BOUNDED = params.BOUNDED ? 'true' : 'false'
+        env.SE_FINALIZER_BOUNDED = bounded ? 'true' : 'false'
         for (String k in ['SE_PRESERVE_LAYER_A', 'SE_PRESERVE_ARCHIVED', 'SE_PRESERVE_STASHED', 'SE_PRESERVE_MANIFEST', 'SE_PRESERVE_HASRESULT']) { env."${k}" = '' }
 
         // ── ⑤ load + init (바깥 스크립트 = 실제 step)
-        def lib = load 'harness_functions.groovy'
+        lib = load 'harness_functions.groovy'
         lib.seHarnessInit(this, [params  : [loc: params.LOC, deploymentEnvironmentId: params.DEPLOYMENT_ENV, eventUuid: eventUuid,
                                             callbackUrl: sinkUrl, target_type: fx.channel],
                                  trusted : trusted, slowSeconds: (sc.slow_seconds ?: 45)])
         if (lib.params.callbackUrl != sinkUrl) { error '[Harness] params 그림자가 동작하지 않는다 — getParams() 해석 확인' }
 
         // ── ⑥ 보존 — Gather post 가 하는 일을 gather_ws 에서 실제 step 으로 (Layer A · archive · stash). 주입은 wrapper 가 한다.
-        Map preserve = [:]
         dir('gather_ws') {
             withEnv(["WORKSPACE=${pwd()}"]) {
                 if (fx.run_preserve) {
@@ -175,22 +242,46 @@ timeout(time: 45, unit: 'MINUTES') {
         echo "[Harness] preserve=${preserve}"
 
         // ── ⑦ finalizer — 실제 timeout(720){ node('built-in') {…} }. outer_timeout 은 Harness 가 짧은 외곽 timeout 으로 감싼다.
-        control.rethrown = false
+        //    set_result(aborted_outcome_finalize): ABORTED 빌드의 사후 finalize — seCallback 의 aborted 분기(1회 시도)를 실제로 탄다.
+        //    self_abort_after(user_abort): 느린 unstash 중에 Harness 가 자기 빌드에 POST /stop — 사용자 중단과 같은 interruption 이 finalizer 로 들어간다.
+        //    expect_interruption 시나리오만 interruption 을 기록 뒤 삼킨다(우리가 만든 것) — 그 외는 진짜 중단이라 그대로 전파한다.
+        boolean expectInterruption = (sc.expect_interruption ?: false) || (sc.outer_timeout_seconds ?: 0) > 0
+        if (sc.set_result) {
+            currentBuild.result = sc.set_result.toString()
+            echo "[Harness] currentBuild.result=${currentBuild.result} (시나리오 ${scenario})"
+        }
         try {
-            if (sc.outer_timeout_seconds) {
+            if (sc.self_abort_after) {
+                int after = sc.self_abort_after as int
+                String stopUrl = "${env.BUILD_URL}stop"
+                parallel(
+                    finalize: { lib.seFinalizeAndCallback() },
+                    stopper: {
+                        sleep(time: after, unit: 'SECONDS')
+                        echo "[Harness] user_abort: POST ${stopUrl} (자기 빌드 중단 — 사용자 Abort 와 같은 경로)"
+                        httpRequest(url: stopUrl, httpMode: 'POST', authentication: 'se-jenkins-lint', ignoreSslErrors: true, validResponseCodes: '100:599', timeout: 30)
+                    },
+                    failFast: false
+                )
+            } else if (sc.outer_timeout_seconds) {
                 timeout(time: (sc.outer_timeout_seconds as int), unit: 'SECONDS') { lib.seFinalizeAndCallback() }
             } else {
                 lib.seFinalizeAndCallback()
             }
         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
             control.rethrown = true
+            control.interruption_class = fie.getClass().name
             echo "[Harness] interruption 이 finalizer 밖으로 전파됐다 (기대: 삼키지 않는다): ${fie.getClass().name}"
-            if (!sc.outer_timeout_seconds) { throw fie }   // 우리가 만든 외곽 timeout 이 아니면 진짜 중단이다 — 그대로 전파
+            if (!expectInterruption) { throw fie }   // 우리가 만든 interruption 이 아니면 진짜 중단이다 — 그대로 전파
         }
+        if (sc.self_abort_after && control.rethrown) {
+            currentBuild.result = 'ABORTED'          // 사용자 중단이 만든 결과를 Harness 가 되돌리지 않는다 (시나리오 기대 jenkins_result=ABORTED)
+        }
+        }   // !holdOnly
 
         // ── ⑧ 관측 수집 — finalizer 가 archive 한 요약·body 를 되가져오고, 호출 기록·제어 정보를 남긴다
         // List 인자는 JsonOutput.toJson(Object) 로 해석돼 sandbox 가 거부한다(Harness #6) — writeJSON step 은 List/Map 모두 받는다
-        writeJSON(file: 'harness_calls.json', json: lib.seHarnessCalls())
+        writeJSON(file: 'harness_calls.json', json: (lib != null ? lib.seHarnessCalls() : []))
         sh 'mkdir -p observed'
         try {
             unarchive mapping: ['finalize_summary.json': 'observed/finalize_summary.json', 'callback_body.json': 'observed/callback_body.json']
@@ -199,6 +290,7 @@ timeout(time: 45, unit: 'MINUTES') {
         } catch (Exception e) {
             echo "[Harness] 요약/body unarchive 실패(finalizer 가 archive 전에 끝났을 수 있다): ${e.message}"
         }
+        if (!fileExists('preserve_state.json')) { writeFile(file: 'preserve_state.json', text: groovy.json.JsonOutput.toJson(preserve), encoding: 'UTF-8') }
         writeFile(file: 'harness_control.json', text: groovy.json.JsonOutput.toJson(control), encoding: 'UTF-8')
         // sink 종료 + 수신 기록을 controller workspace 에서 agent 로 가져온다(verdict · archive 는 agent 의 sink/ 를 읽는다)
         String sinkRecord = ''

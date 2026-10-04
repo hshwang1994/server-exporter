@@ -289,3 +289,56 @@ def test_no_loop_variable_shadows_the_implicit_closure_parameter():
     """CI #2 (2026-10-04) died at compile time: `for (def it in …)` inside a closure — "The current scope already contains a variable of the name it"."""
     assert re.search(r"for \(\s*(def|\w+)\s+it\s+in", CI) is None
     assert re.search(r"\(\s*it\s+in\s", CI) is None
+
+
+
+# ── 2026-10-04 검토 C4 · C5 · C6 ────────────────────────────────────────────────────
+def test_verify_block_decrypts_every_vault_file_with_the_same_binding_and_prints_no_secret():
+    """검토 C6: G19 의 TEST-NET 실행은 credential 을 열지 않는다 — 같은 바인딩으로 vault_decrypt_check.py 가 실제 복호화 증거를 만든다."""
+    v = _stage("Prodgen Verify")
+    assert 'python3 scripts/ai/vault_decrypt_check.py --password-file "\\$VAULT_TMP" > vault_decrypt_check.txt' in v
+    assert "vault_decrypt_rc.txt" in v and "env.CI_STAGE_VAULT_DECRYPT" in v
+    assert "--layout-only" not in v, "layout 만 보는 검사는 복호화 증거가 아니다"
+    assert "cat vault_decrypt_check.txt" not in CI and "SE_VAULT_PASSWORD" not in CI
+    post = CI[CI.rindex("    post {"):]
+    assert "vault_decrypt_check.txt" in post
+
+
+def test_promote_passes_the_stage_results_to_prodgen_and_the_cli_consumes_them():
+    """검토 C4: CLI promote 가 CI 와 같은 stage 증거를 소비한다 — Promote 는 호출 전에 ci_stage_results.json 을 쓰고 --ci-stage-results 로 넘긴다."""
+    p = _stage("Prodgen Promote")
+    assert "seWriteStageResults()" in p and "--ci-stage-results ci_stage_results.json" in p
+    assert p.index("seWriteStageResults()") < p.index("prodgen promote"), "stage 결과 파일을 먼저 쓴다"
+    helper = CI[CI.index("def seWriteStageResults("):CI.index("\npipeline {")]
+    for k in ("GATE", "CORPUS", "BUDGET", "HARNESS_MAIN", "HARNESS_BOUNDED", "PRODGEN_BUILD", "HARNESS_TREE", "PRODGEN_DRIFT", "PRODGEN_VERIFY", "VAULT_DECRYPT", "EVIDENCE", "PROMOTE"):
+        assert f"'{k}'" in helper, k
+    from scripts.ai.prodgen import REQUIRED_CI_STAGES
+    required = re.search(r"List required = \[([^\]]+)\]", p).group(1)
+    assert [x.strip().strip("'") for x in required.split(",")] == list(REQUIRED_CI_STAGES), "CI 와 CLI 의 필수 stage 목록은 하나다"
+
+
+def test_harness_driver_compares_each_scenario_with_its_expected_jenkins_result_and_runs_bounded_separately():
+    """검토 C1 · C5: user_abort 는 ABORTED 가 기대값이다; Tier 2 는 BOUNDED=true 로 따로 돌리고 HARNESS_BOUNDED 에 기록한다(승격 조건 아님)."""
+    helper = CI[CI.index("def seRunHarness("):CI.index("\ndef seWriteStageResults(")]
+    assert "readJSON(file: 'tests/jenkins/harness/scenarios.json'" in helper and "jenkins_result" in helper
+    assert "boolean ok = (b.result == expected)" in helper and "booleanParam(name: k, value: (v.toString() == 'true'))" in helper
+    main = _stage("Harness Driver")
+    assert "results.findAll { !it.ok }" in main and "results.findAll { it.result != 'SUCCESS' }" not in main
+    assert "seRunHarness('checkout', bounded, [BOUNDED: 'true'])" in main and "harness_bounded_results.json" in main
+    assert "env.CI_STAGE_HARNESS_BOUNDED" in main
+    params = CI[CI.index("    parameters {"):CI.index("    environment {")]
+    assert "name: 'HARNESS_BOUNDED_SCENARIOS'" in params
+    default_main = re.search(r"string\(name: 'HARNESS_SCENARIOS', defaultValue: '([^']+)'", params).group(1).split(",")
+    from scripts.ai.prodgen.evidence import REQUIRED_HARNESS, REQUIRED_HARNESS_BOUNDED, REQUIRED_HARNESS_TREE
+    assert set(default_main) == set(REQUIRED_HARNESS), "CI 기본 목록 == 승격이 요구하는 main-function Harness 집합"
+    default_tree = re.search(r"string\(name: 'HARNESS_TREE_SCENARIOS', defaultValue: '([^']+)'", params).group(1).split(",")
+    assert set(default_tree) == set(REQUIRED_HARNESS_TREE)
+    default_bounded = re.search(r"string\(name: 'HARNESS_BOUNDED_SCENARIOS', defaultValue: '([^']+)'", params).group(1).split(",")
+    assert set(default_bounded) == set(REQUIRED_HARNESS_BOUNDED)
+    assert "HARNESS_BOUNDED" not in re.search(r"List required = \[([^\]]+)\]", _stage("Prodgen Promote")).group(1), "Tier 2 는 승격 조건이 아니다(승인 전)"
+
+
+def test_toolchain_reports_esxi_prerequisites_without_adding_the_label():
+    s = _stage("Toolchain")
+    assert "import pyVmomi" in s and "community[.]vmware" in s and "pyvmomi=absent" in s
+    assert "label 'esxi'" not in CI

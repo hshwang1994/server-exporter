@@ -85,8 +85,17 @@ def g20_ancestry_and_remotes(ctx) -> GateResult:
         if (local or "") != (remote or ""):
             failed = True
             details.append(f"local {ref}={(local or 'absent')[:12]} != remotes {(remote or 'absent')[:12]} — fetch / push-sync first")
-    if not (p.get("remotes") or []):
-        details.append("no remotes given — remote baseline not checked (local ref only)")
+    from .. import DEPLOY_REMOTES
+    checked = list(p.get("remotes") or [])
+    data["remotes_checked"] = checked
+    data["deploy_set_complete"] = set(DEPLOY_REMOTES) <= set(checked)
+    if not checked:
+        # 검토 C4: a G20 with no remote is not a pass — the remote baseline was not verified at all
+        data["partial"] = True
+        data["partial_reason"] = "no remotes given — remote baseline not verified (local ref only)"
+        details.append("no remotes given — remote baseline NOT verified (partial)")
+    elif not data["deploy_set_complete"]:
+        details.append(f"remotes checked {checked} do not cover the deploy set {list(DEPLOY_REMOTES)} — a real promotion re-runs G20 with the full set")
     data["expected_parent"] = expected_parent
 
     new_main = prov.get("main_sha")

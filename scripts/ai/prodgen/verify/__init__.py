@@ -45,7 +45,11 @@ ENV_DEPENDENT_GATES = {"G11", "G12", "G13", "G14", "G15", "G19"}
 # mutable-state gates: never reused, re-run right before promotion
 MUTABLE_GATES = {"G18", "G20"}
 LIVE_GATES = {"G11", "G12", "G13", "G14", "G15", "G19"}
-ENV_COMPARE_KEYS = ("python", "platform", "ansible_version", "pwsh", "groovy", "jenkins_version")
+# identifiers compared before reusing an environment-dependent gate. An *unknown* value on either side is not a match (검토 C3):
+#   G11/G12/G15/G19 → python · platform · ansible (runtime · version · installed collections), G13 → jenkins_version,
+#   prodgen build → pwsh/groovy **versions** (presence alone does not identify the toolchain)
+ENV_COMPARE_KEYS = ("python", "platform", "ansible_runtime", "ansible_version", "collections_sha256", "pwsh", "groovy", "jenkins_version")
+UNKNOWN_VALUES = (None, "", "unknown")
 
 
 @dataclass
@@ -163,32 +167,79 @@ def _probe(cmd: list, timeout: int = 20) -> str:
         return ""
 
 
-def collect_environment(jenkins_version: str | None = None) -> dict:
-    """Identifiers of the environment the gates ran in. Compared by `environment_compatible` before reusing env-dependent gates."""
+def probe_jenkins_version(jenkins_url: str | None, netrc: str | None) -> str:
+    """`X-Jenkins` response header of GET /api/json (the pipeline-model-converter response does not carry it — GP-29)."""
+    curl = shutil.which("curl")
+    if not curl or not jenkins_url or not netrc or not os.path.isfile(netrc):
+        return ""
+    try:
+        proc = subprocess.run([curl, "-skI", "--netrc-file", netrc, "--max-time", "30", jenkins_url.rstrip("/") + "/api/json"],
+                              capture_output=True, text=True, timeout=40, encoding="utf-8", errors="replace")
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    for line in (proc.stdout or "").splitlines():
+        if line.lower().startswith("x-jenkins:"):
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
+def _tool_version(cmd: list) -> str:
+    out = _probe(cmd)
+    return out if out else "absent"
+
+
+def _collections_digest(prefix: list) -> tuple:
+    """sha256 over the sorted `name:version` list of installed Ansible collections (G11/G12/G15/G19 depend on them)."""
+    try:
+        proc = subprocess.run(prefix + ["ansible-galaxy collection list --format json 2>/dev/null"], capture_output=True, text=True,
+                              timeout=90, encoding="utf-8", errors="replace")
+        data = json.loads(proc.stdout or "{}")
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return "", 0
+    pairs = sorted(f"{name}:{info.get('version')}" for path in data.values() for name, info in (path or {}).items())
+    if not pairs:
+        return "", 0
+    return hashlib.sha256("\n".join(pairs).encode("utf-8")).hexdigest(), len(pairs)
+
+
+def collect_environment(jenkins_version: str | None = None, *, netrc: str | None = None, jenkins_url: str | None = None) -> dict:
+    """Identifiers of the environment the gates ran in. Compared by `environment_compatible` before reusing env-dependent gates.
+    Unknown values stay empty — the comparison treats them as *not verified*, never as a match."""
+    pwsh = shutil.which("pwsh") or shutil.which("pwsh.exe")
+    ps_cmd = ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$PSVersionTable.PSVersion.ToString()"]
+    if pwsh:
+        pwsh_version = _tool_version([pwsh] + ps_cmd)
+    elif shutil.which("powershell.exe"):
+        pwsh_version = _tool_version(["powershell.exe"] + ps_cmd)
+    else:
+        pwsh_version = "absent"
     env = {
         "python": sys.version.split()[0],
         "platform": f"{platform.system()} {platform.release()}",
         "host": socket.gethostname(),
-        "pwsh": bool(shutil.which("pwsh") or shutil.which("pwsh.exe") or shutil.which("powershell.exe")),
-        "groovy": bool(shutil.which("groovy")),
+        "pwsh": pwsh_version,
+        "groovy": _tool_version(["groovy", "--version"]) if shutil.which("groovy") else "absent",
     }
     if is_windows() and shutil.which("wsl.exe"):
-        env["ansible_version"] = _probe(["wsl.exe", "-e", "bash", "-lc", "ansible --version 2>/dev/null | head -1"])
+        prefix = ["wsl.exe", "-e", "bash", "-lc"]
         env["ansible_runtime"] = "wsl"
     else:
-        env["ansible_version"] = _probe(["bash", "-lc", "ansible --version 2>/dev/null | head -1"])
+        prefix = ["bash", "-lc"]
         env["ansible_runtime"] = "native"
-    env["jenkins_version"] = jenkins_version or ""
+    env["ansible_version"] = _probe(prefix + ["ansible --version 2>/dev/null | head -1"])
+    env["collections_sha256"], env["collections_count"] = _collections_digest(prefix)
+    env["jenkins_version"] = jenkins_version or probe_jenkins_version(jenkins_url, netrc) or ""
     return env
 
 
-def environment_compatible(recorded: dict, current: dict) -> tuple[bool, list]:
+def environment_compatible(recorded: dict, current: dict, keys=ENV_COMPARE_KEYS) -> tuple:
+    """Same environment for the env-dependent gates? Unknown on either side → not verified → not compatible (검토 C3)."""
     problems = []
-    for key in ENV_COMPARE_KEYS:
+    for key in keys:
         a, b = (recorded or {}).get(key), (current or {}).get(key)
-        if key == "jenkins_version" and (not a or not b):
-            continue        # unknown on one side: do not treat as a match problem (G13 is re-run when in doubt by the caller)
-        if a != b:
+        if a in UNKNOWN_VALUES or b in UNKNOWN_VALUES:
+            problems.append(f"{key}: not verified (recorded {a!r}, current {b!r})")
+        elif a != b:
             problems.append(f"{key}: recorded {a!r} != current {b!r}")
     return (not problems), problems
 
@@ -248,7 +299,7 @@ def run_gates(repo_root: str, tree_dir: str, manifest_path: str, *, skip_live: b
             if r.id == "G13":
                 jenkins_version = r.data.get("jenkins_version") or jenkins_version
             report.add(r)
-    report.environment = collect_environment(jenkins_version)
+    report.environment = collect_environment(jenkins_version, netrc=netrc, jenkins_url=jenkins_url)
     prov = ctx["prov"]
     bb = None
     if bootstrap_baseline:

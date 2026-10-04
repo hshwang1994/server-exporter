@@ -1,9 +1,13 @@
 """`prodgen promote` / `prodgen restore` / `prodgen push-sync` via git plumbing (dry-run capable).
 
-promote (2026-10-04, Astra 2~4차 R1 · R2 · R4 · §8):
-  build(sha) → gates (full run, or a reused COMPLETE_PASS report whose binding + environment match; G18/G20 are always re-run)
-  → verdict must be COMPLETE_PASS → E2E evidence for the same main SHA (required unless dry-run) → remotes agree on production and
-  equal the local ref → production state (LEGACY only with --bootstrap-baseline <that sha>, PROVENANCE, RESTORED_BASELINE) → blobs →
+promote (2026-10-04, Astra 2~4차 R1 · R2 · R4 · §8 · 검토 C2~C4):
+  deploy policy (a real run publishes to exactly DEPLOY_REMOTES — origin + internal; fewer or other remotes are refused)
+  → build(sha) → gates (full run, or a reused COMPLETE_PASS report whose binding matches; G18/G20 are always re-run and the
+  environment-dependent gates G11-G15/G19 are re-run when the environment identifiers differ or are unknown)
+  → verdict must be COMPLETE_PASS → E2E evidence for the same main SHA and generated tree (required unless dry-run)
+  → CI stage evidence (ci_stage_results.json: same main SHA, required stages PASS — required unless dry-run)
+  → remotes agree on production and equal the local ref → production state (LEGACY only with --bootstrap-baseline <that sha>,
+  PROVENANCE — inheriting the parent's Bootstrap-Baseline trailers, RESTORED_BASELINE) → blobs →
   temp index → write-tree → commit-tree -p <expected> → fast-forward invariant (new^ == expected, expected is an ancestor) →
   per-remote: pre ls-remote == expected → push (--force-with-lease as a race detector, ff enforced by the parent) → post ls-remote == new
   → local ref updated only after every remote succeeded. A failure on a later remote leaves `partial_push` for `push-sync`.
@@ -19,13 +23,13 @@ import os
 import subprocess
 import tempfile
 
-from . import GENERATOR_VERSION, PROVENANCE_FILE, RULES_VERSION
+from . import DEPLOY_REMOTES, GENERATOR_VERSION, PROVENANCE_FILE, REQUIRED_CI_STAGES, RULES_VERSION
 from .build import build
 from .common import ProdgenError
-from .drift import classify_production, first_prodgen_commit, is_ancestor
+from .drift import baseline_record, classify_production, first_prodgen_commit, is_ancestor
 from .gitstore import GitStore
-from .verify import (ENV_DEPENDENT_GATES, GateReport, GateResult, collect_environment, environment_compatible,
-                     report_digest_ok, run_gates)
+from .verify import (ENV_DEPENDENT_GATES, MANDATORY_GATES, MUTABLE_GATES, GateReport, GateResult, collect_environment,
+                     environment_compatible, report_digest_ok, run_gates)
 from .verify.gates_promotion import g18_drift, g20_ancestry_and_remotes, ls_remote
 
 DEFAULT_REF = "refs/heads/production"
@@ -112,9 +116,10 @@ def _load_json(path: str) -> dict:
         return json.load(fh)
 
 
-def _reuse_report(report_path: str, prov: dict, current_env: dict) -> tuple[dict | None, list]:
-    """A COMPLETE_PASS report may be reused when: digest ok · verify_mode full · binding matches this build ·
-    environment identifiers match (env-dependent gates). Mutable gates are always re-run by the caller."""
+def _reuse_report(report_path: str, prov: dict, current_env: dict) -> tuple:
+    """(report | None, fatal problems, environment problems). A COMPLETE_PASS report may be reused when: digest ok · verify_mode
+    full · binding matches this build. Environment problems (identifiers differ **or are unknown on either side**, 검토 C3) are not
+    fatal: the caller re-runs the environment-dependent gates. Mutable gates are always re-run by the caller."""
     rep = _load_json(report_path)
     problems = []
     if not report_digest_ok(rep):
@@ -127,15 +132,42 @@ def _reuse_report(report_path: str, prov: dict, current_env: dict) -> tuple[dict
     for key in ("main_sha", "tree_hash", "generator_hash", "manifest_sha256"):
         if b.get(key) != prov.get(key):
             problems.append(f"binding {key}: report {str(b.get(key))[:12]} != build {str(prov.get(key))[:12]}")
-    ok_env, env_problems = environment_compatible(rep.get("environment") or {}, current_env)
-    if not ok_env:
-        problems.append("environment identifiers differ (" + "; ".join(env_problems) + ") — re-run verify where promote runs, or promote where the report was produced")
-    return (rep if not problems else None), problems
+    _ok_env, env_problems = environment_compatible(rep.get("environment") or {}, current_env)
+    return (rep if not problems else None), problems, env_problems
 
 
-def _check_e2e(evidence: dict, main_sha: str) -> list:
+def _check_e2e(evidence: dict, main_sha: str, tree_hash: str | None = None) -> list:
     from .evidence import check_evidence
-    return check_evidence(evidence, main_sha)
+    return check_evidence(evidence, main_sha, tree_hash=tree_hash)
+
+
+def _check_ci_stages(path: str, main_sha: str, report: dict) -> list:
+    """ci_stage_results.json (Jenkinsfile_ci post) — the CLI consumes the same stage evidence the CI Promote stage checks (검토 C4)."""
+    try:
+        ci = _load_json(path)
+    except (OSError, ValueError) as exc:
+        return [f"ci stage results unreadable: {exc}"]
+    problems = []
+    if ci.get("main_sha") != main_sha:
+        problems.append(f"ci stage results are for main {str(ci.get('main_sha'))[:12]}, not {main_sha[:12]}")
+    stages = ci.get("stages") or {}
+    bad = [f"{k}={stages.get(k, 'not_run')}" for k in REQUIRED_CI_STAGES if stages.get(k) != "PASS"]
+    if bad:
+        problems.append("required CI stages not PASS: " + ", ".join(bad))
+    src = (report or {}).get("source") or {}
+    if src.get("kind") == "ci" and src.get("build_url") and ci.get("build_url") and src["build_url"].rstrip("/") != ci["build_url"].rstrip("/"):
+        problems.append(f"verify report came from {src['build_url']} but the CI stage results from {ci['build_url']} — mixed builds")
+    return problems
+
+
+def _deploy_policy_problems(remotes: list, dry_run: bool) -> list:
+    """A real promotion/restore publishes to exactly the deploy set. Dropping or narrowing remotes is not a way around it (검토 C4)."""
+    if dry_run:
+        return []
+    want, got = set(DEPLOY_REMOTES), set(remotes)
+    if got != want:
+        return [f"--push-remote must name exactly {','.join(DEPLOY_REMOTES)} for a real promotion (got {','.join(sorted(got)) or 'none'})"]
+    return []
 
 
 # ── promote ───────────────────────────────────────────────────────────────────────
@@ -143,13 +175,19 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
             production_ref: str = DEFAULT_REF, push_remote="", skip_live: bool = True, netrc: str | None = None,
             verify_report: str | None = None, bootstrap_baseline: str | None = None, e2e_evidence: str | None = None,
             vault_password_file: str | None = None, jenkins_url: str = "https://jenkins-prod.gooddi.lab",
-            source: dict | None = None) -> dict:
+            source: dict | None = None, ci_stage_results: str | None = None) -> dict:
     store = GitStore(repo_root)
     main_sha = store.rev_parse(sha)
     remotes = _split_remotes(push_remote)
     result = {"main_sha": main_sha, "dry_run": dry_run, "production_ref": production_ref, "remotes": remotes, "ok": False}
     if skip_live and not dry_run:
         raise ProdgenError("--skip-live is allowed only together with --dry-run (a real promotion needs every mandatory gate)")
+    policy = _deploy_policy_problems(remotes, dry_run)
+    result["deploy_policy"] = {"required_remotes": list(DEPLOY_REMOTES), "ok": not policy, "problems": policy}
+    if policy:
+        result["stage"] = "policy"
+        result["refused"] = "deploy policy: " + "; ".join(policy)
+        return result
 
     with tempfile.TemporaryDirectory(prefix="prodgen-promote-") as td:
         out = os.path.join(td, "tree")
@@ -164,11 +202,16 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
             prov_bytes = fh.read()
         prov = json.loads(prov_bytes.decode("utf-8"))
 
-        # ── gates: reuse a bound COMPLETE_PASS report or run everything; G18/G20 are re-run regardless (mutable state)
+        # ── gates: reuse a bound COMPLETE_PASS report or run everything; G18/G20 are re-run regardless (mutable state) and the
+        #    environment-dependent gates are re-run when the environment identifiers differ or are unknown (검토 C3)
         gates_dict = None
+        env_rerun = False
         if verify_report:
-            rep, problems = _reuse_report(verify_report, prov, collect_environment())
-            result["verify_report"] = {"path": verify_report, "reused": rep is not None, "problems": problems}
+            current_env = collect_environment(netrc=netrc, jenkins_url=jenkins_url)
+            rep, problems, env_problems = _reuse_report(verify_report, prov, current_env)
+            env_rerun = bool(env_problems)
+            result["verify_report"] = {"path": verify_report, "reused": rep is not None, "problems": problems,
+                                       "environment_problems": env_problems, "environment_rerun": env_rerun, "promote_environment": current_env}
             if rep is None:
                 result["stage"] = "verify"
                 result["refused"] = "verify report not reusable: " + "; ".join(problems)
@@ -180,22 +223,30 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
                                 vault_password_file=vault_password_file, source=source)
             gates_dict = rep_obj.to_dict()
         else:
-            # re-run the mutable gates now and overwrite their recorded results
+            # re-run the mutable gates now (+ the environment-dependent ones when the environment is not verified) and overwrite their results
             from .verify import gates_static
             ctx = gates_static.load_context(repo_root, out, manifest_path)
             ctx["promotion"] = {"production_ref": production_ref, "remotes": remotes, "bootstrap_baseline": bootstrap_baseline,
                                 "vault_password_file": vault_password_file, "main_ref": None}
             fresh = {r.id: r for r in (g18_drift(ctx), g20_ancestry_and_remotes(ctx))}
+            if env_rerun:
+                env_rep = run_gates(repo_root, out, manifest_path, only=",".join(sorted(ENV_DEPENDENT_GATES)), skip_live=skip_live,
+                                    netrc=netrc, jenkins_url=jenkins_url, bootstrap_baseline=bootstrap_baseline,
+                                    production_ref=production_ref, remotes=remotes, vault_password_file=vault_password_file, source=source)
+                for r in env_rep.results:
+                    fresh[r.id] = r
             gates = [g for g in gates_dict.get("gates", []) if g["id"] not in fresh]
-            gates += [{"id": r.id, "name": r.name, "status": r.status, "partial": r.partial, "seconds": 0.0, "details": r.details, "data": r.data} for r in fresh.values()]
+            gates += [{"id": r.id, "name": r.name, "status": r.status, "partial": r.partial, "seconds": round(r.seconds, 2), "details": r.details, "data": r.data} for r in fresh.values()]
+            gates.sort(key=lambda g: g["id"])
             gates_dict = dict(gates_dict, gates=gates)
             statuses = {g["id"]: g["status"] for g in gates}
-            from .verify import MANDATORY_GATES
             missing = [f"{gid}: not run" for gid in MANDATORY_GATES if gid not in statuses] + \
                       [f"{gid}: SKIP" for gid, st in statuses.items() if st == "SKIP" and gid in MANDATORY_GATES] + \
                       [f"{g['id']}: partial" for g in gates if g.get("partial")]
             verdict = "FAIL" if any(st == "FAIL" for st in statuses.values()) else ("PARTIAL" if missing else "COMPLETE_PASS")
-            gates_dict.update({"verdict": verdict, "ok": verdict == "COMPLETE_PASS", "mandatory_missing": missing, "mutable_gates_rerun": sorted(fresh)})
+            gates_dict.update({"verdict": verdict, "ok": verdict == "COMPLETE_PASS", "mandatory_missing": missing,
+                               "gates_rerun": sorted(fresh), "gates_reused": sorted(g["id"] for g in gates if g["id"] not in fresh),
+                               "environment_rerun_reason": result["verify_report"]["environment_problems"] if env_rerun else []})
         result["gates"] = {"verdict": gates_dict.get("verdict"), "mandatory_missing": gates_dict.get("mandatory_missing", []),
                            "results": [(g["id"], g["status"]) for g in gates_dict.get("gates", [])]}
         if gates_dict.get("verdict") == "FAIL" or (gates_dict.get("verdict") != "COMPLETE_PASS" and not dry_run):
@@ -212,12 +263,25 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
             evidence = _load_json(e2e_evidence)
         elif gates_dict.get("e2e_evidence"):
             evidence = gates_dict["e2e_evidence"]
-        e2e_problems = _check_e2e(evidence, main_sha) if evidence else ["no E2E evidence given (--e2e-evidence or an aggregated report)"]
+        e2e_problems = _check_e2e(evidence, main_sha, prov.get("tree_hash")) if evidence else ["no E2E evidence given (--e2e-evidence or an aggregated report)"]
         result["e2e"] = {"ok": not e2e_problems, "problems": e2e_problems}
         if e2e_problems and not dry_run:
             result["stage"] = "e2e"
             result["refused"] = "E2E evidence: " + "; ".join(e2e_problems[:5])
             return result
+
+        # ── CI stage evidence (same candidate, required stages PASS) — required for a real promotion (검토 C4)
+        ci_problems = _check_ci_stages(ci_stage_results, main_sha, gates_dict) if ci_stage_results else ["no CI stage results given (--ci-stage-results ci_stage_results.json)"]
+        result["ci_stages"] = {"ok": not ci_problems, "problems": ci_problems, "path": ci_stage_results}
+        if ci_problems and not dry_run:
+            result["stage"] = "ci"
+            result["refused"] = "CI stage evidence: " + "; ".join(ci_problems[:5])
+            return result
+        if ci_stage_results and not ci_build:
+            try:
+                ci_build = _load_json(ci_stage_results).get("build_url") or ""
+            except (OSError, ValueError):
+                ci_build = ""
 
         # ── remote baseline + production state
         base = remote_baseline(store, production_ref, remotes)
@@ -261,8 +325,21 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
         trailers["Bootstrap-Baseline-Tree"] = store.commit_tree_sha(prev)      # git tree OID (not provenance.tree_hash)
     elif state and state["state"] == "RESTORED_BASELINE":
         trailers["Bootstrap-Baseline"] = state.get("baseline")
+        trailers["Bootstrap-Baseline-Tree"] = store.commit_tree_sha(state["baseline"])
+    elif state and state["state"] == "PROVENANCE":
+        # baseline inheritance (검토 C2): every generated commit after P1 keeps naming the legacy baseline it descends from, so a
+        # restore to B after B → P1 → P2 finds the record on the nearest generated commit as well
+        parent_trailers = GitStore.parse_trailers(store.commit_message(prev))
+        for key in ("Bootstrap-Baseline", "Bootstrap-Baseline-Tree"):
+            if parent_trailers.get(key):
+                trailers[key] = parent_trailers[key]
+    if gates_dict.get("gates_rerun"):
+        trailers["Gates-Rerun"] = " ".join(gates_dict["gates_rerun"])
+        trailers["Gates-Reused"] = " ".join(gates_dict.get("gates_reused", []))
     if evidence and evidence.get("evidence_sha256"):
         trailers["E2E-Evidence-SHA256"] = evidence["evidence_sha256"]
+    if ci_stage_results:
+        trailers["CI-Stages"] = "verified"
     message = _message(f"production: runtime tree from main {main_sha[:12]}",
                        "Generated by prodgen from a fixed main SHA (object store only); comments stripped.\n"
                        f"Verdict {gates_dict.get('verdict')} — gates actually run: {_gate_line(gates_dict)}", trailers)
@@ -291,6 +368,10 @@ def restore(repo_root: str, to_commit: str, *, dry_run: bool = True, production_
     target = store.rev_parse(to_commit)
     target_tree = store.commit_tree_sha(target)
     remotes = _split_remotes(push_remote)
+    if remotes and not dry_run:
+        policy = _deploy_policy_problems(remotes, dry_run)
+        if policy:
+            raise ProdgenError("deploy policy: " + "; ".join(policy) + " — a restore that moves one remote leaves the other behind (divergence)")
     base = remote_baseline(store, production_ref, remotes)
     prev = base["expected"]
     result = {"target": target, "target_tree_oid": target_tree, "parent": prev, "dry_run": dry_run,
@@ -313,10 +394,12 @@ def restore(repo_root: str, to_commit: str, *, dry_run: bool = True, production_
         bb = store.rev_parse(bootstrap_baseline)
         if bb != target:
             raise ProdgenError(f"--bootstrap-baseline {bootstrap_baseline} does not name the restore target {target[:12]}")
-        p1, _p1_prov, p1_trailers = first_prodgen_commit(store, prev) if prev else (None, None, None)
-        if p1 is None or (p1_trailers or {}).get("Bootstrap-Baseline") != target:
+        # the record may be older than the nearest generated commit (B → P1 → P2 → restore(B), 검토 C2): search the whole history
+        rec, _rec_prov, _rec_trailers = baseline_record(store, prev, target) if prev else (None, None, None)
+        latest, _l_prov, _l_tr = first_prodgen_commit(store, prev) if prev else (None, None, None)
+        if rec is None or latest is None:
             raise ProdgenError("the production history has no generated commit that recorded this baseline — refusing an arbitrary legacy restore")
-        trailers.update({"Restore-From": p1, "Bootstrap-Baseline": target, "Bootstrap-Baseline-Tree": target_tree})
+        trailers.update({"Restore-From": latest, "Baseline-Recorded-By": rec, "Bootstrap-Baseline": target, "Bootstrap-Baseline-Tree": target_tree})
         body = "Restores the legacy baseline tree (exact tree OID) as a new commit (no history rewrite) — RESTORED_BASELINE state."
         result["kind"] = "legacy_baseline"
     message = _message(f"production: restore tree of {target[:12]}", body, trailers)

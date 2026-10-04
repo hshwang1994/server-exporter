@@ -150,6 +150,10 @@ def g13_jenkins_linter(ctx, netrc=None, jenkins_url="https://jenkins-prod.gooddi
                         jenkins_version = line.split(":", 1)[1].strip()
         except OSError:
             pass
+    if not jenkins_version:
+        # the validate endpoint's response has no X-Jenkins header (2026-10-04 실측, GP-29) — GET /api/json carries it
+        from . import probe_jenkins_version
+        jenkins_version = probe_jenkins_version(base, netrc)
     body = (resp.stdout or "").strip()
     ok = resp.returncode == 0 and "successfully validated" in body
     details = [body[:500] if body else f"curl rc={resp.returncode}, empty response"]

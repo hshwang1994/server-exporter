@@ -67,7 +67,8 @@ def cmd_promote(args) -> int:
                   ci_build=args.ci_build, production_ref=args.production_ref, push_remote=args.push_remote,
                   skip_live=args.skip_live, netrc=args.netrc, verify_report=args.verify_report,
                   bootstrap_baseline=args.bootstrap_baseline, e2e_evidence=args.e2e_evidence,
-                  vault_password_file=args.vault_password_file, jenkins_url=args.jenkins_url, source=source)
+                  vault_password_file=args.vault_password_file, jenkins_url=args.jenkins_url, source=source,
+                  ci_stage_results=args.ci_stage_results)
     _emit(res, args.json)
     if not res.get("ok"):
         eprint(f"[prodgen promote] REFUSED at stage {res.get('stage')}: {res.get('refused', '')}")
@@ -152,12 +153,13 @@ def main(argv=None) -> int:
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--ci-build", default="")
     p.add_argument("--production-ref", default="refs/heads/production")
-    p.add_argument("--push-remote", default="", help="comma-separated remotes to publish to (e.g. origin,internal); not in dry-run")
+    p.add_argument("--push-remote", default="", help="remotes to publish to — a real promotion needs exactly origin,internal (deploy policy); ignored in dry-run")
     p.add_argument("--skip-live", action="store_true", help="only together with --dry-run")
     p.add_argument("--netrc", help="netrc file for the Jenkins linter (G13)")
     p.add_argument("--verify-report", help="reuse a COMPLETE_PASS report (binding + environment must match; G18/G20 re-run)")
     p.add_argument("--bootstrap-baseline", help="legacy production SHA for the first promotion")
     p.add_argument("--e2e-evidence", help="e2e evidence JSON (prodgen e2e-evidence) — required for a real promotion")
+    p.add_argument("--ci-stage-results", help="ci_stage_results.json of the CI build for this SHA (required stages PASS) — required for a real promotion")
     p.add_argument("--vault-password-file", help="vault password file for G19")
     p.add_argument("--jenkins-url", default="https://jenkins-prod.gooddi.lab")
     p.add_argument("--source-build-url", default="")

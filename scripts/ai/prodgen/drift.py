@@ -45,7 +45,10 @@ def is_ancestor(store: GitStore, ancestor: str, descendant: str) -> bool:
 
 
 def first_prodgen_commit(store: GitStore, head: str, limit: int = 200):
-    """Walk first-parent history from head; return (sha, provenance dict, trailers) of the nearest commit with provenance."""
+    """Walk first-parent history from head; return (sha, provenance dict, trailers) of the **nearest** commit with provenance
+    (= the latest generated production — used for G20 ancestry). Despite the name it is not the oldest one; to find the commit
+    that *recorded* a bootstrap baseline use `baseline_record` (검토 C2: the nearest generated commit P2 normally carries no
+    Bootstrap-Baseline trailer, so a restore to B after B → P1 → P2 must look past P2)."""
     out = store.run(["rev-list", "--first-parent", f"--max-count={limit}", head], text=True).split()
     for sha in out:
         prov_bytes = store.cat_path(sha, PROVENANCE_FILE)
@@ -54,6 +57,34 @@ def first_prodgen_commit(store: GitStore, head: str, limit: int = 200):
                 return sha, json.loads(prov_bytes.decode("utf-8")), GitStore.parse_trailers(store.commit_message(sha))
             except ValueError:
                 continue
+    return None, None, None
+
+
+latest_prodgen_commit = first_prodgen_commit
+
+
+def baseline_record(store: GitStore, head: str, baseline_sha: str, limit: int = 500):
+    """Walk first-parent history from head; return (sha, provenance dict, trailers) of the nearest generated commit whose
+    trailers record `baseline_sha` as the bootstrap baseline (`Bootstrap-Baseline`, and `Bootstrap-Baseline-Tree` == the
+    baseline's tree OID when present). None when no commit in the history recorded it (→ an arbitrary legacy restore is refused)."""
+    try:
+        want_tree = store.commit_tree_sha(baseline_sha)
+    except ProdgenError:
+        return None, None, None
+    out = store.run(["rev-list", "--first-parent", f"--max-count={limit}", head], text=True).split()
+    for sha in out:
+        trailers = GitStore.parse_trailers(store.commit_message(sha))
+        if trailers.get("Bootstrap-Baseline") != baseline_sha:
+            continue
+        if trailers.get("Bootstrap-Baseline-Tree") and trailers["Bootstrap-Baseline-Tree"] != want_tree:
+            continue
+        prov_bytes = store.cat_path(sha, PROVENANCE_FILE)
+        if prov_bytes is None:
+            continue          # a restore commit also carries the trailer but is not the *generated* record
+        try:
+            return sha, json.loads(prov_bytes.decode("utf-8")), trailers
+        except ValueError:
+            continue
     return None, None, None
 
 
@@ -81,14 +112,17 @@ def classify_production(store: GitStore, sha: str, bootstrap_baseline: str | Non
                 reasons.append("tree OID differs from the baseline's tree (not an exact legacy restore)")
             if not is_ancestor(store, base_sha, sha):
                 reasons.append("baseline is not an ancestor of this commit")
-            p1, p1_prov, p1_trailers = first_prodgen_commit(store, sha)
-            if p1 is None:
+            # the *latest* generated production decides ancestry (G20); the commit that *recorded* the baseline may be older (C2)
+            p_latest, p_latest_prov, _ = first_prodgen_commit(store, sha)
+            rec, _rec_prov, _rec_tr = baseline_record(store, sha, base_sha)
+            if p_latest is None:
                 reasons.append("no generated production (provenance) in the history")
-            elif (p1_trailers or {}).get("Bootstrap-Baseline") != base_sha:
-                reasons.append(f"generated production {p1[:12]} does not name this baseline ({(p1_trailers or {}).get('Bootstrap-Baseline')})")
+            elif rec is None:
+                reasons.append(f"no generated production in the history recorded this baseline ({base_sha[:12]})")
             else:
-                info["previous_generated"] = p1
-                info["previous_generated_main_sha"] = (p1_prov or {}).get("main_sha")
+                info["previous_generated"] = p_latest
+                info["previous_generated_main_sha"] = (p_latest_prov or {}).get("main_sha")
+                info["baseline_recorded_by"] = rec
         info["baseline"] = base_sha or base
         if reasons:
             info["reasons"] = reasons

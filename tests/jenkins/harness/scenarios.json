@@ -6,104 +6,500 @@
     "expect 의 키: delivered · layerA · layerB · source · filled · lines_eq_accepted · unrecovered_count · damage_contains ·",
     "  preserve.{archived,stashed,deleted} · unstable_contains · unstable_count · sink_posts_min · sink_last_status · body_sha_matches_sink ·",
     "  by_origin.{output,checkpoint,synthetic} · rethrown(interruption 이 Harness 까지 올라왔는가) · note(사람용).",
-    "결과 상태: PASS / FAIL / PARTIAL(필요 입력 없음 — 예: sink 미도달) 은 harness_verdict.py 가 정한다."
+    "결과 상태: PASS / FAIL / PARTIAL(필요 입력 없음 — 예: sink 미도달) 은 harness_verdict.py 가 정한다.",
+    "2026-10-04 검토 C5 — interruption 6 조건의 Harness 몫: ① inner_recover_timeout(BOUNDED=true) · recover_slow(BOUNDED=false, 운영 기본) ② inner_assemble_timeout(BOUNDED=true)",
+    "  ③ outer_timeout ④ Gather stage timeout 은 stage 본문이라 Harness 가 실행하지 못한다 — main Job T5 와 같은 catch 경로(aborted 기록·재전파); 사후 finalize 경로는 aborted_outcome_finalize",
+    "  ⑤ user_abort(Harness 가 자기 빌드를 /stop 으로 중단) + main Job T5 ⑥ foreign_timeout_interruption(남의 timeout 원인 — own nodeId 가 아니면 재전파)",
+    "jenkins_result: 그 시나리오가 끝나는 Jenkins 결과(기본 SUCCESS). bounded=true 는 BOUNDED 파라미터 없이도 SE_FINALIZER_BOUNDED=true 로 돈다.",
+    "probe_approvals=true 는 sandbox 승인 4 시그니처를 실측해 control.approvals 에 적는다 — 승인이 없으면 verdict 가 PARTIAL(승인) 로 둔다(FAIL 도 PASS 도 아니다).",
+    "expect_interruption=true 는 Harness 가 유발한 interruption 이라 Harness 가 기록 뒤 삼킨다(그 외 interruption 은 그대로 전파).",
+    "sink_hold: 판정 없는 보조 시나리오 — controller loopback sink 를 hold_seconds 동안 열어 둔다(main Job T2 의 Callback 수신 증거용). 기록만 archive 한다."
   ],
   "scenarios": {
     "normal_success": {
-      "case": "01_normal", "run_preserve": true, "outcome": "completed", "sink": {"status": "200"},
-      "expect": {"delivered": true, "layerA": "ok", "layerB": "skipped", "source": "stash", "filled": 0, "lines_eq_accepted": true,
-                 "preserve": {"archived": true, "stashed": true, "deleted": true}, "unstable_count": 0,
-                 "sink_posts_min": 1, "sink_last_status": 200, "body_sha_matches_sink": true, "unrecovered_count": 0,
-                 "note": "R5 정상 경로: delivered=true · 보충 0 · lineCount==accepted · unstable 미호출 · deleteDir 도달"}
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "layerB": "skipped",
+        "source": "stash",
+        "filled": 0,
+        "lines_eq_accepted": true,
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "unstable_count": 0,
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "body_sha_matches_sink": true,
+        "unrecovered_count": 0,
+        "note": "R5 정상 경로: delivered=true · 보충 0 · lineCount==accepted · unstable 미호출 · deleteDir 도달"
+      }
     },
     "archive_fail": {
-      "case": "01_normal", "run_preserve": true, "outcome": "completed", "sink": {"status": "200"},
-      "expect": {"delivered": true, "layerA": "ok", "source": "stash", "filled": 0, "lines_eq_accepted": true,
-                 "preserve": {"archived": false, "stashed": true, "deleted": false},
-                 "unstable_contains": ["archive 실패 — stash 로만 전달"], "sink_posts_min": 1, "sink_last_status": 200,
-                 "note": "R7: archive 실패가 stash 를 막지 않는다 · workspace 보존 · finalizer 는 stash 로 전달"}
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "source": "stash",
+        "filled": 0,
+        "lines_eq_accepted": true,
+        "preserve": {
+          "archived": false,
+          "stashed": true,
+          "deleted": false
+        },
+        "unstable_contains": [
+          "archive 실패 — stash 로만 전달"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "note": "R7: archive 실패가 stash 를 막지 않는다 · workspace 보존 · finalizer 는 stash 로 전달"
+      }
     },
     "stash_fail": {
-      "case": "01_normal", "run_preserve": true, "outcome": "completed", "sink": {"status": "200"},
-      "expect": {"delivered": true, "layerA": "ok", "source": "archive", "filled": 0, "lines_eq_accepted": true,
-                 "preserve": {"archived": true, "stashed": false, "deleted": true}, "unstable_count": 0,
-                 "sink_posts_min": 1, "sink_last_status": 200,
-                 "note": "R7: stash 실패 → finalizer 가 unarchive 로 회수 · archive 성공이므로 deleteDir"}
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "source": "archive",
+        "filled": 0,
+        "lines_eq_accepted": true,
+        "preserve": {
+          "archived": true,
+          "stashed": false,
+          "deleted": true
+        },
+        "unstable_count": 0,
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "note": "R7: stash 실패 → finalizer 가 unarchive 로 회수 · archive 성공이므로 deleteDir"
+      }
     },
     "both_fail": {
-      "case": "01_normal", "run_preserve": true, "outcome": "completed", "sink": {"status": "200"},
-      "expect": {"delivered": true, "layerA": "skipped", "layerB": "ok", "source": "none", "lines_eq_accepted": true,
-                 "by_origin": {"output": 0, "checkpoint": 0, "synthetic": 3},
-                 "preserve": {"archived": false, "stashed": false, "deleted": false},
-                 "unstable_contains": ["결과 보존 실패(archive·stash 모두)"], "sink_posts_min": 1, "sink_last_status": 200,
-                 "note": "R7: 둘 다 실패 → workspace 보존 + manifest 기반 실패 결과 전송. 원본 데이터가 Portal 에 간 것이 아니다(synthetic 3)"}
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "layerA": "skipped",
+        "layerB": "ok",
+        "source": "none",
+        "lines_eq_accepted": true,
+        "by_origin": {
+          "output": 0,
+          "checkpoint": 0,
+          "synthetic": 3
+        },
+        "preserve": {
+          "archived": false,
+          "stashed": false,
+          "deleted": false
+        },
+        "unstable_contains": [
+          "결과 보존 실패(archive·stash 모두)"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "note": "R7: 둘 다 실패 → workspace 보존 + manifest 기반 실패 결과 전송. 원본 데이터가 Portal 에 간 것이 아니다(synthetic 3)"
+      }
     },
     "truncate_jsonl": {
-      "case": "04_truncated_tail", "run_preserve": true, "outcome": "timeout", "sink": {"status": "200"},
-      "expect": {"delivered": true, "layerA": "ok_with_damage", "layerB": "skipped", "lines_eq_accepted": true, "filled": 1,
-                 "by_origin": {"output": 1, "checkpoint": 0, "synthetic": 1}, "preserve": {"archived": true, "stashed": true, "deleted": true},
-                 "unstable_contains": ["전송은 됐지만"], "sink_posts_min": 1, "sink_last_status": 200,
-                 "note": "3차 §6: 잘린 JSONL — Layer A 가 truncated_tail 1 을 합성으로 채움(fixture 기준 synthetic 1), body 는 유효 JSON"}
+      "case": "04_truncated_tail",
+      "run_preserve": true,
+      "outcome": "timeout",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "layerA": "ok_with_damage",
+        "layerB": "skipped",
+        "lines_eq_accepted": true,
+        "filled": 1,
+        "by_origin": {
+          "output": 1,
+          "checkpoint": 0,
+          "synthetic": 1
+        },
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "unstable_contains": [
+          "전송은 됐지만"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "note": "3차 §6: 잘린 JSONL — Layer A 가 truncated_tail 1 을 합성으로 채움(fixture 기준 synthetic 1), body 는 유효 JSON"
+      }
     },
     "checkpoint_only_a": {
-      "case": "07_checkpoint_addon_done", "run_preserve": true, "outcome": "timeout_killed", "sink": {"status": "200"},
-      "expect": {"delivered": true, "layerA": "ok", "layerB": "skipped", "lines_eq_accepted": true, "filled": 0,
-                 "by_origin": {"output": 0, "checkpoint": 1, "synthetic": 0}, "preserve": {"archived": true, "stashed": true, "deleted": true},
-                 "sink_posts_min": 1, "sink_last_status": 200,
-                 "note": "4차 §5: 정상 Layer A 가 checkpoint 에서 복구한다(finalize_gather_output.py:354+) — final 이 생기므로 hasResult=true"}
+      "case": "07_checkpoint_addon_done",
+      "run_preserve": true,
+      "outcome": "timeout_killed",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "layerB": "skipped",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "by_origin": {
+          "output": 0,
+          "checkpoint": 1,
+          "synthetic": 0
+        },
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "note": "4차 §5: 정상 Layer A 가 checkpoint 에서 복구한다(finalize_gather_output.py:354+) — final 이 생기므로 hasResult=true"
+      }
     },
     "checkpoint_only_b": {
-      "case": "07_checkpoint_addon_done", "run_preserve": true, "outcome": "timeout_killed", "sink": {"status": "200"},
-      "expect": {"delivered": true, "layerA": "skipped", "layerB": "ok", "source": "stash", "lines_eq_accepted": true, "filled": 0,
-                 "by_origin": {"output": 0, "checkpoint": 1, "synthetic": 0}, "preserve": {"archived": true, "stashed": true, "deleted": false},
-                 "unstable_contains": ["전송은 됐지만"], "sink_posts_min": 1, "sink_last_status": 200,
-                 "note": "4차 §5: Layer A 실패(Harness 주입 rc=1)·미생성 → hasResult=false → workspace 보존, Layer B 가 checkpoint 에서 복구(by_origin.checkpoint=1)"}
+      "case": "07_checkpoint_addon_done",
+      "run_preserve": true,
+      "outcome": "timeout_killed",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "layerA": "skipped",
+        "layerB": "ok",
+        "source": "stash",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "by_origin": {
+          "output": 0,
+          "checkpoint": 1,
+          "synthetic": 0
+        },
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": false
+        },
+        "unstable_contains": [
+          "전송은 됐지만"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "note": "4차 §5: Layer A 실패(Harness 주입 rc=1)·미생성 → hasResult=false → workspace 보존, Layer B 가 checkpoint 에서 복구(by_origin.checkpoint=1)"
+      }
     },
     "layer_a_fail": {
-      "case": "01_normal", "run_preserve": true, "outcome": "completed", "sink": {"status": "200"},
-      "expect": {"delivered": true, "layerA": "skipped", "layerB": "ok", "source": "stash", "lines_eq_accepted": true, "filled": 0,
-                 "by_origin": {"output": 3, "checkpoint": 0, "synthetic": 0}, "preserve": {"archived": true, "stashed": true, "deleted": true},
-                 "unstable_count": 0, "sink_posts_min": 1, "sink_last_status": 200,
-                 "note": "Layer A 실패 → Layer B 가 OUTPUT 줄로 조립. gather_output.json 이 있어 hasResult=true → deleteDir"}
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "layerA": "skipped",
+        "layerB": "ok",
+        "source": "stash",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "by_origin": {
+          "output": 3,
+          "checkpoint": 0,
+          "synthetic": 0
+        },
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "unstable_count": 0,
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "note": "Layer A 실패 → Layer B 가 OUTPUT 줄로 조립. gather_output.json 이 있어 hasResult=true → deleteDir"
+      }
     },
     "raw_fallback": {
-      "case": "05_corrupt_middle", "run_preserve": false, "outcome": "completed", "sink": {"status": "200"},
-      "expect": {"delivered": true, "layerA": "skipped", "layerB": "unavailable", "lines_count": 2, "lines_eq_accepted": false,
-                 "unrecovered_count": 1, "damage_contains": ["raw_dropped=1"], "recovery_limited": true,
-                 "unstable_contains": ["전송은 됐지만"], "sink_posts_min": 1, "sink_last_status": 200, "body_sha_matches_sink": true,
-                 "note": "3차 §6: 라이브러리(readTrusted) 실패 + 깨진 줄 → 유효한 2줄만 유효 JSON 으로 전송, 미복구 host 1 은 unrecovered 로 명시"}
+      "case": "05_corrupt_middle",
+      "run_preserve": false,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "layerA": "skipped",
+        "layerB": "unavailable",
+        "lines_count": 2,
+        "lines_eq_accepted": false,
+        "unrecovered_count": 1,
+        "damage_contains": [
+          "raw_dropped=1"
+        ],
+        "recovery_limited": true,
+        "unstable_contains": [
+          "전송은 됐지만"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "body_sha_matches_sink": true,
+        "note": "3차 §6: 라이브러리(readTrusted) 실패 + 깨진 줄 → 유효한 2줄만 유효 JSON 으로 전송, 미복구 host 1 은 unrecovered 로 명시"
+      }
     },
     "report_corrupt": {
-      "case": "01_normal", "run_preserve": false, "layer_a_direct": true, "mutations_after_layer_a": ["corrupt_report"],
-      "outcome": "completed", "sink": {"status": "200"},
-      "expect": {"delivered": true, "layerA": "report_unreadable", "layerB": "ok", "lines_eq_accepted": true, "filled": 0,
-                 "by_origin": {"output": 3, "checkpoint": 0, "synthetic": 0}, "damage_contains": ["layer_a_unreadable"],
-                 "sink_posts_min": 1, "sink_last_status": 200,
-                 "note": "3차 §6: 잘린 report → 파싱 실패 경계 → Layer B 전환 (interruption 과 분리)"}
+      "case": "01_normal",
+      "run_preserve": false,
+      "layer_a_direct": true,
+      "mutations_after_layer_a": [
+        "corrupt_report"
+      ],
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "layerA": "report_unreadable",
+        "layerB": "ok",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "by_origin": {
+          "output": 3,
+          "checkpoint": 0,
+          "synthetic": 0
+        },
+        "damage_contains": [
+          "layer_a_unreadable"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "note": "3차 §6: 잘린 report → 파싱 실패 경계 → Layer B 전환 (interruption 과 분리)"
+      }
     },
     "sink_5xx": {
-      "case": "01_normal", "run_preserve": true, "outcome": "completed", "sink": {"status": "503"},
-      "expect": {"delivered": false, "layerA": "ok", "unstable_contains": ["Callback 전송 실패"], "sink_posts_min": 3, "sink_last_status": 503,
-                 "note": "T6(통제): 5xx 는 재시도 3회 뒤 실패 — body 는 artifact callback_body.json"}
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "503"
+      },
+      "expect": {
+        "delivered": false,
+        "layerA": "ok",
+        "unstable_contains": [
+          "Callback 전송 실패"
+        ],
+        "sink_posts_min": 3,
+        "sink_last_status": 503,
+        "note": "T6(통제): 5xx 는 재시도 3회 뒤 실패 — body 는 artifact callback_body.json"
+      }
     },
     "sink_close": {
-      "case": "01_normal", "run_preserve": true, "outcome": "completed", "sink": {"status": "200", "mode": "close"},
-      "expect": {"delivered": false, "layerA": "ok", "unstable_contains": ["Callback 전송 실패"], "sink_posts_min": 1,
-                 "note": "T6(통제): 연결 끊김은 httpRequest 예외 → 재시도 뒤 실패"}
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200",
+        "mode": "close"
+      },
+      "expect": {
+        "delivered": false,
+        "layerA": "ok",
+        "unstable_contains": [
+          "Callback 전송 실패"
+        ],
+        "sink_posts_min": 1,
+        "note": "T6(통제): 연결 끊김은 httpRequest 예외 → 재시도 뒤 실패"
+      }
     },
     "recover_slow": {
-      "case": "01_normal", "run_preserve": true, "outcome": "completed", "sink": {"status": "200"}, "slow_seconds": 45,
-      "expect": {"delivered": true, "layerA": "ok", "lines_eq_accepted": true, "sink_posts_min": 1, "sink_last_status": 200,
-                 "note": "Tier 2 기본 off: unstash 가 45 s 느려도 상한 없이 완주한다(종전 동작). BOUNDED=true+승인 환경에서는 source=archive 로 바뀌어야 한다"}
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 45,
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "lines_eq_accepted": true,
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "note": "3차 §4 ① 운영 기본(BOUNDED=false): unstash 가 45 s 느려도 상한 없이 완주한다(source=stash · delivered). 상한 동작은 inner_recover_timeout(BOUNDED=true) 가 따로 본다",
+        "source": "stash",
+        "rethrown": false
+      }
     },
     "outer_timeout": {
-      "case": "01_normal", "run_preserve": true, "outcome": "completed", "sink": {"status": "200"}, "slow_seconds": 45, "outer_timeout_seconds": 20,
-      "expect": {"rethrown": true, "sink_posts_max": 0,
-                 "note": "3차 §4: 외곽 timeout(Harness 가 20 s 로 감쌈)은 finalizer 안에서 삼켜지지 않고 Harness 까지 올라온다 — Callback 미시도"}
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 45,
+      "outer_timeout_seconds": 20,
+      "expect": {
+        "rethrown": true,
+        "sink_posts_max": 0,
+        "note": "3차 §4: 외곽 timeout(Harness 가 20 s 로 감쌈)은 finalizer 안에서 삼켜지지 않고 Harness 까지 올라온다 — Callback 미시도"
+      }
+    },
+    "inner_recover_timeout": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 45,
+      "bounded": true,
+      "probe_approvals": true,
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "source": "archive",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "3차 §4 ① Tier 2: unstash 가 RECOVER(30 s) 를 넘기면 **자기 timeout 의 nodeId 로 식별**해 unarchive 로 회수 → Callback. 승인 4 시그니처가 없으면 식별 불가 → 재전파(PARTIAL/승인, 통과 아님)"
+      }
+    },
+    "inner_assemble_timeout": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 70,
+      "bounded": true,
+      "probe_approvals": true,
+      "expect": {
+        "delivered": true,
+        "layerA": "skipped",
+        "layerB": "unavailable",
+        "lines_eq_accepted": true,
+        "damage_contains": [
+          "assemble_timeout"
+        ],
+        "unstable_contains": [
+          "전송은 됐지만"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "3차 §4 ② Tier 2: Layer A 를 막고(주입 rc=1) readTrusted 가 ASSEMBLE(60 s) 를 넘기면 자기 timeout 으로 식별 → layerB=unavailable · raw 줄로 Callback. 승인 없으면 재전파(PARTIAL/승인)"
+      }
+    },
+    "foreign_timeout_interruption": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "expect_interruption": true,
+      "expect": {
+        "rethrown": true,
+        "sink_posts_max": 0,
+        "note": "3차 §4 ⑥ 원인 미식별: wrapper 가 unstash 안에서 **남의** timeout(2 s) 으로 FlowInterruptedException 을 만든다 — 자기 nodeId 가 아니므로(승인 유무와 무관) 삼키지 않고 재전파, Callback 미시도"
+      }
+    },
+    "user_abort": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 45,
+      "self_abort_after": 12,
+      "expect_interruption": true,
+      "jenkins_result": "ABORTED",
+      "expect": {
+        "rethrown": true,
+        "sink_posts_max": 0,
+        "note": "3차 §4 ⑤ 사용자 중단: 느린 unstash 중에 Harness 가 자기 빌드에 POST /stop — finalizer 는 재전파, Callback 미시도, Jenkins 결과 ABORTED 유지(main Job 전체 경로는 T5)"
+      }
+    },
+    "aborted_outcome_finalize": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "aborted",
+      "sink": {
+        "status": "200"
+      },
+      "set_result": "ABORTED",
+      "jenkins_result": "ABORTED",
+      "expect": {
+        "delivered": true,
+        "layerA": "ok",
+        "outcome": "aborted",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "sink_posts_min": 1,
+        "sink_posts_max": 1,
+        "sink_last_status": 200,
+        "unstable_contains": [
+          "outcome=aborted"
+        ],
+        "rethrown": false,
+        "note": "3차 §4 ④⑤ 사후 경로: outcome=aborted 로 기록된 뒤의 보존·finalize — ABORTED 빌드는 Callback 1회만 시도(seCallback aborted 분기), 완료 host 데이터는 그대로 전달, 비정상 종료를 unstable 로 남긴다"
+      }
+    },
+    "sink_hold": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "hold_seconds": 900,
+      "expect": {
+        "note": "보조 — controller loopback sink 를 hold_seconds 동안 유지(main Job T2: callbackUrl=http://127.0.0.1:<SINK_PORT>). 판정 없음(INFO), sink/record.jsonl 이 수신 증거"
+      }
     },
     "sandbox_probe": {
-      "case": "01_normal", "run_preserve": false, "outcome": "completed", "sink": {"status": "200"},
-      "expect": {"note": "정보성 — sandbox 허용 API 실측만 기록"}
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "note": "정보성 — sandbox 허용 API 실측만 기록"
+      },
+      "probe_approvals": true
     }
   }
 }
