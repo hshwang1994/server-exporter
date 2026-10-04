@@ -11,7 +11,7 @@ import pytest
 
 from scripts.ai.prodgen import PROVENANCE_FILE
 from scripts.ai.prodgen.build import FAILURE_FILE, build
-from scripts.ai.prodgen.drift import drift_check
+from scripts.ai.prodgen.drift import drift_check, export_tar
 from scripts.ai.prodgen.gitstore import GitStore
 from scripts.ai.prodgen.promote import promote, restore
 from scripts.ai.prodgen.verify import run_gates
@@ -189,3 +189,26 @@ def test_restore_refuses_non_prodgen_commit(repo):
         restore(str(repo), "HEAD", dry_run=True)
     with pytest.raises(Exception):
         restore(str(repo), "HEAD", dry_run=True, bootstrap_baseline="HEAD")   # baseline 을 기록한 생성 production 이 없다
+
+
+def test_drift_recorded_generator_export_is_byte_exact_under_autocrlf(repo):
+    """GP-45 (2026-10-05): A1 re-runs the generator recorded in the production provenance from a `git archive` export. With
+    `core.autocrlf=true` (Windows default) a plain archive converts the manifest to CRLF and the loader refuses it, so G18 FAILED on the
+    promoting workstation while CI (Linux) passed. export_tar() must return the LF blobs exactly as committed."""
+    import io
+    import tarfile
+    _git(repo, "config", "core.autocrlf", "true")
+    store = GitStore(str(repo))
+    sha = _git(repo, "rev-parse", "HEAD")
+
+    def manifest_bytes(tar_bytes):
+        with tarfile.open(fileobj=io.BytesIO(tar_bytes)) as tf:
+            member = [m for m in tf.getmembers() if m.name.endswith("production_manifest.yml")][0]
+            return tf.extractfile(member).read()
+
+    plain = manifest_bytes(store.run(["archive", "--format=tar", sha, "--", "production_manifest.yml"]))
+    exact = manifest_bytes(export_tar(store, sha, ["production_manifest.yml"]))
+    assert b"\r\n" not in exact and exact == store.cat_path(sha, "production_manifest.yml"), "export must equal the committed blob"
+    assert b"\r\n" in plain, "the defect: a plain archive under autocrlf=true carries CRLF (what refused the manifest)"
+    src = (pathlib.Path(__file__).resolve().parents[3] / "scripts/ai/prodgen/drift.py").read_text(encoding="utf-8")
+    assert 'export_tar(store, main_sha, ["scripts/ai/prodgen", "production_manifest.yml"])' in src, "A1 uses the byte-exact export"

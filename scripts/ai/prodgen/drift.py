@@ -157,6 +157,13 @@ def previous_generated_main(store: GitStore, production_sha: str | None):
     return p1, (prov or {}).get("main_sha")
 
 
+def export_tar(store: GitStore, treeish: str, paths: list) -> bytes:
+    """Byte-exact `git archive` of `paths` at `treeish`. `git archive` applies core.autocrlf/core.eol like a checkout — on a Windows clone
+    with autocrlf=true the exported production_manifest.yml came out CRLF and the manifest loader refused it, so the A1 check FAILED on the
+    promoting workstation while passing in CI (GP-45, 2026-10-05). Blobs are LF in the index; export them as they are."""
+    return store.run(["-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive", "--format=tar", treeish, "--", *paths])
+
+
 def drift_check(repo_root: str, production_ref: str, manifest_path: str, bootstrap_baseline: str | None = None) -> dict:
     store = GitStore(repo_root)
     sha = store.rev_parse(production_ref)
@@ -205,7 +212,7 @@ def drift_check(repo_root: str, production_ref: str, manifest_path: str, bootstr
         with tempfile.TemporaryDirectory(prefix="prodgen-a1-") as td:
             gen_root = os.path.join(td, "gen")
             os.makedirs(gen_root)
-            archive = store.run(["archive", "--format=tar", main_sha, "--", "scripts/ai/prodgen", "production_manifest.yml"])
+            archive = export_tar(store, main_sha, ["scripts/ai/prodgen", "production_manifest.yml"])
             with tarfile.open(fileobj=io.BytesIO(archive)) as tf:
                 tf.extractall(gen_root)
             out = os.path.join(td, "tree")
