@@ -1,44 +1,17 @@
 ---
-# =============================================================================
-# esxi-gather / site.yml  — orchestration 전용
-#
-# 흐름:
-#   init_fragments
-#   → run_precheck       (도달[TCP 응답 OR ICMP 응답]→port→protocol→auth)
-#   → select_adapter     (adapter_loader)
-#   → collect_facts      (_e_raw_facts, _e_facts_ok)
-#   → collect_config     (_e_raw_config, _e_config_ok)
-#   → collect_datastores (_e_raw_ds, _e_ds_ok)
-#   → normalize_system   (system/hardware/cpu/memory fragment → merge)
-#   → normalize_network  (network fragment → merge)
-#   → normalize_storage  (storage fragment → merge)
-#   → build_sections / build_status / build_errors
-#   → build_meta / build_correlation
-#   → build_output → inject schema_version → OUTPUT
-# =============================================================================
 
 - name: "esxi-gather"
   hosts: all
   gather_facts: false
   connection: local
-  # 2026-04-30 perf: dead-host 다수 inventory에서 host별 독립 진행 (linear 시 stuck host가 wave 막음)
   strategy: free
 
-  # 2026-08-12: vault 를 vars_files 에서 뺐다. Credential 은 이제 Location 축을 갖고
-  #   (vault/<se_location>/esxi.yml) block 안에서 동적으로 로드한다. ESXi 는 선택축이
-  #   location 하나뿐이라 2번째 경로 조각이 없다.
-  #   vars_files 로 경로를 템플릿하면 파일 부재 시 play 가 죽어 envelope 이 사라진다 (rule 11).
   vars_files:
-    # Portal 사용자 문구 카탈로그 (_fr_catalog) — rescue / always 가 참조한다.
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     _e_ip:   "{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}"
-    # 2026-08-12: `| default('')` 방어 추가. 종전에는 default 없이 ansible_user/password 를
-    #   읽었고, 터지지 않은 이유는 Jinja 지연 평가 + 첫 소비 시점(collect_facts)에는 이미
-    #   try_one_credential 이 host fact 으로 덮어썼기 때문이다. vault 가 play 시작 시점에
-    #   top-level 로 주입되지 않게 되면서 그 안전망이 얇아지므로 명시 방어를 둔다 (동작 불변).
     _e_user: "{{ ansible_user | default('') }}"
     _e_pass: "{{ ansible_password | default('') }}"
 
@@ -51,7 +24,6 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/init_fragments.yml"
 
-        # ── pre-check ────────────────────────────────────────────────────
         - name: "esxi | run precheck"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/precheck/run_precheck.yml"
@@ -69,9 +41,6 @@
               ESXi 호스트 전원, 네트워크, vSphere API(443) 포트를 확인하세요.
           when: not (_precheck_ok | bool)
 
-        # Credential 선택 — (se_location) → vault/<loc>/esxi.yml
-        # precheck 뒤에 둔다: 대상이 아예 응답하지 않으면 자격증명 단계가 의미 없고,
-        # failure_stage 도 auth 가 아니라 port/protocol 이어야 하기 때문이다.
         - name: "esxi | resolve credentials"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/credential/resolve_and_load.yml"
@@ -87,7 +56,6 @@
           when: _cred_load_outcome | default('not_resolved') in
                 ['not_resolved', 'credential_set_missing', 'credential_set_undecryptable']
 
-        # P1 (cycle 2026-04-28): vault accounts 후보 순차 시도.
         - name: "esxi | try credentials"
           ansible.builtin.include_tasks: tasks/try_credentials.yml
           vars:
@@ -107,9 +75,6 @@
         - name: "esxi | collect facts"
           ansible.builtin.include_tasks: tasks/collect_facts.yml
 
-        # 2026-04-30: 이 단계 도달은 precheck OK + 인증 OK 의미.
-        # 따라서 네트워크/포트/자격증명은 이미 정상으로 증명됨.
-        # 실제 원인은 vSphere API 호출 실패: 계정 권한 부족, 펌웨어 호환, 라이선스 등.
         - name: "esxi | abort if facts failed"
           ansible.builtin.fail:
             msg: >-
@@ -120,21 +85,11 @@
               가능한 원인: (1) 계정의 vSphere 권한 부족 (Read-Only / System.View 필요), (2) ESXi 펌웨어 호환성 (지원: 6.7 / 7.x / 8.x), (3) 라이선스 만료, (4) lockdown 모드.
           when: not (_e_facts_ok | bool)
 
-        # BUG #1 fix (cycle production-audit 후속): vmware_host_vmnic_info / vmware_vswitch_info /
-        # vmware_portgroup_info / vmware_host_vmhba_info 의 hosts_*_info dict 는 ESXi configured
-        # hostname 을 키로 사용한다. _e_ip (IP) 로 lookup 하면 항상 빈 결과 → BUG #4 의 직접 원인.
-        # 또한 system.hostname / system.fqdn 도 IP 가 아닌 ansible_hostname 을 사용해야 한다.
-        # 2026-09-03 (B-01): 값이 없으면 null — IP 로 대체하지 않는다. 모듈의 esxi_hostname 인자로는
-        #   `_e_hostname | default(_e_ip, true)` 를 넘긴다 (API 인자일 뿐 envelope 에 나가지 않는다).
         - name: "esxi | resolve hostname from raw facts"
           ansible.builtin.set_fact:
             _e_hostname: "{{ _e_raw_facts.ansible_hostname | default(none, true) or none }}"
           no_log: true
 
-        # ── adapter 선택 (collect facts 후 — 실제 ESXi 버전으로 version_patterns 매칭) ──
-        # Round 17 #9: 기존엔 collect_facts 전에 facts={} 로 선택 → version 빈 값이라
-        # version_patterns(^6./^7./^8.)가 죽고 priority 만으로 esxi_8x 가 항상 선택되어
-        # 6.x/7.x 호스트도 adapter_candidate=esxi_8x 로 오기재. 실제 버전을 넘겨 올바로 매칭.
         - name: "esxi | select adapter"
           ansible.builtin.set_fact:
             _selected_adapter: >-
@@ -150,11 +105,9 @@
         - name: "esxi | collect datastores"
           ansible.builtin.include_tasks: tasks/collect_datastores.yml
 
-        # 2026-06-22: 물리 디스크 serial/wwn 수집 (esxi_disks 커스텀 모듈, pyvmomi)
         - name: "esxi | collect physical disks"
           ansible.builtin.include_tasks: tasks/collect_disks.yml
 
-        # 잔류 fix (Round 12 후속): vmware_host_facts/config_info 가 DNS 미반환 케이스 우회
         - name: "esxi | collect dns"
           ansible.builtin.include_tasks: tasks/collect_dns.yml
 
@@ -167,21 +120,11 @@
         - name: "esxi | normalize storage"
           ansible.builtin.include_tasks: tasks/normalize_storage.yml
 
-        # P4 (cycle 2026-04-29): vmnic/vmhba/vSwitch/portgroup 확장
         - name: "esxi | collect network extended (P4)"
           ansible.builtin.include_tasks: tasks/collect_network_extended.yml
 
-        # 2026-04-29 fix B31/B32: ESXi runtime (NTP/timezone/firewall) + default_gateway
         - name: "esxi | collect runtime (B31/B32)"
           ansible.builtin.include_tasks: tasks/collect_runtime.yml
-
-        # 고객별 추가 수집 (Add-on) — 마지막 수집 뒤 · 조립 앞에 둔다 (Add-on 결과가 조립에 들어간다).
-        - name: "esxi | addon"
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
-          vars:
-            _addon_target: esxi
-          when: lookup('env', 'ADDON_DIR') | length > 0
 
         - name: "esxi | build_sections"
           ansible.builtin.include_tasks:
@@ -195,9 +138,6 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_errors.yml"
 
-        # 2026-09-03: envelope.vendor 는 common/tasks/normalize/resolve_vendor.yml 한 곳에서
-        # data.hardware.vendor → vendor_aliases.yml 정본으로 결정한다 (OS 채널과 동일 경로).
-        # 종전 인라인 구현은 alias 정확일치 실패 시 raw 제조사 문자열을 그대로 envelope 에 냈다 (B-07).
         - name: "esxi | set output meta"
           ansible.builtin.set_fact:
             _out_target_type:       "esxi"
@@ -210,10 +150,6 @@
 
         - name: "esxi | enrich diagnosis with adapter"
           ansible.builtin.set_fact:
-            # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
-            # production-audit: ESXi 성공 path에서 auth_success=true 명시 (cross-channel consistency)
-            # 2026-04-29 fix B62: esxi_version 추가 — Redfish/OS 채널과 trace 일관성
-            #  (Redfish: redfish_version / OS: detected_os+python_version / ESXi: esxi_version)
             _diagnosis: >-
               {{ _diagnosis | default({}) | combine({
                    'auth_success': true,
@@ -229,7 +165,6 @@
                    })
                  }) }}
 
-        # ── meta & correlation ───────────────────────────────────────────
         - name: "esxi | build_meta"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_meta.yml"
@@ -237,7 +172,6 @@
         - name: "esxi | build_correlation"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_correlation.yml"
-        # ─────────────────────────────────────────────────────────────────
 
         - name: "esxi | build_output"
           ansible.builtin.include_tasks:
@@ -247,43 +181,27 @@
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
+        - name: CHECKPOINT
+          ansible.builtin.debug:
+            msg: "{{ _output | to_json }}"
+
+        - name: "esxi | addon"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
+          vars:
+            _addon_target: esxi
+          when: lookup('env', 'ADDON_DIR') | length > 0
+
       rescue:
-        # ── Portal Grid 계약 (2026-08-10 사용자 확인) — redfish rescue 와 동일 취지 ──
-        # ESXi 는 redfish 와 달리 인증 단계와 수집 단계가 **분리 관측** 가능하다:
-        #   _e_auth_ok  : try_credentials 의 자격 probe 통과 여부
-        #   _e_facts_ok : vmware_host_facts 본 수집 통과 여부
-        # 따라서 어느 단계에서 멈췄는지 확정할 수 있어 failure_stage='auth' 를 쓸 수 있다.
-        # 단 **원인**(자격 오류 / 권한 부족 / lockdown / 라이선스)은 확정 불가라
-        # (try_one_credential.yml:35 의 판정식이 이들을 구분하지 못함) auth_success 는
-        # false 로 만들지 않고 null 을 유지한다. 반대로 _e_auth_ok=true 는 실제로 인증이
-        # 통과한 것을 관측한 값이므로 true 로 기록한다.
-        #
-        # 사용자 문구는 카탈로그(common/vars/failure_reasons.yml `_fr_catalog`)에서 원인별 키로
-        #   고른다 (2026-09-21). 인증 통과 후 실패(수집/정규화) → gather_after_auth,
-        #   Vault 설정 문제 → loc_* 키, 그 외 인증 실패 → auth_unconfirmed. 수집 실패와 정규화
-        #   실패는 관리자가 할 일이 같아 한 문장이다. 단계 구분은 failure_stage 가 유지한다.
-        # 2026-08-12 (C6): 자격 후보가 0건이면 try_credentials 의 iterate 가 통째로 skip 되어
-        #   _e_auth_ok 가 '관측한 적 없음' 인데도 false 로 남는다. 그 상태에서 이후 단계가
-        #   실패하면 stage=auth + 자격증명 문장이 나가는데, 같은 errors 원소의 detail 은
-        #   "인증과 네트워크는 정상" 이라고 말해 서로 반대되는 이야기가 된다.
-        #   vmware_host_facts 가 실제로 facts 를 돌려준 것(_e_facts_ok)은 인증 통과의 직접
-        #   관측이므로 함께 본다.
         - name: "esxi | rescue | Portal 표시용 failure_reason 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
-              {#- 2026-08-12: credential set 자체를 열지 못한 경우를 분리한다. '자격을 실어
-                  보냈는데 통하지 않았다'(AUTH_PROBE_FAILED)와 '보낼 자격이 없었다'는 운영자의
-                  조치가 다르다 (ESXi 계정/lockdown 점검 vs vault 배치 점검). stage 는 auth 를
-                  유지한다 — stage 는 원인이 아니라 멈춘 위치다(CLAUDE.md §9).
-                  auth_success 는 그대로 null 이다 (미시도). -#}
               {%- set ok = (_e_auth_ok | default(false) | bool)
                            or (_e_facts_ok | default(false) | bool) -%}
               {%- set lo = _cred_load_outcome | default('') -%}
               {%- set cred_na = (not ok)
                                 and (lo in ['not_resolved', 'credential_set_missing',
                                             'credential_set_undecryptable']) -%}
-              {#- 2026-09-21: 원인별 카탈로그 키 — os-gather rescue 와 같은 규칙이다.
-                  계정 0개(empty_accounts)는 계정 없이 시도한 뒤의 실패라 code 는 AUTH_PROBE_FAILED. -#}
               {%- if ok -%}
                 {%- set reason_key = 'gather_after_auth' -%}
               {%- elif (_cred_reason | default('')) == 'unknown_location' -%}
@@ -324,7 +242,6 @@
                                         else {})}) }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
-        # 2026-09-03 (B-36): 예외 전에 확정한 제조사를 버리지 않는다 — 같은 resolve_vendor 경로.
         - name: "esxi | rescue | resolve vendor"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/resolve_vendor.yml"
@@ -337,10 +254,6 @@
             _fail_sec_supported:    "{{ ((_selected_adapter | default({})).capabilities | default({})).sections_supported
                                         | default(['system','hardware','cpu','memory','storage','network']) }}"
             _fail_error_section:    "esxi_gather"
-            # 2026-08-10 (B-7): redfish-gather/site.yml 의 rescue 와 동일하게 실패 태스크명을
-            # prefix 로 포함 — json_only callback 이 fatal 태스크 출력을 차단하므로 이 값이 유일한
-            # 위치 추적 단서다. 2026-08-11 (Phase 6-B) 부터 errors[].message 가 아니라
-            # **errors[].detail** 로 들어간다 (build_failed_output.yml).
             _fail_error_message:    "[task: {{ ansible_failed_task.name | default('unknown') }}] {{ ansible_failed_result.msg | default('ESXi 수집 예외') }}"
 
         - name: "esxi | rescue | build_failed_output"
@@ -352,9 +265,6 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       always:
-        # rule 13 R5 / rule 20 R1: 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
-        # 2026-09-03 (B-01/B-04): hostname 은 IP 로 대체하지 않는다(null). sections/meta/correlation/data 는
-        #   rescue 경로(build_failed_output.yml)와 같은 shape — 호출자가 실패 종류에 따라 다른 모양을 보지 않는다.
         - name: OUTPUT
           ansible.builtin.debug:
             msg: "{{ (_output | default({

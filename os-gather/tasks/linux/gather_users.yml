@@ -1,259 +1,135 @@
 ---
-# os-gather/tasks/linux/gather_users.yml
-# getent passwd/group + lastlog 3단계 → data.users fragment
-#
-# Python 경로: ansible.builtin.getent + shell (기존 로직)
-# Raw fallback: getent 시스템 명령 + lastlog/last/utmpdump (raw only)
 
-# =============================================================================
-# Python Path
-# =============================================================================
-- block:
-    - name: "linux | users | passwd database"
-      ansible.builtin.getent:
-        database: passwd
-      failed_when: false
-      no_log: true
+- name: "linux | users | raw getent + last logins"
+  timeout: "{{ _os_task_timeout | default(120) }}"
+  ansible.builtin.raw: |
+    export LANG=C LC_ALL=C
+    pw=$(getent passwd 2>/dev/null)
+    echo "PASSWD_START"
+    [ -n "$pw" ] && printf '%s\n' "$pw"
+    echo "PASSWD_END"
+    echo "GROUP_START"
+    getent group 2>/dev/null
+    echo "GROUP_END"
+    echo "LASTLOG_START"
+    {{ lookup('file', lookup('env', 'REPO_ROOT') + '/os-gather/files/get_last_login.sh') }}
+    [ -n "$pw" ] && printf '%s\n' "$pw" | while IFS=: read -r u _ uid _ _ home _; do
+      { [ "$uid" -ge 1000 ] || [ "$u" = "root" ]; } && get_last_login "$u"
+    done
+    echo "LASTLOG_END"
+  register: _l_users_raw_result
+  changed_when: false
+  failed_when: false
+  no_log: true
 
-    - name: "linux | users | group database"
-      ansible.builtin.getent:
-        database: group
-      failed_when: false
-      no_log: true
+- name: "linux | users | parse raw passwd + group"
+  ansible.builtin.set_fact:
+    _l_raw_passwd: >-
+      {%- set out = {} -%}
+      {%- set in_section = namespace(active=false) -%}
+      {%- for line in (_l_users_raw_result.stdout_lines | default([])) -%}
+        {%- if line | trim == 'PASSWD_START' -%}
+          {%- set in_section.active = true -%}
+        {%- elif line | trim == 'PASSWD_END' -%}
+          {%- set in_section.active = false -%}
+        {%- elif in_section.active and ':' in line -%}
+          {%- set parts = line.split(':') -%}
+          {%- if parts | length >= 7 -%}
+            {%- set _ = out.update({parts[0]: [parts[0], parts[2], parts[3], parts[4], parts[5], parts[6]]}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+    _l_raw_group: >-
+      {%- set out = {} -%}
+      {%- set in_section = namespace(active=false) -%}
+      {%- for line in (_l_users_raw_result.stdout_lines | default([])) -%}
+        {%- if line | trim == 'GROUP_START' -%}
+          {%- set in_section.active = true -%}
+        {%- elif line | trim == 'GROUP_END' -%}
+          {%- set in_section.active = false -%}
+        {%- elif in_section.active and ':' in line -%}
+          {%- set parts = line.split(':') -%}
+          {%- if parts | length >= 4 -%}
+            {%- set _ = out.update({parts[0]: [parts[0], parts[2], parts[3] | default('')]}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+    _l_raw_last_logins: >-
+      {%- set out = {} -%}
+      {%- set in_section = namespace(active=false) -%}
+      {%- for line in (_l_users_raw_result.stdout_lines | default([])) -%}
+        {%- if line | trim == 'LASTLOG_START' -%}
+          {%- set in_section.active = true -%}
+        {%- elif line | trim == 'LASTLOG_END' -%}
+          {%- set in_section.active = false -%}
+        {%- elif in_section.active and ':' in line and 'PASSWD' not in line and 'GROUP' not in line -%}
+          {%- set parts = line.split(':',1) -%}
+          {%- if parts | length == 2 -%}
+            {%- set _ = out.update({parts[0]: parts[1] if parts[1] != 'null' else none}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
 
-    - name: "linux | users | last login times"
-      ansible.builtin.shell: |
-        export LANG=C LC_ALL=C
-        {{ lookup('file', lookup('env', 'REPO_ROOT') + '/os-gather/files/get_last_login.sh') }}
-        getent passwd | while IFS=: read -r u _ uid _ _ home _; do
-          { [ "$uid" -ge 1000 ] || [ "$u" = "root" ]; } && get_last_login "$u"
-        done
-      args:
-        executable: /bin/bash
-      register: _l_lastlog_raw
-      changed_when: false
-      failed_when: false
-      no_log: true
+- name: "linux | users | build users list (raw)"
+  ansible.builtin.set_fact:
+    _l_norm_users_list_raw: >-
+      {%- set users = [] -%}
+      {%- set ug = {} -%}
+      {%- set gid_name = {} -%}
+      {%- for gname, gdata in (_l_raw_group | default({})).items() -%}
+        {%- set _ = gid_name.update({(gdata[1] | int): gname}) -%}
+        {%- for member in (gdata[2] | default('') | split(',')) -%}
+          {%- if member | trim -%}
+            {%- set m = member | trim -%}
+            {%- if m not in ug -%}{%- set _ = ug.update({m:[]}) -%}{%- endif -%}
+            {%- set _ = ug[m].append(gname) -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endfor -%}
+      {%- for uname, udata in (_l_raw_passwd | default({})).items() -%}
+        {%- set uid  = udata[1] | int -%}
+        {%- set gid  = udata[2] | int -%}
+        {%- set home = udata[4] -%}
+        {%- set is_sys = (uid < 1000 and uid != 0) or uname in ['nobody','nfsnobody']
+                          or home.startswith('/var/') or home == '/nonexistent' -%}
+        {%- if not is_sys or uname == 'root' -%}
+          {%- set ns = namespace(primary_grp='', groups=[]) -%}
+          {%- set ns.primary_grp = gid_name.get(gid, '') -%}
+          {%- set ns.groups = ug.get(uname, []) -%}
+          {%- if ns.primary_grp and ns.primary_grp not in ns.groups -%}
+            {%- set ns.groups = [ns.primary_grp] + ns.groups -%}
+          {%- endif -%}
+          {%- set _ = users.append({
+            'name':             uname,
+            'uid':              udata[1] | string,
+            'groups':           ns.groups,
+            'home':             home if home else none,
+            'last_access_time': _l_raw_last_logins.get(uname, none)
+          }) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set _su = [] -%}
+      {%- for u in users -%}{%- set _ = _su.append({'k': (u.uid | int), 'u': u}) -%}{%- endfor -%}
+      {{ _su | sort(attribute='k') | map(attribute='u') | list }}
+  no_log: true
 
-    - name: "linux | users | parse last login"
-      ansible.builtin.set_fact:
-        _l_last_logins: >-
-          {%- set out = {} -%}
-          {%- for line in (_l_lastlog_raw.stdout_lines | default([])) -%}
-            {%- if ':' in line -%}
-              {%- set parts = line.split(':',1) -%}
-              {%- set _ = out.update({parts[0]: parts[1] if parts[1] != 'null' else none}) -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-      no_log: true
+- name: "linux | users | build fragment (raw)"
+  ansible.builtin.set_fact:
+    _data_fragment:
+      users: "{{ _l_norm_users_list_raw }}"
+    _sections_supported_fragment: ['users']
+    _sections_collected_fragment: >-
+      {{ ['users'] if (_l_raw_passwd | default({}) | length > 0) else [] }}
+    _sections_failed_fragment: []
+    _sections_unsupported_fragment: >-
+      {{ ['users'] if (_l_raw_passwd | default({}) | length == 0) else [] }}
+    _errors_fragment: []
+  no_log: true
 
-    - name: "linux | users | build users list"
-      ansible.builtin.set_fact:
-        _l_norm_users_list: >-
-          {%- set users = [] -%}
-          {%- set ug = {} -%}
-          {%- for gname, gdata in (getent_group | default({})).items() -%}
-            {%- for member in (gdata[2]|default('')|split(',')) -%}
-              {%- if member -%}
-                {%- if member not in ug -%}{%- set _ = ug.update({member:[]}) -%}{%- endif -%}
-                {%- set _ = ug[member].append(gname) -%}
-              {%- endif -%}
-            {%- endfor -%}
-          {%- endfor -%}
-          {%- for uname, udata in (getent_passwd | default({})).items() -%}
-            {%- set uid  = udata[1]|int -%}
-            {%- set gid  = udata[2]|int -%}
-            {%- set home = udata[4] -%}
-            {%- set is_sys = (uid<1000 and uid!=0) or uname in ['nobody','nfsnobody']
-                              or home.startswith('/var/') or home=='/nonexistent' -%}
-            {%- if not is_sys or uname=='root' -%}
-              {# cycle 2026-05-07-post: groups 도 namespace 에 포함 — if-block 안 redefinition 은 기존에도 정상 작동했지만 의도 명확화 + Jinja namespace hook advisory silence #}
-              {%- set ns = namespace(primary_grp='', groups=[]) -%}
-              {%- for gn, gd in (getent_group|default({})).items() -%}
-                {%- if gd[1]|int == gid -%}{%- set ns.primary_grp = gn -%}{%- endif -%}
-              {%- endfor -%}
-              {%- set ns.groups = ug.get(uname,[]) -%}
-              {%- if ns.primary_grp and ns.primary_grp not in ns.groups -%}
-                {%- set ns.groups = [ns.primary_grp] + ns.groups -%}
-              {%- endif -%}
-              {%- set _ = users.append({
-                'name':             uname,
-                'uid':              udata[1]|string,
-                'groups':           ns.groups,
-                'home':             home if home else none,
-                'last_access_time': _l_last_logins.get(uname,none)
-              }) -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {# Round 16: uid 는 문자열('0'/'1000') — sort(attribute='uid') 는 lexicographic
-             정렬이라 999 가 1000 뒤로(잘못) 감. int 키로 수치 정렬하되 출력 dict 에는
-             보조 키를 노출하지 않음(map(attribute='u') 로 원본만 추출). #}
-          {%- set _su = [] -%}
-          {%- for u in users -%}{%- set _ = _su.append({'k': (u.uid | int), 'u': u}) -%}{%- endfor -%}
-          {{ _su | sort(attribute='k') | map(attribute='u') | list }}
-      no_log: true
-
-    # F23 (cycle 2026-05-01): getent 부재 환경 (Alpine / distroless / busybox)
-    # 에서 getent_passwd 가 undefined 또는 empty. root 는 정상 환경이면 항상
-    # 존재하므로 빈 결과 = 진짜 미지원 신호 → 'not_supported' 분류 (errors[] noise
-    # 차단). graceful failure 와 구분.
-    - name: "linux | users | build fragment"
-      ansible.builtin.set_fact:
-        _data_fragment:
-          users: "{{ _l_norm_users_list }}"
-        _sections_supported_fragment: ['users']
-        _sections_collected_fragment: >-
-          {{ ['users'] if (getent_passwd is defined and getent_passwd) else [] }}
-        _sections_failed_fragment: []
-        _sections_unsupported_fragment: >-
-          {{ ['users'] if (getent_passwd is not defined or not getent_passwd) else [] }}
-        _errors_fragment: []
-      no_log: true
-  when: _l_python_mode == 'python_ok'
-
-# =============================================================================
-# Raw Fallback Path — getent 시스템 명령 + lastlog/last (raw only)
-# =============================================================================
-- block:
-    - name: "linux | users | raw getent + last logins"
-      ansible.builtin.raw: |
-        export LANG=C LC_ALL=C
-        echo "PASSWD_START"
-        getent passwd 2>/dev/null
-        echo "PASSWD_END"
-        echo "GROUP_START"
-        getent group 2>/dev/null
-        echo "GROUP_END"
-        echo "LASTLOG_START"
-        {{ lookup('file', lookup('env', 'REPO_ROOT') + '/os-gather/files/get_last_login.sh') }}
-        getent passwd 2>/dev/null | while IFS=: read -r u _ uid _ _ home _; do
-          { [ "$uid" -ge 1000 ] || [ "$u" = "root" ]; } && get_last_login "$u"
-        done
-        echo "LASTLOG_END"
-      register: _l_users_raw_result
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "linux | users | parse raw passwd + group"
-      ansible.builtin.set_fact:
-        _l_raw_passwd: >-
-          {%- set out = {} -%}
-          {%- set in_section = namespace(active=false) -%}
-          {%- for line in (_l_users_raw_result.stdout_lines | default([])) -%}
-            {%- if line | trim == 'PASSWD_START' -%}
-              {%- set in_section.active = true -%}
-            {%- elif line | trim == 'PASSWD_END' -%}
-              {%- set in_section.active = false -%}
-            {%- elif in_section.active and ':' in line -%}
-              {%- set parts = line.split(':') -%}
-              {%- if parts | length >= 7 -%}
-                {%- set _ = out.update({parts[0]: [parts[0], parts[2], parts[3], parts[4], parts[5], parts[6]]}) -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-        _l_raw_group: >-
-          {%- set out = {} -%}
-          {%- set in_section = namespace(active=false) -%}
-          {%- for line in (_l_users_raw_result.stdout_lines | default([])) -%}
-            {%- if line | trim == 'GROUP_START' -%}
-              {%- set in_section.active = true -%}
-            {%- elif line | trim == 'GROUP_END' -%}
-              {%- set in_section.active = false -%}
-            {%- elif in_section.active and ':' in line -%}
-              {%- set parts = line.split(':') -%}
-              {%- if parts | length >= 4 -%}
-                {%- set _ = out.update({parts[0]: [parts[0], parts[2], parts[3] | default('')]}) -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-        _l_raw_last_logins: >-
-          {%- set out = {} -%}
-          {%- set in_section = namespace(active=false) -%}
-          {%- for line in (_l_users_raw_result.stdout_lines | default([])) -%}
-            {%- if line | trim == 'LASTLOG_START' -%}
-              {%- set in_section.active = true -%}
-            {%- elif line | trim == 'LASTLOG_END' -%}
-              {%- set in_section.active = false -%}
-            {%- elif in_section.active and ':' in line and 'PASSWD' not in line and 'GROUP' not in line -%}
-              {%- set parts = line.split(':',1) -%}
-              {%- if parts | length == 2 -%}
-                {%- set _ = out.update({parts[0]: parts[1] if parts[1] != 'null' else none}) -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-      no_log: true
-
-    - name: "linux | users | build users list (raw)"
-      ansible.builtin.set_fact:
-        _l_norm_users_list_raw: >-
-          {%- set users = [] -%}
-          {%- set ug = {} -%}
-          {%- for gname, gdata in (_l_raw_group | default({})).items() -%}
-            {%- for member in (gdata[2] | default('') | split(',')) -%}
-              {%- if member | trim -%}
-                {%- set m = member | trim -%}
-                {%- if m not in ug -%}{%- set _ = ug.update({m:[]}) -%}{%- endif -%}
-                {%- set _ = ug[m].append(gname) -%}
-              {%- endif -%}
-            {%- endfor -%}
-          {%- endfor -%}
-          {%- for uname, udata in (_l_raw_passwd | default({})).items() -%}
-            {%- set uid  = udata[1] | int -%}
-            {%- set gid  = udata[2] | int -%}
-            {%- set home = udata[4] -%}
-            {%- set is_sys = (uid < 1000 and uid != 0) or uname in ['nobody','nfsnobody']
-                              or home.startswith('/var/') or home == '/nonexistent' -%}
-            {%- if not is_sys or uname == 'root' -%}
-              {# cycle 2026-05-07-post: groups 도 namespace 에 포함 — if-block 안 redefinition 은 기존에도 정상 작동했지만 의도 명확화 + Jinja namespace hook advisory silence #}
-              {%- set ns = namespace(primary_grp='', groups=[]) -%}
-              {%- for gn, gd in (_l_raw_group | default({})).items() -%}
-                {%- if gd[1] | int == gid -%}{%- set ns.primary_grp = gn -%}{%- endif -%}
-              {%- endfor -%}
-              {%- set ns.groups = ug.get(uname, []) -%}
-              {%- if ns.primary_grp and ns.primary_grp not in ns.groups -%}
-                {%- set ns.groups = [ns.primary_grp] + ns.groups -%}
-              {%- endif -%}
-              {%- set _ = users.append({
-                'name':             uname,
-                'uid':              udata[1] | string,
-                'groups':           ns.groups,
-                'home':             home if home else none,
-                'last_access_time': _l_raw_last_logins.get(uname, none)
-              }) -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {# Round 16: uid 는 문자열('0'/'1000') — sort(attribute='uid') 는 lexicographic
-             정렬이라 999 가 1000 뒤로(잘못) 감. int 키로 수치 정렬하되 출력 dict 에는
-             보조 키를 노출하지 않음(map(attribute='u') 로 원본만 추출). #}
-          {%- set _su = [] -%}
-          {%- for u in users -%}{%- set _ = _su.append({'k': (u.uid | int), 'u': u}) -%}{%- endfor -%}
-          {{ _su | sort(attribute='k') | map(attribute='u') | list }}
-      no_log: true
-
-    # F23 (cycle 2026-05-01): raw 경로에서도 getent 명령 부재 시 _l_raw_passwd
-     # 빈 dict. root 는 정상 환경이면 항상 응답 → 빈 결과 = 진짜 미지원.
-    - name: "linux | users | build fragment (raw)"
-      ansible.builtin.set_fact:
-        _data_fragment:
-          users: "{{ _l_norm_users_list_raw }}"
-        _sections_supported_fragment: ['users']
-        _sections_collected_fragment: >-
-          {{ ['users'] if (_l_raw_passwd | default({}) | length > 0) else [] }}
-        _sections_failed_fragment: []
-        _sections_unsupported_fragment: >-
-          {{ ['users'] if (_l_raw_passwd | default({}) | length == 0) else [] }}
-        _errors_fragment: []
-      no_log: true
-  when: _l_python_mode != 'python_ok'
-
-# =============================================================================
-# Shared: merge
-# =============================================================================
 - name: "linux | users | merge fragment"
   ansible.builtin.include_tasks:
     file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"

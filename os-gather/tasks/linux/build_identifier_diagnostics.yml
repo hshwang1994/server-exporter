@@ -1,28 +1,7 @@
 ---
-# os-gather/tasks/linux/build_identifier_diagnostics.yml
-# Linux gather_system.yml에서 분리 (NEXT_ACTIONS — 2026-04-28).
-#
-# 입력 (gather_system.yml에서 set_fact 완료된 변수):
-#   _l_serial_val, _l_uuid_val   — 최종 식별자 (Python 경로)
-#   _l_serial_from_setup         — setup fact 결과
-#   _l_uuid_from_setup           — setup fact 결과
-#   _l_dmi_serial_direct         — DMI direct-read register (없을 수 있음)
-#   _l_dmi_uuid_direct           — DMI direct-read register (없을 수 있음)
-#   _l_dmi_fallback_failed       — block rescue trigger (없을 수 있음)
-#
-# 출력:
-#   _l_id_diagnostics  → list of diag dict (errors_fragment 후보)
-#
-# Python 경로에서만 동작. raw-only 경로는 gather_system.yml에서 빈 list 초기화.
 
 - name: "linux | system | build identifier diagnostics"
   when: _l_python_mode == 'python_ok'
-  # H5 (2026-08-12): 식별자 진단 문장을 (필드 2종) x (원인 2종) = 2문장 체계로 축약했다.
-  #   종전에는 영문 enum(insufficient_privilege / identifier_not_available)과 Ansible 용어
-  #   (setup fact / become / DMI direct-read), 긴 대시가 Portal 문장에 그대로 실렸고,
-  #   같은 상황을 Linux 3분기 / Windows 2분기가 서로 다른 문장으로 설명했다.
-  #   이제 Linux 와 Windows 가 **같은 문장**을 쓰고, 분기 근거는 detail 문자열에만 남긴다.
-  #   (동일 문장이 os-gather/tasks/windows/gather_system.yml 에도 있다 — 함께 바꿀 것)
   vars:
     _id_msg_privilege_serial: "시스템 제조번호를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요."
     _id_msg_absent_serial:    "대상이 시스템 제조번호를 제공하지 않습니다."

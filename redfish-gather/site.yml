@@ -1,32 +1,11 @@
 ---
-# =============================================================================
-# redfish-gather / site.yml  — orchestration 전용
-#
-# 흐름:
-#   init_fragments
-#   → run_precheck       (도달[TCP 응답 OR ICMP 응답]→port→protocol→auth)
-#   → detect_vendor      (_rf_detected_vendor, _rf_probe_facts)
-#   → select_adapter     (adapter_loader → _selected_adapter)
-#   → load_vault         (adapter 기반 credential profile)
-#   → collect_standard   (_rf_raw_collect, _rf_collect_ok, _rf_vendor)
-#   → normalize_standard (표준 fragment → merge)
-#   → vendor adapter     (OEM fragment → merge, adapter 기반 동적 로딩)
-#   → build_sections / build_status / build_errors / build_output
-#   → inject schema_version
-#   → OUTPUT
-# =============================================================================
 
 - name: "redfish-gather"
   hosts: all
   gather_facts: false
   connection: local
-  # 2026-04-30 perf: dead-host 다수 inventory에서 host별 독립 진행 (linear 시 stuck host가 wave 막음)
   strategy: free
 
-  # Portal 사용자 문구 카탈로그(_fr_catalog). rescue / always 가 문장을 직접 쓰지 않고
-  # 이 변수를 참조한다 — precheck_bundle.FAILURE_REASON_CATALOG 와 동일 문자열 (drift 는 테스트가 막는다).
-  # 2026-08-12: 섹션 단위(부분 실패) 문장 정본도 함께 로드한다. 모듈이 만든 기술 문자열은
-  #   normalize_standard.yml 이 여기 라벨로 사용자 문장을 만들고 원문은 detail 로 내린다.
   vars_files:
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/section_messages.yml"
@@ -35,6 +14,9 @@
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     _rf_ip:      "{{ ansible_host | default(inventory_hostname) }}"
     _rf_timeout: 30
+    _rf_deadline: 540
+    _rf_detect_deadline: 90
+    _rf_account_deadline: 180
 
   tasks:
 
@@ -45,7 +27,6 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/init_fragments.yml"
 
-        # ── pre-check (Phase 1) ──────────────────────────────────────────
         - name: "redfish | run precheck"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/precheck/run_precheck.yml"
@@ -63,17 +44,9 @@
               BMC 전원, 네트워크, Redfish API(443) 포트를 확인하세요.
           when: not (_precheck_ok | bool)
 
-        # ── detect vendor ────────────────────────────────────────────────
         - name: "redfish | detect vendor"
           ansible.builtin.include_tasks: tasks/detect_vendor.yml
 
-        # ── Credential 선택 (2026-08-12) ─────────────────────────────────
-        # (se_location, canonical vendor) → vault/<loc>/redfish/<vendor>.yml
-        #
-        # adapter 선택 **앞**에 둔다. 데이터 의존은 이미 끊겼지만, 순서를 앞에 두면
-        # "adapter 결과를 볼 수 없으므로 참조할 수 없다" 가 구조로 강제된다.
-        # 종전에는 adapter 의 `credentials.profile` 이 vault 를 골랐다 —
-        # Adapter(어떻게 수집하는가) 와 Credential(누구로 인증하는가) 이 결합돼 있었다.
         - name: "redfish | resolve credentials"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/credential/resolve_and_load_redfish.yml"
@@ -84,11 +57,6 @@
         - name: "redfish | load vault"
           ansible.builtin.include_tasks: tasks/load_vault.yml
 
-        # 표준 수집 계정을 못 열면 Redfish 수집은 성립하지 않는다 — 여기서 명시적으로 끝낸다.
-        #   `vendor_unresolved`(vendor 미식별)는 **표준 계정과 무관**하다. 표준 계정은 전역
-        #   이라 vendor 를 몰라도 열 수 있으므로 여기서 멈추지 않는다. 그 경우 복구만
-        #   불가능하고, 정체 미상 장비에 대한 빈 자격 best-effort 도 그대로 유지된다.
-        #   복구 세트 부재는 여기서 실패로 만들지 않는다 — 표준 인증이 성공하면 아무 영향이 없다.
         - name: "redfish | abort if credential set unavailable"
           ansible.builtin.fail:
             msg: >-
@@ -101,7 +69,6 @@
             or (_cred_standard_outcome | default('not_resolved'))
                in ['credential_set_missing', 'credential_set_undecryptable']
 
-        # ── select adapter (Phase 2) ─────────────────────────────────────
         - name: "redfish | select adapter"
           ansible.builtin.set_fact:
             _selected_adapter: >-
@@ -115,44 +82,19 @@
           ansible.builtin.debug:
             msg: "adapter={{ _selected_adapter.adapter_id | default('none') }}"
 
-        # cycle 2026-05-12 (ADR-2026-05-12): HPE CSUS 3200 / Superdome Flex RMC primary
-        # 멀티-노드 토폴로지 수집 활성. adapter `vendor_notes.manager_layout` 을
-        # redfish_gather 모듈까지 전달. None / 미정의 vendor 는 기존 동작 100% 보존
-        # (Additive only — rule 92 R2). 13 vendor 영향 0.
-        #   Allowed values: '' (None) / 'rmc_primary' / 'rmc_primary_ilo_secondary'
         - name: "redfish | extract manager_layout from adapter"
           ansible.builtin.set_fact:
             _rf_adapter_manager_layout: >-
               {{ ((_selected_adapter | default({})).vendor_notes | default({})).manager_layout | default('') }}
 
-        # ── Phase 1: 표준 수집 계정으로 수집 ─────────────────────────────
-        # 표준 계정은 전역 1개다 (vault/common/redfish/standard.yml).
-        # 복구 계정은 여기 들어오지 않는다 — 복구 계정으로 수집하는 경로는 없다.
         - name: "redfish | collect standard"
           ansible.builtin.include_tasks: tasks/collect_standard.yml
           vars:
             _rf_try_accounts: "{{ _rf_standard_accounts | default([]) }}"
 
-        # ── adapter 재선택 (인증 후 사실로) — 1회차 ──────────────────────
-        # 1차 선택(:105)은 무인증 probe 결과라 model/firmware 가 비어 priority 최상위가
-        # 독식한다. 상세 근거는 tasks/reselect_adapter.yml 머리말에 있다.
-        # 표준 인증이 처음부터 됐으면 여기서 바로잡히고, 계정 Family hint 도 고쳐진
-        # 값을 받는다. 수집이 실패했으면 아무것도 하지 않고 1차 결과가 남는다.
         - name: "redfish | reselect adapter (1차 수집 후)"
           ansible.builtin.include_tasks: tasks/reselect_adapter.yml
 
-        # ── 표준 계정 복구 (recovery → standard) ─────────────────────────
-        # 2026-08-12 (Contract 재확정): 진입 조건에서 "recovery 로 수집이 됐다" 를 뺀다.
-        #   복구 계정으로는 애초에 수집하지 않으므로 그 사실이 존재할 수 없다.
-        #   대신 "표준 수집이 실패했고, 표준 자격이 401 로 명시 거부됐고, 복구 후보가 있다" 로 본다.
-        #
-        # 2026-08-11 (Phase 6-B §6 §7): 401 한정은 그대로 유지한다. primary 실패 원인은
-        #   자격증명 불일치만이 아니다 — timeout / TLS / 5xx / 일시 단절도 같은 모양이다.
-        #   403(권한 부족)도 제외한다: 인증 자체는 통과했을 수 있어, 여기서 계정을 손대면
-        #   멀쩡한 표준 계정 비밀번호를 덮어쓴다.
-        #
-        # 이 값 하나를 account_service.yml 의 쓰기 모드도 함께 본다
-        # (§16 — "기본값이라서" 쓰기가 켜지는 경로를 없앤다).
         - name: "redfish | account_service | 진입 조건 판정"
           ansible.builtin.set_fact:
             _rf_account_reconcile_allowed: >-
@@ -164,10 +106,6 @@
           when: _rf_account_reconcile_allowed | bool
           ansible.builtin.include_tasks: tasks/account_service.yml
 
-        # 표준 자격이 거부됐는데 복구 세트가 없으면 **복구할 방법이 없다**는 사실을 남긴다.
-        # 이 상태는 결과만 보면 "그냥 인증 실패" 와 구분되지 않는다. 운영자가 해야 할 일이
-        # 다르다 — 전자는 해당 Location/Vendor 복구 자격을 배치해야 하고, 후자는 표준
-        # 계정 비밀번호를 맞춰야 한다. failure_code 를 새로 만들지 않고 근거만 분리한다.
         - name: "redfish | recovery set unavailable 사실 기록"
           when:
             - not (_rf_collect_ok | default(false) | bool)
@@ -183,7 +121,6 @@
                 _sections_unsupported_fragment: []
                 _errors_fragment:
                   - section: "account_service"
-                    # 2026-09-21: 대표 실패 문장(failure_reason)을 빌려 쓰지 않고 섹션 문장을 쓴다.
                     message: "{{ _sm_overrides.account_service }}"
                     detail: >-
                       standard credential rejected and no recovery credential set available
@@ -194,9 +131,6 @@
               ansible.builtin.include_tasks:
                 file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
 
-        # ── Phase 3: 표준 계정으로 재인증 + 재수집 ───────────────────────
-        # 복구가 **실제로 확인**됐을 때만 (§9 — write 2xx 는 성공이 아니다).
-        # 여기서 성공해야 비로소 "표준 계정으로 수집했다" 가 된다.
         - name: "redfish | re-collect with standard account (after recovery)"
           when:
             - _rf_account_reconcile_allowed | bool
@@ -206,35 +140,12 @@
           vars:
             _rf_try_accounts: "{{ _rf_standard_accounts | default([]) }}"
 
-        # ── adapter 재선택 — 2회차 (복구 후 재수집이 성공했을 때) ────────
-        # 표준 계정 비밀번호가 어긋나 있으면 1차 수집이 401 로 실패해 위의 1회차가
-        # 서지 않는다. 복구가 계정을 고쳐 여기서 재수집이 성공했으니 이제 model /
-        # firmware 가 있다. 이 두 번째 호출이 없으면 **비밀번호 회전 직후 수집에서
-        # adapter_id 가 계속 1차 값(틀린 값)으로 남는다** — 2026-08-13 실측에서
-        # Dell 4대가 그렇게 나왔다.
         - name: "redfish | reselect adapter (복구 후 재수집 뒤)"
           when:
             - _rf_account_reconcile_allowed | bool
             - (_rf_account_service_meta | default({})).recovered | default(false) | bool
           ansible.builtin.include_tasks: tasks/reselect_adapter.yml
 
-        # 2026-04-30: precheck/diagnosis가 이미 식별한 실패 단계에 따라 specific 메시지.
-        # ServiceRoot(/redfish/v1/)는 Redfish 표준상 무인증 → protocol_supported=true이면
-        # 네트워크/방화벽/서비스 모두 정상 증명됨.
-        #
-        # 2026-08-10 (B-8 정정): 종전 4번째 분기 조건이 `auth_success is none or not auth_success`
-        #   였는데, 이 시점의 auth_success 는 **항상 None** 이다 — precheck 는 인증정보를 받지
-        #   않아 Stage 4 를 수행하지 않고(precheck_bundle.py:546-548, 위 :41-47 이 username/
-        #   password 미전달), auth_success=true 로 덮어쓰는 태스크(:191-206)는 이 태스크보다
-        #   **뒤에** 있다. 따라서 4번째 분기가 항상 잡히고 5번째(else)는 **도달 불가능**했다.
-        #   결과: 펌웨어/OEM/endpoint 문제로 실패한 수집까지 전부 "인증 실패"로 보고됨.
-        #
-        #   또한 `_rf_collect_ok` 는 인증 테스트가 아니라 **전체 수집 결과**다
-        #   (try_one_account.yml:38-40 — `_rf_attempt.status != 'failed'`). 자격증명 불일치 /
-        #   권한 부족 / 5xx / timeout / schema 실패가 모두 이 한 값에 뭉개진다. 즉 이 지점에서
-        #   "인증 실패"를 **확정할 근거가 없다.** 확정할 수 없는 것을 단정하지 않도록 두 분기를
-        #   하나로 합치고, 확인된 사실(네트워크/API 정상)과 가능한 원인을 분리해 안내한다.
-        #   원인 확정(HTTP 401 실증 배선)은 별도 Phase 영역.
         - name: "redfish | abort if collect completely failed"
           ansible.builtin.fail:
             msg: >-
@@ -254,12 +165,6 @@
               {%- endif -%}
           when: not (_rf_collect_ok | bool)
 
-        # ── 최종 수집 주체 검증 (2026-08-12 Contract) ────────────────────
-        # "표준 계정으로 수집했다" 가 성립하지 않으면 성공이 아니다.
-        # 복구 계정으로 수집하는 경로는 위에서 구조적으로 제거했지만, 향후 누군가
-        # collect_standard 에 복구 후보를 넘기는 순간 조용히 되살아난다. 여기서 못 박는다.
-        #   허용: primary(표준 계정) / anonymous(정체 미상 장비 무인증 best-effort)
-        #   금지: recovery
         - name: "redfish | abort if final gathering not by standard account"
           ansible.builtin.fail:
             msg: >-
@@ -269,39 +174,9 @@
               표준 계정 상태와 자격증명을 확인하세요.
           when: ((_rf_used_account | default({})).role | default('primary')) == 'recovery'
 
-        # ── normalize standard ───────────────────────────────────────────
         - name: "redfish | normalize standard"
           ansible.builtin.include_tasks: tasks/normalize_standard.yml
 
-        # ── vendor OEM 확장 단계는 2026-08-13 에 제거됐다 ────────────────
-        # 여기에 adapter 의 `collect.oem_tasks` / `normalize.oem_tasks` 를 include 하는
-        # block 이 있었다. 9 vendor 18개 task 파일이 붙어 있었는데 **전부 기여가 0** 이었다.
-        #
-        #   - task 들이 읽던 경로가 모듈 출력에 없다. `redfish_gather` 최상위 반환에
-        #     `systems` / `chassis` / `managers` 가 없고(`:7347-7352`), `data` 하위에도
-        #     `chassis` 가 없다(`:4895-4917`). 대문자 `'Oem'` 을 출력 키로 쓰는 곳은 0곳이다.
-        #     모듈은 소문자 `'oem'` 에 정제된 형태로만 내보낸다.
-        #   - 실장비 8대 envelope 를 확인했다. task 가 쓴다던 `data.bmc.oem_<vendor>` 키가
-        #     한 건도 없었다. 반면 라이브러리가 채우는 `data.bmc.oem` 은 전부 있었다.
-        #
-        # 즉 OEM 데이터는 이미 라이브러리 층(`_extract_oem_*`, Manager OEM)이 뽑아
-        # `data.system.oem` / `data.bmc.oem` 로 내보내고 있고, 이 단계는 그 위에 얹힌
-        # 빈 껍데기였다. CSUS/Superdome 의 multi-node 정보도 `manager_layout` 을 받은
-        # 라이브러리가 `data.multi_node` 로 채운다 — 이 단계와 무관하다.
-        #
-        # OEM 확장이 실제로 필요해지면 라이브러리의 `_extract_oem_*` 를 넓히는 쪽이
-        # 검증된 경로다 (mock·테스트가 이미 있다). Ansible task 층에서 별도 `uri` 를
-        # 부르는 방식은 인증·타임아웃·계정 잠금을 다시 다뤄야 한다.
-        #
-        # 근거: docs/ai/decisions/ADR-2026-08-13-vendor-oem-task-removal.md
-
-        # 고객별 추가 수집 (Add-on) — 마지막 수집 뒤 · 조립 앞에 둔다 (Add-on 결과가 조립에 들어간다).
-        - name: "redfish | addon"
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
-          vars:
-            _addon_target: redfish
-          when: lookup('env', 'ADDON_DIR') | length > 0
 
         - name: "redfish | build_sections"
           ansible.builtin.include_tasks:
@@ -320,23 +195,9 @@
             _out_target_type:       "redfish"
             _out_collection_method: "redfish_api"
             _out_ip:                "{{ _rf_ip }}"
-            # cycle 2026-06-04 (사용자 결정): 출력 envelope vendor 표시값 매핑 (내부 canonical 유지).
-            # adapter_output_display(예: redfish_hpe_csus_3200 → hpCsus) 우선, 없으면
-            # vendor_output_display(hpe → hp), 둘 다 없으면 canonical 그대로.
-            # _va = common/vars/vendor_aliases.yml (detect_vendor.yml 에서 로드). data-driven — rule 12 R1.
             _out_vendor: >-
               {{ ((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default(''))
                  or ((_va | default({})).vendor_output_display | default({})).get(_rf_vendor | default(''), _rf_vendor | default(none)) }}
-            # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
-            # P2: meta.account_service — recovery 자격으로 공통계정 자동 복구 시 노출
-            #
-            # 2026-08-12 (H11) details.notices: 성공한 fallback / 절단 같은 **정보성 통보**.
-            #   errors[] 에 넣으면 섹션이 failed 로 잡혀 status 가 partial 로 강등된다.
-            #   실패가 아닌 사실은 diagnosis.details(기술 evidence / 확장 metadata 영역)에 남긴다.
-            #
-            # 주의: 아래 `>-` 는 YAML folded block scalar 다. 그 안에서 `#` 는 주석이 아니라
-            #   **Jinja 표현식 본문**이 되어 템플릿 컴파일이 통째로 깨진다. 설명은 반드시
-            #   이 자리(표현식 밖)에 쓴다.
             _diagnosis: >-
               {{ _diagnosis | combine({
                    'auth_success': true,
@@ -363,7 +224,6 @@
                    })
                  }) }}
 
-        # ── meta & correlation (Phase 3) ─────────────────────────────────
         - name: "redfish | build_meta"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_meta.yml"
@@ -371,7 +231,6 @@
         - name: "redfish | build_correlation"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_correlation.yml"
-        # ─────────────────────────────────────────────────────────────────
 
         - name: "redfish | build_output"
           ansible.builtin.include_tasks:
@@ -381,48 +240,71 @@
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
+        - name: CHECKPOINT
+          ansible.builtin.debug:
+            msg: "{{ _output | to_json }}"
+
+        - name: "redfish | addon"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
+          vars:
+            _addon_target: redfish
+          when: lookup('env', 'ADDON_DIR') | length > 0
+
       rescue:
-        # ── Portal Grid 계약 (2026-08-10 사용자 확인) ────────────────────
-        # Portal 은 실패 Grid 의 "실패 사유" 칸에 **diagnosis.failure_reason 만** 표시한다.
-        # precheck 실패는 precheck_bundle 이 이미 사유를 채워 주지만, precheck 통과 후
-        # 실패(수집/정규화 예외)는 종전까지 failure_reason=null 이라 **Portal 이 빈 칸**을
-        # 보여줬다. 아래 태스크가 그 구멍을 막는다.
-        #   - failure_reason 이 이미 있으면 건드리지 않는다 (precheck 의 구체적 사유 보존).
-        #   - 7 키 base 로 시작해 _diagnosis 미정의/비-dict 상황에서도 shape 를 보장한다.
-        #   - auth_success 는 손대지 않는다: 인증 거부를 관측한 근거가 없다(null 유지).
-        #
-        # 2026-08-10 (Phase 2) 단계/코드:
-        #   여기 도달했다는 것은 precheck 를 통과했다는 뜻이다(통과 못 했으면 failure_reason 이
-        #   이미 채워져 있어 when 가드가 막는다). redfish_gather 모듈은 인증과 수집을 한 작업
-        #   결과로 합쳐 반환하므로(try_one_account.yml 이 보는 값은 '전체 수집 결과'),
-        #   기본값은 수집 단계(gather / GATHER_FAILED)이고 auth_success 는 null 을 유지한다.
-        #
-        # 2026-08-11 (Phase 5-A) 인증 거부 실증 — **후보 전체 집계**:
-        #   redfish_gather 가 module result 에 `auth_evidence.first_auth_status` 를 싣는다.
-        #   이는 **자격증명을 실은 첫 요청**이 받은 정수 HTTP status 로, 새 요청 없이
-        #   기존 응답을 관측만 한 값이다(인증 시도 횟수 불변 = 계정 잠금 위험 불변).
-        #   후보마다 모듈이 별도 프로세스로 실행되므로 값도 후보별로 독립이며,
-        #   try_one_account.yml 이 후보 순서대로 _rf_auth_statuses 에 누적한다.
-        #
-        #   전체를 "인증 거부" 로 확정하는 조건 (셋 다 만족해야 한다):
-        #     (1) 실제로 시도한 후보가 1개 이상이고
-        #     (2) 후보 수만큼 관측이 쌓였고 (누락된 후보가 없고)
-        #     (3) 모든 후보의 첫 인증 응답이 **401** 이다
-        #   → 하나라도 timeout / TLS / 403 / 200(인증은 통과) 이 섞이면 원인 미확정이라
-        #     auth_success 는 null 을 유지한다. 후보 하나의 401 로 전체를 단정하지 않는다.
-        #   빈 자격 경로(_rf_accounts 없음)는 (1) 에서 걸러진다 — 무자격 요청의 401 은
-        #   "등록된 자격증명 거부" 가 아니다.
+        - name: "redfish | rescue | backstop 증거 (현재 attempt 파일만)"
+          ansible.builtin.set_fact:
+            _rf_backstop_evidence: >-
+              {{ ((lookup('file', lookup('env', 'SE_AUTH_EVIDENCE_DIR') ~ '/' ~ _rf_ip ~ '/' ~ _rf_attempt_id ~ '.json',
+                          errors='ignore')
+                   if ((lookup('env', 'SE_AUTH_EVIDENCE_DIR') | length) > 0) else '')
+                  | default('', true))
+                 | parse_auth_evidence({'build_id': lookup('env', 'SE_BUILD_ID'),
+                                        'event_uuid': lookup('env', 'SE_EVENT_UUID'),
+                                        'ip': _rf_ip, 'attempt_id': _rf_attempt_id}) }}
+          when: (_rf_attempt_id | default('')) != ''
+          no_log: true
+
+        - name: "redfish | rescue | backstop 관측 반영"
+          ansible.builtin.set_fact:
+            _rf_backstop_class: >-
+              {%- set ev = _rf_backstop_evidence | default({}) -%}
+              {%- set st = ev.first_auth_status | default(none) -%}
+              {%- set proven = (ev.valid | default(false)) and (ev.credentialed | default(false)) and (st is not none) -%}
+              {%- if (_rf_attempt_id | default('')).startswith('account-') -%}recovery_stopped
+              {%- elif proven and st >= 200 and st < 400 -%}auth_passed
+              {%- elif proven and st == 401 -%}auth_rejected
+              {%- else -%}before_auth{%- endif -%}
+            _rf_auth_observations: >-
+              {%- set ev = _rf_backstop_evidence | default({}) -%}
+              {%- set st = ev.first_auth_status | default(none) -%}
+              {%- set proven = (ev.valid | default(false)) and (ev.credentialed | default(false)) and (st is not none) -%}
+              {{ (_rf_auth_observations | default([]))
+                 + ([{'role': (ev.role | default('primary', true)), 'label': (ev.label | default('unlabeled', true)), 'status': st}]
+                    if (proven and (_rf_attempt_id | default('')).startswith('collect-')) else []) }}
+            _rf_auth_statuses: >-
+              {%- set ev = _rf_backstop_evidence | default({}) -%}
+              {%- set st = ev.first_auth_status | default(none) -%}
+              {%- set proven = (ev.valid | default(false)) and (ev.credentialed | default(false)) and (st is not none) -%}
+              {{ (_rf_auth_statuses | default([]))
+                 + ([st] if (proven and (_rf_attempt_id | default('')).startswith('collect-')) else []) }}
+            _rf_failed_attempt_notes: >-
+              {%- set ev = _rf_backstop_evidence | default({}) -%}
+              {%- set st = ev.first_auth_status | default(none) -%}
+              {%- set proven = (ev.valid | default(false)) and (ev.credentialed | default(false)) and (st is not none) -%}
+              {%- if proven and st >= 200 and st < 400 -%}{%- set why = 'task timeout after auth' -%}
+              {%- elif proven -%}{%- set why = 'task timeout after auth status ' ~ st -%}
+              {%- else -%}{%- set why = 'task timeout before auth evidence (' ~ (ev.reason | default('missing')) ~ ')' -%}{%- endif -%}
+              {{ (_rf_failed_attempt_notes | default([]))
+                 + [ (ev.role | default('?', true)) ~ '/' ~ (ev.label | default(_rf_attempt_id, true))
+                     ~ ': status=task_timeout first_auth=' ~ (st if proven else 'none')
+                     ~ ' err=' ~ why
+                     ~ ((' last_request=' ~ ev.last_request) if (ev.last_request | default('')) else '') ] }}
+          when: (_rf_attempt_id | default('')) != ''
+          no_log: true
+
         - name: "redfish | rescue | 인증 거부 실증 판정"
           ansible.builtin.set_fact:
-            #
-            # 2026-08-12 (audit C-2): `attempted` 를 `_rf_accounts`(표준+복구 **병합**)
-            #   길이로 세던 것을 `_rf_standard_accounts` 로 바로잡는다.
-            #   `_rf_auth_statuses` 는 표준 후보에서만 쌓이는데(try_one_account.yml 의
-            #   loop 대상이 `_rf_standard_accounts`) 분모만 복구 후보까지 세고 있었다.
-            #   결과: **복구 후보가 하나라도 있으면** 두 수가 영영 같아지지 않아
-            #   auth_success 가 false 로 확정되지 못했다. 계정 쓰기를 정당화한 바로 그
-            #   401 이 envelope 에 남지 않는, 정확히 reconcile 이 가능한 상황에서만
-            #   진단이 비는 구조였다.
             _rf_auth_rejected: >-
               {%- set statuses = _rf_auth_statuses | default([]) -%}
               {%- set attempted = (_rf_standard_accounts | default([])) | length -%}
@@ -430,50 +312,15 @@
                  and (statuses | length) == attempted
                  and (statuses | select('equalto', 401) | list | length) == attempted }}
 
-        # 2026-08-12 (C1 / C4): 자격 단계 관측을 **하나의 값**으로 확정한다.
-        #
-        #   종전 문제: 같은 set_fact 안에서 stage/code/auth_success 는 `rejected and not collected`
-        #   로, failure_reason 만 `collected` 로 갈렸다. 입력이 둘이라 필연적으로 어긋났다 —
-        #   rejected=false, collected=false 이면 stage=gather / code=GATHER_FAILED 인데
-        #   사용자 문장은 "자격증명과 계정 권한을 확인하세요"(4번) 였다. Portal 은 문장을,
-        #   대시보드는 stage/code 를 읽으므로 같은 결과를 두 소비자가 다르게 해석했다.
-        #
-        #   또 하나: `_rf_collect_ok` 는 인증 판정이 아니라 **전체 수집 결과**다
-        #   (try_one_account.yml 의 `_rf_attempt.status != 'failed'`). 인증이 200 으로
-        #   통과했어도 시리얼 확정 실패 하나로 false 가 되어 자격증명 문장이 나갔다.
-        #   os/esxi 는 자격 probe 전용 결과(_os_auth_ok / _e_auth_ok)를 쓰는데 redfish 만 달랐다.
-        #
-        #   신: 자격 관측을 3-값으로 확정하고 4필드를 **그 하나에서만** 파생한다.
-        #     passed   — 자격을 실은 요청이 통과한 직접 관측이 있다
-        #                (수집 성공했거나, first_auth_status 가 2xx/3xx 인 후보가 있다)
-        #     rejected — 시도한 후보 전원이 401 로 명시 거부됐다
-        #     unknown  — 그 외 (timeout / TLS / 403 / 5xx / 미시도). 원인 미확정.
-        #   `_rf_auth_observations` 는 try_one_account.yml 이 후보마다 쌓아 둔 값이라
-        #   새 요청을 만들지 않는다 (계정 잠금 위험 불변).
         - name: "redfish | rescue | 자격 단계 관측 확정"
           ansible.builtin.set_fact:
             _rf_auth_outcome: >-
-              {#- status 는 정수 또는 none(원인 미확정) 이다. none 과 비교하면 TypeError 이므로
-                  정수만 남긴 뒤 범위를 본다. -#}
               {%- set st = (_rf_auth_observations | default([]))
                            | selectattr('status', 'defined') | map(attribute='status')
                            | select('integer') | list -%}
               {%- set ok_obs = st | select('ge', 200) | select('lt', 400) | list | length -%}
               {%- set tried = ((_rf_auth_observations | default([])) | length)
                               + ((_rf_failed_attempt_notes | default([])) | length) -%}
-              {#- 2026-08-12: credential set 자체를 열지 못한 경우를 별도 관측값으로 분리한다.
-                  '인증을 시도했는데 거부됐다'(rejected)와 '인증을 시도조차 못 했다'를 같은
-                  code 로 만들면 소비 시스템이 구분할 수 없다.
-                  2026-09-21: 조건을 표준 vault 기준으로 바로잡았다. 종전에는 아래 세 경우가
-                  시도 0회인데도 not_attempted(GATHER_FAILED, '접속은 확인됐지만')로 떨어졌다.
-                    - 실행 위치 미등록(unknown_location): 표준 vault 는 전역이라 열려 있어
-                      outcome 이 loaded 인데 site.yml 중단 게이트는 _cred_reason 으로 멈춘다.
-                    - 표준 계정 0개(empty_accounts): vendor 를 알면 빈 자격 시도를 하지 않는다.
-                    - vendor 미상 + 표준 vault 부재: 중단 게이트가 수집 전에 멈춰 빈 자격
-                      시도가 없다 (종전 vendor_unresolved 제외 조건은 이 경우를 놓쳤다).
-                  이 분기는 passed / rejected / unknown 뒤에 오므로 **시도 0회일 때만** 닿는다.
-                  'not_resolved' 만은 vendor 미상일 때 제외한다 — vendor 미상은 장비 정체를 식별하지
-                  못한 것이지 credential set 문제가 아니다 (파일 부재 / 복호화 실패는 vendor 와 무관). -#}
               {%- set std = _cred_standard_outcome | default(_cred_load_outcome | default('')) -%}
               {%- set cred_na = ((_cred_reason | default('')) == 'unknown_location')
                                 or (std in ['credential_set_missing',
@@ -484,6 +331,8 @@
               passed
               {%- elif _rf_auth_rejected | default(false) | bool -%}
               rejected
+              {%- elif (_rf_backstop_class | default('')) == 'before_auth' -%}
+              stopped_before_auth
               {%- elif tried > 0 -%}
               unknown
               {%- elif cred_na -%}
@@ -492,41 +341,15 @@
               not_attempted
               {%- endif -%}
 
-        # 사용자 문구는 카탈로그(common/vars/failure_reasons.yml `_fr_catalog`)에서 고른다.
-        #   passed        → gather / GATHER_FAILED / auth_success=true / gather_after_auth
-        #                   ("대상 Redfish 인증은 성공했지만") — 인증된 요청 통과를 직접 관측했다.
-        #   rejected      → auth / AUTH_PROBE_FAILED / false / auth_rejected. 표준 후보 전원의
-        #                   401 실증이 있을 때만 "계정이 다르거나 권한이 없습니다" 라고 말한다.
-        #   unknown       → auth / AUTH_PROBE_FAILED / null / auth_unconfirmed. 자격 요청은 보냈지만
-        #                   원인을 확정하지 못했다 (timeout / TLS / 403 / 5xx).
-        #                   단 표준 계정이 0개였다면(정체 미상 장비의 무인증 시도만 있었다)
-        #                   project_vault_no_account — 관리자가 할 일은 표준 계정 배치다.
-        #   credential_unavailable
-        #                 → auth / CREDENTIAL_SET_UNAVAILABLE / null (2026-08-12 신설).
-        #                   **인증을 시도조차 못 했다.** AUTH_PROBE_FAILED 와 반드시 구분한다.
-        #                   문장은 원인별로 가른다 (2026-09-21):
-        #                     실행 위치 미등록        → loc_unregistered
-        #                     표준 vault 복호화 실패  → project_vault_unreadable
-        #                     표준 계정 0개          → project_vault_no_account
-        #                     표준 vault 파일 없음    → project_vault_missing
-        #                   표준 계정은 위치와 무관한 전역 vault 라 "해당 위치의 Vault" 라고 쓰지 않는다.
-        #                   stage 는 auth 를 유지한다 — stage 는 원인이 아니라 **멈춘 위치**이고
-        #                   (CLAUDE.md §9) 멈춘 곳은 자격증명 단계가 맞다.
-        #                   auth_success 는 null 이다 (미시도). false 는 '구조화된 명시적 거부'다.
-        #   not_attempted → gather / GATHER_FAILED / null / gather_internal. 자격 요청 자체를 보내기
-        #                   **전에** 수집기 안에서 멈췄다 (adapter 선택 / vendor 정규화 예외 등).
-        #                   CLAUDE.md §9 — failure_stage 는 '워크플로가 멈춘 위치' 다.
-        #                   인증을 시도조차 안 한 실패를 auth 로 라벨링하면 관측하지 않은 것을
-        #                   단정하는 것이고, 사용자에게도 자격증명을 헛되이 뒤지게 만든다.
         - name: "redfish | rescue | Portal 표시용 failure_reason 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
               {%- set outcome = _rf_auth_outcome | default('not_attempted') -%}
-              {%- set at_gather = outcome in ['passed', 'not_attempted'] -%}
+              {%- set at_gather = outcome in ['passed', 'not_attempted', 'stopped_before_auth'] -%}
               {%- set std = _cred_standard_outcome | default(_cred_load_outcome | default('')) -%}
               {%- if outcome == 'passed' -%}
                 {%- set reason_key = 'gather_after_auth' -%}
-              {%- elif outcome == 'not_attempted' -%}
+              {%- elif outcome in ['not_attempted', 'stopped_before_auth'] -%}
                 {%- set reason_key = 'gather_internal' -%}
               {%- elif outcome == 'rejected' -%}
                 {%- set reason_key = 'auth_rejected' -%}
@@ -579,28 +402,15 @@
             _out_target_type:       "redfish"
             _out_collection_method: "redfish_api"
             _out_ip:                "{{ _rf_ip }}"
-            # cycle 2026-06-04 (사용자 결정): 출력 envelope vendor 표시값 매핑 (내부 canonical 유지).
-            # adapter_output_display(예: redfish_hpe_csus_3200 → hpCsus) 우선, 없으면
-            # vendor_output_display(hpe → hp), 둘 다 없으면 canonical 그대로.
-            # _va = common/vars/vendor_aliases.yml (detect_vendor.yml 에서 로드). data-driven — rule 12 R1.
             _out_vendor: >-
               {{ ((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default(''))
                  or ((_va | default({})).vendor_output_display | default({})).get(_rf_vendor | default(''), _rf_vendor | default(none)) }}
             _fail_sec_supported:    "{{ ((_selected_adapter | default({})).capabilities | default({})).sections_supported
                                         | default(['system','hardware','bmc','cpu','memory',
-                                                   'storage','network','firmware']) }}"
+                                                   'storage','network','firmware','power','thermal']) }}"
             _fail_error_section:    "redfish_gather"
-            # 2026-05-11 debugging visibility: ansible_failed_task.name 포함 — json_only callback 으로
-            # 차단된 fatal task 위치 추적용. 2026-08-11 (Phase 6-B) 부터 이 값은 errors[].message 가
-            # 아니라 **errors[].detail** 로 들어간다 (build_failed_output.yml). Portal 사용자 문구는
-            # diagnosis.failure_reason 을 그대로 쓴다.
             _fail_error_message:    "[task: {{ ansible_failed_task.name | default('unknown') }}] {{ ansible_failed_result.msg | default('Redfish 수집 예외') }}"
 
-        # 2026-08-12 (N41 / N50): BMC 가 실제로 준 근거를 detail 로 살린다.
-        #   종전에는 후보별 실패 status / 첫 오류와 무인증 probe 오류가 전부 버려져,
-        #   완전 실패 envelope 에 "왜 실패했는지" 가 한 줄도 남지 않았다.
-        #   errors[].message 는 건드리지 않는다 (문장 카탈로그 정본). 기술 근거는 detail 에만.
-        #   상한 3건 — Portal detail 비대화 방지 (모듈도 MAX_EXTENDED_INFO_* 로 절단 중).
         - name: "redfish | rescue | 실패 근거를 detail 로 합류"
           ansible.builtin.set_fact:
             _fail_error_detail: >-
@@ -628,7 +438,6 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       always:
-        # rule 13 R5 / rule 20 R1: 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
         - name: OUTPUT
           ansible.builtin.debug:
             msg: "{{ (_output | default({
@@ -636,13 +445,13 @@
                        'target_type': 'redfish',
                        'collection_method': 'redfish_api',
                        'ip': _rf_ip | default(inventory_hostname),
-                       'hostname': _rf_ip | default(inventory_hostname),
+                       'hostname': none,
                        'vendor': (((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default('')) or ((_va | default({})).vendor_output_display | default({})).get(_rf_detected_vendor | default(''), _rf_detected_vendor | default(none))),
                        'status': 'failed',
-                       'sections': {},
+                       'sections': {'system': 'failed', 'hardware': 'failed', 'bmc': 'failed', 'cpu': 'failed', 'memory': 'failed', 'storage': 'failed', 'network': 'failed', 'firmware': 'failed', 'users': 'not_supported', 'power': 'failed', 'thermal': 'failed'},
                        'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_catalog.output_build_failed.default, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},
-                       'meta': {},
-                       'correlation': {},
+                       'meta': {'started_at': none, 'finished_at': none, 'duration_ms': none, 'adapter_id': none, 'adapter_version': none, 'ansible_version': none},
+                       'correlation': {'serial_number': none, 'system_uuid': none, 'bmc_ip': _rf_ip | default(inventory_hostname), 'host_ip': _rf_ip | default(inventory_hostname)},
                        'errors': [{'section':'gather','message': _fr_catalog.output_build_failed.default,'detail':'_output 미생성 (block/rescue 모두 실패)'}],
-                       'data': {}
+                       'data': {'system': none, 'hardware': none, 'bmc': none, 'cpu': none, 'memory': none, 'storage': {'filesystems': [], 'physical_disks': [], 'datastores': [], 'controllers': [], 'logical_volumes': [], 'hbas': [], 'infiniband': [], 'summary': {'groups': [], 'grand_total_gb': 0}}, 'network': {'dns_servers': [], 'default_gateways': [], 'interfaces': [], 'adapters': [], 'ports': [], 'virtual_switches': [], 'portgroups': [], 'driver_map': [], 'summary': {'groups': []}}, 'users': [], 'firmware': [], 'power': none, 'thermal': {'temperatures': [], 'fans': []}}
                      })) | to_json }}"

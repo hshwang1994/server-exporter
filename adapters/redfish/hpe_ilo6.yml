@@ -1,37 +1,4 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
-# Vendor: HPE / Hewlett Packard Enterprise
-# Firmware: iLO 6 — 1.x / 2.x
-# Generation: ilo6
-# Generation Year: "2022-2024 (ProLiant Gen11)"
-# Redfish Introduction: "DSP0268 v1.10+"
-# Origin: HPE iLO 6 Redfish API documentation
-# Last sync: 2026-05-11 (M-H2 — Round 11 + PowerSubsystem dual 보강)
-# Notes: ProLiant Gen11 (DL360 Gen11 / DL380 Gen11 / DL580 Gen11 등). Redfish 1.x 표준 호환.
-# Sources (rule 96 R1-A):
-#   - https://hewlettpackard.github.io/ilo-rest-api-docs/ilo6/
-#   - https://servermanagementportal.ext.hpe.com/docs/redfishservices/ilos/ilo6/
-# Lab status: Round 11 검증 (DL380 Gen11 1대 + 사이트 site-A DL380 Gen12) — iLO 6 일부 cover
-# Storage strategy: standard_with_smart_storage_fallback
-#   - 표준 Storage path 우선 + SmartStorage fallback (drive 부재 시 SmartStorage 조회)
-# Power strategy: Power + PowerSubsystem dual
-#   - iLO 6 시기 PowerSubsystem 도입 — Power deprecated path 와 dual
-#   - gather 시 PowerSubsystem 우선 + Power fallback
-# OEM namespace: Oem.Hpe
-# Tested against (실측 2026-04-28, Round 11):
-#   - ProLiant DL380 Gen11 × 1대 (10.50.11.231)
-#   - iLO FirmwareVersion: "iLO 6 v1.73"
-#   - BIOS: "U54 v2.16 (03/01/2024)"
-#   - Redfish: 1.20.0
-#   - CPU: Intel Xeon Gold 6430
-#   - 데이터 경로: tests/reference/redfish/hpe/10_50_11_231/
-# Tested against (실측 2026-04-30, 사이트 site-A):
-#   - ProLiant Compute DL380 Gen12 (Redfish 1.20.0) — Stage 3 OK
-#   - 기타 site BMC (Redfish 1.17.0, Product 필드 부재) — HTTP 406 발생
-#     → http_get Accept/OData/User-Agent 헤더 명시 fix 후 통과 (cycle 2026-04-30)
-#     → FAILURE_PATTERNS.md 2026-04-30 entry 참조
-# Next action: iLO 6 추가 펌웨어 (Gen11 1.30+ / Gen12 1.20+) lab 도입 후 별도 cycle (PowerSubsystem dual 회귀 + SmartStorage fallback 검증)
-# ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_ilo6
 channel: redfish
 priority: 100
@@ -62,7 +29,6 @@ normalize:
 credentials:
   profile: "hpe"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/hpe.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: hpe_fallback, role: recovery }
     - { vault_label: hpe_current,  role: recovery }
@@ -77,13 +43,6 @@ graceful_degradation:
   critical_sections: [system, hardware]
   optional_sections: [firmware, power]
 
-# iLO 6 특이사항 (실장비 검증 2026-03-18):
-# - Storage: StorageControllers 인라인 배열 없음 → Controllers 서브링크 사용
-# - IndicatorLED 미제공 → LocationIndicatorActive (bool) 사용
-# - Fan ReadingUnits = "Percent" (RPM이 아닌 퍼센트)
-# - EthernetInterfaces: SpeedMbps, LinkStatus, Status 모두 null
-# - MemorySummary.Status.Health 미제공 → HealthRollup 사용
-# - HostName이 빈 문자열("") 가능
 
 vendor_notes:
   storage_controller_method: controllers_sublink

@@ -1,10 +1,3 @@
-# =============================================================================
-# get_last_login.sh — Linux 유저 마지막 로그인 시간 조회 함수 (POSIX sh 호환)
-# =============================================================================
-# Python 경로 (bash shell)와 Raw fallback 경로 (POSIX sh) 양쪽에서 공유.
-# - lastlog → last → utmpdump 순서로 fallback
-# - 결과 포맷: "username:ISO8601_timestamp" 또는 "username:null"
-# =============================================================================
 get_last_login() {
   u="$1"; t=""
   if command -v lastlog >/dev/null 2>&1; then

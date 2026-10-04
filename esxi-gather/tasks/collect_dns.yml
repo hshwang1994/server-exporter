@@ -1,29 +1,12 @@
 ---
-# esxi-gather/tasks/collect_dns.yml
-#
-# 잔류 미세 이슈 fix (Round 12 후속):
-#   vmware_host_facts / vmware_host_config_info 가 DNS 정보 미반환 케이스 우회.
-#   community.vmware.vmware_host_dns_info 모듈을 추가 호출하여 dns_servers / domain
-#   / search_domain 을 별도 fragment 로 받는다.
-#
-# 응답 형태 (community.vmware 6.2.0 + ESXi 7.0.3 실측):
-#   hosts_dns_info[hostname] = {
-#     dhcp: bool,
-#     host_name: str,
-#     domain_name: str,
-#     ip_address: [str],         # ← DNS 서버 list
-#     search_domain: [str],
-#     virtual_nic_device: str|null
-#   }
 
 - name: "esxi | collect | vmware_host_dns_info"
+  timeout: "{{ _e_task_timeout | default(180) }}"
   community.vmware.vmware_host_dns_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ ansible_user }}"
     password:       "{{ ansible_password }}"
     validate_certs: false
-    # Round 15: collect_runtime.yml + site.yml BUG#1 패턴 일관 — 응답 dict 가 ESXi 구성
-    # hostname 으로 keyed 되므로 esxi_hostname 도 _e_hostname 사용 (null 이면 _e_ip — API 인자 전용).
     esxi_hostname:  "{{ _e_hostname | default(_e_ip, true) }}"
   register:    _e_dns_result
   delegate_to: localhost

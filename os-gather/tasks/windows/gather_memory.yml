@@ -1,69 +1,103 @@
 ---
-# os-gather/tasks/windows/gather_memory.yml → data.memory fragment
-#
-# 2026-09-03 (OS/ESXi 전수 검수 후속):
-#   - total_mb: 설치량(Win32_PhysicalMemory 합) → OS 가시량(setup fact) → null. 0 placeholder 금지 (B-14).
-#     설치량을 못 읽어 OS 가시량으로 대신하면 Linux 와 같은 경고(시나리오 B) 를 남긴다.
-#   - slots[].manufacturer 는 JEDEC 코드 → 제조사 (Linux 와 같은 jedec_to_vendor) (B-13).
-#   - SMBIOSMemoryType 3(DRAM) 등 Linux dmidecode 가 내는 타입을 같은 표기로 (B-13).
-#   - 둘 다 못 읽으면 섹션 failed + 사유 (B-12).
 
-- name: "windows | memory | Win32_PhysicalMemory total"
+- name: "windows | memory | Win32_PhysicalMemory (total + slots)"
+  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
-    $mem = @(Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue)
-    if ($mem.Count -gt 0) {
-      [math]::Round(($mem | Measure-Object -Property Capacity -Sum).Sum / 1MB, 0)
+    function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
+      $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
+      $Doc[$Name] = $c
+      try { $null = & $Body $c }
+      catch { $c.ok = $false; $c.error = [string]$_.Exception.Message; if (-not $c.error) { $c.error = [string]$_ } }
     }
-  register: _w_mem_raw
+    $doc = [ordered]@{}
+    $mem = $null
+    Invoke-SeComponent $doc 'read_physical_memory' {
+      param($c)
+      $script:mem = @(Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue)
+    }
+    Invoke-SeComponent $doc 'total' {
+      param($c)
+      if ($mem.Count -gt 0) {
+        $c.data = [math]::Round(($mem | Measure-Object -Property Capacity -Sum).Sum / 1MB, 0)
+      }
+    }
+    Invoke-SeComponent $doc 'slots' {
+      param($c)
+      if (-not $doc['read_physical_memory'].ok) { throw $doc['read_physical_memory'].error }
+      $mem | ForEach-Object {
+        $smt = [int]$_.SMBIOSMemoryType
+        $type = switch ($smt) {
+          1 {"Other"} 3 {"DRAM"} 4 {"EDRAM"} 5 {"VRAM"} 6 {"SRAM"} 7 {"RAM"} 8 {"ROM"} 9 {"Flash"}
+          10 {"EEPROM"} 11 {"FEPROM"} 12 {"EPROM"} 13 {"CDRAM"} 14 {"3DRAM"} 15 {"SDRAM"} 16 {"SGRAM"}
+          17 {"RDRAM"} 18 {"DDR"} 19 {"DDR2"} 20 {"DDR2 FB-DIMM"} 24 {"DDR3"} 25 {"FBD2"}
+          26 {"DDR4"} 27 {"LPDDR"} 28 {"LPDDR2"} 29 {"LPDDR3"} 30 {"LPDDR4"} 31 {"Logical non-volatile device"}
+          32 {"HBM"} 33 {"HBM2"} 34 {"DDR5"} 35 {"LPDDR5"} 36 {"HBM3"}
+          default { $null }
+        }
+        if (-not $type) {
+          $mt = [int]$_.MemoryType
+          $type = switch ($mt) { 20 {"DDR"} 21 {"DDR2"} 22 {"DDR2 FB-DIMM"} 24 {"DDR3"} 26 {"DDR4"} default { $null } }
+        }
+        $speedRaw = if ($_.ConfiguredClockSpeed -and [int]$_.ConfiguredClockSpeed -gt 0) { [int]$_.ConfiguredClockSpeed }
+                    elseif ($_.Speed -and [int]$_.Speed -gt 0) { [int]$_.Speed }
+                    else { $null }
+        $serRaw = [string]$_.SerialNumber
+        $mfrRaw = [string]$_.Manufacturer
+        $is_virtual_mem = $mfrRaw -match '(?i)vmware|hyper-?v|microsoft|qemu|kvm|virtual|xen'
+        $serNorm = if (-not $serRaw -or $serRaw -match '^0+$' -or
+                       ($is_virtual_mem -and $serRaw -match '^0{6,}\d?$') -or
+                       $serRaw -in @('NA','N/A','None','Not Specified','To Be Filled By O.E.M.','SerNum0','SerNum1','SerNum2','SerNum3')) { $null } else { $serRaw }
+        $cap = $(if ($_.Capacity -and [int64]$_.Capacity -gt 0) { [int]([math]::Round($_.Capacity / 1MB, 0)) } else { $null })
+        [void]$c.rows.Add([PSCustomObject]@{
+          capacity_mb  = $cap
+          type         = $type
+          speed_mhz    = $speedRaw
+          slot         = $_.DeviceLocator
+          manufacturer = $_.Manufacturer
+          part_number  = $_.PartNumber
+          serial       = $serNorm
+        })
+      }
+    }
+    try { $doc | ConvertTo-Json -Depth 8 -Compress }
+    catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }
+  register: _w_mem_doc_raw
   changed_when: false
   failed_when: false
   no_log: true
 
-# cycle-016 Phase L/N: slot 단위 emit + manufacturer/part_number/serial 추가
-# windows-audit (2026-04-29): SMBIOSMemoryType 매핑 확장 (DDR/DDR2/DDR3/DDR4/DDR5/LPDDR*),
-#   Speed→ConfiguredClockSpeed fallback (VMware Speed=null, ConfiguredClockSpeed=4800),
-#   SerialNumber 센티널(00000000/00000001/all-zeros) → null 정규화.
-- name: "windows | memory | Win32_PhysicalMemory slots"
-  ansible.windows.win_shell: |
-    Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue | ForEach-Object {
-      $smt = [int]$_.SMBIOSMemoryType
-      # SMBIOS Type 17 Memory Type (dmidecode 표기와 동일)
-      $type = switch ($smt) {
-        1 {"Other"} 3 {"DRAM"} 4 {"EDRAM"} 5 {"VRAM"} 6 {"SRAM"} 7 {"RAM"} 8 {"ROM"} 9 {"Flash"}
-        10 {"EEPROM"} 11 {"FEPROM"} 12 {"EPROM"} 13 {"CDRAM"} 14 {"3DRAM"} 15 {"SDRAM"} 16 {"SGRAM"}
-        17 {"RDRAM"} 18 {"DDR"} 19 {"DDR2"} 20 {"DDR2 FB-DIMM"} 24 {"DDR3"} 25 {"FBD2"}
-        26 {"DDR4"} 27 {"LPDDR"} 28 {"LPDDR2"} 29 {"LPDDR3"} 30 {"LPDDR4"} 31 {"Logical non-volatile device"}
-        32 {"HBM"} 33 {"HBM2"} 34 {"DDR5"} 35 {"LPDDR5"} 36 {"HBM3"}
-        default { $null }
-      }
-      # 구형 MemoryType(SMBIOSMemoryType 0/2=Unknown) 만 있는 경우 MemoryType 로 보강
-      if (-not $type) {
-        $mt = [int]$_.MemoryType
-        $type = switch ($mt) { 20 {"DDR"} 21 {"DDR2"} 22 {"DDR2 FB-DIMM"} 24 {"DDR3"} 26 {"DDR4"} default { $null } }
-      }
-      $speedRaw = if ($_.Speed -and [int]$_.Speed -gt 0) { [int]$_.Speed }
-                  elseif ($_.ConfiguredClockSpeed -and [int]$_.ConfiguredClockSpeed -gt 0) { [int]$_.ConfiguredClockSpeed }
-                  else { $null }
-      $serRaw = [string]$_.SerialNumber
-      $mfrRaw = [string]$_.Manufacturer
-      $is_virtual_mem = $mfrRaw -match '(?i)vmware|hyper-?v|microsoft|qemu|kvm|virtual|xen'
-      $serNorm = if (-not $serRaw -or $serRaw -match '^0+$' -or
-                     ($is_virtual_mem -and $serRaw -match '^0{6,}\d?$') -or
-                     $serRaw -in @('NA','N/A','None','Not Specified','To Be Filled By O.E.M.','SerNum0','SerNum1','SerNum2','SerNum3')) { $null } else { $serRaw }
-      $cap = $(if ($_.Capacity -and [int64]$_.Capacity -gt 0) { [int]([math]::Round($_.Capacity / 1MB, 0)) } else { $null })
-      [PSCustomObject]@{
-        capacity_mb  = $cap
-        type         = $type
-        speed_mhz    = $speedRaw
-        slot         = $_.DeviceLocator
-        manufacturer = $_.Manufacturer
-        part_number  = $_.PartNumber
-        serial       = $serNorm
-      } | ConvertTo-Json -Compress
-    }
-  register: _w_mem_slots_raw
-  changed_when: false
-  failed_when: false
+- name: "windows | memory | parse document"
+  ansible.builtin.set_fact:
+    _w_mem_doc: >-
+      {{ (_w_mem_doc_raw.stdout | default('') | trim | from_json)
+         if (_w_mem_doc_raw.stdout | default('') | trim | length > 0) else {} }}
+  no_log: true
+
+- name: "windows | memory | split document"
+  ansible.builtin.set_fact:
+    _w_mem_raw: >-
+      {%- set d = _w_mem_doc if (_w_mem_doc is mapping) else {} -%}
+      {%- set c = d.get('total') if (d.get('total') is mapping) else {} -%}
+      {%- set v = c.get('data') -%}
+      {%- set s = (v | string) if (v is not none) else '' -%}
+      {%- set out = {'stdout': s, 'stdout_lines': ([s] if s else [])} -%}
+      {%- if _w_mem_doc_raw.rc is defined -%}
+        {%- set r = _w_mem_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
+    _w_mem_slots_raw: >-
+      {%- set d = _w_mem_doc if (_w_mem_doc is mapping) else {} -%}
+      {%- set c = d.get('slots') if (d.get('slots') is mapping) else {} -%}
+      {%- set rows = c.get('rows') -%}
+      {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+      {%- set lines = rows | map('to_json') | list -%}
+      {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+      {%- if _w_mem_doc_raw.rc is defined -%}
+        {%- set r = _w_mem_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
   no_log: true
 
 - name: "windows | memory | parse slots + grouping"
@@ -138,7 +172,6 @@
         visible_mb:   "{{ _w_mem_vis_mb | default(none) }}"
         free_mb:      "{{ ansible_memfree_mb | default(none) }}"
         slots:        "{{ _w_mem_slots | default([]) }}"
-        # cycle-016 (2026-04-29): Win32_PhysicalMemory 기반 group summary. 슬롯이 없으면 설치/가시 총량으로 grand_total.
         summary: >-
           {%- set sm = _w_mem_summary | default({'groups': [], 'grand_total_gb': 0}) -%}
           {%- set p = _w_mem_phys_mb | default(none) -%}
@@ -151,7 +184,6 @@
     _sections_supported_fragment: ['memory']
     _sections_collected_fragment: "{{ ['memory'] if ((_w_mem_phys_mb | default(none)) is not none or (_w_mem_vis_mb | default(none)) is not none) else [] }}"
     _sections_failed_fragment:    "{{ [] if ((_w_mem_phys_mb | default(none)) is not none or (_w_mem_vis_mb | default(none)) is not none) else ['memory'] }}"
-    # 시나리오 B: 설치량(Win32_PhysicalMemory) 을 못 읽어 OS 가시량으로 대신한 경우 경고 1건. 둘 다 없으면 실패 1건.
     _errors_fragment: >-
       {%- set p = _w_mem_phys_mb | default(none) -%}
       {%- set v = _w_mem_vis_mb | default(none) -%}

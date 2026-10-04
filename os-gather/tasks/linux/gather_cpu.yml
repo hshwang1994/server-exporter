@@ -1,20 +1,7 @@
 ---
-# os-gather/tasks/linux/gather_cpu.yml
-# CPU 정보 수집 → data.cpu fragment 생성
-#
-# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-09/10/11/12):
-#   - Python / raw 두 경로가 **같은 raw 명령 + 같은 판정식**을 쓴다 (종전: python 경로는
-#     ansible_processor_count 를 소켓 수로 썼는데 `physical id` 가 없는 VM 에서는 논리 CPU 수였고,
-#     raw 경로는 소켓 0 → 1, 코어 미상 → 스레드 수를 코어로 대체했다).
-#   - max_speed_mhz = **정격(base) 클럭** — cpufreq base_frequency → 브랜드 문자열 "@ N.NNGHz".
-#     터보 최대는 turbo_max_mhz 로 따로 낸다 (종전 lscpu 'CPU max MHz' = 터보를 max_speed 에 넣어
-#     Windows(정격)/ESXi(기본) 와 다른 물리량이었다).
-#   - l2_cache_kb / l3_cache_kb = **소켓당 용량**. lscpu 가 "220 MiB (4 instances)" 처럼 합계를
-#     주면 소켓 수로 나누고, 구형 lscpu 가 인스턴스당 값을 주면 L3 는 그대로, L2 는 코어 수를
-#     곱한다 (종전: util-linux 버전에 따라 같은 CPU 가 4배 다른 값).
-#   - 값을 못 구하면 null. 1 / 0 / 스레드 수로 대체하지 않는다. 섹션 status 는 실제 결과로.
 
 - name: "linux | cpu | raw gather (/proc/cpuinfo + lscpu + cpufreq)"
+  timeout: "{{ _os_task_timeout | default(120) }}"
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//')"
@@ -40,20 +27,17 @@
   failed_when: false
   no_log: true
 
-# 2026-09-03 실측(build #190, R760 Silver 4510): cpufreq base_frequency 가 없고 브랜드 문자열에 GHz 표기도 없으면
-#   정격 클럭이 null 이었다. SMBIOS Type 4 의 "Current Speed"(정격) / "Max Speed"(최대) 를 3순위 fallback 으로 쓴다.
-#   dmidecode 는 root 가 필요하므로 별도 task 로 분리 — become 실패가 위 raw 수집을 삼키지 않게 한다.
-#   2026-09-03 실측(build #197, VMware VM): 가상 SMBIOS 는 Max Speed 를 30000 MHz 자리표시자로 준다 →
-#   SMBIOS 값은 100~10000 MHz 범위일 때만 클럭으로 인정한다.
-- name: "linux | cpu | raw dmi processor speed (become)"
-  ansible.builtin.raw: |
-    dmidecode -t processor 2>/dev/null | awk -F': ' '
-      /Current Speed:/ && !cur { sub(/ MHz/,"",$2); gsub(/ /,"",$2); print "DMI_CUR_MHZ=" $2; cur=1 }
-      /Max Speed:/     && !mx  { sub(/ MHz/,"",$2); gsub(/ /,"",$2); print "DMI_MAX_MHZ=" $2; mx=1 }'
-  become: true
-  register: _l_cpu_dmi_raw
-  changed_when: false
-  failed_when: false
+- name: "linux | cpu | select shared dmi raw (processor 구간)"
+  ansible.builtin.set_fact:
+    _l_cpu_dmi_raw: >-
+      {%- set ns = namespace(on=false, lines=[]) -%}
+      {%- for line in ((_l_dmi_raw | default({})).stdout_lines | default([])) -%}
+        {%- if (line | trim) == 'DMI_PROC_BEGIN' -%}{%- set ns.on = true -%}
+        {%- elif (line | trim) == 'DMI_PROC_END' -%}{%- set ns.on = false -%}
+        {%- elif ns.on -%}{%- set _ = ns.lines.append(line) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ {'stdout_lines': ns.lines} }}
   no_log: true
 
 - name: "linux | cpu | parse"
@@ -63,7 +47,6 @@
               | select('search', '=') | map('split', '=', 1) | list) }}
   no_log: true
 
-# 판정식 한 벌 — 두 경로 공통
 - name: "linux | cpu | compute"
   ansible.builtin.set_fact:
     _l_cpu_sockets: >-
@@ -91,7 +74,6 @@
       {%- elif v -%}{{ v }}
       {%- else -%}{{ none }}
       {%- endif -%}
-    # 정격(base) 클럭: cpufreq base_frequency(kHz) → 브랜드 문자열 "@ 2.20GHz" → SMBIOS Current Speed → null
     _l_cpu_base_mhz: >-
       {%- set bk = (_l_cpu_parsed.CPU_BASE_KHZ | default('')) | trim -%}
       {%- set model = (_l_cpu_parsed.CPU_MODEL | default('')) | trim -%}
@@ -100,7 +82,6 @@
       {%- elif ghz != model and (ghz | regex_replace('[0-9.]', '') | length) == 0 -%}{{ ((ghz | float) * 1000) | round(0, 'common') | int }}
       {%- else -%}{%- set dns = namespace(v='') -%}{%- for l in (_l_cpu_dmi_raw.stdout_lines | default([])) -%}{%- if (l | string).startswith('DMI_CUR_MHZ=') and not dns.v -%}{%- set dns.v = (l | string).split('=', 1)[1] | trim -%}{%- endif -%}{%- endfor -%}{{ (dns.v | int) if (dns.v.isdigit() and (dns.v | int) >= 100 and (dns.v | int) <= 10000) else none }}
       {%- endif -%}
-    # 터보 최대: lscpu 'CPU max MHz' → cpufreq cpuinfo_max_freq(kHz) → SMBIOS Max Speed → null
     _l_cpu_turbo_mhz: >-
       {%- set m = (_l_cpu_parsed.CPU_MAX_MHZ | default('')) | trim -%}
       {%- set mk = (_l_cpu_parsed.CPU_MAX_KHZ | default('')) | trim -%}
@@ -110,10 +91,6 @@
       {%- endif -%}
   no_log: true
 
-# 캐시(소켓당 KB). lscpu 표기 두 세대를 모두 받는다.
-#   신형: "220 MiB (4 instances)" = 전체 합계 → 소켓 수로 나눔
-#   구형: "56320K" / "256K"        = 인스턴스당 → L3 는 그대로(소켓당 1개), L2 는 코어당이라 코어 수를 곱함
-#   lscpu 부재: /proc/cpuinfo 'cache size'(= 소켓당 L3) 만 사용
 - name: "linux | cpu | compute cache (per socket)"
   ansible.builtin.set_fact:
     _l_cpu_l2_kb: >-
@@ -167,8 +144,6 @@
         model:           "{{ _l_cpu_model | default(none) }}"
         manufacturer:    "{{ _l_cpu_manufacturer | default(none) }}"
         max_speed_mhz:   "{{ _l_cpu_base_mhz | default(none) }}"
-        # 2026-09-03 실측(build #194, VMware VM): SMBIOS Max Speed 가 정격보다 낮게(2093 < 2200) 보고된다.
-        #   정격보다 낮은 "터보" 는 값이 아니므로 null (turbo >= base 일 때만 신뢰).
         turbo_max_mhz: >-
           {%- set t = _l_cpu_turbo_mhz | default(none) -%}{%- set b = _l_cpu_base_mhz | default(none) -%}{{ t if (t is not none and (b is none or (t | int) >= (b | int))) else none }}
         architecture:    "{{ ((_l_cpu_parsed.CPU_ARCH | default('')) | trim) or none }}"
@@ -197,9 +172,6 @@
     _errors_fragment: "{{ [] if ((_l_cpu_model | default(none)) is not none or (_l_cpu_logical | default(none)) is not none) else [{'section': 'cpu', 'message': 'CPU 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': ('source=/proc/cpuinfo,lscpu; cause=no_output; rc=' ~ (_l_cpu_raw_result.rc | default('none')))}] }}"
   no_log: true
 
-# =============================================================================
-# Shared: merge
-# =============================================================================
 - name: "linux | cpu | merge fragment"
   ansible.builtin.include_tasks:
     file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"

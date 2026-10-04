@@ -1,26 +1,7 @@
 ---
-# esxi-gather/tasks/collect_runtime.yml
-#
-# 2026-04-29 fix B31/B32: ESXi runtime 정보 수집 (timezone / NTP / firewall).
-# 2026-04-30 fix B31/B32 v2: vmware_host_*_info 모듈은 standalone ESXi에서 esxi_hostname 인자 필수.
-#   응답 구조 실측 후 parsing 수정:
-#   - vmware_host_ntp_info → hosts_ntp_info[host][0].{time_zone_name, ntp_servers}
-#   - vmware_host_firewall_info → hosts_firewall_info[host] = list (rule 54개)
-#   - vmware_host_service_info → host_service_info[host] = list of services
-#
-# 2026-09-03 (OS/ESXi 전수 검수 후속):
-#   - default gateway 는 이제 esxi_disks.host_info(ipRouteConfig) 가 정본이라 여기서 뺐다 (B-28).
-#     종전 2차 경로(vmware_host_facts schema=vsphere) 는 실장비 evidence 가 [] 뿐이었다.
-#   - 응답 dict 조회를 `.get(key) | default(first)` 에서 명시 키 판정으로 바꿨다. `.get()` 이 None 을
-#     돌려주면 default 가 발동하지 않아 `None | length` 예외 → 호스트 전체 rescue 였다 (B-01 2차 피해).
-#   - ntp_active = ntpd 서비스 실행 여부, ntp_synchronized = null. vSphere API 는 실제 동기화 여부를
-#     주지 않는다 — 서비스 실행을 동기화로 보고하던 것을 멈췄다 (B-32).
-#   - 세 모듈 결과가 전부 없으면 errors[] 에 남긴다 (종전 _errors_fragment: [] 하드코딩, B-12).
-#
-# 입력:
-#   _e_ip / _e_user / _e_pass / _e_hostname (= ansible_hostname, 없으면 null)
 
 - name: "esxi | runtime | NTP info"
+  timeout: "{{ _e_task_timeout | default(180) }}"
   community.vmware.vmware_host_ntp_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"
@@ -33,6 +14,7 @@
   no_log: true
 
 - name: "esxi | runtime | firewall info"
+  timeout: "{{ _e_task_timeout | default(180) }}"
   community.vmware.vmware_host_firewall_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"
@@ -45,6 +27,7 @@
   no_log: true
 
 - name: "esxi | runtime | service info"
+  timeout: "{{ _e_task_timeout | default(180) }}"
   community.vmware.vmware_host_service_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"
@@ -58,9 +41,6 @@
 
 - name: "esxi | runtime | parse all"
   ansible.builtin.set_fact:
-    # MED-4 fix: hostname 명시 lookup 후 first() fallback. multi-host vCenter 환경
-    # 에서 임의 host 참조 차단. single-host 환경에서는 first() 동작과 동일.
-    # NTP block: time_zone_name + ntp_servers list
     _e_runtime_timezone: >-
       {%- set hosts = (_e_ntp_result.hosts_ntp_info | default({})) -%}
       {%- set h = _e_hostname | default(none) -%}
@@ -75,13 +55,6 @@
       {%- if first_h -%}{{ first_h[0].ntp_servers | default([]) }}{%- else -%}{{ [] }}{%- endif -%}
     _e_runtime_ntp_ok: "{{ (_e_ntp_result is not failed) and (_e_ntp_result.hosts_ntp_info is defined) }}"
 
-    # Firewall: rule 54개 = ESXi 방화벽 활성. ESXi는 시스템 레벨에서 firewall always-on.
-    # 'enabled' rule이 1개 이상이면 firewall_state=active.
-    #
-    # 권한 부족/모듈 실패와 "정상 disabled" 구분: rules list 가 비어있으면
-    # ESXi 표준상 비정상 (firewall always-on) → 미수집(null) 으로 보고. 이전 구현은
-    # 빈 list 를 disabled 로 오판해 보안 라벨이 반대로 갔음.
-    # 2026-09-03: enum 을 OS 채널과 같은 active / inactive / null 로 통일 (종전 enabled/disabled).
     _e_runtime_firewall_state: >-
       {%- set fws = (_e_firewall_result.hosts_firewall_info | default({})) -%}
       {%- if (_e_firewall_result is failed) or not fws or (fws is not mapping) -%}
@@ -99,7 +72,6 @@
       {%- endif -%}
     _e_runtime_fw_ok: "{{ (_e_firewall_result is not failed) and (_e_firewall_result.hosts_firewall_info is defined) }}"
 
-    # ntpd 서비스 실행 여부 → ntp_active. (동기화 여부는 API 가 주지 않는다 → ntp_synchronized null)
     _e_runtime_ntpd_running: >-
       {%- set svcs = (_e_service_result.host_service_info | default({})) -%}
       {%- if svcs and svcs is mapping -%}
@@ -118,28 +90,20 @@
       system:
         runtime:
           timezone:         "{{ _e_runtime_timezone | default(none) }}"
-          # ntpd 실행 → true, 조회됐는데 미실행 → false, 조회 실패 → null
           ntp_active: >-
             {%- set r = _e_runtime_ntpd_running | default(none) -%}
             {{ (r | bool) if (r is not none and (r | string | lower) in ['true','false']) else none }}
           ntp_synchronized: null
           firewall_tool:    "esxi_firewall"
           firewall_state:   "{{ _e_runtime_firewall_state | default(none) }}"
-          # 2026-08-12 버그 수정: 이 fragment 는 system.runtime **dict 전체**를 다시 만든다.
-          #   merge_fragment 는 2단계 깊이에서 dict 를 통째로 교체하므로(실측: STEP1 ['22','443','902']
-          #   -> STEP2 []), 여기서 []로 두면 collect_disks 가 수집해 normalize_system 이 넣어둔
-          #   실제 값이 항상 빈 배열로 덮어써진다. 키를 빼면 계약상 필요한 키 자체가 사라진다
-          #   (실측: STEP3 lp=MISSING). 따라서 normalize_system 과 동일한 원본을 이어받는다.
           listening_ports:  "{{ _e_raw_listening_ports | default([]) }}"
           swap_total_mb:    null
           swap_used_mb:     null
           swap_free_mb:     null
-          # ESXi 부가 정보 (Additive): 설정된 NTP 서버 목록
           ntp_servers:      "{{ _e_runtime_ntp_servers | default([]) }}"
     _sections_supported_fragment: ['system']
     _sections_collected_fragment: ['system']
     _sections_failed_fragment: []
-    # 세 모듈이 전부 실패하면 runtime 은 통째로 비어 있다 — 흔적을 남긴다 (섹션 status 는 유지).
     _errors_fragment: >-
       {%- set oks = [(_e_runtime_ntp_ok | default(false) | bool), (_e_runtime_fw_ok | default(false) | bool), (_e_runtime_svc_ok | default(false) | bool)] -%}
       {%- if oks | select | list | length == 0 -%}

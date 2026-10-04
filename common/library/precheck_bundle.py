@@ -1,92 +1,8 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-# ==============================================================================
-# precheck_bundle.py — 통합 사전 진단 모듈
-# ==============================================================================
-# 수집 전 대상 호스트의 연결 상태를 4단계로 진단합니다.
-#
-# 단계:
-#   1. reachable   — 대상 도달 가능성 확인 (관리 TCP 응답 OR ICMP Echo 응답)
-#   2. port_open   — 채널별 서비스 포트 확인 (443/22/5985/5986)
-#   3. protocol_supported — 프로토콜 핸드셰이크 (Redfish/SSH banner/vSphere)
-#   4. auth_success — 인증 시도 (선택적)
-#
-# 사용법:
-#   - name: Run precheck
-#     precheck_bundle:
-#       host: "{{ ansible_host }}"
-#       channel: redfish
-#       ports: [443]
-#     delegate_to: localhost
-#     register: precheck_result
-# ==============================================================================
 
 __metaclass__ = type
 
-DOCUMENTATION = r"""
----
-module: precheck_bundle
-short_description: 수집 전 대상 호스트 연결 상태 진단
-description:
-  - TCP 도달 → 프로토콜 → 인증 순서로 대상 호스트를 진단합니다.
-  - 도달성(reachable)은 "관리 TCP 응답 OR ICMP Echo 응답" 으로 판정합니다.
-    TCP 를 먼저 보고, TCP 가 아무 응답도 주지 않았을 때만 ICMP 를 한 번 더 확인합니다.
-  - ICMP 는 앞단 Gate 가 아닙니다. ICMP 가 막혀 있어도 TCP 가 답하면 그대로 통과하고,
-    ICMP 무응답만으로 실패시키지 않으며 ICMP 전용 failure_code 도 만들지 않습니다.
-  - 인증 단계는 자격증명이 주어졌을 때만 돕니다. 운영 경로에서는 수집 본단계가
-    인증을 겸하므로 여기서 따로 시도하지 않습니다.
-  - 각 단계의 성공/실패 여부와 실패 사유를 반환합니다.
-  - controller 노드에서 실행됩니다 (delegate_to: localhost).
-options:
-  host:
-    description: 대상 호스트 IP 또는 hostname
-    required: true
-    type: str
-  channel:
-    description: 수집 채널
-    required: true
-    type: str
-    choices: [redfish, os, esxi]
-  ports:
-    description: 확인할 포트 목록 (순서대로 시도, 첫 번째 성공 포트 사용)
-    type: list
-    elements: int
-    default: []
-  timeout_port:
-    description: 포트 연결 타임아웃 (초)
-    type: float
-    default: 3.0
-  timeout_protocol:
-    description: 프로토콜 핸드셰이크 타임아웃 (초)
-    type: float
-    default: 15.0
-  timeout_auth:
-    description: 인증 시도 타임아웃 (초)
-    type: float
-    default: 8.0
-  icmp_probe:
-    description:
-      - TCP 가 전 포트 무응답일 때 ICMP Echo 로 도달성을 한 번 더 확인할지 여부.
-      - false 면 종전(TCP 전용) 판정으로 되돌아갑니다.
-    type: bool
-    default: true
-  timeout_icmp:
-    description: ICMP Echo 1회 타임아웃 (초). TCP 무응답 경로에서만 소비됩니다.
-    type: float
-    default: 1.0
-  username:
-    description: 인증 사용자명 (선택)
-    type: str
-  password:
-    description: 인증 비밀번호 (선택)
-    type: str
-  verify_ssl:
-    description: SSL 인증서 검증 여부
-    type: bool
-    default: false
-author:
-  - server-exporter
-"""
 
 from ansible.module_utils.basic import AnsibleModule
 import base64
@@ -104,45 +20,12 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 
-# =============================================================================
-# 채널별 기본 포트 정의
-# =============================================================================
-# 2026-08-10 실측 주의 — **"os" 채널은 production playbook 에서 호출되지 않는다.**
-#   본 모듈을 include 하는 곳은 common/tasks/precheck/run_precheck.yml 이고, 이를
-#   호출하는 곳은 redfish-gather/site.yml:46 과 esxi-gather/site.yml:51 둘뿐이다.
-#   os-gather 는 precheck_bundle 대신 site.yml PLAY 1 에서 ansible.builtin.wait_for
-#   3연타(5986 → 5985 → 22)로 OS 판별까지 함께 처리한다(os-gather/site.yml:40-81).
-#   → 아래 "os" 항목과 probe_os() / ssh_banner_check() 는 **dead code 가 아니라
-#     라이브러리 기능**이며 tests/unit/test_precheck_probe_os.py 가 회귀를 지킨다.
-#     os-gather 를 precheck 로 통합할 경우의 진입점으로 유지한다(삭제 금지).
 CHANNEL_DEFAULT_PORTS = {
     "redfish": [443],
     "os": [5986, 5985, 22],
     "esxi": [443],
 }
 
-# ── 최종 사용자 문구 (2026-09-21 사용자 확정 — 카탈로그 부분 복제) ──────────
-#
-# 이 문장들이 Portal 실패 Grid 에 그대로 보인다. 같은 문장이 두 곳에 동시에 쓰인다:
-#   - diagnosis.failure_reason
-#   - errors[].message   ← Portal 실패 Grid 의 실제 소스
-# 두 값은 build_failed_output.yml 이 failure_reason 을 그대로 message 로 복사해 항상 일치한다.
-#
-# 정본은 common/vars/failure_reasons.yml 의 `_fr_catalog` 다. 사전 점검이 내는 키만 여기에
-# 글자 그대로 복제한다 — Ansible 모듈은 실행 시 vars 파일도 필터 플러그인도 쓸 수 없다.
-# drift 는 tests/e2e/test_errors_message_contract.py 가 막는다.
-#
-# 2026-09-21: 문장을 failure_code 하나가 아니라 **(failure_code, 채널)** 로 고른다.
-#   종전(2026-08-12 ~ 09-20)에는 code 하나로 골라 TCP_CONNECT_FAILED(방화벽 차단 의심)와
-#   TCP_CONNECTION_REFUSED(서비스 중지 의심)가 같은 문장이었고, 채널 이름을 뺀 탓에
-#   "관리 포트 / 관리 서비스" 가 어느 포트·서비스인지 관리자가 알 수 없었다.
-#
-# 작성 규칙 (CLAUDE.md §10):
-#   앞 단계  : **실제로 관측된 성공만** 문장에 넣는다 ("통신은 되지만" = ICMP 응답 관측).
-#   주어     : 연결 거부의 주체(최종 서버 / 중간 방화벽)는 단정하지 않는다 (CLAUDE.md §7).
-#   금지     : 관리 포트 번호 / IP / HTTP status / timeout 초 / RST·SOAP·XML 같은 내부 용어 /
-#              Ansible 태스크명 / raw exception / 긴 대시 / 가운데점 / DNS·호스트 이름 안내
-#   기술 정보: 포트 목록 / 원본 오류 / HTTP status 는 errors[].detail 에만 보존한다.
 FAILURE_REASON_CATALOG = {
     "ip_invalid": {
         "default": "대상 IP가 올바르지 않습니다. 개더링 대상 IP를 확인하세요.",
@@ -171,7 +54,6 @@ FAILURE_REASON_CATALOG = {
         "default": "접속한 대상에서 필요한 응답을 확인하지 못했습니다. "
                    "대상 종류와 접속 설정을 확인하세요.",
     },
-    # _try_redfish_auth (수동 진단 / 단위 테스트 경로) 전용. 운영 경로는 인증을 여기서 하지 않는다.
     "auth_unconfirmed": {
         "os": "해당 위치({loc})의 Vault 계정으로 대상 OS에 로그인하지 못했습니다.",
         "esxi": "해당 위치({loc})의 Vault 계정으로 대상 ESXi에 로그인하지 못했습니다.",
@@ -180,16 +62,6 @@ FAILURE_REASON_CATALOG = {
     },
 }
 
-# failure_code → 문장 키 (사전 점검이 내는 code 만). 나머지 code 의 키는 각 site.yml rescue /
-# 빌더 / callback 이 관측으로 고른다 (정본 대응표: failure_reasons.yml `_fr_code_keys`).
-#   DNS_RESOLUTION_FAILED  : IPv4 입력이라 사실상 "IP 문자열이 올바르지 않다" 다
-#                            (빈 IP 는 Jenkins Validate 가 먼저 막는다). enum 은 유지한다.
-#   TARGET_UNREACHABLE     : TCP 도 ICMP 도 무응답 (2026-09-03).
-#   TCP_CONNECT_FAILED     : ICMP 는 응답, 관리 포트만 무응답 → "통신은 되지만".
-#   TCP_CONNECTION_REFUSED : 거부 관측. 주어를 쓰지 않는다.
-#   PROTOCOL_CHECK_FAILED  : 포트는 열렸는데 기대 응답이 아님. 대상 종류가 맞아도 서비스
-#                            중지 / 응답 지연 / TLS 비호환이면 같은 code 다 — 원인을 단정하지 않는다.
-#   AUTH_PROBE_FAILED      : 운영 경로에서는 나오지 않는다 (run_module Stage 4 주석).
 PRECHECK_REASON_KEYS = {
     "DNS_RESOLUTION_FAILED":  "ip_invalid",
     "TARGET_UNREACHABLE":     "target_unreachable",
@@ -199,17 +71,10 @@ PRECHECK_REASON_KEYS = {
     "AUTH_PROBE_FAILED":      "auth_unconfirmed",
 }
 
-# 사전 점검은 실행 위치(se_location)를 받지 않는다. {loc} 가 들어간 문장은 운영 경로에서
-# 여기서 나오지 않지만(auth 경로는 redfish 전용), 나오더라도 틀을 드러내지 않게 채운다.
 _LOC_UNKNOWN = "미지정"
 
 
 def reason_for_failure(failure_code, channel=None):
-    """관측된 (failure_code, 채널) → 사용자 문장.
-
-    호출부가 stage / code 를 먼저 확정하고 문장은 여기서 파생한다. 채널 문장이 없으면
-    default 문장을 쓴다. 매핑에 없는 code 는 가장 보수적인 '응답 없음' 문장이다.
-    """
     entry = FAILURE_REASON_CATALOG[
         PRECHECK_REASON_KEYS.get(failure_code, "target_unreachable")]
     text = entry.get(channel) if channel else None
@@ -218,11 +83,6 @@ def reason_for_failure(failure_code, channel=None):
     return text.replace("{loc}", _LOC_UNKNOWN)
 
 
-# TCP 연결 실패 종류 (구조화 — 오류 문자열 파싱 대신 이 값으로 분류한다)
-#   'dns'      : 주소 해석 실패 → TCP 연결 시도 자체를 못 함
-#   'refused'  : RST 관측 → 호스트는 살아 있고 포트만 닫힘
-#   'timeout'  : 응답 없음
-#   'other'    : 그 외 OSError (no route 등)
 TCP_FAIL_DNS = "dns"
 TCP_FAIL_REFUSED = "refused"
 TCP_FAIL_TIMEOUT = "timeout"
@@ -230,16 +90,6 @@ TCP_FAIL_OTHER = "other"
 
 
 def tcp_check_ex(host, port, timeout):
-    """TCP 포트 연결 확인 — (ok, err, kind) 3-튜플.
-
-    production-audit (2026-04-29): IPv4/IPv6 듀얼 스택 — 기존 AF_INET only는
-    IPv6-only 관리망 대상에 도달 불가. socket.getaddrinfo로 family를 자동 선택.
-
-    2026-08-10 (Phase 2): 실패 **종류**를 구조화해 함께 반환한다. 종전에는 호출부가
-    한국어 오류 문자열에 `"거부" in err` 같은 부분 문자열 검사를 해서 refused 를 판별했는데,
-    그런 문자열 파싱으로 failure_code 를 만들면 문구가 바뀔 때마다 분류가 깨진다.
-    반환값 kind 는 위 TCP_FAIL_* 상수 중 하나이며 failure_code 매핑의 유일한 근거다.
-    """
     last_err = "주소 해석 실패"
     last_kind = TCP_FAIL_OTHER
     try:
@@ -247,9 +97,6 @@ def tcp_check_ex(host, port, timeout):
     except socket.gaierror as e:
         return False, "DNS 해석 실패: {0}".format(e), TCP_FAIL_DNS
     for family, socktype, proto, _canon, sockaddr in addr_infos:
-        # Round 16: socket.socket() 를 try 안으로 — IPv6 비활성 host 에서 AF_INET6
-        # 주소군에 socket() 이 OSError(EAFNOSUPPORT) 를 던지면(try 밖이면) 모듈 전체가
-        # 죽음. try 안에서 잡아 다음 주소군(IPv4)으로 graceful degradation.
         sock = None
         try:
             sock = socket.socket(family, socktype, proto)
@@ -275,43 +122,15 @@ def tcp_check_ex(host, port, timeout):
 
 
 def tcp_check(host, port, timeout):
-    """tcp_check_ex 의 (ok, err) 2-튜플 래퍼 — 기존 호출자/테스트 호환용."""
     ok, err, _kind = tcp_check_ex(host, port, timeout)
     return ok, err
 
 
-# ── ICMP Echo — reachable 판정의 **보조 근거** (Gate 아님) ────────────────────
-#
-# 2026-09-03 (사용자 지시): reachable 을 "관리 TCP 응답 OR ICMP Echo 응답" 으로 넓힌다.
-#   종전에는 관리 TCP 포트의 응답(연결 성공 또는 RST)만 도달 근거였다. 그래서 서버는 살아
-#   있는데 방화벽이 관리 포트 TCP 를 DROP 하는 구간이 stage=reachable 로 떨어졌고,
-#   운영자에게는 "IP 사용 여부를 확인하세요" 가 나갔다 — 실제로 봐야 할 곳은 방화벽이다.
-#
-# 이 확장이 지키는 경계 (CLAUDE.md §7 의 원래 취지 그대로다):
-#   - ICMP 는 **앞단 Gate 가 아니다.** TCP 를 먼저 보고, TCP 가 아무 응답도 주지 않았을
-#     때만 마지막으로 한 번 더 물어본다. ICMP 가 막혀 있어도 TCP 가 답하면 그대로 통과다.
-#   - ICMP 실패는 **아무것도 실패시키지 않는다.** 무응답 / 미지원 / ping 부재 / 권한 부족을
-#     구분 없이 "추가 근거 없음" 으로만 취급하고, ICMP 전용 failure_code 도 만들지 않는다.
-#   - 성공 경로와 RST 경로에서는 **호출 자체를 하지 않는다** → 그 두 경로의 예산 증가 0.
-#     소비되는 경우에도 Echo 1회(기본 1초)뿐이다.
-#
-# raw socket 이 아니라 `ping` 명령을 쓰는 이유:
-#   ICMP raw socket 은 CAP_NET_RAW(root)가 필요하고, 비특권 대안인 SOCK_DGRAM+IPPROTO_ICMP
-#   는 커널 net.ipv4.ping_group_range 설정에 좌우돼 에이전트마다 되고 안 되고가 갈린다.
-#   배포판 `ping` 은 setuid/capability 가 붙어 있어 비특권 계정에서 그대로 동작하고,
-#   외부 파이썬 의존도 늘지 않는다 (rule 10 R2 — stdlib subprocess).
-#   `ping` 이 아예 없는 환경이면 "확인 불가" 로 떨어져 판정이 종전(TCP 전용)과 같아진다.
 _ICMP_DEFAULT_TIMEOUT = 1.0
-# subprocess 자체의 하드 타임아웃 여유 (ping 이 자기 deadline 을 못 지킬 때의 상한).
 _ICMP_SPAWN_MARGIN = 1.0
 
 
 def _icmp_command(host, timeout):
-    """플랫폼별 'Echo 1회' ping 명령.
-
-    이름 역조회(-n)를 꺼서 DNS 때문에 예산이 늘지 않게 한다. 운영 controller 는 Linux
-    (Jenkins Agent)이며 win/darwin 분기는 개발 환경에서 같은 코드를 돌리기 위한 것이다.
-    """
     millis = max(1, int(timeout * 1000))
     secs = max(1, int(math.ceil(timeout)))
     if sys.platform.startswith("win"):
@@ -322,13 +141,6 @@ def _icmp_command(host, timeout):
 
 
 def icmp_check(host, timeout=_ICMP_DEFAULT_TIMEOUT):
-    """ICMP Echo 1회 — (replied, note).
-
-    replied=True 는 **Echo Reply 를 실제로 관측했을 때만**이다.
-    False 는 "이번 확인으로는 근거를 얻지 못했다" 이지 "장비가 죽었다" 가 아니다
-    (차단 / 미지원 / ping 부재 / 권한 부족이 모두 여기로 들어온다).
-    note 는 errors[].detail 에 남길 기술 증거 문자열이다 — 사용자 문장이 아니다.
-    """
     try:
         proc = subprocess.run(
             _icmp_command(host, timeout),
@@ -344,8 +156,6 @@ def icmp_check(host, timeout=_ICMP_DEFAULT_TIMEOUT):
 
     if proc.returncode != 0:
         return False, "icmp: 응답 없음 (rc={0})".format(proc.returncode)
-    # Windows ping 은 중간 라우터가 보낸 'Destination host unreachable' 에도 rc=0 을 준다.
-    # Echo Reply 였는지 TTL 표기로 한 번 더 확인한다 (Linux ping 은 rc 만으로 충분).
     if sys.platform.startswith("win"):
         stdout = (proc.stdout or b"").lower()
         if b"ttl=" not in stdout:
@@ -353,19 +163,11 @@ def icmp_check(host, timeout=_ICMP_DEFAULT_TIMEOUT):
     return True, "icmp: Echo Reply 확인"
 
 
-# ansible.builtin.wait_for(state=started, port=...) 의 기본값 (실측 — ansible 2.19.9
-# modules/wait_for.py argument_spec: connect_timeout=5, sleep=1).
-# os-gather 는 이 모듈로 관리 포트를 확인했고 sleep / connect_timeout 을 지정한 적이 없다.
 _WAIT_FOR_CONNECT_TIMEOUT = 5.0
 _WAIT_FOR_SLEEP = 1.0
 
 
 def _dominant_kind(kinds):
-    """여러 시도의 실패 종류 → **대표 종류** (관측의 강도 순).
-
-    마지막 오류 문자열 하나로 원인을 정하면 시도 순서에 따라 결과가 흔들린다.
-    구조화된 kind 만 보고 결정한다. 우선순위 근거는 _tcp_failure_code 와 동일하다.
-    """
     if TCP_FAIL_DNS in kinds:
         return TCP_FAIL_DNS
     if TCP_FAIL_REFUSED in kinds:
@@ -377,23 +179,6 @@ def _dominant_kind(kinds):
 
 def tcp_check_budget(host, port, budget, poll_interval,
                      connect_timeout=_WAIT_FOR_CONNECT_TIMEOUT):
-    """시간 예산 안에서 연결 가능 여부를 **반복 확인** — (ok, err, kind).
-
-    2026-08-10 (Phase 3-A 보정): os-gather 는 종전에 `ansible.builtin.wait_for` 로 포트를
-    확인했다. wait_for(state=started) 는 단발 연결이 아니라 **timeout 예산 안에서 폴링**한다
-    (실측 — modules/wait_for.py:619-628):
-
-        end = start + timeout
-        while now < end:
-            create_connection(..., min(connect_timeout, ceil(end - now)))   # 성공 시 종료
-            time.sleep(sleep)
-
-    Phase 3-A 최초 전환에서 이를 1회 시도로 바꿔, "probe 시작 시점엔 닫혀 있지만 예산 안에
-    기동되는 서비스"가 실패로 바뀌는 회귀가 생겼다. 본 함수가 그 의미를 되돌린다.
-
-    poll_interval 이 0 이하면 **단일 시도**(기존 redfish/esxi 동작)로 되돌아간다 —
-    두 채널의 probe 횟수·타임아웃을 바꾸지 않기 위해서다.
-    """
     if not poll_interval or poll_interval <= 0:
         return tcp_check_ex(host, port, budget)
 
@@ -404,7 +189,6 @@ def tcp_check_budget(host, port, budget, poll_interval,
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             break
-        # wait_for 와 동일: 남은 예산을 올림한 값과 connect_timeout 중 작은 쪽
         ok, err, kind = tcp_check_ex(
             host, port, min(connect_timeout, math.ceil(remaining)))
         if ok:
@@ -416,29 +200,19 @@ def tcp_check_budget(host, port, budget, poll_interval,
         time.sleep(poll_interval)
 
     if not kinds:
-        # 예산이 0 이하라 한 번도 시도하지 못한 경우 — 최소 1회는 시도한다
         return tcp_check_ex(host, port, budget)
     kind = _dominant_kind(kinds)
-    # 대표 종류에 해당하는 **마지막** 오류 문자열을 증거로 남긴다
     err = next((e for e, k in zip(reversed(errs), reversed(kinds)) if k == kind), errs[-1])
     return False, err, kind
 
 
 def _build_ssl_context(verify):
-    """HTTPS context — verify=False 시 self-signed BMC 인증서 허용.
-
-    cycle 2026-04-30: 구 BMC (HPE iLO4, Lenovo IMM2, 일부 iDRAC7/8 펌웨어)
-    호환을 위해 verify=False 환경 한정으로 OpenSSL 3.x legacy renegotiation +
-    weak cipher 허용. curl -k 와 동등한 관용성. 사내 BMC self-signed 망 한정.
-    """
     ctx = ssl.create_default_context()
     if not verify:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-        # OpenSSL 3.x: 구 BMC TLS legacy renegotiation 차단 해제
         if hasattr(ssl, 'OP_LEGACY_SERVER_CONNECT'):
             ctx.options |= ssl.OP_LEGACY_SERVER_CONNECT
-        # 약한 cipher 허용 (TLS 1.0/1.1, RC4 등 — verify=False BMC 망 한정)
         try:
             ctx.set_ciphers('DEFAULT@SECLEVEL=0')
         except ssl.SSLError:
@@ -447,7 +221,6 @@ def _build_ssl_context(verify):
 
 
 def _basic_auth_header(auth):
-    """auth=(user, pass) → 'Basic ...' 헤더 값."""
     if not auth:
         return None
     credentials = base64.b64encode(
@@ -457,11 +230,6 @@ def _basic_auth_header(auth):
 
 
 def _collect_headers(msg):
-    """urllib 응답 헤더 → {소문자 이름: 값}. 중복 헤더는 ', ' 로 합친다.
-
-    2026-08-10 (Phase 3-B): WinRM 판정 근거로 헤더가 필요하다. Windows 는
-    `WWW-Authenticate` 를 여러 줄로 보내므로 get_all 로 모아 합친다.
-    """
     out = {}
     if msg is None:
         return out
@@ -479,20 +247,6 @@ def _collect_headers(msg):
 
 
 def http_get(url, timeout, verify=False, auth=None):
-    """HTTP GET — urllib stdlib 단일 경로 (외부 의존 없음).
-
-    반환: (ok, err, payload)
-      payload = {'status_code': int, 'json': dict|None, 'headers': {소문자: 값}}
-
-    2026-08-10 (Phase 3-B): payload 에 'headers' 를 **추가**했다. 기존 호출자는
-    'status_code' / 'json' 만 읽으므로 동작 변화 없다 (redfish / esxi 회귀 없음).
-
-    cycle 2026-04-30: HTTP 406 Not Acceptable 호환 — 일부 BMC 펌웨어
-    (HPE iLO 펌웨어 ServiceRoot RedfishVersion 1.17.0 등)이 Accept 헤더
-    명시 안 된 요청을 거부.
-    cycle 2026-04-30 hotfix: OData-Version + User-Agent 추가 시 Lenovo XCC
-    일부 펌웨어가 reject (사이트 검증). Accept 헤더만 명시 — 사용자 실측 OK 패턴.
-    """
     ctx = _build_ssl_context(verify)
     req = urllib.request.Request(url)
     req.add_header("Accept", "application/json")
@@ -500,8 +254,6 @@ def http_get(url, timeout, verify=False, auth=None):
     if auth_header:
         req.add_header("Authorization", auth_header)
     try:
-        # Round 16: with 컨텍스트 매니저로 응답(소켓) 결정적 close (GC 의존 제거).
-        # probe + auth 단계가 http_get 를 수회 호출 — 응답 미close 시 소켓 누적.
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             status = resp.getcode()
@@ -522,28 +274,17 @@ def http_get(url, timeout, verify=False, auth=None):
     except socket.timeout:
         return False, "요청 시간 초과 (timeout={0}s)".format(timeout), None
     except urllib.error.URLError as e:
-        # ConnectionRefusedError / SSL handshake / DNS 등 묶음
         return False, "연결 실패: {0}".format(str(e.reason)[:200]), None
     except (ssl.SSLError, OSError) as e:
         return False, str(e)[:200], None
 
 
-# SSH Protocol Version Exchange (RFC 4253 §4.2)
-#   - 서버는 "SSH-protoversion-softwareversion" 한 줄을 CR LF 로 끝낸다.
-#   - 그 **앞에** 다른 줄(법적 고지 등)을 보낼 수 있고, 클라이언트는 그것을 건너뛰어야 한다.
-#   - protoversion 은 2.0 (또는 하위 호환 표기 1.99) 만 유효로 본다.
-# 무제한으로 읽지 않도록 줄 수와 바이트 수를 모두 제한한다.
 _SSH_ID_MAX_LINES = 8
 _SSH_ID_MAX_BYTES = 2048
 _SSH_ID_PREFIXES = ("SSH-2.0-", "SSH-1.99-")
 
 
 def _read_ssh_identification(sock, deadline):
-    """SSH identification 줄을 찾아 반환 — 못 찾으면 None.
-
-    RFC 4253 §4.2 가 허용하는 **선행 추가 줄**을 건너뛴다. 읽는 양은
-    _SSH_ID_MAX_LINES / _SSH_ID_MAX_BYTES 로 제한한다 (무제한 수신 금지).
-    """
     buf = b""
     lines = 0
     while len(buf) < _SSH_ID_MAX_BYTES and lines < _SSH_ID_MAX_LINES:
@@ -562,7 +303,6 @@ def _read_ssh_identification(sock, deadline):
             if line.startswith(_SSH_ID_PREFIXES):
                 return line
             if line.startswith("SSH-"):
-                # SSH 는 맞으나 우리가 아는 protoversion 이 아니다 — 그대로 알린다
                 return line
             if lines >= _SSH_ID_MAX_LINES:
                 return None
@@ -570,24 +310,12 @@ def _read_ssh_identification(sock, deadline):
 
 
 def ssh_banner_check(host, port, timeout):
-    """SSH Protocol Identification 확인 (IPv4/IPv6 듀얼 스택).
-
-    2026-08-10 (Phase 3-B): 종전에는 첫 recv(256) 이 "SSH-" 로 시작하는지만 봤다.
-    RFC 4253 §4.2 는 identification 앞에 다른 줄을 보내는 것을 허용하므로 그런 서버를
-    놓쳤고, "SSH-" 접두사만 맞으면 통과시켜 protoversion 을 검증하지 않았다.
-    이제 선행 줄을 건너뛰고 SSH-2.0 / SSH-1.99 만 성공으로 인정한다.
-
-    자격증명을 보내지 않고 Key Exchange 도 수행하지 않는다 (Protocol 확인까지만).
-    """
     last_err = "주소 해석 실패"
     try:
         addr_infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror as e:
         return False, "DNS 해석 실패: {0}".format(e), None
     for family, socktype, proto, _canon, sockaddr in addr_infos:
-        # Round 16: socket.socket()/settimeout() 를 try 안으로 — IPv6 비활성 host 의
-        # AF_INET6 주소군에서 socket() OSError(EAFNOSUPPORT) 가 모듈을 죽이지 않게
-        # (tcp_check 와 동일). 잡아서 다음 주소군(IPv4)으로 진행.
         sock = None
         try:
             deadline = time.monotonic() + timeout
@@ -598,12 +326,9 @@ def ssh_banner_check(host, port, timeout):
             if ident is None:
                 last_err = "SSH identification 미수신"
             elif ident.startswith(_SSH_ID_PREFIXES):
-                # facts 에 raw identification 을 싣지 않는다 — 소프트웨어 버전 문자열을
-                # 외부 JSON 에 새 필드로 노출하지 않기 위함. 실패 시 근거는 err 로만 전달.
                 return True, None, {}
             else:
                 last_err = "지원하지 않는 SSH protoversion: {0}".format(ident[:40])
-            # Round 15: 비-SSH 응답 → 즉시 return 대신 다음 주소군(dual-stack) 시도.
         except Exception as e:
             last_err = str(e)[:120]
         finally:
@@ -615,34 +340,11 @@ def ssh_banner_check(host, port, timeout):
     return False, last_err, None
 
 
-# ── Redfish ServiceRoot 판정 정본 (Phase 4-A) ──────────────────────────────
-#
-# 최소 성공 조건은 DMTF 규격 + 저장소 실측 양쪽을 근거로 정했다.
-#
-# 규격 근거:
-#   - `@odata.type` / `@odata.id` 는 모든 Redfish 리소스에 필수인 payload annotation
-#     (DSP0266 Redfish Specification / DSP2046 Resource and Schema Guide).
-#   - `RedfishVersion` 은 ServiceRoot_v1.xml 에서 Edm.String + Nullable="false" 로
-#     정의된 필수 속성이다 (redfish.dmtf.org/schemas/v1/ServiceRoot_v1.xml, 확인 2026-08-10).
-#
-# 실측 근거 (2026-08-10, 저장소 fixture 전수):
-#   - tests/fixtures/redfish/*/service_root.json 28개
-#   - tests/fixtures/redfish/*/recording.json 의 `noauth::` 비인증 ServiceRoot 10개
-#     (DMTF 표준 mockup + HPE 에뮬레이터 5 + 실장비 캡처 4)
-#   → 총 38개 전수에서 @odata.type 은 `#ServiceRoot.` 로 시작하고,
-#     @odata.id 는 `/redfish/v1` 또는 `/redfish/v1/`, RedfishVersion 은 항상 존재.
-#   → 비인증 ServiceRoot 10개는 **전부 HTTP 200** 이다. 저장소 안에 ServiceRoot 에서
-#     인증을 요구하는 vendor 캡처는 하나도 없다.
 _SERVICE_ROOT_TYPE_PREFIX = "#ServiceRoot."
 _SERVICE_ROOT_ODATA_IDS = frozenset({"/redfish/v1", "/redfish/v1/"})
 
 
 def parse_service_root(json_data):
-    """Redfish ServiceRoot 검증 → (is_service_root, facts, 사유).
-
-    HTTP status 가 아니라 **응답 본문 구조**로 판정한다. 일반 웹서버가 200 + JSON 을
-    돌려줘도 ServiceRoot 시그니처가 없으면 Redfish 가 아니다.
-    """
     if not isinstance(json_data, dict):
         return False, None, "본문이 JSON object 가 아님 ({0})".format(
             type(json_data).__name__)
@@ -671,35 +373,14 @@ def parse_service_root(json_data):
 
 
 def probe_redfish(host, port, timeout, verify=False):
-    """Redfish ServiceRoot 프로브 — 실제 ServiceRoot 본문으로 판정.
-
-    2026-08-10 (Phase 4-A): 판정 근거가 바뀌었다.
-      (a) 종전: HTTP 2xx 면 **본문을 보지 않고** 성공. 추가로 401/403/405/406/503 을
-          "BMC 가 Redfish 를 응답한다는 증거" 로 보고 성공 처리했다.
-          → 443 에 뜬 일반 HTTPS 서버가 200 + HTML/JSON 을 돌려줘도 Redfish 로 판정됐다.
-      (b) **현재**: `/redfish/v1/` 응답 본문이 ServiceRoot 인지 구조로 검증한다
-          (parse_service_root). HTTP status 는 실패 시 evidence 로만 쓰고 성공 근거로는
-          쓰지 않는다. 인증을 보내지 않으므로 401 을 받아도 auth_success 는 건드리지 않는다.
-
-    제거된 호환 예외 (운영 위험이라 최종 보고에 명시): 종전 주석은 "일부 BMC (HPE iLO5/6
-    보안 강화 펌웨어, Lenovo XCC 일부) 가 무인증 ServiceRoot 에 401 을 던진다" 를 근거로
-    401/403 을 성공 처리했다. 그러나 저장소의 비인증 ServiceRoot 캡처 10개는 전부 200 이고
-    그 주장을 뒷받침하는 fixture 는 없다. 실제로 그런 펌웨어를 만나면 이제
-    PROTOCOL_CHECK_FAILED 가 된다 (evidence 에 root_status_code 보존).
-
-    유지된 것: URI / GET / Accept 헤더 / TLS 정책(verify=False + legacy fallback) /
-    timeout / retry(payload=None 일 때만 1회, 1초 backoff) / redirect(urllib 기본 자동 추종).
-    """
     import time as _time
     url = "https://{0}:{1}/redfish/v1/".format(host, port)
 
     last_err = None
-    for attempt in (1, 2):  # 최대 2회 시도 (1 retry) — 기존 정책 유지
+    for attempt in (1, 2):
         ok, err, payload = http_get(url, timeout, verify=verify)
 
         if ok:
-            # redirect 는 urllib 이 자동 추종한다. 최종 응답 본문이 ServiceRoot 인지로만
-            # 판정하므로 "redirect 가 있었다" 는 사실 자체는 성공/실패에 관여하지 않는다.
             is_root, facts, why = parse_service_root(
                 payload.get("json") if payload else None)
             if is_root:
@@ -709,46 +390,21 @@ def probe_redfish(host, port, timeout, verify=False):
             return False, "Redfish ServiceRoot 아님 (HTTP {0}, {1})".format(
                 (payload or {}).get("status_code"), why), None
 
-        # HTTP 응답은 왔으나 2xx 가 아님 — status 만으로 Redfish 를 확정하지 않는다.
-        # 어떤 status 였는지는 운영자가 원인을 좁힐 수 있도록 err 에 남긴다.
         if payload is not None:
             return False, "Redfish ServiceRoot 응답 아님 (HTTP {0})".format(
                 payload.get("status_code")), None
 
-        # payload=None (URLError/timeout/SSLError) 일 때만 retry — 기존 정책 유지
         last_err = err
         if attempt == 1:
-            _time.sleep(1)  # 1초 backoff
+            _time.sleep(1)
 
     return False, last_err, None
 
 
-# ── WS-Management Identify (WinRM Protocol 판정 정본) ──────────────────────
-#
-# 2026-08-10 (Phase 3-B 보정). 종전 판정은 응답 **헤더** 근거였다:
-#   (1) WWW-Authenticate 의 WSMAN realm, (2) Server=Microsoft-HTTPAPI + 인증 요구.
-# 둘 다 WinRM 의 Protocol Identity 를 직접 증명하지 않는다. 특히 (2) 는 http.sys 위에
-# 올라간 아무 서비스나 통과시킬 수 있어 일반 HTTP 서비스를 Windows 로 오판할 위험이 있다.
-# → **제거**하고, 실제 WS-Management Identify 요청/응답으로만 판정한다.
-#
-# 근거 (lab 부재 — rule 96 R1-A web sources):
-#   - Microsoft Learn "Detecting Whether a Remote Computer Supports WS-Management Protocol"
-#     https://learn.microsoft.com/en-us/windows/win32/winrm/
-#             detecting-whether-a-remote-computer-supports-ws-management-protocol
-#     (확인 2026-08-10) — IdentifyResponse 는 ProtocolVersion / ProductVendor /
-#     ProductVersion 을 반환하며 ProductVendor 예시는 "Microsoft Corporation".
-#   - 비인증 Identify 는 `WSMANIDENTIFY: unauthenticated` 헤더로 보낸다. 이 경우에도
-#     ProtocolVersion 과 ProductVendor 는 반환되고 ProductVersion 만 placeholder 가 된다.
-#   - SOAP envelope / DMTF wsman 네임스페이스는 설치본 pywinrm(winrm/protocol.py) 의
-#     xmlns 맵으로 교차 확인했다.
-# ※ lab 에 Windows WinRM 실장비가 없어 **실측 캡처가 아니라 규격 기반**이다.
 WINRM_ENDPOINT_PATH = "/wsman"
 
 _SOAP_ENVELOPE_NS = "http://www.w3.org/2003/05/soap-envelope"
 
-# 네임스페이스 URI 는 문자열 비교라 표기가 정확히 맞아야 한다. 문서/구현마다 http/https 와
-# `.xsd` 접미사 유무가 갈려 관측된 표기를 모두 허용한다 (문자열 포함 검색이 아니라
-# XML 파서가 분리한 네임스페이스와의 **완전 일치** 비교다).
 _WSMID_NAMESPACES = frozenset({
     "http://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity.xsd",
     "https://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity.xsd",
@@ -756,14 +412,11 @@ _WSMID_NAMESPACES = frozenset({
     "https://schemas.dmtf.org/wbem/wsman/identity/1/wsmanidentity",
 })
 
-# ProtocolVersion 값은 DMTF WS-Management 프로토콜 URI 여야 한다.
 _WSMAN_PROTOCOL_PREFIXES = (
     "http://schemas.dmtf.org/wbem/wsman/1/wsman",
     "https://schemas.dmtf.org/wbem/wsman/1/wsman",
 )
 
-# Windows 판정용 vendor 표기. WS-Management 는 표준이라 비-Windows 장비(BMC 등)도 구현한다.
-# "WS-Man 이 있다" 와 "Windows WinRM 이다" 는 다른 명제이므로 vendor 까지 확인한다.
 _WINRM_VENDOR_MARKER = "microsoft"
 
 _IDENTIFY_REQUEST = (
@@ -773,42 +426,13 @@ _IDENTIFY_REQUEST = (
     "<s:Header/><s:Body><wsmid:Identify/></s:Body></s:Envelope>"
 ).encode("utf-8")
 
-# XML 폭탄 방어 — 파싱 전에 본문 크기를 제한한다 (ElementTree 는 엔티티 확장 공격에 취약).
 _IDENTIFY_MAX_BYTES = 65536
 
-# WS-Management(Identify)는 SOAP 1.2 를 쓴다. vSphere vim25 는 SOAP 1.1 이라 다르다.
 _SOAP12_CONTENT_TYPE = "application/soap+xml;charset=UTF-8"
 
 
 def http_post_soap(url, body, timeout, verify=False, extra_headers=None,
                    content_type=_SOAP12_CONTENT_TYPE, max_bytes=_IDENTIFY_MAX_BYTES):
-    """SOAP POST — Protocol Probe 전용 최소 helper (stdlib urllib).
-
-    기존 `http_get` 은 Redfish / ESXi / OS 가 함께 쓰는 GET 전용 helper 다. Identify 를
-    위해 그것을 POST 겸용으로 변형하면 두 채널 동작에 영향이 갈 수 있어 별도로 둔다.
-    반환: (ok, err, payload) — payload={'status_code', 'body'}. 자격증명은 보내지 않는다.
-
-    2026-08-10 (Phase 4-B): `content_type` / `max_bytes` 를 인자로 뺐다. **기본값이
-    종전 상수와 동일**하므로 WinRM Identify 호출부(probe_os)의 동작은 그대로다.
-      - WS-Management 는 SOAP 1.2(application/soap+xml)를, vSphere vim25 는
-        SOAP 1.1(text/xml)을 쓴다. 한 helper 가 둘을 모두 보내려면 분기 지점이 필요하다.
-      - ServiceContent 응답은 Identify 응답보다 커서 64KB 상한으로 자르면 XML 이
-        잘려 파싱에 실패한다. 호출부가 채널에 맞는 상한을 준다.
-
-    2026-08-11 (Phase 6-A 실장비 검증): 전송을 urllib 에서 **http.client 로 교체**했다.
-      실측 사고 — lab Windows(WinRM) 가 이 helper 의 Identify 요청에 **HTTP 401 + 본문 0**
-      으로 응답해 정상 Windows 호스트가 전부 프로토콜 판정 실패로 떨어졌다.
-      원인: `urllib.request` 는 헤더 이름을 두 지점에서 강제 정규화한다
-      (`Request.add_header` 의 `key.capitalize()`, `AbstractHTTPHandler.do_open` 의
-      `name.title()`). 그 결과 `WSMANIDENTIFY` 가 **`Wsmanidentify`** 로 나가고,
-      WinRM 의 비인증 Identify 처리는 이 헤더 이름을 대소문자 그대로 본다.
-      양성 대조군: 같은 호스트/같은 본문에 헤더 이름만 보존해 보내면 **HTTP 200 +
-      완전한 IdentifyResponse**(ProductVendor=Microsoft Corporation)가 돌아온다.
-      → 요청 본문 / 판정 로직(`parse_identify_response`) / timeout / retry / 인증 시도 횟수는
-        그대로 두고 **전송 계층만** 바꾼다. http.client 도 stdlib 이라 rule 10 R2 유지.
-      주의: http.client 는 redirect 를 따라가지 않는다. 두 호출부(WinRM /wsman,
-      vSphere /sdk)는 POST 이고 redirect 를 쓰지 않으며, 실장비에서 3xx 관측 0건이다.
-    """
     parts = urllib.parse.urlsplit(url)
     host, port = parts.hostname, parts.port
     path = parts.path or "/"
@@ -829,7 +453,6 @@ def http_post_soap(url, body, timeout, verify=False, extra_headers=None,
         resp = conn.getresponse()
         raw = resp.read(max_bytes)
         status = resp.status
-        # 종전 urllib 경로와 동일한 성공 판정 (2xx 만 ok, 그 외는 evidence 로 status 보존)
         if 200 <= status < 300:
             return True, None, {"status_code": status, "body": raw}
         return False, "HTTP {0}".format(status), {"status_code": status, "body": raw}
@@ -841,19 +464,11 @@ def http_post_soap(url, body, timeout, verify=False, extra_headers=None,
         if conn is not None:
             try:
                 conn.close()
-            except Exception:  # noqa: BLE001 — close 실패가 진단을 덮지 않게
+            except Exception:
                 pass
 
 
 def parse_identify_response(raw):
-    """WS-Management IdentifyResponse 검증 → (is_wsman, vendor, 사유).
-
-    문자열 포함 검색이 아니라 **XML 파서가 분리한 네임스페이스**로 판정한다.
-      1) 본문이 정상 XML 인가
-      2) wsmanidentity 네임스페이스의 IdentifyResponse 인가
-      3) ProtocolVersion 이 DMTF WS-Management 프로토콜 URI 인가
-      4) ProductVendor 가 구조적으로 존재하는가 (Windows 판정은 호출부에서)
-    """
     if not raw:
         return False, None, "응답 본문 없음"
     if len(raw) > _IDENTIFY_MAX_BYTES:
@@ -894,34 +509,16 @@ def parse_identify_response(raw):
 
 
 def probe_os(host, port, timeout):
-    """OS 채널 프로토콜 프로브 (SSH identification 또는 WinRM endpoint).
-
-    2026-08-10 (Phase 3-B + 보정): WinRM 판정 근거가 두 번 바뀌었다.
-      (a) 종전: `status in (200, 401, 403, 405, 503)` — "/wsman 에서 아무 HTTP 응답이나 오면
-          WinRM" 과 사실상 같아 일반 웹서버를 Windows 로 오판할 수 있었다.
-      (b) 1차 보정: 응답 헤더 근거(WSMAN realm / Microsoft-HTTPAPI + 인증요구).
-          여전히 WinRM 의 Protocol Identity 를 직접 증명하지 못한다.
-      (c) **현재**: 비인증 WS-Management Identify 를 보내고 IdentifyResponse 를 XML
-          네임스페이스 기준으로 검증한다. HTTP status / Server / WWW-Authenticate 는
-          **판정에 쓰지 않는다.**
-    (이 함수는 Phase 3-B 이전까지 운영 경로에 배선돼 있지 않아 실제 오판 사고는 없었다.)
-
-    TLS 정책은 바꾸지 않는다 — Windows 수집이 `ansible_winrm_server_cert_validation: ignore`
-    를 쓰므로 probe 도 verify=False 로 맞춘다. 인증서 유효성 검사와 WinRM 존재 확인은
-    별개 문제이며, probe 가 더 엄격해서 정상 서버가 탈락하는 일이 없어야 한다.
-    """
     if port == 22:
         return ssh_banner_check(host, port, timeout)
     if port in (5985, 5986):
         scheme = "https" if port == 5986 else "http"
         url = "{0}://{1}:{2}{3}".format(scheme, host, port, WINRM_ENDPOINT_PATH)
-        # 비인증 Identify — 자격증명을 보내지 않는다 (Credential Probe 와 분리).
         ok, err, payload = http_post_soap(
             url, _IDENTIFY_REQUEST, timeout, verify=False,
             extra_headers={"WSMANIDENTIFY": "unauthenticated"},
         )
         if payload is None:
-            # 응답 자체가 없음 (TLS handshake 실패 / timeout / 연결 오류)
             return False, err or "WinRM endpoint 응답 없음", None
 
         is_wsman, vendor, why = parse_identify_response(payload.get("body"))
@@ -929,49 +526,18 @@ def probe_os(host, port, timeout):
             return False, "WS-Management IdentifyResponse 아님 (HTTP {0}, {1})".format(
                 payload.get("status_code"), why), None
         if _WINRM_VENDOR_MARKER not in (vendor or "").lower():
-            # WS-Management 는 표준이라 비-Windows 장비도 구현한다. Windows 로 확정하지 않는다.
             return False, "WS-Management 는 응답하나 Windows WinRM 이 아님 (vendor={0})".format(
                 (vendor or "미제공")[:40]), None
         return True, None, {}
     return False, "지원하지 않는 OS 포트: {0}".format(port), None
 
 
-# ── vSphere Web Services API (vim25 SOAP) Protocol Probe ─────────────────────
-# 2026-08-10 (Phase 4-B). 종전 판정은 `GET /sdk` 의 **HTTP status** 였다
-# (200/301/302/401/403/404/405/500/503 whitelist). 443 에서 응답만 하면 통과라
-# 일반 HTTPS 서버가 전부 "vSphere" 로 통과할 수 있었다 — status 는 Evidence 이지
-# Protocol Identity 가 아니다. → 실제 vim25 SOAP 요청/응답으로만 판정한다.
-#
-# 근거 (요청 형식은 추측하지 않고 저장소가 이미 쓰는 라이브러리에서 뽑았다):
-#   - 요청 XML: 설치본 pyVmomi 9.x 의 SoapStubAdapter.SerializeRequest 가 만들어내는
-#     RetrieveServiceContent 요청과 **바이트 단위로 같은 형태**다 (offline 생성 대조).
-#     Content-Type/SOAPAction 도 pyVmomi SoapAdapter.py InvokeMethod 의 헤더와 같다.
-#   - 무인증 호출 가능: vim.ServiceInstance.RetrieveServiceContent 의 privId 는
-#     'System.Anonymous' (pyVmomi typeinfo 실측). Broadcom vSphere Web Services API
-#     문서도 ServiceInstance 는 인증 없이 접근 가능하다고 기술한다.
-#     https://developer.broadcom.com/xapis/vsphere-web-services-api/latest/vim.ServiceInstanceContent.html
-#   - 버전 하위 호환: 메서드와 ServiceContent/AboutInfo 필수 필드는 모두
-#     vim.version.version1(API 2.0)부터 존재한다(pyVmomi typeinfo 실측) → 6.x/7.x/8.x 공통.
-#   - versionId="6.0": VMware 자체 CLI govc 의 기본값(GOVC_VIM_VERSION=6.0,
-#     GOVC_VIM_NAMESPACE=urn:vim25)과 동일하게 맞춘 값이다. 저장소 지원 하한도
-#     ESXi 6.0 이다(adapters/esxi/esxi_6x.yml). https://github.com/vmware/govmomi/blob/main/govc/README.md
-#
-# ※ 저장소에 /sdk **wire capture** 는 없다. Positive fixture 는 lab 실측 AboutInfo 값
-#   (tests/reference/esxi/*/pyvmomi_host_dump.json → config_product, ESXi 7.0.3)을
-#   pyVmomi 직렬화기로 감싼 것이다. 6.x/8.x 는 합성이며 "검증 완료" 로 취급하지 않는다.
 _VIM25_NS = "urn:vim25"
-# hostd 는 Fault detail 을 `urn:vim25` 또는 내부용 `urn:internalvim25` 로 직렬화한다.
-# 둘 다 VMware 고유 네임스페이스라 일반 SOAP 서비스와 겹치지 않는다.
-#   근거: VMware Technology Network / Broadcom community 의 실제 hostd 응답 사례
-#   (InvalidPropertyFault xmlns="urn:vim25" / ManagedObjectNotFoundFault
-#    xmlns="urn:internalvim25", 확인 2026-08-10). lab wire capture 는 없다.
 _VSPHERE_FAULT_NAMESPACES = frozenset({"urn:vim25", "urn:internalvim25"})
 _SOAP11_ENVELOPE_NS = "http://schemas.xmlsoap.org/soap/envelope/"
 _SOAP11_CONTENT_TYPE = "text/xml; charset=UTF-8"
 _VSPHERE_API_VERSION = "6.0"
 _SERVICE_CONTENT_RESPONSE = "RetrieveServiceContentResponse"
-# ServiceContent 는 관리 객체 참조 50여 개 + AboutInfo 로 보통 수 KB 다. Identify 용
-# 64KB 상한으로 자르면 XML 이 잘려 파싱에 실패하므로 별도 상한을 둔다(XML 폭탄 방어는 유지).
 _SERVICE_CONTENT_MAX_BYTES = 262144
 
 _RETRIEVE_SERVICE_CONTENT_REQUEST = (
@@ -991,12 +557,6 @@ _RETRIEVE_SERVICE_CONTENT_REQUEST = (
 
 
 def _vim_child(parent, local):
-    """vim25 네임스페이스 자식 조회 (네임스페이스 없는 표기도 허용).
-
-    판별력은 상위의 `{urn:vim25}RetrieveServiceContentResponse` 가 이미 확보한다.
-    자손까지 네임스페이스를 강제하면 직렬화 표기가 다른 구형 hostd 를 근거 없이
-    탈락시킬 수 있어, 하위 요소에서만 관대하게 본다 (오탐 위험은 늘지 않는다).
-    """
     found = parent.find("{{{0}}}{1}".format(_VIM25_NS, local))
     if found is None:
         found = parent.find(local)
@@ -1012,12 +572,6 @@ def _vim_text(parent, local):
 
 
 def _vim25_fault_local_name(fault):
-    """SOAP Fault 안에 vSphere 고유 네임스페이스 요소가 있으면 그 local name 을 돌려준다.
-
-    일반 SOAP 서비스의 Fault 와 구별되는 지점은 **detail 안 요소의 네임스페이스**다
-    (fault 문자열의 부분 문자열 검사가 아니다). vSphere 는 MethodFault 를
-    `urn:vim25` / `urn:internalvim25` 로 직렬화한다.
-    """
     for elem in fault.iter():
         tag = elem.tag
         if not isinstance(tag, str) or not tag.startswith("{"):
@@ -1029,16 +583,6 @@ def _vim25_fault_local_name(fault):
 
 
 def parse_service_content(raw):
-    """vim25 RetrieveServiceContent 응답 검증 → (is_vsphere, facts, 사유).
-
-    성공 근거는 두 가지뿐이다.
-      1) `{urn:vim25}RetrieveServiceContentResponse` → `returnval` → `about` 에
-         API 2.0 부터 필수인 `apiType` / `apiVersion` 이 채워져 있다.
-      2) SOAP Fault 인데 그 안에 `urn:vim25` 네임스페이스 요소가 있다 — vSphere 자신이
-         만든 구조화 Fault 이므로 endpoint 존재의 직접 증거다. 네임스페이스가 없는
-         일반 SOAP Fault 는 구별할 수 없으므로 성공으로 쓰지 않는다.
-    HTTP status 는 어느 쪽에도 쓰지 않는다.
-    """
     if not raw:
         return False, None, "응답 본문 없음"
     if len(raw) > _SERVICE_CONTENT_MAX_BYTES:
@@ -1066,7 +610,6 @@ def parse_service_content(raw):
 
 
 def _parse_service_content_returnval(response):
-    """RetrieveServiceContentResponse → ServiceContent 구조 확인."""
     returnval = _vim_child(response, "returnval")
     if returnval is None:
         return False, None, "returnval 없음"
@@ -1089,12 +632,6 @@ def _parse_service_content_returnval(response):
 
 
 def probe_esxi(host, port, timeout, verify=False):
-    """vSphere Web Services API(/sdk) 프로브 — 실제 SOAP 응답으로 판정한다.
-
-    자격증명을 보내지 않는다. 401/403 을 받아도 `auth_success` 는 건드리지 않는다
-    (Credential Probe 는 이후 단계인 esxi-gather/tasks/try_credentials.yml 책임).
-    TLS 정책 / timeout / retry 는 종전과 같다 — 요청 1회, retry 없음.
-    """
     url = "https://{0}:{1}/sdk".format(host, port)
     ok, err, payload = http_post_soap(
         url, _RETRIEVE_SERVICE_CONTENT_REQUEST, timeout, verify=verify,
@@ -1107,7 +644,6 @@ def probe_esxi(host, port, timeout, verify=False):
     raw = (payload or {}).get("body")
     status = (payload or {}).get("status_code")
     if not raw:
-        # 본문 자체가 없다 — 연결 실패 / TLS 오류 / timeout / 빈 응답
         return False, err or "vSphere API endpoint 응답 없음", None
 
     is_vsphere, _probe, why = parse_service_content(raw)
@@ -1117,9 +653,6 @@ def probe_esxi(host, port, timeout, verify=False):
             detail = "{0} [HTTP {1}]".format(detail, status)
         return False, detail, None
 
-    # probe_facts 는 diagnosis.details 로 그대로 나간다. 외부 계약을 늘리지 않기 위해
-    # 종전과 같은 키만 싣는다 (vsphere_endpoint, 비-200 일 때 root_status_code).
-    # 확보한 api_type / api_version 은 판정 근거로만 쓰고 envelope 에 새로 넣지 않는다.
     facts = {"vsphere_endpoint": url}
     if status is not None and status != 200:
         facts["root_status_code"] = status
@@ -1127,7 +660,6 @@ def probe_esxi(host, port, timeout, verify=False):
 
 
 def _init_result(channel, ports):
-    """precheck result dict 초기화 (OS 채널 추가 필드 포함)."""
     result = {
         "changed": False,
         "reachable": False,
@@ -1135,8 +667,6 @@ def _init_result(channel, ports):
         "protocol_supported": False,
         "auth_success": None,
         "failure_stage": None,
-        # 2026-08-10 (Phase 2): 시스템이 분기에 쓰는 안정 식별자.
-        # 사람이 읽는 failure_reason 과 역할을 분리한다. 실패가 없으면 None.
         "failure_code": None,
         "failure_reason": None,
         "detail": None,
@@ -1152,16 +682,6 @@ def _init_result(channel, ports):
 
 
 def _check_ports(host, ports, timeout_port, poll_interval=0.0):
-    """Stage 1+2: 포트 순회 → (any_response, target_port_open, open_port, port_errors, kinds, probed).
-
-    probed 는 **실제로 순차 probe 를 수행한 포트 목록**이다 (성공 시 거기서 멈추므로
-    구성된 전체 목록과 다를 수 있다). checked_ports 의 정본 (2026-08-10 Phase 3-A).
-
-    kinds 는 실패한 포트별 TCP_FAIL_* 종류 목록이다 (성공 시 빈 목록).
-    2026-08-10 (Phase 2): 종전에는 refused 판별을 `"거부" in err` 부분 문자열 검사로 했다.
-    오류 문구를 한 글자만 바꿔도 판별이 조용히 깨지는 구조라 tcp_check_ex 의 구조화된
-    kind 로 교체했다. failure_code 분류도 이 kind 만 근거로 삼는다.
-    """
     any_response = False
     target_port_open = False
     open_port = None
@@ -1169,8 +689,6 @@ def _check_ports(host, ports, timeout_port, poll_interval=0.0):
     kinds = []
     probed = []
     for port in ports:
-        # 한 포트를 예산 안에서 여러 번 시도해도 probed 에는 **한 번만** 넣는다
-        # (checked_ports 는 "어떤 포트를 확인했나" 이지 "몇 번 시도했나"가 아니다).
         probed.append(port)
         ok, err, kind = tcp_check_budget(host, port, timeout_port, poll_interval)
         if ok:
@@ -1178,7 +696,6 @@ def _check_ports(host, ports, timeout_port, poll_interval=0.0):
             target_port_open = True
             open_port = port
             break
-        # ConnectionRefusedError → host alive 이지만 port 닫힘
         if kind == TCP_FAIL_REFUSED:
             any_response = True
         kinds.append(kind)
@@ -1187,27 +704,6 @@ def _check_ports(host, ports, timeout_port, poll_interval=0.0):
 
 
 def _tcp_failure_code(kinds):
-    """포트별 TCP 실패 종류 목록 → **대표** failure_code.
-
-    포트를 여러 개 순차 probe 하면 포트마다 결과가 다를 수 있다
-    (예: 5986 timeout / 5985 refused / 22 timeout). 마지막 결과만 보고 대표를 정하면
-    probe 순서에 따라 결과가 흔들리므로, **관측의 강도** 순으로 결정한다 (2026-08-10 Phase 3-A).
-
-    선정 규칙 (결정적, 순서 무관):
-      1) 주소 해석 실패가 하나라도 있으면 DNS_RESOLUTION_FAILED
-         — DNS 는 호스트 단위라 한 포트에서 실패하면 전 포트가 같다. TCP 연결 시도 자체를
-           못 한 것이므로 가장 앞선 단계의 관측이다.
-      2) RST(거부)를 하나라도 관측했으면 TCP_CONNECTION_REFUSED
-         — "호스트가 살아 있다"는 **능동적 응답**을 실제로 본 것이라 가장 강한 관측이다.
-      3) 그 외에는 TARGET_UNREACHABLE (timeout / no route 등)
-         — **잠정값이다.** 2026-09-03 부터 이 결과는 _resolve_reachability 가 ICMP 를
-           한 번 더 확인한 뒤에 최종 확정된다. ICMP Echo Reply 가 오면 도달은 성립하고
-           실패는 port 단계(TCP_CONNECT_FAILED)로 내려간다.
-           확정된 TARGET_UNREACHABLE 도 "장비가 꺼졌다" 는 뜻이 아니라 "우리가 쓴 어떤
-           probe(TCP·ICMP)로도 응답을 보지 못했다" 는 뜻이다.
-
-    포트별 원본 사유는 result['detail'] 에 "port=<n>: <사유>" 형태로 전부 보존된다.
-    """
     if TCP_FAIL_DNS in kinds:
         return "DNS_RESOLUTION_FAILED"
     if TCP_FAIL_REFUSED in kinds:
@@ -1216,25 +712,10 @@ def _tcp_failure_code(kinds):
 
 
 def _resolve_reachability(module, host, kinds):
-    """TCP 가 아무 응답도 주지 않은 뒤의 **최종 도달성 판정** — (reachable, stage, code, note).
-
-    reachable = TCP 응답 OR ICMP 응답 (2026-09-03 사용자 지시). 이 함수는 그 OR 의
-    오른쪽만 담당한다 — TCP 가 응답한 경우 호출부가 이미 reachable 을 확정하고 여기로
-    오지 않으므로, ICMP 는 성공 경로와 RST 경로의 예산을 전혀 쓰지 않는다.
-
-      DNS 해석 실패        → 보낼 주소 자체가 없다. ICMP 도 무의미하므로 종전 그대로.
-      ICMP Echo Reply 관측 → reachable=true. 다만 관리 포트는 열지 못했으니 실패 단계는
-                             기존 흐름 그대로 port 다 (code=TCP_CONNECT_FAILED).
-      그 외                → TCP·ICMP 모두 무응답 = TARGET_UNREACHABLE (stage=reachable).
-
-    icmp_probe=false 이거나 ping 을 쓸 수 없는 환경이면 "근거 없음" 이 되어 판정이
-    종전(TCP 전용)과 같아진다 — ICMP 는 실패를 **추가하지 않는다.**
-    """
     code = _tcp_failure_code(kinds)
     if code == "DNS_RESOLUTION_FAILED":
         return False, "reachable", code, None
     if code == "TCP_CONNECTION_REFUSED":
-        # 호출부가 이미 걸러내는 경로다. 방어적으로만 둔다 (RST = 능동 응답 = 도달).
         return True, "port", code, None
     if not module.params.get("icmp_probe", True):
         return False, "reachable", code, None
@@ -1247,11 +728,6 @@ def _resolve_reachability(module, host, kinds):
 
 
 def _join_detail(port_errors, icmp_note=None):
-    """기술 증거 조립 — 포트별 사유 + (확인했다면) ICMP 관측 결과.
-
-    envelope shape 은 건드리지 않는다. ICMP 근거는 errors[].detail 로만 나간다
-    (사용자 문장·diagnosis 키를 늘리지 않는다 — CLAUDE.md §10 §11).
-    """
     parts = list(port_errors)
     if icmp_note:
         parts.append(icmp_note)
@@ -1259,17 +735,6 @@ def _join_detail(port_errors, icmp_note=None):
 
 
 def _search_os_candidates(host, ports, timeout_port, poll_interval, timeout_proto):
-    """OS 후보 탐색 (Phase 3-B) — TCP 성공 **+ 기대 프로토콜 확인**까지 되어야 선택.
-
-    종전에는 포트가 열리기만 하면 그 포트로 OS 를 확정했다. 그러면 5986/5985/22 에 다른
-    서비스가 떠 있을 때 Windows / Linux 를 오판한다. 이제 포트가 열려도 기대 프로토콜이
-    아니면 **다음 후보로 계속 진행**한다.
-
-    반환: (selected_port, probed, tcp_open_ports, tcp_errors, tcp_kinds, proto_errors)
-      selected_port : 프로토콜까지 확인된 포트 (없으면 None)
-      probed        : 실제로 시도한 포트 (중복 없음, 순서 보존)
-      tcp_open_ports: TCP 는 열렸던 포트 (프로토콜 실패 포함)
-    """
     selected = None
     probed = []
     tcp_open_ports = []
@@ -1290,14 +755,12 @@ def _search_os_candidates(host, ports, timeout_port, poll_interval, timeout_prot
         if p_ok:
             selected = port
             break
-        # 프로토콜 불일치 — 근거를 남기고 **다음 후보로 계속**
         proto_errors.append("port={0}: {1}".format(port, p_err))
 
     return selected, probed, tcp_open_ports, tcp_errors, tcp_kinds, proto_errors
 
 
 def _detect_os_from_port(open_port):
-    """OS 채널: 포트 기반 OS 유형 + WinRM scheme 판별."""
     if open_port == 22:
         return "linux", None
     if open_port in (5985, 5986):
@@ -1306,7 +769,6 @@ def _detect_os_from_port(open_port):
 
 
 def _probe_protocol(channel, host, open_port, timeout_proto, verify_ssl):
-    """Stage 3 dispatcher — channel별 probe_* 호출."""
     if channel == "redfish":
         return probe_redfish(host, open_port, timeout_proto, verify=verify_ssl)
     if channel == "os":
@@ -1317,52 +779,29 @@ def _probe_protocol(channel, host, open_port, timeout_proto, verify_ssl):
 
 
 def _try_redfish_auth(host, open_port, username, password, timeout_auth, verify_ssl, result):
-    """Stage 4 — Redfish Systems 호출로 인증 확인 + vendor hint 추출. 실패 시 result 업데이트만."""
     url = "https://{0}:{1}/redfish/v1/Systems".format(host, open_port)
     ok, err, payload = http_get(
         url, timeout_auth, verify=verify_ssl, auth=(username, password)
     )
     if not ok:
-        # 2026-08-10: 종전엔 실패 원인과 무관하게 auth_success=False 를 넣었다. 그러나 여기서
-        # ok=False 가 되는 원인에는 timeout / 5xx / TLS 오류도 포함된다 — 인증이 거부됐다는
-        # 관측 근거가 없는 상황까지 "인증 실패"로 확정하던 셈이다.
-        #   → BMC 가 **명시적으로 거부한 401** 을 관측했을 때만 False.
-        #   → 403 은 인증 후 권한/IP 화이트리스트 문제일 수 있어 인증 거부로 단정하지 않는다.
-        #   → 그 외에는 "확인하지 못함"인 None 유지.
-        # failure_stage 는 원인이 아니라 **실행이 멈춘 단계**이므로 어느 쪽이든 'auth'.
-        # 구조화된 HTTP status 를 그대로 본다 (문자열 파싱 아님 — http_get 이 payload 로 전달).
         status = (payload or {}).get("status_code")
         rejected = status == 401
         result["auth_success"] = False if rejected else None
         result["failure_stage"] = "auth"
-        # 401 이든 timeout 이든 **멈춘 단계**는 같다. 원인 확정 여부는 auth_success 가 표현한다.
-        # 403 은 인증 후 권한 부족일 수 있어 거부로 확정하지 않는다 (auth_success 는 None 유지).
         result["failure_code"] = "AUTH_PROBE_FAILED"
-        # 이 경로는 운영에서 돌지 않는다(Stage 4 주석). 요청 1건의 401 로 "계정 불일치 확인"
-        # 문장(auth_rejected)을 내지 않고 미확정 문장을 쓴다 — 운영 rescue 는 표준 후보 **전원**의
-        # 401 을 봐야 거부로 확정한다. 401 이라는 근거는 auth_success=false 와 detail 이 표현한다.
         result["failure_reason"] = reason_for_failure(result["failure_code"], "redfish")
         result["detail"] = err
         return False
     result["auth_success"] = True
     json_data = payload.get("json") if payload else None
-    if isinstance(json_data, dict):  # Round 5 #2: 비-dict JSON .get AttributeError 방어
+    if isinstance(json_data, dict):
         members = json_data.get("Members", [])
-        # rule 95 R1 #2: 비-dict 멤버([null]/[str]) 방어 — members[0].get AttributeError 회피
         if members and isinstance(members[0], dict):
             result["probe_facts"]["first_system_uri"] = members[0].get("@odata.id", "")
     return True
 
 
 def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
-    """OS 전용 진단 흐름 (Phase 3-B) — 후보 탐색 결과를 result 로 옮기고 exit_json.
-
-    성공 우선 원칙: 앞 후보가 프로토콜 불일치여도 뒤 후보에서 확인되면 **전체 성공**이다.
-
-    모든 후보 실패 시 대표 진단:
-      - TCP 로 하나도 못 붙음 → Phase 3-A 매핑 유지 (DNS / REFUSED / CONNECT_FAILED)
-      - TCP 는 붙었는데 프로토콜을 하나도 확인 못 함 → protocol / PROTOCOL_CHECK_FAILED
-    """
     (selected, probed, tcp_open_ports, tcp_errors, tcp_kinds,
      proto_errors) = _search_os_candidates(
         host, ports,
@@ -1370,7 +809,6 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
         module.params["port_poll_interval"],
         module.params["timeout_protocol"],
     )
-    # 프로토콜 불일치로 다음 후보로 넘어간 포트도 "확인한 포트" 다
     result["checked_ports"] = probed or ports
     result["protocol_checked"] = True
 
@@ -1378,7 +816,7 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
         os_type, scheme = _detect_os_from_port(selected)
         result["reachable"] = True
         result["port_open"] = True
-        result["protocol_supported"] = True   # 실제 SSH / WinRM 응답을 확인했다
+        result["protocol_supported"] = True
         result["selected_port"] = selected
         result["detected_os"] = os_type
         result["winrm_scheme"] = scheme
@@ -1386,20 +824,15 @@ def _run_os_candidate_flow(module, result, host, ports, verify_ssl):
         module.exit_json(**result)
 
     if tcp_open_ports:
-        # 포트는 열렸으나 기대 프로토콜을 하나도 확인하지 못함
         result["reachable"] = True
         result["port_open"] = True
-        result["protocol_supported"] = False   # 검사했고, 확인하지 못했다
+        result["protocol_supported"] = False
         result["failure_stage"] = "protocol"
         result["failure_code"] = "PROTOCOL_CHECK_FAILED"
         result["failure_reason"] = reason_for_failure(result["failure_code"], "os")
         result["detail"] = "; ".join(proto_errors + tcp_errors)
         module.exit_json(**result)
 
-    # TCP 단계에서 전부 실패 — stage / code 를 먼저 확정하고, 문장은 (code, 채널) 에서
-    # 파생한다 (reason_for_failure 단일 진입점).
-    # 2026-09-03: RST 를 못 본 경우에만 ICMP 로 도달성을 한 번 더 확인한다
-    #             (RST 는 이미 능동 응답이라 ICMP 를 쓸 이유가 없다).
     icmp_note = None
     if TCP_FAIL_REFUSED in tcp_kinds:
         result["reachable"] = True
@@ -1430,25 +863,9 @@ def run_module():
             username=dict(type="str", required=False, no_log=True),
             password=dict(type="str", required=False, no_log=True),
             verify_ssl=dict(type="bool", default=False),
-            # 2026-08-10 (Phase 3-A): Stage 3(프로토콜 확인) 수행 여부.
-            #   OS 채널을 공통 precheck 로 통합하면서 필요해진 최소 확장이다. OS 는 종전에
-            #   wait_for 로 TCP 개방만 확인했고, 이번 Phase 범위는 구조 정렬이지
-            #   SSH/WinRM 실제 프로토콜 검증 도입이 아니다. probe_protocol=false 로 부르면
-            #   Stage 1+2 까지만 수행하고 protocol_supported 는 초기값(False)을 유지한다
-            #   — 즉 "포트가 열렸으니 프로토콜도 된다"고 **거짓으로 표시하지 않는다.**
-            #   redfish / esxi 는 기본값 true 라 동작 불변.
             probe_protocol=dict(type="bool", default=True),
-            # 2026-08-10 (Phase 3-A 보정): 포트당 재시도 간격(초).
-            #   0 이면 단일 시도 — redfish / esxi 의 기존 동작이며 기본값이다.
-            #   OS 는 종전 wait_for 의 폴링 의미를 보존하려고 1.0(wait_for sleep 기본값)을
-            #   명시 전달한다. 예산(timeout_port)은 그대로라 총 대기 시간은 늘지 않는다.
             port_poll_interval=dict(type="float", default=0.0),
-            # 2026-09-03 (사용자 지시): reachable = TCP 응답 OR ICMP 응답.
-            #   기본 true. false 로 부르면 ICMP 를 확인하지 않아 종전(TCP 전용) 판정이 된다.
-            #   ICMP 는 TCP 전 포트 무응답일 때만 소비되므로 성공 경로의 예산은 그대로다.
             icmp_probe=dict(type="bool", default=True),
-            # ICMP Echo 1회 타임아웃. 포트 예산(timeout_port)과 별개이며, 이 값이 실제로
-            # 소비되는 경우는 "TCP 전 포트 무응답" 한 가지뿐이다.
             timeout_icmp=dict(type="float", default=_ICMP_DEFAULT_TIMEOUT),
         ),
         supports_check_mode=True,
@@ -1460,27 +877,16 @@ def run_module():
     verify_ssl = module.params["verify_ssl"]
     result = _init_result(channel, ports)
 
-    # ── OS 후보 탐색 (Phase 3-B) ─────────────────────────────────────────
-    # OS 는 "포트가 열렸는가" 가 아니라 "기대한 관리 프로토콜이 응답하는가" 로 후보를 고른다.
-    # 아래 분기는 OS + probe_protocol=true 일 때만 타고, redfish / esxi 는 기존 흐름 그대로다.
     if channel == "os" and module.params["probe_protocol"]:
         _run_os_candidate_flow(module, result, host, ports, verify_ssl)
-        return   # _run_os_candidate_flow 안에서 exit_json 한다 (도달하지 않음)
+        return
 
-    # Stage 1+2: reachable + port_open (rule 27 R2 — host alive 분리)
     any_response, target_port_open, open_port, port_errors, port_kinds, probed = _check_ports(
         host, ports, module.params["timeout_port"],
         poll_interval=module.params["port_poll_interval"],
     )
-    # checked_ports 는 **실제로 순차 probe 를 수행한 포트**다 (구성된 전체 목록이 아니다).
-    # 성공 시 거기서 멈추므로 OS 채널은 [5986] / [5986,5985] / [5986,5985,22] 로 달라진다.
-    # redfish / esxi 는 포트가 [443] 하나뿐이라 값이 종전과 동일하다.
     result["checked_ports"] = probed or ports
     if not any_response:
-        # TCP 는 아무 응답도 주지 않았다. 여기서 끝내지 않고 ICMP 를 한 번 더 확인한다
-        # (2026-09-03 — reachable = TCP 응답 OR ICMP 응답). RST 를 못 봤으므로
-        # REFUSED 는 나올 수 없고, 남는 값은 DNS_RESOLUTION_FAILED / TARGET_UNREACHABLE /
-        # (ICMP 가 답한 경우) stage=port + TCP_CONNECT_FAILED 셋뿐이다.
         reachable, stage, code, icmp_note = _resolve_reachability(
             module, host, port_kinds)
         result["reachable"] = reachable
@@ -1492,9 +898,6 @@ def run_module():
     if not target_port_open:
         result["reachable"] = True
         result["failure_stage"] = "port"
-        # 이 분기는 RST 를 관측했기에만 도달한다 (_check_ports 의 any_response 조건).
-        # RST 를 보낸 주체가 최종 서버인지 중간 방화벽인지는 확정할 수 없다. 그래서 문장은
-        # 주어 없이 관측한 사실만 말한다 ("Redfish 접속이 거부되었습니다 ... 방화벽을 확인하세요").
         result["failure_code"] = "TCP_CONNECTION_REFUSED"
         result["failure_reason"] = reason_for_failure(result["failure_code"], channel)
         result["detail"] = "; ".join(port_errors)
@@ -1510,13 +913,6 @@ def run_module():
         result["winrm_scheme"] = scheme
         result["detected_port"] = open_port
 
-    # Stage 3: protocol_supported
-    #
-    # 2026-08-10 (Phase 3-A): probe_protocol=false 면 Stage 3 자체를 수행하지 않는다.
-    #   이때 protocol_supported 는 초기값 False 로 남는다. 이는 "프로토콜이 없다"가 아니라
-    #   **"확인하지 않았다"** 는 뜻이다 (rule: 관측하지 않은 것을 true 로 만들지 않는다).
-    #   호출부가 protocol_checked=False 를 보고 이 구분을 할 수 있게 결과에 함께 싣는다
-    #   — 이 키는 build_diagnosis 가 매핑하지 않으므로 envelope 에는 나가지 않는다.
     if not module.params["probe_protocol"]:
         result["protocol_checked"] = False
         module.exit_json(**result)
@@ -1535,20 +931,6 @@ def run_module():
     if facts:
         result["probe_facts"].update(facts)
 
-    # Stage 4: auth_success (인증 정보 있을 때만)
-    #
-    # 2026-08-10 실측 주의 — **production 경로에서 Stage 4 는 항상 skip 된다.**
-    #   redfish-gather/site.yml:41-47 과 esxi-gather/site.yml:46-52 는 precheck 에
-    #   username/password 를 넘기지 않으므로 아래 if 가 성립하지 않고 auth_success 는
-    #   None 으로 남는다. 이는 **버그가 아니라 설계**다:
-    #     - redfish 는 Vault 2단계 로딩 구조라 precheck 시점에 아직 벤더가 확정되지
-    #       않았고 → 어느 vault 를 열지 모르므로 자격증명 자체가 존재하지 않는다
-    #       (detect_vendor.yml 이 precheck 다음에 실행된다).
-    #     - 여기서 굳이 인증을 시도하면 본 수집 전에 실패 시도가 1회 더 쌓여
-    #       BMC 계정 잠금 위험이 커진다(try_one_account.yml:77-88 의 5초 backoff 참조).
-    #   실제 인증 성공 여부는 본 수집 성공 후 site.yml 이 auth_success: true 로
-    #   덮어쓴다(redfish-gather/site.yml:191-193, esxi-gather/site.yml:200-210).
-    #   → 아래 분기는 단위 테스트 / 수동 진단(직접 invoke) 용 경로다. 유지한다.
     username = module.params.get("username")
     password = module.params.get("password")
     if username and password and channel == "redfish":
@@ -1557,7 +939,6 @@ def run_module():
             module.params["timeout_auth"], verify_ssl, result
         ):
             module.exit_json(**result)
-    # esxi/os 인증은 Ansible 본체 모듈이 처리 → auth_success는 None 유지
 
     module.exit_json(**result)
 

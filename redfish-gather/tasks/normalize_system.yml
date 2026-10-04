@@ -1,4 +1,1 @@
 ---
-# DEPRECATED — kept for backward compatibility only.
-# Normalization is handled by normalize_standard.yml (redfish) or inline in site.yml (esxi).
-# This file intentionally does nothing.

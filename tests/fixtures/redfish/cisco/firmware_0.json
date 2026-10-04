@@ -1,9 +1,0 @@
-{
-  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/slot-L",
-  "@odata.context": "/redfish/v1/$metadata#UpdateService/FirmwareInventory/Members/$entity",
-  "@odata.type": "#SoftwareInventory.v1_2_1.SoftwareInventory",
-  "Id": "slot-L",
-  "Updateable": true,
-  "Name": "slot-L",
-  "Version": "0x80000E74-1.819.0"
-}

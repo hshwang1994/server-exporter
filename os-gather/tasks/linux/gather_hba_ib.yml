@@ -1,104 +1,64 @@
 ---
-# os-gather/tasks/linux/gather_hba_ib.yml
-#
-# P4 (cycle 2026-04-29): Linux FC HBA + InfiniBand 정보 수집.
-# raw 명령으로 /sys/class/fc_host + /sys/class/infiniband 파싱.
-# 미설치 환경에서는 빈 list (graceful degradation, errors 기록 없음).
-#
-# 출력 sub-key:
-#   data.storage.hbas[]       — FC HBA (WWPN, link state, speed)
-#   data.storage.infiniband[] — InfiniBand 어댑터 (node_guid, link state, rate)
-#   data.network.driver_map   — interface → driver 매핑 (P5 NIC 깊이)
 
 - block:
-    # cycle 2026-05-29 (hba-ib-csus, D2): WWNN(node_name) + driver + firmware 보강.
-    # 2026-09-03 (B-22/B-24): model 은 scsi_host 의 model_name(있을 때), 없으면 symbolic_name.
-    #   manufacturer 가 sysfs 에 있으면 vendor 로. WWN 은 normalize_wwn 으로 소문자 colon-hex.
-    # delimiter '|' 11 필드: FC|host|wwpn|wwnn|symbolic|state|speed|driver|firmware|model_name|manufacturer
-    - name: "linux | hba_ib | enumerate fc_host"
+    - name: "linux | hba_ib | enumerate fc_host + infiniband"
+      timeout: "{{ _os_task_timeout | default(120) }}"
       ansible.builtin.raw: |
+        rd() {
+          v=""
+          [ -e "$1" ] || return 0
+          if v=$(cat "$1" 2>/dev/null); then :; else v=""; echo "ERR|$1"; fi
+        }
         if [ -d /sys/class/fc_host ]; then
           for h in /sys/class/fc_host/host*; do
             [ -d "$h" ] || continue
             host=$(basename "$h")
-            wwpn=$(cat "$h/port_name" 2>/dev/null)
-            wwnn=$(cat "$h/node_name" 2>/dev/null)
-            sym=$(cat "$h/symbolic_name" 2>/dev/null)
-            state=$(cat "$h/port_state" 2>/dev/null)
-            speed=$(cat "$h/speed" 2>/dev/null)
+            rd "$h/port_name"; wwpn=$v
+            rd "$h/node_name"; wwnn=$v
+            rd "$h/symbolic_name"; sym=$v
+            rd "$h/port_state"; state=$v
+            rd "$h/speed"; speed=$v
             drv=""
             if [ -e "$h/device/driver" ]; then
-              drv=$(basename "$(readlink -f "$h/device/driver" 2>/dev/null)" 2>/dev/null)
+              if lnk=$(readlink -f "$h/device/driver" 2>/dev/null) && [ -n "$lnk" ]; then
+                drv=$(basename "$lnk" 2>/dev/null)
+              else
+                echo "ERR|$h/device/driver"
+              fi
             fi
             fwver=""
             for fwp in "$h/device/fw_version" "$h"/device/scsi_host/*/fw_version; do
-              if [ -f "$fwp" ]; then fwver=$(cat "$fwp" 2>/dev/null); break; fi
+              if [ -f "$fwp" ]; then rd "$fwp"; fwver=$v; break; fi
             done
             mdl=""; mfr=""
             for mp in "$h/device/scsi_host/$host/model_name" "$h"/device/scsi_host/*/model_name "$h/device/model_name"; do
-              if [ -f "$mp" ]; then mdl=$(cat "$mp" 2>/dev/null); break; fi
+              if [ -f "$mp" ]; then rd "$mp"; mdl=$v; break; fi
             done
             for vp in "$h/device/scsi_host/$host/manufacturer" "$h"/device/scsi_host/*/manufacturer "$h/device/manufacturer"; do
-              if [ -f "$vp" ]; then mfr=$(cat "$vp" 2>/dev/null); break; fi
+              if [ -f "$vp" ]; then rd "$vp"; mfr=$v; break; fi
             done
             echo "FC|$host|$wwpn|$wwnn|$sym|$state|$speed|$drv|$fwver|$mdl|$mfr"
           done
         fi
-      register: _l_fc_raw
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    # cycle 2026-05-29 (hba-ib-csus, D2): per-port GID(port_guid) + rate + fw_ver + hca(vendor) 보강.
-    # delimiter '|' 9 필드: IB|adapter|port|node_guid|gid0|state|rate|firmware|hca
-    - name: "linux | hba_ib | enumerate infiniband"
-      ansible.builtin.raw: |
         if [ -d /sys/class/infiniband ]; then
           for ib in /sys/class/infiniband/*; do
             [ -d "$ib" ] || continue
             adp=$(basename "$ib")
-            guid=$(cat "$ib/node_guid" 2>/dev/null)
-            fwver=$(cat "$ib/fw_ver" 2>/dev/null)
-            hca=$(cat "$ib/hca_type" 2>/dev/null)
-            [ -z "$hca" ] && hca=$(cat "$ib/board_id" 2>/dev/null)
+            rd "$ib/node_guid"; guid=$v
+            rd "$ib/fw_ver"; fwver=$v
+            rd "$ib/hca_type"; hca=$v
+            if [ -z "$hca" ]; then rd "$ib/board_id"; hca=$v; fi
             for p in "$ib"/ports/*; do
               [ -d "$p" ] || continue
               port=$(basename "$p")
-              state=$(awk '{print $2}' "$p/state" 2>/dev/null)
-              rate=$(cat "$p/rate" 2>/dev/null)
-              gid0=$(sed -n '1p' "$p/gids/0" 2>/dev/null)
+              rd "$p/state"; state=$(printf '%s\n' "$v" | awk '{print $2}')
+              rd "$p/rate"; rate=$v
+              rd "$p/gids/0"; gid0=$(printf '%s\n' "$v" | sed -n '1p')
               echo "IB|$adp|$port|$guid|$gid0|$state|$rate|$fwver|$hca"
             done
           done
         fi
-      register: _l_ib_raw
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: "linux | hba_ib | NIC driver map"
-      ansible.builtin.raw: |
-        if [ -d /sys/class/net ]; then
-          for n in /sys/class/net/*; do
-            [ -d "$n" ] || continue
-            iface=$(basename "$n")
-            [ "$iface" = "lo" ] && continue
-            drv=""
-            if [ -L "$n/device/driver" ]; then
-              drv=$(basename "$(readlink "$n/device/driver")" 2>/dev/null)
-            fi
-            vlan=""
-            if [ -f "/proc/net/vlan/$iface" ]; then
-              vlan=$(awk -F'[ |]' '/VID:/ {print $2; exit}' "/proc/net/vlan/$iface" 2>/dev/null)
-            fi
-            bond_master=""
-            if [ -f "$n/master/uevent" ]; then
-              bond_master=$(basename "$(readlink "$n/master")" 2>/dev/null)
-            fi
-            echo "NIC|$iface|$drv|$vlan|$bond_master"
-          done
-        fi
-      register: _l_nicdrv_raw
+      register: _l_hba_raw
       changed_when: false
       failed_when: false
       no_log: true
@@ -107,10 +67,9 @@
       ansible.builtin.set_fact:
         _l_hbas_list: >-
           {%- set out = [] -%}
-          {%- for line in (_l_fc_raw.stdout_lines | default([])) -%}
+          {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
             {%- set parts = line.split('|') -%}
             {%- if parts | length >= 9 and parts[0] == 'FC' -%}
-              {# speed 는 "16 Gbit" / "8 Gbit" 처럼 첫 숫자 토큰만 (여러 숫자가 붙는 문자열을 이어붙이지 않는다) #}
               {%- set spfirst = ((parts[6] | default('')) | trim).split(' ')[0] if (parts[6] | default('') | trim) else '' -%}
               {%- set spdig = spfirst | regex_replace('[^0-9]', '') -%}
               {%- set st = (parts[5] | default('')) | lower -%}
@@ -135,7 +94,7 @@
           {{ out }}
         _l_ib_list: >-
           {%- set out = [] -%}
-          {%- for line in (_l_ib_raw.stdout_lines | default([])) -%}
+          {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
             {%- set parts = line.split('|') -%}
             {%- if parts | length >= 9 and parts[0] == 'IB' -%}
               {%- set gidp = (parts[4] | default('')).split(':') -%}
@@ -144,8 +103,6 @@
               {%- set rfirst = (rate.split(' ')[0]) if rate else '' -%}
               {%- set rdig = rfirst | regex_replace('[^0-9]', '') -%}
               {%- set st = (parts[5] | default('')) | lower -%}
-              {# hca_type/board_id 는 모델 식별자(MT4123 / MT_0000000223) 이지 제조사가 아니다.
-                 제조사는 그 접두로만 판정(MT → Mellanox) 하고, 원문은 model 로 보존한다. #}
               {%- set hca = (parts[8] | trim) if parts[8] else none -%}
               {%- set _ = out.append({
                 'adapter':     parts[1],
@@ -163,9 +120,18 @@
             {%- endif -%}
           {%- endfor -%}
           {{ out }}
+        _l_hba_read_errors: >-
+          {%- set out = [] -%}
+          {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
+            {%- if line.startswith('ERR|') -%}
+              {%- set path = line[4:] | trim -%}
+              {%- if path and path not in out -%}{%- set _ = out.append(path) -%}{%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
         _l_nic_drivers: >-
           {%- set out = [] -%}
-          {%- for line in (_l_nicdrv_raw.stdout_lines | default([])) -%}
+          {%- for line in ((_l_net_raw | default({})).stdout_lines | default([])) -%}
             {%- set parts = line.split('|') -%}
             {%- if parts | length >= 5 and parts[0] == 'NIC' -%}
               {%- set _ = out.append({
@@ -192,7 +158,14 @@
           {{ (['storage'] if _l_hbas_list or _l_ib_list else [])
              + (['network'] if _l_nic_drivers else []) }}
         _sections_failed_fragment:    []
-        _errors_fragment:             []
+        _errors_fragment: >-
+          {%- set paths = _l_hba_read_errors | default([]) -%}
+          {%- if (paths | length) == 0 -%}{{ [] }}
+          {%- else -%}
+            {%- set scope = ((['fc_host'] if (paths | select('search', '/fc_host/') | list | length) > 0 else []) + (['infiniband'] if (paths | select('search', '/infiniband/') | list | length) > 0 else [])) | join(',') -%}
+            {%- set more = (' 외 ' ~ ((paths | length) - 10) ~ '건') if (paths | length) > 10 else '' -%}
+            {{ [{'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=' ~ (scope or 'fc_host,infiniband') ~ '; cause=attribute_unreadable; count=' ~ (paths | length) ~ '; paths=' ~ (paths[:10] | join(',')) ~ more)}] }}
+          {%- endif -%}
       no_log: true
   rescue:
     - name: "linux | hba_ib | rescue (best-effort skip)"
@@ -206,9 +179,6 @@
         _sections_supported_fragment: []
         _sections_collected_fragment: []
         _sections_failed_fragment:    []
-        # M1 / NEW-3 (2026-08-12): message 는 사용자 문장으로, 기술 근거는 detail 문자열로.
-        #   section 은 schema 11 섹션 이름을 쓴다 (종전 linux_hba_ib 는 Portal 이 섹션별로
-        #   오류를 묶을 때 어디에도 붙지 않았다). detail 은 빈 문자열 대신 none 을 쓴다.
         _errors_fragment:
           - section: storage
             message: "스토리지 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."

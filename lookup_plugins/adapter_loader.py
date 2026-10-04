@@ -1,18 +1,4 @@
 # -*- coding: utf-8 -*-
-# ==============================================================================
-# adapter_loader.py — Adapter 자동 탐색 및 선택 Lookup Plugin
-# ==============================================================================
-# adapters/<channel>/ 디렉토리의 YAML 파일을 스캔하고,
-# probe facts와 match 조건을 비교하여 최적의 adapter를 선택합니다.
-#
-# 사용법 (Ansible task):
-#   - set_fact:
-#       _selected_adapter: >-
-#         {{ lookup('adapter_loader',
-#                   channel='redfish',
-#                   facts=_precheck_result.probe_facts,
-#                   repo_root=lookup('env','REPO_ROOT')) }}
-# ==============================================================================
 
 __metaclass__ = type
 
@@ -51,7 +37,6 @@ display = Display()
 
 
 def _resolve_repo_root(kwargs, variables):
-    """repo_root 결정 — kwargs / 환경변수 / Ansible variables 순."""
     repo_root = kwargs.get("repo_root", "") or os.environ.get("REPO_ROOT", "")
     if not repo_root and variables:
         repo_root = variables.get("REPO_ROOT", "")
@@ -64,16 +49,11 @@ def _resolve_repo_root(kwargs, variables):
 
 
 def _import_adapter_common(repo_root):
-    """module_utils 경로 추가 후 adapter_common import.
-
-    Returns: (load_vendor_aliases, normalize_vendor, adapter_matches,
-              adapter_score, adapter_specificity, adapter_match_score)
-    """
     module_utils_path = os.path.join(repo_root, "module_utils")
     if module_utils_path not in sys.path:
         sys.path.insert(0, module_utils_path)
     try:
-        from adapter_common import (  # noqa: WPS433 (runtime path import)
+        from adapter_common import (
             load_vendor_aliases,
             normalize_vendor,
             adapter_matches,
@@ -91,13 +71,6 @@ def _import_adapter_common(repo_root):
 
 
 def _scan_adapters(adapter_dir):
-    """adapter 디렉터리 스캔 → list of dict (_source_file, _filename 포함).
-
-    glob 결과는 sorted()로 알파벳순 정렬한다 — 스캔 순서가 결정적이어야
-    `_match_and_score()` 출력 list 순서가 일관된다. score 동률 시 Python
-    `list.sort()`는 stable sort이므로 알파벳순 (= 파일명 순)이 tie-break이
-    된다 (rule 50 R3 / NEXT_ACTIONS T3-02 관련).
-    """
     if not os.path.isdir(adapter_dir):
         raise AnsibleError(
             "adapter_loader: adapter 디렉토리를 찾을 수 없습니다: {0}".format(adapter_dir)
@@ -107,7 +80,7 @@ def _scan_adapters(adapter_dir):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
-            if not isinstance(data, dict):  # Round 9 #3: scalar/list adapter YAML → skip (item assignment crash 방지)
+            if not isinstance(data, dict):
                 continue
             data["_source_file"] = path
             data["_filename"] = os.path.basename(path)
@@ -125,11 +98,6 @@ def _scan_adapters(adapter_dir):
 
 def _match_and_score(adapters, facts, aliases, adapter_matches, adapter_score,
                      adapter_specificity=None, adapter_match_score=None):
-    """각 adapter의 match 평가 + 점수 계산. matched=[(score, adapter), ...].
-
-    `-vvv` 시 각 매칭 후보의 score breakdown 표시:
-      score = priority × 1000 + specificity × 10 + match_score
-    """
     matched = []
     rejected_with_reason: list[str] = []
     for adapter in adapters:
@@ -138,9 +106,8 @@ def _match_and_score(adapters, facts, aliases, adapter_matches, adapter_score,
             score = adapter_score(adapter, facts, aliases)
             if score > -9999:
                 matched.append((score, adapter))
-                # score breakdown logging (rule 95 R1 — debugging visibility)
                 if adapter_specificity and adapter_match_score:
-                    priority = adapter.get("priority", 0)  # 표시용 raw (int() 제거 — 오타 priority 가 로깅서 crash 안 나게)
+                    priority = adapter.get("priority", 0)
                     spec = adapter_specificity(adapter)
                     msc = adapter_match_score(adapter, facts, aliases)
                     display.vvv(
@@ -166,27 +133,12 @@ def _match_and_score(adapters, facts, aliases, adapter_matches, adapter_score,
         display.vvv(
             "adapter_loader: 후보 거부 — {0}건".format(len(rejected_with_reason))
         )
-        for reason in rejected_with_reason[:10]:  # 최대 10건만
+        for reason in rejected_with_reason[:10]:
             display.vvv("  - {0}".format(reason))
     return matched
 
 
 def _pick_generic_fallback(adapters):
-    """generic 플래그 적용된 adapter 반환 (없으면 None).
-
-    2026-08-10 실측 주의 — **현 구성에서 이 함수는 도달하지 않는다.**
-      호출 조건은 `if not matched:` 하나뿐인데(아래 run() 참조), 3채널 모두
-      generic adapter 를 갖고 있고 그것들이 항상 matched 에 들어가기 때문이다:
-        - redfish_generic.yml : `match: {}` → adapter_matches 가 즉시 True
-          (module_utils/adapter_common.py:153-154)
-        - linux_generic / windows_generic / esxi_generic : os_type / match:{} 로 통과
-      generic 은 specificity -40 (adapter_common.py:243-244) 이라 점수 -400 → 정렬
-      최하위에 머물다가, 다른 후보가 전부 -9999 로 실격되면 자연스럽게 1위가 된다.
-
-    즉 **실제 degrade 경로는 이 함수가 아니라 "점수 정렬"이다.** 이 함수는 누군가
-    generic adapter 파일을 지웠을 때만 의미가 있는 방어망이므로 남겨 둔다(삭제 금지).
-    문서/설명 자료에서 이 함수를 주 degrade 경로로 서술하면 틀린다.
-    """
     for adapter in adapters:
         if adapter.get("generic", False):
             display.v(
@@ -217,7 +169,6 @@ class LookupModule(LookupBase):
         adapter_dir = os.path.join(repo_root, "adapters", channel)
         adapters = _scan_adapters(adapter_dir)
 
-        # rule 95 R1 #4 (debugging visibility) — facts 입력 요약 -vvv 로그
         display.vvv(
             "adapter_loader: channel={0}, facts vendor={1}, model={2}, firmware={3}".format(
                 channel,
@@ -245,15 +196,9 @@ class LookupModule(LookupBase):
                 "facts={1}".format(channel, facts)
             )
 
-        # 점수순 정렬 (내림차순). Python list.sort()는 stable sort이므로
-        # 동률 시 _scan_adapters()가 알파벳순 정렬해 둔 원래 순서를
-        # 유지한다 — 즉 동률 tie-break는 파일명 알파벳 오름차순.
-        # 동률 발생 자체가 priority/specificity 일관성 위반 신호이므로
-        # 동률 발견 시 vvv 경고를 남긴다 (rule 10 R5).
         matched.sort(key=lambda x: x[0], reverse=True)
         best_score, best_adapter = matched[0]
 
-        # rule 95 R1 #4 — top 3 후보 -vvv 로그 (debugging visibility)
         display.vvv(
             "adapter_loader: top {0} candidates (score 내림차순):".format(
                 min(3, len(matched))

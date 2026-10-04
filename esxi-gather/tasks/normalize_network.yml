@@ -1,24 +1,10 @@
 ---
-# esxi-gather/tasks/normalize_network.yml
-# _e_raw_facts + _e_raw_dns + _e_raw_host → network fragment
-#
-# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-28/B-29):
-#   - 기본 게이트웨이는 vSphere ipRouteConfig(_e_raw_host) 에서 읽는다. 종전에는 vmware_host_facts 가
-#     주지 않는 ansible_default_ipv4 를 봐서 is_primary 가 항상 false, gateway 가 항상 null 이었다.
-#   - is_primary = 게이트웨이 장치(gatewayDevice) 와 같은 vmk. 장치가 없으면 게이트웨이와 같은 서브넷의 vmk.
-#   - IPv6 주소(vnic ipV6Config) 를 addresses[] 에 family=ipv6 로 함께 낸다 (Linux 와 동일 shape).
-#   - MAC 은 normalize_mac (소문자 colon).
-#   - vmk link_status: vmware_host_facts 는 vmk 링크 상태를 주지 않는다. 수집에 쓴 IP(_e_ip) 를 가진 vmk 는
-#     통신이 됐으므로 up 이 확실하고, 나머지는 unknown (실측 2026-09-03 build #191: 관리 vmk0 가 down 으로 나왔다).
 
 - name: "esxi | normalize network | extract dns and gw"
   ansible.builtin.set_fact:
     _e_default_gw:  "{{ (_e_raw_host | default({})).default_gateway | default(none, true) or none }}"
     _e_default_gw6: "{{ (_e_raw_host | default({})).default_gateway_ipv6 | default(none, true) or none }}"
     _e_gw_device:   "{{ (_e_raw_host | default({})).gateway_device | default(none, true) or none }}"
-    # 잔류 fix (Round 12 후속): vmware_host_dns_info (collect_dns.yml) 결과를 1순위로,
-    # 기존 vmware_host_config_info drill-in 을 폴백으로. dns_info 모듈은 host_name 키로
-    # ip_address (DNS 서버 list) / search_domain / domain_name 정확 반환.
     _e_dns_servers: >-
       {%- set dns_out = [] -%}
       {%- set dns_dict = _e_raw_dns | default({}) -%}
@@ -35,7 +21,6 @@
         {%- endfor -%}
       {%- endif -%}
       {%- if not dns_out -%}
-        {# fallback: vmware_host_config_info drill-in (production-audit 보존) #}
         {%- set host_cfgs = (_e_raw_config | default({})).values() | list -%}
         {%- for host_cfg in host_cfgs -%}
           {%- set net_info = host_cfg.get('network_system_info', host_cfg) if host_cfg is mapping else {} -%}
@@ -62,7 +47,6 @@
           {%- set _ = vnic_by_dev.update({v.device: v}) -%}
         {%- endif -%}
       {%- endfor -%}
-      {# 게이트웨이 IPv4 → 정수 (서브넷 포함 판정용) #}
       {%- set gns = namespace(gw_int=none) -%}
       {%- if gw and (gw | regex_search('^[0-9]{1,3}(\\.[0-9]{1,3}){3}$')) -%}
         {%- set go = gw.split('.') -%}
@@ -75,7 +59,6 @@
                ipv4.address != '127.0.0.1' and
                not ipv4.address.startswith('169.254.') -%}
           {%- set nm = ipv4.netmask | default('') -%}
-          {# production-audit (2026-04-29): bit-counting (Linux 와 일관) — /22, /26, /28 등 비표준 prefix 지원 #}
           {%- set pns = namespace(bits=0, val=0, mask_int=0) -%}
           {%- if nm -%}
             {%- for octet in nm.split('.') -%}
@@ -90,7 +73,6 @@
             {%- endfor -%}
           {%- endif -%}
           {%- set pfx = pns.bits if nm else none -%}
-          {# is_primary: gatewayDevice 일치 → 없으면 게이트웨이가 이 vmk 의 서브넷 안에 있는지 #}
           {%- set ins = namespace(primary=false) -%}
           {%- if gw_dev -%}
             {%- set ins.primary = (iface == gw_dev) -%}
@@ -129,11 +111,6 @@
       {{ out }}
   no_log: true
 
-# cycle-016 (2026-04-29): ESXi network.summary
-# 2026-06-30: vmk 인터페이스는 speed_mbps=none 이라 여기서 group 산출 시 'null qty' 누출됨
-#   (site 10.100.64.2 실측: summary=[{speed:null,qty:1}]). 따라서 (1) null/0 speed 가드 추가로
-#   vmk 기반 누출 차단(→ groups=[]), (2) 실제 NIC 속도 summary 는 collect_network_extended 에서
-#   pnic(_e_ext_adapters, 실 speed 보유) 기준으로 산출해 merge 시 덮어쓴다 (Windows/Linux 동일 패턴).
 - name: "esxi | normalize network | compute summary groups"
   ansible.builtin.set_fact:
     _e_net_summary: >-
@@ -155,7 +132,6 @@
       {{ {'groups': ns.groups} }}
   no_log: true
 
-# cycle-016 Phase P: 3 채널 key 일관성 — adapters / ports / driver_map 빈 list 키 노출
 - name: "esxi | normalize network | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -176,18 +152,8 @@
         driver_map:  []
         summary: "{{ _e_net_summary | default({'groups': []}) }}"
     _sections_supported_fragment: ['network']
-    # 2026-09-03 (B-12): 인터페이스가 하나도 없으면 수집한 것이 아니다.
     _sections_collected_fragment: "{{ ['network'] if ((_e_norm_interfaces | default([])) | length > 0) else [] }}"
     _sections_failed_fragment:    "{{ [] if ((_e_norm_interfaces | default([])) | length > 0) else ['network'] }}"
-    # 2026-08-12 (N36-c): _e_dns_ok / _e_config_ok 배선. 종전에는 두 플래그 모두 소비처가
-    #   0건이라 이름 서버 수집이 실패해도 흔적이 남지 않았다.
-    #
-    #   이름 서버는 2경로다 — dns_info(1순위) → config_info(폴백, 위).
-    #   한쪽이 실패해도 다른 쪽이 값을 채웠으면 그것은 **성공한 fallback** 이므로 error 가
-    #   아니다. 둘 다 성공했는데 결과가 비었다면 실제로 설정이 없는 것이라 역시 error 가
-    #   아니다. 결과가 비었는데 두 경로 중 하나라도 실패한 경우에만 "미설정" 과 "수집 실패"
-    #   를 구분할 수 없으므로 error 로 승격한다.
-    #   섹션 status 는 바꾸지 않는다 (network 는 인터페이스까지 정상 수집된 상태다).
     _errors_fragment: >-
       {%- set out = [] -%}
       {%- if (_e_norm_interfaces | default([])) | length == 0 -%}

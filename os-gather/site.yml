@@ -1,62 +1,17 @@
 ---
-# =============================================================================
-# os-gather / site.yml  — orchestration 전용
-#
-# 입력:
-#   INVENTORY_JSON = [{"ip": "10.x.x.1"}]
-#   REPO_ROOT      = vault / common 경로 기준
-#
-# 출력 (json_only callback):
-#   확정 스키마 JSON (schema_version: "1")
-#
-# 흐름:
-#   Play1:   포트 감지 → _os_linux / _os_windows / _os_failed 그룹으로 분류 (add_host)
-#   Play1.5: _os_failed (포트 미응답) host별 독립 OUTPUT (strategy: free)
-#   Play2:   Linux  → preflight → adapter 선택 → gather → meta → build_output
-#   Play3:   Windows → adapter 선택 → gather → meta → build_output
-#
-# 실패 처리:
-#   포트 감지 실패 → Play1 이 _os_failed 그룹 등록 → Play1.5 에서 OUTPUT (diagnosis 포함)
-#   수집 예외 → block/rescue → build_failed_output.yml (단일 호출)
-# =============================================================================
 
-# ── PLAY 1: OS 타입 감지 ─────────────────────────────────────────────────────
 
 - name: "os-gather | detect"
   hosts: all
   gather_facts: false
   connection: local
-  # 주의: PLAY 1은 add_host (run_once + loop) 사용으로 strategy: free 불가 (#23 빌드 실패)
-  # connection: local + 짧은 포트 probe라 linear여도 wave 막힘 영향 작음. perf는 _probe_timeout 단축으로 대응.
-  # 2026-08-10 (Phase 3-A): 포트 감지는 공통 precheck 로 통합됐다 (종전 wait_for 3연타).
 
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
-    # 포트 감지 타임아웃 (초) — 2026-04-30 perf: 5→2 (200 dead host 시나리오에서 host당 15→6초)
-    # 진짜 느린 LAN host는 probe_timeout 변수로 override 가능
     _probe_timeout: "{{ probe_timeout | default(2) }}"
 
   tasks:
 
-    # ── 2026-08-10 (Phase 3-A): 공통 precheck 로 통합 ─────────────────────
-    # 종전에는 wait_for 3연타(5986 → 5985 → 22)로 OS 전용 감지를 했다. 다른 두 채널이
-    # 쓰는 common/tasks/precheck/run_precheck.yml 과 구조가 달라 진단 값도 별도 하드코딩
-    # 이었고(아래 PLAY 1.5), 실패 종류(거부 / 시간 초과 / 주소 해석 실패)를 구분하지 못했다.
-    #
-    # 보존한 것 (구조만 바꾸고 동작은 유지):
-    #   - 포트 순서 5986 → 5985 → 22  : precheck_bundle.CHANNEL_DEFAULT_PORTS['os'] 가 동일 순서
-    #   - 첫 성공에서 중단             : _check_ports 가 성공 즉시 break
-    #   - OS 판정 규칙                : _detect_os_from_port (22=linux / 5985·5986=windows)
-    #   - 포트당 타임아웃 2초          : timeout_port 로 명시 전달 (모듈 기본값 3.0 을 쓰지 않는다)
-    #   - 관측 위치                   : connection: local + delegate_to: localhost 모두 controller
-    #   - 재시도 없음                 : _check_ports 는 포트당 1회 시도
-    #   (Phase 3-A 당시의 "프로토콜 미검증" 항목은 Phase 3-B 에서 해제됐다 — 아래
-    #    _precheck_probe_protocol: true 가 SSH identification / WinRM Identify 를 실제로 확인한다.)
-    #
-    # 달라진 것 (의도된 개선):
-    #   - 실패 종류를 구조화해 관측 → failure_stage / failure_code 가 실제 관측을 반영
-    #   - checked_ports 가 실제 probe 한 포트만 담음
-    #   - 포트별 사유가 _fail_error_detail 로 보존됨
     - name: "detect | 공통 precheck (관리 포트 순차 확인)"
       ansible.builtin.include_tasks:
         file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/precheck/run_precheck.yml"
@@ -64,19 +19,10 @@
         _precheck_host:            "{{ ansible_host | default(inventory_hostname) }}"
         _precheck_channel:         "os"
         _precheck_timeout_port:    "{{ _probe_timeout }}"
-        # 2026-08-10 (Phase 3-B): 포트가 열렸다는 사실만으로 OS 를 확정하지 않는다.
-        # 각 후보에서 실제 SSH identification / WinRM WS-Management 응답까지 확인한다.
         _precheck_probe_protocol:  true
-        # 프로토콜 확인용 bounded timeout. 포트 probe 예산(2초)과 별개이며, 살아 있는
-        # 포트에만 적용된다(죽은 호스트는 TCP 단계에서 끝나 추가 대기가 없다).
         _precheck_timeout_protocol: "{{ _probe_protocol_timeout | default(5) }}"
-        # 종전 wait_for 는 timeout 예산 안에서 sleep=1 간격으로 **반복 확인**했다.
-        # 단발 시도로 바꾸면 "probe 시작 시점엔 닫혀 있지만 예산 안에 기동되는 서비스"가
-        # 실패로 바뀐다. wait_for 기본값 sleep=1 을 그대로 써서 그 의미를 보존한다.
         _precheck_port_poll_interval: "{{ _probe_poll_interval | default(1) }}"
 
-    # add_host 가 쓰는 세 fact 는 이름/타입 모두 종전과 동일하게 유지한다
-    # (_winrm_port 는 문자열 — ansible_port 전달 형태를 바꾸지 않기 위함).
     - name: "detect | set os_type"
       ansible.builtin.set_fact:
         _detected_os:  "{{ (_precheck_raw.detected_os | default('')) or 'unknown' }}"
@@ -84,10 +30,6 @@
         _winrm_scheme: "{{ (_precheck_raw.winrm_scheme | default('')) or 'http' }}"
       no_log: true
 
-    # ── add_host 는 인벤토리 조작 모듈이므로 암시적 run_once 동작.
-    #    loop + run_once: true 로 모든 호스트를 한 번에 등록한다.
-    # 2026-04-30 perf: port-fail OUTPUT 처리는 _os_failed 그룹에 등록 후 별도 PLAY 1.5 (strategy: free)에서.
-    # PLAY 1 linear에서 200 dead host의 OUTPUT/build_failed_output 누적 처리(11분)를 회피.
     - name: "detect | register failed hosts"
       ansible.builtin.add_host:
         name:               "{{ item }}"
@@ -107,6 +49,7 @@
         ansible_host:            "{{ hostvars[item].ansible_host | default(item) }}"
         ansible_connection:      ssh
         ansible_port:            22
+        ansible_timeout:         15
         ansible_ssh_common_args: >-
           -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
           -o ConnectTimeout=15 -o ServerAliveInterval=10
@@ -135,9 +78,6 @@
       no_log: true
 
 
-# ── PLAY 1.5: Port-fail OUTPUT (host별 독립, 200 dead host 14분→수초) ──────
-# 2026-04-30 perf: PLAY 1 (linear, add_host 호환)에서 분리.
-# 각 dead host의 build_failed_output 처리가 독립 wave로 진행되어 wall-clock 단축.
 
 - name: "os-gather | failed-output"
   hosts: _os_failed
@@ -145,9 +85,6 @@
   connection: local
   strategy: free
 
-  # 2026-08-12: build_failed_output.yml 이 사용자 문구 카탈로그(_fr_catalog)를
-  # 참조하므로 이 play 도 정본을 로드해야 한다. 종전에는 이 play 만 vars_files 가 없어서
-  # build_failed_output.yml 안에 문장이 하드코딩돼 있었다 (H2 의 구조적 원인).
   vars_files:
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
@@ -164,30 +101,8 @@
         _out_vendor:            null
         _fail_sec_supported:    "{{ ['system','hardware','cpu','memory','storage','network','users'] }}"
         _fail_error_section:    "os_detect"
-        # 2026-08-11 (Phase 6-B / §24 §25): Portal 실패 Grid 는 errors[].message 를 읽는다.
-        #   종전엔 이 값이 곧 message 여서 관리 포트 번호(22 / 5985 / 5986)가 Grid 에 그대로
-        #   노출됐다. 이제 message 는 diagnosis.failure_reason 을 그대로 쓰고(사용자 문장),
-        #   이 값은 **errors[].detail** 로 내려간다 (build_failed_output.yml).
-        #   포트별 실제 관측 오류는 precheck 가 채운 _fail_error_detail 에 이미 들어 있고,
-        #   여기서는 "어떤 포트를 확인했는지" 만 운영자용으로 덧붙인다.
         _fail_error_message:    "확인한 관리 포트: WinRM 5986, WinRM 5985, SSH 22"
 
-    # 2026-08-10 (Phase 3-A): 종전에는 이 자리에서 _diagnosis 를 통째로 하드코딩했다.
-    # 이제 PLAY 1 의 공통 precheck 가 만든 진단(_diagnosis)이 host fact 로 그대로 넘어오므로
-    # 재작성하지 않는다 — reachable / port_open / failure_stage / failure_code /
-    # details.checked_ports 모두 **실제 관측 결과**다.
-    #   - 전 포트 무응답 + ICMP 무응답 → stage=reachable, code=TARGET_UNREACHABLE
-    #   - 전 포트 무응답 + ICMP 응답   → stage=port,      code=TCP_CONNECT_FAILED
-    #   - RST 를 하나라도 관측         → stage=port,      code=TCP_CONNECTION_REFUSED
-    #   - 주소 해석 실패               → stage=reachable, code=DNS_RESOLUTION_FAILED
-    # auth_success 는 인증을 시도하지 않으므로 null 유지 (모듈 초기값).
-    #
-    # 2026-08-11 (Phase 5-A): failure_reason 덮어쓰기를 **제거**했다.
-    #   종전 문구는 관리 포트 번호(22 / 5985 / 5986)를 Portal Grid 에 그대로 노출했고,
-    #   전 포트 무응답 경우를 "모두 응답이 없습니다" 로 단정했다. 이제 precheck 가
-    #   실제 관측(DNS 실패 / 연결 미확인 / 연결 거부 / 프로토콜 미확인)에 맞는 사용자 문장을
-    #   직접 만든다(precheck_bundle.reason_for_failure — 2026-09-21 부터 채널별 문장). 포트 번호는
-    #   errors[].detail 에만 남는다.
 
     - name: "failed-output | init fragments"
       ansible.builtin.include_tasks:
@@ -206,31 +121,19 @@
         msg: "{{ _output | to_json }}"
 
 
-# ── PLAY 2: Linux 수집 ───────────────────────────────────────────────────────
 
 - name: "os-gather | linux"
   hosts: _os_linux
   gather_facts: false
   become: false
-  # 2026-04-30 perf: stuck host (SSH connect timeout) 가 wave 막지 않도록 host별 독립 진행
   strategy: free
 
-  # 2026-08-12: vault 를 vars_files 에서 뺐다. Credential 은 이제 Location 축을 갖고
-  #   (vault/<se_location>/os/linux.yml) block 안에서 동적으로 로드한다.
-  #   vars_files 로는 이 구조를 만들 수 없다 — 경로를 템플릿하면 파일 부재 시 **play 자체가
-  #   죽어** OUTPUT 태스크에 도달하지 못하고 envelope 이 사라진다 (rule 11 위반).
-  #   block 안 include 는 실패해도 rescue 가 정상 failed envelope 을 만든다.
   vars_files:
-    # Portal 사용자 문구 카탈로그 (_fr_catalog) — rescue / always 가 참조한다.
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
   vars:
     _ip:      "{{ ansible_host | default(inventory_hostname) }}"
     _os_type: "linux"
-    # SSH 비밀번호를 sudo 비밀번호로 전달 (DMI 식별자 읽기에 필요)
-    # vault에 ansible_become_pass가 별도 정의되면 그 값이 우선됨
-    # 주: 이 play var 는 try_one_credential.yml 의 host fact set_fact 에 덮여 사실상
-    #     쓰이지 않는다(기존 결함, 이번 변경 범위 밖). 값의 출처만 _cred_become_password 로 옮겼다.
     ansible_become_pass: "{{ _cred_become_password | default(ansible_password | default(omit)) }}"
 
   tasks:
@@ -238,7 +141,6 @@
     - name: "linux | gather"
       block:
 
-        # Credential 선택 — (se_location, os=linux) → vault/<loc>/os/linux.yml
         - name: "linux | resolve credentials"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/credential/resolve_and_load.yml"
@@ -255,9 +157,6 @@
           when: _cred_load_outcome | default('not_resolved') in
                 ['not_resolved', 'credential_set_missing', 'credential_set_undecryptable']
 
-        # P1 (cycle 2026-04-28): vault accounts 후보 순차 시도.
-        # 성공 시 ansible_user/password 갱신 후 본 gather 진행.
-        # 실패 시 _os_auth_ok=false → block 안에서 fail → rescue 진입.
         - name: "linux | try credentials"
           ansible.builtin.include_tasks: tasks/try_credentials.yml
           vars:
@@ -282,13 +181,9 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/init_fragments.yml"
 
-        # ── adapter 선택 ─────────────────────────────────────────────────
         - name: "linux | select adapter"
           ansible.builtin.set_fact:
             _selected_adapter: >-
-              {# 2026-06-22 fix: _l_distro_name(os-release NAME, preflight) 우선 — adapter 선택 시점에
-                 ansible_distribution 은 미정의(facts 미수집) + "RedHat" 형식이라 패턴 불일치 → 전 Linux 가
-                 rhel tie-break 로 오선택되던 버그. os-release NAME("Ubuntu"/"Red Hat Enterprise Linux") 사용. #}
               {{ lookup('adapter_loader',
                          channel='os',
                          facts={'os_type': 'linux',
@@ -314,23 +209,10 @@
         - name: "linux | gather users"
           ansible.builtin.include_tasks: tasks/linux/gather_users.yml
 
-        # P4 (cycle 2026-04-29): FC HBA / InfiniBand / NIC driver/VLAN/bond
         - name: "linux | gather hba_ib"
           ansible.builtin.include_tasks: tasks/linux/gather_hba_ib.yml
 
-        # system.runtime 은 gather_system.yml 이 단일 구현이다 (2026-09-03 — 종전 gather_runtime.yml 이
-        # 같은 9 키를 다른 의미로 다시 만들어 덮어쓰던 것을 제거).
 
-        # ── 고객별 추가 수집 (Add-on) ───────────────────────────────────
-        # 마지막 수집 뒤 · 조립 앞에 둔다 — Add-on 이 기본 수집 결과(hostname)를 읽고, Add-on 결과가 조립에 들어간다.
-        - name: "linux | addon"
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
-          vars:
-            _addon_target: linux
-          when: lookup('env', 'ADDON_DIR') | length > 0
-
-        # ── diagnosis (성공 경로) ───────────────────────────────────────
         - name: "linux | build diagnosis (success path)"
           ansible.builtin.set_fact:
             _diagnosis:
@@ -339,31 +221,19 @@
               protocol_supported: true
               auth_success:       true
               failure_stage:      null
-              # 2026-08-10 (Phase 2): 정상 결과에서도 키는 존재하고 값만 null (shape 고정).
               failure_code:       null
               failure_reason:     null
               details:
                 channel:           "os"
                 adapter_candidate: "{{ (_selected_adapter | default({})).adapter_id | default(none) }}"
                 detected_os:       "linux"
-                # 2026-08-12: 어떤 자격증명 세트로 수집했는지 (Secret 아님 — location/channel 조합).
-                #   성공 경로에도 남긴다 — 성공한 대상과 실패한 대상이 같은 세트를 썼는지
-                #   비교할 수 있어야 원인 범위를 좁힐 수 있다. Redfish / ESXi 와 동일 배치.
                 credential_scope:  "{{ (_cred_scope | default('')) or none }}"
                 selected_port:     22
-                # 2026-08-10 (Phase 3-A): PLAY 1 의 공통 precheck 가 **실제 probe 한 포트**를
-                # 그대로 쓴다. linux 로 분류되려면 5986 실패 → 5985 실패 → 22 성공 순으로
-                # 3개 모두 시도됐어야 하므로 fallback 값도 같다.
                 checked_ports:     "{{ _precheck_raw.checked_ports | default([5986, 5985, 22]) }}"
                 gather_mode:       "{{ _l_python_mode | default('python_ok') }}"
                 python_version:    "{{ _l_python_version | default('') }}"
-                # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
                 auth:              "{{ _os_attempts_meta | default({}) }}"
 
-        # ── meta & correlation ───────────────────────────────────────────
-        # 2026-09-03: envelope.vendor 는 common/tasks/normalize/resolve_vendor.yml 한 곳에서
-        # data.hardware.vendor → vendor_aliases.yml 정본으로 결정한다 (Windows/ESXi 와 동일 경로).
-        # 이 set_fact 결과는 build_output.yml의 'os | normalize | set output meta (defaults preserve)' 에서 보존됨.
         - name: "linux | set output meta vars"
           ansible.builtin.set_fact:
             _out_target_type:       "os"
@@ -385,59 +255,31 @@
         - name: "linux | build output"
           ansible.builtin.include_tasks: tasks/normalize/build_output.yml
 
-        # schema_version 주입
         - name: "linux | inject schema_version"
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
+        - name: CHECKPOINT
+          ansible.builtin.debug:
+            msg: "{{ _output | to_json }}"
+
+        - name: "linux | addon"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
+          vars:
+            _addon_target: linux
+          when: lookup('env', 'ADDON_DIR') | length > 0
+
       rescue:
-        # ── Portal Grid 계약 (2026-08-10 사용자 확인) ────────────────────
-        # Portal 은 실패 Grid 에 **diagnosis.failure_reason 만** 표시한다. 그런데 OS 채널은
-        # _diagnosis 를 **성공 경로에서만** set 하고 있어(위 "build diagnosis (success path)"),
-        # 자격 실패 / 수집 예외로 rescue 에 들어오면 build_failed_output.yml:79 의
-        # `_diagnosis | default(none)` 이 발동해 **diagnosis 전체가 null** 이 됐다.
-        # → Portal 은 빈 칸을 보여주고, 소비자가 diagnosis.* 를 참조하면 null 역참조.
-        #
-        # 값 근거 (확정 가능한 것만 적는다):
-        #   reachable / port_open = true  — PLAY 1 precheck 가 TCP 연결 성공을 실제 관측
-        #   protocol_supported    = true  — 2026-08-11 (Phase 5-A) 정정. 종전엔 자격 probe 결과를
-        #                                   그대로 썼는데(ok 이면 true), Phase 3-B 이후 PLAY 1 이
-        #                                   **SSH identification 을 실제로 확인**해야만 여기까지
-        #                                   오므로 자격 결과와 무관하게 관측된 사실이다
-        #                                   (os-gather PLAY 1 은 _precheck_probe_protocol: true).
-        #   auth_success                  — 통과 시 true. **실패 시 false 가 아니라 null**:
-        #                                   try_one_credential.yml 의 판정식은 잘못된 자격 /
-        #                                   연결 끊김 / timeout / 제한 쉘(nologin, rc≠0) 을 구분하지
-        #                                   못한다 → 인증 거부를 관측했다고 말할 수 없다
-        #   failure_stage                 — 실행이 멈춘 단계. 자격 probe 단계면 'auth', 그 뒤면 'gather'.
-        #   failure_reason                — 카탈로그(common/vars/failure_reasons.yml `_fr_catalog`)에서
-        #                                   원인별 키로 고른다 (2026-09-21). 인증 통과 후 실패 → gather_after_auth,
-        #                                   Vault 설정 문제 → loc_* 키, 그 외 인증 실패 → auth_unconfirmed.
-        #                                   2026-08-11 에 뺐던 대상 종류 어휘(OS)를 다시 쓴다 — 관리자는
-        #                                   target_type 을 골라 요청하므로 조치 대상을 좁혀 준다.
         - name: "linux | rescue | Portal 표시용 diagnosis 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
-              {#- 2026-08-12 (C6): 자격 후보가 0건이면 _os_auth_ok 는 '관측한 적 없음' 인데도
-                  false 로 남아, 원격 명령이 실제로 실행된 뒤의 실패까지 '자격증명 확인'
-                  으로 라벨링됐다. 그 상태의 envelope 은 data 에 수집 결과가 들어 있으면서
-                  '대상에 접속할 수 없습니다' 라고 말한다. 섹션을 하나라도 수집했다는 것은
-                  원격 접속·인증이 통과했다는 직접 관측이므로 함께 본다. -#}
               {%- set ok = (_os_auth_ok | default(false) | bool)
                            or ((_all_sec_collected | default([]) | length) > 0) -%}
-              {#- 2026-08-12: credential set 자체를 열지 못한 경우를 분리한다. '자격을 실어
-                  보냈는데 통하지 않았다'(AUTH_PROBE_FAILED)와 '보낼 자격이 없었다'는 운영자의
-                  조치가 다르다 (대상 계정 점검 vs vault 배치 점검). stage 는 auth 를 유지한다 —
-                  stage 는 원인이 아니라 멈춘 위치이고(CLAUDE.md §9) 멈춘 곳은 자격증명 단계다.
-                  auth_success 는 그대로 null 이다 (미시도 — false 는 명시적 거부를 뜻한다). -#}
               {%- set lo = _cred_load_outcome | default('') -%}
               {%- set cred_na = (not ok)
                                 and (lo in ['not_resolved', 'credential_set_missing',
                                             'credential_set_undecryptable']) -%}
-              {#- 2026-09-21: 문장은 원인별 카탈로그 키로 고른다 (common/vars/failure_reasons.yml).
-                  위치 폴더는 있는데 이 OS 종류 파일만 없으면 '계정 없음', 폴더도 없으면 'Vault 없음'.
-                  계정 0개(empty_accounts)는 계정 없이 접속을 **시도한 뒤** 실패한 것이라 code 는
-                  AUTH_PROBE_FAILED 를 유지하고 문장만 '계정 없음' 으로 알린다 (SSH 키 경로 보존). -#}
               {%- if ok -%}
                 {%- set reason_key = 'gather_after_auth' -%}
               {%- elif (_cred_reason | default('')) == 'unknown_location' -%}
@@ -475,7 +317,6 @@
                                   is mapping) else {})} }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
-        # 2026-09-03 (B-36): 예외 전에 확정한 제조사를 버리지 않는다 — 같은 resolve_vendor 경로.
         - name: "linux | rescue | resolve vendor"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/resolve_vendor.yml"
@@ -488,9 +329,6 @@
             _fail_sec_supported:    "{{ ((_selected_adapter | default({})).capabilities | default({})).sections_supported
                                         | default(['system','hardware','cpu','memory','storage','network','users']) }}"
             _fail_error_section:    "linux_gather"
-            # 2026-08-11 (Phase 6-B): raw 예외 문자열. errors[].message 가 아니라
-            # **errors[].detail** 로 들어간다 (build_failed_output.yml). 사용자 문장은
-            # diagnosis.failure_reason 을 그대로 쓴다.
             _fail_error_message:    "[task: {{ ansible_failed_task.name | default('unknown') }}] {{ ansible_failed_result.msg | default('Linux 수집 예외') }}"
 
         - name: "linux | rescue | build_failed_output"
@@ -502,9 +340,6 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       always:
-        # rule 13 R5 / rule 20 R1: 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
-        # 2026-09-03 (B-01/B-04): hostname 은 IP 로 대체하지 않는다(null). sections/meta/correlation/data 는
-        #   rescue 경로(build_failed_output.yml)와 같은 shape — 호출자가 실패 종류에 따라 다른 모양을 보지 않는다.
         - name: OUTPUT
           ansible.builtin.debug:
             msg: "{{ (_output | default({
@@ -524,17 +359,13 @@
                      })) | to_json }}"
 
 
-# ── PLAY 3: Windows 수집 ─────────────────────────────────────────────────────
 
 - name: "os-gather | windows"
   hosts: _os_windows
   gather_facts: false
-  # 2026-04-30 perf: stuck host (WinRM read/op timeout) 가 wave 막지 않도록 host별 독립 진행
   strategy: free
 
-  # 2026-08-12: vault 는 block 안에서 동적 로딩 (PLAY 2 와 같은 이유 — rule 11 envelope 보호).
   vars_files:
-    # Portal 사용자 문구 카탈로그 (_fr_catalog) — rescue / always 가 참조한다.
     - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
 
   vars:
@@ -546,7 +377,6 @@
     - name: "windows | gather"
       block:
 
-        # Credential 선택 — (se_location, os=windows) → vault/<loc>/os/windows.yml
         - name: "windows | resolve credentials"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/credential/resolve_and_load.yml"
@@ -563,7 +393,6 @@
           when: _cred_load_outcome | default('not_resolved') in
                 ['not_resolved', 'credential_set_missing', 'credential_set_undecryptable']
 
-        # P1 (cycle 2026-04-28): vault accounts 후보 순차 시도 (WinRM).
         - name: "windows | try credentials"
           ansible.builtin.include_tasks: tasks/try_credentials.yml
           vars:
@@ -582,6 +411,7 @@
             _os_accounts: "{{ _cred_accounts | default([]) }}"
 
         - name: "windows | setup"
+          timeout: "{{ _win_task_timeout | default(180) }}"
           ansible.builtin.setup:
             gather_subset: ['hardware', 'network']
           register:    _w_setup
@@ -592,14 +422,9 @@
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/init_fragments.yml"
 
-        # ── adapter 선택 ─────────────────────────────────────────────────
         - name: "windows | select adapter"
           ansible.builtin.set_fact:
             _selected_adapter: >-
-              {# Round 17 #10: ansible_os_product_type 은 SKU(server/workstation) 라
-                 version_patterns(2019/2022, 10.0.NNNNN build)와 절대 안 맞아 generation
-                 adapter 가 죽고 windows_generic 만 선택됨. ansible_kernel(=빌드 10.0.20348.0)
-                 을 넘겨 windows_2019/2022 가 올바로 매칭되게 한다. #}
               {{ lookup('adapter_loader',
                          channel='os',
                          facts={'os_type': 'windows',
@@ -610,7 +435,6 @@
         - name: "windows | gather system"
           ansible.builtin.include_tasks: tasks/windows/gather_system.yml
 
-        # cycle-016 Phase O: Windows hardware section 활성화
         - name: "windows | gather hardware"
           ansible.builtin.include_tasks: tasks/windows/gather_hardware.yml
 
@@ -629,20 +453,9 @@
         - name: "windows | gather users"
           ansible.builtin.include_tasks: tasks/windows/gather_users.yml
 
-        # P5 sub-phase b (cycle 2026-04-29): Windows runtime
         - name: "windows | gather runtime"
           ansible.builtin.include_tasks: tasks/windows/gather_runtime.yml
 
-        # ── 고객별 추가 수집 (Add-on) ───────────────────────────────────
-        # 마지막 수집 뒤 · 조립 앞에 둔다 — Add-on 이 기본 수집 결과(hostname)를 읽고, Add-on 결과가 조립에 들어간다.
-        - name: "windows | addon"
-          ansible.builtin.include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
-          vars:
-            _addon_target: windows
-          when: lookup('env', 'ADDON_DIR') | length > 0
-
-        # ── diagnosis (성공 경로) ───────────────────────────────────────
         - name: "windows | build diagnosis (success path)"
           ansible.builtin.set_fact:
             _diagnosis:
@@ -651,31 +464,17 @@
               protocol_supported: true
               auth_success:       true
               failure_stage:      null
-              # 2026-08-10 (Phase 2): 정상 결과에서도 키는 존재하고 값만 null (shape 고정).
               failure_code:       null
               failure_reason:     null
               details:
                 channel:           "os"
                 adapter_candidate: "{{ (_selected_adapter | default({})).adapter_id | default(none) }}"
                 detected_os:       "windows"
-                # 2026-08-12: 어떤 자격증명 세트로 수집했는지 (Secret 아님 — location/channel 조합).
-                #   성공 경로에도 남긴다 — 성공한 대상과 실패한 대상이 같은 세트를 썼는지
-                #   비교할 수 있어야 원인 범위를 좁힐 수 있다. Redfish / ESXi 와 동일 배치.
                 credential_scope:  "{{ (_cred_scope | default('')) or none }}"
-                # selected_port 는 정수 — checked_ports([5985,5986]) / Linux SSH 경로(22) /
-                # precheck 모듈(int) 과 타입 일관. 구: 문자열 "5986" (2026-06-30 실측 불일치).
                 selected_port:     "{{ ansible_port | default(5986) | int }}"
-                # 2026-08-10 (B-4): PLAY 1 은 5986 을 먼저 시도하고 성공하면 **거기서 멈춘다**
-                # (:49-50 의 when: _probe_winrm_https is failed). 따라서 5986 으로 붙었으면
-                # 검사한 포트는 [5986] 하나뿐이고, 5985 로 붙었을 때만 [5986, 5985] 다.
-                # 종전 [5985, 5986] 은 순서도 내용도 실제와 달랐다.
                 checked_ports:     "{{ _precheck_raw.checked_ports | default([5986] if ((ansible_port | default(5986) | int) == 5986) else [5986, 5985]) }}"
-                # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
                 auth:              "{{ _os_attempts_meta | default({}) }}"
 
-        # ── meta & correlation ───────────────────────────────────────────
-        # 2026-09-03: envelope.vendor 는 common/tasks/normalize/resolve_vendor.yml 한 곳에서
-        # data.hardware.vendor → vendor_aliases.yml 정본으로 결정한다 (Linux/ESXi 와 동일 경로).
         - name: "windows | set output meta vars"
           ansible.builtin.set_fact:
             _out_target_type:       "os"
@@ -701,33 +500,28 @@
           ansible.builtin.set_fact:
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
+        - name: CHECKPOINT
+          ansible.builtin.debug:
+            msg: "{{ _output | to_json }}"
+
+        - name: "windows | addon"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/addon/run_addon.yml"
+          vars:
+            _addon_target: windows
+          when: lookup('env', 'ADDON_DIR') | length > 0
+
       rescue:
-        # Portal Grid 계약 — linux rescue 와 동일 취지 / 동일 근거 (위 주석 참조).
-        # 차이: 접속 포트는 PLAY 1 이 확정한 ansible_port(5986 우선), 검사 이력도 그에 따름.
         - name: "windows | rescue | Portal 표시용 diagnosis 보장"
           ansible.builtin.set_fact:
             _diagnosis: >-
-              {#- 2026-08-12 (C6): 자격 후보가 0건이면 _os_auth_ok 는 '관측한 적 없음' 인데도
-                  false 로 남아, 원격 명령이 실제로 실행된 뒤의 실패까지 '자격증명 확인'
-                  으로 라벨링됐다. 그 상태의 envelope 은 data 에 수집 결과가 들어 있으면서
-                  '대상에 접속할 수 없습니다' 라고 말한다. 섹션을 하나라도 수집했다는 것은
-                  원격 접속·인증이 통과했다는 직접 관측이므로 함께 본다. -#}
               {%- set ok = (_os_auth_ok | default(false) | bool)
                            or ((_all_sec_collected | default([]) | length) > 0) -%}
               {%- set port = ansible_port | default(5986) | int -%}
-              {#- 2026-08-12: credential set 자체를 열지 못한 경우를 분리한다. '자격을 실어
-                  보냈는데 통하지 않았다'(AUTH_PROBE_FAILED)와 '보낼 자격이 없었다'는 운영자의
-                  조치가 다르다 (대상 계정 점검 vs vault 배치 점검). stage 는 auth 를 유지한다 —
-                  stage 는 원인이 아니라 멈춘 위치이고(CLAUDE.md §9) 멈춘 곳은 자격증명 단계다.
-                  auth_success 는 그대로 null 이다 (미시도 — false 는 명시적 거부를 뜻한다). -#}
               {%- set lo = _cred_load_outcome | default('') -%}
               {%- set cred_na = (not ok)
                                 and (lo in ['not_resolved', 'credential_set_missing',
                                             'credential_set_undecryptable']) -%}
-              {#- 2026-09-21: 문장은 원인별 카탈로그 키로 고른다 (common/vars/failure_reasons.yml).
-                  위치 폴더는 있는데 이 OS 종류 파일만 없으면 '계정 없음', 폴더도 없으면 'Vault 없음'.
-                  계정 0개(empty_accounts)는 계정 없이 접속을 **시도한 뒤** 실패한 것이라 code 는
-                  AUTH_PROBE_FAILED 를 유지하고 문장만 '계정 없음' 으로 알린다 (SSH 키 경로 보존). -#}
               {%- if ok -%}
                 {%- set reason_key = 'gather_after_auth' -%}
               {%- elif (_cred_reason | default('')) == 'unknown_location' -%}
@@ -766,7 +560,6 @@
                                   is mapping) else {})} }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
-        # 2026-09-03 (B-36): 예외 전에 확정한 제조사를 버리지 않는다 — 같은 resolve_vendor 경로.
         - name: "windows | rescue | resolve vendor"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/resolve_vendor.yml"
@@ -779,9 +572,6 @@
             _fail_sec_supported:    "{{ ((_selected_adapter | default({})).capabilities | default({})).sections_supported
                                         | default(['system','hardware','cpu','memory','storage','network','users']) }}"
             _fail_error_section:    "windows_gather"
-            # 2026-08-11 (Phase 6-B): raw 예외 문자열. errors[].message 가 아니라
-            # **errors[].detail** 로 들어간다 (build_failed_output.yml). 사용자 문장은
-            # diagnosis.failure_reason 을 그대로 쓴다.
             _fail_error_message:    "[task: {{ ansible_failed_task.name | default('unknown') }}] {{ ansible_failed_result.msg | default('Windows 수집 예외') }}"
 
         - name: "windows | rescue | build_failed_output"
@@ -793,9 +583,6 @@
             _output: "{{ _output | combine({'schema_version': '1'}) }}"
 
       always:
-        # rule 13 R5 / rule 20 R1: 호출자는 13 필드 envelope을 보장받음. _output 미생성 시도 13 필드 모두 채운다.
-        # 2026-09-03 (B-01/B-04): hostname 은 IP 로 대체하지 않는다(null). sections/meta/correlation/data 는
-        #   rescue 경로(build_failed_output.yml)와 같은 shape — 호출자가 실패 종류에 따라 다른 모양을 보지 않는다.
         - name: OUTPUT
           ansible.builtin.debug:
             msg: "{{ (_output | default({

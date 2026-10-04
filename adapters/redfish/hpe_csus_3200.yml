@@ -1,140 +1,48 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
-# Vendor: HPE / Hewlett Packard Enterprise
-# Model: HPE Compute Scale-up Server 3200 (CSUS 3200) — 4-socket × 1~4 chassis (최대 16-socket)
-#        Mission-critical x86 (Intel Xeon SP), DDR5, 2023+ 출시
-# Firmware: RMC (RackManager) 1.75.108 (실측 2026-06-15 4노드 캡처) — RedfishVersion 1.19.0
-#           ※ 구 web-sources 추정 "RMC 3.x~4.x" 는 오류였음 — 실 RMC 펌웨어는 1.x 대 (1.75.108).
-# Origin: 2026-06-15 사이트 실 4노드 미러 캡처(1차 권위) + HPE 공식 docs / DMTF Redfish(보조)
-# Last sync: 2026-06-15 (실 4노드 미러 캡처 + replay_full_mirror.py 오프라인 재생 검증)
-#            evidence: tests/evidence/2026-06-15-hpe-csus3200-mirror-audit.md (19건 fix, 5-round 수렴)
-# Lab: 상설 lab 부재. 단 2026-06-15 사이트 실 4노드(IP 10.173.22.{101,102,80,91}, 노드당 490~637 리소스)
-#      1회 read-only 미러 캡처 + replay 오프라인 재생으로 라이브러리 데이터 정확성 검증 완료.
-#      (1회 스냅샷 한계: 쓰기/Action·펌웨어 업그레이드 후 응답 미포함 — docs/25)
-# Tested against: HPE Compute Scale-up Server 3200 실 4노드 — RMC fw 1.75.108 / RedfishVersion 1.19.0 /
-#      ServiceRoot.Product="Compute Scale-up Server 3200"(실측 확인) / Systems/Partition0(실측 확인) /
-#      Oem #HpeH3Npar·#HpeH3Chassis(실측 확인 — 구 Superdome PartitionInfo/FlexNodeInfo 추정 폐기)
-# Notes:
-#   - HPE 공식 자료 명시: "built on the proven HPE Superdome Flex architecture"
-#     → Superdome Flex 후속 / 동일 RMC 관리 모델 (실측 확인). 단 OEM 구조는 동일하지 않음:
-#       Oem.Hpe namespace 하위지만 CSUS 는 #HpeH3Npar / #HpeH3Chassis / #HpeH3ManagerRmc 전용 type
-#       (iLO 의 평면 Oem.Hpe / Superdome 의 PartitionInfo·FlexNodeInfo 와 구조 상이 — 2026-06-15 실측).
-#   - 관리 구조 = RMC (Rack Management Controller) primary + PDHC (per-chassis) + RMP (redundancy)
-#   - RMC Redfish API 표준 지원 — HPE OneView profile + 표준 Redfish 동시
-#   - Multi-partition (nPAR) — Superdome Flex 상속. cycle 2026-05-29 이후 전 partition 수집
-#     (gather_systems_multi). top-level data.* 는 Partition0 representative, 전 partition 은 data.multi_node.
-#   - 4-socket × 1~4 chassis 모듈식. 캐비닛 4개까지 단일 시스템 결합.
-#   - DDR5 128 GB DIMM 기준 128 GB ~ 32 TB shared memory.
-#   - Oem.Hpe namespace 동일 → HPE 공통 OEM tasks 재사용 (collect_oem.yml / normalize_oem.yml).
-#     model regex 확장: (?i)Superdome|Flex|Compute Scale-up|CSUS — Additive only (rule 92 R2).
-#   - vault profile: hpe (별도 vault 불필요 — 사용자 명시 승인 시 향후 분리).
-# source: https://cdrdv2-public.intel.com/792357/FAQ%20-%20HPE%20Compute%20Scale-up%20Server%203200.pdf
-#         (HPE Compute Scale-up Server 3200 FAQ — RMC + 표준 Redfish API 명시)
-# source: https://www.hpe.com/psnow/doc/a50009596enw
-#         (HPE Compute Scale-up Server 3200 architecture and RAS — "built on the proven HPE Superdome Flex architecture")
-# source: https://buy.hpe.com/us/en/compute/mission-critical-x86-servers/compute-scale-up-servers/compute-scale-up-servers/hpe-compute-scale-up-server-3200/p/1014774076
-#         (HPE store 제품 페이지 — 4-socket 모듈 / DDR5 / Xeon SP 사양)
-# source: https://servermanagementportal.ext.hpe.com/
-#         (HPE Server Management Portal — RMC Redfish API 표준 reference)
-# source: https://support.hpe.com/hpesc/public/docDisplay?docId=sd00001798en_us
-#         (HPE Compute Scale-up Server 3200 & Superdome Flex 공통 support 영역)
-# source: https://redfish.dmtf.org/schemas/DSP0266_1.15.0.html
-#         (Redfish DMTF Specification v1.15 — 표준 schema)
-# source: https://hewlettpackard.github.io/ilo-rest-api-docs/ilo5/
-#         (iLO 5 API Reference — Oem.Hpe namespace reference, Superdome 공유)
-# DRIFT 추적: Manufacturer string / ServiceRoot.Product / RMC firmware version 사이트 실측 시 정정 가능
-# cycle 2026-05-29 (hba-ib-csus / ADR-2026-05-29): 전 공통 섹션 수집 완성.
-#   - 전 Partition 순회 + per-partition cpu/memory/storage/network canonical 정규화
-#     (구: Members[0] 한계 + per-partition raw/빈). gather_systems_multi normalize.
-#   - storage.hbas FC HBA 는 Chassis NetworkAdapters/NetworkDeviceFunctions PortProtocol=FC
-#     기반 분류 (P1 dead-code fix). Superdome Flex Grid (UPI/ASIC) 는 IB 아님 → infiniband=[].
-#   - baseline (schema/baseline_v1/hpe_csus_3200_baseline.json) 현실 mock 으로 전면 채움.
-#   source: HPE Superdome Flex Admin Guide P/N 10-192008-Q123 + Marvell SN1610Q FC HBA + DMTF.
-# cycle 2026-06-09 (ADR-2026-06-09): CSUS 3200 Redfish 모델 검수 → 누락 5종 Additive 추가.
-#   - partitions[].boot (Systems.Boot 부팅 순서) / chassis[].thermal (Chassis/Thermal +
-#     ThermalSubsystem fallback) / managers[].log_services (Managers/LogServices) /
-#     multi_node.composition (CompositionService + ResourceBlocks — 각 RB ↔ chassis) /
-#     multi_node.fabrics (Fabrics + FlexGrid Switches/Endpoints — NUMAlink).
-#   - 모두 data.multi_node 내부 (envelope 13 필드 / 기존 9 section path 변경 0 — rule 92 R2).
-#   source: DMTF DSP0266 (Boot/Thermal/LogService/CompositionService/ResourceBlock/Fabric/
-#     Switch/Endpoint) + HPE CSUS 3200 Administration Guide (nPartition=ResourceBlock 조합)
-#     + Superdome Flex 상속. lab 부재 — fabric_type/RMC LogService ID 사이트 실측 정정 의무.
-# cycle 2026-06-15 (실 4노드 미러 캡처 검수 / tests/evidence/2026-06-15-hpe-csus3200-mirror-audit.md):
-#   - 실 장비 1회 캡처(redfish_full_mirror.py) + replay 재생으로 라이브러리 19건 fix (CSUS-R1~R18 + FC1/2 + MEM-01).
-#     chassis 오선택 / FC HBA WWPN / power telemetry / Ethernet 분류 / system.oem(#HpeH3Npar) /
-#     chassis.oem(#HpeH3Chassis) 등 — 전부 raw 1:1 충실 + Additive. pytest 1206 passed.
-#   - adapter 정정(본 파일): Firmware 실측(1.75.108) / Lab(1회 캡처) / OEM(#HpeH3*) 메타 최신화 +
-#     firmware_patterns 에 실 1.x 추가(Additive — 단 adapter 선택 시 facts.firmware 는 빈값이라 휴면).
-#   - 실측 adapter 선택 검증(tests/redfish-probe/verify_adapter_selection.py): 4노드 전부 redfish_hpe_csus_3200
-#     선택(score=102545) — facts.firmware 빈값(CSUS ServiceRoot 에 iLO식 Oem.Hpe.Manager 부재)이라
-#     firmware_patterns 휴면, model_patterns + priority(102>iLO6 100)로 정상 선택.
-#   - 잔여(gated): baseline JSON 실측 교체(Ansible 환경 필요) / collect_oem.yml dead(라이브러리가 직접 수집) — NEXT_ACTIONS.
-# Next action: baseline 실측 교체(Ansible control node) + collect_oem.yml 정리 — NEXT_ACTIONS.md 등재
-# ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_csus_3200
 channel: redfish
 priority: 102
-# priority 차등 (rule 12 R2 일관성) — cycle 2026-06-04 (HP CSUS 3200 사이트 사고) 갱신:
-#   iLO 7 (120) > CSUS 3200 (102) = Superdome Flex (101) > iLO 6 (100) > iLO 5 (90) > iLO 4 (50) > generic (10)
-#   변경 이유: hpe_ilo6 (priority=100) 은 model_patterns 부재라 절대 실격되지 않음 → 구 CSUS(96) 가
-#     모델("Compute Scale-up Server 3200")을 매치해도 priority 로 패배 (사이트 실측: vendor=hp 로 오선택).
-#     scale-up 2 종을 iLO 6(100) 위로 올려 모델 매치가 firmware-only catch-all 을 이기게 함.
-#   정상 ProLiant 는 scale-up model_patterns 미매치 → 실격되어 iLO 5/6/7 자동 선택 (무회귀 — 검증 C1).
-#   Superdome Flex (101) ↔ CSUS 3200 (102): 모델 regex 분리 (Flex 는 "Superdome Flex", CSUS 는 "Compute Scale-up Server 3200").
-#   사용자 승인 2026-06-04. ADR-2026-06-04-csus-adapter-priority.
 
 match:
   vendor: ["HPE", "Hewlett Packard Enterprise"]
-  # Product / Manager.Model 시그니처 — HPE 공식 명시 "HPE Compute Scale-up Server 3200" / "CSUS 3200"
   model_patterns:
     - "^Compute Scale-up Server 3200.*"
     - "^HPE Compute Scale-up Server.*3200.*"
     - ".*Compute Scale-up Server 3200.*"
-    - ".*CSUS.*3200.*"   # 약어 표기 (사이트 / 일부 BMC 응답 대비)
-  # 펌웨어: RMC (RackManager) — 실측 1.75.108 (2026-06-15 4노드 캡처). 구 추정 3.x/4.x 보존(Additive).
-  #   ※ adapter 선택 시점 facts.firmware 는 빈값(CSUS ServiceRoot 에 iLO식 Oem.Hpe.Manager[].ManagerFirmwareVersion
-  #     부재 — 2026-06-15 실측) → firmware_patterns 는 실 선택에서 휴면. model_patterns + priority 가 결정.
-  #     본 패턴은 미래에 firmware fact 가 채워질 경우의 오실격 방어용 — 실 1.x 를 추가해 1.75.x 가 disqualify 안 되게.
+    - ".*CSUS.*3200.*"
   firmware_patterns:
-    - "^1\\.[0-9]+\\..*"     # RMC 1.x — 실측 1.75.108 (2026-06-15 4노드 캡처)
-    - "^[34]\\.[0-9]+\\..*"  # RMC 3.x / 4.x — 구 web-sources 추정 보존 (Additive, rule 92 R2)
+    - "^1\\.[0-9]+\\..*"
+    - "^[34]\\.[0-9]+\\..*"
 
 capabilities:
   sections_supported:
-    - system     # /Systems/Partition<N> — 전 partition 수집 (cycle 2026-05-29), top-level data.* 는 Partition0 representative
-    - hardware   # /Chassis/<id> — RMC aggregation (Base + Expansion chassis 최대 4)
-    - bmc        # /Managers/<RMC_id> — RMC primary (per-chassis PDHC 는 보조)
-    - cpu        # Systems.Processors (Intel Xeon SP)
-    - memory     # Systems.Memory (DDR5, 128 GB DIMM 표준)
-    - storage    # Systems.Storage + Volumes (표준 Redfish)
-    - network    # Systems.EthernetInterfaces
-    - firmware   # UpdateService — complex/nPar firmware bundles 포함 (raw passthrough — Superdome Flex 상속)
-    - power      # Chassis.PowerSubsystem (DMTF 신 schema) → Power (legacy fallback)
-  # users (AccountService) — sections.yml channels=[os] 정의 따라 Redfish 채널 미해당. capabilities 명시 안 함.
+    - system
+    - hardware
+    - bmc
+    - cpu
+    - memory
+    - storage
+    - network
+    - firmware
+    - power
 
 collect:
   strategy: standard_only
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  # HPE 공통 OEM tasks 재사용 — Oem.Hpe namespace 동일 + PartitionInfo / FlexNodeInfo / GlobalConfiguration 상속.
-  # model regex 확장으로 CSUS 3200 분기 활성화 (Additive — collect_oem.yml Superdome/CSUS OEM 블록).
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  # cycle 2026-05-29: 전 Partition 수집 + per-partition canonical 정규화 완료
-  # (구 "첫 Partition0 만 수집" 한계 해소 — gather_systems_multi). data.multi_node.partitions[]
-  # 각 entry 가 cpu/memory/storage/network 정규화 결과 보유. top-level data.* 는 Partition0 representative.
 
 credentials:
-  profile: "hpe"  # 2026-08-12: 더 이상 vault 선택에 쓰이지 않는다 (Phase B 에서 제거 예정)
+  profile: "hpe"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/hpe.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: hpe_fallback, role: recovery }
     - { vault_label: hpe_current,  role: recovery }
     - { vault_label: hpe_factory,  role: recovery }
 
 auth:
-  preferred: [session, basic]  # RMC 표준 Redfish auth — Superdome Flex 와 동일
+  preferred: [session, basic]
 
 graceful_degradation:
   on_section_fail: continue
@@ -142,23 +50,21 @@ graceful_degradation:
   critical_sections: [system, hardware, bmc]
   optional_sections: [firmware, power, storage, network]
 
-# CSUS 3200 특이사항 (lab 부재 — web sources 추정. 사이트 실측 시 정정)
 vendor_notes:
-  multi_partition: true              # nPAR — 전 partition 수집 (cycle 2026-05-12 ADR-2026-05-12)
-  multi_node_support: true           # cycle 2026-05-12 — _collect_multi_node_topology 활성
-  systems_id_pattern: "Partition*"   # /redfish/v1/Systems/Partition0 (실측 확인 2026-06-15 4노드)
-  manager_layout: "rmc_primary"      # RMC = primary AccountService host. PDHC = per-chassis 보조 (실측 확인).
-  rmc_firmware_min: "1.0"            # 실측 1.75.108 (2026-06-15) — RMC 1.x 대. 구 추정 3.0 정정 (문서용, 코드 미소비)
-  npar_firmware_bundles: true        # complex/nPar firmware bundles (Superdome Flex 상속)
-  socket_module: "4-socket"          # 4-socket × 1~4 chassis 모듈식 (최대 16-socket)
-  memory_dimm: "DDR5"                # 128 GB DIMM 표준, 128 GB ~ 32 TB shared
-  oneview_supported: true            # HPE OneView profile (서버 프로파일 + firmware/BIOS 관리)
-  # cycle 2026-06-09 (ADR-2026-06-09): 확장 컴포넌트 수집 플래그 (설명 모델 검수)
-  composition_service: true          # CompositionService + ResourceBlocks (nPartition 조합 구조)
-  fabrics_flexgrid: true             # Fabrics + FlexGrid (NUMAlink, Switches+Endpoints)
-  chassis_thermal: true              # Chassis/Thermal (+ ThermalSubsystem fallback)
-  manager_log_services: true         # Managers/LogServices (RMC Services/Logs)
-  partition_boot_order: true         # Systems.Boot 부팅 순서 (per-nPartition)
+  multi_partition: true
+  multi_node_support: true
+  systems_id_pattern: "Partition*"
+  manager_layout: "rmc_primary"
+  rmc_firmware_min: "1.0"
+  npar_firmware_bundles: true
+  socket_module: "4-socket"
+  memory_dimm: "DDR5"
+  oneview_supported: true
+  composition_service: true
+  fabrics_flexgrid: true
+  chassis_thermal: true
+  manager_log_services: true
+  partition_boot_order: true
 
 diagnosis:
   protocol_name: redfish

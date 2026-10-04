@@ -1,23 +1,4 @@
 ---
-# common/tasks/normalize/init_fragments.yml
-#
-# fragment 누적 변수를 초기화한다.
-# ※ 빈 데이터 뼈대(data skeleton)는 아래 세 파일에 복제되어 있음.
-#   구조 변경 시 반드시 세 파일 모두 동기화할 것:
-#     - common/tasks/normalize/init_fragments.yml      (이 파일)
-#     - common/tasks/normalize/build_empty_data.yml
-#     - common/tasks/normalize/build_failed_output.yml
-# gather 의 첫 번째 태스크(preflight 직후)에서 반드시 호출해야 한다.
-#
-# 출력 변수:
-#   _merged_data          : dict  — data 병합 누적 공간 (빈 뼈대)
-#   _all_sec_supported    : list  — 지원 섹션 누적
-#   _all_sec_collected    : list  — 수집 성공 섹션 누적
-#   _all_sec_failed       : list  — 수집 실패 섹션 누적
-#   _all_sec_unsupported  : list  — 지원되지 않는 섹션 누적 (cycle 2026-05-01)
-#                                   - redfish 404, OS 명령 부재, ESXi API 미지원
-#                                   - errors[] 노이즈 차단 + sections.{name}='not_supported'
-#   _all_errors           : list  — errors 누적
 
 - name: "normalize | validate REPO_ROOT"
   ansible.builtin.assert:
@@ -31,8 +12,6 @@
 - name: "normalize | init_fragments | timestamp"
   ansible.builtin.set_fact:
     _started_at:    "{{ now(utc=true).isoformat() + 'Z' }}"
-    # 2026-04-29 fix B50: duration_ms 1초 단위 절삭 — now(fmt='%s')는 정수 초만 반환.
-    # microsecond 까지 보존하기 위해 ISO 타임스탬프 (timestamp() float) 로 저장.
     _started_epoch: "{{ '%.6f' | format(now(utc=true).timestamp()) }}"
   no_log: true
 

@@ -1,31 +1,188 @@
 ---
-# os-gather/tasks/windows/gather_network.yml → data.network fragment
-#
-# 2026-09-03 (OS/ESXi 전수 검수 후속):
-#   - interfaces[].id = 어댑터 이름 (Linux/ESXi 의 devname 과 같은 축). 설명 문자열은 description 으로 (B-29).
-#   - MAC 은 normalize_mac (소문자 colon) — 종전 "00-50-56-.." 대시·대문자 (B-26).
-#   - IPv6 주소를 addresses[] 에 family=ipv6 로 함께 낸다 (Linux 와 같은 shape) (B-29).
-#   - adapters[] 를 채운다 (Get-NetAdapter -Physical + HardwareInfo + PnP 제조사) — Linux 와 같은 키 (B-29).
-#   - 인터페이스가 하나도 없으면 섹션 failed + 사유 (B-12).
 
-- name: "windows | network | dns and gateway"
+- name: "windows | network | snapshot (routes + adapters + addresses + dns)"
+  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
-    $gw  = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
-            Sort-Object RouteMetric | Select-Object -First 1).NextHop
-    $gw6 = (Get-NetRoute -DestinationPrefix '::/0' -ErrorAction SilentlyContinue |
-            Sort-Object RouteMetric | Select-Object -First 1).NextHop
-    if ($gw6 -and ($gw6 -eq '::')) { $gw6 = $null }
-    $dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
-             Where-Object { $_.ServerAddresses } |
-             ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
-    [PSCustomObject]@{
-      gw  = $gw
-      gw6 = $gw6
-      dns = $dns
-    } | ConvertTo-Json -Compress
-  register: _w_net_meta_raw
+    function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
+      $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
+      $Doc[$Name] = $c
+      try { $null = & $Body $c }
+      catch { $c.ok = $false; $c.error = [string]$_.Exception.Message; if (-not $c.error) { $c.error = [string]$_ } }
+    }
+    $doc = [ordered]@{}
+    $routes = $null
+    $na = $null
+    $dns = $null
+    Invoke-SeComponent $doc 'read_routes' {
+      param($c)
+      $script:routes = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0','::/0' -ErrorAction SilentlyContinue)
+    }
+    Invoke-SeComponent $doc 'read_adapters' {
+      param($c)
+      $script:na = @(Get-NetAdapter -ErrorAction SilentlyContinue)
+    }
+    Invoke-SeComponent $doc 'read_dns' {
+      param($c)
+      $script:dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
+                      Where-Object { $_.ServerAddresses } |
+                      ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
+    }
+    $def4 = $routes | Where-Object { $_.DestinationPrefix -eq '0.0.0.0/0' } | Sort-Object RouteMetric | Select-Object -First 1
+    $def6 = $routes | Where-Object { $_.DestinationPrefix -eq '::/0' } | Sort-Object RouteMetric | Select-Object -First 1
+    $naByIdx = @{}
+    foreach ($a in @($na)) { if ($null -ne $a) { $naByIdx[[string]$a.InterfaceIndex] = $a } }
+    Invoke-SeComponent $doc 'meta' {
+      param($c)
+      $gw  = $def4.NextHop
+      $gw6 = $def6.NextHop
+      if ($gw6 -and ($gw6 -eq '::')) { $gw6 = $null }
+      $c.data = [PSCustomObject]@{
+        gw  = $gw
+        gw6 = $gw6
+        dns = $dns
+      }
+    }
+    Invoke-SeComponent $doc 'interfaces' {
+      param($c)
+      $m = $doc['meta']
+      $gw  = if ($m.data -and $m.data.gw)  { [string]$m.data.gw }  else { '' }
+      $gw6 = if ($m.data -and $m.data.gw6) { [string]$m.data.gw6 } else { '' }
+      $primary_idx = $def4.InterfaceIndex
+      Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
+      Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -ne '::1' } |
+      ForEach-Object {
+        $addr    = $_
+        $adapter = $naByIdx[[string]$addr.InterfaceIndex]
+        $isGw    = [bool]($adapter -and ($adapter.InterfaceIndex -eq $primary_idx))
+        $fam     = if ([string]$addr.AddressFamily -eq 'IPv6') { 'ipv6' } else { 'ipv4' }
+        [void]$c.rows.Add([PSCustomObject]@{
+          id              = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
+          name            = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
+          description     = $(if ($adapter) { [string]$adapter.InterfaceDescription } else { $null })
+          interface_index = [int]$addr.InterfaceIndex
+          mac             = $(if ($adapter) { [string]$adapter.MacAddress } else { $null })
+          mtu             = $(if ($adapter) { $adapter.MtuSize } else { $null })
+          speed_mbps      = $(if ($adapter -and $adapter.Speed) { [math]::Round($adapter.Speed / 1000000, 0) } else { $null })
+          status          = $(if ($adapter) { [string]$adapter.Status } else { $null })
+          is_primary      = $isGw
+          family          = $fam
+          address         = [string]$addr.IPAddress
+          prefix          = [int]$addr.PrefixLength
+          gateway         = $(if ($isGw) { if ($fam -eq 'ipv6') { $gw6 } else { $gw } } else { $null })
+        })
+      }
+    }
+    Invoke-SeComponent $doc 'driver_map' {
+      param($c)
+      if (-not $doc['read_adapters'].ok) { throw $doc['read_adapters'].error }
+      $na | Where-Object { $_.Status -eq 'Up' -or $_.MediaConnectionState -eq 'Connected' } | ForEach-Object {
+        [void]$c.rows.Add([PSCustomObject]@{
+          name           = $_.Name
+          driver         = $_.DriverDescription
+          driver_version = $_.DriverVersion
+          vlan_id        = $_.VlanID
+          bond_master    = $null
+        })
+      }
+    }
+    Invoke-SeComponent $doc 'adapters' {
+      param($c)
+      $ErrorActionPreference = 'SilentlyContinue'
+      $hw = @{}
+      try {
+        foreach ($h in @(Get-NetAdapterHardwareInfo)) {
+          $pci = $null
+          if ($null -ne $h.Bus -and $null -ne $h.Device -and $null -ne $h.Function) {
+            $pci = ('{0:x4}:{1:x2}:{2:x2}.{3}' -f [int]$h.Segment, [int]$h.Bus, [int]$h.Device, [int]$h.Function)
+          }
+          $hw[[string]$h.Name] = $pci
+        }
+      } catch { }
+      foreach ($a in @(Get-NetAdapter -Physical)) {
+        $mfr = $null
+        try {
+          if ($a.PnPDeviceID) {
+            $pnp = Get-PnpDevice -InstanceId $a.PnPDeviceID
+            if ($pnp -and $pnp.Manufacturer) { $mfr = [string]$pnp.Manufacturer }
+          }
+        } catch { }
+        if (-not $mfr -and $a.DriverProvider -and ([string]$a.DriverProvider -ne 'Microsoft')) { $mfr = [string]$a.DriverProvider }
+        [void]$c.rows.Add([PSCustomObject]@{
+          name         = [string]$a.Name
+          model        = [string]$a.InterfaceDescription
+          manufacturer = $mfr
+          driver       = [string]$a.DriverDescription
+          driver_version = [string]$a.DriverVersion
+          mac          = [string]$a.MacAddress
+          pci          = $(if ($hw.ContainsKey([string]$a.Name)) { $hw[[string]$a.Name] } else { $null })
+          status       = [string]$a.Status
+          speed_mbps   = $(if ($a.Speed) { [math]::Round($a.Speed / 1000000, 0) } else { $null })
+        })
+      }
+    }
+    try { $doc | ConvertTo-Json -Depth 8 -Compress }
+    catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }
+  register: _w_net_doc_raw
   changed_when: false
   failed_when: false
+  no_log: true
+
+- name: "windows | network | parse document"
+  ansible.builtin.set_fact:
+    _w_net_doc: >-
+      {{ (_w_net_doc_raw.stdout | default('') | trim | from_json)
+         if (_w_net_doc_raw.stdout | default('') | trim | length > 0) else {} }}
+  no_log: true
+
+- name: "windows | network | split document"
+  ansible.builtin.set_fact:
+    _w_net_meta_raw: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set c = d.get('meta') if (d.get('meta') is mapping) else {} -%}
+      {%- set v = c.get('data') -%}
+      {%- set s = (v | to_json) if (v is mapping) else '' -%}
+      {%- set out = {'stdout': s, 'stdout_lines': ([s] if s else [])} -%}
+      {%- if _w_net_doc_raw.rc is defined -%}
+        {%- set r = _w_net_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
+    _w_iface_raw: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set c = d.get('interfaces') if (d.get('interfaces') is mapping) else {} -%}
+      {%- set rows = c.get('rows') -%}
+      {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+      {%- set lines = rows | map('to_json') | list -%}
+      {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+      {%- if _w_net_doc_raw.rc is defined -%}
+        {%- set r = _w_net_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
+    _w_drvmap_raw: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set c = d.get('driver_map') if (d.get('driver_map') is mapping) else {} -%}
+      {%- set rows = c.get('rows') -%}
+      {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+      {%- set lines = rows | map('to_json') | list -%}
+      {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+      {%- if _w_net_doc_raw.rc is defined -%}
+        {%- set r = _w_net_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
+    _w_adapters_raw: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set c = d.get('adapters') if (d.get('adapters') is mapping) else {} -%}
+      {%- set rows = c.get('rows') -%}
+      {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+      {%- set lines = rows | map('to_json') | list -%}
+      {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+      {%- if _w_net_doc_raw.rc is defined -%}
+        {%- set r = _w_net_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
   no_log: true
 
 - name: "windows | network | parse meta"
@@ -38,44 +195,6 @@
       {%- endif -%}
   no_log: true
 
-- name: "windows | network | interfaces"
-  ansible.windows.win_shell: |
-    # production-audit (2026-04-29): primary InterfaceIndex 1회 조회 (기존: IP마다 Get-NetRoute 재호출 — O(N))
-    # + interface_index 출력 → 그룹핑 키로 사용 (MAC null/이름 변동 시 NIC가 분리되는 버그 차단)
-    $gw = '{{ _w_norm_net_meta.gw | default("", true) }}'
-    $gw6 = '{{ _w_norm_net_meta.gw6 | default("", true) }}'
-    $primary_idx = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
-                    Sort-Object RouteMetric | Select-Object -First 1).InterfaceIndex
-    Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -ne '::1' } |
-    ForEach-Object {
-      $addr    = $_
-      $adapter = Get-NetAdapter -InterfaceIndex $addr.InterfaceIndex -ErrorAction SilentlyContinue
-      $isGw    = [bool]($adapter -and ($adapter.InterfaceIndex -eq $primary_idx))
-      $fam     = if ([string]$addr.AddressFamily -eq 'IPv6') { 'ipv6' } else { 'ipv4' }
-      [PSCustomObject]@{
-        id              = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
-        name            = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
-        description     = $(if ($adapter) { [string]$adapter.InterfaceDescription } else { $null })
-        interface_index = [int]$addr.InterfaceIndex
-        mac             = $(if ($adapter) { [string]$adapter.MacAddress } else { $null })
-        mtu             = $(if ($adapter) { $adapter.MtuSize } else { $null })
-        speed_mbps      = $(if ($adapter -and $adapter.Speed) { [math]::Round($adapter.Speed / 1000000, 0) } else { $null })
-        status          = $(if ($adapter) { [string]$adapter.Status } else { $null })
-        is_primary      = $isGw
-        family          = $fam
-        address         = [string]$addr.IPAddress
-        prefix          = [int]$addr.PrefixLength
-        gateway         = $(if ($isGw) { if ($fam -eq 'ipv6') { $gw6 } else { $gw } } else { $null })
-      } | ConvertTo-Json -Compress
-    }
-  register: _w_iface_raw
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-# Round 16: JSON null status(미surface adapter)는 'is defined' 통과 → None|lower='none' 누설.
-#           truthy 체크로 None/''/undefined 모두 'unknown' fallback (memory/cpu fix 동일 class).
 - name: "windows | network | normalize interfaces"
   ansible.builtin.set_fact:
     _w_norm_interfaces: >-
@@ -83,18 +202,15 @@
       {%- for line in (_w_iface_raw.stdout_lines | default([])) -%}
         {%- if line | trim -%}
           {%- set n = line | from_json -%}
-          {# production-audit: InterfaceIndex로 그룹핑 — 단일 NIC의 multi-IP가 분리되지 않도록 #}
           {%- set key = (n.interface_index | default(n.mac | default(n.name))) | string -%}
           {%- set fam = (n.family | default('ipv4')) | lower -%}
           {%- set p = n.prefix | default(0) | int -%}
           {%- set mask = none -%}
           {%- if fam == 'ipv4' and p > 0 and p <= 32 -%}
-            {# windows-audit (2026-04-29): prefix_length → subnet_mask 자동 계산 (Linux 일관) #}
             {%- set bits = 4294967296 - (2 ** (32 - p)) -%}
             {%- set mask = '%d.%d.%d.%d' % ((bits // 16777216) % 256, (bits // 65536) % 256, (bits // 256) % 256, bits % 256) -%}
           {%- endif -%}
           {%- if fam == 'ipv6' -%}
-            {# Windows 는 link-local 에 zone index(%<ifindex>) 를 붙여 준다 — 주소 값이 아니므로 뗀다 (실측 build #190: fe80::...%23) #}
             {%- set a6 = ((n.address | default('')) | string).split('%')[0] | lower -%}
             {%- set scope = 'link' if a6.startswith('fe80') else ('host' if a6 == '::1' else 'global') -%}
             {%- set addr = {
@@ -135,7 +251,6 @@
           {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
-      {# IPv4 주소를 앞에 (Linux 와 같은 정렬) #}
       {%- set out = [] -%}
       {%- for g in grouped.values() -%}
         {%- set a4 = g.addresses | selectattr('family', 'equalto', 'ipv4') | list -%}
@@ -144,27 +259,6 @@
         {%- set _ = out.append(g) -%}
       {%- endfor -%}
       {{ out }}
-  no_log: true
-
-# cycle-016 Phase P: Linux 와 일관 — driver_map 추가 + adapters
-- name: "windows | network | NIC driver map (Get-NetAdapter)"
-  ansible.windows.win_shell: |
-    Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -or $_.MediaConnectionState -eq 'Connected' } | ForEach-Object {
-      [PSCustomObject]@{
-        name           = $_.Name
-        driver         = $_.DriverDescription
-        driver_version = $_.DriverVersion
-        # driver_date 는 parse(_w_driver_map)에서 미사용(폐기) 필드였고, 값이 [string] 으로 올 때
-        # String.ToString('yyyy-MM-dd') 오버로드 예외 → ForEach 전체 중단 → driver_map 통째 []
-        # 였음 (LBFO 멀티플렉서가 string 반환, 2026-06-26 site 실측). canonical driver_map
-        # (=Linux: name/driver/vlan_id/bond_master)에 없는 필드라 수집 제거 (root cause 제거).
-        vlan_id        = $_.VlanID
-        bond_master    = $null
-      } | ConvertTo-Json -Compress
-    }
-  register: _w_drvmap_raw
-  changed_when: false
-  failed_when: false
   no_log: true
 
 - name: "windows | network | parse driver_map"
@@ -184,46 +278,6 @@
         {%- endif -%}
       {%- endfor -%}
       {{ out }}
-  no_log: true
-
-# 2026-09-03 (B-29): 물리 NIC 하드웨어 인벤토리 → network.adapters[] (Linux lspci 기반 adapters[] 와 같은 키)
-- name: "windows | network | physical adapters (hardware)"
-  ansible.windows.win_shell: |
-    $ErrorActionPreference = 'SilentlyContinue'
-    $hw = @{}
-    try {
-      foreach ($h in @(Get-NetAdapterHardwareInfo)) {
-        $pci = $null
-        if ($null -ne $h.Bus -and $null -ne $h.Device -and $null -ne $h.Function) {
-          $pci = ('{0:x4}:{1:x2}:{2:x2}.{3}' -f [int]$h.Segment, [int]$h.Bus, [int]$h.Device, [int]$h.Function)
-        }
-        $hw[[string]$h.Name] = $pci
-      }
-    } catch { }
-    foreach ($a in @(Get-NetAdapter -Physical)) {
-      $mfr = $null
-      try {
-        if ($a.PnPDeviceID) {
-          $pnp = Get-PnpDevice -InstanceId $a.PnPDeviceID
-          if ($pnp -and $pnp.Manufacturer) { $mfr = [string]$pnp.Manufacturer }
-        }
-      } catch { }
-      if (-not $mfr -and $a.DriverProvider -and ([string]$a.DriverProvider -ne 'Microsoft')) { $mfr = [string]$a.DriverProvider }
-      [PSCustomObject]@{
-        name         = [string]$a.Name
-        model        = [string]$a.InterfaceDescription
-        manufacturer = $mfr
-        driver       = [string]$a.DriverDescription
-        driver_version = [string]$a.DriverVersion
-        mac          = [string]$a.MacAddress
-        pci          = $(if ($hw.ContainsKey([string]$a.Name)) { $hw[[string]$a.Name] } else { $null })
-        status       = [string]$a.Status
-        speed_mbps   = $(if ($a.Speed) { [math]::Round($a.Speed / 1000000, 0) } else { $null })
-      } | ConvertTo-Json -Compress
-    }
-  register: _w_adapters_raw
-  changed_when: false
-  failed_when: false
   no_log: true
 
 - name: "windows | network | parse adapters"
@@ -252,23 +306,20 @@
       {{ out }}
   no_log: true
 
-# Teaming 수집 (LBFO + Switch Embedded Teaming). Teaming 없는 서버에서도 빈 [] 로 graceful.
 - name: "windows | network | teaming (LBFO + SET)"
+  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     $ErrorActionPreference = 'SilentlyContinue'
     function Emit($tag,$o){ if($o){ Write-Output ($tag + ' ' + ($o | ConvertTo-Json -Compress -Depth 4)) } }
     function Has($n){ return [bool](Get-Command $n -ErrorAction SilentlyContinue) }
-    # adapter 보조 맵 (name -> mac/status/speed) — team member NIC enrichment 용
     if (Has 'Get-NetAdapter') {
       foreach($a in @(Get-NetAdapter)){
-        # 2026-09-03 실측(build #190): 팀 멤버 NIC 는 이 맵의 MAC 이 그대로 나가므로 여기서 소문자 colon 으로 맞춘다
         Emit 'WADP' ([PSCustomObject]@{ name=$a.Name;
           mac=$(if($a.MacAddress){ ([string]$a.MacAddress).Replace('-',':').ToLower() } else { $null });
           status=[string]$a.Status;
           speed_mbps=$(if($a.Speed){ [math]::Round($a.Speed/1000000,0) } else { $null }) })
       }
     }
-    # LBFO Teaming (Get-NetLbfoTeam / Get-NetLbfoTeamMember) — 모듈 없는 SKU 는 graceful skip
     if (Has 'Get-NetLbfoTeam') {
       foreach($t in @(Get-NetLbfoTeam)){
         Emit 'LBFOTEAM' ([PSCustomObject]@{ name=$t.Name; teaming_mode=[string]$t.TeamingMode;
@@ -282,14 +333,12 @@
           admin_mode=[string]$m.AdministrativeMode })
       }
     }
-    # 팀 tNIC (Get-NetLbfoTeamNic) — 팀 위 VLAN(Linux bond0.100 대응). default tNIC 는 VlanID 없음(=팀 자체).
     if (Has 'Get-NetLbfoTeamNic') {
       foreach($tn in @(Get-NetLbfoTeamNic)){
         Emit 'LBFOTEAMNIC' ([PSCustomObject]@{ name=$tn.Name; team=[string]$tn.Team;
           vlan_id=$tn.VlanID; default=[bool]$tn.Default })
       }
     }
-    # Switch Embedded Teaming (Get-NetSwitchTeam / Get-NetSwitchTeamMember)
     if (Has 'Get-NetSwitchTeam') {
       foreach($s in @(Get-NetSwitchTeam)){
         Emit 'SETTEAM' ([PSCustomObject]@{ name=$s.Name;
@@ -306,25 +355,17 @@
   failed_when: false
   no_log: true
 
-# Teaming 토폴로지 정규화 (filter_plugins/network_topology.py — build_windows_network)
 - name: "windows | network | normalize teaming topology"
   ansible.builtin.set_fact:
     _w_net_topo: "{{ _w_norm_interfaces | build_windows_network(_w_teams_raw.stdout_lines | default([])) }}"
   no_log: true
 
-# cycle-016: network.summary grouping (speed_mbps 기준)
-# 2026-06-30: enriched _w_net_topo.interfaces 기준 + 팀 VLAN tNIC / 팀 member 제외.
-#   - VLAN tNIC(vlan_id 보유)은 부모 팀과 같은 물리 대역 공유 → 별도 NIC 로 세면 이중 카운트
-#     (site 10.100.64.120 실측: LabTeam1 + 'LabTeam1 - VLAN 100' 둘 다 20G / 같은 팀 LabTeam1).
-#   - team member 는 팀 aggregate(20G)에 이미 포함 → 중복 방지로 제외.
-#   field_dictionary: summary = 'NIC 그룹' → 논리 NIC 1개당 1회. (teaming 정규화 후 vlan_id/team_role 필요)
 - name: "windows | network | compute summary groups"
   ansible.builtin.set_fact:
     _w_net_summary: >-
       {%- set ns = namespace(groups=[], seen={}) -%}
       {%- for n in (_w_net_topo.interfaces | default([])) -%}
         {%- set sp = n.speed_mbps | default(none) -%}
-        {# VLAN tNIC(같은 물리 대역) / 팀 member(aggregate 중복) / speed 없는 NIC 제외 #}
         {%- if (n.vlan_id | default(none)) is none
                and (n.team_role | default('')) != 'member'
                and sp is not none and (sp | int) > 0 -%}
@@ -342,7 +383,6 @@
       {{ {'groups': ns.groups} }}
   no_log: true
 
-# driver_map[].bond_master 채움 (team member -> team 매핑; 비teamed 는 none 유지)
 - name: "windows | network | driver_map bond_master from teaming"
   ansible.builtin.set_fact:
     _w_driver_map_final: >-
@@ -374,7 +414,6 @@
         adapters:    "{{ _w_adapters | default([]) }}"
         ports:       []
         driver_map:  "{{ _w_driver_map_final | default(_w_driver_map | default([])) }}"
-        # bond/bridge 는 Windows 미해당(빈 []), teams 는 LBFO/SET (Additive — 기존 필드 불변)
         bonds:    "{{ _w_net_topo.bonds }}"
         bridges:  "{{ _w_net_topo.bridges }}"
         teams:    "{{ _w_net_topo.teams }}"

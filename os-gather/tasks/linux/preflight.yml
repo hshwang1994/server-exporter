@@ -1,22 +1,7 @@
 ---
-# os-gather/tasks/linux/preflight.yml
-#
-# Linux 호스트 사전 점검 — Python 버전 감지 + 명령 존재 확인
-# 모든 태스크는 ansible.builtin.raw 사용 (Python 불필요)
-#
-# 출력 변수:
-#   _l_python_mode    : str  — 'python_ok' | 'python_missing' | 'python_incompatible' | 'raw_forced'
-#   _l_python_path    : str  — Python 경로 (없으면 'none')
-#   _l_python_version : str  — Python 버전 문자열 (예: '3.9.16', 없으면 '')
-#   _l_python         : str  — setup 모듈이 사용할 Python 경로 (backward compat)
-#   _l_has_lsblk      : bool
-#   _l_has_dmi        : bool
-#   _l_has_last       : bool
-#   _l_has_lastlog    : bool
-#   _l_has_lscpu      : bool
-#   _l_has_ip         : bool
 
 - name: "linux | preflight | detect python + commands"
+  timeout: "{{ _os_task_timeout | default(120) }}"
   ansible.builtin.raw: |
     py_path="none"
     py_ver=""
@@ -63,12 +48,8 @@
       {%- elif py_ver is version('3.9', '>=') -%}python_ok
       {%- else -%}python_incompatible
       {%- endif -%}
-    # backward compat — setup 모듈의 ansible_python_interpreter 용
     _l_python: "{{ (_l_pf.PY_PATH | default('python3')) | trim }}"
-    # 2026-06-22 fix: adapter 선택용 distribution (os-release NAME — raw-safe, gather_system 전에 필요).
-    #   ansible_distribution 은 이 시점 미정의 + "RedHat"(공백X) 형식이라 패턴("Red Hat") 불일치 → os-release NAME 사용.
     _l_distro_name: "{{ (_l_pf.OS_NAME | default('')) | trim }}"
-    # 명령 존재 플래그
     _l_has_lsblk:   "{{ ((_l_pf.HAS_LSBLK    | default('0')) | trim) == '1' }}"
     _l_has_dmi:     "{{ ((_l_pf.HAS_DMIDECODE | default('0')) | trim) == '1' }}"
     _l_has_last:    "{{ ((_l_pf.HAS_LAST      | default('0')) | trim) == '1' }}"

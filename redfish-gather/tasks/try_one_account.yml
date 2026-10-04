@@ -1,27 +1,16 @@
 ---
-# redfish-gather/tasks/try_one_account.yml
-#
-# P1 (cycle 2026-04-28): 후보 계정 1개로 redfish_gather 시도.
-# 이미 성공(_rf_collect_ok=true)이면 skip — loop 흐름의 break 시뮬레이션.
-#
-# 입력:
-#   _try_account : { username, password, label, role }  (_rf_accounts 의 한 요소)
-#   _rf_ip       : 대상 BMC IP
-#   _rf_timeout  : timeout
-#
-# 출력 (성공 시 set):
-#   _rf_raw_collect       : redfish_gather 결과
-#   _rf_collect_ok        : bool
-#   _rf_used_account      : { username, label, role }  (password 미포함, 보안)
-#   _rf_used_account_role : str ('primary' | 'secondary' | 'recovery')
 
 - when: not (_rf_collect_ok | default(false) | bool)
   block:
 
+    - name: "redfish | try_account | mark attempt in flight"
+      ansible.builtin.set_fact:
+        _rf_attempt_seq: "{{ (_rf_attempt_seq | default(0) | int) + 1 }}"
+        _rf_attempt_id:  "collect-{{ ansible_loop.index | default(1) }}-{{ (_rf_attempt_seq | default(0) | int) + 1 }}"
+      no_log: true
+
     - name: "redfish | try_account | attempt"
-      # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 인자 전달 (Additive).
-      # adapter `vendor_notes.manager_layout` 정의 vendor (HPE CSUS 3200 / Superdome
-      # Flex) 만 멀티-노드 토폴로지 활성. 다른 vendor 는 빈 문자열 → 모듈이 None 처리.
+      timeout: "{{ _rf_task_timeout | default(600) }}"
       redfish_gather:
         bmc_ip:         "{{ _rf_ip }}"
         username:       "{{ _try_account.username | default('') }}"
@@ -29,6 +18,14 @@
         timeout:        "{{ _rf_timeout }}"
         verify_ssl:     false
         manager_layout: "{{ _rf_adapter_manager_layout | default('') }}"
+        deadline:       "{{ _rf_deadline | default(540) }}"
+        attempt:
+          evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"
+          id:           "{{ _rf_attempt_id }}"
+          build_id:     "{{ lookup('env', 'SE_BUILD_ID') }}"
+          event_uuid:   "{{ lookup('env', 'SE_EVENT_UUID') }}"
+          label:        "{{ _try_account.label | default('unlabeled') }}"
+          role:         "{{ _try_account.role | default('primary') }}"
       register:    _rf_attempt
       failed_when: false
       no_log: true
@@ -40,19 +37,9 @@
              (_rf_attempt.status | default('failed')) != 'failed' }}
       no_log: true
 
-    # 2026-08-11 (Phase 5-A 보정): 이 후보의 구조화 인증 관측을 누적한다.
-    #   - 새 요청을 만들지 않는다. 위 attempt 가 이미 받은 반환값만 읽는다.
-    #   - first_auth_status 는 **자격증명을 실은 첫 요청**의 정수 HTTP status 다.
-    #     인증이 통과한 뒤 하위 리소스에서 나온 401 은 여기에 담기지 않는다
-    #     (첫 요청이 200 이었다면 200 이 기록되고 덮어쓰지 않는다).
-    #   - timeout / TLS 오류처럼 status 를 못 받은 경우는 none 이 담긴다 = 원인 미확정.
-    # 2026-08-11 (Phase 6-B §6): 같은 관측을 **후보 역할과 짝지어** 한 번 더 쌓는다.
-    #   _rf_auth_statuses (정수 리스트) 는 site.yml 의 "후보 전원 401" 판정이 이미 쓰고
-    #   있으므로 형태를 바꾸지 않는다. 역할별 판정이 필요한 곳(공통계정 자동 정리 진입)은
-    #   이 _rf_auth_observations 를 본다. 후보 index 는 vault 편집으로 흔들리므로 쓰지 않는다.
-    #   status 는 정수 그대로다 — 문자열로 만들어 비교하지 않는다.
     - name: "redfish | try_account | record auth evidence"
       ansible.builtin.set_fact:
+        _rf_attempt_id: ''
         _rf_auth_statuses: >-
           {{ (_rf_auth_statuses | default([]))
              + [ ((_rf_attempt | default({}, true)).auth_evidence
@@ -64,15 +51,6 @@
                   'status': (((_rf_attempt | default({}, true)).auth_evidence
                               | default({}, true)).first_auth_status | default(none))} ] }}
 
-    # F49 (cycle 2026-05-01): _rf_used_account 에서 password 분리 저장.
-    # 기존: _rf_used_account 에 username/label/role 만 저장 (password 의도적 미저장 — 보안).
-    # 사고: account_service.yml 이 username 만으로 vault lookup → 같은 username 다중 password
-    #       (Dell root 4개 / HPE admin 2개 / Lenovo USERID 2개) 시 첫 entry 잡혀 password
-    #       mismatch → AccountService GET 401 → recovered=False (사용자 보고 사고).
-    # source: 사이트 실측 (Dell iDRAC — root 계정 중 한 entry 만 200, 나머지 3개 401).
-    #         자격증명 원문은 vault 파일에만 둔다 (2026-08-11 Phase 6-B 평문 제거).
-    # fix: _rf_used_account_password 별도 set_fact (no_log:true 로 console 노출 차단).
-    #      account_service.yml 에서 본 변수 직접 사용 → vault re-lookup 불필요.
     - name: "redfish | try_account | promote on success"
       when: _rf_attempt_ok | bool
       ansible.builtin.set_fact:
@@ -86,16 +64,6 @@
         _rf_used_account_password: "{{ _try_account.password | default('') }}"
       no_log: true
 
-    # cycle 2026-04-30: 실패 시 status / 첫 error 메시지를 advisory log에 노출 (디버깅 편의).
-    # password는 자동 redact 안 되므로 명시적 필드만 출력.
-    # 2026-08-12 (N41 / N51 / N52 / N65): 실패 후보의 근거를 **결과에 남긴다**.
-    #   종전에는 실패한 _rf_attempt 가 다음 loop iteration 에서 덮이고 어디에도 보존되지
-    #   않았다. 전 후보가 실패하면 _rf_raw_collect 자체가 없어 normalize_standard 가 읽을
-    #   대상이 없고, abort 가 normalize 보다 앞이라 모듈 errors 는 envelope 에 0건이었다.
-    #   결과: 완전 실패 envelope 의 근거가 '[task: ...] <fail msg>' 한 줄뿐이었다.
-    #
-    #   여기서 만든 값은 rescue 가 errors[].detail 로 합류시킨다 (message 는 불변 — 5문장).
-    #   화이트리스트(role / label / status / 첫 message)만 담는다 — username / password 금지.
     - name: "redfish | try_account | record failure evidence"
       when: not (_rf_attempt_ok | bool)
       ansible.builtin.set_fact:
@@ -121,21 +89,10 @@
           vendor={{ _rf_attempt.vendor | default('?') }},
           first_error={{ (_rf_attempt.errors | default([]) | first | default({})).message | default('?') }}
 
-    # F20 (cycle 2026-05-01): BMC lockout 회피 backoff 1초 → 5초.
-    # source: Dell iDRAC IPMI Lockout Policy (5회 fail / 5분), HPE iLO Account
-    # Lockout (3회 fail), Lenovo XCC Login Lockout (5회 fail) — vendor docs.
-    # multi-account vault (5 자격) × 5초 = 25초/host 추가 — Jenkins gather stage
-    # 60min timeout 대비 영향 미미.
-    # site.yml strategy: free 와 호환되도록 pause 대신 controller-side sleep 사용
-    # (pause 모듈은 free strategy 에서 host loop bypass 미지원 → 즉시 ERROR).
-    #
-    # 2026-08-12: 인증이 **거부**된 경우(401)에만 간격을 늘린다.
-    #   Dell iDRAC10 IP Blocking 기본값 FailCount=3 / FailWindow=60s 를 5초 간격으로는
-    #   피할 수 없다. 반대로 timeout / TLS / transport 오류는 실패 카운터를 올리지 않으므로
-    #   종전 5초를 유지한다 — 도달 불가 장비에서 수집 시간만 늘리지 않기 위해서다.
-    #   source: dell.com/.../idrac10_1.xx_scg/network-security-configuration
     - name: "redfish | try_account | backoff on failure"
-      when: not (_rf_attempt_ok | bool)
+      when:
+        - not (_rf_attempt_ok | bool)
+        - (ansible_loop is not defined) or (ansible_loop.index < ansible_loop.length)
       ansible.builtin.command: >-
         sleep {{ _rf_auth_backoff_seconds | default(65)
                  if ((_rf_attempt.auth_evidence | default({})).first_auth_status | default(0)) == 401

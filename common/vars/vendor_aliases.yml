@@ -1,18 +1,4 @@
 ---
-# ==============================================================================
-# vendor_aliases.yml — 벤더명 정규화 매핑
-# ==============================================================================
-# Redfish Manufacturer, Ansible facts 등에서 반환되는 다양한 벤더 표기를
-# 내부 표준 이름(canonical)으로 정규화합니다.
-#
-# 사용처:
-#   - redfish-gather: detect_vendor에서 벤더 식별
-#   - adapter_loader: adapter match 조건 평가
-#   - normalize 단계: _out_vendor 결정
-#
-# 새 벤더 추가 시: 아래에 canonical 이름과 aliases 목록만 추가하세요.
-# ※ redfish_gather.py의 _BUILTIN_VENDOR_MAP과 동기화 필요 — 변경 시 양쪽 모두 수정할 것
-# ==============================================================================
 
 vendor_aliases:
   dell:
@@ -58,8 +44,6 @@ vendor_aliases:
     - "CISCO"
     - "cisco"
 
-  # ── 2026-05-01 사용자 명시 승인 — F44~F47 신규 4 vendor (lab 부재) ─────────
-  # vault 단계 SKIP (사용자 명시 2026-05-01). lab/사이트 도입 시 vault 만 추가.
   huawei:
     - "Huawei"
     - "HUAWEI"
@@ -91,33 +75,10 @@ vendor_aliases:
     - "QCT"
     - "quanta"
 
-# ==============================================================================
-# 출력 표시값 override (cycle 2026-06-04 — 사용자 결정)
-# ==============================================================================
-# 호출자에게 노출되는 envelope 최상위 `vendor` 값만 치환한다.
-# 내부 canonical 키(위 vendor_aliases)는 그대로 유지 → adapter 선택 / vault 경로
-# (복구 vault vault/<loc>/redfish/<vendor>.yml) / OEM 추출(OEM_EXTRACTORS) / account 복구 분기는
-# 모두 기존 canonical('hpe' 등) 로 라우팅되어 무손상.
-#
-# 적용 위치 (data-driven — vendor 이름 하드코딩 회피, rule 12 R1):
-#   - redfish-gather/site.yml  (_out_vendor: vendor_output_display + adapter_output_display)
-#   - esxi-gather/site.yml     (_out_vendor: vendor_output_display)
-#   - os-gather/site.yml       (raw-fallback inline 매핑 — 동일 결정값을 mirror, # nosec rule12-r1)
-#
-# 결정 근거: docs/reference/decision-log.md (2026-06-04) — 이전 "CSUS 별도 vendor 불필요"
-# 결정을 사용자 지시로 supersede. ADR-2026-06-04-vendor-output-display 참조.
 
-# 내부 canonical → 호출자 노출값 (전 채널 공통)
 vendor_output_display:
-  hpe: hp          # 호출자 노출값: 'hpe' → 'hp'
+  hpe: hp
 
-# adapter_id 별 출력 표시값 (특정 모델 라인을 별도 vendor 값으로 노출 — vendor_output_display 보다 우선)
-# HPE "Compute Scale-up Servers" 패밀리 전체 → hpCsus (2026-06-04 web 검증 — rule 96 R1-A).
-# HPE 공식 분류상 Superdome Flex + CSUS 3200 은 동일 scale-up 패밀리 (둘 다 RMC 관리).
-# CSUS 3200 = Superdome Flex 의 successor ("built on the proven Superdome Flex architecture").
-# source: https://www.hpe.com/us/en/servers/superdome.html (페이지 제목 = "Compute Scale-up Servers")
-# source: https://support.hpe.com/hpesc/public/docDisplay?docId=sd00001798en_us (CSUS 3200 + Superdome Flex 함께 문서화)
-# source: HPE 보안 bulletin hpesbhf04632 / hpesbhf04633 (둘을 동일 영향군으로 묶음)
 adapter_output_display:
-  redfish_hpe_csus_3200:      hpCsus   # HPE Compute Scale-up Server 3200
-  redfish_hpe_superdome_flex: hpCsus   # HPE Superdome Flex (동일 Compute Scale-up 패밀리 — CSUS 3200 predecessor)
+  redfish_hpe_csus_3200:      hpCsus
+  redfish_hpe_superdome_flex: hpCsus

@@ -1,31 +1,31 @@
 ---
-# redfish-gather/tasks/detect_vendor.yml
-# 빈 계정으로 Manufacturer 감지 → _rf_detected_vendor
-# vendor_aliases.yml 기반 정규화 (하드코딩 벤더 목록 제거)
 
-# 잔류 fix (Round 12 후속): include_vars 'name:' 옵션 reserved keyword 경고 우회.
-# vendor_aliases.yml 은 plaintext (vault 아님) 라 lookup('file') | from_yaml 가능.
 - name: "redfish | detect_vendor | load vendor aliases"
   ansible.builtin.set_fact:
     _va: "{{ lookup('file', lookup('env','REPO_ROOT') ~ '/common/vars/vendor_aliases.yml') | from_yaml }}"
 
 - name: "redfish | detect_vendor | probe"
+  timeout: "{{ _rf_detect_task_timeout | default(120) }}"
   redfish_gather:
     bmc_ip:     "{{ _rf_ip }}"
     username:   ""
     password:   ""
     timeout:    "{{ _rf_timeout | default(30) }}"
     verify_ssl: false
+    mode:       detect
+    deadline:   "{{ _rf_detect_deadline | default(90) }}"
+    attempt:
+      evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"
+      id:           "detect-0-1"
+      build_id:     "{{ lookup('env', 'SE_BUILD_ID') }}"
+      event_uuid:   "{{ lookup('env', 'SE_EVENT_UUID') }}"
+      label:        "detect"
+      role:         "anonymous"
   register:    _rf_probe_result
   failed_when: false
   ignore_errors: true
   no_log: true
 
-# 2026-08-12 (N50): 무인증 probe 가 만든 errors 를 저장소 어디도 읽지 않아,
-#   "왜 벤더를 못 알아냈는지"(TLS 오류 / 404 / JSON 아님 / Systems 링크 없음)가 통째로
-#   버려졌다. 그 결과 vendor=unknown → generic adapter → vault profile 오선택 → 자격 전멸
-#   연쇄가 일어나도 최종 envelope 에 근거가 한 줄도 없었다.
-#   여기서 요약만 보존하고, rescue 가 errors[].detail 로 합류시킨다 (message 는 불변).
 - name: "redfish | detect_vendor | preserve probe evidence"
   ansible.builtin.set_fact:
     _rf_probe_notes: >-
@@ -38,27 +38,11 @@
       {{ ('probe: ' ~ (msgs | join(' | '))) if msgs else '' }}
   no_log: true
 
-# 2026-08-12: 인라인 Jinja2 정규화를 `canonical_vendor` 필터로 대체했다.
-#   종전에는 정규화 구현이 3개(redfish_gather.py / 이 파일 / adapter_common.py)였고,
-#   Credential Vault 경로가 vendor 에서 파생되는 구조로 바뀌면서 그 차이가 곧
-#   **자격증명 오선택**이 된다. 알고리즘 정본을 `adapter_common.normalize_vendor`
-#   하나로 모으고 여기서는 그것을 호출만 한다 (filter_plugins/vendor_normalizer.py).
-#   동치성은 tests/unit/test_vendor_normalizer_sot.py 가 상시 검증한다.
-#   반환값은 vendor_aliases.yml 의 canonical 키 집합 또는 'unknown' 으로 **보장**된다.
 - name: "redfish | detect_vendor | normalize vendor"
   ansible.builtin.set_fact:
     _rf_detected_vendor: >-
       {{ (_rf_probe_result.vendor | default(''))
          | canonical_vendor(_va.vendor_aliases | default({})) }}
-    # 2026-05-11 fix: probe 무인증 시 data.bmc / data.system 이 None 가능 (HPE iLO 6 Gen11 사례).
-    # `| default({}, true)` 의 두 번째 인자 true 는 None / empty / False 도 default 적용 — None.get() AttributeError 차단.
-    #
-    # T-01 (cycle 2026-05-11): data.bmc/data.system 가 빈 경우 probe_facts (ServiceRoot
-    # 무인증 추출) fallback. HPE 한정 동작 — redfish_gather.py `_extract_probe_facts()` 가
-    # vendor=='hpe' 분기에서만 model_hint/firmware_hint/manager_type 채움. Dell/Lenovo/
-    # Cisco/Supermicro/Huawei/Inspur/Fujitsu/Quanta 는 probe_facts 가 {} → 기존 동작 동일.
-    # 본 fallback 으로 HPE DL380 Gen11 (iLO 6) 가 hpe_ilo7 Gen12-only adapter 로 오선택되는
-    # 사고 차단 (build #139 → #140+ 회귀 검증).
     _rf_probe_facts:
       vendor: "{{ _rf_probe_result.vendor | default('') }}"
       firmware: >-

@@ -1,51 +1,4 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
-# Vendor: Dell Inc. / Dell EMC
-# Firmware: iDRAC 9 — 3.x / 4.x / 5.x / 6.x / 7.x
-# Generation: idrac9
-# Generation Year: "2017-2024 (PowerEdge 14G / 15G / 16G)"
-# Redfish Introduction: "DSP0268 v1.6+ ~ v1.13+"
-# Origin: Dell support.dell.com / Redfish API guide (iDRAC 9)
-# Last sync: 2026-05-11 (M-H1 — Round 11 + storage strategy 분기 매트릭스 보강)
-# Notes: PowerEdge 14G/15G/16G. Storage Volumes 5.x+ 표준.
-# Sources (rule 96 R1-A — Round 11 외 generation 보강):
-#   - https://developer.dell.com/apis/2978/versions/3/docs/   (iDRAC9 spec)
-#   - https://www.dell.com/support/kbdoc/en-us/000178045/dell-redfish-api-development
-#   - https://infohub.delltechnologies.com/p/idrac9-redfish-pldm/   (PLDM RDE — 5.x+)
-# Tested against (실측 2026-04-28, Round 11 — iDRAC9 7.x 만):
-#   - PowerEdge R760 (16G Monolithic) × 5대 (10.100.15.27/28/31/33/34)
-#   - iDRAC FirmwareVersion: 7.10.70.00
-#   - BIOS: 2.3.5
-#   - Redfish: 1.20.1
-#   - CPU: Intel Xeon Silver 4510
-#   - 데이터 경로: tests/reference/redfish/dell/10_100_15_*
-# Tested against (실측 2026-06-14, 사이트 실 미러 캡처 — iDRAC9 14G):
-#   - PowerEdge R740 (14G) — iDRAC9 fw 7.00.00.184 / ServiceTag J0KV603 / RedfishVersion 1.17.0 / 6135 리소스
-#   - redfish_full_mirror.py 캡처 + replay 재생 → 라이브러리 4건 fix (FW-1 firmware Current-/Installed- dedup 51→32 /
-#     NET-1 멀티컨트롤러 NIC port_count 합산 / STO-1 boot_volume 컨트롤러 BootVirtualDiskFQDD fallback /
-#     SYS-5 exhaust temp 0°C 보존). evidence: tests/evidence/2026-06-14-dell-r740-mirror-audit.md (적대 검증, wrong-data 0)
-#   - [선택 주의] 무인증 ServiceRoot.Product 가 BMC명("Integrated Dell Remote Access Controller")이라 facts.model/firmware
-#     가 빈값 → 실 adapter 선택은 priority 로 결정 → redfish_dell_idrac10(120)이 선택됨(idrac9 100 패배). collect/normalize
-#     tasks 는 idrac9/idrac10 동일(dell OEM)이라 **수집 데이터는 동일**. NEXT_ACTIONS 등재.
-#     ※ 2026-08-12 정정: "diagnosis 라벨만 cosmetic 차이" 는 **수집 경로에 한한 이야기**다.
-#       계정 경로에서는 cosmetic 이 아니었다 — 이 오선택이 Account Family 세대 근거로 그대로
-#       쓰여 dell_idrac10_slot_patch(reserved_slot_ids={1,2})가 선택됐고, 빈 슬롯이 2번일 때
-#       PATCH 대상 슬롯 URI 가 달라진다. 10.100.15.34 에서 차이가 안 보인 건 slot 2 를 root 가
-#       점유했기 때문이다. Family 판정은 Firmware major 기준으로 교정했고(redfish_gather.py
-#       resolve_account_family), adapter 오선택 자체는 남아 있다.
-#       evidence: tests/evidence/2026-08-12-standard-password-convergence.md §5
-#   ※ 1회 read-only 스냅샷 — 쓰기/Action·펌웨어 업그레이드 후 응답 미포함 (docs/25)
-# Storage strategy evolution (web sources, M-H1 cycle 2026-05-07):
-#   - iDRAC9 3.x ~ 4.x: standard storage path (Volumes 표준 미도입)
-#   - iDRAC9 5.x: PLDM RDE 우선 + standard fallback (dual)
-#   - iDRAC9 6.x+: PLDM RDE only (5.x 응답 형식 매우 유사)
-# Power strategy:
-#   - iDRAC9 4.x ~ 6.x: Power deprecated + PowerSubsystem dual
-#   - iDRAC9 7.x: PowerSubsystem 우선 + Power fallback
-# OEM namespace: Oem.Dell (전 generation 동일)
-# Lab status: iDRAC9 7.x 실측 (R760 16G Round 11 + R740 14G 미러 캡처 2026-06-14). iDRAC9 3.x/4.x/5.x/6.x lab 부재.
-# Next action: iDRAC9 5.x 이전 lab 도입 시 별도 cycle (PLDM RDE 분기 검증)
-# ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_dell_idrac9
 channel: redfish
 priority: 100
@@ -76,7 +29,6 @@ normalize:
 credentials:
   profile: "dell"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/dell.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: dell_fallback_1, role: recovery }
     - { vault_label: dell_fallback_2, role: recovery }

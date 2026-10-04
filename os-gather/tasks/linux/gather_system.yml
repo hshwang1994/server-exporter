@@ -1,36 +1,127 @@
 ---
-# os-gather/tasks/linux/gather_system.yml
-# OS 기본 정보 수집 → data.system + data.hardware fragment 생성
-#
-# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-01/02/03/05/07/08/12/14/31/32/33):
-#   - raw gather 는 **두 경로 모두** 실행한다. python 경로는 setup facts 를 1순위로 쓰고
-#     같은 raw 결과를 fallback 으로 쓴다 → 같은 필드가 경로에 따라 다른 의미를 갖지 않는다.
-#   - system.hostname = OS 가 설정한 짧은 이름(nodename 의 첫 label). system.fqdn = hostname +
-#     domain, 도메인이 없으면 **null**. 어느 쪽도 IP 로 대체하지 않는다.
-#   - data.hardware(vendor/model/serial/uuid/bios_version/bios_date) 를 Linux 도 emit 한다
-#     (Windows/ESXi 와 같은 계약). 종전에는 raw 경로가 읽고도 버렸다.
-#   - hosting_type 판정식은 한 벌 (systemd-detect-virt 1순위, facts 보조) — 경로 무관 동일 답.
-#   - selinux 는 모드(enforcing/permissive/disabled/null) — schema/fields/os.yml 과 일치.
-#   - system.runtime 은 이 파일이 **단일 구현**이다 (gather_runtime.yml 은 삭제). 모르면 null,
-#     목록 절단 없음, 도구별 enum 차이 없음(active/inactive/null).
-#   - 값을 못 구하면 null. 0 / '' / IP / 'unknown' 문자열로 대체하지 않는다.
-#
-# 출력:
-#   _data_fragment               → {system: {...}, hardware: {...}}
-#   _sections_supported_fragment → ['system', 'hardware']
-#   _sections_collected_fragment → 실제 수집 결과에 따라
-#   _sections_failed_fragment    → 실제 수집 결과에 따라
-#   _errors_fragment             → [] (정상) or [식별자 진단 / 수집 실패 errors]
 
 - name: "linux | system | init fallback vars"
   ansible.builtin.set_fact:
     _l_fb: {}
   no_log: true
 
-# =============================================================================
-# Python 경로: setup facts (1순위)
-# =============================================================================
+- name: "linux | system | define shared dmi collector"
+  ansible.builtin.set_fact:
+    _l_dmi_collector: |
+      export LANG=C LC_ALL=C
+      out=""; dmi_rc=""; dmi_err=""
+      echo "DMI_MEM_BEGIN"
+      echo "MEM_TOTAL_KB=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null)"
+      echo "MEM_AVAIL_KB=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null)"
+      # dmi_run: dmidecode 1회 실행 → stdout=$out, 종료 코드=$dmi_rc, stderr 첫 줄=$dmi_err.
+      #   2026-10-03 (C1): 종전에는 stderr 를 버리고 rc 도 남기지 않아 권한 거부 / 미설치 / 표 손상을
+      #   구분할 수 없었다. stderr 는 mktemp 파일로만 받는다 (mktemp 가 없으면 버린다 —
+      #   root 로 도는 태스크라 예측 가능한 /tmp 경로는 쓰지 않는다).
+      dmi_run() {
+        dmi_ef=$(mktemp 2>/dev/null) || dmi_ef=""
+        out=$("$@" 2>"${dmi_ef:-/dev/null}")
+        dmi_rc=$?
+        dmi_err=""
+        if [ -n "$dmi_ef" ]; then
+          dmi_err=$(head -n 1 "$dmi_ef" 2>/dev/null | tr -d '|\r')
+          rm -f "$dmi_ef"
+        fi
+      }
+      if command -v dmidecode >/dev/null 2>&1; then
+        echo "DMIDECODE=present"
+        dmi_run dmidecode -t memory -t processor
+        # 비루트 dmidecode 는 버전 머리말을 stdout 에 찍고 rc=1 로 끝난다 — 출력이 비었을 때만 보던 종전 조건으로는
+        # 재시도가 일어나지 않았다 (2026-10-03 C1 검수에서 발견). rc 가 0 이 아니어도 sudo 로 1회 재시도하고,
+        # sudo 도 출력이 없으면 직접 실행의 출력 · rc · stderr 를 되살린다 (실제로 관측한 근거를 지우지 않는다).
+        if { [ -z "$out" ] || [ "$dmi_rc" -ne 0 ]; } && command -v sudo >/dev/null 2>&1; then
+          direct_out=$out; direct_rc=$dmi_rc; direct_err=$dmi_err
+          dmi_run sudo -n dmidecode -t memory -t processor
+          if [ -z "$out" ] && [ -n "$direct_out" ]; then
+            out=$direct_out; dmi_rc=$direct_rc; dmi_err=$direct_err
+          fi
+        fi
+        # 출력을 실제로 만든 시도(직접 또는 sudo 재시도)의 종료 코드와 stderr 첫 줄
+        echo "DMIDECODE_RC=$dmi_rc"
+        echo "DMIDECODE_ERR=$dmi_err"
+        if [ -n "$out" ]; then
+          echo "DMIDECODE_OK=yes"
+          # 메모리 타입(5/6/16/17) 레코드만 — 레코드 밖의 줄(버전 머리말 등)과 Type 4 는 버린다.
+          mem_out=$(printf '%s\n' "$out" | awk '/^Handle /{k=($0 ~ /DMI type (5|6|16|17),/)} k')
+          # 단위: dmidecode 는 kB / MB / GB / TB 를 쓰고(2.x 는 kB), **3.6 부터는 IEC 접두어 kiB / MiB / GiB / TiB** 를 쓴다
+          #   (2026-10-04 RHEL 10.2 실측 main #20: "Size: 4 GiB" — 종전 파서가 0 으로 봐 DIMM 전부 누락, 제보의 원인). 대소문자 무관하게 MB 로 환산.
+          phys=$(printf '%s\n' "$mem_out" \
+            | grep -E "^[[:space:]]*Size:" \
+            | grep -v "No Module Installed" \
+            | awk '{u=tolower($3); if(u=="tb"||u=="tib")s+=$2*1048576; else if(u=="gb"||u=="gib")s+=$2*1024; else if(u=="mb"||u=="mib")s+=$2; else if(u=="kb"||u=="kib")s+=$2/1024} END{print int(s)}')
+          echo "MEM_PHYS_MB=${phys:-}"
+          # 2026-10-04 (Kernel 6.x DIMM 제보 재현 근거): SLOT 0건의 원인을 원본으로 가릴 수 있게 Handle 종류별 개수와
+          #   메모리 레코드(Type 5/6/16/17)의 **식별 줄만**(Handle · Memory Device · Physical Memory Array · Size · Locator ·
+          #   Form Factor · Type · Maximum Capacity · Number Of Devices · Error Information Handle, 최대 24줄) marker 로 남긴다.
+          #   레코드 본문 전체는 복제하지 않는다. gather_memory.yml 은 SLOT 이 0건일 때만 이 줄들을 errors[].detail 에 싣는다.
+          echo "MEM_HANDLE_TYPES=$(printf '%s\n' "$mem_out" | awk '/^Handle /{ if (match($0, /DMI type [0-9]+/)) { t=substr($0, RSTART+9, RLENGTH-9); c[t]++ } } END { for (t in c) printf "%s:%d;", t, c[t] }')"
+          printf '%s\n' "$mem_out" | grep -E '^Handle |^Memory Device|^Physical Memory Array|^[[:space:]]*(Size|Locator|Form Factor|Type|Maximum Capacity|Number Of Devices|Error Information Handle):' | head -n 24 | tr -d '|\r' | sed 's/^/MEM_RAW|/'
+          # DMI Type 17 레코드 파서 (2026-10-03 C1).
+          #   - 레코드는 빈 줄 또는 다음 Handle 줄에서 끝난다 (빈 줄 없이 이어진 레코드도 잃지 않는다).
+          #   - Size 는 줄 머리가 'Size:' 인 것만 (Volatile/Non-Volatile/Cache/Logical Size 제외).
+          #   - 속도는 Configured Memory Speed(구 표기 Configured Clock Speed)가 숫자면 그 값, 아니면 Speed.
+          #   - 공백은 [ \t] 로 쓴다. mawk 1.3.3 은 [[:space:]] 같은 POSIX 문자 클래스를 해석하지 못해
+          #     이 파서만 0건이 되고 grep 기반 MEM_PHYS_MB 는 정상인 상태가 된다.
+          #   - END 에서 Memory Device 레코드 수를 MEM_DEVICE_RECORDS 로 남긴다 (SLOT 0건일 때의 근거).
+          printf '%s\n' "$mem_out" | awk '
+            function flush() {
+              if (in_dev && size != "" && size > 0)
+                printf "SLOT|%s|%s|%s|%s|%s|%s|%s\n", size, type, (cspeed != "" ? cspeed : speed), mfr, pn, sn, loc;
+              in_dev=0; size=""; type=""; speed=""; cspeed=""; mfr=""; pn=""; sn=""; loc="";
+            }
+            function value(s) {
+              sub(/^[ \t]*[^:]*:[ \t]*/, "", s); gsub(/[|]/, "_", s); return s;
+            }
+            BEGIN { in_dev=0; nrec=0; size=""; type=""; speed=""; cspeed=""; mfr=""; pn=""; sn=""; loc=""; }
+            /^Handle / { flush(); next }
+            /^Memory Device/ { flush(); in_dev=1; nrec++; next }
+            /^[ \t]*$/ { flush(); next }
+            !in_dev { next }
+            /^[ \t]*Size:/ {
+              v=$2; u=tolower($3); size=0;
+              if (v ~ /^[0-9]+$/) {
+                if (u=="tb" || u=="tib") size=v*1048576;
+                else if (u=="gb" || u=="gib") size=v*1024;
+                else if (u=="mb" || u=="mib") size=v+0;
+                else if (u=="kb" || u=="kib") size=int(v/1024);
+              }
+              next
+            }
+            /^[ \t]*Type:/ { type=$2; next }
+            /^[ \t]*Speed:/ { speed=$2; next }
+            /^[ \t]*Configured (Memory|Clock) Speed:/ { if ($4 ~ /^[0-9]+$/ && $4+0 > 0) cspeed=$4; next }
+            /^[ \t]*Manufacturer:/ { mfr=value($0); next }
+            /^[ \t]*Part Number:/ { pn=value($0); next }
+            /^[ \t]*Serial Number:/ { sn=value($0); next }
+            /^[ \t]*Locator:/ { loc=value($0); next }
+            END { flush(); printf "MEM_DEVICE_RECORDS=%d\n", nrec; }
+          '
+        else
+          echo "DMIDECODE_OK=no"
+        fi
+      else
+        echo "DMIDECODE=absent"
+        echo "DMIDECODE_RC=127"
+        echo "DMIDECODE_ERR="
+      fi
+      echo "DMI_MEM_END"
+      # SMBIOS Type 4 의 "Current Speed"(정격) / "Max Speed"(최대) — gather_cpu 의 3순위 fallback.
+      #   첫 Processor 레코드 값만 (종전 `dmidecode -t processor | awk` 와 같은 규칙 · 같은 출력).
+      echo "DMI_PROC_BEGIN"
+      if [ -n "$out" ]; then
+        printf '%s\n' "$out" | awk '/^Handle /{k=($0 ~ /DMI type 4,/)} k' | awk -F': ' '
+          /Current Speed:/ && !cur { sub(/ MHz/,"",$2); gsub(/ /,"",$2); print "DMI_CUR_MHZ=" $2; cur=1 }
+          /Max Speed:/     && !mx  { sub(/ MHz/,"",$2); gsub(/ /,"",$2); print "DMI_MAX_MHZ=" $2; mx=1 }'
+      fi
+      echo "DMI_PROC_END"
+  no_log: true
+
 - name: "linux | system | setup"
+  timeout: "{{ _os_task_timeout | default(120) }}"
   when: _l_python_mode == 'python_ok'
   ansible.builtin.setup:
     gather_subset: ['hardware', 'network', 'virtual', 'distribution']
@@ -40,8 +131,6 @@
   failed_when: false
   no_log: true
 
-# setup 이 실제로 facts 를 돌려줬는지 (python_ok 인데 setup 만 실패하는 경우가 있다 —
-# 그때도 아래 raw 결과가 같은 필드를 같은 의미로 채운다).
 - name: "linux | system | setup 성공 판정"
   ansible.builtin.set_fact:
     _l_setup_ok: >-
@@ -49,10 +138,8 @@
          and ((_l_setup_result | default({})).ansible_facts is defined) }}
   no_log: true
 
-# =============================================================================
-# Raw gather — 두 경로 공통 (os-release / uname / hostname / selinux / DMI sysfs)
-# =============================================================================
 - name: "linux | system | raw gather (os-release/uname/hostname/dmi)"
+  timeout: "{{ _os_task_timeout | default(120) }}"
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
@@ -63,8 +150,6 @@
     echo "OS_PRETTY=${PRETTY_NAME:-}"
     echo "KERNEL=$(uname -r 2>/dev/null)"
     echo "ARCH=$(uname -m 2>/dev/null)"
-    # hostname: 커널 nodename (resolver 무관 — OS 에 설정된 값 그대로). 짧은 이름/도메인은
-    # Jinja 에서 첫 label 로 나눈다. domain 은 nodename 에 점이 없을 때만 resolver 에 묻는다.
     echo "NODENAME=$(uname -n 2>/dev/null)"
     echo "DOMAIN=$(hostname -d 2>/dev/null)"
     echo "UPTIME=$(awk '{print int($1)}' /proc/uptime 2>/dev/null)"
@@ -89,6 +174,7 @@
       fi
       echo "DMI_$(echo $f | tr '[:lower:]' '[:upper:]')=$v"
     done
+    {{ _l_dmi_collector }}
   register: _l_raw_sys_result
   changed_when: false
   failed_when: false
@@ -103,12 +189,22 @@
               | list) }}
   no_log: true
 
-# =============================================================================
-# system.runtime — 단일 구현 (timezone / ntp / firewall / listen / swap)
-# 두 경로 모두 raw 모듈 — timedatectl/systemctl 같은 명령은 raw 가 가장 robust.
-# 모르면 null: 명령 부재 시 값을 비워 보낸다 (0 / false 로 단정하지 않는다).
-# =============================================================================
+- name: "linux | system | shared dmi raw (memory / cpu 공용)"
+  ansible.builtin.set_fact:
+    _l_dmi_raw: >-
+      {%- set ns = namespace(on=false, lines=[]) -%}
+      {%- for line in (_l_raw_sys_result.stdout_lines | default([])) -%}
+        {%- if (line | trim) == 'DMI_MEM_BEGIN' -%}{%- set ns.on = true -%}{%- endif -%}
+        {%- if ns.on -%}{%- set _ = ns.lines.append(line) -%}{%- endif -%}
+        {%- if (line | trim) == 'DMI_PROC_END' -%}{%- set ns.on = false -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set out = {'stdout_lines': ns.lines} -%}
+      {%- if (_l_raw_sys_result | default({})).rc is defined -%}{%- set _ = out.update({'rc': _l_raw_sys_result.rc}) -%}{%- endif -%}
+      {{ out }}
+  no_log: true
+
 - name: "linux | system | gather runtime (timezone/ntp/firewall/listen/swap)"
+  timeout: "{{ _os_task_timeout | default(120) }}"
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
@@ -187,15 +283,10 @@
           {%- set _ = ns.kv.update({k: v}) -%}
         {%- endif -%}
       {%- endfor -%}
-      {# Round 17 #7: listening_ports 계약은 str[] (field_dictionary + 전 baseline ["22","53"]).
-         int 로 모아 숫자정렬 후 map('string') 으로 str[] 변환 (정렬은 수치, 출력은 문자열). #}
       {%- set _ = ns.kv.update({'PORTS': ns.ports | sort | unique | map('string') | list}) -%}
       {{ ns.kv }}
   no_log: true
 
-# =============================================================================
-# raw 파생값 — 두 경로 공통 (python 경로에서는 setup facts 의 fallback)
-# =============================================================================
 - name: "linux | system | set raw-derived variables"
   ansible.builtin.set_fact:
     _l_fb:
@@ -260,8 +351,6 @@
     _l_raw_bios_date: "{{ ((_l_raw_sys.DMI_BIOS_DATE | default('')) | trim) or none }}"
   no_log: true
 
-# raw-only 경로: setup fact 가 없으므로 raw DMI 값이 곧 "setup 값" 자리에 들어간다
-# (identifier diagnostics 는 python 경로에서만 돌기 때문에 이 변수는 resolve 단계 입력이다).
 - name: "linux | system | identifiers from raw (no setup facts)"
   when: not (_l_setup_ok | bool)
   ansible.builtin.set_fact:
@@ -270,12 +359,6 @@
     _l_id_diagnostics: []
   no_log: true
 
-# =============================================================================
-# hosting_type — 한 벌의 판정식 (경로 무관)
-#   1) systemd-detect-virt: 가상화 종류 → virtual, 'none' → baremetal
-#   2) (python) ansible_virtualization_type/role 보조: guest → virtual, host → baremetal
-#   3) 그 외 → unknown (근거 부족)
-# =============================================================================
 - name: "linux | system | determine hosting_type"
   ansible.builtin.set_fact:
     _l_hosting_type: >-
@@ -291,25 +374,6 @@
       {%- endif -%}
   no_log: true
 
-# =============================================================================
-# Python 경로 식별자 — setup fact → DMI direct-read(become) → raw DMI
-# =============================================================================
-- name: "linux | system | DMI serial precheck"
-  when: _l_python_mode == 'python_ok'
-  ansible.builtin.command: test -r /sys/class/dmi/id/product_serial
-  register: _l_dmi_serial_access
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: "linux | system | DMI uuid precheck"
-  when: _l_python_mode == 'python_ok'
-  ansible.builtin.command: test -r /sys/class/dmi/id/product_uuid
-  register: _l_dmi_uuid_access
-  changed_when: false
-  failed_when: false
-  no_log: true
-
 - name: "linux | system | check setup fact identifiers"
   when: _l_setup_ok | bool
   ansible.builtin.set_fact:
@@ -321,15 +385,15 @@
          else (ansible_product_uuid | default(none)) }}
   no_log: true
 
-# DMI direct-read fallback (become 필요)
 - name: "linux | system | DMI direct-read fallback"
   when: >
     _l_python_mode == 'python_ok' and
-    ((_l_serial_from_setup | default(none)) is none or
-     (_l_uuid_from_setup | default(none)) is none)
+    (((_l_serial_from_setup | default(none)) is none and (_l_raw_serial | default(none)) is none) or
+     ((_l_uuid_from_setup | default(none)) is none and (_l_raw_uuid | default(none)) is none))
   block:
     - name: "linux | system | DMI direct-read serial"
-      when: (_l_serial_from_setup | default(none)) is none  # rule 95 R1 R5 ok: serial raw fallback 진입
+      timeout: "{{ _os_task_timeout | default(120) }}"
+      when: (_l_serial_from_setup | default(none)) is none and (_l_raw_serial | default(none)) is none
       ansible.builtin.command: cat /sys/class/dmi/id/product_serial
       become: true
       register: _l_dmi_serial_direct
@@ -338,7 +402,8 @@
       no_log: true
 
     - name: "linux | system | DMI direct-read uuid"
-      when: (_l_uuid_from_setup | default(none)) is none  # rule 95 R1 R5 ok: uuid raw fallback 진입
+      timeout: "{{ _os_task_timeout | default(120) }}"
+      when: (_l_uuid_from_setup | default(none)) is none and (_l_raw_uuid | default(none)) is none
       ansible.builtin.command: cat /sys/class/dmi/id/product_uuid
       become: true
       register: _l_dmi_uuid_direct
@@ -351,7 +416,6 @@
         _l_dmi_fallback_failed: true
       no_log: true
 
-# 최종 식별자 결정 — setup fact → DMI direct-read → raw DMI(sudo -n) → null
 - name: "linux | system | resolve identifiers"
   ansible.builtin.set_fact:
     _l_serial_val: >-
@@ -382,8 +446,6 @@
       {%- endif -%}
   no_log: true
 
-# 하드웨어 식별 — setup fact(sentinel 적용) → raw DMI. hardware 섹션과 시리얼 정규화 힌트 공용.
-#   bios_date: DMI/setup 은 MM/DD/YYYY — ISO(YYYY-MM-DD) 로 정규화 (Windows/ESXi 와 같은 형식).
 - name: "linux | system | resolve hardware identity"
   ansible.builtin.set_fact:
     _l_hw_vendor: >-
@@ -410,14 +472,8 @@
       {%- endif -%}
   no_log: true
 
-# nPartition 접미사 정규화 (2026-08-27)
-#   HPE Compute Scale-up Server 3200 은 OS 안에서 읽는 SMBIOS Type 1 System Serial 이
-#   "<물리 시리얼>-<파티션번호 3자리>" 형식이다 (SGHD3TLNDD-000). 자산 관리 기준은 물리
-#   시리얼이라 접미사를 뗀다. vendor + model + 접미사 패턴 셋을 모두 만족할 때만 동작하고,
-#   그 외에는 입력을 글자 그대로 돌려준다 (filter_plugins/serial_normalizer.py).
 - name: "linux | system | normalize serial (nPartition 접미사)"
   vars:
-    # 판정 힌트: resolve hardware identity 결과 → setup fact(sys_vendor / product_name) → raw sysfs
     _l_vendor_hint: >-
       {{ _l_hw_vendor | default(ansible_system_vendor | default(_l_raw_vendor | default('', true), true), true) }}
     _l_model_hint: >-
@@ -426,17 +482,10 @@
     _l_serial_val: "{{ _l_serial_val | normalize_os_serial(_l_vendor_hint, _l_model_hint) }}"
   no_log: true
 
-# identifier diagnostics (Python 경로에서만 상세 진단)
 - name: "linux | system | identifier diagnostics 빌드"
   ansible.builtin.include_tasks:
     file: "{{ playbook_dir }}/tasks/linux/build_identifier_diagnostics.yml"
 
-# =============================================================================
-# hostname / fqdn — nodename 기반 (resolver 결과가 아니다)
-#   short  = nodename 첫 label
-#   domain = nodename 에 점이 있으면 그 뒤, 없으면 resolver(ansible_domain / hostname -d)
-#   fqdn   = short.domain — domain 이 없으면 null (짧은 이름을 FQDN 자리에 넣지 않는다)
-# =============================================================================
 - name: "linux | system | resolve hostname / fqdn"
   ansible.builtin.set_fact:
     _l_hostname_short: >-
@@ -452,10 +501,6 @@
       {{ (short ~ '.' ~ dom) if (short and dom) else none }}
   no_log: true
 
-# =============================================================================
-# fragment 조립 + merge
-# =============================================================================
-# N13: system 섹션 수집 성공 판정 — collected / failed / errors 세 자리가 이 변수 하나를 본다.
 - name: "linux | system | 수집 성공 판정"
   ansible.builtin.set_fact:
     _l_sys_ok: >-
@@ -485,8 +530,6 @@
           {%- set u = ansible_uptime_seconds | default(_l_fb.UPTIME | default(none)) -%}
           {%- set us = (u | string | trim) if u is not none else '' -%}
           {{ (us | int) if us.isdigit() else none }}
-        # selinux 모드 (enforcing / permissive / disabled / null). python 경로는 ansible_selinux 의
-        # mode(활성 시) / status(disabled), raw 경로는 getenforce — 같은 어휘.
         selinux: >-
           {%- set st = ((ansible_selinux | default({})).status | default('')) | lower -%}
           {%- set md = ((ansible_selinux | default({})).mode | default('')) | lower -%}
@@ -496,7 +539,6 @@
           {%- endif -%}
         serial_number:  "{{ _l_serial_val | default(none) }}"
         system_uuid:    "{{ (_l_uuid_val | default(none)) | normalize_uuid }}"
-        # vendor: hardware.vendor 와 같은 값 (종전 호환 — envelope.vendor 는 hardware.vendor 를 쓴다).
         vendor:         "{{ _l_hw_vendor | default(none) }}"
         runtime:
           timezone: >-
@@ -530,7 +572,6 @@
           swap_free_mb: >-
             {%- set v = (_l_runtime.SWAP_FREE | default('')) | trim -%}
             {{ (v | int) if v.isdigit() else none }}
-      # 2026-09-03: Linux 도 hardware 섹션을 emit — Windows(gather_hardware.yml)/ESXi 와 같은 키.
       hardware:
         vendor:       "{{ _l_hw_vendor | default(none) }}"
         model:        "{{ _l_hw_model | default(none) }}"
@@ -543,7 +584,6 @@
       {{ (['system'] if (_l_sys_ok | bool) else []) + (['hardware'] if (_l_hw_ok | bool) else []) }}
     _sections_failed_fragment: >-
       {{ ([] if (_l_sys_ok | bool) else ['system']) + ([] if (_l_hw_ok | bool) else ['hardware']) }}
-    # 식별자 진단(python 경로) + 섹션 실패 사유. 실패인데 errors 가 비는 결과를 만들지 않는다.
     _errors_fragment: "{{ (_l_id_diagnostics | default([])) + ([{'section': 'system', 'message': '서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'field=distribution; cause=os_release_and_setup_fact_unavailable'}] if not (_l_sys_ok | bool) else []) + ([{'section': 'hardware', 'message': '하드웨어 정보 수집에 실패했습니다. 수집 계정의 권한을 확인하세요.', 'detail': 'field=vendor,model,serial,uuid,bios_version; cause=dmi_unavailable; tried=setup_fact,dmi_sysfs'}] if not (_l_hw_ok | bool) else []) }}"
   no_log: true
 

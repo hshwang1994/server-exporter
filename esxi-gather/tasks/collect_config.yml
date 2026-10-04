@@ -1,8 +1,7 @@
 ---
-# esxi-gather/tasks/collect_config.yml
-# vmware_host_config_info → _e_raw_config, _e_config_ok
 
 - name: "esxi | collect | vmware_host_config_info"
+  timeout: "{{ _e_task_timeout | default(180) }}"
   community.vmware.vmware_host_config_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"

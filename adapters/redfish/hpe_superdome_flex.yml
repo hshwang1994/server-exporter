@@ -1,84 +1,47 @@
 ---
-# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
-# Vendor: HPE / Hewlett Packard Enterprise
-# Firmware: RMC 2.x ~ 3.x (Superdome Flex / Flex 280 RMC firmware)
-#           + iLO 5 2.x ~ 3.x (per compute module BMC)
-# Origin: HPE Superdome Flex Server Admin Guide + sdflexutils GitHub
-# Last sync: 2026-05-06 (M-E1 web search — Session-E1 web-evidence-collector)
-# Lab: 부재 — web sources only (rule 96 R1-A). 사이트 실측 시 정정 가능 (rule 25 R7-A-1).
-# Tested against: 미확인 — lab 도입 시 capture-site-fixture skill 적용
-# Notes:
-#   - HPE Superdome Flex / Flex 280 (2017+ x86 Xeon SP). RMC = Redfish API host.
-#   - Multi-partition (nPAR) — Systems ID = Partition<N>. cycle 2026-05-12 (ADR-2026-05-12)
-#     이후 전 partition / 전 manager / 전 chassis 수집 (_collect_multi_node_topology, manager_layout=rmc_primary_ilo_secondary). data.multi_node 컨테이너에 노출.
-#   - Dual-manager — RMC + 각 컴퓨트 모듈 iLO 5. RMC 가 primary AccountService host.
-#   - Oem.Hpe namespace 동일 (기존 hpe OEM tasks 재사용).
-#   - vault profile: hpe (별도 vault 불필요).
-# source: https://github.com/HewlettPackard/sdflexutils — RMC + Partition0 명시
-# source: https://support.hpe.com/.../GUID-FE270127-0E58-4AB8-9D90-FB84DC571827.html — Remote management with Redfish
-# source: https://github.com/HewlettPackard/sdflex-ironic-driver/wiki — sdflex-ironic-driver wiki
-# source: https://pypi.org/project/sdflexutils/ — sdflexutils 1.5.1 (2022-11-29)
-# source: https://redfish.dmtf.org/schemas/DSP0266_1.15.0.html — Specification v1.15
-# source: https://thelinuxcluster.com/2020/05/06/upgrading-firmware-for-super-dome-flex/ — RMC firmware 3.10.164
-# source: https://hewlettpackard.github.io/ilo-rest-api-docs/ilo5/ — iLO 5 API reference
-# DRIFT 추적: Manufacturer string / ServiceRoot.Product 사이트 실측 시 정정 가능
-# ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_superdome_flex
 channel: redfish
 priority: 101
-# priority 차등 (rule 12 R2 일관성) — cycle 2026-06-04 (HP CSUS 3200 사이트 사고) 갱신:
-#   iLO 7 (120) > CSUS 3200 (102) = Superdome Flex (101) > iLO 6 (100) > iLO 5 (90) > iLO 4 (50) > generic (10)
-#   변경 이유: hpe_ilo6 (priority=100) 은 model_patterns 부재라 실격되지 않음 → 구 Superdome(95) 가
-#     모델("Superdome Flex")을 매치해도 priority 로 패배. scale-up 2 종을 iLO 6(100) 위로 올려 모델 매치 우선권 부여.
-#   정상 ProLiant 는 scale-up model_patterns 미매치 → 실격되어 iLO 5/6/7 자동 선택 (무회귀 — 검증 C1).
-#   사용자 승인 2026-06-04. ADR-2026-06-04-csus-adapter-priority.
 
 match:
   vendor: ["HPE", "Hewlett Packard Enterprise"]
-  # Product / Manager.Model 시그니처 — sdflexutils 명시 "Superdome Flex 280" / "Superdome Flex"
   model_patterns:
     - "^Superdome Flex 280.*"
     - "^Superdome Flex(?! 280).*"
-    - ".*Superdome.*Flex.*"  # 펌웨어 별 다른 표기 대비
-  # 펌웨어: RMC 2.x ~ 3.x (Superdome Flex) + iLO 5 2.x~3.x (per compute module)
+    - ".*Superdome.*Flex.*"
   firmware_patterns:
-    - "^[23]\\.[0-9]+\\..*"  # RMC firmware 2.x / 3.x
-    - "iLO.*5"               # per-node iLO 5 fallback signature
+    - "^[23]\\.[0-9]+\\..*"
+    - "iLO.*5"
 
 capabilities:
   sections_supported:
-    - system     # /Systems/Partition<N> — 전 partition 수집 (ADR-2026-05-12), top-level data.* 는 Partition0 representative
-    - hardware   # /Chassis/<id> — RMC aggregation (Base + Expansion 최대 8)
-    - bmc        # /Managers/<RMC_id> — RMC primary (per-node iLO 5 는 보조)
-    - cpu        # Systems.Processors
-    - memory     # Systems.Memory
-    - storage    # Systems.Storage + Volumes (표준 Redfish)
-    - network    # Systems.EthernetInterfaces
-    - firmware   # UpdateService — complex/nPar firmware bundles 포함 (raw passthrough)
-    - power      # Chassis.PowerSubsystem (DMTF 신 schema) → Power (legacy fallback)
-  # users (AccountService) — sections.yml channels=[os] 정의 따라 Redfish 채널 미해당. capabilities 명시 안 함.
+    - system
+    - hardware
+    - bmc
+    - cpu
+    - memory
+    - storage
+    - network
+    - firmware
+    - power
 
 collect:
   strategy: standard_only
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  # Superdome Flex 전용 OEM tasks 신규 작성 보류 (lab 부재) — HPE 공통 OEM 재사용.
-  # Partition 전용 OEM (Oem.Hpe.Partition*) 추가 시 별도 collect_superdome_oem.yml 신설.
 
 normalize:
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  # top-level data.* 는 Partition0 representative — 전 partition 은 data.multi_node 에 노출 (ADR-2026-05-12).
 
 credentials:
-  profile: "hpe"  # vault/<loc>/redfish/hpe.yml 재사용 (M-E1 결정 (a) HPE sub-line)
+  profile: "hpe"
   fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/hpe.yml accounts 의 label 과 매핑
   recovery_accounts:
     - { vault_label: hpe_fallback, role: recovery }
     - { vault_label: hpe_current,  role: recovery }
     - { vault_label: hpe_factory,  role: recovery }
 
 auth:
-  preferred: [session, basic]  # iLO 5 동일 — RMC 도 표준 Redfish auth
+  preferred: [session, basic]
 
 graceful_degradation:
   on_section_fail: continue
@@ -86,15 +49,14 @@ graceful_degradation:
   critical_sections: [system, hardware, bmc]
   optional_sections: [firmware, power, storage, network]
 
-# Superdome Flex 특이사항 (lab 부재 — web sources 추정. 사이트 실측 시 정정)
 vendor_notes:
-  multi_partition: true             # nPAR — 전 partition 수집 (cycle 2026-05-12 ADR-2026-05-12)
-  multi_node_support: true          # cycle 2026-05-12 — _collect_multi_node_topology 활성
-  systems_id_pattern: "Partition*"  # /redfish/v1/Systems/Partition0 (sdflexutils 실측)
+  multi_partition: true
+  multi_node_support: true
+  systems_id_pattern: "Partition*"
   manager_layout: "rmc_primary_ilo_secondary"
   rmc_firmware_min: "2.0"
   ilo5_firmware_min: "2.0"
-  npar_firmware_bundles: true       # complex/nPar firmware bundles (sdflex-ironic-driver wiki)
+  npar_firmware_bundles: true
 
 diagnosis:
   protocol_name: redfish

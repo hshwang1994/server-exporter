@@ -1,8 +1,15 @@
 ---
-# esxi-gather/tasks/collect_facts.yml
-# vmware_host_facts → _e_raw_facts, _e_facts_ok
+
+- name: "esxi | collect | reuse credential probe facts"
+  ansible.builtin.set_fact:
+    _e_facts_reused: >-
+      {{ (_e_auth_ok | default(false) | bool)
+         and ((_e_probe_facts | default({})) is mapping)
+         and ('ansible_distribution_version' in (_e_probe_facts | default({}))) }}
+  no_log: true
 
 - name: "esxi | collect | vmware_host_facts"
+  timeout: "{{ _e_task_timeout | default(180) }}"
   community.vmware.vmware_host_facts:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"
@@ -12,10 +19,14 @@
   delegate_to: localhost
   failed_when: false
   no_log: true
+  when: not (_e_facts_reused | bool)
 
 - name: "esxi | collect | store raw facts"
   ansible.builtin.set_fact:
-    _e_raw_facts: "{{ _e_facts_result.ansible_facts | default({}) }}"
-    _e_facts_ok:  "{{ _e_facts_result is not failed and
-                      _e_facts_result.ansible_facts is defined }}"
+    _e_raw_facts: >-
+      {{ _e_probe_facts if (_e_facts_reused | bool)
+         else (_e_facts_result.ansible_facts | default({})) }}
+    _e_facts_ok: >-
+      {{ (_e_facts_reused | bool)
+         or ((_e_facts_result is not failed) and (_e_facts_result.ansible_facts is defined)) }}
   no_log: true

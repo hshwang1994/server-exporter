@@ -1,25 +1,5 @@
 ---
-# os-gather/tasks/linux/gather_network.yml
-# 네트워크 인터페이스 수집 → data.network fragment
-#
-# 2026-09-03 (OS/ESXi 전수 검수 후속 — B-12/26/27/29/30):
-#   - Python / raw 두 경로가 **같은 raw 명령 + 같은 판정식**을 쓴다. 종전 python 경로는
-#     ansible_interfaces 중 IPv4 를 가진 것만 interfaces[] 에 넣어(NIC 4포트 중 IP 없는 3포트가
-#     인벤토리에서 사라짐) link_status 를 관리 up 플래그로 판정했고(케이블 빠져도 up), raw 경로는
-#     sysfs 전수 + operstate 였다. 이제 두 경로 모두 sysfs + ip 명령이다.
-#   - mac 은 normalize_mac (소문자 콜론) — Windows/ESXi 와 같은 형식.
-#   - IPv6 scope 는 `ip -o -6 addr` 의 scope 토큰 (global/link/host/site) — 주소 앞자리로 추정하지 않는다.
-#   - adapters[].name 에 'Unknown' 리터럴을 넣지 않는다 (없으면 null).
-#   - 섹션 status 는 실제 결과로 (interfaces 나 dns 가 하나라도 있어야 success).
-#
-# bond/vlan/bridge/team 토폴로지는 아래 _l_net_collector 스크립트(POSIX sh)가
-# '|' 구분 라인으로 emit → filter_plugins/network_topology.py(build_linux_network)
-# 가 파싱·정규화. RHEL/Rocky/Alma/CentOS/Oracle/Ubuntu/Debian/SUSE 공통
-# (sysfs+procfs+ip 다중 소스, 일부 부재해도 graceful).
 
-# =============================================================================
-# Shared: bond/vlan/bridge/team 토폴로지 수집 스크립트 (단일 정의)
-# =============================================================================
 - name: "linux | network | define topology collector"
   ansible.builtin.set_fact:
     _l_net_collector: |
@@ -129,13 +109,32 @@
       fi
   no_log: true
 
-# =============================================================================
-# 수집 — 두 경로 공통 (ip 명령 + /sys/class/net + /etc/resolv.conf + lspci + ethtool)
-# =============================================================================
 - name: "linux | network | raw gather"
+  timeout: "{{ _os_task_timeout | default(120) }}"
   ansible.builtin.raw: |
+    (
+      if [ -d /sys/class/net ]; then
+        for n in /sys/class/net/*; do
+          [ -d "$n" ] || continue
+          iface=$(basename "$n")
+          [ "$iface" = "lo" ] && continue
+          drv=""
+          if [ -L "$n/device/driver" ]; then
+            drv=$(basename "$(readlink "$n/device/driver")" 2>/dev/null)
+          fi
+          vlan=""
+          if [ -f "/proc/net/vlan/$iface" ]; then
+            vlan=$(awk '/VID:/ { for (i = 1; i <= NF; i++) if ($i == "VID:") { print $(i + 1); exit } }' "/proc/net/vlan/$iface" 2>/dev/null)
+          fi
+          bond_master=""
+          if [ -f "$n/master/uevent" ]; then
+            bond_master=$(basename "$(readlink "$n/master")" 2>/dev/null)
+          fi
+          echo "NIC|$iface|$drv|$vlan|$bond_master"
+        done
+      fi
+    )
     export LANG=C LC_ALL=C
-    # --- DNS (systemd-resolved 우회 — 127.0.0.53 stub 회피) ---
     if command -v resolvectl >/dev/null 2>&1; then
       resolvectl status 2>/dev/null | awk '/Current DNS Server:/{print "DNS_REAL="$4}'
     fi
@@ -143,13 +142,11 @@
       awk '/^nameserver/{print "DNS_REAL="$2}' /run/systemd/resolve/resolv.conf
     fi
     grep -v '^[#;]' /etc/resolv.conf 2>/dev/null | awk '/^nameserver/{print "DNS="$2}'
-    # --- Default gateway ---
     dg=$(ip route show default 2>/dev/null | head -1)
     if [ -n "$dg" ]; then
       echo "GW=$(echo "$dg" | awk '{print $3}')"
       echo "GW_DEV=$(echo "$dg" | awk '{print $5}')"
     fi
-    # --- Interfaces (IP 유무와 무관하게 전수 — bond slave / bridge port 는 토폴로지 필터가 채운다) ---
     for dev in $(ls /sys/class/net/ 2>/dev/null); do
       case "$dev" in lo|docker*|br-*|veth*|virbr*|vir*|cni*|flannel*|cali*|tunl*|dummy*|kube-*) continue;; esac
       if [ -e "/sys/class/net/$dev/master" ] && [ ! -d "/sys/class/net/$dev/bridge" ] && [ ! -d "/sys/class/net/$dev/bonding" ]; then
@@ -166,7 +163,6 @@
       addr=$(echo "$cidr" | cut -d/ -f1)
       prefix=$(echo "$cidr" | cut -sd/ -f2)
       echo "IF=${dev}|${mac}|${mtu}|${speed}|${state}|${addr:-}|${prefix:-}"
-      # IPv6 (link-local + global, ::1 제외). scope 는 ip 가 준 값 그대로 (global/link/host/site).
       ip -o -6 addr show dev "$dev" 2>/dev/null | awk -v d="$dev" '{
         a=""; sc="";
         for (i=1;i<=NF;i++) { if ($i=="inet6") a=$(i+1); if ($i=="scope") sc=$(i+1) }
@@ -176,7 +172,6 @@
         print "IF6=" d "|" ap[1] "|" ap[2] "|" sc
       }'
     done
-    # --- hardware NIC (lspci -mm) + driver. awk -F'"' field: $2=class / $4=vendor / $6=device ---
     if command -v lspci >/dev/null 2>&1; then
       lspci -k -mm -d ::0200 | while IFS= read -r line; do
         slot=$(echo "$line" | awk -F'"' '{print $1}' | tr -d ' ')
@@ -186,7 +181,6 @@
         echo "ADAPTER|${slot}|${vendor}|${device}|${driver}"
       done
     fi
-    # --- NIC firmware (ethtool -i), bus-info 도메인 strip → adapters[].pci 매칭 ---
     for d in $(ls /sys/class/net 2>/dev/null); do
       [ -e "/sys/class/net/$d/device" ] || continue
       inf=$(ethtool -i "$d" 2>/dev/null)
@@ -195,7 +189,6 @@
       [ -n "$bi" ] || continue
       echo "ETHFW|$(echo "$bi" | sed 's/^0000://')|${fw}"
     done
-    # bond/vlan/bridge/team 토폴로지 — 단일 정의 스크립트 주입
     {{ _l_net_collector }}
   register: _l_net_raw
   changed_when: false
@@ -229,7 +222,6 @@
       {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
         {%- if line.startswith('GW_DEV=') -%}{{ line[7:] | trim }}{% endif -%}
       {%- endfor -%}
-    # IF6 (IPv6 addresses by device) — scope 는 ip 명령 값 (global/link/host/site)
     _l_raw_ipv6_by_dev: >-
       {%- set m = {} -%}
       {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
@@ -253,7 +245,6 @@
         {%- endif -%}
       {%- endfor -%}
       {{ m }}
-    # ADAPTER (lspci PCI NIC) + ETHFW (ethtool firmware) — id, name, manufacturer, model, driver, firmware_version, pci
     _l_raw_adapters: >-
       {%- set out = [] -%}
       {%- set fwmap = {} -%}
@@ -371,7 +362,6 @@
       {{ out }}
   no_log: true
 
-# network.summary group 산출 (speed_mbps 기준). speed 미보고(가상 NIC/bond) 는 집계 제외.
 - name: "linux | network | compute summary groups (raw)"
   ansible.builtin.set_fact:
     _l_net_summary_r: >-
@@ -393,7 +383,6 @@
       {{ {'groups': ns.groups} }}
   no_log: true
 
-# N12 (2026-08-12): 수집 성공 판정을 한 곳에서 결정한다 — collected / failed / errors 세 자리가 이 변수를 본다.
 - name: "linux | network | raw 수집 성공 판정"
   ansible.builtin.set_fact:
     _l_net_raw_ok: >-
@@ -401,8 +390,6 @@
          or ((_l_raw_dns | default([]) | length) > 0) }}
   no_log: true
 
-# bond/vlan/bridge/team 토폴로지 정규화 (filter_plugins/network_topology.py).
-# merge_linux_addresses: bond alias / secondary IP 를 parent addresses[] 에 병합.
 - name: "linux | network | normalize topology (raw)"
   ansible.builtin.set_fact:
     _l_net_topo_raw: >-
@@ -424,7 +411,6 @@
           {%- endif -%}
           {{ out }}
         interfaces: "{{ _l_net_topo_raw.interfaces }}"
-        # bond/vlan/bridge/team 토폴로지 (Additive — 기존 필드 불변)
         bonds:    "{{ _l_net_topo_raw.bonds }}"
         bridges:  "{{ _l_net_topo_raw.bridges }}"
         teams:    "{{ _l_net_topo_raw.teams }}"
@@ -434,14 +420,9 @@
     _sections_supported_fragment: ['network']
     _sections_collected_fragment: "{{ ['network'] if (_l_net_raw_ok | default(false) | bool) else [] }}"
     _sections_failed_fragment:    "{{ [] if (_l_net_raw_ok | default(false) | bool) else ['network'] }}"
-    # N12: 섹션이 failed 가 되는 바로 그 조건에서 errors 1건. LOW-9/H4: lspci stderr 가 비어있지 않으면
-    # 권한 부족/partial enumeration 의심 경고 1건 (섹션은 success 유지 — 시나리오 B).
     _errors_fragment: "{{ ([] if (_l_net_raw_ok | default(false) | bool) else [{'section':'network','message':'네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=ip,sysfs,resolv_conf; cause=no_interface_and_no_dns; rc=' ~ (_l_net_raw.rc | default('none')))}]) + ([{'section':'network','message':'네트워크 카드 상세 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.','detail':('source=lspci; stderr=' ~ ((_l_net_raw.stderr | default('') | replace('\n', ' ') | trim | truncate(500, true)) or 'none'))}] if (('lspci' in (_l_net_raw.stderr | default(''))) and (_l_net_raw_ok | default(false) | bool)) else []) }}"
   no_log: true
 
-# =============================================================================
-# Shared: merge
-# =============================================================================
 - name: "linux | network | merge fragment"
   ansible.builtin.include_tasks:
     file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"

@@ -1,18 +1,5 @@
 ---
-# ==============================================================================
-# supported_sections.yml — 채널별 지원 섹션 정의
-# ==============================================================================
-# 각 채널(redfish/os/esxi)이 수집할 수 있는 섹션 목록을 정의합니다.
-#
-# 사용처:
-#   - build_sections.yml: 섹션 상태(success/failed/not_supported) 판정
-#   - build_failed_output.yml: 실패 시 _fail_sec_supported 자동 설정
-#   - adapter YAML: capabilities.sections_supported 기본값
-#
-# 새 섹션 추가 시: all_sections에 추가하고, 해당 채널 목록에도 추가하세요.
-# ==============================================================================
 
-# 전체 섹션 목록 (순서 = output JSON 순서)
 all_sections:
   - system
   - hardware
@@ -24,9 +11,8 @@ all_sections:
   - firmware
   - users
   - power
-  - thermal          # cycle 2026-06-14 (Track 4): 온도/팬
+  - thermal
 
-# 채널별 지원 섹션
 channel_sections:
   redfish:
     - system
@@ -38,11 +24,11 @@ channel_sections:
     - network
     - firmware
     - power
-    - thermal        # cycle 2026-06-14 (Track 4)
+    - thermal
 
   os:
     - system
-    - hardware        # 2026-09-03: Linux/Windows 모두 DMI/CIM 모델·BIOS·시리얼을 hardware 로 낸다
+    - hardware
     - cpu
     - memory
     - storage

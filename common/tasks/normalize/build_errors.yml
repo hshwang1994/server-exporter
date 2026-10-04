@@ -1,25 +1,4 @@
 ---
-# common/tasks/normalize/build_errors.yml
-#
-# _all_errors 누적 변수를 최종 표준 형식으로 정리한다.
-#
-# 2026-08-12: 정규화 로직은 filter_plugins/errors_normalizer.py (normalize_errors) 한 곳뿐이다.
-#   merge_fragment.yml 과 이 파일이 같은 필터를 부른다 — 종전처럼 같은 Jinja 를 두 벌 복제하지
-#   않는다 (M5). 필터는 멱등이라 이미 정규화된 값을 다시 넣어도 결과가 같다.
-#
-# 필터가 보장하는 것 (계약):
-#   section : 비지 않은 문자열 (없으면 'unknown')
-#   message : **항상 비지 않은 문자열**. null / '' / 키 부재 / 비-문자열은 고정 문장으로
-#             대체되고 원본은 detail 로 내려간다 (파이썬 dict repr 이 사용자 문장 자리에
-#             들어가는 경로 제거 — H10).
-#   detail  : 문자열 또는 null. dict 는 'k=v; k=v' 로 평탄화 (타입 통일 — M12).
-#   원소를 조용히 버리지 않는다 (None / 공백-only 문자열 제외).
-#
-# 입력 변수:
-#   _all_errors : list — merge_fragment 누적 errors
-#
-# 출력 변수:
-#   _norm_errors : list — [{section, message, detail}]
 
 - name: "normalize | build_errors"
   ansible.builtin.set_fact:

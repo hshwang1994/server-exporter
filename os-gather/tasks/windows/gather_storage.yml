@@ -1,42 +1,28 @@
 ---
-# os-gather/tasks/windows/gather_storage.yml → data.storage fragment
-#
-# 2026-09-03 (OS/ESXi 전수 검수 후속):
-#   - filesystems[] 용량은 정수 MB (종전 float + 부동소수 오차 — B-16). Linux 와 같은 계산(used = total - free).
-#   - Normalize-DiskSerial: 디코딩 결과의 **모든 바이트가 인쇄 가능** 할 때만 디코딩 결과를 쓴다.
-#     종전 조건("hex 이고 '20' 을 포함") 은 NAA/RAID 계열 32-hex 시리얼을 의미 없는 짧은 문자열로 바꿨다 (B-19).
-#   - physical_disks[].health: OK / Warning / Critical / null (Redfish 와 같은 어휘 — B-18).
-#   - infiniband[].vendor: 드라이버 공급자 / PnP 제조사에서 읽는다 (종전 'Mellanox' 하드코딩 — B-23).
-#   - 디스크도 볼륨도 못 읽으면 섹션 failed + 사유 (종전 collected 하드코딩 — B-12).
 
-- name: "windows | storage | volumes"
+- name: "windows | storage | volumes + physical disks"
+  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
-    Get-Volume |
-    Where-Object { $_.DriveLetter -and $_.FileSystemType -ne 'Unknown' } |
-    ForEach-Object {
-      [PSCustomObject]@{
-        drive = [string]$_.DriveLetter
-        fs    = $_.FileSystemType
-        total = $_.Size
-        free  = $_.SizeRemaining
-      } | ConvertTo-Json -Compress
+    function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
+      $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
+      $Doc[$Name] = $c
+      try { $null = & $Body $c }
+      catch { $c.ok = $false; $c.error = [string]$_.Exception.Message; if (-not $c.error) { $c.error = [string]$_ } }
     }
-  register: _w_vol_raw
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: "windows | storage | physical disks"
-  ansible.windows.win_shell: |
-    # production-audit (2026-04-29): Get-PhysicalDisk(modern) + Win32_DiskDrive(fallback)로
-    # MediaType을 HDD/SSD enum으로 정규화. 기존 raw WMI string ("Fixed hard disk media") 누출 차단.
-    # windows-audit (2026-04-29): PS5.1=int / PS7+=enum string 양쪽 BusType 처리.
-    #   Win32_DiskDrive raw "Fixed hard disk media"는 SSD/HDD 정보 부재 → null (잘못된 추정 차단).
-    #   HealthStatus 매핑 (Healthy/Warning/Unhealthy) → health 필드 (OK/Warning/Critical).
-    # serial/wwn 추가 (2026-06-22). serial: Get-PhysicalDisk 우선 → Win32_DiskDrive fallback.
-    #   일부 드라이브는 SerialNumber 를 hex 인코딩(ASCII)+공백(20) 패딩으로 반환 → 디코딩 정규화.
-    #   2026-09-03: 디코딩은 모든 바이트가 인쇄 가능(0x20~0x7E) 하고 결과에 hex 밖 문자가 하나라도 있을 때만.
-    #   그렇지 않으면(NAA 식별자처럼 우연히 hex 인 진짜 시리얼) 원문을 보존한다.
+    $doc = [ordered]@{}
+    Invoke-SeComponent $doc 'volumes' {
+      param($c)
+      Get-Volume |
+      Where-Object { $_.DriveLetter -and $_.FileSystemType -ne 'Unknown' } |
+      ForEach-Object {
+        [void]$c.rows.Add([PSCustomObject]@{
+          drive = [string]$_.DriveLetter
+          fs    = $_.FileSystemType
+          total = $_.Size
+          free  = $_.SizeRemaining
+        })
+      }
+    }
     function Normalize-DiskSerial($v) {
       if (-not $v) { return $null }
       $s = ([string]$v).Trim()
@@ -60,169 +46,276 @@
       if (-not $s -or $s -in @('NA','N/A','None','0','00000000')) { return $null }
       return $s
     }
-
-    $physical_map = @{}
-    if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
-      try {
-        Get-PhysicalDisk | ForEach-Object {
-          # MSFT_PhysicalDisk.MediaType: PS5.1=int (3=HDD, 4=SSD, 5=SCM, 0=Unspecified)
-          # PS7+=string ("HDD", "SSD", "SCM", "Unspecified")
-          $mtRaw = $_.MediaType
-          $mt = if ($mtRaw -is [int]) {
-                  switch ([int]$mtRaw) { 3{'HDD'} 4{'SSD'} 5{'SCM'} default{$null} }
-                } else {
-                  switch ([string]$mtRaw) { 'HDD'{'HDD'} 'SSD'{'SSD'} 'SCM'{'SCM'} default{$null} }
-                }
-          # BusType: PS5.1=int (6=SATA, 7=USB, 8=RAID, 10=SAS, 17=NVMe, 11=SCSI)
-          # PS7+=enum string ("SATA", "SAS", "NVMe", ...)
-          $btRaw = $_.BusType
-          $bus = if ($btRaw -is [int]) {
-                   switch ([int]$btRaw) {
-                     1{'SCSI'} 6{'SATA'} 7{'USB'} 8{'RAID'} 10{'SAS'}
-                     11{'SCSI'} 17{'NVMe'} 18{'SD'} 19{'MMC'} default{$null}
-                   }
-                 } else {
-                   $bts = [string]$btRaw
-                   switch -Wildcard ($bts) {
-                     'SATA'  { 'SATA' }
-                     'SAS'   { 'SAS' }
-                     'NVMe'  { 'NVMe' }
-                     'USB'   { 'USB' }
-                     'RAID'  { 'RAID' }
-                     'SCSI'  { 'SCSI' }
-                     'iSCSI' { 'iSCSI' }
-                     'FC'    { 'FibreChannel' }
-                     default { $null }
-                   }
-                 }
-          # HealthStatus: "Healthy", "Warning", "Unhealthy", "Unknown" → OK / Warning / Critical / null
-          $hs = [string]$_.HealthStatus
-          $health = switch ($hs) {
-            'Healthy'   { 'OK' }
-            'Warning'   { 'Warning' }
-            'Unhealthy' { 'Critical' }
-            default     { $null }
+    function ConvertTo-CimCode($v) {
+      if ($null -eq $v) { return $null }
+      if ($v -is [string]) {
+        $t = $v.Trim()
+        if ($t -match '^\d+$') { try { return [int]$t } catch { return $null } }
+        return $null
+      }
+      if ($v -is [bool] -or $v -is [char]) { return $null }
+      if ($v -is [ValueType]) { try { return [int]$v } catch { return $null } }
+      return $null
+    }
+    function Get-DiskBusProtocol($v) {
+      if ($null -eq $v) { return $null }
+      if ($v -is [string]) {
+        $byName = switch ($v.Trim()) {
+          'SATA'          { 'SATA' }
+          'SAS'           { 'SAS' }
+          'NVMe'          { 'NVMe' }
+          'USB'           { 'USB' }
+          'RAID'          { 'RAID' }
+          'SCSI'          { 'SCSI' }
+          'iSCSI'         { 'iSCSI' }
+          'FC'            { 'FibreChannel' }
+          'Fibre Channel' { 'FibreChannel' }
+          'FibreChannel'  { 'FibreChannel' }
+          'SD'            { 'SD' }
+          'MMC'           { 'MMC' }
+          '1394'          { '1394' }
+        }
+        if ($byName) { return $byName }
+      }
+      $code = ConvertTo-CimCode $v
+      if ($null -eq $code) { return $null }
+      switch ($code) {
+        0  { $null }
+        1  { 'SCSI' }
+        2  { $null }
+        3  { $null }
+        4  { '1394' }
+        5  { $null }
+        6  { 'FibreChannel' }
+        7  { 'USB' }
+        8  { 'RAID' }
+        9  { 'iSCSI' }
+        10 { 'SAS' }
+        11 { 'SATA' }
+        12 { 'SD' }
+        13 { 'MMC' }
+        14 { $null }
+        15 { $null }
+        16 { $null }
+        17 { 'NVMe' }
+        18 { $null }
+        19 { $null }
+        default { $null }
+      }
+    }
+    function Get-DiskMediaType($v) {
+      if ($null -eq $v) { return $null }
+      if ($v -is [string]) {
+        $byName = switch ($v.Trim()) {
+          'HDD' { 'HDD' }
+          'SSD' { 'SSD' }
+          'SCM' { 'SCM' }
+        }
+        if ($byName) { return $byName }
+      }
+      $code = ConvertTo-CimCode $v
+      if ($null -eq $code) { return $null }
+      switch ($code) {
+        0 { $null }
+        3 { 'HDD' }
+        4 { 'SSD' }
+        5 { 'SCM' }
+        default { $null }
+      }
+    }
+    function Get-DiskHealth($v) {
+      if ($null -eq $v) { return $null }
+      if ($v -is [string]) {
+        $byName = switch ($v.Trim()) {
+          'Healthy'   { 'OK' }
+          'Warning'   { 'Warning' }
+          'Unhealthy' { 'Critical' }
+        }
+        if ($byName) { return $byName }
+      }
+      $code = ConvertTo-CimCode $v
+      if ($null -eq $code) { return $null }
+      switch ($code) {
+        0 { 'OK' }
+        1 { 'Warning' }
+        2 { 'Critical' }
+        5 { $null }
+        default { $null }
+      }
+    }
+    function Get-UidFormatCode($v) {
+      if ($null -eq $v) { return -1 }
+      if ($v -is [string]) {
+        $byName = switch -Wildcard ($v.Trim()) {
+          'EUI64'      { 2 }
+          'FCPHName'   { 3 }
+          'FCPH Name'  { 3 }
+          'SCSIName*'  { 8 }
+          'SCSI Name*' { 8 }
+        }
+        if ($null -ne $byName) { return $byName }
+      }
+      $code = ConvertTo-CimCode $v
+      if ($null -eq $code) { return -1 }
+      return $code
+    }
+    $dd = $null
+    Invoke-SeComponent $doc 'read_disk_drives' {
+      param($c)
+      $script:dd = @(Get-CimInstance Win32_DiskDrive)
+    }
+    Invoke-SeComponent $doc 'disks' {
+      param($c)
+      $physical_map = @{}
+      if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
+        try {
+          Get-PhysicalDisk | ForEach-Object {
+            $btRaw = $_.BusType
+            $bus = Get-DiskBusProtocol $btRaw
+            $busUnmapped = $null
+            if ($null -eq $bus -and $null -ne $btRaw) {
+              $btCode = ConvertTo-CimCode $btRaw
+              if ($null -ne $btCode) { $busUnmapped = $btCode }
+              else {
+                $btName = ([string]$btRaw).Trim()
+                if ($btName) { $busUnmapped = $btName }
+              }
+            }
+            $mt = Get-DiskMediaType $_.MediaType
+            $health = Get-DiskHealth $_.HealthStatus
+            $serRaw = [string]$_.SerialNumber
+            $uidRaw = [string]$_.UniqueId
+            $ufRaw  = $_.UniqueIdFormat
+            $physical_map[[string]$_.DeviceId] = @{ media_type = $mt; bus = $bus; bus_unmapped = $busUnmapped; health = $health; serial = $serRaw; unique_id = $uidRaw; uid_fmt = $ufRaw }
           }
-          # serial/UniqueId(wwn 후보) 캡처
-          $serRaw = [string]$_.SerialNumber
-          $uidRaw = [string]$_.UniqueId
-          $ufRaw  = $_.UniqueIdFormat
-          $physical_map[[string]$_.DeviceId] = @{ media_type = $mt; bus = $bus; health = $health; serial = $serRaw; unique_id = $uidRaw; uid_fmt = $ufRaw }
+        } catch { }
+      }
+      $osDiskNumbers = @()
+      $osDetermined = $false
+      try {
+        $sysDl = ([string]$env:SystemDrive).TrimEnd(':')
+        if (Get-Command Get-Partition -ErrorAction SilentlyContinue) {
+          $osDiskNumbers = @(Get-Partition -DriveLetter $sysDl -ErrorAction Stop |
+                             Select-Object -ExpandProperty DiskNumber -Unique)
+          if ($osDiskNumbers.Count -gt 0) { $osDetermined = $true }
         }
       } catch { }
-    }
-    # is_os_disk (2026-07-02): OS 루트($env:SystemDrive) 파티션이 속한 물리 디스크 번호 판정.
-    #   Get-Partition → DiskNumber (다중 가능). 부재 시 WMI(Win32_DiskPartition.DiskIndex) fallback.
-    #   Win32_DiskDrive.Index == DiskNumber 매칭. 물리 매칭 0건 → 판정불가(null, 거짓 false 방지).
-    #   주의: Storage Spaces/동적미러 OS 는 가상 DiskNumber 라 물리 Index 매칭 0 → 전 디스크 null
-    #   (Linux 의 RAID/LVM 멤버 all-true 와 비대칭 — hardware-RAID/단일디스크만 true/false. field_dictionary 명시).
-    $osDiskNumbers = @()
-    $osDetermined = $false
-    try {
-      $sysDl = ([string]$env:SystemDrive).TrimEnd(':')
-      if (Get-Command Get-Partition -ErrorAction SilentlyContinue) {
-        $osDiskNumbers = @(Get-Partition -DriveLetter $sysDl -ErrorAction Stop |
-                           Select-Object -ExpandProperty DiskNumber -Unique)
-        if ($osDiskNumbers.Count -gt 0) { $osDetermined = $true }
+      if (-not $osDetermined -and (([string]$env:SystemDrive) -match '^[A-Za-z]:$')) {
+        try {
+          $ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'" -ErrorAction Stop
+          $parts = Get-CimAssociatedInstance -InputObject $ld -ResultClassName Win32_DiskPartition -ErrorAction Stop
+          $nums = @($parts | ForEach-Object { [int]$_.DiskIndex } | Select-Object -Unique)
+          if ($nums.Count -gt 0) { $osDiskNumbers = $nums; $osDetermined = $true }
+        } catch { }
       }
-    } catch { }
-    # WMI fallback (SystemDrive 형식 가드 — WQL 문자열 주입 방지)
-    if (-not $osDetermined -and (([string]$env:SystemDrive) -match '^[A-Za-z]:$')) {
-      try {
-        $ld = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'" -ErrorAction Stop
-        $parts = Get-CimAssociatedInstance -InputObject $ld -ResultClassName Win32_DiskPartition -ErrorAction Stop
-        $nums = @($parts | ForEach-Object { [int]$_.DiskIndex } | Select-Object -Unique)
-        if ($nums.Count -gt 0) { $osDiskNumbers = $nums; $osDetermined = $true }
-      } catch { }
-    }
-    # Win32_DiskDrive 1회 열거(감사 fix: 중복 열거/TOCTOU 제거) — 매칭·emit 공용 스냅샷
-    $dd = @(Get-CimInstance Win32_DiskDrive)
-    if ($osDetermined) {
-      $allIdx = @($dd | ForEach-Object { [int]$_.Index })
-      if (-not (@($osDiskNumbers | Where-Object { $allIdx -contains [int]$_ }).Count -gt 0)) { $osDetermined = $false }
-    }
-    $dd | ForEach-Object {
-      $idx = [string]$_.Index
-      $mt = $null
-      $bus = $null
-      $health = $null
-      $pdSerial = $null
-      $pdUid = $null
-      $pdUidFmt = $null
-      if ($physical_map.ContainsKey($idx)) {
-        $mt = $physical_map[$idx].media_type
-        $bus = $physical_map[$idx].bus
-        $health = $physical_map[$idx].health
-        $pdSerial = $physical_map[$idx].serial
-        $pdUid = $physical_map[$idx].unique_id
-        $pdUidFmt = $physical_map[$idx].uid_fmt
+      if ($osDetermined) {
+        $allIdx = @($dd | ForEach-Object { [int]$_.Index })
+        if (-not (@($osDiskNumbers | Where-Object { $allIdx -contains [int]$_ }).Count -gt 0)) { $osDetermined = $false }
       }
-      # Win32_DiskDrive.MediaType fallback — 진짜 SSD 정보만 매핑.
-      # "Fixed hard disk media"는 SSD/HDD 구분 안 함 → null (잘못된 HDD 추정 금지).
-      if (-not $mt) {
-        $rawMt = [string]$_.MediaType
-        if ($rawMt -match '(?i)solid state|ssd') { $mt = 'SSD' }
-        else { $mt = $null }
-      }
-      # InterfaceType fallback (Win32_DiskDrive)
-      if (-not $bus) {
-        $iface = [string]$_.InterfaceType
-        $bus = switch -Wildcard ($iface) {
-          'SCSI' { 'SCSI' }
-          'IDE'  { 'IDE' }
-          'USB'  { 'USB' }
-          'HDC'  { 'HDC' }
-          '1394' { '1394' }
-          default { $null }
+      $dd | ForEach-Object {
+        $idx = [string]$_.Index
+        $mt = $null
+        $bus = $null
+        $health = $null
+        $pdSerial = $null
+        $pdUid = $null
+        $pdUidFmt = $null
+        $busRaw = $null
+        if ($physical_map.ContainsKey($idx)) {
+          $mt = $physical_map[$idx].media_type
+          $bus = $physical_map[$idx].bus
+          $busRaw = $physical_map[$idx].bus_unmapped
+          $health = $physical_map[$idx].health
+          $pdSerial = $physical_map[$idx].serial
+          $pdUid = $physical_map[$idx].unique_id
+          $pdUidFmt = $physical_map[$idx].uid_fmt
         }
-      }
-      # serial: Get-PhysicalDisk 우선 → Win32_DiskDrive.SerialNumber fallback → 정규화
-      $serial = Normalize-DiskSerial $pdSerial
-      if (-not $serial) { $serial = Normalize-DiskSerial ([string]$_.SerialNumber) }
-      # wwn: UniqueId 가 WWN성 포맷(EUI64=2 / FCPHName=3 / SCSI Name String=8)일 때만 해석.
-      #   로컬 SATA 는 보통 null (best-effort). (MSFT_PhysicalDisk UniqueIdFormat 값맵)
-      $wwn = $null
-      if ($pdUid) {
-        $ufInt = if ($pdUidFmt -is [int]) { [int]$pdUidFmt } else {
-          switch -Wildcard ([string]$pdUidFmt) {
-            'EUI64'     { 2 }
-            'FCPHName'  { 3 }
-            'FCPH Name' { 3 }
-            'SCSIName*' { 8 }
-            'SCSI Name*'{ 8 }
-            default     { -1 }
+        if (-not $mt) {
+          $rawMt = [string]$_.MediaType
+          if ($rawMt -match '(?i)solid state|ssd') { $mt = 'SSD' }
+          else { $mt = $null }
+        }
+        if (-not $bus) {
+          $iface = [string]$_.InterfaceType
+          $bus = switch -Wildcard ($iface) {
+            'SCSI' { 'SCSI' }
+            'IDE'  { 'IDE' }
+            'USB'  { 'USB' }
+            'HDC'  { 'HDC' }
+            '1394' { '1394' }
+            default { $null }
           }
         }
-        if ($ufInt -in @(2,3,8)) {
-          $w = ([string]$pdUid).Trim()
-          if ($w) { $wwn = $w }
+        $serial = Normalize-DiskSerial $pdSerial
+        if (-not $serial) { $serial = Normalize-DiskSerial ([string]$_.SerialNumber) }
+        $wwn = $null
+        if ($pdUid) {
+          $ufInt = Get-UidFormatCode $pdUidFmt
+          if ($ufInt -in @(2,3,8)) {
+            $w = ([string]$pdUid).Trim()
+            if ($w) { $wwn = $w }
+          }
         }
+        $is_os = $null
+        if ($osDetermined) { $is_os = [bool]($osDiskNumbers -contains [int]$_.Index) }
+        [void]$c.rows.Add([PSCustomObject]@{
+          device = $_.DeviceID
+          model  = $_.Model
+          serial = $serial
+          wwn    = $wwn
+          total  = $_.Size
+          media  = $mt
+          protocol = $bus
+          health   = $health
+          is_os_disk = $is_os
+          bus_type_raw = $busRaw
+        })
       }
-      $is_os = $null
-      if ($osDetermined) { $is_os = [bool]($osDiskNumbers -contains [int]$_.Index) }
-      [PSCustomObject]@{
-        device = $_.DeviceID
-        model  = $_.Model
-        serial = $serial
-        wwn    = $wwn
-        total  = $_.Size
-        media  = $mt
-        protocol = $bus
-        health   = $health
-        is_os_disk = $is_os
-      } | ConvertTo-Json -Compress
     }
-  register: _w_disk_raw
+    try { $doc | ConvertTo-Json -Depth 8 -Compress }
+    catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }
+  register: _w_stor_doc_raw
   changed_when: false
   failed_when: false
   no_log: true
 
-# P4 (cycle 2026-04-29 → 2026-05-29 enrich, hba-ib-csus): FC HBA initiator + MSFC_* 보강.
-# Get-InitiatorPort = WWPN/WWNN/상태 (Win2012+ 무 role/feature). MSFC_FCAdapterHBAAttributes /
-# MSFC_FibrePortHBAAttributes (root\WMI) = model/vendor/driver/firmware/speed (HBA miniport
-# driver 가 T11 FC-HBA API 등록 시만 — try/catch + 부재 시 graceful null). WWN 은 colon-hex 정규화.
-# source: MS docs MSFT_InitiatorPort / MSFC_* (EXTERNAL-CONTRACTS §4). lab 부재 — 사이트 실측 시 정정.
+- name: "windows | storage | parse document"
+  ansible.builtin.set_fact:
+    _w_stor_doc: >-
+      {{ (_w_stor_doc_raw.stdout | default('') | trim | from_json)
+         if (_w_stor_doc_raw.stdout | default('') | trim | length > 0) else {} }}
+  no_log: true
+
+- name: "windows | storage | split document"
+  ansible.builtin.set_fact:
+    _w_vol_raw: >-
+      {%- set d = _w_stor_doc if (_w_stor_doc is mapping) else {} -%}
+      {%- set c = d.get('volumes') if (d.get('volumes') is mapping) else {} -%}
+      {%- set rows = c.get('rows') -%}
+      {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+      {%- set lines = rows | map('to_json') | list -%}
+      {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+      {%- if _w_stor_doc_raw.rc is defined -%}
+        {%- set r = _w_stor_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
+    _w_disk_raw: >-
+      {%- set d = _w_stor_doc if (_w_stor_doc is mapping) else {} -%}
+      {%- set c = d.get('disks') if (d.get('disks') is mapping) else {} -%}
+      {%- set rows = c.get('rows') -%}
+      {%- if rows is mapping -%}{%- set rows = [rows] -%}{%- elif rows is string or rows is not iterable -%}{%- set rows = [] -%}{%- endif -%}
+      {%- set lines = rows | map('to_json') | list -%}
+      {%- set out = {'stdout': (lines | join('\n')), 'stdout_lines': lines} -%}
+      {%- if _w_stor_doc_raw.rc is defined -%}
+        {%- set r = _w_stor_doc_raw.rc -%}
+        {%- set _ = out.update({'rc': (r if (r is none or (r | int) != 0) else (0 if (c.get('ok') is sameas true) else 1))}) -%}
+      {%- endif -%}
+      {{ out }}
+  no_log: true
+
 - name: "windows | storage | initiator ports + HBA attrs"
+  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     function Format-Wwn($v) {
       if (-not $v) { return $null }
@@ -264,8 +357,6 @@
       Get-CimInstance -Namespace root\WMI -ClassName MSFC_FibrePortHBAAttributes -ErrorAction Stop | ForEach-Object {
         $a = $_.Attributes
         $spd = [int]$a.PortSpeed
-        # MSFC_FibrePortHBAAttributes.PortSpeed 는 T11 FC-HBA API bitmask: 비트값 → FC 세대 Gbps.
-        # 16=10GFC, 32=16GFC, 64=32GFC, 128=64GFC (1/2/4/8 은 그대로 Gb). 비트값 ≠ Gbps 라 매핑 필수.
         $gbps = switch ($spd) { 1 {1} 2 {2} 4 {4} 8 {8} 16 {10} 32 {16} 64 {32} 128 {64} default {$null} }
         $portattrs += [PSCustomObject]@{
           port_wwn   = Wwn-FromBytes $a.PortWWN
@@ -281,13 +372,8 @@
   failed_when: false
   no_log: true
 
-# P4 (cycle 2026-05-29 hba-ib-csus): Windows InfiniBand best-effort (구: hardcoded []).
-# Get-NetAdapter PhysicalMediaType=InfiniBand / NdisPhysicalMedium=11 (authoritative) +
-# Get-PnpDevice VEN_15B3 (Mellanox) fallback. node_guid 는 Windows 표준 API 부재 → null (날조 금지).
-# source: MS docs Get-NetAdapter / OID_GEN_PHYSICAL_MEDIUM (EXTERNAL-CONTRACTS §4). lab 부재.
-# 2026-09-03: vendor 는 DriverProvider(1차) / PnP Manufacturer(2차) 에서 읽는다. 2차 fallback 은
-#   PhysicalMediaType 이 InfiniBand 인 것만 남긴다 (Mellanox 이더넷 NIC 를 IB 로 세지 않는다 — B-23).
 - name: "windows | storage | infiniband adapters (best-effort)"
+  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     $ib = @()
     try {
@@ -310,9 +396,6 @@
     if ($ib.Count -eq 0) {
       try {
         Get-PnpDevice -Class Net -ErrorAction Stop | Where-Object {
-          # VEN_15B3 = Mellanox PCI vendor ID. 구 '^(mlx|ibal|nd)' 의 'nd' 가 LBFO 팀 멀티플렉서 service
-          # 'NdisImPlatformMp' 를 오탐 (2026-06-26 site 10.100.64.120 실측 — 팀 3개를 Mellanox IB 로 보고).
-          # IB 전용 service(ibbus/ibal) 만 인정 — mlx 계열 이더넷 드라이버는 IB 근거가 아니다.
           (([string]$_.Service -match '^(ibbus|ibal|ipoib)')) -and
           ([string]$_.InstanceId -notmatch 'MS_IMPLAT')
         } | ForEach-Object {
@@ -333,11 +416,6 @@
   failed_when: false
   no_log: true
 
-# cycle 2026-05-29 (hba-ib-csus): HBA/IB canonical 정규화.
-#   - win_shell 단일 JSON object(stdout) 파싱 (구: line-by-line).
-#   - FC/iSCSI 만 hbas[] (SAS/Other initiator 제외 — storage controller 영역).
-#   - MSFC_* 보강 join (node_wwn → vendor/model/driver/firmware ; port_wwn → speed).
-#   - canonical 키 (wwpn/wwnn/model/vendor/driver/firmware/link_status/link_speed_gbps/port_type/source).
 - name: "windows | storage | parse HBA/IB raw json"
   ansible.builtin.set_fact:
     _w_hba_parsed: "{{ (_w_hba_raw.stdout | default('') | trim | from_json) if (_w_hba_raw.stdout | default('') | trim) else {'ports': [], 'adapters': [], 'port_attrs': []} }}"
@@ -348,7 +426,6 @@
   ansible.builtin.set_fact:
     _w_hbas: >-
       {%- set out = [] -%}
-      {#- PS5.1 ConvertTo-Json 단일 원소 배열 → object collapse 방어: mapping 이면 [wrap] -#}
       {%- set ports = _w_hba_parsed.ports | default([]) -%}
       {%- if ports is mapping -%}{%- set ports = [ports] -%}{%- endif -%}
       {%- set adapters = _w_hba_parsed.adapters | default([]) -%}
@@ -357,24 +434,27 @@
       {%- if pattrs is mapping -%}{%- set pattrs = [pattrs] -%}{%- endif -%}
       {%- set adp_by_node = {} -%}
       {%- for a in adapters -%}
-        {%- if a.node_wwn -%}{%- set _ = adp_by_node.update({a.node_wwn: a}) -%}{%- endif -%}
+        {%- set ak = (a.node_wwn | default(none)) | normalize_wwn -%}
+        {%- if ak -%}{%- set _ = adp_by_node.update({ak: a}) -%}{%- endif -%}
       {%- endfor -%}
-      {%- set adp_first = (adapters[0] if (adapters | length > 0) else {}) -%}
       {%- set pa_by_wwpn = {} -%}
       {%- for pa in pattrs -%}
-        {%- if pa.port_wwn -%}{%- set _ = pa_by_wwpn.update({pa.port_wwn: pa}) -%}{%- endif -%}
+        {%- set pk = (pa.port_wwn | default(none)) | normalize_wwn -%}
+        {%- if pk -%}{%- set _ = pa_by_wwpn.update({pk: pa}) -%}{%- endif -%}
       {%- endfor -%}
       {%- for p in ports -%}
-        {%- set ct = (p.conn_type | default('')) | lower -%}
-        {%- set is_fc = 'fibre' in ct -%}
-        {%- set is_iscsi = 'iscsi' in ct -%}
+        {%- set ct_raw = p.conn_type | default(none) -%}
+        {%- set ct = ((ct_raw if ct_raw is not none else '') | string | trim | lower) -%}
+        {%- set is_fc = ('fibre' in ct) or ct == '1' -%}
+        {%- set is_iscsi = ('iscsi' in ct) or ct == '2' -%}
         {%- if is_fc or is_iscsi -%}
           {%- set wwpn = (p.port_addr | default(none)) | normalize_wwn -%}
           {%- set wwnn = (p.node_addr | default(none)) | normalize_wwn -%}
-          {%- set adp = adp_by_node.get(wwnn, adp_first) -%}
-          {%- set pa = pa_by_wwpn.get(wwpn, {}) -%}
-          {%- set os = (p.oper_status | default('')) | lower -%}
-          {%- set link = 'up' if ('oper' in os or os == '2') else ('down' if ('down' in os or os == '6' or 'error' in os or os == '7') else 'unknown') -%}
+          {%- set adp = (adp_by_node.get(wwnn, {}) if wwnn else {}) -%}
+          {%- set pa = (pa_by_wwpn.get(wwpn, {}) if wwpn else {}) -%}
+          {%- set os = (p.oper_status | default('')) | string | lower -%}
+          {%- set os_codes = os.split(',') | map('trim') | list -%}
+          {%- set link = 'up' if ('oper' in os or '2' in os_codes) else ('down' if ('down' in os or 'error' in os or '6' in os_codes or '7' in os_codes) else 'unknown') -%}
           {%- set _ = out.append({
             'wwpn':            wwpn if is_fc else none,
             'wwnn':            wwnn if is_fc else none,
@@ -385,7 +465,7 @@
             'link_status':     link,
             'link_speed_gbps': pa.speed_gbps | default(none),
             'port_type':       'FibreChannel' if is_fc else 'iSCSI',
-            'connection':      p.conn_type | default(none),
+            'connection':      ('Fibre Channel' if ct == '1' else ('iSCSI' if ct == '2' else ct_raw)),
             'source':          'os',
           }) -%}
         {%- endif -%}
@@ -472,9 +552,22 @@
         {%- endif -%}
       {%- endfor -%}
       {{ out }}
+    _w_disk_bus_unmapped: >-
+      {%- set out = [] -%}
+      {%- for line in (_w_disk_raw.stdout_lines | default([])) -%}
+        {%- if line | trim -%}
+          {%- set d = line | from_json -%}
+          {%- set total_b = (d.total | int) if (d.total is defined and d.total is not none) else 0 -%}
+          {%- set total_mb = (total_b / 1048576) | round(0,'floor') | int -%}
+          {%- set raw = d.bus_type_raw | default(none) -%}
+          {%- if total_mb > 0 and (d.protocol | default(none)) is none and raw is not none and raw not in out -%}
+            {%- set _ = out.append(raw) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
   no_log: true
 
-# cycle-016 (2026-04-29): storage.summary grouping
 - name: "windows | storage | compute summary groups"
   ansible.builtin.set_fact:
     _w_stor_summary: >-
@@ -510,19 +603,22 @@
         datastores:      []
         controllers:     []
         logical_volumes: []
-        # cycle-016 (2026-04-29): Win32_DiskDrive 기반 group summary
         summary:         "{{ _w_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
-        # P4 (cycle 2026-04-29 → 2026-05-29): Get-InitiatorPort + MSFC_* FC HBA / Get-NetAdapter IB
         hbas:            "{{ _w_hbas | default([]) }}"
         infiniband:      "{{ _w_ib | default([]) }}"
     _sections_supported_fragment: ['storage']
     _sections_collected_fragment: "{{ ['storage'] if (_w_stor_ok | bool) else [] }}"
     _sections_failed_fragment:    "{{ [] if (_w_stor_ok | bool) else ['storage'] }}"
     _errors_fragment: >-
-      {{ [] if (_w_stor_ok | bool) else [{
+      {{ ([] if (_w_stor_ok | bool) else [{
            'section': 'storage',
            'message': '스토리지 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
-           'detail':  ('source=Get-Volume,Win32_DiskDrive; cause=no_output; rc=' ~ (_w_disk_raw.rc | default('none')))}] }}
+           'detail':  ('source=Get-Volume,Win32_DiskDrive; cause=no_output; rc=' ~ (_w_disk_raw.rc | default('none')))}])
+         + ([{
+           'section': 'storage',
+           'message': '일부 디스크의 연결 인터페이스 종류를 분류하지 못해 해당 항목을 비워 두었습니다.',
+           'detail':  ('source=Get-PhysicalDisk; cause=unmapped_bus_type; bus_type_raw=[' ~ ((_w_disk_bus_unmapped | default([])) | join(',')) ~ ']')}]
+            if ((_w_disk_bus_unmapped | default([])) | length > 0) else []) }}
   no_log: true
 
 - name: "windows | storage | merge fragment"

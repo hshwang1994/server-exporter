@@ -1,24 +1,10 @@
 ---
-# common/tasks/normalize/build_meta.yml
-#
-# 수집 메타데이터 딕셔너리를 생성합니다.
-# init_fragments 이후, build_output 이전에 호출하세요.
-#
-# 입력 변수:
-#   _started_at        : str   — 수집 시작 시각 ISO (init_fragments에서 설정)
-#   _started_epoch     : str   — 수집 시작 epoch (float, init_fragments에서 설정) — duration_ms 차감에 필수
-#   _selected_adapter  : dict  — 선택된 adapter 정보 (optional)
-#
-# 출력 변수:
-#   _meta : dict — 메타데이터
 
 - name: "normalize | build_meta"
   ansible.builtin.set_fact:
     _meta:
       started_at:      "{{ _started_at | default(now(utc=true).isoformat() + 'Z') }}"
       finished_at:     "{{ now(utc=true).isoformat() + 'Z' }}"
-      # 2026-04-29 fix B50: now(utc=true).timestamp() (float, microsecond) 기반 차감 — 1ms 정밀도.
-      # 이전: now(fmt='%s') (정수 초) → duration_ms 가 항상 1000ms 배수로 절삭.
       duration_ms:     "{{ ((now(utc=true).timestamp() - (_started_epoch | default(now(utc=true).timestamp()) | float)) * 1000) | int }}"
       adapter_id:      "{{ (_selected_adapter | default({})).adapter_id | default(none) }}"
       adapter_version: "{{ (_selected_adapter | default({})).version | default(none) }}"

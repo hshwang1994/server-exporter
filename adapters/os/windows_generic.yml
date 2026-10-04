@@ -1,11 +1,4 @@
 ---
-# ── Origin metadata (rule 96 R1) ──────────────────────────────────────────────
-# Vendor: Microsoft Windows (generic fallback)
-# Firmware: tested_against [] — 임의 Windows Server 버전
-# Origin: server-exporter 정책 — version_patterns 매치 실패 시 fallback
-# Last sync: 2026-04-27 (hshwang1994)
-# Notes: priority=0 — windows_2019/2022 매치 실패 시 graceful degradation.
-# ──────────────────────────────────────────────────────────────────────────────
 adapter_id: os_windows_generic
 channel: os
 priority: 0

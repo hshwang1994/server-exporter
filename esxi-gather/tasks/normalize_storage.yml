@@ -1,13 +1,7 @@
 ---
-# esxi-gather/tasks/normalize_storage.yml
-# _e_raw_ds → storage fragment (datastores)
 
 - name: "esxi | normalize storage | build datastores"
   ansible.builtin.set_fact:
-    # MED-11 fix: NFS/vSAN/vVOL 등 capacity 미수집 datastore 도 type/accessible 메타는
-    # 보존하되 size 필드는 null 로 명시 (이전: 0 으로 출력 → 호출자가 "0 byte 빈 datastore"
-    # 와 "용량 미수집" 구분 불가). cap=0 인 datastore name 은 _e_unsized_ds 에 누적 후
-    # errors_fragment 로 emit.
     _e_norm_datastores: >-
       {%- set out = [] -%}
       {%- for ds in (_e_raw_ds | default([])) -%}
@@ -49,11 +43,6 @@
       {{ names }}
   no_log: true
 
-# 2026-09-03 (B-21): storage.summary 는 3채널 모두 **physical_disks 기준** 으로 통일한다.
-#   종전 ESXi 는 datastore 합계(groups=[]) 였고 OS/Redfish 는 물리 디스크 합계라 같은 필드가 다른 양이었다.
-#   ESXi 의 physical_disks 는 vSphere 가 노출하는 LUN(RAID 논리 볼륨 포함) 이다 — group key 는 OS 와 같다
-#   (용량 / media_type / protocol / model). 물리 디스크가 하나도 없으면 datastore 합계로 대신하지 않고
-#   grand_total_gb=0, groups=[] 그대로 둔다 (다른 양을 같은 이름으로 내지 않는다).
 - name: "esxi | normalize storage | compute summary groups"
   ansible.builtin.set_fact:
     _e_stor_summary: >-
@@ -84,32 +73,16 @@
     _data_fragment:
       storage:
         filesystems:     []
-        # 2026-06-22: esxi_disks(pyvmomi) 가 canonical physical_disks(serial/wwn 포함) 직접 생성.
-        #   datastore 와 별개 graceful — 수집 실패 시 빈 list.
         physical_disks:  "{{ _e_raw_disks | default([]) }}"
         datastores:      "{{ _e_norm_datastores }}"
-        # 2026-06-22 T1: storage HBA/RAID 컨트롤러 (hostBusAdapter + pciDevice vendor)
         controllers:     "{{ _e_raw_controllers | default([]) }}"
         logical_volumes: []
-        # 2026-09-03: physical_disks(LUN) 기반 summary — OS/Redfish 와 같은 기준 (B-21)
         summary:         "{{ _e_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
     _sections_supported_fragment: ['storage']
     _sections_collected_fragment: >-
       {{ ['storage'] if _e_ds_ok | bool else [] }}
     _sections_failed_fragment: >-
       {{ [] if _e_ds_ok | bool else ['storage'] }}
-    # 2026-08-12 (C5/N32/H8): 우선순위 분기.
-    #
-    #  (1) datastore 모듈 자체가 실패한 경우(_e_ds_ok=false) → storage 실패 1건.
-    #      종전에는 이 경우 _e_unsized_ds 가 비어 errors 가 0건이 될 수 있었고,
-    #      섹션은 failed 인데 사유 칸이 공백인 결과가 Portal 로 나갔다.
-    #
-    #  (2) 모듈은 성공했지만 용량을 제공하지 않는 datastore 가 있는 경우 → 경고 1건.
-    #      NFS / vSAN / vVOL 은 capacity 를 원래 제공하지 않는다. 즉 "정상 미제공" 이고
-    #      섹션 status 는 success 를 유지한다 (build_status.yml 의 시나리오 B 공식 예).
-    #      종전 message 는 envelope 내부 필드를 설명하는 개발자 메모 뒤에 datastore 이름을
-    #      개수 제한 없이 붙여 문장 길이가 예측 불가였다. 이름 목록은 detail 로 내리고
-    #      message 는 고정 문장 1개로 둔다. detail 은 문자열 (상한 500자).
     _errors_fragment: >-
       {%- set out = [] -%}
       {%- if not (_e_ds_ok | bool) -%}
@@ -117,8 +90,6 @@
           'section': 'storage',
           'message': '스토리지 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
           'detail':  _e_ds_err | default(none)}) -%}
-      {#- 2026-08-12: detail 은 500자 상한이지만 **개수는 항상 남긴다** (조용한 절단 금지).
-          종전에는 이름 뒷부분이 표시 없이 잘려 운영자가 전량을 알 수 없었다. -#}
       {%- elif (_e_unsized_ds | default([]) | length) > 0 -%}
         {%- set _ = out.append({
           'section': 'storage',

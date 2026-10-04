@@ -1,21 +1,4 @@
 #!/bin/bash
-# scripts/addon_checkout.sh — Add-on 저장소를 이 빌드의 작업 공간에 받는다 (Jenkinsfile_portal Gather stage 가 부른다).
-#
-#   scripts/addon_checkout.sh <저장소 URL> <ref> <대상 디렉터리>
-#
-# ref 는 브랜치 이름 · refs/tags/<태그> · 전체(40자) 커밋 해시다. 세 형태를 같은 흐름으로 받는다.
-#   1차: 그 ref 하나만 얕게(depth 1) fetch — 브랜치 · 태그 · 전체 해시 모두 fetch 대상이 된다
-#   2차: 서버가 해시 직접 fetch 를 막으면 브랜치 · 태그 전체를 받아 그 안에서 해석한다
-# 짧은 해시는 받지 않는다 — 서버에 따라 1차가 거부돼 결과가 갈리기 때문이다.
-#
-# 환경변수
-#   ADDON_REPO_SSL_VERIFY  "true" 면 TLS 인증서를 검증한다. 그 밖(기본)에는 이 스크립트가 실행하는 git 명령에만
-#                          -c http.sslVerify=false 를 붙인다 — 전역 git 설정 · 메인 저장소 체크아웃 · 다른 Job 에 영향이 없다.
-#   GIT_ASKPASS 등         자격증명은 호출자가 git 이 아는 환경변수로 넘긴다. 이 스크립트는 자격증명을 읽지도 적지도 않는다.
-#
-# git 명령마다 180초 제한(timeout 이 있을 때) — 응답 없는 저장소가 빌드를 붙잡지 않는다.
-# 대상 디렉터리는 시작할 때 지운다 — 이전 빌드의 파일이 남지 않는다.
-# 성공: stdout 에 `[addon] <URL>@<ref> <해시>` 한 줄, rc 0. 실패: stderr 에 `[addon] unavailable: <사유>`, rc 1.
 set -u
 
 repo="${1:-}"
@@ -41,7 +24,7 @@ opts=()
 if [ "${ADDON_REPO_SSL_VERIFY:-false}" != "true" ]; then
     opts=(-c http.sslVerify=false)
 fi
-export GIT_TERMINAL_PROMPT=0          # 자격증명이 없으면 묻지 않고 실패한다 (빌드가 멈추지 않는다)
+export GIT_TERMINAL_PROMPT=0
 tmo=()
 if command -v timeout >/dev/null 2>&1; then
     tmo=(timeout 180)
@@ -49,7 +32,7 @@ fi
 
 err="$(mktemp)"
 trap 'rm -f "$err"' EXIT
-reason() {   # git stderr 의 마지막 의미 있는 줄
+reason() {
     grep -v '^\s*$' "$err" | tail -n 1 | tr -d '\r'
 }
 

@@ -1,38 +1,15 @@
 ---
-# redfish-gather/tasks/collect_standard.yml
-#
-# 표준 Redfish 수집 (벤더 공통).
-# P1 (cycle 2026-04-28): 단일 자격 → 후보 순차 시도 (primary → secondary → recovery)
-#
-# 출력:
-#   _rf_raw_collect    : redfish_gather 결과 (성공한 후보 기준)
-#   _rf_collect_ok     : bool
-#   _rf_vendor         : 정규화된 vendor (vendor_aliases.yml 기반)
-#   _rf_used_account   : 성공한 계정 메타 (username/label/role, password 미포함)
-#   _rf_attempts_meta  : 후보별 시도 결과 (운영 가시성 — meta.auth)
 
-# 2026-08-12: 이 파일은 **표준 계정으로만** 수집한다. 호출자가 `_rf_try_accounts` 로
-#   후보를 넘기고, 그 값은 언제나 표준 후보다 (site.yml Phase 1 / Phase 3).
-#   복구 계정은 여기로 들어오지 않는다 — 복구 계정으로 수집하는 경로 자체를 없앴다.
 - name: "redfish | collect_standard | init attempt state"
   ansible.builtin.set_fact:
     _rf_collect_ok: false
     _rf_used_account: {}
-    # 아래 4개는 **누적**이다. Phase 3(복구 후 재수집)에서 초기화하면 Phase 1 의 401
-    # 관측이 사라져 "표준이 거부됐다" 는 사실 자체가 결과에서 증발한다.
-    # 2026-08-11 (Phase 5-A 보정): 후보별 구조화 인증 관측 누적 리스트.
-    # 각 후보는 redfish_gather 를 **별도 모듈 프로세스**로 실행하므로
-    # auth_evidence.first_auth_status 는 그 후보 고유의 값이다. 전체 판정은
-    # 이 리스트를 모아 site.yml 이 한 곳에서 내린다 (후보 하나의 401 로 확정 금지).
     _rf_auth_statuses: "{{ _rf_auth_statuses | default([]) }}"
-    # 2026-08-11 (Phase 6-B §6): 같은 관측을 후보 역할과 짝지어 담는 리스트.
-    # {'role': ..., 'label': ..., 'status': 정수 or none}
     _rf_auth_observations: "{{ _rf_auth_observations | default([]) }}"
     _rf_primary_auth_rejected: "{{ _rf_primary_auth_rejected | default(false) }}"
-    # 2026-08-12 (N41): 실패한 후보의 근거를 rescue 까지 나르는 리스트.
-    # try_one_account.yml 이 후보마다 1건씩 append 하고, site.yml rescue 가
-    # errors[].detail 로 합류시킨다 (message 는 5문장 정본 그대로).
     _rf_failed_attempt_notes: "{{ _rf_failed_attempt_notes | default([]) }}"
+    _rf_attempt_id: "{{ _rf_attempt_id | default('') }}"
+    _rf_attempt_seq: "{{ _rf_attempt_seq | default(0) }}"
   no_log: true
 
 - name: "redfish | collect_standard | warn no accounts"
@@ -42,22 +19,16 @@
       reason={{ _cred_reason | default('?') }}).
   when: (_rf_try_accounts | default([])) | length == 0
 
-# ── 빈 자격 1회 시도 ────────────────────────────────────────────────────────
-# 2026-08-12: 트리거를 "후보가 0개" 에서 **"vendor 를 식별하지 못함"** 으로 옮겼다.
-#
-#   종전: generic adapter 가 선택되면 profile 이 빈 문자열이라 후보가 0개가 되고,
-#         그 결과로 빈 자격 시도가 일어났다. 즉 "Dell 인 줄 알면서도 빈 자격으로 찔러
-#         보는" 경로가 존재했다 — 무의미한 인증 시도이고 lockout 카운터만 올린다.
-#   현재: 정체를 **모르는** 장비에 대해서만 best-effort 1회 시도한다 (오픈 BMC /
-#         표준 준수 장비에서 무인증 수집이 실제로 되는 경우가 있어 가치가 있다).
-#
-#   vendor 는 알지만 credential set 이 없거나 accounts 가 비었으면 여기로 오지 않는다.
-#   그 경우는 명시적 실패로 보고한다 — 조용히 빈 자격으로 시도해서 "수집 실패" 로
-#   뭉개면 운영자가 원인(자격증명 미배치)을 볼 수 없다.
 - when: (_cred_reason | default('vendor_unresolved')) == 'vendor_unresolved'
   block:
+    - name: "redfish | collect_standard | mark anonymous attempt in flight"
+      ansible.builtin.set_fact:
+        _rf_attempt_seq: "{{ (_rf_attempt_seq | default(0) | int) + 1 }}"
+        _rf_attempt_id:  "anonymous-0-{{ (_rf_attempt_seq | default(0) | int) + 1 }}"
+      no_log: true
+
     - name: "redfish | collect_standard | empty-credential attempt"
-      # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 인자 전달 (Additive — 빈 자격 경로).
+      timeout: "{{ _rf_task_timeout | default(600) }}"
       redfish_gather:
         bmc_ip:         "{{ _rf_ip }}"
         username:       ""
@@ -65,20 +36,26 @@
         timeout:        "{{ _rf_timeout }}"
         verify_ssl:     false
         manager_layout: "{{ _rf_adapter_manager_layout | default('') }}"
+        deadline:       "{{ _rf_deadline | default(540) }}"
+        attempt:
+          evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"
+          id:           "{{ _rf_attempt_id }}"
+          build_id:     "{{ lookup('env', 'SE_BUILD_ID') }}"
+          event_uuid:   "{{ lookup('env', 'SE_EVENT_UUID') }}"
+          label:        "{{ 'no-credential' }}"
+          role:         "{{ 'anonymous' }}"
       register:    _rf_raw_collect
       failed_when: false
       no_log: true
 
     - name: "redfish | collect_standard | set ok (empty creds)"
       ansible.builtin.set_fact:
+        _rf_attempt_id: ''
         _rf_collect_ok: >-
           {{ _rf_raw_collect is not failed and
              (_rf_raw_collect.status | default('failed')) != 'failed' }}
       no_log: true
 
-    # 정체 미상 장비를 무인증으로 수집한 경우다. role 을 명시해 둔다 —
-    # "최종 수집이 복구 계정으로 수행됐는가" 판정(site.yml)이 이 값을 본다.
-    # 표준 계정도 복구 계정도 아닌 제3의 경로라는 사실이 결과에 남아야 한다.
     - name: "redfish | collect_standard | mark anonymous account (empty creds)"
       when: _rf_collect_ok | bool
       ansible.builtin.set_fact:
@@ -89,7 +66,6 @@
         _rf_used_account_role: "anonymous"
       no_log: true
 
-    # 2026-08-12 (N41): 빈 자격 경로도 실패 근거를 남긴다 (후보 경로와 동일 형식).
     - name: "redfish | collect_standard | record failure evidence (empty creds)"
       when: not (_rf_collect_ok | bool)
       ansible.builtin.set_fact:
@@ -101,28 +77,17 @@
                               | default('-')) ] }}
       no_log: true
 
-# 후보 순차 시도 — 성공 시 loop iteration 자체 skip (include_tasks 호출 안 됨).
-# try_one_account.yml 내부 block-level when 은 방어막으로 유지.
 - name: "redfish | collect_standard | try accounts in order"
   ansible.builtin.include_tasks: try_one_account.yml
   loop: "{{ _rf_try_accounts | default([]) }}"
   loop_control:
     loop_var: _try_account
     label:    "{{ _try_account.label | default('unlabeled') }}"
+    extended: true
   when:
     - (_rf_try_accounts | default([])) | length > 0
     - not (_rf_collect_ok | default(false) | bool)
 
-# 2026-08-11 (Phase 6-B §6 §7): 공통계정(primary) 자격이 **명시적으로 거부**됐는가.
-#
-# true 가 되는 조건은 하나뿐이다: role=primary 후보의 첫 인증 응답이 **401** 이다.
-#   - 401 = BMC 가 "이 자격을 못 받겠다" 고 구조적으로 답한 것이다.
-#   - 403 은 제외한다 (§7). 403 은 인증은 통과했는데 권한이 모자란 상태일 수 있어
-#     "자격증명이 틀렸다" 로 확정할 수 없다. 여기서 계정을 손대면 멀쩡한 자격을 덮어쓴다.
-#   - timeout / TLS 오류 / transport 실패는 status 자체가 none 이라 자동으로 제외된다.
-#   - 5xx (BMC 일시 장애) 도 401 이 아니므로 제외된다.
-#   - primary 후보를 아예 시도하지 않았으면 관측이 없어 false 다.
-# status 는 정수 그대로 비교한다 (문자열 파싱 없음).
 - name: "redfish | collect_standard | primary 자격 거부 판정"
   ansible.builtin.set_fact:
     _rf_primary_auth_rejected: >-
@@ -131,7 +96,6 @@
           | selectattr('status', 'eq', 401)
           | list | length) > 0 }}
 
-# vendor 정규화 (성공 후보 기준 — vendor_aliases.yml 기반, detect_vendor 가 이미 채움)
 - name: "redfish | collect_standard | set vendor"
   ansible.builtin.set_fact:
     _rf_vendor: >-
@@ -140,20 +104,12 @@
          else none }}
   no_log: true
 
-# 운영 가시성 — meta.auth 에 합쳐질 정보 (build_meta.yml 시 활용)
-# production-audit (2026-04-29): cross-channel typing — attempted_count int / fallback_used bool 명시 cast
 - name: "redfish | collect_standard | record attempts meta"
   ansible.builtin.set_fact:
     _rf_attempts_meta:
-      # 2026-08-12: "후보 배열 길이" 가 아니라 **실제 인증 시도 횟수**다.
-      #   종전에는 vault 후보 수를 그대로 썼는데, 표준 계정 하나만 시도하고 끝난
-      #   경우에도 5로 보고돼 "5번 찔렀다" 로 오해할 수 있었다. 관측 리스트는
-      #   Phase 를 넘어 누적되므로 재수집까지 합산된다.
       attempted_count: "{{ _rf_auth_observations | default([]) | length | int }}"
       used_label:      "{{ (_rf_used_account | default({})).label | default(none) }}"
       used_role:       "{{ (_rf_used_account | default({})).role  | default(none) }}"
-      # 표준 계정 하나만 후보이므로 표준 안에서의 fallback 을 뜻한다
-      # (복구 계정으로 넘어간 것이 아니다 — 그 경로는 존재하지 않는다).
       fallback_used: >-
         {{ (((_rf_used_account | default({})).role | default('primary')) != 'primary'
             and _rf_collect_ok | bool) | bool }}

@@ -1,49 +1,10 @@
 ---
-# ── Origin metadata (rule 96 R1 + R1-A) ───────────────────────────────────────
-# Vendor: Lenovo
-# Firmware: XCC3 — OpenBMC 기반 신 generation
-# Origin: Lenovo XCC3 REST API documentation (ThinkSystem V4)
-# Last sync: 2026-06-15 (사이트 실 SR650 V4 미러 캡처 + replay 검증 — 구 2026-05-01 web-sources 승격)
-# Notes: ThinkSystem V4 (SR630 V4 / SR650 V4 / SR680a V4 등). 2025-2026 출하.
-# Sources (rule 96 R1-A — lab 부재):
-#   - https://lenovopress.lenovo.com/lp2273-lenovo-xclarity-controller-3-xcc3
-#   - https://lenovopress.lenovo.com/lp2273.pdf
-#   - https://pubs.lenovo.com/xcc3-restapi/
-#   - https://pubs.lenovo.com/xcc3-restapi/xcc3_restapi_book.pdf
-#   - https://lenovopress.lenovo.com/lp1991-thinksystem-v3-v4-server-firmware-and-drivers-best-practices-advanced-guide
-#   - https://lenovopress.lenovo.com/lp1971-thinksystem-sr630-v4-server
-#   - https://lenovopress.lenovo.com/lp2264-thinksystem-sr680a-v4-server
-# Tested against (실측 2026-06-15, 사이트 실 미러 캡처 — 상설 lab 은 부재):
-#   - Lenovo ThinkSystem SR650 V4 (BMC=XCC3) — XCC fw "IHX414J 1.22 20250402" / UEFI 10U-1.20 /
-#     RedfishVersion 1.15.0 / SN J902E57T / SKU 7DGDCTO1WW / UUID 343AFAA2-... / 2901 리소스
-#   - redfish_full_mirror.py 캡처 + replay 재생 → 라이브러리 2건 fix
-#     (FIX1 firmware pending version="" 유실 / FIX2 network MAC 대소문자). evidence: tests/evidence/2026-06-15-lenovo-sr650-v4-audit.md
-#   - adapter 선택 실측(tests/redfish-probe/verify_adapter_selection.py): Lenovo 는 ServiceRoot.Product=None →
-#     facts 빈값 → priority 로 선택 (redfish_lenovo_xcc3 score=120520; model/firmware_patterns 는 휴면) [정상].
-#   ※ 1회 read-only 스냅샷 — 쓰기/Action·펌웨어 업그레이드 후 응답 미포함 (docs/25)
-# Compatibility (web sources F55/F56 cycle 2026-05-01 + 2026-06-15 실측 확인/정정):
-#   - manufacturer: "Lenovo" (실측 확인)
-#   - Manager URI: /redfish/v1/Managers/1 (실측 확인)
-#   - System URI: /redfish/v1/Systems/1 (실측 확인)
-#   - OEM namespace: Oem.Lenovo (실측 확인 — system.oem 은 V4 가 일부 키 미노출, FruPartNumber 등 보유)
-#   - RedfishVersion 1.15.0 (실측 2026-06-15 — 구 추정 "1.17.0 / schema bundle 2024.3" 정정)
-#   - OpenBMC 기반 → Oem.Lenovo 영역이 표준 Redfish 우선 → OEM 의존 감소
-#   - FPGA firmware separate item — UpdateService/FirmwareInventory/FPGA (gather 자동 cover)
-#   - ExtendedError.1.2.2.json OEM registry 신규 (server-exporter 미사용)
-#   - UEFI/BMC 설정 이름 형식 변경 (read-only 영향 작음)
-# HTTP 헤더 정책 (cycle 2026-04-30 사이트 사고 학습 — F57/J2):
-#   - Accept-only 헤더 패턴 유지 (사용자 사이트 BMC 1.17.0 reject 회피)
-#   - OData-Version / User-Agent 추가 금지
-#   → redfish_gather.py _get() 의 공통 정책 그대로 사용
-# ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_lenovo_xcc3
 channel: redfish
 priority: 120
 
 match:
   vendor: ["Lenovo", "LENOVO"]
-  # XCC3 펌웨어 — XCC1/XCC2 의 "AFBT" / "TAOT" 등과 다른 prefix 가능.
-  # 안전하게 "XCC3" 시그니처 + ThinkSystem V4 model_patterns 로 분리.
   firmware_patterns: ["XCC3", "XCC.*3"]
   model_patterns:
     - "ThinkSystem SR630 V4"
@@ -90,11 +51,6 @@ graceful_degradation:
   critical_sections: [system, hardware]
   optional_sections: [firmware, power]
 
-# XCC3 특이사항 (web sources 기반, lab 부재):
-# - OpenBMC 기반 — 표준 Redfish 우선, OEM 의존 감소
-# - Redfish 1.17.0 / bundle 2024.3
-# - FPGA firmware separate (FirmwareInventory 자동 cover)
-# - Accept-only 헤더 (cycle 2026-04-30 사이트 hotfix 패턴 준수)
 vendor_notes:
   generation: xcc3
   base_platform: openbmc

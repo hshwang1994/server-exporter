@@ -1,17 +1,4 @@
 ---
-# os-gather/tasks/normalize/build_output.yml
-# ─────────────────────────────────────────────────────────────────────
-# OS gather 전용 마무리 단계:
-#   build_sections → build_status → build_errors → set meta → build_output
-#
-# 이 시점에서 _merged_data, _all_sec_* 는 이미 gather_*.yml 들이 채운 상태다.
-# 여기서는 OS 에서 지원하지 않는 섹션만 _all_sec_supported 에서 제외한다.
-# (hardware, bmc, firmware, power 는 supported 에 없으므로 자동으로 not_supported)
-#
-# NOTE: site.yml 은 이 파일을 include 하여 common 의 build_* 체인을
-#       호출한다. site.yml 자체에서 build_sections/status/errors 를
-#       직접 호출하지 않으므로 중복은 아니다 — 이 파일이 유일한 진입점이다.
-# ─────────────────────────────────────────────────────────────────────
 
 - name: "os | normalize | build_sections"
   ansible.builtin.include_tasks:
@@ -26,10 +13,6 @@
     file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_errors.yml"
 
 - name: "os | normalize | set output meta (defaults preserve)"
-  # 2026-04-29 fix B80 (REAL ROOT CAUSE): site.yml의 _out_vendor 매핑이 동작했어도 이 task가
-  # `_out_vendor: null`로 무조건 덮어써서 envelope.vendor가 항상 None이 됐음.
-  # 6번의 v1~v11 시도가 site.yml에서 정상 작동했지만 이 단계에서 모두 null로 reset됨.
-  # 해결: 이미 site.yml에서 set 됐으면 보존 (default 적용).
   ansible.builtin.set_fact:
     _out_target_type:       "{{ _out_target_type | default('os') }}"
     _out_collection_method: "{{ _out_collection_method | default('agent') }}"

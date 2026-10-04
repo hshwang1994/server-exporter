@@ -1,21 +1,8 @@
 ---
-# esxi-gather/tasks/collect_network_extended.yml
-#
-# P4 (cycle 2026-04-29): ESXi 확장 네트워크 / 스토리지 어댑터 수집.
-# vmware_host_vmnic_info / vmware_host_vmhba_info / vmware_vswitch_info /
-# vmware_portgroup_info / vmware_vmkernel_info.
-#
-# best-effort: 일부 vCenter 권한/펌웨어에서 모듈 미지원 시 빈 결과.
-#
-# 출력 fragment sub-key:
-#   data.network.adapters[]         — vmnic (NIC HW)
-#   data.network.virtual_switches[] — vSwitch + portgroup
-#   data.network.vmkernels[]        — vmkernel adapter
-#   data.storage.hbas[]             — vmhba FC / iSCSI 만 (SAS/RAID 제외 — 2-signal type+driver)
-#   data.storage.infiniband[]       — nmlx NIC best-effort 추론 (ESXi native IB 미노출, D1=API-only)
 
 - block:
     - name: "esxi | extended | vmnic info"
+      timeout: "{{ _e_task_timeout | default(180) }}"
       community.vmware.vmware_host_vmnic_info:
         hostname:       "{{ _e_ip }}"
         username:       "{{ ansible_user }}"
@@ -27,6 +14,7 @@
       no_log: true
 
     - name: "esxi | extended | vmhba info"
+      timeout: "{{ _e_task_timeout | default(180) }}"
       community.vmware.vmware_host_vmhba_info:
         hostname:       "{{ _e_ip }}"
         username:       "{{ ansible_user }}"
@@ -38,6 +26,7 @@
       no_log: true
 
     - name: "esxi | extended | vswitch info"
+      timeout: "{{ _e_task_timeout | default(180) }}"
       community.vmware.vmware_vswitch_info:
         hostname:       "{{ _e_ip }}"
         username:       "{{ ansible_user }}"
@@ -49,6 +38,7 @@
       no_log: true
 
     - name: "esxi | extended | portgroup info"
+      timeout: "{{ _e_task_timeout | default(180) }}"
       community.vmware.vmware_portgroup_info:
         hostname:       "{{ _e_ip }}"
         username:       "{{ ansible_user }}"
@@ -59,13 +49,6 @@
       failed_when: false
       no_log: true
 
-    # BUG #4 fix (cycle production-audit 후속): hosts_*_info dict 의 top-level key 는
-    # ESXi configured hostname (예: "esxi01") — _e_ip 가 아니다.
-    # 또한 진짜 dict list 는 'all' (string list) 이 아니라 'vmnic_details' / 'vmhba_details'.
-    # vswitch 는 dict-of-dict (key=vswitch name, value=info).
-    # 키 매핑: pci→location, adapter_type→type, node_world_wide_name→node_wwn.
-    # portgroups 는 별도 portgroup_info 결과를 vswitch 별로 group 해서 채운다.
-    # 진단 근거: tests/scripts/diag_esxi_raw.yml 결과 (community.vmware 6.2.0 + ESXi 7.0.3).
     - name: "esxi | extended | normalize"
       ansible.builtin.set_fact:
         _e_ext_adapters: >-
@@ -78,8 +61,6 @@
           {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
           {%- set vmnics = (d.get(key, {}).get('vmnic_details', [])) if key else [] -%}
           {%- for n in vmnics -%}
-            {# 잔류 fix (Round 12 후속): speed_mbps int 일관성. Connected 시 int (10000),
-               Disconnected 시 raw "N/A" → null. 호출자 cross-channel 일관성 보장 #}
             {%- set raw_sp = n.actual_speed | default(none) -%}
             {%- set sp_int = none -%}
             {%- if raw_sp is number -%}
@@ -90,9 +71,6 @@
             {%- endif -%}
             {%- set raw_dup = n.actual_duplex | default(none) -%}
             {%- set dup = none if (raw_dup in ['N/A', '', none]) else raw_dup -%}
-            {# 2026-09-03 (B-29): OS 채널 adapters[] 와 같은 키 (id / name / manufacturer / model / driver /
-               firmware_version / pci) + ESXi 가 더 아는 것(mac / link_status / speed / duplex). 제조사·모델은
-               esxi_disks.host_info 의 pnic ↔ pciDevice 매핑, 없으면 vmnic_info 의 adapter 문자열. #}
             {%- set dev = n.device | default(none) -%}
             {%- set hp = pnic_by_dev.get(dev, {}) -%}
             {%- set _ = out.append({
@@ -110,13 +88,6 @@
             }) -%}
           {%- endfor -%}
           {{ out }}
-        # cycle 2026-05-29 (hba-ib-csus, D1=API-only): FC/iSCSI HBA 만 hbas[] 로.
-        #   - 분류 2-signal: type + driver (lpfc/qlnativefc=FC, iscsi_vmk=iSCSI).
-        #     SAS/RAID 컨트롤러 (nhpsa/lsi_mr3/smartpqi/vmw_ahci/nvme...) 는 hbas 제외 (storage controller 영역).
-        #   - 구 'infiniband' in type 분기는 dead-code (vmhba type 에 InfiniBand 없음) → 제거.
-        #     IB 는 _e_ext_ib (nmlx NIC best-effort 추론) 로 별도 — 아래 build vswitch task.
-        #   - 누락 필드 보강: port_type / link_speed_gbps (FC speed) / source. 빈 placeholder vmhba (device 없음) skip.
-        #   source: community.vmware vmware_host_vmhba_info + Broadcom esxcli ref (EXTERNAL-CONTRACTS §3).
         _e_ext_hbas: >-
           {%- set out = [] -%}
           {%- set d = _e_vmhba.hosts_vmhbas_info | default({}) -%}
@@ -124,7 +95,6 @@
           {%- set vmhbas = (d.get(key, {}).get('vmhba_details', [])) if key else [] -%}
           {%- set fc_drivers = ['lpfc', 'qlnativefc', 'brcmnvmefc', 'qlnativefcoe'] -%}
           {%- set iscsi_drivers = ['iscsi_vmk'] -%}
-          {# 2026-09-03 (B-22): 같은 vmhba 의 controllers[].controller_manufacturer(pciDevice vendorName) 를 vendor 로 #}
           {%- set ctrl_vendor = {} -%}
           {%- for c in (_e_raw_controllers | default([])) -%}
             {%- if c.id | default(none) -%}{%- set _ = ctrl_vendor.update({c.id: c.controller_manufacturer | default(none)}) -%}{%- endif -%}
@@ -165,7 +135,6 @@
           {{ (d.get(key, [])) if key else [] }}
       no_log: true
 
-    # vswitch 는 dict-of-dict 구조라 별도 task — _e_ext_portgroups 에 의존 (vswitch 별 portgroups join)
     - name: "esxi | extended | build vswitch list"
       ansible.builtin.set_fact:
         _e_ext_vswitches: >-
@@ -195,11 +164,6 @@
             {%- endfor -%}
           {%- endif -%}
           {{ out }}
-        # cycle 2026-05-29 (D1=API-only): InfiniBand best-effort 추론.
-        # ESXi 는 native IB 를 host adapter 로 노출하지 않음 (NVIDIA/VMware: SR-IOV/passthrough-to-VM 만).
-        # Mellanox nmlx/mlx 드라이버 NIC 존재 시 IB/RoCE-capable 로 informational 표기 (node_guid=null,
-        # note 명시 — false-positive 가능). 실 IB 포트 인벤토리는 OS 채널 (Linux ibstat/sysfs) 이 정본.
-        # source: NVIDIA ConnectX VPI on ESXi + VMware IB whitepaper (EXTERNAL-CONTRACTS §3).
         _e_ext_ib: >-
           {%- set ib = [] -%}
           {%- for a in (_e_ext_adapters | default([])) -%}
@@ -225,9 +189,6 @@
           {{ ib }}
       no_log: true
 
-    # 2026-06-30: network.summary 를 pnic(_e_ext_adapters, 실 speed 보유) 기준으로 산출.
-    #   normalize_network 의 vmk 기반 summary(speed=none) 를 merge 시 덮어쓴다 (null 누출 정정).
-    #   null/0 speed(down NIC) 가드 — Windows/Linux 동일 패턴.
     - name: "esxi | extended | compute summary groups (pnic)"
       ansible.builtin.set_fact:
         _e_ext_summary: >-
@@ -280,15 +241,7 @@
             infiniband:       []
         _sections_supported_fragment: []
         _sections_collected_fragment: []
-        # 확장 수집이 실패해도 기본 network 정보(normalize_network.yml)는 이미 수집돼 있다.
-        # 여기서 network 를 failed 로 강등하면 과잉이라 빈 list 를 유지한다.
         _sections_failed_fragment:    []
-        # 2026-08-12 (M1/N33):
-        #   - section: 'esxi_network_extended' 는 schema 11 섹션 밖이라 Portal 이 어느 섹션에도
-        #     묶지 못했다 → 'network' 로 정규화.
-        #   - message: 개발자 용어("best-effort skip")와 커널/하이퍼바이저 내부 명칭을 빼고
-        #     사용자가 무엇을 못 받았고 무엇을 확인하면 되는지로 다시 썼다.
-        #   - detail: 빈 문자열 대신 null. 기술 근거(실패 태스크 msg)는 그대로 여기에 둔다.
         _errors_fragment:
           - section: network
             message: "네트워크 어댑터와 가상 스위치 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
