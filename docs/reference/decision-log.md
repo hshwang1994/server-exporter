@@ -25,7 +25,7 @@
 1. 명부 정정은 실행 `diagnosis` 로만 한다(`.95` → OS 축). 입력 결함으로 탈락한 계약은 올바른 입력으로 **재실행**(E2E-D #61)하고 이름을 바꿔 통과시키지 않는다.
 2. fail-closed 계약(`fail_closed: True`, 현재 E2E-A2 뿐)에 한해 **같은 Job 의 가장 가까운 앞·뒤 빌드가 기록한 revision 이 일치할 때만** 그 revision 으로 묶고 `checkout_sha_source` 에 출처를 적는다. 다른 시나리오는 종전 BuildData 바인딩 그대로. 계약 검사에 "Jenkinsfile 을 SCM 에서 받았고 거부 전에 agent 가 돌지 않았다" 를 추가한다.
 3. S3 는 채널 무관 계약이다. Redfish #55 가 S3 를 충족하며, OS forks 측정창은 사용자 선택 사항으로 남긴다(필수 아님). 최소 시작 예산은 낮추지 않았다.
-4. 실 승격은 사용자가 `se-gitlab-push`(CI 경로) 또는 WSL vault 암호 파일(세션 CLI 경로) 중 하나를 제공한 뒤에만 한다. 그 전까지 push 는 main 에 한정하고 production 양 원격은 `4ce90a00` 그대로 둔다.
+4. 실 승격은 사용자가 `se-gitlab-push`(CI 경로) 또는 WSL vault 암호 파일(세션 CLI 경로) 중 하나를 제공한 뒤에만 한다. → **같은 날 사용자가 사내 테스트 vault 암호를 제공해 세션 CLI 경로로 승격했다(P1 `1f725071`, 양 원격).** 승격 중 드러난 `_publish` 의 공유 push URL 거짓 partial_push 는 idempotent 처리로 수정하고(GP-40), 로컬 ref 는 `push-sync` 로 정합했다. production Job 재검증(canary → 시나리오 → 명부 전수)은 main 과 같은 결과.
 5. 토큰 정리는 하지 않는다(사용자 지시). Runner SSH 자격은 대화로 받아 세션 안에서만 쓰고 어디에도 적지 않는다.
 
 ### 영향

@@ -16,6 +16,8 @@
 | main Job X7 `24c9fd34` 재실행 | T2 #68 · T5 #69 · T6 #70 · S5 #71(slot 1·4096) · S1 #72 · S4 #73 · S2 #74 · E2E-A #75 · E2E-A′ #76 · E2E-D #77(6/6) · E2E-E #78 · S3 #79(timeout·kept 6·filled 1) — 12/12 계약 PASS(§5-11). CI #15 는 수집기 검사 결함으로 중단 |
 | main Job X7b `ce50ccf7` 재실행 + CI #16 | T2 #80 · T5 #81 · T6 #82 · S5 #83(slot 1·4096) · S1 #84 · S4 #85 · S2 #86 · E2E-A #87 · E2E-A′ #88(neighbours:#87,#89 바인딩) · E2E-D #89(6/6) · E2E-E #90 · S3 #91(timeout·kept 6·filled 1) — 12/12 계약 PASS / CI #16: SUCCESS — COMPLETE_PASS 20/20(tree 8d0f05c3…) · VAULT_DECRYPT PASS · Harness 16/16 + prodtree 4/4 · bounded 2 PARTIAL/승인 · Promote DRY_RUN e2e ok(problems []) · parent 4ce90a00 — 실 push 는 credential 대기 |
 | 로컬 단위(X7b) | `tests/unit/prodgen` 91 PASS(E2E-A2 Gather 블록 검사 fixture 포함); 실제 #76 콘솔 6/6 검사 True |
+| **실 승격**(세션 CLI, vault 암호 사용자 제공) | P1 `1f725071` 양 원격 — Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20 전부 PASS(G19 WSL 3채널 실제 실행) · COMPLETE_PASS · `internal` 거짓 partial_push(origin push URL 2개) → `push-sync` 정합 · 결함 수정 regression `test_shared_push_url_between_remotes_is_idempotent_not_partial` → `tests/unit/prodgen` **92 PASS** |
+| **production Job(P1) 재검증** | canary #71 · P-S1 #72 · P-S2 #73 · P-T2 #74 · P-T6 #75(UNSTABLE=기대) · Linux 8 #76 · Linux 7 #77(3 unreachable) · Windows #78 · ESXi 6 #79 · Redfish 10 #80(7 success) · S3-Redfish #81(UNSTABLE=기대) — 전부 checkout == P1, Portal 200 |
 
 ## 2026-10-04 (2차) — 완료 보고 검토 C1~C6 대응 (시나리오 계약 · baseline 복구 · 환경 재실행 · 배포 정책 · interruption Harness · vault 복호화)
 

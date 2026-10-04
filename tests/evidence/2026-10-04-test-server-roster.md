@@ -57,7 +57,7 @@ Redfish 공통 증거: 인증은 전역 표준 계정(`details.auth = {attempted
 
 - **대상 수 = 실행 수**: 명부의 모든 호스트/BMC 를 실제로 실행했다(누락 0). 성공 27 / 미해결 6(도달 실패 5 + Redfish 프로토콜 1) / 비적용 1(.95 ESXi 축).
 - 미해결 6건은 **진단의 증거이지 정상 수집 완료가 아니다.** Job 과 워크스테이션 양쪽에서 응답이 없거나(5), Redfish 서비스 응답이 비정상(1)이다. 장비 상태·Redfish 설정 확인과 테스트 범위 포함 여부는 **사용자 결정** — 이 세션은 설정 변경·재부팅을 하지 않고 명부에서 빼지도 않는다.
-- production Job 실행은 승격 뒤 센다(현재 production 은 legacy `4ce90a00`; 성능 기준선 빌드는 별도).
+- production Job 실행(P1 `1f725071`, 2026-10-04 19:15~19:27): Linux 15(#76 8 success · #77 4 success + `.135 .145 .165` unreachable) · Windows 1(#78) · ESXi 6(#79 전부 success) · Redfish 10(#80: 7 success · `.1` protocol · `.3`·`.231` unreachable) · S3-Redfish(#81) — **main 과 동일**(`2026-10-04-review-c1-c6.md` §5-13). 성능 기준선 빌드(#59~#70, legacy)는 별도.
 
 ## 4. 이번 작업에서 시도한 것 · 거부 · 부재 (최종)
 

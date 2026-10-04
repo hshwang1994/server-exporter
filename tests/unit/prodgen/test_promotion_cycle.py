@@ -281,6 +281,32 @@ def test_g20_without_remotes_is_partial_not_pass(world):
 
 
 @_needs_ps
+def test_shared_push_url_between_remotes_is_idempotent_not_partial(world):
+    """Lab configuration (2026-10-04 real P1 `1f725071`): `origin` has two push URLs (GitHub + the GitLab repo that is also
+    remote `internal`). The origin push updates GitLab, so `internal` is already at the new commit when its turn comes —
+    that is an idempotent success, not `partial_push`; both remotes and the local ref end on the new commit."""
+    repo, store, B = world["repo"], world["store"], world["B"]
+    origin_url, internal_url = _git(repo, "remote", "get-url", "origin"), _git(repo, "remote", "get-url", "internal")
+    _git(repo, "remote", "set-url", "--add", "--push", "origin", origin_url)
+    _git(repo, "remote", "set-url", "--add", "--push", "origin", internal_url)
+    X = _git(repo, "rev-parse", "main")
+    res = _promote(world, X, bootstrap_baseline=B)
+    assert res["ok"] and "partial_push" not in res, res.get("refused")
+    pub = res["publish"]
+    assert [d["remote"] for d in pub["done"]] == ["origin", "internal"] and not pub["failed"] and pub["local_updated"], pub
+    assert pub["done"][1].get("shared_push_url") is True and "shared push URL" in pub["done"][1]["protection"]
+    assert internal_url.rstrip("/") in {u.rstrip("/") for u in pub["shared_push_urls"]}, pub.get("shared_push_urls")
+    P1 = res["commit"]
+    assert _remote_prod(repo, "origin") == P1 == _remote_prod(repo, "internal") == store.rev_parse(PROD)
+    # a remote that moved to something ELSE is still a pre-check failure (the idempotent branch only accepts the new commit)
+    other = store.commit_tree(store.build_tree([("100644", store.hash_object(b"other\n", write=True), "legacy.txt")], write=True), [P1], "other\n")
+    _git(repo, "push", "-q", "internal", f"{other}:{PROD}")
+    new = store.commit_tree(store.commit_tree_sha(P1), [P1], "candidate\n\nX: y\n")
+    pub2 = _publish(store, PROD, new, P1, ["internal"])
+    assert pub2["failed"] and pub2["failed"][0]["stage"] == "pre-check" and not pub2["local_updated"]
+
+
+@_needs_ps
 def test_refusals_evidence_skiplive_remotes_and_race(world):
     repo, store, B, man = world["repo"], world["store"], world["B"], world["man"]
     X = _git(repo, "rev-parse", "main")

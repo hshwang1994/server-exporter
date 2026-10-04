@@ -88,8 +88,14 @@ def _publish(store: GitStore, ref: str, new: str, expected: str | None, remotes:
     if expected and not is_ancestor(store, expected, new):
         raise ProdgenError(f"fast-forward invariant: expected {expected[:12]} is not an ancestor of {new[:12]}")
     done, failed = [], []
+    shared = _shared_push_urls(store, remotes)
     for r in remotes:
         pre, err = ls_remote(store, r, ref)
+        if err is None and pre == new:
+            # Already holds exactly the new commit: reached through another configured remote's push URL (2026-10-04 P1 —
+            # `origin` carries the GitLab URL as a second push URL). Idempotent success, recorded as such; not a failure.
+            done.append({"remote": r, "sha": new, "protection": "already at the new commit (reached via a shared push URL)", "shared_push_url": True})
+            continue
         if err is not None or (pre or None) != (expected or None):
             failed.append({"remote": r, "stage": "pre-check", "remote_sha": pre, "error": err or "moved since baseline"})
             break
@@ -107,7 +113,21 @@ def _publish(store: GitStore, ref: str, new: str, expected: str | None, remotes:
     if remotes and not failed or not remotes:
         store.update_ref(ref, new, expected)
         local_updated = True
-    return {"done": done, "failed": failed, "local_updated": local_updated}
+    out = {"done": done, "failed": failed, "local_updated": local_updated}
+    if shared:
+        out["shared_push_urls"] = shared
+    return out
+
+
+def _shared_push_urls(store: GitStore, remotes: list) -> dict:
+    """{url: [remote, …]} for push URLs configured under more than one remote name (informational; such a URL is
+    updated by the first remote's push and then found already-at-new by the later one)."""
+    seen: dict = {}
+    for r in remotes:
+        proc = subprocess.run(["git", "remote", "get-url", "--push", "--all", r], cwd=store.repo_root, capture_output=True, text=True)
+        for url in (proc.stdout or "").split():
+            seen.setdefault(url.rstrip("/"), []).append(r)
+    return {u: rs for u, rs in seen.items() if len(rs) > 1}
 
 
 # ── evidence helpers ──────────────────────────────────────────────────────────────
