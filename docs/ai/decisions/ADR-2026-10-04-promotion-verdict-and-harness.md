@@ -37,3 +37,15 @@
 - *운영 Jenkinsfile 에 `faultInject`/`perfSample` 파라미터* — 거부(3차 §5-2). production tree 에 장애 분기가 남는다. wrapper 로 밖에서 만든다.
 - *경과 시간·원인 클래스로 timeout 판별* — 거부(3차 §4-1). `ExceededTimeout.nodeId` 식별이 안 되면 catch 하지 않고 재전파한다(기본 off, 보장 축소 명시).
 - *Harness sink 를 agent 에 두고 Runner 방화벽을 연다* — 거부. Runner 시스템 변경이고 접근 경로도 없다. controller loopback 이 finalizer 가 실제로 요청을 보내는 지점이다.
+
+## 보완 (2026-10-04 2차 — 완료 보고 검토 C1~C6)
+
+같은 날 검토가 이 ADR 의 결정 2 · 3 · 6 · 7 의 구현 결함을 찾았다. 결정의 방향은 유지하고 다음을 확정한다.
+
+- 결정 2 보완: E2E 증거는 시나리오 **계약**(`MAIN_CONTRACT`)으로 판정한다 — 입력 조건(대상 host · callbackUrl · loc · 예산 강제) + 관측(`finalize_summary.json` · `callback_body.json` · 콘솔 표식) + 기대 Jenkins 결과. 호출자는 기대 결과를 재선언할 수 없다. Harness 증거는 Job 파라미터·artifact·함수 해시를 대조하고 main 함수 그룹과 생성 tree 그룹(`tree_hash`)을 따로 충족한다. 집계는 입력 digest 를 먼저 검증한다.
+- 결정 3 보완: baseline 기록은 이력 전체에서 찾는다(`baseline_record`); 정상 승격 커밋은 `Bootstrap-Baseline(-Tree)` 를 물려받는다; `Restore-From` 은 최신 생성 커밋, `Baseline-Recorded-By` 는 기록 커밋. B→P1→P2→R→P3 가 regression 과 실 baseline 훈련으로 고정된다.
+- 결정 1 보완: 환경 식별자가 한쪽이라도 비어 있으면 동일이 아니다. promote 는 환경 의존 gate 를 재실행하고 `gates_rerun/gates_reused` 를 보고서·trailer 에 남긴다. 식별자는 `ansible_runtime` · `collections_sha256` · `pwsh`/`groovy` 버전 · `jenkins_version`(`/api/json` 헤더)까지.
+- 결정 6 보완: 배포 원격 집합 `DEPLOY_REMOTES=(origin, internal)` 은 코드 정책이다 — 실제 promote/restore 는 정확히 그 집합만 받고, CLI 도 `--ci-stage-results` 로 CI stage 증거를 소비한다. G20 은 원격 없이 PARTIAL. 특정 credential 이름이 승인 경로가 아니다.
+- 결정 7 보완: interruption 6 조건을 Harness 시나리오(`recover_slow` · `inner_recover_timeout` · `inner_assemble_timeout` · `outer_timeout` · `foreign_timeout_interruption` · `user_abort` · `aborted_outcome_finalize`)에 연결한다. Tier 2 는 승인 4 시그니처를 실측해 없으면 PARTIAL/승인 이며 승격 조건에 합산하지 않는다. Gather stage timeout(④)은 stage 본문이라 main Job T5 로만 확인한다.
+- G19 범위 재확인: TEST-NET 실행은 credential 을 열지 않는다 — vault 복호화 증거는 CI Verify 의 `vault_decrypt_check.py --password-file` 이다.
+- 대안 비교(추가): *기대 결과를 호출자 입력으로 유지* — 거부(검토 C1 재현의 원인). *환경 미확인을 경고로만* — 거부(다른 환경의 보고서 재사용을 막지 못한다). *remote 를 호출자 책임으로* — 거부(원격을 빼는 것으로 정책을 빠져나간다).

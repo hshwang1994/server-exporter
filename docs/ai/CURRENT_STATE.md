@@ -1,5 +1,20 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-04 (2차) — 완료 보고 검토 C1~C6 대응: 시나리오 계약 E2E 증거 · baseline 기록 탐색 · 환경 미확인 재실행 · 배포 원격 정책 · interruption Harness · vault 복호화 검증 — 승격 미수행, 전체 완료 아님
+
+> 검토(2026-10-04, HEAD `ae4db48b`)가 1차 보고의 "코드 완료 PASS" · "Harness interruption 충족" 을 뒤집었다. 결함 6건은 모두 코드에서 재확인됐다. 정본: `tests/evidence/2026-10-04-review-c1-c6.md`, 결정 `docs/reference/decision-log.md`(2026-10-04 2차), ADR 보완절.
+> 사용자 확정 완료 기준(§0): 사내 전체 테스트 서버 실수집 · Kernel 6.x 해결 · 최종 push 와 원격 코드 재검증 — **미충족**(명부 초안 `tests/evidence/2026-10-04-test-server-roster.md`, 실호스트 수집 0).
+
+- **C1 증거 계약**(`scripts/ai/prodgen/evidence.py`): `MAIN_CONTRACT`(S1~S5 · T2 · T5 · T6 · E2E-A/A2/D/E 의 입력 조건·판정 항목·기대 Jenkins 결과)와 Harness 대조(파라미터 `SCENARIO`/`FUNCTIONS_SRC` · `harness_result.json` · `harness_control.json` · 함수 해시).
+  main 함수 그룹(16)과 생성 tree 그룹(4, `provenance.tree_hash` == 승격 대상)은 따로 충족. 호출자 EXPECTED 는 계약과 같을 때만. 집계는 입력 digest 선검증. 종전 T2(연결 거부) 증거는 T6 로 재분류.
+- **C2 baseline 복구**(`drift.py` · `promote.py`): `baseline_record()` 이력 탐색 + 정상 승격의 `Bootstrap-Baseline(-Tree)` 계승 + `Restore-From`(최신 생성)/`Baseline-Recorded-By`(기록) 분리. B→P1→P2→R→P3 regression + 실 `4ce90a00` 복제 훈련.
+- **C3 환경**(`verify/__init__.py`): 식별자 `python · platform · ansible_runtime · ansible_version · collections_sha256 · pwsh/groovy 버전 · jenkins_version`; 미확인 = 불일치; promote 가 환경 의존 gate(G11~G15·G19)를 재실행하고 `gates_rerun/gates_reused`(trailer `Gates-Rerun/Reused`) 기록; `jenkins_version` 은 `/api/json` 헤더(GP-29 종결).
+- **C4 정책**(`prodgen/__init__.py` `DEPLOY_REMOTES` · `REQUIRED_CI_STAGES`): 실제 promote/restore 는 `origin,internal` 정확히 — 부분 집합·0개는 `policy` 단계 거부(객체 생성 0); `--ci-stage-results` 필수(같은 SHA · 필수 stage PASS · 보고서 출처 빌드 일치); G20 원격 없음 = PARTIAL. CI Promote 는 호출 전에 `ci_stage_results.json` 을 써서 넘긴다.
+- **C5 Harness**: 시나리오 `recover_slow`(필수 승격) · `inner_recover_timeout`/`inner_assemble_timeout`(BOUNDED=true, 승인 실측 → PARTIAL/승인) · `foreign_timeout_interruption` · `user_abort`(자기 빌드 `/stop`) · `aborted_outcome_finalize` · `sink_hold`(T2 수신용). CI 기본 16 + `HARNESS_BOUNDED_SCENARIOS`(stage 결과 `HARNESS_BOUNDED`, 승격 조건 아님). Harness 가 기대 Jenkins 결과(`jenkins_result`)로 판정.
+- **C6 vault**: CI Verify 가 같은 바인딩으로 `vault_decrypt_check.py --password-file`(전 Location, 평문 미출력) → `VAULT_DECRYPT`. `location-cj.md` ④' 정정.
+- **GP-4**: CI Toolchain 이 `pyVmomi`/`community.vmware` 를 보고(라벨 변경 없음).
+- **승격 미수행 그대로**: 필수 main E2E(S1·S2·S3·T5·E2E-A/A') HOLD/권한, `se-gitlab-push` 없음. 실호스트 수집 0.
+
 ## 일자: 2026-10-04 — 잔여 결함 R1~R7 · main 전용 Harness · CI 12 stage · prodgen 판정/승격 모델 · 청주 `cj` — 코드·로컬 회귀·Jenkins 실행(일부) 완료, 승격 미수행
 
 > 결정: `docs/reference/decision-log.md` 2026-10-04 두 항목, `docs/ai/decisions/ADR-2026-10-04-promotion-verdict-and-harness.md`. 실측: `tests/evidence/2026-10-04-residual-r1-r7.md` · `-live-e2e.md` · `-location-cj.md`.

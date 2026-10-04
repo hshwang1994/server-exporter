@@ -49,12 +49,12 @@ ref 는 전역 `ADDON_REPO_REF`(없으면 `main`) 하나다 — 빌드마다 바
 | Gate | `bash scripts/ai/ci_gate.sh` | exit 1 FAILURE(후속 stage 계속) · exit 2 PARTIAL → UNSTABLE |
 | Finalize Corpus | Python `tests/scripts/finalize_corpus_check.py` + Groovy `load 'scripts/jenkins/se_finalize.groovy'` 14 case 비교(`seCorpusCompare`) | FAILURE |
 | Budget Self-test | `pytest tests/unit/test_gather_budget.py` + `scripts/gather_budget.sh` os/esxi/redfish `start:true` | FAILURE |
-| Harness Driver | `build(job: 'clovirone-cicd/clovirone-server-gather-harness', wait: true, propagate: false)` 를 `HARNESS_SCENARIOS` 순서대로(main checkout 의 함수) → `harness_main_results.json` | 시나리오 ≠ SUCCESS → UNSTABLE |
+| Harness Driver | `build(job: 'clovirone-cicd/clovirone-server-gather-harness', wait: true, propagate: false)` 를 `HARNESS_SCENARIOS`(16) 순서대로(main checkout 의 함수) → `harness_main_results.json`. 기대 결과는 `scenarios.json` 의 `jenkins_result`(user_abort = ABORTED). 이어서 `HARNESS_BOUNDED_SCENARIOS`(Tier 2, BOUNDED=true) → `harness_bounded_results.json` · `HARNESS_BOUNDED`(승인 전 PARTIAL, 승격 조건 아님) | 시나리오 ≠ 기대 결과 → UNSTABLE |
 | Prodgen Build | `prodgen build --sha MAIN_SHA` → `prodtree/` · `prodtree.tar.gz` · `prodtree_portal.sha256`(이 빌드의 artifact) | class B > 0 → FAILURE |
 | Harness (prodtree) | Build PASS 뒤에만. Harness Job 을 `FUNCTIONS_SRC=artifact` + `ARTIFACT_BASE_URL=${BUILD_URL}artifact` + `EXPECTED_SHA256` 로 — 생성 tree 의 같은 함수를 같은 Harness 로(`HARNESS_TREE_SCENARIOS`) | UNSTABLE |
 | Prodgen Drift | `git fetch origin +refs/heads/production:refs/remotes/origin/production` → `drift-check --production refs/remotes/origin/production [--bootstrap-baseline B]` | 승격 가능 상태 아님 → UNSTABLE |
 | Prodgen Verify | Build PASS 뒤에만. `verify --tree prodtree --remote origin --netrc <mktemp 0600> --vault-password-file <mktemp 0600> --report-out prodgen_verify_report.json --source-build-url BUILD_URL` — credential 이 없으면 그 gate 없이 실행(PARTIAL). exit 0/2/1 | 2 → UNSTABLE · 1 → FAILURE |
-| Evidence Aggregate | 이 빌드의 Harness 결과 + `E2E_MAIN_ENTRIES`(main Job 시나리오 빌드) → `prodgen e2e-evidence` → `evidence-aggregate` → `prodgen_verify_report.aggregated.json` | 미완료 → UNSTABLE |
+| Evidence Aggregate | 이 빌드의 Harness 결과 + `E2E_MAIN_ENTRIES`(main Job 시나리오 빌드) → `prodgen e2e-evidence`(시나리오 계약으로 판정 — 파라미터·artifact·콘솔 표식 대조) → `evidence-aggregate`(입력 digest 검증) → `prodgen_verify_report.aggregated.json` | 미완료 → UNSTABLE |
 | Prodgen Promote | `PROMOTE=true` 일 때만. 필수 stage 전부 PASS · 집계 보고서 존재 · SHA 4값 일치(`PROMOTE_SHA`·`MAIN_SHA`·HEAD·보고서 binding) · `verdict == COMPLETE_PASS` · GitLab credential 있을 때만 양 원격 실 승격(없으면 dry-run) → `prodgen promote` | 조건 미충족 → `error`, 원격 변경 0 |
 
 - 파라미터: `PROMOTE`(false) · `PROMOTE_SHA` · `PROMOTE_DRY_RUN`(true) · `BOOTSTRAP_BASELINE`(빈 값) · `HARNESS_SCENARIOS`(12) · `HARNESS_TREE_SCENARIOS`(4) · `E2E_MAIN_ENTRIES`(`SCENARIO=job/path:build[:EXPECTED]`).

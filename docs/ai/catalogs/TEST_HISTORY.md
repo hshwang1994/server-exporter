@@ -1,5 +1,18 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-04 (2차) — 완료 보고 검토 C1~C6 대응 (시나리오 계약 · baseline 복구 · 환경 재실행 · 배포 정책 · interruption Harness · vault 복호화)
+
+> 실측 `tests/evidence/2026-10-04-review-c1-c6.md` · `2026-10-04-promotion-drill.md` · `2026-10-04-test-server-roster.md`. 상태 어휘 PASS/FAIL/PARTIAL/HOLD/INVALID.
+
+| 항목 | 결과 |
+|---|---|
+| 단위 묶음(Windows) | `tests/unit/prodgen/test_verdict_evidence.py` 9 · `test_promotion_cycle.py` 7(B→P1→R→P2 · **B→P1→P2→R→P3** · 배포 정책/CI stage 증거 · G20 원격 없음 PARTIAL · 거부 · 경쟁 · push-sync) · `test_pipeline_tmp_repo.py` · `test_jenkinsfile_ci.py` 34 · `test_harness_tools.py` 11 · `test_harness_callback_sink.py` 5 — 모두 PASS |
+| Jenkins 선언형 린터 | `Jenkinsfile_ci`(C4·C6·GP-4 수정본) validated(Toolchain 의 `\.` 이스케이프 1건 수정 뒤) |
+| 로컬 `bash scripts/ai/ci_gate.sh`(Windows, X2 작업 트리) | pytest **4,091 passed · 36 skipped · 7 xfailed**(unit·e2e·regression, 15 min) + integration(not live) **308 passed · 4 skipped**; python compile · field_dictionary · schema drift · vendor boundary · harness consistency PASS; corpus 14/14 MATCH. **전체 결과 PARTIAL** — `ansible-playbook --syntax-check` 는 이 호스트에 ansible 이 없어 건너뜀(같은 후보의 CI Gate·G11 이 보완) |
+| 실 `4ce90a00` 복구 훈련(두 bare 원격, live gate stub) | **PASS(기구)** — B→P1→P2→R→P3 전이 전부 기대대로(R tree OID == B^{tree}, baseline 계승, 한 원격 restore 거부, 양 원격 ff). 실 원격 변경 0. `tests/evidence/2026-10-04-promotion-drill.md` |
+| CI(X2) | __CI_RESULT__ |
+| main Job(X2) | __MAIN_RESULT__ |
+
 ## 2026-10-04 — 잔여 결함 R1~R7 · Harness · CI 연결 · prodgen 강화 (Jenkins 실측 포함)
 
 > 실측 `tests/evidence/2026-10-04-residual-r1-r7.md` · `2026-10-04-live-e2e.md` · `2026-10-04-location-cj.md`. 상태 어휘 PASS/FAIL/PARTIAL/HOLD/INVALID.

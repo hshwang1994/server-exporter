@@ -2,14 +2,19 @@
 
 이 문서는 `tests/evidence/2026-10-03-final-report.md` 를 **정정**한다. 2026-10-03 보고서의 "Phase 4 finalizer 완료 · Phase 6 완료 · Phase 7a 완료(코드 수준)" 는 틀렸다: Phase 6 은 CI 에 prodgen 이 연결되지 않았고(R3), Phase 7a 는 판정·복구·원격 기준점 결함(R1·R2·R4)을, Phase 4 는 finalizer 결함(R5·R6·R7)을 포함했다. 실환경은 전부 미검증이었다. 아래는 2026-10-04 작업 뒤의 상태다.
 
+> **2026-10-04 정정(2차 — 완료 보고 검토 C1~C6)**: 아래 §0 의 "코드 완료 PASS" 와 §6 의 "Harness F1~F6 · interruption 충족" 은 **틀렸다**. 검토가 확인한 결함 — C1 E2E 증거가 시나리오 동작을
+> 대조하지 않음 · C2 연속 승격 뒤 baseline 복구 불가 · C3 환경 미확인을 동일로 취급 · C4 CLI 승격이 CI stage 증거·양 원격 집합을 강제하지 않음 · C5 interruption 6 조건 미실행 · C6 cj Vault 복호화
+> 주장 — 은 모두 현재 코드에서 재확인됐고 후속 커밋으로 보완했다. 보완 내용 · 실행 결과 · 남은 차단은 `tests/evidence/2026-10-04-review-c1-c6.md` 가 정본이며, "코드 완료" 는 그 커밋(X2) 기준으로
+> 다시 판정한다. 아래 본문은 2026-10-04 1차 상태 기록으로 남긴다.
+
 상태 어휘: `PASS` · `FAIL` · `PARTIAL/SKIP` · `HOLD/권한` · `HOLD/환경` · `INVALID`. 완료 수준 다섯: **코드 완료 / 로컬 회귀 완료 / Jenkins 실행 완료(main · CI · Harness) / 내부 production 검증 완료 / 고객사 형태 검증 완료** — 어느 하나가 다른 것을 대신하지 않는다. 세 층: 고객사 main 형태 깨끗한 checkout 검증(G19) / 사내 production Job E2E / 실제 고객사 실행(미수행).
 
 ## 0. 한눈에
 
 | 수준 | 상태 |
 |---|---|
-| 코드 완료 | **PASS** — R1~R7 · Harness · CI 12 stage · prodgen 승격 모델 · G19/G20 · cj (커밋 목록 `tests/evidence/2026-10-04-residual-r1-r7.md` §0) |
-| 로컬 회귀 완료 | **PASS(PARTIAL 표기)** — gate 4,070 passed(Windows 는 `ansible-playbook` 없음 → syntax-check 는 CI Runner 가 대신: CI Gate 3,999 passed + G11 PASS) |
+| 코드 완료 | ~~PASS~~ → **정정: 미완료였다**(C1~C6, `2026-10-04-review-c1-c6.md`). R1~R7 · Harness · CI 12 stage · prodgen 승격 모델 · G19/G20 · cj 는 구현됐으나 검증기·복구·정책에 결함이 남아 있었다 |
+| 로컬 회귀 완료 | pytest gate 4,070 passed(Windows). **로컬 전체 검증은 PARTIAL** — `ansible-playbook --syntax-check` 는 이 호스트에 ansible 이 없어 미실행이며 같은 후보의 CI(Gate · G11)가 별도로 보완한다 |
 | Jenkins 실행 완료 | **부분** — CI #7(X=`15e684b0`) **SUCCESS: Verify COMPLETE_PASS(20/20, G19 포함) · Harness 12/12 · 생성 tree 함수 4/4 · Evidence PASS**, main T2+T6 PASS(#6). **S1·S2·S3·S4·T5·E2E-A/A'·E2E-D/E 는 HOLD/권한·환경** |
 | 내부 production 검증 | **미수행** — 승격 전제 미충족(필수 E2E · GitLab 자격 · push-sync) |
 | 고객사 형태 검증 | **G19 PASS(CI #3 · #5)** — 생성 tree 만으로 3채널 실행. 고객사 실환경 검증이 아니다 |

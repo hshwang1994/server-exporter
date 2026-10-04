@@ -8,6 +8,36 @@
 
 > 최종 갱신: 2026-10-03
 
+## 2026-10-04 (2차) — 완료 보고 검토 C1~C6: 증거 계약 · baseline 기록 탐색 · 환경 미확인 재실행 · 배포 원격 집합 · interruption Harness · vault 복호화 증거
+
+### 사용자 의심
+
+2026-10-04 1차 보고의 "코드 완료 PASS" · "Harness F1~F6 및 interruption 충족" 이 틀렸다. 검토가 로컬 재현으로 보인 것: 같은 빌드를 모든 시나리오 이름으로 등록해도 `check_evidence` 가 통과(C1), B→P1→P2 뒤 B 복구 거부(C2), Jenkins 버전 미확인 입력이 호환 통과(C3), remote 없는 G20 PASS 와 CLI 의 CI stage 미검사(C4), interruption 6 조건 중 ③ 만 실행(C5), G19 를 vault 복호화 증거로 쓴 주장(C6).
+또 완료 기준이 확정됐다: 사내 전체 테스트 서버 실수집 · Kernel 6.x 포함 모든 확인된 결함 해결 · 최종 push 와 원격 코드 재검증 — 코드·로컬·일부 Jenkins·dry-run·commit 은 중간 진척이다.
+
+### 분석
+
+- 여섯 건 모두 현재 코드에서 재확인됐다(`tests/evidence/2026-10-04-review-c1-c6.md` §0). 공통 원인: "증거" 와 "환경 동일성" 을 결과값 하나로 축소했고, 상태 전이 테스트가 정상 경로 반복 뒤의 복구를 포함하지 않았다.
+- 도구 차단(노드 라벨 + 실호스트 트리거 묶음, Secret-Store 쓰기)은 사용자 승인과 별개다 — 우회하지 않고, 거부된 묶음의 구성 요소를 분할 재시도하지 않는다. 시도하지 않은 범주(Redfish E2E-E · S5)는 실제 거부와 구분해 1회 정식 경로로 시도한다.
+
+### 결정
+
+1. E2E 증거는 **시나리오 계약**으로 판정한다(입력 조건 + 관측 + 기대 결과). 호출자가 기대 결과를 바꿀 수 없다. main 함수 Harness 와 생성 tree Harness 는 별도 그룹이며 tree 그룹은 `tree_hash` 로 승격 대상과 묶인다. 집계는 입력 digest 를 먼저 검증한다.
+2. baseline 기록은 이력 전체에서 찾고(`baseline_record`), 정상 승격은 baseline trailer 를 물려받는다. 조상 검사는 최신 생성 커밋 기준을 유지한다(단조성 약화 없음).
+3. 환경 식별자 미확인 = 불일치. 보고서 재사용 시 환경 의존 gate 는 promote 가 재실행하고 재사용/재실행 목록을 보고서와 trailer 에 남긴다. 식별자는 도구 **버전** 과 collections 해시까지.
+4. 배포 원격 집합 정책 `DEPLOY_REMOTES = (origin, internal)`: 실제 promote/restore 는 정확히 그 집합만. CLI 는 `--ci-stage-results` 로 CI 와 같은 stage 증거를 소비한다. `se-gitlab-push` 라는 credential 이름은 유일 경로가 아니다(집합이 정책).
+5. interruption 6 조건을 Harness 시나리오에 연결(①②⑤⑥ + 사후 경로; ④ 는 main Job T5 몫). Tier 2 는 승인 실측 → 없으면 PARTIAL/승인, "충족" 으로 합산하지 않는다.
+6. cj Vault 복호화 증거는 CI Verify 의 `vault_decrypt_check.py --password-file`(정식 바인딩) 로 만든다. G19 는 복호화 증거가 아니다.
+7. 전체 테스트 서버 명부를 저장소 기록으로 초안(`2026-10-04-test-server-roster.md`)하고, 확정은 실수집 envelope 로 한다. 접속 정보 파일은 읽지 않는다.
+
+### 영향
+
+- __IMPACT__
+
+### 회귀
+
+- `tests/unit/prodgen/test_verdict_evidence.py`(계약 · 그룹 · digest · 환경 미확인) · `test_promotion_cycle.py`(B→P1→P2→R→P3 · 정책 · CI stage · G20 PARTIAL) · `tests/unit/test_jenkinsfile_ci.py`(vault 복호화 · ci-stage-results · bounded · GP-4) · `tests/unit/test_harness_tools.py`(interruption 시나리오 · PARTIAL/승인 · outcome).
+
 ## 2026-10-04 — 잔여 결함 R1~R7 · 승격 판정 모델 · 고객사 main 형태 실행 검증 · main 전용 Harness · CI 연결 (Astra 2~4차 검토 대응)
 
 ### 사용자 의심

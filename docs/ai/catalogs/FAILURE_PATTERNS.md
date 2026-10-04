@@ -543,3 +543,36 @@
 - (8) **프로세스 실수**: `python -m pytest … | tail -1 && git commit` — 파이프라인 종료코드는 `tail` 의 것이라 수집 오류(`pytest` import 누락)가 가려진 채 커밋·push 됐다(`20354861`, CI #4 중단). `set -o pipefail` 또는 테스트를 별도 명령으로. heredoc 에 적은 `\n` 은 `\n` 으로 접혀 테스트 리터럴에 실제 개행이 들어갔다(Write/Edit 도구로 쓴다 — 2026-10-03 에 이미 적어 둔 패턴을 또 밟았다).
 - (9) **자동 분류기 거부**: 노드 라벨 변경 + 실호스트/Portal 트리거를 **한 명령에 묶어** 요청해 어느 항목이 거부됐는지 알 수 없게 됐다. 다른 범주의 행위는 명령을 나눠 요청한다(각각 1회, 우회 없음).
 - 관련 rule: rule 25 R7-A(실측 검증), rule 95 R3, rule 80 R1
+
+## 2026-10-04 — 검증기가 "이름이 맞는 빌드" 를 증거로 받았다 (완료 보고 검토 C1)
+
+- 카테고리: ai-hallucination / scope-miss
+- 발견 위치: `scripts/ai/prodgen/evidence.py`(`collect()` · `check_evidence()`), 검토 재현 스크립트(같은 main 빌드를 S1~E2E-A' 전부로, 같은 normal_success Harness 빌드를 12 이름으로 등록 → `accepted=true`)
+- 증상: main 시나리오 PASS = "Jenkins 결과 == 호출자가 넘긴 EXPECTED", Harness PASS = "Job 이름에 harness 포함 + artifact verdict". 등록 이름과 실제 파라미터·artifact·동작은 대조하지 않았다.
+- 원인: 증거 모델을 "같은 SHA 의 필수 이름이 전부 PASS" 로만 설계했고, 시나리오가 요구하는 입력·관측(대상 host · Callback 수신 · outcome · 보존)을 정본에 적지 않았다. "T5 ABORTED · T6 UNSTABLE 이 기대값" 이라는 문장이 "결과값 비교" 로 축소됐다.
+- 영향: 승격 조건 ③ 이 이름 바꾸기로 충족될 수 있었다(실제 조작은 없었음 — 검증기 결함).
+- 수정: `MAIN_CONTRACT`(시나리오별 입력 조건·판정 항목·기대 Jenkins 결과) · Harness 파라미터/artifact/해시 대조 · main 함수 그룹 ↔ 생성 tree 그룹 분리(`tree_hash`) · 집계 입력 digest 선검증. 호출자 EXPECTED 는 계약과 같을 때만.
+- 재발 방지: "증거" 는 항상 **입력 조건 + 관측 + 결과** 세 축으로 정의한다. 결과값 하나로 PASS 를 만드는 코드는 쓰지 않는다. regression `tests/unit/prodgen/test_verdict_evidence.py`.
+- 관련 rule: rule 24 R2 · rule 95 R2
+
+## 2026-10-04 — 환경 식별자가 비어 있으면 "같다" 로 통과시켰다 (검토 C3)
+
+- 카테고리: ai-hallucination
+- 발견 위치: `scripts/ai/prodgen/verify/__init__.py::environment_compatible`(`jenkins_version` 한쪽이 비면 continue), `promote.py` 재사용 경로(`collect_environment()` 에 Jenkins 버전 미전달), 주석("G13 재실행") ≠ 실제(G18/G20)
+- 증상: 기록된 Jenkins 버전이 있고 현재가 빈 문자열인 입력이 호환 판정을 통과.
+- 원인: "모르면 문제 삼지 말자" 를 기본값으로 뒀다. 미확인은 동일성의 증거가 아니다. 또 린터 endpoint 응답에 `X-Jenkins` 헤더가 없어(실측) 값이 항상 비었는데 정보성 TODO(GP-29)로 미뤘다.
+- 영향: 다른 Jenkins/plugin 환경의 보고서가 G13 재실행 없이 재사용될 수 있었다.
+- 수정: 미확인 = 불일치; 환경 의존 gate 를 promote 가 재실행하고 보고서/trailer 에 재사용·재실행 목록 기록; 식별자에 collections 해시·도구 버전 추가; `/api/json` 헤더로 버전 포착.
+- 재발 방지: 비교 함수에서 "알 수 없음" 분기는 항상 **보수적(불일치)** 으로. 주석의 동작 설명은 코드와 같은 커밋에서 테스트로 고정한다.
+- 관련 rule: rule 95 R1
+
+## 2026-10-04 — "가장 가까운 provenance 커밋" 을 "baseline 을 기록한 커밋" 으로 썼다 (검토 C2)
+
+- 카테고리: scope-miss
+- 발견 위치: `scripts/ai/prodgen/drift.py::first_prodgen_commit`(이름과 달리 nearest), `promote.py::restore` 의 legacy 경로
+- 증상: B → P1 → P2(정상 승격) 뒤 `restore --to B --bootstrap-baseline B` 가 "기록한 생성 커밋이 없다" 로 거부. 기존 테스트(B→P1→R→P2)는 이 경로를 지나지 않았다.
+- 원인: 두 목적(최신 생성 main 찾기 · baseline 기록 찾기)을 한 함수로 섞었고, 정상 승격 커밋이 baseline trailer 를 물려받지 않았다.
+- 영향: 운영에서 두 번째 정상 승격 뒤 최초 baseline 복구가 불가능했을 것이다.
+- 수정: `baseline_record()`(이력 전체 탐색) + 정상 승격의 trailer 계승 + `Restore-From`/`Baseline-Recorded-By` 분리. regression B→P1→P2→R→P3 + 실 `4ce90a00` 복제 훈련.
+- 재발 방지: 상태 전이 테스트는 "정상 경로가 두 번 이상 반복된 뒤의 복구" 를 반드시 포함한다.
+- 관련 rule: rule 95 R1 · rule 24 R2
