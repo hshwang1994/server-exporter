@@ -72,7 +72,9 @@ NONROOT_STDERR = ("/sys/firmware/dmi/tables/smbios_entry_point: Permission denie
 # ---------------------------------------------------------------------------
 # 독립 oracle — 파서와 다른 방법(Handle 블록 분할 + 키 완전일치)으로 기대값을 만든다
 # ---------------------------------------------------------------------------
-_UNIT_MB = {"kb": 1 / 1024, "mb": 1, "gb": 1024, "tb": 1024 * 1024}
+_UNIT_MB = {"kb": 1 / 1024, "mb": 1, "gb": 1024, "tb": 1024 * 1024,
+            # dmidecode 3.6+ prints IEC binary prefixes (실측 RHEL 10.2, 2026-10-04 main #20: "Size: 4 GiB")
+            "kib": 1 / 1024, "mib": 1, "gib": 1024, "tib": 1024 * 1024}
 
 
 def dmidecode_stdout(capture: Path) -> str:
@@ -516,6 +518,40 @@ def test_raw_head_is_bounded_and_survives_missing_markers():
     ctx = render(RunResult(0, collector_output(many), ""))
     head = ctx["_errors_fragment"][0]["detail"].split("raw_head=", 1)[1]
     assert len(head) <= 600
+
+
+def test_dmidecode_36_iec_units_are_parsed(sbx):
+    """2026-10-04 Kernel 6.x DIMM 제보의 실제 원인: RHEL 10.2 의 dmidecode 3.6 은 Size 를 IEC 접두어(GiB/MiB/kiB/TiB)로 찍는다.
+    main #20(10.100.64.37) raw_head: "Maximum Capacity: 5 GiB" / "Size: 4 GiB" / "Size: No Module Installed" — 종전 파서는 0 으로 봐
+    slot 0 · os_visible 로 떨어졌다. 수정 뒤에는 장착 slot 1(4096 MB) 과 물리 총량이 잡히고, Type 16 의 Maximum Capacity 는 세지 않는다."""
+    header = "# dmidecode 3.6\nGetting SMBIOS data from sysfs.\nSMBIOS 2.7 present.\n"
+    type16 = ("Handle 0x0012, DMI type 16, 23 bytes\nPhysical Memory Array\n\tLocation: System Board Or Motherboard\n"
+              "\tUse: System Memory\n\tError Correction Type: None\n\tMaximum Capacity: 5 GiB\n"
+              "\tError Information Handle: Not Provided\n\tNumber Of Devices: 64\n")
+    populated = ("Handle 0x0013, DMI type 17, 40 bytes\nMemory Device\n\tArray Handle: 0x0012\n\tError Information Handle: No Error\n"
+                 "\tTotal Width: 32 bits\n\tData Width: 32 bits\n\tSize: 4 GiB\n\tForm Factor: DIMM\n\tSet: None\n"
+                 "\tLocator: RAM slot #0\n\tBank Locator: RAM slot #0\n\tType: DRAM\n\tType Detail: EDO\n\tSpeed: Unknown\n"
+                 "\tManufacturer: VMware Virtual RAM\n\tSerial Number: 00000001\n\tAsset Tag: Not Specified\n\tPart Number: VMW-4096MB\n")
+    empty = ("Handle 0x0014, DMI type 17, 40 bytes\nMemory Device\n\tArray Handle: 0x0012\n\tError Information Handle: No Error\n"
+             "\tTotal Width: Unknown\n\tData Width: Unknown\n\tSize: No Module Installed\n\tForm Factor: DIMM\n\tSet: None\n"
+             "\tLocator: RAM slot #1\n\tBank Locator: RAM slot #1\n\tType: Unknown\n\tType Detail: Unknown\n")
+    kib = ("Handle 0x0015, DMI type 17, 40 bytes\nMemory Device\n\tSize: 512 KiB\n\tLocator: ROM\n\tType: ROM\n")
+    install_dmidecode(sbx, stdout=header + "\n" + type16 + "\n" + populated + "\n" + empty + "\n" + kib)
+    res = run_raw(sbx)
+    assert res.marker("MEM_PHYS_MB") == "4096", "4 GiB(+512 KiB → 0) 만 세고 Maximum Capacity 5 GiB 는 세지 않는다"
+    slots = slot_lines(res)
+    assert len(slots) == 1 and slots[0].startswith("SLOT|4096|DRAM|") and "RAM slot #0" in slots[0]
+    assert res.marker("MEM_DEVICE_RECORDS") == "3"
+    ctx = render(res)
+    mem = ctx["_data_fragment"]["memory"]
+    assert mem["total_basis"] == "physical_installed" and mem["installed_mb"] == 4096 and mem["total_mb"] == 4096
+    assert [s["capacity_mb"] for s in mem["slots"]] == [4096] and mem["slots"][0]["manufacturer"] == "VMware Virtual RAM"
+    assert ctx["_errors_fragment"] == []
+    # 같은 캡처를 GB 표기로 바꾸면 결과가 같다 (단위만 다를 뿐 데이터는 동일) — oracle 과도 일치
+    legacy = (header + "\n" + type16 + "\n" + populated + "\n" + empty).replace("4 GiB", "4096 MB").replace("5 GiB", "5 GB")
+    install_dmidecode(sbx, stdout=legacy)
+    assert slot_lines(run_raw(sbx))[0].split("|")[1] == "4096"
+    assert [s["capacity_mb"] for s in oracle_slots(header + "\n" + type16 + "\n" + populated + "\n" + empty)] == [4096]
 
 
 def test_new_user_sentence_meets_portal_quality():

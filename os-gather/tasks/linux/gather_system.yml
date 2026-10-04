@@ -91,11 +91,12 @@
           echo "DMIDECODE_OK=yes"
           # 메모리 타입(5/6/16/17) 레코드만 — 레코드 밖의 줄(버전 머리말 등)과 Type 4 는 버린다.
           mem_out=$(printf '%s\n' "$out" | awk '/^Handle /{k=($0 ~ /DMI type (5|6|16|17),/)} k')
-          # 단위: dmidecode 는 kB / MB / GB / TB 를 쓴다 (2.x 는 kB). 대소문자 무관하게 MB 로 환산.
+          # 단위: dmidecode 는 kB / MB / GB / TB 를 쓰고(2.x 는 kB), **3.6 부터는 IEC 접두어 kiB / MiB / GiB / TiB** 를 쓴다
+          #   (2026-10-04 RHEL 10.2 실측 main #20: "Size: 4 GiB" — 종전 파서가 0 으로 봐 DIMM 전부 누락, 제보의 원인). 대소문자 무관하게 MB 로 환산.
           phys=$(printf '%s\n' "$mem_out" \
             | grep -E "^[[:space:]]*Size:" \
             | grep -v "No Module Installed" \
-            | awk '{u=tolower($3); if(u=="tb")s+=$2*1048576; else if(u=="gb")s+=$2*1024; else if(u=="mb")s+=$2; else if(u=="kb")s+=$2/1024} END{print int(s)}')
+            | awk '{u=tolower($3); if(u=="tb"||u=="tib")s+=$2*1048576; else if(u=="gb"||u=="gib")s+=$2*1024; else if(u=="mb"||u=="mib")s+=$2; else if(u=="kb"||u=="kib")s+=$2/1024} END{print int(s)}')
           echo "MEM_PHYS_MB=${phys:-}"
           # 2026-10-04 (Kernel 6.x DIMM 제보 재현 근거): SLOT 0건의 원인을 원본으로 가릴 수 있게 Handle 종류별 개수와
           #   메모리 레코드(Type 5/6/16/17)의 **식별 줄만**(Handle · Memory Device · Physical Memory Array · Size · Locator ·
@@ -127,10 +128,10 @@
             /^[ \t]*Size:/ {
               v=$2; u=tolower($3); size=0;
               if (v ~ /^[0-9]+$/) {
-                if (u=="tb") size=v*1048576;
-                else if (u=="gb") size=v*1024;
-                else if (u=="mb") size=v+0;
-                else if (u=="kb") size=int(v/1024);
+                if (u=="tb" || u=="tib") size=v*1048576;
+                else if (u=="gb" || u=="gib") size=v*1024;
+                else if (u=="mb" || u=="mib") size=v+0;
+                else if (u=="kb" || u=="kib") size=int(v/1024);
               }
               next
             }
