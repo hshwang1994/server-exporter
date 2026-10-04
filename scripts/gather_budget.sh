@@ -22,7 +22,7 @@ GLOBAL_SEC=9000          # options.timeout 150 min — HARD_DEADLINE = 빌드 �
 RESERVE_SEC=990          # 수집 종료 → Callback 종료의 실제 경로 합: GRACE 90 + LAYER_A 120 + ARCHIVE_STASH 60 + FINALIZER_TOTAL 720
 STAGE_LIMIT_SEC=6900     # Gather stage 합산 상한 115 min (= WAIT_AGENT 300 + CHECKOUT 600 + ADDON 300 + CAP 5400 + 300) — 기준점이 agent 대기 앞이라 대기가 잔여에서 차감된다
 GRACE_SEC=90             # timeout --kill-after
-POST_SEC=180             # Gather post{always}: LAYER_A 120 + ARCHIVE_STASH 60
+POST_SEC=180             # Gather post{always}: LAYER_A 120(shell timeout) + ARCHIVE_STASH 60(archive 30 + stash 30 = Jenkinsfile PRESERVE_STEP — Tier 2 step 상한; 기본 모드에서는 stage 합산 상한(post 포함)이 집행)
 BASE_SEC=300
 MIN_SEC=600
 CAP_SEC=5400
@@ -32,18 +32,24 @@ HOST_CAP_ESXI=240
 REDFISH_DEADLINE_SEC=540
 REDFISH_BACKOFF_SEC=65
 REDFISH_ACCOUNT_SEC=240
-# 2026-10-03 Phase 5 WSL 실측: fork 슬롯당 프로세스 트리 PSS ≈ 36 MB(forks 100 ≈ 3.7 GB), 실패 경로 wall 은 forks 50↔100 차이 없음.
-#   Runner RAM 을 측정하기 전까지 기본 50. Runner 노드 환경변수 SE_FORKS_CAP_OS 로 올린다 (docs/ai/NEXT_ACTIONS.md GP-18).
+# OS forks 기본 상한 50 — Runner 노드 환경변수 SE_FORKS_CAP_OS 로 올린다(메모리 보호가 상한으로 자른다). 2026-10-04 Runner 실측(아래)으로 메모리 상수는 확정했고
+#   forks 50 자체는 유지한다(13 host 배치 peak 트리 PSS 463 MB · 18 host 620 MB — 7.5 GB Runner 의 가용 6.1 GB 안).
 OS_FORKS_MAX=50
 ESXI_FORKS_PER_VCPU=2
 REDFISH_FORKS_PER_VCPU=4
-# ── 메모리 보호 (P-1, 2026-10-03 Astra 3차 §11-1) — 값은 전부 **임시(미측정)**, S1/S2 실측(peak PSS · 활성 fork) 뒤 보정한다 ─────
+# ── 메모리 보호 (P-1, 2026-10-03 Astra 3차 §11-1 · 2026-10-04 Runner 실측으로 확정 — GP-18) ─────────────────────────────────────
 #   mem_cap = floor((MemAvailable_MB × NODE_SHARE_PCT/100 − FIXED_MB) / PER_FORK_MB); forks = min(forks, mem_cap).
-#   PER_FORK_MB 36 = WSL 실패 경로의 fork 슬롯당 PSS 관측값이지 성공 수집의 상한이 아니다. FIXED_MB 200 = ansible 컨트롤 프로세스 등 고정 비용(추정).
-#   NODE_SHARE_PCT 40 = 15 executor Runner 에서 main·production 두 Job 의 Gather 가 겹칠 수 있다는 가정의 몫(예약이 아니다).
+#   실측(2026-10-04, perf-observe Job: 같은 Runner 의 ansible 프로세스 트리를 SE_BUILD_ID 로 귀속해 smaps_rollup PSS 를 2 s 간격 샘플링; main #92~#96 · production #82,
+#   13 host 성공 배치 5회 + 18 host 혼합 1회, Runner01/02 7.5 GB · 4 vCPU):
+#     · 활성 slot 당 PSS(peak 시점, worker + 그 worker 의 ssh/자식 프로세스): 평균 36 MB (Linux 12 slot: worker 20 + 자식 ≈16) — WSL 임시값 36 과 우연히 같다
+#     · 단일 worker 최대 PSS: 58~69 MB (Windows WinRM worker — in-process 라 자식 없음) → slot 최악치 69 MB
+#     · ansible 메인 python 최대 86 MB · timeout 래퍼 0.2 MB · 트리 peak PSS 459~464 MB(13 host) · 620 MB(18 host) · MemAvailable 하락 500~620 MB · swap 0
+#   PER_FORK_MB 80 = slot 최악치 69 + 16 % 여유(평균값·RSS 합·configured forks 가 아니라 **관측 peak** 기준). FIXED_MB 200 = 메인 python 최대 86 + 래퍼 + 여유(×2.3).
+#   NODE_SHARE_PCT 40 = 15 executor Runner 에서 두 Gather 가 겹칠 수 있다는 가정의 몫(예약이 아니다) — 실측에서는 Jenkins(LeastLoad)가 동시 Gather(main+production ·
+#   main 2건)를 서로 다른 Runner 에 배치해 같은 Runner 겹침은 관측되지 않았다(다른 Runner 를 offline 으로 만들어 강제하지 않았다); 산술 2 × 620 MB = 1.24 GB < 6.1 GB × 0.4.
 #   mem_cap ≤ 0 → 1 fork 도 수용 못 함 → start=false reason=not_started_memory (waves 계산 전에 반환). MemAvailable 을 못 읽으면
-#   mem_guard=unavailable 로 두고 기존 상한으로 진행한다 — 보호가 동작한 결과로 보고하지 않는다.
-PER_FORK_MB_DEFAULT=36
+#   mem_guard=unavailable 로 두고 기존 상한으로 진행한다 — 보호가 동작한 결과로 보고하지 않는다. 노드별 override: SE_PER_FORK_MB · SE_FIXED_MB · SE_NODE_SHARE_PCT.
+PER_FORK_MB_DEFAULT=80
 NODE_SHARE_PCT_DEFAULT=40
 FIXED_MB_DEFAULT=200
 

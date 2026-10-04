@@ -9,13 +9,28 @@
 Map seConstants() {
     return [
         GLOBAL           : 9000,   // options.timeout 150 min
-        FINALIZER_TOTAL  : 720,    // post{always} node 대기 120 + 회수 30 + 조립 60 + Callback 390 + 여유 120 (합산 제한 1개)
-        RECOVER          : 30,
-        ASSEMBLE         : 60,
+        // post{always} 합산 제한 1개 = node 대기 120 + 회수 60(unstash 30 + unarchive 30) + 조립 60 + 최소 조립 20 + Callback 390(120×3 + 대기 10+20) + 여유 70.
+        //   아래 step 상한(RECOVER · ASSEMBLE · ASSEMBLE_MIN · PRESERVE_STEP)은 Tier 2(SE_FINALIZER_BOUNDED=true + 승인 4 시그니처)에서만 집행된다 —
+        //   기본(false)에서는 이 합산 제한 · Gather stage 115 min · 전역 150 min 이 유일한 선점이다 (docs/operate/04-pipeline-runtime.md 시간 예산).
+        FINALIZER_TOTAL  : 720,
+        RECOVER          : 30,     // unstash · unarchive 각각 (Tier 2)
+        ASSEMBLE         : 60,     // Layer A 결과 읽기·검문 → Layer B 적재(readTrusted ×3 · load · 정본 파싱 · 조립) → raw 검문 — 전부 한 상한 (Tier 2)
+        ASSEMBLE_MIN     : 20,     // 조립 상한 초과 뒤 최소 경로: 이미 읽은(없으면 지금 읽는) OUTPUT 줄만 검문 (Tier 2)
+        PRESERVE_STEP    : 30,     // Gather post 의 보존 archive · stash 각각 — 합 60 = scripts/gather_budget.sh POST_SEC 의 ARCHIVE_STASH 60 (Tier 2)
         CALLBACK_ATTEMPT : 120,
         CALLBACK_MIN     : 20,     // 이보다 적게 남으면 시도하지 않고 기록만
         ABORT_ATTEMPT    : 60,
     ]
+}
+
+// readTrusted 로 읽은 정본의 식별 (2026-10-04 최종 지시 §5 · Plan §0 ②) — 콘솔에 길이와 Java String.hashCode(32-bit) 를 남긴다.
+//   sandbox 가 MessageDigest · CRC32 를 허용하지 않아 runtime 이 낼 수 있는 해시는 이것뿐이다. 후보 revision 의 같은 파일(`git show <sha>:<path>`)과
+//   대조해 "이 빌드가 어느 내용을 읽었는지" 를 확인하는 용도(혼합 revision 탐지)이지 무결성 증명이 아니다. Jenkins 자체 기록 "Obtained <path> from <SCM>" 은
+//   출처만 남기고 revision 은 남기지 않는다. 추가 checkout · 외부 도구 없음. 증거 대조는 scripts/ai/prodgen/evidence.py trusted_report().
+String seTrusted(String path) {
+    String text = readTrusted(path)
+    echo "[Trusted] ${path} len=${text.length()} jhash=${text.hashCode()}"
+    return text
 }
 
 // Layer B 순수 함수(seFallbackCanon · seJsonString · seReconcileRaw)의 정본은 scripts/jenkins/se_finalize.groovy 다 (2026-10-03, GP-11).
@@ -24,7 +39,7 @@ Map seConstants() {
 //   읽기/적재에 실패하면 null — 호출자는 Layer A 결과(gather_final.jsonl)가 있으면 그것을, 없으면 raw OUTPUT 줄만 보내고 UNSTABLE 로 남긴다.
 def seLoadFinalizeLib() {
     try {
-        writeFile(file: 'se_finalize.groovy', text: readTrusted('scripts/jenkins/se_finalize.groovy'), encoding: 'UTF-8')
+        writeFile(file: 'se_finalize.groovy', text: seTrusted('scripts/jenkins/se_finalize.groovy'), encoding: 'UTF-8')
         return load('se_finalize.groovy')
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
@@ -38,8 +53,8 @@ def seLoadFinalizeLib() {
 def seLoadCanon(def lib) {
     Map canon = lib.seFallbackCanon()
     try {
-        def fr = readYaml text: readTrusted('common/vars/failure_reasons.yml')
-        def ss = readYaml text: readTrusted('common/vars/supported_sections.yml')
+        def fr = readYaml text: seTrusted('common/vars/failure_reasons.yml')
+        def ss = readYaml text: seTrusted('common/vars/supported_sections.yml')
         if (fr?._fr_catalog?.output_build_failed?.default) { canon.reason = fr._fr_catalog.output_build_failed.default }
         if (ss?.channel_sections) { canon.sections = ss.channel_sections; canon.all = ss.all_sections ?: canon.all }
         canon.source = 'readTrusted'
@@ -82,7 +97,8 @@ boolean seCallback(String body, long hardDeadline, long finalizerDeadline, Map C
             msg = "httpRequest 예외 (연결 실패/timeout): ${e.message}"
         }
         if (code ==~ /2\d\d/) {
-            echo "[Callback] [OK] HTTP ${code} (${attempt}/${maxAttempts})"
+            // 2xx = HTTP 응답 증거다. Portal 의 저장·자산 매핑·화면 반영 증거가 아니다 — 응답 본문 앞부분을 남겨 수신 측 응답을 구분할 수 있게 한다.
+            echo "[Callback] [OK] HTTP ${code} (${attempt}/${maxAttempts}) response=${msg.length() > 200 ? msg.substring(0, 200) : msg}"
             return true
         }
         if (code ==~ /4\d\d/ && !(code in ['408', '429'])) {
@@ -194,6 +210,7 @@ Map seFilterEnvelopeLines(List rawLines, String manifestJson) {
 //   보존 증거(영구 archive 성공 + 이 빌드의 manifest + 결과 파일)가 있을 때만 workspace 를 지운다. stash 는 전달 수단일 뿐이다
 //   (finalizer 의 unstash → unarchive 사다리가 덮는다). interruption(취소·timeout)은 어느 단계에서도 삼키지 않는다.
 def sePreserveGatherOutput() {
+    Map C = seConstants()
     String outcome = env.SE_GATHER_OUTCOME ?: 'interrupted_unknown'
     int layerA = -1
     try {
@@ -210,11 +227,16 @@ def sePreserveGatherOutput() {
         echo "[Finalize/A] Layer A 실행 예외 — archive/stash 는 계속한다: ${e.message}"
     }
     echo "[Finalize/A] exit=${layerA} outcome=${outcome}"
+    // archive · stash 각각 Tier 2 상한(PRESERVE_STEP 30 s): 자기 timeout 으로 식별된 초과만 그 수단의 실패로 두고 다음 수단으로 간다 (2026-10-04 최종 지시 §4).
+    //   기본 모드(SE_FINALIZER_BOUNDED=false)에서는 상한 없음 — Gather stage 합산 상한(115 min, post 포함)과 예산의 POST_SEC 예약이 실제 범위다.
     boolean archived = false
     try {
-        archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_auth_evidence/**',
-                         allowEmptyArchive: true, fingerprint: false)
-        archived = true
+        boolean done = seBounded(C.PRESERVE_STEP, 'archive') {
+            archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_auth_evidence/**',
+                             allowEmptyArchive: true, fingerprint: false)
+        }
+        archived = done
+        if (!done) { echo "[Finalize/A] archive 상한 ${C.PRESERVE_STEP}s 초과 — stash 는 계속한다" }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
@@ -222,12 +244,15 @@ def sePreserveGatherOutput() {
     }
     boolean stashed = false
     try {
-        stash(
-            name       : 'gather-output',
-            includes   : 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json',
-            allowEmpty : true,
-        )
-        stashed = true
+        boolean done = seBounded(C.PRESERVE_STEP, 'stash') {
+            stash(
+                name       : 'gather-output',
+                includes   : 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json',
+                allowEmpty : true,
+            )
+        }
+        stashed = done
+        if (!done) { echo "[Finalize/A] stash 상한 ${C.PRESERVE_STEP}s 초과 — finalizer 는 archive(unarchive) 로 회수한다" }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
@@ -322,73 +347,100 @@ def seFinalizeAndCallback() {
                     echo "[Finalize] unarchive 실패(또는 archive 없음): ${e.message}"
                 }
             }
-            // ② 줄 집합: Layer A 결과(exit 0/2) 우선 → 없으면 Layer B 최소 경로
+            // ② 줄 집합: Layer A 결과(exit 0/2) 우선 → 없으면 Layer B 최소 경로 → 라이브러리 부재면 raw 검문.
             //    손상 입력(3차 §6): report/JSONL 파싱 실패와 host 당 1줄 미달은 다음 유효 입력(Layer B)으로 넘기고 damage 에 적는다.
             //    interruption(취소·timeout)은 데이터 파싱 오류와 분리해 그대로 재전파한다.
+            //    상한(2026-10-04 최종 지시 §4): Layer A 읽기·검문 · Layer B 적재(readTrusted ×3 · load · 정본 파싱 · 조립) · raw 검문이 **모두** 한 상한
+            //    ASSEMBLE 안이다(Tier 2 에서만 집행). 자기 timeout 으로 식별된 초과는 최소 경로(ASSEMBLE_MIN)로 — 입력을 처음부터 되풀이하지 않는다.
+            //    body 문자열 결합과 기록(writeFile)은 상한 밖이다(입력은 상한 안에서 확정된 줄 집합뿐).
             List lines = null
             Map report = [:]
             String layerA = 'skipped'
+            String layerB = 'skipped'
             List damage = []
             List unrecovered = []
-            if (fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) {
-                try {
-                    def rep = readJSON file: 'gather_finalize_report.json'
-                    String finalText = readFile(file: 'gather_final.jsonl', encoding: 'UTF-8')
-                    if ((rep.exit_code in [0, 2]) && finalText.trim()) {
-                        Map picked = seFilterEnvelopeLines(finalText.split('\n') as List, manifestJson)
-                        if (picked.lines.size() == ips.size()) {
-                            lines = picked.lines
-                            report = rep
-                            layerA = (rep.exit_code == 0) ? 'ok' : 'ok_with_damage'
+            String outText = null
+            boolean assembled = seBounded(C.ASSEMBLE, 'assemble') {
+                if (fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) {
+                    try {
+                        def rep = readJSON file: 'gather_finalize_report.json'
+                        String finalText = readFile(file: 'gather_final.jsonl', encoding: 'UTF-8')
+                        if ((rep.exit_code in [0, 2]) && finalText.trim()) {
+                            Map picked = seFilterEnvelopeLines(finalText.split('\n') as List, manifestJson)
+                            if (picked.lines.size() == ips.size()) {
+                                lines = picked.lines
+                                report = rep
+                                layerA = (rep.exit_code == 0) ? 'ok' : 'ok_with_damage'
+                            } else {
+                                // host 당 1줄이 아니다(잘린 파일·깨진 줄) → Layer B 가 raw 파일에서 다시 조립한다
+                                layerA = 'incomplete'
+                                damage << "layer_a_incomplete valid=${picked.lines.size()} accepted=${ips.size()} dropped=${picked.dropped}".toString()
+                            }
                         } else {
-                            // host 당 1줄이 아니다(잘린 파일·깨진 줄) → Layer B 가 raw 파일에서 다시 조립한다
-                            layerA = 'incomplete'
-                            damage << "layer_a_incomplete valid=${picked.lines.size()} accepted=${ips.size()} dropped=${picked.dropped}".toString()
+                            layerA = 'failed'
                         }
-                    } else {
-                        layerA = 'failed'
+                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                        throw fie
+                    } catch (Exception e) {
+                        layerA = 'report_unreadable'
+                        damage << "layer_a_unreadable ${e.getClass().simpleName}".toString()
+                        echo "[Finalize] Layer A 결과를 읽지 못함 — Layer B 로: ${e.message}"
                     }
-                } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                    throw fie
-                } catch (Exception e) {
-                    layerA = 'report_unreadable'
-                    damage << "layer_a_unreadable ${e.getClass().simpleName}".toString()
-                    echo "[Finalize] Layer A 결과를 읽지 못함 — Layer B 로: ${e.message}"
                 }
-            }
-            String layerB = 'skipped'
-            if (lines == null) {
-                String outText = fileExists('gather_output.json') ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : ''
-                String cpText  = fileExists('gather_checkpoint.jsonl') ? readFile(file: 'gather_checkpoint.jsonl', encoding: 'UTF-8') : ''
-                // Tier 1 (R6): 적재·조립 뒤에도 Callback 최소 시간이 남을 때만 라이브러리를 읽는다. 아니면 raw 줄만 보낸다.
-                long leftForLib = Math.min(hardDeadline, finalizerDeadline) - seNowSec()
-                def lib = null
-                Map res = null
-                if (leftForLib > (C.ASSEMBLE + C.CALLBACK_MIN)) {
-                    // Tier 2 (opt-in): readTrusted ×3 · load · 정본 파싱 · 조립을 한 상한 안에 둔다 — 상한 초과(식별된 경우만)는 raw 경로로
-                    boolean done = seBounded(C.ASSEMBLE, 'assemble') {
+                if (lines == null) {
+                    outText = fileExists('gather_output.json') ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : ''
+                    String cpText = fileExists('gather_checkpoint.jsonl') ? readFile(file: 'gather_checkpoint.jsonl', encoding: 'UTF-8') : ''
+                    // Tier 1 (R6): 적재·조립 뒤에도 Callback 최소 시간이 남을 때만 라이브러리를 읽는다. 아니면 raw 줄만 보낸다.
+                    long leftForLib = Math.min(hardDeadline, finalizerDeadline) - seNowSec()
+                    def lib = null
+                    Map res = null
+                    if (leftForLib > (C.ASSEMBLE + C.CALLBACK_MIN)) {
                         lib = seLoadFinalizeLib()
                         if (lib != null) { res = lib.seReconcileRaw(manifestJson, outText, cpText, seLoadCanon(lib), outcome) }
+                    } else {
+                        echo "[Finalize] 라이브러리 적재 생략 — 남은 ${leftForLib}s 로는 조립 뒤 Callback 을 보장할 수 없다"
+                        damage << "assemble_skipped_budget left=${leftForLib}".toString()
                     }
-                    if (!done) { lib = null; res = null; damage << 'assemble_timeout' }
-                } else {
-                    echo "[Finalize] 라이브러리 적재 생략 — 남은 ${leftForLib}s 로는 조립 뒤 Callback 을 보장할 수 없다"
-                    damage << "assemble_skipped_budget left=${leftForLib}".toString()
+                    if (lib != null && res != null) {
+                        lines = res.lines
+                        report = res.report
+                        layerB = 'ok'
+                    } else {
+                        // 라이브러리를 못 읽었다 — 보충 없이, **유효한** OUTPUT 줄만 보낸다 (접수 수와 다를 수 있다 → 아래 WARN + UNSTABLE).
+                        //   깨진 줄은 버리고(dropped), 없는 host 는 unrecovered 로 남긴다 — 개수만 맞춘 무근거 데이터로 채우지 않는다.
+                        Map picked = seFilterEnvelopeLines(outText.split('\n') as List, manifestJson)
+                        lines = picked.lines
+                        unrecovered = picked.missing
+                        if (picked.dropped) { damage << "raw_dropped=${picked.dropped}".toString() }
+                        report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
+                        layerB = 'unavailable'
+                    }
                 }
-                if (lib != null && res != null) {
-                    lines = res.lines
-                    report = res.report
-                    layerB = 'ok'
-                } else {
-                    // 라이브러리를 못 읽었다 — 보충 없이, **유효한** OUTPUT 줄만 보낸다 (접수 수와 다를 수 있다 → 아래 WARN + UNSTABLE).
-                    //   깨진 줄은 버리고(dropped), 없는 host 는 unrecovered 로 남긴다 — 개수만 맞춘 무근거 데이터로 채우지 않는다.
+            }
+            if (!assembled) {
+                // ②' 최소 경로 — 조립 상한 초과(자기 timeout 으로 식별). 라이브러리 없이, 이미 읽은(없으면 지금 읽는) OUTPUT 줄만 짧은 상한 안에서 검문한다.
+                //    Layer A 결과가 있었는데 읽기에서 넘겼으면 layerA=timeout 으로 적는다. 그래도 못 끝내면 보낼 줄 없이 전부 unrecovered 로 남긴다.
+                damage << 'assemble_timeout'
+                if (lines == null && layerA == 'skipped' && fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) { layerA = 'timeout' }
+                List minimalLines = null
+                List minimalMissing = []
+                boolean minimal = seBounded(C.ASSEMBLE_MIN, 'assemble_min') {
+                    if (outText == null) { outText = fileExists('gather_output.json') ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : '' }
                     Map picked = seFilterEnvelopeLines(outText.split('\n') as List, manifestJson)
-                    lines = picked.lines
-                    unrecovered = picked.missing
+                    minimalLines = picked.lines
+                    minimalMissing = picked.missing
                     if (picked.dropped) { damage << "raw_dropped=${picked.dropped}".toString() }
-                    report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
-                    layerB = 'unavailable'
                 }
+                if (minimal && minimalLines != null) {
+                    lines = minimalLines
+                    unrecovered = minimalMissing
+                } else {
+                    damage << 'assemble_min_timeout'
+                    lines = []
+                    unrecovered = ips.collect { it.toString() }
+                }
+                report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
+                layerB = 'unavailable'
             }
             int accepted = ips.size()
             // R5 (2026-10-03 Astra): 줄 수는 줄 집합이 확정된 직후·첫 사용 전에 한 번 읽어 둔다. 아래에서 lines 를 비운 뒤(메모리)
@@ -595,7 +647,7 @@ pipeline {
                     if (!key) {
                         error "[Resolve Location] 필수 파라미터 누락: loc"
                     }
-                    def reg = readYaml text: readTrusted('common/vars/locations.yml')
+                    def reg = readYaml text: seTrusted('common/vars/locations.yml')
                     def known = (reg?.locations ?: [:])
                     def entry = known[key]
                     if (!entry) {

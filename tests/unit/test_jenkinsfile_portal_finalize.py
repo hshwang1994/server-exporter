@@ -106,6 +106,7 @@ def test_callback_budget_rules():
     assert "code ==~ /2\\d\\d/" in CALLBACK
     assert "!(code in ['408', '429'])" in CALLBACK, "결정적 4xx 는 중단, 408/429 는 재시도"
     assert "aborted ? 1 : 3" in CALLBACK and "ABORT_ATTEMPT    : 60" in TEXT
+    assert "[Callback] [OK] HTTP ${code}" in CALLBACK and "response=${msg.length() > 200 ? msg.substring(0, 200) : msg}" in CALLBACK, "2xx 는 HTTP 응답 증거 — 응답 본문 앞부분을 남긴다(저장 증거 아님)"
     assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in CALLBACK, "Abort 는 삼키지 않는다"
     assert "unstable(\"[Finalize] Callback 전송 실패" in FINALIZE
     assert "filled > 0 || outcome != 'completed'" in FINALIZE
@@ -166,9 +167,20 @@ def test_bounded_recovery_is_opt_in_and_identity_based():
     own = _method("boolean seIsOwnTimeout")
     assert "ExceededTimeout" in own and "ownIds.contains(c.getNodeId()?.toString())" in own and "return false" in own
     assert "currentTimeMillis" not in own and "currentTimeMillis" not in bounded, "경과 시간 판정 없음"
-    for call in ("seBounded(C.RECOVER, 'unstash')", "seBounded(C.RECOVER, 'unarchive')", "seBounded(C.ASSEMBLE, 'assemble')"):
+    for call in ("seBounded(C.RECOVER, 'unstash')", "seBounded(C.RECOVER, 'unarchive')", "seBounded(C.ASSEMBLE, 'assemble')",
+                 "seBounded(C.ASSEMBLE_MIN, 'assemble_min')"):
         assert call in FINALIZE, call
     assert "leftForLib > (C.ASSEMBLE + C.CALLBACK_MIN)" in FINALIZE, "Tier 1: 조립 뒤 Callback 최소 시간이 남을 때만 적재"
+    # 2026-10-04 최종 지시 §4: 조립 상한은 Layer A 결과 읽기·검문 → Layer B 적재·조립 → raw 검문을 **모두** 감싼다; 초과 뒤 최소 경로는 ASSEMBLE_MIN
+    i_bound = FINALIZE.index("seBounded(C.ASSEMBLE, 'assemble')")
+    assert i_bound < FINALIZE.index("readJSON file: 'gather_finalize_report.json'") < FINALIZE.index("seLoadFinalizeLib()") < FINALIZE.index("layerB = 'unavailable'") < FINALIZE.index("if (!assembled)")
+    assert FINALIZE.index("if (!assembled)") < FINALIZE.index("seBounded(C.ASSEMBLE_MIN, 'assemble_min')") < FINALIZE.index("int accepted = ips.size()")
+    assert "damage << 'assemble_timeout'" in FINALIZE and "damage << 'assemble_min_timeout'" in FINALIZE and "layerA = 'timeout'" in FINALIZE
+    for key in ("PRESERVE_STEP    : 30", "ASSEMBLE_MIN     : 20", "RECOVER          : 30", "ASSEMBLE         : 60"):
+        assert key in TEXT, key
+    # 보존 단계도 같은 상한 helper — archive · stash 각각 (합 60 = gather_budget.sh POST_SEC 의 ARCHIVE_STASH 60)
+    assert "seBounded(C.PRESERVE_STEP, 'archive')" in PRESERVE and "seBounded(C.PRESERVE_STEP, 'stash')" in PRESERVE
+    assert "Map C = seConstants()" in PRESERVE
     assert "|| exit 90" in GATHER, "venv 실패 = prep_failed"
     assert "gather_output.json 미생성/0바이트" not in TEXT, "0바이트는 FAILURE 로 끊지 않고 finalizer 가 보충한다"
 
@@ -204,7 +216,8 @@ def test_preserve_steps_are_independent_and_delete_only_after_archive():
     post = PRESERVE
     assert post.count("catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)") >= 4, "Layer A · archive · stash · manifest 각각"
     assert post.count("throw fie") >= 4
-    assert post.index("archiveArtifacts(") < post.index("archived = true") < re.search(r"^\s*stash\($", post, re.M).start() < post.index("stashed = true")
+    assert post.index("archiveArtifacts(") < post.index("archived = done") < re.search(r"^\s*stash\($", post, re.M).start() < post.index("stashed = done")
+    assert post.count("seBounded(C.PRESERVE_STEP, ") == 2, "archive · stash 각각 Tier 2 상한(기본 off = 상한 없음)"
     assert "if (archived && manifestOk && hasResult) {" in post and post.index("if (archived && manifestOk && hasResult)") < post.index("deleteDir()")
     assert "boolean hasResult = fileExists('gather_final.jsonl') || fileExists('gather_output.json')" in post
     for flag in ("SE_PRESERVE_ARCHIVED", "SE_PRESERVE_STASHED", "SE_PRESERVE_MANIFEST", "SE_PRESERVE_HASRESULT", "SE_PRESERVE_LAYER_A"):
@@ -219,7 +232,7 @@ def test_finalizer_validates_lines_and_records_damage():
     assert "Map seFilterEnvelopeLines(List rawLines, String manifestJson)" in TEXT
     helper = _method("Map seFilterEnvelopeLines")
     assert "new groovy.json.JsonSlurper()" in helper and "keys13" in helper and "accepted.contains(" in helper and "missing" in helper
-    assert FINALIZE.count("seFilterEnvelopeLines(") == 2, "Layer A 결과와 raw fallback 둘 다 같은 검문"
+    assert FINALIZE.count("seFilterEnvelopeLines(") == 3, "Layer A 결과 · raw fallback · 조립 상한 초과 뒤 최소 경로 — 셋 다 같은 검문"
     assert "layerA = 'report_unreadable'" in FINALIZE and "layerA = 'incomplete'" in FINALIZE
     i_read = FINALIZE.index("readJSON file: 'gather_finalize_report.json'")
     seg = FINALIZE[i_read: i_read + 1800]
@@ -245,7 +258,7 @@ def test_portal_loads_layer_b_library_instead_of_defining_it():
     readTrusted → writeFile → load 로 읽고, 실패하면 Layer B 보충 없이(raw OUTPUT 줄만) 보내며 UNSTABLE 로 남긴다."""
     for sig in ("Map seFallbackCanon()", "String seJsonString(", "Map seReconcileRaw("):
         assert sig not in TEXT, f"Jenkinsfile_portal 에 {sig} 사본이 있다 — 정본은 se_finalize.groovy"
-    assert "readTrusted('scripts/jenkins/se_finalize.groovy')" in TEXT and "return load('se_finalize.groovy')" in TEXT
+    assert "seTrusted('scripts/jenkins/se_finalize.groovy')" in TEXT and "return load('se_finalize.groovy')" in TEXT
     assert FINALIZE.index("node('built-in')") < FINALIZE.index("seLoadFinalizeLib()"), "load 는 workspace 가 있는 node 안에서"
     assert "lib.seReconcileRaw(manifestJson, outText, cpText, seLoadCanon(lib), outcome)" in FINALIZE
     assert "layerB = 'unavailable'" in FINALIZE and "layerB == 'unavailable'" in FINALIZE, "라이브러리 부재는 숨기지 않는다 (UNSTABLE)"
@@ -266,6 +279,16 @@ def test_groovy_fallback_canon_matches_yaml_and_layer_a():
     budget = (REPO / "scripts/gather_budget.sh").read_text(encoding="utf-8")
     assert "GLOBAL_SEC=9000" in budget and "GLOBAL           : 9000" in TEXT
     assert "STAGE_LIMIT_SEC=6900" in budget, "Gather stage 115 min 과 같다"
+
+
+def test_trusted_reads_are_identified_in_the_console():
+    """2026-10-04 최종 지시 §5: 모든 readTrusted 는 seTrusted() 를 지나 `[Trusted] <path> len=N jhash=H` 를 남긴다 — 빌드가 실제로 읽은 정본
+    내용을 후보 revision 과 대조하기 위한 식별값(Java String.hashCode; sandbox 는 digest API 를 허용하지 않는다). 추가 checkout · 도구 의존 없음."""
+    assert TEXT.count("readTrusted(") == 1 and "String text = readTrusted(path)" in TEXT, "readTrusted 호출은 seTrusted 안 한 곳"
+    assert TEXT.count("seTrusted('") == 4, "locations.yml · se_finalize.groovy · failure_reasons.yml · supported_sections.yml"
+    assert 'echo "[Trusted] ${path} len=${text.length()} jhash=${text.hashCode()}"' in TEXT
+    assert "MessageDigest.getInstance" not in TEXT and "java.util.zip.CRC32" not in TEXT, "sandbox 비허용 API 를 운영 파이프라인에 두지 않는다(주석 언급은 무방)"
+    assert "checkout scm" not in _stage("Resolve Location") and "checkout(" not in _method("String seTrusted")
 
 
 def test_progress_and_checkpoint_env_wired_for_json_only():

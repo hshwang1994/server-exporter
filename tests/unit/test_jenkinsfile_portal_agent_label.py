@@ -64,7 +64,7 @@ def test_location_values_are_not_hardcoded_in_the_pipeline():
     registry = yaml.safe_load((REPO_ROOT / "common" / "vars" / "locations.yml").read_text(encoding="utf-8"))
     for loc_id, entry in registry["locations"].items():
         assert not re.search(rf"label [\"']{re.escape(entry['agent_label'])}[\"']", TEXT), loc_id
-    assert "readYaml text: readTrusted('common/vars/locations.yml')" in RESOLVE, (
+    assert "readYaml text: seTrusted('common/vars/locations.yml')" in RESOLVE, (
         "registry 는 readTrusted 로 파일 하나만 읽는다 — 컨트롤러 전체 checkout 금지 (main 2분 초과 사고)"
     )
     assert "readYaml file:" not in RESOLVE

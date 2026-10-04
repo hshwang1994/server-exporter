@@ -51,7 +51,8 @@ def test_validate_and_resolve_run_without_agent_or_workspace():
 
 
 def test_resolve_reads_registry_with_read_trusted_only():
-    assert "readYaml text: readTrusted('common/vars/locations.yml')" in RESOLVE
+    assert "readYaml text: seTrusted('common/vars/locations.yml')" in RESOLVE, "readTrusted 는 seTrusted(식별 echo)를 지난다"
+    assert "readTrusted(" not in RESOLVE
     assert "checkout scm" not in RESOLVE and "checkout(" not in RESOLVE and "readYaml file:" not in RESOLVE
 
 
