@@ -15,7 +15,8 @@
 - **GP-4**: CI Toolchain 이 `pyVmomi`/`community.vmware` 를 보고(라벨 변경 없음).
 - **(뒤) 사용자 명시 승인 뒤 실행된 것**: 사용자가 `!` 로 X2 push → CI #10(Verify COMPLETE_PASS, 환경 식별자 완비; VAULT_DECRYPT FAIL=도구 미추적; Promote dry-run 은 자격 미바인딩으로 PARTIAL 미리보기) · main #8 T2 · #9 T6 · #10 T5 · **#11 S5(RHEL 10.2 kernel 6.12 두 대 — DIMM slot 0 재현)** · #12 S1 · #13 S4 · #14 S2 — 실호스트 6대 수집 success, Portal 200. S3 는 INVALID(환경).
 - **X3(진행 중)**: Linux DMI collector 가 SLOT 0 일 때 `handles=`/`raw_head=` 근거를 detail 에 남긴다(`os-gather/tasks/linux/gather_system.yml` · `gather_memory.yml`, 정상 host 영향 0) · CI Promote 가 린터/vault 자격을 바인딩 · `scripts/ai/vault_decrypt_check.py` 추적 복귀(.gitignore 해제) · Harness bounded 시나리오의 설계된 재전파를 PARTIAL/승인 으로 기록.
-- 남은 차단(실제 거부): E2E-E redfish 트리거 · Runner03 `cj` 라벨 · 접속정보 파일 읽기(SSH 원본) · Script Approval API(500 → UI 3건 pending). 승격은 S3 INVALID · E2E-A/A' HOLD 로 계약상 불가.
+- **X4 `41fb14b9`(push 됨)**: Kernel 6.x DIMM 제보의 원인은 **RHEL 10 dmidecode 3.6 의 IEC 단위**(`Size: 4 GiB`) — X3 의 raw 근거 marker 로 판정(main #20), 두 단위 환산에 kib/mib/gib/tib 추가(`34808480`), **main #29 에서 `.37/.38` slot 1 · 4096 MB · physical_installed 확인**. 외부 계약 drift 로 EXTERNAL_CONTRACTS 기록. 명부 Linux 15대 실수집: 12 성공 · 3 `TARGET_UNREACHABLE`(.135 .145 .165); Windows 1 성공; ESXi 7 · Redfish 10 은 라벨/트리거 거부로 0.
+- 남은 차단(실제 거부): E2E-E redfish 트리거 · Runner03 `cj` 라벨(→ E2E-A/A' 와 `esxi` 라벨) · 접속정보 파일 읽기(SSH 원본) · Script Approval API(500 → UI 3건 pending). 승격은 S3 INVALID(환경) · E2E-A/A' HOLD 로 계약상 불가 — CI #12(X4) Promote 는 dry-run.
 
 ## 일자: 2026-10-04 — 잔여 결함 R1~R7 · main 전용 Harness · CI 12 stage · prodgen 판정/승격 모델 · 청주 `cj` — 코드·로컬 회귀·Jenkins 실행(일부) 완료, 승격 미수행
 
