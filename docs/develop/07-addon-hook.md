@@ -117,8 +117,9 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
   Add-on 테스트를 통과한 뒤 `main` 에 올린다.
 - hook 의 제한 시간은 role 안 **태스크 하나**에 대한 300 s(`include_role … apply: timeout`)뿐이다 — role 전체 · loop 누적 ·
   host 전체 상한이 아니다. Add-on 자체의 명령별 제한(5분 — Linux 는 `timeout`, Windows 는 `async`)이 1차이고 이 제한은 그것이
-  놓친 태스크를 끊는 2차다. 끊긴 태스크의 원격 자식 프로세스는 남을 수 있다(실 대상 host 에서의 잔존 여부는 이 저장소의 테스트가 세지 않는다 —
-  통합 테스트는 localhost 대상이다). 그래도 끝나지 않는 host 는 Jenkins Gather 단계의
+  놓친 태스크를 끊는 2차다. **태스크 timeout 은 그 태스크가 띄운 자식 프로세스를 끝내지 않는다** — 2026-10-05 실제 Runner(ansible-core 2.20.3) term-probe 실측:
+  3 s 에 태스크는 끊겼지만 자식 1개가 계속 돌았다(localhost). 원격 대상이면 그 자식은 **대상 host** 에 남고 Add-on 명령 자체 제한(5분)까지 돈다. 배치 INT(Gather 예산 초과)는
+  로컬 프로세스 그룹을 정리하지만(rc 124 · 잔존 0) 대상 host 의 프로세스에는 닿지 않는다. 그래도 끝나지 않는 host 는 Jenkins Gather 단계의
   예산(`scripts/gather_budget.sh`)이 실행 전체를 끊고, 그 host 는 `CHECKPOINT` 로 복원된다 — 다른 host 의 결과는 그대로 전달된다.
   Add-on **준비**(`scripts/addon_checkout.sh`)의 제한은 또 다른 축이다: git 명령마다 180 s, Jenkinsfile 이 두 번 시도 → 최악 ≈ 720 s+, 실측 2~3 s/빌드
   (`docs/operate/04-pipeline-runtime.md` Add-on 절). Runner(ansible-core 2.20.3)에서의 태스크별 timeout · 연결 끊김 · 실패 격리 동작은 CI Gate 의

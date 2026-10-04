@@ -8,6 +8,29 @@
 
 > 최종 갱신: 2026-10-04
 
+## 2026-10-05 (5차) — 남김없이: 실장비 결함(GP-23) 수정 · Runner 종료 동작 실측 · 원인 서술 정정 · P3
+
+### 사용자 의심
+- "푸쉬까지 모두 다 끝나야 완료" · "남김없이해라" — PARTIAL 로 남긴 항목 중 할 수 있는 것을 끝내라.
+
+### 분석
+- Kernel 6.x 항목별 행렬이 GP-23(5a60d420 실장비 확인)을 실패로 드러냈다: 비루트 수집에서 `/proc/net/vlan/<if>`(0600) 읽기 실패. fixture 가 root 캡처라 회귀가 놓쳤다.
+- Runner 종료 동작은 Runner 에서 직접 재야 한다(WSL 2.20.7 결과 대체 금지) — 태스크 timeout 이 자식을 남기는 것은 Runner 2.20.3 에서도 같다.
+- "dmidecode 3.6 = IEC" 는 upstream 이력(2025-04-24 커밋, 3.6 이후)과 RHEL 9.6 캡처(3.6, SI)로 반증된다.
+
+### 결정
+1. GP-23 은 netlink(`ip -d link`) 보완으로 고친다 — become 을 늘리지 않는다(최소 권한). 출력 계약 불변.
+2. 종료 동작 진단은 main 전용 Job(term-probe)으로 남긴다 — 자기 marker 프로세스만 다룬다.
+3. 원인 서술은 append-only 로 정정한다(과거 기록 유지).
+4. Runner03 의 임시 `cj` 만 원복, 주체 미상인 다른 Runner 라벨은 유지.
+5. 정리 Job 이 분류기에 거부된 Runner `/tmp` 샘플러 잔여는 우회하지 않고 사용자 조치로 남긴다.
+
+### 영향
+- runtime X4 `17843cf0`(gather_network.yml NIC driver map) → P3 `915dec4e`(tree_hash `fd93e76b8e16…`). Linux `driver_map[].vlan_id` 가 실제 값을 낸다(종전 항상 null) — 필드 정의 · envelope 불변.
+
+### 회귀
+- `tests/unit/test_linux_hba_ib_markers.py`(+4) · `tests/unit/test_term_probe_contract.py` · `tests/unit/prodgen/test_pipeline_tmp_repo.py`(drift CRLF) · CI #19 · main #121~#133 · production P3 — evidence §10.
+
 ## 2026-10-04 (4차) — 최종 실행 지시: timeout 상한의 실제 범위 · 추정과 직접 증거의 구분 · forks 메모리 상수 · 자산 진단 · Portal 응답의 의미
 
 ### 사용자 의심

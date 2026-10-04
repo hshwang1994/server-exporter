@@ -107,6 +107,8 @@ G20 은 원격 없이 돌면 PARTIAL(검증 안 됨)이고, 일부 원격만 보
 - 커밋 trailer `Main-SHA` · `Tree-Hash` · `Verdict` · `Gates` · `Verify-Report-SHA256` · `Bootstrap-Baseline(-Tree)`(첫 승격) 와 `.production-provenance.json` · `drift-check` 결과.
 - `ls-remote` 성공은 읽기 접근 확인이지 push 권한·branch protection 통과의 증거가 아니다 — 그것은 실제 push 결과로만 적는다.
 
+**종료 코드만으로 원격 상태를 판단하지 않는다(2026-10-04 P1 · 2026-10-05 정리).** `promote`/`restore` 가 비0 으로 끝나도 원격은 바뀌었을 수 있다 — 둘째 원격의 사전 검사 실패(`partial_push`) · 원격 간 공유 push URL(이 저장소의 `origin` = GitHub + GitLab) · push 뒤의 네트워크 오류. 반대로 0 으로 끝나도 사후 확인은 한다. 판단은 항상 `git ls-remote origin refs/heads/production` · `git ls-remote internal refs/heads/production` · 로컬 `git rev-parse production` 세 값으로 하고, 다르면 `push-sync` 로 정합한다.
+
 ## 5. 되돌리기
 
 - 내부: `restore --to <마지막 정상 production 커밋> --push-remote origin,internal` 은 그 tree 를 **새 커밋**으로 양 원격에 올린다(force push · reset 금지, trailer `Restore-Of`). legacy B 로 되돌릴 때만
@@ -125,6 +127,8 @@ G20 은 원격 없이 돌면 PARTIAL(검증 안 됨)이고, 일부 원격만 보
 - lab 의 임시 `cj` 라벨 + TEST-NET 실패 envelope 검증은 라우팅·실패 처리 smoke 이지 **청주 실장비 성공 수집이 아니다**.
 
 ## 7. 현재 상태 (2026-10-04)
+
+2026-10-05: 세 번째 **P3 `915dec4e`**(main X4 `17843cf0` — Linux NIC driver map VLAN id 수정, parent P2 `07ecf7ac`) 양 원격. COMPLETE_PASS · 양 원격 동일(`git ls-remote` 확인) · trailer 완비
 
 2026-10-04: 첫 승격 **P1 `1f725071`**(main `ce50ccf7`, parent legacy `4ce90a00`, bootstrap baseline) → 두 번째 **P2 `07ecf7ac`**(main X2 `ec6a494f`, parent P1). 양 원격(`origin` GitHub · `internal` GitLab) 동일.
 세션 CLI `promote --sha ec6a494f … --verify-report(CI #18) --e2e-evidence --ci-stage-results --push-remote origin,internal` — 1차(00:50) G18 FAIL 로 거부(원인: 작업 PC git `core.autocrlf=true` 가 drift A1 의 `git archive` export 를 CRLF 로 → manifest 거부, GP-45; 원격 변경 0) · 2차(01:06) G14/G15/G19 FAIL 로 거부(같은 시각 PC 메모리 부족 사건으로 WSL staging·하위 프로세스 실패; 원격 변경 0) · 3차(01:17~01:28, 저장소 설정을 잠시 autocrlf=false) **COMPLETE_PASS → P2 `07ecf7ac`**: Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20(G19 WSL 3채널 실제 실행 PASS) · Gates-Reused G01~G10 G16 G17 · publish origin "accepted by remote" · internal "already at the new commit (reached via a shared push URL)"(GP-40 수정 동작 확인, partial_push 없음) · 로컬 ref 갱신 · 193 파일 · 개발 경로 0 · trailer Main-SHA `ec6a494f` · Tree-Hash `de9422fb…` · Previous-Production `1f725071` · CI-Build #18 · Verdict COMPLETE_PASS · CI-Stages verified. vault 암호 파일은 실행마다 생성·삭제. 되돌리기는 `restore --to <이전 production> --push-remote origin,internal`(append). 진행 상태 · 증거는 `docs/reference/decision-log.md`(2026-10-04 3차·4차) 와 `tests/evidence/2026-10-04-*.md`.

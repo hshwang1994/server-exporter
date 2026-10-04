@@ -1,5 +1,16 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-05 (5차) — 남은 실행 검증 · GP-23 실장비 결함 수정 · **X4 `17843cf0` → P3 `915dec4e`(양 원격)** · 시험 설정 원복
+
+> 정본: `tests/evidence/2026-10-04-review-c1-c6.md` §10(J/P/C/H 최종 판정표 §10-3). 사용자 지시 "남김없이".
+
+- **GP-23 결함 수정(runtime)**: `driver_map[].vlan_id` 가 실제 VLAN 장치에서 null — `/proc/net/vlan/<if>` 가 root 전용(0600)이라 비루트 수집에서 읽기 실패. VLAN 장치에 한해 `ip -d link show dev` 로 보완(`795c6ff7`, become 추가 없음). 실장비 main #121: `.96` 64/656 · `.95` 64 일치.
+- **§6-2 실제 Runner 종료 동작(term-probe Job, 신규)**: Runner03 · Runner01(ansible-core 2.20.3) — 태스크 timeout 은 자식 1개를 남긴다(GP-14 확인) · INT 경로 rc 124 잔존 0 · kill-after 대조 rc 137 잔존 0 · ansible 은 상속된 INT 무시를 덮어 "INT 소실" 재현 불가(GP-19) · Add-on hook 통합 테스트 14 passed ×2(GP-10 직접 증거).
+- **X4 → P3**: main E2E 12/12(#122~#133) · CI #19 SUCCESS — 12 stage PASS(bounded PARTIAL) · Harness main 18/18 · 생성 tree 10/10 · Verify COMPLETE_PASS 20/20(tree `fd93e76b…`) · VAULT_DECRYPT PASS · Evidence PASS(main 12 항목 전부 `binding=direct` — 11 BuildData + E2E-A2 `tip_frozen:ls-remote`, `[Trusted]` 전부 utf-8 일치) · Promote DRY_RUN `e2e ok, problems []` · parent P2 `07ecf7ac` · 실 승격 세션 CLI 1회(02:59~03:10, **autocrlf=true 그대로** — GP-45 수정 효과) **COMPLETE_PASS → P3 `915dec4e`**: Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20(G19 WSL 3채널 실제 실행) · Gates-Reused G01~G10 G16 G17 · publish origin "accepted by remote" · internal "already at the new commit (reached via a shared push URL)" · 로컬 ref 갱신 · 193 파일 · 개발 경로 0 · P2 대비 runtime 차이 `os-gather/tasks/linux/gather_network.yml` 1 파일 · trailer Main-SHA `17843cf0` · Tree-Hash `fd93e76b…` · Previous-Production `07ecf7ac` · CI-Build #19 · Verdict COMPLETE_PASS · CI-Stages verified. vault 암호 파일은 실행 동안만 존재(래퍼가 삭제 확인) · production production Job(P3 `915dec4e`, 11 빌드 #94~#104): 전부 checkout == P3 · 기대 결과 전부 일치(CAN-1/S1/S2/T2/Linux 15/Windows/ESXi 6/Redfish 10 SUCCESS, T6·S3 UNSTABLE 기대) — main 과 동일한 결과.
+- **정정**: DIMM 원인의 버전 귀속 — IEC 표기는 upstream 2025-04-24 "Use binary unit prefixes"(3.6 릴리스 이후), RHEL 9.6 의 3.6 은 SI. 결론 불변(EXTERNAL_CONTRACTS · FAILURE_PATTERNS).
+- **원복·정리**: Runner03 임시 `cj` 제거(나머지 라벨 유지) · Runner01/02/04 는 주체 미상이라 유지 · 임시 파일 정리: vault 암호 파일(실행마다 생성·삭제, 잔존 0) · 세션 시험용 자체 서명 인증서/키(`cert.pem`·`key.pem`, CN=localhost, 만료) · cookie 파일 삭제 · WSL `/tmp` 의 이 세션 prodgen staging(G11/G15/G19, 비밀 없음) 정리(잔존 0) · WSL `/tmp` 에 암호 사본(12 바이트 mktemp) 없음 확인 · Jenkins API netrc 는 마지막 확인 뒤 삭제
+- 남은 사용자 조치: `getNodeId` 승인(GP-39) · 자산 6건(GP-37) · 라벨(GP-38) · Portal(GP-42) · Runner /tmp 샘플러(GP-43) · `duration_ms`(GP-44) · GitHub public 정책.
+
 ## 일자: 2026-10-04 (4차) — 최종 실행 지시 대응: timeout 상한 범위 · readTrusted 식별 · 증거 직접/추정 · 생성 tree Harness 10 · Runner 자원 실측 · 자산 진단 · **X2 `ec6a494f` → P2 `07ecf7ac`(양 원격)**
 
 > 정본: `tests/evidence/2026-10-04-review-c1-c6.md` §9, `-test-server-roster.md`(정정판), `-kernel6x-compat-matrix.md`, `-gp36-duration-window.md`. 지시서 §2 의 완료 항목(P1 승격 · X7b · DIMM · cj · publish 수정 등)은 다시 열지 않았다.
@@ -17,7 +28,7 @@
 
 > 정본: `tests/evidence/2026-10-04-review-c1-c6.md` §5-7·§5-8, `-test-server-roster.md`(X6 갱신), `-auto-mode-config-proposal.md`(정정판). 사용자 지시(2026-10-04): 동일 이름 API 토큰 폐기·재발급 **진행하지 않음**.
 
-- **전체 명부 실수집(main X6 `70e4ec8a`)**: OS Linux 16/16 실행(성공 13 · `TARGET_UNREACHABLE` 3 = `.135 .145 .165`) · Windows 1/1 · ESXi 7/7 실행(성공 6, `.95` 는 ESXi 가 아니라 Ubuntu 24.04 베어메탈 — OS 채널 #54 성공으로 명부 정정) · Redfish 10/10 dry-run(#53: 성공 7, `10.100.15.1` protocol · `10.100.15.3`·HPE `10.50.11.231` reachable 실패) — 누락 0, 미해결 6(자산 상태 사용자 확인 요청, 임의 제외 없음).
+- **전체 명부 실수집(main X6 `70e4ec8a`)**: OS Linux 16/16 실행(성공 13 · `TARGET_UNREACHABLE` 3 = `.135 .145 .165`) _(4차 정정: 적용 채널 기준 Linux **15/12** — `.95` 를 두 축에 센 집계 오류; 32 실행 · 성공 26 · 미해결 6)_ · Windows 1/1 · ESXi 7/7 실행(성공 6, `.95` 는 ESXi 가 아니라 Ubuntu 24.04 베어메탈 — OS 채널 #54 성공으로 명부 정정) · Redfish 10/10 dry-run(#53: 성공 7, `10.100.15.1` protocol · `10.100.15.3`·HPE `10.50.11.231` reachable 실패) — 누락 0, 미해결 6(자산 상태 사용자 확인 요청, 임의 제외 없음).
 - **S3**: OS 채널은 기본 forks 로 유효 창이 120 s 아래(INVALID). 기존 설정 `SE_FORKS_CAP_OS`(Runner03 노드 env) + 다른 Runner 임시 offline 측정창은 분류기 `Node Lifecycle Operations` 거부 → HOLD/권한. **Redfish 채널 #55 PASS**(forced 150 s · rc 124 · outcome timeout · kept 6 실 BMC · filled 1 · Portal 200) — 계약은 채널 무관.
 - **E2E-A #42(cj resolve) · E2E-A′ #43(chj 거부) · E2E-D #44→#61(ESXi 6 success) · E2E-E #41(dry-run, Account Write 0)** 모두 계약 PASS. T6 #47 은 controller DNS 일시 장애로 INVALID → #52 PASS.
 - **CI #14(X6) SUCCESS**: COMPLETE_PASS(tree `8d0f05c3…` 불변) · VAULT_DECRYPT PASS · Harness 16/16 + 4/4 · Promote dry-run. E2E 탈락 2건은 수집기 결함(E2E-A2: fail-closed 빌드에 BuildData 없음)과 입력 결함(E2E-D 에 `.95`) — **X7 수정**: `evidence.py` `neighbour_revision`(같은 Job 앞·뒤 빌드 revision 일치 시만, `checkout_sha_source` 기록, `fail_closed: True` 계약에 한정) + E2E-A2 검사 보강(`jenkinsfile_obtained` · `stopped_before_agent`); regression 추가(`tests/unit/prodgen` 전부 PASS).

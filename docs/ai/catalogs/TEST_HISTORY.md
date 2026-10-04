@@ -1,5 +1,17 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-05 (5차) — 남은 실행 검증 · GP-23 수정 · X4 → P3
+
+| 구분 | 결과 |
+|---|---|
+| 로컬 단위(GP-23 수정 후) | `tests/unit` + e2e + regression **4017 passed** · 37 skipped · 7 xfailed; `test_linux_hba_ib_markers.py` 17 passed(WSL uid 1000 — 비루트 재현 포함) · prodgen 94 passed(drift CRLF 회귀 포함) |
+| term-probe #1(Runner03) · #2(Runner01) | A 태스크 timeout rc 2 · 자식 1 잔존→정리 0 / B INT rc 124 / C1 rc 124 / C2 rc 137 · Add-on hook 통합 14 passed ×2 |
+| main #121(GP-23 실장비) | `.96` bond0.64=64 · bond0.656=656, `.95` bond0.64=64 (driver_map == interfaces), `.161` 대조 빈 값 |
+| main X4 `17843cf0` 12 시나리오 | 12/12 계약 PASS(#122~#133: T2 SUCCESS · T5 ABORTED · T6 UNSTABLE · S5/S1/S4/S2 SUCCESS · E2E-A UNSTABLE · E2E-A2 FAILURE · E2E-D/E SUCCESS · S3 UNSTABLE kept 6 · filled 1 — 기대값) · SCM tip 전후 `17843cf0` 동일 |
+| CI #19(X4, PROMOTE dry-run) | SUCCESS — 12 stage PASS(bounded PARTIAL) · Harness main 18/18 · 생성 tree 10/10 · Verify COMPLETE_PASS 20/20(tree `fd93e76b…`) · VAULT_DECRYPT PASS · Evidence PASS(main 12 항목 전부 `binding=direct` — 11 BuildData + E2E-A2 `tip_frozen:ls-remote`, `[Trusted]` 전부 utf-8 일치) · Promote DRY_RUN `e2e ok, problems []` · parent P2 `07ecf7ac` |
+| 실 승격 P3 | 세션 CLI 1회(02:59~03:10, **autocrlf=true 그대로** — GP-45 수정 효과) **COMPLETE_PASS → P3 `915dec4e`**: Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20(G19 WSL 3채널 실제 실행) · Gates-Reused G01~G10 G16 G17 · publish origin "accepted by remote" · internal "already at the new commit (reached via a shared push URL)" · 로컬 ref 갱신 · 193 파일 · 개발 경로 0 · P2 대비 runtime 차이 `os-gather/tasks/linux/gather_network.yml` 1 파일 · trailer Main-SHA `17843cf0` · Tree-Hash `fd93e76b…` · Previous-Production `07ecf7ac` · CI-Build #19 · Verdict COMPLETE_PASS · CI-Stages verified. vault 암호 파일은 실행 동안만 존재(래퍼가 삭제 확인) |
+| production Job(P3) | production Job(P3 `915dec4e`, 11 빌드 #94~#104): 전부 checkout == P3 · 기대 결과 전부 일치(CAN-1/S1/S2/T2/Linux 15/Windows/ESXi 6/Redfish 10 SUCCESS, T6·S3 UNSTABLE 기대) — main 과 동일한 결과 |
+
 ## 2026-10-04 (4차) — 최종 실행 지시 대응 (timeout 상한 범위 · readTrusted 식별 · 증거 직접/추정 · Runner 자원 실측 · 자산 진단 · X2 → P2)
 
 | 구분 | 결과 |

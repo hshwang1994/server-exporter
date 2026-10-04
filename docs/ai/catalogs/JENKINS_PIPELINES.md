@@ -71,6 +71,7 @@ Script Path `tests/jenkins/harness/Jenkinsfile_harness`(scripted), Branch `*/mai
 | Job | Script Path | 하는 일 |
 |---|---|---|
 | `clovirone-cicd/clovirone-server-gather-perf-observe` | `tests/jenkins/harness/Jenkinsfile_perf_observe` | `NODE_NAME` 노드에서 `perf_observe.py` 가 `/proc` 만 읽어 같은 Runner 의 Gather 빌드를 `SE_BUILD_ID` 로 귀속해 PSS(smaps_rollup) · RSS · 활성 worker 수 · 메인 프로세스 PSS · MemAvailable · swap · CPU 를 `INTERVAL_SEC` 마다 JSONL 로; `IDLE_EXIT_SEC` 뒤 자동 종료. 집계 `perf_observe_report.py` — forks 메모리 상수(`per_fork_mb` · `fixed_mb` · `node_share`) 의 실측 근거 |
+| `clovirone-cicd/clovirone-server-gather-term-probe` | `tests/jenkins/harness/Jenkinsfile_term_probe` | `term_probe.sh`: 이 Runner 의 ansible-core · coreutils `timeout` 으로 ① 태스크 timeout 3 s(Add-on `apply.timeout` 장치) ② `timeout --signal=INT --kill-after` 배치 경로 ③ INT 무시 → kill-after(ansible · 대조 sleep)를 localhost 대상으로 실행하고 rc · 경과 · 자식 잔존 · 정리 결과를 남긴다(고유 marker 프로세스만 다룬다) + `tests/integration/test_addon_hook_playbook.py -v` |
 | `clovirone-cicd/clovirone-server-gather-net-probe` | `tests/jenkins/harness/Jenkinsfile_net_probe` | `TARGETS`(ip[:port,…]) 마다 route · ICMP · 관리 TCP connect · ARP/neighbour(같은 L2 의 존재 근거) · tracepath · Redfish ServiceRoot 무인증 GET 상태코드 — Runner 망에서의 무응답 자산 진단. 설정 변경 · 인증 시도 없음 |
 
 정의 `jenkins/jobs/<job>/config.xml`(2026-10-04 등록). 둘 다 `production_manifest.yml` forbidden(`tests/**` · `jenkins/**`) 이라 production 에 없다.

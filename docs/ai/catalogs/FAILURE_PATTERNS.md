@@ -616,3 +616,43 @@
 - 수정: 두 단위 환산에 `tib/gib/mib/kib` 추가 + 3.6 형태 캡처 regression. 원인 확보 방법: SSH 가 막혀 collector 가 SLOT 0 일 때 raw 식별 줄을 detail 에 남기게 해(X3) 승인된 수집 경로로 원본을 받았다.
 - 재발 방지: 외부 도구 출력 단위를 파싱할 때 **알 수 없는 단위는 0 이 아니라 marker(`MEM_RAW|`)로 드러나게** 한다(이번 marker 유지). 새 OS 메이저(RHEL 10 등)가 lab 에 들어오면 dmidecode/lsblk 등 도구 버전과 출력 캡처를 `tests/reference/os/` 에 추가한다(rule 96 R1-A).
 - 관련 rule: rule 96 R4 · rule 95 R1 #11
+
+## 2026-10-05 — 원인 서술 정정: IEC 단위는 "dmidecode 3.6" 이 아니라 그 뒤의 upstream 커밋 (external-contract-drift 보정)
+
+- 카테고리: external-contract-unverified
+- 발견 위치: 위 2026-10-04 항목 "실제 원인은 dmidecode 3.6 의 IEC 단위" — Kernel 6.x 항목별 행렬 검토(`tests/evidence/2026-10-04-kernel6x-compat-matrix.md`) 중 저장소 RHEL 9.6 캡처(`# dmidecode 3.6`, `Size: 8 GB`)와 충돌
+- 증상: 문서가 "dmidecode ≥ 3.6 이면 IEC" 로 일반화했다 — RHEL 9.6 의 3.6 은 SI 표기다.
+- 원인: RHEL 10.2 raw_head 에는 버전 헤더가 없었는데 Runner(RHEL 9.6) 의 dmidecode 3.6 사실과 섞어 버전을 귀속했다. upstream 출처를 확인하지 않았다.
+- 수정: upstream 로그로 확인 — "dmidecode: Use binary unit prefixes"(2025-04-24, 3.6 릴리스 이후). EXTERNAL_CONTRACTS 정정. 파서 수정(두 단위계 환산)과 DIMM 결론은 불변.
+- 재발 방지: 외부 도구 출력 변화의 원인을 버전에 귀속할 때는 **대상 host 의 버전 헤더 원문**과 upstream 변경 이력을 같이 남긴다(rule 96 R1-A).
+- 관련 rule: rule 96 R1-A · R4 · rule 25 R7-B
+
+## 2026-10-05 — root 로 캡처한 fixture 가 비루트 수집의 권한 실패를 가렸다 (driver_map[].vlan_id 항상 null, GP-23)
+
+- 카테고리: scope-miss
+- 발견 위치: production #88(P2) `.96` `bond0.64`/`bond0.656` · `.95` `bond0.64` — `interfaces[].vlan_id` 64/656/64, `driver_map[].vlan_id` null (Kernel 6.x 행렬 O-1)
+- 증상: 5a60d420 의 파싱 수정은 회귀 테스트(root 캡처 `/proc/net/vlan/bond0.64`)를 통과했지만 실수집에서는 여전히 null.
+- 원인: 커널이 `/proc/net/vlan/<if>` 를 0600(root 전용)으로 만들고 network raw 는 become 없이(비루트 수집 계정) 돈다 — 파일은 있는데(-f 참) 읽기가 실패한다. fixture 는 root 로 캡처돼 그 조건을 재현하지 않았다.
+- 수정: proc 읽기가 비면 VLAN 장치(proc 항목 또는 uevent DEVTYPE=vlan)에 한해 `ip -d link show dev <if>`(netlink, 권한 불필요 — interfaces[].vlan_id 와 같은 근거). become 추가 없음. 회귀 4건(비루트 재현은 Linux 에서 chmod 0 으로 — WSL uid 1000 실행 PASS).
+- 재발 방지: 원격 파일을 읽는 수집은 **수집 계정 권한**으로 재현하는 테스트를 둔다(root 캡처 fixture 만으로 닫지 않는다). 실장비 확인 항목(GP-23)은 실제 VLAN 장치가 있는 host 의 envelope 로 닫는다.
+- 관련 rule: rule 95 R1 · rule 25 R7-A-1
+
+## 2026-10-05 — Windows 작업 PC 의 core.autocrlf 가 `git archive` export 를 CRLF 로 바꿔 G18 이 로컬에서만 FAIL (GP-45)
+
+- 카테고리: environment-drift
+- 발견 위치: X3 실 승격 1차 시도(세션 CLI) — drift A1(기록된 생성기 재실행): "manifest: CRLF line endings are not allowed"
+- 증상: CI(Linux) 의 G18 은 PASS, 같은 SHA 의 로컬(Windows, autocrlf=true) 승격에서만 FAIL → 거부(원격 변경 0, ls-remote 확인).
+- 원인: `git archive` 는 checkout 처럼 core.autocrlf/eol 변환을 적용한다. index 의 blob 은 LF.
+- 수정: `drift.export_tar()` 가 `-c core.autocrlf=false -c core.eol=lf` 로 blob 그대로 내보낸다 + tmp repo(autocrlf=true) 회귀.
+- 재발 방지: 생성기·검증기가 git 에서 파일을 꺼낼 때는 object store(cat-file/ls-tree) 또는 변환 없는 export 만 쓴다. Windows 세션 승격은 이 회귀가 지킨다.
+- 관련 rule: rule 92 R3
+
+## 2026-10-05 — 저장소 메타를 읽는 새 테스트에 `source_text` 표식이 없어 G14(production tree overlay) FAIL (CI #17)
+
+- 카테고리: scope-miss
+- 발견 위치: CI #17 Prodgen Verify — `tests/unit/test_perf_observe_tools.py` 가 `jenkins/jobs/*/config.xml` 을 읽음(production tree 에 없음)
+- 증상: 로컬 pytest 는 PASS, G14(생성 tree 위 tests overlay, `-m "not source_text"`) 에서만 1 failed → COMPLETE_PASS 실패.
+- 원인: 새 계약 테스트를 만들며 overlay 제외 표식 규칙(pytest.ini `source_text`)을 적용하지 않았다.
+- 수정: 모듈 단위 `pytestmark = pytest.mark.source_text`(X3). 이후 새 진단 Job 계약 테스트(`test_term_probe_contract.py`)도 같은 표식.
+- 재발 방지: `jenkins/` · `tests/jenkins/` · `.claude/` · `docs/` · `scripts/ai/` 를 읽는 테스트는 작성 시 `source_text` 를 붙인다 — 로컬에서 `-m "not source_text"` 와 production tree overlay 를 함께 돌려 본다.
+- 관련 rule: rule 24 R1 · rule 40 R6

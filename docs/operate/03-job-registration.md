@@ -134,7 +134,8 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 진단 Job 둘(2026-10-04, main 전용 · 읽기 전용 · production 에 없음): **`clovirone-server-gather-perf-observe`**(Script Path `tests/jenkins/harness/Jenkinsfile_perf_observe`; `NODE_NAME` 노드에서
 `perf_observe.py` 가 같은 Runner 의 Gather 빌드 프로세스 트리를 `SE_BUILD_ID` 로 귀속해 PSS · 활성 worker · MemAvailable · swap 을 샘플링 — forks 메모리 상수의 실측 근거) 와
 **`clovirone-server-gather-net-probe`**(Script Path `tests/jenkins/harness/Jenkinsfile_net_probe`; `TARGETS` 의 route · ICMP · 관리 TCP connect · ARP/neighbour · tracepath · Redfish ServiceRoot
-무인증 GET 을 Runner 망에서 읽어 `net_probe.txt` 로 — 무응답 자산의 존재·경로 진단). 정의 `jenkins/jobs/<job>/config.xml`.
+무인증 GET 을 Runner 망에서 읽어 `net_probe.txt` 로 — 무응답 자산의 존재·경로 진단), **`clovirone-server-gather-term-probe`**(Script Path `tests/jenkins/harness/Jenkinsfile_term_probe`; `NODE_NAME` Runner 의 ansible-core · coreutils timeout 으로 태스크 timeout · 배치 INT · kill-after 경로를 localhost 대상으로 실제 실행해 자식 프로세스 잔존을 관측하고(자기 marker 프로세스만 정리) Add-on hook 통합 테스트를 -v 로 실행).
+정의 `jenkins/jobs/<job>/config.xml`.
 
 ## 다음 단계
 

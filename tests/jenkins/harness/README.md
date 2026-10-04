@@ -45,6 +45,14 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
 | 보존 상한(archive · stash 각 30 s) | `inner_archive_timeout` · `inner_stash_timeout`(BOUNDED=true) / `archive_slow`(BOUNDED=false) | bounded: 넘긴 수단만 실패로 두고 다음 수단으로(archive→stash · stash→unarchive) / 기본: 상한 없이 완주 | 2026-10-04 최종 지시 §4-3. 보존 단계 재전파는 Harness 가 기록하고 finalizer 를 건너뛴다(PARTIAL/승인) |
 | 조립 상한 안의 Layer A 읽기 | `inner_layer_a_read_timeout`(BOUNDED=true, readFile 70 s) / `layer_a_read_slow`(BOUNDED=false) | bounded: `layerA=timeout` · 최소 경로(`ASSEMBLE_MIN` 20 s)로 OUTPUT 줄만 전송 · `damage` assemble_timeout / 기본: 완주 | 위와 같다 |
 
+## 진단 Job (Harness 와 같은 디렉터리, 2026-10-04~05)
+
+| 파일 | Job | 하는 일 |
+|---|---|---|
+| `Jenkinsfile_perf_observe` · `perf_observe.py` · `perf_observe_report.py` | `clovirone-server-gather-perf-observe` | 같은 Runner 의 Gather 빌드 프로세스 트리를 `SE_BUILD_ID` 로 귀속해 PSS · 활성 worker · MemAvailable · swap 샘플링(읽기 전용) |
+| `Jenkinsfile_net_probe` | `clovirone-server-gather-net-probe` | Runner 망에서 route · ICMP · 관리 TCP · ARP · tracepath · Redfish ServiceRoot(무인증 GET) |
+| `Jenkinsfile_term_probe` · `term_probe.sh` | `clovirone-server-gather-term-probe` | 태스크 timeout · 배치 INT · kill-after 경로의 rc · 자식 잔존(자기 marker 만 정리) + Add-on hook 통합 테스트 -v |
+
 ## 격리 규칙
 
 - finalizer 는 stash 이름 `gather-output` · 고정 artifact 이름 · `currentBuild.result` 를 쓰므로 **한 빌드에 시나리오 하나**.
