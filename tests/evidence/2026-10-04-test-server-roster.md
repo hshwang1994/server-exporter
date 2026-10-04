@@ -17,16 +17,16 @@
 | 5 | 10.100.64.92 | svr02 | Dell PowerEdge R760(BMC 10.100.15.28) | 물리 | ESXi 9.0.0 | esxi | 08-13 수집 OK | 0 | 0 | HOLD/권한·환경 |
 | 6 | 10.100.64.93 | svr03 | Dell PowerEdge R760(BMC 10.100.15.31) | 물리 | ESXi 9.0.0 | esxi | 08-13 수집 OK | 0 | 0 | HOLD/권한·환경 |
 | 7 | 10.100.64.95 | svr05 | Dell PowerEdge R760(BMC 10.100.15.33) | 물리 | ESXi 9.0.0 | esxi | 443 응답이나 vSphere 아님(08-13 protocol 실패) | 0 | 0 | HOLD/권한 — 비적용 판정은 실행 뒤 `diagnosis` 로 |
-| 8 | 10.100.64.96 | svr06 | Dell PowerEdge R760(BMC 10.100.15.34) | 물리 | Ubuntu 24.04 (kernel 6.8 — 저장소 기록, Red Hat 계열 아님) | os(linux) | 22 open(10-03) | 0 | 0 | HOLD/권한 |
+| 8 | 10.100.64.96 | r760-6 | Dell PowerEdge R760(BMC 10.100.15.34) | **물리**(`hosting_type=baremetal`) | **Ubuntu 24.04, kernel 6.8.0-88-generic**(실측 main #15) | os(linux) | **수집 성공** · DIMM **slot 8**(physical_installed) · errors 0 · Portal 200 | **1** | 0 | **PASS(main)** — kernel 6.8 베어메탈에서 DIMM 정상 |
 | 9 | 10.100.64.120 | WIN-TP7D9J9QKCB | VMware VM | VM(실측 `hosting_type=virtual`) | **Windows Server 2022 Standard 21H2(build 20348)** — 2026-10-04 main #12/#13/#14 실측 | os(windows) | 5985·5986 open; **수집 성공**(sections 7 success, errors 0, 70~80 s) · Portal HTTP 200 | **3** | 0 | **PASS(main)** · production 미실행 |
 | 10 | 10.100.64.161 | gmidbqa01 | VMware VM | VM | **RHEL 8.10, kernel 4.18.0-553.el8_10**(실측) | os(linux) | **수집 성공**(main #12/#14, errors 0, DIMM slot 1 · 8 GB) · Portal 200 | **2** | 0 | **PASS(main)** |
 | 11 | 10.100.64.162 | gmidbqa02 | VMware VM | VM | **RHEL 9.2, kernel 5.14.0-284.11.1.el9_2**(실측) | os(linux) | **수집 성공**(main #12/#14) · Portal 200 | **2** | 0 | **PASS(main)** |
 | 12 | 10.100.64.163 | gmidbqa03cv | VMware VM | VM | **RHEL 9.6, kernel 5.14.0-570.12.1.el9_6**(실측 — 종전 기록 "RHEL 9.2 · TCP 무응답" 은 stale; 9.2 는 .162) | os(linux) | **수집 성공**(main #12/#14) · Portal 200 | **2** | 0 | **PASS(main)** |
-| 13 | 10.100.64.165 | — | 미확인 | VM | RHEL 9.6 | os(linux) | 22 closed(10-03) | 0 | 0 | HOLD/권한 — 실행 뒤 조건 기록 |
-| 14 | 10.100.64.145 | — | 미확인 | VM | RHEL 9.6 | os(linux) | 미측정(10-03) | 0 | 0 | HOLD/권한 |
-| 15 | 10.100.64.156 | cicd-gitlab | 미확인 | VM | Ubuntu 24.04 | os(linux) | 사내 GitLab 호스트 — 수집 대상 포함 여부 사용자 확인 | 0 | 0 | HOLD/권한 |
-| 16 | 10.100.64.135 | — | 미확인 | 미확인 | RHEL 계열(08-12 실측, 상세 미확인) | os(linux) | production #56 입력(10-03) | 0 | 0 | HOLD/권한 |
-| 17 | 10.100.64.33~.36 | Jenkins Runner01~04 | 미확인 | VM | RHEL 계열(Runner; `/app/ansible-env` python 3.12.9) — 자기 자신 수집 대상 포함 여부 사용자 확인 | os(linux) | 22 open(10-03) | 0 | 0 | HOLD/권한 |
+| 13 | 10.100.64.165 | — | 미확인 | VM | RHEL 9.6(저장소 기록) | os(linux) | main #15: **`TARGET_UNREACHABLE`**(TCP 5986/5985/22 · ICMP 모두 무응답 — 관측) | **1(실패)** | 0 | **FAIL(reachable) — 장비 상태 확인 필요(전원/방화벽 미확정)** |
+| 14 | 10.100.64.145 | — | 미확인 | VM | RHEL 9.6(저장소 기록) | os(linux) | main #15: **`TARGET_UNREACHABLE`** | **1(실패)** | 0 | **FAIL(reachable) — 장비 상태 확인 필요** |
+| 15 | 10.100.64.156 | cicd-gitlab | VMware VM | VM | **Ubuntu 24.04, kernel 6.8.0-100-generic**(실측) | os(linux) | **수집 성공**(main #15, slot 1) · Portal 200 — 사내 GitLab 호스트 | **1** | 0 | **PASS(main)** |
+| 16 | 10.100.64.135 | — | 미확인 | 미확인 | RHEL 계열(08-12 실측) | os(linux) | main #15: **`TARGET_UNREACHABLE`** | **1(실패)** | 0 | **FAIL(reachable) — 장비 상태 확인 필요** |
+| 17 | 10.100.64.33~.36 | SKHynix-Jenkins-Runner01~04 | VMware VM | VM | **RHEL 9.6, kernel 5.14.0-570.12.1.el9_6**(실측 main #16) | os(linux) | **4대 수집 성공**(slot 1 each, errors 0) · Portal 200 | **4** | 0 | **PASS(main)** |
 | 18 | 10.100.64.37 · .38 | tanzu-esxi01 · tanzu-esxi02 | VMware VM(VMware7,1, BIOS 2021-06) | VM | **RHEL 10.2, kernel 6.12.0-211.7.3.el10_2**(실측 main #11 — Kernel 6.x 확정) | os(linux) | **수집 성공**(status success, Portal 200) **그러나 DIMM 제보 재현**: dmidecode rc 0 · stderr 없음인데 slot 0 → `total_basis=os_visible`, `installed_mb=null`, errors 1(memory). 같은 플랫폼의 RHEL 8/9 는 slot 1 | **1** | 0 | **PASS(수집) · FAIL(DIMM — 원인 분석 §5)** |
 | 19 | 10.100.64.152 · .153 / .154 · .155 | Jenkins master / 구 agent | — | — | — | (인프라 — 대상 아님) | — | — | — | 비적용(인프라) |
 
@@ -49,9 +49,9 @@
 
 | 채널 | 명부 대상 수 | 실행 수(이번) | 누락 | 비고 |
 |---|---|---|---|---|
-| OS Linux | 13(+Runner 4 · GitLab 1 포함 여부 확인) | **5**(.37 .38 .161 .162 .163 — main #11/#12/#14) | 8(.1~.3 ESXi 제외 … .96 .135 .145 .156 .165 + Runner 4) | S1·S2·S5 실행됨(Portal 200); S3 미실행; 나머지 호스트는 다음 배치 |
+| OS Linux | 15(.37 .38 .96 .135 .145 .156 .161 .162 .163 .165 + Runner .33~.36; .1~.3/.91~.95 는 ESXi 축) | **15 실행**(X2 main #11/#12/#14 · X3 main #15/#16): 성공 12 · `TARGET_UNREACHABLE` 3(.135 .145 .165) | 0(실행 기준) · 미해결 3(도달 실패 — 장비 상태 확인) | S3 INVALID(환경) |
 | OS Windows | 1 | **1**(.120 — main #12/#13/#14) | 0 | S4 PASS(main) |
-| ESXi | 7 | 0 | 7 | `esxi` 라벨 노드 없음(GP-4) — 노드 설정 변경이 분류기에서 거부(Runner03 `cj` 와 같은 범주) |
+| ESXi | 7 | 0 | 7 | `esxi` 라벨 노드 없음(GP-4). Runner venv 의 pyVmomi·community.vmware 6.2.0 은 CI #10 Toolchain 으로 확인됐으나 노드 라벨 변경(POST config.xml)이 분류기에서 거부 |
 | Redfish | 10 | 0 | 10 | E2E-E dry-run 트리거 2회(승인 전·후) 모두 자동 거부 "Auto-Mode Bypass" |
 | TEST-NET(통제 실패 경로) | 2(192.0.2.10/.11) | main #8(T2) · #9(T6) · #10(T5) · #14(S2 혼합) — X2 | — | 실호스트 수집이 아니다 |
 

@@ -605,3 +605,14 @@
 - 원인: Declarative `parameters{}` 변경은 그 빌드가 끝난 뒤 Job 정의에 반영된다 — 트리거 시점의 기본값은 이전 정의다.
 - 수정: 파라미터 정의를 바꾼 직후의 빌드는 값을 **명시**해 트리거한다.
 - 관련 rule: rule 80 R1-C
+
+## 2026-10-04 — "Kernel 6.x DIMM" 제보의 실제 원인은 dmidecode 3.6 의 IEC 단위 (external-contract-drift)
+
+- 카테고리: external-contract-drift
+- 발견 위치: main #11/#20(`10.100.64.37/.38`, RHEL 10.2 · kernel 6.12.0-211) — raw_head `Size: 4 GiB`
+- 증상: dmidecode rc 0 · stderr 없음 · Type 17 레코드 128개인데 SLOT 0 · `MEM_PHYS_MB=0` → os_visible fallback + 경고 1건.
+- 원인: dmidecode 3.6 이 Size 단위를 IEC 접두어로 바꿨고 파서는 `kb/mb/gb/tb` 만 환산했다. 제보가 "kernel 6.x" 로 붙은 것은 RHEL 10(kernel 6.12)이 dmidecode 3.6 을 처음 싣기 때문 — kernel 6.8 Ubuntu(dmidecode 3.5)는 정상이었다.
+- 영향: dmidecode ≥ 3.6 을 쓰는 모든 Linux 대상의 DIMM 상세·물리 총량 누락.
+- 수정: 두 단위 환산에 `tib/gib/mib/kib` 추가 + 3.6 형태 캡처 regression. 원인 확보 방법: SSH 가 막혀 collector 가 SLOT 0 일 때 raw 식별 줄을 detail 에 남기게 해(X3) 승인된 수집 경로로 원본을 받았다.
+- 재발 방지: 외부 도구 출력 단위를 파싱할 때 **알 수 없는 단위는 0 이 아니라 marker(`MEM_RAW|`)로 드러나게** 한다(이번 marker 유지). 새 OS 메이저(RHEL 10 등)가 lab 에 들어오면 dmidecode/lsblk 등 도구 버전과 출력 캡처를 `tests/reference/os/` 에 추가한다(rule 96 R1-A).
+- 관련 rule: rule 96 R4 · rule 95 R1 #11

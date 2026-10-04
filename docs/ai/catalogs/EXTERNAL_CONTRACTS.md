@@ -1376,3 +1376,12 @@ MinPasswordLength                   = 8
 - HTTP 2xx 만으로 convergence 성공 처리
 - 한 Vendor/Family 의 실측을 다른 Vendor 의 기본 동작으로 일반화
 ```
+
+## 2026-10-04 — dmidecode 3.6 Size 단위 IEC 접두어 (external-contract-drift, RHEL 10.2 실측)
+
+- 계약: `dmidecode -t memory` Type 17 `Size:` / Type 16 `Maximum Capacity:` 단위 표기.
+- 종전(≤ 3.5): `kB` / `MB` / `GB` / `TB` (2.x 는 `kB`). **3.6(RHEL 10.2 `.37/.38` 실측, main #20)**: `KiB` / `MiB` / `GiB` / `TiB` — 예 `Size: 4 GiB`, `Maximum Capacity: 5 GiB`.
+- 영향: `os-gather/tasks/linux/gather_system.yml` 공유 DMI collector 의 두 단위 환산이 0 을 내 DIMM 전부 누락 · `total_basis=os_visible`. Windows(WMI) · ESXi(vSphere) 무관.
+- 조치: 환산이 `kib/mib/gib/tib` 를 받는다(2026-10-04). regression `tests/unit/test_linux_memory_parser.py::test_dmidecode_36_iec_units_are_parsed`. 다른 dmidecode 필드(Speed `MT/s`, Current/Max Speed `MHz`)는 3.6 에서도 같다(실측 raw_head · DMI_CUR_MHZ 정상).
+- 출처: 실측 raw(`tests/evidence/2026-10-04-review-c1-c6.md` §5-4). dmidecode 3.6 릴리스 노트(IEC 단위 전환) 는 web 확인이 필요하면 추가한다 — 판정은 실측으로 끝났다.
+- 미검증: dmidecode 3.6 의 `kiB` 대소문자(`KiB`) — 파서는 `tolower` 비교라 무관.
