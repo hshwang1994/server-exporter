@@ -1,0 +1,54 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job">
+  <description>main 전용 종료 동작 진단 Job — 실제 Runner 의 ansible-core · coreutils timeout 으로 태스크 timeout(Add-on apply.timeout 장치) · 배치 INT 경로 · kill-after 경로를 localhost 대상으로 실행해 자식 프로세스 잔존을 관측하고(자기 marker 프로세스만 정리), Add-on hook 통합 테스트를 이 Runner 에서 -v 로 실행한다. 운영 수집 Job 이 아니다. 정의: tests/jenkins/harness/Jenkinsfile_term_probe (Branch */main). 2026-10-05 최종 실행 지시 §6-2</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>NODE_NAME</name>
+          <defaultValue>SKHynix-Jenkins-Runner03</defaultValue>
+          <description>실행할 노드 이름(Runner)</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>ADDON_INTEGRATION</name>
+          <defaultValue>true</defaultValue>
+          <description>tests/integration/test_addon_hook_playbook.py 를 이 Runner 에서 -v 로 실행</description>
+        </hudson.model.BooleanParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+    <jenkins.model.BuildDiscarderProperty>
+      <strategy class="hudson.tasks.LogRotator">
+        <daysToKeep>-1</daysToKeep>
+        <numToKeep>50</numToKeep>
+        <artifactDaysToKeep>-1</artifactDaysToKeep>
+        <artifactNumToKeep>-1</artifactNumToKeep>
+        <removeLastBuild>false</removeLastBuild>
+      </strategy>
+    </jenkins.model.BuildDiscarderProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps">
+    <scm class="hudson.plugins.git.GitSCM" plugin="git">
+      <configVersion>2</configVersion>
+      <userRemoteConfigs>
+        <hudson.plugins.git.UserRemoteConfig>
+          <url>https://github.com/hshwang1994/server-expoter</url>
+          <credentialsId>hshwang token</credentialsId>
+        </hudson.plugins.git.UserRemoteConfig>
+      </userRemoteConfigs>
+      <branches>
+        <hudson.plugins.git.BranchSpec>
+          <name>*/main</name>
+        </hudson.plugins.git.BranchSpec>
+      </branches>
+      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+      <submoduleCfg class="empty-list"/>
+      <extensions/>
+    </scm>
+    <scriptPath>tests/jenkins/harness/Jenkinsfile_term_probe</scriptPath>
+    <lightweight>true</lightweight>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

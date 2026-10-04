@@ -1,0 +1,43 @@
+// tests/jenkins/harness/Jenkinsfile_term_probe — 실제 Runner 의 종료 동작 진단 Job (main 전용, 2026-10-05 최종 실행 지시 §6-2). 운영 수집 Job 이 아니다.
+//
+//   Job: clovirone-cicd/clovirone-server-gather-term-probe — Pipeline from SCM(*/main) · Script Path 이 파일 · Lightweight checkout.
+//   ① term_probe.sh: 이 Runner 의 ansible-core · coreutils timeout 으로 태스크 timeout(Add-on apply.timeout 과 같은 장치) · 배치 INT 경로 ·
+//      kill-after 경로(INT 무시)를 localhost 대상으로 실제 실행하고 자식 프로세스 잔존을 관측한다 — 자기 marker 프로세스만 정리한다.
+//   ② tests/integration/test_addon_hook_playbook.py 를 이 Runner 의 ansible-playbook 으로 -v 실행 — Add-on 정상 · 실패 · 연결 끊김 · 끝나지 않는 태스크
+//      뒤 기본 수집 결과(CHECKPOINT) 보존을 테스트 이름 단위로 남긴다.
+//   산출물: term_probe.txt · addon_hook_integration.txt. production tree 에는 들어가지 않는다(production_manifest forbidden tests/**).
+
+properties([
+    buildDiscarder(logRotator(numToKeepStr: '50')),
+    parameters([
+        string(name: 'NODE_NAME', defaultValue: 'SKHynix-Jenkins-Runner03', description: '실행할 노드 이름(Runner)'),
+        booleanParam(name: 'ADDON_INTEGRATION', defaultValue: true, description: 'tests/integration/test_addon_hook_playbook.py 를 이 Runner 에서 -v 로 실행'),
+    ]),
+])
+
+timeout(time: 30, unit: 'MINUTES') {
+    node((params.NODE_NAME ?: 'SKHynix-Jenkins-Runner03').trim()) {
+        deleteDir()
+        checkout scm
+        currentBuild.description = "term-probe @${params.NODE_NAME}"
+        int rc = sh(returnStatus: true, label: 'term probe', script: '''#!/bin/bash
+            set -u
+            cd "${WORKSPACE}"
+            . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 90
+            bash tests/jenkins/harness/term_probe.sh term_probe.txt
+        ''')
+        int prc = 0
+        if (params.ADDON_INTEGRATION) {
+            prc = sh(returnStatus: true, label: 'addon hook integration', script: '''#!/bin/bash
+                set -o pipefail
+                cd "${WORKSPACE}"
+                . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 90
+                python3 -m pytest tests/integration/test_addon_hook_playbook.py -v -rA -p no:cacheprovider 2>&1 | tee addon_hook_integration.txt
+            ''')
+        }
+        archiveArtifacts(artifacts: 'term_probe.txt,addon_hook_integration.txt', allowEmptyArchive: true, fingerprint: false)
+        if (rc != 0 || prc != 0) {
+            unstable("[term-probe] probe rc=${rc} (1 = 자기 marker 프로세스 정리 실패, 2 = kill-after 대조 실패) · integration rc=${prc}")
+        }
+    }
+}
