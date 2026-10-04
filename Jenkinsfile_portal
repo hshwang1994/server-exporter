@@ -6,15 +6,23 @@ Map seConstants() {
         FINALIZER_TOTAL  : 720,
         RECOVER          : 30,
         ASSEMBLE         : 60,
+        ASSEMBLE_MIN     : 20,
+        PRESERVE_STEP    : 30,
         CALLBACK_ATTEMPT : 120,
         CALLBACK_MIN     : 20,
         ABORT_ATTEMPT    : 60,
     ]
 }
 
+String seTrusted(String path) {
+    String text = readTrusted(path)
+    echo "[Trusted] ${path} len=${text.length()} jhash=${text.hashCode()}"
+    return text
+}
+
 def seLoadFinalizeLib() {
     try {
-        writeFile(file: 'se_finalize.groovy', text: readTrusted('scripts/jenkins/se_finalize.groovy'), encoding: 'UTF-8')
+        writeFile(file: 'se_finalize.groovy', text: seTrusted('scripts/jenkins/se_finalize.groovy'), encoding: 'UTF-8')
         return load('se_finalize.groovy')
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
@@ -27,8 +35,8 @@ def seLoadFinalizeLib() {
 def seLoadCanon(def lib) {
     Map canon = lib.seFallbackCanon()
     try {
-        def fr = readYaml text: readTrusted('common/vars/failure_reasons.yml')
-        def ss = readYaml text: readTrusted('common/vars/supported_sections.yml')
+        def fr = readYaml text: seTrusted('common/vars/failure_reasons.yml')
+        def ss = readYaml text: seTrusted('common/vars/supported_sections.yml')
         if (fr?._fr_catalog?.output_build_failed?.default) { canon.reason = fr._fr_catalog.output_build_failed.default }
         if (ss?.channel_sections) { canon.sections = ss.channel_sections; canon.all = ss.all_sections ?: canon.all }
         canon.source = 'readTrusted'
@@ -70,7 +78,7 @@ boolean seCallback(String body, long hardDeadline, long finalizerDeadline, Map C
             msg = "httpRequest 예외 (연결 실패/timeout): ${e.message}"
         }
         if (code ==~ /2\d\d/) {
-            echo "[Callback] [OK] HTTP ${code} (${attempt}/${maxAttempts})"
+            echo "[Callback] [OK] HTTP ${code} (${attempt}/${maxAttempts}) response=${msg.length() > 200 ? msg.substring(0, 200) : msg}"
             return true
         }
         if (code ==~ /4\d\d/ && !(code in ['408', '429'])) {
@@ -163,6 +171,7 @@ Map seFilterEnvelopeLines(List rawLines, String manifestJson) {
 }
 
 def sePreserveGatherOutput() {
+    Map C = seConstants()
     String outcome = env.SE_GATHER_OUTCOME ?: 'interrupted_unknown'
     int layerA = -1
     try {
@@ -181,9 +190,12 @@ def sePreserveGatherOutput() {
     echo "[Finalize/A] exit=${layerA} outcome=${outcome}"
     boolean archived = false
     try {
-        archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_auth_evidence/**',
-                         allowEmptyArchive: true, fingerprint: false)
-        archived = true
+        boolean done = seBounded(C.PRESERVE_STEP, 'archive') {
+            archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_auth_evidence/**',
+                             allowEmptyArchive: true, fingerprint: false)
+        }
+        archived = done
+        if (!done) { echo "[Finalize/A] archive 상한 ${C.PRESERVE_STEP}s 초과 — stash 는 계속한다" }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
@@ -191,12 +203,15 @@ def sePreserveGatherOutput() {
     }
     boolean stashed = false
     try {
-        stash(
-            name       : 'gather-output',
-            includes   : 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json',
-            allowEmpty : true,
-        )
-        stashed = true
+        boolean done = seBounded(C.PRESERVE_STEP, 'stash') {
+            stash(
+                name       : 'gather-output',
+                includes   : 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json',
+                allowEmpty : true,
+            )
+        }
+        stashed = done
+        if (!done) { echo "[Finalize/A] stash 상한 ${C.PRESERVE_STEP}s 초과 — finalizer 는 archive(unarchive) 로 회수한다" }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
@@ -288,62 +303,85 @@ def seFinalizeAndCallback() {
             List lines = null
             Map report = [:]
             String layerA = 'skipped'
+            String layerB = 'skipped'
             List damage = []
             List unrecovered = []
-            if (fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) {
-                try {
-                    def rep = readJSON file: 'gather_finalize_report.json'
-                    String finalText = readFile(file: 'gather_final.jsonl', encoding: 'UTF-8')
-                    if ((rep.exit_code in [0, 2]) && finalText.trim()) {
-                        Map picked = seFilterEnvelopeLines(finalText.split('\n') as List, manifestJson)
-                        if (picked.lines.size() == ips.size()) {
-                            lines = picked.lines
-                            report = rep
-                            layerA = (rep.exit_code == 0) ? 'ok' : 'ok_with_damage'
+            String outText = null
+            boolean assembled = seBounded(C.ASSEMBLE, 'assemble') {
+                if (fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) {
+                    try {
+                        def rep = readJSON file: 'gather_finalize_report.json'
+                        String finalText = readFile(file: 'gather_final.jsonl', encoding: 'UTF-8')
+                        if ((rep.exit_code in [0, 2]) && finalText.trim()) {
+                            Map picked = seFilterEnvelopeLines(finalText.split('\n') as List, manifestJson)
+                            if (picked.lines.size() == ips.size()) {
+                                lines = picked.lines
+                                report = rep
+                                layerA = (rep.exit_code == 0) ? 'ok' : 'ok_with_damage'
+                            } else {
+                                layerA = 'incomplete'
+                                damage << "layer_a_incomplete valid=${picked.lines.size()} accepted=${ips.size()} dropped=${picked.dropped}".toString()
+                            }
                         } else {
-                            layerA = 'incomplete'
-                            damage << "layer_a_incomplete valid=${picked.lines.size()} accepted=${ips.size()} dropped=${picked.dropped}".toString()
+                            layerA = 'failed'
                         }
-                    } else {
-                        layerA = 'failed'
+                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                        throw fie
+                    } catch (Exception e) {
+                        layerA = 'report_unreadable'
+                        damage << "layer_a_unreadable ${e.getClass().simpleName}".toString()
+                        echo "[Finalize] Layer A 결과를 읽지 못함 — Layer B 로: ${e.message}"
                     }
-                } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                    throw fie
-                } catch (Exception e) {
-                    layerA = 'report_unreadable'
-                    damage << "layer_a_unreadable ${e.getClass().simpleName}".toString()
-                    echo "[Finalize] Layer A 결과를 읽지 못함 — Layer B 로: ${e.message}"
                 }
-            }
-            String layerB = 'skipped'
-            if (lines == null) {
-                String outText = fileExists('gather_output.json') ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : ''
-                String cpText  = fileExists('gather_checkpoint.jsonl') ? readFile(file: 'gather_checkpoint.jsonl', encoding: 'UTF-8') : ''
-                long leftForLib = Math.min(hardDeadline, finalizerDeadline) - seNowSec()
-                def lib = null
-                Map res = null
-                if (leftForLib > (C.ASSEMBLE + C.CALLBACK_MIN)) {
-                    boolean done = seBounded(C.ASSEMBLE, 'assemble') {
+                if (lines == null) {
+                    outText = fileExists('gather_output.json') ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : ''
+                    String cpText = fileExists('gather_checkpoint.jsonl') ? readFile(file: 'gather_checkpoint.jsonl', encoding: 'UTF-8') : ''
+                    long leftForLib = Math.min(hardDeadline, finalizerDeadline) - seNowSec()
+                    def lib = null
+                    Map res = null
+                    if (leftForLib > (C.ASSEMBLE + C.CALLBACK_MIN)) {
                         lib = seLoadFinalizeLib()
                         if (lib != null) { res = lib.seReconcileRaw(manifestJson, outText, cpText, seLoadCanon(lib), outcome) }
+                    } else {
+                        echo "[Finalize] 라이브러리 적재 생략 — 남은 ${leftForLib}s 로는 조립 뒤 Callback 을 보장할 수 없다"
+                        damage << "assemble_skipped_budget left=${leftForLib}".toString()
                     }
-                    if (!done) { lib = null; res = null; damage << 'assemble_timeout' }
-                } else {
-                    echo "[Finalize] 라이브러리 적재 생략 — 남은 ${leftForLib}s 로는 조립 뒤 Callback 을 보장할 수 없다"
-                    damage << "assemble_skipped_budget left=${leftForLib}".toString()
+                    if (lib != null && res != null) {
+                        lines = res.lines
+                        report = res.report
+                        layerB = 'ok'
+                    } else {
+                        Map picked = seFilterEnvelopeLines(outText.split('\n') as List, manifestJson)
+                        lines = picked.lines
+                        unrecovered = picked.missing
+                        if (picked.dropped) { damage << "raw_dropped=${picked.dropped}".toString() }
+                        report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
+                        layerB = 'unavailable'
+                    }
                 }
-                if (lib != null && res != null) {
-                    lines = res.lines
-                    report = res.report
-                    layerB = 'ok'
-                } else {
+            }
+            if (!assembled) {
+                damage << 'assemble_timeout'
+                if (lines == null && layerA == 'skipped' && fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) { layerA = 'timeout' }
+                List minimalLines = null
+                List minimalMissing = []
+                boolean minimal = seBounded(C.ASSEMBLE_MIN, 'assemble_min') {
+                    if (outText == null) { outText = fileExists('gather_output.json') ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : '' }
                     Map picked = seFilterEnvelopeLines(outText.split('\n') as List, manifestJson)
-                    lines = picked.lines
-                    unrecovered = picked.missing
+                    minimalLines = picked.lines
+                    minimalMissing = picked.missing
                     if (picked.dropped) { damage << "raw_dropped=${picked.dropped}".toString() }
-                    report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
-                    layerB = 'unavailable'
                 }
+                if (minimal && minimalLines != null) {
+                    lines = minimalLines
+                    unrecovered = minimalMissing
+                } else {
+                    damage << 'assemble_min_timeout'
+                    lines = []
+                    unrecovered = ips.collect { it.toString() }
+                }
+                report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
+                layerB = 'unavailable'
             }
             int accepted = ips.size()
             int lineCount = lines.size()
@@ -533,7 +571,7 @@ pipeline {
                     if (!key) {
                         error "[Resolve Location] 필수 파라미터 누락: loc"
                     }
-                    def reg = readYaml text: readTrusted('common/vars/locations.yml')
+                    def reg = readYaml text: seTrusted('common/vars/locations.yml')
                     def known = (reg?.locations ?: [:])
                     def entry = known[key]
                     if (!entry) {

@@ -4,6 +4,8 @@
   "common/vars/status_rules.yml": "referenced only by a comment in build_status.yml (reserved, no runtime loader)",
   "jenkins/jobs/clovirone-server-gather-ci/config.xml": "operator tools (job XML) are applied on the controller, not checked out by builds",
   "jenkins/jobs/clovirone-server-gather-harness/config.xml": "operator tools (job XML) are applied on the controller, not checked out by builds",
+  "jenkins/jobs/clovirone-server-gather-net-probe/config.xml": "operator tools (job XML) are applied on the controller, not checked out by builds",
+  "jenkins/jobs/clovirone-server-gather-perf-observe/config.xml": "operator tools (job XML) are applied on the controller, not checked out by builds",
   "jenkins/jobs/redfish-account-provision-verify/config.xml": "operator tools (job XML) are applied on the controller, not checked out by builds",
   "scripts/bootstrap_vault_encrypt.sh": "operator tool (one-time vault bootstrap), not part of a Jenkins build",
   "scripts/verify_account_provision.sh": "operator verification tool, not part of a Jenkins build"
@@ -34,37 +36,37 @@
    "source_sha256": "199497218b903603b5c39f89819a291cadf00c6a43710ba44551d717b56dfba0"
   },
   "Jenkinsfile_portal": {
-   "bytes": 42604,
+   "bytes": 44801,
    "language": "groovy",
    "mode": "100644",
    "preserved": [
     {
-     "line": 169,
+     "line": 178,
      "rule": "shell.shebang",
      "text_sha256": "8f07ba1e2f80a6a072bd462d2e6e114ba218e6d8212e1087bf91305e5dce898d"
     },
     {
-     "line": 635,
+     "line": 673,
      "rule": "shell.shebang",
      "text_sha256": "cabc4902c292ad7fbc4aa0ff4b43034f77d71a3ae464f0359a55f7263308db18"
     },
     {
-     "line": 661,
+     "line": 699,
      "rule": "shell.shebang",
      "text_sha256": "c6ef23fc00b4d5903d14e7d0e6db3c8dc02ba4abe2696c2021270e052928b9ea"
     },
     {
-     "line": 707,
+     "line": 745,
      "rule": "shell.shebang",
      "text_sha256": "043f2898cd3c4bf9d4a4fcc7e56e5580203a20ab63b96f2ec6b4b5fa534be77c"
     }
    ],
    "python_kind": null,
-   "removed_lines": 95,
-   "removed_trailing": 7,
-   "sha256": "9bb680799ce73b85e5cf61a60f349887251ef47eaf387b05d27e040052534b38",
-   "source_blob": "db9ce50f489e0b3867f9f30be6de3feef48ab541",
-   "source_sha256": "8d11ac4bb27d1214754babe5c3d86c523b0cbd698736bb7b0c7c2fda51f6e25e"
+   "removed_lines": 109,
+   "removed_trailing": 10,
+   "sha256": "56d093393a813cec2aa5ee58b569a2bd626b7394276b180aaaa0867faebb618f",
+   "source_blob": "77c1dcae75562aea73b1496a948e8ee056a3cfa3",
+   "source_sha256": "cacfb567dcd211431b0a9e4e517a8ab59c4bbff69faa5db9ddee93b5af3173ad"
   },
   "adapters/esxi/esxi_6x.yml": {
    "bytes": 740,
@@ -2019,11 +2021,11 @@
     }
    ],
    "python_kind": null,
-   "removed_lines": 27,
+   "removed_lines": 33,
    "removed_trailing": 5,
-   "sha256": "66a448b982e664f23b9b42382b5f3a9e8e9f0b44a7816ed472513cbaf87224b9",
-   "source_blob": "340552ba568a74add82a1bc672b10c99fb332a16",
-   "source_sha256": "68b3e5a9365495592c8b3530949f243dd512b3e4081217a12718d8c3205546e6"
+   "sha256": "c1ba3d1b247b2eefe78253ece8c62c347b556a2a872e49405d401c8069cc62ec",
+   "source_blob": "4d5c924bbe85a70e862bd4db015159016241f91c",
+   "source_sha256": "37baf0b2e8282d0b8a7d78d93519bde8bac9c162094a15b50d39028a933fc7af"
   },
   "scripts/jenkins/se_finalize.groovy": {
    "bytes": 6292,
@@ -2626,7 +2628,7 @@
    "source_sha256": "0fa693b93483d9429379dc265436fb412dcd84e52e509bf80f8e74025791bc30"
   }
  },
- "generator_hash": "4ece5896c0ce05dfd89473c7d2e74b7ad0acc3c82fe4e2045120708cd048bab0",
+ "generator_hash": "8e183b5b3206f3c6d0abab5fa374023e20f63c477ddcaf4e826d74726017374b",
  "generator_version": "1.0.0",
  "ignored": [
   ".claude/role/gather/README.md",
@@ -2798,8 +2800,8 @@
   "tests/reference/os/README.md",
   "tests/reference/redfish/README.md"
  ],
- "main_sha": "ce50ccf73f93ad7cb88e2b58cafb6ef07e8d8702",
- "main_tree": "fcc07a592f082c7e458e2f7ca85ce152b9ddd4b2",
+ "main_sha": "ec6a494f45bdab57f5698ac5e0b27271ac51bf48",
+ "main_tree": "620e29da5639b68fc487e2102a9bc92f0807c6ed",
  "manifest_sha256": "02660e89090313e141657a076c3db34f8c35cd29d428a8f3978f3a90a3f622f4",
  "policy": {
   "eol": "lf",
@@ -2815,5 +2817,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "8d0f05c3895d2096c0ded6813a3501750256f590e61218464fde7f41d984c827"
+ "tree_hash": "de9422fb6c568e32652c8e6c123c21a1446d19c11b763f107557ca9b2979c0a4"
 }
