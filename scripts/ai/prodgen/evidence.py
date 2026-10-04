@@ -292,7 +292,9 @@ def evaluate_main(scenario: str, item: dict, summary, body, manifest, console: s
     con = console or ""
     if c.get("fail_closed"):
         add("jenkinsfile_obtained", "Obtained Jenkinsfile_portal from" in con, "lightweight checkout marker" if "Obtained Jenkinsfile_portal from" in con else "marker missing")
-        add("stopped_before_agent", "Running on " not in con.split("[Finalize]")[0], "no agent node before finalizer" if "Running on " not in con.split("[Finalize]")[0] else "an agent ran before the refusal")
+        gather_block = con.split("{ (Gather)")[1].split("{ (Declarative: Post Actions)")[0] if "{ (Gather)" in con else ""
+        no_gather = ("[Budget] exec" not in con) and ("Running on " not in gather_block)
+        add("stopped_before_agent", no_gather, "Gather stage never ran on an agent" if no_gather else "the Gather stage ran on an agent — not the fail-closed path")
     if c.get("delivered") is True:
         add("callback_delivered", "[Callback] [OK] HTTP 2" in con, "[Callback] [OK] HTTP 2xx" if "[Callback] [OK] HTTP 2" in con else "no 2xx marker")
     elif c.get("delivered") is False:

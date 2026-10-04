@@ -235,10 +235,11 @@ def test_main_contract_expected_failures_pass_when_the_behaviour_matches():
     assert "callback_delivered" in _failed(evaluate_main("T2", t2, SUMMARY_OK, body2, None, con6)), "연결 거부로 끝난 실행은 T2 가 아니라 T6 증거다"
     # E2E-A2: FAILURE + Resolve Location refusal marker + loc=chj
     a2 = _main_item(result="FAILURE", params=dict(_main_item()["params"], loc="chj"))
-    a2_console = "Obtained Jenkinsfile_portal from git https://x\n[Resolve Location] 등록되지 않은 Location: 'chj' (등록: ic cj yi git)\n[Finalize] node wait 1s"
+    a2_console = ("Obtained Jenkinsfile_portal from git https://x\n[Pipeline] { (Gather)\n[Pipeline] { (Declarative: Post Actions)\nRunning on Jenkins in /x\n"
+                  "[Finalize] node wait 1s\n[Resolve Location] 등록되지 않은 Location: 'chj' (등록: ic cj yi git)")
     assert _failed(evaluate_main("E2E-A2", a2, None, None, None, a2_console)) == []
     # the refusal must happen before any agent ran, and the Jenkinsfile must have come from SCM (lightweight checkout marker)
-    assert "stopped_before_agent" in _failed(evaluate_main("E2E-A2", a2, None, None, None, "Obtained Jenkinsfile_portal from git https://x\nRunning on R01 in /w\n[Resolve Location] 등록되지 않은 Location: 'chj'"))
+    assert "stopped_before_agent" in _failed(evaluate_main("E2E-A2", a2, None, None, None, "Obtained Jenkinsfile_portal from git https://x\n[Pipeline] { (Gather)\nRunning on R01 in /w\n[Pipeline] { (Declarative: Post Actions)\n[Resolve Location] 등록되지 않은 Location: 'chj'"))
     assert "jenkinsfile_obtained" in _failed(evaluate_main("E2E-A2", a2, None, None, None, "[Resolve Location] 등록되지 않은 Location: 'chj'"))
     # S5: Kernel 6.x majors from data.system.kernel
     assert _failed(evaluate_main("S5", _main_item(), SUMMARY_OK, BODY_OK, None, CONSOLE_OK)) == []
@@ -260,10 +261,13 @@ def test_fail_closed_scenario_binds_to_agreeing_neighbour_builds_only():
     assert [k for k, c in MAIN_CONTRACT.items() if c.get("fail_closed")] == ["E2E-A2"], "only E2E-A2 is the fail-closed contract (T5 has no host constraint but does check out)"
     # the contract itself demands the lightweight checkout marker and that no agent ran before the refusal
     item = {"scenario": "E2E-A2", "result": "FAILURE", "building": False, "params": {"loc": "chj", "inventory_json": '[{"service_ip":"192.0.2.10"}]'}}
-    con_ok = "Obtained Jenkinsfile_portal from git https://x\n[Resolve Location] 등록되지 않은 Location: 'chj' — 허용: [cj, git]\n[Finalize] node wait\nRunning on Jenkins in /x"
+    con_ok = ("Obtained Jenkinsfile_portal from git https://x\n[Pipeline] { (Resolve Location)\n[Pipeline] { (Gather)\n[Pipeline] { (Declarative: Post Actions)\n"
+              "Running on Jenkins in /data1/jenkins/home/workspace/x\n[Finalize] node wait 1s\n"
+              "ERROR: [Resolve Location] 등록되지 않은 Location: 'chj' — 허용: [cj, git]")
     checks = {c["name"]: c["ok"] for c in evaluate_main("E2E-A2", item, None, None, None, con_ok)}
     assert checks["jenkinsfile_obtained"] and checks["stopped_before_agent"] and checks["console:[Resolve Location] 등록되지 않은 Location: 'chj'"]
-    con_agent = "Obtained Jenkinsfile_portal from git https://x\nRunning on Runner01 in /w\n[Resolve Location] 등록되지 않은 Location: 'chj'"
+    con_agent = ("Obtained Jenkinsfile_portal from git https://x\n[Pipeline] { (Gather)\nRunning on Runner01 in /w\n[Budget] exec gather=600\n"
+                 "[Pipeline] { (Declarative: Post Actions)\nRunning on Jenkins in /x\n[Resolve Location] 등록되지 않은 Location: 'chj'")
     checks = {c["name"]: c["ok"] for c in evaluate_main("E2E-A2", item, None, None, None, con_agent)}
     assert not checks["stopped_before_agent"], "an agent before the refusal is not the fail-closed path"
     # check_evidence accepts the neighbour-bound item like any other (same main_sha), and still rejects a None sha
