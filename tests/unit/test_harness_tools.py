@@ -110,7 +110,8 @@ def test_verdict_pass_fail_partial(tmp_path):
     import hashlib
     sha = hashlib.sha256(body.read_bytes()).hexdigest()
     summary = {"accepted": 3, "lines": 3, "kept": 3, "filled": 0, "outcome": "completed", "layerA": "ok", "layerB": "skipped",
-               "source": "stash", "unrecovered": [], "damage": [], "recovery_limited": False, "by_origin": {"output": 3, "checkpoint": 0, "synthetic": 0}}
+               "source": "stash", "unrecovered": [], "damage": [], "recovery_limited": False, "by_origin": {"output": 3, "checkpoint": 0, "synthetic": 0},
+               "warnings": [], "callback": {"attempted": True, "delivered": True, "http_code": 200, "attempts": 1}}
     sink = json.dumps({"method": "POST", "status_sent": 200, "ok": True, "body_sha256": sha}) + "\n"
     preserve = {"archived": True, "stashed": True, "deleted": True}
     control = {"sink_reachable": True, "rethrown": False}
@@ -120,7 +121,7 @@ def test_verdict_pass_fail_partial(tmp_path):
     assert rc == 0 and res["verdict"] == "PASS" and res["problems"] == []
     # FAIL: unstable 이 호출됐고 archive 가 실패했다
     rc, res = _run_verdict(tmp_path, "normal_success", summary=_write(tmp_path / "s.json", summary), body=str(body),
-                           calls=_write(tmp_path / "c2.json", ["unstable:[Finalize/A] archive 실패"]), sink=_write(tmp_path / "k.jsonl", sink),
+                           calls=_write(tmp_path / "c2.json", ["unstable:[결과 보존] 영구 보존(archive) 실패 — 임시 전달(stash)로만 넘겼습니다"]), sink=_write(tmp_path / "k.jsonl", sink),
                            preserve=_write(tmp_path / "p2.json", {"archived": False, "stashed": True, "deleted": False}),
                            control=_write(tmp_path / "ctl.json", control))
     assert rc == 1 and res["verdict"] == "FAIL" and any("preserve.archived" in p for p in res["problems"])
@@ -179,14 +180,15 @@ def test_interruption_scenarios_cover_the_six_conditions_and_bounded_ones_are_pa
 
 def test_verdict_checks_summary_outcome_for_aborted_finalize(tmp_path):
     summary = {"accepted": 3, "lines": 3, "kept": 3, "filled": 0, "outcome": "completed", "layerA": "ok", "layerB": "skipped", "source": "stash",
-               "unrecovered": [], "damage": [], "by_origin": {"output": 3, "checkpoint": 0, "synthetic": 0}}
+               "unrecovered": [], "damage": [], "by_origin": {"output": 3, "checkpoint": 0, "synthetic": 0}, "warnings": [],
+               "callback": {"attempted": True, "delivered": True, "http_code": 200, "attempts": 1}}
     sink = json.dumps({"method": "POST", "status_sent": 200, "ok": True, "body_sha256": "x"}) + "\n"
-    calls = ["unstable:[Finalize] 전송은 됐지만 보충(filled=0) · 비정상 종료(outcome=aborted)"]
+    calls = ["unstable:[마무리] 전송은 했지만 확인할 것이 있습니다 — 위의 [경고] 줄 참조 (outcome_aborted)"]
     rc, res = _run_verdict(tmp_path, "aborted_outcome_finalize", summary=_write(tmp_path / "s.json", summary),
                            calls=_write(tmp_path / "c.json", calls), sink=_write(tmp_path / "k.jsonl", sink),
                            control=_write(tmp_path / "ctl.json", {"rethrown": False, "sink_reachable": True}))
     assert rc == 1 and any(c["name"] == "outcome" and not c["ok"] for c in res["checks"]), "outcome=completed 는 aborted 사후 경로가 아니다"
-    rc, res = _run_verdict(tmp_path, "aborted_outcome_finalize", summary=_write(tmp_path / "s2.json", dict(summary, outcome="aborted")),
+    rc, res = _run_verdict(tmp_path, "aborted_outcome_finalize", summary=_write(tmp_path / "s2.json", dict(summary, outcome="aborted", warnings=["outcome_aborted"])),
                            calls=_write(tmp_path / "c.json", calls), sink=_write(tmp_path / "k.jsonl", sink),
                            control=_write(tmp_path / "ctl.json", {"rethrown": False, "sink_reachable": True}))
     assert rc == 0 and res["verdict"] == "PASS", res
@@ -201,3 +203,30 @@ def test_wrappers_for_the_new_scenarios(tmp_path):
         text = out.read_text(encoding="utf-8")
         assert needle in text, (scenario, needle)
         assert f"scenario: {scenario}" in text
+
+
+def test_verdict_prefers_the_summary_callback_and_requires_the_sink_to_agree(tmp_path):
+    """2026-10-05 (F09 · F13): 전송 여부는 finalize_summary.callback 이 기록이다. 수신 기록이 있으면 그 기록에 2xx 가 있어야 전달로 본다
+    (요약이 거짓으로 delivered=true 를 적어도 통과하지 못한다). 경고는 문장이 아니라 warnings 코드로 판정한다."""
+    base = {"accepted": 3, "lines": 3, "kept": 3, "filled": 0, "outcome": "completed", "layerA": "ok", "layerB": "skipped", "source": "stash",
+            "unrecovered": [], "damage": [], "by_origin": {"output": 3, "checkpoint": 0, "synthetic": 0}, "warnings": []}
+    claimed = dict(base, callback={"attempted": True, "delivered": True, "http_code": 200, "attempts": 1})
+    sink_500 = json.dumps({"method": "POST", "status_sent": 500, "ok": False, "body_sha256": "x"}) + "\n"
+    obs = harness_verdict.observe(claimed, None, [], [json.loads(sink_500)], None, {"rethrown": False})
+    assert obs["delivered"] is False, "수신 기록에 2xx 가 없으면 요약의 delivered=true 를 믿지 않는다"
+    obs = harness_verdict.observe(claimed, None, [], None, None, {"rethrown": False})
+    assert obs["delivered"] is True and obs["warnings"] == [] and obs["callback"]["http_code"] == 200
+    # sink_5xx: warnings 코드 + 새 문구 + delivered=false
+    failed = dict(base, warnings=["callback_failed"], callback={"attempted": True, "delivered": False, "http_code": 500, "attempts": 3})
+    rc, res = _run_verdict(tmp_path, "sink_5xx", summary=_write(tmp_path / "s.json", failed),
+                           calls=_write(tmp_path / "c.json", ["unstable:[마무리] Portal 전송 실패 — 보내려던 본문은 결과 파일 callback_body.json"]),
+                           sink=_write(tmp_path / "k.jsonl", sink_500 * 3), control=_write(tmp_path / "ctl.json", {"rethrown": False, "sink_reachable": True}))
+    assert any(c["name"] == "warnings_include:callback_failed" and c["ok"] for c in res["checks"]), res
+    assert any(c["name"] == "delivered" and c["ok"] for c in res["checks"]), res
+    # 이전 형식 요약(warnings 없음)은 경고 판정을 PARTIAL 로 남긴다 — 통과로 치지 않는다
+    old = {k: v for k, v in failed.items() if k != "warnings"}
+    rc, res = _run_verdict(tmp_path, "sink_5xx", summary=_write(tmp_path / "s2.json", old),
+                           calls=_write(tmp_path / "c2.json", ["unstable:[Finalize] Callback 전송 실패 — artifact callback_body.json 참조"]),
+                           sink=_write(tmp_path / "k2.jsonl", sink_500 * 3), control=_write(tmp_path / "ctl2.json", {"rethrown": False, "sink_reachable": True}))
+    assert any("warnings_include" in p for p in res["partial"]), res
+

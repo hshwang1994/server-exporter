@@ -162,7 +162,7 @@ def readFile(Map m) {
 }
 
 def sh(Map m) {
-    if ((HARNESS.scenario in __FAIL_LAYER_A__) && m.label == 'finalize layer A') {
+    if ((HARNESS.scenario in __FAIL_LAYER_A__) && m.label == '결과 정리 (Layer A)') {
         HARNESS.calls << 'sh:layerA:injected_rc1'
         return 1
     }

@@ -63,13 +63,13 @@ def test_empty_but_set_values_are_cleared_too():
 
 
 def test_gather_shell_sources_the_guard_before_ansible():
-    gather = PORTAL[PORTAL.index("stage('Gather')"):]
+    gather = PORTAL[PORTAL.index("stage('서버 정보 수집')"):]
     i_guard = gather.index('. "\\${WORKSPACE}/scripts/env_guard.sh" ${addonDir ? \'true\' : \'false\'}')
     assert i_guard < gather.index("activate_ansible_venv.sh\" || exit 90") < gather.index("ansible-playbook \"${playbook}\"")
 
 
 def test_budget_inputs_come_only_from_this_build():
-    gather = PORTAL[PORTAL.index("stage('Gather')"):]
+    gather = PORTAL[PORTAL.index("stage('서버 정보 수집')"):]
     line = next(l for l in gather.splitlines() if "def budgetScript =" in l)
     assert "unset SE_MEM_AVAILABLE_MB;" in line and "SE_FORCE_SEC=${budgetForce} " in line, \
         "강제값은 이 빌드의 파라미터에서만(비어 있어도 명시) — 상위 환경의 SE_FORCE_SEC 를 덮는다"

@@ -30,19 +30,19 @@ def _params() -> str:
     return TEXT[start: TEXT.index("    environment {", start)]
 
 
-VALIDATE = _stage("Validate")
-RESOLVE = _stage("Resolve Location")
-GATHER = _stage("Gather")
+VALIDATE = _stage("입력 확인")
+RESOLVE = _stage("실행 위치 확인")
+GATHER = _stage("서버 정보 수집")
 PARAMS = _params()
 
 
 def test_stage_order_validate_then_resolve_then_gather():
-    order = [TEXT.index(f"stage('{n}')") for n in ("Validate", "Resolve Location", "Gather")]
+    order = [TEXT.index(f"stage('{n}')") for n in ("입력 확인", "실행 위치 확인", "서버 정보 수집")]
     assert order == sorted(order), "구조가 틀린 요청은 노드를 고르기 전에 끝낸다"
 
 
 def test_validate_and_resolve_run_without_agent_or_workspace():
-    for name, stage in (("Validate", VALIDATE), ("Resolve Location", RESOLVE)):
+    for name, stage in (("입력 확인", VALIDATE), ("실행 위치 확인", RESOLVE)):
         assert "agent {" not in stage, name
         assert "writeFile(" not in stage, f"{name} 에는 workspace 가 없다"
         assert "deleteDir(" not in stage, name

@@ -1,8 +1,9 @@
 """Jenkinsfile_portal — 2026-10-03 Phase 4 (Plan §6-1 ~ §6-6) finalization·예산·Callback 텍스트 계약.
 
 고정하는 것
-  1. 구조: stage 는 Validate → Resolve Location → Gather 셋뿐. Validate Schema·Callback stage 는 없다(검증은 scripts/ai/ci_gate.sh,
-     전송은 pipeline post{always} 의 finalizer). finalizer 는 `timeout(FINALIZER_TOTAL){ node('built-in'){…} }` 하나 — 합산 제한.
+  1. 구조: stage 는 입력 확인 → 실행 위치 확인 → 서버 정보 수집 셋뿐(2026-10-05 F13 표시 이름; 문서의 Validate / Resolve Location / Gather).
+     Validate Schema·Callback stage 는 없다(검증은 scripts/ai/ci_gate.sh). 전송은 pipeline post{always} 안의 '결과 확인 및 전송' 단계가
+     finalizer 를 한 번 부른다. finalizer 는 `timeout(FINALIZER_TOTAL){ node('built-in'){…} }` 하나 — 합산 제한.
   2. 예산: 공식은 scripts/gather_budget.sh 한 곳. Jenkinsfile 은 node 진입 시 est, ansible 직전 exec 두 번 부르고 exec 값만
      `timeout --signal=INT --kill-after=90 "$SE_GATHER_BUDGET_SEC"` 에 넣는다. start=false 면 수집을 시작하지 않는다(not_started_budget).
   3. 보존: Gather post{always} 가 Layer A → archive → stash(allowEmpty) → (manifest 가 이 빌드 것일 때만) deleteDir.
@@ -38,16 +39,21 @@ def _method(name: str) -> str:
     return TEXT[start: start + 1 + nxt.start()] if nxt else TEXT[start:]
 
 
-GATHER = _stage("Gather")
-RESOLVE = _stage("Resolve Location")
+GATHER = _stage("서버 정보 수집")
+RESOLVE = _stage("실행 위치 확인")
 FINALIZE = _method("def seFinalizeAndCallback")
-CALLBACK = _method("boolean seCallback")
+CALLBACK = _method("Map seCallback")
 
 
 def test_only_three_stages_and_no_callback_or_schema_stage():
     stages = re.findall(r"\n        stage\('([^']+)'\)", TEXT)
-    assert stages == ["Validate", "Resolve Location", "Gather"]
+    assert stages == ["입력 확인", "실행 위치 확인", "서버 정보 수집"]
     assert "Validate Schema" not in TEXT and "stage('Callback')" not in TEXT
+    # 2026-10-05 (F13): 결과 전송은 stage 가 아니라 post{always} 안의 표시 단계다 — 끊긴 빌드에서도 실행되고, finalizer 는 한 번만 돈다
+    post = TEXT[TEXT.index("    post {\n        always {"):]
+    assert "stage('결과 확인 및 전송') {\n                    fin = seFinalizeAndCallback()\n                }" in post
+    assert len(re.findall(r"(?<!def )seFinalizeAndCallback\(\)", TEXT)) == 1, "호출은 post 한 곳(정의 제외)"
+    assert post.count("seFinalizeAndCallback()") == 1 and "seBuildSummary(fin)" in post
 
 
 def test_finalizer_is_a_single_summed_timeout_around_one_builtin_node():
@@ -81,11 +87,11 @@ def test_lines_is_not_referenced_after_it_is_nulled():
     """R5 (2026-10-03 Astra 2차): body 조립 뒤 `lines = null` 로 비운 다음 `lines.size()` 를 다시 불러 정상 경로(delivered=true)에서
     NPE 가 났다. 줄 수는 줄 집합 확정 직후·첫 사용 전에 lineCount 로 한 번 읽고, 이후에는 그 값만 쓴다."""
     i_count = FINALIZE.index("int lineCount = lines.size()")
-    i_warn = FINALIZE.index("[WARN] invariant 위반")
+    i_body = FINALIZE.index("lines.join(',')")
     m_null = re.search(r"^\s*lines = null\s*$", FINALIZE, re.M)   # 선언(List lines = null)이 아니라 비우는 문장
     assert m_null, "lines 를 비우는 문장이 없다"
     i_null = m_null.start()
-    assert i_count < i_warn < i_null, "lineCount 는 첫 사용(WARN) 전에 선언되고 lines 는 그 뒤에 비운다"
+    assert i_count < i_body < i_null, "lineCount 는 본문을 만들기 전에 읽고, lines 는 본문 · 요약을 만든 뒤에 비운다"
     tail = FINALIZE[m_null.end():]
     assert not re.search(r"(?<![\w.])lines\b", tail), "lines 를 비운 뒤에는 lines 를 참조하지 않는다"
     assert "lineCount != accepted" in tail and "lines.size()" not in tail
@@ -101,21 +107,27 @@ def test_runtime_groovy_uses_only_sandbox_whitelisted_json_parsers():
 
 
 def test_callback_budget_rules():
-    assert "if (remaining < C.CALLBACK_MIN)" in CALLBACK and "callback not attempted: budget" in CALLBACK
+    assert "if (remaining < C.CALLBACK_MIN)" in CALLBACK and "최소 ${C.CALLBACK_MIN}초보다 짧아" in CALLBACK and "reason: 'budget'" in CALLBACK
     assert "Math.min(C.CALLBACK_ATTEMPT, (int) (remaining - 10))" in CALLBACK
     assert "code ==~ /2\\d\\d/" in CALLBACK
     assert "!(code in ['408', '429'])" in CALLBACK, "결정적 4xx 는 중단, 408/429 는 재시도"
     assert "aborted ? 1 : 3" in CALLBACK and "ABORT_ATTEMPT    : 60" in TEXT
-    assert "[Callback] [OK] HTTP ${code}" in CALLBACK and "response=${msg.length() > 200 ? msg.substring(0, 200) : msg}" in CALLBACK, "2xx 는 HTTP 응답 증거 — 응답 본문 앞부분을 남긴다(저장 증거 아님)"
+    # 2026-10-05 사용자 결정(F09): 2xx 수신까지가 계약이다 — 응답 본문은 읽지도 기록하지도 않는다
+    assert "[Portal 전송] 완료: HTTP ${code}" in CALLBACK and "quiet: true" in CALLBACK and "consoleLogResponseBody: false" in CALLBACK
+    assert "resp.content" not in CALLBACK and "response=" not in CALLBACK and "resp.status" in CALLBACK
+    for ret in ("[delivered: true, http_code: status, attempts: attempt", "reason: 'refused'", "reason: 'failed'"):
+        assert ret in CALLBACK, ret
     assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in CALLBACK, "Abort 는 삼키지 않는다"
-    assert "unstable(\"[Finalize] Callback 전송 실패" in FINALIZE
-    assert "filled > 0 || outcome != 'completed'" in FINALIZE
+    assert "unstable(\"[마무리] Portal 전송 실패" in FINALIZE
+    for cond in ("if (filled > 0) {", "if (outcome != 'completed') {", "if (layerB == 'unavailable') {", "if (lineCount != accepted) {"):
+        assert cond in FINALIZE, cond
+    assert "} else if (finalizerWarn) {" in FINALIZE
 
 
 def test_budget_is_computed_by_the_script_twice_and_exec_value_is_enforced():
     assert "bash scripts/gather_budget.sh" in GATHER
     assert GATHER.count("readJSON text: sh(returnStdout: true, script: budgetScript") == 2, "node 진입 시 est + ansible 직전 exec"
-    assert GATHER.index("label: 'budget estimate'") < GATHER.index("ADDON_REPO_URL") < GATHER.index("label: 'budget exec'") < GATHER.index("ansible-playbook ")
+    assert GATHER.index("label: '수집 시간 계산 (예상)'") < GATHER.index("ADDON_REPO_URL") < GATHER.index("label: '수집 시간 계산 (실행 직전)'") < GATHER.index("ansible-playbook ")
     assert 'timeout --signal=INT --kill-after=90 "\\${SE_GATHER_BUDGET_SEC}"' in GATHER
     assert '"SE_GATHER_BUDGET_SEC=${exec.budget}"' in GATHER and '-f "\\${SE_GATHER_FORKS}"' in GATHER
     assert "env.SE_GATHER_OUTCOME = 'not_started_budget'" in GATHER and "if (!exec.start)" in GATHER
@@ -128,7 +140,7 @@ def test_budget_is_computed_by_the_script_twice_and_exec_value_is_enforced():
     for field in ("pre=${", "wait_checkout=${", "prep=${"):
         assert GATHER.count(field) == 2, f"{field} est·exec 두 로그 모두"
     assert "wait=${" not in GATHER, "wait_checkout 은 순수 agent 대기가 아니다 — 이름으로 분명히 한다"
-    assert "env.SE_BUILD_START_EPOCH = " in _stage("Validate")
+    assert "env.SE_BUILD_START_EPOCH = " in _stage("입력 확인")
 
 
 def test_rc_to_outcome_mapping():
@@ -138,7 +150,7 @@ def test_rc_to_outcome_mapping():
     assert "env.SE_GATHER_OUTCOME = 'interrupted_unknown'" in GATHER, "아무 분기도 못 타면 중단으로 남긴다"
     # 3차 §4-2 / §6: 취소·timeout 은 원인을 기록하고 재전파, 메모리 부족은 시간 부족과 다른 사유
     assert "env.SE_GATHER_OUTCOME = 'aborted'" in GATHER and "env.SE_GATHER_OUTCOME = 'not_started_memory'" in GATHER
-    assert "if (exec.reason == 'not_started_memory')" in GATHER and "Runner 가용 메모리 부족" in GATHER
+    assert "if (exec.reason == 'not_started_memory')" in GATHER and "Runner 가용 메모리가 부족합니다" in GATHER
 
 
 def test_interruptions_are_recorded_and_rethrown_not_swallowed():
@@ -207,7 +219,7 @@ def test_gather_post_runs_layer_a_then_preserves_then_deletes_only_when_safe():
     assert "allowEmpty : true" in post and "allowEmptyArchive: true" in post
     assert "gather_final.jsonl" in post and "gather_finalize_report.json" in post and "gather_progress.jsonl" in post
     assert "m?.build?.number?.toString() == env.BUILD_NUMBER" in post, "manifest 가 이 빌드 것일 때만 지운다"
-    assert "workspace kept for forensics" in post
+    assert "조사용으로 작업공간을 지우지 않고 남깁니다" in post
 
 
 def test_preserve_steps_are_independent_and_delete_only_after_archive():
@@ -222,7 +234,7 @@ def test_preserve_steps_are_independent_and_delete_only_after_archive():
     assert "boolean hasResult = fileExists('gather_final.jsonl') || fileExists('gather_output.json')" in post
     for flag in ("SE_PRESERVE_ARCHIVED", "SE_PRESERVE_STASHED", "SE_PRESERVE_MANIFEST", "SE_PRESERVE_HASRESULT", "SE_PRESERVE_LAYER_A"):
         assert f"env.{flag}" in post, flag
-    assert "결과 보존 실패(archive·stash 모두)" in post and "archive 실패 — stash 로만 전달" in post
+    assert "결과를 보존하지 못했습니다(영구 보존 · 임시 전달 모두 실패)" in post and "영구 보존(archive) 실패 — 임시 전달(stash)로만 넘겼습니다" in post
     assert TEXT.count("deleteDir()") == 3, "finalizer 2 + preserve 1 — 다른 곳에서 workspace 를 지우지 않는다"
     assert "preserve: [layerA: env.SE_PRESERVE_LAYER_A" in FINALIZE, "finalizer 요약에 보존 결과를 남긴다"
 
@@ -247,9 +259,9 @@ def test_finalizer_validates_lines_and_records_damage():
 
 def test_no_agent_is_accepted_then_failed_not_a_build_error():
     assert "env.SE_GATHER_OUTCOME = 'no_agent'" in RESOLVE
-    assert "error \"[Resolve Location] 라벨" not in RESOLVE, "Runner 부재는 접수 후 실행 실패 — error 로 끊지 않는다"
+    assert "error \"[실행 위치] 라벨" not in RESOLVE, "Runner 부재는 접수 후 실행 실패 — error 로 끊지 않는다"
     assert "when { expression { env.SE_GATHER_OUTCOME != 'no_agent' } }" in GATHER
-    assert "unstable(\"[Resolve Location] 온라인 노드 없음" in RESOLVE
+    assert "unstable(\"[실행 위치] 온라인 노드 없음" in RESOLVE
 
 
 LIB = (REPO / "scripts/jenkins/se_finalize.groovy").read_text(encoding="utf-8")
@@ -290,7 +302,7 @@ def test_trusted_reads_are_identified_in_the_console():
     assert TEXT.count("seTrusted('") == 4, "locations.yml · se_finalize.groovy · failure_reasons.yml · supported_sections.yml"
     assert 'echo "[Trusted] ${path} len=${text.length()} jhash=${text.hashCode()}"' in TEXT
     assert "MessageDigest.getInstance" not in TEXT and "java.util.zip.CRC32" not in TEXT, "sandbox 비허용 API 를 운영 파이프라인에 두지 않는다(주석 언급은 무방)"
-    assert "checkout scm" not in _stage("Resolve Location") and "checkout(" not in _method("String seTrusted")
+    assert "checkout scm" not in _stage("실행 위치 확인") and "checkout(" not in _method("String seTrusted")
 
 
 def test_progress_and_checkpoint_env_wired_for_json_only():
@@ -309,3 +321,72 @@ def test_recovery_source_is_the_medium_and_unarchive_is_per_file():
     assert FINALIZE.count("fileExists('gather_checkpoint.jsonl')) { source = 'archive' }") == 1
     per_file = FINALIZE[FINALIZE.index("for (String f in recoverFiles)"):FINALIZE.index("source = 'archive'")]
     assert "FlowInterruptedException fie" in per_file and "throw fie" in per_file, "파일별 catch 도 interruption 은 재전파"
+
+
+# ── 2026-10-05 (F13 · F09 · §6) 운영 표시 ─────────────────────────────────────────────
+def test_every_shell_step_has_a_label():
+    """Stage View · Blue Ocean 에는 sh 의 label 이 단계 이름으로 보인다 — 이름 없는 'Shell Script' 가 남지 않게."""
+    calls = [m.group(0).lstrip(" \t=(:") for m in re.finditer(r"(?:^|[\s=(:])sh(?=[( ])[^\n]*", TEXT, re.M)]
+    steps = [c for c in calls if ("script:" in c or c.startswith('sh "') or c.startswith("sh '") or c.startswith('sh """'))]
+    assert steps, "sh step 이 없다"
+    unlabeled = [c[:80] for c in steps if "label:" not in c]
+    assert unlabeled == [], unlabeled
+    for label in ("결과 정리 (Layer A)", "이전 실행의 결과 파일 정리", "수집 시간 계산 (예상)", "추가 수집(Add-on) 저장소 받기",
+                  "추가 수집(Add-on) 파일 검사", "수집 시간 계산 (실행 직전)", "서버 정보 수집 (ansible-playbook)"):
+        assert f"label: '{label}'" in TEXT, label
+
+
+def test_summary_records_status_counts_warnings_and_callback():
+    """finalize_summary.json — 사람이 읽는 줄과 같은 값을 기계가 읽는다: 보낸 envelope 의 status 집계, 경고 코드, 전송 결과."""
+    assert "status_counts: [success: (statusCounts.success ?: 0), partial: (statusCounts.partial ?: 0)," in FINALIZE
+    assert "failed: (statusCounts.failed ?: 0), missing: Math.max(0, accepted - lineCount)]" in FINALIZE
+    assert "summary.callback = [attempted: (body != null), delivered: delivered, http_code: cb.http_code, attempts: cb.attempts]" in FINALIZE
+    assert "summary.warnings = warnings" in FINALIZE
+    for code in ("'body_timeout'", "'callback_failed'", "'count_mismatch'", "'filled'", '"outcome_${outcome}"', "'layer_b_unavailable'",
+                 "'preserve_failed'", "'preserve_archive_failed'"):
+        assert code in FINALIZE, code
+    i_counts = [m.start() for m in re.finditer(r"statusCounts = (picked|gated|minimal)\.?counts|statusCounts = minimalCounts", FINALIZE)]
+    assert len(i_counts) >= 4, "Layer A · Layer B · raw · 최소 경로가 모두 상태를 센다"
+    helper = _method("Map seFilterEnvelopeLines")
+    assert "counts: counts]" in helper and "statusByIp[obj.ip] = obj.status" in helper
+    # 경고는 한 줄에 하나, UNSTABLE 은 한 번 — 결과 보존 경고는 수집 단계가 이미 표시했다
+    assert 'for (String w in warnTexts) { echo "[경고] ${w}" }' in FINALIZE
+    assert FINALIZE.count("unstable(") == 3, "본문 실패 · 전송 실패 · 경고 중 하나만"
+    assert "if (!w.startsWith('preserve_')) { finalizerWarn = true }" in FINALIZE
+
+
+def test_result_lines_and_links_are_for_people():
+    assert 'echo "[결과] 요청 ${accepted}대 — 성공 ${sc.success} · 부분 성공 ${sc.partial} · 실패 ${sc.failed}' in FINALIZE
+    i_arch = FINALIZE.index("seBounded(C.PRESERVE_STEP, 'archive_final')")
+    i_links = FINALIZE.index('echo "[결과 파일] ${f[0]}: ${base ? base + \'artifact/\' + f[1] : f[1]}"')
+    i_del = FINALIZE.rindex("deleteDir()")
+    assert i_arch < i_links < i_del, "보존한 뒤에 링크하고, 링크한 뒤에 지운다"
+    links = FINALIZE[i_arch:i_links]
+    assert "if (finalArchived) {" in links and "fileExists('gather_final.jsonl')" in links and "if (body != null)" in links
+    summary_fn = _method("def seBuildSummary")
+    assert "currentBuild.currentResult" in summary_fn and "'ABORTED': '중단'" in summary_fn
+    post = TEXT[TEXT.index("    post {\n        always {"):]
+    for cond in ("success {", "unstable {", "failure {", "aborted {"):
+        assert cond in post, cond
+
+
+def test_build_name_marks_count_and_test_runs():
+    validate = _stage("입력 확인")
+    assert 'currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.target_type.trim()} ${acceptedIps.size()}대${testTags}"' in validate
+    assert '[시험: 강제 제한 ${forceRaw}초]' in validate and "[시험: 계정 복구 모의]" in validate
+    assert "currentBuild.description" not in TEXT
+
+
+def test_callback_url_with_credentials_is_refused_without_echoing_it():
+    """rule 31 R4: 계정 정보가 든 주소는 콘솔에 남는다 — 다른 검사(주소를 출력한다)보다 먼저 거부하고, 이 오류는 주소를 출력하지 않는다."""
+    validate = _stage("입력 확인")
+    i_cred = validate.index("if (cbUrl ==~ /(?is)^[a-z][a-z0-9+.-]*:\\/\\/[^\\/?#]*@.*/) {")
+    assert i_cred < validate.index("cbUrl.startsWith('http://')") < validate.index('echo "[입력 확인] 결과를 보낼 주소: ${cbUrl}"')
+    line = validate[i_cred: validate.index("\n", validate.index("error ", i_cred))]
+    assert "${cbUrl}" not in line and "params.callbackUrl" not in line
+    pat = re.compile(r"(?is)^[a-z][a-z0-9+.-]*://[^/?#]*@.*")
+    for bad in ("http://u:p@portal:8080", "HTTPS://user@portal/x", "http://u:p@h\n/x", "ftp://a:b@h"):
+        assert pat.match(bad), bad
+    for ok in ("http://portal.example.com", "https://portal:8443/api?mail=a@b", "http://10.0.0.1:8080/p#x@y"):
+        assert not pat.match(ok), ok
+

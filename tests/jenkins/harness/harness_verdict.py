@@ -59,15 +59,22 @@ def _load_jsonl(path: str | None) -> list[dict] | None:
 def observe(summary, body_path, calls, sink, preserve, control) -> dict:
     calls = calls or []
     unstable_msgs = [c[len("unstable:"):] for c in calls if isinstance(c, str) and c.startswith("unstable:")]
+    sink_known = sink is not None
     sink = sink or []
     posts = [r for r in sink if r.get("method") == "POST"]
     last_status = posts[-1].get("status_sent") if posts else None
+    sink_ok = any(isinstance(r.get("status_sent"), int) and 200 <= r["status_sent"] < 300 for r in posts)
+    cb = (summary or {}).get("callback") if isinstance(summary, dict) else None
+    claimed = cb.get("delivered") if isinstance(cb, dict) and isinstance(cb.get("delivered"), bool) else None
     delivered = None
     if control is not None and control.get("rethrown"):
         delivered = False
+    elif claimed is not None:
+        # 2026-10-05 (F09 · F13): finalizer 가 요약에 남긴 전송 결과 — 수신 기록이 있으면 그 기록과 맞아야 전달로 본다
+        delivered = (claimed and sink_ok) if sink_known else claimed
     elif posts or unstable_msgs or summary is not None:
-        delivered = any(isinstance(r.get("status_sent"), int) and 200 <= r["status_sent"] < 300 for r in posts) and \
-            not any("Callback 전송 실패" in m for m in unstable_msgs)
+        # 이전 형식(요약에 callback 없음): 수신 기록 + 실패 문구(구 · 신)
+        delivered = sink_ok and not any(("Callback 전송 실패" in m) or ("Portal 전송 실패" in m) for m in unstable_msgs)
     body_sha = None
     if body_path and Path(body_path).is_file():
         body_sha = hashlib.sha256(Path(body_path).read_bytes()).hexdigest()
@@ -83,6 +90,8 @@ def observe(summary, body_path, calls, sink, preserve, control) -> dict:
         "damage": (summary or {}).get("damage"),
         "recovery_limited": (summary or {}).get("recovery_limited"),
         "outcome": (summary or {}).get("outcome"),
+        "warnings": (summary or {}).get("warnings") if isinstance(summary, dict) else None,
+        "callback": cb if isinstance(cb, dict) else None,
         "by_origin": None,
         "delivered": delivered,
         "unstable_msgs": unstable_msgs,
@@ -160,6 +169,20 @@ def check(expect: dict, obs: dict) -> tuple[list[dict], list[str]]:
         joined = " || ".join(obs["unstable_msgs"])
         for needle in expect["unstable_contains"]:
             add(f"unstable_contains:{needle}", True, needle in joined, needle in joined)
+    if "warnings_include" in expect:
+        # 2026-10-05 (F13): 경고는 문장이 아니라 finalize_summary.json 의 warnings 코드로 판정한다
+        if not obs["summary_present"]:
+            partial.append("warnings_include: finalize_summary.json 없음")
+        elif obs["warnings"] is None:
+            partial.append("warnings_include: finalize_summary.json 에 warnings 없음(이전 형식)")
+        else:
+            for code in expect["warnings_include"]:
+                add(f"warnings_include:{code}", True, code in obs["warnings"], code in obs["warnings"])
+    if "warnings_empty" in expect:
+        if not obs["summary_present"] or obs["warnings"] is None:
+            partial.append("warnings_empty: finalize_summary.json 의 warnings 없음")
+        else:
+            add("warnings_empty", expect["warnings_empty"], obs["warnings"] == [], (obs["warnings"] == []) == expect["warnings_empty"])
     if "delivered" in expect:
         if obs["delivered"] is None:
             partial.append("delivered: 관측 없음(sink 기록·호출 기록 모두 없음)")

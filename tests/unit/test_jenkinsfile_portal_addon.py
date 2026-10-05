@@ -27,8 +27,8 @@ def _stage(name: str) -> str:
     return TEXT[start: start + 1 + nxt.start()] if nxt else TEXT[start:]
 
 
-GATHER = _stage("Gather")
-VALIDATE = _stage("Validate")
+GATHER = _stage("서버 정보 수집")
+VALIDATE = _stage("입력 확인")
 
 
 def test_se_addon_dir_is_set_only_for_the_ansible_run():
@@ -90,7 +90,7 @@ def test_no_per_build_addon_ref_parameter():
     assert "params.addonRef" not in TEXT and "addonRef" not in VALIDATE
 
 
-@pytest.mark.parametrize("stage", ["Resolve Location", "Validate"])   # 2026-10-03: Validate Schema·Callback stage 는 없다
+@pytest.mark.parametrize("stage", ["실행 위치 확인", "입력 확인"])   # 2026-10-03: Validate Schema·Callback stage 는 없다
 def test_other_stages_are_untouched_by_addon(stage):
     assert "addon" not in _stage(stage).lower()
 

@@ -128,7 +128,7 @@ def test_main_never_fails_the_build(tmp_path, monkeypatch):
 
 
 def test_gather_shell_runs_the_watch_beside_a_foreground_timeout():
-    gather = PORTAL[PORTAL.index("stage('Gather')"):]
+    gather = PORTAL[PORTAL.index("stage('서버 정보 수집')"):]
     i_watch = gather.index('python3 "\\${WORKSPACE}/scripts/gather_watch.py"')
     i_exec = gather.index("bash -c 'echo \\$\\$ > \"\\$1\"; shift; exec \"\\$@\"' se-gather")
     i_timeout = gather.index('timeout --signal=INT --kill-after=90 "\\${SE_GATHER_BUDGET_SEC}"')

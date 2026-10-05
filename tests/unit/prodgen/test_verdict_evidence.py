@@ -470,3 +470,38 @@ def test_promote_applies_the_effective_requirement_before_the_evidence_checks():
     ci = (Path(__file__).resolve().parents[3] / "Jenkinsfile_ci").read_text(encoding="utf-8")
     assert "require_bounded: (params.REQUIRE_BOUNDED != false), stages: stages" in ci
 
+
+def test_main_contract_reads_the_new_operator_wording_and_the_summary_callback():
+    """2026-10-05 (F13 · F09): 콘솔 문구가 한국어로 바뀌었다 — 전송 결과는 finalize_summary.callback 이 기록이고 콘솔 2xx 표식이 그 기록과
+    맞아야 한다. 구 · 신 표식은 둘 다 인정한다(이전 빌드를 다시 판정할 때)."""
+    cb_ok = dict(SUMMARY_OK, callback={"attempted": True, "delivered": True, "http_code": 200, "attempts": 1}, warnings=[])
+    con_new = "[Portal 전송] http://10.100.64.151:8080/api/jenkins/gather/os 로 보냅니다 (최대 3번, 본문 900자)\n[Portal 전송] 완료: HTTP 200 (1/3번째 시도)\n"
+    assert _failed(evaluate_main("S1", _main_item(), cb_ok, BODY_OK, None, con_new)) == []
+    assert "callback_delivered" in _failed(evaluate_main("S1", _main_item(), cb_ok, BODY_OK, None, "[Portal 전송] 실패 (1/3번째 시도): HTTP 500\n")), \
+        "요약과 콘솔이 어긋나면 전달로 보지 않는다"
+    assert "callback_delivered" in _failed(evaluate_main("S1", _main_item(), dict(cb_ok, callback={"delivered": False}), BODY_OK, None, con_new))
+    # T6 — 요약 delivered=false + 새 실패 문구
+    t6 = _main_item(result="UNSTABLE", params=dict(_main_item()["params"], callbackUrl="http://127.0.0.1:9"))
+    cb_fail = dict(SUMMARY_OK, callback={"attempted": True, "delivered": False, "http_code": None, "attempts": 3}, warnings=["callback_failed"])
+    con6 = "[Portal 전송] 실패 (3/3번째 시도): 연결하지 못했거나 120초 안에 응답이 없었습니다: refused\n[경고] Portal 전송에 실패했습니다\n"
+    assert _failed(evaluate_main("T6", t6, cb_fail, BODY_OK, None, con6)) == []
+    # T5 — 새 중단 표식
+    t5 = _main_item(scenario="T5", result="ABORTED")
+    con5 = "[수집] 중단됨: 사용자 취소 또는 상위 시간 제한(단계 115분 · 빌드 150분) — 확보한 결과를 보존하고 전송으로 넘어갑니다 (outcome=aborted)\n" + con_new
+    assert _failed(evaluate_main("T5", t5, dict(cb_ok, outcome="aborted"), BODY_OK, None, con5)) == []
+    # E2E-A — 새 실행 위치 표식
+    tn = json.dumps([{"service_ip": "192.0.2.10"}, {"service_ip": "192.0.2.11"}])
+    ea = _main_item(result="SUCCESS", params=dict(_main_item()["params"], loc="cj", inventory_json=tn, callbackUrl="http://127.0.0.1:18080"))
+    body_f = {"gatherInfoJson": [_envelope("192.0.2.10", ok=False), _envelope("192.0.2.11", ok=False)]}
+    con_a = "[실행 위치] cj · os → 노드 라벨 'cj && (linux && windows)' (후보: Runner01)\n" + con_new
+    checks = {c["name"]: c for c in evaluate_main("E2E-A", ea, cb_ok, body_f, None, con_a)}
+    assert checks["console:[Resolve Location] cj + "]["ok"] and checks["console:[Resolve Location] cj + "]["observed"] == "[실행 위치] cj · "
+    # E2E-A2 — 새 단계 이름으로 잘린 수집 블록 · 새 거부 표식
+    a2 = _main_item(result="FAILURE", params=dict(_main_item()["params"], loc="chj"))
+    a2_new = ("Obtained Jenkinsfile_portal from git https://x\n[Pipeline] { (실행 위치 확인)\n[Pipeline] { (서버 정보 수집)\n"
+              "Stage \"서버 정보 수집\" skipped due to earlier failure(s)\n[Pipeline] { (Declarative: Post Actions)\nRunning on Jenkins in /x\n"
+              "ERROR: [실행 위치] 등록되지 않은 Location: 'chj' — 허용: [cj, git]")
+    assert _failed(evaluate_main("E2E-A2", a2, None, None, None, a2_new)) == []
+    a2_agent = a2_new.replace("Stage \"서버 정보 수집\" skipped due to earlier failure(s)", "Running on Runner01 in /w")
+    assert "stopped_before_agent" in _failed(evaluate_main("E2E-A2", a2, None, None, None, a2_agent))
+

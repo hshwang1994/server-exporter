@@ -73,10 +73,12 @@ LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 #   callback       : "portal" (not loopback/TEST-NET — a receiving system), "any" (attempted), None
 #   outcome        : allowed finalize outcomes
 #   envelopes      : "all_success" (every host success/partial, no failure fields), "all_failed", "mixed", None
-#   delivered      : True → console "[Callback] [OK] HTTP 2xx"; False → "Callback 전송 실패" and callback_body.json archived
+#   delivered      : True → finalize_summary.callback.delivered=true and the console 2xx marker; False → delivered=false (and callback_body.json archived).
+#                    Builds before 2026-10-05 have no summary.callback → console markers only (old and new wording both accepted)
 #   filled         : exact synthetic count (0) or None; filled_min / preserved_min for S3
 #   force_sec      : gatherBudgetForceSec must be set (≥ 120, MIN_START_SEC)
-#   loc            : required loc value; console: markers that must appear
+#   loc            : required loc value; console: markers that must appear — each item is a string or a tuple of alternatives
+#                    (2026-10-05 F13: the operator wording changed; old and new markers are both accepted)
 MAIN_CONTRACT = {
     "S1": {"desc": "정상 수집 — 실호스트 성공 envelope · Callback 2xx", "expected": {"SUCCESS"}, "hosts": "real", "callback": "portal",
            "outcome": {"completed"}, "envelopes": "all_success", "delivered": True, "filled": 0},
@@ -91,20 +93,25 @@ MAIN_CONTRACT = {
     "T2": {"desc": "빠른 실패 — 전 host 실패 envelope · Callback 2xx · UNSTABLE 아님", "expected": {"SUCCESS"}, "hosts": "testnet",
            "callback": "any", "outcome": {"completed"}, "envelopes": "all_failed", "delivered": True, "filled": 0},
     "T5": {"desc": "사용자 중단 — outcome aborted 기록 · 재전파 · ABORTED 유지 · body 보존", "expected": {"ABORTED"}, "hosts": None,
-           "callback": None, "outcome": {"aborted"}, "console": ["[Gather] interrupted"], "body_required": True},
+           "callback": None, "outcome": {"aborted"}, "console": [("[Gather] interrupted", "[수집] 중단됨:")], "body_required": True},
     "T6": {"desc": "Callback 실패 — delivered=false · callback_body.json 보존 · UNSTABLE", "expected": {"UNSTABLE"}, "hosts": None,
            "callback": "any", "outcome": {"completed"}, "delivered": False, "body_required": True},
     "E2E-A": {"desc": "cj routing smoke — loc=cj resolve · TEST-NET 실패 envelope", "expected": {"SUCCESS", "UNSTABLE"}, "hosts": "testnet",
               "callback": "any", "loc": "cj", "outcome": {"completed"}, "envelopes": "all_failed",
-              "console": ["[Resolve Location] cj + "]},
+              "console": [("[Resolve Location] cj + ", "[실행 위치] cj · ")]},
     "E2E-A2": {"desc": "폐기 Location chj 거부 — Resolve Location fail-closed", "expected": {"FAILURE"}, "hosts": None, "callback": None,
-               "loc": "chj", "console": ["[Resolve Location] 등록되지 않은 Location: 'chj'"], "fail_closed": True},
+               "loc": "chj", "console": [("[Resolve Location] 등록되지 않은 Location: 'chj'", "[실행 위치] 등록되지 않은 Location: 'chj'")],
+               "fail_closed": True},
     "E2E-D": {"desc": "ESXi 성공 경로", "expected": {"SUCCESS"}, "hosts": "real", "callback": "portal", "outcome": {"completed"},
               "envelopes": "all_success", "delivered": True, "filled": 0, "target_type": "esxi"},
     "E2E-E": {"desc": "Redfish dry-run — 표준 계정 인증 · Account Write 0", "expected": {"SUCCESS"}, "hosts": "real", "callback": "portal",
               "outcome": {"completed"}, "envelopes": "all_success", "delivered": True, "filled": 0, "target_type": "redfish",
               "dryrun": True},
 }
+# Console markers — old (before 2026-10-05) and new operator wording (F13). Summary JSON is preferred where it exists.
+CALLBACK_OK_MARKERS = ("[Callback] [OK] HTTP 2", "[Portal 전송] 완료: HTTP 2")
+CALLBACK_FAIL_MARKERS = ("Callback 전송 실패", "[마무리] Portal 전송 실패")
+GATHER_STAGE_MARKERS = ("{ (Gather)", "{ (서버 정보 수집)")
 ENVELOPE_KEYS = {"schema_version", "target_type", "collection_method", "ip", "hostname", "vendor", "status", "sections",
                  "diagnosis", "meta", "correlation", "errors", "data"}
 
@@ -297,15 +304,33 @@ def evaluate_main(scenario: str, item: dict, summary, body, manifest, console: s
     con = console or ""
     if c.get("fail_closed"):
         add("jenkinsfile_obtained", "Obtained Jenkinsfile_portal from" in con, "lightweight checkout marker" if "Obtained Jenkinsfile_portal from" in con else "marker missing")
-        gather_block = con.split("{ (Gather)")[1].split("{ (Declarative: Post Actions)")[0] if "{ (Gather)" in con else ""
+        gather_block = ""
+        for mk in GATHER_STAGE_MARKERS:
+            if mk in con:
+                gather_block = con.split(mk, 1)[1].split("{ (Declarative: Post Actions)")[0]
+                break
         no_gather = ("[Budget] exec" not in con) and ("Running on " not in gather_block)
         add("stopped_before_agent", no_gather, "Gather stage never ran on an agent" if no_gather else "the Gather stage ran on an agent — not the fail-closed path")
-    if c.get("delivered") is True:
-        add("callback_delivered", "[Callback] [OK] HTTP 2" in con, "[Callback] [OK] HTTP 2xx" if "[Callback] [OK] HTTP 2" in con else "no 2xx marker")
-    elif c.get("delivered") is False:
-        add("callback_failed", ("Callback 전송 실패" in con) and "[Callback] [OK] HTTP 2" not in con, "실패 marker" if "Callback 전송 실패" in con else "no failure marker")
+    if c.get("delivered") is not None:
+        want = c["delivered"]
+        name = "callback_delivered" if want else "callback_failed"
+        ok_marker = any(m in con for m in CALLBACK_OK_MARKERS)
+        cb = summary.get("callback") if isinstance(summary, dict) else None
+        claimed = cb.get("delivered") if isinstance(cb, dict) and isinstance(cb.get("delivered"), bool) else None
+        if claimed is None:
+            # builds before 2026-10-05: the summary has no callback record — console markers only
+            fail_marker = any(m in con for m in CALLBACK_FAIL_MARKERS)
+            got = ok_marker if want else (fail_marker and not ok_marker)
+            add(name, got, ("2xx marker" if ok_marker else "no 2xx marker") + ("; failure marker" if fail_marker else ""))
+        else:
+            # the summary is the record; the console 2xx marker must agree with it (when the console is available)
+            consistent = (ok_marker == claimed) if con else True
+            add(name, claimed == want and consistent,
+                f"summary.callback.delivered={claimed} http_code={cb.get('http_code')} attempts={cb.get('attempts')} console_2xx_marker={ok_marker}")
     for marker in c.get("console", []):
-        add(f"console:{marker}", marker in con, None)
+        alts = marker if isinstance(marker, tuple) else (marker,)
+        found = next((m for m in alts if m in con), None)
+        add(f"console:{alts[0]}", found is not None, found)
     if not con:
         add("console_available", False, "consoleText unavailable — markers cannot be verified")
     return checks

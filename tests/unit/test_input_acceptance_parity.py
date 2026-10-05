@@ -101,7 +101,7 @@ def test_groovy_ipv4_rule_matches_inventory_regex():
 
 
 def test_validate_uses_the_acceptance_function_only():
-    validate = PORTAL[PORTAL.index("stage('Validate')"):PORTAL.index("stage('Resolve Location')")]
+    validate = PORTAL[PORTAL.index("stage('입력 확인')"):PORTAL.index("stage('실행 위치 확인')")]
     assert "Map acceptance = seAcceptTargets(hosts, params.target_type.trim())" in validate
     assert "acceptedIps.add(" not in validate and "?.toString()?.trim()" not in validate
     fn = _accept_function()

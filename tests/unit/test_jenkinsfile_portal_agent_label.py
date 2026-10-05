@@ -28,7 +28,7 @@ def _stage(name: str) -> str:
     return TEXT[start: start + 1 + nxt.start()] if nxt else TEXT[start:]
 
 
-RESOLVE = _stage("Resolve Location")
+RESOLVE = _stage("실행 위치 확인")
 
 
 def test_label_is_location_label_and_target_capability():
@@ -47,14 +47,14 @@ def test_missing_node_is_detected_immediately_and_handled_as_accepted_failure():
     assert "def nodes = nodesByLabel(label: env.SE_AGENT_LABEL)" in RESOLVE
     assert "if (!nodes) {" in RESOLVE and "env.SE_GATHER_OUTCOME = 'no_agent'" in RESOLVE
     assert "을 모두 가진 온라인 노드가 없습니다" in RESOLVE, "원인과 조치를 콘솔에 남긴다"
-    assert "(nodes: ${nodes.join(', ')})" in RESOLVE, "고른 노드를 콘솔에 남긴다"
+    assert "(후보: ${nodes.join(', ')})" in RESOLVE, "고른 노드를 콘솔에 남긴다"
 
 
 def test_only_gather_uses_the_agent_label():
-    gather = _stage("Gather")
+    gather = _stage("서버 정보 수집")
     assert 'label "${env.SE_AGENT_LABEL}"' in gather
     assert "label 'built-in'" not in gather, "Gather 는 컨트롤러에서 돌지 않는다"
-    for name in ("Validate", "Resolve Location"):
+    for name in ("입력 확인", "실행 위치 확인"):
         assert "agent {" not in _stage(name), f"{name} 은 agent 없이 돈다 (workspace 불필요)"
     assert "agent { label 'built-in' }" not in TEXT, "컨트롤러 stage 는 없다 — finalizer 가 post 에서 node 를 잡는다"
     assert len(re.findall(r"\bnode\(", TEXT)) == 1 and "node('built-in')" in TEXT, "스크립트형 node 는 finalizer 의 built-in 한 곳"
