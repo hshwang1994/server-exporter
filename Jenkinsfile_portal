@@ -1076,6 +1076,9 @@ pipeline {
                                         # 빌드 환경 경계(F05 · F12) — 상위 환경의 시험용 · 재정의 값을 이번 셸에서 지운다. 검사한 Add-on 이 있을 때만 ADDON_DIR 유지
                                         . "\${WORKSPACE}/scripts/env_guard.sh" ${addonDir ? 'true' : 'false'}
                                         . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 90
+                                        # inventory 스크립트가 요청을 거부하면(exit 1) 빈 inventory 로 rc 0 을 내지 않고 실행을 실패로 끝낸다(F03) —
+                                        #   outcome 이 failed_run 으로 남는다. ansible.cfg 가 아니라 이 실행에만 켠다(진단 · 시험의 ad-hoc 실행은 영향 없음).
+                                        export ANSIBLE_INVENTORY_UNPARSED_FAILED=True
                                         chmod +x "${inventory}"
                                         VAULT_TMP="\$(mktemp)"
                                         trap 'rm -f "\$VAULT_TMP"' EXIT

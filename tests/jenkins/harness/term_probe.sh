@@ -23,7 +23,7 @@ exec > >(tee "$OUT") 2>&1
 echo "[term-probe] node=$(hostname) kernel=$(uname -r) user=$(id -un) marker=${U}"
 echo "[term-probe] $(ansible --version 2>/dev/null | head -1) | python=$(python3 --version 2>&1) | $(timeout --version 2>/dev/null | head -1)"
 printf 'localhost ansible_connection=local ansible_python_interpreter=%s\n' "$(command -v python3)" > "$WD/inv.ini"
-# 저장소 ansible.cfg 는 script · auto 인벤토리 플러그인만 켜고 unparsed_is_failed=True 다(2026-10-05 F03) — 이 진단의 ini 인벤토리를 읽게 켠다
+# 저장소 ansible.cfg 는 script · auto 인벤토리 플러그인만 켠다 — 이 진단의 ini 인벤토리를 읽게 켠다(안 켜면 implicit localhost 로만 돈다)
 export ANSIBLE_INVENTORY_ENABLED=ini,script,auto
 
 play() {   # play <file> <marker> [task timeout s]

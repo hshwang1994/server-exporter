@@ -76,6 +76,18 @@ def test_budget_inputs_come_only_from_this_build():
     assert 'budgetForce ? ["SE_FORCE_SEC=' not in gather
 
 
+@pytest.mark.source_text
 def test_guard_is_shipped_in_the_production_tree():
     manifest = (REPO / "production_manifest.yml").read_text(encoding="utf-8")
     assert "  - path: scripts/env_guard.sh\n    language: shell\n" in manifest
+
+
+def test_unparsed_inventory_fails_only_the_jenkins_gather_run():
+    """2026-10-05 (F03 · CI #21): inventory 해석 실패를 실행 실패로 바꾸는 설정은 Jenkins 수집 실행에만 켠다 — ansible.cfg 에 두면
+    진단용 ad-hoc 명령 · 시험 도구(term-probe) · 승격 게이트 G15(모듈 smoke)가 "No inventory was parsed" 로 실패했다."""
+    cfg = (REPO / "ansible.cfg").read_text(encoding="utf-8")
+    assert not any(line.strip().startswith("unparsed_is_failed") for line in cfg.splitlines())
+    gather = PORTAL[PORTAL.index("stage('서버 정보 수집')"):]
+    i_env = gather.index("export ANSIBLE_INVENTORY_UNPARSED_FAILED=True")
+    assert gather.index('. "\\${WORKSPACE}/scripts/env_guard.sh"') < i_env < gather.index('ansible-playbook "${playbook}"')
+

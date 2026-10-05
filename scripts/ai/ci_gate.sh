@@ -70,8 +70,8 @@ step "ansible-playbook --syntax-check (3 채널)"
 # Windows 의 ansible 은 지원되지 않는다(실행 시 WinError). 실제로 --version 이 도는 환경(WSL/Linux Runner)에서만 돌린다.
 if ansible-playbook --version >/dev/null 2>&1; then
     export ANSIBLE_CONFIG="$PWD/ansible.cfg"
-    # 실제 inventory 스크립트로 확인한다(prodgen G11 과 같은 방식, TEST-NET 대상 1개). ansible.cfg 는 script · auto 플러그인만 켜고
-    #   unparsed_is_failed=True 라(2026-10-05 F03) `-i localhost,` 같은 목록 인벤토리는 해석되지 않아 실패한다 — CI #21 Gate 에서 드러났다.
+    # 실제 inventory 스크립트로 확인한다(prodgen G11 과 같은 방식, TEST-NET 대상 1개). ansible.cfg 는 script · auto 플러그인만 켜서
+    #   `-i localhost,` 같은 목록 인벤토리는 해석되지 않는다(경고만 내고 지나갔다 — 2026-10-05 CI #21 에서 확인).
     for ch in os-gather esxi-gather redfish-gather; do
         case "$ch" in redfish-gather) inv='[{"bmc_ip":"192.0.2.1"}]' ;; *) inv='[{"service_ip":"192.0.2.1"}]' ;; esac
         run env INVENTORY_JSON="$inv" REPO_ROOT="$PWD" ansible-playbook --syntax-check -i "$ch/inventory.sh" "$ch/site.yml"

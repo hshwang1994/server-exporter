@@ -9,7 +9,7 @@
 #   usage: ANSIBLE_INVENTORY_ENABLED=host_list,script,auto ansible-playbook -i localhost, -c local \
 #            tests/jenkins/harness/remote_timeout_probe.yml --vault-password-file <file> \
 #            -e probe_loc=git -e linux_ip=10.100.64.161 -e windows_ip=10.100.64.120 -e probe_out=/tmp/remote_timeout_probe.json
-#   저장소 ansible.cfg 가 적용되는 위치에서는 host_list 플러그인을 켜야 `-i localhost,` 를 읽는다(cfg 는 script · auto 만, unparsed_is_failed=True).
+#   저장소 ansible.cfg 가 적용되는 위치에서는 host_list 플러그인을 켜야 `-i localhost,` 를 읽는다(cfg 는 script · auto 만 켠다).
 # production tree 에는 들어가지 않는다(production_manifest forbidden tests/**).
 
 - name: remote timeout probe | targets

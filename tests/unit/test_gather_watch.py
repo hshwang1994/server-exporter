@@ -139,6 +139,7 @@ def test_gather_shell_runs_the_watch_beside_a_foreground_timeout():
     assert "0|2|4|8) rm -f" in gather, "끝까지 돈 실행의 감시 기록은 버린다"
 
 
+@pytest.mark.source_text
 def test_watch_is_shipped_in_the_production_tree():
     manifest = (REPO / "production_manifest.yml").read_text(encoding="utf-8")
     assert "  - path: scripts/gather_watch.py\n    language: python\n" in manifest
