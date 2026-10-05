@@ -212,6 +212,60 @@ def _ctx(verify_ssl):
 def _auth(username, password):
     return 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()
 
+
+# ── 리다이렉트 경계 (2026-10-05 F04) ─────────────────────────────────────────────
+# 표준 urllib 리다이렉트 처리기는 다른 host · 다른 port · https→http 로 이동할 때도 Authorization(Basic)을 그대로 옮긴다 —
+# 수집 계정이 BMC 가 아닌 곳으로 갈 수 있다. 또 POST 가 301~303 을 받으면 본문 없는 GET 으로 바꿔 보내고 그 GET 의 상태를
+# POST 결과로 돌려준다. 이 모듈의 모든 HTTP 호출은 아래 `_urlopen` 하나를 지나며:
+#   - GET/HEAD 는 같은 origin(scheme · host · port) 으로만 따라간다 (같은 BMC 안의 정상 리다이렉트는 그대로 동작)
+#   - 다른 origin · 하향(https→http)은 따라가지 않는다 → 그 30x 가 HTTPError 로 호출자에게 간다 (사유에 도착 origin)
+#   - 쓰기(POST · PATCH · DELETE)는 어떤 리다이렉트도 따라가지 않는다 — 재전송도 GET 변환도 없다
+# nextLink 의 host 검사(_nextlink_path)와 별개다. 계정 복구 로직은 바꾸지 않는다.
+if HAS_URLLIB:
+    _STDLIB_URLOPEN = urlreq.urlopen
+
+    class _SameOriginRedirect(urlreq.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            method = req.get_method()
+            if method not in ('GET', 'HEAD'):
+                raise urlerr.HTTPError(req.full_url, code, 'redirect not followed for %s' % method, headers, fp)
+            target = _origin_of(newurl)
+            if target is None or target != _origin_of(req.full_url):
+                where = '%s://%s' % (target[0], target[1]) if target else 'unparsable location'
+                raise urlerr.HTTPError(req.full_url, code, 'redirect blocked: different origin %s' % where, headers, fp)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+else:  # pragma: no cover - urllib 은 표준 라이브러리다
+    _STDLIB_URLOPEN = None
+
+_OPENERS = {}
+
+
+def _origin_of(url):
+    """(scheme, host, port) — 기본 포트를 채운다. 해석할 수 없으면 None (따라가지 않는다)."""
+    try:
+        parts = _urlparse.urlsplit(url)
+        scheme = (parts.scheme or '').lower()
+        port = parts.port or {'https': 443, 'http': 80}.get(scheme)
+        return (scheme, (parts.hostname or '').lower(), port)
+    except ValueError:
+        return None
+
+
+def _urlopen(req, verify_ssl, timeout):
+    """HTTP 호출의 단일 진입점 — verify_ssl 별 opener(TLS context + 같은 origin 리다이렉트 처리기)를 1회 만들어 재사용한다.
+
+    시험 대역이 urlreq.urlopen 을 바꿔 두었으면 그 대역을 그대로 부른다 — 기존 단위 시험 seam 과 통합 시험의 네트워크 차단
+    가드(tests/integration/conftest.py)를 유지하기 위해서다. 운영 경로에서는 언제나 아래 opener 를 쓴다.
+    """
+    if urlreq.urlopen is not _STDLIB_URLOPEN:
+        return urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout)
+    key = bool(verify_ssl)
+    opener = _OPENERS.get(key)
+    if opener is None:
+        opener = urlreq.build_opener(urlreq.HTTPSHandler(context=_ctx(verify_ssl)), _SameOriginRedirect())
+        _OPENERS[key] = opener
+    return opener.open(req, timeout=timeout)
+
 # ── 인증 응답 관측 (2026-08-11 Phase 5-A) ──────────────────────────────────────
 # 자격증명을 실은 요청이 받은 **첫 HTTP status** 만 기록한다.
 #   - 새 요청을 만들지 않는다. 이미 보내는 요청의 반환값만 본다 → 인증 시도 횟수 불변
@@ -361,7 +415,8 @@ def evidence_state():
 # 요청을 보내지 않고 건너뛴다 (소켓 timeout 은 연산 단위라 느린 응답을 wall-clock 으로 끊지 못한다 —
 # 그 한계는 Ansible task timeout 이 맡는다).
 _RESPONSE_CACHE = {}
-_CACHE = {'enabled': False, 'hits': 0, 'misses': 0}
+_CACHE = {'enabled': False, 'hits': 0, 'misses': 0, 'bytes': 0}
+_LAST_BODY = {'bytes': 0}    # 직전 _get_impl 이 읽은 원문 길이 — 캐시 총량(MAX_CACHE_BYTES) 계산용 (2026-10-05 F07)
 _DEADLINE = {'at': None, 'seconds': 0, 'exceeded': False}
 
 
@@ -380,14 +435,16 @@ def _reset_response_cache(enabled=False):
     _CACHE['enabled'] = bool(enabled)
     _CACHE['hits'] = 0
     _CACHE['misses'] = 0
+    _CACHE['bytes'] = 0
 
 
 def _invalidate_response_cache():
     _RESPONSE_CACHE.clear()
+    _CACHE['bytes'] = 0
 
 
 def cache_stats():
-    return {'hits': _CACHE['hits'], 'misses': _CACHE['misses'], 'entries': len(_RESPONSE_CACHE)}
+    return {'hits': _CACHE['hits'], 'misses': _CACHE['misses'], 'entries': len(_RESPONSE_CACHE), 'bytes': _CACHE['bytes']}
 
 
 def _set_deadline(seconds):
@@ -466,11 +523,15 @@ def _get(bmc_ip, path, username, password, timeout, verify_ssl):
             _CACHE['hits'] += 1
             return hit[0], copy.deepcopy(hit[1]), hit[2]
         _CACHE['misses'] += 1
+    _LAST_BODY['bytes'] = 0
     status, data, err = _get_impl(bmc_ip, path, username, password, timeout, verify_ssl)
     _record_auth_status(status)
+    # 항목 수(MAX_CACHE_ENTRIES)와 원문 총량(MAX_CACHE_BYTES, 2026-10-05 F07) 둘 다 상한 — 넘으면 새 응답은 캐시하지 않는다(처리는 그대로)
+    size = _LAST_BODY['bytes']
     if (_CACHE['enabled'] and status == 200 and not err and isinstance(data, dict)
-            and len(_RESPONSE_CACHE) < MAX_CACHE_ENTRIES):
+            and len(_RESPONSE_CACHE) < MAX_CACHE_ENTRIES and _CACHE['bytes'] + size <= MAX_CACHE_BYTES):
         _RESPONSE_CACHE[key] = (status, copy.deepcopy(data), err)
+        _CACHE['bytes'] += size
     return status, data, err
 
 
@@ -485,13 +546,14 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             # Round 17 #18: 성공 path 의 json.loads 를 지역 guard 로 감싼다.
             # 200(또는 2xx) + 빈 body 는 {}(tolerant), 비-JSON body(프록시 HTML/잘린 응답)는
             # err 설정. 둘 다 실제 status 를 보존(기존엔 함수-레벨 except 로 status 0 오보).
             # 빈 vs 비-JSON 구분: ServiceRoot 같은 detect 경로에서 malformed body 는 명확히
             # 실패로 남겨야 함(빈 {} 로 진행해 vendor=unknown 으로 새지 않게).
             raw = _read_capped(resp)
+            _LAST_BODY['bytes'] = len(raw)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -529,7 +591,7 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
@@ -563,7 +625,7 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             return resp.status, {}, None
     except urlerr.HTTPError as e:
         try:    body_err = json.loads(e.read(MAX_BODY_BYTES + 1).decode('utf-8', errors='replace'))
@@ -605,7 +667,7 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
     _invalidate_response_cache()   # P2
     req = urlreq.Request(url, data=payload, method='PATCH', headers=headers)
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
@@ -677,6 +739,8 @@ _CODE_NON_BLOCKING_SUBRESOURCE = 'subresource_non_blocking'
 MAX_COLLECTION_PAGES = 64              # Members@odata.nextLink 페이지 상한 (순환 · 폭주 방어)
 MAX_BODY_BYTES = 8 * 1024 * 1024       # 2026-10-03 (P2): 응답 본문 상한 — 초과 시 status 는 보존하고 body 는 버린다
 MAX_CACHE_ENTRIES = 512                # 2026-10-03 (P2): 프로세스 내 200 응답 캐시 항목 상한
+MAX_CACHE_BYTES = 8 * 1024 * 1024      # 2026-10-05 (F07): 캐시 원문 총량 상한 — 실측 host 당 응답 합 0.2~0.64 MB 의 10배 이상
+                                       #   (종전에는 항목 수만 있어 이론상 512 × 8 MiB 까지 쌓일 수 있었다)
 
 
 def _err(section, message, detail=None, code=None):
@@ -1306,7 +1370,7 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
     realm_header = None
     try:
         # 무인증으로 시도 — 200이면 realm 없음 (이미 다른 단계에서 처리)
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             return None
     except urlerr.HTTPError as e:
         # 401/403일 때 WWW-Authenticate 헤더에서 realm 추출
@@ -1348,7 +1412,7 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             # Round 17 #18: 성공 path json.loads 지역 guard — 200+빈 body 는 {}(tolerant),
             # 비-JSON body 는 err 설정. status 0 오보 방지 + detect 경로 malformed 명확 실패.
             raw = _read_capped(resp)
@@ -5426,8 +5490,8 @@ def _get_response_etag(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
-            resp.read()
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+            _read_capped(resp)          # 2026-10-05: 다른 호출처럼 상한 안에서만 읽는다 (종전에는 상한 없이 읽었다)
             etag = resp.headers.get('ETag') if hasattr(resp, 'headers') else None
             _record_auth_status(resp.status)
             return etag or None

@@ -67,7 +67,7 @@ def test_cache_serves_repeat_reads_with_deep_copies(monkeypatch):
     d2["Links"]["Chassis"].append("mutated")
     st3, d3, _ = rg._get(BMC, "Systems/1", *CREDS)
     assert d3["Links"]["Chassis"] == [{"@odata.id": "/x"}], "hit 를 고쳐도 캐시 원본은 바뀌지 않는다"
-    assert len(calls) == 1 and rg.cache_stats() == {"hits": 2, "misses": 1, "entries": 1}
+    assert len(calls) == 1 and rg.cache_stats() == {"hits": 2, "misses": 1, "entries": 1, "bytes": 0}
 
 
 def test_cache_is_keyed_by_username_and_skips_non_200_or_non_dict(monkeypatch):
