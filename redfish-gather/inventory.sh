@@ -25,9 +25,12 @@ INVENTORY_JSON 형식:
 """
 import json, os, pathlib, re, sys
 
+# re.ASCII (2026-10-05 F03): \d 가 전각 · 아랍 숫자 같은 비ASCII 숫자까지 받아 연결 단계에서야 실패하던 것을 여기서 거부한다.
+#   Jenkins Validate(Jenkinsfile_portal seAcceptTargets)도 같은 규칙이다 — 사례 표 tests/fixtures/input_validation/cases.json.
 _IP_PATTERN = re.compile(
     r'^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}'
-    r'(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$'
+    r'(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$',
+    re.ASCII,
 )
 
 def error(msg):
@@ -103,7 +106,13 @@ def main():
 
     hostvars, host_keys, seen = {}, [], set()
     for idx, host in enumerate(payload):
-        ip = (host.get("bmc_ip") or host.get("ip") or "").strip()
+        # 값 종류 오류는 traceback 대신 명확한 오류로 (2026-10-05 F03) — 허용 범위는 그대로다.
+        if not isinstance(host, dict):
+            error(f"항목[{idx}] 은 객체여야 합니다")
+        value = host.get("bmc_ip") or host.get("ip") or ""
+        if not isinstance(value, str):
+            error(f"'bmc_ip' 또는 'ip' 값은 문자열이어야 합니다 (항목[{idx}])")
+        ip = value.strip()
         if not ip:
             error(f"'bmc_ip' 또는 'ip' 필드 누락 (항목[{idx}])")
         validate_ip(ip, idx)

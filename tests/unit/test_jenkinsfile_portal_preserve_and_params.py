@@ -115,8 +115,10 @@ def test_inventory_shape_errors_are_explicit_without_new_rejections():
     assert "JsonSlurperClassic" not in TEXT, "sandbox 가 거부하는 생성자 — 운영 파이프라인에 두지 않는다"
     parse = VALIDATE[VALIDATE.index("hosts = readJSON("):]
     assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in parse[:600], "파싱 실패 처리는 interruption 을 삼키지 않는다"
-    assert "inventory_json 은 JSON 배열이어야 합니다" in VALIDATE
-    assert "은 객체여야 합니다" in VALIDATE
+    # 2026-10-05 (F03): 원소 규칙은 inventory.sh 와 같은 함수 seAcceptTargets 로 옮겼다 (tests/unit/test_input_acceptance_parity.py)
+    assert "seAcceptTargets(hosts, params.target_type.trim())" in VALIDATE
+    assert "inventory_json 은 JSON 배열이어야 합니다" in TEXT
+    assert "은 객체여야 합니다" in TEXT
     for forbidden in ("SE_MAX_HOSTS", "eventUuid 형식", "제어문자"):
         assert forbidden not in TEXT, f"새 거부 규칙({forbidden})은 별도 계약 결정(Q2) 전에는 없다"
 

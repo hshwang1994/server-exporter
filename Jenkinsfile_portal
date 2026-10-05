@@ -238,6 +238,38 @@ Map seFilterEnvelopeLines(List rawLines, String manifestJson) {
     return [lines: lines, missing: missing, dropped: dropped]
 }
 
+// 접수 대상 결정 (2026-10-05 F03) — 각 채널 inventory.sh 와 **같은 규칙**으로 고른다. 위반이 하나라도 있으면 요청 전체를 거부한다
+//   (inventory 가 같은 입력을 exit 1 로 거부하므로, 여기서 받아들인 대상 수 == inventory host 수). 종전 Validate 는 값을 문자열로 바꾸고
+//   비어 있지 않은지만 봐서, 중복 IP 를 접수 manifest 에 두 번 넣고 inventory 는 같은 요청을 거부했다.
+//   규칙: 배열 · 원소는 객체 · 값은 (주 필드 → ip) 중 처음 참인 값(공백뿐인 주 필드는 ip 로 넘어가지 않는다) · 문자열 ·
+//   앞뒤 공백 제거(Python str.strip() 과 같은 문자 집합) · ASCII IPv4(0~255, 앞자리 0 없음) · 중복 금지.
+//   반환 [ips: [...]] 또는 [error: '...']. 같은 사례 표(tests/fixtures/input_validation/cases.json)로 inventory 와 대조한다
+//   (Python: tests/unit/test_input_acceptance_parity.py, Groovy: Jenkinsfile_ci 'Finalize Corpus').
+@NonCPS
+Map seAcceptTargets(Object hosts, String targetType) {
+    if (!(hosts instanceof List)) { return [error: 'inventory_json 은 JSON 배열이어야 합니다'] }
+    if (hosts.isEmpty()) { return [error: 'inventory_json 배열이 비어있습니다'] }
+    String primaryKey = (targetType == 'redfish') ? 'bmc_ip' : 'service_ip'
+    String ws = '[\\t\\n\\u000B\\f\\r\\u001C-\\u001F \\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]'
+    String octet = '(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])'
+    String ipv4 = octet + '\\.' + octet + '\\.' + octet + '\\.' + octet
+    List ips = []
+    Set seen = [] as Set
+    for (int idx = 0; idx < hosts.size(); idx++) {
+        def host = hosts[idx]
+        if (!(host instanceof Map)) { return [error: "inventory_json[${idx}] 은 객체여야 합니다".toString()] }
+        def raw = host[primaryKey] ?: host['ip'] ?: ''
+        if (!(raw instanceof String)) { return [error: "inventory_json[${idx}] 의 '${primaryKey}' 또는 'ip' 값은 문자열이어야 합니다".toString()] }
+        String ip = raw.replaceAll('^' + ws + '+', '').replaceAll(ws + '+$', '')
+        if (!ip) { return [error: "inventory_json[${idx}] '${primaryKey}' 또는 'ip' 필드 누락".toString()] }
+        if (!(ip ==~ ipv4)) { return [error: "inventory_json[${idx}] 유효하지 않은 IPv4 형식: '${ip}'".toString()] }
+        if (seen.contains(ip)) { return [error: "inventory_json[${idx}] IP 가 중복됩니다: '${ip}'".toString()] }
+        seen << ip
+        ips << ip
+    }
+    return [ips: ips]
+}
+
 // Gather post{always} — 결과 보존 (R7, 2026-10-03 Astra 2차). 수집이 어떻게 끝났든 Layer A → archive → stash 를 **각각 독립적으로** 시도하고,
 //   보존 증거(영구 archive 성공 + 이 빌드의 manifest + 결과 파일)가 있을 때만 workspace 를 지운다. stash 는 전달 수단일 뿐이다
 //   (finalizer 의 unstash → unarchive 사다리가 덮는다). interruption(취소·timeout)은 어느 단계에서도 삼키지 않는다.
@@ -618,27 +650,12 @@ pipeline {
                         error "[Validate] inventory_json JSON 파싱 실패: ${e.message}"
                     }
 
-                    // 종전에도 실패하던 입력(객체·비객체 원소)을 NPE 대신 명확한 오류로 — 허용 범위는 바뀌지 않는다.
-                    if (!(hosts instanceof List)) {
-                        error "[Validate] inventory_json 은 JSON 배열이어야 합니다"
+                    // 접수 대상 — inventory.sh 와 같은 규칙(seAcceptTargets). 어긋나는 요청은 노드를 고르기 전에 전체 거부한다(F03).
+                    Map acceptance = seAcceptTargets(hosts, params.target_type.trim())
+                    if (acceptance.error) {
+                        error "[Validate] ${acceptance.error}"
                     }
-                    if (hosts.size() == 0) {
-                        error "[Validate] inventory_json 배열이 비어있습니다"
-                    }
-
-                    def primaryKey = (params.target_type == 'redfish') ? 'bmc_ip' : 'service_ip'
-                    def acceptedIps = []
-                    for (int idx = 0; idx < hosts.size(); idx++) {
-                        def host = hosts[idx]
-                        if (!(host instanceof Map)) {
-                            error "[Validate] inventory_json[${idx}] 은 객체여야 합니다"
-                        }
-                        def ipVal = host[primaryKey]?.toString()?.trim() ?: host['ip']?.toString()?.trim()
-                        if (!ipVal) {
-                            error "[Validate] inventory_json[${idx}] '${primaryKey}' 또는 'ip' 필드 누락"
-                        }
-                        acceptedIps.add(ipVal)
-                    }
+                    def acceptedIps = acceptance.ips
 
                     if (!params.callbackUrl?.trim()) {
                         error "[Validate] 필수 파라미터 누락: callbackUrl"

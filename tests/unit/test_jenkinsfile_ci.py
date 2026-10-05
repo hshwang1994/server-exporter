@@ -187,6 +187,9 @@ def test_ci_corpus_runs_python_side_then_groovy_side_via_load():
     assert "findFiles(glob: 'tests/fixtures/finalize_corpus/*/gather_manifest.json')" in s
     assert "lib.seFallbackCanon()" in s and "lib.seReconcileRaw(manifestJson, outText, cpText, canon, outcome)" in s
     assert "seCorpusCompare(caseName, res," in s and "finalize_corpus_groovy.json" in s
+    # 2026-10-05 (F03): Validate 접수 규칙(seAcceptTargets)도 같은 stage 에서 실제 sandbox 로 사례 표와 대조한다
+    assert "portalText.indexOf('@NonCPS\\nMap seAcceptTargets(')" in s and "seAcceptCompare(acc, table.cases)" in s
+    assert "input_acceptance_groovy.json" in s
     assert "env.CI_STAGE_CORPUS = corpusOk ? 'PASS' : 'FAIL'" in s
     assert "seLoadCanon" not in CI and "readTrusted" not in CI
 
