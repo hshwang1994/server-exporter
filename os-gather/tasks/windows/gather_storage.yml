@@ -96,7 +96,6 @@
 #     bus_type_raw: BusType 이 protocol enum 에 대응되지 않았을 때만 원값 (아니면 null).
 #     normalize 단계 전용 근거 — _w_physical_disks 가 키를 골라 담으므로 envelope 에는 나가지 않는다.
 - name: "windows | storage | volumes + physical disks"
-  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
     function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
       $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
@@ -105,9 +104,12 @@
       catch { $c.ok = $false; $c.error = [string]$_.Exception.Message; if (-not $c.error) { $c.error = [string]$_ } }
     }
     $doc = [ordered]@{}
+    # 2026-10-05 (8차 R5): Get-Volume 의 비종료 오류는 구성요소의 try 가 잡지 못해, 조회 실패가 "볼륨 없음" 과 같게 보였다.
+    #   받은 볼륨은 그대로 두고 오류가 있으면 구성요소를 실패로 표시한다(아래 "disk component status" 가 errors[] 로 옮긴다).
     Invoke-SeComponent $doc 'volumes' {
       param($c)
-      Get-Volume |
+      $volErr = $null
+      Get-Volume -ErrorAction SilentlyContinue -ErrorVariable volErr |
       Where-Object { $_.DriveLetter -and $_.FileSystemType -ne 'Unknown' } |
       ForEach-Object {
         [void]$c.rows.Add([PSCustomObject]@{
@@ -117,6 +119,8 @@
           free  = $_.SizeRemaining
         })
       }
+      $real = @($volErr | Where-Object { [string]$_.CategoryInfo.Category -ne 'ObjectNotFound' })
+      if ($real) { throw $real[0] }
     }
     function Normalize-DiskSerial($v) {
       if (-not $v) { return $null }
@@ -422,7 +426,6 @@
 # driver 가 T11 FC-HBA API 등록 시만 — try/catch + 부재 시 graceful null). WWN 은 colon-hex 정규화.
 # source: MS docs MSFT_InitiatorPort / MSFC_* (EXTERNAL-CONTRACTS §4). lab 부재 — 사이트 실측 시 정정.
 - name: "windows | storage | initiator ports + HBA attrs"
-  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
     function Format-Wwn($v) {
       if (-not $v) { return $null }
@@ -488,7 +491,6 @@
 # 2026-09-03: vendor 는 DriverProvider(1차) / PnP Manufacturer(2차) 에서 읽는다. 2차 fallback 은
 #   PhysicalMediaType 이 InfiniBand 인 것만 남긴다 (Mellanox 이더넷 NIC 를 IB 로 세지 않는다 — B-23).
 - name: "windows | storage | infiniband adapters (best-effort)"
-  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
     $ib = @()
     try {
@@ -745,6 +747,14 @@
         {%- if (d.get(k) is mapping) and (d.get(k).get('ok') is sameas false) -%}{%- set _ = out.append(k) -%}{%- endif -%}
       {%- endfor -%}
       {{ out }}
+    # 2026-10-05 (8차 R5): 파일시스템(Get-Volume) 조회 실패 — 물리 디스크만 읽혀 섹션이 성공해도 filesystems 가 빈 이유를 남긴다
+    _w_stor_volumes_failed: >-
+      {%- set d = _w_stor_doc if (_w_stor_doc is mapping) else {} -%}
+      {{ (d.get('volumes') is mapping) and (d.get('volumes').get('ok') is sameas false) }}
+    _w_stor_volumes_error: >-
+      {%- set d = _w_stor_doc if (_w_stor_doc is mapping) else {} -%}
+      {%- set c = d.get('volumes') if (d.get('volumes') is mapping) else {} -%}
+      {{ ((c.get('error') | default('', true) | string) | replace('\n', ' ') | replace('\r', ' '))[:160] }}
   no_log: true
 
 - name: "windows | storage | build fragment"
@@ -776,6 +786,12 @@
            'message': '스토리지 정보 중 물리 디스크 정보를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
            'detail':  ('source=Win32_DiskDrive,Get-PhysicalDisk; cause=component_failed; parts=' ~ (_w_stor_parts_failed | join(',')) ~ '; disks=' ~ ((_w_physical_disks | default([])) | length))}]
             if ((_w_stor_ok | bool) and ((_w_stor_parts_failed | default([])) | length > 0)) else [])
+         + ([{
+           'section': 'storage',
+           'message': '스토리지 정보 중 파일시스템(볼륨) 정보를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  ('source=Get-Volume; cause=component_failed; parts=volumes; filesystems=' ~ ((_w_norm_filesystems | default([])) | length)
+                       ~ (('; error=' ~ _w_stor_volumes_error) if (_w_stor_volumes_error | default('', true)) else ''))}]
+            if ((_w_stor_ok | bool) and (_w_stor_volumes_failed | default(false) | bool)) else [])
          + ([{
            'section': 'storage',
            'message': '일부 디스크의 연결 인터페이스 종류를 분류하지 못해 해당 항목을 비워 두었습니다.',

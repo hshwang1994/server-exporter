@@ -15,8 +15,8 @@
 # 돌려받는 값 : _addon_result(dict → data.addon), _addon_errors(list → errors[] 1건). 이 두 변수만 읽는다.
 #
 # Add-on 이 무엇을 하든 status · sections · diagnosis 는 바뀌지 않는다 — 조립이 끝난 뒤에 돌고, 실패는 rescue 가 errors[]
-# 1건으로 가둔다. role 안 태스크 하나하나에 `timeout`(기본 300 s, `_addon_task_timeout`)을 건다 — hang 한 태스크 하나를 끊는
-# 장치이지 role 전체 · loop 누적 상한이 아니다 (Plan §6-3). 전체 제한은 Jenkins Gather 단계의 예산이 맡는다.
+# 1건으로 가둔다. 2026-10-05 (8차 R3): role 안 태스크마다 걸던 시간 제한(기본 300 s)은 없앴다 — 정상적으로 오래 걸리는 Add-on 작업을
+# 자르지 않는다. 끝나지 않는 Add-on 은 수집 실행 한계(최대 6시간, scripts/run_gather.sh)와 사용자 취소가 멈춘다.
 # 계약: docs/develop/07-addon-hook.md
 
 - name: "addon | locate"
@@ -59,10 +59,6 @@
     - name: "addon | include add-on"
       ansible.builtin.include_role:
         name: "{{ _addon_dir }}"
-        apply:
-          # role 안 **태스크 각각**의 상한. 발동하면 그 태스크가 실패해 아래 rescue 로 온다 (2026-10-03 WSL 실측:
-          # include_role apply.timeout 은 task 단위로 적용된다). 원격 자식 프로세스는 남을 수 있다 — Add-on 자체의 명령별 제한이 1차다.
-          timeout: "{{ _addon_task_timeout | default(300) | int }}"
 
     - name: "addon | result"
       ansible.builtin.set_fact:

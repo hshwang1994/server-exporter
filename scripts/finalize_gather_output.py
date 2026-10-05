@@ -268,7 +268,8 @@ def _diagnosis(observed, details, auth_success, stage, code, reason):
 def synthetic_envelope(canon: Canon, channel, ip, ctx, outcome, limit_reason=None):
     """OUTPUT 도 CHECKPOINT 도 없는 host 의 envelope — 관측된 사실만으로 단계를 정한다 (json_only 와 같은 4 분기 + outcome).
 
-    limit_reason (2026-10-05 F12): 실행이 시간 제한으로 끝났을 때 그 사유 — stalled(정체 감시) · ceiling(운영 상한) · forced(시험용 강제값).
+    limit_reason (2026-10-05 8차 R3): 수집이 실행 한계에 닿아 멈췄을 때 그 한계의 기준 — gather_limit(수집 실행 한계 6시간) ·
+      build_limit(빌드 12시간 중 남은 시간이 6시간보다 짧았다). 정체 감시 · 시험용 강제 제한은 없앴다.
     diagnosis.details(기술 evidence · 확장 metadata 영역)에만 남긴다. 사용자 문장 · failure_code 는 그대로다.
     """
     ctx = ctx or {}
@@ -459,7 +460,7 @@ def main(argv=None) -> int:
                     help='ansible 실행 결과 분류: completed | timeout | timeout_killed | failed_run | prep_failed | not_started_budget | '
                          'not_started_memory | aborted(취소·stage/global timeout) | no_agent | interrupted_unknown ...')
     ap.add_argument('--limit-reason', default='',
-                    help='시간 제한으로 끝났을 때 그 사유: stalled(정체 감시) | ceiling(운영 상한) | forced(시험용 강제값). 비우면 없음 (2026-10-05 F12)')
+                    help='실행 한계로 끝났을 때 그 한계: gather_limit(수집 실행 한계 6시간) | build_limit(빌드 12시간 안의 남은 시간). 비우면 없음 (2026-10-05 8차 R3)')
     ap.add_argument('--manifest', default='gather_manifest.json')
     ap.add_argument('--output', default='gather_output.json')
     ap.add_argument('--checkpoint', default='gather_checkpoint.jsonl')

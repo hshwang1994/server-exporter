@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -87,9 +88,7 @@ DOC_KEYS = {
 _HEADER = r"""
 $ProgressPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
-$script:__fx = @'
-__FIXTURE__
-'@ | ConvertFrom-Json
+$script:__fx = $env:SE_TEST_FIXTURE | ConvertFrom-Json
 function __Track([string]$n) { [Console]::Error.WriteLine('SE_CALL ' + $n + ' SE_END') }
 function __Err([string]$m) { New-Object System.Management.Automation.ErrorRecord ((New-Object System.Exception $m)), 'Fixture', 'NotSpecified', $null }
 """
@@ -112,7 +111,8 @@ foreach ($p in $Path) { $v = $script:__fx.registry.$p; if ($null -ne $v) { $v } 
 function Get-Service {
 [CmdletBinding()] param([Parameter(Position=0)][string[]]$Name)
 __Track ('Get-Service ' + $Name)
-foreach ($n in $Name) { $v = $script:__fx.services.$n; if ($null -ne $v) { $v } else { Write-Error "Cannot find any service with service name '$n' (fixture)" } }
+$m = $script:__fx.fail.'Get-Service'; if ($m) { Write-Error -Message $m -Category PermissionDenied -ErrorId 'CouldNotGetService'; return }
+foreach ($n in $Name) { $v = $script:__fx.services.$n; if ($null -ne $v) { $v } else { Write-Error -Message "Cannot find any service with service name '$n' (fixture)" -Category ObjectNotFound -ErrorId 'NoServiceFoundForGivenName' } }
 }""",
     "Get-Date": r"""
 function Get-Date { [datetime]$script:__fx.now }""",
@@ -121,7 +121,8 @@ function Get-NetRoute {
 [CmdletBinding()] param([string[]]$DestinationPrefix)
 __Track 'Get-NetRoute'
 $m = $script:__fx.fail.'Get-NetRoute'; if ($m) { $PSCmdlet.ThrowTerminatingError((__Err $m)) }
-foreach ($p in @($DestinationPrefix)) { if (-not @(@($script:__fx.routes) | Where-Object { $_.DestinationPrefix -eq $p }).Count) { Write-Error "no route $p (fixture)" } }
+$s = $script:__fx.soft_fail.'Get-NetRoute'; if ($s) { Write-Error -Message $s -Category InvalidOperation }
+foreach ($p in @($DestinationPrefix)) { if (-not @(@($script:__fx.routes) | Where-Object { $_.DestinationPrefix -eq $p }).Count) { Write-Error -Message "no route $p (fixture)" -Category ObjectNotFound -ErrorId 'CmdletizationQuery_NotFound_DestinationPrefix' } }
 @($script:__fx.routes) | Where-Object { @($DestinationPrefix) -contains $_.DestinationPrefix }
 }""",
     "Get-NetAdapter": r"""
@@ -133,7 +134,8 @@ __Track ($k + $(if ($byIdx) { ' -InterfaceIndex' } else { '' }))
 $m = $script:__fx.fail.$k; if ($m) { $PSCmdlet.ThrowTerminatingError((__Err $m)) }
 $r = @(@($script:__fx.adapters) | Where-Object { $IncludeHidden -or -not $_.Hidden })
 if ($Physical) { $r = @($r | Where-Object { $_.ConnectorPresent }) }
-if ($byIdx) { $r = @($r | Where-Object { @($InterfaceIndex) -contains [uint32]$_.InterfaceIndex }); if (-not $r.Count) { Write-Error "no adapter $InterfaceIndex (fixture)" } }
+if ($byIdx) { $r = @($r | Where-Object { @($InterfaceIndex) -contains [uint32]$_.InterfaceIndex }); if (-not $r.Count) { Write-Error -Message "no adapter $InterfaceIndex (fixture)" -Category ObjectNotFound } }
+$s = $script:__fx.soft_fail.$k; if ($s) { Write-Error -Message $s -Category InvalidOperation }
 $r
 }""",
     "Get-NetIPAddress": r"""
@@ -141,12 +143,14 @@ function Get-NetIPAddress {
 [CmdletBinding()] param([string[]]$AddressFamily)
 __Track 'Get-NetIPAddress'
 $m = $script:__fx.fail.'Get-NetIPAddress'; if ($m) { $PSCmdlet.ThrowTerminatingError((__Err $m)) }
+$s = $script:__fx.soft_fail.'Get-NetIPAddress'; if ($s) { Write-Error -Message $s -Category InvalidOperation }
 @($script:__fx.addresses) | Where-Object { -not $AddressFamily -or (@($AddressFamily) -contains $_.AddressFamily) }
 }""",
     "Get-DnsClientServerAddress": r"""
 function Get-DnsClientServerAddress {
 [CmdletBinding()] param([string[]]$AddressFamily)
 __Track 'Get-DnsClientServerAddress'
+$s = $script:__fx.soft_fail.'Get-DnsClientServerAddress'; if ($s) { Write-Error -Message $s -Category InvalidOperation }
 $script:__fx.dns
 }""",
     "Get-NetAdapterHardwareInfo": r"""
@@ -181,7 +185,7 @@ __Track 'Get-NetTCPConnection'
 @($script:__fx.tcp) | Where-Object { -not $State -or $_.State -eq $State }
 }""",
     "Storage": r"""
-function Get-Volume { [CmdletBinding()] param() __Track 'Get-Volume'; $script:__fx.volumes }
+function Get-Volume { [CmdletBinding()] param() __Track 'Get-Volume'; $script:__fx.volumes; $s = $script:__fx.soft_fail.'Get-Volume'; if ($s) { Write-Error -Message $s -Category InvalidOperation } }
 function Get-PhysicalDisk { [CmdletBinding()] param() __Track 'Get-PhysicalDisk'; $script:__fx.pdisks }
 function Get-Partition { [CmdletBinding()] param([string]$DriveLetter) [PSCustomObject]@{ DiskNumber = $script:__fx.os_disk_number } }
 function Get-InitiatorPort { [CmdletBinding()] param() }
@@ -199,8 +203,9 @@ SECTION_SHADOWS = {
 
 
 def prelude(section: str, fixture: dict) -> str:
-    text = _HEADER.replace("__FIXTURE__", json.dumps(fixture, separators=(",", ":")))
-    return text + "".join(_SHADOWS[s] for s in SECTION_SHADOWS[section]) + "\n"
+    """가짜 cmdlet 머리말. fixture 는 run_encoded(…, fixture) 가 환경변수 SE_TEST_FIXTURE 로 넘긴다 — 명령줄에 넣으면
+    가짜 cmdlet + fixture + 운영 스크립트가 win_shell 의 명령줄 한도(32,767 자)를 넘는다(2026-10-05 network)."""
+    return _HEADER + "".join(_SHADOWS[s] for s in SECTION_SHADOWS[section]) + "\n"
 
 
 def compact(script: str) -> str:
@@ -208,13 +213,14 @@ def compact(script: str) -> str:
     return "\n".join(ln.strip() for ln in script.splitlines() if ln.strip() and not ln.strip().startswith("#"))
 
 
-def run_encoded(script: str) -> dict:
-    """ansible.windows.win_shell 과 같은 호출. 반환 = win_shell register 모양 + stderr / 호출 목록."""
+def run_encoded(script: str, fixture: dict | None = None) -> dict:
+    """ansible.windows.win_shell 과 같은 호출. 반환 = win_shell register 모양 + stderr / 호출 목록. fixture 는 환경변수로 넘긴다."""
     command = _WIN_SHELL_PREFIX + script.strip()
     encoded = base64.b64encode(command.encode("utf-16-le")).decode("ascii")
     assert len(encoded) + 80 < _CMDLINE_LIMIT, f"테스트 명령줄이 한도를 넘는다 ({len(encoded)})"
+    env = dict(os.environ, SE_TEST_FIXTURE=json.dumps(fixture if fixture is not None else {}, separators=(",", ":")))
     proc = subprocess.run([POWERSHELL, "-noprofile", "-noninteractive", "-encodedcommand", encoded],
-                          capture_output=True, timeout=240, check=False)
+                          capture_output=True, timeout=240, check=False, env=env)
     out = proc.stdout.decode("utf-8", errors="replace").lstrip("\ufeff")
     err = proc.stderr.decode("utf-8", errors="replace")
     return {"stdout": out, "stdout_lines": out.splitlines(), "rc": proc.returncode, "stderr": err,
@@ -229,14 +235,15 @@ class PsShell:
 
     def __init__(self, section: str, fixture: dict):
         self.prelude = prelude(section, fixture)
+        self.fixture = fixture
         self.results: dict[str, dict] = {}
 
     def __call__(self, task_name: str, script: str) -> dict:
-        key = (self.prelude, script)
+        key = (self.prelude, json.dumps(self.fixture, sort_keys=True), script)
         with self._lock:
             hit = self._cache.get(key)
         if hit is None:
-            hit = run_encoded(self.prelude + compact(script))
+            hit = run_encoded(self.prelude + compact(script), self.fixture)
             with self._lock:
                 self._cache[key] = hit
         self.results[task_name] = hit
@@ -543,6 +550,10 @@ def test_failed_component_does_not_empty_its_neighbours(runs):
 INTENDED_EXTRA_ERRORS_PS = {
     ("storage", "fail"): [{"section": "storage", "message": "스토리지 정보 중 물리 디스크 정보를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.",
                           "detail": "source=Win32_DiskDrive,Get-PhysicalDisk; cause=component_failed; parts=read_disk_drives; disks=0"}],
+    # 2026-10-05 (8차 R5): 주소 조회(Get-NetIPAddress)가 실패해도 팀 인터페이스로 섹션은 성공한다 — 실패한 구성요소를 1건 남긴다(종전 기록 없음)
+    ("network", "fail"): [{"section": "network", "message": "네트워크 정보 중 일부를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.",
+                          "detail": "source=Get-NetAdapter,Get-NetRoute,Get-DnsClientServerAddress,Get-NetIPAddress; cause=component_failed; "
+                                    "parts=interfaces; interfaces=2; error=interfaces: Get-NetIPAddress: WMI provider failure (fixture)"}],
 }
 
 

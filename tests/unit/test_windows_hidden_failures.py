@@ -375,13 +375,12 @@ def _ps_users(name, which):
     text = users_text() if which == "new" else old_users_text()
     if text is None:
         return None
-    prelude = (PS._HEADER.replace("__FIXTURE__", json.dumps(fixture, separators=(",", ":")))
-               + PS._SHADOWS["Get-CimInstance"] + _USERS_SHADOWS + "\n")
+    prelude = PS._HEADER + PS._SHADOWS["Get-CimInstance"] + _USERS_SHADOWS + "\n"
     box = {}
 
     def shell(task_name, script):
         assert task_name == USERS_TASK, task_name
-        box["run"] = PS.run_encoded(prelude + PS.compact(mutate(script) if mutate else script))
+        box["run"] = PS.run_encoded(prelude + PS.compact(mutate(script) if mutate else script), fixture)
         return {k: box["run"][k] for k in ("stdout", "stdout_lines", "rc")}
     frag, ctx = run_chain(text, {}, shell)
     return {"frag": frag, "ctx": ctx, "run": box["run"]}
@@ -498,8 +497,7 @@ class SoftCimShell(PS.PsShell):
 
     def __init__(self, section: str, fixture: dict):
         super().__init__(section, fixture)
-        head = PS._HEADER.replace("__FIXTURE__", json.dumps(fixture, separators=(",", ":")))
-        self.prelude = head + "".join(_CIM_SOFT if s == "Get-CimInstance" else PS._SHADOWS[s]
+        self.prelude = PS._HEADER + "".join(_CIM_SOFT if s == "Get-CimInstance" else PS._SHADOWS[s]
                                       for s in PS.SECTION_SHADOWS[section]) + "\n"
 
 
@@ -549,3 +547,118 @@ def test_soft_cim_shell_without_failures_records_nothing(section):
     key = "_w_sys_parts_failed" if section == "system" else "_w_stor_parts_failed"
     assert ctx[key] == []
     assert not [e for e in frag["_errors_fragment"] if e["message"] in (SYS_PARTS, STOR_DISKS)]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 5. 8차 R5 (2026-10-05) — 남은 실패 누락: setup(facts) · Hyper-V 서비스 · 네트워크 조회 · Get-Volume
+# ═══════════════════════════════════════════════════════════════════════════
+import test_windows_call_consolidation_render as R  # noqa: E402
+
+MEM_VIS = "메모리 정보 중 OS 가 인식한 용량을 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+NET_PARTS = "네트워크 정보 중 일부를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+STOR_VOL = "스토리지 정보 중 파일시스템(볼륨) 정보를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+
+
+def test_memory_without_os_visible_value_explains_why_setup_failed():
+    """setup 이 실패하면 설치량은 있어도 visible_mb · free_mb 가 빈다 — 종전에는 그 이유가 없었다(섹션은 그대로 성공)."""
+    s = R.mem_120()
+    facts = {"_w_setup_ok": False, "_w_setup_detail": "WinRM: The WS-Management service cannot process the request (fixture)"}
+    frag, _ = R.render_new("memory", s["comps"], facts)
+    assert frag["_sections_collected_fragment"] == ["memory"] and frag["_data_fragment"]["memory"]["total_mb"] == 8192
+    assert frag["_data_fragment"]["memory"]["visible_mb"] is None
+    assert frag["_errors_fragment"] == [{"section": "memory", "message": MEM_VIS, "detail": (
+        "source=setup(ansible_memtotal_mb); cause=facts_failed; effect=visible_mb,free_mb=null; setup=failed; "
+        "error=WinRM: The WS-Management service cannot process the request (fixture)")}]
+
+
+def test_memory_without_os_visible_value_after_a_good_setup_says_no_value():
+    s = R.mem_120()
+    frag, _ = R.render_new("memory", s["comps"], {"_w_setup_ok": True})
+    assert [e["detail"] for e in frag["_errors_fragment"]] == [
+        "source=setup(ansible_memtotal_mb); cause=no_value; effect=visible_mb,free_mb=null"]
+
+
+def test_memory_normal_and_old_paths_are_unchanged():
+    s = R.mem_120()
+    frag, _ = R.render_new("memory", s["comps"], dict(s["facts"], _w_setup_ok=True))
+    assert frag["_errors_fragment"] == []
+    t = R.mem_total_failed()
+    frag, _ = R.render_new("memory", t["comps"], dict(t["facts"]))
+    assert [e["message"] for e in frag["_errors_fragment"]] == ["메모리 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요."]
+
+
+def test_identifier_diagnostics_do_not_blame_privilege_when_setup_failed():
+    s = R.sys_120()
+    facts = {k: v for k, v in s["facts"].items() if k not in ("ansible_product_serial", "ansible_product_uuid")}
+    frag, ctx = R.render_new("system", s["comps"], dict(facts, _w_setup_ok=False, _w_setup_detail="setup failed (fixture)"))
+    diags = ctx["_w_id_diagnostics"]
+    assert [d["message"] for d in diags] == ["시스템 제조번호를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.",
+                                             "시스템 고유 식별자를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요."]
+    assert all("cause=facts_failed" in d["detail"] and "error=setup failed (fixture)" in d["detail"] for d in diags)
+    # setup 이 정상인데 식별자 fact 만 없으면 종전대로 권한 문장
+    frag, ctx = R.render_new("system", s["comps"], dict(facts, _w_setup_ok=True))
+    assert all("cause=insufficient_privilege" in d["detail"] for d in ctx["_w_id_diagnostics"])
+
+
+@pytest.mark.parametrize("role,expected", [("True", "baremetal"), ("Installed", "baremetal"), ("False", "virtual"), ("Unknown", "unknown")])
+def test_hosting_type_does_not_guess_from_a_failed_service_query(role, expected):
+    s = R.sys_hyperv_host_domain()
+    s["comps"]["hosting"]["data"]["HyperVRole"] = role
+    _, ctx = R.render_new("system", s["comps"], s["facts"])
+    assert ctx["_w_hosting_type"] == expected
+
+
+@needs_powershell
+@pytest.mark.parametrize("services,fail,role,hosting_failed", [
+    ({}, None, "False", False),                                       # 서비스 없음(실제 NoServiceFoundForGivenName · ObjectNotFound)
+    ({"vmms": {"Status": "Running"}}, None, "True", False),
+    ({"vmms": {"Status": "Stopped"}}, None, "Installed", False),      # 역할은 설치돼 있다 — 멈춘 서비스를 "없음" 으로 보지 않는다
+    ({}, "Cannot open Service Control Manager on computer '.' (fixture)", "Unknown", True),
+])
+def test_hyperv_service_query_distinguishes_absent_state_and_failure(services, fail, role, hosting_failed):
+    fixture = copy.deepcopy(PS.SYS_DOMAIN_HV)
+    fixture["services"] = services
+    if fail:
+        fixture.setdefault("fail", {})["Get-Service"] = fail
+    frag, ctx = run_chain(new_text("system"), dict(PS._SYS_FACTS), PS.PsShell("system", fixture))
+    assert ctx["_w_hosting"]["HyperVRole"] == role
+    assert ("hosting" in ctx["_w_sys_parts_failed"]) is hosting_failed
+    if hosting_failed:
+        assert ctx["_w_hosting_type"] == "unknown"
+        assert [e["detail"] for e in frag["_errors_fragment"] if e["message"] == SYS_PARTS] == [
+            "source=Win32_OperatingSystem,Win32_ComputerSystem; cause=component_failed; parts=hosting"]
+
+
+@needs_powershell
+@pytest.mark.parametrize("soft,part", [("Get-NetAdapter", "read_adapters"), ("Get-DnsClientServerAddress", "read_dns"),
+                                       ("Get-NetIPAddress", "interfaces"), ("Get-NetRoute", "read_routes")])
+def test_network_non_terminating_query_failures_are_recorded(soft, part):
+    fixture = copy.deepcopy(PS.NET_TEAM)
+    fixture["soft_fail"] = {soft: f"{soft}: provider failure (fixture, non-terminating)"}
+    frag, ctx = run_chain(new_text("network"), {}, PS.PsShell("network", fixture))
+    assert part in ctx["_w_net_parts_failed"]
+    assert frag["_sections_collected_fragment"] == ["network"], "받은 정보로 섹션은 그대로 성공"
+    errs = [e for e in frag["_errors_fragment"] if e["message"] == NET_PARTS]
+    assert len(errs) == 1 and f"parts={part}" in errs[0]["detail"] and f"{soft}: provider failure" in errs[0]["detail"]
+    assert frag["_data_fragment"]["network"]["interfaces"], "성공한 다른 네트워크 정보는 보존"
+
+
+@needs_powershell
+@pytest.mark.parametrize("fixture_name", ["NET_TEAM", "NET_NO_TEAM"])
+def test_network_not_found_answers_are_not_failures(fixture_name):
+    """IPv6 기본 경로가 없는 호스트처럼 '찾는 항목 없음'(ObjectNotFound)은 조회 실패가 아니다 — 2026-10-05 실측(이 PC)."""
+    frag, ctx = run_chain(new_text("network"), {}, PS.PsShell("network", copy.deepcopy(getattr(PS, fixture_name))))
+    assert ctx["_w_net_parts_failed"] == [] and NET_PARTS not in _messages(frag)
+
+
+@needs_powershell
+def test_storage_volume_query_failure_is_told_apart_from_no_volumes():
+    fixture = copy.deepcopy(PS.STOR_120)
+    fixture["soft_fail"] = {"Get-Volume": "Get-Volume: provider failure (fixture, non-terminating)"}
+    frag, ctx = run_chain(new_text("storage"), {}, PS.PsShell("storage", fixture))
+    assert ctx["_w_stor_volumes_failed"] in (True, "True")
+    assert frag["_data_fragment"]["storage"]["filesystems"], "받은 볼륨은 그대로"
+    errs = [e for e in frag["_errors_fragment"] if e["message"] == STOR_VOL]
+    assert len(errs) == 1 and errs[0]["detail"].startswith("source=Get-Volume; cause=component_failed; parts=volumes; filesystems=2")
+    clean, ctx = run_chain(new_text("storage"), {}, PS.PsShell("storage", copy.deepcopy(PS.STOR_120)))
+    assert ctx["_w_stor_volumes_failed"] in (False, "False") and STOR_VOL not in _messages(clean)

@@ -3,8 +3,7 @@
 무엇을 고정하나
   - P2 캐시: 같은 (username, path) 의 200 dict 응답은 한 호출 안에서 네트워크 1회. hit 는 deep copy(aliasing 금지).
     401/비-dict/디코드 실패는 캐시하지 않음. 다른 username 은 다른 key. 쓰기 뒤 무효화. 꺼져 있으면 종전과 같음.
-  - P2 deadline: 남은 시간으로 소켓 timeout 을 줄이고, 다 쓰면 요청을 보내지 않고 `(0, {}, 'Deadline exceeded: request skipped')`
-    + notice 1회. 기본 0 = 끔.
+  - (P2 deadline 은 2026-10-05 8차 R3 에서 없앴다 — 요청마다 연결 60초 · 응답 대기만 있다. tests/unit/test_redfish_request_timeouts.py)
   - P2 응답 상한: 본문이 MAX_BODY_BYTES 를 넘으면 status 는 보존하고 body 는 버린다 (err 문자열).
   - P1 detect 모드: ServiceRoot/컬렉션 식별 + System/Manager 각 1 GET 만 — 같은 recording 의 gather 모드보다 요청이 한 자릿수.
 """
@@ -40,11 +39,9 @@ CREDS = ("u", "p", 5, False)
 @pytest.fixture(autouse=True)
 def _clean_state():
     rg._reset_response_cache(enabled=False)
-    rg._set_deadline(0)
     rg._reset_notices()
     yield
     rg._reset_response_cache(enabled=False)
-    rg._set_deadline(0)
 
 
 def _impl(table, calls):
@@ -113,46 +110,34 @@ def test_write_helpers_invalidate_cache(monkeypatch):
     assert rg._RESPONSE_CACHE == {}
 
 
-# ───────────────────────────── P2: deadline ─────────────────────────────
+# ───────────────────────────── P2: deadline (없앰) ─────────────────────────────
 
-def test_deadline_shrinks_timeout_and_skips_when_exhausted(monkeypatch):
-    now = [1000.0]
-    monkeypatch.setattr(rg.time, "monotonic", lambda: now[0])
-    rg._set_deadline(10)
-    assert rg._effective_timeout(30) == 10
-    now[0] += 7
-    assert rg._effective_timeout(30) == 3
-    now[0] += 5
-    with pytest.raises(rg._DeadlineExceeded):
-        rg._effective_timeout(30)
-    with pytest.raises(rg._DeadlineExceeded):
-        rg._effective_timeout(30)
-    assert rg.deadline_exceeded() is True
-    assert len([n for n in rg.notices() if "deadline" in n["message"]]) == 1, "notice 는 1회"
-
-
-def test_requests_are_skipped_without_network_after_deadline(monkeypatch):
+def test_requests_are_not_skipped_by_elapsed_time(monkeypatch):
+    """8차 R3: 모듈 호출 마감이 없다 — 시간이 많이 지나도 요청을 보낸다(배치 전체는 run_gather.sh 의 수집 실행 한계가 멈춘다)."""
     calls = []
 
-    def boom(*a, **k):
-        calls.append(1)
-        raise AssertionError("deadline 뒤에는 urlopen 을 부르면 안 된다")
+    class _Resp(io.BytesIO):
+        status = 200
 
-    monkeypatch.setattr(rg.urlreq, "urlopen", boom)
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, context=None, timeout=None):
+        calls.append(timeout)
+        return _Resp(b"{}")
+
+    monkeypatch.setattr(rg.urlreq, "urlopen", fake_urlopen)
     now = [0.0]
     monkeypatch.setattr(rg.time, "monotonic", lambda: now[0])
-    rg._set_deadline(1)
-    now[0] = 5.0
-    assert rg._get_impl(BMC, "Systems", *CREDS) == (0, {}, "Deadline exceeded: request skipped")
-    assert rg._get_noauth(BMC, "", 5, False) == (0, {}, "Deadline exceeded: request skipped")
-    assert rg._post(BMC, "AccountService/Accounts", {}, *CREDS) == (0, {}, "Deadline exceeded: request skipped")
-    assert rg._probe_realm_hint(BMC, 5, False) is None
-    assert calls == []
-
-
-def test_deadline_off_keeps_timeout():
-    rg._set_deadline(0)
-    assert rg._effective_timeout(30) == 30 and rg._deadline_remaining() is None
+    assert rg._get_impl(BMC, "Systems", *CREDS)[0] == 200
+    now[0] = 10 * 3600.0
+    assert rg._get_impl(BMC, "Systems", *CREDS)[0] == 200
+    assert rg._get_noauth(BMC, "", 5, False)[0] == 200
+    assert calls == [5, 5, 5], "요청마다 호출자의 응답 대기 값 그대로"
+    assert not hasattr(rg, "_set_deadline") and not hasattr(rg, "deadline_exceeded")
 
 
 # ───────────────────────────── P2: body cap ─────────────────────────────
@@ -233,7 +218,7 @@ def test_detect_mode_uses_an_order_of_magnitude_fewer_requests_than_gather(monke
     assert n_detect <= 10 < n_gather, f"detect {n_detect} vs gather {n_gather}"
 
 
-def test_gather_mode_result_exposes_cache_stats_and_deadline_flag(monkeypatch):
+def test_gather_mode_result_exposes_cache_stats_without_deadline_keys(monkeypatch):
     rec = json.loads((R740 / "recording.json").read_text(encoding="utf-8")) if (R740 / "recording.json").is_file() else None
     if rec is None:
         pytest.skip("fixture 없음")
@@ -246,5 +231,5 @@ def test_gather_mode_result_exposes_cache_stats_and_deadline_flag(monkeypatch):
     with pytest.raises(_Exit) as ei:
         rg.main()
     out = ei.value.payload
-    assert out["deadline_exceeded"] is False
+    assert not ({"deadline_exceeded", "deadline_kind"} & set(out)), "8차 R3: 모듈 마감 결과 키는 없다"
     assert out["cache"]["hits"] >= 1 and out["cache"]["misses"] >= 1, "R740 도 Systems/System.Embedded.1 재조회 1건이 hit 로 바뀐다"

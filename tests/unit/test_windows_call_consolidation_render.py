@@ -688,8 +688,32 @@ INTENDED_EXTRA_ERRORS = {
     ("system", "sys_script_failed"): [{"section": "system", "message": "서버 기본 정보 일부를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.",
                                        "detail": "source=Win32_OperatingSystem,Win32_ComputerSystem; cause=component_failed; parts=script"}],
 }
+# 2026-10-05 (8차 R5): 네트워크 조회(어댑터 · 경로 · DNS · 주소)와 파일시스템(Get-Volume) 조회 실패도 기록한다 — 종전에는 빈 값이 "성공" 이었다.
+#   섹션 실패 문장의 detail 에는 실패한 구성요소(parts=…)를 덧붙인다(종전 문장 · rc 는 그대로 앞에 남는다).
+INTENDED_EXTRA_ERRORS.update({
+    ("network", "net_interfaces_failed"): [{"section": "network", "message": "네트워크 정보 중 일부를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.",
+                                            "detail": "source=Get-NetAdapter,Get-NetRoute,Get-DnsClientServerAddress,Get-NetIPAddress; "
+                                                      "cause=component_failed; parts=interfaces; interfaces=2; "
+                                                      "error=interfaces: Get-NetIPAddress : WMI provider failure (fixture)"}],
+    ("storage", "stor_volumes_failed"): [{"section": "storage", "message": "스토리지 정보 중 파일시스템(볼륨) 정보를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.",
+                                          "detail": "source=Get-Volume; cause=component_failed; parts=volumes; filesystems=0; "
+                                                    "error=Get-Volume threw (fixture)"}],
+})
+INTENDED_ERRORS_OVERRIDE = {
+    ("network", "net_interfaces_failed_no_team"): [{"section": "network", "message": "네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.",
+                                                    "detail": "source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=1; parts=interfaces"}],
+    ("network", "net_script_failed"): [{"section": "network", "message": "네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.",
+                                        "detail": "source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=1; parts=script"}],
+}
 INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_errors_fragment"},
-                         ("storage", "windows | storage | build fragment"): {"_errors_fragment"}}
+                         ("storage", "windows | storage | build fragment"): {"_errors_fragment"},
+                         # 8차 R5: vmms 조회 실패를 "역할 없음" 으로 보지 않는다 · setup 실패를 권한 문제로 적지 않는다 · setup 실패 시 메모리 오류
+                         ("system", "windows | system | determine hosting_type"): {"_w_hosting_type"},
+                         ("system", "windows | system | build identifier diagnostics"): {"_w_id_diagnostics"},
+                         ("memory", "windows | memory | build fragment"): {"_errors_fragment"},
+                         ("network", "windows | network | build fragment"): {"_errors_fragment"}}
+# 태스크 단위로 바뀐 키(set_fact 밖) — 식별자 진단의 문장 변수(vars)에 setup 실패 문장 2개를 더했다
+INTENDED_CHANGED_TASK_KEYS = {("system", "windows | system | build identifier diagnostics"): {"vars"}}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -705,6 +729,7 @@ def test_old_and_new_chains_render_identical_fragments(section, scenario):
         expected = old_frag[key]
         if key == "_errors_fragment":
             expected = list(expected or []) + INTENDED_EXTRA_ERRORS.get((section, scenario.__name__), [])
+            expected = INTENDED_ERRORS_OVERRIDE.get((section, scenario.__name__), expected)
         assert new_frag[key] == expected, f"{section}/{scenario.__name__}: {key} 가 종전과 다르다"
     shared = shared_facts(old_ctx, new_ctx, facts)
     assert shared, "비교할 중간 변수가 없다 — 하네스가 체인을 끝까지 돌리지 못했다"
@@ -750,8 +775,11 @@ def test_downstream_tasks_are_unchanged(section):
             for k in changed:
                 for msg in re.findall(r"'message':\s*'([^']+)'", of[k]):
                     assert msg in nf[k], (name, msg)
-            assert ({k: v for k, v in new[name].items() if k not in ("timeout", "ansible.builtin.set_fact")}
-                    == {k: v for k, v in old[name].items() if k != "ansible.builtin.set_fact"}), name
+            task_changed = INTENDED_CHANGED_TASK_KEYS.get((section, name), set())
+            assert ({k: v for k, v in new[name].items() if k not in ("timeout", "ansible.builtin.set_fact") and k not in task_changed}
+                    == {k: v for k, v in old[name].items() if k != "ansible.builtin.set_fact" and k not in task_changed}), name
+            for k in task_changed:
+                assert isinstance(old[name].get(k), dict) and set(old[name][k].items()) <= set(new[name][k].items()), (name, k)
             continue
         # task-level `timeout`(Plan §6-3, 2026-10-03 GP-9) 은 hang 격리 키워드라 수집 내용과 무관하다 — 비교에서 뺀다
         assert {k: v for k, v in new[name].items() if k != "timeout"} == old[name], f"{section}: 종전 태스크 {name!r} 의 내용이 바뀌었다"
@@ -842,7 +870,7 @@ def test_all_runtime_components_fail_when_script_fails():
     (mem_no_modules, "memory", "source=Win32_PhysicalMemory; cause=no_output; fallback=os_visible; rc=0"),
     (mem_script_failed, "memory", "source=Win32_PhysicalMemory,setup; cause=no_output; rc=1"),
     (sys_os_failed_no_facts, "system", "source=Win32_OperatingSystem; cause=no_output; rc=1"),
-    (net_interfaces_failed_no_team, "network", "source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=1"),
+    (net_interfaces_failed_no_team, "network", "source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=1; parts=interfaces"),
     (stor_disks_failed_no_volumes, "storage", "source=Get-Volume,Win32_DiskDrive; cause=no_output; rc=1"),
 ])
 def test_failure_detail_keeps_per_call_rc(scenario, section, detail):

@@ -370,13 +370,18 @@ def test_total_failure_keeps_existing_single_error_with_lsblk_evidence(sbx):
 # ═══════════════════════════════════════════════════════════════════════════
 # df
 # ═══════════════════════════════════════════════════════════════════════════
-def test_df_runs_under_timeout_when_available(sbx):
+def test_df_runs_without_a_time_limit_even_when_timeout_exists(sbx):
+    """2026-10-05 (8차 R3): df 를 20초 timeout 으로 감싸던 것을 없앴다 — 느린 NFS 같은 정상 응답을 자르지 않는다.
+    끝나지 않는 df 는 수집 실행 한계(최대 6시간)와 사용자 취소가 멈춘다. timeout 이 있어도 부르지 않는다."""
     install_lsblk(sbx, json_out='{"blockdevices": []}')
     res = run_raw(sbx, timeout_log=True)
-    log = (sbx.data / "timeout.log").read_text(encoding="utf-8").splitlines()
-    # 형식 확인(timeout 20 true) 뒤 df 를 감싼다
-    assert log == ["20 true", "20 df -P -T -k"]
+    log_file = sbx.data / "timeout.log"
+    log = log_file.read_text(encoding="utf-8").splitlines() if log_file.is_file() else []
+    assert log == [], "storage 수집은 timeout 을 부르지 않는다"
     assert len([line for line in res.lines if line.startswith("FS=")]) == 3
+    text = (REPO / "os-gather" / "tasks" / "linux" / "gather_storage.yml").read_text(encoding="utf-8")
+    code = "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
+    assert "timeout" not in code and "df -P -T -k 2>/dev/null" in code
 
 
 def test_df_runs_directly_when_timeout_rejects_positional_seconds(sbx):

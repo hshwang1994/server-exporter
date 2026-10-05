@@ -42,9 +42,11 @@ if [ "${ADDON_REPO_SSL_VERIFY:-false}" != "true" ]; then
     opts=(-c http.sslVerify=false)
 fi
 export GIT_TERMINAL_PROMPT=0          # 자격증명이 없으면 묻지 않고 실패한다 (빌드가 멈추지 않는다)
+# Add-on 저장소 받기의 상한 — 2026-10-05 (8차 R3): 180 → 1800초. 수집을 시작하기 전의 준비 단계라 상한은 둔다
+#   (Git 서버가 응답하지 않으면 수집 자체가 시작하지 못한다). 정상 받기(수 초)보다 충분히 길게 둔다.
 tmo=()
 if command -v timeout >/dev/null 2>&1; then
-    tmo=(timeout 180)
+    tmo=(timeout 1800)
 fi
 
 err="$(mktemp)"

@@ -1,13 +1,14 @@
-"""scripts/gather_budget.sh — 수집 배치 예산 공식 (2026-10-03, Plan §6-2 + Astra 3차 §1).
+"""scripts/gather_budget.sh — 수집 실행 한계 계산 (2026-10-03 Plan §6-2, 2026-10-05 8차 R3 개정).
 
 고정하는 것
-  - gather = clamp(BASE + host_cap × waves, MIN, CAP); waves = ceil(H / forks); forks 는 채널·vCPU 로.
-  - 집행 예산 = min(gather, force?, HARD_DEADLINE − now − RESERVE, STAGE_LIMIT − (now − stage_start) − GRACE − POST):
-    stage_start 는 Resolve Location 끝(agent 를 얻기 전)이라 agent 대기·checkout·Add-on 준비가 길어지면 gather 가 줄고 reserve 는 줄지 않는다.
-    예상값이 충분했어도 재계산 결과가 기준. (R6, 2026-10-03)
-  - budget < MIN_START → start=false (not_started_budget). 강제값은 남은 시간을 넘지 못한다. 입력 불량은 rc 2.
+  - 시간 한계: 빌드 12시간 = 입력 확인 · 실행 위치 확인 10분 + 서버 정보 수집 단계 39000초 + 결과 확인 및 전송 1시간.
+    실행 한계 limit = min(6시간, 단계 남은 시간 − GRACE − AGENT_POST, 빌드 남은 시간 − FINALIZER − GRACE − AGENT_POST).
+    6시간을 다 줄 수 없으면 limit_source=build_limit — 6시간을 보장했다고 하지 않는다.
+  - 예상 시간(expected = BASE + host_est × waves)은 안내용이다. 실행 한계에 영향을 주지 않는다.
+  - limit < MIN_START → start=false (not_started_budget). 입력 불량은 rc 2.
   - 메모리 보호(P-1): mem_cap = floor((MemAvailable × share − fixed) / per_fork); forks = min(forks, mem_cap); mem_cap ≤ 0 → not_started_memory;
-    MemAvailable 을 못 읽으면 mem_guard=unavailable 로 기존 상한. 테스트는 SE_MEM_AVAILABLE_MB 를 명시해 결정적으로 돈다.
+    MemAvailable 을 못 읽으면 mem_guard=unavailable 로 기존 상한. 시험은 SE_MEM_AVAILABLE_MB 를 명시해 결정적으로 돈다.
+  - 8차 R1: 강제 한계 입력(SE_FORCE_SEC)은 없다 — 상위 환경에 남아 있어도 결과가 바뀌지 않는다.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ BASH = shutil.which("bash")
 pytestmark = pytest.mark.skipif(BASH is None, reason="bash 없음")
 
 T0 = 1_700_000_000
+BUILD, PRE, STAGE, FINALIZER, GATHER_MAX, GRACE, AGENT_POST, MIN_START = 43200, 600, 39000, 3600, 21600, 90, 900, 120
 
 
 def run(**env):
@@ -34,123 +36,119 @@ def run(**env):
             "SE_MEM_AVAILABLE_MB": "16000"}   # (16000×0.4 − 200)/80 = 77 ≥ OS 상한 50 → 메모리 보호가 forks 를 바꾸지 않는 기준 환경
     base.update({k: str(v) for k, v in env.items()})
     e = dict(os.environ)
-    e.pop("SE_FORCE_SEC", None)
+    for k in ("SE_FORCE_SEC", "SE_FORKS_CAP_OS", "SE_PER_FORK_MB", "SE_FIXED_MB", "SE_NODE_SHARE_PCT"):
+        e.pop(k, None)
     e.update(base)
     r = subprocess.run([BASH, str(SCRIPT)], env=e, capture_output=True, text=True)
     return r.returncode, json.loads(r.stdout.strip()) if r.stdout.strip() else None
 
 
-def test_small_os_batch_uses_min_and_starts():
+def test_fresh_build_gets_the_full_six_hours():
     rc, b = run()
     assert rc == 0 and b["start"] is True and b["reason"] == "computed"
-    assert b["forks"] == 3 and b["waves"] == 1 and b["host_cap"] == 240
-    assert b["gather"] == 600 and b["expected"] == 600, "BASE 300 + 240 = 540 < MIN 600"
-    # 2026-10-05 (F12): 예상값은 중단 기준이 아니다 — 중단 기준은 운영 상한 min(hard, stage)
-    assert b["budget"] == b["stage_remaining"] == 6900 - 90 - 180 and b["limit_source"] == "ceiling"
+    assert b["limit"] == GATHER_MAX and b["limit_source"] == "gather_limit" and b["gather_max"] == GATHER_MAX
+    assert b["stage_remaining"] == STAGE - GRACE - AGENT_POST
+    assert b["build_remaining"] == BUILD - FINALIZER - GRACE - AGENT_POST
+    assert b["forks"] == 3 and b["waves"] == 1 and b["expected"] == 300 + 240
+
+
+def test_constants_add_up_and_match_the_pipeline():
+    _, b = run()
+    c = b["constants"]
+    assert c["build"] == BUILD == c["pre"] + c["stage"] + c["finalizer"], "앞 단계가 길어도 결과 확인 및 전송에 1시간이 남는다"
+    assert (c["pre"], c["stage"], c["finalizer"], c["gather_max"], c["grace"], c["agent_post"], c["min_start"]) == (
+        PRE, STAGE, FINALIZER, GATHER_MAX, GRACE, AGENT_POST, MIN_START)
+    assert c["per_fork_mb"] == 80 and c["fixed_mb"] == 200 and c["node_share_pct"] == 40
+    for gone in ("stall", "reserve", "global", "stage_limit", "post", "cap", "min"):
+        assert gone not in c, gone
+    for gone in ("stall", "budget", "hard_remaining", "host_cap", "gather", "force"):
+        assert gone not in b, gone
+
+
+def test_expected_time_never_changes_the_limit():
+    """예상 공식이 빗나가도(큰 배치 · 느린 대상) 실행 한계는 6시간 그대로다 — 예상은 안내와 자원 계획에만 쓴다."""
+    for channel, hosts in (("os", 3), ("os", 200), ("esxi", 6), ("redfish", 10), ("redfish", 400)):
+        _, b = run(SE_CHANNEL=channel, SE_HOSTS=hosts)
+        assert b["limit"] == GATHER_MAX and b["limit_source"] == "gather_limit", (channel, hosts)
+    _, b = run(SE_CHANNEL="redfish", SE_HOSTS=200, SE_VCPU=8)
+    assert b["forks"] == 32 and b["waves"] == 7 and b["expected"] == 300 + 605 * 7
+
+
+def test_long_wait_shrinks_the_limit_and_says_so():
+    """Runner 대기 · checkout · Add-on 준비로 시간을 썼으면 그만큼만 줄고(build_limit), 결과 정리 · 보존 몫과 결과 확인 1시간은 줄지 않는다."""
+    stage_start = T0 + 60
+    now = stage_start + 5 * 3600                     # Runner 대기 5시간
+    _, b = run(SE_NOW_EPOCH=now, SE_STAGE_START_EPOCH=stage_start)
+    assert b["stage_remaining"] == stage_start + STAGE - now - GRACE - AGENT_POST == 39000 - 18000 - 990
+    assert b["limit"] == b["stage_remaining"] < GATHER_MAX and b["limit_source"] == "build_limit" and b["start"] is True
+    # 끝 무렵: 남은 시간이 MIN_START 미만이면 시작하지 않는다
+    now = stage_start + STAGE - GRACE - AGENT_POST - (MIN_START - 1)
+    _, b = run(SE_NOW_EPOCH=now, SE_STAGE_START_EPOCH=stage_start)
+    assert b["limit"] == MIN_START - 1 and b["start"] is False and b["reason"] == "not_started_budget" and b["limit_source"] == "none"
+    _, b = run(SE_NOW_EPOCH=now - 1, SE_STAGE_START_EPOCH=stage_start)
+    assert b["limit"] == MIN_START and b["start"] is True, "경계: 정확히 MIN_START 면 시작한다"
+
+
+def test_build_deadline_binds_when_the_stage_started_late():
+    """입력 확인 · 실행 위치 확인이 비정상적으로 길었으면(단계 기준점이 늦다) 빌드 끝에서 결과 확인 1시간을 뺀 값이 구속한다."""
+    stage_start = T0 + 2 * 3600
+    now = stage_start + 3 * 3600
+    _, b = run(SE_NOW_EPOCH=now, SE_STAGE_START_EPOCH=stage_start)
+    assert b["build_remaining"] == T0 + BUILD - FINALIZER - now - GRACE - AGENT_POST
+    assert b["limit"] == min(GATHER_MAX, b["stage_remaining"], b["build_remaining"]) == b["build_remaining"]
+
+
+def test_forced_limit_input_is_gone():
+    """8차 R1: 시험용 강제값은 운영 경로에서 없앴다 — 상위 환경에 SE_FORCE_SEC 이 남아 있어도 읽지 않는다."""
+    _, plain = run()
+    _, b = run(SE_FORCE_SEC=150)
+    assert b == plain
+    _, b = run(SE_FORCE_SEC="12s")
+    assert b["limit"] == GATHER_MAX, "형식이 틀린 값도 무시한다(입력 오류로 끊지도 않는다)"
+    assert "SE_FORCE_SEC" not in SCRIPT.read_text(encoding="utf-8").split("set -u", 1)[1], "본문에서 읽지 않는다(머리말 설명만)"
 
 
 def test_os_forks_default_cap_50_and_runner_env_override():
-    """OS 기본 상한 50 유지. 2026-10-04 Runner 실측(GP-18): slot 최악치 PSS 69 MB(Windows worker) → per_fork_mb 80, 13 host 트리 peak 463 MB."""
     _, b = run(SE_CHANNEL="os", SE_HOSTS=200)
-    assert b["forks"] == 50 and b["waves"] == 4 and b["gather"] == 300 + 240 * 4
-    _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_FORKS_CAP_OS=100, SE_MEM_AVAILABLE_MB=40000)   # (16000−200)/80 = 197 ≥ 100
-    assert b["forks"] == 100 and b["waves"] == 2, "Runner 노드 env 로 상향 (메모리 여유가 있을 때만 — P-1)"
+    assert b["forks"] == 50 and b["waves"] == 4 and b["expected"] == 300 + 240 * 4
+    _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_FORKS_CAP_OS=100, SE_MEM_AVAILABLE_MB=40000)
+    assert b["forks"] == 100 and b["waves"] == 2
     _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_FORKS_CAP_OS=100)
     assert b["forks"] == 77, "기준 환경(16000 MB)에서는 메모리 보호 mem_cap=77 이 노드 env 상향을 자른다"
     _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_FORKS_CAP_OS="abc")
-    assert b["forks"] == 50, "잘못된 값은 기본 상한"
+    assert b["forks"] == 50
     _, b = run(SE_CHANNEL="os", SE_HOSTS=30, SE_FORKS_CAP_OS=100)
-    assert b["forks"] == 30, "host 수가 상한보다 작으면 host 수"
+    assert b["forks"] == 30
 
 
-def test_redfish_large_batch_formula():
-    rc, b = run(SE_CHANNEL="redfish", SE_HOSTS=200, SE_VCPU=8)
-    assert b["forks"] == 32 and b["waves"] == 7 and b["host_cap"] == 605
-    assert b["gather"] == 300 + 605 * 7 == 4535 and b["expected"] == 4535
-    assert b["budget"] == min(b["hard_remaining"], b["stage_remaining"]), "예상 4535 s 로 자르지 않는다"
-    rc, b2 = run(SE_CHANNEL="redfish", SE_HOSTS=200, SE_VCPU=8, SE_REDFISH_CANDIDATES=2, SE_REDFISH_RECOVERY=1)
-    assert b2["host_cap"] == 2 * 605 + 240 and b2["gather"] == 5400, "CAP 에서 잘린다"
-
-
-def test_esxi_forks_scale_with_vcpu():
+def test_esxi_and_redfish_forks_scale_with_vcpu():
     _, b = run(SE_CHANNEL="esxi", SE_HOSTS=50, SE_VCPU=4)
     assert b["forks"] == 8 and b["waves"] == 7
+    _, b = run(SE_CHANNEL="redfish", SE_HOSTS=50, SE_VCPU=4)
+    assert b["forks"] == 16 and b["waves"] == 4
 
 
-def test_late_node_entry_shrinks_budget_but_not_reserve():
-    # 빌드 시작 후 140 분이 지나 node 에 들어왔다: HARD_DEADLINE(150 min) − now − RESERVE(990) = 600 − 990 < 0 → 시작하지 않는다.
-    _, b = run(SE_NOW_EPOCH=T0 + 140 * 60, SE_STAGE_START_EPOCH=T0 + 139 * 60, SE_CHANNEL="redfish", SE_HOSTS=4)
-    assert b["start"] is False and b["reason"] == "not_started_budget" and b["budget"] == 0
-    # 100 분 경과: 남은 3000 − 990 = 2010 → 중단 기준은 hard 상한 2010 (예상 905 가 아니다 — F12)
-    _, b = run(SE_NOW_EPOCH=T0 + 100 * 60, SE_STAGE_START_EPOCH=T0 + 99 * 60, SE_CHANNEL="redfish", SE_HOSTS=4)
-    assert b["gather"] == 905 and b["budget"] == 2010 and b["hard_remaining"] == 2010 and b["limit_source"] == "ceiling"
-    # 125 분 경과: 남은 1500 − 990 = 510 → budget 510 (gather 보다 작다), reserve 침범 없음
-    _, b = run(SE_NOW_EPOCH=T0 + 125 * 60, SE_STAGE_START_EPOCH=T0 + 124 * 60, SE_CHANNEL="redfish", SE_HOSTS=4)
-    assert b["budget"] == 510 and b["start"] is True
-
-
-def test_agent_wait_is_charged_to_stage_budget():
-    """R6 (2026-10-03 Astra 2·3차): stage_start 는 Resolve Location 끝이다 — 240 s 는 빌드 시작→stage 기준점(Validate+Resolve)의 pre 구간이지
-    agent 대기가 아니다. agent 대기는 stage_start 이후에 쌓이므로 now 와의 차이로 stage 잔여에서 그대로 차감된다.
-    산식: stage_remaining = stage_start + 6900 − now − 90 − 180, start=false ⇔ budget < 120."""
-    stage_start = T0 + 240
-    _, b = run(SE_NOW_EPOCH=stage_start + 5700, SE_STAGE_START_EPOCH=stage_start, SE_CHANNEL="os", SE_HOSTS=200)
-    assert b["stage_remaining"] == 930 and b["start"] is True and b["budget"] == 930
-    _, b = run(SE_NOW_EPOCH=stage_start + 6510, SE_STAGE_START_EPOCH=stage_start, SE_CHANNEL="os", SE_HOSTS=200)
-    assert b["stage_remaining"] == 120 and b["start"] is True, "경계: 정확히 MIN_START 면 시작한다"
-    _, b = run(SE_NOW_EPOCH=stage_start + 6511, SE_STAGE_START_EPOCH=stage_start, SE_CHANNEL="os", SE_HOSTS=200)
-    assert b["stage_remaining"] == 119 and b["start"] is False and b["reason"] == "not_started_budget"
-    _, b = run(SE_NOW_EPOCH=stage_start + 6600, SE_STAGE_START_EPOCH=stage_start, SE_CHANNEL="os", SE_HOSTS=200)
-    assert b["stage_remaining"] == 30 and b["start"] is False
-    assert b["hard_remaining"] == 9000 - (240 + 6600) - 990 == 1170, "hard 가 아니라 stage 가 구속한다"
-
-
-def test_memory_guard_caps_forks_and_the_budget_grows_with_waves():
-    """P-1: 가용 1000 MB → mem_cap = (400 − 200)/80 = 2 → OS 200 host 가 2 forks · 100 waves 로 늘고 gather 는 CAP 에 막힌다."""
-    _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_MEM_AVAILABLE_MB=1000)
+def test_memory_guard_caps_forks():
+    _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_MEM_AVAILABLE_MB=1000)        # (400 − 200)/80 = 2
     assert b["mem_guard"] == "active" and b["mem_avail_mb"] == 1000 and b["mem_cap"] == 2
-    assert b["forks"] == 2 and b["waves"] == 100
-    assert b["gather"] == 5400, "300 + 240×100 = 24300 → CAP 5400 (용량표의 근거)"
+    assert b["forks"] == 2 and b["waves"] == 100 and b["limit"] == GATHER_MAX
     _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_MEM_AVAILABLE_MB=1000, SE_FORKS_CAP_OS=100)
-    assert b["forks"] == 2, "노드 env 상한은 메모리 보호를 넘지 못한다 (상한으로만)"
-    _, b = run(SE_CHANNEL="os", SE_HOSTS=3, SE_MEM_AVAILABLE_MB=1200)   # mem_cap = (480 − 200)/80 = 3
-    assert b["forks"] == 3, "host 수가 더 작으면 host 수"
+    assert b["forks"] == 2
+    _, b = run(SE_CHANNEL="os", SE_HOSTS=3, SE_MEM_AVAILABLE_MB=1200)          # (480 − 200)/80 = 3
+    assert b["forks"] == 3
 
 
 def test_memory_guard_refuses_to_start_when_no_fork_fits():
-    rc, b = run(SE_CHANNEL="os", SE_HOSTS=10, SE_MEM_AVAILABLE_MB=500)   # (200 − 200)/80 = 0
-    assert rc == 0 and b["start"] is False and b["reason"] == "not_started_memory"
-    assert b["forks"] == 0 and b["waves"] == 0 and b["budget"] == 0 and b["mem_cap"] == 0 and b["mem_guard"] == "active"
-    assert b["constants"]["per_fork_mb"] == 80 and b["constants"]["fixed_mb"] == 200 and b["constants"]["node_share_pct"] == 40
+    rc, b = run(SE_CHANNEL="os", SE_HOSTS=10, SE_MEM_AVAILABLE_MB=500)          # (200 − 200)/80 = 0
+    assert rc == 0 and b["start"] is False and b["reason"] == "not_started_memory" and b["limit_source"] == "none"
+    assert b["forks"] == 0 and b["waves"] == 0 and b["mem_cap"] == 0 and b["mem_guard"] == "active"
 
 
 def test_memory_guard_unavailable_keeps_the_fixed_cap_and_says_so():
     _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_MEM_AVAILABLE_MB="abc")
     assert b["forks"] == 50 and b["mem_guard"] == "unavailable" and b["mem_cap"] is None and b["mem_avail_mb"] is None
     _, b = run(SE_CHANNEL="os", SE_HOSTS=200, SE_MEM_AVAILABLE_MB=1000, SE_PER_FORK_MB=20, SE_FIXED_MB=100, SE_NODE_SHARE_PCT=50)
-    assert b["mem_cap"] == (1000 * 50 // 100 - 100) // 20 == 20 and b["forks"] == 20, "실측 뒤 override 로 보정한다"
-
-
-def test_slow_checkout_and_addon_after_long_wait_consume_stage_budget():
-    """Astra 3차 §1: 긴 agent 대기 뒤 checkout/Add-on 도 지연 — stage 합산 상한에서 GRACE·POST 를 뺀 값이 집행 예산을 자른다."""
-    stage_start = T0 + 10 * 60                     # Validate+Resolve 10 분 뒤 stage 기준점(Resolve Location 끝)
-    now = stage_start + 100 * 60                   # agent 대기·checkout·준비에 100 분 (극단)
-    _, b = run(SE_NOW_EPOCH=now, SE_STAGE_START_EPOCH=stage_start, SE_CHANNEL="os", SE_HOSTS=200)
-    assert b["gather"] == 1260, "os 200 host: 300 + 240×4 (forks 상한 50 → 4 waves, 2026-10-03 Phase 5)"
-    assert b["stage_remaining"] == 6900 - 100 * 60 - 90 - 180 == 630
-    assert b["budget"] == 630 < b["gather"]
-    # 준비가 더 길어져 stage 잔여가 MIN_START 아래로 → 시작하지 않는다
-    _, b = run(SE_NOW_EPOCH=stage_start + 112 * 60, SE_STAGE_START_EPOCH=stage_start, SE_CHANNEL="os", SE_HOSTS=200)
-    assert b["start"] is False
-
-
-def test_force_replaces_gather_but_never_exceeds_remaining():
-    _, b = run(SE_FORCE_SEC=120)
-    assert b["reason"] == "forced" and b["budget"] == 120 and b["start"] is True
-    _, b = run(SE_FORCE_SEC=99999)
-    assert b["budget"] == min(b["hard_remaining"], b["stage_remaining"]) and b["budget"] < 99999
-    _, b = run(SE_FORCE_SEC=60)
-    assert b["start"] is False, "MIN_START 120 아래의 강제값도 수집을 시작하지 않는다"
+    assert b["mem_cap"] == (1000 * 50 // 100 - 100) // 20 == 20 and b["forks"] == 20
 
 
 def test_invalid_inputs_exit_2():
@@ -158,47 +156,5 @@ def test_invalid_inputs_exit_2():
     assert rc == 2 and b["start"] is False and b["reason"] == "invalid_input"
     rc, _ = run(SE_HOSTS="abc")
     assert rc == 2
-    rc, _ = run(SE_FORCE_SEC="12s")
+    rc, _ = run(SE_HOSTS=0)
     assert rc == 2
-
-
-def test_constants_match_plan():
-    _, b = run()
-    c = b["constants"]
-    assert c == {"global": 9000, "reserve": 990, "stage_limit": 6900, "grace": 90, "post": 180,
-                 "base": 300, "min": 600, "cap": 5400, "min_start": 120, "stall": 420,
-                 "per_fork_mb": 80, "node_share_pct": 40, "fixed_mb": 200}
-    assert b["stall"] == c["stall"] == 300 + 120, "가장 긴 단일 태스크 상한(Add-on 300) + 120"
-    assert c["reserve"] == 90 + 120 + 60 + 720, "GRACE + LAYER_A + ARCHIVE_STASH + FINALIZER_TOTAL"
-    assert c["stage_limit"] <= c["global"] - 4 * 60 - 720, "Validate·Resolve 4 min + finalizer 720 s 가 150 min 안에 든다"
-
-
-# ── 2026-10-05 (F12): 예상 시간과 중단 기준의 분리 ─────────────────────────────────────────────
-def test_expected_is_reported_but_the_stop_limit_is_the_operating_ceiling():
-    """예상 공식이 빗나가도 진행 중인 수집을 자르지 않는다 — 큰 배치 · 느린 host 는 운영 상한까지, 정체는 gather_watch.py 가 판단한다."""
-    for channel, hosts in (("os", 3), ("os", 200), ("esxi", 6), ("redfish", 10), ("redfish", 200)):
-        _, b = run(SE_CHANNEL=channel, SE_HOSTS=hosts)
-        assert b["expected"] == b["gather"] and b["limit_source"] == "ceiling"
-        assert b["budget"] == min(b["hard_remaining"], b["stage_remaining"]), (channel, hosts)
-        assert b["budget"] >= b["expected"] or b["expected"] == 5400, "예상이 상한보다 작으면 상한까지 기다린다"
-
-
-def test_redfish_recovery_path_fits_under_the_ceiling():
-    """F08: 복구 경로(표준 1 + 복구 4 후보)의 host 최악치는 예상(605)으로는 잘렸다 — 이제 상한(≈6630 s) 안에서 끝까지 기다린다.
-    precheck 120 + detect 120 + 수집 1260 + 401 뒤 대기 65 + 복구 4 × 240 + 그 사이 대기 3 × 65 + 복구 뒤 재수집 1260 = 3980 s."""
-    worst_host = 120 + 120 + 1260 + 65 + 4 * 240 + 3 * 65 + 1260
-    _, b = run(SE_CHANNEL="redfish", SE_HOSTS=4, SE_VCPU=4)
-    assert b["waves"] == 1 and b["budget"] >= worst_host, (b["budget"], worst_host)
-
-
-def test_forced_limit_is_labelled_and_not_the_ceiling():
-    _, b = run(SE_FORCE_SEC=150)
-    assert b["limit_source"] == "forced" and b["budget"] == 150 and b["expected"] == b["gather"]
-
-
-def test_not_started_has_no_limit_source():
-    _, b = run(SE_FORCE_SEC=60)
-    assert b["start"] is False and b["limit_source"] == "none"
-    _, b = run(SE_CHANNEL="os", SE_HOSTS=10, SE_MEM_AVAILABLE_MB=500)
-    assert b["reason"] == "not_started_memory" and b["limit_source"] == "none" and b["stall"] == 420
-

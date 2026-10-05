@@ -16,9 +16,13 @@
 # 2026-09-03: host_info 파트 추가 — dnsConfig(hostname/domain) / ipRouteConfig(gateway) /
 #   vnic IPv6 / pnic 제조사·모델 / cpuInfo.hz / quickStats.uptime. normalize_system /
 #   normalize_network / collect_network_extended 가 _e_raw_host 로 읽는다.
+#
+# 2026-10-05 (8차 R5): 모듈이 결과를 정상 모양으로 돌려주지 못한 경우(fail_json · traceback · 잘못된 결과 형태)는
+#   error · failed_parts 가 없어 실패 파트가 빈 목록이 됐고, 물리 디스크 · 컨트롤러 · 포트 · 호스트 정보가 기록 없이 비었다.
+#   physical_disks 가 목록으로 오지 않으면 실패 파트 'module' 로 보고 연결 실패와 같이 storage · system 오류로 남긴다.
+#   돌려준 정상 파트의 데이터는 그대로 쓴다.
 
 - name: "esxi | collect | physical disks (serial/wwn)"
-  timeout: "{{ _e_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   esxi_disks:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"
@@ -30,9 +34,16 @@
   failed_when: false
   no_log: true
 
+- name: "esxi | collect | result shape"
+  ansible.builtin.set_fact:
+    _e_disks_shape_ok: >-
+      {%- set v = _e_disks_result.physical_disks | default(none) -%}
+      {{ (v is not none) and (v is iterable) and (v is not string) and (v is not mapping) }}
+  no_log: true
+
 - name: "esxi | collect | store raw disks/controllers/ports"
   ansible.builtin.set_fact:
-    _e_raw_disks: "{{ _e_disks_result.physical_disks | default([]) }}"
+    _e_raw_disks: "{{ (_e_disks_result.physical_disks | default([])) if (_e_disks_shape_ok | bool) else [] }}"
     # 2026-06-22 T1: storage controllers + listening_ports (firewall) 도 동일 모듈에서 수집
     _e_raw_controllers:     "{{ _e_disks_result.controllers | default([]) }}"
     _e_raw_listening_ports: "{{ _e_disks_result.listening_ports | default([]) }}"
@@ -41,16 +52,25 @@
       {{ (_e_disks_result.host_info | default({}))
          if ((_e_disks_result.host_info | default({})) is mapping) else {} }}
     _e_disks_ok:  "{{ (_e_disks_result is not failed)
-                      and (_e_disks_result.physical_disks is defined)
+                      and (_e_disks_shape_ok | bool)
                       and (_e_disks_result.error is not defined) }}"
     # 실패 파트 목록. 구버전 모듈(failed_parts 미반환)이 섞여도 error 키만으로 최소 판정한다.
+    #   결과 모양이 아니면(모듈 일반 실패 · traceback · 잘못된 형태) 'module' — 아래에서 연결 실패와 같이 다룬다.
     _e_disks_failed_parts: >-
-      {{ _e_disks_result.failed_parts
-         | default(['connect'] if (_e_disks_result.error is defined) else []) }}
-    # 기술 근거 — errors[].detail 전용. 사용자 문장에는 넣지 않는다.
+      {%- set fp = _e_disks_result.failed_parts | default(none) -%}
+      {%- if not (_e_disks_shape_ok | bool) -%}{{ ['module'] }}
+      {%- elif fp is not none and fp is iterable and fp is not string and fp is not mapping -%}{{ fp | list }}
+      {%- elif _e_disks_result.error is defined -%}{{ ['connect'] }}
+      {%- else -%}{{ [] }}
+      {%- endif -%}
+    # 기술 근거 — errors[].detail 전용. 사용자 문장에는 넣지 않는다. 모듈 일반 실패는 그 메시지 앞부분(160자)만 남긴다.
     _e_disks_err: >-
-      {{ (_e_disks_result.error | default('', true) | string | trim)
-         | default(none, true) }}
+      {%- set e = (_e_disks_result.error | default('', true) | string | trim) -%}
+      {%- if not (_e_disks_shape_ok | bool) -%}
+        {%- set m = (_e_disks_result.msg | default('module returned no result', true) | string | replace('\n', ' ') | replace('\r', ' ') | trim) -%}
+        {%- set e = 'cause=module_failed; error=' ~ m[:160] -%}
+      {%- endif -%}
+      {{ e if e else none }}
   no_log: true
 
 - name: "esxi | collect | build disks errors fragment"
@@ -61,7 +81,7 @@
     _sections_failed_fragment:      []
     _errors_fragment: >-
       {%- set parts = _e_disks_failed_parts | default([]) -%}
-      {%- set connect = ('connect' in parts) or ('host_select' in parts) -%}  {# 2026-10-03 C8: host 선택 실패도 연결 실패와 같이 storage/system 오류로 #}
+      {%- set connect = ('connect' in parts) or ('host_select' in parts) or ('module' in parts) -%}  {# C8: host 선택 실패 · 8차 R5: 모듈 일반 실패도 연결 실패와 같이 #}
       {%- set hit_storage = connect or ('physical_disks' in parts) or ('controllers' in parts) -%}
       {%- set hit_system  = connect or ('listening_ports' in parts) or ('host_info' in parts) -%}
       {%- set out = [] -%}

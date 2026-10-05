@@ -26,14 +26,12 @@
       no_log: true
 
     - name: "redfish | account_service | invoke"
-      timeout: "{{ _rf_account_task_timeout | default(240) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       redfish_gather:
         bmc_ip:          "{{ _rf_ip }}"
         username:        "{{ _try_recovery.username | default('') }}"
         password:        "{{ _try_recovery.password | default('') }}"
         timeout:         "{{ _rf_timeout }}"
         verify_ssl:      false
-        deadline:        "{{ _rf_account_deadline | default(180) }}"
         mode:            "account_provision"
         target_username: "{{ _rf_target_account.username }}"
         target_password: "{{ _rf_target_account.password }}"

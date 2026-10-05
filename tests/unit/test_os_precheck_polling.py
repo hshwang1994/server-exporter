@@ -356,7 +356,8 @@ def test_os_channel_uses_polling_end_to_end(clock, monkeypatch):
 def test_os_gather_wires_poll_interval():
     text = (REPO / "os-gather/site.yml").read_text(encoding="utf-8")
     assert "_precheck_port_poll_interval" in text, "OS 가 폴링 간격을 넘기지 않으면 회귀 재발"
-    assert "_probe_poll_interval | default(1)" in text, "wait_for sleep 기본값 1 을 쓴다"
+    # 2026-10-05 (8차 R3): 1 → 0(포트당 1회). 연결 거부는 그 시점의 확인된 답이라 바로 다음 후보로, 응답 없는 포트는 연결 대기(10초)만큼 기다린다
+    assert "_probe_poll_interval | default(0)" in text, "포트당 1회 확인"
 
     rp = (REPO / "common/tasks/precheck/run_precheck.yml").read_text(encoding="utf-8")
     assert "port_poll_interval:" in rp

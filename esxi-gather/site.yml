@@ -58,7 +58,9 @@
           vars:
             _precheck_host: "{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}"
             _precheck_channel: "esxi"
-            _precheck_timeout: 30
+            # 프로토콜 확인(vSphere RetrieveServiceContent) 응답 대기 — 2026-10-05 (8차 R3): 30 → 1800초.
+            #   느린 ESXi(hostd)의 정상 응답을 30초에 잘라 "프로토콜 확인 실패" 로 확정하지 않는다. 연결 거부 · 무응답 포트는 그 전에 끝난다.
+            _precheck_timeout: 1800
 
         - name: "esxi | abort if precheck failed"
           ansible.builtin.fail:

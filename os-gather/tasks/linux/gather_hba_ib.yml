@@ -29,7 +29,6 @@
     #   (권한 / 장치 상태로 인한 증거 소실을 드러낸다). 파일이 없는 것은 드라이버가 그 속성을 내지
     #   않는 것이라 실패가 아니다. rd <경로> → $v (실패 시 빈 값 + ERR 줄).
     - name: "linux | hba_ib | enumerate fc_host + infiniband"
-      timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
       ansible.builtin.raw: |
         rd() {
           v=""

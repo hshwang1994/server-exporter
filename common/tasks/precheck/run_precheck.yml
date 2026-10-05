@@ -12,8 +12,8 @@
 #   _precheck_ports:      포트 목록 (기본: 채널별 기본값)
 #   _precheck_username:   인증 사용자명
 #   _precheck_password:   인증 비밀번호
-#   _precheck_timeout_port:     포트 타임아웃 (기본: 3.0)
-#   _precheck_timeout_protocol: 프로토콜 타임아웃 (기본: 15.0)
+#   _precheck_timeout_port:     포트 연결 대기 (기본: 60 — 2026-10-05 8차 R3. OS 는 후보 포트 탐색이라 10 을 넘긴다)
+#   _precheck_timeout_protocol: 프로토콜 응답 대기 (기본: _precheck_timeout, 그것도 없으면 15.0. ESXi · Redfish 는 1800, OS 는 60)
 #   _precheck_timeout_auth:     인증 타임아웃 (기본: 8.0)
 #   _precheck_timeout:          protocol/auth 공통 타임아웃 — 개별 값 미지정 시 적용.
 #                               (port 는 빠른 dead-host 감지 유지 위해 적용 제외 — Round 17 #4)
@@ -33,15 +33,15 @@
 # ==============================================================================
 
 - name: "precheck | 대상 호스트 연결 진단"
-  timeout: "{{ _precheck_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   precheck_bundle:
     host: "{{ _precheck_host }}"
     channel: "{{ _precheck_channel }}"
     ports: "{{ _precheck_ports | default(omit) }}"
     # Round 17 #4: 호출자가 넘기는 _precheck_timeout(redfish=_rf_timeout, esxi=30) 이 기존엔
     # 어디서도 읽히지 않아 dead → protocol/auth 가 항상 15/8 로 고정(느린 BMC 에서 false-negative).
-    # protocol/auth 의 fallback 으로 연결. port 는 빠른 dead-host 감지 위해 3.0 유지(미연결).
-    timeout_port: "{{ _precheck_timeout_port | default(3.0) }}"
+    # protocol/auth 의 fallback 으로 연결. port(연결 수립 대기)는 2026-10-05 (8차 R3) 3.0 → 60초 — 응답이 늦은 대상을 연결 단계에서
+    # 확정하지 않는다. 연결 거부는 바로 끝난다. OS 는 후보 포트 탐색이라 자기 값(os-gather/site.yml _probe_timeout)을 넘긴다.
+    timeout_port: "{{ _precheck_timeout_port | default(60) }}"
     timeout_protocol: "{{ _precheck_timeout_protocol | default(_precheck_timeout | default(15.0)) }}"
     timeout_auth: "{{ _precheck_timeout_auth | default(_precheck_timeout | default(8.0)) }}"
     username: "{{ _precheck_username | default(omit) }}"

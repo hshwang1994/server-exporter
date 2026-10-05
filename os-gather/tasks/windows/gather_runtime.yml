@@ -28,7 +28,6 @@
 
 - block:
     - name: "windows | runtime | timezone + NTP + firewall + ports + pagefile"
-      timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
       ansible.windows.win_shell: |
         function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
           $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }

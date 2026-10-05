@@ -6,7 +6,6 @@
 #   CIM 을 하나도 못 읽으면 섹션 failed + 사유 (종전 collected 하드코딩 — B-12).
 
 - name: "windows | hardware | Win32_ComputerSystem + Win32_BIOS"
-  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
     # windows-audit (2026-04-29): VMware/Hyper-V VM은 Win32_ComputerSystem.UUID=$null.
     # → Win32_ComputerSystemProduct.UUID fallback (ansible_product_uuid 와 동일 source).

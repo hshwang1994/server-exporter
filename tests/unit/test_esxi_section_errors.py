@@ -239,6 +239,19 @@ def test_disks_errors_fragment_is_followed_by_merge():
     assert "merge" in rest, "fragment 를 만들고 merge 를 호출하지 않으면 누적되지 않는다"
 
 
+_DISKS_SHAPE_TASK = "esxi | collect | result shape"
+
+
+def _disk_facts(result: dict[str, Any]) -> dict[str, Any]:
+    """production YAML 의 두 태스크를 차례로 렌더한다 — 결과 모양 판정 → 실패 파트 · 사유."""
+    shape = _render(_DISKS, _DISKS_SHAPE_TASK, "_e_disks_shape_ok", {"_e_disks_result": result})
+    ctx = {"_e_disks_result": result, "_e_disks_shape_ok": shape}
+    return {"shape_ok": shape,
+            "parts": _render(_DISKS, _DISKS_RAW_TASK, "_e_disks_failed_parts", ctx),
+            "err": _render(_DISKS, _DISKS_RAW_TASK, "_e_disks_err", ctx),
+            "disks": _render(_DISKS, _DISKS_RAW_TASK, "_e_raw_disks", ctx)}
+
+
 @pytest.mark.parametrize("result,expected", [
     ({"physical_disks": [], "failed_parts": ["connect"], "error": "x"}, ["connect"]),
     ({"physical_disks": [], "failed_parts": ["listening_ports"], "error": "x"},
@@ -248,9 +261,42 @@ def test_disks_errors_fragment_is_followed_by_merge():
     ({"physical_disks": [{"id": "naa.1"}]}, []),
 ])
 def test_failed_parts_wiring(result, expected):
-    got = _render(_DISKS, _DISKS_RAW_TASK, "_e_disks_failed_parts",
-                  {"_e_disks_result": result})
-    assert list(got) == expected
+    assert list(_disk_facts(result)["parts"]) == expected
+
+
+# ── 8차 R5 (2026-10-05): 모듈이 결과 모양을 돌려주지 못한 일반 실패 ─────────────────────────────────────────
+#   종전: fail_json · traceback · 잘못된 모양의 결과에는 error · failed_parts 가 없어 실패 파트가 빈 목록이 됐고 기록이 없었다
+#   (Astra 로컬 재현 — msg · rc=1 · failed=false 만 있는 결과). 이제 'module' 파트로 storage · system 오류를 남긴다.
+@pytest.mark.parametrize("result", [
+    {"msg": "MODULE FAILURE\nSee stdout/stderr for the exact error", "rc": 1, "failed": False},     # failed_when: false 뒤의 일반 실패
+    {"msg": "pyvmomi (pyVim/pyVmomi) 미설치", "failed": False},                                         # fail_json
+    {"physical_disks": "not-a-list", "failed_parts": [], "connect_ok": True},                          # 잘못된 결과 모양
+    {"physical_disks": {"id": "naa.1"}},
+    {},                                                                                                # 결과가 비었다
+])
+def test_module_general_failure_is_recorded(result):
+    f = _disk_facts(result)
+    assert f["shape_ok"] in (False, "False") and list(f["parts"]) == ["module"]
+    assert list(f["disks"]) == [], "모양이 틀린 값은 데이터로 쓰지 않는다"
+    assert str(f["err"]).startswith("cause=module_failed; error=") and "\n" not in str(f["err"])
+    assert len(str(f["err"])) <= len("cause=module_failed; error=") + 160
+    out = _disks(list(f["parts"]), f["err"])
+    assert {e["section"] for e in out} == {"storage", "system"}
+    for entry in out:
+        _assert_section_error(entry, "disks/module")
+        assert entry["detail"] == f["err"]
+
+
+def test_partial_success_keeps_the_returned_data():
+    """정상 파트의 데이터는 그대로 쓴다 — 실패한 파트만 오류로 남긴다."""
+    result = {"physical_disks": [{"id": "naa.1"}], "failed_parts": ["controllers"], "error": "controllers: boom"}
+    f = _disk_facts(result)
+    assert f["shape_ok"] in (True, "True") and list(f["parts"]) == ["controllers"] and list(f["disks"]) == [{"id": "naa.1"}]
+
+
+def test_failed_parts_that_is_not_a_list_falls_back_to_the_error_key():
+    f = _disk_facts({"physical_disks": [], "failed_parts": "connect", "error": "x"})
+    assert list(f["parts"]) == ["connect"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════

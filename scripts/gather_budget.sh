@@ -1,70 +1,65 @@
 #!/bin/bash
-# scripts/gather_budget.sh — 수집 배치 예산(초) 계산의 **단일 구현** (2026-10-03, Plan §6-2).
+# scripts/gather_budget.sh — 수집 실행 한계(초) 계산의 **단일 구현** (2026-10-03 Plan §6-2, 2026-10-05 8차 R3 개정).
 #
-# Jenkinsfile_portal 이 두 번 부른다: Gather node 진입 직후(예상값 — 로그·조기 중단 판단) 와 ansible-playbook 실행 **직전**(집행값).
-# 집행값만 timeout(1) 에 들어간다 — agent 대기 · checkout · Add-on 준비가 길어진 만큼 줄고 finalization reserve 는 줄지 않는다.
-# 모든 상수의 단위는 초(s). 값은 Phase 1·5 측정 뒤 보정한다 (초기 경험값: 2026-09-03 실측 host 최대 78 s × 3 = 240).
+# Jenkinsfile_portal 이 ansible-playbook 실행 **직전**에 한 번 부른다. 출력의 limit 이 timeout(1) 값이 된다.
+# 모든 상수의 단위는 초(s).
 #
-# 2026-10-05 (F12): **예상 시간과 중단 기준을 나눴다.** 종전에는 공식이 낸 예상값(gather)이 그대로 timeout 값이었다 — 예상이 빗나가면
-#   정상으로 진행 중인 수집도 잘렸다. 지금:
-#     expected (= gather) : 공식이 낸 예상 시간. 표시용이며, 정체 감시(scripts/gather_watch.py)가 이 시간이 지난 뒤에만 정체를 판단한다
-#     budget   (= limit)  : 실제 중단 기준 = 운영 상한 min(hard_remaining, stage_remaining) — 마무리 예비 시간은 이미 빠져 있다
-#     stall               : 예상 시간이 지난 뒤 모든 host 에서 진행이 이 시간 동안 없으면 정체 감시가 멈춘다 (420 = 가장 긴 단일 태스크 상한 300 + 120)
-#   강제값(SE_FORCE_SEC, 시험 전용 — Jenkins 파라미터 gatherBudgetForceSec)은 종전처럼 limit 을 대체한다(limit_source=forced).
+# 시간 한계 (8차 R3 — 사용자 요구: 빠른 종료보다 실제 수집 완료가 우선이다. 운영 서버의 부하 · 작업량은 미리 알 수 없다)
+#   빌드 전체 BUILD_SEC(12시간) = 입력 확인 · 실행 위치 확인 PRE_SEC(10분) + 서버 정보 수집 단계 STAGE_SEC + 결과 확인 및 전송 FINALIZER_SEC(1시간).
+#   실제 수집(ansible-playbook)은 시작부터 최대 GATHER_MAX_SEC(6시간)이다. 수집 단계 안에서, 수집이 끝난 뒤의 결과 정리 · 보존 몫(AGENT_POST_SEC)과
+#   중단 신호 뒤의 정리 시간(GRACE_SEC = timeout --kill-after)을 먼저 뺀다.
+#     limit = min(GATHER_MAX_SEC, 수집 단계 남은 시간 − GRACE − AGENT_POST, 빌드 남은 시간 − FINALIZER − GRACE − AGENT_POST)
+#   Runner 대기 · checkout · Add-on 준비로 시간을 써서 6시간을 다 줄 수 없으면 limit_source=build_limit 이다 — 6시간을 보장했다고 하지 않는다.
+#   예상 시간(expected)은 안내와 자원 계획용이다. 아무것도 그 값으로 중단하지 않는다(정체 감시 · 예상 시간 기준 중단은 2026-10-05 에 없앴다).
 #
 # 입력(환경변수)
-#   SE_NOW_EPOCH          현재 시각 (필수)            SE_BUILD_START_EPOCH  빌드 시작 (필수)        SE_STAGE_START_EPOCH  Gather stage 기준점 (필수)
-#                                                     — Resolve Location 끝(agent 를 얻기 전)에 찍는다. stage 상한이 agent 대기를 포함하므로 기준점도 대기 앞이다 (R6)
-#   SE_MEM_AVAILABLE_MB   Runner 가용 메모리 MB (기본 /proc/meminfo MemAvailable)   SE_PER_FORK_MB · SE_NODE_SHARE_PCT · SE_FIXED_MB  메모리 보호 상수 override
-#   SE_CHANNEL            os | esxi | redfish (필수)  SE_HOSTS              접수 host 수 (필수, ≥1)
-#   SE_VCPU               Runner vCPU (기본 nproc)    SE_FORCE_SEC          검증용 강제 상한 (선택, 정수) — 남은 시간을 넘지 못한다
-#   SE_REDFISH_CANDIDATES 표준 계정 후보 수 (기본 1)  SE_REDFISH_RECOVERY   복구 단계 포함 1/0 (기본 0)
-# 출력: JSON 한 줄 — forks, waves, host_cap, gather(= expected), expected, hard_remaining, stage_remaining, budget(= 중단 기준), limit_source,
-#        stall, start(true/false), reason, mem_avail_mb, mem_cap, mem_guard, 상수.
-#        reason: computed | forced | not_started_budget(시간 부족) | not_started_memory(1 fork 도 수용 못 함) | invalid_input
-#        limit_source: ceiling(운영 상한) | forced(시험용 강제값) | none(시작 안 함)
+#   SE_NOW_EPOCH          현재 시각 (필수)        SE_BUILD_START_EPOCH  빌드 시작 (필수)
+#   SE_STAGE_START_EPOCH  서버 정보 수집 단계의 기준점 (필수) — 실행 위치 확인 끝(Runner 를 얻기 전). 단계 한계가 Runner 대기를 포함하기 때문이다
+#   SE_CHANNEL            os | esxi | redfish (필수)  SE_HOSTS  접수 대상 수 (필수, ≥1)
+#   SE_VCPU               Runner vCPU (기본 nproc)
+#   SE_FORKS_CAP_OS · SE_PER_FORK_MB · SE_NODE_SHARE_PCT · SE_FIXED_MB   Runner 노드 환경변수로 두는 동시 실행 · 메모리 보호 조정값
+#   SE_MEM_AVAILABLE_MB   시험 입력 — 가용 메모리 MB. Jenkinsfile 은 이 값을 지우고 부르므로 운영에서는 /proc/meminfo 만 읽는다.
+#                         값이 있어도 동시 실행 수를 줄이거나 시작을 막을 뿐, 실행 한계는 바꾸지 못한다.
+#   (SE_FORCE_SEC 같은 강제 한계 입력은 없다 — 2026-10-05 R1 에서 운영 파라미터와 함께 없앴다. 상위 환경에 남아 있어도 읽지 않는다.)
+# 출력: JSON 한 줄 — channel, hosts, vcpu, forks, waves, expected, gather_max, stage_remaining, build_remaining, limit, limit_source,
+#        start(true/false), reason, mem_avail_mb, mem_cap, mem_guard, constants.
+#        reason: computed | not_started_budget(남은 시간 부족) | not_started_memory(1 fork 도 수용 못 함) | invalid_input
+#        limit_source: gather_limit(6시간 한계 그대로) | build_limit(빌드 남은 시간이 더 짧다) | none(시작 안 함)
 # 종료 코드: 0 계산 성공 / 2 입력 불량
 set -u
 
-# ── 상수 (초) ───────────────────────────────────────────────────────────────────
-GLOBAL_SEC=9000          # options.timeout 150 min — HARD_DEADLINE = 빌드 시작 + GLOBAL_SEC
-RESERVE_SEC=990          # 수집 종료 → Callback 종료의 실제 경로 합: GRACE 90 + LAYER_A 120 + ARCHIVE_STASH 60 + FINALIZER_TOTAL 720
-STAGE_LIMIT_SEC=6900     # Gather stage 합산 상한 115 min (= WAIT_AGENT 300 + CHECKOUT 600 + ADDON 300 + CAP 5400 + 300) — 기준점이 agent 대기 앞이라 대기가 잔여에서 차감된다
-GRACE_SEC=90             # timeout --kill-after
-POST_SEC=180             # Gather post{always}: LAYER_A 120(shell timeout) + ARCHIVE_STASH 60(archive 30 + stash 30 = Jenkinsfile PRESERVE_STEP — Tier 2 step 상한; 기본 모드에서는 stage 합산 상한(post 포함)이 집행)
+# ── 시간 한계 (초) — Jenkinsfile_portal seConstants() 와 같아야 한다 (tests/unit/test_time_limits.py) ────────────────────
+BUILD_SEC=43200          # options.timeout 12시간. 결과 확인 및 전송(post)도 이 안에서 돈다
+PRE_SEC=600              # 입력 확인 5분 + 실행 위치 확인 5분
+FINALIZER_SEC=3600       # 결과 확인 및 전송 1시간
+STAGE_SEC=39000          # 서버 정보 수집 단계 = BUILD − PRE − FINALIZER
+GATHER_MAX_SEC=21600     # 실제 수집 6시간 (시작 기준)
+GRACE_SEC=90             # timeout --kill-after — 중단 신호(INT) 뒤 ansible 이 자식까지 정리할 시간
+AGENT_POST_SEC=900       # 수집 단계 안의 결과 정리 · 보관 · 전달 · 작업 폴더 정리 몫 (단계별 제한 없이 이 몫 안에서)
+MIN_START_SEC=120        # 이보다 짧으면 시작하지 않는다 (not_started_budget)
+# ── 예상 시간 (표시 · 자원 계획용) ───────────────────────────────────────────────────────────────────────────────────
 BASE_SEC=300
-MIN_SEC=600
-CAP_SEC=5400
-MIN_START_SEC=120
-STALL_SEC=420            # 정체 판단 시간 (F12) — Add-on 태스크 상한 300 + 120. 정상 흐름의 진행 이벤트 간격은 단일 태스크 상한보다 짧다
-HOST_CAP_OS=240
-HOST_CAP_ESXI=240
-REDFISH_DEADLINE_SEC=540
-REDFISH_BACKOFF_SEC=65
-REDFISH_ACCOUNT_SEC=240
-# OS forks 기본 상한 50 — Runner 노드 환경변수 SE_FORKS_CAP_OS 로 올린다(메모리 보호가 상한으로 자른다). 2026-10-04 Runner 실측(아래)으로 메모리 상수는 확정했고
-#   forks 50 자체는 유지한다(13 host 배치 peak 트리 PSS 463 MB · 18 host 620 MB — 7.5 GB Runner 의 가용 6.1 GB 안).
+HOST_EST_OS=240          # 2026-09-03 실측 host 최대 78 s × 3
+HOST_EST_ESXI=240
+HOST_EST_REDFISH=605     # 표준 계정 수집 실측 최장(Cisco CIMC 353 s)에 여유를 둔 값 — 복구 경로는 더 걸릴 수 있다
+# ── 동시 실행 ───────────────────────────────────────────────────────────────────────────────────────────────────────
+# OS forks 기본 상한 50 — Runner 노드 환경변수 SE_FORKS_CAP_OS 로 올린다(메모리 보호가 상한으로 자른다).
 OS_FORKS_MAX=50
 ESXI_FORKS_PER_VCPU=2
 REDFISH_FORKS_PER_VCPU=4
-# ── 메모리 보호 (P-1, 2026-10-03 Astra 3차 §11-1 · 2026-10-04 Runner 실측으로 확정 — GP-18) ─────────────────────────────────────
+# ── 메모리 보호 (P-1, 2026-10-04 Runner 실측으로 확정 — GP-18) ─────────────────────────────────────────────────────────
 #   mem_cap = floor((MemAvailable_MB × NODE_SHARE_PCT/100 − FIXED_MB) / PER_FORK_MB); forks = min(forks, mem_cap).
-#   실측(2026-10-04, perf-observe Job: 같은 Runner 의 ansible 프로세스 트리를 SE_BUILD_ID 로 귀속해 smaps_rollup PSS 를 2 s 간격 샘플링; main #92~#96 · production #82,
-#   13 host 성공 배치 5회 + 18 host 혼합 1회, Runner01/02 7.5 GB · 4 vCPU):
-#     · 활성 slot 당 PSS(peak 시점, worker + 그 worker 의 ssh/자식 프로세스): 평균 36 MB (Linux 12 slot: worker 20 + 자식 ≈16) — WSL 임시값 36 과 우연히 같다
-#     · 단일 worker 최대 PSS: 58~69 MB (Windows WinRM worker — in-process 라 자식 없음) → slot 최악치 69 MB
-#     · ansible 메인 python 최대 86 MB · timeout 래퍼 0.2 MB · 트리 peak PSS 459~464 MB(13 host) · 620 MB(18 host) · MemAvailable 하락 500~620 MB · swap 0
-#   PER_FORK_MB 80 = slot 최악치 69 + 16 % 여유(평균값·RSS 합·configured forks 가 아니라 **관측 peak** 기준). FIXED_MB 200 = 메인 python 최대 86 + 래퍼 + 여유(×2.3).
-#   NODE_SHARE_PCT 40 = 15 executor Runner 에서 두 Gather 가 겹칠 수 있다는 가정의 몫(예약이 아니다) — 실측에서는 Jenkins(LeastLoad)가 동시 Gather(main+production ·
-#   main 2건)를 서로 다른 Runner 에 배치해 같은 Runner 겹침은 관측되지 않았다(다른 Runner 를 offline 으로 만들어 강제하지 않았다); 산술 2 × 620 MB = 1.24 GB < 6.1 GB × 0.4.
-#   mem_cap ≤ 0 → 1 fork 도 수용 못 함 → start=false reason=not_started_memory (waves 계산 전에 반환). MemAvailable 을 못 읽으면
-#   mem_guard=unavailable 로 두고 기존 상한으로 진행한다 — 보호가 동작한 결과로 보고하지 않는다. 노드별 override: SE_PER_FORK_MB · SE_FIXED_MB · SE_NODE_SHARE_PCT.
+#   실측(perf-observe Job, 13 host 성공 배치 5회 + 18 host 혼합 1회, Runner01/02 7.5 GB · 4 vCPU): 활성 slot 당 PSS 평균 36 MB, slot 최악치 69 MB(Windows WinRM worker),
+#   ansible 메인 python 최대 86 MB, 트리 peak 459~620 MB, swap 0. PER_FORK_MB 80 = 69 + 여유, FIXED_MB 200 = 86 + 여유.
+#   NODE_SHARE_PCT 40 = 한 Runner 에 수집 빌드가 겹칠 수 있다는 가정의 몫(예약이 아니다). 2026-10-05 측정: 같은 Runner 에 3~4 빌드가 겹쳐도 남은 메모리 4.68 GB 이상.
+#   mem_cap ≤ 0 → 1 fork 도 수용 못 함 → start=false reason=not_started_memory. MemAvailable 을 못 읽으면 mem_guard=unavailable 로 두고 기존 상한으로 진행한다.
 PER_FORK_MB_DEFAULT=80
 NODE_SHARE_PCT_DEFAULT=40
 FIXED_MB_DEFAULT=200
 
 fail() { echo "{\"start\":false,\"reason\":\"invalid_input\",\"error\":\"$1\"}"; exit 2; }
 is_int() { [[ "${1:-}" =~ ^[0-9]+$ ]]; }
+min() { if [ "$1" -lt "$2" ]; then echo "$1"; else echo "$2"; fi; }
 
 for v in SE_NOW_EPOCH SE_BUILD_START_EPOCH SE_STAGE_START_EPOCH SE_HOSTS; do
     is_int "${!v:-}" || fail "$v must be a non-negative integer"
@@ -76,20 +71,11 @@ VCPU="${SE_VCPU:-}"
 if [ -z "$VCPU" ]; then VCPU="$(nproc 2>/dev/null || echo 2)"; fi
 is_int "$VCPU" && [ "$VCPU" -ge 1 ] || VCPU=2
 if [ -n "${SE_FORKS_CAP_OS:-}" ] && is_int "$SE_FORKS_CAP_OS" && [ "$SE_FORKS_CAP_OS" -ge 1 ]; then OS_FORKS_MAX="$SE_FORKS_CAP_OS"; fi
-CAND="${SE_REDFISH_CANDIDATES:-1}"; is_int "$CAND" && [ "$CAND" -ge 1 ] || CAND=1
-RECOV="${SE_REDFISH_RECOVERY:-0}"
-FORCE="${SE_FORCE_SEC:-}"
-if [ -n "$FORCE" ]; then is_int "$FORCE" || fail "SE_FORCE_SEC must be an integer"; fi
-
-min() { if [ "$1" -lt "$2" ]; then echo "$1"; else echo "$2"; fi; }
-max() { if [ "$1" -gt "$2" ]; then echo "$1"; else echo "$2"; fi; }
 
 case "$CH" in
-    os)      FORKS=$(min "$H" "$OS_FORKS_MAX"); HOST_CAP=$HOST_CAP_OS ;;
-    esxi)    FORKS=$(min "$H" $((ESXI_FORKS_PER_VCPU * VCPU))); HOST_CAP=$HOST_CAP_ESXI ;;
-    redfish) FORKS=$(min "$H" $((REDFISH_FORKS_PER_VCPU * VCPU)))
-             HOST_CAP=$(( CAND * (REDFISH_DEADLINE_SEC + REDFISH_BACKOFF_SEC) ))
-             if [ "$RECOV" = "1" ]; then HOST_CAP=$(( HOST_CAP + REDFISH_ACCOUNT_SEC )); fi ;;
+    os)      FORKS=$(min "$H" "$OS_FORKS_MAX"); HOST_EST=$HOST_EST_OS ;;
+    esxi)    FORKS=$(min "$H" $((ESXI_FORKS_PER_VCPU * VCPU))); HOST_EST=$HOST_EST_ESXI ;;
+    redfish) FORKS=$(min "$H" $((REDFISH_FORKS_PER_VCPU * VCPU))); HOST_EST=$HOST_EST_REDFISH ;;
 esac
 [ "$FORKS" -ge 1 ] || FORKS=1
 
@@ -102,43 +88,43 @@ if [ -z "$MEM_AVAIL_MB" ] && [ -r /proc/meminfo ]; then
     MEM_AVAIL_MB="$(awk '/^MemAvailable:/ { printf "%d", $2 / 1024 }' /proc/meminfo 2>/dev/null)"
 fi
 MEM_GUARD="unavailable"; MEM_CAP="null"; MEM_AVAIL_OUT="null"
+MEM_REFUSED=false
 if is_int "${MEM_AVAIL_MB:-}" && [ "$MEM_AVAIL_MB" -gt 0 ]; then
     MEM_AVAIL_OUT="$MEM_AVAIL_MB"
     MEM_CAP=$(( (MEM_AVAIL_MB * NODE_SHARE_PCT / 100 - FIXED_MB) / PER_FORK_MB ))
     MEM_GUARD="active"
     if [ "$MEM_CAP" -le 0 ]; then
-        # 1 fork 도 수용 못 한다 — waves 계산(0 나누기) 전에 거부 결과를 돌려준다. 최소 자원 = FIXED_MB + PER_FORK_MB.
-        printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":0,"waves":0,"host_cap":%d,"gather":0,"expected":0,"hard_remaining":%d,"stage_remaining":%d,"budget":0,"limit_source":"none","stall":%d,"start":false,"reason":"not_started_memory","force":%s,"mem_avail_mb":%d,"mem_cap":%d,"mem_guard":"active","constants":{"global":%d,"reserve":%d,"stage_limit":%d,"grace":%d,"post":%d,"base":%d,"min":%d,"cap":%d,"min_start":%d,"stall":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
-            "$CH" "$H" "$VCPU" "$HOST_CAP" "$(( SE_BUILD_START_EPOCH + GLOBAL_SEC - SE_NOW_EPOCH - RESERVE_SEC ))" "$(( SE_STAGE_START_EPOCH + STAGE_LIMIT_SEC - SE_NOW_EPOCH - GRACE_SEC - POST_SEC ))" "$STALL_SEC" "${FORCE:-null}" \
-            "$MEM_AVAIL_MB" "$MEM_CAP" "$GLOBAL_SEC" "$RESERVE_SEC" "$STAGE_LIMIT_SEC" "$GRACE_SEC" "$POST_SEC" "$BASE_SEC" "$MIN_SEC" "$CAP_SEC" "$MIN_START_SEC" "$STALL_SEC" "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"
-        exit 0
+        MEM_REFUSED=true      # 1 fork 도 수용 못 한다. 최소 자원 = FIXED_MB + PER_FORK_MB
+    else
+        FORKS=$(min "$FORKS" "$MEM_CAP")
     fi
-    FORKS=$(min "$FORKS" "$MEM_CAP")
 fi
-WAVES=$(( (H + FORKS - 1) / FORKS ))
-GATHER=$(( BASE_SEC + HOST_CAP * WAVES ))
-GATHER=$(max "$GATHER" "$MIN_SEC"); GATHER=$(min "$GATHER" "$CAP_SEC")
 
-HARD_DEADLINE=$(( SE_BUILD_START_EPOCH + GLOBAL_SEC ))
-HARD_REMAINING=$(( HARD_DEADLINE - SE_NOW_EPOCH - RESERVE_SEC ))
-STAGE_REMAINING=$(( SE_STAGE_START_EPOCH + STAGE_LIMIT_SEC - SE_NOW_EPOCH - GRACE_SEC - POST_SEC ))
-
-# 중단 기준 = 운영 상한 (F12). 예상값(GATHER)으로 자르지 않는다 — 진행 중인 수집은 정체 감시가, 끝나지 않는 배치는 이 상한이 끊는다.
-LIMIT=$(min "$HARD_REMAINING" "$STAGE_REMAINING")
-BUDGET="$LIMIT"
-REASON="computed"
-LIMIT_SOURCE="ceiling"
-if [ -n "$FORCE" ]; then
-    # 시험용 강제값은 운영 상한을 대체하지만 남은 시간(hard · stage)은 넘지 못한다.
-    BUDGET=$(min "$FORCE" "$LIMIT")
-    REASON="forced"
-    LIMIT_SOURCE="forced"
+if [ "$MEM_REFUSED" = true ]; then
+    FORKS=0; WAVES=0; EXPECTED=0
+else
+    WAVES=$(( (H + FORKS - 1) / FORKS ))
+    EXPECTED=$(( BASE_SEC + HOST_EST * WAVES ))
 fi
-START=true
-if [ "$BUDGET" -lt "$MIN_START_SEC" ]; then START=false; REASON="not_started_budget"; LIMIT_SOURCE="none"; fi
-[ "$BUDGET" -lt 0 ] && BUDGET=0
 
-printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":%d,"waves":%d,"host_cap":%d,"gather":%d,"expected":%d,"hard_remaining":%d,"stage_remaining":%d,"budget":%d,"limit_source":"%s","stall":%d,"start":%s,"reason":"%s","force":%s,"mem_avail_mb":%s,"mem_cap":%s,"mem_guard":"%s","constants":{"global":%d,"reserve":%d,"stage_limit":%d,"grace":%d,"post":%d,"base":%d,"min":%d,"cap":%d,"min_start":%d,"stall":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
-    "$CH" "$H" "$VCPU" "$FORKS" "$WAVES" "$HOST_CAP" "$GATHER" "$GATHER" "$HARD_REMAINING" "$STAGE_REMAINING" "$BUDGET" "$LIMIT_SOURCE" "$STALL_SEC" "$START" "$REASON" "${FORCE:-null}" \
+STAGE_REMAINING=$(( SE_STAGE_START_EPOCH + STAGE_SEC - SE_NOW_EPOCH - GRACE_SEC - AGENT_POST_SEC ))
+BUILD_REMAINING=$(( SE_BUILD_START_EPOCH + BUILD_SEC - FINALIZER_SEC - SE_NOW_EPOCH - GRACE_SEC - AGENT_POST_SEC ))
+AVAILABLE=$(min "$STAGE_REMAINING" "$BUILD_REMAINING")
+if [ "$GATHER_MAX_SEC" -le "$AVAILABLE" ]; then
+    LIMIT=$GATHER_MAX_SEC; LIMIT_SOURCE="gather_limit"
+else
+    LIMIT=$AVAILABLE; LIMIT_SOURCE="build_limit"
+fi
+START=true; REASON="computed"
+if [ "$MEM_REFUSED" = true ]; then
+    START=false; REASON="not_started_memory"; LIMIT_SOURCE="none"
+elif [ "$LIMIT" -lt "$MIN_START_SEC" ]; then
+    START=false; REASON="not_started_budget"; LIMIT_SOURCE="none"
+fi
+[ "$LIMIT" -lt 0 ] && LIMIT=0
+
+printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":%d,"waves":%d,"expected":%d,"gather_max":%d,"stage_remaining":%d,"build_remaining":%d,"limit":%d,"limit_source":"%s","start":%s,"reason":"%s","mem_avail_mb":%s,"mem_cap":%s,"mem_guard":"%s","constants":{"build":%d,"pre":%d,"stage":%d,"finalizer":%d,"gather_max":%d,"grace":%d,"agent_post":%d,"min_start":%d,"base":%d,"host_est":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
+    "$CH" "$H" "$VCPU" "$FORKS" "$WAVES" "$EXPECTED" "$GATHER_MAX_SEC" "$STAGE_REMAINING" "$BUILD_REMAINING" "$LIMIT" "$LIMIT_SOURCE" "$START" "$REASON" \
     "$MEM_AVAIL_OUT" "$MEM_CAP" "$MEM_GUARD" \
-    "$GLOBAL_SEC" "$RESERVE_SEC" "$STAGE_LIMIT_SEC" "$GRACE_SEC" "$POST_SEC" "$BASE_SEC" "$MIN_SEC" "$CAP_SEC" "$MIN_START_SEC" "$STALL_SEC" "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"
+    "$BUILD_SEC" "$PRE_SEC" "$STAGE_SEC" "$FINALIZER_SEC" "$GATHER_MAX_SEC" "$GRACE_SEC" "$AGENT_POST_SEC" "$MIN_START_SEC" "$BASE_SEC" "$HOST_EST" \
+    "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"

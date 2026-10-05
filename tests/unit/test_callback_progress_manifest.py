@@ -119,11 +119,11 @@ def test_host_lifecycle_events_are_appended_in_order(cb, tmp_path, capsys):
     cb.v2_runner_on_ok(_Result(h, "ADDON_DONE", result={"ansible_facts": {"_addon_marker": "done"}}))
     cb.v2_runner_on_ok(_Result(h, "OUTPUT", action="ansible.builtin.debug", result={"msg": json.dumps(_envelope("10.0.0.1"))}))
     ev = _events(tmp_path)
-    # 2026-10-05 (F12): 작업 태스크(raw) 성공은 alive 진행 이벤트도 남긴다 — set_fact · debug(CHECKPOINT/OUTPUT) 는 남기지 않는다
-    assert [e["event"] for e in ev] == ["first_seen", "precheck", "cred_load", "auth_proven", "alive", "checkpoint", "addon_started",
+    # 2026-10-05 (8차 R3): 정체 감시와 그 진행 신호(alive)는 없앴다 — 작업 태스크 성공은 진행 이벤트를 남기지 않는다
+    assert [e["event"] for e in ev] == ["first_seen", "precheck", "cred_load", "auth_proven", "checkpoint", "addon_started",
                                         "addon_done", "emitted"]
     assert ev[1]["diagnosis"] == diag and ev[2]["outcome"] == "ok" and ev[2]["location"] == "git"
-    assert ev[3]["task"] == "linux | preflight" and ev[4]["task"] == "linux | preflight" and all(e["host"] == "10.0.0.1" for e in ev)
+    assert ev[3]["task"] == "linux | preflight" and all(e["host"] == "10.0.0.1" for e in ev)
     assert all(e["ip"] == "10.0.0.1" for e in ev), "first_seen 을 포함한 모든 줄에 ip 가 실린다 (Phase 5 실측 뒤 정정)"
     assert all(len(json.dumps(e, ensure_ascii=False)) <= 200 for e in ev if e["event"] != "precheck"), "precheck 외 줄은 200B 이하"
     # CHECKPOINT 는 stdout 으로 나가지 않고 파일에만 남는다
@@ -180,35 +180,13 @@ def test_unwritable_progress_path_only_warns(tmp_path, monkeypatch, capsys):
     assert "progress 기록 실패" in capsys.readouterr().err
 
 
-# ── 2026-10-05 (F12): alive 진행 이벤트 — 정체 감시(scripts/gather_watch.py)의 근거 ──────────────────────────────
-def test_alive_is_throttled_per_host_and_skips_trivial_actions(cb, tmp_path, monkeypatch):
-    clock = {"t": 1000.0}
-    monkeypatch.setattr(json_only.time, "monotonic", lambda: clock["t"])
-    a = _Host("10.0.0.7", {"ansible_host": "10.0.0.7"})
-    b = _Host("10.0.0.8", {"ansible_host": "10.0.0.8"})
-    work = lambda h, name: cb.v2_runner_on_ok(_Result(h, name, action="ansible.builtin.shell", result={"rc": 0}))
-    work(a, "linux | cpu")
-    work(a, "linux | memory")                      # 같은 host 10 s 안 — 남기지 않는다
-    work(b, "linux | cpu")                         # 다른 host 는 따로 센다
-    cb.v2_runner_on_ok(_Result(a, "linux | set facts", action="ansible.builtin.set_fact", result={"ansible_facts": {"x": 1}}))
-    cb.v2_runner_on_ok(_Result(a, "linux | rescue note", action="debug", result={"msg": "x"}))
-    cb.v2_runner_on_failed(_Result(a, "linux | disk", action="ansible.builtin.shell", result={"rc": 1, "msg": "fail"}))
-    clock["t"] += 10
-    work(a, "linux | storage")
-    alive = [(e["host"], e["task"]) for e in _events(tmp_path) if e["event"] == "alive"]
-    assert alive == [("10.0.0.7", "linux | cpu"), ("10.0.0.8", "linux | cpu"), ("10.0.0.7", "linux | storage")]
-
-
-def test_custom_modules_count_as_work(cb, tmp_path):
-    """redfish_gather · precheck_bundle 은 controller 에서 돌아도 실제 수집이다 — alive 를 남긴다 (인증 증거와는 다르다)."""
+# ── 2026-10-05 (8차 R3): 정체 감시가 없어져 진행 신호(alive)도 없다 ──────────────────────────────────────────
+def test_work_tasks_leave_no_alive_events(cb, tmp_path):
+    """종전에는 작업 태스크 성공마다(host 당 10 s 에 1번) alive 를 남겨 정체 감시가 읽었다. 감시가 없어져 진행 기록에 남기지 않는다 —
+    진행 기록은 결과 복원용 전이 이벤트(first_seen · precheck · cred_load · auth_proven · checkpoint · addon_* · emitted · lost)뿐이다."""
     h = _Host("10.0.0.9", {"ansible_host": "10.0.0.9"})
+    cb.v2_runner_on_ok(_Result(h, "linux | cpu", action="ansible.builtin.shell", result={"rc": 0}))
     cb.v2_runner_on_ok(_Result(h, "redfish | try_account | attempt", action="redfish_gather", result={"status": "success"}))
-    assert [e["event"] for e in _events(tmp_path)] == ["first_seen", "alive"]
-
-
-def test_no_progress_file_means_no_alive_state(tmp_path, monkeypatch):
-    monkeypatch.delenv("ANSIBLE_JSON_PROGRESS_FILE", raising=False)
-    plain = json_only.CallbackModule()
-    plain.v2_runner_on_ok(_Result(_Host("10.0.0.10", {"ansible_host": "10.0.0.10"}), "linux | cpu", action="shell", result={"rc": 0}))
-    assert plain._alive_at == {}
+    assert "alive" not in [e["event"] for e in _events(tmp_path)]
+    assert not hasattr(json_only, "_ALIVE_EVERY_SEC") and not hasattr(cb, "_alive_at") and not hasattr(cb, "_alive")
 

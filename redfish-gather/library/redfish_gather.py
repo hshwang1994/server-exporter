@@ -46,6 +46,7 @@ options:
 
 import copy, datetime, json, os, re, socket, sys, time, traceback
 import urllib.parse as _urlparse
+import http.client as http_client
 
 # ── 단위 변환 상수 (cycle 2026-06-04 R-4 — 매직넘버 명명) ──────────────────────
 # 주의: decimal(10^n) 과 binary(2^n) 는 의미가 다르므로 절대 통합 금지.
@@ -221,6 +222,12 @@ def _auth(username, password):
 #   - 다른 origin · 하향(https→http)은 따라가지 않는다 → 그 30x 가 HTTPError 로 호출자에게 간다 (사유에 도착 origin)
 #   - 쓰기(POST · PATCH · DELETE)는 어떤 리다이렉트도 따라가지 않는다 — 재전송도 GET 변환도 없다
 # nextLink 의 host 검사(_nextlink_path)와 별개다. 계정 복구 로직은 바꾸지 않는다.
+#
+# 연결 수립 상한(초) — 2026-10-05 (8차 R3). urllib 은 연결과 응답 읽기에 timeout 하나를 같이 쓴다. 응답 대기(모듈 timeout,
+#   site.yml _rf_timeout — 느린 BMC 의 정상 응답을 기다리려고 길게 둔다)를 연결 수립에까지 쓰지 않도록, 연결(TCP + TLS 핸드셰이크)만
+#   이 값으로 따로 끊는다. 응답 읽기의 timeout 은 읽기 한 번마다의 대기라 응답이 계속 오는 동안에는 끊지 않는다(총 시간 마감이 아니다).
+CONNECT_TIMEOUT_SEC = 60
+
 if HAS_URLLIB:
     _STDLIB_URLOPEN = urlreq.urlopen
 
@@ -234,6 +241,27 @@ if HAS_URLLIB:
                 where = '%s://%s' % (target[0], target[1]) if target else 'unparsable location'
                 raise urlerr.HTTPError(req.full_url, code, 'redirect blocked: different origin %s' % where, headers, fp)
             return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    class _SplitTimeoutHTTPSConnection(http_client.HTTPSConnection):
+        """연결 수립은 CONNECT_TIMEOUT_SEC, 연결 뒤 응답 읽기는 호출자가 준 timeout."""
+
+        def connect(self):
+            read_timeout = self.timeout
+            if isinstance(read_timeout, (int, float)) and read_timeout > CONNECT_TIMEOUT_SEC:
+                self.timeout = CONNECT_TIMEOUT_SEC
+            try:
+                super().connect()
+            finally:
+                self.timeout = read_timeout
+            if self.sock is not None and isinstance(read_timeout, (int, float)):
+                self.sock.settimeout(read_timeout)
+
+    class _SplitTimeoutHTTPSHandler(urlreq.HTTPSHandler):
+        def https_open(self, req):
+            kw = {'context': self._context}
+            if hasattr(self, '_check_hostname'):
+                kw['check_hostname'] = self._check_hostname
+            return self.do_open(_SplitTimeoutHTTPSConnection, req, **kw)
 else:  # pragma: no cover - urllib 은 표준 라이브러리다
     _STDLIB_URLOPEN = None
 
@@ -252,7 +280,8 @@ def _origin_of(url):
 
 
 def _urlopen(req, verify_ssl, timeout):
-    """HTTP 호출의 단일 진입점 — verify_ssl 별 opener(TLS context + 같은 origin 리다이렉트 처리기)를 1회 만들어 재사용한다.
+    """HTTP 호출의 단일 진입점 — verify_ssl 별 opener(TLS context + 같은 origin 리다이렉트 처리기 + 연결 · 응답 대기 분리)를
+    1회 만들어 재사용한다.
 
     시험 대역이 urlreq.urlopen 을 바꿔 두었으면 그 대역을 그대로 부른다 — 기존 단위 시험 seam 과 통합 시험의 네트워크 차단
     가드(tests/integration/conftest.py)를 유지하기 위해서다. 운영 경로에서는 언제나 아래 opener 를 쓴다.
@@ -262,7 +291,7 @@ def _urlopen(req, verify_ssl, timeout):
     key = bool(verify_ssl)
     opener = _OPENERS.get(key)
     if opener is None:
-        opener = urlreq.build_opener(urlreq.HTTPSHandler(context=_ctx(verify_ssl)), _SameOriginRedirect())
+        opener = urlreq.build_opener(_SplitTimeoutHTTPSHandler(context=_ctx(verify_ssl)), _SameOriginRedirect())
         _OPENERS[key] = opener
     return opener.open(req, timeout=timeout)
 
@@ -293,7 +322,7 @@ def auth_evidence():
 
 
 # ── attempt 단위 인증 증거 파일 (2026-10-03, Plan §6-3 D7) ──────────────────────────
-# task timeout(backstop)으로 이 프로세스가 끊기면 Ansible 에는 register 가 남지 않는다. 그때 rescue 가 "자격 오류" 를
+# 이 프로세스가 결과 없이 끊기면(예외 · 연결 끊김 · 강제 종료 — 2026-10-05 부터 작업 단위 시간 제한은 없다) Ansible 에는 register 가 남지 않는다. 그때 rescue 가 "자격 오류" 를
 # 추정하지 않도록, 모듈은 시작 즉시 `<evidence_dir>/<ip>/<attempt_id>.json` 을 status null 로 **새로** 만들고(같은 이름의
 # 이전 파일은 덮어쓴다) 자격을 실은 **첫 응답**을 받는 순간 first_auth_status 를 채운다. 파일에는 비밀값이 없다
 # (build/event/ip/attempt 식별자 · 후보 label/role · auth_mode · 첫 status · 요청 수 · 마지막 요청 경로 · 시각).
@@ -406,29 +435,17 @@ def evidence_state():
 # redfish-gather/site.yml 이 diagnosis.details.notices 에 싣는다
 # (envelope 13 top-level 필드 변경 아님 — CLAUDE.md §11 이 details 를 기술 evidence /
 #  확장 metadata 영역으로 규정한다).
-# ── P2 (2026-10-03): 프로세스 내 200 응답 캐시 + 모듈 호출 deadline ───────────────────────
+# ── P2 (2026-10-03): 프로세스 내 200 응답 캐시 ───────────────────────────────────────────────
 # 캐시는 host 1 · 자격 1벌 · 모듈 호출 1회 안에서만 산다 (main() 이 비운다). 200 + JSON dict 응답만,
 # (username, path) 키, hit 는 deep copy 를 돌려 parser 가 값을 바꿔도 다른 섹션에 번지지 않는다.
 # 쓰기(_post/_patch/_delete) 뒤에는 통째로 비운다. account_provision 모드에서는 켜지 않는다 —
 # 재인증 확인(_verify_standard_credential)이 다른 자격으로 같은 경로를 읽기 때문이다.
-# deadline 은 호출마다 재설정되는 wall-clock 기한이다: 남은 시간으로 소켓 timeout 을 줄이고, 다 쓰면
-# 요청을 보내지 않고 건너뛴다 (소켓 timeout 은 연산 단위라 느린 응답을 wall-clock 으로 끊지 못한다 —
-# 그 한계는 Ansible task timeout 이 맡는다).
+# 2026-10-05 (8차 R3 · R4): 모듈 호출 마감(절대 1200 s · 새 응답 없이 120 s · detect 90 s · 계정 180 s)과 진행 표시(heartbeat)를 없앴다.
+#   정상적으로 오래 걸리는 수집을 진행과 무관하게 자르고, 잘못된 응답(HTML 200 등)도 진행으로 세던 장치였다. 이제 요청마다
+#   연결 수립(CONNECT_TIMEOUT_SEC)과 응답 대기(모듈 timeout)만 있고, 배치 전체는 수집 실행 한계(최대 6시간)와 사용자 취소가 멈춘다.
 _RESPONSE_CACHE = {}
 _CACHE = {'enabled': False, 'hits': 0, 'misses': 0, 'bytes': 0}
 _LAST_BODY = {'bytes': 0}    # 직전 _get_impl 이 읽은 원문 길이 — 캐시 총량(MAX_CACHE_BYTES) 계산용 (2026-10-05 F07)
-_DEADLINE = {'at': None, 'seconds': 0, 'exceeded': False, 'idle': 0, 'last_ok': None, 'kind': None}
-# 2026-10-05 (F12): 진행 기반 마감. `deadline` 은 모듈 호출 전체의 절대 상한(태스크 timeout 보다 작다 — 결과를 돌려주고 끝나기 위해),
-#   `idle_deadline` 은 **새 응답(2xx)이 하나도 없이** 지난 시간의 상한이다. 페이지가 계속 들어오는 동안에는 절대 상한까지 수집하고,
-#   BMC 가 아무 응답도 주지 않으면 idle 에서 멈춘다. 같은 페이지 재요청(캐시 hit)은 네트워크가 없어 진행으로 세지 않는다.
-#   heartbeat: 새 응답마다(최대 5 s 에 1번) progress_dir/<bmc_ip> 파일을 갱신한다 — 배치 정체 감시(scripts/gather_watch.py)가
-#   한 태스크 안의 긴 Redfish 수집을 진행으로 본다. progress_dir 이 비면(Jenkins 밖 실행) 아무것도 쓰지 않는다.
-_HEARTBEAT = {'path': None, 'last': None}
-HEARTBEAT_EVERY_SEC = 5
-
-
-class _DeadlineExceeded(OSError):
-    """deadline 경과 — 요청을 보내지 않고 건너뛴다 (urlopen 호출부의 except 체인이 받는다)."""
 
 
 class _BodyTooLarge(OSError):
@@ -452,93 +469,6 @@ def _invalidate_response_cache():
 
 def cache_stats():
     return {'hits': _CACHE['hits'], 'misses': _CACHE['misses'], 'entries': len(_RESPONSE_CACHE), 'bytes': _CACHE['bytes']}
-
-
-def _set_deadline(seconds, idle=0):
-    """seconds > 0 이면 monotonic 절대 기한을, idle > 0 이면 '새 응답 없이 지난 시간' 기한을 건다. 0/None 이면 끈다 (기본 — 하위 호환)."""
-    try:
-        seconds = int(seconds or 0)
-    except (TypeError, ValueError):
-        seconds = 0
-    try:
-        idle = int(idle or 0)
-    except (TypeError, ValueError):
-        idle = 0
-    now = time.monotonic()
-    _DEADLINE['seconds'] = seconds
-    _DEADLINE['at'] = (now + seconds) if seconds > 0 else None
-    _DEADLINE['idle'] = idle if idle > 0 else 0
-    _DEADLINE['last_ok'] = now
-    _DEADLINE['exceeded'] = False
-    _DEADLINE['kind'] = None
-
-
-def _deadline_remaining():
-    if _DEADLINE['at'] is None:
-        return None
-    return _DEADLINE['at'] - time.monotonic()
-
-
-def _idle_remaining():
-    if not _DEADLINE['idle'] or _DEADLINE['last_ok'] is None:
-        return None
-    return _DEADLINE['idle'] - (time.monotonic() - _DEADLINE['last_ok'])
-
-
-def _mark_progress():
-    """새 응답(2xx)을 받았다 — idle 기한을 다시 세고, heartbeat 를 (최대 HEARTBEAT_EVERY_SEC 에 1번) 갱신한다."""
-    now = time.monotonic()
-    _DEADLINE['last_ok'] = now
-    path = _HEARTBEAT['path']
-    if path and (_HEARTBEAT['last'] is None or now - _HEARTBEAT['last'] >= HEARTBEAT_EVERY_SEC):
-        _HEARTBEAT['last'] = now
-        try:
-            with open(path, 'w', encoding='utf-8') as fh:
-                fh.write('%d\n' % int(time.time()))
-        except OSError:
-            pass
-
-
-def _set_heartbeat(progress_dir, bmc_ip):
-    _HEARTBEAT['path'] = None
-    _HEARTBEAT['last'] = None
-    if not progress_dir:
-        return
-    try:
-        os.makedirs(progress_dir, exist_ok=True)
-        _HEARTBEAT['path'] = os.path.join(progress_dir, 'redfish-' + re.sub(r'[^0-9A-Za-z_.-]', '_', str(bmc_ip)))
-    except OSError:
-        _HEARTBEAT['path'] = None
-
-
-def _effective_timeout(timeout):
-    """기한(절대 · 새 응답 없음)이 켜져 있으면 남은 시간으로 소켓 timeout 을 줄인다. 남은 시간이 없으면 요청을 보내지 않는다."""
-    rem = _deadline_remaining()
-    idle_rem = _idle_remaining()
-    if rem is None and idle_rem is None:
-        return timeout
-    if rem is not None and rem <= 0:
-        if not _DEADLINE['exceeded']:
-            _DEADLINE['exceeded'] = True
-            _DEADLINE['kind'] = 'absolute'
-            _notice('gather', '모듈 deadline %ds 경과 — 이후 요청은 보내지 않고 건너뛴다' % _DEADLINE['seconds'])
-        raise _DeadlineExceeded('Deadline exceeded: request skipped')
-    if idle_rem is not None and idle_rem <= 0:
-        if not _DEADLINE['exceeded']:
-            _DEADLINE['exceeded'] = True
-            _DEADLINE['kind'] = 'idle'
-            _notice('gather', '새 응답 없이 %ds 가 지나 이후 요청은 보내지 않고 건너뛴다' % _DEADLINE['idle'])
-        raise _DeadlineExceeded('Deadline exceeded: no new response for %ds, request skipped' % _DEADLINE['idle'])
-    left = min(r for r in (rem, idle_rem) if r is not None)
-    return min(timeout, max(1, int(left + 0.999)))
-
-
-def deadline_kind():
-    return _DEADLINE['kind']
-
-
-def deadline_exceeded():
-    return bool(_DEADLINE['exceeded'])
 
 
 def _read_capped(resp):
@@ -606,7 +536,7 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             # Round 17 #18: 성공 path 의 json.loads 를 지역 guard 로 감싼다.
             # 200(또는 2xx) + 빈 body 는 {}(tolerant), 비-JSON body(프록시 HTML/잘린 응답)는
             # err 설정. 둘 다 실제 status 를 보존(기존엔 함수-레벨 except 로 status 0 오보).
@@ -614,8 +544,6 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
             # 실패로 남겨야 함(빈 {} 로 진행해 vendor=unknown 으로 새지 않게).
             raw = _read_capped(resp)
             _LAST_BODY['bytes'] = len(raw)
-            if 200 <= resp.status < 300:
-                _mark_progress()
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -628,8 +556,6 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
         return e.code, body, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
-    except _DeadlineExceeded:
-        return 0, {}, 'Deadline exceeded: request skipped'
     except _BodyTooLarge as e:
         return e.status, {}, str(e)
     except socket.timeout:
@@ -653,7 +579,7 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
@@ -666,8 +592,6 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         return e.code, body_err, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
-    except _DeadlineExceeded:
-        return 0, {}, 'Deadline exceeded: request skipped'
     except _BodyTooLarge as e:
         return e.status, {}, str(e)
     except socket.timeout:
@@ -687,7 +611,7 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             return resp.status, {}, None
     except urlerr.HTTPError as e:
         try:    body_err = json.loads(e.read(MAX_BODY_BYTES + 1).decode('utf-8', errors='replace'))
@@ -695,8 +619,6 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
         return e.code, body_err, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
-    except _DeadlineExceeded:
-        return 0, {}, 'Deadline exceeded: request skipped'
     except _BodyTooLarge as e:
         return e.status, {}, str(e)
     except socket.timeout:
@@ -729,7 +651,7 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
     _invalidate_response_cache()   # P2
     req = urlreq.Request(url, data=payload, method='PATCH', headers=headers)
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
@@ -742,8 +664,6 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
         return e.code, body_err, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
-    except _DeadlineExceeded:
-        return 0, {}, 'Deadline exceeded: request skipped'
     except _BodyTooLarge as e:
         return e.status, {}, str(e)
     except socket.timeout:
@@ -1432,7 +1352,7 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
     realm_header = None
     try:
         # 무인증으로 시도 — 200이면 realm 없음 (이미 다른 단계에서 처리)
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             return None
     except urlerr.HTTPError as e:
         # 401/403일 때 WWW-Authenticate 헤더에서 realm 추출
@@ -1474,12 +1394,10 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             # Round 17 #18: 성공 path json.loads 지역 guard — 200+빈 body 는 {}(tolerant),
             # 비-JSON body 는 err 설정. status 0 오보 방지 + detect 경로 malformed 명확 실패.
             raw = _read_capped(resp)
-            if 200 <= resp.status < 300:
-                _mark_progress()
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -1492,8 +1410,6 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
         return e.code, body, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
-    except _DeadlineExceeded:
-        return 0, {}, 'Deadline exceeded: request skipped'
     except _BodyTooLarge as e:
         return e.status, {}, str(e)
     except socket.timeout:
@@ -5554,7 +5470,7 @@ def _get_response_etag(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             _read_capped(resp)          # 2026-10-05: 다른 호출처럼 상한 안에서만 읽는다 (종전에는 상한 없이 읽었다)
             etag = resp.headers.get('ETag') if hasattr(resp, 'headers') else None
             _record_auth_status(resp.status)
@@ -7730,13 +7646,6 @@ def main():
             # P2 (cycle 2026-04-28): AccountService 통합
             mode            = dict(type='str',  default='gather',
                                    choices=['gather', 'account_provision', 'detect']),
-            # 2026-10-03 (P2): 모듈 호출 wall-clock 기한(초). 0 = 끔(하위 호환). 남은 시간으로 소켓 timeout 을
-            #   줄이고, 다 쓰면 이후 요청을 건너뛴다 → 해당 섹션 failed, 수집된 데이터는 보존(partial).
-            deadline        = dict(type='int',  default=0),
-            # 2026-10-05 (F12): 새 응답(2xx) 없이 지난 시간의 상한(초). 0 = 끔. 페이지가 계속 오면 deadline 까지 수집한다.
-            idle_deadline   = dict(type='int',  default=0),
-            # 2026-10-05 (F12): heartbeat 디렉터리 — 새 응답마다 <dir>/redfish-<bmc_ip> 를 갱신한다(배치 정체 감시용). 비면 끔.
-            progress_dir    = dict(type='str',  default=''),
             target_username = dict(type='str',  default=''),
             target_password = dict(type='str',  default='', no_log=True),
             target_role     = dict(type='str',  default='Administrator'),
@@ -7779,8 +7688,6 @@ def main():
     timeout, verify_ssl = p['timeout'], p['verify_ssl']
     mode = p['mode']
     _evidence_begin(p.get('attempt'), bmc_ip, username)
-    _set_deadline(p.get('deadline'), p.get('idle_deadline'))
-    _set_heartbeat(p.get('progress_dir'), bmc_ip)
     # P2: 캐시는 읽기 전용 모드에서만. account_provision 은 다른 자격으로 같은 경로를 다시 읽으므로 끈다.
     _reset_response_cache(enabled=(mode in ('gather', 'detect')))
 
@@ -7811,7 +7718,7 @@ def main():
             vendor=vendor, collected=[], failed_sections=[], unsupported_sections=[],
             errors=list(det_errors), data=data, probe_facts=probe_facts, multi_node=None,
             auth_evidence=auth_evidence(), notices=notices(),
-            deadline_exceeded=deadline_exceeded(), deadline_kind=deadline_kind(), cache=cache_stats(),
+            cache=cache_stats(),
         )
         return
 
@@ -7967,7 +7874,7 @@ def main():
         errors=all_errors, data=result_data, probe_facts=probe_facts,
         multi_node=multi_node, auth_evidence=auth_evidence(), notices=notices(),
         # 2026-10-03 (P2): 모듈 내부 관측값 — envelope 13 필드에는 들어가지 않는다 (normalize 가 뽑지 않음).
-        deadline_exceeded=deadline_exceeded(), deadline_kind=deadline_kind(), cache=cache_stats(),
+        cache=cache_stats(),
     )
 
 

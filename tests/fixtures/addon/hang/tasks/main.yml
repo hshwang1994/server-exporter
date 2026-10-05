@@ -1,6 +1,7 @@
----
-# 끝나지 않는 Add-on — 태스크 하나가 멈춘다. hook 의 include_role apply.timeout(테스트는 `-e _addon_task_timeout=3`)이
-# 그 태스크를 끊고 rescue 가 errors[] 1건을 남기는지, 그리고 CHECKPOINT 로 보존된 기본 결과가 그대로인지 확인한다.
+# 오래 걸리는 Add-on — 태스크 하나가 오래 돈다(기본 40 s, `-e addon_fixture_sleep=<초>`).
+# 2026-10-05 (8차 R3): hook 의 태스크별 시간 제한(apply.timeout)을 없앴다. 이 fixture 로 두 가지를 본다
+#   (tests/integration/test_addon_hook_playbook.py) — 짧게 주면 끝까지 기다려 결과가 남는지, 끝나기 전에 수집 실행 한계(INT)가 오면
+#   CHECKPOINT 로 보존된 기본 결과가 그대로이고 결과 정리가 "추가 수집 중 중단" 1건만 붙이는지.
 # sleep 은 control node(local 연결)에서 돈다 — 실장비에 연결하지 않는다.
 - name: "fixture hang | partial result"
   ansible.builtin.set_fact:
@@ -9,5 +10,5 @@
         before_hang: true
 
 - name: "fixture hang | task that never finishes"
-  ansible.builtin.shell: sleep 40
+  ansible.builtin.shell: "sleep {{ addon_fixture_sleep | default(40) | int }}"
   changed_when: false

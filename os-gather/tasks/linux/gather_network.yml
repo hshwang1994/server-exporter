@@ -136,7 +136,6 @@
 # 수집 — 두 경로 공통 (ip 명령 + /sys/class/net + /etc/resolv.conf + lspci + ethtool)
 # =============================================================================
 - name: "linux | network | raw gather"
-  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   ansible.builtin.raw: |
     # --- NIC driver map (Plan §8-2, 2026-10-03) — gather_hba_ib.yml 이 network.driver_map 으로 쓴다 ---
     #   종전 gather_hba_ib.yml 의 별도 raw("NIC driver map")를 원격 실행 1회 줄이려고 여기로 옮겼다.

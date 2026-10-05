@@ -15,7 +15,6 @@
 #   - 값을 못 구하면 null. 1 / 0 / 스레드 수로 대체하지 않는다. 섹션 status 는 실제 결과로.
 
 - name: "linux | cpu | raw gather (/proc/cpuinfo + lscpu + cpufreq)"
-  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//')"

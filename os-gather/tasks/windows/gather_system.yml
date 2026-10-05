@@ -25,7 +25,6 @@
 #     구성요소에서 종료 오류가 났으면 1 (powershell.exe -EncodedCommand 의 종료 코드), 아니면 0.
 
 - name: "windows | system | os version + hosting detection"
-  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
     function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
       $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
@@ -88,15 +87,29 @@
         uptime       = $uptime
       }
     }
+    # Hyper-V 역할(vmms 서비스) — 2026-10-05 (8차 R5): 서비스 없음 · 있음(실행 중 / 멈춤) · 조회 실패를 나눈다.
+    #   종전에는 조회 실패도 "없음" 으로 보아 Hyper-V 호스트를 virtual 로 적을 수 있었다. 조회 실패는 Unknown 으로 두고
+    #   이 구성요소를 실패로 표시한다(아래 "component status" 가 errors[] 로 옮긴다). 데이터는 그대로 낸다.
     Invoke-SeComponent $doc 'hosting' {
       param($c)
-      $vmms = Get-Service -Name vmms -ErrorAction SilentlyContinue
+      $vmmsErr = $null
+      $vmms = Get-Service -Name vmms -ErrorAction SilentlyContinue -ErrorVariable vmmsErr
+      $role = 'False'
+      $roleError = $null
+      if ($vmms) {
+        $role = $(if ($vmms.Status -eq 'Running') { 'True' } else { 'Installed' })
+      } elseif ($vmmsErr) {
+        # 서비스 없음 = NoServiceFoundForGivenName (분류 ObjectNotFound) — 2026-10-05 실측. 그 밖의 오류는 조회 실패다.
+        $notFound = @($vmmsErr | Where-Object { (([string]$_.FullyQualifiedErrorId) -like 'NoServiceFoundForGivenName*') -or ([string]$_.CategoryInfo.Category -eq 'ObjectNotFound') })
+        if (-not $notFound) { $role = 'Unknown'; $roleError = 'vmms: ' + [string]$vmmsErr[0].Exception.Message }
+      }
       $c.data = [PSCustomObject]@{
         Model             = $cs.Model
         Manufacturer      = $cs.Manufacturer
         HypervisorPresent = [string]$cs.HypervisorPresent
-        HyperVRole        = $(if ($vmms -and $vmms.Status -eq 'Running') { 'True' } else { 'False' })
+        HyperVRole        = $role
       }
+      if ($roleError) { throw $roleError }
     }
     try { $doc | ConvertTo-Json -Depth 8 -Compress }
     catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }
@@ -164,8 +177,10 @@
 # hosting_type 판정 (Linux gather_system 의 systemd-detect-virt 판정과 같은 결과 집합):
 #   - Model/Manufacturer 가 알려진 VM 패턴 → virtual
 #   - HypervisorPresent=False → baremetal
-#   - HypervisorPresent=True + Hyper-V 역할(vmms) 실행 → baremetal (Hyper-V 호스트의 루트 파티션)
-#   - HypervisorPresent=True + 역할 없음 → virtual (다른 하이퍼바이저 위의 게스트)
+#   - HypervisorPresent=True + Hyper-V 역할(vmms) 있음(실행 중 · 멈춤) → baremetal (Hyper-V 호스트의 루트 파티션.
+#     모델/제조사가 VM 신호가 아닌 장비에 역할이 설치돼 있다 — 8차 R5: 멈춘 vmms 를 "역할 없음" 으로 보지 않는다)
+#   - HypervisorPresent=True + 역할 없음(서비스 부재 확인) → virtual (다른 하이퍼바이저 위의 게스트)
+#   - HypervisorPresent=True + vmms 조회 실패(Unknown) → unknown (근거 없이 정하지 않는다)
 #   - 값을 못 읽음 → unknown
 - name: "windows | system | determine hosting_type"
   ansible.builtin.set_fact:
@@ -181,8 +196,8 @@
       {%- endfor -%}
       {%- if ns.vm -%}virtual
       {%- elif hyp == 'false' -%}baremetal
-      {%- elif hyp == 'true' and role == 'true' -%}baremetal
-      {%- elif hyp == 'true' -%}virtual
+      {%- elif hyp == 'true' and role in ['true', 'installed'] -%}baremetal
+      {%- elif hyp == 'true' and role == 'false' -%}virtual
       {%- else -%}unknown
       {%- endif -%}
   no_log: true
@@ -224,6 +239,9 @@
     _id_msg_absent_serial:    "대상이 시스템 제조번호를 제공하지 않습니다."
     _id_msg_privilege_uuid:   "시스템 고유 식별자를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요."
     _id_msg_absent_uuid:      "대상이 시스템 고유 식별자를 제공하지 않습니다."
+    # 2026-10-05 (8차 R5): setup(facts) 자체가 실패해 식별자 fact 가 없을 때는 권한 문제가 아니다 — 원인을 그대로 적는다.
+    _id_msg_facts_serial:     "시스템 제조번호를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+    _id_msg_facts_uuid:       "시스템 고유 식별자를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
   ansible.builtin.set_fact:
     _w_id_diagnostics: >-
       {%- set diags = [] -%}
@@ -231,12 +249,18 @@
       {%- set uuid_na   = (_w_uuid_val   | default(none)) is none -%}
       {%- set serial_defined = ansible_product_serial is defined -%}
       {%- set uuid_defined   = ansible_product_uuid is defined -%}
-      {%- if serial_na and not serial_defined -%}
+      {%- set setup_failed = not (_w_setup_ok | default(true) | bool) -%}
+      {%- set facts_err = ('; error=' ~ (_w_setup_detail | default('', true))) if setup_failed else '' -%}
+      {%- if serial_na and not serial_defined and setup_failed -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_facts_serial,"detail":("field=serial_number; cause=facts_failed; tried=setup_fact" ~ facts_err)}) -%}
+      {%- elif serial_na and not serial_defined -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_serial,"detail":"field=serial_number; cause=insufficient_privilege; tried=setup_fact"}) -%}
       {%- elif serial_na and serial_defined -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_absent_serial,"detail":"field=serial_number; cause=identifier_not_available; tried=setup_fact"}) -%}
       {%- endif -%}
-      {%- if uuid_na and not uuid_defined -%}
+      {%- if uuid_na and not uuid_defined and setup_failed -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_facts_uuid,"detail":("field=system_uuid; cause=facts_failed; tried=setup_fact" ~ facts_err)}) -%}
+      {%- elif uuid_na and not uuid_defined -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_uuid,"detail":"field=system_uuid; cause=insufficient_privilege; tried=setup_fact"}) -%}
       {%- elif uuid_na and uuid_defined -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_absent_uuid,"detail":"field=system_uuid; cause=identifier_not_available; tried=setup_fact"}) -%}

@@ -66,7 +66,7 @@ except ImportError:
     PYVMOMI_IMP_ERR = traceback.format_exc()
 
 # vSphere 소켓 timeout 기본값(초) — ESXi precheck(_precheck_timeout) 과 같은 값.
-_DEFAULT_TIMEOUT_SEC = 30
+_DEFAULT_TIMEOUT_SEC = 1800   # 2026-10-05 (8차 R3): 30 → 1800 — 느린 ESXi 의 정상 응답을 기다린다(읽기 한 번마다의 대기, 총 시간 마감 아님)
 
 # 다중 host 선택에서 esxi_hostname 과 비교하는 식별자 (사유 문장에도 그대로 쓴다).
 _SELECT_IDS = 'name / summary.config.name / vmk IPv4(config.network.vnic[].spec.ip.ipAddress)'

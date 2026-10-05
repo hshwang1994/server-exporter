@@ -34,18 +34,12 @@
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     _rf_ip:      "{{ ansible_host | default(inventory_hostname) }}"
-    _rf_timeout: 30
-    # 2026-10-03 (P2, Plan §6-3): 모듈 호출 wall-clock deadline(초). 소켓 timeout(_rf_timeout)은 연산 단위라 50~150 GET 에
-    #   총 상한이 없었다. deadline 이 지나면 모듈은 이후 요청을 보내지 않고 해당 섹션을 failed 로 두어 수집한 것은 보존한다(partial).
-    #   값은 task timeout(_rf_task_timeout)보다 엄격히 작아야 register 가 남는다. 후보마다 재설정된다.
-    # 2026-10-05 (F12): 진행 기반으로 바꿨다. 새 응답이 계속 오면 절대 상한 _rf_deadline(1200 = 최장 정상 실측 Cisco CIMC 353 s 의 약 3배)까지
-    #   수집하고, 새 응답 없이 _rf_idle_deadline(120 = 소켓 timeout 30 × 4) 이 지나면 멈춘다. 종전 540 s 는 페이지가 계속 와도 잘랐다.
-    #   task timeout 은 1260(= 1200 + 60). 상한이 늘어난 만큼 배치 전체 대기는 Jenkins 운영 상한과 정체 감시(scripts/gather_watch.py)가 맡는다.
-    _rf_deadline: 1200
-    _rf_idle_deadline: 120
-    _rf_task_timeout: 1260
-    _rf_detect_deadline: 90
-    _rf_account_deadline: 180
+    # 응답 대기(초) — 요청 한 번에서 응답 읽기를 기다리는 시간(읽기 한 번마다 다시 센다). 2026-10-05 (8차 R3): 30 → 1800.
+    #   사용자 요구: 빠른 종료보다 실제 수집 완료가 우선이고, 운영 BMC 의 부하는 미리 알 수 없다. 느린 BMC 의 정상 응답을 30초에
+    #   자르지 않는다. 연결 수립(TCP · TLS)은 모듈 안에서 따로 60초(CONNECT_TIMEOUT_SEC)다. 사전 진단의 프로토콜 확인(ServiceRoot)도 이 값을 쓴다.
+    #   모듈 호출 마감(절대 1200 s · 새 응답 없이 120 s · detect 90 s · 계정 180 s)과 task 상한은 없앴다 — 배치 전체는 수집 실행 한계
+    #   (최대 6시간, scripts/run_gather.sh)와 사용자 취소가 멈춘다.
+    _rf_timeout: 1800
 
   tasks:
 
@@ -432,7 +426,8 @@
         #     auth_success 는 null 을 유지한다. 후보 하나의 401 로 전체를 단정하지 않는다.
         #   빈 자격 경로(_rf_accounts 없음)는 (1) 에서 걸러진다 — 무자격 요청의 401 은
         #   "등록된 자격증명 거부" 가 아니다.
-        # 2026-10-03 (Plan §6-3 D7 — Astra 3차 acceptance): task timeout(backstop)으로 모듈이 끊기면 register 가 없다.
+        # 2026-10-03 (Plan §6-3 D7 — Astra 3차 acceptance): 모듈이 결과 없이 멈추면 register 가 없다. 2026-10-05 (8차 R3) 부터 작업 단위
+        #   시간 제한은 없다 — 이 경로는 모듈 예외 · 연결 끊김 · 작업 프로세스 강제 종료처럼 결과를 돌려주지 못한 멈춤에서 탄다.
         #   그 시도가 남긴 증거 파일(<SE_AUTH_EVIDENCE_DIR>/<ip>/<attempt_id>.json) **만** 읽는다 — 다른 attempt 의 파일은 이력일 뿐
         #   현재 시도를 분류하지 않는다. build/event/ip/attempt 가 다르면 증거 없음. 익명 응답 200 은 인증 성공이 아니다.
         #   파일은 모듈이 시작 즉시 status null 로 새로 만들고 첫 자격 응답에서 채우므로 "증거 없음" = 인증 확인 전 정지다.
@@ -482,12 +477,12 @@
               {%- set ev = _rf_backstop_evidence | default({}) -%}
               {%- set st = ev.first_auth_status | default(none) -%}
               {%- set proven = (ev.valid | default(false)) and (ev.credentialed | default(false)) and (st is not none) -%}
-              {%- if proven and st >= 200 and st < 400 -%}{%- set why = 'task timeout after auth' -%}
-              {%- elif proven -%}{%- set why = 'task timeout after auth status ' ~ st -%}
-              {%- else -%}{%- set why = 'task timeout before auth evidence (' ~ (ev.reason | default('missing')) ~ ')' -%}{%- endif -%}
+              {%- if proven and st >= 200 and st < 400 -%}{%- set why = 'task stopped after auth' -%}
+              {%- elif proven -%}{%- set why = 'task stopped after auth status ' ~ st -%}
+              {%- else -%}{%- set why = 'task stopped before auth evidence (' ~ (ev.reason | default('missing')) ~ ')' -%}{%- endif -%}
               {{ (_rf_failed_attempt_notes | default([]))
                  + [ (ev.role | default('?', true)) ~ '/' ~ (ev.label | default(_rf_attempt_id, true))
-                     ~ ': status=task_timeout first_auth=' ~ (st if proven else 'none')
+                     ~ ': status=task_stopped first_auth=' ~ (st if proven else 'none')
                      ~ ' err=' ~ why
                      ~ ((' last_request=' ~ ev.last_request) if (ev.last_request | default('')) else '') ] }}
           when: (_rf_attempt_id | default('')) != ''
@@ -597,8 +592,8 @@
         #                   (CLAUDE.md §9) 멈춘 곳은 자격증명 단계가 맞다.
         #                   auth_success 는 null 이다 (미시도). false 는 '구조화된 명시적 거부'다.
         #   stopped_before_auth
-        #                 → gather / GATHER_FAILED / null / gather_internal (2026-10-03 D7). task timeout(backstop) 으로
-        #                   모듈이 끊겼는데 현재 attempt 의 증거 파일에 자격 응답이 없다 — 인증 확인 **전**에 멈췄다.
+        #                 → gather / GATHER_FAILED / null / gather_internal (2026-10-03 D7). 모듈이 결과 없이
+        #                   멈췄는데 현재 attempt 의 증거 파일에 자격 응답이 없다 — 인증 확인 **전**에 멈췄다.
         #                   성공도 거부도 추정하지 않는다. 과거 후보의 401 은 details/errors 이력으로만 남는다.
         #   not_attempted → gather / GATHER_FAILED / null / gather_internal. 자격 요청 자체를 보내기
         #                   **전에** 수집기 안에서 멈췄다 (adapter 선택 / vendor 정규화 예외 등).

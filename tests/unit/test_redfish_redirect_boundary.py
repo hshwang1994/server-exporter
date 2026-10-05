@@ -163,7 +163,9 @@ def test_a_test_double_for_urlopen_is_still_honoured(monkeypatch):
 def test_every_http_call_goes_through_the_single_entry():
     text = (REPO / "redfish-gather" / "library" / "redfish_gather.py").read_text(encoding="utf-8")
     assert text.count("urlreq.urlopen(req,") == 1, "직접 urlopen 은 _urlopen 의 시험 대역 분기 하나뿐"
-    assert text.count("_urlopen(req, verify_ssl, _effective_timeout(timeout))") == 7
+    # 2026-10-05 (8차 R3): 모듈 마감(_effective_timeout)을 없앴다 — 호출자의 응답 대기 값을 그대로 넘긴다(연결은 CONNECT_TIMEOUT_SEC)
+    assert text.count("with _urlopen(req, verify_ssl, timeout) as resp:") == 7
+    assert "_effective_timeout" not in text
     etag = text[text.index("def _get_response_etag("):text.index("def _patch_account(")]
     assert "_read_capped(resp)" in etag and "resp.read()" not in etag, "ETag 조회도 상한 안에서만 읽는다"
 

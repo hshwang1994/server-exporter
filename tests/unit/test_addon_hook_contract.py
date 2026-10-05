@@ -181,19 +181,15 @@ def test_run_block_keeps_lost_hosts_and_isolates_failures():
     assert len(includes) == 1
     inc = includes[0]["ansible.builtin.include_role"]
     assert inc["name"] == "{{ _addon_dir }}"
-    assert set(inc) == {"name", "apply"}
+    assert set(inc) == {"name"}, "8차 R3: role 에 apply(태스크별 시간 제한)를 씌우지 않는다"
 
 
-def test_timeout_is_per_task_apply_only():
-    """Plan §6-3: role 안 **태스크 각각** 300 s. hook 전체 · role 전체 · async 상한은 없다."""
-    tasks = _hook_tasks()
-    apply = tasks["addon | include add-on"]["ansible.builtin.include_role"]["apply"]
-    assert apply == {"timeout": "{{ _addon_task_timeout | default(300) | int }}"}
-    # timeout 키는 apply 안 하나뿐 — hook 자체 태스크(set_fact · include)에는 없다
+def test_hook_has_no_time_limit_of_its_own():
+    """2026-10-05 (8차 R3): Plan §6-3 의 태스크별 300 s(apply.timeout)를 없앴다. hook · role · 태스크 어디에도 시간 제한이 없다 —
+    오래 걸리는 Add-on 작업은 끝까지 기다리고, 끝나지 않으면 수집 실행 한계(최대 6시간)와 사용자 취소가 멈춘다."""
     doc = _load(HOOK)
-    occurrences = sum(1 for k in _all_keys(doc) if k == "timeout")
-    assert occurrences == 1
-    assert not set(_all_keys(doc)) & {"async", "poll"}
+    assert not set(_all_keys(doc)) & {"timeout", "apply", "async", "poll"}
+    assert "_addon_task_timeout" not in HOOK.read_text(encoding="utf-8")
 
 
 # ── 마커 ────────────────────────────────────────────────────────────────────

@@ -17,7 +17,6 @@
 #   _l_has_ip         : bool
 
 - name: "linux | preflight | detect python + commands"
-  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   ansible.builtin.raw: |
     py_path="none"
     py_ver=""

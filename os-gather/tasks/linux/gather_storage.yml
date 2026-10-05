@@ -17,10 +17,11 @@
 # 2026-10-03 (Phase 2 C2 — lsblk 실패 은폐 제거):
 #   - LSBLK_RC / LSBLK_ERR / SYS_BLOCK_COUNT marker, rc != 0 이면 구형 fallback 1회 (LSBLK_TXT|).
 #   - JSON 손상은 block/rescue 로 흡수 (호스트 수집 계속), lsblk 이상은 errors[] 1건 (detail 에 state).
-#   - df 는 timeout 20 으로 감싼다 (-l 은 쓰지 않는다 — NFS 포함). multipath 처리는 변경 없음 (보류).
+#   - df 는 -l 을 쓰지 않는다 — NFS 포함. multipath 처리는 변경 없음 (보류).
+# 2026-10-05 (8차 R3): df 를 감싸던 timeout 20 을 없앴다 — 정상적으로 늦은 네트워크 마운트의 df 를 자르지 않는다.
+#   응답하지 않는 마운트는 수집 실행 한계(최대 6시간)와 사용자 취소가 멈추고, 그때 연결이 닫히면서 원격 명령도 끝난다(R6, pty).
 
 - name: "linux | storage | raw gather (lsblk/udevadm/findmnt/lspci/df)"
-  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     # --- physical disks (JSON) ---
@@ -95,14 +96,8 @@
         }'
     fi
     # --- filesystems (df) — NFS/cifs idle mount 는 '-' 를 출력 → 숫자만 남긴다 ---
-    #   2026-10-03 (C2): 응답 없는 네트워크 마운트에서 df 가 멈추지 않게, timeout 이 있고
-    #   'timeout 초 명령' 형식을 받으면(구형 busybox 는 -t 형식) 20초로 감싼다.
     #   -l(로컬만)은 쓰지 않는다 — NFS 등 네트워크 파일시스템도 수집 대상이다.
-    if command -v timeout >/dev/null 2>&1 && timeout 20 true >/dev/null 2>&1; then
-      timeout 20 df -P -T -k 2>/dev/null
-    else
-      df -P -T -k 2>/dev/null
-    fi | tail -n +2 | awk '{
+    df -P -T -k 2>/dev/null | tail -n +2 | awk '{
       gsub(/[^0-9]/,"",$3); gsub(/[^0-9]/,"",$4); gsub(/[^0-9]/,"",$5);
       total=int($3/1024); used=int($4/1024); avail=int($5/1024);
       pct=$6; gsub(/%/,"",pct); gsub(/[^0-9]/,"",pct);

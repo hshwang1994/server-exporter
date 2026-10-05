@@ -89,7 +89,6 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
     saved_realm = rg._probe_realm_hint
     rg._get_impl, rg._get_noauth = get_impl, noauth_impl
     rg._reset_response_cache(enabled=True)   # main() 과 같은 조건 (gather 모드는 캐시 on)
-    rg._set_deadline(0)
     if realm_impl is not None:
         rg._probe_realm_hint = realm_impl
     try:

@@ -12,7 +12,6 @@
 #   흔한 원인(그룹에 남은 삭제된 계정의 SID 등)을 운영자가 찾을 수 있게 errors[].detail 의 groups= 로 옮긴다.
 
 - name: "windows | users | collect"
-  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
     $useLocal = $null -ne (Get-Command Get-LocalUser -ErrorAction SilentlyContinue)
     $script:listFail = $null

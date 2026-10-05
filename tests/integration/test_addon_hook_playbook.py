@@ -12,7 +12,8 @@ D8(2026-10-03) 이후 추가로 확인하는 것:
       (Add-on 이 무엇을 하든 보존된 기본 결과는 동일).
     - 진행 이벤트(gather_progress.jsonl): checkpoint → addon_started → addon_done → emitted 순.
     - Add-on 이 돈 host 는 meta.finished_at / duration_ms 가 갱신된다 (harness 는 null 로 시작).
-    - 끝나지 않는 Add-on 태스크는 apply.timeout 이 끊고 rescue 가 errors[] 1건을 남긴다.
+    - 2026-10-05 (8차 R3): Add-on 태스크별 시간 제한(apply.timeout)은 없다. 오래 걸리는 태스크는 끝까지 기다리고, 끝나지 않는
+      Add-on 은 수집 실행 한계(INT, scripts/run_gather.sh 와 같은 timeout)가 멈춘다 — 그때 CHECKPOINT 의 기본 결과는 그대로다.
 
 비교 방식:
     `data` 키 순서는 원래 실행마다 달라진다 (merge_fragment 의 union 이 문자열 hash 에 의존 —
@@ -32,6 +33,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -53,7 +55,8 @@ HOSTS = [
     {"service_ip": "192.0.2.10", "physical_purpose": "DB", "note": "{{ 7*7 }}"},
     {"service_ip": "192.0.2.11", "physical_purpose": "APP", "note": "n2"},
 ]
-HANG_TASK_TIMEOUT = 3
+SLOW_TASK_SEC = 6        # 오래 걸리지만 끝나는 Add-on 태스크 — 종전 태스크별 제한(시험값 3 s)보다 길다
+HANG_LIMIT_SEC = 6       # 끝나지 않는 Add-on(sleep 40)을 멈추는 시험용 실행 한계 (운영은 최대 6시간)
 SCENARIOS = {
     # 이름: (ADDON_DIR, hook 포함 여부, 추가 -e)
     "baseline": (None, False, []),
@@ -68,8 +71,8 @@ SCENARIOS = {
     "bad_config": (FIXTURES / "bad_config", True, []),
     "fail_runtime": (FIXTURES / "fail_runtime", True, []),
     "unreachable": (FIXTURES / "unreachable", True, []),
-    # 끝나지 않는 태스크 — apply.timeout(3 s)이 끊는다 (fixture 의 sleep 은 40 s)
-    "hang": (FIXTURES / "hang", True, ["-e", f"_addon_task_timeout={HANG_TASK_TIMEOUT}"]),
+    # 오래 걸리는 태스크 — 태스크별 제한이 없으므로 끝까지 기다린다 (8차 R3)
+    "slow": (FIXTURES / "hang", True, ["-e", f"addon_fixture_sleep={SLOW_TASK_SEC}"]),
 }
 HOOK_RAN = [n for n, (d, h, _) in SCENARIOS.items() if d is not None and h]
 
@@ -258,18 +261,61 @@ def test_connection_lost_during_addon_keeps_the_host(runs):
         assert env["errors"][-1]["detail"] == "remote command not run: target unreachable"
 
 
-def test_hanging_addon_task_is_cut_by_the_per_task_timeout(runs):
-    """fixture 의 sleep 40 이 3 s 에 끊긴다 — 실행 전체가 sleep 보다 훨씬 빨리 끝나고 rescue 가 errors[] 1건을 남긴다."""
-    run = runs["hang"]
-    assert run["elapsed"] < 30, f"hang 시나리오가 {run['elapsed']:.1f}s — timeout 이 태스크를 끊지 못했다"
+def test_slow_addon_task_is_waited_for_not_cut(runs):
+    """8차 R3: 종전 태스크별 제한(시험값 3 s)보다 오래 걸리는 Add-on 태스크도 끝까지 기다린다 — 결과가 남고 Add-on 오류가 없다."""
+    run = runs["slow"]
+    assert run["elapsed"] >= SLOW_TASK_SEC, f"slow 시나리오가 {run['elapsed']:.1f}s — 태스크가 끝나기 전에 끊겼다"
     for ip, env in run["by_ip"].items():
         base = runs["baseline"]["by_ip"][ip]
-        _same_except(env, base, "errors")      # before_hang 중간 결과는 버려진다 (rescue 경로)
-        added = env["errors"][-1]
-        assert env["errors"][:-1] == base["errors"]
-        assert added["section"] == "addon"
-        assert "cause=addon_failed" in added["detail"] and "task that never finishes" in added["detail"]
-        assert "time frame" in added["detail"] or "timed out" in added["detail"].lower(), added["detail"]
+        _same_except(env, base, "data")
+        assert env["data"]["addon"] == {"partial": {"before_hang": True}}
+        assert env["errors"] == base["errors"], "오래 걸린 것은 실패가 아니다"
+
+
+def test_hanging_addon_is_stopped_by_the_run_limit_and_the_checkpoint_is_kept(runs, tmp_path):
+    """8차 R3 · R1: 끝나지 않는 Add-on 은 수집 실행 한계(run_gather.sh 와 같은 timeout --signal=INT)가 멈춘다.
+    CHECKPOINT 는 hook 없는 결과와 같고, 결과 정리(Layer A)는 그 값에 "추가 수집 중 중단" 1건만 붙여 host 당 1줄을 만든다."""
+    timeout_bin = shutil.which("timeout")
+    if not timeout_bin:
+        pytest.skip("coreutils timeout 이 없다")
+    env = {k: v for k, v in os.environ.items() if k != "ADDON_DIR"}
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    env.update({"REPO_ROOT": str(REPO), "ANSIBLE_CONFIG": str(REPO / "ansible.cfg"), "INVENTORY_JSON": json.dumps(HOSTS, ensure_ascii=False),
+                "ANSIBLE_JSON_OUTPUT_FILE": str(ws / "gather_output.json"), "ANSIBLE_JSON_CHECKPOINT_FILE": str(ws / "gather_checkpoint.jsonl"),
+                "ANSIBLE_JSON_PROGRESS_FILE": str(ws / "gather_progress.jsonl"), "PYTHONHASHSEED": "0", "ADDON_DIR": str(FIXTURES / "hang")})
+    t0 = time.monotonic()
+    proc = subprocess.run([timeout_bin, "--signal=INT", "--kill-after=30", str(HANG_LIMIT_SEC), PLAYBOOK_BIN, "-i",
+                           str(REPO / "os-gather" / "inventory.sh"), str(FIXTURES / "harness.yml")],
+                          cwd=REPO, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+    elapsed = time.monotonic() - t0
+    assert proc.returncode == 124, f"rc={proc.returncode} — 실행 한계가 INT 로 멈춰야 한다\n{proc.stderr[-2000:]}"
+    assert HANG_LIMIT_SEC <= elapsed < 40, f"{elapsed:.1f}s"
+    cps = {json.loads(x)["ip"]: json.loads(x) for x in (ws / "gather_checkpoint.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()}
+    assert set(cps) == {h["service_ip"] for h in HOSTS}
+    for ip, cp in cps.items():
+        assert _dump(cp) == _dump(runs["baseline"]["by_ip"][ip]), f"{ip}: CHECKPOINT 는 hook 없는 결과와 같다"
+    out = (ws / "gather_output.json")
+    assert not out.exists() or not out.read_text(encoding="utf-8").strip(), "OUTPUT 전에 멈췄다"
+    manifest = {"schema": 1, "build": {"job": "t", "number": "1", "url": "u"}, "channel": "os",
+                "request": {"loc": "git", "deploymentEnvironmentId": "d", "eventUuid": "e", "callbackUrl": "http://x"},
+                "ips": [h["service_ip"] for h in HOSTS]}
+    (ws / "gather_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (ws / "gather_rc.txt").write_text("124\n", encoding="utf-8")
+    fin = subprocess.run([sys.executable, str(REPO / "scripts" / "finalize_gather_output.py"), "--workspace", str(ws), "--repo-root", str(REPO),
+                          "--outcome", "timeout", "--limit-reason", "gather_limit"], capture_output=True, text=True, encoding="utf-8", timeout=120)
+    assert fin.returncode == 0, fin.stderr
+    report = json.loads((ws / "gather_finalize_report.json").read_text(encoding="utf-8"))
+    assert report["by_origin"] == {"output": 0, "checkpoint": len(HOSTS), "synthetic": 0}, report
+    for line in (ws / "gather_final.jsonl").read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        env_ = json.loads(line)
+        base = runs["baseline"]["by_ip"][env_["ip"]]
+        for key in ("status", "sections", "diagnosis", "data"):
+            assert env_[key] == base[key], f"{env_['ip']}: {key} 는 CHECKPOINT(기본 결과) 그대로"
+        assert env_["errors"][:-1] == base["errors"]
+        assert env_["errors"][-1]["section"] == "addon" and "add-on started but did not finish" in env_["errors"][-1]["detail"]
 
 
 def test_output_failure_after_checkpoint_is_reconciled_from_checkpoint(tmp_path):

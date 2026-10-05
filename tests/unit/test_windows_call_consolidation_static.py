@@ -166,9 +166,10 @@ def test_network_snapshot_reads_each_source_once():
     assert len(re.findall(r"\bGet-NetIPAddress\b", code)) == 1
     assert len(re.findall(r"\bGet-DnsClientServerAddress\b", code)) == 1
     assert len(re.findall(r"\bGet-NetAdapterHardwareInfo\b", code)) == 1
-    # 전체 목록 1회 (InterfaceIndex 색인) + 공급자 질의 옵션 Physical 1회
+    # 전체 목록 1회 (InterfaceIndex 색인) + 공급자 질의 옵션 Physical 1회.
+    #   2026-10-05 (8차 R5): 전체 목록의 끝나지 않는 오류(SilentlyContinue)를 -ErrorVariable 로 모아 구성요소 실패로 남긴다
     calls = re.findall(r"\bGet-NetAdapter\b(?!HardwareInfo)([^\n|)]*)", code)
-    assert sorted(c.strip() for c in calls) == ["-ErrorAction SilentlyContinue", "-Physical"]
+    assert sorted(c.strip() for c in calls) == ["-ErrorAction SilentlyContinue -ErrorVariable seErr", "-Physical"]
     assert "$naByIdx[[string]$addr.InterfaceIndex]" in code
 
 

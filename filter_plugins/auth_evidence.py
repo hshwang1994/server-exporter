@@ -2,7 +2,7 @@
 """Redfish 인증 증거 파일(attempt 단위) 해석 — Plan §6-3 D7 (2026-10-03).
 
 redfish_gather 모듈은 시도(attempt)마다 `<evidence_dir>/<ip>/<attempt_id>.json` 을 **시작 즉시** 만들고, 자격을 실은
-첫 응답을 받는 순간 `first_auth_status` 를 채운다. task timeout(backstop)으로 모듈이 끊겨 `register` 가 없을 때 rescue 는
+첫 응답을 받는 순간 `first_auth_status` 를 채운다. 모듈이 결과 없이 끊겨(예외 · 연결 끊김 · 강제 종료) `register` 가 없을 때 rescue 는
 **현재 attempt 의 파일만** 읽어 세 경우(401 / 200 뒤 정지 / 증거 없음)를 가른다. 이 필터는 그 파일 내용을 안전하게
 해석한다 — 손상 · 부재 · 식별자 불일치는 전부 "증거 없음" 이고 예외를 내지 않는다 (rescue 가 또 실패하면 host 의 봉투가
 fallback 으로 떨어진다).

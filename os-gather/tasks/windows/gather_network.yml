@@ -29,7 +29,6 @@
 #     구성요소에서 종료 오류가 났으면 1 (powershell.exe -EncodedCommand 의 종료 코드), 아니면 0.
 
 - name: "windows | network | snapshot (routes + adapters + addresses + dns)"
-  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
     function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
       $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
@@ -44,19 +43,32 @@
     $routes = $null
     $na = $null
     $dns = $null
+    # 2026-10-05 (8차 R5): 조회의 비종료 오류는 구성요소의 try 가 잡지 못해 빈 목록이 "성공" 으로 남았다. -ErrorVariable 로 받아
+    #   받은 결과는 그대로 두고 구성요소만 실패로 표시한다(아래 "component status" 가 errors[] 로 옮긴다).
+    #   찾는 항목이 없다는 알림(ObjectNotFound — 예: IPv6 기본 경로 없음)은 조회 실패가 아니다.
+    function Get-SeRealError($Errs) { @($Errs | Where-Object { [string]$_.CategoryInfo.Category -ne 'ObjectNotFound' }) }
     Invoke-SeComponent $doc 'read_routes' {
       param($c)
-      $script:routes = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0','::/0' -ErrorAction SilentlyContinue)
+      $seErr = $null
+      $script:routes = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0','::/0' -ErrorAction SilentlyContinue -ErrorVariable seErr)
+      $real = Get-SeRealError $seErr
+      if ($real) { throw $real[0] }
     }
     Invoke-SeComponent $doc 'read_adapters' {
       param($c)
-      $script:na = @(Get-NetAdapter -ErrorAction SilentlyContinue)
+      $seErr = $null
+      $script:na = @(Get-NetAdapter -ErrorAction SilentlyContinue -ErrorVariable seErr)
+      $real = Get-SeRealError $seErr
+      if ($real) { throw $real[0] }
     }
     Invoke-SeComponent $doc 'read_dns' {
       param($c)
-      $script:dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
+      $seErr = $null
+      $script:dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue -ErrorVariable seErr |
                       Where-Object { $_.ServerAddresses } |
                       ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
+      $real = Get-SeRealError $seErr
+      if ($real) { throw $real[0] }
     }
     $def4 = $routes | Where-Object { $_.DestinationPrefix -eq '0.0.0.0/0' } | Sort-Object RouteMetric | Select-Object -First 1
     $def6 = $routes | Where-Object { $_.DestinationPrefix -eq '::/0' } | Sort-Object RouteMetric | Select-Object -First 1
@@ -81,7 +93,8 @@
       $gw  = if ($m.data -and $m.data.gw)  { [string]$m.data.gw }  else { '' }
       $gw6 = if ($m.data -and $m.data.gw6) { [string]$m.data.gw6 } else { '' }
       $primary_idx = $def4.InterfaceIndex
-      Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
+      $ipErr = $null
+      Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue -ErrorVariable ipErr |
       Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -ne '::1' } |
       ForEach-Object {
         $addr    = $_
@@ -104,12 +117,15 @@
           gateway         = $(if ($isGw) { if ($fam -eq 'ipv6') { $gw6 } else { $gw } } else { $null })
         })
       }
+      $real = Get-SeRealError $ipErr
+      if ($real) { throw $real[0] }
     }
     # cycle-016 Phase P: Linux 와 일관 — driver_map (name/driver/vlan_id/bond_master). driver_date 는 수집하지 않는다
     #   (String.ToString('yyyy-MM-dd') 예외로 driver_map 통째 [] 였던 원인 제거, 2026-06-26 site 실측).
     Invoke-SeComponent $doc 'driver_map' {
       param($c)
-      if (-not $doc['read_adapters'].ok) { throw $doc['read_adapters'].error }
+      # 어댑터를 하나도 받지 못했을 때만 같은 오류로 실패한다 — 일부라도 받았으면 받은 것으로 만든다(8차 R5)
+      if ((-not $doc['read_adapters'].ok) -and (@($na).Count -eq 0)) { throw $doc['read_adapters'].error }
       $na | Where-Object { $_.Status -eq 'Up' -or $_.MediaConnectionState -eq 'Connected' } | ForEach-Object {
         [void]$c.rows.Add([PSCustomObject]@{
           name           = $_.Name
@@ -361,7 +377,6 @@
 
 # Teaming 수집 (LBFO + Switch Embedded Teaming). Teaming 없는 서버에서도 빈 [] 로 graceful.
 - name: "windows | network | teaming (LBFO + SET)"
-  timeout: "{{ _win_task_timeout | default(180) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03) — ansible_winrm_read_timeout_sec 70 보다 커야 한다
   ansible.windows.win_shell: |
     $ErrorActionPreference = 'SilentlyContinue'
     function Emit($tag,$o){ if($o){ Write-Output ($tag + ' ' + ($o | ConvertTo-Json -Compress -Depth 4)) } }
@@ -466,6 +481,31 @@
     _w_net_ok: "{{ ((_w_net_topo.interfaces | default([])) | length > 0) }}"
   no_log: true
 
+# 2026-10-05 (8차 R5): 인터페이스가 있어 섹션은 성공해도, 어댑터 · 경로 · DNS · 주소 조회나 스크립트 전체가 실패했으면
+#   MAC · 속도 · 게이트웨이 · DNS · 드라이버가 비는데 기록이 없었다. 실패한 구성요소를 errors[] 1건으로 남긴다(섹션 상태는 그대로).
+- name: "windows | network | component status"
+  ansible.builtin.set_fact:
+    _w_net_parts_failed: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set out = [] -%}
+      {%- for k in ['read_routes', 'read_adapters', 'read_dns', 'meta', 'interfaces', 'driver_map', 'adapters'] -%}
+        {%- if (d.get(k) is mapping) and (d.get(k).get('ok') is sameas false) -%}{%- set _ = out.append(k) -%}{%- endif -%}
+      {%- endfor -%}
+      {%- if (d | length == 0) or ('_error' in d) or (((_w_net_doc_raw.rc | default(0)) or 0) | int != 0) -%}
+        {%- set _ = out.append('script') -%}
+      {%- endif -%}
+      {{ out }}
+    _w_net_parts_error: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set errs = [] -%}
+      {%- for k in ['read_routes', 'read_adapters', 'read_dns', 'meta', 'interfaces', 'driver_map', 'adapters'] -%}
+        {%- if (d.get(k) is mapping) and (d.get(k).get('ok') is sameas false) and d.get(k).get('error') -%}
+          {%- set _ = errs.append(k ~ ': ' ~ (d.get(k).get('error') | string)) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ ((errs | first | default('', true)) | replace('\n', ' ') | replace('\r', ' '))[:160] }}
+  no_log: true
+
 - name: "windows | network | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -491,10 +531,18 @@
     _sections_collected_fragment: "{{ ['network'] if (_w_net_ok | bool) else [] }}"
     _sections_failed_fragment:    "{{ [] if (_w_net_ok | bool) else ['network'] }}"
     _errors_fragment: >-
-      {{ [] if (_w_net_ok | bool) else [{
+      {{ ([] if (_w_net_ok | bool) else [{
            'section': 'network',
            'message': '네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
-           'detail':  ('source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=' ~ (_w_iface_raw.rc | default('none')))}] }}
+           'detail':  ('source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=' ~ (_w_iface_raw.rc | default('none'))
+                       ~ (('; parts=' ~ (_w_net_parts_failed | join(','))) if (_w_net_parts_failed | default([]) | length > 0) else ''))}])
+         + ([{
+           'section': 'network',
+           'message': '네트워크 정보 중 일부를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  ('source=Get-NetAdapter,Get-NetRoute,Get-DnsClientServerAddress,Get-NetIPAddress; cause=component_failed; parts='
+                       ~ (_w_net_parts_failed | join(',')) ~ '; interfaces=' ~ ((_w_net_topo.interfaces | default([])) | length)
+                       ~ (('; error=' ~ _w_net_parts_error) if (_w_net_parts_error | default('', true)) else ''))}]
+            if ((_w_net_ok | bool) and ((_w_net_parts_failed | default([])) | length > 0)) else []) }}
   no_log: true
 
 - name: "windows | network | merge fragment"

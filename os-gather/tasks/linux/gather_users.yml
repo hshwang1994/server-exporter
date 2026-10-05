@@ -14,7 +14,6 @@
 # 두 경로 공통 — getent 시스템 명령 + lastlog/last/utmpdump (raw only)
 # =============================================================================
 - name: "linux | users | raw getent + last logins"
-  timeout: "{{ _os_task_timeout | default(120) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     pw=$(getent passwd 2>/dev/null)

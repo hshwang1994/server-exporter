@@ -94,7 +94,7 @@ def test_current_attempt_401_feeds_the_existing_rejected_rule():
     assert ctx["_rf_auth_statuses"] == [401] and ctx["_rf_auth_observations"][-1]["status"] == 401
     assert ctx["_rf_auth_rejected"] is True, "표준 후보 1벌이 401 → 기존 규칙으로 rejected"
     _assert_outcome(diag, "auth", "AUTH_PROBE_FAILED", False, "auth_rejected")
-    assert "status=task_timeout first_auth=401" in ctx["_rf_failed_attempt_notes"][-1]
+    assert "status=task_stopped first_auth=401" in ctx["_rf_failed_attempt_notes"][-1]
 
 
 def test_current_attempt_200_then_stop_is_gather_failed_with_auth_true():
@@ -102,7 +102,8 @@ def test_current_attempt_200_then_stop_is_gather_failed_with_auth_true():
     assert ctx["_rf_backstop_class"] == "auth_passed"
     _assert_outcome(diag, "gather", "GATHER_FAILED", True, "gather_after_auth")
     note = ctx["_rf_failed_attempt_notes"][-1]
-    assert "task timeout after auth" in note and "last_request=Systems/System.Embedded.1" in note
+    assert "task stopped after auth" in note and "last_request=Systems/System.Embedded.1" in note
+    assert "timeout" not in note, "8차 R3: 작업 단위 시간 제한이 없다 — 관측한 멈춤만 적는다"
 
 
 @pytest.mark.parametrize("raw,why", [
@@ -117,7 +118,7 @@ def test_no_credentialed_evidence_is_stopped_before_auth(raw, why):
     assert ctx["_rf_auth_statuses"] == [] and ctx["_rf_auth_observations"] == [], "증거 없음은 관측이 아니다"
     assert ctx["_rf_auth_outcome"] == "stopped_before_auth"
     _assert_outcome(diag, "gather", "GATHER_FAILED", None, "gather_internal")
-    assert f"task timeout before auth evidence ({why})" in ctx["_rf_failed_attempt_notes"][-1]
+    assert f"task stopped before auth evidence ({why})" in ctx["_rf_failed_attempt_notes"][-1]
 
 
 # ── 격리: 다른 attempt · 식별자 불일치 ────────────────────────────────────────

@@ -40,14 +40,14 @@ def test_label_is_location_label_and_target_capability():
 def test_target_type_is_checked_before_the_label_is_built():
     check = RESOLVE.index("if (!targetLabels.containsKey(targetType))")
     assert check < RESOLVE.index("env.SE_AGENT_LABEL ="), "허용값 밖의 target_type 이 '노드 없음' 으로 보이지 않게 먼저 거른다"
-    assert "target_type 값 오류" in RESOLVE
+    assert "target_type 값이 잘못됐습니다" in RESOLVE
 
 
 def test_missing_node_is_detected_immediately_and_handled_as_accepted_failure():
     assert "def nodes = nodesByLabel(label: env.SE_AGENT_LABEL)" in RESOLVE
     assert "if (!nodes) {" in RESOLVE and "env.SE_GATHER_OUTCOME = 'no_agent'" in RESOLVE
     assert "을 모두 가진 온라인 노드가 없습니다" in RESOLVE, "원인과 조치를 콘솔에 남긴다"
-    assert "(후보: ${nodes.join(', ')})" in RESOLVE, "고른 노드를 콘솔에 남긴다"
+    assert "후보: ${nodes.join(', ')}" in RESOLVE, "고른 노드를 콘솔에 남긴다"
 
 
 def test_only_gather_uses_the_agent_label():

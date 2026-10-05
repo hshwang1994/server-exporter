@@ -66,7 +66,7 @@ def test_layout_check_runs_in_the_venv_with_this_builds_targets():
     check = GATHER[GATHER.index("check_layout.py") - 600: GATHER.index("check_layout.py") + 80]
     assert "activate_ansible_venv.sh" in check, "PyYAML 은 venv 에 있다"
     assert 'python3 addon/tools/check_layout.py addon --targets "${addonTargets}"' in GATHER
-    assert "rc == 3" in GATHER and "실행할 기능 없음" in GATHER, "Add-on 이 지원하지 않는 서버 종류는 켜지 않는다 (UNSTABLE 아님)"
+    assert "rc == 3" in GATHER and "실행할 추가 수집 기능이 없어 Add-on 없이 수집합니다" in GATHER, "Add-on 이 지원하지 않는 서버 종류는 켜지 않는다 (UNSTABLE 아님)"
 
 
 def test_failure_marks_the_build_unstable_without_per_host_errors():
