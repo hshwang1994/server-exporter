@@ -1,0 +1,187 @@
+---
+# tests/jenkins/harness/remote_timeout_probe.yml — 원격 태스크 timeout 관측 (시험 전용 · main 전용, 2026-10-05 F12 (d)(e)). 운영 코드가 아니다.
+#
+# 수집이 쓰는 태스크 단위 상한(`timeout:` 키워드 — Linux 120 s · Windows 180 s)이 실제 원격 대상에서 어떻게 동작하는지 본다:
+#   (d) 출력 없이 오래 걸리지만 상한 안에 끝나는 명령 → 성공해야 한다
+#   (e) 끝나지 않는 명령 → 상한에서 끊겨야 한다. 끊긴 뒤 원격에 그 명령 프로세스가 남는지 고유 marker 로 찾고, 남았으면 정리한 뒤 기록한다
+# 연결 설정은 os-gather/site.yml 의 add_host 와 같다(SSH 22 · WinRM 5986 NTLM). 자격 증명은 vault/<probe_loc>/os/{linux,windows}.yml 의
+# 첫 계정(primary) — no_log 로만 다룬다. 이 플레이북이 만든 프로세스 외에는 건드리지 않는다.
+#   usage: ansible-playbook tests/jenkins/harness/remote_timeout_probe.yml --vault-password-file <file> \
+#            -e probe_loc=git -e linux_ip=10.100.64.161 -e windows_ip=10.100.64.120 -e probe_out=/tmp/remote_timeout_probe.json
+# production tree 에는 들어가지 않는다(production_manifest forbidden tests/**).
+
+- name: remote timeout probe | targets
+  hosts: localhost
+  gather_facts: false
+  vars:
+    probe_loc: git
+    linux_ip: ""
+    windows_ip: ""
+  tasks:
+    - name: probe | marker
+      ansible.builtin.set_fact:
+        _rtp_marker: "SE_RTP_{{ lookup('ansible.builtin.pipe', 'date +%s') }}"
+
+    - name: probe | linux credentials
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../vault/{{ probe_loc }}/os/linux.yml"
+        name: _rtp_lv
+      when: linux_ip | length > 0
+      no_log: true
+
+    - name: probe | windows credentials
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../vault/{{ probe_loc }}/os/windows.yml"
+        name: _rtp_wv
+      when: windows_ip | length > 0
+      no_log: true
+
+    - name: probe | register linux target
+      ansible.builtin.add_host:
+        name: rtp_linux
+        groups: rtp_linux
+        ansible_host: "{{ linux_ip }}"
+        ansible_connection: ssh
+        ansible_port: 22
+        ansible_timeout: 15
+        ansible_user: "{{ _rtp_lv.accounts[0].username }}"
+        ansible_password: "{{ _rtp_lv.accounts[0].password }}"
+        ansible_ssh_common_args: >-
+          -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+          -o ConnectTimeout=15 -o ServerAliveInterval=10
+        _rtp_marker: "{{ _rtp_marker }}"
+      when: linux_ip | length > 0
+      no_log: true
+
+    - name: probe | register windows target
+      ansible.builtin.add_host:
+        name: rtp_windows
+        groups: rtp_windows
+        ansible_host: "{{ windows_ip }}"
+        ansible_connection: winrm
+        ansible_port: 5986
+        ansible_winrm_scheme: https
+        ansible_winrm_transport: ntlm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_operation_timeout_sec: 60
+        ansible_winrm_read_timeout_sec: 70
+        ansible_user: "{{ _rtp_wv.accounts[0].username }}"
+        ansible_password: "{{ _rtp_wv.accounts[0].password }}"
+        _rtp_marker: "{{ _rtp_marker }}"
+      when: windows_ip | length > 0
+      no_log: true
+
+- name: remote timeout probe | linux (raw — the os-gather path for every Python state)
+  hosts: rtp_linux
+  gather_facts: false
+  ignore_unreachable: true   # 시험 관측 — 한 대상의 연결 문제로 다음 대상(Windows) 관측이 빠지지 않게
+  vars:
+    silent_sec: 100
+    silent_timeout: 120
+    cut_timeout: 10
+  tasks:
+    - name: "(d) silent command that ends inside the task limit"
+      timeout: "{{ silent_timeout }}"
+      ansible.builtin.raw: "sleep {{ silent_sec }}; echo done"
+      register: _rtp_l_silent
+      ignore_errors: true      # 시험 관측 — 결과를 기록하는 것이 목적이다
+      changed_when: false
+
+    - name: "(e) endless command cut by the task limit"
+      timeout: "{{ cut_timeout }}"
+      ansible.builtin.raw: "exec -a {{ _rtp_marker }}_L sleep 100000"
+      register: _rtp_l_cut
+      ignore_errors: true      # 끊기는 것이 기대 동작이다 — 기록만 한다
+      changed_when: false
+
+    - name: "(e) remote leftovers after the cut"
+      # 패턴 첫 글자를 [S] 로 감싼다 — 이 명령을 실행하는 셸의 명령줄(같은 문자열을 가진다)과는 맞지 않고 대상 프로세스와만 맞는다
+      ansible.builtin.raw: "sleep 3; pgrep -f '[S]{{ _rtp_marker[1:] }}_L' | wc -l"
+      register: _rtp_l_left
+      changed_when: false
+
+    - name: "(e) cleanup — only this probe's marker"
+      ansible.builtin.raw: "pkill -f '[S]{{ _rtp_marker[1:] }}_L' || true; sleep 1; pgrep -f '[S]{{ _rtp_marker[1:] }}_L' | wc -l"
+      register: _rtp_l_after
+      changed_when: false
+
+- name: remote timeout probe | windows (WinRM)
+  hosts: rtp_windows
+  gather_facts: false
+  ignore_unreachable: true   # 시험 관측
+  vars:
+    silent_sec: 120
+    silent_timeout: 180
+    cut_timeout: 10
+  tasks:
+    - name: "(d) silent command that ends inside the task limit"
+      timeout: "{{ silent_timeout }}"
+      ansible.windows.win_shell: "Start-Sleep -Seconds {{ silent_sec }}; 'done'"
+      register: _rtp_w_silent
+      ignore_errors: true      # 시험 관측
+      changed_when: false
+
+    - name: "(e) endless command cut by the task limit"
+      timeout: "{{ cut_timeout }}"
+      ansible.windows.win_shell: >-
+        powershell.exe -NoProfile -Command "& { '{{ _rtp_marker }}_W' | Out-Null; Start-Sleep -Seconds 100000 }"
+      register: _rtp_w_cut
+      ignore_errors: true      # 끊기는 것이 기대 동작이다 — 기록만 한다
+      changed_when: false
+
+    - name: "(e) remote leftovers after the cut"
+      ansible.windows.win_shell: >-
+        Start-Sleep -Seconds 3;
+        @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*[S]{{ _rtp_marker[1:] }}_W*' -and $_.ProcessId -ne $PID }).Count
+      register: _rtp_w_left
+      changed_when: false
+
+    - name: "(e) cleanup — only this probe's marker"
+      ansible.windows.win_shell: >-
+        Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*[S]{{ _rtp_marker[1:] }}_W*' -and $_.ProcessId -ne $PID } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue };
+        Start-Sleep -Seconds 1;
+        @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*[S]{{ _rtp_marker[1:] }}_W*' -and $_.ProcessId -ne $PID }).Count
+      register: _rtp_w_after
+      changed_when: false
+
+- name: remote timeout probe | report
+  hosts: localhost
+  gather_facts: false
+  vars:
+    probe_out: remote_timeout_probe.json
+  tasks:
+    - name: probe | summarize (no credentials — results only)
+      ansible.builtin.set_fact:
+        _rtp_report:
+          marker: "{{ _rtp_marker }}"
+          linux: >-
+            {{ {} if 'rtp_linux' not in hostvars else {
+                 'target': hostvars['rtp_linux'].ansible_host,
+                 'silent': {'failed': hostvars['rtp_linux']._rtp_l_silent.failed | default(none),
+                            'msg': (hostvars['rtp_linux']._rtp_l_silent.msg | default(''))[:200],
+                            'stdout': (hostvars['rtp_linux']._rtp_l_silent.stdout | default('') | trim)[:40]},
+                 'cut': {'failed': hostvars['rtp_linux']._rtp_l_cut.failed | default(none),
+                         'msg': (hostvars['rtp_linux']._rtp_l_cut.msg | default(''))[:200]},
+                 'left_after_cut': (hostvars['rtp_linux']._rtp_l_left.stdout | default('') | trim),
+                 'left_after_cleanup': (hostvars['rtp_linux']._rtp_l_after.stdout | default('') | trim)} }}
+          windows: >-
+            {{ {} if 'rtp_windows' not in hostvars else {
+                 'target': hostvars['rtp_windows'].ansible_host,
+                 'silent': {'failed': hostvars['rtp_windows']._rtp_w_silent.failed | default(none),
+                            'msg': (hostvars['rtp_windows']._rtp_w_silent.msg | default(''))[:200],
+                            'stdout': (hostvars['rtp_windows']._rtp_w_silent.stdout | default('') | trim)[:40]},
+                 'cut': {'failed': hostvars['rtp_windows']._rtp_w_cut.failed | default(none),
+                         'msg': (hostvars['rtp_windows']._rtp_w_cut.msg | default(''))[:200]},
+                 'left_after_cut': (hostvars['rtp_windows']._rtp_w_left.stdout | default('') | trim),
+                 'left_after_cleanup': (hostvars['rtp_windows']._rtp_w_after.stdout | default('') | trim)} }}
+
+    - name: probe | write report
+      ansible.builtin.copy:
+        content: "{{ _rtp_report | to_nice_json }}\n"
+        dest: "{{ probe_out }}"
+        mode: "0644"
+
+    - name: probe | show report
+      ansible.builtin.debug:
+        var: _rtp_report
