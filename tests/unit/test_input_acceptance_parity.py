@@ -41,6 +41,7 @@ def _run_inventory(channel, inventory):
     env = {k: v for k, v in os.environ.items() if k not in ("INVENTORY_JSON", "inventory_json", "WORKSPACE")}
     env["INVENTORY_JSON"] = json.dumps(inventory)
     env["WORKSPACE"] = str(REPO / "tests" / "fixtures" / "input_validation")    # .inventory_input.json 이 없는 곳
+    env["PYTHONIOENCODING"] = "utf-8"    # Windows 에서도 자식의 한국어 오류를 UTF-8 로 받는다(기본은 cp949 — prodgen G14 로컬 실행에서 드러남)
     proc = subprocess.run([sys.executable, str(REPO / f"{channel}-gather" / "inventory.sh"), "--list"],
                           capture_output=True, text=True, encoding="utf-8", env=env, timeout=60)
     return proc
