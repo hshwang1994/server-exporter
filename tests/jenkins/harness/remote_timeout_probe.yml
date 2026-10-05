@@ -6,8 +6,10 @@
 #   (e) 끝나지 않는 명령 → 상한에서 끊겨야 한다. 끊긴 뒤 원격에 그 명령 프로세스가 남는지 고유 marker 로 찾고, 남았으면 정리한 뒤 기록한다
 # 연결 설정은 os-gather/site.yml 의 add_host 와 같다(SSH 22 · WinRM 5986 NTLM). 자격 증명은 vault/<probe_loc>/os/{linux,windows}.yml 의
 # 첫 계정(primary) — no_log 로만 다룬다. 이 플레이북이 만든 프로세스 외에는 건드리지 않는다.
-#   usage: ansible-playbook tests/jenkins/harness/remote_timeout_probe.yml --vault-password-file <file> \
+#   usage: ANSIBLE_INVENTORY_ENABLED=host_list,script,auto ansible-playbook -i localhost, -c local \
+#            tests/jenkins/harness/remote_timeout_probe.yml --vault-password-file <file> \
 #            -e probe_loc=git -e linux_ip=10.100.64.161 -e windows_ip=10.100.64.120 -e probe_out=/tmp/remote_timeout_probe.json
+#   저장소 ansible.cfg 가 적용되는 위치에서는 host_list 플러그인을 켜야 `-i localhost,` 를 읽는다(cfg 는 script · auto 만, unparsed_is_failed=True).
 # production tree 에는 들어가지 않는다(production_manifest forbidden tests/**).
 
 - name: remote timeout probe | targets
