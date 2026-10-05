@@ -178,11 +178,14 @@ def test_cache_stops_growing_at_the_byte_cap(monkeypatch):
     monkeypatch.setattr(rg, "_get_impl", impl)
     monkeypatch.setattr(rg, "MAX_CACHE_BYTES", 1000)
     rg._reset_response_cache(enabled=True)
-    for p in ("A", "B", "C"):
-        rg._get("192.0.2.1", p, "u", "p", 5, False)
-    stats = rg.cache_stats()
-    assert stats["entries"] == 2 and stats["bytes"] == 700, "B 는 상한을 넘겨 캐시하지 않고(처리는 그대로), 작은 C 는 들어간다"
-    st, data, err = rg._get("192.0.2.1", "B", "u", "p", 5, False)
-    assert (st, data, err) == (200, {"p": "B"}, None), "캐시에 없던 응답도 그대로 돌려준다"
-    rg._invalidate_response_cache()
-    assert rg.cache_stats()["bytes"] == 0
+    try:
+        for p in ("A", "B", "C"):
+            rg._get("192.0.2.1", p, "u", "p", 5, False)
+        stats = rg.cache_stats()
+        assert stats["entries"] == 2 and stats["bytes"] == 700, "B 는 상한을 넘겨 캐시하지 않고(처리는 그대로), 작은 C 는 들어간다"
+        st, data, err = rg._get("192.0.2.1", "B", "u", "p", 5, False)
+        assert (st, data, err) == (200, {"p": "B"}, None), "캐시에 없던 응답도 그대로 돌려준다"
+        rg._invalidate_response_cache()
+        assert rg.cache_stats()["bytes"] == 0
+    finally:
+        rg._reset_response_cache(enabled=False)   # 모듈 전역 상태 — 뒤 시험(e2e 인증 관측)에 캐시가 켜진 채 남지 않게
