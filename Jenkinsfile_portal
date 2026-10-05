@@ -9,13 +9,16 @@
 Map seConstants() {
     return [
         GLOBAL           : 9000,   // options.timeout 150 min
-        // post{always} 합산 제한 1개 = node 대기 120 + 회수 60(unstash 30 + unarchive 30) + 조립 60 + 최소 조립 20 + Callback 390(120×3 + 대기 10+20) + 여유 70.
-        //   아래 step 상한(RECOVER · ASSEMBLE · ASSEMBLE_MIN · PRESERVE_STEP)은 Tier 2(SE_FINALIZER_BOUNDED=true + 승인 4 시그니처)에서만 집행된다 —
+        // post{always} 합산 제한 1개(720) — 적용 순서대로: node 대기(≤120) → 회수 60(unstash 30 + unarchive 30) → 조립 60 → 최소 조립 20 →
+        //   본문 결합·기록 60(BODY, 2026-10-05 F06) → Callback(남은 시간 안에서 시도 시간을 줄여 ≤3회, 최소 CALLBACK_MIN) → 결과 보존 archive 30 → 정리.
+        //   최악 합 120+60+60+20+60+30 = 350 → Callback 에 370 s 가 남는다(120×3 + 대기 30 = 390 은 남은 시간이 자른다).
+        //   아래 step 상한(RECOVER · ASSEMBLE · ASSEMBLE_MIN · BODY · PRESERVE_STEP)은 Tier 2(SE_FINALIZER_BOUNDED=true + 승인 4 시그니처)에서만 집행된다 —
         //   기본(false)에서는 이 합산 제한 · Gather stage 115 min · 전역 150 min 이 유일한 선점이다 (docs/operate/04-pipeline-runtime.md 시간 예산).
         FINALIZER_TOTAL  : 720,
         RECOVER          : 30,     // unstash · unarchive 각각 (Tier 2)
         ASSEMBLE         : 60,     // Layer A 결과 읽기·검문 → Layer B 적재(readTrusted ×3 · load · 정본 파싱 · 조립) → raw 검문 — 전부 한 상한 (Tier 2)
         ASSEMBLE_MIN     : 20,     // 조립 상한 초과 뒤 최소 경로: 이미 읽은(없으면 지금 읽는) OUTPUT 줄만 검문 (Tier 2)
+        BODY             : 60,     // Callback 본문 결합 + callback_body.json 기록 (Tier 2, 2026-10-05 F06) — 넘기면 보내지 않고 사유를 남긴다
         PRESERVE_STEP    : 30,     // Gather post 의 보존 archive · stash 각각 — 합 60 = scripts/gather_budget.sh POST_SEC 의 ARCHIVE_STASH 60 (Tier 2)
         CALLBACK_ATTEMPT : 120,
         CALLBACK_MIN     : 20,     // 이보다 적게 남으면 시도하지 않고 기록만
@@ -523,30 +526,56 @@ def seFinalizeAndCallback() {
             }
             echo "[Finalize] accepted=${accepted} kept=${kept} filled=${filled}(synthetic) dropped=${(report.dropped ?: []).size()} conflicts=${(report.conflicts ?: []).size()} outcome=${outcome} layerA=${layerA} layerB=${layerB} source=${source}"
             // ③ body — 호출자 계약(loc / deploymentEnvironmentId / eventUuid / gatherInfoJson[]) 불변. 문자열 escaping 은 JsonOutput 하나.
-            String body = '{"loc":' + groovy.json.JsonOutput.toJson(params.loc.trim()) +
-                          ',"deploymentEnvironmentId":' + groovy.json.JsonOutput.toJson(params.deploymentEnvironmentId.trim()) +
-                          ',"eventUuid":' + groovy.json.JsonOutput.toJson((params.eventUuid ?: '').trim()) +
-                          ',"gatherInfoJson":[' + lines.join(',') + ']}'
-            writeFile file: 'callback_body.json', text: body, encoding: 'UTF-8'
-            writeFile file: 'finalize_summary.json', encoding: 'UTF-8',
-                      text: groovy.json.JsonOutput.toJson([accepted: accepted, lines: lineCount, kept: kept, filled: filled, outcome: outcome,
-                                                            layerA: layerA, layerB: layerB, source: source, node_wait_sec: tIn - tPost,
-                                                            unrecovered: unrecovered, damage: damage, by_origin: (report.by_origin ?: null),
-                                                            recovery_limited: (layerB == 'unavailable' && lineCount != accepted),
-                                                            preserve: [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED, stashed: env.SE_PRESERVE_STASHED,
-                                                                       manifestOk: env.SE_PRESERVE_MANIFEST, hasResult: env.SE_PRESERVE_HASRESULT]])
+            //    결합과 기록은 BODY 상한 안에서 한다(F06, Tier 2). 넘기면 보내지 않는다 — 만들지 못한 본문으로 전달을 보장한다고 하지 않는다.
+            //    이미 보존한 결과(gather_final.jsonl · gather_output.json, Gather 단계의 archive)는 그대로 남는다.
+            String body = null
+            boolean bodyReady = seBounded(C.BODY, 'body') {
+                body = '{"loc":' + groovy.json.JsonOutput.toJson(params.loc.trim()) +
+                       ',"deploymentEnvironmentId":' + groovy.json.JsonOutput.toJson(params.deploymentEnvironmentId.trim()) +
+                       ',"eventUuid":' + groovy.json.JsonOutput.toJson((params.eventUuid ?: '').trim()) +
+                       ',"gatherInfoJson":[' + lines.join(',') + ']}'
+                writeFile file: 'callback_body.json', text: body, encoding: 'UTF-8'
+            }
+            if (!bodyReady) {
+                damage << 'body_timeout'
+                body = null
+            }
+            // 요약은 줄 집합을 비우기 전에 만들고(전송 결과는 아래에서 더한다), 전송 뒤에 기록한다.
+            Map summary = [accepted: accepted, lines: lineCount, kept: kept, filled: filled, outcome: outcome,
+                           limit_reason: (env.SE_GATHER_LIMIT_REASON ?: null),
+                           layerA: layerA, layerB: layerB, source: source, node_wait_sec: tIn - tPost,
+                           unrecovered: unrecovered, damage: damage, by_origin: (report.by_origin ?: null),
+                           recovery_limited: (layerB == 'unavailable' && lineCount != accepted),
+                           preserve: [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED, stashed: env.SE_PRESERVE_STASHED,
+                                      manifestOk: env.SE_PRESERVE_MANIFEST, hasResult: env.SE_PRESERVE_HASRESULT]]
             lines = null
-            // ④ Callback — 남은 예산 안에서
-            boolean delivered = seCallback(body, hardDeadline, finalizerDeadline, C)
-            archiveArtifacts artifacts: 'callback_body.json,finalize_summary.json,gather_final.jsonl,gather_finalize_report.json',
-                             allowEmptyArchive: true, fingerprint: false
-            if (!delivered) {
+            // ④ Callback — 남은 예산 안에서. 본문이 없으면 시도하지 않고 사유를 남긴다.
+            boolean delivered = false
+            if (body != null) {
+                delivered = seCallback(body, hardDeadline, finalizerDeadline, C)
+            } else {
+                echo "[Finalize] 본문을 상한 ${C.BODY}s 안에 만들지 못해 전송하지 않았다 — 보존한 결과는 artifact gather_final.jsonl · gather_output.json"
+            }
+            summary.callback = [attempted: (body != null), delivered: delivered]
+            writeFile file: 'finalize_summary.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson(summary)
+            boolean finalArchived = seBounded(C.PRESERVE_STEP, 'archive_final') {
+                archiveArtifacts artifacts: 'callback_body.json,finalize_summary.json,gather_final.jsonl,gather_finalize_report.json',
+                                 allowEmptyArchive: true, fingerprint: false
+            }
+            if (!finalArchived) { echo "[Finalize] 마지막 보존 archive 가 상한 ${C.PRESERVE_STEP}s 를 넘겼다 — 요약 · 본문은 이 node 작업공간에만 있다" }
+            if (body == null) {
+                unstable("[Finalize] Callback 본문을 상한 안에 만들지 못해 보내지 않았다 — artifact gather_final.jsonl · gather_output.json 참조")
+            } else if (!delivered) {
                 echo "[Finalize] delivered=false — body 는 artifact callback_body.json"
                 unstable("[Finalize] Callback 전송 실패 — artifact callback_body.json 참조")
             } else if (filled > 0 || outcome != 'completed' || layerB == 'unavailable' || lineCount != accepted) {
                 unstable("[Finalize] 전송은 됐지만 보충(filled=${filled}) · 비정상 종료(outcome=${outcome}) · 라이브러리(layerB=${layerB}) 중 하나가 있었다")
             }
-            deleteDir()
+            if (finalArchived) {
+                deleteDir()
+            } else {
+                echo "[Finalize] 마지막 보존이 끝나지 않아 controller 작업공간을 지우지 않는다 (${pwd()})"
+            }
         }
     }
 }

@@ -182,6 +182,22 @@ def _check_ci_stages(path: str, main_sha: str, report: dict, require_bounded: bo
     return problems
 
 
+def _effective_require_bounded(flag: bool, ci_stage_results: str | None) -> tuple[bool, str]:
+    """2026-10-05 (F06): CI 가 Tier 2 를 승격 조건으로 요구했으면(ci_stage_results.json 의 require_bounded=true) CLI 는 그 요구를 낮추지 못한다.
+    반환 (적용값, 출처: cli | ci_stage_results | cli+ci_stage_results | none)."""
+    ci_required = False
+    if ci_stage_results:
+        try:
+            ci_required = _load_json(ci_stage_results).get("require_bounded") is True
+        except (OSError, ValueError, AttributeError):
+            ci_required = False
+    if flag and ci_required:
+        return True, "cli+ci_stage_results"
+    if ci_required:
+        return True, "ci_stage_results"
+    return bool(flag), ("cli" if flag else "none")
+
+
 def _deploy_policy_problems(remotes: list, dry_run: bool) -> list:
     """A real promotion/restore publishes to exactly the deploy set. Dropping or narrowing remotes is not a way around it (검토 C4)."""
     if dry_run:
@@ -278,6 +294,10 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
             return result
         if gates_dict.get("verdict") != "COMPLETE_PASS":
             result["preview_only"] = f"dry-run preview with verdict {gates_dict.get('verdict')} — a real promotion would be refused here"
+
+        # ── Tier 2 요구 — CI 가 요구했으면 CLI 플래그가 없어도 요구한다 (F06: CI 에서만 강제되고 CLI 실승격에서 빠지는 경로 차단)
+        require_bounded, bounded_from = _effective_require_bounded(require_bounded, ci_stage_results)
+        result["require_bounded"] = {"value": require_bounded, "from": bounded_from}
 
         # ── E2E evidence (same main SHA, required scenarios PASS) — required for a real promotion
         evidence = None

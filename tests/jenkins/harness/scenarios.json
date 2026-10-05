@@ -637,6 +637,31 @@
         "rethrown": false,
         "note": "최종 지시 §4-3 Tier 2: Layer A 결과 읽기가 ASSEMBLE(60 s) 을 넘기면 자기 timeout 으로 식별 → 최소 경로(ASSEMBLE_MIN 20 s)가 OUTPUT 줄만 검문해 전송 · layerA=timeout · layerB=unavailable · damage assemble_timeout. 승인 없으면 PARTIAL/승인"
       }
+    },
+    "inner_body_timeout": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "slow_seconds": 70,
+      "bounded": true,
+      "probe_approvals": true,
+      "expect": {
+        "delivered": false,
+        "layerA": "ok",
+        "lines_eq_accepted": true,
+        "damage_contains": [
+          "body_timeout"
+        ],
+        "unstable_contains": [
+          "본문을 상한 안에 만들지 못해"
+        ],
+        "sink_posts_max": 0,
+        "rethrown": false,
+        "note": "2026-10-05 F06 Tier 2: Callback 본문 기록이 BODY(60 s) 를 넘기면 자기 timeout 으로 식별 → 전송하지 않고 damage body_timeout · UNSTABLE. 보존한 결과(gather_final.jsonl)는 그대로. 승인 없으면 재전파(PARTIAL/승인)"
+      }
     }
   }
 }

@@ -42,13 +42,16 @@ FOREIGN_TIMEOUT_UNSTASH = {"foreign_timeout_interruption"}    # unstash 안에�
 SLOW_ARCHIVE = {"archive_slow", "inner_archive_timeout"}
 SLOW_STASH = {"inner_stash_timeout"}
 SLOW_READFILE_FINAL = {"layer_a_read_slow", "inner_layer_a_read_timeout"}
+# 2026-10-05 (F06): Callback 본문 기록(writeFile callback_body.json)을 늦춘다 — BODY 상한(60 s) 초과 시 전송하지 않고 사유를 남기는지
+SLOW_WRITEFILE_BODY = {"inner_body_timeout"}
 
 # 모든 시나리오 — Jenkinsfile_harness · harness_verdict.py 와 같은 목록 (scenarios.json 이 정본)
 SCENARIOS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
              "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx", "sink_close",
              "recover_slow", "outer_timeout", "inner_recover_timeout", "inner_assemble_timeout", "foreign_timeout_interruption",
              "user_abort", "aborted_outcome_finalize", "sink_hold", "sandbox_probe",
-             "archive_slow", "inner_archive_timeout", "inner_stash_timeout", "layer_a_read_slow", "inner_layer_a_read_timeout")
+             "archive_slow", "inner_archive_timeout", "inner_stash_timeout", "layer_a_read_slow", "inner_layer_a_read_timeout",
+             "inner_body_timeout")
 
 WRAPPERS = r'''
 
@@ -139,6 +142,15 @@ def readTrusted(String path) {
 }
 
 // finalizer 의 Layer A 결과 읽기(readFile gather_final.jsonl)만 늦춘다 — ASSEMBLE 상한 안에 Layer A 읽기가 들어 있는지 본다 (최종 지시 §4-3)
+def writeFile(Map m) {
+    if ((HARNESS.scenario in __SLOW_WRITEFILE_BODY__) && (m.file ?: '').toString() == 'callback_body.json' && !HARNESS.slowBodyDone) {
+        HARNESS.slowBodyDone = true
+        HARNESS.calls << ('writeFile:slow:' + HARNESS.slowSeconds)
+        HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
+    }
+    return HARNESS.outer.writeFile(m)
+}
+
 def readFile(Map m) {
     if ((HARNESS.scenario in __SLOW_READFILE_FINAL__) && (m.file ?: '').toString() == 'gather_final.jsonl' && !HARNESS.slowDone) {
         HARNESS.slowDone = true
@@ -205,7 +217,8 @@ def build(source: Path, scenario: str, out: Path, meta_out: Path | None) -> dict
                 .replace("__FOREIGN_TIMEOUT_UNSTASH__", groovy_list(FOREIGN_TIMEOUT_UNSTASH))
                 .replace("__SLOW_ARCHIVE__", groovy_list(SLOW_ARCHIVE))
                 .replace("__SLOW_STASH__", groovy_list(SLOW_STASH))
-                .replace("__SLOW_READFILE_FINAL__", groovy_list(SLOW_READFILE_FINAL)))
+                .replace("__SLOW_READFILE_FINAL__", groovy_list(SLOW_READFILE_FINAL))
+                .replace("__SLOW_WRITEFILE_BODY__", groovy_list(SLOW_WRITEFILE_BODY)))
     generated = functions.rstrip("\n") + "\n" + wrappers
     _write_lf(out, generated)
     meta = {

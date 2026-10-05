@@ -47,7 +47,7 @@ REQUIRED_HARNESS_TREE = ("normal_success", "archive_fail", "stash_fail", "both_f
                          "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt")
 # Tier 2 (SE_FINALIZER_BOUNDED=true) — required only when bounded mode is enabled for the deployment; PARTIAL without Script Approval
 REQUIRED_HARNESS_BOUNDED = ("inner_recover_timeout", "inner_assemble_timeout", "inner_archive_timeout", "inner_stash_timeout",
-                            "inner_layer_a_read_timeout")
+                            "inner_layer_a_read_timeout", "inner_body_timeout")
 HARNESS_MARKER = "harness"
 # Harness scenarios that end in a Jenkins result other than SUCCESS by design (scenarios.json `jenkins_result`, e.g. user_abort → ABORTED).
 # Read from the repository's scenario definition when present so the collector and the CI driver judge the same expectation

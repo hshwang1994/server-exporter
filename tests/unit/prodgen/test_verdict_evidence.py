@@ -441,3 +441,32 @@ def test_promote_require_bounded_adds_the_tier2_group_and_ci_stage(tmp_path):
     assert not [p for p in _check_e2e(ev, a) if "bounded" in p], "기본: bounded 그룹을 요구하지 않는다"
     assert len([p for p in _check_e2e(ev, a, require_bounded=True) if "bounded" in p]) == len(REQUIRED_HARNESS_BOUNDED)
 
+
+def test_ci_required_bounded_cannot_be_lowered_by_the_cli(tmp_path):
+    """2026-10-05 (F06): CI 가 REQUIRE_BOUNDED 로 Tier 2 를 요구했으면 ci_stage_results.json 이 그 사실을 싣고, CLI promote 가 플래그 없이
+    불려도 같은 요구(HARNESS_BOUNDED PASS · bounded E2E 그룹)를 적용한다. CI 가 요구하지 않은 배포(고객사 기본)는 그대로 선택이다."""
+    import json as _json
+    from scripts.ai.prodgen.promote import _check_ci_stages, _effective_require_bounded
+    a = "a" * 40
+    stages = {k: "PASS" for k in ("GATE", "CORPUS", "BUDGET", "HARNESS_MAIN", "PRODGEN_BUILD", "HARNESS_TREE", "PRODGEN_DRIFT", "PRODGEN_VERIFY", "EVIDENCE")}
+    path = tmp_path / "ci.json"
+    path.write_text(_json.dumps({"main_sha": a, "require_bounded": True, "stages": dict(stages, HARNESS_BOUNDED="PARTIAL")}), encoding="utf-8")
+    assert _effective_require_bounded(False, str(path)) == (True, "ci_stage_results")
+    assert _effective_require_bounded(True, str(path)) == (True, "cli+ci_stage_results")
+    rb, _ = _effective_require_bounded(False, str(path))
+    assert "HARNESS_BOUNDED=PARTIAL" in _check_ci_stages(str(path), a, {}, require_bounded=rb)[0]
+    path.write_text(_json.dumps({"main_sha": a, "require_bounded": False, "stages": stages}), encoding="utf-8")
+    assert _effective_require_bounded(False, str(path)) == (False, "none")
+    assert _effective_require_bounded(True, str(path)) == (True, "cli")
+    assert _effective_require_bounded(False, None) == (False, "none")
+    assert _effective_require_bounded(False, str(tmp_path / "missing.json")) == (False, "none")
+
+
+def test_promote_applies_the_effective_requirement_before_the_evidence_checks():
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[3] / "scripts" / "ai" / "prodgen" / "promote.py").read_text(encoding="utf-8")
+    i_eff = text.index("require_bounded, bounded_from = _effective_require_bounded(require_bounded, ci_stage_results)")
+    assert i_eff < text.index("e2e_problems = (_check_e2e(") < text.index("ci_problems = (_check_ci_stages(")
+    ci = (Path(__file__).resolve().parents[3] / "Jenkinsfile_ci").read_text(encoding="utf-8")
+    assert "require_bounded: (params.REQUIRE_BOUNDED != false), stages: stages" in ci
+
