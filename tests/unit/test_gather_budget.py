@@ -44,8 +44,9 @@ def test_small_os_batch_uses_min_and_starts():
     rc, b = run()
     assert rc == 0 and b["start"] is True and b["reason"] == "computed"
     assert b["forks"] == 3 and b["waves"] == 1 and b["host_cap"] == 240
-    assert b["gather"] == 600, "BASE 300 + 240 = 540 < MIN 600"
-    assert b["budget"] == 600
+    assert b["gather"] == 600 and b["expected"] == 600, "BASE 300 + 240 = 540 < MIN 600"
+    # 2026-10-05 (F12): 예상값은 중단 기준이 아니다 — 중단 기준은 운영 상한 min(hard, stage)
+    assert b["budget"] == b["stage_remaining"] == 6900 - 90 - 180 and b["limit_source"] == "ceiling"
 
 
 def test_os_forks_default_cap_50_and_runner_env_override():
@@ -65,7 +66,8 @@ def test_os_forks_default_cap_50_and_runner_env_override():
 def test_redfish_large_batch_formula():
     rc, b = run(SE_CHANNEL="redfish", SE_HOSTS=200, SE_VCPU=8)
     assert b["forks"] == 32 and b["waves"] == 7 and b["host_cap"] == 605
-    assert b["gather"] == 300 + 605 * 7 == 4535 and b["budget"] == 4535
+    assert b["gather"] == 300 + 605 * 7 == 4535 and b["expected"] == 4535
+    assert b["budget"] == min(b["hard_remaining"], b["stage_remaining"]), "예상 4535 s 로 자르지 않는다"
     rc, b2 = run(SE_CHANNEL="redfish", SE_HOSTS=200, SE_VCPU=8, SE_REDFISH_CANDIDATES=2, SE_REDFISH_RECOVERY=1)
     assert b2["host_cap"] == 2 * 605 + 240 and b2["gather"] == 5400, "CAP 에서 잘린다"
 
@@ -79,9 +81,9 @@ def test_late_node_entry_shrinks_budget_but_not_reserve():
     # 빌드 시작 후 140 분이 지나 node 에 들어왔다: HARD_DEADLINE(150 min) − now − RESERVE(990) = 600 − 990 < 0 → 시작하지 않는다.
     _, b = run(SE_NOW_EPOCH=T0 + 140 * 60, SE_STAGE_START_EPOCH=T0 + 139 * 60, SE_CHANNEL="redfish", SE_HOSTS=4)
     assert b["start"] is False and b["reason"] == "not_started_budget" and b["budget"] == 0
-    # 100 분 경과: 남은 3000 − 990 = 2010 → gather(905) 그대로
+    # 100 분 경과: 남은 3000 − 990 = 2010 → 중단 기준은 hard 상한 2010 (예상 905 가 아니다 — F12)
     _, b = run(SE_NOW_EPOCH=T0 + 100 * 60, SE_STAGE_START_EPOCH=T0 + 99 * 60, SE_CHANNEL="redfish", SE_HOSTS=4)
-    assert b["gather"] == 905 and b["budget"] == 905 and b["hard_remaining"] == 2010
+    assert b["gather"] == 905 and b["budget"] == 2010 and b["hard_remaining"] == 2010 and b["limit_source"] == "ceiling"
     # 125 분 경과: 남은 1500 − 990 = 510 → budget 510 (gather 보다 작다), reserve 침범 없음
     _, b = run(SE_NOW_EPOCH=T0 + 125 * 60, SE_STAGE_START_EPOCH=T0 + 124 * 60, SE_CHANNEL="redfish", SE_HOSTS=4)
     assert b["budget"] == 510 and b["start"] is True
@@ -164,7 +166,39 @@ def test_constants_match_plan():
     _, b = run()
     c = b["constants"]
     assert c == {"global": 9000, "reserve": 990, "stage_limit": 6900, "grace": 90, "post": 180,
-                 "base": 300, "min": 600, "cap": 5400, "min_start": 120,
+                 "base": 300, "min": 600, "cap": 5400, "min_start": 120, "stall": 420,
                  "per_fork_mb": 80, "node_share_pct": 40, "fixed_mb": 200}
+    assert b["stall"] == c["stall"] == 300 + 120, "가장 긴 단일 태스크 상한(Add-on 300) + 120"
     assert c["reserve"] == 90 + 120 + 60 + 720, "GRACE + LAYER_A + ARCHIVE_STASH + FINALIZER_TOTAL"
     assert c["stage_limit"] <= c["global"] - 4 * 60 - 720, "Validate·Resolve 4 min + finalizer 720 s 가 150 min 안에 든다"
+
+
+# ── 2026-10-05 (F12): 예상 시간과 중단 기준의 분리 ─────────────────────────────────────────────
+def test_expected_is_reported_but_the_stop_limit_is_the_operating_ceiling():
+    """예상 공식이 빗나가도 진행 중인 수집을 자르지 않는다 — 큰 배치 · 느린 host 는 운영 상한까지, 정체는 gather_watch.py 가 판단한다."""
+    for channel, hosts in (("os", 3), ("os", 200), ("esxi", 6), ("redfish", 10), ("redfish", 200)):
+        _, b = run(SE_CHANNEL=channel, SE_HOSTS=hosts)
+        assert b["expected"] == b["gather"] and b["limit_source"] == "ceiling"
+        assert b["budget"] == min(b["hard_remaining"], b["stage_remaining"]), (channel, hosts)
+        assert b["budget"] >= b["expected"] or b["expected"] == 5400, "예상이 상한보다 작으면 상한까지 기다린다"
+
+
+def test_redfish_recovery_path_fits_under_the_ceiling():
+    """F08: 복구 경로(표준 1 + 복구 4 후보)의 host 최악치는 예상(605)으로는 잘렸다 — 이제 상한(≈6630 s) 안에서 끝까지 기다린다.
+    precheck 120 + detect 120 + 수집 1260 + 401 뒤 대기 65 + 복구 4 × 240 + 그 사이 대기 3 × 65 + 복구 뒤 재수집 1260 = 3980 s."""
+    worst_host = 120 + 120 + 1260 + 65 + 4 * 240 + 3 * 65 + 1260
+    _, b = run(SE_CHANNEL="redfish", SE_HOSTS=4, SE_VCPU=4)
+    assert b["waves"] == 1 and b["budget"] >= worst_host, (b["budget"], worst_host)
+
+
+def test_forced_limit_is_labelled_and_not_the_ceiling():
+    _, b = run(SE_FORCE_SEC=150)
+    assert b["limit_source"] == "forced" and b["budget"] == 150 and b["expected"] == b["gather"]
+
+
+def test_not_started_has_no_limit_source():
+    _, b = run(SE_FORCE_SEC=60)
+    assert b["start"] is False and b["limit_source"] == "none"
+    _, b = run(SE_CHANNEL="os", SE_HOSTS=10, SE_MEM_AVAILABLE_MB=500)
+    assert b["reason"] == "not_started_memory" and b["limit_source"] == "none" and b["stall"] == 420
+

@@ -417,7 +417,14 @@ def evidence_state():
 _RESPONSE_CACHE = {}
 _CACHE = {'enabled': False, 'hits': 0, 'misses': 0, 'bytes': 0}
 _LAST_BODY = {'bytes': 0}    # 직전 _get_impl 이 읽은 원문 길이 — 캐시 총량(MAX_CACHE_BYTES) 계산용 (2026-10-05 F07)
-_DEADLINE = {'at': None, 'seconds': 0, 'exceeded': False}
+_DEADLINE = {'at': None, 'seconds': 0, 'exceeded': False, 'idle': 0, 'last_ok': None, 'kind': None}
+# 2026-10-05 (F12): 진행 기반 마감. `deadline` 은 모듈 호출 전체의 절대 상한(태스크 timeout 보다 작다 — 결과를 돌려주고 끝나기 위해),
+#   `idle_deadline` 은 **새 응답(2xx)이 하나도 없이** 지난 시간의 상한이다. 페이지가 계속 들어오는 동안에는 절대 상한까지 수집하고,
+#   BMC 가 아무 응답도 주지 않으면 idle 에서 멈춘다. 같은 페이지 재요청(캐시 hit)은 네트워크가 없어 진행으로 세지 않는다.
+#   heartbeat: 새 응답마다(최대 5 s 에 1번) progress_dir/<bmc_ip> 파일을 갱신한다 — 배치 정체 감시(scripts/gather_watch.py)가
+#   한 태스크 안의 긴 Redfish 수집을 진행으로 본다. progress_dir 이 비면(Jenkins 밖 실행) 아무것도 쓰지 않는다.
+_HEARTBEAT = {'path': None, 'last': None}
+HEARTBEAT_EVERY_SEC = 5
 
 
 class _DeadlineExceeded(OSError):
@@ -447,15 +454,23 @@ def cache_stats():
     return {'hits': _CACHE['hits'], 'misses': _CACHE['misses'], 'entries': len(_RESPONSE_CACHE), 'bytes': _CACHE['bytes']}
 
 
-def _set_deadline(seconds):
-    """seconds > 0 이면 monotonic 기한을 건다. 0/None 이면 끈다 (기본 — 하위 호환)."""
+def _set_deadline(seconds, idle=0):
+    """seconds > 0 이면 monotonic 절대 기한을, idle > 0 이면 '새 응답 없이 지난 시간' 기한을 건다. 0/None 이면 끈다 (기본 — 하위 호환)."""
     try:
         seconds = int(seconds or 0)
     except (TypeError, ValueError):
         seconds = 0
+    try:
+        idle = int(idle or 0)
+    except (TypeError, ValueError):
+        idle = 0
+    now = time.monotonic()
     _DEADLINE['seconds'] = seconds
-    _DEADLINE['at'] = (time.monotonic() + seconds) if seconds > 0 else None
+    _DEADLINE['at'] = (now + seconds) if seconds > 0 else None
+    _DEADLINE['idle'] = idle if idle > 0 else 0
+    _DEADLINE['last_ok'] = now
     _DEADLINE['exceeded'] = False
+    _DEADLINE['kind'] = None
 
 
 def _deadline_remaining():
@@ -464,17 +479,62 @@ def _deadline_remaining():
     return _DEADLINE['at'] - time.monotonic()
 
 
+def _idle_remaining():
+    if not _DEADLINE['idle'] or _DEADLINE['last_ok'] is None:
+        return None
+    return _DEADLINE['idle'] - (time.monotonic() - _DEADLINE['last_ok'])
+
+
+def _mark_progress():
+    """새 응답(2xx)을 받았다 — idle 기한을 다시 세고, heartbeat 를 (최대 HEARTBEAT_EVERY_SEC 에 1번) 갱신한다."""
+    now = time.monotonic()
+    _DEADLINE['last_ok'] = now
+    path = _HEARTBEAT['path']
+    if path and (_HEARTBEAT['last'] is None or now - _HEARTBEAT['last'] >= HEARTBEAT_EVERY_SEC):
+        _HEARTBEAT['last'] = now
+        try:
+            with open(path, 'w', encoding='utf-8') as fh:
+                fh.write('%d\n' % int(time.time()))
+        except OSError:
+            pass
+
+
+def _set_heartbeat(progress_dir, bmc_ip):
+    _HEARTBEAT['path'] = None
+    _HEARTBEAT['last'] = None
+    if not progress_dir:
+        return
+    try:
+        os.makedirs(progress_dir, exist_ok=True)
+        _HEARTBEAT['path'] = os.path.join(progress_dir, 'redfish-' + re.sub(r'[^0-9A-Za-z_.-]', '_', str(bmc_ip)))
+    except OSError:
+        _HEARTBEAT['path'] = None
+
+
 def _effective_timeout(timeout):
-    """deadline 이 켜져 있으면 남은 시간으로 소켓 timeout 을 줄인다. 남은 시간이 없으면 요청을 보내지 않는다."""
+    """기한(절대 · 새 응답 없음)이 켜져 있으면 남은 시간으로 소켓 timeout 을 줄인다. 남은 시간이 없으면 요청을 보내지 않는다."""
     rem = _deadline_remaining()
-    if rem is None:
+    idle_rem = _idle_remaining()
+    if rem is None and idle_rem is None:
         return timeout
-    if rem <= 0:
+    if rem is not None and rem <= 0:
         if not _DEADLINE['exceeded']:
             _DEADLINE['exceeded'] = True
+            _DEADLINE['kind'] = 'absolute'
             _notice('gather', '모듈 deadline %ds 경과 — 이후 요청은 보내지 않고 건너뛴다' % _DEADLINE['seconds'])
         raise _DeadlineExceeded('Deadline exceeded: request skipped')
-    return min(timeout, max(1, int(rem + 0.999)))
+    if idle_rem is not None and idle_rem <= 0:
+        if not _DEADLINE['exceeded']:
+            _DEADLINE['exceeded'] = True
+            _DEADLINE['kind'] = 'idle'
+            _notice('gather', '새 응답 없이 %ds 가 지나 이후 요청은 보내지 않고 건너뛴다' % _DEADLINE['idle'])
+        raise _DeadlineExceeded('Deadline exceeded: no new response for %ds, request skipped' % _DEADLINE['idle'])
+    left = min(r for r in (rem, idle_rem) if r is not None)
+    return min(timeout, max(1, int(left + 0.999)))
+
+
+def deadline_kind():
+    return _DEADLINE['kind']
 
 
 def deadline_exceeded():
@@ -554,6 +614,8 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
             # 실패로 남겨야 함(빈 {} 로 진행해 vendor=unknown 으로 새지 않게).
             raw = _read_capped(resp)
             _LAST_BODY['bytes'] = len(raw)
+            if 200 <= resp.status < 300:
+                _mark_progress()
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -1416,6 +1478,8 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
             # Round 17 #18: 성공 path json.loads 지역 guard — 200+빈 body 는 {}(tolerant),
             # 비-JSON body 는 err 설정. status 0 오보 방지 + detect 경로 malformed 명확 실패.
             raw = _read_capped(resp)
+            if 200 <= resp.status < 300:
+                _mark_progress()
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -7669,6 +7733,10 @@ def main():
             # 2026-10-03 (P2): 모듈 호출 wall-clock 기한(초). 0 = 끔(하위 호환). 남은 시간으로 소켓 timeout 을
             #   줄이고, 다 쓰면 이후 요청을 건너뛴다 → 해당 섹션 failed, 수집된 데이터는 보존(partial).
             deadline        = dict(type='int',  default=0),
+            # 2026-10-05 (F12): 새 응답(2xx) 없이 지난 시간의 상한(초). 0 = 끔. 페이지가 계속 오면 deadline 까지 수집한다.
+            idle_deadline   = dict(type='int',  default=0),
+            # 2026-10-05 (F12): heartbeat 디렉터리 — 새 응답마다 <dir>/redfish-<bmc_ip> 를 갱신한다(배치 정체 감시용). 비면 끔.
+            progress_dir    = dict(type='str',  default=''),
             target_username = dict(type='str',  default=''),
             target_password = dict(type='str',  default='', no_log=True),
             target_role     = dict(type='str',  default='Administrator'),
@@ -7711,7 +7779,8 @@ def main():
     timeout, verify_ssl = p['timeout'], p['verify_ssl']
     mode = p['mode']
     _evidence_begin(p.get('attempt'), bmc_ip, username)
-    _set_deadline(p.get('deadline'))
+    _set_deadline(p.get('deadline'), p.get('idle_deadline'))
+    _set_heartbeat(p.get('progress_dir'), bmc_ip)
     # P2: 캐시는 읽기 전용 모드에서만. account_provision 은 다른 자격으로 같은 경로를 다시 읽으므로 끈다.
     _reset_response_cache(enabled=(mode in ('gather', 'detect')))
 
@@ -7742,7 +7811,7 @@ def main():
             vendor=vendor, collected=[], failed_sections=[], unsupported_sections=[],
             errors=list(det_errors), data=data, probe_facts=probe_facts, multi_node=None,
             auth_evidence=auth_evidence(), notices=notices(),
-            deadline_exceeded=deadline_exceeded(), cache=cache_stats(),
+            deadline_exceeded=deadline_exceeded(), deadline_kind=deadline_kind(), cache=cache_stats(),
         )
         return
 
@@ -7898,7 +7967,7 @@ def main():
         errors=all_errors, data=result_data, probe_facts=probe_facts,
         multi_node=multi_node, auth_evidence=auth_evidence(), notices=notices(),
         # 2026-10-03 (P2): 모듈 내부 관측값 — envelope 13 필드에는 들어가지 않는다 (normalize 가 뽑지 않음).
-        deadline_exceeded=deadline_exceeded(), cache=cache_stats(),
+        deadline_exceeded=deadline_exceeded(), deadline_kind=deadline_kind(), cache=cache_stats(),
     )
 
 

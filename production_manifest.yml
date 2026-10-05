@@ -133,6 +133,12 @@ include:
     mode: "100644"
     doc_runtime: preserve_module_docstring
     note: argparse description reads __doc__ at runtime; the module docstring is runtime-required (class A)
+  - path: scripts/gather_watch.py
+    language: python
+    python_kind: script
+    mode: "100644"
+    doc_runtime: preserve_module_docstring
+    note: stall watch beside the Gather timeout (2026-10-05 F12); argparse description reads __doc__ at runtime (class A)
 
 excluded:
   - path: common/vars/status_rules.yml

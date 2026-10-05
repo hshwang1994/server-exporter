@@ -282,7 +282,7 @@ def sePreserveGatherOutput() {
             set +e
             cd "\${WORKSPACE}"
             . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
-            timeout 120 python3 scripts/finalize_gather_output.py --workspace "\${WORKSPACE}" --repo-root "\${WORKSPACE}" --outcome "${outcome}"
+            timeout 120 python3 scripts/finalize_gather_output.py --workspace "\${WORKSPACE}" --repo-root "\${WORKSPACE}" --outcome "${outcome}" --limit-reason "${env.SE_GATHER_LIMIT_REASON ?: ''}"
             exit \$?
         """)
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
@@ -296,7 +296,7 @@ def sePreserveGatherOutput() {
     boolean archived = false
     try {
         boolean done = seBounded(C.PRESERVE_STEP, 'archive') {
-            archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_auth_evidence/**',
+            archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_watch.json,gather_auth_evidence/**',
                              allowEmptyArchive: true, fingerprint: false)
         }
         archived = done
@@ -900,7 +900,11 @@ pipeline {
                                 //   (SE_ANSIBLE_VENV → PATH 의 ansible-playbook → 알려진 설치 경로). 못 찾으면 rc 90 (prep_failed).
                                 // ADDON_DIR 은 검사를 통과한 빌드의 이 ansible 실행에만 준다 — 값이 있으면 hook 이 그 Add-on 을 실행하므로,
                                 //   받지 못했거나 검사에 실패한 빌드에 남으면 모든 host 의 수집에 영향을 준다.
-                                withEnv((addonDir ? ["ADDON_DIR=${addonDir}"] : []) + ["SE_GATHER_BUDGET_SEC=${exec.budget}", "SE_GATHER_FORKS=${exec.forks}"]) {
+                                // 정체 감시(F12)는 운영 상한으로 돌 때만 켠다 — 시험용 강제 제한(limit_source=forced)은 그 제한만으로 끝나야 시험 의미가 남는다.
+                                boolean watchOn = (exec.limit_source?.toString() == 'ceiling')
+                                withEnv((addonDir ? ["ADDON_DIR=${addonDir}"] : []) + ["SE_GATHER_BUDGET_SEC=${exec.budget}", "SE_GATHER_FORKS=${exec.forks}",
+                                         "SE_GATHER_EXPECTED_SEC=${exec.expected ?: exec.gather}", "SE_GATHER_STALL_SEC=${exec.stall ?: 420}",
+                                         "SE_GATHER_WATCH=${watchOn}"]) {
                                     def rc = sh(returnStatus: true, script: """#!/bin/bash
                                         set -eo pipefail
                                         set +x
@@ -919,31 +923,61 @@ pipeline {
                                             EXTRA_ARGS+=(-e _rf_account_service_dryrun=true)
                                         fi
                                         set +e
-                                        # 배치 상한: INT 로 ansible 이 자식까지 정리하게 하고, 90초 뒤에도 남으면 KILL. 값은 직전에 재계산한 집행 예산.
-                                        timeout --signal=INT --kill-after=90 "\${SE_GATHER_BUDGET_SEC}" \\
+                                        rm -f "\${WORKSPACE}/gather_watch.json" "\${WORKSPACE}/gather_timeout.pid"
+                                        # Redfish 모듈이 새 응답마다 갱신하는 heartbeat 디렉터리 — 정체 감시가 한 태스크 안의 긴 수집을 진행으로 본다
+                                        export SE_PROGRESS_DIR="\${WORKSPACE}/gather_heartbeat"
+                                        rm -rf "\$SE_PROGRESS_DIR" && mkdir -p "\$SE_PROGRESS_DIR"
+                                        WATCH_PID=""
+                                        if [ "\${SE_GATHER_WATCH}" = "true" ]; then
+                                            # 정체 감시(F12): 예상 시간이 지난 뒤 모든 host 에서 진행이 STALL 초 동안 없을 때만 아래 timeout 프로세스에 INT 를 보낸다
+                                            python3 "\${WORKSPACE}/scripts/gather_watch.py" --pidfile "\${WORKSPACE}/gather_timeout.pid" \\
+                                                --progress "\${ANSIBLE_JSON_PROGRESS_FILE}" --heartbeat-dir "\$SE_PROGRESS_DIR" \\
+                                                --expected "\${SE_GATHER_EXPECTED_SEC}" --stall "\${SE_GATHER_STALL_SEC}" --out "\${WORKSPACE}/gather_watch.json" &
+                                            WATCH_PID=\$!
+                                        fi
+                                        # 배치 상한(운영 상한 · 시험용 강제값): INT 로 ansible 이 자식까지 정리하게 하고, 90초 뒤에도 남으면 KILL. 값은 직전에 재계산했다.
+                                        #   timeout 은 지금처럼 foreground 다 — exec 로 pid 를 그대로 둔 채 pid 파일만 남긴다(정체 감시가 같은 프로세스에 INT 를 보낸다).
+                                        bash -c 'echo \$\$ > "\$1"; shift; exec "\$@"' se-gather "\${WORKSPACE}/gather_timeout.pid" \\
+                                            timeout --signal=INT --kill-after=90 "\${SE_GATHER_BUDGET_SEC}" \\
                                             ansible-playbook "${playbook}" -i "${inventory}" -f "\${SE_GATHER_FORKS}" --vault-password-file="\$VAULT_TMP" -e se_location="${env.SE_LOCATION}" "\${EXTRA_ARGS[@]}"
                                         rc=\$?
+                                        if [ -n "\$WATCH_PID" ]; then kill "\$WATCH_PID" 2>/dev/null; wait "\$WATCH_PID" 2>/dev/null; fi
                                         set -e
                                         echo "\$rc" > "\${WORKSPACE}/gather_rc.txt"
-                                        if [ "\$rc" -eq 124 ] || [ "\$rc" -eq 137 ]; then
-                                            echo "[Gather] budget exceeded (rc=\$rc, SE_GATHER_BUDGET_SEC=\${SE_GATHER_BUDGET_SEC}) -- 완료된 host 결과는 gather_output.json 에 남아 있다"
-                                        fi
+                                        case "\$rc" in
+                                            0|2|4|8) rm -f "\${WORKSPACE}/gather_watch.json" ;;   # 끝까지 돌았다 — 마지막 순간의 감시 기록은 무시한다
+                                            *)
+                                                if [ -f "\${WORKSPACE}/gather_watch.json" ]; then
+                                                    echo "[수집] 진행이 없어 정체 감시가 수집을 중단했습니다. 예상 시간 \${SE_GATHER_EXPECTED_SEC}초가 지난 뒤 \${SE_GATHER_STALL_SEC}초 동안 어떤 대상도 진행하지 않았습니다. 중단 전에 확보한 결과는 보존합니다."
+                                                elif [ "\$rc" -eq 124 ] || [ "\$rc" -eq 137 ]; then
+                                                    echo "[수집] 시간 제한 \${SE_GATHER_BUDGET_SEC}초에 도달해 수집을 중단했습니다 (종료 코드 \$rc). 중단 전에 확보한 결과는 보존합니다."
+                                                fi ;;
+                                        esac
                                         exit "\$rc"
                                     """)
                                     // rc → outcome. 0/2/4/8 = ansible 이 끝까지 돌았다(host 실패·unreachable 은 envelope 에 이미 있다).
+                                    //   중단 사유(limit_reason, F12): stalled(정체 감시) · ceiling(운영 상한) · forced(시험용 강제값). 새 outcome 값은 만들지 않는다.
+                                    boolean stalled = !(rc in [0, 2, 4, 8]) && fileExists('gather_watch.json')
+                                    String limitReason = ''
                                     if (rc in [0, 2, 4, 8]) {
                                         env.SE_GATHER_OUTCOME = 'completed'
+                                    } else if (stalled) {
+                                        env.SE_GATHER_OUTCOME = (rc == 137) ? 'timeout_killed' : 'timeout'
+                                        limitReason = 'stalled'
                                     } else if (rc == 124) {
                                         env.SE_GATHER_OUTCOME = 'timeout'
+                                        limitReason = exec.limit_source?.toString() ?: 'ceiling'
                                     } else if (rc == 137) {
                                         env.SE_GATHER_OUTCOME = 'timeout_killed'
+                                        limitReason = exec.limit_source?.toString() ?: 'ceiling'
                                     } else if (rc == 90) {
                                         env.SE_GATHER_OUTCOME = 'prep_failed'
                                     } else {
                                         env.SE_GATHER_OUTCOME = 'failed_run'
                                     }
+                                    env.SE_GATHER_LIMIT_REASON = limitReason
                                     if (rc != 0) {
-                                        unstable("[Gather] ansible-playbook rc=${rc} outcome=${env.SE_GATHER_OUTCOME}")
+                                        unstable("[Gather] ansible-playbook rc=${rc} outcome=${env.SE_GATHER_OUTCOME}${limitReason ? ' limit=' + limitReason : ''}")
                                     }
                                 }
                             }

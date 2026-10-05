@@ -37,8 +37,13 @@
     _rf_timeout: 30
     # 2026-10-03 (P2, Plan §6-3): 모듈 호출 wall-clock deadline(초). 소켓 timeout(_rf_timeout)은 연산 단위라 50~150 GET 에
     #   총 상한이 없었다. deadline 이 지나면 모듈은 이후 요청을 보내지 않고 해당 섹션을 failed 로 두어 수집한 것은 보존한다(partial).
-    #   값은 task timeout(다음 단계에서 추가)보다 엄격히 작아야 register 가 남는다. 후보마다 재설정되므로 host 상한 = 후보 수 × (deadline + backoff).
-    _rf_deadline: 540
+    #   값은 task timeout(_rf_task_timeout)보다 엄격히 작아야 register 가 남는다. 후보마다 재설정된다.
+    # 2026-10-05 (F12): 진행 기반으로 바꿨다. 새 응답이 계속 오면 절대 상한 _rf_deadline(1200 = 최장 정상 실측 Cisco CIMC 353 s 의 약 3배)까지
+    #   수집하고, 새 응답 없이 _rf_idle_deadline(120 = 소켓 timeout 30 × 4) 이 지나면 멈춘다. 종전 540 s 는 페이지가 계속 와도 잘랐다.
+    #   task timeout 은 1260(= 1200 + 60). 상한이 늘어난 만큼 배치 전체 대기는 Jenkins 운영 상한과 정체 감시(scripts/gather_watch.py)가 맡는다.
+    _rf_deadline: 1200
+    _rf_idle_deadline: 120
+    _rf_task_timeout: 1260
     _rf_detect_deadline: 90
     _rf_account_deadline: 180
 

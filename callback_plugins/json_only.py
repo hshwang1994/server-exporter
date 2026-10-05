@@ -37,6 +37,7 @@ import json
 import os
 import re
 import sys
+import time
 
 from ansible.plugins.callback import CallbackBase
 
@@ -125,6 +126,14 @@ _CONNECTIONLESS_ACTIONS = frozenset({
     # 항상 controller 에서 도는 이 저장소의 커스텀 모듈
     'precheck_bundle', 'redfish_gather',
 })
+
+# 진행 신호에서 빼는 사소한 액션 (2026-10-05 F12) — 성공해도 "대상에서 일이 진행됐다" 는 근거가 되지 못한다
+#   (rescue 의 set_fact · debug 로 진행처럼 보이면 계속 실패하는 host 가 정체로 판단되지 않는다).
+_TRIVIAL_ACTIONS = frozenset({
+    'set_fact', 'debug', 'assert', 'fail', 'meta', 'add_host', 'group_by', 'set_stats',
+    'include', 'include_tasks', 'import_tasks', 'include_vars', 'include_role', 'import_role', 'import_playbook',
+})
+_ALIVE_EVERY_SEC = 10        # host 당 alive 진행 이벤트 최소 간격 — progress 파일 크기를 묶는다
 
 _LOCAL_CONNECTIONS = frozenset({'local', 'ansible.builtin.local'})
 _LOCAL_DELEGATES = frozenset({'localhost', '127.0.0.1', '::1'})
@@ -236,6 +245,8 @@ class CallbackModule(CallbackBase):
         self._addon_done_task = 'ADDON_DONE'
         # envelope 보충 상태 — 호스트명 → 관측 컨텍스트
         self._hosts = {}
+        # host → 마지막 alive 진행 이벤트 시각 (monotonic). 정체 감시(scripts/gather_watch.py)의 진행 신호 (F12)
+        self._alive_at = {}
         self._playbook_channel = None
         self._reconcile = not _is_truthy(os.getenv('JSON_ONLY_NO_RECONCILE', ''))
         if not self._reconcile:
@@ -562,8 +573,30 @@ class CallbackModule(CallbackBase):
 
     # ── 캡처 대상 태스크 처리 ────────────────────────────────────────────────
 
+    def _alive(self, result):
+        """작업 태스크(set_fact · debug · include 같은 사소한 액션 제외)가 성공하면 host 당 _ALIVE_EVERY_SEC 에 1번 alive 를 남긴다.
+
+        2026-10-05 (F12): 정체 감시가 "예상 시간이 지났어도 무언가 실제로 끝나고 있는가" 를 판단하는 근거다. 실패 · retry · skip 은
+        남기지 않는다. progress 파일이 없으면(Jenkins 밖 실행) 아무것도 하지 않는다.
+        """
+        if not self._progress_file:
+            return
+        try:
+            action = str(self._task_fields(result).get('action') or '').rsplit('.', 1)[-1]
+            if not action or action in _TRIVIAL_ACTIONS:
+                return
+            host = self._host_name(result)
+            now = time.monotonic()
+            if now - self._alive_at.get(host, -_ALIVE_EVERY_SEC) < _ALIVE_EVERY_SEC:
+                return
+            self._alive_at[host] = now
+            self._progress(host, 'alive', task=self._task_name(result))
+        except Exception:                                   # noqa: BLE001
+            pass
+
     def v2_runner_on_ok(self, result):
         self._track(result, ok=True)
+        self._alive(result)
         name = self._task_name(result)
         if name == self._checkpoint_task:
             self._checkpoint(result)

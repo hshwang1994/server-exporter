@@ -66,7 +66,7 @@
       no_log: true
 
     - name: "redfish | collect_standard | empty-credential attempt"
-      timeout: "{{ _rf_task_timeout | default(600) }}"   # Plan §6-3 task-level hang 격리 (2026-10-03)
+      timeout: "{{ _rf_task_timeout | default(1260) }}"   # task-level hang 격리 — 모듈 절대 상한(_rf_deadline)보다 60 s 크다 (2026-10-05 F12)
       # cycle 2026-05-12 (ADR-2026-05-12): manager_layout 인자 전달 (Additive — 빈 자격 경로).
       redfish_gather:
         bmc_ip:         "{{ _rf_ip }}"
@@ -75,7 +75,9 @@
         timeout:        "{{ _rf_timeout }}"
         verify_ssl:     false
         manager_layout: "{{ _rf_adapter_manager_layout | default('') }}"
-        deadline:       "{{ _rf_deadline | default(540) }}"
+        deadline:       "{{ _rf_deadline | default(1200) }}"
+        idle_deadline:  "{{ _rf_idle_deadline | default(120) }}"
+        progress_dir:   "{{ lookup('env', 'SE_PROGRESS_DIR') | default('', true) }}"
         attempt:
           evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"
           id:           "{{ _rf_attempt_id }}"

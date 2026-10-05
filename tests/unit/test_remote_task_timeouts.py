@@ -111,8 +111,8 @@ def test_precheck_task_timeout_120():
 
 REDFISH = {
     ("redfish-gather/tasks/detect_vendor.yml", "redfish | detect_vendor | probe"): (("_rf_detect_task_timeout", 120), "_rf_detect_deadline", 90),
-    ("redfish-gather/tasks/try_one_account.yml", "redfish | try_account | attempt"): (("_rf_task_timeout", 600), "_rf_deadline", 540),
-    ("redfish-gather/tasks/collect_standard.yml", "redfish | collect_standard | empty-credential attempt"): (("_rf_task_timeout", 600), "_rf_deadline", 540),
+    ("redfish-gather/tasks/try_one_account.yml", "redfish | try_account | attempt"): (("_rf_task_timeout", 1260), "_rf_deadline", 1200),
+    ("redfish-gather/tasks/collect_standard.yml", "redfish | collect_standard | empty-credential attempt"): (("_rf_task_timeout", 1260), "_rf_deadline", 1200),
     ("redfish-gather/tasks/account_service_try_one.yml", "redfish | account_service | invoke"): (("_rf_account_task_timeout", 240), "_rf_account_deadline", 180),
 }
 
@@ -137,6 +137,21 @@ def test_redfish_module_tasks_timeout_exceeds_module_deadline(rel, name):
     site_deadline = site_vars.get(dl_var, dl_default)
     site_timeout = site_vars.get(var, val)
     assert int(site_deadline) < int(site_timeout), f"site.yml {dl_var}={site_deadline} 가 {var}={site_timeout} 보다 작아야 한다"
+
+
+def test_redfish_collect_is_progress_based():
+    """2026-10-05 (F12): 수집 모듈은 절대 상한(1200)과 함께 '새 응답 없음' 상한(120)과 heartbeat 디렉터리를 받는다."""
+    for rel, name in (("redfish-gather/tasks/try_one_account.yml", "redfish | try_account | attempt"),
+                      ("redfish-gather/tasks/collect_standard.yml", "redfish | collect_standard | empty-credential attempt")):
+        task = next(t for t in _walk(_load(rel)) if t.get("name") == name)
+        args = task["redfish_gather"]
+        assert re.fullmatch(r"\{\{\s*_rf_idle_deadline\s*\|\s*default\(120\)\s*\}\}", str(args["idle_deadline"])), rel
+        assert "SE_PROGRESS_DIR" in str(args["progress_dir"]), rel
+    site_vars = {}
+    for play in _load("redfish-gather/site.yml"):
+        site_vars.update(play.get("vars") or {})
+    assert (site_vars["_rf_deadline"], site_vars["_rf_idle_deadline"], site_vars["_rf_task_timeout"]) == (1200, 120, 1260)
+    assert site_vars["_rf_idle_deadline"] == 4 * site_vars["_rf_timeout"], "새 응답 없음 상한 = 소켓 timeout 4번"
 
 
 WINDOWS = [f"os-gather/tasks/windows/{n}.yml" for n in

@@ -265,20 +265,28 @@ def _diagnosis(observed, details, auth_success, stage, code, reason):
     }
 
 
-def synthetic_envelope(canon: Canon, channel, ip, ctx, outcome):
-    """OUTPUT 도 CHECKPOINT 도 없는 host 의 envelope — 관측된 사실만으로 단계를 정한다 (json_only 와 같은 4 분기 + outcome)."""
+def synthetic_envelope(canon: Canon, channel, ip, ctx, outcome, limit_reason=None):
+    """OUTPUT 도 CHECKPOINT 도 없는 host 의 envelope — 관측된 사실만으로 단계를 정한다 (json_only 와 같은 4 분기 + outcome).
+
+    limit_reason (2026-10-05 F12): 실행이 시간 제한으로 끝났을 때 그 사유 — stalled(정체 감시) · ceiling(운영 상한) · forced(시험용 강제값).
+    diagnosis.details(기술 evidence · 확장 metadata 영역)에만 남긴다. 사용자 문장 · failure_code 는 그대로다.
+    """
     ctx = ctx or {}
     observed = ctx.get('diagnosis') if isinstance(ctx.get('diagnosis'), dict) else {}
     details = dict(observed.get('details') or {}) if isinstance(observed.get('details'), dict) else {}
     details.setdefault('channel', channel)
     details['finalizer'] = 'layer_a'
     details['outcome'] = outcome
+    if limit_reason:
+        details['limit_reason'] = limit_reason
     if ctx.get('last_task'):
         details['last_task'] = ctx['last_task']
     tech = []
     if ctx.get('fail_detail'):
         tech.append(str(ctx['fail_detail']))
     tech.append(f'outcome={outcome}')
+    if limit_reason:
+        tech.append(f'limit_reason={limit_reason}')
     if ctx.get('last_task'):
         tech.append(f'last_task={ctx["last_task"]}')
 
@@ -333,16 +341,17 @@ ADDON_INTERRUPTED = '추가 수집 중 처리가 중단되어 추가 수집 결�
 EMIT_FAILED = '수집은 끝났지만 결과를 내보내는 단계에서 중단되었습니다. 기본 수집 결과는 그대로입니다.'
 
 
-def envelope_from_checkpoint(cp_obj, ctx, outcome):
+def envelope_from_checkpoint(cp_obj, ctx, outcome, limit_reason=None):
     """CHECKPOINT(Add-on 전 조립본)로 복원 — status/sections/diagnosis 는 그대로, 원인별 오류 1건만 붙인다 (D8)."""
     env = json.loads(json.dumps(cp_obj))
     ctx = ctx or {}
+    why = f'outcome={outcome}' + (f'; limit_reason={limit_reason}' if limit_reason else '')
     if ctx.get('addon_started') and not ctx.get('addon_done'):
         err = {'section': 'addon', 'message': ADDON_INTERRUPTED,
-               'detail': f'finalized from checkpoint; add-on started but did not finish; outcome={outcome}'}
+               'detail': f'finalized from checkpoint; add-on started but did not finish; {why}'}
     else:
         err = {'section': 'gather', 'message': EMIT_FAILED,
-               'detail': f'finalized from checkpoint; output emit failed after assembly/addon; outcome={outcome}'}
+               'detail': f'finalized from checkpoint; output emit failed after assembly/addon; {why}'}
     errors = env.get('errors') if isinstance(env.get('errors'), list) else []
     env['errors'] = errors + [err]
     return env
@@ -350,10 +359,12 @@ def envelope_from_checkpoint(cp_obj, ctx, outcome):
 
 # ───────────────────────── 메인 ─────────────────────────
 
-def finalize(workspace: Path, repo_root: Path, outcome: str, names: dict) -> tuple[int, dict]:
+def finalize(workspace: Path, repo_root: Path, outcome: str, names: dict, limit_reason=None) -> tuple[int, dict]:
     report = {'accepted': 0, 'kept': 0, 'filled': 0, 'dropped': [], 'conflicts': [], 'truncated_tail': [],
               'corrupt_lines': [], 'by_origin': {'output': 0, 'checkpoint': 0, 'synthetic': 0},
               'outcome': outcome, 'rc': None, 'exit_code': EXIT_OK, 'layer': 'a'}
+    if limit_reason:
+        report['limit_reason'] = limit_reason
     canon = Canon(repo_root)
 
     manifest_path = workspace / names['manifest']
@@ -417,10 +428,10 @@ def finalize(workspace: Path, repo_root: Path, outcome: str, names: dict) -> tup
             continue
         ctx = progress.get(ip)
         if ip in checkpoints:
-            env = envelope_from_checkpoint(checkpoints[ip], ctx, outcome)
+            env = envelope_from_checkpoint(checkpoints[ip], ctx, outcome, limit_reason)
             report['by_origin']['checkpoint'] += 1
         else:
-            env = synthetic_envelope(canon, channel, ip, ctx, outcome)
+            env = synthetic_envelope(canon, channel, ip, ctx, outcome, limit_reason)
             report['by_origin']['synthetic'] += 1
             report['filled'] += 1
         final_lines.append(json.dumps(env, ensure_ascii=False, separators=(',', ':')))
@@ -447,6 +458,8 @@ def main(argv=None) -> int:
     ap.add_argument('--outcome', default='completed',
                     help='ansible 실행 결과 분류: completed | timeout | timeout_killed | failed_run | prep_failed | not_started_budget | '
                          'not_started_memory | aborted(취소·stage/global timeout) | no_agent | interrupted_unknown ...')
+    ap.add_argument('--limit-reason', default='',
+                    help='시간 제한으로 끝났을 때 그 사유: stalled(정체 감시) | ceiling(운영 상한) | forced(시험용 강제값). 비우면 없음 (2026-10-05 F12)')
     ap.add_argument('--manifest', default='gather_manifest.json')
     ap.add_argument('--output', default='gather_output.json')
     ap.add_argument('--checkpoint', default='gather_checkpoint.jsonl')
@@ -458,7 +471,7 @@ def main(argv=None) -> int:
     names = {k: getattr(a, k) for k in ('manifest', 'output', 'checkpoint', 'progress', 'rc', 'final', 'report')}
     workspace = Path(a.workspace)
     try:
-        code, report = finalize(workspace, Path(a.repo_root), a.outcome, names)
+        code, report = finalize(workspace, Path(a.repo_root), a.outcome, names, limit_reason=(a.limit_reason or '').strip() or None)
     except ToolFailure as e:
         sys.stderr.write(f'[finalize] tool failure: {e}\n')
         try:

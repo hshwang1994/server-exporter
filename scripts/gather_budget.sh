@@ -2,8 +2,15 @@
 # scripts/gather_budget.sh — 수집 배치 예산(초) 계산의 **단일 구현** (2026-10-03, Plan §6-2).
 #
 # Jenkinsfile_portal 이 두 번 부른다: Gather node 진입 직후(예상값 — 로그·조기 중단 판단) 와 ansible-playbook 실행 **직전**(집행값).
-# 집행값만 timeout(1) 에 들어간다 — agent 대기 · checkout · Add-on 준비가 길어진 만큼 gather 가 줄고 finalization reserve 는 줄지 않는다.
+# 집행값만 timeout(1) 에 들어간다 — agent 대기 · checkout · Add-on 준비가 길어진 만큼 줄고 finalization reserve 는 줄지 않는다.
 # 모든 상수의 단위는 초(s). 값은 Phase 1·5 측정 뒤 보정한다 (초기 경험값: 2026-09-03 실측 host 최대 78 s × 3 = 240).
+#
+# 2026-10-05 (F12): **예상 시간과 중단 기준을 나눴다.** 종전에는 공식이 낸 예상값(gather)이 그대로 timeout 값이었다 — 예상이 빗나가면
+#   정상으로 진행 중인 수집도 잘렸다. 지금:
+#     expected (= gather) : 공식이 낸 예상 시간. 표시용이며, 정체 감시(scripts/gather_watch.py)가 이 시간이 지난 뒤에만 정체를 판단한다
+#     budget   (= limit)  : 실제 중단 기준 = 운영 상한 min(hard_remaining, stage_remaining) — 마무리 예비 시간은 이미 빠져 있다
+#     stall               : 예상 시간이 지난 뒤 모든 host 에서 진행이 이 시간 동안 없으면 정체 감시가 멈춘다 (420 = 가장 긴 단일 태스크 상한 300 + 120)
+#   강제값(SE_FORCE_SEC, 시험 전용 — Jenkins 파라미터 gatherBudgetForceSec)은 종전처럼 limit 을 대체한다(limit_source=forced).
 #
 # 입력(환경변수)
 #   SE_NOW_EPOCH          현재 시각 (필수)            SE_BUILD_START_EPOCH  빌드 시작 (필수)        SE_STAGE_START_EPOCH  Gather stage 기준점 (필수)
@@ -12,8 +19,10 @@
 #   SE_CHANNEL            os | esxi | redfish (필수)  SE_HOSTS              접수 host 수 (필수, ≥1)
 #   SE_VCPU               Runner vCPU (기본 nproc)    SE_FORCE_SEC          검증용 강제 상한 (선택, 정수) — 남은 시간을 넘지 못한다
 #   SE_REDFISH_CANDIDATES 표준 계정 후보 수 (기본 1)  SE_REDFISH_RECOVERY   복구 단계 포함 1/0 (기본 0)
-# 출력: JSON 한 줄 — forks, waves, host_cap, gather, hard_remaining, stage_remaining, budget, start(true/false), reason, mem_avail_mb, mem_cap, mem_guard, 상수.
+# 출력: JSON 한 줄 — forks, waves, host_cap, gather(= expected), expected, hard_remaining, stage_remaining, budget(= 중단 기준), limit_source,
+#        stall, start(true/false), reason, mem_avail_mb, mem_cap, mem_guard, 상수.
 #        reason: computed | forced | not_started_budget(시간 부족) | not_started_memory(1 fork 도 수용 못 함) | invalid_input
+#        limit_source: ceiling(운영 상한) | forced(시험용 강제값) | none(시작 안 함)
 # 종료 코드: 0 계산 성공 / 2 입력 불량
 set -u
 
@@ -27,6 +36,7 @@ BASE_SEC=300
 MIN_SEC=600
 CAP_SEC=5400
 MIN_START_SEC=120
+STALL_SEC=420            # 정체 판단 시간 (F12) — Add-on 태스크 상한 300 + 120. 정상 흐름의 진행 이벤트 간격은 단일 태스크 상한보다 짧다
 HOST_CAP_OS=240
 HOST_CAP_ESXI=240
 REDFISH_DEADLINE_SEC=540
@@ -98,9 +108,9 @@ if is_int "${MEM_AVAIL_MB:-}" && [ "$MEM_AVAIL_MB" -gt 0 ]; then
     MEM_GUARD="active"
     if [ "$MEM_CAP" -le 0 ]; then
         # 1 fork 도 수용 못 한다 — waves 계산(0 나누기) 전에 거부 결과를 돌려준다. 최소 자원 = FIXED_MB + PER_FORK_MB.
-        printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":0,"waves":0,"host_cap":%d,"gather":0,"hard_remaining":%d,"stage_remaining":%d,"budget":0,"start":false,"reason":"not_started_memory","force":%s,"mem_avail_mb":%d,"mem_cap":%d,"mem_guard":"active","constants":{"global":%d,"reserve":%d,"stage_limit":%d,"grace":%d,"post":%d,"base":%d,"min":%d,"cap":%d,"min_start":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
-            "$CH" "$H" "$VCPU" "$HOST_CAP" "$(( SE_BUILD_START_EPOCH + GLOBAL_SEC - SE_NOW_EPOCH - RESERVE_SEC ))" "$(( SE_STAGE_START_EPOCH + STAGE_LIMIT_SEC - SE_NOW_EPOCH - GRACE_SEC - POST_SEC ))" "${FORCE:-null}" \
-            "$MEM_AVAIL_MB" "$MEM_CAP" "$GLOBAL_SEC" "$RESERVE_SEC" "$STAGE_LIMIT_SEC" "$GRACE_SEC" "$POST_SEC" "$BASE_SEC" "$MIN_SEC" "$CAP_SEC" "$MIN_START_SEC" "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"
+        printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":0,"waves":0,"host_cap":%d,"gather":0,"expected":0,"hard_remaining":%d,"stage_remaining":%d,"budget":0,"limit_source":"none","stall":%d,"start":false,"reason":"not_started_memory","force":%s,"mem_avail_mb":%d,"mem_cap":%d,"mem_guard":"active","constants":{"global":%d,"reserve":%d,"stage_limit":%d,"grace":%d,"post":%d,"base":%d,"min":%d,"cap":%d,"min_start":%d,"stall":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
+            "$CH" "$H" "$VCPU" "$HOST_CAP" "$(( SE_BUILD_START_EPOCH + GLOBAL_SEC - SE_NOW_EPOCH - RESERVE_SEC ))" "$(( SE_STAGE_START_EPOCH + STAGE_LIMIT_SEC - SE_NOW_EPOCH - GRACE_SEC - POST_SEC ))" "$STALL_SEC" "${FORCE:-null}" \
+            "$MEM_AVAIL_MB" "$MEM_CAP" "$GLOBAL_SEC" "$RESERVE_SEC" "$STAGE_LIMIT_SEC" "$GRACE_SEC" "$POST_SEC" "$BASE_SEC" "$MIN_SEC" "$CAP_SEC" "$MIN_START_SEC" "$STALL_SEC" "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"
         exit 0
     fi
     FORKS=$(min "$FORKS" "$MEM_CAP")
@@ -113,18 +123,22 @@ HARD_DEADLINE=$(( SE_BUILD_START_EPOCH + GLOBAL_SEC ))
 HARD_REMAINING=$(( HARD_DEADLINE - SE_NOW_EPOCH - RESERVE_SEC ))
 STAGE_REMAINING=$(( SE_STAGE_START_EPOCH + STAGE_LIMIT_SEC - SE_NOW_EPOCH - GRACE_SEC - POST_SEC ))
 
-BUDGET=$(min "$GATHER" "$HARD_REMAINING"); BUDGET=$(min "$BUDGET" "$STAGE_REMAINING")
+# 중단 기준 = 운영 상한 (F12). 예상값(GATHER)으로 자르지 않는다 — 진행 중인 수집은 정체 감시가, 끝나지 않는 배치는 이 상한이 끊는다.
+LIMIT=$(min "$HARD_REMAINING" "$STAGE_REMAINING")
+BUDGET="$LIMIT"
 REASON="computed"
+LIMIT_SOURCE="ceiling"
 if [ -n "$FORCE" ]; then
-    # 강제값은 gather 공식을 대체하지만 남은 시간(hard · stage)은 넘지 못한다.
-    BUDGET=$(min "$FORCE" "$HARD_REMAINING"); BUDGET=$(min "$BUDGET" "$STAGE_REMAINING")
+    # 시험용 강제값은 운영 상한을 대체하지만 남은 시간(hard · stage)은 넘지 못한다.
+    BUDGET=$(min "$FORCE" "$LIMIT")
     REASON="forced"
+    LIMIT_SOURCE="forced"
 fi
 START=true
-if [ "$BUDGET" -lt "$MIN_START_SEC" ]; then START=false; REASON="not_started_budget"; fi
+if [ "$BUDGET" -lt "$MIN_START_SEC" ]; then START=false; REASON="not_started_budget"; LIMIT_SOURCE="none"; fi
 [ "$BUDGET" -lt 0 ] && BUDGET=0
 
-printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":%d,"waves":%d,"host_cap":%d,"gather":%d,"hard_remaining":%d,"stage_remaining":%d,"budget":%d,"start":%s,"reason":"%s","force":%s,"mem_avail_mb":%s,"mem_cap":%s,"mem_guard":"%s","constants":{"global":%d,"reserve":%d,"stage_limit":%d,"grace":%d,"post":%d,"base":%d,"min":%d,"cap":%d,"min_start":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
-    "$CH" "$H" "$VCPU" "$FORKS" "$WAVES" "$HOST_CAP" "$GATHER" "$HARD_REMAINING" "$STAGE_REMAINING" "$BUDGET" "$START" "$REASON" "${FORCE:-null}" \
+printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":%d,"waves":%d,"host_cap":%d,"gather":%d,"expected":%d,"hard_remaining":%d,"stage_remaining":%d,"budget":%d,"limit_source":"%s","stall":%d,"start":%s,"reason":"%s","force":%s,"mem_avail_mb":%s,"mem_cap":%s,"mem_guard":"%s","constants":{"global":%d,"reserve":%d,"stage_limit":%d,"grace":%d,"post":%d,"base":%d,"min":%d,"cap":%d,"min_start":%d,"stall":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
+    "$CH" "$H" "$VCPU" "$FORKS" "$WAVES" "$HOST_CAP" "$GATHER" "$GATHER" "$HARD_REMAINING" "$STAGE_REMAINING" "$BUDGET" "$LIMIT_SOURCE" "$STALL_SEC" "$START" "$REASON" "${FORCE:-null}" \
     "$MEM_AVAIL_OUT" "$MEM_CAP" "$MEM_GUARD" \
-    "$GLOBAL_SEC" "$RESERVE_SEC" "$STAGE_LIMIT_SEC" "$GRACE_SEC" "$POST_SEC" "$BASE_SEC" "$MIN_SEC" "$CAP_SEC" "$MIN_START_SEC" "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"
+    "$GLOBAL_SEC" "$RESERVE_SEC" "$STAGE_LIMIT_SEC" "$GRACE_SEC" "$POST_SEC" "$BASE_SEC" "$MIN_SEC" "$CAP_SEC" "$MIN_START_SEC" "$STALL_SEC" "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"
