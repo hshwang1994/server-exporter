@@ -454,3 +454,12 @@ def test_operator_lines_are_plain_sentences():
     assert bad == [], bad
     assert "'interrupted_unknown': '수집 단계를 마치지 못함(" in TEXT
     assert "code == '408'" in CALLBACK and "요청 도구는 연결 실패도 408 로 표시합니다" in CALLBACK
+
+
+def test_gather_end_does_not_call_a_missing_preservation_a_failure():
+    """2026-10-06 (main #252 관측): 실행 위치 확인에서 거부돼 수집 단계가 돌지 않은 빌드는 보존 기록이 없다 — "결과 보존: 실패" 로 적지 않는다."""
+    fn = TEXT[TEXT.index("def seExplainGatherEnd("):]
+    fn = fn[:fn.index("\n}\n") + 3]
+    assert "String archivedFlag = (summary.preserve?.archived ?: '').toString()" in fn
+    assert "!(archivedFlag in ['true', 'false']) ? '수집 단계가 실행되지 않아 보존할 결과가 없습니다'" in fn
+    assert "(archivedFlag == 'true') ? '완료'" in fn and "'보관 실패, 전달로 받음'" in fn

@@ -894,7 +894,10 @@ def seExplainGatherEnd(Map C, String outcome, Map summary, Map bo, int kept, int
     int done = (bo != null) ? ((bo.output ?: 0) as int) : kept
     int partialCp = (bo != null) ? ((bo.checkpoint ?: 0) as int) : 0
     echo "[수집 종료] 수집은 ${why}. ${ran}. 끝난 대상 ${done}대, 끝나지 않은 대상 ${partialCp + filled}대(중간 결과로 보낸 대상 ${partialCp}대, 실패 결과를 새로 만든 대상 ${filled}대)."
-    String preserve = (summary.preserve?.archived == 'true') ? '완료' : ((summary.preserve?.stashed == 'true') ? '보관 실패, 전달로 받음' : '실패')
+    // 수집 단계가 실행되지 않았으면(실행 위치 확인 실패 · 온라인 노드 없음) 보존 기록이 없다 — "실패" 로 적지 않는다(2026-10-06 main #252 관측)
+    String archivedFlag = (summary.preserve?.archived ?: '').toString()
+    String preserve = !(archivedFlag in ['true', 'false']) ? '수집 단계가 실행되지 않아 보존할 결과가 없습니다' :
+                      ((archivedFlag == 'true') ? '완료' : ((summary.preserve?.stashed == 'true') ? '보관 실패, 전달로 받음' : '실패'))
     String send = delivered ? "HTTP ${cb.http_code} 응답 받음" : ((cb.attempted == true) ? '실패' : '보내지 못함')
     echo "[수집 종료] 결과 보존: ${preserve}. Portal 전송: ${send}."
 }

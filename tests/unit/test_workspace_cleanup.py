@@ -101,6 +101,9 @@ def test_recent_running_foreign_and_current_folders_are_untouched(tmp_path):
     other_job = _ws(tmp_path, 203, job="clovirone-cicd/other", started=now - 30 * DAY, ended=now - 30 * DAY, preserved=True)
     other_build = _ws(tmp_path, 204, build=1204, started=now - 30 * DAY, ended=now - 30 * DAY, preserved=True)
     no_owner = _ws(tmp_path, 205, owner=False)
+    for f in [no_owner, *no_owner.rglob("*")]:
+        os.utime(f, (now - 20 * DAY, now - 20 * DAY))                     # 오래된, 소유를 모르는 폴더
+    fresh = _ws(tmp_path, 207, owner=False, results=())                    # 막 시작한 빌드(checkout 중, 소유 기록 전)
     current = _ws(tmp_path, 206, started=now - 30 * DAY, ended=now - 30 * DAY, preserved=True)
     for name in ("unrelated-dir", f"{BASE}", f"{BASE}-12x", f"other-{BASE}-5"):
         (tmp_path / name).mkdir()
@@ -109,8 +112,9 @@ def test_recent_running_foreign_and_current_folders_are_untouched(tmp_path):
     assert r[recent.name] == "recent" and r[running.name] == "may_be_running"
     assert r[other_job.name] == "owner_record_mismatch" and r[other_build.name] == "owner_record_mismatch"
     assert r[no_owner.name] == "no_owner_record"
+    assert r[fresh.name] == "may_be_running", "소유 기록 전의 새 빌드 폴더를 '소유를 모르는 폴더' 로 알리지 않는다"
     assert current.name not in r and rep["deleted"] == [] and rep["reduced"] == []
-    for d in (recent, running, other_job, other_build, no_owner, current):
+    for d in (recent, running, other_job, other_build, no_owner, fresh, current):
         assert (d / "os-gather" / "site.yml").is_file(), d.name
     for name in ("unrelated-dir", f"{BASE}", f"{BASE}-12x", f"other-{BASE}-5"):
         assert (tmp_path / name).is_dir() and name not in r

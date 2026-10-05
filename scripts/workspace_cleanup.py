@@ -187,6 +187,21 @@ def owner_of(path, number, job):
     return False, "no_owner_record", None, None, False
 
 
+def newest_mtime(path):
+    """폴더와 그 바로 아래 항목 중 가장 최근 수정 시각 — 소유 기록을 쓰기 전(checkout 중)의 새 빌드 폴더를 가린다."""
+    stamps = []
+    try:
+        stamps.append(int(os.lstat(path).st_mtime))
+        for name in os.listdir(path):
+            try:
+                stamps.append(int(os.lstat(os.path.join(path, name)).st_mtime))
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return max(stamps) if stamps else 0
+
+
 def present_results(path):
     found = []
     for name in RESULT_NAMES:
@@ -303,6 +318,9 @@ def main(argv=None):
                 continue
             ok, why, started, ended, preserved = owner_of(p, number, a.job)
             if not ok:
+                # 소유 기록이 아직 없는 최근 폴더는 막 시작한 빌드(checkout 중)일 수 있다 — "소유를 모르는 폴더" 로 알리지 않는다(2026-10-06 main #244 관측)
+                if why == "no_owner_record" and now - newest_mtime(p) < a.build_limit_sec + RUN_MARGIN_SEC:
+                    why = "may_be_running"
                 report["skipped"].append({"dir": entry, "reason": why})
                 continue
             if ended is None:
