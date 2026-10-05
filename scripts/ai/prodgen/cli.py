@@ -68,7 +68,7 @@ def cmd_promote(args) -> int:
                   skip_live=args.skip_live, netrc=args.netrc, verify_report=args.verify_report,
                   bootstrap_baseline=args.bootstrap_baseline, e2e_evidence=args.e2e_evidence,
                   vault_password_file=args.vault_password_file, jenkins_url=args.jenkins_url, source=source,
-                  ci_stage_results=args.ci_stage_results, require_bounded=args.require_bounded)
+                  ci_stage_results=args.ci_stage_results)
     _emit(res, args.json)
     if not res.get("ok"):
         eprint(f"[prodgen promote] REFUSED at stage {res.get('stage')}: {res.get('refused', '')}")
@@ -162,9 +162,6 @@ def main(argv=None) -> int:
     p.add_argument("--e2e-evidence", help="e2e evidence JSON (prodgen e2e-evidence) — required for a real promotion")
     p.add_argument("--ci-stage-results", help="ci_stage_results.json of the CI build for this SHA (required stages PASS) — required for a real promotion")
     p.add_argument("--vault-password-file", help="vault password file for G19")
-    p.add_argument("--require-bounded", action="store_true",
-                   help="require the Tier 2 bounded Harness group and CI stage HARNESS_BOUNDED — for deployments that run with "
-                        "SE_FINALIZER_BOUNDED=true (the internal Jenkins since 2026-10-05); customer installs keep it off by default")
     p.add_argument("--jenkins-url", default="https://jenkins-prod.gooddi.lab")
     p.add_argument("--source-build-url", default="")
     p.set_defaults(func=cmd_promote)

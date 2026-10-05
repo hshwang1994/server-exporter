@@ -33,25 +33,24 @@ def _write_lf(path, text):
 
 FAIL_ARCHIVE = {"archive_fail", "both_fail"}
 FAIL_STASH = {"stash_fail", "both_fail"}
-FAIL_LAYER_A = {"layer_a_fail", "checkpoint_only_b", "inner_assemble_timeout"}
+FAIL_LAYER_A = {"layer_a_fail", "checkpoint_only_b"}
 FAIL_READTRUSTED = {"raw_fallback"}
-SLOW_UNSTASH = {"recover_slow", "outer_timeout", "inner_recover_timeout", "user_abort"}
-SLOW_READTRUSTED = {"inner_assemble_timeout"}                 # readTrusted 를 slowSeconds 만큼 늦춘다 (ASSEMBLE 60 s 초과용)
-FOREIGN_TIMEOUT_UNSTASH = {"foreign_timeout_interruption"}    # unstash 안에서 **남의** timeout 으로 FIE 를 만든다 (3차 §4 ⑥)
-# 2026-10-04 최종 지시 §4-3 — 보존·읽기 상한: 보존 archive / stash / finalizer 의 Layer A 결과 읽기(readFile gather_final.jsonl)를 늦춘다
-SLOW_ARCHIVE = {"archive_slow", "inner_archive_timeout"}
-SLOW_STASH = {"inner_stash_timeout"}
-SLOW_READFILE_FINAL = {"layer_a_read_slow", "inner_layer_a_read_timeout"}
-# 2026-10-05 (F06): Callback 본문 기록(writeFile callback_body.json)을 늦춘다 — BODY 상한(60 s) 초과 시 전송하지 않고 사유를 남기는지
-SLOW_WRITEFILE_BODY = {"inner_body_timeout"}
+SLOW_UNSTASH = {"recover_slow", "outer_timeout", "user_abort"}
+FOREIGN_TIMEOUT_UNSTASH = {"foreign_timeout_interruption"}    # unstash 안에서 **다른** timeout 으로 FIE 를 만든다 (3차 §4 ⑥)
+# 2026-10-04 최종 지시 §4-3 — 느린 보존 archive / 결과 확인 단계의 정리 결과 읽기(readFile gather_final.jsonl). 8차 R3: 안쪽 상한이 없어 기다려 완주한다
+SLOW_ARCHIVE = {"archive_slow"}
+SLOW_READFILE_FINAL = {"layer_a_read_slow"}
+# 결과 정리(Layer A) sh 의 label — Jenkinsfile_portal sePreserveGatherOutput() 과 같은 글자 (8차 R7 에서 바뀌었다)
+LAYER_A_LABEL = "결과 정리 (서버마다 결과 한 줄)"
 
 # 모든 시나리오 — Jenkinsfile_harness · harness_verdict.py 와 같은 목록 (scenarios.json 이 정본)
+#   2026-10-05 (8차 R3): Tier 2(SE_FINALIZER_BOUNDED) · Script Approval 실측 시나리오(inner_*_timeout · sandbox_probe)를 없앴다 — 안쪽 단계 상한이 없다.
+#   8차 R1: gather_limit_preserve 가 운영 Job 의 강제 한계 S3(gatherBudgetForceSec)를 대신한다.
 SCENARIOS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
              "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx", "sink_close",
-             "recover_slow", "outer_timeout", "inner_recover_timeout", "inner_assemble_timeout", "foreign_timeout_interruption",
-             "user_abort", "aborted_outcome_finalize", "sink_hold", "sandbox_probe",
-             "archive_slow", "inner_archive_timeout", "inner_stash_timeout", "layer_a_read_slow", "inner_layer_a_read_timeout",
-             "inner_body_timeout")
+             "recover_slow", "outer_timeout", "foreign_timeout_interruption",
+             "user_abort", "aborted_outcome_finalize", "sink_hold",
+             "archive_slow", "layer_a_read_slow", "gather_limit_preserve")
 
 WRAPPERS = r'''
 
@@ -92,10 +91,6 @@ def archiveArtifacts(Map m) {
 }
 
 def stash(Map m) {
-    if ((HARNESS.scenario in __SLOW_STASH__) && m.name == 'gather-output') {
-        HARNESS.calls << ("stash:slow:" + HARNESS.slowSeconds)
-        HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
-    }
     if ((HARNESS.scenario in __FAIL_STASH__) && m.name == 'gather-output') {
         HARNESS.calls << 'stash:injected_fail'
         throw new Exception('harness: injected stash failure')
@@ -110,7 +105,7 @@ def unstash(String name) {
         HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
     }
     if (HARNESS.scenario in __FOREIGN_TIMEOUT_UNSTASH__) {
-        // 남의 timeout step(이 wrapper 의 것)이 만든 ExceededTimeout — finalizer 의 seBounded 가 자기 nodeId 로 식별하지 못하므로 재전파해야 한다
+        // 다른 timeout step(이 wrapper 의 것)이 만든 ExceededTimeout — 결과 확인 및 전송 단계는 어떤 interruption 도 삼키지 않고 재전파해야 한다
         HARNESS.calls << 'unstash:foreign_timeout'
         HARNESS.outer.timeout(time: 2, unit: 'SECONDS') { HARNESS.outer.sleep(time: 30, unit: 'SECONDS') }
     }
@@ -129,11 +124,6 @@ def readTrusted(String path) {
         HARNESS.calls << ('readTrusted:injected_fail:' + path)
         throw new Exception('harness: injected readTrusted failure for ' + path)
     }
-    if ((HARNESS.scenario in __SLOW_READTRUSTED__) && !HARNESS.slowDone) {
-        HARNESS.slowDone = true          // 첫 readTrusted 만 늦춘다 — ASSEMBLE 상한을 넘기기에 충분하다
-        HARNESS.calls << ('readTrusted:slow:' + HARNESS.slowSeconds)
-        HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
-    }
     HARNESS.calls << ('readTrusted:' + path)
     if (HARNESS.trusted.containsKey(path)) {
         return HARNESS.trusted[path]      // 생성 tree 의 파일 **내용**(Harness 가 agent 에서 미리 읽어 둔다 — finalizer 는 built-in node 에서 돈다)
@@ -141,16 +131,7 @@ def readTrusted(String path) {
     return HARNESS.outer.readTrusted(path)
 }
 
-// finalizer 의 Layer A 결과 읽기(readFile gather_final.jsonl)만 늦춘다 — ASSEMBLE 상한 안에 Layer A 읽기가 들어 있는지 본다 (최종 지시 §4-3)
-def writeFile(Map m) {
-    if ((HARNESS.scenario in __SLOW_WRITEFILE_BODY__) && (m.file ?: '').toString() == 'callback_body.json' && !HARNESS.slowBodyDone) {
-        HARNESS.slowBodyDone = true
-        HARNESS.calls << ('writeFile:slow:' + HARNESS.slowSeconds)
-        HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
-    }
-    return HARNESS.outer.writeFile(m)
-}
-
+// 결과 확인 단계의 정리 결과 읽기(readFile gather_final.jsonl)만 늦춘다 — 안쪽 상한 없이 기다려 완주하는지 본다 (최종 지시 §4-3 · 8차 R3)
 def readFile(Map m) {
     if ((HARNESS.scenario in __SLOW_READFILE_FINAL__) && (m.file ?: '').toString() == 'gather_final.jsonl' && !HARNESS.slowDone) {
         HARNESS.slowDone = true
@@ -162,7 +143,7 @@ def readFile(Map m) {
 }
 
 def sh(Map m) {
-    if ((HARNESS.scenario in __FAIL_LAYER_A__) && m.label == '결과 정리 (Layer A)') {
+    if ((HARNESS.scenario in __FAIL_LAYER_A__) && m.label == '__LAYER_A_LABEL__') {
         HARNESS.calls << 'sh:layerA:injected_rc1'
         return 1
     }
@@ -202,9 +183,11 @@ def build(source: Path, scenario: str, out: Path, meta_out: Path | None) -> dict
     raw = source.read_bytes()
     text = raw.decode("utf-8")
     functions = extract_functions(text)
-    for required in ("def seFinalizeAndCallback()", "def sePreserveGatherOutput()", "Map seConstants()"):
+    for required in ("def seFinalizeAndCallback()", "def sePreserveGatherOutput()", "Map seConstants()", "Map seGatherOutcome(", "Map seReadGatherRun()"):
         if required not in functions:
             raise SystemExit(f"source functions block lacks {required!r}")
+    if f"label: '{LAYER_A_LABEL}'" not in functions:
+        raise SystemExit(f"source functions block has no sh labelled {LAYER_A_LABEL!r} — the Layer A fault injection would not apply")
     if "return this" in functions:
         raise SystemExit("source functions block already contains 'return this' — unexpected")
     wrappers = (WRAPPERS.replace("__SCENARIO__", scenario)
@@ -213,12 +196,10 @@ def build(source: Path, scenario: str, out: Path, meta_out: Path | None) -> dict
                 .replace("__FAIL_LAYER_A__", groovy_list(FAIL_LAYER_A))
                 .replace("__FAIL_READTRUSTED__", groovy_list(FAIL_READTRUSTED))
                 .replace("__SLOW_UNSTASH__", groovy_list(SLOW_UNSTASH))
-                .replace("__SLOW_READTRUSTED__", groovy_list(SLOW_READTRUSTED))
                 .replace("__FOREIGN_TIMEOUT_UNSTASH__", groovy_list(FOREIGN_TIMEOUT_UNSTASH))
                 .replace("__SLOW_ARCHIVE__", groovy_list(SLOW_ARCHIVE))
-                .replace("__SLOW_STASH__", groovy_list(SLOW_STASH))
                 .replace("__SLOW_READFILE_FINAL__", groovy_list(SLOW_READFILE_FINAL))
-                .replace("__SLOW_WRITEFILE_BODY__", groovy_list(SLOW_WRITEFILE_BODY)))
+                .replace("__LAYER_A_LABEL__", LAYER_A_LABEL))
     generated = functions.rstrip("\n") + "\n" + wrappers
     _write_lf(out, generated)
     meta = {

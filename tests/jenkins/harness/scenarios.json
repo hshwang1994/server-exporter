@@ -1,20 +1,20 @@
 {
   "_doc": [
-    "Harness 시나리오 정본 (2026-10-04). Jenkinsfile_harness · fixture.py · build_functions.py · harness_verdict.py 가 같은 이름을 쓴다.",
-    "case = tests/fixtures/finalize_corpus/<case> 입력. run_preserve = sePreserveGatherOutput() 을 먼저 돌릴지(Layer A·archive·stash).",
+    "Harness 시나리오 정본 (2026-10-04, 8차 2026-10-05 개정). Jenkinsfile_harness · fixture.py · build_functions.py · harness_verdict.py 가 같은 이름을 쓴다.",
+    "case = tests/fixtures/finalize_corpus/<case> 입력. run_preserve = sePreserveGatherOutput() 을 먼저 돌릴지(결과 정리(Layer A) · archive · stash).",
     "run_preserve=false 인 시나리오는 Harness 가 raw 입력(또는 Layer A 를 직접 돌린 산출물)을 스스로 stash 한다.",
-    "expect 의 키: delivered · layerA · layerB · source · filled · lines_eq_accepted · unrecovered_count · damage_contains ·",
-    "  preserve.{archived,stashed,deleted} · unstable_contains · unstable_count · sink_posts_min · sink_last_status · body_sha_matches_sink ·",
-    "  by_origin.{output,checkpoint,synthetic} · rethrown(interruption 이 Harness 까지 올라왔는가) · note(사람용).",
-    "결과 상태: PASS / FAIL / PARTIAL(필요 입력 없음 — 예: sink 미도달) 은 harness_verdict.py 가 정한다.",
-    "2026-10-04 검토 C5 — interruption 6 조건의 Harness 몫: ① inner_recover_timeout(BOUNDED=true) · recover_slow(BOUNDED=false, 운영 기본) ② inner_assemble_timeout(BOUNDED=true)",
-    "  ③ outer_timeout ④ Gather stage timeout 은 stage 본문이라 Harness 가 실행하지 못한다 — main Job T5 와 같은 catch 경로(aborted 기록·재전파); 사후 finalize 경로는 aborted_outcome_finalize",
-    "  ⑤ user_abort(Harness 가 자기 빌드를 /stop 으로 중단) + main Job T5 ⑥ foreign_timeout_interruption(남의 timeout 원인 — own nodeId 가 아니면 재전파)",
-    "jenkins_result: 그 시나리오가 끝나는 Jenkins 결과(기본 SUCCESS). bounded=true 는 BOUNDED 파라미터 없이도 SE_FINALIZER_BOUNDED=true 로 돈다.",
-    "probe_approvals=true 는 sandbox 승인 4 시그니처를 실측해 control.approvals 에 적는다 — 승인이 없으면 verdict 가 PARTIAL(승인) 로 둔다(FAIL 도 PASS 도 아니다).",
-    "expect_interruption=true 는 Harness 가 유발한 interruption 이라 Harness 가 기록 뒤 삼킨다(그 외 interruption 은 그대로 전파).",
-    "sink_hold: 판정 없는 보조 시나리오 — controller loopback sink 를 hold_seconds 동안 열어 둔다(main Job T2 의 Callback 수신 증거용). 기록만 archive 한다.",
-    "2026-10-04 최종 실행 지시 §4-3 — 보존·읽기 상한 시나리오: archive_slow · layer_a_read_slow(BOUNDED=false, 운영 기본: 상한 없이 완주) / inner_archive_timeout · inner_stash_timeout(PRESERVE_STEP 30 s) · inner_layer_a_read_timeout(ASSEMBLE 60 s → 최소 경로 ASSEMBLE_MIN 20 s)(BOUNDED=true: 자기 timeout 의 nodeId 로 식별해 다음 수단으로). 승인 4 시그니처 없으면 PARTIAL/승인. 보존 단계의 재전파는 Harness 가 기록하고 finalizer 를 건너뛴다."
+    "stub_gather = 실제 scripts/run_gather.sh 를 가짜 ansible-playbook(case 의 앞 finish 대 결과를 쓰고 대기)과 시험 한계 limit_sec 로 실행하고,",
+    "  운영 함수 seGatherOutcome 으로 종료 상태를 정한 뒤 보존 · 결과 확인 및 전송을 실행한다 — 운영 Job 의 시험용 파라미터(gatherBudgetForceSec)를 없앤 자리(8차 R1).",
+    "expect 의 키: delivered · layerA · layerB · source · filled · outcome · limit_reason · gather_run.{rc,timed_out,limit_sec} · lines_eq_accepted · lines_count ·",
+    "  unrecovered_count · damage_contains · preserve.{archived,stashed,deleted} · unstable_contains · unstable_count · warnings_include · warnings_empty ·",
+    "  sink_posts_min · sink_posts_max · sink_last_status · body_sha_matches_sink · by_origin.{output,checkpoint,synthetic} · rethrown(interruption 이 Harness 까지 올라왔는가) · note(사람용).",
+    "결과 상태: PASS / FAIL / PARTIAL(필요 입력 없음 — 예: sink 미도달) 은 harness_verdict.py 가 정한다. PARTIAL 은 통과가 아니다.",
+    "interruption (8차 R3): 결과 확인 및 전송 단계는 어떤 interruption 도 삼키지 않는다 — 안쪽 단계 상한 · Tier 2(SE_FINALIZER_BOUNDED) · Script Approval 의존을 없앴다.",
+    "  outer_timeout(Harness 가 짧은 외곽 timeout 으로 감쌈) · foreign_timeout_interruption(unstash 안의 다른 timeout) · user_abort(Harness 가 자기 빌드를 /stop) 은 재전파 · Callback 미시도,",
+    "  aborted_outcome_finalize 는 ABORTED 빌드의 사후 전송(1회). 수집 단계 한계 · 취소는 stage 본문이라 Harness 가 실행하지 못한다 — main Job T5 와 같은 catch 경로.",
+    "느린 단계(recover_slow · archive_slow · layer_a_read_slow): 안쪽 상한이 없으므로 기다려 완주한다.",
+    "jenkins_result: 그 시나리오가 끝나는 Jenkins 결과(기본 SUCCESS). expect_interruption=true 는 Harness 가 유발한 interruption 이라 Harness 가 기록 뒤 삼킨다(그 외는 그대로 전파).",
+    "sink_hold: 판정 없는 보조 시나리오 — controller loopback sink 를 hold_seconds 동안 열어 둔다(main Job T2 의 Callback 수신 증거용). 기록만 archive 한다."
   ],
   "scenarios": {
     "normal_success": {
@@ -64,7 +64,7 @@
           "deleted": false
         },
         "unstable_contains": [
-          "영구 보존(archive) 실패 — 임시 전달(stash)로만"
+          "보관(archive)에 실패해 전달(stash)로만 넘겼습니다"
         ],
         "sink_posts_min": 1,
         "sink_last_status": 200,
@@ -334,7 +334,7 @@
         "delivered": false,
         "layerA": "ok",
         "unstable_contains": [
-          "Portal 전송 실패"
+          "Portal 전송에 실패했습니다"
         ],
         "sink_posts_min": 3,
         "sink_last_status": 503,
@@ -356,7 +356,7 @@
         "delivered": false,
         "layerA": "ok",
         "unstable_contains": [
-          "Portal 전송 실패"
+          "Portal 전송에 실패했습니다"
         ],
         "sink_posts_min": 1,
         "note": "T6(통제): 연결 끊김은 httpRequest 예외 → 재시도 뒤 실패",
@@ -379,7 +379,7 @@
         "lines_eq_accepted": true,
         "sink_posts_min": 1,
         "sink_last_status": 200,
-        "note": "3차 §4 ① 운영 기본(BOUNDED=false): unstash 가 45 s 느려도 상한 없이 완주한다(source=stash · delivered). 상한 동작은 inner_recover_timeout(BOUNDED=true) 가 따로 본다",
+        "note": "3차 §4 ① · 8차 R3: unstash 가 45 s 느려도 안쪽 상한 없이 기다려 완주한다(source=stash · delivered)",
         "source": "stash",
         "rethrown": false
       }
@@ -399,58 +399,6 @@
         "note": "3차 §4: 외곽 timeout(Harness 가 20 s 로 감쌈)은 finalizer 안에서 삼켜지지 않고 Harness 까지 올라온다 — Callback 미시도"
       }
     },
-    "inner_recover_timeout": {
-      "case": "01_normal",
-      "run_preserve": true,
-      "outcome": "completed",
-      "sink": {
-        "status": "200"
-      },
-      "slow_seconds": 45,
-      "bounded": true,
-      "probe_approvals": true,
-      "expect": {
-        "delivered": true,
-        "layerA": "ok",
-        "source": "archive",
-        "lines_eq_accepted": true,
-        "filled": 0,
-        "sink_posts_min": 1,
-        "sink_last_status": 200,
-        "rethrown": false,
-        "note": "3차 §4 ① Tier 2: unstash 가 RECOVER(30 s) 를 넘기면 **자기 timeout 의 nodeId 로 식별**해 unarchive 로 회수 → Callback. 승인 4 시그니처가 없으면 식별 불가 → 재전파(PARTIAL/승인, 통과 아님)"
-      }
-    },
-    "inner_assemble_timeout": {
-      "case": "01_normal",
-      "run_preserve": true,
-      "outcome": "completed",
-      "sink": {
-        "status": "200"
-      },
-      "slow_seconds": 70,
-      "bounded": true,
-      "probe_approvals": true,
-      "expect": {
-        "delivered": true,
-        "layerA": "skipped",
-        "layerB": "unavailable",
-        "lines_eq_accepted": true,
-        "damage_contains": [
-          "assemble_timeout"
-        ],
-        "unstable_contains": [
-          "전송은 했지만"
-        ],
-        "sink_posts_min": 1,
-        "sink_last_status": 200,
-        "rethrown": false,
-        "note": "3차 §4 ② Tier 2: Layer A 를 막고(주입 rc=1) readTrusted 가 ASSEMBLE(60 s) 를 넘기면 자기 timeout 으로 식별 → layerB=unavailable · raw 줄로 Callback. 승인 없으면 재전파(PARTIAL/승인)",
-        "warnings_include": [
-          "layer_b_unavailable"
-        ]
-      }
-    },
     "foreign_timeout_interruption": {
       "case": "01_normal",
       "run_preserve": true,
@@ -462,7 +410,7 @@
       "expect": {
         "rethrown": true,
         "sink_posts_max": 0,
-        "note": "3차 §4 ⑥ 원인 미식별: wrapper 가 unstash 안에서 **남의** timeout(2 s) 으로 FlowInterruptedException 을 만든다 — 자기 nodeId 가 아니므로(승인 유무와 무관) 삼키지 않고 재전파, Callback 미시도"
+        "note": "3차 §4 ⑥ · 8차 R3: wrapper 가 unstash 안에서 다른 timeout(2 s) 으로 FlowInterruptedException 을 만든다 — 결과 확인 및 전송 단계는 삼키지 않고 재전파, Callback 미시도"
       }
     },
     "user_abort": {
@@ -522,18 +470,6 @@
         "note": "보조 — controller loopback sink 를 hold_seconds 동안 유지(main Job T2: callbackUrl=http://127.0.0.1:<SINK_PORT>). 판정 없음(INFO), sink/record.jsonl 이 수신 증거"
       }
     },
-    "sandbox_probe": {
-      "case": "01_normal",
-      "run_preserve": false,
-      "outcome": "completed",
-      "sink": {
-        "status": "200"
-      },
-      "expect": {
-        "note": "정보성 — sandbox 허용 API 실측만 기록"
-      },
-      "probe_approvals": true
-    },
     "archive_slow": {
       "case": "01_normal",
       "run_preserve": true,
@@ -558,69 +494,7 @@
         "sink_posts_min": 1,
         "sink_last_status": 200,
         "rethrown": false,
-        "note": "최종 지시 §4-3 운영 기본(BOUNDED=false): 보존 archive 가 45 s 느려도 상한 없이 완주한다(archived · deleteDir · delivered). 상한 동작은 inner_archive_timeout(BOUNDED=true)",
-        "warnings_empty": true
-      }
-    },
-    "inner_archive_timeout": {
-      "case": "01_normal",
-      "run_preserve": true,
-      "outcome": "completed",
-      "sink": {
-        "status": "200"
-      },
-      "slow_seconds": 45,
-      "bounded": true,
-      "probe_approvals": true,
-      "expect": {
-        "delivered": true,
-        "layerA": "ok",
-        "source": "stash",
-        "filled": 0,
-        "lines_eq_accepted": true,
-        "preserve": {
-          "archived": false,
-          "stashed": true,
-          "deleted": false
-        },
-        "unstable_contains": [
-          "영구 보존(archive) 실패 — 임시 전달(stash)로만"
-        ],
-        "sink_posts_min": 1,
-        "sink_last_status": 200,
-        "rethrown": false,
-        "note": "최종 지시 §4-3 Tier 2: 보존 archive 가 PRESERVE_STEP(30 s) 을 넘기면 자기 timeout 의 nodeId 로 식별 → archived=false 로 두고 stash 는 계속 → workspace 보존 · finalizer 는 stash 로 전달. 승인 없으면 PARTIAL/승인",
-        "warnings_include": [
-          "preserve_archive_failed"
-        ]
-      }
-    },
-    "inner_stash_timeout": {
-      "case": "01_normal",
-      "run_preserve": true,
-      "outcome": "completed",
-      "sink": {
-        "status": "200"
-      },
-      "slow_seconds": 45,
-      "bounded": true,
-      "probe_approvals": true,
-      "expect": {
-        "delivered": true,
-        "layerA": "ok",
-        "source": "archive",
-        "filled": 0,
-        "lines_eq_accepted": true,
-        "preserve": {
-          "archived": true,
-          "stashed": false,
-          "deleted": true
-        },
-        "unstable_count": 0,
-        "sink_posts_min": 1,
-        "sink_last_status": 200,
-        "rethrown": false,
-        "note": "최종 지시 §4-3 Tier 2: stash 가 PRESERVE_STEP(30 s) 을 넘기면 식별 → stashed=false · archive 성공이라 deleteDir · finalizer 는 unarchive 로 회수. 승인 없으면 PARTIAL/승인",
+        "note": "최종 지시 §4-3 · 8차 R3: 보존 archive 가 45 s 느려도 안쪽 상한 없이 완주한다(archived · deleteDir · delivered)",
         "warnings_empty": true
       }
     },
@@ -643,68 +517,57 @@
         "sink_posts_min": 1,
         "sink_last_status": 200,
         "rethrown": false,
-        "note": "최종 지시 §4-3 운영 기본(BOUNDED=false): finalizer 의 Layer A 결과 읽기(gather_final.jsonl)가 45 s 느려도 상한 없이 완주한다",
+        "note": "최종 지시 §4-3 · 8차 R3: 결과 확인 단계의 정리 결과 읽기(gather_final.jsonl)가 45 s 느려도 안쪽 상한 없이 완주한다",
         "warnings_empty": true
       }
     },
-    "inner_layer_a_read_timeout": {
+    "gather_limit_preserve": {
       "case": "01_normal",
       "run_preserve": true,
-      "outcome": "completed",
+      "outcome": "interrupted_unknown",
+      "stub_gather": {
+        "finish": 2,
+        "limit_sec": 8
+      },
       "sink": {
         "status": "200"
       },
-      "slow_seconds": 70,
-      "bounded": true,
-      "probe_approvals": true,
       "expect": {
         "delivered": true,
-        "layerA": "timeout",
-        "layerB": "unavailable",
+        "layerA": "ok",
+        "layerB": "skipped",
         "source": "stash",
+        "outcome": "timeout",
+        "limit_reason": "gather_limit",
+        "gather_run": {
+          "rc": 124,
+          "timed_out": true,
+          "limit_sec": 8
+        },
+        "filled": 1,
         "lines_eq_accepted": true,
-        "filled": 0,
-        "damage_contains": [
-          "assemble_timeout"
+        "by_origin": {
+          "output": 2,
+          "checkpoint": 0,
+          "synthetic": 1
+        },
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "warnings_include": [
+          "filled",
+          "outcome_timeout"
         ],
         "unstable_contains": [
           "전송은 했지만"
         ],
         "sink_posts_min": 1,
         "sink_last_status": 200,
+        "body_sha_matches_sink": true,
         "rethrown": false,
-        "note": "최종 지시 §4-3 Tier 2: Layer A 결과 읽기가 ASSEMBLE(60 s) 을 넘기면 자기 timeout 으로 식별 → 최소 경로(ASSEMBLE_MIN 20 s)가 OUTPUT 줄만 검문해 전송 · layerA=timeout · layerB=unavailable · damage assemble_timeout. 승인 없으면 PARTIAL/승인",
-        "warnings_include": [
-          "layer_b_unavailable"
-        ]
-      }
-    },
-    "inner_body_timeout": {
-      "case": "01_normal",
-      "run_preserve": true,
-      "outcome": "completed",
-      "sink": {
-        "status": "200"
-      },
-      "slow_seconds": 70,
-      "bounded": true,
-      "probe_approvals": true,
-      "expect": {
-        "delivered": false,
-        "layerA": "ok",
-        "lines_eq_accepted": true,
-        "damage_contains": [
-          "body_timeout"
-        ],
-        "unstable_contains": [
-          "본문을 상한 안에 만들지 못해"
-        ],
-        "sink_posts_max": 0,
-        "rethrown": false,
-        "note": "2026-10-05 F06 Tier 2: Callback 본문 기록이 BODY(60 s) 를 넘기면 자기 timeout 으로 식별 → 전송하지 않고 damage body_timeout · UNSTABLE. 보존한 결과(gather_final.jsonl)는 그대로. 승인 없으면 재전파(PARTIAL/승인)",
-        "warnings_include": [
-          "body_timeout"
-        ]
+        "note": "8차 R1 · R3 (운영 Job 의 강제 한계 S3 를 대신한다): 실제 scripts/run_gather.sh 가 시험 한계 8초에 닿아 INT 로 멈춘다(가짜 ansible-playbook 이 3대 중 2대 결과를 쓰고 대기). 같은 빌드에서 운영 함수 seGatherOutcome → sePreserveGatherOutput → seFinalizeAndCallback — 끝난 2대는 수집 결과 그대로, 끝나지 않은 1대만 실패 결과로 채워 Portal(sink)로 전달"
       }
     }
   }

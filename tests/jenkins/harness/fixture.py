@@ -10,12 +10,18 @@ manifest 를 다시 만들고, 시나리오가 요구하는 입력 상태(예: r
   python3 tests/jenkins/harness/fixture.py --scenarios tests/jenkins/harness/scenarios.json --scenario normal_success \
       --corpus tests/fixtures/finalize_corpus --workspace "$WORKSPACE" --job "$JOB_NAME" --number "$BUILD_NUMBER" --url "$BUILD_URL" \
       --loc git --deployment-env harness --event-uuid "$BUILD_TAG" --callback-url http://10.0.0.5:18080 --out fixture_state.json
-출력: fixture_state.json {scenario, case, channel, ips, manifest_path, files_copied, mutations, manifest_json}
+출력: fixture_state.json {scenario, case, channel, ips, manifest_path, files_copied, mutations, manifest_json[, stub_gather]}
+
+stub_gather (2026-10-05, 8차 R1 · R3): 시나리오에 {"finish": N, "limit_sec": S} 가 있으면 수집 결과 파일을 복사하지 않고, workspace 옆
+harness_stub/ 에 가짜 venv(bin/activate · python3 · ansible-playbook) · inventory · 끝난 대상 N 대의 결과 줄(output.jsonl)을 만든다.
+Jenkinsfile_harness 가 실제 scripts/run_gather.sh 를 그 venv(SE_ANSIBLE_VENV)와 시험 한계 S 초로 실행한다 — 가짜 ansible-playbook 은
+결과 줄을 ANSIBLE_JSON_OUTPUT_FILE 에 쓰고 끝나지 않은 대상처럼 기다리므로 한계에 닿아 INT 로 멈춘다.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -27,6 +33,41 @@ def _write_lf(path, text):
         fh.write(text)
 
 INPUT_FILES = ("gather_output.json", "gather_checkpoint.jsonl", "gather_progress.jsonl", "gather_rc.txt")
+# 이전 실행의 산출물 — 시나리오가 만들기 전까지 없어야 한다
+STALE_FILES = ("gather_final.jsonl", "gather_finalize_report.json", "callback_body.json", "finalize_summary.json", "gather_run.json")
+
+STUB_ANSIBLE = """#!/bin/bash
+# Harness 가짜 ansible-playbook (tests/jenkins/harness/fixture.py stub_gather) — 운영 경로가 아니다.
+# 끝난 대상의 결과 줄을 콜백 출력 파일에 쓰고, 끝나지 않은 대상처럼 기다린다(scripts/run_gather.sh 의 한계 INT 로 멈춘다).
+cat "${SE_HARNESS_STUB_OUTPUT:?}" >> "${ANSIBLE_JSON_OUTPUT_FILE:?}"
+exec sleep 600
+"""
+
+
+def make_stub_gather(ws: Path, case_dir: Path, spec: dict, host_count: int) -> dict:
+    """workspace 옆 harness_stub/ 에 가짜 venv · inventory · 끝난 대상의 결과 줄을 만든다 (Jenkinsfile_harness 가 run_gather.sh 로 실행)."""
+    finish = int(spec.get("finish", 0))
+    limit = int(spec.get("limit_sec", 8))
+    if not (0 <= finish <= host_count) or limit < 1:
+        raise SystemExit(f"stub_gather: finish={finish} (0..{host_count}) · limit_sec={limit} (1 이상) 이어야 한다")
+    stub = ws.parent / "harness_stub"
+    shutil.rmtree(stub, ignore_errors=True)
+    bindir = stub / "venv" / "bin"
+    bindir.mkdir(parents=True)
+    lines = [ln for ln in (case_dir / "gather_output.json").read_text(encoding="utf-8").splitlines() if ln.strip()]
+    if len(lines) < finish:
+        raise SystemExit(f"stub_gather: case {case_dir.name} 의 결과 줄이 {len(lines)}개라 {finish}대를 끝낼 수 없다")
+    _write_lf(stub / "output.jsonl", "".join(ln + "\n" for ln in lines[:finish]))
+    venv = (stub / "venv").resolve()
+    _write_lf(bindir / "activate", f'export VIRTUAL_ENV="{venv.as_posix()}"\nexport PATH="{(venv / "bin").as_posix()}:$PATH"\n')
+    # python3 은 venv 확인(activate_ansible_venv.sh: PATH 의 python3 이 venv 안인가)만 통과하면 된다 — 심볼릭 링크 대신 실행 파일
+    _write_lf(bindir / "python3", f'#!/bin/sh\nexec "{Path(sys.executable).as_posix()}" "$@"\n')
+    _write_lf(bindir / "ansible-playbook", STUB_ANSIBLE)
+    _write_lf(stub / "inventory.sh", "#!/bin/bash\necho '{}'\n")
+    for f in (bindir / "python3", bindir / "ansible-playbook", stub / "inventory.sh"):
+        os.chmod(f, 0o755)
+    return {"venv": venv.as_posix(), "output": (stub / "output.jsonl").resolve().as_posix(), "inventory": (stub / "inventory.sh").resolve().as_posix(),
+            "playbook": "site.yml", "finish": finish, "limit_sec": limit, "hosts": host_count}
 
 
 def load_scenarios(path: Path) -> dict:
@@ -108,13 +149,19 @@ def main(argv=None) -> int:
         raise SystemExit(f"corpus case 없음: {case_dir}")
     case_manifest = json.loads((case_dir / "gather_manifest.json").read_text(encoding="utf-8"))
     copied = []
+    stub_spec = sc.get("stub_gather")
     for name in INPUT_FILES:
         src = case_dir / name
+        if stub_spec:
+            # 수집 결과는 실제 run_gather.sh 실행이 만든다 — 복사하지 않고 남은 것도 지운다
+            if (ws / name).exists():
+                (ws / name).unlink()
+            continue
         if src.is_file():
             shutil.copyfile(src, ws / name)
             copied.append(name)
     # 전 시험의 잔재가 섞이지 않게 Layer A 산출물은 지운다 (시나리오가 만들기 전까지 없어야 한다)
-    for name in ("gather_final.jsonl", "gather_finalize_report.json", "callback_body.json", "finalize_summary.json"):
+    for name in STALE_FILES:
         p = ws / name
         if p.exists():
             p.unlink()
@@ -127,6 +174,8 @@ def main(argv=None) -> int:
              "manifest_path": str(ws / "gather_manifest.json"), "files_copied": copied, "mutations": mutations,
              "manifest_json": manifest_text, "run_preserve": bool(sc.get("run_preserve", True)),
              "outcome": sc.get("outcome", "completed"), "sink": sc.get("sink", {"status": "200"})}
+    if stub_spec:
+        state["stub_gather"] = make_stub_gather(ws, case_dir, stub_spec, len(manifest["ips"]))
     _write_lf(Path(a.out), json.dumps(state, ensure_ascii=False, indent=2))
     sys.stdout.write(json.dumps({"case": sc["case"], "ips": manifest["ips"], "copied": copied, "mutations": mutations}) + "\n")
     return 0

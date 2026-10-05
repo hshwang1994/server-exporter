@@ -26,24 +26,24 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
 - `truncate_jsonl` · `report_corrupt` · `raw_fallback` — 손상 입력에서도 유효한 Callback body(3차 §6)
 - `checkpoint_only_a`(정상 Layer A 가 checkpoint 복구) · `checkpoint_only_b`(Layer A 실패 뒤 Layer B 가 checkpoint 복구) · `layer_a_fail`
 - `sink_5xx` · `sink_close` — Callback 실패(통제된 조건)
-- `archive_slow` · `layer_a_read_slow`(BOUNDED=false, 운영 기본) / `inner_archive_timeout` · `inner_stash_timeout` · `inner_layer_a_read_timeout`(BOUNDED=true) —
-  2026-10-04 최종 지시 §4-3: 보존 archive/stash 상한(`PRESERVE_STEP` 30 s)과 조립 상한(`ASSEMBLE` 60 s) 안의 Layer A 결과 읽기. 기본에서는 상한 없이 완주,
-  bounded 에서는 자기 timeout 의 nodeId 로 식별해 다음 수단으로(archive → stash · stash → unarchive · 읽기 → 최소 경로 `ASSEMBLE_MIN` 20 s)
-- interruption 6 조건(3차 §4, 2026-10-04 검토 C5) — 아래 표
+- `recover_slow` · `archive_slow` · `layer_a_read_slow` — 느린 회수 · 보존 · 읽기. 2026-10-05(8차 R3)부터 안쪽 단계 상한이 없으므로 기다려 완주한다
+- `gather_limit_preserve` — 2026-10-05(8차 R1 · R3). **실제 `scripts/run_gather.sh`** 를 가짜 `ansible-playbook`(3대 중 2대의 결과 줄을 쓰고 대기)과
+  시험 한계 8초로 실행한다. 한계에 닿아 INT 로 멈춘 실행 기록(`gather_run.json`: rc 124 · timed_out)을 운영 함수 `seGatherOutcome` 이 `timeout` ·
+  `gather_limit` 으로 정하고, 같은 빌드에서 `sePreserveGatherOutput` → `seFinalizeAndCallback` 이 끝난 2대는 수집 결과 그대로, 끝나지 않은 1대만
+  실패 결과로 채워 전달하는지 본다. 운영 Job 의 시험용 파라미터(`gatherBudgetForceSec`)로 하던 S3 를 대신한다 — 운영 파이프라인에는 시험 입력이 없다.
+- interruption 조건(3차 §4, 2026-10-04 검토 C5) — 아래 표
 - `aborted_outcome_finalize` — ABORTED 빌드(outcome=aborted)의 사후 보존·finalize: Callback 1회만 시도, 완료 host 데이터 전달, 비정상 종료 unstable
 - `sink_hold` — 판정 없음. controller loopback sink 를 `hold_seconds` 동안 열어 두어 **main Job T2**(TEST-NET, `callbackUrl=http://127.0.0.1:<SINK_PORT>`)의 Callback 수신 증거를 `sink/record.jsonl` 로 남긴다
-- `sandbox_probe` — sandbox 허용 API 실측(정보성; 승인 4 시그니처 probe 포함)
 
 | 조건 | Harness 시나리오 | 기대 | 비고 |
 |---|---|---|---|
-| ① 내부 회수 timeout | `inner_recover_timeout`(BOUNDED=true) / `recover_slow`(BOUNDED=false = 운영 기본) | bounded: `source=archive` · delivered / 기본: 상한 없이 완주(`source=stash`) | bounded 는 승인 4 시그니처 없으면 **PARTIAL/승인**(재전파가 설계) |
-| ② 내부 조립 timeout | `inner_assemble_timeout`(BOUNDED=true, Layer A 주입 실패 + readTrusted 70 s) | `layerB=unavailable` · `damage` 에 `assemble_timeout` · raw 줄로 delivered | 위와 같이 PARTIAL/승인 |
+| ① 느린 회수 | `recover_slow`(unstash 45 s) | 상한 없이 완주(`source=stash`) · delivered | 8차 R3: 안쪽 단계 상한(Tier 2)을 없앴다 |
+| ② 수집 실행 한계 | `gather_limit_preserve`(실제 run_gather.sh, 시험 한계 8 s) | `outcome=timeout` · `limit_reason=gather_limit` · 끝난 2대 보존 · 1대 보충 · delivered | 운영 Job 의 강제 한계 S3 대체(8차 R1) |
 | ③ 외곽 finalizer timeout | `outer_timeout` | 재전파(`rethrown=true`) · Callback 미시도 | |
-| ④ Gather stage timeout | — (stage 본문은 함수가 아니라 Harness 가 실행하지 못한다) | main Job T5 와 같은 catch(`aborted` 기록 · 재전파) — main Job 에서 확인 | 사후 finalize 경로는 `aborted_outcome_finalize` |
+| ④ 수집 단계 한계 · 취소 | — (stage 본문은 함수가 아니라 Harness 가 실행하지 못한다) | main Job T5 와 같은 catch(`aborted` 기록 · 재전파) — main Job 에서 확인 | 사후 finalize 경로는 `aborted_outcome_finalize` |
 | ⑤ 사용자 중단 | `user_abort`(느린 unstash 중 자기 빌드에 `POST …/stop`) + main Job T5 | 재전파 · Callback 미시도 · Jenkins ABORTED 유지 | |
-| ⑥ 원인 미식별 interruption | `foreign_timeout_interruption`(wrapper 가 unstash 안에서 남의 timeout 2 s) | 재전파 — 자기 nodeId 가 아니면 삼키지 않는다(승인 유무 무관) | |
-| 보존 상한(archive · stash 각 30 s) | `inner_archive_timeout` · `inner_stash_timeout`(BOUNDED=true) / `archive_slow`(BOUNDED=false) | bounded: 넘긴 수단만 실패로 두고 다음 수단으로(archive→stash · stash→unarchive) / 기본: 상한 없이 완주 | 2026-10-04 최종 지시 §4-3. 보존 단계 재전파는 Harness 가 기록하고 finalizer 를 건너뛴다(PARTIAL/승인) |
-| 조립 상한 안의 Layer A 읽기 | `inner_layer_a_read_timeout`(BOUNDED=true, readFile 70 s) / `layer_a_read_slow`(BOUNDED=false) | bounded: `layerA=timeout` · 최소 경로(`ASSEMBLE_MIN` 20 s)로 OUTPUT 줄만 전송 · `damage` assemble_timeout / 기본: 완주 | 위와 같다 |
+| ⑥ 다른 원인의 interruption | `foreign_timeout_interruption`(wrapper 가 unstash 안에서 다른 timeout 2 s) | 재전파 — 결과 확인 및 전송 단계는 어떤 interruption 도 삼키지 않는다 | |
+| 느린 보존 · 읽기 | `archive_slow`(archive 45 s) · `layer_a_read_slow`(gather_final.jsonl 읽기 45 s) | 상한 없이 완주 | 2026-10-04 최종 지시 §4-3 · 8차 R3 |
 
 ## 진단 Job (Harness 와 같은 디렉터리, 2026-10-04~05)
 
@@ -70,9 +70,9 @@ Jenkins: clovirone-cicd/clovirone-server-gather-harness  (정의: jenkins/jobs/c
 
 ## 보장 범위와 한계
 
-- 2026-10-04 lab 실측: sandbox 는 `JsonSlurperClassic` 생성자 · `FlowNode.getId/getEnclosingBlocks/getEnclosingId` ·
-  `FlowInterruptedException.getCauses/getResult` 를 거부한다. 따라서 Tier 2(회수·적재 상한)는 **승인된 Jenkins 에서 `BOUNDED=true` 일 때만** 켜지고,
-  기본에서는 상한 없이 종전 동작이다. `probe_approvals=true` 시나리오는 그 4 시그니처를 실제 호출로 실측해 `harness_control.json` 의 `approvals` 에 적고,
-  거부된 시그니처가 하나라도 있으면 verdict 가 **PARTIAL/승인**(필요 서명 목록 포함)으로 둔다 — "interruption 충족" 으로 합산하지 않는다.
-  사용자 취소는 `user_abort`(함수 범위)로 자동화하고, Gather stage 를 포함한 전체 경로는 실제 main Job T5 에서 확인한다.
+- 2026-10-05(8차 R3): 결과 확인 및 전송 단계는 안쪽 단계 상한 없이 자기 한계 하나(1시간, `seConstants().FINALIZER`)만 쓰고 어떤 interruption 도 삼키지 않는다.
+  그래서 Tier 2(`SE_FINALIZER_BOUNDED`)와 그것이 쓰던 Script Approval 4 서명 실측(`probe_approvals` · `sandbox_probe`)은 없앴다.
+  사용자 취소는 `user_abort`(함수 범위)로 자동화하고, 수집 단계를 포함한 전체 경로는 실제 main Job T5 에서 확인한다.
+- `gather_limit_preserve` 는 실제 `run_gather.sh` · 운영 함수를 실행하지만 `ansible-playbook` 은 가짜다 — 실제 대상의 원격 정리(R6)는
+  `remote_cleanup_probe.sh` 가, 실제 수집은 main · production Job 이 확인한다.
 - Harness 의 PASS 는 "함수가 Jenkins 에서 기대대로 동작했다" 이지, 실제 수집 Job(main/production) 의 E2E 나 고객사 실환경 검증이 아니다.

@@ -14,9 +14,11 @@
 //     Toolchain           venv · 도구 버전 보고 · pwsh 가 없으면 사용자 권한 bootstrap(ci_pwsh_bootstrap.sh)
 //     Gate                bash scripts/ai/ci_gate.sh — exit 1 → FAILURE, exit 2(PARTIAL) → UNSTABLE
 //     Finalize Corpus     Layer A(Python) · Layer B(Groovy load) 를 corpus 정답지와 대조
-//     Budget Self-test    tests/unit/test_gather_budget.py + 대표 입력 3건
+//     Time Limits Self-test  (stage 키 BUDGET) 실행 한계 계산 · 수집 실행(run_gather.sh: 한계 도달 · 기록 · 원격 정리 · 취소) · 시간 상수 일치 ·
+//                         오래된 작업 폴더 정리의 단위 시험 + 이 Runner 로 대표 입력 3건 (2026-10-05 8차 R3 · R8)
 //     Harness Driver      main 전용 Harness Job 을 시나리오별로 build(job:) — main checkout 의 함수 (별도 Job 이라 교착 없음). 시나리오별 기대 Jenkins 결과
-//                         (scenarios.json jenkins_result) 와 대조. Tier 2(BOUNDED=true) 시나리오는 따로 돌려 HARNESS_BOUNDED 로 기록(승인 전엔 PARTIAL, 승격 조건 아님)
+//                         (scenarios.json jenkins_result) 와 대조. gather_limit_preserve 가 실제 run_gather.sh 의 한계 도달 → 보존 → 전달을 본다(8차 R1).
+//                         Tier 2(BOUNDED) · HARNESS_BOUNDED 는 없앴다(8차 R3)
 //     Prodgen Build       prodgen build --sha MAIN_SHA → prodtree/ · prodtree.tar.gz · Jenkinsfile_portal sha256 (이 빌드의 artifact)
 //     Harness (prodtree)  Harness Job 을 FUNCTIONS_SRC=artifact 로 — 생성 tree 의 같은 함수를 같은 Harness 로
 //     Prodgen Drift       origin/production 의 상태 분류(LEGACY · PROVENANCE · RESTORED_BASELINE) — bootstrap 은 BOOTSTRAP_BASELINE 하나로
@@ -152,13 +154,12 @@ def seRunHarness(String functionsSrc, List scenarios, Map extra) {
     List results = []
     for (String s in scenarios) {
         List ps = [string(name: 'SCENARIO', value: s), string(name: 'MAIN_SHA', value: env.MAIN_SHA), string(name: 'FUNCTIONS_SRC', value: functionsSrc)]
-        extra.each { k, v -> ps << (k == 'BOUNDED' ? booleanParam(name: k, value: (v.toString() == 'true')) : string(name: k, value: v.toString())) }
+        extra.each { k, v -> ps << string(name: k, value: v.toString()) }
         String expected = (defs[s]?.jenkins_result ?: 'SUCCESS').toString()
         def b = build(job: 'clovirone-cicd/clovirone-server-gather-harness', wait: true, propagate: false, parameters: ps)
         boolean ok = (b.result == expected)
-        results << [scenario: s, number: b.number, result: b.result, expected: expected, ok: ok, url: b.absoluteUrl, functions_src: functionsSrc,
-                    bounded: (extra.BOUNDED?.toString() == 'true')]
-        echo "[Harness/${functionsSrc}${extra.BOUNDED ? '/bounded' : ''}] ${s}: #${b.number} ${b.result} (expected ${expected}) ${b.absoluteUrl}"
+        results << [scenario: s, number: b.number, result: b.result, expected: expected, ok: ok, url: b.absoluteUrl, functions_src: functionsSrc]
+        echo "[Harness/${functionsSrc}] ${s}: #${b.number} ${b.result} (expected ${expected}) ${b.absoluteUrl}"
     }
     return results
 }
@@ -166,13 +167,11 @@ def seRunHarness(String functionsSrc, List scenarios, Map extra) {
 // stage 결과 파일 — post 가 마지막에 쓰고, Promote 는 prodgen promote 를 부르기 **전**에 한 번 더 써서 --ci-stage-results 로 넘긴다 (검토 C4)
 def seWriteStageResults() {
     Map stages = [:]
-    for (String k in ['GATE', 'CORPUS', 'BUDGET', 'HARNESS_MAIN', 'HARNESS_BOUNDED', 'PRODGEN_BUILD', 'HARNESS_TREE', 'PRODGEN_DRIFT', 'PRODGEN_VERIFY', 'VAULT_DECRYPT', 'EVIDENCE', 'PROMOTE']) {
+    for (String k in ['GATE', 'CORPUS', 'BUDGET', 'HARNESS_MAIN', 'PRODGEN_BUILD', 'HARNESS_TREE', 'PRODGEN_DRIFT', 'PRODGEN_VERIFY', 'VAULT_DECRYPT', 'EVIDENCE', 'PROMOTE']) {
         stages[k] = env."CI_STAGE_${k}" ?: 'not_run'
     }
-    // require_bounded(2026-10-05 F06): 이 CI 가 Tier 2 를 승격 조건으로 요구했는지 — CLI promote 가 이 값을 읽어 요구를 낮추지 못하게 한다
     writeFile(file: 'ci_stage_results.json', encoding: 'UTF-8',
-              text: groovy.json.JsonOutput.toJson([main_sha: env.MAIN_SHA, build_url: env.BUILD_URL, result: currentBuild.currentResult,
-                                                   require_bounded: (params.REQUIRE_BOUNDED != false), stages: stages]))
+              text: groovy.json.JsonOutput.toJson([main_sha: env.MAIN_SHA, build_url: env.BUILD_URL, result: currentBuild.currentResult, stages: stages]))
     return stages
 }
 
@@ -192,15 +191,11 @@ pipeline {
         string(name: 'PROMOTE_SHA', defaultValue: '', description: '승격 요청 SHA — env.MAIN_SHA · 보고서 binding.main_sha · rev-parse HEAD 와 모두 같아야 한다')
         booleanParam(name: 'PROMOTE_DRY_RUN', defaultValue: true, description: 'true 이면 원격을 바꾸지 않는다(기본). 실 승격은 false + 양 원격 credential 준비')
         string(name: 'BOOTSTRAP_BASELINE', defaultValue: '', description: '최초 승격(legacy production) 의 baseline SHA — drift-check/verify/promote 가 같은 값을 쓴다. 정상 승격은 비운다')
-        string(name: 'HARNESS_SCENARIOS', defaultValue: 'normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt,sink_5xx,outer_timeout,recover_slow,foreign_timeout_interruption,user_abort,aborted_outcome_finalize,archive_slow,layer_a_read_slow',
+        string(name: 'HARNESS_SCENARIOS', defaultValue: 'normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt,sink_5xx,outer_timeout,recover_slow,foreign_timeout_interruption,user_abort,aborted_outcome_finalize,archive_slow,layer_a_read_slow,gather_limit_preserve',
                description: 'Harness Driver 가 main checkout 의 함수로 순서대로 돌릴 시나리오(쉼표). 비우면 건너뛴다(PARTIAL)')
-        string(name: 'HARNESS_BOUNDED_SCENARIOS', defaultValue: 'inner_recover_timeout,inner_assemble_timeout,inner_archive_timeout,inner_stash_timeout,inner_layer_a_read_timeout,inner_body_timeout',
-               description: 'Tier 2(SE_FINALIZER_BOUNDED=true) 시나리오 — BOUNDED=true 로 돌린다. 승인 4 시그니처가 없으면 PARTIAL/승인 으로 남고 승격 조건이 아니다')
-        string(name: 'HARNESS_TREE_SCENARIOS', defaultValue: 'normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt',
-               description: '생성 tree(prodtree.tar.gz)의 함수로 돌릴 시나리오(쉼표) — 2026-10-04 최종 지시 §6-1: 보존 실패 경로(archive_fail · stash_fail · truncate_jsonl · checkpoint_only_a/b · layer_a_fail)도 생성 tree 에서. 비우면 건너뛴다(PARTIAL)')
+        string(name: 'HARNESS_TREE_SCENARIOS', defaultValue: 'normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt,gather_limit_preserve',
+               description: '생성 tree(prodtree.tar.gz)의 함수로 돌릴 시나리오(쉼표) — 2026-10-04 최종 지시 §6-1: 보존 실패 경로(archive_fail · stash_fail · truncate_jsonl · checkpoint_only_a/b · layer_a_fail)와 8차 수집 한계 보존(gather_limit_preserve)도 생성 tree 에서. 비우면 건너뛴다(PARTIAL)')
         string(name: 'E2E_MAIN_ENTRIES', defaultValue: '', description: 'main Job 시나리오 증거 — SCENARIO=job/path:build[:EXPECTED] 를 쉼표로 (예: S1=clovirone-cicd/clovirone-server-gather-main:7,T6=clovirone-cicd/clovirone-server-gather-main:9:UNSTABLE)')
-        booleanParam(name: 'REQUIRE_BOUNDED', defaultValue: true,
-                     description: '사내 Jenkins 는 2026-10-05 부터 SE_FINALIZER_BOUNDED=true(Script Approval 4 서명 승인 · bounded Harness 5/5 PASS 뒤) — Tier 2 Harness(HARNESS_BOUNDED) 를 승격 조건으로 요구하고 prodgen promote 에 --require-bounded 를 넘긴다. 그 모드를 끈 배포면 false')
         text(name: 'E2E_TIP_OBSERVATIONS_JSON', defaultValue: '',
              description: '2026-10-04 최종 지시 §5 — fail-closed 빌드(E2E-A2)의 직접 revision 증거: 트리거 측이 빌드 전후에 읽은 Job SCM tip. JSON {"observations":[{"job","build","sha_before","sha_after","before_epoch","after_epoch","remote","method"}]}. 비우면 이웃 빌드 추정만 남고 그 시나리오는 승격 증거로 인정되지 않는다')
     }
@@ -379,15 +374,16 @@ pipeline {
             }
         }
 
-        stage('Budget Self-test') {
+        stage('Time Limits Self-test') {
             steps {
                 script {
-                    def rc = sh(returnStatus: true, label: 'budget', script: '''#!/bin/bash
+                    def rc = sh(returnStatus: true, label: 'time limits', script: '''#!/bin/bash
                         set -eo pipefail
                         cd "${WORKSPACE}"
                         . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
-                        # 공식의 단위 테스트(상수 · forks · waves · 남은 시간 절단 · 강제값 · 메모리 보호 · 입력 불량)
-                        python3 -m pytest tests/unit/test_gather_budget.py -q -p no:cacheprovider
+                        # 실행 한계 계산(상수 · forks · waves · 남은 시간 · 메모리 보호 · 입력 불량), 수집 실행(run_gather.sh — 축소한 한계로 도달 · 기록 ·
+                        # 원격 연결 정리 · 취소 신호, Linux 전용이라 이 Runner 에서 실제로 돈다), 시간 상수가 파일마다 같은지, 오래된 작업 폴더 정리 (8차 R3 · R8)
+                        python3 -m pytest tests/unit/test_gather_budget.py tests/unit/test_run_gather.py tests/unit/test_time_limits.py tests/unit/test_workspace_cleanup.py -q -p no:cacheprovider
                         # 이 Runner 의 vCPU · MemAvailable 로 대표 입력 3건을 실제 스크립트에 넣어 결과 JSON 을 남긴다 — 빌드 시작 직후 가정이라 start=true 여야 한다
                         : > budget_selftest.jsonl
                         now="$(date +%s)"
@@ -400,7 +396,7 @@ pipeline {
                     ''')
                     env.CI_STAGE_BUDGET = (rc == 0) ? 'PASS' : 'FAIL'
                     if (rc != 0) {
-                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') { error "[Budget] self-test rc=${rc}" }
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') { error "[Time Limits] self-test rc=${rc}" }
                     }
                 }
             }
@@ -420,18 +416,6 @@ pipeline {
                         List notPass = results.findAll { !it.ok }
                         env.CI_STAGE_HARNESS_MAIN = notPass ? 'FAIL' : 'PASS'
                         if (notPass) { unstable("[Harness] ${notPass.size()}개 시나리오가 기대 결과가 아니다: ${notPass.collect { it.scenario + '=' + it.result + '(expected ' + it.expected + ')' }} (harness_main_results.json)") }
-                    }
-                    // Tier 2(BOUNDED=true) — 승인 4 시그니처가 없는 Jenkins 에서는 설계대로 재전파 → Harness 가 PARTIAL/승인 으로 둔다(UNSTABLE).
-                    //   승격 조건이 아니므로 이 stage 의 결과를 FAIL 로 만들지 않고 HARNESS_BOUNDED 에 따로 적는다 — "interruption 충족" 으로 합산하지 않는다 (검토 C5).
-                    List bounded = params.HARNESS_BOUNDED_SCENARIOS.split(',').collect { it.trim() }.findAll { it }
-                    if (bounded) {
-                        List bres = seRunHarness('checkout', bounded, [BOUNDED: 'true'])
-                        writeFile(file: 'harness_bounded_results.json', encoding: 'UTF-8',
-                                  text: groovy.json.JsonOutput.toJson([main_sha: env.MAIN_SHA, functions_src: 'checkout', bounded: true, results: bres]))
-                        env.CI_STAGE_HARNESS_BOUNDED = bres.every { it.ok } ? 'PASS' : 'PARTIAL'
-                        echo "[Harness/bounded] ${env.CI_STAGE_HARNESS_BOUNDED} — ${bres.collect { it.scenario + '=' + it.result }} (승인 없으면 PARTIAL/승인 — harness_result.json 의 partial 참조)"
-                    } else {
-                        env.CI_STAGE_HARNESS_BOUNDED = 'PARTIAL'
                     }
                 }
             }
@@ -615,7 +599,7 @@ pipeline {
                     // 이 빌드의 Harness 결과 + 파라미터로 받은 main Job 시나리오 빌드를 구조화 증거로 모아 보고서에 붙인다(digest 재계산).
                     //   Jenkins 조회에는 린터 토큰(읽기)을 쓴다 — 없으면 집계를 건너뛰고 PARTIAL 로 남긴다.
                     List entries = []
-                    for (String f in ['harness_main_results.json', 'harness_tree_results.json', 'harness_bounded_results.json']) {
+                    for (String f in ['harness_main_results.json', 'harness_tree_results.json']) {
                         if (fileExists(f)) {
                             def r = readJSON(file: f, returnPojo: true)
                             for (def hr in (r.results ?: [])) { entries << "${hr.scenario}=clovirone-cicd/clovirone-server-gather-harness:${hr.number}".toString() }
@@ -667,11 +651,6 @@ pipeline {
                 script {
                     // 승격 집행 조건 6항 (Astra 3차 §8-2) — 하나라도 빠지면 원격 변경 0. `branch` 조건은 쓰지 않는다(일반 Pipeline).
                     List required = ['GATE', 'CORPUS', 'BUDGET', 'HARNESS_MAIN', 'PRODGEN_BUILD', 'HARNESS_TREE', 'PRODGEN_DRIFT', 'PRODGEN_VERIFY', 'EVIDENCE']
-                    // 상한 모드를 켠 배포(사내 Jenkins, 2026-10-05~) — docs/operate/09 §3. 파라미터가 Job 에 등록되기 전 첫 빌드는 값이 null 이므로
-                    //   선언한 기본값(true)으로 본다. stage 목록과 prodgen 플래그가 같은 값을 쓴다.
-                    boolean requireBounded = (params.REQUIRE_BOUNDED != false)
-                    echo "[Promote] require_bounded=${requireBounded}"
-                    if (requireBounded) { required << 'HARNESS_BOUNDED' }
                     List bad = required.findAll { (env."CI_STAGE_${it}" ?: 'not_run') != 'PASS' }.collect { "${it}=${env."CI_STAGE_${it}" ?: 'not_run'}".toString() }
                     if (bad) { error "[Promote] 필수 stage 미통과 — 원격 변경 0: ${bad}" }
                     if (!fileExists('prodgen_verify_report.aggregated.json')) { error '[Promote] 집계된 검증 보고서가 없다 — 원격 변경 0' }
@@ -726,7 +705,6 @@ pipeline {
                                   --ci-stage-results ci_stage_results.json --ci-build "\${BUILD_URL}" --source-build-url "\${BUILD_URL}" "\${CRED_ARGS[@]}")
                             if [ -n "\${BOOTSTRAP_BASELINE:-}" ]; then ARGS+=(--bootstrap-baseline "\${BOOTSTRAP_BASELINE}"); fi
                             if [ "${dryRun}" = "true" ]; then ARGS+=(--dry-run); fi
-                            if [ "${requireBounded}" = "true" ]; then ARGS+=(--require-bounded); fi
                             python3 -m scripts.ai.prodgen --json promote --sha "\${MAIN_SHA}" "\${ARGS[@]}" > prodgen_promote.json
                         """)
                     }
@@ -767,7 +745,7 @@ pipeline {
                 Map stages = seWriteStageResults()
                 echo "[Post] stages=${stages}"
             }
-            archiveArtifacts(artifacts: 'toolchain.txt,ci_gate.log,finalize_corpus_python.json,finalize_corpus_groovy.json,input_acceptance_groovy.json,budget_selftest.jsonl,harness_main_results.json,harness_bounded_results.json,harness_tree_results.json,prodgen_drift.json,prodgen_verify_report.json,prodgen_verify_report.json.sha256,prodgen_verify_stdout.json,prodgen_verify_env.json,vault_decrypt_check.txt,vault_decrypt_rc.txt,e2e_entries.txt,e2e_tip_observations.json,e2e_evidence.json,prodgen_verify_report.aggregated.json,prodgen_promote.json,ci_stage_results.json',
+            archiveArtifacts(artifacts: 'toolchain.txt,ci_gate.log,finalize_corpus_python.json,finalize_corpus_groovy.json,input_acceptance_groovy.json,budget_selftest.jsonl,harness_main_results.json,harness_tree_results.json,prodgen_drift.json,prodgen_verify_report.json,prodgen_verify_report.json.sha256,prodgen_verify_stdout.json,prodgen_verify_env.json,vault_decrypt_check.txt,vault_decrypt_rc.txt,e2e_entries.txt,e2e_tip_observations.json,e2e_evidence.json,prodgen_verify_report.aggregated.json,prodgen_promote.json,ci_stage_results.json',
                              allowEmptyArchive: true, fingerprint: false)
             echo "[Post] 결과: ${currentBuild.currentResult} MAIN_SHA=${env.MAIN_SHA ?: '-'} 소요: ${currentBuild.durationString ?: '-'}"
         }

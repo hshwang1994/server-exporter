@@ -7,7 +7,7 @@ import json
 import pytest
 
 from scripts.ai.prodgen.common import ProdgenError
-from scripts.ai.prodgen.evidence import (MAIN_CONTRACT, REQUIRED_HARNESS, REQUIRED_HARNESS_BOUNDED, REQUIRED_HARNESS_TREE,
+from scripts.ai.prodgen.evidence import (MAIN_CONTRACT, REMOVED_MAIN_PARAMS, REQUIRED_HARNESS, REQUIRED_HARNESS_TREE,
                                          REQUIRED_MAIN, aggregate, canonical_digest, check_evidence, evaluate_harness,
                                          evaluate_main, java_string_hash, neighbour_revision, parse_entry, tip_frozen_revision,
                                          trusted_report)
@@ -145,10 +145,12 @@ def test_check_evidence_requires_every_scenario_group_for_the_same_sha_and_tree(
     mixed = _items(sha)
     mixed[len(REQUIRED_MAIN)]["functions_sha256"] = "9" * 64
     assert any("mixed sources" in p for p in check_evidence({"items": mixed}, sha, tree_hash=TREE))
-    # bounded (Tier 2) scenarios are required only on demand
-    assert check_evidence({"items": _items(sha)}, sha, tree_hash=TREE, require_bounded=False) == []
-    probs = check_evidence({"items": _items(sha)}, sha, tree_hash=TREE, require_bounded=True)
-    assert len([p for p in probs if "bounded" in p]) == len(REQUIRED_HARNESS_BOUNDED)
+    # 8차 R1 · R3: the stop/preserve proof is a Harness scenario in both groups; no bounded group exists any more
+    assert "gather_limit_preserve" in REQUIRED_HARNESS and "gather_limit_preserve" in REQUIRED_HARNESS_TREE
+    probs = check_evidence({"items": [i for i in _items(sha) if i["scenario"] != "gather_limit_preserve"]}, sha, tree_hash=TREE)
+    assert len([p for p in probs if "gather_limit_preserve" in p]) == 2, probs
+    with pytest.raises(TypeError):
+        check_evidence({"items": _items(sha)}, sha, tree_hash=TREE, require_bounded=True)
     # digest
     ev2 = {"items": _items(sha), "collected_at": "x"}
     ev2["evidence_sha256"] = canonical_digest(ev2)
@@ -160,7 +162,7 @@ def test_check_evidence_requires_every_scenario_group_for_the_same_sha_and_tree(
 def _main_item(**over):
     base = {"scenario": "S1", "kind": "main", "result": "SUCCESS", "building": False, "checkout_sha": "a" * 40,
             "params": {"loc": "git", "target_type": "os", "inventory_json": json.dumps([{"service_ip": "10.0.0.1"}, {"service_ip": "10.0.0.2"}]),
-                       "callbackUrl": "http://10.100.64.151:8080", "gatherBudgetForceSec": ""}}
+                       "callbackUrl": "http://10.100.64.151:8080"}}
     base.update(over)
     return base
 
@@ -187,7 +189,7 @@ def test_main_contract_s1_passes_only_with_real_hosts_success_data_and_delivered
     assert _failed(evaluate_main("S1", _main_item(), SUMMARY_OK, BODY_OK, None, CONSOLE_OK)) == []
     # the same build registered under other names fails their own checks (C1 재현: one build cannot be every scenario)
     assert "hosts_testnet" in _failed(evaluate_main("T2", _main_item(), SUMMARY_OK, BODY_OK, None, CONSOLE_OK))
-    assert {"jenkins_result", "outcome", "force_sec"} <= set(_failed(evaluate_main("S3", _main_item(), SUMMARY_OK, BODY_OK, None, CONSOLE_OK)))
+    assert {"hosts_min", "full_limit"} <= set(_failed(evaluate_main("S3", _main_item(), SUMMARY_OK, BODY_OK, None, CONSOLE_OK)))
     assert {"jenkins_result", "outcome"} <= set(_failed(evaluate_main("T5", _main_item(), SUMMARY_OK, BODY_OK, None, CONSOLE_OK)))
     assert {"jenkins_result", "callback_failed"} <= set(_failed(evaluate_main("T6", _main_item(), SUMMARY_OK, BODY_OK, None, CONSOLE_OK)))
     assert "loc" in _failed(evaluate_main("E2E-A", _main_item(), SUMMARY_OK, BODY_OK, None, CONSOLE_OK))
@@ -222,13 +224,20 @@ def test_main_contract_expected_failures_pass_when_the_behaviour_matches():
     con6 = "[Callback] [FAIL] (3/3) httpRequest 예외\n[Finalize] delivered=false — body 는 artifact callback_body.json\n[Finalize] Callback 전송 실패 — artifact callback_body.json 참조\n"
     assert _failed(evaluate_main("T6", t6, SUMMARY_OK, BODY_OK, None, con6)) == []
     assert "callback_failed" in _failed(evaluate_main("T6", t6, SUMMARY_OK, BODY_OK, None, CONSOLE_OK)), "UNSTABLE with a delivered callback is not T6"
-    # S3: UNSTABLE + forced budget ≥ 120 + timeout outcome + preserved real data + at least one synthesized host
-    s3 = _main_item(result="UNSTABLE", params=dict(_main_item()["params"], gatherBudgetForceSec="180"))
-    sum3 = dict(SUMMARY_OK, outcome="timeout", filled=1, by_origin={"output": 1, "checkpoint": 0, "synthetic": 1})
-    assert _failed(evaluate_main("S3", s3, sum3, BODY_OK, None, CONSOLE_OK)) == []
-    s3b = _main_item(result="UNSTABLE", params=dict(_main_item()["params"], gatherBudgetForceSec="60"))
-    assert "force_sec" in _failed(evaluate_main("S3", s3b, sum3, BODY_OK, None, CONSOLE_OK)), "MIN_START_SEC=120 아래는 S3 가 아니다"
-    assert "preserved_min" in _failed(evaluate_main("S3", s3, dict(sum3, by_origin={"output": 0, "checkpoint": 0, "synthetic": 2}), BODY_OK, None, CONSOLE_OK))
+    # S3 (8차 R1): a large normal-input batch — ≥ 10 real hosts, completed under the operational 6-hour limit, nothing forced
+    ips = [f"10.0.0.{n}" for n in range(1, 11)]
+    s3 = _main_item(params=dict(_main_item()["params"], inventory_json=json.dumps([{"service_ip": ip} for ip in ips])))
+    lim = {"gather_limit_sec": 21600, "gather_limit_source": "gather_limit", "gather_max_sec": 21600}
+    sum3 = dict(SUMMARY_OK, accepted=10, lines=10, kept=10, limits=lim, by_origin={"output": 10, "checkpoint": 0, "synthetic": 0})
+    body3 = {"gatherInfoJson": [_envelope(ip) for ip in ips]}
+    assert _failed(evaluate_main("S3", s3, sum3, body3, None, CONSOLE_OK)) == []
+    short = dict(sum3, limits=dict(lim, gather_limit_sec=9000, gather_limit_source="build_limit"))
+    assert "full_limit" in _failed(evaluate_main("S3", s3, short, body3, None, CONSOLE_OK)), "빌드 한계로 줄어든 실행은 운영 한계 증거가 아니다"
+    assert "full_limit" in _failed(evaluate_main("S3", s3, dict(sum3, limits=None), body3, None, CONSOLE_OK))
+    forced = _main_item(params=dict(s3["params"], gatherBudgetForceSec="150"))
+    assert "test_params_absent" in _failed(evaluate_main("S3", forced, sum3, body3, None, CONSOLE_OK)), "시험용 파라미터가 남은 빌드는 증거가 아니다"
+    assert "no_test_tag" in _failed(evaluate_main("S3", s3, sum3, body3, None, "[시험: 강제 제한 150초]\n" + CONSOLE_OK))
+    assert "hosts_min" in _failed(evaluate_main("S3", _main_item(), dict(sum3, accepted=2, lines=2), BODY_OK, None, CONSOLE_OK))
     # T2: TEST-NET hosts, all failed with complete diagnosis, delivered 2xx, SUCCESS
     t2 = _main_item(params=dict(_main_item()["params"], inventory_json=json.dumps([{"service_ip": "192.0.2.10"}, {"service_ip": "192.0.2.11"}]), callbackUrl="http://127.0.0.1:18080"))
     body2 = {"gatherInfoJson": [_envelope("192.0.2.10", ok=False), _envelope("192.0.2.11", ok=False)]}
@@ -423,52 +432,96 @@ def test_curl_json_disables_globbing_for_bracketed_tree_queries(monkeypatch, tmp
     assert any("g" in f for f in flags), seen["args"]
 
 
-def test_promote_require_bounded_adds_the_tier2_group_and_ci_stage(tmp_path):
-    """2026-10-05: on a deployment that runs with SE_FINALIZER_BOUNDED=true the Tier 2 Harness group and CI stage HARNESS_BOUNDED are
-    promotion conditions (docs/operate/09 §3). Default (customer installs) does not require them."""
+def test_promote_has_one_required_stage_set_and_no_bounded_mode(tmp_path):
+    """2026-10-05 (8차 R3): Tier 2(SE_FINALIZER_BOUNDED) · HARNESS_BOUNDED · --require-bounded 를 없앴다. 승격 조건은 배포와 무관하게
+    REQUIRED_CI_STAGES 하나이고, 옛 입력(require_bounded 기록 · CLI 플래그)은 아무것도 다시 켜지 못한다 — CLI 는 그 플래그를 거부한다."""
     import json as _json
+    from pathlib import Path
+    from scripts.ai.prodgen import REQUIRED_CI_STAGES
+    from scripts.ai.prodgen.cli import main as prodgen_main
     from scripts.ai.prodgen.promote import _check_ci_stages, _check_e2e
     a = "a" * 40
-    stages = {k: "PASS" for k in ("GATE", "CORPUS", "BUDGET", "HARNESS_MAIN", "PRODGEN_BUILD", "HARNESS_TREE", "PRODGEN_DRIFT", "PRODGEN_VERIFY", "EVIDENCE")}
-    path = tmp_path / "ci.json"
-    path.write_text(_json.dumps({"main_sha": a, "stages": dict(stages, HARNESS_BOUNDED="PARTIAL")}), encoding="utf-8")
-    assert _check_ci_stages(str(path), a, {}) == [], "기본: HARNESS_BOUNDED 는 조건이 아니다"
-    probs = _check_ci_stages(str(path), a, {}, require_bounded=True)
-    assert probs and "HARNESS_BOUNDED=PARTIAL" in probs[0]
-    path.write_text(_json.dumps({"main_sha": a, "stages": dict(stages, HARNESS_BOUNDED="PASS")}), encoding="utf-8")
-    assert _check_ci_stages(str(path), a, {}, require_bounded=True) == []
-    ev = {"items": []}
-    assert not [p for p in _check_e2e(ev, a) if "bounded" in p], "기본: bounded 그룹을 요구하지 않는다"
-    assert len([p for p in _check_e2e(ev, a, require_bounded=True) if "bounded" in p]) == len(REQUIRED_HARNESS_BOUNDED)
-
-
-def test_ci_required_bounded_cannot_be_lowered_by_the_cli(tmp_path):
-    """2026-10-05 (F06): CI 가 REQUIRE_BOUNDED 로 Tier 2 를 요구했으면 ci_stage_results.json 이 그 사실을 싣고, CLI promote 가 플래그 없이
-    불려도 같은 요구(HARNESS_BOUNDED PASS · bounded E2E 그룹)를 적용한다. CI 가 요구하지 않은 배포(고객사 기본)는 그대로 선택이다."""
-    import json as _json
-    from scripts.ai.prodgen.promote import _check_ci_stages, _effective_require_bounded
-    a = "a" * 40
-    stages = {k: "PASS" for k in ("GATE", "CORPUS", "BUDGET", "HARNESS_MAIN", "PRODGEN_BUILD", "HARNESS_TREE", "PRODGEN_DRIFT", "PRODGEN_VERIFY", "EVIDENCE")}
+    stages = {k: "PASS" for k in REQUIRED_CI_STAGES}
     path = tmp_path / "ci.json"
     path.write_text(_json.dumps({"main_sha": a, "require_bounded": True, "stages": dict(stages, HARNESS_BOUNDED="PARTIAL")}), encoding="utf-8")
-    assert _effective_require_bounded(False, str(path)) == (True, "ci_stage_results")
-    assert _effective_require_bounded(True, str(path)) == (True, "cli+ci_stage_results")
-    rb, _ = _effective_require_bounded(False, str(path))
-    assert "HARNESS_BOUNDED=PARTIAL" in _check_ci_stages(str(path), a, {}, require_bounded=rb)[0]
-    path.write_text(_json.dumps({"main_sha": a, "require_bounded": False, "stages": stages}), encoding="utf-8")
-    assert _effective_require_bounded(False, str(path)) == (False, "none")
-    assert _effective_require_bounded(True, str(path)) == (True, "cli")
-    assert _effective_require_bounded(False, None) == (False, "none")
-    assert _effective_require_bounded(False, str(tmp_path / "missing.json")) == (False, "none")
+    assert _check_ci_stages(str(path), a, {}) == [], "옛 기록의 require_bounded · HARNESS_BOUNDED 는 판정에 쓰이지 않는다"
+    path.write_text(_json.dumps({"main_sha": a, "stages": dict(stages, BUDGET="FAIL")}), encoding="utf-8")
+    assert "BUDGET=FAIL" in _check_ci_stages(str(path), a, {})[0]
+    assert not [p for p in _check_e2e({"items": []}, a) if "bounded" in p]
+    with pytest.raises(SystemExit) as exc:
+        prodgen_main(["promote", "--sha", a, "--require-bounded"])
+    assert exc.value.code == 2, "argparse 가 모르는 옵션으로 거부한다" 
+    root = Path(__file__).resolve().parents[3]
+    for rel in ("scripts/ai/prodgen/promote.py", "scripts/ai/prodgen/cli.py", "scripts/ai/prodgen/evidence.py", "Jenkinsfile_ci"):
+        text = (root / rel).read_text(encoding="utf-8")
+        code = "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith(("#", "//")))
+        for gone in ("require_bounded", "REQUIRE_BOUNDED", "--require-bounded", "_effective_require_bounded", "REQUIRED_HARNESS_BOUNDED"):
+            assert gone not in code, (rel, gone)
 
 
-def test_promote_applies_the_effective_requirement_before_the_evidence_checks():
-    from pathlib import Path
-    text = (Path(__file__).resolve().parents[3] / "scripts" / "ai" / "prodgen" / "promote.py").read_text(encoding="utf-8")
-    i_eff = text.index("require_bounded, bounded_from = _effective_require_bounded(require_bounded, ci_stage_results)")
-    assert i_eff < text.index("e2e_problems = (_check_e2e(") < text.index("ci_problems = (_check_ci_stages(")
-    ci = (Path(__file__).resolve().parents[3] / "Jenkinsfile_ci").read_text(encoding="utf-8")
-    assert "require_bounded: (params.REQUIRE_BOUNDED != false), stages: stages" in ci
+def test_e2e_e_is_a_normal_redfish_run_with_standard_auth_and_account_write_zero():
+    """8차 R1: E2E-E 는 시험용 dry-run 파라미터 없이 정상 Redfish 수집이다. 결과 봉투가 "표준 계정 인증(auth_success=true) · 계정 조정 경로
+    미진입(details.account_service 비어 있음)" 을 보여야 한다 — CLAUDE.md §8 정상 경로(Account Write 0)."""
+    def rf(ip, acct=None, auth=True):
+        e = _envelope(ip)
+        e["target_type"] = "redfish"
+        e["diagnosis"] = dict(e["diagnosis"], auth_success=auth, details={"account_service": {} if acct is None else acct})
+        return e
+    item = _main_item(params=dict(_main_item()["params"], target_type="redfish",
+                                  inventory_json=json.dumps([{"bmc_ip": "10.0.0.1"}, {"bmc_ip": "10.0.0.2"}])))
+    body = {"gatherInfoJson": [rf("10.0.0.1"), rf("10.0.0.2")]}
+    assert _failed(evaluate_main("E2E-E", item, SUMMARY_OK, body, None, CONSOLE_OK)) == []
+    recovered = {"gatherInfoJson": [rf("10.0.0.1"), rf("10.0.0.2", acct={"attempted": True, "recovered": True, "method": "patch"})]}
+    assert "account_write_zero" in _failed(evaluate_main("E2E-E", item, SUMMARY_OK, recovered, None, CONSOLE_OK)), "계정 조정 경로에 들어간 대상"
+    no_auth = {"gatherInfoJson": [rf("10.0.0.1"), rf("10.0.0.2", auth=None)]}
+    assert "account_write_zero" in _failed(evaluate_main("E2E-E", item, SUMMARY_OK, no_auth, None, CONSOLE_OK))
+    dry = _main_item(params=dict(item["params"], redfishAccountDryrun="true"))
+    assert "test_params_absent" in _failed(evaluate_main("E2E-E", dry, SUMMARY_OK, body, None, CONSOLE_OK)), "옛 dry-run 입력은 증거가 아니다"
+    # the collector records the removed parameter names it saw (values are never needed)
+    assert set(REMOVED_MAIN_PARAMS) == {"redfishAccountDryrun", "gatherBudgetForceSec"}
+    assert "test_params_absent" in _failed(evaluate_main("S1", dict(_main_item(), removed_params_present=["gatherBudgetForceSec"]),
+                                                         SUMMARY_OK, BODY_OK, None, CONSOLE_OK))
+
+
+def test_console_markers_tolerate_timestamper_prefixes_and_the_8th_wording(tmp_path):
+    """8차 R2: Timestamper 는 콘솔 줄마다 "[<ISO 시각>] " 을 붙이고, 업무 줄은 본문에도 "[YYYY-MM-DD HH:MM:SS +09:00] " 을 쓴다.
+    표식 판정과 [Trusted] 줄 파싱이 그 접두어와 상관없이 같아야 한다."""
+    ts = "[2026-10-06T01:02:03.456Z] "
+    biz = "[2026-10-06 10:02:03 +09:00] "
+    cb_ok = dict(SUMMARY_OK, callback={"attempted": True, "delivered": True, "http_code": 200, "attempts": 1}, warnings=[])
+    con = (ts + biz + "[Portal 전송] 1번째 전송을 시작합니다. 응답은 최대 10분 기다립니다.\n" +
+           ts + biz + "[Portal 전송] HTTP 200 응답을 받았습니다. 소요 시간: 1초. 2xx 는 Portal 이 요청을 받았다는 뜻입니다.\n")
+    assert _failed(evaluate_main("S1", _main_item(), cb_ok, BODY_OK, None, con)) == []
+    t6 = _main_item(result="UNSTABLE", params=dict(_main_item()["params"], callbackUrl="http://127.0.0.1:9"))
+    cb_fail = dict(SUMMARY_OK, callback={"attempted": True, "delivered": False, "http_code": None, "attempts": 3}, warnings=["callback_failed"])
+    con6 = ts + biz + "[Portal 전송] 전달하지 못했습니다. 시도 3번, 마지막 상태 응답 없음.\n" + ts + "[경고] Portal 전송에 실패했습니다. 보내려던 본문은 결과 파일 callback_body.json 에 있습니다.\n"
+    assert _failed(evaluate_main("T6", t6, cb_fail, BODY_OK, None, con6)) == []
+    tn = json.dumps([{"service_ip": "192.0.2.10"}, {"service_ip": "192.0.2.11"}])
+    ea = _main_item(params=dict(_main_item()["params"], loc="cj", inventory_json=tn, callbackUrl="http://127.0.0.1:18080"))
+    body_f = {"gatherInfoJson": [_envelope("192.0.2.10", ok=False), _envelope("192.0.2.11", ok=False)]}
+    con_a = ts + "[실행 위치] cj 위치의 os 대상은 노드 라벨 'cj && linux' 에서 실행합니다. 후보: Runner01\n" + con
+    checks = {c["name"]: c for c in evaluate_main("E2E-A", ea, cb_ok, body_f, None, con_a)}
+    assert checks["console:[Resolve Location] cj + "]["ok"] and checks["console:[Resolve Location] cj + "]["observed"] == "[실행 위치] cj 위치의 "
+    t5 = _main_item(scenario="T5", result="ABORTED")
+    con5 = ts + biz + "[수집] 중단됨: 사용자 취소 또는 다른 중단입니다. 확보한 결과를 보존하고 전송으로 넘어갑니다. (outcome=aborted)\n" + con
+    assert _failed(evaluate_main("T5", t5, dict(cb_ok, outcome="aborted"), BODY_OK, None, con5)) == []
+    # [Trusted] lines with a Timestamper prefix are still parsed
+    import subprocess
+    repo = tmp_path / "r"
+    repo.mkdir()
+    g = ["git", "-C", str(repo)]
+    subprocess.run(g + ["init", "-q"], check=True)
+    subprocess.run(g + ["config", "user.email", "t@x"], check=True)
+    subprocess.run(g + ["config", "user.name", "t"], check=True)
+    reg = "locations:\n  git: {agent_label: git}\n"
+    (repo / "common").mkdir()
+    (repo / "common" / "locations.yml").write_text(reg, encoding="utf-8", newline="\n")
+    (repo / "Jenkinsfile_portal").write_text("echo \"[Trusted] ${path}\"\n", encoding="utf-8")
+    subprocess.run(g + ["add", "-A"], check=True)
+    subprocess.run(g + ["commit", "-q", "-m", "x"], check=True)
+    sha = subprocess.run(g + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    items, checks = trusted_report(ts + f"[Trusted] common/locations.yml len={len(reg)} jhash={java_string_hash(reg)}\n", sha, str(repo))
+    assert items and items[0]["match"] == "utf-8" and checks[0]["ok"], (items, checks)
 
 
 def test_main_contract_reads_the_new_operator_wording_and_the_summary_callback():

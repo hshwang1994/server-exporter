@@ -1,0 +1,89 @@
+# tests/jenkins/harness/remote_cleanup_probe.yml — 수집이 멈출 때 원격 명령이 남는지 관측 (시험 전용 · main 전용, 2026-10-05 8차 R6). 운영 코드가 아니다.
+#
+# 드라이버 tests/jenkins/harness/remote_cleanup_probe.sh 가 이 플레이북을 **운영 실행 스크립트 scripts/run_gather.sh 로** 돌린다 —
+# 실행 한계 · 취소 · 연결 종료 뒤의 원격 정리를 운영 코드 그대로 확인하기 위해서다. run_gather.sh 는 시험용 인자를 받지 않으므로
+# 관측 조건은 환경변수(RCP_*)로 받는다. 남은 프로세스 확인 · 정리(check · cleanup)는 드라이버가 ansible-playbook 으로 직접 돌린다.
+#
+# 연결 설정은 os-gather/site.yml 의 Linux add_host 와 같다(SSH 22 · 연결 수립 60초 · 터미널(pty) 사용 · SSH 다중화 ControlPersist 60s).
+# 명령은 수집과 같은 raw 경로로 실행한다(수집의 Linux 명령은 Python 상태와 무관하게 raw 다). 표식은 고유한 sleep 인자다.
+#   RCP_MODE    run      — raw 로 `sleep <RCP_SLEEP>` 실행 (RCP_ECHO=true 면 끝난 뒤 done)
+#               check    — 표식(sleep <RCP_SLEEP>) 프로세스를 센다 (패턴 첫 글자를 [s] 로 감싸 이 명령 자신과는 맞지 않게)
+#               cleanup  — 표식 프로세스만 정리
+#   RCP_BECOME  true 면 sudo(become) 로 — 수집의 dmidecode 등 root 가 필요한 raw 와 같은 경로
+#   RCP_LINUX_IP 대상 · 위치(loc)는 run_gather.sh 가 넘기는 se_location 을 쓴다(없으면 RCP_LOC, 기본 git)
+# 자격 증명은 vault/<loc>/os/linux.yml 의 첫 계정 — no_log 로만 다룬다. 이 플레이북이 만든 프로세스 외에는 건드리지 않는다.
+# production tree 에는 들어가지 않는다(production_manifest forbidden tests/**).
+
+- name: remote cleanup probe | target
+  hosts: localhost
+  gather_facts: false
+  vars:
+    _rcp_loc: "{{ se_location | default(lookup('env', 'RCP_LOC') | default('git', true)) }}"
+    _rcp_ip: "{{ lookup('env', 'RCP_LINUX_IP') }}"
+  tasks:
+    - name: probe | linux credentials
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../vault/{{ _rcp_loc }}/os/linux.yml"
+        name: _rcp_lv
+      no_log: true
+
+    - name: probe | register linux target (os-gather/site.yml 과 같은 연결 설정)
+      ansible.builtin.add_host:
+        name: rcp_target
+        groups: rcp_linux
+        ansible_host: "{{ _rcp_ip }}"
+        ansible_connection: ssh
+        ansible_port: 22
+        ansible_timeout: 60
+        ansible_ssh_use_tty: true
+        ansible_user: "{{ _rcp_lv.accounts[0].username }}"
+        ansible_password: "{{ _rcp_lv.accounts[0].password }}"
+        ansible_become_pass: "{{ _rcp_lv.accounts[0].password }}"
+        ansible_ssh_common_args: >-
+          -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+          -o ConnectTimeout=60 -o ServerAliveInterval=10
+      no_log: true
+
+- name: remote cleanup probe | linux
+  hosts: rcp_linux
+  gather_facts: false
+  vars:
+    _rcp_mode: "{{ lookup('env', 'RCP_MODE') | default('run', true) }}"
+    _rcp_sleep: "{{ lookup('env', 'RCP_SLEEP') | default('0', true) | int }}"
+    _rcp_become: "{{ lookup('env', 'RCP_BECOME') | default('false', true) | bool }}"
+    _rcp_echo: "{{ lookup('env', 'RCP_ECHO') | default('false', true) | bool }}"
+  tasks:
+    - name: "run — raw sleep (marker = its argument)"
+      when: _rcp_mode == 'run'
+      ansible.builtin.raw: "sleep {{ _rcp_sleep }}{{ '; echo done' if (_rcp_echo | bool) else '' }}"
+      become: "{{ _rcp_become | bool }}"
+      register: _rcp_run
+      changed_when: false
+
+    - name: "run — result"
+      when: _rcp_mode == 'run'
+      ansible.builtin.debug:
+        msg: "RCP_RUN rc={{ _rcp_run.rc | default('none') }} stdout={{ (_rcp_run.stdout | default('') | trim)[-20:] }}"
+
+    - name: "check — marker processes left (fresh session)"
+      when: _rcp_mode == 'check'
+      ansible.builtin.raw: "pgrep -af '[s]leep {{ _rcp_sleep }}$' || true"
+      register: _rcp_check
+      changed_when: false
+
+    - name: "check — result"
+      when: _rcp_mode == 'check'
+      ansible.builtin.debug:
+        msg: "RCP_LEFT={{ (_rcp_check.stdout_lines | default([]) | map('trim') | select | list | length) }} {{ _rcp_check.stdout_lines | default([]) | map('trim') | select | list | join(' | ') }}"
+
+    - name: "cleanup — only this probe's marker"
+      when: _rcp_mode == 'cleanup'
+      ansible.builtin.raw: "pkill -f '[s]leep {{ _rcp_sleep }}$' || true; sleep 1; pgrep -f '[s]leep {{ _rcp_sleep }}$' | wc -l"
+      become: "{{ _rcp_become | bool }}"
+      register: _rcp_clean
+      changed_when: false
+
+    - name: "cleanup — result"
+      when: _rcp_mode == 'cleanup'
+      ansible.builtin.debug:
+        msg: "RCP_AFTER_CLEANUP={{ _rcp_clean.stdout | default('') | trim }}"

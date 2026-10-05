@@ -8,8 +8,11 @@
 //   운영 코드에는 장애 주입 분기가 없다. 생성 tree 의 함수도 같은 Harness 로 검증한다(FUNCTIONS_SRC=artifact).
 //   산출물: harness_result.json(판정) · harness_functions.groovy(+meta: 원본 해시) · harness_calls.json · harness_control.json ·
 //           preserve_state.json · fixture_state.json · sink/record.jsonl · observed/{finalize_summary,callback_body}.json
-//   2026-10-04 검토 C5: interruption 시나리오 — bounded(Tier 2, 승인 실측 → 없으면 PARTIAL/승인) · foreign_timeout · user_abort(자기 빌드 /stop) ·
+//   2026-10-04 검토 C5: interruption 시나리오 — outer_timeout · foreign_timeout · user_abort(자기 빌드 /stop) ·
 //           aborted_outcome_finalize(ABORTED 빌드의 사후 finalize) · sink_hold(main Job T2 의 Callback 수신 증거용 sink 유지)
+//   2026-10-05 (8차): Tier 2(BOUNDED · SE_FINALIZER_BOUNDED) · Script Approval 실측을 없앴다 — 운영 함수에 안쪽 단계 상한이 없다(R3).
+//           stub_gather 시나리오(gather_limit_preserve)는 실제 scripts/run_gather.sh 를 가짜 ansible-playbook 과 시험 한계로 실행하고
+//           운영 함수 seGatherOutcome 으로 종료 상태를 정한다 — 운영 Job 의 시험용 파라미터(gatherBudgetForceSec)를 없앤 자리(R1).
 
 properties([
     disableConcurrentBuilds(),
@@ -21,41 +24,10 @@ properties([
         string(name: 'ARTIFACT_BASE_URL', defaultValue: '', description: 'FUNCTIONS_SRC=artifact: CI 빌드 artifact 기준 URL (…/artifact)'),
         string(name: 'EXPECTED_SHA256', defaultValue: '', description: 'FUNCTIONS_SRC=artifact: 생성 tree Jenkinsfile_portal 의 SHA-256 (CI 가 넘긴 값, 불일치면 중단)'),
         string(name: 'SINK_PORT', defaultValue: '18080', description: 'callback_sink.py 포트 — controller(built-in) 의 127.0.0.1 에 바인딩'),
-        booleanParam(name: 'BOUNDED', defaultValue: false, description: 'SE_FINALIZER_BOUNDED=true — 4 시그니처가 승인된 Jenkins 에서만'),
         string(name: 'LOC', defaultValue: 'git', description: 'Callback body 의 loc'),
         string(name: 'DEPLOYMENT_ENV', defaultValue: 'harness', description: 'Callback body 의 deploymentEnvironmentId'),
     ]),
 ])
-
-// sandbox 승인 실측(검토 C5) — Tier 2 가 쓰는 4 시그니처가 이 Jenkins 에서 허용되는지 **실제 호출**로 확인한다. 거부는 RejectedAccessException 으로
-//   잡혀 false 가 되고, 결과는 harness_control.json 의 approvals 에 남는다(verdict 가 PARTIAL/승인 판정에 쓴다). FlowNode 는 직렬화되지 않으므로 @NonCPS 안에서만 만진다.
-@NonCPS
-Map seHarnessProbeNode(Object node) {
-    Map r = [getEnclosingBlocks: false, getId: false, errors: [:]]
-    try {
-        def blocks = node.getEnclosingBlocks()
-        r.getEnclosingBlocks = true
-        try { blocks[0].getId(); r.getId = true } catch (Exception e2) { r.errors.getId = e2.getClass().name }
-    } catch (Exception e) {
-        r.errors.getEnclosingBlocks = e.getClass().name
-    }
-    return r
-}
-
-@NonCPS
-Map seHarnessProbeCauses(Object fie) {
-    Map r = [getCauses: false, getNodeId: false, errors: [:]]
-    try {
-        def causes = fie.getCauses()
-        r.getCauses = true
-        try {
-            for (Object c in causes) { c.getNodeId(); r.getNodeId = true }
-        } catch (Exception e2) { r.errors.getNodeId = e2.getClass().name }
-    } catch (Exception e) {
-        r.errors.getCauses = e.getClass().name
-    }
-    return r
-}
 
 // Runner 시스템 python3 는 3.9 — Harness 도구는 venv(3.12, PyYAML)에서 돈다. venv 선택은 scripts/activate_ansible_venv.sh 한 곳.
 String PY = '. "$WORKSPACE/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true; python3'
@@ -65,7 +37,7 @@ timeout(time: 45, unit: 'MINUTES') {
     node('linux') {
         deleteDir()
         String scenario = params.SCENARIO.trim()
-        Map control = [scenario: scenario, rethrown: null, sink_reachable: null, functions_source: params.FUNCTIONS_SRC, preserve_rethrown: false]
+        Map control = [scenario: scenario, rethrown: null, sink_reachable: null, functions_source: params.FUNCTIONS_SRC]
 
         // ── ① 소스 — main checkout (Job SCM = */main). MAIN_SHA 가 주어지면 같은 후보인지 확인한다.
         def scmVars = checkout scm
@@ -80,9 +52,7 @@ timeout(time: 45, unit: 'MINUTES') {
         def scenarios = readJSON(file: 'tests/jenkins/harness/scenarios.json', returnPojo: true).scenarios
         def sc = scenarios[scenario]
         if (sc == null) { error "[Harness] unknown scenario '${scenario}' — scenarios.json 참조" }
-        boolean bounded = params.BOUNDED || (sc.bounded ?: false)
         boolean holdOnly = (((sc.hold_seconds ?: 0) as int) > 0)
-        control.bounded = bounded
         control.expected_jenkins_result = (sc.jenkins_result ?: 'SUCCESS')
 
         // gather_ws = 운영 함수가 보는 WORKSPACE(수집 workspace 의 축소판): 입력 파일 + Layer A 가 쓰는 scripts/ · common/vars/.
@@ -112,7 +82,8 @@ timeout(time: 45, unit: 'MINUTES') {
             }
         } else {
             // Layer A 가 읽는 정본: common/vars/*.yml + common/tasks/normalize/{init_fragments,build_meta,build_correlation}.yml (Harness #6: normalize 누락 → exit 3)
-            sh 'mkdir -p gather_ws/scripts gather_ws/common/tasks && cp -a scripts/finalize_gather_output.py scripts/activate_ansible_venv.sh gather_ws/scripts/ && cp -a common/vars gather_ws/common/ && cp -a common/tasks/normalize gather_ws/common/tasks/'
+            // 8차: 보존이 부르는 오래된 작업 폴더 정리(workspace_cleanup.py)와 stub_gather 가 실행하는 run_gather.sh · env_guard.sh 도 같은 위치에 둔다(생성 tree 모드와 같은 배치)
+            sh 'mkdir -p gather_ws/scripts gather_ws/common/tasks && cp -a scripts/finalize_gather_output.py scripts/activate_ansible_venv.sh scripts/workspace_cleanup.py scripts/run_gather.sh scripts/env_guard.sh gather_ws/scripts/ && cp -a common/vars gather_ws/common/ && cp -a common/tasks/normalize gather_ws/common/tasks/'
         }
 
         // ── ② wrapper 를 붙인 함수 스크립트 (원본 글자 불변 — 해시 기록)
@@ -168,28 +139,6 @@ timeout(time: 45, unit: 'MINUTES') {
         }
         control.sink_workspace = sinkWs
 
-        // ── ③' 승인 실측 (Tier 2 시나리오 · sandbox_probe) — 결과만 기록한다
-        if (sc.probe_approvals) {
-            Map approvals = [:]
-            try {
-                def n = getContext(org.jenkinsci.plugins.workflow.graph.FlowNode)
-                approvals.putAll(seHarnessProbeNode(n))
-                n = null
-            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                throw fie
-            } catch (Exception e) {
-                approvals.getEnclosingBlocks = false
-                approvals.probe_error = e.getClass().name
-            }
-            try {
-                timeout(time: 1, unit: 'SECONDS') { sleep(time: 5, unit: 'SECONDS') }
-            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                approvals.putAll(seHarnessProbeCauses(fie))
-            }
-            control.approvals = approvals
-            echo "[Harness] sandbox approvals: ${approvals}"
-        }
-
         // ── ③'' sink_hold — 판정 없이 sink 만 hold_seconds 동안 유지한다 (main Job 이 callbackUrl=http://127.0.0.1:${sinkPort} 로 보낸 POST 가 record 에 남는다)
         if (holdOnly) {
             echo "[Harness] sink_hold: ${sinkUrl} 를 ${sc.hold_seconds}s 유지 — main Job T2 트리거는 이 사이에 한다"
@@ -209,7 +158,6 @@ timeout(time: 45, unit: 'MINUTES') {
         env.SE_MANIFEST_JSON = fx.manifest_json
         env.SE_GATHER_OUTCOME = fx.outcome
         env.SE_BUILD_START_EPOCH = "${(long) (System.currentTimeMillis() / 1000L)}"
-        env.SE_FINALIZER_BOUNDED = bounded ? 'true' : 'false'
         for (String k in ['SE_PRESERVE_LAYER_A', 'SE_PRESERVE_ARCHIVED', 'SE_PRESERVE_STASHED', 'SE_PRESERVE_MANIFEST', 'SE_PRESERVE_HASRESULT']) { env."${k}" = '' }
 
         // ── ⑤ load + init (바깥 스크립트 = 실제 step)
@@ -219,21 +167,36 @@ timeout(time: 45, unit: 'MINUTES') {
                                  trusted : trusted, slowSeconds: (sc.slow_seconds ?: 45)])
         if (lib.params.callbackUrl != sinkUrl) { error '[Harness] params 그림자가 동작하지 않는다 — getParams() 해석 확인' }
 
+        // ── ⑤' stub_gather — 실제 scripts/run_gather.sh 를 가짜 ansible-playbook(앞의 finish 대 결과를 쓰고 대기)과 시험 한계로 실행한다.
+        //      종료 상태 · 한계 사유는 운영 함수 seGatherOutcome 이 정한다(서버 정보 수집 단계와 같은 함수). 시험 한계는 run_gather.sh 의 정상 인자다.
+        if (fx.stub_gather) {
+            Map sg = fx.stub_gather
+            dir('gather_ws') {
+                withEnv(["WORKSPACE=${pwd()}", "SE_ANSIBLE_VENV=${sg.venv}", "SE_HARNESS_STUB_OUTPUT=${sg.output}",
+                         "ANSIBLE_JSON_OUTPUT_FILE=${pwd()}/gather_output.json", "VAULT_PASSWORD=harness-stub"]) {
+                    env.SE_GATHER_STARTED_AT = lib.seIsoUtc(lib.seNowMs())
+                    int grc = sh(returnStatus: true, label: 'harness: 수집 실행 (가짜 ansible-playbook, 시험 한계)', script: """#!/bin/bash
+                        bash "\${WORKSPACE}/scripts/run_gather.sh" '${sg.playbook}' '${sg.inventory}' 1 '${sg.limit_sec}' '${params.LOC}' false '${sg.hosts}'
+                    """)
+                    env.SE_GATHER_ENDED_AT = lib.seIsoUtc(lib.seNowMs())
+                    Map run = lib.seReadGatherRun()
+                    Map oc = lib.seGatherOutcome(grc, run, 'gather_limit')
+                    env.SE_GATHER_RUN = run ? groovy.json.JsonOutput.toJson(run) : ''
+                    env.SE_GATHER_OUTCOME = oc.outcome
+                    env.SE_GATHER_LIMIT_REASON = oc.limit_reason
+                    env.SE_GATHER_LIMIT_SEC = "${sg.limit_sec}"
+                    env.SE_GATHER_LIMIT_SOURCE = 'gather_limit'
+                    control.stub_gather = [rc: grc, run: run, outcome: oc.outcome, limit_reason: oc.limit_reason]
+                    echo "[Harness] stub_gather rc=${grc} outcome=${oc.outcome} limit_reason=${oc.limit_reason} run=${run}"
+                }
+            }
+        }
+
         // ── ⑥ 보존 — Gather post 가 하는 일을 gather_ws 에서 실제 step 으로 (Layer A · archive · stash). 주입은 wrapper 가 한다.
         dir('gather_ws') {
             withEnv(["WORKSPACE=${pwd()}"]) {
                 if (fx.run_preserve) {
-                    try {
-                        lib.sePreserveGatherOutput()
-                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                        // Tier 2 보존 상한(archive·stash PRESERVE_STEP) 시나리오: 승인 4 시그니처가 없으면 seBounded 가 설계대로 재전파한다 —
-                        // 기록하고 finalizer 는 건너뛴다(verdict PARTIAL/승인). bounded 가 아니면 진짜 중단이라 그대로 전파한다.
-                        if (!bounded) { throw fie }
-                        control.rethrown = true
-                        control.preserve_rethrown = true
-                        control.interruption_class = fie.getClass().name
-                        echo "[Harness] 보존 단계에서 interruption 이 전파됐다 (bounded — 승인 없으면 설계): ${fie.getClass().name}"
-                    }
+                    lib.sePreserveGatherOutput()
                     preserve = [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED == 'true', stashed: env.SE_PRESERVE_STASHED == 'true',
                                 manifestOk: env.SE_PRESERVE_MANIFEST == 'true', hasResult: env.SE_PRESERVE_HASRESULT == 'true']
                 } else if (sc.layer_a_direct) {
@@ -255,16 +218,11 @@ timeout(time: 45, unit: 'MINUTES') {
         //    set_result(aborted_outcome_finalize): ABORTED 빌드의 사후 finalize — seCallback 의 aborted 분기(1회 시도)를 실제로 탄다.
         //    self_abort_after(user_abort): 느린 unstash 중에 Harness 가 자기 빌드에 POST /stop — 사용자 중단과 같은 interruption 이 finalizer 로 들어간다.
         //    expect_interruption 시나리오만 interruption 을 기록 뒤 삼킨다(우리가 만든 것) — 그 외는 진짜 중단이라 그대로 전파한다.
-        // bounded(Tier 2) 시나리오도 포함: 승인 4 시그니처가 없으면 finalizer 가 설계대로 재전파하므로 Harness 가 받아 기록하고 verdict 가 PARTIAL/승인 으로 둔다
-        //   (CI #10 Harness #105/#106: 전파를 그대로 두면 빌드가 ABORTED 로 끝나 판정 artifact 가 남지 않았다).
-        boolean expectInterruption = (sc.expect_interruption ?: false) || (sc.outer_timeout_seconds ?: 0) > 0 || bounded
+        boolean expectInterruption = (sc.expect_interruption ?: false) || (sc.outer_timeout_seconds ?: 0) > 0
         if (sc.set_result) {
             currentBuild.result = sc.set_result.toString()
             echo "[Harness] currentBuild.result=${currentBuild.result} (시나리오 ${scenario})"
         }
-        if (control.preserve_rethrown) {
-            echo "[Harness] 보존 단계가 재전파됐으므로 finalizer 를 실행하지 않는다 (판정은 PARTIAL/승인)"
-        } else {
         try {
             if (sc.self_abort_after) {
                 int after = sc.self_abort_after as int
@@ -289,7 +247,6 @@ timeout(time: 45, unit: 'MINUTES') {
             echo "[Harness] interruption 이 finalizer 밖으로 전파됐다 (기대: 삼키지 않는다): ${fie.getClass().name}"
             if (!expectInterruption) { throw fie }   // 우리가 만든 interruption 이 아니면 진짜 중단이다 — 그대로 전파
         }
-        }   // !preserve_rethrown
         if (sc.self_abort_after && control.rethrown) {
             currentBuild.result = 'ABORTED'          // 사용자 중단이 만든 결과를 Harness 가 되돌리지 않는다 (시나리오 기대 jenkins_result=ABORTED)
         }

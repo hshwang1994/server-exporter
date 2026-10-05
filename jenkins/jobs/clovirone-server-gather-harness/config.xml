@@ -84,11 +84,6 @@
           <description>callback_sink.py 포트(agent)</description>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
-        <hudson.model.BooleanParameterDefinition>
-          <name>BOUNDED</name>
-          <defaultValue>false</defaultValue>
-          <description>SE_FINALIZER_BOUNDED=true — 4 시그니처가 승인된 Jenkins 에서만</description>
-        </hudson.model.BooleanParameterDefinition>
         <hudson.model.StringParameterDefinition>
           <name>LOC</name>
           <defaultValue>git</defaultValue>

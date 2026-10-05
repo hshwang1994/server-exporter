@@ -37,7 +37,7 @@ SIGNATURES = (
     "String seJsonString(Object value)",
     "Map seReconcileRaw(String manifestJson, String outputText, String checkpointText, Map canon, String outcome)",
 )
-STAGES = ["Checkout", "Toolchain", "Gate", "Finalize Corpus", "Budget Self-test", "Harness Driver", "Prodgen Build",
+STAGES = ["Checkout", "Toolchain", "Gate", "Finalize Corpus", "Time Limits Self-test", "Harness Driver", "Prodgen Build",
           "Harness (prodtree)", "Prodgen Drift", "Prodgen Verify", "Evidence Aggregate", "Prodgen Promote"]
 CREDENTIAL_STAGES = {"Prodgen Verify", "Evidence Aggregate", "Prodgen Promote"}
 
@@ -326,40 +326,41 @@ def test_promote_passes_the_stage_results_to_prodgen_and_the_cli_consumes_them()
     assert "seWriteStageResults()" in p and "--ci-stage-results ci_stage_results.json" in p
     assert p.index("seWriteStageResults()") < p.index("prodgen promote"), "stage 결과 파일을 먼저 쓴다"
     helper = CI[CI.index("def seWriteStageResults("):CI.index("\npipeline {")]
-    for k in ("GATE", "CORPUS", "BUDGET", "HARNESS_MAIN", "HARNESS_BOUNDED", "PRODGEN_BUILD", "HARNESS_TREE", "PRODGEN_DRIFT", "PRODGEN_VERIFY", "VAULT_DECRYPT", "EVIDENCE", "PROMOTE"):
+    for k in ("GATE", "CORPUS", "BUDGET", "HARNESS_MAIN", "PRODGEN_BUILD", "HARNESS_TREE", "PRODGEN_DRIFT", "PRODGEN_VERIFY", "VAULT_DECRYPT", "EVIDENCE", "PROMOTE"):
         assert f"'{k}'" in helper, k
+    assert "HARNESS_BOUNDED" not in helper and "require_bounded" not in helper, "8차 R3: Tier 2 기록은 없다"
     from scripts.ai.prodgen import REQUIRED_CI_STAGES
     required = re.search(r"List required = \[([^\]]+)\]", p).group(1)
     assert [x.strip().strip("'") for x in required.split(",")] == list(REQUIRED_CI_STAGES), "CI 와 CLI 의 필수 stage 목록은 하나다"
 
 
-def test_harness_driver_compares_each_scenario_with_its_expected_jenkins_result_and_runs_bounded_separately():
-    """검토 C1 · C5: user_abort 는 ABORTED 가 기대값이다; Tier 2 는 BOUNDED=true 로 따로 돌리고 HARNESS_BOUNDED 에 기록한다(승격 조건 아님)."""
+def test_harness_driver_compares_each_scenario_with_its_expected_jenkins_result_and_has_no_bounded_group():
+    """검토 C1 · C5: user_abort 는 ABORTED 가 기대값이다. 8차 R3: Tier 2(BOUNDED) · HARNESS_BOUNDED · REQUIRE_BOUNDED 를 없앴다 —
+    수집 한계 보존(gather_limit_preserve)은 main 함수 · 생성 tree 두 그룹 모두의 기본 목록에 있다(8차 R1)."""
     helper = CI[CI.index("def seRunHarness("):CI.index("\ndef seWriteStageResults(")]
     assert "readJSON(file: 'tests/jenkins/harness/scenarios.json'" in helper and "jenkins_result" in helper
-    assert "boolean ok = (b.result == expected)" in helper and "booleanParam(name: k, value: (v.toString() == 'true'))" in helper
+    assert "boolean ok = (b.result == expected)" in helper and "booleanParam" not in helper
     main = _stage("Harness Driver")
     assert "results.findAll { !it.ok }" in main and "results.findAll { it.result != 'SUCCESS' }" not in main
-    assert "seRunHarness('checkout', bounded, [BOUNDED: 'true'])" in main and "harness_bounded_results.json" in main
-    assert "env.CI_STAGE_HARNESS_BOUNDED" in main
     params = CI[CI.index("    parameters {"):CI.index("    environment {")]
-    assert "name: 'HARNESS_BOUNDED_SCENARIOS'" in params
     default_main = re.search(r"string\(name: 'HARNESS_SCENARIOS', defaultValue: '([^']+)'", params).group(1).split(",")
-    from scripts.ai.prodgen.evidence import REQUIRED_HARNESS, REQUIRED_HARNESS_BOUNDED, REQUIRED_HARNESS_TREE
+    from scripts.ai.prodgen.evidence import REQUIRED_HARNESS, REQUIRED_HARNESS_TREE
     assert set(default_main) == set(REQUIRED_HARNESS), "CI 기본 목록 == 승격이 요구하는 main-function Harness 집합"
     default_tree = re.search(r"string\(name: 'HARNESS_TREE_SCENARIOS', defaultValue: '([^']+)'", params).group(1).split(",")
     assert set(default_tree) == set(REQUIRED_HARNESS_TREE)
-    default_bounded = re.search(r"string\(name: 'HARNESS_BOUNDED_SCENARIOS', defaultValue: '([^']+)'", params).group(1).split(",")
-    assert set(default_bounded) == set(REQUIRED_HARNESS_BOUNDED)
-    promote = _stage("Prodgen Promote")
-    assert "HARNESS_BOUNDED" not in re.search(r"List required = \[([^\]]+)\]", promote).group(1), "기본 목록에는 없다"
-    # 2026-10-05: 상한 모드를 켠 배포(사내 Jenkins)는 REQUIRE_BOUNDED(기본 true)로 Tier 2 를 승격 조건에 넣고 prodgen 에도 같은 요구를 넘긴다
-    assert "boolean requireBounded = (params.REQUIRE_BOUNDED != false)" in promote, "등록 전 첫 빌드(null)는 선언 기본값 true"
-    assert "if (requireBounded) { required << 'HARNESS_BOUNDED' }" in promote
-    assert 'if [ "${requireBounded}" = "true" ]; then ARGS+=(--require-bounded); fi' in promote
-    decl = "boolean requireBounded = (params.REQUIRE_BOUNDED != false)"
-    assert "params.REQUIRE_BOUNDED" not in promote.split(decl, 1)[1], "판정은 한 값으로만"
-    assert re.search(r"booleanParam\(name: 'REQUIRE_BOUNDED', defaultValue: true", params)
+    assert "gather_limit_preserve" in default_main and "gather_limit_preserve" in default_tree
+    code = _code(CI)
+    for gone in ("BOUNDED", "requireBounded", "--require-bounded", "harness_bounded_results.json", "inner_recover_timeout"):
+        assert gone not in code, gone
+
+
+def test_time_limits_self_test_runs_the_real_run_gather_and_constant_checks():
+    """8차 R3 · R8: 예산 자체 시험이 실행 한계 계산 · 실제 run_gather.sh(Linux Runner 에서 실행) · 시간 상수 일치 · 작업 폴더 정리 시험을 함께 돈다.
+    stage 키는 BUDGET 그대로(prodgen REQUIRED_CI_STAGES)."""
+    st = _stage("Time Limits Self-test")
+    for t in ("tests/unit/test_gather_budget.py", "tests/unit/test_run_gather.py", "tests/unit/test_time_limits.py", "tests/unit/test_workspace_cleanup.py"):
+        assert t in st, t
+    assert "env.CI_STAGE_BUDGET" in st and "'\"start\":true'" in st
 
 
 def test_toolchain_reports_esxi_prerequisites_without_adding_the_label():

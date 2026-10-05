@@ -74,7 +74,8 @@ def observe(summary, body_path, calls, sink, preserve, control) -> dict:
         delivered = (claimed and sink_ok) if sink_known else claimed
     elif posts or unstable_msgs or summary is not None:
         # 이전 형식(요약에 callback 없음): 수신 기록 + 실패 문구(구 · 신)
-        delivered = sink_ok and not any(("Callback 전송 실패" in m) or ("Portal 전송 실패" in m) for m in unstable_msgs)
+        delivered = sink_ok and not any(("Callback 전송 실패" in m) or ("Portal 전송 실패" in m) or ("Portal 전송에 실패했습니다" in m)
+                                        for m in unstable_msgs)
     body_sha = None
     if body_path and Path(body_path).is_file():
         body_sha = hashlib.sha256(Path(body_path).read_bytes()).hexdigest()
@@ -90,6 +91,8 @@ def observe(summary, body_path, calls, sink, preserve, control) -> dict:
         "damage": (summary or {}).get("damage"),
         "recovery_limited": (summary or {}).get("recovery_limited"),
         "outcome": (summary or {}).get("outcome"),
+        "limit_reason": (summary or {}).get("limit_reason"),
+        "gather_run": (summary or {}).get("gather_run") if isinstance(summary, dict) else None,
         "warnings": (summary or {}).get("warnings") if isinstance(summary, dict) else None,
         "callback": cb if isinstance(cb, dict) else None,
         "by_origin": None,
@@ -113,21 +116,28 @@ def observe(summary, body_path, calls, sink, preserve, control) -> dict:
 def check(expect: dict, obs: dict) -> tuple[list[dict], list[str]]:
     checks: list[dict] = []
     partial: list[str] = []
-    ctl = obs.get("control") or {}
-    if ctl.get("bounded") and ctl.get("rethrown") and expect.get("rethrown") is False and not _approvals_ok(ctl):
-        # Tier 2 시나리오인데 승인 4 시그니처가 없다: own-timeout 식별이 불가능해 설계대로 재전파됐다 — 뒤 관측(delivered 등)은 생길 수 없으므로
-        # 전체를 PARTIAL(승인) 로 둔다. 통과도 실패도 아니다 (검토 C5: "Harness interruption 충족" 으로 합산하지 않는다).
-        return [], ["rethrown: Script Approval 부재로 식별 불가 → 재전파(설계) — 필요한 서명: " + ", ".join(_approvals_missing(ctl))]
 
     def add(name, expected, observed, ok):
         checks.append({"name": name, "expected": expected, "observed": observed, "ok": bool(ok)})
 
-    for key in ("layerA", "layerB", "source", "filled", "recovery_limited", "outcome"):
+    for key in ("layerA", "layerB", "source", "filled", "recovery_limited", "outcome", "limit_reason"):
         if key in expect:
             if not obs["summary_present"]:
                 partial.append(f"{key}: finalize_summary.json 없음")
                 continue
             add(key, expect[key], obs[key], obs[key] == expect[key])
+    if "gather_run" in expect:
+        # 8차 (stub_gather): 수집 실행 기록(gather_run.json → finalize_summary.gather_run) — 실제 run_gather.sh 가 한계에 닿았는가
+        run = obs.get("gather_run")
+        if not obs["summary_present"] or not isinstance(run, dict):
+            partial.append("gather_run: finalize_summary.json 에 gather_run 없음")
+        else:
+            for k, v in expect["gather_run"].items():
+                add(f"gather_run.{k}", v, run.get(k), run.get(k) == v)
+            if "limit_sec" in expect["gather_run"]:
+                ran = run.get("ran_sec")
+                ok = isinstance(ran, int) and ran >= expect["gather_run"]["limit_sec"]
+                add("gather_run.ran_sec>=limit_sec", f">={expect['gather_run']['limit_sec']}", ran, ok)
     if "lines_eq_accepted" in expect:
         if not obs["summary_present"]:
             partial.append("lines_eq_accepted: finalize_summary.json 없음")
@@ -210,32 +220,9 @@ def check(expect: dict, obs: dict) -> tuple[list[dict], list[str]]:
         got = obs["control"].get("rethrown")
         if got is None:
             partial.append("rethrown: harness_control.json 에 관측 없음")
-        elif got and not expect["rethrown"] and obs["control"].get("bounded") and not _approvals_ok(obs["control"]):
-            # Tier 2 시나리오: 승인 4 시그니처가 없으면 own-timeout 식별이 불가능해 설계대로 재전파한다 — 통과도 실패도 아니다 (검토 C5)
-            missing = _approvals_missing(obs["control"])
-            partial.append("rethrown: Script Approval 부재로 식별 불가 → 재전파(설계) — 필요한 서명: " + ", ".join(missing))
         else:
             add("rethrown", expect["rethrown"], got, got == expect["rethrown"])
     return checks, partial
-
-
-APPROVAL_SIGNATURES = {
-    "getCauses": "method org.jenkinsci.plugins.workflow.steps.FlowInterruptedException getCauses",
-    "getNodeId": "method org.jenkinsci.plugins.workflow.steps.TimeoutStepExecution$ExceededTimeout getNodeId",
-    "getEnclosingBlocks": "method org.jenkinsci.plugins.workflow.graph.FlowNode getEnclosingBlocks",
-    "getId": "method org.jenkinsci.plugins.workflow.graph.FlowNode getId",
-}
-
-
-def _approvals_missing(control: dict) -> list:
-    ap = control.get("approvals") if isinstance(control, dict) else None
-    if not isinstance(ap, dict):
-        return list(APPROVAL_SIGNATURES.values())
-    return [sig for key, sig in APPROVAL_SIGNATURES.items() if not ap.get(key)]
-
-
-def _approvals_ok(control: dict) -> bool:
-    return not _approvals_missing(control)
 
 
 def main(argv=None) -> int:
@@ -274,7 +261,7 @@ def main(argv=None) -> int:
     elif partial:
         verdict = "PARTIAL"
     elif not checks and not partial:
-        verdict = "INFO"   # sandbox_probe 처럼 기대값이 없는 정보성 시나리오
+        verdict = "INFO"   # sink_hold 처럼 기대값이 없는 보조 시나리오
     else:
         verdict = "PASS"
     result = {"scenario": a.scenario, "verdict": verdict, "checks": checks, "partial": partial,

@@ -156,14 +156,14 @@ def _reuse_report(report_path: str, prov: dict, current_env: dict) -> tuple:
     return (rep if not problems else None), problems, env_problems
 
 
-def _check_e2e(evidence: dict, main_sha: str, tree_hash: str | None = None, require_bounded: bool = False) -> list:
+def _check_e2e(evidence: dict, main_sha: str, tree_hash: str | None = None) -> list:
     from .evidence import check_evidence
-    return check_evidence(evidence, main_sha, tree_hash=tree_hash, require_bounded=require_bounded)
+    return check_evidence(evidence, main_sha, tree_hash=tree_hash)
 
 
-def _check_ci_stages(path: str, main_sha: str, report: dict, require_bounded: bool = False) -> list:
+def _check_ci_stages(path: str, main_sha: str, report: dict) -> list:
     """ci_stage_results.json (Jenkinsfile_ci post) — the CLI consumes the same stage evidence the CI Promote stage checks (검토 C4).
-    require_bounded (2026-10-05): on a deployment that enables Tier 2 (SE_FINALIZER_BOUNDED=true) the bounded Harness stage is required too."""
+    2026-10-05 (8차 R3): Tier 2 (SE_FINALIZER_BOUNDED) and its HARNESS_BOUNDED stage are gone — one required stage set for every deployment."""
     try:
         ci = _load_json(path)
     except (OSError, ValueError) as exc:
@@ -172,30 +172,13 @@ def _check_ci_stages(path: str, main_sha: str, report: dict, require_bounded: bo
     if ci.get("main_sha") != main_sha:
         problems.append(f"ci stage results are for main {str(ci.get('main_sha'))[:12]}, not {main_sha[:12]}")
     stages = ci.get("stages") or {}
-    required = REQUIRED_CI_STAGES + (("HARNESS_BOUNDED",) if require_bounded else ())
-    bad = [f"{k}={stages.get(k, 'not_run')}" for k in required if stages.get(k) != "PASS"]
+    bad = [f"{k}={stages.get(k, 'not_run')}" for k in REQUIRED_CI_STAGES if stages.get(k) != "PASS"]
     if bad:
         problems.append("required CI stages not PASS: " + ", ".join(bad))
     src = (report or {}).get("source") or {}
     if src.get("kind") == "ci" and src.get("build_url") and ci.get("build_url") and src["build_url"].rstrip("/") != ci["build_url"].rstrip("/"):
         problems.append(f"verify report came from {src['build_url']} but the CI stage results from {ci['build_url']} — mixed builds")
     return problems
-
-
-def _effective_require_bounded(flag: bool, ci_stage_results: str | None) -> tuple[bool, str]:
-    """2026-10-05 (F06): CI 가 Tier 2 를 승격 조건으로 요구했으면(ci_stage_results.json 의 require_bounded=true) CLI 는 그 요구를 낮추지 못한다.
-    반환 (적용값, 출처: cli | ci_stage_results | cli+ci_stage_results | none)."""
-    ci_required = False
-    if ci_stage_results:
-        try:
-            ci_required = _load_json(ci_stage_results).get("require_bounded") is True
-        except (OSError, ValueError, AttributeError):
-            ci_required = False
-    if flag and ci_required:
-        return True, "cli+ci_stage_results"
-    if ci_required:
-        return True, "ci_stage_results"
-    return bool(flag), ("cli" if flag else "none")
 
 
 def _deploy_policy_problems(remotes: list, dry_run: bool) -> list:
@@ -213,7 +196,7 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
             production_ref: str = DEFAULT_REF, push_remote="", skip_live: bool = True, netrc: str | None = None,
             verify_report: str | None = None, bootstrap_baseline: str | None = None, e2e_evidence: str | None = None,
             vault_password_file: str | None = None, jenkins_url: str = "https://jenkins-prod.gooddi.lab",
-            source: dict | None = None, ci_stage_results: str | None = None, require_bounded: bool = False) -> dict:
+            source: dict | None = None, ci_stage_results: str | None = None) -> dict:
     store = GitStore(repo_root)
     main_sha = store.rev_parse(sha)
     remotes = _split_remotes(push_remote)
@@ -295,26 +278,22 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
         if gates_dict.get("verdict") != "COMPLETE_PASS":
             result["preview_only"] = f"dry-run preview with verdict {gates_dict.get('verdict')} — a real promotion would be refused here"
 
-        # ── Tier 2 요구 — CI 가 요구했으면 CLI 플래그가 없어도 요구한다 (F06: CI 에서만 강제되고 CLI 실승격에서 빠지는 경로 차단)
-        require_bounded, bounded_from = _effective_require_bounded(require_bounded, ci_stage_results)
-        result["require_bounded"] = {"value": require_bounded, "from": bounded_from}
-
         # ── E2E evidence (same main SHA, required scenarios PASS) — required for a real promotion
         evidence = None
         if e2e_evidence:
             evidence = _load_json(e2e_evidence)
         elif gates_dict.get("e2e_evidence"):
             evidence = gates_dict["e2e_evidence"]
-        e2e_problems = (_check_e2e(evidence, main_sha, prov.get("tree_hash"), require_bounded=require_bounded) if evidence
+        e2e_problems = (_check_e2e(evidence, main_sha, prov.get("tree_hash")) if evidence
                         else ["no E2E evidence given (--e2e-evidence or an aggregated report)"])
-        result["e2e"] = {"ok": not e2e_problems, "problems": e2e_problems, "require_bounded": require_bounded}
+        result["e2e"] = {"ok": not e2e_problems, "problems": e2e_problems}
         if e2e_problems and not dry_run:
             result["stage"] = "e2e"
             result["refused"] = "E2E evidence: " + "; ".join(e2e_problems[:5])
             return result
 
         # ── CI stage evidence (same candidate, required stages PASS) — required for a real promotion (검토 C4)
-        ci_problems = (_check_ci_stages(ci_stage_results, main_sha, gates_dict, require_bounded=require_bounded) if ci_stage_results
+        ci_problems = (_check_ci_stages(ci_stage_results, main_sha, gates_dict) if ci_stage_results
                        else ["no CI stage results given (--ci-stage-results ci_stage_results.json)"])
         result["ci_stages"] = {"ok": not ci_problems, "problems": ci_problems, "path": ci_stage_results}
         if ci_problems and not dry_run:

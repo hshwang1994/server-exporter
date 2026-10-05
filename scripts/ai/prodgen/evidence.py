@@ -6,11 +6,18 @@ backed by a build whose *inputs and observed behaviour* are the ones that scenar
 result equals a caller-supplied expectation.
 
 What is checked per entry (collect → item["checks"], all must hold for item["pass"]):
-  main Job   : the scenario contract in MAIN_CONTRACT — Job parameters (loc · target_type · inventory hosts · callbackUrl ·
-               gatherBudgetForceSec), finalize_summary.json (outcome · accepted==lines · by_origin · filled), callback_body.json
-               (one envelope per requested host · status/failure fields per scenario) and console markers (Callback [OK]/실패 ·
-               interruption · Resolve Location). The expected Jenkins result comes from the contract — a caller cannot turn S1 into
+  main Job   : the scenario contract in MAIN_CONTRACT — Job parameters (loc · target_type · inventory hosts · callbackUrl),
+               finalize_summary.json (outcome · accepted==lines · by_origin · filled · limits), callback_body.json
+               (one envelope per requested host · status/failure fields per scenario) and console markers (Portal 전송 2xx/실패 ·
+               interruption · 실행 위치). The expected Jenkins result comes from the contract — a caller cannot turn S1 into
                a PASS by declaring FAILURE as the expectation.
+               2026-10-05 (8차 R1): the operational Job has no test inputs. Every main-Job item must show that the removed test
+               parameters (REMOVED_MAIN_PARAMS) are absent from the build and that the console carries no "[시험:" tag — old inputs
+               cannot re-enable anything. S3 is a large normal-input batch (the 6-hour limit applies, nothing forced) and E2E-E a normal
+               Redfish run whose envelopes prove "standard account, account write 0" (diagnosis.details.account_service empty).
+               The stop/preserve proof moved to the Harness (gather_limit_preserve: the real scripts/run_gather.sh hits a test limit,
+               then the runtime functions preserve and deliver) and the account-write prevention proof to the CI Gate unit tests
+               (same MAIN_SHA) — both tied to the candidate code.
   Harness    : Job parameters SCENARIO/FUNCTIONS_SRC must equal the registered scenario and source group, harness_result.json
                must name the same scenario with verdict PASS, meta carries the function hash (functions_sha256 / source_sha256);
                generated-tree evidence (FUNCTIONS_SRC=artifact) additionally carries the provenance tree_hash of the tree it ran.
@@ -40,14 +47,16 @@ REQUIRED_MAIN = ("S1", "S2", "S3", "T2", "T5", "T6", "E2E-A", "E2E-A2")
 REQUIRED_HARNESS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
                     "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx", "outer_timeout",
                     "recover_slow", "foreign_timeout_interruption", "user_abort", "aborted_outcome_finalize",
-                    "archive_slow", "layer_a_read_slow")
+                    "archive_slow", "layer_a_read_slow", "gather_limit_preserve")
 # generated-tree Harness (FUNCTIONS_SRC=artifact) — the same functions from the prodgen tree. 2026-10-04 최종 지시 §6-1: the preservation
 # failure paths (archive_fail · stash_fail · truncate_jsonl · checkpoint_only_a/b · layer_a_fail) are required on the generated tree too.
+# 2026-10-05 (8차 R1): the stop/preserve proof (gather_limit_preserve) runs the generated tree's run_gather.sh too.
 REQUIRED_HARNESS_TREE = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
-                         "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt")
-# Tier 2 (SE_FINALIZER_BOUNDED=true) — required only when bounded mode is enabled for the deployment; PARTIAL without Script Approval
-REQUIRED_HARNESS_BOUNDED = ("inner_recover_timeout", "inner_assemble_timeout", "inner_archive_timeout", "inner_stash_timeout",
-                            "inner_layer_a_read_timeout", "inner_body_timeout")
+                         "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "gather_limit_preserve")
+# 2026-10-05 (8차 R1): test-only parameters removed from the collection Jobs. A main-Job build that still carries one of them did not run
+# the candidate's parameter set — it is not evidence. Tier 2 (SE_FINALIZER_BOUNDED) and its bounded Harness group are gone (8차 R3).
+REMOVED_MAIN_PARAMS = ("redfishAccountDryrun", "gatherBudgetForceSec")
+TEST_TAG_MARKER = "[시험:"
 HARNESS_MARKER = "harness"
 # Harness scenarios that end in a Jenkins result other than SUCCESS by design (scenarios.json `jenkins_result`, e.g. user_abort → ABORTED).
 # Read from the repository's scenario definition when present so the collector and the CI driver judge the same expectation
@@ -75,17 +84,21 @@ LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 #   envelopes      : "all_success" (every host success/partial, no failure fields), "all_failed", "mixed", None
 #   delivered      : True → finalize_summary.callback.delivered=true and the console 2xx marker; False → delivered=false (and callback_body.json archived).
 #                    Builds before 2026-10-05 have no summary.callback → console markers only (old and new wording both accepted)
-#   filled         : exact synthetic count (0) or None; filled_min / preserved_min for S3
-#   force_sec      : gatherBudgetForceSec must be set (≥ 120, MIN_START_SEC)
+#   filled         : exact synthetic count (0) or None
+#   hosts_min      : at least this many requested hosts (S3 — a large normal-input batch)
+#   full_limit     : finalize_summary.limits — the gather limit is the operational one (source gather_limit, gather_limit_sec == gather_max_sec)
+#   account_write_zero : every envelope authenticated with the standard account (diagnosis.auth_success true) and never entered the account
+#                    reconciliation path (diagnosis.details.account_service empty) — CLAUDE.md §8 "정상: Primary 인증 성공 → Account Write 0"
 #   loc            : required loc value; console: markers that must appear — each item is a string or a tuple of alternatives
-#                    (2026-10-05 F13: the operator wording changed; old and new markers are both accepted)
+#                    (2026-10-05 F13 · 8차 R7: the operator wording changed; old and new markers are both accepted)
 MAIN_CONTRACT = {
     "S1": {"desc": "정상 수집 — 실호스트 성공 envelope · Callback 2xx", "expected": {"SUCCESS"}, "hosts": "real", "callback": "portal",
            "outcome": {"completed"}, "envelopes": "all_success", "delivered": True, "filled": 0},
     "S2": {"desc": "혼합 배치 — 성공 host 보존 + 실패 host 진단 3종", "expected": {"SUCCESS"}, "hosts": "mixed", "callback": "portal",
            "outcome": {"completed"}, "envelopes": "mixed", "delivered": True, "filled": 0},
-    "S3": {"desc": "큰 배치 timeout — 완료 host 데이터 보존, 미완료만 보충", "expected": {"UNSTABLE"}, "hosts": "real", "callback": "portal",
-           "outcome": {"timeout", "timeout_killed"}, "delivered": True, "force_sec": True, "preserved_min": 1, "filled_min": 1},
+    "S3": {"desc": "큰 배치 정상 입력 — 실호스트 10대 이상, 운영 한계(6시간) 안에서 끝까지 수집 · 보충 0 (강제 한계 없음, 8차 R1)",
+           "expected": {"SUCCESS"}, "hosts": "real", "hosts_min": 10, "callback": "portal", "outcome": {"completed"},
+           "envelopes": "all_success", "delivered": True, "filled": 0, "full_limit": True},
     "S4": {"desc": "Windows 단독 수집", "expected": {"SUCCESS"}, "hosts": "real", "callback": "portal", "outcome": {"completed"},
            "envelopes": "all_success", "delivered": True, "filled": 0, "os_family": "Windows"},
     "S5": {"desc": "Kernel 6.x 대상 Linux 수집(원본 대조는 별도)", "expected": {"SUCCESS"}, "hosts": "real", "callback": "portal",
@@ -98,19 +111,22 @@ MAIN_CONTRACT = {
            "callback": "any", "outcome": {"completed"}, "delivered": False, "body_required": True},
     "E2E-A": {"desc": "cj routing smoke — loc=cj resolve · TEST-NET 실패 envelope", "expected": {"SUCCESS", "UNSTABLE"}, "hosts": "testnet",
               "callback": "any", "loc": "cj", "outcome": {"completed"}, "envelopes": "all_failed",
-              "console": [("[Resolve Location] cj + ", "[실행 위치] cj · ")]},
+              "console": [("[Resolve Location] cj + ", "[실행 위치] cj · ", "[실행 위치] cj 위치의 ")]},
     "E2E-A2": {"desc": "폐기 Location chj 거부 — Resolve Location fail-closed", "expected": {"FAILURE"}, "hosts": None, "callback": None,
                "loc": "chj", "console": [("[Resolve Location] 등록되지 않은 Location: 'chj'", "[실행 위치] 등록되지 않은 Location: 'chj'")],
                "fail_closed": True},
     "E2E-D": {"desc": "ESXi 성공 경로", "expected": {"SUCCESS"}, "hosts": "real", "callback": "portal", "outcome": {"completed"},
               "envelopes": "all_success", "delivered": True, "filled": 0, "target_type": "esxi"},
-    "E2E-E": {"desc": "Redfish dry-run — 표준 계정 인증 · Account Write 0", "expected": {"SUCCESS"}, "hosts": "real", "callback": "portal",
-              "outcome": {"completed"}, "envelopes": "all_success", "delivered": True, "filled": 0, "target_type": "redfish",
-              "dryrun": True},
+    "E2E-E": {"desc": "Redfish 정상 입력 — 표준 계정 인증 · Account Write 0 (시험용 dry-run 파라미터 없음, 8차 R1)", "expected": {"SUCCESS"},
+              "hosts": "real", "callback": "portal", "outcome": {"completed"}, "envelopes": "all_success", "delivered": True, "filled": 0,
+              "target_type": "redfish", "account_write_zero": True},
 }
-# Console markers — old (before 2026-10-05) and new operator wording (F13). Summary JSON is preferred where it exists.
-CALLBACK_OK_MARKERS = ("[Callback] [OK] HTTP 2", "[Portal 전송] 완료: HTTP 2")
-CALLBACK_FAIL_MARKERS = ("Callback 전송 실패", "[마무리] Portal 전송 실패")
+# Console markers — old (before 2026-10-05), F13 and 8차 R7 operator wording. Summary JSON is preferred where it exists.
+#   Timestamper (8차 R2) prefixes every console line with "[<ISO time>] " — the markers are substrings, so the prefix does not matter.
+CALLBACK_OK_MARKERS = ("[Callback] [OK] HTTP 2", "[Portal 전송] 완료: HTTP 2", "[Portal 전송] HTTP 2")
+CALLBACK_FAIL_MARKERS = ("Callback 전송 실패", "[마무리] Portal 전송 실패", "[Portal 전송] 전달하지 못했습니다", "Portal 전송에 실패했습니다")
+CANON_FALLBACK_MARKERS = ("정본 읽기 실패 — 복제값 사용", "실패 문구 정본을 읽지 못해 내장 복제값을 씁니다")
+LAYER_B_UNAVAILABLE_MARKERS = ("se_finalize.groovy 적재 실패", "보충 라이브러리(se_finalize.groovy)를 읽지 못해")
 GATHER_STAGE_MARKERS = ("{ (Gather)", "{ (서버 정보 수집)")
 ENVELOPE_KEYS = {"schema_version", "target_type", "collection_method", "ip", "hostname", "vendor", "status", "sections",
                  "diagnosis", "meta", "correlation", "errors", "data"}
@@ -210,6 +226,14 @@ def _env_failure_complete(e: dict) -> bool:
     return all(d.get(k) for k in ("failure_stage", "failure_code", "failure_reason"))
 
 
+def _account_write_zero(e: dict) -> bool:
+    """Standard account authenticated and the reconciliation path was never entered (no recovery, no write)."""
+    d = e.get("diagnosis") if isinstance(e.get("diagnosis"), dict) else {}
+    details = d.get("details") if isinstance(d.get("details"), dict) else {}
+    acct = details.get("account_service")
+    return d.get("auth_success") is True and (acct in ({}, None) or (isinstance(acct, dict) and not acct.get("attempted")))
+
+
 def _kernel_major(e: dict):
     sysd = ((e.get("data") or {}).get("system") or {}) if isinstance(e.get("data"), dict) else {}
     k = str(sysd.get("kernel") or "")
@@ -248,18 +272,20 @@ def evaluate_main(scenario: str, item: dict, summary, body, manifest, console: s
         add("loc", (params.get("loc") or "").strip() == c["loc"], params.get("loc"))
     if c.get("target_type"):
         add("target_type", params.get("target_type") == c["target_type"], params.get("target_type"))
-    if c.get("dryrun"):
-        add("redfish_dryrun", str(params.get("redfishAccountDryrun")).lower() == "true", params.get("redfishAccountDryrun"))
+    if c.get("hosts_min"):
+        add("hosts_min", len(hosts) >= c["hosts_min"], f"hosts={len(hosts)} (min {c['hosts_min']})")
+    # 8차 R1: the build ran the candidate's parameter set — no removed test parameter, no test tag (old inputs cannot re-enable anything)
+    present = item.get("removed_params_present")
+    if present is None:
+        present = sorted(k for k in REMOVED_MAIN_PARAMS if k in params)
+    add("test_params_absent", not present, present or "none")
     cb_host = _callback_host(params.get("callbackUrl", ""))
     if c.get("callback") == "portal":
         add("callback_receiver", cb_host and cb_host not in LOOPBACK_HOSTS and not _is_testnet(cb_host), cb_host)
     elif c.get("callback") == "any":
         add("callback_url", bool(cb_host), cb_host)
-    if c.get("force_sec"):
-        raw = str(params.get("gatherBudgetForceSec") or "").strip()
-        add("force_sec", raw.isdigit() and int(raw) >= 120, raw)
     # ── finalize summary
-    if c.get("outcome") is not None or c.get("filled") is not None or c.get("preserved_min") or c.get("filled_min"):
+    if c.get("outcome") is not None or c.get("filled") is not None or c.get("full_limit"):
         if not isinstance(summary, dict):
             add("finalize_summary", False, "finalize_summary.json missing/unreadable")
         else:
@@ -269,15 +295,14 @@ def evaluate_main(scenario: str, item: dict, summary, body, manifest, console: s
             add("accepted_eq_hosts", not hosts or summary.get("accepted") == len(hosts), f"accepted={summary.get('accepted')} hosts={len(hosts)}")
             if c.get("filled") is not None:
                 add("filled", summary.get("filled") == c["filled"], summary.get("filled"))
-            if c.get("filled_min"):
-                add("filled_min", (summary.get("filled") or 0) >= c["filled_min"], summary.get("filled"))
-            if c.get("preserved_min"):
-                bo = summary.get("by_origin") or {}
-                real = (bo.get("output") or 0) + (bo.get("checkpoint") or 0)
-                add("preserved_min", real >= c["preserved_min"], bo)
+            if c.get("full_limit"):
+                lim = summary.get("limits") if isinstance(summary.get("limits"), dict) else {}
+                ok = (lim.get("gather_limit_source") == "gather_limit" and isinstance(lim.get("gather_limit_sec"), int)
+                      and lim.get("gather_limit_sec") == lim.get("gather_max_sec"))
+                add("full_limit", ok, {k: lim.get(k) for k in ("gather_limit_sec", "gather_limit_source", "gather_max_sec")})
     # ── callback body
     envs = _envelopes(body)
-    if c.get("envelopes") or c.get("body_required") or c.get("os_family") or c.get("kernel_major_min"):
+    if c.get("envelopes") or c.get("body_required") or c.get("os_family") or c.get("kernel_major_min") or c.get("account_write_zero"):
         if body is None:
             add("callback_body", False, "callback_body.json missing/unreadable")
         else:
@@ -300,6 +325,9 @@ def evaluate_main(scenario: str, item: dict, summary, body, manifest, console: s
             if c.get("kernel_major_min"):
                 majors = [_kernel_major(e) for e in envs]
                 add("kernel_major", envs and all(m is not None and m >= c["kernel_major_min"] for m in majors), majors)
+            if c.get("account_write_zero"):
+                bad = [e.get("ip") for e in envs if not _account_write_zero(e)]
+                add("account_write_zero", envs and not bad, f"not standard-auth/write-0: {bad}" if bad else f"{len(envs)} envelopes")
     # ── console markers
     con = console or ""
     if c.get("fail_closed"):
@@ -331,6 +359,8 @@ def evaluate_main(scenario: str, item: dict, summary, body, manifest, console: s
         alts = marker if isinstance(marker, tuple) else (marker,)
         found = next((m for m in alts if m in con), None)
         add(f"console:{alts[0]}", found is not None, found)
+    if con:
+        add("no_test_tag", TEST_TAG_MARKER not in con, "test tag present in the console" if TEST_TAG_MARKER in con else "none")
     if not con:
         add("console_available", False, "consoleText unavailable — markers cannot be verified")
     return checks
@@ -365,7 +395,8 @@ def evaluate_harness(scenario: str, item: dict, hr, control, expected_result: st
     return checks
 
 
-TRUSTED_RE = re.compile(r"^\[Trusted\] (\S+) len=(\d+) jhash=(-?\d+)\s*$", re.M)
+# Timestamper (8차 R2) prefixes console lines with "[<ISO time>] " — tolerate any leading bracketed timestamps before the marker.
+TRUSTED_RE = re.compile(r"^(?:\[[0-9][^\]\n]*\]\s*)*\[Trusted\] (\S+) len=(\d+) jhash=(-?\d+)\s*$", re.M)
 
 
 def java_string_hash(text: str) -> int:
@@ -539,8 +570,9 @@ def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict |
                 "result": info.get("result"), "building": info.get("building"), "checkout_sha": sha, "checkout_sha_source": sha_source,
                 "binding": binding, "tip_observation": tip_note, "timestamp": info.get("timestamp"), "duration": info.get("duration"),
                 "expected": e.get("expected"), "caller_expected": e.get("caller_expected"),
-                "params": {k: params[k] for k in ("loc", "target_type", "inventory_json", "callbackUrl", "gatherBudgetForceSec",
-                                                   "redfishAccountDryrun", "SCENARIO", "MAIN_SHA", "FUNCTIONS_SRC", "BOUNDED") if k in params}}
+                "params": {k: params[k] for k in ("loc", "target_type", "inventory_json", "callbackUrl", "SCENARIO", "MAIN_SHA",
+                                                   "FUNCTIONS_SRC") if k in params},
+                "removed_params_present": sorted(k for k in REMOVED_MAIN_PARAMS if k in params)}
         if kind == "harness":
             hr, err = _try(_curl_json, f"{url}/artifact/harness_result.json", netrc)
             control, _ = _try(_curl_json, f"{url}/artifact/harness_control.json", netrc)
@@ -552,7 +584,6 @@ def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict |
             if isinstance(control, dict):
                 item["source_sha256"] = control.get("source_sha256")
                 item["provenance_tree_hash"] = (control.get("provenance") or {}).get("tree_hash")
-                item["bounded"] = control.get("bounded")
             expected_result = expected_results.get(e["scenario"], "SUCCESS")
             item["checks"] = evaluate_harness(e["scenario"], item, hr, control, expected_result)
         else:
@@ -560,7 +591,8 @@ def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict |
             body, _ = _try(_curl_json, f"{url}/artifact/callback_body.json", netrc)
             manifest, _ = _try(_curl_json, f"{url}/artifact/gather_manifest.json", netrc)
             console, _ = _try(lambda u, n: _curl(u, n, text=True), f"{url}/consoleText", netrc)
-            item["summary"] = {k: summary.get(k) for k in ("accepted", "lines", "kept", "filled", "outcome", "layerA", "layerB", "source", "by_origin", "unrecovered", "damage")} if isinstance(summary, dict) else None
+            item["summary"] = {k: summary.get(k) for k in ("accepted", "lines", "kept", "filled", "outcome", "limit_reason", "layerA", "layerB", "source",
+                                                           "by_origin", "unrecovered", "damage", "limits", "warnings")} if isinstance(summary, dict) else None
             envs = _envelopes(body)
             item["envelopes"] = [{"ip": x.get("ip"), "status": x.get("status"),
                                   "failure_code": ((x.get("diagnosis") or {}).get("failure_code") if isinstance(x.get("diagnosis"), dict) else None),
@@ -570,8 +602,8 @@ def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict |
             # §5: which helper/registry *content* this build read (seTrusted lines) vs the bound revision; fallback paths are recorded
             item["trusted"], trusted_checks = trusted_report(console or "", sha, repo_root)
             item["checks"].extend(trusted_checks)
-            item["canon_fallback"] = "정본 읽기 실패 — 복제값 사용" in (console or "")
-            item["layer_b_lib_unavailable"] = "se_finalize.groovy 적재 실패" in (console or "")
+            item["canon_fallback"] = any(m in (console or "") for m in CANON_FALLBACK_MARKERS)
+            item["layer_b_lib_unavailable"] = any(m in (console or "") for m in LAYER_B_UNAVAILABLE_MARKERS)
         item["pass"] = bool(item["checks"]) and all(ch["ok"] for ch in item["checks"]) and bool(sha)
         items.append(item)
     payload = {"collected_at": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat(),
@@ -581,7 +613,7 @@ def collect(jenkins_url: str, netrc: str, entries: list, harness_results: dict |
 
 
 def check_evidence(evidence: dict, main_sha: str, required_main=REQUIRED_MAIN, required_harness=REQUIRED_HARNESS,
-                   required_harness_tree=REQUIRED_HARNESS_TREE, tree_hash: str | None = None, require_bounded: bool = False) -> list:
+                   required_harness_tree=REQUIRED_HARNESS_TREE, tree_hash: str | None = None) -> list:
     """Problems list (empty = ok): every required scenario present, passed, recorded against `main_sha`, in its own source group."""
     problems = []
     if not isinstance(evidence, dict) or not isinstance(evidence.get("items"), list):
@@ -612,8 +644,6 @@ def check_evidence(evidence: dict, main_sha: str, required_main=REQUIRED_MAIN, r
             else:
                 problems.append(f"{sc}: no passing main-Job evidence for main {main_sha[:12]} ({_why(items)})")
     groups = [("main-function Harness", required_harness, "checkout"), ("generated-tree Harness", required_harness_tree, "artifact")]
-    if require_bounded:
-        groups.append(("bounded Harness", REQUIRED_HARNESS_BOUNDED, "checkout"))
     for label, req, src in groups:
         for sc in req:
             items = [it for it in by.get(sc, []) if it.get("kind") == "harness" and it.get("functions_src") == src]
