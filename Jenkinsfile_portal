@@ -890,7 +890,10 @@ def seExplainGatherEnd(Map C, String outcome, Map summary, Map bo, int kept, int
     } else {
         why = "${seOutcomeText(outcome)} 상태로 끝났습니다"
     }
-    String ran = (run?.ran_sec != null) ? "실행 시간 ${seDuration(run.ran_sec as long)}" : '실행 시간 기록 없음'
+    // 실행 시간: 수집 실행 기록이 정본이고, 취소로 그 기록을 읽지 못했으면 수집 시작부터 중단까지(SE_GATHER_RAN_SEC). 수집을 시작하지 않았으면 그렇게 적는다.
+    String ranSec = (run?.ran_sec != null) ? run.ran_sec.toString() : (env.SE_GATHER_RAN_SEC ?: '')
+    String ran = ranSec.isInteger() ? "실행 시간 ${seDuration(ranSec as long)}" :
+                 ((env.SE_GATHER_STARTED_EPOCH ?: '') ? '실행 시간 기록 없음' : '수집을 시작하지 않았습니다')
     int done = (bo != null) ? ((bo.output ?: 0) as int) : kept
     int partialCp = (bo != null) ? ((bo.checkpoint ?: 0) as int) : 0
     echo "[수집 종료] 수집은 ${why}. ${ran}. 끝난 대상 ${done}대, 끝나지 않은 대상 ${partialCp + filled}대(중간 결과로 보낸 대상 ${partialCp}대, 실패 결과를 새로 만든 대상 ${filled}대)."
@@ -1286,7 +1289,9 @@ pipeline {
                                 //   받지 못했거나 검사에 실패한 빌드에 남으면 모든 host 의 수집에 영향을 준다.
                                 withEnv(addonDir ? ["ADDON_DIR=${addonDir}"] : []) {
                                     // 실행 · 한계 · 시각 기록은 scripts/run_gather.sh 한 곳에 있다(시험 경로가 같은 파일을 실행한다).
-                                    env.SE_GATHER_STARTED_AT = seIsoUtc(seNowMs())
+                                    long gatherStartMs = seNowMs()
+                                    env.SE_GATHER_STARTED_AT = seIsoUtc(gatherStartMs)
+                                    env.SE_GATHER_STARTED_EPOCH = "${(long) (gatherStartMs / 1000L)}"
                                     def rc = sh(returnStatus: true, label: '서버 정보 수집 (ansible-playbook)', script: """#!/bin/bash
                                         bash "\${WORKSPACE}/scripts/run_gather.sh" "${playbook}" "${inventory}" "${exec.forks}" "${exec.limit}" "${env.SE_LOCATION}" "${addonDir ? 'true' : 'false'}" "${hostCount}"
                                     """)
@@ -1312,6 +1317,10 @@ pipeline {
                         // 사용자 취소 또는 단계 시간 한계. 원인 종류는 sandbox 에서 읽을 수 없어, 단계 기준점부터 지난 시간으로 단계 한계였는지만 가린다.
                         //   그대로 다시 던진다 — Jenkins 결과(ABORTED)는 바꾸지 않는다. post{always} 의 보존 · 결과 확인은 이어진다.
                         if (!(env.SE_GATHER_ENDED_AT ?: '')) { env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs()) }
+                        // 취소 · 단계 한계로 끊기면 실행 기록(gather_run.json)을 읽기 전이다 — 수집을 시작했으면 실제 실행 시간을 남긴다
+                        if ((env.SE_GATHER_STARTED_EPOCH ?: '').isInteger() && !(env.SE_GATHER_RUN ?: '')) {
+                            env.SE_GATHER_RAN_SEC = "${Math.max(0L, seNowSec() - (env.SE_GATHER_STARTED_EPOCH as long))}"
+                        }
                         if ((env.SE_GATHER_OUTCOME ?: 'interrupted_unknown') == 'interrupted_unknown') { env.SE_GATHER_OUTCOME = 'aborted' }
                         boolean stageLimit = (seNowSec() - (env.SE_STAGE_START_EPOCH as long)) >= ((C.STAGE as long) - 30L)
                         env.SE_GATHER_INTERRUPTION = stageLimit ? 'stage_limit' : 'user_or_other'

@@ -247,7 +247,7 @@ def test_rc_to_outcome_uses_the_real_timeout_record():
 def test_interruptions_are_recorded_and_rethrown_not_swallowed():
     assert "catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE', catchInterruptions: false)" in GATHER
     i_abort = GATHER.index("env.SE_GATHER_OUTCOME = 'aborted'")
-    before = GATHER[max(0, i_abort - 700): i_abort]
+    before = GATHER[max(0, i_abort - 1200): i_abort]
     after = GATHER[i_abort: i_abort + 900]
     assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in before
     assert "throw fie" in after and "env.SE_GATHER_INTERRUPTION = stageLimit ? 'stage_limit' : 'user_or_other'" in after
@@ -463,3 +463,17 @@ def test_gather_end_does_not_call_a_missing_preservation_a_failure():
     assert "String archivedFlag = (summary.preserve?.archived ?: '').toString()" in fn
     assert "!(archivedFlag in ['true', 'false']) ? '수집 단계가 실행되지 않아 보존할 결과가 없습니다'" in fn
     assert "(archivedFlag == 'true') ? '완료'" in fn and "'보관 실패, 전달로 받음'" in fn
+
+
+def test_aborted_gather_still_reports_its_runtime():
+    """2026-10-06 (main #245 관측): 취소로 끊긴 수집은 실행 기록을 읽기 전이라 "실행 시간 기록 없음" 이었다 — 시작 시각(초)으로 실행 시간을 남긴다.
+    수집을 시작하지 않은 빌드(실행 위치 확인 실패)는 "수집을 시작하지 않았습니다"."""
+    assert 'env.SE_GATHER_STARTED_EPOCH = "${(long) (gatherStartMs / 1000L)}"' in GATHER
+    assert "env.SE_GATHER_RAN_SEC = \"${Math.max(0L, seNowSec() - (env.SE_GATHER_STARTED_EPOCH as long))}\"" in GATHER
+    i_catch = GATHER.index("catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)")
+    assert GATHER.index("env.SE_GATHER_RAN_SEC =") > i_catch, "취소 경로에서 남긴다"
+    fn = TEXT[TEXT.index("def seExplainGatherEnd("):]
+    fn = fn[:fn.index("\n}\n") + 3]
+    assert "String ranSec = (run?.ran_sec != null) ? run.ran_sec.toString() : (env.SE_GATHER_RAN_SEC ?: '')" in fn
+    assert "'수집을 시작하지 않았습니다'" in fn
+
