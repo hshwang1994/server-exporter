@@ -270,3 +270,34 @@ def test_hanging_addon_task_is_cut_by_the_per_task_timeout(runs):
         assert added["section"] == "addon"
         assert "cause=addon_failed" in added["detail"] and "task that never finishes" in added["detail"]
         assert "time frame" in added["detail"] or "timed out" in added["detail"].lower(), added["detail"]
+
+
+def test_output_failure_after_checkpoint_is_reconciled_from_checkpoint(tmp_path):
+    """F01 (2026-10-05) 실제 ansible 재현: CHECKPOINT 뒤 OUTPUT 태스크가 실패하면 콜백의 종료 보충이 CHECKPOINT 조립본을
+    쓴다. 종전에는 기본 실패 envelope(OUTPUT_BUILD_FAILED)이 OUTPUT 파일에 들어가 CHECKPOINT 값을 가렸다."""
+    env = {k: v for k, v in os.environ.items() if k != "ADDON_DIR"}
+    out_file, cp_file, pg_file = tmp_path / "out.jsonl", tmp_path / "cp.jsonl", tmp_path / "pg.jsonl"
+    env.update({
+        "REPO_ROOT": str(REPO), "ANSIBLE_CONFIG": str(REPO / "ansible.cfg"),
+        "INVENTORY_JSON": json.dumps(HOSTS, ensure_ascii=False),
+        "ANSIBLE_JSON_OUTPUT_FILE": str(out_file), "ANSIBLE_JSON_CHECKPOINT_FILE": str(cp_file),
+        "ANSIBLE_JSON_PROGRESS_FILE": str(pg_file), "PYTHONHASHSEED": "0",
+    })
+    cmd = [PLAYBOOK_BIN, "-i", str(REPO / "os-gather" / "inventory.sh"), str(FIXTURES / "harness.yml"),
+           "-e", "harness_hook=false", "-e", "harness_break_output=true"]
+    proc = subprocess.run(cmd, cwd=REPO, env=env, capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=600)
+    assert proc.returncode != 0, "OUTPUT 태스크 실패 — ansible 은 실패 rc 를 낸다"
+    envelopes = [json.loads(line) for line in out_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+    checkpoints = {c["ip"]: c for c in (json.loads(line) for line in cp_file.read_text(encoding="utf-8").splitlines() if line.strip())}
+    assert sorted(e["ip"] for e in envelopes) == sorted(h["service_ip"] for h in HOSTS), "host 당 1개"
+    for e in envelopes:
+        cp = checkpoints[e["ip"]]
+        for key in ("status", "sections", "diagnosis", "data", "meta", "correlation"):
+            assert e[key] == cp[key], f"{e['ip']}: {key} 는 CHECKPOINT 값 그대로"
+        assert e["errors"][:-1] == cp["errors"]
+        assert e["errors"][-1]["detail"].startswith("finalized from checkpoint; reconciled by callback")
+    events = [json.loads(line) for line in pg_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert sorted(ev["host"] for ev in events if ev["event"] == "reconciled" and ev.get("source") == "checkpoint") == \
+        sorted(h["service_ip"] for h in HOSTS)
+

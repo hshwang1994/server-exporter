@@ -79,7 +79,11 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
   `CHECKPOINT` 의 값이 그대로 OUTPUT 에 실린다 ([02-normalize-flow.md](02-normalize-flow.md)).
 - Add-on 이 실행 중 실패하면 rescue 가 격리한다. 그때까지의 중간 결과는 버리고 `errors[]` 1건만 남긴다.
   role 안 태스크 하나가 끝나지 않으면 태스크별 제한(기본 300 s, `_addon_task_timeout`)이 그 태스크를 실패시켜 같은 rescue 로 보낸다.
-- 실행 전체가 강제 종료돼 OUTPUT 을 못 낸 host 는 `CHECKPOINT` 로 복원된다. `ADDON_START` 는 있고 `ADDON_DONE` 이 없으면
+- Add-on 결과를 `_output` 에 합치는 단계 자체가 실패해도 기본 결과는 그대로다. 결합은 자기 block 안에서 돌고, 실패하면
+  "추가 수집 결과를 기본 결과에 합치지 못했습니다. 기본 수집 결과는 그대로입니다." 1건만 붙는다 (2026-10-05).
+- OUTPUT 을 못 낸 host 는 `CHECKPOINT` 로 복원된다. 실행이 강제 종료된 경우는 Layer A 가, 실행은 끝났는데 OUTPUT 태스크가
+  실패한 경우는 콜백의 종료 보충이 같은 규칙으로 복원한다 (2026-10-05 — 종전에는 콜백이 CHECKPOINT 를 보지 않고 실패 봉투를 냈다).
+  `ADDON_START` 는 있고 `ADDON_DONE` 이 없으면
   "추가 수집 중 처리가 중단되어 추가 수집 결과가 없습니다. 기본 수집 결과는 그대로입니다." 가 `errors[]` 에 1건 붙고,
   `ADDON_DONE` 까지 있는데 OUTPUT 이 없으면 Add-on 탓으로 적지 않는다 (emit 실패 문장).
 - 실행 도중 연결이 끊겨도 host 를 잃지 않는다 (`ignore_unreachable: true` — `try_one_credential.yml` 과 같은

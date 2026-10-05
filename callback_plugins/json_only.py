@@ -188,6 +188,12 @@ def _reason(key, channel=None, loc=None):
 
 _REASON_NO_OUTPUT = _reason('output_build_failed')
 
+# CHECKPOINT(Add-on 전 조립본)로 보충할 때 붙이는 오류 1건의 문장 (2026-10-05 F01).
+# scripts/finalize_gather_output.py 의 ADDON_INTERRUPTED · EMIT_FAILED 와 글자까지 같다 — 같은 상황을 콜백이 만나든
+# Layer A 가 만나든 사용자는 같은 문장을 본다. drift 는 tests/unit/test_callback_envelope_reconcile.py 가 막는다.
+_CHECKPOINT_ADDON_INTERRUPTED = '추가 수집 중 처리가 중단되어 추가 수집 결과가 없습니다. 기본 수집 결과는 그대로입니다.'
+_CHECKPOINT_EMIT_FAILED = '수집은 끝났지만 결과를 내보내는 단계에서 중단되었습니다. 기본 수집 결과는 그대로입니다.'
+
 # 복제 이유 (YAML 런타임 로드를 채택하지 않은 근거, 2026-08-12)
 # ---------------------------------------------------------------
 # 정본 YAML 을 import 시점에 읽어 오면 파일 부재 / 권한 / 파싱 오류 어느 하나에도
@@ -340,7 +346,12 @@ class CallbackModule(CallbackBase):
                 self._progress_file, type(e).__name__))
 
     def _checkpoint(self, result):
-        """CHECKPOINT 태스크의 msg(조립된 envelope)를 checkpoint 파일에 append (flush+fsync) + progress."""
+        """CHECKPOINT 태스크의 msg(조립된 envelope)를 checkpoint 파일에 append (flush+fsync) + progress.
+
+        2026-10-05 (F01): 같은 envelope 을 host 컨텍스트에도 둔다. 플레이북이 정상 종료했는데 OUTPUT 이 나가지 않은 host
+        (OUTPUT 태스크 실패 · 기록 실패)를 on_stats 가 보충할 때, 기본 실패 envelope 대신 이 조립본을 쓴다 — 종전에는
+        보충 줄이 OUTPUT 출처로 Layer A/B 에서 CHECKPOINT 보다 우선해 이미 수집한 값을 가렸다.
+        """
         res = getattr(result, 'result', None)
         if not isinstance(res, dict):
             res = getattr(result, '_result', None)
@@ -351,15 +362,23 @@ class CallbackModule(CallbackBase):
         if payload is None:
             self._emit_error('checkpoint_empty', 'CHECKPOINT 태스크에 msg 가 없다', host=host)
             return
+        line = self._json_line(payload)
         if self._checkpoint_file:
             try:
                 with open(self._checkpoint_file, 'a', encoding='utf-8') as fh:
-                    fh.write(self._json_line(payload) + '\n')
+                    fh.write(line + '\n')
                     fh.flush()
                     os.fsync(fh.fileno())
             except (OSError, IOError) as e:
                 sys.stderr.write('[json_only] WARNING: checkpoint 파일 쓰기 실패 ({}): {}\n'.format(
                     self._checkpoint_file, type(e).__name__))
+        if self._reconcile:
+            try:
+                parsed = json.loads(line)
+            except ValueError:
+                parsed = None
+            if isinstance(parsed, dict):
+                self._ctx(host)['checkpoint_env'] = parsed
         self._progress(host, 'checkpoint', task=self._task_name(result))
 
     def _manifest_ips(self):
@@ -550,9 +569,13 @@ class CallbackModule(CallbackBase):
             self._checkpoint(result)
             return
         if name == self._addon_start_task:
+            if self._reconcile:
+                self._ctx(self._host_name(result))['addon_started'] = True
             self._progress(self._host_name(result), 'addon_started', task=name)
             return
         if name == self._addon_done_task:
+            if self._reconcile:
+                self._ctx(self._host_name(result))['addon_done'] = True
             self._progress(self._host_name(result), 'addon_done', task=name)
             return
         if name != self._output_task:
@@ -763,8 +786,31 @@ class CallbackModule(CallbackBase):
             'data':              shape['data'],
         }
 
+    @staticmethod
+    def _envelope_from_checkpoint(checkpoint_env, ctx):
+        """CHECKPOINT 조립본으로 보충 — status · sections · diagnosis · data 는 그대로, 원인 오류 1건만 붙인다.
+
+        Layer A 의 envelope_from_checkpoint 와 같은 규칙이다(문장 · section 같음). detail 은 'finalized from checkpoint;'
+        로 시작해 출처를 남긴다. 진짜 최종 failed OUTPUT 은 이 경로에 오지 않는다(emitted 가 이미 true).
+        """
+        env = json.loads(json.dumps(checkpoint_env))
+        if ctx.get('addon_started') and not ctx.get('addon_done'):
+            err = {'section': 'addon', 'message': _CHECKPOINT_ADDON_INTERRUPTED,
+                   'detail': 'finalized from checkpoint; reconciled by callback at playbook end; '
+                             'add-on started but did not finish'}
+        else:
+            err = {'section': 'gather', 'message': _CHECKPOINT_EMIT_FAILED,
+                   'detail': 'finalized from checkpoint; reconciled by callback at playbook end; '
+                             'OUTPUT was not emitted after assembly'}
+        errors = env.get('errors') if isinstance(env.get('errors'), list) else []
+        env['errors'] = errors + [err]
+        return env
+
     def _reconcile_missing_envelopes(self, stats):
-        """플레이북 종료 시점에 envelope 을 하나도 내지 못한 호스트를 보충한다."""
+        """플레이북 종료 시점에 envelope 을 하나도 내지 못한 호스트를 보충한다.
+
+        CHECKPOINT 조립본이 있으면 그것으로(이미 수집한 값 보존), 없으면 관측 사실로 만든 실패 envelope 으로 보충한다.
+        """
         if not self._reconcile:
             return
         processed = getattr(stats, 'processed', None)
@@ -782,20 +828,29 @@ class CallbackModule(CallbackBase):
             # 첫 호스트 처리 중 예외가 나면 **남은 미방출 호스트 전부**가 envelope 을
             # 잃었다 (보충 장치가 오히려 대량 소실 지점이 된다). 호스트 하나의 실패는
             # 그 호스트로 가둔다. 바깥 try 는 2중 방어로 그대로 둔다.
+            source = 'observed'
             try:
-                envelope = self._build_fallback_envelope(host_name, ctx)
+                checkpoint_env = ctx.get('checkpoint_env')
+                if isinstance(checkpoint_env, dict):
+                    envelope = self._envelope_from_checkpoint(checkpoint_env, ctx)
+                    source = 'checkpoint'
+                else:
+                    envelope = self._build_fallback_envelope(host_name, ctx)
             except Exception as e:                          # noqa: BLE001
                 envelope = self._minimal_envelope(host_name)
+                source = 'minimal'
                 sys.stderr.write(
                     '[json_only] WARNING: envelope 조립 실패 — 최소 envelope 으로 대체 '
                     '(host={}, reason={})\n'.format(host_name, type(e).__name__))
             try:
                 self._emit(envelope)
                 ctx['emitted'] = True
+                self._progress(host_name, 'reconciled', source=source)
                 # 관측 가시성 — stdout JSON 과 분리된 stderr 로만 남긴다.
+                diagnosis = envelope.get('diagnosis') if isinstance(envelope.get('diagnosis'), dict) else {}
                 self._emit_error(
                     error_type='envelope_reconciled',
-                    message=envelope['diagnosis']['failure_code'],
+                    message='{} (source={})'.format(diagnosis.get('failure_code') or envelope.get('status'), source),
                     host=host_name,
                 )
             except Exception as e:                          # noqa: BLE001

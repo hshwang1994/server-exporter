@@ -408,3 +408,31 @@ CURRENT_ADDON_FILES = [
 def test_no_legacy_addon_variable_names(rel):
     text = (REPO / rel).read_text(encoding="utf-8")
     assert "SE_ADDON" not in text, f"{rel}: 옛 이름 SE_ADDON_* 대신 ADDON_REPO_URL · ADDON_REPO_REF · ADDON_DIR 등"
+
+
+# ── 2026-10-05 (F01): 결합 실패가 기본 결과를 실패로 바꾸지 않는다 ─────────────────────
+def test_combine_failure_is_confined_to_one_addon_error():
+    """결합 태스크는 자기 block 안에 있고, rescue 는 _output 을 CHECKPOINT 값 그대로 두고 addon 오류 1건만 붙인다."""
+    guard = _hook_tasks()["addon | combine guard"]
+    assert [t["name"] for t in guard["block"]] == ["addon | combine into output"]
+    assert [t["name"] for t in guard["rescue"]] == ["addon | combine failure"]
+    assert guard["when"] == "_addon_dir | length > 0"
+    rescue = guard["rescue"][0]
+    out = _combine_env().from_string(rescue["ansible.builtin.set_fact"]["_output"]).render(
+        _output=dict(_BASE_OUTPUT), ansible_failed_result={"msg": "x" * 3000})
+    for key in ("schema_version", "target_type", "collection_method", "ip", "hostname", "vendor",
+                "status", "sections", "diagnosis", "meta", "correlation", "data"):
+        assert out[key] == _BASE_OUTPUT[key], f"{key} 는 CHECKPOINT 값 그대로"
+    assert out["errors"][:-1] == _BASE_OUTPUT["errors"]
+    last = out["errors"][-1]
+    assert last["section"] == "addon" and last["detail"].startswith("cause=addon_combine_failed; ")
+    assert len(last["detail"]) <= 2000
+    for token in ("ADDON_DIR", "_addon", "{{", "/", "http", "timeout", "task"):
+        assert token not in last["message"], f"message 에 {token!r}"
+    assert set(rescue["when"]) == {"_output is defined", "_output is mapping"}
+
+
+def test_markers_still_bracket_the_guarded_combine():
+    names = [t.get("name") for t in _load(HOOK)]
+    assert names.index("addon | run") < names.index("addon | combine guard") < names.index("ADDON_DONE")
+

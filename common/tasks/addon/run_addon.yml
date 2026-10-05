@@ -88,24 +88,44 @@
 # 조립된 _output 에 결합한다. 손대는 곳은 data.addon · errors[] · meta.finished_at/duration_ms 뿐이다 —
 # status · sections · diagnosis · 기존 data 는 CHECKPOINT 값 그대로. errors 는 build_errors 와 같은 normalize_errors 필터를
 # 거친다 (detail 2000자 절단 등 같은 규칙). finished_at/duration_ms 는 Add-on 시간까지 포함한 값으로 갱신한다.
-- name: "addon | combine into output"
-  ansible.builtin.set_fact:
-    _output: >-
-      {{ _output | combine({
-           'data':   (((_output.data | default({})) if ((_output.data | default({})) is mapping) else {})
-                      | combine(_addon_data_out | default({}))),
-           'errors': ((_output.errors | default([])) + (_addon_errors_out | default([]) | normalize_errors)),
-           'meta':   (((_output.meta | default({})) if ((_output.meta | default({})) is mapping) else {})
-                      | combine({
-                          'finished_at': now(utc=true).isoformat() + 'Z',
-                          'duration_ms': ((now(utc=true).timestamp()
-                                           - (_started_epoch | default(now(utc=true).timestamp()) | float)) * 1000) | int
-                        }))
-         }) }}
-  when:
-    - _addon_dir | length > 0
-    - _output is defined
-    - _output is mapping
+# 2026-10-05 (F01): 결합 자체가 실패해도 site.yml 바깥 rescue 로 올라가 기본 결과를 실패로 다시 만들지 않도록 이 block 안에
+# 가둔다. 실패하면 _output 은 CHECKPOINT 값 그대로 두고 Add-on 오류 1건만 붙인다.
+- name: "addon | combine guard"
+  when: _addon_dir | length > 0
+  block:
+    - name: "addon | combine into output"
+      ansible.builtin.set_fact:
+        _output: >-
+          {{ _output | combine({
+               'data':   (((_output.data | default({})) if ((_output.data | default({})) is mapping) else {})
+                          | combine(_addon_data_out | default({}))),
+               'errors': ((_output.errors | default([])) + (_addon_errors_out | default([]) | normalize_errors)),
+               'meta':   (((_output.meta | default({})) if ((_output.meta | default({})) is mapping) else {})
+                          | combine({
+                              'finished_at': now(utc=true).isoformat() + 'Z',
+                              'duration_ms': ((now(utc=true).timestamp()
+                                               - (_started_epoch | default(now(utc=true).timestamp()) | float)) * 1000) | int
+                            }))
+             }) }}
+      when:
+        - _addon_dir | length > 0
+        - _output is defined
+        - _output is mapping
+
+  rescue:
+    - name: "addon | combine failure"
+      ansible.builtin.set_fact:
+        _output: >-
+          {{ _output | combine({
+               'errors': ((_output.errors | default([])) + [{
+                   'section': 'addon',
+                   'message': '추가 수집 결과를 기본 결과에 합치지 못했습니다. 기본 수집 결과는 그대로입니다.',
+                   'detail': ('cause=addon_combine_failed; ' ~ (ansible_failed_result.msg | default('') | string))[:2000]
+                 }])
+             }) }}
+      when:
+        - _output is defined
+        - _output is mapping
 
 - name: ADDON_DONE
   ansible.builtin.set_fact:

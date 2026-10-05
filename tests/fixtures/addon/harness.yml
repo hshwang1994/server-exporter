@@ -92,6 +92,10 @@
             - lookup('env', 'ADDON_DIR') | length > 0
 
       always:
+        # 시험 전용(`-e harness_break_output=true`): OUTPUT 렌더링을 실패시켜 "CHECKPOINT 뒤 OUTPUT 미방출" 을 실제
+        # ansible 이벤트로 만든다 (2026-10-05 F01). 운영 site.yml 에는 이런 분기가 없다.
         - name: OUTPUT
           ansible.builtin.debug:
-            msg: "{{ _output | default({'harness_error': 'no _output'}) | to_json }}"
+            msg: >-
+              {{ (_output | default({'harness_error': 'no _output'}) | to_json)
+                 if not (harness_break_output | default(false) | bool) else harness_undefined_on_purpose }}
