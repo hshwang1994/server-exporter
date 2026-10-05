@@ -24,6 +24,7 @@
   `SE_ANSIBLE_VENV` → PATH 의 `ansible-playbook` → `/app/ansible-env` → `/opt/ansible-env`) · 검증 파라미터 기본값(`redfishAccountDryrun` 등은 기본값이면 영향 없음).
   `pwsh` 는 **생성 시** 도구이지 runtime 요구가 아니다. 내부 Jenkins 주소 · credential ID · Runner 이름을 고객 공통 필수값으로 새로 고정하지 않는다.
   마무리 step 상한(Tier 2, `SE_FINALIZER_BOUNDED`)은 **기본 false** 이고 설치 요구 조건이 아니다 — 켜려면 환경변수와 In-process Script Approval 4 서명을 함께 맞춘다(`04-pipeline-runtime.md` "실제 상한(선점) 과 Tier 2").
+  사내 Jenkins 는 2026-10-05 부터 켜져 있다. 고객사가 켜지 않으면 기본 모드의 보장 범위(느린 보존 · 회수 · 조립을 그 단계에서 끊지 않음)가 그대로 남는다.
 - 세 층을 구분해 말한다: **고객사 main 형태 깨끗한 checkout 검증(G19)** / **사내 production Job E2E** / **실제 고객사 실행**(이 저장소의 작업 범위 밖). 앞 둘이 통과해도 "고객사 실환경 검증 완료" 라고 쓰지 않는다.
 
 ## 1. 무엇이 들어가나
@@ -94,8 +95,9 @@ python -m scripts.ai.prodgen restore --to <production commit> [--bootstrap-basel
 
 승격 집행 조건(코드가 확인한다 — CI Promote 와 CLI 공통, CLI 는 `--ci-stage-results` 로 같은 stage 증거를 받는다): ① 필수 CI stage 전부 PASS(`ci_stage_results.json`: GATE · CORPUS · BUDGET · HARNESS_MAIN ·
 PRODGEN_BUILD · HARNESS_TREE · PRODGEN_DRIFT · PRODGEN_VERIFY · EVIDENCE) ② G01~G20 COMPLETE_PASS + binding 일치 ③ 같은 `main_sha` 의 필수 main Job 시나리오(S1 S2 S3 T2 T5 T6 E2E-A E2E-A')와
-main 함수 Harness(16) · 생성 tree Harness(4, 같은 `tree_hash`)가 `e2e_evidence` 에서 계약대로 PASS ④ 생성 tree hash == 검증 대상 ⑤ 양 원격(`origin` + `internal` 정확히) 동일 · 현재 parent ·
-G18/G20 재검사 ⑥ dry-run 이 아니고 명시 요청(`--push-remote origin,internal`/`PROMOTE=true`). Tier 2(`SE_FINALIZER_BOUNDED=true`) Harness 시나리오는 그 모드를 켠 배포에서만 조건이 된다.
+main 함수 Harness · 생성 tree Harness(같은 `tree_hash`)가 `e2e_evidence` 에서 계약대로 PASS ④ 생성 tree hash == 검증 대상 ⑤ 양 원격(`origin` + `internal` 정확히) 동일 · 현재 parent ·
+G18/G20 재검사 ⑥ dry-run 이 아니고 명시 요청(`--push-remote origin,internal`/`PROMOTE=true`). Tier 2(`SE_FINALIZER_BOUNDED=true`) Harness 시나리오는 그 모드를 켠 배포에서만 조건이 된다 — 사내 Jenkins 가 그렇다(2026-10-05~): CI 파라미터 `REQUIRE_BOUNDED`(기본 true)가
+`HARNESS_BOUNDED` 를 ① 의 필수 stage 에 넣고 promote 에 `--require-bounded` 를 넘긴다(그러면 `e2e_evidence` 의 Tier 2 그룹도 필수). CLI 로 승격할 때도 같은 플래그를 준다.
 G20 은 원격 없이 돌면 PARTIAL(검증 안 됨)이고, 일부 원격만 보면 `deploy_set_complete=false` 로 적는다 — 실제 승격은 전체 집합으로 다시 돈다.
 그 밖에: 수집 시간대 밖에서 한다. 승격 **직후** production Job(`clovirone-server-gather`) canary 1회(os 1~3대 · Callback 2xx · checkout SHA == 새 커밋) — 첫 확인 단계이지 완료 판정이 아니다.
 

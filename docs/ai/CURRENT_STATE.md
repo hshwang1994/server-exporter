@@ -1,5 +1,16 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-05 (6차) — Tier 2 승인 완료 · **사내 Jenkins 상한 모드 적용**(`SE_FINALIZER_BOUNDED=true`) · 적용 뒤 production 11 · main 12 · CI #20
+
+> 정본: `tests/evidence/2026-10-04-review-c1-c6.md` §11.
+
+- 승인 4/4(대기 0) → bounded Harness 5/5 PASS(#318~#322, main `031a15e6`) — 자기 timeout step id 판별이 sandbox 에서 동작.
+- 사내 Jenkins 전역 환경변수에 `SE_FINALIZER_BOUNDED=true` 추가(기존 `ADDON_REPO_URL` 보존). 실측 여유: archive ≤ 0.55 s · stash ≤ 0.25 s · unstash ≤ 0.23 s · 조립 ≤ 5 s(상한 30 s · 60 s). 되돌림 = 그 항목 삭제(코드 변경 없음).
+- 적용 뒤: production P3 11 빌드(#105~#115) · main X5 `27f7f4f1` 12 시나리오(#134~#145) 모두 기대 결과, 빌드마다 상한 표시(30 s ×3 · 60 s ×1) · 초과 0, T5 사용자 중단은 상한 모드에서도 ABORTED 유지. CI #20: #20 SUCCESS(35 min) · 필수 stage 전부 PASS(HARNESS_BOUNDED 포함) · Harness 18/18 · bounded 5/5 · 생성 tree 10/10 · Verify COMPLETE_PASS 20/20 · tree_hash `fd93e76b…`(= P3 trailer) · E2E 45건 전부 direct · Promote dry-run ok(`require_bounded=true`)
+- 도구(X5): CI `REQUIRE_BOUNDED`(기본 true; 미등록 첫 빌드 null → true) · `promote --require-bounded`. runtime 변경 0 → production tree 불변, 새 승격 없음(P3 유지).
+- 고객사 main-only: 기본 false 유지 — 켜지 않으면 기본 모드의 보장 축소(느린 보존·회수·조립을 단계에서 끊지 못함)가 남는다.
+- 남은 사용자 조치: 자산 6건(GP-37) · Runner01/02/04 `cj` 라벨(GP-38) · Portal 저장/중복(GP-42) · Runner /tmp 샘플러(GP-43) · `duration_ms`(GP-44) · GitHub public 정책.
+
 ## 일자: 2026-10-05 (5차) — 남은 실행 검증 · GP-23 실장비 결함 수정 · **X4 `17843cf0` → P3 `915dec4e`(양 원격)** · 시험 설정 원복
 
 > 정본: `tests/evidence/2026-10-04-review-c1-c6.md` §10(J/P/C/H 최종 판정표 §10-3). 사용자 지시 "남김없이".
@@ -9,7 +20,7 @@
 - **X4 → P3**: main E2E 12/12(#122~#133) · CI #19 SUCCESS — 12 stage PASS(bounded PARTIAL) · Harness main 18/18 · 생성 tree 10/10 · Verify COMPLETE_PASS 20/20(tree `fd93e76b…`) · VAULT_DECRYPT PASS · Evidence PASS(main 12 항목 전부 `binding=direct` — 11 BuildData + E2E-A2 `tip_frozen:ls-remote`, `[Trusted]` 전부 utf-8 일치) · Promote DRY_RUN `e2e ok, problems []` · parent P2 `07ecf7ac` · 실 승격 세션 CLI 1회(02:59~03:10, **autocrlf=true 그대로** — GP-45 수정 효과) **COMPLETE_PASS → P3 `915dec4e`**: Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20(G19 WSL 3채널 실제 실행) · Gates-Reused G01~G10 G16 G17 · publish origin "accepted by remote" · internal "already at the new commit (reached via a shared push URL)" · 로컬 ref 갱신 · 193 파일 · 개발 경로 0 · P2 대비 runtime 차이 `os-gather/tasks/linux/gather_network.yml` 1 파일 · trailer Main-SHA `17843cf0` · Tree-Hash `fd93e76b…` · Previous-Production `07ecf7ac` · CI-Build #19 · Verdict COMPLETE_PASS · CI-Stages verified. vault 암호 파일은 실행 동안만 존재(래퍼가 삭제 확인) · production production Job(P3 `915dec4e`, 11 빌드 #94~#104): 전부 checkout == P3 · 기대 결과 전부 일치(CAN-1/S1/S2/T2/Linux 15/Windows/ESXi 6/Redfish 10 SUCCESS, T6·S3 UNSTABLE 기대) — main 과 동일한 결과.
 - **정정**: DIMM 원인의 버전 귀속 — IEC 표기는 upstream 2025-04-24 "Use binary unit prefixes"(3.6 릴리스 이후), RHEL 9.6 의 3.6 은 SI. 결론 불변(EXTERNAL_CONTRACTS · FAILURE_PATTERNS).
 - **원복·정리**: Runner03 임시 `cj` 제거(나머지 라벨 유지) · Runner01/02/04 는 주체 미상이라 유지 · 임시 파일 정리: vault 암호 파일(실행마다 생성·삭제, 잔존 0) · 세션 시험용 자체 서명 인증서/키(`cert.pem`·`key.pem`, CN=localhost, 만료) · cookie 파일 삭제 · WSL `/tmp` 의 이 세션 prodgen staging(G11/G15/G19, 비밀 없음) 정리(잔존 0) · WSL `/tmp` 에 암호 사본(12 바이트 mktemp) 없음 확인 · Jenkins API netrc 는 마지막 확인 뒤 삭제
-- 남은 사용자 조치: `getNodeId` 승인(GP-39) · 자산 6건(GP-37) · 라벨(GP-38) · Portal(GP-42) · Runner /tmp 샘플러(GP-43) · `duration_ms`(GP-44) · GitHub public 정책.
+- 남은 사용자 조치(5차 시점 — 6차에서 GP-39 해소): `getNodeId` 승인(GP-39) · 자산 6건(GP-37) · 라벨(GP-38) · Portal(GP-42) · Runner /tmp 샘플러(GP-43) · `duration_ms`(GP-44) · GitHub public 정책.
 
 ## 일자: 2026-10-04 (4차) — 최종 실행 지시 대응: timeout 상한 범위 · readTrusted 식별 · 증거 직접/추정 · 생성 tree Harness 10 · Runner 자원 실측 · 자산 진단 · **X2 `ec6a494f` → P2 `07ecf7ac`(양 원격)**
 

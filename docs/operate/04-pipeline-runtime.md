@@ -84,7 +84,7 @@ host 상한이 아니다.
 위 표의 "Layer A 120 + archive/stash 60" 과 finalizer 안의 "회수 30 · 조립 60" 은 **예산 배분(예약)** 이다. 실제로 그 구간을 **끊는** 수단은 모드에 따라 다르다.
 Declarative 소스(pipeline-model-definition `ModelInterpreter`)로 확인: stage `options.timeout` 은 agent 할당과 stage `post` 를 **모두** 감싸고, pipeline `post` 는 전역 `options.timeout` 안에서 돈다.
 
-| 구간 | 기본 모드(`SE_FINALIZER_BOUNDED` 미설정/false — 사내 main · production · 고객사 main-only 공통) | Tier 2(`SE_FINALIZER_BOUNDED=true` + 승인 4 서명) |
+| 구간 | 기본 모드(`SE_FINALIZER_BOUNDED` 미설정/false — 설치 기본값, 고객사 main-only 설치) | Tier 2(`SE_FINALIZER_BOUNDED=true` + 승인 4 서명 — 사내 Jenkins main · production, 2026-10-05~) |
 |---|---|---|
 | Validate · Resolve Location | stage timeout 2 min 각 | 같다 |
 | Gather 전체(agent 대기 · checkout · 준비 · Add-on · 수집 · 유예 · post 보존) | stage timeout 115 min — post 포함 | 같다 |
@@ -99,7 +99,9 @@ Declarative 소스(pipeline-model-definition `ModelInterpreter`)로 확인: stag
 | 검산 | 720 = node 대기 120 + 회수 60 + 조립 60 + 최소 조립 20 + Callback 390 + 여유 70 · 마무리 예비 990 = 90 + 120 + 60 + 720 | |
 
 - Tier 2 의 식별 규칙: interruption 의 `ExceededTimeout.nodeId` 가 **자기 timeout step** 의 id 와 같을 때만 "상한 초과" 로 보고 다음 단계로 간다. 외곽 timeout · 사용자 취소 · 식별 불가(승인 없음 포함)는 전부 재전파하며 ABORTED 를 SUCCESS 로 바꾸지 않는다. 원인 클래스나 경과 시간으로 판정하지 않는다.
-- Tier 2 를 켜는 조건(둘 다): ① Jenkins 전역/노드/Job 환경변수 `SE_FINALIZER_BOUNDED=true` ② In-process Script Approval 에 `FlowInterruptedException getCauses` · `TimeoutStepExecution$ExceededTimeout getNodeId` · `FlowNode getEnclosingBlocks` · `FlowNode getId` 승인. 승인 없이 켜면 상한을 걸고도 식별을 못 해 재전파만 하므로(느리지만 끝날 회수까지 끊긴다) **켜지 않는다**. 기본 false 가 운영 기본이고 고객사 main-only 설치의 요구 조건이 아니다.
+- Tier 2 를 켜는 조건(둘 다): ① Jenkins 전역/노드/Job 환경변수 `SE_FINALIZER_BOUNDED=true` ② In-process Script Approval 에 `FlowInterruptedException getCauses` · `TimeoutStepExecution$ExceededTimeout getNodeId` · `FlowNode getEnclosingBlocks` · `FlowNode getId` 승인. 승인 없이 켜면 상한을 걸고도 식별을 못 해 재전파만 하므로(느리지만 끝날 회수까지 끊긴다) **켜지 않는다**. 기본 false 가 설치 기본값이고 고객사 main-only 설치의 요구 조건이 아니다.
+- 켜고 끄는 법: Jenkins 관리 → System → Global properties → Environment variables 에 `SE_FINALIZER_BOUNDED` = `true` 를 **추가**한다(다른 전역 변수는 그대로 둔다). 끄려면 그 항목 하나를 지운다 — 다음 빌드부터 기본 모드이고 코드 변경은 없다. 승인을 회수하거나 Jenkins 를 옮기면 이 변수도 함께 지운다. 켜진 빌드는 콘솔에 `Timeout set to expire in 30 sec`(보존 archive · stash, 회수 unstash) 와 `Timeout set to expire in 1 min 0 sec`(조립) 이 찍히고, 상한을 넘긴 단계는 `[Finalize] <단계>: step 상한 <초>s 초과 — 다음 단계로` 를 남긴다.
+- 사내 Jenkins 적용(2026-10-05): 승인 4 서명(대기 0) 확인 → Harness Tier 2 시나리오 5종 실행 PASS → 전역 환경변수 추가(기존 `ADDON_REPO_URL` 유지). 실측 여유 — 기본 모드 production 큰 배치(Linux 8대 · Redfish 10대)에서 archive 0.45~0.55 s · stash 0.14~0.25 s · unstash 0.21~0.23 s · 조립 경로 약 0.8 s 로 상한(30 s · 60 s)의 2 % 이내다. 적용 뒤 production(P3) 11 빌드 전부 상한 표시(30 s 3회 · 60 s 1회)가 찍혔고 상한 초과 0건, 결과는 적용 전과 같다.
 - 보장 범위(기본 모드): 느린 archive/stash 나 느린 회수·조립을 **그 단계에서 선점하지 않는다.** 보장은 ① 예산이 수집 뒤 stage 안에 270 s(유예 90 + post 180)를 남기고, ② 마무리는 720 s 합산 · 전역 150 min 으로 끝나며, ③ 그 안에서 Callback 은 남은 시간을 보고 시도한다는 것이다. 느린 보존·회수가 그 합산 제한까지 끌면 Callback 을 못 보낼 수 있다 — 그것이 기본 모드에 남는 보장 축소이며, Tier 2 는 그 구간을 단계별로 끊어 다음 수단과 Callback 시간을 확보한다. Harness(`tests/jenkins/harness/`)의 `*_slow` 시나리오가 기본 모드의 완주를, `inner_*_timeout` 시나리오가 Tier 2 의 단계 전환을 실행으로 확인한다.
 - `[Trusted] <경로> len=<글자 수> jhash=<Java String.hashCode>` 콘솔 줄(2026-10-04): 빌드가 `readTrusted` 로 실제 읽은 정본(Location registry · `se_finalize.groovy` · failure reason · supported sections)의 식별값이다. 증거 수집기(`scripts/ai/prodgen/evidence.py`)가 bound revision 의 같은 파일과 대조한다(혼합 revision 탐지). sandbox 가 digest API 를 허용하지 않아 32-bit 해시다 — 무결성 증명이 아니라 내용 식별이다.
 - `[Callback] [OK] HTTP 2xx … response=<앞 200자>`: 2xx 는 HTTP 응답 증거이지 Portal 의 저장·반영 증거가 아니다. 응답 본문 앞부분을 남겨 수신 측 응답의 형태(JSON 확인 / HTML 예외 페이지)를 구분한다.

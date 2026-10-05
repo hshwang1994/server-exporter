@@ -6,7 +6,29 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-04
+> 최종 갱신: 2026-10-05
+
+## 2026-10-05 (6차) — Tier 2 승인 완료 뒤 사내 Jenkins 상한 모드 적용
+
+### 사용자 의심
+- "승인했음" — 네 번째 sandbox 서명(`ExceededTimeout getNodeId`) 승인. 지시서 §4: 승인 뒤에도 적용하지 않으면 이유와 남는 보장 축소를 제시하라.
+
+### 분석
+- 기본 모드는 느린 보존 · 회수 · 조립을 그 단계에서 끊지 못한다 — 마무리 합산 제한(720 s)까지 끌면 Callback 을 못 보낼 수 있다. Tier 2 는 그 구간을 단계별로 끊고 다음 수단(archive→stash · stash→unarchive · 조립→최소 경로)으로 넘긴다.
+- 위험은 "정상 단계가 상한을 넘는 것" 이다. 실측(production 큰 배치 #99 · #103, 상한 모드 main #142): 보존·회수 ≤ 0.55 s, 조립 ≤ 5 s — 상한(30 s · 60 s)의 2~8 %.
+- 승인 없이 켜면 식별이 안 돼 재전파만 한다 → 승인 4/4 확인 · bounded Harness 5/5 실행 PASS 를 적용의 전제로 둔다.
+
+### 결정
+1. 사내 Jenkins 전역 환경변수에 `SE_FINALIZER_BOUNDED=true` 를 추가한다(기존 전역 변수 보존). main · production Job 모두 상한 모드.
+2. 사내 CI 는 Tier 2 Harness 를 승격 조건으로 요구한다(`REQUIRE_BOUNDED` 기본 true · `promote --require-bounded`).
+3. 고객사 main-only 설치의 기본값은 false 그대로 — 설치 요구 조건이 아니다. 켜지 않을 때 남는 보장 축소는 운영 문서(`docs/operate/04` · `09`)에 적는다.
+4. 되돌림은 전역 변수 한 항목 삭제(코드 변경 없음) + CI `REQUIRE_BOUNDED=false`.
+
+### 영향
+- runtime 코드 변경 0 → production tree 불변(P3 `915dec4e` 유지). 상한 모드 빌드의 콘솔에 단계 상한 표시(30 s ×3 · 60 s ×1)가 추가된다. envelope · Callback body 불변.
+
+### 회귀
+- bounded Harness #318~#322 · production P3 #105~#115 · main X5 #134~#145 · CI #20(#20 SUCCESS(35 min) · 필수 stage 전부 PASS(HARNESS_BOUNDED 포함) · Harness 18/18 · bounded 5/5 · 생성 tree 10/10 · Verify COMPLETE_PASS 20/20 · tree_hash `fd93e76b…`(= P3 trailer) · E2E 45건 전부 direct · Promote dry-run ok(`require_bounded=true`)) · `tests/unit/test_jenkinsfile_ci.py` · `tests/unit/prodgen/test_verdict_evidence.py` — evidence §11.
 
 ## 2026-10-05 (5차) — 남김없이: 실장비 결함(GP-23) 수정 · Runner 종료 동작 실측 · 원인 서술 정정 · P3
 

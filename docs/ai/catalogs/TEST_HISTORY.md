@@ -1,5 +1,17 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-05 (6차) — Tier 2 승인 완료 · 사내 Jenkins 상한 모드 적용 · 적용 뒤 검증
+
+| 구분 | 결과 |
+|---|---|
+| Script Approval(읽기 전용) | 4 서명 승인 · 대기 0 |
+| bounded Harness #318~#322(main `031a15e6`) | 5/5 PASS — `inner_recover_timeout`(archive 회수) · `inner_assemble_timeout`(최소 경로) · `inner_archive_timeout`(stash 계속 · workspace 보존) · `inner_stash_timeout`(unarchive 회수) · `inner_layer_a_read_timeout`(최소 경로), 재전파 0 |
+| 단계 시간 실측(기본 모드 production #99 · #103) | archive 0.45/0.55 s · stash 0.25/0.14 s · unstash 0.23/0.21 s · 조립 경로 약 0.8 s |
+| production P3 #105~#115(상한 모드) | 11 빌드 전부 checkout == P3 · 기대 결과 일치(T6 · S3 UNSTABLE 기대) · 빌드마다 30 s ×3 · 60 s ×1 · 초과 0 |
+| main X5 `27f7f4f1` #134~#145(상한 모드) | 12/12 기대 결과(T5 ABORTED · T6/E2E-A/S3 UNSTABLE · E2E-A2 FAILURE) · 상한 표시 3·1(#142 는 2·1 — Gather 없음) · 초과 0 · Layer B 경로 4.96 s(#142) |
+| 로컬(X5) | CI 계약 34 passed · prodgen 95 passed · `ci_gate.sh` pytest 4112 passed / 37 skipped / 7 xfailed · 통합 308 passed — PARTIAL(Windows syntax-check 건너뜀) |
+| CI #20(X5, PROMOTE dry-run, REQUIRE_BOUNDED 미등록 → 기본 true) | SUCCESS · 필수 stage PASS(HARNESS_BOUNDED 포함) · Harness 18/18 · bounded 5/5 · tree 10/10 · COMPLETE_PASS 20/20 · tree_hash `fd93e76b…`(P3 동일) · E2E 45 direct · Promote dry-run ok(require_bounded=true) |
+
 ## 2026-10-05 (5차) — 남은 실행 검증 · GP-23 수정 · X4 → P3
 
 | 구분 | 결과 |
