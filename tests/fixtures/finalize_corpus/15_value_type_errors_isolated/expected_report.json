@@ -1,0 +1,51 @@
+{
+  "accepted": 4,
+  "kept": 3,
+  "filled": 1,
+  "dropped": [
+    {
+      "file": "output",
+      "line": 2,
+      "reason": "ip type list",
+      "ip": [
+        "192.0.2.152"
+      ]
+    },
+    {
+      "file": "output",
+      "line": 3,
+      "reason": "status type list",
+      "ip": "192.0.2.152"
+    },
+    {
+      "file": "output",
+      "line": 4,
+      "reason": "sections shape",
+      "ip": "192.0.2.153"
+    }
+  ],
+  "conflicts": [],
+  "truncated_tail": [],
+  "corrupt_lines": [
+    {
+      "file": "progress",
+      "line": 2,
+      "preview": "{\"ts\": \"2026-10-05T01:00:02+00:00\", \"host\": [\"192.0.2.153\"], \"ip\": [\"192.0.2.153\"], \"event\": \"auth_proven\", \"task\": \"x\","
+    }
+  ],
+  "by_origin": {
+    "output": 2,
+    "checkpoint": 1,
+    "synthetic": 1
+  },
+  "outcome": "completed",
+  "rc": 2,
+  "exit_code": 2,
+  "layer": "a",
+  "channel": "os",
+  "build": {
+    "job": "clovirone-cicd/clovirone-server-gather",
+    "number": "15",
+    "url": "https://jenkins.example.invalid/job/clovirone-cicd/job/clovirone-server-gather/15/"
+  }
+}

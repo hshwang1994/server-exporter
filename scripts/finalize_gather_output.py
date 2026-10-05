@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -45,6 +46,23 @@ DIAGNOSIS_KEYS = ('reachable', 'port_open', 'protocol_supported', 'auth_success'
                   'failure_stage', 'failure_code', 'failure_reason', 'details')
 CHANNEL_METHOD = {'os': 'agent', 'esxi': 'vsphere_api', 'redfish': 'redfish_api'}
 MAX_CORRUPT_PREVIEW = 120
+# {loc} 표시 규칙 — filter_plugins/failure_reason.py display_location() · callback_plugins/json_only.py _display_location() 과 같다
+# (2026-10-05 F02: 종전에는 progress 의 location 을 그대로 넣었다 — 같은 상황에 콜백과 Layer A 가 다른 문장을 냈다).
+_LOC_UNSAFE = re.compile(r'[^A-Za-z0-9_.-]')
+_LOC_MAX_LEN = 40
+_LOC_EMPTY = '미지정'
+
+
+def display_location(loc):
+    if loc is None:
+        return _LOC_EMPTY
+    text = _LOC_UNSAFE.sub('', str(loc).strip())[:_LOC_MAX_LEN]
+    return text or _LOC_EMPTY
+
+
+def _reject_constant(name):
+    # NaN · Infinity 는 JSON(RFC 8259) 값이 아니다 — Python json 은 기본으로 받지만 Groovy JsonSlurper · 수신 측은 받지 못한다.
+    raise ValueError(f'non-finite number {name}')
 
 EXIT_OK, EXIT_DAMAGE, EXIT_TOOL = 0, 2, 3
 
@@ -91,7 +109,7 @@ class Canon:
         entry = self.catalog.get(key) or {}
         text = entry.get(channel) if channel else None
         text = text or entry.get('default') or ''
-        return str(text).replace('{loc}', str(loc) if loc else '미지정')
+        return str(text).replace('{loc}', display_location(loc))
 
     def shape(self, channel, ip):
         supported = set(self.channel_sections.get(channel, ()))
@@ -126,7 +144,7 @@ def read_jsonl(path: Path, report: dict, label: str):
         if not text:
             continue
         try:
-            obj = json.loads(text)
+            obj = json.loads(text, parse_constant=_reject_constant)
         except ValueError:
             is_last = (idx == len(lines) - 1) and not trailing_newline
             (report['truncated_tail'] if is_last else report['corrupt_lines']).append(
@@ -137,39 +155,66 @@ def read_jsonl(path: Path, report: dict, label: str):
 
 
 def shape_gate(obj, channel, accepted):
-    """최소 shape 검사 (전체 schema validator 가 아님). 통과하면 None, 아니면 사유 문자열."""
+    """최소 shape 검사 (전체 schema validator 가 아님). 통과하면 None, 아니면 사유 문자열.
+
+    2026-10-05 (F02): **값 종류를 먼저 본다.** 종전에는 목록·객체 값이 집합 비교에 먼저 쓰여 TypeError(unhashable)가 났고,
+    한 줄 때문에 Layer A 전체가 exit 3 으로 끝나 final 파일이 생기지 않았다. 같은 규칙(통과 · 거부 판정)이 Groovy 두 곳에 있다
+    (scripts/jenkins/se_finalize.groovy · Jenkinsfile_portal 의 seEnvelopeShapeReason). 사유 문자열은 언어마다 다를 수 있다.
+    """
     if not isinstance(obj, dict):
         return 'not an object'
-    if tuple(obj.keys()) != ENVELOPE_KEYS and set(obj.keys()) != set(ENVELOPE_KEYS):
+    if set(obj.keys()) != set(ENVELOPE_KEYS):
         return f'keys != 13 envelope keys ({len(obj)})'
-    if str(obj.get('schema_version')) != '1':
+    sv = obj['schema_version']
+    if not ((isinstance(sv, str) and sv == '1') or (type(sv) is int and sv == 1)):
         return 'schema_version != "1"'
-    if obj.get('target_type') != channel:
-        return f'target_type {obj.get("target_type")!r} != channel {channel!r}'
-    if obj.get('ip') not in accepted:
-        return f'ip {obj.get("ip")!r} not in accepted manifest'
-    if obj.get('status') not in STATUS_VALUES:
-        return f'status {obj.get("status")!r}'
-    sections = obj.get('sections')
+    tt = obj['target_type']
+    if not isinstance(tt, str):
+        return f'target_type type {type(tt).__name__}'
+    if tt != channel:
+        return f'target_type {tt!r} != channel {channel!r}'
+    ip = obj['ip']
+    if not isinstance(ip, str):
+        return f'ip type {type(ip).__name__}'
+    if ip not in accepted:
+        return f'ip {ip!r} not in accepted manifest'
+    status = obj['status']
+    if not isinstance(status, str):
+        return f'status type {type(status).__name__}'
+    if status not in STATUS_VALUES:
+        return f'status {status!r}'
+    sections = obj['sections']
     if not isinstance(sections, dict) or set(sections) != set(ALL_SECTIONS) \
-            or not set(sections.values()) <= SECTION_VALUES:
+            or not all(isinstance(v, str) and v in SECTION_VALUES for v in sections.values()):
         return 'sections shape'
-    diag = obj.get('diagnosis')
+    diag = obj['diagnosis']
     if not isinstance(diag, dict) or set(diag) != set(DIAGNOSIS_KEYS):
         return 'diagnosis shape'
-    if not isinstance(obj.get('errors'), list) or not isinstance(obj.get('data'), dict):
+    if not isinstance(obj['errors'], list) or not isinstance(obj['data'], dict):
         return 'errors/data type'
+    if not isinstance(obj['meta'], dict) or not isinstance(obj['correlation'], dict):
+        return 'meta/correlation type'
+    for key in ('collection_method', 'hostname', 'vendor'):
+        if obj[key] is not None and not isinstance(obj[key], str):
+            return f'{key} type {type(obj[key]).__name__}'
     return None
 
 
 def load_progress(path: Path, report: dict):
-    """progress 이벤트 → host 별 관측 컨텍스트 (ip 기준; ip 가 없으면 host 이름)."""
+    """progress 이벤트 → host 별 관측 컨텍스트 (ip 기준; ip 가 없으면 host 이름).
+
+    2026-10-05 (F02): 키(ip/host)가 문자열이 아닌 줄은 그 줄만 손상으로 적고 건너뛴다 — 종전에는 목록 값이 dict 키로 쓰여
+    TypeError 로 Layer A 전체가 멈췄다. task · location 도 문자열일 때만 쓴다.
+    """
     ctx = {}
-    for _, _, ev in read_jsonl(path, report, 'progress'):
+    for line_no, text, ev in read_jsonl(path, report, 'progress'):
         if not isinstance(ev, dict):
             continue
         key = ev.get('ip') or ev.get('host')
         if not key:
+            continue
+        if not isinstance(key, str):
+            report['corrupt_lines'].append({'file': 'progress', 'line': line_no, 'preview': text[:MAX_CORRUPT_PREVIEW]})
             continue
         c = ctx.setdefault(key, {'events': [], 'diagnosis': None, 'auth_proven': False, 'lost': False,
                                  'checkpoint': False, 'addon_started': False, 'addon_done': False,
@@ -177,7 +222,7 @@ def load_progress(path: Path, report: dict):
                                  'fail_detail': None, 'last_task': None})
         name = ev.get('event')
         c['events'].append(name)
-        if ev.get('task'):
+        if isinstance(ev.get('task'), str) and ev.get('task'):
             c['last_task'] = ev.get('task')
         if name == 'precheck' and isinstance(ev.get('diagnosis'), dict):
             c['diagnosis'] = ev['diagnosis']
@@ -196,10 +241,10 @@ def load_progress(path: Path, report: dict):
         elif name == 'emitted':
             c['emitted'] = True
         elif name == 'cred_load':
-            c['cred_load_outcome'] = ev.get('outcome')
-            if ev.get('location'):
+            c['cred_load_outcome'] = ev.get('outcome') if isinstance(ev.get('outcome'), str) else None
+            if isinstance(ev.get('location'), str) and ev.get('location'):
                 c['location'] = ev.get('location')
-        if ev.get('location') and not c['location']:
+        if isinstance(ev.get('location'), str) and ev.get('location') and not c['location']:
             c['location'] = ev.get('location')
     return ctx
 

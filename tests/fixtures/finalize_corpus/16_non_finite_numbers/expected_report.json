@@ -1,0 +1,35 @@
+{
+  "accepted": 3,
+  "kept": 2,
+  "filled": 1,
+  "dropped": [],
+  "conflicts": [],
+  "truncated_tail": [],
+  "corrupt_lines": [
+    {
+      "file": "output",
+      "line": 1,
+      "preview": "{\"schema_version\": \"1\", \"target_type\": \"redfish\", \"collection_method\": \"redfish_api\", \"ip\": \"198.51.100.161\", \"hostname\""
+    },
+    {
+      "file": "output",
+      "line": 2,
+      "preview": "{\"schema_version\": \"1\", \"target_type\": \"redfish\", \"collection_method\": \"redfish_api\", \"ip\": \"198.51.100.162\", \"hostname\""
+    }
+  ],
+  "by_origin": {
+    "output": 1,
+    "checkpoint": 1,
+    "synthetic": 1
+  },
+  "outcome": "completed",
+  "rc": 0,
+  "exit_code": 2,
+  "layer": "a",
+  "channel": "redfish",
+  "build": {
+    "job": "clovirone-cicd/clovirone-server-gather",
+    "number": "16",
+    "url": "https://jenkins.example.invalid/job/clovirone-cicd/job/clovirone-server-gather/16/"
+  }
+}

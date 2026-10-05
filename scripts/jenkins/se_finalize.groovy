@@ -5,9 +5,10 @@
 //   파일로 떼어 둔 것이다. Jenkins 는 `def lib = load 'scripts/jenkins/se_finalize.groovy'` 로 읽고 `lib.seReconcileRaw(...)` 로 부른다.
 //
 // 계약
-//   - 아래 세 함수(seFallbackCanon · seJsonString · seReconcileRaw)의 본문은 Jenkinsfile_portal 의 같은 이름 함수와 **글자까지 같다.**
-//     tests/unit/test_jenkinsfile_ci.py 가 두 사본을 비교해 drift 를 막는다 — Jenkinsfile_portal 이 이 파일을 `load` 하도록 바뀌기
-//     전까지는 두 곳을 **같이** 고쳐야 한다(전환은 GP-11, 조정자 몫).
+//   - Layer B 함수(seFallbackCanon · seJsonString · seReconcileRaw)의 정본은 이 파일 하나다. Jenkinsfile_portal 은 finalizer node 안에서
+//     readTrusted → writeFile → load 로 읽고 사본을 두지 않는다(GP-11, 2026-10-03 전환 완료).
+//   - 예외 하나: 결과 형태 검문 seEnvelopeShapeReason 은 Jenkinsfile_portal 에 글자까지 같은 본문이 있다 — 이 파일을 못 읽은 경로에서도
+//     전송 직전 검문이 돌아야 하기 때문이다. tests/unit/test_envelope_gate_parity.py 가 두 본문을 비교한다.
 //   - 순수 함수만 둔다: pipeline step(readFile · readYaml · readTrusted · echo · sh · httpRequest …) · params · currentBuild 를 쓰지 않는다.
 //   - JSON 파서는 groovy.json.JsonSlurper 만 쓴다 — Classic 변형 생성자는 Jenkins 스크립트 sandbox 가 거부한다
 //     (2026-10-03 lab Jenkins 실측: Scripts not permitted to use new groovy.json.JsonSlurper + Classic). 승인 없이 돌아야 한다.
@@ -15,7 +16,7 @@
 //   - 마지막 줄의 `return this` 가 있어야 `load` 가 메서드를 가진 객체를 돌려준다.
 //
 // 선택 규칙(요약 — 정본은 함수 본문): OUTPUT 줄 > CHECKPOINT 줄(+gather 오류 1건) > synthetic. 같은 origin 안에서는 뒤 줄 우선,
-//   내용이 다르면 conflicts 에 기록. 13 키 집합 · target_type == channel · ip ∈ manifest 를 통과하지 못한 줄은 dropped.
+//   내용이 다르면 conflicts 에 기록. 결과 형태 검문(seEnvelopeShapeReason — Python shape_gate 와 같은 판정)을 통과하지 못한 줄은 dropped.
 //   progress 이벤트 기반 세분(GATHER_FAILED / AUTH_PROBE_FAILED)은 Layer A(scripts/finalize_gather_output.py) 몫이다.
 
 import com.cloudbees.groovy.cps.NonCPS
@@ -48,6 +49,39 @@ String seJsonString(Object value) {
     return groovy.json.JsonOutput.toJson(value == null ? '' : value.toString())
 }
 
+// 결과 형태 최소 계약 (2026-10-05 F02) — Python Layer A(scripts/finalize_gather_output.py) shape_gate 와 같은 통과·거부 판정.
+//   통과하면 null, 아니면 사유. 값 종류를 먼저 본다 — 목록·객체 값이 비교에 먼저 쓰여 예외가 나거나 엉뚱하게 통과하지 않게.
+//   이 본문은 Jenkinsfile_portal 과 scripts/jenkins/se_finalize.groovy 에 글자까지 같게 둘 있다: 라이브러리를 못 읽은 경로에서도
+//   전송 직전 검문이 같은 규칙으로 돌아야 하기 때문이다. tests/unit/test_envelope_gate_parity.py 가 두 본문을 비교한다.
+@NonCPS
+String seEnvelopeShapeReason(Object obj, String channel, Set accepted) {
+    if (!(obj instanceof Map)) { return 'not an object' }
+    Set keys13 = ['schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
+                  'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'] as Set
+    if ((obj.keySet() as Set) != keys13) { return 'keys != 13 envelope keys' }
+    def sv = obj.schema_version
+    if (!((sv instanceof String && sv == '1') || ((sv instanceof Integer || sv instanceof Long) && sv == 1))) { return 'schema_version' }
+    if (!(obj.target_type instanceof String) || obj.target_type != channel) { return 'target_type' }
+    if (!(obj.ip instanceof String) || !accepted.contains(obj.ip)) { return 'ip' }
+    if (!(obj.status instanceof String) || !(obj.status in ['success', 'partial', 'failed'])) { return 'status' }
+    def sections = obj.sections
+    Set all11 = ['system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network', 'firmware', 'users', 'power', 'thermal'] as Set
+    if (!(sections instanceof Map) || (sections.keySet() as Set) != all11) { return 'sections shape' }
+    for (Object v in sections.values()) {
+        if (!(v instanceof String) || !(v in ['success', 'failed', 'not_supported'])) { return 'sections shape' }
+    }
+    def diag = obj.diagnosis
+    Set diag8 = ['reachable', 'port_open', 'protocol_supported', 'auth_success', 'failure_stage', 'failure_code',
+                 'failure_reason', 'details'] as Set
+    if (!(diag instanceof Map) || (diag.keySet() as Set) != diag8) { return 'diagnosis shape' }
+    if (!(obj.errors instanceof List) || !(obj.data instanceof Map)) { return 'errors/data type' }
+    if (!(obj.meta instanceof Map) || !(obj.correlation instanceof Map)) { return 'meta/correlation type' }
+    for (String k in ['collection_method', 'hostname', 'vendor']) {
+        if (obj[k] != null && !(obj[k] instanceof String)) { return "${k} type".toString() }
+    }
+    return null
+}
+
 // Layer B 최소 경로 — Layer A(gather_final.jsonl) 가 없거나 실패했을 때만: OUTPUT 줄 → CHECKPOINT 줄(+gather 오류 1건) → synthetic.
 // progress 이벤트 기반 분기(GATHER_FAILED/AUTH)는 Layer A 몫이라 여기서는 하지 않는다 (보고서에 layerA 상태를 남긴다).
 @NonCPS
@@ -57,8 +91,6 @@ Map seReconcileRaw(String manifestJson, String outputText, String checkpointText
     String channel = manifest.channel
     List ips = (manifest.ips ?: []).collect { it.toString() }
     Set accepted = ips as Set
-    def keys13 = ['schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
-                  'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'] as Set
     Map outputs = [:]; Map checkpoints = [:]
     List dropped = []; List conflicts = []
     int lineNo = 0
@@ -68,8 +100,9 @@ Map seReconcileRaw(String manifestJson, String outputText, String checkpointText
         if (!line) { continue }
         def obj = null
         try { obj = slurper.parseText(line) } catch (Exception e) { dropped << [file: 'output', line: lineNo, reason: 'not JSON']; continue }
-        if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type != channel || !accepted.contains(obj.ip?.toString())) {
-            dropped << [file: 'output', line: lineNo, reason: 'shape/ip gate', ip: (obj instanceof Map ? obj.ip?.toString() : null)]; continue
+        String why = seEnvelopeShapeReason(obj, channel, accepted)
+        if (why != null) {
+            dropped << [file: 'output', line: lineNo, reason: why, ip: (obj instanceof Map && obj.ip instanceof String ? obj.ip : null)]; continue
         }
         String ip = obj.ip.toString()
         if (outputs.containsKey(ip) && outputs[ip] != line) { conflicts << [ip: ip, chosen: lineNo] }
@@ -82,8 +115,9 @@ Map seReconcileRaw(String manifestJson, String outputText, String checkpointText
         if (!line) { continue }
         def obj = null
         try { obj = slurper.parseText(line) } catch (Exception e) { dropped << [file: 'checkpoint', line: lineNo, reason: 'not JSON']; continue }
-        if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type != channel || !accepted.contains(obj.ip?.toString())) {
-            dropped << [file: 'checkpoint', line: lineNo, reason: 'shape/ip gate']; continue
+        String why = seEnvelopeShapeReason(obj, channel, accepted)
+        if (why != null) {
+            dropped << [file: 'checkpoint', line: lineNo, reason: why]; continue
         }
         checkpoints[obj.ip.toString()] = obj
     }

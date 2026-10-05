@@ -231,8 +231,10 @@ def test_finalizer_validates_lines_and_records_damage():
     """3차 §6: 잘린 report/JSONL 이어도 Callback body 는 유효한 envelope 만 담고, 탈락 줄·미복구 host·손상 상태를 따로 기록한다."""
     assert "Map seFilterEnvelopeLines(List rawLines, String manifestJson)" in TEXT
     helper = _method("Map seFilterEnvelopeLines")
-    assert "new groovy.json.JsonSlurper()" in helper and "keys13" in helper and "accepted.contains(" in helper and "missing" in helper
-    assert FINALIZE.count("seFilterEnvelopeLines(") == 3, "Layer A 결과 · raw fallback · 조립 상한 초과 뒤 최소 경로 — 셋 다 같은 검문"
+    assert "new groovy.json.JsonSlurper()" in helper and "missing" in helper
+    # 2026-10-05 (F02): 검문은 공용 함수 하나(seEnvelopeShapeReason — 값 종류 먼저, Python shape_gate 와 같은 판정)
+    assert "seEnvelopeShapeReason(obj, channel, accepted) != null" in helper and "keys13" not in helper
+    assert FINALIZE.count("seFilterEnvelopeLines(") == 4, "Layer A 결과 · Layer B 결과 · raw fallback · 조립 상한 초과 뒤 최소 경로 — 넷 다 같은 검문"
     assert "layerA = 'report_unreadable'" in FINALIZE and "layerA = 'incomplete'" in FINALIZE
     i_read = FINALIZE.index("readJSON file: 'gather_finalize_report.json'")
     seg = FINALIZE[i_read: i_read + 1800]

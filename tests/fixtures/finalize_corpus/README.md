@@ -44,6 +44,10 @@ tests/fixtures/finalize_corpus/<case>/
 | `12_foreign_ip_dropped` | os | manifest 에 없는 ip 의 OUTPUT 줄 + 다른 host 는 인증 전 lost | dropped 1, 합성 AUTH_PROBE_FAILED(`auth_unconfirmed`, loc 치환), exit 2 | Layer B 는 OUTPUT_BUILD_FAILED 합성 |
 | `13_mixed_blank_lines` | redfish | 빈 줄 · 공백 줄 · 12키 줄 · 동일 중복 · 외부 ip · 충돌 · 외부 ip CHECKPOINT · add-on 중단 · precheck 실패(TCP_CONNECTION_REFUSED) · 아무것도 없는 host | output 2 · checkpoint 1 · synthetic 2, dropped 3, conflicts 1, exit 2 | 위 항목들의 합 |
 | `14_lost_without_auth` | os | 인증 전 lost — Vault 계정 있음 vs 계정 0개(`empty_accounts`) | 합성 AUTH_PROBE_FAILED 2건 (`auth_unconfirmed` / `loc_vault_no_account`), exit 0 | Layer B 는 OUTPUT_BUILD_FAILED 합성 |
+| `15_value_type_errors_isolated` | os | 값 종류 오류가 섞인 OUTPUT(목록 ip · 목록 status · 목록 섹션 값) + 목록 키 progress 행 (2026-10-05 F02) | 그 행만 dropped(사유에 값 종류) · progress 1행 corrupt, 정상 2 · CHECKPOINT 1 · 합성 1, exit 2 — 종전에는 TypeError 로 exit 3 · final 없음 | 분류 이름만 다름 |
+| `16_non_finite_numbers` | redfish | OUTPUT 줄에 `NaN` · `Infinity` (JSON 값 아님) | 두 줄 `corrupt_lines` → CHECKPOINT 1 · 합성 1, 정상 1, exit 2 | Groovy JsonSlurper 도 'not JSON' 으로 버린다 |
+| `17_meta_and_scalar_types` | esxi | `meta` 가 목록 · `hostname` 이 숫자인 OUTPUT | 두 줄 dropped → 합성 2, 정상 1, exit 2 | 없음 |
+| `18_callback_reconciled_from_checkpoint` | os | 콜백 종료 보충이 CHECKPOINT 로 만든 OUTPUT 줄(F01) | 원문 그대로 output 2, exit 0 | 없음 |
 
 줄 번호(`line`)는 두 Layer 모두 빈 줄 · 공백 줄을 포함해 1부터 센다 — `13_mixed_blank_lines` 가 이 정렬을 확인한다.
 

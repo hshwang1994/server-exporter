@@ -1,0 +1,37 @@
+{
+  "accepted": 3,
+  "kept": 1,
+  "filled": 2,
+  "dropped": [
+    {
+      "file": "output",
+      "line": 1,
+      "reason": "meta/correlation type",
+      "ip": "203.0.113.171"
+    },
+    {
+      "file": "output",
+      "line": 2,
+      "reason": "hostname type int",
+      "ip": "203.0.113.172"
+    }
+  ],
+  "conflicts": [],
+  "truncated_tail": [],
+  "corrupt_lines": [],
+  "by_origin": {
+    "output": 1,
+    "checkpoint": 0,
+    "synthetic": 2
+  },
+  "outcome": "completed",
+  "rc": 0,
+  "exit_code": 2,
+  "layer": "a",
+  "channel": "esxi",
+  "build": {
+    "job": "clovirone-cicd/clovirone-server-gather",
+    "number": "17",
+    "url": "https://jenkins.example.invalid/job/clovirone-cicd/job/clovirone-server-gather/17/"
+  }
+}

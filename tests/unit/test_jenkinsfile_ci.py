@@ -78,8 +78,9 @@ def test_layer_b_function_lives_only_in_the_library(signature):
 
 def test_library_defines_exactly_the_three_functions_and_returns_this():
     names = re.findall(r"^(?:Map|String|List|boolean|long|def) (se\w+)\(", LIB, re.M)
-    assert names == ["seFallbackCanon", "seJsonString", "seReconcileRaw"]
-    assert LIB.count("@NonCPS") == 3
+    # 2026-10-05 (F02): 결과 형태 검문 seEnvelopeShapeReason 이 더해졌다 (Jenkinsfile_portal 에 같은 본문 — test_envelope_gate_parity.py)
+    assert names == ["seFallbackCanon", "seJsonString", "seEnvelopeShapeReason", "seReconcileRaw"]
+    assert LIB.count("@NonCPS") == 4
     assert LIB.rstrip().endswith("return this"), "load 가 메서드를 가진 객체를 돌려주려면 마지막이 return this"
     assert "import com.cloudbees.groovy.cps.NonCPS" in LIB
 
