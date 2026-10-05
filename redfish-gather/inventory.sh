@@ -3,7 +3,8 @@ import json, os, pathlib, re, sys
 
 _IP_PATTERN = re.compile(
     r'^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}'
-    r'(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$'
+    r'(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$',
+    re.ASCII,
 )
 
 def error(msg):
@@ -66,7 +67,12 @@ def main():
 
     hostvars, host_keys, seen = {}, [], set()
     for idx, host in enumerate(payload):
-        ip = (host.get("bmc_ip") or host.get("ip") or "").strip()
+        if not isinstance(host, dict):
+            error(f"항목[{idx}] 은 객체여야 합니다")
+        value = host.get("bmc_ip") or host.get("ip") or ""
+        if not isinstance(value, str):
+            error(f"'bmc_ip' 또는 'ip' 값은 문자열이어야 합니다 (항목[{idx}])")
+        ip = value.strip()
         if not ip:
             error(f"'bmc_ip' 또는 'ip' 필드 누락 (항목[{idx}])")
         validate_ip(ip, idx)

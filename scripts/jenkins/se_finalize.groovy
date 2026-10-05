@@ -28,14 +28,41 @@ String seJsonString(Object value) {
 }
 
 @NonCPS
+String seEnvelopeShapeReason(Object obj, String channel, Set accepted) {
+    if (!(obj instanceof Map)) { return 'not an object' }
+    Set keys13 = ['schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
+                  'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'] as Set
+    if ((obj.keySet() as Set) != keys13) { return 'keys != 13 envelope keys' }
+    def sv = obj.schema_version
+    if (!((sv instanceof String && sv == '1') || ((sv instanceof Integer || sv instanceof Long) && sv == 1))) { return 'schema_version' }
+    if (!(obj.target_type instanceof String) || obj.target_type != channel) { return 'target_type' }
+    if (!(obj.ip instanceof String) || !accepted.contains(obj.ip)) { return 'ip' }
+    if (!(obj.status instanceof String) || !(obj.status in ['success', 'partial', 'failed'])) { return 'status' }
+    def sections = obj.sections
+    Set all11 = ['system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network', 'firmware', 'users', 'power', 'thermal'] as Set
+    if (!(sections instanceof Map) || (sections.keySet() as Set) != all11) { return 'sections shape' }
+    for (Object v in sections.values()) {
+        if (!(v instanceof String) || !(v in ['success', 'failed', 'not_supported'])) { return 'sections shape' }
+    }
+    def diag = obj.diagnosis
+    Set diag8 = ['reachable', 'port_open', 'protocol_supported', 'auth_success', 'failure_stage', 'failure_code',
+                 'failure_reason', 'details'] as Set
+    if (!(diag instanceof Map) || (diag.keySet() as Set) != diag8) { return 'diagnosis shape' }
+    if (!(obj.errors instanceof List) || !(obj.data instanceof Map)) { return 'errors/data type' }
+    if (!(obj.meta instanceof Map) || !(obj.correlation instanceof Map)) { return 'meta/correlation type' }
+    for (String k in ['collection_method', 'hostname', 'vendor']) {
+        if (obj[k] != null && !(obj[k] instanceof String)) { return "${k} type".toString() }
+    }
+    return null
+}
+
+@NonCPS
 Map seReconcileRaw(String manifestJson, String outputText, String checkpointText, Map canon, String outcome) {
     def slurper  = new groovy.json.JsonSlurper()
     def manifest = slurper.parseText(manifestJson)
     String channel = manifest.channel
     List ips = (manifest.ips ?: []).collect { it.toString() }
     Set accepted = ips as Set
-    def keys13 = ['schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
-                  'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'] as Set
     Map outputs = [:]; Map checkpoints = [:]
     List dropped = []; List conflicts = []
     int lineNo = 0
@@ -45,8 +72,9 @@ Map seReconcileRaw(String manifestJson, String outputText, String checkpointText
         if (!line) { continue }
         def obj = null
         try { obj = slurper.parseText(line) } catch (Exception e) { dropped << [file: 'output', line: lineNo, reason: 'not JSON']; continue }
-        if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type != channel || !accepted.contains(obj.ip?.toString())) {
-            dropped << [file: 'output', line: lineNo, reason: 'shape/ip gate', ip: (obj instanceof Map ? obj.ip?.toString() : null)]; continue
+        String why = seEnvelopeShapeReason(obj, channel, accepted)
+        if (why != null) {
+            dropped << [file: 'output', line: lineNo, reason: why, ip: (obj instanceof Map && obj.ip instanceof String ? obj.ip : null)]; continue
         }
         String ip = obj.ip.toString()
         if (outputs.containsKey(ip) && outputs[ip] != line) { conflicts << [ip: ip, chosen: lineNo] }
@@ -59,8 +87,9 @@ Map seReconcileRaw(String manifestJson, String outputText, String checkpointText
         if (!line) { continue }
         def obj = null
         try { obj = slurper.parseText(line) } catch (Exception e) { dropped << [file: 'checkpoint', line: lineNo, reason: 'not JSON']; continue }
-        if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type != channel || !accepted.contains(obj.ip?.toString())) {
-            dropped << [file: 'checkpoint', line: lineNo, reason: 'shape/ip gate']; continue
+        String why = seEnvelopeShapeReason(obj, channel, accepted)
+        if (why != null) {
+            dropped << [file: 'checkpoint', line: lineNo, reason: why]; continue
         }
         checkpoints[obj.ip.toString()] = obj
     }

@@ -14,6 +14,7 @@
     verify_ssl: false
     mode:       detect
     deadline:   "{{ _rf_detect_deadline | default(90) }}"
+    progress_dir: "{{ lookup('env', 'SE_PROGRESS_DIR') | default('', true) }}"
     attempt:
       evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"
       id:           "detect-0-1"

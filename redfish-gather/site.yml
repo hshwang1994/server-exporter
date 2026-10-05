@@ -14,7 +14,9 @@
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     _rf_ip:      "{{ ansible_host | default(inventory_hostname) }}"
     _rf_timeout: 30
-    _rf_deadline: 540
+    _rf_deadline: 1200
+    _rf_idle_deadline: 120
+    _rf_task_timeout: 1260
     _rf_detect_deadline: 90
     _rf_account_deadline: 180
 

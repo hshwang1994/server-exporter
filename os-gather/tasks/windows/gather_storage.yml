@@ -162,7 +162,9 @@
     $dd = $null
     Invoke-SeComponent $doc 'read_disk_drives' {
       param($c)
-      $script:dd = @(Get-CimInstance Win32_DiskDrive)
+      $seErr = $null
+      $script:dd = @(Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue -ErrorVariable seErr)
+      if ($seErr) { throw $seErr[0] }
     }
     Invoke-SeComponent $doc 'disks' {
       param($c)
@@ -594,6 +596,17 @@
     _w_stor_ok: "{{ ((_w_physical_disks | default([])) | length > 0) or ((_w_norm_filesystems | default([])) | length > 0) }}"
   no_log: true
 
+- name: "windows | storage | disk component status"
+  ansible.builtin.set_fact:
+    _w_stor_parts_failed: >-
+      {%- set d = _w_stor_doc if (_w_stor_doc is mapping) else {} -%}
+      {%- set out = [] -%}
+      {%- for k in ['read_disk_drives', 'disks'] -%}
+        {%- if (d.get(k) is mapping) and (d.get(k).get('ok') is sameas false) -%}{%- set _ = out.append(k) -%}{%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
+
 - name: "windows | storage | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -614,6 +627,11 @@
            'section': 'storage',
            'message': '스토리지 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
            'detail':  ('source=Get-Volume,Win32_DiskDrive; cause=no_output; rc=' ~ (_w_disk_raw.rc | default('none')))}])
+         + ([{
+           'section': 'storage',
+           'message': '스토리지 정보 중 물리 디스크 정보를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  ('source=Win32_DiskDrive,Get-PhysicalDisk; cause=component_failed; parts=' ~ (_w_stor_parts_failed | join(',')) ~ '; disks=' ~ ((_w_physical_disks | default([])) | length))}]
+            if ((_w_stor_ok | bool) and ((_w_stor_parts_failed | default([])) | length > 0)) else [])
          + ([{
            'section': 'storage',
            'message': '일부 디스크의 연결 인터페이스 종류를 분류하지 못해 해당 항목을 비워 두었습니다.',

@@ -4,18 +4,27 @@
   timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     $useLocal = $null -ne (Get-Command Get-LocalUser -ErrorAction SilentlyContinue)
+    $script:listFail = $null
+    $script:listUnsupported = $false
+    $script:groupFail = $false
+    $script:groupFailNames = @{}
     if ($useLocal) {
       try {
         Get-LocalUser -ErrorAction Stop | ForEach-Object {
           $u = $_; $grps = @()
           try {
-            Get-LocalGroup -ErrorAction SilentlyContinue | ForEach-Object {
+            $glErr = $null
+            Get-LocalGroup -ErrorAction SilentlyContinue -ErrorVariable glErr | ForEach-Object {
+              $gName = [string]$_.Name
               try {
-                $members = Get-LocalGroupMember $_.Name -ErrorAction SilentlyContinue
+                $gmErr = $null
+                $members = Get-LocalGroupMember $_.Name -ErrorAction SilentlyContinue -ErrorVariable gmErr
+                if ($gmErr) { $script:groupFail = $true; $script:groupFailNames[$gName] = $true }
                 if ($members.Name -contains "$env:COMPUTERNAME\$($u.Name)") { $grps += $_.Name }
-              } catch {}
+              } catch { $script:groupFail = $true; $script:groupFailNames[$gName] = $true }
             }
-          } catch {}
+            if ($glErr) { $script:groupFail = $true; $script:groupFailNames['Get-LocalGroup'] = $true }
+          } catch { $script:groupFail = $true; $script:groupFailNames['Get-LocalGroup'] = $true }
           $profile = $null
           try {
             $reg = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$($u.SID.Value)"
@@ -27,7 +36,10 @@
           [PSCustomObject]@{ name=$u.Name; uid=$u.SID.Value; groups=($grps -join ',');
             home=$profile; is_system=$isSys; last=$last } | ConvertTo-Json -Compress
         }
-      } catch {}
+      } catch {
+        if ($_.Exception -is [System.Management.Automation.CommandNotFoundException]) { $script:listUnsupported = $true }
+        else { $script:listFail = 'Get-LocalUser: ' + [string]$_.Exception.Message }
+      }
     } else {
       try {
         Get-CimInstance Win32_UserAccount -Filter 'LocalAccount=True' -ErrorAction Stop | ForEach-Object {
@@ -40,8 +52,14 @@
           [PSCustomObject]@{ name=$u.Name; uid=$u.SID; groups=($grps -join ',');
             home=$profile; is_system=$isSys; last=$null } | ConvertTo-Json -Compress
         }
-      } catch {}
+      } catch {
+        if ($_.Exception -is [System.Management.Automation.CommandNotFoundException]) { $script:listUnsupported = $true }
+        else { $script:listFail = 'Win32_UserAccount: ' + [string]$_.Exception.Message }
+      }
     }
+    if ($script:listFail) { [PSCustomObject]@{ _error = 'list'; detail = $script:listFail } | ConvertTo-Json -Compress }
+    if ($script:groupFail) { [PSCustomObject]@{ _error = 'groups'; detail = ((@($script:groupFailNames.Keys) | Sort-Object) -join ',') } | ConvertTo-Json -Compress }
+    if ($script:listUnsupported) { exit 1 }
   register: _w_users_raw
   changed_when: false
   failed_when: false
@@ -56,7 +74,7 @@
           {%- set u = line | from_json -%}
           {%- set groups = (u.groups|default('')).split(',')|reject('equalto','')|list -%}
           {%- set is_admin = 'Administrators' in groups -%}
-          {%- if not (u.is_system|default(true)) or is_admin -%}
+          {%- if ('_error' not in u) and (not (u.is_system|default(true)) or is_admin) -%}
             {%- set _ = out.append({
               'name': u.name, 'uid': u.uid|string, 'groups': groups,
               'home': u.home|default(none), 'last_access_time': u.last|default(none)
@@ -65,6 +83,27 @@
         {%- endif -%}
       {%- endfor -%}
       {{ out }}
+    _w_users_marks: >-
+      {%- set out = [] -%}
+      {%- for line in (_w_users_raw.stdout_lines | default([])) -%}
+        {%- if line | trim -%}
+          {%- set u = line | from_json -%}
+          {%- if (u is mapping) and ('_error' in u) -%}{%- set _ = out.append(u) -%}{%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
+
+- name: "windows | users | failure marks"
+  ansible.builtin.set_fact:
+    _w_users_list_fail: "{{ (_w_users_marks | selectattr('_error', 'equalto', 'list') | list | length) > 0 }}"
+    _w_users_group_fail: "{{ (_w_users_marks | selectattr('_error', 'equalto', 'groups') | list | length) > 0 }}"
+    _w_users_list_detail: >-
+      {%- set m = (_w_users_marks | selectattr('_error', 'equalto', 'list') | list) -%}
+      {{ ((m[0].detail | default('') | string | replace('\n', ' ') | replace('\r', ' '))[:160]) if m else '' }}
+    _w_users_group_detail: >-
+      {%- set m = (_w_users_marks | selectattr('_error', 'equalto', 'groups') | list) -%}
+      {{ ((m[0].detail | default('') | string | replace('\n', ' ') | replace('\r', ' '))[:160]) if m else '' }}
   no_log: true
 
 - name: "windows | users | build fragment"
@@ -74,12 +113,25 @@
     _sections_supported_fragment: ['users']
     _sections_collected_fragment: >-
       {{ ['users'] if ((_w_norm_users_list | length > 0)
-                       or ((_w_users_raw.rc | default(0)) == 0)) else [] }}
-    _sections_failed_fragment:    []
+                       or (((_w_users_raw.rc | default(0)) == 0) and not (_w_users_list_fail | bool))) else [] }}
+    _sections_failed_fragment: >-
+      {{ ['users'] if ((_w_norm_users_list | length == 0) and (_w_users_list_fail | bool)) else [] }}
     _sections_unsupported_fragment: >-
       {{ ['users'] if ((_w_norm_users_list | length == 0)
                        and ((_w_users_raw.rc | default(0)) != 0)) else [] }}
-    _errors_fragment:             []
+    _errors_fragment: >-
+      {{ ([{'section': 'users',
+            'message': '사용자 계정 목록 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
+            'detail': ('cause=command_failed; listed=0; error=' ~ _w_users_list_detail)}]
+          if ((_w_users_list_fail | bool) and (_w_norm_users_list | length == 0)) else [])
+         + ([{'section': 'users',
+              'message': '사용자 계정 목록을 끝까지 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+              'detail': ('cause=command_failed_partial; listed=' ~ (_w_norm_users_list | length) ~ '; error=' ~ _w_users_list_detail)}]
+            if ((_w_users_list_fail | bool) and (_w_norm_users_list | length > 0)) else [])
+         + ([{'section': 'users',
+              'message': '사용자 계정의 그룹 정보를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+              'detail': ('source=Get-LocalGroup,Get-LocalGroupMember; cause=command_failed; groups=' ~ _w_users_group_detail ~ '; effect=builtin_admin_may_be_omitted')}]
+            if (_w_users_group_fail | bool) else []) }}
   no_log: true
 
 - name: "windows | users | merge fragment"

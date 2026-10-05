@@ -14,11 +14,15 @@
     $cs = $null
     Invoke-SeComponent $doc 'read_operating_system' {
       param($c)
-      $script:os = Get-CimInstance Win32_OperatingSystem
+      $seErr = $null
+      $script:os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue -ErrorVariable seErr
+      if ($seErr) { throw $seErr[0] }
     }
     Invoke-SeComponent $doc 'read_computer_system' {
       param($c)
-      $script:cs = Get-CimInstance Win32_ComputerSystem
+      $seErr = $null
+      $script:cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue -ErrorVariable seErr
+      if ($seErr) { throw $seErr[0] }
     }
     Invoke-SeComponent $doc 'os' {
       param($c)
@@ -207,6 +211,20 @@
     _w_sys_ok: "{{ ((_w_os_data.caption | default('', true)) | string | trim | length > 0) or (ansible_os_name is defined) or (ansible_distribution is defined) }}"
   no_log: true
 
+- name: "windows | system | component status"
+  ansible.builtin.set_fact:
+    _w_sys_parts_failed: >-
+      {%- set d = _w_sys_doc if (_w_sys_doc is mapping) else {} -%}
+      {%- set out = [] -%}
+      {%- for k in ['read_operating_system', 'read_computer_system', 'os', 'hosting'] -%}
+        {%- if (d.get(k) is mapping) and (d.get(k).get('ok') is sameas false) -%}{%- set _ = out.append(k) -%}{%- endif -%}
+      {%- endfor -%}
+      {%- if (d | length == 0) or ('_error' in d) or (((_w_sys_doc_raw.rc | default(0)) or 0) | int != 0) -%}
+        {%- set _ = out.append('script') -%}
+      {%- endif -%}
+      {{ out }}
+  no_log: true
+
 - name: "windows | system | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -253,7 +271,9 @@
     _sections_failed_fragment:    "{{ [] if (_w_sys_ok | bool) else ['system'] }}"
     _errors_fragment: >-
       {{ ((_w_id_diagnostics if (_w_id_diagnostics is defined and _w_id_diagnostics is iterable and _w_id_diagnostics is not string and _w_id_diagnostics is not mapping) else [{'section':'system','message':'서버 기본 정보를 정리하는 중 내부 처리 오류가 발생했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':'field=identifier_diagnostics; cause=unexpected_render_type'}])
-         + ([] if (_w_sys_ok | bool) else [{'section':'system','message':'서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=Win32_OperatingSystem; cause=no_output; rc=' ~ (_w_os_raw.rc | default('none')))}])) }}
+         + ([] if (_w_sys_ok | bool) else [{'section':'system','message':'서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=Win32_OperatingSystem; cause=no_output; rc=' ~ (_w_os_raw.rc | default('none')))}])
+         + ([{'section':'system','message':'서버 기본 정보 일부를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=Win32_OperatingSystem,Win32_ComputerSystem; cause=component_failed; parts=' ~ (_w_sys_parts_failed | join(',')))}]
+            if ((_w_sys_ok | bool) and (_w_sys_parts_failed | length > 0)) else [])) }}
   no_log: true
 
 - name: "windows | system | merge fragment"

@@ -61,24 +61,42 @@
               {{ 'cause=addon_failed; task=' ~ (ansible_failed_task.name | default('')) ~ '; '
                  ~ (ansible_failed_result.msg | default('') | string) }}
 
-- name: "addon | combine into output"
-  ansible.builtin.set_fact:
-    _output: >-
-      {{ _output | combine({
-           'data':   (((_output.data | default({})) if ((_output.data | default({})) is mapping) else {})
-                      | combine(_addon_data_out | default({}))),
-           'errors': ((_output.errors | default([])) + (_addon_errors_out | default([]) | normalize_errors)),
-           'meta':   (((_output.meta | default({})) if ((_output.meta | default({})) is mapping) else {})
-                      | combine({
-                          'finished_at': now(utc=true).isoformat() + 'Z',
-                          'duration_ms': ((now(utc=true).timestamp()
-                                           - (_started_epoch | default(now(utc=true).timestamp()) | float)) * 1000) | int
-                        }))
-         }) }}
-  when:
-    - _addon_dir | length > 0
-    - _output is defined
-    - _output is mapping
+- name: "addon | combine guard"
+  when: _addon_dir | length > 0
+  block:
+    - name: "addon | combine into output"
+      ansible.builtin.set_fact:
+        _output: >-
+          {{ _output | combine({
+               'data':   (((_output.data | default({})) if ((_output.data | default({})) is mapping) else {})
+                          | combine(_addon_data_out | default({}))),
+               'errors': ((_output.errors | default([])) + (_addon_errors_out | default([]) | normalize_errors)),
+               'meta':   (((_output.meta | default({})) if ((_output.meta | default({})) is mapping) else {})
+                          | combine({
+                              'finished_at': now(utc=true).isoformat() + 'Z',
+                              'duration_ms': ((now(utc=true).timestamp()
+                                               - (_started_epoch | default(now(utc=true).timestamp()) | float)) * 1000) | int
+                            }))
+             }) }}
+      when:
+        - _addon_dir | length > 0
+        - _output is defined
+        - _output is mapping
+
+  rescue:
+    - name: "addon | combine failure"
+      ansible.builtin.set_fact:
+        _output: >-
+          {{ _output | combine({
+               'errors': ((_output.errors | default([])) + [{
+                   'section': 'addon',
+                   'message': '추가 수집 결과를 기본 결과에 합치지 못했습니다. 기본 수집 결과는 그대로입니다.',
+                   'detail': ('cause=addon_combine_failed; ' ~ (ansible_failed_result.msg | default('') | string))[:2000]
+                 }])
+             }) }}
+      when:
+        - _output is defined
+        - _output is mapping
 
 - name: ADDON_DONE
   ansible.builtin.set_fact:

@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -45,6 +46,20 @@ DIAGNOSIS_KEYS = ('reachable', 'port_open', 'protocol_supported', 'auth_success'
                   'failure_stage', 'failure_code', 'failure_reason', 'details')
 CHANNEL_METHOD = {'os': 'agent', 'esxi': 'vsphere_api', 'redfish': 'redfish_api'}
 MAX_CORRUPT_PREVIEW = 120
+_LOC_UNSAFE = re.compile(r'[^A-Za-z0-9_.-]')
+_LOC_MAX_LEN = 40
+_LOC_EMPTY = '미지정'
+
+
+def display_location(loc):
+    if loc is None:
+        return _LOC_EMPTY
+    text = _LOC_UNSAFE.sub('', str(loc).strip())[:_LOC_MAX_LEN]
+    return text or _LOC_EMPTY
+
+
+def _reject_constant(name):
+    raise ValueError(f'non-finite number {name}')
 
 EXIT_OK, EXIT_DAMAGE, EXIT_TOOL = 0, 2, 3
 
@@ -89,7 +104,7 @@ class Canon:
         entry = self.catalog.get(key) or {}
         text = entry.get(channel) if channel else None
         text = text or entry.get('default') or ''
-        return str(text).replace('{loc}', str(loc) if loc else '미지정')
+        return str(text).replace('{loc}', display_location(loc))
 
     def shape(self, channel, ip):
         supported = set(self.channel_sections.get(channel, ()))
@@ -122,7 +137,7 @@ def read_jsonl(path: Path, report: dict, label: str):
         if not text:
             continue
         try:
-            obj = json.loads(text)
+            obj = json.loads(text, parse_constant=_reject_constant)
         except ValueError:
             is_last = (idx == len(lines) - 1) and not trailing_newline
             (report['truncated_tail'] if is_last else report['corrupt_lines']).append(
@@ -135,35 +150,53 @@ def read_jsonl(path: Path, report: dict, label: str):
 def shape_gate(obj, channel, accepted):
     if not isinstance(obj, dict):
         return 'not an object'
-    if tuple(obj.keys()) != ENVELOPE_KEYS and set(obj.keys()) != set(ENVELOPE_KEYS):
+    if set(obj.keys()) != set(ENVELOPE_KEYS):
         return f'keys != 13 envelope keys ({len(obj)})'
-    if str(obj.get('schema_version')) != '1':
+    sv = obj['schema_version']
+    if not ((isinstance(sv, str) and sv == '1') or (type(sv) is int and sv == 1)):
         return 'schema_version != "1"'
-    if obj.get('target_type') != channel:
-        return f'target_type {obj.get("target_type")!r} != channel {channel!r}'
-    if obj.get('ip') not in accepted:
-        return f'ip {obj.get("ip")!r} not in accepted manifest'
-    if obj.get('status') not in STATUS_VALUES:
-        return f'status {obj.get("status")!r}'
-    sections = obj.get('sections')
+    tt = obj['target_type']
+    if not isinstance(tt, str):
+        return f'target_type type {type(tt).__name__}'
+    if tt != channel:
+        return f'target_type {tt!r} != channel {channel!r}'
+    ip = obj['ip']
+    if not isinstance(ip, str):
+        return f'ip type {type(ip).__name__}'
+    if ip not in accepted:
+        return f'ip {ip!r} not in accepted manifest'
+    status = obj['status']
+    if not isinstance(status, str):
+        return f'status type {type(status).__name__}'
+    if status not in STATUS_VALUES:
+        return f'status {status!r}'
+    sections = obj['sections']
     if not isinstance(sections, dict) or set(sections) != set(ALL_SECTIONS) \
-            or not set(sections.values()) <= SECTION_VALUES:
+            or not all(isinstance(v, str) and v in SECTION_VALUES for v in sections.values()):
         return 'sections shape'
-    diag = obj.get('diagnosis')
+    diag = obj['diagnosis']
     if not isinstance(diag, dict) or set(diag) != set(DIAGNOSIS_KEYS):
         return 'diagnosis shape'
-    if not isinstance(obj.get('errors'), list) or not isinstance(obj.get('data'), dict):
+    if not isinstance(obj['errors'], list) or not isinstance(obj['data'], dict):
         return 'errors/data type'
+    if not isinstance(obj['meta'], dict) or not isinstance(obj['correlation'], dict):
+        return 'meta/correlation type'
+    for key in ('collection_method', 'hostname', 'vendor'):
+        if obj[key] is not None and not isinstance(obj[key], str):
+            return f'{key} type {type(obj[key]).__name__}'
     return None
 
 
 def load_progress(path: Path, report: dict):
     ctx = {}
-    for _, _, ev in read_jsonl(path, report, 'progress'):
+    for line_no, text, ev in read_jsonl(path, report, 'progress'):
         if not isinstance(ev, dict):
             continue
         key = ev.get('ip') or ev.get('host')
         if not key:
+            continue
+        if not isinstance(key, str):
+            report['corrupt_lines'].append({'file': 'progress', 'line': line_no, 'preview': text[:MAX_CORRUPT_PREVIEW]})
             continue
         c = ctx.setdefault(key, {'events': [], 'diagnosis': None, 'auth_proven': False, 'lost': False,
                                  'checkpoint': False, 'addon_started': False, 'addon_done': False,
@@ -171,7 +204,7 @@ def load_progress(path: Path, report: dict):
                                  'fail_detail': None, 'last_task': None})
         name = ev.get('event')
         c['events'].append(name)
-        if ev.get('task'):
+        if isinstance(ev.get('task'), str) and ev.get('task'):
             c['last_task'] = ev.get('task')
         if name == 'precheck' and isinstance(ev.get('diagnosis'), dict):
             c['diagnosis'] = ev['diagnosis']
@@ -190,10 +223,10 @@ def load_progress(path: Path, report: dict):
         elif name == 'emitted':
             c['emitted'] = True
         elif name == 'cred_load':
-            c['cred_load_outcome'] = ev.get('outcome')
-            if ev.get('location'):
+            c['cred_load_outcome'] = ev.get('outcome') if isinstance(ev.get('outcome'), str) else None
+            if isinstance(ev.get('location'), str) and ev.get('location'):
                 c['location'] = ev.get('location')
-        if ev.get('location') and not c['location']:
+        if isinstance(ev.get('location'), str) and ev.get('location') and not c['location']:
             c['location'] = ev.get('location')
     return ctx
 
@@ -213,19 +246,23 @@ def _diagnosis(observed, details, auth_success, stage, code, reason):
     }
 
 
-def synthetic_envelope(canon: Canon, channel, ip, ctx, outcome):
+def synthetic_envelope(canon: Canon, channel, ip, ctx, outcome, limit_reason=None):
     ctx = ctx or {}
     observed = ctx.get('diagnosis') if isinstance(ctx.get('diagnosis'), dict) else {}
     details = dict(observed.get('details') or {}) if isinstance(observed.get('details'), dict) else {}
     details.setdefault('channel', channel)
     details['finalizer'] = 'layer_a'
     details['outcome'] = outcome
+    if limit_reason:
+        details['limit_reason'] = limit_reason
     if ctx.get('last_task'):
         details['last_task'] = ctx['last_task']
     tech = []
     if ctx.get('fail_detail'):
         tech.append(str(ctx['fail_detail']))
     tech.append(f'outcome={outcome}')
+    if limit_reason:
+        tech.append(f'limit_reason={limit_reason}')
     if ctx.get('last_task'):
         tech.append(f'last_task={ctx["last_task"]}')
 
@@ -276,25 +313,28 @@ ADDON_INTERRUPTED = '추가 수집 중 처리가 중단되어 추가 수집 결�
 EMIT_FAILED = '수집은 끝났지만 결과를 내보내는 단계에서 중단되었습니다. 기본 수집 결과는 그대로입니다.'
 
 
-def envelope_from_checkpoint(cp_obj, ctx, outcome):
+def envelope_from_checkpoint(cp_obj, ctx, outcome, limit_reason=None):
     env = json.loads(json.dumps(cp_obj))
     ctx = ctx or {}
+    why = f'outcome={outcome}' + (f'; limit_reason={limit_reason}' if limit_reason else '')
     if ctx.get('addon_started') and not ctx.get('addon_done'):
         err = {'section': 'addon', 'message': ADDON_INTERRUPTED,
-               'detail': f'finalized from checkpoint; add-on started but did not finish; outcome={outcome}'}
+               'detail': f'finalized from checkpoint; add-on started but did not finish; {why}'}
     else:
         err = {'section': 'gather', 'message': EMIT_FAILED,
-               'detail': f'finalized from checkpoint; output emit failed after assembly/addon; outcome={outcome}'}
+               'detail': f'finalized from checkpoint; output emit failed after assembly/addon; {why}'}
     errors = env.get('errors') if isinstance(env.get('errors'), list) else []
     env['errors'] = errors + [err]
     return env
 
 
 
-def finalize(workspace: Path, repo_root: Path, outcome: str, names: dict) -> tuple[int, dict]:
+def finalize(workspace: Path, repo_root: Path, outcome: str, names: dict, limit_reason=None) -> tuple[int, dict]:
     report = {'accepted': 0, 'kept': 0, 'filled': 0, 'dropped': [], 'conflicts': [], 'truncated_tail': [],
               'corrupt_lines': [], 'by_origin': {'output': 0, 'checkpoint': 0, 'synthetic': 0},
               'outcome': outcome, 'rc': None, 'exit_code': EXIT_OK, 'layer': 'a'}
+    if limit_reason:
+        report['limit_reason'] = limit_reason
     canon = Canon(repo_root)
 
     manifest_path = workspace / names['manifest']
@@ -356,10 +396,10 @@ def finalize(workspace: Path, repo_root: Path, outcome: str, names: dict) -> tup
             continue
         ctx = progress.get(ip)
         if ip in checkpoints:
-            env = envelope_from_checkpoint(checkpoints[ip], ctx, outcome)
+            env = envelope_from_checkpoint(checkpoints[ip], ctx, outcome, limit_reason)
             report['by_origin']['checkpoint'] += 1
         else:
-            env = synthetic_envelope(canon, channel, ip, ctx, outcome)
+            env = synthetic_envelope(canon, channel, ip, ctx, outcome, limit_reason)
             report['by_origin']['synthetic'] += 1
             report['filled'] += 1
         final_lines.append(json.dumps(env, ensure_ascii=False, separators=(',', ':')))
@@ -386,6 +426,8 @@ def main(argv=None) -> int:
     ap.add_argument('--outcome', default='completed',
                     help='ansible 실행 결과 분류: completed | timeout | timeout_killed | failed_run | prep_failed | not_started_budget | '
                          'not_started_memory | aborted(취소·stage/global timeout) | no_agent | interrupted_unknown ...')
+    ap.add_argument('--limit-reason', default='',
+                    help='시간 제한으로 끝났을 때 그 사유: stalled(정체 감시) | ceiling(운영 상한) | forced(시험용 강제값). 비우면 없음 (2026-10-05 F12)')
     ap.add_argument('--manifest', default='gather_manifest.json')
     ap.add_argument('--output', default='gather_output.json')
     ap.add_argument('--checkpoint', default='gather_checkpoint.jsonl')
@@ -397,7 +439,7 @@ def main(argv=None) -> int:
     names = {k: getattr(a, k) for k in ('manifest', 'output', 'checkpoint', 'progress', 'rc', 'final', 'report')}
     workspace = Path(a.workspace)
     try:
-        code, report = finalize(workspace, Path(a.repo_root), a.outcome, names)
+        code, report = finalize(workspace, Path(a.repo_root), a.outcome, names, limit_reason=(a.limit_reason or '').strip() or None)
     except ToolFailure as e:
         sys.stderr.write(f'[finalize] tool failure: {e}\n')
         try:

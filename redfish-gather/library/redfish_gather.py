@@ -110,6 +110,46 @@ def _ctx(verify_ssl):
 def _auth(username, password):
     return 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()
 
+
+if HAS_URLLIB:
+    _STDLIB_URLOPEN = urlreq.urlopen
+
+    class _SameOriginRedirect(urlreq.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            method = req.get_method()
+            if method not in ('GET', 'HEAD'):
+                raise urlerr.HTTPError(req.full_url, code, 'redirect not followed for %s' % method, headers, fp)
+            target = _origin_of(newurl)
+            if target is None or target != _origin_of(req.full_url):
+                where = '%s://%s' % (target[0], target[1]) if target else 'unparsable location'
+                raise urlerr.HTTPError(req.full_url, code, 'redirect blocked: different origin %s' % where, headers, fp)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+else:
+    _STDLIB_URLOPEN = None
+
+_OPENERS = {}
+
+
+def _origin_of(url):
+    try:
+        parts = _urlparse.urlsplit(url)
+        scheme = (parts.scheme or '').lower()
+        port = parts.port or {'https': 443, 'http': 80}.get(scheme)
+        return (scheme, (parts.hostname or '').lower(), port)
+    except ValueError:
+        return None
+
+
+def _urlopen(req, verify_ssl, timeout):
+    if urlreq.urlopen is not _STDLIB_URLOPEN:
+        return urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=timeout)
+    key = bool(verify_ssl)
+    opener = _OPENERS.get(key)
+    if opener is None:
+        opener = urlreq.build_opener(urlreq.HTTPSHandler(context=_ctx(verify_ssl)), _SameOriginRedirect())
+        _OPENERS[key] = opener
+    return opener.open(req, timeout=timeout)
+
 _AUTH_OBSERVATION = {'first_status': None}
 
 
@@ -220,8 +260,11 @@ def evidence_state():
 
 
 _RESPONSE_CACHE = {}
-_CACHE = {'enabled': False, 'hits': 0, 'misses': 0}
-_DEADLINE = {'at': None, 'seconds': 0, 'exceeded': False}
+_CACHE = {'enabled': False, 'hits': 0, 'misses': 0, 'bytes': 0}
+_LAST_BODY = {'bytes': 0}
+_DEADLINE = {'at': None, 'seconds': 0, 'exceeded': False, 'idle': 0, 'last_ok': None, 'kind': None}
+_HEARTBEAT = {'path': None, 'last': None}
+HEARTBEAT_EVERY_SEC = 5
 
 
 class _DeadlineExceeded(OSError):
@@ -239,24 +282,34 @@ def _reset_response_cache(enabled=False):
     _CACHE['enabled'] = bool(enabled)
     _CACHE['hits'] = 0
     _CACHE['misses'] = 0
+    _CACHE['bytes'] = 0
 
 
 def _invalidate_response_cache():
     _RESPONSE_CACHE.clear()
+    _CACHE['bytes'] = 0
 
 
 def cache_stats():
-    return {'hits': _CACHE['hits'], 'misses': _CACHE['misses'], 'entries': len(_RESPONSE_CACHE)}
+    return {'hits': _CACHE['hits'], 'misses': _CACHE['misses'], 'entries': len(_RESPONSE_CACHE), 'bytes': _CACHE['bytes']}
 
 
-def _set_deadline(seconds):
+def _set_deadline(seconds, idle=0):
     try:
         seconds = int(seconds or 0)
     except (TypeError, ValueError):
         seconds = 0
+    try:
+        idle = int(idle or 0)
+    except (TypeError, ValueError):
+        idle = 0
+    now = time.monotonic()
     _DEADLINE['seconds'] = seconds
-    _DEADLINE['at'] = (time.monotonic() + seconds) if seconds > 0 else None
+    _DEADLINE['at'] = (now + seconds) if seconds > 0 else None
+    _DEADLINE['idle'] = idle if idle > 0 else 0
+    _DEADLINE['last_ok'] = now
     _DEADLINE['exceeded'] = False
+    _DEADLINE['kind'] = None
 
 
 def _deadline_remaining():
@@ -265,16 +318,60 @@ def _deadline_remaining():
     return _DEADLINE['at'] - time.monotonic()
 
 
+def _idle_remaining():
+    if not _DEADLINE['idle'] or _DEADLINE['last_ok'] is None:
+        return None
+    return _DEADLINE['idle'] - (time.monotonic() - _DEADLINE['last_ok'])
+
+
+def _mark_progress():
+    now = time.monotonic()
+    _DEADLINE['last_ok'] = now
+    path = _HEARTBEAT['path']
+    if path and (_HEARTBEAT['last'] is None or now - _HEARTBEAT['last'] >= HEARTBEAT_EVERY_SEC):
+        _HEARTBEAT['last'] = now
+        try:
+            with open(path, 'w', encoding='utf-8') as fh:
+                fh.write('%d\n' % int(time.time()))
+        except OSError:
+            pass
+
+
+def _set_heartbeat(progress_dir, bmc_ip):
+    _HEARTBEAT['path'] = None
+    _HEARTBEAT['last'] = None
+    if not progress_dir:
+        return
+    try:
+        os.makedirs(progress_dir, exist_ok=True)
+        _HEARTBEAT['path'] = os.path.join(progress_dir, 'redfish-' + re.sub(r'[^0-9A-Za-z_.-]', '_', str(bmc_ip)))
+    except OSError:
+        _HEARTBEAT['path'] = None
+
+
 def _effective_timeout(timeout):
     rem = _deadline_remaining()
-    if rem is None:
+    idle_rem = _idle_remaining()
+    if rem is None and idle_rem is None:
         return timeout
-    if rem <= 0:
+    if rem is not None and rem <= 0:
         if not _DEADLINE['exceeded']:
             _DEADLINE['exceeded'] = True
+            _DEADLINE['kind'] = 'absolute'
             _notice('gather', '모듈 deadline %ds 경과 — 이후 요청은 보내지 않고 건너뛴다' % _DEADLINE['seconds'])
         raise _DeadlineExceeded('Deadline exceeded: request skipped')
-    return min(timeout, max(1, int(rem + 0.999)))
+    if idle_rem is not None and idle_rem <= 0:
+        if not _DEADLINE['exceeded']:
+            _DEADLINE['exceeded'] = True
+            _DEADLINE['kind'] = 'idle'
+            _notice('gather', '새 응답 없이 %ds 가 지나 이후 요청은 보내지 않고 건너뛴다' % _DEADLINE['idle'])
+        raise _DeadlineExceeded('Deadline exceeded: no new response for %ds, request skipped' % _DEADLINE['idle'])
+    left = min(r for r in (rem, idle_rem) if r is not None)
+    return min(timeout, max(1, int(left + 0.999)))
+
+
+def deadline_kind():
+    return _DEADLINE['kind']
 
 
 def deadline_exceeded():
@@ -317,11 +414,14 @@ def _get(bmc_ip, path, username, password, timeout, verify_ssl):
             _CACHE['hits'] += 1
             return hit[0], copy.deepcopy(hit[1]), hit[2]
         _CACHE['misses'] += 1
+    _LAST_BODY['bytes'] = 0
     status, data, err = _get_impl(bmc_ip, path, username, password, timeout, verify_ssl)
     _record_auth_status(status)
+    size = _LAST_BODY['bytes']
     if (_CACHE['enabled'] and status == 200 and not err and isinstance(data, dict)
-            and len(_RESPONSE_CACHE) < MAX_CACHE_ENTRIES):
+            and len(_RESPONSE_CACHE) < MAX_CACHE_ENTRIES and _CACHE['bytes'] + size <= MAX_CACHE_BYTES):
         _RESPONSE_CACHE[key] = (status, copy.deepcopy(data), err)
+        _CACHE['bytes'] += size
     return status, data, err
 
 
@@ -334,8 +434,11 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             raw = _read_capped(resp)
+            _LAST_BODY['bytes'] = len(raw)
+            if 200 <= resp.status < 300:
+                _mark_progress()
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -372,7 +475,7 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
@@ -404,7 +507,7 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             return resp.status, {}, None
     except urlerr.HTTPError as e:
         try:    body_err = json.loads(e.read(MAX_BODY_BYTES + 1).decode('utf-8', errors='replace'))
@@ -441,7 +544,7 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
     _invalidate_response_cache()
     req = urlreq.Request(url, data=payload, method='PATCH', headers=headers)
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
@@ -491,6 +594,7 @@ _CODE_NON_BLOCKING_SUBRESOURCE = 'subresource_non_blocking'
 MAX_COLLECTION_PAGES = 64
 MAX_BODY_BYTES = 8 * 1024 * 1024
 MAX_CACHE_ENTRIES = 512
+MAX_CACHE_BYTES = 8 * 1024 * 1024
 
 
 def _err(section, message, detail=None, code=None):
@@ -895,7 +999,7 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
     req = urlreq.Request(url, headers={'Accept': 'application/json', 'OData-Version': '4.0'})
     realm_header = None
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             return None
     except urlerr.HTTPError as e:
         if e.code in (401, 403):
@@ -932,8 +1036,10 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
             raw = _read_capped(resp)
+            if 200 <= resp.status < 300:
+                _mark_progress()
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -3727,8 +3833,8 @@ def _get_response_etag(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with urlreq.urlopen(req, context=_ctx(verify_ssl), timeout=_effective_timeout(timeout)) as resp:
-            resp.read()
+        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+            _read_capped(resp)
             etag = resp.headers.get('ETag') if hasattr(resp, 'headers') else None
             _record_auth_status(resp.status)
             return etag or None
@@ -5106,6 +5212,8 @@ def main():
             mode            = dict(type='str',  default='gather',
                                    choices=['gather', 'account_provision', 'detect']),
             deadline        = dict(type='int',  default=0),
+            idle_deadline   = dict(type='int',  default=0),
+            progress_dir    = dict(type='str',  default=''),
             target_username = dict(type='str',  default=''),
             target_password = dict(type='str',  default='', no_log=True),
             target_role     = dict(type='str',  default='Administrator'),
@@ -5133,7 +5241,8 @@ def main():
     timeout, verify_ssl = p['timeout'], p['verify_ssl']
     mode = p['mode']
     _evidence_begin(p.get('attempt'), bmc_ip, username)
-    _set_deadline(p.get('deadline'))
+    _set_deadline(p.get('deadline'), p.get('idle_deadline'))
+    _set_heartbeat(p.get('progress_dir'), bmc_ip)
     _reset_response_cache(enabled=(mode in ('gather', 'detect')))
 
     if mode == 'detect':
@@ -5158,7 +5267,7 @@ def main():
             vendor=vendor, collected=[], failed_sections=[], unsupported_sections=[],
             errors=list(det_errors), data=data, probe_facts=probe_facts, multi_node=None,
             auth_evidence=auth_evidence(), notices=notices(),
-            deadline_exceeded=deadline_exceeded(), cache=cache_stats(),
+            deadline_exceeded=deadline_exceeded(), deadline_kind=deadline_kind(), cache=cache_stats(),
         )
         return
 
@@ -5283,7 +5392,7 @@ def main():
         unsupported_sections=list(set(unsupported)),
         errors=all_errors, data=result_data, probe_facts=probe_facts,
         multi_node=multi_node, auth_evidence=auth_evidence(), notices=notices(),
-        deadline_exceeded=deadline_exceeded(), cache=cache_stats(),
+        deadline_exceeded=deadline_exceeded(), deadline_kind=deadline_kind(), cache=cache_stats(),
     )
 
 

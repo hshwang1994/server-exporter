@@ -7,6 +7,7 @@ Map seConstants() {
         RECOVER          : 30,
         ASSEMBLE         : 60,
         ASSEMBLE_MIN     : 20,
+        BODY             : 60,
         PRESERVE_STEP    : 30,
         CALLBACK_ATTEMPT : 120,
         CALLBACK_MIN     : 20,
@@ -27,7 +28,7 @@ def seLoadFinalizeLib() {
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[Finalize] se_finalize.groovy 적재 실패 — Layer B 보충 없이 진행: ${e.message}"
+        echo "[마무리] 보충 라이브러리(se_finalize.groovy)를 읽지 못해 보충 없이 진행합니다: ${e.message}"
         return null
     }
 }
@@ -43,7 +44,7 @@ def seLoadCanon(def lib) {
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[Finalize] 정본 읽기 실패 — 복제값 사용: ${e.message}"
+        echo "[마무리] 실패 문구 정본을 읽지 못해 내장 복제값을 씁니다: ${e.message}"
         canon.source = 'fallback'
     }
     return canon
@@ -51,48 +52,65 @@ def seLoadCanon(def lib) {
 
 long seNowSec() { return (long) (System.currentTimeMillis() / 1000L) }
 
-boolean seCallback(String body, long hardDeadline, long finalizerDeadline, Map C) {
+Map seCallback(String body, long hardDeadline, long finalizerDeadline, Map C) {
     def endpoint = params.callbackUrl.trim().replaceAll('/+$', '') + '/api/jenkins/gather/' + params.target_type.trim()
     boolean aborted = (currentBuild.result == 'ABORTED')
     int maxAttempts = aborted ? 1 : 3
-    echo "[Callback] POST -> ${endpoint} (attempts<=${maxAttempts}, body ${body.length()} bytes)"
+    echo "[Portal 전송] ${endpoint} 로 보냅니다 (최대 ${maxAttempts}번, 본문 ${body.length()}자)"
+    Integer lastStatus = null
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
         long remaining = Math.min(hardDeadline, finalizerDeadline) - seNowSec()
         if (remaining < C.CALLBACK_MIN) {
-            echo "[Finalize] callback not attempted: budget (remaining ${remaining}s)"
-            return false
+            echo "[Portal 전송] 남은 시간 ${remaining}초가 최소 ${C.CALLBACK_MIN}초보다 짧아 ${attempt}번째 시도를 하지 않았습니다"
+            return [delivered: false, http_code: lastStatus, attempts: attempt - 1, reason: 'budget']
         }
         int t = Math.max(10, Math.min(C.CALLBACK_ATTEMPT, (int) (remaining - 10)))
         if (aborted) { t = Math.min(t, C.ABORT_ATTEMPT) }
-        String code = ''
-        String msg = ''
+        Integer status = null
+        String problem = ''
         try {
             def resp = httpRequest(url: endpoint, httpMode: 'POST', contentType: 'APPLICATION_JSON', requestBody: body,
-                                   timeout: t, validResponseCodes: '100:599', consoleLogResponseBody: false)
-            code = "${resp.status}"
-            msg = (resp.content ?: '')
-            if (msg.length() > 500) { msg = msg.substring(0, 500) }
+                                   timeout: t, validResponseCodes: '100:599', consoleLogResponseBody: false, quiet: true)
+            status = resp.status
         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
             throw fie
         } catch (Exception e) {
-            msg = "httpRequest 예외 (연결 실패/timeout): ${e.message}"
+            problem = "연결하지 못했거나 ${t}초 안에 응답이 없었습니다: ${e.message}"
         }
+        String code = (status != null) ? "${status}" : ''
+        if (status != null) { lastStatus = status }
         if (code ==~ /2\d\d/) {
-            echo "[Callback] [OK] HTTP ${code} (${attempt}/${maxAttempts}) response=${msg.length() > 200 ? msg.substring(0, 200) : msg}"
-            return true
+            echo "[Portal 전송] 완료: HTTP ${code} (${attempt}/${maxAttempts}번째 시도)"
+            return [delivered: true, http_code: status, attempts: attempt, reason: null]
         }
         if (code ==~ /4\d\d/ && !(code in ['408', '429'])) {
-            echo "[Callback] [FAIL] HTTP ${code} — 결정적 거부, 재시도하지 않음: ${msg}"
-            return false
+            echo "[Portal 전송] 실패: HTTP ${code} — Portal 이 요청을 거부해 다시 보내지 않습니다 (${attempt}/${maxAttempts}번째 시도)"
+            return [delivered: false, http_code: status, attempts: attempt, reason: 'refused']
         }
-        echo "[Callback] [FAIL] (${attempt}/${maxAttempts}) ${code ? 'HTTP ' + code + ' ' : ''}${msg}"
+        String shown = code ? ('HTTP ' + code + (code == '408' ? ' — 연결하지 못했거나 응답 시간이 지났습니다(요청 도구는 연결 실패도 408 로 표시)' : '')) : problem
+        echo "[Portal 전송] 실패 (${attempt}/${maxAttempts}번째 시도): ${shown}"
         if (attempt < maxAttempts) {
             long left = Math.min(hardDeadline, finalizerDeadline) - seNowSec() - C.CALLBACK_MIN
             int wait = (int) Math.max(0L, Math.min((long) (10 * attempt), left))
-            if (wait > 0) { echo "[Callback] ${wait}초 후 재시도"; sleep(time: wait, unit: 'SECONDS') }
+            if (wait > 0) { echo "[Portal 전송] ${wait}초 뒤 다시 보냅니다"; sleep(time: wait, unit: 'SECONDS') }
         }
     }
-    return false
+    return [delivered: false, http_code: lastStatus, attempts: maxAttempts, reason: 'failed']
+}
+
+@NonCPS
+String seOutcomeText(String outcome) {
+    Map t = ['completed': '정상 종료', 'timeout': '시간 제한으로 중단', 'timeout_killed': '시간 제한으로 강제 종료',
+             'aborted': '취소 또는 상위 시간 제한으로 중단', 'failed_run': 'Ansible 실행 실패', 'prep_failed': '실행 준비 실패(Ansible 환경 없음)',
+             'no_agent': '실행할 Runner 없음', 'not_started_budget': '남은 시간이 부족해 시작하지 않음',
+             'not_started_memory': 'Runner 메모리가 부족해 시작하지 않음', 'interrupted_unknown': '수집 단계를 마치지 못함 — 시작 전에 끝났거나 원인 기록 없이 중단']
+    return "${t[outcome] ?: '기록 없음'}(${outcome})".toString()
+}
+
+@NonCPS
+String seLimitText(String reason) {
+    Map t = ['stalled': '진행 없음(정체 감시)', 'ceiling': '운영 상한(빌드 · 단계의 남은 시간)', 'forced': '시험용 강제 제한']
+    return (t[reason] ?: reason).toString()
 }
 
 boolean seBounded(int seconds, String label, Closure body) {
@@ -111,7 +129,7 @@ boolean seBounded(int seconds, String label, Closure body) {
         return true
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         if (ownIds && seIsOwnTimeout(fie, ownIds)) {
-            echo "[Finalize] ${label}: step 상한 ${seconds}s 초과 — 다음 단계로 (ownIds=${ownIds})"
+            echo "[단계 상한] ${label} 단계가 ${seconds}초를 넘겨 다음 단계로 넘어갑니다 (ownIds=${ownIds})"
             return false
         }
         throw fie
@@ -142,32 +160,92 @@ boolean seIsOwnTimeout(Object fie, List ownIds) {
 }
 
 @NonCPS
+String seEnvelopeShapeReason(Object obj, String channel, Set accepted) {
+    if (!(obj instanceof Map)) { return 'not an object' }
+    Set keys13 = ['schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
+                  'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'] as Set
+    if ((obj.keySet() as Set) != keys13) { return 'keys != 13 envelope keys' }
+    def sv = obj.schema_version
+    if (!((sv instanceof String && sv == '1') || ((sv instanceof Integer || sv instanceof Long) && sv == 1))) { return 'schema_version' }
+    if (!(obj.target_type instanceof String) || obj.target_type != channel) { return 'target_type' }
+    if (!(obj.ip instanceof String) || !accepted.contains(obj.ip)) { return 'ip' }
+    if (!(obj.status instanceof String) || !(obj.status in ['success', 'partial', 'failed'])) { return 'status' }
+    def sections = obj.sections
+    Set all11 = ['system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network', 'firmware', 'users', 'power', 'thermal'] as Set
+    if (!(sections instanceof Map) || (sections.keySet() as Set) != all11) { return 'sections shape' }
+    for (Object v in sections.values()) {
+        if (!(v instanceof String) || !(v in ['success', 'failed', 'not_supported'])) { return 'sections shape' }
+    }
+    def diag = obj.diagnosis
+    Set diag8 = ['reachable', 'port_open', 'protocol_supported', 'auth_success', 'failure_stage', 'failure_code',
+                 'failure_reason', 'details'] as Set
+    if (!(diag instanceof Map) || (diag.keySet() as Set) != diag8) { return 'diagnosis shape' }
+    if (!(obj.errors instanceof List) || !(obj.data instanceof Map)) { return 'errors/data type' }
+    if (!(obj.meta instanceof Map) || !(obj.correlation instanceof Map)) { return 'meta/correlation type' }
+    for (String k in ['collection_method', 'hostname', 'vendor']) {
+        if (obj[k] != null && !(obj[k] instanceof String)) { return "${k} type".toString() }
+    }
+    return null
+}
+
+@NonCPS
 Map seFilterEnvelopeLines(List rawLines, String manifestJson) {
     def slurper = new groovy.json.JsonSlurper()
     def manifest = slurper.parseText(manifestJson)
     String channel = manifest.channel?.toString()
     List ips = (manifest.ips ?: []).collect { it.toString() }
     Set accepted = ips as Set
-    def keys13 = ['schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
-                  'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'] as Set
     Map byIp = [:]
+    Map statusByIp = [:]
     int dropped = 0
     for (Object raw in (rawLines ?: [])) {
         String line = raw?.toString()?.trim()
         if (!line) { continue }
         def obj = null
         try { obj = slurper.parseText(line) } catch (Exception e) { dropped++; continue }
-        if (!(obj instanceof Map) || (obj.keySet() as Set) != keys13 || obj.target_type?.toString() != channel || !accepted.contains(obj.ip?.toString())) {
+        if (seEnvelopeShapeReason(obj, channel, accepted) != null) {
             dropped++; continue
         }
-        byIp[obj.ip.toString()] = line
+        byIp[obj.ip] = line
+        statusByIp[obj.ip] = obj.status
     }
     List lines = []
     List missing = []
+    Map counts = [success: 0, partial: 0, failed: 0]
     for (String ip in ips) {
-        if (byIp.containsKey(ip)) { lines << byIp[ip] } else { missing << ip }
+        if (byIp.containsKey(ip)) {
+            lines << byIp[ip]
+            counts[statusByIp[ip]] = counts[statusByIp[ip]] + 1
+        } else {
+            missing << ip
+        }
     }
-    return [lines: lines, missing: missing, dropped: dropped]
+    return [lines: lines, missing: missing, dropped: dropped, counts: counts]
+}
+
+@NonCPS
+Map seAcceptTargets(Object hosts, String targetType) {
+    if (!(hosts instanceof List)) { return [error: 'inventory_json 은 JSON 배열이어야 합니다'] }
+    if (hosts.isEmpty()) { return [error: 'inventory_json 배열이 비어있습니다'] }
+    String primaryKey = (targetType == 'redfish') ? 'bmc_ip' : 'service_ip'
+    String ws = '[\\t\\n\\u000B\\f\\r\\u001C-\\u001F \\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]'
+    String octet = '(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])'
+    String ipv4 = octet + '\\.' + octet + '\\.' + octet + '\\.' + octet
+    List ips = []
+    Set seen = [] as Set
+    for (int idx = 0; idx < hosts.size(); idx++) {
+        def host = hosts[idx]
+        if (!(host instanceof Map)) { return [error: "inventory_json[${idx}] 은 객체여야 합니다".toString()] }
+        def raw = host[primaryKey] ?: host['ip'] ?: ''
+        if (!(raw instanceof String)) { return [error: "inventory_json[${idx}] 의 '${primaryKey}' 또는 'ip' 값은 문자열이어야 합니다".toString()] }
+        String ip = raw.replaceAll('^' + ws + '+', '').replaceAll(ws + '+$', '')
+        if (!ip) { return [error: "inventory_json[${idx}] '${primaryKey}' 또는 'ip' 필드 누락".toString()] }
+        if (!(ip ==~ ipv4)) { return [error: "inventory_json[${idx}] 유효하지 않은 IPv4 형식: '${ip}'".toString()] }
+        if (seen.contains(ip)) { return [error: "inventory_json[${idx}] IP 가 중복됩니다: '${ip}'".toString()] }
+        seen << ip
+        ips << ip
+    }
+    return [ips: ips]
 }
 
 def sePreserveGatherOutput() {
@@ -175,31 +253,32 @@ def sePreserveGatherOutput() {
     String outcome = env.SE_GATHER_OUTCOME ?: 'interrupted_unknown'
     int layerA = -1
     try {
-        layerA = sh(returnStatus: true, label: 'finalize layer A', script: """#!/bin/bash
+        layerA = sh(returnStatus: true, label: '결과 정리 (Layer A)', script: """#!/bin/bash
             set +e
             cd "\${WORKSPACE}"
             . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
-            timeout 120 python3 scripts/finalize_gather_output.py --workspace "\${WORKSPACE}" --repo-root "\${WORKSPACE}" --outcome "${outcome}"
+            timeout 120 python3 scripts/finalize_gather_output.py --workspace "\${WORKSPACE}" --repo-root "\${WORKSPACE}" --outcome "${outcome}" --limit-reason "${env.SE_GATHER_LIMIT_REASON ?: ''}"
             exit \$?
         """)
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[Finalize/A] Layer A 실행 예외 — archive/stash 는 계속한다: ${e.message}"
+        echo "[결과 보존] 결과 정리(Layer A) 실행 중 예외 — 보존은 계속합니다: ${e.message}"
     }
-    echo "[Finalize/A] exit=${layerA} outcome=${outcome}"
+    String layerAText = (layerA == 0) ? '정상' : ((layerA == 2) ? '형태가 틀린 줄만 빼고 정상' : '실패 — 마무리 단계가 원본 결과로 다시 조립합니다')
+    echo "[결과 보존] 결과 정리(Layer A): ${layerAText} · 종료 코드 ${layerA} · 수집 종료 상태: ${seOutcomeText(outcome)}"
     boolean archived = false
     try {
         boolean done = seBounded(C.PRESERVE_STEP, 'archive') {
-            archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_auth_evidence/**',
+            archiveArtifacts(artifacts: 'gather_output.json,gather_manifest.json,gather_rc.txt,gather_progress.jsonl,gather_checkpoint.jsonl,gather_final.jsonl,gather_finalize_report.json,gather_watch.json,gather_auth_evidence/**',
                              allowEmptyArchive: true, fingerprint: false)
         }
         archived = done
-        if (!done) { echo "[Finalize/A] archive 상한 ${C.PRESERVE_STEP}s 초과 — stash 는 계속한다" }
+        if (!done) { echo "[결과 보존] 영구 보존(archive)이 상한 ${C.PRESERVE_STEP}초를 넘겼습니다 — 임시 전달(stash)은 계속합니다" }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[Finalize/A] archive 실패 — stash 는 계속한다: ${e.message}"
+        echo "[결과 보존] 영구 보존(archive) 실패 — 임시 전달(stash)은 계속합니다: ${e.message}"
     }
     boolean stashed = false
     try {
@@ -211,11 +290,11 @@ def sePreserveGatherOutput() {
             )
         }
         stashed = done
-        if (!done) { echo "[Finalize/A] stash 상한 ${C.PRESERVE_STEP}s 초과 — finalizer 는 archive(unarchive) 로 회수한다" }
+        if (!done) { echo "[결과 보존] 임시 전달(stash)이 상한 ${C.PRESERVE_STEP}초를 넘겼습니다 — 마무리 단계는 영구 보존본(archive)에서 회수합니다" }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[Finalize/A] stash 실패 — finalizer 는 archive(unarchive) 로 회수한다: ${e.message}"
+        echo "[결과 보존] 임시 전달(stash) 실패 — 마무리 단계는 영구 보존본(archive)에서 회수합니다: ${e.message}"
     }
     boolean manifestOk = false
     if (fileExists('gather_manifest.json')) {
@@ -234,16 +313,18 @@ def sePreserveGatherOutput() {
     env.SE_PRESERVE_STASHED   = "${stashed}"
     env.SE_PRESERVE_MANIFEST  = "${manifestOk}"
     env.SE_PRESERVE_HASRESULT = "${hasResult}"
-    echo "[Finalize/A] preserve archived=${archived} stashed=${stashed} manifestOk=${manifestOk} hasResult=${hasResult}"
+    echo "[결과 보존] 영구 보존(archive) ${archived ? '완료' : '실패'} · 임시 전달(stash) ${stashed ? '완료' : '실패'} · " +
+         "접수 목록 ${manifestOk ? '이 빌드 것 확인' : '없음 또는 다른 빌드 것'} · 결과 파일 ${hasResult ? '있음' : '없음'} " +
+         "(archived=${archived} stashed=${stashed} manifestOk=${manifestOk} hasResult=${hasResult})"
     if (archived && manifestOk && hasResult) {
         deleteDir()
     } else {
-        echo "[Finalize/A] workspace kept for forensics (archived=${archived} stashed=${stashed} manifestOk=${manifestOk} hasResult=${hasResult})"
+        echo "[결과 보존] 보존을 확인하지 못해 조사용으로 작업공간을 지우지 않고 남깁니다"
     }
     if (!archived && !stashed) {
-        unstable("[Finalize/A] 결과 보존 실패(archive·stash 모두) — workspace 보관, finalizer 는 manifest 로 보충한다")
+        unstable("[결과 보존] 결과를 보존하지 못했습니다(영구 보존 · 임시 전달 모두 실패) — 작업공간을 남기고, 마무리 단계는 접수 목록으로 실패 결과를 만듭니다")
     } else if (!archived) {
-        unstable("[Finalize/A] archive 실패 — stash 로만 전달 (영구 보존 없음)")
+        unstable("[결과 보존] 영구 보존(archive) 실패 — 임시 전달(stash)로만 넘겼습니다. 빌드 기록에는 결과 파일이 남지 않습니다")
     }
 }
 
@@ -252,19 +333,20 @@ def seFinalizeAndCallback() {
     long tPost = seNowSec()
     String manifestJson = env.SE_MANIFEST_JSON ?: ''
     if (!manifestJson.trim()) {
-        echo "[Finalize] not-run: 접수 manifest 없음 (Validate 전에 끝남) — 전송할 것 없음"
-        return
+        echo "[마무리] 접수 manifest 없음 — 입력 확인에서 끝난 요청이라 전송할 것 없음"
+        return null
     }
     def manifest = readJSON text: manifestJson
     List ips = manifest.ips ?: []
     String outcome = env.SE_GATHER_OUTCOME ?: 'interrupted_unknown'
     long buildStart = (env.SE_BUILD_START_EPOCH ?: "${tPost}").toString() as long
     long hardDeadline = buildStart + C.GLOBAL
+    Map result = null
     timeout(time: C.FINALIZER_TOTAL, unit: 'SECONDS') {
         node('built-in') {
             long tIn = seNowSec()
             long finalizerDeadline = tPost + C.FINALIZER_TOTAL
-            echo "[Finalize] node wait ${tIn - tPost}s, remaining ${Math.min(hardDeadline, finalizerDeadline) - tIn}s, outcome=${outcome}, accepted=${ips.size()}"
+            echo "[마무리] 시작 — 접수 ${ips.size()}대, 수집 종료 상태 ${seOutcomeText(outcome)}, 대기 ${tIn - tPost}초, 남은 시간 ${Math.min(hardDeadline, finalizerDeadline) - tIn}초"
             deleteDir()
             String source = 'none'
             List recoverFiles = ['gather_final.jsonl', 'gather_finalize_report.json', 'gather_output.json', 'gather_checkpoint.jsonl']
@@ -273,11 +355,11 @@ def seFinalizeAndCallback() {
                     unstash 'gather-output'
                     if (fileExists('gather_final.jsonl') || fileExists('gather_output.json') || fileExists('gather_checkpoint.jsonl')) { source = 'stash' }
                 }
-                if (!done) { echo "[Finalize] unstash 상한 초과 — archive 회수로" }
+                if (!done) { echo "[마무리] 임시 전달본(stash) 회수가 상한을 넘겨 영구 보존본(archive)에서 찾습니다" }
             } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                 throw fie
             } catch (Exception e) {
-                echo "[Finalize] unstash 실패: ${e.message}"
+                echo "[마무리] 임시 전달본(stash)을 회수하지 못해 영구 보존본(archive)에서 찾습니다: ${e.message}"
             }
             if (source == 'none' && (Math.min(hardDeadline, finalizerDeadline) - seNowSec()) > (C.RECOVER + C.ASSEMBLE + C.CALLBACK_ATTEMPT)) {
                 try {
@@ -288,16 +370,16 @@ def seFinalizeAndCallback() {
                             } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                                 throw fie
                             } catch (Exception e) {
-                                echo "[Finalize] unarchive ${f}: 없음 (${e.message})"
+                                echo "[마무리] 영구 보존본에 ${f} 없음 (${e.message})"
                             }
                         }
                         if (fileExists('gather_final.jsonl') || fileExists('gather_output.json') || fileExists('gather_checkpoint.jsonl')) { source = 'archive' }
                     }
-                    if (!done) { echo "[Finalize] unarchive 상한 초과 — manifest 기반으로" }
+                    if (!done) { echo "[마무리] 영구 보존본 회수가 상한을 넘겨 접수 목록으로 결과를 만듭니다" }
                 } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                     throw fie
                 } catch (Exception e) {
-                    echo "[Finalize] unarchive 실패(또는 archive 없음): ${e.message}"
+                    echo "[마무리] 영구 보존본을 회수하지 못했습니다(또는 없음): ${e.message}"
                 }
             }
             List lines = null
@@ -306,6 +388,7 @@ def seFinalizeAndCallback() {
             String layerB = 'skipped'
             List damage = []
             List unrecovered = []
+            Map statusCounts = [:]
             String outText = null
             boolean assembled = seBounded(C.ASSEMBLE, 'assemble') {
                 if (fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) {
@@ -316,6 +399,7 @@ def seFinalizeAndCallback() {
                             Map picked = seFilterEnvelopeLines(finalText.split('\n') as List, manifestJson)
                             if (picked.lines.size() == ips.size()) {
                                 lines = picked.lines
+                                statusCounts = picked.counts
                                 report = rep
                                 layerA = (rep.exit_code == 0) ? 'ok' : 'ok_with_damage'
                             } else {
@@ -330,7 +414,7 @@ def seFinalizeAndCallback() {
                     } catch (Exception e) {
                         layerA = 'report_unreadable'
                         damage << "layer_a_unreadable ${e.getClass().simpleName}".toString()
-                        echo "[Finalize] Layer A 결과를 읽지 못함 — Layer B 로: ${e.message}"
+                        echo "[마무리] 정리된 결과(gather_final.jsonl)를 읽지 못해 원본 결과로 다시 조립합니다: ${e.message}"
                     }
                 }
                 if (lines == null) {
@@ -343,16 +427,23 @@ def seFinalizeAndCallback() {
                         lib = seLoadFinalizeLib()
                         if (lib != null) { res = lib.seReconcileRaw(manifestJson, outText, cpText, seLoadCanon(lib), outcome) }
                     } else {
-                        echo "[Finalize] 라이브러리 적재 생략 — 남은 ${leftForLib}s 로는 조립 뒤 Callback 을 보장할 수 없다"
+                        echo "[마무리] 남은 ${leftForLib}초로는 보충 조립 뒤 전송까지 보장할 수 없어 보충 없이 진행합니다"
                         damage << "assemble_skipped_budget left=${leftForLib}".toString()
                     }
                     if (lib != null && res != null) {
-                        lines = res.lines
+                        Map gated = seFilterEnvelopeLines(res.lines, manifestJson)
+                        if (gated.lines.size() != res.lines.size() || gated.dropped) {
+                            damage << "layer_b_gate_dropped=${res.lines.size() - gated.lines.size()}".toString()
+                            unrecovered = gated.missing
+                        }
+                        lines = gated.lines
+                        statusCounts = gated.counts
                         report = res.report
                         layerB = 'ok'
                     } else {
                         Map picked = seFilterEnvelopeLines(outText.split('\n') as List, manifestJson)
                         lines = picked.lines
+                        statusCounts = picked.counts
                         unrecovered = picked.missing
                         if (picked.dropped) { damage << "raw_dropped=${picked.dropped}".toString() }
                         report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
@@ -365,20 +456,24 @@ def seFinalizeAndCallback() {
                 if (lines == null && layerA == 'skipped' && fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) { layerA = 'timeout' }
                 List minimalLines = null
                 List minimalMissing = []
+                Map minimalCounts = [:]
                 boolean minimal = seBounded(C.ASSEMBLE_MIN, 'assemble_min') {
                     if (outText == null) { outText = fileExists('gather_output.json') ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : '' }
                     Map picked = seFilterEnvelopeLines(outText.split('\n') as List, manifestJson)
                     minimalLines = picked.lines
                     minimalMissing = picked.missing
+                    minimalCounts = picked.counts
                     if (picked.dropped) { damage << "raw_dropped=${picked.dropped}".toString() }
                 }
                 if (minimal && minimalLines != null) {
                     lines = minimalLines
                     unrecovered = minimalMissing
+                    statusCounts = minimalCounts
                 } else {
                     damage << 'assemble_min_timeout'
                     lines = []
                     unrecovered = ips.collect { it.toString() }
+                    statusCounts = [:]
                 }
                 report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
                 layerB = 'unavailable'
@@ -387,35 +482,128 @@ def seFinalizeAndCallback() {
             int lineCount = lines.size()
             int filled = (report.filled ?: 0) as int
             int kept = (report.kept ?: (accepted - filled)) as int
-            if (lineCount != accepted) {
-                echo "[Finalize] [WARN] invariant 위반: lines=${lineCount} accepted=${accepted} — 그래도 있는 것을 보낸다"
+            Map bo = (report.by_origin instanceof Map) ? report.by_origin : null
+            echo "[마무리] 처리 경로: layerA=${layerA} layerB=${layerB} source=${source} kept=${kept} filled=${filled} dropped=${(report.dropped ?: []).size()} conflicts=${(report.conflicts ?: []).size()}${damage ? ' damage=' + damage.join(',') : ''}"
+            String body = null
+            boolean bodyReady = seBounded(C.BODY, 'body') {
+                body = '{"loc":' + groovy.json.JsonOutput.toJson(params.loc.trim()) +
+                       ',"deploymentEnvironmentId":' + groovy.json.JsonOutput.toJson(params.deploymentEnvironmentId.trim()) +
+                       ',"eventUuid":' + groovy.json.JsonOutput.toJson((params.eventUuid ?: '').trim()) +
+                       ',"gatherInfoJson":[' + lines.join(',') + ']}'
+                writeFile file: 'callback_body.json', text: body, encoding: 'UTF-8'
             }
-            echo "[Finalize] accepted=${accepted} kept=${kept} filled=${filled}(synthetic) dropped=${(report.dropped ?: []).size()} conflicts=${(report.conflicts ?: []).size()} outcome=${outcome} layerA=${layerA} layerB=${layerB} source=${source}"
-            String body = '{"loc":' + groovy.json.JsonOutput.toJson(params.loc.trim()) +
-                          ',"deploymentEnvironmentId":' + groovy.json.JsonOutput.toJson(params.deploymentEnvironmentId.trim()) +
-                          ',"eventUuid":' + groovy.json.JsonOutput.toJson((params.eventUuid ?: '').trim()) +
-                          ',"gatherInfoJson":[' + lines.join(',') + ']}'
-            writeFile file: 'callback_body.json', text: body, encoding: 'UTF-8'
-            writeFile file: 'finalize_summary.json', encoding: 'UTF-8',
-                      text: groovy.json.JsonOutput.toJson([accepted: accepted, lines: lineCount, kept: kept, filled: filled, outcome: outcome,
-                                                            layerA: layerA, layerB: layerB, source: source, node_wait_sec: tIn - tPost,
-                                                            unrecovered: unrecovered, damage: damage, by_origin: (report.by_origin ?: null),
-                                                            recovery_limited: (layerB == 'unavailable' && lineCount != accepted),
-                                                            preserve: [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED, stashed: env.SE_PRESERVE_STASHED,
-                                                                       manifestOk: env.SE_PRESERVE_MANIFEST, hasResult: env.SE_PRESERVE_HASRESULT]])
+            if (!bodyReady) {
+                damage << 'body_timeout'
+                body = null
+            }
+            Map summary = [accepted: accepted, lines: lineCount, kept: kept, filled: filled, outcome: outcome,
+                           limit_reason: (env.SE_GATHER_LIMIT_REASON ?: null),
+                           status_counts: [success: (statusCounts.success ?: 0), partial: (statusCounts.partial ?: 0),
+                                           failed: (statusCounts.failed ?: 0), missing: Math.max(0, accepted - lineCount)],
+                           layerA: layerA, layerB: layerB, source: source, node_wait_sec: tIn - tPost,
+                           unrecovered: unrecovered, damage: damage, by_origin: (report.by_origin ?: null),
+                           recovery_limited: (layerB == 'unavailable' && lineCount != accepted),
+                           preserve: [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED, stashed: env.SE_PRESERVE_STASHED,
+                                      manifestOk: env.SE_PRESERVE_MANIFEST, hasResult: env.SE_PRESERVE_HASRESULT]]
             lines = null
-            boolean delivered = seCallback(body, hardDeadline, finalizerDeadline, C)
-            archiveArtifacts artifacts: 'callback_body.json,finalize_summary.json,gather_final.jsonl,gather_finalize_report.json',
-                             allowEmptyArchive: true, fingerprint: false
-            if (!delivered) {
-                echo "[Finalize] delivered=false — body 는 artifact callback_body.json"
-                unstable("[Finalize] Callback 전송 실패 — artifact callback_body.json 참조")
-            } else if (filled > 0 || outcome != 'completed' || layerB == 'unavailable' || lineCount != accepted) {
-                unstable("[Finalize] 전송은 됐지만 보충(filled=${filled}) · 비정상 종료(outcome=${outcome}) · 라이브러리(layerB=${layerB}) 중 하나가 있었다")
+            Map cb = [delivered: false, http_code: null, attempts: 0, reason: 'no_body']
+            if (body != null) {
+                cb = seCallback(body, hardDeadline, finalizerDeadline, C)
+            } else {
+                echo "[Portal 전송] 보내지 않았습니다 — 전송 본문을 상한 ${C.BODY}초 안에 만들지 못했습니다"
             }
-            deleteDir()
+            boolean delivered = (cb.delivered == true)
+            summary.callback = [attempted: (body != null), delivered: delivered, http_code: cb.http_code, attempts: cb.attempts]
+            Map sc = summary.status_counts
+            echo "[결과] 요청 ${accepted}대 — 성공 ${sc.success} · 부분 성공 ${sc.partial} · 실패 ${sc.failed}${sc.missing ? ' · 보낼 결과 없음 ' + sc.missing : ''}"
+            if (filled > 0 || (bo?.checkpoint ?: 0) > 0) {
+                echo "[결과] 수집 결과 그대로 ${bo != null ? bo.output : kept}대 · 중간 결과(CHECKPOINT)로 ${bo?.checkpoint ?: 0}대 · 수집이 끝나지 않아 실패 결과를 새로 만듦 ${filled}대"
+            }
+            List warnings = []
+            List warnTexts = []
+            if (body == null) {
+                warnings << 'body_timeout'
+                warnTexts << "전송 본문을 상한 ${C.BODY}초 안에 만들지 못해 Portal 로 보내지 않았습니다".toString()
+            } else if (!delivered) {
+                warnings << 'callback_failed'
+                warnTexts << 'Portal 전송에 실패했습니다 — 보내려던 본문은 결과 파일 callback_body.json 에 있습니다'
+            }
+            if (lineCount != accepted) {
+                warnings << 'count_mismatch'
+                warnTexts << "보낼 결과가 ${lineCount}대로 접수 ${accepted}대와 다릅니다 — 있는 결과만 전송 본문에 넣었습니다 (결과 없음: ${unrecovered ? unrecovered.join(', ') : '-'})".toString()
+            }
+            if (filled > 0) {
+                warnings << 'filled'
+                warnTexts << "${filled}대는 수집 결과가 없어 실패 결과를 새로 만들었습니다".toString()
+            }
+            if (outcome != 'completed') {
+                warnings << "outcome_${outcome}".toString()
+                warnTexts << "수집이 정상적으로 끝나지 않았습니다: ${seOutcomeText(outcome)}".toString()
+            }
+            if (layerB == 'unavailable') {
+                warnings << 'layer_b_unavailable'
+                warnTexts << '보충 단계 없이 수집이 남긴 결과만 전송 본문에 넣었습니다 — 결과가 빠진 대상은 채우지 못했습니다'
+            }
+            if (env.SE_PRESERVE_ARCHIVED == 'false') {
+                boolean noStash = (env.SE_PRESERVE_STASHED == 'false')
+                warnings << (noStash ? 'preserve_failed' : 'preserve_archive_failed')
+                warnTexts << (noStash ? '수집 단계에서 결과를 보존하지 못했습니다(영구 보존 · 임시 전달 모두 실패)'
+                                      : '수집 단계의 영구 보존(archive)이 실패해 임시 전달(stash)로 받았습니다')
+            }
+            summary.warnings = warnings
+            for (String w in warnTexts) { echo "[경고] ${w}" }
+            writeFile file: 'finalize_summary.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson(summary)
+            boolean finalArchived = seBounded(C.PRESERVE_STEP, 'archive_final') {
+                archiveArtifacts artifacts: 'callback_body.json,finalize_summary.json,gather_final.jsonl,gather_finalize_report.json',
+                                 allowEmptyArchive: true, fingerprint: false
+            }
+            if (finalArchived) {
+                String base = (env.BUILD_URL ?: '').trim()
+                List files = []
+                if (fileExists('gather_final.jsonl')) { files << ['서버별 수집 결과 (JSON, 한 줄에 한 대)', 'gather_final.jsonl'] }
+                if (body != null) { files << ['Portal 로 보낸 본문 (JSON)', 'callback_body.json'] }
+                files << ['실행 요약 (JSON)', 'finalize_summary.json']
+                for (List f in files) { echo "[결과 파일] ${f[0]}: ${base ? base + 'artifact/' + f[1] : f[1]}" }
+            } else {
+                echo "[결과 파일] 마지막 보존(archive)이 상한 ${C.PRESERVE_STEP}초를 넘겨 요약 · 본문은 이 작업공간에만 있습니다 (${pwd()})"
+            }
+            boolean finalizerWarn = false
+            for (String w in warnings) { if (!w.startsWith('preserve_')) { finalizerWarn = true } }
+            if (body == null) {
+                unstable("[마무리] 전송 본문을 상한 안에 만들지 못해 보내지 않았습니다 — 결과 파일 gather_final.jsonl · gather_output.json 참조")
+            } else if (!delivered) {
+                unstable("[마무리] Portal 전송 실패 — 보내려던 본문은 결과 파일 callback_body.json")
+            } else if (finalizerWarn) {
+                unstable("[마무리] 전송은 했지만 확인할 것이 있습니다 — 위의 [경고] 줄 참조 (${warnings.join(', ')})")
+            }
+            if (finalArchived) {
+                deleteDir()
+            } else {
+                echo "[마무리] 마지막 보존이 끝나지 않아 controller 작업공간을 지우지 않습니다 (${pwd()})"
+            }
+            result = [accepted: accepted, success: sc.success, partial: sc.partial, failed: sc.failed, missing: sc.missing,
+                      attempted: (body != null), delivered: delivered, http_code: cb.http_code, warnings: warnings]
         }
     }
+    return result
+}
+
+def seBuildSummary(Map fin) {
+    String res = currentBuild.currentResult
+    Map names = ['SUCCESS': '정상', 'UNSTABLE': '확인 필요', 'FAILURE': '실패', 'ABORTED': '중단', 'NOT_BUILT': '실행 안 함']
+    echo "[요약] ─────────────────────────────────────────────"
+    long took = Math.max(0L, seNowSec() - (long) (currentBuild.startTimeInMillis / 1000L))
+    String tookText = (took >= 60L) ? "${(long) (took / 60L)}분 ${took % 60L}초" : "${took}초"
+    echo "[요약] 빌드 결과: ${names[res] ?: res} (${res}) · 소요 ${tookText}"
+    if (fin != null) {
+        echo "[요약] 대상: ${params.target_type} ${fin.accepted}대 · 실행 위치 ${params.loc ?: '-'}"
+        echo "[요약] 결과: 성공 ${fin.success} · 부분 성공 ${fin.partial} · 실패 ${fin.failed}${fin.missing ? ' · 보낼 결과 없음 ' + fin.missing : ''}"
+        echo "[요약] Portal 전송: ${fin.delivered ? '완료 (HTTP ' + fin.http_code + ')' : (fin.attempted ? '실패' : '보내지 않음')}"
+        if (fin.warnings) { echo "[요약] 경고: ${fin.warnings.join(', ')}" }
+    } else {
+        echo "[요약] 접수 전에 끝나 Portal 로 보낸 결과가 없습니다"
+    }
+    echo "[요약] ─────────────────────────────────────────────"
 }
 
 pipeline {
@@ -426,31 +614,31 @@ pipeline {
         string(
             name        : 'loc',
             defaultValue: '',
-            description : 'Agent 로케이션 (ic | cj | yi | git) — common/vars/locations.yml 의 키'
+            description : '실행 위치 — 수집을 맡을 Runner 묶음 이름 (common/vars/locations.yml 의 키, 예: ic · cj · yi · git)'
         )
         choice(
             name        : 'target_type',
             choices     : ['os', 'esxi', 'redfish'],
-            description : '수집 대상 종류'
+            description : '수집 대상 종류 — os(Linux · Windows) · esxi · redfish(BMC)'
         )
         text(
             name        : 'inventory_json',
-            description : '호스트 JSON 배열 (os/esxi: service_ip, redfish: bmc_ip, fallback: ip)'
+            description : '대상 목록 JSON 배열 — 예: [{"service_ip": "10.0.0.1"}]. os · esxi 는 service_ip, redfish 는 bmc_ip, 없으면 ip. IPv4 만, 중복 불가'
         )
         string(
             name        : 'deploymentEnvironmentId',
             defaultValue: '',
-            description : '포털 개발환경 ID'
+            description : 'Portal 배포 환경 ID — 결과 전송 본문에 그대로 넣습니다'
         )
         string(
             name        : 'eventUuid',
             defaultValue: '',
-            description : '포털 이벤트 UUID (결과 Callback body 에 그대로 반환)'
+            description : 'Portal 이벤트 UUID — 결과 전송 본문에 그대로 넣습니다'
         )
         string(
             name        : 'callbackUrl',
             defaultValue: '',
-            description : '결과 전달 Callback URL (예: http://portal.example.com)'
+            description : '결과를 보낼 Portal 주소 (예: http://portal.example.com) — 뒤에 /api/jenkins/gather/<target_type> 을 붙여 POST 합니다'
         )
         choice(
             name        : 'verbosity',
@@ -460,12 +648,12 @@ pipeline {
         booleanParam(
             name        : 'redfishAccountDryrun',
             defaultValue: false,
-            description : '검증용 — Redfish 표준 계정 복구(쓰기)를 시뮬레이션만 한다 (-e _rf_account_service_dryrun=true). 운영 기본 false'
+            description : '시험 전용 — Redfish 표준 계정 복구(쓰기)를 실제로 하지 않고 모의 실행만 합니다 (-e _rf_account_service_dryrun=true). 운영은 false'
         )
         string(
             name        : 'gatherBudgetForceSec',
             defaultValue: '',
-            description : '검증용 — 수집(ansible-playbook) 배치 상한(초)을 강제한다. 비우면 scripts/gather_budget.sh 공식(host 수·채널·Runner vCPU). 남은 시간은 넘지 못한다'
+            description : '시험 전용 — 수집 시간 제한(초)을 강제로 겁니다. 운영은 비워 두세요. 비우면 빌드 · 단계의 남은 시간이 제한이고, 예상 시간이 지난 뒤 진행이 멈추면 정체 감시가 끝냅니다'
         )
     }
 
@@ -481,23 +669,23 @@ pipeline {
 
     stages {
 
-        stage('Validate') {
+        stage('입력 확인') {
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
                 script {
                     env.SE_BUILD_START_EPOCH = "${(long) (currentBuild.startTimeInMillis / 1000L)}"
 
                     if (!params.loc?.trim()) {
-                        error "[Validate] 필수 파라미터 누락: loc"
+                        error "[입력 확인] 필수 값이 없습니다: loc"
                     }
 
                     def allowed = ['os', 'esxi', 'redfish']
                     if (!allowed.contains(params.target_type?.trim())) {
-                        error "[Validate] target_type 값 오류: '${params.target_type}' -- 허용값: ${allowed}"
+                        error "[입력 확인] target_type 값 오류: '${params.target_type}' — 허용값: ${allowed}"
                     }
 
                     if (!params.inventory_json?.trim()) {
-                        error "[Validate] inventory_json 이 비어있습니다"
+                        error "[입력 확인] inventory_json 이 비어 있습니다"
                     }
 
                     def hosts
@@ -506,42 +694,30 @@ pipeline {
                     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                         throw fie
                     } catch (Exception e) {
-                        error "[Validate] inventory_json JSON 파싱 실패: ${e.message}"
+                        error "[입력 확인] inventory_json 을 JSON 으로 읽지 못했습니다: ${e.message}"
                     }
 
-                    if (!(hosts instanceof List)) {
-                        error "[Validate] inventory_json 은 JSON 배열이어야 합니다"
+                    Map acceptance = seAcceptTargets(hosts, params.target_type.trim())
+                    if (acceptance.error) {
+                        error "[입력 확인] ${acceptance.error}"
                     }
-                    if (hosts.size() == 0) {
-                        error "[Validate] inventory_json 배열이 비어있습니다"
-                    }
-
-                    def primaryKey = (params.target_type == 'redfish') ? 'bmc_ip' : 'service_ip'
-                    def acceptedIps = []
-                    for (int idx = 0; idx < hosts.size(); idx++) {
-                        def host = hosts[idx]
-                        if (!(host instanceof Map)) {
-                            error "[Validate] inventory_json[${idx}] 은 객체여야 합니다"
-                        }
-                        def ipVal = host[primaryKey]?.toString()?.trim() ?: host['ip']?.toString()?.trim()
-                        if (!ipVal) {
-                            error "[Validate] inventory_json[${idx}] '${primaryKey}' 또는 'ip' 필드 누락"
-                        }
-                        acceptedIps.add(ipVal)
-                    }
+                    def acceptedIps = acceptance.ips
 
                     if (!params.callbackUrl?.trim()) {
-                        error "[Validate] 필수 파라미터 누락: callbackUrl"
+                        error "[입력 확인] 필수 값이 없습니다: callbackUrl"
                     }
                     def cbUrl = params.callbackUrl.trim()
+                    if (cbUrl ==~ /(?is)^[a-z][a-z0-9+.-]*:\/\/[^\/?#]*@.*/) {
+                        error "[입력 확인] callbackUrl 에 계정 정보(사용자:비밀번호@)를 넣을 수 없습니다 — 주소는 기록하지 않았습니다"
+                    }
                     if (!(cbUrl.startsWith('http://') || cbUrl.startsWith('https://'))) {
-                        error "[Validate] callbackUrl 은 http:// 또는 https:// 로 시작해야 함: ${cbUrl}"
+                        error "[입력 확인] callbackUrl 은 http:// 또는 https:// 로 시작해야 합니다: ${cbUrl}"
                     }
                     if (cbUrl.contains("'") || cbUrl.contains('"') || cbUrl.contains('`') || cbUrl.contains('\\') || cbUrl.replaceAll(/\s/, '') != cbUrl) {
-                        error "[Validate] callbackUrl 에 허용되지 않는 문자(따옴표/백틱/역슬래시/공백) 포함 — 거부: ${cbUrl}"
+                        error "[입력 확인] callbackUrl 에 쓸 수 없는 문자(따옴표 · 백틱 · 역슬래시 · 공백)가 있습니다: ${cbUrl}"
                     }
                     if (!params.deploymentEnvironmentId?.trim()) {
-                        error "[Validate] 필수 파라미터 누락: deploymentEnvironmentId"
+                        error "[입력 확인] 필수 값이 없습니다: deploymentEnvironmentId"
                     }
 
                     env.SE_MANIFEST_JSON = groovy.json.JsonOutput.toJson([
@@ -557,54 +733,59 @@ pipeline {
                         ips    : acceptedIps,
                     ])
 
-                    echo "[Validate] OK -- target_type=${params.target_type}, hosts=${acceptedIps.size()}, loc=${params.loc}"
-                    echo "[Validate] callback=${params.callbackUrl}"
+                    String testTags = ''
+                    String forceRaw = (params.gatherBudgetForceSec ?: '').trim()
+                    if (forceRaw) { testTags += " [시험: 강제 제한 ${forceRaw}초]" }
+                    if (params.redfishAccountDryrun) { testTags += ' [시험: 계정 복구 모의]' }
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.target_type.trim()} ${acceptedIps.size()}대${testTags}"
+                    echo "[입력 확인] 통과 — ${params.target_type.trim()} ${acceptedIps.size()}대, 실행 위치 ${params.loc.trim()}${testTags}"
+                    echo "[입력 확인] 결과를 보낼 주소: ${cbUrl}"
                 }
             }
         }
 
-        stage('Resolve Location') {
+        stage('실행 위치 확인') {
             options { timeout(time: 2, unit: 'MINUTES') }
             steps {
                 script {
                     def key = params.loc?.trim()
                     if (!key) {
-                        error "[Resolve Location] 필수 파라미터 누락: loc"
+                        error "[실행 위치] 필수 값이 없습니다: loc"
                     }
                     def reg = readYaml text: seTrusted('common/vars/locations.yml')
                     def known = (reg?.locations ?: [:])
                     def entry = known[key]
                     if (!entry) {
-                        error "[Resolve Location] 등록되지 않은 Location: '${key}' " +
+                        error "[실행 위치] 등록되지 않은 Location: '${key}' " +
                               "— 허용: ${known.keySet().sort()}. " +
                               "새 Location 은 common/vars/locations.yml 에 등록하세요."
                     }
                     if (!entry.agent_label?.trim()) {
-                        error "[Resolve Location] Location '${key}' 에 agent_label 이 없습니다 " +
+                        error "[실행 위치] Location '${key}' 에 agent_label 이 없습니다 " +
                               "— common/vars/locations.yml 을 확인하세요."
                     }
                     def targetLabels = ['os': 'linux && windows', 'esxi': 'esxi', 'redfish': 'redfish']
                     def targetType   = params.target_type?.trim()
                     if (!targetLabels.containsKey(targetType)) {
-                        error "[Resolve Location] target_type 값 오류: '${params.target_type}' -- 허용값: ${targetLabels.keySet().sort()}"
+                        error "[실행 위치] target_type 값 오류: '${params.target_type}' — 허용값: ${targetLabels.keySet().sort()}"
                     }
                     env.SE_LOCATION    = key
                     env.SE_AGENT_LABEL = "${entry.agent_label.trim()} && (${targetLabels[targetType]})"
                     def nodes = nodesByLabel(label: env.SE_AGENT_LABEL)
                     if (!nodes) {
                         env.SE_GATHER_OUTCOME = 'no_agent'
-                        echo "[Resolve Location] 라벨 '${env.SE_AGENT_LABEL}' 을 모두 가진 온라인 노드가 없습니다 " +
-                             "-- 수집을 건너뛰고 접수된 host 마다 실패 결과를 돌려줍니다. Manage Jenkins > Nodes 에서 '${key}' 노드의 라벨(${targetLabels[targetType]})을 확인하세요."
-                        unstable("[Resolve Location] 온라인 노드 없음 (${env.SE_AGENT_LABEL})")
+                        echo "[실행 위치] 라벨 '${env.SE_AGENT_LABEL}' 을 모두 가진 온라인 노드가 없습니다 " +
+                             "— 수집을 건너뛰고 접수된 대상마다 실패 결과를 보냅니다. Manage Jenkins > Nodes 에서 '${key}' 노드의 라벨(${targetLabels[targetType]})을 확인하세요."
+                        unstable("[실행 위치] 온라인 노드 없음 (${env.SE_AGENT_LABEL}) — 접수된 대상마다 실패 결과를 보냅니다")
                     } else {
-                        echo "[Resolve Location] ${key} + ${targetType} -> agent label '${env.SE_AGENT_LABEL}' (nodes: ${nodes.join(', ')})"
+                        echo "[실행 위치] ${key} · ${targetType} → 노드 라벨 '${env.SE_AGENT_LABEL}' (후보: ${nodes.join(', ')})"
                     }
                     env.SE_STAGE_START_EPOCH = "${seNowSec()}"
                 }
             }
         }
 
-        stage('Gather') {
+        stage('서버 정보 수집') {
             when { expression { env.SE_GATHER_OUTCOME != 'no_agent' } }
             agent {
                 node {
@@ -643,23 +824,23 @@ pipeline {
 
                     def playbook  = playbookMap[params.target_type]
                     def inventory = inventoryMap[params.target_type]
-                    echo "[Gather] playbook=${playbook}"
+                    echo "[수집] 플레이북: ${playbook}"
 
-                    sh "rm -rf \"${env.WORKSPACE}/gather_output.json\" \"${env.WORKSPACE}/gather_rc.txt\" \"${env.WORKSPACE}/gather_progress.jsonl\" \"${env.WORKSPACE}/gather_checkpoint.jsonl\" \"${env.WORKSPACE}/gather_final.jsonl\" \"${env.WORKSPACE}/gather_finalize_report.json\" \"${env.WORKSPACE}/gather_auth_evidence\""
+                    sh label: '이전 실행의 결과 파일 정리', script: "rm -rf \"${env.WORKSPACE}/gather_output.json\" \"${env.WORKSPACE}/gather_rc.txt\" \"${env.WORKSPACE}/gather_progress.jsonl\" \"${env.WORKSPACE}/gather_checkpoint.jsonl\" \"${env.WORKSPACE}/gather_final.jsonl\" \"${env.WORKSPACE}/gather_finalize_report.json\" \"${env.WORKSPACE}/gather_auth_evidence\""
                     writeFile(file: 'gather_manifest.json', text: (env.SE_MANIFEST_JSON ?: '') + '\n', encoding: 'UTF-8')
 
                     def budgetForce = (params.gatherBudgetForceSec ?: '').trim()
                     if (budgetForce && !(budgetForce ==~ /\d+/)) {
-                        error "[Gather] gatherBudgetForceSec 은 정수(초)여야 합니다: '${budgetForce}'"
+                        error "[수집] gatherBudgetForceSec 은 정수(초)여야 합니다: '${budgetForce}'"
                     }
                     def manifest = readJSON text: env.SE_MANIFEST_JSON
                     def hostCount = (manifest.ips ?: []).size()
                     def budgetEnv = ["SE_BUILD_START_EPOCH=${env.SE_BUILD_START_EPOCH}", "SE_STAGE_START_EPOCH=${env.SE_STAGE_START_EPOCH}",
-                                     "SE_CHANNEL=${params.target_type}", "SE_HOSTS=${hostCount}"] + (budgetForce ? ["SE_FORCE_SEC=${budgetForce}"] : [])
-                    def budgetScript = 'SE_NOW_EPOCH="$(date +%s)" SE_VCPU="$(nproc 2>/dev/null || echo 2)" bash scripts/gather_budget.sh'
+                                     "SE_CHANNEL=${params.target_type}", "SE_HOSTS=${hostCount}"]
+                    def budgetScript = "unset SE_MEM_AVAILABLE_MB; SE_FORCE_SEC=${budgetForce} SE_NOW_EPOCH=\"\$(date +%s)\" SE_VCPU=\"\$(nproc 2>/dev/null || echo 2)\" bash scripts/gather_budget.sh"
                     def est = null
                     withEnv(budgetEnv) {
-                        est = readJSON text: sh(returnStdout: true, script: budgetScript, label: 'budget estimate').trim()
+                        est = readJSON text: sh(returnStdout: true, script: budgetScript, label: '수집 시간 계산 (예상)').trim()
                     }
                     echo "[Budget] est gather=${est.gather} budget=${est.budget} start=${est.start} (forks=${est.forks}, waves=${est.waves}, hard_remaining=${est.hard_remaining}, stage_remaining=${est.stage_remaining}, mem_avail_mb=${est.mem_avail_mb}, mem_cap=${est.mem_cap}, mem_guard=${est.mem_guard}, pre=${(env.SE_STAGE_START_EPOCH as long) - (env.SE_BUILD_START_EPOCH as long)}s, wait_checkout=${(env.SE_NODE_ENTER_EPOCH as long) - (env.SE_STAGE_START_EPOCH as long)}s, prep=${seNowSec() - (env.SE_NODE_ENTER_EPOCH as long)}s)"
 
@@ -670,7 +851,7 @@ pipeline {
                         def addonCred    = (env.ADDON_REPO_CREDENTIALS_ID ?: '').trim()
                         def addonTargets = ['os': 'linux,windows', 'esxi': 'esxi', 'redfish': 'redfish'][params.target_type]
                         def fetchAddon = { ->
-                            sh """#!/bin/bash
+                            sh label: '추가 수집(Add-on) 저장소 받기', script: """#!/bin/bash
                                 set -eo pipefail
                                 set +x
                                 cd "\${WORKSPACE}"
@@ -696,7 +877,7 @@ pipeline {
                             problem = "저장소를 받지 못했습니다 (${addonRepo}@${addonRef}) — 위 [addon] unavailable 줄 참조"
                         }
                         if (!problem) {
-                            def rc = sh(returnStatus: true, script: """#!/bin/bash
+                            def rc = sh(returnStatus: true, label: '추가 수집(Add-on) 파일 검사', script: """#!/bin/bash
                                 set -eo pipefail
                                 set +x
                                 cd "\${WORKSPACE}"
@@ -719,18 +900,24 @@ pipeline {
 
                     def exec = null
                     withEnv(budgetEnv) {
-                        exec = readJSON text: sh(returnStdout: true, script: budgetScript, label: 'budget exec').trim()
+                        exec = readJSON text: sh(returnStdout: true, script: budgetScript, label: '수집 시간 계산 (실행 직전)').trim()
                     }
                     echo "[Budget] exec gather=${exec.gather} budget=${exec.budget} start=${exec.start} reason=${exec.reason} (forks=${exec.forks}, waves=${exec.waves}, hard_remaining=${exec.hard_remaining}, stage_remaining=${exec.stage_remaining}, mem_avail_mb=${exec.mem_avail_mb}, mem_cap=${exec.mem_cap}, mem_guard=${exec.mem_guard}, pre=${(env.SE_STAGE_START_EPOCH as long) - (env.SE_BUILD_START_EPOCH as long)}s, wait_checkout=${(env.SE_NODE_ENTER_EPOCH as long) - (env.SE_STAGE_START_EPOCH as long)}s, prep=${seNowSec() - (env.SE_NODE_ENTER_EPOCH as long)}s)"
+                    boolean watchOn = (exec.limit_source?.toString() == 'ceiling')
+                    if (exec.start) {
+                        echo "[시간] 예상 ${exec.expected ?: exec.gather}초 · 중단 기준 ${exec.budget}초 — ${seLimitText(exec.limit_source?.toString() ?: 'ceiling')} · " +
+                             (watchOn ? "예상 시간이 지난 뒤 ${exec.stall ?: 420}초 동안 어떤 대상도 진행하지 않으면 중단" : '정체 감시 꺼짐(시험용 강제 제한)') +
+                             " · 동시 ${exec.forks}대"
+                    }
                     if (!exec.start) {
                         if (exec.reason == 'not_started_memory') {
                             env.SE_GATHER_OUTCOME = 'not_started_memory'
                             writeFile(file: 'gather_rc.txt', text: "not_started\n", encoding: 'UTF-8')
-                            unstable("[Budget] 수집을 시작하지 않음 — Runner 가용 메모리 부족 (mem_avail_mb=${exec.mem_avail_mb}, mem_cap=${exec.mem_cap}, 최소 fixed+per_fork=${exec.constants?.fixed_mb}+${exec.constants?.per_fork_mb} MB)")
+                            unstable("[수집] 시작하지 않았습니다 — Runner 가용 메모리가 부족합니다 (가용 ${exec.mem_avail_mb} MB, 최소 ${exec.constants?.fixed_mb}+${exec.constants?.per_fork_mb} MB, mem_cap=${exec.mem_cap})")
                         } else {
                             env.SE_GATHER_OUTCOME = 'not_started_budget'
                             writeFile(file: 'gather_rc.txt', text: "not_started\n", encoding: 'UTF-8')
-                            unstable("[Budget] 수집을 시작하지 않음 — 남은 예산 ${exec.budget}s < MIN_START (reason=${exec.reason})")
+                            unstable("[수집] 시작하지 않았습니다 — 남은 시간 ${exec.budget}초가 최소 시작 시간 ${exec.constants?.min_start}초보다 짧습니다 (reason=${exec.reason})")
                         }
                     } else {
                       try {
@@ -741,12 +928,16 @@ pipeline {
                                     variable     : 'VAULT_PASSWORD',
                                 ),
                             ]) {
-                                withEnv((addonDir ? ["ADDON_DIR=${addonDir}"] : []) + ["SE_GATHER_BUDGET_SEC=${exec.budget}", "SE_GATHER_FORKS=${exec.forks}"]) {
-                                    def rc = sh(returnStatus: true, script: """#!/bin/bash
+                                withEnv((addonDir ? ["ADDON_DIR=${addonDir}"] : []) + ["SE_GATHER_BUDGET_SEC=${exec.budget}", "SE_GATHER_FORKS=${exec.forks}",
+                                         "SE_GATHER_EXPECTED_SEC=${exec.expected ?: exec.gather}", "SE_GATHER_STALL_SEC=${exec.stall ?: 420}",
+                                         "SE_GATHER_WATCH=${watchOn}"]) {
+                                    def rc = sh(returnStatus: true, label: '서버 정보 수집 (ansible-playbook)', script: """#!/bin/bash
                                         set -eo pipefail
                                         set +x
                                         cd "\${WORKSPACE}"
+                                        . "\${WORKSPACE}/scripts/env_guard.sh" ${addonDir ? 'true' : 'false'}
                                         . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 90
+                                        export ANSIBLE_INVENTORY_UNPARSED_FAILED=True
                                         chmod +x "${inventory}"
                                         VAULT_TMP="\$(mktemp)"
                                         trap 'rm -f "\$VAULT_TMP"' EXIT
@@ -757,36 +948,64 @@ pipeline {
                                             EXTRA_ARGS+=(-e _rf_account_service_dryrun=true)
                                         fi
                                         set +e
-                                        timeout --signal=INT --kill-after=90 "\${SE_GATHER_BUDGET_SEC}" \\
+                                        rm -f "\${WORKSPACE}/gather_watch.json" "\${WORKSPACE}/gather_timeout.pid"
+                                        export SE_PROGRESS_DIR="\${WORKSPACE}/gather_heartbeat"
+                                        rm -rf "\$SE_PROGRESS_DIR" && mkdir -p "\$SE_PROGRESS_DIR"
+                                        WATCH_PID=""
+                                        if [ "\${SE_GATHER_WATCH}" = "true" ]; then
+                                            python3 "\${WORKSPACE}/scripts/gather_watch.py" --pidfile "\${WORKSPACE}/gather_timeout.pid" \\
+                                                --progress "\${ANSIBLE_JSON_PROGRESS_FILE}" --heartbeat-dir "\$SE_PROGRESS_DIR" \\
+                                                --expected "\${SE_GATHER_EXPECTED_SEC}" --stall "\${SE_GATHER_STALL_SEC}" --out "\${WORKSPACE}/gather_watch.json" &
+                                            WATCH_PID=\$!
+                                        fi
+                                        bash -c 'echo \$\$ > "\$1"; shift; exec "\$@"' se-gather "\${WORKSPACE}/gather_timeout.pid" \\
+                                            timeout --signal=INT --kill-after=90 "\${SE_GATHER_BUDGET_SEC}" \\
                                             ansible-playbook "${playbook}" -i "${inventory}" -f "\${SE_GATHER_FORKS}" --vault-password-file="\$VAULT_TMP" -e se_location="${env.SE_LOCATION}" "\${EXTRA_ARGS[@]}"
                                         rc=\$?
+                                        if [ -n "\$WATCH_PID" ]; then kill "\$WATCH_PID" 2>/dev/null; wait "\$WATCH_PID" 2>/dev/null; fi
                                         set -e
                                         echo "\$rc" > "\${WORKSPACE}/gather_rc.txt"
-                                        if [ "\$rc" -eq 124 ] || [ "\$rc" -eq 137 ]; then
-                                            echo "[Gather] budget exceeded (rc=\$rc, SE_GATHER_BUDGET_SEC=\${SE_GATHER_BUDGET_SEC}) -- 완료된 host 결과는 gather_output.json 에 남아 있다"
-                                        fi
+                                        case "\$rc" in
+                                            0|2|4|8) rm -f "\${WORKSPACE}/gather_watch.json" ;;
+                                            *)
+                                                if [ -f "\${WORKSPACE}/gather_watch.json" ]; then
+                                                    echo "[수집] 진행이 없어 정체 감시가 수집을 중단했습니다. 예상 시간 \${SE_GATHER_EXPECTED_SEC}초가 지난 뒤 \${SE_GATHER_STALL_SEC}초 동안 어떤 대상도 진행하지 않았습니다. 중단 전에 확보한 결과는 보존합니다."
+                                                elif [ "\$rc" -eq 124 ] || [ "\$rc" -eq 137 ]; then
+                                                    echo "[수집] 시간 제한 \${SE_GATHER_BUDGET_SEC}초에 도달해 수집을 중단했습니다 (종료 코드 \$rc). 중단 전에 확보한 결과는 보존합니다."
+                                                fi ;;
+                                        esac
                                         exit "\$rc"
                                     """)
+                                    boolean stalled = !(rc in [0, 2, 4, 8]) && fileExists('gather_watch.json')
+                                    String limitReason = ''
                                     if (rc in [0, 2, 4, 8]) {
                                         env.SE_GATHER_OUTCOME = 'completed'
+                                    } else if (stalled) {
+                                        env.SE_GATHER_OUTCOME = (rc == 137) ? 'timeout_killed' : 'timeout'
+                                        limitReason = 'stalled'
                                     } else if (rc == 124) {
                                         env.SE_GATHER_OUTCOME = 'timeout'
+                                        limitReason = exec.limit_source?.toString() ?: 'ceiling'
                                     } else if (rc == 137) {
                                         env.SE_GATHER_OUTCOME = 'timeout_killed'
+                                        limitReason = exec.limit_source?.toString() ?: 'ceiling'
                                     } else if (rc == 90) {
                                         env.SE_GATHER_OUTCOME = 'prep_failed'
                                     } else {
                                         env.SE_GATHER_OUTCOME = 'failed_run'
                                     }
+                                    env.SE_GATHER_LIMIT_REASON = limitReason
                                     if (rc != 0) {
-                                        unstable("[Gather] ansible-playbook rc=${rc} outcome=${env.SE_GATHER_OUTCOME}")
+                                        String what = (rc in [2, 4, 8]) ? '일부 대상이 실패하거나 응답하지 않았습니다 — 대상별 결과는 마무리 단계의 [결과] 줄을 보세요'
+                                                                       : seOutcomeText(env.SE_GATHER_OUTCOME)
+                                        unstable("[수집] ${what} (ansible-playbook 종료 코드 ${rc}${limitReason ? ', 중단 사유 ' + seLimitText(limitReason) : ''})")
                                     }
                                 }
                             }
                         }
                       } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                         if ((env.SE_GATHER_OUTCOME ?: 'interrupted_unknown') == 'interrupted_unknown') { env.SE_GATHER_OUTCOME = 'aborted' }
-                        echo "[Gather] interrupted (취소 또는 timeout) — outcome=${env.SE_GATHER_OUTCOME}, 재전파"
+                        echo "[수집] 중단됨: 사용자 취소 또는 상위 시간 제한(단계 115분 · 빌드 150분) — 확보한 결과를 보존하고 전송으로 넘어갑니다 (outcome=${env.SE_GATHER_OUTCOME})"
                         throw fie
                       }
                     }
@@ -805,22 +1024,24 @@ pipeline {
     post {
         always {
             script {
-                seFinalizeAndCallback()
+                Map fin = null
+                stage('결과 확인 및 전송') {
+                    fin = seFinalizeAndCallback()
+                }
+                seBuildSummary(fin)
             }
-            echo "[Post] ======================================================="
-            echo "[Post] 결과: ${currentBuild.currentResult}"
-            echo "[Post] 소요: ${currentBuild.durationString ?: '-'}"
-            echo "[Post] type: ${params.target_type}"
-            echo "[Post] ======================================================="
         }
         success {
-            echo "[Post] [OK] Gather + Callback 완료"
+            echo "[요약] 정상 — 수집과 결과 전송이 끝났습니다"
         }
         unstable {
-            echo "[Post] [WARN] 일부 단계 실패 또는 보충 -- 포털 확인 필요"
+            echo "[요약] 확인 필요 — 위의 [경고] 줄과 [결과 파일] 링크를 보세요"
         }
         failure {
-            echo "[Post] [FAIL] 파이프라인 실패 -- 콘솔 로그 확인"
+            echo "[요약] 실패 — 위의 오류 줄을 보세요"
+        }
+        aborted {
+            echo "[요약] 중단 — 사용자 취소 또는 시간 제한입니다. 접수된 요청이면 확보한 결과의 전송을 시도했습니다(위의 [Portal 전송] 줄)"
         }
     }
 }

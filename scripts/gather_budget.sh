@@ -10,6 +10,7 @@ BASE_SEC=300
 MIN_SEC=600
 CAP_SEC=5400
 MIN_START_SEC=120
+STALL_SEC=420
 HOST_CAP_OS=240
 HOST_CAP_ESXI=240
 REDFISH_DEADLINE_SEC=540
@@ -66,9 +67,9 @@ if is_int "${MEM_AVAIL_MB:-}" && [ "$MEM_AVAIL_MB" -gt 0 ]; then
     MEM_CAP=$(( (MEM_AVAIL_MB * NODE_SHARE_PCT / 100 - FIXED_MB) / PER_FORK_MB ))
     MEM_GUARD="active"
     if [ "$MEM_CAP" -le 0 ]; then
-        printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":0,"waves":0,"host_cap":%d,"gather":0,"hard_remaining":%d,"stage_remaining":%d,"budget":0,"start":false,"reason":"not_started_memory","force":%s,"mem_avail_mb":%d,"mem_cap":%d,"mem_guard":"active","constants":{"global":%d,"reserve":%d,"stage_limit":%d,"grace":%d,"post":%d,"base":%d,"min":%d,"cap":%d,"min_start":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
-            "$CH" "$H" "$VCPU" "$HOST_CAP" "$(( SE_BUILD_START_EPOCH + GLOBAL_SEC - SE_NOW_EPOCH - RESERVE_SEC ))" "$(( SE_STAGE_START_EPOCH + STAGE_LIMIT_SEC - SE_NOW_EPOCH - GRACE_SEC - POST_SEC ))" "${FORCE:-null}" \
-            "$MEM_AVAIL_MB" "$MEM_CAP" "$GLOBAL_SEC" "$RESERVE_SEC" "$STAGE_LIMIT_SEC" "$GRACE_SEC" "$POST_SEC" "$BASE_SEC" "$MIN_SEC" "$CAP_SEC" "$MIN_START_SEC" "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"
+        printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":0,"waves":0,"host_cap":%d,"gather":0,"expected":0,"hard_remaining":%d,"stage_remaining":%d,"budget":0,"limit_source":"none","stall":%d,"start":false,"reason":"not_started_memory","force":%s,"mem_avail_mb":%d,"mem_cap":%d,"mem_guard":"active","constants":{"global":%d,"reserve":%d,"stage_limit":%d,"grace":%d,"post":%d,"base":%d,"min":%d,"cap":%d,"min_start":%d,"stall":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
+            "$CH" "$H" "$VCPU" "$HOST_CAP" "$(( SE_BUILD_START_EPOCH + GLOBAL_SEC - SE_NOW_EPOCH - RESERVE_SEC ))" "$(( SE_STAGE_START_EPOCH + STAGE_LIMIT_SEC - SE_NOW_EPOCH - GRACE_SEC - POST_SEC ))" "$STALL_SEC" "${FORCE:-null}" \
+            "$MEM_AVAIL_MB" "$MEM_CAP" "$GLOBAL_SEC" "$RESERVE_SEC" "$STAGE_LIMIT_SEC" "$GRACE_SEC" "$POST_SEC" "$BASE_SEC" "$MIN_SEC" "$CAP_SEC" "$MIN_START_SEC" "$STALL_SEC" "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"
         exit 0
     fi
     FORKS=$(min "$FORKS" "$MEM_CAP")
@@ -81,17 +82,20 @@ HARD_DEADLINE=$(( SE_BUILD_START_EPOCH + GLOBAL_SEC ))
 HARD_REMAINING=$(( HARD_DEADLINE - SE_NOW_EPOCH - RESERVE_SEC ))
 STAGE_REMAINING=$(( SE_STAGE_START_EPOCH + STAGE_LIMIT_SEC - SE_NOW_EPOCH - GRACE_SEC - POST_SEC ))
 
-BUDGET=$(min "$GATHER" "$HARD_REMAINING"); BUDGET=$(min "$BUDGET" "$STAGE_REMAINING")
+LIMIT=$(min "$HARD_REMAINING" "$STAGE_REMAINING")
+BUDGET="$LIMIT"
 REASON="computed"
+LIMIT_SOURCE="ceiling"
 if [ -n "$FORCE" ]; then
-    BUDGET=$(min "$FORCE" "$HARD_REMAINING"); BUDGET=$(min "$BUDGET" "$STAGE_REMAINING")
+    BUDGET=$(min "$FORCE" "$LIMIT")
     REASON="forced"
+    LIMIT_SOURCE="forced"
 fi
 START=true
-if [ "$BUDGET" -lt "$MIN_START_SEC" ]; then START=false; REASON="not_started_budget"; fi
+if [ "$BUDGET" -lt "$MIN_START_SEC" ]; then START=false; REASON="not_started_budget"; LIMIT_SOURCE="none"; fi
 [ "$BUDGET" -lt 0 ] && BUDGET=0
 
-printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":%d,"waves":%d,"host_cap":%d,"gather":%d,"hard_remaining":%d,"stage_remaining":%d,"budget":%d,"start":%s,"reason":"%s","force":%s,"mem_avail_mb":%s,"mem_cap":%s,"mem_guard":"%s","constants":{"global":%d,"reserve":%d,"stage_limit":%d,"grace":%d,"post":%d,"base":%d,"min":%d,"cap":%d,"min_start":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
-    "$CH" "$H" "$VCPU" "$FORKS" "$WAVES" "$HOST_CAP" "$GATHER" "$HARD_REMAINING" "$STAGE_REMAINING" "$BUDGET" "$START" "$REASON" "${FORCE:-null}" \
+printf '{"channel":"%s","hosts":%d,"vcpu":%d,"forks":%d,"waves":%d,"host_cap":%d,"gather":%d,"expected":%d,"hard_remaining":%d,"stage_remaining":%d,"budget":%d,"limit_source":"%s","stall":%d,"start":%s,"reason":"%s","force":%s,"mem_avail_mb":%s,"mem_cap":%s,"mem_guard":"%s","constants":{"global":%d,"reserve":%d,"stage_limit":%d,"grace":%d,"post":%d,"base":%d,"min":%d,"cap":%d,"min_start":%d,"stall":%d,"per_fork_mb":%d,"node_share_pct":%d,"fixed_mb":%d}}\n' \
+    "$CH" "$H" "$VCPU" "$FORKS" "$WAVES" "$HOST_CAP" "$GATHER" "$GATHER" "$HARD_REMAINING" "$STAGE_REMAINING" "$BUDGET" "$LIMIT_SOURCE" "$STALL_SEC" "$START" "$REASON" "${FORCE:-null}" \
     "$MEM_AVAIL_OUT" "$MEM_CAP" "$MEM_GUARD" \
-    "$GLOBAL_SEC" "$RESERVE_SEC" "$STAGE_LIMIT_SEC" "$GRACE_SEC" "$POST_SEC" "$BASE_SEC" "$MIN_SEC" "$CAP_SEC" "$MIN_START_SEC" "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"
+    "$GLOBAL_SEC" "$RESERVE_SEC" "$STAGE_LIMIT_SEC" "$GRACE_SEC" "$POST_SEC" "$BASE_SEC" "$MIN_SEC" "$CAP_SEC" "$MIN_START_SEC" "$STALL_SEC" "$PER_FORK_MB" "$NODE_SHARE_PCT" "$FIXED_MB"

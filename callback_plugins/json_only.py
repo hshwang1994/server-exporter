@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sys
+import time
 
 from ansible.plugins.callback import CallbackBase
 
@@ -77,6 +78,12 @@ _CONNECTIONLESS_ACTIONS = frozenset({
     'precheck_bundle', 'redfish_gather',
 })
 
+_TRIVIAL_ACTIONS = frozenset({
+    'set_fact', 'debug', 'assert', 'fail', 'meta', 'add_host', 'group_by', 'set_stats',
+    'include', 'include_tasks', 'import_tasks', 'include_vars', 'include_role', 'import_role', 'import_playbook',
+})
+_ALIVE_EVERY_SEC = 10
+
 _LOCAL_CONNECTIONS = frozenset({'local', 'ansible.builtin.local'})
 _LOCAL_DELEGATES = frozenset({'localhost', '127.0.0.1', '::1'})
 
@@ -122,6 +129,9 @@ def _reason(key, channel=None, loc=None):
 
 _REASON_NO_OUTPUT = _reason('output_build_failed')
 
+_CHECKPOINT_ADDON_INTERRUPTED = '추가 수집 중 처리가 중단되어 추가 수집 결과가 없습니다. 기본 수집 결과는 그대로입니다.'
+_CHECKPOINT_EMIT_FAILED = '수집은 끝났지만 결과를 내보내는 단계에서 중단되었습니다. 기본 수집 결과는 그대로입니다.'
+
 
 
 def _is_truthy(value):
@@ -146,6 +156,7 @@ class CallbackModule(CallbackBase):
         self._addon_start_task = 'ADDON_START'
         self._addon_done_task = 'ADDON_DONE'
         self._hosts = {}
+        self._alive_at = {}
         self._playbook_channel = None
         self._reconcile = not _is_truthy(os.getenv('JSON_ONLY_NO_RECONCILE', ''))
         if not self._reconcile:
@@ -238,15 +249,23 @@ class CallbackModule(CallbackBase):
         if payload is None:
             self._emit_error('checkpoint_empty', 'CHECKPOINT 태스크에 msg 가 없다', host=host)
             return
+        line = self._json_line(payload)
         if self._checkpoint_file:
             try:
                 with open(self._checkpoint_file, 'a', encoding='utf-8') as fh:
-                    fh.write(self._json_line(payload) + '\n')
+                    fh.write(line + '\n')
                     fh.flush()
                     os.fsync(fh.fileno())
             except (OSError, IOError) as e:
                 sys.stderr.write('[json_only] WARNING: checkpoint 파일 쓰기 실패 ({}): {}\n'.format(
                     self._checkpoint_file, type(e).__name__))
+        if self._reconcile:
+            try:
+                parsed = json.loads(line)
+            except ValueError:
+                parsed = None
+            if isinstance(parsed, dict):
+                self._ctx(host)['checkpoint_env'] = parsed
         self._progress(host, 'checkpoint', task=self._task_name(result))
 
     def _manifest_ips(self):
@@ -389,16 +408,37 @@ class CallbackModule(CallbackBase):
         return True
 
 
+    def _alive(self, result):
+        if not self._progress_file:
+            return
+        try:
+            action = str(self._task_fields(result).get('action') or '').rsplit('.', 1)[-1]
+            if not action or action in _TRIVIAL_ACTIONS:
+                return
+            host = self._host_name(result)
+            now = time.monotonic()
+            if now - self._alive_at.get(host, -_ALIVE_EVERY_SEC) < _ALIVE_EVERY_SEC:
+                return
+            self._alive_at[host] = now
+            self._progress(host, 'alive', task=self._task_name(result))
+        except Exception:
+            pass
+
     def v2_runner_on_ok(self, result):
         self._track(result, ok=True)
+        self._alive(result)
         name = self._task_name(result)
         if name == self._checkpoint_task:
             self._checkpoint(result)
             return
         if name == self._addon_start_task:
+            if self._reconcile:
+                self._ctx(self._host_name(result))['addon_started'] = True
             self._progress(self._host_name(result), 'addon_started', task=name)
             return
         if name == self._addon_done_task:
+            if self._reconcile:
+                self._ctx(self._host_name(result))['addon_done'] = True
             self._progress(self._host_name(result), 'addon_done', task=name)
             return
         if name != self._output_task:
@@ -566,6 +606,21 @@ class CallbackModule(CallbackBase):
             'data':              shape['data'],
         }
 
+    @staticmethod
+    def _envelope_from_checkpoint(checkpoint_env, ctx):
+        env = json.loads(json.dumps(checkpoint_env))
+        if ctx.get('addon_started') and not ctx.get('addon_done'):
+            err = {'section': 'addon', 'message': _CHECKPOINT_ADDON_INTERRUPTED,
+                   'detail': 'finalized from checkpoint; reconciled by callback at playbook end; '
+                             'add-on started but did not finish'}
+        else:
+            err = {'section': 'gather', 'message': _CHECKPOINT_EMIT_FAILED,
+                   'detail': 'finalized from checkpoint; reconciled by callback at playbook end; '
+                             'OUTPUT was not emitted after assembly'}
+        errors = env.get('errors') if isinstance(env.get('errors'), list) else []
+        env['errors'] = errors + [err]
+        return env
+
     def _reconcile_missing_envelopes(self, stats):
         if not self._reconcile:
             return
@@ -579,19 +634,28 @@ class CallbackModule(CallbackBase):
             ctx = self._hosts.get(host_name)
             if ctx is None or ctx.get('emitted'):
                 continue
+            source = 'observed'
             try:
-                envelope = self._build_fallback_envelope(host_name, ctx)
+                checkpoint_env = ctx.get('checkpoint_env')
+                if isinstance(checkpoint_env, dict):
+                    envelope = self._envelope_from_checkpoint(checkpoint_env, ctx)
+                    source = 'checkpoint'
+                else:
+                    envelope = self._build_fallback_envelope(host_name, ctx)
             except Exception as e:
                 envelope = self._minimal_envelope(host_name)
+                source = 'minimal'
                 sys.stderr.write(
                     '[json_only] WARNING: envelope 조립 실패 — 최소 envelope 으로 대체 '
                     '(host={}, reason={})\n'.format(host_name, type(e).__name__))
             try:
                 self._emit(envelope)
                 ctx['emitted'] = True
+                self._progress(host_name, 'reconciled', source=source)
+                diagnosis = envelope.get('diagnosis') if isinstance(envelope.get('diagnosis'), dict) else {}
                 self._emit_error(
                     error_type='envelope_reconciled',
-                    message=envelope['diagnosis']['failure_code'],
+                    message='{} (source={})'.format(diagnosis.get('failure_code') or envelope.get('status'), source),
                     host=host_name,
                 )
             except Exception as e:
