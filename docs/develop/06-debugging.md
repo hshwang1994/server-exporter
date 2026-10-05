@@ -6,7 +6,7 @@
 
 | 사고 시점 | 1차 확인 파일 | 2차 확인 |
 |---|---|---|
-| Jenkins Validate 실패 | `Jenkinsfile_portal` 'Validate' stage (그 앞 'Resolve Location' 은 `common/vars/locations.yml` 로 `loc` 검증) | console log 의 `[Validate]` · `[Resolve Location]` 메시지 |
+| Jenkins 입력 확인 실패 | `Jenkinsfile_portal` '입력 확인'(Validate) 단계 — 대상 목록 규칙은 `seAcceptTargets`(inventory.sh 와 같다). 그 뒤 '실행 위치 확인'(Resolve Location)은 `common/vars/locations.yml` 로 `loc` 검증 | 콘솔의 `ERROR: [입력 확인] …` · `[실행 위치] …` 줄 (2026-10-05 전 빌드는 `[Validate]` · `[Resolve Location]`) |
 | Jenkins Stage 2 (Gather) 실패 | `os-gather/site.yml` 또는 채널별 site.yml | ansible -vvv 로그 |
 | Jenkins Stage 3 (Validate Schema) 실패 | `tests/validate_field_dictionary.py` | `schema/field_dictionary.yml` |
 | Gather / Validate Schema 가 `[venv] ...` 로 실패 | `scripts/activate_ansible_venv.sh` 메시지 (SE_ANSIBLE_VENV · PATH 의 ansible-playbook · 후보 경로) | `docs/operate/02-agent-node.md` 5절 · 9절 |

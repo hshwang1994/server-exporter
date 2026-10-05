@@ -1,5 +1,21 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-05 (7차) — 최종 정비 F01~F13 · §5 예외 무시 감사 · X13 → P4
+
+| 구분 | 결과 |
+|---|---|
+| 로컬(X13 `1e15bf6f`) | unit · e2e · regression **4,411 통과** · 건너뜀 20 · xfail 7 — PC 메모리 부족으로 한 번에 돌린 실행이 시스템에 의해 중단돼 묶음별로(prodgen 98 · unit 1,719 · 1,374 · Windows 전용 259 · e2e+regression 961) · integration 308 · `ci_gate.sh` 정적 PASS(corpus 18/18) · 3채널 syntax-check rc 0(WSL 2.20.7, 저장소 ansible.cfg) · 로컬 prodgen G14 PASS(생성 tree 위 4,131) · G15 PASS |
+| 새 시험 | `tests/unit/test_windows_hidden_failures.py` — users 9 시나리오 실제 powershell.exe(종전 스크립트와 데이터 · 종료 코드 대조), 비종료 CIM 오류 · 전제 시험, 변이 검사 |
+| CI #21(X10) | FAILURE — Gate(전역 `unparsed_is_failed`) · G14(`source_text` 누락) · G15 · Harness SHA 불일치(CI 중 push) → X11 · X12 |
+| CI #22(X12 `b33e278d`) | SUCCESS — 13 stage · Harness 18/18 · 상한 6/6 · 생성 tree 10/10 · Verify COMPLETE_PASS 20/20(tree `1ad25d58…`) · Evidence 46 direct · Promote dry-run |
+| main X12 #187~#198 · X10 추가 #170~#174 | 12 시나리오 기대 결과 일치 · 입력 거부 3종 · Redfish 10 정상 6분 47초 · Linux 15 |
+| F07(X12) | perf-observe K=2(#199 · #200) · K=12 혼합(#204~#215): 노드 PSS 합 최대 1.27 GB · MemAvailable 최소 4.68 GB · swap 0 → throttle 미적용. 같은 BMC 4개 동시에서 Cisco partial(상한 1,200 s) |
+| 성능 P3 ↔ X12 | 채널별 5회 교대(production #116~#130 · main #216~#230, 30 SUCCESS): OS +1.1 s · ESXi +2.6 s · Redfish −17.3 s(중앙값) — 퇴행 없음 |
+| main X13 #231~#242 | 12/12 기대 결과(T2 SUCCESS · T5 ABORTED · T6 UNSTABLE · S5/S1/S4/S2 SUCCESS · E2E-A UNSTABLE · E2E-A2 FAILURE · ESXi/Redfish SUCCESS · S3 UNSTABLE `limit_reason=forced`) · 전부 checkout `1e15bf6f`(E2E-A2 는 수집 단계 없음) · S4 `.120` 오류 0 · users 는 X12 #192 와 동일 · SCM tip 전후 `1e15bf6f` |
+| CI #23(X13) | SUCCESS(37분 52초) — Gate(Runner pytest 4,297 + integration 323 · 3채널 syntax-check) · Corpus 18/18 ×2 · Harness main 18/18(#431~#448) · 상한 6/6(#449~#454) · 생성 tree 10/10(#455~#464) · Verify COMPLETE_PASS 20/20 · tree `1c16ca55…` · VAULT_DECRYPT · Evidence 46 direct · Promote dry-run(부모 P3, require_bounded cli+ci) |
+| 승격 P4 | 세션 CLI 1회(20:06~20:19) **COMPLETE_PASS → P4 `5ac5566c`**(parent P3): Gates-Rerun G11~G15 G18~G20(G19 WSL 3채널 실제 실행) · Reused G01~G10 G16 G17 · origin "accepted by remote" · internal "already at the new commit" · 양 원격 · 로컬 동일 · 개발 경로 0 · vault 사본 삭제 |
+| production P4 | #131~#142: canary SUCCESS 3/3 → S1 4/4 · S2 4+2 · T2 · Linux A 8/8 · Linux B 4+3(명부) · Windows 1/1 · ESXi 6/6 · Redfish 10 7+3(명부) SUCCESS, T6 UNSTABLE(408 ×3) · S3 UNSTABLE(`limit_reason=forced`) · 중복 IP FAILURE(입력 거부) — 전부 checkout `5ac5566c` |
+
 ## 2026-10-05 (6차) — Tier 2 승인 완료 · 사내 Jenkins 상한 모드 적용 · 적용 뒤 검증
 
 | 구분 | 결과 |

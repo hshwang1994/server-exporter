@@ -77,7 +77,7 @@ python -m scripts.ai.prodgen restore --to <production commit> [--bootstrap-basel
   어떤 gate 를 재사용하고 어떤 gate 를 다시 돌렸는지는 보고서 `gates_reused`/`gates_rerun` 과 커밋 trailer `Gates-Reused`/`Gates-Rerun` 에 남는다.
   보고서 digest 는 변조·혼용 탐지용이지 실행의 증명이 아니다 — 실행 출처(`--source-build-url`)를 같이 적는다.
 - `e2e-evidence` 는 **시나리오 계약**(`scripts/ai/prodgen/evidence.py` `MAIN_CONTRACT`)으로 판정한다(검토 C1): main Job 빌드의 파라미터(loc · 대상 host · callbackUrl · gatherBudgetForceSec) ·
-  `finalize_summary.json`(outcome · accepted==lines · by_origin · filled) · `callback_body.json`(host 당 envelope 1 · 성공/실패 필드) · 콘솔 표식(`[Callback] [OK] HTTP 2xx` / `Callback 전송 실패` /
+  `finalize_summary.json`(outcome · accepted==lines · by_origin · filled) · `callback_body.json`(host 당 envelope 1 · 성공/실패 필드) · 전송 기록(`finalize_summary.callback.delivered` — 2026-10-05 부터 요약이 정본, 콘솔 2xx 표식과 일치해야 한다) · 콘솔 표식(`[Portal 전송] 완료: HTTP 2xx` / `[마무리] Portal 전송 실패`, 이전 빌드는 `[Callback] [OK] HTTP 2xx` / `Callback 전송 실패` /
   `[Gather] interrupted` / `[Resolve Location]`)을 대조한다. 기대 Jenkins 결과는 계약이 정한다(S3 UNSTABLE · T5 ABORTED · T6 UNSTABLE · E2E-A' FAILURE) — 호출자가 다른 값을 넣어도
   통과로 바꿀 수 없다. Harness 증거는 Job 파라미터 `SCENARIO`/`FUNCTIONS_SRC` · artifact `harness_result.json` 의 scenario·verdict · 함수 해시를 대조하고, main 함수 그룹과 생성 tree
   그룹(`provenance.tree_hash` == 승격 대상 tree)은 **따로** 충족해야 한다. 집계(`evidence-aggregate`)는 입력 evidence 의 digest 를 먼저 검증한다.
@@ -128,7 +128,9 @@ G20 은 원격 없이 돌면 PARTIAL(검증 안 됨)이고, 일부 원격만 보
   ⑦ 원복 조건 — `cj` 요청 준비 전에 코드가 먼저 나가 신규 요청이 실패하면 `git revert`(main) / `restore`(production) / 고객사 main 이전 tree 재적용으로 즉시 원복, 공급자 값 복귀는 담당 몫.
 - lab 의 임시 `cj` 라벨 + TEST-NET 실패 envelope 검증은 라우팅·실패 처리 smoke 이지 **청주 실장비 성공 수집이 아니다**.
 
-## 7. 현재 상태 (2026-10-04)
+## 7. 현재 상태 (2026-10-05)
+
+2026-10-05 (7차): 네 번째 **P4 `5ac5566c`**(main X13 `1e15bf6f` — 최종 정비 F01~F13 · Windows 숨은 실패 기록, parent P3 `915dec4e`) 양 원격. COMPLETE_PASS(CI #23 + 환경 의존 게이트 로컬 재실행) · GitHub · GitLab · 로컬 production 동일(`git ls-remote` 확인) · trailer 완비. 승격 직후 production Job 검증은 `tests/evidence/2026-10-05-final-maintenance.md` 8절.
 
 2026-10-05: 세 번째 **P3 `915dec4e`**(main X4 `17843cf0` — Linux NIC driver map VLAN id 수정, parent P2 `07ecf7ac`) 양 원격. COMPLETE_PASS · 양 원격 동일(`git ls-remote` 확인) · trailer 완비
 

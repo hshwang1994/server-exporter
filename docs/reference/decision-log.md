@@ -8,6 +8,34 @@
 
 > 최종 갱신: 2026-10-05
 
+## 2026-10-05 (7차) — 최종 정비 지시서 F01~F13 · §5 예외 무시 감사 · Portal 계약 축소 · X13 → P4
+
+### 사용자 의심
+- 최종 정비 지시서(2026-10-05): 결과 보존 결함(F01 · F02) · 입력 · 전송 경계(F03 · F04 · F05) · 마무리 시간 보장(F06) · 동시 실행(F07) · 시간 제한 설계(F08 · F12) · Portal 응답 판정(F09) · 비밀정보(F10) · 호환성 문서(F11) · 운영 화면(F13) · 정확성 범위(§5).
+- 사용자 결정: "포탈에게 그냥 전달하면 된다 … 우리는 저 url 에 보내고 200 으로 받기만 하면 됨. 확인하는 로직이나 이런 건 불필요하다 없애라."
+
+### 분석
+- 예상 시간이 그대로 중단 기준(`min(예상, 상한)`)이라 예상치 오차만으로 정상 배치가 잘렸다(Redfish 복구 경로 최악 약 2,595 s vs 605 s, Redfish 모듈 마감은 진행과 무관하게 540 s 고정).
+- 종료 보충(on_stats)이 CHECKPOINT 를 보지 않아 조립된 데이터가 기본 실패 봉투로 덮였다(F01). 한 행의 값 종류 오류가 Layer A 전체를 멈췄다(F02).
+- Windows 수집에서 필수 데이터의 실패가 기록 없이 숨는 지점이 있었다 — 사용자 목록 · 그룹 조회 · system 구성요소 · 물리 디스크. 실제 CIM 실패는 비종료 오류라 구성요소 try/catch 가 잡지 못한다(실측).
+- 동시 실행: 노드당 3~4 빌드에서 남은 메모리 ≥ 4.68 GB · swap 0. 같은 BMC 동시 요청은 BMC 쪽에서 느려진다(Cisco CIMC 367 → 1,245 s).
+
+### 결정
+1. 예상 시간은 표시용, 중단은 운영 상한 + 정체 감시(예상 시간 뒤 420 s 동안 어떤 대상도 진행 없음) + Redfish 진행 기반 마감(절대 1,200 s · 무응답 120 s). 새 failure_code 없음 — 이유는 `limit_reason`.
+2. 결과 형태 최소 계약(값 종류 먼저 · NaN 거부)을 Python Layer A · Groovy Layer B · 전송 직전 검문에 같게. 나쁜 행만 격리.
+3. Portal 전송 계약 = HTTP 2xx 수신(사용자 결정). 응답 본문은 읽지도 기록하지도 않는다.
+4. 입력 확인은 inventory 규칙과 같게 요청 전체를 거부. inventory 해석 실패 처리는 Jenkins 수집 실행에만(ansible.cfg 전역은 진단 · 게이트 실행을 깨뜨렸다 — CI #21).
+5. Redfish redirect 는 같은 origin 의 GET/HEAD 만. 쓰기는 따라가지 않는다.
+6. 동시 실행 throttle 은 켜지 않는다(측정상 여유) — 권장값만 운영 문서에.
+7. 예외 무시 지점 81개 중 필수 데이터를 숨기는 원인 8개 가운데 4개(C-1 · C-2 · C-3 · C-6)를 고친다. 섹션 상태는 users 를 한 명도 못 읽은 경우만 failed, 나머지는 errors[] 1건(시나리오 B). 명령 부재(F23)는 종전처럼 미지원. 가능성 낮은 4개는 기록.
+
+### 영향
+- envelope 13 필드 · failure_code enum 불변. 추가/변경: `diagnosis.details.limit_reason`(Layer A 합성 봉투), `finalize_summary` 의 `status_counts` · `warnings` · `callback`, 단계 표시 이름, Windows users 섹션 상태(명령은 있는데 조회 실패 → failed), Windows system · storage · users 의 errors[] 추가 문장 4종.
+- production P3 `915dec4e` → P4 `5ac5566c`(main X13 `1e15bf6f`).
+
+### 회귀
+- 로컬(X13) unit · e2e · regression 4,411 + integration 308 · 3채널 syntax-check · 로컬 prodgen G14 · G15 · `tests/unit/test_windows_hidden_failures.py`(실제 powershell.exe · 변이 검사) · main X12 #187~#198 · X13 #231~#242 · F07 #199 · #200 · #204~#215 · 성능 production #116~#130 ↔ main #216~#230 · CI #21(실패 → 수정) · #22 · **#23 SUCCESS**(COMPLETE_PASS 20/20) · 승격 P4 · production 검증 production Job 12 빌드 #131~#142 — canary #131 SUCCESS 3/3 → S1 · S2 · T2 · Linux A 8 · Linux B 7 · Windows · ESXi 6 · Redfish 10 SUCCESS, T6 · S3 UNSTABLE(기대), 중복 IP FAILURE(입력 거부) — 모두 checkout `5ac5566c`(중복 IP 는 checkout 전 거부), 결과는 main X13 과 같다. 명부 전 채널 성공 26/32(미해결 6건은 명부 그대로). — 근거 `tests/evidence/2026-10-05-final-maintenance.md`.
+
 ## 2026-10-05 (6차) — Tier 2 승인 완료 뒤 사내 Jenkins 상한 모드 적용
 
 ### 사용자 의심

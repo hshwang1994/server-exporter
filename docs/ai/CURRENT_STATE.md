@@ -1,5 +1,20 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-05 (7차) — 최종 정비 지시서 F01~F13 · §5 예외 무시 감사: 결과 보존 · 형태 계약 · 입력 규칙 · Redfish redirect · 환경 경계 · 시간 제한 분리 · 운영 화면 · Windows 숨은 실패 · **X13 `1e15bf6f` → P4 `5ac5566c`**
+
+> 정본: `tests/evidence/2026-10-05-final-maintenance.md`. 사용자 결정(2026-10-05): ① 6차 마무리 먼저 ② **Portal 전송은 HTTP 2xx 수신까지가 계약**(응답 본문 판독 · 저장 확인 없음 — 지시서 F09 · §8-5 대체) ③ 메모리 부족으로 중단된 로컬 전체 회귀는 묶음으로 나눠 다시.
+
+- **runtime 수정(F01~F06 · F12 · F13)**: 종료 보충이 CHECKPOINT 를 쓴다(`5d1c17c5`) · 결과 형태 최소 계약을 Python Layer A · Groovy Layer B · 전송 직전 검문에 같게(값 종류 먼저, NaN 거부, `b482a5fb`) · 입력 확인을 inventory 규칙과 일치 + 계정 정보 든 callbackUrl 거부(`13984b64` · `6a74faf1`) · Redfish redirect 는 같은 origin 의 GET/HEAD 만, 응답 캐시 8 MiB(`e06033c3`) · 환경 경계 `scripts/env_guard.sh`(`2ba192b5`) · **예상 시간과 중단 기준 분리 + 정체 감시**(`scripts/gather_watch.py`, 예상 뒤 420 s 무진행, Redfish 절대 1200 s + 무응답 120 s, `ef7575b2`) · 본문 단계 상한 60 s · CLI 승격이 CI 의 `require_bounded` 를 낮추지 못함(`c15a52c8`) · 운영 화면(단계 표시 이름 입력 확인 / 실행 위치 확인 / 서버 정보 수집 / 결과 확인 및 전송, sh label 7, `[결과]` 집계 · `[경고]` · `[결과 파일]` 링크 · 빌드 이름 · `finalize_summary` 의 `status_counts` · `warnings` · `callback`, `6a74faf1` · `444db56e`) · inventory 해석 실패 처리는 Jenkins 수집 실행에만(`6f83cb33`).
+- **Windows 숨은 실패 기록(지시서 §5 감사, X13 `1e15bf6f`)**: Windows · ESXi 예외 무시 지점 81개 전수 분류 → 필수 데이터를 숨기는 원인 8개 중 4개 수정 — 사용자 목록 조회 실패(0명이면 섹션 실패 · 일부면 부분 오류) · 그룹 조회 실패(실패한 그룹 이름 기록) · system 구성요소 실패 · 물리 디스크 조회 실패를 errors[] 로. 실제 CIM 실패는 비종료 오류라 공용 조회 3개가 `-ErrorVariable` 로 받는다(실측). 명령 부재(F23)는 종전처럼 미지원(종료 코드 1). 나머지 4개 · 볼륨 실패는 NEXT_ACTIONS GP-51.
+- **문서 · 시험 도구**: REQUIREMENTS 의 Python 요건 정정(3.8 이하 · 없음은 raw 경로로 수집 — RHEL 8.10 실측) · runbook 85행 평문 1건 가림 + 추적 파일 재검사(현재 자격 값 0건, 이력 1 commit 잔존 — 사용자 결정 GP-52) · 원격 태스크 timeout 관측 플레이북 · `ci_gate.sh` syntax-check 를 실제 inventory 로 · 동시 실행 권장값(`docs/operate/04` 7절) · Windows users 섹션 상태 계약(`docs/contract/04`).
+- **원격 태스크 timeout 실측(F12 d·e)**: `.161`(SSH raw) · `.120`(WinRM) 모두 무출력 장기 명령은 상한 안에서 성공, 끝나지 않는 명령은 상한에서 끊김. **Linux 는 끊긴 명령이 원격에 남는다**(연결을 닫아도) — Windows 는 0. 대응 결정은 GP-48.
+- **F07 동시 실행 · 메모리**: perf-observe 로 노드별 PSS · MemAvailable 실측 — K=2(Redfish 10 ×2, 분산) · K=12 혼합(노드마다 3개 겹침)에서 노드 PSS 합 최대 1.27 GB · MemAvailable 최소 4.68 GB(전체 7.5 GB) · swap 증가 0 → **throttle 미적용**(설정 변경 없음). 같은 BMC 동시 요청은 느린 BMC 를 늦춘다 — Cisco CIMC 367 → 673 → 1,245 s(4개 동시에서 Redfish 상한 1,200 s 로 partial, 결과 보존, GP-49).
+- **성능(P3 ↔ X12, 채널별 5회 교대)**: 총 시간 중앙값 OS 154.0 → 155.2 s · ESXi 72.5 → 75.1 s · Redfish 400.4 → 383.1 s — 퇴행 없음. HPE iLO `.231` 이 Runner 망에서 10회 중 2회 닿음(GP-37 새 근거).
+- **검증**: 로컬(X13) unit · e2e · regression 4,411 + integration 308 · 정적 gate · 3채널 syntax-check · 로컬 prodgen G14(4,131) · G15 · main X12 #187~#198 · X13 #231~#242 12 시나리오 기대 결과 일치(S4 `.120` 오류 0 · 사용자 데이터 X12 와 동일) · **CI #23 SUCCESS**(Gate 4,297 + 323 · Harness 18/18 · 상한 6/6 · 생성 tree 10/10 · Verify COMPLETE_PASS 20/20 · tree `1c16ca55…` · 증거 46건 전부 direct · Promote dry-run `require_bounded` cli+ci).
+- **승격**: P4 `5ac5566c`(main X13, parent P3) — 세션 CLI COMPLETE_PASS(Gates-Rerun G11~G15 G18~G20), GitHub · GitLab · 로컬 production 동일. production 검증: production Job 12 빌드 #131~#142 — canary #131 SUCCESS 3/3 → S1 · S2 · T2 · Linux A 8 · Linux B 7 · Windows · ESXi 6 · Redfish 10 SUCCESS, T6 · S3 UNSTABLE(기대), 중복 IP FAILURE(입력 거부) — 모두 checkout `5ac5566c`(중복 IP 는 checkout 전 거부), 결과는 main X13 과 같다. 명부 전 채널 성공 26/32(미해결 6건은 명부 그대로).
+- **도중 실패와 수정**: CI #21 — Gate(전역 `unparsed_is_failed`) · G14(새 시험 `source_text` 누락) · G15 · Harness 22건(CI 중 push 로 SHA 불일치) → X11 · X12. X13 작업 중 — 가짜 cmdlet 이 종료 오류만 내 실제 비종료 CIM 실패를 놓친 시험 · 종료 코드 변화로 F23 이 깨질 뻔한 회귀를 실제 powershell.exe 대조로 찾아 고침. 원인 · 재발 방지는 FAILURE_PATTERNS 6건.
+- 남은 사용자 결정: 노출 자격 회전 · 이력 정리 · GitHub 공개 범위(GP-52) · 미해결 자산 6건(GP-37) · Runner01/02/04 `cj` 라벨(GP-38) · `meta.duration_ms` 의미(GP-44) · Linux 원격 잔존 프로세스 대응(GP-48) · throttle 적용 여부(GP-50).
+
 ## 일자: 2026-10-05 (6차) — Tier 2 승인 완료 · **사내 Jenkins 상한 모드 적용**(`SE_FINALIZER_BOUNDED=true`) · 적용 뒤 production 11 · main 12 · CI #20
 
 > 정본: `tests/evidence/2026-10-04-review-c1-c6.md` §11.

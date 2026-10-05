@@ -656,3 +656,62 @@
 - 수정: 모듈 단위 `pytestmark = pytest.mark.source_text`(X3). 이후 새 진단 Job 계약 테스트(`test_term_probe_contract.py`)도 같은 표식.
 - 재발 방지: `jenkins/` · `tests/jenkins/` · `.claude/` · `docs/` · `scripts/ai/` 를 읽는 테스트는 작성 시 `source_text` 를 붙인다 — 로컬에서 `-m "not source_text"` 와 production tree overlay 를 함께 돌려 본다.
 - 관련 rule: rule 24 R1 · rule 40 R6
+
+## 2026-10-05 — 전역 ansible.cfg 설정(unparsed_is_failed)이 운영 밖 실행까지 실패시켰고, 로컬 확인이 그 설정을 읽지 않았다 (CI #21)
+
+- 카테고리: scope-miss · environment-drift
+- 발견 위치: CI #21 Gate(`ci_gate.sh` 의 `--syntax-check -i localhost,` rc 1) · Prodgen Verify G15(모듈 smoke "No inventory was parsed")
+- 증상: F03 의 `[inventory] unparsed_is_failed = True` 를 ansible.cfg 에 넣었더니 목록 · ini 인벤토리나 인벤토리 없는 ad-hoc 실행이 전부 실패했다. 로컬 WSL syntax-check 는 PASS 였다.
+- 원인: ① 설정 범위를 운영 경로(Jenkins 수집, 항상 inventory 스크립트)만 보고 정했다 — 진단용 ad-hoc 명령 · 시험 도구(term-probe) · 승격 게이트도 같은 cfg 를 읽는다. ② WSL 의 `/mnt/c` 는 world-writable 이라 ansible 이 저장소 ansible.cfg 를 **무시**한다 — `ci_gate.sh` 처럼 `ANSIBLE_CONFIG` 를 고정하지 않은 로컬 확인은 다른 설정으로 돌았다.
+- 수정: 설정을 ansible.cfg 에서 빼고 Jenkins 수집 실행에만 `ANSIBLE_INVENTORY_UNPARSED_FAILED=True`(`6f83cb33`). `ci_gate.sh` syntax-check 는 G11 처럼 채널 inventory.sh 로(`a25405be`).
+- 재발 방지: 동작을 바꾸는 ansible.cfg 항목은 "이 cfg 를 읽는 모든 실행"(수집 · ad-hoc · 시험 도구 · 게이트)을 나열해 확인한다. WSL 에서 저장소 설정으로 확인할 때는 `ANSIBLE_CONFIG=$PWD/ansible.cfg` 를 붙인다.
+- 관련 rule: rule 92 R3 · rule 24 R1
+
+## 2026-10-05 — CI 실행 중 main 에 push 해 Harness 22건이 SHA 불일치로 스스로 멈췄다 (CI #21)
+
+- 카테고리: process
+- 발견 위치: CI #21 Harness Driver · bounded · prodtree — `ERROR: [Harness] MAIN_SHA <X10> != checkout <X11>`
+- 증상: Gate 실패를 고친 커밋을 CI 가 도는 중에 push → 이후 Harness 빌드가 main 최신을 받아 후보 SHA 와 달라졌다(설계된 보호가 동작). 그 전 12건은 PASS.
+- 원인: CI 는 시작 시점의 main SHA 를 후보로 고정하고, Harness Job 은 빌드마다 main 최신을 checkout 한다. 진행 중 push 는 후보와 다른 코드를 시험하게 만든다.
+- 수정: CI #22 가 끝날 때까지 main push 를 멈췄다.
+- 재발 방지: CI(Harness 포함)가 도는 동안 main 에 push 하지 않는다 — 고칠 것은 로컬 커밋으로 모아 CI 가 끝난 뒤 새 후보로 올린다.
+- 관련 rule: rule 93 R4
+
+## 2026-10-05 — production tree 에 없는 파일을 읽는 새 시험에 `source_text` 를 빠뜨렸다 (G14, CI #17 과 같은 유형의 재발)
+
+- 카테고리: scope-miss (재발)
+- 발견 위치: CI #21 Prodgen Verify G14 — `test_env_guard.py::test_guard_is_shipped_in_the_production_tree` · `test_gather_watch.py::test_watch_is_shipped_in_the_production_tree` 가 `production_manifest.yml`(main 전용)을 읽음
+- 증상: 로컬 pytest PASS, 생성 tree overlay 에서만 2 failed.
+- 원인: CI #17 기록의 재발 방지("로컬에서 production tree overlay 를 함께 돌려 본다")를 이번 커밋 전에 하지 않았다.
+- 수정: 두 시험에 `@pytest.mark.source_text`(`6f83cb33`). 이후 `prodgen build` + `verify --only G14,G15` 를 로컬에서 먼저 돌려 PASS 확인 뒤 push(X12).
+- 재발 방지: 새 시험이 `production_manifest.yml` · `jenkins/` · `docs/` · `scripts/ai/` · `Jenkinsfile_ci` 를 읽으면 `source_text`. CI 에 올리기 전 로컬 `prodgen verify --only G14,G15`.
+- 관련 rule: rule 24 R1 · rule 40 R6
+
+## 2026-10-05 — Windows 에서 자식 Python 의 한국어 출력이 cp949 로 나와 UTF-8 로 읽는 시험이 깨졌다
+
+- 카테고리: environment-drift
+- 발견 위치: 로컬 prodgen G14 overlay(Windows) — `test_input_acceptance_parity.py` 69 failed (`UnicodeDecodeError ... 0xc0`). 반대로 `PYTHONIOENCODING=utf-8` 을 붙인 로컬 전체 실행에서는 `test_cli_exit_codes` 1건이 같은 이유로 실패.
+- 원인: 파이프로 연결된 자식 Python 의 출력 인코딩은 Windows 에서 로캘(cp949)이다. 시험은 UTF-8 로 읽는다. 리눅스 CI 는 UTF-8 이라 드러나지 않는다.
+- 수정: 시험이 자식 환경에 `PYTHONIOENCODING=utf-8` 을 명시(`b33e278d`).
+- 재발 방지: 자식 프로세스의 한국어 출력을 읽는 시험은 자식의 출력 인코딩을 명시한다. 로컬 실행에 `PYTHONIOENCODING` 을 덧붙여 결과를 바꾸지 않는다(덧붙였다면 결과 해석에 적는다).
+- 관련 rule: rule 40 R6
+
+## 2026-10-05 — 가짜 cmdlet 이 종료 오류만 내서, 실제 CIM 실패(비종료 오류)를 구성요소 try/catch 가 못 잡는다는 것을 시험이 놓쳤다
+
+- 카테고리: test-fidelity · ai-hallucination(전제 미확인)
+- 발견 위치: §5 감사 C-3 · C-6 수정 중(X13) — `os-gather/tasks/windows/gather_system.yml` · `gather_storage.yml` 의 공용 조회 `read_operating_system` · `read_computer_system` · `read_disk_drives`
+- 증상: 구성요소 실패를 errors[] 로 옮기는 수정과 시험(가짜 `Get-CimInstance` 가 `ThrowTerminatingError`)이 모두 통과했지만, 실제 `Get-CimInstance` 실패(잘못된 클래스 · 네임스페이스)는 비종료 오류라 `try` 로 잡히지 않고 결과 0건 · 구성요소 `ok=true` 로 남는다(이 PC 의 Windows PowerShell 5.1 실측). 수정이 실환경 실패에서는 발동하지 않았을 것이다.
+- 원인: P4 통합 하네스의 가짜 cmdlet 은 "실제 cmdlet 처럼" 문장 종료 오류를 낸다고 가정했다. CIM cmdlet 은 기본이 비종료 오류다. 가짜의 실패 방식을 실제와 대조하지 않았다.
+- 수정: 공용 조회 3개가 `-ErrorAction SilentlyContinue -ErrorVariable seErr` 로 받아 결과는 그대로 두고 `if ($seErr) { throw $seErr[0] }` 로 구성요소만 실패 표시. 시험에 비종료 오류를 내는 가짜(`Write-Error`)와 "실제 CIM 실패는 try 로 안 잡힌다" 전제 시험을 추가(`tests/unit/test_windows_hidden_failures.py`), 변이 검사로 확인.
+- 재발 방지: 실패 경로를 가짜 cmdlet 으로 시험할 때는 실제 cmdlet 의 오류 종류(종료 / 비종료)를 먼저 실측하고, 가짜가 같은 종류를 내게 한다. memory · network 공용 조회의 실패 검사도 같은 이유로 발동하지 않는다(현재는 다른 경로로 실패가 드러나는 A 분류).
+- 관련 rule: rule 95 R1 · R3
+
+## 2026-10-05 — 스크립트 끝에 문장을 추가하자 PowerShell 종료 코드가 바뀌어 "명령 부재 → 미지원"(F23) 분류가 깨질 뻔했다
+
+- 카테고리: regression(사전 발견)
+- 발견 위치: §5 감사 C-1 수정(X13) — `os-gather/tasks/windows/gather_users.yml`, 실제 powershell.exe 대조
+- 증상: 실패 표식 줄을 스크립트 끝에 출력하도록 바꾸자, 명령이 없을 때(Get-LocalUser · Get-CimInstance 부재) 종료 코드가 1 → 0 으로 바뀌어 users 가 "미지원" 대신 "성공 + 빈 목록"이 됐다.
+- 원인: `powershell.exe -EncodedCommand` 의 종료 코드는 마지막 문장의 성공 여부(`$?`)로 정해진다. 종전 스크립트는 빈 catch 가 마지막 문장이라 1 이었고, 분류(F23)가 그 종료 코드에 기대고 있었다.
+- 수정: 명령 부재(CommandNotFoundException)만 표식 대신 `exit 1` 로 끝내 종전 분류를 지켰다. 시험이 종전 · 새 스크립트의 종료 코드를 시나리오별로 비교한다.
+- 재발 방지: win_shell 스크립트의 마지막 문장을 바꿀 때는 종료 코드에 기대는 분류(`rc != 0`)가 있는지 찾고, 실제 powershell.exe 로 종전 · 새 종료 코드를 대조한다.
+- 관련 rule: rule 95 R1 · rule 92 R2
