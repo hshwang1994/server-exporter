@@ -223,6 +223,7 @@ def test_cli_always_exits_zero_and_prints_timed_lines(tmp_path):
     assert r.returncode == 0
 
 
+@pytest.mark.source_text   # production_manifest.yml 은 main 전용 — production tree overlay(G14)에는 없다
 def test_pipeline_wires_the_cleanup_and_records_ownership():
     portal = (REPO / "Jenkinsfile_portal").read_text(encoding="utf-8")
     assert "python3 scripts/workspace_cleanup.py --current" in portal and "exit 0" in portal

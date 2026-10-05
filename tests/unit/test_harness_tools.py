@@ -225,6 +225,7 @@ def test_layer_a_fault_injection_targets_the_runtime_label(tmp_path):
         build_functions.build(broken, "layer_a_fail", tmp_path / "x.groovy", None)
 
 
+@pytest.mark.source_text   # jenkins/jobs/ 는 main 전용 — production tree overlay(G14)에는 없다
 def test_harness_pipeline_has_no_tier2_and_runs_the_real_run_gather():
     jf = (HARNESS / "Jenkinsfile_harness").read_text(encoding="utf-8")
     for gone in ("BOUNDED", "seHarnessProbeNode", "seHarnessProbeCauses", "probe_approvals", "preserve_rethrown", "getEnclosingBlocks"):
