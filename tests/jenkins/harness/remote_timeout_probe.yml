@@ -100,6 +100,14 @@
       register: _rtp_l_left
       changed_when: false
 
+    - name: "(e) close the multiplexed SSH connection (ControlPersist — as when a gather run ends)"
+      ansible.builtin.meta: reset_connection
+
+    - name: "(e) leftovers after the connection closed (fresh connection)"
+      ansible.builtin.raw: "sleep 5; pgrep -f '[S]{{ _rtp_marker[1:] }}_L' | wc -l"
+      register: _rtp_l_left_reset
+      changed_when: false
+
     - name: "(e) cleanup — only this probe's marker"
       ansible.builtin.raw: "pkill -f '[S]{{ _rtp_marker[1:] }}_L' || true; sleep 1; pgrep -f '[S]{{ _rtp_marker[1:] }}_L' | wc -l"
       register: _rtp_l_after
@@ -136,6 +144,16 @@
       register: _rtp_w_left
       changed_when: false
 
+    - name: "(e) close the WinRM connection"
+      ansible.builtin.meta: reset_connection
+
+    - name: "(e) leftovers after the connection closed (fresh connection)"
+      ansible.windows.win_shell: >-
+        Start-Sleep -Seconds 5;
+        @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*[S]{{ _rtp_marker[1:] }}_W*' -and $_.ProcessId -ne $PID }).Count
+      register: _rtp_w_left_reset
+      changed_when: false
+
     - name: "(e) cleanup — only this probe's marker"
       ansible.windows.win_shell: >-
         Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*[S]{{ _rtp_marker[1:] }}_W*' -and $_.ProcessId -ne $PID } |
@@ -164,6 +182,7 @@
                  'cut': {'failed': hostvars['rtp_linux']._rtp_l_cut.failed | default(none),
                          'msg': (hostvars['rtp_linux']._rtp_l_cut.msg | default(''))[:200]},
                  'left_after_cut': (hostvars['rtp_linux']._rtp_l_left.stdout | default('') | trim),
+                 'left_after_reset': (hostvars['rtp_linux']._rtp_l_left_reset.stdout | default('') | trim),
                  'left_after_cleanup': (hostvars['rtp_linux']._rtp_l_after.stdout | default('') | trim)} }}
           windows: >-
             {{ {} if 'rtp_windows' not in hostvars else {
@@ -174,6 +193,7 @@
                  'cut': {'failed': hostvars['rtp_windows']._rtp_w_cut.failed | default(none),
                          'msg': (hostvars['rtp_windows']._rtp_w_cut.msg | default(''))[:200]},
                  'left_after_cut': (hostvars['rtp_windows']._rtp_w_left.stdout | default('') | trim),
+                 'left_after_reset': (hostvars['rtp_windows']._rtp_w_left_reset.stdout | default('') | trim),
                  'left_after_cleanup': (hostvars['rtp_windows']._rtp_w_after.stdout | default('') | trim)} }}
 
     - name: probe | write report
