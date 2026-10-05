@@ -539,6 +539,13 @@ def test_failed_component_does_not_empty_its_neighbours(runs):
 # ═══════════════════════════════════════════════════════════════════════════
 # 3. 종전 스크립트 vs 새 스크립트 — 같은 가짜 cmdlet 위에서 fragment 동일
 # ═══════════════════════════════════════════════════════════════════════════
+# 2026-10-05 (§5 감사 C-6): 디스크 조회가 실패하고 볼륨만 읽힌 경우 새 체인은 errors[] 1건을 남긴다(종전 체인은 기록 없음 — 의도한 차이)
+INTENDED_EXTRA_ERRORS_PS = {
+    ("storage", "fail"): [{"section": "storage", "message": "스토리지 정보 중 물리 디스크 정보를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.",
+                          "detail": "source=Win32_DiskDrive,Get-PhysicalDisk; cause=component_failed; parts=read_disk_drives; disks=0"}],
+}
+
+
 @pytest.mark.parametrize("section,name", list(SCENARIOS))
 def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
     old = runs[(section, name, "old")]
@@ -546,10 +553,15 @@ def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
         pytest.skip(f"통합 직전 파일({PRE_P4_SHA[:8]}) 을 git 으로 읽을 수 없다")
     new = runs[(section, name, "new")]
     for key in FRAGMENT_KEYS:
-        assert new["frag"][key] == old["frag"][key], f"{section}/{name}: {key} 가 종전과 다르다"
+        expected = old["frag"][key]
+        if key == "_errors_fragment":
+            expected = list(expected or []) + INTENDED_EXTRA_ERRORS_PS.get((section, name), [])
+        assert new["frag"][key] == expected, f"{section}/{name}: {key} 가 종전과 다르다"
     shared = shared_facts(old["ctx"], new["ctx"], new["facts"])
     assert shared
     for key in shared:
+        if key in FRAGMENT_KEYS:
+            continue  # 위에서 (의도한 차이를 넣어) 비교했다
         assert new["ctx"][key] == old["ctx"][key], f"{section}/{name}: 중간 변수 {key} 가 종전과 다르다"
 
 

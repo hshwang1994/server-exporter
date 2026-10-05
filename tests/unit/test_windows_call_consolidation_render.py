@@ -680,6 +680,18 @@ def _scenario(fn):
     return s["comps"], s.get("facts") or {}, s.get("extra"), s.get("script_rc", 0)
 
 
+# 2026-10-05 (최종 정비 §5 — 예외 무시 지점 감사 C-3 · C-6): 새 체인은 구성요소 실패를 errors[] 로 드러낸다. 종전 체인은 같은 입력에서
+#   기록이 없었다(섹션은 OS 정보 · setup fact · 볼륨으로 성공) — 의도한 차이라 기대값에 명시한다. 그 밖의 fragment 와 중간 변수는 종전과 같아야 한다.
+INTENDED_EXTRA_ERRORS = {
+    ("system", "sys_hosting_failed"): [{"section": "system", "message": "서버 기본 정보 일부를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.",
+                                        "detail": "source=Win32_OperatingSystem,Win32_ComputerSystem; cause=component_failed; parts=hosting"}],
+    ("system", "sys_script_failed"): [{"section": "system", "message": "서버 기본 정보 일부를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.",
+                                       "detail": "source=Win32_OperatingSystem,Win32_ComputerSystem; cause=component_failed; parts=script"}],
+}
+INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_errors_fragment"},
+                         ("storage", "windows | storage | build fragment"): {"_errors_fragment"}}
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. 같은 입력 → 같은 fragment (종전 파일 vs 새 파일)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -690,10 +702,15 @@ def test_old_and_new_chains_render_identical_fragments(section, scenario):
     new_frag, new_ctx = render_new(section, comps, facts, extra, rc)
     assert old_frag is not None and new_frag is not None
     for key in FRAGMENT_KEYS:
-        assert new_frag[key] == old_frag[key], f"{section}/{scenario.__name__}: {key} 가 종전과 다르다"
+        expected = old_frag[key]
+        if key == "_errors_fragment":
+            expected = list(expected or []) + INTENDED_EXTRA_ERRORS.get((section, scenario.__name__), [])
+        assert new_frag[key] == expected, f"{section}/{scenario.__name__}: {key} 가 종전과 다르다"
     shared = shared_facts(old_ctx, new_ctx, facts)
     assert shared, "비교할 중간 변수가 없다 — 하네스가 체인을 끝까지 돌리지 못했다"
     for key in shared:
+        if key in FRAGMENT_KEYS:
+            continue  # 위에서 (의도한 차이를 넣어) 비교했다
         assert new_ctx[key] == old_ctx[key], f"{section}/{scenario.__name__}: 중간 변수 {key} 가 종전과 다르다"
 
 
@@ -724,6 +741,18 @@ def test_downstream_tasks_are_unchanged(section):
     assert kept, section
     for name in kept:
         assert name in new, f"{section}: 종전 태스크 {name!r} 가 사라졌다"
+        changed = INTENDED_CHANGED_KEYS.get((section, name), set())
+        if changed:
+            # 의도한 변경(errors[] 추가)만 허용 — 다른 키는 같고, 종전 문장은 새 식에 그대로 남는다
+            nf = new[name]["ansible.builtin.set_fact"]
+            of = old[name]["ansible.builtin.set_fact"]
+            assert {k: v for k, v in nf.items() if k not in changed} == {k: v for k, v in of.items() if k not in changed}, name
+            for k in changed:
+                for msg in re.findall(r"'message':\s*'([^']+)'", of[k]):
+                    assert msg in nf[k], (name, msg)
+            assert ({k: v for k, v in new[name].items() if k not in ("timeout", "ansible.builtin.set_fact")}
+                    == {k: v for k, v in old[name].items() if k != "ansible.builtin.set_fact"}), name
+            continue
         # task-level `timeout`(Plan §6-3, 2026-10-03 GP-9) 은 hang 격리 키워드라 수집 내용과 무관하다 — 비교에서 뺀다
         assert {k: v for k, v in new[name].items() if k != "timeout"} == old[name], f"{section}: 종전 태스크 {name!r} 의 내용이 바뀌었다"
     # 종전 rescue (runtime) 도 그대로
