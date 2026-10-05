@@ -50,7 +50,7 @@
 | 항목 | 최소 요구사항 | 미충족 시 동작 |
 |------|-------------|--------------|
 | **SSH 포트** | 22 오픈 | 연결 실패 → `status: failed` |
-| **Python** | **3.9 이상** | 모듈 실행 실패 → 수집 불가 |
+| **Python** | 없어도 된다 (3.9 이상이면 모듈 경로, 그 밖에는 raw 경로) | Python 이 없거나 3.8 이하여도 같은 형식으로 수집한다 — 아래 "Python 상태별 수집 경로" |
 | **배포판** | 아래 참조 | 구버전은 제한 지원 또는 미지원 |
 | **계정 권한** | **sudo(become) 권한 권장** | 권한 없으면 serial_number, system_uuid 등 DMI 정보 `null` 반환 |
 | **커널** | 2.6.32+ | `ip` 명령 없으면 `/proc/net` fallback |
@@ -58,13 +58,23 @@
 | **lsblk** | util-linux 2.19+ | 없으면 `df` fallback (물리 디스크 정보 제한) |
 | **getent** | glibc 포함 (기본 설치) | users 수집 실패 |
 | **lastlog / last** | shadow-utils (기본 설치) | `last_access_time` → `null` 반환 |
-| **Python3 경로** | `/usr/bin/python3` (3.9 이상) 또는 `/usr/bin/python3.9` | `ansible_python_interpreter`로 경로 지정 가능 |
+| **Python3 경로** | PATH 의 `python3` → `python` 순으로 찾는다 | 찾은 Python 이 3.9 미만이거나 없으면 raw 경로로 수집 |
 
-> **타겟 서버 Python 기준:**
-> - ansible-core 2.20은 타겟 서버 Python 3.9 이상을 요구한다.
-> - RHEL 8 기본 Python은 3.6이므로 미지원. `sudo yum install python39` 후 사용.
-> - RHEL 9+, Ubuntu 22.04+는 기본 Python이 3.9 이상이므로 별도 조치 불필요.
-> - `ansible_python_interpreter`로 경로 지정 가능 (`/usr/bin/python3.9` 등).
+> **Python 상태별 수집 경로** (`os-gather/tasks/linux/preflight.yml`, 2026-10-05 정정):
+> - 사전 점검은 Python 없이(`raw` 명령) 돈다. `python3` → `python` 순으로 찾아 버전을 보고 수집 경로를 정한다.
+>   어느 경로였는지는 결과의 `diagnosis.details.gather_mode` 에 남는다.
+> - **모듈 경로 (`python_ok`)** — Python 3.9 이상. ansible-core 2.20 의 모듈 실행 요건이다. setup facts
+>   (hardware · network · virtual · distribution)를 먼저 쓰고 셸 명령 결과로 보강한다.
+> - **raw 경로 (`python_incompatible` · `python_missing` · `raw_forced`)** — Python 이 3.8 이하이거나 없을 때.
+>   같은 섹션을 셸 명령(`/etc/os-release` · `/proc` · `/sys/class/dmi/id` · `lsblk` · `ip` · `dmidecode` 등)으로 수집하고,
+>   결과 형식(envelope · 섹션 · 필드)은 모듈 경로와 같다.
+> - raw 경로에서 달라지는 점: setup facts 가 없다. serial · uuid 를 못 읽었을 때의 보조 읽기(DMI direct-read)와
+>   식별자 안내 문장(`errors[]`)은 모듈 경로에서만 만든다 — raw 경로에서는 그 값이 `null` 이고 안내 문장이 없다.
+> - raw 경로에 필요한 것: POSIX 셸과 기본 명령(`awk` · `grep` · `cat`), 위 표의 `iproute2` · `util-linux`,
+>   DMI · 디스크 정보를 위한 sudo(become) 권한.
+> - 실장비 확인 범위: RHEL 8.10 + Python 3.6.8 (`python_incompatible`) → `success`
+>   (`tests/evidence/2026-05-07-real-gather.md`, 2026-09-03 재확인). Python 이 아예 없는 대상(`python_missing`)은
+>   실장비로 확인하지 않았다 — 같은 raw 경로를 `SE_FORCE_LINUX_RAW_FALLBACK=true`(`raw_forced`)로 Python 있는 장비에서 재현해 시험한다.
 
 > **계정 권한 기준:**
 > - 모든 섹션을 수집하려면 sudo(become) 권한이 있는 계정을 사용해야 한다.
@@ -73,16 +83,18 @@
 > - 권한 부족 시 해당 필드는 `null`로 반환되며 수집 자체는 실패하지 않는다 (non-fatal).
 > - vault에 `become_password`를 포함하면 자동으로 sudo 권한 사용.
 
-> **미지원**: Python 3.8 이하 (RHEL 8 기본 Python 3.6 포함).
+> **Python 버전으로 수집이 막히지는 않는다.** Python 3.8 이하(RHEL 8 기본 3.6 포함) · Python 없음은 raw 경로로 수집한다.
 
 **Linux 배포판 지원 수준:**
 
-| 수준 | 배포판 | Python 상태 | 비고 |
+| 수준 | 배포판 | 기본 Python | 수집 경로 · 비고 |
 |------|--------|------------|------|
-| 기본 Python으로 바로 사용 가능 | RHEL 9+, Rocky 9+, Ubuntu 22.04+, Debian 12+ | 3.9 이상 기본 설치 | 별도 조치 불필요 |
-| 추가 Python 설치 후 사용 가능 | RHEL 8, Rocky 8, Ubuntu 20.04, Debian 11 | 기본 3.6~3.8 | python39 이상 별도 설치 필요 |
-| 프로젝트 기준 밖 (별도 검증 필요) | RHEL 7, CentOS 7, Ubuntu 18.04, Debian 10 | 3.6 이하 기본 | python39 설치 가능하나 프로젝트에서 검증하지 않음 |
-| 미지원 | RHEL 6, CentOS 6, Ubuntu 14.04, Debian 8 | 3.9 설치 불가 | |
+| 모듈 경로 | RHEL 9+, Rocky 9+, Ubuntu 22.04+, Debian 12+ | 3.9 이상 | 별도 조치 불필요 |
+| raw 경로 (실장비 확인) | RHEL 8 (8.10 확인), Rocky 8 | 3.6 | 별도 조치 불필요. python39 를 설치하면 모듈 경로로 바뀐다 |
+| raw 경로 (실장비 미확인) | Ubuntu 20.04 | 3.8 | 같은 raw 경로 — 이 배포판 실장비로는 확인하지 않았다 |
+| 모듈 경로 (실장비 미확인) | Debian 11 | 3.9 | 이 배포판 실장비로는 확인하지 않았다 |
+| 프로젝트 기준 밖 (별도 검증 필요) | RHEL 7, CentOS 7, Ubuntu 18.04, Debian 10 | 3.6 이하 | raw 경로로 시도는 하지만 명령 · 출력 형식을 검증하지 않았다 |
+| 미지원 | RHEL 6, CentOS 6, Ubuntu 14.04, Debian 8 | — | 지원 · 검증 대상이 아니다. raw 경로로 시도는 하지만 결과를 보장하지 않는다 |
 
 ---
 
@@ -369,7 +381,7 @@ OS 채널은 `system.hosting_type` 필드를 제공한다.
 | Lenovo ThinkServer | Redfish 자체 미지원 (ThinkSystem 만 지원) |
 | Supermicro X8 이하 | Redfish 미지원 (X9 는 6 섹션 부분 수집 — 8절 NOTE) |
 | Cisco UCS C-Series M3 이하 | Redfish 미지원 |
-| Python 3.8 이하 (타겟 Linux) | ansible-core 2.20 모듈 실행 불가 |
+| ~~Python 3.8 이하 (타겟 Linux)~~ | 2026-10-05 정정 — 미지원이 아니다. raw 경로로 수집한다 (1-1절 "Python 상태별 수집 경로") |
 | Python 3.11 이하 (Agent) | 프로젝트 검증 기준 외 |
 
 > [!NOTE]
