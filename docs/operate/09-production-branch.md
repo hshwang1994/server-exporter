@@ -21,10 +21,11 @@
   개발 main·생성기·내부 원격 접근 없음 / 필요한 외부 runtime 은 아래 "설치 시 맞출 값" 으로만 요구한다.
 - **설치 시 맞출 값**(고객사 Jenkins): Gathering Job 의 Branch Specifier `*/main` · Script Path `Jenkinsfile_portal` · Secret text credential `server-gather-vault-password` ·
   Runner 라벨 `linux | windows | esxi | redfish` + `common/vars/locations.yml` 의 `agent_label`(Location 별, 예: 청주 = `cj`) · Agent 의 Ansible venv(`scripts/activate_ansible_venv.sh` 가 고른다:
-  `SE_ANSIBLE_VENV` → PATH 의 `ansible-playbook` → `/app/ansible-env` → `/opt/ansible-env`) · 검증 파라미터 기본값(`redfishAccountDryrun` 등은 기본값이면 영향 없음).
+  `SE_ANSIBLE_VENV` → PATH 의 `ansible-playbook` → `/app/ansible-env` → `/opt/ansible-env`). 시험용 파라미터는 없다(2026-10-05 8차 R1).
   `pwsh` 는 **생성 시** 도구이지 runtime 요구가 아니다. 내부 Jenkins 주소 · credential ID · Runner 이름을 고객 공통 필수값으로 새로 고정하지 않는다.
-  마무리 step 상한(Tier 2, `SE_FINALIZER_BOUNDED`)은 **기본 false** 이고 설치 요구 조건이 아니다 — 켜려면 환경변수와 In-process Script Approval 4 서명을 함께 맞춘다(`04-pipeline-runtime.md` "실제 상한(선점) 과 Tier 2").
-  사내 Jenkins 는 2026-10-05 부터 켜져 있다. 고객사가 켜지 않으면 기본 모드의 보장 범위(느린 보존 · 회수 · 조립을 그 단계에서 끊지 않음)가 그대로 남는다.
+  시간 한계(빌드 12시간 · 수집 실행 최대 6시간 · 결과 확인 및 전송 1시간)와 보존 기간(빌드 기록 14일/100 · 결과 파일 7일/50 · 작업 폴더 7일 정리)은 Jenkinsfile 과
+  스크립트에 들어 있어 설치 때 맞출 값이 아니다. Script Approval · 전역 환경변수가 필요 없다(2026-10-05 8차 R3 — Tier 2 `SE_FINALIZER_BOUNDED` 를 없앴다).
+  Timestamper 플러그인은 있으면 콘솔 줄마다 시각을 붙이고, 없어도 파이프라인은 그대로 돈다(업무 줄은 본문에 시각을 적는다).
 - 세 층을 구분해 말한다: **고객사 main 형태 깨끗한 checkout 검증(G19)** / **사내 production Job E2E** / **실제 고객사 실행**(이 저장소의 작업 범위 밖). 앞 둘이 통과해도 "고객사 실환경 검증 완료" 라고 쓰지 않는다.
 
 ## 1. 무엇이 들어가나
@@ -76,9 +77,9 @@ python -m scripts.ai.prodgen restore --to <production commit> [--bootstrap-basel
   **다르거나 한쪽이라도 비어 있으면**(미확인 = 동일이 아니다, 검토 C3) 환경 의존 gate(G11 G12 G13 G14 G15 G19)를 그 자리에서 다시 실행한다. G18(drift) · G20(조상·원격) 은 **항상 다시** 실행한다.
   어떤 gate 를 재사용하고 어떤 gate 를 다시 돌렸는지는 보고서 `gates_reused`/`gates_rerun` 과 커밋 trailer `Gates-Reused`/`Gates-Rerun` 에 남는다.
   보고서 digest 는 변조·혼용 탐지용이지 실행의 증명이 아니다 — 실행 출처(`--source-build-url`)를 같이 적는다.
-- `e2e-evidence` 는 **시나리오 계약**(`scripts/ai/prodgen/evidence.py` `MAIN_CONTRACT`)으로 판정한다(검토 C1): main Job 빌드의 파라미터(loc · 대상 host · callbackUrl · gatherBudgetForceSec) ·
+- `e2e-evidence` 는 **시나리오 계약**(`scripts/ai/prodgen/evidence.py` `MAIN_CONTRACT`)으로 판정한다(검토 C1): main Job 빌드의 파라미터(loc · 대상 host · callbackUrl, 그리고 없앤 시험용 파라미터가 **없어야** 한다 — 8차 R1) ·
   `finalize_summary.json`(outcome · accepted==lines · by_origin · filled) · `callback_body.json`(host 당 envelope 1 · 성공/실패 필드) · 전송 기록(`finalize_summary.callback.delivered` — 2026-10-05 부터 요약이 정본, 콘솔 2xx 표식과 일치해야 한다) · 콘솔 표식(`[Portal 전송] 완료: HTTP 2xx` / `[마무리] Portal 전송 실패`, 이전 빌드는 `[Callback] [OK] HTTP 2xx` / `Callback 전송 실패` /
-  `[Gather] interrupted` / `[Resolve Location]`)을 대조한다. 기대 Jenkins 결과는 계약이 정한다(S3 UNSTABLE · T5 ABORTED · T6 UNSTABLE · E2E-A' FAILURE) — 호출자가 다른 값을 넣어도
+  `[Gather] interrupted` / `[Resolve Location]`)을 대조한다. 기대 Jenkins 결과는 계약이 정한다(T5 ABORTED · T6 UNSTABLE · E2E-A' FAILURE) — 호출자가 다른 값을 넣어도
   통과로 바꿀 수 없다. Harness 증거는 Job 파라미터 `SCENARIO`/`FUNCTIONS_SRC` · artifact `harness_result.json` 의 scenario·verdict · 함수 해시를 대조하고, main 함수 그룹과 생성 tree
   그룹(`provenance.tree_hash` == 승격 대상 tree)은 **따로** 충족해야 한다. 집계(`evidence-aggregate`)는 입력 evidence 의 digest 를 먼저 검증한다.
 - gate: G01~G10 · G16 · G17 정적 / G11 syntax-check · G12 config dump · G15 module smoke(환경 의존) / G13 Jenkins 린터(`--netrc`) / G14 pytest overlay(필수 테스트 그룹이 하나라도 빠지면 PARTIAL) /
@@ -96,8 +97,11 @@ python -m scripts.ai.prodgen restore --to <production commit> [--bootstrap-basel
 승격 집행 조건(코드가 확인한다 — CI Promote 와 CLI 공통, CLI 는 `--ci-stage-results` 로 같은 stage 증거를 받는다): ① 필수 CI stage 전부 PASS(`ci_stage_results.json`: GATE · CORPUS · BUDGET · HARNESS_MAIN ·
 PRODGEN_BUILD · HARNESS_TREE · PRODGEN_DRIFT · PRODGEN_VERIFY · EVIDENCE) ② G01~G20 COMPLETE_PASS + binding 일치 ③ 같은 `main_sha` 의 필수 main Job 시나리오(S1 S2 S3 T2 T5 T6 E2E-A E2E-A')와
 main 함수 Harness · 생성 tree Harness(같은 `tree_hash`)가 `e2e_evidence` 에서 계약대로 PASS ④ 생성 tree hash == 검증 대상 ⑤ 양 원격(`origin` + `internal` 정확히) 동일 · 현재 parent ·
-G18/G20 재검사 ⑥ dry-run 이 아니고 명시 요청(`--push-remote origin,internal`/`PROMOTE=true`). Tier 2(`SE_FINALIZER_BOUNDED=true`) Harness 시나리오는 그 모드를 켠 배포에서만 조건이 된다 — 사내 Jenkins 가 그렇다(2026-10-05~): CI 파라미터 `REQUIRE_BOUNDED`(기본 true)가
-`HARNESS_BOUNDED` 를 ① 의 필수 stage 에 넣고 promote 에 `--require-bounded` 를 넘긴다(그러면 `e2e_evidence` 의 Tier 2 그룹도 필수). CLI 로 승격할 때도 같은 플래그를 준다.
+G18/G20 재검사 ⑥ dry-run 이 아니고 명시 요청(`--push-remote origin,internal`/`PROMOTE=true`). 필수 stage 집합은 배포와 무관하게 하나다(2026-10-05 8차 R3 —
+Tier 2 · `HARNESS_BOUNDED` · `REQUIRE_BOUNDED` · `--require-bounded` 를 없앴다. CLI 는 그 플래그를 모르는 옵션으로 거부한다).
+8차 R1 의 증거 분담: 운영 Job 은 정상 입력만 증명한다 — S3 = 실호스트 10대 이상 큰 배치를 운영 한계(6시간) 안에서 끝까지(보충 0 · `limits.gather_limit_source=gather_limit`),
+E2E-E = 정상 Redfish 수집의 표준 계정 인증 · 계정 쓰기 0(`diagnosis.details.account_service` 비어 있음). 한계 도달 · 보존은 Harness `gather_limit_preserve`(실제 `run_gather.sh` ·
+main 함수와 생성 tree 두 그룹), 계정 쓰기 방지는 CI Gate 의 단위 시험(같은 main SHA)이 증명한다.
 G20 은 원격 없이 돌면 PARTIAL(검증 안 됨)이고, 일부 원격만 보면 `deploy_set_complete=false` 로 적는다 — 실제 승격은 전체 집합으로 다시 돈다.
 그 밖에: 수집 시간대 밖에서 한다. 승격 **직후** production Job(`clovirone-server-gather`) canary 1회(os 1~3대 · Callback 2xx · checkout SHA == 새 커밋) — 첫 확인 단계이지 완료 판정이 아니다.
 

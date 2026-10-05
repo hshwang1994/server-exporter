@@ -78,7 +78,8 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 - `status` · `sections` · `diagnosis` 는 바뀌지 않는다. hook 은 조립이 끝난 뒤에 돌고 그 세 값에는 손대지 않는다 —
   `CHECKPOINT` 의 값이 그대로 OUTPUT 에 실린다 ([02-normalize-flow.md](02-normalize-flow.md)).
 - Add-on 이 실행 중 실패하면 rescue 가 격리한다. 그때까지의 중간 결과는 버리고 `errors[]` 1건만 남긴다.
-  role 안 태스크 하나가 끝나지 않으면 태스크별 제한(기본 300 s, `_addon_task_timeout`)이 그 태스크를 실패시켜 같은 rescue 로 보낸다.
+  2026-10-05 (8차 R3) 부터 hook 에는 시간 제한이 없다 — 오래 걸리는 Add-on 작업은 끝까지 기다린다. 끝나지 않는 Add-on 은 수집 실행 한계
+  (최대 6시간)와 사용자 취소가 멈추고, 그 host 는 아래처럼 `CHECKPOINT` 로 복원된다(Add-on 오류 1건).
 - Add-on 결과를 `_output` 에 합치는 단계 자체가 실패해도 기본 결과는 그대로다. 결합은 자기 block 안에서 돌고, 실패하면
   "추가 수집 결과를 기본 결과에 합치지 못했습니다. 기본 수집 결과는 그대로입니다." 1건만 붙는다 (2026-10-05).
 - OUTPUT 을 못 낸 host 는 `CHECKPOINT` 로 복원된다. 실행이 강제 종료된 경우는 Layer A 가, 실행은 끝났는데 OUTPUT 태스크가
@@ -119,15 +120,12 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
   `AnsibleParserError` 를 다시 던진다). 그래서 고객이 고치는 파일은 런타임에 읽는 설정 파일(`config/`)로
   두고, Add-on 의 `tools/check_layout.py` 가 켜기 전에 태스크 YAML 과 설정 파일을 검사하며, Add-on 태스크 변경은
   Add-on 테스트를 통과한 뒤 `main` 에 올린다.
-- hook 의 제한 시간은 role 안 **태스크 하나**에 대한 300 s(`include_role … apply: timeout`)뿐이다 — role 전체 · loop 누적 ·
-  host 전체 상한이 아니다. Add-on 자체의 명령별 제한(5분 — Linux 는 `timeout`, Windows 는 `async`)이 1차이고 이 제한은 그것이
-  놓친 태스크를 끊는 2차다. **태스크 timeout 은 그 태스크가 띄운 자식 프로세스를 끝내지 않는다** — 2026-10-05 실제 Runner(ansible-core 2.20.3) term-probe 실측:
-  3 s 에 태스크는 끊겼지만 자식 1개가 계속 돌았다(localhost). 원격 대상이면 그 자식은 **대상 host** 에 남고 Add-on 명령 자체 제한(5분)까지 돈다. 배치 INT(Gather 예산 초과)는
-  로컬 프로세스 그룹을 정리하지만(rc 124 · 잔존 0) 대상 host 의 프로세스에는 닿지 않는다. 그래도 끝나지 않는 host 는 Jenkins Gather 단계의
-  예산(`scripts/gather_budget.sh`)이 실행 전체를 끊고, 그 host 는 `CHECKPOINT` 로 복원된다 — 다른 host 의 결과는 그대로 전달된다.
-  Add-on **준비**(`scripts/addon_checkout.sh`)의 제한은 또 다른 축이다: git 명령마다 180 s, Jenkinsfile 이 두 번 시도 → 최악 ≈ 720 s+, 실측 2~3 s/빌드
-  (`docs/operate/04-pipeline-runtime.md` Add-on 절). Runner(ansible-core 2.20.3)에서의 태스크별 timeout · 연결 끊김 · 실패 격리 동작은 CI Gate 의
-  `tests/integration/test_addon_hook_playbook.py`(실제 ansible-playbook) 가 빌드마다 실행한다(CI #16: integration 322 passed).
+- hook 자체의 시간 제한은 없다(2026-10-05 8차 R3 — 종전 태스크별 300 s `include_role … apply: timeout` 를 없앴다). Add-on 자체의 명령별 제한
+  (5분 — Linux 는 `timeout`, Windows 는 `async`)이 있다면 그것은 Add-on 의 설계다. 끝나지 않는 Add-on 은 수집 실행 한계(최대 6시간, `scripts/run_gather.sh`)가
+  실행 전체를 INT 로 멈추고, 그 host 는 `CHECKPOINT` 로 복원된다 — 다른 host 의 결과는 그대로 전달된다. Linux 대상의 원격 명령은 그 실행의 SSH 연결을 닫아
+  정리한다(`docs/operate/04-pipeline-runtime.md` "원격 명령 정리"). Add-on **준비**(`scripts/addon_checkout.sh`)의 제한은 다른 축이다: git 명령마다 30분,
+  Jenkinsfile 이 두 번 시도(실측 2~3 s/빌드). 실행 동작(오래 걸리는 태스크 대기 · 실행 한계로 멈춘 뒤 `CHECKPOINT` 복원 · 연결 끊김 · 실패 격리)은 CI Gate 의
+  `tests/integration/test_addon_hook_playbook.py`(실제 ansible-playbook)가 빌드마다 실행한다.
 - Add-on 이 돌려준 글자에 짝 없는 surrogate(원격 출력의 UTF-8 이 아닌 바이트)가 남으면 콜백이 그 host 의 봉투를
   쓰지 못한다 (`surrogates not allowed`). 콜백 보충이 `OUTPUT_BUILD_FAILED` 실패 봉투를 대신 내므로 host 수는
   유지되지만 기본 수집 결과도 잃는다. 그래서 3절의 약속대로 Add-on 이 돌려주기 전에 글자를 정리한다.
