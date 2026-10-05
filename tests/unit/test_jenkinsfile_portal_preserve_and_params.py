@@ -82,7 +82,8 @@ def test_dryrun_flag_is_passed_only_when_the_param_is_true():
 
 def test_budget_force_goes_through_the_budget_script_only():
     assert "budgetForce ==~ /\\d+/" in GATHER, "정수(초)만 받는다"
-    assert '(budgetForce ? ["SE_FORCE_SEC=${budgetForce}"] : [])' in GATHER
+    # 2026-10-05 (F12): 강제값은 파라미터에서만 — 비어 있어도 SE_FORCE_SEC= 를 명시해 상위 환경 값을 덮는다 (tests/unit/test_env_guard.py)
+    assert "SE_FORCE_SEC=${budgetForce} " in GATHER
     assert "SE_GATHER_BUDGET_FORCE_SEC" not in TEXT, "강제값이 timeout 에 직접 들어가지 않는다 — 스크립트가 남은 시간으로 자른다"
     assert 'timeout --signal=INT --kill-after=90 "\\${SE_GATHER_BUDGET_SEC}"' in GATHER
     assert 'echo "\\$rc" > "\\${WORKSPACE}/gather_rc.txt"' in GATHER

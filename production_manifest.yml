@@ -123,6 +123,10 @@ include:
   - path: scripts/gather_budget.sh
     language: shell
     mode: "100644"
+  - path: scripts/env_guard.sh
+    language: shell
+    mode: "100644"
+    note: sourced by the Gather ansible shell (no shebang by design) — clears inherited test/override env (2026-10-05 F05)
   - path: scripts/finalize_gather_output.py
     language: python
     python_kind: script
