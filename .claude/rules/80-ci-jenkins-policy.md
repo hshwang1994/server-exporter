@@ -27,14 +27,16 @@
 |---|---|---|---|
 | 0. Validate | agent 없음 | 입력값 (target_type / inventory_json / callbackUrl / deploymentEnvironmentId) 형식 검증 → 접수 manifest `env.SE_MANIFEST_JSON` | YES |
 | 1. Resolve Location | agent 없음 | `readYaml text: readTrusted('common/vars/locations.yml')` 로 `loc` 검증 → `agent_label` (컨트롤러 전체 checkout 금지 — main 2분 초과 사고) | YES |
-| 2. Gather | agent (stage 합산 상한 115 min) | `gather_manifest.json` 기록 → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 체크아웃 · 검사 — R1-B) → venv 활성화 → `scripts/gather_budget.sh` 로 예산 재계산(ansible 직전) → `timeout --signal=INT --kill-after=90 <예산> ansible-playbook … -f <forks>` (검증 파라미터 `redfishAccountDryrun`/`gatherBudgetForceSec` 는 기본값이면 영향 없음) → rc → outcome → post{always} Layer A(`scripts/finalize_gather_output.py`) + `archiveArtifacts` + `stash(allowEmpty)` + 조건부 `deleteDir` | Add-on 못 받으면 UNSTABLE + Add-on 없이 수집; ansible rc 는 outcome 으로 기록 (stage 를 끊지 않는다) |
-| 3. (pipeline `post { always }`) 마무리 | controller, `timeout(720 s){ node('built-in') }` | 입력 회수(unstash → unarchive) → Layer A 결과 우선 / Groovy 최소 보충 → 접수 수 == 결과 수 → 호출자 통보 (`httpRequest`, rule 31 무결성, 남은 예산 안 ≤3회) → `callback_body.json` 보존 | NO (UNSTABLE) |
+| 2. Gather | agent, 작업 폴더 `<Job>-<번호>` (stage 39,000 s) | 소유 기록 · `gather_manifest.json` → (전역 `ADDON_REPO_URL` 이 있으면 Add-on 체크아웃 · 검사 — R1-B) → `scripts/gather_budget.sh` 로 실행 한계 계산(ansible 직전, 최대 6시간) → `bash scripts/run_gather.sh …`(환경 경계 · venv · `timeout --signal=INT --kill-after=90 <한계> ansible-playbook … -f <forks>` · 이 실행의 SSH 연결 정리 · `gather_run.json`) → `seGatherOutcome` → post{always} 결과 정리(`scripts/finalize_gather_output.py`) · 작업 폴더 정리(`scripts/workspace_cleanup.py`) · `archiveArtifacts`(있는 파일만) · `stash` · 보관 확인 시만 `deleteDir` | Add-on 못 받으면 UNSTABLE + Add-on 없이 수집; ansible rc 는 outcome 으로 기록 (stage 를 끊지 않는다) |
+| 3. (pipeline `post { always }`) 결과 확인 및 전송 | controller, `timeout(min(1 h, 빌드 끝 − 60 s)){ node('built-in'){ dir("fin-<번호>") } }` | 입력 회수(unstash → unarchive) → 정리 결과 우선 / Groovy 최소 보충 → 접수 수 == 결과 수 → 호출자 통보 (`httpRequest`, rule 31 무결성, 시도당 응답 최대 10분 · ≤3회) → `callback_body.json` · `finalize_summary.json` 보존 | NO (UNSTABLE) |
 
 - **2026-10-03 (Phase 4)**: `Validate Schema`(FAIL 게이트) · `Callback` stage 는 삭제됐다. field_dictionary 정합은 `scripts/ai/ci_gate.sh`
   (커밋 전 · CI 진입점) 가 맡는다 — 수집 Job 에서 정적 검사로 **결과 전달을 막지 않는다**. 결과 전달은 stage 가 아니라 pipeline
   `post { always }` 다 (stage 실패 · agent 대기 초과 · 1회 Abort 뒤에도 실행 경로가 있다). 요청 1 = 결과 1 은 Layer A/B 가 맞춘다.
 - **Forbidden**: 수집 Job 에 정적 FAIL 게이트 stage 재도입, Callback 을 stage 로 되돌리기(끊긴 빌드에서 전달이 사라진다),
-  `timeout` 없이 ansible 실행, 예산 계산을 node 진입 시점 값으로 집행하기(ansible 직전 재계산이 계약 — Astra 3차 acceptance).
+  실행 한계(`run_gather.sh` 의 `timeout`) 없이 ansible 실행, 한계 계산을 node 진입 시점 값으로 집행하기(ansible 직전 재계산이 계약 — Astra 3차 acceptance),
+  수집 Job 에 시험용 파라미터 · 작업(task) 단위 시간 제한 · 정체 감시 · 안쪽 단계 상한을 다시 넣기(2026-10-05 8차 — 정상 작업을 잘랐다.
+  시간 한계는 빌드 12 h · 수집 실행 최대 6 h · 결과 확인 및 전송 1 h 셋이다. 근거 `docs/ai/decisions/ADR-2026-10-05-time-limits-and-test-inputs.md`).
 
 ### R1-A. venv 선택 규칙 (2026-09-28)
 
