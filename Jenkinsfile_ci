@@ -161,6 +161,8 @@ pipeline {
         string(name: 'HARNESS_TREE_SCENARIOS', defaultValue: 'normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt',
                description: '생성 tree(prodtree.tar.gz)의 함수로 돌릴 시나리오(쉼표) — 2026-10-04 최종 지시 §6-1: 보존 실패 경로(archive_fail · stash_fail · truncate_jsonl · checkpoint_only_a/b · layer_a_fail)도 생성 tree 에서. 비우면 건너뛴다(PARTIAL)')
         string(name: 'E2E_MAIN_ENTRIES', defaultValue: '', description: 'main Job 시나리오 증거 — SCENARIO=job/path:build[:EXPECTED] 를 쉼표로 (예: S1=clovirone-cicd/clovirone-server-gather-main:7,T6=clovirone-cicd/clovirone-server-gather-main:9:UNSTABLE)')
+        booleanParam(name: 'REQUIRE_BOUNDED', defaultValue: true,
+                     description: '사내 Jenkins 는 2026-10-05 부터 SE_FINALIZER_BOUNDED=true(Script Approval 4 서명 승인 · bounded Harness 5/5 PASS 뒤) — Tier 2 Harness(HARNESS_BOUNDED) 를 승격 조건으로 요구하고 prodgen promote 에 --require-bounded 를 넘긴다. 그 모드를 끈 배포면 false')
         text(name: 'E2E_TIP_OBSERVATIONS_JSON', defaultValue: '',
              description: '2026-10-04 최종 지시 §5 — fail-closed 빌드(E2E-A2)의 직접 revision 증거: 트리거 측이 빌드 전후에 읽은 Job SCM tip. JSON {"observations":[{"job","build","sha_before","sha_after","before_epoch","after_epoch","remote","method"}]}. 비우면 이웃 빌드 추정만 남고 그 시나리오는 승격 증거로 인정되지 않는다')
     }
@@ -599,6 +601,11 @@ pipeline {
                 script {
                     // 승격 집행 조건 6항 (Astra 3차 §8-2) — 하나라도 빠지면 원격 변경 0. `branch` 조건은 쓰지 않는다(일반 Pipeline).
                     List required = ['GATE', 'CORPUS', 'BUDGET', 'HARNESS_MAIN', 'PRODGEN_BUILD', 'HARNESS_TREE', 'PRODGEN_DRIFT', 'PRODGEN_VERIFY', 'EVIDENCE']
+                    // 상한 모드를 켠 배포(사내 Jenkins, 2026-10-05~) — docs/operate/09 §3. 파라미터가 Job 에 등록되기 전 첫 빌드는 값이 null 이므로
+                    //   선언한 기본값(true)으로 본다. stage 목록과 prodgen 플래그가 같은 값을 쓴다.
+                    boolean requireBounded = (params.REQUIRE_BOUNDED != false)
+                    echo "[Promote] require_bounded=${requireBounded}"
+                    if (requireBounded) { required << 'HARNESS_BOUNDED' }
                     List bad = required.findAll { (env."CI_STAGE_${it}" ?: 'not_run') != 'PASS' }.collect { "${it}=${env."CI_STAGE_${it}" ?: 'not_run'}".toString() }
                     if (bad) { error "[Promote] 필수 stage 미통과 — 원격 변경 0: ${bad}" }
                     if (!fileExists('prodgen_verify_report.aggregated.json')) { error '[Promote] 집계된 검증 보고서가 없다 — 원격 변경 0' }
@@ -653,6 +660,7 @@ pipeline {
                                   --ci-stage-results ci_stage_results.json --ci-build "\${BUILD_URL}" --source-build-url "\${BUILD_URL}" "\${CRED_ARGS[@]}")
                             if [ -n "\${BOOTSTRAP_BASELINE:-}" ]; then ARGS+=(--bootstrap-baseline "\${BOOTSTRAP_BASELINE}"); fi
                             if [ "${dryRun}" = "true" ]; then ARGS+=(--dry-run); fi
+                            if [ "${requireBounded}" = "true" ]; then ARGS+=(--require-bounded); fi
                             python3 -m scripts.ai.prodgen --json promote --sha "\${MAIN_SHA}" "\${ARGS[@]}" > prodgen_promote.json
                         """)
                     }

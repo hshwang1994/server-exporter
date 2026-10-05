@@ -347,7 +347,15 @@ def test_harness_driver_compares_each_scenario_with_its_expected_jenkins_result_
     assert set(default_tree) == set(REQUIRED_HARNESS_TREE)
     default_bounded = re.search(r"string\(name: 'HARNESS_BOUNDED_SCENARIOS', defaultValue: '([^']+)'", params).group(1).split(",")
     assert set(default_bounded) == set(REQUIRED_HARNESS_BOUNDED)
-    assert "HARNESS_BOUNDED" not in re.search(r"List required = \[([^\]]+)\]", _stage("Prodgen Promote")).group(1), "Tier 2 는 승격 조건이 아니다(승인 전)"
+    promote = _stage("Prodgen Promote")
+    assert "HARNESS_BOUNDED" not in re.search(r"List required = \[([^\]]+)\]", promote).group(1), "기본 목록에는 없다"
+    # 2026-10-05: 상한 모드를 켠 배포(사내 Jenkins)는 REQUIRE_BOUNDED(기본 true)로 Tier 2 를 승격 조건에 넣고 prodgen 에도 같은 요구를 넘긴다
+    assert "boolean requireBounded = (params.REQUIRE_BOUNDED != false)" in promote, "등록 전 첫 빌드(null)는 선언 기본값 true"
+    assert "if (requireBounded) { required << 'HARNESS_BOUNDED' }" in promote
+    assert 'if [ "${requireBounded}" = "true" ]; then ARGS+=(--require-bounded); fi' in promote
+    decl = "boolean requireBounded = (params.REQUIRE_BOUNDED != false)"
+    assert "params.REQUIRE_BOUNDED" not in promote.split(decl, 1)[1], "판정은 한 값으로만"
+    assert re.search(r"booleanParam\(name: 'REQUIRE_BOUNDED', defaultValue: true", params)
 
 
 def test_toolchain_reports_esxi_prerequisites_without_adding_the_label():

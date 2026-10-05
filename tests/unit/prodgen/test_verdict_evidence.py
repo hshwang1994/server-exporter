@@ -421,3 +421,23 @@ def test_curl_json_disables_globbing_for_bracketed_tree_queries(monkeypatch, tmp
     assert out["number"] == 28
     flags = [a for a in seen["args"] if a.startswith("-") and not a.startswith("--")]
     assert any("g" in f for f in flags), seen["args"]
+
+
+def test_promote_require_bounded_adds_the_tier2_group_and_ci_stage(tmp_path):
+    """2026-10-05: on a deployment that runs with SE_FINALIZER_BOUNDED=true the Tier 2 Harness group and CI stage HARNESS_BOUNDED are
+    promotion conditions (docs/operate/09 §3). Default (customer installs) does not require them."""
+    import json as _json
+    from scripts.ai.prodgen.promote import _check_ci_stages, _check_e2e
+    a = "a" * 40
+    stages = {k: "PASS" for k in ("GATE", "CORPUS", "BUDGET", "HARNESS_MAIN", "PRODGEN_BUILD", "HARNESS_TREE", "PRODGEN_DRIFT", "PRODGEN_VERIFY", "EVIDENCE")}
+    path = tmp_path / "ci.json"
+    path.write_text(_json.dumps({"main_sha": a, "stages": dict(stages, HARNESS_BOUNDED="PARTIAL")}), encoding="utf-8")
+    assert _check_ci_stages(str(path), a, {}) == [], "기본: HARNESS_BOUNDED 는 조건이 아니다"
+    probs = _check_ci_stages(str(path), a, {}, require_bounded=True)
+    assert probs and "HARNESS_BOUNDED=PARTIAL" in probs[0]
+    path.write_text(_json.dumps({"main_sha": a, "stages": dict(stages, HARNESS_BOUNDED="PASS")}), encoding="utf-8")
+    assert _check_ci_stages(str(path), a, {}, require_bounded=True) == []
+    ev = {"items": []}
+    assert not [p for p in _check_e2e(ev, a) if "bounded" in p], "기본: bounded 그룹을 요구하지 않는다"
+    assert len([p for p in _check_e2e(ev, a, require_bounded=True) if "bounded" in p]) == len(REQUIRED_HARNESS_BOUNDED)
+

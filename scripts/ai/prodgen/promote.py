@@ -156,13 +156,14 @@ def _reuse_report(report_path: str, prov: dict, current_env: dict) -> tuple:
     return (rep if not problems else None), problems, env_problems
 
 
-def _check_e2e(evidence: dict, main_sha: str, tree_hash: str | None = None) -> list:
+def _check_e2e(evidence: dict, main_sha: str, tree_hash: str | None = None, require_bounded: bool = False) -> list:
     from .evidence import check_evidence
-    return check_evidence(evidence, main_sha, tree_hash=tree_hash)
+    return check_evidence(evidence, main_sha, tree_hash=tree_hash, require_bounded=require_bounded)
 
 
-def _check_ci_stages(path: str, main_sha: str, report: dict) -> list:
-    """ci_stage_results.json (Jenkinsfile_ci post) — the CLI consumes the same stage evidence the CI Promote stage checks (검토 C4)."""
+def _check_ci_stages(path: str, main_sha: str, report: dict, require_bounded: bool = False) -> list:
+    """ci_stage_results.json (Jenkinsfile_ci post) — the CLI consumes the same stage evidence the CI Promote stage checks (검토 C4).
+    require_bounded (2026-10-05): on a deployment that enables Tier 2 (SE_FINALIZER_BOUNDED=true) the bounded Harness stage is required too."""
     try:
         ci = _load_json(path)
     except (OSError, ValueError) as exc:
@@ -171,7 +172,8 @@ def _check_ci_stages(path: str, main_sha: str, report: dict) -> list:
     if ci.get("main_sha") != main_sha:
         problems.append(f"ci stage results are for main {str(ci.get('main_sha'))[:12]}, not {main_sha[:12]}")
     stages = ci.get("stages") or {}
-    bad = [f"{k}={stages.get(k, 'not_run')}" for k in REQUIRED_CI_STAGES if stages.get(k) != "PASS"]
+    required = REQUIRED_CI_STAGES + (("HARNESS_BOUNDED",) if require_bounded else ())
+    bad = [f"{k}={stages.get(k, 'not_run')}" for k in required if stages.get(k) != "PASS"]
     if bad:
         problems.append("required CI stages not PASS: " + ", ".join(bad))
     src = (report or {}).get("source") or {}
@@ -195,7 +197,7 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
             production_ref: str = DEFAULT_REF, push_remote="", skip_live: bool = True, netrc: str | None = None,
             verify_report: str | None = None, bootstrap_baseline: str | None = None, e2e_evidence: str | None = None,
             vault_password_file: str | None = None, jenkins_url: str = "https://jenkins-prod.gooddi.lab",
-            source: dict | None = None, ci_stage_results: str | None = None) -> dict:
+            source: dict | None = None, ci_stage_results: str | None = None, require_bounded: bool = False) -> dict:
     store = GitStore(repo_root)
     main_sha = store.rev_parse(sha)
     remotes = _split_remotes(push_remote)
@@ -283,15 +285,17 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
             evidence = _load_json(e2e_evidence)
         elif gates_dict.get("e2e_evidence"):
             evidence = gates_dict["e2e_evidence"]
-        e2e_problems = _check_e2e(evidence, main_sha, prov.get("tree_hash")) if evidence else ["no E2E evidence given (--e2e-evidence or an aggregated report)"]
-        result["e2e"] = {"ok": not e2e_problems, "problems": e2e_problems}
+        e2e_problems = (_check_e2e(evidence, main_sha, prov.get("tree_hash"), require_bounded=require_bounded) if evidence
+                        else ["no E2E evidence given (--e2e-evidence or an aggregated report)"])
+        result["e2e"] = {"ok": not e2e_problems, "problems": e2e_problems, "require_bounded": require_bounded}
         if e2e_problems and not dry_run:
             result["stage"] = "e2e"
             result["refused"] = "E2E evidence: " + "; ".join(e2e_problems[:5])
             return result
 
         # ── CI stage evidence (same candidate, required stages PASS) — required for a real promotion (검토 C4)
-        ci_problems = _check_ci_stages(ci_stage_results, main_sha, gates_dict) if ci_stage_results else ["no CI stage results given (--ci-stage-results ci_stage_results.json)"]
+        ci_problems = (_check_ci_stages(ci_stage_results, main_sha, gates_dict, require_bounded=require_bounded) if ci_stage_results
+                       else ["no CI stage results given (--ci-stage-results ci_stage_results.json)"])
         result["ci_stages"] = {"ok": not ci_problems, "problems": ci_problems, "path": ci_stage_results}
         if ci_problems and not dry_run:
             result["stage"] = "ci"
