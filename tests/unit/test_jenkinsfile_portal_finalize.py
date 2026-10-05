@@ -390,3 +390,14 @@ def test_callback_url_with_credentials_is_refused_without_echoing_it():
     for ok in ("http://portal.example.com", "https://portal:8443/api?mail=a@b", "http://10.0.0.1:8080/p#x@y"):
         assert not pat.match(ok), ok
 
+
+
+def test_operator_lines_found_on_the_real_console_are_plain():
+    """2026-10-05 main #146~#157 실화면: 연결 거부가 'HTTP 408' 로만 보였고(요청 도구가 연결 실패를 408 로 돌려준다 — quiet 라 도구 설명 없음),
+    [시간] 줄에 괄호가 겹쳤고, [요약] 소요 시간이 영문(durationString)이었다."""
+    assert "code == '408' ? ' — 연결하지 못했거나 응답 시간이 지났습니다(요청 도구는 연결 실패도 408 로 표시)'" in CALLBACK
+    gather = _stage("서버 정보 수집")
+    assert "중단 기준 ${exec.budget}초 — ${seLimitText(" in gather and "중단 기준 ${exec.budget}초(${seLimitText(" not in gather
+    summary_fn = _method("def seBuildSummary")
+    assert "durationString" not in summary_fn and "currentBuild.startTimeInMillis" in summary_fn and "분 ${took % 60L}초" in summary_fn
+    assert "'interrupted_unknown': '수집 단계를 마치지 못함" in TEXT
