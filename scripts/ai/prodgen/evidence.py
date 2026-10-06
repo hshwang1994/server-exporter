@@ -70,6 +70,7 @@ REQUIRED_HARNESS = ("normal_success", "archive_fail", "stash_fail", "both_fail",
                     "preserve_both_fail",
                     "preserve_cut_before_marker",
                     "preserve_cut_delete",
+                    "preserve_cut_owner_write",
                     "addon_decision_transient",
                     "addon_reuse_disabled",
                     "addon_copy_restore")
