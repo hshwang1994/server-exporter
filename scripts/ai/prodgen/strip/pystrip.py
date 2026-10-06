@@ -11,6 +11,7 @@ Verification (all must hold, otherwise ProdgenError / class B):
 from __future__ import annotations
 
 import ast
+import codecs
 import io
 import re
 import tokenize
@@ -21,6 +22,23 @@ from ..editlog import Edit, EditEngine
 DOC_ASSIGNS_LIBRARY = frozenset({"DOCUMENTATION", "RETURN", "EXAMPLES", "ANSIBLE_METADATA"})
 DOC_ASSIGNS_PLUGIN = frozenset({"RETURN", "EXAMPLES"})
 CODING_RE = re.compile(r"^[ \t\f]*#.*?coding[:=][ \t]*([-\w.]+)")
+
+
+
+def _keeps_source_encoding(line: str) -> bool:
+    """A coding declaration is runtime-required only when it names an encoding other than UTF-8 (2026-10-06, D13).
+
+    Python 3 reads source as UTF-8 by default (PEP 3120), so `# -*- coding: utf-8 -*-` changes nothing and is removed like any
+    other comment. Any other (or unknown) encoding is kept — removing it would change how the file is decoded.
+    """
+    m = CODING_RE.match(line)
+    if not m or not line.lstrip().startswith("#"):
+        return False
+    try:
+        return codecs.lookup(m.group(1)).name != "utf-8"
+    except LookupError:
+        return True
+
 
 RULE_SHEBANG = "python.shebang"
 RULE_CODING = "python.coding_declaration"
@@ -133,7 +151,7 @@ def detect(text: str, python_kind: str, doc_runtime=None) -> dict:
         if row == 1 and col == 0 and tok.string.startswith("#!"):
             preserved.append((row - 1, RULE_SHEBANG))
             continue
-        if row <= 2 and CODING_RE.match(lines[row - 1]) and lines[row - 1].lstrip().startswith("#"):
+        if row <= 2 and _keeps_source_encoding(lines[row - 1]):
             preserved.append((row - 1, RULE_CODING))
             continue
         comments.append((row - 1, col, tok.string))
@@ -227,7 +245,7 @@ def _verify(text: str, output: str, info: dict, path: str) -> None:
         raise ProdgenError(f"{path}: {len(remaining)} comment tokens remain (expected {allowed})")
     for tok in remaining:
         row, col = tok.start
-        ok = (row == 1 and col == 0 and tok.string.startswith("#!")) or (row <= 2 and CODING_RE.match(tok.line))
+        ok = (row == 1 and col == 0 and tok.string.startswith("#!")) or (row <= 2 and _keeps_source_encoding(tok.line))
         if not ok:
             raise ProdgenError(f"{path}: unexpected residual comment at line {row}")
     for node in ast.walk(got):

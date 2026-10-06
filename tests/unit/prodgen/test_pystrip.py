@@ -48,8 +48,8 @@ def test_library_drops_all_doc_assigns_and_docstrings():
     assert "DOCUMENTATION" not in out and "RETURN" not in out and "EXAMPLES" not in out
     assert "Module docstring" not in out and "Class doc" not in out
     assert "    def only_doc(self):\n        pass\n" in out
-    assert _no_comments(out) == [(1, "#!/usr/bin/python3"), (2, "# -*- coding: utf-8 -*-")]
-    assert [p.rule for p in res.preserved] == ["python.shebang", "python.coding_declaration"]
+    assert _no_comments(out) == [(1, "#!/usr/bin/python3")], "UTF-8 선언은 Python 3 기본값이라 실행에 필요 없다 (D13)"
+    assert [p.rule for p in res.preserved] == ["python.shebang"]
     compile(out, "<t>", "exec")
     for node in ast.walk(ast.parse(out)):
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef)):
@@ -99,5 +99,31 @@ def test_docstring_sharing_line_with_code_is_class_b():
 
 def test_residual_reports_remaining_comments_and_rules():
     stripped = pystrip.strip(SRC, "library").output
-    assert pystrip.residual(stripped, "library") == [(1, "python.shebang"), (2, "python.coding_declaration")]
+    assert pystrip.residual(stripped, "library") == [(1, "python.shebang")]
     assert (3, None) in pystrip.residual("x = 1\ny = 2\n# left\n", "script")
+
+
+
+@pytest.mark.parametrize("cookie", ["# -*- coding: utf-8 -*-", "# coding=utf8", "# vim: set fileencoding=UTF-8 :", "# -*- coding: utf_8 -*-"])
+def test_utf8_coding_declarations_are_removed(cookie):
+    """2026-10-06 (D13): Python 3 의 기본 원본 인코딩은 UTF-8 이다(PEP 3120) — 그 선언은 실행에 필요 없는 설명이라 지운다."""
+    src = "#!/usr/bin/env python3\n" + cookie + "\nx = '한글'\n"
+    res = pystrip.strip(src, "script")
+    assert res.output == "#!/usr/bin/env python3\nx = '한글'\n" and not res.class_b
+    assert [p.rule for p in res.preserved] == ["python.shebang"]
+    assert pystrip.residual(res.output, "script") == [(1, "python.shebang")]
+
+
+@pytest.mark.parametrize("cookie", ["# -*- coding: latin-1 -*-", "# coding: euc-kr", "# -*- coding: utf-8-sig -*-", "# coding: no-such-codec"])
+def test_other_coding_declarations_are_kept(cookie):
+    """다른(또는 모르는) 인코딩 선언은 원본을 읽는 방법을 바꾸므로 실행에 필요하다 — 남긴다."""
+    src = "#!/usr/bin/env python3\n" + cookie + "\nx = 1  # trailing\n"
+    res = pystrip.strip(src, "script")
+    assert res.output == "#!/usr/bin/env python3\n" + cookie + "\nx = 1\n"
+    assert [p.rule for p in res.preserved] == ["python.shebang", "python.coding_declaration"]
+
+
+def test_a_coding_text_below_line_two_is_an_ordinary_comment():
+    src = "x = 1\ny = 2\n# -*- coding: latin-1 -*-\n"
+    res = pystrip.strip(src, "script")
+    assert res.output == "x = 1\ny = 2\n" and res.preserved == []
