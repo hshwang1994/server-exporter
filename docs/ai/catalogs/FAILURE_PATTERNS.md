@@ -888,3 +888,15 @@
   `tests/unit/test_gather_state.py` 반례(다른 프로세스 OOM + rc 1 · `kill -9` · 사용자 취소 · 시도 시작 뒤 들어온 프로세스, 이 실행의 OOM + 신호).
 - 재발 방지: 원인 판정의 근거는 "같은 시간 · 같은 범위" 가 아니라 이 실행과의 연결(PID 등)로 둔다. 격리 시험의 결과를 공유 환경 판정으로 옮길 때 반례를 먼저 만든다.
 - 관련 rule: rule 95 R1 · rule 25 R7-B
+
+## 2026-10-07 — 커널 로그 시각을 /proc/uptime 과 비교해 이 실행의 OOM 을 놓쳤다
+
+- 카테고리: external-contract-unverified
+- 발견 위치: 10차 실기(Runner03 격리 시험, 실제 커널 OOM). 이 실행의 ansible-playbook PID 가 커널 로그의 OOM 종료 기록에 그대로 있는데도
+  `runner_oom` 이 아니라 `aborted` 로 판정됐다. 시도 시작 uptime 1357006.19, 그 뒤의 OOM 기록 시각 1356984.27.
+- 원인: 시도 시작 기준점을 `/proc/uptime`(CLOCK_BOOTTIME)으로 잡고 커널 로그 시각(printk 시계)과 비교했다. 두 시계는 VM(VMware, clocksource tsc)에서
+  약 22초 어긋났다. 단위 시험은 이미 걸러진 커널 기록을 넣어 두 시계를 함께 쓰는 경로를 타지 않았다.
+- 수정: 기준점을 커널 로그 자신의 시계로 — 시도 시작 때 dmesg 마지막 줄의 시각(`kernel_mark`). 시작 때 읽지 못했으면 기준점이 없어 연결하지 않는다.
+  `tests/unit/test_gather_state.py::test_this_runs_oom_is_linked_even_when_the_kernel_log_clock_lags_uptime`(Runner03 실측 줄 그대로). 고친 뒤 같은 실기 6사례가 기대대로.
+- 재발 방지: 서로 다른 출처의 시각을 비교할 때 같은 시계인지 먼저 본다. 해석 함수 단위 시험만으로 끝내지 말고 실제 출력(실장비 형식)을 처음부터 끝까지 태운다.
+- 관련 rule: rule 95 R1 · rule 25 R7-A-1 · CLAUDE.md §16

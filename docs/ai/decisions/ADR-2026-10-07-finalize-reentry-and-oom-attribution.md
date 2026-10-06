@@ -42,11 +42,15 @@
 5. **보존 뒤 재시도 중단 (N1)**: 마지막 보존이 결과를 포함한 보관(archive) **또는** 전달(stash) 중 하나라도 마치면 표식(`SE_FINAL_PRESERVED`)을 남긴다.
    그 뒤에 끊기면 다시 시도하지 않고 직전 판정으로 끝낸다. 둘 다 성공해야 한다는 조건은 만들지 않는다. 다시 쓰는 소유 기록은 `commit` · `prepared` 를 유지한다.
 6. **OOM 은 관측과 원인을 나눈다 (R5)**: cgroup `memory.events` · `/proc/vmstat` 의 OOM 종료 증가는 관측(`oom_observed`)으로만 남긴다.
-   원인(`runner_oom`)은 바깥에서 끝난 시도(신호 · 한계가 아닌 137 · 끝 기록 없음)이면서 커널 로그(`dmesg`, 시도 시작 이후)의 OOM 종료 기록 PID 가 이 실행
+   원인(`runner_oom`)은 바깥에서 끝난 시도(신호 · 한계가 아닌 137 · 끝 기록 없음)이면서 커널 로그(`dmesg`, 시도 시작 기준점 이후)의 OOM 종료 기록 PID 가 이 실행
    (`run_gather.sh` · ansible-playbook 주 프로세스)의 것일 때만이다. ansible-playbook PID 는 `run_gather.sh` 가 `exec` 직전에 기록한다(PID 가 같아 신호 동작은 그대로).
    스스로 끝난 실패(rc 1 등)는 `failed_run`, 근거 없는 바깥 종료는 `process_lost` / `aborted`(원인 미확인)다. 사용자 취소는 Groovy 가 확인한 뒤
    `gather_state.py classify --user-abort` 로 `aborted` 를 확정한다. 커널 로그를 읽을 수 없는 Runner 에서는 공유 범위의 OOM 을 원인으로 정하지 않는다.
    시도 시작 때 cgroup 구성원만으로 "격리 범위" 를 인정하지 않는다 — 시작 뒤에 다른 프로세스가 들어올 수 있기 때문이다.
+   시도 시작 기준점은 **커널 로그 자신의 시계**(시작 때 마지막 줄의 시각)로 잡는다. `/proc/uptime` 과 비교하지 않는다 — 실기(Runner03, VMware)에서
+   커널 로그 시각이 `/proc/uptime` 보다 약 22초 늦어, uptime 으로 잡은 기준점이 이 실행의 OOM 종료 기록을 "시작 전" 으로 빼 버렸다.
+   시작 때 커널 로그를 읽지 못했으면 기준점이 없어 연결하지 않는다(오래된 같은 PID 번호를 잇지 않는다).
+   ansible 작업자(fork) 프로세스의 PID 는 남지 않아 연결하지 못한다 — 작업자만 OOM 으로 끝나면 원인 미확인이다(systemd 가 범위를 멈추면 연결 끊김 경로로 재개).
 7. **R6 시험 조건 (보정 5)**: 운영 경로에 새 SSH · WinRM · HTTP 제한을 넣지 않는다. 시험 6 · 18 은 운영 유효 설정(Linux `os-gather/site.yml` 의
    `ConnectTimeout=60` · `ServerAliveInterval=10` · ansible `timeout` 60, Windows operation 60 · read 70)과 실제 실행 인자를 기록한 뒤 그 값으로 기대 결과를 정한다.
    가짜 시계 · 축약 상수를 쓰는 Harness · pytest 는 별도 동작 시험으로 표시한다.
