@@ -19,7 +19,13 @@ Map seFallbackCanon() {
                                'virtual_switches': [], 'portgroups': [], 'driver_map': [], 'summary': ['groups': []]],
                    'users': [], 'firmware': [], 'power': null, 'thermal': ['temperatures': [], 'fans': []]],
         emitFailed: '수집은 끝났지만 결과를 내보내는 단계에서 중단되었습니다. 기본 수집 결과는 그대로입니다.',
+        infraReason: '수집을 실행하던 Runner 가 회복되지 않아 이 대상의 수집을 마치지 못했습니다.',
     ]
+}
+
+@NonCPS
+boolean seIsInfraOutcome(String outcome) {
+    return outcome in ['infra_wait_expired', 'resume_impossible']
 }
 
 @NonCPS
@@ -111,14 +117,15 @@ Map seReconcileRaw(String manifestJson, String outputText, String checkpointText
         Map meta = [:];  for (String k in canon.meta) { meta[k] = null }
         Map corr = [:];  for (String k in canon.corr) { corr[k] = (k == 'host_ip' || (k == 'bmc_ip' && channel == 'redfish')) ? ip : null }
         String detail = "envelope synthesized by Layer B from accepted manifest; outcome=${outcome}".toString()
+        String reason = (seIsInfraOutcome(outcome) && canon.infraReason) ? canon.infraReason : canon.reason
         Map env = [
             schema_version: '1', target_type: channel, collection_method: canon.method[channel], ip: ip, hostname: null,
             vendor: null, status: 'failed', sections: sections,
             diagnosis: [reachable: null, port_open: null, protocol_supported: null, auth_success: null,
-                        failure_stage: 'fallback', failure_code: 'OUTPUT_BUILD_FAILED', failure_reason: canon.reason,
+                        failure_stage: 'fallback', failure_code: 'OUTPUT_BUILD_FAILED', failure_reason: reason,
                         details: [channel: channel, finalizer: 'layer_b', outcome: outcome]],
             meta: meta, correlation: corr,
-            errors: [[section: 'gather', message: canon.reason, detail: detail]],
+            errors: [[section: 'gather', message: reason, detail: detail]],
             data: new groovy.json.JsonSlurper().parseText(groovy.json.JsonOutput.toJson(canon.skeleton)),
         ]
         lines << groovy.json.JsonOutput.toJson(env); synthetic++

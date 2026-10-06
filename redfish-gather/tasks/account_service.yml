@@ -11,6 +11,7 @@
          else (not (_rf_account_reconcile_allowed | default(false) | bool)) }}
     _rf_acct_result: {}
     _rf_acct_auth_ok: false
+    _rf_acct_stopped: false
     _rf_acct_recovery_label: ""
   no_log: true
 
@@ -106,7 +107,9 @@
         loop_var: _try_recovery
         extended: true
         label: "{{ _try_recovery.label | default('unlabeled') }}"
-      when: not (_rf_acct_auth_ok | default(false) | bool)
+      when:
+        - not (_rf_acct_auth_ok | default(false) | bool)
+        - not (_rf_acct_stopped | default(false) | bool)
 
     - name: "redfish | account_service | record meta"
       ansible.builtin.set_fact:

@@ -62,6 +62,8 @@ _fr_catalog:
 
   output_build_failed:
     default: "개더링 프로젝트에서 수집 결과를 만들지 못했습니다."
+  infra_unavailable:
+    default: "수집을 실행하던 Runner 가 회복되지 않아 이 대상의 수집을 마치지 못했습니다."
 
 _fr_code_keys:
   DNS_RESOLUTION_FAILED:      [ip_invalid]
@@ -76,6 +78,6 @@ _fr_code_keys:
                                project_vault_no_account]
   GATHER_FAILED:              [gather_after_auth, gather_connection_lost, gather_no_data,
                                gather_internal]
-  OUTPUT_BUILD_FAILED:        [output_build_failed]
+  OUTPUT_BUILD_FAILED:        [output_build_failed, infra_unavailable]
 
 _fr_errors_truncated: "표시하지 않은 오류가 더 있습니다."

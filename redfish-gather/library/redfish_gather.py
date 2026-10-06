@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-# -*- coding: utf-8 -*-
 
 __metaclass__ = type
 
@@ -420,6 +419,8 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
+    except http_client.HTTPException as e:
+        return 0, {}, f'Response lost: {type(e).__name__}: {e}'
     except (OSError, ValueError) as e:
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
@@ -445,6 +446,8 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
         return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
+    except http_client.HTTPException as e:
+        return 0, {}, f'Response lost: {type(e).__name__}: {e}'
     except (OSError, ValueError) as e:
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
@@ -485,6 +488,8 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
         return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
+    except http_client.HTTPException as e:
+        return 0, {}, f'Response lost: {type(e).__name__}: {e}'
     except (OSError, ValueError) as e:
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
@@ -1963,7 +1968,7 @@ def _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout,
     if cerr or cst != 200:
         errors.append(_err('storage',
                            f'Controllers 컬렉션 fetch 실패 ({ctrl_link}): {cerr or cst}',
-                           detail={'status_code': cst}))
+                           detail={'status_code': cst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
         return {'controller_fetch_status': cst}, errors
     ctrl_members = _safe(ctrl_coll, 'Members') or []
     if not isinstance(ctrl_members, list) or not ctrl_members:
@@ -1975,7 +1980,7 @@ def _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout,
     if cerr2 or cst2 != 200:
         errors.append(_err('storage',
                            f'Controller fetch 실패 ({c_uri}): {cerr2 or cst2}',
-                           detail={'status_code': cst2}))
+                           detail={'status_code': cst2}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
         return {'controller_fetch_status': cst2}, errors
     return {
         'controller_name':         _safe(cdata, 'Name'),
@@ -4402,6 +4407,10 @@ def interpret_write_response(family, code, body, err, requested=None):
     return True, None
 
 
+def _write_outcome_unknown(code, err):
+    return not code and bool(err)
+
+
 def _create_target_uri(family, discovery, explicit_id=None):
     d = discovery or {}
     accounts_uri = d.get('accounts_uri') or 'AccountService/Accounts'
@@ -4602,6 +4611,65 @@ def account_service_provision(
                 return True, code_v, None, attempt + 1
             _spend_auth(target_username)
         return False, code_v, err_v, len(verify_schedule)
+
+    def _settle_lost_write(slot_uri, what, err_text, created=False):
+        out['write_response_lost'] = True
+        if created and slot_uri:
+            st_c, slot_now, err_c = _get(bmc_ip, _p(slot_uri), current_username, current_password, timeout, verify_ssl)
+            if st_c == 200 and not err_c and isinstance(slot_now, dict) and 'UserName' in slot_now \
+                    and _safe(slot_now, 'UserName', default='') != target_username:
+                out['verification'] = 'failed'
+                out['errors'].append(_err(
+                    'account_service',
+                    '표준 계정 쓰기 요청의 응답을 받지 못했고, 다시 읽은 슬롯에 표준 계정이 없어 반영되지 않은 것으로 봅니다. '
+                    '같은 쓰기를 다시 보내지 않았습니다.',
+                    detail=f'{what} response lost: {err_text}; slot={slot_uri} UserName unchanged',
+                ))
+                return out
+        state_ok, _mm = _confirm_account_state(
+            bmc_ip, slot_uri, target_username, family,
+            current_username, current_password, timeout, verify_ssl, out)
+        ok_v, vcode, verr, attempts = _verify_standard_credential()
+        out['verify_attempts'] = attempts
+        if ok_v and state_ok is not False:
+            out['recovered'] = True
+            out['verification'] = 'verified'
+            return out
+        out['verification'] = 'state_mismatch' if ok_v else 'failed'
+        if not ok_v:
+            out['errors'].append(_err(
+                'account_service',
+                '표준 계정 쓰기 요청의 응답을 받지 못했고, 다시 읽고 다시 인증해도 반영을 확인하지 못했습니다. '
+                '같은 쓰기를 다시 보내지 않았습니다. 계정 상태를 확인하세요.',
+                detail='; '.join(x for x in (f'{what} response lost: {err_text}', verr or f'verify HTTP {vcode}',
+                                              f'verify_attempts={attempts}') if x),
+            ))
+        return out
+
+    def _locate_after_lost_create(what, err_text):
+        recheck = account_service_discover(bmc_ip, current_username, current_password,
+                                           timeout, verify_ssl,
+                                           service_root=discovery.get('service'))
+        again = [a for a in (recheck.get('accounts') or [])
+                 if (a.get('username') or '') == target_username]
+        if recheck.get('enumeration') != ENUM_COMPLETE or len(again) != 1:
+            out['write_response_lost'] = True
+            out['verification'] = 'failed'
+            if recheck.get('enumeration') != ENUM_COMPLETE:
+                message = ('표준 계정 생성 요청의 응답을 받지 못했고 계정 목록도 끝까지 다시 읽지 못했습니다. '
+                           '다시 만들지 않았습니다. 계정 상태를 확인하세요.')
+            elif not again:
+                message = ('표준 계정 생성 요청의 응답을 받지 못했고 다시 읽은 계정 목록에 표준 계정이 없습니다. '
+                           '반영되지 않은 것으로 보고 다시 만들지 않았습니다.')
+            else:
+                message = ('표준 계정 생성 요청의 응답을 받지 못했고 같은 이름의 계정이 여러 개 보입니다. '
+                           '자동 정리를 중단했습니다. 중복 계정을 정리하세요.')
+            out['errors'].append(_err(
+                'account_service', message,
+                detail=f'{what} response lost: {err_text}; re-enumeration={recheck.get("enumeration")} matches={len(again)}',
+            ))
+            return None
+        return again[0].get('slot_uri')
 
     discovery = account_service_discover(
         bmc_ip, current_username, current_password, timeout, verify_ssl,
@@ -4820,6 +4888,11 @@ def account_service_provision(
                     current_username, current_password, timeout, verify_ssl,
                     {'If-Match': etag},
                 )
+        if _write_outcome_unknown(code, err):
+            out['write_http_status'] = code
+            out['write_accepted'] = None
+            out['vendor_status'] = 'response_lost'
+            return _settle_lost_write(existing.get('slot_uri'), 'PATCH', err)
         out['write_response_info'] = _extended_info(patch_resp) or out.get('write_response_info')
         out['write_http_status'] = code
         accepted, reject_reason = interpret_write_response(
@@ -4843,8 +4916,14 @@ def account_service_provision(
             )
             f_ok, f_reason = interpret_write_response(family, f_code, f_resp, f_err)
             out['followup_properties'] = sorted(followup_body)
-            out['followup_accepted'] = f_ok
-            if not f_ok:
+            out['followup_accepted'] = None if _write_outcome_unknown(f_code, f_err) else f_ok
+            if _write_outcome_unknown(f_code, f_err):
+                out['errors'].append(_err(
+                    'account_service',
+                    '표준 계정 비밀번호는 적용됐고, 계정 속성(권한/활성) 동기화 요청은 응답을 받지 못했습니다. 다시 보내지 않았습니다.',
+                    detail=f'properties={",".join(sorted(followup_body))}; PATCH response lost: {f_err}',
+                ))
+            elif not f_ok:
                 out['errors'].append(_err(
                     'account_service',
                     '표준 계정 비밀번호는 적용됐지만 계정 속성(권한/활성) 동기화는 거부됐습니다.',
@@ -4908,6 +4987,14 @@ def account_service_provision(
             bmc_ip, _p(existing['slot_uri']),
             current_username, current_password, timeout, verify_ssl,
         )
+        if _write_outcome_unknown(del_code, del_err):
+            out['write_response_lost'] = True
+            out['errors'].append(_err(
+                'account_service',
+                '계정 삭제 요청의 응답을 받지 못해 다시 만들지 않았습니다. 계정 상태를 확인하세요.',
+                detail=f'DELETE response lost: {del_err} (slot={existing.get("id")})',
+            ))
+            return out
         if del_code not in (200, 204) or del_err:
             out['errors'].append(_err(
                 'account_service',
@@ -4925,6 +5012,15 @@ def account_service_provision(
             current_username, current_password, timeout, verify_ssl,
         )
         out['write_http_status'] = post_code
+        if _write_outcome_unknown(post_code, post_err):
+            out['write_accepted'] = None
+            out['vendor_status'] = 'response_lost'
+            out['method'] = 'delete_repost'
+            found = _locate_after_lost_create('POST', post_err)
+            if found is None:
+                return out
+            out['slot_uri'] = found
+            return _settle_lost_write(found, 'POST', post_err)
         accepted_r, reason_r = interpret_write_response(family, post_code, post_data, post_err)
         out['write_accepted'] = accepted_r
         out['vendor_status'] = reason_r
@@ -5005,6 +5101,10 @@ def account_service_provision(
         )
         out['write_response_info'] = _extended_info(patch_resp) or out['write_response_info']
         out['write_http_status'] = code
+        if _write_outcome_unknown(code, err):
+            out['write_accepted'] = None
+            out['vendor_status'] = 'response_lost'
+            return _settle_lost_write(chosen_slot.get('slot_uri'), 'PATCH', err, created=True)
         accepted, reject_reason = interpret_write_response(family, code, patch_resp, err)
         out['write_accepted'] = accepted
         out['vendor_status'] = reject_reason
@@ -5041,6 +5141,13 @@ def account_service_provision(
                 out['write_response_info'],
             ) if x),
         ))
+        if verify_code != 401:
+            out['errors'].append(_err(
+                'account_service',
+                '인증 확인이 확정되지 않아 만든 슬롯을 비우지 않았습니다. 해당 슬롯 상태를 확인하세요.',
+                detail=f'verify HTTP {verify_code}; {verify_err or "-"}; slot={chosen_slot.get("id")}',
+            ))
+            return out
         cl_code, cl_resp, cl_err = _patch(
             bmc_ip, _p(chosen_slot['slot_uri']),
             {'UserName': '', 'Enabled': False, 'RoleId': 'None'},
@@ -5066,6 +5173,14 @@ def account_service_provision(
         current_username, current_password, timeout, verify_ssl,
     )
     out['write_http_status'] = code
+    if _write_outcome_unknown(code, err):
+        out['write_accepted'] = None
+        out['vendor_status'] = 'response_lost'
+        found = _locate_after_lost_create('POST', err)
+        if found is None:
+            return out
+        out['slot_uri'] = found
+        return _settle_lost_write(found, 'POST', err)
     accepted, reject_reason = interpret_write_response(
         family, code, resp_data, err, requested=set(body_base))
     out['write_response_info'] = _extended_info(resp_data) or out['write_response_info']

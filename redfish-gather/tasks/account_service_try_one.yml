@@ -1,6 +1,8 @@
 ---
 
-- when: not (_rf_acct_auth_ok | default(false) | bool)
+- when:
+    - not (_rf_acct_auth_ok | default(false) | bool)
+    - not (_rf_acct_stopped | default(false) | bool)
   block:
 
     - name: "redfish | account_service | mark recovery attempt in flight"
@@ -38,6 +40,8 @@
         _rf_attempt_id: ''
         _rf_acct_attempt_auth_ok: >-
           {{ ((_rf_acct_attempt.account_service | default({})).auth_ok | default(false)) | bool }}
+        _rf_acct_attempt_rejected: >-
+          {{ ((_rf_acct_attempt.account_service | default({})).auth_rejected | default(false)) | bool }}
       no_log: true
 
     - name: "redfish | account_service | adopt authenticated recovery result"
@@ -65,10 +69,16 @@
     - name: "redfish | account_service | backoff on recovery auth failure"
       when:
         - not (_rf_acct_attempt_auth_ok | bool)
+        - _rf_acct_attempt_rejected | bool
         - (ansible_loop is not defined) or (ansible_loop.index < ansible_loop.length)
       ansible.builtin.command: >-
-        sleep {{ _rf_auth_backoff_seconds | default(65)
-                 if (((_rf_acct_attempt.account_service | default({})).auth_rejected | default(false)) | bool)
-                 else (_rf_transport_backoff_seconds | default(5)) }}
+        sleep {{ _rf_auth_backoff_seconds | default(65) }}
       delegate_to: localhost
       changed_when: false
+
+    - name: "redfish | account_service | stop recovery candidates unless explicitly rejected"
+      when:
+        - not (_rf_acct_attempt_auth_ok | bool)
+        - not (_rf_acct_attempt_rejected | bool)
+      ansible.builtin.set_fact:
+        _rf_acct_stopped: true

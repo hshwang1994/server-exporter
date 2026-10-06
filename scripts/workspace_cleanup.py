@@ -1,29 +1,4 @@
 #!/usr/bin/env python3
-"""scripts/workspace_cleanup.py — Runner 에 남은 이 Job 의 끝난 작업 폴더 정리 (2026-10-05, 8차 R8). 운영 runtime 파일이다.
-
-Jenkinsfile_portal 의 서버 정보 수집 단계(post)가 결과 보존 중에 부른다. 하루 한 번만 실제로 본다(같은 Runner · 같은 Job 기준).
-
-왜 필요한가: 작업 폴더는 빌드마다 다르다(`<Job 이름>-<빌드 번호>`). 결과를 보관한 빌드는 자기 폴더를 지우지만, 보관에 실패한 빌드나
-Runner 연결이 끊긴 빌드의 폴더는 다음 빌드가 다시 쓰지 않아 계속 남는다. Jenkins 의 기본 작업 폴더 정리는 이런 빌드별 폴더를 보지 않는다.
-
-무엇을 지우나 (모두 이 Job 의 폴더만 — 이름 `<job-base>-<숫자>` 이고 그 안의 소유 기록이 이 Job · 이 빌드 번호를 가리킬 때)
-  - 결과 보관을 확인한 폴더(.se_workspace.json preserved=true): 끝난 지 --keep-days 가 지나면 통째로 지운다.
-  - 보관하지 못한 결과가 있는 폴더: 결과 파일(gather_* · callback_body.json · finalize_summary.json …)만 **그 자리에 남기고**
-    다시 만들 수 있는 부분(저장소 사본 · Add-on 사본 등)만 지운다. 남긴 파일 목록 · 크기 · 이유는 .se_kept_results.json 에 적는다.
-    이 폴더는 자동으로 지우지 않는다 — 그 빌드의 유일한 결과일 수 있다. 실행할 때마다 수와 크기를 알린다(사람이 확인한 뒤 지운다).
-  - 결과 파일이 하나도 없는 폴더(수집 전에 끝난 빌드): 지킬 결과가 없어 통째로 지운다.
-  - `<폴더>@tmp`(Jenkins 의 실행 제어 폴더): 같은 이름의 폴더가 없거나 위에서 정리됐으면 지운다. 결과가 들어 있지 않다.
-건드리지 않는 것
-  - 소유를 확인할 수 없는 폴더(소유 기록 · 접수 목록이 없거나 다른 Job · 다른 빌드 번호) — 수와 이름만 알린다.
-  - 아직 실행 중일 수 있는 폴더: 끝 기록이 없고 시작 뒤 빌드 한계(12시간) + 1시간이 지나지 않았거나, 어떤 프로세스가 그 안을 쓰는 중.
-  - 지금 빌드의 폴더, 링크(심볼릭 링크)인 폴더, 실제 경로가 작업 폴더 상위 밖인 폴더. 폴더 안의 링크는 따라가지 않고 링크만 지운다.
-기간은 빌드 끝 시각(소유 기록의 ended_epoch)으로 센다. 끝 기록이 없으면 시작 + 빌드 한계를 끝으로 본다(늦은 쪽으로 어림).
-옛 폴더(소유 기록이 생기기 전)는 접수 목록(gather_manifest.json)으로 소유를 확인하고, 결과 파일의 마지막 수정 시각을 끝으로 어림한다.
-
-동시 실행: 같은 Job 의 정리가 겹치지 않게 잠금 폴더(.se-cleanup-<job-base>.lock)를 쓴다. 1시간이 지난 잠금은 버려진 것으로 본다.
-결과: 콘솔에 [작업 폴더 정리] 줄, --report 에 JSON. 비밀값은 다루지 않는다. 종료 코드는 언제나 0 이다(정리 실패가 수집 결과를 바꾸지 않는다).
-Python 3.6 이상 · 표준 라이브러리만 (Runner 의 venv 가 없을 때 시스템 python3 로도 돈다).
-"""
 import argparse
 import json
 import os
@@ -36,7 +11,7 @@ import time
 RESULT_NAMES = (
     "gather_output.json", "gather_manifest.json", "gather_rc.txt", "gather_run.json", "gather_progress.jsonl",
     "gather_checkpoint.jsonl", "gather_final.jsonl", "gather_finalize_report.json", "workspace_cleanup.json",
-    "callback_body.json", "finalize_summary.json",
+    "callback_body.json", "finalize_summary.json", "gather_tail_fragments.jsonl",
 )
 RESULT_DIRS = ("gather_auth_evidence",)
 OWNER_FILE = ".se_workspace.json"
@@ -244,11 +219,11 @@ def reduce_to_results(path, results, reason):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(description="이 Job 의 끝난 작업 폴더 정리 (하루 한 번)")
     ap.add_argument("--current", required=True, help="지금 빌드의 작업 폴더")
     ap.add_argument("--job", required=True, help="JOB_NAME (폴더 포함 전체 이름)")
     ap.add_argument("--job-base", required=True, help="JOB_BASE_NAME (작업 폴더 이름의 앞부분)")
-    ap.add_argument("--build-limit-sec", type=int, default=43200)
+    ap.add_argument("--build-limit-sec", type=int, default=295200, help="최대 빌드 수명(초) — 끝 기록이 없는 폴더를 실행 중으로 보는 기간")
     ap.add_argument("--keep-days", type=int, default=7)
     ap.add_argument("--every-sec", type=int, default=86400)
     ap.add_argument("--report", default="")

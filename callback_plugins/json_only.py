@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 __metaclass__ = type
 
 import datetime

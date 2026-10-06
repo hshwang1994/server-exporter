@@ -10,6 +10,7 @@
     _rf_failed_attempt_notes: "{{ _rf_failed_attempt_notes | default([]) }}"
     _rf_attempt_id: "{{ _rf_attempt_id | default('') }}"
     _rf_attempt_seq: "{{ _rf_attempt_seq | default(0) }}"
+    _rf_candidates_stopped: false
   no_log: true
 
 - name: "redfish | collect_standard | warn no accounts"
@@ -85,14 +86,18 @@
   when:
     - (_rf_try_accounts | default([])) | length > 0
     - not (_rf_collect_ok | default(false) | bool)
+    - not (_rf_candidates_stopped | default(false) | bool)
 
 - name: "redfish | collect_standard | primary 자격 거부 판정"
   ansible.builtin.set_fact:
     _rf_primary_auth_rejected: >-
-      {{ ((_rf_auth_observations | default([]))
-          | selectattr('role', 'eq', 'primary')
-          | selectattr('status', 'eq', 401)
-          | list | length) > 0 }}
+      {{ (((_rf_auth_observations | default([]))
+           | selectattr('role', 'eq', 'primary')
+           | selectattr('status', 'eq', 401)
+           | list | length) > 0)
+         and (((_rf_auth_observations | default([]))
+               | rejectattr('status', 'eq', 401)
+               | list | length) == 0) }}
 
 - name: "redfish | collect_standard | set vendor"
   ansible.builtin.set_fact:

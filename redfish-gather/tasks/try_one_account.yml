@@ -1,6 +1,8 @@
 ---
 
-- when: not (_rf_collect_ok | default(false) | bool)
+- when:
+    - not (_rf_collect_ok | default(false) | bool)
+    - not (_rf_candidates_stopped | default(false) | bool)
   block:
 
     - name: "redfish | try_account | mark attempt in flight"
@@ -90,10 +92,16 @@
     - name: "redfish | try_account | backoff on failure"
       when:
         - not (_rf_attempt_ok | bool)
+        - (((_rf_attempt | default({}, true)).auth_evidence | default({}, true)).first_auth_status | default(none)) == 401
         - (ansible_loop is not defined) or (ansible_loop.index < ansible_loop.length)
       ansible.builtin.command: >-
-        sleep {{ _rf_auth_backoff_seconds | default(65)
-                 if ((_rf_attempt.auth_evidence | default({})).first_auth_status | default(0)) == 401
-                 else (_rf_transport_backoff_seconds | default(5)) }}
+        sleep {{ _rf_auth_backoff_seconds | default(65) }}
       delegate_to: localhost
       changed_when: false
+
+    - name: "redfish | try_account | stop candidates unless explicitly rejected"
+      when:
+        - not (_rf_attempt_ok | bool)
+        - (((_rf_attempt | default({}, true)).auth_evidence | default({}, true)).first_auth_status | default(none)) != 401
+      ansible.builtin.set_fact:
+        _rf_candidates_stopped: true

@@ -1,27 +1,4 @@
 #!/usr/bin/env python3
-"""finalize_gather_output.py — Layer A finalizer: 요청 대상 1개 = 결과 envelope 1개 (2026-10-03, Plan §6-4 D3).
-
-Gather stage 의 post{always} 에서 Agent 위에서 돈다. ansible-playbook 이 어떻게 끝났든(완료 · timeout INT · 준비 실패)
-접수 manifest 의 모든 IP 에 대해 envelope 을 정확히 하나씩 가진 `gather_final.jsonl` 과 처리 보고 `gather_finalize_report.json`
-을 만든다. Ansible 콜백(json_only)이 `on_stats` 에서 하던 보충은 강제 종료 뒤에는 돌지 않으므로, 그 자리를 **파일 증거**로 메운다.
-
-입력 (workspace 안, 모두 선택이지만 manifest 는 필수)
-  gather_manifest.json    Jenkins Validate 가 만든 접수 집합 {schema, build, channel, request, ips[]}
-  gather_output.json      json_only 가 OUTPUT 태스크마다 append 한 envelope JSONL
-  gather_checkpoint.jsonl json_only 가 CHECKPOINT(Add-on 전 조립본) 태스크마다 append 한 envelope JSONL
-  gather_progress.jsonl   host 당 전이 이벤트 JSONL — {ts, host, ip, event, task, detail, diagnosis?, outcome?, location?}
-                          event ∈ first_seen | precheck | cred_load | auth_proven | checkpoint | addon_started | addon_done | emitted | lost
-  gather_rc.txt           ansible-playbook(또는 timeout) 의 rc
-
-출력
-  gather_final.jsonl          접수 순서대로 host 당 1줄 (OUTPUT 줄은 원문 그대로, 보충분만 새로 직렬화)
-  gather_finalize_report.json accepted/kept/by_origin/filled/dropped/conflicts/truncated_tail/corrupt_lines/outcome/rc/exit_code
-
-종료 코드: 0 정상 · 2 입력 손상이 있었으나 처리함(절단/손상 줄 드롭·보충) · 3 도구 실패(manifest 없음 · 쓰기 실패 등 — Layer B 가 raw 로 진행)
-
-문장·shape 는 **정본 파일을 읽어** 쓴다(복제 없음): common/vars/failure_reasons.yml(_fr_catalog), common/vars/supported_sections.yml,
-common/tasks/normalize/init_fragments.yml(_merged_data) · build_meta.yml · build_correlation.yml. 새 failure_stage/failure_code 는 만들지 않는다.
-"""
 from __future__ import annotations
 
 import argparse
@@ -187,10 +164,24 @@ def shape_gate(obj, channel, accepted):
     return None
 
 
+def _new_ctx():
+    return {'events': [], 'diagnosis': None, 'auth_proven': False, 'lost': False,
+            'checkpoint': False, 'addon_started': False, 'addon_done': False,
+            'emitted': False, 'cred_load_outcome': None, 'location': None,
+            'fail_detail': None, 'last_task': None}
+
+
 def load_progress(path: Path, report: dict):
     ctx = {}
     for line_no, text, ev in read_jsonl(path, report, 'progress'):
         if not isinstance(ev, dict):
+            continue
+        if ev.get('event') == 'attempt' and isinstance(ev.get('hosts'), list):
+            for h in ev['hosts']:
+                if isinstance(h, str) and h in ctx:
+                    loc = ctx[h].get('location')
+                    ctx[h] = _new_ctx()
+                    ctx[h]['location'] = loc
             continue
         key = ev.get('ip') or ev.get('host')
         if not key:
@@ -198,10 +189,7 @@ def load_progress(path: Path, report: dict):
         if not isinstance(key, str):
             report['corrupt_lines'].append({'file': 'progress', 'line': line_no, 'preview': text[:MAX_CORRUPT_PREVIEW]})
             continue
-        c = ctx.setdefault(key, {'events': [], 'diagnosis': None, 'auth_proven': False, 'lost': False,
-                                 'checkpoint': False, 'addon_started': False, 'addon_done': False,
-                                 'emitted': False, 'cred_load_outcome': None, 'location': None,
-                                 'fail_detail': None, 'last_task': None})
+        c = ctx.setdefault(key, _new_ctx())
         name = ev.get('event')
         c['events'].append(name)
         if isinstance(ev.get('task'), str) and ev.get('task'):
@@ -273,6 +261,11 @@ def synthetic_envelope(canon: Canon, channel, ip, ctx, outcome, limit_reason=Non
             diag['failure_reason'] = canon.reason('output_build_failed')
         section = 'precheck'
         tech.append('envelope finalized by Layer A; precheck diagnosis preserved')
+    elif outcome in INFRA_OUTCOMES:
+        diag = _diagnosis(observed, details, observed.get('auth_success'), 'fallback', 'OUTPUT_BUILD_FAILED',
+                          canon.reason('infra_unavailable'))
+        section = 'gather'
+        tech.append('envelope finalized by Layer A; the execution base (Runner/Jenkins agent) did not come back for this host')
     elif ctx.get('auth_proven'):
         key = 'gather_connection_lost' if ctx.get('lost') else 'gather_after_auth'
         diag = _diagnosis(observed, details, True, 'gather', 'GATHER_FAILED',
@@ -308,6 +301,8 @@ def synthetic_envelope(canon: Canon, channel, ip, ctx, outcome, limit_reason=Non
         'data': shape['data'],
     }
 
+
+INFRA_OUTCOMES = ('infra_wait_expired', 'resume_impossible')
 
 ADDON_INTERRUPTED = '추가 수집 중 처리가 중단되어 추가 수집 결과가 없습니다. 기본 수집 결과는 그대로입니다.'
 EMIT_FAILED = '수집은 끝났지만 결과를 내보내는 단계에서 중단되었습니다. 기본 수집 결과는 그대로입니다.'
@@ -420,14 +415,14 @@ def finalize(workspace: Path, repo_root: Path, outcome: str, names: dict, limit_
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    ap = argparse.ArgumentParser(description='Layer A 결과 정리: 접수 대상 1개 = 결과 envelope 1개')
     ap.add_argument('--workspace', required=True)
     ap.add_argument('--repo-root', required=True, help='정본 YAML 을 읽을 저장소 루트 (Jenkins WORKSPACE)')
     ap.add_argument('--outcome', default='completed',
-                    help='ansible 실행 결과 분류: completed | timeout | timeout_killed | failed_run | prep_failed | not_started_budget | '
-                         'not_started_memory | aborted(취소·stage/global timeout) | no_agent | interrupted_unknown ...')
+                    help='수집 종료 상태: completed | timeout | timeout_killed | failed_run | prep_failed | process_lost | aborted | '
+                         'infra_wait_expired | resume_impossible | attempt_limit | config_error | interrupted_unknown')
     ap.add_argument('--limit-reason', default='',
-                    help='실행 한계로 끝났을 때 그 한계: gather_limit(수집 실행 한계 6시간) | build_limit(빌드 12시간 안의 남은 시간). 비우면 없음 (2026-10-05 8차 R3)')
+                    help='한계로 끝났을 때 그 한계: gather_limit(누적 수집 실행 한계 6시간) | infra_wait(실행 기반 대기 한도 72시간). 비우면 없음')
     ap.add_argument('--manifest', default='gather_manifest.json')
     ap.add_argument('--output', default='gather_output.json')
     ap.add_argument('--checkpoint', default='gather_checkpoint.jsonl')
