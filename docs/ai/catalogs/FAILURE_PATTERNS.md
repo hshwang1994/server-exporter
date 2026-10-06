@@ -816,3 +816,16 @@
 - 재발 방지: 예산 · 한도를 공유하는 연속 대기는 "앞 단계가 예산을 다 쓴 경우" 를 경계 사례로 따로 본다. 남은 값 0 이 "기다리지 않음" 인지
   "아무것도 하지 않음" 인지 구분한다.
 - 관련 rule: rule 95 R1 · rule 91 R5
+
+## 2026-10-06 — OOM 직후의 신호 종료를 사용자 취소처럼 기록했다
+
+- 카테고리: boundary
+- 발견 위치: 9차 시험 20 — Runner03 격리 시험(`systemd-run --scope -p MemoryMax=64M -p MemorySwapMax=0`, 시험 프로세스만)에서 가짜 수집이 512 MiB 를
+  잡자 커널이 그 프로세스를 OOM 으로 끝냈고, 이어서 systemd 가 범위를 멈추며 수집 셸(`run_gather.sh`)에 TERM 을 보냈다. 끝 기록은 `aborted (signal TERM)`.
+- 원인: `scripts/gather_state.py classify_end` 가 신호 종료(TERM · INT · HUP)를 OOM 근거보다 먼저 `aborted` 로 분류했다. systemd 의 기본 `OOMPolicy=stop` 은
+  OOM 뒤 범위 전체를 멈추므로, 이 Runner 들에서는 OOM 이 신호 종료로 끝나는 경우가 오히려 흔하다(Agent 도 같은 세션 범위에 있다).
+- 수정: 신호 종료여도 같은 cgroup 의 OOM 횟수가 늘었으면 `runner_oom`(근거에 신호를 함께 적음). 대조 `kill -9`(OOM 없음)는 그대로 `process_lost`.
+  `tests/unit/test_gather_state.py` 의 `(143, …, runner_oom)` 사례 · `test_signal_right_after_an_oom_keeps_both_observations`. 고친 뒤 같은 격리 시험에서 `runner_oom`.
+- 재발 방지: 근거 기반 분류는 근거를 가리는 앞 분기(신호 · 종료 코드)가 없는지 실제 환경의 종료 순서로 확인한다. Runner OOM 은 운영 Runner 전체를 OOM 으로
+  만들지 않고 시험 프로세스만 묶은 범위에서 재현한다.
+- 관련 rule: rule 95 R1 · CLAUDE.md §16

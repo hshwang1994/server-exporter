@@ -41,7 +41,7 @@
    없으면 마지막 생존 표시(60 s 마다 `.gather_alive`) + 60 s, 생존 표시가 없으면 시작 + 60 s. 재부팅이면 새 부팅 시각을, 그리고 지금을 넘지 않는다. 그래서 비정상 종료가
    반복돼도 누적을 덜 세지 않는다(한 번에 최대 60 s 를 더 셀 수는 있다). 이번 시도의 한계 = 6 h − 누적, 0 이면 시작하지 않고 `gather_limit`.
    빌드 전체 · 수집 단계 timeout 은 없앴고, 시도 하나에 `timeout(6 h + 90 s + 2 h)` 를 node 를 얻은 뒤에만 건다(멈춘 step 이 빌드를 붙잡지 않게 하는 안전망).
-6. **원인은 근거가 있을 때만 (D7)**: Runner 재부팅(boot_id 바뀜) · Runner OOM(비정상 종료 + 같은 cgroup v2 `memory.events` oom_kill 증가, cgroup 을 못 읽을 때만
+6. **원인은 근거가 있을 때만 (D7)**: Runner 재부팅(boot_id 바뀜) · Runner OOM(비정상 종료 — systemd 가 OOM 뒤 범위를 멈추며 보내는 TERM 포함 — + 같은 cgroup v2 `memory.events` oom_kill 증가, cgroup 을 못 읽을 때만
    `/proc/vmstat`) · 연결 끊김(Jenkins 보고)만 실행 기반 장애다. 근거가 없으면 원인 미확인(`process_lost`)이고 다시 시도하지 않는다. 진척 없이 장애가 반복되면
    5분부터 두 배씩(최대 1 h) executor 를 잡지 않고 쉰다.
 7. **사전 차단 제거 (W01 · W02 · W03 · D12)**: `scripts/gather_budget.sh`, 메모리 상한 · 시험 입력, `no_agent` · `not_started_budget` · `not_started_memory`, 빌드 12 h ·
