@@ -959,9 +959,19 @@ def seExplainGatherEnd(Map C, String outcome, Map summary, Map bo, int kept, int
     int partialCp = (bo != null) ? ((bo.checkpoint ?: 0) as int) : 0
     echo "[수집 종료] 수집은 ${why}. ${ran}. 끝난 대상 ${done}대, 끝나지 않은 대상 ${partialCp + filled}대(중간 결과로 보낸 대상 ${partialCp}대, 실패 결과를 새로 만든 대상 ${filled}대)."
     // 수집 단계가 실행되지 않았으면(실행 위치 확인 실패 · 등록된 Runner 없음 · Runner 를 끝내 얻지 못함) 보존 기록이 없다 — "실패" 로 적지 않는다(2026-10-06 main #252 관측)
+    //   수집은 했지만 마지막 보존 전에 끝났으면(9차 — Runner 연결 끊김 · 작업 폴더 사라짐 · 대기 한도 초과 · 대기 중 취소) 다시 시도하기 전에 넘겨 둔
+    //   결과가 있는지로 나눈다. 수집이 돈 빌드를 "수집 단계가 실행되지 않아" 로 적지 않는다(2026-10-06 se-probe L5 · L6 · L8 관측)
     String archivedFlag = (summary.preserve?.archived ?: '').toString()
-    String preserve = !(archivedFlag in ['true', 'false']) ? '수집 단계가 실행되지 않아 보존할 결과가 없습니다' :
-                      ((archivedFlag == 'true') ? '완료' : ((summary.preserve?.stashed == 'true') ? '보관 실패, 전달로 받음' : '실패'))
+    String preserve
+    if (archivedFlag in ['true', 'false']) {
+        preserve = (archivedFlag == 'true') ? '완료' : ((summary.preserve?.stashed == 'true') ? '보관 실패, 전달로 받음' : '실패')
+    } else if (!(env.SE_GATHER_STARTED_AT ?: '')) {
+        preserve = '수집 단계가 실행되지 않아 보존할 결과가 없습니다'
+    } else if (summary.preserve?.stashed == 'true') {
+        preserve = '마지막 보존 전에 끝나 다시 시도하기 전에 넘겨 둔 결과(stash)로 처리했습니다'
+    } else {
+        preserve = '수집은 했지만 Runner 에서 결과를 넘겨받지 못했습니다(이 빌드에 보존본 없음)'
+    }
     String send = delivered ? "HTTP ${cb.http_code} 응답 받음" : ((cb.attempted == true) ? '실패' : '보내지 못함')
     echo "[수집 종료] 결과 보존: ${preserve}. Portal 전송: ${send}."
 }
@@ -1190,8 +1200,10 @@ def seGatherStage(Map C) {
         if ((env.SE_GATHER_OUTCOME ?: 'interrupted_unknown') == 'interrupted_unknown') { env.SE_GATHER_OUTCOME = 'aborted' }
         env.SE_GATHER_INTERRUPTION = 'user_or_other'
         if (st.user_abort != true) {
-            seLog("[수집] 중단됨: 사용자 취소입니다(${st.gather_started ? '수집 시도 사이' : '수집 시작 전'}). " +
-                  (st.gather_started ? '앞 시도에서 넘겨 둔 결과로 전송합니다.' : '접수된 대상마다 실패 결과를 보냅니다.') + ' (outcome=aborted)')
+            // 넘겨 둔 결과가 있을 때만 그렇게 적는다 — Runner 연결이 끊긴 채 기다리던 중이면 넘겨받은 것이 없을 수 있다(2026-10-06 se-probe L6)
+            String handed = (env.SE_PRESERVE_STASHED == 'true') ? '앞 시도에서 넘겨 둔 결과로 전송합니다.' :
+                            (st.gather_started ? 'Runner 에서 넘겨받은 결과가 없어 접수된 대상마다 실패 결과를 보냅니다.' : '접수된 대상마다 실패 결과를 보냅니다.')
+            seLog("[수집] 중단됨: 사용자 취소입니다(${st.gather_started ? '수집 시도 사이' : '수집 시작 전'}). " + handed + ' (outcome=aborted)')
         }
         if (st.gather_started && !(env.SE_GATHER_ENDED_AT ?: '')) { env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs()) }
         seInfraSave(infra)

@@ -551,8 +551,23 @@ def test_gather_end_does_not_call_a_missing_preservation_a_failure():
     fn = TEXT[TEXT.index("def seExplainGatherEnd("):]
     fn = fn[:fn.index("\n}\n") + 3]
     assert "String archivedFlag = (summary.preserve?.archived ?: '').toString()" in fn
-    assert "!(archivedFlag in ['true', 'false']) ? '수집 단계가 실행되지 않아 보존할 결과가 없습니다'" in fn
     assert "(archivedFlag == 'true') ? '완료'" in fn and "'보관 실패, 전달로 받음'" in fn
+    # 9차 (2026-10-06 se-probe L5 · L6 · L8 관측): 보존 기록이 없을 때 수집이 돌았는지 · 넘겨 둔 결과가 있는지로 나눈다
+    i_none = fn.index("} else if (!(env.SE_GATHER_STARTED_AT ?: '')) {")
+    i_stash = fn.index("} else if (summary.preserve?.stashed == 'true') {")
+    assert fn.index("if (archivedFlag in ['true', 'false']) {") < i_none < i_stash
+    assert "'수집 단계가 실행되지 않아 보존할 결과가 없습니다'" in fn[i_none:i_stash]
+    assert "'마지막 보존 전에 끝나 다시 시도하기 전에 넘겨 둔 결과(stash)로 처리했습니다'" in fn[i_stash:]
+    assert "'수집은 했지만 Runner 에서 결과를 넘겨받지 못했습니다(이 빌드에 보존본 없음)'" in fn[i_stash:]
+
+
+def test_abort_between_attempts_says_handed_results_only_when_there_are_some():
+    # 9차 (2026-10-06 se-probe L6): 같은 Runner 를 기다리던 중 취소 — 넘겨 둔 결과(stash)가 없으면 "넘겨 둔 결과로 전송" 이라고 적지 않는다
+    stage = TEXT[TEXT.index("def seGatherStage(Map C) {"):]
+    stage = stage[:stage.index("\n}\n")]
+    assert "String handed = (env.SE_PRESERVE_STASHED == 'true') ? '앞 시도에서 넘겨 둔 결과로 전송합니다.' :" in stage
+    assert "(st.gather_started ? 'Runner 에서 넘겨받은 결과가 없어 접수된 대상마다 실패 결과를 보냅니다.' : '접수된 대상마다 실패 결과를 보냅니다.')" in stage
+    assert "seLog(\"[수집] 중단됨: 사용자 취소입니다(" in stage and "+ handed + ' (outcome=aborted)')" in stage
 
 
 def test_aborted_gather_still_reports_its_runtime():
