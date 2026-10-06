@@ -96,12 +96,13 @@ PYEOF""").trim()
             sh label: 'live: 시험 폴더 정리', script: "rm -rf '${stubRoot}'"
             deleteDir()
         }
-        // 시도 작업 폴더는 노드 루트 아래(ws 가 고르는 곳 — 운영 작업 폴더와 같은 규칙). 마지막 보존이 지웠으면 빈 폴더만 지운다
+        // 시도 작업 폴더는 노드 루트 아래(ws 가 고르는 곳 — 운영 작업 폴더와 같은 규칙). 마지막 보존이 지웠으면 빈 폴더만 지운다.
+        //   운영 보존과 같은 방법(dir('<폴더>@tmp') { deleteDir() })으로 지운다 — 지운 폴더 안에서 sh 를 띄우면 시작하지 못한다(2026-10-06 L1 #7, exit -2)
         node(probe) {
             ws("${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}") {
                 String attemptWs = pwd()
                 deleteDir()
-                sh label: 'live: 시도 작업 폴더 정리', script: "rm -rf '${attemptWs}@tmp'"
+                dir("${attemptWs}@tmp") { deleteDir() }
             }
         }
     }
