@@ -1,25 +1,33 @@
-// tests/jenkins/harness/Jenkinsfile_live_infra — 실행 기반 대기 · 같은 Runner 재개 실기 검증 드라이버 (2026-10-06, 9차). 운영 수집 Job 이 아니다.
+// tests/jenkins/harness/Jenkinsfile_live_infra — 실행 기반 대기 · 같은 Runner 재개 실기 검증 드라이버 (2026-10-06 9차, 2026-10-07 10차). 운영 수집 Job 이 아니다.
 //
-//   임시 노드(PROBE_LABEL, 기본 se-probe — Runner 호스트의 별도 작업 폴더 · executor 1)에서 운영 함수 seGatherStage 를 시험 상수로 **실제 node()** 와 함께
-//   실행한다. 수집은 실제 scripts/run_gather.sh · scripts/gather_state.py 가 하고, ansible 만 가짜(stub_ansible.py — 시도별 계획대로 결과를 쓰고 기다린다)다.
-//   오프라인 전환 · 연결 끊기 · 다시 붙이기 · 작업 폴더 삭제 · 취소는 검증자가 Jenkins REST · Runner SSH 로 한다(사례별 절차는 README 와
-//   tests/evidence/2026-10-06-9th-infra-wait-resume.md). 준비 · 정리도 같은 임시 노드에서 한다 — 운영 Runner 의 executor 를 잡지 않는다.
+//   임시 노드(PROBE_LABEL, 기본 se-probe — Runner 호스트의 별도 작업 폴더 · executor 1)에서 운영 함수 seGatherStage 를 **실제 node()** 와 함께 실행한다.
+//   L1~L8: 시험 상수 + 가짜 ansible(stub_ansible.py — 시도별 계획대로 결과를 쓰고 기다린다). 실제 run_gather.sh · gather_state.py 가 돈다.
+//   REAL(10차): 운영 상수(seConstants 그대로) · 실제 ansible · 실제 vault credential · 실제 대상으로 수집한다 — 시험 6 · 18(대상 측 일시 장애, 장애는 검증자가
+//     tests/jenkins/harness/net_fault_inject.sh 로 이 노드의 cgroup 과 대상 1대 사이에만 건다)과 L9(Add-on 을 켠 재개 — ADDON_URL 에 시험 Add-on 저장소)에 쓴다.
+//     첫 단계에서 이 노드의 실행 사용자(Agent)로 유효 SSH 설정(ssh -G) · 커널 로그 읽기 가능 여부 · 이 Agent 의 cgroup 을 기록한다(시험 조건 기록).
+//   오프라인 전환 · 연결 끊기 · 다시 붙이기 · 작업 폴더 삭제 · 취소 · 네트워크 장애는 검증자가 Jenkins REST · Runner SSH 로 한다(사례별 절차는 README 와
+//   tests/evidence). 준비 · 정리도 같은 임시 노드에서 한다 — 운영 Runner 의 executor 를 잡지 않는다.
 //   Job 은 Pipeline from SCM(main) · Script Path 이 파일. 결과 판정은 검증자가 아래 산출물로 한다(가짜 실행 기반을 쓰는 Harness 판정과 별개).
-//   산출물: live_received.jsonl(가짜 ansible 이 시도마다 받은 대상) · finalize_summary.json · callback_body.json · gather_run.json(마지막 보존이 보관한 경우)
+//   산출물: live_received.jsonl(가짜 ansible 이 시도마다 받은 대상, L1~L8) · live_env.json(REAL) · finalize_summary.json · callback_body.json ·
+//           gather_final.jsonl · gather_run.json(마지막 보존이 보관한 경우)
 
 properties([
     disableConcurrentBuilds(),
-    buildDiscarder(logRotator(numToKeepStr: '30')),
+    buildDiscarder(logRotator(numToKeepStr: '40')),
     parameters([
-        choice(name: 'CASE', choices: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L8'],
-               description: 'L1 오프라인→온라인 · L2 executor 사용 중→가용 · L3 끊김(프로세스 생존) · L4 끊김(프로세스 종료) · L5 대기 한도 초과 · L6 대기 중 취소 · L8 끊긴 사이 작업 폴더 삭제'),
+        choice(name: 'CASE', choices: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L8', 'REAL'],
+               description: 'L1 오프라인→온라인 · L2 executor 사용 중→가용 · L3 끊김(프로세스 생존) · L4 끊김(프로세스 종료) · L5 대기 한도 초과 · L6 대기 중 취소 · L8 끊긴 사이 작업 폴더 삭제 · REAL 실제 수집(운영 상수)'),
         string(name: 'PROBE_LABEL', defaultValue: 'se-probe', description: '시험 전용 노드 이름(운영 Runner 를 쓰지 않는다)'),
-        string(name: 'HOSTS', defaultValue: '6', description: '가짜 대상 수(192.0.2.0/24)'),
+        string(name: 'HOSTS', defaultValue: '6', description: 'L1~L8: 가짜 대상 수(192.0.2.0/24)'),
+        choice(name: 'TARGET_TYPE', choices: ['os', 'redfish', 'esxi'], description: 'REAL: 대상 종류'),
+        text(name: 'TARGETS_JSON', defaultValue: '', description: 'REAL: 대상 목록 JSON 배열(운영 inventory_json 과 같은 형식)'),
+        string(name: 'LOC', defaultValue: 'git', description: 'REAL: 실행 위치(vault 경로)'),
+        string(name: 'ADDON_URL', defaultValue: '', description: 'REAL(L9): 시험용 Add-on 저장소 URL(file://…). 비우면 Add-on 없이'),
     ]),
 ])
 
 // 사례별 시험 상수와 가짜 ansible 의 시도별 계획 — 실행 기반 장애는 검증자가 만든다
-Map BASE = [INFRA_WAIT: 3600, OFFLINE_GRACE: 300, GATHER_MAX: 1800, KILL_AFTER: 10, ATTEMPT_MARGIN: 900, BACKOFF_MAX: 60]
+Map BASE = [INFRA_WAIT: 3600, GATHER_MAX: 1800, KILL_AFTER: 10, ATTEMPT_MARGIN: 900, BACKOFF_MAX: 60]
 Map PLANS = [
     L1: [constants: BASE, attempts: [[emit: 'all', sleep: 5]]],
     L2: [constants: BASE, attempts: [[emit: 'all', sleep: 5]]],
@@ -29,7 +37,8 @@ Map PLANS = [
     L6: [constants: BASE, attempts: [[emit: 2, sleep: 900], [emit: 'all']]],
     L8: [constants: BASE, attempts: [[emit: 2, sleep: 900], [emit: 'all']]],
 ]
-Map plan = PLANS[params.CASE]
+boolean real = (params.CASE == 'REAL')
+Map plan = real ? null : PLANS[params.CASE]
 String probe = params.PROBE_LABEL.trim()
 String PY = '. "$WORKSPACE/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true; python3'
 
@@ -37,14 +46,48 @@ timeout(time: 4, unit: 'HOURS') {     // 시험 Job 의 안전 상한(운영 파
     def lib = null
     Map stub = null
     String stubRoot = ''
+    List ips = []
+    String targetType = real ? params.TARGET_TYPE : 'os'
     // ── 준비 — 임시 노드에서. 이 블록을 나온 뒤 운영 함수가 같은 노드를 스스로 기다린다(executor 1)
     node(probe) {
         deleteDir()
         checkout scm
         stubRoot = "${pwd()}/../se-live-stub-${env.BUILD_NUMBER}".toString()
         sh "${PY} tests/jenkins/harness/build_functions.py --source Jenkinsfile_portal --scenario normal_success --out harness_functions.groovy --meta harness_functions_meta.json"
-        writeFile(file: 'live_plan.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson([hosts: (params.HOSTS as int), attempts: plan.attempts]))
-        String out = sh(returnStdout: true, label: 'live: 가짜 ansible 준비', script: """${PY} - <<'PYEOF'
+        if (real) {
+            // 시험 조건 기록 — 이 노드의 실행 사용자(Agent)로 본 유효 SSH 설정(ansible 이 쓰는 옵션 그대로 · 사용자 설정 포함)과 커널 로그 읽기 가능 여부
+            sh label: 'live: 시험 조건 기록', script: '''#!/bin/bash
+                set +e
+                first=$(python3 - <<'PYEOF'
+import json, os
+hosts = json.loads(os.environ.get("TARGETS_JSON") or "[]")
+for h in hosts:
+    v = h.get("service_ip") or h.get("bmc_ip") or h.get("ip")
+    if v:
+        print(v.strip()); break
+PYEOF
+)
+                {
+                    echo "{"
+                    echo "  \\"user\\": \\"$(id -un)\\","
+                    echo "  \\"cgroup\\": \\"$(sed -n 's/^0:://p' /proc/self/cgroup)\\","
+                    echo "  \\"openssh\\": \\"$(ssh -V 2>&1 | tr -d '"')\\","
+                    echo "  \\"dmesg_restrict\\": \\"$(cat /proc/sys/kernel/dmesg_restrict 2>/dev/null)\\","
+                    if dmesg >/dev/null 2>&1; then echo "  \\"dmesg_readable\\": true,"; else echo "  \\"dmesg_readable\\": false,"; fi
+                    echo "  \\"tcp_keepalive_time\\": \\"$(cat /proc/sys/net/ipv4/tcp_keepalive_time)\\", \\"tcp_retries2\\": \\"$(cat /proc/sys/net/ipv4/tcp_retries2)\\","
+                    echo "  \\"ssh_G\\": ["
+                    ssh -G -o ControlMaster=auto -o ControlPersist=60s -o StrictHostKeyChecking=no -o ConnectTimeout=60 -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=10 "${first:-127.0.0.1}" 2>/dev/null \\
+                        | grep -Ei '^(serveraliveinterval|serveralivecountmax|connecttimeout|tcpkeepalive|controlpersist|connectionattempts) ' | sed 's/"//g; s/^/    "/; s/$/",/'
+                    echo '    "end"'
+                    echo "  ]"
+                    echo "}"
+                } > live_env.json
+                cat live_env.json
+            '''
+            archiveArtifacts(artifacts: 'live_env.json', allowEmptyArchive: true, fingerprint: false)
+        } else {
+            writeFile(file: 'live_plan.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson([hosts: (params.HOSTS as int), attempts: plan.attempts]))
+            String out = sh(returnStdout: true, label: 'live: 가짜 ansible 준비', script: """${PY} - <<'PYEOF'
 import json, pathlib, sys
 sys.path.insert(0, 'tests/jenkins/harness')
 import fixture
@@ -54,27 +97,38 @@ root = pathlib.Path('${stubRoot}').resolve()
 st = fixture.make_gather_stage(root / 'src', pathlib.Path('tests/fixtures/finalize_corpus/01_normal'), spec, 'os', ips)
 print(json.dumps(st))
 PYEOF""").trim()
-        String[] outLines = out.split('\n')
-        stub = readJSON(text: outLines[outLines.length - 1], returnPojo: true) as Map
+            String[] outLines = out.split('\n')
+            stub = readJSON(text: outLines[outLines.length - 1], returnPojo: true) as Map
+        }
         lib = load 'harness_functions.groovy'
-        lib.seHarnessInit(this, [params: [loc: 'git', deploymentEnvironmentId: 'live-infra', eventUuid: "live-${env.BUILD_TAG}".toString(),
-                                          callbackUrl: 'http://127.0.0.1:9', target_type: 'os', verbosity: '0'],
+        lib.seHarnessInit(this, [params: [loc: (real ? params.LOC : 'git'), deploymentEnvironmentId: (real ? 'live-real' : 'live-infra'),
+                                          eventUuid: "live-${env.BUILD_TAG}".toString(), callbackUrl: 'http://127.0.0.1:9', target_type: targetType, verbosity: '0'],
                                  trusted: [:], gather: null])
-        echo "[live] CASE=${params.CASE} probe=${probe} stub=${stub.stub_dir} constants=${plan.constants}"
+        if (real) {
+            // 접수 대상 — 운영 입력 확인과 같은 함수(seAcceptTargets)로 고른다
+            Map acc = lib.seAcceptTargets(readJSON(text: params.TARGETS_JSON, returnPojo: true), targetType)
+            if (acc.error) { error "[live] TARGETS_JSON: ${acc.error}" }
+            ips = acc.ips
+        } else {
+            ips = stub.ips
+        }
+        echo "[live] CASE=${params.CASE} probe=${probe} targets=${ips.size()} ${real ? 'constants=운영(seConstants)' : 'stub=' + stub.stub_dir + ' constants=' + plan.constants}"
     }
 
     // ── 운영 함수 그대로 — 접수 목록 · 실행 위치는 입력 확인 · 실행 위치 확인이 하던 대로 env 에 둔다
     env.SE_MANIFEST_JSON = groovy.json.JsonOutput.toJson([schema: 1, build: [job: env.JOB_NAME, number: env.BUILD_NUMBER, url: env.BUILD_URL],
-                                                          channel: 'os', request: [loc: 'git', deploymentEnvironmentId: 'live-infra',
-                                                                                   eventUuid: "live-${env.BUILD_TAG}".toString(), callbackUrl: 'http://127.0.0.1:9'],
-                                                          ips: stub.ips])
+                                                          channel: targetType, request: [loc: (real ? params.LOC : 'git'), deploymentEnvironmentId: (real ? 'live-real' : 'live-infra'),
+                                                                                         eventUuid: "live-${env.BUILD_TAG}".toString(), callbackUrl: 'http://127.0.0.1:9'],
+                                                          ips: ips])
     env.SE_AGENT_LABEL = probe
-    env.SE_LOCATION = 'git'
+    env.SE_LOCATION = real ? params.LOC : 'git'
     env.SE_INFRA_JSON = ''
     boolean aborted = false
+    List runEnv = real ? ["ADDON_REPO_URL=${params.ADDON_URL ?: ''}", "ADDON_REPO_REF=", "INVENTORY_JSON=${params.TARGETS_JSON}"]
+                       : ["ADDON_REPO_URL=", "SE_ANSIBLE_VENV=${stub.venv}", "SE_HARNESS_STUB_DIR=${stub.stub_dir}"]
     try {
-        withEnv(["ADDON_REPO_URL=", "SE_ANSIBLE_VENV=${stub.venv}", "SE_HARNESS_STUB_DIR=${stub.stub_dir}"]) {
-            lib.seGatherStage(lib.seConstants() + plan.constants)
+        withEnv(runEnv) {
+            lib.seGatherStage(real ? lib.seConstants() : (lib.seConstants() + plan.constants))
         }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         aborted = true
@@ -91,9 +145,11 @@ PYEOF""").trim()
     // ── 관측 수집 · 정리 — 같은 임시 노드. 노드가 끝내 돌아오지 않는 사례(L5)는 검증자가 다시 붙인 뒤 진행된다
     timeout(time: 30, unit: 'MINUTES') {
         node(probe) {
-            sh "cp '${stub.stub_dir}/received.jsonl' live_received.jsonl 2>/dev/null || : > live_received.jsonl"
-            archiveArtifacts(artifacts: 'live_received.jsonl,harness_functions_meta.json,live_plan.json', allowEmptyArchive: true, fingerprint: false)
-            sh label: 'live: 시험 폴더 정리', script: "rm -rf '${stubRoot}'"
+            if (!real) {
+                sh "cp '${stub.stub_dir}/received.jsonl' live_received.jsonl 2>/dev/null || : > live_received.jsonl"
+                archiveArtifacts(artifacts: 'live_received.jsonl,harness_functions_meta.json,live_plan.json', allowEmptyArchive: true, fingerprint: false)
+                sh label: 'live: 시험 폴더 정리', script: "rm -rf '${stubRoot}'"
+            }
             deleteDir()
         }
         // 시도 작업 폴더는 노드 루트 아래(ws 가 고르는 곳 — 운영 작업 폴더와 같은 규칙). 마지막 보존이 지웠으면 빈 폴더만 지운다.
