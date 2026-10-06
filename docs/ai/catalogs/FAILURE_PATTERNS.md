@@ -842,3 +842,49 @@
 - 재발 방지: 결과가 고정된 시나리오(ABORTED 등)는 Jenkins 결과로 판정을 대신하지 않는다. 증거 수집기(`prodgen evidence`)가 판정을 따로 보므로 CI 집계와
   증거 집계가 어긋나면 먼저 의심한다.
 - 관련 rule: rule 24 R2 · rule 25 R7-A
+
+## 2026-10-07 — 재진입 표식을 처리하지 않은 결과 처리가 전송 없이 SUCCESS 로 끝났다
+
+- 카테고리: boundary
+- 발견 위치: 10차 외부 검토(Astra) — 결과 확인 및 전송 중 잡히지 않는 step(controller 재시작 뒤 이어 갈 수 없는 step · 채널 오류)이
+  `retry(agent(), nonresumable())` 로 본문을 다시 부르게 하면, 두 번째 호출이 남긴 `agent_lost` 를 `seFinalizeAndCallback` 이 처리하지 않고 `null` 을 돌려줬다.
+- 원인: 9차가 수집 단계에 넣은 재진입 표식 처리를 결과 처리 단계에는 넣지 않았다. 빌드 요약은 결과가 없으면 "접수 전" 으로 읽고 SUCCESS 꼬리를 붙였다.
+- 수정: 결과 처리를 반복 구조로 — 같은 빌드 안에서 노드를 다시 기다려 같은 폴더에서 다시 처리, 2xx 받은 전송은 다시 보내지 않고 시도 수 · 처리 시간은 이어 센다.
+  끝내 처리하지 못하면 FAILURE(미전송) 또는 UNSTABLE(전송 뒤). Harness `finalize_reentry*` · `finalize_limit_cumulative`.
+- 재발 방지: 재진입 표식을 만드는 `retry` 를 쓰는 곳마다 표식을 받는 쪽이 있는지 본다. "결과 없음" 을 "접수 전" 으로 읽는 기본값은 접수 목록으로 확인한다.
+- 관련 rule: rule 95 R1 · rule 24 R2
+
+## 2026-10-07 — 기록 파일 읽기 예외를 "기록 없음" 으로 바꿔 재개를 포기했다
+
+- 카테고리: boundary
+- 발견 위치: 10차 외부 검토 — `seReadOwner` · `seAddonPrepare` 가 `readFile` 예외를 모두 `null` 로 바꿨다. 일시적인 채널 오류가 `resume_impossible`(GP-61) 이 되거나,
+  Add-on 결정을 잃고 기본 ref 를 새로 받아 한 빌드 안에서 Add-on 버전이 섞였다(GP-58).
+- 원인: "없음" · "손상" · "읽기 실패" 를 한 값으로 접었다. 읽기 실패는 실행 기반 오류일 수 있고, 그 판정은 Jenkins 의 `retry` 조건이 한다.
+- 수정: `seReadJsonFile` — 없음은 `absent`, 읽은 문자열의 해석 실패만 `corrupt`, 읽기 예외는 원래 형태로 상위 `retry` 로. 예외 종류 목록을 Groovy 에 복제하지 않는다.
+  Harness `owner_read_transient` · `run_record_read_transient` · `addon_decision_transient`.
+- 재발 방지: catch 로 예외를 기본값으로 바꾸기 전에, 그 예외를 판단할 상위 구조(retry 조건 · 사용자 취소)가 있는지 본다.
+- 관련 rule: rule 95 R1 #5 · CLAUDE.md §12
+
+## 2026-10-07 — 첫 준비 · 마지막 보존의 중간 끊김을 재진입이 구분하지 못했다
+
+- 카테고리: boundary
+- 발견 위치: 10차 외부 검토(R3) · 10차 구현 중 발견(N1). 첫 준비가 소유 기록 → 정리 → 접수 목록 순서였는데 재진입은 소유 기록만 보고 준비 전체를 건너뛰어
+  접수 목록 없이 수집해 `prep_failed` 로 끝났다. 마지막 보존은 보관 · 전달 뒤 소유 기록을 `commit` 없이 다시 쓰고 폴더를 지웠는데, 그 사이 끊기면 다음 시도가
+  기록이 없다고 보고 `resume_impossible` 로 끝났다(결과는 이미 보관돼 있었다).
+- 원인: 여러 걸음으로 이뤄진 준비 · 보존의 "어디까지 했나" 를 기록하지 않고 첫 걸음의 흔적(소유 기록)으로 전체 완료를 추정했다.
+- 수정: 소유 기록의 `prepared`(시작 false · 끝 true), 접수 목록 복원(같은 빌드 · 같은 revision), 확정 결과 IP 대조(사라졌으면 rc 92 · 재수집 안 함),
+  보관 또는 전달 성공 뒤 표식(`SE_FINAL_PRESERVED`), 소유 기록은 `seWriteOwner` 한 곳에서만. Harness `prep_cut_*` · `manifest_missing_restore` · `results_missing_refuse` · `preserve_*`.
+- 재발 방지: 재진입이 가능한 다단계 작업은 마지막 걸음 뒤에 완료 표식을 둔다. 완료된 대상은 개수가 아니라 식별자(IP)로 대조한다.
+- 관련 rule: rule 95 R1 · rule 22
+
+## 2026-10-07 — 공유 cgroup 의 OOM 카운터를 이 실행의 OOM 으로 읽었다
+
+- 카테고리: boundary
+- 발견 위치: 10차 외부 검토(R5). 9차 수정(2026-10-06 항목 "OOM 직후의 신호 종료")이 신호 종료여도 같은 cgroup 의 OOM 증가가 있으면 `runner_oom` 으로 정했는데,
+  Agent 세션 범위는 여러 빌드가 함께 쓴다. 다른 프로세스의 OOM + 이 실행의 rc 1 · `kill -9` · 사용자 취소가 모두 `runner_oom`(다시 수집)이 됐다.
+- 원인: 격리 시험(시험 프로세스만 묶은 범위)의 결과를 공유 범위에 그대로 일반화했다. `memory.events` 는 범위 전체의 사건이라 "누가" 를 말하지 않는다.
+- 수정: 증가는 관측(`oom_observed`)만. 원인은 커널 로그의 OOM 종료 기록 PID 가 이 실행(`run_gather.sh` · ansible-playbook 주 프로세스)일 때만. 스스로 끝난 실패는
+  `failed_run`, 근거 없는 바깥 종료는 `process_lost` / `aborted`, 사용자 취소는 `classify --user-abort`. 시도 시작 때 구성원만으로는 격리로 인정하지 않는다.
+  `tests/unit/test_gather_state.py` 반례(다른 프로세스 OOM + rc 1 · `kill -9` · 사용자 취소 · 시도 시작 뒤 들어온 프로세스, 이 실행의 OOM + 신호).
+- 재발 방지: 원인 판정의 근거는 "같은 시간 · 같은 범위" 가 아니라 이 실행과의 연결(PID 등)로 둔다. 격리 시험의 결과를 공유 환경 판정으로 옮길 때 반례를 먼저 만든다.
+- 관련 rule: rule 95 R1 · rule 25 R7-B

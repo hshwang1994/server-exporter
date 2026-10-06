@@ -50,14 +50,38 @@ REQUIRED_HARNESS = ("normal_success", "archive_fail", "stash_fail", "both_fail",
                     "archive_slow", "layer_a_read_slow", "gather_limit_preserve",
                     # 2026-10-06 (9차): the gather stage itself — Runner wait · agent loss · resume of unfinished hosts on the same Runner ·
                     # wait-budget expiry · lost workspace · abort while waiting (fake execution base, real run_gather.sh / gather_state.py)
-                    "infra_resume", "infra_wait_expired", "resume_impossible", "gather_wait_abort")
+                    "infra_resume", "infra_wait_expired", "resume_impossible", "gather_wait_abort",
+                    # 2026-10-07 (10차): finalize re-entry after an infra error (R1) · transient record reads (R2) · interrupted first preparation,
+                    # manifest restore and vanished confirmed results (R3) · final preservation marker (N1) · Add-on decision reuse (R4)
+                    "finalize_reentry",
+                    "finalize_reentry_after_delivery",
+                    "finalize_reentry_expired",
+                    "finalize_reentry_abort",
+                    "finalize_limit_cumulative",
+                    "owner_read_transient",
+                    "run_record_read_transient",
+                    "prep_cut_after_owner",
+                    "prep_cut_after_cleanup",
+                    "prep_cut_after_manifest",
+                    "manifest_missing_restore",
+                    "results_missing_refuse",
+                    "preserve_archive_ok_stash_fail",
+                    "preserve_stash_ok_archive_fail",
+                    "preserve_both_fail",
+                    "preserve_cut_before_marker",
+                    "preserve_cut_delete",
+                    "addon_decision_transient",
+                    "addon_reuse_disabled",
+                    "addon_copy_restore")
 # generated-tree Harness (FUNCTIONS_SRC=artifact) — the same functions from the prodgen tree. 2026-10-04 최종 지시 §6-1: the preservation
 # failure paths (archive_fail · stash_fail · truncate_jsonl · checkpoint_only_a/b · layer_a_fail) are required on the generated tree too.
 # 2026-10-05 (8차 R1): the stop/preserve proof (gather_limit_preserve) runs the generated tree's run_gather.sh too.
 # 2026-10-06 (9차): the resume and wait-budget paths run on the generated tree's functions and scripts too.
 REQUIRED_HARNESS_TREE = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
                          "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "gather_limit_preserve",
-                         "infra_resume", "infra_wait_expired")
+                         "infra_resume", "infra_wait_expired",
+                         # 2026-10-07 (10차): the new resume paths run on the generated tree's functions and scripts too
+                         "finalize_reentry", "finalize_reentry_after_delivery", "owner_read_transient", "prep_cut_after_owner", "manifest_missing_restore", "results_missing_refuse", "preserve_cut_delete", "addon_decision_transient")
 # 2026-10-05 (8차 R1): test-only parameters removed from the collection Jobs. A main-Job build that still carries one of them did not run
 # the candidate's parameter set — it is not evidence. Tier 2 (SE_FINALIZER_BOUNDED) and its bounded Harness group are gone (8차 R3).
 REMOVED_MAIN_PARAMS = ("redfishAccountDryrun", "gatherBudgetForceSec")

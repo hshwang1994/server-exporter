@@ -28,7 +28,7 @@
 | 0. Validate | agent 없음 | 입력값 (target_type / inventory_json / callbackUrl / deploymentEnvironmentId) 형식 검증 → 접수 manifest `env.SE_MANIFEST_JSON` | YES |
 | 1. Resolve Location | agent 없음 | `readYaml text: readTrusted('common/vars/locations.yml')` 로 `loc` 검증 → `agent_label` (컨트롤러 전체 checkout 금지 — main 2분 초과 사고) → 등록된 Runner 수(`nodesByLabel offline:true`). 0 이면 `config_error` | YES (등록 Runner 0 도 FAILURE — 접수된 대상마다 실패 결과는 보낸다) |
 | 2. Gather | stage 에 agent · timeout 없음. `seGatherStage` 가 시도마다 `seWithNode`(Jenkins queue 대기, executor 를 잡지 않음, 빌드의 실행 기반 대기 합 72 h) → `node(라벨 → 수집을 시작한 뒤에는 그 Runner)` · `ws("<Job>-<번호>")` · `timeout(6 h + 90 s + 2 h, node 를 얻은 뒤)` | 첫 시도: 저장소 받기 · 소유 기록(받은 commit) · 지난 결과 정리 · `gather_manifest.json`. 이어서 하는 시도: 저장소를 다시 받지 않고 revision 대조 → (Add-on — R1-B, 결정 재사용) → `bash scripts/run_gather.sh …`(작업 폴더 잠금 · 환경 경계 · venv · `scripts/gather_state.py begin`(남은 대상 · 누적 한계 · 동시 실행 수) · `timeout --signal=INT --kill-after=90 <남은 한계> ansible-playbook … --limit @<남은 대상>` · 60 s 생존 표시 · SSH 정리 · `gather_state.py end`) → `gather_state.py classify` → 실행 기반 장애(Runner 연결 끊김 · 근거 있는 OOM · 재부팅)면 원본만 stash 하고 같은 Runner 로 다시 시도, 끝이면 결과 정리 · 작업 폴더 정리 · archive · stash · 보관 확인 시만 `deleteDir` | Add-on 못 받으면 UNSTABLE + Add-on 없이 수집; ansible rc 는 outcome 으로 기록; 대기 한도 초과 · 재개 불가는 UNSTABLE + 실행 기반 문장 |
-| 3. (pipeline `post { always }`) 결과 확인 및 전송 | controller, `seWithNode('built-in')`(실행 기반 대기 합 안에서 · 취소된 빌드는 5분) → 노드를 얻은 뒤 `timeout(1 h){ dir("fin-<번호>") }` | 입력 회수(unstash → unarchive) → 정리 결과 우선 / Groovy 최소 보충 → 접수 수 == 결과 수 → 호출자 통보 (`httpRequest`, rule 31 무결성, 시도당 응답 최대 10분 · ≤3회) → `callback_body.json` · `finalize_summary.json` 보존 | NO (UNSTABLE). 결과 처리 노드를 끝내 얻지 못하면 보내지 못한 채 FAILURE |
+| 3. (pipeline `post { always }`) 결과 확인 및 전송 | controller, `seWithNode('built-in')`(실행 기반 대기 합 안에서 · 취소된 빌드는 합 5분) → 노드를 얻은 뒤 `timeout(남은 결과 처리 시간 합, 최대 1 h){ dir("fin-<번호>") }`. 실행 기반 오류(`agent()` · `nonresumable()` 재호출)면 같은 빌드 안에서 노드를 다시 기다려 같은 폴더에서 다시 처리(10차 R1) | 입력 회수(unstash → unarchive) → 정리 결과 우선 / Groovy 최소 보충 → 접수 수 == 결과 수 → 호출자 통보 (`httpRequest`, rule 31 무결성, 시도당 응답 최대 10분 · ≤3회) → `callback_body.json` · `finalize_summary.json` 보존 | NO (UNSTABLE). 결과 처리 노드를 끝내 얻지 못하면 보내지 못한 채 FAILURE |
 
 - **2026-10-03 (Phase 4)**: `Validate Schema`(FAIL 게이트) · `Callback` stage 는 삭제됐다. field_dictionary 정합은 `scripts/ai/ci_gate.sh`
   (커밋 전 · CI 진입점) 가 맡는다 — 수집 Job 에서 정적 검사로 **결과 전달을 막지 않는다**. 결과 전달은 stage 가 아니라 pipeline
@@ -37,13 +37,21 @@
   실행 기반 대기 합 72 h(빌드 하나, 다시 시도 · 재개해도 처음부터 세지 않는다) · 실제 수집 누적 6 h(Runner 시계, 비정상 종료는 마지막 생존 표시 + 60 s 까지
   보수적으로 센다) · 시도 하나의 실행 한계(node 를 얻은 뒤) · 결과 확인 및 전송 1 h(노드를 얻은 뒤). Precheck 실패 대상은 확정이라 다시 수집하지 않고,
   대상 측 일시 장애는 채널의 기존 timeout · retry 안에서만 처리한다. 근거 `docs/ai/decisions/ADR-2026-10-06-infra-wait-and-host-resume.md`.
+- **2026-10-07 (10차)**: 결과 확인 및 전송도 실행 기반 오류 뒤 다시 들어간다 — 2xx 를 받은 전송은 다시 보내지 않고, Portal 시도 수 · 결과 처리 실행 시간은
+  진입마다 처음부터 세지 않는다(노드를 얻은 때부터 끝 · 오류 감지까지의 합, 대기는 빼고). 끝내 처리하지 못하면 결과 없이 SUCCESS 로 끝내지 않는다.
+  실행 기반 대기는 오류를 감지한 시각부터 센다(Jenkins 처리 유예를 5분으로 가정해 앞당기지 않는다). 작업 폴더 기록 파일 읽기의 예외는 감싸지 않고 상위
+  `retry(agent(), nonresumable())` 로 넘긴다(해석 실패만 손상). 첫 준비가 끊기면 남은 준비만 마치고(`prepared`), 접수 목록 파일만 없으면 접수 원본으로 복원하며,
+  확정됐던 대상의 결과가 사라졌으면(IP 대조) 다시 수집하지 않고 재개 불가다. 마지막 보존이 보관 또는 전달을 마친 뒤 끊기면 다시 시도하지 않는다.
+  OOM 은 커널 로그의 OOM 종료 PID 가 이 실행의 것일 때만 원인이다(공유 cgroup 카운터는 관측). 근거 `docs/ai/decisions/ADR-2026-10-07-finalize-reentry-and-oom-attribution.md`.
 - **Forbidden**: 수집 Job 에 정적 FAIL 게이트 stage 재도입, Callback 을 stage 로 되돌리기(끊긴 빌드에서 전달이 사라진다),
   실행 한계(`run_gather.sh` 의 `timeout`) 없이 ansible 실행, 한계를 node 진입 전 값으로 집행하기(ansible 직전 `gather_state.py begin` 이 누적에서 계산),
   수집 Job 에 시험용 파라미터 · 작업(task) 단위 시간 제한 · 정체 감시 · 안쪽 단계 상한을 다시 넣기(2026-10-05 8차 — 정상 작업을 잘랐다.
   근거 `docs/ai/decisions/ADR-2026-10-05-time-limits-and-test-inputs.md`),
   빌드 전체 · 수집 단계 timeout 재도입, 가용 메모리 · 남은 빌드 시간으로 수집 시작을 막기, 온라인 Runner 가 지금 없다고 수집을 건너뛰기(`no_agent`),
   실행 기반 장애 뒤 다른 Runner 로 작업 옮기기 · 새 저장소(외부 큐 · 공유 폴더)로 상태 옮기기, 대기 중 executor 를 붙잡기, 끝난 대상 다시 수집하기
-  (2026-10-06 9차 — 근거 위 ADR).
+  (2026-10-06 9차 — 근거 위 ADR), 결과 처리가 실행 기반 오류로 끝났는데 SUCCESS 로 두기 · 확인된 전송을 재진입에서 다시 보내기 · 결과 처리 한계를 진입마다
+  초기화하기, 기록 파일 읽기 예외를 '기록 없음' 으로 바꾸기, 공유 cgroup · 가까운 시각 · 시작 때 구성원만으로 OOM 을 원인으로 정하기, 실행 기반 장애 판정을
+  Jenkins 내부 조건을 복제해 Groovy 로 다시 만들기(2026-10-07 10차 — 근거 위 10차 ADR).
 
 ### R1-A. venv 선택 규칙 (2026-09-28)
 
