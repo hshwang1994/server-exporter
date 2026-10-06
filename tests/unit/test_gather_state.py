@@ -31,7 +31,10 @@ _spec.loader.exec_module(gs)
 LINUX = sys.platform.startswith("linux")
 ALL = ["system", "hardware", "bmc", "cpu", "memory", "storage", "network", "firmware", "users", "power", "thermal"]
 T0 = 1_800_000_000
-PROBES = {"boot_id": "boot-a", "btime": T0 - 86400, "oom": {"vmstat": 0, "cgroup": 0, "cgroup_path": "/system.slice/jenkins-agent.service"}}
+CG = "/user.slice/user-985.slice/session-570.scope"   # Agent 세션 범위 — 여러 빌드가 함께 쓴다
+KERNEL_NONE = {"readable": True, "kills": []}          # 커널 로그를 읽었고 OOM 종료 기록이 없다
+PROBES = {"boot_id": "boot-a", "btime": T0 - 86400, "uptime": 1000.0, "kernel": KERNEL_NONE,
+          "oom": {"vmstat": 0, "cgroup": 0, "cgroup_path": CG}}
 
 
 def _envelope(ip, channel="os"):
@@ -181,43 +184,133 @@ def test_truncated_tail_is_moved_aside_and_the_host_is_gathered_again(tmp_path):
     (124, 600, 0, "gather_limit", True), (137, 700, 0, "gather_limit", True),
     (124, 100, 0, "failed_run", False),                       # 한계 전 124 는 한계 도달이 아니다
     (137, 100, 0, "process_lost", False),                     # 한계 전 KILL, OOM 근거 없음 — 원인 미확인
-    (137, 100, 1, "runner_oom", False),                       # 같은 cgroup 의 OOM 카운터가 늘었다
-    (1, 100, 1, "runner_oom", False),
+    (137, 100, 1, "process_lost", False),                     # 10차 R5: 공유 cgroup 의 OOM 카운터 증가만으로는 이 실행의 OOM 이 아니다
+    (1, 100, 1, "failed_run", False),                         # 10차 R5: 스스로 끝난 실행 실패를 OOM 으로 가리지 않는다(Astra 재현 사례)
     (90, 5, 0, "prep_failed", False), (91, 5, 0, "prep_failed", False),
     (143, 50, 0, "aborted", False), (130, 50, 0, "aborted", False), (129, 50, 0, "aborted", False),
-    (143, 50, 1, "runner_oom", False),                        # OOM 직후 systemd 가 범위를 멈추며 보낸 TERM(2026-10-06 Runner03 격리 시험)
+    (143, 50, 1, "aborted", False),                           # 10차 R5: TERM + 공유 카운터 증가는 관측일 뿐이다(PID 근거 없음)
 ])
 def test_end_classifies_with_evidence_only(tmp_path, rc, ran, oom_after, state, timed_out):
     ws = _ws(tmp_path, ["10.0.0.1"])
     _begin(ws, T0, gather_max=600)
-    oom = {"vmstat": 0, "cgroup": oom_after, "cgroup_path": "/system.slice/jenkins-agent.service"}
-    att = gs.end(ws, rc=rc, now=T0 + ran, probes={"oom": oom})
+    oom = {"vmstat": 0, "cgroup": oom_after, "cgroup_path": CG}
+    att = gs.end(ws, rc=rc, now=T0 + ran, probes={"oom": oom, "kernel": KERNEL_NONE})
     assert att["state"] == state and att["timed_out"] is timed_out and att["exec_sec"] == ran and att["end_source"] in ("exit", "signal")
     assert (ws / "gather_rc.txt").read_text(encoding="utf-8").strip() == str(rc)
     run = _state(ws)
     assert run["ran_sec"] == run["exec_used_sec"] == ran and run["rc"] == rc and run["state"] == state
+    if oom_after:
+        assert att["oom_observed"] == {"cgroup": {"path": CG, "delta": 1}}, "관측은 남긴다"
+        if state != "completed":
+            assert "원인" in (att["evidence"] or ""), att["evidence"]
+    assert att["oom_link"] is None
 
 
-def test_signal_right_after_an_oom_keeps_both_observations(tmp_path):
-    # 2026-10-06 Runner03 격리 시험(systemd-run --scope -p MemoryMax=64M): 커널이 수집 프로세스를 OOM 으로 끝내자 systemd 가 범위를 멈추며
-    #   수집 셸에 TERM 을 보냈다. 끝 기록은 신호 종료지만 같은 cgroup 의 OOM 카운터가 늘었으므로 runner_oom 이고, 두 관측을 함께 남긴다
+def _ansible_pid(ws, pid):
+    (ws / ".gather_ansible_pid").write_text(f"{pid}\n", encoding="utf-8")
+
+
+def test_oom_of_this_runs_process_with_the_following_signal_is_the_runner_oom(tmp_path):
+    # 반례 4(필수): 이 수집 실행의 프로세스(ansible-playbook 주 프로세스)가 OOM 으로 끝났다는 커널 기록이 있고, 그에 따른 종료 신호가 왔다
+    #   (2026-10-06 Runner03 격리 시험 — 커널이 수집 프로세스를 OOM 으로 끝내자 systemd 가 범위를 멈추며 수집 셸에 TERM)
     ws = _ws(tmp_path, ["10.0.0.1"])
     _begin(ws, T0, gather_max=600)
-    oom = dict(PROBES["oom"], cgroup=PROBES["oom"]["cgroup"] + 1)
-    att = gs.end(ws, rc=143, now=T0 + 5, probes={"oom": oom})
+    _ansible_pid(ws, 5151)
+    kernel = {"readable": True, "kills": [{"at": 1500.0, "pid": 5151, "comm": "ansible-playboo"}]}
+    att = gs.end(ws, rc=143, now=T0 + 5, probes={"oom": dict(PROBES["oom"], cgroup=1), "kernel": kernel})
     assert att["state"] == "runner_oom" and att["end_source"] == "signal" and att["rc"] == 143
-    assert "memory.events oom_kill +1" in att["evidence"] and att["evidence"].endswith("signal TERM")
+    assert att["oom_link"] == {"pid": 5151, "role": "ansible-playbook", "comm": "ansible-playboo", "at": 1500.0}
+    assert "PID 5151" in att["evidence"] and att["evidence"].endswith("signal TERM")
+    assert att["ansible_pid"] == 5151 and att["kernel_log"] == "readable"
     assert gs.TERMINAL_STATES.count("runner_oom") == 0 and "runner_oom" in gs.INFRA_STATES, "이어서 수집하는 실행 기반 장애다"
+    # 같은 근거로 KILL(137, 한계 전)도 runner_oom
+    (tmp_path / "k").mkdir()
+    ws2 = _ws(tmp_path / "k", ["10.0.0.1"])
+    _begin(ws2, T0, gather_max=600)
+    _ansible_pid(ws2, 6161)
+    att2 = gs.end(ws2, rc=137, now=T0 + 5, probes={"oom": PROBES["oom"], "kernel": {"readable": True, "kills": [{"at": 1200.0, "pid": 6161, "comm": "python3"}]}})
+    assert att2["state"] == "runner_oom" and "KILL" in att2["evidence"]
 
 
-def test_oom_evidence_uses_the_same_cgroup_and_falls_back_to_the_runner_only_without_it():
-    cg = "/system.slice/jenkins-agent.service"
-    assert gs.oom_evidence({"cgroup": 3, "cgroup_path": cg, "vmstat": 10}, {"cgroup": 4, "cgroup_path": cg, "vmstat": 10})
-    assert gs.oom_evidence({"cgroup": 3, "cgroup_path": cg, "vmstat": 10}, {"cgroup": 3, "cgroup_path": cg, "vmstat": 11}) is None, \
-        "같은 cgroup 을 읽었는데 그대로면 이 Runner 의 다른 프로세스가 끝난 것이다"
-    assert gs.oom_evidence({"cgroup": None, "vmstat": 10}, {"cgroup": None, "vmstat": 11})
-    assert gs.oom_evidence({"cgroup": 3, "cgroup_path": cg, "vmstat": 10}, {"cgroup": 9, "cgroup_path": "/other", "vmstat": 10}) is None
-    assert gs.oom_evidence(None, None) is None
+@pytest.mark.parametrize("rc,state", [(1, "failed_run"), (137, "process_lost"), (143, "aborted")])
+def test_other_process_oom_in_the_shared_cgroup_is_only_an_observation(tmp_path, rc, state):
+    # 반례 1 · 2(필수): 같은 공유 cgroup 의 다른 프로세스가 종료 직전에 OOM 으로 끝났다(카운터 +1, 커널 기록의 PID 는 이 실행의 것이 아니다).
+    #   이 수집은 별도 원인으로 rc=1 / kill -9 / TERM 으로 끝났다 — OOM 을 원인으로 적지 않고 관측만 남긴다(불필요한 재시도 없음)
+    ws = _ws(tmp_path, ["10.0.0.1"])
+    _begin(ws, T0, gather_max=600)
+    _ansible_pid(ws, 5151)
+    kernel = {"readable": True, "kills": [{"at": 1990.0, "pid": 9999, "comm": "java"}]}
+    att = gs.end(ws, rc=rc, now=T0 + 50, probes={"oom": dict(PROBES["oom"], cgroup=1), "kernel": kernel})
+    assert att["state"] == state and att["oom_link"] is None
+    assert att["oom_observed"] == {"cgroup": {"path": CG, "delta": 1}}
+    assert "원인" in att["evidence"] and "runner_oom" not in att["evidence"], att["evidence"]
+    assert att["state"] not in gs.INFRA_STATES
+
+
+def test_another_process_entering_an_isolated_scope_after_start_is_not_this_runs_oom(tmp_path):
+    # 반례(필수, 10차 보정): 시도 시작 때 cgroup 에 이 실행만 있었더라도 그 뒤 다른 프로세스가 들어와 OOM 으로 끝날 수 있다 —
+    #   시작 때의 구성원과 카운터 증가만으로는 원인이 아니다. 커널 기록의 PID 가 이 실행의 것이 아니면 TERM 은 취소(aborted)로 남는다
+    ws = _ws(tmp_path, ["10.0.0.1"])
+    scope = "/system.slice/run-r1234.scope"
+    probes = dict(PROBES, oom={"vmstat": 0, "cgroup": 0, "cgroup_path": scope})
+    _begin(ws, T0, gather_max=600, probes=probes)
+    _ansible_pid(ws, 5151)
+    kernel = {"readable": True, "kills": [{"at": 1700.0, "pid": 7171, "comm": "stress"}]}
+    att = gs.end(ws, rc=143, now=T0 + 30, probes={"oom": {"vmstat": 1, "cgroup": 1, "cgroup_path": scope}, "kernel": kernel})
+    assert att["state"] == "aborted" and att["oom_observed"]["cgroup"] == {"path": scope, "delta": 1} and att["oom_observed"]["system"] == {"delta": 1}
+
+
+def test_unreadable_kernel_log_is_never_an_oom_cause(tmp_path):
+    ws = _ws(tmp_path, ["10.0.0.1"])
+    _begin(ws, T0, gather_max=600)
+    _ansible_pid(ws, 5151)
+    att = gs.end(ws, rc=137, now=T0 + 30, probes={"oom": dict(PROBES["oom"], cgroup=1), "kernel": {"readable": False, "kills": []}})
+    assert att["state"] == "process_lost" and att["kernel_log"] == "unreadable" and "커널 로그를 읽지 못함" in att["evidence"]
+
+
+def test_user_abort_overlapping_an_oom_increase_is_recorded_as_aborted(tmp_path):
+    # 반례 3(필수): OOM 카운터 증가와 사용자 취소가 겹쳤다. 파이프라인이 취소로 확인하면(classify --user-abort) 그 시도는 aborted 다 —
+    #   이 실행의 PID 가 OOM 으로 끝난 기록이 있었더라도 취소한 요청을 다시 시작하지 않는다
+    ws = _ws(tmp_path, ["10.0.0.1"])
+    _begin(ws, T0, gather_max=600)
+    _ansible_pid(ws, 5151)
+    kernel = {"readable": True, "kills": [{"at": 1100.0, "pid": 5151, "comm": "ansible-playboo"}]}
+    att = gs.end(ws, rc=143, now=T0 + 20, probes={"oom": dict(PROBES["oom"], cgroup=1), "kernel": kernel})
+    assert att["state"] == "runner_oom"
+    out = gs.classify(ws, user_abort=True, now=T0 + 25, probes=PROBES)
+    assert out["state"] == "aborted" and out["infra"] is False and "사용자 취소" in out["evidence"] and "runner_oom" in out["evidence"]
+    rec = _state(ws)["attempts"][-1]
+    assert rec["user_abort"] is True and rec["oom_observed"] == {"cgroup": {"path": CG, "delta": 1}}
+    # 이미 스스로 끝난 시도(completed)는 취소로 바꾸지 않는다
+    (tmp_path / "c").mkdir()
+    ws2 = _ws(tmp_path / "c", ["10.0.0.1"])
+    _begin(ws2, T0)
+    gs.end(ws2, rc=0, now=T0 + 5, probes=PROBES)
+    assert gs.classify(ws2, user_abort=True, now=T0 + 6, probes=PROBES)["state"] == "completed"
+
+
+def test_kernel_oom_records_are_parsed_by_pid_and_window():
+    text = "\n".join([
+        "[  900.000001] Out of memory: Killed process 1111 (java) total-vm:1kB, anon-rss:1kB",                # 시도 전 — 뺀다
+        "[ 1500.250000] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=/,mems_allowed=0,oom_memcg=/x,task_memcg=/x,task=python3,pid=2222,uid=985",
+        "[ 1500.260000] Memory cgroup out of memory: Killed process 2222 (python3) total-vm:9kB, anon-rss:9kB",
+        "[ 1600.000000] Out of memory: Killed process 3333 (ansible-playboo) total-vm:1kB, anon-rss:1kB, UID:985 oom_score_adj:0",
+        "unrelated line", "[ 1700.0] something else",
+    ])
+    kills = gs.parse_kernel_oom(text, since=1000.0)
+    assert kills == [{"at": 1500.25, "pid": 2222, "comm": "python3"}, {"at": 1600.0, "pid": 3333, "comm": "ansible-playboo"}]
+    assert gs.parse_kernel_oom(text, since=None)[0]["pid"] == 1111
+    assert gs.parse_kernel_oom("", since=0) == [] and gs.parse_kernel_oom(None, since=0) == []
+
+
+def test_oom_observation_reports_scope_and_never_decides_the_cause():
+    assert gs.oom_observation({"cgroup": 3, "cgroup_path": CG, "vmstat": 10}, {"cgroup": 4, "cgroup_path": CG, "vmstat": 10}) == \
+        {"cgroup": {"path": CG, "delta": 1}}
+    assert gs.oom_observation({"cgroup": 3, "cgroup_path": CG, "vmstat": 10}, {"cgroup": 3, "cgroup_path": CG, "vmstat": 11}) == \
+        {"system": {"delta": 1}}, "Runner 전체 증가는 Runner 전체 관측으로만"
+    assert gs.oom_observation({"cgroup": 3, "cgroup_path": CG, "vmstat": 10}, {"cgroup": 9, "cgroup_path": "/other", "vmstat": 10}) is None
+    assert gs.oom_observation(None, None) is None
+    assert not hasattr(gs, "oom_evidence"), "카운터 증가를 원인으로 쓰던 함수는 없다"
 
 
 def test_open_attempt_is_closed_with_evidence(tmp_path):
@@ -228,11 +321,21 @@ def test_open_attempt_is_closed_with_evidence(tmp_path):
     out = gs.classify(ws, now=T0 + 4000, probes=reboot)
     assert out["state"] == "runner_restart" and out["infra"] is True and out["exec_sec"] == 330 and "boot_id" in out["evidence"]
 
+    # 끝 기록 없이 사라짐 + 공유 cgroup 카운터 증가만 — 원인 미확인(10차 R5)
     (tmp_path / "b").mkdir()
     ws2 = _ws(tmp_path / "b", ["10.0.0.1"])
     _begin(ws2, T0)
-    oom = dict(PROBES, oom={"vmstat": 0, "cgroup": 1, "cgroup_path": "/system.slice/jenkins-agent.service"})
-    assert gs.classify(ws2, now=T0 + 100, probes=oom)["state"] == "runner_oom"
+    oom = dict(PROBES, oom={"vmstat": 0, "cgroup": 1, "cgroup_path": CG})
+    out2 = gs.classify(ws2, now=T0 + 100, probes=oom)
+    assert out2["state"] == "process_lost" and out2["infra"] is False and "원인 미확인" in out2["evidence"]
+
+    # 끝 기록 없이 사라짐 + 이 실행의 PID 가 OOM 으로 끝난 커널 기록 — runner_oom
+    (tmp_path / "b2").mkdir()
+    ws2b = _ws(tmp_path / "b2", ["10.0.0.1"])
+    _begin(ws2b, T0)
+    killed = dict(PROBES, kernel={"readable": True, "kills": [{"at": 1300.0, "pid": 4242, "comm": "bash"}]})
+    out2b = gs.classify(ws2b, now=T0 + 100, probes=killed)
+    assert out2b["state"] == "runner_oom" and out2b["infra"] is True and "run_gather.sh" in out2b["evidence"]
 
     (tmp_path / "c").mkdir()
     ws3 = _ws(tmp_path / "c", ["10.0.0.1"])
@@ -245,6 +348,57 @@ def test_open_attempt_is_closed_with_evidence(tmp_path):
     _begin(ws4, T0)
     unknown = gs.classify(ws4, now=T0 + 100, probes=PROBES)
     assert unknown["state"] == "process_lost" and unknown["infra"] is False and unknown["end_source"] == "start"
+
+
+def _emitted(ip):
+    return {"ts": "2026-10-06T00:00:00+00:00", "host": ip, "ip": ip, "event": "emitted", "task": "OUTPUT"}
+
+
+def test_confirmed_hosts_whose_results_vanished_are_not_gathered_again(tmp_path):
+    # 10차 R3: 결과가 확정됐던 대상(진행 기록 emitted)의 결과 줄이 결과 파일에서 사라졌다 — 다시 수집하지 않고 재개 불가로 남긴다
+    ips = ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+    ws = _ws(tmp_path, ips, outputs=[_envelope("10.0.0.1"), _envelope("10.0.0.2")], progress=[_emitted("10.0.0.1"), _emitted("10.0.0.2")])
+    first = _begin(ws, T0)
+    assert first["state"] is None and first["pending"] == 1
+    gs.end(ws, rc=137, now=T0 + 10, probes=PROBES)             # 첫 시도가 바깥에서 끝났다(실행 기반 장애 등)
+    (ws / "gather_output.json").write_text(json.dumps(_envelope("10.0.0.1")) + "\n", encoding="utf-8")   # 10.0.0.2 의 결과 줄이 사라졌다
+    plan = _begin(ws, T0 + 100)
+    assert plan["state"] == "resume_impossible" and plan["lost"] == 1 and "10.0.0.2" in plan["evidence"]
+    att = _state(ws)["attempts"][-1]
+    assert att["state"] == "resume_impossible" and att["lost_ips"] == ["10.0.0.2"] and att["rc"] == 92
+    assert not (ws / ".gather_limit_hosts").exists() or "10.0.0.2" not in (ws / ".gather_limit_hosts").read_text()
+
+
+def test_same_count_but_different_hosts_is_detected_by_ip(tmp_path):
+    # 개수가 같아도 확정됐던 대상의 결과가 다른 대상의 결과로 바뀌었으면 그 대상의 결과는 사라진 것이다(앞 시도 기록의 completed_ips 로 대조)
+    ips = ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+    ws = _ws(tmp_path, ips, outputs=[_envelope("10.0.0.1"), _envelope("10.0.0.2")])
+    _begin(ws, T0)
+    att = gs.end(ws, rc=137, now=T0 + 10, probes=PROBES)
+    assert att["completed_ips"] == ["10.0.0.1", "10.0.0.2"]
+    (ws / "gather_output.json").write_text("".join(json.dumps(e) + "\n" for e in (_envelope("10.0.0.1"), _envelope("10.0.0.3"))), encoding="utf-8")
+    plan = _begin(ws, T0 + 100)
+    assert plan["state"] == "resume_impossible" and "10.0.0.2" in plan["evidence"]
+
+
+def test_unconfirmed_hosts_stay_pending_and_confirmed_invalid_lines_are_not_regathered(tmp_path):
+    ips = ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+    bad = dict(_envelope("10.0.0.2"), status="weird")          # 결과 줄은 있지만 형태 검사를 통과하지 못한다
+    ws = _ws(tmp_path, ips, outputs=[_envelope("10.0.0.1"), bad], progress=[_emitted("10.0.0.1"), _emitted("10.0.0.2")])
+    plan = _begin(ws, T0)
+    assert plan["state"] is None and plan["pending"] == 1, "확정 근거가 없는 10.0.0.3 만 남은 대상이다"
+    assert (ws / ".gather_limit_hosts").read_text(encoding="utf-8") == "10.0.0.3\n"
+
+
+def test_precheck_failures_recorded_by_earlier_attempts_are_not_regathered(tmp_path):
+    ips = ["10.0.0.1", "10.0.0.2"]
+    ws = _ws(tmp_path, ips, progress=[_precheck("10.0.0.2", "reachable")])
+    _begin(ws, T0)
+    att = gs.end(ws, rc=137, now=T0 + 10, probes=PROBES)
+    assert att["precheck_failed_ips"] == ["10.0.0.2"]
+    (ws / "gather_progress.jsonl").unlink()                    # 진행 기록이 사라져도 앞 시도 기록으로 확정 실패를 안다
+    plan = _begin(ws, T0 + 100)
+    assert plan["pending"] == 1 and (ws / ".gather_limit_hosts").read_text(encoding="utf-8") == "10.0.0.1\n"
 
 
 def test_progress_counts_only_this_attempt(tmp_path):

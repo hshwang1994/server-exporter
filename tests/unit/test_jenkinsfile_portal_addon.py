@@ -33,8 +33,10 @@ def _func(signature: str) -> str:
     return TEXT[start: TEXT.index("\n}\n", start) + 2]
 
 
-ADDON = _func("String seAddonPrepare(String targetType) {")
+ADDON = _func("String seAddonPrepare(String targetType, Map st) {")
 BODY = _func("def seAttemptBody(Map C, Map st, Map r) {")
+PREP = _func("def sePrepareWorkspace(String targetType, Map own) {")
+READ = _func("Map seReadJsonFile(String path) {")
 VALIDATE = _stage("입력 확인")
 
 
@@ -86,15 +88,31 @@ def test_failure_marks_the_build_unstable_without_per_host_errors():
 
 def test_decision_is_recorded_and_reused_by_the_next_attempt():
     """W09 — 이어서 하는 시도는 저장소를 다시 받지 않고 앞 시도의 결정(사용 여부 · commit)을 쓴다."""
-    assert "fileExists('.se_addon.json')" in ADDON and "d?.decided == true" in ADDON
-    reuse = ADDON[ADDON.index("d?.decided == true"): ADDON.index("String addonCred")]
+    assert "Map rec = seReadJsonFile('.se_addon.json')" in ADDON and "d?.decided == true" in ADDON
+    reuse = ADDON[ADDON.index("if (d?.decided == true) {"): ADDON.index("} else if (rec.state == 'corrupt'")]
     assert "return ''" in reuse and 'return "${env.WORKSPACE}/addon".toString()' in reuse
     assert "addonRef = d.commit.toString()" in reuse, "사본이 없어졌으면 같은 commit 으로 다시 받는다"
     assert "writeFile(file: '.se_addon.json'" in ADDON and "decided: true" in ADDON and "commit: commit" in ADDON
     assert ADDON.index("writeFile(file: '.se_addon.json'") < ADDON.index('unstable("[addon] unavailable:'), "결정을 먼저 남긴다"
     assert "rev-parse HEAD" in ADDON
-    assert "String addonDir = seAddonPrepare(targetType)" in BODY
-    assert ".se_addon.json" in BODY[BODY.index("이전 실행의 결과 파일 정리"):BODY.index("이전 실행의 결과 파일 정리") + 600], "새 빌드의 처음 시도는 지난 결정을 지운다"
+    assert "String addonDir = seAddonPrepare(targetType, st)" in BODY
+    assert ".se_addon.json" in PREP[PREP.index("이전 실행의 결과 파일 정리"):PREP.index("이전 실행의 결과 파일 정리") + 600], "새 빌드의 처음 시도는 지난 결정을 지운다"
+
+
+def test_decision_read_errors_are_not_treated_as_a_missing_decision():
+    """10차 R4 — 결정 파일 읽기의 예외(Runner 연결 끊김 등)를 '결정 없음' 으로 바꿔 기본 ref 를 새로 받지 않는다.
+    읽기 예외는 seReadJsonFile 이 감싸지 않고 상위 retry(agent(), nonresumable())로 넘긴다. 손상(해석 불가)일 때만 결정을 다시 세운다."""
+    assert "readJSON(file: '.se_addon.json'" not in ADDON and "d = null" not in ADDON
+    read_stmt = "String text = readFile(file: path, encoding: 'UTF-8')"
+    assert read_stmt in READ
+    before = READ[:READ.index(read_stmt)]
+    assert "try {" not in before, "파일 읽기는 try 밖이다 — 실행 기반 예외가 원래 형태로 위로 간다"
+    assert "readJSON(text: text, returnPojo: true)" in READ and "[state: 'corrupt'" in READ and "[state: 'absent']" in READ
+    corrupt = ADDON[ADDON.index("} else if (rec.state == 'corrupt'"): ADDON.index("String addonCred")]
+    assert "addonRef = kept" in corrupt and "fetch = false" in corrupt, "손상: 작업 폴더의 사본 commit 으로 다시 검사한다(다른 ref 로 바꾸지 않는다)"
+    assert "problem: 'decision_unreadable'" in corrupt and "unstable(" in corrupt, "사본도 없이 수집을 시작했으면 Add-on 없이 수집하고 알린다"
+    assert "st.gather_started == true" in corrupt
+    assert "if (fetch) {" in ADDON and ADDON.index("if (fetch) {") < ADDON.index("retry(2)")
 
 
 def test_no_traces_of_node_paths_deploy_job_or_global_git_settings():

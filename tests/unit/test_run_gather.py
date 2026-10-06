@@ -48,6 +48,7 @@ with open(out, "a", encoding="utf-8") as fh:
 STUB = r'''#!/bin/bash
 # 가짜 ansible-playbook — 받은 인자 · 환경 · vault 파일 · 대상을 기록하고 STUB_MODE 대로 행동한다
 out="$STUB_OUT"
+echo "$$" > "$out/stub_pid.txt"
 printf '%s\n' "$@" > "$out/args.txt"
 env > "$out/env.txt"
 vf=""; lim=""
@@ -207,9 +208,9 @@ def test_kill_before_the_limit_is_not_reported_as_the_limit(env):
     r = _run(env, gather_max="600", mode="killed")
     assert r.returncode == 137
     rec = _record(env)
-    assert rec["timed_out"] is False and rec["state"] in ("process_lost", "runner_oom")
-    if rec["state"] == "process_lost":
-        assert "실행 한계 전에 강제 종료됐습니다" in r.stdout and "원인 미확인" in r.stdout
+    # 10차 R5: OOM 은 커널 로그의 OOM 종료 기록 PID 가 이 실행의 것일 때만 원인이다 — 가짜가 스스로 KILL 했으니 원인 미확인
+    assert rec["timed_out"] is False and rec["state"] == "process_lost" and rec["attempts"][-1]["oom_link"] is None
+    assert "실행 한계 전에 강제 종료됐습니다" in r.stdout and "원인 미확인" in r.stdout
 
 
 def test_partial_host_failures_pass_the_ansible_code_through(env):
@@ -374,3 +375,29 @@ def test_cleanup_runs_on_limit_and_on_cancel(env):
                 os.kill(pid, signal.SIGKILL)
             except OSError:
                 pass
+
+
+def test_the_ansible_main_pid_is_recorded_without_changing_the_process(env):
+    """10차 R5: run_gather.sh 는 bash -c 로 PID 를 적고 exec 로 ansible-playbook 이 된다 — 기록된 PID 가 실제 ansible-playbook 의 PID 다
+    (timeout 의 신호는 그대로 그 프로세스에 간다). 이 PID 가 커널 OOM 기록과 이 실행을 잇는 근거다."""
+    r = _run(env, mode="ok")
+    assert r.returncode == 0, r.stdout + r.stderr
+    recorded = (env["ws"] / ".gather_ansible_pid").read_text(encoding="utf-8").strip()
+    stub = (env["out"] / "stub_pid.txt").read_text(encoding="utf-8").strip()
+    assert recorded and recorded == stub
+    assert _record(env)["attempts"][-1]["ansible_pid"] == int(recorded)
+
+
+def test_vanished_confirmed_results_stop_the_resume_without_gathering_again(env):
+    """10차 R3: 앞 시도에서 결과가 확정된 대상(completed_ips)의 결과 줄이 작업 폴더에 없으면 다시 수집하지 않고 92 로 끝난다(재개 불가)."""
+    run = {"schema": 2, "gather_max_sec": 600, "alive_interval_sec": 60,
+           "attempts": [{"n": 1, "started_epoch": 1_800_000_000, "started_at": "2027-01-15T08:00:00.000Z", "pid": 1, "state": "agent_disconnect",
+                         "exec_sec": 10, "ran_sec": 10, "completed_ips": [IPS[0]], "precheck_failed_ips": []}]}
+    (env["ws"] / "gather_run.json").write_text(json.dumps(run), encoding="utf-8")
+    r = _run(env, gather_max="600", mode="ok")
+    assert r.returncode == 92, r.stdout + r.stderr
+    assert not (env["out"] / "args.txt").exists(), "ansible 을 실행하지 않는다"
+    assert "결과가 확정됐던 대상의 결과가 작업 폴더에 없어 다시 수집하지 않습니다" in r.stdout and IPS[0] in r.stdout
+    att = _record(env)["attempts"][-1]
+    assert att["state"] == "resume_impossible" and att["lost_ips"] == [IPS[0]]
+    assert (env["ws"] / "gather_rc.txt").read_text(encoding="utf-8").strip() == "92"

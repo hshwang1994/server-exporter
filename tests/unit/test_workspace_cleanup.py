@@ -247,7 +247,11 @@ def test_pipeline_wires_the_cleanup_and_records_ownership():
     portal = (REPO / "Jenkinsfile_portal").read_text(encoding="utf-8")
     assert "python3 scripts/workspace_cleanup.py --current" in portal and "exit 0" in portal
     assert 'ws("${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}") {' in portal, "시도마다 같은 작업 폴더(종전 customWorkspace 와 같은 위치)"
-    assert portal.count("writeFile(file: '.se_workspace.json'") == 2, "첫 시도 시작(소유 · 시작 시각 · commit)과 보존 끝(끝 시각 · 보존 여부)"
+    # 2026-10-07 (10차 R3 · N1): 소유 기록은 seWriteOwner 한 곳에서만 쓴다(commit · prepared 를 잃지 않게) —
+    # 준비 시작(prepared:false) · 준비 끝(prepared:true) · 보존 끝(끝 시각 · 보존 여부) 세 번 부른다
+    assert portal.count("writeFile(file: '.se_workspace.json'") == 1
+    assert portal.count("seWriteOwner(false, [:])") == 1 and portal.count("seWriteOwner(true, [:])") == 1
+    assert portal.count("seWriteOwner(true, [ended_epoch: seNowSec(), preserved: preserved") == 1
     assert "--build-limit-sec ${C.MAX_BUILD}" in portal
     manifest = (REPO / "production_manifest.yml").read_text(encoding="utf-8")
     assert "scripts/workspace_cleanup.py" in manifest, "운영 runtime 파일 — production tree 에 들어간다"

@@ -30,7 +30,7 @@ C = _constants()
 
 
 def test_constants_table_is_complete():
-    assert C == {"INFRA_WAIT": 259200, "OFFLINE_GRACE": 300, "GATHER_MAX": 21600, "KILL_AFTER": 90, "ATTEMPT_MARGIN": 7200,
+    assert C == {"INFRA_WAIT": 259200, "GATHER_MAX": 21600, "KILL_AFTER": 90, "ATTEMPT_MARGIN": 7200,
                  "FINALIZER": 3600, "ABORT_NODE_WAIT": 300, "BACKOFF_MAX": 3600, "MAX_BUILD": 295200, "PORTAL_WAIT": 600,
                  "PORTAL_MIN": 30, "PORTAL_ATTEMPTS": 3, "KEEP_DAYS": 7}
 
@@ -54,7 +54,12 @@ def test_execution_limits_start_only_after_a_node_is_acquired():
     assert "long limitSec = (C.GATHER_MAX as long) + (C.KILL_AFTER as long) + (C.ATTEMPT_MARGIN as long)" in attempt
     fin = PORTAL[PORTAL.index("def seFinalizeAndCallback() {"):]
     fin = fin[: fin.index("\n}\n")]
-    assert fin.index("seWithNode('built-in'") < fin.index("timeout(time: C.FINALIZER, unit: 'SECONDS') {"), "결과 확인 1시간은 노드를 얻은 뒤"
+    # 10차 R1: 결과 확인 1시간은 노드를 얻은 뒤부터, 재진입해도 처음부터 세지 않는다 — 진입마다 노드를 얻은 때부터 끝(또는 오류 감지)까지 더한다
+    assert "long leftMs = (C.FINALIZER as long) * 1000L - (fs.exec_ms as long)" in fin
+    assert fin.index("seWithNode('built-in'") < fin.index("timeout(time: Math.max(1L, (long) (leftMs / 1000L)), unit: 'SECONDS') {"), "결과 확인 한계는 노드를 얻은 뒤"
+    assert "fs.exec_ms = (fs.exec_ms as long) + Math.max(0L, seNowMs() - tInMs)" in fin and "} finally {" in fin
+    assert "fs.abort_wait_ms" in fin and "(C.ABORT_NODE_WAIT as long) * 1000L - (fs.abort_wait_ms as long)" in fin, "취소된 빌드의 노드 대기 5분은 재진입마다 새로 주지 않는다"
+    assert "OFFLINE_GRACE" not in PORTAL, "끊김 대기를 Jenkins 처리 유예(5분)로 앞당겨 세지 않는다 — 확인된 감지 시각부터 센다"
 
 
 def test_gather_limit_is_accumulated_real_execution():

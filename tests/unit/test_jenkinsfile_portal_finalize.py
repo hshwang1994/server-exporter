@@ -52,6 +52,8 @@ FINALIZE = _method("def seFinalizeAndCallback")
 FIN_IN = _method("def seFinalizeIn")
 CALLBACK = _method("def seCallback")
 PRESERVE = _method("def sePreserveGatherOutput")
+PREP = _method("def sePrepareWorkspace")
+READ = _method("Map seReadJsonFile")
 LIB = (REPO / "scripts/jenkins/se_finalize.groovy").read_text(encoding="utf-8")
 POST = TEXT[TEXT.index("    post {\n        always {"):]
 
@@ -61,7 +63,9 @@ def test_only_three_stages_and_no_callback_or_schema_stage():
     assert stages == ["입력 확인", "실행 위치 확인", "서버 정보 수집"]
     assert "Validate Schema" not in TEXT and "stage('Callback')" not in TEXT
     # 결과 전송은 stage 가 아니라 post{always} 안의 표시 단계다 — 끊긴 빌드에서도 실행되고, 한 번만 돈다
-    assert "stage('결과 확인 및 전송') {\n                        fin = seFinalizeAndCallback()\n                    }" in POST
+    assert "stage('결과 확인 및 전송') {\n                            fin = seFinalizeAndCallback()\n                        }" in POST
+    # 10차 R1: 결과 확인이 중단돼도 빌드 끝 요약을 남긴다
+    assert POST.index("try {") < POST.index("stage('결과 확인 및 전송')") < POST.index("} finally {") < POST.index("seBuildSummary(fin)")
     assert len(re.findall(r"(?<!def )seFinalizeAndCallback\(\)", TEXT)) == 1, "호출은 post 한 곳(정의 제외)"
     assert "seBuildSummary(fin)" in POST
     for cond in ("success {", "unstable {", "failure {", "aborted {"):
@@ -69,21 +73,46 @@ def test_only_three_stages_and_no_callback_or_schema_stage():
 
 
 def test_finalizer_waits_for_the_builtin_node_then_one_limit_in_a_per_build_folder():
-    """9차 W07 · 8차 R8: 결과 처리 노드(built-in)도 실행 기반이다 — 이 빌드의 실행 기반 대기 합(72시간) 안에서 Jenkins queue 로 기다리고
-    (취소된 빌드는 ABORT_NODE_WAIT 까지만), 노드를 얻은 뒤부터 FINALIZER(1시간) 하나로 감싼다. 작업 위치는 빌드마다 따로(fin-<빌드 번호>)."""
-    assert "seWithNode('built-in', infra, '결과 처리 노드', 0L, aborted ? (C.ABORT_NODE_WAIT as long) : 0L, { Map rr ->" in FINALIZE
+    """9차 W07 · 8차 R8 · 10차 R1: 결과 처리 노드(built-in)도 실행 기반이다 — 이 빌드의 실행 기반 대기 합(72시간) 안에서 Jenkins queue 로 기다리고
+    (취소된 빌드는 ABORT_NODE_WAIT 합까지만), 노드를 얻은 뒤부터 FINALIZER(1시간, 재진입 합) 하나로 감싼다. 작업 위치는 빌드마다 따로(fin-<빌드 번호>).
+    실행 기반 오류로 끊기면(agent_lost) 같은 빌드 안에서 노드를 다시 기다려 이어서 처리한다 — 종전에는 결과 없이 SUCCESS 로 끝날 수 있었다."""
+    assert "Map r = seWithNode('built-in', infra, fs.entries ? '결과 처리 노드 복구 대기' : '결과 처리 노드', backdate, cap, { Map rr ->" in FINALIZE
     assert "boolean aborted = (currentBuild.result == 'ABORTED')" in FINALIZE
-    assert FINALIZE.index("seWithNode('built-in'") < FINALIZE.index("timeout(time: C.FINALIZER, unit: 'SECONDS') {") < FINALIZE.index('dir("fin-${env.BUILD_NUMBER}")')
-    assert "long tIn = seNowSec()" in FINALIZE and FINALIZE.index("timeout(time: C.FINALIZER") < FINALIZE.index("long tIn = seNowSec()"), \
-        "노드를 기다린 시간은 1시간에 넣지 않는다"
+    assert "while (fs.result == null) {" in FINALIZE
+    assert FINALIZE.index("seWithNode('built-in'") < FINALIZE.index("timeout(time: Math.max(1L, (long) (leftMs / 1000L)), unit: 'SECONDS') {") < FINALIZE.index('dir("fin-${env.BUILD_NUMBER}")')
+    assert "long tInMs = seNowMs()" in FINALIZE and FINALIZE.index("long tInMs = seNowMs()") < FINALIZE.index("timeout(time: Math.max(1L"), "노드를 기다린 시간은 넣지 않는다"
     assert "seCleanOldFinalizerDirs(C)" in FINALIZE and FINALIZE.index("seCleanOldFinalizerDirs(C)") < FINALIZE.index('dir("fin-')
-    assert "result = seFinalizeIn(C, manifestJson, ips, outcome, tPostMs, tIn, tIn + (C.FINALIZER as long), infra)" in FINALIZE
-    # 노드를 끝내 얻지 못하면 보내지 못한 채 FAILURE — 결과는 stash · 보관본에 남는다
-    expired = FINALIZE[FINALIZE.index("if (r.state == 'expired') {"):]
-    assert "currentBuild.result = 'FAILURE'" in expired and "'finalize_node_unavailable'" in expired and "stash" in expired
+    assert "fs.result = seFinalizeIn(C, manifestJson, ips, outcome, tPostMs, tIn, tIn + (long) (leftMs / 1000L), infra, fs)" in FINALIZE
+    # 재진입: 감지 시각부터 다시 기다린다(앞당기지 않는다). 같은 단계에서 진척 없이 반복되면 쉰다(대기 합에 넣는다). 취소는 삼키지 않는다
+    lost = FINALIZE[FINALIZE.index("if (r.state != 'agent_lost') { stop = 'unknown'; break }"):]
+    assert "waitFrom = lostAt" in lost and "fs.lost << [at: seIsoUtc(lostAt), error: r.error, mark: fs.mark]" in lost
+    assert "seInfraPause(infra, backoff," in lost and "lastMark == fs.mark" in lost
+    assert "if (r.state == 'expired') { stop = 'expired'; break }" in FINALIZE
+    abort = FINALIZE[FINALIZE.index("} catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {"):]
+    assert "seCbState(fs.cb)" in abort and "throw fie" in abort
+    assert "return seFinalizeIncomplete(C, fs, ips, stop)" in FINALIZE and "return null" in FINALIZE, "null 은 접수되지 않은 요청에만"
+    # 끝내 처리하지 못했을 때: 보내지 못했으면 FAILURE, 보냈지만 마무리만 못 했으면 UNSTABLE — 보존 위치를 적는다
+    inc = _method("Map seFinalizeIncomplete")
+    assert "currentBuild.result = 'FAILURE'" in inc and "unstable(" in inc and "'finalize_node_unavailable'" in inc and "stash" in inc
+    assert "incomplete: true" in inc and "callback_body.json" in inc
     # 결과 확인 진입 때 Job 작업 폴더를 통째로 지우던 deleteDir 는 없다 — 지우는 것은 보관을 확인한 이 빌드의 폴더뿐
     assert "deleteDir()" not in FINALIZE
     assert FIN_IN.count("deleteDir()") == 1 and "if (finalArchived) {\n        deleteDir()" in FIN_IN
+
+
+def test_finalizer_reentry_does_not_resend_a_confirmed_delivery_or_restart_the_attempt_count():
+    """10차 R1: 전송 기록(fs.cb)은 재진입해도 이어진다. 2xx 를 받은 전송은 다시 보내지 않고, 확인하지 못한 전송은 남은 횟수만 쓴다."""
+    seg = FIN_IN[FIN_IN.index("Map cb = (fs.cb instanceof Map) ? fs.cb : [:]"):FIN_IN.index("boolean delivered = (cb.delivered == true)")]
+    assert "if (cb.delivered == true) {" in seg and "다시 보내지 않습니다" in seg and "seCallback(body, deadline, C, cb)" in seg
+    assert "if (!(state.tries instanceof List)) { state.tries = [] }" in CALLBACK and "int done = (state.tries as List).size()" in CALLBACK
+    assert "for (int attempt = done + 1; attempt <= maxAttempts; attempt++) {" in CALLBACK
+    assert "state.tries = []\n" not in CALLBACK, "앞 진입의 시도 기록을 지우지 않는다"
+    assert "finalize: [entries: fs.entries, exec_sec_before: (long) ((fs.exec_ms as long) / 1000L), limit_left_sec: deadline - tIn, lost: fs.lost]" in FIN_IN
+    summary = _method("def seBuildSummary")
+    assert "} else if (!(env.SE_MANIFEST_JSON ?: '').trim()) {\n        echo '[요약] 접수 전에 끝나 Portal 로 보낸 결과가 없습니다.'" in summary
+    assert "결과 확인을 마치지 못해 이 빌드의 결과 요약이 없습니다" in summary
+    assert "if (res == 'SUCCESS' && (fin == null || fin.delivered != true) && (env.SE_MANIFEST_JSON ?: '').trim()) {" in summary, \
+        "보내지 못한 요청에 '수집과 결과 전송이 끝났습니다' 를 쓰지 않는다"
 
 
 def test_no_inner_step_limits_and_no_tier2():
@@ -107,7 +136,7 @@ def test_time_limits_count_execution_and_waiting_separately():
     assert "options {" not in GATHER.split("\n    post {")[0] and "agent {" not in GATHER.split("\n    post {")[0]
     consts = dict(re.findall(r"^\s+([A-Z_]+)\s*:\s*(\d+),", _method("Map seConstants"), re.M))
     assert int(consts["INFRA_WAIT"]) == 72 * 3600 and int(consts["GATHER_MAX"]) == 6 * 3600 and int(consts["FINALIZER"]) == 3600
-    assert int(consts["OFFLINE_GRACE"]) == 300, "Jenkins 가 끊긴 Agent 를 기다리는 5분(workflow-durable-task-step 기본)"
+    assert "OFFLINE_GRACE" not in consts, "10차: 끊김 대기를 Jenkins 처리 유예로 앞당기지 않는다 — 확인된 감지 시각부터 센다"
     assert int(consts["MAX_BUILD"]) == int(consts["INFRA_WAIT"]) + int(consts["GATHER_MAX"]) + int(consts["FINALIZER"]) + 3 * 3600
     assert int(consts["PORTAL_WAIT"]) == 600 and int(consts["PORTAL_ATTEMPTS"]) == 3
     for gone in ("BUILD", "STAGE", "PRE"):
@@ -239,18 +268,21 @@ def test_gather_runs_through_run_gather_with_the_accumulated_limit():
     이번 시도의 한계 · 남은 대상 · 동시 실행 수는 Runner 의 실행 기록(scripts/gather_state.py)이 정한다."""
     assert ('bash "\\${WORKSPACE}/scripts/run_gather.sh" "${playbook}" "${inventory}" "${env.SE_LOCATION}" "${addonDir ? \'true\' : \'false\'}" '
             '"${C.GATHER_MAX}" "${lostPrev ? \'true\' : \'false\'}"') in BODY
-    assert BODY.index("String addonDir = seAddonPrepare(targetType)") < BODY.index("scripts/run_gather.sh")
+    assert BODY.index("String addonDir = seAddonPrepare(targetType, st)") < BODY.index("scripts/run_gather.sh")
     assert not re.search(r'ansible-playbook\s+"', TEXT) and "timeout --signal" not in TEXT, "ansible-playbook 실행 · 한계 집행은 run_gather.sh 한 곳"
     for gone in ("gather_budget.sh", "SE_MEM_AVAILABLE_MB", "not_started_budget", "not_started_memory", "mem_cap", "mem_guard", "[Budget]",
                  "SE_FORCE_SEC", "build_limit", "stage_limit", "exec.start"):
         assert gone not in TEXT, gone
-    # 처음 시도: 저장소 받기 → 소유 기록 → 지난 결과 정리 → 접수 목록. 이어서 하는 시도는 저장소를 다시 받지 않고 revision 을 대조한다
-    first = BODY[BODY.index("if (!mine) {"):BODY.index("} else {", BODY.index("if (!mine) {"))]
-    order = [first.index(k) for k in ("checkout(scm)", "writeFile(file: '.se_workspace.json'", "sh label: '이전 실행의 결과 파일 정리'",
-                                       "writeFile(file: 'gather_manifest.json'")]
+    # 처음 시도: 저장소 받기 → 소유 기록(prepared: false) → 지난 결과 정리 → 접수 목록 → 소유 기록(prepared: true). 이어서 하는 시도는
+    #   저장소를 다시 받지 않고 revision 을 대조한다(10차 R3: 준비가 중간에 끊긴 같은 빌드는 남은 준비만 마친다)
+    order = [PREP.index(k) for k in ("checkout(scm)", "seWriteOwner(false, [:])", "sh label: '이전 실행의 결과 파일 정리'",
+                                      "writeFile(file: 'gather_manifest.json'", "seWriteOwner(true, [:])")]
     assert order == sorted(order)
-    assert "commit: (scmVars?.GIT_COMMIT ?: '')" in first
-    resume = BODY[BODY.index("} else {", BODY.index("if (!mine) {")):BODY.index("String addonDir = seAddonPrepare")]
+    assert "commit = (scmVars?.GIT_COMMIT ?: '').toString()" in PREP and "env.SE_WS_COMMIT = commit" in PREP
+    assert "if (head && head == own.commit.toString()) { commit = head }" in PREP, "같은 빌드의 준비를 이어 갈 때 받은 revision 이 그대로면 다시 받지 않는다"
+    assert "sePrepareWorkspace(targetType, null)" in BODY and "sePrepareWorkspace(targetType, own)" in BODY
+    assert "} else if (own.prepared == false && st.gather_started != true) {" in BODY
+    resume = BODY[BODY.index("} else {", BODY.index("} else if (own.prepared == false")):BODY.index("String addonDir = seAddonPrepare")]
     assert "checkout" not in resume and "git rev-parse HEAD" in resume and "head != own.commit.toString()" in resume
     assert TEXT.count("checkout(scm)") == 1
     # 기술 기록 한 줄 — 증거 수집기가 수집 단계가 Runner 위에서 돌았는지 본다(종전 [Budget] exec)
@@ -286,13 +318,17 @@ def test_retry_rules_infra_only_with_backoff_and_pinned_runner():
             in LOOP), "5분부터 두 배씩, 상한은 BACKOFF_MAX(시험 상수도 그대로 따른다)"
     assert "if (((last.progress ?: 0) as int) > 0) {\n                st.backoff = 0L" in LOOP, "진척이 있으면 바로 다시 시도한다"
     assert "seInfraPause(infra, st.backoff as long," in LOOP
-    assert "if (r.state == 'agent_lost') {" in LOOP and "st.backdate = (C.OFFLINE_GRACE as long)" in LOOP
+    assert "if (r.state == 'agent_lost') {" in LOOP and "st.wait_from_ms = lostAt" in LOOP and "OFFLINE_GRACE" not in TEXT
+    assert "long backdate = st.wait_from_ms ? Math.max(0L, (long) ((seNowMs() - (st.wait_from_ms as long)) / 1000L)) : 0L" in LOOP, \
+        "대기는 확인된 감지 시각부터 센다 — 즉시 난 읽기 오류 · controller 재시작을 5분 기다린 것으로 적지 않는다"
+    assert "Jenkins 가 ${seDuration" not in LOOP and "기다린 뒤 알렸습니다" not in TEXT
     assert "st.agent_lost_prev = (st.gather_started == true)" in LOOP
     assert "if (r.state == 'expired') {" in LOOP and "st.outcome = 'infra_wait_expired'" in LOOP and "st.limit_reason = 'infra_wait'" in LOOP
     assert "process_lost" not in LOOP, "원인 미확인 종료는 다시 시도하지 않는다"
     # retry(agent()) 는 Runner 연결 끊김을 아는 방법일 뿐이다 — 두 번째 호출은 일을 하지 않고 표식만 남긴다
     assert "retry(count: 2, conditions: [agent(), nonresumable()]) {" in WITH_NODE
-    assert "if ((r.calls as int) > 1) {\n                        r.state = 'agent_lost'\n                        return" in WITH_NODE
+    assert "if ((r.calls as int) > 1) {\n                        r.state = 'agent_lost'\n                        r.lost_at_ms = seNowMs()\n                        return" in WITH_NODE
+    assert "} catch (Throwable t) {" in WITH_NODE and "throw t" in WITH_NODE, "오류 종류만 남기고 다시 던진다 — 판정은 retry 조건이 한다"
     assert "failFast: true" in WITH_NODE and "'대기 한도': {\n                seQueueTimer(r, infra, ep, capSec)" in WITH_NODE
     timer = _method("def seQueueTimer")
     assert "nap = Math.min(nap * 2L, 300L)" in timer and "long nap = 5L" in timer, "즉시 반복 조회 없이 5초부터 5분까지 늘린다"
@@ -362,14 +398,14 @@ def test_preserve_steps_are_independent():
 def test_workspace_markers_and_cleanup_wiring():
     """8차 R8: 작업 폴더 소유 기록(.se_workspace.json)을 수집 단계 첫 동작으로 쓰고, 보존 뒤 끝 시각 · 보존 여부로 다시 쓴다.
     정리는 scripts/workspace_cleanup.py(Runner) 와 seCleanOldFinalizerDirs(controller, pipeline step 만) — 사용자 입력은 없다."""
-    assert BODY.index("writeFile(file: '.se_workspace.json'") < BODY.index("sh label: '이전 실행의 결과 파일 정리'")
+    assert PREP.index("seWriteOwner(false, [:])") < PREP.index("sh label: '이전 실행의 결과 파일 정리'")
     assert "ended_epoch: seNowSec(), preserved: preserved" in PRESERVE
     clean = _method("def seCleanOldWorkspaces")
     assert "python3 scripts/workspace_cleanup.py --current" in clean and "--keep-days ${C.KEEP_DAYS} --every-sec 86400" in clean
     assert "--build-limit-sec ${C.MAX_BUILD}" in clean, "끝 기록 없는 폴더는 최대 빌드 수명(72 + 6 + 1 + 3시간) 동안 실행 중으로 본다"
     # 이어서 하는 시도는 소유 기록으로 이 빌드의 폴더인지 확인한다 — 없으면 전체를 다시 수집하지 않고 재개 불가
     assert "boolean mine = (own != null && \"${own.job}\" == \"${env.JOB_NAME}\" && \"${own.build}\" == \"${env.BUILD_NUMBER}\")" in BODY
-    gone = BODY[BODY.index("if (!mine) {"):BODY.index("def scmVars = checkout(scm)")]
+    gone = BODY[BODY.index("if (!mine) {"):BODY.index("sePrepareWorkspace(targetType, null)")]
     assert "if (st.gather_started == true) {" in gone and "outcome: 'resume_impossible'" in gone and "return" in gone
     assert "exit 0" in clean and "returnStatus: true" in clean, "정리 실패가 빌드 결과를 바꾸지 않는다"
     fin = _method("def seCleanOldFinalizerDirs")
@@ -594,3 +630,43 @@ def test_spent_wait_budget_still_takes_a_node_that_is_free_now():
     assert "if (left <= 0L && !firstLook) {" in timer
     assert "sleep(time: (left > 0L) ? Math.max(1L, Math.min(nap, left)) : nap, unit: 'SECONDS')" in timer
     assert timer.index("sleep(time:") < timer.index("firstLook = false") < timer.index("if (r.state != 'waiting') { break }")
+
+
+def test_record_files_propagate_read_errors_and_only_parse_errors_are_corrupt():
+    """10차 R2(GP-61): 소유 기록 · 수집 실행 기록 · Add-on 결정 파일의 읽기 예외를 '기록 없음' 으로 바꾸지 않는다. 읽기(readFile)는 감싸지 않아
+    실행 기반 예외가 원래 형태로 상위 retry(agent(), nonresumable())로 가고, 읽은 문자열의 JSON 해석 오류만 corrupt 다."""
+    assert "Map seReadOwner()" not in TEXT, "읽기 예외를 null 로 바꾸던 함수는 없다"
+    read_stmt = "String text = readFile(file: path, encoding: 'UTF-8')"
+    assert READ.index("if (!fileExists(path)) { return [state: 'absent'] }") < READ.index(read_stmt) < READ.index("try {")
+    assert "catch (Exception e) {\n        return [state: 'corrupt', problem: e.getClass().simpleName]" in READ
+    assert "Map rec = seReadJsonFile('.se_workspace.json')" in BODY
+    assert "Map rec = seReadJsonFile('gather_run.json')" in _method("Map seReadGatherRun")
+    gone = BODY[BODY.index("if (!mine) {"):BODY.index("sePrepareWorkspace(targetType, null)")]
+    assert "(rec.state == 'absent')" in gone and "(rec.state == 'corrupt')" in gone, "재개 불가 문구는 없음 · 해석 불가 · 다른 빌드를 구분한다"
+
+
+def test_final_preservation_marker_stops_retrying_after_results_were_handed_over():
+    """10차 N1: 마지막 보존이 보관(archive) 또는 전달(stash) 중 하나라도 마치면 표식을 남긴다. 그 뒤 실행 기반 오류로 끊기면 다시 수집하지 않고
+    직전 판정으로 끝낸다. 표식 전에 끊기면 같은 작업 폴더에서 보존만 다시 한다(preserve_only). 다시 쓰는 소유 기록은 commit · prepared 를 유지한다."""
+    assert "if (archived || stashed) { env.SE_FINAL_PRESERVED = 'true' }" in PRESERVE
+    assert PRESERVE.index("env.SE_FINAL_PRESERVED = 'true'") < PRESERVE.index("seWriteOwner(true, [ended_epoch: seNowSec(), preserved: preserved") < PRESERVE.index("deleteDir()")
+    assert "env.SE_FINAL_PRESERVED = ''" in STAGE_FN
+    lost = LOOP[LOOP.index("if (r.state == 'agent_lost') {"):]
+    assert "if (st.final == true && (env.SE_FINAL_PRESERVED ?: '') == 'true') {" in lost and "break" in lost
+    assert "if (st.final == true) { st.preserve_only = true }" in lost
+    main_branch = "    if (!mine) {\n        if (st.gather_started == true) {"
+    assert "if (st.preserve_only == true) {" in BODY and BODY.index("if (st.preserve_only == true) {") < BODY.index(main_branch)
+    only = BODY[BODY.index("if (st.preserve_only == true) {"):BODY.index(main_branch)]
+    assert "sePreserveGatherOutput()" in only and "run_gather" not in only, "보존만 다시 한다 — 다시 수집하지 않는다"
+    assert BODY.index("st.final = true") < BODY.rindex("sePreserveGatherOutput()")
+    assert "st.final = true" in ATTEMPT, "시도 실행 한계로 끝난 시도도 마지막이다"
+    writer = _method("def seWriteOwner")
+    assert "commit: (env.SE_WS_COMMIT ?: '')" in writer and "prepared: prepared" in writer and "rec.putAll(extra)" in writer
+
+
+def test_user_abort_is_recorded_as_aborted_in_the_run_record():
+    """10차 R5: 파이프라인이 사용자 취소로 확인한 시도는 실행 기록에서도 aborted 로 확정한다(같은 때의 OOM 은 관측으로만 남는다)."""
+    mark = _method("def seMarkUserAbort")
+    assert "gather_state.py classify --ws \"${WORKSPACE}\" --user-abort" in mark and "returnStatus: true" in mark
+    user = BODY[BODY.index("env.SE_GATHER_OUTCOME = 'aborted'"):]
+    assert "if (cls.state != 'running') { seMarkUserAbort() }" in user

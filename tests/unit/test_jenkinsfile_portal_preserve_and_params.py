@@ -46,6 +46,7 @@ VALIDATE = _stage("입력 확인")
 RESOLVE = _stage("실행 위치 확인")
 GATHER = _stage("서버 정보 수집")
 BODY = _method("def seAttemptBody")
+PREP = _method("def sePrepareWorkspace")
 PARAMS = _params()
 OPERATIONAL_PARAMS = ["loc", "target_type", "inventory_json", "deploymentEnvironmentId", "eventUuid", "callbackUrl", "verbosity"]
 
@@ -77,11 +78,15 @@ def test_manifest_is_env_json_in_validate_and_a_file_at_the_first_attempt():
         assert key in VALIDATE, key
     assert TEXT.count("SE_MANIFEST_JSON =") == 1, "manifest 를 만드는 곳은 입력 확인 한 곳"
     marker = "writeFile(file: 'gather_manifest.json', text: (env.SE_MANIFEST_JSON ?: '') + '\\n', encoding: 'UTF-8')"
-    assert TEXT.count(marker) == 1
-    write = BODY.index(marker)
-    assert write < BODY.index(RUN_CALL), "manifest 파일화는 수집보다 먼저"
-    first = BODY.index("if (!mine) {")
-    assert first < write < BODY.index("} else {", first), "이 빌드의 첫 시도에서만 쓴다 — 이어서 하는 시도는 같은 파일을 쓴다"
+    assert TEXT.count(marker) == 1 and marker in PREP, "첫 준비(sePrepareWorkspace)가 쓴다"
+    assert BODY.index("sePrepareWorkspace(targetType, null)") < BODY.index(RUN_CALL), "manifest 파일화는 수집보다 먼저"
+    # 10차 R3: 이어서 하는 시도는 접수 목록 파일만 없을 때 이 빌드의 접수 원본으로 다시 쓴다(결과 파일은 그대로) — 원본이 이 빌드의 것이 아니면 재개 불가
+    restore = BODY[BODY.index("if (!fileExists('gather_manifest.json')) {"):BODY.index("seLog(\"[수집] 같은 Runner")]
+    assert "seManifestIsThisBuild(env.SE_MANIFEST_JSON ?: '')" in restore and "outcome: 'resume_impossible'" in restore
+    assert "writeFile(file: 'gather_manifest.json', text: env.SE_MANIFEST_JSON + '\\n', encoding: 'UTF-8')" in restore
+    assert "rm -rf" not in restore, "복원할 때 결과 파일을 지우지 않는다"
+    check = _method("boolean seManifestIsThisBuild")
+    assert '"${m.build?.job}" == "${env.JOB_NAME}"' in check and '"${m.build?.number}" == "${env.BUILD_NUMBER}"' in check
 
 
 def test_only_operational_parameters_are_declared():
