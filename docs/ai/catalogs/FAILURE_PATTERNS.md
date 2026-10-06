@@ -770,3 +770,36 @@
 - 수정: 8차 문서 커밋에서 `check_project_map_drift.py --update` 를 다시 돌려 커밋된 tree 와 같은 값(`dbc2a88b4399`)으로 맞췄다.
 - 재발 방지: `--update` 는 변경 파일을 모두 index 에 넣은 뒤(커밋 직전)에 돌린다. 커밋 뒤 `check_project_map_drift.py`(update 없이)가 drift 0 인지 확인한다.
 - 관련 rule: rule 70 R2
+
+## 2026-10-06 — include_tasks loop 의 when 은 반복을 시작하기 전에 한꺼번에 평가된다
+
+- 카테고리: ansible
+- 발견 위치: 9차 W06 — 자격 후보 중단 표식(`_os_cred_stopped` 등)을 `include_tasks` loop 의 `when` 에만 두었더니, WSL ansible-core 2.20.7 실측에서
+  1번째 후보가 표식을 켠 뒤에도 2번째 후보의 probe 가 실행됐다(닫힌 포트 시험 플레이북).
+- 원인: loop 가 붙은 include 는 항목마다의 `when` 을 include 를 펼칠 때(첫 반복 전) 평가한다. 앞 반복이 set_fact 로 바꾼 값은 보이지 않는다.
+  종전 `_os_auth_ok` 도 포함된 파일의 block `when` 이 실제로 막고 있었다(주석은 "loop iteration 자체 skip" 이라고 잘못 적혀 있었다).
+- 수정: 중단 표식을 포함된 파일의 block `when` 에도 둔다. 그 표식을 켜는 set_fact 는 block 의 **마지막** 태스크로 둔다 — 켜는 순간 같은 block 의
+  남은 태스크(실패 근거 기록 · 로그 · 간격)도 건너뛰기 때문이다. `tests/unit/test_credential_candidate_stop.py` 가 두 조건을 고정한다.
+- 재발 방지: loop 반복 사이의 상태로 다음 반복을 막는 로직은 텍스트 시험만으로 끝내지 말고 실제 ansible 로 한 번 돌려 본다.
+- 관련 rule: rule 22 R3 · rule 95 R1 #5
+
+## 2026-10-06 — 백그라운드 보조 프로세스가 호출자의 출력 파이프를 붙잡았다
+
+- 카테고리: tooling
+- 발견 위치: 9차 `scripts/run_gather.sh` 의 60초 생존 표시 루프 — `tests/unit/test_run_gather.py` 가 수집이 끝난 뒤에도 최대 60초씩 기다렸다.
+- 원인: 루프의 `sleep 60` 이 호출자의 stdout 을 물려받았다. 루프를 끝내도 고아가 된 sleep 이 파이프를 닫지 않아 호출자가 EOF 를 기다린다.
+  또 루프가 부모 생존을 `kill -0` 으로만 봐서, 끝났지만 아직 회수되지 않은(zombie) 부모를 살아 있다고 봤다.
+- 수정: `sleep 60 </dev/null >/dev/null 2>&1`, 부모 확인은 `/proc/<pid>/status` 의 `State: Z` 를 빼고 본다(`se_parent_alive`).
+- 재발 방지: 셸 스크립트의 백그라운드 보조 루프는 출력이 필요한 줄만 호출자 출력으로 보내고 나머지 자식은 출력을 끊는다. 시험은 `capture_output`
+  으로 한 번 돌려 끝나는 시간을 본다.
+- 관련 rule: rule 24 R1
+
+## 2026-10-06 — 시험이 운영과 다른 방법으로 임시 경로를 만들었다
+
+- 카테고리: test
+- 발견 위치: 9차 `tests/unit/test_gather_state.py::test_stale_vault_and_ssh_paths_are_removed` 가 WSL 에서 가끔 실패했다.
+- 원인: 운영(`run_gather.sh`)은 coreutils `mktemp`(영숫자만)로 `/tmp/se_vault.*` 를 만들고 정리 규칙도 영숫자만 받는데, 시험은 Python `tempfile`
+  (`_` 포함 가능)로 만들었다. 이름에 `_` 가 나오면 규칙에 맞지 않아 지워지지 않았다 — 코드가 아니라 시험이 틀렸다.
+- 수정: 시험도 `mktemp` 로 만든다.
+- 재발 방지: 정리 · 인식 규칙을 시험할 때는 운영이 이름을 만드는 방법 그대로 만든다.
+- 관련 rule: rule 95 R3

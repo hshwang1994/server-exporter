@@ -47,12 +47,17 @@ REQUIRED_MAIN = ("S1", "S2", "S3", "T2", "T5", "T6", "E2E-A", "E2E-A2")
 REQUIRED_HARNESS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
                     "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx", "outer_timeout",
                     "recover_slow", "foreign_timeout_interruption", "user_abort", "aborted_outcome_finalize",
-                    "archive_slow", "layer_a_read_slow", "gather_limit_preserve")
+                    "archive_slow", "layer_a_read_slow", "gather_limit_preserve",
+                    # 2026-10-06 (9차): the gather stage itself — Runner wait · agent loss · resume of unfinished hosts on the same Runner ·
+                    # wait-budget expiry · lost workspace · abort while waiting (fake execution base, real run_gather.sh / gather_state.py)
+                    "infra_resume", "infra_wait_expired", "resume_impossible", "gather_wait_abort")
 # generated-tree Harness (FUNCTIONS_SRC=artifact) — the same functions from the prodgen tree. 2026-10-04 최종 지시 §6-1: the preservation
 # failure paths (archive_fail · stash_fail · truncate_jsonl · checkpoint_only_a/b · layer_a_fail) are required on the generated tree too.
 # 2026-10-05 (8차 R1): the stop/preserve proof (gather_limit_preserve) runs the generated tree's run_gather.sh too.
+# 2026-10-06 (9차): the resume and wait-budget paths run on the generated tree's functions and scripts too.
 REQUIRED_HARNESS_TREE = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
-                         "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "gather_limit_preserve")
+                         "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "gather_limit_preserve",
+                         "infra_resume", "infra_wait_expired")
 # 2026-10-05 (8차 R1): test-only parameters removed from the collection Jobs. A main-Job build that still carries one of them did not run
 # the candidate's parameter set — it is not evidence. Tier 2 (SE_FINALIZER_BOUNDED) and its bounded Harness group are gone (8차 R3).
 REMOVED_MAIN_PARAMS = ("redfishAccountDryrun", "gatherBudgetForceSec")
@@ -337,7 +342,8 @@ def evaluate_main(scenario: str, item: dict, summary, body, manifest, console: s
             if mk in con:
                 gather_block = con.split(mk, 1)[1].split("{ (Declarative: Post Actions)")[0]
                 break
-        no_gather = ("[Budget] exec" not in con) and ("Running on " not in gather_block)
+        # 9차: the per-attempt technical line replaced the budget line ("[Budget] exec" — builds before 2026-10-06)
+        no_gather = ("[Budget] exec" not in con) and ("[기술 기록] 수집 시도" not in con) and ("Running on " not in gather_block)
         add("stopped_before_agent", no_gather, "Gather stage never ran on an agent" if no_gather else "the Gather stage ran on an agent — not the fail-closed path")
     if c.get("delivered") is not None:
         want = c["delivered"]

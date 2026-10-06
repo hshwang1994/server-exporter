@@ -170,7 +170,7 @@ def g13_jenkins_linter(ctx, netrc=None, jenkins_url="https://jenkins-prod.gooddi
 MANDATORY_TEST_GROUPS = {
     "runtime_regression": "tests/regression/",
     "runtime_e2e": "tests/e2e/",
-    "budget_formula": "tests/unit/test_gather_budget.py",
+    "gather_state": "tests/unit/test_gather_state.py",      # 9차: 실행 기록 · 재개 대상 · 보수적 누적 실행 시간 (종전 budget_formula)
     "portal_contract": "tests/unit/test_jenkinsfile_portal_finalize.py",
     "finalize_layer_a": "tests/unit/test_finalize_gather_output.py",
 }
