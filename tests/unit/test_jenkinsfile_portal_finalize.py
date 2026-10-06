@@ -570,3 +570,12 @@ def test_aborted_gather_still_reports_its_runtime():
     assert "String ranSec = (run?.exec_used_sec != null) ? run.exec_used_sec.toString() : ((run?.ran_sec != null) ? run.ran_sec.toString() : '')" in fn
     assert "'수집을 시작하지 않았습니다'" in fn and "(env.SE_GATHER_STARTED_AT ?: '')" in fn
 
+
+def test_spent_wait_budget_still_takes_a_node_that_is_free_now():
+    # 2026-10-06 9차: Runner 를 기다리다 한도를 다 쓴 빌드도 결과 처리 노드(built-in)를 얻어 끝나지 않은 대상의 실패 결과를 보낸다.
+    #   한도가 0 일 때 첫 반복에서 바로 거두면 node 요청이 queue 에서 배정되기 전에 취소돼 아무것도 보내지 못했다 — 첫 조회(5초) 뒤에 판단한다
+    timer = _method("def seQueueTimer")
+    assert "boolean firstLook = true" in timer
+    assert "if (left <= 0L && !firstLook) {" in timer
+    assert "sleep(time: (left > 0L) ? Math.max(1L, Math.min(nap, left)) : nap, unit: 'SECONDS')" in timer
+    assert timer.index("sleep(time:") < timer.index("firstLook = false") < timer.index("if (r.state != 'waiting') { break }")

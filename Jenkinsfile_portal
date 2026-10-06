@@ -1071,17 +1071,21 @@ def seInfraClose(Map infra, Map ep, long endMs, String result) {
 
 // 대기 한도 — '실행' 가지가 node 를 얻을 때까지 남은 한도를 본다. 0 이 되면 표식을 남기고 실패해 queue 의 요청을 거둔다(failFast).
 //   조회 간격은 5초에서 두 배씩 늘려 5분에서 멈춘다(즉시 반복 조회 없음). 기다리기 시작하면 한 번, 그 뒤 30분마다 줄을 쓰고 빌드 설명을 바꾼다.
+//   한도를 이미 다 썼어도 지금 바로 얻을 수 있는 노드는 얻는다 — 요청을 거두는 판단은 첫 조회(5초) 뒤에 한다. Runner 를 기다리다 한도를
+//   다 쓴 빌드도 결과 처리 노드를 얻어 끝나지 않은 대상의 실패 결과를 보낸다(2026-10-06 9차 — 첫 반복에서 바로 거두면 아무것도 보내지 못했다).
 def seQueueTimer(Map r, Map infra, Map ep, long capSec) {
     long nap = 5L
     long lastNote = 0L
+    boolean firstLook = true
     while (r.state == 'waiting') {
         long left = seInfraLeftSec(infra, ep, seNowMs(), capSec)
-        if (left <= 0L) {
+        if (left <= 0L && !firstLook) {
             r.state = 'expired'
             seInfraClose(infra, ep, seNowMs(), 'expired')
             error("[실행 기반 대기] ${ep.reason}: 기다릴 수 있는 시간을 다 써서 Jenkins queue 의 요청을 거둡니다(누적 ${seDuration(infra.used_sec as long)} / 한도 ${seDuration(infra.budget_sec as long)}).")
         }
-        sleep(time: Math.max(1L, Math.min(nap, left)), unit: 'SECONDS')
+        sleep(time: (left > 0L) ? Math.max(1L, Math.min(nap, left)) : nap, unit: 'SECONDS')
+        firstLook = false
         if (r.state != 'waiting') { break }
         if (lastNote == 0L || seNowMs() - lastNote >= 1800000L) {
             lastNote = seNowMs()
