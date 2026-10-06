@@ -803,3 +803,16 @@
 - 수정: 시험도 `mktemp` 로 만든다.
 - 재발 방지: 정리 · 인식 규칙을 시험할 때는 운영이 이름을 만드는 방법 그대로 만든다.
 - 관련 rule: rule 95 R3
+
+## 2026-10-06 — 대기 한도를 다 쓴 뒤의 node 요청을 queue 배정 전에 거뒀다
+
+- 카테고리: boundary
+- 발견 위치: 9차 push 뒤 실기 L5(대기 한도 초과)를 준비하며 `Jenkinsfile_portal` 의 `seQueueTimer` 를 다시 읽다가 발견 — Harness `infra_wait_expired`
+  도 같은 경로를 기대하고 있었다(실제 Jenkins 에서는 아직 돌기 전).
+- 원인: 결과 처리 노드(built-in) 대기도 같은 72시간 합 안에서 센다. Runner 를 기다리다 한도를 다 쓰면 남은 한도가 0 이라, 타이머가 첫 반복에서 바로
+  요청을 거뒀다 — `node('built-in')` 가 queue 에서 배정되기 전에 취소돼 끝나지 않은 대상의 실패 결과를 하나도 보내지 못하고 FAILURE 로 끝난다.
+- 수정: 요청을 거두는 판단은 첫 조회(5초) 뒤에 한다(`firstLook`). 지금 바로 얻을 수 있는 노드는 한도와 무관하게 얻는다(합이 최대 5초 넘을 수 있다).
+  `tests/unit/test_jenkinsfile_portal_finalize.py::test_spent_wait_budget_still_takes_a_node_that_is_free_now` · Harness `infra_wait_expired` · 실기 L5.
+- 재발 방지: 예산 · 한도를 공유하는 연속 대기는 "앞 단계가 예산을 다 쓴 경우" 를 경계 사례로 따로 본다. 남은 값 0 이 "기다리지 않음" 인지
+  "아무것도 하지 않음" 인지 구분한다.
+- 관련 rule: rule 95 R1 · rule 91 R5
