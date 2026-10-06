@@ -2006,6 +2006,12 @@
           "match": ".se_workspace.json",
           "nth": 3,
           "kind": "infra"
+        },
+        {
+          "op": "deleteDir",
+          "match": "",
+          "nth": 1,
+          "kind": "infra"
         }
       ],
       "expect": {
@@ -2033,11 +2039,12 @@
         },
         "calls_count": {
           "retry:agent_lost": 1,
-          "fault:infra:writeFile:.se_workspace.json": 1
+          "fault:infra:writeFile:.se_workspace.json#3": 1,
+          "fault:infra:deleteDir:#1": 1
         },
         "sink_posts_min": 1,
         "rethrown": false,
-        "note": "10차 N1: 보관 · 전달을 마친 뒤 소유 기록(끝 시각 · 보존 여부)을 다시 쓰는 중 실행 기반 오류 — 표식이 있으므로 다시 시도하지 않고 직전 판정(completed)으로 끝낸다(재수집 · 재개 불가 없음)"
+        "note": "10차 N1: 보관 · 전달을 마친 뒤 소유 기록(끝 시각 · 보존 여부)을 다시 쓰는 순간부터 연결이 끊긴 채 이어진다 — 소유 기록 쓰기 실패는 기록만 하고(정리용 기록이라 수집을 실패시키지 않는다) 다음 작업 폴더 step(deleteDir)에서 실행 기반 오류가 드러난다. 표식이 있으므로 다시 시도하지 않고 직전 판정(completed)으로 끝낸다(재수집 · 재개 불가 없음). 한 번만 끊고 바로 회복하는 경우는 기록 실패만 남고 정상 종료한다(CI 단일 실행 #763)"
       }
     },
     "addon_decision_transient": {
