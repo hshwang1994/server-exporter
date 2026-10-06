@@ -132,7 +132,7 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 같은 폴더의 **Harness Job** `clovirone-server-gather-harness`(Script Path `tests/jenkins/harness/Jenkinsfile_harness`, Branch `*/main`, 파라미터 `SCENARIO`·`MAIN_SHA`·`FUNCTIONS_SRC`·`ARTIFACT_BASE_URL`·`EXPECTED_SHA256`·`SINK_PORT`·`LOC`·`DEPLOYMENT_ENV`)은 CI 의 Harness Driver 가 시나리오당 1빌드로 호출한다. 수집 Job 이 아니며 production 에는 없다. 정의 `jenkins/jobs/clovirone-server-gather-harness/config.xml`.
 
 진단 Job 둘(2026-10-04, main 전용 · 읽기 전용 · production 에 없음): **`clovirone-server-gather-perf-observe`**(Script Path `tests/jenkins/harness/Jenkinsfile_perf_observe`; `NODE_NAME` 노드에서
-`perf_observe.py` 가 같은 Runner 의 Gather 빌드 프로세스 트리를 `SE_BUILD_ID` 로 귀속해 PSS · 활성 worker · MemAvailable · swap 을 샘플링 — forks 메모리 상수의 실측 근거) 와
+`perf_observe.py` 가 같은 Runner 의 Gather 빌드 프로세스 트리를 `SE_BUILD_ID` 로 귀속해 PSS · 활성 worker · MemAvailable · swap 을 샘플링 — 진단용 관측이다. 2026-10-06 9차부터 메모리 값으로 수집 시작이나 동시 실행 수를 정하지 않는다) 와
 **`clovirone-server-gather-net-probe`**(Script Path `tests/jenkins/harness/Jenkinsfile_net_probe`; `TARGETS` 의 route · ICMP · 관리 TCP connect · ARP/neighbour · tracepath · Redfish ServiceRoot
 무인증 GET 을 Runner 망에서 읽어 `net_probe.txt` 로 — 무응답 자산의 존재·경로 진단), **`clovirone-server-gather-term-probe`**(Script Path `tests/jenkins/harness/Jenkinsfile_term_probe`; `NODE_NAME` Runner 의 ansible-core · coreutils timeout 으로 태스크 timeout · 배치 INT · kill-after 경로를 localhost 대상으로 실제 실행해 자식 프로세스 잔존을 관측하고(자기 marker 프로세스만 정리) Add-on hook 통합 테스트를 -v 로 실행).
 정의 `jenkins/jobs/<job>/config.xml`.

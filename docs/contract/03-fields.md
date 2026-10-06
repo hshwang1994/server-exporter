@@ -112,7 +112,7 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 | 키 | 무슨 값 | 의미 |
 |---|---|---|
 | `diagnosis` | 객체 | precheck 진단(TCP 도달 → 프로토콜 → 인증) 결과. 어디서 막혔는지 |
-| `meta` | 객체 | 시작/종료 시각, 소요 시간, 사용된 adapter ID |
+| `meta` | 객체 | 시작/종료 시각, 소요 시간, 사용된 adapter ID. 소요 시간(`duration_ms`)은 그 대상 한 대의 시작~끝이며 Add-on 이 켜진 빌드에서는 Add-on 실행 시간이 포함된다(끝 시각을 Add-on 종료 시각으로 다시 적는다 — 2026-10-03 부터, 상세 `docs/contract/02-output-envelope.md`) |
 | `errors` | 배열 | 수집 중 발생한 오류 목록. 정상이면 `[]` |
 | `correlation` | 객체 | 시리얼 / UUID / IP — 다른 시스템 데이터와 묶을 때 쓰는 키들 |
 

@@ -1436,9 +1436,11 @@ fields:
     help_ko: >-
       수집 소요 시간 (밀리초). 해당 호스트 1대의 수집 시간.
       배치 실행 시 전체 시간이 아닌 개별 호스트 시간.
+      Add-on 이 켜진 빌드에서는 Add-on 실행 시간이 포함된다(끝 시각을 Add-on 종료 시각으로 다시 적는다).
     help_en: >-
       Collection duration (milliseconds). Per-host collection time,
       not total batch time.
+      When the Add-on is enabled, it includes the Add-on run (the end time is re-stamped when the Add-on finishes).
 
   diagnosis.failure_stage:
     type: "string|null"

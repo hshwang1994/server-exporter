@@ -5,8 +5,8 @@
 >
 > Jenkinsfile 을 수정해야 한다면 본 문서의 단계 구조와 게이트 정책을 먼저 이해한 뒤 손댄다.
 
-> 검증일: 2026-10-06 (9차 — 실행 기반 대기 · 같은 Runner 재개 · 사전 차단 제거. 코드 · 회귀 기준이며 사내 Jenkins 실행 결과는
-> `tests/evidence/2026-10-06-9th-infra-wait-resume.md` 에 적는다. 8차 결과는 `tests/evidence/2026-10-05-8th-time-limits.md`)
+> 검증일: 2026-10-07 (10차 — 결과 처리 재진입 · 기록 읽기 예외 · 끊긴 준비 · OOM 귀속. 코드 · 회귀 기준이며 사내 Jenkins 실행 결과는
+> `tests/evidence/2026-10-07-10th-final-defects.md` 에 적는다. 9차 결과는 `tests/evidence/2026-10-06-9th-infra-wait-resume.md`)
 
 ## 1. 파이프라인 구조
 
@@ -91,12 +91,12 @@ Runner · 결과 처리 노드를 최대 72시간 기다리는 동안 빌드를 
 | 한계 | 값 | 어디서 | 넘었을 때 |
 |---|---|---|---|
 | 입력 확인 · 실행 위치 확인 | 각 5분 | stage `options.timeout` — 실행 기반 대기가 아니라 입력 · 저장소 확인 | FAILURE |
-| **실행 기반 대기** | 빌드 하나의 합 72시간 (259,200초) | `seWithNode` — Runner 배정 · 실행 중 연결 끊김(Jenkins 가 기다린 5분 포함) · 결과 처리 노드 · 진척 없는 장애 뒤 쉬는 시간을 모두 더한다. 다시 시도 · 재개해도 처음부터 세지 않는다 | queue 의 요청을 거두고 outcome `infra_wait_expired`, `limit_reason` = `infra_wait` — 끝난 대상은 그대로, 끝나지 않은 대상은 실행 기반 문장의 실패 결과로 |
+| **실행 기반 대기** | 빌드 하나의 합 72시간 (259,200초) | `seWithNode` — Runner 배정 · 실행 중 실행 기반 오류 뒤 다시 기다린 시간 · 결과 처리 노드 · 진척 없는 장애 뒤 쉬는 시간을 모두 더한다. 다시 시도 · 재개해도 처음부터 세지 않는다. 끊긴 뒤의 대기는 실행 기반 오류를 **감지한 시각**부터 센다 — Jenkins 의 처리 유예(연결 끊김을 알리기까지의 시간)를 오류 종류와 상관없이 5분으로 가정해 앞당기지 않는다(2026-10-07 10차) | queue 의 요청을 거두고 outcome `infra_wait_expired`, `limit_reason` = `infra_wait` — 끝난 대상은 그대로, 끝나지 않은 대상은 실행 기반 문장의 실패 결과로 |
 | **수집 실행 한계** | 누적 6시간 (21,600초) — 이번 시도의 한계 = 6시간 − 앞 시도들의 실제 수집 시간 | `scripts/gather_state.py begin` → `scripts/run_gather.sh` 의 `timeout --signal=INT --kill-after=90` | INT 로 멈추고 90초 뒤에도 남으면 KILL → outcome `timeout`/`timeout_killed`, `limit_reason` = `gather_limit`. 끝난 대상의 결과는 보존하고 끝나지 않은 대상만 실패 결과로 채운다. 누적을 다 썼으면 시작하지 않는다 |
 | 실제 수집 시간 세는 법 | Runner 시계로 잰 ansible 실행 시간의 합(동시에 수집한 Host 를 겹쳐 세지 않는다) | 끝 기록이 있으면 그 값, 없으면 마지막 생존 표시(60초마다) + 60초, 재부팅이면 새 부팅 시각까지 | 비정상 종료가 반복돼도 덜 세지 않는다(한 번에 최대 60초를 더 셀 수는 있다) |
 | INT 뒤 정리 시간 | 90초 | `--kill-after=90` | KILL |
 | 시도 하나의 실행 한계 | 6시간 + 90초 + 2시간(준비 · 보존 몫) | node 를 얻은 뒤의 `timeout` — 멈춘 step 이 빌드를 붙잡지 않게 하는 안전망 | outcome `attempt_limit`(Runner 가 연결돼 있으면 확보한 결과를 보존해 보낸다) |
-| 결과 확인 및 전송 | 결과 처리 노드를 얻은 뒤 1시간 (노드를 기다린 시간은 실행 기반 대기에 들어간다. Runner 를 기다리다 한도를 다 쓴 빌드도 지금 바로 얻을 수 있는 노드는 첫 조회(5초)까지 기다려 얻고 실패 결과를 보낸다) | `seWithNode('built-in')` 안의 `timeout` — 회수 · 조립 · 본문 · 전송 · 보관을 합해 센다 | 전파. 시작 못 한 전송은 `callback_not_attempted`, 노드를 끝내 얻지 못하면 FAILURE |
+| 결과 확인 및 전송 | 결과 처리에 실제로 쓴 시간의 합 1시간 — 노드를 얻은 때부터 끝(또는 실행 기반 오류를 감지한 때)까지를 진입마다 더한다. 재진입해도 처음부터 세지 않고, 노드를 기다린 시간은 실행 기반 대기에 들어간다. 취소된 빌드의 노드 대기 5분도 진입마다 새로 주지 않는다(2026-10-07 10차). Runner 를 기다리다 한도를 다 쓴 빌드도 지금 바로 얻을 수 있는 노드는 첫 조회(5초)까지 기다려 얻고 실패 결과를 보낸다 | `seWithNode('built-in')` 안의 `timeout`(남은 합) — 회수 · 조립 · 본문 · 전송 · 보관을 합해 센다 | 전파. 시작 못 한 전송은 `callback_not_attempted`. 끝내 처리하지 못하면 보내지 못한 경우 FAILURE, 보냈지만 마무리만 못 한 경우 UNSTABLE(보낸 것과 결과가 남은 곳을 `[결과 확인]` 줄에 적는다) |
 | Portal 응답 대기 | 시도마다 최대 10분(남은 시간 − 10초 안), 최대 3번(취소된 빌드 1번), 사이 대기 10 · 20초, 남은 시간 30초 미만이면 시작하지 않음 | `seCallback` — 요청 도구(http_request)는 연결과 응답 대기에 같은 값을 쓴다 | 다음 시도 또는 실패 기록. 2xx 는 Portal 이 요청을 받았다는 뜻이다 |
 | SSH 연결 | 60초 (`ansible_timeout` · `ConnectTimeout=60`), 연결 유지 확인 10초 × 3 | `os-gather/site.yml` | 그 host 의 연결 실패로 기록 |
 | OS 후보 포트 탐색 연결 | 포트마다 10초 (`_probe_timeout`) | DROP 방화벽에서 SYN 재시도 3회를 허용하는 값. 연결 거부는 바로 다음 후보로(포트당 1회) | 다음 후보 포트 |
@@ -130,15 +130,29 @@ Redfish 모듈 마감(절대 1,200초 · 새 응답 없음 120초 · 탐지 90 �
 | 관측 | 판정 | 그다음 |
 |---|---|---|
 | Runner 가 지금 연결돼 있지 않거나 executor 가 모두 사용 중 | 대기 (`Runner 배정 대기`) | executor 를 잡지 않고 Jenkins queue 로 기다린다 |
-| 실행 중 Runner 연결이 끊김 — Jenkins 가 5분 기다린 뒤 step 을 끝냈다 | `agent_disconnect` | 같은 Runner 를 기다린다(`같은 Runner(<이름>) 복구 대기`). Runner 쪽 수집이 계속 돌았으면 끝나기를 기다린 뒤 남은 대상만 |
-| 비정상 종료(신호 종료 포함) + 같은 cgroup 의 OOM 종료 횟수 증가(`memory.events`, 못 읽으면 `/proc/vmstat`) | `runner_oom` | 원본을 넘겨 두고(stash) 같은 Runner 로 다시 시도 |
+| 실행 중 실행 기반 오류 — Runner 연결 끊김(Jenkins 가 끊긴 Agent 를 기다렸다가 step 을 끝냄) · 기록 파일을 읽는 순간의 채널 오류 · controller 재시작 뒤 이어 갈 수 없는 step(Jenkins `retry` 의 `agent()` · `nonresumable()` 조건이 판단한다) | `agent_disconnect` | 같은 Runner 를 기다린다(`같은 Runner(<이름>) 복구 대기`). 대기는 감지 시각부터 센다. Runner 쪽 수집이 계속 돌았으면 끝나기를 기다린 뒤 남은 대상만 |
+| 바깥에서 끝남(신호 · 한계가 아닌 KILL · 끝 기록 없음) + 커널 로그의 OOM 종료 기록 PID 가 **이 실행**(`run_gather.sh` · ansible-playbook 주 프로세스)의 것 | `runner_oom` | 원본을 넘겨 두고(stash) 같은 Runner 로 다시 시도 |
 | Runner 의 부팅 기록(boot_id)이 바뀜 | `runner_restart` | 같은 Runner 로 다시 시도 |
 | 근거 없이 끝 기록 없이 사라짐 | `process_lost`(원인 미확인) | 다시 시도하지 않는다 — 끝난 결과만 보내고 나머지는 실패 결과 |
 | 대상 측 일시 장애(SSH · WinRM · vSphere · Redfish 응답 없음 · 401 · 5xx) | 실행 기반 장애 아님 | 채널의 기존 timeout · retry 안에서만 처리하고 그 대상의 결과로 끝낸다(기다리지 않는다) |
 
-- systemd 는 범위(scope) 안의 프로세스가 OOM 으로 끝나면 그 범위를 멈추고 남은 프로세스에 TERM 을 보낸다(기본 `OOMPolicy=stop`). 그래서 OOM 뒤의
-  신호 종료도 같은 cgroup 의 OOM 횟수가 늘었으면 `runner_oom` 이다(2026-10-06 Runner03 격리 시험: 64 MiB 범위 → OOM → TERM → `runner_oom`, 대조 `kill -9` →
-  `process_lost`). Agent 와 수집이 같은 세션 범위에 있으면 범위가 멈출 때 Agent 연결도 끊겨 먼저 연결 끊김으로 보이고, 끝 기록에는 OOM 근거가 남는다.
+- OOM 은 관측과 원인을 나눈다(2026-10-07 10차). 이 실행이 속한 cgroup 의 `memory.events` · Runner 전체 `/proc/vmstat` 의 OOM 종료 횟수가 늘었다는 것은
+  **관측**(`gather_run.json` 의 `oom_observed`)으로만 남긴다 — Agent 세션 범위는 여러 빌드가 함께 쓰므로 같은 cgroup · 가까운 시각 · 시도 시작 때의 구성원만으로는
+  이 실행이 OOM 으로 끝났다고 할 수 없다. 원인(`runner_oom`)은 커널 로그(`dmesg`, 시도 시작 이후)의 OOM 종료 기록 PID 가 이 실행의 PID 일 때만이다
+  (ansible-playbook PID 는 `run_gather.sh` 가 `exec` 직전에 `.gather_ansible_pid` 로 남긴다). 스스로 끝난 실행 실패(종료 코드 1 등)는 OOM 관측이 있어도
+  `failed_run` 이고, 근거 없이 바깥에서 끝난 시도는 `process_lost` / `aborted`(원인 미확인 — 다시 시도하지 않는다)다. 사용자 취소로 확인된 시도는 `aborted` 로 확정한다.
+  커널 로그를 읽을 수 없는 Runner 에서는 공유 범위의 OOM 을 원인으로 확정하지 않는다. systemd 가 OOM 뒤 Agent 범위를 멈추면(기본 `OOMPolicy=stop`)
+  Agent 연결도 끊겨 연결 끊김 경로로 이어서 수집한다.
+- 결과 확인 및 전송 중 실행 기반 오류(예: controller 재시작 뒤 이어 갈 수 없는 step)가 나면 같은 빌드 안에서 결과 처리 노드를 다시 기다려 같은 폴더
+  (`fin-<빌드 번호>`)에서 다시 처리한다(2026-10-07 10차). 2xx 를 이미 받은 전송은 다시 보내지 않고, 받지 못한 전송은 남은 횟수(최대 3번 중)만 쓴다. 끝내 처리하지
+  못하면 결과 없이 SUCCESS 로 끝내지 않는다 — 보내지 못했으면 FAILURE, 보냈으면 UNSTABLE 이고 `[결과 확인]` 줄에 보낸 것과 결과가 남은 곳을 적는다.
+- 작업 폴더의 기록 파일(소유 기록 `.se_workspace.json` · 수집 실행 기록 `gather_run.json` · Add-on 결정 `.se_addon.json`)을 읽는 순간의 실행 기반 오류는
+  "기록 없음" 으로 바꾸지 않고 위의 연결 끊김 경로로 넘긴다(2026-10-07 10차). 파일이 없거나 해석할 수 없거나 다른 빌드의 것이거나 받은 commit 이 다르면 종전처럼 판정한다.
+- 첫 준비(저장소 받기 → 소유 기록 → 지난 결과 정리 → 접수 목록 → 준비 완료 기록)가 중간에 끊겼으면 다음 시도가 남은 준비를 마친다(소유 기록의 `prepared`).
+  수집을 시작한 뒤 작업 폴더에서 접수 목록 파일만 없어졌으면 이 빌드가 접수한 원본으로 다시 쓰고 이어서 수집한다. 결과가 확정됐던 대상(진행 기록의
+  `emitted` · `reconciled`, 앞 시도의 `completed_ips`)의 결과 줄이 작업 폴더에 없으면 다시 수집하지 않고 `resume_impossible` 로 끝낸다 — 개수가 아니라 IP 로 대조한다.
+- 마지막 보존이 보관(archive) 또는 전달(stash) 중 하나라도 마친 뒤 끊기면 다시 시도하지 않고 그 판정으로 끝낸다. 그 전에 끊기면 같은 Runner 의 같은 작업 폴더에서
+  보존만 다시 한다(다시 수집하지 않는다).
 - 다시 시도할 때 **끝난 대상은 다시 수집하지 않는다**: 형태 검사를 통과한 결과 줄이 있는 대상과 사전 점검(Precheck)에서 실패로 확정된 대상은 빠지고,
   실행 중이던 대상(CHECKPOINT 만 있음)은 다시 수집한다. 대상은 `--limit @.gather_limit_hosts` 로 넘긴다(Job 파라미터를 늘리지 않는다).
 - 진척 없이 장애가 반복되면 5분부터 두 배씩(최대 1시간) executor 를 잡지 않고 쉰다. 쉬는 시간도 실행 기반 대기 합에 들어간다.
@@ -253,7 +267,7 @@ Jenkins 관리 → System → Global properties → Environment variables. 노�
 1. Add-on 저장소의 `ADDON_REPO_REF`(기본 `main`)를 `${WORKSPACE}/addon` 에 받는다 (두 번까지 시도). 콘솔
    `[addon] <URL>@<ref> <커밋>`. 실측(2026-10-04 production #76/#79/#80) 받기 + 검사 ≈ **2~3 s/빌드**(`[Budget] est … prep=2s` → `exec … prep=4~5s`);
    ESXi · Redfish 빌드도 "실행할 기능 없음" 을 알기 위해 이 시간을 쓴다(지원 여부는 Add-on 저장소 안의 layout 이라 받기 전에는 알 수 없다 — 비용이 작아 그대로 둔다).
-   최악치: git 명령마다 30분 제한(2026-10-05 8차 — 종전 180 s) × 2번 시도. 준비가 길어진 만큼 `[Budget] exec` 재계산이 수집 실행 한계를 줄인다(보존 몫 · 결과 확인 및 전송 1시간은 줄지 않는다). Add-on 의 태스크별 시간 제한(종전 300 s)은 없앴다 — 끝나지 않는 Add-on 은 수집 실행 한계가 멈춘다.
+   최악치: git 명령마다 30분 제한(2026-10-05 8차 — 종전 180 s) × 2번 시도. 받기는 시도 하나의 준비 · 보존 몫(2시간) 안이고, 수집 실행 한계(누적 6시간)는 ansible 이 실제로 돈 시간만 센다(2026-10-06 9차부터 — 종전의 `[Budget] exec` 재계산은 없다). Add-on 의 태스크별 시간 제한(종전 300 s)은 없앴다 — 끝나지 않는 Add-on 은 수집 실행 한계가 멈춘다.
 2. 받은 파일을 검사한다 — 설정 파일(`config/`)의 형식, 태스크 YAML 문법 등. 설정 작성 오류는 여기서 한 번에 막혀
    서버마다 반복되지 않는다. 콘솔 `[addon] 검사 통과: linux, windows` 또는 `[addon] 검사 실패: <파일>: <이유>`.
 3. 검사를 통과하면 그 빌드의 수집에 Add-on 을 넣는다. ESXi · Redfish 빌드는 Add-on 이 할 일이 없어 켜지 않는다
@@ -329,8 +343,8 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
 - 기본값은 제한 없음이다(두 수집 Job 의 Throttle Concurrent Builds 비활성). 한 Runner 에 무거운 빌드가 10개 가까이 겹칠 수 있는 규모라면
   전역 설정에 throttle 카테고리(예: `clovirone-gather`, 노드당 6)를 만들고 두 수집 Job 에서 그 카테고리를 켠다. 끄면 원래대로 돌아간다(코드 변경 없음).
 - 가용 메모리로 수집 시작을 막거나 동시 실행 수를 줄이지 않는다(2026-10-06 9차 — 그 계산이 정상 작업을 막았다). 동시 실행 상한은 채널 상한 그대로다
-  (OS 50 또는 노드 환경변수 `SE_FORKS_CAP_OS`, ESXi 2×vCPU, Redfish 4×vCPU). Runner 에서 메모리 부족(OOM)으로 수집이 끝나면 그 근거(OOM 종료 횟수 증가)가
-  있을 때만 실행 기반 장애로 보고 같은 Runner 로 이어서 수집한다.
+  (OS 50 또는 노드 환경변수 `SE_FORKS_CAP_OS`, ESXi 2×vCPU, Redfish 4×vCPU). Runner 에서 이 실행의 프로세스가 메모리 부족(OOM)으로 끝났다는 근거(커널 로그의
+  OOM 종료 기록 PID)가 있을 때만 실행 기반 장애로 보고 같은 Runner 로 이어서 수집한다. OOM 종료 횟수 증가는 관측으로만 남긴다(1절 "실행 기반 대기와 같은 Runner 재개").
 - 같은 BMC 를 여러 빌드가 동시에 요청하면 느린 BMC(예: Cisco C220 CIMC)의 응답이 길어진다. 8차부터 Redfish 모듈 마감이 없어 끊기지 않고 기다리며,
   멈추는 것은 수집 실행 한계뿐이다. 같은 대상의 중복 요청은 호출 측에서 정리한다.
 

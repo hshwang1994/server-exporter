@@ -149,6 +149,10 @@ HTTP 상태 같은 내부 사정은 들어가지 않는다. 그런 건 `detail`�
 `adapter_version`은 **항상 `null`**이다. 어떤 어댑터 파일도 버전을 정의하지 않는다.
 필드가 남아 있는 건 형태를 유지하기 위해서다.
 
+`duration_ms`는 그 대상 한 대의 수집 시작(`started_at`)부터 끝(`finished_at`)까지의 밀리초다. 배치 전체 시간이 아니다.
+추가 수집(Add-on)이 켜진 빌드에서는 Add-on 실행이 끝난 시각으로 `finished_at` · `duration_ms` 를 다시 적으므로 **Add-on 시간이 들어간다**
+(2026-10-03 부터의 동작, 값 계산은 바뀌지 않았다). 기본 수집만의 시간과 비교할 때는 이 차이를 감안한다.
+
 `adapter_id`는 어떤 수집 규칙이 쓰였는지 알려 준다. 다만 이 값이 장비의 실제 세대와
 다를 수 있다 — 자세한 건 [reference/live-validation.md](../reference/live-validation.md)에
 기록해 두었다.
