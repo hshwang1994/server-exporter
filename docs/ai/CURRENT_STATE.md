@@ -1,5 +1,19 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-06 (9차) — 실행 기반 대기 · 같은 Runner 재개 · 사전 차단 제거 · **main `8af81613` → production P6 `a8833d47`**
+
+> 정본: `tests/evidence/2026-10-06-9th-infra-wait-resume.md` · 결정 `docs/ai/decisions/ADR-2026-10-06-infra-wait-and-host-resume.md` · 운영 `docs/operate/04-pipeline-runtime.md`.
+
+- **실행 기반 대기**: Runner · Jenkins Agent · 결과 처리 노드 장애는 빌드 하나의 합 72 h 까지 executor 를 잡지 않고 Jenkins queue 로 기다린다(`seWithNode` — `parallel(failFast)` 의 node 요청 + 대기 한도 타이머, 끊김 판정은 `retry(agent())` 의 두 번째 호출).
+- **같은 Runner 재개**: 수집을 시작한 Runner · 작업 폴더로만 다시 시도하고 끝난 대상 · Precheck 실패 대상은 빼고 이어서 수집한다(`scripts/gather_state.py` · `run_gather.sh` 의 flock · `--limit @파일`). 이어 갈 수 없으면 `resume_impossible`, 한도를 넘으면 `infra_wait_expired` — 둘 다 새 문장 `infra_unavailable`(`OUTPUT_BUILD_FAILED`).
+- **시간**: 빌드 12 h · 수집 단계 39,000 s · `gather_budget.sh`(메모리 상한) · `no_agent` · `not_started_*` 삭제. 실제 수집 누적 6 h(끝 기록이 없으면 마지막 생존 표시 + 60 s 로 보수 계산) · 시도 실행 한계 · 결과 확인 1 h(노드를 얻은 뒤).
+- **대상 측**: 자격 후보는 Redfish 구조화된 401 · OS/ESXi 관리 포트 재응답일 때만 전환, 응답 잃은 계정 쓰기는 재조회 · 재인증으로 판정(다시 쓰지 않음), 저장장치 하위 401/403 은 섹션 실패만.
+- **production 주석(D13)**: prodgen 이 utf-8 인코딩 선언을 지운다 · argparse 설명 상수화 — 남은 `#` 모양 줄은 shebang 21 · plugin `DOCUMENTATION` 3 · YAML 문자열 안 셸 본문 37 뿐(승격 전후 같은 검사).
+- **검증**: 로컬 WSL 4,490 + 324 · Windows PowerShell 185 · CI #27(`b3bc02dd`) SUCCESS(Harness 23/23 · 생성 tree 13/13 · Verify COMPLETE_PASS) · CI #29(`e4bbd2cb`) SUCCESS 이나 증거에서 Harness 판정 FAIL 1건 발견(결함 6) · CI #30(`8af81613`) SUCCESS(Harness 23/23 · 생성 tree 13/13 · Verify COMPLETE_PASS · Evidence 48/48) · se-probe 실기 L1~L6 · L8 · Runner03 OOM 격리 시험 · main 17 시나리오 × 3 후보(#276~#292 · #293~#309 · #310~#326) · production Job #160~#174 15/15 기대 결과(canary 3/3 · 명부 32대 성공 26 · 실패 6 환경 항목 · 계정 쓰기 0).
+- **도중 결함 6건 수정**: 결과 처리 노드 대기(한도 소진 뒤 0초 대기로 전송 못 함) · G08 같은 폴더 import · 실기 드라이버 정리 · 운영 문구 2건 · OOM 직후 TERM 분류 · Harness 판정(수집 단계 재전파를 전송 실패로 봄)과 CI 집계(ABORTED 시나리오는 Jenkins 결과만 봄).
+- **실기 미확인**: 시험 6 · 18(대상 측 네트워크 장애 주입 경로 없음) · Redfish 쓰기 응답 유실(mock) · 재개 때 Add-on 재사용(단위) · 72 h 자체(축소 상수).
+- 남은 사용자 결정: GP-52 · GP-37 · GP-38 · GP-44 · GP-50 그대로 + Portal 의 늦은 결과 수신(최대 약 79 h, GP-60) · 강제 종료 뒤 남는 vault 임시 파일 정리 방식(GP-63).
+
 ## 일자: 2026-10-05~06 (8차) — 시험 입력 제거 · 실제 시각 · 장시간 대기 · 숨은 실패 · 원격 정리 · 운영 문구 · 보존 정리(R1~R8) · **main `8c9e04a9` → production P5 `f43af470`**
 
 > 정본: `tests/evidence/2026-10-05-8th-time-limits.md` · 결정 `docs/ai/decisions/ADR-2026-10-05-time-limits-and-test-inputs.md`.

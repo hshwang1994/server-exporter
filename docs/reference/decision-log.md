@@ -8,6 +8,34 @@
 
 > 최종 갱신: 2026-10-06
 
+## 2026-10-06 (9차) — 실행 기반 대기 · 같은 Runner 재개 · 사전 차단 제거
+
+### 사용자 의심
+- 지시서 최종본(2026-10-06): 온라인 Runner 가 없으면 수집을 건너뛰고(`no_agent`), 빌드 12 h · 단계 39,000 s 가 Runner 를 기다린 시간까지 세며,
+  메모리 계산으로 시작을 거부하고, 끊기면 끝난 결과까지 다시 수집해야 하는 구조다.
+
+### 분석
+- 대기 · 실행 시간을 같은 시계로 세서 Runner 장애가 수집 시간을 잡아먹었다. 재개를 막는 것은 진입 때 결과 삭제 · 끝에만 쓰는 실행 기록 ·
+  Runner 고정 없음 · 잘린 마지막 줄이었다. 메모리 상한은 측정값이 정상 작업을 막은 사례가 있었다.
+- 실기(se-probe): 끊긴 Runner 의 `sh` 는 5분 뒤 끝나고(`RemovedNodeTimeoutCause`) Runner 쪽 프로세스는 살아남는다 — `retry(agent())` 의
+  두 번째 호출로 끊김을 알 수 있고, 다음 시도는 그 고아 수집이 끝나기를 기다려야 한다.
+
+### 결정
+1. 실행 기반 장애만 빌드 하나의 합으로 72 h 기다린다(executor 미점유). 대상 측 장애는 채널의 기존 timeout · retry 만.
+2. 같은 Runner · 같은 작업 폴더에서 끝나지 않은 대상만 재개. 다른 Runner 로 넘기지 않고 새 저장소 · queue 를 만들지 않는다.
+3. 실제 수집 시간은 누적 6 h, 보수 계산(끝 기록 없으면 마지막 생존 표시 + 60 s). 메모리 · 남은 시간으로 시작을 막지 않는다.
+4. 원인은 근거가 있을 때만(boot_id · OOM 카운터 · Jenkins 연결 보고), 없으면 `process_lost` 로 끝낸다.
+5. 자격 후보는 구조화된 401(Redfish) · 관리 포트 재응답(OS · ESXi)일 때만 전환. 응답 잃은 쓰기는 다시 쓰지 않는다.
+6. production 은 utf-8 인코딩 선언까지 지운다(D13).
+
+### 영향
+- 호출자: 새 문장 `infra_unavailable`(기존 `OUTPUT_BUILD_FAILED`) · `limit_reason` `infra_wait` · `finalize_summary` 의 `infra` · `callback.receipt`.
+  72 h 대기 빌드의 결과는 최대 약 79 h 뒤 도착할 수 있다. Job 파라미터 · envelope 13 필드 · `failure_code` 집합은 그대로.
+
+### 회귀
+- 증거 `tests/evidence/2026-10-06-9th-infra-wait-resume.md`: 로컬 4,490 + 324 · CI #27 · #29 · #30 · Harness 23 + 생성 tree 13 · se-probe 실기 L1~L6 · L8 ·
+  Runner03 OOM 격리 · main 17 시나리오 × 3 후보 · production P6 `a8833d47` 검증.
+
 ## 2026-10-05~06 (8차) — 시험 입력 제거 · 시간 한계 셋 · 원격 명령 정리 · 보존 기간
 
 ### 사용자 의심

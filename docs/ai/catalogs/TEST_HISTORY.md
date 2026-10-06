@@ -1,5 +1,17 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-06 (9차) — 실행 기반 대기 · 같은 Runner 재개 · `8af81613` → production P6 `a8833d47`
+
+| 구분 | 결과 |
+|---|---|
+| 로컬(`e4bbd2cb`) | WSL `ci_gate` PASS — unit · e2e · regression **4,490 통과** · 145 건너뜀 · 7 xfail · integration **324** · 동치 corpus 20/20 · Windows PowerShell 관련 185 통과 · 3채널 syntax-check · prodgen 로컬 build(195 · class B 0 · tree `e6b06e99…`) · 오프라인 gate PASS |
+| 새 시험 | `test_gather_state.py`(43 + Linux) · `test_account_lost_write_response.py` · `test_credential_candidate_stop.py` · `tests/unit/prodgen/test_depclosure_imports.py`(4) · Harness `infra_resume` · `infra_wait_expired` · `resume_impossible` · `gather_wait_abort` · corpus 19 · 20 |
+| 실기 se-probe | L1 #7 · L2 #9 · L3 #10 · L4 #11(50대) · L5 #12 · L6 #13/#15 · L8 #14/#16 — 전부 기대 동작(증거 §4). #7~#11 의 FAILURE 는 시험 드라이버 정리 결함(`8beb4e81` 수정) |
+| Runner03 OOM 격리 | 64 MiB scope: 고치기 전 `aborted (signal TERM)` → `9ba237a6` 뒤 `runner_oom` · 대조 `kill -9` → `process_lost` |
+| CI | #26 · #28 중단(결함 발견 뒤 새 후보) · **#27(`b3bc02dd`) SUCCESS** — Harness 23/23 · 생성 tree 13/13 · Verify COMPLETE_PASS(G14 4,260) · #29(`e4bbd2cb`) SUCCESS(Verify COMPLETE_PASS · tree `e6b06e99…` · G14 4,263) 이나 증거 48항목 중 `gather_wait_abort` #609 판정 FAIL — #27 의 #551 도 같았다(시험 판정기 · CI 집계 결함, `d1e86297`) · **#30(`8af81613`) SUCCESS** — Harness 23/23(판정 PASS) · 생성 tree 13/13 · Verify COMPLETE_PASS(G14 4,264) · Evidence 48/48 |
+| main `8beb4e81` #276~#292 · `e4bbd2cb` #293~#309 · `8af81613` #310~#326 | 17/17 × 3 기대 결과(T2 SUCCESS · T5 ABORTED · T17 FAILURE config_error 전송 200 · T6 UNSTABLE · S5 2/2 · S1 4/4 · S4 1/1 · S2 4+2 · E2E-A UNSTABLE · E2E-A2 FAILURE · ESXi 6/6 · E2E-E 2/2 · S3 13/13 · Linux A 8/8 · Linux B 4+3 · Redfish 7+3 · 중복 IP FAILURE) |
+| 승격 · production | 세션 CLI 2026-10-06 19:20~19:33 COMPLETE_PASS → **P6 `a8833d47`**(parent P5 `f43af470` · Main-SHA `8af81613` · Tree-Hash `e6b06e99…` · 196 파일 · 다시 실행 G11~G15 · G18~G20) · GitHub · GitLab production `a8833d47` · 승격 뒤 새 사본 G07 PASS(두 원격 동일 · 로컬 tree 와 동일) · production Job #160~#174 15/15 기대 결과 |
+
 ## 2026-10-05~06 (8차) — R1~R8 · `8c9e04a9` → production P5 `f43af470`
 
 | 구분 | 결과 |
