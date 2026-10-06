@@ -47,10 +47,10 @@
 | GP-57 | Redfish 계정 쓰기 응답 유실 — 실장비 확인 | `[HOLD / 실장비 쓰기 승인]` | 9차는 mock 서버(`test_account_lost_write_response.py`)만. 실장비 계정 쓰기는 지시상 하지 않았다 |
 | GP-58 | 재개 때 Add-on 결정 재사용 — 실기 | `[TODO / 낮음]` | 단위 시험만. 실기 드라이버(`Jenkinsfile_live_infra`)는 Add-on 을 끈다 — Add-on 을 켠 재개 사례를 더할 수 있다 |
 | GP-59 | 대기 뒤 짧은 시도의 다음 단계 지연(최대 5분) | `[INFO / 선택]` | `seWithNode` 의 `parallel` 이 대기 한도 타이머의 현재 조회 간격(5 s → 300 s)이 끝나기를 기다린다(실측 L1 2분 17초). executor 미점유. 간격 상한을 줄이면 72 h 대기의 flow 노드가 늘어난다 |
-| GP-60 | Portal 의 늦은 결과 수신(최대 약 79 h) | `[HOLD / 사용자 · Portal]` | 72 h 실행 기반 대기 + 수집 6 h + 결과 확인 1 h. Portal 쪽 대기 한도 · 화면 표시 확인 |
+| GP-60 | Portal 의 늦은 결과 수신(최대 약 79 h) | `[CLOSED 2026-10-06 — 사용자 결정: 늦게 받아도 된다]` | 72 h 실행 기반 대기 + 수집 6 h + 결과 확인 1 h. 사용자 확인(2026-10-06): Portal 은 늦게 받아도 된다 — 변경 없음 |
 | GP-61 | 시도 시작 순간 Agent 끊김의 좁은 창 | `[INFO]` | 노드를 얻은 직후 소유 기록(`.se_workspace.json`)을 읽는 순간 끊기면 `resume_impossible` 로 끝날 수 있다(읽기 예외를 기록 없음으로 본다). 재현 없음 |
 | GP-62 | Harness gather_stage 빌드의 설명(description) | `[INFO]` | 운영 함수가 대기 뒤 빌드 설명을 지워 Harness 빌드 설명(시나리오 @SHA)이 비어 보인다. 증거 수집은 설명을 쓰지 않는다 |
-| GP-63 | 강제 종료 뒤 남는 vault 임시 파일 | `[TODO / 보안 위생]` | 수집 셸이 `kill -9` 로 끝나고 같은 작업 폴더에서 이어서 하는 시도가 없으면 `/tmp/se_vault.*`(0600 · Agent 사용자, vault 암호) · `/tmp/se_cp.*` 가 남는다. 2026-10-06 실기 L5 · L6 · L8 에서 실제로 남아 손으로 지웠다(Harness 강제 종료 시나리오도 시험 값으로 남긴다). 후보: 임시 파일을 작업 폴더 안에 두거나, 다음 수집 · 하루 정리가 살아 있는 소유자가 없는 `se_vault.*` 를 지운다 — 사용자 승인 뒤 설계 |
+| GP-63 | 강제 종료 뒤 남는 vault 임시 파일 | `[CLOSED 2026-10-06 — 사용자 결정: 남아도 된다]` | 수집 셸이 `kill -9` 로 끝나고 같은 작업 폴더에서 이어서 하는 시도가 없으면 `/tmp/se_vault.*`(0600 · Agent 사용자, vault 암호) · `/tmp/se_cp.*` 가 남는다. 2026-10-06 실기 L5 · L6 · L8 에서 실제로 남아 손으로 지웠다(Harness 강제 종료 시나리오도 시험 값으로 남긴다). 사용자 결정(2026-10-06): 남아도 된다 — 코드 변경 없음, 운영 문서(`docs/operate/04` 실행 기반 대기 절)에 적었다 |
 | GP-22 | prodgen 결정 사항 확인 — `adapters/registry.yml` 제외(런타임 미참조), Jinja AST 동치는 Ansible templar 설정 기준(`os-gather/site.yml` 주석 2건은 trim_blocks=True 에서만 동치) | `[INFO / 사용자 확인]` | 둘 다 manifest `policy` 에 기록. 다르게 결정하면 manifest 만 바꾼다 |
 | GP-23 | driver_map `vlan_id` 실장비 확인 | `[DONE 2026-10-05 — 결함 수정 · 재수집]` | P2 production #88 에서 실패 확인(비루트 수집에서 /proc/net/vlan 0600 읽기 실패) → `795c6ff7` netlink 보완 → main #121 `.96` 64/656 · `.95` 64 일치 → P3 production 재검증 |
 | GP-20 | Redfish 성공 경로 규모 측정 수단 | `[INFO / 사용자 결정]` | 실장비 10 BMC 전수(#53/#80, 7 success) · S3-Redfish(7 BMC forced 150 s) 가 현재의 규모 증거. 에뮬레이터 443 바인드 등 환경 변경은 하지 않았다(종전 선택지 유지) |

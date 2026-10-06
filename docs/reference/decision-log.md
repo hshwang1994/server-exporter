@@ -27,6 +27,8 @@
 4. 원인은 근거가 있을 때만(boot_id · OOM 카운터 · Jenkins 연결 보고), 없으면 `process_lost` 로 끝낸다.
 5. 자격 후보는 구조화된 401(Redfish) · 관리 포트 재응답(OS · ESXi)일 때만 전환. 응답 잃은 쓰기는 다시 쓰지 않는다.
 6. production 은 utf-8 인코딩 선언까지 지운다(D13).
+7. 사용자 결정(2026-10-06, 검증 뒤): Portal 은 결과를 늦게(최대 약 79 h) 받아도 된다. 수집 셸이 강제 종료되고 같은 작업 폴더에서 이어서 하는 시도가 없을 때
+   Runner `/tmp` 에 남는 임시 파일(vault 암호 사본 · SSH 다중화 폴더)은 그대로 둔다 — 정리 코드를 더하지 않는다.
 
 ### 영향
 - 호출자: 새 문장 `infra_unavailable`(기존 `OUTPUT_BUILD_FAILED`) · `limit_reason` `infra_wait` · `finalize_summary` 의 `infra` · `callback.receipt`.

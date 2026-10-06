@@ -12,7 +12,7 @@
 - **검증**: 로컬 WSL 4,490 + 324 · Windows PowerShell 185 · CI #27(`b3bc02dd`) SUCCESS(Harness 23/23 · 생성 tree 13/13 · Verify COMPLETE_PASS) · CI #29(`e4bbd2cb`) SUCCESS 이나 증거에서 Harness 판정 FAIL 1건 발견(결함 6) · CI #30(`8af81613`) SUCCESS(Harness 23/23 · 생성 tree 13/13 · Verify COMPLETE_PASS · Evidence 48/48) · se-probe 실기 L1~L6 · L8 · Runner03 OOM 격리 시험 · main 17 시나리오 × 3 후보(#276~#292 · #293~#309 · #310~#326) · production Job #160~#174 15/15 기대 결과(canary 3/3 · 명부 32대 성공 26 · 실패 6 환경 항목 · 계정 쓰기 0).
 - **도중 결함 6건 수정**: 결과 처리 노드 대기(한도 소진 뒤 0초 대기로 전송 못 함) · G08 같은 폴더 import · 실기 드라이버 정리 · 운영 문구 2건 · OOM 직후 TERM 분류 · Harness 판정(수집 단계 재전파를 전송 실패로 봄)과 CI 집계(ABORTED 시나리오는 Jenkins 결과만 봄).
 - **실기 미확인**: 시험 6 · 18(대상 측 네트워크 장애 주입 경로 없음) · Redfish 쓰기 응답 유실(mock) · 재개 때 Add-on 재사용(단위) · 72 h 자체(축소 상수).
-- 남은 사용자 결정: GP-52 · GP-37 · GP-38 · GP-44 · GP-50 그대로 + Portal 의 늦은 결과 수신(최대 약 79 h, GP-60) · 강제 종료 뒤 남는 vault 임시 파일 정리 방식(GP-63).
+- 남은 사용자 결정: GP-52 · GP-37 · GP-38 · GP-44 · GP-50 그대로, 시험 6 · 18 주입 경로(GP-56). 사용자 결정(2026-10-06): Portal 은 결과를 늦게(최대 약 79 h) 받아도 된다(GP-60) · 강제 종료 뒤 남는 Runner `/tmp` 임시 파일은 그대로 둔다(GP-63).
 
 ## 일자: 2026-10-05~06 (8차) — 시험 입력 제거 · 실제 시각 · 장시간 대기 · 숨은 실패 · 원격 정리 · 운영 문구 · 보존 정리(R1~R8) · **main `8c9e04a9` → production P5 `f43af470`**
 
