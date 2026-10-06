@@ -15,7 +15,10 @@
 #   _rf_used_account      : { username, label, role }  (password 미포함, 보안)
 #   _rf_used_account_role : str ('primary' | 'secondary' | 'recovery')
 
-- when: not (_rf_collect_ok | default(false) | bool)
+# 2026-10-06 (9차): include_tasks 의 loop when 은 반복을 시작하기 전에 한꺼번에 평가된다 — 앞 시도가 켠 중단 표식은 이 block 조건만 본다.
+- when:
+    - not (_rf_collect_ok | default(false) | bool)
+    - not (_rf_candidates_stopped | default(false) | bool)
   block:
 
     # 2026-10-03 (Plan §6-3 D7): 시도 식별자 `<phase>-<candidate_index>-<invocation>`. 모듈은 이 이름으로 증거 파일을 만들고,
@@ -152,13 +155,26 @@
     #   source: dell.com/.../idrac10_1.xx_scg/network-security-configuration
     # 2026-10-03 (N3): 마지막 후보 뒤에는 기다릴 이유가 없다 — 다음 시도가 없다. 표준 계정 1벌 환경에서 401 host 마다 65초를 아낀다.
     #   ansible_loop 는 collect_standard.yml 의 loop_control.extended 가 준다(없으면 종전처럼 항상 대기).
+    # 2026-10-06 (9차 W06): 401 이 아니면 다음 후보를 시도하지 않으므로(위 stop) 기다릴 일도 없다 — 거부 뒤 간격만 남긴다.
     - name: "redfish | try_account | backoff on failure"
       when:
         - not (_rf_attempt_ok | bool)
+        - (((_rf_attempt | default({}, true)).auth_evidence | default({}, true)).first_auth_status | default(none)) == 401
         - (ansible_loop is not defined) or (ansible_loop.index < ansible_loop.length)
       ansible.builtin.command: >-
-        sleep {{ _rf_auth_backoff_seconds | default(65)
-                 if ((_rf_attempt.auth_evidence | default({})).first_auth_status | default(0)) == 401
-                 else (_rf_transport_backoff_seconds | default(5)) }}
+        sleep {{ _rf_auth_backoff_seconds | default(65) }}
       delegate_to: localhost
       changed_when: false
+
+    # 이 표식은 block 조건(위)이 본다 — 켜지는 순간 같은 block 의 남은 태스크도 건너뛰므로 **마지막** 태스크로 둔다
+    #   (실패 근거 기록 · 로그 · 간격이 먼저 끝나야 한다).
+    # 2026-10-06 (9차 W06): 다음 후보로는 이 후보가 **구조화된 401**(자격 거부)을 받았을 때만 넘어간다.
+    #   통신 오류(timeout · TLS · 연결 · 응답 유실 — first_auth_status 없음) · 5xx · 403 이거나 인증은 통과했는데 수집이 실패했으면
+    #   남은 후보에 자격을 더 보내지 않는다. 대상 측 일시 장애를 자격 문제로 보고 후보를 소모하면 계정 잠금만 가까워진다(CLAUDE.md §8).
+    #   status 는 정수 그대로 비교한다(오류 문자열을 해석하지 않는다).
+    - name: "redfish | try_account | stop candidates unless explicitly rejected"
+      when:
+        - not (_rf_attempt_ok | bool)
+        - (((_rf_attempt | default({}, true)).auth_evidence | default({}, true)).first_auth_status | default(none)) != 401
+      ansible.builtin.set_fact:
+        _rf_candidates_stopped: true

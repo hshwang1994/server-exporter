@@ -347,8 +347,9 @@ def test_confirm_account_state_returns_ok_and_mismatches(monkeypatch):
 
 
 def test_recovery_sites_gate_on_state(monkeypatch):
-    """4 호출부 모두 (ok, mismatches) 를 받아 state_ok is not False 로 recovered 를 묶는다 (텍스트 계약)."""
+    """5 호출부 모두 (ok, mismatches) 를 받아 state_ok is not False 로 recovered 를 묶는다 (텍스트 계약).
+    2026-10-06 (9차): 응답을 받지 못한 쓰기의 판정(_settle_lost_write)이 다섯 번째 호출부다 — 같은 규칙을 쓴다."""
     src = (REPO / "redfish-gather" / "library" / "redfish_gather.py").read_text(encoding="utf-8")
-    assert src.count("_confirm_account_state(") == 5, "정의 1 + 호출 4"
-    assert src.count("state_ok is not False") + src.count("state_ok_r is not False") == 4
+    assert src.count("_confirm_account_state(") == 6, "정의 1 + 호출 5"
+    assert src.count("state_ok is not False") + src.count("state_ok_r is not False") == 5
     assert src.count("'state_mismatch'") >= 3

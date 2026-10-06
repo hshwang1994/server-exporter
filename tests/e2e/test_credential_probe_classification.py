@@ -88,8 +88,10 @@ def test_credential_attempt_count_unchanged():
     #   source: dell.com/.../idrac10_1.xx_scg/network-security-configuration
     assert "sleep " in rf_text, "lockout backoff 를 제거하면 안 된다"
     assert "_rf_auth_backoff_seconds" in rf_text
-    assert "_rf_transport_backoff_seconds | default(5)" in rf_text, (
-        "transport 오류의 종전 5초 간격이 사라졌다")
+    # 2026-10-06 (9차 W06): transport 오류(401 이 아닌 실패)면 남은 후보를 시도하지 않는다(stop) — 다음 시도가 없으니 5초 간격도 없다.
+    #   인증 시도는 줄면 줄었지 늘지 않는다. 거부(401) 뒤 긴 간격만 남는다.
+    assert "_rf_transport_backoff_seconds" not in rf_text
+    assert "_rf_candidates_stopped: true" in rf_text and "first_auth_status | default(none)) != 401" in rf_text
 
 
 def test_no_extra_diagnostic_login_added():

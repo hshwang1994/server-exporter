@@ -16,7 +16,10 @@
 #
 # **이 파일은 수집을 하지 않는다.** 복구 계정으로 서버 정보를 모으는 경로는 없다.
 
-- when: not (_rf_acct_auth_ok | default(false) | bool)
+# 2026-10-06 (9차): include_tasks 의 loop when 은 반복을 시작하기 전에 한꺼번에 평가된다 — 앞 시도가 켠 중단 표식은 이 block 조건만 본다.
+- when:
+    - not (_rf_acct_auth_ok | default(false) | bool)
+    - not (_rf_acct_stopped | default(false) | bool)
   block:
 
     - name: "redfish | account_service | mark recovery attempt in flight"
@@ -60,6 +63,9 @@
         _rf_attempt_id: ''
         _rf_acct_attempt_auth_ok: >-
           {{ ((_rf_acct_attempt.account_service | default({})).auth_ok | default(false)) | bool }}
+        # 2026-10-06 (9차): 명시 거부(401)만 다음 후보로 넘어갈 근거다. 결과가 없으면(모듈이 중간에 끝남) 거부로 보지 않는다.
+        _rf_acct_attempt_rejected: >-
+          {{ ((_rf_acct_attempt.account_service | default({})).auth_rejected | default(false)) | bool }}
       no_log: true
 
     - name: "redfish | account_service | adopt authenticated recovery result"
@@ -99,13 +105,22 @@
     # **인증 거부(auth_success=false 로 관측된 경우)에만** 긴 간격을 쓴다.
     #   timeout / TLS / transport 오류는 실패 카운터를 올리지 않으므로 종전 5초를 유지한다
     #   — 정상 장비의 실행시간에 영향을 주지 않기 위해서다.
+    #   2026-10-06 (9차): 명시 거부가 아니면 다음 후보로 가지 않으므로(위 stop) 거부 뒤 간격만 남긴다.
     - name: "redfish | account_service | backoff on recovery auth failure"
       when:
         - not (_rf_acct_attempt_auth_ok | bool)
+        - _rf_acct_attempt_rejected | bool
         - (ansible_loop is not defined) or (ansible_loop.index < ansible_loop.length)   # 2026-10-03 (N3): 마지막 후보 뒤 대기 생략
       ansible.builtin.command: >-
-        sleep {{ _rf_auth_backoff_seconds | default(65)
-                 if (((_rf_acct_attempt.account_service | default({})).auth_rejected | default(false)) | bool)
-                 else (_rf_transport_backoff_seconds | default(5)) }}
+        sleep {{ _rf_auth_backoff_seconds | default(65) }}
       delegate_to: localhost
       changed_when: false
+
+    # 이 표식은 block 조건(위)이 본다 — 켜지는 순간 같은 block 의 남은 태스크도 건너뛰므로 **마지막** 태스크로 둔다
+    #   (실패 근거 기록 · 로그 · 간격이 먼저 끝나야 한다).
+    - name: "redfish | account_service | stop recovery candidates unless explicitly rejected"
+      when:
+        - not (_rf_acct_attempt_auth_ok | bool)
+        - not (_rf_acct_attempt_rejected | bool)
+      ansible.builtin.set_fact:
+        _rf_acct_stopped: true

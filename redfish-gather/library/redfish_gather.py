@@ -596,6 +596,10 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
+    except http_client.HTTPException as e:
+        # 2026-10-06 (9차): 요청을 보낸 뒤 응답을 끝까지 받지 못했다(연결 끊김 · 잘린 응답 · 상태 줄 오류). 반영 여부를 모른다 —
+        #   호출자는 같은 쓰기를 다시 보내지 않고 다시 읽어 확인한다(account_service_provision 의 _settle_lost_write).
+        return 0, {}, f'Response lost: {type(e).__name__}: {e}'
     except (OSError, ValueError) as e:
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
@@ -623,6 +627,10 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
         return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
+    except http_client.HTTPException as e:
+        # 2026-10-06 (9차): 요청을 보낸 뒤 응답을 끝까지 받지 못했다(연결 끊김 · 잘린 응답 · 상태 줄 오류). 반영 여부를 모른다 —
+        #   호출자는 같은 쓰기를 다시 보내지 않고 다시 읽어 확인한다(account_service_provision 의 _settle_lost_write).
+        return 0, {}, f'Response lost: {type(e).__name__}: {e}'
     except (OSError, ValueError) as e:
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
@@ -668,6 +676,10 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
         return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
+    except http_client.HTTPException as e:
+        # 2026-10-06 (9차): 요청을 보낸 뒤 응답을 끝까지 받지 못했다(연결 끊김 · 잘린 응답 · 상태 줄 오류). 반영 여부를 모른다 —
+        #   호출자는 같은 쓰기를 다시 보내지 않고 다시 읽어 확인한다(account_service_provision 의 _settle_lost_write).
+        return 0, {}, f'Response lost: {type(e).__name__}: {e}'
     except (OSError, ValueError) as e:
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
@@ -2989,10 +3001,13 @@ def _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout,
         return {}, errors
     cst, ctrl_coll, cerr = _get(bmc_ip, _p(ctrl_link), username, password, timeout, verify_ssl)
     if cerr or cst != 200:
-        # 401/403/503: BMC 가 응답한 의미 있는 에러 — errors 에 기록
+        # 401/403/503: BMC 가 응답한 의미 있는 에러 — errors 에 기록.
+        # 2026-10-06 (9차 W05): 이 Storage 멤버는 같은 자격으로 이미 200 을 받았다 — 그 아래 Controllers 의 401/403 은
+        #   자격 오류가 아니라 하위 리소스 권한 · 펌웨어 한계다. 비차단 code 를 붙여 host 를 failed 로 끌어내리지 않는다
+        #   (storage 섹션은 failed, host 는 partial, 확보한 데이터 유지 — 다른 멤버 수준 실패와 같은 규칙).
         errors.append(_err('storage',
                            f'Controllers 컬렉션 fetch 실패 ({ctrl_link}): {cerr or cst}',
-                           detail={'status_code': cst}))
+                           detail={'status_code': cst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
         return {'controller_fetch_status': cst}, errors
     ctrl_members = _safe(ctrl_coll, 'Members') or []
     if not isinstance(ctrl_members, list) or not ctrl_members:  # rule 95 R1 #2: 비-list 방어 (Round 2 #13)
@@ -3004,7 +3019,7 @@ def _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout,
     if cerr2 or cst2 != 200:
         errors.append(_err('storage',
                            f'Controller fetch 실패 ({c_uri}): {cerr2 or cst2}',
-                           detail={'status_code': cst2}))
+                           detail={'status_code': cst2}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
         return {'controller_fetch_status': cst2}, errors
     return {
         'controller_name':         _safe(cdata, 'Name'),
@@ -6519,6 +6534,15 @@ def interpret_write_response(family, code, body, err, requested=None):
     return True, None
 
 
+def _write_outcome_unknown(code, err):
+    """쓰기 요청의 결과를 모른다 — HTTP 상태를 받지 못했다(응답 유실 · 시간 초과 · 연결 끊김). (2026-10-06 9차)
+
+    반영됐을 수도, 안 됐을 수도 있다. 이때는 같은 쓰기를 다시 보내지 않고 계정을 다시 읽고 표준 자격으로 다시 인증해 판정한다.
+    HTTP 상태를 받은 응답(2xx · 4xx · 5xx)은 여기에 해당하지 않는다 — 종전대로 Family 계약(interpret_write_response)으로 판정한다.
+    """
+    return not code and bool(err)
+
+
 def _create_target_uri(family, discovery, explicit_id=None):
     """계정 **생성** 대상 URI. 열거 URI 와 같은 개념이 아니다.
 
@@ -6893,6 +6917,72 @@ def account_service_provision(
             _spend_auth(target_username)
         return False, code_v, err_v, len(verify_schedule)
 
+    def _settle_lost_write(slot_uri, what, err_text, created=False):
+        """응답을 받지 못한 쓰기의 반영 여부를 판정한다 (2026-10-06 9차 — 쓰기 응답 유실).
+
+        같은 쓰기를 다시 보내지 않는다. 계정을 다시 읽고(생성이면 그 슬롯에 표준 계정 이름이 들어갔는지 먼저) 표준 자격으로
+        다시 인증해서 반영됐으면 recovered, 확인되지 않으면 실패로 남긴다. 계정을 비우는 PATCH 도 보내지 않는다 —
+        확정되지 않은 상태에서 되돌리면 방금 반영된 표준 계정을 지울 수 있다.
+        """
+        out['write_response_lost'] = True
+        if created and slot_uri:
+            st_c, slot_now, err_c = _get(bmc_ip, _p(slot_uri), current_username, current_password, timeout, verify_ssl)
+            if st_c == 200 and not err_c and isinstance(slot_now, dict) and 'UserName' in slot_now \
+                    and _safe(slot_now, 'UserName', default='') != target_username:
+                out['verification'] = 'failed'
+                out['errors'].append(_err(
+                    'account_service',
+                    '표준 계정 쓰기 요청의 응답을 받지 못했고, 다시 읽은 슬롯에 표준 계정이 없어 반영되지 않은 것으로 봅니다. '
+                    '같은 쓰기를 다시 보내지 않았습니다.',
+                    detail=f'{what} response lost: {err_text}; slot={slot_uri} UserName unchanged',
+                ))
+                return out
+        state_ok, _mm = _confirm_account_state(
+            bmc_ip, slot_uri, target_username, family,
+            current_username, current_password, timeout, verify_ssl, out)
+        ok_v, vcode, verr, attempts = _verify_standard_credential()
+        out['verify_attempts'] = attempts
+        if ok_v and state_ok is not False:
+            out['recovered'] = True
+            out['verification'] = 'verified'
+            return out
+        out['verification'] = 'state_mismatch' if ok_v else 'failed'
+        if not ok_v:
+            out['errors'].append(_err(
+                'account_service',
+                '표준 계정 쓰기 요청의 응답을 받지 못했고, 다시 읽고 다시 인증해도 반영을 확인하지 못했습니다. '
+                '같은 쓰기를 다시 보내지 않았습니다. 계정 상태를 확인하세요.',
+                detail='; '.join(x for x in (f'{what} response lost: {err_text}', verr or f'verify HTTP {vcode}',
+                                              f'verify_attempts={attempts}') if x),
+            ))
+        return out
+
+    def _locate_after_lost_create(what, err_text):
+        """응답을 받지 못한 생성 요청 뒤 — 계정 목록을 끝까지 다시 읽어 표준 계정이 정확히 하나 생겼는지 본다(추측하지 않는다)."""
+        recheck = account_service_discover(bmc_ip, current_username, current_password,
+                                           timeout, verify_ssl,
+                                           service_root=discovery.get('service'))
+        again = [a for a in (recheck.get('accounts') or [])
+                 if (a.get('username') or '') == target_username]
+        if recheck.get('enumeration') != ENUM_COMPLETE or len(again) != 1:
+            out['write_response_lost'] = True
+            out['verification'] = 'failed'
+            if recheck.get('enumeration') != ENUM_COMPLETE:
+                message = ('표준 계정 생성 요청의 응답을 받지 못했고 계정 목록도 끝까지 다시 읽지 못했습니다. '
+                           '다시 만들지 않았습니다. 계정 상태를 확인하세요.')
+            elif not again:
+                message = ('표준 계정 생성 요청의 응답을 받지 못했고 다시 읽은 계정 목록에 표준 계정이 없습니다. '
+                           '반영되지 않은 것으로 보고 다시 만들지 않았습니다.')
+            else:
+                message = ('표준 계정 생성 요청의 응답을 받지 못했고 같은 이름의 계정이 여러 개 보입니다. '
+                           '자동 정리를 중단했습니다. 중복 계정을 정리하세요.')
+            out['errors'].append(_err(
+                'account_service', message,
+                detail=f'{what} response lost: {err_text}; re-enumeration={recheck.get("enumeration")} matches={len(again)}',
+            ))
+            return None
+        return again[0].get('slot_uri')
+
     # 1) Capability Discovery — 이 호출이 곧 복구 자격의 인증 시험이다.
     #    2026-08-12: AccountService URI 를 하드코딩하지 않고 ServiceRoot 가 알려주는
     #    링크를 따른다 (Dell iDRAC7/8·초기 iDRAC9 는 Manager-scoped 경로를 쓴다).
@@ -7221,6 +7311,12 @@ def account_service_provision(
                     current_username, current_password, timeout, verify_ssl,
                     {'If-Match': etag},
                 )
+        if _write_outcome_unknown(code, err):
+            # 2026-10-06 (9차): 응답을 받지 못했다 — 다시 쓰지 않고(뒤이어 맞출 속성도 보내지 않는다) 다시 읽고 다시 인증해 판정한다
+            out['write_http_status'] = code
+            out['write_accepted'] = None
+            out['vendor_status'] = 'response_lost'
+            return _settle_lost_write(existing.get('slot_uri'), 'PATCH', err)
         # 2026-08-12 (rev.2): **거부된 속성을 빼고 다시 쓰던 사다리를 제거했다.**
         #   종전에는 400/405 이거나 본문이 read-only 를 지목하면 그 속성을 빼고 한 번 더
         #   PATCH 했다. 이것은 "보내 보고 거부되면 뺀다" 는 추측성 재시도이고, 9 Vendor
@@ -7264,8 +7360,15 @@ def account_service_provision(
             )
             f_ok, f_reason = interpret_write_response(family, f_code, f_resp, f_err)
             out['followup_properties'] = sorted(followup_body)
-            out['followup_accepted'] = f_ok
-            if not f_ok:
+            out['followup_accepted'] = None if _write_outcome_unknown(f_code, f_err) else f_ok
+            if _write_outcome_unknown(f_code, f_err):
+                # 2026-10-06 (9차): 응답을 받지 못했다 — 다시 보내지 않는다. 아래 재조회가 실제 속성을 읽어 불일치를 드러낸다.
+                out['errors'].append(_err(
+                    'account_service',
+                    '표준 계정 비밀번호는 적용됐고, 계정 속성(권한/활성) 동기화 요청은 응답을 받지 못했습니다. 다시 보내지 않았습니다.',
+                    detail=f'properties={",".join(sorted(followup_body))}; PATCH response lost: {f_err}',
+                ))
+            elif not f_ok:
                 out['errors'].append(_err(
                     'account_service',
                     '표준 계정 비밀번호는 적용됐지만 계정 속성(권한/활성) 동기화는 거부됐습니다.',
@@ -7370,6 +7473,15 @@ def account_service_provision(
             bmc_ip, _p(existing['slot_uri']),
             current_username, current_password, timeout, verify_ssl,
         )
+        if _write_outcome_unknown(del_code, del_err):
+            # 2026-10-06 (9차): 지워졌는지 모른다 — 다시 만들지 않는다(같은 이름이 둘이 되거나 남은 관리자 계정을 잃을 수 있다)
+            out['write_response_lost'] = True
+            out['errors'].append(_err(
+                'account_service',
+                '계정 삭제 요청의 응답을 받지 못해 다시 만들지 않았습니다. 계정 상태를 확인하세요.',
+                detail=f'DELETE response lost: {del_err} (slot={existing.get("id")})',
+            ))
+            return out
         if del_code not in (200, 204) or del_err:
             out['errors'].append(_err(
                 'account_service',
@@ -7389,6 +7501,15 @@ def account_service_provision(
             current_username, current_password, timeout, verify_ssl,
         )
         out['write_http_status'] = post_code
+        if _write_outcome_unknown(post_code, post_err):
+            out['write_accepted'] = None
+            out['vendor_status'] = 'response_lost'
+            out['method'] = 'delete_repost'
+            found = _locate_after_lost_create('POST', post_err)
+            if found is None:
+                return out
+            out['slot_uri'] = found
+            return _settle_lost_write(found, 'POST', post_err)
         accepted_r, reason_r = interpret_write_response(family, post_code, post_data, post_err)
         out['write_accepted'] = accepted_r
         out['vendor_status'] = reason_r
@@ -7502,6 +7623,11 @@ def account_service_provision(
         #   여기서도 본다. 종전에는 기존 계정 경로에만 이 검사가 있어, 같은 펌웨어의
         #   같은 거부를 생성 경로에서는 성공으로 읽고 넘어갔다.
         out['write_http_status'] = code
+        if _write_outcome_unknown(code, err):
+            # 2026-10-06 (9차): 응답을 받지 못했다 — 다른 슬롯에 다시 쓰지 않고, 그 슬롯을 비우지도 않는다
+            out['write_accepted'] = None
+            out['vendor_status'] = 'response_lost'
+            return _settle_lost_write(chosen_slot.get('slot_uri'), 'PATCH', err, created=True)
         accepted, reject_reason = interpret_write_response(family, code, patch_resp, err)
         out['write_accepted'] = accepted
         out['vendor_status'] = reject_reason
@@ -7540,6 +7666,15 @@ def account_service_provision(
                 out['write_response_info'],
             ) if x),
         ))
+        # 2026-10-06 (9차): 슬롯을 비우는 PATCH 는 인증 확인이 **확정적으로** 실패했을 때(표준 자격 401)만 보낸다.
+        #   시간 초과 · 연결 오류 · 5xx · 403 이면 계정이 제대로 만들어졌는데 확인만 못 한 것일 수 있다 — 되돌리지 않고 남긴다.
+        if verify_code != 401:
+            out['errors'].append(_err(
+                'account_service',
+                '인증 확인이 확정되지 않아 만든 슬롯을 비우지 않았습니다. 해당 슬롯 상태를 확인하세요.',
+                detail=f'verify HTTP {verify_code}; {verify_err or "-"}; slot={chosen_slot.get("id")}',
+            ))
+            return out
         cl_code, cl_resp, cl_err = _patch(
             bmc_ip, _p(chosen_slot['slot_uri']),
             {'UserName': '', 'Enabled': False, 'RoleId': 'None'},
@@ -7570,6 +7705,15 @@ def account_service_provision(
         current_username, current_password, timeout, verify_ssl,
     )
     out['write_http_status'] = code
+    if _write_outcome_unknown(code, err):
+        # 2026-10-06 (9차): 응답을 받지 못했다 — 다시 POST 하지 않고 계정 목록을 다시 읽어 생겼는지 본 뒤 다시 인증해 판정한다
+        out['write_accepted'] = None
+        out['vendor_status'] = 'response_lost'
+        found = _locate_after_lost_create('POST', err)
+        if found is None:
+            return out
+        out['slot_uri'] = found
+        return _settle_lost_write(found, 'POST', err)
     accepted, reject_reason = interpret_write_response(
         family, code, resp_data, err, requested=set(body_base))
     out['write_response_info'] = _extended_info(resp_data) or out['write_response_info']

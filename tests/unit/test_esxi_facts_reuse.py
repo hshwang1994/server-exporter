@@ -141,6 +141,11 @@ def _all_module_tasks() -> list[tuple[str, str, tuple[str, ...]]]:
 # ═══════════════════════════════════════════════════════════════════════════
 def test_module_runs_per_host_drop_from_13_to_12():
     tasks = _all_module_tasks()
+    # 2026-10-06 (9차 W06): 자격 probe 가 **실패했을 때만** 도는 관리 포트 재확인(wait_for, vSphere 를 부르지 않는다)은
+    #   인증 성공 경로의 예산에 들지 않는다. 실패 경로 전용 태스크는 그것 하나뿐이다.
+    failure_only = [(f, a) for f, a, g in tasks if any("not (_e_probe_ok | bool)" in w for w in g)]
+    assert failure_only == [("try_one_credential.yml", "ansible.builtin.wait_for")], failure_only
+    tasks = [t for t in tasks if (t[0], t[1]) not in failure_only]
     guarded = [(f, a) for f, a, g in tasks if any(_REUSE_FLAG in w for w in g)]
     unguarded = [(f, a) for f, a, g in tasks if not any(_REUSE_FLAG in w for w in g)]
     assert guarded == [("collect_facts.yml", _VHF)], (

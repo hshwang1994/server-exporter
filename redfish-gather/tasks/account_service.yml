@@ -45,6 +45,7 @@
          else (not (_rf_account_reconcile_allowed | default(false) | bool)) }}
     _rf_acct_result: {}
     _rf_acct_auth_ok: false
+    _rf_acct_stopped: false
     _rf_acct_recovery_label: ""
   no_log: true
 
@@ -152,6 +153,9 @@
     # ── recovery 후보를 vault 배열 순서대로 시도 ─────────────────────────────
     # 인증되는 후보를 찾을 때까지만. 인증 실패 후보로는 아무것도 쓰지 않는다
     # (모듈이 auth_ok=false 로 돌려주고 쓰기 경로에 들어가지 않는다).
+    # 2026-10-06 (9차 W06 · 쓰기 응답 유실): 다음 복구 후보로는 앞 후보가 AccountService 에서 **401 로 명시 거부**됐을 때만 넘어간다.
+    #   통신 오류 · 5xx · 403 이거나 모듈이 결과 없이 끝났으면(쓰기를 보냈을 수 있다) 더 시도하지 않는다 — 다른 후보가 같은 쓰기를
+    #   다시 보내지 않게 한다. 거부된 후보는 쓰기 전 단계(AccountService GET)에서 멈췄으므로 표준 계정 상태는 바뀌지 않았다.
     - name: "redfish | account_service | try recovery accounts in order"
       ansible.builtin.include_tasks: account_service_try_one.yml
       loop: "{{ _rf_recovery_accounts | default([]) }}"
@@ -159,7 +163,9 @@
         loop_var: _try_recovery
         extended: true    # 2026-10-03 (N3)
         label: "{{ _try_recovery.label | default('unlabeled') }}"
-      when: not (_rf_acct_auth_ok | default(false) | bool)
+      when:
+        - not (_rf_acct_auth_ok | default(false) | bool)
+        - not (_rf_acct_stopped | default(false) | bool)
 
     # production-audit (2026-04-29): bool typing 명시 cast (string "true"/"false" emit 차단)
     #
