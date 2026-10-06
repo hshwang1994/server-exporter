@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 import configparser
 import os
+import posixpath
 import re
 import shutil
 import subprocess
@@ -323,6 +324,7 @@ class Closure:
         module_utils = {os.path.splitext(os.path.basename(p))[0] for p in self.files if p.startswith("module_utils/")}
         allowed_roots = {"ansible", "yaml", "pyVmomi", "pyVim", "__future__"}
         count = 0
+        siblings = []
         for rel, full in sorted(self.files.items()):
             if self.ctx["prov"]["files"].get(rel, {}).get("language") != "python":
                 continue
@@ -347,8 +349,20 @@ class Closure:
                                                                         "compat", "_text", "facts", "json_utils"}:
                                 self.problems.append(f"{rel}: ansible.module_utils.{sub} not provided by tree")
                         continue
+                    if self._sibling_script_module(rel, root):
+                        siblings.append(f"{rel} -> {root}")
+                        continue
                     self.problems.append(f"{rel}: import '{name}' is not stdlib/module_utils/ansible/yaml/pyVmomi")
         self.info["python_imports_checked"] = count
+        self.info["python_sibling_imports"] = siblings
+
+    def _sibling_script_module(self, rel: str, root: str) -> bool:
+        # 직접 실행되는 스크립트(python_kind: script)는 python 이 자기 폴더를 sys.path 맨 앞에 둔다 — 그 폴더의 모듈이
+        # 생성 tree 에 python 으로 함께 들어 있을 때만 의존이 닫힌 것으로 본다 (2026-10-06 9차: gather_state.py -> finalize_gather_output)
+        if self.ctx["prov"]["files"].get(rel, {}).get("python_kind") != "script":
+            return False
+        sibling = posixpath.join(posixpath.dirname(rel), root + ".py")
+        return sibling in self.files and self.ctx["prov"]["files"].get(sibling, {}).get("language") == "python"
 
     # ── Jenkinsfile quoted paths ────────────────────────────────────────────
     def check_jenkinsfile_paths(self):
