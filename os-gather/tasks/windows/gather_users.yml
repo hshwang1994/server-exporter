@@ -1,7 +1,6 @@
 ---
 
 - name: "windows | users | collect"
-  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     $useLocal = $null -ne (Get-Command Get-LocalUser -ErrorAction SilentlyContinue)
     $script:listFail = $null

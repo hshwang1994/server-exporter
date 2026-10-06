@@ -1,7 +1,6 @@
 ---
 
 - name: "windows | hardware | Win32_ComputerSystem + Win32_BIOS"
-  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     $cs   = Get-CimInstance Win32_ComputerSystem
     $csp  = Get-CimInstance Win32_ComputerSystemProduct -ErrorAction SilentlyContinue

@@ -2,7 +2,6 @@
 
 - block:
     - name: "linux | hba_ib | enumerate fc_host + infiniband"
-      timeout: "{{ _os_task_timeout | default(120) }}"
       ansible.builtin.raw: |
         rd() {
           v=""

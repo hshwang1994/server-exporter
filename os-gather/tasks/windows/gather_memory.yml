@@ -1,7 +1,6 @@
 ---
 
 - name: "windows | memory | Win32_PhysicalMemory (total + slots)"
-  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
       $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
@@ -187,7 +186,13 @@
     _errors_fragment: >-
       {%- set p = _w_mem_phys_mb | default(none) -%}
       {%- set v = _w_mem_vis_mb | default(none) -%}
-      {%- if p is not none -%}{{ [] }}
+      {%- set setup_ok = (_w_setup_ok | default(true) | bool) -%}
+      {%- set setup_note = ('' if setup_ok else ('; setup=failed; error=' ~ (_w_setup_detail | default('', true)))) -%}
+      {%- if p is not none and v is none -%}
+        {{ [{'section': 'memory',
+             'message': '메모리 정보 중 OS 가 인식한 용량을 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+             'detail':  ('source=setup(ansible_memtotal_mb); cause=' ~ ('no_value' if setup_ok else 'facts_failed') ~ '; effect=visible_mb,free_mb=null' ~ setup_note)}] }}
+      {%- elif p is not none -%}{{ [] }}
       {%- elif v is not none -%}
         {{ [{'section': 'memory',
              'message': '메모리 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.',
@@ -195,7 +200,7 @@
       {%- else -%}
         {{ [{'section': 'memory',
              'message': '메모리 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
-             'detail':  ('source=Win32_PhysicalMemory,setup; cause=no_output; rc=' ~ (_w_mem_raw.rc | default('none')))}] }}
+             'detail':  ('source=Win32_PhysicalMemory,setup; cause=no_output; rc=' ~ (_w_mem_raw.rc | default('none')) ~ setup_note)}] }}
       {%- endif -%}
   no_log: true
 

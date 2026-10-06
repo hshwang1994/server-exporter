@@ -1,7 +1,6 @@
 ---
 
 - name: "esxi | runtime | NTP info"
-  timeout: "{{ _e_task_timeout | default(180) }}"
   community.vmware.vmware_host_ntp_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"
@@ -14,7 +13,6 @@
   no_log: true
 
 - name: "esxi | runtime | firewall info"
-  timeout: "{{ _e_task_timeout | default(180) }}"
   community.vmware.vmware_host_firewall_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"
@@ -27,7 +25,6 @@
   no_log: true
 
 - name: "esxi | runtime | service info"
-  timeout: "{{ _e_task_timeout | default(180) }}"
   community.vmware.vmware_host_service_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"

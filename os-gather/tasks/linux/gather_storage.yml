@@ -1,7 +1,6 @@
 ---
 
 - name: "linux | storage | raw gather (lsblk/udevadm/findmnt/lspci/df)"
-  timeout: "{{ _os_task_timeout | default(120) }}"
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     lsblk_rc=127; lsblk_err=""; lsblk_json=""
@@ -62,11 +61,7 @@
           printf "%s|%s|%s\n", drv, $8, $10
         }'
     fi
-    if command -v timeout >/dev/null 2>&1 && timeout 20 true >/dev/null 2>&1; then
-      timeout 20 df -P -T -k 2>/dev/null
-    else
-      df -P -T -k 2>/dev/null
-    fi | tail -n +2 | awk '{
+    df -P -T -k 2>/dev/null | tail -n +2 | awk '{
       gsub(/[^0-9]/,"",$3); gsub(/[^0-9]/,"",$4); gsub(/[^0-9]/,"",$5);
       total=int($3/1024); used=int($4/1024); avail=int($5/1024);
       pct=$6; gsub(/%/,"",pct); gsub(/[^0-9]/,"",pct);

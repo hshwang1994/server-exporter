@@ -27,7 +27,7 @@ fi
 export GIT_TERMINAL_PROMPT=0
 tmo=()
 if command -v timeout >/dev/null 2>&1; then
-    tmo=(timeout 180)
+    tmo=(timeout 1800)
 fi
 
 err="$(mktemp)"

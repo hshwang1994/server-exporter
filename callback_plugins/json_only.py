@@ -6,7 +6,6 @@ import json
 import os
 import re
 import sys
-import time
 
 from ansible.plugins.callback import CallbackBase
 
@@ -77,12 +76,6 @@ _CONNECTIONLESS_ACTIONS = frozenset({
     'include_role', 'import_role', 'import_playbook', 'pause',
     'precheck_bundle', 'redfish_gather',
 })
-
-_TRIVIAL_ACTIONS = frozenset({
-    'set_fact', 'debug', 'assert', 'fail', 'meta', 'add_host', 'group_by', 'set_stats',
-    'include', 'include_tasks', 'import_tasks', 'include_vars', 'include_role', 'import_role', 'import_playbook',
-})
-_ALIVE_EVERY_SEC = 10
 
 _LOCAL_CONNECTIONS = frozenset({'local', 'ansible.builtin.local'})
 _LOCAL_DELEGATES = frozenset({'localhost', '127.0.0.1', '::1'})
@@ -156,7 +149,6 @@ class CallbackModule(CallbackBase):
         self._addon_start_task = 'ADDON_START'
         self._addon_done_task = 'ADDON_DONE'
         self._hosts = {}
-        self._alive_at = {}
         self._playbook_channel = None
         self._reconcile = not _is_truthy(os.getenv('JSON_ONLY_NO_RECONCILE', ''))
         if not self._reconcile:
@@ -408,25 +400,8 @@ class CallbackModule(CallbackBase):
         return True
 
 
-    def _alive(self, result):
-        if not self._progress_file:
-            return
-        try:
-            action = str(self._task_fields(result).get('action') or '').rsplit('.', 1)[-1]
-            if not action or action in _TRIVIAL_ACTIONS:
-                return
-            host = self._host_name(result)
-            now = time.monotonic()
-            if now - self._alive_at.get(host, -_ALIVE_EVERY_SEC) < _ALIVE_EVERY_SEC:
-                return
-            self._alive_at[host] = now
-            self._progress(host, 'alive', task=self._task_name(result))
-        except Exception:
-            pass
-
     def v2_runner_on_ok(self, result):
         self._track(result, ok=True)
-        self._alive(result)
         name = self._task_name(result)
         if name == self._checkpoint_task:
             self._checkpoint(result)

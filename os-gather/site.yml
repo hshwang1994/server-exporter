@@ -8,7 +8,7 @@
 
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
-    _probe_timeout: "{{ probe_timeout | default(2) }}"
+    _probe_timeout: "{{ probe_timeout | default(10) }}"
 
   tasks:
 
@@ -20,8 +20,8 @@
         _precheck_channel:         "os"
         _precheck_timeout_port:    "{{ _probe_timeout }}"
         _precheck_probe_protocol:  true
-        _precheck_timeout_protocol: "{{ _probe_protocol_timeout | default(5) }}"
-        _precheck_port_poll_interval: "{{ _probe_poll_interval | default(1) }}"
+        _precheck_timeout_protocol: "{{ _probe_protocol_timeout | default(60) }}"
+        _precheck_port_poll_interval: "{{ _probe_poll_interval | default(0) }}"
 
     - name: "detect | set os_type"
       ansible.builtin.set_fact:
@@ -49,10 +49,11 @@
         ansible_host:            "{{ hostvars[item].ansible_host | default(item) }}"
         ansible_connection:      ssh
         ansible_port:            22
-        ansible_timeout:         15
+        ansible_timeout:         60
+        ansible_ssh_use_tty:     true
         ansible_ssh_common_args: >-
           -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
-          -o ConnectTimeout=15 -o ServerAliveInterval=10
+          -o ConnectTimeout=60 -o ServerAliveInterval=10
         _os_type:                linux
       loop: "{{ ansible_play_hosts_all }}"
       when: (hostvars[item]._detected_os | default('') | trim) == 'linux'
@@ -411,11 +412,18 @@
             _os_accounts: "{{ _cred_accounts | default([]) }}"
 
         - name: "windows | setup"
-          timeout: "{{ _win_task_timeout | default(180) }}"
           ansible.builtin.setup:
             gather_subset: ['hardware', 'network']
+            gather_timeout: 1800
           register:    _w_setup
           failed_when: false
+          no_log: true
+
+        - name: "windows | setup result"
+          ansible.builtin.set_fact:
+            _w_setup_ok: "{{ ((_w_setup.ansible_facts | default({})) | length) > 0 }}"
+            _w_setup_detail: >-
+              {{ (_w_setup.msg | default('', true) | string | replace('\n', ' ') | replace('\r', ' ') | trim)[:160] }}
           no_log: true
 
         - name: "windows | init fragments"

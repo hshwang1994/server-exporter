@@ -1,7 +1,6 @@
 ---
 
 - name: "windows | network | snapshot (routes + adapters + addresses + dns)"
-  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
       $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
@@ -13,19 +12,29 @@
     $routes = $null
     $na = $null
     $dns = $null
+    function Get-SeRealError($Errs) { @($Errs | Where-Object { [string]$_.CategoryInfo.Category -ne 'ObjectNotFound' }) }
     Invoke-SeComponent $doc 'read_routes' {
       param($c)
-      $script:routes = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0','::/0' -ErrorAction SilentlyContinue)
+      $seErr = $null
+      $script:routes = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0','::/0' -ErrorAction SilentlyContinue -ErrorVariable seErr)
+      $real = Get-SeRealError $seErr
+      if ($real) { throw $real[0] }
     }
     Invoke-SeComponent $doc 'read_adapters' {
       param($c)
-      $script:na = @(Get-NetAdapter -ErrorAction SilentlyContinue)
+      $seErr = $null
+      $script:na = @(Get-NetAdapter -ErrorAction SilentlyContinue -ErrorVariable seErr)
+      $real = Get-SeRealError $seErr
+      if ($real) { throw $real[0] }
     }
     Invoke-SeComponent $doc 'read_dns' {
       param($c)
-      $script:dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
+      $seErr = $null
+      $script:dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue -ErrorVariable seErr |
                       Where-Object { $_.ServerAddresses } |
                       ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
+      $real = Get-SeRealError $seErr
+      if ($real) { throw $real[0] }
     }
     $def4 = $routes | Where-Object { $_.DestinationPrefix -eq '0.0.0.0/0' } | Sort-Object RouteMetric | Select-Object -First 1
     $def6 = $routes | Where-Object { $_.DestinationPrefix -eq '::/0' } | Sort-Object RouteMetric | Select-Object -First 1
@@ -48,7 +57,8 @@
       $gw  = if ($m.data -and $m.data.gw)  { [string]$m.data.gw }  else { '' }
       $gw6 = if ($m.data -and $m.data.gw6) { [string]$m.data.gw6 } else { '' }
       $primary_idx = $def4.InterfaceIndex
-      Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue |
+      $ipErr = $null
+      Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue -ErrorVariable ipErr |
       Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -ne '::1' } |
       ForEach-Object {
         $addr    = $_
@@ -71,10 +81,12 @@
           gateway         = $(if ($isGw) { if ($fam -eq 'ipv6') { $gw6 } else { $gw } } else { $null })
         })
       }
+      $real = Get-SeRealError $ipErr
+      if ($real) { throw $real[0] }
     }
     Invoke-SeComponent $doc 'driver_map' {
       param($c)
-      if (-not $doc['read_adapters'].ok) { throw $doc['read_adapters'].error }
+      if ((-not $doc['read_adapters'].ok) -and (@($na).Count -eq 0)) { throw $doc['read_adapters'].error }
       $na | Where-Object { $_.Status -eq 'Up' -or $_.MediaConnectionState -eq 'Connected' } | ForEach-Object {
         [void]$c.rows.Add([PSCustomObject]@{
           name           = $_.Name
@@ -307,7 +319,6 @@
   no_log: true
 
 - name: "windows | network | teaming (LBFO + SET)"
-  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     $ErrorActionPreference = 'SilentlyContinue'
     function Emit($tag,$o){ if($o){ Write-Output ($tag + ' ' + ($o | ConvertTo-Json -Compress -Depth 4)) } }
@@ -398,6 +409,29 @@
     _w_net_ok: "{{ ((_w_net_topo.interfaces | default([])) | length > 0) }}"
   no_log: true
 
+- name: "windows | network | component status"
+  ansible.builtin.set_fact:
+    _w_net_parts_failed: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set out = [] -%}
+      {%- for k in ['read_routes', 'read_adapters', 'read_dns', 'meta', 'interfaces', 'driver_map', 'adapters'] -%}
+        {%- if (d.get(k) is mapping) and (d.get(k).get('ok') is sameas false) -%}{%- set _ = out.append(k) -%}{%- endif -%}
+      {%- endfor -%}
+      {%- if (d | length == 0) or ('_error' in d) or (((_w_net_doc_raw.rc | default(0)) or 0) | int != 0) -%}
+        {%- set _ = out.append('script') -%}
+      {%- endif -%}
+      {{ out }}
+    _w_net_parts_error: >-
+      {%- set d = _w_net_doc if (_w_net_doc is mapping) else {} -%}
+      {%- set errs = [] -%}
+      {%- for k in ['read_routes', 'read_adapters', 'read_dns', 'meta', 'interfaces', 'driver_map', 'adapters'] -%}
+        {%- if (d.get(k) is mapping) and (d.get(k).get('ok') is sameas false) and d.get(k).get('error') -%}
+          {%- set _ = errs.append(k ~ ': ' ~ (d.get(k).get('error') | string)) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ ((errs | first | default('', true)) | replace('\n', ' ') | replace('\r', ' '))[:160] }}
+  no_log: true
+
 - name: "windows | network | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -422,10 +456,18 @@
     _sections_collected_fragment: "{{ ['network'] if (_w_net_ok | bool) else [] }}"
     _sections_failed_fragment:    "{{ [] if (_w_net_ok | bool) else ['network'] }}"
     _errors_fragment: >-
-      {{ [] if (_w_net_ok | bool) else [{
+      {{ ([] if (_w_net_ok | bool) else [{
            'section': 'network',
            'message': '네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
-           'detail':  ('source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=' ~ (_w_iface_raw.rc | default('none')))}] }}
+           'detail':  ('source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=' ~ (_w_iface_raw.rc | default('none'))
+                       ~ (('; parts=' ~ (_w_net_parts_failed | join(','))) if (_w_net_parts_failed | default([]) | length > 0) else ''))}])
+         + ([{
+           'section': 'network',
+           'message': '네트워크 정보 중 일부를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  ('source=Get-NetAdapter,Get-NetRoute,Get-DnsClientServerAddress,Get-NetIPAddress; cause=component_failed; parts='
+                       ~ (_w_net_parts_failed | join(',')) ~ '; interfaces=' ~ ((_w_net_topo.interfaces | default([])) | length)
+                       ~ (('; error=' ~ _w_net_parts_error) if (_w_net_parts_error | default('', true)) else ''))}]
+            if ((_w_net_ok | bool) and ((_w_net_parts_failed | default([])) | length > 0)) else []) }}
   no_log: true
 
 - name: "windows | network | merge fragment"

@@ -1,12 +1,11 @@
 ---
 
 - name: "precheck | 대상 호스트 연결 진단"
-  timeout: "{{ _precheck_task_timeout | default(120) }}"
   precheck_bundle:
     host: "{{ _precheck_host }}"
     channel: "{{ _precheck_channel }}"
     ports: "{{ _precheck_ports | default(omit) }}"
-    timeout_port: "{{ _precheck_timeout_port | default(3.0) }}"
+    timeout_port: "{{ _precheck_timeout_port | default(60) }}"
     timeout_protocol: "{{ _precheck_timeout_protocol | default(_precheck_timeout | default(15.0)) }}"
     timeout_auth: "{{ _precheck_timeout_auth | default(_precheck_timeout | default(8.0)) }}"
     username: "{{ _precheck_username | default(omit) }}"

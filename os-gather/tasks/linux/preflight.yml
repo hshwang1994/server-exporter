@@ -1,7 +1,6 @@
 ---
 
 - name: "linux | preflight | detect python + commands"
-  timeout: "{{ _os_task_timeout | default(120) }}"
   ansible.builtin.raw: |
     py_path="none"
     py_ver=""

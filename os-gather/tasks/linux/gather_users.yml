@@ -1,7 +1,6 @@
 ---
 
 - name: "linux | users | raw getent + last logins"
-  timeout: "{{ _os_task_timeout | default(120) }}"
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     pw=$(getent passwd 2>/dev/null)

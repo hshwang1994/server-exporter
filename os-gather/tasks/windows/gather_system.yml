@@ -1,7 +1,6 @@
 ---
 
 - name: "windows | system | os version + hosting detection"
-  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
       $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }
@@ -63,13 +62,23 @@
     }
     Invoke-SeComponent $doc 'hosting' {
       param($c)
-      $vmms = Get-Service -Name vmms -ErrorAction SilentlyContinue
+      $vmmsErr = $null
+      $vmms = Get-Service -Name vmms -ErrorAction SilentlyContinue -ErrorVariable vmmsErr
+      $role = 'False'
+      $roleError = $null
+      if ($vmms) {
+        $role = $(if ($vmms.Status -eq 'Running') { 'True' } else { 'Installed' })
+      } elseif ($vmmsErr) {
+        $notFound = @($vmmsErr | Where-Object { (([string]$_.FullyQualifiedErrorId) -like 'NoServiceFoundForGivenName*') -or ([string]$_.CategoryInfo.Category -eq 'ObjectNotFound') })
+        if (-not $notFound) { $role = 'Unknown'; $roleError = 'vmms: ' + [string]$vmmsErr[0].Exception.Message }
+      }
       $c.data = [PSCustomObject]@{
         Model             = $cs.Model
         Manufacturer      = $cs.Manufacturer
         HypervisorPresent = [string]$cs.HypervisorPresent
-        HyperVRole        = $(if ($vmms -and $vmms.Status -eq 'Running') { 'True' } else { 'False' })
+        HyperVRole        = $role
       }
+      if ($roleError) { throw $roleError }
     }
     try { $doc | ConvertTo-Json -Depth 8 -Compress }
     catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }
@@ -145,8 +154,8 @@
       {%- endfor -%}
       {%- if ns.vm -%}virtual
       {%- elif hyp == 'false' -%}baremetal
-      {%- elif hyp == 'true' and role == 'true' -%}baremetal
-      {%- elif hyp == 'true' -%}virtual
+      {%- elif hyp == 'true' and role in ['true', 'installed'] -%}baremetal
+      {%- elif hyp == 'true' and role == 'false' -%}virtual
       {%- else -%}unknown
       {%- endif -%}
   no_log: true
@@ -175,6 +184,8 @@
     _id_msg_absent_serial:    "대상이 시스템 제조번호를 제공하지 않습니다."
     _id_msg_privilege_uuid:   "시스템 고유 식별자를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요."
     _id_msg_absent_uuid:      "대상이 시스템 고유 식별자를 제공하지 않습니다."
+    _id_msg_facts_serial:     "시스템 제조번호를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+    _id_msg_facts_uuid:       "시스템 고유 식별자를 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
   ansible.builtin.set_fact:
     _w_id_diagnostics: >-
       {%- set diags = [] -%}
@@ -182,12 +193,18 @@
       {%- set uuid_na   = (_w_uuid_val   | default(none)) is none -%}
       {%- set serial_defined = ansible_product_serial is defined -%}
       {%- set uuid_defined   = ansible_product_uuid is defined -%}
-      {%- if serial_na and not serial_defined -%}
+      {%- set setup_failed = not (_w_setup_ok | default(true) | bool) -%}
+      {%- set facts_err = ('; error=' ~ (_w_setup_detail | default('', true))) if setup_failed else '' -%}
+      {%- if serial_na and not serial_defined and setup_failed -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_facts_serial,"detail":("field=serial_number; cause=facts_failed; tried=setup_fact" ~ facts_err)}) -%}
+      {%- elif serial_na and not serial_defined -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_serial,"detail":"field=serial_number; cause=insufficient_privilege; tried=setup_fact"}) -%}
       {%- elif serial_na and serial_defined -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_absent_serial,"detail":"field=serial_number; cause=identifier_not_available; tried=setup_fact"}) -%}
       {%- endif -%}
-      {%- if uuid_na and not uuid_defined -%}
+      {%- if uuid_na and not uuid_defined and setup_failed -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_facts_uuid,"detail":("field=system_uuid; cause=facts_failed; tried=setup_fact" ~ facts_err)}) -%}
+      {%- elif uuid_na and not uuid_defined -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_uuid,"detail":"field=system_uuid; cause=insufficient_privilege; tried=setup_fact"}) -%}
       {%- elif uuid_na and uuid_defined -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_absent_uuid,"detail":"field=system_uuid; cause=identifier_not_available; tried=setup_fact"}) -%}

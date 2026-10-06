@@ -20,7 +20,7 @@ except ImportError:
     HAS_PYVMOMI = False
     PYVMOMI_IMP_ERR = traceback.format_exc()
 
-_DEFAULT_TIMEOUT_SEC = 30
+_DEFAULT_TIMEOUT_SEC = 1800
 
 _SELECT_IDS = 'name / summary.config.name / vmk IPv4(config.network.vnic[].spec.ip.ipAddress)'
 

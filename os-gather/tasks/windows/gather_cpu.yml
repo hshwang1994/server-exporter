@@ -1,7 +1,6 @@
 ---
 
 - name: "windows | cpu | collect Win32_Processor 상세"
-  timeout: "{{ _win_task_timeout | default(180) }}"
   ansible.windows.win_shell: |
     function Normalize-CpuModel($n) {
       if (-not $n) { return $null }

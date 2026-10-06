@@ -1,7 +1,6 @@
 ---
 
 - name: "esxi | collect | vmware_host_config_info"
-  timeout: "{{ _e_task_timeout | default(180) }}"
   community.vmware.vmware_host_config_info:
     hostname:       "{{ _e_ip }}"
     username:       "{{ _e_user }}"

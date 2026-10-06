@@ -13,12 +13,7 @@
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     _rf_ip:      "{{ ansible_host | default(inventory_hostname) }}"
-    _rf_timeout: 30
-    _rf_deadline: 1200
-    _rf_idle_deadline: 120
-    _rf_task_timeout: 1260
-    _rf_detect_deadline: 90
-    _rf_account_deadline: 180
+    _rf_timeout: 1800
 
   tasks:
 
@@ -294,12 +289,12 @@
               {%- set ev = _rf_backstop_evidence | default({}) -%}
               {%- set st = ev.first_auth_status | default(none) -%}
               {%- set proven = (ev.valid | default(false)) and (ev.credentialed | default(false)) and (st is not none) -%}
-              {%- if proven and st >= 200 and st < 400 -%}{%- set why = 'task timeout after auth' -%}
-              {%- elif proven -%}{%- set why = 'task timeout after auth status ' ~ st -%}
-              {%- else -%}{%- set why = 'task timeout before auth evidence (' ~ (ev.reason | default('missing')) ~ ')' -%}{%- endif -%}
+              {%- if proven and st >= 200 and st < 400 -%}{%- set why = 'task stopped after auth' -%}
+              {%- elif proven -%}{%- set why = 'task stopped after auth status ' ~ st -%}
+              {%- else -%}{%- set why = 'task stopped before auth evidence (' ~ (ev.reason | default('missing')) ~ ')' -%}{%- endif -%}
               {{ (_rf_failed_attempt_notes | default([]))
                  + [ (ev.role | default('?', true)) ~ '/' ~ (ev.label | default(_rf_attempt_id, true))
-                     ~ ': status=task_timeout first_auth=' ~ (st if proven else 'none')
+                     ~ ': status=task_stopped first_auth=' ~ (st if proven else 'none')
                      ~ ' err=' ~ why
                      ~ ((' last_request=' ~ ev.last_request) if (ev.last_request | default('')) else '') ] }}
           when: (_rf_attempt_id | default('')) != ''

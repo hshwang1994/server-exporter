@@ -121,7 +121,6 @@
   no_log: true
 
 - name: "linux | system | setup"
-  timeout: "{{ _os_task_timeout | default(120) }}"
   when: _l_python_mode == 'python_ok'
   ansible.builtin.setup:
     gather_subset: ['hardware', 'network', 'virtual', 'distribution']
@@ -139,7 +138,6 @@
   no_log: true
 
 - name: "linux | system | raw gather (os-release/uname/hostname/dmi)"
-  timeout: "{{ _os_task_timeout | default(120) }}"
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
@@ -204,7 +202,6 @@
   no_log: true
 
 - name: "linux | system | gather runtime (timezone/ntp/firewall/listen/swap)"
-  timeout: "{{ _os_task_timeout | default(120) }}"
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
@@ -392,7 +389,6 @@
      ((_l_uuid_from_setup | default(none)) is none and (_l_raw_uuid | default(none)) is none))
   block:
     - name: "linux | system | DMI direct-read serial"
-      timeout: "{{ _os_task_timeout | default(120) }}"
       when: (_l_serial_from_setup | default(none)) is none and (_l_raw_serial | default(none)) is none
       ansible.builtin.command: cat /sys/class/dmi/id/product_serial
       become: true
@@ -402,7 +398,6 @@
       no_log: true
 
     - name: "linux | system | DMI direct-read uuid"
-      timeout: "{{ _os_task_timeout | default(120) }}"
       when: (_l_uuid_from_setup | default(none)) is none and (_l_raw_uuid | default(none)) is none
       ansible.builtin.command: cat /sys/class/dmi/id/product_uuid
       become: true

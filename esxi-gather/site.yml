@@ -30,7 +30,7 @@
           vars:
             _precheck_host: "{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}"
             _precheck_channel: "esxi"
-            _precheck_timeout: 30
+            _precheck_timeout: 1800
 
         - name: "esxi | abort if precheck failed"
           ansible.builtin.fail:

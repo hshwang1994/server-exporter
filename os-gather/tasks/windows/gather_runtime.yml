@@ -2,7 +2,6 @@
 
 - block:
     - name: "windows | runtime | timezone + NTP + firewall + ports + pagefile"
-      timeout: "{{ _win_task_timeout | default(180) }}"
       ansible.windows.win_shell: |
         function Invoke-SeComponent($Doc, [string]$Name, [scriptblock]$Body) {
           $c = [ordered]@{ ok = $true; error = $null; rows = (New-Object System.Collections.ArrayList); data = $null }

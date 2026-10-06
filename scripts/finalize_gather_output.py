@@ -427,7 +427,7 @@ def main(argv=None) -> int:
                     help='ansible 실행 결과 분류: completed | timeout | timeout_killed | failed_run | prep_failed | not_started_budget | '
                          'not_started_memory | aborted(취소·stage/global timeout) | no_agent | interrupted_unknown ...')
     ap.add_argument('--limit-reason', default='',
-                    help='시간 제한으로 끝났을 때 그 사유: stalled(정체 감시) | ceiling(운영 상한) | forced(시험용 강제값). 비우면 없음 (2026-10-05 F12)')
+                    help='실행 한계로 끝났을 때 그 한계: gather_limit(수집 실행 한계 6시간) | build_limit(빌드 12시간 안의 남은 시간). 비우면 없음 (2026-10-05 8차 R3)')
     ap.add_argument('--manifest', default='gather_manifest.json')
     ap.add_argument('--output', default='gather_output.json')
     ap.add_argument('--checkpoint', default='gather_checkpoint.jsonl')

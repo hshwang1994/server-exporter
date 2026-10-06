@@ -10,7 +10,6 @@
       no_log: true
 
     - name: "redfish | try_account | attempt"
-      timeout: "{{ _rf_task_timeout | default(1260) }}"
       redfish_gather:
         bmc_ip:         "{{ _rf_ip }}"
         username:       "{{ _try_account.username | default('') }}"
@@ -18,9 +17,6 @@
         timeout:        "{{ _rf_timeout }}"
         verify_ssl:     false
         manager_layout: "{{ _rf_adapter_manager_layout | default('') }}"
-        deadline:       "{{ _rf_deadline | default(1200) }}"
-        idle_deadline:  "{{ _rf_idle_deadline | default(120) }}"
-        progress_dir:   "{{ lookup('env', 'SE_PROGRESS_DIR') | default('', true) }}"
         attempt:
           evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"
           id:           "{{ _rf_attempt_id }}"

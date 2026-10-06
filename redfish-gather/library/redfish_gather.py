@@ -6,6 +6,7 @@ __metaclass__ = type
 
 import copy, datetime, json, os, re, socket, sys, time, traceback
 import urllib.parse as _urlparse
+import http.client as http_client
 
 BYTES_PER_GB_DECIMAL = 1_000_000_000
 BYTES_PER_MIB = 1048576
@@ -111,6 +112,8 @@ def _auth(username, password):
     return 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()
 
 
+CONNECT_TIMEOUT_SEC = 60
+
 if HAS_URLLIB:
     _STDLIB_URLOPEN = urlreq.urlopen
 
@@ -124,6 +127,26 @@ if HAS_URLLIB:
                 where = '%s://%s' % (target[0], target[1]) if target else 'unparsable location'
                 raise urlerr.HTTPError(req.full_url, code, 'redirect blocked: different origin %s' % where, headers, fp)
             return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    class _SplitTimeoutHTTPSConnection(http_client.HTTPSConnection):
+
+        def connect(self):
+            read_timeout = self.timeout
+            if isinstance(read_timeout, (int, float)) and read_timeout > CONNECT_TIMEOUT_SEC:
+                self.timeout = CONNECT_TIMEOUT_SEC
+            try:
+                super().connect()
+            finally:
+                self.timeout = read_timeout
+            if self.sock is not None and isinstance(read_timeout, (int, float)):
+                self.sock.settimeout(read_timeout)
+
+    class _SplitTimeoutHTTPSHandler(urlreq.HTTPSHandler):
+        def https_open(self, req):
+            kw = {'context': self._context}
+            if hasattr(self, '_check_hostname'):
+                kw['check_hostname'] = self._check_hostname
+            return self.do_open(_SplitTimeoutHTTPSConnection, req, **kw)
 else:
     _STDLIB_URLOPEN = None
 
@@ -146,7 +169,7 @@ def _urlopen(req, verify_ssl, timeout):
     key = bool(verify_ssl)
     opener = _OPENERS.get(key)
     if opener is None:
-        opener = urlreq.build_opener(urlreq.HTTPSHandler(context=_ctx(verify_ssl)), _SameOriginRedirect())
+        opener = urlreq.build_opener(_SplitTimeoutHTTPSHandler(context=_ctx(verify_ssl)), _SameOriginRedirect())
         _OPENERS[key] = opener
     return opener.open(req, timeout=timeout)
 
@@ -262,13 +285,6 @@ def evidence_state():
 _RESPONSE_CACHE = {}
 _CACHE = {'enabled': False, 'hits': 0, 'misses': 0, 'bytes': 0}
 _LAST_BODY = {'bytes': 0}
-_DEADLINE = {'at': None, 'seconds': 0, 'exceeded': False, 'idle': 0, 'last_ok': None, 'kind': None}
-_HEARTBEAT = {'path': None, 'last': None}
-HEARTBEAT_EVERY_SEC = 5
-
-
-class _DeadlineExceeded(OSError):
-    pass
 
 
 class _BodyTooLarge(OSError):
@@ -292,90 +308,6 @@ def _invalidate_response_cache():
 
 def cache_stats():
     return {'hits': _CACHE['hits'], 'misses': _CACHE['misses'], 'entries': len(_RESPONSE_CACHE), 'bytes': _CACHE['bytes']}
-
-
-def _set_deadline(seconds, idle=0):
-    try:
-        seconds = int(seconds or 0)
-    except (TypeError, ValueError):
-        seconds = 0
-    try:
-        idle = int(idle or 0)
-    except (TypeError, ValueError):
-        idle = 0
-    now = time.monotonic()
-    _DEADLINE['seconds'] = seconds
-    _DEADLINE['at'] = (now + seconds) if seconds > 0 else None
-    _DEADLINE['idle'] = idle if idle > 0 else 0
-    _DEADLINE['last_ok'] = now
-    _DEADLINE['exceeded'] = False
-    _DEADLINE['kind'] = None
-
-
-def _deadline_remaining():
-    if _DEADLINE['at'] is None:
-        return None
-    return _DEADLINE['at'] - time.monotonic()
-
-
-def _idle_remaining():
-    if not _DEADLINE['idle'] or _DEADLINE['last_ok'] is None:
-        return None
-    return _DEADLINE['idle'] - (time.monotonic() - _DEADLINE['last_ok'])
-
-
-def _mark_progress():
-    now = time.monotonic()
-    _DEADLINE['last_ok'] = now
-    path = _HEARTBEAT['path']
-    if path and (_HEARTBEAT['last'] is None or now - _HEARTBEAT['last'] >= HEARTBEAT_EVERY_SEC):
-        _HEARTBEAT['last'] = now
-        try:
-            with open(path, 'w', encoding='utf-8') as fh:
-                fh.write('%d\n' % int(time.time()))
-        except OSError:
-            pass
-
-
-def _set_heartbeat(progress_dir, bmc_ip):
-    _HEARTBEAT['path'] = None
-    _HEARTBEAT['last'] = None
-    if not progress_dir:
-        return
-    try:
-        os.makedirs(progress_dir, exist_ok=True)
-        _HEARTBEAT['path'] = os.path.join(progress_dir, 'redfish-' + re.sub(r'[^0-9A-Za-z_.-]', '_', str(bmc_ip)))
-    except OSError:
-        _HEARTBEAT['path'] = None
-
-
-def _effective_timeout(timeout):
-    rem = _deadline_remaining()
-    idle_rem = _idle_remaining()
-    if rem is None and idle_rem is None:
-        return timeout
-    if rem is not None and rem <= 0:
-        if not _DEADLINE['exceeded']:
-            _DEADLINE['exceeded'] = True
-            _DEADLINE['kind'] = 'absolute'
-            _notice('gather', '모듈 deadline %ds 경과 — 이후 요청은 보내지 않고 건너뛴다' % _DEADLINE['seconds'])
-        raise _DeadlineExceeded('Deadline exceeded: request skipped')
-    if idle_rem is not None and idle_rem <= 0:
-        if not _DEADLINE['exceeded']:
-            _DEADLINE['exceeded'] = True
-            _DEADLINE['kind'] = 'idle'
-            _notice('gather', '새 응답 없이 %ds 가 지나 이후 요청은 보내지 않고 건너뛴다' % _DEADLINE['idle'])
-        raise _DeadlineExceeded('Deadline exceeded: no new response for %ds, request skipped' % _DEADLINE['idle'])
-    left = min(r for r in (rem, idle_rem) if r is not None)
-    return min(timeout, max(1, int(left + 0.999)))
-
-
-def deadline_kind():
-    return _DEADLINE['kind']
-
-
-def deadline_exceeded():
-    return bool(_DEADLINE['exceeded'])
 
 
 def _read_capped(resp):
@@ -434,11 +366,9 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             raw = _read_capped(resp)
             _LAST_BODY['bytes'] = len(raw)
-            if 200 <= resp.status < 300:
-                _mark_progress()
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -451,8 +381,6 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
         return e.code, body, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
-    except _DeadlineExceeded:
-        return 0, {}, 'Deadline exceeded: request skipped'
     except _BodyTooLarge as e:
         return e.status, {}, str(e)
     except socket.timeout:
@@ -475,7 +403,7 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
@@ -488,8 +416,6 @@ def _post(bmc_ip, path, body, username, password, timeout, verify_ssl):
         return e.code, body_err, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
-    except _DeadlineExceeded:
-        return 0, {}, 'Deadline exceeded: request skipped'
     except _BodyTooLarge as e:
         return e.status, {}, str(e)
     except socket.timeout:
@@ -507,7 +433,7 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             return resp.status, {}, None
     except urlerr.HTTPError as e:
         try:    body_err = json.loads(e.read(MAX_BODY_BYTES + 1).decode('utf-8', errors='replace'))
@@ -515,8 +441,6 @@ def _delete(bmc_ip, path, username, password, timeout, verify_ssl):
         return e.code, body_err, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
-    except _DeadlineExceeded:
-        return 0, {}, 'Deadline exceeded: request skipped'
     except _BodyTooLarge as e:
         return e.status, {}, str(e)
     except socket.timeout:
@@ -544,7 +468,7 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
     _invalidate_response_cache()
     req = urlreq.Request(url, data=payload, method='PATCH', headers=headers)
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             raw = _read_capped(resp)
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
@@ -557,8 +481,6 @@ def _patch(bmc_ip, path, body, username, password, timeout, verify_ssl,
         return e.code, body_err, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
-    except _DeadlineExceeded:
-        return 0, {}, 'Deadline exceeded: request skipped'
     except _BodyTooLarge as e:
         return e.status, {}, str(e)
     except socket.timeout:
@@ -999,7 +921,7 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
     req = urlreq.Request(url, headers={'Accept': 'application/json', 'OData-Version': '4.0'})
     realm_header = None
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             return None
     except urlerr.HTTPError as e:
         if e.code in (401, 403):
@@ -1036,10 +958,8 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             raw = _read_capped(resp)
-            if 200 <= resp.status < 300:
-                _mark_progress()
             try:
                 data = json.loads(raw.decode('utf-8', errors='replace')) if raw else {}
                 decode_err = None
@@ -1052,8 +972,6 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
         return e.code, body, f'HTTP {e.code}: {e.reason}'
     except urlerr.URLError as e:
         return 0, {}, f'URLError: {e.reason}'
-    except _DeadlineExceeded:
-        return 0, {}, 'Deadline exceeded: request skipped'
     except _BodyTooLarge as e:
         return e.status, {}, str(e)
     except socket.timeout:
@@ -3833,7 +3751,7 @@ def _get_response_etag(bmc_ip, path, username, password, timeout, verify_ssl):
         'OData-Version': '4.0',
     })
     try:
-        with _urlopen(req, verify_ssl, _effective_timeout(timeout)) as resp:
+        with _urlopen(req, verify_ssl, timeout) as resp:
             _read_capped(resp)
             etag = resp.headers.get('ETag') if hasattr(resp, 'headers') else None
             _record_auth_status(resp.status)
@@ -5211,9 +5129,6 @@ def main():
             verify_ssl      = dict(type='bool', default=False),
             mode            = dict(type='str',  default='gather',
                                    choices=['gather', 'account_provision', 'detect']),
-            deadline        = dict(type='int',  default=0),
-            idle_deadline   = dict(type='int',  default=0),
-            progress_dir    = dict(type='str',  default=''),
             target_username = dict(type='str',  default=''),
             target_password = dict(type='str',  default='', no_log=True),
             target_role     = dict(type='str',  default='Administrator'),
@@ -5241,8 +5156,6 @@ def main():
     timeout, verify_ssl = p['timeout'], p['verify_ssl']
     mode = p['mode']
     _evidence_begin(p.get('attempt'), bmc_ip, username)
-    _set_deadline(p.get('deadline'), p.get('idle_deadline'))
-    _set_heartbeat(p.get('progress_dir'), bmc_ip)
     _reset_response_cache(enabled=(mode in ('gather', 'detect')))
 
     if mode == 'detect':
@@ -5267,7 +5180,7 @@ def main():
             vendor=vendor, collected=[], failed_sections=[], unsupported_sections=[],
             errors=list(det_errors), data=data, probe_facts=probe_facts, multi_node=None,
             auth_evidence=auth_evidence(), notices=notices(),
-            deadline_exceeded=deadline_exceeded(), deadline_kind=deadline_kind(), cache=cache_stats(),
+            cache=cache_stats(),
         )
         return
 
@@ -5392,7 +5305,7 @@ def main():
         unsupported_sections=list(set(unsupported)),
         errors=all_errors, data=result_data, probe_facts=probe_facts,
         multi_node=multi_node, auth_evidence=auth_evidence(), notices=notices(),
-        deadline_exceeded=deadline_exceeded(), deadline_kind=deadline_kind(), cache=cache_stats(),
+        cache=cache_stats(),
     )
 
 

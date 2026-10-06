@@ -37,8 +37,6 @@
     - name: "addon | include add-on"
       ansible.builtin.include_role:
         name: "{{ _addon_dir }}"
-        apply:
-          timeout: "{{ _addon_task_timeout | default(300) | int }}"
 
     - name: "addon | result"
       ansible.builtin.set_fact:
