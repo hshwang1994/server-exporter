@@ -40,6 +40,20 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
     2번째 시도는 1대를 쓰고 끊긴다 → 같은 Runner 를 기다리다 한도 초과 → `infra_wait_expired` · 넘겨 둔 2대 + 실행 기반 문장 2대
   - `resume_impossible` — 끊긴 사이 작업 폴더가 사라졌다 → 전체를 다시 수집하지 않고 `resume_impossible` · 3대 모두 실행 기반 문장
   - `gather_wait_abort` — 같은 Runner 를 기다리는 중 자기 빌드에 `POST …/stop` → 다시 시도하지 않음 · 대기 구간 '취소' · 넘겨 둔 1대 + 실패 2대를 1번 전송 · ABORTED
+- 10차 재진입 · 읽기 · 준비 · 보존 · Add-on 시나리오(2026-10-07) — 범용 장애 주입(`faults`: step · 대상 · 몇 번째 · `infra`(실행 기반 오류 → `retry(agent())` 재호출) |
+  `fail`(일반 오류))과 느린 step(`slow`)으로 운영 함수를 그대로 끊는다.
+  - 결과 처리 재진입(R1): `finalize_reentry`(전송 전 끊김 → 같은 폴더에서 다시 처리 · 1번 전송) · `finalize_reentry_after_delivery`(2xx 뒤 끊김 → 다시 보내지 않음) ·
+    `finalize_reentry_expired`(노드를 끝내 못 얻음 → 보내지 못하면 FAILURE) · `finalize_reentry_abort`(취소는 삼키지 않음) · `finalize_limit_cumulative`(긴 step 뒤 끊김 — 결과 처리 시간을 이어 센다)
+  - 기록 읽기 예외(R2): `owner_read_transient` · `run_record_read_transient` — 읽기 순간의 실행 기반 오류는 재시도, '기록 없음' 이 아니다
+  - 끊긴 준비(R3): `prep_cut_after_owner` · `prep_cut_after_cleanup` · `prep_cut_after_manifest` · `manifest_missing_restore`(접수 원본으로 복원) ·
+    `results_missing_refuse`(확정 결과가 사라짐 → 다시 수집하지 않고 재개 불가)
+  - 마지막 보존(N1): `preserve_archive_ok_stash_fail` · `preserve_stash_ok_archive_fail` · `preserve_both_fail` · `preserve_cut_before_marker` ·
+    `preserve_cut_owner_write` · `preserve_cut_delete` — 보관 또는 전달을 마친 뒤 끊기면 다시 시도하지 않는다
+  - Add-on 결정(R4): `addon_decision_transient` · `addon_reuse_disabled` · `addon_copy_restore` — 시험 Add-on 저장소(file://, commit A · B)로 재개가 같은 commit 을 쓰는지 본다
+- 실기 드라이버 `Jenkinsfile_live_infra`(main 전용, 임시 노드 se-probe — 운영 Runner 의 executor 를 잡지 않는다): L1~L8 은 가짜 ansible 로 실제 node · 연결 끊김 ·
+  작업 폴더 삭제 · 취소를, `REAL` 은 운영 상수 · 실제 ansible · 실제 vault 로 실제 대상을 수집한다(시험 조건 `live_env.json` — 유효 SSH 설정 · 커널 로그 읽기).
+  `net_fault_inject.sh` 는 시험 6 · 18(대상 측 일시 네트워크 장애)용 — se-probe Agent 의 cgroup 에서 대상 1대로 가는 패킷만, 그 대상의 인증 통과 진행 기록 뒤에,
+  정해진 초 동안 버리고 nftables 표를 지운다(root, 운영 경로 아님).
 - interruption 조건(3차 §4, 2026-10-04 검토 C5) — 아래 표
 - `aborted_outcome_finalize` — ABORTED 빌드(outcome=aborted)의 사후 보존·finalize: Callback 1회만 시도, 완료 host 데이터 전달, 비정상 종료 unstable
 - `sink_hold` — 판정 없음. controller loopback sink 를 `hold_seconds` 동안 열어 두어 **main Job T2**(TEST-NET, `callbackUrl=http://127.0.0.1:<SINK_PORT>`)의 Callback 수신 증거를 `sink/record.jsonl` 로 남긴다

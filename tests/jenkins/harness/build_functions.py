@@ -64,7 +64,7 @@ SCENARIOS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "trunc
              "finalize_limit_cumulative", "owner_read_transient", "run_record_read_transient", "prep_cut_after_owner",
              "prep_cut_after_cleanup", "prep_cut_after_manifest", "manifest_missing_restore", "results_missing_refuse",
              "preserve_archive_ok_stash_fail", "preserve_stash_ok_archive_fail", "preserve_both_fail", "preserve_cut_before_marker",
-             "preserve_cut_delete", "addon_decision_transient", "addon_reuse_disabled", "addon_copy_restore")
+             "preserve_cut_delete", "preserve_cut_owner_write", "addon_decision_transient", "addon_reuse_disabled", "addon_copy_restore")
 
 WRAPPERS = r'''
 

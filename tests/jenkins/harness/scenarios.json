@@ -1977,6 +1977,69 @@
         "note": "10차 N1: 보관 · 전달을 마친 뒤 작업 폴더 삭제 중 실행 기반 오류 — 표식이 있으므로 다시 시도하지 않고 직전 판정(completed)으로 끝낸다(종전: 재개 불가 · UNSTABLE)"
       }
     },
+    "preserve_cut_owner_write": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "writeFile",
+          "match": ".se_workspace.json",
+          "nth": 3,
+          "kind": "infra"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "source": "stash",
+        "preserve": {
+          "archived": true,
+          "stashed": true
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 1
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "fault:infra:writeFile:.se_workspace.json": 1
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 N1: 보관 · 전달을 마친 뒤 소유 기록(끝 시각 · 보존 여부)을 다시 쓰는 중 실행 기반 오류 — 표식이 있으므로 다시 시도하지 않고 직전 판정(completed)으로 끝낸다(재수집 · 재개 불가 없음)"
+      }
+    },
     "addon_decision_transient": {
       "case": "01_normal",
       "run_preserve": false,
