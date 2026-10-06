@@ -829,3 +829,16 @@
 - 재발 방지: 근거 기반 분류는 근거를 가리는 앞 분기(신호 · 종료 코드)가 없는지 실제 환경의 종료 순서로 확인한다. Runner OOM 은 운영 Runner 전체를 OOM 으로
   만들지 않고 시험 프로세스만 묶은 범위에서 재현한다.
 - 관련 rule: rule 95 R1 · CLAUDE.md §16
+
+## 2026-10-06 — Harness 판정 실패를 CI 가 Jenkins 결과만 보고 놓쳤다
+
+- 카테고리: test
+- 발견 위치: 9차 CI #29 증거 수집 — `gather_wait_abort`(#609)의 `pass: false`. CI #27 의 같은 시나리오(#551)도 판정 FAIL 이었는데 Harness Driver 는 둘 다 통과로 셌다.
+- 원인 ①: `harness_verdict.py` 가 "interruption 을 다시 던졌으면 전송 안 됨" 으로 강제했다. 이 규칙은 finalizer 밖으로 다시 던지는 경우(outer_timeout)용인데,
+  `gather_wait_abort` 는 수집 단계에서 다시 던진 뒤 결과 확인이 정상 전송한다(콘솔 · 요약 · sink 모두 200).
+- 원인 ②: `Jenkinsfile_ci` 의 `seRunHarness` 가 Jenkins 결과만 기대값과 비교했다. ABORTED 로 끝나는 시나리오는 판정이 FAIL 이어도 결과가 기대와 같다.
+- 수정: Harness 가 재전파 단계(`rethrown_in` gather · finalize)와 판정(`env.SE_HARNESS_VERDICT`)을 남기고, 판정기는 finalize 재전파만 전송 실패로 본다.
+  CI 는 결과와 판정 PASS 를 모두 확인한다. #609 의 실제 산출물을 고친 판정기로 다시 판정하면 15/15 PASS.
+- 재발 방지: 결과가 고정된 시나리오(ABORTED 등)는 Jenkins 결과로 판정을 대신하지 않는다. 증거 수집기(`prodgen evidence`)가 판정을 따로 보므로 CI 집계와
+  증거 집계가 어긋나면 먼저 의심한다.
+- 관련 rule: rule 24 R2 · rule 25 R7-A
