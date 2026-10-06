@@ -15,6 +15,9 @@
 //           운영 함수 seGatherStage 를 짧은 시험 상수로 그대로 실행한다. 수집은 실제 scripts/run_gather.sh 가 가짜 ansible-playbook(stub_ansible.py)으로
 //           하고, 실행 기반(Runner 대기 · 연결 끊김 · 작업 폴더 사라짐 · 결과 처리 노드 대기)만 wrapper 가 흉내 낸다. 이 Harness 가 잡은 executor 안에서
 //           돈다 — 운영 Runner 의 executor 를 더 잡지 않는다. 운영 Job 에 시험용 파라미터 · 분기는 없다.
+//   2026-10-07 (10차): 결과 처리 재진입(finalize_reentry*) · 기록 파일 일시 읽기 실패 · 첫 준비 끊김 · 접수 목록 복원 · 확정 결과 사라짐 ·
+//           마지막 보존 표식 · Add-on 결정 재사용 시나리오. 장애는 시나리오의 faults 로 wrapper 가 넣고(운영 코드 무변경), Add-on 시험은
+//           fixture 가 만든 file:// 시험 저장소(commit A · B)를 ADDON_REPO_URL 로 넘긴다(이 시험 빌드의 withEnv 에만 — 전역 설정 무변경).
 
 properties([
     disableConcurrentBuilds(),
@@ -86,7 +89,7 @@ timeout(time: 45, unit: 'MINUTES') {
             // Layer A 가 읽는 정본: common/vars/*.yml + common/tasks/normalize/{init_fragments,build_meta,build_correlation}.yml (Harness #6: normalize 누락 → exit 3)
             // 8차 · 9차: 보존이 부르는 오래된 작업 폴더 정리(workspace_cleanup.py)와 gather_stage 가 실행하는 run_gather.sh · env_guard.sh · gather_state.py 도
             //   같은 위치에 둔다(생성 tree 모드와 같은 배치). gather_stage 의 시도는 이 사본을 저장소 대신 받는다(wrapper checkout)
-            sh 'mkdir -p gather_ws/scripts gather_ws/common/tasks && cp -a scripts/finalize_gather_output.py scripts/activate_ansible_venv.sh scripts/workspace_cleanup.py scripts/run_gather.sh scripts/env_guard.sh scripts/gather_state.py gather_ws/scripts/ && cp -a common/vars gather_ws/common/ && cp -a common/tasks/normalize gather_ws/common/tasks/'
+            sh 'mkdir -p gather_ws/scripts gather_ws/common/tasks && cp -a scripts/finalize_gather_output.py scripts/activate_ansible_venv.sh scripts/workspace_cleanup.py scripts/addon_checkout.sh scripts/addon_askpass.sh scripts/run_gather.sh scripts/env_guard.sh scripts/gather_state.py gather_ws/scripts/ && cp -a common/vars gather_ws/common/ && cp -a common/tasks/normalize gather_ws/common/tasks/'
         }
 
         // ── ② wrapper 를 붙인 함수 스크립트 (원본 글자 불변 — 해시 기록)
@@ -170,11 +173,13 @@ timeout(time: 45, unit: 'MINUTES') {
         Map gatherCfg = null
         if (fx.gather_stage) {
             gatherCfg = [attempts: (fx.gather_stage.attempts ?: []), finalize_delay: (fx.gather_stage.finalize_delay ?: 0),
-                         deregistered: false, src: "${pwd()}/gather_ws".toString(), sha: checkoutSha]
+                         deregistered: false, src: "${pwd()}/gather_ws".toString(), sha: checkoutSha,
+                         node_steps: fx.gather_stage.node_steps, addon: fx.gather_stage.addon]
         }
         lib.seHarnessInit(this, [params  : [loc: params.LOC, deploymentEnvironmentId: params.DEPLOYMENT_ENV, eventUuid: eventUuid,
                                             callbackUrl: sinkUrl, target_type: fx.channel, verbosity: '0'],
-                                 trusted : trusted, slowSeconds: (sc.slow_seconds ?: 45), gather: gatherCfg])
+                                 trusted : trusted, slowSeconds: (sc.slow_seconds ?: 45), gather: gatherCfg,
+                                 faults  : (sc.faults ?: []), slow: (sc.slow ?: [:]), finalizeDelays: sc.finalize_delays])
         if (lib.params.callbackUrl != sinkUrl) { error '[Harness] params 그림자가 동작하지 않는다 — getParams() 해석 확인' }
 
         // ── ⑤' gather_stage (9차) — 운영 함수 seGatherStage 를 짧은 시험 상수로 그대로 실행한다. 시도마다 실제 scripts/run_gather.sh 가
@@ -189,7 +194,7 @@ timeout(time: 45, unit: 'MINUTES') {
             env.SE_INFRA_JSON = ''
             String stopUrl = "${env.BUILD_URL}stop"
             try {
-                withEnv(["ADDON_REPO_URL=", "SE_ANSIBLE_VENV=${gsx.venv}", "SE_HARNESS_STUB_DIR=${gsx.stub_dir}"]) {
+                withEnv(["ADDON_REPO_URL=${gsx.addon?.url ?: ''}", "ADDON_REPO_REF=", "SE_ANSIBLE_VENV=${gsx.venv}", "SE_HARNESS_STUB_DIR=${gsx.stub_dir}"]) {
                     if (sc.gather_abort_after) {
                         parallel(
                             gather: { lib.seGatherStage(C) },
@@ -215,7 +220,7 @@ timeout(time: 45, unit: 'MINUTES') {
             hs = lib.seHarnessState()
             sh "cp '${gsx.stub_dir}/received.jsonl' gather_received.jsonl 2>/dev/null || : > gather_received.jsonl"
             control.gather = [outcome: env.SE_GATHER_OUTCOME, limit_reason: env.SE_GATHER_LIMIT_REASON, ws_path: hs.ws_path,
-                              node_calls: hs.node_calls, gather_calls: hs.gather_calls, ips: gsx.ips]
+                              node_calls: hs.node_calls, gather_calls: hs.gather_calls, ips: gsx.ips, addon: gsx.addon]
             preserve = [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED == 'true', stashed: env.SE_PRESERVE_STASHED == 'true',
                         manifestOk: env.SE_PRESERVE_MANIFEST == 'true', hasResult: env.SE_PRESERVE_HASRESULT == 'true']
             preserve.deleted = hs.ws_path ? (sh(returnStatus: true, script: "test -e '${hs.ws_path}/gather_manifest.json'") != 0) : null
@@ -256,12 +261,16 @@ timeout(time: 45, unit: 'MINUTES') {
             currentBuild.result = sc.set_result.toString()
             echo "[Harness] currentBuild.result=${currentBuild.result} (시나리오 ${scenario})"
         }
+        // 10차 R1: 결과 처리 노드 대기 한도를 짧게 — 이 빌드의 실행 기반 대기 기록을 시험 한도로 시작한다(운영 72시간 대신)
+        if (sc.infra_budget_sec && !fx.gather_stage) {
+            env.SE_INFRA_JSON = groovy.json.JsonOutput.toJson([budget_sec: (sc.infra_budget_sec as long), used_sec: 0L, expired: false, episodes: []])
+        }
         try {
             if (sc.self_abort_after) {
                 int after = sc.self_abort_after as int
                 String stopUrl = "${env.BUILD_URL}stop"
                 parallel(
-                    finalize: { lib.seFinalizeAndCallback() },
+                    finalize: { control.finalize_result = lib.seFinalizeAndCallback() },
                     stopper: {
                         sleep(time: after, unit: 'SECONDS')
                         echo "[Harness] user_abort: POST ${stopUrl} (자기 빌드 중단 — 사용자 Abort 와 같은 경로)"
@@ -270,9 +279,9 @@ timeout(time: 45, unit: 'MINUTES') {
                     failFast: false
                 )
             } else if (sc.outer_timeout_seconds) {
-                timeout(time: (sc.outer_timeout_seconds as int), unit: 'SECONDS') { lib.seFinalizeAndCallback() }
+                timeout(time: (sc.outer_timeout_seconds as int), unit: 'SECONDS') { control.finalize_result = lib.seFinalizeAndCallback() }
             } else {
-                lib.seFinalizeAndCallback()
+                control.finalize_result = lib.seFinalizeAndCallback()
             }
         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
             control.rethrown = true
@@ -298,6 +307,7 @@ timeout(time: 45, unit: 'MINUTES') {
             echo "[Harness] 요약/body unarchive 실패(finalizer 가 archive 전에 끝났을 수 있다): ${e.message}"
         }
         if (!fileExists('preserve_state.json')) { writeFile(file: 'preserve_state.json', text: groovy.json.JsonOutput.toJson(preserve), encoding: 'UTF-8') }
+        control.build_result = currentBuild.result
         writeFile(file: 'harness_control.json', text: groovy.json.JsonOutput.toJson(control), encoding: 'UTF-8')
         // sink 종료 + 수신 기록을 controller workspace 에서 agent 로 가져온다(verdict · archive 는 agent 의 sink/ 를 읽는다)
         String sinkRecord = ''

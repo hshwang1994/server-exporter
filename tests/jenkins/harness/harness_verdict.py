@@ -136,6 +136,8 @@ def observe(summary, body_path, calls, sink, preserve, control, received=None, f
         "preserve": preserve or {},
         "control": control or {},
         "infra": (summary or {}).get("infra") if isinstance(summary, dict) else None,
+        "finalize": (summary or {}).get("finalize") if isinstance(summary, dict) else None,
+        "finalize_result": (control or {}).get("finalize_result"),
         "received": received,
         "fixture_ips": (fixture or {}).get("ips") if isinstance(fixture, dict) else None,
         "body_envelopes": _body_envelopes(body_path),
@@ -236,6 +238,30 @@ def check(expect: dict, obs: dict) -> tuple[list[dict], list[str]]:
             partial.append("sink_posts_min: controller 에서 sink 에 닿지 못함")
         else:
             add("sink_posts_min", f">={expect['sink_posts_min']}", obs["sink_posts"], obs["sink_posts"] >= expect["sink_posts_min"])
+    if "sink_posts_eq" in expect:
+        # 10차 R1: 재진입해도 확인된 전송을 다시 보내지 않는다 — 정확히 몇 번 받았는가
+        add("sink_posts_eq", expect["sink_posts_eq"], obs["sink_posts"], obs["sink_posts"] == expect["sink_posts_eq"])
+    if "summary_present" in expect:
+        add("summary_present", expect["summary_present"], obs["summary_present"], obs["summary_present"] == expect["summary_present"])
+    if "finalize" in expect:
+        fz = obs.get("finalize")
+        if not obs["summary_present"] or not isinstance(fz, dict):
+            partial.append("finalize: finalize_summary.json 에 finalize 없음")
+        else:
+            for k, v in expect["finalize"].items():
+                if k.endswith("_min"):
+                    key = k[:-4]
+                    got = fz.get(key)
+                    add(f"finalize.{key}>={v}", f">={v}", got, isinstance(got, (int, float)) and got >= v)
+                else:
+                    add(f"finalize.{k}", v, fz.get(k), fz.get(k) == v)
+    if "finalize_result" in expect:
+        fr = obs.get("finalize_result")
+        if not isinstance(fr, dict):
+            partial.append("finalize_result: harness_control.json 에 결과 확인 반환값 없음")
+        else:
+            for k, v in expect["finalize_result"].items():
+                add(f"finalize_result.{k}", v, fr.get(k), fr.get(k) == v)
     if "sink_posts_max" in expect:
         add("sink_posts_max", f"<={expect['sink_posts_max']}", obs["sink_posts"], obs["sink_posts"] <= expect["sink_posts_max"])
     if "sink_last_status" in expect:
@@ -322,6 +348,27 @@ def _check_gather(exp: dict, obs: dict, add, partial) -> None:
     if "outcome" in exp:
         got = (obs["control"].get("gather") or {}).get("outcome")
         add("gather.outcome", exp["outcome"], got, got == exp["outcome"])
+    if "addon_commits" in exp:
+        # 10차 R4: 시도마다 가짜 ansible 이 받은 Add-on commit — 앞 시도의 결정(commit)을 재사용했는가(ref 가 바뀌어도)
+        rec = obs["received"]
+        commits = ((obs["control"].get("gather") or {}).get("addon") or {}).get("commits") or {}
+        if rec is None or not commits:
+            partial.append("gather.addon_commits: gather_received.jsonl 또는 시험 Add-on 정보 없음")
+        else:
+            want = [commits.get(x) for x in exp["addon_commits"]]
+            got = [r.get("addon_commit") for r in rec if isinstance(r, dict)]
+            add("gather.addon_commits", exp["addon_commits"], got, got == want)
+    if "node_calls" in exp:
+        # 10차: 수집 단계가 실행 기반(Runner)을 몇 번 요청했는가 — 보존 뒤 끊김에서 다시 시도하지 않았는지 · 보존만 다시 했는지
+        got = (obs["control"].get("gather") or {}).get("node_calls")
+        add("gather.node_calls", exp["node_calls"], got, got == exp["node_calls"])
+    if "addon_none" in exp:
+        rec = obs["received"]
+        if rec is None:
+            partial.append("gather.addon_none: gather_received.jsonl 없음")
+        else:
+            got = [bool(r.get("addon_dir")) for r in rec if isinstance(r, dict)]
+            add("gather.addon_none", exp["addon_none"], got, (not any(got)) == exp["addon_none"])
 
 
 def _check_infra(exp: dict, obs: dict, add, partial) -> None:

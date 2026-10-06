@@ -59,14 +59,15 @@ def test_build_functions_extracts_runtime_functions_verbatim(tmp_path):
     for wrapper in ("def getParams()", "def archiveArtifacts(Map m)", "def stash(Map m)", "def unstash(String name)",
                     "def readTrusted(String path)", "def sh(Map m)", "def unstable(String msg)", "def httpRequest(Map m)",
                     "def node(String target, Closure body)", "def nodesByLabel(Map m)", "def retry(Map m, Closure body)",
-                    "def ws(String path, Closure body)", "def checkout(Object s)", "def withCredentials(List creds, Closure body)"):
+                    "def ws(String path, Closure body)", "def checkout(Object s)", "def withCredentials(List creds, Closure body)",
+                    "def writeFile(Map m)", "def fileExists(String f)", "def deleteDir()", "def seHarnessFault(String op, String target)"):
         assert wrapper in text, wrapper
     for name in ("seGatherStage", "seGatherLoop", "seWithNode", "seAttempt", "seAttemptBody", "seQueueTimer", "seInfraClose"):
         assert name in meta["defs"], name
     # gather 가 없는 시나리오에서는 실행 기반 wrapper 가 실제 step 으로 그대로 넘긴다
     for passthrough in ("if (HARNESS.gather == null) { return HARNESS.outer.node(target) { body() } }",
                         "if (HARNESS.gather == null) { return HARNESS.outer.nodesByLabel(m) }",
-                        "if (HARNESS.gather == null || m.conditions == null) { return HARNESS.outer.retry(m) { body() } }",
+                        "if (m.conditions == null || (HARNESS.gather == null && !HARNESS.faults)) { return HARNESS.outer.retry(m) { body() } }",
                         "if (HARNESS.gather == null) { return HARNESS.outer.ws(path) { body() } }"):
         assert passthrough in text, passthrough
     assert "'archive_fail'" in text and "startsWith('gather_output.json')" in text, "주입 대상은 보존 archive 뿐"
@@ -494,3 +495,81 @@ def test_verdict_prefers_the_summary_callback_and_requires_the_sink_to_agree(tmp
                            sink=_write(tmp_path / "k2.jsonl", sink_500 * 3), control=_write(tmp_path / "ctl2.json", {"rethrown": False, "sink_reachable": True}))
     assert any("warnings_include" in p for p in res["partial"]), res
 
+
+
+# ── 10차 (2026-10-07) ──────────────────────────────────────────────────────────────────────────────────────
+
+def test_fault_injection_lives_only_in_the_wrappers_and_counts_calls(tmp_path):
+    """10차: 장애 주입은 wrapper 의 seHarnessFault 한 곳 — op(대상)의 n번째 호출에서 infra(실행 기반 오류 흉내) 또는 fail. 운영 함수부는 원본 그대로다."""
+    out = tmp_path / "f.groovy"
+    build_functions.build(PORTAL, "finalize_reentry", out, None)
+    text = out.read_text(encoding="utf-8")
+    wrappers = text.split("harness wrappers")[1]
+    assert "HARNESS.agentLost = true" in wrappers and "HARNESS.offline = true" in wrappers
+    for call in ("seHarnessFault('writeFile'", "seHarnessFault('readFile'", "seHarnessFault('fileExists'", "seHarnessFault('deleteDir'",
+                 "seHarnessFault('stash'", "seHarnessFault('archiveArtifacts'", "seHarnessFault('sh'", "seHarnessFault('unstash'"):
+        assert call in wrappers, call
+    assert "HARNESS.finalizeDelays" in wrappers and "HARNESS.builtinCalls" in wrappers, "결과 처리 노드 진입마다 늦춘다"
+    assert "hk.remove_files" in wrappers and "hk.addon_ref_to" in wrappers and "hk.remove_addon_copy" in wrappers
+    functions = PORTAL.read_text(encoding="utf-8")
+    functions = functions[: functions.index("\npipeline {")]
+    assert "seHarnessFault" not in functions and "HARNESS" not in functions
+
+
+def test_new_scenarios_declare_faults_that_hit_real_runtime_points():
+    """faults 의 대상이 운영 함수가 실제로 부르는 이름이어야 주입이 걸린다(sh label · 기록 파일 이름 · stash 이름)."""
+    src = PORTAL.read_text(encoding="utf-8")
+    for name in build_functions.SCENARIOS:
+        for f in SCENARIOS[name].get("faults") or []:
+            assert f["op"] in ("writeFile", "readFile", "fileExists", "sh", "deleteDir", "stash", "archiveArtifacts", "unstash"), (name, f)
+            assert f.get("kind", "infra") in ("infra", "fail"), (name, f)
+            if f["op"] == "sh":
+                assert f"label: '{f['match']}'" in src, (name, f)
+            elif f["op"] in ("writeFile", "readFile", "fileExists"):
+                assert f"'{f['match']}'" in src, (name, f)
+            elif f["op"] == "stash":
+                assert f"name: '{f['match']}'" in src, (name, f)
+    expired = SCENARIOS["finalize_reentry_expired"]
+    assert expired["jenkins_result"] == "FAILURE" and expired["infra_budget_sec"] < expired["finalize_delays"][1]
+    assert SCENARIOS["finalize_reentry_abort"]["jenkins_result"] == "ABORTED" and SCENARIOS["finalize_reentry_abort"]["expect_interruption"]
+    assert SCENARIOS["finalize_limit_cumulative"]["slow"]["unstash"] >= 20
+
+
+def test_fixture_builds_a_read_only_test_addon_repository_with_two_commits(tmp_path):
+    ws = tmp_path / "gather_ws"
+    r = subprocess.run([sys.executable, str(HARNESS / "fixture.py"), *_fixture_args(tmp_path, "addon_decision_transient", ws)],
+                       capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0, r.stderr
+    st = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    addon = st["gather_stage"]["addon"]
+    assert addon["url"].startswith("file://") and set(addon["commits"]) == {"A", "B"} and addon["unsupported"] is False
+    bare = Path(addon["bare"])
+    main = subprocess.run(["git", "-C", str(bare), "rev-parse", "refs/heads/main"], capture_output=True, text=True).stdout.strip()
+    assert main == addon["commits"]["A"], "처음 main 은 A — 시험이 시도 사이에 B 로 옮긴다"
+    work = tmp_path / "co"
+    subprocess.run(["git", "clone", "-q", str(bare), str(work)], check=True)
+    check = work / "tools" / "check_layout.py"
+    assert subprocess.run([sys.executable, str(check), "addon", "--targets", "linux,windows"]).returncode == 0
+    assert subprocess.run([sys.executable, str(check), "addon", "--targets", "esxi"]).returncode == 3
+    assert "debug" in (work / "tasks" / "main.yml").read_text(encoding="utf-8"), "읽기 전용 — 대상에 아무것도 하지 않는다"
+    assert st["gather_stage"]["node_steps"][1]["addon_ref_to"] == "B"
+
+
+def test_verdict_checks_reentry_delivery_count_and_addon_commits(tmp_path):
+    exp = {"sink_posts_eq": 1, "summary_present": True, "finalize": {"entries": 2, "exec_sec_before_min": 19},
+           "finalize_result": {"incomplete": False}, "gather": {"addon_commits": ["A", "A"], "node_calls": 3}}
+    summary = {"finalize": {"entries": 2, "exec_sec_before": 21}, "callback": {"delivered": True}}
+    control = {"finalize_result": {"incomplete": False}, "gather": {"node_calls": 3, "addon": {"commits": {"A": "aaa", "B": "bbb"}}}}
+    received = [{"attempt": 1, "hosts": ["x"], "addon_commit": "aaa"}, {"attempt": 2, "hosts": ["y"], "addon_commit": "aaa"}]
+    obs = harness_verdict.observe(summary, None, [], [{"method": "POST", "status_sent": 200}], {}, control, received, {"ips": ["x", "y"]})
+    checks, partial = harness_verdict.check(exp, obs)
+    assert partial == [] and all(c["ok"] for c in checks), checks
+    received[1]["addon_commit"] = "bbb"                          # 재개가 main(B)을 새로 받았다 — 결정 재사용 실패
+    obs = harness_verdict.observe(summary, None, [], [{"method": "POST", "status_sent": 200}, {"method": "POST", "status_sent": 200}], {},
+                                  control, received, {"ips": ["x", "y"]})
+    checks, _ = harness_verdict.check(exp, obs)
+    bad = {c["name"] for c in checks if not c["ok"]}
+    assert {"gather.addon_commits", "sink_posts_eq"} <= bad
+    none_obs = harness_verdict.observe(summary, None, [], [], {}, control, [{"hosts": [], "addon_dir": False}], {"ips": []})
+    checks, _ = harness_verdict.check({"gather": {"addon_none": True}}, none_obs)
+    assert all(c["ok"] for c in checks)

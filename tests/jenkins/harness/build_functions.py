@@ -52,12 +52,19 @@ GATHER_LABEL = "서버 정보 수집 (ansible-playbook)"
 #   9차 (2026-10-06): gather_stage 시나리오 — 운영 함수 seGatherStage 를 짧은 시험 상수로 그대로 실행하고 실행 기반(Runner 대기 · 연결 끊김 ·
 #   작업 폴더 사라짐 · 결과 처리 노드 대기)만 wrapper 가 흉내 낸다: gather_limit_preserve · infra_resume · infra_wait_expired · resume_impossible ·
 #   gather_wait_abort.
+#   10차 (2026-10-07): 결과 처리 재진입(R1) · 기록 파일 일시 읽기 실패(R2) · 첫 준비 끊김 · 접수 목록 복원 · 확정 결과 사라짐(R3) ·
+#   마지막 보존 표식(N1) · Add-on 결정 재사용(R4). 장애는 시나리오의 faults(op · 대상 · n번째 호출 · infra|fail)로 넣는다.
 SCENARIOS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
              "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx", "sink_close",
              "recover_slow", "outer_timeout", "foreign_timeout_interruption",
              "user_abort", "aborted_outcome_finalize", "sink_hold",
              "archive_slow", "layer_a_read_slow", "gather_limit_preserve",
-             "infra_resume", "infra_wait_expired", "resume_impossible", "gather_wait_abort")
+             "infra_resume", "infra_wait_expired", "resume_impossible", "gather_wait_abort",
+             "finalize_reentry", "finalize_reentry_after_delivery", "finalize_reentry_expired", "finalize_reentry_abort",
+             "finalize_limit_cumulative", "owner_read_transient", "run_record_read_transient", "prep_cut_after_owner",
+             "prep_cut_after_cleanup", "prep_cut_after_manifest", "manifest_missing_restore", "results_missing_refuse",
+             "preserve_archive_ok_stash_fail", "preserve_stash_ok_archive_fail", "preserve_both_fail", "preserve_cut_before_marker",
+             "preserve_cut_delete", "addon_decision_transient", "addon_reuse_disabled", "addon_copy_restore")
 
 WRAPPERS = r'''
 
@@ -68,7 +75,8 @@ WRAPPERS = r'''
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // 타입 없는 대입 = 스크립트 binding 변수 — 메서드에서 보인다 (typed 선언은 run() 의 지역변수가 돼 MissingPropertyException, Harness #5 실측)
 HARNESS = [scenario: '__SCENARIO__', calls: [], params: [:], trusted: [:], outer: null, slowDone: false, gather: null,
-           nodeCalls: 0, gatherCalls: 0, offline: false, agentLost: false, removeWs: false, wsPath: null]
+           nodeCalls: 0, gatherCalls: 0, builtinCalls: 0, offline: false, agentLost: false, removeWs: false, wsPath: null,
+           faults: [], opCounts: [:], slow: [:], finalizeDelays: null, hooks: [:]]
 
 def seHarnessInit(Object outer, Map cfg) {
     HARNESS.outer = outer
@@ -77,7 +85,39 @@ def seHarnessInit(Object outer, Map cfg) {
     HARNESS.slowSeconds = (cfg.slowSeconds ?: 45) as int
     HARNESS.calls = []
     HARNESS.gather = cfg.gather      // 9차 gather_stage 시나리오만 — 그 외에는 null(아래 wrapper 가 실제 step 으로 그대로 넘긴다)
+    HARNESS.faults = (cfg.faults ?: [])             // 10차: [{op, match, nth, kind: infra | fail}] — op(대상)의 n번째 호출에서
+    HARNESS.slow = (cfg.slow ?: [:])                // 10차: {op: 초} — 그 step 을 호출마다 늦춘다
+    HARNESS.finalizeDelays = cfg.finalizeDelays     // 10차: 결과 처리 노드(built-in)를 얻기까지 늦출 초 — 진입마다(마지막 값을 이어 쓴다)
+    HARNESS.opCounts = [:]
     return this
+}
+
+// 10차: 장애 주입 — op(대상)의 n번째 호출에서 일으킨다. infra 는 실행 기반 오류 흉내(Runner 오프라인으로 두고 retry(agent()) 가 본문을 다시 부르게 한다),
+//   fail 은 보통 실패(보존 단계 독립 시험). 운영 함수는 그대로다 — 주입은 이 wrapper 들에만 있다.
+def seHarnessFault(String op, String target) {
+    String key = op + ':' + (target ?: '')
+    int n = ((HARNESS.opCounts[key] ?: 0) as int) + 1
+    HARNESS.opCounts[key] = n
+    for (Map f in HARNESS.faults) {
+        if (f.op == op && ((f.match ?: '') == (target ?: '')) && ((f.nth ?: 1) as int) == n) {
+            String kind = (f.kind ?: 'infra')
+            HARNESS.calls << ('fault:' + kind + ':' + key + '#' + n)
+            if (kind == 'infra') {
+                HARNESS.agentLost = true
+                HARNESS.offline = true
+                throw new Exception('harness: injected infrastructure failure at ' + key + ' #' + n)
+            }
+            throw new Exception('harness: injected failure at ' + key + ' #' + n)
+        }
+    }
+}
+
+def seHarnessSlow(String op) {
+    int sec = (HARNESS.slow[op] ?: 0) as int
+    if (sec > 0) {
+        HARNESS.calls << ('slow:' + op + ':' + sec)
+        HARNESS.outer.sleep(time: sec, unit: 'SECONDS')
+    }
 }
 
 def seHarnessState() { return [ws_path: HARNESS.wsPath, node_calls: HARNESS.nodeCalls, gather_calls: HARNESS.gatherCalls] }
@@ -97,6 +137,7 @@ def archiveArtifacts(Map m) {
         HARNESS.calls << 'archiveArtifacts:injected_fail'
         throw new Exception('harness: injected archiveArtifacts failure')
     }
+    seHarnessFault('archiveArtifacts', (m.artifacts ?: '').toString().split(',')[0])
     HARNESS.calls << 'archiveArtifacts'
     return HARNESS.outer.archiveArtifacts(m)
 }
@@ -106,6 +147,7 @@ def stash(Map m) {
         HARNESS.calls << 'stash:injected_fail'
         throw new Exception('harness: injected stash failure')
     }
+    seHarnessFault('stash', (m.name ?: '').toString())
     HARNESS.calls << 'stash'
     return HARNESS.outer.stash(m)
 }
@@ -120,6 +162,8 @@ def unstash(String name) {
         HARNESS.calls << 'unstash:foreign_timeout'
         HARNESS.outer.timeout(time: 2, unit: 'SECONDS') { HARNESS.outer.sleep(time: 30, unit: 'SECONDS') }
     }
+    seHarnessSlow('unstash')
+    seHarnessFault('unstash', name)
     HARNESS.calls << 'unstash'
     return HARNESS.outer.unstash(name)
 }
@@ -149,8 +193,27 @@ def readFile(Map m) {
         HARNESS.calls << ('readFile:slow:' + HARNESS.slowSeconds)
         HARNESS.outer.sleep(time: HARNESS.slowSeconds, unit: 'SECONDS')
     }
+    seHarnessFault('readFile', (m.file ?: '').toString())
     HARNESS.calls << ('readFile:' + (m.file ?: '-'))
     return HARNESS.outer.readFile(m)
+}
+
+// 10차: 기록 파일 쓰기 · 존재 확인 · 폴더 삭제 — 장애 주입 지점(재진입 · 준비 끊김 · 보존 뒤 끊김)
+def writeFile(Map m) {
+    seHarnessFault('writeFile', (m.file ?: '').toString())
+    HARNESS.calls << ('writeFile:' + (m.file ?: '-'))
+    return HARNESS.outer.writeFile(m)
+}
+
+def fileExists(String f) {
+    seHarnessFault('fileExists', f)
+    return HARNESS.outer.fileExists(f)
+}
+
+def deleteDir() {
+    seHarnessFault('deleteDir', '')
+    HARNESS.calls << 'deleteDir'
+    return HARNESS.outer.deleteDir()
 }
 
 def sh(Map m) {
@@ -158,6 +221,7 @@ def sh(Map m) {
         HARNESS.calls << 'sh:layerA:injected_rc1'
         return 1
     }
+    seHarnessFault('sh', (m.label ?: '-').toString())
     HARNESS.calls << ('sh:' + (m.label ?: '-'))
     def res = HARNESS.outer.sh(m)
     if (HARNESS.gather != null && m.label == '__GATHER_LABEL__') {
@@ -181,21 +245,28 @@ def sh(Map m) {
 //    node(): 결과 처리 노드(built-in)는 실제 node 로(계획한 만큼 늦게), 수집 라벨 · Runner 는 이 Harness 가 이미 잡은 executor 안에서 실행한다
 //            (운영 Runner 의 executor 를 더 잡지 않는다). 계획(attempts[k].queue_delay)만큼 기다린 뒤 실행 — 그동안 운영 함수의 대기 한도가 실제로 돈다.
 def node(String target, Closure body) {
-    if (HARNESS.gather == null) { return HARNESS.outer.node(target) { body() } }
-    if (target == 'built-in') {
-        int fd = (HARNESS.gather.finalize_delay ?: 0) as int
+    if (target == 'built-in' && (HARNESS.gather != null || HARNESS.finalizeDelays != null)) {
+        // 결과 처리 노드 — 진입마다 계획한 만큼 늦게(10차: 재진입 대기 · 대기 한도 초과 · 대기 중 취소 시험)
+        int b = HARNESS.builtinCalls as int
+        HARNESS.builtinCalls = b + 1
+        List fds = HARNESS.finalizeDelays
+        int fd = (fds != null && !fds.isEmpty()) ? (((b < fds.size()) ? fds[b] : fds[fds.size() - 1]) ?: 0) as int : ((HARNESS.gather?.finalize_delay ?: 0) as int)
         HARNESS.calls << ('node:built-in:delay:' + fd)
         if (fd > 0) { HARNESS.outer.sleep(time: fd, unit: 'SECONDS') }
         return HARNESS.outer.node('built-in') { body() }
     }
+    if (HARNESS.gather == null) { return HARNESS.outer.node(target) { body() } }
     int k = HARNESS.nodeCalls as int
     HARNESS.nodeCalls = k + 1
-    Map step = (k < HARNESS.gather.attempts.size()) ? HARNESS.gather.attempts[k] : [:]
+    // 시도마다의 노드 단계(대기 · 폴더 사라짐 · 파일 지우기 · Add-on ref 옮기기) — node_steps 가 있으면 그것을, 없으면 attempts 를 쓴다(9차 시나리오)
+    List steps = (HARNESS.gather.node_steps != null) ? HARNESS.gather.node_steps : HARNESS.gather.attempts
+    Map step = (k < steps.size()) ? steps[k] : [:]
     int d = (step.queue_delay ?: 0) as int
     HARNESS.calls << ('node:' + target + ':delay:' + d)
     if (d > 0) { HARNESS.outer.sleep(time: d, unit: 'SECONDS') }
     HARNESS.offline = false
     HARNESS.removeWs = (step.remove_workspace == true)
+    HARNESS.hooks = step
     return body()
 }
 
@@ -209,7 +280,7 @@ def nodesByLabel(Map m) {
 
 // retry(agent() 조건) — Jenkins 가 끊긴 Runner 의 step 을 끝내면 retry 가 본문을 한 번 더 부른다(2026-10-06 se-probe 실측). 흉내 낸 끊김일 때만 그렇게 한다.
 def retry(Map m, Closure body) {
-    if (HARNESS.gather == null || m.conditions == null) { return HARNESS.outer.retry(m) { body() } }
+    if (m.conditions == null || (HARNESS.gather == null && !HARNESS.faults)) { return HARNESS.outer.retry(m) { body() } }
     int count = (m.count ?: 1) as int
     for (int i = 1; i <= count; i++) {
         try {
@@ -235,6 +306,22 @@ def ws(String path, Closure body) {
             HARNESS.removeWs = false
             HARNESS.calls << 'ws:removed'
             HARNESS.outer.deleteDir()
+        }
+        // 10차: 시도 사이의 변화 — 파일 하나 사라짐(접수 목록 · 결과 파일) · Add-on 사본 사라짐 · Add-on 저장소의 ref 가 바뀜
+        Map hk = (HARNESS.hooks ?: [:])
+        HARNESS.hooks = [:]
+        for (Object f in (hk.remove_files ?: [])) {
+            HARNESS.calls << ('ws:remove:' + f)
+            HARNESS.outer.sh(label: 'harness: 파일 지우기', script: "rm -rf '" + f + "'")
+        }
+        if (hk.remove_addon_copy == true) {
+            HARNESS.calls << 'ws:remove:addon'
+            HARNESS.outer.sh(label: 'harness: Add-on 사본 지우기', script: 'rm -rf addon')
+        }
+        if (hk.addon_ref_to) {
+            Map ad = (HARNESS.gather.addon ?: [:])
+            HARNESS.calls << ('addon:ref:' + hk.addon_ref_to)
+            HARNESS.outer.sh(label: 'harness: Add-on ref 옮기기', script: "git -C '" + ad.bare + "' update-ref refs/heads/main " + ad.commits[hk.addon_ref_to])
         }
         body()
     }

@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -35,6 +36,41 @@ def _write_lf(path, text):
 INPUT_FILES = ("gather_output.json", "gather_checkpoint.jsonl", "gather_progress.jsonl", "gather_rc.txt")
 # 이전 실행의 산출물 — 시나리오가 만들기 전까지 없어야 한다
 STALE_FILES = ("gather_final.jsonl", "gather_finalize_report.json", "callback_body.json", "finalize_summary.json", "gather_run.json")
+
+def make_addon_repo(stub: Path, spec: dict) -> dict:
+    """10차 R4: 시험용 Add-on 저장소(file://, 같은 Runner 의 Harness 폴더) — commit A · B 두 개, main 은 A.
+
+    tools/check_layout.py 는 운영 Jenkinsfile 이 부르는 방식 그대로(addon --targets <종류>) 0(지원) 또는 3(지원 안 함)을 낸다.
+    tasks/main.yml 은 대상에 아무것도 하지 않는다(읽기 전용, 가짜 ansible 은 실행하지도 않는다). VERSION 파일로 commit 을 구분한다.
+    시험이 시도 사이에 main 을 B 로 옮겨도 이어서 하는 시도가 A 를 그대로 쓰는지(결정 재사용) 본다.
+    """
+    work = stub / "addon_work"
+    bare = stub / "addon.git"
+    shutil.rmtree(work, ignore_errors=True)
+    shutil.rmtree(bare, ignore_errors=True)
+    (work / "tools").mkdir(parents=True)
+    (work / "tasks").mkdir(parents=True)
+    unsupported = bool(spec.get("unsupported"))
+    _write_lf(work / "tools" / "check_layout.py",
+              "import sys\n"
+              "targets = sys.argv[sys.argv.index('--targets') + 1].split(',') if '--targets' in sys.argv else []\n"
+              f"UNSUPPORTED = {unsupported!r}\n"
+              "sys.exit(3 if UNSUPPORTED or not (set(targets) & {'linux', 'windows'}) else 0)\n")
+    _write_lf(work / "tasks" / "main.yml", "- name: harness add-on (read only)\n  ansible.builtin.debug:\n    msg: harness add-on\n")
+    git = ["git", "-c", "user.name=harness", "-c", "user.email=harness@localhost", "-c", "commit.gpgsign=false", "-C", str(work)]
+    subprocess.run(git[:-2] + ["init", "-q", str(work)], check=True)
+    shas = {}
+    for label in ("A", "B"):
+        _write_lf(work / "VERSION", label + "\n")
+        subprocess.run(git + ["add", "-A"], check=True)
+        subprocess.run(git + ["commit", "-q", "-m", f"harness add-on {label}"], check=True)
+        shas[label] = subprocess.run(git + ["rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+    subprocess.run(["git", "clone", "-q", "--bare", str(work), str(bare)], check=True)
+    subprocess.run(["git", "-C", str(bare), "update-ref", "refs/heads/main", shas["A"]], check=True)
+    subprocess.run(["git", "-C", str(bare), "symbolic-ref", "HEAD", "refs/heads/main"], check=True)
+    shutil.rmtree(work, ignore_errors=True)
+    return {"url": "file://" + bare.resolve().as_posix(), "bare": bare.resolve().as_posix(), "commits": shas, "unsupported": unsupported}
+
 
 def make_gather_stage(ws: Path, case_dir: Path, spec: dict, channel: str, ips: list[str]) -> dict:
     """9차 (2026-10-06): 운영 함수 seGatherStage 를 그대로 돌리는 시나리오의 준비물 — workspace 옆 harness_stub/ 에 가짜 venv
@@ -79,8 +115,10 @@ def make_gather_stage(ws: Path, case_dir: Path, spec: dict, channel: str, ips: l
     _write_lf(chdir / "site.yml", "# harness placeholder — the fake ansible-playbook does not read it\n")
     for f in (bindir / "python3", bindir / "ansible-playbook", chdir / "inventory.sh"):
         os.chmod(f, 0o755)
+    addon = make_addon_repo(stub, spec["addon"] or {}) if spec.get("addon") is not None else None
     return {"venv": venv.as_posix(), "stub_dir": stub.resolve().as_posix(), "constants": spec.get("constants", {}),
-            "attempts": spec.get("attempts", []), "finalize_delay": int(spec.get("finalize_delay", 0)), "hosts": len(ips), "ips": ips}
+            "attempts": spec.get("attempts", []), "finalize_delay": int(spec.get("finalize_delay", 0)), "hosts": len(ips), "ips": ips,
+            "node_steps": spec.get("node_steps"), "addon": addon}
 
 
 def load_scenarios(path: Path) -> dict:

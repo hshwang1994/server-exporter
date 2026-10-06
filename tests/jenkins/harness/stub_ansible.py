@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import signal
+import subprocess
 import sys
 import time
 
@@ -44,7 +45,18 @@ def main(argv: list[str]) -> int:
     if os.path.exists(received):
         with open(received, encoding="utf-8") as fh:
             n = sum(1 for line in fh if line.strip()) + 1
-    _append(received, json.dumps({"attempt": n, "hosts": hosts}))
+    # 10차 R4: 이 시도가 받은 Add-on — 결정을 재사용했는지(같은 commit) · 끈 결정을 지켰는지 시험이 본다
+    addon = os.environ.get("ADDON_DIR") or ""
+    commit = ""
+    if addon:
+        try:
+            commit = subprocess.run(["git", "-C", addon, "rev-parse", "HEAD"], capture_output=True, text=True, timeout=30).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            commit = ""
+    rec = {"attempt": n, "hosts": hosts}
+    if addon:                                    # Add-on 을 받은 시도만 적는다 — 종전 기록 형태(시도 · 대상)는 그대로
+        rec.update(addon_dir=True, addon_commit=commit)
+    _append(received, json.dumps(rec))
     attempts = plan.get("attempts") or []
     step = attempts[n - 1] if n - 1 < len(attempts) else {"emit": "all"}
     ips = plan["ips"]

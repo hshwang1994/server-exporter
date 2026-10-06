@@ -14,7 +14,9 @@
     "  aborted_outcome_finalize 는 ABORTED 빌드의 사후 전송(1회). 수집 단계 한계 · 취소는 stage 본문이라 Harness 가 실행하지 못한다 — main Job T5 와 같은 catch 경로.",
     "느린 단계(recover_slow · archive_slow · layer_a_read_slow): 안쪽 상한이 없으므로 기다려 완주한다.",
     "jenkins_result: 그 시나리오가 끝나는 Jenkins 결과(기본 SUCCESS). expect_interruption=true 는 Harness 가 유발한 interruption 이라 Harness 가 기록 뒤 삼킨다(그 외는 그대로 전파).",
-    "sink_hold: 판정 없는 보조 시나리오 — controller loopback sink 를 hold_seconds 동안 열어 둔다(main Job T2 의 Callback 수신 증거용). 기록만 archive 한다."
+    "sink_hold: 판정 없는 보조 시나리오 — controller loopback sink 를 hold_seconds 동안 열어 둔다(main Job T2 의 Callback 수신 증거용). 기록만 archive 한다.",
+    "10차 (2026-10-07): faults = [{op, match, nth, kind}] — 운영 함수가 부르는 step(op: writeFile · readFile · fileExists · sh(label) · deleteDir · stash(name) · archiveArtifacts(첫 파일) · unstash)의 n번째 호출에서 kind=infra(실행 기반 오류 흉내: Runner 오프라인 + retry(agent()) 재호출) 또는 kind=fail(보통 실패)을 일으킨다. slow = {op: 초}. finalize_delays = 결과 처리 노드 진입마다 늦출 초. infra_budget_sec = 결과 처리만 도는 시나리오의 실행 기반 대기 한도. gather_stage.node_steps = 시도(노드 요청)마다의 단계(queue_delay · remove_files · remove_addon_copy · addon_ref_to) — attempts 는 가짜 ansible 이 실행될 때마다의 계획이다. gather_stage.addon = 시험용 Add-on 저장소(file://, commit A · B, unsupported 면 그 대상 종류를 지원하지 않음).",
+    "  10차 기대값: sink_posts_eq · summary_present · finalize.{entries · exec_sec_before_min} · finalize_result.{incomplete · delivered}(결과 확인 반환값) · gather.{addon_commits(A/B) · addon_none · node_calls}. 축약 상수 · 가짜 실행 기반을 쓰는 별도 동작 시험이다 — 운영 설정 실기와 구분한다."
   ],
   "scenarios": {
     "normal_success": {
@@ -529,7 +531,6 @@
         "hosts": 3,
         "constants": {
           "INFRA_WAIT": 900,
-          "OFFLINE_GRACE": 5,
           "GATHER_MAX": 8,
           "KILL_AFTER": 5,
           "ATTEMPT_MARGIN": 300,
@@ -605,7 +606,6 @@
         "hosts": 10,
         "constants": {
           "INFRA_WAIT": 900,
-          "OFFLINE_GRACE": 5,
           "GATHER_MAX": 900,
           "KILL_AFTER": 5,
           "ATTEMPT_MARGIN": 300,
@@ -716,7 +716,6 @@
         "hosts": 4,
         "constants": {
           "INFRA_WAIT": 45,
-          "OFFLINE_GRACE": 5,
           "GATHER_MAX": 900,
           "KILL_AFTER": 5,
           "ATTEMPT_MARGIN": 300,
@@ -805,7 +804,6 @@
         "hosts": 3,
         "constants": {
           "INFRA_WAIT": 900,
-          "OFFLINE_GRACE": 5,
           "GATHER_MAX": 900,
           "KILL_AFTER": 5,
           "ATTEMPT_MARGIN": 300,
@@ -878,7 +876,6 @@
         "hosts": 3,
         "constants": {
           "INFRA_WAIT": 900,
-          "OFFLINE_GRACE": 5,
           "GATHER_MAX": 900,
           "KILL_AFTER": 5,
           "ATTEMPT_MARGIN": 300,
@@ -937,6 +934,1286 @@
           "outcome_aborted"
         ],
         "note": "9차 시험 11(대기 중 취소): 같은 Runner 를 기다리는 동안 사용자가 취소한다 — 다시 시도하지 않고 대기 구간을 '취소' 로 닫은 뒤, 넘겨 둔 결과(1대)와 실패 결과(2대)를 1번만 보낸다. Jenkins 결과는 ABORTED"
+      }
+    },
+    "finalize_reentry": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "writeFile",
+          "match": ".se_fin.json",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "finalize_delays": [
+        0,
+        5
+      ],
+      "expect": {
+        "delivered": true,
+        "sink_posts_eq": 1,
+        "lines_eq_accepted": true,
+        "layerA": "ok",
+        "source": "stash",
+        "finalize": {
+          "entries": 2
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "fault:infra:writeFile:.se_fin.json": 1
+        },
+        "infra": {
+          "expired": false,
+          "episodes": [
+            {
+              "reason_contains": "결과 처리 노드 복구 대기",
+              "result": "acquired",
+              "min_sec": 4
+            }
+          ]
+        },
+        "rethrown": false,
+        "note": "10차 R1: 결과 처리 노드를 얻은 뒤 첫 기록(.se_fin.json)을 쓰다 실행 기반 오류 — retry(agent()) 재호출로 끊긴 것을 알고 같은 빌드 안에서 노드를 다시 기다려(5초, 대기 합에 넣음) 같은 폴더에서 처음부터 처리한다. 전송은 1번. 종전 코드는 null 을 돌려 '접수 전에 끝나' · SUCCESS 로 끝났다(Astra 재현)"
+      }
+    },
+    "finalize_reentry_after_delivery": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "writeFile",
+          "match": "finalize_summary.json",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "finalize_delays": [
+        0,
+        5
+      ],
+      "expect": {
+        "delivered": true,
+        "sink_posts_eq": 1,
+        "finalize": {
+          "entries": 2
+        },
+        "lines_eq_accepted": true,
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "httpRequest:": 1
+        },
+        "rethrown": false,
+        "note": "10차 R1: Portal 이 2xx 를 준 뒤 요약을 쓰다 실행 기반 오류 — 재진입은 확인된 전송을 다시 보내지 않고(전송 1번) 요약 · 보관만 마친다"
+      }
+    },
+    "finalize_reentry_expired": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "writeFile",
+          "match": ".se_fin.json",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "finalize_delays": [
+        0,
+        300
+      ],
+      "infra_budget_sec": 40,
+      "jenkins_result": "FAILURE",
+      "expect": {
+        "summary_present": false,
+        "sink_posts_eq": 0,
+        "finalize_result": {
+          "incomplete": true,
+          "delivered": false
+        },
+        "calls_count": {
+          "retry:agent_lost": 1
+        },
+        "rethrown": false,
+        "note": "10차 R1: 재진입을 기다리다 실행 기반 대기 한도(시험 40초)를 다 썼다 — 보내지 못했으므로 FAILURE, 결과는 stash · 보관본에 있다고 적는다(SUCCESS 아님)"
+      }
+    },
+    "finalize_reentry_abort": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "writeFile",
+          "match": ".se_fin.json",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "finalize_delays": [
+        0,
+        300
+      ],
+      "self_abort_after": 20,
+      "expect_interruption": true,
+      "jenkins_result": "ABORTED",
+      "expect": {
+        "rethrown": true,
+        "sink_posts_eq": 0,
+        "calls_count": {
+          "retry:agent_lost": 1
+        },
+        "note": "10차 R1: 재진입을 기다리는 동안 사용자가 취소 — 삼키지 않고 재전파(ABORTED), 보내지 않았다고 적는다. 취소를 재진입으로 바꾸지 않는다"
+      }
+    },
+    "finalize_limit_cumulative": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "fileExists",
+          "match": "gather_final.jsonl",
+          "nth": 2,
+          "kind": "infra"
+        }
+      ],
+      "slow": {
+        "unstash": 20
+      },
+      "expect": {
+        "delivered": true,
+        "sink_posts_eq": 1,
+        "finalize": {
+          "entries": 2,
+          "exec_sec_before_min": 19
+        },
+        "lines_eq_accepted": true,
+        "calls_count": {
+          "retry:agent_lost": 1
+        },
+        "rethrown": false,
+        "note": "10차 R1: 첫 진입이 느린 회수(20초)를 마친 직후 실행 기반 오류 — 재진입은 결과 처리 실행 한계를 처음부터 세지 않는다(앞 진입이 쓴 시간 >= 19초를 요약에 남긴다). fileExists 1번째는 Harness 의 보존 단계 호출이라 2번째를 끊는다"
+      }
+    },
+    "owner_read_transient": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 10,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 4,
+            "precheck_fail": [
+              5
+            ],
+            "checkpoint": [
+              6
+            ],
+            "sleep": 2,
+            "crash": true,
+            "agent_lost": true
+          },
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 5
+          },
+          {
+            "queue_delay": 5
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "readFile",
+          "match": ".se_workspace.json",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "filled": 1,
+        "by_origin": {
+          "output": 9,
+          "checkpoint": 0,
+          "synthetic": 1
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            [
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          ],
+          "attempt_states": [
+            "agent_disconnect",
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 3
+        },
+        "calls_count": {
+          "retry:agent_lost": 2,
+          "fault:infra:readFile:.se_workspace.json": 1,
+          "checkout:copy": 1
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 R2(GP-61): 끝난 대상이 있는 재개에서 소유 기록 읽기만 일시 실패 — 재개 불가로 끝내지 않고 같은 Runner 를 다시 기다린 뒤 남은 5대만 수집한다(Astra 재현: 종전에는 resume_impossible)"
+      }
+    },
+    "run_record_read_transient": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 3
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "readFile",
+          "match": "gather_run.json",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed",
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 2
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "fault:infra:readFile:gather_run.json": 1
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 R2: 수집 실행 기록 읽기의 일시 실패 — 삼키지 않고 재시도로 넘긴다. 다음 시도는 끝난 3대를 다시 수집하지 않는다(남은 대상 0, 가짜 ansible 1번)"
+      }
+    },
+    "prep_cut_after_owner": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 3
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "sh",
+          "match": "이전 실행의 결과 파일 정리",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 2
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "checkout:copy": 2
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 R3: 첫 준비(소유 기록 → 정리 → 접수 목록 → 준비 완료 기록) 도중 실행 기반 오류 — 다음 시도는 소유 기록만 보고 준비를 건너뛰지 않고 (prepared: false · 수집 시작 전) 남은 준비를 마친 뒤 수집한다(Astra 재현: 종전에는 접수 목록 없이 재개). 시험 사본은 git 저장소가 아니라 저장소를 다시 받는다(checkout 2번)"
+      }
+    },
+    "prep_cut_after_cleanup": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 3
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "writeFile",
+          "match": "gather_manifest.json",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 2
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "checkout:copy": 2
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 R3: 첫 준비(소유 기록 → 정리 → 접수 목록 → 준비 완료 기록) 도중 실행 기반 오류 — 다음 시도는 소유 기록만 보고 준비를 건너뛰지 않고 (prepared: false · 수집 시작 전) 남은 준비를 마친 뒤 수집한다(Astra 재현: 종전에는 접수 목록 없이 재개). 시험 사본은 git 저장소가 아니라 저장소를 다시 받는다(checkout 2번)"
+      }
+    },
+    "prep_cut_after_manifest": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 3
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "writeFile",
+          "match": ".se_workspace.json",
+          "nth": 2,
+          "kind": "infra"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 2
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "checkout:copy": 2
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 R3: 첫 준비(소유 기록 → 정리 → 접수 목록 → 준비 완료 기록) 도중 실행 기반 오류 — 다음 시도는 소유 기록만 보고 준비를 건너뛰지 않고 (prepared: false · 수집 시작 전) 남은 준비를 마친 뒤 수집한다(Astra 재현: 종전에는 접수 목록 없이 재개). 시험 사본은 git 저장소가 아니라 저장소를 다시 받는다(checkout 2번)"
+      }
+    },
+    "manifest_missing_restore": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 6,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "sleep": 2,
+            "crash": true,
+            "agent_lost": true
+          },
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 3,
+            "remove_files": [
+              "gather_manifest.json"
+            ]
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              3,
+              4,
+              5,
+              6
+            ]
+          ],
+          "attempt_states": [
+            "agent_disconnect",
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 2
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "writeFile:gather_manifest.json": 2,
+          "checkout:copy": 1
+        },
+        "calls_include": [
+          "ws:remove:gather_manifest.json"
+        ],
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 R3(보정 4): 수집을 시작한 뒤 작업 폴더에서 접수 목록 파일만 사라졌다 — 같은 빌드 소유 · 같은 revision 이고 접수 원본(SE_MANIFEST_JSON)이 이 빌드의 것이라 그것으로 다시 쓰고 남은 4대만 수집한다(재개 불가로 끝내지 않는다)"
+      }
+    },
+    "results_missing_refuse": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 6,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "sleep": 2,
+            "crash": true,
+            "agent_lost": true
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 3,
+            "remove_files": [
+              "gather_output.json"
+            ]
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "outcome": "resume_impossible",
+        "lines_eq_accepted": true,
+        "body_reasons": {
+          "infra_unavailable": 6
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          ],
+          "attempt_states": [
+            "agent_disconnect",
+            "resume_impossible"
+          ],
+          "outcome": "resume_impossible",
+          "node_calls": 2
+        },
+        "calls_include": [
+          "ws:remove:gather_output.json"
+        ],
+        "warnings_include": [
+          "outcome_resume_impossible"
+        ],
+        "unstable_contains": [
+          "같은 Runner · 작업 폴더에서 이어서 수집할 수 없음"
+        ],
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 R3(보정 4 · 검토 2): 결과가 확정됐던 2대의 결과 줄이 사라졌다(IP 로 대조) — 다시 수집하지 않고(가짜 ansible 1번) 재개 불가로 끝낸다. 넘겨 둔 결과가 없어 6대 모두 실행 기반 문장"
+      }
+    },
+    "preserve_archive_ok_stash_fail": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "stash",
+          "match": "gather-output",
+          "nth": 1,
+          "kind": "fail"
+        },
+        {
+          "op": "deleteDir",
+          "match": "",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "source": "archive",
+        "preserve": {
+          "archived": true,
+          "stashed": false
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 1
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "fault:infra:deleteDir:#1": 1
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 N1: 마지막 보존에서 보관 성공 · 전달 실패, 그 뒤 작업 폴더 삭제 중 실행 기반 오류 — 보관으로 회수할 수 있으므로 다시 시도하지 않는다(재수집 · 재개 불가 없음)"
+      }
+    },
+    "preserve_stash_ok_archive_fail": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "archiveArtifacts",
+          "match": "gather_output.json",
+          "nth": 1,
+          "kind": "fail"
+        },
+        {
+          "op": "writeFile",
+          "match": ".se_workspace.json",
+          "nth": 3,
+          "kind": "fail"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "source": "stash",
+        "preserve": {
+          "archived": false,
+          "stashed": true
+        },
+        "warnings_include": [
+          "preserve_archive_failed"
+        ],
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 1
+        },
+        "calls_count": {
+          "retry:agent_lost": 0
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 N1: 보관 실패 · 전달 성공, 소유 기록 다시 쓰기도 실패 — 전달로 회수할 수 있으므로 다시 시도 · 재수집 없이 끝낸다(둘 다 성공을 요구하지 않는다)"
+      }
+    },
+    "preserve_both_fail": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "archiveArtifacts",
+          "match": "gather_output.json",
+          "nth": 1,
+          "kind": "fail"
+        },
+        {
+          "op": "stash",
+          "match": "gather-output",
+          "nth": 1,
+          "kind": "fail"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "preserve": {
+          "archived": false,
+          "stashed": false
+        },
+        "by_origin": {
+          "output": 0,
+          "checkpoint": 0,
+          "synthetic": 3
+        },
+        "warnings_include": [
+          "preserve_failed"
+        ],
+        "unstable_contains": [
+          "결과를 보존하지 못했습니다"
+        ],
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 1
+        },
+        "calls_count": {
+          "retry:agent_lost": 0
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 N1: 보관 · 전달 모두 실패(실행 기반 오류 아님) — 다시 수집하지 않고 재개 불가로 바꾸지도 않는다. 작업 폴더를 남기고 접수 목록으로 실패 결과를 보낸다(종전 both_fail 과 같은 결과)"
+      }
+    },
+    "preserve_cut_before_marker": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 3
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "fileExists",
+          "match": "gather_output.json",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "source": "stash",
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 2
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "fault:infra:fileExists:gather_output.json": 1
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 N1: 마지막 보존이 보관 · 전달 전에 실행 기반 오류로 끊겼다(표식 없음) — 같은 Runner 의 같은 작업 폴더에서 보존만 다시 한다. 다시 수집하지 않는다(가짜 ansible 1번, 시도 기록 1개)"
+      }
+    },
+    "preserve_cut_delete": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "deleteDir",
+          "match": "",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "source": "stash",
+        "preserve": {
+          "archived": true,
+          "stashed": true
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 1
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "fault:infra:deleteDir:#1": 1
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 N1: 보관 · 전달을 마친 뒤 작업 폴더 삭제 중 실행 기반 오류 — 표식이 있으므로 다시 시도하지 않고 직전 판정(completed)으로 끝낸다(종전: 재개 불가 · UNSTABLE)"
+      }
+    },
+    "addon_decision_transient": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 6,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "sleep": 2,
+            "crash": true,
+            "agent_lost": true
+          },
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 3,
+            "addon_ref_to": "B"
+          },
+          {
+            "queue_delay": 3
+          }
+        ],
+        "addon": {}
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "readFile",
+          "match": ".se_addon.json",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              3,
+              4,
+              5,
+              6
+            ]
+          ],
+          "addon_commits": [
+            "A",
+            "A"
+          ],
+          "outcome": "completed",
+          "node_calls": 3
+        },
+        "calls_count": {
+          "sh:추가 수집(Add-on) 저장소 받기": 1,
+          "retry:agent_lost": 2,
+          "fault:infra:readFile:.se_addon.json": 1
+        },
+        "calls_include": [
+          "addon:ref:B"
+        ],
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 R4(GP-58): 재개 사이 Add-on 저장소의 main 이 B 로 바뀌고 결정 파일 읽기가 한 번 일시 실패 — 결정을 버리고 main(B)을 새로 받지 않는다. 다시 기다린 뒤 같은 commit A 를 쓴다(받기 1번)"
+      }
+    },
+    "addon_reuse_disabled": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 6,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "sleep": 2,
+            "crash": true,
+            "agent_lost": true
+          },
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 3
+          }
+        ],
+        "addon": {
+          "unsupported": true
+        }
+      },
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              3,
+              4,
+              5,
+              6
+            ]
+          ],
+          "addon_none": true,
+          "outcome": "completed",
+          "node_calls": 2
+        },
+        "calls_count": {
+          "sh:추가 수집(Add-on) 저장소 받기": 1,
+          "sh:추가 수집(Add-on) 파일 검사": 1
+        },
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 R4: 이 대상 종류를 지원하지 않는 Add-on(미사용 결정) — 재개해도 다시 받거나 검사하지 않고 Add-on 없이 수집한다"
+      }
+    },
+    "addon_copy_restore": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 6,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "sleep": 2,
+            "crash": true,
+            "agent_lost": true
+          },
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {
+            "queue_delay": 3,
+            "addon_ref_to": "B",
+            "remove_addon_copy": true
+          }
+        ],
+        "addon": {}
+      },
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "lines_eq_accepted": true,
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            [
+              3,
+              4,
+              5,
+              6
+            ]
+          ],
+          "addon_commits": [
+            "A",
+            "A"
+          ],
+          "outcome": "completed",
+          "node_calls": 2
+        },
+        "calls_count": {
+          "sh:추가 수집(Add-on) 저장소 받기": 2
+        },
+        "calls_include": [
+          "ws:remove:addon",
+          "addon:ref:B"
+        ],
+        "sink_posts_min": 1,
+        "rethrown": false,
+        "note": "10차 R4: 재개 사이 Add-on 사본이 사라지고 main 이 B 로 바뀌었다 — 결정에 남은 같은 commit A 로 다시 받는다(main 을 받지 않는다)"
       }
     }
   }
