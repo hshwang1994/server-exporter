@@ -49,7 +49,7 @@ parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid
 > 2026-10-06 (9차): 빌드 12시간 · 수집 단계 39,000초 한계, 실행 한계 계산(`scripts/gather_budget.sh`), 가용 메모리로 시작을 막던 처리, 온라인 Runner 가
 > 없으면 수집을 건너뛰던 처리(`no_agent`)를 없앴다. 실행 기반(Runner · Jenkins Agent · 결과 처리 노드)을 기다린 시간은 실행 시간에 넣지 않고 빌드 하나의
 > 합으로 최대 72시간까지 센다. 실행 기반 장애 뒤에는 끝난 결과를 보존한 채 같은 Runner · 같은 작업 폴더에서 끝나지 않은 대상만 이어서 수집한다(아래
-> "실행 기반 대기와 같은 Runner 재개"). 근거 `docs/ai/decisions/ADR-2026-10-06-infra-wait-and-host-resume.md`.
+> "실행 기반 대기와 같은 Runner 재개"). 결정 경위는 `docs/reference/decision-log.md` 2026-10-06(9차).
 
 | 단계 (Stage View 표시 이름) | 노드 | 하는 일 | 실패 시 |
 |-------|------|--------|--------|
