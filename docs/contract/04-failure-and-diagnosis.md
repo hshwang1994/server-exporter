@@ -150,10 +150,10 @@ ICMP는 **호출조차 하지 않는다**. TCP가 아무 응답도 주지 않았
 시험용 강제 한계와 함께 없앴다.) CHECKPOINT(조립 직후 보존본)로 보낸 봉투는 `errors[].detail` 의 `limit_reason=` 에만 남고, 결과 정리(Layer A)가
 실패해 보충 라이브러리가 조립한 경우에는 봉투에 남지 않는다 — 어느 경우든 실행 요약 `finalize_summary.json` 의 `limit_reason` 이 정본이다.
 
-**실행 기반(Runner)이 돌아오지 않아 끝나지 않은 host** (2026-10-06 9차). Runner · Jenkins Agent 장애(연결 끊김 · 근거 있는 OOM · 재부팅)는 대상 측
+**실행 기반(Runner)이 돌아오지 않아 끝나지 않은 host** (2026-10-06 9차, 2026-10-07 10차 보완). Runner · Jenkins Agent 장애(연결 끊김 · 근거 있는 OOM — 커널 로그에 이 수집 실행의 프로세스가 OOM 으로 끝났다는 기록이 있을 때 · 재부팅)는 대상 측
 장애가 아니다. 파이프라인은 끝난 결과를 보존한 채 같은 Runner · 같은 작업 폴더가 돌아오기를 빌드 하나의 합으로 최대 72시간 기다렸다가 끝나지 않은
 host 만 이어서 수집한다(끝난 host · 사전 점검에서 실패로 확정된 host 는 다시 수집하지 않는다). 대기 한도를 넘었거나(outcome `infra_wait_expired`)
-같은 작업 폴더로 이어 갈 수 없으면(`resume_impossible` — Runner 등록 해제 · 작업 폴더 사라짐) 끝나지 않은 host 는 대상 측 실패로 확정하지 않고
+같은 작업 폴더로 이어 갈 수 없으면(`resume_impossible` — Runner 등록 해제 · 작업 폴더 사라짐 · 결과가 확정됐던 host 의 결과가 작업 폴더에서 사라짐) 끝나지 않은 host 는 대상 측 실패로 확정하지 않고
 아래 문장의 실패 봉투로 보낸다.
 
 | 경우 | `failure_stage` / `failure_code` | `auth_success` | 사용자 문장 (`failure_reason` = `errors[0].message`) |
