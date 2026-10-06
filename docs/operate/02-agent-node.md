@@ -295,7 +295,11 @@ git push
 ### Labels 설정
 
 `Jenkinsfile_portal` 은 `common/vars/locations.yml` 의 `agent_label`(Location 라벨)과 `target_type` 의 능력 라벨을 `&&` 로 이어
-노드를 고른다. 두 종류를 모두 가진 온라인 노드가 없으면 Resolve Location 에서 바로 실패한다.
+노드를 고른다. 두 종류를 모두 가진 노드가 Jenkins 에 **하나도 등록돼 있지 않으면** 실행 위치 확인이 설정 오류로 FAILURE 다(접수된 대상마다 실패 결과는
+보낸다). 등록돼 있으면 지금 연결이 끊겼거나 executor 가 모두 사용 중이어도 수집 단계가 Jenkins queue 로 기다린다 — executor 를 잡지 않고 빌드 하나의
+실행 기반 대기 합 최대 72시간(2026-10-06 9차, [04-pipeline-runtime.md](04-pipeline-runtime.md) "실행 기반 대기와 같은 Runner 재개").
+수집을 시작한 뒤 연결이 끊기면 **그 노드**가 돌아오기를 기다려 같은 작업 폴더에서 끝나지 않은 대상만 이어서 수집한다 — 노드를 지우거나 이름을 바꾸면
+그 빌드는 이어 가지 못한다(`resume_impossible`). 빌드가 기다리는 중에는 노드의 라벨 · 작업 폴더 위치를 바꾸지 않는다.
 
 | Location | Labels 값 |
 |-------------|----------|

@@ -17,6 +17,7 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
 | `fixture.py` | corpus case 입력 복사 + **현재 빌드**(job/number/url)와 시험 request 로 manifest 재생성 + 시나리오 변형 |
 | `callback_sink.py` | Callback **POST** 수신기(검증 · 응답 통제 · 기록). `python3 -m http.server` 는 POST 를 받지 못한다. Harness 는 이것을 **controller(built-in) 의 127.0.0.1** 에 띄운다 — finalizer 의 `httpRequest` 가 `node('built-in')` 안에서 실행되고(http_request 1.25 는 node 컨텍스트의 노드에서 요청), Runner 는 controller 발 인바운드를 거부했다(Harness #6, NoRouteToHost). Python 3.6 호환(controller python 을 고를 수 없다) |
 | `scenarios.json` | 시나리오 정본(입력 case · 변형 · 기대값) |
+| `stub_ansible.py` | gather_stage 시나리오의 가짜 `ansible-playbook`(2026-10-06 9차). `--limit @<남은 대상>` 의 대상만 시도별 계획(plan.json)대로 결과 · Precheck 실패 · CHECKPOINT 를 쓰고, 받은 대상을 기록한다. 계획에 따라 수집 셸을 끝 기록 없이 끝내거나(crash) 잠금을 쥔 이전 수집을 남긴다(orphan_hold) |
 | `harness_verdict.py` | 관측 ↔ 기대 대조 → `harness_result.json` (PASS / FAIL / PARTIAL) |
 
 ## 시나리오 (요약 — 정본은 `scenarios.json`)
@@ -27,10 +28,18 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
 - `checkpoint_only_a`(정상 Layer A 가 checkpoint 복구) · `checkpoint_only_b`(Layer A 실패 뒤 Layer B 가 checkpoint 복구) · `layer_a_fail`
 - `sink_5xx` · `sink_close` — Callback 실패(통제된 조건)
 - `recover_slow` · `archive_slow` · `layer_a_read_slow` — 느린 회수 · 보존 · 읽기. 2026-10-05(8차 R3)부터 안쪽 단계 상한이 없으므로 기다려 완주한다
-- `gather_limit_preserve` — 2026-10-05(8차 R1 · R3). **실제 `scripts/run_gather.sh`** 를 가짜 `ansible-playbook`(3대 중 2대의 결과 줄을 쓰고 대기)과
-  시험 한계 8초로 실행한다. 한계에 닿아 INT 로 멈춘 실행 기록(`gather_run.json`: rc 124 · timed_out)을 운영 함수 `seGatherOutcome` 이 `timeout` ·
-  `gather_limit` 으로 정하고, 같은 빌드에서 `sePreserveGatherOutput` → `seFinalizeAndCallback` 이 끝난 2대는 수집 결과 그대로, 끝나지 않은 1대만
-  실패 결과로 채워 전달하는지 본다. 운영 Job 의 시험용 파라미터(`gatherBudgetForceSec`)로 하던 S3 를 대신한다 — 운영 파이프라인에는 시험 입력이 없다.
+- gather_stage 시나리오(2026-10-06 9차, 8차 `stub_gather` 를 대신한다) — 운영 함수 **`seGatherStage`** 를 짧은 시험 상수(`constants`)로 그대로 실행한다.
+  시도마다 실제 `scripts/run_gather.sh` · `scripts/gather_state.py` 가 가짜 ansible(`stub_ansible.py`)을 남은 대상만 넘겨 실행하고, 마지막 시도가 보존한 뒤
+  `seFinalizeAndCallback` 이 전달한다. 실행 기반만 wrapper 가 흉내 낸다 — `node()` 는 Harness 가 이미 잡은 executor 안에서 계획한 만큼 늦게 실행하고
+  (결과 처리 노드는 실제 `node('built-in')`), Runner 연결 끊김은 수집 step 뒤 실제 interruption + `retry(agent())` 재호출로, 작업 폴더 사라짐은 `ws` 안 삭제로.
+  **운영 Runner 의 executor 를 더 잡지 않는다**(사용자 지시 2026-10-06). 끝나면 이 빌드가 만든 시도 작업 폴더를 지운다.
+  - `gather_limit_preserve` — 누적 한계 8초. 3대 중 2대 결과를 쓰고 기다리면 INT 로 멈춘다 → `timeout` · `gather_limit` · 2대 보존 · 1대 보충 · delivered
+  - `infra_resume` — 10대 중 4대 결과 · 1대 Precheck 실패 · 1대 CHECKPOINT 만 남기고 끊긴다(Jenkins 가 끊긴 Runner 의 step 을 끝냄) → 같은 Runner 를 20초
+    기다린 뒤 결과가 확정되지 않은 5대만 다시 수집(저장소를 다시 받지 않음) → 결과 처리 노드 15초 대기 → 10대 전달. 2번째 시도의 한계 = 누적 − 1번째 실행 시간
+  - `infra_wait_expired` — 대기 한도 45초. 1번째 시도는 2대를 끝내고 잠금을 쥔 이전 수집이 남은 채 끊긴다(원본 stash · 즉시 다시 시도 · 이전 수집이 끝나기를 기다림),
+    2번째 시도는 1대를 쓰고 끊긴다 → 같은 Runner 를 기다리다 한도 초과 → `infra_wait_expired` · 넘겨 둔 2대 + 실행 기반 문장 2대
+  - `resume_impossible` — 끊긴 사이 작업 폴더가 사라졌다 → 전체를 다시 수집하지 않고 `resume_impossible` · 3대 모두 실행 기반 문장
+  - `gather_wait_abort` — 같은 Runner 를 기다리는 중 자기 빌드에 `POST …/stop` → 다시 시도하지 않음 · 대기 구간 '취소' · 넘겨 둔 1대 + 실패 2대를 1번 전송 · ABORTED
 - interruption 조건(3차 §4, 2026-10-04 검토 C5) — 아래 표
 - `aborted_outcome_finalize` — ABORTED 빌드(outcome=aborted)의 사후 보존·finalize: Callback 1회만 시도, 완료 host 데이터 전달, 비정상 종료 unstable
 - `sink_hold` — 판정 없음. controller loopback sink 를 `hold_seconds` 동안 열어 두어 **main Job T2**(TEST-NET, `callbackUrl=http://127.0.0.1:<SINK_PORT>`)의 Callback 수신 증거를 `sink/record.jsonl` 로 남긴다
@@ -38,9 +47,9 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
 | 조건 | Harness 시나리오 | 기대 | 비고 |
 |---|---|---|---|
 | ① 느린 회수 | `recover_slow`(unstash 45 s) | 상한 없이 완주(`source=stash`) · delivered | 8차 R3: 안쪽 단계 상한(Tier 2)을 없앴다 |
-| ② 수집 실행 한계 | `gather_limit_preserve`(실제 run_gather.sh, 시험 한계 8 s) | `outcome=timeout` · `limit_reason=gather_limit` · 끝난 2대 보존 · 1대 보충 · delivered | 운영 Job 의 강제 한계 S3 대체(8차 R1) |
+| ② 수집 실행 한계 | `gather_limit_preserve`(운영 함수 seGatherStage + 실제 run_gather.sh, 누적 한계 8 s) | `outcome=timeout` · `limit_reason=gather_limit` · 끝난 2대 보존 · 1대 보충 · delivered | 운영 Job 의 강제 한계 S3 대체(8차 R1) |
 | ③ 외곽 finalizer timeout | `outer_timeout` | 재전파(`rethrown=true`) · Callback 미시도 | |
-| ④ 수집 단계 한계 · 취소 | — (stage 본문은 함수가 아니라 Harness 가 실행하지 못한다) | main Job T5 와 같은 catch(`aborted` 기록 · 재전파) — main Job 에서 확인 | 사후 finalize 경로는 `aborted_outcome_finalize` |
+| ④ 수집 중 · 대기 중 취소 | `gather_wait_abort`(실행 기반 대기 중 취소, 9차) · 수집 실행 중 취소는 main Job T5 | `aborted` 기록 · 재전파 · 다시 시도 없음 | 9차부터 수집 단계 한계는 없다(시도 하나의 실행 한계만) · 사후 finalize 경로는 `aborted_outcome_finalize` |
 | ⑤ 사용자 중단 | `user_abort`(느린 unstash 중 자기 빌드에 `POST …/stop`) + main Job T5 | 재전파 · Callback 미시도 · Jenkins ABORTED 유지 | |
 | ⑥ 다른 원인의 interruption | `foreign_timeout_interruption`(wrapper 가 unstash 안에서 다른 timeout 2 s) | 재전파 — 결과 확인 및 전송 단계는 어떤 interruption 도 삼키지 않는다 | |
 | 느린 보존 · 읽기 | `archive_slow`(archive 45 s) · `layer_a_read_slow`(gather_final.jsonl 읽기 45 s) | 상한 없이 완주 | 2026-10-04 최종 지시 §4-3 · 8차 R3 |

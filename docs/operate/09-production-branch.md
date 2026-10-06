@@ -23,7 +23,7 @@
   Runner 라벨 `linux | windows | esxi | redfish` + `common/vars/locations.yml` 의 `agent_label`(Location 별, 예: 청주 = `cj`) · Agent 의 Ansible venv(`scripts/activate_ansible_venv.sh` 가 고른다:
   `SE_ANSIBLE_VENV` → PATH 의 `ansible-playbook` → `/app/ansible-env` → `/opt/ansible-env`). 시험용 파라미터는 없다(2026-10-05 8차 R1).
   `pwsh` 는 **생성 시** 도구이지 runtime 요구가 아니다. 내부 Jenkins 주소 · credential ID · Runner 이름을 고객 공통 필수값으로 새로 고정하지 않는다.
-  시간 한계(빌드 12시간 · 수집 실행 최대 6시간 · 결과 확인 및 전송 1시간)와 보존 기간(빌드 기록 14일/100 · 결과 파일 7일/50 · 작업 폴더 7일 정리)은 Jenkinsfile 과
+  시간 한계(실행 기반 대기 합 72시간 · 실제 수집 누적 6시간 · 결과 확인 및 전송 1시간 — 2026-10-06 9차)와 보존 기간(빌드 기록 14일/100 · 결과 파일 7일/50 · 작업 폴더 7일 정리)은 Jenkinsfile 과
   스크립트에 들어 있어 설치 때 맞출 값이 아니다. Script Approval · 전역 환경변수가 필요 없다(2026-10-05 8차 R3 — Tier 2 `SE_FINALIZER_BOUNDED` 를 없앴다).
   Timestamper 플러그인은 있으면 콘솔 줄마다 시각을 붙이고, 없어도 파이프라인은 그대로 돈다(업무 줄은 본문에 시각을 적는다).
 - 세 층을 구분해 말한다: **고객사 main 형태 깨끗한 checkout 검증(G19)** / **사내 production Job E2E** / **실제 고객사 실행**(이 저장소의 작업 범위 밖). 앞 둘이 통과해도 "고객사 실환경 검증 완료" 라고 쓰지 않는다.
@@ -38,7 +38,7 @@
 | Adapter | `adapters/{redfish,os,esxi}/*.yml` | `adapters/registry.yml` 은 제외(런타임 미참조) |
 | Vault | `vault/**/*.yml` | 바이트 그대로(헤더 검사) |
 | 플러그인 · 라이브러리 | `callback_plugins/`, `filter_plugins/`, `lookup_plugins/`, `module_utils/`, `*/library/*.py` | 플러그인의 `DOCUMENTATION` 은 로더가 읽어 보존, library 모듈은 제거 |
-| 운영 스크립트 | `scripts/activate_ansible_venv.sh`, `scripts/addon_*.sh`, `scripts/finalize_gather_output.py`, `scripts/gather_budget.sh`, `os-gather/files/get_last_login.sh` | |
+| 운영 스크립트 | `scripts/activate_ansible_venv.sh`, `scripts/addon_*.sh`, `scripts/env_guard.sh`, `scripts/run_gather.sh`, `scripts/gather_state.py`, `scripts/finalize_gather_output.py`, `scripts/workspace_cleanup.py`, `scripts/jenkins/se_finalize.groovy`, `os-gather/files/get_last_login.sh` | Python 은 주석 · docstring 을 지운다 — UTF-8 인코딩 선언도 지운다(Python 3 기본값, 2026-10-06 D13). shebang 과 다른 인코딩 선언은 남긴다 |
 | 저장소 메타 | `.gitattributes`, `.gitignore`, `.production-provenance.json` | provenance 는 생성기가 쓴다 |
 
 제외: `tests/**`, `docs/**`, `schema/**`, `.claude/**`, `scripts/ai/**`, `jenkins/**`, `Jenkinsfile_ci`, `README.md`, `REQUIREMENTS.md`, `CLAUDE.md`, `requirements-test.txt`,

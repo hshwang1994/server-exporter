@@ -142,13 +142,28 @@ ICMP는 **호출조차 하지 않는다**. TCP가 아무 응답도 주지 않았
 시도를 거부로 적지 않는다. 표준 계정 시도가 결과 없이 멈추면 복구 계정 경로에는 들어가지 않는다(401 이 아니다).
 기술 근거(`status=task_stopped first_auth=… last_request=…`, 2026-10-05 전에는 `task_timeout`)는 `errors[].detail` 에 남는다.
 
-**배치가 실행 한계로 끝나 결과를 못 낸 host** (2026-10-05 8차). 수집 배치를 멈추는 것은 수집 실행 한계(실제 수집 시작부터 최대 6시간)와
-사용자 취소뿐이다. 한계에 닿아 결과를 내지 못한 host 는 결과 정리 단계가 진행 기록으로 실패 봉투를 만든다(code 는 위 표의 기존 값).
-끝난 host 의 결과는 그대로 보낸다. 그 봉투의 `diagnosis.details.limit_reason` 에 어떤 한계였는지 남는다 — `gather_limit`(수집 실행 한계
-6시간) · `build_limit`(Runner 대기 · 준비가 길어 빌드 12시간 안의 남은 시간이 6시간보다 짧았던 경우). 새 `failure_code` 는 없다.
-(2026-10-05 7차의 `stalled` · `ceiling` · `forced` 는 정체 감시 · 시험용 강제 한계와 함께 없앴다.) CHECKPOINT(조립 직후 보존본)로
-보낸 봉투는 `errors[].detail` 의 `limit_reason=` 에만 남고, 결과 정리(Layer A)가 실패해 보충 라이브러리가 조립한 경우에는 봉투에
-남지 않는다 — 어느 경우든 실행 요약 `finalize_summary.json` 의 `limit_reason` 이 정본이다.
+**배치가 실행 한계로 끝나 결과를 못 낸 host** (2026-10-05 8차, 2026-10-06 9차 개정). 수집 배치를 멈추는 것은 수집 실행 한계(실제 수집 시간의
+누적 최대 6시간 — 실행 기반을 기다린 시간은 넣지 않는다)와 사용자 취소뿐이다. 한계에 닿아 결과를 내지 못한 host 는 결과 정리 단계가 진행 기록으로
+실패 봉투를 만든다(code 는 위 표의 기존 값). 끝난 host 의 결과는 그대로 보낸다. 그 봉투의 `diagnosis.details.limit_reason` 에 어떤 한계였는지
+남는다 — `gather_limit`(수집 실행 한계 6시간) · `infra_wait`(실행 기반 대기 한도 72시간, 아래). 새 `failure_code` 는 없다. 2026-10-05 의
+`build_limit`(빌드 12시간 안의 남은 시간)은 9차에 빌드 한계와 함께 없앴다. (2026-10-05 7차의 `stalled` · `ceiling` · `forced` 는 정체 감시 ·
+시험용 강제 한계와 함께 없앴다.) CHECKPOINT(조립 직후 보존본)로 보낸 봉투는 `errors[].detail` 의 `limit_reason=` 에만 남고, 결과 정리(Layer A)가
+실패해 보충 라이브러리가 조립한 경우에는 봉투에 남지 않는다 — 어느 경우든 실행 요약 `finalize_summary.json` 의 `limit_reason` 이 정본이다.
+
+**실행 기반(Runner)이 돌아오지 않아 끝나지 않은 host** (2026-10-06 9차). Runner · Jenkins Agent 장애(연결 끊김 · 근거 있는 OOM · 재부팅)는 대상 측
+장애가 아니다. 파이프라인은 끝난 결과를 보존한 채 같은 Runner · 같은 작업 폴더가 돌아오기를 빌드 하나의 합으로 최대 72시간 기다렸다가 끝나지 않은
+host 만 이어서 수집한다(끝난 host · 사전 점검에서 실패로 확정된 host 는 다시 수집하지 않는다). 대기 한도를 넘었거나(outcome `infra_wait_expired`)
+같은 작업 폴더로 이어 갈 수 없으면(`resume_impossible` — Runner 등록 해제 · 작업 폴더 사라짐) 끝나지 않은 host 는 대상 측 실패로 확정하지 않고
+아래 문장의 실패 봉투로 보낸다.
+
+| 경우 | `failure_stage` / `failure_code` | `auth_success` | 사용자 문장 (`failure_reason` = `errors[0].message`) |
+|---|---|---|---|
+| 실행 기반 대기 한도 초과 · 같은 Runner 로 이어 갈 수 없음 | `fallback` / `OUTPUT_BUILD_FAILED` (기존 값) | `null` | "수집을 실행하던 Runner 가 회복되지 않아 이 대상의 수집을 마치지 못했습니다." |
+
+사전 점검(Precheck) 진단이 이미 있는 host 는 그 진단을 그대로 보낸다. 문장 정본은 `common/vars/failure_reasons.yml` 의 `_fr_catalog.infra_unavailable`
+(Groovy 보충 라이브러리의 `infraReason` 이 같은 문장이고 drift 테스트가 막는다). 실행 단위 기록은 `finalize_summary.json` 의 `infra`
+(예산 · 사용 · 만료 · 대기 구간마다 사유 · 대상 · 시작 · 끝 · 초 · 결과)와 `callback.receipt`(`delivered` · `not_delivered` · `uncertain` · `not_attempted`)다.
+Portal 은 72시간 대기 빌드의 결과를 최대 약 79시간 뒤(대기 72 + 수집 6 + 결과 확인 1)에 받을 수 있다.
 
 ## 실제로 이렇게 나온다
 
