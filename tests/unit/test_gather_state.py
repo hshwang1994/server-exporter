@@ -185,6 +185,7 @@ def test_truncated_tail_is_moved_aside_and_the_host_is_gathered_again(tmp_path):
     (1, 100, 1, "runner_oom", False),
     (90, 5, 0, "prep_failed", False), (91, 5, 0, "prep_failed", False),
     (143, 50, 0, "aborted", False), (130, 50, 0, "aborted", False), (129, 50, 0, "aborted", False),
+    (143, 50, 1, "runner_oom", False),                        # OOM 직후 systemd 가 범위를 멈추며 보낸 TERM(2026-10-06 Runner03 격리 시험)
 ])
 def test_end_classifies_with_evidence_only(tmp_path, rc, ran, oom_after, state, timed_out):
     ws = _ws(tmp_path, ["10.0.0.1"])
@@ -195,6 +196,18 @@ def test_end_classifies_with_evidence_only(tmp_path, rc, ran, oom_after, state, 
     assert (ws / "gather_rc.txt").read_text(encoding="utf-8").strip() == str(rc)
     run = _state(ws)
     assert run["ran_sec"] == run["exec_used_sec"] == ran and run["rc"] == rc and run["state"] == state
+
+
+def test_signal_right_after_an_oom_keeps_both_observations(tmp_path):
+    # 2026-10-06 Runner03 격리 시험(systemd-run --scope -p MemoryMax=64M): 커널이 수집 프로세스를 OOM 으로 끝내자 systemd 가 범위를 멈추며
+    #   수집 셸에 TERM 을 보냈다. 끝 기록은 신호 종료지만 같은 cgroup 의 OOM 카운터가 늘었으므로 runner_oom 이고, 두 관측을 함께 남긴다
+    ws = _ws(tmp_path, ["10.0.0.1"])
+    _begin(ws, T0, gather_max=600)
+    oom = dict(PROBES["oom"], cgroup=PROBES["oom"]["cgroup"] + 1)
+    att = gs.end(ws, rc=143, now=T0 + 5, probes={"oom": oom})
+    assert att["state"] == "runner_oom" and att["end_source"] == "signal" and att["rc"] == 143
+    assert "memory.events oom_kill +1" in att["evidence"] and att["evidence"].endswith("signal TERM")
+    assert gs.TERMINAL_STATES.count("runner_oom") == 0 and "runner_oom" in gs.INFRA_STATES, "이어서 수집하는 실행 기반 장애다"
 
 
 def test_oom_evidence_uses_the_same_cgroup_and_falls_back_to_the_runner_only_without_it():

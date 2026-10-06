@@ -396,6 +396,11 @@ def classify_end(rc: int, exec_sec: int, limit: int, oom_start: dict | None, oom
     if rc in (90, 91):
         return 'prep_failed', None, False
     if rc in SIGNAL_RCS:
+        # systemd 는 범위(scope) 안의 프로세스가 OOM 으로 끝나면 그 범위를 멈춘다(기본 OOMPolicy=stop) — 남은 수집 셸은 TERM 을 받는다.
+        #   같은 cgroup 의 OOM 카운터가 늘었으면 신호 종료여도 OOM 근거로 남긴다(2026-10-06 Runner03 격리 시험: 64 MiB 범위에서 OOM → TERM)
+        evidence = oom_evidence(oom_start, oom_now)
+        if evidence:
+            return 'runner_oom', f'{evidence}, 뒤이어 signal {SIGNAL_RCS[rc]}', False
         return 'aborted', f'signal {SIGNAL_RCS[rc]}', False
     evidence = oom_evidence(oom_start, oom_now)
     if evidence:

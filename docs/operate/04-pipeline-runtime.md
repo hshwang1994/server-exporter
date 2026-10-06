@@ -131,11 +131,14 @@ Redfish 모듈 마감(절대 1,200초 · 새 응답 없음 120초 · 탐지 90 �
 |---|---|---|
 | Runner 가 지금 연결돼 있지 않거나 executor 가 모두 사용 중 | 대기 (`Runner 배정 대기`) | executor 를 잡지 않고 Jenkins queue 로 기다린다 |
 | 실행 중 Runner 연결이 끊김 — Jenkins 가 5분 기다린 뒤 step 을 끝냈다 | `agent_disconnect` | 같은 Runner 를 기다린다(`같은 Runner(<이름>) 복구 대기`). Runner 쪽 수집이 계속 돌았으면 끝나기를 기다린 뒤 남은 대상만 |
-| 비정상 종료 + 같은 cgroup 의 OOM 종료 횟수 증가(`memory.events`, 못 읽으면 `/proc/vmstat`) | `runner_oom` | 원본을 넘겨 두고(stash) 같은 Runner 로 다시 시도 |
+| 비정상 종료(신호 종료 포함) + 같은 cgroup 의 OOM 종료 횟수 증가(`memory.events`, 못 읽으면 `/proc/vmstat`) | `runner_oom` | 원본을 넘겨 두고(stash) 같은 Runner 로 다시 시도 |
 | Runner 의 부팅 기록(boot_id)이 바뀜 | `runner_restart` | 같은 Runner 로 다시 시도 |
 | 근거 없이 끝 기록 없이 사라짐 | `process_lost`(원인 미확인) | 다시 시도하지 않는다 — 끝난 결과만 보내고 나머지는 실패 결과 |
 | 대상 측 일시 장애(SSH · WinRM · vSphere · Redfish 응답 없음 · 401 · 5xx) | 실행 기반 장애 아님 | 채널의 기존 timeout · retry 안에서만 처리하고 그 대상의 결과로 끝낸다(기다리지 않는다) |
 
+- systemd 는 범위(scope) 안의 프로세스가 OOM 으로 끝나면 그 범위를 멈추고 남은 프로세스에 TERM 을 보낸다(기본 `OOMPolicy=stop`). 그래서 OOM 뒤의
+  신호 종료도 같은 cgroup 의 OOM 횟수가 늘었으면 `runner_oom` 이다(2026-10-06 Runner03 격리 시험: 64 MiB 범위 → OOM → TERM → `runner_oom`, 대조 `kill -9` →
+  `process_lost`). Agent 와 수집이 같은 세션 범위에 있으면 범위가 멈출 때 Agent 연결도 끊겨 먼저 연결 끊김으로 보이고, 끝 기록에는 OOM 근거가 남는다.
 - 다시 시도할 때 **끝난 대상은 다시 수집하지 않는다**: 형태 검사를 통과한 결과 줄이 있는 대상과 사전 점검(Precheck)에서 실패로 확정된 대상은 빠지고,
   실행 중이던 대상(CHECKPOINT 만 있음)은 다시 수집한다. 대상은 `--limit @.gather_limit_hosts` 로 넘긴다(Job 파라미터를 늘리지 않는다).
 - 진척 없이 장애가 반복되면 5분부터 두 배씩(최대 1시간) executor 를 잡지 않고 쉰다. 쉬는 시간도 실행 기반 대기 합에 들어간다.
