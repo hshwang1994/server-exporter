@@ -454,6 +454,21 @@ def test_gather_stage_scenarios_cover_the_directive_tests():
         assert sc["run_preserve"] is False and "stub_gather" not in sc and "gather" in sc["expect"], name
 
 
+def test_rethrow_from_the_gather_stage_does_not_cancel_the_delivery():
+    """2026-10-06 (CI #27 · #29 gather_wait_abort): 수집 단계에서 다시 던진 interruption(실행 기반 대기 중 취소)은 전송을 막지 않는다 —
+    결과 확인(post{always} 자리)이 뒤에서 한 번 보낸다. finalizer 밖으로 다시 던진 것만 전송 실패로 본다. rethrown_in 이 없는 옛 기록은 finalizer."""
+    summary = {"accepted": 3, "lines": 3, "outcome": "aborted", "warnings": ["filled", "outcome_aborted"],
+               "callback": {"attempted": True, "delivered": True, "http_code": 200, "attempts": 1}}
+    sink = [{"method": "POST", "status_sent": 200, "ok": True, "body_sha256": "x"}]
+    assert harness_verdict.observe(summary, None, [], sink, None, {"rethrown": True, "rethrown_in": "gather"})["delivered"] is True
+    assert harness_verdict.observe(summary, None, [], sink, None, {"rethrown": True, "rethrown_in": "finalize"})["delivered"] is False
+    assert harness_verdict.observe(summary, None, [], sink, None, {"rethrown": True})["delivered"] is False
+    jf = (HARNESS / "Jenkinsfile_harness").read_text(encoding="utf-8")
+    assert jf.count("control.rethrown_in = 'gather'") == 1 and jf.count("control.rethrown_in = 'finalize'") == 1
+    assert "env.SE_HARNESS_VERDICT = (rc == 0) ? 'PASS' : ((rc == 1) ? 'FAIL' : ((rc == 2) ? 'PARTIAL' : 'ERROR'))" in jf
+    assert jf.index("env.SE_HARNESS_VERDICT") < jf.index("if (rc == 1) {"), "판정 실패로 빌드가 끝나기 전에 남긴다"
+
+
 def test_verdict_prefers_the_summary_callback_and_requires_the_sink_to_agree(tmp_path):
     """2026-10-05 (F09 · F13): 전송 여부는 finalize_summary.callback 이 기록이다. 수신 기록이 있으면 그 기록에 2xx 가 있어야 전달로 본다
     (요약이 거짓으로 delivered=true 를 적어도 통과하지 못한다). 경고는 문장이 아니라 warnings 코드로 판정한다."""

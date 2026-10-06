@@ -342,7 +342,10 @@ def test_harness_driver_compares_each_scenario_with_its_expected_jenkins_result_
     수집 한계 보존(gather_limit_preserve)은 main 함수 · 생성 tree 두 그룹 모두의 기본 목록에 있다(8차 R1)."""
     helper = CI[CI.index("def seRunHarness("):CI.index("\ndef seWriteStageResults(")]
     assert "readJSON(file: 'tests/jenkins/harness/scenarios.json'" in helper and "jenkins_result" in helper
-    assert "boolean ok = (b.result == expected)" in helper and "booleanParam" not in helper
+    assert "boolean ok = (b.result == expected) && verdict == 'PASS'" in helper and "booleanParam" not in helper
+    # 2026-10-06: ABORTED 로 끝나는 시나리오는 판정이 FAIL 이어도 Jenkins 결과가 기대와 같다 — Harness 가 남긴 판정(빌드 변수)까지 본다
+    assert "verdict = ((b.buildVariables ?: [:]).SE_HARNESS_VERDICT ?: '').toString()" in helper
+    assert "verdict: verdict, ok: ok" in helper
     main = _stage("Harness Driver")
     assert "results.findAll { !it.ok }" in main and "results.findAll { it.result != 'SUCCESS' }" not in main
     params = CI[CI.index("    parameters {"):CI.index("    environment {")]

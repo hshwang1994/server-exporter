@@ -206,6 +206,7 @@ timeout(time: 45, unit: 'MINUTES') {
                 }
             } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                 control.rethrown = true
+                control.rethrown_in = 'gather'         // 판정기는 수집 단계의 재전파를 전송 실패로 보지 않는다(결과 확인이 뒤에서 한 번 보낸다)
                 control.interruption_class = fie.getClass().name
                 echo "[Harness] 수집 단계 밖으로 interruption 이 전파됐다: ${fie.getClass().name}"
                 if (!expectInterruption) { throw fie }
@@ -275,6 +276,7 @@ timeout(time: 45, unit: 'MINUTES') {
             }
         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
             control.rethrown = true
+            control.rethrown_in = 'finalize'
             control.interruption_class = fie.getClass().name
             echo "[Harness] interruption 이 finalizer 밖으로 전파됐다 (기대: 삼키지 않는다): ${fie.getClass().name}"
             if (!expectInterruption) { throw fie }   // 우리가 만든 interruption 이 아니면 진짜 중단이다 — 그대로 전파
@@ -322,6 +324,8 @@ timeout(time: 45, unit: 'MINUTES') {
         if (hs.ws_path && hs.ws_path.toString().endsWith("/${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}")) {
             sh "rm -rf '${hs.ws_path}' '${hs.ws_path}@tmp'"
         }
+        // 판정을 빌드 변수로 남긴다 — CI 가 Jenkins 결과만 보면 ABORTED 로 끝나는 시나리오의 판정 실패를 놓친다(2026-10-06 CI #27 · #29)
+        env.SE_HARNESS_VERDICT = (rc == 0) ? 'PASS' : ((rc == 1) ? 'FAIL' : ((rc == 2) ? 'PARTIAL' : 'ERROR'))
         if (rc == 1) {
             unstable("[Harness] ${scenario}: FAIL — 기대와 다르다 (harness_result.json)")
         } else if (rc == 2) {

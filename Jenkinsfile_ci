@@ -158,9 +158,18 @@ def seRunHarness(String functionsSrc, List scenarios, Map extra) {
         extra.each { k, v -> ps << string(name: k, value: v.toString()) }
         String expected = (defs[s]?.jenkins_result ?: 'SUCCESS').toString()
         def b = build(job: 'clovirone-cicd/clovirone-server-gather-harness', wait: true, propagate: false, parameters: ps)
-        boolean ok = (b.result == expected)
-        results << [scenario: s, number: b.number, result: b.result, expected: expected, ok: ok, url: b.absoluteUrl, functions_src: functionsSrc]
-        echo "[Harness/${functionsSrc}] ${s}: #${b.number} ${b.result} (expected ${expected}) ${b.absoluteUrl}"
+        // Jenkins 결과와 Harness 판정을 모두 본다 — ABORTED 로 끝나는 시나리오는 판정이 FAIL 이어도 결과가 기대와 같다(2026-10-06 CI #27 · #29)
+        String verdict = ''
+        try {
+            verdict = ((b.buildVariables ?: [:]).SE_HARNESS_VERDICT ?: '').toString()
+        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+            throw fie
+        } catch (Exception e) {
+            verdict = ''
+        }
+        boolean ok = (b.result == expected) && verdict == 'PASS'
+        results << [scenario: s, number: b.number, result: b.result, expected: expected, verdict: verdict, ok: ok, url: b.absoluteUrl, functions_src: functionsSrc]
+        echo "[Harness/${functionsSrc}] ${s}: #${b.number} ${b.result} (expected ${expected}) verdict=${verdict ?: '-'} ${b.absoluteUrl}"
     }
     return results
 }

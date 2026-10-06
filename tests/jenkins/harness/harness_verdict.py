@@ -93,7 +93,10 @@ def observe(summary, body_path, calls, sink, preserve, control, received=None, f
     cb = (summary or {}).get("callback") if isinstance(summary, dict) else None
     claimed = cb.get("delivered") if isinstance(cb, dict) and isinstance(cb.get("delivered"), bool) else None
     delivered = None
-    if control is not None and control.get("rethrown"):
+    # finalizer 밖으로 다시 던진 interruption 은 전송을 끊는다(outer_timeout 류). 수집 단계에서 다시 던진 것(실행 기반 대기 중 취소 등)은
+    #   전송을 막지 않는다 — post{always} 자리의 결과 확인이 한 번 보낸다(2026-10-06 CI #27 · #29 의 gather_wait_abort 판정 오류).
+    #   rethrown_in 이 없는 옛 control 은 finalizer 로 본다(종전 판정 그대로).
+    if control is not None and control.get("rethrown") and control.get("rethrown_in", "finalize") != "gather":
         delivered = False
     elif claimed is not None:
         # 2026-10-05 (F09 · F13): finalizer 가 요약에 남긴 전송 결과 — 수신 기록이 있으면 그 기록과 맞아야 전달로 본다
