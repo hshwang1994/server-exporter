@@ -138,10 +138,12 @@ Redfish 모듈 마감(절대 1,200초 · 새 응답 없음 120초 · 탐지 90 �
 
 - OOM 은 관측과 원인을 나눈다(2026-10-07 10차). 이 실행이 속한 cgroup 의 `memory.events` · Runner 전체 `/proc/vmstat` 의 OOM 종료 횟수가 늘었다는 것은
   **관측**(`gather_run.json` 의 `oom_observed`)으로만 남긴다 — Agent 세션 범위는 여러 빌드가 함께 쓰므로 같은 cgroup · 가까운 시각 · 시도 시작 때의 구성원만으로는
-  이 실행이 OOM 으로 끝났다고 할 수 없다. 원인(`runner_oom`)은 커널 로그(`dmesg`, 시도 시작 이후)의 OOM 종료 기록 PID 가 이 실행의 PID 일 때만이다
+  이 실행이 OOM 으로 끝났다고 할 수 없다. 원인(`runner_oom`)은 커널 로그(`dmesg`, 시도 시작 기준점 이후)의 OOM 종료 기록 PID 가 이 실행의 PID 일 때만이다
   (ansible-playbook PID 는 `run_gather.sh` 가 `exec` 직전에 `.gather_ansible_pid` 로 남긴다). 스스로 끝난 실행 실패(종료 코드 1 등)는 OOM 관측이 있어도
   `failed_run` 이고, 근거 없이 바깥에서 끝난 시도는 `process_lost` / `aborted`(원인 미확인 — 다시 시도하지 않는다)다. 사용자 취소로 확인된 시도는 `aborted` 로 확정한다.
-  커널 로그를 읽을 수 없는 Runner 에서는 공유 범위의 OOM 을 원인으로 확정하지 않는다. systemd 가 OOM 뒤 Agent 범위를 멈추면(기본 `OOMPolicy=stop`)
+  커널 로그를 읽을 수 없는 Runner 에서는 공유 범위의 OOM 을 원인으로 확정하지 않는다. 시작 기준점은 커널 로그 자신의 시계(시작 때 마지막 줄 시각)다 —
+  커널 로그 시각은 `/proc/uptime` 과 다르게 갈 수 있다(2026-10-07 Runner03 실측 약 22초 늦음). ansible 작업자(fork) 프로세스만 OOM 으로 끝나면 PID 를 이을 수 없어
+  원인 미확인이다. systemd 가 OOM 뒤 Agent 범위를 멈추면(기본 `OOMPolicy=stop`)
   Agent 연결도 끊겨 연결 끊김 경로로 이어서 수집한다.
 - 결과 확인 및 전송 중 실행 기반 오류(예: controller 재시작 뒤 이어 갈 수 없는 step)가 나면 같은 빌드 안에서 결과 처리 노드를 다시 기다려 같은 폴더
   (`fin-<빌드 번호>`)에서 다시 처리한다(2026-10-07 10차). 2xx 를 이미 받은 전송은 다시 보내지 않고, 받지 못한 전송은 남은 횟수(최대 3번 중)만 쓴다. 끝내 처리하지
