@@ -132,7 +132,9 @@ G20 은 원격 없이 돌면 PARTIAL(검증 안 됨)이고, 일부 원격만 보
   ⑦ 원복 조건 — `cj` 요청 준비 전에 코드가 먼저 나가 신규 요청이 실패하면 `git revert`(main) / `restore`(production) / 고객사 main 이전 tree 재적용으로 즉시 원복, 공급자 값 복귀는 담당 몫.
 - lab 의 임시 `cj` 라벨 + TEST-NET 실패 envelope 검증은 라우팅·실패 처리 smoke 이지 **청주 실장비 성공 수집이 아니다**.
 
-## 7. 현재 상태 (2026-10-05)
+## 7. 현재 상태 (2026-10-06)
+
+2026-10-06 (8차): 다섯 번째 **P5 `f43af470`**(main `8c9e04a9` — 시험 입력 제거 · 시간 한계 셋 · 원격 명령 정리 · 보존 기간 R1~R8, parent P4 `5ac5566c`) 양 원격. COMPLETE_PASS(CI #25 + 환경 의존 게이트 G11~G15 · G18~G20 로컬 재실행) · GitHub · GitLab · 로컬 production 동일(`git ls-remote` 확인) · trailer 완비. 승격 직후 production Job 검증은 `tests/evidence/2026-10-05-8th-time-limits.md` 9절.
 
 2026-10-05 (7차): 네 번째 **P4 `5ac5566c`**(main X13 `1e15bf6f` — 최종 정비 F01~F13 · Windows 숨은 실패 기록, parent P3 `915dec4e`) 양 원격. COMPLETE_PASS(CI #23 + 환경 의존 게이트 로컬 재실행) · GitHub · GitLab · 로컬 production 동일(`git ls-remote` 확인) · trailer 완비. 승격 직후 production Job 검증은 `tests/evidence/2026-10-05-final-maintenance.md` 8절.
 

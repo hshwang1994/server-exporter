@@ -1,5 +1,19 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-05~06 (8차) — R1~R8 · `8c9e04a9` → production P5 `f43af470`
+
+| 구분 | 결과 |
+|---|---|
+| 로컬(`8c9e04a9`) | WSL unit · e2e · regression **4,380 통과** · 건너뜀 145(Windows 전용) · xfail 7 · integration(not live) **324 통과** · Windows PowerShell 99 + 71 통과 · `ci_gate`(pytest 제외) PASS · 생성 tree G14 **4,220** · G15 PASS |
+| 새 시험 | `test_run_gather.py`(13, Linux) · `test_time_limits.py`(6) · `test_workspace_cleanup.py`(8) · `test_redfish_request_timeouts.py`(5) · Windows 숨은 실패 R5 · Harness `gather_limit_preserve` · Add-on 실제 ansible 2건(오래 걸리는 태스크 대기 · 한계로 멈춘 뒤 CHECKPOINT 복원) |
+| R6 실측 | `remote_cleanup_probe.sh` → `.161`: 고치기 전 한계 1 · sudo 3 남음 → 고친 뒤 7 상황 0(WSL 2.20.7 · Runner02 2.20.3) |
+| main `85630d2c` #243~#259 | 등록 실행 #243 + 16 빌드 기대 결과 · 첫 정리 Runner01 81 · Runner04 39 · Runner03 38 · Runner02 52 개 삭제 |
+| CI #24(`85630d2c`) | FAILURE — Gate PASS(4,378 + 324) · Corpus · Time Limits 39 · Harness main 19/19 · 생성 tree 11/11 · **Verify G14 2 failed**(main 전용 파일을 읽는 새 시험 표식 누락) |
+| main `8c9e04a9` #260~#275 | 16/16 기대 결과(T2 SUCCESS · T5 ABORTED · T6 UNSTABLE · S5 2/2 · S1 4/4 · S4 1/1 · S2 4+2 · E2E-A UNSTABLE · E2E-A2 FAILURE · ESXi 6/6 · E2E-E 2/2 · S3 13/13 · Linux A 8/8 · Linux B 4+3 · Redfish 7+3 · 중복 IP FAILURE) |
+| CI #25(`8c9e04a9`) | SUCCESS 37분 — Gate PASS(Runner 4,380 + 324 · 3채널 syntax-check) · Corpus 18/18 MATCH · Time Limits Self-test 39 · Harness main 19/19(#498~#516) · 생성 tree 11/11(#517~#527) · Build tree `54cf8028…`(195 파일) · Drift PASS · Verify COMPLETE_PASS(G14 4,166) · Vault PASS · Evidence 42/42 |
+| 승격 | 세션 CLI 2026-10-06 09:34~09:50 COMPLETE_PASS → **P5 `f43af470`**(parent P4 `5ac5566c` · Main-SHA `8c9e04a9` · Tree-Hash `54cf8028…` · 196 파일) · 다시 실행한 게이트 G11~G15 · G18~G20(G19 WSL 3채널) · origin accepted · internal 은 공유 push URL 로 도달 · GitHub · GitLab · 로컬 production 일치 |
+| production | #144 canary SUCCESS(파라미터 7개 · 보존 14일/100 · 7일/50 등록) · S1 4/4 · S2 4+2 · T2 SUCCESS · T5 ABORTED(전송 200) · T6 UNSTABLE(408 × 3) · S5 2/2 · S3 13/13 · Linux A 8/8 · Linux B 4+3 · Windows 1/1 · ESXi 6/6 · Redfish 7+3(표준 계정 7/7 · 계정 쓰기 0) · 중복 IP FAILURE · Tier 2 해제 뒤 #158 SUCCESS · #159 ABORTED(승인 오류 0) · 첫 정리 production 157개 · 수집 빌드 checkout 전부 `f43af470` |
+
 ## 2026-10-05 (7차) — 최종 정비 F01~F13 · §5 예외 무시 감사 · X13 → P4
 
 | 구분 | 결과 |

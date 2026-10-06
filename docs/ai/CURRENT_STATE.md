@@ -1,5 +1,20 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-05~06 (8차) — 시험 입력 제거 · 실제 시각 · 장시간 대기 · 숨은 실패 · 원격 정리 · 운영 문구 · 보존 정리(R1~R8) · **main `8c9e04a9` → production P5 `f43af470`**
+
+> 정본: `tests/evidence/2026-10-05-8th-time-limits.md` · 결정 `docs/ai/decisions/ADR-2026-10-05-time-limits-and-test-inputs.md`.
+
+- **R1 시험 입력 제거**: 운영 수집 Job 의 `redfishAccountDryrun` · `gatherBudgetForceSec` 와 배선 삭제(Job 파라미터 7개 — main #243 · production #144 첫 실행이 등록). 증거 분담 — S3 = 실호스트 13대 정상 배치, E2E-E = 정상 Redfish(표준 계정 · 계정 쓰기 0), 한계 도달 · 보존 = Harness `gather_limit_preserve`(실제 `scripts/run_gather.sh`), 계정 쓰기 방지 = CI Gate 단위 시험. 증거 수집기는 없앤 파라미터 · `[시험:` 이 남은 빌드를 받지 않는다.
+- **R3 · R4 시간 한계 셋**: 빌드 12 h · 수집 실행 최대 6 h(실제 시작 기준, `gather_limit`/`build_limit`) · 결과 확인 및 전송 1 h. 작업 단위 제한 · Redfish 모듈 마감 · 정체 감시(`gather_watch.py` 삭제) · `df` 20 s · 결과 정리 120 s · Tier 2(`SE_FINALIZER_BOUNDED` · Script Approval 4 서명) 삭제. 연결 60 s · 응답 대기(수집 API 30 min · Portal 시도당 10 min) 유지. 정본 표 `docs/operate/04` · `tests/unit/test_time_limits.py`.
+- **R2 실제 시각**: Timestamper `timestamps {}`(Job 범위, 없으면 생략) · 업무 줄 `[YYYY-MM-DD HH:MM:SS +09:00]` · `finalize_summary` 의 `times` · `callback.tries[]` · `gather_run.json`(UTC ISO). envelope · `duration_ms` 불변.
+- **R5 숨은 실패**: ESXi 디스크 모듈 실패 · Windows Hyper-V 서비스 조회 실패(없음 · 멈춤과 구분) · 네트워크 조회 비종료 오류 · setup 실패 · `Get-Volume` 실패를 `errors[]` 1건으로(섹션 상태 · 받은 값 유지).
+- **R6 원격 정리**: `run_gather.sh` 가 이 실행의 SSH 다중화 연결만 닫는다 — Linux `.161` 7 상황 남은 원격 명령 0(고치기 전 한계 1 · sudo 3), WSL · Runner02 둘 다.
+- **R7 운영 문구**: 문장 · 하는 일로, `[수집 종료]` 가 한계 · 실행 시간 · 대상 수 · 보존 · 전송을 나눈다. 2xx = "Portal 이 요청을 받았다". 후보 실행에서 찾은 문구 3건 고침(`c0117fd6` · `38e39c75`).
+- **R8 보존 · 정리**: `buildDiscarder` 14일/100 · 7일/50 · 빌드별 작업 폴더 소유 기록 · 보관 확인 뒤에만 삭제(빈 보관은 실패) · `scripts/workspace_cleanup.py` 하루 한 번 7일 정리(보관 못 한 결과는 남김) · 컨트롤러 `fin-<번호>`. 첫 정리에서 main 지난 제어 폴더 210개 · production 157개(소유 기록 없는 옛 폴더 1개는 확인 뒤 수동 삭제) 삭제, `/app` 사용 3~4 %.
+- **검증**: 로컬 4,380 + integration 324 · Windows PowerShell 170 · 생성 tree G14 4,220 · G15 · CI #24 FAILURE(G14 시험 표식 2건 — 고침) → **CI #25 SUCCESS(10 stage PASS · Verify COMPLETE_PASS · Evidence 42/42)** · main #260~#275 16/16 기대 결과 · production P5 #144~#159 16/16 기대 결과(명부 32대 성공 26 = main 과 같음 · Kernel 6.12/6.8 memory 가 7차 행렬과 일치 · Redfish 표준 계정 7/7 · 계정 쓰기 0).
+- **설정 정리**: production 검증 뒤 Jenkins 전역 `SE_FINALIZER_BOUNDED` 삭제 · Script Approval Tier 2 서명 4개 해제(9 → 5, 나머지 5개 그대로 — 이 Jenkins 에는 서명별 해제가 없어 목록 지정으로) · 해제 뒤 production #158 · #159 승인 오류 0. production #143(07:48, admin, 파라미터 없음 — 이 세션이 실행하지 않음)은 컨트롤러 DNS 실패로 Jenkinsfile 을 못 읽은 빌드다(결과 · 전송 없음, GP-55).
+- 남은 사용자 결정: 노출 자격(GP-52) · 미해결 자산 6건(GP-37) · `cj` 라벨(GP-38) · `meta.duration_ms`(GP-44) · throttle(GP-50).
+
 ## 일자: 2026-10-05 (7차) — 최종 정비 지시서 F01~F13 · §5 예외 무시 감사: 결과 보존 · 형태 계약 · 입력 규칙 · Redfish redirect · 환경 경계 · 시간 제한 분리 · 운영 화면 · Windows 숨은 실패 · **X13 `1e15bf6f` → P4 `5ac5566c`**
 
 > 정본: `tests/evidence/2026-10-05-final-maintenance.md`. 사용자 결정(2026-10-05): ① 6차 마무리 먼저 ② **Portal 전송은 HTTP 2xx 수신까지가 계약**(응답 본문 판독 · 저장 확인 없음 — 지시서 F09 · §8-5 대체) ③ 메모리 부족으로 중단된 로컬 전체 회귀는 묶음으로 나눠 다시.

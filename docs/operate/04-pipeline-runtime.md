@@ -323,6 +323,9 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
   UNSTABLE 은 한 번만 표시한다 — 전송 실패(또는 시작 못 함) · 그 밖 경고(보존 경고는 수집 단계가 이미 표시) 순.
 - Groovy 최소 경로의 함수(`seReconcileRaw` 등)는 `scripts/jenkins/se_finalize.groovy` 하나가 정본이다 — 마무리 단계가 `readTrusted` 로 읽어 `load` 하고,
   CI Job(`Jenkinsfile_ci`)이 같은 파일로 Python Layer A 와의 동치를 검사한다. 파일을 못 읽으면 보충 없이 있는 OUTPUT 줄만 보내고 UNSTABLE(`layerB=unavailable`)이다.
+- **파이프라인이 시작되기 전의 실패는 결과를 보내지 못한다.** Jenkins 가 Jenkinsfile 을 저장소에서 읽지 못하면(예: 2026-10-06 07:48 production #143 —
+  컨트롤러가 `github.com` 이름을 해석하지 못해 `production` 브랜치를 가져오지 못했다) 파이프라인 코드가 하나도 실행되지 않으므로 결과 · 전송 · artifact 가 없다.
+  콘솔이 `hudson.plugins.git.GitException` 으로 시작하고 stage 가 없는 빌드다. 결과를 받지 못한 요청을 다시 보낼지는 호출 측(Portal)이 정한다.
 - envelope 형식은 [../contract/02-output-envelope.md](../contract/02-output-envelope.md), 실패 봉투의 stage/code 는
   [../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md).
 

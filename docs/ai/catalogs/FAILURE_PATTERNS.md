@@ -715,3 +715,58 @@
 - 수정: 명령 부재(CommandNotFoundException)만 표식 대신 `exit 1` 로 끝내 종전 분류를 지켰다. 시험이 종전 · 새 스크립트의 종료 코드를 시나리오별로 비교한다.
 - 재발 방지: win_shell 스크립트의 마지막 문장을 바꿀 때는 종료 코드에 기대는 분류(`rc != 0`)가 있는지 찾고, 실제 powershell.exe 로 종전 · 새 종료 코드를 대조한다.
 - 관련 rule: rule 95 R1 · rule 92 R2
+
+## 2026-10-05 — 기능을 없앤 뒤 다른 시험 파일이 그 기능을 계속 기대했다 (8차 R3)
+
+- 카테고리: scope-miss
+- 발견 위치: 8차 로컬 전체 회귀(묶음 실행) — Redfish 모듈 마감(`_set_deadline`) · Add-on 태스크별 제한(`apply: timeout`) · `df` 20초 · 포트 재시도 간격 1초를 없앤 뒤
+  `tests/integration/emulator_harness.py` · `test_redfish_phase3_contracts.py` · `test_dell_service_tag_serial.py`(같은 하네스 사용) · `test_addon_hook_contract.py` ·
+  `test_addon_hook_playbook.py` · `test_linux_storage_markers.py` · `test_os_precheck_polling.py` · `test_redfish_redirect_boundary.py` · `test_windows_call_consolidation_static.py` 가 실패(합 50건 남짓)
+- 원인: 없앤 이름을 바꾼 파일과 그 파일 전용 시험에서만 찾았다. 같은 함수를 부르는 시험 도구(emulator 하네스)와 다른 계약을 고정하던 시험은 전체 실행에서야 드러났다.
+- 수정: 각 시험을 새 계약(작업 단위 제한 없음 · 연결 60초/응답 대기 · 포트당 1회)으로 바꿨다. Add-on 은 "오래 걸려도 기다린다" 와 "실행 한계가 멈추면 CHECKPOINT 로 복원" 두 실제 ansible 시험으로.
+- 재발 방지: 기능 · 변수 · 함수를 없애면 그 이름을 `tests/` 전체와 시험 도구(`tests/integration/*harness*`, `tests/jenkins/`)에서 먼저 찾고, 커밋 전에 전체 회귀를 한 번 돌린다(메모리가 부족하면 묶음으로).
+- 관련 rule: rule 24 R1 · rule 92 R3
+
+## 2026-10-05 — 회귀를 백그라운드로 돌리는 동안 파일을 고쳐 가짜 실패 6건이 났다
+
+- 카테고리: process
+- 발견 위치: 8차 Windows `ci_gate.sh` 전체 실행(16분) 중 `redfish-gather/site.yml` 의 기술 근거 문구(`task_timeout` → `task_stopped`)와 그 시험을 함께 고침
+- 증상: `test_redfish_timeout_auth_classification.py` 6 failed — 수집 시점의 시험 코드(종전 문구)가 실행 시점의 새 site.yml 을 읽었다(실패 표시는 새 시험 줄을 보여 혼동).
+- 수정: 고친 뒤 그 시험만 다시 돌려 22 passed, 커밋 전 WSL 전체 회귀를 새로 돌려 확인했다.
+- 재발 방지: 회귀가 도는 동안 저장소를 고치지 않는다. 고쳤다면 그 실행의 결과를 판정에 쓰지 않고 다시 돌린다.
+- 관련 rule: rule 24 R2
+
+## 2026-10-05 — 시험용 PowerShell 명령줄이 32,767 자 한도를 넘었다
+
+- 카테고리: test-fidelity
+- 발견 위치: 8차 R5 — Windows network 시험(가짜 cmdlet 머리말 + fixture JSON + 운영 스크립트를 `-EncodedCommand` 하나로)
+- 원인: 운영 스크립트는 한도 안(가장 긴 storage 약 24,000)인데 시험이 fixture JSON 을 명령줄에 넣었다.
+- 수정: fixture 는 환경변수(`SE_TEST_FIXTURE`)로 넘긴다 — 명령줄에는 운영과 같은 스크립트와 가짜 cmdlet 만.
+- 재발 방지: 시험 하네스가 운영 명령에 덧붙이는 것은 운영 한도를 함께 써 버린다. 큰 입력은 파일 · 환경변수로 넘긴다.
+- 관련 rule: rule 40 R6
+
+## 2026-10-05 — 이 Bash 도구의 heredoc 이 `\\` 를 `\` 로 줄였다
+
+- 카테고리: tooling
+- 발견 위치: 8차 — Python 패치 스크립트를 `python - <<'EOF'` 로 넘겼는데 문자열 안의 `\\n` 이 실제 줄바꿈이 돼 시험 파일이 깨졌다(`test_time_limits.py` · `test_jenkinsfile_portal_finalize.py`). `sed` 의 치환 문자열 `\n` 도 줄바꿈이 됐다.
+- 수정: 역슬래시가 든 패치는 파일로 쓴 스크립트(Write)로 실행했다. 깨진 줄은 같은 방식으로 되돌렸다.
+- 재발 방지: 역슬래시가 하나라도 든 수정은 heredoc · sed 로 넘기지 않는다. 고친 뒤 그 파일을 import/parse 해 본다.
+- 관련 rule: rule 24 R1
+
+## 2026-10-06 — main 전용 파일을 읽는 새 시험의 `source_text` 표식 누락이 재발했다 (CI #24 G14)
+
+- 카테고리: repeat
+- 발견 위치: 8차 CI #24(`85630d2c`) Prodgen Verify G14 — `test_workspace_cleanup.py::test_pipeline_wires_the_cleanup_and_records_ownership`(`production_manifest.yml`) · `test_harness_tools.py::test_harness_pipeline_has_no_tier2_and_runs_the_real_run_gather`(`jenkins/jobs/…/config.xml`)
+- 원인: 7차 항목(로컬에서 생성 tree G14 를 먼저 돌린다)을 새 시험 두 건에 적용하지 않고 push 했다. 두 시험 모두 production tree 에 없는 파일을 읽는다.
+- 수정: `@pytest.mark.source_text` 표식(`8c9e04a9`) 뒤 로컬 `prodgen build` + `verify --only G14,G15` 통과를 확인하고 push → CI #25 COMPLETE_PASS.
+- 재발 방지: 새 시험이 `production_manifest.yml` · `jenkins/` · `.claude/` · `docs/ai/` · `scripts/ai/` 를 읽으면 표식부터 단다. push 전 로컬 G14 를 생략하지 않는다(시간이 들어도 CI 한 바퀴보다 짧다).
+- 관련 rule: rule 24 R1 · rule 93 R2
+
+## 2026-10-06 — PROJECT_MAP 지문을 새 파일을 index 에 넣기 전에 갱신했다
+
+- 카테고리: harness
+- 발견 위치: 8차 세션 시작 훅의 drift 경고(tests `ae2fdd35a8e5` → `dbc2a88b4399`). `85630d2c` 가 커밋한 값이 `85630d2c` 를 포함해 그 뒤 어느 커밋의 추적 파일 목록과도 맞지 않았다.
+- 원인: 지문은 git index 기준이다(`git ls-files -s`). 512개 조합을 대조한 결과 저장된 값은 "삭제한 시험 3개는 `git rm` 했고 새 시험 6개는 아직 `git add` 하지 않은" index 와 정확히 일치했다 — `--update` 를 새 파일을 넣기 전에 돌리고 그 값을 그대로 커밋했다.
+- 수정: 8차 문서 커밋에서 `check_project_map_drift.py --update` 를 다시 돌려 커밋된 tree 와 같은 값(`dbc2a88b4399`)으로 맞췄다.
+- 재발 방지: `--update` 는 변경 파일을 모두 index 에 넣은 뒤(커밋 직전)에 돌린다. 커밋 뒤 `check_project_map_drift.py`(update 없이)가 drift 0 인지 확인한다.
+- 관련 rule: rule 70 R2
