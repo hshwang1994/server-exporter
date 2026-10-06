@@ -228,3 +228,31 @@ def test_synthetic_shape_matches_json_only_table():
         mine = canon.shape(ch, "1.2.3.4")
         theirs = json_only._failed_shape(ch, "1.2.3.4")
         assert mine == theirs, ch
+
+
+def test_infra_outcomes_use_the_execution_base_sentence_not_a_target_failure(tmp_path):
+    """9차: 실행 기반(Runner)이 대기 한도 안에 돌아오지 않았거나(infra_wait_expired) 같은 작업 폴더로 이어 갈 수 없을 때(resume_impossible),
+    끝나지 않은 대상은 대상 측 실패로 확정하지 않고 실행 기반 문장을 쓴다. failure_code 는 그대로(OUTPUT_BUILD_FAILED)다."""
+    for outcome in ("infra_wait_expired", "resume_impossible"):
+        ws = _ws(tmp_path / outcome, ["10.0.0.1", "10.0.0.2"], outputs=[_envelope("10.0.0.1")],
+                 progress=[{"ts": "t", "host": "10.0.0.2", "ip": "10.0.0.2", "event": "auth_proven", "task": "linux | facts"}]) \
+            if (tmp_path / outcome).mkdir() is None else None
+        code, report, final = _run(ws, outcome=outcome)
+        env = final[1]
+        assert code == 0 and report["filled"] == 1
+        assert env["diagnosis"]["failure_stage"] == "fallback" and env["diagnosis"]["failure_code"] == "OUTPUT_BUILD_FAILED"
+        assert env["diagnosis"]["failure_reason"] == CATALOG["infra_unavailable"]["default"] == env["errors"][0]["message"]
+        assert env["errors"][0]["section"] == "gather" and env["diagnosis"]["details"]["outcome"] == outcome
+    assert fz.INFRA_OUTCOMES == ("infra_wait_expired", "resume_impossible")
+
+
+def test_attempt_marker_resets_observations_of_resumed_hosts(tmp_path):
+    """9차: 재개 표식(attempt) 뒤에는 그 대상의 지난 시도 관측(인증 · 끊김)을 쓰지 않는다 — 다시 수집한 시도의 관측만 분기를 정한다."""
+    prog = [{"ts": "t", "host": "10.0.0.2", "ip": "10.0.0.2", "event": "auth_proven", "task": "linux | facts"},
+            {"ts": "t", "host": "10.0.0.2", "ip": "10.0.0.2", "event": "lost", "task": "linux | disks", "detail": "x"},
+            {"ts": "t", "host": None, "ip": None, "event": "attempt", "task": None, "detail": "attempt 2", "n": 2, "hosts": ["10.0.0.2"]}]
+    ws = _ws(tmp_path, ["10.0.0.1", "10.0.0.2"], outputs=[_envelope("10.0.0.1")], progress=prog)
+    code, report, final = _run(ws, outcome="timeout")
+    env = final[1]
+    assert env["diagnosis"]["failure_code"] == "OUTPUT_BUILD_FAILED", "지난 시도의 인증 · 끊김 관측으로 GATHER_FAILED 를 만들지 않는다"
+    assert report["corrupt_lines"] == []

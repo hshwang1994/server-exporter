@@ -1,9 +1,11 @@
-"""시간 한계 표 — 값이 파일마다 같고, 서로의 합이 맞는지 (2026-10-05, 8차 R3 · R8).
+"""시간 한계 표 — 값이 파일마다 같고, 기다린 시간과 실행 시간을 따로 세는지 (2026-10-05 8차 R3 · R8, 2026-10-06 9차 개정).
 
 정본 표는 docs/operate/04-pipeline-runtime.md 의 "시간 한계" 절이다. 이 시험은 그 표의 값을 코드에서 읽어 서로 맞는지 본다.
-  빌드 12시간 = 입력 확인 5분 + 실행 위치 확인 5분 + 서버 정보 수집 단계 39,000초 + 결과 확인 및 전송 1시간
-  실제 수집(ansible-playbook)은 단계 안에서 최대 6시간 — 시작 기준으로 scripts/gather_budget.sh 가 계산하고 scripts/run_gather.sh 가 집행한다
+  빌드 전체 · 서버 정보 수집 단계의 timeout 은 없다(9차) — Runner · 결과 처리 노드를 최대 72시간 기다리는 동안 빌드를 끊지 않는다.
+  실행 기반 대기 합 72시간(빌드 하나, 다시 시도해도 처음부터 세지 않는다) · 실제 수집 누적 6시간(scripts/gather_state.py 가 시도마다 남은 한계를 정하고
+  scripts/run_gather.sh 가 집행) · 시도 하나의 실행 한계(6시간 + INT 뒤 정리 90초 + 준비 · 보존 몫, node 를 얻은 뒤) · 결과 확인 및 전송 1시간(노드를 얻은 뒤)
   연결 대기 60초 · 응답 대기(수집 API) 30분 · Portal 응답 대기 시도당 10분 · 오래된 작업 폴더 7일 · 빌드 기록 14일/100개 · 결과 파일 7일/50개
+기다린 시간을 실행 시간에서 빼는 동작과 보수적인 실행 시간 계산은 tests/unit/test_gather_state.py 가 가짜 시계로 본다.
 작업(task) 단위 제한이 없다는 것은 tests/unit/test_remote_task_timeouts.py 가, Redfish 요청의 연결 · 응답 대기 분리는
 tests/unit/test_redfish_request_timeouts.py 가 본다.
 """
@@ -14,8 +16,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 PORTAL = (REPO / "Jenkinsfile_portal").read_text(encoding="utf-8")
-BUDGET = (REPO / "scripts" / "gather_budget.sh").read_text(encoding="utf-8")
 RUN = (REPO / "scripts" / "run_gather.sh").read_text(encoding="utf-8")
+STATE = (REPO / "scripts" / "gather_state.py").read_text(encoding="utf-8")
+CLEANUP = (REPO / "scripts" / "workspace_cleanup.py").read_text(encoding="utf-8")
 
 
 def _constants() -> dict:
@@ -23,45 +26,56 @@ def _constants() -> dict:
     return {k: int(v) for k, v in re.findall(r"^\s+([A-Z_]+)\s*:\s*(\d+),", block, re.M)}
 
 
-def _budget(name: str) -> int:
-    m = re.search(rf"^{name}=(\d+)\b", BUDGET, re.M)
-    assert m, name
-    return int(m.group(1))
-
-
 C = _constants()
 
 
 def test_constants_table_is_complete():
-    assert C == {"BUILD": 43200, "PRE": 600, "STAGE": 39000, "FINALIZER": 3600, "GATHER_MAX": 21600, "PORTAL_WAIT": 600,
+    assert C == {"INFRA_WAIT": 259200, "OFFLINE_GRACE": 300, "GATHER_MAX": 21600, "KILL_AFTER": 90, "ATTEMPT_MARGIN": 7200,
+                 "FINALIZER": 3600, "ABORT_NODE_WAIT": 300, "BACKOFF_MAX": 3600, "MAX_BUILD": 295200, "PORTAL_WAIT": 600,
                  "PORTAL_MIN": 30, "PORTAL_ATTEMPTS": 3, "KEEP_DAYS": 7}
 
 
-def test_build_is_the_sum_of_its_parts_and_the_pipeline_options_use_the_same_values():
-    assert C["BUILD"] == C["PRE"] + C["STAGE"] + C["FINALIZER"], "빌드 = 입력 확인 · 실행 위치 확인 + 수집 단계 + 결과 확인 및 전송"
+def test_no_build_or_stage_timeout_waiting_is_not_execution():
     opts = PORTAL[PORTAL.index("\n    options {"):PORTAL.index("\n    stages {")]
-    m = re.search(r"timeout\(time: (\d+), unit: 'HOURS'\)", opts)
-    assert m and int(m.group(1)) * 3600 == C["BUILD"]
+    assert "timeout(" not in opts, "빌드 전체 timeout 이 있으면 72시간 대기가 끊긴다"
     pre = re.findall(r"options \{ timeout\(time: (\d+), unit: 'MINUTES'\) \}", PORTAL)
-    assert len(pre) == 2 and sum(int(x) * 60 for x in pre) == C["PRE"], "입력 확인 · 실행 위치 확인 각 5분"
-    m = re.search(r"options \{ timeout\(time: (\d+), unit: 'SECONDS'\) \}", PORTAL)
-    assert m and int(m.group(1)) == C["STAGE"], "서버 정보 수집 단계"
+    assert pre == ["5", "5"], "입력 확인 · 실행 위치 확인 각 5분 — 실행 기반 대기가 아니라 입력 · 저장소 확인"
+    assert "unit: 'SECONDS') }" not in PORTAL, "서버 정보 수집 단계 한계(종전 39000초)는 없다"
+    assert "unit: 'HOURS'" not in PORTAL
 
 
-def test_gather_budget_uses_the_same_limits_and_leaves_room_for_preserve():
-    for name, key in (("BUILD_SEC", "BUILD"), ("PRE_SEC", "PRE"), ("FINALIZER_SEC", "FINALIZER"), ("STAGE_SEC", "STAGE"), ("GATHER_MAX_SEC", "GATHER_MAX")):
-        assert _budget(name) == C[key], name
-    grace, post = _budget("GRACE_SEC"), _budget("AGENT_POST_SEC")
-    # 6시간 수집 + INT 뒤 정리 + 결과 정리 · 보존 몫이 단계 안에 들어가고, 남는 시간이 Runner 대기 · 준비에 쓰인다
-    assert C["GATHER_MAX"] + grace + post < C["STAGE"]
-    assert C["STAGE"] - C["GATHER_MAX"] - grace - post >= 3 * 3600, "Runner 대기 · checkout · Add-on 준비에 3시간 이상"
-    assert re.search(rf'timeout --signal=INT --kill-after={grace} "\$LIMIT"', RUN), "INT 뒤 정리 시간 = gather_budget GRACE_SEC"
-    assert "SE_FORCE_SEC" not in BUDGET.split("set -u", 1)[-1] and "SE_FORCE_SEC" not in RUN
+def test_execution_limits_start_only_after_a_node_is_acquired():
+    attempt = PORTAL[PORTAL.index("def seAttempt(Map C, Map st, Map r) {"):]
+    attempt = attempt[: attempt.index("\n}\n")]
+    i_ws = attempt.index('ws("${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}") {')
+    i_t0 = attempt.index("long t0 = seNowMs()")
+    i_to = attempt.index("timeout(time: limitSec, unit: 'SECONDS') {")
+    assert i_ws < i_t0 < i_to, "시도 하나의 실행 한계는 node · 작업 폴더를 얻은 뒤에만 센다"
+    assert "long limitSec = (C.GATHER_MAX as long) + (C.KILL_AFTER as long) + (C.ATTEMPT_MARGIN as long)" in attempt
+    fin = PORTAL[PORTAL.index("def seFinalizeAndCallback() {"):]
+    fin = fin[: fin.index("\n}\n")]
+    assert fin.index("seWithNode('built-in'") < fin.index("timeout(time: C.FINALIZER, unit: 'SECONDS') {"), "결과 확인 1시간은 노드를 얻은 뒤"
+
+
+def test_gather_limit_is_accumulated_real_execution():
+    assert re.search(rf'timeout --signal=INT --kill-after={C["KILL_AFTER"]} "\$LIMIT"', RUN), "INT 뒤 정리 시간 = KILL_AFTER"
+    assert "limit = max(0, int(gather_max) - used)" in STATE, "이번 시도의 한계 = 6시간 − 누적 실제 수집 시간"
+    assert "ALIVE_INTERVAL_SEC = 60" in STATE and "sleep 60" in RUN, "생존 표시 주기 = 보수적 계산의 더하는 몫"
+    for gone in ("MemAvailable", "meminfo", "SE_MEM_AVAILABLE_MB", "SE_PER_FORK_MB", "SE_NODE_SHARE_PCT", "SE_FIXED_MB", "mem_cap", "MEM_REFUSED"):
+        assert gone not in RUN and gone not in STATE and gone not in PORTAL, gone
+    assert not (REPO / "scripts" / "gather_budget.sh").exists(), "메모리 · 남은 빌드 시간으로 시작을 막던 계산은 없다"
+
+
+def test_infra_wait_is_one_budget_per_build():
+    load = PORTAL[PORTAL.index("def seInfraLoad(Map C) {"):]
+    load = load[: load.index("\n}\n")]
+    assert "env.SE_INFRA_JSON" in load and "return seInfraNew(C.INFRA_WAIT as long)" in load
+    assert PORTAL.count("seInfraNew(") == 2, "정의 하나 · 처음 만들 때 하나 — 다시 시도 · 재개 · 결과 처리 노드 대기가 같은 기록을 이어 쓴다"
+    assert "Map infra = seInfraLoad(C)" in PORTAL[PORTAL.index("def seGatherStage(Map C) {"):PORTAL.index("def seGatherLoop(")]
+    assert "Map infra = seInfraLoad(C)" in PORTAL[PORTAL.index("def seFinalizeAndCallback() {"):PORTAL.index("def seFinalizeIn(")]
 
 
 def test_finalizer_limit_and_portal_waits():
-    assert "long limit = Math.max(60L, Math.min((long) C.FINALIZER, buildStart + (long) C.BUILD - tPost - 60L))" in PORTAL
-    assert "timeout(time: limit, unit: 'SECONDS') {" in PORTAL and "node('built-in')" in PORTAL
     assert "int t = (int) Math.min((long) C.PORTAL_WAIT, left - 10L)" in PORTAL, "시도당 응답 대기 10분(남은 시간 안에서)"
     assert "if (left < (C.PORTAL_MIN as long))" in PORTAL
     assert "int maxAttempts = aborted ? 1 : (C.PORTAL_ATTEMPTS as int)" in PORTAL
@@ -91,5 +105,8 @@ def test_connection_and_response_waits():
 def test_retention_and_cleanup_values():
     m = re.search(r"buildDiscarder\(logRotator\(daysToKeepStr: '(\d+)', numToKeepStr: '(\d+)', artifactDaysToKeepStr: '(\d+)', artifactNumToKeepStr: '(\d+)'\)\)", PORTAL)
     assert m and m.groups() == ("14", "100", "7", "50"), "빌드 기록 14일 · 100개, 결과 파일 7일 · 50개"
-    assert "--build-limit-sec ${C.BUILD} --keep-days ${C.KEEP_DAYS} --every-sec 86400" in PORTAL, "작업 폴더 정리: 하루 한 번, 7일 지난 끝난 폴더"
+    assert "--build-limit-sec ${C.MAX_BUILD} --keep-days ${C.KEEP_DAYS} --every-sec 86400" in PORTAL, "작업 폴더 정리: 하루 한 번, 7일 지난 끝난 폴더"
     assert int(m.group(3)) == C["KEEP_DAYS"], "결과 파일 보관 기간 = 남은 작업 폴더 정리 기간"
+    assert C["MAX_BUILD"] == C["INFRA_WAIT"] + C["GATHER_MAX"] + C["FINALIZER"] + 3 * 3600, "끝 기록 없는 폴더를 실행 중으로 보는 기간"
+    m = re.search(r'"--build-limit-sec", type=int, default=(\d+)', CLEANUP)
+    assert m and int(m.group(1)) == C["MAX_BUILD"]

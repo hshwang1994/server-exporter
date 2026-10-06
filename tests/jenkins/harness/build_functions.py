@@ -4,7 +4,8 @@
 운영 코드에는 장애 주입 분기를 넣지 않는다. 대신 이 도구가
   1. Jenkinsfile_portal(main checkout 또는 생성 tree 의 사본) 에서 `pipeline {` 앞의 최상위 선언(상수·helper·seFinalizeAndCallback·
      sePreserveGatherOutput …)을 **그대로** 잘라내고,
-  2. 같은 이름의 **wrapper 메서드**(archiveArtifacts · stash · unstash · unarchive · readTrusted · readFile · sh · unstable · httpRequest) 와
+  2. 같은 이름의 **wrapper 메서드**(archiveArtifacts · stash · unstash · unarchive · readTrusted · readFile · sh · unstable · httpRequest,
+     9차 gather_stage: node · nodesByLabel · retry · ws · checkout · withCredentials) 와
      `getParams()`(params 그림자) 를 덧붙여 — 스크립트 메서드가 DSL step 보다 먼저 해석되므로 시나리오별로 실제 step 에 위임하거나
      예외·지연을 일으킨다 —
   3. `return this` 로 끝나는 파일을 만든다. Jenkinsfile_harness 가 `load` 한 뒤 `seHarnessInit(this, cfg)` 로 바깥 스크립트(실제 step)를 넘긴다.
@@ -42,15 +43,21 @@ SLOW_ARCHIVE = {"archive_slow"}
 SLOW_READFILE_FINAL = {"layer_a_read_slow"}
 # 결과 정리(Layer A) sh 의 label — Jenkinsfile_portal sePreserveGatherOutput() 과 같은 글자 (8차 R7 에서 바뀌었다)
 LAYER_A_LABEL = "결과 정리 (서버마다 결과 한 줄)"
+# 수집 실행 sh 의 label — Jenkinsfile_portal seAttemptBody() 와 같은 글자 (9차: 이 step 뒤에 실행 기반 끊김을 흉내 낸다)
+GATHER_LABEL = "서버 정보 수집 (ansible-playbook)"
 
 # 모든 시나리오 — Jenkinsfile_harness · harness_verdict.py 와 같은 목록 (scenarios.json 이 정본)
 #   2026-10-05 (8차 R3): Tier 2(SE_FINALIZER_BOUNDED) · Script Approval 실측 시나리오(inner_*_timeout · sandbox_probe)를 없앴다 — 안쪽 단계 상한이 없다.
 #   8차 R1: gather_limit_preserve 가 운영 Job 의 강제 한계 S3(gatherBudgetForceSec)를 대신한다.
+#   9차 (2026-10-06): gather_stage 시나리오 — 운영 함수 seGatherStage 를 짧은 시험 상수로 그대로 실행하고 실행 기반(Runner 대기 · 연결 끊김 ·
+#   작업 폴더 사라짐 · 결과 처리 노드 대기)만 wrapper 가 흉내 낸다: gather_limit_preserve · infra_resume · infra_wait_expired · resume_impossible ·
+#   gather_wait_abort.
 SCENARIOS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
              "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx", "sink_close",
              "recover_slow", "outer_timeout", "foreign_timeout_interruption",
              "user_abort", "aborted_outcome_finalize", "sink_hold",
-             "archive_slow", "layer_a_read_slow", "gather_limit_preserve")
+             "archive_slow", "layer_a_read_slow", "gather_limit_preserve",
+             "infra_resume", "infra_wait_expired", "resume_impossible", "gather_wait_abort")
 
 WRAPPERS = r'''
 
@@ -60,7 +67,8 @@ WRAPPERS = r'''
 //   스크립트 메서드는 같은 이름의 DSL step 보다 먼저 해석된다. 실제 step 은 HARNESS.outer(바깥 WorkflowScript)로 위임한다.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // 타입 없는 대입 = 스크립트 binding 변수 — 메서드에서 보인다 (typed 선언은 run() 의 지역변수가 돼 MissingPropertyException, Harness #5 실측)
-HARNESS = [scenario: '__SCENARIO__', calls: [], params: [:], trusted: [:], outer: null, slowDone: false]
+HARNESS = [scenario: '__SCENARIO__', calls: [], params: [:], trusted: [:], outer: null, slowDone: false, gather: null,
+           nodeCalls: 0, gatherCalls: 0, offline: false, agentLost: false, removeWs: false, wsPath: null]
 
 def seHarnessInit(Object outer, Map cfg) {
     HARNESS.outer = outer
@@ -68,8 +76,11 @@ def seHarnessInit(Object outer, Map cfg) {
     HARNESS.trusted = (cfg.trusted ?: [:])
     HARNESS.slowSeconds = (cfg.slowSeconds ?: 45) as int
     HARNESS.calls = []
+    HARNESS.gather = cfg.gather      // 9차 gather_stage 시나리오만 — 그 외에는 null(아래 wrapper 가 실제 step 으로 그대로 넘긴다)
     return this
 }
+
+def seHarnessState() { return [ws_path: HARNESS.wsPath, node_calls: HARNESS.nodeCalls, gather_calls: HARNESS.gatherCalls] }
 
 // params 그림자 — 함수 본문의 params.loc / params.callbackUrl … 가 Harness 가 준 값을 읽는다 (운영 함수는 손대지 않는다)
 def getParams() { return HARNESS.params }
@@ -148,7 +159,102 @@ def sh(Map m) {
         return 1
     }
     HARNESS.calls << ('sh:' + (m.label ?: '-'))
-    return HARNESS.outer.sh(m)
+    def res = HARNESS.outer.sh(m)
+    if (HARNESS.gather != null && m.label == '__GATHER_LABEL__') {
+        // 9차: 가짜 ansible 이 계획대로 수집 셸을 끝 기록 없이 끝냈다(crash). 계획이 agent_lost 면 Runner 를 오프라인으로 두고, Jenkins 가 끊긴
+        //   Runner 의 step 을 끝낼 때처럼 실제 interruption(다른 timeout 의 FlowInterruptedException)을 만든다 — 운영 함수의 catch 경로를 그대로 탄다
+        int k = HARNESS.gatherCalls as int
+        HARNESS.gatherCalls = k + 1
+        Map step = (k < HARNESS.gather.attempts.size()) ? HARNESS.gather.attempts[k] : [:]
+        HARNESS.calls << ('gather:attempt:' + (k + 1) + ':rc:' + res)
+        if (step.agent_lost == true) {
+            HARNESS.offline = true
+            HARNESS.agentLost = true
+            HARNESS.calls << ('gather:agent_lost:' + (k + 1))
+            HARNESS.outer.timeout(time: 1, unit: 'SECONDS') { HARNESS.outer.sleep(time: 30, unit: 'SECONDS') }
+        }
+    }
+    return res
+}
+
+// ── 9차 gather_stage: 실행 기반을 흉내 낸다. gather 가 없는 시나리오는 모두 실제 step 으로 그대로 넘긴다.
+//    node(): 결과 처리 노드(built-in)는 실제 node 로(계획한 만큼 늦게), 수집 라벨 · Runner 는 이 Harness 가 이미 잡은 executor 안에서 실행한다
+//            (운영 Runner 의 executor 를 더 잡지 않는다). 계획(attempts[k].queue_delay)만큼 기다린 뒤 실행 — 그동안 운영 함수의 대기 한도가 실제로 돈다.
+def node(String target, Closure body) {
+    if (HARNESS.gather == null) { return HARNESS.outer.node(target) { body() } }
+    if (target == 'built-in') {
+        int fd = (HARNESS.gather.finalize_delay ?: 0) as int
+        HARNESS.calls << ('node:built-in:delay:' + fd)
+        if (fd > 0) { HARNESS.outer.sleep(time: fd, unit: 'SECONDS') }
+        return HARNESS.outer.node('built-in') { body() }
+    }
+    int k = HARNESS.nodeCalls as int
+    HARNESS.nodeCalls = k + 1
+    Map step = (k < HARNESS.gather.attempts.size()) ? HARNESS.gather.attempts[k] : [:]
+    int d = (step.queue_delay ?: 0) as int
+    HARNESS.calls << ('node:' + target + ':delay:' + d)
+    if (d > 0) { HARNESS.outer.sleep(time: d, unit: 'SECONDS') }
+    HARNESS.offline = false
+    HARNESS.removeWs = (step.remove_workspace == true)
+    return body()
+}
+
+// 등록 · 연결 상태 — 흉내 낸 끊김 동안만 오프라인. deregistered 면 등록된 Runner 가 없다
+def nodesByLabel(Map m) {
+    if (HARNESS.gather == null) { return HARNESS.outer.nodesByLabel(m) }
+    HARNESS.calls << ('nodesByLabel:' + (m.offline == true ? 'registered' : 'online') + ':' + (HARNESS.offline ? 'offline' : 'on'))
+    if (m.offline == true) { return (HARNESS.gather.deregistered == true) ? [] : [m.label] }
+    return HARNESS.offline ? [] : [m.label]
+}
+
+// retry(agent() 조건) — Jenkins 가 끊긴 Runner 의 step 을 끝내면 retry 가 본문을 한 번 더 부른다(2026-10-06 se-probe 실측). 흉내 낸 끊김일 때만 그렇게 한다.
+def retry(Map m, Closure body) {
+    if (HARNESS.gather == null || m.conditions == null) { return HARNESS.outer.retry(m) { body() } }
+    int count = (m.count ?: 1) as int
+    for (int i = 1; i <= count; i++) {
+        try {
+            return body()
+        } catch (Throwable t) {
+            if (HARNESS.agentLost == true && i < count) {
+                HARNESS.agentLost = false
+                HARNESS.calls << 'retry:agent_lost'
+                continue
+            }
+            throw t
+        }
+    }
+    return null
+}
+
+// 작업 폴더 — 실제 ws 다(이 Runner 의 <agent root>/<Job>-<번호>). 계획이 remove_workspace 면 그 시도 전에 폴더를 지운다(끊긴 사이 폴더가 사라짐)
+def ws(String path, Closure body) {
+    if (HARNESS.gather == null) { return HARNESS.outer.ws(path) { body() } }
+    return HARNESS.outer.ws(path) {
+        HARNESS.wsPath = HARNESS.outer.pwd()
+        if (HARNESS.removeWs == true) {
+            HARNESS.removeWs = false
+            HARNESS.calls << 'ws:removed'
+            HARNESS.outer.deleteDir()
+        }
+        body()
+    }
+}
+
+// 저장소 받기 — 시험 사본(gather_ws: scripts · common · <채널>-gather 자리)을 복사한다. 운영 Job 의 SCM 을 다시 받지 않는다
+def getScm() { return 'harness-scm' }
+
+def checkout(Object s) {
+    if (HARNESS.gather == null) { return HARNESS.outer.checkout(HARNESS.outer.scm) }
+    HARNESS.calls << 'checkout:copy'
+    HARNESS.outer.sh(label: 'harness: 저장소 사본', script: "cp -a '" + HARNESS.gather.src + "/.' .")
+    return [GIT_COMMIT: HARNESS.gather.sha]
+}
+
+// vault 비밀번호 — 가짜 ansible 은 읽지 않는다. 실제 credential 을 꺼내지 않는다
+def withCredentials(List creds, Closure body) {
+    if (HARNESS.gather == null) { return HARNESS.outer.withCredentials(creds) { body() } }
+    HARNESS.calls << 'withCredentials:stub'
+    return HARNESS.outer.withEnv(['VAULT_PASSWORD=harness-stub']) { body() }
 }
 
 // 결과는 verdict 가 정한다 — 함수가 부른 unstable() 은 기록만 한다 (Jenkins 결과를 바꾸지 않으므로 한 빌드 안의 시나리오를 오염시키지 않는다)
@@ -183,11 +289,13 @@ def build(source: Path, scenario: str, out: Path, meta_out: Path | None) -> dict
     raw = source.read_bytes()
     text = raw.decode("utf-8")
     functions = extract_functions(text)
-    for required in ("def seFinalizeAndCallback()", "def sePreserveGatherOutput()", "Map seConstants()", "Map seGatherOutcome(", "Map seReadGatherRun()"):
+    for required in ("def seFinalizeAndCallback()", "def sePreserveGatherOutput()", "Map seConstants()", "def seGatherStage(", "def seWithNode(",
+                     "Map seOutcomeFromState(", "Map seReadGatherRun()"):
         if required not in functions:
             raise SystemExit(f"source functions block lacks {required!r}")
-    if f"label: '{LAYER_A_LABEL}'" not in functions:
-        raise SystemExit(f"source functions block has no sh labelled {LAYER_A_LABEL!r} — the Layer A fault injection would not apply")
+    for label in (LAYER_A_LABEL, GATHER_LABEL):
+        if f"label: '{label}'" not in functions:
+            raise SystemExit(f"source functions block has no sh labelled {label!r} — the fault injection would not apply")
     if "return this" in functions:
         raise SystemExit("source functions block already contains 'return this' — unexpected")
     wrappers = (WRAPPERS.replace("__SCENARIO__", scenario)
@@ -199,7 +307,8 @@ def build(source: Path, scenario: str, out: Path, meta_out: Path | None) -> dict
                 .replace("__FOREIGN_TIMEOUT_UNSTASH__", groovy_list(FOREIGN_TIMEOUT_UNSTASH))
                 .replace("__SLOW_ARCHIVE__", groovy_list(SLOW_ARCHIVE))
                 .replace("__SLOW_READFILE_FINAL__", groovy_list(SLOW_READFILE_FINAL))
-                .replace("__LAYER_A_LABEL__", LAYER_A_LABEL))
+                .replace("__LAYER_A_LABEL__", LAYER_A_LABEL)
+                .replace("__GATHER_LABEL__", GATHER_LABEL))
     generated = functions.rstrip("\n") + "\n" + wrappers
     _write_lf(out, generated)
     meta = {

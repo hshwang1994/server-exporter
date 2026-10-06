@@ -1,0 +1,7 @@
+{"ts": "2026-10-06T01:00:00+00:00", "host": null, "ip": null, "event": "attempt", "task": null, "detail": "attempt 1", "n": 1, "hosts": ["203.0.113.201", "203.0.113.202", "203.0.113.203"]}
+{"ts": "2026-10-06T01:00:01.000000Z", "host": "203.0.113.201", "ip": "203.0.113.201", "event": "first_seen"}
+{"ts": "2026-10-06T01:01:02.000000Z", "host": "203.0.113.201", "ip": "203.0.113.201", "event": "precheck", "task": "precheck | 진단 결과 저장", "diagnosis": {"reachable": false, "port_open": false, "protocol_supported": null, "auth_success": null, "failure_stage": "reachable", "failure_code": "TARGET_UNREACHABLE", "failure_reason": "대상 서버가 응답하지 않습니다. 서버 전원 상태와 네트워크 연결을 확인하세요.", "details": {"channel": "redfish", "checked_ports": [443], "elapsed_ms": 61200, "icmp": "no_reply"}}}
+{"ts": "2026-10-06T01:00:01.000000Z", "host": "203.0.113.202", "ip": "203.0.113.202", "event": "first_seen"}
+{"ts": "2026-10-06T01:02:40.000000Z", "host": "203.0.113.202", "ip": "203.0.113.202", "event": "emitted"}
+{"ts": "2026-10-06T01:00:01.000000Z", "host": "203.0.113.203", "ip": "203.0.113.203", "event": "first_seen"}
+{"ts": "2026-10-06T01:00:09.000000Z", "host": "203.0.113.203", "ip": "203.0.113.203", "event": "auth_proven", "task": "redfish | collect"}

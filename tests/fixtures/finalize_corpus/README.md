@@ -18,7 +18,7 @@ tests/fixtures/finalize_corpus/<case>/
 ├── gather_manifest.json      # Jenkins Validate 가 만드는 접수 manifest {schema, build, channel, request, ips[]}   [입력 · 필수]
 ├── gather_output.json        # json_only 가 OUTPUT 태스크마다 append 한 envelope JSONL                            [입력 · 선택]
 ├── gather_checkpoint.jsonl   # json_only 가 CHECKPOINT(Add-on 전 조립본) 마다 append 한 envelope JSONL              [입력 · 선택]
-├── gather_progress.jsonl     # host 별 전이 이벤트 JSONL (Layer A 만 읽는다)                                          [입력 · 선택]
+├── gather_progress.jsonl     # host 별 전이 이벤트 JSONL + 재개 표식(attempt, 9차) (Layer A 만 읽는다)                   [입력 · 선택]
 ├── gather_rc.txt             # ansible-playbook(또는 timeout) rc                                                    [입력 · 선택]
 ├── outcome.txt               # Jenkinsfile 이 넘기는 --outcome (completed | timeout | timeout_killed | prep_failed …) [입력 · 필수]
 ├── expected_final.jsonl      # Layer A 의 gather_final.jsonl — 접수 순서대로 host 당 1줄                               [정답지]
@@ -48,6 +48,8 @@ tests/fixtures/finalize_corpus/<case>/
 | `16_non_finite_numbers` | redfish | OUTPUT 줄에 `NaN` · `Infinity` (JSON 값 아님) | 두 줄 `corrupt_lines` → CHECKPOINT 1 · 합성 1, 정상 1, exit 2 | Groovy JsonSlurper 도 'not JSON' 으로 버린다 |
 | `17_meta_and_scalar_types` | esxi | `meta` 가 목록 · `hostname` 이 숫자인 OUTPUT | 두 줄 dropped → 합성 2, 정상 1, exit 2 | 없음 |
 | `18_callback_reconciled_from_checkpoint` | os | 콜백 종료 보충이 CHECKPOINT 로 만든 OUTPUT 줄(F01) | 원문 그대로 output 2, exit 0 | 없음 |
+| `19_infra_wait_expired` | os | 시도 1 에서 1대 OUTPUT · 1대 인증 뒤 끊김, 재개 표식(attempt 2) 뒤 실행 기반(Runner)이 대기 한도 안에 돌아오지 않음 (2026-10-06 9차) | output 1 · 합성 2(`infra_unavailable` 문장, OUTPUT_BUILD_FAILED) — 재개 표식이 지난 시도의 인증 관측을 지운다, exit 0 | 없음 (문장 · 단계 · 오류 section 같음) |
+| `20_resume_impossible` | redfish | 같은 작업 폴더로 이어 갈 수 없음 — 1대 precheck 실패(TCP · ICMP 무응답), 1대 OUTPUT, 1대 인증 뒤 멈춤 (9차) | precheck 진단 보존 1 · output 1 · 합성 1(`infra_unavailable`), exit 0 | Layer B 는 precheck 대상도 실행 기반 문장으로 합성 |
 
 줄 번호(`line`)는 두 Layer 모두 빈 줄 · 공백 줄을 포함해 1부터 센다 — `13_mixed_blank_lines` 가 이 정렬을 확인한다.
 

@@ -13,7 +13,7 @@
 #                          -c http.sslVerify=false 를 붙인다 — 전역 git 설정 · 메인 저장소 체크아웃 · 다른 Job 에 영향이 없다.
 #   GIT_ASKPASS 등         자격증명은 호출자가 git 이 아는 환경변수로 넘긴다. 이 스크립트는 자격증명을 읽지도 적지도 않는다.
 #
-# git 명령마다 180초 제한(timeout 이 있을 때) — 응답 없는 저장소가 빌드를 붙잡지 않는다.
+# git 명령마다 1800초 제한(timeout 이 있을 때) — 응답 없는 저장소가 빌드를 붙잡지 않는다.
 # 대상 디렉터리는 시작할 때 지운다 — 이전 빌드의 파일이 남지 않는다.
 # 성공: stdout 에 `[addon] <URL>@<ref> <해시>` 한 줄, rc 0. 실패: stderr 에 `[addon] unavailable: <사유>`, rc 1.
 set -u

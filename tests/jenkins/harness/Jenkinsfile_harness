@@ -11,8 +11,10 @@
 //   2026-10-04 검토 C5: interruption 시나리오 — outer_timeout · foreign_timeout · user_abort(자기 빌드 /stop) ·
 //           aborted_outcome_finalize(ABORTED 빌드의 사후 finalize) · sink_hold(main Job T2 의 Callback 수신 증거용 sink 유지)
 //   2026-10-05 (8차): Tier 2(BOUNDED · SE_FINALIZER_BOUNDED) · Script Approval 실측을 없앴다 — 운영 함수에 안쪽 단계 상한이 없다(R3).
-//           stub_gather 시나리오(gather_limit_preserve)는 실제 scripts/run_gather.sh 를 가짜 ansible-playbook 과 시험 한계로 실행하고
-//           운영 함수 seGatherOutcome 으로 종료 상태를 정한다 — 운영 Job 의 시험용 파라미터(gatherBudgetForceSec)를 없앤 자리(R1).
+//   2026-10-06 (9차): gather_stage 시나리오(gather_limit_preserve · infra_resume · infra_wait_expired · resume_impossible · gather_wait_abort)는
+//           운영 함수 seGatherStage 를 짧은 시험 상수로 그대로 실행한다. 수집은 실제 scripts/run_gather.sh 가 가짜 ansible-playbook(stub_ansible.py)으로
+//           하고, 실행 기반(Runner 대기 · 연결 끊김 · 작업 폴더 사라짐 · 결과 처리 노드 대기)만 wrapper 가 흉내 낸다. 이 Harness 가 잡은 executor 안에서
+//           돈다 — 운영 Runner 의 executor 를 더 잡지 않는다. 운영 Job 에 시험용 파라미터 · 분기는 없다.
 
 properties([
     disableConcurrentBuilds(),
@@ -82,8 +84,9 @@ timeout(time: 45, unit: 'MINUTES') {
             }
         } else {
             // Layer A 가 읽는 정본: common/vars/*.yml + common/tasks/normalize/{init_fragments,build_meta,build_correlation}.yml (Harness #6: normalize 누락 → exit 3)
-            // 8차: 보존이 부르는 오래된 작업 폴더 정리(workspace_cleanup.py)와 stub_gather 가 실행하는 run_gather.sh · env_guard.sh 도 같은 위치에 둔다(생성 tree 모드와 같은 배치)
-            sh 'mkdir -p gather_ws/scripts gather_ws/common/tasks && cp -a scripts/finalize_gather_output.py scripts/activate_ansible_venv.sh scripts/workspace_cleanup.py scripts/run_gather.sh scripts/env_guard.sh gather_ws/scripts/ && cp -a common/vars gather_ws/common/ && cp -a common/tasks/normalize gather_ws/common/tasks/'
+            // 8차 · 9차: 보존이 부르는 오래된 작업 폴더 정리(workspace_cleanup.py)와 gather_stage 가 실행하는 run_gather.sh · env_guard.sh · gather_state.py 도
+            //   같은 위치에 둔다(생성 tree 모드와 같은 배치). gather_stage 의 시도는 이 사본을 저장소 대신 받는다(wrapper checkout)
+            sh 'mkdir -p gather_ws/scripts gather_ws/common/tasks && cp -a scripts/finalize_gather_output.py scripts/activate_ansible_venv.sh scripts/workspace_cleanup.py scripts/run_gather.sh scripts/env_guard.sh scripts/gather_state.py gather_ws/scripts/ && cp -a common/vars gather_ws/common/ && cp -a common/tasks/normalize gather_ws/common/tasks/'
         }
 
         // ── ② wrapper 를 붙인 함수 스크립트 (원본 글자 불변 — 해시 기록)
@@ -149,6 +152,7 @@ timeout(time: 45, unit: 'MINUTES') {
         String eventUuid = "harness-${env.BUILD_TAG}"
         def lib = null
         Map preserve = [:]
+        Map hs = [:]
         control.rethrown = false
         if (!holdOnly) {
         sh """${PY} tests/jenkins/harness/fixture.py --scenarios tests/jenkins/harness/scenarios.json --scenario ${scenario} \\
@@ -161,38 +165,65 @@ timeout(time: 45, unit: 'MINUTES') {
         for (String k in ['SE_PRESERVE_LAYER_A', 'SE_PRESERVE_ARCHIVED', 'SE_PRESERVE_STASHED', 'SE_PRESERVE_MANIFEST', 'SE_PRESERVE_HASRESULT']) { env."${k}" = '' }
 
         // ── ⑤ load + init (바깥 스크립트 = 실제 step)
+        boolean expectInterruption = (sc.expect_interruption ?: false) || (sc.outer_timeout_seconds ?: 0) > 0
         lib = load 'harness_functions.groovy'
+        Map gatherCfg = null
+        if (fx.gather_stage) {
+            gatherCfg = [attempts: (fx.gather_stage.attempts ?: []), finalize_delay: (fx.gather_stage.finalize_delay ?: 0),
+                         deregistered: false, src: "${pwd()}/gather_ws".toString(), sha: checkoutSha]
+        }
         lib.seHarnessInit(this, [params  : [loc: params.LOC, deploymentEnvironmentId: params.DEPLOYMENT_ENV, eventUuid: eventUuid,
-                                            callbackUrl: sinkUrl, target_type: fx.channel],
-                                 trusted : trusted, slowSeconds: (sc.slow_seconds ?: 45)])
+                                            callbackUrl: sinkUrl, target_type: fx.channel, verbosity: '0'],
+                                 trusted : trusted, slowSeconds: (sc.slow_seconds ?: 45), gather: gatherCfg])
         if (lib.params.callbackUrl != sinkUrl) { error '[Harness] params 그림자가 동작하지 않는다 — getParams() 해석 확인' }
 
-        // ── ⑤' stub_gather — 실제 scripts/run_gather.sh 를 가짜 ansible-playbook(앞의 finish 대 결과를 쓰고 대기)과 시험 한계로 실행한다.
-        //      종료 상태 · 한계 사유는 운영 함수 seGatherOutcome 이 정한다(서버 정보 수집 단계와 같은 함수). 시험 한계는 run_gather.sh 의 정상 인자다.
-        if (fx.stub_gather) {
-            Map sg = fx.stub_gather
-            dir('gather_ws') {
-                withEnv(["WORKSPACE=${pwd()}", "SE_ANSIBLE_VENV=${sg.venv}", "SE_HARNESS_STUB_OUTPUT=${sg.output}",
-                         "ANSIBLE_JSON_OUTPUT_FILE=${pwd()}/gather_output.json", "VAULT_PASSWORD=harness-stub"]) {
-                    env.SE_GATHER_STARTED_AT = lib.seIsoUtc(lib.seNowMs())
-                    int grc = sh(returnStatus: true, label: 'harness: 수집 실행 (가짜 ansible-playbook, 시험 한계)', script: """#!/bin/bash
-                        bash "\${WORKSPACE}/scripts/run_gather.sh" '${sg.playbook}' '${sg.inventory}' 1 '${sg.limit_sec}' '${params.LOC}' false '${sg.hosts}'
-                    """)
-                    env.SE_GATHER_ENDED_AT = lib.seIsoUtc(lib.seNowMs())
-                    Map run = lib.seReadGatherRun()
-                    Map oc = lib.seGatherOutcome(grc, run, 'gather_limit')
-                    env.SE_GATHER_RUN = run ? groovy.json.JsonOutput.toJson(run) : ''
-                    env.SE_GATHER_OUTCOME = oc.outcome
-                    env.SE_GATHER_LIMIT_REASON = oc.limit_reason
-                    env.SE_GATHER_LIMIT_SEC = "${sg.limit_sec}"
-                    env.SE_GATHER_LIMIT_SOURCE = 'gather_limit'
-                    control.stub_gather = [rc: grc, run: run, outcome: oc.outcome, limit_reason: oc.limit_reason]
-                    echo "[Harness] stub_gather rc=${grc} outcome=${oc.outcome} limit_reason=${oc.limit_reason} run=${run}"
+        // ── ⑤' gather_stage (9차) — 운영 함수 seGatherStage 를 짧은 시험 상수로 그대로 실행한다. 시도마다 실제 scripts/run_gather.sh 가
+        //      가짜 ansible-playbook(stub_ansible.py, 계획대로 결과를 쓰고 · 끊기고 · 남는다)을 남은 대상만 넘겨 실행하고, 마지막 시도가 보존한다.
+        //      Runner 대기 · 연결 끊김 · 작업 폴더 사라짐 · 결과 처리 노드 대기만 wrapper 가 흉내 낸다(이 executor 안에서 — 추가 executor 없음).
+        if (fx.gather_stage) {
+            Map gsx = fx.gather_stage
+            Map C = lib.seConstants() + (gsx.constants ?: [:])
+            control.gather_constants = gsx.constants
+            env.SE_AGENT_LABEL = 'harness-runner-label'
+            env.SE_LOCATION = params.LOC
+            env.SE_INFRA_JSON = ''
+            String stopUrl = "${env.BUILD_URL}stop"
+            try {
+                withEnv(["ADDON_REPO_URL=", "SE_ANSIBLE_VENV=${gsx.venv}", "SE_HARNESS_STUB_DIR=${gsx.stub_dir}"]) {
+                    if (sc.gather_abort_after) {
+                        parallel(
+                            gather: { lib.seGatherStage(C) },
+                            stopper: {
+                                sleep(time: (sc.gather_abort_after as int), unit: 'SECONDS')
+                                echo "[Harness] gather_wait_abort: POST ${stopUrl} (실행 기반을 기다리는 중 자기 빌드 중단 — 사용자 Abort 와 같은 경로)"
+                                httpRequest(url: stopUrl, httpMode: 'POST', authentication: 'se-jenkins-lint', ignoreSslErrors: true, validResponseCodes: '100:599', timeout: 30)
+                            },
+                            failFast: false
+                        )
+                    } else {
+                        lib.seGatherStage(C)
+                    }
                 }
+            } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                control.rethrown = true
+                control.interruption_class = fie.getClass().name
+                echo "[Harness] 수집 단계 밖으로 interruption 이 전파됐다: ${fie.getClass().name}"
+                if (!expectInterruption) { throw fie }
+                currentBuild.result = 'ABORTED'        // 선언형 파이프라인이 post 전에 남기는 결과와 같게
             }
+            hs = lib.seHarnessState()
+            sh "cp '${gsx.stub_dir}/received.jsonl' gather_received.jsonl 2>/dev/null || : > gather_received.jsonl"
+            control.gather = [outcome: env.SE_GATHER_OUTCOME, limit_reason: env.SE_GATHER_LIMIT_REASON, ws_path: hs.ws_path,
+                              node_calls: hs.node_calls, gather_calls: hs.gather_calls, ips: gsx.ips]
+            preserve = [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED == 'true', stashed: env.SE_PRESERVE_STASHED == 'true',
+                        manifestOk: env.SE_PRESERVE_MANIFEST == 'true', hasResult: env.SE_PRESERVE_HASRESULT == 'true']
+            preserve.deleted = hs.ws_path ? (sh(returnStatus: true, script: "test -e '${hs.ws_path}/gather_manifest.json'") != 0) : null
+            echo "[Harness] gather_stage outcome=${env.SE_GATHER_OUTCOME} limit_reason=${env.SE_GATHER_LIMIT_REASON} ws=${hs.ws_path} node_calls=${hs.node_calls} gather_calls=${hs.gather_calls}"
         }
 
         // ── ⑥ 보존 — Gather post 가 하는 일을 gather_ws 에서 실제 step 으로 (Layer A · archive · stash). 주입은 wrapper 가 한다.
+        //      gather_stage 는 운영 함수(마지막 시도)가 이미 보존했다.
+        if (!fx.gather_stage) {
         dir('gather_ws') {
             withEnv(["WORKSPACE=${pwd()}"]) {
                 if (fx.run_preserve) {
@@ -211,6 +242,7 @@ timeout(time: 45, unit: 'MINUTES') {
             }
         }
         preserve.deleted = !fileExists('gather_ws/gather_manifest.json')
+        }   // !fx.gather_stage
         writeFile(file: 'preserve_state.json', text: groovy.json.JsonOutput.toJson(preserve), encoding: 'UTF-8')
         echo "[Harness] preserve=${preserve}"
 
@@ -218,7 +250,7 @@ timeout(time: 45, unit: 'MINUTES') {
         //    set_result(aborted_outcome_finalize): ABORTED 빌드의 사후 finalize — seCallback 의 aborted 분기(1회 시도)를 실제로 탄다.
         //    self_abort_after(user_abort): 느린 unstash 중에 Harness 가 자기 빌드에 POST /stop — 사용자 중단과 같은 interruption 이 finalizer 로 들어간다.
         //    expect_interruption 시나리오만 interruption 을 기록 뒤 삼킨다(우리가 만든 것) — 그 외는 진짜 중단이라 그대로 전파한다.
-        boolean expectInterruption = (sc.expect_interruption ?: false) || (sc.outer_timeout_seconds ?: 0) > 0
+        //    gather_stage 시나리오는 이 호출이 pipeline post{always} 의 결과 확인 및 전송 자리다(수집 단계가 어떻게 끝났든 한 번).
         if (sc.set_result) {
             currentBuild.result = sc.set_result.toString()
             echo "[Harness] currentBuild.result=${currentBuild.result} (시나리오 ${scenario})"
@@ -281,9 +313,15 @@ timeout(time: 45, unit: 'MINUTES') {
         // ── ⑨ 판정 — 기대 불일치는 UNSTABLE(FAIL), 관측 부족은 UNSTABLE(PARTIAL), 도구 실패는 FAILURE
         int rc = sh(returnStatus: true, script: """${PY} tests/jenkins/harness/harness_verdict.py --scenarios tests/jenkins/harness/scenarios.json --scenario ${scenario} \\
                 --summary observed/finalize_summary.json --body observed/callback_body.json --calls harness_calls.json --sink sink/record.jsonl \\
-                --preserve preserve_state.json --control harness_control.json --meta harness_functions_meta.json --out harness_result.json""")
-        archiveArtifacts(artifacts: 'harness_result.json,harness_functions.groovy,harness_functions_meta.json,harness_calls.json,harness_control.json,preserve_state.json,fixture_state.json,fixture_post.json,sink/record.jsonl,sink/sink.log,observed/*',
+                --preserve preserve_state.json --control harness_control.json --meta harness_functions_meta.json --received gather_received.jsonl \\
+                --fixture fixture_state.json --out harness_result.json""")
+        archiveArtifacts(artifacts: 'harness_result.json,harness_functions.groovy,harness_functions_meta.json,harness_calls.json,harness_control.json,preserve_state.json,fixture_state.json,fixture_post.json,gather_received.jsonl,sink/record.jsonl,sink/sink.log,observed/*',
                          allowEmptyArchive: true, fingerprint: false)
+        // gather_stage 가 이 Runner 에 만든 시도 작업 폴더(<agent root>/<Job>-<번호>) — 보존을 마친 시도는 운영 함수가 지웠다. 남은 것(대기 한도 초과 ·
+        //   재개 불가 · 취소)은 이 빌드의 것만 확인하고 지운다(운영 Runner 에 시험 폴더를 남기지 않는다)
+        if (hs.ws_path && hs.ws_path.toString().endsWith("/${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}")) {
+            sh "rm -rf '${hs.ws_path}' '${hs.ws_path}@tmp'"
+        }
         if (rc == 1) {
             unstable("[Harness] ${scenario}: FAIL — 기대와 다르다 (harness_result.json)")
         } else if (rc == 2) {

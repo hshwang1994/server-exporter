@@ -1,0 +1,109 @@
+// tests/jenkins/harness/Jenkinsfile_live_infra — 실행 기반 대기 · 같은 Runner 재개 실기 검증 드라이버 (2026-10-06, 9차). 운영 수집 Job 이 아니다.
+//
+//   임시 노드(PROBE_LABEL, 기본 se-probe — Runner 호스트의 별도 작업 폴더 · executor 1)에서 운영 함수 seGatherStage 를 시험 상수로 **실제 node()** 와 함께
+//   실행한다. 수집은 실제 scripts/run_gather.sh · scripts/gather_state.py 가 하고, ansible 만 가짜(stub_ansible.py — 시도별 계획대로 결과를 쓰고 기다린다)다.
+//   오프라인 전환 · 연결 끊기 · 다시 붙이기 · 작업 폴더 삭제 · 취소는 검증자가 Jenkins REST · Runner SSH 로 한다(사례별 절차는 README 와
+//   tests/evidence/2026-10-06-9th-infra-wait-resume.md). 준비 · 정리도 같은 임시 노드에서 한다 — 운영 Runner 의 executor 를 잡지 않는다.
+//   Job 은 Pipeline from SCM(main) · Script Path 이 파일. 결과 판정은 검증자가 아래 산출물로 한다(가짜 실행 기반을 쓰는 Harness 판정과 별개).
+//   산출물: live_received.jsonl(가짜 ansible 이 시도마다 받은 대상) · finalize_summary.json · callback_body.json · gather_run.json(마지막 보존이 보관한 경우)
+
+properties([
+    disableConcurrentBuilds(),
+    buildDiscarder(logRotator(numToKeepStr: '30')),
+    parameters([
+        choice(name: 'CASE', choices: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L8'],
+               description: 'L1 오프라인→온라인 · L2 executor 사용 중→가용 · L3 끊김(프로세스 생존) · L4 끊김(프로세스 종료) · L5 대기 한도 초과 · L6 대기 중 취소 · L8 끊긴 사이 작업 폴더 삭제'),
+        string(name: 'PROBE_LABEL', defaultValue: 'se-probe', description: '시험 전용 노드 이름(운영 Runner 를 쓰지 않는다)'),
+        string(name: 'HOSTS', defaultValue: '6', description: '가짜 대상 수(192.0.2.0/24)'),
+    ]),
+])
+
+// 사례별 시험 상수와 가짜 ansible 의 시도별 계획 — 실행 기반 장애는 검증자가 만든다
+Map BASE = [INFRA_WAIT: 3600, OFFLINE_GRACE: 300, GATHER_MAX: 1800, KILL_AFTER: 10, ATTEMPT_MARGIN: 900, BACKOFF_MAX: 60]
+Map PLANS = [
+    L1: [constants: BASE, attempts: [[emit: 'all', sleep: 5]]],
+    L2: [constants: BASE, attempts: [[emit: 'all', sleep: 5]]],
+    L3: [constants: BASE, attempts: [[emit: 2, sleep: 540], [emit: 'all']]],
+    L4: [constants: BASE, attempts: [[emit: 2, sleep: 900], [emit: 'all']]],
+    L5: [constants: BASE + [INFRA_WAIT: 480], attempts: [[emit: 2, sleep: 900], [emit: 'all']]],
+    L6: [constants: BASE, attempts: [[emit: 2, sleep: 900], [emit: 'all']]],
+    L8: [constants: BASE, attempts: [[emit: 2, sleep: 900], [emit: 'all']]],
+]
+Map plan = PLANS[params.CASE]
+String probe = params.PROBE_LABEL.trim()
+String PY = '. "$WORKSPACE/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true; python3'
+
+timeout(time: 4, unit: 'HOURS') {     // 시험 Job 의 안전 상한(운영 파이프라인에는 빌드 timeout 이 없다)
+    def lib = null
+    Map stub = null
+    String stubRoot = ''
+    // ── 준비 — 임시 노드에서. 이 블록을 나온 뒤 운영 함수가 같은 노드를 스스로 기다린다(executor 1)
+    node(probe) {
+        deleteDir()
+        checkout scm
+        stubRoot = "${pwd()}/../se-live-stub-${env.BUILD_NUMBER}".toString()
+        sh "${PY} tests/jenkins/harness/build_functions.py --source Jenkinsfile_portal --scenario normal_success --out harness_functions.groovy --meta harness_functions_meta.json"
+        writeFile(file: 'live_plan.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson([hosts: (params.HOSTS as int), attempts: plan.attempts]))
+        String out = sh(returnStdout: true, label: 'live: 가짜 ansible 준비', script: """${PY} - <<'PYEOF'
+import json, pathlib, sys
+sys.path.insert(0, 'tests/jenkins/harness')
+import fixture
+spec = json.load(open('live_plan.json', encoding='utf-8'))
+ips = ['192.0.2.%d' % (10 + i) for i in range(int(spec['hosts']))]
+root = pathlib.Path('${stubRoot}').resolve()
+st = fixture.make_gather_stage(root / 'src', pathlib.Path('tests/fixtures/finalize_corpus/01_normal'), spec, 'os', ips)
+print(json.dumps(st))
+PYEOF""").trim()
+        String[] outLines = out.split('\n')
+        stub = readJSON(text: outLines[outLines.length - 1], returnPojo: true) as Map
+        lib = load 'harness_functions.groovy'
+        lib.seHarnessInit(this, [params: [loc: 'git', deploymentEnvironmentId: 'live-infra', eventUuid: "live-${env.BUILD_TAG}".toString(),
+                                          callbackUrl: 'http://127.0.0.1:9', target_type: 'os', verbosity: '0'],
+                                 trusted: [:], gather: null])
+        echo "[live] CASE=${params.CASE} probe=${probe} stub=${stub.stub_dir} constants=${plan.constants}"
+    }
+
+    // ── 운영 함수 그대로 — 접수 목록 · 실행 위치는 입력 확인 · 실행 위치 확인이 하던 대로 env 에 둔다
+    env.SE_MANIFEST_JSON = groovy.json.JsonOutput.toJson([schema: 1, build: [job: env.JOB_NAME, number: env.BUILD_NUMBER, url: env.BUILD_URL],
+                                                          channel: 'os', request: [loc: 'git', deploymentEnvironmentId: 'live-infra',
+                                                                                   eventUuid: "live-${env.BUILD_TAG}".toString(), callbackUrl: 'http://127.0.0.1:9'],
+                                                          ips: stub.ips])
+    env.SE_AGENT_LABEL = probe
+    env.SE_LOCATION = 'git'
+    env.SE_INFRA_JSON = ''
+    boolean aborted = false
+    try {
+        withEnv(["ADDON_REPO_URL=", "SE_ANSIBLE_VENV=${stub.venv}", "SE_HARNESS_STUB_DIR=${stub.stub_dir}"]) {
+            lib.seGatherStage(lib.seConstants() + plan.constants)
+        }
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+        aborted = true
+        currentBuild.result = 'ABORTED'
+        echo "[live] 수집 단계 밖으로 interruption: ${fie.getClass().name}"
+    }
+    echo "[live] outcome=${env.SE_GATHER_OUTCOME} limit_reason=${env.SE_GATHER_LIMIT_REASON} infra=${env.SE_INFRA_JSON}"
+    // ── 결과 확인 및 전송 — 운영 post 와 같은 함수(전송 주소는 닫힌 포트라 전송만 실패한다)
+    try {
+        lib.seFinalizeAndCallback()
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+        echo "[live] 결과 확인 중 interruption: ${fie.getClass().name}"
+    }
+    // ── 관측 수집 · 정리 — 같은 임시 노드. 노드가 끝내 돌아오지 않는 사례(L5)는 검증자가 다시 붙인 뒤 진행된다
+    timeout(time: 30, unit: 'MINUTES') {
+        node(probe) {
+            sh "cp '${stub.stub_dir}/received.jsonl' live_received.jsonl 2>/dev/null || : > live_received.jsonl"
+            archiveArtifacts(artifacts: 'live_received.jsonl,harness_functions_meta.json,live_plan.json', allowEmptyArchive: true, fingerprint: false)
+            sh label: 'live: 시험 폴더 정리', script: "rm -rf '${stubRoot}'"
+            deleteDir()
+        }
+        // 시도 작업 폴더는 노드 루트 아래(ws 가 고르는 곳 — 운영 작업 폴더와 같은 규칙). 마지막 보존이 지웠으면 빈 폴더만 지운다
+        node(probe) {
+            ws("${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}") {
+                String attemptWs = pwd()
+                deleteDir()
+                sh label: 'live: 시도 작업 폴더 정리', script: "rm -rf '${attemptWs}@tmp'"
+            }
+        }
+    }
+    if (aborted) { currentBuild.result = 'ABORTED' }
+}

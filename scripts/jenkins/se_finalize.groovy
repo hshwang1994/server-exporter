@@ -40,7 +40,15 @@ Map seFallbackCanon() {
                                'virtual_switches': [], 'portgroups': [], 'driver_map': [], 'summary': ['groups': []]],
                    'users': [], 'firmware': [], 'power': null, 'thermal': ['temperatures': [], 'fans': []]],
         emitFailed: '수집은 끝났지만 결과를 내보내는 단계에서 중단되었습니다. 기본 수집 결과는 그대로입니다.',
+        // 2026-10-06 (9차): 실행 기반(Runner)이 72시간 안에 돌아오지 않았거나 같은 작업 폴더로 이어 갈 수 없어 끝나지 않은 대상의 문장
+        infraReason: '수집을 실행하던 Runner 가 회복되지 않아 이 대상의 수집을 마치지 못했습니다.',
     ]
+}
+
+// 실행 기반 장애로 끝나지 않은 수집의 종료 상태 (2026-10-06 9차, Python Layer A 의 INFRA_OUTCOMES 와 같다)
+@NonCPS
+boolean seIsInfraOutcome(String outcome) {
+    return outcome in ['infra_wait_expired', 'resume_impossible']
 }
 
 // JSON 문자열 escaping — 종전 수동 replaceAll 대신 Groovy JsonOutput 이 특수문자 escaping 을 맡는다. 입력 거부 정책 변경이 아니다.
@@ -139,14 +147,16 @@ Map seReconcileRaw(String manifestJson, String outputText, String checkpointText
         Map meta = [:];  for (String k in canon.meta) { meta[k] = null }
         Map corr = [:];  for (String k in canon.corr) { corr[k] = (k == 'host_ip' || (k == 'bmc_ip' && channel == 'redfish')) ? ip : null }
         String detail = "envelope synthesized by Layer B from accepted manifest; outcome=${outcome}".toString()
+        // 실행 기반 장애로 끝나지 않은 대상은 대상 측 실패가 아니다 — 실행 기반 문장을 쓴다(Layer A 와 같은 문장)
+        String reason = (seIsInfraOutcome(outcome) && canon.infraReason) ? canon.infraReason : canon.reason
         Map env = [
             schema_version: '1', target_type: channel, collection_method: canon.method[channel], ip: ip, hostname: null,
             vendor: null, status: 'failed', sections: sections,
             diagnosis: [reachable: null, port_open: null, protocol_supported: null, auth_success: null,
-                        failure_stage: 'fallback', failure_code: 'OUTPUT_BUILD_FAILED', failure_reason: canon.reason,
+                        failure_stage: 'fallback', failure_code: 'OUTPUT_BUILD_FAILED', failure_reason: reason,
                         details: [channel: channel, finalizer: 'layer_b', outcome: outcome]],
             meta: meta, correlation: corr,
-            errors: [[section: 'gather', message: canon.reason, detail: detail]],
+            errors: [[section: 'gather', message: reason, detail: detail]],
             data: new groovy.json.JsonSlurper().parseText(groovy.json.JsonOutput.toJson(canon.skeleton)),
         ]
         lines << groovy.json.JsonOutput.toJson(env); synthetic++

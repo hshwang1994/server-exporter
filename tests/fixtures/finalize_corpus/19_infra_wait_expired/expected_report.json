@@ -1,0 +1,24 @@
+{
+  "accepted": 3,
+  "kept": 1,
+  "filled": 2,
+  "dropped": [],
+  "conflicts": [],
+  "truncated_tail": [],
+  "corrupt_lines": [],
+  "by_origin": {
+    "output": 1,
+    "checkpoint": 0,
+    "synthetic": 2
+  },
+  "outcome": "infra_wait_expired",
+  "rc": null,
+  "exit_code": 0,
+  "layer": "a",
+  "channel": "os",
+  "build": {
+    "job": "clovirone-cicd/clovirone-server-gather",
+    "number": "119",
+    "url": "https://jenkins.example.invalid/job/clovirone-cicd/job/clovirone-server-gather/119/"
+  }
+}

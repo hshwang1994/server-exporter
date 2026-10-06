@@ -19,9 +19,9 @@ RUN_GATHER = (REPO / "scripts" / "run_gather.sh").read_text(encoding="utf-8")
 BASH = shutil.which("bash")
 PORTAL = (REPO / "Jenkinsfile_portal").read_text(encoding="utf-8")
 CLEARED_ALWAYS = ("SE_FORCE_LINUX_RAW_FALLBACK", "JSON_ONLY_NO_RECONCILE", "ANSIBLE_JSON_OUTPUT_TASK", "ANSIBLE_JSON_CHECKPOINT_TASK",
-                  "ANSIBLE_STDOUT_CALLBACK", "SE_VENDOR_ALIASES_PATH", "SE_MEM_AVAILABLE_MB")
+                  "ANSIBLE_STDOUT_CALLBACK", "SE_VENDOR_ALIASES_PATH")
 KEPT = {"ANSIBLE_CONFIG": "/w/ansible.cfg", "ANSIBLE_JSON_OUTPUT_FILE": "/w/gather_output.json", "SE_FORKS_CAP_OS": "80",
-        "SE_PER_FORK_MB": "90", "REPO_ROOT": "/w"}
+        "REPO_ROOT": "/w"}
 
 
 def _run(addon_validated: str, extra: dict) -> subprocess.CompletedProcess:
@@ -41,14 +41,14 @@ def test_inherited_test_values_are_cleared_and_only_names_are_logged():
     r = _run("false", inherited)
     assert r.returncode == 0, r.stderr
     left = {line.split()[1] for line in r.stdout.splitlines() if line.startswith("LEFT ")}
-    assert left == set(KEPT), "운영 설정(ansible.cfg 경로 · forks 상한 · 메모리 상수 등)은 남기고 시험용 값만 지운다"
+    assert left == set(KEPT), "운영 설정(ansible.cfg 경로 · forks 상한 등)은 남기고 시험용 값만 지운다"
     msg = [line for line in r.stdout.splitlines() if line.startswith("[수집]")]
     assert len(msg) == 1 and "ADDON_DIR" in msg[0] and all(n in msg[0] for n in CLEARED_ALWAYS)
     assert "secret-ish" not in r.stdout and "/tmp/unverified-addon" not in r.stdout, "값은 출력하지 않는다"
 
 
 def test_validated_addon_dir_is_kept():
-    r = _run("true", {"ADDON_DIR": "/w/addon", "SE_MEM_AVAILABLE_MB": "130"})
+    r = _run("true", {"ADDON_DIR": "/w/addon", "SE_FORCE_LINUX_RAW_FALLBACK": "true"})
     left = {line.split()[1] for line in r.stdout.splitlines() if line.startswith("LEFT ")}
     assert left == {"ADDON_DIR"}
     assert "ADDON_DIR" not in next(line for line in r.stdout.splitlines() if line.startswith("[수집]"))
@@ -60,8 +60,8 @@ def test_clean_environment_prints_nothing():
 
 
 def test_empty_but_set_values_are_cleared_too():
-    r = _run("false", {"SE_MEM_AVAILABLE_MB": "", "ADDON_DIR": ""})
-    assert "LEFT" not in r.stdout and "SE_MEM_AVAILABLE_MB" in r.stdout
+    r = _run("false", {"SE_VENDOR_ALIASES_PATH": "", "ADDON_DIR": ""})
+    assert "LEFT" not in r.stdout and "SE_VENDOR_ALIASES_PATH" in r.stdout
 
 
 def test_removed_force_value_is_not_even_read():
@@ -75,16 +75,16 @@ def test_removed_force_value_is_not_even_read():
 def test_run_gather_sources_the_guard_before_ansible():
     i_guard = RUN_GATHER.index('. "$WS/scripts/env_guard.sh" "$ADDON_OK"')
     assert i_guard < RUN_GATHER.index('. "$WS/scripts/activate_ansible_venv.sh" || exit 90') < RUN_GATHER.index("ansible-playbook \"$PLAYBOOK\"")
-    gather = PORTAL[PORTAL.index("stage('서버 정보 수집')"):]
-    call = gather[gather.index('bash "\\${WORKSPACE}/scripts/run_gather.sh"'):]
-    assert "${addonDir ? 'true' : 'false'}" in call[: call.index("\n")]
+    line = next(l for l in PORTAL.splitlines() if "scripts/run_gather.sh" in l and "bash " in l)
+    assert "${addonDir ? 'true' : 'false'}" in line
 
 
-def test_budget_inputs_come_only_from_this_build():
-    gather = PORTAL[PORTAL.index("stage('서버 정보 수집')"):]
-    line = next(l for l in gather.splitlines() if "bash scripts/gather_budget.sh" in l)
-    assert "unset SE_MEM_AVAILABLE_MB;" in line, "가용 메모리는 /proc/meminfo 에서만 — 상위 환경의 시험 입력을 지운다"
-    assert "SE_FORCE_SEC" not in gather
+def test_memory_is_never_an_input():
+    """9차: 가용 메모리로 수집 시작을 막지 않는다 — 어디서도 메모리 값을 읽지 않으므로 시험 입력(SE_MEM_AVAILABLE_MB)을 지울 필요도 없다."""
+    state = (REPO / "scripts" / "gather_state.py").read_text(encoding="utf-8")
+    for text in (PORTAL, RUN_GATHER, state, GUARD.read_text(encoding="utf-8").split("_se_guard_names=", 1)[1]):
+        assert "SE_MEM_AVAILABLE_MB" not in text and "meminfo" not in text and "MemAvailable" not in text
+    assert "SE_FORCE_SEC" not in PORTAL
 
 
 @pytest.mark.source_text

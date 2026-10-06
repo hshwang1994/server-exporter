@@ -12,7 +12,7 @@
 #   - 결과: WORKDIR/summary.json (phase5_report.py summarize) + 원본 파일(gather_*, time.txt, stdout.log, stderr.log, mem.json)
 #
 # usage: phase5_scale_run.sh --repo-root DIR --workdir DIR --hosts N [--forks F] [--budget-sec S] [--no-progress] [--octet 1] [--label TEXT]
-#   --forks 생략 시 scripts/gather_budget.sh 의 os 규칙 min(N, 100).  --budget-sec 는 timeout(1) 에 들어가는 값 (기본 3600).
+#   --forks 생략 시 min(N, 100) (운영의 동시 실행 상한은 scripts/gather_state.py forks_for — 이 시험 도구와 따로다).  --budget-sec 는 timeout(1) 에 들어가는 값 (기본 3600).
 #   --no-progress 는 ANSIBLE_JSON_PROGRESS_FILE / ANSIBLE_JSON_CHECKPOINT_FILE 을 비운다 (기록 비용 측정용).
 # 실장비에 연결하지 않는다. 127.0.0.0/8 만 쓴다. 파일에 자격증명을 쓰지 않는다.
 set -u

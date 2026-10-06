@@ -15,7 +15,9 @@ Runner 연결이 끊긴 빌드의 폴더는 다음 빌드가 다시 쓰지 않�
   - `<폴더>@tmp`(Jenkins 의 실행 제어 폴더): 같은 이름의 폴더가 없거나 위에서 정리됐으면 지운다. 결과가 들어 있지 않다.
 건드리지 않는 것
   - 소유를 확인할 수 없는 폴더(소유 기록 · 접수 목록이 없거나 다른 Job · 다른 빌드 번호) — 수와 이름만 알린다.
-  - 아직 실행 중일 수 있는 폴더: 끝 기록이 없고 시작 뒤 빌드 한계(12시간) + 1시간이 지나지 않았거나, 어떤 프로세스가 그 안을 쓰는 중.
+  - 아직 실행 중일 수 있는 폴더: 끝 기록이 없고 시작 뒤 최대 빌드 수명(--build-limit-sec) + 1시간이 지나지 않았거나, 어떤 프로세스가
+    그 안을 쓰는 중. 2026-10-06(9차)부터 빌드는 실행 기반(Runner)을 최대 72시간 기다리고 같은 폴더에서 이어서 수집하므로 최대 빌드 수명은
+    실행 기반 대기 72시간 + 수집 6시간 + 결과 확인 1시간 + 여유 3시간 = 82시간이다(Jenkinsfile_portal seConstants MAX_BUILD).
   - 지금 빌드의 폴더, 링크(심볼릭 링크)인 폴더, 실제 경로가 작업 폴더 상위 밖인 폴더. 폴더 안의 링크는 따라가지 않고 링크만 지운다.
 기간은 빌드 끝 시각(소유 기록의 ended_epoch)으로 센다. 끝 기록이 없으면 시작 + 빌드 한계를 끝으로 본다(늦은 쪽으로 어림).
 옛 폴더(소유 기록이 생기기 전)는 접수 목록(gather_manifest.json)으로 소유를 확인하고, 결과 파일의 마지막 수정 시각을 끝으로 어림한다.
@@ -36,7 +38,7 @@ import time
 RESULT_NAMES = (
     "gather_output.json", "gather_manifest.json", "gather_rc.txt", "gather_run.json", "gather_progress.jsonl",
     "gather_checkpoint.jsonl", "gather_final.jsonl", "gather_finalize_report.json", "workspace_cleanup.json",
-    "callback_body.json", "finalize_summary.json",
+    "callback_body.json", "finalize_summary.json", "gather_tail_fragments.jsonl",
 )
 RESULT_DIRS = ("gather_auth_evidence",)
 OWNER_FILE = ".se_workspace.json"
@@ -251,11 +253,11 @@ def reduce_to_results(path, results, reason):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(description="이 Job 의 끝난 작업 폴더 정리 (하루 한 번)")
     ap.add_argument("--current", required=True, help="지금 빌드의 작업 폴더")
     ap.add_argument("--job", required=True, help="JOB_NAME (폴더 포함 전체 이름)")
     ap.add_argument("--job-base", required=True, help="JOB_BASE_NAME (작업 폴더 이름의 앞부분)")
-    ap.add_argument("--build-limit-sec", type=int, default=43200)
+    ap.add_argument("--build-limit-sec", type=int, default=295200, help="최대 빌드 수명(초) — 끝 기록이 없는 폴더를 실행 중으로 보는 기간")
     ap.add_argument("--keep-days", type=int, default=7)
     ap.add_argument("--every-sec", type=int, default=86400)
     ap.add_argument("--report", default="")

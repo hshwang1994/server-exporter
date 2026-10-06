@@ -137,6 +137,25 @@ def test_unknown_end_uses_start_plus_build_limit_and_legacy_manifest_folders_kee
     assert not (legacy / "os-gather").exists()
 
 
+def test_a_build_waiting_for_its_runner_is_not_cleaned_before_the_max_build_life(tmp_path):
+    """9차: 빌드 하나가 실행 기반을 최대 72시간 기다린 뒤 같은 작업 폴더에서 이어서 수집한다 — 끝 기록이 없는 폴더는 최대 빌드 수명
+    (72 + 6 + 1 + 여유 3시간 = 295,200초, Jenkinsfile_portal seConstants MAX_BUILD) 동안 실행 중으로 보고 건드리지 않는다.
+    대기 중 남긴 중간 결과(잘린 줄 조각 포함)는 결과 파일로 본다."""
+    now = int(time.time())
+    waiting = _ws(tmp_path, 451, started=now - 60 * 3600, results=("gather_output.json", "gather_tail_fragments.jsonl"))
+    gone = _ws(tmp_path, 452, started=now - 30 * DAY, preserved=False, results=("gather_tail_fragments.jsonl",))
+    cur = tmp_path / f"{BASE}-999"
+    cur.mkdir()
+    rep_path = tmp_path / "r82.json"
+    assert wc.main(["--current", str(cur), "--job", JOB, "--job-base", BASE, "--keep-days", "7", "--every-sec", "86400",
+                    "--report", str(rep_path)]) == 0, "기본값이 최대 빌드 수명이다"
+    rep = json.loads(rep_path.read_text(encoding="utf-8"))
+    assert _reasons(rep)[waiting.name] == "may_be_running" and (waiting / "os-gather" / "site.yml").is_file()
+    red = {x["dir"]: x for x in rep["reduced"]}
+    assert gone.name in red and "gather_tail_fragments.jsonl" in red[gone.name]["kept"], "끝나지 않은 빌드의 조각 파일도 결과로 남긴다"
+    assert "gather_tail_fragments.jsonl" in wc.RESULT_NAMES
+
+
 def test_control_dirs_follow_their_folder(tmp_path):
     now = int(time.time())
     old = now - 8 * DAY
@@ -227,7 +246,8 @@ def test_cli_always_exits_zero_and_prints_timed_lines(tmp_path):
 def test_pipeline_wires_the_cleanup_and_records_ownership():
     portal = (REPO / "Jenkinsfile_portal").read_text(encoding="utf-8")
     assert "python3 scripts/workspace_cleanup.py --current" in portal and "exit 0" in portal
-    assert "customWorkspace \"${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}\"" in portal
-    assert portal.count("writeFile(file: '.se_workspace.json'") == 2, "단계 시작(소유 · 시작 시각)과 보존 끝(끝 시각 · 보존 여부)"
+    assert 'ws("${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}") {' in portal, "시도마다 같은 작업 폴더(종전 customWorkspace 와 같은 위치)"
+    assert portal.count("writeFile(file: '.se_workspace.json'") == 2, "첫 시도 시작(소유 · 시작 시각 · commit)과 보존 끝(끝 시각 · 보존 여부)"
+    assert "--build-limit-sec ${C.MAX_BUILD}" in portal
     manifest = (REPO / "production_manifest.yml").read_text(encoding="utf-8")
     assert "scripts/workspace_cleanup.py" in manifest, "운영 runtime 파일 — production tree 에 들어간다"

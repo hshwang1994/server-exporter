@@ -3,9 +3,9 @@
     "Harness 시나리오 정본 (2026-10-04, 8차 2026-10-05 개정). Jenkinsfile_harness · fixture.py · build_functions.py · harness_verdict.py 가 같은 이름을 쓴다.",
     "case = tests/fixtures/finalize_corpus/<case> 입력. run_preserve = sePreserveGatherOutput() 을 먼저 돌릴지(결과 정리(Layer A) · archive · stash).",
     "run_preserve=false 인 시나리오는 Harness 가 raw 입력(또는 Layer A 를 직접 돌린 산출물)을 스스로 stash 한다.",
-    "stub_gather = 실제 scripts/run_gather.sh 를 가짜 ansible-playbook(case 의 앞 finish 대 결과를 쓰고 대기)과 시험 한계 limit_sec 로 실행하고,",
-    "  운영 함수 seGatherOutcome 으로 종료 상태를 정한 뒤 보존 · 결과 확인 및 전송을 실행한다 — 운영 Job 의 시험용 파라미터(gatherBudgetForceSec)를 없앤 자리(8차 R1).",
     "expect 의 키: delivered · layerA · layerB · source · filled · outcome · limit_reason · gather_run.{rc,timed_out,limit_sec} · lines_eq_accepted · lines_count ·",
+    "gather_stage (9차, 8차 stub_gather 를 대신한다) = 운영 함수 seGatherStage 를 시험 상수(constants)로 그대로 실행한다. 시도마다 실제 scripts/run_gather.sh 가 가짜 ansible-playbook(stub_ansible.py)을 남은 대상만 넘겨 실행하고, attempts[k] 가 그 시도의 결과(emit · precheck_fail · checkpoint) · 끝(crash = 끝 기록 없이 사라짐, hang = 한계까지 대기) · 실행 기반(queue_delay = Runner 대기 흉내, agent_lost = Jenkins 가 끊긴 Runner 의 step 을 끝냄, orphan_hold = 잠금을 쥔 이전 수집이 남음, remove_workspace = 끊긴 사이 작업 폴더가 사라짐)을 정한다. finalize_delay = 결과 처리 노드 대기 흉내.",
+    "  gather_stage 의 기대값: gather.{received(시도마다 받은 대상 번호, 1부터) · attempt_states · limit_chain · pinned · outcome} · infra.{expired · within_budget · episodes[{reason_contains, result, min_sec}]} · body_reasons{<실패 문장 키>: 수} · calls_count · calls_include.",
     "  unrecovered_count · damage_contains · preserve.{archived,stashed,deleted} · unstable_contains · unstable_count · warnings_include · warnings_empty ·",
     "  sink_posts_min · sink_posts_max · sink_last_status · body_sha_matches_sink · by_origin.{output,checkpoint,synthetic} · rethrown(interruption 이 Harness 까지 올라왔는가) · note(사람용).",
     "결과 상태: PASS / FAIL / PARTIAL(필요 입력 없음 — 예: sink 미도달) 은 harness_verdict.py 가 정한다. PARTIAL 은 통과가 아니다.",
@@ -523,11 +523,24 @@
     },
     "gather_limit_preserve": {
       "case": "01_normal",
-      "run_preserve": true,
+      "run_preserve": false,
       "outcome": "interrupted_unknown",
-      "stub_gather": {
-        "finish": 2,
-        "limit_sec": 8
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "OFFLINE_GRACE": 5,
+          "GATHER_MAX": 8,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "hang": true
+          }
+        ]
       },
       "sink": {
         "status": "200"
@@ -567,7 +580,363 @@
         "sink_last_status": 200,
         "body_sha_matches_sink": true,
         "rethrown": false,
-        "note": "8차 R1 · R3 (운영 Job 의 강제 한계 S3 를 대신한다): 실제 scripts/run_gather.sh 가 시험 한계 8초에 닿아 INT 로 멈춘다(가짜 ansible-playbook 이 3대 중 2대 결과를 쓰고 대기). 같은 빌드에서 운영 함수 seGatherOutcome → sePreserveGatherOutput → seFinalizeAndCallback — 끝난 2대는 수집 결과 그대로, 끝나지 않은 1대만 실패 결과로 채워 Portal(sink)로 전달"
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "gather_limit"
+          ],
+          "limit_chain": true,
+          "outcome": "timeout"
+        },
+        "note": "8차 R1 · R3 · 9차: 운영 함수 seGatherStage 가 실제 scripts/run_gather.sh 를 시험 한계 8초로 실행한다(가짜 ansible 이 3대 중 2대 결과를 쓰고 대기). 한계에 닿아 INT 로 멈추고, 마지막 시도가 보존한 뒤 끝난 2대는 수집 결과 그대로, 끝나지 않은 1대만 실패 결과로 채워 Portal(sink)로 전달"
+      }
+    },
+    "infra_resume": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 10,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "OFFLINE_GRACE": 5,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 4,
+            "precheck_fail": [
+              5
+            ],
+            "checkpoint": [
+              6
+            ],
+            "sleep": 2,
+            "crash": true,
+            "agent_lost": true
+          },
+          {
+            "queue_delay": 20,
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 15
+      },
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "layerA": "ok",
+        "source": "stash",
+        "lines_eq_accepted": true,
+        "filled": 1,
+        "by_origin": {
+          "output": 9,
+          "checkpoint": 0,
+          "synthetic": 1
+        },
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ],
+            [
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          ],
+          "attempt_states": [
+            "agent_disconnect",
+            "completed"
+          ],
+          "limit_chain": true,
+          "pinned": true,
+          "outcome": "completed"
+        },
+        "infra": {
+          "expired": false,
+          "within_budget": true,
+          "episodes": [
+            {
+              "reason_contains": "복구 대기",
+              "result": "acquired",
+              "min_sec": 20
+            },
+            {
+              "reason_contains": "결과 처리 노드",
+              "result": "acquired",
+              "min_sec": 15
+            }
+          ]
+        },
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "checkout:copy": 1
+        },
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "body_sha_matches_sink": true,
+        "rethrown": false,
+        "note": "9차 시험 1 · 4 · 7 · 10 · 15 · 16 · 19 (가짜 실행 기반): 1번째 시도가 10대 중 4대 결과 · 1대 Precheck 실패 · 1대 CHECKPOINT 만 남기고 끝 기록 없이 끊긴다(Jenkins 가 끊긴 Runner 의 step 을 끝냄). 같은 Runner 를 20초 기다린 뒤(대기 한도에 넣고 실행 시간에는 넣지 않는다) 같은 작업 폴더에서 결과가 확정되지 않은 5대(CHECKPOINT 만 있던 대상 포함)만 다시 수집한다 — 저장소를 다시 받지 않고, Precheck 실패 대상은 다시 수집하지 않는다. 결과 처리 노드를 15초 기다린 뒤 10대 결과를 보낸다"
+      }
+    },
+    "infra_wait_expired": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 4,
+        "constants": {
+          "INFRA_WAIT": 45,
+          "OFFLINE_GRACE": 5,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "orphan_hold": 6,
+            "crash": true
+          },
+          {
+            "emit": 1,
+            "crash": true,
+            "agent_lost": true
+          },
+          {
+            "queue_delay": 180
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "outcome": "infra_wait_expired",
+        "limit_reason": "infra_wait",
+        "layerB": "ok",
+        "source": "stash",
+        "lines_eq_accepted": true,
+        "by_origin": {
+          "output": 2,
+          "checkpoint": 0,
+          "synthetic": 2
+        },
+        "body_reasons": {
+          "infra_unavailable": 2
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3,
+              4
+            ],
+            [
+              3,
+              4
+            ]
+          ],
+          "pinned": true,
+          "outcome": "infra_wait_expired"
+        },
+        "infra": {
+          "expired": true,
+          "within_budget": true,
+          "episodes": [
+            {
+              "reason_contains": "복구 대기",
+              "result": "expired"
+            }
+          ]
+        },
+        "calls_count": {
+          "retry:agent_lost": 1
+        },
+        "unstable_contains": [
+          "실행 기반(Runner)이 대기 한도 안에 회복되지 않음"
+        ],
+        "warnings_include": [
+          "outcome_infra_wait_expired"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "9차 시험 11 (72시간 경계를 45초로 줄임): 1번째 시도는 2대를 끝내고 잠금을 쥔 이전 수집이 남은 채 끊긴다 → 원본 결과를 넘겨 두고(stash) 바로 다시 시도, 2번째 시도는 그 수집이 끝나기를 기다린 뒤 남은 2대 중 1대를 쓰고 Runner 연결이 끊긴다. 같은 Runner 를 기다리는 동안 이 빌드의 대기 합이 한도를 넘어 요청을 거둔다 — 넘겨 둔 2대는 그대로, 나머지 2대는 실행 기반 문장의 실패 결과로 보낸다(대기 시작 시각을 다시 잡지 않는다)"
+      }
+    },
+    "resume_impossible": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "OFFLINE_GRACE": 5,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "crash": true,
+            "agent_lost": true
+          },
+          {
+            "queue_delay": 5,
+            "remove_workspace": true
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "outcome": "resume_impossible",
+        "layerB": "ok",
+        "source": "none",
+        "lines_eq_accepted": true,
+        "by_origin": {
+          "output": 0,
+          "checkpoint": 0,
+          "synthetic": 3
+        },
+        "body_reasons": {
+          "infra_unavailable": 3
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "pinned": true,
+          "outcome": "resume_impossible"
+        },
+        "infra": {
+          "expired": false,
+          "within_budget": true
+        },
+        "calls_include": [
+          "ws:removed"
+        ],
+        "unstable_contains": [
+          "같은 Runner · 작업 폴더에서 이어서 수집할 수 없음"
+        ],
+        "warnings_include": [
+          "outcome_resume_impossible"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "9차 시험 21: 1번째 시도가 끊긴 사이 그 작업 폴더가 사라졌다 — 이 빌드의 기록이 없으므로 전체를 다시 수집하지 않고(가짜 ansible 은 한 번만 실행) 재개 불가로 끝낸다. Runner 에만 있던 결과는 넘겨 둔 것이 없어 3대 모두 실행 기반 문장의 실패 결과로 보낸다"
+      }
+    },
+    "gather_wait_abort": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "OFFLINE_GRACE": 5,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 1,
+            "orphan_hold": 3,
+            "crash": true
+          },
+          {
+            "queue_delay": 300
+          }
+        ]
+      },
+      "gather_abort_after": 45,
+      "expect_interruption": true,
+      "jenkins_result": "ABORTED",
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "rethrown": true,
+        "outcome": "aborted",
+        "delivered": true,
+        "sink_posts_min": 1,
+        "sink_posts_max": 1,
+        "lines_eq_accepted": true,
+        "by_origin": {
+          "output": 1,
+          "checkpoint": 0,
+          "synthetic": 2
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "pinned": true,
+          "outcome": "aborted"
+        },
+        "infra": {
+          "expired": false,
+          "episodes": [
+            {
+              "reason_contains": "복구 대기",
+              "result": "interrupted"
+            }
+          ]
+        },
+        "warnings_include": [
+          "outcome_aborted"
+        ],
+        "note": "9차 시험 11(대기 중 취소): 같은 Runner 를 기다리는 동안 사용자가 취소한다 — 다시 시도하지 않고 대기 구간을 '취소' 로 닫은 뒤, 넘겨 둔 결과(1대)와 실패 결과(2대)를 1번만 보낸다. Jenkins 결과는 ABORTED"
       }
     }
   }

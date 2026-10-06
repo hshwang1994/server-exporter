@@ -6,8 +6,11 @@
   - fixture.py 는 corpus 입력을 복사하고 manifest 를 현재 빌드(job/number/url)와 시험 request 로 다시 만든다.
   - harness_verdict.py 는 기대/관측 대조로 PASS · FAIL · PARTIAL(관측 부족) 을 나누고, 관측이 없으면 PASS 로 두지 않는다.
   - scenarios.json 의 이름 집합은 세 도구가 같은 것을 쓴다.
-  - 2026-10-05 (8차): Tier 2(BOUNDED) · Script Approval 실측 시나리오는 없다. gather_limit_preserve 가 실제 scripts/run_gather.sh 를
-    가짜 ansible-playbook 과 시험 한계로 실행하는 준비물(fixture stub_gather)과 판정(gather_run · limit_reason)을 고정한다.
+  - 2026-10-05 (8차): Tier 2(BOUNDED) · Script Approval 실측 시나리오는 없다.
+  - 2026-10-06 (9차): gather_stage 시나리오(gather_limit_preserve · infra_resume · infra_wait_expired · resume_impossible · gather_wait_abort)는
+    운영 함수 seGatherStage 를 시험 상수로 그대로 실행한다. 준비물(fixture gather_stage: 가짜 ansible = stub_ansible.py · 시도별 계획 · 대상별 결과 줄),
+    실행 기반 흉내 wrapper(node · nodesByLabel · retry · ws · checkout · withCredentials), 판정(gather · infra · body_reasons)을 고정하고,
+    가짜 ansible 과 실제 run_gather.sh · gather_state.py 의 연결(남은 대상만 받기 · 한계 도달)을 Linux 에서 실제로 돌린다.
 """
 from __future__ import annotations
 
@@ -54,8 +57,18 @@ def test_build_functions_extracts_runtime_functions_verbatim(tmp_path):
     assert "pipeline {" not in text.split("harness wrappers")[0]
     assert text.rstrip().endswith("return this")
     for wrapper in ("def getParams()", "def archiveArtifacts(Map m)", "def stash(Map m)", "def unstash(String name)",
-                    "def readTrusted(String path)", "def sh(Map m)", "def unstable(String msg)", "def httpRequest(Map m)"):
+                    "def readTrusted(String path)", "def sh(Map m)", "def unstable(String msg)", "def httpRequest(Map m)",
+                    "def node(String target, Closure body)", "def nodesByLabel(Map m)", "def retry(Map m, Closure body)",
+                    "def ws(String path, Closure body)", "def checkout(Object s)", "def withCredentials(List creds, Closure body)"):
         assert wrapper in text, wrapper
+    for name in ("seGatherStage", "seGatherLoop", "seWithNode", "seAttempt", "seAttemptBody", "seQueueTimer", "seInfraClose"):
+        assert name in meta["defs"], name
+    # gather 가 없는 시나리오에서는 실행 기반 wrapper 가 실제 step 으로 그대로 넘긴다
+    for passthrough in ("if (HARNESS.gather == null) { return HARNESS.outer.node(target) { body() } }",
+                        "if (HARNESS.gather == null) { return HARNESS.outer.nodesByLabel(m) }",
+                        "if (HARNESS.gather == null || m.conditions == null) { return HARNESS.outer.retry(m) { body() } }",
+                        "if (HARNESS.gather == null) { return HARNESS.outer.ws(path) { body() } }"):
+        assert passthrough in text, passthrough
     assert "'archive_fail'" in text and "startsWith('gather_output.json')" in text, "주입 대상은 보존 archive 뿐"
     assert len(meta["functions_sha256"]) == 64 and len(meta["source_sha256"]) == 64
 
@@ -230,8 +243,15 @@ def test_harness_pipeline_has_no_tier2_and_runs_the_real_run_gather():
     jf = (HARNESS / "Jenkinsfile_harness").read_text(encoding="utf-8")
     for gone in ("BOUNDED", "seHarnessProbeNode", "seHarnessProbeCauses", "probe_approvals", "preserve_rethrown", "getEnclosingBlocks"):
         assert gone not in jf.split("\n", 15)[-1], gone
-    assert 'bash "\\${WORKSPACE}/scripts/run_gather.sh"' in jf and "lib.seGatherOutcome(grc, run, 'gather_limit')" in jf
-    assert "scripts/run_gather.sh scripts/env_guard.sh" in jf, "checkout 모드도 run_gather.sh · env_guard.sh 를 gather_ws 에 둔다"
+    assert "lib.seGatherStage(C)" in jf and "Map C = lib.seConstants() + (gsx.constants ?: [:])" in jf, "운영 함수를 시험 상수로 그대로 실행한다"
+    assert "seGatherOutcome" not in jf and 'scripts/run_gather.sh"' not in jf, "Harness 가 run_gather.sh 를 따로 부르지 않는다 — 운영 함수가 부른다"
+    assert "scripts/run_gather.sh scripts/env_guard.sh scripts/gather_state.py gather_ws/scripts/" in jf, \
+        "checkout 모드도 run_gather.sh · env_guard.sh · gather_state.py 를 gather_ws(시도의 저장소 사본)에 둔다"
+    assert "ADDON_REPO_URL=" in jf and "SE_ANSIBLE_VENV=${gsx.venv}" in jf and "SE_HARNESS_STUB_DIR=${gsx.stub_dir}" in jf
+    assert "if (!fx.gather_stage) {" in jf, "gather_stage 의 보존은 운영 함수(마지막 시도)가 한다"
+    assert 'endsWith("/${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}")' in jf and "rm -rf '${hs.ws_path}' '${hs.ws_path}@tmp'" in jf, \
+        "운영 Runner 에 시험 작업 폴더를 남기지 않는다(이 빌드의 것만)"
+    assert "--received gather_received.jsonl" in jf and "--fixture fixture_state.json" in jf
     cfg = (REPO / "jenkins" / "jobs" / "clovirone-server-gather-harness" / "config.xml").read_text(encoding="utf-8")
     assert "<name>BOUNDED</name>" not in cfg
 
@@ -243,88 +263,195 @@ def _fixture_args(tmp_path, scenario, ws):
             "--out", str(tmp_path / "state.json")]
 
 
-def test_fixture_stub_gather_prepares_a_fake_venv_and_no_gather_output(tmp_path):
+def test_fixture_gather_stage_prepares_the_stub_plan_and_no_gather_output(tmp_path):
     ws = tmp_path / "ws"
     ws.mkdir()
     (ws / "gather_output.json").write_text("stale\n", encoding="utf-8")
     (ws / "gather_run.json").write_text("{}", encoding="utf-8")
-    assert fixture.main(_fixture_args(tmp_path, "gather_limit_preserve", ws)) == 0
+    assert fixture.main(_fixture_args(tmp_path, "infra_resume", ws)) == 0
     state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
-    sg = state["stub_gather"]
-    assert sg["finish"] == 2 and sg["limit_sec"] == 8 and sg["hosts"] == 3 and state["outcome"] == "interrupted_unknown"
+    gs = state["gather_stage"]
+    assert state["run_preserve"] is False and state["outcome"] == "interrupted_unknown" and state["files_copied"] == []
+    assert state["ips"] == [f"192.0.2.{10 + i}" for i in range(10)] and gs["ips"] == state["ips"] and gs["hosts"] == 10
     assert not (ws / "gather_output.json").exists() and not (ws / "gather_run.json").exists(), "수집 결과는 실제 실행이 만든다"
-    assert state["files_copied"] == []
+    assert gs["constants"]["INFRA_WAIT"] == 900 and gs["finalize_delay"] == 15 and gs["attempts"][0]["agent_lost"] is True
     stub = tmp_path / "harness_stub"
-    lines = (stub / "output.jsonl").read_text(encoding="utf-8").splitlines()
-    corpus = (REPO / "tests/fixtures/finalize_corpus/01_normal/gather_output.json").read_text(encoding="utf-8").splitlines()
-    assert lines == corpus[:2]
+    tmpl = [json.loads(x) for x in (stub / "templates.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [t["ip"] for t in tmpl] == state["ips"] and all(len(t) == 13 and t["target_type"] == "os" for t in tmpl)
+    plan = json.loads((stub / "plan.json").read_text(encoding="utf-8"))
+    assert plan["ips"] == state["ips"] and plan["attempts"] == SCENARIOS["infra_resume"]["gather_stage"]["attempts"]
+    assert (stub / "stub_ansible.py").read_text(encoding="utf-8") == (HARNESS / "stub_ansible.py").read_text(encoding="utf-8")
     act = (stub / "venv" / "bin" / "activate").read_text(encoding="utf-8")
     assert "VIRTUAL_ENV=" in act and "/bin:$PATH" in act
-    ap = (stub / "venv" / "bin" / "ansible-playbook").read_text(encoding="utf-8")
-    assert "ANSIBLE_JSON_OUTPUT_FILE" in ap and "exec sleep 600" in ap
-    assert Path(sg["venv"]) == (stub / "venv").resolve() and Path(sg["inventory"]).is_file()
+    assert "stub_ansible.py" in (stub / "venv" / "bin" / "ansible-playbook").read_text(encoding="utf-8")
+    assert (ws / "os-gather" / "inventory.sh").is_file() and (ws / "os-gather" / "site.yml").is_file(), "시도의 저장소 사본에 inventory 자리"
+    assert Path(gs["venv"]) == (stub / "venv").resolve() and Path(gs["stub_dir"]) == stub.resolve()
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux") or shutil.which("bash") is None or shutil.which("timeout") is None,
-                    reason="Linux bash · coreutils timeout 이 필요하다 (CI Runner · WSL 에서 실행)")
-def test_stub_gather_runs_the_real_run_gather_to_its_limit_and_layer_a_fills_only_the_unfinished(tmp_path):
-    """Jenkinsfile_harness 의 stub_gather 단계를 로컬에서 그대로 — 실제 run_gather.sh 가 시험 한계에 닿아 INT 로 멈추고(rc 124 · timed_out),
-    결과 정리(Layer A)가 끝난 2대는 수집 결과 그대로, 끝나지 않은 1대만 실패 결과로 채운다."""
+LINUX_ONLY = pytest.mark.skipif(not sys.platform.startswith("linux") or shutil.which("bash") is None or shutil.which("timeout") is None
+                                or shutil.which("flock") is None, reason="Linux bash · coreutils timeout · flock 이 필요하다 (CI Runner · WSL 에서 실행)")
+
+
+def _gather_ws(tmp_path, scenario):
     ws = tmp_path / "gather_ws"
     (ws / "scripts").mkdir(parents=True)
-    for f in ("run_gather.sh", "env_guard.sh", "activate_ansible_venv.sh", "finalize_gather_output.py"):
+    for f in ("run_gather.sh", "env_guard.sh", "activate_ansible_venv.sh", "finalize_gather_output.py", "gather_state.py"):
         shutil.copy2(REPO / "scripts" / f, ws / "scripts" / f)
     shutil.copytree(REPO / "common" / "vars", ws / "common" / "vars")
     shutil.copytree(REPO / "common" / "tasks" / "normalize", ws / "common" / "tasks" / "normalize")
-    assert fixture.main(_fixture_args(tmp_path, "gather_limit_preserve", ws)) == 0
-    sg = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))["stub_gather"]
-    limit = 2   # 시나리오 값(8 s)보다 줄여 빨리 끝낸다 — run_gather.sh 의 정상 인자다
+    assert fixture.main(_fixture_args(tmp_path, scenario, ws)) == 0
+    gs = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))["gather_stage"]
     env = {k: v for k, v in os.environ.items() if not k.startswith(("SE_", "ANSIBLE_", "ADDON_"))}
-    env.update({"WORKSPACE": str(ws), "SE_ANSIBLE_VENV": sg["venv"], "SE_HARNESS_STUB_OUTPUT": sg["output"],
-                "ANSIBLE_JSON_OUTPUT_FILE": str(ws / "gather_output.json"), "VAULT_PASSWORD": "harness-stub", "LC_ALL": "C.UTF-8"})
-    r = subprocess.run(["bash", str(ws / "scripts" / "run_gather.sh"), sg["playbook"], sg["inventory"], "1", str(limit), "git", "false", str(sg["hosts"])],
-                       env=env, capture_output=True, text=True, encoding="utf-8", timeout=120)
-    assert r.returncode == 124, (r.returncode, r.stdout, r.stderr)
+    env.update({"WORKSPACE": str(ws), "SE_ANSIBLE_VENV": gs["venv"], "SE_HARNESS_STUB_DIR": gs["stub_dir"], "VAULT_PASSWORD": "harness-stub",
+                "ANSIBLE_JSON_OUTPUT_FILE": str(ws / "gather_output.json"), "ANSIBLE_JSON_PROGRESS_FILE": str(ws / "gather_progress.jsonl"),
+                "ANSIBLE_JSON_CHECKPOINT_FILE": str(ws / "gather_checkpoint.jsonl"), "LC_ALL": "C.UTF-8"})
+    return ws, gs, env
+
+
+def _run_gather(ws, env, gather_max, lost="false"):
+    argv = ["bash", str(ws / "scripts" / "run_gather.sh"), str(ws / "os-gather" / "site.yml"), str(ws / "os-gather" / "inventory.sh"), "git",
+            "false", str(gather_max), lost]
+    with open(ws.parent / "run.log", "a", encoding="utf-8") as log:
+        p = subprocess.Popen(argv, env=env, stdout=log, stderr=subprocess.STDOUT)
+        return p.wait(timeout=180)
+
+
+@LINUX_ONLY
+def test_gather_limit_stub_reaches_the_limit_and_layer_a_fills_only_the_unfinished(tmp_path):
+    """gather_limit_preserve 의 시도를 로컬에서 그대로 — 실제 run_gather.sh 가 시험 한계에 닿아 INT 로 멈추고(rc 124 · gather_limit),
+    결과 정리(Layer A)가 끝난 2대는 수집 결과 그대로, 끝나지 않은 1대만 실패 결과로 채운다."""
+    ws, gs, env = _gather_ws(tmp_path, "gather_limit_preserve")
+    rc = _run_gather(ws, env, 2)
+    assert rc == 124, (ws.parent / "run.log").read_text(encoding="utf-8")
     run = json.loads((ws / "gather_run.json").read_text(encoding="utf-8"))
-    assert run["rc"] == 124 and run["timed_out"] is True and run["ran_sec"] >= limit and run["limit_sec"] == limit
+    assert run["rc"] == 124 and run["timed_out"] is True and run["ran_sec"] >= 2 and run["limit_sec"] == 2 and run["state"] == "gather_limit"
     assert len((ws / "gather_output.json").read_text(encoding="utf-8").splitlines()) == 2
-    assert re.search(r"\[수집\] 실행 한계 2초\(2초\)에 도달해 INT 로 멈췄습니다", r.stdout), r.stdout
+    received = [json.loads(x) for x in (Path(gs["stub_dir"]) / "received.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert received == [{"attempt": 1, "hosts": gs["ips"]}]
     fin = subprocess.run([sys.executable, str(ws / "scripts" / "finalize_gather_output.py"), "--workspace", str(ws), "--repo-root", str(ws),
                           "--outcome", "timeout", "--limit-reason", "gather_limit"], capture_output=True, text=True, encoding="utf-8", timeout=120)
     assert fin.returncode == 0, fin.stderr
     report = json.loads((ws / "gather_finalize_report.json").read_text(encoding="utf-8"))
     assert report["by_origin"] == {"output": 2, "checkpoint": 0, "synthetic": 1} and report["filled"] == 1, report
-    final = [json.loads(x) for x in (ws / "gather_final.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
-    finished = {json.loads(x)["ip"] for x in Path(sg["output"]).read_text(encoding="utf-8").splitlines() if x.strip()}
-    unfinished = [e for e in final if e["ip"] not in finished]
-    assert len(final) == 3 and len(finished) == 2 and len(unfinished) == 1
-    assert unfinished[0]["status"] == "failed" and unfinished[0]["diagnosis"]["details"].get("limit_reason") == "gather_limit"
-    assert all(e["status"] != "failed" for e in final if e["ip"] in finished), "끝난 대상은 수집 결과 그대로"
 
 
-def test_verdict_gather_limit_preserve(tmp_path):
+@LINUX_ONLY
+def test_infra_resume_stub_regathers_only_the_unfinished_hosts(tmp_path):
+    """infra_resume 의 두 시도를 로컬에서 그대로 — 1번째 시도가 4대 결과 · 1대 Precheck 실패 · 1대 CHECKPOINT 만 남기고 수집 셸이 끝 기록 없이
+    사라진다. 2번째 시도(이전 시도 중 Agent 끊김 보고)는 결과가 확정되지 않은 5대만 받는다(CHECKPOINT 만 있던 대상 포함, Precheck 실패 대상 제외)."""
+    ws, gs, env = _gather_ws(tmp_path, "infra_resume")
+    for name in ("gather_manifest.json",):
+        assert (ws / name).is_file()
+    rc = _run_gather(ws, env, 900)
+    assert rc == -9, (ws.parent / "run.log").read_text(encoding="utf-8")
+    deadline = __import__("time").monotonic() + 30
+    while subprocess.run(["flock", "-n", str(ws / ".gather.lock"), "true"]).returncode != 0:
+        assert __import__("time").monotonic() < deadline, "잠금이 풀리지 않았다"
+        __import__("time").sleep(0.2)
+    rc = _run_gather(ws, env, 900, lost="true")
+    assert rc == 0, (ws.parent / "run.log").read_text(encoding="utf-8")
+    ips = gs["ips"]
+    received = [json.loads(x)["hosts"] for x in (Path(gs["stub_dir"]) / "received.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert received == [ips, ips[5:]]
+    run = json.loads((ws / "gather_run.json").read_text(encoding="utf-8"))
+    assert [a["state"] for a in run["attempts"]] == ["agent_disconnect", "completed"]
+    assert run["attempts"][1]["limit_sec"] == 900 - run["attempts"][0]["exec_sec"]
+    fin = subprocess.run([sys.executable, str(ws / "scripts" / "finalize_gather_output.py"), "--workspace", str(ws), "--repo-root", str(ws),
+                          "--outcome", "completed"], capture_output=True, text=True, encoding="utf-8", timeout=120)
+    assert fin.returncode == 0, fin.stderr
+    report = json.loads((ws / "gather_finalize_report.json").read_text(encoding="utf-8"))
+    assert report["by_origin"] == {"output": 9, "checkpoint": 0, "synthetic": 1}, report
+    final = {json.loads(x)["ip"]: json.loads(x) for x in (ws / "gather_final.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()}
+    assert final[ips[4]]["diagnosis"]["failure_stage"] == "reachable", "Precheck 실패 대상은 그 진단 그대로"
+
+
+def _gather_summary(states, limits, execs, gmax=900, infra=None, **extra):
+    attempts = [{"state": st, "limit_sec": lim, "exec_sec": ex} for st, lim, ex in zip(states, limits, execs)]
+    base = {"accepted": 10, "lines": 10, "kept": 9, "filled": 1, "outcome": "completed", "layerA": "ok", "layerB": "skipped", "source": "stash",
+            "unrecovered": [], "damage": [], "by_origin": {"output": 9, "checkpoint": 0, "synthetic": 1}, "warnings": ["filled"],
+            "gather_run": {"gather_max_sec": gmax, "attempts": attempts, "rc": 0, "timed_out": False, "limit_sec": limits[-1], "ran_sec": sum(execs)},
+            "infra": infra or {"budget_sec": 900, "used_sec": 42, "expired": False,
+                               "episodes": [{"reason": "Runner 배정 대기", "result": "acquired", "sec": 0},
+                                            {"reason": "같은 Runner(r3) 복구 대기", "result": "acquired", "sec": 26},
+                                            {"reason": "결과 처리 노드", "result": "acquired", "sec": 16}]},
+            "callback": {"attempted": True, "delivered": True, "http_code": 200, "attempts": 1}}
+    base.update(extra)
+    return base
+
+
+def test_verdict_gather_stage_checks_received_states_limits_pinning_and_infra(tmp_path):
+    import hashlib
+    ips = [f"192.0.2.{10 + i}" for i in range(10)]
     body = tmp_path / "callback_body.json"
     body.write_bytes(b'{"loc":"git","gatherInfoJson":[]}')
-    import hashlib
     sha = hashlib.sha256(body.read_bytes()).hexdigest()
-    summary = {"accepted": 3, "lines": 3, "kept": 2, "filled": 1, "outcome": "timeout", "limit_reason": "gather_limit",
-               "layerA": "ok", "layerB": "skipped", "source": "stash", "unrecovered": [], "damage": [],
-               "by_origin": {"output": 2, "checkpoint": 0, "synthetic": 1}, "warnings": ["filled", "outcome_timeout"],
-               "gather_run": {"rc": 124, "timed_out": True, "limit_sec": 8, "ran_sec": 8},
-               "callback": {"attempted": True, "delivered": True, "http_code": 200, "attempts": 1}}
-    sink = json.dumps({"method": "POST", "status_sent": 200, "ok": True, "body_sha256": sha}) + "\n"
-    files = dict(body=str(body), calls=_write(tmp_path / "c.json", ["unstable:[결과 확인] 전송은 했지만 확인할 것이 있습니다. (filled, outcome_timeout)"]),
-                 sink=_write(tmp_path / "k.jsonl", sink), preserve=_write(tmp_path / "p.json", {"archived": True, "stashed": True, "deleted": True}),
-                 control=_write(tmp_path / "ctl.json", {"sink_reachable": True, "rethrown": False}))
-    rc, res = _run_verdict(tmp_path, "gather_limit_preserve", summary=_write(tmp_path / "s.json", summary), **files)
-    assert rc == 0 and res["verdict"] == "PASS", res["problems"]
-    # 한계에 닿지 않았다면(정상 종료 rc 0) 이 시나리오의 증거가 아니다
-    rc, res = _run_verdict(tmp_path, "gather_limit_preserve",
-                           summary=_write(tmp_path / "s2.json", dict(summary, gather_run={"rc": 0, "timed_out": False, "limit_sec": 8, "ran_sec": 3})), **files)
-    assert rc == 1 and {"gather_run.rc", "gather_run.timed_out", "gather_run.ran_sec>=limit_sec"} <= {c["name"] for c in res["checks"] if not c["ok"]}
-    # 실행 기록이 없으면 PASS 로 두지 않는다
-    rc, res = _run_verdict(tmp_path, "gather_limit_preserve", summary=_write(tmp_path / "s3.json", {k: v for k, v in summary.items() if k != "gather_run"}), **files)
-    assert rc == 2 and any("gather_run" in p for p in res["partial"])
+    received = _write(tmp_path / "r.jsonl", json.dumps({"attempt": 1, "hosts": ips}) + "\n" + json.dumps({"attempt": 2, "hosts": ips[5:]}) + "\n")
+    fixture_state = _write(tmp_path / "fx.json", {"ips": ips})
+    calls = ["node:harness-runner-label:delay:0", "retry:agent_lost", "node:SKHynix-Jenkins-Runner03:delay:20", "checkout:copy",
+             "node:built-in:delay:15", "unstable:[결과 확인] 전송은 했지만 확인할 것이 있습니다. (filled)"]
+    files = dict(body=str(body), calls=_write(tmp_path / "c.json", calls),
+                 sink=_write(tmp_path / "k.jsonl", json.dumps({"method": "POST", "status_sent": 200, "ok": True, "body_sha256": sha}) + "\n"),
+                 preserve=_write(tmp_path / "p.json", {"archived": True, "stashed": True, "deleted": True}),
+                 control=_write(tmp_path / "ctl.json", {"sink_reachable": True, "rethrown": False, "gather": {"outcome": "completed"}}),
+                 received=received, fixture=fixture_state)
+    good = _gather_summary(["agent_disconnect", "completed"], [900, 870], [30, 12])
+    rc, res = _run_verdict(tmp_path, "infra_resume", summary=_write(tmp_path / "s.json", good), **files)
+    assert rc == 0 and res["verdict"] == "PASS", res["problems"] + res["partial"]
+    # 두 번째 시도의 한계가 앞 시도의 실행 시간을 빼지 않았다면 FAIL
+    bad = _gather_summary(["agent_disconnect", "completed"], [900, 900], [30, 12])
+    rc, res = _run_verdict(tmp_path, "infra_resume", summary=_write(tmp_path / "s2.json", bad), **files)
+    assert rc == 1 and any(c["name"] == "gather.limit_chain" and not c["ok"] for c in res["checks"])
+    # 끝난 대상을 다시 수집했다면 FAIL
+    files2 = dict(files, received=_write(tmp_path / "r2.jsonl", json.dumps({"attempt": 1, "hosts": ips}) + "\n" + json.dumps({"attempt": 2, "hosts": ips}) + "\n"))
+    rc, res = _run_verdict(tmp_path, "infra_resume", summary=_write(tmp_path / "s3.json", good), **files2)
+    assert rc == 1 and any(c["name"] == "gather.received" and not c["ok"] for c in res["checks"])
+    # 다른 Runner 로 옮겼다면 FAIL
+    files3 = dict(files, calls=_write(tmp_path / "c3.json", [c.replace("node:SKHynix-Jenkins-Runner03", "node:harness-runner-label") for c in calls]))
+    rc, res = _run_verdict(tmp_path, "infra_resume", summary=_write(tmp_path / "s4.json", good), **files3)
+    assert rc == 1 and any(c["name"] == "gather.pinned" and not c["ok"] for c in res["checks"])
+    # 같은 Runner 를 기다린 시간이 짧다면(흉내 낸 20초를 대기로 세지 않았다면) FAIL
+    short = _gather_summary(["agent_disconnect", "completed"], [900, 870], [30, 12],
+                            infra={"budget_sec": 900, "used_sec": 3, "expired": False, "episodes": [{"reason": "같은 Runner(r3) 복구 대기", "result": "acquired", "sec": 3},
+                                                                                                   {"reason": "결과 처리 노드", "result": "acquired", "sec": 16}]})
+    rc, res = _run_verdict(tmp_path, "infra_resume", summary=_write(tmp_path / "s5.json", short), **files)
+    assert rc == 1 and any(c["name"].startswith("infra.episode:복구 대기") and not c["ok"] for c in res["checks"])
+    # 받은 대상 기록이 없으면 PASS 로 두지 않는다
+    files4 = dict(files, received=str(tmp_path / "missing.jsonl"))
+    rc, res = _run_verdict(tmp_path, "infra_resume", summary=_write(tmp_path / "s6.json", good), **files4)
+    assert rc == 2 and any("gather.received" in p for p in res["partial"])
+
+
+def test_verdict_body_reasons_use_the_catalog_sentence(tmp_path):
+    import yaml
+    cat = yaml.safe_load((REPO / "common/vars/failure_reasons.yml").read_text(encoding="utf-8"))["_fr_catalog"]
+    infra = cat["infra_unavailable"]["default"]
+    other = cat["output_build_failed"]["default"]
+    env = lambda reason: {"diagnosis": {"failure_reason": reason}}
+    body = tmp_path / "b.json"
+    body.write_text(json.dumps({"gatherInfoJson": [env(infra), env(infra), env(None)]}, ensure_ascii=False), encoding="utf-8")
+    obs = harness_verdict.observe({}, str(body), [], None, None, {})
+    checks, partial = harness_verdict.check({"body_reasons": {"infra_unavailable": 2}}, obs)
+    assert partial == [] and all(c["ok"] for c in checks), checks
+    body.write_text(json.dumps({"gatherInfoJson": [env(other), env(infra), env(None)]}, ensure_ascii=False), encoding="utf-8")
+    obs = harness_verdict.observe({}, str(body), [], None, None, {})
+    checks, _ = harness_verdict.check({"body_reasons": {"infra_unavailable": 2}}, obs)
+    assert not checks[0]["ok"] and checks[0]["observed"] == 1, "다른 문장(대상 측 실패)으로 보냈다면 FAIL"
+
+
+def test_gather_stage_scenarios_cover_the_directive_tests():
+    """9차 지시서 시험 대응 — 가짜 실행 기반 시나리오의 계획이 각 시험의 조건을 실제로 만든다."""
+    r = SCENARIOS["infra_resume"]["gather_stage"]["attempts"]
+    assert r[0]["agent_lost"] and r[0]["crash"] and r[0]["precheck_fail"] == [5] and r[0]["checkpoint"] == [6] and r[1]["queue_delay"] >= 20
+    assert SCENARIOS["infra_resume"]["gather_stage"]["finalize_delay"] >= 15
+    w = SCENARIOS["infra_wait_expired"]["gather_stage"]
+    assert w["attempts"][0].get("orphan_hold") and w["attempts"][-1]["queue_delay"] > w["constants"]["INFRA_WAIT"], "대기 한도를 넘기는 대기"
+    assert SCENARIOS["resume_impossible"]["gather_stage"]["attempts"][1]["remove_workspace"] is True
+    ab = SCENARIOS["gather_wait_abort"]
+    assert ab["jenkins_result"] == "ABORTED" and ab["expect_interruption"] and ab["gather_abort_after"] < ab["gather_stage"]["attempts"][1]["queue_delay"]
+    assert "self_abort_after" not in ab, "결과 확인 단계의 취소 시나리오(user_abort)와 섞지 않는다"
+    for name in ("gather_limit_preserve", "infra_resume", "infra_wait_expired", "resume_impossible", "gather_wait_abort"):
+        sc = SCENARIOS[name]
+        assert sc["run_preserve"] is False and "stub_gather" not in sc and "gather" in sc["expect"], name
 
 
 def test_verdict_prefers_the_summary_callback_and_requires_the_sink_to_agree(tmp_path):

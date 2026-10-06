@@ -120,9 +120,6 @@ include:
   - path: scripts/addon_askpass.sh
     language: shell
     mode: "100755"
-  - path: scripts/gather_budget.sh
-    language: shell
-    mode: "100644"
   - path: scripts/env_guard.sh
     language: shell
     mode: "100644"
@@ -131,18 +128,21 @@ include:
     language: python
     python_kind: script
     mode: "100644"
-    doc_runtime: preserve_module_docstring
-    note: argparse description reads __doc__ at runtime; the module docstring is runtime-required (class A)
+    note: Layer A finalizer; the argparse description is a string literal (2026-10-06 D13) — the module docstring is no longer runtime-required
   - path: scripts/run_gather.sh
     language: shell
     mode: "100644"
     note: the single entry that runs ansible-playbook under the gather limit and records start/end times (2026-10-05 8th R3); invoked with bash
+  - path: scripts/gather_state.py
+    language: python
+    python_kind: script
+    mode: "100644"
+    note: run record, unfinished hosts to resume and conservative accumulated gather time (2026-10-06 9th); invoked by run_gather.sh and Jenkinsfile_portal
   - path: scripts/workspace_cleanup.py
     language: python
     python_kind: script
     mode: "100644"
-    doc_runtime: preserve_module_docstring
-    note: once-a-day cleanup of this Job's finished Runner workspaces (2026-10-05 8th R8); argparse description reads __doc__ at runtime (class A)
+    note: once-a-day cleanup of this Job's finished Runner workspaces (2026-10-05 8th R8); the argparse description is a string literal (2026-10-06 D13)
 
 excluded:
   - path: common/vars/status_rules.yml

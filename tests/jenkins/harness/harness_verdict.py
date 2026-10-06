@@ -7,7 +7,9 @@
   --calls     harness_calls.json      (wrapper 가 기록한 step 호출 · unstable 메시지)
   --sink      sink/record.jsonl       (callback_sink.py 수신 기록)
   --preserve  preserve_state.json     (sePreserveGatherOutput() 뒤 env 플래그 · 파일 존재)
-  --control   harness_control.json    (Harness 자체 관측: rethrown · sink_reachable · functions_sha256 · source)
+  --control   harness_control.json    (Harness 자체 관측: rethrown · sink_reachable · functions_sha256 · source · gather)
+  --received  gather_received.jsonl   (9차 gather_stage: 가짜 ansible 이 시도마다 받은 대상 {attempt, hosts})
+  --fixture   fixture_state.json      (접수 대상 순서 — 기대값의 대상 번호(1부터)를 IP 로 바꾼다)
 출력: harness_result.json {scenario, verdict, checks: [{name, expected, observed, ok}], problems, observed, meta}
 종료 코드: 0 PASS · 1 FAIL · 2 PARTIAL(필요 관측이 없어 판정 불가 — 통과가 아니다) · 3 도구 실패
 """
@@ -56,7 +58,31 @@ def _load_jsonl(path: str | None) -> list[dict] | None:
     return out
 
 
-def observe(summary, body_path, calls, sink, preserve, control) -> dict:
+def _body_envelopes(body_path) -> list | None:
+    if not body_path or not Path(body_path).is_file():
+        return None
+    try:
+        body = json.loads(Path(body_path).read_text(encoding="utf-8"))
+    except ValueError:
+        return None
+    envs = body.get("gatherInfoJson") if isinstance(body, dict) else None
+    return envs if isinstance(envs, list) else None
+
+
+def _catalog() -> dict:
+    """실패 문장 정본(common/vars/failure_reasons.yml) — 기대값이 문장 대신 키를 쓴다(복제 없음)."""
+    try:
+        import yaml
+    except ImportError:
+        return {}
+    path = Path(__file__).resolve().parents[3] / "common" / "vars" / "failure_reasons.yml"
+    try:
+        return (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("_fr_catalog") or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def observe(summary, body_path, calls, sink, preserve, control, received=None, fixture=None) -> dict:
     calls = calls or []
     unstable_msgs = [c[len("unstable:"):] for c in calls if isinstance(c, str) and c.startswith("unstable:")]
     sink_known = sink is not None
@@ -106,6 +132,10 @@ def observe(summary, body_path, calls, sink, preserve, control) -> dict:
         "body_sha256": body_sha,
         "preserve": preserve or {},
         "control": control or {},
+        "infra": (summary or {}).get("infra") if isinstance(summary, dict) else None,
+        "received": received,
+        "fixture_ips": (fixture or {}).get("ips") if isinstance(fixture, dict) else None,
+        "body_envelopes": _body_envelopes(body_path),
     }
     bo = (summary or {}).get("by_origin") if isinstance(summary, dict) else None
     if isinstance(bo, dict):
@@ -222,7 +252,93 @@ def check(expect: dict, obs: dict) -> tuple[list[dict], list[str]]:
             partial.append("rethrown: harness_control.json 에 관측 없음")
         else:
             add("rethrown", expect["rethrown"], got, got == expect["rethrown"])
+    if "gather" in expect:
+        _check_gather(expect["gather"], obs, add, partial)
+    if "infra" in expect:
+        _check_infra(expect["infra"], obs, add, partial)
+    if "body_reasons" in expect:
+        envs = obs["body_envelopes"]
+        cat = _catalog()
+        if envs is None:
+            partial.append("body_reasons: callback_body.json 없음")
+        elif not cat:
+            partial.append("body_reasons: 실패 문장 정본을 읽지 못함(PyYAML)")
+        else:
+            for key, want in expect["body_reasons"].items():
+                sentence = (cat.get(key) or {}).get("default")
+                got = sum(1 for e in envs if isinstance(e, dict) and (e.get("diagnosis") or {}).get("failure_reason") == sentence)
+                add(f"body_reasons.{key}", want, got, sentence is not None and got == want)
+    if "calls_include" in expect:
+        joined = "\n".join(c for c in obs["calls"] if isinstance(c, str))
+        for needle in expect["calls_include"]:
+            add(f"calls_include:{needle}", True, needle in joined, needle in joined)
+    if "calls_count" in expect:
+        for needle, want in expect["calls_count"].items():
+            got = sum(1 for c in obs["calls"] if isinstance(c, str) and c.startswith(needle))
+            add(f"calls_count:{needle}", want, got, got == want)
     return checks, partial
+
+
+def _check_gather(exp: dict, obs: dict, add, partial) -> None:
+    """9차 gather_stage — 시도마다 받은 대상 · 시도 판정 · 누적 한계 · 같은 Runner 고정."""
+    ips = obs["fixture_ips"] or []
+    if "received" in exp:
+        rec = obs["received"]
+        if rec is None or not ips:
+            partial.append("gather.received: gather_received.jsonl 또는 fixture_state.json 없음")
+        else:
+            want = [[ips[i - 1] for i in group] for group in exp["received"]]
+            got = [r.get("hosts") for r in rec if isinstance(r, dict)]
+            add("gather.received", want, got, got == want)
+    run = obs.get("gather_run")
+    atts = run.get("attempts") if isinstance(run, dict) else None
+    if "attempt_states" in exp:
+        if not isinstance(atts, list):
+            partial.append("gather.attempt_states: finalize_summary.gather_run.attempts 없음")
+        else:
+            got = [a.get("state") for a in atts]
+            add("gather.attempt_states", exp["attempt_states"], got, got == exp["attempt_states"])
+    if exp.get("limit_chain"):
+        if not isinstance(atts, list) or not atts:
+            partial.append("gather.limit_chain: 시도 기록 없음")
+        else:
+            gmax = run.get("gather_max_sec")
+            used = 0
+            chain = []
+            ok = isinstance(gmax, int)
+            for a in atts:
+                expected_limit = max(0, gmax - used) if isinstance(gmax, int) else None
+                chain.append((a.get("limit_sec"), expected_limit, a.get("exec_sec")))
+                ok = ok and a.get("limit_sec") == expected_limit
+                used += int(a.get("exec_sec") or 0)
+            add("gather.limit_chain", "limit_sec == gather_max - 앞 시도 실행 시간 합", chain, ok)
+    if "pinned" in exp:
+        targets = [c.split(":")[1] for c in obs["calls"] if isinstance(c, str) and c.startswith("node:") and not c.startswith("node:built-in")]
+        ok = len(targets) >= 2 and targets[0] == "harness-runner-label" and all(t == targets[1] for t in targets[1:]) and targets[1] != targets[0]
+        add("gather.pinned", exp["pinned"], targets, ok == exp["pinned"])
+    if "outcome" in exp:
+        got = (obs["control"].get("gather") or {}).get("outcome")
+        add("gather.outcome", exp["outcome"], got, got == exp["outcome"])
+
+
+def _check_infra(exp: dict, obs: dict, add, partial) -> None:
+    """9차 — 실행 기반 대기 기록(finalize_summary.infra): 만료 여부 · 대기 구간(사유 · 결과 · 최소 초) · 합이 한도를 넘지 않음."""
+    infra = obs["infra"]
+    if not isinstance(infra, dict):
+        partial.append("infra: finalize_summary.json 에 infra 없음")
+        return
+    if "expired" in exp:
+        add("infra.expired", exp["expired"], infra.get("expired"), infra.get("expired") == exp["expired"])
+    eps = infra.get("episodes") or []
+    for want in exp.get("episodes", []):
+        hit = [e for e in eps if want["reason_contains"] in str(e.get("reason")) and (want.get("result") is None or e.get("result") == want["result"])
+               and int(e.get("sec") or 0) >= int(want.get("min_sec", 0))]
+        add(f"infra.episode:{want['reason_contains']}:{want.get('result')}>={want.get('min_sec', 0)}s", True,
+            [(e.get("reason"), e.get("result"), e.get("sec")) for e in eps], bool(hit))
+    if exp.get("within_budget"):
+        used, budget = infra.get("used_sec"), infra.get("budget_sec")
+        ok = isinstance(used, int) and isinstance(budget, int) and used <= budget + 15
+        add("infra.within_budget", "used_sec <= budget_sec(+15s 판정 간격)", (used, budget), ok)
 
 
 def main(argv=None) -> int:
@@ -236,6 +352,8 @@ def main(argv=None) -> int:
     ap.add_argument("--preserve")
     ap.add_argument("--control")
     ap.add_argument("--meta", help="harness_functions_meta.json (functions_sha256 · source)")
+    ap.add_argument("--received", help="gather_received.jsonl (9차 gather_stage)")
+    ap.add_argument("--fixture", help="fixture_state.json (접수 대상 순서)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     try:
@@ -253,7 +371,7 @@ def main(argv=None) -> int:
     preserve = _load_json(a.preserve)
     control = _load_json(a.control)
     meta = _load_json(a.meta)
-    obs = observe(summary, a.body, calls, sink, preserve, control)
+    obs = observe(summary, a.body, calls, sink, preserve, control, _load_jsonl(a.received), _load_json(a.fixture))
     checks, partial = check(expect, obs)
     failed = [c for c in checks if not c["ok"]]
     if failed:
@@ -266,7 +384,7 @@ def main(argv=None) -> int:
         verdict = "PASS"
     result = {"scenario": a.scenario, "verdict": verdict, "checks": checks, "partial": partial,
               "problems": [f"{c['name']}: expected {c['expected']!r} observed {c['observed']!r}" for c in failed],
-              "observed": {k: v for k, v in obs.items() if k != "calls"}, "calls": obs["calls"],
+              "observed": {k: v for k, v in obs.items() if k not in ("calls", "body_envelopes")}, "calls": obs["calls"],
               "meta": meta or {}, "note": expect.get("note", "")}
     _write_lf(Path(a.out), json.dumps(result, ensure_ascii=False, indent=2))
     sys.stdout.write(f"[verdict] {a.scenario}: {verdict} checks={len(checks)} failed={len(failed)} partial={len(partial)}\n")

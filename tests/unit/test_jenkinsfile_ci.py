@@ -79,8 +79,10 @@ def test_layer_b_function_lives_only_in_the_library(signature):
 def test_library_defines_exactly_the_three_functions_and_returns_this():
     names = re.findall(r"^(?:Map|String|List|boolean|long|def) (se\w+)\(", LIB, re.M)
     # 2026-10-05 (F02): 결과 형태 검문 seEnvelopeShapeReason 이 더해졌다 (Jenkinsfile_portal 에 같은 본문 — test_envelope_gate_parity.py)
-    assert names == ["seFallbackCanon", "seJsonString", "seEnvelopeShapeReason", "seReconcileRaw"]
-    assert LIB.count("@NonCPS") == 4
+    # 2026-10-06 (9차): 실행 기반 장애 종료 상태 판정 seIsInfraOutcome (Python Layer A 의 INFRA_OUTCOMES 와 같은 값)
+    assert names == ["seFallbackCanon", "seIsInfraOutcome", "seJsonString", "seEnvelopeShapeReason", "seReconcileRaw"]
+    assert LIB.count("@NonCPS") == 5
+    assert "return outcome in ['infra_wait_expired', 'resume_impossible']" in LIB
     assert LIB.rstrip().endswith("return this"), "load 가 메서드를 가진 객체를 돌려주려면 마지막이 return this"
     assert "import com.cloudbees.groovy.cps.NonCPS" in LIB
 
@@ -97,6 +99,7 @@ def test_library_fallback_canon_still_matches_catalog_and_layer_a():
     import yaml
     fr = yaml.safe_load((REPO / "common/vars/failure_reasons.yml").read_text(encoding="utf-8"))
     assert f"reason  : '{fr['_fr_catalog']['output_build_failed']['default']}'" in LIB
+    assert f"infraReason: '{fr['_fr_catalog']['infra_unavailable']['default']}'" in LIB, "9차: 실행 기반 장애 문장도 정본과 같다"
     layer_a = (REPO / "scripts/finalize_gather_output.py").read_text(encoding="utf-8")
     emit = re.search(r"EMIT_FAILED = '([^']+)'", layer_a).group(1)
     assert f"emitFailed: '{emit}'" in LIB
@@ -358,9 +361,11 @@ def test_time_limits_self_test_runs_the_real_run_gather_and_constant_checks():
     """8차 R3 · R8: 예산 자체 시험이 실행 한계 계산 · 실제 run_gather.sh(Linux Runner 에서 실행) · 시간 상수 일치 · 작업 폴더 정리 시험을 함께 돈다.
     stage 키는 BUDGET 그대로(prodgen REQUIRED_CI_STAGES)."""
     st = _stage("Time Limits Self-test")
-    for t in ("tests/unit/test_gather_budget.py", "tests/unit/test_run_gather.py", "tests/unit/test_time_limits.py", "tests/unit/test_workspace_cleanup.py"):
+    for t in ("tests/unit/test_gather_state.py", "tests/unit/test_run_gather.py", "tests/unit/test_env_guard.py", "tests/unit/test_time_limits.py",
+              "tests/unit/test_workspace_cleanup.py"):
         assert t in st, t
-    assert "env.CI_STAGE_BUDGET" in st and "'\"start\":true'" in st
+    assert "env.CI_STAGE_BUDGET" in st and "gather_budget" not in st
+    assert "python3 scripts/gather_state.py begin --ws" in st and 'p["limit"] == 21600' in st, "실제 Runner 에서 메모리와 무관하게 바로 시작하는지"
 
 
 def test_toolchain_reports_esxi_prerequisites_without_adding_the_label():
