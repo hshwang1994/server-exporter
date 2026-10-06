@@ -33,7 +33,7 @@ ALL = ["system", "hardware", "bmc", "cpu", "memory", "storage", "network", "firm
 T0 = 1_800_000_000
 CG = "/user.slice/user-985.slice/session-570.scope"   # Agent 세션 범위 — 여러 빌드가 함께 쓴다
 KERNEL_NONE = {"readable": True, "kills": []}          # 커널 로그를 읽었고 OOM 종료 기록이 없다
-PROBES = {"boot_id": "boot-a", "btime": T0 - 86400, "uptime": 1000.0, "kernel": KERNEL_NONE,
+PROBES = {"boot_id": "boot-a", "btime": T0 - 86400, "kernel_mark": 1000.0, "kernel": KERNEL_NONE,
           "oom": {"vmstat": 0, "cgroup": 0, "cgroup_path": CG}}
 
 
@@ -301,6 +301,53 @@ def test_kernel_oom_records_are_parsed_by_pid_and_window():
     assert kills == [{"at": 1500.25, "pid": 2222, "comm": "python3"}, {"at": 1600.0, "pid": 3333, "comm": "ansible-playboo"}]
     assert gs.parse_kernel_oom(text, since=None)[0]["pid"] == 1111
     assert gs.parse_kernel_oom("", since=0) == [] and gs.parse_kernel_oom(None, since=0) == []
+    # 기준점과 같은 시각의 줄은 시도 시작 때 이미 있던 줄이다 — 뺀다
+    assert [k["pid"] for k in gs.parse_kernel_oom(text, since=1500.26)] == [3333]
+    assert gs.parse_kernel_oom(text, since=1500.25)[0] == {"at": 1500.26, "pid": 2222, "comm": "python3"}, "같은 PID 의 뒤 줄(Killed process)은 남는다"
+
+
+# 2026-10-07 Runner03(VMware) 실측 형식 그대로 — 커널 로그 시각(printk)이 /proc/uptime 보다 약 22초 늦었다(시도 시작 uptime 1357006.19, 그 뒤의 OOM 기록 1356984.27)
+RUNNER03_BEFORE = "\n".join([
+    "[1309802.489401] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=/,mems_allowed=0,oom_memcg=/system.slice/se-oom-probe-1255082.scope,"
+    "task_memcg=/system.slice/se-oom-probe-1255082.scope,task=python3,pid=1255125,uid=0",
+    "[1309802.489415] Memory cgroup out of memory: Killed process 1255125 (python3) total-vm:756444kB, anon-rss:63904kB, file-rss:5760kB, shmem-rss:0kB, UID:0 pgtables:200kB oom_score_adj:0",
+    "[1356960.100000] IPv6: ADDRCONF(NETDEV_CHANGE): ens192: link becomes ready",
+])
+RUNNER03_AFTER = RUNNER03_BEFORE + "\n" + "\n".join([
+    "[1356984.274808] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=/,mems_allowed=0,oom_memcg=/system.slice/se-oom10-isolated_9th-1332166.scope,"
+    "task_memcg=/system.slice/se-oom10-isolated_9th-1332166.scope,task=python3,pid=1332436,uid=985",
+    "[1356984.274820] Memory cgroup out of memory: Killed process 1332436 (python3) total-vm:756444kB, anon-rss:63896kB, file-rss:5888kB, shmem-rss:0kB, UID:985 pgtables:200kB oom_score_adj:0",
+])
+
+
+def test_kernel_log_mark_is_taken_from_the_kernel_logs_own_clock():
+    assert gs.kernel_log_mark(RUNNER03_BEFORE) == 1356960.1
+    assert gs.kernel_log_mark("no timestamps here\n") == 0.0, "읽었지만 시각이 붙은 줄이 없다"
+    assert gs.kernel_log_mark(None) is None, "읽지 못했다 — 기준점 없음"
+    assert gs.kernel_oom_kills(None, lambda: RUNNER03_AFTER) == {"readable": False, "kills": [], "why": "시도 시작 때 커널 로그를 읽지 못해 기준점이 없음"}
+    assert gs.kernel_oom_kills(1356960.1, lambda: None) == {"readable": False, "kills": []}
+    assert gs.kernel_oom_kills(1356960.1, lambda: RUNNER03_AFTER)["kills"] == [{"at": 1356984.274808, "pid": 1332436, "comm": "python3"}]
+
+
+def test_this_runs_oom_is_linked_even_when_the_kernel_log_clock_lags_uptime(tmp_path):
+    # 10차 실기(2026-10-07, Runner03 격리 시험)에서 찾은 결함 — 시도 시작을 /proc/uptime 으로 잡았더니 커널 로그 시각이 그보다 늦어
+    #   이 실행의 OOM 종료 기록이 '시작 전' 으로 빠졌고 runner_oom 이 aborted 가 됐다. 기준점을 커널 로그 자신의 시계로 잡으면 연결된다
+    ws = _ws(tmp_path, ["10.0.0.1"])
+    begin_probes = {k: v for k, v in PROBES.items() if k not in ("kernel_mark", "kernel")}
+    _begin(ws, T0, gather_max=600, probes=dict(begin_probes, dmesg=RUNNER03_BEFORE))
+    assert gs.load_state(ws)["attempts"][-1]["kernel_mark"] == 1356960.1
+    _ansible_pid(ws, 1332436)
+    att = gs.end(ws, rc=143, now=T0 + 5, probes={"oom": dict(PROBES["oom"], cgroup=1), "dmesg": RUNNER03_AFTER})
+    assert att["state"] == "runner_oom" and att["oom_link"] == {"pid": 1332436, "role": "ansible-playbook", "comm": "python3", "at": 1356984.274808}
+    # 시작 때 커널 로그를 읽지 못했으면 기준점이 없다 — 나중에 읽혀도 오래된 같은 PID 번호를 이 실행으로 잇지 않는다
+    (tmp_path / "n").mkdir()
+    ws2 = _ws(tmp_path / "n", ["10.0.0.1"])
+    _begin(ws2, T0, gather_max=600, probes=dict(begin_probes, dmesg=None))
+    assert gs.load_state(ws2)["attempts"][-1]["kernel_mark"] is None
+    _ansible_pid(ws2, 1332436)
+    att2 = gs.end(ws2, rc=143, now=T0 + 5, probes={"oom": dict(PROBES["oom"], cgroup=1), "dmesg": RUNNER03_AFTER})
+    assert att2["state"] == "aborted" and att2["oom_link"] is None and att2["kernel_log"] == "unreadable"
+    assert "기준점" in att2["evidence"], att2["evidence"]
 
 
 def test_oom_observation_reports_scope_and_never_decides_the_cause():

@@ -151,14 +151,6 @@ def _obs_text(obs: dict | None) -> str:
     return ', '.join(parts)
 
 
-def uptime_now(path='/proc/uptime') -> float | None:
-    text = _read(path)
-    try:
-        return float(text.split()[0]) if text and text.split() else None
-    except ValueError:
-        return None
-
-
 _KLOG_LINE = re.compile(r'^\[\s*(\d+(?:\.\d+)?)\]\s?(.*)$')
 _KILLED = re.compile(r'Killed process (\d+) \(([^)]*)\)')
 _OOM_KILL = re.compile(r'\boom-kill:.*?\bpid=(\d+)')
@@ -166,14 +158,15 @@ _OOM_TASK = re.compile(r'\btask=([^,]*)')
 
 
 def parse_kernel_oom(text: str | None, since: float | None) -> list:
-    """커널 로그(dmesg 기본 형식 '[부팅 뒤 초] 내용')에서 OOM 종료 기록을 고른다 — [{'at', 'pid', 'comm'}]. since(부팅 뒤 초) 이전은 뺀다."""
+    """커널 로그(dmesg 기본 형식 '[커널 로그 시각] 내용')에서 OOM 종료 기록을 고른다 — [{'at', 'pid', 'comm'}].
+    since(같은 커널 로그 시계의 기준점 — kernel_log_mark) 까지의 줄은 뺀다(기준점과 같은 시각의 줄은 시도 전에 이미 있던 줄이다)."""
     kills = {}
     for line in (text or '').splitlines():
         m = _KLOG_LINE.match(line.strip())
         if not m:
             continue
         at = float(m.group(1))
-        if since is not None and at < float(since):
+        if since is not None and at <= float(since):
             continue
         msg = m.group(2)
         k = _KILLED.search(msg)
@@ -189,15 +182,46 @@ def parse_kernel_oom(text: str | None, since: float | None) -> list:
     return sorted(kills.values(), key=lambda x: x['at'])
 
 
-def kernel_oom_kills(since: float | None) -> dict:
-    """커널 로그의 OOM 종료 기록 — {'readable': bool, 'kills': [...]}. 읽지 못하면(권한 · 명령 없음) readable=False(근거 없음)다."""
+def kernel_log_text() -> str | None:
+    """dmesg 출력. 읽지 못하면(권한 · 명령 없음) None."""
     try:
         out = subprocess.run(['dmesg'], capture_output=True, text=True, errors='replace', timeout=15)
     except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout if out.returncode == 0 else None
+
+
+def kernel_log_mark(text: str | None) -> float | None:
+    """시도 시작 때의 커널 로그 기준점 — 그때 마지막 줄의 '[커널 로그 시각]'(시각이 붙은 줄이 없으면 0.0, 읽지 못하면 None).
+
+    /proc/uptime 과 비교하지 않는다. 커널 로그 시각(printk 시계)은 /proc/uptime 과 다르게 갈 수 있다 — 2026-10-07 Runner03(VMware)
+    실측에서 약 22초 늦었고, 시도 시작을 /proc/uptime 으로 잡았더니 이 실행의 OOM 종료 기록이 '시작 전' 으로 빠졌다(10차 실기)."""
+    if text is None:
+        return None
+    mark = 0.0
+    for line in text.splitlines():
+        m = _KLOG_LINE.match(line.strip())
+        if m:
+            mark = max(mark, float(m.group(1)))
+    return mark
+
+
+def kernel_oom_kills(mark: float | None, read=kernel_log_text) -> dict:
+    """커널 로그의 OOM 종료 기록 중 시도 시작 기준점(mark) 뒤의 것 — {'readable': bool, 'kills': [...]}.
+    지금 읽지 못하거나 시작 때 기준점을 얻지 못했으면 readable=False(근거 없음)다 — 기준점 없이 오래된 같은 PID 번호를 이 실행으로 잇지 않는다."""
+    if mark is None:
+        return {'readable': False, 'kills': [], 'why': '시도 시작 때 커널 로그를 읽지 못해 기준점이 없음'}
+    text = read()
+    if text is None:
         return {'readable': False, 'kills': []}
-    if out.returncode != 0:
-        return {'readable': False, 'kills': []}
-    return {'readable': True, 'kills': parse_kernel_oom(out.stdout, since)}
+    return {'readable': True, 'kills': parse_kernel_oom(text, mark)}
+
+
+def _kernel_reader(probes: dict):
+    """시험은 probes['dmesg'](커널 로그 글)로 실제 해석 경로를 그대로 탄다. 운영은 dmesg 를 읽는다."""
+    if 'dmesg' in probes:
+        return lambda: probes['dmesg']
+    return kernel_log_text
 
 
 def _kernel_state(kernel: dict | None):
@@ -244,7 +268,10 @@ def _unlinked_note(obs: dict | None, kernel: dict | None) -> str | None:
     """바깥에서 끝난 시도에 OOM 관측이 있지만 이 실행과 연결하지 못했을 때의 기록 — 원인 미확인으로 남긴다."""
     if not obs:
         return None
-    why = '커널 로그를 읽지 못함' if (kernel is not None and not kernel.get('readable')) else '커널 로그에 이 실행의 PID 가 없음'
+    if kernel is not None and not kernel.get('readable'):
+        why = kernel.get('why') or '커널 로그를 읽지 못함'
+    else:
+        why = '커널 로그에 이 실행의 PID 가 없음'
     return f"OOM 관측({_obs_text(obs)}) — 이 실행과 연결된 근거 없음({why}), 원인 미확인"
 
 
@@ -479,7 +506,7 @@ def close_open_attempt(st: dict, ws: Path, now: float, agent_lost: bool = False,
         state, evidence = 'runner_restart', f"boot_id {str(att['boot_id'])[:8]} -> {cur_boot[:8]}"
     else:
         obs = oom_observation(att.get('oom_kill_start'), probes['oom'] if 'oom' in probes else oom_counters())
-        kernel = probes['kernel'] if 'kernel' in probes else kernel_oom_kills(att.get('uptime_start'))
+        kernel = probes['kernel'] if 'kernel' in probes else kernel_oom_kills(att.get('kernel_mark'), _kernel_reader(probes))
         link = oom_link(att, ws, kernel)
         note = _unlinked_note(obs, kernel)
         if link:
@@ -539,7 +566,7 @@ def begin(ws: Path, *, pid: int, vault_tmp: str, cp_dir: str, gather_max: int, v
     probes = probes or {}
     att = {'n': len(st['attempts']) + 1, 'started_epoch': int(now), 'started_at': iso(now), 'pid': int(pid),
            'boot_id': probes['boot_id'] if 'boot_id' in probes else boot_id(),
-           'uptime_start': probes['uptime'] if 'uptime' in probes else uptime_now(),
+           'kernel_mark': probes['kernel_mark'] if 'kernel_mark' in probes else kernel_log_mark(_kernel_reader(probes)()),
            'oom_kill_start': probes['oom'] if 'oom' in probes else oom_counters(),
            'vault_tmp': vault_tmp, 'cp_dir': cp_dir, 'hosts_total': len(ips), 'completed_before': len(done),
            'precheck_failed': len(pre_all), 'pending': len(pending), 'limit_sec': limit,
@@ -612,7 +639,7 @@ def end(ws: Path, *, rc: int, ssh_closed: int = 0, now: float | None = None, pro
     kernel = None
     if rc in SIGNAL_RCS or rc == 137:
         # 바깥에서 끝난 시도만 커널 로그를 본다 — 이 실행의 PID 가 OOM 으로 끝났다는 기록이 있어야 OOM 을 원인으로 적는다
-        kernel = probes['kernel'] if 'kernel' in probes else kernel_oom_kills(att.get('uptime_start'))
+        kernel = probes['kernel'] if 'kernel' in probes else kernel_oom_kills(att.get('kernel_mark'), _kernel_reader(probes))
     link = oom_link(att, ws, kernel)
     state, evidence, timed_out = classify_end(rc, exec_sec, int(att.get('limit_sec') or 0), obs, link, kernel)
     att.update(state=state, evidence=evidence, timed_out=timed_out, rc=rc, exec_sec=exec_sec, ran_sec=exec_sec,
