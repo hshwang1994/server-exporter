@@ -25,7 +25,7 @@ gathering = explicit                        # gather_facts: no
 jinja2_native = True                        # JSON 출력 타입 보존 (int/bool 유지)
 host_key_checking = False
 interpreter_python = auto
-forks = 200
+forks = 50                                   # 2026-10-07: 200 → 50 (현재 운영 설정, 향후 변경 가능). 동적 forks·자원 차단 로직은 없다
 timeout = 60
 gather_timeout = 60
 ```

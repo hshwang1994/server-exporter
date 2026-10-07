@@ -1,5 +1,18 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-07 (최종 마무리) — 로그 보관 전역화 · forks 50 · Windows vault 도메인 · Portal 재진입 4.1/4.2 · GP-64 확인 · **main push(양 원격) · production P7 `61b9dd4a` 유지**
+
+> 정본: `tests/evidence/2026-10-07-final-wrapup.md`. 10차 결과·회귀는 그대로 유지하고 아래 변경만 더했다.
+
+- **로그 보관 전역화(지시 1)**: `Jenkinsfile_portal` · `Jenkinsfile_ci` 의 `buildDiscarder(logRotator(...))` 제거 — 보관 정책은 Jenkins 전역 설정으로 관리한다(전역 설정은 이번에 바꾸지 않음). 운영 문서(`docs/operate/04` · `08` · `JENKINS_PIPELINES`)에서 Jenkinsfile 이 보관기간을 지정한다던 부분만 갱신.
+- **forks 50(지시 2)**: `ansible.cfg` `[defaults] forks` 200 → 50(현재 운영 설정). CPU/메모리 계산·동적 forks·사전 차단 로직은 추가하지 않음.
+- **Windows vault 도메인(지시 3)**: `vault/{yi,ic,cj}/os/windows.yml` 의 secondary(`windows_fallback`) username 만 `yimad\infraops` · `icmad\infraops` · `cjmad\infraops` 로. password·label·role·순서·primary(`administrator`)·`vault/git`·Linux/ESXi/Redfish 불변(복호화→수정→재암호화, 비밀값 미출력). 전달 경로 확인: vault username → `_cred_accounts` → `_os_accounts` → `try_one_credential.yml` `ansible_user`(NTLM `ansible_winrm_transport: ntlm`). YAML plain scalar 라 역슬래시는 그대로 전달.
+- **Portal 결과 재진입(지시 4)**: 4.1 확정 거부(408·429 제외 4xx)는 `state.refused` 를 진입 사이에 유지해 재진입에도 다시 POST 안 함(2xx 미재전송은 유지). 4.2 응답 확인 전 중단(`outcome=interrupted`)도 수신 불명 → `receipt=uncertain`(그 뒤 재진입에서 4xx 를 받아도 uncertain). `eventUuid`·본문·누적 시도·시간 유지, 새 전송 체계·시도 초기화 없음.
+- **GP-64 확인(지시 6)**: Jenkins Agent·ansible 주 프로세스가 살아 있고 작업자(fork)만 OOM 인 경우 — 작업자 PID 는 `run_gather.sh`·ansible 주 프로세스가 아니라 직접 귀속 불가. `classify_end` 는 이미 PID 연결(link) 있을 때만 `runner_oom`, 스스로 끝난 rc(1 등)는 OOM 관측이 있어도 `failed_run`. 새 추정 로직을 두지 않고 한계로 남김(회귀 `test_worker_fork_oom_is_not_this_runs_oom_gp64`).
+- **검증**: 로컬 WSL `ci_gate`(오프라인 gate — 컴파일·field_dictionary·schema drift·vendor/harness 일관성·finalize corpus·pytest·3채널 syntax) · 영향 단위 시험(`test_jenkinsfile_portal_finalize` · `test_jenkinsfile_ci` · `test_time_limits` · `test_gather_state` · `test_harness_tools` · `test_finalize_corpus` · prodgen verdict). Harness 시나리오 `finalize_refused_no_resend` 추가(CI·prodgen 목록 동기).
+- **[HOLD] 이 세션 Jenkins 자격 부재**: Jenkins controller 는 닿지만(HTTP 200) 인증 netrc 가 이 세션에 없다(10차 종료 시 접근 파일 삭제, 재발급 안 됨). 그래서 **CI 실행 · production 승격·canary · production 실환경 재검증 · GP-57 실장비는 이 세션에서 수행하지 못했다** — 우회하지 않고 미수행으로 남긴다. main 코드는 양 원격에 push, production 은 P7 `61b9dd4a` 유지.
+- **실기 미확인**: GP-57(실장비 계정 쓰기 응답 유실) · GP-64(작업자 OOM PID 연결) · Windows 도메인 계정 실인증(승인된 도메인 가입 시험 대상 없음 · 반복 실패 시 운영 `infraops` 잠금 위험) · 72 h 자체 · 이번 세션의 Jenkins 실행 검증.
+
 ## 일자: 2026-10-07 (10차) — 결과 처리 재진입 · 기록 읽기 예외 · 끊긴 준비 · OOM 귀속 · 실환경 검증 · **main `fa05d122` → production P7 `61b9dd4a`**
 
 > 정본: `tests/evidence/2026-10-07-10th-final-defects.md` · 결정 `docs/ai/decisions/ADR-2026-10-07-finalize-reentry-and-oom-attribution.md` · 운영 `docs/operate/04-pipeline-runtime.md`.

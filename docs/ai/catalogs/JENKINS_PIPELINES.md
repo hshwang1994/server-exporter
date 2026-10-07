@@ -23,7 +23,8 @@
 
 > 2026-10-05 (8차): 시험용 파라미터(`redfishAccountDryrun` · `gatherBudgetForceSec`) 삭제, 시간 한계 셋(빌드 12 h · 수집 실행 최대 6 h · 결과 확인 및 전송 1 h),
 > 작업 단위 제한 · 정체 감시(`gather_watch.py`) · Tier 2(`SE_FINALIZER_BOUNDED`) 삭제, 업무 줄 시각 · Timestamper(`timestamps {}` — 플러그인 없으면 생략),
-> `buildDiscarder(14일/100 · 결과 파일 7일/50)`, 작업 폴더 정리. 정본 `docs/operate/04-pipeline-runtime.md` · `tests/unit/test_time_limits.py`.
+> 작업 폴더 정리. 정본 `docs/operate/04-pipeline-runtime.md` · `tests/unit/test_time_limits.py`.
+> 2026-10-07 (마무리): `buildDiscarder`(로그·빌드 기록 보관)는 Jenkinsfile(`_portal` · `_ci`)에서 제거 — 보관 정책은 Jenkins 전역 설정으로 관리한다. ansible.cfg `forks` 200 → 50. Portal 결과 전송은 확정 거부(4xx)도 재진입 재전송 금지 · 응답 확인 전 중단은 `receipt=uncertain`.
 
 > 2026-10-05 (7차 F13): 단계 표시 이름을 한국어로(괄호 안이 종전 이름) — Stage View · Blue Ocean 에 '결과 확인 및 전송' 이 별도 단계로 보인다(post 안의 `stage`,
 > 추가 executor 없음). sh 7개 모두 label, 콘솔 태그 `[입력 확인]` `[실행 위치]` `[수집]` `[시간]` `[결과 보존]` `[마무리]` `[Portal 전송]` `[결과]` `[경고]` `[결과 파일]` `[요약]`,

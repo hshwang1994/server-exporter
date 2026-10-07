@@ -1,5 +1,14 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-07 (최종 마무리) — 로그 보관 전역화 · forks 50 · Windows vault 도메인 · Portal 재진입 4.1/4.2 · GP-64
+
+| 구분 | 결과 |
+|---|---|
+| 로컬 | WSL `ci_gate`(오프라인 gate) — python compile · field_dictionary 정합 · output schema drift · vendor/harness 일관성 · finalize corpus · pytest(unit·e2e·regression) **4,516 통과 · 145 건너뜀 · 7 xfail** · integration · 3채널 `ansible-playbook --syntax-check`. 영향 단위 시험 별도 실행 PASS(`test_jenkinsfile_portal_finalize` · `test_jenkinsfile_ci` · `test_time_limits` · `test_gather_state` · `test_harness_tools` · `test_finalize_corpus` · prodgen `test_verdict_evidence`) |
+| 새 시험 | `test_gather_state.py::test_worker_fork_oom_is_not_this_runs_oom_gp64`(지시 6 — 작업자 fork OOM 은 link 안 됨 · rc=1 은 failed_run · 137+작업자 PID 는 process_lost) · `test_jenkinsfile_portal_finalize`(4.1 refused 유지·재진입 미전송 · 4.2 interrupted→uncertain) · Harness 시나리오 `finalize_refused_no_resend`(확정 거부 HTTP 400 뒤 재진입 재전송 0 · sink 1회) — scenarios.json · build_functions.SCENARIOS · Jenkinsfile_ci · prodgen REQUIRED_HARNESS 동기 |
+| 항목별 | 1 buildDiscarder 제거(portal·ci) · 2 `ansible.cfg` forks 200→50 · 3 Windows vault 재암호화(yi·ic·cj secondary username, 비밀 fingerprint `14465ae6…` 불변 확인) · 4 seCallback refused/receipt · 6 GP-64 한계 확인 |
+| 미수행(자격 부재) | **이 세션 Jenkins 인증 netrc 없음** → CI 실행 · production 승격·canary · production 실환경 재검증 · GP-57 실장비 미수행(우회 안 함). Jenkins controller 는 닿음(HTTP 200). main 양 원격 push, production P7 `61b9dd4a` 유지 |
+
 ## 2026-10-07 (10차) — 결과 처리 재진입 · 기록 읽기 · 끊긴 준비 · OOM 귀속 · `fa05d122` → production P7 `61b9dd4a`
 
 | 구분 | 결과 |

@@ -8,6 +8,24 @@
 
 > 최종 갱신: 2026-10-07
 
+## 2026-10-07 (최종 마무리) — 로그 보관 전역화 · forks 50 · Windows vault 도메인 · Portal 재진입 4.1/4.2 · GP-64 확인
+
+### 배경
+- 지시서(2026-10-07, "최종 마무리 실행 지시서"): 10차 결과는 유지하고 추가 6개 항목만. 새 문제 없는 기능 재설계·범위 확대 금지.
+
+### 결정
+1. **로그 보관은 Jenkinsfile 이 아니라 Jenkins 전역 설정으로** — `Jenkinsfile_portal` · `Jenkinsfile_ci` 의 `buildDiscarder(logRotator(...))` 를 제거했다. 왜: 보관 정책을 Job 파일에 박아 두면 Job 마다·Jenkinsfile 마다 흩어진다. 전역 설정 한 곳에서 관리하는 편이 운영에 맞다(이번에 전역 설정 자체는 바꾸지 않음). 향후 보관 기간이 필요하면 Jenkinsfile 에 되넣지 말고 전역 정책으로 설정할지 사용자에게 먼저 확인한다.
+2. **ansible.cfg `forks` 200 → 50** — 현재 운영 설정. 향후 다시 바뀔 수 있다. 이 변경 때문에 CPU/메모리 계산·동적 forks·사전 차단 로직을 더하지 않았다(그런 자원 로직은 8차에 제거됐고 되살리지 않는다).
+3. **Windows vault 도메인 계정** — `vault/{yi,ic,cj}/os/windows.yml` 의 secondary(`windows_fallback`) username 만 `yimad\infraops` · `icmad\infraops` · `cjmad\infraops` 로. 왜: 해당 사이트의 Windows 폴백 로그인이 도메인 한정(`DOMAIN\user`) 형식이어야 한다. password·label·role·순서·primary 는 그대로. 전달 경로(vault → `_cred_accounts` → `_os_accounts` → `ansible_user`, NTLM)에서 YAML plain scalar 라 역슬래시가 그대로 전달됨을 확인. 실인증은 승인된 도메인 가입 시험 대상이 없고 반복 실패 시 운영 계정 잠금 위험이라 실기 미확인.
+4. **Portal 결과 처리 재진입 4.1 · 4.2** — Astra/지시서가 가리킨 두 틈:
+   - 4.1 확정 거부(HTTP 400/401/403 등, 408·429 제외)를 받은 뒤 결과 처리가 재진입하면 같은 요청을 다시 POST 할 수 있었다(거부 상태가 진입 사이에 유지되지 않음). `state.refused` 를 `state.delivered` 와 같이 진입 사이에 유지해 재진입 재전송을 막았다. 408·429 는 그대로 재시도 대상.
+   - 4.2 요청을 보낸 뒤 응답 확인 전 중단(`outcome=interrupted`)된 경우 수신 여부를 알 수 없는데 `uncertain` 으로 분류되지 않았다(연결 실패·408 만 uncertain 으로 셌다). 중단도 `uncertain` 에 포함하고, 그 뒤 재진입에서 확정 거부(4xx)를 받아도 앞 전송이 전달됐을 수 있어 `uncertain` 으로 남긴다. 2xx 가 확인되면 `delivered`. `eventUuid`·본문·누적 시도·시간은 그대로, 새 전송 체계·시도 초기화는 없음.
+5. **GP-64(작업자 fork OOM) 확인** — Jenkins Agent·ansible 주 프로세스가 살아 있고 작업자만 OOM 인 경우는 직접 귀속 근거가 없다(작업자 PID 는 `run_gather.sh`·ansible 주 프로세스가 아니고 기록되지 않음). `classify_end` 는 이미 PID 연결이 있을 때만 `runner_oom`, 스스로 끝난 rc(1 등)는 OOM 관측이 있어도 `failed_run` 이다. 지시대로 공유 카운터·종료 코드만으로 추정하는 새 로직을 두지 않고 한계로 남겼다(회귀 1건 추가).
+
+### 결과 · 범위
+- 검증: 로컬 WSL `ci_gate`(오프라인 gate — pytest 4,516 passed · 145 skipped · 7 xfailed + 정적 검사 + 3채널 syntax) 통과. Harness 시나리오 `finalize_refused_no_resend`(확정 거부 뒤 재진입 재전송 금지) 추가, CI·prodgen 목록 동기.
+- **이 세션 Jenkins 자격 부재로 미수행(우회 안 함)**: CI 실행 · production 승격·canary · production 실환경 재검증 · GP-57 실장비. Jenkins controller 는 닿지만(HTTP 200) 인증 netrc 가 이 세션에 없다(10차 종료 시 접근 파일 삭제). main 코드는 양 원격에 push, production 은 P7 `61b9dd4a` 유지. 이 항목들은 Jenkins/Runner 자격이 주어지면 수행 가능.
+
 ## 2026-10-07 (10차) — 결과 처리 재진입 · 기록 읽기 예외 · 끊긴 준비 · OOM 귀속 · 실환경 검증
 
 ### 사용자 의심

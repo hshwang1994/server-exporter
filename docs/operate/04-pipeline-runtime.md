@@ -153,6 +153,9 @@ Redfish 모듈 마감(절대 1,200초 · 새 응답 없음 120초 · 탐지 90 �
 - 결과 확인 및 전송 중 실행 기반 오류(예: controller 재시작 뒤 이어 갈 수 없는 step)가 나면 같은 빌드 안에서 결과 처리 노드를 다시 기다려 같은 폴더
   (`fin-<빌드 번호>`)에서 다시 처리한다(2026-10-07 10차). 2xx 를 이미 받은 전송은 다시 보내지 않고, 받지 못한 전송은 남은 횟수(최대 3번 중)만 쓴다. 끝내 처리하지
   못하면 결과 없이 SUCCESS 로 끝내지 않는다 — 보내지 못했으면 FAILURE, 보냈으면 UNSTABLE 이고 `[결과 확인]` 줄에 보낸 것과 결과가 남은 곳을 적는다.
+  2026-10-07 마무리: Portal 이 **확정 거부(408 · 429 가 아닌 4xx)** 한 전송도 2xx 처럼 재진입 사이에 유지해 다시 보내지 않는다(408 · 429 는 그대로 재시도 대상).
+  수신 여부(`callback.receipt`)는 2xx 면 `delivered`, 응답을 확인하지 못한 시도(연결 실패·408·**응답 확인 전 중단**)가 하나라도 있으면 `uncertain` — 보낸 뒤 응답을 못 받은 상태라
+  그 뒤 재진입에서 확정 거부를 받아도 앞 전송이 전달됐을 수 있어 `uncertain` 으로 남는다.
 - 작업 폴더의 기록 파일(소유 기록 `.se_workspace.json` · 수집 실행 기록 `gather_run.json` · Add-on 결정 `.se_addon.json`)을 읽는 순간의 실행 기반 오류는
   "기록 없음" 으로 바꾸지 않고 위의 연결 끊김 경로로 넘긴다(2026-10-07 10차). 파일이 없거나 해석할 수 없거나 다른 빌드의 것이거나 받은 commit 이 다르면 종전처럼 판정한다.
 - 첫 준비(저장소 받기 → 소유 기록 → 지난 결과 정리 → 접수 목록 → 준비 완료 기록)가 중간에 끊겼으면 다음 시도가 남은 준비를 마친다(소유 기록의 `prepared`).
@@ -394,9 +397,8 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
 
 | 대상 | 기간 · 개수 | 어디서 |
 |---|---|---|
-| 빌드 기록 | 14일, 최대 100개 | `buildDiscarder(logRotator(daysToKeepStr '14', numToKeepStr '100', …))` — Job 범위(두 수집 Job 이 같은 Jenkinsfile 을 쓴다) |
-| 결과 파일(artifact) | 7일, 최대 50개 빌드 | 같은 설정의 `artifactDaysToKeepStr '7'` · `artifactNumToKeepStr '50'` |
-| Runner 작업 폴더 | 보관을 확인하면 그 빌드가 바로 지운다. 남은 폴더는 끝난 지 7일 뒤 하루 한 번 정리 | `scripts/workspace_cleanup.py` (서버 정보 수집 단계의 결과 보존 중에 부른다) |
+| 빌드 기록 · 콘솔 로그 · 결과 파일(artifact) | Jenkins 전역 보관 정책 | **2026-10-07 부터 Jenkinsfile(`_portal` · `_ci`)은 `buildDiscarder` 를 지정하지 않는다** — 보관 기간·개수는 Jenkins 전역 설정으로 관리한다. 조정이 필요하면 Jenkinsfile 이 아니라 전역 정책으로 설정한다 |
+| Runner 작업 폴더 | 보관을 확인하면 그 빌드가 바로 지운다. 남은 폴더는 끝난 지 7일 뒤 하루 한 번 정리(보관 정책과 별개) | `scripts/workspace_cleanup.py` (서버 정보 수집 단계의 결과 보존 중에 부른다) |
 | 컨트롤러 결과 확인 폴더 | 빌드마다 `fin-<빌드 번호>`. 보관을 확인하면 지운다. 남은 폴더는 7일 뒤 하루 한 번 정리(보관하지 않은 폴더는 지우지 않고 알린다) | `seCleanOldFinalizerDirs` |
 
 작업 폴더 정리 규칙(`scripts/workspace_cleanup.py`, 같은 Runner · 같은 Job 기준 하루 한 번, 잠금으로 겹침 방지):
