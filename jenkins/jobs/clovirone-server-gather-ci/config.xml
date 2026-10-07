@@ -19,7 +19,7 @@
       <options/>
     </org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction>
   </actions>
-  <description>main 전용 CI — 정적 gate · finalize corpus · budget self-test · Harness Driver · prodgen Build/Drift/Verify/Evidence Aggregate · 조건부 Promote. 운영 수집 Job 이 아니다. Script Path Jenkinsfile_ci, Branch */main, 트리거 없음(수동). 2026-10-04</description>
+  <description>main 전용 CI — 정적 gate · finalize corpus · Time Limits(Gate 실행 기록 대조 + 시작 계산) · prodgen Build/Drift/Verify · Harness(main · 생성 tree, 두 lane 동시) · Evidence Aggregate · 조건부 Promote. 선행 필수 검사가 FAIL 이면 Harness · Evidence 는 건너뛴다. 운영 수집 Job 이 아니다. Script Path Jenkinsfile_ci, Branch */main, 트리거 없음(수동). 2026-10-04 · 2026-10-08</description>
   <keepDependencies>false</keepDependencies>
   <properties>
     <com.dabsquared.gitlabjenkins.connection.GitLabConnectionProperty plugin="gitlab-plugin@1.9.13">
@@ -76,6 +76,12 @@
           <name>HARNESS_TREE_SCENARIOS</name>
           <defaultValue>normal_success,both_fail,raw_fallback,report_corrupt</defaultValue>
           <description>생성 tree(prodtree.tar.gz)의 함수로 돌릴 시나리오(쉼표). 비우면 건너뛴다(PARTIAL)</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>HARNESS_JOB</name>
+          <defaultValue></defaultValue>
+          <description>Harness Job 경로 — 비우면 공유 Job(clovirone-cicd/clovirone-server-gather-harness). 시험용 CI 사본은 시험용 Harness Job 을 준다(공유 Job 을 부르지 않는다). 이름에 harness 가 있어야 한다</description>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>

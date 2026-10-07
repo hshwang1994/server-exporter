@@ -174,7 +174,8 @@ def unarchive(Map m) {
     return HARNESS.outer.unarchive(m)
 }
 
-// 생성 tree 검증(FUNCTIONS_SRC=artifact)에서는 readTrusted 가 main 이 아니라 그 tree 의 helper 를 돌려줘야 한다 → trusted 매핑
+// readTrusted 는 고정 후보의 파일만 돌려준다 — checkout 모드는 MAIN_SHA 로 받은 사본, 생성 tree 모드는 그 tree (Harness 가 agent 에서 미리 읽어 둔다).
+//   실제 readTrusted 는 Job SCM 의 branch 최신을 읽어 후보와 다른 revision 이 섞일 수 있다(2026-10-08) — 미리 읽지 않은 경로는 기록하고 실패시킨다.
 def readTrusted(String path) {
     if (HARNESS.scenario in __FAIL_READTRUSTED__) {
         HARNESS.calls << ('readTrusted:injected_fail:' + path)
@@ -182,9 +183,10 @@ def readTrusted(String path) {
     }
     HARNESS.calls << ('readTrusted:' + path)
     if (HARNESS.trusted.containsKey(path)) {
-        return HARNESS.trusted[path]      // 생성 tree 의 파일 **내용**(Harness 가 agent 에서 미리 읽어 둔다 — finalizer 는 built-in node 에서 돈다)
+        return HARNESS.trusted[path]      // 고정 후보 파일의 **내용**(finalizer 는 built-in node 에서 돈다)
     }
-    return HARNESS.outer.readTrusted(path)
+    HARNESS.calls << ('readTrusted:unpinned:' + path)
+    throw new Exception('harness: readTrusted ' + path + ' 는 고정 후보에서 미리 읽지 않았다 — Jenkinsfile_harness 의 trusted 목록에 더한다')
 }
 
 // 결과 확인 단계의 정리 결과 읽기(readFile gather_final.jsonl)만 늦춘다 — 안쪽 상한 없이 기다려 완주하는지 본다 (최종 지시 §4-3 · 8차 R3)
@@ -332,7 +334,8 @@ def ws(String path, Closure body) {
 def getScm() { return 'harness-scm' }
 
 def checkout(Object s) {
-    if (HARNESS.gather == null) { return HARNESS.outer.checkout(HARNESS.outer.scm) }
+    // gather_stage 밖에서 운영 함수가 저장소를 받을 일은 없다 — 받으면 Job SCM 의 branch 최신(후보 밖)이라 실패시킨다(2026-10-08)
+    if (HARNESS.gather == null) { HARNESS.outer.error('harness: gather_stage 밖의 checkout 은 고정 후보 밖을 받는다 — 지원하지 않는다') }
     HARNESS.calls << 'checkout:copy'
     HARNESS.outer.sh(label: 'harness: 저장소 사본', script: "cp -a '" + HARNESS.gather.src + "/.' .")
     return [GIT_COMMIT: HARNESS.gather.sha]

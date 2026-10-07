@@ -11,6 +11,8 @@
   python3 tests/jenkins/harness/callback_sink.py --port 18080 --record /tmp/sink/slow.jsonl --status 200 --delay 5
   python3 tests/jenkins/harness/callback_sink.py --port 18080 --record /tmp/sink/drop.jsonl --mode close             # 연결 끊기(응답 없음)
   … --pidfile /tmp/sink/pid  로 pid 를 남기면 Harness 가 종료 시 kill 한다.
+  python3 tests/jenkins/harness/callback_sink.py --port 0 --record /tmp/sink/r.jsonl --ready-file /tmp/sink/ready.json
+      # 포트를 OS 가 정한다(같은 Job 의 빌드가 동시에 돌 때). bind 가 끝나면 ready 파일에 {pid, port, bind} 를 쓴다 — 고정 대기 없이 그 파일을 기다린다
 
 검증 (각 POST 마다 기록):
   - path 가 /api/jenkins/gather/<target_type> 인가, target_type ∈ {os, esxi, redfish}
@@ -159,6 +161,15 @@ def make_handler(state: SinkState):
     return Handler
 
 
+def _write_ready(path: str, info: dict) -> None:
+    """준비 파일 — 임시 파일에 쓴 뒤 os.replace 로 바꿔 넣는다. 읽는 쪽(Harness)은 반쯤 쓴 내용을 보지 않는다."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(json.dumps(info))
+    os.replace(tmp, path)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--port", type=int, default=18080)
@@ -169,6 +180,7 @@ def main(argv=None) -> int:
     ap.add_argument("--mode", choices=["respond", "close"], default="respond", help="close = 응답 없이 연결 끊기")
     ap.add_argument("--expect-ips", default="", help="기대 ip 집합(쉼표) — 다르면 problems 에 기록")
     ap.add_argument("--pidfile", default="")
+    ap.add_argument("--ready-file", default="", help="bind 직후 {pid, port, bind} 를 쓴다(원자적 교체) — --port 0 일 때 실제 포트를 알리는 곳. 끝나면 지운다")
     ap.add_argument("--max-seconds", type=int, default=3600, help="자동 종료(초) — Harness 가 죽어도 프로세스가 남지 않게")
     a = ap.parse_args(argv)
     statuses = [int(s) for s in a.status.split(",") if s.strip()]
@@ -190,17 +202,21 @@ def main(argv=None) -> int:
     timer = threading.Timer(a.max_seconds, stop)
     timer.daemon = True
     timer.start()
-    sys.stderr.write(f"[sink] listening on {a.bind}:{a.port} statuses={statuses} delay={a.delay} mode={a.mode} record={a.record}\n")
+    port = httpd.server_address[1]          # --port 0 이면 OS 가 정한 포트 (bind · listen 은 생성자에서 끝났다)
+    if a.ready_file:
+        _write_ready(a.ready_file, {"pid": os.getpid(), "port": port, "bind": a.bind})
+    sys.stderr.write(f"[sink] listening on {a.bind}:{port} statuses={statuses} delay={a.delay} mode={a.mode} record={a.record}\n")
     sys.stderr.flush()
     try:
         httpd.serve_forever()
     finally:
         httpd.server_close()          # release the port right away
-        if a.pidfile:
-            try:
-                os.unlink(a.pidfile)
-            except OSError:
-                pass
+        for path in (a.pidfile, a.ready_file):
+            if path:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
         sys.stderr.write("[sink] stopped\n")
         sys.stderr.flush()
     return 0

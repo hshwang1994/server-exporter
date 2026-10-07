@@ -134,3 +134,45 @@ def test_health_get_is_not_a_callback_record(sink):
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=5) as r:
         assert r.status == 200
     assert not record.exists() or _records(record) == [], "GET health 는 Callback 수신 증거가 아니므로 기록하지 않는다"
+
+
+def _wait_ready(path: Path, proc: subprocess.Popen, seconds: float = 15.0) -> dict:
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if path.is_file() and path.stat().st_size > 0:
+            return json.loads(path.read_text(encoding="utf-8"))
+        assert proc.poll() is None, f"sink exited early rc={proc.returncode}: {proc.stderr.read().decode('utf-8', 'replace')[-300:]}"
+        time.sleep(0.05)
+    raise AssertionError("ready file did not appear")
+
+
+def test_port_zero_reports_the_bound_port_through_the_ready_file_and_removes_it_on_stop(tmp_path):
+    """2026-10-08 (CI 병렬화): 같은 Job 의 빌드가 동시에 돌 때 수신기는 --port 0 으로 OS 가 정한 포트를 쓴다. 빈 포트를 찾아 닫고 다시 여는
+    경쟁 없이, bind 한 그 소켓의 실제 포트를 ready 파일({pid, port, bind})로 알린다. 두 수신기는 서로 다른 포트 · 서로 다른 기록을 갖는다.
+    끝나면(TERM) ready · pid 파일을 지운다 — Harness 가 고정 sleep 대신 이 파일을 기다리고, 종료도 pid 로 확인한다."""
+    procs, infos = [], []
+    for n in (1, 2):
+        ready, record = tmp_path / f"ready{n}.json", tmp_path / f"record{n}.jsonl"
+        p = subprocess.Popen([sys.executable, str(SINK), "--port", "0", "--bind", "127.0.0.1", "--record", str(record),
+                              "--pidfile", str(tmp_path / f"pid{n}"), "--ready-file", str(ready), "--max-seconds", "60"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        procs.append(p)
+        infos.append((ready, record, _wait_ready(ready, p)))
+    try:
+        (r1, rec1, i1), (r2, rec2, i2) = infos
+        assert i1["pid"] == procs[0].pid and i2["pid"] == procs[1].pid and i1["bind"] == "127.0.0.1"
+        assert isinstance(i1["port"], int) and i1["port"] > 0 and i1["port"] != i2["port"], "빌드마다 다른 포트"
+        for n, info in ((1, i1), (2, i2)):
+            body = {"loc": "git", "deploymentEnvironmentId": "dev", "eventUuid": f"e{n}", "gatherInfoJson": [_envelope("192.0.2.10")]}
+            assert _post(f"http://127.0.0.1:{info['port']}/api/jenkins/gather/os", body)[0] == 200
+        assert [r["eventUuid"] for r in _records(rec1)] == ["e1"] and [r["eventUuid"] for r in _records(rec2)] == ["e2"], "기록이 섞이지 않는다"
+        assert not (tmp_path / "ready1.json.tmp").exists(), "임시 파일은 교체로 사라진다"
+    finally:
+        for p in procs:
+            p.terminate()
+            try:
+                p.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                p.kill()
+    if sys.platform != "win32":     # Windows 의 terminate() 는 TerminateProcess 라 SIGTERM 정리 경로를 타지 않는다(Harness 는 Linux controller)
+        assert not (tmp_path / "ready1.json").exists() and not (tmp_path / "pid1").exists(), "끝나면(TERM) ready · pid 파일을 지운다"

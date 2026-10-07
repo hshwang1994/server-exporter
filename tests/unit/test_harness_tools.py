@@ -573,3 +573,93 @@ def test_verdict_checks_reentry_delivery_count_and_addon_commits(tmp_path):
     none_obs = harness_verdict.observe(summary, None, [], [], {}, control, [{"hosts": [], "addon_dir": False}], {"ips": []})
     checks, _ = harness_verdict.check({"gather": {"addon_none": True}}, none_obs)
     assert all(c["ok"] for c in checks)
+
+
+# ── 2026-10-08 CI 실행시간 개선: 같은 Job 의 빌드 둘이 동시에 돈다 ─────────────────────────────────
+
+def _pass_inputs(tmp_path, event_uuids):
+    body = tmp_path / "callback_body.json"
+    body.write_bytes(b'{"loc":"git","gatherInfoJson":[]}')
+    import hashlib
+    sha = hashlib.sha256(body.read_bytes()).hexdigest()
+    summary = {"accepted": 3, "lines": 3, "kept": 3, "filled": 0, "outcome": "completed", "layerA": "ok", "layerB": "skipped",
+               "source": "stash", "unrecovered": [], "damage": [], "recovery_limited": False, "by_origin": {"output": 3, "checkpoint": 0, "synthetic": 0},
+               "warnings": [], "callback": {"attempted": True, "delivered": True, "http_code": 200, "attempts": 1}}
+    sink = "".join(json.dumps({"method": "POST", "status_sent": 200, "ok": True, "body_sha256": sha, "eventUuid": u}) + "\n" for u in event_uuids)
+    return dict(summary=_write(tmp_path / "s.json", summary), body=str(body), sink=_write(tmp_path / "k.jsonl", sink),
+                preserve=_write(tmp_path / "p.json", {"archived": True, "stashed": True, "deleted": True}),
+                control=_write(tmp_path / "ctl.json", {"sink_reachable": True, "rethrown": False}))
+
+
+def test_verdict_fails_when_the_sink_record_holds_another_builds_request(tmp_path):
+    """수신기는 빌드마다 따로지만, 기록에 다른 요청(eventUuid)이 섞이면 격리가 깨진 것이다 — 그 빌드의 판정은 PASS 가 아니다.
+    readTrusted 가 고정 후보 밖(Job branch 최신)을 읽었어도 FAIL 이다(섞인 revision)."""
+    own = "harness-jenkins-clovirone-cicd-clovirone-server-gather-harness-970"
+    files = _pass_inputs(tmp_path, [own])
+    rc, res = _run_verdict(tmp_path, "normal_success", calls=_write(tmp_path / "c.json", ["readTrusted:scripts/jenkins/se_finalize.groovy"]),
+                           **{"event-uuid": own}, **files)
+    assert rc == 0 and res["verdict"] == "PASS"
+    assert {c["name"] for c in res["checks"]} >= {"sink_isolation", "trusted_pinned"}
+    files = _pass_inputs(tmp_path, [own, "harness-jenkins-clovirone-cicd-clovirone-server-gather-harness-971"])
+    rc, res = _run_verdict(tmp_path, "normal_success", calls=_write(tmp_path / "c.json", []), **{"event-uuid": own}, **files)
+    assert rc == 1 and any(p.startswith("sink_isolation") for p in res["problems"])
+    files = _pass_inputs(tmp_path, [own])
+    rc, res = _run_verdict(tmp_path, "normal_success", calls=_write(tmp_path / "c.json", ["readTrusted:common/vars/x.yml", "readTrusted:unpinned:common/vars/x.yml"]),
+                           **{"event-uuid": own}, **files)
+    assert rc == 1 and any(p.startswith("trusted_pinned") for p in res["problems"])
+
+
+def test_sink_hold_has_no_isolation_check_because_it_receives_main_job_posts(tmp_path):
+    """sink_hold 는 main Job(T2 · T5)의 POST 를 받는 보조 시나리오다 — 기대값이 없어 INFO 로 끝나고 eventUuid 격리 검사를 붙이지 않는다."""
+    assert set(SCENARIOS["sink_hold"]["expect"]) <= {"note"} and SCENARIOS["sink_hold"]["hold_seconds"] > 0
+    sink = json.dumps({"method": "POST", "status_sent": 200, "ok": True, "eventUuid": "r10-t2-1791328282"}) + "\n"
+    rc, res = _run_verdict(tmp_path, "sink_hold", sink=_write(tmp_path / "k.jsonl", sink), **{"event-uuid": "harness-x-1"})
+    assert rc == 0 and res["verdict"] == "INFO" and res["checks"] == []
+
+
+def test_wrappers_fail_closed_outside_the_pinned_candidate(tmp_path):
+    """readTrusted 는 고정 후보에서 미리 읽은 파일만 돌려준다 — 없는 경로는 기록(readTrusted:unpinned:)하고 실패시킨다(Job SCM 의 branch 최신을
+    읽지 않는다). gather_stage 밖의 checkout 도 후보 밖을 받으므로 실패시킨다."""
+    out = tmp_path / "f.groovy"
+    build_functions.build(PORTAL, "normal_success", out, None)
+    text = out.read_text(encoding="utf-8")
+    rt = text[text.index("def readTrusted(String path) {"):]
+    rt = rt[:rt.index("\n}\n")]
+    assert "HARNESS.calls << ('readTrusted:unpinned:' + path)" in rt and "throw new Exception(" in rt
+    assert "HARNESS.outer.readTrusted(" not in rt, "실제 readTrusted(Job SCM 최신)로 넘기지 않는다"
+    co = text[text.index("def checkout(Object s) {"):]
+    co = co[:co.index("\n}\n")]
+    assert "HARNESS.outer.error(" in co and "HARNESS.outer.checkout(" not in co
+
+
+@pytest.mark.source_text   # Jenkinsfile_harness 는 main 전용 — production tree overlay(G14)에는 없다
+def test_harness_pipeline_isolates_concurrent_builds_and_pins_the_candidate():
+    """2026-10-08: CI 의 두 lane 이 이 Job 의 빌드 둘을 동시에 돌린다.
+    - 동시 실행을 막지 않는다(disableConcurrentBuilds 없음) · 보관 정책은 그대로.
+    - 수신기: SINK_PORT=0 이면 OS 배정(기본값 18080 은 수동 · main E2E sink_hold 용으로 유지) · 빌드 번호로 나눈 controller 폴더 · ready 파일 대기
+      (고정 sleep 없음) · 남의 수신기를 pkill 하지 않는다 · finally 에서 이 빌드의 수신기만(명령줄의 ready 경로 확인) 끝낸다.
+    - 후보 고정: MAIN_SHA 를 그 commit 으로 받고(비교 유지) · readTrusted 3개 파일을 두 모드 모두 받은 소스에서 · Pipeline 정의 revision 을 git 이력으로 확인.
+    - 부모가 결속을 확인할 빌드 변수 · 판정에 eventUuid 를 넘긴다."""
+    jf = (HARNESS / "Jenkinsfile_harness").read_text(encoding="utf-8")
+    code = "\n".join(l for l in jf.split("\n") if not l.lstrip().startswith("//"))
+    assert "disableConcurrentBuilds()" not in code and "buildDiscarder(logRotator(numToKeepStr: '200'))" in code
+    assert "string(name: 'SINK_PORT', defaultValue: '18080'" in code
+    assert "pkill" not in code and "sleep 2" not in code and "sleep 1;" not in code
+    assert 'sinkWs = "${pwd()}@sink/${env.BUILD_NUMBER}"' in code and 'ws("${pwd()}@sink")' not in code
+    assert "--port ${sinkMode}" in code and '--ready-file "\\$D/ready.json"' in code
+    assert "/proc/\\$PID/cmdline" in code and 'grep -qF -- "--ready-file \\$D/ready.json"' in code
+    assert code.index("} finally {") < code.index("int rc = sh(returnStatus: true"), "판정 전에 수신기를 정리하고 기록을 회수한다"
+    assert "String sinkUrl = 'http://127.0.0.1:9'" in code, "수신기가 뜨지 않으면 닫힌 포트로 — 남의 수신기로 보내지 않는다"
+    assert "branches: [[name: want]], userRemoteConfigs: scm.userRemoteConfigs, extensions: scm.extensions" in code
+    assert 'error "[Harness] MAIN_SHA ${want} != checkout ${checkoutSha}' in code, "받은 commit 과 후보 비교는 그대로"
+    assert "git merge-base --is-ancestor '${want}' '${defRef}'" in code
+    assert "git log --format=%H '${want}..${defRef}' -- tests/jenkins/harness/Jenkinsfile_harness" in code
+    assert "for (String path in TRUSTED_PATHS)" in code and "trustedRoot = 'prodtree_src/'" in code
+    for var in ("env.SE_HARNESS_SHA", "env.SE_HARNESS_FUNCTIONS_SHA256", "env.SE_HARNESS_SOURCE_SHA256", "env.SE_HARNESS_ARCHIVE_SHA256",
+                "env.SE_HARNESS_TREE_HASH"):
+        assert var in code, var
+    assert "params.EXPECTED_ARCHIVE_SHA256" in code and "params.EXPECTED_TREE_HASH" in code
+    assert code.index("sha256sum prodtree.tar.gz") < code.index("tar -xzf prodtree.tar.gz"), "압축 파일은 풀기 전에 대조한다"
+    assert "--event-uuid '${eventUuid}'" in code
+    cfg = (REPO / "jenkins" / "jobs" / "clovirone-server-gather-harness" / "config.xml").read_text(encoding="utf-8")
+    assert "DisableConcurrentBuildsJobProperty" not in cfg, "Job 정의 스냅샷도 동시 실행을 막지 않는다"

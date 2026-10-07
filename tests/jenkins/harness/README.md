@@ -12,7 +12,7 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
 
 | 파일 | 역할 |
 |---|---|
-| `Jenkinsfile_harness` | Harness Job 의 파이프라인(scripted). 시나리오당 빌드 1개 |
+| `Jenkinsfile_harness` | Harness Job 의 파이프라인(scripted). 시나리오당 빌드 1개 · 같은 Job 의 빌드가 동시에 돌 수 있다(2026-10-08 — 아래 격리 규칙) |
 | `build_functions.py` | 함수부 추출(원본 불변 · 해시 기록) + wrapper 생성. `getParams()` 가 `params` 를 그림자로 덮어 함수가 Harness 의 값을 읽는다 |
 | `fixture.py` | corpus case 입력 복사 + **현재 빌드**(job/number/url)와 시험 request 로 manifest 재생성 + 시나리오 변형 |
 | `callback_sink.py` | Callback **POST** 수신기(검증 · 응답 통제 · 기록). `python3 -m http.server` 는 POST 를 받지 못한다. Harness 는 이것을 **controller(built-in) 의 127.0.0.1** 에 띄운다 — finalizer 의 `httpRequest` 가 `node('built-in')` 안에서 실행되고(http_request 1.25 는 node 컨텍스트의 노드에서 요청), Runner 는 controller 발 인바운드를 거부했다(Harness #6, NoRouteToHost). Python 3.6 호환(controller python 을 고를 수 없다) |
@@ -56,7 +56,8 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
   정해진 초 동안 버리고 nftables 표를 지운다(root, 운영 경로 아님).
 - interruption 조건(3차 §4, 2026-10-04 검토 C5) — 아래 표
 - `aborted_outcome_finalize` — ABORTED 빌드(outcome=aborted)의 사후 보존·finalize: Callback 1회만 시도, 완료 host 데이터 전달, 비정상 종료 unstable
-- `sink_hold` — 판정 없음. controller loopback sink 를 `hold_seconds` 동안 열어 두어 **main Job T2**(TEST-NET, `callbackUrl=http://127.0.0.1:<SINK_PORT>`)의 Callback 수신 증거를 `sink/record.jsonl` 로 남긴다
+- `sink_hold` — 판정 없음. controller loopback sink 를 `hold_seconds` 동안 열어 두어 **main Job T2**(TEST-NET, `callbackUrl=http://127.0.0.1:<SINK_PORT>`)의 Callback 수신 증거를 `sink/record.jsonl` 로 남긴다.
+  고정 포트(기본 18080)로 띄운다. `SINK_PORT=0` 이면 OS 가 정한 실제 포트가 빌드 설명(`sink=127.0.0.1:<포트>`)과 콘솔에 나온다
 
 | 조건 | Harness 시나리오 | 기대 | 비고 |
 |---|---|---|---|
@@ -82,12 +83,24 @@ wrapper 와 함께 `load` 하고, 실제 Jenkins step(`archiveArtifacts` · `sta
 - 함수가 부른 `unstable()` 은 wrapper 가 **기록만** 한다 — Jenkins 결과는 verdict 가 정한다(기대 불일치 = UNSTABLE, 도구 실패 = FAILURE).
 - 운영 함수가 보는 WORKSPACE 는 `gather_ws/`(하위 디렉터리) — `deleteDir()` 이 Harness 파일을 지우지 않는다.
 - 생성 tree 검증(`FUNCTIONS_SRC=artifact`)은 CI 가 archive 한 `prodtree.tar.gz` 를 받아 SHA-256 을 대조하고, `readTrusted` 는 그 tree 의 파일 **내용**을 돌려준다.
+- **동시 빌드(2026-10-08)**: CI 가 이 Job 의 빌드 둘을 동시에 돌린다(두 lane). 그래서 빌드마다 따로다.
+  - 수신기: `SINK_PORT=0` 이면 OS 가 포트를 정하고 `callback_sink.py --ready-file` 이 실제 포트 · pid 를 알린다(고정 sleep 대신 그 파일을 기다린다).
+    controller 폴더는 `<ws>@sink/<빌드 번호>` 다. 남의 수신기를 `pkill` 하지 않는다 — 고정 포트가 이미 쓰이면 이 빌드의 수신기가 뜨지 않고 PARTIAL 로 남으며
+    Callback 은 닫힌 포트로 간다(남의 수신기로 보내지 않는다).
+  - 정리: `finally` 에서 이 빌드의 수신기만 끝낸다 — ready 파일의 pid 가 명령줄에 이 빌드의 ready 경로를 가진 프로세스일 때만 TERM(최대 10초 기다린 뒤 그 pid 만 KILL).
+    부모 CI 가 취소되면 Jenkins 가 그 CI 가 부른 빌드만 멈추고, 각 빌드가 자기 수신기를 정리한다.
+  - 판정: 수신 기록의 `eventUuid` 가 전부 이 빌드(`harness-<BUILD_TAG>`)의 것이어야 한다(`sink_isolation`).
+- **후보 고정(2026-10-08)**: `MAIN_SHA` 를 주면 그 commit 을 받는다(CI 도중 main 이 움직여도 같은 후보 · 받은 commit 과 비교는 그대로).
+  `readTrusted` 3개 파일은 두 모드 모두 받은 소스(checkout 사본 · 생성 tree)에서 미리 읽고, 목록 밖 경로는 실패시킨다(`trusted_pinned`).
+  이 Pipeline 정의는 Job branch 끝에서 와 revision 이 남지 않으므로, 후보 뒤에 `Jenkinsfile_harness` 를 바꾼 commit 이 없는지 git 이력으로 확인하고 있으면 멈춘다.
+  부모 CI 는 빌드 변수(`SE_HARNESS_SHA` · `SE_HARNESS_FUNCTIONS_SHA256` · `SE_HARNESS_SOURCE_SHA256` · `SE_HARNESS_ARCHIVE_SHA256` · `SE_HARNESS_TREE_HASH`)로 후보 · 생성물과 대조한다.
 
 ## 실행
 
 ```text
 Jenkins: clovirone-cicd/clovirone-server-gather-harness  (정의: jenkins/jobs/clovirone-server-gather-harness/config.xml)
-  SCENARIO=normal_success  [MAIN_SHA=<X>]  [FUNCTIONS_SRC=artifact ARTIFACT_BASE_URL=<ci build>/artifact EXPECTED_SHA256=<sha>]
+  SCENARIO=normal_success  [MAIN_SHA=<X>]  [SINK_PORT=0]  [FUNCTIONS_SRC=artifact ARTIFACT_BASE_URL=<ci build>/artifact EXPECTED_SHA256=<sha>
+                                                            EXPECTED_ARCHIVE_SHA256=<sha> EXPECTED_TREE_HASH=<tree_hash>]
 로컬 도구 검증: python -m pytest tests/unit/test_harness_tools.py tests/unit/test_harness_callback_sink.py -q
 ```
 

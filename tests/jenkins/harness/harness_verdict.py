@@ -10,6 +10,9 @@
   --control   harness_control.json    (Harness 자체 관측: rethrown · sink_reachable · functions_sha256 · source · gather)
   --received  gather_received.jsonl   (9차 gather_stage: 가짜 ansible 이 시도마다 받은 대상 {attempt, hosts})
   --fixture   fixture_state.json      (접수 대상 순서 — 기대값의 대상 번호(1부터)를 IP 로 바꾼다)
+  --event-uuid harness-<BUILD_TAG>    (2026-10-08 — 같은 Job 의 빌드가 동시에 돈다. 이 빌드의 요청만 수신 기록에 있어야 한다)
+기대값이 있는 시나리오에는 격리 검사 둘이 더 붙는다(2026-10-08): 수신 기록의 eventUuid 가 전부 이 빌드의 것인가(sink_isolation) ·
+  readTrusted 가 고정 후보 밖(Job branch 최신)을 읽지 않았는가(trusted_pinned). 기대값이 없는 보조 시나리오(sink_hold — main Job 의 POST 를 받는다)는 제외.
 출력: harness_result.json {scenario, verdict, checks: [{name, expected, observed, ok}], problems, observed, meta}
 종료 코드: 0 PASS · 1 FAIL · 2 PARTIAL(필요 관측이 없어 판정 불가 — 통과가 아니다) · 3 도구 실패
 """
@@ -129,6 +132,7 @@ def observe(summary, body_path, calls, sink, preserve, control, received=None, f
         "unstable_msgs": unstable_msgs,
         "calls": calls,
         "sink_posts": len(posts),
+        "sink_event_uuids": [r.get("eventUuid") for r in posts],
         "sink_last_status": last_status,
         "sink_last_ok": posts[-1].get("ok") if posts else None,
         "sink_body_sha256": posts[-1].get("body_sha256") if posts else None,
@@ -308,6 +312,17 @@ def check(expect: dict, obs: dict) -> tuple[list[dict], list[str]]:
     return checks, partial
 
 
+def isolation_checks(obs: dict, event_uuid: str | None) -> list[dict]:
+    """2026-10-08 — 동시 빌드 격리: 수신 기록에 다른 요청이 섞이지 않았는가, readTrusted 가 고정 후보 밖을 읽지 않았는가."""
+    checks = []
+    if event_uuid:
+        foreign = [u for u in obs.get("sink_event_uuids") or [] if u != event_uuid]
+        checks.append({"name": "sink_isolation", "expected": f"모든 POST eventUuid == {event_uuid}", "observed": foreign, "ok": not foreign})
+    unpinned = [c for c in obs.get("calls") or [] if isinstance(c, str) and c.startswith("readTrusted:unpinned:")]
+    checks.append({"name": "trusted_pinned", "expected": "readTrusted 는 고정 후보 사본만", "observed": unpinned, "ok": not unpinned})
+    return checks
+
+
 def _check_gather(exp: dict, obs: dict, add, partial) -> None:
     """9차 gather_stage — 시도마다 받은 대상 · 시도 판정 · 누적 한계 · 같은 Runner 고정."""
     ips = obs["fixture_ips"] or []
@@ -404,6 +419,7 @@ def main(argv=None) -> int:
     ap.add_argument("--meta", help="harness_functions_meta.json (functions_sha256 · source)")
     ap.add_argument("--received", help="gather_received.jsonl (9차 gather_stage)")
     ap.add_argument("--fixture", help="fixture_state.json (접수 대상 순서)")
+    ap.add_argument("--event-uuid", help="이 빌드가 보낸 요청의 eventUuid — 수신 기록에 다른 값이 있으면 FAIL (2026-10-08 동시 빌드 격리)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     try:
@@ -423,6 +439,8 @@ def main(argv=None) -> int:
     meta = _load_json(a.meta)
     obs = observe(summary, a.body, calls, sink, preserve, control, _load_jsonl(a.received), _load_json(a.fixture))
     checks, partial = check(expect, obs)
+    if any(k != "note" for k in expect):          # 기대값이 있는 시나리오만 — sink_hold(note 뿐)는 main Job 의 POST 를 받는 보조 시나리오
+        checks += isolation_checks(obs, a.event_uuid)
     failed = [c for c in checks if not c["ok"]]
     if failed:
         verdict = "FAIL"

@@ -3,7 +3,11 @@
 고정하는 것
   1. se_finalize.groovy 가 Layer B 순수 함수의 유일한 정본이다(Jenkinsfile_portal 은 load). 순수 함수만, 마지막 `return this`, sandbox 허용 파서.
   2. Jenkinsfile_ci 는 declarative · agent linux · disableConcurrentBuilds + timeout · 트리거 없음(수동 기본 — rule 80 R2) ·
-     stage 12개 순서(dependency: Harness(main) → Prodgen Build → Harness(prodtree) → Drift → Verify → Evidence → Promote) · env.MAIN_SHA 고정.
+     stage 12개 순서(2026-10-08: Prodgen Build → Drift → Verify 를 두 Harness 앞으로 — 확정 오류를 긴 Harness 전에 잡는다. 선행 FAIL 이면
+     Harness · Evidence 는 SKIPPED) · env.MAIN_SHA 고정.
+  2-1. (2026-10-08) Harness 는 시나리오당 빌드 1개를 두 고정 lane 이 나눠 동시에 부른다(parallel 반환값으로 모으고 요청 순서로 정렬) ·
+     quietPeriod: 0 · 두 Harness 단계가 같은 판정(seHarnessOk: 기대 Jenkins 결과 · 내부 verdict · 후보/생성물 결속) · 판정 · 집계 자체 시험표.
+  2-2. (2026-10-08) Time Limits 는 5개 시험 파일을 다시 돌리지 않고 Gate 의 JUnit 기록을 시험 ID 단위로 대조한다(tests/scripts/junit_evidence_check.py).
   3. 자격증명은 **Prodgen Verify**(린터 토큰 · vault 암호 — G13/G19)와 **Evidence Aggregate**(Jenkins 읽기 토큰)와 **Prodgen Promote**(git push)
      안에서만 바인딩한다. vault 암호는 mktemp 0600 파일 → --vault-password-file → trap 으로 지운다. echo/set -x 로 새지 않는다.
   4. Promote 는 `branch` 조건을 쓰지 않는다(일반 Pipeline). PROMOTE 기본 false · PROMOTE_DRY_RUN 기본 true · BOOTSTRAP_BASELINE 기본 빈 값 ·
@@ -37,8 +41,10 @@ SIGNATURES = (
     "String seJsonString(Object value)",
     "Map seReconcileRaw(String manifestJson, String outputText, String checkpointText, Map canon, String outcome)",
 )
-STAGES = ["Checkout", "Toolchain", "Gate", "Finalize Corpus", "Time Limits Self-test", "Harness Driver", "Prodgen Build",
-          "Harness (prodtree)", "Prodgen Drift", "Prodgen Verify", "Evidence Aggregate", "Prodgen Promote"]
+STAGES = ["Checkout", "Toolchain", "Gate", "Finalize Corpus", "Time Limits Self-test", "Prodgen Build", "Prodgen Drift",
+          "Prodgen Verify", "Harness Driver", "Harness (prodtree)", "Evidence Aggregate", "Prodgen Promote"]
+TIME_LIMIT_TESTS = ("tests/unit/test_gather_state.py", "tests/unit/test_run_gather.py", "tests/unit/test_env_guard.py", "tests/unit/test_time_limits.py",
+                    "tests/unit/test_workspace_cleanup.py")
 CREDENTIAL_STAGES = {"Prodgen Verify", "Evidence Aggregate", "Prodgen Promote"}
 
 
@@ -121,10 +127,34 @@ def test_ci_is_declarative_with_linux_agent_and_required_options():
 
 def test_ci_stage_order_follows_dependencies():
     assert re.findall(r"\n        stage\('([^']+)'\)", CI) == STAGES
-    order = [CI.index(f"stage('{n}')") for n in ("Harness Driver", "Prodgen Build", "Harness (prodtree)", "Prodgen Drift", "Prodgen Verify", "Evidence Aggregate", "Prodgen Promote")]
-    assert order == sorted(order), "생성 tree 를 쓰는 단계는 Build 뒤 (4차 §2)"
-    assert "when { expression { env.CI_STAGE_PRODGEN_BUILD == 'PASS' } }" in _stage("Harness (prodtree)")
+    order = [CI.index(f"stage('{n}')") for n in ("Prodgen Build", "Prodgen Drift", "Prodgen Verify", "Harness Driver", "Harness (prodtree)", "Evidence Aggregate", "Prodgen Promote")]
+    assert order == sorted(order), "생성 tree 를 쓰는 단계는 Build 뒤 (4차 §2) · Drift 가 만든 로컬 production ref 를 Verify(G18/G20)가 읽는다 · " \
+                                   "확정 오류를 긴 Harness 전에 잡는다(2026-10-08)"
+    assert "when { expression { env.CI_STAGE_PRODGEN_BUILD == 'PASS' && seFailedPrereqs().isEmpty() } }" in _stage("Harness (prodtree)")
     assert "when { expression { env.CI_STAGE_PRODGEN_BUILD == 'PASS' } }" in _stage("Prodgen Verify")
+
+
+def test_harness_and_evidence_are_skipped_after_a_definite_prerequisite_failure():
+    """2026-10-08: 선행 필수 검사(GATE · CORPUS · BUDGET · PRODGEN_BUILD · PRODGEN_VERIFY)가 FAIL 이면 60분 넘는 Harness 를 시작하지 않는다.
+    건너뛴 단계는 ci_stage_results 에 SKIPPED(PASS 가 아니다 → promote 거부)로 남고, 이유(skipped_because)도 남긴다. Drift(원격 production 상태)와
+    PARTIAL(자격 부재 등)은 Harness 를 막지 않는다."""
+    fn = CI[CI.index("List seFailedPrereqs() {"):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "['GATE', 'CORPUS', 'BUDGET', 'PRODGEN_BUILD', 'PRODGEN_VERIFY']" in fn and "== 'FAIL'" in fn
+    assert "PRODGEN_DRIFT" not in fn and "PARTIAL" not in fn
+    assert "when { expression { seFailedPrereqs().isEmpty() } }" in _stage("Harness Driver")
+    assert "&& seFailedPrereqs().isEmpty() } }" in _stage("Evidence Aggregate")
+    wsr = CI[CI.index("def seWriteStageResults("):CI.index("\npipeline {")]
+    assert "v = 'SKIPPED'" in wsr and "['HARNESS_MAIN', 'HARNESS_TREE', 'EVIDENCE']" in wsr and "skipped_because: failedPrereqs" in wsr
+    for name in ("Gate", "Finalize Corpus", "Time Limits Self-test", "Prodgen Build", "Prodgen Drift"):
+        assert "seFailedPrereqs" not in _code(_stage(name)), f"{name}: 짧은 검사는 선행 실패여도 돈다(한 빌드에서 보이게)"
+
+
+def test_verify_complete_pass_message_does_not_claim_harness_or_e2e():
+    """2026-10-08: 앞당긴 Verify 의 COMPLETE_PASS 는 생성물 gate 통과일 뿐 — Harness · main E2E 까지 끝났다는 뜻으로 쓰지 않는다."""
+    v = _stage("Prodgen Verify")
+    assert "echo '[Prodgen Verify] COMPLETE_PASS'" not in v
+    assert "gate COMPLETE_PASS" in v and "Harness · main E2E 증거는 아직 없다" in v
 
 
 def test_ci_has_no_triggers_or_cron():
@@ -140,8 +170,9 @@ def test_ci_parameters_default_to_no_promotion():
     assert re.search(r"booleanParam\(name: 'PROMOTE_DRY_RUN', defaultValue: true", params)
     assert re.search(r"string\(name: 'BOOTSTRAP_BASELINE', defaultValue: ''", params)
     assert re.search(r"string\(name: 'PROMOTE_SHA', defaultValue: ''", params)
-    for p in ("HARNESS_SCENARIOS", "HARNESS_TREE_SCENARIOS", "E2E_MAIN_ENTRIES", "E2E_TIP_OBSERVATIONS_JSON"):
+    for p in ("HARNESS_SCENARIOS", "HARNESS_TREE_SCENARIOS", "HARNESS_JOB", "E2E_MAIN_ENTRIES", "E2E_TIP_OBSERVATIONS_JSON"):
         assert f"name: '{p}'" in params, p
+    assert re.search(r"string\(name: 'HARNESS_JOB', defaultValue: ''", params), "비우면 공유 Harness Job"
 
 
 def test_evidence_stage_passes_tip_observations_to_the_collector():
@@ -174,9 +205,27 @@ def test_ci_toolchain_reports_tools_and_bootstraps_pwsh_user_level():
     assert "$HOME/.local/powershell" in boot and "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1" in boot
 
 
+def test_toolchain_clears_outputs_of_the_previous_build():
+    """2026-10-08: CI workspace 는 빌드 사이에 비우지 않는다 — 선행 실패로 건너뛴 단계의 오래된 결과(harness_*_results.json 등)가 이번 빌드의
+    증거로 집계되지 않게 처음에 지난 산출물을 지운다(이번 빌드가 쓰는 파일만)."""
+    s = _stage("Toolchain")
+    rm = [l for l in s.split("\n") if l.strip().startswith("rm -f ")]
+    assert len(rm) == 1, rm
+    for f in ("harness_main_results.json", "harness_tree_results.json", "budget_pytest_evidence.json", "e2e_evidence.json", "e2e_entries.txt",
+              "prodgen_verify_report.aggregated.json", "ci_stage_results.json", "ci_gate_junit_unit.xml", "prodtree_archive.sha256"):
+        assert f in rm[0], f
+    assert s.index("rm -f ") < s.index("} 2>&1 | tee toolchain.txt")
+
+
 def test_ci_gate_exit_code_semantics_and_stage_result_recording():
     s = _stage("Gate")
     assert "bash scripts/ai/ci_gate.sh 2>&1 | tee ci_gate.log" in s
+    # 2026-10-08: pytest 실행 기록(JUnit)을 남긴다 — Time Limits 가 같은 실행의 시험 ID 를 대조한다. 지난 빌드의 기록은 먼저 지운다
+    assert 'CI_GATE_JUNIT_DIR="${WORKSPACE}" bash scripts/ai/ci_gate.sh' in s
+    assert s.index("rm -f ci_gate_junit_unit.xml ci_gate_junit_integration.xml") < s.index("CI_GATE_JUNIT_DIR=")
+    gate = (REPO / "scripts/ai/ci_gate.sh").read_text(encoding="utf-8")
+    assert 'JUNIT_MAIN=(--junitxml "$CI_GATE_JUNIT_DIR/ci_gate_junit_unit.xml")' in gate
+    assert '${JUNIT_MAIN[@]+"${JUNIT_MAIN[@]}"}' in gate and '${JUNIT_INT[@]+"${JUNIT_INT[@]}"}' in gate, "비어 있으면 인자 없음(set -u 안전)"
     assert 'exit "${PIPESTATUS[0]}"' in s
     assert "if (rc == 0)" in s and "else if (rc == 2)" in s
     assert "unstable(\"[Gate] PARTIAL" in s
@@ -210,21 +259,76 @@ def test_ci_corpus_compare_uses_sandbox_parser():
 
 def test_ci_harness_driver_calls_the_separate_harness_job_per_scenario():
     helper = CI[CI.index("def seRunHarness("):CI.index("\npipeline {")]
-    assert "build(job: 'clovirone-cicd/clovirone-server-gather-harness', wait: true, propagate: false" in helper, "별도 Job → 교착 없음, 시나리오당 빌드 1개"
+    # 2026-10-08: quietPeriod 0(고정 후보 — 모아서 기다릴 이유가 없다) · 수신기 포트는 OS 배정(SINK_PORT=0 — 같은 Job 의 빌드가 동시에 돈다)
+    assert "build(job: harnessJob, wait: true, propagate: false, quietPeriod: 0, parameters: ps)" in helper, "별도 Job → 교착 없음, 시나리오당 빌드 1개"
     assert "string(name: 'SCENARIO', value: s)" in helper and "string(name: 'MAIN_SHA', value: env.MAIN_SHA)" in helper
+    assert "string(name: 'SINK_PORT', value: '0')" in helper
+    job = CI[CI.index("String seHarnessJob() {"):]
+    job = job[:job.index("\n}\n")]
+    assert "String shared = 'clovirone-cicd/clovirone-server-gather-harness'" in job and "job.contains('harness')" in job
+    assert "env.JOB_NAME != 'clovirone-cicd/clovirone-server-gather-ci'" in job, "시험용 CI 사본은 공유 Harness Job 을 부르지 않는다"
     main = _stage("Harness Driver")
-    assert "seRunHarness('checkout'" in main and "harness_main_results.json" in main and "env.CI_STAGE_HARNESS_MAIN" in main
+    assert "seRunHarnessGroup('checkout'" in main and "harness_main_results.json" in main and "env.CI_STAGE_HARNESS_MAIN" in main
+    assert "harness_job: seHarnessJob()" in main
     tree = _stage("Harness (prodtree)")
-    assert "seRunHarness('artifact'" in tree and "ARTIFACT_BASE_URL" in tree and "EXPECTED_SHA256: env.PRODTREE_PORTAL_SHA256" in tree
+    assert "seRunHarnessGroup('artifact'" in tree and "ARTIFACT_BASE_URL" in tree and "EXPECTED_SHA256: env.PRODTREE_PORTAL_SHA256" in tree
+    assert "EXPECTED_ARCHIVE_SHA256: env.PRODTREE_ARCHIVE_SHA256" in tree and "EXPECTED_TREE_HASH: env.PRODTREE_TREE_HASH" in tree
     assert "harness_tree_results.json" in tree
+    ev = _stage("Evidence Aggregate")
+    assert "${hr.scenario}=${r.harness_job}:${hr.number}" in ev and "if (hr.number != null)" in ev, "증거 항목은 실제로 부른 Harness Job · 빌드만"
+
+
+def test_harness_groups_run_in_two_fixed_lanes_and_merge_in_request_order():
+    """2026-10-08: 시나리오당 빌드 1개는 그대로 두고 두 고정 lane 이 목록을 나눠 동시에 돈다. 각 lane 은 자기 목록만 받고 결과는 parallel 의
+    반환값으로만 돌아온다(공유 List · env 를 분기에서 고치지 않는다). failFast 없음 — 한 시험의 실패 · 취소가 다른 lane 을 멈추지 않는다."""
+    grp = CI[CI.index("Map seRunHarnessGroup("):]
+    grp = grp[:grp.index("\n}\n")]
+    assert "List plan = seLanePlan(names, 2)" in grp and "Map out = parallel(branches)" in grp and "return seMergeLanes(names, out)" in grp
+    assert "List mine = plan[l]" in grp and "branches[lane] = { -> seRunHarness(functionsSrc, mine, extra, lane) }" in grp
+    assert "seHarnessJudgeSelfTest()" in grp and grp.index("seHarnessJudgeSelfTest()") < grp.index("parallel(")
+    assert "failFast" not in _code(CI), "failFast 를 켜지 않는다"
+    plan = CI[CI.index("List seLanePlan("):]
+    assert "plan[i % lanes] << [idx: i, name: names[i].toString()]" in plan[:plan.index("\n}\n")]
+    merge = CI[CI.index("Map seMergeLanes("):]
+    merge = merge[:merge.index("\n}\n")]
+    assert "hits.size() == 1 && hits[0].scenario == names[i]" in merge and "result: 'MISSING'" in merge and "ok: false" in merge
+    assert "functions_sha256" in merge, "통과 항목의 함수 해시가 둘 이상이면 섞인 소스"
+    for name in ("seLanePlan", "seMergeLanes", "seHarnessOk", "seHarnessBinding", "seHarnessJudgeSelfTest"):
+        assert re.search(r"@NonCPS\n(?:List|Map|boolean) " + name + r"\(", CI), f"{name}: 순수 함수(@NonCPS)"
+
+
+def test_both_harness_stages_share_one_judgment_and_its_self_test_table():
+    """2026-10-08 C5: 생성 tree 단계도 main 단계와 같은 판정이다 — 기대 Jenkins 결과 · 내부 verdict PASS · 후보/생성물 결속. 기대된 ABORTED +
+    내부 PASS 는 통과, Jenkins 가 SUCCESS 여도 내부 FAIL · 판정 누락 · 결속 불일치는 불통과. 자체 시험표가 이 Jenkins 에서 직접 확인한다."""
+    assert "it.result != 'SUCCESS'" not in CI
+    for name in ("Harness Driver", "Harness (prodtree)"):
+        s = _stage(name)
+        assert "results.findAll { !it.ok }" in s and "(notPass || g.problems) ? 'FAIL' : 'PASS'" in s, name
+    ok = CI[CI.index("boolean seHarnessOk("):]
+    assert "return result == expected && verdict == 'PASS' && bound" in ok[:ok.index("\n}\n")]
+    table = CI[CI.index("List seHarnessJudgeSelfTest()"):]
+    table = table[:table.index("\n}\n")]
+    for case in ("['ABORTED', 'ABORTED', 'PASS', true, true]", "['SUCCESS', 'SUCCESS', 'FAIL', true, false]", "['SUCCESS', 'SUCCESS', '', true, false]",
+                 "['SUCCESS', 'SUCCESS', 'PASS', false, false]", "['ABORTED', 'SUCCESS', 'PASS', true, false]"):
+        assert case in table, case
+    for check in ("merge: 요청 순서", "merge: 누락", "merge: 중복", "merge: 섞인 함수 해시"):
+        assert check in table, check
+    binding = CI[CI.index("Map seHarnessBinding("):]
+    binding = binding[:binding.index("\n}\n")]
+    assert "got.checkout_sha != want.main_sha" in binding and "['source_sha256', 'archive_sha256', 'tree_hash']" in binding
+    for var in ("SE_HARNESS_SHA", "SE_HARNESS_FUNCTIONS_SHA256", "SE_HARNESS_SOURCE_SHA256", "SE_HARNESS_ARCHIVE_SHA256", "SE_HARNESS_TREE_HASH"):
+        assert var in binding, var
 
 
 def test_ci_prodgen_build_archives_the_tree_of_this_build():
     s = _stage("Prodgen Build")
     assert 'python3 -m scripts.ai.prodgen --json build --sha "${MAIN_SHA}" --out "${WORKSPACE}/prodtree"' in s
     assert "tar -czf prodtree.tar.gz -C prodtree ." in s and "sha256sum prodtree/Jenkinsfile_portal" in s
-    assert "archiveArtifacts(artifacts: 'prodgen_build.json,prodtree.tar.gz,prodtree_portal.sha256'" in s, "생성 tree 는 이 빌드의 artifact (경로 전달·이전 빌드 재사용 없음)"
+    assert "archiveArtifacts(artifacts: 'prodgen_build.json,prodtree.tar.gz,prodtree_portal.sha256" in s, "생성 tree 는 이 빌드의 artifact (경로 전달·이전 빌드 재사용 없음)"
     assert "env.PRODTREE_PORTAL_SHA256" in s and 'eval "$(bash scripts/ai/prodgen/ci_pwsh_bootstrap.sh --env)"' in s
+    # 2026-10-08: 생성물 전체의 식별 — 압축 파일 해시와 tree_hash 를 Harness 에 넘겨 대조한다
+    assert "sha256sum prodtree.tar.gz | cut -d' ' -f1 > prodtree_archive.sha256" in s and "prodtree_archive.sha256'" in s
+    assert "env.PRODTREE_ARCHIVE_SHA256" in s and "readJSON(file: 'prodgen_build.json', returnPojo: true).tree_hash" in s
 
 
 def test_ci_drift_and_verify_use_the_single_bootstrap_syntax():
@@ -344,12 +448,15 @@ def test_harness_driver_compares_each_scenario_with_its_expected_jenkins_result_
     수집 한계 보존(gather_limit_preserve)은 main 함수 · 생성 tree 두 그룹 모두의 기본 목록에 있다(8차 R1)."""
     helper = CI[CI.index("def seRunHarness("):CI.index("\ndef seWriteStageResults(")]
     assert "readJSON(file: 'tests/jenkins/harness/scenarios.json'" in helper and "jenkins_result" in helper
-    assert "boolean ok = (b.result == expected) && verdict == 'PASS'" in helper and "booleanParam" not in helper
+    # 2026-10-08: 판정식은 seHarnessOk 하나 — 기대 Jenkins 결과 · 내부 verdict PASS · 후보/생성물 결속(seHarnessBinding)
+    assert "boolean ok = seHarnessOk((b.result ?: '').toString(), expected, verdict, bound.ok == true)" in helper and "booleanParam" not in helper
+    assert "bound = seHarnessBinding(functionsSrc, (b.buildVariables ?: [:]), want)" in helper
     # 2026-10-06: ABORTED 로 끝나는 시나리오는 판정이 FAIL 이어도 Jenkins 결과가 기대와 같다 — Harness 가 남긴 판정(빌드 변수)까지 본다
     assert "verdict = ((b.buildVariables ?: [:]).SE_HARNESS_VERDICT ?: '').toString()" in helper
     assert "verdict: verdict, ok: ok" in helper
-    main = _stage("Harness Driver")
-    assert "results.findAll { !it.ok }" in main and "results.findAll { it.result != 'SUCCESS' }" not in main
+    for name in ("Harness Driver", "Harness (prodtree)"):
+        s = _stage(name)
+        assert "results.findAll { !it.ok }" in s and "results.findAll { it.result != 'SUCCESS' }" not in s, name
     params = CI[CI.index("    parameters {"):CI.index("    environment {")]
     default_main = re.search(r"string\(name: 'HARNESS_SCENARIOS', defaultValue: '([^']+)'", params).group(1).split(",")
     from scripts.ai.prodgen.evidence import REQUIRED_HARNESS, REQUIRED_HARNESS_TREE
@@ -366,11 +473,28 @@ def test_time_limits_self_test_runs_the_real_run_gather_and_constant_checks():
     """8차 R3 · R8: 예산 자체 시험이 실행 한계 계산 · 실제 run_gather.sh(Linux Runner 에서 실행) · 시간 상수 일치 · 작업 폴더 정리 시험을 함께 돈다.
     stage 키는 BUDGET 그대로(prodgen REQUIRED_CI_STAGES)."""
     st = _stage("Time Limits Self-test")
-    for t in ("tests/unit/test_gather_state.py", "tests/unit/test_run_gather.py", "tests/unit/test_env_guard.py", "tests/unit/test_time_limits.py",
-              "tests/unit/test_workspace_cleanup.py"):
+    for t in TIME_LIMIT_TESTS:
         assert t in st, t
     assert "env.CI_STAGE_BUDGET" in st and "gather_budget" not in st
     assert "python3 scripts/gather_state.py begin --ws" in st and 'p["limit"] == 21600' in st, "실제 Runner 에서 메모리와 무관하게 바로 시작하는지"
+
+
+def test_time_limits_uses_the_gate_junit_record_instead_of_rerunning_the_tests():
+    """2026-10-08 C4: 5개 시험 파일은 Gate(ci_gate.sh 의 tests/unit)가 같은 SHA · 같은 Runner · 같은 venv 로 이미 실행한다 — 다시 돌리지 않고
+    그 JUnit 기록을 시험 ID 단위로 대조한다. 기록이 이 빌드(시작 시각) · 이 후보(MAIN_SHA)의 것인지도 본다. 건너뜀 · 기록 없음은 PARTIAL(2),
+    실패 · 누락은 FAIL — 파일이 있다는 것만으로 PASS 가 되지 않는다. 3채널 시작 계산(budget_selftest.jsonl)은 그대로 이 단계가 한다."""
+    st = _stage("Time Limits Self-test")
+    assert "python3 -m pytest" not in st, "5개 파일을 다시 돌리지 않는다"
+    call = [l for l in st.split("\n") if "tests/scripts/junit_evidence_check.py" in l]
+    assert len(call) == 1, call
+    assert '--junit ci_gate_junit_unit.xml --not-before "${SE_CI_START_EPOCH}" --expect-sha "${MAIN_SHA}" --report budget_pytest_evidence.json' in call[0]
+    assert call[0].rstrip().endswith("|| ev=$?") and all(t in call[0] for t in TIME_LIMIT_TESTS)
+    assert 'exit "$ev"' in st and st.index(": > budget_selftest.jsonl") < st.index('exit "$ev"')
+    assert "env.CI_STAGE_BUDGET = (rc == 0) ? 'PASS' : ((rc == 2) ? 'PARTIAL' : 'FAIL')" in st
+    assert 'env.SE_CI_START_EPOCH = "${(long) (currentBuild.startTimeInMillis / 1000L)}"' in _stage("Checkout")
+    assert "budget_pytest_evidence.json" in CI[CI.rindex("    post {"):]
+    for t in TIME_LIMIT_TESTS:
+        assert (REPO / t).is_file() and t.startswith("tests/unit/"), "Gate 의 pytest tests/unit 이 이 파일들을 실제로 돈다"
 
 
 def test_toolchain_reports_esxi_prerequisites_without_adding_the_label():

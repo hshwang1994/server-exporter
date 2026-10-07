@@ -19,7 +19,7 @@
       <options/>
     </org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction>
   </actions>
-  <description>main 전용 실행 Harness — Jenkinsfile_portal 함수(보존·finalizer)를 wrapper 와 함께 실제 Jenkins step 으로 실행해 장애·손상·timeout 시나리오를 검증한다. 운영 수집 Job 이 아니다. 정의: tests/jenkins/harness/ (Script Path tests/jenkins/harness/Jenkinsfile_harness, Branch */main). 2026-10-04</description>
+  <description>main 전용 실행 Harness — Jenkinsfile_portal 함수(보존·finalizer)를 wrapper 와 함께 실제 Jenkins step 으로 실행해 장애·손상·timeout 시나리오를 검증한다. 운영 수집 Job 이 아니다. 정의: tests/jenkins/harness/ (Script Path tests/jenkins/harness/Jenkinsfile_harness, Branch */main). 2026-10-04 · 2026-10-08: 동시 실행 허용(CI 의 두 lane) — 빌드마다 수신기 포트(SINK_PORT=0 OS 배정) · controller 폴더를 나누고 MAIN_SHA commit 을 받는다</description>
   <keepDependencies>false</keepDependencies>
   <properties>
     <com.dabsquared.gitlabjenkins.connection.GitLabConnectionProperty plugin="gitlab-plugin@1.9.13">
@@ -41,7 +41,6 @@
       <limitOneJobWithMatchingParams>false</limitOneJobWithMatchingParams>
       <paramsToUseForLimit></paramsToUseForLimit>
     </hudson.plugins.throttleconcurrents.ThrottleJobProperty>
-    <org.jenkinsci.plugins.workflow.job.properties.DisableConcurrentBuildsJobProperty/>
     <hudson.model.ParametersDefinitionProperty>
       <parameterDefinitions>
         <hudson.model.StringParameterDefinition>
@@ -53,7 +52,7 @@
         <hudson.model.StringParameterDefinition>
           <name>MAIN_SHA</name>
           <defaultValue></defaultValue>
-          <description>검증 중인 개발 main SHA X — checkout 과 다르면 중단(비우면 검사 안 함)</description>
+          <description>검증 중인 개발 main SHA X(40자) — 주면 그 commit 을 받는다(받은 commit 이 다르면 중단). 비우면 Job branch 최신(수동 실행 — 후보 고정 없음)</description>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
         <hudson.model.ChoiceParameterDefinition>
@@ -79,9 +78,21 @@
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
+          <name>EXPECTED_ARCHIVE_SHA256</name>
+          <defaultValue></defaultValue>
+          <description>FUNCTIONS_SRC=artifact: prodtree.tar.gz 전체의 SHA-256 (CI 가 넘긴 값, 불일치면 풀지 않고 중단)</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>EXPECTED_TREE_HASH</name>
+          <defaultValue></defaultValue>
+          <description>FUNCTIONS_SRC=artifact: 생성 tree 의 tree_hash(prodgen build · provenance — CI 가 넘긴 값, 불일치면 중단)</description>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
           <name>SINK_PORT</name>
           <defaultValue>18080</defaultValue>
-          <description>callback_sink.py 포트(agent)</description>
+          <description>callback_sink.py 포트 — controller(built-in) 의 127.0.0.1. 0 = OS 가 배정(동시 빌드 · CI 가 넘긴다), 숫자 = 고정(수동 · main E2E sink_hold)</description>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>

@@ -10,6 +10,8 @@
 #   CI_GATE_SKIP_PYTEST=1 bash scripts/ai/ci_gate.sh    # 정적 검사만
 #   CI_GATE_PYTEST_ARGS="-x" bash scripts/ai/ci_gate.sh # pytest 추가 인자
 #   CI_GATE_SKIP_CORPUS=1 bash scripts/ai/ci_gate.sh    # finalize corpus(Layer A oracle 대조) 건너뜀 — PARTIAL
+#   CI_GATE_JUNIT_DIR=<dir> bash scripts/ai/ci_gate.sh  # pytest 실행 기록(JUnit)을 <dir>/ci_gate_junit_{unit,integration}.xml 로 남긴다 —
+#                                                       # CI 의 Time Limits 단계가 같은 실행의 시험 ID 를 대조한다(2026-10-08). 비우면 남기지 않는다
 #
 # 종료 코드: 0 = 전부 통과, 1 = 하나라도 실패, 2 = 환경 부족으로 건너뛴 단계가 있음(통과 아님 — 보고에 "부분 실행" 으로 적는다)
 set -uo pipefail
@@ -57,8 +59,13 @@ if [ "${CI_GATE_SKIP_PYTEST:-0}" != "1" ]; then
     if "$PY" -m pytest --version >/dev/null 2>&1; then
         # tests/e2e_browser 는 playwright 가 필요한 브라우저 테스트라 여기서 돌리지 않는다.
         # tests/integration 은 따로 돈다 — e2e 와 integration 이 각자 `conftest` 를 rootdir 모듈로 import 해 한 세션에서 이름이 충돌한다.
-        run "$PY" -m pytest tests/unit tests/e2e tests/regression -q -p no:cacheprovider ${CI_GATE_PYTEST_ARGS:-}
-        run "$PY" -m pytest tests/integration -m "not live" -q -p no:cacheprovider ${CI_GATE_PYTEST_ARGS:-}
+        JUNIT_MAIN=(); JUNIT_INT=()
+        if [ -n "${CI_GATE_JUNIT_DIR:-}" ]; then
+            JUNIT_MAIN=(--junitxml "$CI_GATE_JUNIT_DIR/ci_gate_junit_unit.xml")
+            JUNIT_INT=(--junitxml "$CI_GATE_JUNIT_DIR/ci_gate_junit_integration.xml")
+        fi
+        run "$PY" -m pytest tests/unit tests/e2e tests/regression -q -p no:cacheprovider ${JUNIT_MAIN[@]+"${JUNIT_MAIN[@]}"} ${CI_GATE_PYTEST_ARGS:-}
+        run "$PY" -m pytest tests/integration -m "not live" -q -p no:cacheprovider ${JUNIT_INT[@]+"${JUNIT_INT[@]}"} ${CI_GATE_PYTEST_ARGS:-}
     else
         echo "-- [ci_gate] 이 python 에 pytest 가 없다 — 건너뜀 (requirements-test.txt 설치 후 재실행)"; skipped=1
     fi
