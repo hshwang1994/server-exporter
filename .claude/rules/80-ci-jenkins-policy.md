@@ -83,8 +83,15 @@
 
 - **Default**: 정적 검사 · 회귀 · 동치 검증은 수집 Job 이 아니라 **main 전용 CI Job**(`clovirone-cicd/clovirone-server-gather-ci`, 일반 Pipeline-from-SCM,
   Branch `*/main`, Script Path `Jenkinsfile_ci`, Lightweight) 이 맡는다. Stage: Checkout(`env.MAIN_SHA = GIT_COMMIT` 고정) → Toolchain(venv 선택기 · 버전 보고 ·
-  pwsh 유무 보고) → Gate(`bash scripts/ai/ci_gate.sh`: exit 1 FAILURE · exit 2 PARTIAL=UNSTABLE) → Finalize Corpus(Python `tests/scripts/finalize_corpus_check.py`
-  + Groovy `load 'scripts/jenkins/se_finalize.groovy'` 로 같은 corpus 비교) → Budget Self-test → artifact. 트리거 없음(cron · pollSCM 금지 — R2).
+  pwsh 유무 보고) → Gate(`bash scripts/ai/ci_gate.sh`: exit 1 FAILURE · exit 2 PARTIAL=UNSTABLE, pytest JUnit 기록) → Finalize Corpus(Python `tests/scripts/finalize_corpus_check.py`
+  + Groovy `load 'scripts/jenkins/se_finalize.groovy'` 로 같은 corpus 비교) → Time Limits(Gate JUnit 을 시험 ID 단위로 대조 + 시작 계산) → Prodgen Build · Drift · Verify →
+  Harness(main · 생성 tree) → Evidence Aggregate → (PROMOTE) Promote. 트리거 없음(cron · pollSCM 금지 — R2).
+- **Default (2026-10-08 실행시간 개선)**: 확정 오류는 긴 Harness 전에 잡는다 — GATE · CORPUS · BUDGET · PRODGEN_BUILD · PRODGEN_VERIFY 중 FAIL 이면 두 Harness 와 Evidence 를
+  건너뛰고 `SKIPPED`(PASS 아님)로 남긴다(Drift FAIL · PARTIAL 은 막지 않는다). Harness 는 **시나리오당 빌드 1개**를 두 고정 lane 이 동시에 부르고(`quietPeriod: 0`, 결과는
+  parallel 반환값을 요청 순서로 모은다) 두 단계가 같은 판정(기대 Jenkins 결과 · 내부 verdict · 후보/생성물 결속)을 쓴다. Harness Job 은 빌드마다 수신기 포트 · controller 폴더를
+  나누고 `MAIN_SHA` commit 을 받는다. 근거 `docs/ai/decisions/ADR-2026-10-08-ci-harness-parallel.md`.
+- **Forbidden (2026-10-08)**: 시험을 빼거나 Harness 시나리오를 한 빌드로 합쳐 시간을 줄이기, Harness 의 같은 포트 `pkill` · 공유 수신기 폴더 되살리기, 다른 SHA 의 Harness 결과를
+  이 후보의 통과로 세기, 선행 FAIL 로 건너뛴 단계를 PASS 로 집계하기, 동시 실행 수를 운영 수집의 forks · executor · 전역 설정과 묶기.
 - **Default**: Layer B 순수 함수(`seFallbackCanon` · `seJsonString` · `seReconcileRaw`)의 정본은 `scripts/jenkins/se_finalize.groovy` 하나다. `Jenkinsfile_portal` 은
   finalizer node 안에서 `readTrusted` → `writeFile` → `load` 로 읽고, 실패하면 Layer B 보충 없이 raw OUTPUT 줄만 보내며 UNSTABLE 로 남긴다(`layerB=unavailable`).
 - **Forbidden**: 두 Jenkinsfile 에 Layer B 함수 사본 두기(동치 검증이 무의미해진다), CI Job 에 수집 · 자격증명 · 실장비 접근 넣기, `Jenkinsfile_ci` 를 Multibranch 로

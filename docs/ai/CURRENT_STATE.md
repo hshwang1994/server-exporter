@@ -1,5 +1,17 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) + production 승격
+
+> 정본: 결정 `docs/ai/decisions/ADR-2026-10-08-ci-harness-parallel.md` · 실측 `tests/evidence/2026-10-08-ci-speed-p8.md`(최종 실행 뒤 기록). 수집 runtime 은 바꾸지 않았다.
+
+- **순서**: Gate → Corpus → Time Limits → **Prodgen Build · Drift · Verify** → Harness(main · tree) → Evidence. 선행 필수 검사(GATE · CORPUS · BUDGET · PRODGEN_BUILD ·
+  PRODGEN_VERIFY) FAIL 이면 Harness · Evidence 는 `SKIPPED`(PASS 아님). Verify 의 COMPLETE_PASS 는 gate 통과일 뿐 — 증거는 Evidence · promote.
+- **Harness**: 시나리오당 빌드 1개 유지, 두 고정 lane 동시(`quietPeriod: 0`) · parallel 반환값을 요청 순서로 · 두 단계 같은 판정(`seHarnessOk` — 기대 결과 · 내부 verdict ·
+  후보/생성물 결속) · 판정 자체 시험표. Harness Job 은 동시 실행 허용 — 수신기 OS 배정 포트(`--ready-file`) · 빌드별 controller 폴더 · 자기 수신기만 finally 정리 ·
+  eventUuid 격리 판정 · `MAIN_SHA` commit checkout · readTrusted 고정 · Pipeline 정의 revision 확인(git 이력).
+- **Time Limits**: 5개 파일을 다시 돌리지 않고 Gate JUnit 을 시험 ID 단위로 대조(`tests/scripts/junit_evidence_check.py`, WSL 실측 105/105 통과). 3채널 시작 계산은 그대로.
+- **격리 시험**: 임시 Job `…-harness-cispeed` · `…-ci-cispeed` · `cispeed-probe`(feature branch) — 공유 Job 은 반영 전까지 그대로. `HARNESS_JOB` 가드로 사본이 공유 Harness Job 을 부르지 않는다.
+
 ## 일자: 2026-10-07 (최종 마무리) — 로그 보관 전역화 · forks 50 · Windows vault 도메인 · Portal 재진입 4.1/4.2 · GP-64 확인 · **main push(양 원격) · production P7 `61b9dd4a` 유지**
 
 > 정본: `tests/evidence/2026-10-07-final-wrapup.md`. 10차 결과·회귀는 그대로 유지하고 아래 변경만 더했다.
