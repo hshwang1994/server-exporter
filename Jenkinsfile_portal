@@ -1867,12 +1867,9 @@ pipeline {
         PYTHONDONTWRITEBYTECODE = '1'
     }
 
-    options {
-        // 빌드 전체 timeout 은 두지 않는다 (9차, 2026-10-06) — Runner · 결과 처리 노드를 최대 72시간 기다리는 동안 빌드를 끊지 않기 위해서다.
-        //   한계는 실제 실행에만 건다: 실행 기반 대기 합 72시간 · 실제 수집 누적 6시간 · 시도 하나의 실행 한계 · 결과 확인 및 전송 1시간 (seConstants).
-        // 로그 · 빌드 기록 보관(buildDiscarder)은 이 Jenkinsfile 에서 지정하지 않는다 (2026-10-07) — 보관 정책은 Jenkins 전역 설정으로 관리한다.
-        //   Runner · controller 의 작업 폴더 정리는 보관 정책과 별개로 seCleanOldWorkspaces · seCleanOldFinalizerDirs 가 본다.
-    }
+    // pipeline-level options 블록은 두지 않는다 (2026-10-07) — 넣을 지시어가 없어서다. 빈 options {} 는 선언형 린터가 거부한다("options can not be empty").
+    //   빌드 전체 timeout 없음 (9차, 2026-10-06): Runner · 결과 처리 노드를 최대 72시간 기다리는 동안 빌드를 끊지 않는다. 한계는 실제 실행에만 건다(seConstants).
+    //   로그 · 빌드 기록 보관(buildDiscarder) 없음: 보관 정책은 Jenkins 전역 설정으로 관리한다. 작업 폴더 정리는 seCleanOldWorkspaces · seCleanOldFinalizerDirs 가 본다.
 
     stages {
 

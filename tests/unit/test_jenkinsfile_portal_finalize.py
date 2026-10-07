@@ -134,8 +134,10 @@ def test_no_inner_step_limits_and_no_tier2():
 
 def test_time_limits_count_execution_and_waiting_separately():
     """9차: 기다린 시간은 실행 한계에 넣지 않는다. 대기는 빌드 하나의 합으로 세고(다시 시도해도 처음부터 세지 않는다), 수집은 누적 실제 실행 시간으로 센다."""
-    opts = TEXT[TEXT.index("    options {"):TEXT.index("    stages {")]
-    assert "timeout(" not in opts and "buildDiscarder(" not in opts   # 10차 마무리 1: 보관은 Jenkins 전역 설정, Jenkinsfile 미지정
+    # 10차 마무리 1: pipeline-level options 블록 자체를 두지 않는다(빈 블록은 선언형 린터 오류 · G13). buildDiscarder/보관 지정 없음.
+    assert "\n    options {" not in TEXT, "pipeline-level options 블록 없음 (stage-level options 는 더 깊은 들여쓰기)"
+    assert "buildDiscarder(" not in TEXT and "logRotator(" not in TEXT
+    assert "unit: 'HOURS'" not in TEXT, "빌드 전체 timeout 없음"
     assert VALIDATE.count("options { timeout(time: 5, unit: 'MINUTES') }") == 1
     assert RESOLVE.count("options { timeout(time: 5, unit: 'MINUTES') }") == 1
     assert "options {" not in GATHER.split("\n    post {")[0] and "agent {" not in GATHER.split("\n    post {")[0]
@@ -157,9 +159,8 @@ def test_time_limits_count_execution_and_waiting_separately():
 
 def test_retention_policy():
     # 10차 마무리 1: 로그·빌드 기록 보관(buildDiscarder/logRotator)은 Jenkinsfile 이 지정하지 않는다 — Jenkins 전역 설정으로 관리한다.
+    #   (주석은 production 트리에서 strip 되므로 주석 문자열을 단언하지 않는다 — 코드에 보관 지시어가 없음만 확인.)
     assert "buildDiscarder(" not in TEXT and "logRotator(" not in TEXT
-    opts = TEXT[TEXT.index("    options {"):TEXT.index("    stages {")]
-    assert "보관 정책은 Jenkins 전역 설정으로 관리한다" in opts
 
 
 def test_finalizer_recovers_inputs_in_order_and_prefers_layer_a():

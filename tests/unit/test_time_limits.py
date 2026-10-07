@@ -36,8 +36,8 @@ def test_constants_table_is_complete():
 
 
 def test_no_build_or_stage_timeout_waiting_is_not_execution():
-    opts = PORTAL[PORTAL.index("\n    options {"):PORTAL.index("\n    stages {")]
-    assert "timeout(" not in opts, "빌드 전체 timeout 이 있으면 72시간 대기가 끊긴다"
+    # 10차 마무리 1: pipeline-level options 블록 없음(빈 블록은 선언형 린터 오류 · 넣을 지시어 없음). 빌드 전체 timeout 이 있으면 72시간 대기가 끊긴다.
+    assert "\n    options {" not in PORTAL, "pipeline-level options 블록 없음"
     pre = re.findall(r"options \{ timeout\(time: (\d+), unit: 'MINUTES'\) \}", PORTAL)
     assert pre == ["5", "5"], "입력 확인 · 실행 위치 확인 각 5분 — 실행 기반 대기가 아니라 입력 · 저장소 확인"
     assert "unit: 'SECONDS') }" not in PORTAL, "서버 정보 수집 단계 한계(종전 39000초)는 없다"
