@@ -1,5 +1,18 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-07 (10차) — 결과 처리 재진입 · 기록 읽기 예외 · 끊긴 준비 · OOM 귀속 · 실환경 검증 · **main `fa05d122` → production P7 `61b9dd4a`**
+
+> 정본: `tests/evidence/2026-10-07-10th-final-defects.md` · 결정 `docs/ai/decisions/ADR-2026-10-07-finalize-reentry-and-oom-attribution.md` · 운영 `docs/operate/04-pipeline-runtime.md`.
+
+- **결과 처리 재진입(R1)**: 결과 확인 및 전송 중 실행 기반 오류면 같은 빌드에서 노드를 다시 기다려 같은 폴더에서 다시 처리한다. 2xx 받은 전송은 다시 보내지 않고, 결과 처리 시간 1 h · Portal 시도 3번 · 취소 빌드 노드 대기 5분은 진입 사이에 이어 센다. 끝내 못 하면 FAILURE(미전송) · UNSTABLE(전송 뒤).
+- **대기 시각(보정 1)**: 끊긴 뒤 대기는 감지 시각부터(`OFFLINE_GRACE` 삭제). 실기 L3 대기 63초(9차 368초).
+- **기록 읽기(R2 · R4)**: `seReadJsonFile` — 없음 · 손상(해석 실패만)과 읽기 예외를 나누고 예외는 `retry(agent(), nonresumable())` 로. Add-on 결정은 재사용 · 손상이면 사본 commit · 없으면 끔.
+- **준비 · 보존(R3 · N1)**: 소유 기록 `prepared` · 접수 목록 복원 · 확정 결과 IP 대조(사라지면 rc 92 · 재개 불가) · 보관 또는 전달 뒤 표식(그 뒤 끊김은 다시 시도하지 않음).
+- **OOM(R5)**: 커널 로그 OOM 종료 PID == 이 실행(run_gather.sh · ansible-playbook 주 프로세스)일 때만 `runner_oom`. 기준점은 커널 로그 자신의 시계(실기에서 /proc/uptime 과 22초 차이로 놓치던 결함을 찾아 고침). 카운터 증가는 관측만.
+- **실기**: se-probe L3 · L4 · L5 · L6 · L8 재실행 · L9(Add-on 을 켠 재개 — A 재사용) · R6 대상 측 장애(Linux · Windows · Redfish, Windows 는 대상 쪽 약 20초 경계) · Runner03 실제 커널 OOM 6사례 — 모두 기대 동작.
+- **검증**: WSL `ci_gate` PASS(4,476 + 324) · CI #32 Verify COMPLETE_PASS(Harness 63/64 — 시나리오 설계 고침) · **최종 CI #33(`fa05d122`) SUCCESS** — Harness main 44/44 · 생성 tree 21/21 · Verify COMPLETE_PASS · Evidence PASS · main Job #327~#344 17 시나리오 기대 결과 · 명부 32대 성공 26 · 실패 6 → **P7 `61b9dd4a`**(양 원격 일치 · G07 재검사 PASS) · production #176 canary 3/3 · #177~#190 같은 매트릭스 · 명부 같은 결과.
+- **실기 미확인**: GP-57(실장비 계정 쓰기 응답 유실 — 도구 차단) · GP-64(ansible 작업자 OOM 의 PID 연결) · 72 h 자체(축소 상수).
+
 ## 일자: 2026-10-06 (9차) — 실행 기반 대기 · 같은 Runner 재개 · 사전 차단 제거 · **main `8af81613` → production P6 `a8833d47`**
 
 > 정본: `tests/evidence/2026-10-06-9th-infra-wait-resume.md` · 결정 `docs/ai/decisions/ADR-2026-10-06-infra-wait-and-host-resume.md` · 운영 `docs/operate/04-pipeline-runtime.md`.

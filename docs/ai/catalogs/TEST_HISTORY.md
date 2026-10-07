@@ -1,5 +1,17 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-07 (10차) — 결과 처리 재진입 · 기록 읽기 · 끊긴 준비 · OOM 귀속 · `fa05d122` → production P7 `61b9dd4a`
+
+| 구분 | 결과 |
+|---|---|
+| 로컬 | WSL `ci_gate` PASS — unit · e2e · regression **4,476 통과** · 182 건너뜀 · 7 xfail · integration **324** · corpus 20/20 · 3채널 syntax-check. 커밋마다(`88c9250a` · `574454f5` · `dcd89274`) 회귀 통과(줄끝 4건은 내보내기 CRLF — LF 로 다시 확인). Groovy 문법 · 로컬 driver R1~R4 15/15 |
+| 새 시험 | `test_gather_state.py` 반례(다른 프로세스 OOM + rc 1 · `kill -9` · 사용자 취소 · 시도 시작 뒤 들어온 프로세스 · 이 실행의 OOM + 신호 · 커널 로그 시계 지연) · `test_run_gather.py`(PID 기록 · rc 92) · 구조 시험 · Harness 21 시나리오(재진입 5 · 읽기 2 · 준비 5 · 보존 6 · Add-on 3) |
+| se-probe 실기 | L3 #1 · L4 #2 · L5 #3 · L6 #4 · L8 #5 기대 동작(대기는 감지 시각부터) · **L9 #6** Add-on A 재사용 3/3 · **R6** #7~#10(Linux 15 s 회복 · 600 s 그 대상만 실패 · Windows 8 s 회복 · 20 s 대상 쪽 연결 종료로 그 대상만 실패 · Redfish 20 s 회복 · 600 s partial) |
+| Runner03 OOM | 실제 커널 OOM 6사례 — 고치기 전 이 실행의 OOM 2건 `aborted`(커널 로그 시계 결함) → `f9f38cea` 뒤 `runner_oom` · 반례 4건 기대대로 |
+| CI | #31 중단(실행 중 push) · **#32(`5dc8d0af`) UNSTABLE** — Gate PASS(4,515 + 324) · Harness main 42/43 · tree 21/21 · Verify COMPLETE_PASS(G14 4,288 · G19) · 고친 시나리오 단일 실행 #762 · #764 PASS · **최종 CI #33(`fa05d122`) SUCCESS** — Gate 4,515 + 324 · Harness main 44/44 · tree 21/21 · Verify COMPLETE_PASS(G14 4,288 · G19) · Evidence PASS · 필수 stage 전부 PASS |
+| main `fa05d122` #327~#344 | 17/17 기대 결과(T2 SUCCESS · T5 ABORTED · T17 FAILURE config_error 전송 200 · T6 UNSTABLE · S5 2/2(.37 .38 DIMM 1 × 4,096 MB) · S1 4/4 · S4 1/1 · S2 4+2 · E2E-A UNSTABLE · E2E-A2 FAILURE · ESXi 6/6 · E2E-E 2/2 · S3 13/13 · Linux A 8/8 · Linux B 4+3 · Redfish 7+3(#342 는 controller DNS 실패로 시작 전 실패 → #344) · 중복 IP 거부). 명부 32대 성공 26 · 실패 6(9차와 같은 환경 항목) |
+| 승격 · production | 세션 CLI 2026-10-07 09:36~09:51 COMPLETE_PASS → **P7 `61b9dd4a`**(parent P6 `a8833d47` · Main-SHA `fa05d122` · Tree-Hash `9816ed3b…` · 196 파일 · 다시 실행 G11~G15 · G18~G20) · GitHub · GitLab production `61b9dd4a` · 승격 뒤 두 원격 새 사본 G07 PASS · production #176 canary 3/3 · #177~#190 매트릭스 · 명부 32대 성공 26 · 실패 6 |
+
 ## 2026-10-06 (9차) — 실행 기반 대기 · 같은 Runner 재개 · `8af81613` → production P6 `a8833d47`
 
 | 구분 | 결과 |
