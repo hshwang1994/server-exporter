@@ -108,10 +108,10 @@ def test_connection_and_response_waits():
 
 
 def test_retention_and_cleanup_values():
-    m = re.search(r"buildDiscarder\(logRotator\(daysToKeepStr: '(\d+)', numToKeepStr: '(\d+)', artifactDaysToKeepStr: '(\d+)', artifactNumToKeepStr: '(\d+)'\)\)", PORTAL)
-    assert m and m.groups() == ("14", "100", "7", "50"), "빌드 기록 14일 · 100개, 결과 파일 7일 · 50개"
+    # 10차 마무리 1: 로그·빌드 기록 보관(buildDiscarder/logRotator)은 Jenkinsfile 이 지정하지 않는다 — Jenkins 전역 설정으로 관리한다.
+    assert "buildDiscarder(" not in PORTAL and "logRotator(" not in PORTAL
     assert "--build-limit-sec ${C.MAX_BUILD} --keep-days ${C.KEEP_DAYS} --every-sec 86400" in PORTAL, "작업 폴더 정리: 하루 한 번, 7일 지난 끝난 폴더"
-    assert int(m.group(3)) == C["KEEP_DAYS"], "결과 파일 보관 기간 = 남은 작업 폴더 정리 기간"
+    assert C["KEEP_DAYS"] == 7, "작업 폴더 정리 보관 기간(보관 정책과 별개)"
     assert C["MAX_BUILD"] == C["INFRA_WAIT"] + C["GATHER_MAX"] + C["FINALIZER"] + 3 * 3600, "끝 기록 없는 폴더를 실행 중으로 보는 기간"
     m = re.search(r'"--build-limit-sec", type=int, default=(\d+)', CLEANUP)
     assert m and int(m.group(1)) == C["MAX_BUILD"]

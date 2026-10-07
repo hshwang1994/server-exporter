@@ -157,9 +157,11 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
     int maxAttempts = aborted ? 1 : (C.PORTAL_ATTEMPTS as int)
     // 10차 R1: 결과 확인이 실행 기반 오류로 다시 들어오면 앞 진입의 시도 기록을 이어받는다 — 시도 수를 처음부터 세지 않는다.
     //   이미 2xx 를 받은 전송은 호출자가 거른다(다시 보내지 않는다). 수신을 확인하지 못한 전송만 남은 횟수 안에서 다시 보낸다(본문 · eventUuid 같음).
+    // 10차 마무리 4.1: Portal 이 확정 거부(408 · 429 제외 4xx)한 뒤에는 재진입해도 다시 POST 하지 않는다 — state.refused 를 진입 사이에 유지한다.
     if (!(state.tries instanceof List)) { state.tries = [] }
     int done = (state.tries as List).size()
     state.delivered = (state.delivered == true)
+    state.refused = (state.refused == true)
     if (done == 0) {
         state.http_code = null
         state.reason = null
@@ -167,10 +169,13 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
     if (!state.started_at) { state.started_at = seIsoUtc(seNowMs()) }
     seLog("[Portal 전송] 결과를 ${endpoint} 로 보냅니다. 최대 ${maxAttempts}번 시도합니다${aborted ? '(취소된 빌드라 1번)' : ''}" +
           (done ? ", 앞선 결과 처리에서 ${done}번 시도해 남은 시도는 ${Math.max(0, maxAttempts - done)}번입니다" : '') + ". 본문 ${body.length()}자.")
-    if (done >= maxAttempts) {
+    boolean resolved = (state.delivered == true) || (state.refused == true)   // 10차 마무리 4.1: 확정된 전송은 재진입해도 다시 보내지 않는다
+    if (resolved) {
+        seLog("[Portal 전송] 앞선 결과 처리에서 " + (state.delivered ? "HTTP ${state.http_code} 응답을 이미 받았습니다" : "Portal 이 요청을 거부(HTTP ${state.http_code})했습니다") + ". 다시 보내지 않습니다.")
+    } else if (done >= maxAttempts) {
         seLog("[Portal 전송] 앞선 결과 처리에서 이미 ${done}번 시도해 더 보내지 않습니다.")
     }
-    for (int attempt = done + 1; attempt <= maxAttempts; attempt++) {
+    for (int attempt = done + 1; !resolved && attempt <= maxAttempts; attempt++) {
         long left = deadlineSec - seNowSec()
         if (left < (C.PORTAL_MIN as long)) {
             seLog("[Portal 전송] 남은 시간이 ${left}초라 ${attempt}번째 전송을 시작하지 않았습니다. 최소 ${C.PORTAL_MIN}초가 필요합니다.")
@@ -214,6 +219,7 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
         if (code ==~ /4\d\d/ && !(code in ['408', '429'])) {
             rec.outcome = 'refused'
             state.reason = 'refused'
+            state.refused = true          // 10차 마무리 4.1: 확정 거부 — 재진입해도 다시 보내지 않는다(408 · 429 는 재시도 대상이라 제외)
             seLog("[Portal 전송] HTTP ${code} 응답을 받았습니다. Portal 이 요청을 거부해 다시 보내지 않습니다. 소요 시간: ${took}")
             break
         }
@@ -240,11 +246,12 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
     state.attempted = (state.attempts > 0)
     state.ended_at = seIsoUtc(seNowMs())
     if (!state.delivered && state.reason == null) { state.reason = state.attempted ? 'failed' : 'no_time' }
-    // 수신 여부 (9차, W08): 2xx → delivered. 응답이 없었거나 408(요청 도구는 연결 실패 · 응답 시간 초과를 408 로 돌려준다)로 끝난 시도가
-    //   있으면 Portal 이 받았는지 알 수 없다 → uncertain. Portal 이 2xx 아닌 응답만 줬으면 not_delivered. 다시 보낸 본문 · eventUuid 는 같다.
+    // 수신 여부 (9차 W08 · 10차 마무리 4.2): 2xx → delivered. 응답을 확인하지 못한 시도 — 연결 실패 · 408(요청 도구는 연결 실패 · 응답 시간 초과를
+    //   408 로 돌려준다) · 응답 확인 전 중단(interrupted) — 이 하나라도 있으면 Portal 이 받았는지 알 수 없다 → uncertain. 2xx 아닌 응답만 받았으면
+    //   not_delivered. 중단은 보낸 뒤 응답을 못 받은 것이라, 그 뒤 재진입에서 확정 거부(4xx)를 받아도 앞 전송이 전달됐을 수 있어 uncertain 이다.
     boolean unknownReceipt = false
     for (Map t in state.tries) {
-        if (t.outcome == 'failed' && (t.http_code == null || "${t.http_code}" == '408')) { unknownReceipt = true }
+        if (t.outcome == 'interrupted' || (t.outcome == 'failed' && (t.http_code == null || "${t.http_code}" == '408'))) { unknownReceipt = true }
     }
     state.receipt = state.delivered ? 'delivered' : (!state.attempted ? 'not_attempted' : (unknownReceipt ? 'uncertain' : 'not_delivered'))
     if (!state.delivered && state.attempted) {
@@ -906,6 +913,9 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
     try {
         if (cb.delivered == true) {
             seLog("[Portal 전송] 앞선 결과 처리에서 HTTP ${cb.http_code} 응답을 이미 받았습니다(${cb.delivered_show}). 다시 보내지 않습니다.")
+        } else if (cb.refused == true) {
+            // 10차 마무리 4.1: 앞선 진입에서 Portal 이 확정 거부했다 — 재진입해도 같은 요청을 다시 POST 하지 않는다(408 · 429 는 refused 가 아니라 재시도 대상).
+            seLog("[Portal 전송] 앞선 결과 처리에서 Portal 이 요청을 확정 거부(HTTP ${cb.http_code})했습니다. 다시 보내지 않습니다.")
         } else {
             seCallback(body, deadline, C, cb)
         }
@@ -1029,7 +1039,7 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
 @NonCPS
 Map seCallbackRecord(Map cb) {
     return [attempted: (cb.attempted == true), delivered: (cb.delivered == true), http_code: cb.http_code,
-            attempts: (cb.attempts ?: 0), reason: cb.reason, interrupted: (cb.interrupted == true),
+            attempts: (cb.attempts ?: 0), reason: cb.reason, interrupted: (cb.interrupted == true), refused: (cb.refused == true),
             receipt: (cb.receipt ?: ((cb.delivered == true) ? 'delivered' : ((cb.attempted == true) ? 'uncertain' : 'not_attempted'))),
             started_at: cb.started_at, ended_at: cb.ended_at, tries: (cb.tries ?: [])]
 }
@@ -1860,10 +1870,8 @@ pipeline {
     options {
         // 빌드 전체 timeout 은 두지 않는다 (9차, 2026-10-06) — Runner · 결과 처리 노드를 최대 72시간 기다리는 동안 빌드를 끊지 않기 위해서다.
         //   한계는 실제 실행에만 건다: 실행 기반 대기 합 72시간 · 실제 수집 누적 6시간 · 시도 하나의 실행 한계 · 결과 확인 및 전송 1시간 (seConstants).
-        // 보관 기준 (8차 R8, 2026-10-05 제안 기본값): 빌드 기록 · 콘솔 로그는 14일 · 최근 100개, 보관한 결과 파일은 7일 · 최근 50개.
-        //   먼저 닿는 조건으로 오래된 것부터 Jenkins 가 지운다. '영구 보존(Keep this build forever)' 으로 표시한 빌드와 실행 중인 빌드는 지우지 않는다.
-        //   빌드가 돌 때 이 값이 Job 설정에 반영된다. Runner · controller 의 작업 폴더는 seCleanOldWorkspaces · seCleanOldFinalizerDirs 가 따로 본다.
-        buildDiscarder(logRotator(daysToKeepStr: '14', numToKeepStr: '100', artifactDaysToKeepStr: '7', artifactNumToKeepStr: '50'))
+        // 로그 · 빌드 기록 보관(buildDiscarder)은 이 Jenkinsfile 에서 지정하지 않는다 (2026-10-07) — 보관 정책은 Jenkins 전역 설정으로 관리한다.
+        //   Runner · controller 의 작업 폴더 정리는 보관 정책과 별개로 seCleanOldWorkspaces · seCleanOldFinalizerDirs 가 본다.
     }
 
     stages {

@@ -104,8 +104,13 @@ def test_finalizer_reentry_does_not_resend_a_confirmed_delivery_or_restart_the_a
     """10차 R1: 전송 기록(fs.cb)은 재진입해도 이어진다. 2xx 를 받은 전송은 다시 보내지 않고, 확인하지 못한 전송은 남은 횟수만 쓴다."""
     seg = FIN_IN[FIN_IN.index("Map cb = (fs.cb instanceof Map) ? fs.cb : [:]"):FIN_IN.index("boolean delivered = (cb.delivered == true)")]
     assert "if (cb.delivered == true) {" in seg and "다시 보내지 않습니다" in seg and "seCallback(body, deadline, C, cb)" in seg
+    # 10차 마무리 4.1: 확정 거부(refused)도 재진입 사이에 유지하고 다시 보내지 않는다 (408 · 429 는 재시도 대상이라 제외)
+    assert "} else if (cb.refused == true) {" in seg and "확정 거부" in seg
     assert "if (!(state.tries instanceof List)) { state.tries = [] }" in CALLBACK and "int done = (state.tries as List).size()" in CALLBACK
-    assert "for (int attempt = done + 1; attempt <= maxAttempts; attempt++) {" in CALLBACK
+    assert "state.refused = (state.refused == true)" in CALLBACK, "refused 를 진입 사이에 유지한다"
+    assert "boolean resolved = (state.delivered == true) || (state.refused == true)" in CALLBACK
+    assert "for (int attempt = done + 1; !resolved && attempt <= maxAttempts; attempt++) {" in CALLBACK
+    assert "state.refused = true" in CALLBACK, "결정적 4xx 에서 refused 를 세운다"
     assert "state.tries = []\n" not in CALLBACK, "앞 진입의 시도 기록을 지우지 않는다"
     assert "finalize: [entries: fs.entries, exec_sec_before: (long) ((fs.exec_ms as long) / 1000L), limit_left_sec: deadline - tIn, lost: fs.lost]" in FIN_IN
     summary = _method("def seBuildSummary")
@@ -130,7 +135,7 @@ def test_no_inner_step_limits_and_no_tier2():
 def test_time_limits_count_execution_and_waiting_separately():
     """9차: 기다린 시간은 실행 한계에 넣지 않는다. 대기는 빌드 하나의 합으로 세고(다시 시도해도 처음부터 세지 않는다), 수집은 누적 실제 실행 시간으로 센다."""
     opts = TEXT[TEXT.index("    options {"):TEXT.index("    stages {")]
-    assert "timeout(" not in opts and "buildDiscarder(" in opts
+    assert "timeout(" not in opts and "buildDiscarder(" not in opts   # 10차 마무리 1: 보관은 Jenkins 전역 설정, Jenkinsfile 미지정
     assert VALIDATE.count("options { timeout(time: 5, unit: 'MINUTES') }") == 1
     assert RESOLVE.count("options { timeout(time: 5, unit: 'MINUTES') }") == 1
     assert "options {" not in GATHER.split("\n    post {")[0] and "agent {" not in GATHER.split("\n    post {")[0]
@@ -151,8 +156,10 @@ def test_time_limits_count_execution_and_waiting_separately():
 
 
 def test_retention_policy():
-    assert ("buildDiscarder(logRotator(daysToKeepStr: '14', numToKeepStr: '100', artifactDaysToKeepStr: '7', artifactNumToKeepStr: '50'))"
-            in TEXT)
+    # 10차 마무리 1: 로그·빌드 기록 보관(buildDiscarder/logRotator)은 Jenkinsfile 이 지정하지 않는다 — Jenkins 전역 설정으로 관리한다.
+    assert "buildDiscarder(" not in TEXT and "logRotator(" not in TEXT
+    opts = TEXT[TEXT.index("    options {"):TEXT.index("    stages {")]
+    assert "보관 정책은 Jenkins 전역 설정으로 관리한다" in opts
 
 
 def test_finalizer_recovers_inputs_in_order_and_prefers_layer_a():
@@ -249,6 +256,10 @@ def test_callback_rules_and_attempt_records():
                 "rec.outcome = 'failed'"):
         assert key in CALLBACK, key
     assert CALLBACK.index("if (left < (C.PORTAL_MIN as long)) {") < CALLBACK.index("Map rec = [attempt:"), "미시도에는 시도 기록(시각)을 만들지 않는다"
+    # 10차 마무리 4.2: 응답 확인 전 중단(interrupted)도 수신 불명 → uncertain. 그 뒤 재진입에서 4xx(refused)를 받아도 앞 전송이 전달됐을 수 있어 uncertain 이다.
+    assert "if (t.outcome == 'interrupted' || (t.outcome == 'failed' && (t.http_code == null || \"${t.http_code}\" == '408'))) { unknownReceipt = true }" in CALLBACK
+    assert "state.receipt = state.delivered ? 'delivered' : (!state.attempted ? 'not_attempted' : (unknownReceipt ? 'uncertain' : 'not_delivered'))" in CALLBACK
+    assert "refused: (cb.refused == true)" in _method("Map seCallbackRecord"), "요약 기록에 refused 를 남긴다"
 
 
 def test_summary_records_attempted_from_real_attempts_not_from_body():
