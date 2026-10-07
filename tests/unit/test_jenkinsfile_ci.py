@@ -114,6 +114,8 @@ def test_ci_is_declarative_with_linux_agent_and_required_options():
     assert "disableConcurrentBuilds()" in opts
     assert "timeout(time: 150, unit: 'MINUTES')" in opts
     assert "skipDefaultCheckout(true)" in opts, "Checkout stage 가 유일한 checkout"
+    # 10차 마무리 1: 보관(buildDiscarder/logRotator)은 Jenkinsfile 이 지정하지 않는다 — Jenkins 전역 설정으로 관리한다.
+    assert "buildDiscarder(" not in CI and "logRotator(" not in CI
     assert "label 'esxi'" not in CI and "'linux && windows'" not in CI, "Runner 라벨은 linux 하나"
 
 

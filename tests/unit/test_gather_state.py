@@ -260,6 +260,30 @@ def test_another_process_entering_an_isolated_scope_after_start_is_not_this_runs
     assert att["state"] == "aborted" and att["oom_observed"]["cgroup"] == {"path": scope, "delta": 1} and att["oom_observed"]["system"] == {"delta": 1}
 
 
+def test_worker_fork_oom_is_not_this_runs_oom_gp64(tmp_path):
+    # GP-64 (10차 마무리 6): Jenkins Agent·Ansible 주 프로세스는 살아 있고 이 수집에 속한 작업자(fork)만 OOM 으로 끝난 경우.
+    #   작업자 PID 는 run_gather.sh·ansible-playbook 주 프로세스가 아니고 기록되지도 않는다 → 커널 로그에 그 PID 의 OOM 기록이
+    #   있어도 이 실행에 직접 귀속할 수 없다. 공유 카운터·종료 코드만으로 OOM 을 추정하는 새 로직을 두지 않는다 — 한계로 남긴다.
+    ws = _ws(tmp_path, ["10.0.0.1"])
+    _begin(ws, T0, gather_max=600)            # run_gather.sh pid=4242
+    _ansible_pid(ws, 5151)                    # ansible-playbook 주 프로세스
+    worker = {"readable": True, "kills": [{"at": 1500.0, "pid": 8888, "comm": "python3"}]}   # 작업자 fork — run_pids 에 없다
+    # oom_link: 작업자 PID 는 이 실행의 PID 집합(run_gather.sh·ansible 주)에 없어 연결되지 않는다
+    assert gs.oom_link({"pid": 4242, "started_epoch": T0}, ws, worker) is None
+    # 주 프로세스가 살아 정상 종료 코드로 끝났고(작업자 하나가 죽어 rc=1) OOM 카운터가 올랐다 → 관측만 남기고 원인은 아니다(failed_run)
+    att = gs.end(ws, rc=1, now=T0 + 40, probes={"oom": dict(PROBES["oom"], cgroup=1), "kernel": worker})
+    assert att["state"] == "failed_run" and att["oom_link"] is None
+    assert att["oom_observed"] == {"cgroup": {"path": CG, "delta": 1}}
+    assert att["state"] not in gs.INFRA_STATES      # 같은 Runner runner_oom 재개 경로로 가지 않는다
+    # 설령 주 프로세스가 신호로 끝났더라도(137) 커널 기록의 OOM PID 가 작업자뿐이면 연결 없음 → process_lost(원인 미확인)
+    (tmp_path / "s").mkdir()
+    ws2 = _ws(tmp_path / "s", ["10.0.0.1"])
+    _begin(ws2, T0, gather_max=600)
+    _ansible_pid(ws2, 5151)
+    att2 = gs.end(ws2, rc=137, now=T0 + 40, probes={"oom": dict(PROBES["oom"], cgroup=1), "kernel": worker})
+    assert att2["state"] == "process_lost" and att2["oom_link"] is None and "원인 미확인" in att2["evidence"]
+
+
 def test_unreadable_kernel_log_is_never_an_oom_cause(tmp_path):
     ws = _ws(tmp_path, ["10.0.0.1"])
     _begin(ws, T0, gather_max=600)

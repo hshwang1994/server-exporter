@@ -1016,6 +1016,40 @@
         "note": "10차 R1: Portal 이 2xx 를 준 뒤 요약을 쓰다 실행 기반 오류 — 재진입은 확인된 전송을 다시 보내지 않고(전송 1번) 요약 · 보관만 마친다"
       }
     },
+    "finalize_refused_no_resend": {
+      "case": "01_normal",
+      "run_preserve": true,
+      "outcome": "completed",
+      "sink": {
+        "status": "400"
+      },
+      "faults": [
+        {
+          "op": "writeFile",
+          "match": "finalize_summary.json",
+          "nth": 1,
+          "kind": "infra"
+        }
+      ],
+      "finalize_delays": [
+        0,
+        5
+      ],
+      "expect": {
+        "delivered": false,
+        "sink_posts_eq": 1,
+        "finalize": {
+          "entries": 2
+        },
+        "lines_eq_accepted": true,
+        "calls_count": {
+          "retry:agent_lost": 1,
+          "httpRequest:": 1
+        },
+        "rethrown": false,
+        "note": "10차 마무리 4.1: Portal 이 확정 거부(HTTP 400)한 뒤 요약을 쓰다 실행 기반 오류 — 재진입은 거부된 요청을 다시 보내지 않는다(전송 1번, delivered=false). refused 를 진입 사이에 유지한다(408 · 429 가 아닌 결정적 4xx)"
+      }
+    },
     "finalize_reentry_expired": {
       "case": "01_normal",
       "run_preserve": true,

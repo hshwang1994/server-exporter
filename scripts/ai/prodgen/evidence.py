@@ -57,6 +57,7 @@ REQUIRED_HARNESS = ("normal_success", "archive_fail", "stash_fail", "both_fail",
                     "finalize_reentry_after_delivery",
                     "finalize_reentry_expired",
                     "finalize_reentry_abort",
+                    "finalize_refused_no_resend",   # 2026-10-07 마무리 4.1: 확정 거부(4xx) 뒤 재진입 재전송 금지
                     "finalize_limit_cumulative",
                     "owner_read_transient",
                     "run_record_read_transient",

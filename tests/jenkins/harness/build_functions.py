@@ -61,6 +61,7 @@ SCENARIOS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "trunc
              "archive_slow", "layer_a_read_slow", "gather_limit_preserve",
              "infra_resume", "infra_wait_expired", "resume_impossible", "gather_wait_abort",
              "finalize_reentry", "finalize_reentry_after_delivery", "finalize_reentry_expired", "finalize_reentry_abort",
+             "finalize_refused_no_resend",
              "finalize_limit_cumulative", "owner_read_transient", "run_record_read_transient", "prep_cut_after_owner",
              "prep_cut_after_cleanup", "prep_cut_after_manifest", "manifest_missing_restore", "results_missing_refuse",
              "preserve_archive_ok_stash_fail", "preserve_stash_ok_archive_fail", "preserve_both_fail", "preserve_cut_before_marker",
