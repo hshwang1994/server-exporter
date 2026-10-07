@@ -22,7 +22,7 @@ se_dur() {
 se_state_text() {
     case "$1" in
         runner_restart) echo "Runner 가 다시 부팅됐습니다" ;;
-        runner_oom) echo "Runner 에서 메모리 부족(OOM) 종료가 기록됐습니다" ;;
+        runner_oom) echo "이 실행의 프로세스가 Runner 의 메모리 부족(OOM)으로 끝났습니다" ;;
         agent_disconnect) echo "Runner 와 Jenkins 의 연결이 끊겼습니다" ;;
         process_lost) echo "수집 프로세스가 끝 기록 없이 사라졌습니다(원인 미확인)" ;;
         *) echo "$1" ;;
@@ -114,7 +114,8 @@ import json, shlex, sys
 p = json.loads(sys.argv[1])
 pairs = (("ATTEMPT", p["attempt"]), ("PENDING", p["pending"]), ("LIMIT", p["limit"]), ("FORKS", p["forks"]),
          ("TOTAL", p["hosts_total"]), ("DONE", p["completed"]), ("PREFAIL", p["precheck_failed"]), ("USED", p["exec_used"]),
-         ("PREV", p.get("closed_previous") or ""), ("PREV_EV", p.get("closed_evidence") or ""), ("FIXED", ",".join(p.get("tail_fixed") or [])))
+         ("PREV", p.get("closed_previous") or ""), ("PREV_EV", p.get("closed_evidence") or ""), ("FIXED", ",".join(p.get("tail_fixed") or [])),
+         ("BSTATE", p.get("state") or ""), ("BEVID", p.get("evidence") or ""))
 print(" ".join("%s=%s" % (k, shlex.quote(str(v))) for k, v in pairs))
 ' "$PLAN")"
 
@@ -128,6 +129,11 @@ if [ "$ATTEMPT" -gt 1 ]; then
 fi
 if [ -n "$FIXED" ]; then
     echo "[$(se_show)] [수집] 쓰는 도중 끊긴 마지막 줄을 gather_tail_fragments.jsonl 로 옮겼습니다(${FIXED}). 그 대상은 다시 수집합니다."
+fi
+if [ "$BSTATE" = "resume_impossible" ]; then
+    echo "[$(se_show)] [수집] 결과가 확정됐던 대상의 결과가 작업 폴더에 없어 다시 수집하지 않습니다(${BEVID}). 남은 대상은 실행 기반 장애 사유의 실패 결과로 보냅니다."
+    echo 92 > "$WS/gather_rc.txt"
+    exit 92
 fi
 if [ "$PENDING" -eq 0 ]; then
     echo "[$(se_show)] [수집] 남은 대상이 없습니다. 접수 ${TOTAL}대의 결과가 모두 확정돼 있어 ansible 을 실행하지 않습니다."
@@ -147,6 +153,7 @@ STARTED=true
 SECONDS=0
 set +e
 timeout --signal=INT --kill-after=90 "$LIMIT" \
+    bash -c 'printf "%s\n" "$$" > "$1" 2>/dev/null || true; shift; exec "$@"' se-ansible "$WS/.gather_ansible_pid" \
     ansible-playbook "$PLAYBOOK" -i "$INVENTORY" -f "$FORKS" --limit "@$WS/.gather_limit_hosts" --vault-password-file="$VAULT_TMP" -e se_location="$LOCATION"
 rc=$?
 ran=$SECONDS
@@ -167,13 +174,13 @@ case "$STATE" in
         echo "[$(se_show)] [수집] 이 실행이 연 원격 연결을 닫아 대상에서 돌던 명령을 정리했습니다(연결 ${SSH_CLOSED}개)."
         ;;
     runner_oom)
-        echo "[$(se_show)] [수집] Runner 에서 메모리 부족(OOM) 종료가 확인됐습니다(근거: ${EVIDENCE}). 실행 시간 $(se_dur "$ran"), 종료 코드 ${rc}. 끝난 대상의 결과는 보존하고 남은 대상은 이어서 수집합니다."
+        echo "[$(se_show)] [수집] 이 실행의 프로세스가 Runner 의 메모리 부족(OOM)으로 끝났습니다(근거: ${EVIDENCE}). 실행 시간 $(se_dur "$ran"), 종료 코드 ${rc}. 끝난 대상의 결과는 보존하고 남은 대상은 이어서 수집합니다."
         ;;
     process_lost)
-        echo "[$(se_show)] [수집] 실행 한계 전에 강제 종료됐습니다(종료 코드 ${rc}). OOM 기록은 없어 원인 미확인으로 남깁니다. 실행 시간 $(se_dur "$ran")."
+        echo "[$(se_show)] [수집] 실행 한계 전에 강제 종료됐습니다(종료 코드 ${rc}). 이 실행과 연결된 OOM 기록이 없어 원인 미확인으로 남깁니다${EVIDENCE:+ (${EVIDENCE})}. 실행 시간 $(se_dur "$ran")."
         ;;
     failed_run)
-        echo "[$(se_show)] [수집] ansible 이 비정상 종료했습니다(종료 코드 ${rc}). 실행 시간 $(se_dur "$ran"). 끝난 대상의 결과는 보존합니다."
+        echo "[$(se_show)] [수집] ansible 이 비정상 종료했습니다(종료 코드 ${rc})${EVIDENCE:+ (${EVIDENCE})}. 실행 시간 $(se_dur "$ran"). 끝난 대상의 결과는 보존합니다."
         ;;
     *)
         echo "[$(se_show)] [수집] 끝났습니다. 실행 시간 $(se_dur "$ran"), 종료 코드 ${rc}."
