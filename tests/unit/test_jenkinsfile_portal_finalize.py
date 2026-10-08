@@ -617,14 +617,17 @@ def test_gather_end_does_not_call_a_missing_preservation_a_failure():
     fn = TEXT[TEXT.index("def seExplainGatherEnd("):]
     fn = fn[:fn.index("\n}\n") + 3]
     assert "String archivedFlag = (summary.preserve?.archived ?: '').toString()" in fn
-    assert "(archivedFlag == 'true') ? '완료'" in fn and "'빌드 기록 저장은 실패했고 전달된 결과로 처리했습니다'" in fn
+    assert "(archivedFlag == 'true') ? '완료'" in fn and "'빌드 기록 저장은 실패했고 전달된 결과로 처리했습니다.'" in fn
     # 9차 (2026-10-06 se-probe L5 · L6 · L8 관측): 보존 기록이 없을 때 수집이 돌았는지 · 넘겨 둔 결과가 있는지로 나눈다
     i_none = fn.index("} else if (!(env.SE_GATHER_STARTED_AT ?: '')) {")
     i_stash = fn.index("} else if (summary.preserve?.stashed == 'true') {")
     assert fn.index("if (archivedFlag in ['true', 'false']) {") < i_none < i_stash
-    assert "'수집 단계가 실행되지 않아 보존할 결과가 없습니다'" in fn[i_none:i_stash]
-    assert "'마지막 보존 전에 끝나 앞서 넘겨 둔 결과로 처리했습니다'" in fn[i_stash:]
-    assert "'수집은 했지만 Runner에서 결과를 넘겨받지 못했습니다(이 빌드에 남은 결과 없음)'" in fn[i_stash:]
+    assert "'수집 단계가 실행되지 않아 보존할 결과가 없습니다.'" in fn[i_none:i_stash]
+    assert "'마지막 보존 전에 끝나 앞서 넘겨 둔 결과로 처리했습니다.'" in fn[i_stash:]
+    assert "'수집은 했지만 Runner에서 결과를 넘겨받지 못했습니다(이 빌드에 남은 결과 없음).'" in fn[i_stash:]
+    # 2026-10-09 (main #356 · #367 관측): 수집을 시작하지 않은 빌드는 머리 문장이 그 사실을 말하고 같은 뜻의 '수집 시간' 행을 되풀이하지 않는다
+    assert "why = (outcome == 'config_error') ? '등록된 Runner가 없어 수집을 시작하지 못했습니다' : '수집을 시작하기 전에 빌드가 끝났습니다'" in fn
+    assert "(whyNotStarted ? '' : \"\\n  수집 시간: ${ran}\")" in fn
 
 
 def test_abort_between_attempts_says_handed_results_only_when_there_are_some():
@@ -649,7 +652,7 @@ def test_aborted_gather_still_reports_its_runtime():
     fn = TEXT[TEXT.index("def seExplainGatherEnd("):]
     fn = fn[:fn.index("\n}\n") + 3]
     assert "String ranSec = (run?.exec_used_sec != null) ? run.exec_used_sec.toString() : ((run?.ran_sec != null) ? run.ran_sec.toString() : '')" in fn
-    assert "'수집을 시작하지 않았습니다'" in fn and "(env.SE_GATHER_STARTED_AT ?: '')" in fn
+    assert "'수집을 시작하지 않았습니다.'" in fn and "(env.SE_GATHER_STARTED_AT ?: '')" in fn
 
 
 def test_spent_wait_budget_still_takes_a_node_that_is_free_now():
