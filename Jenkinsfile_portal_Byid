@@ -1836,6 +1836,7 @@ pipeline {
         )
         text(
             name        : 'inventory_json',
+            defaultValue: '[{"bmc_ip":"","by_id":""}]',
             description : '대상 목록 JSON 배열. 예: [{"service_ip": "10.0.0.1"}]. os 와 esxi 는 service_ip, redfish 는 bmc_ip, 없으면 ip 를 씁니다. IPv4 만 받고 중복은 거부합니다'
         )
         string(
@@ -1857,10 +1858,6 @@ pipeline {
             name        : 'verbosity',
             choices     : ['0', '1', '2', '3', '4'],
             description : 'Ansible verbosity (0=운영, 1~2=디버그, 3~4=깊은 진단)'
-        )
-        string(
-            name        : 'byid',
-            description : 'os clean 판단을 위한 parameter'
         )
         // 2026-10-05 (8차 R1): 시험 전용 파라미터(Redfish 계정 복구 모의 · 수집 시간 강제 제한)를 운영 입력에서 없앴다.
         //   두 시험은 main 의 시험 경로(단위 시험 · Harness · CI)가 같은 운영 코드를 실행해 확인한다. 예전 이름으로 값이 들어와도 읽지 않는다.
