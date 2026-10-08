@@ -284,7 +284,7 @@ def main(argv=None):
     if now - last < a.every_sec:
         report["skipped_reason"] = "checked_recently"
         report["last_checked_epoch"] = last
-        say("최근 24시간 안에 이미 확인해 이번에는 건너뜁니다. 마지막 확인 %s" % now_show(last))
+        say("마지막 확인(%s) 뒤 %d시간이 지나지 않아 이번에는 건너뜁니다." % (now_show(last), max(1, a.every_sec // 3600)))
         return finish(report)
     lock = Lock(os.path.join(root, ".se-cleanup-%s.lock" % a.job_base))
     if not lock.acquire():
