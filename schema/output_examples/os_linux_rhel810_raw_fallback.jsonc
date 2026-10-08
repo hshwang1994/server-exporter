@@ -15,7 +15,7 @@
   "target_type": "os",                                     // 수집 채널 — "os" | "esxi" | "redfish"
   "collection_method": "agent",                            // 수집 방식 — agent=Ansible SSH/WinRM, vsphere_api=community.vmware, redfish_api=stdlib HTTP
   "ip": "10.100.64.161",                                   // 호출자 inventory_json 의 service_ip
-  "hostname": "localhost",                                 // 해석된 hostname (해석 실패 시 ip 로 fallback). RHEL 기본값
+  "hostname": "localhost",                                 // 해석된 hostname (없으면 null — IP 로 채우지 않음). RHEL 기본값
   "vendor": "vmware",                                      // 정규화 vendor (소문자) — VM 이라 hosting hardware = VMware
   "status": "success",                                     // 전체 수집 결과 — success / partial / failed (수집 자체 결과 — 장비 정상 여부와 다름)
   "sections": {                                            // 섹션별 수집 상태 — success / failed / not_supported

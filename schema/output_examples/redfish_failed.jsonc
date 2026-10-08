@@ -18,7 +18,7 @@
   "target_type": "redfish",                             // 수집 채널 — "os" | "esxi" | "redfish"
   "collection_method": "redfish_api",                   // 수집 방식 — agent (SSH/WinRM) / vsphere_api / redfish_api (stdlib HTTP)
   "ip": "10.100.15.1",                                  // 대상 장비 IP (호출자 inventory_json 의 service_ip 또는 bmc_ip)
-  "hostname": "10.100.15.1",                               // 해석 실패 → ip 로 fallback
+  "hostname": null,                                        // 장비에서 읽은 값 없음 → null (IP 로 채우지 않음)
   "vendor": null,                                          // probe 실패 → vendor 미감지
   "status": "failed",                                      // 전체 실패
   "sections": {                                         // 섹션별 수집 상태 dict — success / failed / not_supported

@@ -98,18 +98,24 @@ withCredentials([string(credentialsId: 'server-gather-vault-password', variable:
 
 ## 5. 실행 명령 예시
 
+Jenkins 밖에서 직접 실행할 때도 Jenkins 가 넘기는 두 값을 함께 준다. `ansible.cfg` 의 vault 비밀번호 파일 설정은 꺼져 있어
+비밀번호 파일을 직접 줘야 하고, `se_location` 이 없거나 등록되지 않은 위치면 세 채널 모두 대상이 자격증명 단계 실패 결과로 끝난다.
+
 ```bash
 # Redfish gather
 cd ${REPO_ROOT}
 export REPO_ROOT=$(pwd)
 export INVENTORY_JSON='[{"ip":"10.50.11.232"}]'
-ansible-playbook redfish-gather/site.yml -i redfish-gather/inventory.sh
+ansible-playbook redfish-gather/site.yml -i redfish-gather/inventory.sh \
+  --vault-password-file=<비밀번호 파일> -e se_location=<loc>
 
 # OS gather
-ansible-playbook os-gather/site.yml -i os-gather/inventory.sh
+ansible-playbook os-gather/site.yml -i os-gather/inventory.sh \
+  --vault-password-file=<비밀번호 파일> -e se_location=<loc>
 
 # ESXi gather
-ansible-playbook esxi-gather/site.yml -i esxi-gather/inventory.sh
+ansible-playbook esxi-gather/site.yml -i esxi-gather/inventory.sh \
+  --vault-password-file=<비밀번호 파일> -e se_location=<loc>
 ```
 
 ---
