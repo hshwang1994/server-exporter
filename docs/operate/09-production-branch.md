@@ -132,7 +132,13 @@ G20 은 원격 없이 돌면 PARTIAL(검증 안 됨)이고, 일부 원격만 보
   ⑦ 원복 조건 — `cj` 요청 준비 전에 코드가 먼저 나가 신규 요청이 실패하면 `git revert`(main) / `restore`(production) / 고객사 main 이전 tree 재적용으로 즉시 원복, 공급자 값 복귀는 담당 몫.
 - lab 의 임시 `cj` 라벨 + TEST-NET 실패 envelope 검증은 라우팅·실패 처리 smoke 이지 **청주 실장비 성공 수집이 아니다**.
 
-## 7. 현재 상태 (2026-10-06)
+## 7. 현재 상태 (2026-10-08)
+
+2026-10-08: 여덟 번째 **P8 `347ab74e`**(main `21b24c0a` — CI 실행시간 개선, 수집 runtime 은 `004a500e` 와 같다. P7 뒤 main 에 들어온 runtime 변경: Portal 결과 처리 재진입 4.1/4.2 · forks 50 · Windows vault 보조 계정 · 빈 `options {}` 제거, parent P7 `61b9dd4a`) 양 원격. COMPLETE_PASS(CI #36 + 환경 의존 게이트 G11~G15 · G18~G20 로컬 재실행) · GitHub · GitLab · 로컬 production 동일(`git ls-remote` 확인) · 두 원격 새 clone 의 tree 일치 · trailer 완비. 승격 직후 canary production #191 SUCCESS(os 3대 · Portal 200 · checkout == P8). 기록 `tests/evidence/2026-10-08-ci-speed-p8.md` 7절.
+
+2026-10-07 (10차): 일곱 번째 **P7 `61b9dd4a`**(main `fa05d122`, parent P6 `a8833d47`) 양 원격. COMPLETE_PASS(CI #33 + 환경 의존 게이트 로컬 재실행). 승격 직후 production Job canary #176 · 확장 매트릭스 #177~#190. 기록 `tests/evidence/2026-10-07-10th-final-defects.md` 10절.
+
+2026-10-06 (9차): 여섯 번째 **P6 `a8833d47`**(main `8af81613`, parent P5 `f43af470`) 양 원격. COMPLETE_PASS(CI #30 + 환경 의존 게이트 로컬 재실행). 기록 `tests/evidence/2026-10-06-9th-infra-wait-resume.md` 10절.
 
 2026-10-06 (8차): 다섯 번째 **P5 `f43af470`**(main `8c9e04a9` — 시험 입력 제거 · 시간 한계 셋 · 원격 명령 정리 · 보존 기간 R1~R8, parent P4 `5ac5566c`) 양 원격. COMPLETE_PASS(CI #25 + 환경 의존 게이트 G11~G15 · G18~G20 로컬 재실행) · GitHub · GitLab · 로컬 production 동일(`git ls-remote` 확인) · trailer 완비. 승격 직후 production Job 검증은 `tests/evidence/2026-10-05-8th-time-limits.md` 9절.
 

@@ -6,7 +6,29 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-07
+> 최종 갱신: 2026-10-08
+
+## 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · production P8
+
+### 배경
+- CI 한 번이 80분이었다(#33 · #34 · #35). 두 Harness 단계가 79% — 66빌드를 순차로 돌리고, 빌드마다 quiet period 5초를 기다리고, 생성물 검사가 Harness 뒤에 있었다(#34 는 0.5초면 잡히는 G13 결함을 80분 뒤에 확인).
+- Harness Job 은 동시 실행 금지 · 고정 포트 18080 + 같은 포트 `pkill` · 공유 수신기 폴더 · `checkout scm`(main 최신) 뒤 비교라 병렬화에도, CI 도중 push 에도 약했다.
+- 사용자 지시서(2026-10-07, "CI 개선 실행 지시서"): 시험 범위 · 판정 품질 유지, 45~55분, 실제 Jenkins 검증 뒤 main 반영. 2026-10-08 추가 지시: 일전에 못 한 production 승격 push 까지.
+
+### 결정 (ADR-2026-10-08-ci-harness-parallel)
+1. Prodgen Build · Drift · Verify 를 Harness 앞으로. 선행 필수 검사(GATE · CORPUS · BUDGET · PRODGEN_BUILD · PRODGEN_VERIFY) FAIL 이면 두 Harness · Evidence 는 `SKIPPED`(PASS 아님).
+2. 시나리오당 빌드 1개를 유지하고 두 고정 lane 이 동시에 부른다(`quietPeriod: 0`, parallel 반환값을 요청 순서로 모은다).
+3. 두 Harness 단계가 같은 판정을 쓴다 — 기대 Jenkins 결과 · 내부 verdict · 후보/생성물 결속. 판정 자체 시험표를 그룹마다 먼저 돌린다.
+4. Harness 빌드마다 수신기(OS 배정 포트 · ready 파일 · 빌드 번호 폴더 · 자기 pid 만 정리)와 eventUuid 격리 판정. `MAIN_SHA` commit checkout · readTrusted 고정 · Pipeline 정의 revision 확인.
+5. Time Limits 는 5개 파일을 다시 돌리지 않고 Gate JUnit 을 시험 ID 단위로 대조한다(같은 SHA · 같은 host · 이 빌드 뒤 기록).
+- 버린 대안: 시나리오를 합친 실행기 · 작업 대기열 · Job 복제 · Verify 와 Gate 동시 실행 · checkout 재사용(GP-65 후보) · Evidence 단계의 `check_evidence` 판정(GP-66).
+
+### 결과 · 범위
+- CI #36(`21b24c0a`) **46.94분 SUCCESS** — #35 80.31분 대비 −33.4분(−41.6%). Harness main 2,623.6 → 1,298.5초 · tree 1,218.9 → 600.5초 · Time Limits 81.7 → 2.4초 · 자식 호출 대기 중앙값 7.24 → 0.09초. 자식 실행 합(executor 점유)은 +8~10%(동시 실행 경합).
+- 격리 시험 R1~R5(임시 Job): 동시 쌍 판정 = 순차 · 포트 · 기록 격리 · #34 결함 15.1분 FAILURE + SKIPPED · 부모 취소는 자기 자식만.
+- 승격: **P8 `347ab74e`**(parent P7 `61b9dd4a`, Main-SHA `21b24c0a`) COMPLETE_PASS · 양 원격 일치 · canary production #191 SUCCESS 3/3 · Portal 200.
+- 수집 runtime 은 바꾸지 않았다(생성 tree `8dac1eb2…` 가 `004a500e` 와 같다). P8 에 들어간 runtime 변화는 P7 뒤 main 에 들어온 다른 작업의 것이다.
+- 증거: `tests/evidence/2026-10-08-ci-speed-p8.md`.
 
 ## 2026-10-07 (최종 마무리) — 로그 보관 전역화 · forks 50 · Windows vault 도메인 · Portal 재진입 4.1/4.2 · GP-64 확인
 
