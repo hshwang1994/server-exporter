@@ -1,5 +1,17 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## inventory_json 확장형 입력 후속 (2026-10-08)
+
+> Portal 이 서버 정보를 통째로 보내도(`service_ip` · `bmc_ip` · `hostname` · `vendor` 등) target_type 이 고른 IP 키 하나만 쓰고 나머지는
+> `se_host_input` 에 보존만 한다 — inventory.sh 3종 `--list` 실행으로 확인, `docs/contract/01-input.md` 2 · 5 · 6절에 반영 (2026-10-08).
+
+- [ ] **[inventory] inventory.sh 3종 docstring 의 `.inventory_input.json` "(Jenkinsfile writeFile 로 생성)" 정정** — 지금 `Jenkinsfile_portal` 은
+  이 파일을 만들지 않는다(Jenkins 밖 수동 실행용 대체 경로). 런타임 파일이라 다음 inventory.sh 변경 때 함께 고치고 production 승격에 태운다.
+- [ ] **[실측] inventory_json 크기 한도** — Linux 환경변수 1개 131,072바이트 기준 계산값: 확장형(1대 약 200자) 약 600대, IP 만 약 4,000대.
+  Jenkins 는 파라미터(`inventory_json`)와 `INVENTORY_JSON` 두 환경변수로 넘긴다. lab Jenkins 에서 한도 근처 요청이 입력 확인 · 수집 · 결과 전송에서 어떻게 끝나는지 확인한다.
+- [ ] **[결정 보류] 키가 없는 서버만 실패 결과로 처리** — 지금은 한 서버라도 키가 없으면 요청 전체 거부 + 콜백 0건(2026-10-05 F03 접수 규칙).
+  2026-10-08 사용자는 문서화를 골랐고 동작 변경은 고르지 않았다. 바꾸려면 `seAcceptTargets` · inventory.sh 3종 · `tests/fixtures/input_validation/cases.json` · 결과 수 계약을 함께 본다.
+
 ## Gathering 개선 작업 (사용자 승인 Plan 2026-10-03) — Phase 진행과 대기 항목
 
 > 정본: 승인 Plan(세션 파일) · `tests/evidence/2026-10-03-phase1-baseline.md` · `docs/ai/CURRENT_STATE.md` 2026-10-03.

@@ -43,7 +43,7 @@ Redfish 에서 Adapter(어떻게 수집하는가)와 Credential(누구로 인증
 | # | 항목 | 내용 |
 |---|---|---|
 | A | **Generation 기반 Credential** | 불가. 요구사항에서 이미 제외됐지만, 사유를 기록해 둔다 — 세대를 아는 시점이 인증 이후라 순환이다. Redfish 는 HPE 만 예외(`redfish_gather.py` 의 `manager_type` hint) |
-| B | **Location 을 host 단위로 다르게** | 이번 설계 범위 밖. Jenkins 빌드 1회 = agent 1개 = Location 1개이며, `inventory.sh` 가 IP 외 모든 필드를 폐기한다(`os-gather/inventory.sh:86,93`). host 단위 Location 은 inventory 계약 변경이 선행돼야 한다 |
+| B | **Location 을 host 단위로 다르게** | 이번 설계 범위 밖. Jenkins 빌드 1회 = agent 1개 = Location 1개이며, `inventory.sh` 는 IP 만 연결에 쓴다(IP 외 필드는 2026-09-21 부터 `se_host_input` 으로 보존되지만 연결 · 자격증명에는 쓰이지 않는다). host 단위 Location 은 inventory 계약 변경이 선행돼야 한다 |
 | C | **Vendor 정규화 통합 없이 Redfish 전환** | 불가. 현재 정규화 구현이 3개이고(§8.4), Vault 경로가 vendor 에서 파생되는 순간 그 차이가 곧 오선택이다. **선행 필수조건**으로 다룬다 |
 | D | **`Jenkinsfile` 삭제 시 E2E Regression 게이트** | `Jenkinsfile:208-236` 의 Stage 4 는 `Jenkinsfile_portal` 에 대응물이 없다. 삭제하면 CI 회귀 게이트가 사라진다 (§12.4, §19-⑦) |
 
@@ -80,7 +80,7 @@ flowchart TD
     CB[Callback body loc<br/>:269]:::plain
     DEAD[Ansible 로 전달 안 됨<br/>extra-vars 0건]:::ng
 
-    INV[inventory.sh<br/>IP 외 전 필드 폐기]:::plain
+    INV[inventory.sh<br/>IP 만 연결에 사용]:::plain
 
     OSV[(vault/<loc>/os/linux.yml<br/>vault/<loc>/os/windows.yml)]:::store
     EXV[(vault/<loc>/esxi.yml)]:::store
@@ -222,7 +222,7 @@ ESXi 버전 / adapter_id / adapter priority.
 |---|---|---|
 | **extra-vars** | **채택** | 아래 4가지 |
 | 환경변수 | 기각 | `lookup('env','X')` 는 미설정 시 **조용히 `''`** 를 반환한다. Credential 범위를 정하는 값이 조용히 빈 문자열이 되면 잘못된(또는 없는) vault 를 가리키게 된다. 실패는 시끄러워야 한다 |
-| inventory hostvars | 기각 | `inventory.sh` 수정이 필요하고(`os-gather/inventory.sh:93` 이 `{"ansible_host": ip}` 만 생성), 그 파일은 rule 11(요청 target 수 == envelope 수) 의 입력이라 손대는 비용이 크다. 게다가 빌드 1회 = agent 1개 = Location 1개라 per-host 값이 필요 없다 |
+| inventory hostvars | 기각 | `inventory.sh` 수정이 필요하고(작성 당시 `os-gather/inventory.sh` 는 `{"ansible_host": ip}` 만 생성 — 2026-09-21 부터 `se_host_input` 도 함께 만든다), 그 파일은 rule 11(요청 target 수 == envelope 수) 의 입력이라 손대는 비용이 크다. 게다가 빌드 1회 = agent 1개 = Location 1개라 per-host 값이 필요 없다 |
 | 공통 config | 기각 | 전달 수단이 아니라 저장 수단이다. Location 값 자체는 실행 시점 입력이다 |
 
 채택 이유 4가지:

@@ -1,5 +1,14 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-08 — inventory_json 확장형 입력 문서화 (문서 · 예시만, 코드 변경 없음)
+
+| 구분 | 결과 |
+|---|---|
+| 문서 주장 대조 | inventory.sh 3종 `--list` 직접 실행 **36/36 PASS** — 확장형 → 채널 주 키 IP(os·esxi `service_ip`, redfish `bmc_ip`) · 단순형(service_ip) redfish 거부 · 혼합(한 서버 키 누락) 전체 거부 · 공백뿐 주 키 거부 · `""`/`null` → `ip` · 숫자 · CIDR · 앞자리 0 · 주 키↔`ip` 중복 · 배열 아님 거부 · 앞뒤 공백 제거 |
+| 동작 고정 시험 | `test_inventory_passthrough.py` + `test_input_acceptance_parity.py` **146 통과** (Windows 로컬 Python 3.13) |
+| 문서 · 예시 | `verify_docs_references.py` — 바꾼 파일에서 새 깨진 참조 0 (기존 17건은 다른 파일 · 범위 밖) · 바꾼 `.jsonc` 3개 주석 제거 후 JSON 파싱 PASS |
+| 미수행 | ansible syntax-check · 전체 pytest · Jenkins — 코드 변경 없음. 크기 한도(확장형 약 600대)는 Linux 환경변수 한도 계산값이며 실측 안 함(NEXT_ACTIONS) |
+
 ## 2026-10-08 — CI 실행시간 개선(2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · `21b24c0a` → production P8 `347ab74e`
 
 | 구분 | 결과 |
