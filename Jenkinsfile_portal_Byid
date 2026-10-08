@@ -119,7 +119,7 @@ def seLoadFinalizeLib() {
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[결과 확인] 보충 라이브러리(se_finalize.groovy)를 읽지 못해 보충 없이 진행합니다: ${e.message}"
+        echo "[결과 확인] 결과 복구 모듈을 읽지 못했습니다. 확보된 수집 결과로 처리를 계속합니다.\n  파일: scripts/jenkins/se_finalize.groovy\n  오류: ${e.message}"
         return null
     }
 }
@@ -137,7 +137,7 @@ def seLoadCanon(def lib) {
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie      // 취소·timeout 은 정본 읽기 실패가 아니다 — 삼키지 않는다 (3차 §4-2)
     } catch (Exception e) {
-        echo "[결과 확인] 실패 문구 정본을 읽지 못해 내장 복제값을 씁니다: ${e.message}"
+        echo "[결과 확인] 오류 안내 파일을 읽지 못해 기본 메시지를 사용합니다.\n  파일: common/vars/failure_reasons.yml, common/vars/supported_sections.yml\n  오류: ${e.message}"
         canon.source = 'fallback'
     }
     return canon
@@ -167,18 +167,20 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
         state.reason = null
     }
     if (!state.started_at) { state.started_at = seIsoUtc(seNowMs()) }
-    seLog("[Portal 전송] 결과를 ${endpoint} 로 보냅니다. 최대 ${maxAttempts}번 시도합니다${aborted ? '(취소된 빌드라 1번)' : ''}" +
-          (done ? ", 앞선 결과 처리에서 ${done}번 시도해 남은 시도는 ${Math.max(0, maxAttempts - done)}번입니다" : '') + ". 본문 ${body.length()}자.")
     boolean resolved = (state.delivered == true) || (state.refused == true)   // 10차 마무리 4.1: 확정된 전송은 재진입해도 다시 보내지 않는다
     if (resolved) {
-        seLog("[Portal 전송] 앞선 결과 처리에서 " + (state.delivered ? "HTTP ${state.http_code} 응답을 이미 받았습니다" : "Portal 이 요청을 거부(HTTP ${state.http_code})했습니다") + ". 다시 보내지 않습니다.")
+        seLog("[Portal 전송] 앞선 결과 처리에서 " + (state.delivered ? "HTTP ${state.http_code} 응답을 이미 받았습니다" : "Portal이 요청을 거부했습니다(HTTP ${state.http_code})") + ". 다시 보내지 않습니다.")
     } else if (done >= maxAttempts) {
         seLog("[Portal 전송] 앞선 결과 처리에서 이미 ${done}번 시도해 더 보내지 않습니다.")
     }
     for (int attempt = done + 1; !resolved && attempt <= maxAttempts; attempt++) {
         long left = deadlineSec - seNowSec()
         if (left < (C.PORTAL_MIN as long)) {
-            seLog("[Portal 전송] 남은 시간이 ${left}초라 ${attempt}번째 전송을 시작하지 않았습니다. 최소 ${C.PORTAL_MIN}초가 필요합니다.")
+            if ((state.tries as List).isEmpty()) {
+                seLog("[Portal 전송] Portal 전송을 시작하지 않았습니다.\n  처리 시간이 ${left}초밖에 남지 않았습니다. 전송에는 최소 ${C.PORTAL_MIN}초가 필요합니다.")
+            } else {
+                seLog("[Portal 전송] 처리 시간이 부족해 ${attempt}번째 전송은 시작하지 않았습니다.\n  남은 시간 ${left}초, 필요한 시간 최소 ${C.PORTAL_MIN}초")
+            }
             if (state.reason == null) { state.reason = 'no_time' }
             break
         }
@@ -186,7 +188,7 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
         long t0 = seNowMs()
         Map rec = [attempt: attempt, started_at: seIsoUtc(t0), timeout_sec: t]
         state.tries << rec
-        seLog("[Portal 전송] ${attempt}번째 전송을 시작합니다. 응답은 최대 ${seDuration(t)} 기다립니다.")
+        seLog("[Portal 전송] ${attempt}번째 전송을 시작합니다.${seCallbackStartDetail(attempt == done + 1, endpoint, aborted, done, maxAttempts, (long) t, C.PORTAL_WAIT as long)}")
         Integer status = null
         String problem = null
         try {
@@ -213,31 +215,31 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
             state.delivered = true
             state.reason = null
             state.delivered_show = seShowTime(t1)
-            seLog("[Portal 전송] HTTP ${code} 응답을 받았습니다. 소요 시간: ${took}. 2xx 는 Portal 이 요청을 받았다는 뜻입니다.")
+            seLog("[Portal 전송] HTTP ${code} 응답을 받았습니다. 소요 시간 ${took}.")
             break
         }
         if (code ==~ /4\d\d/ && !(code in ['408', '429'])) {
             rec.outcome = 'refused'
             state.reason = 'refused'
             state.refused = true          // 10차 마무리 4.1: 확정 거부 — 재진입해도 다시 보내지 않는다(408 · 429 는 재시도 대상이라 제외)
-            seLog("[Portal 전송] HTTP ${code} 응답을 받았습니다. Portal 이 요청을 거부해 다시 보내지 않습니다. 소요 시간: ${took}")
+            seLog("[Portal 전송] Portal이 요청을 거부했습니다. HTTP ${code}.\n  다시 보내지 않습니다.\n  소요 시간: ${took}")
             break
         }
         rec.outcome = 'failed'
         state.reason = 'failed'
         if (code) {
-            // http_request 는 연결 실패 · 응답 시간 초과도 408 로 돌려준다(quiet 라 도구의 설명 줄은 나오지 않는다)
-            String why = (code == '408') ? ' 연결하지 못했거나 응답 시간이 지났습니다(요청 도구는 연결 실패도 408 로 표시합니다).' : ''
-            seLog("[Portal 전송] ${attempt}번째 전송이 실패했습니다. HTTP ${code}.${why} 소요 시간: ${took}")
+            // http_request 는 연결 실패 · 응답 시간 초과도 408 로 돌려준다(quiet 라 도구의 설명 줄은 나오지 않는다) — 서버의 408 과 구분할 수 없어 도구 상태로 적는다
+            String why = (code == '408') ? '연결하지 못했거나 응답을 받지 못했습니다.\n  전송 도구 상태: 408' : "HTTP ${code} 응답을 받았습니다."
+            seLog("[Portal 전송] ${attempt}번째 전송에 실패했습니다.\n  ${why}\n  소요 시간: ${took}")
         } else {
             rec.error = problem.take(200)
-            seLog("[Portal 전송] ${attempt}번째 전송이 실패했습니다. 연결하지 못했거나 응답이 없었습니다: ${problem.take(200)}. 소요 시간: ${took}")
+            seLog("[Portal 전송] ${attempt}번째 전송에 실패했습니다.\n  연결하지 못했거나 응답을 받지 못했습니다.\n  오류: ${problem.take(200)}\n  소요 시간: ${took}")
         }
         if (attempt < maxAttempts) {
             long wait = Math.max(0L, Math.min(10L * attempt, deadlineSec - seNowSec() - (C.PORTAL_MIN as long)))
             if (wait > 0L) {
                 rec.retry_wait = [started_at: seIsoUtc(seNowMs()), sec: wait]
-                seLog("[Portal 전송] ${wait}초 기다린 뒤 ${attempt + 1}번째 전송을 합니다.")
+                seLog("[Portal 전송] ${wait}초 후 ${attempt + 1}번째 전송을 시도합니다.")
                 sleep(time: wait, unit: 'SECONDS')
             }
         }
@@ -254,38 +256,213 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
         if (t.outcome == 'interrupted' || (t.outcome == 'failed' && (t.http_code == null || "${t.http_code}" == '408'))) { unknownReceipt = true }
     }
     state.receipt = state.delivered ? 'delivered' : (!state.attempted ? 'not_attempted' : (unknownReceipt ? 'uncertain' : 'not_delivered'))
-    if (!state.delivered && state.attempted) {
-        seLog("[Portal 전송] 전달하지 못했습니다. 시도 ${state.attempts}번, 마지막 상태 ${state.http_code ?: '응답 없음'}.")
+    // 마지막 상태 문구는 기록(delivered · refused · 시도 기록)으로 고른다 — 거부는 위 줄이 이미 알렸다. 상태는 마지막 시도의 기록에서 읽는다
+    if (!state.delivered && state.attempted && !state.refused) {
+        seLog("[Portal 전송] 전송을 확인하지 못했습니다. 총 ${state.attempts}번 시도했습니다.\n  ${seLastTryText(state.tries as List)}")
     }
     return state
 }
 
-// 수집 종료 상태(outcome) · 실행 한계의 기준(limit_reason)을 사람이 읽는 말로 — 코드 값은 괄호에 남긴다(검색 · 대조용).
+// 수집 종료 상태(outcome) · 실행 한계의 기준(limit_reason)을 사람이 읽는 말로. 코드 값은 finalize_summary.json 과 [기술 기록] 줄에 있다.
 @NonCPS
 String seOutcomeText(String outcome) {
-    Map t = ['completed': '정상 종료', 'timeout': '누적 수집 실행 한계에 도달해 멈춤', 'timeout_killed': '누적 수집 실행 한계에 도달한 뒤 강제 종료',
+    Map t = ['completed': '정상 종료', 'timeout': '누적 수집 실행 한계에 도달해 멈춤', 'timeout_killed': '누적 수집 실행 한계에 도달한 뒤 강제 종료됨',
              'aborted': '사용자 취소로 중단', 'failed_run': 'Ansible 실행 실패', 'prep_failed': '실행 준비 실패(Ansible 환경 없음)',
              'process_lost': '수집 프로세스가 끝 기록 없이 끝남(원인 미확인)',
-             'infra_wait_expired': '실행 기반(Runner)이 대기 한도 안에 회복되지 않음',
-             'resume_impossible': '같은 Runner · 작업 폴더에서 이어서 수집할 수 없음',
-             'attempt_limit': '시도 하나의 실행 한계에 도달(멈춘 단계)', 'config_error': '실행 위치 설정 오류(등록된 Runner 없음)',
-             'interrupted_unknown': '수집 단계를 마치지 못함(시작 전에 끝났거나 원인 기록 없이 중단)']
-    return "${t[outcome] ?: '기록 없음'}(${outcome})".toString()
+             'infra_wait_expired': 'Runner가 대기 한도 안에 돌아오지 않음',
+             'resume_impossible': '같은 Runner와 작업 폴더에서 이어서 수집할 수 없음',
+             'attempt_limit': '시도 하나의 실행 한계에 도달함', 'config_error': '실행 위치 설정 오류(등록된 Runner 없음)',
+             'interrupted_unknown': '수집 단계를 마치지 못함']
+    return (t[outcome] ?: "기록 없음(${outcome})").toString()
 }
 
 @NonCPS
 String seLimitText(String reason) {
-    Map t = ['gather_limit': '누적 수집 실행 한계', 'infra_wait': '실행 기반 대기 한도']
+    Map t = ['gather_limit': '누적 수집 실행 한계', 'infra_wait': 'Runner 대기 한도']
     return (t[reason] ?: (reason ?: '-')).toString()
 }
 
 // 수집 시도 판정(scripts/gather_state.py) 을 사람이 읽는 말로 (9차)
 @NonCPS
 String seStateText(String state) {
-    Map t = ['runner_restart': 'Runner 가 다시 부팅됐습니다', 'runner_oom': '이 실행의 프로세스가 Runner 의 메모리 부족(OOM)으로 끝났습니다',
-             'agent_disconnect': 'Runner 와 Jenkins 의 연결이 끊겼습니다', 'process_lost': '수집 프로세스가 끝 기록 없이 사라졌습니다(원인 미확인)',
+    Map t = ['runner_restart': 'Runner가 다시 부팅됐습니다', 'runner_oom': '이 실행의 프로세스가 Runner의 메모리 부족(OOM)으로 끝났습니다',
+             'agent_disconnect': 'Runner와 Jenkins의 연결이 끊겼습니다', 'process_lost': '수집 프로세스가 끝 기록 없이 사라졌습니다(원인 미확인)',
              'running': '이전 수집이 아직 실행 중입니다']
     return (t[state] ?: (state ?: '-')).toString()
+}
+
+// ── 사람이 읽는 줄의 문장 helper (2026-10-09 로그 문구 정리) ─────────────────────────────────────────────
+//   한 사건 = 첫 줄 + 두 칸 들여쓴 상세 줄. 값만 받아 문장을 만든다(파이프라인 상태 · 파라미터를 직접 읽지 않는다). 동작 · 판정은 바꾸지 않는다.
+@NonCPS
+String seChannelName(String t) {
+    return (['os': 'OS', 'esxi': 'ESXi', 'redfish': 'Redfish'][t] ?: (t ?: '-')).toString()
+}
+
+// Portal 전송 시작 줄의 상세 — 주소는 이번 진입의 첫 시도에만, 취소 빌드 · 재진입 · 줄어든 응답 대기는 해당할 때만
+@NonCPS
+String seCallbackStartDetail(boolean first, String endpoint, boolean aborted, int done, int maxAttempts, long waitSec, long portalWait) {
+    List rows = []
+    if (first) {
+        rows << "주소: ${endpoint}".toString()
+        if (aborted) { rows << '취소된 빌드라 한 번만 보냅니다.' }
+        if (done > 0) { rows << "앞선 결과 처리에서 ${done}번 시도했습니다. 남은 시도: ${Math.max(0, maxAttempts - done)}번".toString() }
+    }
+    if (waitSec < portalWait) { rows << "응답 대기: 최대 ${seDuration(waitSec)}".toString() }
+    return rows ? ('\n  ' + rows.join('\n  ')) : ''
+}
+
+// 마지막 시도의 상태 — 요청 도구는 연결 실패 · 응답 시간 초과도 408 로 표시한다
+@NonCPS
+String seLastTryText(List tries) {
+    Map last = (tries && (tries[tries.size() - 1] instanceof Map)) ? (Map) tries[tries.size() - 1] : [:]
+    if (last.outcome == 'interrupted') { return '마지막 시도: 응답을 받기 전에 중단됨' }
+    if (last.http_code != null) {
+        return ("${last.http_code}" == '408') ? '마지막 전송 도구 상태: 408' : "마지막 응답: HTTP ${last.http_code}".toString()
+    }
+    return last.error ? "마지막 오류: ${last.error}".toString() : '마지막 시도: 응답 없음'
+}
+
+// 무엇을 기다리는지 — 기존 대기 사유(기록값)에서 고른다. 쉬는 구간(대상 '-')은 null
+@NonCPS
+String seWaitSubject(String reason, String target) {
+    String r = (reason ?: '').toString()
+    if (target == '-') { return null }
+    if (r.startsWith('결과 처리 노드')) { return '결과를 처리할 Jenkins 노드' }
+    if (r.contains('복구 대기')) { return '수집을 이어서 실행할 Runner' }
+    return '수집을 실행할 Runner'
+}
+
+@NonCPS
+String sePauseReasonText(String why) {
+    Map t = ['작업 폴더가 아직 사용 중': '작업 폴더를 아직 다른 실행이 쓰고 있습니다.',
+             '진척 없이 Runner 측 장애가 반복돼 다시 시도하기 전': 'Runner 쪽 장애가 진척 없이 반복됐습니다.',
+             '결과 처리 노드 장애가 진척 없이 반복돼 다시 시도하기 전': '결과 처리 노드의 장애가 진척 없이 반복됐습니다.']
+    return (t[why] ?: (why ?: '-')).toString()
+}
+
+// 대기 구간이 끝났을 때의 첫 줄과 상세 줄(대상 · 사유)
+@NonCPS
+String seWaitDoneText(String reason, String target, String result) {
+    String what = seWaitSubject(reason, target)
+    String head
+    if (result == 'acquired') {
+        head = what ? "기다리던 ${what}를 확보했습니다.".toString() : '대기를 마쳤습니다.'
+    } else if (result == 'expired') {
+        head = '기다릴 수 있는 시간을 다 썼습니다.'
+    } else if (result == 'interrupted') {
+        head = '빌드가 중단돼 기다리기를 멈췄습니다.'
+    } else if (result == 'paused') {
+        head = '쉬는 시간을 마쳤습니다. 다시 시도합니다.'
+    } else {
+        head = "대기를 마쳤습니다(${result}).".toString()
+    }
+    List rows = []
+    if (what && result != 'acquired') { rows << "기다린 것: ${what}".toString() }
+    if (what) { rows << "대상: ${target}".toString() }
+    if (!what && result != 'paused') { rows << "사유: ${sePauseReasonText(reason)}".toString() }
+    return head + (rows ? ('\n  ' + rows.join('\n  ')) : '')
+}
+
+// 결과 처리의 단계 표식(기록값)을 사람이 읽는 말로
+@NonCPS
+String seFinStepText(String mark) {
+    Map t = ['recover': '결과 회수', 'assemble': '결과 조립', 'send': 'Portal 전송', 'summary': '실행 요약 작성', 'archive': '결과 파일 보관', 'done': '마무리']
+    return (t[mark] ?: (mark ?: '-')).toString()
+}
+
+// 결과 보존 결과 — 정상은 한 줄, 실패한 동작과 그 영향은 상세 줄로
+@NonCPS
+String sePreserveText(boolean archived, boolean stashed, boolean manifestOk, boolean hasResult) {
+    List rows = []
+    String head
+    if (archived && stashed) {
+        head = '결과를 빌드에 저장하고 다음 단계로 전달했습니다.'
+    } else if (stashed) {
+        head = '결과 파일을 빌드 기록에 저장하지 못했습니다.'
+        rows << '다음 단계에는 결과를 전달했습니다.'
+        rows << '일부 원본 파일은 빌드 기록에서 확인할 수 없습니다.'
+    } else if (archived) {
+        head = '결과를 빌드에 저장했지만 다음 단계로 전달하지 못했습니다.'
+        rows << '결과 확인 단계는 빌드에 저장된 파일에서 결과를 찾습니다.'
+    } else {
+        head = '결과를 빌드에 저장하지도 다음 단계로 전달하지도 못했습니다.'
+        rows << '작업 폴더를 남기고, 결과 확인 단계는 접수 목록으로 실패 결과를 만듭니다.'
+    }
+    if (!manifestOk) { rows << '접수 목록: 없거나 다른 빌드의 것입니다.' }
+    if (!hasResult) { rows << '결과 파일: 없습니다.' }
+    return head + (rows ? ('\n  ' + rows.join('\n  ')) : '')
+}
+
+// Portal 전송은 했지만 확인할 것이 있을 때의 사유 한 가지(가장 중요한 것) — 사실인 문장만 고른다
+@NonCPS
+String seAfterSendWarnText(List warnings, int filled, int checkpoint, String outcome) {
+    if (warnings.contains('count_mismatch')) { return '보낼 결과가 없는 대상이 있습니다' }
+    if (filled > 0 || checkpoint > 0) { return '수집을 마치지 못한 대상이 있습니다' }
+    if (outcome != 'completed') { return "수집이 정상적으로 끝나지 않았습니다(${seOutcomeText(outcome)})".toString() }
+    if (warnings.contains('layer_b_unavailable')) { return '결과 복구 모듈을 쓰지 못했습니다' }
+    if (warnings.contains('body_not_saved')) { return '전송 본문을 파일로 저장하지 못했습니다' }
+    return '확인할 내용이 있습니다'
+}
+
+// 마치지 못한 대상이 생긴 원인 — 수집 종료 상태(outcome)에서. 수집을 시작했는지는 SE_GATHER_STARTED_AT 기록으로 넘겨받는다
+@NonCPS
+String seUnfinishedCause(String outcome, boolean started) {
+    Map t = ['aborted': '사용자 취소로', 'timeout': '수집 실행 한계에 도달해', 'timeout_killed': '수집 실행 한계에 도달해',
+             'infra_wait_expired': 'Runner가 대기 한도 안에 돌아오지 않아', 'resume_impossible': '같은 Runner에서 이어서 수집할 수 없어',
+             'attempt_limit': '시도 하나의 실행 한계에 도달해', 'process_lost': '수집 프로세스가 끝 기록 없이 끝나',
+             'failed_run': 'ansible-playbook이 비정상 종료해', 'prep_failed': '실행 준비에 실패해', 'config_error': '등록된 Runner가 없어',
+             'completed': '수집 결과가 없어']
+    if (t[outcome]) { return t[outcome].toString() }
+    return started ? '수집 단계가 원인 기록 없이 끝나' : '수집을 시작하기 전에 빌드가 끝나'
+}
+
+// 빌드 끝 요약 — 머리 줄 + 두 칸 들여쓴 행. 행은 사실이 있을 때만 쓴다(값은 seBuildSummary 가 모아 넘긴다).
+@NonCPS
+String seSummaryText(Map v) {
+    Map fin = (v.fin instanceof Map) ? (Map) v.fin : null
+    List rows = []
+    String outcome = (v.outcome ?: '').toString()
+    if (fin != null) {
+        rows << "대상: ${seChannelName((v.channel ?: '').toString())} ${fin.accepted ?: 0}대, 실행 위치 ${v.loc ?: '-'}".toString()
+        rows << ("수집 결과: 성공 ${fin.success ?: 0}대, 부분 성공 ${fin.partial ?: 0}대, 실패 ${fin.failed ?: 0}대" +
+                 ((fin.missing ?: 0) ? ", 보낼 결과 없음 ${fin.missing}대" : '')).toString()
+        int unfinished = (fin.unfinished ?: 0) as int
+        // 수집을 시작하지 않은 빌드는 아래 '수집 시간' 행이 그렇게 적는다 — 미완료 행으로 같은 말을 반복하지 않는다
+        if (unfinished > 0 && v.started == true) {
+            rows << "미완료: ${seUnfinishedCause(outcome, true)} ${unfinished}대의 수집을 마치지 못했습니다.".toString()
+        } else if (unfinished == 0 && outcome && outcome != 'completed' && !(outcome == 'aborted' && v.res == 'ABORTED')) {
+            rows << "수집 종료: ${seOutcomeText(outcome)}".toString()
+        }
+    }
+    boolean hasExec = (v.execSec != null)
+    int tries = (v.tries ?: 0) as int
+    rows << ("소요 시간: 전체 ${seDuration((v.took ?: 0) as long)}" +
+             (hasExec ? ", 수집 ${seDuration(v.execSec as long)}${tries > 1 ? '(시도 ' + tries + '번 합계)' : ''}" : '') +
+             ", 실행 대기 ${seDuration((v.waited ?: 0) as long)}").toString()
+    if (!hasExec) {
+        rows << ((v.started == true) ? '수집 시간: 실행 기록이 없어 확인할 수 없습니다.' : '수집 시간: 수집을 시작하지 않았습니다.')
+    }
+    if (fin != null) {
+        String send
+        if (fin.delivered == true) {
+            send = "HTTP ${fin.http_code}, 응답 시각 ${fin.delivered_show ?: '-'}".toString()
+        } else if (fin.refused == true) {
+            send = "거부됨, HTTP ${fin.http_code}".toString()
+        } else {
+            send = (fin.attempted == true) ? '확인하지 못함' : '시작하지 않음'
+        }
+        rows << "Portal 전송: ${send}".toString()
+        List w = (fin.warnings instanceof List) ? (List) fin.warnings : []
+        if (w.contains('preserve_failed')) { rows << '결과 보존: 빌드 기록 저장과 다음 단계 전달이 모두 실패했습니다.' }
+        if (w.contains('preserve_archive_failed')) { rows << '결과 보존: 빌드 기록에 저장하지 못했습니다. 전달된 결과로 처리했습니다.' }
+        if (w.contains('body_not_saved')) { rows << '전송 본문: 파일로 저장하지 못했습니다.' }
+        if (w.contains('layer_b_unavailable')) { rows << '결과 복구: 모듈을 읽지 못해 쓰지 않았습니다.' }
+        if (fin.incomplete == true) { rows << '결과 확인: 마치지 못했습니다.' }
+    } else {
+        rows << ((v.manifest == true) ? '결과 확인: 마치지 못해 결과 요약이 없습니다.' : 'Portal 전송: 접수 전에 끝나 보낸 결과가 없습니다.')
+    }
+    if (v.recProblem) { rows << "기록 읽기: 대기 기록과 실행 기록을 읽지 못했습니다(${v.recProblem}).".toString() }
+    return "[요약] ${v.head} (${v.res})\n  " + rows.join('\n  ')
 }
 
 // 시도 판정 → 수집 종료 상태(outcome) · 한계 사유 (9차). 실행 기반 장애(다시 시도하는 상태)는 여기 오지 않는다.
@@ -421,10 +598,9 @@ Map seReadGatherRun() {
 //   stash 는 전달 수단일 뿐이다(결과 확인 단계의 unstash → unarchive 가 덮는다). 취소 · 시간 한계(interruption)는 어느 단계에서도 삼키지 않는다.
 def sePreserveGatherOutput() {
     String outcome = env.SE_GATHER_OUTCOME ?: 'interrupted_unknown'
-    seLog("[결과 보존] 시작합니다. 수집 종료 상태: ${seOutcomeText(outcome)}")
     int layerA = -1
     try {
-        layerA = sh(returnStatus: true, label: '결과 정리 (서버마다 결과 한 줄)', script: """#!/bin/bash
+        layerA = sh(returnStatus: true, label: '수집 결과 정리', script: """#!/bin/bash
             set +e
             cd "\${WORKSPACE}"
             . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
@@ -434,10 +610,13 @@ def sePreserveGatherOutput() {
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[결과 보존] 결과 정리를 실행하지 못했습니다. 보존은 계속합니다: ${e.message}"
+        echo "[결과 보존] 결과 정리를 실행하지 못했습니다. 결과 보존은 계속합니다.\n  오류: ${e.message}"
     }
-    String layerAText = (layerA == 0) ? '마쳤습니다' : ((layerA == 2) ? '마쳤습니다. 형태가 틀린 줄은 뺐습니다' : '하지 못했습니다. 결과 확인 단계가 원본 결과로 다시 조립합니다')
-    echo "[결과 보존] 결과 정리를 ${layerAText}. (종료 코드 ${layerA})"
+    // 정리 결과 — 정상(0)은 [finalize] 줄이 이미 알렸다. 실행 자체를 못 했으면(-1) 위 줄이 알렸다
+    if (layerA > 0) {
+        echo((layerA == 2) ? '[결과 보존] 결과를 정리하면서 형태가 틀린 줄을 뺐습니다.'
+                           : "[결과 보존] 결과 정리를 하지 못했습니다. 결과 확인 단계에서 원본 결과로 다시 조립합니다.\n  종료 코드: ${layerA}")
+    }
     seCleanOldWorkspaces()
     // 보관할 파일 — 지금 있는 것만 이름으로 지정한다. 첫 이름은 gather_output.json 이다(있으면).
     List names = ['gather_output.json', 'gather_manifest.json', 'gather_rc.txt', 'gather_run.json', 'gather_progress.jsonl', 'gather_checkpoint.jsonl',
@@ -470,7 +649,7 @@ def sePreserveGatherOutput() {
             throw fie
         } catch (Exception e) {
             archiveProblem = (e.message ?: e.getClass().simpleName).toString()
-            echo "[결과 보존] 보관(archive)에 실패했습니다. 전달(stash)은 계속합니다: ${archiveProblem}"
+            echo "[결과 보존] 결과 파일을 빌드 기록에 저장하지 못했습니다.\n  오류: ${archiveProblem}"
         }
     } else {
         archiveProblem = '보관할 결과 파일이 없습니다'
@@ -486,7 +665,7 @@ def sePreserveGatherOutput() {
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[결과 보존] 전달(stash)에 실패했습니다. 결과 확인 단계는 보관본(archive)에서 찾습니다: ${e.message}"
+        echo "[결과 보존] 결과를 다음 단계로 전달하지 못했습니다.\n  오류: ${e.message}"
     }
     // 마지막 보존 표식 (10차 N1) — 이 빌드의 결과 파일을 보관(archive) 또는 전달(stash) 중 하나라도 넘겼으면, 뒤에 실행 기반 오류로 끊겨도
     //   다시 시도하지 않는다(결과 확인 단계가 그 수단으로 회수한다). 하나의 실패가 다른 유효한 수단을 무효로 하지 않는다.
@@ -499,8 +678,7 @@ def sePreserveGatherOutput() {
     env.SE_PRESERVE_MANIFEST  = "${manifestOk}"
     env.SE_PRESERVE_HASRESULT = "${hasResult}"
     env.SE_PRESERVE_FILES     = archived ? archiveList.join(',') : ''
-    seLog("[결과 보존] 끝났습니다. 보관(archive) ${archived ? '완료' : '실패'}, 전달(stash) ${stashed ? '완료' : '실패'}, " +
-          "접수 목록 ${manifestOk ? '이 빌드 것 확인' : '없음 또는 다른 빌드 것'}, 결과 파일 ${hasResult ? '있음' : '없음'}.")
+    seLog("[결과 보존] ${sePreserveText(archived, stashed, manifestOk, hasResult)}")
     echo "[기술 기록] 결과 보존: archived=${archived} stashed=${stashed} manifestOk=${manifestOk} hasResult=${hasResult} files=${archiveList.join(',') ?: '-'}"
     // 작업 폴더 소유 기록에 끝 시각과 보존 여부를 적는다 — 이 폴더가 남으면 오래된 작업 폴더 정리가 이 기록으로 판단한다
     try {
@@ -508,20 +686,19 @@ def sePreserveGatherOutput() {
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[결과 보존] 작업 폴더 소유 기록을 쓰지 못했습니다: ${e.message}"
+        echo "[결과 보존] 작업 폴더 소유 기록을 쓰지 못했습니다.\n  오류: ${e.message}"
     }
     if (preserved) {
         deleteDir()
         // durable task 제어 폴더(<작업 폴더>@tmp) — 이 빌드의 sh 가 끝났으므로 같이 지운다(Jenkins 는 빈 폴더를 남긴다)
         dir("${env.WORKSPACE}@tmp") { deleteDir() }
     } else {
-        echo "[결과 보존] 보존을 확인하지 못해 작업 폴더를 지우지 않고 남깁니다: ${env.WORKSPACE}. " +
-             "${env.NODE_NAME ?: 'Runner'} 의 이 폴더는 하루 한 번 도는 정리가 ${seConstants().KEEP_DAYS}일 뒤 결과 파일만 남기고 줄입니다."
+        echo "[결과 보존] 결과 보존을 확인하지 못해 작업 폴더를 지우지 않고 남겼습니다.\n  위치: ${env.NODE_NAME ?: 'Runner'}:${env.WORKSPACE}\n  ${seConstants().KEEP_DAYS}일이 지나면 결과 파일만 남기고 정리합니다."
     }
     if (!archived && !stashed) {
-        unstable("[결과 보존] 결과를 보존하지 못했습니다. 보관과 전달이 모두 실패했습니다. 작업 폴더를 남기고, 결과 확인 단계는 접수 목록으로 실패 결과를 만듭니다.")
+        unstable("[결과 보존] 결과를 보존하지 못했습니다. 빌드 기록 저장과 다음 단계 전달이 모두 실패했습니다.")
     } else if (!archived) {
-        unstable("[결과 보존] 보관(archive)에 실패해 전달(stash)로만 넘겼습니다. 원본 결과 일부(gather_output.json 등)는 빌드 기록에 남지 않습니다.")
+        unstable("[결과 보존] 결과 파일을 빌드 기록에 저장하지 못했습니다. 다음 단계에는 결과를 전달했습니다.")
     }
 }
 
@@ -537,11 +714,11 @@ def seSnapshotGatherOutput() {
     try {
         stash(name: 'gather-output', includes: (present ? present.join(',') : 'gather_manifest.json'), allowEmpty: true)
         env.SE_PRESERVE_STASHED = 'true'
-        echo "[결과 보존] 다시 시도하기 전에 지금까지의 결과를 넘겨 두었습니다(stash: ${present ? present.join(', ') : '-'})."
+        echo "[결과 보존] 다시 시도하기 전에 지금까지의 결과를 결과 처리 단계로 넘겨 두었습니다.\n  파일: ${present ? present.join(', ') : '-'}"
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[결과 보존] 중간 결과를 넘기지 못했습니다(stash). 다음 시도 뒤 다시 넘깁니다: ${e.message}"
+        echo "[결과 보존] 중간 결과를 넘기지 못했습니다. 다음 시도 뒤 다시 넘깁니다.\n  오류: ${e.message}"
     }
 }
 
@@ -552,7 +729,7 @@ def seSnapshotGatherOutput() {
 def seCleanOldWorkspaces() {
     Map C = seConstants()
     try {
-        sh(returnStatus: true, label: '오래된 작업 폴더 정리 (하루 한 번)', script: """#!/bin/bash
+        sh(returnStatus: true, label: '오래된 작업 폴더 정리', script: """#!/bin/bash
             set +e
             cd "\${WORKSPACE}"
             . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
@@ -563,7 +740,7 @@ def seCleanOldWorkspaces() {
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[작업 폴더 정리] 실행하지 못했습니다(이 빌드의 결과와는 무관합니다): ${e.message}"
+        echo "[작업 폴더 정리] 정리를 실행하지 못했습니다. 수집 결과에는 영향이 없습니다.\n  오류: ${e.message}"
     }
 }
 
@@ -613,15 +790,15 @@ def seCleanOldFinalizerDirs(Map C) {
             }
         }
         if (deleted || kept) {
-            echo "[작업 폴더 정리] controller: ${C.KEEP_DAYS}일이 지난 결과 확인 폴더 ${deleted}개를 지웠습니다." +
-                 (kept ? " 보관을 확인하지 못해 남긴 폴더 ${kept.size()}개: ${kept.join(', ')}. 위치: ${pwd()}. 내용을 확인한 뒤 지우세요." : '')
+            echo "[작업 폴더 정리] Jenkins 결과 작업 폴더: ${C.KEEP_DAYS}일이 지난 폴더 ${deleted}개를 지웠습니다." +
+                 (kept ? "\n  보관을 확인하지 못해 남긴 폴더: ${kept.size()}개 (${kept.join(', ')})\n  위치: ${pwd()}\n  내용을 확인한 뒤 지우세요." : '')
         } else {
-            echo "[작업 폴더 정리] controller: 정리할 결과 확인 폴더가 없습니다."
+            echo "[작업 폴더 정리] Jenkins 결과 작업 폴더: 정리할 항목이 없습니다."
         }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[작업 폴더 정리] controller 정리를 하지 못했습니다(이 빌드의 결과와는 무관합니다): ${e.message}"
+        echo "[작업 폴더 정리] Jenkins 결과 작업 폴더를 정리하지 못했습니다. 수집 결과에는 영향이 없습니다.\n  오류: ${e.message}"
     }
 }
 
@@ -640,7 +817,7 @@ def seFinalizeAndCallback() {
     long tPostMs = seNowMs()
     String manifestJson = env.SE_MANIFEST_JSON ?: ''
     if (!manifestJson.trim()) {
-        seLog('[결과 확인] 접수된 요청이 없어 Portal 로 보낼 결과가 없습니다. 입력 확인 단계에서 끝난 요청입니다.')
+        seLog('[결과 확인] 접수된 요청이 없어 Portal로 보낼 결과가 없습니다. 입력 확인 단계에서 요청이 끝났습니다.')
         return null
     }
     def manifest = readJSON text: manifestJson
@@ -676,9 +853,11 @@ def seFinalizeAndCallback() {
                         seCleanOldFinalizerDirs(C)
                         dir("fin-${env.BUILD_NUMBER}") {
                             seFinMarker(fs, tIn, [:])
-                            seLog("[결과 확인] 시작합니다${(fs.entries as int) > 1 ? '(' + fs.entries + '번째 진입)' : ''}. 접수 ${ips.size()}대, 수집 종료 상태: ${seOutcomeText(outcome)}. " +
-                                  "결과 처리 노드를 기다린 시간 ${tIn - (long) (tPostMs / 1000L)}초, 이 단계의 남은 한계 ${seDuration((long) (leftMs / 1000L))}(노드를 얻은 뒤부터 센 합)." +
-                                  ((fs.entries as int) > 1 ? " 앞 진입에서 결과 처리에 ${seDuration((long) ((fs.exec_ms as long) / 1000L))}을 썼습니다." : ''))
+                            if ((fs.entries as int) > 1) {
+                                seLog("[결과 확인] 결과 확인을 이어서 합니다(${fs.entries}번째 진입). 접수 ${ips.size()}대.\n  앞 진입의 처리 시간: ${seDuration((long) ((fs.exec_ms as long) / 1000L))}\n  남은 처리 시간: ${seDuration((long) (leftMs / 1000L))}")
+                            } else {
+                                seLog("[결과 확인] 접수 ${ips.size()}대의 결과를 확인합니다.")
+                            }
                             fs.result = seFinalizeIn(C, manifestJson, ips, outcome, tPostMs, tIn, tIn + (long) (leftMs / 1000L), infra, fs)
                         }
                     }
@@ -693,9 +872,10 @@ def seFinalizeAndCallback() {
             long lostAt = (r.lost_at_ms ?: seNowMs()) as long
             fs.lost << [at: seIsoUtc(lostAt), error: r.error, mark: fs.mark]
             waitFrom = lostAt
-            seLog("[결과 확인] 결과 처리 노드에서 실행 기반 오류로 이번 처리를 이어 가지 못했습니다(감지 ${seShowTime(lostAt)}, 단계 ${fs.mark ?: '-'}${r.error ? ', ' + r.error : ''}). " +
-                  ((fs.cb?.delivered == true) ? 'Portal 전송은 이미 확인돼 다시 보내지 않습니다. ' : '') +
-                  "결과 처리 노드를 다시 기다려 같은 폴더에서 이어서 처리합니다. 지금까지 결과 처리 시간 ${seDuration((long) ((fs.exec_ms as long) / 1000L))}.")
+            seLog("[결과 확인] 결과를 처리하던 Jenkins 노드에 문제가 생겨 처리가 끊겼습니다.\n  감지 시각: ${seShowTime(lostAt)}\n  끊긴 단계: ${seFinStepText(fs.mark as String)}" +
+                  (r.error ? "\n  오류: ${r.error}" : '') +
+                  ((fs.cb?.delivered == true) ? '\n  Portal 전송은 이미 확인돼 다시 보내지 않습니다.' : '') +
+                  "\n  노드가 돌아오면 같은 폴더에서 이어서 처리합니다. 지금까지 처리 시간: ${seDuration((long) ((fs.exec_ms as long) / 1000L))}")
             // 같은 단계에서 진척 없이 다시 끊기면 쉰다 — 쉰 시간은 실행 기반 대기 합에 넣는다(수집 반복과 같다). 취소된 빌드는 쉬지 않는다
             if (!aborted && lastMark != null && lastMark == fs.mark) {
                 backoff = (backoff > 0L) ? Math.min(backoff * 2L, C.BACKOFF_MAX as long) : Math.min(300L, C.BACKOFF_MAX as long)
@@ -708,7 +888,7 @@ def seFinalizeAndCallback() {
         }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         // 사용자 취소 · 이 단계의 실행 한계 — 삼키지 않는다. 지금까지 보낸 것만 남긴다
-        seLog("[결과 확인] 중단으로 결과 확인을 마치지 못했습니다. Portal 전송: ${seCbState(fs.cb)}.")
+        seLog("[결과 확인] 빌드가 중단돼 결과 확인을 마치지 못했습니다.\n  Portal 전송: ${seCbState(fs.cb)}")
         throw fie
     }
     if (fs.result != null) { return fs.result }
@@ -726,24 +906,27 @@ def seFinMarker(Map fs, long tIn, Map extra) {
 // Portal 전송 상태를 한 줄로 — 결과 확인을 마치지 못했을 때 무엇을 보냈는지 적는다
 @NonCPS
 String seCbState(Map cb) {
-    if (cb?.delivered == true) { return "HTTP ${cb.http_code} 응답 받음(${cb.delivered_show})".toString() }
+    if (cb?.delivered == true) { return "HTTP ${cb.http_code} 응답을 받음 (${cb.delivered_show})".toString() }
+    if (cb?.refused == true) { return "Portal이 요청을 거부함 (HTTP ${cb.http_code})".toString() }
     int n = ((cb?.tries ?: []) as List).size()
-    return n ? "${n}번 시도했지만 전달을 확인하지 못함".toString() : '보내지 않음'
+    return n ? "${n}번 시도했지만 전송을 확인하지 못함".toString() : '시작하지 않음'
 }
 
 // 결과 확인을 끝내지 못했을 때 (10차 R1) — 결과 처리 노드를 끝내 얻지 못함 · 결과 처리 실행 한계를 다 씀 · 취소된 빌드의 노드 대기를 다 씀.
 //   전송을 확인했으면 UNSTABLE(마무리만 못 함), 아니면 FAILURE. 보낸 것과 결과가 남은 곳을 적는다. 성공으로 끝내지 않는다.
 Map seFinalizeIncomplete(Map C, Map fs, List ips, String stop) {
     boolean delivered = (fs.cb?.delivered == true)
-    Map why = ['expired'   : '결과 처리 노드(built-in)를 기다릴 수 있는 시간 안에 얻지 못해',
-               'limit'     : "결과 처리 실행 한계(${seDuration(C.FINALIZER as long)}, 진입 합)를 다 써서",
-               'abort_wait': "취소된 빌드의 결과 처리 노드 대기(${seDuration(C.ABORT_NODE_WAIT as long)})를 다 써서",
-               'unknown'   : '결과 처리 노드에서 처리 결과 없이 돌아와']
-    seLog("[결과 확인] ${why[stop] ?: why.unknown} 결과 확인을 마치지 못했습니다. Portal 전송: ${seCbState(fs.cb)}. " +
-          "수집 결과는 이 빌드의 stash와 보관본(gather_output.json 등)에 남아 있습니다" +
-          ((fs.entries as int) > 0 ? ". 만든 본문은 controller 의 Job 작업 폴더 fin-${env.BUILD_NUMBER}/callback_body.json 에 있을 수 있습니다." : '.'))
+    Map why = ['expired'   : '결과를 처리할 Jenkins 노드(built-in)를 기다릴 수 있는 시간 안에 얻지 못했습니다',
+               'limit'     : "결과 처리 시간 한계(${seDuration(C.FINALIZER as long)})를 다 썼습니다",
+               'abort_wait': "취소된 빌드라 결과 처리 노드를 ${seDuration(C.ABORT_NODE_WAIT as long)}까지만 기다렸습니다",
+               'unknown'   : '결과 처리 노드에서 처리 결과 없이 돌아왔습니다']
+    // 수집 결과가 어디 있는지 — 보존 기록으로 고른다(보존이 실패했는데 남아 있다고 쓰지 않는다)
+    boolean handedOver = (env.SE_PRESERVE_ARCHIVED == 'true' || env.SE_PRESERVE_STASHED == 'true' || env.SE_FINAL_PRESERVED == 'true')
+    seLog("[결과 확인] 결과 확인을 마치지 못했습니다. ${why[stop] ?: why.unknown}.\n  Portal 전송: ${seCbState(fs.cb)}" +
+          (handedOver ? '\n  수집 결과: 이 빌드의 전달본(stash)과 보관 파일(gather_output.json 등)' : '\n  수집 결과: 이 빌드에서 결과 보존을 확인하지 못했습니다') +
+          ((fs.entries as int) > 0 ? "\n  전송 본문: Jenkins Job 작업 폴더의 fin-${env.BUILD_NUMBER}/callback_body.json (만들었다면)" : ''))
     if (delivered) {
-        unstable("[결과 확인] Portal 전송은 했지만(HTTP ${fs.cb.http_code}) 결과 확인을 마치지 못했습니다. 위의 [결과 확인] 줄을 보세요.")
+        unstable("[결과 확인] Portal 전송은 했지만(HTTP ${fs.cb.http_code}) 결과 확인을 마치지 못했습니다.")
     } else {
         currentBuild.result = 'FAILURE'
     }
@@ -751,6 +934,7 @@ Map seFinalizeIncomplete(Map C, Map fs, List ips, String stop) {
     return [accepted: ips.size(), success: (c.success ?: 0), partial: (c.partial ?: 0), failed: (c.failed ?: 0),
             missing: c.containsKey('missing') ? c.missing : ips.size(),
             attempted: (fs.cb?.attempted == true), delivered: delivered, http_code: fs.cb?.http_code, delivered_show: fs.cb?.delivered_show,
+            refused: (fs.cb?.refused == true), receipt: fs.cb?.receipt,
             warnings: [delivered ? 'finalize_incomplete' : ((stop == 'expired') ? 'finalize_node_unavailable' : 'finalize_not_delivered')],
             incomplete: true]
 }
@@ -769,20 +953,24 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[결과 확인] 수집 단계가 넘긴 결과(stash)를 받지 못해 빌드 보관본(archive)에서 찾습니다: ${e.message}"
+        echo "[결과 확인] 수집 단계에서 전달받은 결과가 없어 빌드에 저장된 결과 파일에서 찾습니다.\n  오류: ${e.message}"
     }
     if (source == 'none') {
         // 파일별로 회수한다 — 한 mapping 에 없는 파일이 섞이면 unarchive 가 통째로 실패해 이미 꺼낸 파일도 반영되지 않았다 (Harness #30)
+        List notFound = []
         for (String f in recoverFiles) {
             try {
                 unarchive mapping: [(f): f]
             } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                 throw fie
             } catch (Exception e) {
-                echo "[결과 확인] 빌드 보관본에 ${f} 이(가) 없습니다 (${e.message})"
+                notFound << "${f}: ${e.message}".toString()
             }
         }
         if (fileExists('gather_final.jsonl') || fileExists('gather_output.json') || fileExists('gather_checkpoint.jsonl')) { source = 'archive' }
+        if (notFound) {
+            echo "[결과 확인] ${source == 'archive' ? '빌드에 저장된 결과 파일 중 일부가 없습니다.' : '빌드에 저장된 결과 파일도 없습니다.'}\n  " + notFound.join('\n  ')
+        }
     }
     // ② 줄 집합: 수집 단계의 정리 결과(Layer A, exit 0/2) 우선 → 없으면 보충 조립(Layer B) → 라이브러리가 없으면 원본 줄 검문.
     //    손상 입력: 정리 결과 파싱 실패와 대상당 1줄 미달은 다음 유효 입력(Layer B)으로 넘기고 damage 에 적는다.
@@ -818,7 +1006,7 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
         } catch (Exception e) {
             layerA = 'report_unreadable'
             damage << "layer_a_unreadable ${e.getClass().simpleName}".toString()
-            echo "[결과 확인] 정리된 결과(gather_final.jsonl)를 읽지 못해 원본 결과로 다시 조립합니다: ${e.message}"
+            echo "[결과 확인] 정리된 결과 파일(gather_final.jsonl)을 읽지 못해 원본 결과로 다시 조립합니다.\n  오류: ${e.message}"
         }
     }
     if (lines == null) {
@@ -869,7 +1057,7 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[결과 확인] 전송 본문을 파일로 남기지 못했습니다. 전송은 그대로 합니다: ${e.message}"
+        echo "[결과 확인] 전송 본문을 파일로 저장하지 못했습니다. 전송은 계속합니다.\n  오류: ${e.message}"
     }
     // 요약 — 줄 집합을 비우기 전에 만들고(전송 결과 · 경고는 아래에서 더한다), 전송 뒤에 기록한다.
     //   status_counts 는 보낼 결과의 status 를 직접 센 값이다 — kept(수집이 남긴 결과 수)는 성공 수가 아니다.
@@ -915,7 +1103,7 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
             seLog("[Portal 전송] 앞선 결과 처리에서 HTTP ${cb.http_code} 응답을 이미 받았습니다(${cb.delivered_show}). 다시 보내지 않습니다.")
         } else if (cb.refused == true) {
             // 10차 마무리 4.1: 앞선 진입에서 Portal 이 확정 거부했다 — 재진입해도 같은 요청을 다시 POST 하지 않는다(408 · 429 는 refused 가 아니라 재시도 대상).
-            seLog("[Portal 전송] 앞선 결과 처리에서 Portal 이 요청을 확정 거부(HTTP ${cb.http_code})했습니다. 다시 보내지 않습니다.")
+            seLog("[Portal 전송] 앞선 결과 처리에서 Portal이 요청을 거부했습니다(HTTP ${cb.http_code}). 다시 보내지 않습니다.")
         } else {
             seCallback(body, deadline, C, cb)
         }
@@ -939,45 +1127,38 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
     fs.mark = 'summary'
     // ⑤ 결과 — 보낸 결과의 status 집계. 실패 결과를 새로 만든 수는 줄을 나눠 적는다.
     Map sc = summary.status_counts
-    echo "[결과] 요청 ${accepted}대: 성공 ${sc.success}, 부분 성공 ${sc.partial}, 실패 ${sc.failed}${sc.missing ? ', 보낼 결과 없음 ' + sc.missing : ''}."
-    if (filled > 0 || (bo?.checkpoint ?: 0) > 0) {
-        echo "[결과] 수집 결과 그대로 ${bo != null ? bo.output : kept}대, 중간 결과(CHECKPOINT)로 ${bo?.checkpoint ?: 0}대, 수집이 끝나지 않아 실패 결과를 새로 만든 대상 ${filled}대."
+    echo "[결과] 성공 ${sc.success}대, 부분 성공 ${sc.partial}대, 실패 ${sc.failed}대${sc.missing ? ', 보낼 결과 없음 ' + sc.missing + '대' : ''}"
+    // 결과 출처 — 정상 종료인데 보충 · 중간 결과가 있을 때만(그 밖에는 아래 [수집 종료] 가 같은 수를 적는다)
+    if (outcome == 'completed' && (filled > 0 || (bo?.checkpoint ?: 0) > 0)) {
+        echo "[결과] 결과 출처: 수집 결과 ${bo != null ? bo.output : kept}대, 중간 결과(CHECKPOINT) ${bo?.checkpoint ?: 0}대, 결과가 없어 새로 만든 실패 결과 ${filled}대"
     }
     seExplainGatherEnd(C, outcome, summary, bo, kept, filled, delivered, cb)
-    // ⑥ 경고 — 실제로 생긴 조건만, 한 줄에 하나씩. 코드는 finalize_summary.json 의 warnings 에 남긴다.
-    //    결과 보존 경고(preserve_*)는 수집 단계가 이미 UNSTABLE 로 표시했다 — 목록에만 올리고 아래에서 다시 표시하지 않는다.
+    // ⑥ 경고 — 실제로 생긴 조건만. 코드는 finalize_summary.json 의 warnings 에 남기고 빌드 끝 [요약] 이 사람이 읽는 말로 적는다.
+    //    [경고] 줄은 다른 줄에 없는 정보(보낼 결과가 없는 대상 목록)만 쓴다. 전송 · 보존 · 수집 종료는 각자의 줄이 이미 알렸다.
     List warnings = []
     List warnTexts = []
     if (!delivered) {
         warnings << ((cb.attempted == true) ? 'callback_failed' : 'callback_not_attempted')
-        warnTexts << ((cb.attempted == true) ? 'Portal 전송에 실패했습니다. 보내려던 본문은 결과 파일 callback_body.json 에 있습니다.'
-                                            : 'Portal 로 보내지 못했습니다. 전송을 시작할 시간이 남지 않았습니다. 보내려던 본문은 결과 파일 callback_body.json 에 있습니다.')
     }
     if (!bodySaved) {
         warnings << 'body_not_saved'
-        warnTexts << '전송 본문을 파일로 남기지 못했습니다. 전송은 했습니다.'
     }
     if (lineCount != accepted) {
         warnings << 'count_mismatch'
-        warnTexts << "보낼 결과가 ${lineCount}대로 접수 ${accepted}대와 다릅니다. 있는 결과만 보냈습니다. 결과 없는 대상: ${unrecovered ? unrecovered.join(', ') : '-'}".toString()
+        warnTexts << "보낼 결과가 ${lineCount}대로 접수 ${accepted}대와 다릅니다. 있는 결과만 보냈습니다.\n  결과가 없는 대상: ${unrecovered ? unrecovered.join(', ') : '-'}".toString()
     }
     if (filled > 0) {
         warnings << 'filled'
-        warnTexts << "${filled}대는 수집 결과가 없어 실패 결과를 새로 만들었습니다.".toString()
     }
     if (outcome != 'completed') {
         warnings << "outcome_${outcome}".toString()
-        warnTexts << "수집이 정상적으로 끝나지 않았습니다: ${seOutcomeText(outcome)}".toString()
     }
     if (layerB == 'unavailable') {
         warnings << 'layer_b_unavailable'
-        warnTexts << '보충 단계 없이 수집이 남긴 결과만 보냈습니다. 결과가 빠진 대상은 채우지 못했습니다.'
     }
     if (env.SE_PRESERVE_ARCHIVED == 'false') {
         boolean noStash = (env.SE_PRESERVE_STASHED == 'false')
         warnings << (noStash ? 'preserve_failed' : 'preserve_archive_failed')
-        warnTexts << (noStash ? '수집 단계에서 결과를 보존하지 못했습니다. 보관과 전달이 모두 실패했습니다.'
-                              : '수집 단계의 보관(archive)이 실패해 전달(stash)로 받았습니다.')
     }
     summary.warnings = warnings
     for (String w in warnTexts) { echo "[경고] ${w}" }
@@ -1001,37 +1182,40 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
         // 결과 파일 — 이번에 보관한 것만 링크한다(콘솔에서 바로 연다)
         String base = (env.BUILD_URL ?: '').trim()
         List files = []
-        if (fileExists('gather_final.jsonl')) { files << ['서버별 수집 결과 (JSON, 한 줄에 한 대)', 'gather_final.jsonl'] }
-        if (bodySaved) { files << ['Portal 로 보낸 본문 (JSON)', 'callback_body.json'] }
-        files << ['실행 요약 (JSON)', 'finalize_summary.json']
+        if (fileExists('gather_final.jsonl')) { files << ['서버별 수집 결과', 'gather_final.jsonl'] }
+        if (bodySaved) { files << ['Portal 전송 본문', 'callback_body.json'] }
+        files << ['실행 요약', 'finalize_summary.json']
         for (List f in files) { echo "[결과 파일] ${f[0]}: ${base ? base + 'artifact/' + f[1] : f[1]}" }
     } else {
-        echo "[결과 파일] 결과 파일 보관을 확인하지 못해 요약과 본문이 이 폴더에만 있습니다: ${pwd()}"
+        echo "[결과 파일] 결과 파일을 빌드에 보관하지 못했습니다. 요약과 본문은 Jenkins의 이 폴더에 남겨 둡니다.\n  위치: ${pwd()}"
     }
     // UNSTABLE 은 한 번만, 가장 중요한 사유로
     boolean finalizerWarn = false
     for (String w in warnings) { if (!w.startsWith('preserve_')) { finalizerWarn = true } }
     if (!delivered) {
-        unstable((cb.attempted == true) ? '[결과 확인] Portal 전송에 실패했습니다. 보내려던 본문은 결과 파일 callback_body.json 에 있습니다.'
-                                        : '[결과 확인] Portal 로 보내지 못했습니다. 전송을 시작할 시간이 남지 않았습니다.')
+        unstable((cb.refused == true) ? "[결과 확인] Portal이 요청을 거부했습니다. HTTP ${cb.http_code}." :
+                 ((cb.attempted == true) ? '[결과 확인] Portal 전송을 확인하지 못했습니다.' : '[결과 확인] Portal 전송을 시작하지 않았습니다.'))
     } else if (finalizerWarn) {
-        unstable("[결과 확인] 전송은 했지만 확인할 것이 있습니다. 위의 [경고] 줄을 보세요. (${warnings.join(', ')})")
+        unstable("[결과 확인] Portal 전송은 했지만 ${seAfterSendWarnText(warnings, filled, (bo?.checkpoint ?: 0) as int, outcome)}.")
     }
     try {
         seFinMarker(fs, tIn, [ended_epoch: seNowSec(), archived: finalArchived])
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[결과 확인] 폴더 기록을 쓰지 못했습니다: ${e.message}"
+        echo "[결과 확인] 결과 작업 폴더의 기록 파일을 쓰지 못했습니다.\n  오류: ${e.message}"
     }
     if (finalArchived) {
         deleteDir()
-    } else {
-        echo "[결과 확인] 결과 파일 보관을 확인하지 못해 이 폴더를 지우지 않습니다: ${pwd()}"
     }
     fs.mark = 'done'
+    // 요약용 값 — 마치지 못한 대상 수, 수집 종료 상태, 결과 확인이 읽은 실행 기록(보관본에서 다시 읽은 것 포함)
+    def execSec = (run != null) ? ((run.exec_used_sec != null) ? run.exec_used_sec : run.ran_sec) : null
     return [accepted: accepted, success: sc.success, partial: sc.partial, failed: sc.failed, missing: sc.missing,
             attempted: (cb.attempted == true), delivered: delivered, http_code: cb.http_code, delivered_show: cb.delivered_show,
+            refused: (cb.refused == true), receipt: cb.receipt,
+            unfinished: ((bo?.checkpoint ?: 0) as int) + filled, gather_exec_sec: execSec,
+            gather_attempts: ((run?.attempts) instanceof List) ? run.attempts.size() : 0,
             warnings: warnings]
 }
 
@@ -1053,86 +1237,67 @@ def seExplainGatherEnd(Map C, String outcome, Map summary, Map bo, int kept, int
     String why
     if (outcome in ['timeout', 'timeout_killed']) {
         long l = (C.GATHER_MAX as long)
-        why = "${seLimitText('gather_limit')} ${seDuration(l)}(${l}초)에 도달해 멈췄습니다" + (outcome == 'timeout_killed' ? '. 정리 시간 90초 뒤 강제 종료했습니다' : '')
+        why = "${seLimitText('gather_limit')} ${seDuration(l)}에 도달해 수집을 멈췄습니다" + (outcome == 'timeout_killed' ? '. 중단 신호를 보낸 뒤 정리 시간 90초가 지나 강제 종료했습니다' : '')
     } else if (outcome == 'aborted') {
-        why = '사용자 취소로 멈췄습니다'
+        why = '사용자 취소로 수집을 마치지 못했습니다'
     } else if (outcome == 'infra_wait_expired') {
-        why = "실행 기반(Runner)이 대기 한도 ${seDuration(((summary.infra?.budget_sec) ?: C.INFRA_WAIT) as long)} 안에 회복되지 않아 멈췄습니다"
+        why = "Runner가 대기 한도 ${seDuration(((summary.infra?.budget_sec) ?: C.INFRA_WAIT) as long)} 안에 돌아오지 않아 수집을 마치지 못했습니다"
     } else if (outcome == 'resume_impossible') {
-        why = '같은 Runner · 작업 폴더에서 이어서 수집할 수 없어 멈췄습니다(다른 Runner 로 작업을 옮기지 않습니다)'
+        why = '같은 Runner와 작업 폴더에서 이어서 수집할 수 없어 수집을 마치지 못했습니다'
     } else {
-        why = "${seOutcomeText(outcome)} 상태로 끝났습니다"
+        why = "수집이 정상적으로 끝나지 않았습니다: ${seOutcomeText(outcome)}"
     }
     // 실행 시간: 수집 실행 기록(gather_run.json — 시도마다 더한 실제 수집 시간)이 정본이다. 기록이 없으면 그렇게 적는다.
     String ranSec = (run?.exec_used_sec != null) ? run.exec_used_sec.toString() : ((run?.ran_sec != null) ? run.ran_sec.toString() : '')
     int tries = (run?.attempts instanceof List) ? run.attempts.size() : 0
-    String ran = ranSec.isInteger() ? "실제 수집 시간 ${seDuration(ranSec as long)}${tries > 1 ? '(시도 ' + tries + '번 합계)' : ''}" :
-                 ((env.SE_GATHER_STARTED_AT ?: '') ? '실행 시간 기록 없음' : '수집을 시작하지 않았습니다')
+    String ran = ranSec.isInteger() ? "${seDuration(ranSec as long)}${tries > 1 ? '(시도 ' + tries + '번 합계)' : ''}" :
+                 ((env.SE_GATHER_STARTED_AT ?: '') ? '실행 기록이 없어 확인할 수 없습니다' : '수집을 시작하지 않았습니다')
     int done = (bo != null) ? ((bo.output ?: 0) as int) : kept
     int partialCp = (bo != null) ? ((bo.checkpoint ?: 0) as int) : 0
-    echo "[수집 종료] 수집은 ${why}. ${ran}. 끝난 대상 ${done}대, 끝나지 않은 대상 ${partialCp + filled}대(중간 결과로 보낸 대상 ${partialCp}대, 실패 결과를 새로 만든 대상 ${filled}대)."
     // 수집 단계가 실행되지 않았으면(실행 위치 확인 실패 · 등록된 Runner 없음 · Runner 를 끝내 얻지 못함) 보존 기록이 없다 — "실패" 로 적지 않는다(2026-10-06 main #252 관측)
     //   수집은 했지만 마지막 보존 전에 끝났으면(9차 — Runner 연결 끊김 · 작업 폴더 사라짐 · 대기 한도 초과 · 대기 중 취소) 다시 시도하기 전에 넘겨 둔
     //   결과가 있는지로 나눈다. 수집이 돈 빌드를 "수집 단계가 실행되지 않아" 로 적지 않는다(2026-10-06 se-probe L5 · L6 · L8 관측)
     String archivedFlag = (summary.preserve?.archived ?: '').toString()
     String preserve
     if (archivedFlag in ['true', 'false']) {
-        preserve = (archivedFlag == 'true') ? '완료' : ((summary.preserve?.stashed == 'true') ? '보관 실패, 전달로 받음' : '실패')
+        preserve = (archivedFlag == 'true') ? '완료' : ((summary.preserve?.stashed == 'true') ? '빌드 기록 저장은 실패했고 전달된 결과로 처리했습니다' : '실패')
     } else if (!(env.SE_GATHER_STARTED_AT ?: '')) {
         preserve = '수집 단계가 실행되지 않아 보존할 결과가 없습니다'
     } else if (summary.preserve?.stashed == 'true') {
-        preserve = '마지막 보존 전에 끝나 다시 시도하기 전에 넘겨 둔 결과(stash)로 처리했습니다'
+        preserve = '마지막 보존 전에 끝나 앞서 넘겨 둔 결과로 처리했습니다'
     } else {
-        preserve = '수집은 했지만 Runner 에서 결과를 넘겨받지 못했습니다(이 빌드에 보존본 없음)'
+        preserve = '수집은 했지만 Runner에서 결과를 넘겨받지 못했습니다(이 빌드에 남은 결과 없음)'
     }
-    String send = delivered ? "HTTP ${cb.http_code} 응답 받음" : ((cb.attempted == true) ? '실패' : '보내지 못함')
-    echo "[수집 종료] 결과 보존: ${preserve}. Portal 전송: ${send}."
+    // 전송 결과는 바로 위 [Portal 전송] 줄과 빌드 끝 [요약] 에 있다 — 여기서 다시 쓰지 않는다
+    echo "[수집 종료] ${why}.\n  수집 시간: ${ran}\n  결과가 확정된 대상: ${done}대\n  마치지 못한 대상: ${partialCp + filled}대 (중간 결과로 보냄 ${partialCp}대, 실패 결과를 새로 만듦 ${filled}대)\n  결과 보존: ${preserve}"
 }
 
-// 빌드 끝 요약 — post 의 마지막 출력. 빌드 결과는 이 시점의 currentResult 다.
+// 빌드 끝 요약 — post 의 마지막 출력, 한 블록(seSummaryText). 빌드 결과는 이 시점의 currentResult 다.
+//   9차: 실행 기반을 기다린 시간과 실제 수집 시간을 따로 보여 준다. 수집 시간은 결과 확인이 읽은 실행 기록을 먼저 쓴다(보관본에서 다시 읽은 것 포함).
+//   접수된 요청인데 결과 확인 결과가 없으면(10차 R1) "접수 전" 으로 적지 않는다. 전송을 확인하지 못한 요청을 "끝났다" 로 적지 않는다.
 def seBuildSummary(Map fin) {
     String res = currentBuild.currentResult
-    Map names = ['SUCCESS': '정상', 'UNSTABLE': '확인 필요', 'FAILURE': '실패', 'ABORTED': '중단', 'NOT_BUILT': '실행 안 함']
+    Map names = ['SUCCESS': '정상 종료', 'UNSTABLE': '확인 필요', 'FAILURE': '실패', 'ABORTED': '중단', 'NOT_BUILT': '실행 안 함']
     long startMs = (long) currentBuild.startTimeInMillis
     long took = Math.max(0L, (long) ((seNowMs() - startMs) / 1000L))
-    echo "[요약] 빌드 결과: ${names[res] ?: res} (${res}). 시작 ${seShowTime(startMs)}, 소요 ${seDuration(took)}."
-    // 9차: 실행 기반을 기다린 시간과 실제 수집 시간을 따로 보여 준다 — 기다린 시간은 수집 실행 한계에 넣지 않는다
     Map infra = null
     Map run = null
+    String recProblem = ''
     try {
         infra = (env.SE_INFRA_JSON ?: '').trim() ? (readJSON(text: env.SE_INFRA_JSON, returnPojo: true) as Map) : null
         run = (env.SE_GATHER_RUN ?: '').trim() ? (readJSON(text: env.SE_GATHER_RUN, returnPojo: true) as Map) : null
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        echo "[요약] 대기 기록과 실행 기록을 읽지 못했습니다: ${e.message}"
+        recProblem = (e.message ?: e.getClass().simpleName).toString()
     }
-    long waited = (infra != null) ? ((infra.used_sec ?: 0) as long) : 0L
-    int waits = (infra != null) ? ((infra.episodes ?: []).size()) : 0
-    String execText = (run != null) ? "${seDuration(((run.exec_used_sec ?: run.ran_sec) ?: 0) as long)}(시도 ${(run.attempts ?: []).size()}번)" : '수집을 시작하지 않았습니다'
-    echo "[요약] 실행 기반 대기 ${seDuration(waited)}${waits ? '(' + waits + '구간)' : ''}, 실제 수집 ${execText}. 기다린 시간은 수집 실행 한계에 넣지 않습니다."
-    if (fin != null) {
-        echo "[요약] 대상: ${params.target_type} ${fin.accepted}대, 실행 위치 ${params.loc ?: '-'}."
-        echo "[요약] 결과: 성공 ${fin.success}, 부분 성공 ${fin.partial}, 실패 ${fin.failed}${fin.missing ? ', 보낼 결과 없음 ' + fin.missing : ''}."
-        String send = fin.delivered ? "HTTP ${fin.http_code} 응답을 받았습니다(${fin.delivered_show}). Portal 이 요청을 받았다는 뜻입니다."
-                                    : (fin.attempted ? '실패했습니다.' : '보내지 않았습니다.')
-        echo "[요약] Portal 전송: ${send}"
-        if (fin.warnings) { echo "[요약] 확인할 것: ${fin.warnings.join(', ')}" }
-        if (fin.incomplete == true) { echo '[요약] 결과 확인을 마치지 못했습니다. 위의 [결과 확인] 줄에 보낸 것과 결과가 남은 곳이 있습니다.' }
-    } else if (!(env.SE_MANIFEST_JSON ?: '').trim()) {
-        echo '[요약] 접수 전에 끝나 Portal 로 보낸 결과가 없습니다.'
-    } else {
-        // 접수된 요청인데 결과 확인 결과가 없다(10차 R1) — 결과 확인이 중단됐다. "접수 전" 으로 적지 않는다
-        echo '[요약] 결과 확인을 마치지 못해 이 빌드의 결과 요약이 없습니다. 위의 [결과 확인] 줄을 보세요.'
-    }
-    Map tail = ['SUCCESS': '수집과 결과 전송이 끝났습니다.', 'UNSTABLE': '위의 [경고] 줄과 [결과 파일] 링크를 보세요.',
-                'FAILURE': '위의 오류 줄을 보세요.',
-                'ABORTED': '사용자 취소로 중단됐습니다. 접수된 요청이면 확보한 결과를 보내려고 시도했습니다(위의 [Portal 전송] 줄).']
-    String tailText = tail[res]
-    if (res == 'SUCCESS' && (fin == null || fin.delivered != true) && (env.SE_MANIFEST_JSON ?: '').trim()) {
-        tailText = 'Portal 로 보낸 것을 확인하지 못했습니다. 위의 [결과 확인] 줄을 보세요.'
-    }
-    if (tailText) { echo "[요약] ${tailText}" }
+    String outcome = (env.SE_GATHER_OUTCOME ?: '').toString()
+    def execSec = (fin?.gather_exec_sec != null) ? fin.gather_exec_sec : ((run != null) ? ((run.exec_used_sec != null) ? run.exec_used_sec : run.ran_sec) : null)
+    int tries = (fin?.gather_attempts) ? (fin.gather_attempts as int) : (((run?.attempts) instanceof List) ? run.attempts.size() : 0)
+    String head = ((res == 'ABORTED' && outcome == 'aborted') ? '사용자 취소로 ' : '') + (names[res] ?: res)
+    echo seSummaryText([head: head, res: res, took: took, waited: ((infra != null) ? ((infra.used_sec ?: 0) as long) : 0L), execSec: execSec, tries: tries,
+                        fin: fin, outcome: outcome, started: ((env.SE_GATHER_STARTED_AT ?: '') != ''), manifest: ((env.SE_MANIFEST_JSON ?: '').trim() != ''),
+                        channel: (params.target_type ?: '').toString().trim(), loc: (params.loc ?: '-').toString().trim(), recProblem: recProblem])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1158,7 +1323,7 @@ def seInfraLoad(Map C) {
         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
             throw fie
         } catch (Exception e) {
-            echo "[실행 기반 대기] 지난 대기 기록을 읽지 못해 새로 셉니다: ${e.message}"
+            echo "[실행 대기] 지난 대기 기록을 읽지 못해 대기 시간을 처음부터 셉니다.\n  오류: ${e.message}"
         }
     }
     return seInfraNew(C.INFRA_WAIT as long)
@@ -1195,8 +1360,7 @@ def seInfraClose(Map infra, Map ep, long endMs, String result) {
     seInfraSave(infra)
     if (ep.announced == true) { currentBuild.description = null }
     if (sec >= 60L || result != 'acquired') {
-        Map words = ['acquired': '확보했습니다', 'expired': '기다릴 수 있는 시간을 다 썼습니다', 'interrupted': '취소로 멈췄습니다', 'paused': '쉬는 시간을 마쳤습니다']
-        seLog("[실행 기반 대기] ${ep.reason}: ${words[result] ?: result}. 이번 대기 ${seDuration(sec)}, 누적 ${seDuration(infra.used_sec as long)} / 한도 ${seDuration(infra.budget_sec as long)}.")
+        seLog("[실행 대기] ${seWaitDoneText(ep.reason as String, ep.target as String, result)}\n  이번 대기: ${seDuration(sec)}\n  누적 대기: ${seDuration(infra.used_sec as long)} (한도 ${seDuration(infra.budget_sec as long)})")
     }
 }
 
@@ -1213,7 +1377,7 @@ def seQueueTimer(Map r, Map infra, Map ep, long capSec) {
         if (left <= 0L && !firstLook) {
             r.state = 'expired'
             seInfraClose(infra, ep, seNowMs(), 'expired')
-            error("[실행 기반 대기] ${ep.reason}: 기다릴 수 있는 시간을 다 써서 Jenkins queue 의 요청을 거둡니다(누적 ${seDuration(infra.used_sec as long)} / 한도 ${seDuration(infra.budget_sec as long)}).")
+            error("[실행 대기] 기다릴 수 있는 시간을 다 써서 대기 요청을 거둡니다.\n  누적 대기: ${seDuration(infra.used_sec as long)} (한도 ${seDuration(infra.budget_sec as long)})")
         }
         sleep(time: (left > 0L) ? Math.max(1L, Math.min(nap, left)) : nap, unit: 'SECONDS')
         firstLook = false
@@ -1223,9 +1387,8 @@ def seQueueTimer(Map r, Map infra, Map ep, long capSec) {
             ep.announced = true
             long waited = Math.max(0L, (long) ((seNowMs() - (ep.start_ms as long)) / 1000L))
             long remain = Math.max(0L, seInfraLeftSec(infra, ep, seNowMs(), capSec))
-            seLog("[실행 기반 대기] ${ep.reason}: '${ep.target}' 를 기다립니다. 연결이 끊겼거나 executor 가 모두 사용 중입니다(이유는 위의 Jenkins queue 줄을 보세요). " +
-                  "경과 ${seDuration(waited)}, 남은 한도 ${seDuration(remain)}. executor 를 잡지 않고 기다립니다.")
-            currentBuild.description = "실행 기반 대기: ${ep.reason} (${ep.target}), 경과 ${seDuration(waited)}, 남은 한도 ${seDuration(remain)}".toString()
+            seLog("[실행 대기] ${seWaitSubject(ep.reason as String, ep.target as String) ?: '실행 기반'}를 기다립니다.\n  대상: ${ep.target}\n  기다린 시간: ${seDuration(waited)}\n  남은 대기시간: ${seDuration(remain)}")
+            currentBuild.description = "실행 대기: ${ep.reason} (${ep.target}), 경과 ${seDuration(waited)}, 남은 대기시간 ${seDuration(remain)}".toString()
         }
         nap = Math.min(nap * 2L, 300L)
     }
@@ -1291,7 +1454,7 @@ boolean seInfraPause(Map infra, long sec, String why) {
         return false
     }
     long t = Math.min(sec, left)
-    seLog("[실행 기반 대기] ${why}: ${seDuration(t)} 쉰 뒤 다시 시도합니다. executor 를 잡지 않습니다.")
+    seLog("[실행 대기] ${seDuration(t)} 쉰 뒤 다시 시도합니다.\n  사유: ${sePauseReasonText(why)}")
     sleep(time: t, unit: 'SECONDS')
     seInfraClose(infra, ep, seNowMs(), (t < sec) ? 'expired' : 'paused')
     return t >= sec
@@ -1304,12 +1467,9 @@ Map seCheckRunners(String label) {
     def registered = nodesByLabel(label: label, offline: true)
     if (!registered) {
         env.SE_GATHER_OUTCOME = 'config_error'
-        error("[실행 위치] 라벨 '${label}' 을 가진 Runner 가 Jenkins 에 하나도 등록돼 있지 않습니다. Location(loc)과 Runner 라벨 설정을 확인하세요 " +
-              "(docs/operate/02-agent-node.md 8절). 접수된 대상마다 실패 결과를 보냅니다.")
+        error("[실행 위치] 라벨 '${label}'에 해당하는 Runner가 Jenkins에 등록돼 있지 않습니다.\n  Location(loc)과 Runner 라벨 설정을 확인하세요.\n  접수된 대상마다 실패 결과를 보냅니다.")
     }
     def online = nodesByLabel(label: label)
-    echo "[실행 위치] 라벨 '${label}' Runner: 등록 ${registered.size()}대(${registered.join(', ')}), 지금 연결 ${online.size()}대. " +
-         "연결된 Runner 가 없거나 executor 가 모두 사용 중이면 수집 단계가 최대 ${seDuration(seConstants().INFRA_WAIT as long)} 기다립니다."
     return [registered: registered, online: online]
 }
 
@@ -1332,9 +1492,9 @@ def seGatherStage(Map C) {
         env.SE_GATHER_INTERRUPTION = 'user_or_other'
         if (st.user_abort != true) {
             // 넘겨 둔 결과가 있을 때만 그렇게 적는다 — Runner 연결이 끊긴 채 기다리던 중이면 넘겨받은 것이 없을 수 있다(2026-10-06 se-probe L6)
-            String handed = (env.SE_PRESERVE_STASHED == 'true') ? '앞 시도에서 넘겨 둔 결과로 전송합니다.' :
-                            (st.gather_started ? 'Runner 에서 넘겨받은 결과가 없어 접수된 대상마다 실패 결과를 보냅니다.' : '접수된 대상마다 실패 결과를 보냅니다.')
-            seLog("[수집] 중단됨: 사용자 취소입니다(${st.gather_started ? '수집 시도 사이' : '수집 시작 전'}). " + handed + ' (outcome=aborted)')
+            String handed = (env.SE_PRESERVE_STASHED == 'true') ? '앞 시도에서 넘겨 둔 결과로 Portal 전송을 시도합니다.' :
+                            (st.gather_started ? 'Runner에서 넘겨받은 결과가 없어 접수된 대상마다 실패 결과를 보냅니다.' : '수집을 시작하기 전이라 접수된 대상마다 실패 결과를 보냅니다.')
+            seLog("[수집] 중단됨: 사용자가 빌드를 취소했습니다.\n  " + handed)
         }
         if (st.gather_started && !(env.SE_GATHER_ENDED_AT ?: '')) { env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs()) }
         seInfraSave(infra)
@@ -1345,7 +1505,7 @@ def seGatherStage(Map C) {
     if (!(env.SE_GATHER_ENDED_AT ?: '')) { env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs()) }
     seInfraSave(infra)
     if (st.outcome in ['infra_wait_expired', 'resume_impossible']) {
-        unstable("[수집] ${seOutcomeText(st.outcome)}. 결과가 확정된 대상은 그대로 보내고, 끝나지 않은 대상은 실행 기반 장애 사유의 실패 결과로 보냅니다.")
+        unstable("[수집] ${seOutcomeText(st.outcome)}.\n  결과가 확정된 대상은 그대로 보내고, 끝나지 않은 대상은 Runner 장애 사유의 실패 결과로 보냅니다.")
     }
 }
 
@@ -1360,11 +1520,11 @@ def seGatherLoop(Map C, Map st, Map infra) {
                 Map lastF = (st.last instanceof Map) ? st.last : [:]
                 st.outcome = (lastF.outcome ?: 'interrupted_unknown').toString()
                 st.limit_reason = (lastF.limit_reason ?: '').toString()
-                seLog("[수집] 보존을 다시 하려던 Runner(${st.pinned})가 Jenkins 에서 등록 해제됐습니다. 수집은 이미 끝났으므로 앞서 넘겨 둔 결과로 처리합니다.")
+                seLog("[수집] 결과 보존을 다시 하려던 Runner(${st.pinned})가 Jenkins에서 등록 해제됐습니다.\n  수집은 이미 끝났으므로 앞서 넘겨 둔 결과로 처리합니다.")
                 break
             }
             st.outcome = 'resume_impossible'
-            seLog("[수집] 이어서 수집할 Runner(${st.pinned})가 Jenkins 에서 등록 해제됐습니다. 다른 Runner 로 작업을 옮기지 않으므로 끝나지 않은 대상은 실패 결과로 보냅니다.")
+            seLog("[수집] 이어서 수집할 Runner(${st.pinned})가 Jenkins에서 등록 해제됐습니다.\n  끝나지 않은 대상은 실패 결과로 보냅니다.")
             break
         }
         String target = st.pinned ?: env.SE_AGENT_LABEL
@@ -1377,7 +1537,7 @@ def seGatherLoop(Map C, Map st, Map infra) {
                 Map lastE = (st.last instanceof Map) ? st.last : [:]
                 st.outcome = (lastE.outcome ?: 'interrupted_unknown').toString()
                 st.limit_reason = (lastE.limit_reason ?: '').toString()
-                seLog("[수집] 보존을 다시 할 Runner 를 기다릴 수 있는 시간을 다 썼습니다. 수집은 이미 끝났으므로 앞서 넘겨 둔 결과로 처리합니다.")
+                seLog("[수집] 결과 보존을 다시 할 Runner를 기다릴 수 있는 시간을 다 썼습니다.\n  수집은 이미 끝났으므로 앞서 넘겨 둔 결과로 처리합니다.")
                 break
             }
             st.outcome = 'infra_wait_expired'
@@ -1387,23 +1547,23 @@ def seGatherLoop(Map C, Map st, Map infra) {
         if (r.state == 'agent_lost') {
             String where = r.node ?: target
             long lostAt = (r.lost_at_ms ?: seNowMs()) as long
-            String seen = "감지 ${seShowTime(lostAt)}${r.error ? ', ' + r.error : ''}"
+            String seen = "\n  감지 시각: ${seShowTime(lostAt)}" + (r.error ? "\n  오류: ${r.error}" : '')
             if (st.final == true && (env.SE_FINAL_PRESERVED ?: '') == 'true') {
                 // 마지막 보존(보관 또는 전달)을 마친 뒤 끊겼다 — 결과는 이미 넘겼다. 다시 시도하지 않고 직전 판정으로 끝낸다(10차 N1)
                 Map lastP = (st.last instanceof Map) ? st.last : [:]
                 st.outcome = (lastP.outcome ?: 'interrupted_unknown').toString()
                 st.limit_reason = (lastP.limit_reason ?: '').toString()
-                seLog("[실행 기반] ${where} 에서 마지막 보존을 마친 뒤 실행 기반 오류로 이번 시도가 끊겼습니다(${seen}). " +
-                      '결과는 이미 넘겨 두었으므로 다시 시도하지 않습니다. 남은 작업 폴더는 오래된 작업 폴더 정리가 맡습니다.')
+                seLog("[수집] ${where}에서 이번 시도가 끊겼습니다. 결과 보존은 이미 마쳤습니다.${seen}" +
+                      '\n  결과를 넘겨 두었으므로 다시 시도하지 않습니다. 남은 작업 폴더는 오래된 작업 폴더 정리가 맡습니다.')
                 break
             }
             if (st.gather_started && !st.pinned) { st.pinned = where }
             st.agent_lost_prev = (st.gather_started == true)
             st.wait_from_ms = lostAt
             if (st.final == true) { st.preserve_only = true }
-            seLog("[실행 기반] ${where} 에서 실행 기반 오류로 이번 시도를 이어 가지 못했습니다(${seen}). " +
-                  ((st.final == true) ? '수집은 이미 끝났습니다. 같은 Runner 와 작업 폴더가 돌아오면 결과 보존만 다시 합니다.' :
-                   (st.gather_started ? '같은 Runner 와 작업 폴더가 돌아오면 끝나지 않은 대상만 이어서 수집합니다.' : '수집을 시작하기 전이라 Runner 를 다시 배정받습니다.')))
+            seLog("[수집] ${where}에서 Runner 또는 Jenkins 쪽 문제로 이번 시도를 이어 가지 못했습니다.${seen}\n  " +
+                  ((st.final == true) ? '수집은 이미 끝났습니다. 같은 Runner와 작업 폴더가 돌아오면 결과 보존만 다시 합니다.' :
+                   (st.gather_started ? '같은 Runner와 작업 폴더가 돌아오면 끝나지 않은 대상만 이어서 수집합니다.' : '수집을 시작하기 전이라 Runner를 다시 배정받습니다.')))
             continue
         }
         Map last = (st.last instanceof Map) ? st.last : [:]
@@ -1451,7 +1611,7 @@ def seAttempt(Map C, Map st, Map r) {
         if (!wsPath.endsWith("/${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}")) {
             // 같은 경로를 이 빌드의 다른 node 블록이 아직 쥐고 있다(<경로>@2) — 그 폴더의 결과를 믿지 않고 잠시 뒤 다시 시도한다
             st.last = [state: 'workspace_busy']
-            echo "[수집] 작업 폴더가 아직 사용 중입니다(${wsPath}). 잠시 뒤 다시 시도합니다."
+            echo "[수집] 작업 폴더를 아직 다른 실행이 쓰고 있어 잠시 뒤 다시 시도합니다.\n  작업 폴더: ${wsPath}"
             return
         }
         st.attempts = (st.attempts as int) + 1
@@ -1471,8 +1631,8 @@ def seAttempt(Map C, Map st, Map r) {
                 }
                 st.last = [state: 'attempt_limit', outcome: 'attempt_limit', limit_reason: '']
                 st.final = true
-                seLog("[수집] 시도 하나의 실행 한계(${seDuration(limitSec)})에 도달해 멈췄습니다. 멈춘 단계를 그대로 기다리지 않고 확보한 결과를 보존해 보냅니다.")
-                try { sePreserveGatherOutput() } catch (Throwable t) { echo "[결과 보존] 멈춘 시도의 보존을 마치지 못했습니다: ${t}" }
+                seLog("[수집] 시도 하나의 실행 한계(${seDuration(limitSec)})에 도달해 멈췄습니다.\n  지금까지 확보한 결과를 보존해 보냅니다.")
+                try { sePreserveGatherOutput() } catch (Throwable t) { echo "[결과 보존] 멈춘 시도의 결과 보존을 마치지 못했습니다.\n  오류: ${t}" }
             }
         }
     }
@@ -1523,9 +1683,10 @@ boolean seManifestIsThisBuild(String json) {
 //   이 빌드에는 지울 완료 결과가 없다(정리 대상은 같은 번호의 이전 빌드가 남긴 파일뿐이다).
 def sePrepareWorkspace(String targetType, Map own) {
     String commit = ''
+    boolean reused = false
     if (own?.commit) {
         String head = sh(returnStdout: true, label: '저장소 revision 확인', script: 'git rev-parse HEAD 2>/dev/null || true').trim()
-        if (head && head == own.commit.toString()) { commit = head }
+        if (head && head == own.commit.toString()) { commit = head; reused = true }
     }
     if (!commit) {
         // 저장소 받기 — 이 빌드의 수집을 시작하기 전에만(종전 선언형 agent 의 묵시 checkout 자리). Job SCM 설정 그대로이고 clean 확장은 없다.
@@ -1541,7 +1702,7 @@ def sePrepareWorkspace(String targetType, Map own) {
     // 접수 manifest 파일화 — 수집보다 먼저 (입력 확인이 env 로 넘긴 JSON 그대로)
     writeFile(file: 'gather_manifest.json', text: (env.SE_MANIFEST_JSON ?: '') + '\n', encoding: 'UTF-8')
     seWriteOwner(true, [:])
-    echo "[수집] 플레이북: ${env.WORKSPACE}/${targetType}-gather/site.yml (Runner ${env.NODE_NAME}, revision ${commit ?: '-'})"
+    echo(reused ? "[수집] 받아 둔 저장소를 그대로 씁니다. revision ${commit}" : "[수집] 저장소를 준비했습니다. revision ${commit ?: '-'}")
 }
 
 // Add-on 준비 (W09, 9차, 10차 R4) — 결정(사용 여부 · 받은 commit · 문제)을 작업 폴더의 .se_addon.json 에 남긴다. 이어서 하는 시도는 그 결정을 그대로
@@ -1558,7 +1719,7 @@ String seAddonPrepare(String targetType, Map st) {
     Map d = (rec.state == 'ok') ? (rec.data as Map) : null
     if (d?.decided == true) {
         if (d.enabled != true) {
-            echo "[addon] 앞 시도의 결정대로 Add-on 없이 수집합니다(${d.problem ?: '이 대상 종류에서 실행할 추가 수집 기능이 없음'})."
+            echo "[addon] 앞 시도의 결정대로 Add-on 없이 수집합니다.\n  사유: ${(['unsupported_target': '이 대상 종류에서 실행할 추가 수집 기능이 없음', 'decision_unreadable': '앞 시도의 결정 기록을 읽을 수 없음'][d.problem] ?: (d.problem ?: '이 대상 종류에서 실행할 추가 수집 기능이 없음'))}"
             return ''
         }
         if (fileExists('addon/tools/check_layout.py')) {
@@ -1571,14 +1732,13 @@ String seAddonPrepare(String targetType, Map st) {
         String kept = fileExists('addon/tools/check_layout.py') ?
                       sh(returnStdout: true, label: '추가 수집(Add-on) revision', script: 'git -C "${WORKSPACE}/addon" rev-parse HEAD 2>/dev/null || true').trim() : ''
         if (kept) {
-            echo "[addon] 앞 시도의 결정 기록을 읽을 수 없어 이 작업 폴더의 Add-on 사본(${kept})을 다시 검사해 씁니다. 다른 ref 로 바꾸지 않습니다."
+            echo "[addon] 앞 시도의 결정 기록을 읽을 수 없어 이 작업 폴더의 Add-on 사본(${kept})을 다시 검사해 씁니다. 다른 ref로 바꾸지 않습니다."
             addonRef = kept
             fetch = false
         } else if (st.gather_started == true) {
-            String lostProblem = '앞 시도의 Add-on 결정 기록을 읽을 수 없고 사본도 없어 같은 Add-on 을 확인할 수 없습니다. 남은 대상은 Add-on 없이 수집합니다'
+            String lostProblem = '앞 시도의 Add-on 결정 기록을 읽을 수 없고 사본도 없어 같은 Add-on을 확인할 수 없습니다. 남은 대상은 Add-on 없이 수집합니다.'
             writeFile(file: '.se_addon.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson([
                 decided: true, enabled: false, ref: addonRef, commit: '', problem: 'decision_unreadable']) + '\n')
-            echo "[addon] unavailable: ${lostProblem}"
             unstable("[addon] unavailable: ${lostProblem}")
             return ''
         }
@@ -1612,7 +1772,7 @@ String seAddonPrepare(String targetType, Map st) {
         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
             throw fie      // 취소 · Runner 연결 끊김은 Add-on 실패가 아니다 (3차 §4-2)
         } catch (Exception e) {
-            problem = "저장소를 받지 못했습니다(${addonRepo}@${addonRef}). 위의 [addon] 줄을 보세요"
+            problem = "Add-on 저장소를 받지 못했습니다(${addonRepo}@${addonRef}). Add-on 없이 수집합니다."
         }
     }
     if (!problem) {
@@ -1628,9 +1788,9 @@ String seAddonPrepare(String targetType, Map st) {
             addonDir = "${env.WORKSPACE}/addon".toString()
         } else if (rc == 3) {
             unsupported = true
-            echo "[addon] 이 대상 종류(${targetType})에서 실행할 추가 수집 기능이 없어 Add-on 없이 수집합니다"
+            echo "[addon] 이 대상 종류(${targetType})에서 실행할 추가 수집 기능이 없어 Add-on 없이 수집합니다."
         } else {
-            problem = "Add-on 파일 검사에 실패했습니다(rc=${rc}). 위의 [addon] 검사 실패 줄을 보세요"
+            problem = "Add-on 파일 검사에 실패했습니다(종료 코드 ${rc}). Add-on 없이 수집합니다."
         }
     }
     String commit = ''
@@ -1640,7 +1800,6 @@ String seAddonPrepare(String targetType, Map st) {
     writeFile(file: '.se_addon.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson([
         decided: true, enabled: (addonDir != ''), ref: addonRef, commit: commit, problem: (problem ?: (unsupported ? 'unsupported_target' : ''))]) + '\n')
     if (problem) {
-        echo "[addon] unavailable: ${problem}"
         unstable("[addon] unavailable: ${problem}")
     }
     return addonDir
@@ -1686,10 +1845,10 @@ def seAttemptBody(Map C, Map st, Map r) {
     if (st.preserve_only == true) {
         st.preserve_only = false
         if (!mine) {
-            seLog("[결과 보존] 보존을 다시 하려던 작업 폴더(${pwd()})에 이 빌드의 기록이 없습니다. 다시 수집하지 않고 앞서 넘겨 둔 결과로 처리합니다.")
+            seLog("[결과 보존] 결과 보존을 다시 하려던 작업 폴더에 이 빌드의 기록이 없습니다. 다시 수집하지 않고 앞서 넘겨 둔 결과로 처리합니다.\n  작업 폴더: ${pwd()}")
             return
         }
-        seLog("[결과 보존] 수집은 이미 끝났습니다(${seOutcomeText(env.SE_GATHER_OUTCOME ?: 'interrupted_unknown')}). 마지막 보존이 끊겨 같은 작업 폴더에서 보존만 다시 합니다.")
+        seLog("[결과 보존] 마지막 결과 보존이 끊겨 같은 작업 폴더에서 보존만 다시 합니다.\n  수집 종료 상태: ${seOutcomeText(env.SE_GATHER_OUTCOME ?: 'interrupted_unknown')}")
         sePreserveGatherOutput()
         return
     }
@@ -1697,20 +1856,19 @@ def seAttemptBody(Map C, Map st, Map r) {
         if (st.gather_started == true) {
             st.last = [state: 'resume_impossible', outcome: 'resume_impossible', limit_reason: '']
             String why = (rec.state == 'absent') ? '이 빌드의 기록이 없습니다' : ((rec.state == 'corrupt') ? '이 빌드의 기록을 해석할 수 없습니다' : '다른 빌드의 기록이 있습니다')
-            seLog("[수집] 이어서 수집할 작업 폴더(${pwd()})에 ${why}. 폴더가 지워졌거나 바뀐 것으로 보고 전체를 다시 수집하지 않습니다. " +
-                  "끝나지 않은 대상은 실행 기반 장애 사유의 실패 결과로 보냅니다.")
+            seLog("[수집] 이어서 수집할 작업 폴더에 ${why}. 폴더가 지워졌거나 바뀐 것으로 보고 다시 수집하지 않습니다.\n  작업 폴더: ${pwd()}\n  끝나지 않은 대상은 Runner 장애 사유의 실패 결과로 보냅니다.")
             return
         }
         sePrepareWorkspace(targetType, null)
     } else if (own.prepared == false && st.gather_started != true) {
         // 이 빌드의 첫 준비가 중간에 끊겼다(10차 R3) — 수집은 아직 시작하지 않았다. 남은 준비만 마친다
-        seLog("[수집] 이 빌드의 첫 준비가 중간에 끊겨 남은 준비를 마칩니다(${pwd()}). 이 빌드의 수집은 아직 시작하지 않았습니다.")
+        seLog("[수집] 첫 준비가 중간에 끊겨 남은 준비를 마칩니다. 수집은 아직 시작하지 않았습니다.\n  작업 폴더: ${pwd()}")
         sePrepareWorkspace(targetType, own)
     } else {
         String head = sh(returnStdout: true, label: '저장소 revision 확인', script: 'git rev-parse HEAD 2>/dev/null || true').trim()
         if (own.commit && head && head != own.commit.toString()) {
             st.last = [state: 'resume_impossible', outcome: 'resume_impossible', limit_reason: '']
-            seLog("[수집] 작업 폴더의 저장소 revision(${head})이 이 빌드가 받은 것(${own.commit})과 달라 이어서 수집하지 않습니다.")
+            seLog("[수집] 작업 폴더의 저장소 revision이 이 빌드가 받은 것과 달라 이어서 수집하지 않습니다.\n  작업 폴더의 revision: ${head}\n  이 빌드가 받은 revision: ${own.commit}")
             return
         }
         env.SE_WS_COMMIT = (own.commit ?: head ?: '').toString()
@@ -1725,7 +1883,7 @@ def seAttemptBody(Map C, Map st, Map r) {
             writeFile(file: 'gather_manifest.json', text: env.SE_MANIFEST_JSON + '\n', encoding: 'UTF-8')
             seLog("[수집] 작업 폴더에 접수 목록(gather_manifest.json)이 없어 이 빌드가 접수한 원본으로 다시 썼습니다. 결과 파일은 그대로 둡니다.")
         }
-        seLog("[수집] 같은 Runner(${env.NODE_NAME})의 같은 작업 폴더(${pwd()})에서 이어서 수집합니다. 저장소를 다시 받지 않습니다(revision ${head ?: '-'}).")
+        seLog("[수집] 같은 Runner의 작업 폴더를 그대로 씁니다. 저장소는 다시 받지 않습니다.\n  작업 폴더: ${pwd()}\n  revision: ${head ?: '-'}")
     }
     String addonDir = seAddonPrepare(targetType, st)
     String playbook  = "${env.WORKSPACE}/${targetType}-gather/site.yml"
@@ -1750,13 +1908,13 @@ def seAttemptBody(Map C, Map st, Map r) {
         if (!nodesByLabel(label: env.NODE_NAME)) {
             // Runner 연결이 끊긴 지 5분이 지나 Jenkins 가 이 step 을 끝냈다 — seWithNode 의 retry(agent()) 가 이어받아 같은 Runner 를 다시 기다린다.
             //   Runner 쪽 수집 프로세스는 계속 돌 수 있다(2026-10-06 se-probe 실측). 그 폴더는 건드리지 않는다.
-            seLog("[실행 기반] ${env.NODE_NAME} 와 Jenkins 의 연결이 끊긴 채 Jenkins 가 수집 step 을 끝냈습니다. 결과는 그 Runner 의 작업 폴더에 그대로 둡니다.")
+            seLog("[수집] Runner(${env.NODE_NAME})와 Jenkins의 연결이 끊긴 채 Jenkins가 수집 단계를 끝냈습니다.\n  결과는 그 Runner의 작업 폴더에 그대로 둡니다.")
             throw fie
         }
         // Runner 가 연결돼 있다 — 사용자 취소다. 다시 시도하지 않는다. 수집 프로세스가 끝나기를(잠금이 풀리기를) 잠깐 기다린 뒤 결과를 정리해 보존한다.
         env.SE_GATHER_OUTCOME = 'aborted'
         env.SE_GATHER_INTERRUPTION = 'user_or_other'
-        seLog("[수집] 중단됨: 사용자 취소입니다. 확보한 결과를 보존하고 전송으로 넘어갑니다. (outcome=aborted)")
+        seLog("[수집] 중단됨: 사용자가 빌드를 취소했습니다.\n  지금까지 확보한 결과를 저장하고 Portal 전송을 시도합니다.")
         try {
             Map cls = seClassifyAttempt()
             for (int i = 0; i < 6 && cls.state == 'running'; i++) {
@@ -1775,7 +1933,7 @@ def seAttemptBody(Map C, Map st, Map r) {
         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie2) {
             throw fie2
         } catch (Exception e) {
-            echo "[결과 보존] 취소 뒤 보존을 마치지 못했습니다: ${e.message}"
+            echo "[결과 보존] 취소 뒤 결과 보존을 마치지 못했습니다.\n  오류: ${e.message}"
         }
         st.user_abort = true
         throw fie
@@ -1796,8 +1954,8 @@ def seAttemptBody(Map C, Map st, Map r) {
          "completed=${cls.completed ?: 0}/${cls.hosts_total ?: '-'} precheck_failed=${cls.precheck_failed ?: 0} pending=${cls.pending_left ?: 0} progress=${cls.progress ?: 0}"
     if (s in ['runner_oom', 'runner_restart', 'agent_disconnect', 'running']) {
         st.last = [state: s, evidence: cls.evidence, progress: (cls.progress ?: 0), limit_left: cls.limit_left]
-        seLog("[수집] 실행 기반 장애로 이번 시도가 끝났습니다: ${seStateText(s)}${cls.evidence ? ' (근거: ' + cls.evidence + ')' : ''}. " +
-              "결과 확정 ${cls.completed ?: 0}/${cls.hosts_total ?: '-'}대, 남은 대상 ${cls.pending_left ?: '-'}대. 끝난 대상의 결과는 보존하고 이어서 수집합니다.")
+        seLog("[수집] 이번 수집 시도가 끝났습니다: ${seStateText(s)}." + (cls.evidence ? "\n  근거: ${cls.evidence}" : '') +
+              "\n  처리 완료: ${cls.completed ?: 0}/${cls.hosts_total ?: '-'}대, 남은 대상: ${cls.pending_left ?: 0}대\n  끝난 대상의 결과는 보존했고 남은 대상은 이어서 수집합니다.")
         seSnapshotGatherOutput()
         return
     }
@@ -1807,14 +1965,13 @@ def seAttemptBody(Map C, Map st, Map r) {
     env.SE_GATHER_OUTCOME = oc.outcome
     env.SE_GATHER_LIMIT_REASON = oc.limit_reason
     if (s == 'resume_impossible') {
-        seLog("[수집] 결과가 확정됐던 대상의 결과가 작업 폴더에 없어 다시 수집하지 않습니다${cls.evidence ? '(' + cls.evidence + ')' : ''}. " +
-              '끝나지 않은 대상은 실행 기반 장애 사유의 실패 결과로 보냅니다.')
+        // 사유와 근거는 scripts/run_gather.sh 가 이미 출력했다 — 같은 문장을 다시 쓰지 않는다
     } else if (s == 'completed' && (rc in [2, 4, 8])) {
-        unstable("[수집] 일부 대상이 실패하거나 응답하지 않았습니다. 대상별 결과는 결과 확인 단계의 [결과] 줄을 보세요. (ansible-playbook 종료 코드 ${rc})")
+        unstable("[수집] 일부 대상의 수집이 실패했거나 대상이 응답하지 않았습니다.\n  ansible-playbook 종료 코드: ${rc}")
     } else if (oc.limit_reason) {
-        unstable("[수집] ${seLimitText(oc.limit_reason)} ${seDuration(C.GATHER_MAX as long)}(${C.GATHER_MAX}초)에 도달해 수집을 멈췄습니다. 끝난 대상의 결과는 보존하고, 끝나지 않은 대상은 실패 결과로 보냅니다. (종료 코드 ${rc})")
+        unstable("[수집] ${seLimitText(oc.limit_reason)} ${seDuration(C.GATHER_MAX as long)}에 도달해 수집을 멈췄습니다.\n  끝나지 않은 대상은 실패 결과로 보냅니다.\n  종료 코드: ${rc}")
     } else if (s != 'completed') {
-        unstable("[수집] ${seOutcomeText(oc.outcome)}. (종료 코드 ${rc})")
+        unstable("[수집] ${seOutcomeText(oc.outcome)}.\n  종료 코드: ${rc}")
     }
     sePreserveGatherOutput()
 }
@@ -1890,11 +2047,11 @@ pipeline {
 
                     def allowed = ['os', 'esxi', 'redfish']
                     if (!allowed.contains(params.target_type?.trim())) {
-                        error "[입력 확인] target_type 값이 잘못됐습니다: '${params.target_type}'. 허용값: ${allowed}"
+                        error "[입력 확인] target_type 값이 잘못됐습니다: '${params.target_type}'.\n  사용할 수 있는 값: ${allowed.join(', ')}"
                     }
 
                     if (!params.inventory_json?.trim()) {
-                        error "[입력 확인] inventory_json 이 비어 있습니다"
+                        error "[입력 확인] inventory_json이 비어 있습니다."
                     }
 
                     def hosts
@@ -1906,7 +2063,7 @@ pipeline {
                     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                         throw fie
                     } catch (Exception e) {
-                        error "[입력 확인] inventory_json 을 JSON 으로 읽지 못했습니다: ${e.message}"
+                        error "[입력 확인] inventory_json을 JSON으로 읽지 못했습니다.\n  오류: ${e.message}"
                     }
 
                     // 접수 대상 — inventory.sh 와 같은 규칙(seAcceptTargets). 어긋나는 요청은 노드를 고르기 전에 전체 거부한다(F03).
@@ -1922,13 +2079,13 @@ pipeline {
                     def cbUrl = params.callbackUrl.trim()
                     // 계정 정보(사용자:비밀번호@)가 든 주소는 거부한다 — 콘솔에 남기 때문이다(rule 31 R4). 이 오류는 주소를 출력하지 않는다.
                     if (cbUrl ==~ /(?is)^[a-z][a-z0-9+.-]*:\/\/[^\/?#]*@.*/) {
-                        error "[입력 확인] callbackUrl 에 계정 정보(사용자:비밀번호@)를 넣을 수 없습니다. 주소는 기록하지 않았습니다."
+                        error "[입력 확인] callbackUrl에 계정 정보(사용자:비밀번호@)를 넣을 수 없습니다. 주소는 기록하지 않았습니다."
                     }
                     if (!(cbUrl.startsWith('http://') || cbUrl.startsWith('https://'))) {
-                        error "[입력 확인] callbackUrl 은 http:// 또는 https:// 로 시작해야 합니다: ${cbUrl}"
+                        error "[입력 확인] callbackUrl은 http:// 또는 https://로 시작해야 합니다.\n  입력값: ${cbUrl}"
                     }
                     if (cbUrl.contains("'") || cbUrl.contains('"') || cbUrl.contains('`') || cbUrl.contains('\\') || cbUrl.replaceAll(/\s/, '') != cbUrl) {
-                        error "[입력 확인] callbackUrl 에 쓸 수 없는 문자(따옴표, 백틱, 역슬래시, 공백)가 있습니다: ${cbUrl}"
+                        error "[입력 확인] callbackUrl에 쓸 수 없는 문자(따옴표, 백틱, 역슬래시, 공백)가 있습니다.\n  입력값: ${cbUrl}"
                     }
                     if (!params.deploymentEnvironmentId?.trim()) {
                         error "[입력 확인] 필수 값이 없습니다: deploymentEnvironmentId"
@@ -1951,8 +2108,7 @@ pipeline {
 
                     // 빌드 이름 — 목록에서 무엇을 몇 대 수집했는지 바로 보이게 (예: "#123 os 7대")
                     currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.target_type.trim()} ${acceptedIps.size()}대"
-                    seLog("[입력 확인] 통과했습니다. ${params.target_type.trim()} ${acceptedIps.size()}대, 실행 위치 ${params.loc.trim()}.")
-                    echo "[입력 확인] 결과를 보낼 주소: ${cbUrl}"
+                    seLog("[입력 확인] 요청을 접수했습니다. ${seChannelName(params.target_type.trim())} ${acceptedIps.size()}대, 실행 위치 ${params.loc.trim()}.\n  결과를 보낼 주소: ${cbUrl}")
                   }
                 }
             }
@@ -1974,27 +2130,29 @@ pipeline {
                     def known = (reg?.locations ?: [:])
                     def entry = known[key]
                     if (!entry) {
-                        error "[실행 위치] 등록되지 않은 Location: '${key}'. " +
-                              "허용: ${known.keySet().sort()}. " +
-                              "새 Location 은 common/vars/locations.yml 에 등록하세요."
+                        error "[실행 위치] 등록되지 않은 Location: '${key}'.\n" +
+                              "  사용할 수 있는 값: ${known.keySet().sort().join(', ')}\n" +
+                              "  loc 값을 확인하세요."
                     }
                     if (!entry.agent_label?.trim()) {
-                        error "[실행 위치] Location '${key}' 에 agent_label 이 없습니다. " +
-                              "common/vars/locations.yml 을 확인하세요."
+                        error "[실행 위치] Location '${key}'에 agent_label이 없습니다.\n" +
+                              "  common/vars/locations.yml의 설정을 확인하세요."
                     }
                     // 노드는 Location 라벨과 target_type 의 능력 라벨을 모두 가진 것만 고른다 (docs/operate/02-agent-node.md 8절).
                     //   os 는 한 inventory 에 Linux · Windows 가 섞이므로 두 라벨이 다 필요하고, esxi · redfish 는 각자의 라벨이다.
                     def targetLabels = ['os': 'linux && windows', 'esxi': 'esxi', 'redfish': 'redfish']
                     def targetType   = params.target_type?.trim()
                     if (!targetLabels.containsKey(targetType)) {
-                        error "[실행 위치] target_type 값이 잘못됐습니다: '${params.target_type}'. 허용값: ${targetLabels.keySet().sort()}"
+                        error "[실행 위치] target_type 값이 잘못됐습니다: '${params.target_type}'.\n  사용할 수 있는 값: ${targetLabels.keySet().sort().join(', ')}"
                     }
                     env.SE_LOCATION    = key
                     env.SE_AGENT_LABEL = "${entry.agent_label.trim()} && (${targetLabels[targetType]})"
                     // 등록된 Runner 확인 (9차) — 하나도 없으면 설정 오류로 끝낸다(접수된 대상마다 실패 결과는 보낸다). 등록돼 있으면 지금 연결이
                     //   끊겼거나 executor 가 모두 사용 중이어도 수집 단계가 Jenkins queue 로 기다린다(최대 72시간). 온라인 후보가 없다고 건너뛰지 않는다.
-                    seCheckRunners(env.SE_AGENT_LABEL)
-                    echo "[실행 위치] ${key} 위치의 ${targetType} 대상은 노드 라벨 '${env.SE_AGENT_LABEL}' 에서 실행합니다."
+                    Map runners = seCheckRunners(env.SE_AGENT_LABEL)
+                    echo "[실행 위치] ${key} 위치의 ${targetType} 대상은 '${env.SE_AGENT_LABEL}' 라벨의 Runner에서 실행합니다.\n" +
+                         "  등록된 Runner: ${runners.registered.size()}대 (${runners.registered.join(', ')})\n  연결된 Runner: ${runners.online.size()}대" +
+                         (runners.online ? '' : "\n  지금 연결된 Runner가 없어 수집 단계에서 연결을 기다립니다(최대 ${seDuration(seConstants().INFRA_WAIT as long)}).")
                   }
                 }
             }
