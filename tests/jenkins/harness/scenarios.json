@@ -66,7 +66,7 @@
           "deleted": false
         },
         "unstable_contains": [
-          "보관(archive)에 실패해 전달(stash)로만 넘겼습니다"
+          "결과 파일을 빌드 기록에 저장하지 못했습니다"
         ],
         "sink_posts_min": 1,
         "sink_last_status": 200,
@@ -336,7 +336,7 @@
         "delivered": false,
         "layerA": "ok",
         "unstable_contains": [
-          "Portal 전송에 실패했습니다"
+          "Portal 전송을 확인하지 못했습니다"
         ],
         "sink_posts_min": 3,
         "sink_last_status": 503,
@@ -358,7 +358,7 @@
         "delivered": false,
         "layerA": "ok",
         "unstable_contains": [
-          "Portal 전송에 실패했습니다"
+          "Portal 전송을 확인하지 못했습니다"
         ],
         "sink_posts_min": 1,
         "note": "T6(통제): 연결 끊김은 httpRequest 예외 → 재시도 뒤 실패",
@@ -785,7 +785,7 @@
           "retry:agent_lost": 1
         },
         "unstable_contains": [
-          "실행 기반(Runner)이 대기 한도 안에 회복되지 않음"
+          "Runner가 대기 한도 안에 돌아오지 않음"
         ],
         "warnings_include": [
           "outcome_infra_wait_expired"
@@ -857,7 +857,7 @@
           "ws:removed"
         ],
         "unstable_contains": [
-          "같은 Runner · 작업 폴더에서 이어서 수집할 수 없음"
+          "같은 Runner와 작업 폴더에서 이어서 수집할 수 없음"
         ],
         "warnings_include": [
           "outcome_resume_impossible"
@@ -1653,7 +1653,7 @@
           "outcome_resume_impossible"
         ],
         "unstable_contains": [
-          "같은 Runner · 작업 폴더에서 이어서 수집할 수 없음"
+          "같은 Runner와 작업 폴더에서 이어서 수집할 수 없음"
         ],
         "sink_posts_min": 1,
         "rethrown": false,

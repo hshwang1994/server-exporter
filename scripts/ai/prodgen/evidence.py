@@ -152,12 +152,14 @@ MAIN_CONTRACT = {
               "hosts": "real", "callback": "portal", "outcome": {"completed"}, "envelopes": "all_success", "delivered": True, "filled": 0,
               "target_type": "redfish", "account_write_zero": True},
 }
-# Console markers — old (before 2026-10-05), F13 and 8차 R7 operator wording. Summary JSON is preferred where it exists.
+# Console markers — old (before 2026-10-05), F13, 8차 R7 and 2026-10-09 operator wording (new wording appended last; old kept for re-judging
+#   older builds). Summary JSON is preferred where it exists.
 #   Timestamper (8차 R2) prefixes every console line with "[<ISO time>] " — the markers are substrings, so the prefix does not matter.
 CALLBACK_OK_MARKERS = ("[Callback] [OK] HTTP 2", "[Portal 전송] 완료: HTTP 2", "[Portal 전송] HTTP 2")
-CALLBACK_FAIL_MARKERS = ("Callback 전송 실패", "[마무리] Portal 전송 실패", "[Portal 전송] 전달하지 못했습니다", "Portal 전송에 실패했습니다")
-CANON_FALLBACK_MARKERS = ("정본 읽기 실패 — 복제값 사용", "실패 문구 정본을 읽지 못해 내장 복제값을 씁니다")
-LAYER_B_UNAVAILABLE_MARKERS = ("se_finalize.groovy 적재 실패", "보충 라이브러리(se_finalize.groovy)를 읽지 못해")
+CALLBACK_FAIL_MARKERS = ("Callback 전송 실패", "[마무리] Portal 전송 실패", "[Portal 전송] 전달하지 못했습니다", "Portal 전송에 실패했습니다",
+                         "[Portal 전송] 전송을 확인하지 못했습니다", "Portal 전송을 확인하지 못했습니다", "Portal이 요청을 거부했습니다")
+CANON_FALLBACK_MARKERS = ("정본 읽기 실패 — 복제값 사용", "실패 문구 정본을 읽지 못해 내장 복제값을 씁니다", "오류 안내 파일을 읽지 못해 기본 메시지를 사용합니다")
+LAYER_B_UNAVAILABLE_MARKERS = ("se_finalize.groovy 적재 실패", "보충 라이브러리(se_finalize.groovy)를 읽지 못해", "결과 복구 모듈을 읽지 못했습니다")
 GATHER_STAGE_MARKERS = ("{ (Gather)", "{ (서버 정보 수집)")
 ENVELOPE_KEYS = {"schema_version", "target_type", "collection_method", "ip", "hostname", "vendor", "status", "sections",
                  "diagnosis", "meta", "correlation", "errors", "data"}

@@ -7,7 +7,8 @@ import json
 import pytest
 
 from scripts.ai.prodgen.common import ProdgenError
-from scripts.ai.prodgen.evidence import (MAIN_CONTRACT, REMOVED_MAIN_PARAMS, REQUIRED_HARNESS, REQUIRED_HARNESS_TREE,
+from scripts.ai.prodgen.evidence import (CALLBACK_FAIL_MARKERS, CALLBACK_OK_MARKERS, CANON_FALLBACK_MARKERS, LAYER_B_UNAVAILABLE_MARKERS,
+                                         MAIN_CONTRACT, REMOVED_MAIN_PARAMS, REQUIRED_HARNESS, REQUIRED_HARNESS_TREE,
                                          REQUIRED_MAIN, aggregate, canonical_digest, check_evidence, evaluate_harness,
                                          evaluate_main, java_string_hash, neighbour_revision, parse_entry, tip_frozen_revision,
                                          trusted_report)
@@ -558,3 +559,46 @@ def test_main_contract_reads_the_new_operator_wording_and_the_summary_callback()
     a2_agent = a2_new.replace("Stage \"서버 정보 수집\" skipped due to earlier failure(s)", "Running on Runner01 in /w")
     assert "stopped_before_agent" in _failed(evaluate_main("E2E-A2", a2, None, None, None, a2_agent))
 
+
+def test_main_contract_reads_the_2026_10_09_wording():
+    """2026-10-09 (로그 문구 정리): 사건 첫 줄 + 두 칸 들여쓴 상세 줄. 표식이 되는 첫 줄의 앞부분은 그대로라 판정이 같고,
+    바뀐 표식(전송 확인 못함 · 거부 · 정본 · 결과 복구 모듈)은 새 문구를 더해 인정한다. 옛 빌드를 다시 판정하는 옛 표식도 그대로다."""
+    ts = "[2026-10-09T01:02:03.456Z] "
+    biz = "[2026-10-09 10:02:03 +09:00] "
+    cb_ok = dict(SUMMARY_OK, callback={"attempted": True, "delivered": True, "http_code": 200, "attempts": 1}, warnings=[])
+    con = (ts + biz + "[Portal 전송] 1번째 전송을 시작합니다.\n" + ts + "  주소: http://10.100.64.151:8080/api/jenkins/gather/os\n" +
+           ts + biz + "[Portal 전송] HTTP 200 응답을 받았습니다. 소요 시간 0.3초.\n" +
+           ts + "[요약] 정상 종료 (SUCCESS)\n" + ts + "  Portal 전송: HTTP 200, 응답 시각 2026-10-09 10:02:03 +09:00\n")
+    assert _failed(evaluate_main("S1", _main_item(), cb_ok, BODY_OK, None, con)) == []
+    # T6 — 전송을 확인하지 못한 빌드: 2xx 표식이 어디에도 없고(요약 행 포함), 실패 표식은 새 문구로도 잡힌다
+    t6 = _main_item(result="UNSTABLE", params=dict(_main_item()["params"], callbackUrl="http://127.0.0.1:9"))
+    cb_fail = dict(SUMMARY_OK, callback={"attempted": True, "delivered": False, "http_code": 408, "attempts": 3}, warnings=["callback_failed"])
+    con6 = (ts + biz + "[Portal 전송] 3번째 전송에 실패했습니다.\n" + ts + "  연결하지 못했거나 응답을 받지 못했습니다.\n" + ts + "  전송 도구 상태: 408\n" +
+            ts + biz + "[Portal 전송] 전송을 확인하지 못했습니다. 총 3번 시도했습니다.\n" + ts + "  마지막 전송 도구 상태: 408\n" +
+            ts + "WARNING: [결과 확인] Portal 전송을 확인하지 못했습니다.\n" + ts + "[요약] 확인 필요 (UNSTABLE)\n" + ts + "  Portal 전송: 확인하지 못함\n")
+    assert not any(m in con6 for m in CALLBACK_OK_MARKERS), "전송을 확인하지 못한 콘솔에 2xx 표식이 없다"
+    assert any(m in con6 for m in CALLBACK_FAIL_MARKERS)
+    assert _failed(evaluate_main("T6", t6, cb_fail, BODY_OK, None, con6)) == []
+    refused = ts + biz + "[Portal 전송] Portal이 요청을 거부했습니다. HTTP 403.\n" + ts + "  다시 보내지 않습니다.\n"
+    assert any(m in refused for m in CALLBACK_FAIL_MARKERS) and not any(m in refused for m in CALLBACK_OK_MARKERS)
+    # T5 — 취소 표식은 첫 줄 앞부분 그대로
+    t5 = _main_item(scenario="T5", result="ABORTED")
+    con5 = ts + biz + "[수집] 중단됨: 사용자가 빌드를 취소했습니다.\n" + ts + "  지금까지 확보한 결과를 저장하고 Portal 전송을 시도합니다.\n" + con
+    assert _failed(evaluate_main("T5", t5, dict(cb_ok, outcome="aborted"), BODY_OK, None, con5)) == []
+    # E2E-A — 실행 위치 블록의 첫 줄
+    tn = json.dumps([{"service_ip": "192.0.2.10"}, {"service_ip": "192.0.2.11"}])
+    ea = _main_item(params=dict(_main_item()["params"], loc="cj", inventory_json=tn, callbackUrl="http://127.0.0.1:18080"))
+    body_f = {"gatherInfoJson": [_envelope("192.0.2.10", ok=False), _envelope("192.0.2.11", ok=False)]}
+    con_a = (ts + "[실행 위치] cj 위치의 os 대상은 'cj && (linux && windows)' 라벨의 Runner에서 실행합니다.\n" + ts + "  등록된 Runner: 1대 (Runner01)\n" +
+             ts + "  연결된 Runner: 1대\n" + con)
+    checks = {c["name"]: c for c in evaluate_main("E2E-A", ea, cb_ok, body_f, None, con_a)}
+    assert checks["console:[Resolve Location] cj + "]["ok"] and checks["console:[Resolve Location] cj + "]["observed"] == "[실행 위치] cj 위치의 "
+    # E2E-A2 — 여러 줄 오류의 첫 줄
+    a2 = _main_item(result="FAILURE", params=dict(_main_item()["params"], loc="chj"))
+    a2_new = ("Obtained Jenkinsfile_portal from git https://x\n[Pipeline] { (실행 위치 확인)\n[Pipeline] { (서버 정보 수집)\n"
+              "Stage \"서버 정보 수집\" skipped due to earlier failure(s)\n[Pipeline] { (Declarative: Post Actions)\nRunning on Jenkins in /x\n"
+              "ERROR: [실행 위치] 등록되지 않은 Location: 'chj'.\n  사용할 수 있는 값: cj, git, ic, yi\n  loc 값을 확인하세요.")
+    assert _failed(evaluate_main("E2E-A2", a2, None, None, None, a2_new)) == []
+    # 정본 · 결과 복구 모듈 대체 경로 표식(정보) — 새 문구도 기록된다
+    assert any(m in "[결과 확인] 오류 안내 파일을 읽지 못해 기본 메시지를 사용합니다.\n  파일: …" for m in CANON_FALLBACK_MARKERS)
+    assert any(m in "[결과 확인] 결과 복구 모듈을 읽지 못했습니다. 확보된 수집 결과로 처리를 계속합니다." for m in LAYER_B_UNAVAILABLE_MARKERS)

@@ -57,7 +57,10 @@ def test_registered_runners_are_counted_and_none_is_a_config_error_not_a_skip():
     assert "env.SE_GATHER_OUTCOME = 'config_error'" in check and "error(" in check
     assert check.index("env.SE_GATHER_OUTCOME = 'config_error'") < check.index("error("), "결과 확인이 사유를 알도록 먼저 적는다"
     assert "Location(loc)과 Runner 라벨 설정을 확인하세요" in check, "원인과 조치를 콘솔에 남긴다"
-    assert "등록 ${registered.size()}대" in check and "지금 연결 ${online.size()}대" in check
+    assert "return [registered: registered, online: online]" in check
+    # 등록 · 연결된 Runner 수는 실행 위치 단계가 실행 라벨과 함께 한 블록으로 남긴다(설계 설명 없이 사실만)
+    assert "등록된 Runner: ${runners.registered.size()}대" in RESOLVE and "연결된 Runner: ${runners.online.size()}대" in RESOLVE
+    assert "executor" not in check, "아직 일어나지 않은 대기 정책을 매번 설명하지 않는다"
     assert "no_agent" not in TEXT.replace("no_agent 는 없앴다", ""), "온라인 후보가 없다고 수집을 건너뛰지 않는다"
     assert "when { expression" not in TEXT
 

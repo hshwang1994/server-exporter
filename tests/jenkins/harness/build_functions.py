@@ -41,8 +41,8 @@ FOREIGN_TIMEOUT_UNSTASH = {"foreign_timeout_interruption"}    # unstash 안에�
 # 2026-10-04 최종 지시 §4-3 — 느린 보존 archive / 결과 확인 단계의 정리 결과 읽기(readFile gather_final.jsonl). 8차 R3: 안쪽 상한이 없어 기다려 완주한다
 SLOW_ARCHIVE = {"archive_slow"}
 SLOW_READFILE_FINAL = {"layer_a_read_slow"}
-# 결과 정리(Layer A) sh 의 label — Jenkinsfile_portal sePreserveGatherOutput() 과 같은 글자 (8차 R7 에서 바뀌었다)
-LAYER_A_LABEL = "결과 정리 (서버마다 결과 한 줄)"
+# 결과 정리(Layer A) sh 의 label — Jenkinsfile_portal sePreserveGatherOutput() 과 같은 글자 (8차 R7, 2026-10-09 로그 문구 정리에서 바뀌었다)
+LAYER_A_LABEL = "수집 결과 정리"
 # 수집 실행 sh 의 label — Jenkinsfile_portal seAttemptBody() 와 같은 글자 (9차: 이 step 뒤에 실행 기반 끊김을 흉내 낸다)
 GATHER_LABEL = "서버 정보 수집 (ansible-playbook)"
 
