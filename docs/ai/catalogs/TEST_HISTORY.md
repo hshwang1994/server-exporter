@@ -1,5 +1,16 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-08 — CI 실행시간 개선(2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · `21b24c0a` → production P8 `347ab74e`
+
+| 구분 | 결과 |
+|---|---|
+| 로컬 | WSL `ci_gate`(LF clone `170e64d8`) PASS — unit · e2e · regression **4,534 통과** · 145 건너뜀 · 7 xfail · integration **324** · 3채널 syntax-check · JUnit 대조 105/105 · Jenkins 선언형 린터 OK · Groovy 2.4.21 구문(Harness · CI · Portal · wrapper 3) OK · Windows 대상 pytest 124 통과 |
+| 새 시험 | `test_junit_evidence_check.py`(7 — 통과 · 누락 · 중복 · 건너뜀 · 실패 · 기록 없음 · 오래된 기록 · 다른 host · 다른 SHA · CLI 종료 코드) · `test_harness_callback_sink.py`(port 0 · ready 파일 · 빌드별 기록) · `test_harness_tools.py`(eventUuid 격리 · readTrusted 고정 · sink_hold 제외 · wrapper 실패 닫힘 · Harness 동시 실행 · 후보 고정 계약) · `test_jenkinsfile_ci.py`(순서 · 생략 · lane · quietPeriod · 판정 통일 · JUnit 대조 · 산출물 정리 · `HARNESS_JOB`) |
+| 격리 시험(임시 Job) | R1 Harness 동시 쌍 10빌드 — 순차와 같은 판정 · 포트 · 기록 격리 · 고정 포트 sink_hold 중단 정리 · R2 넓은 대표 CI(UNSTABLE 의도 — 없는 시나리오만 불통과, branch 이동 중에도 고정 commit) · R3 #34 결함 재현 **15.1분 FAILURE · Harness/Evidence SKIPPED** · R5 부모 취소 — 자식 2개만 ABORTED · 수동 빌드 PASS · 남은 수신기 0 |
+| main `21b24c0a` E2E #346~#353 | 8/8 기대 결과(T2 SUCCESS · T5 ABORTED · T6 UNSTABLE · S1 4/4 · S2 4+2 · S3 13/13 · E2E-A UNSTABLE · E2E-A2 FAILURE) · sink_hold #964(18080) · tip 관측 전후 `21b24c0a` |
+| CI #36(`21b24c0a`) | **46.94분 SUCCESS**(#35 80.31분 — −41.6%) · Harness main 45/45(1,298.5초) · tree 21/21(600.5초) — 2-lane · Time Limits 2.4초(Gate JUnit 105/105) · Verify COMPLETE_PASS 20/20(Harness 앞) · Evidence 74 항목 · 오프라인 `check_evidence` 문제 0 · 대기열 최대 0 · 자식 실행 합 +8~10% |
+| 승격 · production | 세션 CLI COMPLETE_PASS(G11~G15 · G18~G20 이 PC 재실행) → **P8 `347ab74e`**(parent P7 `61b9dd4a` · Main-SHA `21b24c0a` · Tree-Hash `8dac1eb2…`) · origin · internal · 로컬 일치 · 새 clone tree 일치 · drift-check PROVENANCE · canary production #191 SUCCESS 3/3 · Portal 200 · checkout P8 |
+
 ## 2026-10-07 (최종 마무리) — 로그 보관 전역화 · forks 50 · Windows vault 도메인 · Portal 재진입 4.1/4.2 · GP-64
 
 | 구분 | 결과 |

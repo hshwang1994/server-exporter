@@ -1,8 +1,8 @@
 # server-exporter 현재 상태
 
-## 일자: 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) + production 승격
+## 일자: 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · **main `21b24c0a` → production P8 `347ab74e`**
 
-> 정본: 결정 `docs/ai/decisions/ADR-2026-10-08-ci-harness-parallel.md` · 실측 `tests/evidence/2026-10-08-ci-speed-p8.md`(최종 실행 뒤 기록). 수집 runtime 은 바꾸지 않았다.
+> 정본: 결정 `docs/ai/decisions/ADR-2026-10-08-ci-harness-parallel.md` · 실측 `tests/evidence/2026-10-08-ci-speed-p8.md`. 수집 runtime 은 바꾸지 않았다(생성 tree `8dac1eb2…` = `004a500e`).
 
 - **순서**: Gate → Corpus → Time Limits → **Prodgen Build · Drift · Verify** → Harness(main · tree) → Evidence. 선행 필수 검사(GATE · CORPUS · BUDGET · PRODGEN_BUILD ·
   PRODGEN_VERIFY) FAIL 이면 Harness · Evidence 는 `SKIPPED`(PASS 아님). Verify 의 COMPLETE_PASS 는 gate 통과일 뿐 — 증거는 Evidence · promote.
@@ -10,7 +10,14 @@
   후보/생성물 결속) · 판정 자체 시험표. Harness Job 은 동시 실행 허용 — 수신기 OS 배정 포트(`--ready-file`) · 빌드별 controller 폴더 · 자기 수신기만 finally 정리 ·
   eventUuid 격리 판정 · `MAIN_SHA` commit checkout · readTrusted 고정 · Pipeline 정의 revision 확인(git 이력).
 - **Time Limits**: 5개 파일을 다시 돌리지 않고 Gate JUnit 을 시험 ID 단위로 대조(`tests/scripts/junit_evidence_check.py`, WSL 실측 105/105 통과). 3채널 시작 계산은 그대로.
-- **격리 시험**: 임시 Job `…-harness-cispeed` · `…-ci-cispeed` · `cispeed-probe`(feature branch) — 공유 Job 은 반영 전까지 그대로. `HARNESS_JOB` 가드로 사본이 공유 Harness Job 을 부르지 않는다.
+- **격리 시험(임시 Job, 작업 뒤 삭제)**: R1 동시 쌍 10빌드 — 순차와 같은 판정 · 포트 · eventUuid 격리 · 고정 포트 sink_hold 중단 정리 / R2 넓은 대표 CI — 호출 → 자식 시작 0.08초 · branch 가 움직여도 고정 commit /
+  R3 #34 결함 재현 15.1분 FAILURE · Harness · Evidence SKIPPED / R5 부모 취소 — 자기 자식만 중단 · 수동 빌드 PASS. `HARNESS_JOB` 가드로 사본이 공유 Harness Job 을 부르지 않는다.
+- **실측**: CI #36(`21b24c0a`) **46.94분 SUCCESS**(#35 80.31분, −41.6%) — Harness main 1,298.5초(2,623.6) · tree 600.5초(1,218.9) · Time Limits 2.4초(81.7) · Harness 45/45 · 21/21 ·
+  Verify COMPLETE_PASS(Harness 앞) · Evidence 74 · 오프라인 `check_evidence` 문제 0. 자식 실행 합 +8~10%(동시 실행 경합 — 판정 영향 없음). main Job E2E #346~#353 8/8.
+- **승격**: **P8 `347ab74e`**(parent P7 `61b9dd4a` · Main-SHA `21b24c0a` · Tree-Hash `8dac1eb2…`) — 세션 CLI COMPLETE_PASS(G11~G15 · G18~G20 이 PC 재실행) · origin · internal · 로컬 일치 ·
+  새 clone tree 일치 · drift-check PROVENANCE · canary production #191 SUCCESS 3/3 · Portal 200 · checkout P8.
+- **정리 · 실기 범위**: 임시 Job 4개 · 그 작업 폴더(약 1 GB) · WSL staging · feature branch · worktree · 접속 파일 삭제, 증거는 저장소 밖 보관. 실장비는 main E2E 8 시나리오 + canary 1회.
+  후보 · 정보로 남긴 것: GP-65(checkout 재사용) · GP-66(Evidence 판정 범위) · GP-67(`Jenkinsfile_ci` 자기 정의 revision).
 
 ## 일자: 2026-10-07 (최종 마무리) — 로그 보관 전역화 · forks 50 · Windows vault 도메인 · Portal 재진입 4.1/4.2 · GP-64 확인 · **main push(양 원격) · production P7 `61b9dd4a` 유지**
 
