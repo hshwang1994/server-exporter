@@ -98,7 +98,7 @@ def test_windows_connection_settings():
 def test_os_discovery_probe_limits():
     play = _load("os-gather/site.yml")[0]
     assert play["vars"]["_probe_timeout"] == "{{ probe_timeout | default(10) }}"
-    t = next(t for t in _walk(play["tasks"]) if t.get("name", "").startswith("detect | 공통 precheck"))
+    t = next(t for t in _walk(play["tasks"]) if t.get("name", "") == "사전 점검: 관리 포트 연결 확인")
     v = t["vars"]
     assert v["_precheck_timeout_protocol"] == "{{ _probe_protocol_timeout | default(60) }}"
     assert v["_precheck_port_poll_interval"] == "{{ _probe_poll_interval | default(0) }}"

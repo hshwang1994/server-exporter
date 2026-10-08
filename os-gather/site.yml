@@ -60,7 +60,7 @@
     #   - 실패 종류를 구조화해 관측 → failure_stage / failure_code 가 실제 관측을 반영
     #   - checked_ports 가 실제 probe 한 포트만 담음
     #   - 포트별 사유가 _fail_error_detail 로 보존됨
-    - name: "detect | 공통 precheck (관리 포트 순차 확인)"
+    - name: "사전 점검: 관리 포트 연결 확인"
       ansible.builtin.include_tasks:
         file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/precheck/run_precheck.yml"
       vars:
@@ -305,26 +305,26 @@
                          repo_root=lookup('env','REPO_ROOT')) }}
           no_log: true
 
-        - name: "linux | gather system"
+        - name: "Linux: 서버 기본 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_system.yml
 
-        - name: "linux | gather cpu"
+        - name: "Linux: CPU 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_cpu.yml
 
-        - name: "linux | gather memory"
+        - name: "Linux: 메모리 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_memory.yml
 
-        - name: "linux | gather storage"
+        - name: "Linux: 스토리지 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_storage.yml
 
-        - name: "linux | gather network"
+        - name: "Linux: 네트워크 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_network.yml
 
-        - name: "linux | gather users"
+        - name: "Linux: 사용자 계정 목록 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_users.yml
 
         # P4 (cycle 2026-04-29): FC HBA / InfiniBand / NIC driver/VLAN/bond
-        - name: "linux | gather hba_ib"
+        - name: "Linux: HBA와 InfiniBand 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_hba_ib.yml
 
         # system.runtime 은 gather_system.yml 이 단일 구현이다 (2026-09-03 — 종전 gather_runtime.yml 이
@@ -636,30 +636,30 @@
                          repo_root=lookup('env','REPO_ROOT')) }}
           no_log: true
 
-        - name: "windows | gather system"
+        - name: "Windows: 서버 기본 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_system.yml
 
         # cycle-016 Phase O: Windows hardware section 활성화
-        - name: "windows | gather hardware"
+        - name: "Windows: 하드웨어 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_hardware.yml
 
-        - name: "windows | gather cpu"
+        - name: "Windows: CPU 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_cpu.yml
 
-        - name: "windows | gather memory"
+        - name: "Windows: 메모리 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_memory.yml
 
-        - name: "windows | gather storage"
+        - name: "Windows: 스토리지 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_storage.yml
 
-        - name: "windows | gather network"
+        - name: "Windows: 네트워크 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_network.yml
 
-        - name: "windows | gather users"
+        - name: "Windows: 사용자 계정 목록 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_users.yml
 
         # P5 sub-phase b (cycle 2026-04-29): Windows runtime
-        - name: "windows | gather runtime"
+        - name: "Windows: 실행 환경 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_runtime.yml
 
         # ── diagnosis (성공 경로) ───────────────────────────────────────
