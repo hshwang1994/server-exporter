@@ -116,6 +116,7 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
     if (!(state.tries instanceof List)) { state.tries = [] }
     int done = (state.tries as List).size()
     state.delivered = (state.delivered == true)
+    state.refused = (state.refused == true)
     if (done == 0) {
         state.http_code = null
         state.reason = null
@@ -123,10 +124,13 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
     if (!state.started_at) { state.started_at = seIsoUtc(seNowMs()) }
     seLog("[Portal 전송] 결과를 ${endpoint} 로 보냅니다. 최대 ${maxAttempts}번 시도합니다${aborted ? '(취소된 빌드라 1번)' : ''}" +
           (done ? ", 앞선 결과 처리에서 ${done}번 시도해 남은 시도는 ${Math.max(0, maxAttempts - done)}번입니다" : '') + ". 본문 ${body.length()}자.")
-    if (done >= maxAttempts) {
+    boolean resolved = (state.delivered == true) || (state.refused == true)
+    if (resolved) {
+        seLog("[Portal 전송] 앞선 결과 처리에서 " + (state.delivered ? "HTTP ${state.http_code} 응답을 이미 받았습니다" : "Portal 이 요청을 거부(HTTP ${state.http_code})했습니다") + ". 다시 보내지 않습니다.")
+    } else if (done >= maxAttempts) {
         seLog("[Portal 전송] 앞선 결과 처리에서 이미 ${done}번 시도해 더 보내지 않습니다.")
     }
-    for (int attempt = done + 1; attempt <= maxAttempts; attempt++) {
+    for (int attempt = done + 1; !resolved && attempt <= maxAttempts; attempt++) {
         long left = deadlineSec - seNowSec()
         if (left < (C.PORTAL_MIN as long)) {
             seLog("[Portal 전송] 남은 시간이 ${left}초라 ${attempt}번째 전송을 시작하지 않았습니다. 최소 ${C.PORTAL_MIN}초가 필요합니다.")
@@ -170,6 +174,7 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
         if (code ==~ /4\d\d/ && !(code in ['408', '429'])) {
             rec.outcome = 'refused'
             state.reason = 'refused'
+            state.refused = true
             seLog("[Portal 전송] HTTP ${code} 응답을 받았습니다. Portal 이 요청을 거부해 다시 보내지 않습니다. 소요 시간: ${took}")
             break
         }
@@ -197,7 +202,7 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
     if (!state.delivered && state.reason == null) { state.reason = state.attempted ? 'failed' : 'no_time' }
     boolean unknownReceipt = false
     for (Map t in state.tries) {
-        if (t.outcome == 'failed' && (t.http_code == null || "${t.http_code}" == '408')) { unknownReceipt = true }
+        if (t.outcome == 'interrupted' || (t.outcome == 'failed' && (t.http_code == null || "${t.http_code}" == '408'))) { unknownReceipt = true }
     }
     state.receipt = state.delivered ? 'delivered' : (!state.attempted ? 'not_attempted' : (unknownReceipt ? 'uncertain' : 'not_delivered'))
     if (!state.delivered && state.attempted) {
@@ -774,6 +779,8 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
     try {
         if (cb.delivered == true) {
             seLog("[Portal 전송] 앞선 결과 처리에서 HTTP ${cb.http_code} 응답을 이미 받았습니다(${cb.delivered_show}). 다시 보내지 않습니다.")
+        } else if (cb.refused == true) {
+            seLog("[Portal 전송] 앞선 결과 처리에서 Portal 이 요청을 확정 거부(HTTP ${cb.http_code})했습니다. 다시 보내지 않습니다.")
         } else {
             seCallback(body, deadline, C, cb)
         }
@@ -888,7 +895,7 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
 @NonCPS
 Map seCallbackRecord(Map cb) {
     return [attempted: (cb.attempted == true), delivered: (cb.delivered == true), http_code: cb.http_code,
-            attempts: (cb.attempts ?: 0), reason: cb.reason, interrupted: (cb.interrupted == true),
+            attempts: (cb.attempts ?: 0), reason: cb.reason, interrupted: (cb.interrupted == true), refused: (cb.refused == true),
             receipt: (cb.receipt ?: ((cb.delivered == true) ? 'delivered' : ((cb.attempted == true) ? 'uncertain' : 'not_attempted'))),
             started_at: cb.started_at, ended_at: cb.ended_at, tries: (cb.tries ?: [])]
 }
@@ -1623,9 +1630,6 @@ pipeline {
         PYTHONDONTWRITEBYTECODE = '1'
     }
 
-    options {
-        buildDiscarder(logRotator(daysToKeepStr: '14', numToKeepStr: '100', artifactDaysToKeepStr: '7', artifactNumToKeepStr: '50'))
-    }
 
     stages {
 
