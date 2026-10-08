@@ -152,10 +152,10 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 | '실행 위치 확인'(Resolve Location) 이 2분 제한으로 끊김 | 2026-10-03 이전 Jenkinsfile: Branch 가 `*/main` 이면 참조 데이터까지 받는다 — `*/production` 으로. 이후 Jenkinsfile: `readTrusted` 가 체크아웃을 하지 않으므로 Job 의 Lightweight checkout 이 꺼져 있는지 확인 |
 | `readTrusted` 가 전체 체크아웃으로 떨어졌다는 콘솔 메시지 | Job 의 Lightweight checkout 이 꺼져 있거나 SCM 플러그인이 lightweight 를 지원하지 않는다 — Job 설정 확인 |
 | `[실행 위치] 등록되지 않은 Location` (2026-10-05 전: `[Resolve Location] …`) | `loc` 값이 `common/vars/locations.yml` 에 없다 |
-| `[실행 위치] 라벨 '… && (…)' 을 모두 가진 온라인 노드가 없습니다` — 수집을 건너뛰고 UNSTABLE(접수 대상마다 실패 결과 전송) | `loc` 의 `agent_label` 과 `target_type` 의 능력 라벨(`os` 는 `linux`+`windows`, `esxi`, `redfish`)을 모두 가진 온라인 노드가 없다 — Manage Jenkins → Nodes 의 Labels 확인 ([02-agent-node.md](02-agent-node.md) 8절) |
+| `[실행 위치] 라벨 '… && (…)'에 해당하는 Runner가 Jenkins에 등록돼 있지 않습니다.` — FAILURE(수집하지 않고 접수 대상마다 실패 결과 전송) | `loc` 의 `agent_label` 과 `target_type` 의 능력 라벨(`os` 는 `linux`+`windows`, `esxi`, `redfish`)을 모두 가진 Runner 가 등록돼 있지 않다(등록돼 있으면 연결이 끊겨 있어도 수집 단계가 기다린다) — Manage Jenkins → Nodes 의 Labels 확인 ([02-agent-node.md](02-agent-node.md) 8절) |
 | `ERROR: [입력 확인] inventory_json[<번호>] …` (중복 · 잘못된 IPv4 · 원소 타입) | 요청 전체가 거부됐다 — 그 번호의 대상 값을 고친다. inventory.sh 와 같은 규칙이다 |
-| `ERROR: [입력 확인] callbackUrl 에 계정 정보(사용자:비밀번호@)를 넣을 수 없습니다` | callbackUrl 에서 `사용자:비밀번호@` 를 뺀다 — 계정 정보는 콘솔 · 빌드 기록에 남는다(주소는 기록하지 않았다) |
-| `[Portal 전송] 실패 … HTTP 408 — 연결하지 못했거나 응답 시간이 지났습니다` | Portal 주소 · 포트 · 방화벽 확인. 요청 도구는 연결 실패도 408 로 표시한다. 보내려던 본문은 `callback_body.json` artifact |
+| `ERROR: [입력 확인] callbackUrl에 계정 정보(사용자:비밀번호@)를 넣을 수 없습니다.` | callbackUrl 에서 `사용자:비밀번호@` 를 뺀다 — 계정 정보는 콘솔 · 빌드 기록에 남는다(주소는 기록하지 않았다) |
+| `[Portal 전송] N번째 전송에 실패했습니다.` / `  연결하지 못했거나 응답을 받지 못했습니다.` / `  전송 도구 상태: 408` (3번 모두 실패하면 `[Portal 전송] 전송을 확인하지 못했습니다. 총 3번 시도했습니다.`) | Portal 주소 · 포트 · 방화벽 확인. 요청 도구는 연결 실패도 408 로 표시한다. 보내려던 본문은 `callback_body.json` artifact |
 | 서버 정보 수집(Gather) 에서 `[venv] Ansible 실행환경(venv)을 찾지 못했습니다` | Agent 의 venv 가 없거나 파이프라인이 아는 경로 밖 — [02-agent-node.md](02-agent-node.md) 5절 · 9절 |
 | Agent 체크아웃이 `git: command not found` 로 실패 | Agent 에 CLI `git` 이 없다 |
 | 빌드가 UNSTABLE 이고 콘솔에 `[addon] unavailable: …` | Add-on 저장소를 받지 못했거나 파일 검사에 실패했다 — 전역 `ADDON_REPO_URL` / `ADDON_REPO_REF` / credential 값과 그 위 `[addon]` 줄. 기본 수집은 정상이다 |

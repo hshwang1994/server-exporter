@@ -57,20 +57,20 @@
 ### Stage 3 — Validate Schema (정합)
 
 **역할**: envelope 13 필드 + `schema/sections.yml` 의 섹션 + `field_dictionary.yml` 항목 정합.
-**위치**: `tests/validate_field_dictionary.py` (`Jenkinsfile_portal` 'Validate Schema' stage — venv 는 `scripts/activate_ansible_venv.sh` 가 고른다)
+**위치**: `tests/validate_field_dictionary.py` — 2026-10-03 부터 수집 Job 의 stage 가 아니라 `scripts/ai/ci_gate.sh`(커밋 전 로컬 · CI Job 의 Gate)가 돌린다
 **실패 시 확인**:
 - `schema/field_dictionary.yml` 갱신 누락 (rule 13 R1 3종 동반)
 - `schema/sections.yml` 에 섹션 정의 누락
 - `common/tasks/normalize/build_output.yml` envelope 13 필드 (rule 13 R5)
 
-### Stage 4 — Callback (컨트롤러)
+### 결과 확인 및 전송 (컨트롤러, pipeline post)
 
-**역할**: 호출자 callback POST (`httpRequest`, 3회 재시도). pytest 회귀는 Jenkins 밖 — 커밋 전 로컬 `pytest tests/e2e tests/regression`.
+**역할**: 결과 확인 뒤 호출자 callback POST (`httpRequest`, 시도마다 응답 최대 10분, 최대 3번). pytest 회귀는 Jenkins 밖 — 커밋 전 로컬 `pytest tests/e2e tests/regression`.
 
-**위치**: `Jenkinsfile_portal` 'Callback' stage
+**위치**: `Jenkinsfile_portal` pipeline `post { always }` 의 '결과 확인 및 전송' (`seFinalizeAndCallback` · `seCallback`, 2026-10-03 전에는 'Callback' stage)
 
 **실패 시 확인**:
-- callback URL 무결성 (rule 31) — `[Callback]` console log
+- callback URL 무결성 (rule 31) — 콘솔 `[Portal 전송]` 줄(시도 번호 · HTTP 상태 또는 전송 도구 상태 · 소요 시간, 2026-10-05 전 빌드는 `[Callback]`)과 `finalize_summary.json` 의 `callback`
 - pytest 출력 — 어느 baseline 어느 필드가 차이 (로컬)
 
 ---

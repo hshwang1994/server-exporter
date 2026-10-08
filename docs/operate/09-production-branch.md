@@ -79,7 +79,7 @@ python -m scripts.ai.prodgen restore --to <production commit> [--bootstrap-basel
   보고서 digest 는 변조·혼용 탐지용이지 실행의 증명이 아니다 — 실행 출처(`--source-build-url`)를 같이 적는다.
 - `e2e-evidence` 는 **시나리오 계약**(`scripts/ai/prodgen/evidence.py` `MAIN_CONTRACT`)으로 판정한다(검토 C1): main Job 빌드의 파라미터(loc · 대상 host · callbackUrl, 그리고 없앤 시험용 파라미터가 **없어야** 한다 — 8차 R1) ·
   `finalize_summary.json`(outcome · accepted==lines · by_origin · filled) · `callback_body.json`(host 당 envelope 1 · 성공/실패 필드) · 전송 기록(`finalize_summary.callback.delivered` — 2026-10-05 부터 요약이 정본, 콘솔 2xx 표식과 일치해야 한다) · 콘솔 표식(`[Portal 전송] 완료: HTTP 2xx` / `[마무리] Portal 전송 실패`, 이전 빌드는 `[Callback] [OK] HTTP 2xx` / `Callback 전송 실패` /
-  `[Gather] interrupted` / `[Resolve Location]`)을 대조한다. 기대 Jenkins 결과는 계약이 정한다(T5 ABORTED · T6 UNSTABLE · E2E-A' FAILURE) — 호출자가 다른 값을 넣어도
+  `[수집] 중단됨:` / `[실행 위치] …` / 2xx 줄의 `[Portal 전송] HTTP 2…`, 옛 빌드의 `[Gather] interrupted` / `[Resolve Location]` 도 읽는다)을 대조한다. 기대 Jenkins 결과는 계약이 정한다(T5 ABORTED · T6 UNSTABLE · E2E-A' FAILURE) — 호출자가 다른 값을 넣어도
   통과로 바꿀 수 없다. Harness 증거는 Job 파라미터 `SCENARIO`/`FUNCTIONS_SRC` · artifact `harness_result.json` 의 scenario·verdict · 함수 해시를 대조하고, main 함수 그룹과 생성 tree
   그룹(`provenance.tree_hash` == 승격 대상 tree)은 **따로** 충족해야 한다. 집계(`evidence-aggregate`)는 입력 evidence 의 digest 를 먼저 검증한다.
 - gate: G01~G10 · G16 · G17 정적 / G11 syntax-check · G12 config dump · G15 module smoke(환경 의존) / G13 Jenkins 린터(`--netrc`) / G14 pytest overlay(필수 테스트 그룹이 하나라도 빠지면 PARTIAL) /
