@@ -24,7 +24,7 @@ if [ -z "$PY" ]; then
         if "$cand" -c "import sys; sys.exit(0)" >/dev/null 2>&1; then PY=$cand; break; fi
     done
 fi
-if [ -z "$PY" ]; then echo "[ci_gate] 실행 가능한 python 이 없다 (PYTHON=... 로 지정)"; exit 1; fi
+if [ -z "$PY" ]; then echo "[ci_gate] 실행할 수 있는 python이 없습니다. PYTHON=<경로>로 지정하세요."; exit 1; fi
 echo "[ci_gate] python: $("$PY" -c 'import sys; print(sys.executable, sys.version.split()[0])')"
 
 fail=0
@@ -35,7 +35,7 @@ run()  { "$@"; local rc=$?; if [ $rc -ne 0 ]; then echo "-- [ci_gate] FAIL (rc=$
 step "python compile (plugins / libraries / scripts)"
 run "$PY" -m compileall -q callback_plugins filter_plugins lookup_plugins module_utils common/library redfish-gather/library esxi-gather/library scripts
 
-step "field_dictionary 정합 (종전 Jenkins Validate Schema stage)"
+step "field_dictionary 검사"
 run "$PY" tests/validate_field_dictionary.py
 
 step "output schema drift"
@@ -45,17 +45,17 @@ step "vendor boundary / harness consistency"
 run "$PY" scripts/ai/verify_vendor_boundary.py
 run "$PY" scripts/ai/verify_harness_consistency.py
 
-step "finalize corpus — Layer A 를 corpus 위에서 실행해 정답지와 대조 (Python 쪽 동치 검증; Groovy 쪽은 Jenkinsfile_ci)"
+step "finalize corpus (결과 정리 결과를 정답지와 비교)"
 if [ "${CI_GATE_SKIP_CORPUS:-0}" = "1" ]; then
     echo "-- [ci_gate] corpus skipped (CI_GATE_SKIP_CORPUS=1)"; skipped=1
 elif [ -f tests/scripts/finalize_corpus_check.py ] && [ -d tests/fixtures/finalize_corpus ]; then
     run "$PY" tests/scripts/finalize_corpus_check.py
 else
-    echo "-- [ci_gate] tests/fixtures/finalize_corpus 또는 검사 스크립트 없음 — 건너뜀"; skipped=1
+    echo "-- [ci_gate] 건너뜀: tests/fixtures/finalize_corpus 또는 검사 스크립트가 없습니다."; skipped=1
 fi
 
 if [ "${CI_GATE_SKIP_PYTEST:-0}" != "1" ]; then
-    step "pytest offline (unit · e2e · regression · integration -m 'not live')"
+    step "pytest offline (unit, e2e, regression, integration -m 'not live')"
     if "$PY" -m pytest --version >/dev/null 2>&1; then
         # tests/e2e_browser 는 playwright 가 필요한 브라우저 테스트라 여기서 돌리지 않는다.
         # tests/integration 은 따로 돈다 — e2e 와 integration 이 각자 `conftest` 를 rootdir 모듈로 import 해 한 세션에서 이름이 충돌한다.
@@ -67,7 +67,7 @@ if [ "${CI_GATE_SKIP_PYTEST:-0}" != "1" ]; then
         run "$PY" -m pytest tests/unit tests/e2e tests/regression -q -p no:cacheprovider ${JUNIT_MAIN[@]+"${JUNIT_MAIN[@]}"} ${CI_GATE_PYTEST_ARGS:-}
         run "$PY" -m pytest tests/integration -m "not live" -q -p no:cacheprovider ${JUNIT_INT[@]+"${JUNIT_INT[@]}"} ${CI_GATE_PYTEST_ARGS:-}
     else
-        echo "-- [ci_gate] 이 python 에 pytest 가 없다 — 건너뜀 (requirements-test.txt 설치 후 재실행)"; skipped=1
+        echo "-- [ci_gate] 건너뜀: 이 python에 pytest가 없습니다. requirements-test.txt를 설치한 뒤 다시 실행하세요."; skipped=1
     fi
 else
     echo "-- [ci_gate] pytest skipped (CI_GATE_SKIP_PYTEST=1)"; skipped=1
@@ -84,10 +84,10 @@ if ansible-playbook --version >/dev/null 2>&1; then
         run env INVENTORY_JSON="$inv" REPO_ROOT="$PWD" ansible-playbook --syntax-check -i "$ch/inventory.sh" "$ch/site.yml"
     done
 else
-    echo "-- [ci_gate] 동작하는 ansible-playbook 없음 — syntax-check 건너뜀 (WSL/Runner 에서 돌린다)"; skipped=1
+    echo "-- [ci_gate] 건너뜀: 실행할 수 있는 ansible-playbook이 없어 syntax-check를 하지 않았습니다. WSL이나 Runner에서 실행하세요."; skipped=1
 fi
 
 echo
 if [ $fail -ne 0 ]; then echo "[ci_gate] RESULT: FAIL"; exit 1; fi
-if [ $skipped -ne 0 ]; then echo "[ci_gate] RESULT: PARTIAL (건너뛴 단계 있음 — 통과로 보고하지 않는다)"; exit 2; fi
+if [ $skipped -ne 0 ]; then echo "[ci_gate] RESULT: PARTIAL (건너뛴 단계가 있어 통과로 보지 않습니다)"; exit 2; fi
 echo "[ci_gate] RESULT: PASS"

@@ -151,10 +151,15 @@ def test_harness_and_evidence_are_skipped_after_a_definite_prerequisite_failure(
 
 
 def test_verify_complete_pass_message_does_not_claim_harness_or_e2e():
-    """2026-10-08: 앞당긴 Verify 의 COMPLETE_PASS 는 생성물 gate 통과일 뿐 — Harness · main E2E 까지 끝났다는 뜻으로 쓰지 않는다."""
-    v = _stage("Prodgen Verify")
+    """2026-10-08: 앞당긴 Verify 의 COMPLETE_PASS 는 생성물 gate 통과일 뿐 — Harness · main E2E 까지 끝났다는 뜻으로 쓰지 않는다.
+    2026-10-09 (로그 문구): 'production 파일 검사를 통과했습니다' 한 줄 + 다음 검사(Harness)는 그 단계가 실제로 돌 때(선행 실패 없음)만."""
+    v = _code(_stage("Prodgen Verify"))
     assert "echo '[Prodgen Verify] COMPLETE_PASS'" not in v
-    assert "gate COMPLETE_PASS" in v and "Harness · main E2E 증거는 아직 없다" in v
+    line = [l for l in v.split("\n") if "[Prodgen Verify] COMPLETE_PASS" in l]
+    assert len(line) == 1 and "COMPLETE_PASS: production 파일 검사를 통과했습니다." in line[0]
+    assert "(seFailedPrereqs().isEmpty() ? '\\n  다음 검사: Jenkins 파이프라인 시험(Harness)' : '')" in line[0], "Harness 가 실제로 다음일 때만"
+    for claim in ("E2E", "증거", "승격", "promote", "Harness 통과"):
+        assert claim not in line[0], claim
 
 
 def test_ci_has_no_triggers_or_cron():
@@ -190,6 +195,8 @@ def test_ci_checkout_fixes_main_sha_from_git_commit():
     assert "env.MAIN_SHA = (scmVars?.GIT_COMMIT ?: '').toString()" in s
     assert "git rev-parse HEAD" in s
     assert "*/main" in s, "main 전용은 Job 의 Branch Specifier 로 — 주석으로 남긴다"
+    # 2026-10-09: */main 안내는 다른 브랜치로 받았을 때만 콘솔에 쓴다(정상 빌드마다 반복하지 않는다)
+    assert "otherBranch ? '\\n  이 Job은 main 전용입니다." in s
 
 
 def test_ci_toolchain_reports_tools_and_bootstraps_pwsh_user_level():
