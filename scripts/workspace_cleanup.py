@@ -284,12 +284,12 @@ def main(argv=None):
     if now - last < a.every_sec:
         report["skipped_reason"] = "checked_recently"
         report["last_checked_epoch"] = last
-        say("하루 한 번 확인합니다. 마지막 확인 %s 이후라 이번에는 건너뜁니다." % now_show(last))
+        say("최근 24시간 안에 이미 확인해 이번에는 건너뜁니다. 마지막 확인 %s" % now_show(last))
         return finish(report)
     lock = Lock(os.path.join(root, ".se-cleanup-%s.lock" % a.job_base))
     if not lock.acquire():
         report["skipped_reason"] = "locked"
-        say("같은 Job 의 다른 빌드가 정리 중이라 이번에는 건너뜁니다.")
+        say("같은 Job의 다른 빌드가 정리 중이라 이번에는 건너뜁니다.")
         return finish(report)
     try:
         report["ran"] = True
@@ -390,18 +390,21 @@ def main(argv=None):
     deleted_b = sum(d["bytes"] for d in report["deleted"])
     freed_b = sum(r["freed_bytes"] for r in report["reduced"])
     kept = report["kept_results"]
-    say("%d일이 지난 이 Job 의 작업 폴더를 확인했습니다. 지운 폴더 %d개(%s), 결과 파일만 남기고 줄인 폴더 %d개(%s 확보)." % (
-        a.keep_days, len(report["deleted"]), mb(deleted_b), len(report["reduced"]), mb(freed_b)))
+    # 사람이 읽는 줄 — 결과 한 줄(디스크 남은 공간 포함), 그 밖에는 사람이 확인할 폴더 · 오류가 있을 때만
+    disk = (" 디스크 남은 공간 %s / %s." % (mb(report["disk"]["free_bytes"]), mb(report["disk"]["total_bytes"]))) if "disk" in report else ""
+    if report["deleted"] or report["reduced"]:
+        say("%d일이 지난 작업 폴더를 정리했습니다. 삭제 %d개(%s), 결과 파일만 남김 %d개(%s 확보).%s" % (
+            a.keep_days, len(report["deleted"]), mb(deleted_b), len(report["reduced"]), mb(freed_b), disk))
+    else:
+        say("정리할 오래된 작업 폴더가 없습니다.%s" % disk)
     if kept:
-        say("보관하지 못한 결과를 남긴 폴더 %d개, 크기 %s. 결과를 확인한 뒤 지우세요: %s (위치 %s)" % (
+        say("보관하지 못한 결과를 남긴 폴더 %d개(%s)가 있습니다. 결과를 확인한 뒤 지우세요: %s (위치 %s)" % (
             len(kept), mb(sum(k["bytes"] for k in kept)), ", ".join(k["dir"] for k in kept[:10]) + (" 외" if len(kept) > 10 else ""), root))
     unknown = [s for s in report["skipped"] if s["reason"] in ("no_owner_record", "owner_record_mismatch")]
     if unknown:
         say("소유 빌드를 확인할 수 없어 건드리지 않은 폴더 %d개: %s" % (len(unknown), ", ".join(s["dir"] for s in unknown[:10])))
     for err in report["errors"]:
-        say("정리하지 못했습니다: %s (%s)" % (err["dir"], err["error"]))
-    if "disk" in report:
-        say("작업 폴더가 있는 디스크의 남은 공간: %s / %s" % (mb(report["disk"]["free_bytes"]), mb(report["disk"]["total_bytes"])))
+        say("폴더를 정리하지 못했습니다: %s (%s)" % (err["dir"], err["error"]))
     return finish(report)
 
 
@@ -409,5 +412,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as exc:                      # noqa: BLE001 — 정리 실패가 빌드를 바꾸지 않는다
-        say("정리 중 예상하지 못한 오류로 멈췄습니다(이 빌드의 결과와는 무관합니다): %s: %s" % (type(exc).__name__, exc))
+        say("정리 중 예상하지 못한 오류로 멈췄습니다. 수집 결과에는 영향이 없습니다. 오류: %s: %s" % (type(exc).__name__, exc))
         sys.exit(0)

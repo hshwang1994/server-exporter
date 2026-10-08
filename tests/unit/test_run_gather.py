@@ -104,7 +104,7 @@ def env(tmp_path):
     inv.write_text("#!/bin/bash\necho '{}'\n", encoding="utf-8")
     out = tmp_path / "out"
     out.mkdir()
-    e = {k: v for k, v in os.environ.items() if not k.startswith(("SE_", "ANSIBLE_", "ADDON_"))}
+    e = {k: v for k, v in os.environ.items() if not k.startswith(("SE_", "ANSIBLE_", "ADDON_")) and k != "NODE_NAME"}
     e.update({"WORKSPACE": str(ws), "SE_ANSIBLE_VENV": str(tmp_path / "venv"), "STUB_OUT": str(out), "STUB_EMIT": str(emit),
               "ANSIBLE_JSON_OUTPUT_FILE": str(ws / "gather_output.json"), "VAULT_PASSWORD": "pw-for-test", "LC_ALL": "C.UTF-8"})
     return {"env": e, "ws": ws, "out": out, "inv": inv, "tmp": tmp_path}
@@ -155,8 +155,13 @@ def test_normal_run_records_times_and_passes_the_computed_inputs(env):
     r = _run(env, gather_max="21600", mode="emit")
     assert r.returncode == 0, r.stderr
     lines = [l for l in r.stdout.splitlines() if "[수집]" in l]
-    assert TIME_LINE.match(lines[0]) and "시작합니다. 대상 7대(접수 7대), 동시 실행 7대, 이번 실행 한계 6시간(21600초)." in lines[0]
-    assert TIME_LINE.match(lines[-1]) and "끝났습니다. 실행 시간" in lines[-1] and "종료 코드 0." in lines[-1]
+    assert TIME_LINE.match(lines[0]) and lines[0].endswith("[수집] OS 서버 7대의 정보 수집을 시작합니다.")
+    assert TIME_LINE.match(lines[-1]) and "수집 실행을 마쳤습니다. 소요 시간" in lines[-1]
+    out = r.stdout.splitlines()
+    i_start = out.index(lines[0])
+    assert out[i_start + 1] == "  동시 수집: 7대", "시작의 상세 줄은 바로 아래 두 칸 들여쓰기로"
+    assert "  Runner:" not in r.stdout, "NODE_NAME 이 없으면 Runner 줄을 쓰지 않는다"
+    assert "실행 한계" not in r.stdout and "종료 코드" not in r.stdout, "정상 첫 시도는 운영 한계 · 종료 코드 0 을 반복하지 않는다(기록은 gather_run.json)"
     rec = _record(env)
     assert rec["schema"] == 2 and rec["rc"] == 0 and rec["timed_out"] is False and rec["limit_sec"] == 21600 and rec["ran_sec"] < 30
     assert rec["state"] == "completed" and rec["attempt_count"] == 1 and rec["attempts"][0]["completed_after"] == 7
@@ -199,7 +204,8 @@ def test_limit_reached_is_confirmed_by_the_real_runtime(env):
     assert r.returncode == 124
     rec = _record(env)
     assert rec["timed_out"] is True and rec["ran_sec"] >= 2 and rec["rc"] == 124 and rec["state"] == "gather_limit"
-    assert any(TIME_LINE.match(l) and "이번 실행 한계 2초(2초)에 도달해 INT 로 멈췄습니다" in l for l in r.stdout.splitlines()), r.stdout
+    assert any(TIME_LINE.match(l) and "이번 실행 한계 2초에 도달해 중단 신호(INT)로 멈췄습니다" in l for l in r.stdout.splitlines()), r.stdout
+    assert "  종료 코드: 124" in r.stdout.splitlines() or "  종료 코드: 137" in r.stdout.splitlines(), "한계 도달은 종료 코드를 상세 줄로 남긴다"
     assert (env["ws"] / "gather_rc.txt").read_text().strip() == "124"
 
 
@@ -210,7 +216,7 @@ def test_kill_before_the_limit_is_not_reported_as_the_limit(env):
     rec = _record(env)
     # 10차 R5: OOM 은 커널 로그의 OOM 종료 기록 PID 가 이 실행의 것일 때만 원인이다 — 가짜가 스스로 KILL 했으니 원인 미확인
     assert rec["timed_out"] is False and rec["state"] == "process_lost" and rec["attempts"][-1]["oom_link"] is None
-    assert "실행 한계 전에 강제 종료됐습니다" in r.stdout and "원인 미확인" in r.stdout
+    assert "실행 한계 전에 강제 종료됐습니다" in r.stdout and "원인은 확인하지 못했습니다" in r.stdout
 
 
 def test_partial_host_failures_pass_the_ansible_code_through(env):
@@ -227,7 +233,7 @@ def test_missing_venv_is_a_preparation_failure(env):
 def test_missing_manifest_is_a_record_failure(env):
     (env["ws"] / "gather_manifest.json").unlink()
     r = _run(env)
-    assert r.returncode == 91 and "실행 기록을 준비하지 못했습니다" in r.stdout
+    assert r.returncode == 91 and "실행 기록을 준비하지 못해 수집을 시작하지 않았습니다" in r.stdout
     assert not (env["out"] / "args.txt").exists(), "ansible 을 실행하지 않는다"
 
 
@@ -247,8 +253,9 @@ def test_resume_gathers_only_the_unfinished_hosts_and_keeps_the_time(env):
     first = _record(env)
     assert not first["attempts"][-1].get("state"), "끝 기록이 없다"
     _wait_lock_free(env)
-    r = _run(env, gather_max="600", mode="emit", agent_lost="true")
+    r = _run(env, gather_max="600", mode="emit", agent_lost="true", extra={"NODE_NAME": "runner-t"})
     assert r.returncode == 0, r.stdout + r.stderr
+    assert "  Runner: runner-t" in r.stdout.splitlines(), "Jenkins 가 넘긴 NODE_NAME 을 시작 상세 줄에 쓴다"
     assert _received(env) == [IPS, IPS[3:]], "두 번째 시도는 끝나지 않은 4대만 받는다"
     rec = _record(env)
     a1, a2 = rec["attempts"]
@@ -256,8 +263,12 @@ def test_resume_gathers_only_the_unfinished_hosts_and_keeps_the_time(env):
     assert 0 <= a1["exec_sec"] <= 60 and a2["limit_sec"] == 600 - a1["exec_sec"], "이전 시도의 실행 시간을 누적에 넣고 남은 만큼만 준다"
     assert a2["completed_before"] == 3 and a2["pending"] == 4 and a2["state"] == "completed" and a2["completed_after"] == 7
     assert rec["exec_used_sec"] == a1["exec_sec"] + a2["exec_sec"] and rec["attempt_count"] == 2
-    assert "2번째 시도로 이어서 수집합니다. 접수 7대 중 결과가 확정된 3대는 다시 수집하지 않습니다." in r.stdout
-    assert "이전 시도는 끝 기록 없이 중단됐습니다: Runner 와 Jenkins 의 연결이 끊겼습니다" in r.stdout
+    assert "[수집] 남은 대상의 수집을 이어서 진행합니다." in r.stdout
+    for row in ("  처리 완료: 3대", "  남은 대상: 4대", "  동시 수집: 4대"):
+        assert row in r.stdout.splitlines(), row
+    assert "  지금까지 수집 시간: " in r.stdout, "이어서 하는 시도는 누적 수집 시간을 보인다"
+    assert ("  남은 실행 한계: " in r.stdout) == (a2["limit_sec"] < 600), "한계가 줄었을 때만 남은 한계를 보인다"
+    assert "이전 시도는 끝 기록 없이 중단됐습니다: Runner와 Jenkins의 연결이 끊겼습니다" in r.stdout
     out_ips = [json.loads(l)["ip"] for l in (env["ws"] / "gather_output.json").read_text(encoding="utf-8").splitlines()]
     assert sorted(out_ips) == sorted(IPS) and len(out_ips) == 7, "대상마다 결과 한 줄 — 겹쳐 수집하지 않는다"
 
@@ -267,7 +278,7 @@ def test_nothing_pending_or_no_time_left_does_not_run_ansible(env):
     assert r.returncode == 0 and _received(env) == [IPS]
     r = _run(env, mode="emit")
     assert r.returncode == 0 and _received(env) == [IPS], "남은 대상이 없으면 ansible 을 실행하지 않는다"
-    assert "남은 대상이 없습니다. 접수 7대의 결과가 모두 확정돼 있어 ansible 을 실행하지 않습니다." in r.stdout
+    assert "남은 대상이 없어 수집을 실행하지 않습니다. 접수 7대의 결과가 모두 확정됐습니다." in r.stdout
     assert _record(env)["attempts"][-1]["end_source"] == "no_pending"
     # 누적 한계를 다 쓴 빌드: 결과 줄을 지우고 한계를 1초로 — 앞 시도들이 쓴 시간이 이미 한계 이상이다
     (env["ws"] / "gather_output.json").write_text("", encoding="utf-8")
@@ -275,7 +286,7 @@ def test_nothing_pending_or_no_time_left_does_not_run_ansible(env):
     r = _run(env, gather_max="1", mode="hang")
     rec = _record(env)
     if rec["exec_used_sec"] >= 1 and rec["attempts"][-1]["end_source"] == "limit_exhausted":
-        assert r.returncode == 124 and "이미 다 썼습니다" in r.stdout and len(_received(env)) == 1
+        assert r.returncode == 124 and "이미 다 써서" in r.stdout and len(_received(env)) == 1
 
 
 def test_a_previous_run_still_holding_the_lock_is_waited_for(env):
@@ -299,7 +310,7 @@ def test_truncated_tail_is_moved_aside_before_appending(env):
     _wait_lock_free(env)
     r = _run(env, gather_max="600", mode="emit")
     assert r.returncode == 0
-    assert "쓰는 도중 끊긴 마지막 줄을 gather_tail_fragments.jsonl 로 옮겼습니다(gather_output.json)" in r.stdout
+    assert "쓰다 끊긴 마지막 줄을 gather_tail_fragments.jsonl로 옮겼습니다" in r.stdout and "  옮긴 파일: gather_output.json" in r.stdout
     frag = json.loads((env["ws"] / "gather_tail_fragments.jsonl").read_text(encoding="utf-8").splitlines()[0])
     assert frag["fragment"].startswith('{"schema_version": "1", "ip": "10.9')
     lines = whole.read_text(encoding="utf-8").splitlines()

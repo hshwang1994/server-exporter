@@ -497,7 +497,7 @@ def main(argv=None) -> int:
     try:
         code, report = finalize(workspace, Path(a.repo_root), a.outcome, names, limit_reason=(a.limit_reason or '').strip() or None)
     except ToolFailure as e:
-        sys.stderr.write(f'[finalize] tool failure: {e}\n')
+        sys.stderr.write(f'[finalize] 결과 정리를 하지 못했습니다: {e}\n')
         try:
             (workspace / a.report).write_text(json.dumps(
                 {'layer': 'a', 'exit_code': EXIT_TOOL, 'error': str(e), 'outcome': a.outcome},
@@ -506,7 +506,7 @@ def main(argv=None) -> int:
             pass
         return EXIT_TOOL
     except Exception as e:  # noqa: BLE001 - 어떤 예외도 Layer B 가 알 수 있게 3 으로 끝낸다
-        sys.stderr.write(f'[finalize] unexpected: {type(e).__name__}: {e}\n')
+        sys.stderr.write(f'[finalize] 예상하지 못한 오류로 결과 정리를 멈췄습니다: {type(e).__name__}: {e}\n')
         return EXIT_TOOL
     sys.stderr.write('[finalize] accepted=%d kept=%d filled=%d dropped=%d conflicts=%d outcome=%s exit=%d\n' % (
         report['accepted'], report['kept'], report['filled'], len(report['dropped']),
