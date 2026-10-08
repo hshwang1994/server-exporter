@@ -158,7 +158,7 @@ host 만 이어서 수집한다(끝난 host · 사전 점검에서 실패로 확
 
 | 경우 | `failure_stage` / `failure_code` | `auth_success` | 사용자 문장 (`failure_reason` = `errors[0].message`) |
 |---|---|---|---|
-| 실행 기반 대기 한도 초과 · 같은 Runner 로 이어 갈 수 없음 | `fallback` / `OUTPUT_BUILD_FAILED` (기존 값) | `null` | "수집을 실행하던 Runner 가 회복되지 않아 이 대상의 수집을 마치지 못했습니다." |
+| 실행 기반 대기 한도 초과 · 같은 Runner 로 이어 갈 수 없음 | `fallback` / `OUTPUT_BUILD_FAILED` (기존 값) | `null` | "수집을 실행하던 Runner가 회복되지 않아 이 대상의 수집을 마치지 못했습니다." |
 
 사전 점검(Precheck) 진단이 이미 있는 host 는 그 진단을 그대로 보낸다. 문장 정본은 `common/vars/failure_reasons.yml` 의 `_fr_catalog.infra_unavailable`
 (Groovy 보충 라이브러리의 `infraReason` 이 같은 문장이고 drift 테스트가 막는다). 실행 단위 기록은 `finalize_summary.json` 의 `infra`

@@ -41,7 +41,7 @@ Map seFallbackCanon() {
                    'users': [], 'firmware': [], 'power': null, 'thermal': ['temperatures': [], 'fans': []]],
         emitFailed: '수집은 끝났지만 결과를 내보내는 단계에서 중단되었습니다. 기본 수집 결과는 그대로입니다.',
         // 2026-10-06 (9차): 실행 기반(Runner)이 72시간 안에 돌아오지 않았거나 같은 작업 폴더로 이어 갈 수 없어 끝나지 않은 대상의 문장
-        infraReason: '수집을 실행하던 Runner 가 회복되지 않아 이 대상의 수집을 마치지 못했습니다.',
+        infraReason: '수집을 실행하던 Runner가 회복되지 않아 이 대상의 수집을 마치지 못했습니다.',
     ]
 }
 

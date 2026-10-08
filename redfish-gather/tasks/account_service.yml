@@ -129,7 +129,7 @@
         _sections_unsupported_fragment: []
         _errors_fragment:
           - section: "account_service"
-            message: "대상 서버에 사용할 표준 관리 계정 정보가 등록되어 있지 않습니다. 계정 설정을 확인하세요."
+            message: "표준 관리 계정 정보가 없어 계정 확인과 복구를 진행하지 않았습니다. 수집용 Vault 설정을 확인하세요."
             detail: "standard credential scope={{ _rf_vault_scope | default('unknown') }}; role=primary candidate=0"
 
     - name: "redfish | account_service | no primary target 누적 (merge_fragment)"
