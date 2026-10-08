@@ -19,6 +19,19 @@
 
 ---
 
+## DRIFT-019 (2026-10-08)
+
+- **발견 위치**: `Jenkinsfile_portal_Byid` (GitLab 웹 편집 `87c47f8d` · `09fb4890` → 병합 `2cd63067`)
+- **분류**: convention-violation
+- **설명**: rule 80 R1 · rule 00 · `JENKINS_PIPELINES.md` 는 "파이프라인은 `Jenkinsfile_portal` 하나"(2026-09-28 portal 사본 삭제)라고 적는데,
+  GitLab 관리자가 main 에 `Jenkinsfile_portal` 의 통째 사본을 올렸다. 원본과 차이는 `inventory_json` 의 `defaultValue: '[{"bmc_ip":"","by_id":""}]'` 1줄.
+  2,036줄 전부 CRLF 로 저장돼 `.gitattributes`(Jenkinsfile* eol=lf)와 어긋나 있던 것은 `1566454a` 에서 줄끝만 LF 로 맞췄다(줄끝 무시 diff 0).
+- **영향**: 원본 수정이 사본에 따라가지 않는다(시간이 지날수록 어긋난다). production 생성 대상이 아니다(`production_manifest.yml` runtime_roots 밖) —
+  Byid Job 이 production 브랜치를 checkout 하면 파일이 없다. CI 검사 · 수집 코드 영향 없음. `by_id` 는 `se_host_input` 에 보존만 되고 결과 본문에는 돌아오지 않는다.
+- **제안**: 사용자 · 작성자 결정 — (a) 사본 유지 + rule 80 · 카탈로그에 공식 등재(ADR), (b) 원본에 기본값만 반영하고 사본 삭제. 결정 전에는 내용을 고치지 않는다(rule 92 R2).
+- **상태**: open
+- **관련**: rule 80 R1 / rule 00 / rule 92 R2 / `docs/ai/catalogs/JENKINS_PIPELINES.md` / `docs/ai/NEXT_ACTIONS.md` 2026-10-08
+
 ## DRIFT-018 (2026-07-02, resolved cycle is-os-disk)
 
 - **발견 위치**: `schema/field_dictionary.yml:33` 헤더 + 카운트 기재 12곳 (CLAUDE.md / schema/README.md / rules 00·13·23 / ai-context output-schema·common×2 / role output-schema README×3 / skills update-output-schema-evidence / PROJECT_MAP)

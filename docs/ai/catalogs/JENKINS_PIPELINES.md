@@ -3,6 +3,9 @@
 > Jenkins 파이프라인 카탈로그. rule 28 #4-5 측정 대상 (TTL 7-14일).
 > 실측 2026-09-28 — 파이프라인은 `Jenkinsfile_portal` 하나다. 비운영 `Jenkinsfile`(pytest 회귀 게이트) ·
 > `Jenkinsfile_portal_test` · `test_sj`(portal 사본)는 2026-09-28 에 삭제됐다 (사용자 결정).
+> 실측 2026-10-08 — main 에 `Jenkinsfile_portal_Byid` 가 있다. GitLab 관리자가 웹에서 올린 `Jenkinsfile_portal` 사본이다
+> (`87c47f8d` · `09fb4890`, 병합 `2cd63067`, 줄끝 LF 정규화 `1566454a`). 원본과 차이는 `inventory_json` 의
+> `defaultValue: '[{"bmc_ip":"","by_id":""}]'` 1줄, cron · trigger 없음, production 생성 대상 아님. 처리 미정 — CONVENTION_DRIFT DRIFT-019.
 
 ## Stage 매트릭스 (실측 — `Jenkinsfile_portal`)
 

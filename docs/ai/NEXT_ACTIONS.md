@@ -11,6 +11,8 @@
   Jenkins 는 파라미터(`inventory_json`)와 `INVENTORY_JSON` 두 환경변수로 넘긴다. lab Jenkins 에서 한도 근처 요청이 입력 확인 · 수집 · 결과 전송에서 어떻게 끝나는지 확인한다.
 - [ ] **[결정 보류] 키가 없는 서버만 실패 결과로 처리** — 지금은 한 서버라도 키가 없으면 요청 전체 거부 + 콜백 0건(2026-10-05 F03 접수 규칙).
   2026-10-08 사용자는 문서화를 골랐고 동작 변경은 고르지 않았다. 바꾸려면 `seAcceptTargets` · inventory.sh 3종 · `tests/fixtures/input_validation/cases.json` · 결과 수 계약을 함께 본다.
+- [ ] **[결정 필요] `Jenkinsfile_portal_Byid` 처리** — 2026-10-08 GitLab 웹 편집으로 main 에 들어온 portal 사본(차이: `inventory_json` 기본값 1줄, 줄끝은 `1566454a` 에서 LF 로 맞춤).
+  사본 유지(rule 80 · 카탈로그 공식 등재) / 원본에 기본값만 반영하고 사본 삭제 중 결정. Byid Job 의 checkout 브랜치도 확인한다(production 에는 이 파일이 없다). DRIFT-019.
 
 ## Gathering 개선 작업 (사용자 승인 Plan 2026-10-03) — Phase 진행과 대기 항목
 
