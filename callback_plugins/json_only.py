@@ -144,6 +144,7 @@ class CallbackModule(CallbackBase):
         self._progress_file = os.getenv('ANSIBLE_JSON_PROGRESS_FILE', '').strip()
         self._checkpoint_file = os.getenv('ANSIBLE_JSON_CHECKPOINT_FILE', '').strip()
         self._manifest_file = os.getenv('ANSIBLE_JSON_MANIFEST_FILE', '').strip()
+        self._manifest_compared = False
         self._checkpoint_task = os.getenv('ANSIBLE_JSON_CHECKPOINT_TASK', 'CHECKPOINT')
         self._addon_start_task = 'ADDON_START'
         self._addon_done_task = 'ADDON_DONE'
@@ -669,11 +670,20 @@ class CallbackModule(CallbackBase):
         except Exception:
             play_name = None
         self._progress(None, 'inventory', task=play_name, hosts=hosts)
+        if self._manifest_compared:
+            return
         manifest = self._manifest_ips()
-        if manifest is not None and set(manifest) != set(hosts):
-            missing = sorted(set(manifest) - set(hosts))
-            extra = sorted(set(hosts) - set(manifest))
-            sys.stderr.write('[json_only] NOTICE: inventory 와 접수 manifest 가 다르다 (manifest 에만 {} / inventory 에만 {})\n'
+        if manifest is None:
+            return
+        try:
+            full = [h.get_name() for h in inv.get_hosts('all', ignore_limits=True, ignore_restrictions=True)]
+        except Exception:
+            return
+        self._manifest_compared = True
+        if set(manifest) != set(full):
+            missing = sorted(set(manifest) - set(full))
+            extra = sorted(set(full) - set(manifest))
+            sys.stderr.write('[json_only] NOTICE: 수집 대상(inventory)이 접수 목록과 다릅니다. 접수 목록에만 있음: {}, 수집 대상에만 있음: {}\n'
                              .format(missing[:5], extra[:5]))
     def v2_playbook_on_task_start(self, task, is_conditional): pass
 

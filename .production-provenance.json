@@ -613,16 +613,16 @@
    "source_sha256": "c64657720f6f6f4b8db8ae83d4534473fc5156be9d0f6929d33df43dac51d3dc"
   },
   "callback_plugins/json_only.py": {
-   "bytes": 29608,
+   "bytes": 29965,
    "language": "python",
    "mode": "100644",
    "preserved": [],
    "python_kind": "plugin",
-   "removed_lines": 112,
-   "removed_trailing": 18,
-   "sha256": "f5d189390d5f00b887d15bde81d4c72e65dccd025a10db0cb868f1f38ebbf622",
-   "source_blob": "216b1e52bea3285465f4dfd125eaf0d7a3e59eb7",
-   "source_sha256": "218a36c4ea499b9133d941023c531bb502c2d11c7a0af5e3f6ca47b0ebf4af1c"
+   "removed_lines": 116,
+   "removed_trailing": 19,
+   "sha256": "bd3b25b83955a958e9556fae62befccac986d0f2155e6b4e874b41c5c94ccd69",
+   "source_blob": "94f618e3e2c384789bcdc9e84356bf6823bef767",
+   "source_sha256": "5e9e23291b5f93ab66d55587f71b8ff1a30b38f36ff14c373d19d6421ff828cc"
   },
   "common/library/precheck_bundle.py": {
    "bytes": 33796,
@@ -2651,8 +2651,8 @@
   "tests/reference/os/README.md",
   "tests/reference/redfish/README.md"
  ],
- "main_sha": "2c6d71f3c8f5cfd676e9609506e5a73919d6a707",
- "main_tree": "2ac2654b2d652f5cf30e263e7ff1cabff68861d3",
+ "main_sha": "04a0d6c9a52cc91b354263a283d2538b5f2d3279",
+ "main_tree": "a69e1fc3af541007e9c4ad636d1f006925b67e4a",
  "manifest_sha256": "f8b40542dda8532e13c0566d8a57ccc8601c6a862bd18da6c68ac50f950580ab",
  "policy": {
   "eol": "lf",
@@ -2668,5 +2668,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "cc5d8df59502a7f133bddea5490ebe2e45665acc9a1553cfda75371c6489236e"
+ "tree_hash": "a334d823a070837eab5b255d7fbb51b3e52e1d11224a539bb33460e06f8f3e08"
 }
