@@ -5,7 +5,8 @@
 > `Jenkinsfile_portal_test` · `test_sj`(portal 사본)는 2026-09-28 에 삭제됐다 (사용자 결정).
 > 실측 2026-10-08 — main 에 `Jenkinsfile_portal_Byid` 가 있다. GitLab 관리자가 웹에서 올린 `Jenkinsfile_portal` 사본이다
 > (`87c47f8d` · `09fb4890`, 병합 `2cd63067`, 줄끝 LF 정규화 `1566454a`). 원본과 차이는 `inventory_json` 의
-> `defaultValue: '[{"bmc_ip":"","by_id":""}]'` 1줄, cron · trigger 없음, production 생성 대상 아님. 처리 미정 — CONVENTION_DRIFT DRIFT-019.
+> `defaultValue: '[{"bmc_ip":"","by_id":""}]'` 1줄, cron · trigger 없음, production 생성 대상 아님.
+> 2026-10-09 결정 — 사본을 유지하고 portal 과 맞춘다(`ADR-2026-10-09-portal-byid-copy.md`, `tests/unit/test_jenkinsfile_portal_byid_sync.py` 가 강제). DRIFT-019 resolved.
 > 실측 2026-10-09 — 운영 로그 문구 정리(작업지시서 "로그 문구 개선"): `Jenkinsfile_portal` · `Jenkinsfile_portal_Byid`(차이 1줄 유지) ·
 >   `Jenkinsfile_ci` · `scripts/run_gather.sh` · `scripts/ai/ci_gate.sh` 의 사람이 읽는 문장만 바꿨다. stage 이름 · 순서 · 개수, 판정 · 호출 순서,
 >   `[Trusted] … len= jhash=` · `[기술 기록] 수집 시도 …` · `OUTPUT`/`CHECKPOINT`/`ADDON_*` 는 그대로다. 콘솔 문구를 읽는 곳(Harness `unstable_contains` ·

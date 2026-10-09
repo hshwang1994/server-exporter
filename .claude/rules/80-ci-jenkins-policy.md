@@ -11,6 +11,9 @@
 
 - Jenkins pipeline: `Jenkinsfile_portal` 하나. 비운영 `Jenkinsfile`(pytest 회귀 게이트) · `Jenkinsfile_portal_test` · `test_sj`(portal 사본)는 2026-09-28 에 삭제됐다
   (사용자 결정). pytest 회귀는 커밋 전 로컬 검증이다
+- `Jenkinsfile_portal_Byid`: 2026-10-08 GitLab 웹 편집으로 들어온 portal 사본. 2026-10-09 사용자 결정으로 유지하고 portal 과 맞춘다 — 차이는 `inventory_json`
+  기본값 1줄뿐이고 `tests/unit/test_jenkinsfile_portal_byid_sync.py` 가 강제한다. production 생성 대상이 아니고 jenkins-prod 에 이 파일을 쓰는 Job 은 없다
+  (근거 `docs/ai/decisions/ADR-2026-10-09-portal-byid-copy.md`)
 - 외부 CI 시스템 미사용 (Jenkins 단독)
 - Stage: Validate(agent 없음) / Resolve Location(agent 없음, `readTrusted`) / Gather(agent) 셋 + pipeline `post { always }` 마무리(controller:
   Layer A/B 보충 → Callback) — 2026-10-03 Phase 4. `Validate Schema` · `Callback` stage 는 삭제됐다(정합은 `scripts/ai/ci_gate.sh`)
@@ -43,6 +46,7 @@
   `retry(agent(), nonresumable())` 로 넘긴다(해석 실패만 손상). 첫 준비가 끊기면 남은 준비만 마치고(`prepared`), 접수 목록 파일만 없으면 접수 원본으로 복원하며,
   확정됐던 대상의 결과가 사라졌으면(IP 대조) 다시 수집하지 않고 재개 불가다. 마지막 보존이 보관 또는 전달을 마친 뒤 끊기면 다시 시도하지 않는다.
   OOM 은 커널 로그의 OOM 종료 PID 가 이 실행의 것일 때만 원인이다(공유 cgroup 카운터는 관측). 근거 `docs/ai/decisions/ADR-2026-10-07-finalize-reentry-and-oom-attribution.md`.
+- **Default (2026-10-09)**: `Jenkinsfile_portal` 을 고치면 같은 커밋에서 `Jenkinsfile_portal_Byid` 를 portal + 고유 1줄(`inventory_json` 기본값)로 다시 만든다.
 - **Forbidden**: 수집 Job 에 정적 FAIL 게이트 stage 재도입, Callback 을 stage 로 되돌리기(끊긴 빌드에서 전달이 사라진다),
   실행 한계(`run_gather.sh` 의 `timeout`) 없이 ansible 실행, 한계를 node 진입 전 값으로 집행하기(ansible 직전 `gather_state.py begin` 이 누적에서 계산),
   수집 Job 에 시험용 파라미터 · 작업(task) 단위 시간 제한 · 정체 감시 · 안쪽 단계 상한을 다시 넣기(2026-10-05 8차 — 정상 작업을 잘랐다.

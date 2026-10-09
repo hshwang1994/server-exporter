@@ -14,6 +14,7 @@
 - 멀티벤더 9종 (Dell / HPE / Lenovo / Supermicro / Cisco + Huawei / Inspur / Fujitsu / Quanta — 후 4종 lab 부재)
 - Schema 11 sections (`system hardware bmc cpu memory storage network firmware users power thermal`)
 - Jenkins pipeline: `Jenkinsfile_portal` 하나 (2026-09-28 에 비운영 `Jenkinsfile` · `Jenkinsfile_portal_test` · `test_sj` 는 삭제됐다).
+  `Jenkinsfile_portal_Byid` 는 portal 의 동기화된 사본이다(`inventory_json` 기본값 1줄만 다름, 2026-10-09 ADR — 시험이 동기화를 강제).
   cron·trigger 없음. grafana 파이프라인은 존재하지 않는다. Agent venv 는 `scripts/activate_ansible_venv.sh` 가 고른다
 
 > **세어 놓은 수는 적지 않는다.** adapter·fixture·baseline·테스트 개수, 파일 줄 수는

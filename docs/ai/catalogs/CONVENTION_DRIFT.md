@@ -29,7 +29,8 @@
 - **영향**: 원본 수정이 사본에 따라가지 않는다(시간이 지날수록 어긋난다). production 생성 대상이 아니다(`production_manifest.yml` runtime_roots 밖) —
   Byid Job 이 production 브랜치를 checkout 하면 파일이 없다. CI 검사 · 수집 코드 영향 없음. `by_id` 는 `se_host_input` 에 보존만 되고 결과 본문에는 돌아오지 않는다.
 - **제안**: 사용자 · 작성자 결정 — (a) 사본 유지 + rule 80 · 카탈로그에 공식 등재(ADR), (b) 원본에 기본값만 반영하고 사본 삭제. 결정 전에는 내용을 고치지 않는다(rule 92 R2).
-- **상태**: open
+- **상태**: resolved (2026-10-09 — 사용자 결정 "맞춰라": 사본 유지 · portal 과 동기화. `ADR-2026-10-09-portal-byid-copy.md`,
+  `tests/unit/test_jenkinsfile_portal_byid_sync.py` 가 차이 1줄 · 위치 · 줄끝을 강제. rule 80 · rule 00 서술 정정)
 - **2026-10-09 메모**: 사용자 작업지시서("로그 문구 개선")가 Byid 에도 같은 표현을 적용하라고 해서 내용을 portal 과 맞췄다(`11907cb6` · `2c6d71f3`).
   차이는 그대로 `inventory_json` 기본값 1줄이다. 사본 유지 · 삭제 결정은 여전히 열려 있다 — 결정 전까지 portal 을 고칠 때마다 같은 방식으로 맞춘다.
 - **관련**: rule 80 R1 / rule 00 / rule 92 R2 / `docs/ai/catalogs/JENKINS_PIPELINES.md` / `docs/ai/NEXT_ACTIONS.md` 2026-10-08
