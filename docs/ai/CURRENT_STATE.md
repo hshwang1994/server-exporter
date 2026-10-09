@@ -12,8 +12,9 @@
   문구를 읽는 곳(Harness needle · sh label · `evidence.py` 표식 — 새 문구를 더하고 옛 표식 유지)은 같은 커밋에서 맞췄다.
 - **실측**: main Job #368~#380(13 시나리오) 콘솔 전수 · 지난 빌드 13쌍과 대상별 결과 차이 0 · Harness `sink_close` #1033 PASS · CI #37 SUCCESS(47분 58초 —
   Harness 45 · 21, Evidence 78, Verify COMPLETE_PASS) · 세션 CLI 승격 **P9 `c69a0d33`**(G11~G15 · G18~G20 이 PC 재실행) · 양 원격 · canary #194 SUCCESS 3/3 · HTTP 200.
-- **알게 된 것**: Jenkins 에 GitLab push 자격증명(`se-gitlab-push`)이 없어 CI Promote 는 언제나 dry-run 이다(CI #37 콘솔). 실제 승격은 세션 CLI.
-  OS 정상 배치에도 `[json_only] NOTICE: inventory 와 접수 manifest 가 다르다` 가 play 마다 나온다(보호 경로 — NEXT_ACTIONS, 승인 필요).
+- **참고**: CI Promote 는 2026-10-04 CI 도입 때부터 dry-run 이다 — Jenkins 에 GitLab push 자격증명(`se-gitlab-push`)이 없다(바뀐 것 없음).
+  승격은 P1~P9 모두 이 PC 세션 CLI(이 PC 의 git 자격)로 했다.
+- **이번에 확인한 것**: OS 정상 배치에도 `[json_only] NOTICE: inventory 와 접수 manifest 가 다르다` 가 play 마다 나온다(보호 경로 — NEXT_ACTIONS, 승인 필요).
 
 ## 일자: 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · **main `21b24c0a` → production P8 `347ab74e`**
 
