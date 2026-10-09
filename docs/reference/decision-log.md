@@ -37,7 +37,11 @@
 
 ### 결과 · 범위
 - 커밋: `1d8bc4c3`(Portal 문구 2건) · `b2ad4aa6`(os task 이름) · `57ecdd14`(수집 스크립트) · `7d915a37`(수집 Job) · `11907cb6`(Byid) · `afaf9e43`(CI).
-- 수집 결과 · 판정 · 전송 · 보존 동작은 바뀌지 않는다. 실제 Jenkins 확인과 승격 결과는 `tests/evidence/2026-10-09-log-wording.md` 에 적는다.
+- 뒤이어 실제 콘솔을 읽고 고친 것: `56160f33`(작업 폴더 정리 건너뜀 문장) · `2c6d71f3`(수집을 시작하지 않은 빌드의 회수 실패 원본 6줄 → 한 줄, `[수집 종료]` 머리 문장).
+- 실제 확인: main Job #368~#380(13 시나리오, `2c6d71f3`) 콘솔 전수 · 같은 입력의 지난 빌드 13쌍과 대상별 결과 차이 0 · Harness `sink_close` #1033 PASS ·
+  CI #37 SUCCESS(Harness 45 · 21, Evidence 78, Verify COMPLETE_PASS) · **production P9 `c69a0d33`** 양 원격 · canary #194 SUCCESS.
+- CI #37 의 Promote 는 Jenkins 에 GitLab push 자격증명(`se-gitlab-push`)이 없어 dry-run 만 했다 — 실제 승격은 P8 과 같은 세션 CLI 로 했다.
+- 수집 결과 · 판정 · 전송 · 보존 동작은 바뀌지 않았다. 기록: `tests/evidence/2026-10-09-log-wording.md`.
 
 ## 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · production P8
 
