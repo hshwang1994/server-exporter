@@ -5,6 +5,11 @@ portal 을 고치고 Byid 를 맞추지 않으면 이 시험이 실패한다. �
 """
 from pathlib import Path
 
+import pytest
+
+# 주석이 남은 원본과 main 에만 있는 Byid 를 읽는다 — production 생성 tree(주석 제거 · Byid 없음) 위의 G14 에서는 제외한다
+pytestmark = pytest.mark.source_text
+
 REPO = Path(__file__).resolve().parents[2]
 PORTAL = REPO / "Jenkinsfile_portal"
 BYID = REPO / "Jenkinsfile_portal_Byid"
