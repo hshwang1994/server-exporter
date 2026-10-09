@@ -226,11 +226,13 @@ class CallbackModule(CallbackBase):
         #   progress   : host 당 append JSONL (first_seen / precheck / cred_load / auth_proven / checkpoint / addon_started /
         #                addon_done / emitted / lost) — 전체 snapshot 재기록 없음(H²×T 비용 회피), 줄은 짧다.
         #   checkpoint : `CHECKPOINT` 태스크(Add-on 전 조립본 envelope)를 host 당 1줄 append (flush+fsync).
-        #   manifest   : Jenkins 가 쓴 접수 집합 — play 시작 시 inventory 와 대조해 다르면 stderr 로 알린다(대조용, 정본은 manifest).
+        #   manifest   : Jenkins 가 쓴 접수 집합 — 실행마다 한 번, play 범위로 좁히기 전의 전체 inventory 와 대조해 다르면 stderr 로 알린다
+        #                (대조용, 정본은 manifest).
         #   Layer A(scripts/finalize_gather_output.py)가 이 파일들로 누락 envelope 을 보충한다.
         self._progress_file = os.getenv('ANSIBLE_JSON_PROGRESS_FILE', '').strip()
         self._checkpoint_file = os.getenv('ANSIBLE_JSON_CHECKPOINT_FILE', '').strip()
         self._manifest_file = os.getenv('ANSIBLE_JSON_MANIFEST_FILE', '').strip()
+        self._manifest_compared = False
         self._checkpoint_task = os.getenv('ANSIBLE_JSON_CHECKPOINT_TASK', 'CHECKPOINT')
         self._addon_start_task = 'ADDON_START'
         self._addon_done_task = 'ADDON_DONE'
@@ -894,11 +896,23 @@ class CallbackModule(CallbackBase):
         except Exception:                                   # noqa: BLE001
             play_name = None
         self._progress(None, 'inventory', task=play_name, hosts=hosts)
+        # 접수 목록 대조는 실행마다 한 번, play 범위로 좁히기 전의 전체 inventory 로 한다. Ansible 은 play 를 시작할 때 inventory 를 그 play 의
+        #   대상으로 좁히고(restrict_to_hosts), 이어서 하는 시도는 --limit 로 남은 대상만 돈다 — os-gather 의 linux · windows play 가 접수 목록의
+        #   일부만 보는 것은 정상이다(2026-10-09 main #359 · #360: 정상 배치에서 play 마다 오경보). 위 진행 기록은 종전대로 play 범위다.
+        if self._manifest_compared:
+            return
         manifest = self._manifest_ips()
-        if manifest is not None and set(manifest) != set(hosts):
-            missing = sorted(set(manifest) - set(hosts))
-            extra = sorted(set(hosts) - set(manifest))
-            sys.stderr.write('[json_only] NOTICE: inventory 와 접수 manifest 가 다르다 (manifest 에만 {} / inventory 에만 {})\n'
+        if manifest is None:
+            return
+        try:
+            full = [h.get_name() for h in inv.get_hosts('all', ignore_limits=True, ignore_restrictions=True)]
+        except Exception:                                   # noqa: BLE001
+            return
+        self._manifest_compared = True
+        if set(manifest) != set(full):
+            missing = sorted(set(manifest) - set(full))
+            extra = sorted(set(full) - set(manifest))
+            sys.stderr.write('[json_only] NOTICE: 수집 대상(inventory)이 접수 목록과 다릅니다. 접수 목록에만 있음: {}, 수집 대상에만 있음: {}\n'
                              .format(missing[:5], extra[:5]))
     def v2_playbook_on_task_start(self, task, is_conditional): pass
 

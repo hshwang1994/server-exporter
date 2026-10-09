@@ -61,21 +61,24 @@ class _Result:
 
 
 class _Inventory:
-    def __init__(self, names):
+    """play 시작 때의 inventory 대역 — Ansible 은 play 대상으로 좁혀(restrict_to_hosts) 두므로 기본 조회는 play 범위(names)이고,
+    ignore_limits · ignore_restrictions 를 주면 좁히기 전의 전체(full)다."""
+    def __init__(self, names, full=None):
         self._names = names
+        self._full = list(names) if full is None else full
 
-    def get_hosts(self, pattern):
-        return [_Host(n) for n in self._names]
+    def get_hosts(self, pattern, ignore_limits=False, ignore_restrictions=False, order=None):
+        return [_Host(n) for n in (self._full if (ignore_limits and ignore_restrictions) else self._names)]
 
 
 class _VM:
-    def __init__(self, names):
-        self._inventory = _Inventory(names)
+    def __init__(self, names, full=None):
+        self._inventory = _Inventory(names, full)
 
 
 class _Play:
-    def __init__(self, names, name="os-gather | linux"):
-        self._vm = _VM(names)
+    def __init__(self, names, name="os-gather | linux", full=None):
+        self._vm = _VM(names, full)
         self._name = name
 
     def get_variable_manager(self):
@@ -150,13 +153,32 @@ def test_ignore_unreachable_probe_does_not_mark_lost(cb, tmp_path):
 
 
 def test_play_start_records_inventory_and_warns_on_manifest_mismatch(cb, tmp_path, capsys):
-    cb.v2_playbook_on_play_start(_Play(["10.0.0.1", "10.0.0.2"]))
+    """전체 inventory 가 접수 목록과 다르면 한 번 알린다(play 가 여럿이어도 한 번)."""
+    cb.v2_playbook_on_play_start(_Play(["10.0.0.1"], name="os-gather | detect", full=["10.0.0.1"]))
     ev = _events(tmp_path)
-    assert ev[-1]["event"] == "inventory" and ev[-1]["hosts"] == ["10.0.0.1", "10.0.0.2"] and ev[-1]["host"] is None
-    assert "접수 manifest" not in capsys.readouterr().err
-    cb.v2_playbook_on_play_start(_Play(["10.0.0.1"]))
+    assert ev[-1]["event"] == "inventory" and ev[-1]["hosts"] == ["10.0.0.1"] and ev[-1]["host"] is None
     err = capsys.readouterr().err
-    assert "inventory 와 접수 manifest 가 다르다" in err and "10.0.0.2" in err
+    assert "수집 대상(inventory)이 접수 목록과 다릅니다" in err and "10.0.0.2" in err
+    cb.v2_playbook_on_play_start(_Play(["10.0.0.1"], full=["10.0.0.1"]))
+    assert "NOTICE" not in capsys.readouterr().err, "실행마다 한 번만"
+
+
+def test_play_subsets_of_a_matching_inventory_do_not_warn(cb, tmp_path, capsys):
+    """2026-10-09 (main #359 · #360): os-gather 의 linux · windows play 는 접수 목록의 일부만 본다 — 정상이라 알리지 않는다.
+    진행 기록(inventory 이벤트)은 종전대로 play 범위의 대상을 남긴다."""
+    full = ["10.0.0.1", "10.0.0.2"]
+    cb.v2_playbook_on_play_start(_Play(full, name="os-gather | detect", full=full))
+    cb.v2_playbook_on_play_start(_Play(["10.0.0.1"], name="os-gather | linux", full=full))
+    cb.v2_playbook_on_play_start(_Play(["10.0.0.2"], name="os-gather | windows", full=full))
+    assert "NOTICE" not in capsys.readouterr().err
+    inv = [e for e in _events(tmp_path) if e["event"] == "inventory"]
+    assert [e["hosts"] for e in inv] == [full, ["10.0.0.1"], ["10.0.0.2"]] and [e["task"] for e in inv][1] == "os-gather | linux"
+
+
+def test_resumed_attempt_limit_does_not_warn(cb, tmp_path, capsys):
+    """이어서 하는 시도는 --limit 로 남은 대상만 돈다 — play 대상이 접수 목록보다 적어도 전체 inventory 가 같으면 알리지 않는다."""
+    cb.v2_playbook_on_play_start(_Play(["10.0.0.2"], name="os-gather | detect", full=["10.0.0.1", "10.0.0.2"]))
+    assert "NOTICE" not in capsys.readouterr().err
 
 
 def test_without_env_vars_nothing_is_written_and_nothing_breaks(tmp_path, monkeypatch):
