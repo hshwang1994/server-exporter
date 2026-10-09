@@ -146,3 +146,36 @@ CI(#36 → #37): `[Prodgen Verify] gate COMPLETE_PASS — 생성물 gate 통과�
 - `[수집] 수집 실행을 마쳤습니다. 소요 시간` 은 ansible 실행 시간, `[요약]` 의 수집 시간은 실행 기록(`exec_used`)이라 1초 차이가 날 수 있다(종전과 같은 측정).
 - 실장비 OOM · 72시간 대기 · 결과 처리 노드 장애는 Harness 와 단위 시험으로만 확인했다(지시서 §8 — 새로 재현하지 않음).
 - `Jenkinsfile_portal_Byid` 처리 결정(DRIFT-019)은 여전히 열려 있다.
+
+## 11. 후속 (같은 날, 사용자 승인 "남아있는 작업 모두 수행해라 승인한다")
+
+### 11-1. `[json_only] NOTICE` 오경보 — `callback_plugins/json_only.py`(보호 경로, 사용자 승인)
+
+- 원인: Ansible 은 play 를 시작할 때 inventory 를 그 play 의 대상으로 좁힌다(`PlaybookExecutor.run` → `restrict_to_hosts(batch)` 뒤 `v2_playbook_on_play_start`,
+  ansible-core 2.20.7 소스 확인). os-gather 의 linux · windows play 는 접수 목록의 일부만 보는 것이 정상인데 콜백이 그것을 접수 목록과 비교했다(S1 2줄 · S2 3줄).
+- 수정(`a271fae1`): 실행마다 한 번, 좁히기 전 전체 inventory(`get_hosts('all', ignore_limits=True, ignore_restrictions=True)`)로 대조한다 — 이어서 하는 시도의
+  `--limit` 도 오경보를 내지 않는다. 진행 기록(`inventory` 이벤트)은 종전대로 play 범위. 문장: `[json_only] NOTICE: 수집 대상(inventory)이 접수 목록과 다릅니다. …`.
+- 실제 Ansible(WSL 2.20.7, 2-play 플레이북 · 대상 접속 없음): 같은 목록 0줄 · 진짜 불일치 1줄 · `--limit` 0줄. main Job #381~#393 · #394~#406 콘솔 전부 NOTICE 0줄.
+
+### 11-2. `Jenkinsfile_portal_Byid` — 사본 유지 · portal 과 동기화 (사용자 결정 "맞춰라")
+
+- ADR `docs/ai/decisions/ADR-2026-10-09-portal-byid-copy.md`, rule 80 · rule 00 서술 정정, DRIFT-019 resolved. jenkins-prod 에 Byid 를 쓰는 Job 은 없다(Job 목록 확인) —
+  production 생성 대상에 넣지 않았다.
+- `tests/unit/test_jenkinsfile_portal_byid_sync.py`(`127d6a96`) — 고유 1줄 · 위치 · LF 를 강제.
+
+### 11-3. CI #38 FAIL → 수정 → CI #39 SUCCESS
+
+- CI #38(`f0bf371a`) Prodgen Verify FAIL — G14(생성 tree 위 pytest)에서 새 동기화 시험 2개 실패. 생성 tree 에는 Byid 가 없고 portal 주석이 지워져 있다.
+  원인은 `source_text` 표식 누락(FAILURE_PATTERNS 2026-10-09). Harness · Evidence 는 설계대로 SKIPPED, Promote 는 원격 변경 0 으로 거부.
+- 수정(`04a0d6c9`) 뒤 이 PC 에서 생성 tree G14 PASS(4,346 통과 · 44 제외)를 확인하고 다시 돌렸다.
+- main Job #394~#406(`04a0d6c9`, 같은 13 시나리오): 계약대로 · NOTICE 0 · 직전 회차(#381~#393)와 대상별 차이 0 · `e2e-evidence` 12/12 direct.
+- CI #39(`04a0d6c9`, 47분 58초 SUCCESS): 필수 10단계 PASS · Harness 45/45 · 21/21 · Evidence 78 · Verify COMPLETE_PASS · Promote DRY_RUN(GitLab 자격 없음 — 종전과 같음).
+
+### 11-4. production 승격 P10 · canary
+
+| 항목 | 값 |
+|---|---|
+| 방식 | 세션 CLI — `promote --sha 04a0d6c9 --verify-report <CI #39 집계> --e2e-evidence --ci-stage-results --ci-build #39 --netrc <세션> --vault-password-file <임시 사본, 직후 삭제> --push-remote origin,internal` |
+| 결과 | **P10 `9ddc174a`** — parent P9 `c69a0d33` · `Main-SHA: 04a0d6c9` · `Tree-Hash: a334d823…` · 196 파일 · Verdict COMPLETE_PASS · G01~G20 PASS(재실행 G11~G15 · G18~G20) |
+| 원격 | origin "accepted by remote" · internal 공유 push 주소로 도달 · `ls-remote` GitHub · GitLab · 로컬 모두 `9ddc174a` · drift-check PROVENANCE |
+| canary | production **#197 SUCCESS**(58초) · checkout P10 · 3대 성공 · Portal HTTP 200 · #194 와 대상별 차이 0 |

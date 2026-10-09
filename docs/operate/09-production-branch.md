@@ -134,6 +134,9 @@ G20 은 원격 없이 돌면 PARTIAL(검증 안 됨)이고, 일부 원격만 보
 
 ## 7. 현재 상태 (2026-10-09)
 
+2026-10-09 (후속): 열 번째 **P10 `9ddc174a`**(main `04a0d6c9` — `json_only` 접수 목록 대조 오경보 수정 · Byid 동기화 시험, parent P9 `c69a0d33`) 양 원격.
+COMPLETE_PASS(CI #39 집계 보고서 + G11~G15 · G18~G20 이 PC 재실행) · drift-check PROVENANCE · canary production #197 SUCCESS(checkout P10).
+
 2026-10-09: 아홉 번째 **P9 `c69a0d33`**(main `2c6d71f3` — 운영 로그 문구 정리, parent P8 `347ab74e`) 양 원격. COMPLETE_PASS(CI #37 집계 보고서 + 환경 의존 게이트
 G11~G15 · G18~G20 이 PC 재실행). CI #37 의 Promote 는 Jenkins 에 GitLab push 자격증명(`se-gitlab-push`)이 없어 dry-run 만 했고, 실제 승격은 세션 CLI 로 했다.
 GitHub · GitLab · 로컬 production 동일(`git ls-remote` 확인) · drift-check PROVENANCE. 승격 직후 production Job canary #194 SUCCESS(OS 3대 · HTTP 200 · checkout P9).

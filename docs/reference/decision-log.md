@@ -42,6 +42,9 @@
   CI #37 SUCCESS(Harness 45 · 21, Evidence 78, Verify COMPLETE_PASS) · **production P9 `c69a0d33`** 양 원격 · canary #194 SUCCESS.
 - CI #37 의 Promote 는 Jenkins 에 GitLab push 자격증명(`se-gitlab-push`)이 없어 dry-run 만 했다 — 실제 승격은 P8 과 같은 세션 CLI 로 했다.
 - 수집 결과 · 판정 · 전송 · 보존 동작은 바뀌지 않았다. 기록: `tests/evidence/2026-10-09-log-wording.md`.
+- 후속(같은 날, 사용자 승인): `[json_only] NOTICE` 오경보 수정 — 실행마다 한 번, play 범위로 좁히기 전 전체 inventory 로 접수 목록과 대조(`a271fae1`,
+  보호 경로 `json_only.py`). `Jenkinsfile_portal_Byid` 는 사본 유지 · portal 과 동기화(`ADR-2026-10-09-portal-byid-copy.md`, 시험으로 강제).
+  CI #39 SUCCESS · **production P10 `9ddc174a`**(main `04a0d6c9`) 양 원격 · canary #197 SUCCESS.
 
 ## 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · production P8
 
