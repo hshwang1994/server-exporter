@@ -553,3 +553,91 @@ def test_cli_round_trip(tmp_path):
     (ws / "gather_manifest.json").write_text("{}", encoding="utf-8")
     r = run("begin", "--ws", str(ws), "--pid", "1", "--gather-max", "100")
     assert r.returncode == 2 and "[수집 기록]" in r.stderr
+
+
+# ── 개행만 빠진 완전한 마지막 줄 (2026-10-10 C2) ──────────────────────────────────────────────────────────────
+# 판정은 finalize_gather_output.parse_tail_record(치환 전 bytes) 하나 — read_jsonl 과 fix_tail 이 같은 답을 내야 앞 시도를 닫을 때
+# 확정으로 센 대상의 결과 줄이 끝줄 정리에서 사라지지 않는다. 이 절은 파일 상태 재현이다(실제 프로세스 중단 관측이 아니다).
+
+def test_complete_unterminated_line_is_kept_and_the_resume_continues(tmp_path):
+    """감사 재현: 정상 결과 줄 하나가 개행 없이 남은 채 앞 시도가 끊겼다 → 그 대상은 확정으로 남고 남은 대상만 이어서 수집한다."""
+    ips = ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+    ws = _ws(tmp_path, ips)
+    _begin(ws, T0)
+    line = json.dumps(_envelope("10.0.0.1"))
+    (ws / "gather_output.json").write_text(line, encoding="utf-8")       # json_only 가 줄을 쓰고 개행 전에 끊긴 상태
+    plan = _begin(ws, T0 + 100, agent_lost=True)
+    assert plan["state"] is None and plan["lost"] == 0, plan
+    assert plan["tail_terminated"] == ["gather_output.json"] and plan["tail_fixed"] == []
+    assert plan["completed"] == 1 and plan["pending"] == 2
+    assert (ws / "gather_output.json").read_text(encoding="utf-8") == line + "\n", "내용은 그대로, 구분 개행만 붙는다"
+    assert not (ws / "gather_tail_fragments.jsonl").exists()
+    assert (ws / ".gather_limit_hosts").read_text(encoding="utf-8").split() == ["10.0.0.2", "10.0.0.3"]
+    closed = _state(ws)["attempts"][0]
+    assert closed["completed_ips"] == ["10.0.0.1"], "앞 시도를 닫을 때 확정으로 센 대상이 그대로 남는다"
+
+
+def test_complete_unterminated_checkpoint_and_progress_lines_are_kept(tmp_path):
+    ips = ["10.0.0.1", "10.0.0.2"]
+    ws = _ws(tmp_path, ips)
+    cp = json.dumps({"ip": "10.0.0.2", "host": "10.0.0.2", "event": "checkpoint", "data": {}})
+    ev = json.dumps(_emitted("10.0.0.1"))
+    (ws / "gather_checkpoint.jsonl").write_text(cp, encoding="utf-8")
+    (ws / "gather_progress.jsonl").write_text(ev, encoding="utf-8")
+    plan = _begin(ws, T0)
+    assert plan["tail_terminated"] == ["gather_checkpoint.jsonl", "gather_progress.jsonl"] and plan["tail_fixed"] == []
+    assert (ws / "gather_checkpoint.jsonl").read_text(encoding="utf-8") == cp + "\n"
+    assert (ws / "gather_progress.jsonl").read_text(encoding="utf-8").startswith(ev + "\n")
+
+
+@pytest.mark.parametrize("tail", [
+    b'{"schema_version": "1", "ip": "10.0',              # 쓰는 도중 끊긴 JSON
+    b'{"ip": "10.0.0.2", "x": NaN}',                      # RFC 8259 밖의 수
+    b'[1, 2, 3]',                                         # 객체가 아니다
+    b'   ',                                               # 공백만
+    b'{"ip": "10.0.0.2", "name": "caf\xe9"}',             # JSON 문자열 안의 잘못된 UTF-8 bytes(latin-1 é)
+], ids=["cut", "nan", "not_object", "blank", "invalid_utf8"])
+def test_damaged_unterminated_tails_still_go_to_the_fragment_file(tmp_path, tail):
+    whole = (json.dumps(_envelope("10.0.0.1")) + "\n").encode("utf-8")
+    ws = _ws(tmp_path, ["10.0.0.1", "10.0.0.2"])
+    (ws / "gather_output.json").write_bytes(whole + tail)
+    plan = _begin(ws, T0)
+    assert plan["tail_fixed"] == ["gather_output.json"] and plan["tail_terminated"] == []
+    assert (ws / "gather_output.json").read_bytes() == whole
+    frag = json.loads((ws / "gather_tail_fragments.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert frag["file"] == "gather_output.json" and frag["bytes"] == len(tail)
+
+
+def test_valid_utf8_tail_with_the_same_character_is_kept(tmp_path):
+    """같은 글자(é)를 정상 UTF-8 로 쓴 완전한 줄은 손상이 아니다 — 위 invalid_utf8 경우와 bytes 로만 다르다."""
+    env = dict(_envelope("10.0.0.2"), hostname="caf\u00e9")
+    tail = json.dumps(env, ensure_ascii=False).encode("utf-8")
+    assert b"caf\xc3\xa9" in tail
+    whole = (json.dumps(_envelope("10.0.0.1")) + "\n").encode("utf-8")
+    ws = _ws(tmp_path, ["10.0.0.1", "10.0.0.2"])
+    (ws / "gather_output.json").write_bytes(whole + tail)
+    plan = _begin(ws, T0)
+    assert plan["tail_terminated"] == ["gather_output.json"] and plan["tail_fixed"] == []
+    assert plan["completed"] == 2 and plan["pending"] == 0
+    assert (ws / "gather_output.json").read_bytes() == whole + tail + b"\n"
+
+
+@pytest.mark.parametrize("tail,complete", [
+    (b'{"ip": "10.0.0.2", "name": "caf\xe9"}', False),
+    (b'{"ip": "10.0.0.2", "name": "caf\xc3\xa9"}', True),
+    (b'{"ip": "10.0.0.2"', False),
+    (b'{"ip": "10.0.0.2"}', True),
+    (b'{"ip": "10.0.0.2", "v": Infinity}', False),
+    (b'"just a string"', False),
+], ids=["latin1", "utf8", "cut", "whole", "infinity", "string"])
+def test_read_jsonl_and_fix_tail_agree_on_the_same_bytes(tmp_path, tail, complete):
+    import finalize_gather_output as fz
+    head = b'{"ip": "10.0.0.1"}\n'
+    p = tmp_path / "gather_output.json"
+    p.write_bytes(head + tail)
+    report = {"truncated_tail": [], "corrupt_lines": []}
+    rows = fz.read_jsonl(p, report, "output")
+    reader_complete = len(rows) == 2 and not report["truncated_tail"]
+    how = gs.fix_tail(p, tmp_path / "gather_tail_fragments.jsonl", T0)
+    assert reader_complete is complete
+    assert how == ("terminated" if complete else "moved")

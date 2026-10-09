@@ -256,3 +256,35 @@ def test_attempt_marker_resets_observations_of_resumed_hosts(tmp_path):
     env = final[1]
     assert env["diagnosis"]["failure_code"] == "OUTPUT_BUILD_FAILED", "지난 시도의 인증 · 끊김 관측으로 GATHER_FAILED 를 만들지 않는다"
     assert report["corrupt_lines"] == []
+
+
+
+def test_unterminated_last_line_is_judged_on_the_original_bytes(tmp_path):
+    """2026-10-10 (C2): 개행 없는 마지막 줄은 치환 전 bytes 로 판정한다 — 잘못된 UTF-8 은 정상 문자열로 둔갑하지 않는다."""
+    ok = json.dumps(_envelope("10.0.0.1")).encode("utf-8") + b"\n"
+    bad = json.dumps(dict(_envelope("10.0.0.2"), hostname="h-cafX")).encode("utf-8").replace(b"cafX", b"caf\xe9")
+    ws = _ws(tmp_path, ["10.0.0.1", "10.0.0.2"])
+    (ws / "gather_output.json").write_bytes(ok + bad)
+    code, report, final = _run(ws)
+    assert code == 2 and len(report["truncated_tail"]) == 1 and report["truncated_tail"][0]["line"] == 2
+    assert final[1]["status"] == "failed", "손상 줄의 대상은 보충 결과"
+
+    (tmp_path / "b").mkdir()
+    good = json.dumps(dict(_envelope("10.0.0.2"), hostname="h-caf\u00e9"), ensure_ascii=False).encode("utf-8")
+    ws2 = _ws(tmp_path / "b", ["10.0.0.1", "10.0.0.2"])
+    (ws2 / "gather_output.json").write_bytes(ok + good)
+    code2, report2, final2 = _run(ws2)
+    assert code2 == 0 and not report2["truncated_tail"] and final2[1]["hostname"] == "h-caf\u00e9"
+
+
+@pytest.mark.parametrize("data,expected", [
+    (b'{"a": 1}', {"a": 1}),
+    (b'  {"a": 1}  ', {"a": 1}),
+    (b'{"a": NaN}', None),
+    (b'[1]', None),
+    (b'', None),
+    (b'{"a": "\xff"}', None),
+    (b'{' * 100000, None),
+], ids=['object', 'padded', 'nan', 'array', 'empty', 'invalid_utf8', 'deep_nesting'])
+def test_parse_tail_record(data, expected):
+    assert fz.parse_tail_record(data) == expected

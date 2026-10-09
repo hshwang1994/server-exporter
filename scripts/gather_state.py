@@ -7,7 +7,8 @@ scripts/run_gather.sh 가 ansible 실행 앞뒤로 부르고(begin · end), Jenk
 begin     · 이전 시도가 끝 기록 없이 사라졌으면 근거로 닫는다 — Runner 재부팅(boot_id) · 이 실행의 OOM(커널 로그의 OOM 종료 기록 PID 가
             이 실행의 PID) · 연결 끊김(Jenkins 보고) · 근거가 없으면 원인 미확인(process_lost). 그 시도가 남긴 vault 임시 파일 ·
             SSH 다중화 폴더를 지운다.
-          · 잘린 마지막 줄(개행 없음)을 gather_tail_fragments.jsonl 로 옮긴다 — 다음 시도가 이어 쓸 때 두 줄이 같이 깨지지 않게.
+          · 개행 없이 끝난 마지막 줄: 완전한 JSON 객체 레코드면 줄바꿈만 붙이고(2026-10-10 C2 — 내용 보존), 쓰는 도중 끊긴 줄 · 잘못된 UTF-8 은
+            gather_tail_fragments.jsonl 로 옮긴다 — 다음 시도가 이어 쓸 때 두 줄이 같이 깨지지 않게.
           · 결과가 확정됐던 대상(진행 기록의 emitted · reconciled 사건, 앞 시도 기록의 completed_ips)의 결과 줄이 지금 결과 파일에 없으면
             다시 수집하지 않고 재개 불가(resume_impossible)로 남긴다. 개수가 아니라 IP 로 대조한다(10차 R3).
           · 남은 대상 = 접수 IP − 결과 줄이 있는 IP − 결과가 확정됐던 IP − Precheck 실패가 관측된 IP(다시 수집하지 않는다).
@@ -41,7 +42,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from finalize_gather_output import read_jsonl, shape_gate  # noqa: E402 - 같은 폴더의 Layer A 판정을 그대로 쓴다(복제 없음)
+from finalize_gather_output import parse_tail_record, read_jsonl, shape_gate  # noqa: E402 - 같은 폴더의 Layer A 판정을 그대로 쓴다(복제 없음)
 
 ALIVE_INTERVAL_SEC = 60
 OS_FORKS_MAX = 50
@@ -306,15 +307,27 @@ def forks_for(channel: str, hosts: int, vcpu, os_cap) -> int:
     return max(1, min(max(1, hosts), cap))
 
 
-def fix_tail(path: Path, fragments: Path, now: float) -> bool:
-    """개행 없이 끝난 마지막 줄(쓰는 도중 끊긴 줄)을 fragments 로 옮기고 원본을 마지막 개행까지 자른다. 옮겼으면 True."""
+def fix_tail(path: Path, fragments: Path, now: float):
+    """개행 없이 끝난 마지막 줄 정리 — 'terminated' | 'moved' | None(정리할 것 없음).
+
+    2026-10-10 (C2): 마지막 조각이 완전한 JSON 객체 레코드면(판정은 finalize_gather_output.parse_tail_record — read_jsonl 과 같은 함수,
+    치환 전 bytes 기준) 내용은 그대로 두고 구분 개행만 붙인다('terminated'). 쓰는 도중 끊긴 줄 · 잘못된 UTF-8 은 종전대로 fragments 로
+    옮기고 원본을 마지막 개행까지 자른다('moved'). 종전에는 완전한 줄도 옮겨, 앞 시도를 닫을 때 확정으로 센 대상의 결과 줄이 사라지고
+    재개 불가(rc 92)로 끝났다.
+    """
     try:
         data = path.read_bytes()
     except FileNotFoundError:
-        return False
+        return None
     if not data or data.endswith(b'\n'):
-        return False
+        return None
     cut = data.rfind(b'\n') + 1
+    if parse_tail_record(data[cut:]) is not None:
+        with open(path, 'ab') as fh:
+            fh.write(b'\n')
+            fh.flush()
+            os.fsync(fh.fileno())
+        return 'terminated'
     rec = {'file': path.name, 'at': iso(now), 'bytes': len(data) - cut, 'fragment': data[cut:].decode('utf-8', 'replace')}
     with open(fragments, 'a', encoding='utf-8') as fh:
         fh.write(json.dumps(rec, ensure_ascii=False) + '\n')
@@ -324,7 +337,7 @@ def fix_tail(path: Path, fragments: Path, now: float) -> bool:
         fh.truncate(cut)
         fh.flush()
         os.fsync(fh.fileno())
-    return True
+    return 'moved'
 
 
 def load_manifest(ws: Path):
@@ -551,7 +564,9 @@ def begin(ws: Path, *, pid: int, vault_tmp: str, cp_dir: str, gather_max: int, v
     closed = close_open_attempt(st, ws, now, prev_agent_lost, probes)
     if prev_agent_lost and st['attempts']:
         st['attempts'][-1]['agent_lost'] = True
-    fixed = [NAMES[key] for key in ('output', 'checkpoint', 'progress') if fix_tail(ws / NAMES[key], ws / NAMES['fragments'], now)]
+    tails = [(NAMES[key], fix_tail(ws / NAMES[key], ws / NAMES['fragments'], now)) for key in ('output', 'checkpoint', 'progress')]
+    fixed = [name for name, how in tails if how == 'moved']
+    terminated = [name for name, how in tails if how == 'terminated']
     done, pre_failed = completed_hosts(ws, channel, ips)
     # 10차 R3 — 결과가 확정됐던 대상을 IP 로 대조한다. 결과 줄은 있지만 형태 검사를 통과하지 못한 확정 대상은 다시 수집하지 않는다
     #   (결과 확인 단계가 손상 줄로 처리한다). 확정 대상의 결과 줄이 아예 없으면 재수집 없이 재개할 수 없다.
@@ -570,7 +585,7 @@ def begin(ws: Path, *, pid: int, vault_tmp: str, cp_dir: str, gather_max: int, v
            'oom_kill_start': probes['oom'] if 'oom' in probes else oom_counters(),
            'vault_tmp': vault_tmp, 'cp_dir': cp_dir, 'hosts_total': len(ips), 'completed_before': len(done),
            'precheck_failed': len(pre_all), 'pending': len(pending), 'limit_sec': limit,
-           'forks': forks_for(channel, len(pending), vcpu, os_cap), 'tail_fixed': fixed}
+           'forks': forks_for(channel, len(pending), vcpu, os_cap), 'tail_fixed': fixed, 'tail_terminated': terminated}
     if lost:
         att.update(state='resume_impossible', end_source='results_lost', exec_sec=0, ran_sec=0, rc=92, timed_out=False,
                    ended_epoch=int(now), ended_at=iso(now), completed_after=len(done), lost_ips=lost,
@@ -594,7 +609,7 @@ def begin(ws: Path, *, pid: int, vault_tmp: str, cp_dir: str, gather_max: int, v
     return {'attempt': att['n'], 'state': att.get('state'), 'pending': len(pending), 'limit': limit, 'forks': att['forks'],
             'hosts_total': len(ips), 'completed': len(done), 'precheck_failed': len(pre_all), 'exec_used': used,
             'resumed': att['n'] > 1, 'closed_previous': (closed or {}).get('state'), 'closed_evidence': (closed or {}).get('evidence'),
-            'tail_fixed': fixed, 'limit_file': NAMES['limit_hosts'], 'channel': channel, 'lost': len(lost),
+            'tail_fixed': fixed, 'tail_terminated': terminated, 'limit_file': NAMES['limit_hosts'], 'channel': channel, 'lost': len(lost),
             'evidence': att.get('evidence') or ''}
 
 

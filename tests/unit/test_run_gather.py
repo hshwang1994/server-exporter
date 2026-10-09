@@ -412,3 +412,24 @@ def test_vanished_confirmed_results_stop_the_resume_without_gathering_again(env)
     att = _record(env)["attempts"][-1]
     assert att["state"] == "resume_impossible" and att["lost_ips"] == [IPS[0]]
     assert (env["ws"] / "gather_rc.txt").read_text(encoding="utf-8").strip() == "92"
+
+
+
+def test_complete_last_line_without_newline_is_kept_and_the_rest_is_gathered(env):
+    """2026-10-10 (C2): 앞 시도가 정상 결과 줄을 개행 없이 남기고 끊겼다 — 줄바꿈만 붙이고 그 대상은 다시 수집하지 않는다(재개 불가 아님)."""
+    whole = env["ws"] / "gather_output.json"
+    e = dict(env["env"], STUB_MODE="crash", STUB_EMIT_N="1")
+    with open(env["tmp"] / "first.log", "w", encoding="utf-8") as log:
+        subprocess.Popen([BASH, str(SCRIPT), *_argv(env, "600")], env=e, stdout=log, stderr=subprocess.STDOUT).wait(timeout=120)
+    text = whole.read_text(encoding="utf-8")
+    assert text.endswith("\n") and len(text.splitlines()) == 1
+    whole.write_text(text[:-1], encoding="utf-8")            # 개행만 빠진 상태
+    _wait_lock_free(env)
+    r = _run(env, gather_max="600", mode="emit")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "줄바꿈만 붙였습니다" in r.stdout and "  파일: gather_output.json" in r.stdout
+    assert "옮겼습니다" not in r.stdout and not (env["ws"] / "gather_tail_fragments.jsonl").exists()
+    lines = whole.read_text(encoding="utf-8").splitlines()
+    assert sorted(json.loads(l)["ip"] for l in lines) == sorted(IPS) and len(lines) == 7
+    received = (env["out"] / "hosts_received.txt").read_text(encoding="utf-8").split("--")
+    assert IPS[0] not in received[-2].split(), "확정된 대상은 다시 받지 않는다"

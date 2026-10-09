@@ -9,7 +9,7 @@
 #   1. 작업 폴더의 잠금(.gather.lock)을 잡는다. 이 빌드의 이전 수집이 아직 돌고 있으면(Agent 연결만 끊겼던 동안 계속 돈 실행)
 #      끝날 때까지 기다린다. 이전 수집은 자기 실행 한계 안에서 끝난다.
 #   2. 빌드 환경 경계(scripts/env_guard.sh) · Ansible venv 선택(scripts/activate_ansible_venv.sh) — 못 찾으면 종료 코드 90
-#   3. scripts/gather_state.py begin — 끝 기록 없이 사라진 이전 시도를 근거로 닫고, 쓰는 도중 끊긴 마지막 줄을 옮기고,
+#   3. scripts/gather_state.py begin — 끝 기록 없이 사라진 이전 시도를 근거로 닫고, 쓰는 도중 끊긴 마지막 줄을 옮기고(완전한 줄은 줄바꿈만 붙인다),
 #      남은 대상(결과가 확정되지 않은 접수 IP — Precheck 실패로 확정된 대상 제외)과 이번 실행 한계(수집 실행 한계 − 누적 실행 시간),
 #      동시 실행 수(채널 상한 그대로, 메모리 계산 없음)를 정한다. 남은 대상이 없으면 ansible 을 실행하지 않고 0 으로,
 #      누적 한계를 다 썼으면 실행하지 않고 124 로 끝난다. 결과가 확정됐던 대상의 결과 줄이 작업 폴더에서 사라졌으면(IP 로 대조)
@@ -158,6 +158,7 @@ p = json.loads(sys.argv[1])
 pairs = (("ATTEMPT", p["attempt"]), ("PENDING", p["pending"]), ("LIMIT", p["limit"]), ("FORKS", p["forks"]),
          ("TOTAL", p["hosts_total"]), ("DONE", p["completed"]), ("PREFAIL", p["precheck_failed"]), ("USED", p["exec_used"]),
          ("PREV", p.get("closed_previous") or ""), ("PREV_EV", p.get("closed_evidence") or ""), ("FIXED", ",".join(p.get("tail_fixed") or [])),
+         ("TERMINATED", ",".join(p.get("tail_terminated") or [])),
          ("BSTATE", p.get("state") or ""), ("BEVID", p.get("evidence") or ""), ("CHANNEL", p.get("channel") or ""))
 print(" ".join("%s=%s" % (k, shlex.quote(str(v))) for k, v in pairs))
 ' "$PLAN")"
@@ -170,6 +171,10 @@ fi
 if [ -n "$FIXED" ]; then
     echo "[$(se_show)] [수집] 결과 파일에서 쓰다 끊긴 마지막 줄을 gather_tail_fragments.jsonl로 옮겼습니다. 그 대상은 다시 수집합니다."
     echo "  옮긴 파일: ${FIXED}"
+fi
+if [ -n "$TERMINATED" ]; then
+    echo "[$(se_show)] [수집] 결과 파일의 마지막 줄에 줄바꿈이 없어 줄바꿈만 붙였습니다. 줄의 내용은 그대로입니다."
+    echo "  파일: ${TERMINATED}"
 fi
 if [ "$BSTATE" = "resume_impossible" ]; then
     echo "[$(se_show)] [수집] 결과가 확정됐던 대상의 결과가 작업 폴더에 없어 다시 수집하지 않습니다."

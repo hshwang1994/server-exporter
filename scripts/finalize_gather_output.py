@@ -124,31 +124,56 @@ class Canon:
 
 # ───────────────────────── 입력 파싱 ─────────────────────────
 
+def parse_tail_record(data: bytes):
+    """개행 없이 끝난 마지막 조각(원래 bytes)이 완전한 JSON 객체 레코드인가 — 맞으면 그 객체, 아니면 None.
+
+    2026-10-10 (C2): 판정은 치환 전 bytes 로 한다 — 엄격한 UTF-8 · RFC 8259 수(NaN/Infinity 거부) · 객체 하나. 쓰는 도중 끊긴 줄과
+    잘못된 UTF-8 은 None(손상)이다. read_jsonl 과 gather_state.fix_tail 이 이 함수 하나로 판정한다 — 한쪽만 완전한 줄로 인정하면
+    앞 시도를 닫을 때 확정으로 센 대상의 결과 줄이 끝줄 정리에서 사라진다.
+    """
+    try:
+        text = data.decode('utf-8').strip()
+        obj = json.loads(text, parse_constant=_reject_constant) if text else None
+    except (ValueError, RecursionError):
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
 def read_jsonl(path: Path, report: dict, label: str):
-    """JSONL → [(index, text, obj)]. 마지막 줄 절단(개행 없음 + 파싱 불가) 과 손상 줄은 report 에 남기고 건너뛴다."""
+    """JSONL → [(index, text, obj)]. 마지막 줄 절단(개행 없음 + 완전한 레코드 아님) 과 손상 줄은 report 에 남기고 건너뛴다.
+
+    개행 없는 마지막 줄은 parse_tail_record(원래 bytes)로 판정한다. 중간 줄은 종전대로 치환 디코딩한 글자로 판정한다.
+    """
     rows = []
     if not path.is_file():
         return rows
     try:
-        raw = path.read_text(encoding='utf-8', errors='replace')
+        data = path.read_bytes()
     except OSError as e:
         raise ToolFailure(f'{label} 읽기 실패: {e}') from e
-    if not raw:
+    if not data:
         return rows
+    raw = data.decode('utf-8', errors='replace')
     lines = raw.split('\n')
     trailing_newline = raw.endswith('\n')
     if trailing_newline:
         lines = lines[:-1]
+    tail = None if trailing_newline else data[data.rfind(b'\n') + 1:]
     for idx, line in enumerate(lines):
         text = line.strip()
         if not text:
             continue
+        if tail is not None and idx == len(lines) - 1:
+            obj = parse_tail_record(tail)
+            if obj is None:
+                report['truncated_tail'].append({'file': label, 'line': idx + 1, 'preview': text[:MAX_CORRUPT_PREVIEW]})
+                continue
+            rows.append((idx + 1, text, obj))
+            continue
         try:
             obj = json.loads(text, parse_constant=_reject_constant)
         except ValueError:
-            is_last = (idx == len(lines) - 1) and not trailing_newline
-            (report['truncated_tail'] if is_last else report['corrupt_lines']).append(
-                {'file': label, 'line': idx + 1, 'preview': text[:MAX_CORRUPT_PREVIEW]})
+            report['corrupt_lines'].append({'file': label, 'line': idx + 1, 'preview': text[:MAX_CORRUPT_PREVIEW]})
             continue
         rows.append((idx + 1, text, obj))
     return rows
