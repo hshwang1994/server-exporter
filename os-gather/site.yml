@@ -12,7 +12,7 @@
 
   tasks:
 
-    - name: "detect | 공통 precheck (관리 포트 순차 확인)"
+    - name: "사전 점검: 관리 포트 연결 확인"
       ansible.builtin.include_tasks:
         file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/precheck/run_precheck.yml"
       vars:
@@ -192,25 +192,25 @@
                          repo_root=lookup('env','REPO_ROOT')) }}
           no_log: true
 
-        - name: "linux | gather system"
+        - name: "Linux: 서버 기본 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_system.yml
 
-        - name: "linux | gather cpu"
+        - name: "Linux: CPU 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_cpu.yml
 
-        - name: "linux | gather memory"
+        - name: "Linux: 메모리 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_memory.yml
 
-        - name: "linux | gather storage"
+        - name: "Linux: 스토리지 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_storage.yml
 
-        - name: "linux | gather network"
+        - name: "Linux: 네트워크 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_network.yml
 
-        - name: "linux | gather users"
+        - name: "Linux: 사용자 계정 목록 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_users.yml
 
-        - name: "linux | gather hba_ib"
+        - name: "Linux: HBA와 InfiniBand 정보 수집"
           ansible.builtin.include_tasks: tasks/linux/gather_hba_ib.yml
 
 
@@ -440,28 +440,28 @@
                          repo_root=lookup('env','REPO_ROOT')) }}
           no_log: true
 
-        - name: "windows | gather system"
+        - name: "Windows: 서버 기본 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_system.yml
 
-        - name: "windows | gather hardware"
+        - name: "Windows: 하드웨어 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_hardware.yml
 
-        - name: "windows | gather cpu"
+        - name: "Windows: CPU 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_cpu.yml
 
-        - name: "windows | gather memory"
+        - name: "Windows: 메모리 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_memory.yml
 
-        - name: "windows | gather storage"
+        - name: "Windows: 스토리지 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_storage.yml
 
-        - name: "windows | gather network"
+        - name: "Windows: 네트워크 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_network.yml
 
-        - name: "windows | gather users"
+        - name: "Windows: 사용자 계정 목록 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_users.yml
 
-        - name: "windows | gather runtime"
+        - name: "Windows: 실행 환경 정보 수집"
           ansible.builtin.include_tasks: tasks/windows/gather_runtime.yml
 
         - name: "windows | build diagnosis (success path)"
