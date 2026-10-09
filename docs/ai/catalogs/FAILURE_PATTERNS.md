@@ -900,3 +900,13 @@
   `tests/unit/test_gather_state.py::test_this_runs_oom_is_linked_even_when_the_kernel_log_clock_lags_uptime`(Runner03 실측 줄 그대로). 고친 뒤 같은 실기 6사례가 기대대로.
 - 재발 방지: 서로 다른 출처의 시각을 비교할 때 같은 시계인지 먼저 본다. 해석 함수 단위 시험만으로 끝내지 말고 실제 출력(실장비 형식)을 처음부터 끝까지 태운다.
 - 관련 rule: rule 95 R1 · rule 25 R7-A-1 · CLAUDE.md §16
+
+## 2026-10-09 — main 전용 원문을 읽는 새 시험에 source_text 표식을 빠뜨려 CI Verify(G14)가 막혔다
+
+- 카테고리: scope-miss
+- 발견 위치: CI #38(`f0bf371a`) Prodgen Verify — G14(production 생성 tree 위 pytest) 2 failed: `tests/unit/test_jenkinsfile_portal_byid_sync.py`.
+- 원인: 새 시험이 주석이 남은 `Jenkinsfile_portal` 과 main 에만 있는 `Jenkinsfile_portal_Byid` 를 읽는데 `source_text` 표식이 없었다. G14 는 생성 tree(주석 제거 ·
+  Byid 없음)에서 `-m "not source_text"` 로 시험을 다시 돌린다. 로컬 `ci_gate`(main 원본)에서는 통과해 놓쳤다.
+- 수정: `pytestmark = pytest.mark.source_text`(`04a0d6c9`). 이 PC 에서 생성 tree G14 PASS(44 제외) 확인 뒤 CI #39 SUCCESS.
+- 재발 방지: 저장소 원문(주석 · Jenkinsfile 사본 · docs · .claude)을 읽는 새 시험은 source_text 표식을 단다. 시험을 더한 커밋은 push 전에 생성 tree G14 를 한 번 돌린다.
+- 관련 rule: rule 95 R3 · rule 91 R5 · CLAUDE.md §16

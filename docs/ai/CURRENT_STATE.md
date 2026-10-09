@@ -1,5 +1,15 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-09 (후속) — `json_only` 오경보 수정 · Byid 동기화 결정 · **main `04a0d6c9` → production P10 `9ddc174a`**
+
+> 정본: `tests/evidence/2026-10-09-log-wording.md` 11절 · `docs/ai/decisions/ADR-2026-10-09-portal-byid-copy.md`.
+
+- **`[json_only] NOTICE` 오경보**(사용자 승인 — 보호 경로): play 시작 때 inventory 가 그 play 대상으로 좁혀져 OS 정상 배치에서 play 마다 경고가 났다.
+  실행마다 한 번, 좁히기 전 전체 inventory(`ignore_limits` · `ignore_restrictions`)로 대조하도록 고쳤다. 진행 기록은 그대로. main Job 26빌드 콘솔 NOTICE 0줄.
+- **Byid**: 사용자 결정 "맞춰라" — 사본 유지 · portal 과 동기화(`test_jenkinsfile_portal_byid_sync.py`, source_text). rule 80 · rule 00 정정, DRIFT-019 resolved.
+- **실측**: CI #38 FAIL(새 시험의 source_text 표식 누락 — G14) → 수정 · 로컬 G14 PASS → main Job #394~#406 계약대로 · 차이 0 → CI #39 SUCCESS →
+  세션 CLI 승격 **P10 `9ddc174a`** COMPLETE_PASS · 양 원격 · canary #197 SUCCESS 3/3.
+
 ## 일자: 2026-10-09 — 운영 로그 문구 정리(수집 Job · 수집 스크립트 · CI) · **main `2c6d71f3` → production P9 `c69a0d33`**
 
 > 정본: 결정 `docs/reference/decision-log.md` 2026-10-09 · `ADR-2026-10-05` 보완 문단 · 실측 `tests/evidence/2026-10-09-log-wording.md`.
@@ -14,7 +24,7 @@
   Harness 45 · 21, Evidence 78, Verify COMPLETE_PASS) · 세션 CLI 승격 **P9 `c69a0d33`**(G11~G15 · G18~G20 이 PC 재실행) · 양 원격 · canary #194 SUCCESS 3/3 · HTTP 200.
 - **참고**: CI Promote 는 2026-10-04 CI 도입 때부터 dry-run 이다 — Jenkins 에 GitLab push 자격증명(`se-gitlab-push`)이 없다(바뀐 것 없음).
   승격은 P1~P9 모두 이 PC 세션 CLI(이 PC 의 git 자격)로 했다.
-- **이번에 확인한 것**: OS 정상 배치에도 `[json_only] NOTICE: inventory 와 접수 manifest 가 다르다` 가 play 마다 나온다(보호 경로 — NEXT_ACTIONS, 승인 필요).
+- **이번에 확인한 것**: OS 정상 배치에도 `[json_only] NOTICE` 가 play 마다 나왔다 — 같은 날 후속(위 항목)에서 사용자 승인으로 고쳤다.
 
 ## 일자: 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · **main `21b24c0a` → production P8 `347ab74e`**
 

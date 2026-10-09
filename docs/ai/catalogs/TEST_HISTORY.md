@@ -1,5 +1,18 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-09 (후속) — `json_only` 오경보 수정 · Byid 동기화 시험 · `04a0d6c9` → production P10 `9ddc174a`
+
+| 구분 | 결과 |
+|---|---|
+| 단위 시험 | `test_callback_progress_manifest.py` 9 통과(새 3: play 부분집합 무경보 · 전체 불일치 1회 · `--limit` 무경보) · `test_jenkinsfile_portal_byid_sync.py` 2 통과 |
+| 실제 Ansible(WSL 2.20.7) | 2-play 플레이북(local 연결): 같은 목록 NOTICE 0 · 불일치 1줄 · `--limit` 0 · 진행 기록 play 범위 그대로 |
+| WSL `ci_gate`(LF clone `f0bf371a`) | PASS — 4,539 통과 · 145 건너뜀 · 7 xfail · integration 324 · 3채널 syntax-check · corpus 20/20 |
+| CI #38(`f0bf371a`) | **FAIL** — Prodgen Verify G14: 새 동기화 시험 2개(source_text 표식 누락). Harness · Evidence SKIPPED · Promote 원격 변경 0 |
+| 로컬 G14(`04a0d6c9` 생성 tree) | PASS — 4,346 통과 · 127 건너뜀 · 44 제외 · 필수 그룹 portal_contract 43 |
+| main Job | #381~#393(`f0bf371a`) · #394~#406(`04a0d6c9`) 각 13 시나리오 계약대로 · NOTICE 0 · 회차 사이 대상별 차이 0 · `e2e-evidence` 12/12 direct |
+| CI #39(`04a0d6c9`) | SUCCESS 47분 58초 — 필수 10단계 PASS · Harness 45/45 · 21/21 · Evidence 78 · Verify COMPLETE_PASS · Promote DRY_RUN |
+| 승격 · canary | P10 `9ddc174a` COMPLETE_PASS(G11~G15 · G18~G20 재실행) · 양 원격 · 로컬 일치 · drift-check PROVENANCE · canary #197 SUCCESS 3/3 · #194 와 차이 0 |
+
 ## 2026-10-09 — 운영 로그 문구 정리 · `2c6d71f3` → production P9 `c69a0d33`
 
 | 구분 | 결과 |
