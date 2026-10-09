@@ -1,5 +1,20 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-09 — 운영 로그 문구 정리(수집 Job · 수집 스크립트 · CI) · **main `2c6d71f3` → production P9 `c69a0d33`**
+
+> 정본: 결정 `docs/reference/decision-log.md` 2026-10-09 · `ADR-2026-10-05` 보완 문단 · 실측 `tests/evidence/2026-10-09-log-wording.md`.
+
+- **바꾼 것**: 운영자가 읽는 문장만 — 한 사건은 첫 줄 + 두 칸 들여쓴 상세 줄, 업무 시각은 첫 줄에만, 설계 설명 · 코드값 나열 삭제. Portal 전송 상태는 기록
+  (delivered · refused · 시도 기록)으로 고른다(`HTTP 200 응답을 받았습니다` / `Portal이 요청을 거부했습니다` / `전송을 확인하지 못했습니다. 총 3번 시도했습니다` /
+  `Portal 전송을 시작하지 않았습니다`). `[결과] 성공 N대, …` 는 제자리 유지, `[요약]` 은 한 블록. CI 는 `COMPLETE_PASS: production 파일 검사를 통과했습니다` + 다음 검사(Harness)일 때만 둘째 줄.
+  Portal 화면 문구 2건(`Runner가` 띄어쓰기 · Redfish 표준 계정 Vault 없음 문장) · os 수집 include 블록 이름 15개 · `Jenkinsfile_portal_Byid` 동기화(차이 1줄 유지).
+- **바꾸지 않은 것**: stage · 판정 · 호출 순서 · `unstable`/`error` 조건 · JSON · `OUTPUT`/`CHECKPOINT`/`ADDON_*` · `[Trusted]` · `[기술 기록] 수집 시도` · `json_only.py`.
+  문구를 읽는 곳(Harness needle · sh label · `evidence.py` 표식 — 새 문구를 더하고 옛 표식 유지)은 같은 커밋에서 맞췄다.
+- **실측**: main Job #368~#380(13 시나리오) 콘솔 전수 · 지난 빌드 13쌍과 대상별 결과 차이 0 · Harness `sink_close` #1033 PASS · CI #37 SUCCESS(47분 58초 —
+  Harness 45 · 21, Evidence 78, Verify COMPLETE_PASS) · 세션 CLI 승격 **P9 `c69a0d33`**(G11~G15 · G18~G20 이 PC 재실행) · 양 원격 · canary #194 SUCCESS 3/3 · HTTP 200.
+- **알게 된 것**: Jenkins 에 GitLab push 자격증명(`se-gitlab-push`)이 없어 CI Promote 는 언제나 dry-run 이다(CI #37 콘솔). 실제 승격은 세션 CLI.
+  OS 정상 배치에도 `[json_only] NOTICE: inventory 와 접수 manifest 가 다르다` 가 play 마다 나온다(보호 경로 — NEXT_ACTIONS, 승인 필요).
+
 ## 일자: 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · **main `21b24c0a` → production P8 `347ab74e`**
 
 > 정본: 결정 `docs/ai/decisions/ADR-2026-10-08-ci-harness-parallel.md` · 실측 `tests/evidence/2026-10-08-ci-speed-p8.md`. 수집 runtime 은 바꾸지 않았다(생성 tree `8dac1eb2…` = `004a500e`).

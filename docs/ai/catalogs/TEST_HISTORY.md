@@ -1,5 +1,20 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-09 — 운영 로그 문구 정리 · `2c6d71f3` → production P9 `c69a0d33`
+
+| 구분 | 결과 |
+|---|---|
+| WSL `ci_gate`(LF clone `a9e26059`) | PASS — unit · e2e · regression 4,535 통과 · 145 건너뜀 · 7 xfail · integration 324 · 3채널 syntax-check · corpus 20/20 |
+| 문구를 읽는 시험(Windows) | `7d915a37` 17파일 568 통과 · 5 건너뜀 / `2c6d71f3` portal 4종 + Harness 도구 99 통과 · 2 건너뜀 / CI 41 통과 / 작업 폴더 정리 9 통과(WSL) |
+| Groovy 2.4.21 · 표시 함수 실행 | CONVERSION OK(portal · Byid · ci · se_finalize) · `@NonCPS` 표시 함수 · `seExplainGatherEnd` · CI 안내 식 실행 결과를 작업지시서 §6 문안과 대조 |
+| prodgen(이 PC, `a9e26059`) | build 195 파일 · class B 0 · verify G01~G12 · G14~G17 PASS(G14 4,344 통과 · `portal_contract` 43) |
+| main Job(`2c6d71f3`) | #368~#380 13 시나리오 계약대로(T2 · S1~S5 · E2E-D · E2E-E SUCCESS / T6 · E2E-A UNSTABLE / T5 ABORTED / T17 · E2E-A2 FAILURE) · 콘솔 전수 확인 · `e2e-evidence` 12/12 pass(direct) |
+| 변경 전후 대조 | 같은 입력 13쌍 + production #191→#194 — 대상별 status · 섹션 · failure_stage/code/reason · errors · 데이터 키 구조 차이 0 |
+| Harness | `sink_close` #1033 PASS 7/7 · CI #37 main 45/45 · 생성 tree 21/21 |
+| CI #37 | SUCCESS 47분 58초 — 필수 10단계 PASS · Evidence 78 · Verify COMPLETE_PASS · Promote DRY_RUN(GitLab push 자격증명 없음) |
+| 승격 · canary | P9 `c69a0d33` COMPLETE_PASS(G11~G15 · G18~G20 재실행) · 양 원격 · 로컬 일치 · drift-check PROVENANCE · canary #194 SUCCESS 3/3 · HTTP 200 |
+| 미수행 | 실장비 OOM · 72시간 대기 · 결과 처리 노드 장애 재현(Harness · 단위 시험으로만 확인 — 작업지시서 §8) |
+
 ## 2026-10-08 — inventory_json 확장형 입력 문서화 (문서 · 예시만, 코드 변경 없음)
 
 | 구분 | 결과 |

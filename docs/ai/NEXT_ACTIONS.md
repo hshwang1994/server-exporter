@@ -1,5 +1,15 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## 운영 로그 문구 정리 후속 (2026-10-09)
+
+> 정본: `docs/reference/decision-log.md` 2026-10-09 · `tests/evidence/2026-10-09-log-wording.md`. 실제 콘솔(main #354~#380 · CI · canary)에서 확인한 뒤 남긴 항목.
+
+- [ ] **[승인 필요] `[json_only] NOTICE: inventory 와 접수 manifest 가 다르다 …` 정상 수집 오경보** — OS 수집의 Linux · Windows play 마다
+  `callback_plugins/json_only.py:901` 이 play 의 inventory 와 접수 목록을 비교해 다르면 찍는다. Linux · Windows 가 섞인 정상 배치(S1 · S2)에서도 2~3줄 나온다.
+  `json_only.py` 는 보호 경로(rule 20 R2 — 수정 시 사용자 승인)라 이번 문구 작업에서 바꾸지 않았다. 조건(play 범위로 비교)과 문장을 함께 정리할지 결정이 필요하다.
+- [ ] **[정보] Add-on 검사 줄 중복** — esxi · redfish 빌드에서 Add-on 저장소의 `addon/tools/check_layout.py` 가 `[addon] 검사 통과: esxi 에는 실행할 기능이 없습니다` 를,
+  이어서 `Jenkinsfile_portal` 이 `[addon] 이 대상 종류(esxi)에서 실행할 추가 수집 기능이 없어 Add-on 없이 수집합니다.` 를 찍는다. 앞 줄은 Add-on 저장소 출력이라 이번 범위 밖이다.
+
 ## inventory_json 확장형 입력 후속 (2026-10-08)
 
 > Portal 이 서버 정보를 통째로 보내도(`service_ip` · `bmc_ip` · `hostname` · `vendor` 등) target_type 이 고른 IP 키 하나만 쓰고 나머지는

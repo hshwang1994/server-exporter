@@ -6,6 +6,10 @@
 > 실측 2026-10-08 — main 에 `Jenkinsfile_portal_Byid` 가 있다. GitLab 관리자가 웹에서 올린 `Jenkinsfile_portal` 사본이다
 > (`87c47f8d` · `09fb4890`, 병합 `2cd63067`, 줄끝 LF 정규화 `1566454a`). 원본과 차이는 `inventory_json` 의
 > `defaultValue: '[{"bmc_ip":"","by_id":""}]'` 1줄, cron · trigger 없음, production 생성 대상 아님. 처리 미정 — CONVENTION_DRIFT DRIFT-019.
+> 실측 2026-10-09 — 운영 로그 문구 정리(작업지시서 "로그 문구 개선"): `Jenkinsfile_portal` · `Jenkinsfile_portal_Byid`(차이 1줄 유지) ·
+>   `Jenkinsfile_ci` · `scripts/run_gather.sh` · `scripts/ai/ci_gate.sh` 의 사람이 읽는 문장만 바꿨다. stage 이름 · 순서 · 개수, 판정 · 호출 순서,
+>   `[Trusted] … len= jhash=` · `[기술 기록] 수집 시도 …` · `OUTPUT`/`CHECKPOINT`/`ADDON_*` 는 그대로다. 콘솔 문구를 읽는 곳(Harness `unstable_contains` ·
+>   sh label `수집 결과 정리` · `scripts/ai/prodgen/evidence.py` 표식)은 같은 커밋에서 맞췄다 — 정본 `docs/reference/decision-log.md` 2026-10-09.
 
 ## Stage 매트릭스 (실측 — `Jenkinsfile_portal`)
 
