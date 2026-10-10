@@ -24,6 +24,7 @@ powershell.exe 가 없으면 (Linux CI 등) 이 파일 전체를 건너뛴다. �
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import os
 import re
@@ -99,6 +100,7 @@ function Get-CimInstance {
 [CmdletBinding()] param([Parameter(Position=0)][string]$ClassName, [string]$Namespace, [string]$Filter)
 __Track ('Get-CimInstance ' + $ClassName)
 $m = $script:__fx.fail.$ClassName; if ($m) { $PSCmdlet.ThrowTerminatingError((__Err $m)) }
+$s = $script:__fx.soft_fail.$ClassName; if ($s) { Write-Error -Message $s -Category InvalidOperation; return }
 $v = $script:__fx.cim.$ClassName; if ($null -ne $v) { $v }
 }""",
     "Get-ItemProperty": r"""
@@ -173,8 +175,8 @@ function Get-TimeZone { [CmdletBinding()] param() __Track 'Get-TimeZone'; [PSCus
 function w32tm { __Track 'w32tm'; $global:LASTEXITCODE = 0; if ($args -contains '/source') { $script:__fx.w32tm_source } else { $script:__fx.w32tm_status } }""",
     "Get-NetFirewallProfile": r"""
 function Get-NetFirewallProfile {
-[CmdletBinding()] param()
-__Track 'Get-NetFirewallProfile'
+[CmdletBinding()] param([string]$PolicyStore)
+__Track ('Get-NetFirewallProfile' + $(if ($PolicyStore) { ' -PolicyStore ' + $PolicyStore } else { '' }))
 $m = $script:__fx.fail.'Get-NetFirewallProfile'; if ($m) { $PSCmdlet.ThrowTerminatingError((__Err $m)) }
 $script:__fx.firewall
 }""",
@@ -565,8 +567,44 @@ INTENDED_REPLACED_ERRORS_PS = {
 }
 
 
+# 2026-10-10 (WIN-DM): 드라이버 목록은 모든 어댑터다(Linux 와 같다). 종전 스크립트는 Up/Connected 만 담아 Disconnected NIC(Ethernet3)의
+#   드라이버가 빠졌다 — 어댑터 순서상 Ethernet3 행이 3번째 자리에 들어온다 (tests/unit/test_windows_audit_2026_10_10.py 가 규칙을 고정).
+_E3_DRIVER_ROW = {"name": "Ethernet3", "driver": "Intel(R) Ethernet 25G #3", "driver_version": "1.2.3.4", "vlan_id": None, "bond_master": None}
+
+
+def _with_e3_driver(rows):
+    rows = list(rows or [])
+    rows.insert(3, dict(_E3_DRIVER_ROW))
+    return rows
+
+
+def _net_data_with_e3(data):
+    data = copy.deepcopy(data)
+    data["network"]["driver_map"] = _with_e3_driver(data["network"]["driver_map"])
+    return data
+
+
+def _hosting_with_vbs(hosting):
+    # 2026-10-10 (D-02): hosting 원시 문서에 VbsStatus(Win32_DeviceGuard) 가 들어간다 — fixture 에 그 클래스가 없으니 ''(조회 실패 = 판정에 쓰지 않음)
+    return dict(hosting, VbsStatus="")
+
+
+INTENDED_FRAGMENT_PS = {  # (section, name) → {fragment 변수: 종전 값 → 기대 값}
+    ("network", "two_nics_one_team"): {"_data_fragment": _net_data_with_e3},
+    ("network", "fail"): {"_data_fragment": _net_data_with_e3},
+}
+INTENDED_CTX_PS = {  # (section, name) → {중간 변수: 종전 값 → 기대 값}
+    ("network", "two_nics_one_team"): {"_w_driver_map": _with_e3_driver, "_w_driver_map_final": _with_e3_driver},
+    ("network", "fail"): {"_w_driver_map": _with_e3_driver, "_w_driver_map_final": _with_e3_driver},
+    ("system", "normal"): {"_w_hosting": _hosting_with_vbs},
+    ("system", "domain_hyperv_host"): {"_w_hosting": _hosting_with_vbs},
+    ("system", "fail"): {"_w_hosting": _hosting_with_vbs},
+}
+
+
 @pytest.mark.parametrize("section,name", list(SCENARIOS))
 def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
+    """통합 직전 per-call 스크립트와 같은 fragment — 그 뒤 의도적으로 바꾼 값(위 INTENDED_*, 결함 ID · 날짜 명시)만 기대값에 반영한다."""
     old = runs[(section, name, "old")]
     if old is None:
         pytest.skip(f"통합 직전 파일({PRE_P4_SHA[:8]}) 을 git 으로 읽을 수 없다")
@@ -576,13 +614,20 @@ def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
         if key == "_errors_fragment":
             expected = list(expected or []) + INTENDED_EXTRA_ERRORS_PS.get((section, name), [])
             expected = INTENDED_REPLACED_ERRORS_PS.get((section, name), expected)
+        fix = INTENDED_FRAGMENT_PS.get((section, name), {}).get(key)
+        if fix is not None:
+            expected = fix(expected)
         assert new["frag"][key] == expected, f"{section}/{name}: {key} 가 종전과 다르다"
     shared = shared_facts(old["ctx"], new["ctx"], new["facts"])
     assert shared
     for key in shared:
         if key in FRAGMENT_KEYS:
             continue  # 위에서 (의도한 차이를 넣어) 비교했다
-        assert new["ctx"][key] == old["ctx"][key], f"{section}/{name}: 중간 변수 {key} 가 종전과 다르다"
+        expected = old["ctx"][key]
+        fix = INTENDED_CTX_PS.get((section, name), {}).get(key)
+        if fix is not None:
+            expected = fix(expected)
+        assert new["ctx"][key] == expected, f"{section}/{name}: 중간 변수 {key} 가 종전과 다르다"
 
 
 def test_old_scripts_really_ran_per_call(runs):

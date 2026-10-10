@@ -119,7 +119,8 @@
         Invoke-SeComponent $doc 'firewall' {
           param($c)
           if (Get-Command Get-NetFirewallProfile -ErrorAction SilentlyContinue) {
-            Get-NetFirewallProfile | ForEach-Object {
+            # D-03 (2026-10-10): 유효 정책(GPO 적용 뒤) — PersistentStore(로컬 설정)가 아니라 ActiveStore 를 읽는다
+            Get-NetFirewallProfile -PolicyStore ActiveStore | ForEach-Object {
               [void]$c.rows.Add([PSCustomObject]@{
                 profile = $_.Name
                 enabled = [bool]$_.Enabled

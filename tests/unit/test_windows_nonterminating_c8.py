@@ -28,7 +28,7 @@ sys.path.insert(0, str(REPO / "filter_plugins"))
 
 import test_windows_call_consolidation_powershell as PS  # noqa: E402
 from errors_normalizer import normalize_errors  # noqa: E402
-from identity_normalizer import normalize_mac, normalize_uuid, normalize_wwn  # noqa: E402
+from identity_normalizer import dmi_sentinel_null, normalize_mac, normalize_uuid, normalize_wwn  # noqa: E402
 from linux_raw_harness import ansible_env, render_tree  # noqa: E402
 from test_windows_call_consolidation_render import new_text, run_chain  # noqa: E402
 
@@ -39,6 +39,7 @@ def _final(frag):
     """fragment → 공통 merge_fragment → build_sections → build_status → build_errors (실제 YAML 식)."""
     env = ansible_env()
     env.filters.update({"normalize_mac": normalize_mac, "normalize_uuid": normalize_uuid, "normalize_wwn": normalize_wwn,
+                        "dmi_sentinel_null": dmi_sentinel_null,
                         "normalize_errors": normalize_errors, "union": lambda a, b: list(dict.fromkeys(list(a) + list(b)))})
     ctx = {"_all_sec_supported": [], "_all_sec_collected": [], "_all_sec_failed": [], "_all_sec_unsupported": [], "_all_errors": [], **frag}
     for name in ("merge_fragment", "build_sections", "build_status", "build_errors"):

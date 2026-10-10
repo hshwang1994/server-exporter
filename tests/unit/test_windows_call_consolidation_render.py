@@ -45,7 +45,7 @@ from jinja2.nativetypes import NativeEnvironment  # noqa: E402
 REPO = Path(__file__).resolve().parents[2]
 WIN = REPO / "os-gather" / "tasks" / "windows"
 sys.path.insert(0, str(REPO / "filter_plugins"))
-from identity_normalizer import normalize_mac, normalize_uuid, normalize_wwn  # noqa: E402
+from identity_normalizer import dmi_sentinel_null, normalize_mac, normalize_uuid, normalize_wwn  # noqa: E402
 from jedec_mapper import jedec_to_vendor  # noqa: E402
 from network_topology import build_windows_network  # noqa: E402
 from serial_normalizer import normalize_os_serial  # noqa: E402
@@ -143,6 +143,7 @@ FILTERS = {
     "normalize_mac": normalize_mac,
     "normalize_uuid": normalize_uuid,
     "normalize_wwn": normalize_wwn,
+    "dmi_sentinel_null": dmi_sentinel_null,
     "jedec_to_vendor": jedec_to_vendor,
     "normalize_os_serial": normalize_os_serial,
     "build_windows_network": build_windows_network,
@@ -714,6 +715,8 @@ INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_err
                          # 2026-10-10 (C8): DIMM 조회의 공급자 오류 — 조회 실패 표시 · 일부 합계를 설치량으로 확정하지 않음 · 합계 미확정
                          ("memory", "windows | memory | parse slots + grouping"): {"_w_mem_read_failed", "_w_mem_read_error"},
                          ("memory", "windows | memory | summary + totals"): {"_w_mem_phys_mb"},
+                         # 2026-10-10 (LX-F12): 식별자 자리표시자 목록을 공용 필터(dmi_sentinel_null)로 — 값 의미는 같다(trim 추가)
+                         ("system", "windows | system | resolve identifiers"): {"_w_serial_val", "_w_uuid_val"},
                          ("network", "windows | network | build fragment"): {"_errors_fragment"}}
 # 태스크 단위로 바뀐 키(set_fact 밖) — 식별자 진단의 문장 변수(vars)에 setup 실패 문장 2개를 더했다
 INTENDED_CHANGED_TASK_KEYS = {("system", "windows | system | build identifier diagnostics"): {"vars"}}

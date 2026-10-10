@@ -185,7 +185,7 @@ def test_runtime_failure_modes_match_old_per_call_scripts():
     """종전 rc≠0 판정이 구성요소 ok=false 로 이어진다: pagefile -ErrorAction Stop / 마지막 문장의 조회."""
     code = _code(_script("gather_runtime.yml", MERGED["gather_runtime.yml"][0]))
     assert "@(Get-CimInstance Win32_PageFileUsage -ErrorAction Stop)" in code
-    assert "Get-NetFirewallProfile | ForEach-Object" in code
+    assert "Get-NetFirewallProfile -PolicyStore ActiveStore | ForEach-Object" in code   # D-03 (2026-10-10): 유효 정책 저장소
     assert "Get-NetTCPConnection -State Listen" in code
 
 

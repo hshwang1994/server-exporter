@@ -271,6 +271,8 @@ WIN_HW = REPO / "os-gather" / "tasks" / "windows" / "gather_hardware.yml"
 def _env():
     env = Environment()  # noqa: S701 — 테스트 전용 (autoescape 불필요)
     env.filters["normalize_os_serial"] = normalize_os_serial
+    from identity_normalizer import dmi_sentinel_null  # noqa: PLC0415 — LX-F12 (2026-10-10): hardware serial 템플릿이 자리표시자 필터를 먼저 거친다
+    env.filters["dmi_sentinel_null"] = dmi_sentinel_null
     return env
 
 

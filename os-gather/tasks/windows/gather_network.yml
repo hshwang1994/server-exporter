@@ -64,9 +64,11 @@
     Invoke-SeComponent $doc 'read_dns' {
       param($c)
       $seErr = $null
+      # WIN-02 (2026-10-10): fec0:0:0:ffff::1~3 은 Windows 가 IPv6 스택에 넣어 두는 site-local DNS 자리표시자다 — 실제 이름 서버가 아니다
       $script:dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue -ErrorVariable seErr |
                       Where-Object { $_.ServerAddresses } |
-                      ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
+                      ForEach-Object { $_.ServerAddresses } |
+                      Where-Object { $_ -notmatch '^fec0:0:0:ffff::[1-3]$' } | Select-Object -Unique)
       $real = Get-SeRealError $seErr
       if ($real) { throw $real[0] }
     }
@@ -93,14 +95,16 @@
       $gw  = if ($m.data -and $m.data.gw)  { [string]$m.data.gw }  else { '' }
       $gw6 = if ($m.data -and $m.data.gw6) { [string]$m.data.gw6 } else { '' }
       $primary_idx = $def4.InterfaceIndex
+      $primary_idx6 = $def6.InterfaceIndex     # WIN-11/12 (2026-10-10): IPv6 주소의 기본 경로 귀속은 ::/0 경로의 인터페이스로 본다
       $ipErr = $null
       Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue -ErrorVariable ipErr |
       Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -ne '::1' } |
       ForEach-Object {
         $addr    = $_
         $adapter = $naByIdx[[string]$addr.InterfaceIndex]
-        $isGw    = [bool]($adapter -and ($adapter.InterfaceIndex -eq $primary_idx))
         $fam     = if ([string]$addr.AddressFamily -eq 'IPv6') { 'ipv6' } else { 'ipv4' }
+        $pidx    = if ($fam -eq 'ipv6') { $primary_idx6 } else { $primary_idx }
+        $isGw    = [bool]($adapter -and ($null -ne $pidx) -and ($adapter.InterfaceIndex -eq $pidx))
         [void]$c.rows.Add([PSCustomObject]@{
           id              = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
           name            = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
@@ -126,7 +130,8 @@
       param($c)
       # 어댑터를 하나도 받지 못했을 때만 같은 오류로 실패한다 — 일부라도 받았으면 받은 것으로 만든다(8차 R5)
       if ((-not $doc['read_adapters'].ok) -and (@($na).Count -eq 0)) { throw $doc['read_adapters'].error }
-      $na | Where-Object { $_.Status -eq 'Up' -or $_.MediaConnectionState -eq 'Connected' } | ForEach-Object {
+      # WIN-DM (2026-10-10): Linux 와 같이 모든 어댑터 — 종전에는 Up/Connected 만 담아 내려간 NIC 의 드라이버가 빠졌다
+      $na | ForEach-Object {
         [void]$c.rows.Add([PSCustomObject]@{
           name           = $_.Name
           driver         = $_.DriverDescription

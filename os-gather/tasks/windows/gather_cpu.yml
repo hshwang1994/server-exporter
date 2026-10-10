@@ -49,10 +49,14 @@
     })
     $coreSum = ($cpus | Where-Object { $null -ne $_.NumberOfCores } | Measure-Object -Property NumberOfCores -Sum).Sum
     $logSum  = ($cpus | Where-Object { $null -ne $_.NumberOfLogicalProcessors } | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
+    # WIN-21 (2026-10-10): 일부 소켓에 NumberOfCores/NumberOfLogicalProcessors 가 없으면 부분합을 전체처럼 내지 않는다 — null + 표식
+    $coreMissing = @($cpus | Where-Object { $null -eq $_.NumberOfCores }).Count
+    $logMissing  = @($cpus | Where-Object { $null -eq $_.NumberOfLogicalProcessors }).Count
     @{
       sockets   = $cpus.Count
-      cores     = $(if ($null -ne $coreSum -and $coreSum -gt 0) { [int]$coreSum } else { $null })
-      logical   = $(if ($null -ne $logSum -and $logSum -gt 0) { [int]$logSum } else { $null })
+      cores     = $(if ($coreMissing -eq 0 -and $null -ne $coreSum -and $coreSum -gt 0) { [int]$coreSum } else { $null })
+      logical   = $(if ($logMissing -eq 0 -and $null -ne $logSum -and $logSum -gt 0) { [int]$logSum } else { $null })
+      counts_incomplete = [bool](($coreMissing -gt 0) -or ($logMissing -gt 0))
       model     = (Normalize-CpuModel ($cpus | Select-Object -First 1 -ExpandProperty Name))
       manufacturer  = ($cpus | Select-Object -First 1 -ExpandProperty Manufacturer)
       max_clock_mhz = $(if ($cpus.Count -gt 0 -and $cpus[0].MaxClockSpeed -and [int]$cpus[0].MaxClockSpeed -gt 0) { [int]$cpus[0].MaxClockSpeed } else { $null })
@@ -159,10 +163,15 @@
     _sections_collected_fragment: "{{ ['cpu'] if (_w_cpu_ok | bool) else [] }}"
     _sections_failed_fragment:    "{{ [] if (_w_cpu_ok | bool) else ['cpu'] }}"
     _errors_fragment: >-
-      {{ [] if (_w_cpu_ok | bool) else [{
+      {{ ([] if (_w_cpu_ok | bool) else [{
            'section': 'cpu',
            'message': 'CPU 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
-           'detail':  ('source=Win32_Processor; cause=no_output; rc=' ~ (_w_cpu_raw.rc | default('none')))}] }}
+           'detail':  ('source=Win32_Processor; cause=no_output; rc=' ~ (_w_cpu_raw.rc | default('none')))}])
+         + ([{
+           'section': 'cpu',
+           'message': 'CPU 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  'source=Win32_Processor; cause=NumberOfCores_or_NumberOfLogicalProcessors_missing_on_some_sockets; cores=null'}]
+            if ((_w_cpu_ok | bool) and (_w_cpu_data.counts_incomplete | default(false) | bool)) else []) }}
   no_log: true
 
 - name: "windows | cpu | merge fragment"

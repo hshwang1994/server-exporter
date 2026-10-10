@@ -289,7 +289,7 @@
             $serRaw = [string]$_.SerialNumber
             $uidRaw = [string]$_.UniqueId
             $ufRaw  = $_.UniqueIdFormat
-            $physical_map[[string]$_.DeviceId] = @{ media_type = $mt; bus = $bus; bus_unmapped = $busUnmapped; health = $health; serial = $serRaw; unique_id = $uidRaw; uid_fmt = $ufRaw }
+            $physical_map[[string]$_.DeviceId] = @{ media_type = $mt; bus = $bus; bus_unmapped = $busUnmapped; health = $health; serial = $serRaw; unique_id = $uidRaw; uid_fmt = $ufRaw; size = $_.Size }
           }
         } catch { }
       }
@@ -323,8 +323,10 @@
         $pdSerial = $null
         $pdUid = $null
         $pdUidFmt = $null
+        $pdSize = $null
         $busRaw = $null
         if ($physical_map.ContainsKey($idx)) {
+          $pdSize = $physical_map[$idx].size
           $mt = $physical_map[$idx].media_type
           $bus = $physical_map[$idx].bus
           $busRaw = $physical_map[$idx].bus_unmapped
@@ -366,7 +368,8 @@
           model  = $_.Model
           serial = $serial
           wwn    = $wwn
-          total  = $_.Size
+          # D-08 (2026-10-10): MSFT_PhysicalDisk.Size 우선 — Win32_DiskDrive.Size 는 디스크 기하값(실린더×헤드×섹터) 계산이라 실제보다 작다
+          total  = $(if ($pdSize) { [uint64]$pdSize } else { $_.Size })
           media  = $mt
           protocol = $bus
           health   = $health
