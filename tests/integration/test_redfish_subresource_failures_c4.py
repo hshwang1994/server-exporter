@@ -25,6 +25,15 @@ import emulator_harness as H
 
 REPO = Path(__file__).resolve().parents[2]
 FIX = REPO / "tests" / "fixtures" / "redfish"
+
+
+@pytest.fixture(autouse=True)
+def _module_state():
+    """rg.main() 은 모듈 전역 상태(응답 캐시 · 인증 관측 · 알림)를 켜 둔 채 끝난다 — 뒤 시험(e2e 인증 관측)에 남지 않게 매 시험 뒤 되돌린다."""
+    yield
+    rg._reset_response_cache(enabled=False)
+    rg._reset_auth_observation()
+    rg._reset_notices()
 NORM_STD = REPO / "redfish-gather" / "tasks" / "normalize_standard.yml"
 NORM_COMMON = REPO / "common" / "tasks" / "normalize"
 SM = yaml.safe_load((REPO / "common" / "vars" / "section_messages.yml").read_text(encoding="utf-8"))

@@ -44,6 +44,15 @@ VA = yaml.safe_load((REPO / "common" / "vars" / "vendor_aliases.yml").read_text(
 ALIASES = load_vendor_aliases(str(REPO / "common" / "vars" / "vendor_aliases.yml"))
 
 
+@pytest.fixture(autouse=True)
+def _module_state():
+    """rg.main() 은 모듈 전역 상태(응답 캐시 · 인증 관측 · 알림)를 켜 둔 채 끝난다 — 뒤 시험(e2e 인증 관측)에 남지 않게 매 시험 뒤 되돌린다."""
+    yield
+    rg._reset_response_cache(enabled=False)
+    rg._reset_auth_observation()
+    rg._reset_notices()
+
+
 def _env():
     env = NativeEnvironment()
     env.filters["canonical_vendor"] = canonical_vendor
