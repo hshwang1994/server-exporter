@@ -1,5 +1,16 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## 전체 감사 (2026-10-10, 진행 중) — 남은 단계
+
+> 정본: `tests/evidence/2026-10-10-full-audit.md`. 지시서 §16 완료 조건 11개는 대장(`evidence-audit-2026-10-10/ledger.json` requirements)에 증거 ID 로 묶는다.
+
+- [ ] **X2 커밋(채널별) · push(양 원격) · WSL ci_gate · main Job 매트릭스 15 · strict compare(선언 `expected_diffs.json`) · CI(필수 단계 PASS)**
+- [ ] **승격(C1 포함 첫 production 승격) · canary · 명부 전수(Linux · Windows · ESXi · Redfish) · 이전 production 과 대조**
+- [ ] **lab 읽기 전용 probe 결과 반영(P4 Windows · P8 Linux · P11-lite ESXi)** — LX-F09(`last -F` 시간대) · LX-F11(bnxt_re link_layer) · ESXI-10/14 는 probe 결과로 확정/기각
+- [ ] **성능 전후(P4)** — 이전 production vs 최종 후보, 고정 집합, 측정값을 새 제한으로 만들지 않는다
+- [ ] **정리** — netrc · vault 임시 사본 · WSL clone · 임시 Job 3개(`se-audit-parity` · `se-audit-negative-control` · `se-audit-labprobe`) · 브랜치 `audit/negative-control` 삭제 확인
+- [ ] **lab 부재 영역(fixture 수준) 후속** — AMD(lscpu<2.34 L3 CCX) · multipath · ECMP/nhid · vCenter 대상 · VBS 물리 Windows · GPO Windows · CNA(FCoE) — 장비 확보 시 `capture-site-fixture`
+
 ## 검수 후속 C1~C10 — 남은 단계 (2026-10-10, 진행 중)
 
 > 인계: `docs/ai/tickets/2026-10-10-c1-c10-followup/CONTINUATION.md`. 결함 수정 · 로컬 검증 · Harness 사전 확인(#1168~#1177 10/10)까지 했고,

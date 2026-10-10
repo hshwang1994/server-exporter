@@ -1,5 +1,16 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-10 (감사 — 진행 중) — 전체 감사 결함 묶음 X2 · 원격 main `b3c8ebf7`(X1) · production P10 `9ddc174a` 그대로
+
+> 정본: `tests/evidence/2026-10-10-full-audit.md` · `docs/reference/decision-log.md` 2026-10-10(D-01~D-12) · 대장은 저장소 밖 `evidence-audit-2026-10-10`.
+
+- **고친 것(미커밋 → 커밋 예정)**: Redfish(RD-F03 · D-09 vendor alias · RA-F05/F06 복구 인증 간격 · RD-F18 · RD-F15 · D-07 PSU Absent · RD-FW1 · RD-UNK/FW2 · 죽은 normalize 4개 삭제) ·
+  ESXi(ESXI-03 config_info `esxi_hostname` + DNS 오류 조건 · ESXI-21 · D-01 vCenter 거부 · ESXI-09/12/13 · D-03) · Windows(WIN-02 · 11/12 · DM · D-02 VBS · D-03 ActiveStore · WIN-13 · WIN-21 · D-08) ·
+  Linux(LX-F08 · LX-F02 · LX-F10 · LX-F01 비특권/특권 분리 · D-03 · LX-F04 multipath · LX-F06 · LX-F12 자리표시자 집합 · D-10 JEDEC bank) · Jenkinsfile FL-F01b(classify 에 연결 끊김 근거).
+- **확인한 것**: X0 `3d053d36` CI #40 COMPLETE_PASS · 매트릭스 15 계약대로 / X1 `b3c8ebf7` 매트릭스 15 계약대로 · CI #41 FAILURE(Harness `prep_failed_on_resume` 1건 → FL-F01b) /
+  Harness 부정 대조 N1~N4 · 변이 M1~M9 / LX-F02 'None' 게이트웨이를 Runner 2.20.3 · WSL 2.20.7 에서 재현 / ESXI-03 argspec 을 Runner · WSL 에서 확인.
+- **멈춘 곳**: X2 전체 suite · lab probe 실행 중 → 커밋(채널별 분리) → push → WSL ci_gate → 매트릭스 → CI → 승격(C1 포함 첫 승격) → canary · 명부 전수 → 성능 · 정리 · §17 보고.
+
 ## 일자: 2026-10-10 (진행 중) — 검수 후속 C1~C10 결함 수정 · 원격 main `a64654aa` · production P10 `9ddc174a` 그대로
 
 > 인계: `docs/ai/tickets/2026-10-10-c1-c10-followup/CONTINUATION.md`. 결정: `docs/ai/decisions/ADR-2026-10-10-finalize-recovery-medium.md`.

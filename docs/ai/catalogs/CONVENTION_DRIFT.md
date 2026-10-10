@@ -314,3 +314,20 @@
   - baseline JSON 추가 (4 generation × 1 vendor) — rule 13 R4
   - DRIFT-015 close trigger: 사이트 검증 후 firmware_patterns 일치 confirm
 - **관련**: rule 12 R2, rule 50 R3, rule 95 R1 #4 (adapter score 동률), rule 96 R1-A / R1-C, `module_utils/adapter_common.py:272-287`, `lookup_plugins/adapter_loader.py:232-237`
+
+## DRIFT-016 (2026-10-10, resolved 2026-10-10 full-audit)
+
+- **무엇**: JEDEC 제조사 표가 두 곳(`filter_plugins/jedec_mapper.py` · `redfish_gather._JEDEC_VENDORS`)에 byte 전용 키로 있었고, bank(continuation 수)를
+  보지 않아 bank 1 의 0x98(Kingston) 과 bank 0 의 0x98(Toshiba) 을 구분하지 못했다. `"0B": "Intel"` 항목은 JEP106 과 다르다(0x0B 는 Intersil, Intel 은 0x89/0x09).
+  어느 쪽도 origin 주석(rule 96 R1)이 없었다.
+- **해결**: (bank, 7-bit ID) 키 표 하나를 두 파일에 동일하게(JEP106BE — docs.rs jep106 codes.rs · lshw jedec.cc · Linux mtd/cfi.h, 확인 2026-10-10) 두고
+  `tests/unit/test_jedec_drift_guard.py` 가 표 동일성 + 해석기 동치(28 입력)를 지킨다. 모르는 코드는 원문 그대로.
+- **관련 rule**: rule 96 R1 · R4, rule 13 cross-channel.
+
+## DRIFT-017 (2026-10-10, resolved 2026-10-10 full-audit)
+
+- **무엇**: 식별자(serial/uuid/vendor/model/bios) 자리표시자 목록이 `gather_system.yml`(Linux 6곳 · Windows 2곳) 과 `redfish_gather.py`(invalid_values) 에
+  복제돼 있었고 ESXi 는 아무것도 거르지 않았다(`NA` 가 serial 로 나감). SMBIOS 공장 기본 UUID `03000200-0400-0500-0006-000700080009` 는 식별자로 통과했다.
+- **해결**: `identity_normalizer.DMI_SENTINELS` + `dmi_sentinel_null(kind)` 필터 하나를 3채널 템플릿이 쓰고, Redfish(stdlib 전용)는 `_SERIAL_SENTINELS_UPPER`
+  복제본을 `tests/unit/test_identity_sentinels.py` 가 drift 가드한다. 자리표시자 UUID 는 `normalize_uuid` 가 null 로.
+- **관련 rule**: rule 13 cross-channel · rule 22 R5.

@@ -990,3 +990,26 @@
 - 재발 방지: 디렉터리를 바꾸는 복합 명령은 `cd … || exit 1`(또는 `set -e`) 로 끊는다. 부수 작업에 main 작업 트리에서 `git commit -a` 를 쓰지 않는다 —
   plumbing(임시 index) 이나 별도 clone 으로 만든다. push 전후 `ls-remote` 로 원격 main 이 움직이지 않았음을 확인한다.
 - 관련 rule: rule 93 R1 · R3 · rule 26 R3
+
+## 2026-10-10 — 새 Harness 시나리오의 기대값이 코드의 근거 전달 경로를 가정했다 (prep_failed_on_resume · CI #41)
+
+- 카테고리: scope-miss
+- 발견 위치: Harness #1304 (`prep_failed_on_resume`, X1 `b3c8ebf7`) — `gather.attempt_states` 기대 `['agent_disconnect']`, 관측 `['process_lost']`.
+  파이프라인의 outcome(`prep_failed`)은 설계대로였다.
+- 원인: 이어서 하는 시도가 begin 전에 끝나면(rc 90 · 91) Jenkins 가 아는 "앞 시도의 Runner 연결 끊김" 근거가 `gather_state` 에 전달되지 않았다 — 그 근거는
+  `run_gather.sh` 의 `begin --prev-agent-lost` 만 넘겼고, 그 뒤의 `classify` 는 근거 없이 앞 시도를 닫아 process_lost 가 됐다. 시나리오를 쓸 때 "앞 시도의
+  상태" 를 기대값에 넣으면서 그 상태가 어디서 확정되는지 코드로 확인하지 않았다.
+- 수정(X2): `seClassifyAttempt(boolean agentLost)` 가 `--agent-lost` 를 붙이고, 시도 본문이 `lostPrev && rc in [90, 91]` 일 때 넘긴다 (FL-F01b).
+- 재발 방지: Harness 기대값에 상태 전이를 적을 때는 그 전이를 만드는 호출(begin · classify · end)과 근거 전달 인자를 코드에서 짚어 `note` 에 적는다.
+  기대 불일치는 "기대값 수정" 이 아니라 먼저 "코드가 틀렸는가" 를 묻는다 — 이번은 코드가 틀렸다.
+- 관련 rule: rule 95 R2 · R3, rule 80 R1.
+
+## 2026-10-10 — 패치 도구의 구간 치환이 끝 표식 앞의 본문까지 지웠다 (감사 작업 도구 — 제품 영향 0)
+
+- 카테고리: tool-misuse
+- 발견 위치: `patch_linux_bundle.py` 의 `replace_span(start, end)` 로 `gather_storage.yml` 정규화 블록 머리에 변수 선언을 넣으려다, 끝 표식을 legacy 분기
+  (`{%- else -%}`)로 잡아 그 사이 **JSON 분기 루프 전체**가 지워졌다. 바로 뒤 edit 의 anchor 가 안 맞아 멈췄고(count 0), 시험 7건 실패로 드러났다.
+- 복구: 지워진 루프를 LX-F04 변경을 포함해 다시 넣고(`patch_linux_bundle_part2.py`), Linux 시험 388 + 감사 시험 45 통과.
+- 재발 방지: 구간 치환은 start 와 end 사이에 다른 본문이 없음을 assert 한다(또는 "뒤에 삽입" 으로 쓴다). 패치 뒤에는 `git diff --stat` 의 삭제 줄 수를
+  기대와 대조한다.
+- 관련 rule: rule 95 R1 · rule 24 R1.

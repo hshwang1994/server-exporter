@@ -1,5 +1,17 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-10 (감사 — 진행 중) — 전체 감사 X0/X1 실행 · X2 결함 묶음 로컬 검증
+
+| 구분 | 결과 |
+|---|---|
+| X0 `3d053d36` | WSL ci_gate PASS · main Job #408~#422 15 시나리오 계약대로(T5 재실행) · strict compare 차이 = 선언만 · CI #40 SUCCESS COMPLETE_PASS |
+| X1 `b3c8ebf7` | WSL ci_gate PASS · prodgen build tree `96db8f5f…` · main Job #423~#438 계약대로 · CI #41 FAILURE(Harness 54: 53 PASS · `prep_failed_on_resume` FAIL → FL-F01b) |
+| Harness 신뢰 | N1 FAIL · N2 PARTIAL · N3 변조 거부(한계 2건) · N4 SKIPPED 거부 · 변이 M1~M9 9/9(M1 은 시험 신설 뒤) |
+| Runner parity(2.20.3, `se-audit-parity` #1~#4) | LX-F02 'None' 재현 · ESXI-03 argspec 확인 · 비 UTF-8 바이트는 lone surrogate 로 도착(json_only 1줄 출력) |
+| X2 채널별 단위(이 PC) | Redfish 감사 15 · ESXi 91 · Windows 325 + 98(실제 powershell.exe 5.1) · Linux 388 + 45 · JEDEC/메모리 104 · 자리표시자 171 · Jenkinsfile/Harness 157 |
+| X2 정적 | YAML 40 · py_compile · vendor boundary · harness consistency 통과 |
+| X2 전체 suite · lab probe · 매트릭스 · CI · 승격 | 실행 중 / 미실행 — `tests/evidence/2026-10-10-full-audit.md` §7 에 추가 |
+
 ## 2026-10-10 (진행 중) — 검수 후속 C1~C10 · 로컬 검증 · Harness 사전 확인 (승격 전)
 
 | 구분 | 결과 |
