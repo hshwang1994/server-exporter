@@ -326,7 +326,10 @@ def test_attempt_state_to_outcome_uses_the_run_record():
     assert "    return [outcome: 'interrupted_unknown', limit_reason: '']\n}" in fn
     assert "Map cls = seClassifyAttempt()" in BODY and "Map oc = seOutcomeFromState(s, cls.rc)" in BODY
     assert "env.SE_GATHER_OUTCOME = oc.outcome" in BODY and "env.SE_GATHER_LIMIT_REASON = oc.limit_reason" in BODY
-    assert "if (s == 'not_started') { s = (rc in [90, 91]) ? 'prep_failed' : 'failed_run' }" in BODY
+    # D-11 (2026-10-10 FL-F01): run_gather.sh 의 종료 코드 90(venv) · 91(실행 기록 준비)은 begin 전이라 classify 의 상태(이어서 하는 시도에서는
+    #   앞 시도를 닫은 결과)와 무관하게 prep_failed 다. 소비되는 값(종료 코드 계약)이라 글자로 고정한다.
+    assert "if (rc in [90, 91]) { s = 'prep_failed' }" in BODY and "else if (s == 'not_started') { s = 'failed_run' }" in BODY
+    assert "if (s == 'not_started') { s = (rc in [90, 91])" not in BODY, "rc 90/91 판정이 not_started 에 묶이면 재개 시도의 준비 실패가 앞 시도 상태로 가려진다"
     infra = BODY[BODY.index("if (s in ['runner_oom', 'runner_restart', 'agent_disconnect', 'running']) {"):BODY.index("Map oc = seOutcomeFromState")]
     assert "seSnapshotGatherOutput()" in infra and "return" in infra and "sePreserveGatherOutput" not in infra, \
         "실행 기반 장애면 원본만 넘기고 다시 시도한다 — 작업 폴더를 지우지 않는다"
@@ -431,9 +434,16 @@ def test_workspace_markers_and_cleanup_wiring():
     assert "python3 scripts/workspace_cleanup.py --current" in clean and "--keep-days ${C.KEEP_DAYS} --every-sec 86400" in clean
     assert "--build-limit-sec ${C.MAX_BUILD}" in clean, "끝 기록 없는 폴더는 최대 빌드 수명(72 + 6 + 1 + 3시간) 동안 실행 중으로 본다"
     # 이어서 하는 시도는 소유 기록으로 이 빌드의 폴더인지 확인한다 — 없으면 전체를 다시 수집하지 않고 재개 불가
-    assert "boolean mine = (own != null && \"${own.job}\" == \"${env.JOB_NAME}\" && \"${own.build}\" == \"${env.BUILD_NUMBER}\")" in BODY
+    # FL-F06 (2026-10-10): (Job, 번호)가 같아도 빌드 인스턴스 표식(nonce)이 다르면 이 빌드의 폴더가 아니다 — Job 재생성 뒤 번호가 다시 쓰이면
+    #   옛 폴더를 자기 것으로 보고 revision 불일치로 수집 전에 재개 불가로 끝냈다. nonce 가 어느 한쪽에 없으면(옛 폴더 · 시험 fixture) 종전 판정이다.
+    assert "boolean sameNumber = (own != null && \"${own.job}\" == \"${env.JOB_NAME}\" && \"${own.build}\" == \"${env.BUILD_NUMBER}\")" in BODY
+    assert "boolean mine = sameNumber && seSameBuildNonce(own?.nonce)" in BODY
+    nonce_fn = _method("boolean seSameBuildNonce")
+    assert "return (!mineNonce || !theirs) ? true : (mineNonce == theirs)" in nonce_fn
+    assert "nonce: (env.SE_BUILD_NONCE ?: '')" in _method("def seWriteOwner")
     gone = BODY[BODY.index("if (!mine) {"):BODY.index("sePrepareWorkspace(targetType, null)")]
     assert "if (st.gather_started == true) {" in gone and "outcome: 'resume_impossible'" in gone and "return" in gone
+    assert "같은 번호의 다른 빌드" in gone, "같은 번호의 옛 폴더는 재개 불가가 아니라 새로 준비한다고 알린다"
     assert "exit 0" in clean and "returnStatus: true" in clean, "정리 실패가 빌드 결과를 바꾸지 않는다"
     fin = _method("def seCleanOldFinalizerDirs")
     assert "findFiles(glob: 'fin-*/.se_fin.json')" in fin and "if (info.archived == true) {" in fin and "kept << d" in fin

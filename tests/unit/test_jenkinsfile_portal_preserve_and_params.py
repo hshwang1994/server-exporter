@@ -73,9 +73,13 @@ def test_resolve_reads_registry_with_read_trusted_only():
 
 def test_manifest_is_env_json_in_validate_and_a_file_at_the_first_attempt():
     assert "env.SE_MANIFEST_JSON = groovy.json.JsonOutput.toJson([" in VALIDATE
-    for key in ("schema : 1", "build  : [job: env.JOB_NAME, number: env.BUILD_NUMBER, url: env.BUILD_URL]",
+    for key in ("schema : 1", "build  : [job: env.JOB_NAME, number: env.BUILD_NUMBER, url: env.BUILD_URL, nonce: env.SE_BUILD_NONCE]",
                 "channel: params.target_type.trim()", "ips    : acceptedIps"):
         assert key in VALIDATE, key
+    # FL-F06 (2026-10-10): 빌드 인스턴스 표식은 접수 때 한 번 만든다 — manifest 와 작업 폴더 소유 기록이 같은 값을 들고, envelope 에는 들어가지 않는다
+    assert 'env.SE_BUILD_NONCE = "${env.BUILD_TAG}-${seNowMs()}".toString()' in VALIDATE
+    assert VALIDATE.index("env.SE_BUILD_NONCE =") < VALIDATE.index("env.SE_MANIFEST_JSON =")
+    assert TEXT.count("SE_BUILD_NONCE =") == 1
     assert TEXT.count("SE_MANIFEST_JSON =") == 1, "manifest 를 만드는 곳은 입력 확인 한 곳"
     marker = "writeFile(file: 'gather_manifest.json', text: (env.SE_MANIFEST_JSON ?: '') + '\\n', encoding: 'UTF-8')"
     assert TEXT.count(marker) == 1 and marker in PREP, "첫 준비(sePrepareWorkspace)가 쓴다"
@@ -87,6 +91,7 @@ def test_manifest_is_env_json_in_validate_and_a_file_at_the_first_attempt():
     assert "rm -rf" not in restore, "복원할 때 결과 파일을 지우지 않는다"
     check = _method("boolean seManifestIsThisBuild")
     assert '"${m.build?.job}" == "${env.JOB_NAME}"' in check and '"${m.build?.number}" == "${env.BUILD_NUMBER}"' in check
+    assert "seSameBuildNonce(m.build?.nonce)" in check, "접수 원본 복원도 같은 빌드 인스턴스인지 본다 (FL-F06)"
 
 
 def test_only_operational_parameters_are_declared():

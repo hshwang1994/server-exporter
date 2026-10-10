@@ -207,6 +207,10 @@ def test_cli_exit_codes(tmp_path):
     assert r.returncode == 3 and "manifest 없음" in r.stderr
     report = json.loads((tmp_path / "nomanifest" / "gather_finalize_report.json").read_text(encoding="utf-8"))
     assert report["exit_code"] == 3
+    # FL-F18 (2026-10-10): 인자 오류는 argparse 기본(2 = 이 도구의 '손상 처리')이 아니라 도구 오류 3 이다
+    for argv in (['--workspace', str(ws)], ['--workspace', str(ws), '--repo-root', str(REPO), '--no-such-flag']):
+        r = subprocess.run([sys.executable, str(SCRIPT), *argv], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        assert r.returncode == 3 and "인자 오류" in r.stderr and "usage:" in r.stderr, (argv, r.returncode, r.stderr[:200])
 
 
 def test_synthetic_shape_matches_json_only_table():

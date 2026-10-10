@@ -1834,8 +1834,18 @@ def seAttempt(Map C, Map st, Map r) {
                 }
                 st.last = [state: 'attempt_limit', outcome: 'attempt_limit', limit_reason: '']
                 st.final = true
+                // FL-F12 (2026-10-10): 보존(Layer A 의 --outcome)이 읽는 env 를 여기서 맞춘다 — 종전에는 루프가 끝난 뒤에야 적혀 interrupted_unknown 으로 정리됐다
+                env.SE_GATHER_OUTCOME = 'attempt_limit'
+                env.SE_GATHER_LIMIT_REASON = ''
                 seLog("[수집] 시도 하나의 실행 한계(${seDuration(limitSec)})에 도달해 멈췄습니다.\n  지금까지 확보한 결과를 보존해 보냅니다.")
-                try { sePreserveGatherOutput() } catch (Throwable t) { echo "[결과 보존] 멈춘 시도의 결과 보존을 마치지 못했습니다.\n  오류: ${t}" }
+                try {
+                    sePreserveGatherOutput()
+                } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie2) {
+                    // FL-F03 (2026-10-10): 보존 중 Runner 끊김 · 취소는 삼키지 않는다 — 상위 retry(agent()) 가 받아 같은 작업 폴더에서 보존만 다시 한다(st.final → preserve_only)
+                    throw fie2
+                } catch (Exception e) {
+                    echo "[결과 보존] 멈춘 시도의 결과 보존을 마치지 못했습니다.\n  오류: ${e}"
+                }
             }
         }
     }
@@ -1862,9 +1872,17 @@ Map seReadJsonFile(String path) {
 //   마지막 보존이 다시 쓸 때도 commit · prepared 를 그대로 남긴다(N1 — 빠지면 다음 시도가 준비가 끝나지 않은 폴더로 볼 수 있다).
 def seWriteOwner(boolean prepared, Map extra) {
     Map rec = [schema: 1, job: env.JOB_NAME, job_base: env.JOB_BASE_NAME, build: env.BUILD_NUMBER, url: env.BUILD_URL, node: env.NODE_NAME,
+               nonce: (env.SE_BUILD_NONCE ?: ''),   // FL-F06 — 같은 (Job, 번호)의 다른 빌드 인스턴스와 구분한다
                started_epoch: ((env.SE_NODE_ENTER_EPOCH ?: '0') as long), preserved: false, commit: (env.SE_WS_COMMIT ?: ''), prepared: prepared]
     rec.putAll(extra)
     writeFile(file: '.se_workspace.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson(rec) + '\n')
+}
+
+// FL-F06 (2026-10-10): 기록의 nonce 가 이 빌드의 것인가. 어느 한쪽에 nonce 가 없으면(이 변경 전에 만든 폴더 · 시험 fixture) (Job, 번호)만으로 판단한다.
+boolean seSameBuildNonce(Object recorded) {
+    String mineNonce = (env.SE_BUILD_NONCE ?: '').toString()
+    String theirs = (recorded ?: '').toString()
+    return (!mineNonce || !theirs) ? true : (mineNonce == theirs)
 }
 
 // 이 빌드의 접수 원본(입력 확인이 넘긴 SE_MANIFEST_JSON)인가 — 작업 폴더의 접수 목록 파일이 없을 때 이것으로 다시 쓸 수 있는지 본다(10차 R3)
@@ -1873,7 +1891,7 @@ boolean seManifestIsThisBuild(String json) {
     try {
         def m = readJSON(text: json, returnPojo: true)
         return (m instanceof Map) && "${m.build?.job}" == "${env.JOB_NAME}" && "${m.build?.number}" == "${env.BUILD_NUMBER}" &&
-               (m.ips instanceof List) && !m.ips.isEmpty()
+               seSameBuildNonce(m.build?.nonce) && (m.ips instanceof List) && !m.ips.isEmpty()
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
@@ -2046,7 +2064,8 @@ def seAttemptBody(Map C, Map st, Map r) {
     String targetType = params.target_type.trim()
     Map rec = seReadJsonFile('.se_workspace.json')
     Map own = (rec.state == 'ok') ? (rec.data as Map) : null
-    boolean mine = (own != null && "${own.job}" == "${env.JOB_NAME}" && "${own.build}" == "${env.BUILD_NUMBER}")
+    boolean sameNumber = (own != null && "${own.job}" == "${env.JOB_NAME}" && "${own.build}" == "${env.BUILD_NUMBER}")
+    boolean mine = sameNumber && seSameBuildNonce(own?.nonce)   // FL-F06: 같은 (Job, 번호)라도 다른 빌드 인스턴스의 폴더는 이 빌드의 것이 아니다
     if (st.preserve_only == true) {
         st.preserve_only = false
         if (!mine) {
@@ -2060,9 +2079,13 @@ def seAttemptBody(Map C, Map st, Map r) {
     if (!mine) {
         if (st.gather_started == true) {
             st.last = [state: 'resume_impossible', outcome: 'resume_impossible', limit_reason: '']
-            String why = (rec.state == 'absent') ? '이 빌드의 기록이 없습니다' : ((rec.state == 'corrupt') ? '이 빌드의 기록을 해석할 수 없습니다' : '다른 빌드의 기록이 있습니다')
+            String why = (rec.state == 'absent') ? '이 빌드의 기록이 없습니다' : ((rec.state == 'corrupt') ? '이 빌드의 기록을 해석할 수 없습니다' :
+                         (sameNumber ? '같은 번호의 다른 빌드(Job 재생성 또는 번호 재사용)의 기록이 있습니다' : '다른 빌드의 기록이 있습니다'))
             seLog("[수집] 이어서 수집할 작업 폴더에 ${why}. 폴더가 지워졌거나 바뀐 것으로 보고 다시 수집하지 않습니다.\n  작업 폴더: ${pwd()}\n  끝나지 않은 대상은 Runner 장애 사유의 실패 결과로 보냅니다.")
             return
+        }
+        if (sameNumber) {
+            seLog("[수집] 작업 폴더에 같은 번호의 다른 빌드 기록이 있습니다(Job 재생성 또는 번호 재사용). 이 빌드의 폴더로 새로 준비합니다.\n  작업 폴더: ${pwd()}")
         }
         sePrepareWorkspace(targetType, null)
     } else if (own.prepared == false && st.gather_started != true) {
@@ -2158,7 +2181,10 @@ def seAttemptBody(Map C, Map st, Map r) {
         env.SE_GATHER_LIMIT_SOURCE = 'gather_limit'
     }
     String s = (cls.state ?: 'unknown').toString()
-    if (s == 'not_started') { s = (rc in [90, 91]) ? 'prep_failed' : 'failed_run' }
+    // D-11 (2026-10-10 FL-F01): 종료 코드 90(Ansible 환경 없음) · 91(실행 기록 준비 실패)은 begin 전에 끝난 것이라 이번 시도의 기록이 없다.
+    //   이어서 하는 시도에서는 classify 가 **앞 시도**를 닫아 돌려주므로 그 상태(process_lost 등)를 쓰면 이번 실패 원인이 가려진다 — rc 로 직접 확정한다.
+    if (rc in [90, 91]) { s = 'prep_failed' }
+    else if (s == 'not_started') { s = 'failed_run' }
     // 기술 기록 한 줄 — 증거 수집기가 수집 단계가 Runner 위에서 돌았는지 본다(종전 Budget 줄의 자리)
     echo "[기술 기록] 수집 시도 n=${cls.attempt ?: '-'} node=${env.NODE_NAME} rc=${rc} state=${s} evidence=${cls.evidence ?: '-'} exec_used=${cls.exec_used ?: 0} " +
          "completed=${cls.completed ?: 0}/${cls.hosts_total ?: '-'} precheck_failed=${cls.precheck_failed ?: 0} pending=${cls.pending_left ?: 0} progress=${cls.progress ?: 0}"
@@ -2304,9 +2330,13 @@ pipeline {
 
                     // 접수 manifest — "요청 대상 1개 = 결과 1개" 대조의 정본. Gather 가 node 진입 직후 gather_manifest.json 으로 쓴다.
                     //   비밀값 없음. env 는 CPS 가 직렬화할 수 있는 문자열이라 어느 stage/post 에서도 읽을 수 있다.
+                    // FL-F06 (2026-10-10): 빌드 식별은 (Job, 번호)만으로는 모자라다 — Job 을 다시 만들어 번호가 다시 쓰이면 같은 번호의 옛 작업 폴더를
+                    //   이 빌드의 것으로 보고 revision 불일치 → 수집 전에 재개 불가로 끝냈다. 이 빌드 인스턴스의 표식(nonce)을 접수 때 한 번 만들어
+                    //   manifest 와 작업 폴더 소유 기록에 넣고 같은 값일 때만 같은 빌드로 본다. envelope 에는 들어가지 않는다(내부 파일 키).
+                    env.SE_BUILD_NONCE = "${env.BUILD_TAG}-${seNowMs()}".toString()
                     env.SE_MANIFEST_JSON = groovy.json.JsonOutput.toJson([
                         schema : 1,
-                        build  : [job: env.JOB_NAME, number: env.BUILD_NUMBER, url: env.BUILD_URL],
+                        build  : [job: env.JOB_NAME, number: env.BUILD_NUMBER, url: env.BUILD_URL, nonce: env.SE_BUILD_NONCE],
                         channel: params.target_type.trim(),
                         request: [
                             loc                    : params.loc.trim(),

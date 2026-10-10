@@ -500,8 +500,16 @@ def finalize(workspace: Path, repo_root: Path, outcome: str, names: dict, limit_
     return report['exit_code'], report
 
 
+class _Parser(argparse.ArgumentParser):
+    """FL-F18 (2026-10-10): argparse 는 인자 오류를 종료 코드 2 로 끝내는데 2 는 이 도구의 '손상이 있었으나 처리함'(EXIT_DAMAGE)이다.
+    인자 오류는 도구 오류(EXIT_TOOL=3)다 — Jenkinsfile 의 보존 단계가 2 를 보고 "형태가 틀린 줄을 뺐다" 고 적지 않게 한다."""
+
+    def error(self, message):
+        raise ToolFailure(f'인자 오류: {message}')
+
+
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description='Layer A 결과 정리: 접수 대상 1개 = 결과 envelope 1개')
+    ap = _Parser(description='Layer A 결과 정리: 접수 대상 1개 = 결과 envelope 1개')
     ap.add_argument('--workspace', required=True)
     ap.add_argument('--repo-root', required=True, help='정본 YAML 을 읽을 저장소 루트 (Jenkins WORKSPACE)')
     ap.add_argument('--outcome', default='completed',
@@ -516,7 +524,12 @@ def main(argv=None) -> int:
     ap.add_argument('--rc', default='gather_rc.txt')
     ap.add_argument('--final', default='gather_final.jsonl')
     ap.add_argument('--report', default='gather_finalize_report.json')
-    a = ap.parse_args(argv)
+    try:
+        a = ap.parse_args(argv)
+    except ToolFailure as e:
+        sys.stderr.write(f'[finalize] {e}\n')
+        ap.print_usage(sys.stderr)
+        return EXIT_TOOL
     names = {k: getattr(a, k) for k in ('manifest', 'output', 'checkpoint', 'progress', 'rc', 'final', 'report')}
     workspace = Path(a.workspace)
     try:
