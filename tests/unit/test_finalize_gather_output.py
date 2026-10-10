@@ -288,3 +288,46 @@ def test_unterminated_last_line_is_judged_on_the_original_bytes(tmp_path):
 ], ids=['object', 'padded', 'nan', 'array', 'empty', 'invalid_utf8', 'deep_nesting'])
 def test_parse_tail_record(data, expected):
     assert fz.parse_tail_record(data) == expected
+
+
+def test_every_synthetic_branch_and_checkpoint_restore_pass_the_shape_gate():
+    """FL-F14 (2026-10-10): Layer A 가 스스로 만든 envelope 이 자기 shape_gate 를 통과해야 한다 — 그렇지 않으면 Layer B(Groovy 동형 검사)와
+    결과 회수(C1)가 그 host 를 '결과 없음' 으로 센다. 4 분기(+실행 기반) × 3 채널, 그리고 실제 precheck 진단(corpus 08 의 progress 줄)과
+    failure_reason 이 빈 precheck 진단(문장 보충 경로)을 모두 본다. 사용자 문장은 errors[0].message 와 같아야 한다 (CLAUDE.md §10)."""
+    canon = fz.Canon(REPO)
+    progress = (REPO / "tests/fixtures/finalize_corpus/08_progress_precheck_failed/gather_progress.jsonl").read_text(encoding="utf-8")
+    precheck = next(json.loads(l)["diagnosis"] for l in progress.splitlines() if l.strip() and json.loads(l)["event"] == "precheck")
+    assert set(precheck) == set(fz.DIAGNOSIS_KEYS) and precheck["failure_stage"] == "reachable"
+    blank_reason = dict(precheck, failure_reason="")
+    ip = "198.51.100.81"
+    cases = [
+        ("precheck_preserved", {"diagnosis": precheck}, "completed", None),
+        ("precheck_blank_reason_filled", {"diagnosis": blank_reason}, "interrupted_unknown", None),
+        ("infra_wait_expired", {}, "infra_wait_expired", "infra_wait"),
+        ("resume_impossible", {}, "resume_impossible", None),
+        ("auth_proven_stopped", {"auth_proven": True, "location": "ic", "last_task": "linux | facts"}, "gather_limit", "gather_limit"),
+        ("auth_proven_lost", {"auth_proven": True, "lost": True, "fail_detail": "connection reset"}, "interrupted_unknown", None),
+        ("lost_no_auth", {"lost": True, "location": "cj"}, "completed", None),
+        ("lost_empty_vault", {"lost": True, "cred_load_outcome": "empty_accounts", "location": "yi"}, "completed", None),
+        ("output_not_run", {"fail_detail": "x", "last_task": "OUTPUT"}, "attempt_limit", None),
+    ]
+    for ch in ("os", "esxi", "redfish"):
+        for name, ctx, outcome, limit in cases:
+            env = fz.synthetic_envelope(canon, ch, ip, ctx, outcome, limit_reason=limit)
+            assert fz.shape_gate(env, ch, {ip}) is None, (ch, name, fz.shape_gate(env, ch, {ip}))
+            d = env["diagnosis"]
+            assert isinstance(d["failure_reason"], str) and d["failure_reason"].strip(), (ch, name)
+            assert d["failure_stage"] and d["failure_code"], (ch, name)
+            assert env["errors"][0]["message"] == d["failure_reason"], (ch, name)
+            assert env["status"] == "failed" and d["details"]["outcome"] == outcome
+            if limit:
+                assert d["details"]["limit_reason"] == limit
+        if ch == "os":
+            assert fz.synthetic_envelope(canon, ch, ip, {"diagnosis": blank_reason}, "completed")["diagnosis"]["failure_reason"] == \
+                CATALOG["output_build_failed"]["default"]
+        # CHECKPOINT 복원도 shape 를 깨지 않는다 (추가 수집 중단 · 내보내기 실패 두 사유)
+        cp = _envelope(ip, channel=ch)
+        for ctx in ({"addon_started": True, "addon_done": False}, {"emitted": False}):
+            restored = fz.envelope_from_checkpoint(cp, ctx, "interrupted_unknown")
+            assert fz.shape_gate(restored, ch, {ip}) is None, (ch, ctx)
+            assert restored["errors"][-1]["message"] in (fz.ADDON_INTERRUPTED, fz.EMIT_FAILED)
