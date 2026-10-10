@@ -1,19 +1,20 @@
 # server-exporter 현재 상태
 
-## 일자: 2026-10-10 (감사 — 진행 중) — X2' `361d4484` 양 원격 main · CI #42 진행 중 · production P10 `9ddc174a` 그대로
+## 일자: 2026-10-10 (감사 — 진행 중) — X2' `361d4484` CI #42 COMPLETE_PASS · 승격 대상 X4 준비 · production P10 `9ddc174a` 그대로
 
-> 정본: `tests/evidence/2026-10-10-full-audit.md` · `docs/reference/decision-log.md` 2026-10-10(D-01~D-15) · 대장은 저장소 밖 `evidence-audit-2026-10-10`.
+> 정본: `tests/evidence/2026-10-10-full-audit.md` · `docs/reference/decision-log.md` 2026-10-10(D-01~D-16) · 대장은 저장소 밖 `evidence-audit-2026-10-10`.
 
 - **고친 것(커밋 · push)**: Redfish `56918724`(RD-F03 · D-09 vendor alias · RA-F05/F06 복구 인증 간격 · RD-F18 · RD-F15 · D-07 PSU Absent · RD-FW1 · RD-UNK/FW2 · JEDEC bank) ·
   죽은 normalize 4개 삭제 `91b307a4` · ESXi `6e783d06`(ESXI-03 config_info `esxi_hostname` + DNS 오류 조건 · ESXI-21 · D-01 vCenter 거부 · ESXI-09/12/13 · D-03) ·
   Windows `18a01573`(WIN-02 · 11/12 · DM · D-02 VBS · D-03 ActiveStore · WIN-13 · WIN-21 · D-08) · Linux `8752b04c`(LX-F08 · LX-F02 · LX-F10 · LX-F01 비특권/특권 분리 · D-03 ·
   LX-F04 multipath · LX-F06 · LX-F12 자리표시자 집합) · Jenkinsfile FL-F01b `f5aed96d` · 문서 `807b92fa` · 하네스 `32d4e307` · 시험 수정 X2' `361d4484`.
-- **미커밋(시험 · 문서만 — runtime 불변)**: HC-09(e2e 실제 엔진 렌더 시험이 unit 계층 ansible 대역을 치우고 실물 import) · rule 12 R4 코드 대조 정정 + ADR ·
-  DRIFT-022/023 재번호(종전 016/017 중복) + DRIFT-024 · decision-log D-13~D-15 · ESXI-03 문구 교정.
+- **로컬 커밋(미push, 시험 · 문서 · 하네스만 — runtime tree `20fb2094…` 동일)**: X3 `aa68e1a9`(HC-09) · `579cedcc`(rule 12 R4 정정 · DRIFT-022/023 재번호 · 024 · 실패 패턴) ·
+  `a57916e7`(adapter Step 4 · D-13~D-15 · 감사 요약) · `00cb1bf3`(훅 docstring) → X4: `test_cli_exit_codes` 자식 인코딩 고정(HC-T6b) + D-15 정정 · D-16.
 - **확인한 것**: X0 CI #40 COMPLETE_PASS / X1 CI #41 FAILURE(Harness 1건 → FL-F01b) / X2' main Job #454~#469 15 계약대로 · strict compare 회귀 0 · WSL ci_gate PASS(깨끗한 checkout) ·
   prodgen tree `20fb2094…` class B 0 / Harness 부정 대조 N1~N4 · 변이 M1~M9 / LX-F02 · ESXI-03 을 Runner 2.20.3 에서 재현 / lab 읽기 전용 probe(Linux 4 · Windows 1 · ESXi 3) /
   HC-09: Runner CI Gate 가 e2e 렌더 29건을 한 번도 돌리지 않았음(#40 · #41 ci_gate.log).
-- **멈춘 곳**: CI #42(X2') → COMPLETE_PASS 면 성능 P10(production P10 코드) → 승격(C1 포함 첫 승격) → canary · 명부 전수 → 성능 P11 → X3(HC-09 · 문서) push → CI → 정리 · §17 보고.
+- **확인한 것(추가)**: CI #42(X2') SUCCESS — 필수 stage 전부 PASS · Harness 54+23 PASS · COMPLETE_PASS. CLI 승격 dry-run 은 PC G14 1건(HC-T6b)으로 거부 → X4.
+- **멈춘 곳**: 성능 P10(production #198~, 진행 중) → X4 push → 매트릭스 15 → CI → CLI 승격(C1 포함 첫 승격) → canary · 명부 전수 · 대조 → 성능 P11 → 문서 · 정리 · §17 보고.
 
 ## 일자: 2026-10-10 (진행 중) — 검수 후속 C1~C10 결함 수정 · 원격 main `a64654aa` · production P10 `9ddc174a` 그대로
 

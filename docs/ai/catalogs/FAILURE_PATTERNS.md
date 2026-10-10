@@ -1039,3 +1039,17 @@
 - 수정: 022/023 으로 재번호해 머리로 옮기고 각 항목에 번호 메모를 남겼다(커밋 메시지는 바꾸지 않는다). 이번 항목 DRIFT-024 부터 `grep -o "DRIFT-0[0-9][0-9]" | sort -u | tail -1` 로 센다.
 - 재발 방지: 카탈로그에 항목을 더할 때는 (1) 머리의 형식 · 정렬 안내를 읽고 (2) 번호를 grep 으로 세고 (3) 같은 날 항목은 머리에 넣는다. rule 70 R3 "실제 결과만" 은 번호에도 적용된다.
 - 관련 rule: rule 70 R1 · R3.
+
+## 2026-10-10 — 환경 변수를 물려받은 상태에서만 통과하는 "수정" 이 승격 dry-run 을 막았다 (HC-T6b)
+
+- 카테고리: incomplete-fix (environment assumption)
+- 발견 위치: `tests/unit/test_finalize_gather_output.py::test_cli_exit_codes` — X2' `361d4484` 의 CLI 승격 dry-run 이 이 PC 의 G14(생성 tree 위 시험 overlay) 재실행에서 이 1건으로 거부됐다
+  (`verdict FAIL — a real promotion needs COMPLETE_PASS`). Runner CI #42 의 G14 는 PASS(Linux UTF-8).
+- 원인: X1 의 HC-T6 수정은 부모가 자식 출력을 `encoding="utf-8"` 로 읽게만 했다. 자식(`finalize_gather_output.py`)의 stdio 인코딩은 콘솔 코덱(cp949)에 남겨 뒀고, 내 모든 로컬
+  실행은 `PYTHONIOENCODING=utf-8` 을 export 한 셸이라 자식도 utf-8 을 썼다 — 그래서 PC 전체 suite 에서는 통과했다. prodgen G14 는 **의도적으로** `PYTHONIOENCODING` 을 빼고 돈다
+  (gates_live.py 주석: 자식에만 UTF-8 을 강제하면 다른 시험이 깨진다) → cp949 바이트를 utf-8 로 읽어 `manifest 없음` 매칭 실패.
+- 수정(X4): 시험이 자식 env 에 `PYTHONIOENCODING=utf-8` 을 **고정**하고 같은 코덱으로 읽는다(`_run_cli`). 재현 overlay(생성 tree + main_sha 의 tests)에서 PYTHONIOENCODING 없이 24 통과.
+- 비용: 승격 대상이 X2' 에서 X4(시험 · 문서만, runtime tree 동일 `20fb2094…`)로 바뀌어 main Job 매트릭스 15 + CI 1회를 다시 돈다 — prodgen 의 e2e 증거는 `checkout == main_sha` 를 요구한다.
+- 재발 방지: (1) 자식 프로세스를 띄우는 시험은 자식의 코덱을 env 로 고정하고 부모가 같은 코덱으로 읽는다 — 셸 환경을 가정하지 않는다. (2) "환경 의존" 수정은 그 환경 변수를
+  **뺀** 셸에서 한 번 더 돌린다(`env -u PYTHONIOENCODING`). (3) 승격 전에 `prodgen promote --dry-run` 을 이 PC 에서 먼저 돌려 G14 를 본다 — 이번엔 그 순서가 사고를 승격 전에 잡았다.
+- 관련 rule: rule 24 R1 · rule 95 R2(자기 보고도 검증) · rule 93 R2 예외 2(승격 전제).

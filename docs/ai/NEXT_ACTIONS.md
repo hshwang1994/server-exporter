@@ -4,8 +4,9 @@
 
 > 정본: `tests/evidence/2026-10-10-full-audit.md`. 지시서 §16 완료 조건 11개는 대장(`evidence-audit-2026-10-10/ledger.json` requirements)에 증거 ID 로 묶는다.
 
-- [x] **X2 커밋(채널별) · push(양 원격) · WSL ci_gate · main Job 매트릭스 15 · strict compare** — X2' `361d4484`(main #454~#469 · 회귀 0). **CI #42 진행 중**
-- [ ] **X3(시험 · 문서만) push · CI** — HC-09 · rule 12 R4 정정 · DRIFT 재번호 · D-13~D-15. runtime tree 는 X2' 와 동일(tree hash 로 확인) → 매트릭스 증거 이전(D-15)
+- [x] **X2 커밋(채널별) · push(양 원격) · WSL ci_gate · main Job 매트릭스 15 · strict compare · CI** — X2' `361d4484`(main #454~#469 · 회귀 0 · CI #42 COMPLETE_PASS)
+- [ ] **X4(시험 · 문서만: HC-09 · HC-T6b · rule 12 R4 정정 · DRIFT 재번호 · D-13~D-16) push · 매트릭스 15 · CI · CLI 승격** — runtime tree 는 X2' 와 동일(tree hash). X2' 의 CLI 승격
+  dry-run 은 PC G14 `test_cli_exit_codes` 1건으로 거부됐다(D-16)
 - [ ] **[결정 보류] adapter 기록용 절(`collect` · `normalize` · `credentials` · `graceful_degradation`) 삭제 여부** — 코드가 읽지 않는다(DRIFT-024). 지우면 runtime tree 변경 → 새 후보
 - [ ] **승격(C1 포함 첫 production 승격) · canary · 명부 전수(Linux · Windows · ESXi · Redfish) · 이전 production 과 대조**
 - [ ] **lab 읽기 전용 probe 결과 반영(P4 Windows · P8 Linux · P11-lite ESXi)** — LX-F09(`last -F` 시간대) · LX-F11(bnxt_re link_layer) · ESXI-10/14 는 probe 결과로 확정/기각
