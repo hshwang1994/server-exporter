@@ -68,3 +68,24 @@ def test_unknown_hex_returns_raw():
 def test_strip_whitespace():
     assert jedec_to_vendor("  00AD  ") == "SK hynix"
     assert jedec_to_vendor(" Samsung  ") == "Samsung"
+
+
+# D-10 (2026-10-10): bank(continuation 수) 를 본다 — 같은 7-bit ID 가 bank 마다 다른 제조사다 (JEP106BE).
+def test_bank_aware_kingston_vs_bank0():
+    assert jedec_to_vendor("0198") == "Kingston"          # continuation 1 + 0x98 → bank 1 0x18 = Kingston
+    assert jedec_to_vendor("7F98") == "Kingston"          # SPD/lshw 표기 (7F = continuation)
+    assert jedec_to_vendor("0098") == "0098"              # bank 0 0x18(Toshiba/Kioxia) 는 DRAM 표에 없다 → 원문 (Kingston 으로 잘못 붙이지 않는다)
+    assert jedec_to_vendor("98") == "Kingston"            # bank 미상(bare) → bank 0 없음 → bank 1
+
+
+def test_bank_aware_pny_and_parity_stripped_ids():
+    assert jedec_to_vendor("7FBA") == "PNY Technologies"
+    assert jedec_to_vendor("0xBA01") == "PNY Technologies"  # CIMC 표기: ID 먼저, continuation 수 뒤
+    assert jedec_to_vendor("00BA") == "00BA"                # bank 0 0x3A(Thomson CSF) 는 표에 없다 → 원문
+    assert jedec_to_vendor("4E") == "Samsung" and jedec_to_vendor("CE") == "Samsung"   # parity 비트 유무 모두
+    assert jedec_to_vendor("2D") == "SK hynix" and jedec_to_vendor("80AD") == "SK hynix"
+
+
+def test_intel_is_0x89_not_0x0b():
+    assert jedec_to_vendor("0089") == "Intel" and jedec_to_vendor("0x89") == "Intel"
+    assert jedec_to_vendor("000B") == "000B"   # 0x0B 는 Intersil — 종전 표의 "0B": Intel 은 오류였다

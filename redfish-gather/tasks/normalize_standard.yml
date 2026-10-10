@@ -237,7 +237,7 @@
     _rf_summary_cpu: >-
       {%- set ns = namespace(groups=[], seen={}) -%}
       {%- for p in (_rf_d_cpus | default([])) -%}
-        {%- set m = p.model | default('unknown') -%}
+        {%- set m = p.model | default(none) -%}  {#- RD-UNK (2026-10-10): 자리표시자 'unknown' 대신 null -#}
         {%- if m in ns.seen -%}
           {%- set idx = ns.seen[m] -%}
           {%- set _ = ns.groups[idx].update({'sockets': ns.groups[idx].sockets + 1, 'total_cores': ns.groups[idx].total_cores + (p.total_cores | default(0) | int)}) -%}
@@ -381,8 +381,9 @@
         {%- elif 'backplane' in lid -%}{%- set cat = 'backplane' -%}
         {%- elif 'service' in lid -%}{%- set cat = 'service_module' -%}
         {%- elif 'idrac' in lid or 'ilo' in lid or 'xcc' in lid or 'cimc' in lid or 'bmc' in lid -%}{%- set cat = 'bmc' -%}{# nosec rule12-r1: BMC 표시명 substring (Redfish firmware naming, vendor 분기 아님) #}
-        {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid -%}{%- set cat = 'nic' -%}
+        {#- RD-FW1 (2026-10-10): RAID 토큰이 NIC 보다 먼저 — Broadcom MegaRAID 컨트롤러가 'broadcom' 으로 nic 이 되던 것 -#}
         {%- elif 'raid' in lid or 'perc' in lid or 'megaraid' in lid -%}{%- set cat = 'storage_controller' -%}
+        {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid -%}{%- set cat = 'nic' -%}
         {%- elif 'psu' in lid or 'power supply' in lid -%}{%- set cat = 'psu' -%}
         {%- endif -%}
         {%- set _ = out.append(fw | combine({'category': cat})) -%}
@@ -397,6 +398,9 @@
                               critical=0, warning=0, ok=0, unknown_health=0,
                               cap_unknown=0) -%}
       {%- for psu in (_rf_d_power.power_supplies | default([])) -%}
+        {#- D-07 (2026-10-10): State=Absent 슬롯은 설치된 PSU 가 아니다 — 수 · 용량 합 · 상태 집계 모두에서 뺀다 (목록 power_supplies 에는 남는다).
+            Ansible 기본 Jinja 에는 loopcontrols(continue) 가 없으므로 if 로 감싼다 -#}
+        {%- if (psu.state | default('') | string | trim | lower) != 'absent' -%}
         {%- set ns.psu_total = ns.psu_total + 1 -%}
         {%- if (psu.state | default('') | string | trim | lower) == 'enabled' -%}
           {%- set ns.psu_active = ns.psu_active + 1 -%}
@@ -411,6 +415,7 @@
           {%- set ns.cap_unknown = ns.cap_unknown + 1 -%}
         {%- else -%}
           {%- set ns.cap_total = ns.cap_total + ((psu.power_capacity_w | default(0)) | int) -%}
+        {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
       {{ {

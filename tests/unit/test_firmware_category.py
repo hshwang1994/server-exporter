@@ -112,6 +112,16 @@ def test_csus_firmware_category_unchanged(fw_id, name, expected):
     assert cat(fw_id, name) == expected
 
 
+@pytest.mark.parametrize("fw_id,name,expected", [
+    # RD-FW1 (2026-10-10): 'broadcom' 이 'raid' 보다 먼저 걸려 Broadcom MegaRAID 컨트롤러가 nic 이었다
+    ("Installed-110-7.26.0__RAID.Slot.1-1", "Broadcom MegaRAID SAS 9460-8i Adapter", "storage_controller"),
+    ("Installed-111-7.26.0__NIC.Slot.3-1-1", "Broadcom NetXtreme-E 25Gb Ethernet", "nic"),
+    ("Installed-112-2.3__RAID.Integrated.1-1", "PERC H755 Front", "storage_controller"),
+])
+def test_broadcom_raid_is_storage_controller_and_broadcom_nic_stays_nic(fw_id, name, expected):
+    assert cat(fw_id, name) == expected, f"{name!r} -> {cat(fw_id, name)}"
+
+
 def test_drive_not_mislabeled_storage_controller():
     """Disk.Bay 물리디스크 firmware 는 storage_controller 가 아니라 drive."""
     c = cat("Installed-106441-ST33__Disk.Bay.1:Enclosure.Internal.0-1:RAID.Slot.6-1",

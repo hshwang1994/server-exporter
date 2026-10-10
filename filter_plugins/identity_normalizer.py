@@ -31,6 +31,15 @@
 #   mac:  "{{ raw_mac | normalize_mac }}"
 #   wwpn: "{{ raw_wwn | normalize_wwn }}"
 #   uuid: "{{ raw_uuid | normalize_uuid }}"
+#   serial: "{{ raw_serial | dmi_sentinel_null('serial') }}"   — DMI 자리표시자('To Be Filled By O.E.M.' 등)는 None
+#
+# DMI/SMBIOS 자리표시자 (LX-F12, 2026-10-10)
+#   식별자가 아닌 공장 기본 문자열은 한 곳(아래 DMI_SENTINELS)에서 정의하고 OS(Linux/Windows) · ESXi 가 공유한다.
+#   종전에는 gather_system.yml(Linux/Windows) 안에 같은 목록이 8번 복제돼 있었고 ESXi 는 아무것도 걸러내지 않았다('NA' 가 serial 로 나감).
+#   비교는 trim + 소문자. 집합은 종전 인라인 목록의 합집합 + redfish_gather.py invalid_values('N/A') 이다 — 근거 없는 추가는 없다.
+#   Redfish 모듈(stdlib 전용)은 serial 집합을 _SERIAL_SENTINELS 로 복제한다 — tests/unit/test_identity_sentinels.py 가 drift 를 막는다.
+#   UUID 자리표시자: 03000200-0400-0500-0006-000700080009 (SMBIOS 공장 기본값으로 널리 남는 값) 와 그 바이트 순서 반전형 —
+#   normalize_uuid 가 all-0 / all-f 와 같이 None 으로 돌린다 (세 채널 공통 경로).
 # ==============================================================================
 
 from __future__ import absolute_import, division, print_function
@@ -40,6 +49,16 @@ __metaclass__ = type
 import re
 
 _NON_HEX_RE = re.compile(r"[^0-9a-f]")
+
+_DMI_COMMON = frozenset({"", "na", "n/a", "none", "not specified", "to be filled by o.e.m.", "default string"})
+DMI_SENTINELS = {
+    "serial": _DMI_COMMON | {"system serial number", "0", "00000000"},
+    "uuid": _DMI_COMMON,
+    "vendor": _DMI_COMMON | {"system manufacturer"},
+    "model": _DMI_COMMON | {"system product name"},
+    "bios": _DMI_COMMON,
+}
+_UUID_PLACEHOLDERS = frozenset({"03000200040005000006000700080009", "00020003000400050006000700080009"})
 
 
 def _clean(value):
@@ -95,9 +114,32 @@ def normalize_uuid(value):
     hexs = _hex_only(s)
     if len(hexs) != 32:
         return s or None
-    if hexs == "0" * 32 or hexs == "f" * 32:
+    if hexs == "0" * 32 or hexs == "f" * 32 or hexs in _UUID_PLACEHOLDERS:
         return None
     return "%s-%s-%s-%s-%s" % (hexs[0:8], hexs[8:12], hexs[12:16], hexs[16:20], hexs[20:32])
+
+
+def is_dmi_sentinel(value, kind="serial"):
+    """DMI/SMBIOS 자리표시자인가 (trim + 소문자 비교). kind: serial | uuid | vendor | model | bios. None/빈 값도 참."""
+    if kind not in DMI_SENTINELS:
+        raise ValueError("unknown DMI sentinel kind: %r" % (kind,))
+    if value is None:
+        return True
+    s = str(value).strip().lower()
+    if s in DMI_SENTINELS[kind]:
+        return True
+    if kind == "uuid":
+        hexs = _hex_only(s.strip("{}"))
+        if len(hexs) == 32 and (hexs == "0" * 32 or hexs == "f" * 32 or hexs in _UUID_PLACEHOLDERS):
+            return True
+    return False
+
+
+def dmi_sentinel_null(value, kind="serial"):
+    """자리표시자면 None, 아니면 trim 한 문자열 (값을 지어내지 않는다 — 표기 정규화는 normalize_uuid 등 별도 필터)."""
+    if is_dmi_sentinel(value, kind):
+        return None
+    return str(value).strip()
 
 
 def uuid_byteswap(value):
@@ -132,4 +174,6 @@ class FilterModule(object):
             "normalize_uuid": normalize_uuid,
             "uuid_byteswap": uuid_byteswap,
             "uuid_equal": uuid_equal,
+            "dmi_sentinel_null": dmi_sentinel_null,
+            "is_dmi_sentinel": is_dmi_sentinel,
         }

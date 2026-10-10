@@ -90,15 +90,16 @@ def normalize_vendor(raw_vendor, aliases=None):
         # 부분 매칭 — forward(alias 가 v 에 포함)만. Round 17:
         #  (1) 역방향(v in alias) 제거 — 'inc'/'computer' 같은 짧은 입력이 긴 alias 의
         #      substring 으로 걸려 엉뚱한 vendor 로 오분류되는 것 차단
-        #  (2) 짧은 alias(<3, 사실상 'hp')는 whole-word 토큰일 때만 — 'HPC Systems Inc.' 를
-        #      hpe 로 오분류하지 않으면서 'HP Enterprise' 같은 토큰 표기는 보존
+        #  (2) 짧은 alias(3자 이하 — 'hp' · 'hpe' · 'ibm' · 'qct')는 whole-word 토큰일 때만 — 'HPC Systems Inc.' 를
+        #      hpe 로, 'Huawei iBMC' 의 'ibmc' 를 lenovo('ibm') 로 오분류하지 않으면서 'HP Enterprise' 같은 토큰 표기는 보존
+        #      (2026-10-10 D-09: 3자 alias 도 토큰 경계 — redfish_gather._best_alias_match 와 같은 규칙)
         #  (3) 최장 alias 우선 — dict 순회 순서에 의존하지 않는 결정적 결과
         v_tokens = set(re.split(r"[^a-z0-9]+", v))
         best_alias, best_canon = "", None
         for alias, canon in flat.items():
             if not alias:
                 continue
-            hit = (alias in v) if len(alias) >= 3 else (alias in v_tokens)
+            hit = (alias in v) if len(alias) > 3 else (alias in v_tokens)
             if hit and len(alias) > len(best_alias):
                 best_alias, best_canon = alias, canon
         if best_canon:

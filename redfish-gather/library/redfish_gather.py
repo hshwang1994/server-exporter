@@ -560,6 +560,10 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
         return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
+    except http_client.HTTPException as e:
+        # 2026-10-10 (RD-F03): 응답을 끝까지 받지 못했다(IncompleteRead · BadStatusLine …). _post/_patch/_delete 와 같은 transport 오류다 —
+        #   종전에는 이 예외가 섹션 수집 함수 밖으로 새어 '예외 발생' 으로 떨어지고 인증 관측(_record_auth_status)도 거치지 않았다.
+        return 0, {}, f'Response lost: {type(e).__name__}: {e}'
     except (OSError, ValueError) as e:
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
@@ -802,8 +806,24 @@ def account_verify_delays(policy):
     remaining = ACCOUNT_VERIFY_MAX_TOTAL_SECONDS - sum(delays)
     extra = min(penalty + 2, remaining)
     if extra > 0:
-        delays.append(extra)
+        # 2026-10-10 (RA-F06): 패널티를 **먼저** 기다린다. 종전에는 끝에 붙여 0/1/5초의 앞 3회가 패널티 창 안에서 전부 401 로 떨어져
+        #   예산(기본 3회)을 다 쓴 뒤에야 기다렸다 — HPE(10초 지연)에서 "쓰기 성공인데 검증 실패" 가 구조적으로 났고, Dell(IP Blocking
+        #   3회/60초)에서는 차단 임계를 넘겼다.
+        return (extra,) + tuple(delays)
     return tuple(delays)
+
+
+# 장비의 실패 카운터가 리셋될 때까지 기다리는 시간(초) — 예산이 이미 소진된 채 재인증 확인을 시작해야 할 때 1회 확인 전에 기다린다 (RA-F05).
+ACCOUNT_COUNTER_RESET_DEFAULT_SECONDS = 60
+ACCOUNT_COUNTER_RESET_MAX_SECONDS = 90
+
+
+def account_counter_reset_wait(policy):
+    """장비가 선언한 AccountLockoutCounterResetAfter(초). 없으면 60초(Dell IP Blocking 창), 상한 90초 — 수집 시간을 끝없이 늘리지 않는다."""
+    value = (policy or {}).get('lockout_counter_reset')
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return min(value, ACCOUNT_COUNTER_RESET_MAX_SECONDS)
+    return ACCOUNT_COUNTER_RESET_DEFAULT_SECONDS
 
 # 2026-08-12 (rev.2): `ACCOUNT_OPTIONAL_PATCH_PROPS` 를 제거했다. "거부되면 빼도 되는
 # 속성" 이라는 개념 자체가 추측성 재시도를 전제한다. 무엇을 보낼지는 쓰기 **전에**
@@ -1164,19 +1184,22 @@ def _capped(seq, section=None, errors=None):
 
 # 2026-04-29 fix B90 / B23: JEDEC ID -> vendor name normalization (rule 10 stdlib only)
 # Cisco CIMC returns Memory.Manufacturer as raw '0xCExx' (Samsung) instead of name.
-# JEP106 standard: 7-bit ID byte (MSB = parity). Common DRAM vendors below.
+# D-10 (2026-10-10): keyed by (bank, 7-bit ID) — bank = continuation(0x7F) count, parity bit stripped. The same 7-bit ID is a
+#   different vendor in another bank (0x18: bank 1 Kingston / bank 0 Toshiba). Mirror of filter_plugins/jedec_mapper.py::JEDEC_MAP
+#   (sources there: JEP106BE via docs.rs jep106 codes.rs, lshw jedec.cc, Linux mtd/cfi.h). tests/unit/test_jedec_drift_guard.py keeps
+#   the two identical. "0B": Intel (pre-audit) was wrong — 0x0B is Intersil; Intel is 7-bit 0x09 (0x89 with parity).
 _JEDEC_VENDORS = {
-    "01": "AMD",
-    "0B": "Intel",
-    "1F": "Atmel",
-    "2C": "Micron Technology",
-    "98": "Kingston",
-    "AD": "SK hynix",
-    "B3": "IDT",
-    "BA": "PNY Electronics",
-    "CE": "Samsung",
-    "04": "Fujitsu",
-    "07": "Hitachi",
+    (0, 0x01): "AMD",
+    (0, 0x04): "Fujitsu",
+    (0, 0x07): "Hitachi",
+    (0, 0x09): "Intel",
+    (0, 0x1F): "Atmel",
+    (0, 0x2C): "Micron Technology",
+    (0, 0x2D): "SK hynix",
+    (0, 0x33): "IDT",
+    (0, 0x4E): "Samsung",
+    (1, 0x18): "Kingston",
+    (1, 0x3A): "PNY Technologies",
 }
 
 
@@ -1202,14 +1225,49 @@ def _canonical_vendor_name(name):
     return _VENDOR_NAME_NORMALIZATION.get(name.strip().lower(), name)
 
 
+def _jedec_lookup(hex_text, id_first=False):
+    """(vendor, bank, id7) or None — same algorithm as filter_plugins/jedec_mapper.jedec_lookup (D-10 mirror).
+
+    hex_text: hex bytes without '0x'. Layouts: continuation style '7F98' (leading 0x7F bytes = bank, next byte = ID);
+    count-first '00AD0632…' / '80AD…' / '0198' (first byte & 0x7F = bank, second byte = ID); ID-first (Cisco CIMC, id_first)
+    'CE00' (first byte = ID, second byte & 0x7F = bank); single byte 'AD' → bank unknown: bank 0 then bank 1.
+    """
+    s = hex_text.strip()
+    if len(s) < 2 or len(s) % 2 or not all(c in "0123456789ABCDEFabcdef" for c in s):
+        return None
+    bs = [int(s[i:i + 2], 16) for i in range(0, len(s), 2)]
+    bank = None
+    if bs[0] == 0x7F:
+        n = 0
+        while n < len(bs) and bs[n] == 0x7F:
+            n += 1
+        if n >= len(bs):
+            return None
+        bank, ident = n, bs[n]
+    elif len(bs) >= 2:
+        if id_first:
+            ident, bank = bs[0], bs[1] & 0x7F
+        else:
+            bank, ident = bs[0] & 0x7F, bs[1]
+    else:
+        ident = bs[0]
+    id7 = ident & 0x7F
+    for b in ((bank,) if bank is not None else (0, 1)):
+        name = _JEDEC_VENDORS.get((b, id7))
+        if name:
+            return name, b, id7
+    return None
+
+
 def _normalize_jedec(value):
     """Normalize a JEDEC manufacturer ID hex string to vendor name.
 
     Handles:
-      - "0xCE00" / "0xCE" / "0xAD00" (Cisco CIMC)
-      - "00CE" / "00AD063200AD" (raw JEDEC, dmidecode style)
+      - "0xCE00" / "0xCE" / "0xAD00" (Cisco CIMC — ID first, then continuation count)
+      - "00CE" / "00AD063200AD" / "7F98" (raw JEDEC, dmidecode / SPD style)
       - "Samsung" / "Hynix Semiconductor" — canonical normalization (cross-vendor)
       - None / "" / "Unknown" / "Not Specified" -> None
+      - unknown hex -> raw string (traceability)
     """
     if value is None:
         return None
@@ -1218,22 +1276,21 @@ def _normalize_jedec(value):
         return None
     # 0x prefixed hex (Cisco CIMC)
     if s.lower().startswith("0x"):
-        hp = s[2:].upper()
-        if hp[:2] in _JEDEC_VENDORS:
-            return _JEDEC_VENDORS[hp[:2]]
-        return s  # unknown — keep raw for traceability
+        hit = _jedec_lookup(s[2:].upper(), id_first=True)
+        return hit[0] if hit else s  # unknown — keep raw for traceability
     # Vendor name (contains non-hex alpha or whitespace)
     if " " in s or any(c.isalpha() and c not in "ABCDEFabcdef" for c in s):
         return _canonical_vendor_name(s)
     # Plain hex string
     if all(c in "0123456789ABCDEFabcdef" for c in s) and len(s) >= 2:
-        # Try first byte (some BMCs) or 2nd byte (continuation+ID)
-        for idx in (slice(2, 4), slice(0, 2)):
-            byte = s[idx].upper() if len(s) >= idx.stop else None
-            if byte and byte in _JEDEC_VENDORS:
-                return _JEDEC_VENDORS[byte]
-        return s
+        hit = _jedec_lookup(s.upper())
+        return hit[0] if hit else s
     return _canonical_vendor_name(s)
+
+
+# DMI/SMBIOS serial 자리표시자 — identity_normalizer.DMI_SENTINELS['serial'] 의 복제본(upper, '' 제외). LX-F12 drift guard 가 지킨다.
+_SERIAL_SENTINELS_UPPER = ('NA', 'N/A', 'NONE', 'NOT SPECIFIED', 'TO BE FILLED BY O.E.M.', 'DEFAULT STRING',
+                           'SYSTEM SERIAL NUMBER', '0', '00000000')
 
 
 def _strip_or_none(value):
@@ -1370,12 +1427,41 @@ def _load_vendor_aliases_file():
             continue
     return {}
 
+def _best_alias_match(text, mapping):
+    """text(소문자) 안에서 mapping 의 alias 를 찾는다 (D-09, 2026-10-10 — module_utils/adapter_common.normalize_vendor 와 같은 규칙).
+
+    - 전방 일치만: alias 가 text 안에 있어야 한다 (text 가 alias 안에 있는 역방향 매칭은 'inc' 같은 짧은 입력을 엉뚱한 vendor 로 보낸다).
+    - 3자 이하 alias('hp' · 'ibm' · 'hpe' · 'qct' · 'ilo' · 'ucs' · 'xcc')는 **토큰 전체**로만 맞춘다 — 'ibm' 이 'iBMC'(Huawei) 를,
+      'hp' 가 'HPC Systems' 를 삼키지 않게. 종전 양방향 부분일치는 dict 순서에 따라 Huawei iBMC 를 lenovo 로 돌려줬다(RA-F03/F08).
+    - 가장 긴 alias 가 이긴다 — dict 순회 순서와 무관한 결정적 결과.
+    """
+    if not text:
+        return None
+    tokens = set(re.split(r'[^a-z0-9]+', text))
+    best_alias, best = '', None
+    for alias, canon in (mapping or {}).items():
+        if not alias:
+            continue
+        hit = (alias in text) if len(alias) > 3 else (alias in tokens)
+        if hit and len(alias) > len(best_alias):
+            best_alias, best = alias, canon
+    return best
+
+
+def _vendor_from_text(text, vm):
+    """ServiceRoot Vendor/Product/Name · WWW-Authenticate realm 같은 자유 문자열 → vendor. alias 먼저, 그 다음 BMC 제품명 힌트 (D-09)."""
+    t = _str(text).lower()
+    if not t.strip():
+        return None
+    return _best_alias_match(t, vm) or _best_alias_match(t, _BMC_PRODUCT_HINTS)   # nosec rule12-r1
+
+
 def _normalize_vendor_from_aliases(mfr_lower):
     """
     Manufacturer 문자열(소문자)을 정규화된 벤더명으로 변환합니다.
     1차: vendor_aliases.yml (REPO_ROOT 기반)
     2차: 내장 fallback 맵
-    3차: 부분 매칭 (substring)
+    3차: 부분 매칭 — 최장 alias · 전방 일치 · 3자 이하는 토큰 경계 (_best_alias_match, D-09)
     """
     # 2026-08-12: 빈 입력 방어. 아래 부분 매칭의 `mfr_lower in key` 는 mfr_lower 가
     #   '' 이면 **모든 key 에 대해 참**이라, 공백-only Manufacturer("   ") 가 dict 첫
@@ -1395,12 +1481,9 @@ def _normalize_vendor_from_aliases(mfr_lower):
     if mfr_lower in merged:
         return merged[mfr_lower]
 
-    # 부분 매칭 (기존 로직 호환)
-    for key, canon in merged.items():
-        if key and (key in mfr_lower or mfr_lower in key):  # rule 95: 빈 alias wildcard 매칭 방어 (Round 1 #9)
-            return canon
-
-    return 'unknown'
+    # 부분 매칭 — 2026-10-10 (D-09): 종전 `key in mfr_lower or mfr_lower in key` 는 dict 순서 의존 + 역방향('ibm' ⊂ 'ibmc') 오탐
+    hit = _best_alias_match(mfr_lower, merged)
+    return hit or 'unknown'
 
 
 # ── 벤더 감지 ────────────────────────────────────────────────────────────────
@@ -1427,7 +1510,7 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
         # 401/403일 때 WWW-Authenticate 헤더에서 realm 추출
         if e.code in (401, 403):
             realm_header = e.headers.get('WWW-Authenticate') or ''
-    except (urlerr.URLError, socket.timeout, OSError, ValueError):
+    except (urlerr.URLError, socket.timeout, http_client.HTTPException, OSError, ValueError):   # RD-F03: 끊긴 응답도 '힌트 없음'
         return None
 
     if not realm_header:
@@ -1441,17 +1524,10 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
         return None
     realm = m.group(1).lower().strip()
 
-    # vendor_aliases + BMC product hints 매칭
+    # vendor_aliases + BMC product hints 매칭 — ServiceRoot 와 같은 규칙 (D-09)
     aliases_yaml = _load_vendor_aliases_file()
     vm = {**_FALLBACK_VENDOR_MAP, **aliases_yaml}
-    for alias, canon in vm.items():
-        if alias and alias in realm:
-            return canon
-    # nosec rule12-r1: realm BMC 시그니처
-    for hint, canon in _BMC_PRODUCT_HINTS.items():                              # nosec rule12-r1
-        if hint in realm:                                                       # nosec rule12-r1
-            return canon                                                        # nosec rule12-r1
-    return None
+    return _vendor_from_text(realm, vm)
 
 
 def _get_noauth(bmc_ip, path, timeout, verify_ssl):
@@ -1483,6 +1559,8 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
         return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
+    except http_client.HTTPException as e:
+        return 0, {}, f'Response lost: {type(e).__name__}: {e}'   # RD-F03 (2026-10-10) — _get_impl 과 같다
     except (OSError, ValueError) as e:
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
@@ -1532,34 +1610,24 @@ def _detect_vendor_from_service_root(root):
         for cand in (v, v.rstrip('.').strip()):
             if cand in vm:
                 return vm[cand]
-        # 2-B. substring 매칭 (Product/Name과 동일 정신)
-        for alias, canonical in vm.items():
-            if alias and alias in v:
-                return canonical
+        # 2-B. 부분 매칭 — 최장 alias · 토큰 경계 (D-09, 2026-10-10)
+        hit = _best_alias_match(v, vm)
+        if hit:
+            return hit
 
-    # 3. Product 필드에 벤더명 포함 확인 — ServiceRoot v1.3.0+ 표준
+    # 3. Product 필드 — alias 먼저, 그 다음 BMC 제품명 힌트 (D-09: 둘 다 최장 일치 · 3자 이하 토큰 경계)
     product = _safe(root, 'Product')
     if product and isinstance(product, str):
-        p = product.lower()
-        for alias, canonical in vm.items():
-            if alias and alias in p:  # rule 95: 빈 alias wildcard 매칭 방어 (Round 1 #8, 아래 Name 필드 동일 가드)
-                return canonical
-        # nosec rule12-r1: BMC 시그니처 → vendor 식별 (외부 Redfish spec OEM namespace)
-        for hint, canon in _BMC_PRODUCT_HINTS.items():                        # nosec rule12-r1
-            if hint in p:                                                     # nosec rule12-r1
-                return canon                                                  # nosec rule12-r1
+        hit = _vendor_from_text(product, vm)
+        if hit:
+            return hit
 
-    # 4. Name 필드에 벤더명 포함 확인 — Cisco "Cisco RESTful Root Service" 등
+    # 4. Name 필드 — Cisco "Cisco RESTful Root Service" 등
     name = _safe(root, 'Name')
     if name and isinstance(name, str):
-        n = name.lower()
-        for alias, canonical in vm.items():
-            if alias and alias in n:  # rule 95: 빈 alias wildcard 매칭 방어 (Round 1 #8)
-                return canonical
-        # nosec rule12-r1: BMC 시그니처 fallback (Name 필드)
-        for hint, canon in _BMC_PRODUCT_HINTS.items():                        # nosec rule12-r1
-            if hint in n:                                                     # nosec rule12-r1
-                return canon                                                  # nosec rule12-r1
+        hit = _vendor_from_text(name, vm)
+        if hit:
+            return hit
 
     # 5. 해당 없음
     return None
@@ -1582,54 +1650,6 @@ def _fetch_service_root(bmc_ip, username, password, timeout, verify_ssl):
         errors.append(_err('vendor_detect', 'ServiceRoot JSON 이 object 아님'))
         return None, errors
     return root, errors
-
-
-def _endpoint_with_fallback(bmc_ip, primary_path, fallback_path, username,
-                            password, timeout, verify_ssl, section_name='generic'):
-    """primary endpoint 시도 → 404 / 미지원 시 fallback endpoint 시도.
-
-    cycle 2026-05-01 신설 (rule 22 R5 헬퍼 추상화 / HARNESS B5).
-    Storage→SimpleStorage / Power→PowerSubsystem / 향후 ThermalSubsystem 같은
-    DMTF 변천 호환 패턴을 재사용 가능한 단일 함수로 추상화.
-
-    Behavior:
-    - primary GET → 200 이면 (data, [], 'primary') 반환
-    - primary 404 → fallback GET → 200 이면 (data, [], 'fallback') 반환
-    - fallback 404 → ({}, [], 'not_supported') 반환 (호출자가 분류)
-    - 5xx / 401 / 403 / 그 외 → ({}, [error], 'failed')
-
-    호환성 fallback only — envelope 신 키 추가 안 함 (rule 96 R1-B Additive).
-
-    Args:
-        bmc_ip: BMC IP
-        primary_path: 우선 시도 path (예: /Chassis/{id}/Power)
-        fallback_path: 404 시 fallback path (예: /Chassis/{id}/PowerSubsystem)
-        username, password, timeout, verify_ssl: 표준 HTTP 옵션
-        section_name: error 분류 라벨 (envelope errors[] 의 stage)
-
-    Returns:
-        (data_dict, errors_list, source_label)
-        source_label: 'primary' | 'fallback' | 'not_supported' | 'failed'
-    """
-    errors = []
-    st, data, err = _get(bmc_ip, primary_path, username, password, timeout, verify_ssl)
-
-    if not err and st == 200:
-        return data, errors, 'primary'
-
-    if st == 404:
-        st_fb, data_fb, err_fb = _get(bmc_ip, fallback_path, username, password,
-                                      timeout, verify_ssl)
-        if not err_fb and st_fb == 200:
-            return data_fb, errors, 'fallback'
-        if st_fb == 404:
-            return {}, errors, 'not_supported'
-        errors.append(_err(section_name,
-                           f'fallback {fallback_path} 실패: {err_fb or st_fb}'))
-        return {}, errors, 'failed'
-
-    errors.append(_err(section_name, f'{primary_path} 실패: {err or st}'))
-    return {}, errors, 'failed'
 
 
 def _resolve_first_member_uri(bmc_ip, coll_uri, username, password, timeout, verify_ssl):
@@ -2082,13 +2102,10 @@ def _resolve_serial_dell(service_root, refetch=None):                         # 
 
     Returns: (service_tag, None) | (None, 실패사유)
     """
-    # 이 프로젝트가 이미 invalid 로 정의한 식별자 값의 합집합 — 새로 정의하지 않는다.
-    #   os-gather/tasks/linux/gather_system.yml:209    (serial 센티널 5종)
-    #   os-gather/tasks/windows/gather_hardware.yml:53 (BIOS serial 센티널 8종)
-    # 원본 PowerShell 목록이 대소문자 무시라 그 의미를 보존해 upper() 비교한다.
+    # 자리표시자 집합의 정본은 filter_plugins/identity_normalizer.py DMI_SENTINELS['serial'] 다 (LX-F12). 이 모듈은 stdlib 전용이라
+    # _SERIAL_SENTINELS_UPPER 로 복제한다 — tests/unit/test_identity_sentinels.py 가 두 집합의 drift 를 막는다. upper() 비교(대소문자 무시).
     # 빈 문자열/공백은 _strip_or_none 이 이미 None 으로 정규화하므로 목록에 넣지 않는다.
-    invalid_values = ('NA', 'N/A', 'NONE', 'NOT SPECIFIED', 'TO BE FILLED BY O.E.M.',
-                      'SYSTEM SERIAL NUMBER', '0', '00000000')
+    invalid_values = _SERIAL_SENTINELS_UPPER
 
     def _pick(root):
         tag = _strip_or_none(_safe(root, 'Oem', 'Dell', 'ServiceTag'))         # nosec rule12-r1
@@ -2743,14 +2760,22 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     nic_link = _safe(data, 'EthernetInterfaces', '@odata.id')
     if nic_link:
         nst, ncoll, nerr = _get(bmc_ip, _p(nic_link), username, password, timeout, verify_ssl)
-        if not nerr and nst == 200:
+        if nerr or nst != 200:
+            # 2026-10-10 (RD-F18): 종전에는 조용히 건너뛰어 "BMC IP 없음" 이 성공처럼 보였다. 404(미노출)만 조용하고 그 밖은 비차단 오류로 남긴다.
+            if nst != 404:
+                errors.append(_err('bmc', f'EthernetInterfaces {nic_link} 실패: {nerr or nst}',
+                                   detail={'status_code': nst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        else:
             for nm in _collection_members(bmc_ip, _p(nic_link), ncoll, username, password, timeout,
-                                          verify_ssl, 'bmc', None):
+                                          verify_ssl, 'bmc', errors):
                 nuri = _safe(nm, '@odata.id')
                 if not nuri:
                     continue
                 nst2, ndata, nerr2 = _get(bmc_ip, _p(nuri), username, password, timeout, verify_ssl)
                 if nerr2 or nst2 != 200:
+                    if nst2 != 404:
+                        errors.append(_err('bmc', f'EthernetInterface {nuri} 실패: {nerr2 or nst2}',
+                                           detail={'status_code': nst2}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
                 # IPv4 — 첫 매칭만 result['ip']/['mac_address']/['dns_name'] 에 사용,
                 # 모든 NIC 의 Gateway 는 누적 (멀티 NIC: dedicated + shared 등 대비)
@@ -2805,6 +2830,9 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
             # FQDN 우선(도메인 포함 더 완전), 없으면 HostName. 빈 문자열 → None 정규화.
             result['network_hostname'] = (_strip_or_none(_safe(npdata, 'FQDN'))
                                           or _strip_or_none(_safe(npdata, 'HostName')))
+        elif npst != 404:
+            errors.append(_err('bmc', f'NetworkProtocol {np_link} 실패: {_nperr or npst}',   # RD-F18 (2026-10-10)
+                               detail={'status_code': npst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
 
     # 벤더별 BMC OEM 확장 (Redfish API spec)
     if vendor == 'hpe':                                                       # nosec rule12-r1
@@ -3837,7 +3865,12 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
 
         # NetworkDeviceFunctions — FC WWPN/WWNN + IB GUID 식별 (cycle 2026-05-29).
         ndfs = _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
-        ndf_by_port = {n['port_uri']: i for i, n in enumerate(ndfs) if n.get('port_uri')}
+        # 2026-10-10 (RD-F15): 한 포트에 NDF 가 여럿(CNA 의 Ethernet 기능 + FCoE 기능)이면 **목록**으로 둔다 — 종전 dict 는 뒤 멤버가 앞을
+        #   덮어 멤버 순서에 따라 같은 포트가 Ethernet 으로도 FC 로도 분류됐다.
+        ndf_by_port = {}
+        for i, n in enumerate(ndfs):
+            if n.get('port_uri'):
+                ndf_by_port.setdefault(n['port_uri'], []).append(i)
         # CSUS-FC1 (2026-06-15 실미러 검수): NDF.Links.PhysicalPortAssignment 부재 펌웨어
         # (HPE CSUS RMC — NDF 가 Links.PCIeFunction 만 노출)에서 NDF↔Port 매칭이 port_uri 로
         # 안 되면 ID 일치(NDF.Id == Port.Id, 예: PCIeCard10Port1)로 fallback. 그래야 FC WWPN/WWNN
@@ -3911,12 +3944,15 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         port_ctx_by_id[port_id] = (port_protocol, link_tech, pdata)
 
                     # NDF join (식별 정보) — port_uri(PhysicalPortAssignment) 우선, 부재 시 ID 매칭(CSUS-FC1)
-                    ndf_idx = ndf_by_port.get(_p(p_uri)) if p_uri else None
-                    if ndf_idx is None and port_id:
-                        ndf_idx = ndf_by_id.get(port_id)
-                    ndf = ndfs[ndf_idx] if ndf_idx is not None else None
-                    if ndf_idx is not None:
-                        ndf_matched.add(ndf_idx)
+                    cand = list(ndf_by_port.get(_p(p_uri), [])) if p_uri else []
+                    if not cand and port_id and port_id in ndf_by_id:
+                        cand = [ndf_by_id[port_id]]
+                    ndf_matched.update(cand)
+                    # RD-F15 (2026-10-10): 이 포트에 FC/FCoE 기능이 하나라도 있으면 그 포트는 FC 다 — Ethernet 기능이 분류를 뒤집지 않는다.
+                    #   fc_hbas 는 FC 기능마다 하나씩(각자의 WWPN).
+                    fc_ndfs = [ndfs[i] for i in cand
+                               if _classify_port_protocol(port_protocol, link_tech, ndfs[i], pdata) in ('FibreChannel', 'FCoE')]
+                    ndf = fc_ndfs[0] if fc_ndfs else (ndfs[cand[0]] if cand else None)
 
                     cls = _classify_port_protocol(port_protocol, link_tech, ndf, pdata)
 
@@ -3954,9 +3990,11 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         cur['speed_mbps'] = speed_mbps
 
                     if cls in ('FibreChannel', 'FCoE'):
-                        out['fc_hbas'].append(_make_fc_hba(
-                            adapter_id, adapter_info, port_id, cls,
-                            normalized_link, speed_gbps, primary_addr, ndf))
+                        for fndf in (fc_ndfs or [ndf]):   # RD-F15: FC 기능마다 hba 하나
+                            out['fc_hbas'].append(_make_fc_hba(
+                                adapter_id, adapter_info, port_id, cls,
+                                normalized_link, speed_gbps,
+                                (fndf.get('wwpn') if isinstance(fndf, dict) and fndf.get('wwpn') else primary_addr), fndf))
                     elif cls == 'InfiniBand':
                         out['infiniband'].append(_make_ib_port(
                             adapter_id, adapter_info, port_id,
@@ -4101,6 +4139,7 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
         ver = _safe(member, 'Version')
         if isinstance(ver, str) and ver.strip().upper() in ('N/A', 'NA', ''):
             if not is_pending:
+                _notice('firmware', f'{fw_id or member_uri}: Version 비어 있음(N/A) — 목록에서 제외')   # RD-FW2 (2026-10-10): 조용히 버리지 않는다
                 continue
             ver = None
         # Q-13: SoftwareId가 문자열 "null"이면 Python None으로 변환
@@ -4184,7 +4223,12 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     psu_input_seen = False
     if psu_link:
         st_c, coll, _err_c = _get(bmc_ip, _p(psu_link), username, password, timeout, verify_ssl)
-        if st_c == 200:
+        if st_c != 200:
+            # 2026-10-10 (RD-F18): 종전에는 조용히 건너뛰어 "PSU 0" 이 성공처럼 보였다. 404(미노출)만 조용하다.
+            if st_c != 404:
+                errors.append(_err('power', f'PowerSupplies {psu_link} 실패: {_err_c or st_c}',
+                                   detail={'status_code': st_c}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        else:
             for member in _collection_members(bmc_ip, _p(psu_link), coll, username, password, timeout,
                                               verify_ssl, 'power', errors):
                 m_uri = _safe(member, '@odata.id')
@@ -4192,6 +4236,9 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                     continue
                 st_m, mdata, _err_m = _get(bmc_ip, _p(m_uri), username, password, timeout, verify_ssl)
                 if st_m != 200:
+                    if st_m != 404:
+                        errors.append(_err('power', f'PowerSupply {m_uri} 실패: {_err_m or st_m}',
+                                           detail={'status_code': st_m}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
                 psus.append({
                     'name':             _safe(mdata, 'Name'),
@@ -4220,7 +4267,9 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
 
     # PowerControl 은 PowerSubsystem 표준에 없음 — chassis-level 합산 또는 None
     pc_capacity = None
-    psu_caps = [p['power_capacity_w'] for p in psus if p['power_capacity_w'] is not None]
+    # D-07 (2026-10-10): State=Absent 슬롯은 설치된 PSU 가 아니다 — 용량 합(PSU 합 기준 power_capacity_watts)에서 뺀다
+    psu_caps = [p['power_capacity_w'] for p in psus
+                if p['power_capacity_w'] is not None and _str(p.get('state')).strip().lower() != 'absent']
     if psu_caps:
         pc_capacity = sum(psu_caps)
     power_control = {
@@ -4931,7 +4980,7 @@ def _normalize_cpu_raw(procs):
     isets = [p.get('instruction_set') for p in cpus if p.get('instruction_set')]
     groups, seen = [], {}
     for p in cpus:
-        m = p.get('model') or 'unknown'
+        m = p.get('model') or None   # RD-UNK (2026-10-10): 자리표시자 'unknown' 대신 null — 모델을 모르면 모르는 것이다
         tc = _safe_int(p.get('total_cores'), 0)  # rule 95 R1 #7: grouping 도 동일 방어
         if m in seen:
             g = groups[seen[m]]
@@ -5190,6 +5239,9 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                     continue
                 bst, bd, _e = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
                 if bst != 200 or not isinstance(bd, dict):
+                    if bst != 404:   # RD-F18 (2026-10-10): 나열된 멤버를 못 읽었다 — 조용히 세지 않는다
+                        errors.append(_err('multi_node.composition', f'ResourceBlock {uri} 실패: {_e or bst}',
+                                           detail={'status_code': bst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
                 # 각 ResourceBlock 의 chassis 대응 + 조합된 ComputerSystems (nPartition) 링크
                 chassis_links = [
@@ -5239,6 +5291,9 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
         return []
     st, coll, cerr = _get(bmc_ip, _p(coll_uri), username, password, timeout, verify_ssl)
     if cerr or st != 200:
+        if st != 404:   # RD-F18 (2026-10-10)
+            errors.append(_err(f'multi_node.fabrics.{kind}', f'{kind} 컬렉션 {coll_uri} 실패: {cerr or st}',
+                               detail={'status_code': st}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
         return []
     out = []
     for m in _collection_members(bmc_ip, _p(coll_uri), coll, username, password, timeout, verify_ssl,
@@ -5248,6 +5303,9 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
             continue
         mst, md, _e = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if mst != 200 or not isinstance(md, dict):
+            if mst != 404:   # RD-F18 (2026-10-10)
+                errors.append(_err(f'multi_node.fabrics.{kind}', f'{kind} {uri} 실패: {_e or mst}',
+                                   detail={'status_code': mst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         if kind == 'switch':
             out.append({
@@ -5302,6 +5360,9 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
             continue
         fst, fdata, _e = _get(bmc_ip, _p(furi), username, password, timeout, verify_ssl)
         if fst != 200 or not isinstance(fdata, dict):
+            if fst != 404:   # RD-F18 (2026-10-10)
+                errors.append(_err('multi_node.fabrics', f'Fabric {furi} 실패: {_e or fst}',
+                                   detail={'status_code': fst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         switches = _gather_fabric_members(
             bmc_ip, _safe(fdata, 'Switches', '@odata.id'),
@@ -6840,7 +6901,7 @@ def account_service_provision(
     bmc_ip, vendor, current_username, current_password,
     target_username, target_password, target_role,
     timeout, verify_ssl, dryrun=True, allow_delete_recreate=False,
-    adapter_id=None, manager_uri=None, service_root=None,
+    adapter_id=None, manager_uri=None, service_root=None, prior_auth_failures=0,
 ):
     """공통계정(target) 생성 또는 복구.
 
@@ -6863,6 +6924,9 @@ def account_service_provision(
                           쓰지 않는다. 실제 Resource Capability 가 우선한다).
         manager_uri:      Manager @odata.id (Firmware/Model 을 Family 근거로 쓸 때).
         service_root:     이미 읽어 둔 ServiceRoot body (있으면 재요청하지 않는다).
+        prior_auth_failures:
+                          이 run 에서 표준 계정으로 이미 난 실패 인증 횟수(복구를 촉발한 401). 장비의 실패 카운터에 들어 있는
+                          값이라 예산을 그만큼 먼저 쓴다 (2026-10-10 RA-F05). 0 이면 종전과 같다.
 
     Returns:
         dict: {
@@ -6967,6 +7031,12 @@ def account_service_provision(
     # 그 전에 호출될 일은 없지만, 미할당 상태가 남지 않게 기본값으로 먼저 묶어 둔다.
     verify_schedule = ACCOUNT_VERIFY_DELAYS
     auth_budget_limit = ACCOUNT_DEFAULT_AUTH_BUDGET
+    # 2026-10-10 (RA-F05): 복구를 촉발한 표준 계정 401(같은 run, 몇 초 전)도 장비의 실패 카운터에 들어 있다 — 예산을 그만큼 먼저 쓴다.
+    prior = int(prior_auth_failures or 0) if isinstance(prior_auth_failures, int) and not isinstance(prior_auth_failures, bool) else 0
+    out['prior_auth_failures'] = prior
+    if prior > 0:
+        out['auth_budget'][target_username] = out['auth_budget'].get(target_username, 0) + prior
+    policy_seen = {'policy': {}}     # Capability Discovery 가 읽은 정책 — 아래 1) 단계에서 채운다 (counter reset 대기 계산용)
 
     def _verify_standard_credential():
         """쓴 뒤 표준 자격으로 실제 인증되는지 확인. (ok, code, err, attempts)
@@ -6976,6 +7046,19 @@ def account_service_provision(
         """
         out['verify_resource'] = 'Systems'
         code_v, err_v = None, None
+        if out['auth_budget'].get(target_username, 0) >= auth_budget_limit:
+            # 2026-10-10 (RA-F05): 확인을 시작하기도 전에 예산이 없다(앞선 401 들이 장비의 카운터를 채웠다). 그 자리에서 더 두드리면 잠근다 —
+            #   장비가 선언한 카운터 리셋 시간(없으면 60초, 상한 90초)을 기다린 뒤 **한 번만** 확인하고, 그 사실을 일정에 남긴다.
+            wait = account_counter_reset_wait(policy_seen['policy'])
+            out['verify_schedule_seconds'] = [wait]
+            out['verify_after_counter_reset_seconds'] = wait
+            time.sleep(wait)
+            code_v, _, err_v = _get(bmc_ip, 'Systems', target_username, target_password, timeout, verify_ssl)
+            if code_v == 200 and not err_v:
+                return True, code_v, None, 1
+            _spend_auth(target_username)
+            out['auth_budget_exhausted'] = True
+            return False, code_v, err_v, 1
         for attempt, delay in enumerate(verify_schedule):
             # 예산을 넘기면서까지 확인하지 않는다. 여기서 더 시도하면 표준 계정을 잠근다.
             if out['auth_budget'].get(target_username, 0) >= auth_budget_limit:
@@ -7143,9 +7226,10 @@ def account_service_provision(
         # 비밀번호 길이 자체는 남기지 않는다 (탐색 공간을 줄여 주는 약한 누출).
         'within_declared_bounds': within,
     }
-    # 재인증 확인 간격을 장비가 선언한 패널티에 맞춰 넓힌다 (정책은 읽기만 한다).
+    # 재인증 확인 간격을 장비가 선언한 패널티에 맞춰 넓힌다 (정책은 읽기만 한다). 패널티가 먼저다 (RA-F06).
     verify_schedule = account_verify_delays(policy)
     out['verify_schedule_seconds'] = list(verify_schedule)
+    policy_seen['policy'] = policy if isinstance(policy, dict) else {}
     # 실패 인증 예산도 장비가 선언한 값에서 끌어온다 (재시도를 늘리지 않는다).
     auth_budget_limit = account_auth_budget(policy)
     out['auth_budget_limit'] = auth_budget_limit
@@ -7899,6 +7983,8 @@ def main():
             # 2026-10-03 (Plan §6-3 D7): attempt 단위 인증 증거 파일. {evidence_dir, id, build_id, event_uuid, label, role}.
             #   None 또는 evidence_dir/id 가 비면 아무 것도 쓰지 않는다 (Jenkins 밖 실행 · 종전 호출 호환).
             attempt         = dict(type='dict', default=None, required=False),
+            # 2026-10-10 (RA-F05): 이 run 에서 표준 계정으로 이미 난 실패 인증 횟수(복구를 촉발한 401) — 잠금 예산을 그만큼 먼저 쓴다.
+            prior_auth_failures = dict(type='int', default=0, required=False),
         ),
         supports_check_mode=True,
     )
@@ -7990,6 +8076,7 @@ def main():
             adapter_id=p.get('adapter_id'),
             manager_uri=mgr_uri,
             service_root=svc_root,
+            prior_auth_failures=int(p.get('prior_auth_failures') or 0),
         )
         result['dryrun_reason'] = dryrun_reason
         result['errors'] = list(det_errors) + (result.get('errors') or [])

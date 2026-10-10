@@ -297,7 +297,8 @@ def test_verify_delays_outlast_declared_auth_failure_penalty():
     """iLO 가 선언한 10초를 6초짜리 확인으로 덮으면 옳게 쓴 비밀번호도 401 이 된다."""
     delays = rg.account_verify_delays({"auth_failure_delay_seconds": 10})
     assert sum(delays) > 10, f"총 대기 {sum(delays)}s 가 선언된 패널티 10s 를 넘지 않는다"
-    assert delays[:len(rg.ACCOUNT_VERIFY_DELAYS)] == rg.ACCOUNT_VERIFY_DELAYS
+    # 2026-10-10 (RA-F06): 패널티를 **먼저** 기다린다 — 끝에 붙이면 앞 3회가 패널티 창 안에서 전부 401 로 예산을 소진한다
+    assert delays[0] == 12 and delays[1:] == rg.ACCOUNT_VERIFY_DELAYS, delays
 
 
 def test_verify_delays_use_lockout_duration_when_larger():
@@ -401,3 +402,39 @@ def test_hpe_proven_label_does_not_spread_beyond_the_tested_firmware(monkeypatch
     assert other["evidence"] == "documented"
     assert other["isolation_basis"] == rg.ISOLATION_SAFETY
     assert other["firmware_advisory"] is None
+
+
+# ── 2026-10-10 RA-F05: 복구를 촉발한 표준 계정 401 은 장비의 실패 카운터에 이미 들어 있다 ─────────
+def test_counter_reset_wait_reads_declared_value_with_default_and_cap():
+    assert rg.account_counter_reset_wait({}) == 60 and rg.account_counter_reset_wait(None) == 60
+    assert rg.account_counter_reset_wait({"lockout_counter_reset": 30}) == 30
+    assert rg.account_counter_reset_wait({"lockout_counter_reset": 600}) == 90
+    assert rg.account_counter_reset_wait({"lockout_counter_reset": 0}) == 60
+
+
+def test_prior_failures_that_exhaust_the_budget_wait_for_counter_reset_then_verify_once(monkeypatch):
+    """예산 3 · 표준 계정 401 이 이미 3번(prior) — 쓰기 직후 곧바로 두드리면 잠근다. 카운터 리셋(60s)을 기다린 뒤 한 번만 확인한다."""
+    slept = []
+    monkeypatch.setattr(rg.time, "sleep", lambda s: slept.append(s))
+    _install(monkeypatch, [_account()])
+    out = _provision("dell", prior_auth_failures=3)
+    assert out["prior_auth_failures"] == 3 and out["auth_budget"][TARGET] == 3, "성공한 확인은 예산을 쓰지 않는다"
+    assert out["verify_after_counter_reset_seconds"] == 60 and out["verify_schedule_seconds"] == [60]
+    assert slept == [60] and out["verify_attempts"] == 1
+    assert out["recovered"] is True and out["verification"] == "verified"
+
+
+def test_prior_failures_within_budget_use_the_normal_schedule(monkeypatch):
+    slept = []
+    monkeypatch.setattr(rg.time, "sleep", lambda s: slept.append(s))
+    _install(monkeypatch, [_account()])
+    out = _provision("dell", prior_auth_failures=1)
+    assert out["prior_auth_failures"] == 1 and out["auth_budget"][TARGET] == 1
+    assert "verify_after_counter_reset_seconds" not in out and out["verify_schedule_seconds"] == list(rg.ACCOUNT_VERIFY_DELAYS)
+    assert out["recovered"] is True and slept == []
+
+
+def test_no_prior_failures_is_the_previous_behaviour(monkeypatch):
+    _install(monkeypatch, [_account()])
+    out = _provision("dell")
+    assert out["prior_auth_failures"] == 0 and out["auth_budget"] == {} and out["recovered"] is True

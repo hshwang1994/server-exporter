@@ -9,21 +9,13 @@ mirror 되어 있어 동일한 cross-channel 위험이 있다 — test_vendor_na
 
 두 경로가 같은 JEDEC byte 를 **다른 vendor 이름**으로 해석하면 통합 envelope 의
 `data.memory[].manufacturer` 가 채널별로 divergence (rule 13 cross-channel 정합 위반).
-본 테스트는 그 drift 만 잡고, 두 테이블이 **scope/표현**(A 는 '0x'·4자리 alias row 보유)에서
-정당하게 다른 것은 허용한다.
-
-정규화 규칙 (각 런타임이 자기 테이블을 INDEX 하는 byte 키 도출과 동일):
-  raw key → 선행 '0x'/'0X' 제거 → 앞 2 hex 문자 → upper
-  (A: full '0x'+hex 우선 후 [:2] / B: '0x' strip 후 [:2] — 둘 다 byte 로 수렴)
-  주의: 입력 ACCEPTANCE 경계는 A(bare hex ≥4자 — HEX_PATTERN) ↔ B(≥2자) 로 다르나,
-  이는 테이블 VALUE drift 가 아니라 입력 수용 차이 (실 채널 입력 = dmidecode '00AD..' / CIMC '0xCE00').
-  본 가드의 범위 = 테이블 byte 키의 vendor 값 cross-channel 일치 (입력→출력 full parity 아님).
+D-10 (2026-10-10): 두 테이블은 (bank, 7-bit ID) 키의 **같은 dict** 다 — alias row 가 없어졌으니 정확히 같아야 한다.
+  bank = continuation(0x7F) 수, ID 는 parity 비트를 뗀 7-bit. 두 해석기(jedec_lookup / _jedec_lookup)도 같은 입력에 같은 답을 낸다.
 
 불변식:
-  1. 각 테이블 내부 self-consistency — 같은 byte 로 정규화되는 alias row 가 충돌 값 금지
-  2. (HARD) 공유 byte 키의 vendor 값 동일 — 채널 간 manufacturer 일치 보장
-  3. (방향성) B(Redfish) 정규화 키 ⊆ A(OS+CIMC) 정규화 키 — B 에만 있는 byte 는
-     OS-gather 가 못 풀어 silent fail → 미러링 누락 신호
+  1. 키 모양 — (int bank, int 0..0x7F) 만
+  2. (HARD) JEDEC_MAP == _JEDEC_VENDORS
+  3. 해석기 동치 — 대표 입력(dmidecode · CIMC · SPD 7F · bare · 미지) 에 두 채널이 같은 vendor
 """
 from __future__ import annotations
 
@@ -86,26 +78,24 @@ def _load_vendor_name_norms():
     return filter_norm, mod._VENDOR_NAME_NORMALIZATION
 
 
-def _norm_byte(key: str) -> str:
-    """raw JEDEC key → canonical 1-byte hex (선행 0x 제거 + 앞 2자 + upper)."""
-    k = key
-    if k.lower().startswith("0x"):
-        k = k[2:]
-    return k[:2].upper()
+def _assert_key_shape(table: dict) -> None:
+    for k in table:
+        assert isinstance(k, tuple) and len(k) == 2 and all(isinstance(x, int) for x in k), k
+        assert k[0] >= 0 and 0 <= k[1] <= 0x7F, k
 
 
-def _normalized_table(raw: dict) -> dict:
-    """raw dict → {byte: vendor}. 내부 alias 충돌 시 AssertionError (불변식 1)."""
-    out: dict = {}
-    for k, v in raw.items():
-        b = _norm_byte(k)
-        if b in out and out[b] != v:
-            pytest.fail(
-                f"테이블 내부 self-collision: byte '{b}' 가 "
-                f"'{out[b]}' 와 '{v}' 두 값으로 매핑 (alias row 불일치)"
-            )
-        out[b] = v
-    return out
+def _load_redfish_module():
+    if "ansible.module_utils.basic" not in sys.modules:
+        mock_basic = types.ModuleType("ansible.module_utils.basic")
+        mock_basic.AnsibleModule = type("AnsibleModule", (), {})
+        sys.modules.setdefault("ansible", types.ModuleType("ansible"))
+        sys.modules.setdefault("ansible.module_utils", types.ModuleType("ansible.module_utils"))
+        sys.modules["ansible.module_utils.basic"] = mock_basic
+    src = REPO / "redfish-gather" / "library" / "redfish_gather.py"
+    spec = importlib.util.spec_from_file_location("redfish_gather_jedec_resolver", str(src))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 @pytest.fixture(scope="module")
@@ -118,46 +108,34 @@ def table_b() -> dict:
     return _load_jedec_vendors()
 
 
-def test_table_a_internally_consistent(table_a):
-    """불변식 1: JEDEC_MAP 의 '0x'/4자리 alias row 가 base byte 와 충돌하지 않음."""
-    norm = _normalized_table(table_a)
-    assert norm, "JEDEC_MAP 정규화 결과가 비어 있음"
+def test_table_a_key_shape(table_a):
+    """불변식 1: (bank, 7-bit ID) 키만."""
+    _assert_key_shape(table_a)
+    assert table_a, "JEDEC_MAP 이 비어 있음"
 
 
-def test_table_b_internally_consistent(table_b):
-    """불변식 1: _JEDEC_VENDORS 내부 충돌 없음."""
-    norm = _normalized_table(table_b)
-    assert norm, "_JEDEC_VENDORS 정규화 결과가 비어 있음"
+def test_table_b_key_shape(table_b):
+    _assert_key_shape(table_b)
+    assert table_b, "_JEDEC_VENDORS 가 비어 있음"
 
 
-def test_shared_keys_agree(table_a, table_b):
-    """불변식 2 (HARD): 공유 byte 키의 vendor 값이 두 테이블에서 동일.
-
-    이게 깨지면 같은 메모리 모듈이 OS-gather 채널과 Redfish 채널에서
-    다른 manufacturer 로 출력된다 (cross-channel divergence).
-    """
-    na, nb = _normalized_table(table_a), _normalized_table(table_b)
-    shared = set(na) & set(nb)
-    assert shared, "두 테이블에 공유 byte 키가 없음 (정규화 오류 의심)"
-    mismatches = {b: (na[b], nb[b]) for b in shared if na[b] != nb[b]}
-    assert not mismatches, (
-        f"JEDEC vendor drift — 공유 byte 가 채널별로 다른 vendor: {mismatches}. "
-        f"jedec_mapper.py 와 redfish_gather._JEDEC_VENDORS 를 동기화하라 (rule 13 cross-channel)."
-    )
+def test_tables_identical(table_a, table_b):
+    """불변식 2 (HARD): 두 테이블이 같다 — 깨지면 같은 메모리 모듈이 OS 채널과 Redfish 채널에서 다른 manufacturer 로 나간다."""
+    assert dict(table_a) == dict(table_b), (
+        "JEDEC drift — jedec_mapper.JEDEC_MAP 과 redfish_gather._JEDEC_VENDORS 를 동기화하라 (rule 13 cross-channel)")
 
 
-def test_redfish_keys_subset_of_filter(table_a, table_b):
-    """불변식 3 (방향성): B(Redfish) 정규화 키 ⊆ A(OS+CIMC) 정규화 키.
+@pytest.mark.parametrize("raw", [
+    "00AD063200AD", "80AD000080AD", "00CE0000", "002C0700", "0198", "0098", "7F98", "7FBA", "00BA",
+    "AD", "CE", "4E", "89", "0B", "0x0B", "0xCE00", "0xAD00", "0x2C00", "0xBA01", "0xBA00", "00FF", "ACBE",
+    "Samsung", "Hynix Semiconductor", "VMware Virtual RAM", None, "", "Unknown",
+])
+def test_resolvers_agree_on_representative_inputs(raw):
+    """불변식 3: 두 해석기가 같은 답 — 알고리즘 복제본의 drift 를 입력 수준에서 막는다."""
+    sys.path.insert(0, str(REPO / "filter_plugins"))
+    from jedec_mapper import jedec_to_vendor
 
-    A 가 더 넓은 경로(OS dmidecode + Cisco CIMC)라 superset 이어야 한다.
-    B 에만 새 byte 가 생기면 OS-gather 가 그 ID 를 못 풀어 raw 노출 → 미러링 누락 신호.
-    """
-    na, nb = _normalized_table(table_a), _normalized_table(table_b)
-    only_in_b = set(nb) - set(na)
-    assert not only_in_b, (
-        f"_JEDEC_VENDORS 에만 있는 byte: {sorted(only_in_b)} — "
-        f"filter_plugins/jedec_mapper.py JEDEC_MAP 에 미러링하라 (OS-gather 채널 누락 방지)."
-    )
+    assert jedec_to_vendor(raw) == _load_redfish_module()._normalize_jedec(raw), raw
 
 
 @pytest.fixture(scope="module")

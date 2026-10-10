@@ -40,6 +40,8 @@
         target_password: "{{ _rf_target_account.password }}"
         target_role:     "Administrator"
         dryrun:          "{{ _rf_account_service_dryrun_effective | bool }}"
+        # 2026-10-10 (RA-F05): 복구를 촉발한 표준 계정 401 은 장비의 실패 카운터에 이미 들어 있다 — 모듈이 잠금 예산을 그만큼 먼저 쓴다
+        prior_auth_failures: "{{ 1 if (_rf_primary_auth_rejected | default(false) | bool) else 0 }}"
         # 2026-08-12: Account Family 선택 **hint**. 단독 근거가 아니다 — 모듈은 실제
         #   Resource Capability(Roles 어휘 / pre-populated slot / AccountTypes / Firmware)를
         #   먼저 보고, adapter 이름은 그것만으로 갈리지 않을 때만 쓴다.
