@@ -199,11 +199,11 @@ def test_redfish_channel_shape(tmp_path):
 def test_cli_exit_codes(tmp_path):
     ws = _ws(tmp_path, ["10.0.0.1"], outputs=[_envelope("10.0.0.1")])
     r = subprocess.run([sys.executable, str(SCRIPT), "--workspace", str(ws), "--repo-root", str(REPO)],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")   # 2026-10-10: Windows cp949 콘솔에서 한글 stderr 디코딩
     assert r.returncode == 0 and "accepted=1 kept=1 filled=0" in r.stderr
     (tmp_path / "nomanifest").mkdir()
     r = subprocess.run([sys.executable, str(SCRIPT), "--workspace", str(tmp_path / "nomanifest"), "--repo-root", str(REPO)],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 3 and "manifest 없음" in r.stderr
     report = json.loads((tmp_path / "nomanifest" / "gather_finalize_report.json").read_text(encoding="utf-8"))
     assert report["exit_code"] == 3
