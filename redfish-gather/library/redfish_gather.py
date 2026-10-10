@@ -1022,6 +1022,93 @@ def _nextlink_path(bmc_ip, current_path, link):
     return rel + ('?' + parts.query if parts.query else '')
 
 
+def _collection_walk(bmc_ip, path, coll, username, password, timeout, verify_ssl):
+    """컬렉션 첫 페이지(coll, 이미 조회됨)의 Members 를 모으고 Members@odata.nextLink 를 따라간다 — 보고하지 않고 근거만 돌려준다.
+
+    반환: (members, state)
+      members : dict 멤버(페이지 순서 그대로, 중복 제거 없음 — _collection_members 의 종전 반환과 같다)
+      state   : cut       — 순회가 끊긴 사유 None | ('unfollowable', None) | ('cycle', None) | ('cap', (pages, n)) |
+                            ('page_failed', (nxt, status, err))
+                pages     — 읽은 페이지 수
+                non_object — dict 가 아닌 Members 원소 수(버려진 것)
+                members_absent / members_not_list — Members 가 없거나(None) 목록이 아닌 페이지 수
+                duplicates — 같은 @odata.id 가 다시 나온 수(중복은 지우지 않는다)
+    2026-10-10 (C3): 순회 · 요청 순서는 종전 _collection_members 와 같다. 새 근거(비객체 · Members 부재 · 중복)는 Accounts 처럼
+    완결성이 쓰기 판단의 근거인 호출부만 쓴다 — 다른 소비자에는 새 정책을 전파하지 않는다.
+    """
+    state = {'cut': None, 'pages': 1, 'non_object': 0, 'members_absent': 0, 'members_not_list': 0, 'duplicates': 0}
+    ids = set()
+
+    def _take(page):
+        raw = _safe(page, 'Members')
+        if raw is None:
+            state['members_absent'] += 1
+        elif not isinstance(raw, list):
+            state['members_not_list'] += 1
+        got = _dicts(raw)
+        if isinstance(raw, list):
+            state['non_object'] += len(raw) - len(got)
+        for m in got:
+            oid = _safe(m, '@odata.id')
+            if isinstance(oid, str) and oid:
+                if oid in ids:
+                    state['duplicates'] += 1
+                ids.add(oid)
+        return got
+
+    members = list(_take(coll))
+    seen = {_str(path)}
+    cur, cur_path = coll, _str(path)
+    while True:
+        link = _safe(cur, 'Members@odata.nextLink')
+        if not link:
+            break
+        nxt = _nextlink_path(bmc_ip, cur_path, link)
+        if nxt is None:
+            state['cut'] = ('unfollowable', None)
+            break
+        if nxt in seen:
+            state['cut'] = ('cycle', None)
+            break
+        if state['pages'] >= MAX_COLLECTION_PAGES or len(members) >= MAX_COLLECTION_MEMBERS:
+            state['cut'] = ('cap', (state['pages'], len(members)))
+            break
+        st, nxt_coll, err = _get(bmc_ip, nxt, username, password, timeout, verify_ssl)
+        if err or st != 200 or not isinstance(nxt_coll, dict):
+            state['cut'] = ('page_failed', (nxt, st, err))
+            break
+        seen.add(nxt)
+        state['pages'] += 1
+        cur, cur_path = nxt_coll, nxt
+        members.extend(_take(nxt_coll))
+    return members, state
+
+
+def _walk_cut_text(first_path, cut):
+    """_collection_walk 의 절단 사유 → 종전 보고 문장(글자 그대로)."""
+    kind, arg = cut
+    if kind == 'unfollowable':
+        return '%s: nextLink 를 따라갈 수 없음 (다른 origin 또는 형식 오류) — 앞 페이지까지 보존' % first_path
+    if kind == 'cycle':
+        return '%s: nextLink 순환 감지 — 앞 페이지까지 보존' % first_path
+    if kind == 'cap':
+        return '%s: 페이지 %d / 멤버 %d 상한 도달 — 절단' % (first_path, arg[0], arg[1])
+    return '%s: 다음 페이지 실패 (%s): %s — 앞 페이지까지 보존' % (first_path, arg[0], arg[2] or arg[1])
+
+
+def _walk_cut_detail(cut):
+    """계정 열거 요약 오류의 detail 조각. HTTP 상태는 'status=' 숫자로만 적는다 — 'HTTP 404' 글자가 들어가면 요약 오류까지
+    404 신호로 읽혀 '계정 관리 미지원' 으로 잘못 분류된다(_is_404_only_error)."""
+    if not cut:
+        return ''
+    kind, arg = cut
+    if kind == 'page_failed':
+        return f' cut=page_failed next={arg[0]} status={arg[1] or 0}'
+    if kind == 'cap':
+        return f' cut=cap pages={arg[0]} members={arg[1]}'
+    return f' cut={kind}'
+
+
 def _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
                         section, errors):
     """컬렉션 첫 페이지(coll, 이미 조회됨)의 Members 를 모으고 Members@odata.nextLink 를 따라간다.
@@ -1031,47 +1118,17 @@ def _collection_members(bmc_ip, path, coll, username, password, timeout, verify_
     - dict 멤버만, MAX_COLLECTION_MEMBERS 상한(_capped 와 같은 보고).
     - Members@odata.count 가 있고 모은 수와 다르면 notice (정보 없음과 불일치를 구분).
     errors 가 None 인 호출부(보조 헬퍼)는 notice 로만 남긴다. nextLink 가 없으면 종전과 완전히 같다.
+    2026-10-10 (C3): 순회는 _collection_walk 가 한다. 반환 멤버 · 요청 순서 · errors · notices 는 종전과 같다.
     """
-    members = list(_dicts(_safe(coll, 'Members')))
+    members, state = _collection_walk(bmc_ip, path, coll, username, password, timeout, verify_ssl)
     first_path = _str(path).split('?', 1)[0]
-    seen = {_str(path)}
-    cur, cur_path, pages, truncated = coll, _str(path), 1, False
-
-    def _report(msg):
+    truncated = state['cut'] is not None
+    if truncated:
+        msg = _walk_cut_text(first_path, state['cut'])
         if errors is not None:
             errors.append(_err(section, msg, code=_CODE_NON_BLOCKING_SUBRESOURCE))
         else:
             _notice(section, msg)
-
-    while True:
-        link = _safe(cur, 'Members@odata.nextLink')
-        if not link:
-            break
-        nxt = _nextlink_path(bmc_ip, cur_path, link)
-        if nxt is None:
-            _report('%s: nextLink 를 따라갈 수 없음 (다른 origin 또는 형식 오류) — 앞 페이지까지 보존'
-                    % first_path)
-            truncated = True
-            break
-        if nxt in seen:
-            _report('%s: nextLink 순환 감지 — 앞 페이지까지 보존' % first_path)
-            truncated = True
-            break
-        if pages >= MAX_COLLECTION_PAGES or len(members) >= MAX_COLLECTION_MEMBERS:
-            _report('%s: 페이지 %d / 멤버 %d 상한 도달 — 절단' % (first_path, pages, len(members)))
-            truncated = True
-            break
-        st, nxt_coll, err = _get(bmc_ip, nxt, username, password, timeout, verify_ssl)
-        if err or st != 200 or not isinstance(nxt_coll, dict):
-            _report('%s: 다음 페이지 실패 (%s): %s — 앞 페이지까지 보존'
-                    % (first_path, nxt, err or st))
-            truncated = True
-            break
-        seen.add(nxt)
-        pages += 1
-        cur, cur_path = nxt_coll, nxt
-        members.extend(_dicts(_safe(nxt_coll, 'Members')))
-
     declared = _safe(coll, 'Members@odata.count')
     if (not truncated and isinstance(declared, int) and not isinstance(declared, bool)
             and declared != len(members)):
@@ -5696,9 +5753,10 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
                            detail=err or f'HTTP {code}'))
         return out
 
-    members = _safe(acc_coll, 'Members', default=[]) or []
-    if not isinstance(members, list):  # rule 95 R1 #2 (Round 1 #25)
-        members = []
+    # 2026-10-10 (C3): Members@odata.nextLink 를 따라 **모든 페이지**를 읽는다(공용 순회 _collection_walk). 첫 페이지만 읽고
+    #   count 가 없으면 "완결 · 부재" 로 보고 같은 이름을 새로 만들거나, count 가 있어 불완전한데도 보이는 슬롯을 고쳤다.
+    #   비객체 원소 · Members 부재 · 같은 ref 반복 · 순회 절단은 여기서만 완결성 근거로 쓴다(다른 컬렉션 소비자는 종전 그대로).
+    members, walk = _collection_walk(bmc_ip, out['accounts_uri'], acc_coll, username, password, timeout, verify_ssl)
     declared = _safe(acc_coll, 'Members@odata.count', default=None)
     out['member_total'] = declared if isinstance(declared, int) and not isinstance(declared, bool) \
         else len(members)
@@ -5706,11 +5764,15 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
     member_failures = 0
     capped = _capped(members, 'account_service', errors)  # Round 6 #8: 무경계 순회 DoS 방어
     truncated = len(capped) < len(members)
+    slots_seen = set()
     for m in capped:
         slot_uri = _safe(m, '@odata.id')
         if not slot_uri:
             member_failures += 1
             continue
+        if slot_uri in slots_seen:
+            continue    # 같은 ref 반복 — walk.duplicates 가 불완전으로 센다(같은 계정을 두 번 담아 중복 이름으로 보이지 않게)
+        slots_seen.add(slot_uri)
         code_a, acc_data, err_a = _get(bmc_ip, _p(slot_uri), username, password,
                                        timeout, verify_ssl)
         if code_a != 200 or err_a:
@@ -5744,15 +5806,22 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
         })
     out['member_read'] = len(out['accounts'])
 
-    # 4) 완결성 판정 — 하나라도 빠지면 complete 가 아니다.
-    if member_failures == 0 and not truncated and out['member_read'] == out['member_total']:
+    # 4) 완결성 판정 — 하나라도 빠지면 complete 가 아니다. 불완전이면 아래 요약 오류를 항상 남긴다
+    #    (2페이지 404 하나만 있어도 errors 가 404 뿐이라 '미지원' 으로 잘못 분류되지 않게).
+    anomalies = walk['non_object'] + walk['members_absent'] + walk['members_not_list'] + walk['duplicates']
+    if (member_failures == 0 and not truncated and walk['cut'] is None and anomalies == 0
+            and out['member_read'] == out['member_total']):
         out['enumeration'] = ENUM_COMPLETE
     else:
+        cut = walk['cut']
         errors.append(_err(
             'account_service',
             '계정 목록을 완전히 읽지 못했습니다. 계정 부재를 확정할 수 없습니다.',
             detail=(f'members declared={out["member_total"]} read={out["member_read"]} '
-                    f'failures={member_failures} truncated={truncated}'),
+                    f'failures={member_failures} truncated={truncated} pages={walk["pages"]}'
+                    + _walk_cut_detail(cut)
+                    + (f' non_object={walk["non_object"]} members_absent={walk["members_absent"]}'
+                       f' members_not_list={walk["members_not_list"]} duplicates={walk["duplicates"]}' if anomalies else '')),
         ))
 
     # 5) Manager 정보 (Firmware/Model) — Supermicro 계정분리 경계처럼 Firmware 가
@@ -5810,10 +5879,12 @@ def account_presence(discovery, target_username, family=None):
         return PRESENCE_PROTECTED_CONFLICT, protected
     if len(matches) > 1:
         return PRESENCE_AMBIGUOUS, matches
+    if (discovery or {}).get('enumeration') != ENUM_COMPLETE:
+        # 2026-10-10 (C3): 열거가 불완전하면 보이는 일치가 하나여도 단일 슬롯으로 확정하지 않는다 — 읽지 못한 페이지 · 슬롯에
+        #   같은 이름이 더 있을 수 있다(CLAUDE.md §8: unknown 에서는 쓰기 0). 관측한 일치는 matches 로 남긴다.
+        return PRESENCE_UNKNOWN, matches
     if matches:
         return PRESENCE_PRESENT, matches
-    if (discovery or {}).get('enumeration') != ENUM_COMPLETE:
-        return PRESENCE_UNKNOWN, []
     return PRESENCE_ABSENT, []
 
 
@@ -6959,9 +7030,11 @@ def account_service_provision(
 
     def _locate_after_lost_create(what, err_text):
         """응답을 받지 못한 생성 요청 뒤 — 계정 목록을 끝까지 다시 읽어 표준 계정이 정확히 하나 생겼는지 본다(추측하지 않는다)."""
+        # 2026-10-10 (C3 인접): 재열거에는 ServiceRoot 를 넘긴다(종전 'service' 는 AccountService 본문이라 Manager-scoped 장비에서
+        #   표준 경로 AccountService 로 떨어졌다).
         recheck = account_service_discover(bmc_ip, current_username, current_password,
                                            timeout, verify_ssl,
-                                           service_root=discovery.get('service'))
+                                           service_root=discovery.get('service_root'))
         again = [a for a in (recheck.get('accounts') or [])
                  if (a.get('username') or '') == target_username]
         if recheck.get('enumeration') != ENUM_COMPLETE or len(again) != 1:
@@ -7164,16 +7237,22 @@ def account_service_provision(
         # 2026-08-12 (audit C-1). 계정 목록을 완전히 읽지 못했다.
         #   "못 읽었다" 는 "없다" 가 아니다. 여기서 생성하면 이미 있는 계정을 못 본 채
         #   같은 이름으로 만들려 들고, 최악에는 남의 슬롯을 건드린다.
-        #   Accounts 403 / 5xx / timeout / 링크 부재 / member 일부 실패가 전부 여기로 온다.
+        #   Accounts 403 / 5xx / timeout / 링크 부재 / member 일부 실패 / 다음 페이지 실패가 전부 여기로 온다.
+        # 2026-10-10 (C3): 보이는 일치가 있어도 여기서 끝난다(비밀번호 동기화도 하지 않는다). 관측한 슬롯만 기록한다.
         out['method'] = 'noop'
         out['action'] = 'none'
+        if matches:
+            out['account_existed'] = True
+        seen_ids = [('' if m.get('id') is None else str(m.get('id'))) for m in matches]
         out['errors'].append(_err(
             'account_service',
-            '계정 목록을 완전히 확인하지 못해 표준 계정 생성을 시작하지 않았습니다. '
+            '계정 목록을 완전히 확인하지 못해 표준 계정 생성이나 비밀번호 동기화를 시작하지 않았습니다. '
             '복구 계정의 사용자 관리 권한과 계정 관리 서비스 상태를 확인하세요.',
             detail=(f'enumeration={discovery.get("enumeration")} '
                     f'declared={discovery.get("member_total")} '
-                    f'read={discovery.get("member_read")}; no write attempted'),
+                    f'read={discovery.get("member_read")}'
+                    + (('; observed standard slots: ' + ', '.join(i for i in seen_ids if i)) if matches else '')
+                    + '; no write attempted'),
         ))
         return out
 
@@ -7747,7 +7826,7 @@ def account_service_provision(
         # 응답이 위치를 알려주지 않으면 다시 열거해서 찾는다 — 그래도 추측하지 않는다.
         recheck = account_service_discover(bmc_ip, current_username, current_password,
                                            timeout, verify_ssl,
-                                           service_root=discovery.get('service'))
+                                           service_root=discovery.get('service_root'))
         again = [a for a in (recheck.get('accounts') or [])
                  if (a.get('username') or '') == target_username]
         created_uri = again[0].get('slot_uri') if len(again) == 1 else None
