@@ -22,6 +22,7 @@ tests/e2e/test_linux_raw_scripts_shim 이 쓴다.
 --------------------------------------
 tests/unit 의 여러 모듈이 import 시점에 ``sys.modules["ansible"]`` 를 stub 으로 채운다.
 수집 순서에 따라 실제 Templar import 가 깨지므로 unit 계층은 순수 jinja2 로 렌더한다.
+(e2e 계층 ``test_diagnosis_template_ansible_render`` 는 실행 시점에 그 대역을 치우고 실제 Templar 를 쓴다 — HC-09.)
 대신 ansible-core 2.19+ 처럼 **정의되지 않은 값을 타입 테스트에 넘기면 죽게** 만들어 둔다.
 """
 from __future__ import annotations

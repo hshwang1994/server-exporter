@@ -34,7 +34,7 @@ from typing import Any
 import pytest
 import yaml
 
-from tests.e2e.test_diagnosis_template_ansible_render import _iter_tasks, _templar, _trust
+from tests.e2e.test_diagnosis_template_ansible_render import _engine, _iter_tasks, _templar, _trust
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -203,6 +203,8 @@ def _module_no_log_params() -> set[str]:
 
 
 def _no_log_tools():
+    if _engine()["templar"] is None:  # pragma: no cover - ansible-core 를 import 할 수 없는 개발 PC 에서만
+        pytest.skip(f"ansible-core 를 import 할 수 없다: {_engine()['why']}")
     try:
         from ansible.module_utils.common.parameters import (  # noqa: PLC0415
             _list_no_log_values,

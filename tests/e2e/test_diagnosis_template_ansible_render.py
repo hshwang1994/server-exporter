@@ -22,6 +22,13 @@
 패키지는 있으나 POSIX 전용 모듈(fcntl 등)에 의존해 그냥은 import 되지 않는다. 그래서 그
 모듈들을 최소 shim 으로 채운 뒤 Templar 만 끌어온다. shim 이 실패하면 테스트를 skip 한다
 (운영 Agent 는 Linux 라 그대로 import 된다).
+
+수집 순서 제약 (2026-10-10, HC-09)
+---------------------------------
+tests/unit 의 여러 모듈이 import 시점에 ``sys.modules`` 에 ansible 대역(``types.ModuleType``)을 심는다.
+그래서 엔진 import 는 수집 시점의 전역이 아니라 **첫 시험이 실행될 때** 하고, 그 직전에 ``__spec__`` 없는
+대역만 치운다(``_evict_ansible_stubs``). 이걸 하지 않으면 ansible-core 가 있는 Linux(WSL · Runner CI Gate)
+에서도 이 파일 전체가 "플랫폼" 사유로 skip 된다 — 2026-10-10 감사까지 실제로 그렇게 한 번도 돌지 않았다.
 """
 from __future__ import annotations
 
@@ -117,13 +124,32 @@ def _install_posix_shims() -> None:
             sys.modules["ansible.utils.display"] = stub
 
 
+def _evict_ansible_stubs() -> dict:
+    """unit 계층이 심어 둔 ansible 대역을 치우고, 치운 것을 돌려준다(실제 import 가 실패하면 복원한다).
+
+    tests/unit 의 여러 모듈(test_esxi_section_errors._load_module · test_identity_sentinels · test_jedec_drift_guard ·
+    test_probe_facts_extraction · test_redfish_pure_helpers · test_callback_* 등)이 라이브러리를 ansible 없이 import 하려고
+    ``sys.modules["ansible"]`` · ``["ansible.module_utils"]`` · ``["ansible.module_utils.basic"]`` ·
+    ``["ansible.plugins.callback"]`` 을 ``types.ModuleType`` 대역으로 채운다. 대역이 남아 있으면 실제 ansible-core 가
+    깔린 Linux 에서도 ``from ansible.template import Templar`` 가 "'ansible' is not a package" 로 실패한다.
+    2026-10-10 감사(HC-09)에서 이 파일과 bios 렌더 시험 29건이 그 이유로 WSL 과 Runner CI Gate 양쪽에서 한 번도
+    돌지 않고 skip 돼 왔음을 확인했다. 대역은 ``__spec__`` 이 None 이라 실제 모듈과 구분된다.
+    """
+    evicted = {}
+    for name, mod in list(sys.modules.items()):
+        if (name == "ansible" or name.startswith("ansible.")) and getattr(mod, "__spec__", None) is None:
+            evicted[name] = sys.modules.pop(name)
+    return evicted
+
+
 def _import_templar():
-    """ansible-core 의 Templar 를 끌어온다. 실패하면 None.
+    """ansible-core 의 Templar 를 끌어온다. 실패하면 ``(None, 사유)``.
 
     ansible-core 의 일부 모듈이 import 시점에 `os.path.sep` 를 정규식에 그대로 넣는다
     (`'(?:^|%s)+tasks%s?$' % (os.path.sep, ...)`). Windows 의 `\\` 는 정규식 이스케이프라
     컴파일이 깨진다. import 하는 동안만 POSIX 구분자로 바꿔 준다 — 템플릿 평가에는 관여하지 않는다.
     """
+    evicted = _evict_ansible_stubs()
     _install_posix_shims()
     import ntpath
     import os
@@ -133,25 +159,37 @@ def _import_templar():
     try:
         os.sep = os.path.sep = ntpath.sep = posixpath.sep
         from ansible.template import Templar
-        return Templar
-    except Exception:  # noqa: BLE001 - 플랫폼 의존. 못 쓰면 skip 한다.
-        return None
+        return Templar, None
+    except Exception as exc:  # noqa: BLE001 - 플랫폼 의존. 못 쓰면 사유를 들고 skip 한다.
+        for name, mod in evicted.items():
+            sys.modules.setdefault(name, mod)
+        return None, f"{type(exc).__name__}: {exc}"
     finally:
         os.sep, os.path.sep, ntpath.sep = saved
 
 
-_TEMPLAR_CLS = _import_templar()
+_ENGINE: dict = {}
+
+
+def _engine() -> dict:
+    """첫 사용 시 한 번 import 한다 — **수집 시점이 아니라 실행 시점**이어야 unit 계층의 대역을 치운 뒤가 된다
+    (pytest 는 세 디렉터리를 모두 수집한 뒤 실행하므로 모듈 전역에서 import 하면 대역이 깔린 상태를 본다)."""
+    if not _ENGINE:
+        cls, why = _import_templar()
+        _ENGINE.update(templar=cls, why=why, trusted=_trusted_as_template() if cls is not None else None)
+    return _ENGINE
 
 
 def _templar():
-    if _TEMPLAR_CLS is None:  # pragma: no cover - 이 개발 환경에서만 발생
-        pytest.skip("이 플랫폼에서 ansible-core 템플릿 엔진을 import 할 수 없다 "
+    eng = _engine()
+    if eng["templar"] is None:  # pragma: no cover - ansible-core 를 import 할 수 없는 개발 PC 에서만
+        pytest.skip(f"ansible-core 템플릿 엔진을 import 할 수 없다: {eng['why']} "
                     "(운영 Agent 는 Linux 라 정상 동작한다)")
     # rescue 가 쓰는 저장소 필터(failure_reason 등)를 실제 로더에 등록한다 — ansible.cfg 의
     # filter_plugins = ./filter_plugins 와 같은 효과. 등록 실패는 조용히 넘기지 않는다.
     from ansible.plugins.loader import filter_loader  # noqa: PLC0415
     filter_loader.add_directory(str(REPO / "filter_plugins"))
-    return _TEMPLAR_CLS(loader=None)
+    return eng["templar"](loader=None)
 
 
 def _trusted_as_template():
@@ -167,9 +205,6 @@ def _trusted_as_template():
     return None
 
 
-_TRUSTED = _trusted_as_template()
-
-
 def _trust(text: str):
     """ansible-core 2.19+ 는 **신뢰 표시가 없는 문자열을 템플릿으로 보지 않는다.**
 
@@ -177,9 +212,10 @@ def _trust(text: str):
     테스트가 '통과한 것처럼' 보이면서 실제로는 아무것도 검증하지 않게 된다.
     그래서 태그 확보 실패는 조용히 넘기지 않고 skip 으로 드러낸다.
     """
-    if _TRUSTED is None:  # pragma: no cover
+    trusted = _engine()["trusted"]
+    if trusted is None:  # pragma: no cover
         pytest.skip("ansible-core 의 TrustedAsTemplate 을 찾지 못해 템플릿 평가를 신뢰할 수 없다")
-    return _TRUSTED().tag(text)
+    return trusted().tag(text)
 
 
 def _plays(site: str) -> list[dict[str, Any]]:
@@ -327,3 +363,34 @@ def test_build_output_failed_guard_renders_on_real_engine():
         assert set(rendered) == _DIAGNOSIS_KEYS, f"[{shape}] 8키 shape 위반"
         assert rendered["failure_reason"] == \
             FAILURE_REASONS["_fr_catalog"]["gather_no_data"]["default"], shape
+
+
+def test_hc09_stub_eviction_removes_only_spec_less_ansible_entries():
+    """HC-09 회귀: unit 계층이 심는 ``types.ModuleType`` 대역만 치우고 ``__spec__`` 이 있는 실제 모듈은 남긴다.
+    치운 것은 돌려줘야 실제 import 가 실패했을 때(ansible-core 없는 PC) 복원할 수 있다."""
+    import importlib.machinery
+
+    stub_root = types.ModuleType("ansible")
+    stub_utils = types.ModuleType("ansible.module_utils")
+    real_like = types.ModuleType("ansible._se_hc09_real_like")
+    real_like.__spec__ = importlib.machinery.ModuleSpec("ansible._se_hc09_real_like", loader=None)
+    names = ("ansible", "ansible.module_utils", "ansible._se_hc09_real_like")
+    saved = {k: sys.modules.get(k) for k in names}
+    sys.modules["ansible"] = stub_root
+    sys.modules["ansible.module_utils"] = stub_utils
+    sys.modules["ansible._se_hc09_real_like"] = real_like
+    evicted = {}
+    try:
+        evicted = _evict_ansible_stubs()
+        assert evicted["ansible"] is stub_root and evicted["ansible.module_utils"] is stub_utils
+        assert "ansible._se_hc09_real_like" not in evicted
+        assert "ansible" not in sys.modules and "ansible.module_utils" not in sys.modules
+        assert sys.modules["ansible._se_hc09_real_like"] is real_like
+    finally:
+        for k, v in evicted.items():
+            sys.modules.setdefault(k, v)
+        for k, v in saved.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
