@@ -74,7 +74,13 @@ REQUIRED_HARNESS = ("normal_success", "archive_fail", "stash_fail", "both_fail",
                     "preserve_cut_owner_write",
                     "addon_decision_transient",
                     "addon_reuse_disabled",
-                    "addon_copy_restore")
+                    "addon_copy_restore",
+                    # 2026-10-10 (C1): finalize medium choice — a confirmed final stash vs. an older snapshot stash and the final archive
+                    "recover_final_archive_over_snapshot",
+                    "recover_flag_unwritten_archive",
+                    "recover_archive_unavailable_stash",
+                    "recover_partial_archive_keeps_stash",
+                    "recover_checkpoint_only_archive")
 # generated-tree Harness (FUNCTIONS_SRC=artifact) — the same functions from the prodgen tree. 2026-10-04 최종 지시 §6-1: the preservation
 # failure paths (archive_fail · stash_fail · truncate_jsonl · checkpoint_only_a/b · layer_a_fail) are required on the generated tree too.
 # 2026-10-05 (8차 R1): the stop/preserve proof (gather_limit_preserve) runs the generated tree's run_gather.sh too.
@@ -83,7 +89,9 @@ REQUIRED_HARNESS_TREE = ("normal_success", "archive_fail", "stash_fail", "both_f
                          "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "gather_limit_preserve",
                          "infra_resume", "infra_wait_expired",
                          # 2026-10-07 (10차): the new resume paths run on the generated tree's functions and scripts too
-                         "finalize_reentry", "finalize_reentry_after_delivery", "owner_read_transient", "prep_cut_after_owner", "manifest_missing_restore", "results_missing_refuse", "preserve_cut_delete", "addon_decision_transient")
+                         "finalize_reentry", "finalize_reentry_after_delivery", "owner_read_transient", "prep_cut_after_owner", "manifest_missing_restore", "results_missing_refuse", "preserve_cut_delete", "addon_decision_transient",
+                         # 2026-10-10 (C1): the medium choice runs on the generated tree's finalizer too
+                         "recover_final_archive_over_snapshot", "recover_flag_unwritten_archive")
 # 2026-10-05 (8차 R1): test-only parameters removed from the collection Jobs. A main-Job build that still carries one of them did not run
 # the candidate's parameter set — it is not evidence. Tier 2 (SE_FINALIZER_BOUNDED) and its bounded Harness group are gone (8차 R3).
 REMOVED_MAIN_PARAMS = ("redfishAccountDryrun", "gatherBudgetForceSec")

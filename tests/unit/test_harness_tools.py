@@ -521,11 +521,13 @@ def test_new_scenarios_declare_faults_that_hit_real_runtime_points():
     src = PORTAL.read_text(encoding="utf-8")
     for name in build_functions.SCENARIOS:
         for f in SCENARIOS[name].get("faults") or []:
-            assert f["op"] in ("writeFile", "readFile", "fileExists", "sh", "deleteDir", "stash", "archiveArtifacts", "unstash"), (name, f)
-            assert f.get("kind", "infra") in ("infra", "fail"), (name, f)
+            assert f["op"] in ("writeFile", "readFile", "fileExists", "sh", "deleteDir", "stash", "archiveArtifacts", "unstash", "unarchive"), (name, f)
+            # C1 (2026-10-10): interrupt = 실제 interruption 으로 끊는 실행 기반 오류, truncate = unarchive 로 받은 파일의 앞 keep 줄만(보관본 일부 회수)
+            assert f.get("kind", "infra") in ("infra", "fail", "interrupt", "truncate"), (name, f)
+            assert f.get("kind") != "truncate" or f["op"] == "unarchive", (name, f)
             if f["op"] == "sh":
                 assert f"label: '{f['match']}'" in src, (name, f)
-            elif f["op"] in ("writeFile", "readFile", "fileExists"):
+            elif f["op"] in ("writeFile", "readFile", "fileExists", "unarchive"):
                 assert f"'{f['match']}'" in src, (name, f)
             elif f["op"] == "stash":
                 assert f"name: '{f['match']}'" in src, (name, f)
@@ -573,6 +575,58 @@ def test_verdict_checks_reentry_delivery_count_and_addon_commits(tmp_path):
     none_obs = harness_verdict.observe(summary, None, [], [], {}, control, [{"hosts": [], "addon_dir": False}], {"ips": []})
     checks, _ = harness_verdict.check({"gather": {"addon_none": True}}, none_obs)
     assert all(c["ok"] for c in checks)
+
+
+# ── C1 (2026-10-10): 결과 확인의 회수 매체 선택 ──────────────────────────────────────────────────────
+
+def test_c1_wrappers_inject_interrupt_and_partial_unarchive(tmp_path):
+    """interrupt 는 실제 interruption(다른 timeout 의 FlowInterruptedException) + Runner 오프라인, unarchive 는 원본 이름으로 주입하고 truncate 는
+    실제 unarchive 뒤에 받은 파일의 앞 keep 줄만 남긴다. 운영 함수부에는 주입 토큰이 없다."""
+    out = tmp_path / "f.groovy"
+    build_functions.build(PORTAL, "recover_partial_archive_keeps_stash", out, None)
+    wrappers = out.read_text(encoding="utf-8").split("harness wrappers")[1]
+    assert "if (kind == 'interrupt') {" in wrappers and "HARNESS.outer.timeout(time: 1, unit: 'SECONDS') { HARNESS.outer.sleep(time: 30, unit: 'SECONDS') }" in wrappers
+    unarch = wrappers[wrappers.index("def unarchive(Map m) {"):wrappers.index("// readTrusted 는")]
+    assert "Map cut = seHarnessFault('unarchive', src)" in unarch
+    assert unarch.index("HARNESS.outer.unarchive(m)") < unarch.index("HARNESS.outer.writeFile(file: dst")
+    assert "take((cut.keep ?: 1) as int)" in unarch
+
+
+def test_c1_scenarios_cover_the_directive_cases():
+    """A 중간 stash 뒤 마지막 stash 실패 → archive · B 표식 없이 끊김 + Runner 미복귀 → archive · C archive 회수 전부 실패 → stash ·
+    D 보관본 일부(정리 결과 실패 · OUTPUT 일부) + 더 나은 stash → stash · E CHECKPOINT 만 있는 archive → Layer B."""
+    exp = {name: SCENARIOS[name]["expect"] for name in ("recover_final_archive_over_snapshot", "recover_flag_unwritten_archive",
+                                                         "recover_archive_unavailable_stash", "recover_partial_archive_keeps_stash",
+                                                         "recover_checkpoint_only_archive")}
+    assert exp["recover_final_archive_over_snapshot"]["recovery"]["chosen"] == "archive"
+    assert exp["recover_final_archive_over_snapshot"]["by_origin"] == {"output": 3, "checkpoint": 0, "synthetic": 0}
+    assert exp["recover_flag_unwritten_archive"]["recovery"]["chosen"] == "archive" and exp["recover_flag_unwritten_archive"]["infra"]["expired"] is True
+    assert exp["recover_archive_unavailable_stash"]["recovery"]["chosen"] == "stash" and exp["recover_archive_unavailable_stash"]["filled"] == 1
+    d = exp["recover_partial_archive_keeps_stash"]
+    assert d["recovery"]["chosen"] == "stash" and d["recovery"]["stash_real"] > d["recovery"]["archive_real"]
+    assert d["by_origin"] == {"output": 2, "checkpoint": 1, "synthetic": 0}, "stash 의 OUTPUT · CHECKPOINT 를 버리지 않는다"
+    e = exp["recover_checkpoint_only_archive"]
+    assert e["source"] == "archive" and e["layerB"] == "ok" and e["by_origin"]["checkpoint"] == 1 and e["by_origin"]["synthetic"] == 0
+    kinds = {(f["op"], f.get("kind")) for f in SCENARIOS["recover_flag_unwritten_archive"]["faults"]}
+    assert ("stash", "interrupt") in kinds
+    b_nodes = SCENARIOS["recover_flag_unwritten_archive"]["gather_stage"]
+    assert b_nodes["node_steps"][2]["queue_delay"] > b_nodes["constants"]["INFRA_WAIT"], "보존만 다시 하려던 Runner 가 대기 한도 안에 돌아오지 않는다"
+
+
+def test_verdict_checks_the_recovery_record():
+    exp = {"recovery": {"final_stashed": False, "fast_path": False, "chosen": "archive", "stash_real": 2, "archive_real": 3, "stash_recovered": True}}
+    summary = {"recovery": {"final_stashed": False, "fast_path": False, "chosen": "archive",
+                            "stash": {"looked_up": True, "recovered": True, "real": 2}, "archive": {"looked_up": True, "real": 3}}}
+    obs = harness_verdict.observe(summary, None, [], [], {}, {}, None, None)
+    checks, partial = harness_verdict.check(exp, obs)
+    assert partial == [] and all(c["ok"] for c in checks), checks
+    summary["recovery"]["chosen"] = "stash"
+    obs = harness_verdict.observe(summary, None, [], [], {}, {}, None, None)
+    checks, _ = harness_verdict.check(exp, obs)
+    assert {c["name"] for c in checks if not c["ok"]} == {"recovery.chosen"}
+    obs = harness_verdict.observe({"source": "stash"}, None, [], [], {}, {}, None, None)
+    _, partial = harness_verdict.check(exp, obs)
+    assert partial == ["recovery: finalize_summary.json 에 recovery 없음"]
 
 
 # ── 2026-10-08 CI 실행시간 개선: 같은 Job 의 빌드 둘이 동시에 돈다 ─────────────────────────────────

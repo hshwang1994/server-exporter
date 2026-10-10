@@ -2,7 +2,7 @@
 """harness_verdict.py — Harness 시나리오의 관측값을 scenarios.json 기대값과 대조해 PASS / FAIL / PARTIAL 을 정한다 (2026-10-04).
 
 입력(모두 Harness 빌드가 만든 파일; 없는 파일은 "관측 없음" 으로 처리)
-  --summary   finalize_summary.json   (finalizer 가 archive 한 것을 unarchive 로 회수)
+  --summary   finalize_summary.json   (finalizer 가 archive 한 것을 unarchive 로 회수 — C1: recovery 로 회수 매체 선택 근거도 본다)
   --body      callback_body.json      (위와 같음 — sha256 을 sink 기록과 대조)
   --calls     harness_calls.json      (wrapper 가 기록한 step 호출 · unstable 메시지)
   --sink      sink/record.jsonl       (callback_sink.py 수신 기록)
@@ -141,6 +141,7 @@ def observe(summary, body_path, calls, sink, preserve, control, received=None, f
         "control": control or {},
         "infra": (summary or {}).get("infra") if isinstance(summary, dict) else None,
         "finalize": (summary or {}).get("finalize") if isinstance(summary, dict) else None,
+        "recovery": (summary or {}).get("recovery") if isinstance(summary, dict) else None,
         "finalize_result": (control or {}).get("finalize_result"),
         "received": received,
         "fixture_ips": (fixture or {}).get("ips") if isinstance(fixture, dict) else None,
@@ -259,6 +260,20 @@ def check(expect: dict, obs: dict) -> tuple[list[dict], list[str]]:
                     add(f"finalize.{key}>={v}", f">={v}", got, isinstance(got, (int, float)) and got >= v)
                 else:
                     add(f"finalize.{k}", v, fz.get(k), fz.get(k) == v)
+    if "recovery" in expect:
+        # C1 (2026-10-10): 회수 매체 선택 근거(finalize_summary.recovery) — 마지막 보존 전달 표식 · 빠른 길 · 고른 매체 · 후보마다 결과가 있는 대상 수
+        rc = obs.get("recovery")
+        if not obs["summary_present"] or not isinstance(rc, dict):
+            partial.append("recovery: finalize_summary.json 에 recovery 없음")
+        else:
+            for k, v in expect["recovery"].items():
+                if k in ("stash_real", "archive_real", "stash_recovered", "archive_looked_up"):
+                    medium, field = k.split("_", 1)
+                    field = {"real": "real", "recovered": "recovered", "looked_up": "looked_up"}[field]
+                    got = (rc.get(medium) or {}).get(field)
+                else:
+                    got = rc.get(k)
+                add(f"recovery.{k}", v, got, got == v)
     if "finalize_result" in expect:
         fr = obs.get("finalize_result")
         if not isinstance(fr, dict):

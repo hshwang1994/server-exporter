@@ -65,7 +65,11 @@ SCENARIOS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "trunc
              "finalize_limit_cumulative", "owner_read_transient", "run_record_read_transient", "prep_cut_after_owner",
              "prep_cut_after_cleanup", "prep_cut_after_manifest", "manifest_missing_restore", "results_missing_refuse",
              "preserve_archive_ok_stash_fail", "preserve_stash_ok_archive_fail", "preserve_both_fail", "preserve_cut_before_marker",
-             "preserve_cut_delete", "preserve_cut_owner_write", "addon_decision_transient", "addon_reuse_disabled", "addon_copy_restore")
+             "preserve_cut_delete", "preserve_cut_owner_write", "addon_decision_transient", "addon_reuse_disabled", "addon_copy_restore",
+             # 2026-10-10 (C1): 결과 확인의 회수 매체 선택 — 중간 보존 stash 와 마지막 보존 archive 중 결과가 더 많은 쪽 · 표식 없는 끊김 ·
+             #   archive 회수 실패 · archive 일부만 회수 · CHECKPOINT 만 있는 archive
+             "recover_final_archive_over_snapshot", "recover_flag_unwritten_archive", "recover_archive_unavailable_stash",
+             "recover_partial_archive_keeps_stash", "recover_checkpoint_only_archive")
 
 WRAPPERS = r'''
 
@@ -95,6 +99,9 @@ def seHarnessInit(Object outer, Map cfg) {
 
 // 10차: 장애 주입 — op(대상)의 n번째 호출에서 일으킨다. infra 는 실행 기반 오류 흉내(Runner 오프라인으로 두고 retry(agent()) 가 본문을 다시 부르게 한다),
 //   fail 은 보통 실패(보존 단계 독립 시험). 운영 함수는 그대로다 — 주입은 이 wrapper 들에만 있다.
+//   C1 (2026-10-10): interrupt 는 infra 와 같지만 실제 interruption(다른 timeout 의 FlowInterruptedException)으로 끊는다 — 운영 함수의
+//   FlowInterruptedException 재전파 경로를 그대로 탄다(수집 셸의 agent_lost 흉내와 같은 방법). truncate 는 예외 없이 그 항목을 돌려주고
+//   wrapper 가 실제 step 뒤에 적용한다(unarchive: 받은 파일의 앞 keep 줄만 남긴다 — 보관본을 일부만 회수한 경우).
 def seHarnessFault(String op, String target) {
     String key = op + ':' + (target ?: '')
     int n = ((HARNESS.opCounts[key] ?: 0) as int) + 1
@@ -108,9 +115,18 @@ def seHarnessFault(String op, String target) {
                 HARNESS.offline = true
                 throw new Exception('harness: injected infrastructure failure at ' + key + ' #' + n)
             }
+            if (kind == 'interrupt') {
+                HARNESS.agentLost = true
+                HARNESS.offline = true
+                HARNESS.outer.timeout(time: 1, unit: 'SECONDS') { HARNESS.outer.sleep(time: 30, unit: 'SECONDS') }
+            }
+            if (kind == 'truncate') {
+                return f
+            }
             throw new Exception('harness: injected failure at ' + key + ' #' + n)
         }
     }
+    return null
 }
 
 def seHarnessSlow(String op) {
@@ -170,8 +186,18 @@ def unstash(String name) {
 }
 
 def unarchive(Map m) {
-    HARNESS.calls << 'unarchive'
-    return HARNESS.outer.unarchive(m)
+    // C1: 장애 주입 대상 = mapping 의 첫 원본 이름(운영 함수는 파일마다 한 번씩 부른다)
+    String src = m.mapping ? (m.mapping.keySet() as List)[0].toString() : ''
+    Map cut = seHarnessFault('unarchive', src)
+    HARNESS.calls << ('unarchive:' + src)
+    def res = HARNESS.outer.unarchive(m)
+    if (cut != null) {
+        String dst = m.mapping[src].toString()
+        List kept = (HARNESS.outer.readFile(file: dst, encoding: 'UTF-8').split('\n') as List).findAll { it.trim() }.take((cut.keep ?: 1) as int)
+        HARNESS.outer.writeFile(file: dst, text: kept.join('\n') + '\n', encoding: 'UTF-8')
+        HARNESS.calls << ('unarchive:truncated:' + src + ':' + kept.size())
+    }
+    return res
 }
 
 // readTrusted 는 고정 후보의 파일만 돌려준다 — checkout 모드는 MAIN_SHA 로 받은 사본, 생성 tree 모드는 그 tree (Harness 가 agent 에서 미리 읽어 둔다).

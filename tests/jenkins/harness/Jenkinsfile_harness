@@ -239,7 +239,7 @@ timeout(time: 45, unit: 'MINUTES') {
         env.SE_MANIFEST_JSON = fx.manifest_json
         env.SE_GATHER_OUTCOME = fx.outcome
         env.SE_BUILD_START_EPOCH = "${(long) (System.currentTimeMillis() / 1000L)}"
-        for (String k in ['SE_PRESERVE_LAYER_A', 'SE_PRESERVE_ARCHIVED', 'SE_PRESERVE_STASHED', 'SE_PRESERVE_MANIFEST', 'SE_PRESERVE_HASRESULT']) { env."${k}" = '' }
+        for (String k in ['SE_PRESERVE_LAYER_A', 'SE_PRESERVE_ARCHIVED', 'SE_PRESERVE_STASHED', 'SE_PRESERVE_MANIFEST', 'SE_PRESERVE_HASRESULT', 'SE_FINAL_STASHED']) { env."${k}" = '' }
 
         // ── ⑤ load + init (바깥 스크립트 = 실제 step)
         boolean expectInterruption = (sc.expect_interruption ?: false) || (sc.outer_timeout_seconds ?: 0) > 0
@@ -316,8 +316,10 @@ timeout(time: 45, unit: 'MINUTES') {
                     sh """${PY} ../tests/jenkins/harness/fixture.py --scenarios ../tests/jenkins/harness/scenarios.json --scenario ${scenario} --corpus ../tests/fixtures/finalize_corpus \\
                             --workspace "\$PWD" --job x --number 0 --url x --callback-url x --out ../fixture_post.json --post-layer-a"""
                     stash(name: 'gather-output', includes: PRESERVE_FILES, allowEmpty: true)
+                    env.SE_FINAL_STASHED = 'true'      // C1: Harness 가 직접 넘긴 것이 마지막 보존의 전달이다(운영 sePreserveGatherOutput 과 같은 표식)
                 } else {
                     stash(name: 'gather-output', includes: PRESERVE_FILES, allowEmpty: true)
+                    env.SE_FINAL_STASHED = 'true'
                 }
             }
         }

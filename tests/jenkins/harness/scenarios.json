@@ -16,7 +16,8 @@
     "jenkins_result: 그 시나리오가 끝나는 Jenkins 결과(기본 SUCCESS). expect_interruption=true 는 Harness 가 유발한 interruption 이라 Harness 가 기록 뒤 삼킨다(그 외는 그대로 전파).",
     "sink_hold: 판정 없는 보조 시나리오 — controller loopback sink 를 hold_seconds 동안 열어 둔다(main Job T2 의 Callback 수신 증거용). 기록만 archive 한다.",
     "10차 (2026-10-07): faults = [{op, match, nth, kind}] — 운영 함수가 부르는 step(op: writeFile · readFile · fileExists · sh(label) · deleteDir · stash(name) · archiveArtifacts(첫 파일) · unstash)의 n번째 호출에서 kind=infra(실행 기반 오류 흉내: Runner 오프라인 + retry(agent()) 재호출) 또는 kind=fail(보통 실패)을 일으킨다. slow = {op: 초}. finalize_delays = 결과 처리 노드 진입마다 늦출 초. infra_budget_sec = 결과 처리만 도는 시나리오의 실행 기반 대기 한도. gather_stage.node_steps = 시도(노드 요청)마다의 단계(queue_delay · remove_files · remove_addon_copy · addon_ref_to) — attempts 는 가짜 ansible 이 실행될 때마다의 계획이다. gather_stage.addon = 시험용 Add-on 저장소(file://, commit A · B, unsupported 면 그 대상 종류를 지원하지 않음).",
-    "  10차 기대값: sink_posts_eq · summary_present · finalize.{entries · exec_sec_before_min} · finalize_result.{incomplete · delivered}(결과 확인 반환값) · gather.{addon_commits(A/B) · addon_none · node_calls}. 축약 상수 · 가짜 실행 기반을 쓰는 별도 동작 시험이다 — 운영 설정 실기와 구분한다."
+    "  10차 기대값: sink_posts_eq · summary_present · finalize.{entries · exec_sec_before_min} · finalize_result.{incomplete · delivered}(결과 확인 반환값) · gather.{addon_commits(A/B) · addon_none · node_calls}. 축약 상수 · 가짜 실행 기반을 쓰는 별도 동작 시험이다 — 운영 설정 실기와 구분한다.",
+    "C1 (2026-10-10): recover_* = 결과 확인의 회수 매체 선택(seEvalCandidate · seChooseMedium). 기대값 recovery.{final_stashed · fast_path · chosen · stash_real · archive_real · stash_recovered · archive_looked_up}. faults 의 kind 에 interrupt(실제 interruption + Runner 오프라인 — 보존 중 끊김) · truncate(unarchive 로 받은 파일의 앞 keep 줄만 — 보관본 일부 회수)를 더했다. unarchive 의 match 는 원본 파일 이름이다."
   ],
   "scenarios": {
     "normal_success": {
@@ -1127,7 +1128,7 @@
         {
           "op": "fileExists",
           "match": "gather_final.jsonl",
-          "nth": 3,
+          "nth": 2,
           "kind": "infra"
         }
       ],
@@ -1146,7 +1147,7 @@
           "retry:agent_lost": 1
         },
         "rethrown": false,
-        "note": "10차 R1: 첫 진입이 느린 회수(20초)를 마친 뒤 결과 처리 본문에서 실행 기반 오류 — 재진입은 결과 처리 실행 한계를 처음부터 세지 않는다(앞 진입이 쓴 시간 >= 19초를 요약에 남긴다). fileExists 1번째는 Harness 의 보존 단계, 2번째는 회수 직후의 확인(stash 를 못 쓰면 보관본으로 넘어가는 catch 안 — 그 오류는 다음 회수 수단으로 흡수된다, CI #32 #725)이라 3번째(정리 결과 선택, catch 밖)를 끊는다"
+        "note": "10차 R1: 첫 진입이 느린 회수(20초)를 마친 뒤 결과 처리 본문에서 실행 기반 오류 — 재진입은 결과 처리 실행 한계를 처음부터 세지 않는다(앞 진입이 쓴 시간 >= 19초를 요약에 남긴다). fileExists 1번째는 Harness 의 보존 단계, 2번째는 회수한 stash 후보의 평가(seEvalCandidate — catch 밖, C1 2026-10-10 부터 회수 폴더 안에서 한 번 본다)라 그것을 끊는다. 종전 3번째(정리 결과 선택)와 같은 지점이다"
       }
     },
     "owner_read_transient": {
@@ -2318,6 +2319,454 @@
         "sink_posts_min": 1,
         "rethrown": false,
         "note": "10차 R4: 재개 사이 Add-on 사본이 사라지고 main 이 B 로 바뀌었다 — 결정에 남은 같은 commit A 로 다시 받는다(main 을 받지 않는다)"
+      }
+    },
+    "recover_final_archive_over_snapshot": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "orphan_hold": 3,
+            "crash": true
+          },
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "stash",
+          "match": "gather-output",
+          "nth": 2,
+          "kind": "fail"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "source": "archive",
+        "layerA": "ok",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "by_origin": {
+          "output": 3,
+          "checkpoint": 0,
+          "synthetic": 0
+        },
+        "preserve": {
+          "archived": true,
+          "stashed": false,
+          "deleted": true
+        },
+        "recovery": {
+          "final_stashed": false,
+          "fast_path": false,
+          "chosen": "archive",
+          "stash_real": 2,
+          "archive_real": 3
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              3
+            ]
+          ],
+          "outcome": "completed"
+        },
+        "calls_count": {
+          "fault:fail:stash:gather-output": 1,
+          "retry:agent_lost": 0
+        },
+        "warnings_empty": true,
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "body_sha_matches_sink": true,
+        "rethrown": false,
+        "note": "C1: 1번째 시도가 2대 결과를 남기고 수집 프로세스 잠금이 남은 채 끝나 중간 보존(stash)을 넘긴 뒤, 2번째 시도가 3대를 마치고 마지막 보존에서 보관(archive)은 성공 · 전달(stash)은 실패했다. 남은 stash 는 중간 보존의 2대뿐이다 — 종전에는 그것을 먼저 써 1대를 실패 결과로 보냈다. 마지막 보존의 전달 표식이 없으므로 보관본도 받아 평가하고, 결과가 있는 대상이 더 많은(3대, 정리 결과 완결) 보관본으로 보낸다"
+      }
+    },
+    "recover_flag_unwritten_archive": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 60,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "orphan_hold": 3,
+            "crash": true
+          },
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0,
+        "node_steps": [
+          {},
+          {},
+          {
+            "queue_delay": 240
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "stash",
+          "match": "gather-output",
+          "nth": 2,
+          "kind": "interrupt"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "source": "archive",
+        "layerA": "ok",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "by_origin": {
+          "output": 3,
+          "checkpoint": 0,
+          "synthetic": 0
+        },
+        "preserve": {
+          "stashed": true,
+          "deleted": false
+        },
+        "recovery": {
+          "final_stashed": false,
+          "fast_path": false,
+          "chosen": "archive",
+          "stash_real": 2,
+          "archive_real": 3
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              3
+            ]
+          ],
+          "outcome": "completed",
+          "node_calls": 3
+        },
+        "infra": {
+          "expired": true,
+          "episodes": [
+            {
+              "reason_contains": "복구 대기",
+              "result": "expired"
+            }
+          ]
+        },
+        "calls_count": {
+          "fault:interrupt:stash:gather-output": 1,
+          "retry:agent_lost": 1
+        },
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "body_sha_matches_sink": true,
+        "rethrown": false,
+        "note": "C1: recover_final_archive_over_snapshot 과 같은데 마지막 보존의 전달(stash) 중 실행 기반 끊김(실제 interruption)이 나 보존 기록(env)을 남기지 못했고, 보존만 다시 하려던 Runner 는 대기 한도(60초) 안에 돌아오지 않았다. 보관은 끊기기 전에 끝났다 — 결과 확인은 남은 중간 보존 stash(2대) 대신 보관본(3대)으로 보낸다. preserve.archived 는 기록되지 않아 보지 않는다(Harness 는 env 로 관측한다)"
+      }
+    },
+    "recover_archive_unavailable_stash": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "orphan_hold": 3,
+            "crash": true
+          },
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "stash",
+          "match": "gather-output",
+          "nth": 2,
+          "kind": "fail"
+        },
+        {
+          "op": "unarchive",
+          "match": "gather_final.jsonl",
+          "nth": 1,
+          "kind": "fail"
+        },
+        {
+          "op": "unarchive",
+          "match": "gather_finalize_report.json",
+          "nth": 1,
+          "kind": "fail"
+        },
+        {
+          "op": "unarchive",
+          "match": "gather_output.json",
+          "nth": 1,
+          "kind": "fail"
+        },
+        {
+          "op": "unarchive",
+          "match": "gather_checkpoint.jsonl",
+          "nth": 1,
+          "kind": "fail"
+        },
+        {
+          "op": "unarchive",
+          "match": "gather_run.json",
+          "nth": 1,
+          "kind": "fail"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "source": "stash",
+        "layerB": "ok",
+        "lines_eq_accepted": true,
+        "filled": 1,
+        "by_origin": {
+          "output": 2,
+          "checkpoint": 0,
+          "synthetic": 1
+        },
+        "recovery": {
+          "final_stashed": false,
+          "fast_path": false,
+          "chosen": "stash",
+          "stash_real": 2
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              3
+            ]
+          ],
+          "outcome": "completed"
+        },
+        "calls_count": {
+          "fault:fail:unarchive:": 5
+        },
+        "warnings_include": [
+          "filled"
+        ],
+        "unstable_contains": [
+          "전송은 했지만"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "C1: recover_final_archive_over_snapshot 과 같은데 보관본의 결과 파일을 하나도 받지 못했다(unarchive 전부 실패) — 남은 중간 보존 stash(2대)로 보내고 나머지 1대는 실패 결과로 채운다(회수할 수 있는 것 중 가장 낫다)"
+      }
+    },
+    "recover_partial_archive_keeps_stash": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "checkpoint": [
+              3
+            ],
+            "orphan_hold": 3,
+            "crash": true
+          },
+          {
+            "emit": "all"
+          }
+        ],
+        "finalize_delay": 0
+      },
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "stash",
+          "match": "gather-output",
+          "nth": 2,
+          "kind": "fail"
+        },
+        {
+          "op": "unarchive",
+          "match": "gather_final.jsonl",
+          "nth": 1,
+          "kind": "fail"
+        },
+        {
+          "op": "unarchive",
+          "match": "gather_finalize_report.json",
+          "nth": 1,
+          "kind": "fail"
+        },
+        {
+          "op": "unarchive",
+          "match": "gather_output.json",
+          "nth": 1,
+          "kind": "truncate",
+          "keep": 1
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "source": "stash",
+        "layerB": "ok",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "by_origin": {
+          "output": 2,
+          "checkpoint": 1,
+          "synthetic": 0
+        },
+        "recovery": {
+          "final_stashed": false,
+          "chosen": "stash",
+          "stash_real": 3,
+          "archive_real": 2
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              3
+            ]
+          ],
+          "outcome": "completed"
+        },
+        "calls_count": {
+          "unarchive:truncated:gather_output.json": 1
+        },
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "C1 대조: 보관본의 정리 결과 파일을 받지 못하고 OUTPUT 도 일부(1대)만 받았다. 중간 보존 stash 에는 OUTPUT 2대 + 3번째 대상의 CHECKPOINT 가 있어 결과가 있는 대상이 더 많다(3 > 2) — stash 의 유효한 OUTPUT · CHECKPOINT 를 버리지 않고 stash 로 보낸다"
+      }
+    },
+    "recover_checkpoint_only_archive": {
+      "case": "07_checkpoint_addon_done",
+      "run_preserve": true,
+      "outcome": "timeout_killed",
+      "sink": {
+        "status": "200"
+      },
+      "faults": [
+        {
+          "op": "sh",
+          "match": "수집 결과 정리",
+          "nth": 1,
+          "kind": "fail"
+        },
+        {
+          "op": "stash",
+          "match": "gather-output",
+          "nth": 1,
+          "kind": "fail"
+        }
+      ],
+      "expect": {
+        "delivered": true,
+        "source": "archive",
+        "layerA": "skipped",
+        "layerB": "ok",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "by_origin": {
+          "output": 0,
+          "checkpoint": 1,
+          "synthetic": 0
+        },
+        "preserve": {
+          "archived": true,
+          "stashed": false,
+          "deleted": false
+        },
+        "recovery": {
+          "final_stashed": false,
+          "chosen": "archive",
+          "stash_recovered": false,
+          "archive_real": 1
+        },
+        "warnings_include": [
+          "outcome_timeout_killed"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "C1 (사용자 보정 1): 결과 정리(Layer A) 실패 · OUTPUT 없음 · stash 없음, 보관본에서 유효한 CHECKPOINT 만 회수 — 보충 조립(Layer B)으로 중간 결과를 보낸다(합성 실패 결과만 만들지 않는다)"
       }
     }
   }
