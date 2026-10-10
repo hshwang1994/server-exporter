@@ -74,6 +74,8 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 > 2026-10-10: `cpu.summary.groups[].l2_cache_kb` · `l3_cache_kb` 는 그대로 **소켓당 KB** 다(의미 불변). Linux 는 lscpu 값이 합계인지
 > 인스턴스당인지를 util-linux 버전으로 가른다 — 2.34 이상(`(N instances)` 문구 유무와 무관)은 합계라 소켓 수로 나누고, 2.33 이하는
 > 인스턴스당 값이다. 버전을 알 수 없고 문구도 없으면 추측하지 않는다(L2 `null`, L3 는 `/proc/cpuinfo` 값).
+> 2026-10-10 (후속): 구형 lscpu(<2.34)가 인스턴스 하나의 값만 줄 때는 sysfs(`shared_cpu_list`)로 센 인스턴스 수로 소켓당 합계를 만든다 — AMD(Zen) 는
+> L3 가 CCX 마다 있어 "L3 = 소켓당 1개" 가정이 틀렸다. sysfs 를 읽지 못하면 종전 가정으로 떨어진다. lab 에 AMD 가 없어 공개 사양 재현(fixture) 수준이다.
 
 이 JSON 한 통이 보내는 메시지를 한 줄씩 풀면 이렇다.
 
@@ -439,6 +441,12 @@ for e in response["errors"]:
 > **2026-10-03 의미 정정 (값 shape 불변)** — `data.system.runtime.listening_ports[]` 는 ESXi 에서 **방화벽 허용 inbound 규칙의
 > port** 이지 실제 listener 가 아니다 (vSphere API 로는 listener 를 볼 수 없다). 범위 규칙(`port`~`endPort`)은 시작 port 만
 > 표기하고 범위 사실은 수집기 notice 로만 남긴다. UDP 제외·범위 표기 확장은 호출자 확인 전까지 바꾸지 않는다.
+> **2026-10-10 의미 확정** — `data.system.runtime.firewall_state` 는 세 채널 모두 **유효 정책**이다: Windows 는 `Get-NetFirewallProfile -PolicyStore ActiveStore`
+> (GPO 적용 뒤 활성 프로필), ESXi 는 `config.firewall.defaultPolicy.incomingBlocked`, Linux 는 firewalld 실행 → `active`, ufw 는 `Status:` 값, nftables/iptables 는
+> 입력 체인 정책이 drop|reject 이거나 규칙이 1개 이상이면 `active` · 정책 accept 에 규칙 0 이면 `inactive`(종전 iptables 는 설치만 돼 있어도 `active` 였다).
+> 판정 근거를 읽지 못하면(Linux 는 sudo 실패) `firewall_tool` · `firewall_state` 가 `null` 이고 `errors[]` 에 system 오류 1건이 남는다.
+> `system.hosting_type`(Windows): `HypervisorPresent=True` 이고 Hyper-V 역할이 없어도 VBS(Device Guard)가 Running 이면 `baremetal` 이다 —
+> VBS 를 켠 물리 Windows 는 하이퍼바이저가 있다고 보고한다. VBS 상태를 못 읽으면 종전 규칙(`virtual`)이다.
 
 10개 섹션을 다 풀면 길어진다. 가장 자주 쓰이는 5개만 여기서 정리하고, 나머지는 라인별 한국어 주석본 (`schema/output_examples/redfish_dell_idrac9.jsonc`) 을 본다.
 
@@ -467,6 +475,12 @@ for e in response["errors"]:
 `uuid` 는 3채널 모두 소문자 `8-4-4-4-12` 로 정규화한다. Redfish 와 OS/ESXi 의 UUID 는 SMBIOS 바이트 순서 규약이 달라
 앞 3그룹이 반전돼 보일 수 있다 — 같은 장비 판정은 `filter_plugins/identity_normalizer.py` 의 `uuid_equal` 로 한다.
 `serial` 은 `system.serial_number` 와 같은 값이고, `envelope.vendor` 는 `hardware.vendor` 원문을 `vendor_aliases.yml` 로 정규화한 표시값이다.
+> **2026-10-10** — (1) 식별자 자리표시자는 세 채널이 **같은 집합**으로 거른다 (`filter_plugins/identity_normalizer.py` `DMI_SENTINELS`:
+> `To Be Filled By O.E.M.` · `Not Specified` · `Default string` · `System Serial Number` · `NA` · `N/A` · `None` · `0` · `00000000` 등 — 대소문자 · 공백 무시).
+> ESXi 도 이제 `NA` 를 `serial` 로 내지 않는다. SMBIOS 공장 기본 UUID `03000200-0400-0500-0006-000700080009`(바이트 순서 반전형 포함)는
+> all-0 · all-f 와 같이 `uuid` / `system_uuid` 를 `null` 로 둔다 — 보드 공장값은 장비 식별자가 아니다.
+> (2) Linux 는 수집을 비특권(OS · 호스트명 · 읽을 수 있는 DMI: vendor · model · bios)과 특권(serial · uuid · dmidecode)으로 나눠 실행한다. sudo 가
+> 실패하면 특권 값만 `null` 이고 `errors[]` 에 권한 문장(시스템 제조번호 · 고유 식별자)이 남는다 — 종전에는 섹션 전체가 비었다.
 
 ### 6.2 `data.memory`
 
@@ -477,6 +491,9 @@ for e in response["errors"]:
 > (3) Linux 에서 총량은 있는데 DIMM 상세가 0건이면 `errors[]` 에 memory 섹션 오류 1건이 남는다(섹션 status 는 총량 기준 `success` 유지;
 > detail 에 dmidecode 종료 코드 · 레코드 수 · stderr 첫 줄). dmidecode 가 비루트로 머리말만 찍고 rc≠0 으로 끝나면 sudo 로 1회 재시도한다.
 > dmidecode 3.2 미만의 `Configured Clock Speed` 는 `Configured Memory Speed` 와 같은 필드로 읽는다.
+> **2026-10-10 (JEDEC)** — `slots[].manufacturer` 의 JEDEC 코드 해석은 bank(continuation 바이트 수)를 본다. 같은 7-bit ID 가 bank 마다 다른 제조사라
+> (0x18: bank 1 = Kingston, bank 0 = Toshiba/Kioxia) 종전 byte 전용 표는 bank 0 의 0x98 도 Kingston 으로 적었다. 표는 JEP106BE 기준이며 모르는 코드는
+> 원문 그대로 둔다(지어내지 않는다). 종전 표의 `0B → Intel` 은 오류였다(0x0B 는 Intersil, Intel 은 0x89/0x09). OS 채널과 Redfish 채널이 같은 표를 쓴다.
 
 ```json
 "memory": {
@@ -521,6 +538,12 @@ for e in response["errors"]:
 > 스토리지가 통째로 비면(디스크 0 · 파일시스템 0) 기존 실패 항목 하나에 lsblk 근거를 합친다. `df` 는 `timeout 20` 아래서 돈다
 > (`timeout 20 true` 가 되는 환경에서만). filesystems 만으로 섹션이 `success` 이면 "success + errors" (4절 시나리오 B) 다. (3) Windows HBA 포트가 어댑터와 매칭되지 않으면 첫 어댑터 값을 빌리지
 > 않고 `model/vendor/driver/firmware` 가 `null` 이다.
+> **2026-10-10** — (1) Linux multipath: 같은 LUN 의 경로 디스크(`/sys/block/dm-*` 의 `mpath-*` 구성원, 또는 같은 WWN·크기)는 `physical_disks[]` 1개로
+> 접고 `id`/`device` 는 `/dev/mapper/<이름>`(구성원 정보가 없으면 첫 경로)이다 — 종전에는 경로마다 1개라 디스크 수와 `summary` 합계가 경로 수만큼
+> 부풀었다. ESXi 의 `physical_disks[]` 는 종전대로 **LUN 단위**다(2026-09-03 결정 유지). (2) Windows `total_mb` 는 `MSFT_PhysicalDisk.Size` 가 우선이고
+> `Win32_DiskDrive.Size`(디스크 기하값 계산이라 실제보다 작다)는 없을 때만 쓴다. (3) ESXi `controllers[].controller_type` 은 BlockHba 를 전부 SATA 로
+> 적지 않고 드라이버 계열(`vmw_ahci`=SATA · `lsi_mr3`/`megaraid`/`smartpqi`=RAID · `nvme`=NVMe)로 정하며 모르면 `null` 이다. (4) ESXi `datastores[]` 의
+> 문자열 용량은 TB · GB · MB 단위를 모두 읽는다(종전에는 TB 만 보고 MB 를 GB 로 읽었다).
 
 스토리지는 다음 하위 list 가 있다.
 
@@ -640,6 +663,14 @@ controllers[*].id  ────┤
 - `up` / `down` — 링크 활성 / 비활성(미연결·disabled·offline 포함)
 - `unknown` — 상태 미제공/판별 불가 (HPE iLO / Cisco System NIC 등에서 종종 발생)
 - `null` — 응답에 필드 자체가 없음
+> **2026-10-10** — (1) `default_gateways[]` 는 **기본 경로 전부**다: Linux 는 metric 이 다른 복수 기본 경로 · ECMP(nexthop 마다) · IPv6 를 모두 내고(`ip route`
+> 의 via/dev 토큰을 읽는다 — `default dev ppp0` · `nhid` 형식도 바르게 읽는다), Windows 는 IPv4 · IPv6 를 가족별로 낸다. 기본 경로가 없는 host 는 `[]` 다
+> (종전 Linux 는 `"None"` 문자열이 들어갔다). (2) `interfaces[].addresses[].gateway` 는 그 주소 가족의 기본 경로가 그 인터페이스에 있을 때만 값이 있고,
+> IPv6 주소의 게이트웨이는 `::/0` 경로의 인터페이스로 판정한다(Windows 종전에는 IPv4 기본 경로 인터페이스로 판정했다). `is_primary` 는 기본 경로를
+> 가진 인터페이스다(IPv4 가 없으면 IPv6 기준). (3) **Redfish 채널**의 `dns_servers` · `default_gateways` 는 BMC 관리 NIC 의 값이다(2026-04-29 결정 유지 —
+> 호스트 OS 값은 Redfish 로 얻을 수 없다). (4) Windows `dns_servers` 에서 IPv6 스택 자리표시자 `fec0:0:0:ffff::1~3` 은 뺀다. `driver_map[]` 은 연결이 끊긴
+> 어댑터도 포함한다(Linux 와 같다). (5) ESXi 이름 서버 수집 실패 오류는 `dns_info` 가 실패했을 때만 남는다 — 종전에는 `config_info` 가 인자 오류로 늘
+> 실패해 모든 host 가 `partial` 이었다. (6) Linux `lspci` 오류(권한 등)는 stdout 표식으로 읽어 `errors[]` 에 남는다(종전 조건은 참이 될 수 없었다).
 
 #### 6.4.1 본딩/티밍 토폴로지 (cycle 2026-06-15 — OS 채널, Additive)
 
@@ -741,6 +772,10 @@ controllers[*].id  ────┤
 ```
 
 PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. 위 예시가 그 케이스.
+> **2026-10-10** — PSU 요약(`psu_count` · `power_capacity_watts` 의 PSU 합)은 `State=Absent` 슬롯을 제외한다. `power_capacity_watts` 의 출처는 둘이다:
+> legacy `Power.PowerControl.PowerCapacityWatts`(장비 예산값)와 `PowerSubsystem` 경로의 PSU 용량 합 — 같은 장비에서 값이 다를 수 있다.
+> Power 와 Thermal 이 모두 404 면 `sections.power/thermal = not_supported` 다. PSU 컬렉션 · 멤버 조회가 404 가 아닌 오류로 끝나면 `errors[]` 에 남고
+> "PSU 0" 처럼 성공으로 보이지 않는다.
 
 ### 6.6 `data.bmc` (Redfish 전용)
 
@@ -1062,6 +1097,8 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | 활성화 미상 진단 | `diagnosis.details.rmc_activation_check == false` 시 사이트 RMC Redfish 서비스 / Subscription 라이선스 확인 (`docs/operate/06-rmc-activation.md`) |
 
 ### Lab 부재 한계 (NEXT_ACTIONS C1~C8)
+- (2026-10-10) `multi_node.partitions[].network.summary` 는 빈 그룹, `memory.total_basis` 는 고정값이다 — CSUS lab 이 없어 파티션 단위 계산 근거를
+  만들 수 없다. 두 값은 파티션 하위 섹션의 한계로 두고 지어내지 않는다.
 
 현재 mock fixture 는 sdflexutils + DMTF v1.15 + iLO 5 API ref 합성. ServiceRoot.Product 정확 문자열 / Manager ID 패턴 / Oem.Hpe schema 는 사이트 실측 후 정정 의무 (내부 후속 작업 목록 C1~C8 참조).
 

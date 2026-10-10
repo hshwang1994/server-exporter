@@ -114,14 +114,13 @@ site.yml (4 Play)
       init_fragments
       adapter_loader (os 채널)
       tasks/linux/preflight.yml      → Python 버전 감지 → python_ok / raw_fallback 분기
-      tasks/linux/gather_system.yml  → system fragment   → merge
+      tasks/linux/gather_system.yml  → system · hardware fragment (runtime 포함) → merge   (비특권 raw + 특권 raw(become) — 2026-10-10)
       tasks/linux/gather_cpu.yml     → cpu fragment      → merge
       tasks/linux/gather_memory.yml  → memory fragment   → merge   (dmidecode)
       tasks/linux/gather_storage.yml → storage fragment  → merge   (lsblk + mounts)
       tasks/linux/gather_network.yml → network fragment  → merge   (gw / dns / speed)
       tasks/linux/gather_users.yml   → users fragment    → merge   (getent + lastlog)
       tasks/linux/gather_hba_ib.yml  → HBA / InfiniBand   → merge
-      tasks/linux/gather_runtime.yml → runtime 보강       → merge
       build_*  → output
 
   Play 3 — Windows (hosts: _os_windows)

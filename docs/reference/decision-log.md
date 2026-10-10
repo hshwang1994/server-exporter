@@ -6,7 +6,49 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-09
+> 최종 갱신: 2026-10-10
+
+## 2026-10-10 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-12
+
+### 배경
+- 사용자 지시서 "ClovirONE Server Gathering 전체 감사 및 개선 실행 지시서"(2026-10-10): 전 저장소 탐색 · 결함 근본 수정 · 회귀 + 실제 Jenkins
+  CI/Harness + lab 수집 · 고정 후보 SHA · production 승격 · §16 완료 조건 11개. 계획 v3(사용자 보정 10개 반영) 승인 뒤 단계별 재승인 없이 진행.
+- 증거 대장은 저장소 밖(`C:\github\ClovirONE\evidence-audit-2026-10-10`, ledger.json · expected_diffs.json · raw/ · mutations/). 요약은
+  `tests/evidence/2026-10-10-full-audit.md`.
+
+### 결정 (작성자 결정 — 기술 사항은 작성자가 정하고 근거를 적는다, 사용자 결정은 별도 표기)
+1. **D-01 vCenter 거부**: ESXi 대상의 `about.apiType=VirtualCenter` 는 protocol 단계 `PROTOCOL_CHECK_FAILED`(기존 코드 · 기존 문장, detail 에 apiType).
+   자격증명을 던지지 않는다 — 잠금 위험 · 잘못된 대상 수집.
+2. **D-02 Windows hosting_type**: VM 신호 우선 규칙 유지. `HypervisorPresent=True` + Hyper-V 역할 없음 + VBS(Device Guard) Running → baremetal.
+   근거: VBS 를 켠 물리 Windows 가 virtual 로 분류됐다(감사 PC 실측 VBS=2 · HypervisorPresent=True).
+3. **D-03 firewall_state = 유효 정책** (3채널 같은 뜻): Windows ActiveStore · ESXi defaultPolicy.incomingBlocked · Linux firewalld/ufw/nft·iptables 입력 체인
+   정책 또는 규칙 유무. 종전 Linux iptables 는 설치만 돼 있어도 active.
+4. **D-04 physical_disks**: ESXi 는 LUN 단위 유지(2026-09-03). Linux multipath 경로는 1개로 접는다(`/dev/mapper/<이름>`).
+5. **D-05 network.summary** 는 `interfaces[]` 와 같은 목록으로 계산(모집단 정의 유지) — 코드 변경 없음, 문서 명시.
+6. **D-06 Redfish network.dns_servers/default_gateways** = BMC 관리 NIC 값(2026-04-29 결정 유지) — 문서 명시.
+7. **D-07 Redfish power**: Power·Thermal 둘 다 404 → not_supported. PSU 요약 · PSU 용량 합에서 `State=Absent` 제외. 용량 출처 차이(legacy PowerControl 예산
+   vs PSU 합) 문서 명시.
+8. **D-08 Windows 디스크 크기**: `MSFT_PhysicalDisk.Size` 우선, 없으면 `Win32_DiskDrive.Size`(기하값 — 작다). lab .120 은 VMDK 100 GiB 가 102398 → 102400 MB 로
+   바뀔 것으로 예상(매트릭스에서 확인 · 선언).
+9. **D-09 Redfish vendor 정규화**: 모듈의 alias 탐색을 `module_utils/adapter_common` 과 같은 규칙(최장 alias · 3자 이하 토큰 경계)으로 — 'ibm'(lenovo) 이
+   'iBMC'(huawei) 를 삼키던 결함.
+10. **D-10 JEDEC**: (bank, 7-bit ID) 표(JEP106BE — docs.rs jep106 codes.rs · lshw jedec.cc · Linux mtd/cfi.h). 종전 `0B → Intel` 은 오류(Intersil; Intel 0x89).
+    OS · Redfish 두 표 동일(drift guard).
+11. **D-11 run_gather rc 90/91**: begin 전 종료는 Jenkinsfile 이 rc 로 `prep_failed` 확정. **FL-F01b**(Harness #1304): 그때 앞 시도의 연결 끊김 근거를
+    classify 에 넘긴다(`seClassifyAttempt(agentLost)`) — 안 넘기면 앞 시도가 process_lost 로 닫힌다.
+12. **D-12 임시 Jenkins 자원**: `se-audit-parity` · `se-audit-negative-control` Job, scratch 브랜치 `audit/negative-control` — 감사 끝에 삭제.
+- 사용자 결정(확정): BIOS 연구 패키지 폴더 삭제 · `tests/reference` 전부 유지 · Jenkins admin 자격은 채팅 전달만(어디에도 기록 금지) · §8 운영 정책 재논의 없음.
+
+### 결과 · 범위 (코드)
+- Harness 신뢰: 부정 대조 N1(FAIL) · N2(PARTIAL) · N3(변조 증거 거부, 한계 2건 기록) · N4(SKIPPED 거부), 변이 M1~M9(9/9 — M1 은 `test_output_task_names.py` 신설 뒤 재검출).
+- 묶음: B-R/B-J(Runner 기록 · 수집 루프 · 보존 · FL-F01/F02/F03/F06/F11/F12/F14/F18) · B-RD/RA(Redfish — RD-F03 · RA-F03/F08(D-09) · RA-F05/F06 · RD-F18 · RD-F15 ·
+  D-07 · RD-FW1 · RD-UNK · RD-FW2 · 죽은 normalize 4개 삭제) · B-E(ESXI-03/21/04/05(D-01)/09/12/13 · D-03) · B-W(WIN-02/11/12/DM · D-02 · D-03 · WIN-13 · WIN-21 · D-08) ·
+  B-L(LX-F08 · LX-F02(WSL 2.20.7 재현) · LX-F10 · LX-F01 · D-03 · LX-F04 · LX-F06 · LX-F12 · D-10).
+- 바꾸지 않은 것: envelope 13 필드 · 섹션 · field_dictionary 의미 · failure_code/stage · §8 운영 정책 · 계정 쓰기(HOLD).
+- 증거 수준은 항목마다 다르다(unit_fixture · local raw-script sandbox · local_ansible_wsl · jenkins_harness · main Job). lab 부재 영역(AMD lscpu ·
+  multipath · vCenter · ECMP · VBS 물리 Windows · GPO Windows)은 fixture 수준이며 실장비 검증 완료라고 쓰지 않는다.
+- X0 `3d053d36`(CI #40 COMPLETE_PASS · 매트릭스 15 계약대로) · X1 `b3c8ebf7`(매트릭스 15 계약대로 · CI #41 FAILURE — Harness 54 중 `prep_failed_on_resume` 1건
+  기대 불일치 → FL-F01b) · X2(이 묶음) 는 push 뒤 매트릭스 · CI · 승격을 다시 돈다 — 결과는 `tests/evidence/2026-10-10-full-audit.md`.
 
 ## 2026-10-09 — 운영 로그 문구 정리 (수집 Job · 수집 스크립트 · CI)
 

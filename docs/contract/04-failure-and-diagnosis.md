@@ -180,6 +180,9 @@ Portal 은 72시간 대기 빌드의 결과를 최대 약 79시간 뒤(대기 72
 
 이 경우 "장비가 없다"고 결론 내리면 틀린다. 장비는 있고 443도 답한다. Redfish 서비스가
 꺼져 있거나 다른 것이 그 포트를 쓰고 있는 상태다.
+**ESXi 대상이 실제로는 vCenter 인 경우 (2026-10-10)** — vSphere `ServiceContent.about.apiType` 이 `VirtualCenter` 면 ESXi 호스트가 아니다. 자격증명을
+보내지 않고 `protocol` 단계에서 멈춘다 — `failure_code` 는 그대로 `PROTOCOL_CHECK_FAILED`, 사용자 문장도 ESXi 프로토콜 실패 문장이며 `errors[].detail`
+에 `apiType=VirtualCenter` 가 남는다. 새 코드나 문장은 없다. vCenter 에 ESXi 계정 후보를 던지면 잠금 위험이 있고, 수집해도 다른 대상의 값이다.
 
 **자격증명이 거부된 경우** — Dell BMC `10.100.15.27`. 표준 계정 비밀번호가 이 장비까지
 반영되지 않아 401을 받았다.

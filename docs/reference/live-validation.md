@@ -578,3 +578,22 @@ cycle 2026-05-07 M-K1 검증: 30/30 adapter origin 주석 일관성 PASS (verify
 | InfiniBand | **미검증** | Linux sysfs 가 정본 채널. lab IB HCA 부재. NEXT_ACTIONS §2.4 |
 
 > mock/미검증 = pytest 통과 ≠ 사이트 실측 통과 (rule 25 R7-B). 실장비 확보 시 `capture-site-fixture` + rule 13 R4 절차로 실 baseline 교체.
+
+## 2026-10-10 감사 — Redfish 수정의 증거 수준 (fixture · replay · main Job 매트릭스)
+
+실장비 BMC 에 인증 실패를 유발하는 시험은 하지 않았다(계정 잠금 위험 — 계정 쓰기는 HOLD). 아래 항목의 "실장비" 란은 main Job 매트릭스(R10 · E2E-E)
+에서 lab 10대의 결과가 바뀌었는지로만 확인한다 — 결과 차이는 `expected_diffs.json` 에 선언한 것만 허용한다.
+
+| 항목 | 바뀐 것 | 증거 수준 |
+|---|---|---|
+| RD-F03 | `_get`/`_get_noauth`/`_probe_realm_hint` 가 `http.client.HTTPException`(IncompleteRead) 을 transport 오류로 분류 | unit (가짜 응답) |
+| D-09 (RA-F03/F08) | vendor alias 탐색 — 최장 alias · 3자 이하 토큰 경계 (`iBMC` ≠ `ibm`) | unit (적대 문자열) · canonical SoT 시험 |
+| RA-F05/F06 | 복구 인증 예산이 표준 계정 401 을 선소비 · 검증 간격은 장비 선언 패널티 먼저 · 예산 소진 시 counter-reset 뒤 1회 | unit (HPE 10s · Dell 3/60 fixture) — 실장비 401 유발 금지 |
+| RD-F18 | BMC NIC · NetworkProtocol · PSU 컬렉션/멤버 · ResourceBlock/Switch/Endpoint 의 404 아닌 실패를 errors[] 로 | unit fixture (500/timeout 주입) |
+| RD-F15 | 한 포트에 Ethernet + FC/FCoE 기능이 같이 있으면 FC 분류 · FC NDF 마다 hba 1개 | unit (멤버 순서 뒤집은 fixture) — lab CNA 없음 |
+| D-07 (RD-F02/F08/F09) | Power·Thermal 둘 다 404 → not_supported · PSU 요약/용량 합에서 Absent 제외 | unit + 매트릭스(Absent PSU 슬롯이 있는 lab 장비에서 값 변화 선언) |
+| RD-FW1 | firmware 분류에서 raid/perc/megaraid 가 nic/broadcom 보다 먼저 | unit (Broadcom RAID/NIC) |
+| RD-UNK / RD-FW2 | cpu model 자리표시자 'unknown' → null · 버전 N/A 멤버 수 notice | unit |
+| 죽은 코드 | `normalize_{system,network,storage}.yml`(redfish) · `normalize_sections.yml`(esxi) · `_endpoint_with_fallback` 삭제 — 참조 0 | grep · ci_gate · prodgen build |
+
+> 모든 항목은 mock/fixture 통과 ≠ 사이트 실측 통과(rule 25 R7-B). 매트릭스에서 확인한 lab 장비 결과 차이와 그 선언은 `tests/evidence/2026-10-10-full-audit.md` 에 적는다.

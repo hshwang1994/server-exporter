@@ -25,26 +25,26 @@
 | `system.hosting_type` | `systemd-detect-virt` → `ansible_virtualization_type/role` | `gather_system.yml` | python/raw 동일 판정식, OEM 제조사 목록 없음 (2026-09-03). enum: virtual/baremetal/unknown |
 | `system.hostname` | `ansible_nodename` → raw `uname -n` (첫 라벨) | `gather_system.yml` | 2026-09-03 신설. IP 대체 금지 |
 | `system.fqdn` | hostname + (`uname -n` 도메인부 → `ansible_domain` → raw `hostname -d`) | `gather_system.yml` | 도메인 없으면 null. resolver(`ansible_fqdn`) 미사용 (2026-09-03) |
-| `hardware.vendor / model / serial / uuid / bios_version / bios_date` | setup fact → `/sys/class/dmi/id/*` (become) | `gather_system.yml` | 2026-09-03 신설 — OS 채널 hardware 섹션. bios_date MM/DD/YYYY → YYYY-MM-DD, uuid 소문자 |
-| `system.serial_number` | setup fact → DMI direct-read fallback (`become: true`) → nPartition 접미사 정규화 | `gather_system.yml` | setup fact가 NA일 경우 `/sys/class/dmi/id/product_serial` 직접 읽기. become 필수. 마지막에 파티션 접미사 정규화 (아래 별도 절) |
-| `system.system_uuid` | setup fact → DMI direct-read fallback (`become: true`) | `gather_system.yml` | setup fact가 NA일 경우 `/sys/class/dmi/id/product_uuid` 직접 읽기. cross-channel 연결 키 |
+| `hardware.vendor / model / serial / uuid / bios_version / bios_date` | setup fact → `/sys/class/dmi/id/*` (vendor · model · bios 는 비특권 raw, serial · uuid 는 특권 raw) | `gather_system.yml` | 2026-09-03 신설 — OS 채널 hardware 섹션. bios_date MM/DD/YYYY → YYYY-MM-DD, uuid 소문자. 2026-10-10: 비특권/특권 분리 — sudo 실패 시 serial · uuid 만 null + errors[]; 자리표시자는 `dmi_sentinel_null`(identity_normalizer, 3채널 공용) |
+| `system.serial_number` | setup fact → DMI direct-read fallback (`become: true`) → 특권 raw `/sys/class/dmi/id/product_serial` → nPartition 접미사 정규화 | `gather_system.yml` | 자리표시자(`To Be Filled By O.E.M.` 등, `DMI_SENTINELS['serial']`)는 null. 특권 수집이 실패하면 raw 경로에서도 권한 문장이 errors[] 에 남는다 (2026-10-10) |
+| `system.system_uuid` | setup fact → DMI direct-read fallback (`become: true`) → 특권 raw `/sys/class/dmi/id/product_uuid` | `gather_system.yml` | 자리표시자 · SMBIOS 공장 기본 UUID(`03000200-0400-0500-0006-000700080009`)는 null (2026-10-10). cross-channel 연결 키 |
 | `cpu.sockets` | `/proc/cpuinfo physical id` 종류 수 → `lscpu Socket(s)` | `gather_cpu.yml` | raw 단일 구현 (2026-09-03). 모르면 null (1 placeholder 금지) |
 | `cpu.cores_physical` | `cpu cores` × sockets | `gather_cpu.yml` | 둘 중 하나라도 모르면 null |
 | `cpu.logical_threads` | `/proc/cpuinfo processor` 수 | `gather_cpu.yml` | |
 | `cpu.model` | `/proc/cpuinfo model name` | `gather_cpu.yml` | |
 | `cpu.max_speed_mhz` | cpufreq `base_frequency` → 브랜드 `@ N.NNGHz` | `gather_cpu.yml` | 정격 클럭 (2026-09-03 3채널 통일). 터보는 `cpu.turbo_max_mhz` (`lscpu CPU max MHz` / `cpuinfo_max_freq`) |
-| `cpu.summary.groups[].l2_cache_kb / l3_cache_kb` | `lscpu` L2/L3 (`(N instances)` 합계는 소켓 수로 나눔) → `/proc/cpuinfo cache size` | `gather_cpu.yml` | 소켓당 KB (2026-09-03) |
+| `cpu.summary.groups[].l2_cache_kb / l3_cache_kb` | `lscpu` L2/L3 (util-linux 버전으로 합계/인스턴스당 판정 — 합계는 소켓 수로 나누고, 인스턴스당은 sysfs `shared_cpu_list` 인스턴스 수로 소켓당 합계) → `/proc/cpuinfo cache size` | `gather_cpu.yml` | 소켓당 KB (2026-09-03). 2026-10-10 C7 · LX-F06 |
 | `cpu.architecture` | `ansible_architecture` | `gather_cpu.yml` | system.architecture와 동일 값 |
 | `memory.total_mb` | `dmidecode -t memory` 설치 합 → `/proc/meminfo MemTotal` | `gather_memory.yml` | 둘 다 없으면 null. dmidecode 종료 코드 · stderr 첫 줄은 `DMIDECODE_RC` / `DMIDECODE_ERR` 마커로 남아 errors[].detail 에 실린다 (2026-10-03). 비루트 rc≠0 이면 sudo 1회 재시도 |
 | `memory.slots[].speed_mhz` | `dmidecode` `Configured Memory Speed`(3.2 미만 `Configured Clock Speed`) → 정격 `Speed` | `gather_memory.yml` | 현재 동작 속도 (2026-10-03, field_dictionary 정합). 단위 변환 없음 |
 | `memory.total_basis` | 실제 소스 판정 (`physical_installed` / `os_visible` / null) | `gather_memory.yml` | 2026-09-03 정정 (종전 문서: hardcoded) |
 | `memory.slots[].serial / locator` | `dmidecode` Serial Number / Locator | `gather_memory.yml` | 2026-09-03 추가 |
-| `storage.physical_disks[]` | `lsblk -J` (`+SERIAL,WWN`) → 실패 시 레거시 `lsblk -b -d -n -o NAME,SIZE,TYPE,ROTA,MODEL` 1회 | `gather_storage.yml` | `serial`/`wwn` 추가(2026-06-22). 빈값 시 `udevadm info`(ID_SERIAL_SHORT/ID_WWN) 보강. virtio=null. `is_os_disk` 추가(2026-07-02): `findmnt /`→`lsblk -s` 로 OS 루트 물리 디스크 판정(SAN/NFS 루트=null). 2026-10-03: `LSBLK_RC`/`LSBLK_ERR`/`LSBLK_TXT`/`SYS_BLOCK_COUNT` 마커, 실패 상태(unknown/unsupported/permission/malformed)는 errors[] 1건 |
+| `storage.physical_disks[]` | `lsblk -J` (`+SERIAL,WWN`) → 실패 시 레거시 `lsblk -b -d -n -o NAME,SIZE,TYPE,ROTA,MODEL` 1회 | `gather_storage.yml` | `serial`/`wwn` 추가(2026-06-22). 빈값 시 `udevadm info`(ID_SERIAL_SHORT/ID_WWN) 보강. 2026-10-10: multipath 경로 디스크(`/sys/block/dm-*` mpath 구성원 또는 같은 WWN·크기)는 1개로 접는다 — `device` 는 `/dev/mapper/<이름>` |
 | `storage.filesystems[]` | `df -P -T -k` (`/dev/*` + 네트워크 FS) | `gather_storage.yml` | 정수 MB, used = df Used (2026-09-03 raw 단일 구현). `timeout 20` 아래서 실행 (`timeout 20 true` 가 되는 환경, 2026-10-03) |
 | `network.interfaces[]` | `/sys/class/net` + `ip -o addr` (IPv4/IPv6, scope) | `gather_network.yml` | raw 단일 구현 (2026-09-03) — IP 없는 물리 포트 포함, link_status=operstate, MAC 소문자 colon |
 | `network.interfaces[].addresses[]` (alias/secondary) | `ip -j addr show` → `ip -o addr show` → `ifconfig -a` (다중 소스 폴백) | `gather_network.yml` + `merge_linux_addresses` | `label`/`parent_interface`/`is_alias`/`scope`/`is_secondary` Additive. bond alias(bond1:1)는 parent addresses[] 에 병합 |
 | `network.bonds[].addresses[]` | bond master 인터페이스 addresses 미러 (`build_linux_network`) | `gather_network.yml` | interfaces ↔ bonds 일관 |
-| `network.default_gateways[]` | `ip route show default` | `gather_network.yml` | |
+| `network.default_gateways[]` | `ip route show default` + `ip -6 route show default` (via/dev 토큰 — ECMP nexthop · nhid · via 없는 경로) | `gather_network.yml` | 기본 경로 전부(IPv4 + IPv6, 중복 제거). 없으면 `[]` (2026-10-10 — 종전 `"None"` 문자열 결함) |
 | `users[]` | `getent passwd` + `last`/`lastlog` | `gather_users.yml` | |
 
 ---
@@ -60,12 +60,12 @@
 | `system.architecture` | `ansible_architecture2` → `OSArchitecture` | `gather_system.yml` | x86_64 / aarch64 / x86 (2026-09-03 — ARM64 오분류 정정) |
 | `system.uptime_seconds` | `ansible_uptime_seconds` → `LastBootUpTime` 차 | `gather_system.yml` | 모르면 null |
 | `system.selinux` | N/A | `gather_system.yml` | Windows에는 SELinux 없음 → null |
-| `system.hosting_type` | `Win32_ComputerSystem` Model/Manufacturer VM 신호 + `HypervisorPresent` + Hyper-V `vmms` 역할 | `gather_system.yml` | OEM 제조사 목록 없음 (2026-09-03). enum: virtual/baremetal/unknown |
+| `system.hosting_type` | `Win32_ComputerSystem` Model/Manufacturer VM 신호 + `HypervisorPresent` + Hyper-V `vmms` 역할 + `Win32_DeviceGuard.VirtualizationBasedSecurityStatus` | `gather_system.yml` | OEM 제조사 목록 없음 (2026-09-03). enum: virtual/baremetal/unknown. 2026-10-10: HypervisorPresent=True · 역할 없음이라도 VBS Running(2) 이면 baremetal |
 | `system.hostname` | `Win32_ComputerSystem.DNSHostName` → `COMPUTERNAME` | `gather_system.yml` | 2026-09-03 신설 |
 | `system.fqdn` | hostname + (AD `Domain` / Tcpip `Domain`·`NV Domain` 접미사) | `gather_system.yml` | 도메인 없으면 null (2026-09-03) |
 | `hardware.*` | `Win32_ComputerSystem` / `Win32_BIOS` / `Win32_SystemEnclosure` | `gather_hardware.yml` | OS 채널 정식 섹션 (2026-09-03). sku=SystemSKUNumber, uuid 소문자 |
-| `system.serial_number` | `ansible_product_serial` (WMI/setup) | `gather_system.yml` | NA/빈값→null 정규화 + nPartition 접미사 정규화 (아래 별도 절) |
-| `system.system_uuid` | `ansible_product_uuid` (WMI/setup) | `gather_system.yml` | NA/빈값→null 정규화. cross-channel 연결 키 |
+| `system.serial_number` | `ansible_product_serial` (WMI/setup) | `gather_system.yml` | 자리표시자 → null 은 3채널 공용 `dmi_sentinel_null` (2026-10-10) + nPartition 접미사 정규화 (아래 별도 절) |
+| `system.system_uuid` | `ansible_product_uuid` (WMI/setup) | `gather_system.yml` | 자리표시자 · SMBIOS 공장 기본 UUID → null (2026-10-10, 3채널 공용). cross-channel 연결 키 |
 | `cpu.sockets` | `Win32_Processor` (WMI) | `gather_cpu.yml` | WMI |
 | `cpu.cores_physical` | `Win32_Processor.NumberOfCores` | `gather_cpu.yml` | WMI |
 | `cpu.logical_threads` | `Win32_Processor.NumberOfLogicalProcessors` | `gather_cpu.yml` | WMI |
@@ -74,11 +74,11 @@
 | `cpu.architecture` | `ansible_architecture` (정규화 적용) | `gather_cpu.yml` | `'64' in _arch` 조건으로 "64비트"→"x86_64" 매핑 |
 | `memory.total_mb` | `Win32_PhysicalMemory` Capacity 합 → `ansible_memtotal_mb` | `gather_memory.yml` | 둘 다 없으면 null. `slots[].manufacturer` JEDEC 코드 → 제조사 (2026-09-03) |
 | `memory.total_basis` | 실제 소스 판정 (`physical_installed` / `os_visible` / null) | `gather_memory.yml` | 2026-09-03 정정 |
-| `storage.physical_disks[]` | `Win32_DiskDrive` + `Get-PhysicalDisk` | `gather_storage.yml` | WMI. `serial`/`wwn` 추가(2026-06-22): serial=Get-PhysicalDisk→Win32 fallback(hex/공백 정규화), wwn=UniqueId(UniqueIdFormat EUI64/FCPHName/SCSIName 일 때만, 로컬 SATA=null). `is_os_disk` 추가(2026-07-02): `%SystemDrive%`→`Get-Partition.DiskNumber`(WMI fallback), `Win32_DiskDrive.Index` 매칭 |
+| `storage.physical_disks[]` | `Win32_DiskDrive` + `Get-PhysicalDisk` | `gather_storage.yml` | WMI. `serial`/`wwn` 추가(2026-06-22): serial=Get-PhysicalDisk→Win32 fallback(hex/공백 정규화), wwn=UniqueId(UniqueIdFormat EUI64/FCPHName/SCSIName 일 때만). `total_mb` 는 `MSFT_PhysicalDisk.Size` 우선, 없을 때만 `Win32_DiskDrive.Size`(기하값 — 작다) (2026-10-10) |
 | `storage.filesystems[]` | `Get-Volume` (드라이브 문자 있는 볼륨) | `gather_storage.yml` | 정수 MB (2026-09-03 — 종전 float). physical_disks health OK/Warning/Critical |
 | `network.interfaces[]` | `Get-NetIPAddress` (IPv4+IPv6) + `Get-NetAdapter` | `gather_network.yml` | id=어댑터 이름, description=InterfaceDescription, MAC 소문자 colon (2026-09-03) |
 | `network.adapters[]` | `Get-NetAdapter -Physical` + `Get-NetAdapterHardwareInfo` + PnP 제조사 | `gather_network.yml` | 2026-09-03 신설 (Linux 와 같은 키) |
-| `network.default_gateways[]` | `Get-NetRoute 0.0.0.0/0` + `::/0` | `gather_network.yml` | |
+| `network.default_gateways[]` | `Get-NetRoute 0.0.0.0/0` + `::/0` | `gather_network.yml` | 주소의 게이트웨이 귀속은 가족별(IPv6 는 `::/0` 경로의 인터페이스) — 2026-10-10. `dns_servers` 에서 `fec0:0:0:ffff::1~3` 자리표시자 제외 |
 | `users[]` | `Win32_UserAccount` + `Win32_NetworkLoginProfile` | `gather_users.yml` | WMI |
 
 ---
@@ -98,7 +98,7 @@
 | `system.fqdn` | hostname + (dnsConfig.domainName → dns_info.domain_name) | `normalize_system.yml` | 도메인 없으면 null (종전: short name 을 그대로 냈다) |
 | `hardware.vendor` | `vmware_host_facts` → `ansible_system_vendor` | `normalize_system.yml` | vSphere API |
 | `hardware.model` | `vmware_host_facts` → `ansible_product_name` | `normalize_system.yml` | vSphere API |
-| `hardware.serial` | `vmware_host_facts` → `ansible_product_serial` | `normalize_system.yml` | vSphere API |
+| `hardware.serial` | `vmware_host_facts` → `ansible_product_serial` | `normalize_system.yml` | vSphere API. 자리표시자(`NA` 등)는 null — 3채널 공용 `dmi_sentinel_null` (2026-10-10) |
 | `hardware.uuid` | `vmware_host_facts` → `ansible_uuid` (소문자 정규화) | `normalize_system.yml` | 2026-09-03 정정 (종전 문서: ansible_product_uuid) |
 | `hardware.bios_version` | `vmware_host_facts` → `ansible_bios_version` | `normalize_system.yml` | vSphere API |
 | `hardware.bios_date` | `vmware_host_facts` → `ansible_bios_date` | `normalize_system.yml` | vSphere API |
