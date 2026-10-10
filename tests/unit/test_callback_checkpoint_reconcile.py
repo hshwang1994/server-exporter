@@ -195,16 +195,22 @@ def test_chain_callback_then_layer_a_keeps_checkpoint_values(capsys, monkeypatch
 
 
 def test_chain_unparsable_output_line_falls_back_to_checkpoint(capsys, monkeypatch, tmp_path):
-    """OUTPUT msg 가 JSON 이 아니면(직렬화 실패) 콜백은 문자열 줄을 낸다 — Layer A 가 그 줄을 버리고 CHECKPOINT 를 쓴다."""
+    """OUTPUT msg 가 JSON 이 아니면(직렬화 실패) 콜백은 문자열 줄을 낸다 — 2026-10-10 (FL-F02): 그 줄은 13 필드 envelope 이 아니라
+    emitted 로 세지 않고(emit_failed: shape), 플레이북 끝에 콜백이 CHECKPOINT 조립본으로 바로 보충한다. Layer A 는 문자열 줄을
+    손상으로 버리고(damage) 보충된 OUTPUT 줄을 쓴다 — 종전에는 콜백이 emitted 로 세어 Layer A 가 CHECKPOINT 로 떨어졌다."""
     _files(monkeypatch, tmp_path)
     d = Driver(capsys)
     _until_checkpoint(d, "10.0.0.1", _full("10.0.0.1"))
     d.cb.v2_runner_on_ok(_Result(d.hosts["10.0.0.1"], "OUTPUT", action="ansible.builtin.debug",
                                  result={"msg": "{not json"}))
     d.finish()
+    events = [json.loads(line) for line in (tmp_path / "gather_progress.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert next(e for e in events if e["event"] == "emit_failed")["detail"] == "shape"
+    assert "emitted" not in {e["event"] for e in events if e["event"] != "reconciled"} or         [e["event"] for e in events].index("reconciled") < [e["event"] for e in events].index("emitted") if "emitted" in {e["event"] for e in events} else True
+    assert {"event": "reconciled", "source": "checkpoint"}.items() <= next(e for e in events if e["event"] == "reconciled").items()
     code, report, final = _layer_a(tmp_path, ["10.0.0.1"])
-    assert code == 2, "손상 줄을 버렸으므로 damage"
-    assert report["by_origin"]["checkpoint"] == 1
+    assert code == 2, "손상 줄(문자열)을 버렸으므로 damage"
+    assert report["by_origin"] == {"output": 1, "checkpoint": 0, "synthetic": 0}, "콜백이 보충한 OUTPUT 줄을 쓴다"
     assert final[0]["data"]["memory"]["installed_mb"] == 4096
     assert final[0]["errors"][-1]["message"] == fz.EMIT_FAILED
 

@@ -204,6 +204,67 @@ _CHECKPOINT_EMIT_FAILED = '수집은 끝났지만 결과를 내보내는 단계�
 # (tests/unit/test_callback_envelope_reconcile.py::TestCanonicalReasonsDoNotDrift).
 
 
+# ── 직렬화 전 정화 (2026-10-10 FL-F05 · FL-F02) ─────────────────────────────
+# Runner 의 ansible-core 2.20.3 은 raw/shell 출력의 비 UTF-8 바이트를 lone surrogate(U+DC80~U+DCFF)로 넘긴다. json.dumps(ensure_ascii=False)
+# 는 그것을 그대로 두고, UTF-8 파일 쓰기가 UnicodeEncodeError(ValueError)로 터져 콜백 dispatch 전체가 실패했다 — 그 host 의 OUTPUT 이 사라지고
+# on_stats 가 OUTPUT_BUILD_FAILED 합성 envelope 을 썼다(2026-10-10 Runner01~04 실측, se-audit-parity #1~#4). NaN/Infinity 도 RFC 8259 밖이라
+# Layer A(parse_constant 거부) · Groovy 가 받지 못한다. 그래서 내보내기 전에 값을 고치고, 고친 사실은 diagnosis.details.notices 에 남긴다.
+_LONE_SURROGATE_RE = re.compile('[\ud800-\udfff]')
+_ENVELOPE_KEYS = frozenset(('schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
+                            'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'))
+
+
+def _sanitize(value, stats, path=''):
+    """lone surrogate → U+FFFD, 비유한 float → None. stats: {'surrogates': int, 'non_finite': [path, ...]}. 새 객체를 돌려준다."""
+    if isinstance(value, str):
+        if _LONE_SURROGATE_RE.search(value):
+            stats['surrogates'] = stats.get('surrogates', 0) + len(_LONE_SURROGATE_RE.findall(value))
+            return _LONE_SURROGATE_RE.sub('\ufffd', value)
+        return value
+    if isinstance(value, float):
+        if value != value or value in (float('inf'), float('-inf')):
+            stats.setdefault('non_finite', []).append(path or '$')
+            return None
+        return value
+    if isinstance(value, dict):
+        return {(_sanitize(k, stats, path) if isinstance(k, str) else k): _sanitize(v, stats, f'{path}.{k}' if path else str(k))
+                for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize(v, stats, f'{path}[{i}]') for i, v in enumerate(value)]
+    return value
+
+
+def _note_sanitized(data, stats):
+    """정화한 사실을 envelope 의 diagnosis.details.notices 에 남긴다 (13 필드 밖 새 키 없음 — details 는 확장 영역)."""
+    if not stats or not isinstance(data, dict):
+        return
+    diag = data.get('diagnosis')
+    if not isinstance(diag, dict):
+        return
+    details = diag.get('details')
+    if not isinstance(details, dict):
+        details = {}
+        diag['details'] = details
+    notices = details.get('notices')
+    if not isinstance(notices, list):
+        notices = []
+        details['notices'] = notices
+    if stats.get('surrogates'):
+        notices.append('json_only: non-UTF-8 text replaced with U+FFFD ({} chars)'.format(stats['surrogates']))
+    if stats.get('non_finite'):
+        notices.append('json_only: non-finite number replaced with null ({})'.format(', '.join(stats['non_finite'][:8])))
+
+
+def _envelope_shape_ok(data):
+    """OUTPUT 으로 낸 값이 13 필드 envelope 인가 (Layer A shape_gate 의 첫 관문과 같다 — 아니면 emitted 로 세지 않는다)."""
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            return False
+    return isinstance(data, dict) and set(data.keys()) == _ENVELOPE_KEYS
+
+
 def _is_truthy(value):
     return str(value or '').strip().lower() in ('1', 'true', 'yes')
 
@@ -253,10 +314,14 @@ class CallbackModule(CallbackBase):
     # ── 내부 유틸 ────────────────────────────────────────────────────────────
 
     def _emit(self, data, file=None):
-        """dict/list/str → compact JSON → stdout (또는 file).
+        """dict/list/str → compact JSON → stdout (또는 file). 성공하면 True.
 
         문자열 입력은 JSON 파싱 시도 후 실패하면 문자열 그대로 출력 (호출자 호환성).
         파싱 실패 시 JSON_ONLY_DEBUG=1 환경변수로 stderr 경고 활성화 (디버그 가시성).
+
+        2026-10-10 (FL-F05 · FL-F02): 내보내기 전에 값을 고친다 — lone surrogate 는 U+FFFD, NaN/Infinity 는 null (고친 사실은
+        diagnosis.details.notices). 파일 쓰기는 OSError 뿐 아니라 UnicodeEncodeError(ValueError)도 잡는다. 반환값은 "stdout 에 냈고,
+        결과 파일이 설정돼 있으면 그 파일에도 fsync 까지 썼다" 일 때만 True — 호출자는 True 일 때만 emitted 로 센다.
         """
         target = file or sys.stdout
         if isinstance(data, str):
@@ -268,13 +333,28 @@ class CallbackModule(CallbackBase):
                         '[json_only] _emit: JSON 파싱 실패, 문자열 그대로 출력 '
                         '(reason={}, head={!r})\n'.format(type(e).__name__, data[:120])
                     )
+        stats = {}
         try:
-            line = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-        except TypeError:
+            data = _sanitize(data, stats)
+        except Exception as e:                              # noqa: BLE001 - 정화 자체가 죽어도 원본으로 계속 간다
+            sys.stderr.write('[json_only] WARNING: 정화 실패, 원본 그대로 내보냄 ({})\n'.format(type(e).__name__))
+            stats = {}
+        if stats:
+            _note_sanitized(data, stats)
+            sys.stderr.write('[json_only] NOTICE: OUTPUT 값을 고쳤다 — surrogates={} non_finite={}\n'.format(
+                stats.get('surrogates', 0), len(stats.get('non_finite', []))))
+        try:
+            line = json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+        except (TypeError, ValueError):
             # 비-JSON-직렬화 객체(datetime / Ansible 객체 등)가 섞이면 callback 전체가 죽어
             # OUTPUT 이 통째로 소실된다 → str fallback 으로 graceful (Round 2 #0/#9).
             line = json.dumps(str(data), ensure_ascii=False, separators=(',', ':'))
-        print(line, file=target, flush=True)
+        ok = True
+        try:
+            print(line, file=target, flush=True)
+        except (OSError, ValueError) as e:
+            ok = False
+            sys.stderr.write('[json_only] WARNING: OUTPUT stdout 출력 실패: {}\n'.format(type(e).__name__))
         # OUTPUT 결과를 파일로도 기록 (stdout target 일 때만, stderr 결과는 제외)
         if self._output_file and target is sys.stdout:
             try:
@@ -282,14 +362,16 @@ class CallbackModule(CallbackBase):
                     fh.write(line + '\n')
                     fh.flush()
                     os.fsync(fh.fileno())     # 강제 종료 직전의 줄도 디스크에 남긴다 (D4)
-            except (OSError, IOError) as e:
+            except (OSError, IOError, ValueError) as e:
                 # 파일 쓰기 실패: stdout 은 정상이라 callback 흐름은 유지하되, 파일 소비자(다운스트림)
                 # 가 빈 결과를 받는 silent data-loss 를 stderr 로 가시화 (Round 15 observability).
-                # stderr 는 stdout JSON 과 분리되어 호출자 파싱에 영향 없음.
+                # 호출자는 이 실패를 emitted 로 세지 않는다 (FL-F02) — 결과 확인 단계가 CHECKPOINT 조립본으로 보충한다.
+                ok = False
                 sys.stderr.write(
                     '[json_only] WARNING: OUTPUT 파일 쓰기 실패 ({}): {}\n'.format(
                         self._output_file, type(e).__name__)
                 )
+        return ok
 
     def _emit_error(self, error_type, message, host=None, task=None):
         """진단을 stderr 에 **평문 한 줄**로 남긴다.
@@ -319,15 +401,22 @@ class CallbackModule(CallbackBase):
 
     @staticmethod
     def _json_line(data):
-        """_emit 과 같은 변환 — 문자열은 JSON 으로 파싱 시도, 실패하면 문자열 그대로."""
+        """_emit 과 같은 변환 — 문자열은 JSON 으로 파싱 시도, 실패하면 문자열 그대로. 값 정화도 같다(FL-F05)."""
         if isinstance(data, str):
             try:
                 data = json.loads(data)
             except (json.JSONDecodeError, ValueError):
                 pass
+        stats = {}
         try:
-            return json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-        except TypeError:
+            data = _sanitize(data, stats)
+            if stats:
+                _note_sanitized(data, stats)
+        except Exception:                                   # noqa: BLE001
+            pass
+        try:
+            return json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+        except (TypeError, ValueError):
             return json.dumps(str(data), ensure_ascii=False, separators=(',', ':'))
 
     def _progress(self, host_name, event, task=None, detail=None, **extra):
@@ -341,6 +430,7 @@ class CallbackModule(CallbackBase):
             for k, v in extra.items():
                 if v is not None:
                     row[k] = v
+            row = _sanitize(row, {})       # 진행 기록도 UTF-8 파일이다 — surrogate 가 섞인 detail 로 줄을 잃지 않는다 (FL-F05)
             with open(self._progress_file, 'a', encoding='utf-8') as fh:
                 fh.write(json.dumps(row, ensure_ascii=False, separators=(',', ':'), default=str) + '\n')
         except Exception as e:                              # noqa: BLE001
@@ -584,13 +674,21 @@ class CallbackModule(CallbackBase):
             return
         res = result._result
         if 'msg' in res:
-            self._emit(res['msg'])
+            payload = res['msg']
         elif 'ansible_facts' in res:
             # set_fact 결과가 OUTPUT 태스크에 연결된 경우
-            self._emit(res['ansible_facts'])
+            payload = res['ansible_facts']
         else:
             return
-        self._mark_emitted(result)
+        # 2026-10-10 (FL-F02): emitted 는 "결과 줄이 실제로 기록됐고 13 필드 envelope 이다" 일 때만. 기록 실패 · 형태 불량은
+        #   emit_failed 진행 사건으로 남기고 emitted 를 세지 않는다 — 결과 확인(Layer A · gather_state)이 이 host 를 끝난 것으로
+        #   보지 않고 CHECKPOINT 조립본으로 보충하거나 다시 수집한다. 종전에는 쓰기 실패 뒤에도 emitted 를 남겨 다음 시도가
+        #   '확정 결과가 사라졌다'(resume_impossible) 로 끝났다.
+        written = self._emit(payload)
+        if written and _envelope_shape_ok(payload):
+            self._mark_emitted(result)
+        else:
+            self._emit_failed(result, 'write' if not written else 'shape')
 
     def v2_runner_on_failed(self, result, ignore_errors=False):
         self._track(result)
@@ -623,6 +721,17 @@ class CallbackModule(CallbackBase):
         try:
             self._ctx(self._host_name(result))['emitted'] = True
             self._progress(self._host_name(result), 'emitted', task=self._task_name(result))
+        except Exception:                                   # noqa: BLE001
+            pass
+
+    def _emit_failed(self, result, why):
+        """OUTPUT 을 기록하지 못했다(또는 envelope 형태가 아니다) — emitted 로 세지 않고 사건만 남긴다 (FL-F02)."""
+        host = self._host_name(result)
+        self._emit_error('output_not_recorded', why, host=host, task=self._task_name(result))
+        if not self._reconcile:
+            return
+        try:
+            self._progress(host, 'emit_failed', task=self._task_name(result), detail=why)
         except Exception:                                   # noqa: BLE001
             pass
 
@@ -845,7 +954,8 @@ class CallbackModule(CallbackBase):
                     '[json_only] WARNING: envelope 조립 실패 — 최소 envelope 으로 대체 '
                     '(host={}, reason={})\n'.format(host_name, type(e).__name__))
             try:
-                self._emit(envelope)
+                if not self._emit(envelope):
+                    raise OSError('OUTPUT 기록 실패')
                 ctx['emitted'] = True
                 self._progress(host_name, 'reconciled', source=source)
                 # 관측 가시성 — stdout JSON 과 분리된 stderr 로만 남긴다.
