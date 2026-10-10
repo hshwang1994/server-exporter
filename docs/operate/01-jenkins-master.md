@@ -252,7 +252,6 @@ Job 이름이 패턴과 일치하면 권한이 자동 적용되므로 신규 Job
 
 | 다음 작업 | 문서 |
 |---|---|
-| Redis 설치 (마스터에 함께) | [02-agent-node.md](02-agent-node.md) |
 | Agent 노드 구성 | [02-agent-node.md](02-agent-node.md) |
 | Jenkins Job 등록 | [03-job-registration.md](03-job-registration.md) |
 | Vault 운영 (회전 / 검증) | [05-vault.md](05-vault.md) |

@@ -12,12 +12,12 @@
 > - 본 절차 전에 [01-jenkins-master.md](01-jenkins-master.md) (마스터 설치) 를 먼저 끝내야 합니다.
 
 > [!NOTE]
-> **Redis 는 이 프로젝트가 쓰지 않는다.** 아래에 Redis 설치·연결 절차가 있는 이유는
-> Agent 공통 설정(`/etc/ansible/ansible.cfg`)이 fact 캐싱을 쓸 수 있어서다.
-> server-exporter 의 프로젝트 `ansible.cfg` 는 `gathering = explicit` 이고
-> `fact_caching` 설정이 없다. 그래서 이 파이프라인으로 수집해도 Redis 캐시는 비어 있는
-> 게 정상이다. Redis 를 쓰지 않는 환경이라면 관련 단계를 건너뛰어도 수집은 동작한다.
-> - Agent 노드는 마스터와 같은 사내망에 있어야 하며 마스터로 가는 8080/tcp + Redis 6379/tcp 양방향이 필요합니다.
+> **Redis 는 쓰지 않는다.** 프로젝트 `ansible.cfg` 는 `gathering = explicit` 이고 `fact_caching` 이 없다. Ansible 은 설정 파일을
+> 병합하지 않고 가장 먼저 찾은 하나만 읽으며, Jenkins 빌드에서는 그것이 저장소 루트의 `ansible.cfg` 다. 그래서 Agent 공통
+> `/etc/ansible/ansible.cfg` 에 fact 캐시를 적어도 이 파이프라인에는 적용되지 않는다. Redis 서버 · 클라이언트 · 6379 포트 개방은
+> 필요 없다 (2026-10-10 정정 — 이전 판은 Redis 설치 · 연결 시험 · 방화벽 행을 두고 있었다).
+> - Agent 노드는 마스터와 같은 사내망에 있어야 한다. 필요한 연결은 2절 표가 전부다. 마스터가 SSH 로 Agent 에 접속하므로
+>   Agent → 마스터 방향 포트는 열지 않아도 된다.
 
 > **검증 기준 환경 (참고)**: Ubuntu 24.04, Python 3.12, ansible-core 2.20, Java 21 (10.100.64.154 에서 2026-03-27 확인)
 
@@ -33,7 +33,7 @@ Jenkins Agent 는 로케이션 (이천 / 청주 / 용인) 별로 구성하며 �
 | 항목 | 사양 |
 |------|------|
 | CPU | 8 core |
-| RAM | 32 GB (Jenkins 16GB + Redis 1GB + 여유) |
+| RAM | 32 GB (Jenkins 16 GB + 여유) |
 | Disk | 500 GB (빌드 로그, 히스토리 누적 고려) |
 
 ### Jenkins Agent
@@ -44,39 +44,26 @@ Jenkins Agent 는 로케이션 (이천 / 청주 / 용인) 별로 구성하며 �
 | RAM | 16 GB |
 | Disk | 100 GB (Ansible 가상환경 + workspace) |
 
-### Redis (마스터 노드에 함께 설치)
-
-호스트 약 1만 대 기준 (추정):
-
-```text
-호스트당 facts 평균 20~50KB × 10,000대 = 200~500MB
-여유분 포함 → maxmemory 1GB
-eviction policy: allkeys-lru
-fact_caching_timeout: 86400 (24시간)
-```
-
-```ini
-# /etc/redis.conf
-maxmemory 1gb
-maxmemory-policy allkeys-lru
-```
-
 ---
 
 ## 2. 방화벽 오픈 목록
 
-| 출발 | 목적지 | 포트 | 프로토콜 | 용도 |
-|------|--------|------|----------|------|
-| 포털 | Jenkins 마스터 | 8080 | TCP | Jenkins Job 트리거 |
-| Jenkins 마스터 | GitLab | 443 | TCP | Jenkinsfile / repo checkout |
-| Jenkins 마스터 | Agent | 22 | TCP | SSH — Agent 연결 |
-| Agent | Jenkins 마스터 | 6379 | TCP | Redis Fact 캐싱 |
-| Agent | 대상서버 Linux/ESXi | 22 | TCP | SSH |
-| Agent | 대상서버 Windows | 5985/5986 | TCP | WinRM |
-| Agent | 대상서버 Redfish | 443 | TCP | BMC HTTPS API |
-| Agent | 대상서버 전체 | — | ICMP Echo | 도달성 보조 확인 (선택) |
+| 출발 | 목적지 | 포트 | 프로토콜 | 용도 | 근거 |
+|------|--------|------|----------|------|------|
+| 포털 | Jenkins 마스터 | Jenkins URL 의 포트 (기본 8080, HTTPS 구성이면 443) | TCP | Job 트리거 (REST) | [01-jenkins-master.md](01-jenkins-master.md) 5절 |
+| Jenkins 마스터 | Git 서버 (GitHub / GitLab) | 443 | TCP | Pipeline 정의(lightweight) 와 실행 위치 확인의 `readTrusted`(`common/vars/locations.yml`) — 마스터에서 저장소 전체를 받지 않는다 | `Jenkinsfile_portal` Resolve Location |
+| Jenkins 마스터 | Agent | 22 | TCP | Launch agents via SSH (8절). 원격 채널이 이 연결 위에서 동작한다 | 노드 설정 |
+| Jenkins 마스터 | 포털 | `callbackUrl` 의 포트 | TCP | 결과 전송 `httpRequest` POST — Agent 가 아니라 built-in 노드가 보낸다 | `Jenkinsfile_portal` seCallback |
+| Agent | Git 서버 (GitHub / GitLab) | 443 | TCP | 수집 단계 첫 시도의 저장소 checkout | `Jenkinsfile_portal` Gather |
+| Agent | Add-on 저장소 | 저장소 URL 의 포트 (보통 443) | TCP | 전역 환경변수 `ADDON_REPO_URL` 을 켰을 때만, 빌드마다 받는다 | `scripts/addon_checkout.sh` |
+| Agent | 대상 서버 Linux | 22 | TCP | SSH | `precheck_bundle.py` os 후보 `5986 → 5985 → 22` |
+| Agent | 대상 서버 Windows | 5986 / 5985 | TCP | WinRM — HTTPS 먼저, 다음 HTTP | 같은 후보 순서 |
+| Agent | 대상 서버 ESXi | 443 | TCP | vSphere API (`community.vmware`). ESXi 에 SSH 22 는 쓰지 않는다 | `precheck_bundle.py` esxi `[443]` |
+| Agent | 대상 BMC | 443 | TCP | Redfish API | `precheck_bundle.py` redfish `[443]` |
+| Agent | 대상 서버 전체 | — | ICMP Echo | 도달성 보조 확인 (선택) | `precheck_bundle.py` `_icmp_command` |
 
-> Redis(6379) 는 내부망만 오픈. 외부 차단 필수.
+> 2026-10-10 정정: 이전 판은 ESXi 를 22 로, Agent → 마스터 6379(Redis) 를 필수로 적고 마스터 → 포털(결과 전송) · Agent → Git 저장소 ·
+> Add-on 저장소 행이 없었다. 위 표는 사전 진단의 기본 포트(`CHANNEL_DEFAULT_PORTS`)와 `Jenkinsfile_portal` 의 실제 호출 위치에서 옮겼다.
 >
 > ICMP 는 **선택**이다. 열려 있으면 관리 포트 TCP 가 방화벽에서 조용히 버려지는 구간에서
 > "장비는 살아 있고 관리 포트만 막혔다" 를 구분해 준다 (실패가 `reachable` 이 아니라 `port`
@@ -89,15 +76,12 @@ maxmemory-policy allkeys-lru
 
 ```bash
 # RHEL 계열
-yum install -y java-21-openjdk python3 git jq redis iputils
+yum install -y java-21-openjdk python3 git jq iputils
 
 # Debian 계열
-apt update && apt install -y openjdk-21-jdk python3 python3-venv git jq redis-tools iputils-ping
+apt update && apt install -y openjdk-21-jdk python3 python3-venv git jq iputils-ping
 ```
 
-> `redis` (RHEL) / `redis-tools` (Debian) 는 `redis-cli` 를 포함한다.
-> Agent 에서 마스터 Redis 연결을 확인할 때 쓴다.
->
 > `iputils` / `iputils-ping` 은 도달성 보조 확인용 `ping` 이다. 사전 진단이 관리 포트 TCP 로
 > 아무 응답도 못 받았을 때만 Echo 를 1회 보낸다. 서비스 계정(비특권)으로 아래가 되면 준비 완료다.
 >
@@ -141,13 +125,12 @@ VENV=/opt/ansible-env   # 직접 구축 기준. 설치 자동화 Runner 는 /app
 sudo python3 -m venv $VENV
 sudo $VENV/bin/pip install --upgrade pip
 sudo $VENV/bin/pip install 'ansible>=2.12'  # 검증 기준: ansible 13.4.0 (ansible-core 2.20.3)
-sudo $VENV/bin/pip install redis            # 검증 기준: 7.3.0 — Ansible fact_caching Redis 백엔드
 sudo $VENV/bin/pip install pywinrm          # 검증 기준: 0.5.0 — Windows WinRM 연결
 sudo $VENV/bin/pip install 'pyvmomi>=7.0'   # 검증 기준: 9.0.0 — VMware ESXi API (community.vmware 의존)
 sudo $VENV/bin/pip install jmespath         # 검증 기준: 1.1.0 — json_query 필터 (JSON 데이터 파싱)
 sudo $VENV/bin/pip install netaddr          # 검증 기준: 1.3.0 — ipaddr 필터 (IP/서브넷 연산)
 sudo $VENV/bin/pip install lxml             # 검증 기준: 6.0.2 — VMware 모듈 XML 파싱
-sudo $VENV/bin/pip install pytest           # 검증 기준: 9.0.2 — E2E regression 게이트 (Jenkins Stage 4)
+sudo $VENV/bin/pip install pytest           # 검증 기준: 9.0.2 — main 전용 CI Job(`Jenkinsfile_ci`)의 `scripts/ai/ci_gate.sh` 가 Runner 에서 돈다. 수집 Job 은 쓰지 않는다
 
 # 확인
 $VENV/bin/ansible --version
@@ -226,9 +209,6 @@ interpreter_python      = auto
 forks                   = 20
 timeout                 = 60
 deprecation_warnings    = False
-fact_caching            = redis
-fact_caching_connection = {Jenkins_마스터_IP}:6379:0:{Redis비밀번호}
-fact_caching_timeout    = 86400
 
 [inventory]
 enable_plugins = script, auto
@@ -240,8 +220,6 @@ pipelining = True
 transport = ntlm
 EOF
 ```
-
-> `{Jenkins_마스터_IP}`, `{Redis비밀번호}` 는 실제 값으로 교체한 뒤 실행한다.
 
 > **범용 설정 원칙**: 이 파일은 Agent에서 실행하는 모든 프로젝트의 공통 기본값이다.
 > Ansible은 ansible.cfg를 병합하지 않고 우선순위 1개만 쓰므로
@@ -357,29 +335,24 @@ git push
 
 ---
 
-## 10. Redis 연결 테스트
+## 10. 연결 확인
 
-[02-agent-node.md](02-agent-node.md) 의 마스터 Redis 설정을 끝낸 뒤에 실행합니다.
+노드를 등록한 뒤 Agent 서비스 계정으로 아래를 확인한다. 2절 표의 연결이 전부다.
 
 ```bash
-# Agent 에서 마스터 Redis 접속 확인
-redis-cli -h {Jenkins_마스터_IP} -a {Redis비밀번호} ping
-# 기대 응답: PONG
+# 1) 마스터 → Agent: Jenkins → Nodes 에서 노드가 online 인가 (SSH 접속 · Java 실행이 됐다는 뜻)
 
-# Ansible fact caching 동작 확인 (json_only 는 본 프로젝트 전용 콜백이므로 default 로 우회)
-ANSIBLE_STDOUT_CALLBACK=default $VENV/bin/ansible -m setup localhost | head -5
-redis-cli -h {Jenkins_마스터_IP} -a {Redis비밀번호} DBSIZE
-# 기대 응답: (integer) 1 이상  ← Redis 에 facts 가 저장됨
+# 2) Agent → Git 서버: Job 에 등록된 저장소 URL 로 (자격이 필요하면 Job credential 과 같은 것으로)
+git ls-remote <저장소 URL> refs/heads/main
+
+# 3) venv: 파이프라인이 쓰는 선택 스크립트 그대로 (저장소 clone 안에서)
+. scripts/activate_ansible_venv.sh && ansible --version && ansible-galaxy collection list | grep -E 'community.vmware|ansible.windows'
+
+# 4) 대상 서버 포트: 사전 진단이 빌드마다 판정한다 — 결과의 diagnosis.details.checked_ports 를 본다. 미리 확인하려면
+#    (bash 내장) timeout 3 bash -c '</dev/tcp/<대상IP>/443' && echo open
+
+# 5) ICMP 보조 확인 (선택, 3절) — 없어도 수집은 동작한다
 ```
-
-연결이 실패하면 다음을 차례로 확인합니다.
-
-| 점검 항목 | 위치 |
-|----------|------|
-| 마스터 `bind` 설정에 마스터 실제 IP 가 포함됐는지 | 마스터 `/etc/redis.conf` |
-| `requirepass` 설정 및 비밀번호 일치 | 마스터 `/etc/redis.conf` |
-| 6379 방화벽 통과 | 마스터 `firewall-cmd` / `ufw` |
-| Agent 측 `ansible.cfg` 의 fact_caching_connection | Agent 의 server-exporter 저장소 루트 |
 
 ---
 
