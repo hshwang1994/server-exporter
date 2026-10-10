@@ -8,7 +8,8 @@
      단계 안의 짧은 제한(Tier 2 · 정체 감시)은 없다.
   3. 보존: 마지막 시도가 결과 정리 → 오래된 작업 폴더 정리 → 보관(지금 있는 파일을 이름으로, 빈 보관 불가) → 전달 →
      (이 빌드의 접수 목록 + 결과 파일을 보관했을 때만) 작업 폴더 삭제. 실행 기반 장애로 다시 시도하기 전에는 원본만 전달한다.
-  4. 회수: unstash → unarchive → 접수 목록만. 정리 결과(Layer A, exit 0/2) 우선, 없으면 보충 조립(Layer B).
+  4. 회수(C1 2026-10-10): 매체마다 격리 폴더(rec-<진입>/stash · archive). 마지막 보존의 전달이 확인되고 정리 결과가 완결이면 stash, 아니면
+     빌드에 저장된 파일도 받아 두 후보를 같은 검문으로 평가해 고른다. 정리 결과(Layer A, exit 0/2) 우선, 없으면 보충 조립(Layer B).
   5. Portal 전송(8차 R2): 남은 시간 기반, 2xx 성공, 408/429 외 4xx 중단, 시작한 시도만 시각과 함께 기록, 취소된 빌드 1회.
   6. 등록된 Runner 없음: 실행 위치 확인이 outcome=config_error 를 적고 FAILURE — 결과 확인이 접수 목록으로 보충 + 전송한다.
   7. Groovy 복제값(seFallbackCanon)은 정본 YAML · finalize 스크립트 상수와 같다.
@@ -50,6 +51,11 @@ RESOLVE = _stage("실행 위치 확인")
 VALIDATE = _stage("입력 확인")
 FINALIZE = _method("def seFinalizeAndCallback")
 FIN_IN = _method("def seFinalizeIn")
+REC_STASH = _method("Map seRecoverStash")
+REC_ARCH = _method("Map seRecoverArchive")
+EVAL = _method("Map seEvalCandidate")
+CHOOSE = _method("String seChooseMedium")
+FIN_LIB = _method("def seFinLib")
 CALLBACK = _method("def seCallback")
 PRESERVE = _method("def sePreserveGatherOutput")
 PREP = _method("def sePrepareWorkspace")
@@ -168,12 +174,14 @@ def test_retention_policy():
 
 
 def test_finalizer_recovers_inputs_in_order_and_prefers_layer_a():
-    i_unstash = FIN_IN.index("unstash 'gather-output'")
-    i_unarchive = FIN_IN.index("unarchive mapping:")
-    i_layer_b = FIN_IN.index("seReconcileRaw(manifestJson")
-    assert i_unstash < i_unarchive < i_layer_b
+    assert "unstash 'gather-output'" in REC_STASH and "unarchive mapping: [(f): f]" in REC_ARCH
+    i_stash = FIN_IN.index("seRecoverStash(")
+    i_arch = FIN_IN.index("seRecoverArchive(")
+    i_choose = FIN_IN.index("seChooseMedium(stEval, arEval, finalStashed)")
+    assert i_stash < i_arch < i_choose
     assert "JENKINS_HOME" not in TEXT, "archive 는 unarchive step 으로만 회수한다"
-    assert "rep.exit_code in [0, 2]" in FIN_IN, "Layer A 결과(exit 0/2) 우선"
+    assert "rep.exit_code in [0, 2]" in EVAL, "Layer A 결과(exit 0/2) 우선"
+    assert EVAL.index("rep.exit_code in [0, 2]") < EVAL.index("seReconcileRaw(manifestJson"), "정리 결과 → 보충 조립 순서"
     assert "layerA=${layerA}" in FIN_IN and "source=${source}" in FIN_IN
 
 
@@ -437,12 +445,13 @@ def test_finalizer_validates_lines_and_records_damage():
     helper = _method("Map seFilterEnvelopeLines")
     assert "new groovy.json.JsonSlurper()" in helper and "missing" in helper
     assert "seEnvelopeShapeReason(obj, channel, accepted) != null" in helper and "keys13" not in helper
-    assert FIN_IN.count("seFilterEnvelopeLines(") == 3, "Layer A 결과 · Layer B 결과 · raw — 셋 다 같은 검문"
-    assert "layerA = 'report_unreadable'" in FIN_IN and "layerA = 'incomplete'" in FIN_IN
-    i_read = FIN_IN.index("readJSON file: 'gather_finalize_report.json'")
-    seg = FIN_IN[i_read: i_read + 1800]
+    assert EVAL.count("seFilterEnvelopeLines(") == 3, "Layer A 결과 · Layer B 결과 · raw — 셋 다 같은 검문(후보마다)"
+    assert "seFilterEnvelopeLines(" not in FIN_IN, "줄 집합은 후보 평가(seEvalCandidate) 한 곳에서만 만든다"
+    assert "ev.layerA = 'report_unreadable'" in EVAL and "ev.layerA = 'incomplete'" in EVAL
+    i_read = EVAL.index("readJSON file: 'gather_finalize_report.json'")
+    seg = EVAL[i_read: i_read + 1800]
     assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in seg
-    assert "unrecovered = picked.missing" in FIN_IN
+    assert "ev.unrecovered = picked.missing" in EVAL
     for key in ("unrecovered: unrecovered", "damage: damage", "by_origin: (report.by_origin ?: null)",
                 "recovery_limited: (layerB == 'unavailable' && lineCount != accepted)"):
         assert key in FIN_IN, key
@@ -464,8 +473,12 @@ def test_portal_loads_layer_b_library_instead_of_defining_it():
         assert sig not in TEXT, f"Jenkinsfile_portal 에 {sig} 사본이 있다 — 정본은 se_finalize.groovy"
     assert "seTrusted('scripts/jenkins/se_finalize.groovy')" in TEXT and "return load('se_finalize.groovy')" in TEXT
     assert FINALIZE.index("seWithNode('built-in'") < FINALIZE.index("seFinalizeIn(")
-    assert "lib.seReconcileRaw(manifestJson, outText, cpText, seLoadCanon(lib), outcome)" in FIN_IN
-    assert "layerB = 'unavailable'" in FIN_IN and "layerB == 'unavailable'" in FIN_IN
+    assert "lib.seReconcileRaw(manifestJson, outText, cpText, box.canon, outcome)" in EVAL
+    # 후보가 둘이어도 한 진입에서 한 번만 읽는다(라이브러리 파일은 결과 확인 폴더에 쓴다 — 회수 폴더가 아니다)
+    assert "box.lib = seLoadFinalizeLib()" in FIN_LIB and "box.canon = (box.lib != null) ? seLoadCanon(box.lib) : null" in FIN_LIB
+    assert "if (box.tried != true) {" in FIN_LIB
+    assert EVAL.index("dir(cdir) {") < EVAL.index("def lib = seFinLib(box)"), "보충 조립은 회수 폴더 밖에서"
+    assert "ev.layerB = 'unavailable'" in EVAL and "layerB == 'unavailable'" in FIN_IN
     assert "FlowInterruptedException fie" in TEXT[TEXT.index("def seLoadFinalizeLib()"):TEXT.index("def seLoadCanon(")]
 
 
@@ -505,11 +518,48 @@ def test_file_has_lf_line_endings():
 
 
 def test_recovery_source_is_the_medium_and_unarchive_is_per_file():
-    assert "for (String f in recoverFiles)" in FIN_IN and "unarchive mapping: [(f): f]" in FIN_IN
-    assert FIN_IN.count("fileExists('gather_checkpoint.jsonl')) { source = 'stash' }") == 1
-    assert FIN_IN.count("fileExists('gather_checkpoint.jsonl')) { source = 'archive' }") == 1
-    per_file = FIN_IN[FIN_IN.index("for (String f in recoverFiles)"):FIN_IN.index("source = 'archive'")]
-    assert "FlowInterruptedException fie" in per_file and "throw fie" in per_file
+    """C1 (2026-10-10): source = 고른 회수 매체. 매체마다 격리 폴더에 받고(섞지 않는다), archive 는 파일별로 받는다.
+    unstash 가 예외면 그 폴더를 쓰지 않는다. 고르는 근거는 파일 존재가 아니라 평가 결과(결과가 있는 대상 수 · 정리 결과 완결)다."""
+    assert 'String rd = "rec-${fs.entries}"' in FIN_IN
+    assert 'Map stashC = seRecoverStash("${rd}/stash")' in FIN_IN and 'archC = seRecoverArchive("${rd}/archive", recoverFiles)' in FIN_IN
+    assert "dir(sdir) { unstash 'gather-output' }\n        r.ok = true" in REC_STASH, "unstash 가 끝나야 그 폴더를 쓴다"
+    per_file = REC_ARCH[REC_ARCH.index("for (String f in files)"):]
+    assert "unarchive mapping: [(f): f]" in per_file and "FlowInterruptedException fie" in per_file and "throw fie" in per_file
+    assert "r.missing << " in per_file
+    # 평가: 결과 파일이 있는 후보만 고른다. 결과가 있는 대상(real) → 정리 결과 완결 → 마지막 보존 전달 표식(있으면 stash, 없으면 archive)
+    assert "ev.has = hasFinal || hasOut || hasCp" in EVAL and "if (!ev.has) { return ev }" in EVAL
+    assert "ev.real = Math.max(0, ((bo.output ?: 0) as int) + ((bo.checkpoint ?: 0) as int) - gateDropped)" in EVAL
+    assert "if (rs != ra) { return (rs > ra) ? 'stash' : 'archive' }" in CHOOSE
+    assert "return finalStashed ? 'stash' : 'archive'" in CHOOSE
+    assert CHOOSE.index("if (rs != ra)") < CHOOSE.index("st.complete == true") < CHOOSE.index("return finalStashed")
+    # 빠른 길: 마지막 보존의 전달이 확인되고 그 정리 결과가 완결이면 archive 를 조회하지 않는다
+    assert "boolean fast = finalStashed && stEval != null && stEval.complete == true" in FIN_IN
+    assert FIN_IN.index("boolean fast =") < FIN_IN.index("if (!fast) {") < FIN_IN.index("seRecoverArchive(")
+    assert "boolean finalStashed = (env.SE_FINAL_STASHED == 'true')" in FIN_IN
+    assert "recovery: [final_stashed: finalStashed, fast_path: fast, chosen: source," in FIN_IN
+
+
+def test_final_stash_flag_is_set_only_after_the_final_stash_succeeds():
+    """C1: 마지막 보존의 stash 직전에 표식을 지우고 성공 직후에만 세운다. 중간 보존(snapshot)과 수집 단계 시작은 표식을 지운다."""
+    seg = PRESERVE[PRESERVE.index("env.SE_FINAL_STASHED = ''"):]
+    assert seg.index("env.SE_FINAL_STASHED = ''") < seg.index("stash(name: 'gather-output'") < seg.index("stashed = true") \
+        < seg.index("env.SE_FINAL_STASHED = 'true'") < seg.index("} catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)")
+    snap = _method("def seSnapshotGatherOutput")
+    assert snap.index("env.SE_FINAL_STASHED = ''") < snap.index("stash(name: 'gather-output'")
+    assert "env.SE_FINAL_STASHED = 'true'" not in snap
+    assert "env.SE_FINAL_PRESERVED = ''\n    env.SE_FINAL_STASHED = ''" in STAGE_FN
+
+
+def test_finalizer_archives_result_files_from_the_chosen_input_only_when_present():
+    """C1: 요약 · 본문은 결과 확인 폴더에서, 정리 결과 파일은 고른 입력 폴더에 **있을 때만** 보관한다. 둘을 따로 기록하고 보관 완료는 수행한 보관이 모두
+    성공했을 때다. 결과 파일 링크는 실제로 보관한 것만."""
+    seg = FIN_IN[FIN_IN.index("fs.mark = 'archive'"):FIN_IN.index("// UNSTABLE 은 한 번만")]
+    assert "for (String f in ['callback_body.json', 'finalize_summary.json'])" in seg
+    assert "dir(ev.dir) {" in seg and "for (String f in ['gather_final.jsonl', 'gather_finalize_report.json'])" in seg
+    assert "if (resultFiles) {" in seg, "정리 결과 파일이 없으면 두 번째 보관을 부르지 않는다"
+    assert "boolean finalArchived = bodyArchived && resultArchive != 'failed'" in seg
+    assert "if (resultArchive == 'ok' && resultFiles.contains('gather_final.jsonl')) { files << ['서버별 수집 결과', 'gather_final.jsonl'] }" in seg
+    assert "archive_body_summary: bodyArchived, archive_results: resultArchive" in FIN_IN
 
 
 def test_every_shell_step_has_a_label():
@@ -645,7 +695,8 @@ def test_aborted_gather_still_reports_its_runtime():
     수집을 시작하지 않은 빌드(실행 위치 확인 실패)는 "수집을 시작하지 않았습니다"."""
     user = BODY[BODY.index("env.SE_GATHER_OUTCOME = 'aborted'"):]
     assert "Map run = seReadGatherRun()" in user and "env.SE_GATHER_RUN = run ? groovy.json.JsonOutput.toJson(run) : ''" in user
-    assert "if (run == null && fileExists('gather_run.json')) { run = readJSON(file: 'gather_run.json', returnPojo: true) as Map }" in FIN_IN
+    assert "String runDir = ev.dir ?: (stashC.ok ? stashC.dir : ((archC?.got) ? archC.dir : null))" in FIN_IN
+    assert "if (fileExists('gather_run.json')) { run = readJSON(file: 'gather_run.json', returnPojo: true) as Map }" in FIN_IN
     assert "'gather_run.json']" in FIN_IN, "보관본에서도 실행 기록을 회수한다"
     rg = (REPO / "scripts" / "run_gather.sh").read_text(encoding="utf-8")
     assert "trap 'se_on_signal 143' TERM" in rg and 'gather_state.py" end --ws "$WS" --rc "$1"' in rg

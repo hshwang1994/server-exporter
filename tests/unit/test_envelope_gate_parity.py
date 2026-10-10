@@ -45,8 +45,9 @@ def test_every_groovy_gate_site_uses_the_shared_function():
 
 
 def test_layer_b_result_passes_the_send_gate_too():
-    # 8차 R8: 결과 확인 본체는 빌드별 폴더 안에서 도는 seFinalizeIn 이다(seFinalizeAndCallback 은 한계 · 노드 · 폴더만 잡는다)
-    fin = re.search(r"def seFinalizeIn\(.*?\n}\n", PORTAL, re.S).group(0)
+    # 8차 R8: 결과 확인 본체는 빌드별 폴더 안에서 도는 seFinalizeIn 이다(seFinalizeAndCallback 은 한계 · 노드 · 폴더만 잡는다).
+    #   C1 (2026-10-10): 줄 집합은 회수 후보마다 seEvalCandidate 가 만든다 — 보충 조립 결과도 그 안에서 같은 문을 지난다
+    fin = re.search(r"Map seEvalCandidate\(.*?\n}\n", PORTAL, re.S).group(0)
     assert "Map gated = seFilterEnvelopeLines(res.lines, manifestJson)" in fin
     assert "layer_b_gate_dropped=" in fin
 
