@@ -1281,10 +1281,12 @@ Location 별 실제 Credential **값이 서로 다르므로**(사용자 확정) 
 - 삭제: `Jenkinsfile`, `Jenkinsfile_portal_test` (2026-09-28 에 삭제됐다)
 - 하네스·문서 갱신(§12.4)은 **별도 커밋**으로 분리 (CLAUDE.md §13)
 
-**4단계 — flat vault 제거** (별도 커밋)
-- 3단계가 **실환경에서 확인된 뒤에만** 수행한다.
-- 삭제 대상: `vault/<loc>/os/linux.yml`, `vault/<loc>/os/windows.yml`, `vault/<loc>/esxi.yml`,
-  `vault/<loc>/redfish/*.yml` 9개. (`vault/.lab-credentials.yml` 은 제외 — §5.4)
+**4단계 — flat vault 제거** (별도 커밋) — **완료 2026-08-12 `adc99570`**
+- 3단계가 실환경에서 확인된 뒤 수행했다.
+- 삭제된 flat 12 파일: `vault/linux.yml`, `vault/windows.yml`, `vault/esxi.yml`, `vault/redfish/<vendor>.yml` 9개
+  (`vault/.lab-credentials.yml` 은 제외 — §5.4).
+- 2026-10-10 정정: 이전 판은 여기에 **현재 운영 경로** `vault/<loc>/os/*.yml` · `vault/<loc>/esxi.yml` · `vault/<loc>/redfish/*.yml` 를
+  삭제 대상으로 적고 있었다 (docs/operate/05-vault.md §3.4 도 같은 오류 — 함께 고쳤다).
 
 ### 16.3 선행 작업 — Vendor 정규화 통합 (§8.4)
 
@@ -1320,6 +1322,7 @@ dry-run 과 실제 write 를 구분해 보고한다.
 | 4단계 전 | 3단계 커밋 `git revert` 1회. flat vault 가 워킹트리에 그대로 있으므로 **이전 동작이 즉시 복원**된다 | 즉시 |
 | 4단계 후 | 3·4단계 커밋 `git revert` 2회. flat vault 가 git 이력에서 복원된다 | 즉시 |
 
+4단계는 2026-08-12 (`adc99570`) 에 끝났으므로 지금은 "4단계 후" 행만 해당한다.
 force push / history rewrite 는 하지 않는다 (rule 93 R1).
 
 ### 17.2 Credential 데이터 rollback — **코드 rollback 으로 해결되지 않는다**
@@ -1405,8 +1408,8 @@ force push / history rewrite 는 하지 않는다 (rule 93 R1).
 |---|---|
 | `Jenkinsfile` | 3단계 |
 | `Jenkinsfile_portal_test` (2026-09-28 에 삭제됐다) | 3단계 |
-| `vault/<loc>/os/linux.yml`, `vault/<loc>/os/windows.yml`, `vault/<loc>/esxi.yml` | 4단계 |
-| `vault/<loc>/redfish/*.yml` 9개 | 4단계 |
+| `vault/linux.yml`, `vault/windows.yml`, `vault/esxi.yml` (flat) | 4단계 — 완료 `adc99570` |
+| `vault/redfish/<vendor>.yml` 9개 (flat) | 4단계 — 완료 `adc99570` |
 
 ### 18.4 별도 커밋 (하네스·문서)
 
