@@ -1,5 +1,16 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-10 (진행 중) — 검수 후속 C1~C10 결함 수정 · 원격 main `a64654aa` · production P10 `9ddc174a` 그대로
+
+> 인계: `docs/ai/tickets/2026-10-10-c1-c10-followup/CONTINUATION.md`. 결정: `docs/ai/decisions/ADR-2026-10-10-finalize-recovery-medium.md`.
+
+- **고친 것**: C1 결과 확인이 중간 전달본(stash)을 마지막 보존의 보관본보다 먼저 씀 → 표식(`SE_FINAL_STASHED`) · 격리 폴더 · 같은 검문으로 매체 평가 /
+  C2 개행만 빠진 완전한 결과 줄 보존 / C3 Redfish 계정 다음 페이지 · 불완전 열거 쓰기 0 / C4 Redfish Volumes · Port 하위 실패 기록 / C5 인증 뒤 vendor 로 adapter 재선택 /
+  C6 Windows FC PortSpeed 공식 값맵(미상 코드 `null`) / C7 lscpu 버전별 캐시 합계 / C8 Windows 비종료 오류 · DIMM 일부 조회(설치량 미확정) / C9 ESXi 결과 키 부재 = 실패 기록 /
+  C10 Linux 별도 sudo 비밀번호 우선. 커밋 `16afc210` ~ `5bada078` · `e07da9ad` · `fa4d025c`.
+- **확인한 것**: WSL `ci_gate` PASS(`a64654aa` · `f905f145`) · Windows PowerShell 506 · Groovy CONVERSION · C1 로컬 구동 12/12 · 실제 Jenkins Harness 사전 확인 10/10(#1168~#1177) ·
+  감사 재현 전후(저장소 밖 `evidence-c1-c10-2026-10-10`).
+- **멈춘 곳**: 새 후보(`e27c642d` G14 시험 수정 포함) push 가 자동 권한 판정으로 거부 — main Job · CI · 승격 · production 확인은 아직 하지 않았다.
 ## 일자: 2026-10-09 (후속) — `json_only` 오경보 수정 · Byid 동기화 결정 · **main `04a0d6c9` → production P10 `9ddc174a`**
 
 > 정본: `tests/evidence/2026-10-09-log-wording.md` 11절 · `docs/ai/decisions/ADR-2026-10-09-portal-byid-copy.md`.

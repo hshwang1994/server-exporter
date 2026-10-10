@@ -1,5 +1,15 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## 검수 후속 C1~C10 — 남은 단계 (2026-10-10, 진행 중)
+
+> 인계: `docs/ai/tickets/2026-10-10-c1-c10-followup/CONTINUATION.md`. 결함 수정 · 로컬 검증 · Harness 사전 확인(#1168~#1177 10/10)까지 했고,
+> 새 후보 push 가 자동 권한 판정으로 거부돼 멈췄다. 원격 main `a64654aa` · production P10 `9ddc174a` 그대로.
+
+- [ ] **[사용자 승인] 후보 push** — 로컬 main(`e27c642d` · `410c8604` · `f905f145` + 인계 커밋)을 양 원격에. 없으면 CI G14 가 1건 실패한다.
+- [ ] **[Jenkins] main Job 매트릭스 15빌드 · 대상별 대조 · CI(필수 단계 PASS)** — 인계 문서 4절 3~5번.
+- [ ] **[승격] 세션 CLI production P11 · production canary · 전수 회귀(Linux 15 · Windows 1 · ESXi 6 · Redfish 10)** — 4절 6~7번.
+- [ ] **[문서] CURRENT_STATE · TEST_HISTORY · decision-log · 09-production-branch 7절 · `tests/evidence/2026-10-10-c1-c10-defects.md` · 최종 push · 이 ticket 삭제** — 4절 8~9번.
+
 ## 운영 로그 문구 정리 후속 (2026-10-09)
 
 > 정본: `docs/reference/decision-log.md` 2026-10-09 · `tests/evidence/2026-10-09-log-wording.md`. 실제 콘솔(main #354~#380 · CI · canary)에서 확인한 뒤 남긴 항목.

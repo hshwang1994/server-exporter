@@ -1,5 +1,17 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-10 (진행 중) — 검수 후속 C1~C10 · 로컬 검증 · Harness 사전 확인 (승격 전)
+
+| 구분 | 결과 |
+|---|---|
+| 결함별 회귀(Windows) | C2 94 통과 · 2 건너뜀(+corpus 28) · C3 40 · C4 9 · C5 21 · C6 Windows 묶음 369 · C7 18 · C8 6 · C9 12 · C10 13 · C1 문자열 · Harness 도구 138 |
+| WSL `ci_gate`(LF clone) | `fa4d025c` FAIL 1건(시험 순서 의존 — C5 시험이 남긴 응답 캐시) → `a64654aa` PASS · `f905f145` PASS: unit/e2e/regression 4,679 통과 · 161 건너뜀 · 7 xfail · integration 333 · corpus 20/20 · 3채널 syntax-check |
+| Windows 실제 PowerShell | `-k "windows or powershell"` 506 통과 · 5 건너뜀 |
+| Groovy 2.4.21 | CONVERSION OK(portal · Byid · ci · harness · 생성한 harness 함수 2종 · se_finalize). C1 로컬 구동(가짜 step) 12/12, 종전 코드 결함 재현 1건 |
+| prodgen(이 PC) | build `fa4d025c` · `a64654aa` — 195 파일 · class B 0 · tree `b7e61c03…` / verify `--skip-live` PARTIAL(G01~G10 · G16~G18 · G20 PASS) / **G14(`a64654aa`) FAIL 1건**(주석 기준 index) → `e27c642d` 수정 · 생성 tree 사본에서 그 파일 45 통과(전체 G14 재실행 전) |
+| 실제 Jenkins Harness(`a64654aa`) | 10/10 PASS — #1168~#1172 `recover_*` 5종 · #1173 `finalize_limit_cumulative` · #1174 `stash_fail` · #1175 `raw_fallback` · #1176 `checkpoint_only_b` · #1177 `infra_wait_expired` |
+| 미수행 | main Job 매트릭스 · CI · 승격 · production canary · 전수 회귀(후보 push 거부로 중단 — 인계 문서) |
+
 ## 2026-10-09 (후속) — `json_only` 오경보 수정 · Byid 동기화 시험 · `04a0d6c9` → production P10 `9ddc174a`
 
 | 구분 | 결과 |
