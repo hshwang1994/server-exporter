@@ -8,7 +8,7 @@
 
 > 최종 갱신: 2026-10-10
 
-## 2026-10-10 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-12
+## 2026-10-10 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-15
 
 ### 배경
 - 사용자 지시서 "ClovirONE Server Gathering 전체 감사 및 개선 실행 지시서"(2026-10-10): 전 저장소 탐색 · 결함 근본 수정 · 회귀 + 실제 Jenkins
@@ -36,13 +36,22 @@
     OS · Redfish 두 표 동일(drift guard).
 11. **D-11 run_gather rc 90/91**: begin 전 종료는 Jenkinsfile 이 rc 로 `prep_failed` 확정. **FL-F01b**(Harness #1304): 그때 앞 시도의 연결 끊김 근거를
     classify 에 넘긴다(`seClassifyAttempt(agentLost)`) — 안 넘기면 앞 시도가 process_lost 로 닫힌다.
-12. **D-12 임시 Jenkins 자원**: `se-audit-parity` · `se-audit-negative-control` Job, scratch 브랜치 `audit/negative-control` — 감사 끝에 삭제.
+12. **D-12 임시 Jenkins 자원**: `se-audit-parity` · `se-audit-negative-control` · `se-audit-labprobe`(lab 읽기 전용 probe, 뒤에 추가) Job, scratch 브랜치
+    `audit/negative-control` — 감사 끝에 삭제하고 삭제를 확인한다.
+13. **D-13 실제 엔진 렌더 시험의 대역 정리(HC-09)**: unit 계층이 `sys.modules` 에 심는 ansible 대역 때문에 e2e 렌더 시험 29건이 WSL · Runner CI Gate 에서 늘 skip 됐다.
+    unit 시험 수십 개를 고치는 대신 e2e 쪽이 실행 시점에 `__spec__` 없는 대역만 치우고 실물을 import 한다(실패 시 복원 · 사유 표기). 근거: 대역을 심는 쪽은 라이브러리를
+    ansible 없이 import 하는 정당한 목적이고, 실물을 쓰는 쪽이 하나다. 시험 전용 변경 — runtime tree 불변.
+14. **D-14 adapter 필수 키 서술 정정**: rule 12 R4 의 "4개 키 필수" 는 코드와 다르다(로더는 `match` · `adapter_id` · `priority` · `generic` 만 읽고 강제 없음, 플레이북은
+    `capabilities.sections_supported` · `vendor_notes.manager_layout`). 규칙 · skill · 개발 문서를 코드대로 고치고 기록용 절은 지우지 않는다 —
+    `docs/ai/decisions/ADR-2026-10-10-adapter-required-keys.md`, DRIFT-024.
+15. **D-15 시험 전용 후속 후보의 증거 이전**: X2'(`361d4484`) 뒤에 시험 · 문서만 바꾼 후보(X3)는 prodgen tree hash 가 X2' 와 같음을 기계로 확인한 경우 main Job 매트릭스 ·
+    strict compare 증거를 이어받는다(runtime tree 가 byte 동일). CI(Gate · Harness)는 시험이 바뀌었으므로 다시 돈다. 승격은 tree hash 가 같으면 no-op 다(rule 93 R4).
 - 사용자 결정(확정): BIOS 연구 패키지 폴더 삭제 · `tests/reference` 전부 유지 · Jenkins admin 자격은 채팅 전달만(어디에도 기록 금지) · §8 운영 정책 재논의 없음.
 
 ### 결과 · 범위 (코드)
 - Harness 신뢰: 부정 대조 N1(FAIL) · N2(PARTIAL) · N3(변조 증거 거부, 한계 2건 기록) · N4(SKIPPED 거부), 변이 M1~M9(9/9 — M1 은 `test_output_task_names.py` 신설 뒤 재검출).
 - 묶음: B-R/B-J(Runner 기록 · 수집 루프 · 보존 · FL-F01/F02/F03/F06/F11/F12/F14/F18) · B-RD/RA(Redfish — RD-F03 · RA-F03/F08(D-09) · RA-F05/F06 · RD-F18 · RD-F15 ·
-  D-07 · RD-FW1 · RD-UNK · RD-FW2 · 죽은 normalize 4개 삭제) · B-E(ESXI-03/21/04/05(D-01)/09/12/13 · D-03) · B-W(WIN-02/11/12/DM · D-02 · D-03 · WIN-13 · WIN-21 · D-08) ·
+  D-07 · RD-FW1 · RD-UNK · RD-FW2 · 죽은 normalize 4개 삭제) · B-E(ESXI-03 — config_info 인자 오류는 모든 host 에서 났고 이름 서버가 빈 host 만 partial 이 됐다 /21/04/05(D-01)/09/12/13 · D-03) · B-W(WIN-02/11/12/DM · D-02 · D-03 · WIN-13 · WIN-21 · D-08) ·
   B-L(LX-F08 · LX-F02(WSL 2.20.7 재현) · LX-F10 · LX-F01 · D-03 · LX-F04 · LX-F06 · LX-F12 · D-10).
 - 바꾸지 않은 것: envelope 13 필드 · 섹션 · field_dictionary 의미 · failure_code/stage · §8 운영 정책 · 계정 쓰기(HOLD).
 - 증거 수준은 항목마다 다르다(unit_fixture · local raw-script sandbox · local_ansible_wsl · jenkins_harness · main Job). lab 부재 영역(AMD lscpu ·

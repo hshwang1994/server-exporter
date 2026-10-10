@@ -670,7 +670,7 @@ controllers[*].id  ────┤
 > 가진 인터페이스다(IPv4 가 없으면 IPv6 기준). (3) **Redfish 채널**의 `dns_servers` · `default_gateways` 는 BMC 관리 NIC 의 값이다(2026-04-29 결정 유지 —
 > 호스트 OS 값은 Redfish 로 얻을 수 없다). (4) Windows `dns_servers` 에서 IPv6 스택 자리표시자 `fec0:0:0:ffff::1~3` 은 뺀다. `driver_map[]` 은 연결이 끊긴
 > 어댑터도 포함한다(Linux 와 같다). (5) ESXi 이름 서버 수집 실패 오류는 `dns_info` 가 실패했을 때만 남는다 — 종전에는 `config_info` 가 인자 오류로 늘
-> 실패해 모든 host 가 `partial` 이었다. (6) Linux `lspci` 오류(권한 등)는 stdout 표식으로 읽어 `errors[]` 에 남는다(종전 조건은 참이 될 수 없었다).
+> 실패해 이름 서버가 비어 있는 host 가 `partial` 이었다(lab 의 ESXi 는 이름 서버가 있어 결과가 바뀌지 않았다 — 매트릭스 E2E-D 확인). (6) Linux `lspci` 오류(권한 등)는 stdout 표식으로 읽어 `errors[]` 에 남는다(종전 조건은 참이 될 수 없었다).
 
 #### 6.4.1 본딩/티밍 토폴로지 (cycle 2026-06-15 — OS 채널, Additive)
 

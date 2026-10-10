@@ -63,11 +63,13 @@
     └─ 최고 점수 → dell_idrac9.yml 선택
     │
     ▼
-[ Step 4 ] 선택된 adapter 가 시키는 대로
-    - credentials.profile = "dell"  → vault/<loc>/redfish/dell.yml 로드
-    - collect.standard_tasks = "redfish-gather/tasks/collect_standard.yml" 실행
-    - normalize.standard_tasks 실행 → fragment 생성
-    - capabilities.sections_supported 가 출력 sections[].not_supported 의 기준
+[ Step 4 ] 선택된 adapter 에서 플레이북이 읽는 것 (2026-10-10 코드 대조)
+    - adapter_id → 결과 meta · 진단 adapter_candidate
+    - capabilities.sections_supported → 출력 sections 의 not_supported 기준
+    - vendor_notes.manager_layout → redfish_gather 모듈 인자(멀티-노드 토폴로지)
+    - 수집 · 정규화 task 경로는 site.yml 에 고정(collect_standard.yml · normalize_standard.yml).
+      adapter 의 collect / normalize / credentials / graceful_degradation 절은 설계 기록이라 코드가 읽지 않는다.
+      복구 vault 는 감지된 vendor(canonical)로 고른다 — vault/<loc>/redfish/<vendor>.yml
 ```
 
 여기서 핵심: Ansible / Python 코드 **어디에도 "Dell" 이라는 단어가 없다.** 모든 분기가 YAML 안의 정보로 결정된다.
@@ -178,22 +180,22 @@ capabilities:
                                       # ← 출력 JSON 의 sections 에서
                                       #   여기 없는 섹션은 자동으로 not_supported
 
-collect:
+collect:                              # 기록용 — site.yml 이 같은 경로를 고정 include 한다 (코드가 이 절을 읽지 않음, 2026-10-10)
   standard_tasks: "redfish-gather/tasks/collect_standard.yml"
 
-normalize:
+normalize:                            # 기록용 — 같다
   standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
 
 credentials:
-  profile:           "dell"   # vault/<loc>/redfish/dell.yml 을 로드
+  profile:           "dell"   # 기록용 — 복구 vault 는 감지된 vendor 로 고른다(vault/<loc>/redfish/<vendor>.yml)
   fallback_profiles: []
 
 graceful_degradation:
-  critical_sections: [system, hardware]   # 이게 실패하면 abort
-  optional_sections: [firmware, power]    # 이게 실패해도 다른 섹션 계속
+  critical_sections: [system, hardware]   # 기록용 — 읽는 코드 없음. status 판정은 common/tasks/normalize/build_status.yml
+  optional_sections: [firmware, power]    # 기록용
 ```
 
-읽는 법: 위에서부터 "**누구한테 매칭되는가 → 뭘 할 수 있는가 → 어떤 코드를 호출하는가 → 어떤 자격증명 쓰는가 → 실패 어떻게 다루는가**".
+읽는 법: 위에서부터 "**누구한테 매칭되는가(match) → 뭘 할 수 있는가(capabilities.sections_supported)**" 두 절이 동작을 정하고, 그 아래 절은 설계 기록이다(2026-10-10 코드 대조 — rule 12 R4).
 
 ---
 

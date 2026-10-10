@@ -28,7 +28,8 @@
 |---|---|---|---|---|---|---|
 | X0 `3d053d36` | PASS | class B 0 | #408~#422 계약대로(T5 재실행 뒤 ABORTED) | 차이 = 선언(T5 합성 봉투 진단 보존)만 | #40 SUCCESS · COMPLETE_PASS | 안 함(Harness 미신뢰 단계) |
 | X1 `b3c8ebf7` | PASS | tree `96db8f5f…` | #423~#438 계약대로(T5 재실행 #438) | OK | **#41 FAILURE** — Harness 54 중 `prep_failed_on_resume` 1건 기대 불일치(FL-F01b) | 안 함 |
-| X2 | 미실행 | 미실행 | 미실행 | 미실행 | 미실행 | 미실행 |
+| X2 `32d4e307` | **FAIL 1**(시험이 Windows 샌드박스 가정) | class B 0 · tree `20fb2094…` | — | — | — | 안 함 |
+| X2' `361d4484`(시험만 수정) | PASS(깨끗한 checkout · 4,879/182/7 · integration 333) | tree `20fb2094…`(X2 와 동일) | #454~#468 계약대로(T5 #456 → 재실행 #469 ABORTED) | 회귀 0 — 선언 D-03(Windows) · D-08 · WIN-02 · WIN-DM | #42 진행 중 | 미실행 |
 
 X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 90) Jenkins 가 아는 앞 시도의 연결 끊김 근거가 상태 파일에 전달되지 않아 앞 시도가
 `process_lost` 로 닫혔다(기대 `agent_disconnect`). 파이프라인 outcome(`prep_failed`)은 설계대로였다. X2 에서 `seClassifyAttempt(agentLost)` 로 고쳤다.
@@ -40,7 +41,7 @@ X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 9
 | 묶음 | 항목 | 수준 |
 |---|---|---|
 | B-RD/RA (Redfish) | RD-F03 IncompleteRead 분류 · D-09 vendor alias(iBMC≠ibm) · RA-F05/F06 복구 인증 예산·간격 · RD-F18 하위 자원 404 아닌 실패 errors[] · RD-F15 FC/FCoE 포트 · D-07 PSU Absent 제외 · RD-FW1 RAID 분류 · RD-UNK/FW2 · 죽은 normalize 4개 삭제 | U (+M 예정) |
-| B-E (ESXi) | ESXI-03 config_info `esxi_hostname` + DNS 오류 조건(dns_info 만) · ESXI-21 자격 변수 통일 · D-01 vCenter 거부 · ESXI-09 TB/GB/MB · ESXI-12 컨트롤러 종류 · ESXI-13 시도 수 · D-03 defaultPolicy | U · R(argspec) (+M 예정) |
+| B-E (ESXi) | ESXI-03 config_info `esxi_hostname` + DNS 오류 조건(dns_info 만 — 인자 오류는 전 host, partial 은 이름 서버가 빈 host 만) · ESXI-21 자격 변수 통일 · D-01 vCenter 거부 · ESXI-09 TB/GB/MB · ESXI-12 컨트롤러 종류 · ESXI-13 시도 수 · D-03 defaultPolicy | U · R(argspec) (+M 예정) |
 | B-W (Windows) | WIN-02 fec0 · WIN-11/12 IPv6 게이트웨이 · WIN-DM 드라이버 전수 · D-02 VBS · D-03 ActiveStore · WIN-13 CIM 격리 · WIN-21 부분합 금지 · D-08 디스크 크기 | U(실제 powershell.exe 5.1) (+M 예정) |
 | B-L (Linux) | LX-F08 기본 경로 토큰 파싱(ECMP·nhid·IPv6) · LX-F02 'None' 게이트웨이 · LX-F10 lspci 표식 · LX-F01 비특권/특권 분리 · D-03 유효 정책 · LX-F04 multipath · LX-F06 캐시 인스턴스 · LX-F12 자리표시자 집합 · D-10 JEDEC bank | U · S · W · **R**(LX-F02: Runner01/03 에서 'None' 재현) (+M 예정) |
 | B-J 후속 | FL-F01b classify 에 연결 끊김 근거 전달 | H 예정(X2 CI) |
@@ -53,8 +54,8 @@ X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 9
 |---|---|
 | 정적 | YAML 40 파일 parse OK · Python compile OK · verify_vendor_boundary 통과 · verify_harness_consistency 통과 · verify_docs_references(이 문서 생성 뒤) |
 | 채널별 단위 | Redfish 감사 15 · ESXi 묶음 91 · Windows 325+98(실제 PowerShell) · Linux 388+45 · JEDEC/드리프트/메모리 104 · 식별자 자리표시자 묶음 171 · Jenkinsfile/Harness 157 |
-| 전체 suite(unit · e2e · regression) | 실행 중 — 결과는 §7 에 추가 |
-| lab 읽기 전용 probe(Runner) | 실행 중(`se-audit-labprobe`) — Linux 7 · Windows 2 · ESXi 3 |
+| 전체 suite(unit · e2e · regression) | 이 PC 4,998 통과 · 63 건너뜀 · 7 xfail / WSL(깨끗한 `361d4484`) 4,879 통과 · 182 건너뜀(ID 보존) · integration 333 |
+| lab 읽기 전용 probe(Runner02, `se-audit-labprobe` #1~#3) | Linux 4/7 도달(.165 .167 .169 미도달) · Windows .120(.135 미도달) · ESXi 3/3 — 가설 확정: fec0 자리표시자 · MSFT≠Win32 디스크 크기 · ActiveStore≠PersistentStore · config_info+esxi_hostname 성공 / 기각: LX-F09 / 미확정: LX-F11(IB 장치 없음) |
 
 ## 6. 삭제 · 정리
 
@@ -65,9 +66,19 @@ X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 9
 
 ## 7. 결과 추가 (진행 중)
 
-- [ ] 전체 suite 결과
-- [ ] lab probe 결과(P4 · P8 · P11-lite)
-- [ ] X2 push · WSL ci_gate · 매트릭스 · strict compare · CI
+- [x] 전체 suite 결과(§5)
+- [x] lab probe 결과(P4 · P8 · P11-lite — §5)
+- [x] X2 push · WSL ci_gate · 매트릭스 · strict compare(§3) — [ ] CI #42
 - [ ] 승격 · canary · 명부 전수
 - [ ] 성능 전후(P4)
 - [ ] 정리 완료 확인
+
+## 8. 감사 중 발견한 하네스 맹점 · 문서 정정 (X3 — 시험 · 문서만, runtime 불변)
+
+- **HC-09**: `tests/e2e/test_diagnosis_template_ansible_render.py`(26) · `test_bios_attributes_ansible_render.py`(3) 가 전체 suite 에서 늘 skip 됐다 — unit 계층이 `sys.modules` 에 심는
+  ansible 대역 때문에 수집 시점의 `from ansible.template import Templar` 가 "'ansible' is not a package" 로 실패했고, skip 사유는 "플랫폼" 이라 적혀 있었다. **Runner CI Gate 도 같았다**
+  (CI #40 161 · #41 162 건너뜀). 수정: 첫 사용 시 `__spec__` 없는 `ansible*` 대역을 치우고 실물을 import(실패 시 복원 · 사유 표기) + 회귀 1건. WSL 전체 suite 4,879 → 4,909 통과 · 0 실패.
+- **rule 12 R4**: "4개 키 필수(adapter_loader 파싱 실패)" 는 코드와 달랐다 — 로더는 `match` · `adapter_id` · `priority` · `generic` 만 읽고 강제 없음, 플레이북은 `capabilities.sections_supported` ·
+  `vendor_notes.manager_layout` · `version`. `collect` · `normalize` · `credentials` · `graceful_degradation` 절은 아무 코드도 읽지 않는다(OS · ESXi adapter 12개는 `normalize` 없음).
+  규칙 · skill · 개발 문서를 코드대로 고쳤다(`ADR-2026-10-10-adapter-required-keys.md` · DRIFT-024). 기록용 절 삭제는 별도 결정(NEXT_ACTIONS).
+- **DRIFT-016/017 재번호**: 커밋 `32d4e307` 이 붙인 두 항목은 이미 쓰인 번호였다(2026-05-11 · 2026-06-08) → DRIFT-022/023 으로 재번호해 머리로 옮겼다(FAILURE_PATTERNS 기록).
