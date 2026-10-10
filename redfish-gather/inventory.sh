@@ -2,17 +2,21 @@
 """
 동적 인벤토리 스크립트 — redfish-gather
 
-INVENTORY_JSON 환경변수 또는 .inventory_input.json 파일을 파싱하여
-Ansible 동적 인벤토리를 생성한다.
+접수 목록 JSON 을 파일(INVENTORY_JSON_FILE 이 가리키는 파일 · 작업 폴더의 .inventory_input.json) 또는
+환경변수(INVENTORY_JSON)에서 읽어 Ansible 동적 인벤토리를 생성한다.
 inventory_json 에는 IP 만 전달. 벤더는 Redfish Manufacturer 로 자동 감지.
 계정은 표준=vault/common/redfish/standard.yml, 복구=vault/<loc>/redfish/<vendor>.yml 에서 로딩.
 IP 필드: bmc_ip (1순위) → ip (fallback)
 호출자가 보낸 host object 전체는 hostvar se_host_input 으로 보존한다 (Add-on 이 읽는다).
 
-우선순위:
-  1. 환경변수 INVENTORY_JSON (값이 있으면 사용)
-  2. workspace의 .inventory_input.json 파일 (Jenkinsfile writeFile 로 생성)
-  3. 둘 다 없으면 에러
+우선순위 (2026-10-10 FL-F11 — Linux 는 환경변수 하나가 131,072 바이트를 넘으면 그 프로세스 실행 자체가
+"Argument list too long" 으로 실패한다. 확장형 입력 5,000대 = 510 KB 실측. 그래서 파이프라인은 파일로 넘긴다):
+  1. 환경변수 INVENTORY_JSON_FILE 이 가리키는 파일 — Jenkinsfile_portal 수집 단계가 작업 폴더에
+     .inventory_input.json 을 쓰고(sePrepareWorkspace · 재개 시 복원) seGatherEnv 로 이 변수를 넘긴다.
+     변수가 있는데 파일이 없거나 비어 있으면 다른 곳으로 넘어가지 않고 오류다.
+  2. 환경변수 INVENTORY_JSON / inventory_json (값이 있으면) — 로컬 실행 · scripts/ai/ci_gate.sh 의 syntax-check 같은 작은 입력
+  3. $WORKSPACE/.inventory_input.json (WORKSPACE 가 없으면 저장소 루트) — Jenkins 밖에서 직접 실행할 때
+  4. 모두 없으면 에러
 
 INVENTORY_JSON 형식:
   [{ "bmc_ip": "10.x.x.201" }]            — 권장
@@ -60,15 +64,26 @@ def _inert(value):
     return value
 
 def load_inventory_json():
-    """환경변수 → 파일 순서로 인벤토리 JSON 문자열을 가져온다."""
-    # 1순위: 환경변수 (대문자 또는 소문자 — Jenkins 파라미터명 그대로 내보내짐)
+    """지정 파일 → 환경변수 → 작업 폴더 파일 순서로 인벤토리 JSON 문자열을 가져온다 (우선순위는 모듈 docstring)."""
+    # 1순위: INVENTORY_JSON_FILE — 파이프라인이 작업 폴더에 쓴 접수 입력 파일 (환경변수 크기 한도와 무관하다)
+    explicit = os.environ.get("INVENTORY_JSON_FILE", "").strip()
+    if explicit:
+        path = pathlib.Path(explicit)
+        if not path.is_file():
+            error(f"INVENTORY_JSON_FILE 이 가리키는 파일이 없습니다: {explicit}")
+        content = path.read_text(encoding="utf-8").strip()
+        if not content:
+            error(f"INVENTORY_JSON_FILE 이 가리키는 파일이 비어 있습니다: {explicit}")
+        return content
+
+    # 2순위: 환경변수 (대문자 또는 소문자 — Jenkins 파라미터명 그대로 내보내짐). 작은 입력 · 수동 실행 · syntax-check 용
     raw = os.environ.get("INVENTORY_JSON", "").strip()
     if not raw:
         raw = os.environ.get("inventory_json", "").strip()
     if raw:
         return raw
 
-    # 2순위: .inventory_input.json 파일 (Jenkinsfile writeFile 로 생성됨)
+    # 3순위: $WORKSPACE/.inventory_input.json (Jenkins 밖 직접 실행)
     workspace = os.environ.get("WORKSPACE", "")
     if workspace:
         fallback = pathlib.Path(workspace) / ".inventory_input.json"
@@ -80,7 +95,7 @@ def load_inventory_json():
         if content:
             return content
 
-    error("INVENTORY_JSON 환경변수와 .inventory_input.json 파일 모두 비어있습니다.")
+    error("INVENTORY_JSON_FILE · INVENTORY_JSON 환경변수와 .inventory_input.json 파일 모두 비어있습니다.")
 
 def main():
     # --host 처리 (Ansible 규약)

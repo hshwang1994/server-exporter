@@ -34,15 +34,16 @@ SCRIPTS = {
 PRIMARY_IP_KEY = {"os": "service_ip", "esxi": "service_ip", "redfish": "bmc_ip"}
 
 
-def _run(script: Path, payload, tmp_path: Path, *args: str) -> subprocess.CompletedProcess:
+def _run(script: Path, payload, tmp_path: Path, *args: str, extra_env: dict | None = None) -> subprocess.CompletedProcess:
     env = {k: v for k, v in os.environ.items()
-           if k not in ("INVENTORY_JSON", "inventory_json", "WORKSPACE")}
+           if k not in ("INVENTORY_JSON", "inventory_json", "WORKSPACE", "INVENTORY_JSON_FILE")}
     # .inventory_input.json fallback 이 저장소 파일을 줍지 않도록 빈 workspace 를 준다
     env["WORKSPACE"] = str(tmp_path)
     # Windows 콘솔 기본 인코딩(cp949)이 아니라 운영(Linux)과 같은 UTF-8 로 출력하게 한다
     env["PYTHONIOENCODING"] = "utf-8"
     if payload is not None:
         env["INVENTORY_JSON"] = payload if isinstance(payload, str) else json.dumps(payload)
+    env.update(extra_env or {})
     return subprocess.run([sys.executable, str(script), *(args or ("--list",))],
                           capture_output=True, text=True, encoding="utf-8", env=env)
 
@@ -167,3 +168,55 @@ def test_host_flag_output_unchanged(channel, tmp_path):
     proc = _run(SCRIPTS[channel], None, tmp_path, "--host", "192.0.2.10")
     assert proc.returncode == 0, proc.stderr
     assert json.loads(proc.stdout) == {"ansible_host": "192.0.2.10"}
+
+
+# ── FL-F11 (2026-10-10): 접수 목록은 파일로 넘어온다 ──────────────────────────────────────
+# Linux 는 환경변수 하나가 131,072 바이트(MAX_ARG_STRLEN)를 넘으면 프로세스 실행 자체가 "Argument list too long" 으로 실패한다 —
+# WSL 실측: 확장형 입력 5,000대(510 KB)를 INVENTORY_JSON 으로 넘기면 env 조차 뜨지 않았고, 파일로는 5,000대가 그대로 나왔다.
+# 그래서 Jenkinsfile_portal 은 .inventory_input.json 을 쓰고 INVENTORY_JSON_FILE 로 알린다. 여기서는 그 읽기 계약을 고정한다.
+
+def _big_inventory(key: str, n: int = 5000) -> list:
+    return [{key: f"10.{i // 65536 % 256}.{i // 256 % 256}.{i % 256}", "physical_purpose": "db", "site": "ic", "note": "x" * 20}
+            for i in range(1, n + 1)]
+
+
+@pytest.mark.parametrize("channel", sorted(SCRIPTS))
+def test_inventory_json_file_is_read_first_and_carries_large_batches(channel, tmp_path):
+    key = PRIMARY_IP_KEY[channel]
+    big = _big_inventory(key)
+    f = tmp_path / "accepted.json"
+    f.write_text(json.dumps(big), encoding="utf-8")
+    assert f.stat().st_size > 131072, "환경변수 한도보다 큰 입력이어야 뜻이 있다"
+    # 환경변수와 작업 폴더 파일이 둘 다 다른 내용을 가리켜도 INVENTORY_JSON_FILE 이 이긴다
+    (tmp_path / ".inventory_input.json").write_text(json.dumps([{key: "192.0.2.99"}]), encoding="utf-8")
+    proc = _run(SCRIPTS[channel], [{key: "192.0.2.98"}], tmp_path, extra_env={"INVENTORY_JSON_FILE": str(f)})
+    assert proc.returncode == 0, proc.stderr
+    inv = json.loads(proc.stdout)
+    assert len(inv["all"]["hosts"]) == 5000 and inv["all"]["hosts"][0] == "10.0.0.1" and inv["all"]["hosts"][-1] == "10.0.19.136"
+    hv = inv["_meta"]["hostvars"]["10.0.0.1"]
+    assert set(hv) == {"ansible_host", "se_host_input"} and _unwrap(hv["se_host_input"]) == big[0]
+
+
+@pytest.mark.parametrize("channel", sorted(SCRIPTS))
+def test_inventory_json_file_set_but_missing_or_empty_is_an_error_not_a_fallback(channel, tmp_path):
+    key = PRIMARY_IP_KEY[channel]
+    missing = _run(SCRIPTS[channel], [{key: "192.0.2.98"}], tmp_path, extra_env={"INVENTORY_JSON_FILE": str(tmp_path / "nope.json")})
+    assert missing.returncode == 1 and "INVENTORY_JSON_FILE" in missing.stderr and "없습니다" in missing.stderr
+    empty = tmp_path / "empty.json"
+    empty.write_text("  \n", encoding="utf-8")
+    proc = _run(SCRIPTS[channel], [{key: "192.0.2.98"}], tmp_path, extra_env={"INVENTORY_JSON_FILE": str(empty)})
+    assert proc.returncode == 1 and "비어 있습니다" in proc.stderr
+    # 변수가 비어 있으면(정의만 됐을 때) 환경변수 경로로 간다 — 작은 입력 · syntax-check 호환
+    proc = _run(SCRIPTS[channel], [{key: "192.0.2.98"}], tmp_path, extra_env={"INVENTORY_JSON_FILE": ""})
+    assert proc.returncode == 0 and json.loads(proc.stdout)["all"]["hosts"] == ["192.0.2.98"]
+
+
+@pytest.mark.parametrize("channel", sorted(SCRIPTS))
+def test_workspace_file_is_the_last_fallback(channel, tmp_path):
+    key = PRIMARY_IP_KEY[channel]
+    (tmp_path / ".inventory_input.json").write_text(json.dumps([{key: "192.0.2.77"}]), encoding="utf-8")
+    proc = _run(SCRIPTS[channel], None, tmp_path)
+    assert proc.returncode == 0 and json.loads(proc.stdout)["all"]["hosts"] == ["192.0.2.77"]
+    (tmp_path / "empty-ws").mkdir()
+    nothing = _run(SCRIPTS[channel], None, tmp_path / "empty-ws")
+    assert nothing.returncode == 1 and "모두 비어있습니다" in nothing.stderr
