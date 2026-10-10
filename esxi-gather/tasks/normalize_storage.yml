@@ -17,8 +17,13 @@
         {%- else -%}
           {%- set tr   = ds.total | default('0 GB', boolean=true) | string -%}
           {%- set fr   = ds.free  | default('0 GB', boolean=true) | string -%}
-          {%- set tg   = (tr|regex_replace('[^0-9.]','')|default('0', boolean=true)|float)*(1024 if 'TB' in tr else 1) -%}
-          {%- set fg   = (fr|regex_replace('[^0-9.]','')|default('0', boolean=true)|float)*(1024 if 'TB' in fr else 1) -%}
+          {#- ESXI-09 (2026-10-10): 단위 접미사 일반 처리 (GB 기준) — TB x1024 · MB /1024. 종전에는 TB 만 보고 MB 를 GB 로 읽었다 -#}
+          {%- set tu   = tr | upper -%}
+          {%- set fu   = fr | upper -%}
+          {%- set tmul = 1024 if 'TB' in tu else (0.0009765625 if 'MB' in tu else 1) -%}
+          {%- set fmul = 1024 if 'TB' in fu else (0.0009765625 if 'MB' in fu else 1) -%}
+          {%- set tg   = (tr|regex_replace('[^0-9.]','')|default('0', boolean=true)|float)*tmul -%}
+          {%- set fg   = (fr|regex_replace('[^0-9.]','')|default('0', boolean=true)|float)*fmul -%}
           {%- set cap  = (tg*1073741824)|int -%}
           {%- set free = (fg*1073741824)|int -%}
         {%- endif -%}

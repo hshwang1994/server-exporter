@@ -222,3 +222,28 @@ def test_no_credentials_leak_in_result(monkeypatch):
     blob = " ".join(str(v) for v in result.values())
     for secret in ("password", "Passw0rd", "Authorization", "Cookie", "Basic "):
         assert secret not in blob, "민감정보 노출: {0}".format(secret)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# D-01 (2026-10-10, ESXI-04/05): vCenter 는 ESXi 대상이 아니다 — protocol 단계에서 멈춘다
+# ═══════════════════════════════════════════════════════════════════════════
+VCENTER_SERVICE_CONTENT = (LAB_SERVICE_CONTENT
+                           .replace(b"<apiType>HostAgent</apiType>", b"<apiType>VirtualCenter</apiType>")
+                           .replace(b"<productLineId>embeddedEsx</productLineId>", b"<productLineId>vpx</productLineId>")
+                           .replace(b"<name>VMware ESXi</name>", b"<name>VMware vCenter Server</name>"))
+
+
+def test_vcenter_service_content_is_refused_at_the_protocol_stage(monkeypatch):
+    """apiType=VirtualCenter 는 유효한 vSphere 응답이지만 ESXi 호스트가 아니다 — 자격 후보를 던지지 않고 protocol 에서 멈춘다.
+    새 code · 새 문장은 없다(기존 PROTOCOL_CHECK_FAILED + esxi 문장). 근거(apiType)는 detail 에만."""
+    assert b"VirtualCenter" in VCENTER_SERVICE_CONTENT
+    result = run_esxi(monkeypatch, post=_post(True, None, 200, VCENTER_SERVICE_CONTENT))
+    assert result["reachable"] is True and result["port_open"] is True
+    assert result["protocol_supported"] is False and result["protocol_checked"] is True
+    assert result["auth_success"] is None
+    assert result["failure_stage"] == "protocol" and result["failure_code"] == "PROTOCOL_CHECK_FAILED"
+    assert result["failure_reason"] == ESXI_PROTOCOL_REASON
+    assert "VirtualCenter" in result["detail"] and "vCenter" in result["detail"]
+    # 같은 본문의 HostAgent 는 종전 그대로 통과한다
+    ok = run_esxi(monkeypatch, post=_post(True, None, 200, LAB_SERVICE_CONTENT))
+    assert ok["protocol_supported"] is True and ok["failure_stage"] is None

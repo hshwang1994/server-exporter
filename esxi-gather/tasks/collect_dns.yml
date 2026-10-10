@@ -19,8 +19,8 @@
 - name: "esxi | collect | vmware_host_dns_info"
   community.vmware.vmware_host_dns_info:
     hostname:       "{{ _e_ip }}"
-    username:       "{{ ansible_user }}"
-    password:       "{{ ansible_password }}"
+    username:       "{{ _e_user }}"
+    password:       "{{ _e_pass }}"
     validate_certs: false
     # Round 15: collect_runtime.yml + site.yml BUG#1 패턴 일관 — 응답 dict 가 ESXi 구성
     # hostname 으로 keyed 되므로 esxi_hostname 도 _e_hostname 사용 (null 이면 _e_ip — API 인자 전용).

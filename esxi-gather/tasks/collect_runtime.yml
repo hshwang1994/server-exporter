@@ -83,8 +83,13 @@
     # 빈 list 를 disabled 로 오판해 보안 라벨이 반대로 갔음.
     # 2026-09-03: enum 을 OS 채널과 같은 active / inactive / null 로 통일 (종전 enabled/disabled).
     _e_runtime_firewall_state: >-
+      {#- D-03 (2026-10-10): firewall_state 의 뜻은 **유효 정책**이다 — esxi_disks.host_info 의 defaultPolicy.incomingBlocked 가 있으면 그것으로
+          판정한다(true → active, false → inactive). 못 읽었을 때만 종전 규칙 기반 판정으로 떨어진다 -#}
+      {%- set _ib = (_e_raw_host | default({})).firewall_incoming_blocked | default(none) -%}
       {%- set fws = (_e_firewall_result.hosts_firewall_info | default({})) -%}
-      {%- if (_e_firewall_result is failed) or not fws or (fws is not mapping) -%}
+      {%- if _ib is not none -%}
+        {{ 'active' if _ib else 'inactive' }}
+      {%- elif (_e_firewall_result is failed) or not fws or (fws is not mapping) -%}
         {{ none }}
       {%- else -%}
         {%- set h = _e_hostname | default(none) -%}

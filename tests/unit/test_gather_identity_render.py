@@ -25,7 +25,7 @@ from jinja2.nativetypes import NativeEnvironment
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "filter_plugins"))
-from identity_normalizer import normalize_mac, normalize_uuid  # noqa: E402
+from identity_normalizer import dmi_sentinel_null, normalize_mac, normalize_uuid  # noqa: E402
 
 LINUX_SYS = REPO / "os-gather" / "tasks" / "linux" / "gather_system.yml"
 WIN_SYS = REPO / "os-gather" / "tasks" / "windows" / "gather_system.yml"
@@ -62,6 +62,7 @@ def _env():
     env.filters["combine"] = _combine
     env.filters["normalize_uuid"] = normalize_uuid
     env.filters["normalize_mac"] = normalize_mac
+    env.filters["dmi_sentinel_null"] = dmi_sentinel_null
     env.filters["from_json"] = json.loads
     return env
 

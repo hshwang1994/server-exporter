@@ -436,13 +436,15 @@ def test_module_failed_parts_is_deterministic():
 
 # ═══════════════════════════════════════════════════════════════════════════
 # N36 (c) — dns / config 플래그 배선. 성공한 fallback 은 error 가 아니다
+# 2026-10-10 (ESXI-03): 오류 조건은 dns_info 실패만 본다 — config_info 는 폴백일 뿐이라 그 실패 하나로
+#   "일부 수집 실패" 를 내지 않는다 (종전에는 config_info 가 argspec 오류로 항상 실패해 모든 host 가 partial 이 됐다).
 # ═══════════════════════════════════════════════════════════════════════════
 @pytest.mark.parametrize("servers,dns_ok,config_ok,expected", [
     (["10.0.0.1"], True, True, 0),     # 정상
     (["10.0.0.1"], False, True, 0),    # 1순위 실패 + 폴백 성공 = 성공한 fallback
     ([], True, True, 0),               # 두 경로 모두 성공 + 결과 없음 = 실제 미설정
-    ([], False, True, 1),
-    ([], True, False, 1),
+    ([], False, True, 1),              # dns_info 실패 + 폴백도 값 없음 = 수집 실패
+    ([], True, False, 0),              # dns_info 성공(비어 있음) + 폴백 실패 = 실제 미설정 (폴백 실패는 근거가 아니다)
     ([], False, False, 1),
 ])
 def test_dns_error_only_when_result_empty_and_a_source_failed(

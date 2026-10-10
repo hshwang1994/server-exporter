@@ -8,6 +8,9 @@
     username:       "{{ _e_user }}"
     password:       "{{ _e_pass }}"
     validate_certs: no
+    # ESXI-03 (2026-10-10): 이 모듈은 esxi_hostname 또는 cluster_name 이 필수다(required_one_of). 둘 다 없어 **모든 host 에서 argspec 오류**로
+    #   끝났고 _e_config_ok 는 항상 false 였다 (WSL 2.20.7 · Runner 2.20.3 모두 재현). collect_dns · collect_runtime 과 같은 값을 넘긴다.
+    esxi_hostname:  "{{ _e_hostname | default(_e_ip, true) }}"
   register:    _e_config_result
   delegate_to: localhost
   failed_when: false

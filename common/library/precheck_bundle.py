@@ -1116,6 +1116,15 @@ def probe_esxi(host, port, timeout, verify=False):
         if status is not None:
             detail = "{0} [HTTP {1}]".format(detail, status)
         return False, detail, None
+    # D-01 (2026-10-10, ESXI-04/05): apiType=VirtualCenter 는 vCenter 다 — ESXi 호스트 대상이 아니다. 여기서 멈춘다(ESXi 자격 후보를
+    #   vCenter 에 던지면 잠금 위험 + 잘못된 대상 수집). 새 code · 새 문장 없이 protocol 단계 실패(PROTOCOL_CHECK_FAILED)로 두고
+    #   근거는 errors[].detail 에만 남긴다. 종전에는 api_type 을 버려 vCenter 도 ESXi 처럼 통과시켰다.
+    api_type = _probe.get("api_type") if isinstance(_probe, dict) else None
+    if api_type and str(api_type).strip() == "VirtualCenter":
+        detail = "vSphere ServiceContent apiType=VirtualCenter — vCenter 는 ESXi 호스트 대상이 아님"
+        if status is not None:
+            detail = "{0} [HTTP {1}]".format(detail, status)
+        return False, detail, None
 
     # probe_facts 는 diagnosis.details 로 그대로 나간다. 외부 계약을 늘리지 않기 위해
     # 종전과 같은 키만 싣는다 (vsphere_endpoint, 비-200 일 때 root_status_code).

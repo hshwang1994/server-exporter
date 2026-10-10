@@ -97,9 +97,10 @@
         hostname:       "{{ _e_sys_short | default(none) }}"
         fqdn:           "{{ _e_sys_fqdn | default(none) }}"
         hosting_type:   "hypervisor"
-        serial_number:  "{{ _e_raw_facts.ansible_product_serial | default(none) }}"
+        # LX-F12 / ESXI-02 (2026-10-10): 자리표시자('NA' 등)는 식별자가 아니다 — identity_normalizer.DMI_SENTINELS (OS 채널과 같은 집합)
+        serial_number:  "{{ (_e_raw_facts.ansible_product_serial | default('')) | dmi_sentinel_null('serial') }}"
         system_uuid:    "{{ (_e_raw_facts.ansible_uuid | default(none)) | normalize_uuid }}"
-        vendor:         "{{ _e_raw_facts.ansible_system_vendor | default(none) }}"
+        vendor:         "{{ (_e_raw_facts.ansible_system_vendor | default('')) | dmi_sentinel_null('vendor') }}"
         runtime:
           # 값은 collect_runtime.yml 이 단일 구현이다 (같은 키를 dict 통째로 교체). 여기서는 키만 자리를 잡는다.
           timezone:         null
@@ -114,11 +115,11 @@
           swap_free_mb:     null
           ntp_servers:      []
       hardware:
-        vendor:       "{{ _e_raw_facts.ansible_system_vendor  | default(none) }}"
-        model:        "{{ _e_raw_facts.ansible_product_name   | default(none) }}"
-        serial:       "{{ _e_raw_facts.ansible_product_serial | default(none) }}"
+        vendor:       "{{ (_e_raw_facts.ansible_system_vendor  | default('')) | dmi_sentinel_null('vendor') }}"
+        model:        "{{ (_e_raw_facts.ansible_product_name   | default('')) | dmi_sentinel_null('model') }}"
+        serial:       "{{ (_e_raw_facts.ansible_product_serial | default('')) | dmi_sentinel_null('serial') }}"
         uuid:         "{{ (_e_raw_facts.ansible_uuid | default(none)) | normalize_uuid }}"
-        bios_version: "{{ _e_raw_facts.ansible_bios_version   | default(none) }}"
+        bios_version: "{{ (_e_raw_facts.ansible_bios_version   | default('')) | dmi_sentinel_null('bios') }}"
         # 2026-06-30: field_dictionary 계약 = "ISO 8601 YYYY-MM-DD 정규화". vSphere 는
         # "2021-02-02T09:00:00+09:00" 풀타임스탬프 반환(site 10.100.64.2 실측) → 날짜만 truncate.
         bios_date: >-

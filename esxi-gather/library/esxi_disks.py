@@ -120,6 +120,32 @@ def _build_disks(target):
     return sorted(out, key=lambda d: d.get('id') or '')
 
 
+def _controller_type(type_name, driver):
+    """ESXI-12 (2026-10-10): hostBusAdapter 종류 + 드라이버 계열 → controller_type.
+
+    종전에는 BlockHba 를 전부 'SATA' 로 적었다 — RAID 컨트롤러(lsi_mr3 · megaraid_sas · smartpqi · hpsa · aacraid)와 NVMe 도 BlockHba 로
+    노출되므로 틀린 값이었다. 드라이버로 갈리지 않으면 null (추측하지 않는다). 드라이버 이름 근거: VMware HCL 의 inbox 드라이버 이름
+    (vmw_ahci · lsi_mr3 · smartpqi · nvme_pcie 등).
+    """
+    t = type_name or ''
+    d = (driver or '').strip().lower()
+    if 'FibreChannel' in t:
+        return 'FC'
+    if 'InternetScsi' in t:
+        return 'iSCSI'
+    if 'SerialAttached' in t:
+        return 'SAS'
+    if 'BlockHba' in t:
+        if d.startswith('nvme'):
+            return 'NVMe'
+        if any(k in d for k in ('lsi_mr3', 'megaraid', 'smartpqi', 'hpsa', 'aacraid')):
+            return 'RAID'
+        if 'ahci' in d:
+            return 'SATA'
+        return None
+    return None
+
+
 def _build_controllers(target):
     """storage HBA/RAID 컨트롤러 — hostBusAdapter + pciDevice vendor 보강."""
     hs = _as_target(target).host()
@@ -140,13 +166,9 @@ def _build_controllers(target):
     for hba in (sd.hostBusAdapter or []):
         model = (getattr(hba, 'model', '') or '').strip() or None
         pci = getattr(hba, 'pci', None)
-        # type: BlockHba/FibreChannelHba/SerialAttachedHba → SATA/FC/SAS
+        # type + driver → controller_type (ESXI-12)
         tname = type(hba).__name__
-        ctype = ('SATA' if 'BlockHba' in tname
-                 else 'FC' if 'FibreChannel' in tname
-                 else 'SAS' if 'SerialAttached' in tname
-                 else 'iSCSI' if 'InternetScsi' in tname
-                 else None)
+        ctype = _controller_type(tname, getattr(hba, 'driver', None))
         out.append({
             'id': getattr(hba, 'device', None),
             'name': model,
@@ -338,6 +360,14 @@ def _build_host_info(target, hostname=None):
 
     # ── DNS 설정: 호스트 이름 / 도메인 (system.hostname / fqdn 의 정본) ──
     dns = getattr(net, 'dnsConfig', None) if net is not None else None
+    # D-03 (2026-10-10): 방화벽 유효 정책 — config.firewall.defaultPolicy.incomingBlocked. 규칙 수가 아니라 정책이 firewall_state 의 뜻이다.
+    #   못 읽으면 None (collect_runtime 이 규칙 기반 종전 판정으로 떨어진다).
+    fw = getattr(cfg, 'firewall', None) if cfg is not None else None
+    dp = getattr(fw, 'defaultPolicy', None) if fw is not None else None
+    ib = getattr(dp, 'incomingBlocked', None) if dp is not None else None
+    ob = getattr(dp, 'outgoingBlocked', None) if dp is not None else None
+    info['firewall_incoming_blocked'] = bool(ib) if ib is not None else None
+    info['firewall_outgoing_blocked'] = bool(ob) if ob is not None else None
     info['hostname'] = _s(getattr(dns, 'hostName', None)) if dns is not None else None
     info['domain_name'] = _s(getattr(dns, 'domainName', None)) if dns is not None else None
     info['search_domain'] = [str(x) for x in (getattr(dns, 'searchDomain', None) or [])] if dns is not None else []

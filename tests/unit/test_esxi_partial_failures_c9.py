@@ -20,7 +20,7 @@ sys.path.insert(0, str(REPO / "tests" / "unit"))
 sys.path.insert(0, str(REPO / "filter_plugins"))
 
 from errors_normalizer import normalize_errors  # noqa: E402
-from identity_normalizer import normalize_mac, normalize_uuid, normalize_wwn  # noqa: E402
+from identity_normalizer import dmi_sentinel_null, normalize_mac, normalize_uuid, normalize_wwn  # noqa: E402
 from linux_raw_harness import ansible_env, render_tree  # noqa: E402
 
 EXT = REPO / "esxi-gather" / "tasks" / "collect_network_extended.yml"
@@ -33,6 +33,7 @@ STOR_TEXT = "스토리지 정보 중 일부를 수집하지 못했습니다. 대
 def _env():
     env = ansible_env()
     env.filters.update({"normalize_mac": normalize_mac, "normalize_uuid": normalize_uuid, "normalize_wwn": normalize_wwn,
+                        "dmi_sentinel_null": dmi_sentinel_null,
                         "normalize_errors": normalize_errors, "union": lambda a, b: list(dict.fromkeys(list(a) + list(b)))})
     env.tests["failed"] = lambda x: bool((x or {}).get("failed", False))
     return env

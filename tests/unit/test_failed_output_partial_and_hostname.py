@@ -17,7 +17,7 @@ from jinja2.nativetypes import NativeEnvironment
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "filter_plugins"))
-from identity_normalizer import normalize_uuid  # noqa: E402
+from identity_normalizer import dmi_sentinel_null, normalize_uuid  # noqa: E402
 
 YML = REPO / "common" / "tasks" / "normalize" / "build_failed_output.yml"
 
@@ -32,6 +32,7 @@ def _env():
     env = NativeEnvironment()
     env.filters["combine"] = _combine
     env.filters["normalize_uuid"] = normalize_uuid
+    env.filters["dmi_sentinel_null"] = dmi_sentinel_null
     return env
 
 
