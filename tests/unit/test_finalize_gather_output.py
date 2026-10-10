@@ -6,6 +6,7 @@ build_correlation)은 저장소의 실제 파일을 읽으므로 문장/shape dr
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -196,20 +197,27 @@ def test_redfish_channel_shape(tmp_path):
     assert env["sections"]["power"] == "failed" and env["correlation"]["bmc_ip"] == "10.1.1.1"
 
 
+# 자식 프로세스(finalize_gather_output.py)는 한글 stderr 를 낸다. 부모가 utf-8 로 읽으려면 자식의 stdio 인코딩도 utf-8 로 **고정**해야 한다 —
+# Windows 콘솔 코덱(cp949)에 맡기면 PYTHONIOENCODING 이 없는 환경(prodgen G14 overlay 가 그렇다)에서 깨진다(HC-T6b, 2026-10-10 승격 dry-run 거부).
+_CHILD_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+
+
+def _run_cli(*argv):
+    return subprocess.run([sys.executable, str(SCRIPT), *argv], capture_output=True, text=True, encoding="utf-8", errors="replace", env=_CHILD_ENV)
+
+
 def test_cli_exit_codes(tmp_path):
     ws = _ws(tmp_path, ["10.0.0.1"], outputs=[_envelope("10.0.0.1")])
-    r = subprocess.run([sys.executable, str(SCRIPT), "--workspace", str(ws), "--repo-root", str(REPO)],
-                       capture_output=True, text=True, encoding="utf-8", errors="replace")   # 2026-10-10: Windows cp949 콘솔에서 한글 stderr 디코딩
+    r = _run_cli("--workspace", str(ws), "--repo-root", str(REPO))
     assert r.returncode == 0 and "accepted=1 kept=1 filled=0" in r.stderr
     (tmp_path / "nomanifest").mkdir()
-    r = subprocess.run([sys.executable, str(SCRIPT), "--workspace", str(tmp_path / "nomanifest"), "--repo-root", str(REPO)],
-                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    r = _run_cli("--workspace", str(tmp_path / "nomanifest"), "--repo-root", str(REPO))
     assert r.returncode == 3 and "manifest 없음" in r.stderr
     report = json.loads((tmp_path / "nomanifest" / "gather_finalize_report.json").read_text(encoding="utf-8"))
     assert report["exit_code"] == 3
     # FL-F18 (2026-10-10): 인자 오류는 argparse 기본(2 = 이 도구의 '손상 처리')이 아니라 도구 오류 3 이다
     for argv in (['--workspace', str(ws)], ['--workspace', str(ws), '--repo-root', str(REPO), '--no-such-flag']):
-        r = subprocess.run([sys.executable, str(SCRIPT), *argv], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        r = _run_cli(*argv)
         assert r.returncode == 3 and "인자 오류" in r.stderr and "usage:" in r.stderr, (argv, r.returncode, r.stderr[:200])
 
 
