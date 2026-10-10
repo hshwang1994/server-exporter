@@ -9,8 +9,8 @@ cycle 2026-05-06 M-E1 web 검색 (14 sources) + M-E2 adapter 추가.
 3. match.vendor = HPE (sub-line — M-E1 결정 (a))
 4. capabilities.sections_supported 9 sections (system/hardware/bmc/cpu/memory/storage/network/firmware/power)
 5. capabilities.sections_supported 에 users 미포함 (sections.yml channels=[os] 정합)
-6. credentials.profile = "hpe" (vault 재사용)
-7. collect.oem_tasks = HPE 공유 (Oem.Hpe namespace)
+6. 복구 계정은 vault(`vault/<loc>/redfish/hpe.yml`)가 정본 — adapter 에 credentials 절이 없다(2026-10-11)
+7. 멀티노드는 OEM task 가 아니라 `vendor_notes.manager_layout` 으로 라이브러리가 만든다
 8. _BMC_PRODUCT_HINTS 에 'superdome' 시그니처 → 'hpe' 정규화
 9. ai-context vendors/hpe.md 에 Superdome 절 명시
 10. vendor-boundary-map.yaml 에 superdome_flex sub_line 명시
@@ -54,10 +54,13 @@ def test_m_e2_adapter_yaml_exists() -> None:
 
 
 def test_m_e2_adapter_required_keys() -> None:
-    """rule 12 R4 — match / capabilities / collect / normalize 4 필수 키."""
+    """rule 12 R4 (2026-10-11) — 코드가 읽는 절만 있다: match · capabilities.sections_supported 필수, 그 밖의 최상위 절은 허용 집합 안."""
     d = yaml.safe_load(ADAPTER_PATH.read_text(encoding="utf-8"))
-    for key in ("match", "capabilities", "collect", "normalize"):
+    for key in ("adapter_id", "priority", "match", "capabilities"):
         assert key in d, f"hpe_superdome_flex: 필수 키 '{key}' 부재"
+    assert d["capabilities"].get("sections_supported"), "capabilities.sections_supported 부재"
+    assert set(d) <= {"adapter_id", "priority", "match", "capabilities", "generic", "vendor_notes", "metadata"}, (
+        f"코드가 읽지 않는 최상위 절이 있다: {sorted(set(d) - {'adapter_id', 'priority', 'match', 'capabilities', 'generic', 'vendor_notes', 'metadata'})}")
 
 
 def test_m_e2_priority_above_ilo6_below_ilo7() -> None:
@@ -116,12 +119,12 @@ def test_m_e2_capabilities_9_sections_no_users() -> None:
 # ── credentials / collect (HPE 재사용) ──────────────────────────────────────
 
 
-def test_m_e2_credentials_profile_hpe() -> None:
-    """credentials.profile = 'hpe' — vault/redfish/hpe.yml 재사용 (별도 vault 불필요)."""
+def test_m_e2_no_credentials_section_vault_is_the_source() -> None:
+    """2026-10-11: adapter 에 credentials 절이 없다 — 복구 계정 정본은 vault `role: recovery` 다(HPE sub-line 은 hpe vault 를 그대로 쓴다).
+    설계 메모는 `vendor_notes.design_hints` 에만 있다(코드 미참조)."""
     d = yaml.safe_load(ADAPTER_PATH.read_text(encoding="utf-8"))
-    assert d["credentials"]["profile"] == "hpe", (
-        "M-E1 결정 (a) — HPE sub-line. vault profile=hpe 재사용"
-    )
+    assert "credentials" not in d and "graceful_degradation" not in d and "collect" not in d
+    assert isinstance((d.get("vendor_notes") or {}).get("design_hints"), dict)
 
 
 def test_m_e2_multi_node_comes_from_manager_layout_not_oem_task() -> None:

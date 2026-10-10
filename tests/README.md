@@ -15,7 +15,6 @@
 | `tests/scripts/` | 보조 검증 스크립트 (conditional_review 등) | Jenkins Stage 4 보조 |
 | `tests/evidence/` | Round 검증 결과 / cycle 사고 분석 (rule 70 보존) | Round / 사이트 사고 |
 | `tests/reference/` | 참조 자료 (개발 시 참고용 — production 미사용) | (정리 후보) |
-| `tests/e2e_browser/` | BMC WebUI 브라우저 테스트 (선택) | BMC WebUI 변경 |
 
 ## baseline JSON 정본 위치
 
