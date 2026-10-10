@@ -15,7 +15,6 @@ common/
 └── vars/
     ├── supported_sections.yml # 10 sections 정본 (rule 13 R1)
     ├── vendor_aliases.yml     # vendor 정규화 정본 (rule 50 R1)
-    └── status_rules.yml       # status 판정 보조 규칙
 ```
 
 ## 책임 분리

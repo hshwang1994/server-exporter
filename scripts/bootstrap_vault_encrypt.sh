@@ -2,7 +2,7 @@
 # =============================================================================
 # scripts/bootstrap_vault_encrypt.sh
 #
-# 평문 vault/*.yml 을 ansible-vault 로 일괄 암호화한다.
+# 평문 vault/**/*.yml 을 ansible-vault 로 일괄 암호화한다 (vault/common/redfish/standard.yml + vault/<loc>/...).
 # 사용자 결정 (cycle 2026-04-28):
 #   - vault 처리 정책 = "ansible-vault encrypt 후 commit"
 #   - Jenkins credentials ID = "server-gather-vault-password" (Secret File)
@@ -37,16 +37,13 @@ if [[ "$(stat -c '%a' "${VAULT_PASS_FILE}" 2>/dev/null || stat -f '%Lp' "${VAULT
     chmod 600 "${VAULT_PASS_FILE}"
 fi
 
-VAULT_FILES=(
-    "${REPO_ROOT}/vault/linux.yml"
-    "${REPO_ROOT}/vault/windows.yml"
-    "${REPO_ROOT}/vault/esxi.yml"
-    "${REPO_ROOT}/vault/redfish/dell.yml"
-    "${REPO_ROOT}/vault/redfish/hpe.yml"
-    "${REPO_ROOT}/vault/redfish/lenovo.yml"
-    "${REPO_ROOT}/vault/redfish/supermicro.yml"
-    "${REPO_ROOT}/vault/redfish/cisco.yml"
-)
+# 현재 vault 배치(2026-08-12 flat 제거 뒤): vault/common/redfish/standard.yml(전역 표준 계정) + vault/<loc>/{os/linux.yml,os/windows.yml,esxi.yml,redfish/<vendor>.yml}.
+# 디렉터리를 재귀로 훑는다 — 평문 lab 자격 파일(.lab-credentials.yml, gitignored)과 README 는 대상이 아니다. 0건이면 실패다(2026-10-11: 종전 flat 경로 목록은 0건을 성공으로 보고했다).
+mapfile -t VAULT_FILES < <(find "${REPO_ROOT}/vault" -type f -name '*.yml' ! -name '.*' ! -iname 'README*' | sort)
+if [[ "${#VAULT_FILES[@]}" -eq 0 ]]; then
+    echo "[ERROR] vault/ 아래에 암호화할 *.yml 이 없습니다: ${REPO_ROOT}/vault" >&2
+    exit 1
+fi
 
 encrypted_count=0
 skipped_count=0

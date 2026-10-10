@@ -53,7 +53,7 @@
 #   diagnosis.details.notices 로 간다. 즉 시나리오 B 의 errors[] 는 "실제로 못 읽은 것" 만 담는다.
 #
 # severity (error/warning/info) 도입 안 함 — rule 22 R7/R8 (5 fragment 변수 / 타입 정본) 영역.
-# 향후 동적 정책 로딩이 필요하면 common/vars/status_rules.yml 활성화 (현재 reserved).
+# 판정 규칙은 이 파일의 인라인 Jinja2 하나다 — 별도 규칙 데이터 파일은 없다(2026-10-11 reserved 파일 삭제).
 #
 # 변경 시 사용자 명시 승인 필수: rule 13 R5 (envelope) / rule 92 R5 (schema) / rule 96 R1-B (호환성 외).
 # 결정 reference: docs/reference/decision-log.md (M-A2 / 2026-05-06)

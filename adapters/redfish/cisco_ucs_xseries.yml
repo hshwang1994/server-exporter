@@ -27,7 +27,6 @@
 #   - IMM 모드는 본 adapter 에서 graceful 실패 (precheck protocol 단계에서 차단)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_cisco_ucs_xseries
-channel: redfish
 priority: 110
 
 match:
@@ -51,33 +50,24 @@ capabilities:
     - firmware
     - power
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "cisco"
-  fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/cisco.yml accounts 의 label 과 매핑
-  recovery_accounts:
-    - { vault_label: cisco_current, role: recovery }
-    - { vault_label: cisco_factory, role: recovery }
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
-
 vendor_notes:
   family: ucs_xseries
   modes:
     - standalone   # 본 adapter cover — CIMC Redfish
     - intersight_managed   # 본 adapter 범위 외 — 별도 채널 필요
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: Cisco UCS X-Series 장비 — standalone CIMC Redfish 가정 (lab 부재 — web sources 기반). IMM 모드는 별도
+      Intersight 채널 필요.
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "Cisco UCS X-Series 장비 — standalone CIMC Redfish 가정 (lab 부재 — web sources 기반). IMM 모드는 별도 Intersight 채널 필요."

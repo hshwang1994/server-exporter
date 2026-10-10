@@ -24,7 +24,6 @@
 # DRIFT 추적: Manufacturer string / ServiceRoot.Product 사이트 실측 시 정정 가능
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_superdome_flex
-channel: redfish
 priority: 101
 # priority 차등 (rule 12 R2 일관성) — cycle 2026-06-04 (HP CSUS 3200 사이트 사고) 갱신:
 #   iLO 7 (120) > CSUS 3200 (102) = Superdome Flex (101) > iLO 6 (100) > iLO 5 (90) > iLO 4 (50) > generic (10)
@@ -58,34 +57,6 @@ capabilities:
     - power      # Chassis.PowerSubsystem (DMTF 신 schema) → Power (legacy fallback)
   # users (AccountService) — sections.yml channels=[os] 정의 따라 Redfish 채널 미해당. capabilities 명시 안 함.
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  # Superdome Flex 전용 OEM tasks 신규 작성 보류 (lab 부재) — HPE 공통 OEM 재사용.
-  # Partition 전용 OEM (Oem.Hpe.Partition*) 추가 시 별도 collect_superdome_oem.yml 신설.
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  # top-level data.* 는 Partition0 representative — 전 partition 은 data.multi_node 에 노출 (ADR-2026-05-12).
-
-credentials:
-  profile: "hpe"  # vault/<loc>/redfish/hpe.yml 재사용 (M-E1 결정 (a) HPE sub-line)
-  fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/hpe.yml accounts 의 label 과 매핑
-  recovery_accounts:
-    - { vault_label: hpe_fallback, role: recovery }
-    - { vault_label: hpe_current,  role: recovery }
-    - { vault_label: hpe_factory,  role: recovery }
-
-auth:
-  preferred: [session, basic]  # iLO 5 동일 — RMC 도 표준 Redfish auth
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware, bmc]
-  optional_sections: [firmware, power, storage, network]
-
 # Superdome Flex 특이사항 (lab 부재 — web sources 추정. 사이트 실측 시 정정)
 vendor_notes:
   multi_partition: true             # nPAR — 전 partition 수집 (cycle 2026-05-12 ADR-2026-05-12)
@@ -95,10 +66,26 @@ vendor_notes:
   rmc_firmware_min: "2.0"
   ilo5_firmware_min: "2.0"
   npar_firmware_bundles: true       # complex/nPar firmware bundles (sdflex-ironic-driver wiki)
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    - bmc
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    - storage
+    - network
+    auth_preferred:
+    - session
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: HPE Superdome Flex / Flex 280 — RMC + iLO 5 dual-manager, multi-partition (nPAR). cycle 2026-05-12
+      (ADR-2026-05-12) — 전 partition / 전 manager / 전 chassis 수집 활성. data.multi_node 컨테이너에 partitions / managers / chassis 리스트
+      노출 (Additive).
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: >-
-    HPE Superdome Flex / Flex 280 — RMC + iLO 5 dual-manager, multi-partition (nPAR).
-    cycle 2026-05-12 (ADR-2026-05-12) — 전 partition / 전 manager / 전 chassis 수집 활성.
-    data.multi_node 컨테이너에 partitions / managers / chassis 리스트 노출 (Additive).

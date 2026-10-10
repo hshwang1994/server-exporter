@@ -24,7 +24,6 @@
 # Next action: X14/H14 (Granite Rapids / Turin) lab 도입 후 별도 cycle (Redfish 1.21.0 신 features + CPLD APIs 검증)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_supermicro_x14
-channel: redfish
 priority: 110
 
 match:
@@ -44,29 +43,6 @@ capabilities:
     - firmware
     - power
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "supermicro"
-  fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/supermicro.yml accounts 의 label 과 매핑
-  recovery_accounts:
-    - { vault_label: supermicro_factory, role: recovery }
-
-auth:
-  preferred: [basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
-
 vendor_notes:
   generation: x14
   generation_year: "2024+"
@@ -78,9 +54,22 @@ vendor_notes:
   cpld_firmware_inventory: true
   power_subsystem_introduction: true     # PowerSubsystem 표준 지원 (X12+)
   storage_strategy_evolution: standard   # 표준 Storage path 지원
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    auth_preferred:
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: Supermicro X14/H14 계열 — Redfish 완전 지원 가정 (lab 부재 — web sources 기반).
 # Lab status: 부재 — 사용자 명시 2026-05-07 Q2 (Supermicro 사이트 BMC 0대)
 # Next action: lab 도입 후 별도 cycle — capability 보정 (rule 50 R2 단계 10)
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "Supermicro X14/H14 계열 — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."

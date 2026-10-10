@@ -21,7 +21,6 @@
 # Next action: lab 도입 후 별도 cycle (iDRAC8 사이트 실측 fixture 캡처)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_dell_idrac8
-channel: redfish
 priority: 50
 
 match:
@@ -40,32 +39,19 @@ capabilities:
     - firmware
     - power  # M-D3 W1 (cycle 2026-05-06): cycle 2026-05-01 PowerSubsystem fallback 코드 적용 — Additive only
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "dell"
-  fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/dell.yml accounts 의 label 과 매핑
-  recovery_accounts:
-    - { vault_label: dell_fallback_1, role: recovery }
-    - { vault_label: dell_fallback_2, role: recovery }
-    - { vault_label: dell_current,    role: recovery }
-    - { vault_label: lab_dell_root,   role: recovery }
-
-auth:
-  preferred: [basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware]
-
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "Dell iDRAC 8 장비 — Redfish 제한적 지원 (power 섹션 미지원 가능)."
+vendor_notes:
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    auth_preferred:
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: Dell iDRAC 8 장비 — Redfish 제한적 지원 (power 섹션 미지원 가능).

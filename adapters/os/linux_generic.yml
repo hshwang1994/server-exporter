@@ -7,7 +7,6 @@
 # Notes: priority=0 — Linux 2-tier (rule 10 R4) Python ok / raw fallback 모두 지원.
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: os_linux_generic
-channel: os
 priority: 0
 generic: true
 
@@ -24,23 +23,13 @@ capabilities:
     - network
     - users
 
-collect:
-  tasks_dir: "os-gather/tasks/linux"
-  gather_tasks:
-    - "os-gather/tasks/linux/gather_system.yml"
-    - "os-gather/tasks/linux/gather_cpu.yml"
-    - "os-gather/tasks/linux/gather_memory.yml"
-    - "os-gather/tasks/linux/gather_storage.yml"
-    - "os-gather/tasks/linux/gather_network.yml"
-    - "os-gather/tasks/linux/gather_users.yml"
-  preflight_tasks: "os-gather/tasks/linux/preflight.yml"
-
-credentials:
-  profile: "os_linux"
-  fallback_profiles: []
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system]
-  optional_sections: [users]
+vendor_notes:
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    graceful_degradation_optional_sections:
+    - users

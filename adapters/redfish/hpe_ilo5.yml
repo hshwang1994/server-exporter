@@ -26,7 +26,6 @@
 # Next action: lab 도입 후 별도 cycle (Gen10 Plus 와 Gen10 응답 차이 확정)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_ilo5
-channel: redfish
 priority: 90
 # priority 차등 (NEXT_ACTIONS T3-02): iLO 6 (100) > iLO 5 (90) > iLO 4 (50) > generic (10).
 # 동일 firmware_patterns 미매치 + vendor만 일치하는 부정확 응답 시 최신 세대가 우선.
@@ -47,31 +46,21 @@ capabilities:
     - firmware
     - power
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "hpe"
-  fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/hpe.yml accounts 의 label 과 매핑
-  recovery_accounts:
-    - { vault_label: hpe_fallback, role: recovery }
-    - { vault_label: hpe_current,  role: recovery }
-    - { vault_label: hpe_factory,  role: recovery }
-
-auth:
-  preferred: [session, basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
-
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "HPE iLO 5 장비 — Redfish 완전 지원."
+vendor_notes:
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    auth_preferred:
+    - session
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: HPE iLO 5 장비 — Redfish 완전 지원.

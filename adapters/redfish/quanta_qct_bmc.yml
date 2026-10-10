@@ -27,7 +27,6 @@
 # Next action: QuantaGrid D54Q / D52BQ lab 도입 후 별도 cycle (OpenBMC bmcweb 응답 형식 + Oem.Quanta_Computer_Inc vs Oem.QCT fallback 검증)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_quanta_qct_bmc
-channel: redfish
 priority: 80
 
 match:
@@ -50,30 +49,6 @@ capabilities:
     - firmware
     - power
     # M-D3 W6 (cycle 2026-05-06): users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
-  oem_strategy: "none"   # 2026-08-13: vendor OEM task 제거
-
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "quanta"
-  fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/quanta.yml accounts 의 label 과 매핑 (lab 부재 — recovery factory 만 정의)
-  recovery_accounts:
-    - { vault_label: quanta_factory, role: recovery }
-
-auth:
-  preferred: [basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
 
 vendor_notes:
   bmc_name: "BMC"  # OpenBMC 기반 — 별도 표시명 없음
@@ -86,7 +61,21 @@ vendor_notes:
     - "QuantaGrid D54Q-2U"
     - "QuantaGrid D52BQ-2U"
     - "QuantaPlex T42S-2U"
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    auth_preferred:
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: Quanta QCT BMC 장비 (OpenBMC 기반) — Redfish 표준 호환 가정 (lab 부재 — web sources 기반).
+    capabilities_oem_strategy: none
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "Quanta QCT BMC 장비 (OpenBMC 기반) — Redfish 표준 호환 가정 (lab 부재 — web sources 기반)."

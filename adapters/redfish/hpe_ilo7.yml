@@ -33,7 +33,6 @@
 #       (gather_firmware 가 자동 cover)
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_ilo7
-channel: redfish
 priority: 120
 
 match:
@@ -70,30 +69,6 @@ capabilities:
     - firmware
     - power
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "hpe"
-  fallback_profiles: []
-  recovery_accounts:
-    - { vault_label: hpe_fallback, role: recovery }
-    - { vault_label: hpe_current,  role: recovery }
-    - { vault_label: hpe_factory,  role: recovery }
-
-auth:
-  preferred: [session, basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
-
 # iLO 7 특이사항 (Gen12 — web sources 기반, lab 부재):
 # - NetworkPorts deprecated → EthernetInterface (gather_network 자동 cover)
 # - Oem.Hpe.Firmware.Current.* deprecated → FirmwareInventory 우선
@@ -105,7 +80,21 @@ vendor_notes:
   fan_reading_units: Percent
   nic_data_limited: false
   generation: gen12
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    auth_preferred:
+    - session
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: HPE iLO 7 장비 (Gen12) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반).
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "HPE iLO 7 장비 (Gen12) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."

@@ -14,7 +14,6 @@
 #        이 adapter 가 단독 1위가 된다. 즉 동률이어도 판정은 갈린다.
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: esxi_9x
-channel: esxi
 priority: 100
 
 match:
@@ -29,22 +28,14 @@ capabilities:
     - storage
     - network
 
-collect:
-  collect_tasks:
-    - "esxi-gather/tasks/collect_facts.yml"
-    - "esxi-gather/tasks/collect_config.yml"
-    - "esxi-gather/tasks/collect_datastores.yml"
-  normalize_tasks:
-    - "esxi-gather/tasks/normalize_system.yml"
-    - "esxi-gather/tasks/normalize_network.yml"
-    - "esxi-gather/tasks/normalize_storage.yml"
-
-credentials:
-  profile: "esxi_default"
-  fallback_profiles: []
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [storage]
+vendor_notes:
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - storage

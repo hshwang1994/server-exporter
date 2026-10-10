@@ -23,7 +23,6 @@
 #     EnvironmentMetrics / MemoryMetrics / ManagerDiagnosticData
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_dell_idrac10
-channel: redfish
 priority: 120
 
 match:
@@ -43,31 +42,21 @@ capabilities:
     - firmware
     - power
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "dell"
-  fallback_profiles: []
-  recovery_accounts:
-    - { vault_label: dell_fallback_1, role: recovery }
-    - { vault_label: dell_fallback_2, role: recovery }
-    - { vault_label: dell_current,    role: recovery }
-    - { vault_label: lab_dell_root,   role: recovery }
-
-auth:
-  preferred: [session, basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
-
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "Dell iDRAC 10 장비 (PowerEdge 17G) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."
+vendor_notes:
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    auth_preferred:
+    - session
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: Dell iDRAC 10 장비 (PowerEdge 17G) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반).

@@ -37,7 +37,6 @@
 #   → redfish_gather.py _get() 의 공통 정책 그대로 사용
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_lenovo_xcc3
-channel: redfish
 priority: 120
 
 match:
@@ -66,30 +65,6 @@ capabilities:
     - firmware
     - power
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "lenovo"
-  fallback_profiles: []
-  recovery_accounts:
-    - { vault_label: lenovo_fallback, role: recovery }
-    - { vault_label: lenovo_current,  role: recovery }
-    - { vault_label: lenovo_factory,  role: recovery }
-
-auth:
-  preferred: [basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
-
 # XCC3 특이사항 (web sources 기반, lab 부재):
 # - OpenBMC 기반 — 표준 Redfish 우선, OEM 의존 감소
 # - Redfish 1.17.0 / bundle 2024.3
@@ -101,7 +76,20 @@ vendor_notes:
   redfish_version: "1.17.0"
   schema_bundle: "2024.3"
   http_headers_policy: accept_only
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    auth_preferred:
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: Lenovo XCC3 장비 (ThinkSystem V4) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반).
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "Lenovo XCC3 장비 (ThinkSystem V4) — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."

@@ -145,14 +145,8 @@ include:
     note: once-a-day cleanup of this Job's finished Runner workspaces (2026-10-05 8th R8); the argparse description is a string literal (2026-10-06 D13)
 
 excluded:
-  - path: common/vars/status_rules.yml
-    reason: referenced only by a comment in build_status.yml (reserved, no runtime loader)
-  - path: adapters/registry.yml
-    reason: master index document; adapter_loader globs adapters/<channel>/*.yml directly
   - path: scripts/bootstrap_vault_encrypt.sh
     reason: operator tool (one-time vault bootstrap), not part of a Jenkins build
-  - path: scripts/verify_account_provision.sh
-    reason: operator verification tool, not part of a Jenkins build
   - glob: "jenkins/**"
     reason: operator tools (job XML) are applied on the controller, not checked out by builds
 

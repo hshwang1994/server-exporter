@@ -72,7 +72,6 @@
 # Next action: baseline 실측 교체(Ansible control node) + collect_oem.yml 정리 — NEXT_ACTIONS.md 등재
 # ──────────────────────────────────────────────────────────────────────────────
 adapter_id: redfish_hpe_csus_3200
-channel: redfish
 priority: 102
 # priority 차등 (rule 12 R2 일관성) — cycle 2026-06-04 (HP CSUS 3200 사이트 사고) 갱신:
 #   iLO 7 (120) > CSUS 3200 (102) = Superdome Flex (101) > iLO 6 (100) > iLO 5 (90) > iLO 4 (50) > generic (10)
@@ -112,36 +111,6 @@ capabilities:
     - power      # Chassis.PowerSubsystem (DMTF 신 schema) → Power (legacy fallback)
   # users (AccountService) — sections.yml channels=[os] 정의 따라 Redfish 채널 미해당. capabilities 명시 안 함.
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  # HPE 공통 OEM tasks 재사용 — Oem.Hpe namespace 동일 + PartitionInfo / FlexNodeInfo / GlobalConfiguration 상속.
-  # model regex 확장으로 CSUS 3200 분기 활성화 (Additive — collect_oem.yml Superdome/CSUS OEM 블록).
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-  # cycle 2026-05-29: 전 Partition 수집 + per-partition canonical 정규화 완료
-  # (구 "첫 Partition0 만 수집" 한계 해소 — gather_systems_multi). data.multi_node.partitions[]
-  # 각 entry 가 cpu/memory/storage/network 정규화 결과 보유. top-level data.* 는 Partition0 representative.
-
-credentials:
-  profile: "hpe"  # 2026-08-12: 더 이상 vault 선택에 쓰이지 않는다 (Phase B 에서 제거 예정)
-  fallback_profiles: []
-  # P2 AccountService 진입점 — vault/<loc>/redfish/hpe.yml accounts 의 label 과 매핑
-  recovery_accounts:
-    - { vault_label: hpe_fallback, role: recovery }
-    - { vault_label: hpe_current,  role: recovery }
-    - { vault_label: hpe_factory,  role: recovery }
-
-auth:
-  preferred: [session, basic]  # RMC 표준 Redfish auth — Superdome Flex 와 동일
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware, bmc]
-  optional_sections: [firmware, power, storage, network]
-
 # CSUS 3200 특이사항 (lab 부재 — web sources 추정. 사이트 실측 시 정정)
 vendor_notes:
   multi_partition: true              # nPAR — 전 partition 수집 (cycle 2026-05-12 ADR-2026-05-12)
@@ -159,13 +128,27 @@ vendor_notes:
   chassis_thermal: true              # Chassis/Thermal (+ ThermalSubsystem fallback)
   manager_log_services: true         # Managers/LogServices (RMC Services/Logs)
   partition_boot_order: true         # Systems.Boot 부팅 순서 (per-nPartition)
+  # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
+  # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    - bmc
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    - storage
+    - network
+    auth_preferred:
+    - session
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: HPE Compute Scale-up Server 3200 (CSUS 3200) — RMC + PDHC 관리, multi-partition (nPAR). cycle
+      2026-05-12 (ADR-2026-05-12) — 전 partition / 전 manager / 전 chassis 수집 활성. cycle 2026-06-09 (ADR-2026-06-09) — partitions[].boot
+      / chassis[].thermal / managers[].log_services / multi_node.composition (ResourceBlocks) / multi_node.fabrics (FlexGrid)
+      추가. data.multi_node 컨테이너에 노출 (Additive). lab 부재 — 사이트 실측 시 model_patterns / firmware_patterns / OEM schema 정정 의무.
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: >-
-    HPE Compute Scale-up Server 3200 (CSUS 3200) — RMC + PDHC 관리, multi-partition (nPAR).
-    cycle 2026-05-12 (ADR-2026-05-12) — 전 partition / 전 manager / 전 chassis 수집 활성.
-    cycle 2026-06-09 (ADR-2026-06-09) — partitions[].boot / chassis[].thermal /
-    managers[].log_services / multi_node.composition (ResourceBlocks) / multi_node.fabrics
-    (FlexGrid) 추가. data.multi_node 컨테이너에 노출 (Additive).
-    lab 부재 — 사이트 실측 시 model_patterns / firmware_patterns / OEM schema 정정 의무.
