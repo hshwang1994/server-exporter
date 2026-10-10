@@ -237,9 +237,9 @@
     _ip:      "{{ ansible_host | default(inventory_hostname) }}"
     _os_type: "linux"
     # SSH 비밀번호를 sudo 비밀번호로 전달 (DMI 식별자 읽기에 필요)
-    # vault에 ansible_become_pass가 별도 정의되면 그 값이 우선됨
-    # 주: 이 play var 는 try_one_credential.yml 의 host fact set_fact 에 덮여 사실상
-    #     쓰이지 않는다(기존 결함, 이번 변경 범위 밖). 값의 출처만 _cred_become_password 로 옮겼다.
+    # vault에 ansible_become_password 가 별도 정의되면 그 값이 우선됨
+    # 주: 실제 값은 후보마다 try_one_credential.yml 의 set_fact 가 같은 규칙(별도 become 값이 비어 있지 않으면 그 값, 아니면 그 로그인
+    #     후보의 비밀번호)으로 정한다(2026-10-10 C10 — 종전에는 그 set_fact 가 언제나 로그인 비밀번호로 덮어썼다). 이 play var 는 후보 적용 전 기본값이다.
     ansible_become_pass: "{{ _cred_become_password | default(ansible_password | default(omit)) }}"
 
   tasks:
