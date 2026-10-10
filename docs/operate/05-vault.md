@@ -61,14 +61,16 @@ Generation / Model / Firmware 는 **선택축이 아니다** (세대를 아는 �
 
 ### 3.2 이전 flat 경로 (2026-08-12 삭제 완료)
 
-| 채널 | 이전 경로 |
-|---|---|
-| Linux | `vault/<loc>/os/linux.yml` |
-| Windows | `vault/<loc>/os/windows.yml` |
-| ESXi | `vault/<loc>/esxi.yml` |
-| Redfish | `vault/<loc>/redfish/<vendor>.yml` |
+| 채널 | 이전 flat 경로 (2026-08-12 `adc99570` 에서 12 파일 삭제) | 지금 경로 (§3.1) |
+|---|---|---|
+| Linux | `vault/linux.yml` | `vault/<loc>/os/linux.yml` |
+| Windows | `vault/windows.yml` | `vault/<loc>/os/windows.yml` |
+| ESXi | `vault/esxi.yml` | `vault/<loc>/esxi.yml` |
+| Redfish | `vault/redfish/<vendor>.yml` (9 vendor) | 복구 `vault/<loc>/redfish/<vendor>.yml` + 표준 `vault/common/redfish/standard.yml` |
 
-**현재 코드는 이 경로를 읽지 않는다.** 런타임 폴백도 없다 — 신규 경로가 준비되지 않으면
+> 2026-10-10 정정: 이전 판의 이 표는 "이전 경로" 열에 **지금 경로**를 적고 있었다. 위 flat 경로가 `git log --diff-filter=D -- vault` 로 확인한 실제 삭제 목록이다.
+
+**현재 코드는 flat 경로를 읽지 않는다.** 런타임 폴백도 없다 — 신규 경로가 준비되지 않으면
 "조용히 옛 파일로 성공" 하는 대신 명시적으로 실패한다
 (`failure_code=CREDENTIAL_SET_UNAVAILABLE`). 이관 실패를 감추지 않기 위한 의도된 설계다.
 
@@ -106,79 +108,72 @@ OS / ESXi 는 축이 하나뿐이라 구조가 그대로다 (`<loc>/os/<type>`, 
 비밀번호를 바꿀 때: 표준 계정은 `vault/common/redfish/standard.yml` **1곳**,
 복구 계정은 해당 Location+Vendor 파일만 고친다.
 
-### 3.4 flat → Location 이관 절차 (4단계)
+### 3.4 Location 별 운영 값 관리 (flat → Location 이관은 끝났다)
+
+> **상태 (2026-10-10 실측)**: 4 Location (`ic / cj / yi / git`) × 12 + 전역 표준 1 = **49 파일**. 전부 현재 마스터 키로 복호화되고
+> 구조 검사(`accounts[]` · role · label)를 통과한다. flat 12 파일은 2026-08-12 (`adc99570`) 에 삭제됐다 — **더 지울 파일은 없다.**
+> Location 별 복구 값은 이미 서로 다르다 (복호화 결과의 해시만 비교했다 — 값은 보지 않았다). 2026-08-12 Pilot 때 네 Location 에 같은 값을
+> 둔 것은 경로 분기(`loc` → agent label → `se_location` → vault 경로 → 복호화 → 인증) 검증이 목적이었던 당시 상태다.
+>
+> **2026-10-10 정정**: 이전 판의 "4단계 — flat vault 제거" 는 삭제 대상으로 `vault/<loc>/os/linux.yml` · `vault/<loc>/os/windows.yml` ·
+> `vault/<loc>/esxi.yml` · `vault/<loc>/redfish/*.yml` 를 적고 있었다. 그 경로는 **현재 운영 경로**다 (§3.1). 그대로 따랐다면 운영 자격을 지웠을 것이다.
+> 실제 삭제됐던 flat 경로는 §3.2 표의 왼쪽 열이다.
 
 > **2026-10-04 — 청주 Location `chj` → `cj`**: registry 키·`agent_label`·`vault/cj/`(12 파일, 암호문 blob 동일 · 재암호화 없음) 만 바꿨다. alias 는 두지 않았으므로
 > `loc=chj` 요청은 미등록 Location 으로 **fail-closed** 다. 반영 순서: ① 요청 `loc` 값을 만드는 쪽(공급자) 확인 ② 실 청주 Runner 에 라벨 `cj`(기존 라벨 유지)
 > ③ 전환 시각 합의·진행 중 `chj` 빌드 완료 대기 ④ 코드 반영(main → 승격) ⑤ `cj` 빌드 Resolve 성공·`chj` 요청 0건 확인 ⑥ 원복 = `git revert`/`prodgen restore` + 공급자 값 복귀.
 > alias 가 없으므로 무중단은 약속하지 않는다. 고객사 전달 자료에도 같은 내용을 적는다 (docs/operate/09).
->
-> **현재 상태 (2026-08-12, Location 이름만 2026-10-04 기준)**: 4 Location (`ic / cj / yi / git`) × 12 = 48개 +
-> 전역 표준 1개 = **49개**. flat 12개는 삭제됐다.
-> 복구 자격은 아직 **4곳이 같은 값**이다 (Pilot 단계). 아래 절차는 **운영 값으로
-> 분리할 때**의 정본이다.
-> Pilot 결과: `tests/evidence/2026-08-12-location-vault-jenkins-pilot.md`,
-> 표준/복구 분리: `tests/evidence/2026-08-12-redfish-standard-account-separation.md`
->
-> **Pilot 예외가 정당했던 이유**: Pilot 의 검증 목표는 값이 아니라 **경로 분기**
-> (`loc` → agent label → `se_location` → vault 경로 → 복호화 → 인증) 였다. 값을 4벌로
-> 새로 만들면 값 오타와 경로 버그가 뒤섞여 원인 분리가 안 된다. 값을 고정해 두면
-> `credential_scope` 차이만으로 경로 동작을 판정할 수 있다.
-> **운영 전환 시에는 이 예외를 쓰지 마라** — 아래 1단계대로 신규 작성한다.
 
-Location 별 실제 계정 값이 서로 다를 수 있으므로 이관은 **파일 이동이 아니라 신규 작성**이다.
-기존 flat vault 를 3벌 복사하는 것은 잘못된 값을 3곳에 심는 일이다.
+**값을 바꾸거나 Location 별로 갈라 쓸 때** — 파일을 옮기거나 다른 Location 에서 복사하지 않는다. 다른 Location 의 값을 복사하는 것은
+잘못된 값을 그 Location 에 심는 일이다.
 
-**1단계 — 신규 Vault 작성** (운영 담당자)
+**1단계 — 값 확정 · 편집** (운영 담당자)
 
 ```bash
-# Location × 채널별 실제 계정 값을 확정한 뒤 각각 신규 생성
-mkdir -p vault/<loc>/os vault/<loc>/redfish
-ansible-vault create vault/<loc>/os/linux.yml
-ansible-vault create vault/<loc>/esxi.yml
-ansible-vault create vault/<loc>/redfish/dell.yml
-# ... 필요한 vendor 만큼
+# 있는 파일은 edit 다 (create 는 §3.3 의 새 Location 에만)
+ansible-vault edit vault/<loc>/os/linux.yml
+ansible-vault edit vault/<loc>/os/windows.yml
+ansible-vault edit vault/<loc>/esxi.yml
+ansible-vault edit vault/<loc>/redfish/dell.yml          # 복구 계정 — 필요한 vendor 만큼
+ansible-vault edit vault/common/redfish/standard.yml     # 표준 수집 계정 — 전역 1곳 (§3.3.1)
 ```
 
-파일 내부 스키마는 **바뀌지 않았다** (§6). 바뀐 것은 파일이 놓이는 경로뿐이다.
-`accounts` 배열 **순서 = 인증 시도 순서**다 — 코드가 재정렬하지 않는다.
+파일 내부 스키마는 바뀌지 않았다 (§7). `accounts` 배열 **순서 = 인증 시도 순서**다 — 코드가 재정렬하지 않는다.
 
-**2단계 — 구조 / 암호화 검증**
+**2단계 — 구조 / 암호화 검증** (Secret 값은 출력하지 않는다)
 
 ```bash
-# 어떤 경로가 아직 비었는지 (복호화 없이)
-python 내부 검증 스크립트 --layout-only
+# 어떤 경로가 비었는지 (복호화 없이)
+python scripts/ai/vault_decrypt_check.py --layout-only
 
-# 복호화 + accounts 스키마 + role + label 정합 (Secret 값은 출력하지 않는다)
-SE_VAULT_PASSWORD='<마스터 키>' python 내부 검증 스크립트
+# 복호화 + accounts 스키마 + role + label 정합 — 마스터 키는 권한 600 임시 사본으로 넘기고 끝나면 지운다
+python scripts/ai/vault_decrypt_check.py --password-file <임시 사본>
 ```
 
-> vault 복호화 점검 도구 는 `.gitignore` 대상 **로컬 도구**다 (cycle-018 결정 —
-> 당시 마스터 키가 코드에 하드코딩돼 있었다). 2026-08-12 에 하드코딩을 제거하고 키를
-> `SE_VAULT_PASSWORD` / `--password-file` 로만 받도록 바꿨다. gitignore 해제 여부는
-> 사용자 결정 사항으로 남겨 두었으므로 fresh clone 에는 이 파일이 없을 수 있다.
+> `scripts/ai/vault_decrypt_check.py` 는 저장소에 들어 있다 (2026-08-12 하드코딩 키 제거 뒤 추적). Windows 드라이브를 WSL 에서 열면
+> 파일마다 실행 비트가 붙어 `--vault-password-file` 이 키 파일을 **스크립트로 실행**하려다 `Exec format error` 로 실패한다 — WSL 쪽 경로에
+> 600 사본을 만들어 넘긴다.
 
 검사 항목: `$ANSIBLE_VAULT` 헤더 / 복호화 성공 / `accounts[]` 각 항목의
 `username·password·label·role` / `role ∈ {primary, recovery, secondary}` /
 `primary` 1개 이상 / Redfish label 이 vendor 허용 집합(§6.5)과 정합 /
 `accounts[0].role != primary` 경고.
 
-**3단계 — 실장비 Pilot**
+Location 별 값이 같은지 볼 때는 값이 아니라 해시를 비교한다:
 
-Location 1곳 × 채널별 1대씩 실제 수집을 돌려 확인한다:
+```bash
+for loc in ic cj yi git; do ansible-vault view --vault-password-file <임시 사본> vault/$loc/redfish/dell.yml | sha256sum; done
+```
+
+**3단계 — 실장비 확인**
+
+값을 바꾼 Location × 채널마다 1대씩 실제 수집을 돌려 확인한다:
 
 - `diagnosis.details.credential_scope` 가 기대 값인가 (`<loc>/os/linux` 등)
-- 요청 target 수 == 결과 envelope 수 (rule 11)
-- 실패 경로: 없는 Location 으로 빌드 → `Resolve Location` stage 에서 즉시 실패
-  (agent 대기 없음)
+- 요청 target 수 == 결과 envelope 수
+- 실패 경로: 없는 Location 으로 빌드 → `Resolve Location` 단계에서 즉시 실패 (agent 대기 없음)
 
 **Unit test 통과는 실장비 검증이 아니다.**
-
-**4단계 — flat vault 제거** (별도 커밋)
-
-3단계가 확인된 뒤에만. 삭제 대상: `vault/<loc>/os/linux.yml`, `vault/<loc>/os/windows.yml`,
-`vault/<loc>/esxi.yml`, `vault/<loc>/redfish/*.yml` 9개.
-(`vault/.lab-credentials.yml` 은 제외 — resolver 대상이 아닌 lab 전용 평문 파일)
 
 ## 4. Vault 자동 반영 메커니즘 (rule 27 R6)
 
