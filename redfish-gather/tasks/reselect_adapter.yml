@@ -32,13 +32,14 @@
 # model 과 firmware 가 둘 다 비면 아무것도 하지 않는다. 즉 수집이 실패한 상황에서는
 # 1차 결과가 그대로 남아 종전 동작과 완전히 같다.
 #
-# 입력: _rf_raw_collect (수집 결과), _rf_probe_facts (vendor)
+# 입력: _rf_raw_collect (수집 결과), _rf_vendor (collect_standard 가 정한 vendor — 인증 후 유효값 우선, 2026-10-10 C5),
+#       _rf_probe_facts (vendor 를 정하지 못했을 때의 probe 원값)
 # 출력: _selected_adapter (바뀔 수 있음), _rf_adapter_first_pass (바뀐 경우 종전 값)
 
 - name: "redfish | reselect | 인증 후 facts 조립"
   ansible.builtin.set_fact:
     _rf_postauth_facts:
-      vendor: "{{ (_rf_probe_facts | default({})).vendor | default('') }}"
+      vendor: "{{ (_rf_vendor | default(none, true)) or ((_rf_probe_facts | default({})).vendor | default('')) }}"
       model: >-
         {{ ((_rf_raw_collect.data | default({}, true)).get('system') | default({}, true)).get('model', '')
            | default('', true) }}

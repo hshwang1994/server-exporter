@@ -159,13 +159,18 @@
                | rejectattr('status', 'eq', 401)
                | list | length) == 0) }}
 
-# vendor 정규화 (성공 후보 기준 — vendor_aliases.yml 기반, detect_vendor 가 이미 채움)
+# vendor 정규화 (성공 후보 기준 — vendor_aliases.yml 기반)
+# 2026-10-10 (C5): 성공한 수집이 알려 준 유효한 canonical vendor(모듈의 인증 후 detect_vendor — ServiceRoot 에 식별 정보가 없으면
+#   Chassis · Managers · Systems 의 Manufacturer 까지 본다)를 먼저 쓰고, 그 값이 없거나 unknown 이면 무인증 probe 의 유효값
+#   (_rf_detected_vendor)을 쓴다. 무인증 ServiceRoot 에 식별 정보가 없는 장비는 probe 가 unknown 이라 adapter 재선택이 generic 에,
+#   결과 vendor 가 null 에 머물렀다. 두 수집 단계(1차 · 복구 뒤 재수집) 모두 이 task 를 지난다. Vault 범위(_cred_vendor)는 그대로다.
 - name: "redfish | collect_standard | set vendor"
   ansible.builtin.set_fact:
     _rf_vendor: >-
-      {{ _rf_detected_vendor
-         if (_rf_detected_vendor | default('unknown')) != 'unknown'
-         else none }}
+      {%- set post = (((_rf_raw_collect.vendor | default('', true)) | string) | canonical_vendor(_va.vendor_aliases))
+                     if (_rf_collect_ok | default(false) | bool) else 'unknown' -%}
+      {%- set probe = _rf_detected_vendor | default('unknown', true) -%}
+      {{ post if post != 'unknown' else (probe if probe != 'unknown' else none) }}
   no_log: true
 
 # 운영 가시성 — meta.auth 에 합쳐질 정보 (build_meta.yml 시 활용)
