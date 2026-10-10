@@ -29,7 +29,8 @@
 | X0 `3d053d36` | PASS | class B 0 | #408~#422 계약대로(T5 재실행 뒤 ABORTED) | 차이 = 선언(T5 합성 봉투 진단 보존)만 | #40 SUCCESS · COMPLETE_PASS | 안 함(Harness 미신뢰 단계) |
 | X1 `b3c8ebf7` | PASS | tree `96db8f5f…` | #423~#438 계약대로(T5 재실행 #438) | OK | **#41 FAILURE** — Harness 54 중 `prep_failed_on_resume` 1건 기대 불일치(FL-F01b) | 안 함 |
 | X2 `32d4e307` | **FAIL 1**(시험이 Windows 샌드박스 가정) | class B 0 · tree `20fb2094…` | — | — | — | 안 함 |
-| X2' `361d4484`(시험만 수정) | PASS(깨끗한 checkout · 4,879/182/7 · integration 333) | tree `20fb2094…`(X2 와 동일) | #454~#468 계약대로(T5 #456 → 재실행 #469 ABORTED) | 회귀 0 — 선언 D-03(Windows) · D-08 · WIN-02 · WIN-DM | #42 진행 중 | 미실행 |
+| X2' `361d4484`(시험만 수정) | PASS(깨끗한 checkout · 4,879/182/7 · integration 333) | tree `20fb2094…`(X2 와 동일) | #454~#468 계약대로(T5 #456 → 재실행 #469 ABORTED) | 회귀 0 — 선언 D-03(Windows) · D-08 · WIN-02 · WIN-DM | **#42 SUCCESS · COMPLETE_PASS** | CLI dry-run 거부(PC G14 1건 HC-T6b) |
+| X3 `00cb1bf3` → X4 `c2d76de2`(시험 · 문서 · 하네스만) | PASS(각 4,909/153/7) · PC G14 overlay 4,739 통과 0 실패 | tree `20fb2094…`(동일) | #470~#484 계약대로(T5 #472 → 재실행 #485 ABORTED) | 회귀 0 — ENV-01(10.50.11.231 복구) 선언 뒤 | **#43 SUCCESS · COMPLETE_PASS**(Gate 4,909/153) | **P11 `35b9ad5e`** |
 
 X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 90) Jenkins 가 아는 앞 시도의 연결 끊김 근거가 상태 파일에 전달되지 않아 앞 시도가
 `process_lost` 로 닫혔다(기대 `agent_disconnect`). 파이프라인 outcome(`prep_failed`)은 설계대로였다. X2 에서 `seClassifyAttempt(agentLost)` 로 고쳤다.
@@ -68,10 +69,10 @@ X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 9
 
 - [x] 전체 suite 결과(§5)
 - [x] lab probe 결과(P4 · P8 · P11-lite — §5)
-- [x] X2 push · WSL ci_gate · 매트릭스 · strict compare(§3) — [ ] CI #42
-- [ ] 승격 · canary · 명부 전수
-- [ ] 성능 전후(P4)
-- [ ] 정리 완료 확인
+- [x] X2' · X4 push · WSL ci_gate · 매트릭스 · strict compare · CI(§3)
+- [x] 승격 · canary · 명부 전수(§9)
+- [x] 성능 전후(§9)
+- [ ] 정리 완료 확인 — 이 커밋 뒤 수행, 결과는 대장(`ledger.json` items cleanup-*)에 기록
 
 ## 8. 감사 중 발견한 하네스 맹점 · 문서 정정 (X3 — 시험 · 문서만, runtime 불변)
 
@@ -85,3 +86,16 @@ X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 9
 - **HC-T6b**: X2' 의 CLI 승격 dry-run 이 이 PC 의 G14 재실행(생성 tree + tests overlay, `PYTHONIOENCODING` 없음)에서 `test_cli_exit_codes` 1건으로 거부됐다 — 자식 프로세스의
   한글 stderr 가 cp949 로 나오는데 시험은 utf-8 로 읽었다(X1 의 HC-T6 수정은 셸이 export 한 `PYTHONIOENCODING` 에 기대고 있었다). 자식 env 를 고정해 고쳤고(X4) 같은 overlay 에서
   재현 → 통과를 확인했다. 승격 대상은 X4 가 되며 매트릭스 · CI 를 다시 돈다(D-15 정정 · D-16).
+
+## 9. 승격 · production 명부 · 성능 (2026-10-10)
+
+- **승격**: X4 `c2d76de2` → **production P11 `35b9ad5e`**(parent P10 `9ddc174a`). CLI `prodgen promote`(CI #43 집계 보고서 재사용 · 환경 의존 gate G11~G15 · G18~G20 PC 재실행 · COMPLETE_PASS) ·
+  origin(GitHub+GitLab) · internal · 로컬 동일 · drift-check PROVENANCE · 새 clone tree 동일(`b3a44151…`) · trailer Main-SHA/Tree-Hash/Previous-Production/CI-Build/Gates-Rerun.
+  X2' 의 dry-run 은 PC G14 1건(HC-T6b)으로 거부 — 시험만 고친 X4 로 승격(runtime tree 는 X2 `32d4e307` 부터 `20fb2094…` 동일).
+- **production 명부**(Job `clovirone-server-gather`, checkout == P11 전부, Portal HTTP 200 전부): canary #233 os 3/3 · Linux A #234 8/8 · Linux B #235 4 + 미도달 3(.135 .145 .165 기존) ·
+  Windows #236 .120 · ESXi #237 6/6 success(P10 과 같음 — lab ESXi 는 이름 서버가 있어 ESXI-03 partial 조건에 해당하지 않았다) · Redfish #238 7 + 실패 3(10.100.15.1 프로토콜 · 미도달 2 기존).
+  P10 빌드(#197 · #185~#189)와 대상별 strict 대조: 회귀 0 — 선언 사용 D-03 (Windows), LX-F04, WIN-02, WIN-DM(LX-F04 표기는 .120 `storage.summary` 행에 먼저 매칭된 선언 이름 — 실제 원인은 D-08). Portal 저장 확인은 계약 밖(2xx 만).
+- **성능**(같은 Job, 고정 집합 단일 5 · 배치 3, 순차, P10 #198~#232 vs P11 — 관측값이며 새 제한으로 쓰지 않는다):
+  Jenkins 중앙값 초(전→후, Δ): PE1 62.3 → 63.1s(0.8) · PE6 68.6 → 77.4s(8.8) · PL1 52.4 → 54.9s(2.5) · PL4 62.7 → 60.4s(-2.3) · PLB 70.9 → 72.4s(1.5) · PR1 69.1 → 70.2s(1.1) · PR10 385.7 → 388.9s(3.2) · PW1 131.0 → 132.8s(1.8) · S3 205.6 → 210.8s(5.2)
+  host `meta.duration_ms` 중앙값(전→후, Δ): PE1 25300 → 25689ms(389) · PE6 34007 → 37345ms(3338) · PL1 12887 → 13288ms(401) · PL4 19192 → 19643ms(451) · PLB 19076 → 19824ms(748) · PR1 34450 → 32298ms(-2152) · PR10 45598 → 44986ms(-612) · PW1 74592 → 74077ms(-515) · S3 52269 → 53473ms(1204)
+- **미해결 · 미검증**: lab 부재(AMD lscpu<2.34 L3 · multipath · ECMP/nhid · vCenter · VBS 물리 Windows · GPO Windows · CNA · RD-DOC partition · LX-F11 IB) — fixture 수준 · NEXT_ACTIONS.

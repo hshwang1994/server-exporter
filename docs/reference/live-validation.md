@@ -597,3 +597,8 @@ cycle 2026-05-07 M-K1 검증: 30/30 adapter origin 주석 일관성 PASS (verify
 | 죽은 코드 | `normalize_{system,network,storage}.yml`(redfish) · `normalize_sections.yml`(esxi) · `_endpoint_with_fallback` 삭제 — 참조 0 | grep · ci_gate · prodgen build |
 
 > 모든 항목은 mock/fixture 통과 ≠ 사이트 실측 통과(rule 25 R7-B). 매트릭스에서 확인한 lab 장비 결과 차이와 그 선언은 `tests/evidence/2026-10-10-full-audit.md` 에 적는다.
+
+### 2026-10-10 production P11 명부 (실장비)
+
+production P11 `35b9ad5e`(main `c2d76de2`) 승격 직후 production Job #233~#238: canary os 3 · Linux A 8 · Linux B 7(미도달 3 기존) · Windows 1 · ESXi 6 · Redfish 10(실패 3 기존).
+checkout == P11 · Portal 200 · P10 대조 회귀 0 — 선언 사용 D-03 (Windows), LX-F04, WIN-02, WIN-DM. 정본 `tests/evidence/2026-10-10-full-audit.md` 9절.

@@ -132,7 +132,13 @@ G20 은 원격 없이 돌면 PARTIAL(검증 안 됨)이고, 일부 원격만 보
   ⑦ 원복 조건 — `cj` 요청 준비 전에 코드가 먼저 나가 신규 요청이 실패하면 `git revert`(main) / `restore`(production) / 고객사 main 이전 tree 재적용으로 즉시 원복, 공급자 값 복귀는 담당 몫.
 - lab 의 임시 `cj` 라벨 + TEST-NET 실패 envelope 검증은 라우팅·실패 처리 smoke 이지 **청주 실장비 성공 수집이 아니다**.
 
-## 7. 현재 상태 (2026-10-09)
+## 7. 현재 상태 (2026-10-10)
+
+2026-10-10: 열한 번째 **P11 `35b9ad5e`**(main `c2d76de2` — 전체 감사 결함 묶음: Runner 기록 무결성 · Jenkinsfile 수집 루프 · Redfish/ESXi/Windows/Linux 결함 · FL-F01b,
+그리고 검수 후속 C1~C10, parent P10 `9ddc174a`) 양 원격. COMPLETE_PASS(CI #43 집계 보고서 + G11~G15 · G18~G20 이 PC 재실행) · drift-check PROVENANCE ·
+canary production #233 SUCCESS(os 3/3 · checkout P11) · 명부 #234~#238(Linux A · Linux B · Windows · ESXi 6 · Redfish 10) 전부 SUCCESS · Portal 200 ·
+P10 빌드와 대상별 대조 회귀 0 — 선언 사용 D-03 (Windows), LX-F04, WIN-02, WIN-DM(LX-F04 표기는 .120 `storage.summary` 행에 먼저 매칭된 선언 이름 — 실제 원인은 D-08). 승격 대상 X2' `361d4484` 의 CLI dry-run 은 PC G14 1건(시험의 자식 인코딩 미고정)으로 거부돼 시험만 고친 X4 로 승격했다(runtime tree 동일).
+기록 `tests/evidence/2026-10-10-full-audit.md`.
 
 2026-10-09 (후속): 열 번째 **P10 `9ddc174a`**(main `04a0d6c9` — `json_only` 접수 목록 대조 오경보 수정 · Byid 동기화 시험, parent P9 `c69a0d33`) 양 원격.
 COMPLETE_PASS(CI #39 집계 보고서 + G11~G15 · G18~G20 이 PC 재실행) · drift-check PROVENANCE · canary production #197 SUCCESS(checkout P10).
