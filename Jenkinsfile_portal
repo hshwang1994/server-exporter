@@ -2028,13 +2028,15 @@ String seAddonPrepare(String targetType, Map st) {
     return addonDir
 }
 
-// 마지막 시도의 판정 (scripts/gather_state.py classify) — 끝 기록 없이 사라진 시도는 근거로 닫는다(재부팅 · OOM · 원인 미확인)
-Map seClassifyAttempt() {
-    String out = sh(returnStdout: true, label: '수집 시도 판정', script: '''#!/bin/bash
-        cd "${WORKSPACE}"
-        . "${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
-        python3 scripts/gather_state.py classify --ws "${WORKSPACE}" 2>/dev/null || echo '{"state":"unknown"}'
-    ''').trim()
+// 마지막 시도의 판정 (scripts/gather_state.py classify) — 끝 기록 없이 사라진 시도는 근거로 닫는다(재부팅 · OOM · 원인 미확인).
+//   agentLost: 앞 시도가 Runner 연결 끊김으로 끝났다는 Jenkins 의 근거. 보통은 run_gather.sh 의 begin(--prev-agent-lost) 이 앞 시도를 닫지만,
+//   이번 시도가 begin 전에 끝나면(rc 90 · 91) 그 근거가 전달되지 않아 앞 시도가 원인 미확인(process_lost)으로 닫혔다 — FL-F01b (2026-10-10, Harness #1304).
+Map seClassifyAttempt(boolean agentLost = false) {
+    String out = sh(returnStdout: true, label: '수집 시도 판정', script: """#!/bin/bash
+        cd "\${WORKSPACE}"
+        . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
+        python3 scripts/gather_state.py classify --ws "\${WORKSPACE}" ${agentLost ? '--agent-lost' : ''} 2>/dev/null || echo '{"state":"unknown"}'
+    """).trim()
     String[] parts = out.split('\n')
     try {
         return readJSON(text: (parts.length > 0 ? parts[parts.length - 1] : '{}'), returnPojo: true) as Map
@@ -2172,7 +2174,8 @@ def seAttemptBody(Map C, Map st, Map r) {
         throw fie
     }
     env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs())
-    Map cls = seClassifyAttempt()
+    // begin 전에 끝난 시도(rc 90 · 91)는 앞 시도를 닫지 못했다 — Jenkins 가 아는 연결 끊김 근거를 classify 에 넘긴다 (FL-F01b)
+    Map cls = seClassifyAttempt(lostPrev && (rc in [90, 91]))
     Map run = seReadGatherRun()
     env.SE_GATHER_RUN = run ? groovy.json.JsonOutput.toJson(run) : ''
     if (run != null && (run.attempts instanceof List) && run.attempts) {
