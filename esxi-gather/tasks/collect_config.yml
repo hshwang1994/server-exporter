@@ -6,6 +6,7 @@
     username:       "{{ _e_user }}"
     password:       "{{ _e_pass }}"
     validate_certs: no
+    esxi_hostname:  "{{ _e_hostname | default(_e_ip, true) }}"
   register:    _e_config_result
   delegate_to: localhost
   failed_when: false

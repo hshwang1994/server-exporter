@@ -126,6 +126,59 @@ _CHECKPOINT_EMIT_FAILED = '수집은 끝났지만 결과를 내보내는 단계�
 
 
 
+_LONE_SURROGATE_RE = re.compile('[\ud800-\udfff]')
+_ENVELOPE_KEYS = frozenset(('schema_version', 'target_type', 'collection_method', 'ip', 'hostname', 'vendor', 'status',
+                            'sections', 'diagnosis', 'meta', 'correlation', 'errors', 'data'))
+
+
+def _sanitize(value, stats, path=''):
+    if isinstance(value, str):
+        if _LONE_SURROGATE_RE.search(value):
+            stats['surrogates'] = stats.get('surrogates', 0) + len(_LONE_SURROGATE_RE.findall(value))
+            return _LONE_SURROGATE_RE.sub('\ufffd', value)
+        return value
+    if isinstance(value, float):
+        if value != value or value in (float('inf'), float('-inf')):
+            stats.setdefault('non_finite', []).append(path or '$')
+            return None
+        return value
+    if isinstance(value, dict):
+        return {(_sanitize(k, stats, path) if isinstance(k, str) else k): _sanitize(v, stats, f'{path}.{k}' if path else str(k))
+                for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize(v, stats, f'{path}[{i}]') for i, v in enumerate(value)]
+    return value
+
+
+def _note_sanitized(data, stats):
+    if not stats or not isinstance(data, dict):
+        return
+    diag = data.get('diagnosis')
+    if not isinstance(diag, dict):
+        return
+    details = diag.get('details')
+    if not isinstance(details, dict):
+        details = {}
+        diag['details'] = details
+    notices = details.get('notices')
+    if not isinstance(notices, list):
+        notices = []
+        details['notices'] = notices
+    if stats.get('surrogates'):
+        notices.append('json_only: non-UTF-8 text replaced with U+FFFD ({} chars)'.format(stats['surrogates']))
+    if stats.get('non_finite'):
+        notices.append('json_only: non-finite number replaced with null ({})'.format(', '.join(stats['non_finite'][:8])))
+
+
+def _envelope_shape_ok(data):
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            return False
+    return isinstance(data, dict) and set(data.keys()) == _ENVELOPE_KEYS
+
+
 def _is_truthy(value):
     return str(value or '').strip().lower() in ('1', 'true', 'yes')
 
@@ -169,22 +222,39 @@ class CallbackModule(CallbackBase):
                         '[json_only] _emit: JSON 파싱 실패, 문자열 그대로 출력 '
                         '(reason={}, head={!r})\n'.format(type(e).__name__, data[:120])
                     )
+        stats = {}
         try:
-            line = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-        except TypeError:
+            data = _sanitize(data, stats)
+        except Exception as e:
+            sys.stderr.write('[json_only] WARNING: 정화 실패, 원본 그대로 내보냄 ({})\n'.format(type(e).__name__))
+            stats = {}
+        if stats:
+            _note_sanitized(data, stats)
+            sys.stderr.write('[json_only] NOTICE: OUTPUT 값을 고쳤다 — surrogates={} non_finite={}\n'.format(
+                stats.get('surrogates', 0), len(stats.get('non_finite', []))))
+        try:
+            line = json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+        except (TypeError, ValueError):
             line = json.dumps(str(data), ensure_ascii=False, separators=(',', ':'))
-        print(line, file=target, flush=True)
+        ok = True
+        try:
+            print(line, file=target, flush=True)
+        except (OSError, ValueError) as e:
+            ok = False
+            sys.stderr.write('[json_only] WARNING: OUTPUT stdout 출력 실패: {}\n'.format(type(e).__name__))
         if self._output_file and target is sys.stdout:
             try:
                 with open(self._output_file, 'a', encoding='utf-8') as fh:
                     fh.write(line + '\n')
                     fh.flush()
                     os.fsync(fh.fileno())
-            except (OSError, IOError) as e:
+            except (OSError, IOError, ValueError) as e:
+                ok = False
                 sys.stderr.write(
                     '[json_only] WARNING: OUTPUT 파일 쓰기 실패 ({}): {}\n'.format(
                         self._output_file, type(e).__name__)
                 )
+        return ok
 
     def _emit_error(self, error_type, message, host=None, task=None):
         line = '[json_only] {}: {}'.format(error_type, message)
@@ -209,9 +279,16 @@ class CallbackModule(CallbackBase):
                 data = json.loads(data)
             except (json.JSONDecodeError, ValueError):
                 pass
+        stats = {}
         try:
-            return json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-        except TypeError:
+            data = _sanitize(data, stats)
+            if stats:
+                _note_sanitized(data, stats)
+        except Exception:
+            pass
+        try:
+            return json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+        except (TypeError, ValueError):
             return json.dumps(str(data), ensure_ascii=False, separators=(',', ':'))
 
     def _progress(self, host_name, event, task=None, detail=None, **extra):
@@ -224,6 +301,7 @@ class CallbackModule(CallbackBase):
             for k, v in extra.items():
                 if v is not None:
                     row[k] = v
+            row = _sanitize(row, {})
             with open(self._progress_file, 'a', encoding='utf-8') as fh:
                 fh.write(json.dumps(row, ensure_ascii=False, separators=(',', ':'), default=str) + '\n')
         except Exception as e:
@@ -420,12 +498,16 @@ class CallbackModule(CallbackBase):
             return
         res = result._result
         if 'msg' in res:
-            self._emit(res['msg'])
+            payload = res['msg']
         elif 'ansible_facts' in res:
-            self._emit(res['ansible_facts'])
+            payload = res['ansible_facts']
         else:
             return
-        self._mark_emitted(result)
+        written = self._emit(payload)
+        if written and _envelope_shape_ok(payload):
+            self._mark_emitted(result)
+        else:
+            self._emit_failed(result, 'write' if not written else 'shape')
 
     def v2_runner_on_failed(self, result, ignore_errors=False):
         self._track(result)
@@ -458,6 +540,16 @@ class CallbackModule(CallbackBase):
         try:
             self._ctx(self._host_name(result))['emitted'] = True
             self._progress(self._host_name(result), 'emitted', task=self._task_name(result))
+        except Exception:
+            pass
+
+    def _emit_failed(self, result, why):
+        host = self._host_name(result)
+        self._emit_error('output_not_recorded', why, host=host, task=self._task_name(result))
+        if not self._reconcile:
+            return
+        try:
+            self._progress(host, 'emit_failed', task=self._task_name(result), detail=why)
         except Exception:
             pass
 
@@ -624,7 +716,8 @@ class CallbackModule(CallbackBase):
                     '[json_only] WARNING: envelope 조립 실패 — 최소 envelope 으로 대체 '
                     '(host={}, reason={})\n'.format(host_name, type(e).__name__))
             try:
-                self._emit(envelope)
+                if not self._emit(envelope):
+                    raise OSError('OUTPUT 기록 실패')
                 ctx['emitted'] = True
                 self._progress(host_name, 'reconciled', source=source)
                 diagnosis = envelope.get('diagnosis') if isinstance(envelope.get('diagnosis'), dict) else {}

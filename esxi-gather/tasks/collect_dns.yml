@@ -3,8 +3,8 @@
 - name: "esxi | collect | vmware_host_dns_info"
   community.vmware.vmware_host_dns_info:
     hostname:       "{{ _e_ip }}"
-    username:       "{{ ansible_user }}"
-    password:       "{{ ansible_password }}"
+    username:       "{{ _e_user }}"
+    password:       "{{ _e_pass }}"
     validate_certs: false
     esxi_hostname:  "{{ _e_hostname | default(_e_ip, true) }}"
   register:    _e_dns_result

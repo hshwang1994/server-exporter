@@ -4,8 +4,8 @@
     - name: "esxi | extended | vmnic info"
       community.vmware.vmware_host_vmnic_info:
         hostname:       "{{ _e_ip }}"
-        username:       "{{ ansible_user }}"
-        password:       "{{ ansible_password }}"
+        username:       "{{ _e_user }}"
+        password:       "{{ _e_pass }}"
         validate_certs: false
         esxi_hostname:  "{{ _e_ip }}"
       register:    _e_vmnic
@@ -15,8 +15,8 @@
     - name: "esxi | extended | vmhba info"
       community.vmware.vmware_host_vmhba_info:
         hostname:       "{{ _e_ip }}"
-        username:       "{{ ansible_user }}"
-        password:       "{{ ansible_password }}"
+        username:       "{{ _e_user }}"
+        password:       "{{ _e_pass }}"
         validate_certs: false
         esxi_hostname:  "{{ _e_ip }}"
       register:    _e_vmhba
@@ -26,8 +26,8 @@
     - name: "esxi | extended | vswitch info"
       community.vmware.vmware_vswitch_info:
         hostname:       "{{ _e_ip }}"
-        username:       "{{ ansible_user }}"
-        password:       "{{ ansible_password }}"
+        username:       "{{ _e_user }}"
+        password:       "{{ _e_pass }}"
         validate_certs: false
         esxi_hostname:  "{{ _e_ip }}"
       register:    _e_vswitch
@@ -37,8 +37,8 @@
     - name: "esxi | extended | portgroup info"
       community.vmware.vmware_portgroup_info:
         hostname:       "{{ _e_ip }}"
-        username:       "{{ ansible_user }}"
-        password:       "{{ ansible_password }}"
+        username:       "{{ _e_user }}"
+        password:       "{{ _e_pass }}"
         validate_certs: false
         esxi_hostname:  "{{ _e_ip }}"
       register:    _e_portgroup
@@ -222,7 +222,31 @@
           {{ (['network'] if (_e_ext_adapters | length > 0 or _e_ext_vswitches | length > 0) else [])
              + (['storage'] if ((_e_ext_hbas | default([])) | length > 0 or (_e_ext_ib | default([])) | length > 0) else []) }}
         _sections_failed_fragment:    []
-        _errors_fragment:             []
+        _errors_fragment: >-
+          {%- set mods = [('network', 'vmnic', _e_vmnic | default({}), 'hosts_vmnics_info'),
+                          ('storage', 'vmhba', _e_vmhba | default({}), 'hosts_vmhbas_info'),
+                          ('network', 'vswitch', _e_vswitch | default({}), 'hosts_vswitch_info'),
+                          ('network', 'portgroup', _e_portgroup | default({}), 'hosts_portgroup_info')] -%}
+          {%- set texts = {'network': '네트워크 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+                           'storage': '스토리지 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.'} -%}
+          {%- set out = [] -%}
+          {%- for sec in ['network', 'storage'] -%}
+            {%- set scopes = [] -%}
+            {%- set msgs = [] -%}
+            {%- for m in mods if m[0] == sec -%}
+              {%- set r = m[2] if (m[2] is mapping) else {} -%}
+              {%- if (r.get(m[3]) is not mapping) -%}
+                {%- set _ = scopes.append(m[1]) -%}
+                {%- set t = ((r.get('msg') or '') | string | replace('\n', ' ') | replace('\r', ' ') | trim) -%}
+                {%- if t -%}{%- set _ = msgs.append(t) -%}{%- endif -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- if scopes -%}
+              {%- set _ = out.append({'section': sec, 'message': texts[sec],
+                                      'detail': ('scope=' ~ (scopes | join(',')) ~ '; cause=module_failed; msg=' ~ ((msgs | first | default('none'))[:160]))}) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
       no_log: true
   rescue:
     - name: "esxi | extended | rescue (best-effort skip)"

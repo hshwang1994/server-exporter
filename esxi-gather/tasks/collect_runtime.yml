@@ -53,8 +53,11 @@
     _e_runtime_ntp_ok: "{{ (_e_ntp_result is not failed) and (_e_ntp_result.hosts_ntp_info is defined) }}"
 
     _e_runtime_firewall_state: >-
+      {%- set _ib = (_e_raw_host | default({})).firewall_incoming_blocked | default(none) -%}
       {%- set fws = (_e_firewall_result.hosts_firewall_info | default({})) -%}
-      {%- if (_e_firewall_result is failed) or not fws or (fws is not mapping) -%}
+      {%- if _ib is not none -%}
+        {{ 'active' if _ib else 'inactive' }}
+      {%- elif (_e_firewall_result is failed) or not fws or (fws is not mapping) -%}
         {{ none }}
       {%- else -%}
         {%- set h = _e_hostname | default(none) -%}
@@ -108,6 +111,19 @@
              'message': '서버 기본 정보 중 운영 환경 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
              'detail':  'scope=timezone,ntp,firewall; cause=all_modules_failed; msg='
                         ~ ((_e_ntp_result.msg | default('') | string | trim) or 'none')}] }}
+      {%- elif oks | select | list | length < 3 -%}
+        {%- set mods = [('ntp', oks[0], _e_ntp_result | default({})), ('firewall', oks[1], _e_firewall_result | default({})),
+                        ('service', oks[2], _e_service_result | default({}))] -%}
+        {%- set scopes = [] -%}
+        {%- set msgs = [] -%}
+        {%- for m in mods if not m[1] -%}
+          {%- set _ = scopes.append(m[0]) -%}
+          {%- set t = (((m[2].get('msg') if (m[2] is mapping) else '') or '') | string | replace('\n', ' ') | replace('\r', ' ') | trim) -%}
+          {%- if t -%}{%- set _ = msgs.append(t) -%}{%- endif -%}
+        {%- endfor -%}
+        {{ [{'section': 'system',
+             'message': '서버 기본 정보 중 운영 환경 정보 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+             'detail':  'scope=' ~ (scopes | join(',')) ~ '; cause=module_failed; msg=' ~ ((msgs | first | default('none'))[:160])}] }}
       {%- else -%}
         {{ [] }}
       {%- endif -%}

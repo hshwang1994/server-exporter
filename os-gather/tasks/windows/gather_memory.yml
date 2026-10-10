@@ -9,20 +9,22 @@
       catch { $c.ok = $false; $c.error = [string]$_.Exception.Message; if (-not $c.error) { $c.error = [string]$_ } }
     }
     $doc = [ordered]@{}
-    $mem = $null
+    $mem = @()
     Invoke-SeComponent $doc 'read_physical_memory' {
       param($c)
-      $script:mem = @(Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue)
+      $seErr = $null
+      $script:mem = @(Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue -ErrorVariable seErr)
+      if ($seErr) { throw $seErr[0] }
     }
     Invoke-SeComponent $doc 'total' {
       param($c)
+      if (-not $doc['read_physical_memory'].ok) { return }
       if ($mem.Count -gt 0) {
         $c.data = [math]::Round(($mem | Measure-Object -Property Capacity -Sum).Sum / 1MB, 0)
       }
     }
     Invoke-SeComponent $doc 'slots' {
       param($c)
-      if (-not $doc['read_physical_memory'].ok) { throw $doc['read_physical_memory'].error }
       $mem | ForEach-Object {
         $smt = [int]$_.SMBIOSMemoryType
         $type = switch ($smt) {
@@ -57,6 +59,7 @@
           serial       = $serNorm
         })
       }
+      if (-not $doc['read_physical_memory'].ok) { throw $doc['read_physical_memory'].error }
     }
     try { $doc | ConvertTo-Json -Depth 8 -Compress }
     catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }
@@ -101,6 +104,14 @@
 
 - name: "windows | memory | parse slots + grouping"
   ansible.builtin.set_fact:
+    _w_mem_read_failed: >-
+      {%- set d = _w_mem_doc if (_w_mem_doc is mapping) else {} -%}
+      {%- set r = d.get('read_physical_memory') -%}
+      {{ (r is mapping) and (r.get('ok') is sameas false) }}
+    _w_mem_read_error: >-
+      {%- set d = _w_mem_doc if (_w_mem_doc is mapping) else {} -%}
+      {%- set r = d.get('read_physical_memory') -%}
+      {{ ((((r.get('error') if (r is mapping) else '') or '') | string) | replace('\n', ' ') | replace('\r', ' '))[:160] }}
     _w_mem_slots: >-
       {%- set out = [] -%}
       {%- for line in (_w_mem_slots_raw.stdout_lines | default([])) -%}
@@ -149,7 +160,7 @@
       {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
     _w_mem_phys_mb: >-
       {%- set v = (_w_mem_raw.stdout | default('', true)) | string | trim -%}
-      {{ (v | int) if (v.isdigit() and (v | int) > 0) else none }}
+      {{ (v | int) if (v.isdigit() and (v | int) > 0 and not (_w_mem_read_failed | default(false) | bool)) else none }}
     _w_mem_vis_mb: >-
       {%- set v = ansible_memtotal_mb | default(none) -%}
       {{ (v | int) if (v is not none and (v | string).isdigit() and (v | int) > 0) else none }}
@@ -175,7 +186,8 @@
           {%- set sm = _w_mem_summary | default({'groups': [], 'grand_total_gb': 0}) -%}
           {%- set p = _w_mem_phys_mb | default(none) -%}
           {%- set v = _w_mem_vis_mb | default(none) -%}
-          {%- if (sm.grand_total_gb | default(0)) > 0 -%}{{ sm }}
+          {%- if (_w_mem_read_failed | default(false) | bool) and (sm.groups | default([]) | length) > 0 -%}{{ {'groups': sm.groups, 'grand_total_gb': none} }}
+          {%- elif (sm.grand_total_gb | default(0)) > 0 -%}{{ sm }}
           {%- elif p is not none -%}{{ {'groups': sm.groups, 'grand_total_gb': ((p / 1024) | round(0, 'common') | int)} }}
           {%- elif v is not none -%}{{ {'groups': sm.groups, 'grand_total_gb': ((v / 1024) | round(0, 'common') | int)} }}
           {%- else -%}{{ {'groups': [], 'grand_total_gb': none} }}
@@ -188,11 +200,18 @@
       {%- set v = _w_mem_vis_mb | default(none) -%}
       {%- set setup_ok = (_w_setup_ok | default(true) | bool) -%}
       {%- set setup_note = ('' if setup_ok else ('; setup=failed; error=' ~ (_w_setup_detail | default('', true)))) -%}
+      {%- set rf = (_w_mem_read_failed | default(false) | bool) -%}
+      {%- set rerr = _w_mem_read_error | default('', true) -%}
       {%- if p is not none and v is none -%}
         {{ [{'section': 'memory',
              'message': '메모리 정보 중 OS 가 인식한 용량을 읽지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
              'detail':  ('source=setup(ansible_memtotal_mb); cause=' ~ ('no_value' if setup_ok else 'facts_failed') ~ '; effect=visible_mb,free_mb=null' ~ setup_note)}] }}
       {%- elif p is not none -%}{{ [] }}
+      {%- elif v is not none and rf -%}
+        {{ [{'section': 'memory',
+             'message': '메모리 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+             'detail':  ('source=Win32_PhysicalMemory; cause=read_failed; fallback=os_visible; slots=' ~ ((_w_mem_slots | default([])) | length)
+                         ~ (('; error=' ~ rerr) if rerr else ''))}] }}
       {%- elif v is not none -%}
         {{ [{'section': 'memory',
              'message': '메모리 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.',
@@ -200,7 +219,8 @@
       {%- else -%}
         {{ [{'section': 'memory',
              'message': '메모리 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.',
-             'detail':  ('source=Win32_PhysicalMemory,setup; cause=no_output; rc=' ~ (_w_mem_raw.rc | default('none')) ~ setup_note)}] }}
+             'detail':  ('source=Win32_PhysicalMemory,setup; cause=' ~ ('read_failed' if rf else 'no_output')
+                         ~ (('; error=' ~ rerr) if (rf and rerr) else '') ~ '; rc=' ~ (_w_mem_raw.rc | default('none')) ~ setup_note)}] }}
       {%- endif -%}
   no_log: true
 

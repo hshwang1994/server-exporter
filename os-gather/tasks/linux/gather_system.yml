@@ -138,7 +138,6 @@
   no_log: true
 
 - name: "linux | system | raw gather (os-release/uname/hostname/dmi)"
-  become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     . /etc/os-release 2>/dev/null || true
@@ -167,13 +166,27 @@
       v=""
       if [ -r /sys/class/dmi/id/$f ]; then
         v=$(cat /sys/class/dmi/id/$f 2>/dev/null)
-      elif command -v sudo >/dev/null 2>&1; then
-        v=$(sudo -n cat /sys/class/dmi/id/$f 2>/dev/null || true)
+      fi
+      echo "DMI_$(echo $f | tr '[:lower:]' '[:upper:]')=$v"
+    done
+  register: _l_raw_sys_result
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: "linux | system | raw gather (privileged dmi + dmidecode collector)"
+  become: true
+  ansible.builtin.raw: |
+    export LANG=C LC_ALL=C
+    for f in product_serial product_uuid sys_vendor product_name bios_version bios_date; do
+      v=""
+      if [ -r /sys/class/dmi/id/$f ]; then
+        v=$(cat /sys/class/dmi/id/$f 2>/dev/null)
       fi
       echo "DMI_$(echo $f | tr '[:lower:]' '[:upper:]')=$v"
     done
     {{ _l_dmi_collector }}
-  register: _l_raw_sys_result
+  register: _l_raw_priv_result
   changed_when: false
   failed_when: false
   no_log: true
@@ -181,28 +194,33 @@
 - name: "linux | system | parse raw results"
   ansible.builtin.set_fact:
     _l_raw_sys: >-
-      {{ dict(_l_raw_sys_result.stdout_lines | default([])
-              | select('search', '=')
-              | map('split', '=', 1)
-              | list) }}
+      {%- set base = dict(_l_raw_sys_result.stdout_lines | default([]) | select('search', '=') | map('split', '=', 1) | list) -%}
+      {%- set priv = dict(_l_raw_priv_result.stdout_lines | default([]) | select('search', '=') | map('split', '=', 1) | list) -%}
+      {%- set out = {} -%}
+      {%- set _ = out.update(base) -%}
+      {%- for k, v in priv.items() -%}
+        {%- if ((v | string | trim) | length) > 0 or (k not in out) -%}{%- set _ = out.update({k: v}) -%}{%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+    _l_raw_priv_failed: >-
+      {{ ((_l_raw_priv_result.stdout_lines | default([])) | select('match', '^DMI_PRODUCT_SERIAL=') | list | length) == 0 }}
   no_log: true
 
 - name: "linux | system | shared dmi raw (memory / cpu 공용)"
   ansible.builtin.set_fact:
     _l_dmi_raw: >-
       {%- set ns = namespace(on=false, lines=[]) -%}
-      {%- for line in (_l_raw_sys_result.stdout_lines | default([])) -%}
+      {%- for line in (_l_raw_priv_result.stdout_lines | default([])) -%}
         {%- if (line | trim) == 'DMI_MEM_BEGIN' -%}{%- set ns.on = true -%}{%- endif -%}
         {%- if ns.on -%}{%- set _ = ns.lines.append(line) -%}{%- endif -%}
         {%- if (line | trim) == 'DMI_PROC_END' -%}{%- set ns.on = false -%}{%- endif -%}
       {%- endfor -%}
       {%- set out = {'stdout_lines': ns.lines} -%}
-      {%- if (_l_raw_sys_result | default({})).rc is defined -%}{%- set _ = out.update({'rc': _l_raw_sys_result.rc}) -%}{%- endif -%}
+      {%- if (_l_raw_priv_result | default({})).rc is defined -%}{%- set _ = out.update({'rc': _l_raw_priv_result.rc}) -%}{%- endif -%}
       {{ out }}
   no_log: true
 
-- name: "linux | system | gather runtime (timezone/ntp/firewall/listen/swap)"
-  become: true
+- name: "linux | system | gather runtime (timezone/ntp/listen/swap)"
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     TZ=$(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || (readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||') || echo "")
@@ -220,27 +238,6 @@
       NTPACTIVE=""
     fi
     echo "NTPACTIVE=${NTPACTIVE}"
-    FW_TOOL=""
-    FW_STATE=""
-    if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active firewalld 2>/dev/null | grep -q "^active$"; then
-      FW_TOOL="firewalld"; FW_STATE="active"
-    elif command -v ufw >/dev/null 2>&1; then
-      UFW_OUT=$(sudo -n ufw status 2>/dev/null | head -1 || true)
-      if echo "$UFW_OUT" | grep -qi "Status: active"; then FW_TOOL="ufw"; FW_STATE="active"
-      elif echo "$UFW_OUT" | grep -qi "Status: inactive"; then FW_TOOL="ufw"; FW_STATE="inactive"
-      fi
-    elif command -v nft >/dev/null 2>&1; then
-      RULESET=$(sudo -n nft list ruleset 2>/dev/null || true)
-      if [ -n "$RULESET" ]; then FW_TOOL="nftables"; FW_STATE="active"
-      else FW_TOOL="nftables"; FW_STATE="inactive"
-      fi
-    elif command -v iptables >/dev/null 2>&1; then
-      FW_TOOL="iptables"
-      IPT_OUT=$(sudo -n iptables -L -n 2>/dev/null | head -5 || true)
-      if [ -n "$IPT_OUT" ]; then FW_STATE="active"; else FW_STATE="inactive"; fi
-    fi
-    echo "FW_TOOL=${FW_TOOL}"
-    echo "FW_STATE=${FW_STATE}"
     echo "PORTS_BEGIN"
     if command -v ss >/dev/null 2>&1; then
       ss -tlnH 2>/dev/null | awk '{print $4}' | awk -F: '{print $NF}' | grep -E '^[0-9]+$' | sort -un
@@ -264,10 +261,42 @@
   failed_when: false
   no_log: true
 
+- name: "linux | system | gather runtime firewall (privileged)"
+  become: true
+  ansible.builtin.raw: |
+    export LANG=C LC_ALL=C
+    FW_TOOL=""
+    FW_STATE=""
+    if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active firewalld 2>/dev/null | grep -q "^active$"; then
+      FW_TOOL="firewalld"; FW_STATE="active"
+    elif command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | head -1 | grep -qi "^Status:"; then
+      FW_TOOL="ufw"
+      if ufw status 2>/dev/null | head -1 | grep -qi "Status: active"; then FW_STATE="active"; else FW_STATE="inactive"; fi
+    elif command -v nft >/dev/null 2>&1 && nft list ruleset >/dev/null 2>&1; then
+      FW_TOOL="nftables"
+      FW_STATE=$(nft list ruleset 2>/dev/null | awk '
+        /type filter hook input/ { inchain = 1; if ($0 ~ /policy (drop|reject)/) drop = 1; next }
+        inchain && /^[ \t]*}/ { inchain = 0; next }
+        inchain && NF > 0 { rules++ }
+        END { if (drop || rules > 0) print "active"; else print "inactive" }')
+    elif command -v iptables >/dev/null 2>&1 && iptables -S INPUT >/dev/null 2>&1; then
+      FW_TOOL="iptables"
+      FW_STATE=$(iptables -S INPUT 2>/dev/null | awk '
+        /^-P INPUT (DROP|REJECT)/ { drop = 1 }
+        /^-A INPUT/ { rules++ }
+        END { if (drop || rules > 0) print "active"; else print "inactive" }')
+    fi
+    echo "FW_TOOL=${FW_TOOL}"
+    echo "FW_STATE=${FW_STATE}"
+  register: _l_runtime_fw_raw
+  changed_when: false
+  failed_when: false
+  no_log: true
+
 - name: "linux | system | parse runtime"
   ansible.builtin.set_fact:
     _l_runtime: >-
-      {%- set lines = _l_runtime_raw.stdout_lines | default([]) -%}
+      {%- set lines = (_l_runtime_raw.stdout_lines | default([])) + (_l_runtime_fw_raw.stdout_lines | default([])) -%}
       {%- set ns = namespace(in_ports=false, ports=[], kv={}) -%}
       {%- for line in lines -%}
         {%- set s = line | trim -%}
@@ -282,6 +311,8 @@
       {%- endfor -%}
       {%- set _ = ns.kv.update({'PORTS': ns.ports | sort | unique | map('string') | list}) -%}
       {{ ns.kv }}
+    _l_runtime_fw_failed: >-
+      {{ ((_l_runtime_fw_raw.stdout_lines | default([])) | select('match', '^FW_TOOL=') | list | length) == 0 }}
   no_log: true
 
 - name: "linux | system | set raw-derived variables"
@@ -325,26 +356,11 @@
         {%- else -%}{{ none }}
         {%- endif -%}
       SDV: "{{ ((_l_raw_sys.SDV | default('')) | trim | lower) or none }}"
-    _l_raw_serial: >-
-      {%- set s = (_l_raw_sys.DMI_PRODUCT_SERIAL | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string', '0', '00000000'] -%}
-      {{ s if s not in sentinel else none }}
-    _l_raw_uuid: >-
-      {%- set u = (_l_raw_sys.DMI_PRODUCT_UUID | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified'] -%}
-      {{ u if u not in sentinel else none }}
-    _l_raw_vendor: >-
-      {%- set v = (_l_raw_sys.DMI_SYS_VENDOR | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System manufacturer', 'Default string'] -%}
-      {{ v if v not in sentinel else none }}
-    _l_raw_model: >-
-      {%- set m = (_l_raw_sys.DMI_PRODUCT_NAME | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Product Name', 'Default string'] -%}
-      {{ m if m not in sentinel else none }}
-    _l_raw_bios_version: >-
-      {%- set b = (_l_raw_sys.DMI_BIOS_VERSION | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'Default string'] -%}
-      {{ b if b not in sentinel else none }}
+    _l_raw_serial:       "{{ (_l_raw_sys.DMI_PRODUCT_SERIAL | default('')) | dmi_sentinel_null('serial') }}"
+    _l_raw_uuid:         "{{ (_l_raw_sys.DMI_PRODUCT_UUID   | default('')) | dmi_sentinel_null('uuid') }}"
+    _l_raw_vendor:       "{{ (_l_raw_sys.DMI_SYS_VENDOR     | default('')) | dmi_sentinel_null('vendor') }}"
+    _l_raw_model:        "{{ (_l_raw_sys.DMI_PRODUCT_NAME   | default('')) | dmi_sentinel_null('model') }}"
+    _l_raw_bios_version: "{{ (_l_raw_sys.DMI_BIOS_VERSION   | default('')) | dmi_sentinel_null('bios') }}"
     _l_raw_bios_date: "{{ ((_l_raw_sys.DMI_BIOS_DATE | default('')) | trim) or none }}"
   no_log: true
 
@@ -374,12 +390,8 @@
 - name: "linux | system | check setup fact identifiers"
   when: _l_setup_ok | bool
   ansible.builtin.set_fact:
-    _l_serial_from_setup: >-
-      {{ none if (ansible_product_serial | default('')) in ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string', '0', '00000000']
-         else (ansible_product_serial | default(none)) }}
-    _l_uuid_from_setup: >-
-      {{ none if (ansible_product_uuid | default('')) in ['', 'NA', 'None', 'Not Specified']
-         else (ansible_product_uuid | default(none)) }}
+    _l_serial_from_setup: "{{ (ansible_product_serial | default('')) | dmi_sentinel_null('serial') }}"
+    _l_uuid_from_setup:   "{{ (ansible_product_uuid   | default('')) | dmi_sentinel_null('uuid') }}"
   no_log: true
 
 - name: "linux | system | DMI direct-read fallback"
@@ -414,12 +426,10 @@
 - name: "linux | system | resolve identifiers"
   ansible.builtin.set_fact:
     _l_serial_val: >-
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string', '0', '00000000'] -%}
       {%- if (_l_serial_from_setup | default(none)) is not none -%}
         {{ _l_serial_from_setup }}
       {%- elif (_l_dmi_serial_direct is defined) and (_l_dmi_serial_direct.rc | default(1)) == 0
-              and (_l_dmi_serial_direct.stdout | default('') | trim) not in sentinel
-              and (_l_dmi_serial_direct.stdout | default('') | trim | length) > 0 -%}
+              and (((_l_dmi_serial_direct.stdout | default('')) | dmi_sentinel_null('serial')) is not none) -%}
         {{ _l_dmi_serial_direct.stdout | trim }}
       {%- elif (_l_raw_serial | default(none)) is not none -%}
         {{ _l_raw_serial }}
@@ -427,12 +437,10 @@
         {{ none }}
       {%- endif -%}
     _l_uuid_val: >-
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified'] -%}
       {%- if (_l_uuid_from_setup | default(none)) is not none -%}
         {{ _l_uuid_from_setup }}
       {%- elif (_l_dmi_uuid_direct is defined) and (_l_dmi_uuid_direct.rc | default(1)) == 0
-              and (_l_dmi_uuid_direct.stdout | default('') | trim) not in sentinel
-              and (_l_dmi_uuid_direct.stdout | default('') | trim | length) > 0 -%}
+              and (((_l_dmi_uuid_direct.stdout | default('')) | dmi_sentinel_null('uuid')) is not none) -%}
         {{ _l_dmi_uuid_direct.stdout | trim }}
       {%- elif (_l_raw_uuid | default(none)) is not none -%}
         {{ _l_raw_uuid }}
@@ -444,17 +452,14 @@
 - name: "linux | system | resolve hardware identity"
   ansible.builtin.set_fact:
     _l_hw_vendor: >-
-      {%- set v = (ansible_system_vendor | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System manufacturer', 'Default string'] -%}
-      {{ v if (v not in sentinel) else (_l_raw_vendor | default(none)) }}
+      {%- set v = (ansible_system_vendor | default('')) | dmi_sentinel_null('vendor') -%}
+      {{ v if v is not none else (_l_raw_vendor | default(none)) }}
     _l_hw_model: >-
-      {%- set m = (ansible_product_name | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Product Name', 'Default string'] -%}
-      {{ m if (m not in sentinel) else (_l_raw_model | default(none)) }}
+      {%- set m = (ansible_product_name | default('')) | dmi_sentinel_null('model') -%}
+      {{ m if m is not none else (_l_raw_model | default(none)) }}
     _l_hw_bios_version: >-
-      {%- set b = (ansible_bios_version | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'Default string'] -%}
-      {{ b if (b not in sentinel) else (_l_raw_bios_version | default(none)) }}
+      {%- set b = (ansible_bios_version | default('')) | dmi_sentinel_null('bios') -%}
+      {{ b if b is not none else (_l_raw_bios_version | default(none)) }}
     _l_hw_bios_date: >-
       {%- set d = ((ansible_bios_date | default('')) | trim) or (_l_raw_bios_date | default('', true)) -%}
       {%- set d = d | string | trim -%}
@@ -579,7 +584,11 @@
       {{ (['system'] if (_l_sys_ok | bool) else []) + (['hardware'] if (_l_hw_ok | bool) else []) }}
     _sections_failed_fragment: >-
       {{ ([] if (_l_sys_ok | bool) else ['system']) + ([] if (_l_hw_ok | bool) else ['hardware']) }}
-    _errors_fragment: "{{ (_l_id_diagnostics | default([])) + ([{'section': 'system', 'message': '서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'field=distribution; cause=os_release_and_setup_fact_unavailable'}] if not (_l_sys_ok | bool) else []) + ([{'section': 'hardware', 'message': '하드웨어 정보 수집에 실패했습니다. 수집 계정의 권한을 확인하세요.', 'detail': 'field=vendor,model,serial,uuid,bios_version; cause=dmi_unavailable; tried=setup_fact,dmi_sysfs'}] if not (_l_hw_ok | bool) else []) }}"
+    _errors_fragment: >-
+      {{ (_l_id_diagnostics | default([]))
+         + ([{'section': 'system', 'message': '서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'field=distribution; cause=os_release_and_setup_fact_unavailable'}] if not (_l_sys_ok | bool) else [])
+         + ([{'section': 'hardware', 'message': '하드웨어 정보 수집에 실패했습니다. 수집 계정의 권한을 확인하세요.', 'detail': 'field=vendor,model,serial,uuid,bios_version; cause=dmi_unavailable; tried=setup_fact,dmi_sysfs'}] if not (_l_hw_ok | bool) else [])
+         + ([{'section': 'system', 'message': '서버 운영 정보 중 방화벽 상태를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.', 'detail': 'field=runtime.firewall_tool,runtime.firewall_state; cause=privileged_read_failed; tried=become'}] if ((_l_runtime_fw_failed | default(false)) | bool) else []) }}
   no_log: true
 
 - name: "linux | system | merge fragment"

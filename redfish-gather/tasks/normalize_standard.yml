@@ -200,7 +200,7 @@
     _rf_summary_cpu: >-
       {%- set ns = namespace(groups=[], seen={}) -%}
       {%- for p in (_rf_d_cpus | default([])) -%}
-        {%- set m = p.model | default('unknown') -%}
+        {%- set m = p.model | default(none) -%}
         {%- if m in ns.seen -%}
           {%- set idx = ns.seen[m] -%}
           {%- set _ = ns.groups[idx].update({'sockets': ns.groups[idx].sockets + 1, 'total_cores': ns.groups[idx].total_cores + (p.total_cores | default(0) | int)}) -%}
@@ -324,8 +324,8 @@
         {%- elif 'backplane' in lid -%}{%- set cat = 'backplane' -%}
         {%- elif 'service' in lid -%}{%- set cat = 'service_module' -%}
         {%- elif 'idrac' in lid or 'ilo' in lid or 'xcc' in lid or 'cimc' in lid or 'bmc' in lid -%}{%- set cat = 'bmc' -%}
-        {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid -%}{%- set cat = 'nic' -%}
         {%- elif 'raid' in lid or 'perc' in lid or 'megaraid' in lid -%}{%- set cat = 'storage_controller' -%}
+        {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid -%}{%- set cat = 'nic' -%}
         {%- elif 'psu' in lid or 'power supply' in lid -%}{%- set cat = 'psu' -%}
         {%- endif -%}
         {%- set _ = out.append(fw | combine({'category': cat})) -%}
@@ -336,6 +336,7 @@
                               critical=0, warning=0, ok=0, unknown_health=0,
                               cap_unknown=0) -%}
       {%- for psu in (_rf_d_power.power_supplies | default([])) -%}
+        {%- if (psu.state | default('') | string | trim | lower) != 'absent' -%}
         {%- set ns.psu_total = ns.psu_total + 1 -%}
         {%- if (psu.state | default('') | string | trim | lower) == 'enabled' -%}
           {%- set ns.psu_active = ns.psu_active + 1 -%}
@@ -350,6 +351,7 @@
           {%- set ns.cap_unknown = ns.cap_unknown + 1 -%}
         {%- else -%}
           {%- set ns.cap_total = ns.cap_total + ((psu.power_capacity_w | default(0)) | int) -%}
+        {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
       {{ {

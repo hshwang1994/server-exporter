@@ -115,6 +115,7 @@ p = json.loads(sys.argv[1])
 pairs = (("ATTEMPT", p["attempt"]), ("PENDING", p["pending"]), ("LIMIT", p["limit"]), ("FORKS", p["forks"]),
          ("TOTAL", p["hosts_total"]), ("DONE", p["completed"]), ("PREFAIL", p["precheck_failed"]), ("USED", p["exec_used"]),
          ("PREV", p.get("closed_previous") or ""), ("PREV_EV", p.get("closed_evidence") or ""), ("FIXED", ",".join(p.get("tail_fixed") or [])),
+         ("TERMINATED", ",".join(p.get("tail_terminated") or [])),
          ("BSTATE", p.get("state") or ""), ("BEVID", p.get("evidence") or ""), ("CHANNEL", p.get("channel") or ""))
 print(" ".join("%s=%s" % (k, shlex.quote(str(v))) for k, v in pairs))
 ' "$PLAN")"
@@ -126,6 +127,10 @@ fi
 if [ -n "$FIXED" ]; then
     echo "[$(se_show)] [수집] 결과 파일에서 쓰다 끊긴 마지막 줄을 gather_tail_fragments.jsonl로 옮겼습니다. 그 대상은 다시 수집합니다."
     echo "  옮긴 파일: ${FIXED}"
+fi
+if [ -n "$TERMINATED" ]; then
+    echo "[$(se_show)] [수집] 결과 파일의 마지막 줄에 줄바꿈이 없어 줄바꿈만 붙였습니다. 줄의 내용은 그대로입니다."
+    echo "  파일: ${TERMINATED}"
 fi
 if [ "$BSTATE" = "resume_impossible" ]; then
     echo "[$(se_show)] [수집] 결과가 확정됐던 대상의 결과가 작업 폴더에 없어 다시 수집하지 않습니다."

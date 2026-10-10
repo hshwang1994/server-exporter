@@ -32,7 +32,8 @@
       $seErr = $null
       $script:dns = @(Get-DnsClientServerAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue -ErrorVariable seErr |
                       Where-Object { $_.ServerAddresses } |
-                      ForEach-Object { $_.ServerAddresses } | Select-Object -Unique)
+                      ForEach-Object { $_.ServerAddresses } |
+                      Where-Object { $_ -notmatch '^fec0:0:0:ffff::[1-3]$' } | Select-Object -Unique)
       $real = Get-SeRealError $seErr
       if ($real) { throw $real[0] }
     }
@@ -57,14 +58,16 @@
       $gw  = if ($m.data -and $m.data.gw)  { [string]$m.data.gw }  else { '' }
       $gw6 = if ($m.data -and $m.data.gw6) { [string]$m.data.gw6 } else { '' }
       $primary_idx = $def4.InterfaceIndex
+      $primary_idx6 = $def6.InterfaceIndex
       $ipErr = $null
       Get-NetIPAddress -AddressFamily IPv4,IPv6 -ErrorAction SilentlyContinue -ErrorVariable ipErr |
       Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -ne '::1' } |
       ForEach-Object {
         $addr    = $_
         $adapter = $naByIdx[[string]$addr.InterfaceIndex]
-        $isGw    = [bool]($adapter -and ($adapter.InterfaceIndex -eq $primary_idx))
         $fam     = if ([string]$addr.AddressFamily -eq 'IPv6') { 'ipv6' } else { 'ipv4' }
+        $pidx    = if ($fam -eq 'ipv6') { $primary_idx6 } else { $primary_idx }
+        $isGw    = [bool]($adapter -and ($null -ne $pidx) -and ($adapter.InterfaceIndex -eq $pidx))
         [void]$c.rows.Add([PSCustomObject]@{
           id              = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
           name            = $(if ($adapter) { [string]$adapter.Name } else { [string]$addr.InterfaceAlias })
@@ -87,7 +90,7 @@
     Invoke-SeComponent $doc 'driver_map' {
       param($c)
       if ((-not $doc['read_adapters'].ok) -and (@($na).Count -eq 0)) { throw $doc['read_adapters'].error }
-      $na | Where-Object { $_.Status -eq 'Up' -or $_.MediaConnectionState -eq 'Connected' } | ForEach-Object {
+      $na | ForEach-Object {
         [void]$c.rows.Add([PSCustomObject]@{
           name           = $_.Name
           driver         = $_.DriverDescription
@@ -110,7 +113,8 @@
           $hw[[string]$h.Name] = $pci
         }
       } catch { }
-      foreach ($a in @(Get-NetAdapter -Physical)) {
+      $physErr = $null
+      foreach ($a in @(Get-NetAdapter -Physical -ErrorVariable physErr)) {
         $mfr = $null
         try {
           if ($a.PnPDeviceID) {
@@ -131,6 +135,8 @@
           speed_mbps   = $(if ($a.Speed) { [math]::Round($a.Speed / 1000000, 0) } else { $null })
         })
       }
+      $real = Get-SeRealError $physErr
+      if ($real) { throw $real[0] }
     }
     try { $doc | ConvertTo-Json -Depth 8 -Compress }
     catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }

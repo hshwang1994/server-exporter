@@ -190,7 +190,7 @@
             $serRaw = [string]$_.SerialNumber
             $uidRaw = [string]$_.UniqueId
             $ufRaw  = $_.UniqueIdFormat
-            $physical_map[[string]$_.DeviceId] = @{ media_type = $mt; bus = $bus; bus_unmapped = $busUnmapped; health = $health; serial = $serRaw; unique_id = $uidRaw; uid_fmt = $ufRaw }
+            $physical_map[[string]$_.DeviceId] = @{ media_type = $mt; bus = $bus; bus_unmapped = $busUnmapped; health = $health; serial = $serRaw; unique_id = $uidRaw; uid_fmt = $ufRaw; size = $_.Size }
           }
         } catch { }
       }
@@ -224,8 +224,10 @@
         $pdSerial = $null
         $pdUid = $null
         $pdUidFmt = $null
+        $pdSize = $null
         $busRaw = $null
         if ($physical_map.ContainsKey($idx)) {
+          $pdSize = $physical_map[$idx].size
           $mt = $physical_map[$idx].media_type
           $bus = $physical_map[$idx].bus
           $busRaw = $physical_map[$idx].bus_unmapped
@@ -267,7 +269,7 @@
           model  = $_.Model
           serial = $serial
           wwn    = $wwn
-          total  = $_.Size
+          total  = $(if ($pdSize) { [uint64]$pdSize } else { $_.Size })
           media  = $mt
           protocol = $bus
           health   = $health
@@ -360,7 +362,7 @@
       Get-CimInstance -Namespace root\WMI -ClassName MSFC_FibrePortHBAAttributes -ErrorAction Stop | ForEach-Object {
         $a = $_.Attributes
         $spd = [int]$a.PortSpeed
-        $gbps = switch ($spd) { 1 {1} 2 {2} 4 {4} 8 {8} 16 {10} 32 {16} 64 {32} 128 {64} default {$null} }
+        $gbps = switch ($spd) { 1 {1} 2 {2} 4 {10} 8 {4} 16 {8} 32 {16} default {$null} }
         $portattrs += [PSCustomObject]@{
           port_wwn   = Wwn-FromBytes $a.PortWWN
           node_wwn   = Wwn-FromBytes $a.NodeWWN

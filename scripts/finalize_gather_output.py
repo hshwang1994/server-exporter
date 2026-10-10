@@ -95,30 +95,46 @@ class Canon:
 
 
 
+def parse_tail_record(data: bytes):
+    try:
+        text = data.decode('utf-8').strip()
+        obj = json.loads(text, parse_constant=_reject_constant) if text else None
+    except (ValueError, RecursionError):
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
 def read_jsonl(path: Path, report: dict, label: str):
     rows = []
     if not path.is_file():
         return rows
     try:
-        raw = path.read_text(encoding='utf-8', errors='replace')
+        data = path.read_bytes()
     except OSError as e:
         raise ToolFailure(f'{label} 읽기 실패: {e}') from e
-    if not raw:
+    if not data:
         return rows
+    raw = data.decode('utf-8', errors='replace')
     lines = raw.split('\n')
     trailing_newline = raw.endswith('\n')
     if trailing_newline:
         lines = lines[:-1]
+    tail = None if trailing_newline else data[data.rfind(b'\n') + 1:]
     for idx, line in enumerate(lines):
         text = line.strip()
         if not text:
             continue
+        if tail is not None and idx == len(lines) - 1:
+            obj = parse_tail_record(tail)
+            if obj is None:
+                report['truncated_tail'].append({'file': label, 'line': idx + 1, 'preview': text[:MAX_CORRUPT_PREVIEW]})
+                continue
+            rows.append((idx + 1, text, obj))
+            continue
         try:
             obj = json.loads(text, parse_constant=_reject_constant)
         except ValueError:
-            is_last = (idx == len(lines) - 1) and not trailing_newline
-            (report['truncated_tail'] if is_last else report['corrupt_lines']).append(
-                {'file': label, 'line': idx + 1, 'preview': text[:MAX_CORRUPT_PREVIEW]})
+            report['corrupt_lines'].append({'file': label, 'line': idx + 1, 'preview': text[:MAX_CORRUPT_PREVIEW]})
             continue
         rows.append((idx + 1, text, obj))
     return rows
@@ -414,8 +430,14 @@ def finalize(workspace: Path, repo_root: Path, outcome: str, names: dict, limit_
     return report['exit_code'], report
 
 
+class _Parser(argparse.ArgumentParser):
+
+    def error(self, message):
+        raise ToolFailure(f'인자 오류: {message}')
+
+
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description='Layer A 결과 정리: 접수 대상 1개 = 결과 envelope 1개')
+    ap = _Parser(description='Layer A 결과 정리: 접수 대상 1개 = 결과 envelope 1개')
     ap.add_argument('--workspace', required=True)
     ap.add_argument('--repo-root', required=True, help='정본 YAML 을 읽을 저장소 루트 (Jenkins WORKSPACE)')
     ap.add_argument('--outcome', default='completed',
@@ -430,7 +452,12 @@ def main(argv=None) -> int:
     ap.add_argument('--rc', default='gather_rc.txt')
     ap.add_argument('--final', default='gather_final.jsonl')
     ap.add_argument('--report', default='gather_finalize_report.json')
-    a = ap.parse_args(argv)
+    try:
+        a = ap.parse_args(argv)
+    except ToolFailure as e:
+        sys.stderr.write(f'[finalize] {e}\n')
+        ap.print_usage(sys.stderr)
+        return EXIT_TOOL
     names = {k: getattr(a, k) for k in ('manifest', 'output', 'checkpoint', 'progress', 'rc', 'final', 'report')}
     workspace = Path(a.workspace)
     try:

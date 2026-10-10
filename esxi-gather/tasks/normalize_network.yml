@@ -162,8 +162,7 @@
              'detail':  'source=vmware_host_facts.ansible_interfaces; cause=no_interfaces'}) -%}
       {%- endif -%}
       {%- if (((_e_dns_servers | default([]) | length) == 0)
-              and not ((_e_dns_ok | default(false) | bool)
-                       and (_e_config_ok | default(false) | bool))) -%}
+              and not (_e_dns_ok | default(false) | bool)) -%}
         {%- set _ = out.append({'section': 'network',
              'message': '네트워크 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
              'detail':  'dns_servers=[] (dns_info ok=' ~ (_e_dns_ok | default(false)) ~

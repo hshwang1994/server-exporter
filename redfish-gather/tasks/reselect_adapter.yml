@@ -3,7 +3,7 @@
 - name: "redfish | reselect | 인증 후 facts 조립"
   ansible.builtin.set_fact:
     _rf_postauth_facts:
-      vendor: "{{ (_rf_probe_facts | default({})).vendor | default('') }}"
+      vendor: "{{ (_rf_vendor | default(none, true)) or ((_rf_probe_facts | default({})).vendor | default('')) }}"
       model: >-
         {{ ((_rf_raw_collect.data | default({}, true)).get('system') | default({}, true)).get('model', '')
            | default('', true) }}

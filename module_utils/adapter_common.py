@@ -55,7 +55,7 @@ def normalize_vendor(raw_vendor, aliases=None):
         for alias, canon in flat.items():
             if not alias:
                 continue
-            hit = (alias in v) if len(alias) >= 3 else (alias in v_tokens)
+            hit = (alias in v) if len(alias) > 3 else (alias in v_tokens)
             if hit and len(alias) > len(best_alias):
                 best_alias, best_canon = alias, canon
         if best_canon:

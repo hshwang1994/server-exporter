@@ -2,10 +2,22 @@
 
 - name: "windows | hardware | Win32_ComputerSystem + Win32_BIOS"
   ansible.windows.win_shell: |
-    $cs   = Get-CimInstance Win32_ComputerSystem
-    $csp  = Get-CimInstance Win32_ComputerSystemProduct -ErrorAction SilentlyContinue
-    $bios = Get-CimInstance Win32_BIOS
-    $sysenc = Get-CimInstance Win32_SystemEnclosure -ErrorAction SilentlyContinue
+    $cimErrors = @()
+    function Get-SeErrText($Errs) {
+      $e = @($Errs)[0]
+      if ($null -eq $e) { return '' }
+      if ($e -is [System.Management.Automation.ErrorRecord]) { return [string]$e.Exception.Message }
+      if ($e -is [System.Exception]) { return [string]$e.Message }
+      return [string]$e
+    }
+    $csErr = $null;   $cs     = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue -ErrorVariable csErr
+    if ($csErr)   { $cimErrors += ('Win32_ComputerSystem: ' + (Get-SeErrText $csErr)) }
+    $cspErr = $null;  $csp    = Get-CimInstance Win32_ComputerSystemProduct -ErrorAction SilentlyContinue -ErrorVariable cspErr
+    if ($cspErr)  { $cimErrors += ('Win32_ComputerSystemProduct: ' + (Get-SeErrText $cspErr)) }
+    $biosErr = $null; $bios   = Get-CimInstance Win32_BIOS -ErrorAction SilentlyContinue -ErrorVariable biosErr
+    if ($biosErr) { $cimErrors += ('Win32_BIOS: ' + (Get-SeErrText $biosErr)) }
+    $encErr = $null;  $sysenc = Get-CimInstance Win32_SystemEnclosure -ErrorAction SilentlyContinue -ErrorVariable encErr
+    if ($encErr)  { $cimErrors += ('Win32_SystemEnclosure: ' + (Get-SeErrText $encErr)) }
 
     $uuid = if ($cs.UUID) { $cs.UUID }
             elseif ($csp -and $csp.UUID) { $csp.UUID }
@@ -58,6 +70,7 @@
       asset_tag     = $asset
       chassis_type  = $chassis
       power_state   = [string]$cs.PowerState
+      cim_errors    = $cimErrors
     } | ConvertTo-Json -Compress
   register: _w_hw_raw
   changed_when: false
@@ -80,7 +93,7 @@
     _w_hw_model_hint: "{{ _w_hw_data.model | default('', true) }}"
   ansible.builtin.set_fact:
     _w_hw_serial: >-
-      {{ (_w_hw_data.bios_serial | default(none)
+      {{ ((_w_hw_data.bios_serial | default('')) | dmi_sentinel_null('serial')
           | normalize_os_serial(_w_hw_vendor_hint, _w_hw_model_hint))
          or (_w_serial_val | default(none)) }}
     _w_hw_ok: "{{ ((_w_hw_data.vendor | default('', true)) | string | trim | length > 0) or ((_w_hw_data.model | default('', true)) | string | trim | length > 0) or ((_w_hw_data.bios_version | default('', true)) | string | trim | length > 0) }}"
@@ -107,10 +120,16 @@
     _sections_collected_fragment: "{{ ['hardware'] if (_w_hw_ok | bool) else [] }}"
     _sections_failed_fragment:    "{{ [] if (_w_hw_ok | bool) else ['hardware'] }}"
     _errors_fragment: >-
-      {{ [] if (_w_hw_ok | bool) else [{
+      {%- set cim_errs = (_w_hw_data.cim_errors | default([])) if ((_w_hw_data.cim_errors | default([])) is sequence and (_w_hw_data.cim_errors | default([])) is not string) else [] -%}
+      {{ ([] if (_w_hw_ok | bool) else [{
            'section': 'hardware',
            'message': '하드웨어 정보 수집에 실패했습니다. 수집 계정의 권한을 확인하세요.',
-           'detail':  ('source=Win32_ComputerSystem,Win32_BIOS; cause=no_output; rc=' ~ (_w_hw_raw.rc | default('none')))}] }}
+           'detail':  ('source=Win32_ComputerSystem,Win32_BIOS; cause=no_output; rc=' ~ (_w_hw_raw.rc | default('none')))}])
+         + ([{
+           'section': 'hardware',
+           'message': '하드웨어 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.',
+           'detail':  ('source=cim; cause=call_failed; ' ~ ((cim_errs | map('string') | join(' | ')) | truncate(500, true)))}]
+            if ((_w_hw_ok | bool) and (cim_errs | length > 0)) else []) }}
   no_log: true
 
 - name: "windows | hardware | merge fragment"

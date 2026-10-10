@@ -72,11 +72,17 @@
         $notFound = @($vmmsErr | Where-Object { (([string]$_.FullyQualifiedErrorId) -like 'NoServiceFoundForGivenName*') -or ([string]$_.CategoryInfo.Category -eq 'ObjectNotFound') })
         if (-not $notFound) { $role = 'Unknown'; $roleError = 'vmms: ' + [string]$vmmsErr[0].Exception.Message }
       }
+      $vbs = ''
+      try {
+        $dg = Get-CimInstance -Namespace 'root\Microsoft\Windows\DeviceGuard' -ClassName Win32_DeviceGuard -ErrorAction Stop
+        if ($dg) { $vbs = [string]@($dg)[0].VirtualizationBasedSecurityStatus }
+      } catch { $vbs = '' }
       $c.data = [PSCustomObject]@{
         Model             = $cs.Model
         Manufacturer      = $cs.Manufacturer
         HypervisorPresent = [string]$cs.HypervisorPresent
         HyperVRole        = $role
+        VbsStatus         = $vbs
       }
       if ($roleError) { throw $roleError }
     }
@@ -147,6 +153,7 @@
       {%- set mfr   = (_w_hosting.Manufacturer | default('', true)) | string | lower -%}
       {%- set hyp   = (_w_hosting.HypervisorPresent | default('', true)) | string | lower -%}
       {%- set role  = (_w_hosting.HyperVRole | default('', true)) | string | lower -%}
+      {%- set vbs   = (_w_hosting.VbsStatus | default('', true)) | string | trim -%}
       {%- set vm_signals = ['virtual machine', 'vmware virtual platform', 'virtualbox', 'kvm', 'qemu', 'standard pc', 'bochs', 'xen', 'hvm domu', 'amazon ec2', 'google compute engine', 'openstack', 'parallels'] -%}
       {%- set ns = namespace(vm=false) -%}
       {%- for sig in vm_signals -%}
@@ -155,19 +162,15 @@
       {%- if ns.vm -%}virtual
       {%- elif hyp == 'false' -%}baremetal
       {%- elif hyp == 'true' and role in ['true', 'installed'] -%}baremetal
-      {%- elif hyp == 'true' and role == 'false' -%}virtual
+      {%- elif hyp == 'true' and role == 'false' -%}{{ 'baremetal' if vbs == '2' else 'virtual' }}
       {%- else -%}unknown
       {%- endif -%}
   no_log: true
 
 - name: "windows | system | resolve identifiers"
   ansible.builtin.set_fact:
-    _w_serial_val: >-
-      {{ none if (ansible_product_serial | default('')) in ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string']
-         else (ansible_product_serial | default(none)) }}
-    _w_uuid_val: >-
-      {{ none if (ansible_product_uuid | default('')) in ['', 'NA', 'None', 'Not Specified']
-         else ((ansible_product_uuid | default(none)) | normalize_uuid) }}
+    _w_serial_val: "{{ (ansible_product_serial | default('')) | dmi_sentinel_null('serial') }}"
+    _w_uuid_val:   "{{ (ansible_product_uuid   | default('')) | dmi_sentinel_null('uuid') | normalize_uuid }}"
   no_log: true
 
 - name: "windows | system | normalize serial (nPartition 접미사)"

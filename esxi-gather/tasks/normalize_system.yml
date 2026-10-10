@@ -83,9 +83,9 @@
         hostname:       "{{ _e_sys_short | default(none) }}"
         fqdn:           "{{ _e_sys_fqdn | default(none) }}"
         hosting_type:   "hypervisor"
-        serial_number:  "{{ _e_raw_facts.ansible_product_serial | default(none) }}"
+        serial_number:  "{{ (_e_raw_facts.ansible_product_serial | default('')) | dmi_sentinel_null('serial') }}"
         system_uuid:    "{{ (_e_raw_facts.ansible_uuid | default(none)) | normalize_uuid }}"
-        vendor:         "{{ _e_raw_facts.ansible_system_vendor | default(none) }}"
+        vendor:         "{{ (_e_raw_facts.ansible_system_vendor | default('')) | dmi_sentinel_null('vendor') }}"
         runtime:
           timezone:         null
           ntp_active:       null
@@ -98,11 +98,11 @@
           swap_free_mb:     null
           ntp_servers:      []
       hardware:
-        vendor:       "{{ _e_raw_facts.ansible_system_vendor  | default(none) }}"
-        model:        "{{ _e_raw_facts.ansible_product_name   | default(none) }}"
-        serial:       "{{ _e_raw_facts.ansible_product_serial | default(none) }}"
+        vendor:       "{{ (_e_raw_facts.ansible_system_vendor  | default('')) | dmi_sentinel_null('vendor') }}"
+        model:        "{{ (_e_raw_facts.ansible_product_name   | default('')) | dmi_sentinel_null('model') }}"
+        serial:       "{{ (_e_raw_facts.ansible_product_serial | default('')) | dmi_sentinel_null('serial') }}"
         uuid:         "{{ (_e_raw_facts.ansible_uuid | default(none)) | normalize_uuid }}"
-        bios_version: "{{ _e_raw_facts.ansible_bios_version   | default(none) }}"
+        bios_version: "{{ (_e_raw_facts.ansible_bios_version   | default('')) | dmi_sentinel_null('bios') }}"
         bios_date: >-
           {%- set raw = _e_raw_facts.ansible_bios_date | default(none) -%}
           {%- if raw -%}{{ (raw | string).split('T')[0] }}{%- else -%}{{ none }}{%- endif -%}

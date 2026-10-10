@@ -23,6 +23,7 @@
         target_password: "{{ _rf_target_account.password }}"
         target_role:     "Administrator"
         dryrun:          "{{ _rf_account_service_dryrun_effective | bool }}"
+        prior_auth_failures: "{{ 1 if (_rf_primary_auth_rejected | default(false) | bool) else 0 }}"
         adapter_id:      "{{ (_selected_adapter | default({})).adapter_id | default(omit) }}"
         attempt:
           evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"

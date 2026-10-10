@@ -42,6 +42,14 @@
       w=$(printf '%s\n' "$p" | sed -n 's/^ID_WWN=//p' | head -1)
       echo "UDEV|/dev/$d|$s|$w"
     done
+    for dm in /sys/block/dm-*; do
+      [ -d "$dm" ] || continue
+      case "$(cat "$dm/dm/uuid" 2>/dev/null)" in mpath-*) ;; *) continue ;; esac
+      mp_name=$(cat "$dm/dm/name" 2>/dev/null)
+      mp_members=""
+      for s in "$dm"/slaves/*; do [ -e "$s" ] && mp_members="${mp_members} $(basename "$s")"; done
+      if [ -n "$mp_name" ]; then echo "MPATH|${mp_name}|$(echo "$mp_members" | sed 's/^ *//')"; fi
+    done
     src=$(findmnt -n -o SOURCE / 2>/dev/null)
     if [ -z "$src" ]; then src=$(awk '$2=="/"{print $1; exit}' /proc/mounts 2>/dev/null); fi
     src=${src%%\[*}
@@ -116,6 +124,17 @@
         {%- if line.startswith('OSDISK|') -%}{%- set _ = osdisks.append(line.split('|')[1] | trim) -%}{%- endif -%}
       {%- endfor -%}
       {%- set os_known = (osdisks | length) > 0 -%}
+      {%- set mp_of = {} -%}
+      {%- for line in (_l_stor_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('MPATH|') -%}
+          {%- set p = line.split('|') -%}
+          {%- if (p | length) >= 3 and (p[1] | trim) -%}
+            {%- for m in (p[2] | trim).split() -%}{%- set _ = mp_of.update({m: (p[1] | trim)}) -%}{%- endfor -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set seen_mp = {} -%}
+      {%- set seen_wwn = {} -%}
       {%- if (devs | length) > 0 -%}
         {%- for dev in devs -%}
           {%- if (dev.type | default('')) in ['disk'] and ((dev.size | default(0)) | int) > 0 -%}
@@ -137,18 +156,34 @@
             {%- set _u = udev.get(_dev_path, {}) -%}
             {%- set _serial = (dev.serial | trim) if dev.serial else (_u.serial | default(none)) -%}
             {%- set _wwn = (dev.wwn | trim) if dev.wwn else (_u.wwn | default(none)) -%}
-            {%- set _ = out.append({
-              'id':         _dev_path,
-              'device':     _dev_path,
-              'model':      (dev.model | trim) if dev.model else none,
-              'serial':     _serial,
-              'wwn':        _wwn,
-              'total_mb':   ((dev.size | int) / 1048576) | round(0, 'floor') | int,
-              'media_type': _media,
-              'protocol':   _proto,
-              'health':     none,
-              'is_os_disk': (_dev_path in osdisks) if os_known else none
-            }) -%}
+            {%- set _model = (dev.model | trim) if dev.model else none -%}
+            {%- set _mp = mp_of[dev.name] if (dev.name in mp_of) else none -%}
+            {%- set _wkey = ((_wwn | lower) ~ '|' ~ (dev.size | int)) if _wwn else none -%}
+            {%- if _mp is not none and _mp in seen_mp -%}
+              {%- set _e = out[seen_mp[_mp]] -%}
+              {%- set _ = _e.update({'serial': (_e.serial or _serial), 'wwn': (_e.wwn or _wwn), 'model': (_e.model or _model),
+                                     'is_os_disk': (true if (os_known and (_dev_path in osdisks)) else _e.is_os_disk)}) -%}
+            {%- elif _mp is none and _wkey is not none and _wkey in seen_wwn -%}
+              {%- set _e = out[seen_wwn[_wkey]] -%}
+              {%- set _ = _e.update({'serial': (_e.serial or _serial), 'model': (_e.model or _model),
+                                     'is_os_disk': (true if (os_known and (_dev_path in osdisks)) else _e.is_os_disk)}) -%}
+            {%- else -%}
+              {%- if _mp is not none -%}{%- set _ = seen_mp.update({_mp: out | length}) -%}
+              {%- elif _wkey is not none -%}{%- set _ = seen_wwn.update({_wkey: out | length}) -%}{%- endif -%}
+              {%- set _id = ('/dev/mapper/' ~ _mp) if _mp is not none else _dev_path -%}
+              {%- set _ = out.append({
+                'id':         _id,
+                'device':     _id,
+                'model':      _model,
+                'serial':     _serial,
+                'wwn':        _wwn,
+                'total_mb':   ((dev.size | int) / 1048576) | round(0, 'floor') | int,
+                'media_type': _media,
+                'protocol':   _proto,
+                'health':     none,
+                'is_os_disk': (_dev_path in osdisks) if os_known else none
+              }) -%}
+            {%- endif -%}
           {%- endif -%}
         {%- endfor -%}
       {%- else -%}
@@ -160,9 +195,16 @@
               {%- set _dev_path = '/dev/' ~ (p[1] | trim) -%}
               {%- set _rota = (p[4] | trim) | lower -%}
               {%- set _u = udev.get(_dev_path, {}) -%}
+              {%- set _mp = mp_of[p[1] | trim] if ((p[1] | trim) in mp_of) else none -%}
+              {%- if _mp is not none and _mp in seen_mp -%}
+                {%- set _e = out[seen_mp[_mp]] -%}
+                {%- set _ = _e.update({'is_os_disk': (true if (os_known and (_dev_path in osdisks)) else _e.is_os_disk)}) -%}
+              {%- else -%}
+              {%- if _mp is not none -%}{%- set _ = seen_mp.update({_mp: out | length}) -%}{%- endif -%}
+              {%- set _id = ('/dev/mapper/' ~ _mp) if _mp is not none else _dev_path -%}
               {%- set _ = out.append({
-                'id':         _dev_path,
-                'device':     _dev_path,
+                'id':         _id,
+                'device':     _id,
                 'model':      (p[5] | trim) or none,
                 'serial':     _u.serial | default(none),
                 'wwn':        _u.wwn | default(none),
@@ -172,6 +214,7 @@
                 'health':     none,
                 'is_os_disk': (_dev_path in osdisks) if os_known else none
               }) -%}
+              {%- endif -%}
             {%- endif -%}
           {%- endif -%}
         {%- endfor -%}

@@ -566,9 +566,11 @@ def sePreserveGatherOutput() {
         if (present.contains(n)) { stashList << n }
     }
     boolean stashed = false
+    env.SE_FINAL_STASHED = ''
     try {
         stash(name: 'gather-output', includes: (stashList ? stashList.join(',') : 'gather_manifest.json'), allowEmpty: true)
         stashed = true
+        env.SE_FINAL_STASHED = 'true'
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
@@ -610,6 +612,7 @@ def seSnapshotGatherOutput() {
                       'gather_progress.jsonl', 'gather_tail_fragments.jsonl']) {
         if (fileExists(n)) { present << n }
     }
+    env.SE_FINAL_STASHED = ''
     try {
         stash(name: 'gather-output', includes: (present ? present.join(',') : 'gather_manifest.json'), allowEmpty: true)
         env.SE_PRESERVE_STASHED = 'true'
@@ -810,96 +813,222 @@ Map seFinalizeIncomplete(Map C, Map fs, List ips, String stop) {
             incomplete: true]
 }
 
-def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPostMs, long tIn, long deadline, Map infra, Map fs) {
-    long tPost = (long) (tPostMs / 1000L)
-    fs.mark = 'recover'
-    String source = 'none'
-    List recoverFiles = ['gather_final.jsonl', 'gather_finalize_report.json', 'gather_output.json', 'gather_checkpoint.jsonl', 'gather_run.json']
-    boolean gatherRan = ((env.SE_GATHER_STARTED_AT ?: '') != '')
+
+Map seRecoverStash(String sdir) {
+    Map r = [medium: 'stash', dir: sdir, ok: false, error: null]
     try {
-        unstash 'gather-output'
-        if (fileExists('gather_final.jsonl') || fileExists('gather_output.json') || fileExists('gather_checkpoint.jsonl')) { source = 'stash' }
+        dir(sdir) { unstash 'gather-output' }
+        r.ok = true
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
-        if (gatherRan) { echo "[결과 확인] 수집 단계에서 전달받은 결과가 없어 빌드에 저장된 결과 파일에서 찾습니다.\n  오류: ${e.message}" }
+        r.error = (e.message ?: e.getClass().simpleName).toString()
     }
-    if (source == 'none') {
-        List notFound = []
-        for (String f in recoverFiles) {
+    return r
+}
+
+Map seRecoverArchive(String adir, List files) {
+    Map r = [medium: 'archive', dir: adir, got: [], missing: []]
+    dir(adir) {
+        for (String f in files) {
             try {
                 unarchive mapping: [(f): f]
+                r.got << f
             } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                 throw fie
             } catch (Exception e) {
-                notFound << "${f}: ${e.message}".toString()
+                r.missing << "${f}: ${e.message}".toString()
             }
         }
-        if (fileExists('gather_final.jsonl') || fileExists('gather_output.json') || fileExists('gather_checkpoint.jsonl')) { source = 'archive' }
-        if (notFound && (gatherRan || source != 'none')) {
-            echo "[결과 확인] ${source == 'archive' ? '빌드에 저장된 결과 파일 중 일부가 없습니다.' : '빌드에 저장된 결과 파일도 없습니다.'}\n  " + notFound.join('\n  ')
-        } else if (!gatherRan && source == 'none') {
-            echo '[결과 확인] 수집을 시작하지 않아 수집 결과 파일이 없습니다.'
-        }
     }
-    List lines = null
-    Map report = [:]
-    String layerA = 'skipped'
-    String layerB = 'skipped'
-    List damage = []
-    List unrecovered = []
-    Map statusCounts = [:]
-    if (fileExists('gather_final.jsonl') && fileExists('gather_finalize_report.json')) {
-        try {
-            def rep = readJSON file: 'gather_finalize_report.json'
-            String finalText = readFile(file: 'gather_final.jsonl', encoding: 'UTF-8')
-            if ((rep.exit_code in [0, 2]) && finalText.trim()) {
-                Map picked = seFilterEnvelopeLines(finalText.split('\n') as List, manifestJson)
-                if (picked.lines.size() == ips.size()) {
-                    lines = picked.lines
-                    statusCounts = picked.counts
-                    report = rep
-                    layerA = (rep.exit_code == 0) ? 'ok' : 'ok_with_damage'
-                } else {
-                    layerA = 'incomplete'
-                    damage << "layer_a_incomplete valid=${picked.lines.size()} accepted=${ips.size()} dropped=${picked.dropped}".toString()
+    return r
+}
+
+def seFinLib(Map box) {
+    if (box.tried != true) {
+        box.tried = true
+        box.lib = seLoadFinalizeLib()
+        box.canon = (box.lib != null) ? seLoadCanon(box.lib) : null
+    }
+    return box.lib
+}
+
+Map seEvalCandidate(String medium, String cdir, String manifestJson, List ips, String outcome, Map box) {
+    Map ev = [medium: medium, dir: cdir, has: false, lines: null, lineCount: 0, report: [:], layerA: 'skipped', layerB: 'skipped',
+              damage: [], unrecovered: [], counts: [:], real: 0, complete: false]
+    String outText = ''
+    String cpText = ''
+    if (cdir != null) {
+        dir(cdir) {
+            boolean hasFinal = fileExists('gather_final.jsonl')
+            boolean hasOut = fileExists('gather_output.json')
+            boolean hasCp = fileExists('gather_checkpoint.jsonl')
+            ev.has = hasFinal || hasOut || hasCp
+            if (ev.has && hasFinal && fileExists('gather_finalize_report.json')) {
+                try {
+                    def rep = readJSON file: 'gather_finalize_report.json'
+                    String finalText = readFile(file: 'gather_final.jsonl', encoding: 'UTF-8')
+                    if ((rep.exit_code in [0, 2]) && finalText.trim()) {
+                        Map picked = seFilterEnvelopeLines(finalText.split('\n') as List, manifestJson)
+                        if (picked.lines.size() == ips.size()) {
+                            ev.lines = picked.lines
+                            ev.counts = picked.counts
+                            ev.report = rep
+                            ev.layerA = (rep.exit_code == 0) ? 'ok' : 'ok_with_damage'
+                        } else {
+                            ev.layerA = 'incomplete'
+                            ev.damage << "layer_a_incomplete valid=${picked.lines.size()} accepted=${ips.size()} dropped=${picked.dropped}".toString()
+                        }
+                    } else {
+                        ev.layerA = 'failed'
+                    }
+                } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                    throw fie
+                } catch (Exception e) {
+                    ev.layerA = 'report_unreadable'
+                    ev.damage << "layer_a_unreadable ${e.getClass().simpleName}".toString()
+                    echo "[결과 확인] 정리된 결과 파일(gather_final.jsonl)을 읽지 못해 원본 결과로 다시 조립합니다.\n  오류: ${e.message}"
                 }
-            } else {
-                layerA = 'failed'
             }
-        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-            throw fie
-        } catch (Exception e) {
-            layerA = 'report_unreadable'
-            damage << "layer_a_unreadable ${e.getClass().simpleName}".toString()
-            echo "[결과 확인] 정리된 결과 파일(gather_final.jsonl)을 읽지 못해 원본 결과로 다시 조립합니다.\n  오류: ${e.message}"
+            if (ev.has && ev.lines == null) {
+                outText = hasOut ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : ''
+                cpText = hasCp ? readFile(file: 'gather_checkpoint.jsonl', encoding: 'UTF-8') : ''
+            }
+        }
+        if (!ev.has) { return ev }
+    }
+    if (ev.lines != null) {
+        Map bo = (ev.report.by_origin instanceof Map) ? ev.report.by_origin : null
+        ev.real = (bo != null) ? (((bo.output ?: 0) as int) + ((bo.checkpoint ?: 0) as int)) : ((ev.report.kept ?: 0) as int)
+        ev.complete = true
+        ev.lineCount = ev.lines.size()
+        return ev
+    }
+    def lib = seFinLib(box)
+    Map res = (lib != null) ? lib.seReconcileRaw(manifestJson, outText, cpText, box.canon, outcome) : null
+    if (lib != null && res != null) {
+        Map gated = seFilterEnvelopeLines(res.lines, manifestJson)
+        int gateDropped = res.lines.size() - gated.lines.size()
+        if (gateDropped != 0 || gated.dropped) {
+            ev.damage << "layer_b_gate_dropped=${gateDropped}".toString()
+            ev.unrecovered = gated.missing
+        }
+        ev.lines = gated.lines
+        ev.counts = gated.counts
+        ev.report = res.report
+        ev.layerB = 'ok'
+        Map bo = res.report.by_origin
+        ev.real = Math.max(0, ((bo.output ?: 0) as int) + ((bo.checkpoint ?: 0) as int) - gateDropped)
+    } else {
+        Map picked = seFilterEnvelopeLines(outText.split('\n') as List, manifestJson)
+        ev.lines = picked.lines
+        ev.counts = picked.counts
+        ev.unrecovered = picked.missing
+        if (picked.dropped) { ev.damage << "raw_dropped=${picked.dropped}".toString() }
+        ev.report = [filled: 0, kept: ev.lines.size(), dropped: [], conflicts: [], layer: 'none']
+        ev.layerB = 'unavailable'
+        ev.real = ev.lines.size()
+    }
+    ev.lineCount = ev.lines.size()
+    return ev
+}
+
+@NonCPS
+String seChooseMedium(Map st, Map ar, boolean finalStashed) {
+    boolean s = (st != null && st.has == true)
+    boolean a = (ar != null && ar.has == true)
+    if (!s && !a) { return 'none' }
+    if (!a) { return 'stash' }
+    if (!s) { return 'archive' }
+    int rs = (st.real ?: 0) as int
+    int ra = (ar.real ?: 0) as int
+    if (rs != ra) { return (rs > ra) ? 'stash' : 'archive' }
+    if ((st.complete == true) != (ar.complete == true)) { return (st.complete == true) ? 'stash' : 'archive' }
+    return finalStashed ? 'stash' : 'archive'
+}
+
+@NonCPS
+String seMediumNote(String source, Map st, Map ar, boolean finalStashed) {
+    if (st?.has != true || ar?.has != true) { return null }
+    int rs = (st.real ?: 0) as int
+    int ra = (ar.real ?: 0) as int
+    String counts = "\n  빌드에 저장된 결과 파일: ${ra}대, 수집 단계에서 전달받은 결과: ${rs}대 (수집 결과 또는 중간 결과가 있는 대상)"
+    if (source == 'archive') {
+        if (ra != rs) { return ('결과가 있는 대상이 더 많은 빌드 저장 결과 파일로 처리합니다.' + counts).toString() }
+        if (ar.complete == true && st.complete != true) { return ('정리된 결과가 있는 빌드 저장 결과 파일로 처리합니다.' + counts).toString() }
+        return ('마지막 결과 보존의 전달을 확인하지 못했고 결과가 있는 대상 수가 같아, 마지막 보존이 빌드에 저장한 결과 파일로 처리합니다.' + counts).toString()
+    }
+    if (source == 'stash' && rs != ra) {
+        return ('결과가 있는 대상이 더 많은, 수집 단계에서 전달받은 결과로 처리합니다.' + counts).toString()
+    }
+    return null
+}
+
+@NonCPS
+Map seCandidateRecord(Map rc, Map ev) {
+    if (rc == null) { return [looked_up: false] }
+    Map m = [looked_up: true, dir: rc.dir]
+    if (rc.medium == 'stash') {
+        m.recovered = (rc.ok == true)
+        if (rc.error) { m.error = rc.error }
+    } else {
+        m.recovered = rc.got
+        m.missing = rc.missing
+    }
+    if (ev != null) {
+        m.has_result = (ev.has == true)
+        m.real = ev.real
+        m.complete = (ev.complete == true)
+        m.layerA = ev.layerA
+        m.layerB = ev.layerB
+        m.lines = ev.lineCount
+    }
+    return m
+}
+
+def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPostMs, long tIn, long deadline, Map infra, Map fs) {
+    long tPost = (long) (tPostMs / 1000L)
+    fs.mark = 'recover'
+    List recoverFiles = ['gather_final.jsonl', 'gather_finalize_report.json', 'gather_output.json', 'gather_checkpoint.jsonl', 'gather_run.json']
+    boolean gatherRan = ((env.SE_GATHER_STARTED_AT ?: '') != '')
+    boolean finalStashed = (env.SE_FINAL_STASHED == 'true')
+    String rd = "rec-${fs.entries}"
+    Map box = [tried: false, lib: null, canon: null]
+    Map stashC = seRecoverStash("${rd}/stash")
+    if (!stashC.ok && gatherRan) {
+        echo "[결과 확인] 수집 단계에서 전달받은 결과가 없어 빌드에 저장된 결과 파일에서 찾습니다.\n  오류: ${stashC.error}"
+    }
+    Map stEval = stashC.ok ? seEvalCandidate('stash', stashC.dir, manifestJson, ips, outcome, box) : null
+    boolean fast = finalStashed && stEval != null && stEval.complete == true
+    Map archC = null
+    Map arEval = null
+    if (!fast) {
+        archC = seRecoverArchive("${rd}/archive", recoverFiles)
+        arEval = archC.got ? seEvalCandidate('archive', archC.dir, manifestJson, ips, outcome, box) : null
+        boolean archHas = (arEval?.has == true)
+        if (stEval?.has != true) {
+            if (archC.missing && (gatherRan || archHas)) {
+                echo "[결과 확인] ${archHas ? '빌드에 저장된 결과 파일 중 일부가 없습니다.' : '빌드에 저장된 결과 파일도 없습니다.'}\n  " + archC.missing.join('\n  ')
+            } else if (!gatherRan && !archHas) {
+                echo '[결과 확인] 수집을 시작하지 않아 수집 결과 파일이 없습니다.'
+            }
         }
     }
-    if (lines == null) {
-        String outText = fileExists('gather_output.json') ? readFile(file: 'gather_output.json', encoding: 'UTF-8') : ''
-        String cpText = fileExists('gather_checkpoint.jsonl') ? readFile(file: 'gather_checkpoint.jsonl', encoding: 'UTF-8') : ''
-        def lib = seLoadFinalizeLib()
-        Map res = (lib != null) ? lib.seReconcileRaw(manifestJson, outText, cpText, seLoadCanon(lib), outcome) : null
-        if (lib != null && res != null) {
-            Map gated = seFilterEnvelopeLines(res.lines, manifestJson)
-            if (gated.lines.size() != res.lines.size() || gated.dropped) {
-                damage << "layer_b_gate_dropped=${res.lines.size() - gated.lines.size()}".toString()
-                unrecovered = gated.missing
-            }
-            lines = gated.lines
-            statusCounts = gated.counts
-            report = res.report
-            layerB = 'ok'
-        } else {
-            Map picked = seFilterEnvelopeLines(outText.split('\n') as List, manifestJson)
-            lines = picked.lines
-            statusCounts = picked.counts
-            unrecovered = picked.missing
-            if (picked.dropped) { damage << "raw_dropped=${picked.dropped}".toString() }
-            report = [filled: 0, kept: lines.size(), dropped: [], conflicts: [], layer: 'none']
-            layerB = 'unavailable'
-        }
-    }
+    String source = seChooseMedium(stEval, arEval, finalStashed)
+    String mediumNote = seMediumNote(source, stEval, arEval, finalStashed)
+    if (mediumNote) { echo "[결과 확인] ${mediumNote}" }
+    echo "[기술 기록] 결과 회수: final_stashed=${finalStashed} fast=${fast} stash=${stashC.ok ? (stEval?.has ? 'real=' + stEval.real + (stEval.complete ? ',complete' : '') : 'empty') : 'unavailable'}" +
+         " archive=${archC == null ? 'skipped' : (arEval?.has ? 'real=' + arEval.real + (arEval.complete ? ',complete' : '') : 'empty')} chosen=${source}"
+    Map ev = (source == 'stash') ? stEval : ((source == 'archive') ? arEval : seEvalCandidate('none', null, manifestJson, ips, outcome, box))
+    if (source != 'stash' && stEval != null) { stEval.lines = null }
+    if (source != 'archive' && arEval != null) { arEval.lines = null }
+    List lines = ev.lines
+    Map report = ev.report
+    String layerA = ev.layerA
+    String layerB = ev.layerB
+    List damage = ev.damage
+    List unrecovered = ev.unrecovered
+    Map statusCounts = ev.counts
     fs.mark = 'assemble'
     int accepted = ips.size()
     int lineCount = lines.size()
@@ -923,7 +1052,12 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
     Map run = null
     try {
         run = (env.SE_GATHER_RUN ?: '').trim() ? (readJSON(text: env.SE_GATHER_RUN, returnPojo: true) as Map) : null
-        if (run == null && fileExists('gather_run.json')) { run = readJSON(file: 'gather_run.json', returnPojo: true) as Map }
+        String runDir = ev.dir ?: (stashC.ok ? stashC.dir : ((archC?.got) ? archC.dir : null))
+        if (run == null && runDir) {
+            dir(runDir) {
+                if (fileExists('gather_run.json')) { run = readJSON(file: 'gather_run.json', returnPojo: true) as Map }
+            }
+        }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
@@ -934,6 +1068,8 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
                    status_counts: [success: (statusCounts.success ?: 0), partial: (statusCounts.partial ?: 0),
                                    failed: (statusCounts.failed ?: 0), missing: Math.max(0, accepted - lineCount)],
                    layerA: layerA, layerB: layerB, source: source, node_wait_sec: tIn - tPost,
+                   recovery: [final_stashed: finalStashed, fast_path: fast, chosen: source,
+                              stash: seCandidateRecord(stashC, stEval), archive: seCandidateRecord(archC, arEval)],
                    unrecovered: unrecovered, damage: damage, by_origin: (report.by_origin ?: null),
                    recovery_limited: (layerB == 'unavailable' && lineCount != accepted),
                    preserve: [layerA: env.SE_PRESERVE_LAYER_A, archived: env.SE_PRESERVE_ARCHIVED, stashed: env.SE_PRESERVE_STASHED,
@@ -949,6 +1085,7 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
                    finalize: [entries: fs.entries, exec_sec_before: (long) ((fs.exec_ms as long) / 1000L), limit_left_sec: deadline - tIn, lost: fs.lost]]
     fs.counts = summary.status_counts
     lines = null
+    ev.lines = null
     Map cb = (fs.cb instanceof Map) ? fs.cb : [:]
     fs.cb = cb
     fs.mark = 'send'
@@ -1012,27 +1149,52 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
     writeFile file: 'finalize_summary.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson(summary)
     fs.mark = 'archive'
     List finalFiles = []
-    for (String f in ['callback_body.json', 'finalize_summary.json', 'gather_final.jsonl', 'gather_finalize_report.json']) {
+    for (String f in ['callback_body.json', 'finalize_summary.json']) {
         if (fileExists(f)) { finalFiles << f }
     }
-    boolean finalArchived = false
+    boolean bodyArchived = false
     try {
         archiveArtifacts artifacts: finalFiles.join(','), allowEmptyArchive: false, fingerprint: false
-        finalArchived = finalFiles.contains('finalize_summary.json') && (!bodySaved || finalFiles.contains('callback_body.json'))
+        bodyArchived = finalFiles.contains('finalize_summary.json') && (!bodySaved || finalFiles.contains('callback_body.json'))
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
         echo "[결과 확인] 결과 파일을 빌드에 보관하지 못했습니다: ${e.message}"
     }
-    if (finalArchived) {
-        String base = (env.BUILD_URL ?: '').trim()
-        List files = []
-        if (fileExists('gather_final.jsonl')) { files << ['서버별 수집 결과', 'gather_final.jsonl'] }
+    List resultFiles = []
+    String resultArchive = 'not_needed'
+    if (ev.dir) {
+        dir(ev.dir) {
+            for (String f in ['gather_final.jsonl', 'gather_finalize_report.json']) {
+                if (fileExists(f)) { resultFiles << f }
+            }
+            if (resultFiles) {
+                try {
+                    archiveArtifacts artifacts: resultFiles.join(','), allowEmptyArchive: false, fingerprint: false
+                    resultArchive = 'ok'
+                } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                    throw fie
+                } catch (Exception e) {
+                    resultArchive = 'failed'
+                    echo "[결과 확인] 정리된 수집 결과 파일을 빌드에 보관하지 못했습니다: ${e.message}"
+                }
+            }
+        }
+    }
+    boolean finalArchived = bodyArchived && resultArchive != 'failed'
+    echo "[기술 기록] 결과 확인 보관: body_summary=${bodyArchived} results=${resultArchive}${resultFiles ? ' files=' + resultFiles.join(',') : ''}"
+    String base = (env.BUILD_URL ?: '').trim()
+    List files = []
+    if (resultArchive == 'ok' && resultFiles.contains('gather_final.jsonl')) { files << ['서버별 수집 결과', 'gather_final.jsonl'] }
+    if (bodyArchived) {
         if (bodySaved) { files << ['Portal 전송 본문', 'callback_body.json'] }
         files << ['실행 요약', 'finalize_summary.json']
-        for (List f in files) { echo "[결과 파일] ${f[0]}: ${base ? base + 'artifact/' + f[1] : f[1]}" }
-    } else {
+    }
+    for (List f in files) { echo "[결과 파일] ${f[0]}: ${base ? base + 'artifact/' + f[1] : f[1]}" }
+    if (!bodyArchived) {
         echo "[결과 파일] 결과 파일을 빌드에 보관하지 못했습니다. 요약과 본문은 Jenkins의 이 폴더에 남겨 둡니다.\n  위치: ${pwd()}"
+    } else if (resultArchive == 'failed') {
+        echo "[결과 파일] 정리된 수집 결과 파일을 빌드에 보관하지 못해 Jenkins의 이 폴더에 남겨 둡니다.\n  위치: ${pwd()}/${ev.dir}"
     }
     boolean finalizerWarn = false
     for (String w in warnings) { if (!w.startsWith('preserve_')) { finalizerWarn = true } }
@@ -1043,7 +1205,7 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
         unstable("[결과 확인] Portal 전송은 했지만 ${seAfterSendWarnText(warnings, filled, (bo?.checkpoint ?: 0) as int, outcome)}.")
     }
     try {
-        seFinMarker(fs, tIn, [ended_epoch: seNowSec(), archived: finalArchived])
+        seFinMarker(fs, tIn, [ended_epoch: seNowSec(), archived: finalArchived, archive_body_summary: bodyArchived, archive_results: resultArchive])
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
@@ -1103,6 +1265,8 @@ def seExplainGatherEnd(Map C, String outcome, Map summary, Map bo, int kept, int
         preserve = (archivedFlag == 'true') ? '완료' : ((summary.preserve?.stashed == 'true') ? '빌드 기록 저장은 실패했고 전달된 결과로 처리했습니다.' : '실패')
     } else if (!(env.SE_GATHER_STARTED_AT ?: '')) {
         preserve = '수집 단계가 실행되지 않아 보존할 결과가 없습니다.'
+    } else if (summary.source == 'archive') {
+        preserve = '보존 기록은 남지 않았지만 빌드에 저장된 결과 파일로 처리했습니다.'
     } else if (summary.preserve?.stashed == 'true') {
         preserve = '마지막 보존 전에 끝나 앞서 넘겨 둔 결과로 처리했습니다.'
     } else {
@@ -1287,6 +1451,7 @@ def seGatherStage(Map C) {
               last: null, outcome: 'interrupted_unknown', limit_reason: '', final: false, preserve_only: false]
     env.SE_GATHER_OUTCOME = 'interrupted_unknown'
     env.SE_FINAL_PRESERVED = ''
+    env.SE_FINAL_STASHED = ''
     try {
         seGatherLoop(C, st, infra)
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
@@ -1393,6 +1558,7 @@ List seGatherEnv() {
     return ["REPO_ROOT=${w}", "ANSIBLE_CONFIG=${w}/ansible.cfg", "ANSIBLE_JSON_OUTPUT_FILE=${w}/gather_output.json",
             "ANSIBLE_JSON_MANIFEST_FILE=${w}/gather_manifest.json", "ANSIBLE_JSON_PROGRESS_FILE=${w}/gather_progress.jsonl",
             "ANSIBLE_JSON_CHECKPOINT_FILE=${w}/gather_checkpoint.jsonl",
+            "INVENTORY_JSON_FILE=${w}/.inventory_input.json",
             "SE_AUTH_EVIDENCE_DIR=${w}/gather_auth_evidence", "SE_BUILD_ID=${env.BUILD_TAG}", "SE_EVENT_UUID=${params.eventUuid ?: ''}",
             "ANSIBLE_VERBOSITY=${params.verbosity ?: '0'}"]
 }
@@ -1421,8 +1587,16 @@ def seAttempt(Map C, Map st, Map r) {
                 }
                 st.last = [state: 'attempt_limit', outcome: 'attempt_limit', limit_reason: '']
                 st.final = true
+                env.SE_GATHER_OUTCOME = 'attempt_limit'
+                env.SE_GATHER_LIMIT_REASON = ''
                 seLog("[수집] 시도 하나의 실행 한계(${seDuration(limitSec)})에 도달해 멈췄습니다.\n  지금까지 확보한 결과를 보존해 보냅니다.")
-                try { sePreserveGatherOutput() } catch (Throwable t) { echo "[결과 보존] 멈춘 시도의 결과 보존을 마치지 못했습니다.\n  오류: ${t}" }
+                try {
+                    sePreserveGatherOutput()
+                } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie2) {
+                    throw fie2
+                } catch (Exception e) {
+                    echo "[결과 보존] 멈춘 시도의 결과 보존을 마치지 못했습니다.\n  오류: ${e}"
+                }
             }
         }
     }
@@ -1443,9 +1617,16 @@ Map seReadJsonFile(String path) {
 
 def seWriteOwner(boolean prepared, Map extra) {
     Map rec = [schema: 1, job: env.JOB_NAME, job_base: env.JOB_BASE_NAME, build: env.BUILD_NUMBER, url: env.BUILD_URL, node: env.NODE_NAME,
+               nonce: (env.SE_BUILD_NONCE ?: ''),
                started_epoch: ((env.SE_NODE_ENTER_EPOCH ?: '0') as long), preserved: false, commit: (env.SE_WS_COMMIT ?: ''), prepared: prepared]
     rec.putAll(extra)
     writeFile(file: '.se_workspace.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson(rec) + '\n')
+}
+
+boolean seSameBuildNonce(Object recorded) {
+    String mineNonce = (env.SE_BUILD_NONCE ?: '').toString()
+    String theirs = (recorded ?: '').toString()
+    return (!mineNonce || !theirs) ? true : (mineNonce == theirs)
 }
 
 boolean seManifestIsThisBuild(String json) {
@@ -1453,7 +1634,7 @@ boolean seManifestIsThisBuild(String json) {
     try {
         def m = readJSON(text: json, returnPojo: true)
         return (m instanceof Map) && "${m.build?.job}" == "${env.JOB_NAME}" && "${m.build?.number}" == "${env.BUILD_NUMBER}" &&
-               (m.ips instanceof List) && !m.ips.isEmpty()
+               seSameBuildNonce(m.build?.nonce) && (m.ips instanceof List) && !m.ips.isEmpty()
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
@@ -1477,8 +1658,9 @@ def sePrepareWorkspace(String targetType, Map own) {
     seWriteOwner(false, [:])
     sh label: '이전 실행의 결과 파일 정리', script: "cd \"${env.WORKSPACE}\" && rm -rf gather_output.json gather_rc.txt gather_run.json gather_run.json.tmp gather_progress.jsonl gather_checkpoint.jsonl " +
                                                     "gather_final.jsonl gather_finalize_report.json workspace_cleanup.json gather_auth_evidence gather_tail_fragments.jsonl " +
-                                                    ".gather_alive .gather_limit_hosts .gather_ansible_pid .se_addon.json"
+                                                    ".gather_alive .gather_limit_hosts .gather_ansible_pid .se_addon.json .inventory_input.json"
     writeFile(file: 'gather_manifest.json', text: (env.SE_MANIFEST_JSON ?: '') + '\n', encoding: 'UTF-8')
+    writeFile(file: '.inventory_input.json', text: (params.inventory_json ?: '') + '\n', encoding: 'UTF-8')
     seWriteOwner(true, [:])
     echo(reused ? "[수집] 받아 둔 저장소를 그대로 씁니다. revision ${commit}" : "[수집] 저장소를 준비했습니다. revision ${commit ?: '-'}")
 }
@@ -1576,12 +1758,12 @@ String seAddonPrepare(String targetType, Map st) {
     return addonDir
 }
 
-Map seClassifyAttempt() {
-    String out = sh(returnStdout: true, label: '수집 시도 판정', script: '''#!/bin/bash
-        cd "${WORKSPACE}"
-        . "${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
-        python3 scripts/gather_state.py classify --ws "${WORKSPACE}" 2>/dev/null || echo '{"state":"unknown"}'
-    ''').trim()
+Map seClassifyAttempt(boolean agentLost = false) {
+    String out = sh(returnStdout: true, label: '수집 시도 판정', script: """#!/bin/bash
+        cd "\${WORKSPACE}"
+        . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
+        python3 scripts/gather_state.py classify --ws "\${WORKSPACE}" ${agentLost ? '--agent-lost' : ''} 2>/dev/null || echo '{"state":"unknown"}'
+    """).trim()
     String[] parts = out.split('\n')
     try {
         return readJSON(text: (parts.length > 0 ? parts[parts.length - 1] : '{}'), returnPojo: true) as Map
@@ -1604,7 +1786,8 @@ def seAttemptBody(Map C, Map st, Map r) {
     String targetType = params.target_type.trim()
     Map rec = seReadJsonFile('.se_workspace.json')
     Map own = (rec.state == 'ok') ? (rec.data as Map) : null
-    boolean mine = (own != null && "${own.job}" == "${env.JOB_NAME}" && "${own.build}" == "${env.BUILD_NUMBER}")
+    boolean sameNumber = (own != null && "${own.job}" == "${env.JOB_NAME}" && "${own.build}" == "${env.BUILD_NUMBER}")
+    boolean mine = sameNumber && seSameBuildNonce(own?.nonce)
     if (st.preserve_only == true) {
         st.preserve_only = false
         if (!mine) {
@@ -1618,9 +1801,13 @@ def seAttemptBody(Map C, Map st, Map r) {
     if (!mine) {
         if (st.gather_started == true) {
             st.last = [state: 'resume_impossible', outcome: 'resume_impossible', limit_reason: '']
-            String why = (rec.state == 'absent') ? '이 빌드의 기록이 없습니다' : ((rec.state == 'corrupt') ? '이 빌드의 기록을 해석할 수 없습니다' : '다른 빌드의 기록이 있습니다')
+            String why = (rec.state == 'absent') ? '이 빌드의 기록이 없습니다' : ((rec.state == 'corrupt') ? '이 빌드의 기록을 해석할 수 없습니다' :
+                         (sameNumber ? '같은 번호의 다른 빌드(Job 재생성 또는 번호 재사용)의 기록이 있습니다' : '다른 빌드의 기록이 있습니다'))
             seLog("[수집] 이어서 수집할 작업 폴더에 ${why}. 폴더가 지워졌거나 바뀐 것으로 보고 다시 수집하지 않습니다.\n  작업 폴더: ${pwd()}\n  끝나지 않은 대상은 Runner 장애 사유의 실패 결과로 보냅니다.")
             return
+        }
+        if (sameNumber) {
+            seLog("[수집] 작업 폴더에 같은 번호의 다른 빌드 기록이 있습니다(Job 재생성 또는 번호 재사용). 이 빌드의 폴더로 새로 준비합니다.\n  작업 폴더: ${pwd()}")
         }
         sePrepareWorkspace(targetType, null)
     } else if (own.prepared == false && st.gather_started != true) {
@@ -1643,6 +1830,10 @@ def seAttemptBody(Map C, Map st, Map r) {
             }
             writeFile(file: 'gather_manifest.json', text: env.SE_MANIFEST_JSON + '\n', encoding: 'UTF-8')
             seLog("[수집] 작업 폴더에 접수 목록(gather_manifest.json)이 없어 이 빌드가 접수한 원본으로 다시 썼습니다. 결과 파일은 그대로 둡니다.")
+        }
+        if (!fileExists('.inventory_input.json')) {
+            writeFile(file: '.inventory_input.json', text: (params.inventory_json ?: '') + '\n', encoding: 'UTF-8')
+            seLog("[수집] 작업 폴더에 접수 입력(.inventory_input.json)이 없어 이 빌드의 입력으로 다시 썼습니다. 결과 파일은 그대로 둡니다.")
         }
         seLog("[수집] 같은 Runner의 작업 폴더를 그대로 씁니다. 저장소는 다시 받지 않습니다.\n  작업 폴더: ${pwd()}\n  revision: ${head ?: '-'}")
     }
@@ -1695,7 +1886,7 @@ def seAttemptBody(Map C, Map st, Map r) {
         throw fie
     }
     env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs())
-    Map cls = seClassifyAttempt()
+    Map cls = seClassifyAttempt(lostPrev && (rc in [90, 91]))
     Map run = seReadGatherRun()
     env.SE_GATHER_RUN = run ? groovy.json.JsonOutput.toJson(run) : ''
     if (run != null && (run.attempts instanceof List) && run.attempts) {
@@ -1703,7 +1894,8 @@ def seAttemptBody(Map C, Map st, Map r) {
         env.SE_GATHER_LIMIT_SOURCE = 'gather_limit'
     }
     String s = (cls.state ?: 'unknown').toString()
-    if (s == 'not_started') { s = (rc in [90, 91]) ? 'prep_failed' : 'failed_run' }
+    if (rc in [90, 91]) { s = 'prep_failed' }
+    else if (s == 'not_started') { s = 'failed_run' }
     echo "[기술 기록] 수집 시도 n=${cls.attempt ?: '-'} node=${env.NODE_NAME} rc=${rc} state=${s} evidence=${cls.evidence ?: '-'} exec_used=${cls.exec_used ?: 0} " +
          "completed=${cls.completed ?: 0}/${cls.hosts_total ?: '-'} precheck_failed=${cls.precheck_failed ?: 0} pending=${cls.pending_left ?: 0} progress=${cls.progress ?: 0}"
     if (s in ['runner_oom', 'runner_restart', 'agent_disconnect', 'running']) {
@@ -1771,7 +1963,6 @@ pipeline {
     }
 
     environment {
-        INVENTORY_JSON          = "${params.inventory_json}"
         PYTHONDONTWRITEBYTECODE = '1'
     }
 
@@ -1828,9 +2019,10 @@ pipeline {
                         error "[입력 확인] 필수 값이 없습니다: deploymentEnvironmentId"
                     }
 
+                    env.SE_BUILD_NONCE = "${env.BUILD_TAG}-${seNowMs()}".toString()
                     env.SE_MANIFEST_JSON = groovy.json.JsonOutput.toJson([
                         schema : 1,
-                        build  : [job: env.JOB_NAME, number: env.BUILD_NUMBER, url: env.BUILD_URL],
+                        build  : [job: env.JOB_NAME, number: env.BUILD_NUMBER, url: env.BUILD_URL, nonce: env.SE_BUILD_NONCE],
                         channel: params.target_type.trim(),
                         request: [
                             loc                    : params.loc.trim(),

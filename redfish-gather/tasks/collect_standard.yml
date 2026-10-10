@@ -102,9 +102,10 @@
 - name: "redfish | collect_standard | set vendor"
   ansible.builtin.set_fact:
     _rf_vendor: >-
-      {{ _rf_detected_vendor
-         if (_rf_detected_vendor | default('unknown')) != 'unknown'
-         else none }}
+      {%- set post = (((_rf_raw_collect.vendor | default('', true)) | string) | canonical_vendor(_va.vendor_aliases))
+                     if (_rf_collect_ok | default(false) | bool) else 'unknown' -%}
+      {%- set probe = _rf_detected_vendor | default('unknown', true) -%}
+      {{ post if post != 'unknown' else (probe if probe != 'unknown' else none) }}
   no_log: true
 
 - name: "redfish | collect_standard | record attempts meta"

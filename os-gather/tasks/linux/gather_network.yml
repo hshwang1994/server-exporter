@@ -144,11 +144,22 @@
       awk '/^nameserver/{print "DNS_REAL="$2}' /run/systemd/resolve/resolv.conf
     fi
     grep -v '^[#;]' /etc/resolv.conf 2>/dev/null | awk '/^nameserver/{print "DNS="$2}'
-    dg=$(ip route show default 2>/dev/null | head -1)
-    if [ -n "$dg" ]; then
-      echo "GW=$(echo "$dg" | awk '{print $3}')"
-      echo "GW_DEV=$(echo "$dg" | awk '{print $5}')"
+    gw4_rows=$(ip route show default 2>/dev/null | awk '{
+      gw = ""; dev = "";
+      for (i = 1; i <= NF; i++) { if ($i == "via") gw = $(i + 1); if ($i == "dev") dev = $(i + 1) }
+      if (gw != "" || dev != "") print "GW4|" gw "|" dev
+    }')
+    if [ -n "$gw4_rows" ]; then
+      printf '%s\n' "$gw4_rows"
+      gw4_first=$(printf '%s\n' "$gw4_rows" | head -1)
+      echo "GW=$(echo "$gw4_first" | cut -d'|' -f2)"
+      echo "GW_DEV=$(echo "$gw4_first" | cut -d'|' -f3)"
     fi
+    ip -6 route show default 2>/dev/null | awk '{
+      gw = ""; dev = "";
+      for (i = 1; i <= NF; i++) { if ($i == "via") gw = $(i + 1); if ($i == "dev") dev = $(i + 1) }
+      if (gw != "" || dev != "") print "GW6|" gw "|" dev
+    }'
     for dev in $(ls /sys/class/net/ 2>/dev/null); do
       case "$dev" in lo|docker*|br-*|veth*|virbr*|vir*|cni*|flannel*|cali*|tunl*|dummy*|kube-*) continue;; esac
       if [ -e "/sys/class/net/$dev/master" ] && [ ! -d "/sys/class/net/$dev/bridge" ] && [ ! -d "/sys/class/net/$dev/bonding" ]; then
@@ -175,13 +186,19 @@
       }'
     done
     if command -v lspci >/dev/null 2>&1; then
-      lspci -k -mm -d ::0200 | while IFS= read -r line; do
+      lspci_ef=$(mktemp 2>/dev/null) || lspci_ef=""
+      lspci -k -mm -d ::0200 2>"${lspci_ef:-/dev/null}" | while IFS= read -r line; do
         slot=$(echo "$line" | awk -F'"' '{print $1}' | tr -d ' ')
         vendor=$(echo "$line" | awk -F'"' '{print $4}')
         device=$(echo "$line" | awk -F'"' '{print $6}')
         driver=$(lspci -k -s "$slot" 2>/dev/null | awk '/Kernel driver in use:/{print $5}')
         echo "ADAPTER|${slot}|${vendor}|${device}|${driver}"
       done
+      if [ -n "$lspci_ef" ]; then
+        lspci_err=$(head -n 1 "$lspci_ef" 2>/dev/null | tr -d '|\r')
+        rm -f "$lspci_ef"
+        if [ -n "$lspci_err" ]; then echo "LSPCI_ERR=$lspci_err"; fi
+      fi
     fi
     for d in $(ls /sys/class/net 2>/dev/null); do
       [ -e "/sys/class/net/$d/device" ] || continue
@@ -217,13 +234,28 @@
       {%- endfor -%}
       {{ real if real else fallback }}
     _l_raw_gw: >-
+      {%- set ns = namespace(v='') -%}
       {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
-        {%- if line.startswith('GW=') -%}{{ line[3:] | trim }}{% endif -%}
+        {%- if line.startswith('GW=') and not ns.v -%}{%- set ns.v = line[3:] | trim -%}{%- endif -%}
       {%- endfor -%}
+      {{ ns.v }}
     _l_raw_gw_dev: >-
+      {%- set ns = namespace(v='') -%}
       {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
-        {%- if line.startswith('GW_DEV=') -%}{{ line[7:] | trim }}{% endif -%}
+        {%- if line.startswith('GW_DEV=') and not ns.v -%}{%- set ns.v = line[7:] | trim -%}{%- endif -%}
       {%- endfor -%}
+      {{ ns.v }}
+    _l_raw_gw_rows: >-
+      {%- set rows = [] -%}
+      {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('GW4|') or line.startswith('GW6|') -%}
+          {%- set p = line.split('|') -%}
+          {%- if p | length >= 3 -%}
+            {%- set _ = rows.append({'family': ('ipv4' if line.startswith('GW4|') else 'ipv6'), 'address': ((p[1] | trim) or none), 'dev': ((p[2] | trim) or none)}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ rows }}
     _l_raw_ipv6_by_dev: >-
       {%- set m = {} -%}
       {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
@@ -343,18 +375,32 @@
 - name: "linux | network | raw mark primary + inject gateway + merge IPv6"
   ansible.builtin.set_fact:
     _l_norm_interfaces_raw: >-
-      {%- set gw     = (_l_raw_gw     | default('')) | trim -%}
-      {%- set gw_dev = (_l_raw_gw_dev | default('')) | trim -%}
-      {%- set v6_map = (_l_raw_ipv6_by_dev | default({})) -%}
+      {%- set gw     = (_l_raw_gw     | default('', true)) | string | trim -%}
+      {%- set gw_dev = (_l_raw_gw_dev | default('', true)) | string | trim -%}
+      {%- set rows   = (_l_raw_gw_rows | default([], true)) -%}
+      {%- set v6_map = (_l_raw_ipv6_by_dev | default({}, true)) -%}
+      {%- set gw4_by_dev = {} -%}
+      {%- set gw6_by_dev = {} -%}
+      {%- for r in rows -%}
+        {%- if r.dev -%}
+          {%- if r.family == 'ipv4' and r.dev not in gw4_by_dev -%}{%- set _ = gw4_by_dev.update({r.dev: r.address}) -%}
+          {%- elif r.family == 'ipv6' and r.dev not in gw6_by_dev -%}{%- set _ = gw6_by_dev.update({r.dev: r.address}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- if (rows | length) == 0 and gw_dev -%}{%- set _ = gw4_by_dev.update({gw_dev: (gw or none)}) -%}{%- endif -%}
+      {%- set primary_devs = (gw4_by_dev.keys() | list) if (gw4_by_dev | length > 0) else (gw6_by_dev.keys() | list) -%}
       {%- set out = [] -%}
       {%- for iface in (_l_raw_ifaces | default([])) -%}
-        {%- set is_primary = (gw_dev | length > 0) and (iface.id == gw_dev) -%}
+        {%- set is_primary = iface.id in primary_devs -%}
+        {%- set gw4 = gw4_by_dev[iface.id] if (iface.id in gw4_by_dev) else none -%}
+        {%- set gw6 = gw6_by_dev[iface.id] if (iface.id in gw6_by_dev) else none -%}
         {%- set addrs = [] -%}
         {%- for a in (iface.addresses | default([])) -%}
-          {%- set _ = addrs.append(a | combine({'gateway': gw if (is_primary and gw) else none})) -%}
+          {%- set _ = addrs.append(a | combine({'gateway': (gw4 if gw4 else none)})) -%}
         {%- endfor -%}
         {%- for v6 in (v6_map[iface.id] | default([])) -%}
-          {%- set _ = addrs.append(v6) -%}
+          {%- set _ = addrs.append(v6 | combine({'gateway': (gw6 if gw6 else none)})) -%}
         {%- endfor -%}
         {%- set _ = out.append(iface | combine({
           'is_primary': is_primary,
@@ -407,8 +453,15 @@
         dns_servers: "{{ _l_raw_dns | default([]) }}"
         default_gateways: >-
           {%- set out = [] -%}
-          {%- set gw = (_l_raw_gw | default('')) | trim -%}
-          {%- if gw -%}
+          {%- set seen = [] -%}
+          {%- for r in (_l_raw_gw_rows | default([], true)) -%}
+            {%- if r.address and ((r.family ~ '|' ~ r.address) not in seen) -%}
+              {%- set _ = seen.append(r.family ~ '|' ~ r.address) -%}
+              {%- set _ = out.append({'family': r.family, 'address': r.address}) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- set gw = (_l_raw_gw | default('', true)) | string | trim -%}
+          {%- if (out | length) == 0 and gw -%}
             {%- set _ = out.append({'family':'ipv4','address':gw}) -%}
           {%- endif -%}
           {{ out }}
@@ -422,7 +475,14 @@
     _sections_supported_fragment: ['network']
     _sections_collected_fragment: "{{ ['network'] if (_l_net_raw_ok | default(false) | bool) else [] }}"
     _sections_failed_fragment:    "{{ [] if (_l_net_raw_ok | default(false) | bool) else ['network'] }}"
-    _errors_fragment: "{{ ([] if (_l_net_raw_ok | default(false) | bool) else [{'section':'network','message':'네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=ip,sysfs,resolv_conf; cause=no_interface_and_no_dns; rc=' ~ (_l_net_raw.rc | default('none')))}]) + ([{'section':'network','message':'네트워크 카드 상세 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.','detail':('source=lspci; stderr=' ~ ((_l_net_raw.stderr | default('') | replace('\n', ' ') | trim | truncate(500, true)) or 'none'))}] if (('lspci' in (_l_net_raw.stderr | default(''))) and (_l_net_raw_ok | default(false) | bool)) else []) }}"
+    _errors_fragment: >-
+      {%- set ns = namespace(lspci_err='') -%}
+      {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('LSPCI_ERR=') and not ns.lspci_err -%}{%- set ns.lspci_err = line[10:] | trim -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set ok = _l_net_raw_ok | default(false) | bool -%}
+      {{ ([] if ok else [{'section':'network','message':'네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=ip,sysfs,resolv_conf; cause=no_interface_and_no_dns; rc=' ~ (_l_net_raw.rc | default('none')))}])
+         + ([{'section':'network','message':'네트워크 카드 상세 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.','detail':('source=lspci; stderr=' ~ (ns.lspci_err | truncate(500, true)))}] if (ok and ns.lspci_err) else []) }}
   no_log: true
 
 - name: "linux | network | merge fragment"

@@ -26,6 +26,16 @@ def _inert(value):
     return value
 
 def load_inventory_json():
+    explicit = os.environ.get("INVENTORY_JSON_FILE", "").strip()
+    if explicit:
+        path = pathlib.Path(explicit)
+        if not path.is_file():
+            error(f"INVENTORY_JSON_FILE 이 가리키는 파일이 없습니다: {explicit}")
+        content = path.read_text(encoding="utf-8").strip()
+        if not content:
+            error(f"INVENTORY_JSON_FILE 이 가리키는 파일이 비어 있습니다: {explicit}")
+        return content
+
     raw = os.environ.get("INVENTORY_JSON", "").strip()
     if not raw:
         raw = os.environ.get("inventory_json", "").strip()
@@ -43,7 +53,7 @@ def load_inventory_json():
         if content:
             return content
 
-    error("INVENTORY_JSON 환경변수와 .inventory_input.json 파일 모두 비어있습니다.")
+    error("INVENTORY_JSON_FILE · INVENTORY_JSON 환경변수와 .inventory_input.json 파일 모두 비어있습니다.")
 
 def main():
     if len(sys.argv) > 1:

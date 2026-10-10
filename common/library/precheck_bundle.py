@@ -651,6 +651,12 @@ def probe_esxi(host, port, timeout, verify=False):
         if status is not None:
             detail = "{0} [HTTP {1}]".format(detail, status)
         return False, detail, None
+    api_type = _probe.get("api_type") if isinstance(_probe, dict) else None
+    if api_type and str(api_type).strip() == "VirtualCenter":
+        detail = "vSphere ServiceContent apiType=VirtualCenter — vCenter 는 ESXi 호스트 대상이 아님"
+        if status is not None:
+            detail = "{0} [HTTP {1}]".format(detail, status)
+        return False, detail, None
 
     facts = {"vsphere_endpoint": url}
     if status is not None and status != 200:

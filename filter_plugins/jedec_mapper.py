@@ -4,24 +4,17 @@ from __future__ import annotations
 import re
 
 JEDEC_MAP = {
-    "01": "AMD",
-    "04": "Fujitsu",
-    "07": "Hitachi",
-    "0B": "Intel",
-    "1F": "Atmel",
-    "2C": "Micron Technology",
-    "AD": "SK hynix",
-    "CE": "Samsung",
-    "98": "Kingston",
-    "B3": "IDT",
-    "BA": "PNY Electronics",
-    "0x2C": "Micron Technology",
-    "0xAD": "SK hynix",
-    "0xCE": "Samsung",
-    "0x98": "Kingston",
-    "0xCE00": "Samsung",
-    "0xAD00": "SK hynix",
-    "0x2C00": "Micron Technology",
+    (0, 0x01): "AMD",
+    (0, 0x04): "Fujitsu",
+    (0, 0x07): "Hitachi",
+    (0, 0x09): "Intel",
+    (0, 0x1F): "Atmel",
+    (0, 0x2C): "Micron Technology",
+    (0, 0x2D): "SK hynix",
+    (0, 0x33): "IDT",
+    (0, 0x4E): "Samsung",
+    (1, 0x18): "Kingston",
+    (1, 0x3A): "PNY Technologies",
 }
 
 HEX_PATTERN = re.compile(r"^[0-9A-Fa-f]{2,}$")
@@ -48,6 +41,35 @@ def _canonicalize_vendor_name(name):
     return VENDOR_NAME_NORMALIZATION.get(key, name)
 
 
+def jedec_lookup(hex_text, id_first=False):
+    s = hex_text.strip()
+    if len(s) < 2 or len(s) % 2 or not HEX_PATTERN.match(s):
+        return None
+    bs = [int(s[i:i + 2], 16) for i in range(0, len(s), 2)]
+    bank = None
+    if bs[0] == 0x7F:
+        n = 0
+        while n < len(bs) and bs[n] == 0x7F:
+            n += 1
+        if n >= len(bs):
+            return None
+        bank, ident = n, bs[n]
+    elif len(bs) >= 2:
+        if id_first:
+            ident, bank = bs[0], bs[1] & 0x7F
+        else:
+            bank, ident = bs[0] & 0x7F, bs[1]
+    else:
+        ident = bs[0]
+    id7 = ident & 0x7F
+    banks = (bank,) if bank is not None else (0, 1)
+    for b in banks:
+        name = JEDEC_MAP.get((b, id7))
+        if name:
+            return name, b, id7
+    return None
+
+
 def jedec_to_vendor(value):
     if value is None:
         return None
@@ -57,23 +79,15 @@ def jedec_to_vendor(value):
 
     m = PREFIX_HEX_PATTERN.match(s)
     if m:
-        hex_part = m.group(1).upper()
-        if "0x" + hex_part in JEDEC_MAP:
-            return JEDEC_MAP["0x" + hex_part]
-        if hex_part[:2] in JEDEC_MAP:
-            return JEDEC_MAP[hex_part[:2]]
-        return s
+        hit = jedec_lookup(m.group(1).upper(), id_first=True)
+        return hit[0] if hit else s
 
     if any(c.isalpha() and c not in "ABCDEFabcdef" for c in s) or " " in s:
         return _canonicalize_vendor_name(s)
 
     if HEX_PATTERN.match(s):
-        id_byte = s[2:4].upper() if len(s) >= 4 else s[:2].upper()
-        if id_byte in JEDEC_MAP:
-            return JEDEC_MAP[id_byte]
-        if s[:2].upper() in JEDEC_MAP:
-            return JEDEC_MAP[s[:2].upper()]
-        return s
+        hit = jedec_lookup(s.upper())
+        return hit[0] if hit else s
 
     return _canonicalize_vendor_name(s)
 

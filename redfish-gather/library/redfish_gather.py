@@ -384,6 +384,8 @@ def _get_impl(bmc_ip, path, username, password, timeout, verify_ssl):
         return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
+    except http_client.HTTPException as e:
+        return 0, {}, f'Response lost: {type(e).__name__}: {e}'
     except (OSError, ValueError) as e:
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
@@ -561,8 +563,19 @@ def account_verify_delays(policy):
     remaining = ACCOUNT_VERIFY_MAX_TOTAL_SECONDS - sum(delays)
     extra = min(penalty + 2, remaining)
     if extra > 0:
-        delays.append(extra)
+        return (extra,) + tuple(delays)
     return tuple(delays)
+
+
+ACCOUNT_COUNTER_RESET_DEFAULT_SECONDS = 60
+ACCOUNT_COUNTER_RESET_MAX_SECONDS = 90
+
+
+def account_counter_reset_wait(policy):
+    value = (policy or {}).get('lockout_counter_reset')
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return min(value, ACCOUNT_COUNTER_RESET_MAX_SECONDS)
+    return ACCOUNT_COUNTER_RESET_DEFAULT_SECONDS
 
 
 _READ_ONLY_PROP_RE = re.compile(
@@ -692,48 +705,88 @@ def _nextlink_path(bmc_ip, current_path, link):
     return rel + ('?' + parts.query if parts.query else '')
 
 
-def _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
-                        section, errors):
-    members = list(_dicts(_safe(coll, 'Members')))
-    first_path = _str(path).split('?', 1)[0]
+def _collection_walk(bmc_ip, path, coll, username, password, timeout, verify_ssl):
+    state = {'cut': None, 'pages': 1, 'non_object': 0, 'members_absent': 0, 'members_not_list': 0, 'duplicates': 0}
+    ids = set()
+
+    def _take(page):
+        raw = _safe(page, 'Members')
+        if raw is None:
+            state['members_absent'] += 1
+        elif not isinstance(raw, list):
+            state['members_not_list'] += 1
+        got = _dicts(raw)
+        if isinstance(raw, list):
+            state['non_object'] += len(raw) - len(got)
+        for m in got:
+            oid = _safe(m, '@odata.id')
+            if isinstance(oid, str) and oid:
+                if oid in ids:
+                    state['duplicates'] += 1
+                ids.add(oid)
+        return got
+
+    members = list(_take(coll))
     seen = {_str(path)}
-    cur, cur_path, pages, truncated = coll, _str(path), 1, False
-
-    def _report(msg):
-        if errors is not None:
-            errors.append(_err(section, msg, code=_CODE_NON_BLOCKING_SUBRESOURCE))
-        else:
-            _notice(section, msg)
-
+    cur, cur_path = coll, _str(path)
     while True:
         link = _safe(cur, 'Members@odata.nextLink')
         if not link:
             break
         nxt = _nextlink_path(bmc_ip, cur_path, link)
         if nxt is None:
-            _report('%s: nextLink 를 따라갈 수 없음 (다른 origin 또는 형식 오류) — 앞 페이지까지 보존'
-                    % first_path)
-            truncated = True
+            state['cut'] = ('unfollowable', None)
             break
         if nxt in seen:
-            _report('%s: nextLink 순환 감지 — 앞 페이지까지 보존' % first_path)
-            truncated = True
+            state['cut'] = ('cycle', None)
             break
-        if pages >= MAX_COLLECTION_PAGES or len(members) >= MAX_COLLECTION_MEMBERS:
-            _report('%s: 페이지 %d / 멤버 %d 상한 도달 — 절단' % (first_path, pages, len(members)))
-            truncated = True
+        if state['pages'] >= MAX_COLLECTION_PAGES or len(members) >= MAX_COLLECTION_MEMBERS:
+            state['cut'] = ('cap', (state['pages'], len(members)))
             break
         st, nxt_coll, err = _get(bmc_ip, nxt, username, password, timeout, verify_ssl)
         if err or st != 200 or not isinstance(nxt_coll, dict):
-            _report('%s: 다음 페이지 실패 (%s): %s — 앞 페이지까지 보존'
-                    % (first_path, nxt, err or st))
-            truncated = True
+            state['cut'] = ('page_failed', (nxt, st, err))
             break
         seen.add(nxt)
-        pages += 1
+        state['pages'] += 1
         cur, cur_path = nxt_coll, nxt
-        members.extend(_dicts(_safe(nxt_coll, 'Members')))
+        members.extend(_take(nxt_coll))
+    return members, state
 
+
+def _walk_cut_text(first_path, cut):
+    kind, arg = cut
+    if kind == 'unfollowable':
+        return '%s: nextLink 를 따라갈 수 없음 (다른 origin 또는 형식 오류) — 앞 페이지까지 보존' % first_path
+    if kind == 'cycle':
+        return '%s: nextLink 순환 감지 — 앞 페이지까지 보존' % first_path
+    if kind == 'cap':
+        return '%s: 페이지 %d / 멤버 %d 상한 도달 — 절단' % (first_path, arg[0], arg[1])
+    return '%s: 다음 페이지 실패 (%s): %s — 앞 페이지까지 보존' % (first_path, arg[0], arg[2] or arg[1])
+
+
+def _walk_cut_detail(cut):
+    if not cut:
+        return ''
+    kind, arg = cut
+    if kind == 'page_failed':
+        return f' cut=page_failed next={arg[0]} status={arg[1] or 0}'
+    if kind == 'cap':
+        return f' cut=cap pages={arg[0]} members={arg[1]}'
+    return f' cut={kind}'
+
+
+def _collection_members(bmc_ip, path, coll, username, password, timeout, verify_ssl,
+                        section, errors):
+    members, state = _collection_walk(bmc_ip, path, coll, username, password, timeout, verify_ssl)
+    first_path = _str(path).split('?', 1)[0]
+    truncated = state['cut'] is not None
+    if truncated:
+        msg = _walk_cut_text(first_path, state['cut'])
+        if errors is not None:
+            errors.append(_err(section, msg, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        else:
+            _notice(section, msg)
     declared = _safe(coll, 'Members@odata.count')
     if (not truncated and isinstance(declared, int) and not isinstance(declared, bool)
             and declared != len(members)):
@@ -756,17 +809,17 @@ def _capped(seq, section=None, errors=None):
 
 
 _JEDEC_VENDORS = {
-    "01": "AMD",
-    "0B": "Intel",
-    "1F": "Atmel",
-    "2C": "Micron Technology",
-    "98": "Kingston",
-    "AD": "SK hynix",
-    "B3": "IDT",
-    "BA": "PNY Electronics",
-    "CE": "Samsung",
-    "04": "Fujitsu",
-    "07": "Hitachi",
+    (0, 0x01): "AMD",
+    (0, 0x04): "Fujitsu",
+    (0, 0x07): "Hitachi",
+    (0, 0x09): "Intel",
+    (0, 0x1F): "Atmel",
+    (0, 0x2C): "Micron Technology",
+    (0, 0x2D): "SK hynix",
+    (0, 0x33): "IDT",
+    (0, 0x4E): "Samsung",
+    (1, 0x18): "Kingston",
+    (1, 0x3A): "PNY Technologies",
 }
 
 
@@ -789,6 +842,34 @@ def _canonical_vendor_name(name):
     return _VENDOR_NAME_NORMALIZATION.get(name.strip().lower(), name)
 
 
+def _jedec_lookup(hex_text, id_first=False):
+    s = hex_text.strip()
+    if len(s) < 2 or len(s) % 2 or not all(c in "0123456789ABCDEFabcdef" for c in s):
+        return None
+    bs = [int(s[i:i + 2], 16) for i in range(0, len(s), 2)]
+    bank = None
+    if bs[0] == 0x7F:
+        n = 0
+        while n < len(bs) and bs[n] == 0x7F:
+            n += 1
+        if n >= len(bs):
+            return None
+        bank, ident = n, bs[n]
+    elif len(bs) >= 2:
+        if id_first:
+            ident, bank = bs[0], bs[1] & 0x7F
+        else:
+            bank, ident = bs[0] & 0x7F, bs[1]
+    else:
+        ident = bs[0]
+    id7 = ident & 0x7F
+    for b in ((bank,) if bank is not None else (0, 1)):
+        name = _JEDEC_VENDORS.get((b, id7))
+        if name:
+            return name, b, id7
+    return None
+
+
 def _normalize_jedec(value):
     if value is None:
         return None
@@ -796,19 +877,18 @@ def _normalize_jedec(value):
     if not s or s.lower() in ("unknown", "not specified", "none"):
         return None
     if s.lower().startswith("0x"):
-        hp = s[2:].upper()
-        if hp[:2] in _JEDEC_VENDORS:
-            return _JEDEC_VENDORS[hp[:2]]
-        return s
+        hit = _jedec_lookup(s[2:].upper(), id_first=True)
+        return hit[0] if hit else s
     if " " in s or any(c.isalpha() and c not in "ABCDEFabcdef" for c in s):
         return _canonical_vendor_name(s)
     if all(c in "0123456789ABCDEFabcdef" for c in s) and len(s) >= 2:
-        for idx in (slice(2, 4), slice(0, 2)):
-            byte = s[idx].upper() if len(s) >= idx.stop else None
-            if byte and byte in _JEDEC_VENDORS:
-                return _JEDEC_VENDORS[byte]
-        return s
+        hit = _jedec_lookup(s.upper())
+        return hit[0] if hit else s
     return _canonical_vendor_name(s)
+
+
+_SERIAL_SENTINELS_UPPER = ('NA', 'N/A', 'NONE', 'NOT SPECIFIED', 'TO BE FILLED BY O.E.M.', 'DEFAULT STRING',
+                           'SYSTEM SERIAL NUMBER', '0', '00000000')
 
 
 def _strip_or_none(value):
@@ -901,6 +981,27 @@ def _load_vendor_aliases_file():
             continue
     return {}
 
+def _best_alias_match(text, mapping):
+    if not text:
+        return None
+    tokens = set(re.split(r'[^a-z0-9]+', text))
+    best_alias, best = '', None
+    for alias, canon in (mapping or {}).items():
+        if not alias:
+            continue
+        hit = (alias in text) if len(alias) > 3 else (alias in tokens)
+        if hit and len(alias) > len(best_alias):
+            best_alias, best = alias, canon
+    return best
+
+
+def _vendor_from_text(text, vm):
+    t = _str(text).lower()
+    if not t.strip():
+        return None
+    return _best_alias_match(t, vm) or _best_alias_match(t, _BMC_PRODUCT_HINTS)
+
+
 def _normalize_vendor_from_aliases(mfr_lower):
     if not mfr_lower:
         return 'unknown'
@@ -911,11 +1012,8 @@ def _normalize_vendor_from_aliases(mfr_lower):
     if mfr_lower in merged:
         return merged[mfr_lower]
 
-    for key, canon in merged.items():
-        if key and (key in mfr_lower or mfr_lower in key):
-            return canon
-
-    return 'unknown'
+    hit = _best_alias_match(mfr_lower, merged)
+    return hit or 'unknown'
 
 
 
@@ -931,7 +1029,7 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
     except urlerr.HTTPError as e:
         if e.code in (401, 403):
             realm_header = e.headers.get('WWW-Authenticate') or ''
-    except (urlerr.URLError, socket.timeout, OSError, ValueError):
+    except (urlerr.URLError, socket.timeout, http_client.HTTPException, OSError, ValueError):
         return None
 
     if not realm_header:
@@ -946,13 +1044,7 @@ def _probe_realm_hint(bmc_ip, timeout, verify_ssl):
 
     aliases_yaml = _load_vendor_aliases_file()
     vm = {**_FALLBACK_VENDOR_MAP, **aliases_yaml}
-    for alias, canon in vm.items():
-        if alias and alias in realm:
-            return canon
-    for hint, canon in _BMC_PRODUCT_HINTS.items():
-        if hint in realm:
-            return canon
-    return None
+    return _vendor_from_text(realm, vm)
 
 
 def _get_noauth(bmc_ip, path, timeout, verify_ssl):
@@ -981,6 +1073,8 @@ def _get_noauth(bmc_ip, path, timeout, verify_ssl):
         return e.status, {}, str(e)
     except socket.timeout:
         return 0, {}, f'Timeout after {timeout}s'
+    except http_client.HTTPException as e:
+        return 0, {}, f'Response lost: {type(e).__name__}: {e}'
     except (OSError, ValueError) as e:
         return 0, {}, f'Unexpected: {type(e).__name__}: {e}'
 
@@ -1009,29 +1103,21 @@ def _detect_vendor_from_service_root(root):
         for cand in (v, v.rstrip('.').strip()):
             if cand in vm:
                 return vm[cand]
-        for alias, canonical in vm.items():
-            if alias and alias in v:
-                return canonical
+        hit = _best_alias_match(v, vm)
+        if hit:
+            return hit
 
     product = _safe(root, 'Product')
     if product and isinstance(product, str):
-        p = product.lower()
-        for alias, canonical in vm.items():
-            if alias and alias in p:
-                return canonical
-        for hint, canon in _BMC_PRODUCT_HINTS.items():
-            if hint in p:
-                return canon
+        hit = _vendor_from_text(product, vm)
+        if hit:
+            return hit
 
     name = _safe(root, 'Name')
     if name and isinstance(name, str):
-        n = name.lower()
-        for alias, canonical in vm.items():
-            if alias and alias in n:
-                return canonical
-        for hint, canon in _BMC_PRODUCT_HINTS.items():
-            if hint in n:
-                return canon
+        hit = _vendor_from_text(name, vm)
+        if hit:
+            return hit
 
     return None
 
@@ -1048,29 +1134,6 @@ def _fetch_service_root(bmc_ip, username, password, timeout, verify_ssl):
         errors.append(_err('vendor_detect', 'ServiceRoot JSON 이 object 아님'))
         return None, errors
     return root, errors
-
-
-def _endpoint_with_fallback(bmc_ip, primary_path, fallback_path, username,
-                            password, timeout, verify_ssl, section_name='generic'):
-    errors = []
-    st, data, err = _get(bmc_ip, primary_path, username, password, timeout, verify_ssl)
-
-    if not err and st == 200:
-        return data, errors, 'primary'
-
-    if st == 404:
-        st_fb, data_fb, err_fb = _get(bmc_ip, fallback_path, username, password,
-                                      timeout, verify_ssl)
-        if not err_fb and st_fb == 200:
-            return data_fb, errors, 'fallback'
-        if st_fb == 404:
-            return {}, errors, 'not_supported'
-        errors.append(_err(section_name,
-                           f'fallback {fallback_path} 실패: {err_fb or st_fb}'))
-        return {}, errors, 'failed'
-
-    errors.append(_err(section_name, f'{primary_path} 실패: {err or st}'))
-    return {}, errors, 'failed'
 
 
 def _resolve_first_member_uri(bmc_ip, coll_uri, username, password, timeout, verify_ssl):
@@ -1319,8 +1382,7 @@ def _extract_oem_dell(data):
 
 
 def _resolve_serial_dell(service_root, refetch=None):
-    invalid_values = ('NA', 'N/A', 'NONE', 'NOT SPECIFIED', 'TO BE FILLED BY O.E.M.',
-                      'SYSTEM SERIAL NUMBER', '0', '00000000')
+    invalid_values = _SERIAL_SENTINELS_UPPER
 
     def _pick(root):
         tag = _strip_or_none(_safe(root, 'Oem', 'Dell', 'ServiceTag'))
@@ -1742,14 +1804,21 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     nic_link = _safe(data, 'EthernetInterfaces', '@odata.id')
     if nic_link:
         nst, ncoll, nerr = _get(bmc_ip, _p(nic_link), username, password, timeout, verify_ssl)
-        if not nerr and nst == 200:
+        if nerr or nst != 200:
+            if nst != 404:
+                errors.append(_err('bmc', f'EthernetInterfaces {nic_link} 실패: {nerr or nst}',
+                                   detail={'status_code': nst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        else:
             for nm in _collection_members(bmc_ip, _p(nic_link), ncoll, username, password, timeout,
-                                          verify_ssl, 'bmc', None):
+                                          verify_ssl, 'bmc', errors):
                 nuri = _safe(nm, '@odata.id')
                 if not nuri:
                     continue
                 nst2, ndata, nerr2 = _get(bmc_ip, _p(nuri), username, password, timeout, verify_ssl)
                 if nerr2 or nst2 != 200:
+                    if nst2 != 404:
+                        errors.append(_err('bmc', f'EthernetInterface {nuri} 실패: {nerr2 or nst2}',
+                                           detail={'status_code': nst2}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
                 nic_first_ip = None
                 for addr in _dicts(_safe(ndata, 'IPv4Addresses')):
@@ -1788,6 +1857,9 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         if not _nperr and npst == 200 and isinstance(npdata, dict):
             result['network_hostname'] = (_strip_or_none(_safe(npdata, 'FQDN'))
                                           or _strip_or_none(_safe(npdata, 'HostName')))
+        elif npst != 404:
+            errors.append(_err('bmc', f'NetworkProtocol {np_link} 실패: {_nperr or npst}',
+                               detail={'status_code': npst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
 
     if vendor == 'hpe':
         oem = _safe(data, 'Oem', 'Hpe') or _safe(data, 'Oem', 'Hp') or {}
@@ -2043,6 +2115,8 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
         return volumes, errors
     vst, vcoll, verr = _get(bmc_ip, _p(vol_link), username, password, timeout, verify_ssl)
     if verr or vst != 200:
+        if vst != 404:
+            errors.append(_err('storage', f'Volumes {vol_link} 실패: {verr or vst}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
         return volumes, errors
     _boot_vd_fqdd = _safe(sdata, 'Oem', 'Dell', 'DellController', 'BootVirtualDiskFQDD')
     if not (isinstance(_boot_vd_fqdd, str) and _boot_vd_fqdd.strip()):
@@ -2536,7 +2610,10 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         _ports_before = len(out['ports'])
 
         ndfs = _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
-        ndf_by_port = {n['port_uri']: i for i, n in enumerate(ndfs) if n.get('port_uri')}
+        ndf_by_port = {}
+        for i, n in enumerate(ndfs):
+            if n.get('port_uri'):
+                ndf_by_port.setdefault(n['port_uri'], []).append(i)
         ndf_by_id = {n['id']: i for i, n in enumerate(ndfs) if n.get('id')}
         ndf_matched = set()
         port_ctx_by_id = {}
@@ -2556,6 +2633,8 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         continue
                     st4, pdata, perr2 = _get(bmc_ip, _p(p_uri), username, password, timeout, verify_ssl)
                     if perr2 or st4 != 200:
+                        errors.append(_err('network_adapters', f'Port {p_uri} 실패: {perr2 or st4}',
+                                           code=_CODE_NON_BLOCKING_SUBRESOURCE))
                         continue
                     speed_gbps, speed_mbps = _normalize_port_speed(pdata)
                     assoc = _safe(pdata, 'AssociatedNetworkAddresses', default=[]) or []
@@ -2582,12 +2661,13 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     if port_id:
                         port_ctx_by_id[port_id] = (port_protocol, link_tech, pdata)
 
-                    ndf_idx = ndf_by_port.get(_p(p_uri)) if p_uri else None
-                    if ndf_idx is None and port_id:
-                        ndf_idx = ndf_by_id.get(port_id)
-                    ndf = ndfs[ndf_idx] if ndf_idx is not None else None
-                    if ndf_idx is not None:
-                        ndf_matched.add(ndf_idx)
+                    cand = list(ndf_by_port.get(_p(p_uri), [])) if p_uri else []
+                    if not cand and port_id and port_id in ndf_by_id:
+                        cand = [ndf_by_id[port_id]]
+                    ndf_matched.update(cand)
+                    fc_ndfs = [ndfs[i] for i in cand
+                               if _classify_port_protocol(port_protocol, link_tech, ndfs[i], pdata) in ('FibreChannel', 'FCoE')]
+                    ndf = fc_ndfs[0] if fc_ndfs else (ndfs[cand[0]] if cand else None)
 
                     cls = _classify_port_protocol(port_protocol, link_tech, ndf, pdata)
 
@@ -2617,9 +2697,11 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         cur['speed_mbps'] = speed_mbps
 
                     if cls in ('FibreChannel', 'FCoE'):
-                        out['fc_hbas'].append(_make_fc_hba(
-                            adapter_id, adapter_info, port_id, cls,
-                            normalized_link, speed_gbps, primary_addr, ndf))
+                        for fndf in (fc_ndfs or [ndf]):
+                            out['fc_hbas'].append(_make_fc_hba(
+                                adapter_id, adapter_info, port_id, cls,
+                                normalized_link, speed_gbps,
+                                (fndf.get('wwpn') if isinstance(fndf, dict) and fndf.get('wwpn') else primary_addr), fndf))
                     elif cls == 'InfiniBand':
                         out['infiniband'].append(_make_ib_port(
                             adapter_id, adapter_info, port_id,
@@ -2729,6 +2811,7 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl):
         ver = _safe(member, 'Version')
         if isinstance(ver, str) and ver.strip().upper() in ('N/A', 'NA', ''):
             if not is_pending:
+                _notice('firmware', f'{fw_id or member_uri}: Version 비어 있음(N/A) — 목록에서 제외')
                 continue
             ver = None
         component = _safe(member, 'SoftwareId')
@@ -2789,7 +2872,11 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     psu_input_seen = False
     if psu_link:
         st_c, coll, _err_c = _get(bmc_ip, _p(psu_link), username, password, timeout, verify_ssl)
-        if st_c == 200:
+        if st_c != 200:
+            if st_c != 404:
+                errors.append(_err('power', f'PowerSupplies {psu_link} 실패: {_err_c or st_c}',
+                                   detail={'status_code': st_c}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        else:
             for member in _collection_members(bmc_ip, _p(psu_link), coll, username, password, timeout,
                                               verify_ssl, 'power', errors):
                 m_uri = _safe(member, '@odata.id')
@@ -2797,6 +2884,9 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                     continue
                 st_m, mdata, _err_m = _get(bmc_ip, _p(m_uri), username, password, timeout, verify_ssl)
                 if st_m != 200:
+                    if st_m != 404:
+                        errors.append(_err('power', f'PowerSupply {m_uri} 실패: {_err_m or st_m}',
+                                           detail={'status_code': st_m}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
                 psus.append({
                     'name':             _safe(mdata, 'Name'),
@@ -2819,7 +2909,8 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                             psu_input_seen = True
 
     pc_capacity = None
-    psu_caps = [p['power_capacity_w'] for p in psus if p['power_capacity_w'] is not None]
+    psu_caps = [p['power_capacity_w'] for p in psus
+                if p['power_capacity_w'] is not None and _str(p.get('state')).strip().lower() != 'absent']
     if psu_caps:
         pc_capacity = sum(psu_caps)
     power_control = {
@@ -3326,7 +3417,7 @@ def _normalize_cpu_raw(procs):
     isets = [p.get('instruction_set') for p in cpus if p.get('instruction_set')]
     groups, seen = [], {}
     for p in cpus:
-        m = p.get('model') or 'unknown'
+        m = p.get('model') or None
         tc = _safe_int(p.get('total_cores'), 0)
         if m in seen:
             g = groups[seen[m]]
@@ -3514,6 +3605,9 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                     continue
                 bst, bd, _e = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
                 if bst != 200 or not isinstance(bd, dict):
+                    if bst != 404:
+                        errors.append(_err('multi_node.composition', f'ResourceBlock {uri} 실패: {_e or bst}',
+                                           detail={'status_code': bst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
                     continue
                 chassis_links = [
                     _safe(c, '@odata.id')
@@ -3552,6 +3646,9 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
         return []
     st, coll, cerr = _get(bmc_ip, _p(coll_uri), username, password, timeout, verify_ssl)
     if cerr or st != 200:
+        if st != 404:
+            errors.append(_err(f'multi_node.fabrics.{kind}', f'{kind} 컬렉션 {coll_uri} 실패: {cerr or st}',
+                               detail={'status_code': st}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
         return []
     out = []
     for m in _collection_members(bmc_ip, _p(coll_uri), coll, username, password, timeout, verify_ssl,
@@ -3561,6 +3658,9 @@ def _gather_fabric_members(bmc_ip, coll_uri, username, password, timeout, verify
             continue
         mst, md, _e = _get(bmc_ip, _p(uri), username, password, timeout, verify_ssl)
         if mst != 200 or not isinstance(md, dict):
+            if mst != 404:
+                errors.append(_err(f'multi_node.fabrics.{kind}', f'{kind} {uri} 실패: {_e or mst}',
+                                   detail={'status_code': mst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         if kind == 'switch':
             out.append({
@@ -3600,6 +3700,9 @@ def gather_fabrics(bmc_ip, service_root, username, password, timeout, verify_ssl
             continue
         fst, fdata, _e = _get(bmc_ip, _p(furi), username, password, timeout, verify_ssl)
         if fst != 200 or not isinstance(fdata, dict):
+            if fst != 404:
+                errors.append(_err('multi_node.fabrics', f'Fabric {furi} 실패: {_e or fst}',
+                                   detail={'status_code': fst}, code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         switches = _gather_fabric_members(
             bmc_ip, _safe(fdata, 'Switches', '@odata.id'),
@@ -3897,9 +4000,7 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
                            detail=err or f'HTTP {code}'))
         return out
 
-    members = _safe(acc_coll, 'Members', default=[]) or []
-    if not isinstance(members, list):
-        members = []
+    members, walk = _collection_walk(bmc_ip, out['accounts_uri'], acc_coll, username, password, timeout, verify_ssl)
     declared = _safe(acc_coll, 'Members@odata.count', default=None)
     out['member_total'] = declared if isinstance(declared, int) and not isinstance(declared, bool) \
         else len(members)
@@ -3907,11 +4008,15 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
     member_failures = 0
     capped = _capped(members, 'account_service', errors)
     truncated = len(capped) < len(members)
+    slots_seen = set()
     for m in capped:
         slot_uri = _safe(m, '@odata.id')
         if not slot_uri:
             member_failures += 1
             continue
+        if slot_uri in slots_seen:
+            continue
+        slots_seen.add(slot_uri)
         code_a, acc_data, err_a = _get(bmc_ip, _p(slot_uri), username, password,
                                        timeout, verify_ssl)
         if code_a != 200 or err_a:
@@ -3937,14 +4042,20 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
         })
     out['member_read'] = len(out['accounts'])
 
-    if member_failures == 0 and not truncated and out['member_read'] == out['member_total']:
+    anomalies = walk['non_object'] + walk['members_absent'] + walk['members_not_list'] + walk['duplicates']
+    if (member_failures == 0 and not truncated and walk['cut'] is None and anomalies == 0
+            and out['member_read'] == out['member_total']):
         out['enumeration'] = ENUM_COMPLETE
     else:
+        cut = walk['cut']
         errors.append(_err(
             'account_service',
             '계정 목록을 완전히 읽지 못했습니다. 계정 부재를 확정할 수 없습니다.',
             detail=(f'members declared={out["member_total"]} read={out["member_read"]} '
-                    f'failures={member_failures} truncated={truncated}'),
+                    f'failures={member_failures} truncated={truncated} pages={walk["pages"]}'
+                    + _walk_cut_detail(cut)
+                    + (f' non_object={walk["non_object"]} members_absent={walk["members_absent"]}'
+                       f' members_not_list={walk["members_not_list"]} duplicates={walk["duplicates"]}' if anomalies else '')),
         ))
 
     if manager_uri:
@@ -3976,10 +4087,10 @@ def account_presence(discovery, target_username, family=None):
         return PRESENCE_PROTECTED_CONFLICT, protected
     if len(matches) > 1:
         return PRESENCE_AMBIGUOUS, matches
+    if (discovery or {}).get('enumeration') != ENUM_COMPLETE:
+        return PRESENCE_UNKNOWN, matches
     if matches:
         return PRESENCE_PRESENT, matches
-    if (discovery or {}).get('enumeration') != ENUM_COMPLETE:
-        return PRESENCE_UNKNOWN, []
     return PRESENCE_ABSENT, []
 
 
@@ -4545,7 +4656,7 @@ def account_service_provision(
     bmc_ip, vendor, current_username, current_password,
     target_username, target_password, target_role,
     timeout, verify_ssl, dryrun=True, allow_delete_recreate=False,
-    adapter_id=None, manager_uri=None, service_root=None,
+    adapter_id=None, manager_uri=None, service_root=None, prior_auth_failures=0,
 ):
     out = {
         'recovered':       False,
@@ -4588,10 +4699,26 @@ def account_service_provision(
 
     verify_schedule = ACCOUNT_VERIFY_DELAYS
     auth_budget_limit = ACCOUNT_DEFAULT_AUTH_BUDGET
+    prior = int(prior_auth_failures or 0) if isinstance(prior_auth_failures, int) and not isinstance(prior_auth_failures, bool) else 0
+    out['prior_auth_failures'] = prior
+    if prior > 0:
+        out['auth_budget'][target_username] = out['auth_budget'].get(target_username, 0) + prior
+    policy_seen = {'policy': {}}
 
     def _verify_standard_credential():
         out['verify_resource'] = 'Systems'
         code_v, err_v = None, None
+        if out['auth_budget'].get(target_username, 0) >= auth_budget_limit:
+            wait = account_counter_reset_wait(policy_seen['policy'])
+            out['verify_schedule_seconds'] = [wait]
+            out['verify_after_counter_reset_seconds'] = wait
+            time.sleep(wait)
+            code_v, _, err_v = _get(bmc_ip, 'Systems', target_username, target_password, timeout, verify_ssl)
+            if code_v == 200 and not err_v:
+                return True, code_v, None, 1
+            _spend_auth(target_username)
+            out['auth_budget_exhausted'] = True
+            return False, code_v, err_v, 1
         for attempt, delay in enumerate(verify_schedule):
             if out['auth_budget'].get(target_username, 0) >= auth_budget_limit:
                 out['auth_budget_exhausted'] = True
@@ -4649,7 +4776,7 @@ def account_service_provision(
     def _locate_after_lost_create(what, err_text):
         recheck = account_service_discover(bmc_ip, current_username, current_password,
                                            timeout, verify_ssl,
-                                           service_root=discovery.get('service'))
+                                           service_root=discovery.get('service_root'))
         again = [a for a in (recheck.get('accounts') or [])
                  if (a.get('username') or '') == target_username]
         if recheck.get('enumeration') != ENUM_COMPLETE or len(again) != 1:
@@ -4724,6 +4851,7 @@ def account_service_provision(
     }
     verify_schedule = account_verify_delays(policy)
     out['verify_schedule_seconds'] = list(verify_schedule)
+    policy_seen['policy'] = policy if isinstance(policy, dict) else {}
     auth_budget_limit = account_auth_budget(policy)
     out['auth_budget_limit'] = auth_budget_limit
     if isinstance(min_len, int) and isinstance(max_len, int) and min_len > max_len:
@@ -4796,13 +4924,18 @@ def account_service_provision(
     if presence == PRESENCE_UNKNOWN:
         out['method'] = 'noop'
         out['action'] = 'none'
+        if matches:
+            out['account_existed'] = True
+        seen_ids = [('' if m.get('id') is None else str(m.get('id'))) for m in matches]
         out['errors'].append(_err(
             'account_service',
-            '계정 목록을 완전히 확인하지 못해 표준 계정 생성을 시작하지 않았습니다. '
+            '계정 목록을 완전히 확인하지 못해 표준 계정 생성이나 비밀번호 동기화를 시작하지 않았습니다. '
             '복구 계정의 사용자 관리 권한과 계정 관리 서비스 상태를 확인하세요.',
             detail=(f'enumeration={discovery.get("enumeration")} '
                     f'declared={discovery.get("member_total")} '
-                    f'read={discovery.get("member_read")}; no write attempted'),
+                    f'read={discovery.get("member_read")}'
+                    + (('; observed standard slots: ' + ', '.join(i for i in seen_ids if i)) if matches else '')
+                    + '; no write attempted'),
         ))
         return out
 
@@ -5204,7 +5337,7 @@ def account_service_provision(
     if not created_uri:
         recheck = account_service_discover(bmc_ip, current_username, current_password,
                                            timeout, verify_ssl,
-                                           service_root=discovery.get('service'))
+                                           service_root=discovery.get('service_root'))
         again = [a for a in (recheck.get('accounts') or [])
                  if (a.get('username') or '') == target_username]
         created_uri = again[0].get('slot_uri') if len(again) == 1 else None
@@ -5252,6 +5385,7 @@ def main():
             manager_layout  = dict(type='str',  default=None, required=False),
             adapter_id      = dict(type='str',  default=None, required=False),
             attempt         = dict(type='dict', default=None, required=False),
+            prior_auth_failures = dict(type='int', default=0, required=False),
         ),
         supports_check_mode=True,
     )
@@ -5328,6 +5462,7 @@ def main():
             adapter_id=p.get('adapter_id'),
             manager_uri=mgr_uri,
             service_root=svc_root,
+            prior_auth_failures=int(p.get('prior_auth_failures') or 0),
         )
         result['dryrun_reason'] = dryrun_reason
         result['errors'] = list(det_errors) + (result.get('errors') or [])

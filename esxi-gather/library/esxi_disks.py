@@ -70,6 +70,26 @@ def _build_disks(target):
     return sorted(out, key=lambda d: d.get('id') or '')
 
 
+def _controller_type(type_name, driver):
+    t = type_name or ''
+    d = (driver or '').strip().lower()
+    if 'FibreChannel' in t:
+        return 'FC'
+    if 'InternetScsi' in t:
+        return 'iSCSI'
+    if 'SerialAttached' in t:
+        return 'SAS'
+    if 'BlockHba' in t:
+        if d.startswith('nvme'):
+            return 'NVMe'
+        if any(k in d for k in ('lsi_mr3', 'megaraid', 'smartpqi', 'hpsa', 'aacraid')):
+            return 'RAID'
+        if 'ahci' in d:
+            return 'SATA'
+        return None
+    return None
+
+
 def _build_controllers(target):
     hs = _as_target(target).host()
     if hs is None:
@@ -89,11 +109,7 @@ def _build_controllers(target):
         model = (getattr(hba, 'model', '') or '').strip() or None
         pci = getattr(hba, 'pci', None)
         tname = type(hba).__name__
-        ctype = ('SATA' if 'BlockHba' in tname
-                 else 'FC' if 'FibreChannel' in tname
-                 else 'SAS' if 'SerialAttached' in tname
-                 else 'iSCSI' if 'InternetScsi' in tname
-                 else None)
+        ctype = _controller_type(tname, getattr(hba, 'driver', None))
         out.append({
             'id': getattr(hba, 'device', None),
             'name': model,
@@ -241,6 +257,12 @@ def _build_host_info(target, hostname=None):
     hw = getattr(hs, 'hardware', None)
 
     dns = getattr(net, 'dnsConfig', None) if net is not None else None
+    fw = getattr(cfg, 'firewall', None) if cfg is not None else None
+    dp = getattr(fw, 'defaultPolicy', None) if fw is not None else None
+    ib = getattr(dp, 'incomingBlocked', None) if dp is not None else None
+    ob = getattr(dp, 'outgoingBlocked', None) if dp is not None else None
+    info['firewall_incoming_blocked'] = bool(ib) if ib is not None else None
+    info['firewall_outgoing_blocked'] = bool(ob) if ob is not None else None
     info['hostname'] = _s(getattr(dns, 'hostName', None)) if dns is not None else None
     info['domain_name'] = _s(getattr(dns, 'domainName', None)) if dns is not None else None
     info['search_domain'] = [str(x) for x in (getattr(dns, 'searchDomain', None) or [])] if dns is not None else []

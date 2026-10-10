@@ -1,7 +1,6 @@
 ---
 
 - name: "linux | system | build identifier diagnostics"
-  when: _l_python_mode == 'python_ok'
   vars:
     _id_msg_privilege_serial: "시스템 제조번호를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요."
     _id_msg_absent_serial:    "대상이 시스템 제조번호를 제공하지 않습니다."
@@ -12,6 +11,22 @@
       {%- set diags = [] -%}
       {%- set serial_na = (_l_serial_val | default(none)) is none -%}
       {%- set uuid_na   = (_l_uuid_val   | default(none)) is none -%}
+      {%- set python_path = (_l_python_mode | default('')) == 'python_ok' -%}
+      {%- set priv_failed = (_l_raw_priv_failed | default(false)) | bool -%}
+      {%- if not python_path -%}
+        {%- if serial_na and priv_failed -%}
+          {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_serial,"detail":"field=serial_number; cause=insufficient_privilege; tried=dmi_sysfs,become"}) -%}
+        {%- elif serial_na -%}
+          {%- set _ = diags.append({"section":"system","message":_id_msg_absent_serial,"detail":"field=serial_number; cause=identifier_not_available; tried=dmi_sysfs,become"}) -%}
+        {%- endif -%}
+        {%- if uuid_na and priv_failed -%}
+          {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_uuid,"detail":"field=system_uuid; cause=insufficient_privilege; tried=dmi_sysfs,become"}) -%}
+        {%- elif uuid_na -%}
+          {%- set _ = diags.append({"section":"system","message":_id_msg_absent_uuid,"detail":"field=system_uuid; cause=identifier_not_available; tried=dmi_sysfs,become"}) -%}
+        {%- endif -%}
+      {%- endif -%}
+      {%- set serial_na = serial_na and python_path -%}
+      {%- set uuid_na   = uuid_na and python_path -%}
       {%- set dmi_block_failed = (_l_dmi_fallback_failed | default(false)) | bool -%}
       {%- set serial_dmi_tried  = _l_dmi_serial_direct is defined -%}
       {%- set serial_dmi_failed = serial_dmi_tried and (_l_dmi_serial_direct.rc | default(1)) != 0 -%}

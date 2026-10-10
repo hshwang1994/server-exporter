@@ -85,7 +85,7 @@
         Invoke-SeComponent $doc 'firewall' {
           param($c)
           if (Get-Command Get-NetFirewallProfile -ErrorAction SilentlyContinue) {
-            Get-NetFirewallProfile | ForEach-Object {
+            Get-NetFirewallProfile -PolicyStore ActiveStore | ForEach-Object {
               [void]$c.rows.Add([PSCustomObject]@{
                 profile = $_.Name
                 enabled = [bool]$_.Enabled
