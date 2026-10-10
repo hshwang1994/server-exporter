@@ -96,7 +96,7 @@
 - **Forbidden**:
   - 4 시나리오 매트릭스 의미 변경 (A/B/C/D enum 값 / overall status 결과) + `docs/reference/decision-log.md` + `docs/contract/03-fields.md` + 회귀 fixture 동반 갱신 누락
   - severity (warning / error) 도입 시 envelope shape 변경 영향 무시 (rule 22 R7 + rule 13 R5 + rule 96 R1-B)
-  - status_rules.yml DEAD CODE 활성화 (build_status.yml 인라인 Jinja2 ↔ status_rules.yml 동기화 의무 발생) + 사용자 명시 승인 누락
+  - status 판정 규칙을 데이터 파일로 분리해 동적으로 읽는 구조 도입(종전 `common/vars/status_rules.yml` 은 읽는 코드가 없어 2026-10-11 삭제) + 사용자 명시 승인 누락
 - **Why**: status 판정은 envelope 호출자 계약의 핵심. M-A 학습 (cycle 2026-05-06) — 사용자 의심 "errors 있는데 success 모순" 발생 → 시나리오 B 가 의도된 동작임을 코드 주석 + `docs/reference/decision-log.md` + `docs/contract/03-fields.md` + mock fixture 4 곳에 명시한 후 사용자 신뢰 회복. 매트릭스 분산 갱신은 향후 동일 의심 재발 차단
 - **검증 절차**: `verify-status-logic` skill 로 A/B/C/D 시나리오 매트릭스를 확인한다.
 - **재검토**: status 로직 자동 동기화 hook (`pre_commit_status_logic_check.py`) 이 blocking 으로 격상될 때

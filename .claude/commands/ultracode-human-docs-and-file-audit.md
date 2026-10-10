@@ -205,7 +205,6 @@ rule 22 (fragment-philosophy)
 .claude/rules/**/*.md
 .claude/skills/**/SKILL.md
 .claude/commands/**/*.md
-.claude/workflows/**/*.md
 .claude/ai-context/**/*.md
 .claude/templates/**/*.md
 ```

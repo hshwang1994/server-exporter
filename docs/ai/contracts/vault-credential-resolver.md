@@ -439,7 +439,7 @@ vault/
 ### 5.4 `vault/.lab-credentials.yml` 은 건드리지 않는다
 
 resolver 대상이 아니고(평문, gitignored, lab 전용) 다음 5개 파일이 경로를 하드코딩한다:
-`tests/e2e_browser/lab_loader.py:16`,
+`tests/e2e_browser/lab_loader.py:16`(2026-10-11 삭제됨),
 cycle-015 의 probe 스크립트 4종 (해당 evidence 디렉터리는 삭제됐다. git log 참조).
 
 ### 5.5 파일 내부 Schema — **변경 없음**
@@ -448,7 +448,7 @@ cycle-015 의 probe 스크립트 4종 (해당 evidence 디렉터리는 삭제됐
 accounts:
   - username: "..."
     password: "..."
-    label: "..."          # vendor 별 허용 집합은 tests/unit/test_adapter_vault_label_consistency.py:32-68
+    label: "..."          # vendor 별 허용 집합을 보던 tests/unit/test_adapter_vault_label_consistency.py 는 2026-10-11 삭제됨 — vault 가 유일한 정본
     role: "primary"       # primary | recovery | secondary
 # Linux 전용 (선택)
 ansible_become_password: "..."
@@ -745,7 +745,7 @@ Vault 경로가 vendor 에서 파생되는 순간 이 차이는 곧 **오선택*
   "현재 모두 primary-first 라 정렬을 넣어도 무변화" 라고 단정할 수 없다.
   만약 어떤 vault 가 recovery-first 라면, 정렬 도입은 그 대상의 인증 순서를 바꾸는
   관측 가능한 동작 변경이고 Redfish 에서는 reconcile 진입 조건까지 건드릴 수 있다.
-- `scripts/ai/reorder_windows_vault_admin_primary.py` 의 존재는 과거에 수동 재정렬이 필요했다는
+- `scripts/ai/reorder_windows_vault_admin_primary.py`(2026-10-11 삭제됨)의 존재는 과거에 수동 재정렬이 필요했다는
   **정황**이지 현재 상태의 증거가 아니다.
 - 이번 변경의 본질은 **경로 선택 축의 추가**다. 시도 순서 변경을 같이 넣으면 회귀 원인 분리가 어렵다.
 
@@ -1123,7 +1123,7 @@ top-level 13필드는 건드리지 않는다.
 | esxi | 4 | `esxi_default` ×4 | **없음** (대응 vault 파일도 없음) |
 
 `fallback_profiles` 는 42/42 가 `[]`. `recovery_accounts` 는 redfish 31개에만 있고
-production 소비 코드가 0건이며 `tests/unit/test_adapter_vault_label_consistency.py` 만 강제한다.
+production 소비 코드가 0건이며 `tests/unit/test_adapter_vault_label_consistency.py`(2026-10-11 삭제됨) 만 강제한다.
 
 ### 14.2 Phase A (이번)
 
@@ -1217,7 +1217,7 @@ T1~T8, T15~T17, T20 은 **파일시스템 없이** 실행된다 (§4.2 순수 �
 | R4 | 동 `:110,113` | legacy `ansible_user`/`ansible_password` 폴백 | 유지 (§4.6) |
 | R5 | `tests/e2e/test_credential_probe_classification.py:31-35` | 3개 probe 파일 경로 고정 | **무영향** — 그 3파일을 수정하지 않는다 |
 | R6 | 동 `:73-75,78-79,82-83,85` | 모듈 호출 1회 / `retries:` 부재 / `sleep 5` | **무영향** (§10.2) |
-| R7 | `tests/unit/test_adapter_vault_label_consistency.py:114` | redfish non-generic adapter **30개** | Phase A 무영향 / Phase B 수정 |
+| R7 | `tests/unit/test_adapter_vault_label_consistency.py:114`(2026-10-11 삭제됨) | redfish non-generic adapter **30개** | Phase A 무영향 / Phase B 수정 |
 | R8 | 동 `:137,140,158,170,185` | `recovery_accounts` 존재·label·role | Phase A 무영향 / Phase B 수정 |
 | R9 | `tests/unit/test_hpe_superdome_flex_m_e2.py:121` | `credentials.profile == "hpe"` | Phase A 무영향 (필드 유지) / Phase B 수정 |
 | R10 | `tests/e2e/test_failure_code_contract.py:55,68` | code 집합 / code→stage 매핑 | **신규 code 추가 시 수정** (§10.3) |
@@ -1228,7 +1228,7 @@ T1~T8, T15~T17, T20 은 **파일시스템 없이** 실행된다 (§4.2 순수 �
 | R15 | `tests/regression/test_vendor_output_display.py` | canonical → 출력 표시값 | canonical 라우팅이 vault 경로에 쓰이므로 **동반 확인** |
 | R16 | `tests/e2e/test_redfish_baseline.py:32,61,89,117` | `meta.adapter_id` | 무영향 (adapter 선택 불변) |
 | R17 | `schema/baseline_v1/*.json` 10건 | `diagnosis.details` | **수정 필요** — `credential_scope` 키 추가 (§13.4) |
-| R18 | `tests/e2e_browser/lab_loader.py:16` 외 4건 | `vault/.lab-credentials.yml` | **무영향** (§5.4) |
+| R18 | `tests/e2e_browser/lab_loader.py:16` 외 4건(폴더는 2026-10-11 삭제됨) | `vault/.lab-credentials.yml` | **무영향** (§5.4) |
 
 ### 15.4 회귀 게이트
 
@@ -1447,7 +1447,7 @@ force push / history rewrite 는 하지 않는다 (rule 93 R1).
 | Jenkins `built-in` 노드의 SCM checkout 가부 | Jenkins 런타임/보안 설정. 저장소 코드로 확인 불가 |
 | Portal 소비자의 `failure_code` 분기 구현 | 외부 시스템 |
 | Location 별 실제 계정 값의 차이 정도 | 운영 정보 |
-| `jenkins/jobs/redfish-account-provision-verify/config.xml:99-103` 의 `${VAULT_PASSWORD}` 출처 | `<buildWrappers/>`(`:133`)가 비어 credential 바인딩이 없다. 저장소 코드로 확인 불가 |
+| `jenkins/jobs/redfish-account-provision-verify/config.xml:99-103` 의 `${VAULT_PASSWORD}` 출처(Job 정의 · 스크립트는 2026-10-11 삭제 — Jenkins 에 등록된 적 없음) | `<buildWrappers/>`(`:133`)가 비어 credential 바인딩이 없다. 저장소 코드로 확인 불가 |
 
 ## 부록 B. 이번 설계로 해소되는 기존 결함
 

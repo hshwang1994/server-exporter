@@ -160,7 +160,6 @@ def _adapter_vendor_key(rel: str) -> Tuple[str, str]:
 
     예: adapters/redfish/dell_idrac9.yml → ('redfish', 'dell')
         adapters/esxi/esxi_8x.yml      → ('esxi', 'esxi')
-        adapters/registry.yml          → ('registry', 'registry')
     """
     parts = rel.split("/")
     if len(parts) < 2 or parts[0] != "adapters":

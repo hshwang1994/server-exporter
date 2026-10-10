@@ -57,7 +57,6 @@ fi
 if [ "${CI_GATE_SKIP_PYTEST:-0}" != "1" ]; then
     step "pytest offline (unit, e2e, regression, integration -m 'not live')"
     if "$PY" -m pytest --version >/dev/null 2>&1; then
-        # tests/e2e_browser 는 playwright 가 필요한 브라우저 테스트라 여기서 돌리지 않는다.
         # tests/integration 은 따로 돈다 — e2e 와 integration 이 각자 `conftest` 를 rootdir 모듈로 import 해 한 세션에서 이름이 충돌한다.
         JUNIT_MAIN=(); JUNIT_INT=()
         if [ -n "${CI_GATE_JUNIT_DIR:-}" ]; then

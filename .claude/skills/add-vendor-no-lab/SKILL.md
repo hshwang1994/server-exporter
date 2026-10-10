@@ -37,7 +37,7 @@ huawei:
 ### 2. adapter YAML 생성 (`adapters/redfish/{vendor}_*.yml`)
 
 코드가 읽는 필드는 `adapter_id` · `priority` · `match` · `capabilities.sections_supported`(+ redfish `vendor_notes.manager_layout`)다 (rule 12 R4, 2026-10-10 정정).
-`collect` · `normalize` · `credentials` · `graceful_degradation` 절은 기록용(코드가 읽지 않음) — 기존 adapter 와 모양을 맞춰 적는다:
+코드가 읽지 않는 최상위 절은 두지 않는다(2026-10-11 — 종전 `collect` · `normalize` · `credentials` · `graceful_degradation` 절 제거). 설계 메모는 `vendor_notes.design_hints` 에:
 
 ```yaml
 # adapters/redfish/huawei_ibmc.yml
@@ -49,12 +49,11 @@ specificity: 5
 match:
   manufacturer: ["Huawei", "Huawei Technologies"]
 capabilities:
-  storage: standard
-  power: standard
-collect:
-  strategy: standard_only
-normalize:
-  fragments_path: ...
+  sections_supported: [system, hardware, bmc, cpu, memory, storage, network, firmware, power]
+vendor_notes:
+  bmc_name: "iBMC"
+  design_hints:
+    collect_strategy: standard_only
 ```
 
 → **rule 96 R1-A 의무**: web sources 4종 중 1개 이상 origin 주석 (vendor docs / DMTF spec / GitHub issue / 사용자 사이트 실측). lab 부재 시 web sources 0건 금지.

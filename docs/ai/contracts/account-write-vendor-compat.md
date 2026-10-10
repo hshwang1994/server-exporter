@@ -22,7 +22,7 @@
 > - **EX-01 (`gather_cpu.yml` `\| float` raise) = 오탐**. WSL ansible 실측: `'abc' \| float` → `0.0` (raise 안 함), `\| int` → `0`. Jinja2/Ansible 필터가 이미 default 반환 → 기존 코드(`if not max_mhz_int` fallback)로 graceful. **변경 불필요** (auditor 오진단 — empirical 반증).
 > - redfish-gather/site.yml `--syntax-check` **PASS** (shim 삭제 후 regression 0). os/esxi 는 parse-time vault decrypt 로 WSL(무vault) 미검증 — 운영 Jenkins 정상.
 
-> `registry.yml` 은 **삭제하지 않음** — 테스트(`conftest.py`/`test_cross_channel_consistency.py`/`scan_suspicious_patterns.py`)가 소비. auditor 의 "loader 가 안 읽음"은 설계 관찰이지 dead 가 아님.
+> `registry.yml` 은 2026-10-11 삭제됐다 — 2026-10-10 감사에서 읽는 코드 · 시험이 없음을 확인했다(위 "테스트가 소비" 는 그 사이에 사실이 아니게 됐다).
 
 ---
 
@@ -104,7 +104,7 @@
 |---|---|---|---|
 | AR-1 | **esxi vendor 정규화가 substring fallback 누락** → `"Dell Inc"`(마침표 없음) 가 redfish 는 'dell' 로 정규화되나 esxi 는 raw 패스스루. `vendor` envelope 필드 divergence (실제 버그) | `esxi-gather/site.yml:162-175` (인라인 Jinja2) | **[PARTIAL] 2026-06-08** — redfish reference 단위 테스트 고정(`tests/unit/test_vendor_normalize_aliases.py` 16). esxi YAML 수정 recipe = NEXT_ACTIONS §0.8 (Jenkins Agent — ansible CLI Windows 미동작 + `[ANSIBLE]` defer) |
 | ~~AR-2~~ | JEDEC 제조사 테이블 2곳 (`filter_plugins/jedec_mapper.py` ↔ `redfish_gather.py:266 _JEDEC_VENDORS`) — memory `manufacturer` drift 위험 | — | **[DONE] 2026-06-04** — `tests/unit/test_jedec_drift_guard.py`(5 test: 공유 byte 값 일치 + VENDOR_NAME_NORMALIZATION mirror + 방향성). 통합 대신 drift 가드(rule 10 R2 self-contained 보존, 통합은 stdlib-only 모듈 충돌로 미채택). 2026-06-08 재확인 |
-| AR-3 | `adapters/registry.yml` 을 loader 는 안 읽고 test 만 소비 — CLAUDE.md 가 "master index"로 기술 → 오해 소지 | — | loader 가 소비하게 하거나 문서에서 "test manifest"로 명확화 (삭제 금지 — test 의존) |
+| AR-3 | `adapters/registry.yml` 을 loader 는 안 읽고 test 만 소비 — CLAUDE.md 가 "master index"로 기술 → 오해 소지 | — | loader 가 소비하게 하거나 문서에서 "test manifest"로 명확화 (삭제 금지 — test 의존) | (2026-10-11: 파일 삭제로 종결 — 읽는 코드 · 시험 없음 확인)
 | AR-4 | `build_output.yml` 이름 충돌 (`common/.../build_output.yml` 정본 ↔ `os-gather/.../build_output.yml` orchestrator). os 만 wrapper 파일, esxi/redfish 는 site.yml 인라인 — 비일관 | — | `[ANSIBLE]` rename(`build_chain.yml`) 권고 |
 | AR-5 | `try_credentials.yml` os/esxi 구조 중복 → `common/` 파라미터화 | — | `[AUTH]` 신중 |
 | AR-6 | vendor `normalize_oem.yml`(cisco/huawei/inspur) debug 가 legacy `_collected_data`(현 `_merged_data`) 참조 — 항상 false dead debug | — | `[ANSIBLE]` debug-only, 무해. 정리 시 빈 파일 parse 주의 |

@@ -53,15 +53,18 @@
 - **Forbidden**: site.yml 수정 (adapter_loader가 동적 감지)
 - **Why**: site.yml을 vendor마다 수정하면 vendor 수만큼 site.yml이 비대해짐
 
-### R4. Adapter YAML 필드 (2026-10-10 코드 대조 정정 — `docs/ai/decisions/ADR-2026-10-10-adapter-required-keys.md`)
+### R4. Adapter YAML 필드 (2026-10-10 코드 대조 정정 · 2026-10-11 미참조 절 제거 — `docs/ai/decisions/ADR-2026-10-10-adapter-required-keys.md` · `ADR-2026-10-11-adapter-key-cleanup.md`)
 
 - **Default**: adapter 는 `adapter_id` · `priority` · `match` · `capabilities.sections_supported` 를 가진다. 코드가 읽는 것은 이것뿐이다 —
   로더(`module_utils/adapter_common.py` · `lookup_plugins/adapter_loader.py`)는 `match`(없으면 `{}` — 어느 장비에도 매칭되지 않음) · `adapter_id` · `priority` · `generic` 을
   읽고 어떤 키도 강제하지 않는다. site.yml 은 `capabilities.sections_supported` 로 `not_supported` 를 정하고, redfish site.yml 은 `vendor_notes.manager_layout` 을 모듈에 넘기며, `build_meta.yml` 은 `version` 을 `meta.adapter_version` 에 적는다(현 adapter 들에는 없어 null).
-- **Allowed**: `metadata` · `vendor_notes` 로 vendor / firmware / tested_against / oem_path 등 origin 주석 (rule 96 R1). `collect` · `normalize` · `credentials` ·
-  `graceful_degradation` 절은 **기록용**이다 — 어떤 코드도 읽지 않는다(수집 · 정규화 task 경로는 site.yml 고정, 복구 vault 는 감지된 vendor 로 선택). OS · ESXi adapter 는 `normalize` 키가 없다.
-- **Forbidden**: `match` 누락(선택되지 않는 adapter) · `capabilities.sections_supported` 누락(모든 섹션이 not_supported) · 기록용 절을 "실행된다" 고 문서에 적기
-- **종전 서술** "4개 키 필수(adapter_loader 파싱 실패)" 는 코드와 달랐다 — DRIFT-024
+- **Allowed**: `metadata` · `vendor_notes` 로 vendor / firmware / tested_against / oem_path 등 origin 주석 (rule 96 R1)과 설계 메모(`vendor_notes.design_hints` — 코드 미참조,
+  2026-10-11 에 종전 `collect` · `graceful_degradation` · `auth` · `diagnosis` · `capabilities` 하위 값 중 경로 복제가 아닌 것을 옮겨 둔 곳). adapter 의 최상위 절은
+  `adapter_id` · `priority` · `match` · `capabilities`(`sections_supported` 만) · `generic` · `vendor_notes` · `metadata` 뿐이다.
+- **Forbidden**: `match` 누락(선택되지 않는 adapter) · `capabilities.sections_supported` 누락(모든 섹션이 not_supported) · 코드가 읽지 않는 최상위 절을 새로 두기(설계 메모는
+  `vendor_notes` 아래) · 기록용 값을 "실행된다" 고 문서에 적기
+- **종전** "4개 키 필수(adapter_loader 파싱 실패)" 는 코드와 달랐고(DRIFT-024), 종전 `collect` · `normalize` · `credentials` · `graceful_degradation` · `auth` · `diagnosis` · `channel` 절은
+  어떤 코드도 읽지 않아 2026-10-11 에 제거했다(복구 계정은 vault 의 `role: recovery` 가 정본 — adapter 사본과 `test_adapter_vault_label_consistency.py` 도 함께 제거).
 
 ### R5. Generic fallback
 

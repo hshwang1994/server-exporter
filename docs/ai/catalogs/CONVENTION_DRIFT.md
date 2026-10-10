@@ -30,7 +30,7 @@
   고정이고 복구 vault 는 감지된 vendor 로 고른다. OS · ESXi adapter 12개는 `normalize` 키 없이 운영 중이다(`adapters/os/*.yml` · `adapters/esxi/*.yml`).
 - **영향**: 규칙 · 문서만. 수집 동작 · production tree 변화 없음.
 - **resolved (2026-10-10)**: rule 12 R4 를 코드대로 고쳤다(`docs/ai/decisions/ADR-2026-10-10-adapter-required-keys.md`). skill · 개발 문서 Step 4 · 예시 주석 정정.
-  기록용 키(`collect` · `normalize` · `credentials` · `graceful_degradation`)를 adapter 에서 지울지는 별도 결정(지우면 runtime tree 가 바뀌어 새 후보가 필요) — NEXT_ACTIONS.
+  기록용 절은 2026-10-11 에 제거하고 설계 메모를 `vendor_notes.design_hints` 로 옮겼다(`ADR-2026-10-11-adapter-key-cleanup.md`, 후보 X6).
 - **관련**: rule 12 R4 · rule 70 R8(ADR 트리거) · rule 96 R1
 
 ## DRIFT-023 (2026-10-10, resolved 2026-10-10 full-audit)

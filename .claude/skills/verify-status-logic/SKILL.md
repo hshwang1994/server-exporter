@@ -45,9 +45,7 @@ server-exporter overall.status 판정 로직의 4 시나리오 매트릭스 (A/B
    - `_errors_fragment` 5 fragment 변수 정본 유지
    - severity (warning / error) 도입 안 함 (envelope shape 보존 — rule 96 R1-B)
 
-4. **status_rules.yml DEAD CODE 처리**:
-   - `common/vars/status_rules.yml` 명시 주석 "삭제 금지 / 향후 동적 로딩 reserved" 유지
-   - 어떤 playbook 도 `include_vars` / `vars_files` 로 로드 안 함
+4. **status 규칙 데이터 파일 없음**: 판정 규칙은 `build_status.yml` 인라인 Jinja2 하나다(`common/vars/status_rules.yml` 은 읽는 코드가 없어 2026-10-11 삭제)
 
 5. **시나리오 B 재현 mock fixture 존재** (M-A3 commit `78611714`):
    - `tests/test_*status*.py` — 13건 회귀 (시나리오 A/B/C/D 모두)
@@ -66,7 +64,7 @@ server-exporter overall.status 판정 로직의 4 시나리오 매트릭스 (A/B
    - `os-gather/tasks/linux/gather_memory.yml:171-175` (dmidecode fallback)
    - `os-gather/tasks/linux/gather_network.yml:208-209` (lspci stderr)
    - `esxi-gather/tasks/normalize_storage.yml:79-83` (NFS/vSAN/vVOL capacity 미수집)
-4. **status_rules.yml DEAD CODE 상태** 검증 — `grep -r "include_vars.*status_rules" .` 0 결과
+4. **status 규칙 파일 부재** 확인 — `ls common/vars/status_rules.yml` 없음, `grep -r status_rules common/ *-gather/` 0 결과
 5. **동반 정본 4 곳 일관성** — `docs/reference/decision-log.md` + `docs/contract/03-fields.md` + mock fixture diff
 6. **회귀 — pytest tests/test_*status*.py** PASS
 
@@ -84,8 +82,8 @@ server-exporter overall.status 판정 로직의 4 시나리오 매트릭스 (A/B
 - _errors_fragment 5 fragment 변수 정본 유지
 - severity 미도입 (envelope shape 보존)
 
-### status_rules.yml DEAD CODE 상태: PASS
-- include_vars / vars_files 로드 0건
+### status 규칙 데이터 파일: 없음(정상)
+- `common/vars/status_rules.yml` 삭제됨(2026-10-11), 판정은 build_status.yml 인라인만
 - 명시 주석 "삭제 금지 / reserved" 유지
 
 ### 시나리오 B 재현 mock fixture: PASS

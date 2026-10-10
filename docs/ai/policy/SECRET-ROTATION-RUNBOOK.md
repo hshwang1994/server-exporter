@@ -16,7 +16,7 @@
 | **BMC primary 계정** | `__REDACTED__Infra` (`infraops`) | 5 벤더 통일 primary Redfish 계정 | 전 벤더 BMC 인증 장악 |
 | **BMC recovery** | `__REDACTED__` (HPE admin / Lenovo USERID), `__REDACTED__` (Cisco admin) | 공장/복구 계정 — 최고 권한 fallback | BMC 복구 경로 장악 |
 
-> 정본 확인: `docs/operate/05-vault.md` (vault 암호 = `__REDACTED__`), `jenkins/jobs/redfish-account-provision-verify/config.xml:100` (`echo '__REDACTED__' > .vault_pass`).
+> 정본 확인: `docs/operate/05-vault.md` (vault 암호 = `__REDACTED__`), (종전 `jenkins/jobs/redfish-account-provision-verify/config.xml` 은 2026-10-11 삭제 — Jenkins 에 등록된 적 없는 정의였다).
 
 ## 2. 노출 인벤토리 (추적 파일 기준 — 2026-10-05 재검사)
 
@@ -56,7 +56,7 @@ done
 > 회전 후 `vault/**` 재암호화 (3.1 의 NEW 키로). 회전 전·후 모두 `git ls-files vault/` 가 암호화 상태인지 확인.
 
 ### 3.3 운영 메커니즘 수정 — config.xml (2026-10-05 확인: 해소)
-`jenkins/jobs/redfish-account-provision-verify/config.xml` 은 이제 평문 대신 자격 증명 변수(`${VAULT_PASSWORD}`)를 `.vault_pass` 에 쓴다.
+(종전 `redfish-account-provision-verify` Job 정의는 2026-10-11 삭제됐다 — 계정 쓰기 HOLD(GP-57) 상태에서 쓰이지 않았고 Jenkins 에 등록된 적도 없다.)
 수집 Job(`Jenkinsfile_portal`)은 `withCredentials(string 'server-gather-vault-password')` 로 받은 값을 임시 파일(권한 600)에만 쓰고 끝나면 지운다.
 
 ## 4. git 히스토리 정리 (선택 — force-push 필요, rule 93)
@@ -78,7 +78,6 @@ git filter-repo --replace-text <(printf '__REDACTED__==>REDACTED\n__REDACTED__In
 ## 6. 검증 체크리스트 (회전 후)
 - [ ] `ansible-vault view vault/<loc>/redfish/dell.yml` 가 NEW 키로만 열림 (옛 키 거부)
 - [ ] `git grep -I '__REDACTED__'` → 0 (스크럽 선택 시)
-- [ ] Jenkins `redfish-account-provision-verify` job 이 credential binding 으로 동작
 - [ ] BMC 로그인: 옛 암호 거부 / NEW 암호 허용
 - [ ] (히스토리 정리 시) `git log -S '__REDACTED__' --oneline` → 0
 

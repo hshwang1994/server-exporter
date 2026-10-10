@@ -1,7 +1,7 @@
 # AI 문서 지도
 
 여기 있는 문서는 **AI가 개발 작업을 하려고 읽는 것**이다. `production` 브랜치에는
-나가지 않는다 (`scripts/ai/promote_to_production.sh` 가 `docs/ai/` 를 통째로 제외한다).
+나가지 않는다 (`production_manifest.yml` 의 runtime roots 밖이라 prodgen 생성 tree 에 들어가지 않는다).
 
 사람이 읽는 문서는 `docs/README.md` 에서 시작한다.
 
@@ -14,7 +14,6 @@
 | `decisions/` | ADR — 왜 이렇게 정했나 | 기존 결정을 뒤집으려 할 때 |
 | `references/` | 외부 API 레퍼런스 사본 | Ansible·Redfish·vSphere 문법이 필요할 때 |
 | `policy/` | 하네스 운영 정책 | 보안·회전 절차 |
-| `workflows/` | 하네스 자기개선 절차 | harness cycle 돌릴 때 |
 | `archive/` | 지나간 것 | 보통 안 읽는다 |
 
 `CURRENT_STATE.md` 와 `NEXT_ACTIONS.md` 는 훅이 갱신을 권고하는 파일이다.

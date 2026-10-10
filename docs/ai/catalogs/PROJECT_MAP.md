@@ -12,7 +12,7 @@ server-exporter/
 ├── CLAUDE.md, README.md, REQUIREMENTS.md  (정본)
 ├── ansible.cfg                                              (Ansible 설정)
 ├── Jenkinsfile, Jenkinsfile_portal                          (2종 4-Stage 파이프라인 — cycle-015 _grafana 제거)
-├── adapters/                # 42 vendor adapter YAML + registry.yml — cycle 2026-05-07 실측
+├── adapters/                # 채널별 vendor adapter YAML (개수는 ls adapters/*/*.yml | wc -l)
 │   ├── redfish/             # 31 (generic + dell×4 + hpe×5 + lenovo×4 + supermicro×8 + cisco×3 + ucs_xseries×1
 │   │                          + huawei×1 + inspur×1 + fujitsu×1 + quanta×1 + superdome_flex×1)
 │   ├── os/                  # 7 (linux_*/windows_*)

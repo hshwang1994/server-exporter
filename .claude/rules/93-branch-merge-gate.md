@@ -63,7 +63,7 @@ internal remote는 별도 명시적 push용 (선택적).
 - **Allowed (예외 2 — production 승격, 2026-06-30 사용자 명시 · 2026-10-03 prodgen 으로 개정)**: main → production 승격은
   **사용자 per-instance 승인 불요**(R6 승인 포맷 면제)이되, 방식과 전제가 바뀌었다 (ADR-2026-10-03-production-generation).
   - 방식: `python -m scripts.ai.prodgen promote --sha <main sha>` — 고정 SHA 의 object store 에서 **runtime-only tree** 를 생성해 gate(G01~G20) 통과 뒤
-    git plumbing append 커밋(trailer `Main-SHA` 등)으로 올린다. 파일 state sync(`promote_to_production.sh`)와 `git merge` 는 금지 — 종전 스크립트는 shim(exit 1).
+    git plumbing append 커밋(trailer `Main-SHA` 등)으로 올린다. 파일 state sync 와 `git merge` 는 금지 — 종전 `promote_to_production.sh` 는 shim 을 거쳐 2026-10-11 삭제됐다.
   - 전제(하나라도 빠지면 승격하지 않는다): gate 전부 PASS · class B 0 · drift-check 정합 · **같은 main SHA 가 main Job 에서 1회 이상 성공** · 승격 직후 production Job
     canary 가능. canary 를 돌릴 수 없는 세션은 `--dry-run` 까지만 한다 (`docs/operate/09-production-branch.md` 3절).
   - plumbing 커밋은 pre-commit 훅을 거치지 않으므로 `--no-verify` 예외는 더 이상 필요 없다. force push 는 여전히 금지 (R1). 되돌림은 `prodgen restore`(append).

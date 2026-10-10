@@ -13,7 +13,7 @@
 | sanitized 토폴로지 | 이 파일 |
 
 수집 실행에 쓰는 자격증명은 또 다르다. `vault/<loc>/…` 의 ansible-vault 파일이며
-`vault/.lab-credentials.yml` 과는 별개다. 후자는 브라우저 E2E(`tests/e2e_browser/lab_loader.py`)가 읽는다.
+`vault/.lab-credentials.yml` 과는 별개다. 후자는 lab 자격 메모(gitignored)로, 읽는 시험 코드는 2026-10-11 브라우저 E2E 삭제 뒤 없다.
 
 ## 1. 권한
 

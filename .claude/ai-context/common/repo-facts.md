@@ -43,7 +43,7 @@
 | ESXi gather | `esxi-gather/` | site.yml (1-Play), tasks/collect_facts/config/datastores + normalize_*.yml |
 | Redfish gather | `redfish-gather/` | site.yml (1-Play: precheck → detect vendor → 자격증명 해석 → vault → adapter → collect → normalize), library/redfish_gather.py |
 | 공통 | `common/` | library/precheck_bundle.py (도달[TCP OR ICMP]·프로토콜 진단), tasks/normalize/init_fragments/merge_fragment/build_*.yml |
-| 어댑터 | `adapters/{redfish,os,esxi}/` | 채널별 YAML. `registry.yml` 은 **읽는 코드가 없다** (문서용 색인) |
+| 어댑터 | `adapters/{redfish,os,esxi}/` | 채널별 YAML. 로더가 디렉터리를 직접 glob 한다(인덱스 파일 없음 — `registry.yml` 은 2026-10-11 삭제) |
 | Schema | `schema/` | sections.yml (11 섹션), field_dictionary.yml (런타임 미사용 — 테스트·CI·훅 전용), baseline_v1/ (vendor 별 회귀 기준선) |
 | Vault | `vault/` | `vault/common/redfish/standard.yml`(전역 표준) + `<loc>/redfish/<vendor>.yml`(복구) + `<loc>/os/{linux,windows}.yml` + `<loc>/esxi.yml`. 평면 경로는 2026-08-12 삭제 |
 
