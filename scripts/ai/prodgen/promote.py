@@ -28,8 +28,8 @@ from .build import build
 from .common import ProdgenError
 from .drift import baseline_record, classify_production, first_prodgen_commit, is_ancestor
 from .gitstore import GitStore
-from .verify import (ENV_DEPENDENT_GATES, MANDATORY_GATES, MUTABLE_GATES, GateReport, GateResult, collect_environment,
-                     environment_compatible, report_digest_ok, run_gates)
+from .verify import (ENV_DEPENDENT_GATES, MANDATORY_GATES, MUTABLE_GATES, GateReport, GateResult, canonical_digest,
+                     collect_environment, environment_compatible, report_digest_ok, run_gates)
 from .verify.gates_promotion import g18_drift, g20_ancestry_and_remotes, ls_remote
 
 DEFAULT_REF = "refs/heads/production"
@@ -268,6 +268,12 @@ def promote(repo_root: str, sha: str, manifest_path: str, *, dry_run: bool = Tru
             gates_dict.update({"verdict": verdict, "ok": verdict == "COMPLETE_PASS", "mandatory_missing": missing,
                                "gates_rerun": sorted(fresh), "gates_reused": sorted(g["id"] for g in gates if g["id"] not in fresh),
                                "environment_rerun_reason": result["verify_report"]["environment_problems"] if env_rerun else []})
+            # 2026-10-10 (PG-01): the trailer names the report that was actually used — after re-running gates the body changed, so the
+            #   digest is recomputed over the merged report (the reused report's digest would describe a report that no longer exists).
+            gates_dict.pop("report_sha256", None)
+            gates_dict["report_sha256"] = canonical_digest(gates_dict)
+            result["verify_report"]["report_sha256_used"] = gates_dict["report_sha256"]
+            result["verify_report"]["report_sha256_file"] = rep.get("report_sha256")
         result["gates"] = {"verdict": gates_dict.get("verdict"), "mandatory_missing": gates_dict.get("mandatory_missing", []),
                            "results": [(g["id"], g["status"]) for g in gates_dict.get("gates", [])]}
         if gates_dict.get("verdict") == "FAIL" or (gates_dict.get("verdict") != "COMPLETE_PASS" and not dry_run):

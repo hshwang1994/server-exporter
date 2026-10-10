@@ -342,9 +342,16 @@ def test_trusted_lines_identify_the_content_read_against_the_bound_revision(tmp_
 def test_harness_contract_rejects_wrong_scenario_source_or_missing_artifacts():
     item = {"scenario": "both_fail", "kind": "harness", "result": "SUCCESS", "building": False,
             "params": {"SCENARIO": "both_fail", "FUNCTIONS_SRC": "checkout"}}
-    hr = {"scenario": "both_fail", "verdict": "PASS", "meta": {"functions_sha256": "f" * 64, "source_sha256": "s" * 64}}
+    hr = {"scenario": "both_fail", "verdict": "PASS", "checks": [{"name": "delivered", "ok": True}], "partial": [], "problems": [],
+          "meta": {"functions_sha256": "f" * 64, "source_sha256": "s" * 64}}
     control = {"functions_source": "checkout", "source_sha256": "s" * 64}
     assert _failed(evaluate_harness("both_fail", item, hr, control, "SUCCESS")) == []
+    # 2026-10-10 (N3): a PASS verdict is only accepted when the recorded checks / partial / problems agree with it — a result whose
+    # verdict field says PASS but carries a failed check, a partial list, or no checks at all is refused as evidence.
+    assert "verdict_consistent" in _failed(evaluate_harness("both_fail", item, dict(hr, checks=[{"name": "delivered", "ok": False}]), control, "SUCCESS"))
+    assert "verdict_consistent" in _failed(evaluate_harness("both_fail", item, dict(hr, partial=["sink_reachable"]), control, "SUCCESS"))
+    assert "verdict_consistent" in _failed(evaluate_harness("both_fail", item, dict(hr, problems=["x"]), control, "SUCCESS"))
+    assert "verdict_consistent" in _failed(evaluate_harness("both_fail", item, {k: v for k, v in hr.items() if k != "checks"}, control, "SUCCESS"))
     # registered name differs from the build's parameter / artifact → refused (C1 재현: normal_success 빌드를 모든 이름으로 등록)
     assert {"param_scenario", "artifact_scenario"} <= set(_failed(evaluate_harness("archive_fail", item, hr, control, "SUCCESS")))
     assert "verdict" in _failed(evaluate_harness("both_fail", item, dict(hr, verdict="PARTIAL"), control, "SUCCESS"))
@@ -366,7 +373,8 @@ def test_harness_expected_jenkins_result_comes_from_scenarios_json():
     assert exp.get("user_abort") == "ABORTED" and exp.get("aborted_outcome_finalize") == "ABORTED" and exp.get("normal_success") == "SUCCESS"
     assert harness_expected_results("/nonexistent/scenarios.json") == {}
     item = {"scenario": "user_abort", "kind": "harness", "result": "ABORTED", "building": False, "params": {"SCENARIO": "user_abort", "FUNCTIONS_SRC": "checkout"}}
-    hr = {"scenario": "user_abort", "verdict": "PASS", "meta": {"functions_sha256": "f" * 64, "source_sha256": "s" * 64}}
+    hr = {"scenario": "user_abort", "verdict": "PASS", "checks": [{"name": "jenkins_result", "ok": True}], "partial": [], "problems": [],
+          "meta": {"functions_sha256": "f" * 64, "source_sha256": "s" * 64}}
     ctl = {"functions_source": "checkout", "source_sha256": "s" * 64}
     assert _failed(evaluate_harness("user_abort", item, hr, ctl, exp["user_abort"])) == []
     assert "jenkins_result" in _failed(evaluate_harness("user_abort", dict(item, result="SUCCESS"), hr, ctl, exp["user_abort"])), "ABORTED 가 기대인 시나리오가 SUCCESS 로 끝나면 통과가 아니다"

@@ -45,7 +45,9 @@ from .verify import canonical_digest, report_digest_ok
 REQUIRED_MAIN = ("S1", "S2", "S3", "T2", "T5", "T6", "E2E-A", "E2E-A2")
 # main-function Harness (FUNCTIONS_SRC=checkout) — F1~F6 + damaged input + Callback failure + interruption (3차 §4 ①~⑥ 중 Harness 몫)
 REQUIRED_HARNESS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "truncate_jsonl", "checkpoint_only_a",
-                    "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx", "outer_timeout",
+                    "checkpoint_only_b", "layer_a_fail", "raw_fallback", "report_corrupt", "sink_5xx",
+                    # 2026-10-10 (HC-02): Callback 연결 끊김 경로 — scenarios.json 에 있었지만 필수 집합에 없어 한 번도 돌지 않았다
+                    "sink_close", "outer_timeout",
                     "recover_slow", "foreign_timeout_interruption", "user_abort", "aborted_outcome_finalize",
                     "archive_slow", "layer_a_read_slow", "gather_limit_preserve",
                     # 2026-10-06 (9차): the gather stage itself — Runner wait · agent loss · resume of unfinished hosts on the same Runner ·
@@ -223,15 +225,22 @@ def parse_entry(entry: str) -> dict:
 
 
 # ── helpers over artifacts ───────────────────────────────────────────────────────
-def _hosts_from_inventory(inv_json: str) -> list:
+def _hosts_from_inventory(inv_json: str, target_type: str | None = None) -> list:
+    """Requested hosts, chosen like Jenkinsfile_portal seAcceptTargets / *-gather/inventory.sh: the channel's primary key
+    (os · esxi = service_ip, redfish = bmc_ip) first, then `ip`. 2026-10-10 (FL-F17): the old `service_ip or bmc_ip or ip` ignored
+    the channel, so an inventory entry carrying both keys made the evidence compare the wrong host set. Unknown channel → legacy order."""
     try:
         arr = json.loads(inv_json or "[]")
     except ValueError:
         return []
+    primary = "bmc_ip" if target_type == "redfish" else ("service_ip" if target_type in ("os", "esxi") else None)
     out = []
     for e in arr if isinstance(arr, list) else []:
         if isinstance(e, dict):
-            v = e.get("service_ip") or e.get("bmc_ip") or e.get("ip")
+            if primary:
+                v = e.get(primary) or e.get("ip")
+            else:
+                v = e.get("service_ip") or e.get("bmc_ip") or e.get("ip")
             if v:
                 out.append(str(v).strip())
     return out
@@ -300,7 +309,7 @@ def evaluate_main(scenario: str, item: dict, summary, body, manifest, console: s
     add("jenkins_result", result in c["expected"] and not item.get("building"), f"{result} (expected {sorted(c['expected'])})")
     if item.get("caller_expected") and item["caller_expected"] not in c["expected"]:
         add("caller_expected", False, f"caller expected {item['caller_expected']} but the contract says {sorted(c['expected'])} — override refused")
-    hosts = _hosts_from_inventory(params.get("inventory_json", ""))
+    hosts = _hosts_from_inventory(params.get("inventory_json", ""), params.get("target_type"))
     add("hosts_given", bool(hosts), hosts)
     tn = [h for h in hosts if _is_testnet(h)]
     if c.get("hosts") == "real":
@@ -424,6 +433,14 @@ def evaluate_harness(scenario: str, item: dict, hr, control, expected_result: st
         return checks
     add("artifact_scenario", hr.get("scenario") == scenario, hr.get("scenario"))
     add("verdict", hr.get("verdict") == "PASS", hr.get("verdict"))
+    # 2026-10-10 (N3): the verdict field alone is not trusted — it must agree with the recorded checks / partial / problems.
+    checks_ = hr.get("checks") if isinstance(hr.get("checks"), list) else None
+    failed_checks = [c.get("name") for c in (checks_ or []) if isinstance(c, dict) and not c.get("ok")]
+    partial = hr.get("partial") if isinstance(hr.get("partial"), list) else []
+    problems = hr.get("problems") if isinstance(hr.get("problems"), list) else []
+    if hr.get("verdict") == "PASS":
+        add("verdict_consistent", checks_ is not None and not failed_checks and not partial and not problems,
+            f"checks={len(checks_ or [])} failed={failed_checks[:4]} partial={len(partial)} problems={len(problems)}")
     meta = hr.get("meta") or {}
     add("functions_sha256", bool(meta.get("functions_sha256")), meta.get("functions_sha256"))
     add("source_sha256", bool(meta.get("source_sha256") or (control or {}).get("source_sha256")), None)

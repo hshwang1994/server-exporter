@@ -68,13 +68,13 @@
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
           <name>HARNESS_SCENARIOS</name>
-          <defaultValue>normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt,sink_5xx,outer_timeout</defaultValue>
+          <defaultValue>normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt,sink_5xx,outer_timeout,recover_slow,foreign_timeout_interruption,user_abort,aborted_outcome_finalize,archive_slow,layer_a_read_slow,gather_limit_preserve,infra_resume,infra_wait_expired,resume_impossible,gather_wait_abort,finalize_reentry,finalize_reentry_after_delivery,finalize_reentry_expired,finalize_reentry_abort,finalize_refused_no_resend,finalize_limit_cumulative,owner_read_transient,run_record_read_transient,prep_cut_after_owner,prep_cut_after_cleanup,prep_cut_after_manifest,manifest_missing_restore,results_missing_refuse,preserve_archive_ok_stash_fail,preserve_stash_ok_archive_fail,preserve_both_fail,preserve_cut_before_marker,preserve_cut_delete,preserve_cut_owner_write,addon_decision_transient,addon_reuse_disabled,addon_copy_restore,recover_final_archive_over_snapshot,recover_flag_unwritten_archive,recover_archive_unavailable_stash,recover_partial_archive_keeps_stash,recover_checkpoint_only_archive,sink_close</defaultValue>
           <description>Harness Driver 가 main checkout 의 함수로 순서대로 돌릴 시나리오(쉼표). 비우면 건너뛴다(PARTIAL)</description>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
           <name>HARNESS_TREE_SCENARIOS</name>
-          <defaultValue>normal_success,both_fail,raw_fallback,report_corrupt</defaultValue>
+          <defaultValue>normal_success,archive_fail,stash_fail,both_fail,truncate_jsonl,checkpoint_only_a,checkpoint_only_b,layer_a_fail,raw_fallback,report_corrupt,gather_limit_preserve,infra_resume,infra_wait_expired,finalize_reentry,finalize_reentry_after_delivery,owner_read_transient,prep_cut_after_owner,manifest_missing_restore,results_missing_refuse,preserve_cut_delete,addon_decision_transient,recover_final_archive_over_snapshot,recover_flag_unwritten_archive</defaultValue>
           <description>생성 tree(prodtree.tar.gz)의 함수로 돌릴 시나리오(쉼표). 비우면 건너뛴다(PARTIAL)</description>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
