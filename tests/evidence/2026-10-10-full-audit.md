@@ -82,3 +82,6 @@ X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 9
   `vendor_notes.manager_layout` · `version`. `collect` · `normalize` · `credentials` · `graceful_degradation` 절은 아무 코드도 읽지 않는다(OS · ESXi adapter 12개는 `normalize` 없음).
   규칙 · skill · 개발 문서를 코드대로 고쳤다(`ADR-2026-10-10-adapter-required-keys.md` · DRIFT-024). 기록용 절 삭제는 별도 결정(NEXT_ACTIONS).
 - **DRIFT-016/017 재번호**: 커밋 `32d4e307` 이 붙인 두 항목은 이미 쓰인 번호였다(2026-05-11 · 2026-06-08) → DRIFT-022/023 으로 재번호해 머리로 옮겼다(FAILURE_PATTERNS 기록).
+- **HC-T6b**: X2' 의 CLI 승격 dry-run 이 이 PC 의 G14 재실행(생성 tree + tests overlay, `PYTHONIOENCODING` 없음)에서 `test_cli_exit_codes` 1건으로 거부됐다 — 자식 프로세스의
+  한글 stderr 가 cp949 로 나오는데 시험은 utf-8 로 읽었다(X1 의 HC-T6 수정은 셸이 export 한 `PYTHONIOENCODING` 에 기대고 있었다). 자식 env 를 고정해 고쳤고(X4) 같은 overlay 에서
+  재현 → 통과를 확인했다. 승격 대상은 X4 가 되며 매트릭스 · CI 를 다시 돈다(D-15 정정 · D-16).

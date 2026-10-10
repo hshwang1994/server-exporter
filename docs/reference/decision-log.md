@@ -8,7 +8,7 @@
 
 > 최종 갱신: 2026-10-10
 
-## 2026-10-10 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-15
+## 2026-10-10 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-16
 
 ### 배경
 - 사용자 지시서 "ClovirONE Server Gathering 전체 감사 및 개선 실행 지시서"(2026-10-10): 전 저장소 탐색 · 결함 근본 수정 · 회귀 + 실제 Jenkins
@@ -44,8 +44,11 @@
 14. **D-14 adapter 필수 키 서술 정정**: rule 12 R4 의 "4개 키 필수" 는 코드와 다르다(로더는 `match` · `adapter_id` · `priority` · `generic` 만 읽고 강제 없음, 플레이북은
     `capabilities.sections_supported` · `vendor_notes.manager_layout`). 규칙 · skill · 개발 문서를 코드대로 고치고 기록용 절은 지우지 않는다 —
     `docs/ai/decisions/ADR-2026-10-10-adapter-required-keys.md`, DRIFT-024.
-15. **D-15 시험 전용 후속 후보의 증거 이전**: X2'(`361d4484`) 뒤에 시험 · 문서만 바꾼 후보(X3)는 prodgen tree hash 가 X2' 와 같음을 기계로 확인한 경우 main Job 매트릭스 ·
-    strict compare 증거를 이어받는다(runtime tree 가 byte 동일). CI(Gate · Harness)는 시험이 바뀌었으므로 다시 돈다. 승격은 tree hash 가 같으면 no-op 다(rule 93 R4).
+15. **D-15 시험 전용 후속 후보의 증거**: X2'(`361d4484`) 뒤에 시험 · 문서만 바꾼 후보(X3 · X4)는 prodgen tree hash 가 X2' 와 같음을 기계로 확인한 경우 strict compare(값 대조)
+    증거를 이어받는다(runtime tree 가 byte 동일). 그러나 **승격 대상 SHA 의 main Job 매트릭스와 CI 는 다시 돈다** — prodgen 의 e2e 증거 계약(`evidence.py`)이 `checkout == main_sha`
+    를 요구하고 시험이 바뀌었기 때문이다. (처음 적은 "매트릭스 증거 이전" 은 승격 대상에는 적용되지 않는다 — 2026-10-10 20:50 정정.)
+16. **D-16 승격 대상 = X4**: X2' 의 CLI 승격 dry-run 이 이 PC 의 G14 재실행에서 `test_cli_exit_codes`(자식 stdio 인코딩 미고정, HC-T6b) 1건으로 거부됐다. 시험만 고친 X4 를
+    매트릭스 15 · CI 뒤 CLI 로 승격한다 — runtime tree 는 X2 `32d4e307` 부터 동일(`20fb2094…`). CI 의 Promote 단계는 GitLab push 자격증명이 없어(2026-10-09 와 같음) 쓰지 않는다.
 - 사용자 결정(확정): BIOS 연구 패키지 폴더 삭제 · `tests/reference` 전부 유지 · Jenkins admin 자격은 채팅 전달만(어디에도 기록 금지) · §8 운영 정책 재논의 없음.
 
 ### 결과 · 범위 (코드)
