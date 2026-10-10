@@ -3144,7 +3144,12 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
         return volumes, errors
     vst, vcoll, verr = _get(bmc_ip, _p(vol_link), username, password, timeout, verify_ssl)
     if verr or vst != 200:
-        # Volumes 미지원(HBA 모드 등)은 정상 — 에러 추가하지 않음
+        # 2026-10-10 (C4): 404 만 "이 Storage 는 Volumes 를 노출하지 않음"(정상 미지원)으로 보고 조용히 빈 목록을 낸다.
+        #   그 밖의 실패(403 · 5xx · timeout · 연결 오류 · 200 비JSON)는 조회 실패다 — 정상 빈 목록으로 숨기지 않는다.
+        #   이 Storage 는 같은 자격으로 이미 읽었으므로 하위 실패는 자격 오류가 아니다(비차단 code: host 는 failed 로 내려가지 않고
+        #   storage 섹션만 failed — 다른 하위 리소스 실패와 같은 규칙). 종전 주석의 "HBA 모드 = 미지원" 은 근거가 없었다.
+        if vst != 404:
+            errors.append(_err('storage', f'Volumes {vol_link} 실패: {verr or vst}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
         return volumes, errors
     # cycle 2026-06-14 (DELL R740 실 미러 검수 STO-1): Dell 컨트롤러 OEM 이 명시하는 부팅 VD 의
     # FQDD(=부팅 Volume.Id). R740 iDRAC9 펌웨어는 표준 Volume.BootVolume 도 Volume.Oem.Dell.
@@ -3859,6 +3864,10 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         continue
                     st4, pdata, perr2 = _get(bmc_ip, _p(p_uri), username, password, timeout, verify_ssl)
                     if perr2 or st4 != 200:
+                        # 2026-10-10 (C4): 컬렉션이 나열한 Port 를 읽지 못했다(404 포함) — 그 포트의 데이터를 잃었으므로 근거를 남긴다.
+                        #   network_adapters 는 보조 수집이라 network 섹션 상태에는 들어가지 않고 errors[] 로만 보인다(비차단 code).
+                        errors.append(_err('network_adapters', f'Port {p_uri} 실패: {perr2 or st4}',
+                                           code=_CODE_NON_BLOCKING_SUBRESOURCE))
                         continue
                     # 속도: 신 CurrentSpeedGbps(Gbps) 우선 > 구 CurrentLinkSpeedMbps/1000 (Round 17 #3)
                     speed_gbps, speed_mbps = _normalize_port_speed(pdata)
