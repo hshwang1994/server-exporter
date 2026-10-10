@@ -46,23 +46,51 @@ parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid
 > Add-on 도중 끊긴 host 는 `CHECKPOINT`(조립 직후 보존본), 그 밖은 진행 기록(`gather_progress.jsonl`)에 따라 실패 봉투로 채운다 (8절).
 >
 > 2026-10-05 (8차): 시험용 파라미터 2개(`redfishAccountDryrun` · `gatherBudgetForceSec`)와 그 배선을 없앴다. 단계 · 작업(task)마다 두던 짧은 제한,
-> 정체 감시, 안쪽 단계 상한(Tier 2 · Script Approval)은 없다.
+> 정체 감시, 안쪽 단계 상한(Script Approval 이 필요하던 종전 보충 시간 제한)은 없다.
 >
 > 2026-10-06 (9차): 빌드 12시간 · 수집 단계 39,000초 한계, 실행 한계 계산(`scripts/gather_budget.sh`(삭제됨)), 가용 메모리로 시작을 막던 처리, 온라인 Runner 가
 > 없으면 수집을 건너뛰던 처리(`no_agent`)를 없앴다. 실행 기반(Runner · Jenkins Agent · 결과 처리 노드)을 기다린 시간은 실행 시간에 넣지 않고 빌드 하나의
 > 합으로 최대 72시간까지 센다. 실행 기반 장애 뒤에는 끝난 결과를 보존한 채 같은 Runner · 같은 작업 폴더에서 끝나지 않은 대상만 이어서 수집한다(아래
 > "실행 기반 대기와 같은 Runner 재개"). 결정 경위는 `docs/reference/decision-log.md` 2026-10-06(9차).
 
-| 단계 (Stage View 표시 이름) | 노드 | 하는 일 | 실패 시 |
+| 단계 (Stage View 표시 이름) | 노드 | 하는 일 (요약) | 실패 시 (요약) |
 |-------|------|--------|--------|
-| 입력 확인 | 없음 (5분) | `target_type` · `inventory_json`(JSON 배열 · 원소 객체 · `service_ip`/`bmc_ip`/`ip` 중 처음 값 · 문자열 · ASCII IPv4 · 중복 금지 — `inventory.sh` 와 같은 규칙, 위반이 하나라도 있으면 요청 전체 거부) · `callbackUrl`(`http(s)://`, 계정 정보 `사용자:비밀번호@` 금지 — 이 오류는 주소를 출력하지 않는다) · `deploymentEnvironmentId` 검증 → 접수 manifest 를 `env.SE_MANIFEST_JSON` 으로, 빌드 이름 `#N <종류> N대` | FAILURE — 접수 manifest 가 없어 보낼 것이 없다 |
-| 실행 위치 확인 | 없음 (5분) | `readYaml text: readTrusted('common/vars/locations.yml')` — 미등록 `loc` 는 노드 대기 없이 즉시 실패. 라벨식을 가진 **등록된** Runner 를 센다(`nodesByLabel offline:true`). 콘솔 `[실행 위치] <loc> 위치의 <종류> 대상은 '<라벨식>' 라벨의 Runner에서 실행합니다.` 아래에 등록된 Runner · 연결된 Runner 수 | 미등록 loc · 등록 Runner 0(`config_error`): FAILURE — 접수 대상마다 실패 결과는 보낸다. 등록돼 있으면 지금 연결이 끊겼거나 바빠도 수집 단계가 기다린다 |
-| 서버 정보 수집 | stage 에 agent · timeout 없음. 시도마다 `agent_label && 능력 라벨`(수집을 시작한 뒤에는 그 Runner)을 Jenkins queue 로 기다리고 작업 폴더 `<Job 이름>-<빌드 번호>` 를 쓴다 | 첫 시도: 저장소 받기 · `.se_workspace.json`(소유 기록 · 받은 commit) · 지난 결과 정리 · `gather_manifest.json`. 이어서 하는 시도: 저장소를 다시 받지 않고 revision 대조 → (Add-on — 3절) → `bash scripts/run_gather.sh <playbook> <inventory> <loc> <Add-on 검사 통과> <수집 실행 누적 최대> <이전 시도 중 끊김>` — 작업 폴더 잠금(이전 실행이 남아 있으면 끝날 때까지 대기) · 환경 경계(`scripts/env_guard.sh`) · venv · `scripts/gather_state.py begin`(남은 대상 · 이번 한계 · 동시 실행 수) · vault 비밀번호 임시 파일(600) · `timeout --signal=INT --kill-after=90 <이번 한계> ansible-playbook <채널>/site.yml -i <채널>/inventory.sh -f <동시 실행 수> --limit @<남은 대상 파일> …` · 60초 생존 표시 · 이 실행의 SSH 다중화 연결 종료 · `gather_state.py end` → `gather_state.py classify` → 끝이면 결과 정리(`scripts/finalize_gather_output.py`) → 오래된 작업 폴더 정리(`scripts/workspace_cleanup.py`, 하루 한 번) → `archiveArtifacts`(있는 파일만, 빈 보관은 실패) → `stash` → 보관을 확인했을 때만 `deleteDir`. 실행 기반 장애면 원본만 `stash` 하고 다시 시도 | Add-on 을 받지 못하면 UNSTABLE + Add-on 없이 수집; ansible 이 비정상 종료해도 종료 상태만 남기고 결과 전달은 다음 단계가 한다; 대기 한도 초과 · 재개 불가는 UNSTABLE(끝나지 않은 대상은 실행 기반 문장의 실패 결과). 사용자 취소는 그대로 전파(ABORTED) |
-| 결과 확인 및 전송 (post 안의 표시 단계) | `built-in` — 실행 기반 대기 합 안에서 기다리고(취소된 빌드는 5분까지만), 노드를 얻은 뒤 `timeout(1시간) { dir("fin-<빌드 번호>") }` | 회수(2026-10-10 C1): 매체마다 격리 폴더 — 마지막 보존의 전달 표식(`SE_FINAL_STASHED`)이 있고 그 stash 의 정리 결과가 완결이면 stash, 아니면 빌드 보관본도 파일별 `unarchive` 해 두 후보를 같은 검문으로 평가(결과가 있는 대상 수 → 정리 결과 완결 → 표식이 있으면 stash, 없으면 보관본) → `gather_final.jsonl`(정리 결과, exit 0/2) 우선, 없으면 Groovy 최소 경로(OUTPUT → CHECKPOINT+오류 1건 → 합성 실패 봉투) → 전송 직전 형태 검문 → `{loc, deploymentEnvironmentId, eventUuid, gatherInfoJson:[…]}` POST(시도마다 응답 최대 10분, 남은 시간 안에서 최대 3번, 결정적 4xx(408/429 제외)는 다시 보내지 않음, ABORTED 면 1번) → `[결과]` 집계 · `[경고]` · `callback_body.json` · `finalize_summary.json` 보존 · `[결과 파일]` 링크 → 보관을 확인했을 때만 폴더 삭제 | 전송 실패 · 시작 못 한 전송 · 합성 보충 · outcome ≠ completed · 보충 라이브러리 없음 · 결과 수 ≠ 접수 수 → UNSTABLE 한 번(사유는 WARNING 줄 한 문장, 보낼 결과가 없는 대상의 IP 는 `[경고]` 줄). 결과 처리 노드를 끝내 얻지 못하면 보내지 못한 채 FAILURE(결과는 stash · 보관본에 남는다). 접수 manifest 조차 없으면(입력 확인 실패) 보낼 것이 없다 |
+| 입력 확인 | 없음 (5분) | 파라미터 검증 → 접수 manifest | FAILURE — 보낼 것이 없다 |
+| 실행 위치 확인 | 없음 (5분) | `loc` → Runner 라벨식, 등록 Runner 수 | 미등록 loc · 등록 Runner 0: FAILURE(실패 결과는 보낸다) |
+| 서버 정보 수집 | 라벨식의 Runner (agent · timeout 없음) | 저장소 받기 → 수집 실행 → 결과 정리 → 보존 | UNSTABLE / 실패 결과 채움 / 취소 전파 |
+| 결과 확인 및 전송 (post) | `built-in` (1시간) | 회수 → 접수 수 == 결과 수 → Portal POST → 보존 | UNSTABLE 한 번 / 노드를 못 얻으면 FAILURE |
+
+#### 단계별 상세
+
+**입력 확인** — 노드 없음, 5분.
+- `target_type` · `inventory_json`(JSON 배열 · 원소 객체 · `service_ip`/`bmc_ip`/`ip` 중 처음 값 · 문자열 · ASCII IPv4 · 중복 금지 — `inventory.sh` 와 같은 규칙, 위반이 하나라도 있으면 요청 전체 거부)
+- `callbackUrl`(`http(s)://`, 계정 정보 `사용자:비밀번호@` 금지 — 이 오류는 주소를 출력하지 않는다) · `deploymentEnvironmentId` 검증
+- 접수 manifest 를 `env.SE_MANIFEST_JSON` 으로, 빌드 이름 `#N <종류> N대`
+- 실패: FAILURE — 접수 manifest 가 없어 보낼 것이 없다
+
+**실행 위치 확인** — 노드 없음, 5분.
+- `readYaml text: readTrusted('common/vars/locations.yml')` — 미등록 `loc` 는 노드 대기 없이 즉시 실패
+- 라벨식을 가진 **등록된** Runner 를 센다(`nodesByLabel offline:true`). 콘솔 `[실행 위치] <loc> 위치의 <종류> 대상은 '<라벨식>' 라벨의 Runner에서 실행합니다.` 아래에 등록된 Runner · 연결된 Runner 수
+- 실패: 미등록 loc · 등록 Runner 0(`config_error`) → FAILURE — 접수 대상마다 실패 결과는 보낸다. 등록돼 있으면 지금 연결이 끊겼거나 바빠도 수집 단계가 기다린다
+
+**서버 정보 수집** — stage 에 agent · timeout 없음. 시도마다 `agent_label && 능력 라벨`(수집을 시작한 뒤에는 그 Runner)을 Jenkins queue 로 기다리고 작업 폴더 `<Job 이름>-<빌드 번호>` 를 쓴다.
+- 첫 시도: 저장소 받기 · `.se_workspace.json`(소유 기록 · 받은 commit) · 지난 결과 정리 · `gather_manifest.json`
+- 이어서 하는 시도: 저장소를 다시 받지 않고 revision 대조 → (Add-on — 3절)
+- `bash scripts/run_gather.sh <playbook> <inventory> <loc> <Add-on 검사 통과> <수집 실행 누적 최대> <이전 시도 중 끊김>`: 작업 폴더 잠금(이전 실행이 남아 있으면 끝날 때까지 대기) · 환경 경계(`scripts/env_guard.sh`) · venv · `scripts/gather_state.py begin`(남은 대상 · 이번 한계 · 동시 실행 수) · vault 비밀번호 임시 파일(600)
+- `timeout --signal=INT --kill-after=90 <이번 한계> ansible-playbook <채널>/site.yml -i <채널>/inventory.sh -f <동시 실행 수> --limit @<남은 대상 파일> …` · 60초 생존 표시 · 이 실행의 SSH 다중화 연결 종료 · `gather_state.py end`
+- `gather_state.py classify` → 끝이면 결과 정리(`scripts/finalize_gather_output.py`) → 오래된 작업 폴더 정리(`scripts/workspace_cleanup.py`, 하루 한 번) → `archiveArtifacts`(있는 파일만, 빈 보관은 실패) → `stash` → 보관을 확인했을 때만 `deleteDir`. 실행 기반 장애면 원본만 `stash` 하고 다시 시도
+- 실패: Add-on 을 받지 못하면 UNSTABLE + Add-on 없이 수집. ansible 이 비정상 종료해도 종료 상태만 남기고 결과 전달은 다음 단계가 한다. 대기 한도 초과 · 재개 불가는 UNSTABLE(끝나지 않은 대상은 실행 기반 문장의 실패 결과). 사용자 취소는 그대로 전파(ABORTED)
+
+**결과 확인 및 전송** — post 안의 표시 단계. `built-in` 에서 실행 기반 대기 합 안에서 기다리고(취소된 빌드는 5분까지만), 노드를 얻은 뒤 `timeout(1시간) { dir("fin-<빌드 번호>") }`.
+- 회수(2026-10-10 C1): 매체마다 격리 폴더 — 마지막 보존의 전달 표식(`SE_FINAL_STASHED`)이 있고 그 stash 의 정리 결과가 완결이면 stash, 아니면 빌드 보관본도 파일별 `unarchive` 해 두 후보를 같은 검문으로 평가(결과가 있는 대상 수 → 정리 결과 완결 → 표식이 있으면 stash, 없으면 보관본)
+- `gather_final.jsonl`(정리 결과, exit 0/2) 우선, 없으면 Groovy 최소 경로(OUTPUT → CHECKPOINT+오류 1건 → 합성 실패 봉투) → 전송 직전 형태 검문
+- `{loc, deploymentEnvironmentId, eventUuid, gatherInfoJson:[…]}` POST(시도마다 응답 최대 10분, 남은 시간 안에서 최대 3번, 결정적 4xx(408/429 제외)는 다시 보내지 않음, ABORTED 면 1번)
+- `[결과]` 집계 · `[경고]` · `callback_body.json` · `finalize_summary.json` 보존 · `[결과 파일]` 링크 → 보관을 확인했을 때만 폴더 삭제
+- 실패: 전송 실패 · 시작 못 한 전송 · 합성 보충 · outcome ≠ completed · 보충 라이브러리 없음 · 결과 수 ≠ 접수 수 → UNSTABLE 한 번(사유는 WARNING 줄 한 문장, 보낼 결과가 없는 대상의 IP 는 `[경고]` 줄). 결과 처리 노드를 끝내 얻지 못하면 보내지 못한 채 FAILURE(결과는 stash · 보관본에 남는다). 접수 manifest 조차 없으면(입력 확인 실패) 보낼 것이 없다
 
 ### Ansible 실행환경(venv) 선택
 
-Gather(수집과 Layer A 마무리)는 저장소의 `scripts/activate_ansible_venv.sh` 를 한 줄로 source 한다.
+Gather(수집과 결과 정리)는 저장소의 `scripts/activate_ansible_venv.sh` 를 한 줄로 source 한다.
 
 ```bash
 . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
@@ -93,12 +121,12 @@ Runner · 결과 처리 노드를 최대 72시간 기다리는 동안 빌드를 
 | 한계 | 값 | 어디서 | 넘었을 때 |
 |---|---|---|---|
 | 입력 확인 · 실행 위치 확인 | 각 5분 | stage `options.timeout` — 실행 기반 대기가 아니라 입력 · 저장소 확인 | FAILURE |
-| **실행 기반 대기** | 빌드 하나의 합 72시간 (259,200초) | `seWithNode` — Runner 배정 · 실행 중 실행 기반 오류 뒤 다시 기다린 시간 · 결과 처리 노드 · 진척 없는 장애 뒤 쉬는 시간을 모두 더한다. 다시 시도 · 재개해도 처음부터 세지 않는다. 끊긴 뒤의 대기는 실행 기반 오류를 **감지한 시각**부터 센다 — Jenkins 의 처리 유예(연결 끊김을 알리기까지의 시간)를 오류 종류와 상관없이 5분으로 가정해 앞당기지 않는다(2026-10-07 10차) | queue 의 요청을 거두고 outcome `infra_wait_expired`, `limit_reason` = `infra_wait` — 끝난 대상은 그대로, 끝나지 않은 대상은 실행 기반 문장의 실패 결과로 |
+| **실행 기반 대기** | 빌드 하나의 합 72시간 (259,200초) | `seWithNode` — 아래 (가) | queue 의 요청을 거두고 outcome `infra_wait_expired`, `limit_reason` = `infra_wait` — 끝난 대상은 그대로, 끝나지 않은 대상은 실행 기반 문장의 실패 결과로 |
 | **수집 실행 한계** | 누적 6시간 (21,600초) — 이번 시도의 한계 = 6시간 − 앞 시도들의 실제 수집 시간 | `scripts/gather_state.py begin` → `scripts/run_gather.sh` 의 `timeout --signal=INT --kill-after=90` | INT 로 멈추고 90초 뒤에도 남으면 KILL → outcome `timeout`/`timeout_killed`, `limit_reason` = `gather_limit`. 끝난 대상의 결과는 보존하고 끝나지 않은 대상만 실패 결과로 채운다. 누적을 다 썼으면 시작하지 않는다 |
 | 실제 수집 시간 세는 법 | Runner 시계로 잰 ansible 실행 시간의 합(동시에 수집한 Host 를 겹쳐 세지 않는다) | 끝 기록이 있으면 그 값, 없으면 마지막 생존 표시(60초마다) + 60초, 재부팅이면 새 부팅 시각까지 | 비정상 종료가 반복돼도 덜 세지 않는다(한 번에 최대 60초를 더 셀 수는 있다) |
 | INT 뒤 정리 시간 | 90초 | `--kill-after=90` | KILL |
 | 시도 하나의 실행 한계 | 6시간 + 90초 + 2시간(준비 · 보존 몫) | node 를 얻은 뒤의 `timeout` — 멈춘 step 이 빌드를 붙잡지 않게 하는 안전망 | outcome `attempt_limit`(Runner 가 연결돼 있으면 확보한 결과를 보존해 보낸다) |
-| 결과 확인 및 전송 | 결과 처리에 실제로 쓴 시간의 합 1시간 — 노드를 얻은 때부터 끝(또는 실행 기반 오류를 감지한 때)까지를 진입마다 더한다. 재진입해도 처음부터 세지 않고, 노드를 기다린 시간은 실행 기반 대기에 들어간다. 취소된 빌드의 노드 대기 5분도 진입마다 새로 주지 않는다(2026-10-07 10차). Runner 를 기다리다 한도를 다 쓴 빌드도 지금 바로 얻을 수 있는 노드는 첫 조회(5초)까지 기다려 얻고 실패 결과를 보낸다 | `seWithNode('built-in')` 안의 `timeout`(남은 합) — 회수 · 조립 · 본문 · 전송 · 보관을 합해 센다 | 전파. 시작 못 한 전송은 `callback_not_attempted`. 끝내 처리하지 못하면 보내지 못한 경우 FAILURE, 보냈지만 마무리만 못 한 경우 UNSTABLE(보낸 것과 결과가 남은 곳을 `[결과 확인]` 줄에 적는다) |
+| 결과 확인 및 전송 | 결과 처리에 실제로 쓴 시간의 합 1시간 — 아래 (나) | `seWithNode('built-in')` 안의 `timeout`(남은 합) — 회수 · 조립 · 본문 · 전송 · 보관을 합해 센다 | 전파. 시작 못 한 전송은 `callback_not_attempted`. 끝내 처리하지 못하면 보내지 못한 경우 FAILURE, 보냈지만 마무리만 못 한 경우 UNSTABLE(`[결과 확인]` 줄에 적는다) |
 | Portal 응답 대기 | 시도마다 최대 10분(남은 시간 − 10초 안), 최대 3번(취소된 빌드 1번), 사이 대기 10 · 20초, 남은 시간 30초 미만이면 시작하지 않음 | `seCallback` — 요청 도구(http_request)는 연결과 응답 대기에 같은 값을 쓴다 | 다음 시도 또는 실패 기록. 2xx 는 Portal 이 요청을 받았다는 뜻이다 |
 | SSH 연결 | 60초 (`ansible_timeout` · `ConnectTimeout=60`), 연결 유지 확인 10초 × 3 | `os-gather/site.yml` | 그 host 의 연결 실패로 기록 |
 | OS 후보 포트 탐색 연결 | 포트마다 10초 (`_probe_timeout`) | DROP 방화벽에서 SYN 재시도 3회를 허용하는 값. 연결 거부는 바로 다음 후보로(포트당 1회) | 다음 후보 포트 |
@@ -110,10 +138,15 @@ Runner · 결과 처리 노드를 최대 72시간 기다리는 동안 빌드를 
 | ESXi 응답 | 30분 (`_precheck_timeout` · `esxi_disks.py` `_DEFAULT_TIMEOUT_SEC`) | vSphere API 읽기 한 번마다 | 그 구성요소의 실패로 기록 |
 | Add-on 받기 | git 명령마다 30분, 2번까지 | `scripts/addon_checkout.sh` — 준비 단계(시도 하나의 준비 · 보존 몫 2시간 안). 수집 실행 한계는 줄지 않는다 | UNSTABLE + Add-on 없이 수집 |
 
+(가) 실행 기반 대기 — Runner 배정 · 실행 중 실행 기반 오류 뒤 다시 기다린 시간 · 결과 처리 노드 · 진척 없는 장애 뒤 쉬는 시간을 모두 더한다. 다시 시도 · 재개해도 처음부터 세지 않는다.
+끊긴 뒤의 대기는 실행 기반 오류를 **감지한 시각**부터 센다 — Jenkins 의 처리 유예(연결 끊김을 알리기까지의 시간)를 오류 종류와 상관없이 5분으로 가정해 앞당기지 않는다(2026-10-07).
+(나) 결과 확인 및 전송 — 노드를 얻은 때부터 끝(또는 실행 기반 오류를 감지한 때)까지를 진입마다 더한다. 재진입해도 처음부터 세지 않고, 노드를 기다린 시간은 실행 기반 대기에 들어간다.
+취소된 빌드의 노드 대기 5분도 진입마다 새로 주지 않는다(2026-10-07). Runner 를 기다리다 한도를 다 쓴 빌드도 지금 바로 얻을 수 있는 노드는 첫 조회(5초)까지 기다려 얻고 실패 결과를 보낸다.
+
 없앤 것(2026-10-06 9차): 빌드 12시간 · 수집 단계 39,000초 한계, 실행 한계 계산(`scripts/gather_budget.sh`(삭제됨) — 남은 빌드 시간 · 최소 시작 120초 · 가용 메모리),
 `no_agent` · `not_started_budget` · `not_started_memory`. 없앤 것(2026-10-05 8차 R3 — 정상 작업을 잘랐다): 작업(task) 단위 제한(Linux 120초 · Windows/ESXi 180초 · Add-on 300초 · Redfish 탐지 120 · 수집 1,260 · 계정 240초),
 Redfish 모듈 마감(절대 1,200초 · 새 응답 없음 120초 · 탐지 90 · 계정 180초)과 진행 표시, 정체 감시(420초, `gather_watch.py`), `df` 20초,
-결과 정리 120초, 보존 archive · stash 30초, 조립 · 본문 60초(Tier 2 `SE_FINALIZER_BOUNDED` · Script Approval 4 서명 포함), 시험용 강제 한계.
+결과 정리 120초, 보존 archive · stash 30초, 조립 · 본문 60초(`SE_FINALIZER_BOUNDED` · Script Approval 4 서명 포함), 시험용 강제 한계.
 예상 시간(`expected`)은 안내용으로만 계산하고 멈추는 데 쓰지 않는다.
 
 콘솔에는 시도마다 기계용 `[기술 기록] 수집 시도 n=… node=… rc=… state=… exec_used=… completed=…/… precheck_failed=… pending=…` 한 줄과
@@ -262,11 +295,14 @@ Jenkinsfile 이 설정한다.
 | `ANSIBLE_JSON_MANIFEST_FILE` | Gather | `${WORKSPACE}/gather_manifest.json` — 접수 집합. 콜백이 inventory 와 대조해 다르면 stderr 로 알린다 (2026-10-03) |
 | `ANSIBLE_JSON_PROGRESS_FILE` | Gather | `${WORKSPACE}/gather_progress.jsonl` — host 전이 이벤트(first_seen · precheck · cred_load · auth_proven · checkpoint · addon_started · addon_done · emitted · reconciled · lost). 결과 정리가 누락 봉투를 채울 때 읽는다 |
 | `ANSIBLE_JSON_CHECKPOINT_FILE` | Gather | `${WORKSPACE}/gather_checkpoint.jsonl` — Add-on 직전 조립본(`CHECKPOINT` 태스크) host 당 1줄 |
-| `SE_AUTH_EVIDENCE_DIR` / `SE_BUILD_ID` / `SE_EVENT_UUID` | Gather | `${WORKSPACE}/gather_auth_evidence` / `${BUILD_TAG}` / `${params.eventUuid}` — Redfish 모듈이 시도(attempt)마다 남기는 인증 증거 파일(비밀값 없음). task timeout 뒤 rescue 가 현재 시도의 파일만 읽어 401 / 인증 뒤 정지 / 확인 전 정지를 가른다 ([../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md)) |
+| `SE_AUTH_EVIDENCE_DIR` / `SE_BUILD_ID` / `SE_EVENT_UUID` | Gather | `${WORKSPACE}/gather_auth_evidence` / `${BUILD_TAG}` / `${params.eventUuid}` — Redfish 인증 증거 파일(비밀값 없음), 아래 설명 |
 | `ANSIBLE_VERBOSITY` | Gather | `${params.verbosity}` |
 | `ADDON_DIR` | Gather 의 ansible 실행만 | `${WORKSPACE}/addon` — Add-on 을 켜고(아래 전역 변수) 받은 파일이 검사를 통과한 빌드에만 있다. 상위 환경에서 넘어온 값은 환경 경계가 지운다 |
 | `ANSIBLE_SSH_CONTROL_PATH_DIR` | Gather 의 ansible 실행만 | `run_gather.sh` 가 실행마다 만드는 `/tmp/se_cp.XXXXXX` — 이 실행의 SSH 다중화 연결 위치. 끝나면 그 연결만 닫고 지운다(원격 명령 정리) |
 | `ANSIBLE_INVENTORY_UNPARSED_FAILED` | Gather 의 ansible 실행만 | `True` — inventory 스크립트가 요청을 거부하면 빈 inventory 로 rc 0 을 내지 않고 실행 실패(outcome `failed_run`). ansible.cfg 가 아니라 이 실행에만 켠다(진단용 ad-hoc 명령 · 시험 도구는 영향 없음) |
+
+`SE_AUTH_EVIDENCE_DIR` 아래에는 Redfish 모듈이 시도(attempt)마다 인증 증거 파일을 남긴다(비밀값 없음). task timeout 뒤 rescue 가 현재 시도의 파일만 읽어 401 / 인증 뒤 정지 / 확인 전 정지를 가른다
+([../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md)).
 
 환경 경계(`scripts/env_guard.sh`, 2026-10-05 F05): 수집 셸은 상위 환경에서 넘어온 시험용 · 재정의 값(`SE_FORCE_LINUX_RAW_FALLBACK` · `JSON_ONLY_NO_RECONCILE` · `ANSIBLE_JSON_OUTPUT_TASK` · `ANSIBLE_JSON_CHECKPOINT_TASK` · `ANSIBLE_STDOUT_CALLBACK` · `SE_VENDOR_ALIASES_PATH`, 검사 통과 전 `ADDON_DIR`)을 지우고 콘솔에 **이름만** 남긴다: `[수집] 상위 환경에서 넘어온 시험용 설정을 이번 실행에서 지웠습니다: …`.
 
@@ -350,7 +386,7 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
 
 | 항목 | 요구사항 |
 |------|---------|
-| Label | `common/vars/locations.yml` 의 `agent_label` (ic / cj / yi / git) + 수집할 target_type 의 능력 라벨 (`os` 는 `linux` 와 `windows`, `esxi` 는 `esxi`, `redfish` 는 `redfish`) — [02-agent-node.md](02-agent-node.md) 8절 |
+| Label | `common/vars/locations.yml` 의 `agent_label` (ic / cj / yi / git) + target_type 의 능력 라벨(`os` 는 `linux` 와 `windows`, `esxi`, `redfish`) — [02-agent-node.md](02-agent-node.md) 8절 |
 | venv | `/app/ansible-env` 또는 `/opt/ansible-env`, 아니면 노드 환경변수 `SE_ANSIBLE_VENV` |
 | CLI `git` | Gather 의 체크아웃, Add-on 체크아웃(`scripts/addon_checkout.sh`)에 필요 |
 | Add-on 저장소 접근 | 전역 `ADDON_REPO_URL` 을 켠 경우 Agent 에서 그 URL 에 닿아야 한다 (자체 서명 인증서는 기본값으로 통과 — CA 설치 불필요) |
@@ -379,11 +415,11 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
   많은 쪽 → 같으면 정리 결과가 완결인 쪽 → 같으면 표식이 있으면 stash, 없으면 보관본을 고른다. 표식이 없는 stash 는 다시 시도하기 전에 넘긴 중간 결과일 수 있다
   — 종전에는 남은 stash 를 먼저 써서 마지막 보존이 보관한 전체 결과 대신 일부만 보낼 수 있었다. 고른 근거는 `finalize_summary.json` 의 `recovery` 에 남는다.
   정리 결과 파일(`gather_final.jsonl` · report)은 고른 입력에 있을 때만 다시 보관하고, 요약 · 본문 보관과 따로 기록한다(`.se_fin.json` 의 `archive_body_summary` · `archive_results`).
-- **요청한 대상 1개 = 결과 1개.** Gather 의 `post{always}` 가 먼저 Layer A(`scripts/finalize_gather_output.py`)로 `gather_final.jsonl` 을 만든다:
+- **요청한 대상 1개 = 결과 1개.** Gather 의 `post{always}` 가 먼저 결과 정리 스크립트(`scripts/finalize_gather_output.py`)로 `gather_final.jsonl` 을 만든다:
   OUTPUT 줄(13 필드 · 접수 IP 검사) → 없는 host 는 `CHECKPOINT` 줄(Add-on 직전 조립본; Add-on 중 끊겼으면 "추가 수집 중 처리가 중단되어 …"
   오류 1건, 아니면 "결과를 내보내는 단계에서 중단" 1건) → 그래도 없는 host 는 진행 기록으로 실패 봉투 합성(precheck 진단 보존 / 인증 뒤
   중단 `GATHER_FAILED` auth true / 연결 끊김 `AUTH_PROBE_FAILED` / 그 밖 `OUTPUT_BUILD_FAILED`). 보고서 `gather_finalize_report.json`
-  (accepted · kept · filled · dropped · conflicts). Layer A 가 없거나 실패(exit 3)하면 컨트롤러 Groovy 가 OUTPUT → CHECKPOINT → 합성 봉투의
+  (accepted · kept · filled · dropped · conflicts). 결과 정리가 없거나 실패(exit 3)하면 컨트롤러 Groovy 가 OUTPUT → CHECKPOINT → 합성 봉투의
   최소 경로로 같은 수를 맞춘다 (progress 기반 stage 분류는 하지 않는다 — 보고서에 남는 차이).
 - 전송은 남은 시간 안에서 최대 3번(시도마다 응답 최대 10분; 5xx · 408 · 429 · 연결 실패만 다시 보내고, 그 밖 4xx 는 중단; 빌드가 ABORTED 면 1번).
   **HTTP 2xx 를 받으면 Portal 이 요청을 받았다는 뜻이고 이 Job 의 전달은 끝난다**(2026-10-05 사용자 결정 — Portal 의 저장 · 반영 확인은 이 Job 의 역할이
@@ -398,7 +434,7 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
   `[결과 파일]` 링크(보관을 확인한 파일만: 서버별 수집 결과 `gather_final.jsonl` · Portal 전송 본문 `callback_body.json` · 실행 요약 `finalize_summary.json`) ·
   `[요약]` 한 블록(머리 줄 `정상 종료 (SUCCESS)` · `확인 필요 (UNSTABLE)` · `실패 (FAILURE)` · `중단 (ABORTED)`, 대상 · 수집 결과 · 미완료(있을 때만) ·
   소요 시간 · Portal 전송 · 해당할 때만 결과 보존 · 전송 본문 · 결과 복구 · 결과 확인). 문구는 운영자가 읽는 말로 쓴다 — 첫 줄에 일어난 일, 두 칸 들여쓴 상세 줄,
-  내부 용어(Layer A 등) · 설계 설명 대신 하는 일. 기술 값은 `[기술 기록] …` 줄과 `finalize_summary.json` 에 둔다.
+  내부 용어 · 설계 설명 대신 하는 일. 기술 값은 `[기술 기록] …` 줄과 `finalize_summary.json` 에 둔다.
 - `finalize_summary.json`: `accepted · lines · kept · filled · outcome · limit_reason · status_counts{success, partial, failed, missing} ·
   warnings[](callback_failed · callback_not_attempted · callback_interrupted · body_not_saved · count_mismatch · filled · outcome_<값> · layer_b_unavailable ·
   preserve_failed · preserve_archive_failed) · callback{attempted, delivered, http_code, attempts, reason, interrupted, started_at, ended_at, tries[]} ·
@@ -406,7 +442,7 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
   layerA · layerB · source · node_wait_sec · unrecovered · damage · by_origin · recovery_limited · preserve`.
   UNSTABLE 은 한 번만 표시한다 — 전송 실패(또는 시작 못 함) · 그 밖 경고(보존 경고는 수집 단계가 이미 표시) 순.
 - Groovy 최소 경로의 함수(`seReconcileRaw` 등)는 `scripts/jenkins/se_finalize.groovy` 하나가 정본이다 — 마무리 단계가 `readTrusted` 로 읽어 `load` 하고,
-  CI Job(`Jenkinsfile_ci`)이 같은 파일로 Python Layer A 와의 동치를 검사한다. 파일을 못 읽으면 보충 없이 있는 OUTPUT 줄만 보내고 UNSTABLE(`layerB=unavailable`)이다.
+  CI Job(`Jenkinsfile_ci`)이 같은 파일로 Python 결과 정리 스크립트와의 동치를 검사한다. 파일을 못 읽으면 보충 없이 있는 OUTPUT 줄만 보내고 UNSTABLE(`layerB=unavailable`)이다.
 - **파이프라인이 시작되기 전의 실패는 결과를 보내지 못한다.** Jenkins 가 Jenkinsfile 을 저장소에서 읽지 못하면(예: 2026-10-06 07:48 production #143 —
   컨트롤러가 `github.com` 이름을 해석하지 못해 `production` 브랜치를 가져오지 못했다) 파이프라인 코드가 하나도 실행되지 않으므로 결과 · 전송 · artifact 가 없다.
   콘솔이 `hudson.plugins.git.GitException` 으로 시작하고 stage 가 없는 빌드다. 결과를 받지 못한 요청을 다시 보낼지는 호출 측(Portal)이 정한다.

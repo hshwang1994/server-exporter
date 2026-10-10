@@ -68,7 +68,7 @@
     - capabilities.sections_supported → 출력 sections 의 not_supported 기준
     - vendor_notes.manager_layout → redfish_gather 모듈 인자(멀티-노드 토폴로지)
     - 수집 · 정규화 task 경로는 site.yml 에 고정(collect_standard.yml · normalize_standard.yml).
-      adapter 의 collect / normalize / credentials / graceful_degradation 절은 설계 기록이라 코드가 읽지 않는다.
+      adapter 에는 코드가 읽는 절만 있다(2026-10-11) — 설계 메모는 `vendor_notes.design_hints`(기록용).
       복구 vault 는 감지된 vendor(canonical)로 고른다 — vault/<loc>/redfish/<vendor>.yml
 ```
 
@@ -180,22 +180,14 @@ capabilities:
                                       # ← 출력 JSON 의 sections 에서
                                       #   여기 없는 섹션은 자동으로 not_supported
 
-collect:                              # 기록용 — site.yml 이 같은 경로를 고정 include 한다 (코드가 이 절을 읽지 않음, 2026-10-10)
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:                            # 기록용 — 같다
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile:           "dell"   # 기록용 — 복구 vault 는 감지된 vendor 로 고른다(vault/<loc>/redfish/<vendor>.yml)
-  fallback_profiles: []
-
-graceful_degradation:
-  critical_sections: [system, hardware]   # 기록용 — 읽는 코드 없음. status 판정은 common/tasks/normalize/build_status.yml
-  optional_sections: [firmware, power]    # 기록용
+vendor_notes:                         # 기록용 — origin 주석과 설계 메모. 코드가 읽는 값은 redfish 의 manager_layout 하나(멀티-노드 토폴로지)
+  bmc_name: "iDRAC"
+  design_hints:                       # 2026-10-11 전까지 collect/graceful_degradation/auth/diagnosis 절이던 메모 — 코드가 읽지 않는다
+    collect_strategy: standard_only
+    graceful_degradation_critical_sections: [system, hardware]
 ```
 
-읽는 법: 위에서부터 "**누구한테 매칭되는가(match) → 뭘 할 수 있는가(capabilities.sections_supported)**" 두 절이 동작을 정하고, 그 아래 절은 설계 기록이다(2026-10-10 코드 대조 — rule 12 R4).
+읽는 법: "**누구한테 매칭되는가(match) → 뭘 할 수 있는가(capabilities.sections_supported)**" 두 절이 동작을 정한다. 그 밖의 메모는 `vendor_notes` 에만 둔다(2026-10-11 — 코드가 읽지 않는 최상위 절은 없다).
 
 ---
 
@@ -297,7 +289,6 @@ adapter 가 매칭은 됐는데 normalize task 가 그 섹션을 못 채운 경�
 | 점수 계산 코드 | `module_utils/adapter_common.py` |
 | adapter 동적 로딩 | `lookup_plugins/adapter_loader.py` |
 | 벤더 별칭 사전 | `common/vars/vendor_aliases.yml` |
-| adapter 인덱스 | `adapters/registry.yml` |
 
 ---
 

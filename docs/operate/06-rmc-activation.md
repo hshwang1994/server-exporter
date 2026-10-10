@@ -1,6 +1,6 @@
 # RMC (Rack Management Controller) Redfish 활성화 가이드
 
-> cycle 2026-05-12 (ADR-2026-05-12) 신규.
+> 2026-05-12 신규.
 > HPE Compute Scale-up Server 3200 / Superdome Flex 사이트 배포 시 RMC Redfish 비활성화 / 라이선스 부재로 인한 수집 실패 진단 + 활성화 절차.
 
 ## 1. RMC 란?
@@ -9,9 +9,9 @@ HPE 의 스케일업 서버 군 (CSUS 3200 / Superdome Flex / Flex 280) 은 단�
 
 > "supports large, partitionable systems managed by a **single aggregated controller like HPE Compute Scale-up Server 3200 RMC**."
 
-server-exporter 는 cycle 2026-05-12 부터 RMC primary 시스템의 전 Partition/Manager/Chassis 를 수집한다 (ADR-2026-05-12, `data.multi_node` Additive 컨테이너).
+server-exporter 는 2026-05-12 부터 RMC primary 시스템의 전 Partition/Manager/Chassis 를 수집한다 (`data.multi_node` 컨테이너 — 기존 필드는 그대로).
 
-cycle 2026-06-09 (ADR-2026-06-09) 부터 CSUS 3200 Redfish 모델 전체를 수집한다 — nPartition 별 부팅 순서(`partitions[].boot`), chassis 별 Thermal(`chassis[].thermal`, Power 와 쌍), RMC LogServices(`managers[].log_services`), CompositionService/ResourceBlocks(`multi_node.composition` — 각 ResourceBlock ↔ chassis 대응), Fabrics/FlexGrid(`multi_node.fabrics` — NUMAlink Switches+Endpoints). 상세 shape 는 `docs/contract/03-fields.md` 9절 (`data.multi_node` 확장 컴포넌트) 참조.
+2026-06-09 부터 CSUS 3200 Redfish 모델 전체를 수집한다 — nPartition 별 부팅 순서(`partitions[].boot`), chassis 별 Thermal(`chassis[].thermal`, Power 와 쌍), RMC LogServices(`managers[].log_services`), CompositionService/ResourceBlocks(`multi_node.composition` — 각 ResourceBlock ↔ chassis 대응), Fabrics/FlexGrid(`multi_node.fabrics` — NUMAlink Switches+Endpoints). 상세 shape 는 `docs/contract/03-fields.md` 9절 (`data.multi_node` 확장 컴포넌트) 참조.
 
 ## 2. 알려진 위험 신호
 
@@ -97,8 +97,8 @@ curl -k -s -u <user>:<password> https://<rmc-ip>/redfish/v1/Chassis
 
 1. `tests/evidence/<YYYY-MM-DD>-csus-3200-site.md` — 실측 결과 + 환경 (펌웨어 / 라이선스 / 모델)
 2. `tests/fixtures/redfish/hpe_csus_3200/` 실 응답으로 합성 fixture 교체 (lab 도입 cycle)
-3. `schema/baseline_v1/hpe_csus_3200_baseline.json` 교체 (현재 mock-derived → 실측 baseline, rule 13 R4)
-4. `docs/reference/decision-log.md` Round 신 항목
+3. `schema/baseline_v1/hpe_csus_3200_baseline.json` 교체 (현재 합성 → 실측 baseline — baseline 은 실측으로만 갱신한다)
+4. `docs/reference/decision-log.md` 에 날짜 항목 추가
 
 → NEXT_ACTIONS C1~C8 (내부 후속 작업 목록) 참조.
 

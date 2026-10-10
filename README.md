@@ -82,20 +82,20 @@ server-exporter/
 ├── redfish-gather/          서버 BMC 수집 (Redfish API)
 │
 ├── adapters/                벤더 / 세대별 어댑터 YAML
-│   ├── redfish/             31개 (Dell / HPE / Lenovo / Supermicro / Cisco / Huawei / Inspur / Fujitsu / Quanta 9 벤더 — HPE 계열에 Superdome Flex, CSUS 3200 포함)
-│   ├── os/                  7개 (Linux / Windows 변형)
-│   └── esxi/                4개 (ESXi 6.x / 7.x / 8.x)
+│   ├── redfish/             Dell / HPE(Superdome Flex · CSUS 3200 포함) / Lenovo / Supermicro / Cisco / Huawei / Inspur / Fujitsu / Quanta — 개수는 `ls adapters/redfish/*.yml | wc -l`
+│   ├── os/                  Linux / Windows 변형
+│   └── esxi/                ESXi 6.x / 7.x / 8.x / 9.x
 │
 ├── schema/                  표준 JSON 스키마
 │   ├── sections.yml         11 섹션 정의
-│   ├── field_dictionary.yml 83 필드 사전 (호출자 reference)
+│   ├── field_dictionary.yml 필드 사전 (호출자 reference — 항목 수는 `grep -c '^\s*priority:' schema/field_dictionary.yml`)
 │   ├── fields/              채널별 필드 정의
 │   ├── examples/            success / partial / failed 예시
 │   └── baseline_v1/         실장비 회귀 기준선 JSON
 │
 ├── tests/                   회귀 / 검증
 │   ├── fixtures/            실장비 raw 응답
-│   ├── e2e/, e2e_browser/   백엔드·브라우저 E2E
+│   ├── e2e/                 백엔드 E2E
 │   └── reference/           실장비 종합 자료
 │
 └── docs/                    설치 / 운영 / 개발 문서 (01~23)

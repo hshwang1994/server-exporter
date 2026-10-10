@@ -24,7 +24,7 @@
   `SE_ANSIBLE_VENV` → PATH 의 `ansible-playbook` → `/app/ansible-env` → `/opt/ansible-env`). 시험용 파라미터는 없다(2026-10-05 8차 R1).
   `pwsh` 는 **생성 시** 도구이지 runtime 요구가 아니다. 내부 Jenkins 주소 · credential ID · Runner 이름을 고객 공통 필수값으로 새로 고정하지 않는다.
   시간 한계(실행 기반 대기 합 72시간 · 실제 수집 누적 6시간 · 결과 확인 및 전송 1시간 — 2026-10-06 9차)와 보존 기간(빌드 기록 14일/100 · 결과 파일 7일/50 · 작업 폴더 7일 정리)은 Jenkinsfile 과
-  스크립트에 들어 있어 설치 때 맞출 값이 아니다. Script Approval · 전역 환경변수가 필요 없다(2026-10-05 8차 R3 — Tier 2 `SE_FINALIZER_BOUNDED` 를 없앴다).
+  스크립트에 들어 있어 설치 때 맞출 값이 아니다. Script Approval · 전역 환경변수가 필요 없다(2026-10-05 — 보충 시간 제한 `SE_FINALIZER_BOUNDED` 를 없앴다).
   Timestamper 플러그인은 있으면 콘솔 줄마다 시각을 붙이고, 없어도 파이프라인은 그대로 돈다(업무 줄은 본문에 시각을 적는다).
 - 세 층을 구분해 말한다: **고객사 main 형태 깨끗한 checkout 검증(G19)** / **사내 production Job E2E** / **실제 고객사 실행**(이 저장소의 작업 범위 밖). 앞 둘이 통과해도 "고객사 실환경 검증 완료" 라고 쓰지 않는다.
 
@@ -34,15 +34,17 @@
 |---|---|---|
 | 파이프라인 | `Jenkinsfile_portal`, `scripts/jenkins/se_finalize.groovy` | `Jenkinsfile_ci` 는 main 전용이라 제외 |
 | Ansible 설정 · 인벤토리 | `ansible.cfg`, `{os,esxi,redfish}-gather/inventory.sh` | |
-| Playbook · task · 변수 정본 | `*/site.yml`, `*/tasks/**`, `common/tasks/**`, `common/vars/{failure_reasons,section_messages,locations,vendor_aliases,supported_sections}.yml` | `common/vars/status_rules.yml` 은 제외(주석에서만 참조) |
-| Adapter | `adapters/{redfish,os,esxi}/*.yml` | `adapters/registry.yml` 은 제외(런타임 미참조) |
+| Playbook · task · 변수 정본 | `*/site.yml`, `*/tasks/**`, `common/tasks/**`, `common/vars/{failure_reasons,section_messages,locations,vendor_aliases,supported_sections}.yml` | — |
+| Adapter | `adapters/{redfish,os,esxi}/*.yml` | — |
 | Vault | `vault/**/*.yml` | 바이트 그대로(헤더 검사) |
 | 플러그인 · 라이브러리 | `callback_plugins/`, `filter_plugins/`, `lookup_plugins/`, `module_utils/`, `*/library/*.py` | 플러그인의 `DOCUMENTATION` 은 로더가 읽어 보존, library 모듈은 제거 |
-| 운영 스크립트 | `scripts/activate_ansible_venv.sh`, `scripts/addon_*.sh`, `scripts/env_guard.sh`, `scripts/run_gather.sh`, `scripts/gather_state.py`, `scripts/finalize_gather_output.py`, `scripts/workspace_cleanup.py`, `scripts/jenkins/se_finalize.groovy`, `os-gather/files/get_last_login.sh` | Python 은 주석 · docstring 을 지운다 — UTF-8 인코딩 선언도 지운다(Python 3 기본값, 2026-10-06 D13). shebang 과 다른 인코딩 선언은 남긴다 |
+| 운영 스크립트 | `scripts/` 의 운영 스크립트(아래 목록) + `os-gather/files/get_last_login.sh` | Python 은 주석 · docstring · UTF-8 인코딩 선언을 지운다(shebang 과 다른 인코딩 선언은 남긴다) |
 | 저장소 메타 | `.gitattributes`, `.gitignore`, `.production-provenance.json` | provenance 는 생성기가 쓴다 |
 
+운영 스크립트 목록: `activate_ansible_venv.sh` · `addon_*.sh` · `env_guard.sh` · `run_gather.sh` · `gather_state.py` · `finalize_gather_output.py` · `workspace_cleanup.py` · `scripts/jenkins/se_finalize.groovy`.
+
 제외: `tests/**`, `docs/**`, `schema/**`, `.claude/**`, `scripts/ai/**`, `jenkins/**`, `Jenkinsfile_ci`, `README.md`, `REQUIREMENTS.md`, `CLAUDE.md`, `requirements-test.txt`,
-`scripts/bootstrap_vault_encrypt.sh`, `scripts/verify_account_provision.sh`(운영자는 main 에서 쓴다). 정본은 저장소 루트의 `production_manifest.yml`.
+`scripts/bootstrap_vault_encrypt.sh`(운영자는 main 에서 쓴다). 정본은 저장소 루트의 `production_manifest.yml`.
 장애 주입 · 성능 샘플러 · Harness 는 운영 소스에 없다 — `tests/jenkins/harness/`(main 전용) 가 밖에서 만든다.
 
 ## 2. 명령 (main checkout 에서, Windows 또는 pwsh 가 있는 Linux)
@@ -98,7 +100,7 @@ python -m scripts.ai.prodgen restore --to <production commit> [--bootstrap-basel
 PRODGEN_BUILD · HARNESS_TREE · PRODGEN_DRIFT · PRODGEN_VERIFY · EVIDENCE) ② G01~G20 COMPLETE_PASS + binding 일치 ③ 같은 `main_sha` 의 필수 main Job 시나리오(S1 S2 S3 T2 T5 T6 E2E-A E2E-A')와
 main 함수 Harness · 생성 tree Harness(같은 `tree_hash`)가 `e2e_evidence` 에서 계약대로 PASS ④ 생성 tree hash == 검증 대상 ⑤ 양 원격(`origin` + `internal` 정확히) 동일 · 현재 parent ·
 G18/G20 재검사 ⑥ dry-run 이 아니고 명시 요청(`--push-remote origin,internal`/`PROMOTE=true`). 필수 stage 집합은 배포와 무관하게 하나다(2026-10-05 8차 R3 —
-Tier 2 · `HARNESS_BOUNDED` · `REQUIRE_BOUNDED` · `--require-bounded` 를 없앴다. CLI 는 그 플래그를 모르는 옵션으로 거부한다).
+`HARNESS_BOUNDED` · `REQUIRE_BOUNDED` · `--require-bounded` 를 없앴다. CLI 는 그 플래그를 모르는 옵션으로 거부한다).
 8차 R1 의 증거 분담: 운영 Job 은 정상 입력만 증명한다 — S3 = 실호스트 10대 이상 큰 배치를 운영 한계(6시간) 안에서 끝까지(보충 0 · `limits.gather_limit_source=gather_limit`),
 E2E-E = 정상 Redfish 수집의 표준 계정 인증 · 계정 쓰기 0(`diagnosis.details.account_service` 비어 있음). 한계 도달 · 보존은 Harness `gather_limit_preserve`(실제 `run_gather.sh` ·
 main 함수와 생성 tree 두 그룹), 계정 쓰기 방지는 CI Gate 의 단위 시험(같은 main SHA)이 증명한다.

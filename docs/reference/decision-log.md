@@ -8,7 +8,86 @@
 
 > 최종 갱신: 2026-10-10
 
-## 2026-10-10 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-16
+## 현재 유효한 결정 — 주제별 요약 (2026-10-11 기준)
+
+아래 표는 지금 유효한 결정을 주제별로 한 줄씩 적고, 근거가 적힌 날짜 절을 가리킨다. 역사와 경위는 각 날짜 절에 그대로 있다(내용 삭제 없음).
+
+| 주제 | 현재 결정 | 근거 절 |
+|---|---|---|
+| 도달성 판정 | 관리 TCP 응답 OR ICMP Echo. ICMP 는 TCP 전 포트 무응답일 때 1회, Gate 가 아니다 | 2026-09-03 |
+| Redfish 자격 축 | 표준 수집 계정은 전역 1벌(`vault/common/redfish/standard.yml`), 복구 계정은 Location×Vendor(`vault/<loc>/redfish/<vendor>.yml`, `role: recovery`) | 2026-08-12 · 2026-10-11 D-17 |
+| 계정 쓰기 | 보류(GP-57). 실장비에 인증 실패 유발 금지. 쓰기 전제는 "표준 인증 시도 AND 구조화된 401 AND 복구 인증 성공" | 2026-08-12~13 |
+| status 판정 | 시나리오 A/B/C/D 매트릭스 — 실제 섹션 결과로 success/partial/failed, errors 수로 판단하지 않음 | 2026-05-06 |
+| envelope | 13 필드 고정 · 새 키 추가는 호환성 작업 밖(사용자 승인) | 2026-05-01 · 2026-10-03 |
+| 시간 한계 | 실행 기반 대기 합 72h · 실제 수집 누적 6h · 결과 처리 1h, 빌드 · 단계 timeout 없음, 같은 Runner · 작업 폴더 재개 | 2026-10-05~07 |
+| 결과 전달 | 요청 1 = 결과 1, `post { always }` 전달, Portal 2xx 로 종결(저장 확인은 계약 밖), 회수 매체는 같은 검문으로 평가 | 2026-10-03 · 2026-10-05 · 2026-10-10 |
+| production | `prodgen` 생성 tree 만, 고정 main SHA, gate G01~G20 COMPLETE_PASS, 양 원격 동일, 승격 직후 canary | 2026-10-03 · 2026-10-04 |
+| Jenkinsfile 사본 | `Jenkinsfile_portal_Byid` 유지 · portal 과 동기화(시험 강제) | 2026-10-09 |
+| Add-on | 전역 `ADDON_REPO_URL` 하나로 켜고 빌드마다 받는다, 실패는 UNSTABLE + Add-on 없이 수집 | 2026-09-29 · 2026-09-30 |
+| Runner 선택 | `loc` 의 agent_label && target_type 능력 라벨, venv 는 `activate_ansible_venv.sh` 가 고른다 | 2026-09-28 · 2026-09-30 |
+| vendor 표시값 | 내부 canonical(`hpe`) ↔ 호출자 표시값(`hp` · `hpCsus`) 분리 | 2026-06-04 |
+| adapter | 코드가 읽는 절만(`match` · `capabilities.sections_supported` · `vendor_notes` …), 점수 `priority×1000 + specificity×10 + match` | 2026-05-11 · 2026-10-10 D-14 · 2026-10-11 D-17 |
+| 멀티-노드(RMC) | `data.multi_node` 컨테이너로 CSUS 3200 / Superdome Flex 전 Partition · Manager · Chassis 수집 | 2026-05-12 · 2026-06-09 |
+| 실패 문장 | `failure_code` + 대상 종류 + 세부 사유로 고르는 중앙 카탈로그, 사용자 문장에 기술값 금지 | 2026-08-12 · 2026-09-21 |
+| 식별자 · 단위 | DMI 자리표시자 집합 한 곳(`identity_normalizer`), JEDEC (bank, id) 표, firewall_state = 유효 정책 | 2026-10-10 D-03 · D-10 · LX-F12 |
+| ESXi | `vmware_host_config_info` 는 `esxi_hostname` 필수, vCenter 대상은 protocol 단계 거부 | 2026-10-10 D-01 · ESXI-03 |
+| 문서 · 하네스 | 사람용 문서는 `.claude`/`docs/ai` 를 참조하지 않는다, 세어 놓은 수는 적지 않는다, 삭제는 참조 0 · 고유 내용 확인 뒤 | 2026-08-13 · 2026-10-11 D-19 |
+
+## 날짜별 결정 색인
+
+| 날짜 · 제목 |
+|---|
+| 2026-10-10~11 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-19 |
+| 2026-10-09 — 운영 로그 문구 정리 (수집 Job · 수집 스크립트 · CI) |
+| 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · production P8 |
+| 2026-10-07 (최종 마무리) — 로그 보관 전역화 · forks 50 · Windows vault 도메인 · Portal 재진입 4.1/4.2 · GP-64 확인 |
+| 2026-10-07 (10차) — 결과 처리 재진입 · 기록 읽기 예외 · 끊긴 준비 · OOM 귀속 · 실환경 검증 |
+| 2026-10-06 (9차) — 실행 기반 대기 · 같은 Runner 재개 · 사전 차단 제거 |
+| 2026-10-05~06 (8차) — 시험 입력 제거 · 시간 한계 셋 · 원격 명령 정리 · 보존 기간 |
+| 2026-10-05 (7차) — 최종 정비 지시서 F01~F13 · §5 예외 무시 감사 · Portal 계약 축소 · X13 → P4 |
+| 2026-10-05 (6차) — Tier 2 승인 완료 뒤 사내 Jenkins 상한 모드 적용 |
+| 2026-10-05 (5차) — 남김없이: 실장비 결함(GP-23) 수정 · Runner 종료 동작 실측 · 원인 서술 정정 · P3 |
+| 2026-10-04 (4차) — 최종 실행 지시: timeout 상한의 실제 범위 · 추정과 직접 증거의 구분 · forks 메모리 상수 · 자산 진단 · Portal 응답의 의미 |
+| 2026-10-04 (3차) — 재개 지시: 명부 전수 실수집 · S3 를 Redfish 로 · fail-closed 빌드의 revision 바인딩 · 승격 credential 경계 |
+| 2026-10-04 (2차) — 완료 보고 검토 C1~C6: 증거 계약 · baseline 기록 탐색 · 환경 미확인 재실행 · 배포 원격 집합 · interruption Harness · vault 복호화 증거 |
+| 2026-10-04 — 잔여 결함 R1~R7 · 승격 판정 모델 · 고객사 main 형태 실행 검증 · main 전용 Harness · CI 연결 (Astra 2~4차 검토 대응) |
+| 2026-10-04 — 청주 Location 키 `chj` → `cj` (사용자 결정, alias 없음) |
+| 2026-10-03 — Gathering 개선 Phase 2~4: 정확성 정정 · Redfish 호출 절감 · 시간 예산 · 마무리(finalization) · Callback 재설계 |
+| 2026-10-03 — 파이프라인 입구를 agent 없이: Validate → Resolve Location(`readTrusted`), 결과는 post{always} 에서 보존 |
+| 2026-09-30 — Jenkins 노드 선택 축을 `loc` 에서 `loc && target_type 능력 라벨` 로 |
+| 2026-09-30 — Add-on 변수 이름 정리 (`SE_ADDON_*` → `ADDON_REPO_*` · `ADDON_DIR`) |
+| 2026-09-29 — Add-on 을 빌드마다 받는다: 켜기 1개 설정 · 추가 1개 파일 · Runner 무관 |
+| 2026-09-28 — Agent 의 Ansible venv 경로를 파이프라인에서 떼어냄 (`scripts/activate_ansible_venv.sh`) |
+| 2026-09-21 — 고객별 추가 수집(Add-on) 확장점 추가 (`data.addon`) |
+| 2026-09-21 — 실패 사유 문장(`failure_reason`)을 대상 종류·세부 사유별로 나눈다 |
+| 2026-09-15 — BIOS Attributes 를 Key 이름순으로 정렬해 내보낸다 (`data.bios.current.attributes`) |
+| 2026-09-15 — Redfish BIOS Current Attributes 수집 추가 (`data.bios.current.attributes`) |
+| 2026-09-03 — 도달성(reachable) 판정에 ICMP Echo 를 OR 조건으로 추가 |
+| 2026-09-03 — OS(Linux/Windows) / ESXi 게더링 전수 검수 — 37건 정정 |
+| 2026-08-12 — Fragment 덮어쓰기 / 공통 Task include 경로 2건 수정 (실환경 검증 중 발견) |
+| 2026-08-12 — errors[].message 를 4계층으로 분리하고 문장을 failure_code 에서만 파생 |
+| 2026-08-11 — Dell 대표 시리얼을 Service Tag 로 교정 (1차, Dell 단독) |
+| 2026-08-03 — 보조 섹션(network_adapters) 실패가 network status 를 덮던 문제 + 400 분류 |
+| 2026-06-17 — OS Linux bond alias / secondary IP 수집 (네트워크 개더링) |
+| 2026-06-16 — CSUS 실 게더링 cascade: HPE OEM dict conditional(Bug A) + site.yml graceful degradation 복원(Bug B, redfish) |
+| 2026-06-15 — HPE Compute Scale-up Server 3200 (CSUS 3200) 실 미러 검수: 라이브러리 fix 16건 (5-round 수렴) |
+| 2026-06-15 — HPE DL380 Gen12 실 미러 검수: thermal 섹션 배선 + 라이브러리 fix 7건 |
+| 2026-05-29 — CSUS 3200 전 공통 섹션 수집 + HBA/InfiniBand 전 채널 (lab 부재 — web sources) |
+| 2026-05-12 — HPE CSUS 3200 / Superdome Flex RMC 멀티-노드 Redfish 수집 정식 지원 (lab 부재 — 별도 cycle) |
+| 2026-05-11 — Adapter 선택 단계 검증 + Supermicro X12 priority 일관성 fix (DRIFT-015) |
+| 2026-05-11 — HPE Compute Scale-up Server 3200 (CSUS 3200) adapter 추가 (lab 부재) |
+| 2026-06-04 — 출력 envelope vendor 표시값 매핑 (hpe→hp, CSUS 3200→hpCsus) |
+| 2026-05-11 — HPE iLO 7 Gen12 2-part firmware version 매치 보강 (cycle hpe-ilo7-gen12-match-fix) |
+| 2026-05-11 — Phase 7 ticket_consistency hook BLOCKING 격상 (4/4 완료) |
+| 2026-05-11 — advisory hook 격상 Phase 6 일괄 (2/4 + 1/4 보류) |
+| 2026-05-11 — docs20_sync hook advisory → BLOCKING 격상 (advisory hook 격상 1/4) |
+| 2026-05-11 — Jinja namespace hook advisory → BLOCKING 격상 (harness-cycle) |
+| 2026-05-11 — M-A7 adapter `recovery_accounts.vault_label` ↔ vault `accounts.label` 정합 |
+| 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
+| 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
+| 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-10~11 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-19
 
 ### 배경
 - 사용자 지시서 "ClovirONE Server Gathering 전체 감사 및 개선 실행 지시서"(2026-10-10): 전 저장소 탐색 · 결함 근본 수정 · 회귀 + 실제 Jenkins
@@ -43,12 +122,21 @@
     ansible 없이 import 하는 정당한 목적이고, 실물을 쓰는 쪽이 하나다. 시험 전용 변경 — runtime tree 불변.
 14. **D-14 adapter 필수 키 서술 정정**: rule 12 R4 의 "4개 키 필수" 는 코드와 다르다(로더는 `match` · `adapter_id` · `priority` · `generic` 만 읽고 강제 없음, 플레이북은
     `capabilities.sections_supported` · `vendor_notes.manager_layout`). 규칙 · skill · 개발 문서를 코드대로 고치고 기록용 절은 지우지 않는다 —
-    `docs/ai/decisions/ADR-2026-10-10-adapter-required-keys.md`, DRIFT-024.
+    AI 결정 기록 ADR-2026-10-10-adapter-required-keys, DRIFT-024.
 15. **D-15 시험 전용 후속 후보의 증거**: X2'(`361d4484`) 뒤에 시험 · 문서만 바꾼 후보(X3 · X4)는 prodgen tree hash 가 X2' 와 같음을 기계로 확인한 경우 strict compare(값 대조)
     증거를 이어받는다(runtime tree 가 byte 동일). 그러나 **승격 대상 SHA 의 main Job 매트릭스와 CI 는 다시 돈다** — prodgen 의 e2e 증거 계약(`evidence.py`)이 `checkout == main_sha`
     를 요구하고 시험이 바뀌었기 때문이다. (처음 적은 "매트릭스 증거 이전" 은 승격 대상에는 적용되지 않는다 — 2026-10-10 20:50 정정.)
 16. **D-16 승격 대상 = X4**: X2' 의 CLI 승격 dry-run 이 이 PC 의 G14 재실행에서 `test_cli_exit_codes`(자식 stdio 인코딩 미고정, HC-T6b) 1건으로 거부됐다. 시험만 고친 X4 를
     매트릭스 15 · CI 뒤 CLI 로 승격한다 — runtime tree 는 X2 `32d4e307` 부터 동일(`20fb2094…`). CI 의 Promote 단계는 GitLab push 자격증명이 없어(2026-10-09 와 같음) 쓰지 않는다.
+17. **D-17 adapter 미참조 절 제거(2026-10-11, 사용자 "모두 진행" 뒤 집행)**: `collect` · `normalize` · `credentials` · `graceful_degradation` · `auth` · `diagnosis` · `channel` 절과
+    `capabilities` 의 `sections_supported` 이외 값을 43개 adapter 에서 제거. 경로 · vault 복제는 삭제, 설계 메모는 `vendor_notes.design_hints` 로 이동.
+    `test_adapter_vault_label_consistency.py` 삭제(vault `role: recovery` 가 정본). 근거 AI 결정 기록 ADR-2026-10-11-adapter-key-cleanup. 후보 X6.
+18. **D-18 Jenkinsfile 텍스트 시험**: 24 파일 · 329 시험을 AST 로 분류했다(동적 66 · 소비 문자열 48 · 소비+흐름 102 · 흐름 50 · 기타 61). 흐름 고정 시험은
+    운영 금지 사항(트리거 · timeout · stage 순서 · node 를 잡는 곳 하나 · sh 라벨)을 지키는 정책 가드로 보고 유지한다 — 동작 증거는 Harness 54 시나리오. 삭제 0.
+19. **D-19 정리 묶음(B-C)**: 참조 0 · 고유 내용 없음을 확인한 파일을 지웠다 — `promote_to_production.sh`(shim) · `scripts/ai/one_off` · `scripts/ai/bug_tracker` · vault 일회성
+    스크립트 5 · `verify_hpe_ilo7_fix.py` · `inject_summary_to_baselines.py` · `tests/redfish-probe/{validate_fields,probe_volumes}.py` · `tests/e2e_browser` · `adapters/registry.yml` ·
+    `common/vars/status_rules.yml` · `verify_account_provision.sh` + 미등록 Job 정의 · 완료 ticket · 하네스 일회성 문서 3. 유지: `tests/evidence/2026-04-29-full-lab-sweep.md`
+    (라운드 증거 보존 규칙) · AI 영역의 빈 impact 폴더 표식 · 미완 ticket 2. 고침: `bootstrap_vault_encrypt.sh` 가 현 vault 배치를 재귀로 찾고 0건이면 실패(시험 추가).
 - 사용자 결정(확정): BIOS 연구 패키지 폴더 삭제 · `tests/reference` 전부 유지 · Jenkins admin 자격은 채팅 전달만(어디에도 기록 금지) · §8 운영 정책 재논의 없음.
 
 ### 결과 · 범위 (코드)

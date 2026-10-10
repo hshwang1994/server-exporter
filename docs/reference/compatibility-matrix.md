@@ -6,13 +6,14 @@
 
 호출자 시스템 개발자가 응답을 미리 예상할 때, 새로 들어온 작업자가 지원 범위를 파악할 때, 다음 cycle 진입자가 GAP 영역을 찾을 때 본다.
 
-9개 벤더 × 여러 세대 × 10 섹션 = 240 칸짜리 표 한 장으로 정리했다.
+9개 벤더 × 여러 세대 × 11 섹션(thermal 포함) = 297 칸짜리 표 한 장으로 정리했다.
 
 ## 매트릭스를 만든 재료
 
 3가지를 종합해서 만든다.
 
-1. **Adapter YAML** 의 `capabilities.sections_supported` (어떤 섹션을 다룰 수 있다고 선언했나)
+1. **Adapter YAML** 의 `capabilities.sections_supported` (어떤 섹션을 다룰 수 있다고 선언했나 — 실패 봉투에서 `failed`/`not_supported` 를 가르는 기준. `thermal` 은 선언에 없고
+   모듈이 모든 Redfish adapter 에 대해 Chassis Thermal 을 읽는다 — 2026-10-11 열 추가)
 2. **Baseline JSON** (실장비 검증 결과) — `schema/baseline_v1/<vendor>_baseline.json`
 3. **Web sources** — lab 에 장비가 없어 직접 검증 못한 영역의 vendor 공식 문서 / DMTF 스펙
 
@@ -30,52 +31,57 @@
 | `N/A` | 채널 자체가 그 섹션을 안 다룸 | `not_supported` 로 옴 (정상) |
 | `?` | adapter 도 없고 spec 도 불명확 | 추가 조사 필요 |
 
-## 매트릭스 — Redfish 채널 (24 row × 10 col)
+## 매트릭스 — Redfish 채널 (27 row × 11 col)
 
 OS / ESXi 채널은 별도다. Redfish 채널은 OS 로컬 계정을 안 보기 때문에 `users` 섹션이 모든 행에서 `N/A` 로 표시된다.
 
-| vendor | generation | system | hardware | bmc | cpu | memory | storage | network | firmware | users | power |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Dell** | iDRAC 7 | FB | FB | FB | FB | FB | FB | FB | FB | N/A | FB |
-| **Dell** | iDRAC 8 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | FB |
-| **Dell** | iDRAC 9 | OK | OK | OK | OK | OK | OK | OK | OK | N/A | OK |
-| **Dell** | iDRAC 10 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **HPE** | iLO 4 | OK★ | OK★ | OK★ | OK★ | OK★ | FB | OK★ | OK★ | N/A | FB |
-| **HPE** | iLO 5 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **HPE** | iLO 6 | OK | OK | OK | OK | OK | OK | OK | OK | N/A | OK |
-| **HPE** | iLO 7 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Lenovo** | IMM2 / XCC1 (legacy) | OK★ | OK★ | OK★ | OK★ | OK★ | FB | OK★ | OK★ | N/A | FB |
-| **Lenovo** | XCC v2 | OK | OK | OK | OK | OK | OK | OK | OK | N/A | OK |
-| **Lenovo** | XCC v3 (OpenBMC) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Supermicro** | X9 | BLOCK | BLOCK | BLOCK | BLOCK | BLOCK | GAP | BLOCK | GAP | N/A | GAP |
-| **Supermicro** | X10 / X11 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Supermicro** | X12 / H12 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Supermicro** | X13 / H13 / B13 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Supermicro** | X14 / H14 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Cisco** | CIMC M4 | OK | OK | OK | OK | OK | OK | OK | OK | N/A | OK |
-| **Cisco** | CIMC M5 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Cisco** | CIMC M6 / M7 / M8 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Cisco** | UCS X-Series (standalone) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Huawei** | iBMC (FusionServer V5/V6) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Inspur** | iSBMC (NF / TS) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Fujitsu** | iRMC (PRIMERGY M5/M6/M7) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
-| **Quanta** | QCT BMC (OpenBMC) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ |
+| vendor | generation | system | hardware | bmc | cpu | memory | storage | network | firmware | users | power | thermal |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Dell** | iDRAC 7 | FB | FB | FB | FB | FB | FB | FB | FB | N/A | FB | OK★ |
+| **Dell** | iDRAC 8 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | FB | OK★ |
+| **Dell** | iDRAC 9 | OK | OK | OK | OK | OK | OK | OK | OK | N/A | OK | OK★¹ |
+| **Dell** | iDRAC 10 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **HPE** | iLO 4 | OK★ | OK★ | OK★ | OK★ | OK★ | FB | OK★ | OK★ | N/A | FB | OK★ |
+| **HPE** | iLO 5 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **HPE** | iLO 6 | OK | OK | OK | OK | OK | OK | OK | OK | N/A | OK | OK★¹ |
+| **HPE** | iLO 7 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Lenovo** | IMM2 / XCC1 (legacy) | OK★ | OK★ | OK★ | OK★ | OK★ | FB | OK★ | OK★ | N/A | FB | OK★ |
+| **Lenovo** | XCC v2 | OK | OK | OK | OK | OK | OK | OK | OK | N/A | OK | OK★¹ |
+| **Lenovo** | XCC v3 (OpenBMC) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Supermicro** | X9 | BLOCK | BLOCK | BLOCK | BLOCK | BLOCK | GAP | BLOCK | GAP | N/A | GAP | BLOCK |
+| **Supermicro** | X10 / X11 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Supermicro** | X12 / H12 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Supermicro** | X13 / H13 / B13 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Supermicro** | X14 / H14 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Cisco** | CIMC M4 | OK | OK | OK | OK | OK | OK | OK | OK | N/A | OK | OK★¹ |
+| **Cisco** | CIMC M5 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Cisco** | CIMC M6 / M7 / M8 | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Cisco** | UCS X-Series (standalone) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Huawei** | iBMC (FusionServer V5/V6) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Inspur** | iSBMC (NF / TS) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Fujitsu** | iRMC (PRIMERGY M5/M6/M7) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Quanta** | QCT BMC (OpenBMC) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **HPE** | Compute Scale-up Server 3200 (RMC) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **HPE** | Superdome Flex / Flex 280 (RMC) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+| **Supermicro** | ARS (Ampere Altra, ARM) | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
+
+¹ thermal: 2026-10-10 production P11 명부(#238)와 main #483 에서 Dell iDRAC9 · HPE iLO6 · Lenovo XCC · Cisco CIMC 실장비가 `thermal: success` 를 냈다. baseline JSON 에는 아직 `thermal` 키가 없어(실측 재캡처 대상) `OK` 가 아니라 `OK★` 로 둔다.
 
 ## 칸 분포 — 한눈에
 
-240 칸을 기호별로 모아보면:
+297 칸을 기호별로 모아보면:
 
 | 기호 | 개수 | 비율 | 상태 |
 |---|---:|---:|---|
-| `OK` (lab 검증 완료) | 36 | 15% | 가장 신뢰 |
-| `OK★` (코드는 있고 baseline 만 부재) | 157 | 65% | 보통 동작 |
-| `FB` (옛 펌웨어 fallback) | 14 | 6% | 사용 가능 |
+| `OK` (lab 검증 완료) | 36 | 12% | 가장 신뢰 |
+| `OK★` (코드는 있고 baseline 만 부재) | 210 | 71% | 보통 동작 |
+| `FB` (옛 펌웨어 fallback) | 14 | 5% | 사용 가능 |
 | `GAP` (명시 미지원) | 3 | 1% | not_supported 응답 |
-| `BLOCK` (미검증) | 6 | 2.5% | 신규 추가 필요 |
-| `N/A` (Redfish 가 안 다루는 영역) | 24 | 10% | 정상 |
-| **합계** | **240** | **100%** | |
+| `BLOCK` (미검증) | 7 | 2% | 신규 추가 필요 |
+| `N/A` (Redfish 가 안 다루는 영역) | 27 | 9% | 정상 |
+| **합계** | **297** | **100%** | |
 
-baseline 을 가진 lab tested 벤더 4개 (Dell iDRAC9 / HPE iLO6 / Lenovo XCC v2 / Cisco CIMC M4) 가 36 칸 (각 9 섹션)을 차지한다. Cisco M4 는 partial lab 검증이다 (`docs/reference/live-validation.md` 참조). 나머지는 코드 / 어댑터는 있지만 실장비 검증을 못한 상태.
+baseline 을 가진 lab tested 벤더 4개 (Dell iDRAC9 / HPE iLO6 / Lenovo XCC v2 / Cisco CIMC M4) 가 `OK` 36 칸(각 9 섹션)을 차지한다. thermal 열은 ¹ 참조. Cisco M4 는 partial lab 검증이다 (`docs/reference/live-validation.md` 참조). 나머지는 코드 / 어댑터는 있지만 실장비 검증을 못한 상태.
 
 ## lab 에 장비가 없는 영역
 

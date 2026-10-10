@@ -214,7 +214,7 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 | 4 | 라이브러리 `_extract_oem_*` 에 vendor 분기 | 선택 (vendor 특이 OEM 필요 시) | vendor-specific OEM 미수집 |
 | 5 | `schema/baseline_v1/{vendor}_baseline.json` | **의무 (실측 후)** / lab 부재 시 NEXT_ACTIONS 등재 | 회귀 테스트 미보호 → drift 가능 |
 
-`vault/<loc>/redfish/<vendor>.yml` (자격증명) + 내부 벤더 노트 `.claude/ai-context/vendors/{vendor}.md` (도메인 노트) 도 의무 (rule 50 R2 9단계).
+`vault/<loc>/redfish/<vendor>.yml` (자격증명) 도 의무다. AI 하네스를 쓰는 작업자는 AI 전용 영역의 벤더 노트도 함께 둔다(사람용 문서가 아니다).
 
 ### 9 단계 (rule 50 R2 정본)
 
@@ -223,7 +223,7 @@ echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GA
 3. (선택) 라이브러리 `_extract_oem_*` 에 vendor 분기
 4. `vault/<loc>/redfish/<vendor>.yml` 생성 (ansible-vault encrypt) — lab 부재 시 placeholder + 사용자 명시 승인
 5. `schema/baseline_v1/{vendor}_baseline.json` 추가 (실장비 검증 후) — lab 부재 시 단계 10 등재
-6. 내부 벤더 노트 `.claude/ai-context/vendors/{vendor}.md` 추가
+6. (AI 하네스 사용 시) AI 전용 영역에 벤더 노트 추가
 7. 벤더 경계 정책 갱신
 8. `docs/reference/live-validation.md` Round 갱신
 9. `docs/reference/decision-log.md` ADR 추가

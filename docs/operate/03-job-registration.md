@@ -44,7 +44,7 @@ RBAC Pattern 과 일치해야 권한이 자동 적용된다.
 `tests/reference/`, `tests/evidence/` 를 뺀 것). `main` 은 참조 데이터까지 약 17k 파일이라 컨트롤러의
 'Resolve Location' 단계(2분 제한)가 체크아웃 도중 끊긴 적이 있다(2026-10-03 부터 이 단계는 `readTrusted` 로
 파일 하나만 읽어 체크아웃을 하지 않는다 — Lightweight checkout 이 켜져 있어야 한다). 코드는 `main` 에 커밋한 뒤
-`scripts/ai/promote_to_production.sh` 로 승격한다.
+`python -m scripts.ai.prodgen promote --sha <main sha>` 로 승격한다([09-production-branch.md](09-production-branch.md) 2절).
 
 ### Script Path
 
@@ -113,7 +113,7 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 
 ## CI Job (main 전용) — `clovirone-cicd/clovirone-server-gather-ci` (2026-10-04 등록)
 
-수집 Job 에서 빠진 정적 검사(field_dictionary 정합 · pytest 회귀 · Layer A/B 동치 · 예산 공식)와 production 생성·검증(prodgen Build/Drift/Verify, Harness Job 호출, 조건부 Promote)은 이 Job 이 맡는다. 수집 · 대상 서버 접속은 없다. 자격증명은 Prodgen Verify(린터 토큰 `se-jenkins-lint` · `server-gather-vault-password`) · Evidence Aggregate(`se-jenkins-lint`) · Prodgen Promote(push 토큰)에서만 바인딩한다.
+수집 Job 에서 빠진 정적 검사(field_dictionary 정합 · pytest 회귀 · 결과 정리 Python 과 Groovy 보충의 동치 · 예산 공식)와 production 생성·검증(prodgen Build/Drift/Verify, Harness Job 호출, 조건부 Promote)은 이 Job 이 맡는다. 수집 · 대상 서버 접속은 없다. 자격증명은 Prodgen Verify(린터 토큰 `se-jenkins-lint` · `server-gather-vault-password`) · Evidence Aggregate(`se-jenkins-lint`) · Prodgen Promote(push 토큰)에서만 바인딩한다.
 
 | 항목 | 값 |
 |---|---|
@@ -124,8 +124,12 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 | Lightweight checkout | 켬 |
 | 트리거 | 없음 (webhook 또는 수동; `pollSCM`/cron 은 승인 항목) |
 | Agent | `linux` 라벨 Runner 1대 (venv 는 `scripts/activate_ansible_venv.sh` 가 고른다); `pwsh` 가 없으면 `scripts/ai/prodgen/ci_pwsh_bootstrap.sh` 가 사용자 권한으로 `$HOME/.local/powershell` 에 준비한다(시스템 변경 없음) |
-| 파라미터 | `PROMOTE`(기본 false) · `PROMOTE_SHA` · `PROMOTE_DRY_RUN`(기본 true) · `BOOTSTRAP_BASELINE`(기본 빈 값) · `HARNESS_SCENARIOS` · `HARNESS_TREE_SCENARIOS`(기본값 = 승격이 요구하는 Harness 집합 — 시험이 맞춘다) · `HARNESS_JOB`(비우면 공유 Harness Job. 시험용 CI 사본은 시험용 Harness Job 을 준다) · `E2E_MAIN_ENTRIES` · `E2E_TIP_OBSERVATIONS_JSON`(fail-closed 빌드의 직접 revision 증거 — 트리거 측 tip 관측) |
+| 파라미터 | 아래 목록 |
 | 폴더 credential | `se-jenkins-lint`(Username with password — Jenkins API 토큰, 린터·artifact 읽기) · `hshwang token`(GitHub push) · `se-gitlab-push`(GitLab push — 없으면 Promote 는 dry-run 까지만) |
+
+파라미터: `PROMOTE`(기본 false) · `PROMOTE_SHA` · `PROMOTE_DRY_RUN`(기본 true) · `BOOTSTRAP_BASELINE`(기본 빈 값) · `HARNESS_SCENARIOS` · `HARNESS_TREE_SCENARIOS`(기본값 = 승격이 요구하는
+Harness 집합 — 시험이 맞춘다) · `HARNESS_JOB`(비우면 공유 Harness Job. 시험용 CI 사본은 시험용 Harness Job 을 준다) · `E2E_MAIN_ENTRIES` · `E2E_TIP_OBSERVATIONS_JSON`(fail-closed 빌드의
+직접 revision 증거 — 트리거 측 tip 관측).
 
 결과: Gate 가 exit 2(건너뛴 단계 있음)면 UNSTABLE, exit 1 이면 FAILURE. 순서는 Gate → Corpus → Time Limits → Prodgen Build · Drift · Verify → Harness 두 단계 → Evidence 다(2026-10-08) — 앞의 필수 검사(Gate · Corpus · Time Limits · Prodgen Build · Verify) 중 FAIL 이 있으면 긴 Harness 와 Evidence 는 건너뛰고(SKIPPED, 통과 아님) 나머지 짧은 검사는 진단용으로 돈다. Promote 는 `ci_stage_results.json` 을 읽어 원격을 바꾸지 않는다. 보고서(`ci_gate.log` · corpus 비교 · 예산 self-test · `harness_*_results.json` · `prodgen_*.json` · `prodgen_verify_report(.aggregated).json`)는 artifact. stage 표 정본은 [AI 카탈로그가 아닌 이 저장소의 `Jenkinsfile_ci` 머리말 주석]이다.
 
@@ -152,7 +156,7 @@ Ansible venv 는 파이프라인이 `scripts/activate_ansible_venv.sh` 로 찾�
 | '실행 위치 확인'(Resolve Location) 이 2분 제한으로 끊김 | 2026-10-03 이전 Jenkinsfile: Branch 가 `*/main` 이면 참조 데이터까지 받는다 — `*/production` 으로. 이후 Jenkinsfile: `readTrusted` 가 체크아웃을 하지 않으므로 Job 의 Lightweight checkout 이 꺼져 있는지 확인 |
 | `readTrusted` 가 전체 체크아웃으로 떨어졌다는 콘솔 메시지 | Job 의 Lightweight checkout 이 꺼져 있거나 SCM 플러그인이 lightweight 를 지원하지 않는다 — Job 설정 확인 |
 | `[실행 위치] 등록되지 않은 Location` (2026-10-05 전: `[Resolve Location] …`) | `loc` 값이 `common/vars/locations.yml` 에 없다 |
-| `[실행 위치] 라벨 '… && (…)'에 해당하는 Runner가 Jenkins에 등록돼 있지 않습니다.` — FAILURE(수집하지 않고 접수 대상마다 실패 결과 전송) | `loc` 의 `agent_label` 과 `target_type` 의 능력 라벨(`os` 는 `linux`+`windows`, `esxi`, `redfish`)을 모두 가진 Runner 가 등록돼 있지 않다(등록돼 있으면 연결이 끊겨 있어도 수집 단계가 기다린다) — Manage Jenkins → Nodes 의 Labels 확인 ([02-agent-node.md](02-agent-node.md) 8절) |
+| `[실행 위치] 라벨 '… && (…)'에 해당하는 Runner가 Jenkins에 등록돼 있지 않습니다.` — FAILURE | `loc` 의 `agent_label` 과 `target_type` 능력 라벨을 모두 가진 Runner 미등록 — Manage Jenkins → Nodes 의 Labels 확인([02-agent-node.md](02-agent-node.md) 8절). 접수 대상마다 실패 결과는 보낸다. 등록돼 있으면 끊겨 있어도 기다린다 |
 | `ERROR: [입력 확인] inventory_json[<번호>] …` (중복 · 잘못된 IPv4 · 원소 타입) | 요청 전체가 거부됐다 — 그 번호의 대상 값을 고친다. inventory.sh 와 같은 규칙이다 |
 | `ERROR: [입력 확인] callbackUrl에 계정 정보(사용자:비밀번호@)를 넣을 수 없습니다.` | callbackUrl 에서 `사용자:비밀번호@` 를 뺀다 — 계정 정보는 콘솔 · 빌드 기록에 남는다(주소는 기록하지 않았다) |
 | `[Portal 전송] N번째 전송에 실패했습니다.` / `  연결하지 못했거나 응답을 받지 못했습니다.` / `  전송 도구 상태: 408` (3번 모두 실패하면 `[Portal 전송] 전송을 확인하지 못했습니다. 총 3번 시도했습니다.`) | Portal 주소 · 포트 · 방화벽 확인. 요청 도구는 연결 실패도 408 로 표시한다. 보내려던 본문은 `callback_body.json` artifact |

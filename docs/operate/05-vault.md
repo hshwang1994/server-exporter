@@ -175,7 +175,7 @@ for loc in ic cj yi git; do ansible-vault view --vault-password-file <임시 사
 
 **Unit test 통과는 실장비 검증이 아니다.**
 
-## 4. Vault 자동 반영 메커니즘 (rule 27 R6)
+## 4. Vault 변경이 다음 실행에 바로 반영되는 이유
 
 ### 4.1 자동 반영 보장 3 단서
 
@@ -281,7 +281,7 @@ echo "$(date +%Y-%m-%d): Dell vault rotation (BMC user 변경)" \
 
 ### 5.3 시나리오 C: 새 vendor vault 추가
 
-`rule 50 R2` 9단계 중 4단계.
+새 vendor 추가 절차([../develop/04-add-vendor.md](../develop/04-add-vendor.md)) 중 vault 단계.
 
 ```bash
 ansible-vault create vault/<loc>/redfish/<vendor>.yml
@@ -303,7 +303,7 @@ ansible-vault create vault/<loc>/redfish/<vendor>.yml
 |---|---|
 | ansible-vault password (마스터) | 분기 |
 | BMC / Linux / Windows / ESXi 자격증명 | 반기 또는 사고 시 |
-| 새 vendor vault | 추가 시점 (rule 50 R2 9단계) |
+| 새 vendor vault | 추가 시점 |
 
 ## 6.5. 9 vendor recovery 자격 매트릭스 (cycle 2026-05-11 — M-A1~A6)
 
@@ -322,7 +322,7 @@ ansible-vault create vault/<loc>/redfish/<vendor>.yml
 
 ### vendor 별 recovery 자격 (공장 기본)
 
-| vendor | recovery 자격 | label | source (rule 96 R1-A) |
+| vendor | recovery 자격 | label | 출처 |
 |---|---|---|---|
 | **Dell** | root / calvin | `dell_fallback_2` | Dell PowerEdge / iDRAC 공식 매뉴얼 (역사적 default) |
 | **HPE** | admin / admin | `hpe_factory` | HPE iLO User Guide (legacy default — iLO5+ 첫 로그인 강제 변경) |
@@ -388,17 +388,15 @@ BMC AccountService POST/PATCH → infraops 계정 생성/복구
 - `ansible-playbook --check` 도 dryrun 으로 접힌다 (module.check_mode → dryrun)
 - 신규 사이트 BMC 1대 처음 적용 시 권장: dryrun ON 으로 시뮬레이션 1회 → dryrun OFF 로 실 적용
 
-## 6.6. adapter label naming convention (cycle 2026-05-11 — M-A7)
+## 6.6. 복구 계정 label 이름 규칙 (2026-05-11 도입 · 2026-10-11 정본 단일화)
 
-> 본 절은 cycle 2026-05-11 M-A7 (commit `a82afc4b`) 의 30 adapter 전수 정합 결과를 정본 reference 로 고정.
+> 2026-05-11 에 adapter 와 vault 양쪽에 label 을 두고 맞췄다. 2026-10-11 부터 adapter 쪽 사본은 없다 — vault 가 유일한 정본이다.
 
-### 1:1 정합 의무
+### 정본 = vault 하나 (2026-10-11)
 
-adapter (`adapters/redfish/{vendor}_*.yml`) 의 `credentials.recovery_accounts[*].vault_label` 은 vault (`vault/<loc>/redfish/<vendor>.yml`) 의 `accounts[*].label` 와 **1:1 정합** 의무.
-
-- **정본** = vault `accounts[*].label` (운영자 결정)
-- adapter `vault_label` 은 vault 정본을 참조만 — adapter 가 vault 에 없는 label declare 시 `account_service.yml:31-41` label 매칭 chain 에서 skip 후 username fallback 으로 우회 (기능은 동작하나 label 매칭 활성화 안 됨 + 시도 회수 증가)
-- 회귀 검증: `tests/unit/test_adapter_vault_label_consistency.py` (30 adapter × vendor 별 허용 set 정적 검증)
+복구 계정의 정본은 vault(`vault/<loc>/redfish/<vendor>.yml`) 의 `accounts[*]` 다 — `role: recovery` 인 항목이 그 vendor 의 복구 후보이고 `label` 은 사람이 읽는 이름이다
+(`redfish-gather/tasks/account_service.yml` 이 role 로 고른다). 종전에는 adapter(`adapters/redfish/{vendor}_*.yml`) 의 `credentials.recovery_accounts[*].vault_label` 이
+같은 label 을 한 번 더 들고 있었고 시험이 둘을 맞췄는데, 그 절을 읽는 코드가 없어 2026-10-11 에 adapter 사본과 시험을 없앴다. label 이름 규칙(아래)은 vault 안에서 그대로 쓴다.
 
 ### naming convention (cycle 2026-05-11 정착)
 
@@ -409,41 +407,36 @@ adapter (`adapters/redfish/{vendor}_*.yml`) 의 `credentials.recovery_accounts[*
 | `{vendor}_fallback` / `{vendor}_fallback_N` | 히스토리컬 fallback (이전 cycle 운영 자격 또는 다중 history 보존) | Dell (`fallback_1`, `fallback_2`) / HPE / Lenovo |
 | `lab_{vendor}_root` | lab 환경 root 자격 (사이트 외 lab 검증 전용) | Dell only (`lab_dell_root`) |
 
-### vendor 별 적용 결과 (30 adapter 정합 완료)
+### vendor 별 vault label (2026-05-11 정합 당시 — 지금은 vault 파일에서 `grep label` 로 센다)
 
-| vendor | adapter 수 | label entries | 정본 |
-|---|---|---|---|
-| Dell | 4 (idrac/idrac8/idrac9/idrac10) | `dell_fallback_1`, `dell_fallback_2`, `dell_current`, `lab_dell_root` | §6.5 매트릭스 |
-| HPE | 7 (ilo/ilo4/ilo5/ilo6/ilo7/superdome_flex/csus_3200) | `hpe_fallback`, `hpe_current`, `hpe_factory` | §6.5 매트릭스 |
-| Lenovo | 4 (bmc/imm2/xcc/xcc3) | `lenovo_fallback`, `lenovo_current`, `lenovo_factory` | §6.5 매트릭스 |
-| Supermicro | 8 (bmc/x9/x10/x11/x12/x13/x14/ars) | `supermicro_factory` | §6.5 매트릭스 |
-| Cisco | 3 (bmc/cimc/ucs_xseries) | `cisco_current`, `cisco_factory` | §6.5 매트릭스 |
-| Huawei | 1 (ibmc) | `huawei_factory` | §6.5 매트릭스 |
-| Inspur | 1 (isbmc) | `inspur_factory` | §6.5 매트릭스 |
-| Fujitsu | 1 (irmc) | `fujitsu_factory` | §6.5 매트릭스 |
-| Quanta | 1 (qct_bmc) | `quanta_factory` | §6.5 매트릭스 |
+| vendor | label entries | 정본 |
+|---|---|---|
+| Dell | `dell_fallback_1`, `dell_fallback_2`, `dell_current`, `lab_dell_root` | §6.5 매트릭스 |
+| HPE | `hpe_fallback`, `hpe_current`, `hpe_factory` | §6.5 매트릭스 |
+| Lenovo | `lenovo_fallback`, `lenovo_current`, `lenovo_factory` | §6.5 매트릭스 |
+| Supermicro | `supermicro_factory` | §6.5 매트릭스 |
+| Cisco | `cisco_current`, `cisco_factory` | §6.5 매트릭스 |
+| Huawei | `huawei_factory` | §6.5 매트릭스 |
+| Inspur | `inspur_factory` | §6.5 매트릭스 |
+| Fujitsu | `fujitsu_factory` | §6.5 매트릭스 |
+| Quanta | `quanta_factory` | §6.5 매트릭스 |
 
-총 30 adapter (`redfish_generic.yml` 제외 — generic fallback 은 vendor 미상으로 `recovery_accounts: []` 유지).
+generic fallback(`redfish_generic.yml`)은 vendor 미상이라 복구 계정이 없다(vault 파일도 없다).
 
-### 변경 원칙 (rule 13 R5 + rule 96 R1-B — Additive only)
+### 변경 원칙 (추가만)
 
-adapter `recovery_accounts` 변경은 **Additive only** 의무:
+vault `accounts` 변경은 **추가**를 원칙으로 한다:
 
-- **Allowed**: vault accounts 신규 추가 후 adapter 에 동일 label entry **추가** (Additive)
-- **Allowed**: adapter declare entry 순서 변경 (시도 순서는 vault accounts 순서로 결정 — adapter 순서 변경은 cosmetic)
-- **Forbidden**:
-  - adapter 의 기존 label entry **삭제 / 리네임** (호환성 cycle 외)
-  - vault 에 존재하지 않는 label declare (회귀 테스트 차단)
-  - envelope `data.bmc.account_service` shape 변경 (rule 13 R5)
-  - 호출자 시스템 파싱 변경 (rule 96 R1-B)
+- **해도 된다**: 새 복구 항목 추가(`role: recovery` · 고유 `label`), 항목 순서 변경(시도 순서는 vault 순서 — 표준 계정은 `role: primary` 1개)
+- **하면 안 된다**: 기존 label 삭제 · 리네임(사이트 호환성 작업 밖에서), 같은 vendor 에 `role: primary` 둘, 결과 봉투 `data.bmc.account_service` 모양 변경
+  ([../contract/03-fields.md](../contract/03-fields.md))
 
-### 신규 adapter 추가 시 체크리스트
+### 신규 vendor vault 추가 시 체크리스트
 
-1. vault `vault/<loc>/redfish/<vendor>.yml` 의 `accounts[*].label` 확인 (정본)
-2. adapter `credentials.recovery_accounts` 에 vault label 와 동일 entry 추가
-3. 각 entry 에 `role: recovery` 명시
-4. `tests/unit/test_adapter_vault_label_consistency.py` 회귀 PASS 확인
-5. (vendor 신규 시) §6.5 매트릭스 + 본 절 vendor 별 적용 결과 표 갱신
+1. `ansible-vault create vault/<loc>/redfish/<vendor>.yml` (5.3 절) — `accounts[*]` 에 `username` · `password` · `label` · `role`
+2. `role: recovery` 항목의 label 은 위 이름 규칙(`{vendor}_factory` · `{vendor}_current` · …)을 따른다
+3. 복구 계정 쓰기는 실장비에서 하지 않는다(계정 쓰기 보류 중 — 인증 실패 유발 금지). 복구 인증 경로는 단위 시험 · 모의 BMC 로만 확인한다
+4. (vendor 신규 시) §6.5 매트릭스 + 본 절 vendor 별 표 갱신
 
 ## 7. accounts 정규화 (P1 cycle 2026-04-28)
 
@@ -488,7 +481,7 @@ accounts:
 
 1. `ansible-vault view <vault>` — 새 password 로 read 가능
 2. dry-run: `ansible-playbook --syntax-check redfish-gather/site.yml`
-3. **자동 반영 3 단서 검증** (rule 27 R6) — 4.1 명령 3개
+3. **자동 반영 3 단서 검증** — 4.1 명령 3개
 4. 실장비 1대 대상 본 수집 시도 (target_type별)
 5. callback 결과 envelope 최상위 `vendor` 값 정상
 6. console log 평문 password 노출 없음 확인
@@ -504,11 +497,8 @@ accounts:
 
 | 문서 | 용도 |
 |---|---|
-| `rule 27 R6` | vault 자동 반영 단서 3개 정본 |
-| `rule 50 R2` | 새 vendor 추가 9단계 |
-| `skill: rotate-vault` | 회전 절차 상세 |
-| `skill: add-new-vendor` | vendor 추가 시 vault 생성 단계 |
-| `skill: debug-precheck-failure` | auth 실패 시 |
+| [../develop/04-add-vendor.md](../develop/04-add-vendor.md) | 새 vendor 추가 절차(vault 단계 포함) |
+| [../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md) | 인증 실패(`auth` 단계) 진단 |
 | `redfish-gather/tasks/load_vault.yml` | vault 로딩 정본 코드 |
 | `docs/operate/02-agent-node.md` | Agent 보안 설정 |
 | Ansible Vault 공식 문서 | ansible-vault 명령 reference |
@@ -527,7 +517,7 @@ accounts:
 
 | 증상 | 원인 / 해결 |
 |------|------------|
-| 새로 만든 vault 가 반영 안 됨 | `cacheable: yes` / fact_caching 충돌 의심 — rule 27 R6 단서 3개 검증 |
+| 새로 만든 vault 가 반영 안 됨 | `cacheable: yes` / fact_caching 충돌 의심 — 4.1 의 단서 3개 검증 |
 | `Decryption failed` | `.vault_pass` 파일의 패스워드와 vault 가 일치하지 않음 |
 | `Could not find credentials entry` | Jenkins Credentials 에 `server-gather-vault-password` 미등록 |
 | ansible-vault edit 실패 | 파일이 이미 평문이거나 다른 vault password 로 암호화됨 |
