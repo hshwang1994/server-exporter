@@ -979,3 +979,14 @@
 - 재발 방지: `redfish_gather.main()` 을 부르는 시험은 모듈 전역 상태를 되돌린다. 새 시험은 해당 파일 단독이 아니라 전체 순서(`ci_gate`)로 확인한다.
 - 관련 rule: rule 95 R3 · CLAUDE.md §16
 
+## 2026-10-10 — 복합 셸 명령의 `cd` 실패 뒤 나머지가 main 작업 트리에서 실행돼 임시 커밋이 main 에 생겼다
+
+- 카테고리: destructive-side-effect
+- 발견 위치: 감사 작업 중 scratch 브랜치(`audit/negative-control`) 준비 — `git worktree add … && cd … && git commit -a … && git push -u origin …`
+  를 `;` 로 이어 둔 한 명령. `worktree add` 가 "Could not reset index file" 로 실패하고 `cd` 도 실패했는데 뒤 명령이 main 작업 트리에서 그대로 돌아
+  미커밋 수정까지 포함한 커밋 2개가 **로컬 main** 에 생기고 scratch 브랜치가 push 됐다.
+- 복구: `git reset --soft 3d053d36` → 두 파일을 3d053d36 으로 복원 → unstage → `git worktree prune`. 양 원격 main 은 3d053d36 그대로였고(push 는
+  scratch 브랜치만) 미커밋 수정은 보존됐다. scratch 커밋은 임시 index(`GIT_INDEX_FILE`) + plumbing 으로 다시 만들어 `update-ref` 로 올렸다.
+- 재발 방지: 디렉터리를 바꾸는 복합 명령은 `cd … || exit 1`(또는 `set -e`) 로 끊는다. 부수 작업에 main 작업 트리에서 `git commit -a` 를 쓰지 않는다 —
+  plumbing(임시 index) 이나 별도 clone 으로 만든다. push 전후 `ls-remote` 로 원격 main 이 움직이지 않았음을 확인한다.
+- 관련 rule: rule 93 R1 · R3 · rule 26 R3
