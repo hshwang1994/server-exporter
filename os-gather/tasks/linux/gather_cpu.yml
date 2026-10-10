@@ -9,9 +9,12 @@
 #   - max_speed_mhz = **정격(base) 클럭** — cpufreq base_frequency → 브랜드 문자열 "@ N.NNGHz".
 #     터보 최대는 turbo_max_mhz 로 따로 낸다 (종전 lscpu 'CPU max MHz' = 터보를 max_speed 에 넣어
 #     Windows(정격)/ESXi(기본) 와 다른 물리량이었다).
-#   - l2_cache_kb / l3_cache_kb = **소켓당 용량**. lscpu 가 "220 MiB (4 instances)" 처럼 합계를
-#     주면 소켓 수로 나누고, 구형 lscpu 가 인스턴스당 값을 주면 L3 는 그대로, L2 는 코어 수를
-#     곱한다 (종전: util-linux 버전에 따라 같은 CPU 가 4배 다른 값).
+#   - l2_cache_kb / l3_cache_kb = **소켓당 용량**. lscpu 가 합계를 주면 소켓 수로 나누고, 구형 lscpu 가 인스턴스당 값을
+#     주면 L3 는 그대로, L2 는 코어 수를 곱한다 (종전: util-linux 버전에 따라 같은 CPU 가 4배 다른 값).
+#     2026-10-10 (C7): 합계인지 인스턴스당인지는 lscpu 의 util-linux 버전으로 정한다(공식 소스 sys-utils/lscpu.c):
+#     ≤2.33 = 인스턴스당 sysfs 값("256K"), 2.34~2.36 = 모든 인스턴스 합계(문구 없음, "48 MiB"), ≥2.37 = 합계 + "(N instances)".
+#     종전에는 "(N instances)" 유무만 봐서 2.34~2.36 의 합계를 인스턴스당 값으로 보고 L2 를 코어 수만큼 또 곱했다.
+#     버전을 모르고 문구도 없으면 추측하지 않는다(L2 null, L3 는 /proc/cpuinfo 경로).
 #   - 값을 못 구하면 null. 1 / 0 / 스레드 수로 대체하지 않는다. 섹션 status 는 실제 결과로.
 
 - name: "linux | cpu | raw gather (/proc/cpuinfo + lscpu + cpufreq)"
@@ -27,6 +30,7 @@
     echo "CPU_BASE_KHZ=$(cat /sys/devices/system/cpu/cpu0/cpufreq/base_frequency 2>/dev/null)"
     echo "CPU_MAX_KHZ=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null)"
     if command -v lscpu >/dev/null 2>&1; then
+      lscpu --version 2>/dev/null | sed -n '1s/.*util-linux[^0-9]*\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/LSCPU_VERSION=\1.\2/p'
       lscpu 2>/dev/null | awk -F: '
         /^Socket\(s\)/          {gsub(/^ +| +$/,"",$2); print "LSCPU_SOCKETS=" $2}
         /^Core\(s\) per socket/ {gsub(/^ +| +$/,"",$2); print "LSCPU_CPS=" $2}
@@ -116,9 +120,10 @@
       {%- endif -%}
   no_log: true
 
-# 캐시(소켓당 KB). lscpu 표기 두 세대를 모두 받는다.
-#   신형: "220 MiB (4 instances)" = 전체 합계 → 소켓 수로 나눔
-#   구형: "56320K" / "256K"        = 인스턴스당 → L3 는 그대로(소켓당 1개), L2 는 코어당이라 코어 수를 곱함
+# 캐시(소켓당 KB). 합계/인스턴스당은 util-linux 버전(LSCPU_VERSION)으로 정한다 — 위 머리말 C7.
+#   합계: "(N instances)" 가 있거나 버전 ≥2.34 ("220 MiB (4 instances)" · "48 MiB")  → 소켓 수로 나눔
+#   인스턴스당: 버전 <2.34 ("56320K" / "256K")                                         → L3 는 그대로(소켓당 1개), L2 는 코어 수를 곱함
+#   버전 미확인 + 문구 없음: 추측하지 않음 → L2 null, L3 는 /proc/cpuinfo 경로
 #   lscpu 부재: /proc/cpuinfo 'cache size'(= 소켓당 L3) 만 사용
 - name: "linux | cpu | compute cache (per socket)"
   ansible.builtin.set_fact:
@@ -127,14 +132,18 @@
       {%- set num = raw | regex_replace('^([0-9]+(?:\\.[0-9]+)?).*$', '\\1') -%}
       {%- set unit = (raw | regex_replace('^[0-9.]+\\s*', '')) | upper -%}
       {%- set inst = raw | regex_replace('^.*\\(([0-9]+) instance.*$', '\\1') -%}
+      {%- set vp = ((_l_cpu_parsed.LSCPU_VERSION | default('')) | trim).split('.') -%}
+      {%- set vknown = (vp | length) == 2 and vp[0].isdigit() and vp[1].isdigit() -%}
+      {%- set total = (inst != raw and inst.isdigit()) or (vknown and ((vp[0] | int) > 2 or ((vp[0] | int) == 2 and (vp[1] | int) >= 34))) -%}
       {%- set sockets = _l_cpu_sockets | default(none) -%}
       {%- set cps = _l_cpu_cps | default(none) -%}
       {%- if raw and num != raw and (num | regex_replace('[0-9.]', '') | length) == 0 -%}
         {%- set kb = ((num | float) * (1048576 if unit.startswith('G') else (1024 if unit.startswith('M') else 1))) | int -%}
-        {%- if inst != raw and inst.isdigit() -%}
+        {%- if total -%}
           {{ (kb // (sockets | int)) if (sockets is not none and (sockets | int) > 0) else none }}
-        {%- else -%}
+        {%- elif vknown -%}
           {{ (kb * (cps | int)) if (cps is not none and (cps | int) > 0) else none }}
+        {%- else -%}{{ none }}
         {%- endif -%}
       {%- else -%}{{ none }}
       {%- endif -%}
@@ -143,12 +152,15 @@
       {%- set num = raw | regex_replace('^([0-9]+(?:\\.[0-9]+)?).*$', '\\1') -%}
       {%- set unit = (raw | regex_replace('^[0-9.]+\\s*', '')) | upper -%}
       {%- set inst = raw | regex_replace('^.*\\(([0-9]+) instance.*$', '\\1') -%}
+      {%- set vp = ((_l_cpu_parsed.LSCPU_VERSION | default('')) | trim).split('.') -%}
+      {%- set vknown = (vp | length) == 2 and vp[0].isdigit() and vp[1].isdigit() -%}
+      {%- set total = (inst != raw and inst.isdigit()) or (vknown and ((vp[0] | int) > 2 or ((vp[0] | int) == 2 and (vp[1] | int) >= 34))) -%}
       {%- set sockets = _l_cpu_sockets | default(none) -%}
       {%- set cs = (_l_cpu_parsed.CPU_CACHE_SIZE | default('')) | trim -%}
       {%- set csnum = cs | regex_replace('^([0-9]+).*$', '\\1') -%}
-      {%- if raw and num != raw and (num | regex_replace('[0-9.]', '') | length) == 0 -%}
+      {%- if raw and num != raw and (num | regex_replace('[0-9.]', '') | length) == 0 and (total or vknown) -%}
         {%- set kb = ((num | float) * (1048576 if unit.startswith('G') else (1024 if unit.startswith('M') else 1))) | int -%}
-        {%- if inst != raw and inst.isdigit() -%}
+        {%- if total -%}
           {{ (kb // (sockets | int)) if (sockets is not none and (sockets | int) > 0) else none }}
         {%- else -%}
           {{ kb }}

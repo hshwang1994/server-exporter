@@ -70,6 +70,10 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 > cycle 2026-06-15 (field_dictionary 134 entries): `firmware[].category` (bios/cpld/tpm/drive/
 > backplane/nic/storage_controller/psu/... id·name 추론) + `firmware[].pending` (적용 보류) 정식 등록.
 > `cpu.architecture` 는 redfish 채널도 emit (channel=[redfish,os,esxi]).
+>
+> 2026-10-10: `cpu.summary.groups[].l2_cache_kb` · `l3_cache_kb` 는 그대로 **소켓당 KB** 다(의미 불변). Linux 는 lscpu 값이 합계인지
+> 인스턴스당인지를 util-linux 버전으로 가른다 — 2.34 이상(`(N instances)` 문구 유무와 무관)은 합계라 소켓 수로 나누고, 2.33 이하는
+> 인스턴스당 값이다. 버전을 알 수 없고 문구도 없으면 추측하지 않는다(L2 `null`, L3 는 `/proc/cpuinfo` 값).
 
 이 JSON 한 통이 보내는 메시지를 한 줄씩 풀면 이렇다.
 
