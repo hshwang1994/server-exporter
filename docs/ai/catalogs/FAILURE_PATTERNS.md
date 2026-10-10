@@ -910,3 +910,72 @@
 - 수정: `pytestmark = pytest.mark.source_text`(`04a0d6c9`). 이 PC 에서 생성 tree G14 PASS(44 제외) 확인 뒤 CI #39 SUCCESS.
 - 재발 방지: 저장소 원문(주석 · Jenkinsfile 사본 · docs · .claude)을 읽는 새 시험은 source_text 표식을 단다. 시험을 더한 커밋은 push 전에 생성 tree G14 를 한 번 돌린다.
 - 관련 rule: rule 95 R3 · rule 91 R5 · CLAUDE.md §16
+
+## 2026-10-10 — 결과 확인이 남은 중간 전달본(stash)을 마지막 보존의 보관본보다 먼저 썼다 (검수 C1)
+
+- 카테고리: boundary
+- 발견 위치: 2026-10-09 검수. `seFinalizeIn` 이 `unstash` 가 되면 무조건 그 stash 를 썼다. 다시 시도하기 전 넘긴 중간 stash 가 남은 채 마지막 보존의 stash 만
+  실패(또는 끊김)하면, 보관(archive)된 전체 결과 대신 중간의 일부 결과 + 실패 결과를 보냈다.
+- 원인: "stash 가 있으면 최신" 이라는 출처 가정. stash 이름이 하나라 중간 보존과 마지막 보존을 구분하지 못했다.
+- 수정(`e07da9ad`): 마지막 보존의 stash 성공 표식(`SE_FINAL_STASHED`) — 표식이 있고 정리 결과가 완결이면 stash, 아니면 보관본도 격리 폴더에 받아 같은 검문으로
+  평가(결과가 있는 대상 수 → 정리 결과 완결 → 표식). CHECKPOINT 만 있는 보관본은 Layer B. Harness `recover_*` 5종 · 로컬 Groovy 구동 12사례.
+- 재발 방지: 같은 이름으로 덮어쓰는 전달 수단은 "마지막 것인지" 를 따로 기록한다. 회수 매체는 파일 존재가 아니라 내용 평가로 고른다.
+- 관련 rule: rule 95 R1 · rule 22 · rule 80 R1
+
+## 2026-10-10 — 개행만 빠진 완전한 결과 줄을 손상으로 옮겨 재개를 포기했다 (검수 C2)
+
+- 카테고리: boundary
+- 발견 위치: `scripts/gather_state.py fix_tail` · `scripts/finalize_gather_output.py read_jsonl`. 끝 개행만 없는 완전한 JSON 줄을 잘린 줄로 보고 옮겨,
+  확정됐던 대상의 결과가 사라진 것으로 판정(`resume_impossible`)했다.
+- 원인: "개행 없음 = 잘림" 이라는 형식 가정. 내용(엄격 UTF-8 · JSON · 객체)을 보지 않았다.
+- 수정(`16afc210`): 치환 전 원래 bytes 로 판정하는 `parse_tail_record` 하나를 두 곳이 쓴다 — 완전한 레코드면 개행만 붙인다(`tail_terminated`).
+- 재발 방지: 손상 판정은 내용 기준으로, 두 경로(재개 · 결과 정리)가 같은 함수를 쓴다. 잘못된 UTF-8 bytes vs 정상 UTF-8 을 실제 bytes 로 시험한다.
+- 관련 rule: rule 95 R1 #5
+
+## 2026-10-10 — Redfish 계정 목록 첫 페이지만 보고 부재 · 완결로 판정했다 (검수 C3)
+
+- 카테고리: external-contract-unverified
+- 발견 위치: `redfish_gather.py account_service_discover` — `Members@odata.nextLink` 를 따르지 않아 다음 페이지의 표준 계정을 못 보고 POST(중복 생성)할 수 있었고,
+  열거가 불완전해도 보이는 일치 1개로 PATCH 했다.
+- 원인: 컬렉션 순회 래퍼가 완결성 근거(절단 · 중복 · count 불일치)를 버렸다. 쓰기 판단이 그 근거 없이 진행됐다.
+- 수정(`e1c2295c`): `_collection_walk` 가 근거를 계산하고 Accounts 쓰기 판단에만 쓴다(다른 21개 소비자는 래퍼로 종전과 같다). 불완전 열거는 `unknown` → 쓰기 0,
+  `account_existed=True` 는 일치를 실제로 봤을 때만.
+- 재발 방지: 쓰기 전 판단은 "본 것" 이 아니라 "전부 봤다는 근거" 로 한다. 래퍼를 바꿀 때 기존 소비자의 반환 · 요청 · 오류가 같은지 oracle 로 비교한다.
+- 관련 rule: CLAUDE.md §8 · rule 95 R1 · rule 96 R2
+
+## 2026-10-10 — 하위 조회 실패를 빈 결과로 남겼다 (검수 C4 · C8 · C9)
+
+- 카테고리: silent-failure
+- 발견 위치: Redfish Volumes · Port member(C4), Windows `Get-NetAdapter -Physical` · `Win32_PhysicalMemory`(SilentlyContinue, C8), ESXi `failed_when: false`
+  모듈의 결과 키 부재(C9). 실패와 "없음" 이 같은 빈 값이 됐다.
+- 원인: 실패를 막는 장치(`failed_when: false` · SilentlyContinue · 404 외 실패 무시)가 근거까지 지웠다.
+- 수정(`69faa107` · `e9b77177` · `1672538a`): 실패 근거를 섹션 오류 1건(코드 · detail)으로 남기고 데이터 · 섹션 상태는 그대로(success + errors 계약).
+  DIMM 일부만 읽혔으면 설치량을 확정하지 않는다(`os_visible` · `installed_mb null` · `grand_total_gb null`).
+- 재발 방지: 실패를 계속 진행시키는 장치를 둘 때는 그 자리에서 근거를 fragment 로 남긴다. "결과 키 부재" 가 실패다(빈 mapping/list 는 정상).
+- 관련 rule: rule 22 · CLAUDE.md §12
+
+## 2026-10-10 — 인증 뒤 확인한 vendor 를 adapter 재선택에 쓰지 않았다 (검수 C5)
+
+- 카테고리: scope-miss
+- 발견 위치: `redfish-gather/tasks/collect_standard.yml` · `reselect_adapter.yml` — 익명 ServiceRoot 에 제조사가 없으면 인증 뒤 수집 결과의 vendor 를 무시해
+  generic adapter 로 남았다.
+- 수정(`5a3b99ed`): 수집 성공 + 정규화된 vendor 가 있으면 그것, 아니면 probe 값. 모든 recording 에서 probe vendor == 인증 후 vendor(식별 장비 결과 불변).
+- 관련 rule: rule 12 · rule 50 R3
+
+## 2026-10-10 — 별도 sudo 비밀번호가 후보 적용 set_fact 에 덮였다 (검수 C10)
+
+- 카테고리: scope-miss
+- 발견 위치: `os-gather/tasks/try_one_credential.yml` — set_fact 가 play var 보다 우선해 Vault 의 `ansible_become_password` 가 쓰이지 않았다(2026-09 기록만 해 둔 기존 결함).
+- 수정(`5bada078`): Linux 는 비어 있지 않은 별도 값(trim 없음), 없으면 그 로그인 후보의 비밀번호. 로그인/sudo 비밀번호가 다른 것은 정상 구성이다.
+- 관련 rule: CLAUDE.md §12
+
+## 2026-10-10 — 새 시험이 모듈 전역 상태(응답 캐시)를 켜 둔 채 끝나 전체 실행에서만 다른 시험이 실패했다
+
+- 카테고리: test-isolation
+- 발견 위치: WSL LF clone `ci_gate` — `tests/e2e/test_redfish_multi_credential_auth.py::test_first_status_is_the_credentialed_request` 1건(단독 실행은 통과).
+- 원인: C5 시험이 `rg.main()` 을 불렀고, `main()` 은 응답 캐시를 켠 채 끝난다. 뒤 시험의 `_get` 이 캐시에서 돌아와 인증 관측이 비었다.
+  같은 원인의 정리 문장이 `test_redfish_redirect_boundary.py` 에 이미 있었는데 새 시험에 옮기지 않았다.
+- 수정(`a64654aa`): C4 · C5 시험에 autouse fixture(캐시 · 인증 관측 · 알림 되돌림). 재실행 `ci_gate` PASS.
+- 재발 방지: `redfish_gather.main()` 을 부르는 시험은 모듈 전역 상태를 되돌린다. 새 시험은 해당 파일 단독이 아니라 전체 순서(`ci_gate`)로 확인한다.
+- 관련 rule: rule 95 R3 · CLAUDE.md §16
+

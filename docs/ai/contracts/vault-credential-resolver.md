@@ -520,6 +520,10 @@ vault 의 `ansible_become_password` 는 현재도 무시되고 SSH 비밀번호�
 - 단 `resolve_and_load.yml` 이 `_cred_become_password` 를 명시적으로 노출해 두어
   이 결함을 고치는 후속 작업이 값을 잃지 않게 한다.
 - 이 결함 자체는 **별도 이슈로 기록**한다 (§19 범위 밖. 동작 변경이므로 이번에 섞지 않는다).
+- **해소 (2026-10-10, 검수 C10 `5bada078`)**: 후보 적용 set_fact 가 Linux 에서는 `_cred_become_password` 가 비어 있지 않으면 그 값(trim 없음),
+  없거나 비었으면 지금 고른 로그인 후보의 비밀번호를 `ansible_become_pass` 로 쓴다. Windows · 후보 순서 · 개수 · 인증 정책 · `no_log` 는 그대로다.
+  로그인 비밀번호와 sudo 비밀번호가 다른 것은 정상 구성이다(차이만으로 위험 · 차단으로 보지 않는다). 회귀 `tests/unit/test_become_password_c10.py`
+  (별도 값 · 미설정 · 빈 값 · null · 숫자 값 · 다음 후보 · root 로그인 · 비밀번호 없는 sudo · Windows). 별도 sudo 비밀번호를 쓰는 실서버 실행은 하지 않았다.
 
 ### 6.5 TO-BE 흐름
 
@@ -1455,3 +1459,4 @@ force push / history rewrite 는 하지 않는다 (rule 93 R1).
 
 > **해소하지 않고 기록만 하는 것**: `os-gather/site.yml:227` 의 `ansible_become_password` 가
 > `try_one_credential.yml:22-25` 에 덮여 사실상 무시되는 문제 (§6.4). 동작 변경이므로 이번에 섞지 않는다.
+> → 2026-10-10 해소(검수 C10, §6.4 끝 문단).

@@ -1386,3 +1386,22 @@ MinPasswordLength                   = 8
 - 출처: 실측 raw(`tests/evidence/2026-10-04-review-c1-c6.md` §5-4). dmidecode 3.6 릴리스 노트(IEC 단위 전환) 는 web 확인이 필요하면 추가한다 — 판정은 실측으로 끝났다.
 - 미검증: dmidecode 3.6 의 `kiB` 대소문자(`KiB`) — 파서는 `tolower` 비교라 무관.
 - **정정 2026-10-05**: IEC 표기는 "3.6" 이 아니라 upstream 커밋 **"dmidecode: Use binary unit prefixes"(2025-04-24)** 에서 왔다 — 3.6 릴리스(2024-04-24) **이후**다(source: https://cgit.git.savannah.nongnu.org/cgit/dmidecode.git/log/?qt=grep&q=unit, 확인 2026-10-05; 같은 로그에 "Fix unit of starting and ending addresses"(2025-04-24) · "dmioem: Display drive capacity in power-of-10 units"(2025-05-12)). upstream NEWS(mirror) 에는 이 변경 항목이 없다. 저장소 실캡처 `tests/reference/os/rhel960/10_100_64_165/cmd_dmidecode_memory.txt` (`# dmidecode 3.6`, RHEL 9.6)은 `Size: 8 GB`(SI)다. 따라서 "RHEL 10.2 가 싣는 dmidecode 빌드(버전 표기는 raw_head 에 없었다)가 이 upstream 변경을 포함한다" 가 정확한 서술이고, 영향 범위는 "dmidecode ≥ 3.6" 이 아니라 **그 커밋을 포함한 빌드**(upstream 3.7 이후 또는 배포판 backport)다. 파서는 두 단위계를 모두 환산하므로 조치·결론(DIMM 해결)은 그대로다.
+
+## 2026-10-10 — Windows FC PortSpeed 비트 값 · lscpu 캐시 합계 (external-contract-drift, 검수 C6 · C7)
+
+### Windows `MSFC_FibrePortHBAAttributes.PortSpeed`
+
+- 계약: 비트 값(HBA API). Microsoft SDK `hbaapi.h`: `HBA_FCPHYSPEED_UNKNOWN 0` · `_1GBIT 1` · `_2GBIT 2` · `_10GBIT 4` · `_4GBIT 8` · `_8GBIT 16` · `_16GBIT 32` ·
+  `_NOT_NEGOTIATED (1<<15)`. 1 · 2 · 4 · 8 의 뜻은 MS 문서 `MSFC_HBAPortAttributesResults` 와도 같다.
+- 매핑(`os-gather/tasks/windows/gather_storage.yml`): 1→1 · 2→2 · 4→10 · 8→4 · 16→8 · 32→16 Gbps, 0 · 0x8000 → `null`.
+- **미상 코드**: 64 · 128 등은 Windows/벤더 HBA 인터페이스 정의를 확인하지 못했다 → `null`(오류 아님). Linux `FC_PORTSPEED_*` 등 다른 API 표는 WMI PortSpeed 에 쓰지 않는다.
+  정의를 확인하면(벤더 Windows 드라이버 문서 · 사이트 실측) 그 코드만 더한다.
+- source: https://raw.githubusercontent.com/microsoft/win32metadata/main/generation/WinSDK/RecompiledIdlHeaders/shared/hbaapi.h (확인 2026-10-10)
+- lab: Windows FC HBA 장비 부재 — 실제 PowerShell 로 WMI 값만 재현(`tests/unit/test_windows_storage_powershell_static.py`).
+
+### lscpu(util-linux) 캐시 크기 출력
+
+- 계약(util-linux `sys-utils/lscpu.c`): ≤2.33 인스턴스당 sysfs 값(예 `256K`) · 2.34~2.36 모든 인스턴스 합계(문구 없음, 예 `48 MiB`) · ≥2.37 합계 + `(N instances)`.
+- 수집(`os-gather/tasks/linux/gather_cpu.yml`): `lscpu --version`(util-linux-ng 형식 포함)으로 판정. 문구 또는 ≥2.34 → 합계 ÷ 소켓, <2.34 → 기존 규칙, 미상 + 문구 없음 → L2 `null` · L3 `/proc/cpuinfo`.
+- 사내 대상 배포판의 기본 util-linux(배포판 패키지 기준 — 대상에서 버전을 직접 읽어 기록하지는 않았다): RHEL 8 2.32 · RHEL 9 2.37 · Ubuntu 24.04 2.39 · RHEL 10 2.40. 2.34~2.36 실장비는 없다(재현만).
+

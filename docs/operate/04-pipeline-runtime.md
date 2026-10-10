@@ -30,7 +30,9 @@ parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid
                 (결과 정리 → 오래된 작업 폴더 정리 → archive → stash → 보관 확인 시만 작업 폴더 삭제)
                 실행 기반 장애(Runner 연결 끊김 · 근거 있는 OOM · 재부팅)면 원본만 stash 하고 **같은 Runner** 를 기다려 다시 시도
   pipeline post{always} → 표시 단계 '결과 확인 및 전송' [built-in — 실행 기반 대기 합 안에서 기다린 뒤, 노드를 얻고 최대 1시간]
-        빌드별 폴더 fin-<번호> → unstash(없으면 unarchive) → 정리된 결과 또는 Groovy 최소 보충(scripts/jenkins/se_finalize.groovy 를 readTrusted→load)
+        빌드별 폴더 fin-<번호> → 회수: 매체마다 격리 폴더(rec-<진입>/stash · rec-<진입>/archive)
+          마지막 보존의 전달(stash)이 확인되고 정리 결과가 완결이면 stash, 아니면 빌드 보관본도 파일별로 받아 두 후보를 같은 검문으로 평가해 고른다
+        → 정리된 결과 또는 Groovy 최소 보충(scripts/jenkins/se_finalize.groovy 를 readTrusted→load)
         → Portal 로 POST(시도마다 응답 최대 10분, 최대 3번, HTTP 2xx 수신 = Portal 이 요청을 받음) → callback_body.json · finalize_summary.json 보존
         → [결과 파일] 링크 → [요약](소요 시간을 전체 · 수집 · 실행 대기로 나눠 적는다)
 ```
@@ -56,7 +58,7 @@ parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid
 | 입력 확인 | 없음 (5분) | `target_type` · `inventory_json`(JSON 배열 · 원소 객체 · `service_ip`/`bmc_ip`/`ip` 중 처음 값 · 문자열 · ASCII IPv4 · 중복 금지 — `inventory.sh` 와 같은 규칙, 위반이 하나라도 있으면 요청 전체 거부) · `callbackUrl`(`http(s)://`, 계정 정보 `사용자:비밀번호@` 금지 — 이 오류는 주소를 출력하지 않는다) · `deploymentEnvironmentId` 검증 → 접수 manifest 를 `env.SE_MANIFEST_JSON` 으로, 빌드 이름 `#N <종류> N대` | FAILURE — 접수 manifest 가 없어 보낼 것이 없다 |
 | 실행 위치 확인 | 없음 (5분) | `readYaml text: readTrusted('common/vars/locations.yml')` — 미등록 `loc` 는 노드 대기 없이 즉시 실패. 라벨식을 가진 **등록된** Runner 를 센다(`nodesByLabel offline:true`). 콘솔 `[실행 위치] <loc> 위치의 <종류> 대상은 '<라벨식>' 라벨의 Runner에서 실행합니다.` 아래에 등록된 Runner · 연결된 Runner 수 | 미등록 loc · 등록 Runner 0(`config_error`): FAILURE — 접수 대상마다 실패 결과는 보낸다. 등록돼 있으면 지금 연결이 끊겼거나 바빠도 수집 단계가 기다린다 |
 | 서버 정보 수집 | stage 에 agent · timeout 없음. 시도마다 `agent_label && 능력 라벨`(수집을 시작한 뒤에는 그 Runner)을 Jenkins queue 로 기다리고 작업 폴더 `<Job 이름>-<빌드 번호>` 를 쓴다 | 첫 시도: 저장소 받기 · `.se_workspace.json`(소유 기록 · 받은 commit) · 지난 결과 정리 · `gather_manifest.json`. 이어서 하는 시도: 저장소를 다시 받지 않고 revision 대조 → (Add-on — 3절) → `bash scripts/run_gather.sh <playbook> <inventory> <loc> <Add-on 검사 통과> <수집 실행 누적 최대> <이전 시도 중 끊김>` — 작업 폴더 잠금(이전 실행이 남아 있으면 끝날 때까지 대기) · 환경 경계(`scripts/env_guard.sh`) · venv · `scripts/gather_state.py begin`(남은 대상 · 이번 한계 · 동시 실행 수) · vault 비밀번호 임시 파일(600) · `timeout --signal=INT --kill-after=90 <이번 한계> ansible-playbook <채널>/site.yml -i <채널>/inventory.sh -f <동시 실행 수> --limit @<남은 대상 파일> …` · 60초 생존 표시 · 이 실행의 SSH 다중화 연결 종료 · `gather_state.py end` → `gather_state.py classify` → 끝이면 결과 정리(`scripts/finalize_gather_output.py`) → 오래된 작업 폴더 정리(`scripts/workspace_cleanup.py`, 하루 한 번) → `archiveArtifacts`(있는 파일만, 빈 보관은 실패) → `stash` → 보관을 확인했을 때만 `deleteDir`. 실행 기반 장애면 원본만 `stash` 하고 다시 시도 | Add-on 을 받지 못하면 UNSTABLE + Add-on 없이 수집; ansible 이 비정상 종료해도 종료 상태만 남기고 결과 전달은 다음 단계가 한다; 대기 한도 초과 · 재개 불가는 UNSTABLE(끝나지 않은 대상은 실행 기반 문장의 실패 결과). 사용자 취소는 그대로 전파(ABORTED) |
-| 결과 확인 및 전송 (post 안의 표시 단계) | `built-in` — 실행 기반 대기 합 안에서 기다리고(취소된 빌드는 5분까지만), 노드를 얻은 뒤 `timeout(1시간) { dir("fin-<빌드 번호>") }` | `unstash` → 없으면 파일별 `unarchive` → `gather_final.jsonl`(정리 결과, exit 0/2) 우선, 없으면 Groovy 최소 경로(OUTPUT → CHECKPOINT+오류 1건 → 합성 실패 봉투) → 전송 직전 형태 검문 → `{loc, deploymentEnvironmentId, eventUuid, gatherInfoJson:[…]}` POST(시도마다 응답 최대 10분, 남은 시간 안에서 최대 3번, 결정적 4xx(408/429 제외)는 다시 보내지 않음, ABORTED 면 1번) → `[결과]` 집계 · `[경고]` · `callback_body.json` · `finalize_summary.json` 보존 · `[결과 파일]` 링크 → 보관을 확인했을 때만 폴더 삭제 | 전송 실패 · 시작 못 한 전송 · 합성 보충 · outcome ≠ completed · 보충 라이브러리 없음 · 결과 수 ≠ 접수 수 → UNSTABLE 한 번(사유는 WARNING 줄 한 문장, 보낼 결과가 없는 대상의 IP 는 `[경고]` 줄). 결과 처리 노드를 끝내 얻지 못하면 보내지 못한 채 FAILURE(결과는 stash · 보관본에 남는다). 접수 manifest 조차 없으면(입력 확인 실패) 보낼 것이 없다 |
+| 결과 확인 및 전송 (post 안의 표시 단계) | `built-in` — 실행 기반 대기 합 안에서 기다리고(취소된 빌드는 5분까지만), 노드를 얻은 뒤 `timeout(1시간) { dir("fin-<빌드 번호>") }` | 회수(2026-10-10 C1): 매체마다 격리 폴더 — 마지막 보존의 전달 표식(`SE_FINAL_STASHED`)이 있고 그 stash 의 정리 결과가 완결이면 stash, 아니면 빌드 보관본도 파일별 `unarchive` 해 두 후보를 같은 검문으로 평가(결과가 있는 대상 수 → 정리 결과 완결 → 표식이 있으면 stash, 없으면 보관본) → `gather_final.jsonl`(정리 결과, exit 0/2) 우선, 없으면 Groovy 최소 경로(OUTPUT → CHECKPOINT+오류 1건 → 합성 실패 봉투) → 전송 직전 형태 검문 → `{loc, deploymentEnvironmentId, eventUuid, gatherInfoJson:[…]}` POST(시도마다 응답 최대 10분, 남은 시간 안에서 최대 3번, 결정적 4xx(408/429 제외)는 다시 보내지 않음, ABORTED 면 1번) → `[결과]` 집계 · `[경고]` · `callback_body.json` · `finalize_summary.json` 보존 · `[결과 파일]` 링크 → 보관을 확인했을 때만 폴더 삭제 | 전송 실패 · 시작 못 한 전송 · 합성 보충 · outcome ≠ completed · 보충 라이브러리 없음 · 결과 수 ≠ 접수 수 → UNSTABLE 한 번(사유는 WARNING 줄 한 문장, 보낼 결과가 없는 대상의 IP 는 `[경고]` 줄). 결과 처리 노드를 끝내 얻지 못하면 보내지 못한 채 FAILURE(결과는 stash · 보관본에 남는다). 접수 manifest 조차 없으면(입력 확인 실패) 보낼 것이 없다 |
 
 ### Ansible 실행환경(venv) 선택
 
@@ -370,8 +372,13 @@ ansible-playbook <채널>/site.yml -i <채널>/inventory.sh --vault-password-fil
 ## 8. 결과 전달
 
 - Gather 가 만든 `gather_output.json` 은 host 마다 envelope 한 줄(JSON Lines)이다. 파이프라인 `post { always }` 의 마무리 단계
-  (컨트롤러)가 `unstash`(없으면 같은 빌드의 artifact 를 `unarchive`) 해서 `{loc, deploymentEnvironmentId, eventUuid, gatherInfoJson:[...]}`
-  본문으로 `<callbackUrl>/api/jenkins/gather/<target_type>` 에 POST 한다.
+  (컨트롤러)가 결과를 회수해 `{loc, deploymentEnvironmentId, eventUuid, gatherInfoJson:[...]}` 본문으로 `<callbackUrl>/api/jenkins/gather/<target_type>` 에 POST 한다.
+- **회수 매체 선택(2026-10-10 C1)**: 전달본(stash)과 빌드 보관본(archive)을 각각 격리 폴더(`fin-<번호>/rec-<진입>/stash` · `/archive`)에 받아 서로 섞지 않는다.
+  마지막 보존의 stash 가 끝났다는 표식(`SE_FINAL_STASHED`)이 있고 그 정리 결과가 접수 대상마다 1줄이면 그 stash 를 쓴다(보관본 조회 없음 — 보통 경로의 회수 시간 불변).
+  그 밖에는 보관본도 파일별로 받아 두 후보를 같은 검문(정리 결과 → 보충 조립 → 원본 줄)으로 평가하고, 결과가 있는 대상(OUTPUT · CHECKPOINT, 새로 만든 실패 결과 제외)이
+  많은 쪽 → 같으면 정리 결과가 완결인 쪽 → 같으면 표식이 있으면 stash, 없으면 보관본을 고른다. 표식이 없는 stash 는 다시 시도하기 전에 넘긴 중간 결과일 수 있다
+  — 종전에는 남은 stash 를 먼저 써서 마지막 보존이 보관한 전체 결과 대신 일부만 보낼 수 있었다. 고른 근거는 `finalize_summary.json` 의 `recovery` 에 남는다.
+  정리 결과 파일(`gather_final.jsonl` · report)은 고른 입력에 있을 때만 다시 보관하고, 요약 · 본문 보관과 따로 기록한다(`.se_fin.json` 의 `archive_body_summary` · `archive_results`).
 - **요청한 대상 1개 = 결과 1개.** Gather 의 `post{always}` 가 먼저 Layer A(`scripts/finalize_gather_output.py`)로 `gather_final.jsonl` 을 만든다:
   OUTPUT 줄(13 필드 · 접수 IP 검사) → 없는 host 는 `CHECKPOINT` 줄(Add-on 직전 조립본; Add-on 중 끊겼으면 "추가 수집 중 처리가 중단되어 …"
   오류 1건, 아니면 "결과를 내보내는 단계에서 중단" 1건) → 그래도 없는 host 는 진행 기록으로 실패 봉투 합성(precheck 진단 보존 / 인증 뒤

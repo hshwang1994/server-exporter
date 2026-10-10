@@ -1255,7 +1255,8 @@ label → 노드 배정 경로는 검증됐지만 망 분리는 검증되지 않
       이미 `OPS-AUDIT-1` 로 등재된 사용자 결정 사항이며, CLAUDE.md §12 에 따라
       Secret Rotation / History Cleanup 으로 범위를 넓히지 않았다.
       이번에는 내가 수정한 파일(`scripts/ai/vault_decrypt_check.py`)의 하드코딩만 제거했다.
-- [ ] **`os-gather/site.yml` 의 `ansible_become_pass` play var 가 사실상 죽은 값** —
+- [x] **`os-gather/site.yml` 의 `ansible_become_pass` play var 가 사실상 죽은 값** —
       `try_one_credential.yml` 이 host fact 으로 덮어써 vault 의 `ansible_become_password` 가
       무시되고 SSH 비밀번호가 sudo 비밀번호로 쓰인다. 동작 변경이라 이번에 섞지 않았다.
       값의 출처만 `_cred_become_password` 로 옮겨 두어, 고칠 때 값을 잃지 않게 했다.
+      → **2026-10-10 해소(검수 C10 `5bada078`)**: Linux 는 비어 있지 않은 별도 값을 그대로 쓴다. 별도 sudo 비밀번호 실서버 실행은 미확인.

@@ -506,6 +506,10 @@ for e in response["errors"]:
 
 같은 서버라도 channel 마다 값이 다를 수 있다 (가상화 / 불량 DIMM / BIOS 예약 영역 등으로).
 
+> **2026-10-10 (Windows DIMM 조회 일부 실패)**: `Win32_PhysicalMemory` 조회가 공급자 오류를 내면서 일부 DIMM 행만 돌려주면, 받은 슬롯 · 그룹은 그대로 두되
+> 설치량을 확정하지 않는다 — `total_mb` = OS 가시량, `total_basis` = `os_visible`, `installed_mb` = `null`, `summary.grand_total_gb` = `null`(일부 슬롯 합을 전체
+> 합계로 쓰지 않는다), memory 섹션 경고 1건(`cause=read_failed` · 받은 슬롯 수 · 오류 원문). 섹션은 성공이다. 슬롯을 하나도 받지 못하면 종전 fallback(가시량 기준 합계) 그대로.
+
 ### 6.3 `data.storage`
 
 > **2026-10-03** — (1) `physical_disks[].protocol` 의 enum 은 그대로다. Windows BusType 가 enum 밖(ATAPI/ATA/SSA/Virtual/
@@ -603,6 +607,9 @@ controllers[*].id  ────┤
   **있는데 읽지 못하면**(권한 등) storage 섹션 오류 1건이 남는다 (detail: `scope=fc_host[,infiniband]; cause=attribute_unreadable;
   count=; paths=` 최대 10개). 속성 파일 자체가 없는 것은 오류가 아니다 (2026-10-03).
 - `port_type` ∈ {`FibreChannel`, `FCoE`, `iSCSI`}. `source` ∈ {`redfish`, `os`, `esxi`}.
+- **Windows `link_speed_gbps` (2026-10-10)**: `MSFC_FibrePortHBAAttributes.PortSpeed` 는 비트 값이다 — Microsoft SDK `hbaapi.h` 정의대로
+  1 → 1, 2 → 2, 4 → 10, 8 → 4, 16 → 8, 32 → 16 Gbps. 0(미확인) · 0x8000(미협상)은 `null`. 64 · 128 처럼 Windows · 벤더 HBA 인터페이스 정의를 확인하지
+  못한 코드는 **미상 코드**로 `null` 이다(오류가 아니다). 종전 표는 4 · 8 · 16 을 4 · 8 · 10 으로 잘못 바꿨다.
 - **FCoE 지원 CNA 는 여기 안 들어온다 (2026-08-03)**: Broadcom 57800 같은 CNA 는 *이더넷* 기능에도
   MAC 파생 WWN 을 달고 나온다. WWN 이 있다는 이유로 HBA 로 잡으면 같은 물리 포트가
   `network.ports[]`=Ethernet / `storage.hbas[]`=FibreChannel 로 갈리는 모순이 생긴다.

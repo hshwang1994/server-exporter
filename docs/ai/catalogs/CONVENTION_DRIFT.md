@@ -19,6 +19,30 @@
 
 ---
 
+## DRIFT-021 (2026-10-10, resolved)
+
+- **발견 위치**: `os-gather/tasks/linux/gather_cpu.yml` 의 L2/L3 캐시 환산(종전)
+- **분류**: external-contract-drift
+- **설명**: lscpu 출력의 캐시 값이 합계인지 인스턴스당인지가 util-linux 버전마다 다르다 — ≤2.33 인스턴스당("256K"), 2.34~2.36 모든 인스턴스 합계(문구 없음, "48 MiB"),
+  ≥2.37 합계 + "(N instances)"(util-linux `sys-utils/lscpu.c`). 종전 코드는 "(N instances)" 유무만 봐서 2.34~2.36 의 합계를 인스턴스당 값으로 보고 L2 를 코어 수만큼 또 곱했다(검수 C7).
+- **영향**: Linux `cpu.summary.groups[].l2_cache_kb` · `l3_cache_kb` 값(의미는 소켓당 KB, 불변). 2.34~2.36 을 싣는 배포판에서 과대값.
+- **resolved (2026-10-10 `cce90cb4`)**: 같은 raw 태스크에서 `lscpu --version` 을 읽어(`LSCPU_VERSION`) 2.34 이상 또는 문구가 있으면 합계 ÷ 소켓, 2.33 이하는 기존 규칙,
+  버전 미상 + 문구 없음은 추측하지 않는다(L2 `null`, L3 는 `/proc/cpuinfo`). 회귀 `tests/unit/test_linux_cpu_cache_c7.py`(2.17 ng · 2.32 · 2.34 · 2.36 · 2.37+ · 부재 · 미상).
+  2.34~2.36 실장비는 없다(재현만).
+- **관련**: rule 96 R1 / R4, `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-10
+
+## DRIFT-020 (2026-10-10, resolved)
+
+- **발견 위치**: `os-gather/tasks/windows/gather_storage.yml` 의 `MSFC_FibrePortHBAAttributes.PortSpeed` 값맵(종전)
+- **분류**: external-contract-drift
+- **설명**: PortSpeed 는 비트 값이다 — Microsoft SDK `hbaapi.h` 정의 1=1G · 2=2G · 4=10G · 8=4G · 16=8G(`HBA_FCPHYSPEED_8GBIT`) · 32=16G(`HBA_FCPHYSPEED_16GBIT`).
+  종전 표는 4 · 8 · 16 을 4 · 8 · 10 Gbps 로 바꿔 10G/4G/8G 포트를 잘못 보고했다(검수 C6).
+- **영향**: Windows `storage.hbas[].link_speed_gbps`(Nice). Linux · ESXi · Redfish 무관.
+- **resolved (2026-10-10 `75c55e38`)**: 공식 정의대로 고쳤다. 0 · 0x8000(미협상)은 `null`. 64 · 128 등 Windows · 벤더 HBA 인터페이스 정의를 확인하지 못한 코드는
+  **미상 코드**로 `null`(근거 확인 코드와 구분해 주석 · 문서에 적음) — 다른 API(Linux `FC_PORTSPEED` 등) 표를 옮겨 오지 않았고, 오래된 헤더에 없다는 이유로 무효라 하지 않았다.
+  회귀: 실제 PowerShell 로 1 · 2 · 4 · 8 · 16 · 32 · 64 · 0 · 128 · 32768.
+- **관련**: rule 96 R1 / R4, source https://raw.githubusercontent.com/microsoft/win32metadata/main/generation/WinSDK/RecompiledIdlHeaders/shared/hbaapi.h (확인 2026-10-10)
+
 ## DRIFT-019 (2026-10-08)
 
 - **발견 위치**: `Jenkinsfile_portal_Byid` (GitLab 웹 편집 `87c47f8d` · `09fb4890` → 병합 `2cd63067`)
