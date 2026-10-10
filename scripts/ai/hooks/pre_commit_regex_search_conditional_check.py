@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pre-commit hook — rule 95 R1 #12: `regex_search` + `when` 절 None 가드 차단.
+r"""pre-commit hook — rule 95 R1 #12: `regex_search` + `when` 절 None 가드 차단.
 
 Ansible Jinja2 `regex_search` / `regex_findall` / `regex_replace` 가 미매치 시
 **None** 반환 → Ansible strict mode 의 conditional 평가 fail
