@@ -481,7 +481,12 @@ def test_raw_script_counts_cache_instances_from_sysfs(sbx):
     assert res.marker("L2_INSTANCES") == "4" and res.marker("L3_INSTANCES") == "2"
 
 
-def test_raw_script_without_sysfs_cache_keeps_exit_code_zero(sbx):
+def test_raw_script_cache_instance_count_never_breaks_exit_code(sbx):
+    """sysfs 가 없는 호스트(Windows 샌드박스)에서는 표식이 없거나 0 이고, 실제 Linux(WSL · Runner)에서는 그 호스트의 인스턴스 수가 나온다 —
+    어느 쪽이든 awk 실패가 스크립트 종료 코드를 바꾸지 않는다 (LX-F06: `|| true`)."""
     sbx.shim_cmd("lscpu", "exit 127\n")
     res = sbx.run(raw_script(CPU_YML, "raw gather"))
-    assert res.rc == 0 and res.marker("L3_INSTANCES") in (None, "0")
+    assert res.rc == 0
+    for key in ("L2_INSTANCES", "L3_INSTANCES"):
+        v = res.marker(key)
+        assert v is None or v.isdigit(), (key, v)
