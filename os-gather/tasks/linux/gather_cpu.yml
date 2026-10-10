@@ -39,6 +39,15 @@
         /^L3 cache/             {gsub(/^ +| +$/,"",$2); print "L3_CACHE=" $2}
       '
     fi
+    # 캐시 인스턴스 수 (sysfs, lscpu 버전 무관 — LX-F06 2026-10-10): 구형 lscpu(<2.34)가 인스턴스 하나의 값만 줄 때 소켓당 합계를 만드는 근거.
+    #   AMD(Zen)는 L3 가 CCX 마다 있어 "L3 = 소켓당 1개" 가정이 틀린다. 읽지 못하면 표식이 없다(종전 가정으로 떨어진다). 종료 코드는 남기지 않는다.
+    awk 'FNR == 1 {
+        dir = FILENAME; sub(/\/shared_cpu_list$/, "", dir); lv = "";
+        if ((getline lv < (dir "/level")) > 0) { if (lv == "2") l2[$0] = 1; else if (lv == "3") l3[$0] = 1 }
+        close(dir "/level")
+      }
+      END { n2 = 0; for (k in l2) n2++; n3 = 0; for (k in l3) n3++; print "L2_INSTANCES=" n2; print "L3_INSTANCES=" n3 }' \
+      /sys/devices/system/cpu/cpu[0-9]*/cache/index*/shared_cpu_list 2>/dev/null || true
   register: _l_cpu_raw_result
   changed_when: false
   failed_when: false
@@ -122,7 +131,8 @@
 
 # 캐시(소켓당 KB). 합계/인스턴스당은 util-linux 버전(LSCPU_VERSION)으로 정한다 — 위 머리말 C7.
 #   합계: "(N instances)" 가 있거나 버전 ≥2.34 ("220 MiB (4 instances)" · "48 MiB")  → 소켓 수로 나눔
-#   인스턴스당: 버전 <2.34 ("56320K" / "256K")                                         → L3 는 그대로(소켓당 1개), L2 는 코어 수를 곱함
+#   인스턴스당: 버전 <2.34 ("56320K" / "256K")                                         → sysfs 인스턴스 수(L2_INSTANCES / L3_INSTANCES)가 있으면
+#                                                                                      (값 × 인스턴스) / 소켓, 없으면 L3 그대로(소켓당 1개) · L2 × 코어 (LX-F06)
 #   버전 미확인 + 문구 없음: 추측하지 않음 → L2 null, L3 는 /proc/cpuinfo 경로
 #   lscpu 부재: /proc/cpuinfo 'cache size'(= 소켓당 L3) 만 사용
 - name: "linux | cpu | compute cache (per socket)"
@@ -142,7 +152,13 @@
         {%- if total -%}
           {{ (kb // (sockets | int)) if (sockets is not none and (sockets | int) > 0) else none }}
         {%- elif vknown -%}
-          {{ (kb * (cps | int)) if (cps is not none and (cps | int) > 0) else none }}
+          {#- 인스턴스당 값(<2.34): sysfs 인스턴스 수가 있으면 (값 × 인스턴스) / 소켓, 없으면 종전 가정(코어마다 L2 1개 → 값 × 코어) — LX-F06 -#}
+          {%- set inst2 = ((_l_cpu_parsed.L2_INSTANCES | default('')) | trim) -%}
+          {%- if inst2.isdigit() and (inst2 | int) > 0 and sockets is not none and (sockets | int) > 0 -%}
+            {{ (kb * (inst2 | int)) // (sockets | int) }}
+          {%- else -%}
+            {{ (kb * (cps | int)) if (cps is not none and (cps | int) > 0) else none }}
+          {%- endif -%}
         {%- else -%}{{ none }}
         {%- endif -%}
       {%- else -%}{{ none }}
@@ -163,7 +179,13 @@
         {%- if total -%}
           {{ (kb // (sockets | int)) if (sockets is not none and (sockets | int) > 0) else none }}
         {%- else -%}
-          {{ kb }}
+          {#- 인스턴스당 값(<2.34): sysfs 인스턴스 수가 있으면 (값 × 인스턴스) / 소켓 (AMD CCX), 없으면 종전 가정(소켓당 1개 → 값 그대로) — LX-F06 -#}
+          {%- set inst3 = ((_l_cpu_parsed.L3_INSTANCES | default('')) | trim) -%}
+          {%- if inst3.isdigit() and (inst3 | int) > 0 and sockets is not none and (sockets | int) > 0 -%}
+            {{ (kb * (inst3 | int)) // (sockets | int) }}
+          {%- else -%}
+            {{ kb }}
+          {%- endif -%}
         {%- endif -%}
       {%- elif cs and csnum != cs and csnum.isdigit() -%}
         {{ csnum | int }}

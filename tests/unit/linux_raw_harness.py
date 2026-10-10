@@ -52,7 +52,7 @@ for _p in (str(REPO), str(REPO / "filter_plugins")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from identity_normalizer import normalize_wwn  # noqa: E402
+from identity_normalizer import dmi_sentinel_null, normalize_wwn  # noqa: E402
 from jedec_mapper import jedec_to_vendor  # noqa: E402
 
 SH = shutil.which("sh")
@@ -269,17 +269,18 @@ def dmi_collector_script() -> str:
     """
     text = set_fact_args(SYSTEM_YML, "define shared dmi collector")["_l_dmi_collector"]
     assert_jinja_free(text, "gather_system.yml:_l_dmi_collector")
-    raw = next(t for t in iter_tasks(load_tasks(SYSTEM_YML))
-               if "raw gather" in (t.get("name") or "") and "ansible.builtin.raw" in t)
-    assert "{{ _l_dmi_collector }}" in raw["ansible.builtin.raw"], "raw gather 에 DMI collector 주입이 없다"
-    assert raw.get("become") is True, "DMI collector 를 싣는 raw gather 는 become 이어야 한다"
+    raws = [t for t in iter_tasks(load_tasks(SYSTEM_YML))
+            if "raw gather" in (t.get("name") or "") and "ansible.builtin.raw" in t
+            and "{{ _l_dmi_collector }}" in t["ansible.builtin.raw"]]
+    assert len(raws) == 1, "DMI collector 를 싣는 raw gather 는 하나다 (LX-F01: 특권 태스크)"
+    assert raws[0].get("become") is True, "DMI collector 를 싣는 raw gather 는 become 이어야 한다"
     return text
 
 
 def shared_dmi_raw(system_register: dict[str, Any]) -> dict[str, Any]:
     """gather_system.yml 의 ``_l_dmi_raw`` set_fact 를 그대로 렌더한다 (입력 = raw gather register)."""
     args = set_fact_args(SYSTEM_YML, "shared dmi raw")
-    return render_tree(ansible_env(), args["_l_dmi_raw"], {"_l_raw_sys_result": system_register})
+    return render_tree(ansible_env(), args["_l_dmi_raw"], {"_l_raw_priv_result": system_register})   # LX-F01: 특권 raw register
 
 
 def collector_output(mem_lines: list[str], proc_lines: list[str] = ()) -> str:
@@ -343,6 +344,7 @@ def ansible_env() -> NativeEnvironment:
         "bool": _ansible_bool,
         "jedec_to_vendor": jedec_to_vendor,
         "normalize_wwn": normalize_wwn,
+        "dmi_sentinel_null": dmi_sentinel_null,
     })
     env.tests["search"] = lambda value, pattern: re.search(pattern, str(value)) is not None
     env.tests["match"] = lambda value, pattern: re.match(pattern, str(value)) is not None

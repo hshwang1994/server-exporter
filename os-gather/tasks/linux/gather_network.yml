@@ -180,12 +180,27 @@
       awk '/^nameserver/{print "DNS_REAL="$2}' /run/systemd/resolve/resolv.conf
     fi
     grep -v '^[#;]' /etc/resolv.conf 2>/dev/null | awk '/^nameserver/{print "DNS="$2}'
-    # --- Default gateway ---
-    dg=$(ip route show default 2>/dev/null | head -1)
-    if [ -n "$dg" ]; then
-      echo "GW=$(echo "$dg" | awk '{print $3}')"
-      echo "GW_DEV=$(echo "$dg" | awk '{print $5}')"
+    # --- Default gateways (IPv4 + IPv6) ---
+    #   LX-F08 (2026-10-10): 토큰(via/dev) 기준으로 읽는다. 종전 awk '{print $3}' / '{print $5}' 는 `default dev ppp0`(via 없음)에서
+    #   장치명을 게이트웨이로, `default nhid 7 via …`(iproute2 nexthop 객체)에서 nhid 값을 게이트웨이로 냈고, ECMP(`default proto static`
+    #   + 들여쓴 `nexthop via … dev …` 줄)는 아예 읽지 못했다. 기본 경로는 전부 GW4|<gw>|<dev> 줄로 낸다(ECMP 는 nexthop 마다 1줄).
+    #   종전 GW= / GW_DEV= 는 첫 줄로 유지한다(해석기 호환). IPv6 기본 경로는 GW6|<gw>|<dev>.
+    gw4_rows=$(ip route show default 2>/dev/null | awk '{
+      gw = ""; dev = "";
+      for (i = 1; i <= NF; i++) { if ($i == "via") gw = $(i + 1); if ($i == "dev") dev = $(i + 1) }
+      if (gw != "" || dev != "") print "GW4|" gw "|" dev
+    }')
+    if [ -n "$gw4_rows" ]; then
+      printf '%s\n' "$gw4_rows"
+      gw4_first=$(printf '%s\n' "$gw4_rows" | head -1)
+      echo "GW=$(echo "$gw4_first" | cut -d'|' -f2)"
+      echo "GW_DEV=$(echo "$gw4_first" | cut -d'|' -f3)"
     fi
+    ip -6 route show default 2>/dev/null | awk '{
+      gw = ""; dev = "";
+      for (i = 1; i <= NF; i++) { if ($i == "via") gw = $(i + 1); if ($i == "dev") dev = $(i + 1) }
+      if (gw != "" || dev != "") print "GW6|" gw "|" dev
+    }'
     # --- Interfaces (IP 유무와 무관하게 전수 — bond slave / bridge port 는 토폴로지 필터가 채운다) ---
     for dev in $(ls /sys/class/net/ 2>/dev/null); do
       case "$dev" in lo|docker*|br-*|veth*|virbr*|vir*|cni*|flannel*|cali*|tunl*|dummy*|kube-*) continue;; esac
@@ -214,14 +229,23 @@
       }'
     done
     # --- hardware NIC (lspci -mm) + driver. awk -F'"' field: $2=class / $4=vendor / $6=device ---
+    #   LX-F10 (2026-10-10): lspci 의 stderr 첫 줄을 LSPCI_ERR= 표식으로 stdout 에 남긴다. os-gather/site.yml 의 ansible_ssh_use_tty 로
+    #   stderr 가 stdout 에 합쳐져 register.stderr 는 늘 비어 있었고, 종전 `'lspci' in stderr` 조건은 참이 될 수 없었다.
+    #   임시 파일은 mktemp 로만 받는다(없으면 버린다).
     if command -v lspci >/dev/null 2>&1; then
-      lspci -k -mm -d ::0200 | while IFS= read -r line; do
+      lspci_ef=$(mktemp 2>/dev/null) || lspci_ef=""
+      lspci -k -mm -d ::0200 2>"${lspci_ef:-/dev/null}" | while IFS= read -r line; do
         slot=$(echo "$line" | awk -F'"' '{print $1}' | tr -d ' ')
         vendor=$(echo "$line" | awk -F'"' '{print $4}')
         device=$(echo "$line" | awk -F'"' '{print $6}')
         driver=$(lspci -k -s "$slot" 2>/dev/null | awk '/Kernel driver in use:/{print $5}')
         echo "ADAPTER|${slot}|${vendor}|${device}|${driver}"
       done
+      if [ -n "$lspci_ef" ]; then
+        lspci_err=$(head -n 1 "$lspci_ef" 2>/dev/null | tr -d '|\r')
+        rm -f "$lspci_ef"
+        if [ -n "$lspci_err" ]; then echo "LSPCI_ERR=$lspci_err"; fi
+      fi
     fi
     # --- NIC firmware (ethtool -i), bus-info 도메인 strip → adapters[].pci 매칭 ---
     for d in $(ls /sys/class/net 2>/dev/null); do
@@ -258,14 +282,32 @@
         {%- endif -%}
       {%- endfor -%}
       {{ real if real else fallback }}
+    # LX-F02 (2026-10-10, ansible-core 2.20.7 jinja2_native 재현): 출력 노드가 하나도 없는 템플릿은 None 이 되고 `None | trim` 은
+    #   'None' 이라 기본 경로가 없는 host 가 default_gateways=[{'address': 'None'}] 로 나갔다. 늘 문자열 하나를 낸다 ({{ ns.v }}).
     _l_raw_gw: >-
+      {%- set ns = namespace(v='') -%}
       {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
-        {%- if line.startswith('GW=') -%}{{ line[3:] | trim }}{% endif -%}
+        {%- if line.startswith('GW=') and not ns.v -%}{%- set ns.v = line[3:] | trim -%}{%- endif -%}
       {%- endfor -%}
+      {{ ns.v }}
     _l_raw_gw_dev: >-
+      {%- set ns = namespace(v='') -%}
       {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
-        {%- if line.startswith('GW_DEV=') -%}{{ line[7:] | trim }}{% endif -%}
+        {%- if line.startswith('GW_DEV=') and not ns.v -%}{%- set ns.v = line[7:] | trim -%}{%- endif -%}
       {%- endfor -%}
+      {{ ns.v }}
+    # GW4|<gw>|<dev> / GW6|<gw>|<dev> — 기본 경로 전부 (ECMP 는 nexthop 마다 1줄, via 없는 경로는 address 가 null). LX-F08.
+    _l_raw_gw_rows: >-
+      {%- set rows = [] -%}
+      {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('GW4|') or line.startswith('GW6|') -%}
+          {%- set p = line.split('|') -%}
+          {%- if p | length >= 3 -%}
+            {%- set _ = rows.append({'family': ('ipv4' if line.startswith('GW4|') else 'ipv6'), 'address': ((p[1] | trim) or none), 'dev': ((p[2] | trim) or none)}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ rows }}
     # IF6 (IPv6 addresses by device) — scope 는 ip 명령 값 (global/link/host/site)
     _l_raw_ipv6_by_dev: >-
       {%- set m = {} -%}
@@ -387,18 +429,34 @@
 - name: "linux | network | raw mark primary + inject gateway + merge IPv6"
   ansible.builtin.set_fact:
     _l_norm_interfaces_raw: >-
-      {%- set gw     = (_l_raw_gw     | default('')) | trim -%}
-      {%- set gw_dev = (_l_raw_gw_dev | default('')) | trim -%}
-      {%- set v6_map = (_l_raw_ipv6_by_dev | default({})) -%}
+      {%- set gw     = (_l_raw_gw     | default('', true)) | string | trim -%}
+      {%- set gw_dev = (_l_raw_gw_dev | default('', true)) | string | trim -%}
+      {%- set rows   = (_l_raw_gw_rows | default([], true)) -%}
+      {%- set v6_map = (_l_raw_ipv6_by_dev | default({}, true)) -%}
+      {#- 장치별 기본 경로 게이트웨이 — 가족(ipv4/ipv6)마다 첫 값. ECMP 는 한 장치에 nexthop 이 여럿일 수 있어 주소에는 첫 것을 붙인다 (LX-F08).
+          GW4/GW6 줄이 없고 종전 GW=/GW_DEV= 만 있는 입력(옛 캡처)도 같은 결과를 낸다. -#}
+      {%- set gw4_by_dev = {} -%}
+      {%- set gw6_by_dev = {} -%}
+      {%- for r in rows -%}
+        {%- if r.dev -%}
+          {%- if r.family == 'ipv4' and r.dev not in gw4_by_dev -%}{%- set _ = gw4_by_dev.update({r.dev: r.address}) -%}
+          {%- elif r.family == 'ipv6' and r.dev not in gw6_by_dev -%}{%- set _ = gw6_by_dev.update({r.dev: r.address}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- if (rows | length) == 0 and gw_dev -%}{%- set _ = gw4_by_dev.update({gw_dev: (gw or none)}) -%}{%- endif -%}
+      {%- set primary_devs = (gw4_by_dev.keys() | list) if (gw4_by_dev | length > 0) else (gw6_by_dev.keys() | list) -%}
       {%- set out = [] -%}
       {%- for iface in (_l_raw_ifaces | default([])) -%}
-        {%- set is_primary = (gw_dev | length > 0) and (iface.id == gw_dev) -%}
+        {%- set is_primary = iface.id in primary_devs -%}
+        {%- set gw4 = gw4_by_dev[iface.id] if (iface.id in gw4_by_dev) else none -%}
+        {%- set gw6 = gw6_by_dev[iface.id] if (iface.id in gw6_by_dev) else none -%}
         {%- set addrs = [] -%}
         {%- for a in (iface.addresses | default([])) -%}
-          {%- set _ = addrs.append(a | combine({'gateway': gw if (is_primary and gw) else none})) -%}
+          {%- set _ = addrs.append(a | combine({'gateway': (gw4 if gw4 else none)})) -%}
         {%- endfor -%}
         {%- for v6 in (v6_map[iface.id] | default([])) -%}
-          {%- set _ = addrs.append(v6) -%}
+          {%- set _ = addrs.append(v6 | combine({'gateway': (gw6 if gw6 else none)})) -%}
         {%- endfor -%}
         {%- set _ = out.append(iface | combine({
           'is_primary': is_primary,
@@ -454,9 +512,17 @@
       network:
         dns_servers: "{{ _l_raw_dns | default([]) }}"
         default_gateways: >-
+          {#- LX-F08: 기본 경로 전부(IPv4 + IPv6, 중복 제거). GW4/GW6 줄이 없는 옛 입력은 종전 GW= 하나 -#}
           {%- set out = [] -%}
-          {%- set gw = (_l_raw_gw | default('')) | trim -%}
-          {%- if gw -%}
+          {%- set seen = [] -%}
+          {%- for r in (_l_raw_gw_rows | default([], true)) -%}
+            {%- if r.address and ((r.family ~ '|' ~ r.address) not in seen) -%}
+              {%- set _ = seen.append(r.family ~ '|' ~ r.address) -%}
+              {%- set _ = out.append({'family': r.family, 'address': r.address}) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- set gw = (_l_raw_gw | default('', true)) | string | trim -%}
+          {%- if (out | length) == 0 and gw -%}
             {%- set _ = out.append({'family':'ipv4','address':gw}) -%}
           {%- endif -%}
           {{ out }}
@@ -473,7 +539,15 @@
     _sections_failed_fragment:    "{{ [] if (_l_net_raw_ok | default(false) | bool) else ['network'] }}"
     # N12: 섹션이 failed 가 되는 바로 그 조건에서 errors 1건. LOW-9/H4: lspci stderr 가 비어있지 않으면
     # 권한 부족/partial enumeration 의심 경고 1건 (섹션은 success 유지 — 시나리오 B).
-    _errors_fragment: "{{ ([] if (_l_net_raw_ok | default(false) | bool) else [{'section':'network','message':'네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=ip,sysfs,resolv_conf; cause=no_interface_and_no_dns; rc=' ~ (_l_net_raw.rc | default('none')))}]) + ([{'section':'network','message':'네트워크 카드 상세 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.','detail':('source=lspci; stderr=' ~ ((_l_net_raw.stderr | default('') | replace('\n', ' ') | trim | truncate(500, true)) or 'none'))}] if (('lspci' in (_l_net_raw.stderr | default(''))) and (_l_net_raw_ok | default(false) | bool)) else []) }}"
+    _errors_fragment: >-
+      {#- LX-F10 (2026-10-10): lspci 오류는 stdout 의 LSPCI_ERR= 표식으로 본다 (use_tty 로 register.stderr 는 늘 비어 있었다) -#}
+      {%- set ns = namespace(lspci_err='') -%}
+      {%- for line in (_l_net_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('LSPCI_ERR=') and not ns.lspci_err -%}{%- set ns.lspci_err = line[10:] | trim -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set ok = _l_net_raw_ok | default(false) | bool -%}
+      {{ ([] if ok else [{'section':'network','message':'네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=ip,sysfs,resolv_conf; cause=no_interface_and_no_dns; rc=' ~ (_l_net_raw.rc | default('none')))}])
+         + ([{'section':'network','message':'네트워크 카드 상세 정보 중 일부를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.','detail':('source=lspci; stderr=' ~ (ns.lspci_err | truncate(500, true)))}] if (ok and ns.lspci_err) else []) }}
   no_log: true
 
 # =============================================================================

@@ -33,7 +33,8 @@ def _render(stdout_lines):
     # `unique` 는 Ansible 필터(jinja2 builtin 아님) — order-preserving dedup 으로 대체.
     env.filters["unique"] = lambda seq: list(dict.fromkeys(seq))
     out = env.from_string(_parse_template()).render(
-        _l_runtime_raw={"stdout_lines": stdout_lines}
+        _l_runtime_raw={"stdout_lines": stdout_lines},
+        _l_runtime_fw_raw={"stdout_lines": []},          # LX-F01 (2026-10-10): 방화벽은 특권 register 로 따로 온다
     )
     if isinstance(out, str):
         out = ast.literal_eval(out.strip())

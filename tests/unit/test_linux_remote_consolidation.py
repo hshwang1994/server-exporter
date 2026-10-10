@@ -250,7 +250,8 @@ DMI_LINES = ["DMI_MEM_BEGIN", "MEM_TOTAL_KB=131481148", "MEM_AVAIL_KB=120000000"
 def _raw_sys(lines: list[str]) -> dict:
     reg = RunResult(0, "".join(ln + "\n" for ln in lines), "").register()
     args = set_fact_args(SYSTEM_YML, "parse raw results")
-    return render_tree(ansible_env(), args["_l_raw_sys"], {"_l_raw_sys_result": reg})
+    # LX-F01: 비특권 · 특권 두 register — 같은 줄을 둘 다에 주면 종전(한 register)과 같은 사전이다
+    return render_tree(ansible_env(), args["_l_raw_sys"], {"_l_raw_sys_result": reg, "_l_raw_priv_result": reg})
 
 
 def test_system_parser_values_unchanged_by_collector_lines():

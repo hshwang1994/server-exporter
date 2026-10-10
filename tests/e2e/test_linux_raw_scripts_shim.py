@@ -68,7 +68,8 @@ SCENARIOS = {
     "python_no_sysfs_dmi": {**BASE, "_l_python_mode": "python_ok", "_l_setup_ok": True,
                             "_l_raw_serial": None, "_l_raw_uuid": None},
 }
-EXPECTED = {"python": 10, "raw": 9, "python_no_sysfs_dmi": 12}
+# 2026-10-10 (LX-F01): system raw 와 runtime 이 비특권/특권 둘로 나뉘어 host 당 원격 실행이 2건 늘었다 — become 실패가 비특권 값을 삼키지 않게.
+EXPECTED = {"python": 12, "raw": 11, "python_no_sysfs_dmi": 14}
 
 
 # ---------------------------------------------------------------------------
@@ -195,9 +196,9 @@ def test_remote_execution_count_per_host(scenario):
 
 
 def test_remote_execution_targets_of_plan_8_2():
-    """Plan §8-2 목표 상한 — Python 12 · raw 9 (자격 probe 포함)."""
-    assert len(count_remote("python")) <= 12
-    assert len(count_remote("raw")) <= 9
+    """Plan §8-2 목표 상한 — Python 12 · raw 9 (자격 probe 포함) + LX-F01 의 특권 분리 2건 (2026-10-10)."""
+    assert len(count_remote("python")) <= 14
+    assert len(count_remote("raw")) <= 11
 
 
 def test_python_and_raw_paths_differ_only_by_setup():
@@ -222,7 +223,7 @@ def test_dmidecode_and_getent_live_in_exactly_one_remote_task():
             for cmd in hits:
                 if cmd in body or action.split(".")[-1] == cmd:
                     hits[cmd].append(f"{yml.name}:{task.get('name')}")
-    assert hits["dmidecode"] == ["gather_system.yml:linux | system | raw gather (os-release/uname/hostname/dmi)"]
+    assert hits["dmidecode"] == ["gather_system.yml:linux | system | raw gather (privileged dmi + dmidecode collector)"]   # LX-F01: 특권 태스크
     assert hits["getent"] == ["gather_users.yml:linux | users | raw getent + last logins"]
 
 

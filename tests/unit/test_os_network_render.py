@@ -83,7 +83,7 @@ def _render_raw_path(stdout_text: str) -> dict:
     ctx = {"_l_net_raw": {"stdout": stdout_text, "stdout_lines": lines, "stderr": "", "rc": 0}}
 
     parse_sf = _setfact(block, "parse raw")
-    for var in ["_l_raw_dns", "_l_raw_gw", "_l_raw_gw_dev", "_l_raw_ipv6_by_dev",
+    for var in ["_l_raw_dns", "_l_raw_gw", "_l_raw_gw_dev", "_l_raw_gw_rows", "_l_raw_ipv6_by_dev",
                 "_l_raw_adapters", "_l_raw_ifaces"]:
         ctx[var] = _render(env, parse_sf[var], ctx)
     ctx["_l_norm_interfaces_raw"] = _render(

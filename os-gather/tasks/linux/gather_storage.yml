@@ -17,7 +17,8 @@
 # 2026-10-03 (Phase 2 C2 — lsblk 실패 은폐 제거):
 #   - LSBLK_RC / LSBLK_ERR / SYS_BLOCK_COUNT marker, rc != 0 이면 구형 fallback 1회 (LSBLK_TXT|).
 #   - JSON 손상은 block/rescue 로 흡수 (호스트 수집 계속), lsblk 이상은 errors[] 1건 (detail 에 state).
-#   - df 는 -l 을 쓰지 않는다 — NFS 포함. multipath 처리는 변경 없음 (보류).
+#   - df 는 -l 을 쓰지 않는다 — NFS 포함.
+# 2026-10-10 (LX-F04): multipath 경로 디스크는 MPATH| 줄(sysfs dm/uuid=mpath-*) 또는 같은 WWN·크기로 1개로 접는다 — 종전에는 경로마다 1개였다.
 # 2026-10-05 (8차 R3): df 를 감싸던 timeout 20 을 없앴다 — 정상적으로 늦은 네트워크 마운트의 df 를 자르지 않는다.
 #   응답하지 않는 마운트는 수집 실행 한계(최대 6시간)와 사용자 취소가 멈추고, 그때 연결이 닫히면서 원격 명령도 끝난다(R6, pty).
 
@@ -71,6 +72,16 @@
       s=$(printf '%s\n' "$p" | sed -n 's/^ID_SERIAL_SHORT=//p' | head -1)
       w=$(printf '%s\n' "$p" | sed -n 's/^ID_WWN=//p' | head -1)
       echo "UDEV|/dev/$d|$s|$w"
+    done
+    # multipath (LX-F04, 2026-10-10): dm 장치(dm/uuid 가 mpath- 로 시작)의 경로 디스크 목록 — 같은 LUN 의 경로를 1개로 접는 근거.
+    #   MPATH|<mpath 이름>|<member …> (sysfs 만 읽는다 — multipath 명령 · 권한 불필요)
+    for dm in /sys/block/dm-*; do
+      [ -d "$dm" ] || continue
+      case "$(cat "$dm/dm/uuid" 2>/dev/null)" in mpath-*) ;; *) continue ;; esac
+      mp_name=$(cat "$dm/dm/name" 2>/dev/null)
+      mp_members=""
+      for s in "$dm"/slaves/*; do [ -e "$s" ] && mp_members="${mp_members} $(basename "$s")"; done
+      if [ -n "$mp_name" ]; then echo "MPATH|${mp_name}|$(echo "$mp_members" | sed 's/^ *//')"; fi
     done
     # is_os_disk (2026-07-02): OS 루트(/) 가 올라간 물리 디스크 — findmnt → lsblk -s 역추적.
     #   -l(list) + awk 글리프 strip. btrfs SOURCE 의 [/@subvol] 접미사 strip. 0건 → 판정불가(null).
@@ -160,6 +171,20 @@
         {%- if line.startswith('OSDISK|') -%}{%- set _ = osdisks.append(line.split('|')[1] | trim) -%}{%- endif -%}
       {%- endfor -%}
       {%- set os_known = (osdisks | length) > 0 -%}
+      {#- LX-F04 (2026-10-10): multipath 경로 디스크는 한 LUN 이다. MPATH| 줄(member → mpath 이름)로 접고, 그 줄이 없으면 WWN 과 크기가
+          같은 disk 들을 접는다(virtio 처럼 WWN 이 비면 접지 않는다). 접힌 항목의 id/device 는 /dev/mapper/<mpath>(MPATH 근거) 또는 첫 경로다.
+          종전에는 경로마다 physical_disks 1개가 되어 디스크 수와 summary 합계가 경로 수만큼 부풀었다. -#}
+      {%- set mp_of = {} -%}
+      {%- for line in (_l_stor_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('MPATH|') -%}
+          {%- set p = line.split('|') -%}
+          {%- if (p | length) >= 3 and (p[1] | trim) -%}
+            {%- for m in (p[2] | trim).split() -%}{%- set _ = mp_of.update({m: (p[1] | trim)}) -%}{%- endfor -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set seen_mp = {} -%}
+      {%- set seen_wwn = {} -%}
       {%- if (devs | length) > 0 -%}
         {%- for dev in devs -%}
           {%- if (dev.type | default('')) in ['disk'] and ((dev.size | default(0)) | int) > 0 -%}
@@ -182,18 +207,34 @@
             {%- set _u = udev.get(_dev_path, {}) -%}
             {%- set _serial = (dev.serial | trim) if dev.serial else (_u.serial | default(none)) -%}
             {%- set _wwn = (dev.wwn | trim) if dev.wwn else (_u.wwn | default(none)) -%}
-            {%- set _ = out.append({
-              'id':         _dev_path,
-              'device':     _dev_path,
-              'model':      (dev.model | trim) if dev.model else none,
-              'serial':     _serial,
-              'wwn':        _wwn,
-              'total_mb':   ((dev.size | int) / 1048576) | round(0, 'floor') | int,
-              'media_type': _media,
-              'protocol':   _proto,
-              'health':     none,
-              'is_os_disk': (_dev_path in osdisks) if os_known else none
-            }) -%}
+            {%- set _model = (dev.model | trim) if dev.model else none -%}
+            {%- set _mp = mp_of[dev.name] if (dev.name in mp_of) else none -%}
+            {%- set _wkey = ((_wwn | lower) ~ '|' ~ (dev.size | int)) if _wwn else none -%}
+            {%- if _mp is not none and _mp in seen_mp -%}
+              {%- set _e = out[seen_mp[_mp]] -%}
+              {%- set _ = _e.update({'serial': (_e.serial or _serial), 'wwn': (_e.wwn or _wwn), 'model': (_e.model or _model),
+                                     'is_os_disk': (true if (os_known and (_dev_path in osdisks)) else _e.is_os_disk)}) -%}
+            {%- elif _mp is none and _wkey is not none and _wkey in seen_wwn -%}
+              {%- set _e = out[seen_wwn[_wkey]] -%}
+              {%- set _ = _e.update({'serial': (_e.serial or _serial), 'model': (_e.model or _model),
+                                     'is_os_disk': (true if (os_known and (_dev_path in osdisks)) else _e.is_os_disk)}) -%}
+            {%- else -%}
+              {%- if _mp is not none -%}{%- set _ = seen_mp.update({_mp: out | length}) -%}
+              {%- elif _wkey is not none -%}{%- set _ = seen_wwn.update({_wkey: out | length}) -%}{%- endif -%}
+              {%- set _id = ('/dev/mapper/' ~ _mp) if _mp is not none else _dev_path -%}
+              {%- set _ = out.append({
+                'id':         _id,
+                'device':     _id,
+                'model':      _model,
+                'serial':     _serial,
+                'wwn':        _wwn,
+                'total_mb':   ((dev.size | int) / 1048576) | round(0, 'floor') | int,
+                'media_type': _media,
+                'protocol':   _proto,
+                'health':     none,
+                'is_os_disk': (_dev_path in osdisks) if os_known else none
+              }) -%}
+            {%- endif -%}
           {%- endif -%}
         {%- endfor -%}
       {%- else -%}
@@ -205,9 +246,16 @@
               {%- set _dev_path = '/dev/' ~ (p[1] | trim) -%}
               {%- set _rota = (p[4] | trim) | lower -%}
               {%- set _u = udev.get(_dev_path, {}) -%}
+              {%- set _mp = mp_of[p[1] | trim] if ((p[1] | trim) in mp_of) else none -%}
+              {%- if _mp is not none and _mp in seen_mp -%}
+                {%- set _e = out[seen_mp[_mp]] -%}
+                {%- set _ = _e.update({'is_os_disk': (true if (os_known and (_dev_path in osdisks)) else _e.is_os_disk)}) -%}
+              {%- else -%}
+              {%- if _mp is not none -%}{%- set _ = seen_mp.update({_mp: out | length}) -%}{%- endif -%}
+              {%- set _id = ('/dev/mapper/' ~ _mp) if _mp is not none else _dev_path -%}
               {%- set _ = out.append({
-                'id':         _dev_path,
-                'device':     _dev_path,
+                'id':         _id,
+                'device':     _id,
                 'model':      (p[5] | trim) or none,
                 'serial':     _u.serial | default(none),
                 'wwn':        _u.wwn | default(none),
@@ -217,6 +265,7 @@
                 'health':     none,
                 'is_os_disk': (_dev_path in osdisks) if os_known else none
               }) -%}
+              {%- endif -%}
             {%- endif -%}
           {%- endif -%}
         {%- endfor -%}

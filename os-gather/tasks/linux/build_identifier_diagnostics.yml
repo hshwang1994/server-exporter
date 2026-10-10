@@ -9,14 +9,14 @@
 #   _l_dmi_serial_direct         — DMI direct-read register (없을 수 있음)
 #   _l_dmi_uuid_direct           — DMI direct-read register (없을 수 있음)
 #   _l_dmi_fallback_failed       — block rescue trigger (없을 수 있음)
+#   _l_raw_priv_failed           — 특권 raw gather(become) 가 실행되지 못함 (LX-F01, raw 경로의 권한 근거)
 #
 # 출력:
 #   _l_id_diagnostics  → list of diag dict (errors_fragment 후보)
 #
-# Python 경로에서만 동작. raw-only 경로는 gather_system.yml에서 빈 list 초기화.
+# 두 경로 모두 동작한다 (2026-10-10 LX-F01). python 경로는 setup fact / DMI direct-read 근거, raw 경로는 특권 raw gather 근거.
 
 - name: "linux | system | build identifier diagnostics"
-  when: _l_python_mode == 'python_ok'
   # H5 (2026-08-12): 식별자 진단 문장을 (필드 2종) x (원인 2종) = 2문장 체계로 축약했다.
   #   종전에는 영문 enum(insufficient_privilege / identifier_not_available)과 Ansible 용어
   #   (setup fact / become / DMI direct-read), 긴 대시가 Portal 문장에 그대로 실렸고,
@@ -33,6 +33,23 @@
       {%- set diags = [] -%}
       {%- set serial_na = (_l_serial_val | default(none)) is none -%}
       {%- set uuid_na   = (_l_uuid_val   | default(none)) is none -%}
+      {%- set python_path = (_l_python_mode | default('')) == 'python_ok' -%}
+      {%- set priv_failed = (_l_raw_priv_failed | default(false)) | bool -%}
+      {%- if not python_path -%}
+        {#- raw 경로 (LX-F01): 특권 raw gather 가 돌지 못했으면 권한 문장, 돌았는데 값이 없으면(자리표시자 포함) 대상이 제공하지 않는 것 -#}
+        {%- if serial_na and priv_failed -%}
+          {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_serial,"detail":"field=serial_number; cause=insufficient_privilege; tried=dmi_sysfs,become"}) -%}
+        {%- elif serial_na -%}
+          {%- set _ = diags.append({"section":"system","message":_id_msg_absent_serial,"detail":"field=serial_number; cause=identifier_not_available; tried=dmi_sysfs,become"}) -%}
+        {%- endif -%}
+        {%- if uuid_na and priv_failed -%}
+          {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_uuid,"detail":"field=system_uuid; cause=insufficient_privilege; tried=dmi_sysfs,become"}) -%}
+        {%- elif uuid_na -%}
+          {%- set _ = diags.append({"section":"system","message":_id_msg_absent_uuid,"detail":"field=system_uuid; cause=identifier_not_available; tried=dmi_sysfs,become"}) -%}
+        {%- endif -%}
+      {%- endif -%}
+      {%- set serial_na = serial_na and python_path -%}
+      {%- set uuid_na   = uuid_na and python_path -%}
       {%- set dmi_block_failed = (_l_dmi_fallback_failed | default(false)) | bool -%}
       {%- set serial_dmi_tried  = _l_dmi_serial_direct is defined -%}
       {%- set serial_dmi_failed = serial_dmi_tried and (_l_dmi_serial_direct.rc | default(1)) != 0 -%}

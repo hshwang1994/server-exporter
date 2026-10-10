@@ -16,8 +16,11 @@
 #   - 값을 못 구하면 null. 0 / '' / IP / 'unknown' 문자열로 대체하지 않는다.
 #
 # 2026-10-03 (Plan §8-2 — 원격 실행 수 감축, 출력 불변):
-#   - dmidecode 는 호스트당 1회. 아래 raw gather(become) 끝에서 공유 DMI collector 가
+#   - dmidecode 는 호스트당 1회. 아래 특권 raw gather(become) 끝에서 공유 DMI collector 가
 #     `dmidecode -t memory -t processor` 1회 + /proc/meminfo 를 읽어 `_l_dmi_raw` 로 남긴다.
+#   - LX-F01 (2026-10-10): raw gather 는 비특권(os-release · uname · hostname · 읽을 수 있는 DMI)과 특권(serial · uuid · dmidecode)으로
+#     나뉜다. runtime 도 비특권(시간대 · NTP · 포트 · 스왑)과 특권(방화벽, D-03 유효 정책)으로 나뉜다. become 실패는 특권 값만 비우고
+#     errors[] 로 남는다 (식별자 진단은 raw 경로에서도 돈다).
 #     gather_memory.yml / gather_cpu.yml 은 그 안의 자기 구간(DMI 타입)만 파싱한다 (dmidecode 를 직접 돌리지 않는다).
 #   - 쓰이지 않던 DMI precheck(`test -r`) 2건 삭제 (N5 — 결과를 읽는 곳이 없었다).
 #   - DMI direct-read(become) 2건은 raw sysfs 읽기도 실패했을 때만 실행한다. raw gather 가 같은 파일을
@@ -190,7 +193,8 @@
 # Raw gather — 두 경로 공통 (os-release / uname / hostname / selinux / DMI sysfs)
 # =============================================================================
 - name: "linux | system | raw gather (os-release/uname/hostname/dmi)"
-  become: true
+  # LX-F01 (2026-10-10): 비특권 수집. 종전에는 이 태스크 전체가 become 이라 sudo 가 실패하면(비밀번호 불일치 · sudoers 부재) 권한 없이도
+  #   읽을 수 있는 OS·커널·호스트명·제조사까지 모두 잃었다. 특권이 필요한 것(product_serial · product_uuid · dmidecode)은 아래 특권 태스크다.
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     . /etc/os-release 2>/dev/null || true
@@ -217,18 +221,35 @@
     else
       echo "SDV="
     fi
+    # 읽을 수 있는 DMI 만 (sys_vendor · product_name · bios_* 는 보통 0444, product_serial · product_uuid 는 0400 — 특권 태스크가 읽는다)
     for f in product_serial product_uuid sys_vendor product_name bios_version bios_date; do
       v=""
       if [ -r /sys/class/dmi/id/$f ]; then
         v=$(cat /sys/class/dmi/id/$f 2>/dev/null)
-      elif command -v sudo >/dev/null 2>&1; then
-        v=$(sudo -n cat /sys/class/dmi/id/$f 2>/dev/null || true)
+      fi
+      echo "DMI_$(echo $f | tr '[:lower:]' '[:upper:]')=$v"
+    done
+  register: _l_raw_sys_result
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: "linux | system | raw gather (privileged dmi + dmidecode collector)"
+  # LX-F01: 특권 수집(become). 실패해도 위 비특권 결과는 남고, 식별자(serial/uuid)·dmidecode 만 없다 — 그 사실은 errors[] 로 나간다.
+  #   비특권 태스크가 이미 읽은 DMI 값은 아래 parse 가 특권 값(비어 있지 않은 것)으로만 덮는다.
+  become: true
+  ansible.builtin.raw: |
+    export LANG=C LC_ALL=C
+    for f in product_serial product_uuid sys_vendor product_name bios_version bios_date; do
+      v=""
+      if [ -r /sys/class/dmi/id/$f ]; then
+        v=$(cat /sys/class/dmi/id/$f 2>/dev/null)
       fi
       echo "DMI_$(echo $f | tr '[:lower:]' '[:upper:]')=$v"
     done
     # 공유 DMI collector (위 _l_dmi_collector — memory / cpu 가 읽는다). 이 태스크의 become 을 같이 쓴다.
     {{ _l_dmi_collector }}
-  register: _l_raw_sys_result
+  register: _l_raw_priv_result
   changed_when: false
   failed_when: false
   no_log: true
@@ -236,10 +257,18 @@
 - name: "linux | system | parse raw results"
   ansible.builtin.set_fact:
     _l_raw_sys: >-
-      {{ dict(_l_raw_sys_result.stdout_lines | default([])
-              | select('search', '=')
-              | map('split', '=', 1)
-              | list) }}
+      {#- LX-F01: 비특권 결과 위에 특권 결과를 덮는다 — 값이 있는 키만. become 이 실패하면 특권 줄이 없어 비특권 값이 그대로 남는다 -#}
+      {%- set base = dict(_l_raw_sys_result.stdout_lines | default([]) | select('search', '=') | map('split', '=', 1) | list) -%}
+      {%- set priv = dict(_l_raw_priv_result.stdout_lines | default([]) | select('search', '=') | map('split', '=', 1) | list) -%}
+      {%- set out = {} -%}
+      {%- set _ = out.update(base) -%}
+      {%- for k, v in priv.items() -%}
+        {%- if ((v | string | trim) | length) > 0 or (k not in out) -%}{%- set _ = out.update({k: v}) -%}{%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+    # 특권 수집이 실행되지 못했는가 — 특권 스크립트는 값이 비어도 DMI_PRODUCT_SERIAL= 줄을 낸다. 그 줄이 없으면 become/연결 실패다.
+    _l_raw_priv_failed: >-
+      {{ ((_l_raw_priv_result.stdout_lines | default([])) | select('match', '^DMI_PRODUCT_SERIAL=') | list | length) == 0 }}
   no_log: true
 
 # 공유 DMI 결과 — DMI_MEM_BEGIN 부터 DMI_PROC_END 까지 (gather_memory.yml / gather_cpu.yml 이 자기 구간만 읽는다).
@@ -248,13 +277,13 @@
   ansible.builtin.set_fact:
     _l_dmi_raw: >-
       {%- set ns = namespace(on=false, lines=[]) -%}
-      {%- for line in (_l_raw_sys_result.stdout_lines | default([])) -%}
+      {%- for line in (_l_raw_priv_result.stdout_lines | default([])) -%}
         {%- if (line | trim) == 'DMI_MEM_BEGIN' -%}{%- set ns.on = true -%}{%- endif -%}
         {%- if ns.on -%}{%- set _ = ns.lines.append(line) -%}{%- endif -%}
         {%- if (line | trim) == 'DMI_PROC_END' -%}{%- set ns.on = false -%}{%- endif -%}
       {%- endfor -%}
       {%- set out = {'stdout_lines': ns.lines} -%}
-      {%- if (_l_raw_sys_result | default({})).rc is defined -%}{%- set _ = out.update({'rc': _l_raw_sys_result.rc}) -%}{%- endif -%}
+      {%- if (_l_raw_priv_result | default({})).rc is defined -%}{%- set _ = out.update({'rc': _l_raw_priv_result.rc}) -%}{%- endif -%}
       {{ out }}
   no_log: true
 
@@ -263,8 +292,8 @@
 # 두 경로 모두 raw 모듈 — timedatectl/systemctl 같은 명령은 raw 가 가장 robust.
 # 모르면 null: 명령 부재 시 값을 비워 보낸다 (0 / false 로 단정하지 않는다).
 # =============================================================================
-- name: "linux | system | gather runtime (timezone/ntp/firewall/listen/swap)"
-  become: true
+- name: "linux | system | gather runtime (timezone/ntp/listen/swap)"
+  # LX-F01 (2026-10-10): 비특권 부분. 종전에는 방화벽과 함께 한 태스크(become)였다 — sudo 실패 하나로 시간대·NTP·포트·스왑까지 잃었다.
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
     TZ=$(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || (readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||') || echo "")
@@ -282,27 +311,6 @@
       NTPACTIVE=""
     fi
     echo "NTPACTIVE=${NTPACTIVE}"
-    FW_TOOL=""
-    FW_STATE=""
-    if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active firewalld 2>/dev/null | grep -q "^active$"; then
-      FW_TOOL="firewalld"; FW_STATE="active"
-    elif command -v ufw >/dev/null 2>&1; then
-      UFW_OUT=$(sudo -n ufw status 2>/dev/null | head -1 || true)
-      if echo "$UFW_OUT" | grep -qi "Status: active"; then FW_TOOL="ufw"; FW_STATE="active"
-      elif echo "$UFW_OUT" | grep -qi "Status: inactive"; then FW_TOOL="ufw"; FW_STATE="inactive"
-      fi
-    elif command -v nft >/dev/null 2>&1; then
-      RULESET=$(sudo -n nft list ruleset 2>/dev/null || true)
-      if [ -n "$RULESET" ]; then FW_TOOL="nftables"; FW_STATE="active"
-      else FW_TOOL="nftables"; FW_STATE="inactive"
-      fi
-    elif command -v iptables >/dev/null 2>&1; then
-      FW_TOOL="iptables"
-      IPT_OUT=$(sudo -n iptables -L -n 2>/dev/null | head -5 || true)
-      if [ -n "$IPT_OUT" ]; then FW_STATE="active"; else FW_STATE="inactive"; fi
-    fi
-    echo "FW_TOOL=${FW_TOOL}"
-    echo "FW_STATE=${FW_STATE}"
     echo "PORTS_BEGIN"
     if command -v ss >/dev/null 2>&1; then
       ss -tlnH 2>/dev/null | awk '{print $4}' | awk -F: '{print $NF}' | grep -E '^[0-9]+$' | sort -un
@@ -326,10 +334,47 @@
   failed_when: false
   no_log: true
 
+- name: "linux | system | gather runtime firewall (privileged)"
+  # D-03 (2026-10-10): firewall_state 의 뜻은 **유효 정책**이다 — 도구가 설치돼 있다는 사실이나 체인 머리말 출력이 아니다.
+  #   firewalld 실행 중 → active. ufw → 'Status: active/inactive'. nftables / iptables → 입력 체인(hook input / INPUT)의 정책이 drop|reject
+  #   이거나 규칙이 1개 이상이면 active, 정책 accept 이고 규칙이 없으면 inactive. (종전 iptables 는 `-L` 머리말만 보고 설치만 돼 있어도 active 였다.)
+  #   Windows(ActiveStore) · ESXi(defaultPolicy) 와 같은 뜻. 규칙 조회는 root 가 필요하다 — become 이 실패하면 둘 다 null + errors[] 1건.
+  become: true
+  ansible.builtin.raw: |
+    export LANG=C LC_ALL=C
+    FW_TOOL=""
+    FW_STATE=""
+    if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active firewalld 2>/dev/null | grep -q "^active$"; then
+      FW_TOOL="firewalld"; FW_STATE="active"
+    elif command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | head -1 | grep -qi "^Status:"; then
+      FW_TOOL="ufw"
+      if ufw status 2>/dev/null | head -1 | grep -qi "Status: active"; then FW_STATE="active"; else FW_STATE="inactive"; fi
+    elif command -v nft >/dev/null 2>&1 && nft list ruleset >/dev/null 2>&1; then
+      FW_TOOL="nftables"
+      FW_STATE=$(nft list ruleset 2>/dev/null | awk '
+        /type filter hook input/ { inchain = 1; if ($0 ~ /policy (drop|reject)/) drop = 1; next }
+        inchain && /^[ \t]*}/ { inchain = 0; next }
+        inchain && NF > 0 { rules++ }
+        END { if (drop || rules > 0) print "active"; else print "inactive" }')
+    elif command -v iptables >/dev/null 2>&1 && iptables -S INPUT >/dev/null 2>&1; then
+      FW_TOOL="iptables"
+      FW_STATE=$(iptables -S INPUT 2>/dev/null | awk '
+        /^-P INPUT (DROP|REJECT)/ { drop = 1 }
+        /^-A INPUT/ { rules++ }
+        END { if (drop || rules > 0) print "active"; else print "inactive" }')
+    fi
+    echo "FW_TOOL=${FW_TOOL}"
+    echo "FW_STATE=${FW_STATE}"
+  register: _l_runtime_fw_raw
+  changed_when: false
+  failed_when: false
+  no_log: true
+
 - name: "linux | system | parse runtime"
   ansible.builtin.set_fact:
     _l_runtime: >-
-      {%- set lines = _l_runtime_raw.stdout_lines | default([]) -%}
+      {#- LX-F01: 비특권(시간대·NTP·포트·스왑) + 특권(방화벽) 두 결과를 한 사전으로 -#}
+      {%- set lines = (_l_runtime_raw.stdout_lines | default([])) + (_l_runtime_fw_raw.stdout_lines | default([])) -%}
       {%- set ns = namespace(in_ports=false, ports=[], kv={}) -%}
       {%- for line in lines -%}
         {%- set s = line | trim -%}
@@ -346,6 +391,9 @@
          int 로 모아 숫자정렬 후 map('string') 으로 str[] 변환 (정렬은 수치, 출력은 문자열). #}
       {%- set _ = ns.kv.update({'PORTS': ns.ports | sort | unique | map('string') | list}) -%}
       {{ ns.kv }}
+    # 방화벽(특권) 수집이 실행되지 못했는가 — 특권 스크립트는 값이 비어도 FW_TOOL= 줄을 낸다. 없으면 become/연결 실패 → firewall_* null + errors[] 1건.
+    _l_runtime_fw_failed: >-
+      {{ ((_l_runtime_fw_raw.stdout_lines | default([])) | select('match', '^FW_TOOL=') | list | length) == 0 }}
   no_log: true
 
 # =============================================================================
@@ -392,26 +440,12 @@
         {%- else -%}{{ none }}
         {%- endif -%}
       SDV: "{{ ((_l_raw_sys.SDV | default('')) | trim | lower) or none }}"
-    _l_raw_serial: >-
-      {%- set s = (_l_raw_sys.DMI_PRODUCT_SERIAL | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string', '0', '00000000'] -%}
-      {{ s if s not in sentinel else none }}
-    _l_raw_uuid: >-
-      {%- set u = (_l_raw_sys.DMI_PRODUCT_UUID | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified'] -%}
-      {{ u if u not in sentinel else none }}
-    _l_raw_vendor: >-
-      {%- set v = (_l_raw_sys.DMI_SYS_VENDOR | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System manufacturer', 'Default string'] -%}
-      {{ v if v not in sentinel else none }}
-    _l_raw_model: >-
-      {%- set m = (_l_raw_sys.DMI_PRODUCT_NAME | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Product Name', 'Default string'] -%}
-      {{ m if m not in sentinel else none }}
-    _l_raw_bios_version: >-
-      {%- set b = (_l_raw_sys.DMI_BIOS_VERSION | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'Default string'] -%}
-      {{ b if b not in sentinel else none }}
+    # LX-F12 (2026-10-10): 자리표시자 집합은 filter_plugins/identity_normalizer.py DMI_SENTINELS 하나다 (Windows · ESXi 와 공유, 종전 인라인 8곳)
+    _l_raw_serial:       "{{ (_l_raw_sys.DMI_PRODUCT_SERIAL | default('')) | dmi_sentinel_null('serial') }}"
+    _l_raw_uuid:         "{{ (_l_raw_sys.DMI_PRODUCT_UUID   | default('')) | dmi_sentinel_null('uuid') }}"
+    _l_raw_vendor:       "{{ (_l_raw_sys.DMI_SYS_VENDOR     | default('')) | dmi_sentinel_null('vendor') }}"
+    _l_raw_model:        "{{ (_l_raw_sys.DMI_PRODUCT_NAME   | default('')) | dmi_sentinel_null('model') }}"
+    _l_raw_bios_version: "{{ (_l_raw_sys.DMI_BIOS_VERSION   | default('')) | dmi_sentinel_null('bios') }}"
     _l_raw_bios_date: "{{ ((_l_raw_sys.DMI_BIOS_DATE | default('')) | trim) or none }}"
   no_log: true
 
@@ -453,12 +487,8 @@
 - name: "linux | system | check setup fact identifiers"
   when: _l_setup_ok | bool
   ansible.builtin.set_fact:
-    _l_serial_from_setup: >-
-      {{ none if (ansible_product_serial | default('')) in ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string', '0', '00000000']
-         else (ansible_product_serial | default(none)) }}
-    _l_uuid_from_setup: >-
-      {{ none if (ansible_product_uuid | default('')) in ['', 'NA', 'None', 'Not Specified']
-         else (ansible_product_uuid | default(none)) }}
+    _l_serial_from_setup: "{{ (ansible_product_serial | default('')) | dmi_sentinel_null('serial') }}"
+    _l_uuid_from_setup:   "{{ (ansible_product_uuid   | default('')) | dmi_sentinel_null('uuid') }}"
   no_log: true
 
 # DMI direct-read fallback (become 필요)
@@ -499,12 +529,10 @@
 - name: "linux | system | resolve identifiers"
   ansible.builtin.set_fact:
     _l_serial_val: >-
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Serial Number', 'Default string', '0', '00000000'] -%}
       {%- if (_l_serial_from_setup | default(none)) is not none -%}
         {{ _l_serial_from_setup }}
       {%- elif (_l_dmi_serial_direct is defined) and (_l_dmi_serial_direct.rc | default(1)) == 0
-              and (_l_dmi_serial_direct.stdout | default('') | trim) not in sentinel
-              and (_l_dmi_serial_direct.stdout | default('') | trim | length) > 0 -%}
+              and (((_l_dmi_serial_direct.stdout | default('')) | dmi_sentinel_null('serial')) is not none) -%}
         {{ _l_dmi_serial_direct.stdout | trim }}
       {%- elif (_l_raw_serial | default(none)) is not none -%}
         {{ _l_raw_serial }}
@@ -512,12 +540,10 @@
         {{ none }}
       {%- endif -%}
     _l_uuid_val: >-
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified'] -%}
       {%- if (_l_uuid_from_setup | default(none)) is not none -%}
         {{ _l_uuid_from_setup }}
       {%- elif (_l_dmi_uuid_direct is defined) and (_l_dmi_uuid_direct.rc | default(1)) == 0
-              and (_l_dmi_uuid_direct.stdout | default('') | trim) not in sentinel
-              and (_l_dmi_uuid_direct.stdout | default('') | trim | length) > 0 -%}
+              and (((_l_dmi_uuid_direct.stdout | default('')) | dmi_sentinel_null('uuid')) is not none) -%}
         {{ _l_dmi_uuid_direct.stdout | trim }}
       {%- elif (_l_raw_uuid | default(none)) is not none -%}
         {{ _l_raw_uuid }}
@@ -531,17 +557,14 @@
 - name: "linux | system | resolve hardware identity"
   ansible.builtin.set_fact:
     _l_hw_vendor: >-
-      {%- set v = (ansible_system_vendor | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System manufacturer', 'Default string'] -%}
-      {{ v if (v not in sentinel) else (_l_raw_vendor | default(none)) }}
+      {%- set v = (ansible_system_vendor | default('')) | dmi_sentinel_null('vendor') -%}
+      {{ v if v is not none else (_l_raw_vendor | default(none)) }}
     _l_hw_model: >-
-      {%- set m = (ansible_product_name | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'System Product Name', 'Default string'] -%}
-      {{ m if (m not in sentinel) else (_l_raw_model | default(none)) }}
+      {%- set m = (ansible_product_name | default('')) | dmi_sentinel_null('model') -%}
+      {{ m if m is not none else (_l_raw_model | default(none)) }}
     _l_hw_bios_version: >-
-      {%- set b = (ansible_bios_version | default('')) | trim -%}
-      {%- set sentinel = ['', 'NA', 'None', 'Not Specified', 'To Be Filled By O.E.M.', 'Default string'] -%}
-      {{ b if (b not in sentinel) else (_l_raw_bios_version | default(none)) }}
+      {%- set b = (ansible_bios_version | default('')) | dmi_sentinel_null('bios') -%}
+      {{ b if b is not none else (_l_raw_bios_version | default(none)) }}
     _l_hw_bios_date: >-
       {%- set d = ((ansible_bios_date | default('')) | trim) or (_l_raw_bios_date | default('', true)) -%}
       {%- set d = d | string | trim -%}
@@ -688,7 +711,11 @@
     _sections_failed_fragment: >-
       {{ ([] if (_l_sys_ok | bool) else ['system']) + ([] if (_l_hw_ok | bool) else ['hardware']) }}
     # 식별자 진단(python 경로) + 섹션 실패 사유. 실패인데 errors 가 비는 결과를 만들지 않는다.
-    _errors_fragment: "{{ (_l_id_diagnostics | default([])) + ([{'section': 'system', 'message': '서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'field=distribution; cause=os_release_and_setup_fact_unavailable'}] if not (_l_sys_ok | bool) else []) + ([{'section': 'hardware', 'message': '하드웨어 정보 수집에 실패했습니다. 수집 계정의 권한을 확인하세요.', 'detail': 'field=vendor,model,serial,uuid,bios_version; cause=dmi_unavailable; tried=setup_fact,dmi_sysfs'}] if not (_l_hw_ok | bool) else []) }}"
+    _errors_fragment: >-
+      {{ (_l_id_diagnostics | default([]))
+         + ([{'section': 'system', 'message': '서버 기본 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': 'field=distribution; cause=os_release_and_setup_fact_unavailable'}] if not (_l_sys_ok | bool) else [])
+         + ([{'section': 'hardware', 'message': '하드웨어 정보 수집에 실패했습니다. 수집 계정의 권한을 확인하세요.', 'detail': 'field=vendor,model,serial,uuid,bios_version; cause=dmi_unavailable; tried=setup_fact,dmi_sysfs'}] if not (_l_hw_ok | bool) else [])
+         + ([{'section': 'system', 'message': '서버 운영 정보 중 방화벽 상태를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.', 'detail': 'field=runtime.firewall_tool,runtime.firewall_state; cause=privileged_read_failed; tried=become'}] if ((_l_runtime_fw_failed | default(false)) | bool) else []) }}
   no_log: true
 
 - name: "linux | system | merge fragment"
