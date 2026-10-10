@@ -169,7 +169,8 @@ def test_network_snapshot_reads_each_source_once():
     # 전체 목록 1회 (InterfaceIndex 색인) + 공급자 질의 옵션 Physical 1회.
     #   2026-10-05 (8차 R5): 전체 목록의 끝나지 않는 오류(SilentlyContinue)를 -ErrorVariable 로 모아 구성요소 실패로 남긴다
     calls = re.findall(r"\bGet-NetAdapter\b(?!HardwareInfo)([^\n|)]*)", code)
-    assert sorted(c.strip() for c in calls) == ["-ErrorAction SilentlyContinue -ErrorVariable seErr", "-Physical"]
+    #   2026-10-10 (C8): 물리 어댑터 목록(-Physical)의 비종료 오류도 -ErrorVariable 로 받아 adapters 구성요소 실패로 남긴다
+    assert sorted(c.strip() for c in calls) == ["-ErrorAction SilentlyContinue -ErrorVariable seErr", "-Physical -ErrorVariable physErr"]
     assert "$naByIdx[[string]$addr.InterfaceIndex]" in code
 
 

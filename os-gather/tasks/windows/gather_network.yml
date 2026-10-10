@@ -150,7 +150,8 @@
           $hw[[string]$h.Name] = $pci
         }
       } catch { }
-      foreach ($a in @(Get-NetAdapter -Physical)) {
+      $physErr = $null
+      foreach ($a in @(Get-NetAdapter -Physical -ErrorVariable physErr)) {
         $mfr = $null
         try {
           if ($a.PnPDeviceID) {
@@ -171,6 +172,10 @@
           speed_mbps   = $(if ($a.Speed) { [math]::Round($a.Speed / 1000000, 0) } else { $null })
         })
       }
+      # 2026-10-10 (C8): -Physical 조회의 비종료 오류(공용 조회와 같은 처리) — 받은 행은 두고 이 구성요소만 실패로 남긴다
+      #   ("component status" 가 network 부분 오류 1건으로 옮긴다, 섹션 상태는 그대로). 찾는 항목 없음(ObjectNotFound)은 실패가 아니다.
+      $real = Get-SeRealError $physErr
+      if ($real) { throw $real[0] }
     }
     try { $doc | ConvertTo-Json -Depth 8 -Compress }
     catch { '{"_error":' + (ConvertTo-Json ([string]$_.Exception.Message) -Compress) + '}' }

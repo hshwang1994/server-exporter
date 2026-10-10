@@ -710,7 +710,10 @@ INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_err
                          # 8차 R5: vmms 조회 실패를 "역할 없음" 으로 보지 않는다 · setup 실패를 권한 문제로 적지 않는다 · setup 실패 시 메모리 오류
                          ("system", "windows | system | determine hosting_type"): {"_w_hosting_type"},
                          ("system", "windows | system | build identifier diagnostics"): {"_w_id_diagnostics"},
-                         ("memory", "windows | memory | build fragment"): {"_errors_fragment"},
+                         ("memory", "windows | memory | build fragment"): {"_errors_fragment", "_data_fragment"},
+                         # 2026-10-10 (C8): DIMM 조회의 공급자 오류 — 조회 실패 표시 · 일부 합계를 설치량으로 확정하지 않음 · 합계 미확정
+                         ("memory", "windows | memory | parse slots + grouping"): {"_w_mem_read_failed", "_w_mem_read_error"},
+                         ("memory", "windows | memory | summary + totals"): {"_w_mem_phys_mb"},
                          ("network", "windows | network | build fragment"): {"_errors_fragment"}}
 # 태스크 단위로 바뀐 키(set_fact 밖) — 식별자 진단의 문장 변수(vars)에 setup 실패 문장 2개를 더했다
 INTENDED_CHANGED_TASK_KEYS = {("system", "windows | system | build identifier diagnostics"): {"vars"}}
@@ -787,8 +790,13 @@ def test_downstream_tasks_are_unchanged(section):
             of = old[name]["ansible.builtin.set_fact"]
             assert {k: v for k, v in nf.items() if k not in changed} == {k: v for k, v in of.items() if k not in changed}, name
             for k in changed:
-                for msg in re.findall(r"'message':\s*'([^']+)'", of[k]):
-                    assert msg in nf[k], (name, msg)
+                if k not in of:
+                    assert k in nf, (name, k)     # 새로 더한 키(종전에 없던 사실)
+                    continue
+                old_v = of[k] if isinstance(of[k], str) else repr(of[k])
+                new_v = nf[k] if isinstance(nf[k], str) else repr(nf[k])
+                for msg in re.findall(r"'message':\s*'([^']+)'", old_v):
+                    assert msg in new_v, (name, msg)
             task_changed = INTENDED_CHANGED_TASK_KEYS.get((section, name), set())
             assert ({k: v for k, v in new[name].items() if k not in ("timeout", "ansible.builtin.set_fact") and k not in task_changed}
                     == {k: v for k, v in old[name].items() if k != "ansible.builtin.set_fact" and k not in task_changed}), name

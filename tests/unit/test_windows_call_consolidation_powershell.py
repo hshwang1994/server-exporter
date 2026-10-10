@@ -556,6 +556,14 @@ INTENDED_EXTRA_ERRORS_PS = {
                                     "parts=interfaces; interfaces=2; error=interfaces: Get-NetIPAddress: WMI provider failure (fixture)"}],
 }
 
+# 2026-10-10 (C8): Win32_PhysicalMemory 조회가 실패하면 종전에는 "출력 없음 · 권한 확인" 으로 적었다. 새 체인은 조회 실패와 그 원문을
+#   적는다(원인을 권한으로 단정하지 않는다) — 종전 항목을 대신하는 의도한 차이.
+INTENDED_REPLACED_ERRORS_PS = {
+    ("memory", "fail"): [{"section": "memory", "message": "메모리 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.",
+                         "detail": "source=Win32_PhysicalMemory; cause=read_failed; fallback=os_visible; slots=0; "
+                                   "error=Win32_PhysicalMemory provider failure (fixture)"}],
+}
+
 
 @pytest.mark.parametrize("section,name", list(SCENARIOS))
 def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
@@ -567,6 +575,7 @@ def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
         expected = old["frag"][key]
         if key == "_errors_fragment":
             expected = list(expected or []) + INTENDED_EXTRA_ERRORS_PS.get((section, name), [])
+            expected = INTENDED_REPLACED_ERRORS_PS.get((section, name), expected)
         assert new["frag"][key] == expected, f"{section}/{name}: {key} 가 종전과 다르다"
     shared = shared_facts(old["ctx"], new["ctx"], new["facts"])
     assert shared
