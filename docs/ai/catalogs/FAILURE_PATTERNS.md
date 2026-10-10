@@ -1013,3 +1013,29 @@
 - 재발 방지: 구간 치환은 start 와 end 사이에 다른 본문이 없음을 assert 한다(또는 "뒤에 삽입" 으로 쓴다). 패치 뒤에는 `git diff --stat` 의 삭제 줄 수를
   기대와 대조한다.
 - 관련 rule: rule 95 R1 · rule 24 R1.
+
+## 2026-10-10 — 실제 Ansible 엔진 렌더 시험 29건이 전체 suite 에서 조용히 skip 돼 CI 가 한 번도 돌리지 않았다 (HC-09)
+
+- 카테고리: harness-blind-spot (silent skip counted as PASS)
+- 발견 위치: `tests/e2e/test_diagnosis_template_ansible_render.py`(26) · `tests/e2e/test_bios_attributes_ansible_render.py`(3). 파일만 따로 돌리면 통과(22 + 8)하는데
+  `pytest tests/unit tests/e2e tests/regression` 에서는 "이 플랫폼에서 ansible-core 템플릿 엔진을 import 할 수 없다" 로 skip — WSL 2.20.7 과 **Runner CI Gate**(CI #40 161 skip ·
+  #41 162 skip) 모두.
+- 원인: tests/unit 의 여러 모듈이 import 시점에 `sys.modules["ansible"]` · `["ansible.module_utils"]` · `["ansible.module_utils.basic"]` · `["ansible.plugins.callback"]` 을
+  `types.ModuleType` 대역으로 채운다(라이브러리를 ansible 없이 import 하려고). pytest 는 세 디렉터리를 모두 **수집한 뒤** 실행하므로, e2e 모듈이 전역에서 `from ansible.template
+  import Templar` 를 하는 순간 대역이 깔려 있어 "'ansible' is not a package" 로 실패했다. skip 사유는 "플랫폼" 이라 적혀 있어 Linux 에서도 아무도 의심하지 않았다.
+- 수정: 엔진 import 를 첫 사용 시(실행 시점)로 미루고, 그 직전에 `__spec__` 없는 `ansible*` 대역만 치운다(`_evict_ansible_stubs`). 실제 import 가 실패하면 대역을 복원하고
+  skip 사유에 실제 예외를 적는다. 회귀 `test_hc09_stub_eviction_removes_only_spec_less_ansible_entries`. WSL 전체 suite 4879→4909 passed(+29 실행 +1 신규) · 0 fail.
+- 재발 방지: (1) skip 사유가 "플랫폼" 인 시험은 그 플랫폼의 전체 suite 결과에서 **실제로 실행됐는지**(skip 목록 ID) 확인한다 — 파일 단독 통과는 증거가 아니다.
+  (2) `sys.modules` 에 대역을 심는 시험은 자신이 치우거나, 실물을 쓰는 시험이 치울 수 있게 `__spec__` 없는 ModuleType 으로만 심는다. (3) CI Gate 의 skip 수가
+  로컬과 같은 이유로 같은지 JUnit 으로 대조한다(이번 감사 skip 목록: `evidence-audit-2026-10-10/raw/x2-wsl/x2b_skips.txt`).
+- 관련 rule: rule 24 R2(발견 가능한 버그 0) · rule 40 R6 · rule 95 R1.
+
+## 2026-10-10 — 카탈로그에 이미 쓰인 DRIFT 번호를 다시 썼다 (DRIFT-016/017 → 022/023)
+
+- 카테고리: catalog-stale (self-inflicted)
+- 발견 위치: `docs/ai/catalogs/CONVENTION_DRIFT.md` — 커밋 `32d4e307` 에서 JEDEC · 자리표시자 drift 를 **파일 끝에** DRIFT-016/017 로 붙였다. 파일은 최신이 위(DRIFT-021 이 머리)이고
+  DRIFT-016(2026-05-11) · DRIFT-017(2026-06-08)은 이미 있었다. 다음 날 ADR 을 쓰다가 번호 grep 으로 발견.
+- 원인: 끝부분(tail)만 읽고 "마지막 번호 + 1" 로 추정했다 — 파일 머리의 형식 안내와 정렬(최신 먼저)을 읽지 않았다.
+- 수정: 022/023 으로 재번호해 머리로 옮기고 각 항목에 번호 메모를 남겼다(커밋 메시지는 바꾸지 않는다). 이번 항목 DRIFT-024 부터 `grep -o "DRIFT-0[0-9][0-9]" | sort -u | tail -1` 로 센다.
+- 재발 방지: 카탈로그에 항목을 더할 때는 (1) 머리의 형식 · 정렬 안내를 읽고 (2) 번호를 grep 으로 세고 (3) 같은 날 항목은 머리에 넣는다. rule 70 R3 "실제 결과만" 은 번호에도 적용된다.
+- 관련 rule: rule 70 R1 · R3.

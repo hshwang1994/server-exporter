@@ -36,7 +36,8 @@ huawei:
 
 ### 2. adapter YAML 생성 (`adapters/redfish/{vendor}_*.yml`)
 
-priority/specificity/match/capabilities/collect/normalize 4 필수 필드 (rule 12 R4):
+코드가 읽는 필드는 `adapter_id` · `priority` · `match` · `capabilities.sections_supported`(+ redfish `vendor_notes.manager_layout`)다 (rule 12 R4, 2026-10-10 정정).
+`collect` · `normalize` · `credentials` · `graceful_degradation` 절은 기록용(코드가 읽지 않음) — 기존 adapter 와 모양을 맞춰 적는다:
 
 ```yaml
 # adapters/redfish/huawei_ibmc.yml

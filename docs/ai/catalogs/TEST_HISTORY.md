@@ -1,6 +1,6 @@
 # TEST_HISTORY — server-exporter
 
-## 2026-10-10 (감사 — 진행 중) — 전체 감사 X0/X1 실행 · X2 결함 묶음 로컬 검증
+## 2026-10-10 (감사 — 진행 중) — 전체 감사 X0/X1/X2/X2' 실행 · HC-09
 
 | 구분 | 결과 |
 |---|---|
@@ -8,9 +8,13 @@
 | X1 `b3c8ebf7` | WSL ci_gate PASS · prodgen build tree `96db8f5f…` · main Job #423~#438 계약대로 · CI #41 FAILURE(Harness 54: 53 PASS · `prep_failed_on_resume` FAIL → FL-F01b) |
 | Harness 신뢰 | N1 FAIL · N2 PARTIAL · N3 변조 거부(한계 2건) · N4 SKIPPED 거부 · 변이 M1~M9 9/9(M1 은 시험 신설 뒤) |
 | Runner parity(2.20.3, `se-audit-parity` #1~#4) | LX-F02 'None' 재현 · ESXI-03 argspec 확인 · 비 UTF-8 바이트는 lone surrogate 로 도착(json_only 1줄 출력) |
-| X2 채널별 단위(이 PC) | Redfish 감사 15 · ESXi 91 · Windows 325 + 98(실제 powershell.exe 5.1) · Linux 388 + 45 · JEDEC/메모리 104 · 자리표시자 171 · Jenkinsfile/Harness 157 |
-| X2 정적 | YAML 40 · py_compile · vendor boundary · harness consistency 통과 |
-| X2 전체 suite · lab probe · 매트릭스 · CI · 승격 | 실행 중 / 미실행 — `tests/evidence/2026-10-10-full-audit.md` §7 에 추가 |
+| X2 `32d4e307`(이 PC) | 전체 suite 4,998 통과 · 63 건너뜀 · 7 xfail(`raw/x2_unit_e2e_regression.txt`) · 채널별 단위 Redfish 15 · ESXi 91 · Windows 325+98(실제 powershell.exe) · Linux 388+45 · JEDEC/메모리 104 · 자리표시자 171 · Jenkinsfile/Harness 157 · prodgen build class B 0 tree `20fb2094…` |
+| X2 `32d4e307` WSL ci_gate | FAIL 1건 — `test_raw_script_without_sysfs_cache_keeps_exit_code_zero` 가 Windows 샌드박스(sysfs 없음)를 가정 → 시험만 고친 X2' `361d4484` |
+| X2' `361d4484` | WSL ci_gate PASS(깨끗한 checkout: 4,879 통과 · 182 건너뜀 · 7 xfail · integration 333) · prodgen build tree `20fb2094…`(X2 와 byte 동일 — runtime 불변) · main Job #454~#468 15 시나리오 계약대로(T5 #456 SUCCESS → 재실행 #469 ABORTED) · strict compare 회귀 0(선언 사용: D-03 Windows · D-08 · WIN-02 · WIN-DM) · CI #42 진행 중 |
+| lab 읽기 전용 probe(`se-audit-labprobe` #1~#3, Runner02) | Linux 4/7 도달(.161 .162 .163 .96 — .165 .167 .169 미도달) · Windows .120(.135 미도달) · ESXi 3/3. 기본 경로 단일 · multipath 없음 · fec0 자리표시자 실재 · MSFT vs Win32 디스크 크기 차 실재 · ActiveStore ≠ PersistentStore 실재 · `vmware_host_config_info` + `esxi_hostname` 3/3 성공 |
+| HC-09(이번 발견 — 하네스 맹점) | e2e 실제 엔진 렌더 29건이 전체 suite 에서 늘 skip(WSL · **Runner CI Gate** #40 161 · #41 162 건너뜀) — unit 계층의 `sys.modules` ansible 대역. 대역 치우기 수정 뒤 WSL 4,909 통과 · 153 건너뜀 · 0 실패(깨끗한 `361d4484` + 패치) · 이 PC 파일 단독 31 통과(전체 suite 실행 중) |
+| skip 목록 | WSL 182건 ID 보존 `evidence-audit-2026-10-10/raw/x2-wsl/x2b_skips.txt` + JUnit — HC-09 뒤 153 |
+| 승격 · canary · 명부 · 성능 | 미실행(CI #42 결과 뒤) |
 
 ## 2026-10-10 (진행 중) — 검수 후속 C1~C10 · 로컬 검증 · Harness 사전 확인 (승격 전)
 

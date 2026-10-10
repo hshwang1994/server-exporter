@@ -19,6 +19,39 @@
 
 ---
 
+## DRIFT-024 (2026-10-10, resolved — 서술 정정)
+
+- **발견 위치**: `.claude/rules/12-adapter-vendor-boundary.md` R4 · `.claude/skills/add-vendor-no-lab/SKILL.md` 2절 · `docs/develop/03-adapter-system.md` 4절 Step 4 · 예시 주석
+- **분류**: catalog-stale (rule 본문 · 문서가 코드와 다름)
+- **설명**: rule 12 R4 는 "adapter 는 `match`/`capabilities`/`collect`/`normalize` 4개 키 필수 — 누락 시 adapter_loader 파싱 실패" 라고 적었다. 코드는 다르다 —
+  로더(`module_utils/adapter_common.py` · `lookup_plugins/adapter_loader.py`)가 읽는 키는 `match`(없으면 `{}`) · `adapter_id` · `priority` · `generic` 뿐이고 어떤 키도
+  강제하지 않는다. 플레이북이 읽는 adapter 속성은 `adapter_id` · `capabilities.sections_supported` · `vendor_notes.manager_layout` · `version`(`build_meta.yml` → meta.adapter_version — 현 adapter 들에는 없어 null) 뿐이다(2026-10-10 grep).
+  `collect.standard_tasks` · `normalize.standard_tasks` · `credentials.profile` · `graceful_degradation` 은 어떤 코드도 읽지 않는다 — 수집 · 정규화 task 경로는 site.yml 에
+  고정이고 복구 vault 는 감지된 vendor 로 고른다. OS · ESXi adapter 12개는 `normalize` 키 없이 운영 중이다(`adapters/os/*.yml` · `adapters/esxi/*.yml`).
+- **영향**: 규칙 · 문서만. 수집 동작 · production tree 변화 없음.
+- **resolved (2026-10-10)**: rule 12 R4 를 코드대로 고쳤다(`docs/ai/decisions/ADR-2026-10-10-adapter-required-keys.md`). skill · 개발 문서 Step 4 · 예시 주석 정정.
+  기록용 키(`collect` · `normalize` · `credentials` · `graceful_degradation`)를 adapter 에서 지울지는 별도 결정(지우면 runtime tree 가 바뀌어 새 후보가 필요) — NEXT_ACTIONS.
+- **관련**: rule 12 R4 · rule 70 R8(ADR 트리거) · rule 96 R1
+
+## DRIFT-023 (2026-10-10, resolved 2026-10-10 full-audit)
+
+- **무엇**: 식별자(serial/uuid/vendor/model/bios) 자리표시자 목록이 `gather_system.yml`(Linux 6곳 · Windows 2곳) 과 `redfish_gather.py`(invalid_values) 에
+  복제돼 있었고 ESXi 는 아무것도 거르지 않았다(`NA` 가 serial 로 나감). SMBIOS 공장 기본 UUID `03000200-0400-0500-0006-000700080009` 는 식별자로 통과했다.
+- **해결**: `identity_normalizer.DMI_SENTINELS` + `dmi_sentinel_null(kind)` 필터 하나를 3채널 템플릿이 쓰고, Redfish(stdlib 전용)는 `_SERIAL_SENTINELS_UPPER`
+  복제본을 `tests/unit/test_identity_sentinels.py` 가 drift 가드한다. 자리표시자 UUID 는 `normalize_uuid` 가 null 로.
+- **관련 rule**: rule 13 cross-channel · rule 22 R5.
+- **번호 메모**: 처음 DRIFT-017 로 적었다(커밋 `32d4e307` 메시지 · 대장 기록). 그 번호는 2026-06-08(DRIFT-017 audit-cleanup) 항목이 이미 쓰고 있어 2026-10-10 에 재번호했다.
+
+## DRIFT-022 (2026-10-10, resolved 2026-10-10 full-audit)
+
+- **무엇**: JEDEC 제조사 표가 두 곳(`filter_plugins/jedec_mapper.py` · `redfish_gather._JEDEC_VENDORS`)에 byte 전용 키로 있었고, bank(continuation 수)를
+  보지 않아 bank 1 의 0x98(Kingston) 과 bank 0 의 0x98(Toshiba) 을 구분하지 못했다. `"0B": "Intel"` 항목은 JEP106 과 다르다(0x0B 는 Intersil, Intel 은 0x89/0x09).
+  어느 쪽도 origin 주석(rule 96 R1)이 없었다.
+- **해결**: (bank, 7-bit ID) 키 표 하나를 두 파일에 동일하게(JEP106BE — docs.rs jep106 codes.rs · lshw jedec.cc · Linux mtd/cfi.h, 확인 2026-10-10) 두고
+  `tests/unit/test_jedec_drift_guard.py` 가 표 동일성 + 해석기 동치(28 입력)를 지킨다. 모르는 코드는 원문 그대로.
+- **관련 rule**: rule 96 R1 · R4, rule 13 cross-channel.
+- **번호 메모**: 처음 DRIFT-016 로 적었다(커밋 `32d4e307` 메시지 · 대장 기록). 그 번호는 2026-05-11(DRIFT-016 field-channel-refinement) 항목이 이미 쓰고 있어 2026-10-10 에 재번호했다.
+
 ## DRIFT-021 (2026-10-10, resolved)
 
 - **발견 위치**: `os-gather/tasks/linux/gather_cpu.yml` 의 L2/L3 캐시 환산(종전)
@@ -314,20 +347,3 @@
   - baseline JSON 추가 (4 generation × 1 vendor) — rule 13 R4
   - DRIFT-015 close trigger: 사이트 검증 후 firmware_patterns 일치 confirm
 - **관련**: rule 12 R2, rule 50 R3, rule 95 R1 #4 (adapter score 동률), rule 96 R1-A / R1-C, `module_utils/adapter_common.py:272-287`, `lookup_plugins/adapter_loader.py:232-237`
-
-## DRIFT-016 (2026-10-10, resolved 2026-10-10 full-audit)
-
-- **무엇**: JEDEC 제조사 표가 두 곳(`filter_plugins/jedec_mapper.py` · `redfish_gather._JEDEC_VENDORS`)에 byte 전용 키로 있었고, bank(continuation 수)를
-  보지 않아 bank 1 의 0x98(Kingston) 과 bank 0 의 0x98(Toshiba) 을 구분하지 못했다. `"0B": "Intel"` 항목은 JEP106 과 다르다(0x0B 는 Intersil, Intel 은 0x89/0x09).
-  어느 쪽도 origin 주석(rule 96 R1)이 없었다.
-- **해결**: (bank, 7-bit ID) 키 표 하나를 두 파일에 동일하게(JEP106BE — docs.rs jep106 codes.rs · lshw jedec.cc · Linux mtd/cfi.h, 확인 2026-10-10) 두고
-  `tests/unit/test_jedec_drift_guard.py` 가 표 동일성 + 해석기 동치(28 입력)를 지킨다. 모르는 코드는 원문 그대로.
-- **관련 rule**: rule 96 R1 · R4, rule 13 cross-channel.
-
-## DRIFT-017 (2026-10-10, resolved 2026-10-10 full-audit)
-
-- **무엇**: 식별자(serial/uuid/vendor/model/bios) 자리표시자 목록이 `gather_system.yml`(Linux 6곳 · Windows 2곳) 과 `redfish_gather.py`(invalid_values) 에
-  복제돼 있었고 ESXi 는 아무것도 거르지 않았다(`NA` 가 serial 로 나감). SMBIOS 공장 기본 UUID `03000200-0400-0500-0006-000700080009` 는 식별자로 통과했다.
-- **해결**: `identity_normalizer.DMI_SENTINELS` + `dmi_sentinel_null(kind)` 필터 하나를 3채널 템플릿이 쓰고, Redfish(stdlib 전용)는 `_SERIAL_SENTINELS_UPPER`
-  복제본을 `tests/unit/test_identity_sentinels.py` 가 drift 가드한다. 자리표시자 UUID 는 `normalize_uuid` 가 null 로.
-- **관련 rule**: rule 13 cross-channel · rule 22 R5.
