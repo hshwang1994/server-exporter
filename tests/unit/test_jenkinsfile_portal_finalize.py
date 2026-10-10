@@ -553,7 +553,7 @@ def test_final_stash_flag_is_set_only_after_the_final_stash_succeeds():
 def test_finalizer_archives_result_files_from_the_chosen_input_only_when_present():
     """C1: 요약 · 본문은 결과 확인 폴더에서, 정리 결과 파일은 고른 입력 폴더에 **있을 때만** 보관한다. 둘을 따로 기록하고 보관 완료는 수행한 보관이 모두
     성공했을 때다. 결과 파일 링크는 실제로 보관한 것만."""
-    seg = FIN_IN[FIN_IN.index("fs.mark = 'archive'"):FIN_IN.index("// UNSTABLE 은 한 번만")]
+    seg = FIN_IN[FIN_IN.index("fs.mark = 'archive'"):FIN_IN.index("boolean finalizerWarn = false")]   # 코드로 자른다 — 생성 tree(G14)는 주석이 없다
     assert "for (String f in ['callback_body.json', 'finalize_summary.json'])" in seg
     assert "dir(ev.dir) {" in seg and "for (String f in ['gather_final.jsonl', 'gather_finalize_report.json'])" in seg
     assert "if (resultFiles) {" in seg, "정리 결과 파일이 없으면 두 번째 보관을 부르지 않는다"
