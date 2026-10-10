@@ -38,7 +38,7 @@
 - 로컬 prodgen: build OK(class B 0) · verify `--skip-live` G01~G10 · G16~G18 · G20 PASS · **G14 는 `a64654aa` 에서 1건 FAIL** → `e27c642d` 로 고침(생성 tree 사본에서 그 파일 45 통과). 전체 G14 재실행은 아직이다.
 - **실제 Jenkins Harness 사전 확인 10/10 PASS(`a64654aa`)**: #1168 `recover_final_archive_over_snapshot` · #1169 `recover_flag_unwritten_archive` · #1170 `recover_partial_archive_keeps_stash` ·
   #1171 `recover_checkpoint_only_archive` · #1172 `recover_archive_unavailable_stash` · #1173 `finalize_limit_cumulative` · #1174 `stash_fail` · #1175 `raw_fallback` · #1176 `checkpoint_only_b` · #1177 `infra_wait_expired`
-  (`jenkins/harness_precheck.json`).
+  (증거 폴더 `evidence-c1-c10-2026-10-10/jenkins/harness_precheck.json` — 저장소 밖).
 - 감사 재현 전/후(`pre/` · `post/`): C2 재개 불가 → 정상 재개, C3 다음 페이지 계정 PATCH · 중복 슬롯이면 쓰기 0, C4 Volumes · Port 오류 기록, C6 4→10 · 8→4 · 16→8,
   C8 · C9 오류 기록. C7 은 감사 입력에 `lscpu --version` 줄이 없어 고친 코드가 추측하지 않고 `null`(버전이 있는 경우는 C7 시험이 확인).
 
@@ -86,7 +86,7 @@ main push 와 production 승격 push(origin · internal)는 승인한다.
 7. **production** — `python prod_regression.py <P11 SHA> <out>/prod.json`: canary(os .161~.163) 먼저, 맞으면 Linux A · Linux B · Windows · ESXi 6 · Redfish 10. checkout == P11 · Portal HTTP 2xx ·
    대상별 본문을 지난 production #185~#189 · #197 과 대조.
 8. **문서 · 증거 · 최종 push** — `docs/ai/CURRENT_STATE.md` · `docs/ai/catalogs/TEST_HISTORY.md`(이 세션의 중간 기록에 Jenkins 결과를 더한다) · `docs/reference/decision-log.md` 2026-10-10 ·
-   `docs/operate/09-production-branch.md` 7절(P11) · 새 `tests/evidence/2026-10-10-c1-c10-defects.md`(결함별 전후 · 재현/fixture/실서버 구분 · 빌드 번호 · checkout SHA · 대상 분류 ·
+   `docs/operate/09-production-branch.md` 7절(P11) · 새 `tests/evidence/2026-10-10-full-audit.md`(만들 예정 — 2026-10-10 전체 감사 요약 1편에 C1~C10 결함별 전후를 넣는다; · 재현/fixture/실서버 구분 · 빌드 번호 · checkout SHA · 대상 분류 ·
    미확인 항목) · 이 ticket 폴더 삭제 · `docs/ai/NEXT_ACTIONS.md` 의 이 후속 항목 정리. 커밋 → `git push origin main` → 양 원격 최종 SHA 확인.
    승격 뒤 커밋이 문서 · 시험 기록뿐이면 runtime 차이 없음(생성 tree hash 동일)을 확인해 기록한다(재승격 · 전체 E2E 반복 없음 — 사용자 보정 8).
 9. **정리** — 그 세션의 netrc · vault 임시 사본 · WSL clone · 생성 tree 사본 삭제. 다른 프로젝트 Runner 설정 · 라벨 · token 은 건드리지 않는다.

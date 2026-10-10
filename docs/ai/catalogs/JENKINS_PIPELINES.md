@@ -25,7 +25,7 @@
 > 끊긴 준비(`prepared`) · 접수 목록 복원 · 확정 결과 IP 대조 · 보존 표식 · OOM 은 커널 로그 PID 근거만. 정본
 > `docs/ai/decisions/ADR-2026-10-07-finalize-reentry-and-oom-attribution.md` · `docs/operate/04-pipeline-runtime.md`.
 
-> 2026-10-06 (9차): 빌드 12 h · 수집 단계 39,000 s · `scripts/gather_budget.sh` · 메모리 상한 · `no_agent` · `not_started_*` 삭제. 실행 기반 대기 합 72 h ·
+> 2026-10-06 (9차): 빌드 12 h · 수집 단계 39,000 s · `scripts/gather_budget.sh`(삭제됨) · 메모리 상한 · `no_agent` · `not_started_*` 삭제. 실행 기반 대기 합 72 h ·
 > 실제 수집 누적 6 h(`scripts/gather_state.py`) · 같은 Runner · 같은 작업 폴더 재개(끝난 대상 · Precheck 실패 대상 제외). 정본
 > `docs/ai/decisions/ADR-2026-10-06-infra-wait-and-host-resume.md` · `docs/operate/04-pipeline-runtime.md`.
 

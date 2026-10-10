@@ -1283,7 +1283,7 @@ Location 별 실제 Credential **값이 서로 다르므로**(사용자 확정) 
 
 **4단계 — flat vault 제거** (별도 커밋) — **완료 2026-08-12 `adc99570`**
 - 3단계가 실환경에서 확인된 뒤 수행했다.
-- 삭제된 flat 12 파일: `vault/linux.yml`, `vault/windows.yml`, `vault/esxi.yml`, `vault/redfish/<vendor>.yml` 9개
+- flat 12 파일(삭제됨): `vault/linux.yml`, `vault/windows.yml`, `vault/esxi.yml`, `vault/redfish/<vendor>.yml` 9개
   (`vault/.lab-credentials.yml` 은 제외 — §5.4).
 - 2026-10-10 정정: 이전 판은 여기에 **현재 운영 경로** `vault/<loc>/os/*.yml` · `vault/<loc>/esxi.yml` · `vault/<loc>/redfish/*.yml` 를
   삭제 대상으로 적고 있었다 (docs/operate/05-vault.md §3.4 도 같은 오류 — 함께 고쳤다).
@@ -1408,8 +1408,8 @@ force push / history rewrite 는 하지 않는다 (rule 93 R1).
 |---|---|
 | `Jenkinsfile` | 3단계 |
 | `Jenkinsfile_portal_test` (2026-09-28 에 삭제됐다) | 3단계 |
-| `vault/linux.yml`, `vault/windows.yml`, `vault/esxi.yml` (flat) | 4단계 — 완료 `adc99570` |
-| `vault/redfish/<vendor>.yml` 9개 (flat) | 4단계 — 완료 `adc99570` |
+| `vault/linux.yml`, `vault/windows.yml`, `vault/esxi.yml` (flat, 삭제됨) | 4단계 — 완료 `adc99570` |
+| `vault/redfish/<vendor>.yml` 9개 (flat, 삭제됨) | 4단계 — 완료 `adc99570` |
 
 ### 18.4 별도 커밋 (하네스·문서)
 

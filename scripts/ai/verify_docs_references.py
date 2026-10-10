@@ -211,7 +211,9 @@ def main() -> int:
         hist_file = bool(HISTORY_DOC_RE.search(rel))
         for lineno, line in enumerate(lines, 1):
             for tok in extract_candidates(line, tops, shorthand=args.shorthand):
-                if exists(tok):
+                # 저장소 루트 기준, 또는 그 문서가 있는 디렉터리 기준 (README 가 옆 파일을 이름만으로 가리키는 경우 —
+                #   tests/jenkins/harness/README.md 의 `Jenkinsfile_harness`). 2026-10-10.
+                if exists(tok) or (fp.parent / tok).exists():
                     continue
                 # 역사 기록과 "없음을 주장하는 문장"은 위반이 아니다.
                 #   ADR·evidence·drift 카탈로그는 그 시점에 존재하던 경로를 적는 게 일이고,
