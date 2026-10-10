@@ -1,6 +1,6 @@
 # TEST_HISTORY — server-exporter
 
-## 2026-10-10 (감사 — 진행 중) — 전체 감사 X0/X1/X2/X2' 실행 · HC-09
+## 2026-10-10 (감사) — 전체 감사 X0~X4 실행 · 승격 P11 · 명부 · 성능
 
 | 구분 | 결과 |
 |---|---|
@@ -10,11 +10,14 @@
 | Runner parity(2.20.3, `se-audit-parity` #1~#4) | LX-F02 'None' 재현 · ESXI-03 argspec 확인 · 비 UTF-8 바이트는 lone surrogate 로 도착(json_only 1줄 출력) |
 | X2 `32d4e307`(이 PC) | 전체 suite 4,998 통과 · 63 건너뜀 · 7 xfail(`raw/x2_unit_e2e_regression.txt`) · 채널별 단위 Redfish 15 · ESXi 91 · Windows 325+98(실제 powershell.exe) · Linux 388+45 · JEDEC/메모리 104 · 자리표시자 171 · Jenkinsfile/Harness 157 · prodgen build class B 0 tree `20fb2094…` |
 | X2 `32d4e307` WSL ci_gate | FAIL 1건 — `test_raw_script_without_sysfs_cache_keeps_exit_code_zero` 가 Windows 샌드박스(sysfs 없음)를 가정 → 시험만 고친 X2' `361d4484` |
-| X2' `361d4484` | WSL ci_gate PASS(깨끗한 checkout: 4,879 통과 · 182 건너뜀 · 7 xfail · integration 333) · prodgen build tree `20fb2094…`(X2 와 byte 동일 — runtime 불변) · main Job #454~#468 15 시나리오 계약대로(T5 #456 SUCCESS → 재실행 #469 ABORTED) · strict compare 회귀 0(선언 사용: D-03 Windows · D-08 · WIN-02 · WIN-DM) · CI #42 진행 중 |
+| X2' `361d4484` | WSL ci_gate PASS(깨끗한 checkout: 4,879 통과 · 182 건너뜀 · 7 xfail · integration 333) · prodgen build tree `20fb2094…`(X2 와 byte 동일 — runtime 불변) · main Job #454~#468 15 시나리오 계약대로(T5 #456 SUCCESS → 재실행 #469 ABORTED) · strict compare 회귀 0(선언 사용: D-03 Windows · D-08 · WIN-02 · WIN-DM) · **CI #42 SUCCESS COMPLETE_PASS**(Harness 54+23 PASS · Gate 4,879/182) · CLI 승격 dry-run **거부**(PC G14 `test_cli_exit_codes` 1건 — HC-T6b) |
+| X3 `00cb1bf3` · X4 `c2d76de2`(시험 · 문서 · 하네스만, tree `20fb2094…` 동일) | WSL ci_gate PASS(X3 · X4 각 4,909 통과 · 153 건너뜀 — HC-09 29건 실행) · PC G14 overlay(PYTHONIOENCODING 없음) 4,739 통과 · 0 실패 · main Job #470~#484 15 계약대로(T5 #472 → 재실행 #485 ABORTED) · strict compare 회귀 0(ENV-01 10.50.11.231 복구 선언 뒤) · **CI #43 SUCCESS COMPLETE_PASS**(Gate 4,909/153 — Runner 에서 렌더 29건 첫 실행 · Harness 54+23 PASS) |
+| 승격 P11 `35b9ad5e` | CLI promote(COMPLETE_PASS · Gates-Rerun G11~G15 G18~G20) · 양 원격 + 로컬 동일 · drift-check PROVENANCE · 새 clone tree 동일 · canary #233 SUCCESS 3/3 · 명부 #234~#238 전부 SUCCESS(Linux A 8 · Linux B 4+3 미도달 · Windows 1 · ESXi 6 · Redfish 7+3 실패 기존) · Portal 200 · P10 대조 회귀 0 — 선언 사용 D-03 (Windows), LX-F04, WIN-02, WIN-DM(LX-F04 표기는 .120 `storage.summary` 행에 먼저 매칭된 선언 이름 — 실제 원인은 D-08) |
+| 성능 P10 → P11(production Job, 단일 5 · 배치 3, 순차) | Jenkins 중앙값 초(전→후, Δ): PE1 62.3 → 63.1s(0.8) · PE6 68.6 → 77.4s(8.8) · PL1 52.4 → 54.9s(2.5) · PL4 62.7 → 60.4s(-2.3) · PLB 70.9 → 72.4s(1.5) · PR1 69.1 → 70.2s(1.1) · PR10 385.7 → 388.9s(3.2) · PW1 131.0 → 132.8s(1.8) · S3 205.6 → 210.8s(5.2) / host duration_ms 중앙값: PE1 25300 → 25689ms(389) · PE6 34007 → 37345ms(3338) · PL1 12887 → 13288ms(401) · PL4 19192 → 19643ms(451) · PLB 19076 → 19824ms(748) · PR1 34450 → 32298ms(-2152) · PR10 45598 → 44986ms(-612) · PW1 74592 → 74077ms(-515) · S3 52269 → 53473ms(1204) — 관측값, 제한으로 쓰지 않음 |
 | lab 읽기 전용 probe(`se-audit-labprobe` #1~#3, Runner02) | Linux 4/7 도달(.161 .162 .163 .96 — .165 .167 .169 미도달) · Windows .120(.135 미도달) · ESXi 3/3. 기본 경로 단일 · multipath 없음 · fec0 자리표시자 실재 · MSFT vs Win32 디스크 크기 차 실재 · ActiveStore ≠ PersistentStore 실재 · `vmware_host_config_info` + `esxi_hostname` 3/3 성공 |
-| HC-09(이번 발견 — 하네스 맹점) | e2e 실제 엔진 렌더 29건이 전체 suite 에서 늘 skip(WSL · **Runner CI Gate** #40 161 · #41 162 건너뜀) — unit 계층의 `sys.modules` ansible 대역. 대역 치우기 수정 뒤 WSL 4,909 통과 · 153 건너뜀 · 0 실패(깨끗한 `361d4484` + 패치) · 이 PC 파일 단독 31 통과(전체 suite 실행 중) |
+| HC-09(이번 발견 — 하네스 맹점) | e2e 실제 엔진 렌더 29건이 전체 suite 에서 늘 skip(WSL · **Runner CI Gate** #40 161 · #41 162 건너뜀) — unit 계층의 `sys.modules` ansible 대역. 대역 치우기 수정 뒤 WSL 4,909 통과 · 153 건너뜀 · 0 실패 · 이 PC 전체 suite 5,028 통과 · 34 건너뜀 · 0 실패 · Runner CI #43 Gate 4,909/153 |
+| HC-T6b(이번 발견) | X1 의 HC-T6 수정이 셸의 `PYTHONIOENCODING` 에 기대고 있어 prodgen G14(변수 없음)에서 실패 → 자식 env 고정. 재현 overlay 24 통과(변수 없이) |
 | skip 목록 | WSL 182건 ID 보존 `evidence-audit-2026-10-10/raw/x2-wsl/x2b_skips.txt` + JUnit — HC-09 뒤 153 |
-| 승격 · canary · 명부 · 성능 | 미실행(CI #42 결과 뒤) |
 
 ## 2026-10-10 (진행 중) — 검수 후속 C1~C10 · 로컬 검증 · Harness 사전 확인 (승격 전)
 
