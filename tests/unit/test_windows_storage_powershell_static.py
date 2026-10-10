@@ -412,3 +412,20 @@ def test_powershell_initiator_ports_render_without_adapter_leak(tmp_path):
     assert got[("FibreChannel", "21:00:00:24:ff:99:99:99")]["link_status"] == "down"
     assert got[("FibreChannel", "21:00:00:24:ff:0a:0b:0c")]["link_status"] == "down"
     assert got[("iSCSI", None)]["connection"] == "iSCSI"
+
+
+
+# 2026-10-10 (C6): PortSpeed 는 비트값 — 근거가 확인된 코드만 Gbps. 1/2/4/8 = 1/2/10/4 (MS MSFC_HBAPortAttributesResults · VDS),
+#   16/32 = 8/16 (Microsoft SDK hbaapi.h HBA_FCPHYSPEED_*). 0(미상) · 0x8000(미협상) · 64 · 128 은 Windows/벤더 정의를 확인하지 못한
+#   미상 코드라 null. 종전 표는 4→4 · 8→8 · 16→10 · 128→64 였다(숫자 크기로 추측). 32 → 16 한 사례만 보던 시험이 그 표를 놓쳤다.
+@needs_powershell
+@pytest.mark.parametrize("code,gbps", [(1, 1), (2, 2), (4, 10), (8, 4), (16, 8), (32, 16), (64, None), (0, None), (128, None), (32768, None)])
+def test_powershell_port_speed_code_to_canonical_link_speed(tmp_path, code, gbps):
+    prelude = _HBA_SCRIPT_PRELUDE.replace("PortSpeed=[uint32]32;", f"PortSpeed=[uint32]{code};")
+    assert prelude != _HBA_SCRIPT_PRELUDE or code == 32
+    lines = _run_powershell(prelude + _win_shell(HBA_TASK), tmp_path, f"hba_{code}")
+    doc = json.loads(lines[0])
+    assert [p["speed_gbps"] for p in doc["port_attrs"]] == [gbps]
+    out = run_storage([], hba=doc)
+    matched = [h for h in out["storage"]["hbas"] if h["wwpn"] == "21:00:00:24:ff:01:02:03"]
+    assert len(matched) == 1 and matched[0]["link_speed_gbps"] == gbps

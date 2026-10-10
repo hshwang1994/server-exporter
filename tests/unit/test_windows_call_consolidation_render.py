@@ -714,6 +714,20 @@ INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_err
                          ("network", "windows | network | build fragment"): {"_errors_fragment"}}
 # 태스크 단위로 바뀐 키(set_fact 밖) — 식별자 진단의 문장 변수(vars)에 setup 실패 문장 2개를 더했다
 INTENDED_CHANGED_TASK_KEYS = {("system", "windows | system | build identifier diagnostics"): {"vars"}}
+# 그대로 둔 win_shell 중 의도해서 고친 줄 — 그 줄(앞부분으로 찾는다)과 PowerShell 주석 줄만 다를 수 있고 나머지 스크립트는 글자 그대로다.
+#   2026-10-10 (C6): FC HBA PortSpeed 값맵 정정(4→10 · 8→4 · 16→8, 확인 못 한 64 · 128 은 null).
+INTENDED_SHELL_LINES = {("storage", "windows | storage | initiator ports + HBA attrs"): ("$gbps = switch ($spd)",)}
+
+
+def _shell_without(script: str, prefixes) -> list:
+    """비교용 스크립트 — PowerShell 주석 줄과 의도해서 고친 줄을 뺀 나머지 줄."""
+    out = []
+    for line in script.splitlines():
+        t = line.strip()
+        if t.startswith("#") or any(t.startswith(p) for p in prefixes):
+            continue
+        out.append(line)
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -780,6 +794,14 @@ def test_downstream_tasks_are_unchanged(section):
                     == {k: v for k, v in old[name].items() if k != "ansible.builtin.set_fact" and k not in task_changed}), name
             for k in task_changed:
                 assert isinstance(old[name].get(k), dict) and set(old[name][k].items()) <= set(new[name][k].items()), (name, k)
+            continue
+        lines = INTENDED_SHELL_LINES.get((section, name))
+        if lines:
+            ns, os_ = new[name]["ansible.windows.win_shell"], old[name]["ansible.windows.win_shell"]
+            assert _shell_without(ns, lines) == _shell_without(os_, lines), f"{section}: {name!r} 의 의도한 줄 밖이 바뀌었다"
+            assert all(any(l.strip().startswith(p) for l in ns.splitlines()) for p in lines), name
+            assert ({k: v for k, v in new[name].items() if k not in ("timeout", "ansible.windows.win_shell")}
+                    == {k: v for k, v in old[name].items() if k != "ansible.windows.win_shell"}), name
             continue
         # task-level `timeout`(Plan §6-3, 2026-10-03 GP-9) 은 hang 격리 키워드라 수집 내용과 무관하다 — 비교에서 뺀다
         assert {k: v for k, v in new[name].items() if k != "timeout"} == old[name], f"{section}: 종전 태스크 {name!r} 의 내용이 바뀌었다"

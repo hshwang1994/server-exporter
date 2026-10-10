@@ -425,6 +425,14 @@
 # MSFC_FibrePortHBAAttributes (root\WMI) = model/vendor/driver/firmware/speed (HBA miniport
 # driver 가 T11 FC-HBA API 등록 시만 — try/catch + 부재 시 graceful null). WWN 은 colon-hex 정규화.
 # source: MS docs MSFT_InitiatorPort / MSFC_* (EXTERNAL-CONTRACTS §4). lab 부재 — 사이트 실측 시 정정.
+# 2026-10-10 (C6) PortSpeed 값맵 — 근거가 확인된 코드만 Gbps 로 바꾼다(비트값이지 속도 숫자가 아니다):
+#   1=1G · 2=2G · 4=10G · 8=4G : learn.microsoft.com/windows-hardware/drivers/storage/msfc-hbaportattributesresults-wmi-class
+#                                (ValueMap 1,2,4,8 = 1,2,10,4 GBit/sec) · MS-VDS VDS_HBAPORT_SPEED_FLAG (확인 2026-10-10)
+#   16=8G · 32=16G             : Microsoft SDK hbaapi.h HBA_FCPHYSPEED_8GBIT=16 · HBA_FCPHYSPEED_16GBIT=32
+#                                (github.com/microsoft/win32metadata .../RecompiledIdlHeaders/shared/hbaapi.h, 확인 2026-10-10)
+#   미상 코드 → null           : 0(HBA_PORTSPEED_UNKNOWN) · 0x8000(NOT_NEGOTIATED) · 64 · 128 등 Windows/벤더 WMI 정의를 확인하지 못한 값.
+#                                64 는 SNIA libHBAAPI · Linux FC transport 에서 32G 지만 그 표를 WMI PortSpeed 에 그대로 쓰지 않는다.
+#   종전 표(4→4 · 8→8 · 16→10 · 128→64)는 숫자 크기로 추측한 값이었다(DRIFT — CONVENTION_DRIFT 참조).
 - name: "windows | storage | initiator ports + HBA attrs"
   ansible.windows.win_shell: |
     function Format-Wwn($v) {
@@ -467,9 +475,8 @@
       Get-CimInstance -Namespace root\WMI -ClassName MSFC_FibrePortHBAAttributes -ErrorAction Stop | ForEach-Object {
         $a = $_.Attributes
         $spd = [int]$a.PortSpeed
-        # MSFC_FibrePortHBAAttributes.PortSpeed 는 T11 FC-HBA API bitmask: 비트값 → FC 세대 Gbps.
-        # 16=10GFC, 32=16GFC, 64=32GFC, 128=64GFC (1/2/4/8 은 그대로 Gb). 비트값 ≠ Gbps 라 매핑 필수.
-        $gbps = switch ($spd) { 1 {1} 2 {2} 4 {4} 8 {8} 16 {10} 32 {16} 64 {32} 128 {64} default {$null} }
+        # PortSpeed 는 비트값 — 근거가 확인된 코드만 Gbps(위 task 머리말의 출처). 그 밖은 미상 코드라 null.
+        $gbps = switch ($spd) { 1 {1} 2 {2} 4 {10} 8 {4} 16 {8} 32 {16} default {$null} }
         $portattrs += [PSCustomObject]@{
           port_wwn   = Wwn-FromBytes $a.PortWWN
           node_wwn   = Wwn-FromBytes $a.NodeWWN
