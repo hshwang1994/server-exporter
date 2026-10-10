@@ -58,13 +58,11 @@ tests/reference/
 | Raw 수집 데이터 | `redfish/`, `os/`, `esxi/`, `agent/` | YES (단 OS의 sshd_config / sudoers 등 민감 파일은 사용자 검토 후 commit 결정) |
 | 수집 로그 | `local/crawl_*.log` | NO |
 
-`.gitignore`에 등록된 패턴:
-```text
-tests/reference/local/*
-!tests/reference/local/.gitkeep
-tests/reference/.cache/
-tests/reference/**/.crawl_inflight/
-```
+`.gitignore`에 등록된 패턴 (해당 경로는 실행 때 생기고 저장소에는 없다):
+
+- `tests/reference/local/*` — 단 `tests/reference/local/.gitkeep` 은 추적한다
+- `tests/reference/.cache/` — 실행 때 생기는 캐시, 저장소에는 없다
+- `tests/reference/**/.crawl_inflight/`
 
 ## 사용 시나리오
 

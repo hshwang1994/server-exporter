@@ -63,10 +63,10 @@ Generation / Model / Firmware 는 **선택축이 아니다** (세대를 아는 �
 
 | 채널 | 이전 flat 경로 (2026-08-12 `adc99570` 에서 12 파일 삭제) | 지금 경로 (§3.1) |
 |---|---|---|
-| Linux | `vault/linux.yml` | `vault/<loc>/os/linux.yml` |
-| Windows | `vault/windows.yml` | `vault/<loc>/os/windows.yml` |
-| ESXi | `vault/esxi.yml` | `vault/<loc>/esxi.yml` |
-| Redfish | `vault/redfish/<vendor>.yml` (9 vendor) | 복구 `vault/<loc>/redfish/<vendor>.yml` + 표준 `vault/common/redfish/standard.yml` |
+| Linux | `vault/linux.yml` (삭제됨) | `vault/<loc>/os/linux.yml` |
+| Windows | `vault/windows.yml` (삭제됨) | `vault/<loc>/os/windows.yml` |
+| ESXi | `vault/esxi.yml` (삭제됨) | `vault/<loc>/esxi.yml` |
+| Redfish | `vault/redfish/<vendor>.yml` (9 vendor, 삭제됨) | 복구 `vault/<loc>/redfish/<vendor>.yml` + 표준 `vault/common/redfish/standard.yml` |
 
 > 2026-10-10 정정: 이전 판의 이 표는 "이전 경로" 열에 **지금 경로**를 적고 있었다. 위 flat 경로가 `git log --diff-filter=D -- vault` 로 확인한 실제 삭제 목록이다.
 
@@ -276,7 +276,7 @@ ansible-playbook redfish-gather/site.yml \
 
 # 4. evidence 기록
 echo "$(date +%Y-%m-%d): Dell vault rotation (BMC user 변경)" \
-  >> tests/evidence/vault-rotation-log.md
+  >> tests/evidence/vault-rotation-log.md   # 첫 회전 때 만든다 (아직 없다)
 ```
 
 ### 5.3 시나리오 C: 새 vendor vault 추가
@@ -497,7 +497,7 @@ accounts:
 
 - 회전 절차 중 임시 평문 password 메모는 메모리 only (파일 / clipboard 제거)
 - Jenkins credentials 는 server-exporter 외부 (Jenkins controller 권한 최소)
-- 회전 이력 = `tests/evidence/vault-rotation-log.md` (날짜 + 대상만, password 자체는 절대 기록 안 함)
+- 회전 이력 = `tests/evidence/vault-rotation-log.md` (첫 회전 때 만든다 — 아직 없다. 날짜 + 대상만, password 자체는 절대 기록 안 함)
 - ansible-vault password file (`~/.vault_pass`) 은 `chmod 600`
 
 ## 11. 관련 문서

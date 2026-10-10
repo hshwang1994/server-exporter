@@ -165,31 +165,22 @@ parameters {
 따라서 파라미터명이 `inventory_json` 이면 쉘·Python 에서
 `$inventory_json` (소문자) 으로 바로 접근할 수 있다.
 
-추가로 `environment` 블록에서 대문자 변수를 명시해서 매핑하면
-두 가지 이름을 모두 쓸 수 있다:
-
-```groovy
-environment {
-    INVENTORY_JSON = "${params.inventory_json}"   // 대문자 별칭
-}
-```
+`Jenkinsfile_portal` 은 접수 목록을 **환경변수로 넘기지 않는다** (2026-10-10 정정). Linux 는 환경변수 하나가
+131,072 바이트를 넘으면 그 빌드의 모든 셸 단계가 "Argument list too long" 으로 실패한다 — 확장형 입력 5,000대(510 KB)로
+확인했다. 수집 단계가 작업 폴더에 `.inventory_input.json` 을 쓰고 `INVENTORY_JSON_FILE` 환경변수로 그 경로만 넘긴다.
 
 ### inventory.sh 읽기 우선순위
 
-각 gather 프로젝트의 `inventory.sh` 는 다음 순서로 인벤토리 JSON 을 탐색한다.
+각 gather 프로젝트의 `inventory.sh` 는 다음 순서로 인벤토리 JSON 을 찾는다.
 
 | 우선순위 | 소스 | 설명 |
 |----------|------|------|
-| 1순위 | 환경변수 `INVENTORY_JSON` (대문자) | `environment` 블록에서 명시 설정 |
-| 2순위 | 환경변수 `inventory_json` (소문자) | Jenkins 파라미터 자동 전달 |
-| 3순위 | `.inventory_input.json` 파일 | Jenkins 밖에서 직접 실행할 때 쓰는 대체 경로 (`$WORKSPACE` 또는 저장소 루트). 현재 `Jenkinsfile_portal` 은 이 파일을 만들지 않는다 |
+| 1순위 | 환경변수 `INVENTORY_JSON_FILE` 이 가리키는 파일 | `Jenkinsfile_portal` 수집 단계가 작업 폴더에 쓴 `.inventory_input.json`. 변수가 있는데 파일이 없거나 비어 있으면 다른 곳으로 넘어가지 않고 오류다 |
+| 2순위 | 환경변수 `INVENTORY_JSON` / `inventory_json` | 로컬 실행 · `scripts/ai/ci_gate.sh` 의 syntax-check 같은 작은 입력 |
+| 3순위 | `$WORKSPACE/.inventory_input.json` (없으면 저장소 루트) | Jenkins 밖에서 직접 실행할 때 |
 
-세 가지가 모두 비어 있거나 없으면 에러로 종료한다.
-
-> **참고** — 현재 `Jenkinsfile_portal` 에서는 `environment` 블록에서 `INVENTORY_JSON` 을
-> 명시 설정하므로 실제 동작 시 1순위(대문자 환경변수) 로 전달된다.
-> 2·3순위는 `environment` 블록 없이 파라미터만 정의하거나
-> Jenkins 밖에서 직접 실행할 때 fallback 으로 동작한다.
+모두 비어 있거나 없으면 에러로 종료한다. 파일 내용은 `inventory_json` 파라미터 원문 그대로다 — 호출자가 보낸 host object 전체가
+`se_host_input` 으로 보존된다(2절).
 
 ---
 

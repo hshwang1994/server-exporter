@@ -23,19 +23,19 @@ baseline credential 변경 금지.
 credential은 다음 방식으로만 관리:
 1. `tests/inventory/local/` 아래 supplemental ini (gitignored) — gitignored 로컬 파일이라 저장소에는 없다.
    아래 사용 방법대로 샘플에서 복사해 만든다
-2. `tests/vault/supplemental.yml` (ansible-vault encrypted)
+2. `tests/inventory/local/` 아래 ansible-vault 로 암호화한 yml (gitignored — 저장소에는 없다. 예전 문서의 `tests/vault/supplemental.yml` 은 존재하지 않는다)
 3. 일회성 `--extra-vars` (디버깅 용도 한정)
 
 ### 사용 방법
 ```bash
 # 1. 샘플 파일을 local/로 복사
-cp tests/inventory/supplemental.sample.ini tests/inventory/local/supplemental.ini
+cp tests/inventory/supplemental.sample.ini tests/inventory/local/supplemental.ini   # local/ 은 gitignored — 저장소에는 없다
 
 # 2. 실제 credential 입력 (에디터로 편집)
-vi tests/inventory/local/supplemental.ini
+vi tests/inventory/local/supplemental.ini   # 저장소에는 없다
 
 # 3. 실행
-ansible-playbook redfish-gather/site.yml -i tests/inventory/local/supplemental.ini
+ansible-playbook redfish-gather/site.yml -i tests/inventory/local/supplemental.ini   # 저장소에는 없다
 ```
 
 ### 주의사항

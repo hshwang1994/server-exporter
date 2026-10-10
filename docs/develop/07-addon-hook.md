@@ -118,7 +118,7 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 
 - Add-on 의 태스크 YAML 문법 오류는 rescue 로 잡히지 않고 실행 전체를 멈춘다 (`strategy/free.py` 가
   `AnsibleParserError` 를 다시 던진다). 그래서 고객이 고치는 파일은 런타임에 읽는 설정 파일(`config/`)로
-  두고, Add-on 의 `tools/check_layout.py` 가 켜기 전에 태스크 YAML 과 설정 파일을 검사하며, Add-on 태스크 변경은
+  두고, Add-on 사본의 `addon/tools/check_layout.py`(이 저장소 밖) 가 켜기 전에 태스크 YAML 과 설정 파일을 검사하며, Add-on 태스크 변경은
   Add-on 테스트를 통과한 뒤 `main` 에 올린다.
 - hook 자체의 시간 제한은 없다(2026-10-05 8차 R3 — 종전 태스크별 300 s `include_role … apply: timeout` 를 없앴다). Add-on 자체의 명령별 제한
   (5분 — Linux 는 `timeout`, Windows 는 `async`)이 있다면 그것은 Add-on 의 설계다. 끝나지 않는 Add-on 은 수집 실행 한계(최대 6시간, `scripts/run_gather.sh`)가

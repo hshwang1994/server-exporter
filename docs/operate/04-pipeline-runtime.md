@@ -48,7 +48,7 @@ parameters (loc, target_type, inventory_json, deploymentEnvironmentId, eventUuid
 > 2026-10-05 (8차): 시험용 파라미터 2개(`redfishAccountDryrun` · `gatherBudgetForceSec`)와 그 배선을 없앴다. 단계 · 작업(task)마다 두던 짧은 제한,
 > 정체 감시, 안쪽 단계 상한(Tier 2 · Script Approval)은 없다.
 >
-> 2026-10-06 (9차): 빌드 12시간 · 수집 단계 39,000초 한계, 실행 한계 계산(`scripts/gather_budget.sh`), 가용 메모리로 시작을 막던 처리, 온라인 Runner 가
+> 2026-10-06 (9차): 빌드 12시간 · 수집 단계 39,000초 한계, 실행 한계 계산(`scripts/gather_budget.sh`(삭제됨)), 가용 메모리로 시작을 막던 처리, 온라인 Runner 가
 > 없으면 수집을 건너뛰던 처리(`no_agent`)를 없앴다. 실행 기반(Runner · Jenkins Agent · 결과 처리 노드)을 기다린 시간은 실행 시간에 넣지 않고 빌드 하나의
 > 합으로 최대 72시간까지 센다. 실행 기반 장애 뒤에는 끝난 결과를 보존한 채 같은 Runner · 같은 작업 폴더에서 끝나지 않은 대상만 이어서 수집한다(아래
 > "실행 기반 대기와 같은 Runner 재개"). 결정 경위는 `docs/reference/decision-log.md` 2026-10-06(9차).
@@ -110,7 +110,7 @@ Runner · 결과 처리 노드를 최대 72시간 기다리는 동안 빌드를 
 | ESXi 응답 | 30분 (`_precheck_timeout` · `esxi_disks.py` `_DEFAULT_TIMEOUT_SEC`) | vSphere API 읽기 한 번마다 | 그 구성요소의 실패로 기록 |
 | Add-on 받기 | git 명령마다 30분, 2번까지 | `scripts/addon_checkout.sh` — 준비 단계(시도 하나의 준비 · 보존 몫 2시간 안). 수집 실행 한계는 줄지 않는다 | UNSTABLE + Add-on 없이 수집 |
 
-없앤 것(2026-10-06 9차): 빌드 12시간 · 수집 단계 39,000초 한계, 실행 한계 계산(`scripts/gather_budget.sh` — 남은 빌드 시간 · 최소 시작 120초 · 가용 메모리),
+없앤 것(2026-10-06 9차): 빌드 12시간 · 수집 단계 39,000초 한계, 실행 한계 계산(`scripts/gather_budget.sh`(삭제됨) — 남은 빌드 시간 · 최소 시작 120초 · 가용 메모리),
 `no_agent` · `not_started_budget` · `not_started_memory`. 없앤 것(2026-10-05 8차 R3 — 정상 작업을 잘랐다): 작업(task) 단위 제한(Linux 120초 · Windows/ESXi 180초 · Add-on 300초 · Redfish 탐지 120 · 수집 1,260 · 계정 240초),
 Redfish 모듈 마감(절대 1,200초 · 새 응답 없음 120초 · 탐지 90 · 계정 180초)과 진행 표시, 정체 감시(420초, `gather_watch.py`), `df` 20초,
 결과 정리 120초, 보존 archive · stash 30초, 조립 · 본문 60초(Tier 2 `SE_FINALIZER_BOUNDED` · Script Approval 4 서명 포함), 시험용 강제 한계.
@@ -254,8 +254,8 @@ Jenkinsfile 이 설정한다.
 
 | 변수 | 범위 | 값 |
 |------|------|----|
-| `INVENTORY_JSON` | 전체 | `${params.inventory_json}` — `inventory.sh` 가 읽는다 |
 | `PYTHONDONTWRITEBYTECODE` | 전체 | `1` |
+| `INVENTORY_JSON_FILE` | Gather | `${WORKSPACE}/.inventory_input.json` — 접수 입력 원본(`inventory_json` 파라미터 그대로). `inventory.sh` 가 환경변수보다 먼저 읽는다. 환경변수로는 넘기지 않는다 — Linux 환경변수 1개 한도 131,072 바이트 (2026-10-10) |
 | `REPO_ROOT` | Gather | `${WORKSPACE}` — adapter / vault 로딩 기준 |
 | `ANSIBLE_CONFIG` | Gather | `${WORKSPACE}/ansible.cfg` |
 | `ANSIBLE_JSON_OUTPUT_FILE` | Gather | `${WORKSPACE}/gather_output.json` — `json_only` 콜백이 envelope 을 쓴다 (flush+fsync) |

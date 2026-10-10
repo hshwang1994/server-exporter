@@ -241,10 +241,12 @@ storage
 
 | 입력 우선순위 | 출처 |
 |---|---|
-| 1순위 | `INVENTORY_JSON` 환경변수 |
-| 2순위 | `.inventory_input.json` 파일 (파이프라인이 `writeFile` 로 만들 때) |
+| 1순위 | `INVENTORY_JSON_FILE` 환경변수가 가리키는 파일 — `Jenkinsfile_portal` 수집 단계가 작업 폴더에 쓴 `.inventory_input.json` |
+| 2순위 | `INVENTORY_JSON` / `inventory_json` 환경변수 (로컬 · syntax-check 같은 작은 입력) |
+| 3순위 | `$WORKSPACE/.inventory_input.json` (Jenkins 밖 직접 실행) |
 
-두 가지 경로를 두는 이유: Jenkins `ansiblePlaybook` 플러그인이 멀티라인 환경변수를 일부 환경에서 못 넘긴다. 파일 fallback 으로 보완 (현재 `Jenkinsfile_portal` 은 환경변수로 넘긴다).
+파일로 넘기는 이유 (2026-10-10): Linux 는 환경변수 하나가 131,072 바이트를 넘으면 프로세스 실행 자체가 "Argument list too long" 으로 실패한다.
+확장형 입력 5,000대(510 KB)로 확인했다. 환경변수는 작은 입력의 편의 경로로만 남긴다.
 
 추가 약속:
 - `inventory_hostname = ip` 로 통일. 호스트명 사전 등록 안 한다.
