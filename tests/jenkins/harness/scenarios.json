@@ -17,7 +17,8 @@
     "sink_hold: 판정 없는 보조 시나리오 — controller loopback sink 를 hold_seconds 동안 열어 둔다(main Job T2 의 Callback 수신 증거용). 기록만 archive 한다.",
     "10차 (2026-10-07): faults = [{op, match, nth, kind}] — 운영 함수가 부르는 step(op: writeFile · readFile · fileExists · sh(label) · deleteDir · stash(name) · archiveArtifacts(첫 파일) · unstash)의 n번째 호출에서 kind=infra(실행 기반 오류 흉내: Runner 오프라인 + retry(agent()) 재호출) 또는 kind=fail(보통 실패)을 일으킨다. slow = {op: 초}. finalize_delays = 결과 처리 노드 진입마다 늦출 초. infra_budget_sec = 결과 처리만 도는 시나리오의 실행 기반 대기 한도. gather_stage.node_steps = 시도(노드 요청)마다의 단계(queue_delay · remove_files · remove_addon_copy · addon_ref_to) — attempts 는 가짜 ansible 이 실행될 때마다의 계획이다. gather_stage.addon = 시험용 Add-on 저장소(file://, commit A · B, unsupported 면 그 대상 종류를 지원하지 않음).",
     "  10차 기대값: sink_posts_eq · summary_present · finalize.{entries · exec_sec_before_min} · finalize_result.{incomplete · delivered}(결과 확인 반환값) · gather.{addon_commits(A/B) · addon_none · node_calls}. 축약 상수 · 가짜 실행 기반을 쓰는 별도 동작 시험이다 — 운영 설정 실기와 구분한다.",
-    "C1 (2026-10-10): recover_* = 결과 확인의 회수 매체 선택(seEvalCandidate · seChooseMedium). 기대값 recovery.{final_stashed · fast_path · chosen · stash_real · archive_real · stash_recovered · archive_looked_up}. faults 의 kind 에 interrupt(실제 interruption + Runner 오프라인 — 보존 중 끊김) · truncate(unarchive 로 받은 파일의 앞 keep 줄만 — 보관본 일부 회수)를 더했다. unarchive 의 match 는 원본 파일 이름이다."
+    "C1 (2026-10-10): recover_* = 결과 확인의 회수 매체 선택(seEvalCandidate · seChooseMedium). 기대값 recovery.{final_stashed · fast_path · chosen · stash_real · archive_real · stash_recovered · archive_looked_up}. faults 의 kind 에 interrupt(실제 interruption + Runner 오프라인 — 보존 중 끊김) · truncate(unarchive 로 받은 파일의 앞 keep 줄만 — 보관본 일부 회수)를 더했다. unarchive 의 match 는 원본 파일 이름이다.",
+    "2026-10-10 (감사 B-J): prep_failed_on_resume(FL-F01) · stale_workspace_same_number(FL-F06) · attempt_limit_preserve(FL-F12 · FL-F03). node_steps/attempts 의 break_venv(venv activate 삭제) · stale_owner(같은 Job · 번호, 다른 nonce 의 소유 기록) 훅, slow 의 \"sh:<label>\" 키, expect 의 body_outcome(합성 envelope 의 details.outcome)."
   ],
   "scenarios": {
     "normal_success": {
@@ -2767,6 +2768,233 @@
         "sink_last_status": 200,
         "rethrown": false,
         "note": "C1 (사용자 보정 1): 결과 정리(Layer A) 실패 · OUTPUT 없음 · stash 없음, 보관본에서 유효한 CHECKPOINT 만 회수 — 보충 조립(Layer B)으로 중간 결과를 보낸다(합성 실패 결과만 만들지 않는다)"
+      }
+    },
+    "prep_failed_on_resume": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "crash": true,
+            "agent_lost": true
+          },
+          {
+            "queue_delay": 3,
+            "break_venv": true
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "outcome": "prep_failed",
+        "layerA": "ok",
+        "source": "stash",
+        "lines_eq_accepted": true,
+        "filled": 1,
+        "by_origin": {
+          "output": 2,
+          "checkpoint": 0,
+          "synthetic": 1
+        },
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "agent_disconnect"
+          ],
+          "pinned": true,
+          "outcome": "prep_failed",
+          "node_calls": 2
+        },
+        "calls_include": [
+          "ws:break_venv",
+          "retry:agent_lost"
+        ],
+        "unstable_contains": [
+          "실행 준비"
+        ],
+        "warnings_include": [
+          "filled",
+          "outcome_prep_failed"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "FL-F01 / D-11 (2026-10-10): 1번째 시도가 끊긴 뒤 같은 Runner 의 venv 가 사라졌다. 2번째 시도의 run_gather.sh 는 begin 전에 rc 90 으로 끝나 이번 시도 기록이 없다 — 종전에는 classify 가 앞 시도를 닫은 상태(agent_disconnect)로 판정해 준비 실패가 가려졐다. 지금은 rc 로 prep_failed 를 확정하고 끝난 2대는 그대로, 1대는 실패 결과로 보낸다"
+      }
+    },
+    "stale_workspace_same_number": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 900,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 300,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": "all"
+          }
+        ],
+        "node_steps": [
+          {
+            "stale_owner": true
+          }
+        ]
+      },
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "outcome": "completed",
+        "layerA": "ok",
+        "source": "stash",
+        "lines_eq_accepted": true,
+        "filled": 0,
+        "by_origin": {
+          "output": 3,
+          "checkpoint": 0,
+          "synthetic": 0
+        },
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "completed"
+          ],
+          "outcome": "completed",
+          "node_calls": 1
+        },
+        "calls_include": [
+          "ws:stale_owner",
+          "checkout:copy"
+        ],
+        "calls_count": {
+          "checkout:copy": 1
+        },
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "warnings_empty": true,
+        "note": "FL-F06 (2026-10-10): Job 을 다시 만들어 번호가 다시 쓰이면 같은 <Job>-<번호> 작업 폴더에 다른 빌드 인스턴스의 소유 기록이 남아 있다. 종전에는 (Job, 번호)만 보고 자기 것으로 삼아 revision 불일치로 수집 전에 재개 불가였다. 지금은 빌드 표식(nonce)이 달라 새로 준비하고(checkout 1번) 정상 수집한다"
+      }
+    },
+    "attempt_limit_preserve": {
+      "case": "01_normal",
+      "run_preserve": false,
+      "outcome": "interrupted_unknown",
+      "gather_stage": {
+        "hosts": 3,
+        "constants": {
+          "INFRA_WAIT": 900,
+          "GATHER_MAX": 8,
+          "KILL_AFTER": 5,
+          "ATTEMPT_MARGIN": 10,
+          "BACKOFF_MAX": 10
+        },
+        "attempts": [
+          {
+            "emit": 2,
+            "hang": true
+          }
+        ]
+      },
+      "slow": {
+        "sh:수집 시도 판정": 40
+      },
+      "sink": {
+        "status": "200"
+      },
+      "expect": {
+        "delivered": true,
+        "outcome": "attempt_limit",
+        "layerA": "ok",
+        "source": "stash",
+        "lines_eq_accepted": true,
+        "filled": 1,
+        "by_origin": {
+          "output": 2,
+          "checkpoint": 0,
+          "synthetic": 1
+        },
+        "body_outcome": "attempt_limit",
+        "preserve": {
+          "archived": true,
+          "stashed": true,
+          "deleted": true
+        },
+        "gather": {
+          "received": [
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "attempt_states": [
+            "gather_limit"
+          ],
+          "outcome": "attempt_limit"
+        },
+        "gather_run": {
+          "rc": 124,
+          "timed_out": true,
+          "limit_sec": 8
+        },
+        "calls_include": [
+          "slow:sh:수집 시도 판정:40"
+        ],
+        "warnings_include": [
+          "filled",
+          "outcome_attempt_limit"
+        ],
+        "unstable_contains": [
+          "전송은 했지만"
+        ],
+        "sink_posts_min": 1,
+        "sink_last_status": 200,
+        "rethrown": false,
+        "note": "FL-F12 · FL-F03 (2026-10-10): 수집 셸은 한계(8초)에 끝났지만 그 뒤 단계(시도 판정)가 멈춰 시도 하나의 실행 한계(8+5+10초)에 닿았다. 종전에는 이 경로의 보존이 outcome=interrupted_unknown 으로 돌았다(env 가 루프 뒤에서야 적혔다) — 합성 결과의 details.outcome 이 attempt_limit 이어야 한다. 보존 중 끊김은 삼키지 않고 재전파한다(여기서는 끊김 없음)"
       }
     }
   }

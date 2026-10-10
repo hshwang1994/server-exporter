@@ -316,6 +316,16 @@ def check(expect: dict, obs: dict) -> tuple[list[dict], list[str]]:
                 sentence = (cat.get(key) or {}).get("default")
                 got = sum(1 for e in envs if isinstance(e, dict) and (e.get("diagnosis") or {}).get("failure_reason") == sentence)
                 add(f"body_reasons.{key}", want, got, sentence is not None and got == want)
+    if "body_outcome" in expect:
+        # 2026-10-10 (FL-F12): Layer A 가 합성한 envelope 의 diagnosis.details.outcome — 보존이 어떤 종료 상태로 돌았는지 Portal 본문에서 본다
+        envs = obs["body_envelopes"]
+        if envs is None:
+            partial.append("body_outcome: callback_body.json 없음")
+        else:
+            synth = [e for e in envs if isinstance(e, dict) and isinstance((e.get("diagnosis") or {}).get("details"), dict)
+                     and e["diagnosis"]["details"].get("finalizer") == "layer_a"]
+            got = sorted({str(e["diagnosis"]["details"].get("outcome")) for e in synth})
+            add("body_outcome", [expect["body_outcome"]], got, bool(synth) and got == [expect["body_outcome"]])
     if "calls_include" in expect:
         joined = "\n".join(c for c in obs["calls"] if isinstance(c, str))
         for needle in expect["calls_include"]:

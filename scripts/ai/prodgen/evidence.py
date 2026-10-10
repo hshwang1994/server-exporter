@@ -82,7 +82,9 @@ REQUIRED_HARNESS = ("normal_success", "archive_fail", "stash_fail", "both_fail",
                     "recover_flag_unwritten_archive",
                     "recover_archive_unavailable_stash",
                     "recover_partial_archive_keeps_stash",
-                    "recover_checkpoint_only_archive")
+                    "recover_checkpoint_only_archive",
+                    # 2026-10-10 (감사 B-J): FL-F01 · FL-F06 · FL-F12/F03 재현 시나리오
+                    "prep_failed_on_resume", "stale_workspace_same_number", "attempt_limit_preserve")
 # generated-tree Harness (FUNCTIONS_SRC=artifact) — the same functions from the prodgen tree. 2026-10-04 최종 지시 §6-1: the preservation
 # failure paths (archive_fail · stash_fail · truncate_jsonl · checkpoint_only_a/b · layer_a_fail) are required on the generated tree too.
 # 2026-10-05 (8차 R1): the stop/preserve proof (gather_limit_preserve) runs the generated tree's run_gather.sh too.

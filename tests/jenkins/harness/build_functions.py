@@ -69,7 +69,9 @@ SCENARIOS = ("normal_success", "archive_fail", "stash_fail", "both_fail", "trunc
              # 2026-10-10 (C1): 결과 확인의 회수 매체 선택 — 중간 보존 stash 와 마지막 보존 archive 중 결과가 더 많은 쪽 · 표식 없는 끊김 ·
              #   archive 회수 실패 · archive 일부만 회수 · CHECKPOINT 만 있는 archive
              "recover_final_archive_over_snapshot", "recover_flag_unwritten_archive", "recover_archive_unavailable_stash",
-             "recover_partial_archive_keeps_stash", "recover_checkpoint_only_archive")
+             "recover_partial_archive_keeps_stash", "recover_checkpoint_only_archive",
+             # 2026-10-10 (감사 B-J): 이어서 하는 시도의 준비 실패(FL-F01) · 같은 번호의 옛 작업 폴더(FL-F06) · 시도 실행 한계 뒤 보존(FL-F12 · FL-F03)
+             "prep_failed_on_resume", "stale_workspace_same_number", "attempt_limit_preserve")
 
 WRAPPERS = r'''
 
@@ -251,6 +253,7 @@ def sh(Map m) {
         return 1
     }
     seHarnessFault('sh', (m.label ?: '-').toString())
+    seHarnessSlow('sh:' + (m.label ?: '-'))          // 2026-10-10: slow: {"sh:<label>": 초} — 그 sh 호출마다 앞에서 늦춘다(시도 실행 한계 시험)
     HARNESS.calls << ('sh:' + (m.label ?: '-'))
     def res = HARNESS.outer.sh(m)
     if (HARNESS.gather != null && m.label == '__GATHER_LABEL__') {
@@ -346,6 +349,22 @@ def ws(String path, Closure body) {
         if (hk.remove_addon_copy == true) {
             HARNESS.calls << 'ws:remove:addon'
             HARNESS.outer.sh(label: 'harness: Add-on 사본 지우기', script: 'rm -rf addon')
+        }
+        if (hk.break_venv == true) {
+            // 2026-10-10 FL-F01: 이어서 하는 시도에서 Ansible venv 가 사라졌다 — scripts/run_gather.sh 가 begin 전에 종료 코드 90 으로 끝난다
+            HARNESS.calls << 'ws:break_venv'
+            HARNESS.outer.sh(label: 'harness: venv activate 지우기', script: 'rm -f "$SE_ANSIBLE_VENV/bin/activate"')
+        }
+        if (hk.stale_owner == true) {
+            // 2026-10-10 FL-F06: 같은 (Job, 번호)의 **다른 빌드 인스턴스**가 남긴 작업 폴더 — 소유 기록의 nonce 가 다르다. 운영 함수는 이 폴더를
+            //   자기 것으로 보지 않고 새로 준비해야 한다(종전: 자기 것으로 보고 revision 불일치 → 수집 전에 재개 불가)
+            HARNESS.calls << 'ws:stale_owner'
+            Map stale = [schema: 1, job: HARNESS.outer.env.JOB_NAME, job_base: HARNESS.outer.env.JOB_BASE_NAME, build: HARNESS.outer.env.BUILD_NUMBER,
+                         url: HARNESS.outer.env.BUILD_URL, node: 'stale-runner', nonce: ('stale-' + HARNESS.outer.env.BUILD_TAG), started_epoch: 1L,
+                         preserved: false, commit: '0000000000000000000000000000000000000000', prepared: true]
+            HARNESS.outer.writeFile(file: '.se_workspace.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson(stale) + '\n')
+            HARNESS.outer.writeFile(file: 'gather_manifest.json', encoding: 'UTF-8',
+                                    text: '{"schema": 1, "build": {"job": "stale", "number": "0", "nonce": "stale"}, "channel": "os", "ips": ["192.0.2.250"]}\n')
         }
         if (hk.addon_ref_to) {
             Map ad = (HARNESS.gather.addon ?: [:])

@@ -91,12 +91,15 @@ def test_fixture_regenerates_manifest_for_the_current_build(tmp_path):
                        "--out", str(out)])
     assert rc == 0
     m = json.loads((ws / "gather_manifest.json").read_text(encoding="utf-8"))
-    assert m["build"] == {"job": "clovirone-cicd/clovirone-server-gather-harness", "number": "77", "url": "https://j/x/77/"}
+    # FL-F06 (2026-10-10): 빌드 인스턴스 표식(nonce)이 manifest 에 들어가고 state.build_nonce 와 같다 — Jenkinsfile_harness 가 SE_BUILD_NONCE 로 넘긴다
+    nonce = m["build"].pop("nonce")
+    assert nonce.startswith("harness-77-") and m["build"] == {"job": "clovirone-cicd/clovirone-server-gather-harness", "number": "77", "url": "https://j/x/77/"}
     assert m["request"]["callbackUrl"] == "http://10.0.0.5:18080" and m["request"]["eventUuid"] == "harness-77" and m["request"]["loc"] == "git"
     assert m["ips"] == ["198.51.100.11", "198.51.100.12", "198.51.100.13"] and m["channel"] == "os"
     assert (ws / "gather_output.json").is_file() and (ws / "gather_progress.jsonl").is_file()
     state = json.loads(out.read_text(encoding="utf-8"))
     assert state["run_preserve"] is True and state["outcome"] == "completed" and state["case"] == "01_normal"
+    assert state["build_nonce"] == nonce
 
 
 def test_fixture_post_layer_a_mutation_corrupts_report(tmp_path):

@@ -237,6 +237,7 @@ timeout(time: 45, unit: 'MINUTES') {
                 --loc '${params.LOC}' --deployment-env '${params.DEPLOYMENT_ENV}' --event-uuid '${eventUuid}' --callback-url '${sinkUrl}' --out fixture_state.json"""
         def fx = readJSON(file: 'fixture_state.json', returnPojo: true)
         env.SE_MANIFEST_JSON = fx.manifest_json
+        env.SE_BUILD_NONCE = (fx.build_nonce ?: '').toString()      // FL-F06: 입력 확인이 만드는 빌드 표식과 같은 자리(fixture 가 manifest 에도 넣었다)
         env.SE_GATHER_OUTCOME = fx.outcome
         env.SE_BUILD_START_EPOCH = "${(long) (System.currentTimeMillis() / 1000L)}"
         for (String k in ['SE_PRESERVE_LAYER_A', 'SE_PRESERVE_ARCHIVED', 'SE_PRESERVE_STASHED', 'SE_PRESERVE_MANIFEST', 'SE_PRESERVE_HASRESULT', 'SE_FINAL_STASHED']) { env."${k}" = '' }

@@ -25,6 +25,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -129,10 +130,15 @@ def load_scenarios(path: Path) -> dict:
 
 
 def regenerate_manifest(case_manifest: dict, *, job: str, number: str, url: str, loc: str, deployment_env: str,
-                        event_uuid: str, callback_url: str) -> dict:
+                        event_uuid: str, callback_url: str, nonce: str = "") -> dict:
+    # nonce (2026-10-10 FL-F06): 빌드 인스턴스 표식 — Jenkinsfile_portal 입력 확인이 만드는 manifest 와 같은 자리. 운영 함수(seWriteOwner ·
+    #   seSameBuildNonce)가 SE_BUILD_NONCE 와 비교한다. 비우면 종전 판정(Job · 번호만).
+    build = {"job": job, "number": str(number), "url": url}
+    if nonce:
+        build["nonce"] = nonce
     return {
         "schema": 1,
-        "build": {"job": job, "number": str(number), "url": url},
+        "build": build,
         "channel": case_manifest["channel"],
         "request": {"loc": loc, "deploymentEnvironmentId": deployment_env, "eventUuid": event_uuid, "callbackUrl": callback_url},
         "ips": list(case_manifest["ips"]),
@@ -219,14 +225,15 @@ def main(argv=None) -> int:
         p = ws / name
         if p.exists():
             p.unlink()
+    nonce = f"harness-{a.number}-{int(time.time())}"
     manifest = regenerate_manifest(case_manifest, job=a.job, number=a.number, url=a.url, loc=a.loc,
-                                   deployment_env=a.deployment_env, event_uuid=a.event_uuid, callback_url=a.callback_url)
+                                   deployment_env=a.deployment_env, event_uuid=a.event_uuid, callback_url=a.callback_url, nonce=nonce)
     manifest_text = json.dumps(manifest, ensure_ascii=False)
     _write_lf(ws / "gather_manifest.json", manifest_text + "\n")
     mutations = apply_mutations(ws, sc.get("mutations", []))
     state = {"scenario": a.scenario, "case": sc["case"], "channel": manifest["channel"], "ips": manifest["ips"],
              "manifest_path": str(ws / "gather_manifest.json"), "files_copied": copied, "mutations": mutations,
-             "manifest_json": manifest_text, "run_preserve": bool(sc.get("run_preserve", True)),
+             "manifest_json": manifest_text, "build_nonce": nonce, "run_preserve": bool(sc.get("run_preserve", True)),
              "outcome": sc.get("outcome", "completed"), "sink": sc.get("sink", {"status": "200"})}
     if gs_spec:
         state["gather_stage"] = make_gather_stage(ws, case_dir, gs_spec, manifest["channel"], manifest["ips"])
