@@ -31,7 +31,7 @@
 | 0. Validate | agent 없음 | 입력값 (target_type / inventory_json / callbackUrl / deploymentEnvironmentId) 형식 검증 → 접수 manifest `env.SE_MANIFEST_JSON` | YES |
 | 1. Resolve Location | agent 없음 | `readYaml text: readTrusted('common/vars/locations.yml')` 로 `loc` 검증 → `agent_label` (컨트롤러 전체 checkout 금지 — main 2분 초과 사고) → 등록된 Runner 수(`nodesByLabel offline:true`). 0 이면 `config_error` | YES (등록 Runner 0 도 FAILURE — 접수된 대상마다 실패 결과는 보낸다) |
 | 2. Gather | stage 에 agent · timeout 없음. `seGatherStage` 가 시도마다 `seWithNode`(Jenkins queue 대기, executor 를 잡지 않음, 빌드의 실행 기반 대기 합 72 h) → `node(라벨 → 수집을 시작한 뒤에는 그 Runner)` · `ws("<Job>-<번호>")` · `timeout(6 h + 90 s + 2 h, node 를 얻은 뒤)` | 첫 시도: 저장소 받기 · 소유 기록(받은 commit) · 지난 결과 정리 · `gather_manifest.json`. 이어서 하는 시도: 저장소를 다시 받지 않고 revision 대조 → (Add-on — R1-B, 결정 재사용) → `bash scripts/run_gather.sh …`(작업 폴더 잠금 · 환경 경계 · venv · `scripts/gather_state.py begin`(남은 대상 · 누적 한계 · 동시 실행 수) · `timeout --signal=INT --kill-after=90 <남은 한계> ansible-playbook … --limit @<남은 대상>` · 60 s 생존 표시 · SSH 정리 · `gather_state.py end`) → `gather_state.py classify` → 실행 기반 장애(Runner 연결 끊김 · 근거 있는 OOM · 재부팅)면 원본만 stash 하고 같은 Runner 로 다시 시도, 끝이면 결과 정리 · 작업 폴더 정리 · archive · stash · 보관 확인 시만 `deleteDir` | Add-on 못 받으면 UNSTABLE + Add-on 없이 수집; ansible rc 는 outcome 으로 기록; 대기 한도 초과 · 재개 불가는 UNSTABLE + 실행 기반 문장 |
-| 3. (pipeline `post { always }`) 결과 확인 및 전송 | controller, `seWithNode('built-in')`(실행 기반 대기 합 안에서 · 취소된 빌드는 합 5분) → 노드를 얻은 뒤 `timeout(남은 결과 처리 시간 합, 최대 1 h){ dir("fin-<번호>") }`. 실행 기반 오류(`agent()` · `nonresumable()` 재호출)면 같은 빌드 안에서 노드를 다시 기다려 같은 폴더에서 다시 처리(10차 R1) | 입력 회수(unstash → unarchive) → 정리 결과 우선 / Groovy 최소 보충 → 접수 수 == 결과 수 → 호출자 통보 (`httpRequest`, rule 31 무결성, 시도당 응답 최대 10분 · ≤3회) → `callback_body.json` · `finalize_summary.json` 보존 | NO (UNSTABLE). 결과 처리 노드를 끝내 얻지 못하면 보내지 못한 채 FAILURE |
+| 3. (pipeline `post { always }`) 결과 확인 및 전송 | controller, `seWithNode('built-in')`(실행 기반 대기 합 안에서 · 취소된 빌드는 합 5분) → 노드를 얻은 뒤 `timeout(남은 결과 처리 시간 합, 최대 1 h){ dir("fin-<번호>") }`. 실행 기반 오류(`agent()` · `nonresumable()` 재호출)면 같은 빌드 안에서 노드를 다시 기다려 같은 폴더에서 다시 처리(10차 R1) | 입력 회수(매체마다 격리 폴더 — 마지막 보존 전달 표식 + 정리 결과 완결이면 stash, 아니면 보관본도 받아 같은 검문으로 평가해 고름, 2026-10-10) → 정리 결과 우선 / Groovy 최소 보충 → 접수 수 == 결과 수 → 호출자 통보 (`httpRequest`, rule 31 무결성, 시도당 응답 최대 10분 · ≤3회) → `callback_body.json` · `finalize_summary.json` 보존 | NO (UNSTABLE). 결과 처리 노드를 끝내 얻지 못하면 보내지 못한 채 FAILURE |
 
 - **2026-10-03 (Phase 4)**: `Validate Schema`(FAIL 게이트) · `Callback` stage 는 삭제됐다. field_dictionary 정합은 `scripts/ai/ci_gate.sh`
   (커밋 전 · CI 진입점) 가 맡는다 — 수집 Job 에서 정적 검사로 **결과 전달을 막지 않는다**. 결과 전달은 stage 가 아니라 pipeline
@@ -47,6 +47,9 @@
   확정됐던 대상의 결과가 사라졌으면(IP 대조) 다시 수집하지 않고 재개 불가다. 마지막 보존이 보관 또는 전달을 마친 뒤 끊기면 다시 시도하지 않는다.
   OOM 은 커널 로그의 OOM 종료 PID 가 이 실행의 것일 때만 원인이다(공유 cgroup 카운터는 관측). 근거 `docs/ai/decisions/ADR-2026-10-07-finalize-reentry-and-oom-attribution.md`.
 - **Default (2026-10-09)**: `Jenkinsfile_portal` 을 고치면 같은 커밋에서 `Jenkinsfile_portal_Byid` 를 portal + 고유 1줄(`inventory_json` 기본값)로 다시 만든다.
+- **2026-10-10 (C1)**: 결과 확인의 회수는 매체마다 격리 폴더에 받는다. 마지막 보존의 stash 성공 표식(`SE_FINAL_STASHED`)이 있고 정리 결과가 완결이면 stash,
+  아니면 보관본도 파일별로 받아 기존 검문으로 평가해 결과가 있는 대상이 많은 쪽(→ 정리 결과 완결 → 표식)을 고른다. 근거 `docs/ai/decisions/ADR-2026-10-10-finalize-recovery-medium.md`.
+  **Forbidden**: 표식 없는 stash 를 보관본 평가 없이 쓰기, 매체 사이에 파일 섞기, 파일 존재 · 보관 성공 목록만으로 매체 고르기, 정리 결과 파일이 없는데 두 번째 보관 부르기.
 - **Forbidden**: 수집 Job 에 정적 FAIL 게이트 stage 재도입, Callback 을 stage 로 되돌리기(끊긴 빌드에서 전달이 사라진다),
   실행 한계(`run_gather.sh` 의 `timeout`) 없이 ansible 실행, 한계를 node 진입 전 값으로 집행하기(ansible 직전 `gather_state.py begin` 이 누적에서 계산),
   수집 Job 에 시험용 파라미터 · 작업(task) 단위 시간 제한 · 정체 감시 · 안쪽 단계 상한을 다시 넣기(2026-10-05 8차 — 정상 작업을 잘랐다.
