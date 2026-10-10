@@ -265,7 +265,34 @@
           {{ (['network'] if (_e_ext_adapters | length > 0 or _e_ext_vswitches | length > 0) else [])
              + (['storage'] if ((_e_ext_hbas | default([])) | length > 0 or (_e_ext_ib | default([])) | length > 0) else []) }}
         _sections_failed_fragment:    []
-        _errors_fragment:             []
+        # 2026-10-10 (C9): 모듈 조회 실패의 근거. failed_when: false 라 실패해도 `is failed` 는 거짓이다 — 실패는 **예상 결과 키가 없는 것**으로
+        #   판정한다(msg 가 비어 있어도 실패, msg 는 원인 설명). 결과 키가 있고 비어 있으면(HBA 미설치 등) 정상이다. 섹션 상태 · 이미 확보한
+        #   데이터는 그대로 두고 섹션별 1건(network: vmnic · vswitch · portgroup, storage: vmhba)을 남긴다 — success + errors 허용 계약.
+        _errors_fragment: >-
+          {%- set mods = [('network', 'vmnic', _e_vmnic | default({}), 'hosts_vmnics_info'),
+                          ('storage', 'vmhba', _e_vmhba | default({}), 'hosts_vmhbas_info'),
+                          ('network', 'vswitch', _e_vswitch | default({}), 'hosts_vswitch_info'),
+                          ('network', 'portgroup', _e_portgroup | default({}), 'hosts_portgroup_info')] -%}
+          {%- set texts = {'network': '네트워크 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+                           'storage': '스토리지 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.'} -%}
+          {%- set out = [] -%}
+          {%- for sec in ['network', 'storage'] -%}
+            {%- set scopes = [] -%}
+            {%- set msgs = [] -%}
+            {%- for m in mods if m[0] == sec -%}
+              {%- set r = m[2] if (m[2] is mapping) else {} -%}
+              {%- if (r.get(m[3]) is not mapping) -%}
+                {%- set _ = scopes.append(m[1]) -%}
+                {%- set t = ((r.get('msg') or '') | string | replace('\n', ' ') | replace('\r', ' ') | trim) -%}
+                {%- if t -%}{%- set _ = msgs.append(t) -%}{%- endif -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- if scopes -%}
+              {%- set _ = out.append({'section': sec, 'message': texts[sec],
+                                      'detail': ('scope=' ~ (scopes | join(',')) ~ '; cause=module_failed; msg=' ~ ((msgs | first | default('none'))[:160]))}) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
       no_log: true
   rescue:
     - name: "esxi | extended | rescue (best-effort skip)"

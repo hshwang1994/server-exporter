@@ -140,6 +140,8 @@
     _sections_collected_fragment: ['system']
     _sections_failed_fragment: []
     # 세 모듈이 전부 실패하면 runtime 은 통째로 비어 있다 — 흔적을 남긴다 (섹션 status 는 유지).
+    # 2026-10-10 (C9): 1~2개만 실패해도(예: NTP 조회 권한 없음) 해당 값이 null/빈 목록이 되므로 실패한 범위를 1건 남긴다 — "미설정" 과
+    #   "조회 실패" 를 구분하기 위해서다. 실패는 결과 키 부재로 본다(위 *_ok, msg 는 원인 설명). 전부 실패 문장은 종전 그대로다.
     _errors_fragment: >-
       {%- set oks = [(_e_runtime_ntp_ok | default(false) | bool), (_e_runtime_fw_ok | default(false) | bool), (_e_runtime_svc_ok | default(false) | bool)] -%}
       {%- if oks | select | list | length == 0 -%}
@@ -147,6 +149,19 @@
              'message': '서버 기본 정보 중 운영 환경 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
              'detail':  'scope=timezone,ntp,firewall; cause=all_modules_failed; msg='
                         ~ ((_e_ntp_result.msg | default('') | string | trim) or 'none')}] }}
+      {%- elif oks | select | list | length < 3 -%}
+        {%- set mods = [('ntp', oks[0], _e_ntp_result | default({})), ('firewall', oks[1], _e_firewall_result | default({})),
+                        ('service', oks[2], _e_service_result | default({}))] -%}
+        {%- set scopes = [] -%}
+        {%- set msgs = [] -%}
+        {%- for m in mods if not m[1] -%}
+          {%- set _ = scopes.append(m[0]) -%}
+          {%- set t = (((m[2].get('msg') if (m[2] is mapping) else '') or '') | string | replace('\n', ' ') | replace('\r', ' ') | trim) -%}
+          {%- if t -%}{%- set _ = msgs.append(t) -%}{%- endif -%}
+        {%- endfor -%}
+        {{ [{'section': 'system',
+             'message': '서버 기본 정보 중 운영 환경 정보 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+             'detail':  'scope=' ~ (scopes | join(',')) ~ '; cause=module_failed; msg=' ~ ((msgs | first | default('none'))[:160])}] }}
       {%- else -%}
         {{ [] }}
       {%- endif -%}
