@@ -1,5 +1,21 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-11 — 감사 후속 X6/X7(adapter 절 정리 · 삭제 묶음) · 승격 P12 · 명부
+
+| 구분 | 결과 |
+|---|---|
+| X6 `3b84b65f` WSL ci_gate(깨끗한 checkout) | PASS — unit · e2e · regression 4,817 통과 · 153 건너뜀 · 7 xfail · integration 333 · corpus 20/20 · 3채널 syntax-check(첫 실행 `0286a3ec` 는 신규 vendor adapter 시험 1건이 옛 4키 계약을 고정해 FAIL → 시험만 고친 `3b84b65f`) |
+| X6 prodgen build(이 PC) | 191 파일 · class B 0 · tree `ab065f3d…`(`0286a3ec` 와 동일 — 시험 파일만 차이) |
+| X6 PC 전체 suite | 미완 — 저메모리로 2회 중단, 재시작 안 함(D-21). Windows task 파일 변경 0 · PowerShell 시험은 승격 gate G14 overlay 에서 실행 |
+| main Job #488~#503(X6) | 15 시나리오 계약대로(T5 #490 → 재실행 #503 ABORTED) · checkout 전부 `3b84b65f` · strict compare 회귀 0(선언 사용 D-03 (Windows) · D-08 · LX-F04 · WIN-02 · WIN-DM) |
+| CI #44(X6) | **FAILURE** — Gate 4,817/153 PASS · Corpus · Budget · Prodgen Build · Drift PASS · **Prodgen Verify G14 FAIL 2건**(`test_bootstrap_vault_encrypt.py` 가 manifest excluded 스크립트를 읽음 — HC-T7) · Harness · Evidence SKIPPED(설계) |
+| X7 `9a6ee77b`(시험 + FAILURE_PATTERNS 만) | 표식 + 가드 시험: 로컬 4 통과 · `-m "not source_text"` 4 deselected · WSL ci_gate PASS(깨끗한 checkout) · prodgen tree `ab065f3d…`(X6 와 동일) |
+| main Job #504~#519(X7) | 15 시나리오 계약대로(T5 #506 → 재실행 #519 ABORTED) · checkout 전부 `9a6ee77b` · strict compare 회귀 0(선언 사용 D-03 (Windows) · D-08 · LX-F04 · WIN-02 · WIN-DM) |
+| CI #45(X7) | SUCCESS — 필수 10단계 PASS · Gate 4819/153 · integration 333/3 · Harness 54/54 · 23/23 · Verify COMPLETE_PASS · Promote DRY_RUN |
+| 승격 P12 `410317a7` | CLI promote COMPLETE_PASS(Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20) · 양 원격 + 로컬 동일 · drift-check PROVENANCE · parent P11 `35b9ad5e` · 실 승격은 3차에 성공 — 1차는 PC 네트워크 단절(G13 Jenkins linter timeout · G20 ls-remote 실패), 2차는 PC 메모리 고갈(G14 PowerShell 시험 · G15/G19 WSL staging)로 gate 가 거부했고 원격 변경은 0 이었다 |
+| production 명부 #274~#279(P12) | canary #274 os 3/3 · Linux A #275 8/8 · Linux B #276 4 + 실패 3/7 · Windows #277 1/1 · ESXi #278 6/6 · Redfish #279 7 + 실패 3/10 — 전부 SUCCESS · checkout P12 · Portal 200 · P11 명부(#233~#238)와 직접 strict 대조 회귀 0(선언 사용 없음) · 입력 원본 P10 빌드(#185~#197)와도 회귀 0(선언 사용 D-03 (Windows) · LX-F04 · WIN-02 · WIN-DM) |
+| 성능 | 재측정 생략(D-20 — 수집 경로 불변) |
+
 ## 2026-10-10 (감사) — 전체 감사 X0~X4 실행 · 승격 P11 · 명부 · 성능
 
 | 구분 | 결과 |

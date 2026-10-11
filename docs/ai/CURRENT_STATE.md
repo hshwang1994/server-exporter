@@ -1,5 +1,22 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-11 — 감사 후속 집행(사용자 "모두 진행") · adapter 미참조 절 제거 · 정리 묶음 · 운영 문서 가독성 · **main `9a6ee77b`(X7) → production P12 `410317a7`**(parent P11 `35b9ad5e`)
+
+> 정본: `tests/evidence/2026-10-10-full-audit.md` 9절(2026-10-11 추가) · `docs/reference/decision-log.md` 2026-10-10~11(D-17~D-22) · `docs/operate/09-production-branch.md` 7절 · 대장은 저장소 밖 `evidence-audit-2026-10-10`.
+
+- **고친 것(production 반영, X6 `3622ce64`)**: adapter 43개에서 코드가 읽지 않는 절(`collect` · `normalize` · `credentials` · `graceful_degradation` · `auth` · `diagnosis` · `channel`, `capabilities` 의
+  `sections_supported` 외 값) 제거 — 설계 메모는 `vendor_notes.design_hints`(D-17) · `common/vars/status_rules.yml`(읽는 코드 없음) · `adapters/registry.yml` · 미등록 계정 provision 검증 도구 삭제 ·
+  `scripts/bootstrap_vault_encrypt.sh` 가 현 vault 배치를 재귀로 찾고 0건이면 실패. runtime tree `ab065f3d…`(P11 `20fb2094…` 에서 변경).
+- **시험 · 하네스 · 문서(`e65aac7f` · `f5c4c529` · `0286a3ec` · `3b84b65f` · `656a7804` · `9a6ee77b`)**: vault 부트스트랩 시험 신설 · 미사용 시험 삭제 · adapter 계약 시험을 "코드가 읽는 키" 기준으로 · 참조 0 일회성 스크립트 · 문서 삭제(D-19) ·
+  rule 12 R4 / rule 13 R8 코드대로 정정 · ADR-2026-10-11-adapter-key-cleanup · 운영 문서 내부 라벨 0 · 표 칸 200자 이하 · 호환성 매트릭스 thermal 열 · 결정 로그 현재 결정 요약 · HC-04 Jenkinsfile 텍스트 시험 분류(D-18, 삭제 0) ·
+  HC-T7(G14 overlay 맹점 — `source_text` 표식 + `test_overlay_excluded_paths_marked.py` 가드).
+- **확인한 것**: X6 `3b84b65f`(adapter 절 정리 · 삭제 묶음)는 WSL ci_gate PASS · 매트릭스 #488~#503 계약대로 · strict 회귀 0 이었으나 **CI #44 가 G14 overlay 에서 FAIL** — 새 시험이 manifest 가 runtime tree 에서 제외한 운영자 도구를 읽었다(HC-T7). 시험에 `source_text` 표식 + 가드 시험만 더한 X7 `9a6ee77b` 로 다시 돌렸다(runtime tree 동일 `ab065f3d…`).
+  X7: WSL ci_gate PASS(깨끗한 checkout) · prodgen build class B 0 tree `ab065f3d…` · main Job #504~#519 15 시나리오 계약대로(T5 #506 → 재실행 #519 ABORTED) · strict compare 회귀 0(선언 사용 D-03 (Windows) · D-08 · LX-F04 · WIN-02 · WIN-DM) ·
+  **CI #45 SUCCESS · COMPLETE_PASS**(Gate 4819/153 · Harness 54+23 PASS) · 승격 P12 `410317a7`(CLI promote · Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20 · 양 원격 + 로컬 동일 · drift-check PROVENANCE; 실 승격은 3차에 성공 — 1차는 PC 네트워크 단절(G13 Jenkins linter timeout · G20 ls-remote 실패), 2차는 PC 메모리 고갈(G14 PowerShell 시험 · G15/G19 WSL staging)로 gate 가 거부했고 원격 변경은 0 이었다) ·
+  production 명부 #274~#279 전부 SUCCESS · Portal 200 · P11 명부(#233~#238)와 직접 strict 대조 회귀 0(선언 사용 없음) · 입력 원본 P10 빌드(#185~#197)와도 회귀 0(선언 사용 D-03 (Windows) · LX-F04 · WIN-02 · WIN-DM). 성능 재측정은 D-20 으로 생략.
+- **못 한 것**: 이 PC 의 전체 pytest 는 저메모리로 2회 중단돼 재시작하지 않았다(D-21 — WSL ci_gate · Runner CI Gate · 승격 gate G14 overlay 가 대신한다). ESXI-10/14 는 lab 조건 부재로 미확정 유지.
+- **남은 것**: lab 부재 영역 후속(NEXT_ACTIONS) · 키 없는 서버만 실패 처리(2026-10-08 보류 유지).
+
 ## 일자: 2026-10-10 (감사 완료) — main `c2d76de2`(X4) · **production P11 `35b9ad5e`**(parent P10 `9ddc174a`)
 
 > 정본: `tests/evidence/2026-10-10-full-audit.md` · `docs/reference/decision-log.md` 2026-10-10(D-01~D-16) · `docs/operate/09-production-branch.md` 7절 · 대장은 저장소 밖 `evidence-audit-2026-10-10`.

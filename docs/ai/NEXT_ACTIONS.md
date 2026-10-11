@@ -6,22 +6,21 @@
 
 - [x] **X2 커밋(채널별) · push(양 원격) · WSL ci_gate · main Job 매트릭스 15 · strict compare · CI** — X2' `361d4484`(main #454~#469 · 회귀 0 · CI #42 COMPLETE_PASS)
 - [x] **X4 `c2d76de2` push · 매트릭스 15(#470~#485) · CI #43 COMPLETE_PASS · CLI 승격 → production P11 `35b9ad5e`** — runtime tree 는 X2 부터 동일(`20fb2094…`)
-- [ ] **[결정 보류] adapter 기록용 절(`collect` · `normalize` · `credentials` · `graceful_degradation`) 삭제 여부** — 코드가 읽지 않는다(DRIFT-024). 지우면 runtime tree 변경 → 새 후보
+- [x] **adapter 기록용 절 삭제 — 결정 D-17 로 집행**(X6 `3622ce64`: 43 adapter 에서 코드가 읽지 않는 절 제거 · 설계 메모는 `vendor_notes.design_hints`) — production P12 `410317a7`(main X7 `9a6ee77b`), 명부 대조 회귀 0
 - [x] **승격 · canary #233 · 명부 #234~#238 전수 · P10 대조** — 회귀 0 — 선언 사용 D-03 (Windows), LX-F04, WIN-02, WIN-DM
 - [x] **lab 읽기 전용 probe 결과 반영** — LX-F09 기각 · LX-F11 미확정(IB 장치 없음) · ESXI-10/14 미확정(아래 lab 부재 후속)
 - [x] **성능 전후** — P10 vs P11, 고정 집합 35 빌드씩, 관측값만(TEST_HISTORY · 대장 perf_compare.md)
-- [ ] **정리** — netrc · vault 임시 사본 · WSL clone · 임시 Job 3개(`se-audit-parity` · `se-audit-negative-control` · `se-audit-labprobe`) · 브랜치 `audit/negative-control` 삭제 확인
+- [x] **정리** — 임시 Job 3개(`se-audit-parity` · `se-audit-negative-control` · `se-audit-labprobe`) · 브랜치 `audit/negative-control` 삭제를 2026-10-11 재확인(REST 404 · ls-remote 0). 세션 임시 파일(netrc · vault 임시 사본 · WSL clone · 생성 tree 사본)은 세션 종료 절차로 삭제하고 대장 `cleanup-*` 항목에 기록
 - [ ] **lab 부재 영역(fixture 수준) 후속** — AMD(lscpu<2.34 L3 CCX) · multipath · ECMP/nhid · vCenter 대상 · VBS 물리 Windows · GPO Windows · CNA(FCoE) — 장비 확보 시 `capture-site-fixture`
 
-## 검수 후속 C1~C10 — 남은 단계 (2026-10-10, 진행 중)
+## 검수 후속 C1~C10 — 종결 (2026-10-10 전체 감사 안에서 수행)
 
-> 인계: `docs/ai/tickets/2026-10-10-c1-c10-followup/CONTINUATION.md`. 결함 수정 · 로컬 검증 · Harness 사전 확인(#1168~#1177 10/10)까지 했고,
-> 새 후보 push 가 자동 권한 판정으로 거부돼 멈췄다. 원격 main `a64654aa` · production P10 `9ddc174a` 그대로.
+> C1~C10 결함 수정은 전체 감사의 첫 후보 X0 `3d053d36` 에 포함돼 push · main Job 매트릭스 · CI(#40) 를 거쳤고, 수정 묶음 X2 · 시험 보정 X4 와 함께 production P11
+> `35b9ad5e` 로 승격됐다. 인계 ticket 폴더는 2026-10-11 정리 묶음(D-19)에서 삭제했다. 정본은 `tests/evidence/2026-10-10-full-audit.md` 3절 · 9절.
 
-- [ ] **[사용자 승인] 후보 push** — 로컬 main(`e27c642d` · `410c8604` · `f905f145` + 인계 커밋)을 양 원격에. 없으면 CI G14 가 1건 실패한다.
-- [ ] **[Jenkins] main Job 매트릭스 15빌드 · 대상별 대조 · CI(필수 단계 PASS)** — 인계 문서 4절 3~5번.
-- [ ] **[승격] 세션 CLI production P11 · production canary · 전수 회귀(Linux 15 · Windows 1 · ESXi 6 · Redfish 10)** — 4절 6~7번.
-- [ ] **[문서] CURRENT_STATE · TEST_HISTORY · decision-log · 09-production-branch 7절 · `tests/evidence/2026-10-10-c1-c10-defects.md` · 최종 push · 이 ticket 삭제** — 4절 8~9번.
+- [x] 후보 push(X0 `3d053d36`, 2026-10-10) · 매트릭스 15 · 대상별 대조 · CI #40 COMPLETE_PASS
+- [x] 승격 P11 · canary #233 · 명부 #234~#238 · P10 대조 회귀 0
+- [x] 문서(CURRENT_STATE · TEST_HISTORY · decision-log · 09-production-branch 7절) · ticket 삭제
 
 ## 운영 로그 문구 정리 후속 (2026-10-09)
 
