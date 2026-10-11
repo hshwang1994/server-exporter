@@ -1,6 +1,5 @@
 ---
 adapter_id: redfish_hpe_csus_3200
-channel: redfish
 priority: 102
 
 match:
@@ -26,30 +25,6 @@ capabilities:
     - firmware
     - power
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "hpe"
-  fallback_profiles: []
-  recovery_accounts:
-    - { vault_label: hpe_fallback, role: recovery }
-    - { vault_label: hpe_current,  role: recovery }
-    - { vault_label: hpe_factory,  role: recovery }
-
-auth:
-  preferred: [session, basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware, bmc]
-  optional_sections: [firmware, power, storage, network]
-
 vendor_notes:
   multi_partition: true
   multi_node_support: true
@@ -65,13 +40,25 @@ vendor_notes:
   chassis_thermal: true
   manager_log_services: true
   partition_boot_order: true
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    - bmc
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    - storage
+    - network
+    auth_preferred:
+    - session
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: HPE Compute Scale-up Server 3200 (CSUS 3200) — RMC + PDHC 관리, multi-partition (nPAR). cycle
+      2026-05-12 (ADR-2026-05-12) — 전 partition / 전 manager / 전 chassis 수집 활성. cycle 2026-06-09 (ADR-2026-06-09) — partitions[].boot
+      / chassis[].thermal / managers[].log_services / multi_node.composition (ResourceBlocks) / multi_node.fabrics (FlexGrid)
+      추가. data.multi_node 컨테이너에 노출 (Additive). lab 부재 — 사이트 실측 시 model_patterns / firmware_patterns / OEM schema 정정 의무.
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: >-
-    HPE Compute Scale-up Server 3200 (CSUS 3200) — RMC + PDHC 관리, multi-partition (nPAR).
-    cycle 2026-05-12 (ADR-2026-05-12) — 전 partition / 전 manager / 전 chassis 수집 활성.
-    cycle 2026-06-09 (ADR-2026-06-09) — partitions[].boot / chassis[].thermal /
-    managers[].log_services / multi_node.composition (ResourceBlocks) / multi_node.fabrics
-    (FlexGrid) 추가. data.multi_node 컨테이너에 노출 (Additive).
-    lab 부재 — 사이트 실측 시 model_patterns / firmware_patterns / OEM schema 정정 의무.

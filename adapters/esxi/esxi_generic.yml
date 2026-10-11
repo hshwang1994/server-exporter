@@ -1,6 +1,5 @@
 ---
 adapter_id: esxi_generic
-channel: esxi
 priority: 0
 generic: true
 
@@ -15,22 +14,12 @@ capabilities:
     - storage
     - network
 
-collect:
-  collect_tasks:
-    - "esxi-gather/tasks/collect_facts.yml"
-    - "esxi-gather/tasks/collect_config.yml"
-    - "esxi-gather/tasks/collect_datastores.yml"
-  normalize_tasks:
-    - "esxi-gather/tasks/normalize_system.yml"
-    - "esxi-gather/tasks/normalize_network.yml"
-    - "esxi-gather/tasks/normalize_storage.yml"
-
-credentials:
-  profile: "esxi_default"
-  fallback_profiles: []
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [storage]
+vendor_notes:
+  design_hints:
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - storage

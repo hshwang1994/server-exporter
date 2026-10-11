@@ -1,6 +1,5 @@
 ---
 adapter_id: redfish_supermicro_x12
-channel: redfish
 priority: 100
 
 match:
@@ -19,28 +18,6 @@ capabilities:
     - firmware
     - power
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "supermicro"
-  fallback_profiles: []
-  recovery_accounts:
-    - { vault_label: supermicro_factory, role: recovery }
-
-auth:
-  preferred: [basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
-
 vendor_notes:
   generation: x12
   generation_year: "2020-2022"
@@ -49,7 +26,18 @@ vendor_notes:
   power_subsystem_introduction: true
   storage_strategy_evolution: standard
   redfish_introduction: "DSP0268 v1.13+"
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    auth_preferred:
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: Supermicro X12/H12 계열 — Redfish 완전 지원 가정 (lab 부재 — web sources 기반).
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "Supermicro X12/H12 계열 — Redfish 완전 지원 가정 (lab 부재 — web sources 기반)."

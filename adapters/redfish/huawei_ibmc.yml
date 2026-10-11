@@ -1,6 +1,5 @@
 ---
 adapter_id: redfish_huawei_ibmc
-channel: redfish
 priority: 80
 
 match:
@@ -35,35 +34,6 @@ capabilities:
     - network
     - firmware
     - power
-  redfish_version: "1.0+"
-  power_subsystem: "conditional"
-  storage_strategy: "conditional"
-  oem_strategy: "none"
-  oem_namespace: "Oem.Huawei"
-
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-  storage_strategy: "standard_with_simple_fallback"
-  power_strategy: "subsystem_with_legacy_fallback"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "huawei"
-  fallback_profiles: []
-  recovery_accounts:
-    - { vault_label: huawei_factory, role: recovery }
-
-auth:
-  preferred: [basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
 
 vendor_notes:
   bmc_name: "iBMC"
@@ -82,10 +52,27 @@ vendor_notes:
     "3.x": "DSP0268 v1.8+ / PowerSubsystem 부분 도입"
     "4.x": "DSP0268 v1.10+ / 표준 가까움 / PowerSubsystem 완전"
     "5.x": "DSP0268 v1.13+ / Atlas AI 서버 분기"
-
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "Huawei iBMC 장비 — Redfish 표준 호환 가정 (lab 부재 — web sources 기반)."
+  design_hints:
+    collect_strategy: standard_only
+    collect_storage_strategy: standard_with_simple_fallback
+    collect_power_strategy: subsystem_with_legacy_fallback
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    auth_preferred:
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: Huawei iBMC 장비 — Redfish 표준 호환 가정 (lab 부재 — web sources 기반).
+    capabilities_redfish_version: 1.0+
+    capabilities_power_subsystem: conditional
+    capabilities_storage_strategy: conditional
+    capabilities_oem_strategy: none
+    capabilities_oem_namespace: Oem.Huawei
 
 metadata:
   vendor: huawei

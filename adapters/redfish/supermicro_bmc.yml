@@ -1,6 +1,5 @@
 ---
 adapter_id: redfish_supermicro_bmc
-channel: redfish
 priority: 10
 
 match:
@@ -18,28 +17,18 @@ capabilities:
     - firmware
     - power
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "supermicro"
-  fallback_profiles: []
-  recovery_accounts:
-    - { vault_label: supermicro_factory, role: recovery }
-
-auth:
-  preferred: [basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
-
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "Supermicro 장비이나 Redfish를 지원하지 않습니다 (X9/X10 등 구 세대 추정)."
+vendor_notes:
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    auth_preferred:
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: Supermicro 장비이나 Redfish를 지원하지 않습니다 (X9/X10 등 구 세대 추정).

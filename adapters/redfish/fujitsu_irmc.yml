@@ -1,6 +1,5 @@
 ---
 adapter_id: redfish_fujitsu_irmc
-channel: redfish
 priority: 80
 
 match:
@@ -30,31 +29,6 @@ capabilities:
     - network
     - firmware
     - power
-  power_subsystem: "conditional"
-  storage_strategy: "standard_with_simple_fallback"
-  oem_strategy: "none"
-
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "fujitsu"
-  fallback_profiles: []
-  recovery_accounts:
-    - { vault_label: fujitsu_factory, role: recovery }
-
-auth:
-  preferred: [basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
 
 vendor_notes:
   bmc_name: "iRMC"
@@ -80,7 +54,22 @@ vendor_notes:
     - "PRIMERGY RX4770 M6"
     - "PRIMEQUEST 3800B"
     - "PRIMEQUEST 3800E"
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    auth_preferred:
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: Fujitsu iRMC 장비 (PRIMERGY/PRIMEQUEST) — Redfish 표준 호환 가정 (lab 부재 — web sources 기반). iRMC
+      S2 generation 의 Redfish 미지원 가능 — graceful degradation.
+    capabilities_power_subsystem: conditional
+    capabilities_storage_strategy: standard_with_simple_fallback
+    capabilities_oem_strategy: none
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: "Fujitsu iRMC 장비 (PRIMERGY/PRIMEQUEST) — Redfish 표준 호환 가정 (lab 부재 — web sources 기반). iRMC S2 generation 의 Redfish 미지원 가능 — graceful degradation."

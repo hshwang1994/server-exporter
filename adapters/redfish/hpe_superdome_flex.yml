@@ -1,6 +1,5 @@
 ---
 adapter_id: redfish_hpe_superdome_flex
-channel: redfish
 priority: 101
 
 match:
@@ -25,30 +24,6 @@ capabilities:
     - firmware
     - power
 
-collect:
-  strategy: standard_only
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-
-credentials:
-  profile: "hpe"
-  fallback_profiles: []
-  recovery_accounts:
-    - { vault_label: hpe_fallback, role: recovery }
-    - { vault_label: hpe_current,  role: recovery }
-    - { vault_label: hpe_factory,  role: recovery }
-
-auth:
-  preferred: [session, basic]
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system, hardware, bmc]
-  optional_sections: [firmware, power, storage, network]
-
 vendor_notes:
   multi_partition: true
   multi_node_support: true
@@ -57,10 +32,24 @@ vendor_notes:
   rmc_firmware_min: "2.0"
   ilo5_firmware_min: "2.0"
   npar_firmware_bundles: true
+  design_hints:
+    collect_strategy: standard_only
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    - hardware
+    - bmc
+    graceful_degradation_optional_sections:
+    - firmware
+    - power
+    - storage
+    - network
+    auth_preferred:
+    - session
+    - basic
+    diagnosis_protocol_name: redfish
+    diagnosis_not_supported_message: HPE Superdome Flex / Flex 280 — RMC + iLO 5 dual-manager, multi-partition (nPAR). cycle 2026-05-12
+      (ADR-2026-05-12) — 전 partition / 전 manager / 전 chassis 수집 활성. data.multi_node 컨테이너에 partitions / managers / chassis 리스트
+      노출 (Additive).
 
-diagnosis:
-  protocol_name: redfish
-  not_supported_message: >-
-    HPE Superdome Flex / Flex 280 — RMC + iLO 5 dual-manager, multi-partition (nPAR).
-    cycle 2026-05-12 (ADR-2026-05-12) — 전 partition / 전 manager / 전 chassis 수집 활성.
-    data.multi_node 컨테이너에 partitions / managers / chassis 리스트 노출 (Additive).

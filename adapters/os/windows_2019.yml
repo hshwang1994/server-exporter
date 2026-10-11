@@ -1,6 +1,5 @@
 ---
 adapter_id: os_windows_2019
-channel: os
 priority: 50
 
 match:
@@ -17,22 +16,11 @@ capabilities:
     - network
     - users
 
-collect:
-  tasks_dir: "os-gather/tasks/windows"
-  gather_tasks:
-    - "os-gather/tasks/windows/gather_system.yml"
-    - "os-gather/tasks/windows/gather_cpu.yml"
-    - "os-gather/tasks/windows/gather_memory.yml"
-    - "os-gather/tasks/windows/gather_storage.yml"
-    - "os-gather/tasks/windows/gather_network.yml"
-    - "os-gather/tasks/windows/gather_users.yml"
-
-credentials:
-  profile: "os_windows"
-  fallback_profiles: []
-
-graceful_degradation:
-  on_section_fail: continue
-  on_auth_fail: abort
-  critical_sections: [system]
-  optional_sections: [users]
+vendor_notes:
+  design_hints:
+    graceful_degradation_on_section_fail: continue
+    graceful_degradation_on_auth_fail: abort
+    graceful_degradation_critical_sections:
+    - system
+    graceful_degradation_optional_sections:
+    - users
