@@ -1,6 +1,6 @@
 ---
 name: add-new-vendor
-description: server-exporter에 새 벤더(예: Huawei iBMC, Inspur, Ampere)를 3단계로 추가하는 절차 안내. vendor_aliases.yml + adapters/{channel}/{vendor}_*.yml + (선택) OEM tasks + vault + baseline + ai-context + docs 동시 갱신. 사용자가 "Huawei vendor 추가", "새 벤더 추가", "Huawei 지원하자" 등 요청 시 자동 호출. - 새 vendor가 호출자 시스템에서 요청됨 / 펌웨어 프로파일링 후 정식 지원 / 기존 generic fallback 한계 시
+description: "server-exporter에 새 벤더(예: Huawei iBMC, Inspur, Ampere)를 3단계로 추가하는 절차 안내. vendor_aliases.yml + adapters/{channel}/{vendor}_*.yml + (선택) OEM tasks + vault + baseline + ai-context + docs 동시 갱신. 사용자가 \"Huawei vendor 추가\", \"새 벤더 추가\", \"Huawei 지원하자\" 등 요청 시 자동 호출. - 새 vendor가 호출자 시스템에서 요청됨 / 펌웨어 프로파일링 후 정식 지원 / 기존 generic fallback 한계 시"
 ---
 
 # add-new-vendor

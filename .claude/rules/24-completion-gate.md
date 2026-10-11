@@ -35,8 +35,8 @@
 
 - **Default**: 다음 모두 PASS
   - 테스트 실패 0건 (pytest)
-  - schema validate FAIL 0건 (Jenkins Stage 3 등가 — `output_schema_drift_check.py`)
-  - baseline 회귀 FAIL 0건 (영향 vendor — Jenkins Stage 4 등가)
+  - schema validate FAIL 0건 (CI gate 등가 — `output_schema_drift_check.py`)
+  - baseline 회귀 FAIL 0건 (영향 vendor — 로컬 pytest 회귀, rule 40 R6)
 - **Allowed**: 사용자가 "회귀 skip" 명시한 경우. 단 NEXT_ACTIONS.md에 "회귀 미실행" 후속 작업 등재
 - **Forbidden**: FAIL 발견 후 무시
 - **Why**: 발견된 버그를 두고 "완료" 선언하면 다음 세션에서 동일 버그 재발견 + 사용자 신뢰 손상

@@ -1,16 +1,17 @@
+---
+paths:
+  - "adapters/**"
+  - "common/**"
+  - "os-gather/**"
+  - "esxi-gather/**"
+  - "redfish-gather/**"
+---
 # Adapter / Vendor 경계 보호
 
 ## 적용 대상
 - `adapters/{redfish,os,esxi}/**`
 - `common/`, `os-gather/`, `esxi-gather/`, `redfish-gather/` (vendor 하드코딩 금지 영역)
 - `common/vars/vendor_aliases.yml`
-
-## 현재 관찰된 현실
-
-- adapter YAML 은 `adapters/{redfish,os,esxi}/` 아래에 있다 (개수는 세지 않는다 — rule 00 의 세는 명령 참조)
-- 9 vendor (Dell / HPE / Lenovo / Supermicro / Cisco / Huawei / Inspur / Fujitsu / Quanta) + generic fallback
-- adapter_loader (lookup plugin)이 동적 점수 계산으로 선택
-- vendor-specific OEM 추출은 라이브러리 `_extract_oem_*` (task 디렉터리는 2026-08-13 제거)
 
 ## 목표 규칙
 

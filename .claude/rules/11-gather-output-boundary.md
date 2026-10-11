@@ -1,15 +1,15 @@
+---
+paths:
+  - "os-gather/**"
+  - "esxi-gather/**"
+  - "redfish-gather/**"
+  - "common/tasks/normalize/**"
+---
 # Gather ↔ Output 경계
 
 ## 적용 대상
 - `os-gather/**`, `esxi-gather/**`, `redfish-gather/**`
 - `common/tasks/normalize/**`
-
-## 현재 관찰된 현실
-
-- 각 gather가 자기 fragment만 만들고 (5 공통 변수: `_data_fragment`, `_sections_supported_fragment`, `_sections_collected_fragment`, `_sections_failed_fragment`, `_errors_fragment`)
-- `merge_fragment.yml`이 누적 병합
-- 공통 builder 5종 (build_sections / build_status / build_errors / build_meta / build_correlation / build_output)이 최종 JSON 조립
-- gather가 builder 변수 직접 수정하면 단계 경계 침범
 
 ## 목표 규칙
 

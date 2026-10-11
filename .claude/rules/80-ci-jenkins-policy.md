@@ -1,3 +1,18 @@
+---
+paths:
+  - "Jenkinsfile*"
+  - "scripts/jenkins/**"
+  - "scripts/activate_ansible_venv.sh"
+  - "scripts/run_gather.sh"
+  - "scripts/gather_state.py"
+  - "scripts/addon_checkout.sh"
+  - "scripts/ai/ci_gate.sh"
+  - "scripts/ai/prodgen/**"
+  - "ansible.cfg"
+  - "jenkins/**"
+  - "docs/operate/**"
+  - "tests/jenkins/**"
+---
 # CI / Jenkins 정책
 
 ## 적용 대상

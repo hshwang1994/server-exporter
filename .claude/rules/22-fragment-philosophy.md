@@ -1,3 +1,11 @@
+---
+paths:
+  - "os-gather/**"
+  - "esxi-gather/**"
+  - "redfish-gather/**"
+  - "common/tasks/normalize/**"
+  - "common/library/**"
+---
 # Fragment 철학 (server-exporter 핵심 규칙)
 
 > server-exporter의 모든 gather 작업의 가장 근본 원칙. 위반 시 회귀 / 누락 / 오염이 동시에 발생.
@@ -11,13 +19,6 @@
 - `os-gather/**`, `esxi-gather/**`, `redfish-gather/**`
 - `common/tasks/normalize/**`
 - `common/library/**`, `redfish-gather/library/**`
-
-## 현재 관찰된 현실
-
-- 3-channel 통합 수집 시스템 (os/esxi/redfish)
-- 각 gather가 자기 fragment만 만들고, common builder가 누적 병합
-- 새 섹션/채널 추가 시 build_output.yml 전체 수정 필요 없음 — site.yml에 include_tasks 한 줄만
-- Fragment 변수 침범으로 인한 사고 사전 차단
 
 ## 목표 규칙
 
@@ -68,7 +69,7 @@
   6. `schema/sections.yml` + `schema/fields/*.yml` 추가
   7. Baseline JSON 예시 추가 + 문서 갱신
 - **Forbidden**: 위 7단계 중 일부 skip하고 PR 제출
-- **Why**: 일부 단계 누락 시 Jenkins Stage 3 (Validate Schema) 또는 로컬 pytest 회귀(tests/e2e) FAIL
+- **Why**: 일부 단계 누락 시 CI gate(`scripts/ai/ci_gate.sh`) 또는 로컬 pytest 회귀(tests/e2e) FAIL
 
 ### R3. merge_fragment.yml 호출 보장
 

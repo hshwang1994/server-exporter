@@ -1,3 +1,15 @@
+---
+paths:
+  - "os-gather/**"
+  - "esxi-gather/**"
+  - "redfish-gather/**"
+  - "common/library/**"
+  - "common/tasks/**"
+  - "common/vars/**"
+  - "filter_plugins/**"
+  - "lookup_plugins/**"
+  - "module_utils/**"
+---
 # Gather Core 규칙 (Ansible / Python)
 
 ## 적용 대상

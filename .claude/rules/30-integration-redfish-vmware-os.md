@@ -1,3 +1,9 @@
+---
+paths:
+  - "redfish-gather/**"
+  - "os-gather/**"
+  - "esxi-gather/**"
+---
 # 외부 시스템 통합 — Redfish / IPMI / SSH / WinRM / vSphere
 
 ## 적용 대상
@@ -9,7 +15,7 @@
 
 | 시스템 | 채널 | 라이브러리 | 인증 |
 |---|---|---|---|
-| Redfish API | redfish-gather | stdlib (urllib/ssl/json) | Basic Auth (vault/<loc>/redfish/<vendor>.yml) |
+| Redfish API | redfish-gather | stdlib (urllib/ssl/json) | Basic Auth (표준 계정 `vault/common/redfish/standard.yml` 전역 · 복구 계정 `vault/<loc>/redfish/<vendor>.yml`) |
 | IPMI | (현재 사용 안 함, 향후 fallback) | — | — |
 | SSH | os-gather Linux | paramiko (Ansible 내부) | key 또는 password (vault/<loc>/os/linux.yml) |
 | WinRM | os-gather Windows | pywinrm 0.5.0 | NTLM/Basic (vault/<loc>/os/windows.yml) |

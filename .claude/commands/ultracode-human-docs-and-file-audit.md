@@ -2,7 +2,7 @@
 
 description: UltraCode dynamic workflow로 사람이 읽는 Markdown 문서를 전체 리팩토링하고, 프로젝트 전체 파일을 검수해 미사용 비코드 파일을 정리한다. 코드 파일은 삭제하지 않는다.
 argument-hint: "(선택) 점검 범위, 예: 전체 / root / README.md / docs/ / schema/ / tests/"
---------------------------------------------------------------------------------
+---
 
 # /ultracode-human-docs-and-file-audit
 

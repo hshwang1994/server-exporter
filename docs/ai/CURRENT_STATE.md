@@ -1,5 +1,18 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-12 — 하네스 정리(Claude Code `/doctor` 2026-10-11 점검, 사용자 "모두 정리" 승인) · runtime 불변 · production P12 `410317a7` 그대로
+
+> 정본: `docs/ai/decisions/ADR-2026-10-12-rules-path-scoping.md` · CONVENTION_DRIFT DRIFT-025. 제품 코드 변경 0 — production 승격 없음(runtime tree `ab065f3d…` 동일).
+
+- **고친 것(하네스만)**: rule 15개(10 · 11 · 12 · 13 · 20 · 21 · 22 · 26 · 27 · 30 · 31 · 40 · 41 · 50 · 80)에 `paths:` frontmatter — 해당 경로를 다룰 때만 로드. CLAUDE.md §3 "주요 위치" · §18 docs 갈래 목록,
+  rule 00 모듈 트리, rule 11 · 12 · 21 · 22 · 50 "현재 관찰된 현실", rule 20 envelope JSON 예시, rule 40 시험 분류 표 · pytest 명령, rule 50 alias 표처럼 코드 · 파일에서 바로 읽을 수 있는 서술을 뺐다(정본 포인터만 남김).
+  깨진 frontmatter 2건 수리(`.claude/skills/add-new-vendor/SKILL.md` description 따옴표 · `.claude/commands/ultracode-human-docs-and-file-audit.md` 종결 `---`).
+- **코드대로 정정(DRIFT-025)**: 2026-10-03 삭제된 Jenkins `Validate Schema` · `Callback` stage 로 게이트를 설명한 rule 00 · 13 · 22 · 23 · 24 · 27 → 현 4단계(`입력 확인` / `실행 위치 확인` / `서버 정보 수집` / `결과 확인 및 전송`) ·
+  CI gate(`scripts/ai/ci_gate.sh`) · shape gate(`scripts/finalize_gather_output.py`) / rule 23 field_dictionary 고정 개수 제거 / rule 30 Redfish 표준 계정 vault 는 전역 `vault/common/redfish/standard.yml`.
+- **확인한 것**: `scripts/ai/verify_harness_consistency.py` · `scripts/ai/validate_claude_structure.py` · `scripts/ai/hooks/pre_commit_harness_drift.py`(rules 28 · skills 47 · agents 47 불변) · `scripts/ai/hooks/skill_edit_validate.py` ·
+  `scripts/ai/verify_docs_references.py` 통과. 모든 세션이 읽는 양 140,463자 → 66,821자(est. 35.1k → 16.7k 토큰).
+- **남은 것**: 없음 — lab 부재 후속(NEXT_ACTIONS) · 키 없는 서버만 실패 처리(2026-10-08 보류)는 그대로.
+
 ## 일자: 2026-10-11 — 감사 후속 집행(사용자 "모두 진행") · adapter 미참조 절 제거 · 정리 묶음 · 운영 문서 가독성 · **main `9a6ee77b`(X7) → production P12 `410317a7`**(parent P11 `35b9ad5e`)
 
 > 정본: `tests/evidence/2026-10-10-full-audit.md` 9절(2026-10-11 추가) · `docs/reference/decision-log.md` 2026-10-10~11(D-17~D-22) · `docs/operate/09-production-branch.md` 7절 · 대장은 저장소 밖 `evidence-audit-2026-10-10`.

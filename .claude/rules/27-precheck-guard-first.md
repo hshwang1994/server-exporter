@@ -1,3 +1,12 @@
+---
+paths:
+  - "common/library/**"
+  - "common/tasks/precheck/**"
+  - "os-gather/**"
+  - "esxi-gather/**"
+  - "redfish-gather/**"
+  - "ansible.cfg"
+---
 # Precheck Guard First
 
 > 본 수집 전에 도달성·프로토콜을 확인하고, 실패 지점을 `diagnosis` 에 남긴다.
@@ -110,11 +119,11 @@
 
 | 검증 종류 | 위치 |
 |---|---|
-| 입력 형식 (JSON 파싱 / IP 형식) | Jenkins Stage 1 (Validate) |
+| 입력 형식 (JSON 파싱 / IP 형식) | 수집 Job `입력 확인` 단계 (`seAcceptTargets`) |
 | 호스트 도달성 | precheck TCP 판정 (reachable/port_open) |
 | 프로토콜 응답 | precheck protocol 판정 |
 | 자격증명 | 본 수집의 자격증명 시도 (precheck 인증 단계는 운영 미실행) |
-| 데이터 형식 (envelope schema) | Jenkins Stage 3 (Validate Schema) |
+| 데이터 형식 (envelope schema) | 수집 Job 결과 처리의 shape gate(`scripts/finalize_gather_output.py`) · 정합 검사는 CI gate(`scripts/ai/ci_gate.sh`) |
 | 비즈니스 규칙 (vendor-specific) | adapter YAML capabilities |
 
 각 검증이 적절한 layer에서 차단 — 늦은 차단은 시간 낭비, 이른 차단은 graceful degradation 무력화.

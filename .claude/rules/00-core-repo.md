@@ -45,32 +45,14 @@ ansible-playbook --syntax-check redfish-gather/site.yml
 pytest tests/ -v
 python tests/redfish-probe/probe_redfish.py --vendor dell   # 실장비 probe (pytest 아님)
 
-# Schema 검증 (Jenkins Stage 3와 동일)
-python tests/scripts/conditional_review.py
+# Schema 정합 검사 (수집 Job 에는 schema 단계가 없다 — CI gate scripts/ai/ci_gate.sh 와 같은 검사)
+python tests/validate_field_dictionary.py
+python scripts/ai/hooks/output_schema_drift_check.py
 
 # 하네스 검증
 python scripts/ai/verify_harness_consistency.py
 python scripts/ai/verify_vendor_boundary.py
 python scripts/ai/check_project_map_drift.py
-```
-
-### 모듈 / 채널 계층
-
-```
-호출자 (Jenkins Job)
-  ↓
-ansible.cfg + Jenkinsfile_portal (+ scripts/activate_ansible_venv.sh 가 Agent venv 선택)
-  ↓
-3-channel:
-  ├── os-gather/site.yml (4-Play: 포트감지 → 감지실패 OUTPUT → Linux → Windows)
-  ├── esxi-gather/site.yml (1-Play, community.vmware)
-  └── redfish-gather/site.yml (precheck → detect vendor → 자격증명 해석 → vault → adapter → collect → normalize)
-  ↓
-Adapter (vendor 자동 감지)
-  ↓ adapters/{redfish,os,esxi}/{vendor}_*.yml
-common/ (precheck, normalize, build_*)
-  ↓
-callback_plugins/json_only.py → JSON envelope
 ```
 
 ### 증거 문서 갱신

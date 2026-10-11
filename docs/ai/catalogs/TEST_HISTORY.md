@@ -1,5 +1,13 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-12 — 하네스 정리(`/doctor` 후속) · runtime 불변
+
+| 구분 | 결과 |
+|---|---|
+| 하네스 검증기 | `verify_harness_consistency.py` 통과(rules 28 · skills 47 · agents 47 · policies 7) · `validate_claude_structure.py` OK · `pre_commit_harness_drift.py` rc 0 · `skill_edit_validate.py` rc 0 · `verify_docs_references.py` 죽은 경로 0 |
+| frontmatter | 수리한 SKILL.md · command 2건과 rule 15개의 `paths:` 블록이 YAML 로 파싱됨 · `paths` 로드가 실제로 동작함(docs 아래 md 를 읽을 때 rule 41 만 추가 로드) |
+| pytest | 해당 없음 — `.claude/` · `CLAUDE.md` · `docs/ai/` 만 변경, 제품 경로 diff 0. production 승격 없음(P12 `410317a7` 그대로) |
+
 ## 2026-10-11 — 감사 후속 X6/X7(adapter 절 정리 · 삭제 묶음) · 승격 P12 · 명부
 
 | 구분 | 결과 |

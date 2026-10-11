@@ -1,3 +1,10 @@
+---
+paths:
+  - "docs/**/*.md"
+  - ".claude/skills/**/*.md"
+  - ".claude/agents/**/*.md"
+  - "prototypes/**/*.md"
+---
 # Mermaid 시각화 규칙
 
 ## 규칙 표기 구조

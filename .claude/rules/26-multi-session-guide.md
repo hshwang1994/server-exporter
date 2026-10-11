@@ -1,3 +1,7 @@
+---
+paths:
+  - "docs/ai/tickets/**"
+---
 # 다중 세션 운영 가이드
 
 > 꼭 필요한 경우에만 별도 Claude CLI 세션. 기본은 단일 세션 + Agent tool 병렬 (rule 25).

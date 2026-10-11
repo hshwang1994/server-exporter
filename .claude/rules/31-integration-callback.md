@@ -1,3 +1,9 @@
+---
+paths:
+  - "Jenkinsfile_portal"
+  - "Jenkinsfile_portal_Byid"
+  - "scripts/jenkins/**"
+---
 # Callback URL 무결성
 
 ## 적용 대상

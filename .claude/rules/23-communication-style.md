@@ -60,7 +60,7 @@
 | `Vault 2단계` | "Vault 2단계 로딩 (무인증 detect → vendor vault → 인증 수집)" |
 | `Linux 2-tier` | "Linux 2-tier (Python ok / raw fallback)" |
 | `Sections 11` | "11 섹션 (system/hardware/bmc/cpu/memory/storage/network/firmware/users/power/thermal)" |
-| `Field Dictionary 47 Must` | "Field Dictionary (47 Must + 115 Nice + 6 Skip = 168 entries)" |
+| `Field Dictionary Must` | "Field Dictionary (`schema/field_dictionary.yml` — 항목마다 priority must/nice/skip. 개수는 세지 않는다, rule 00)" |
 | `Baseline` | "Baseline (실장비 회귀 기준선 JSON)" |
 | `loc` | "loc (운영 사이트 — 정본은 common/vars/locations.yml)" |
 | `target_type` | "target_type (os/esxi/redfish)" |
@@ -70,7 +70,7 @@
 | `squash merge` | "squash 병합 (여러 커밋을 1개로 압축)" |
 | `force push` | "강제 푸시 (원격 이력 덮어쓰기 — 위험)" |
 | `worktree` | "작업 트리 (같은 저장소의 평행 작업 공간)" |
-| `Jenkins Stage` | "Jenkins 파이프라인 단계 (Resolve Location / Validate / Gather / Validate Schema / Callback)" |
+| `Jenkins Stage` | "Jenkins 파이프라인 단계 (입력 확인 / 실행 위치 확인 / 서버 정보 수집 / 결과 확인 및 전송 — 정본 `Jenkinsfile_portal`)" |
 
 ### R3. 결정 주체(AI vs 사람) 명시
 

@@ -1,3 +1,11 @@
+---
+paths:
+  - "callback_plugins/**"
+  - "common/tasks/normalize/**"
+  - "os-gather/site.yml"
+  - "esxi-gather/site.yml"
+  - "redfish-gather/site.yml"
+---
 # Output JSON / Callback 규칙
 
 ## 적용 대상
@@ -15,34 +23,12 @@
 
 ### R1. JSON envelope 13 필드 고정 (rule 13 R5와 동일 정본)
 
-정본 = `common/tasks/normalize/build_output.yml`. 13 필드:
-
-```json
-{
-  "schema_version": "1",
-  "target_type": "os | esxi | redfish",
-  "collection_method": "agent | redfish_api | vsphere_api",
-  "ip": "<service_ip | bmc_ip>",
-  "hostname": "<resolved hostname or ip>",
-  "vendor": "dell | hp | hpCsus | lenovo | supermicro | cisco | null",
-  "status": "success | partial | failed",
-  "sections": { "system": "supported", "cpu": "not_supported", ... },
-  "diagnosis": {
-    "reachable": true, "port_open": true, "protocol_supported": true,
-    "auth_success": true, "failure_stage": null, "failure_code": null, "failure_reason": null,
-    "details": { "channel": "...", "checked_ports": [...], ... }
-  },
-  "meta": { "loc": "...", "duration_ms": ..., ... },
-  "correlation": { "host_ip": "...", "request_id": "..." },
-  "errors": [...],
-  "data": { "cpu": {...}, "memory": {...}, ... }
-}
-```
+정본 = `common/tasks/normalize/build_output.yml`.
 
 - **Forbidden**: 13 필드 외 추가, envelope 형식 변경
 - **2026-08-10 정정 (실측 대조)**: 종전 본문은 `diagnosis` 를
   `{ "precheck": {...}, "gather_mode": "...", "details": [...] }` 로 적었으나 **코드와 다르다.**
-  실제는 위와 같이 **flat** 이며 `details` 는 **dict** 다 (정본 = `filter_plugins/diagnosis_mapper.py:60-68`,
+  실제는 **flat** 이며 `details` 는 **dict** 다 (정본 = `filter_plugins/diagnosis_mapper.py:60-68`,
   `schema/baseline_v1/*.json` 10건 전수 확인). `precheck` 라는 하위 키를 만드는 production 코드는 없다.
   `collection_method` 도 실제 값은 `agent`(os) / `redfish_api` / `vsphere_api` 다
   (`os-gather/site.yml:152`, `redfish-gather/site.yml:195`, `esxi-gather/site.yml:187`).

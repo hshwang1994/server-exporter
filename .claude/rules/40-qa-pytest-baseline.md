@@ -1,3 +1,8 @@
+---
+paths:
+  - "tests/**"
+  - "schema/baseline_v1/**"
+---
 # QA — pytest + redfish-probe + Baseline 회귀
 
 ## 적용 대상
@@ -8,14 +13,7 @@
 
 ### R1. 테스트 분류
 
-| 분류 | 위치 | 용도 |
-|---|---|---|
-| Live probe | `tests/redfish-probe/probe_redfish.py` | 실장비 검증 (Round) |
-| Deep probe | `tests/redfish-probe/deep_probe_redfish.py` | 새 펌웨어 프로파일링 |
-| Mock fixtures | `tests/fixtures/**` | Mock 회귀 입력 |
-| Baseline | `schema/baseline_v1/**` | 회귀 기준선 |
-| Evidence | `tests/evidence/**` | Round 검증 결과 |
-| Scripts | `tests/scripts/conditional_review.py`, `os_esxi_verify.sh` | 보조 검증 |
+- 정본은 `tests/` 디렉터리 배치와 `pytest.ini` markers(`source_text` · `integration` · `live`)다 — 표로 복제하지 않는다. 실장비 probe(`tests/redfish-probe/`)는 pytest 가 아니다.
 
 ### R2. 실장비 검증 절차 (Round)
 
@@ -29,11 +27,7 @@
 
 ### R3. pytest 명령
 
-```bash
-pytest tests/ -v
-python tests/redfish-probe/probe_redfish.py --vendor dell
-pytest tests/regression/ -k dell
-```
+- 기본은 `pytest tests/`. 선택 실행은 경로 · `-k` · `-m`(`pytest.ini` markers)으로 한다 — 명령 예시는 복제하지 않는다.
 
 ### R4. 새 펌웨어 추가 시 deep_probe
 

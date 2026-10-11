@@ -18,7 +18,6 @@ Server Exporter는 Jenkins + Ansible 기반 서버 정보 Gathering 프로젝트
 `Portal -> Jenkins Controller -> Site/Agent Routing -> Jenkins Agent -> Ansible -> OS|ESXi|Redfish -> Fragment -> Normalize/Merge -> JSON -> Callback/Result -> Portal`
 입력 개념: `loc`=Site/Agent Routing, `target_type`=`os|esxi|redfish`, OS/ESXi=`service_ip`, Redfish=`bmc_ip`, 호환 입력=`ip`, Portal 대상 입력은 IPv4 기준.
 `loc` 값으로 Credential/Vendor를 임의 분기하지 않는다. Jenkins Stage, Job 이름, Checkout SHA는 현재 Jenkinsfile과 실제 Build Log를 확인한다.
-주요 위치: `os-gather/site.yml`, `esxi-gather/site.yml`, `redfish-gather/site.yml`, `common/library/precheck_bundle.py`, `common/tasks/normalize/`, `callback_plugins/json_only.py`, `lookup_plugins/adapter_loader.py`, `schema/`, `vault/`.
 
 ## 4. Fragment / Normalize
 각 Gather는 자기 담당 정보만 Fragment로 만들고 누적 Result를 직접 수정하지 않는다.
@@ -142,13 +141,7 @@ Cycle/Round History, 긴 Troubleshooting, Vendor별 전체 구현, AI Harness Hi
 세부 절차는 `.claude/skills/`, 경로별 규칙은 `.claude/rules/`, 상세 설계와 Evidence는 `docs/`에 둔다.
 
 ## 18. Key Documentation
-문서 지도는 `docs/README.md` 다. 갈래는 다섯이다.
-
-- `docs/overview/` — 이 시스템이 푸는 문제와 전체 그림
-- `docs/operate/` — Jenkins·에이전트 구축, 잡 등록, 자격증명, 현장 작업
-- `docs/contract/` — 호출자 계약 (입력 / envelope / 필드 / 실패)
-- `docs/develop/` — 수집 구조, 어댑터, 벤더 추가, 디버깅
-- `docs/reference/` — 호환성 매트릭스, 실장비 검증, 결정 로그
+문서 지도는 `docs/README.md` 다.
 
 AI 전용 문서는 `docs/ai/` 에 있고 production 브랜치에는 나가지 않는다.
 사람용 문서가 `docs/ai/` 나 `.claude/` 를 참조하면 안 된다 — 배포본에서 깨진 링크가 된다.

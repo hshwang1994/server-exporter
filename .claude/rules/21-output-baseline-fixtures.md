@@ -1,15 +1,15 @@
+---
+paths:
+  - "tests/fixtures/**"
+  - "schema/baseline_v1/**"
+  - "tests/evidence/**"
+---
 # Baseline / Fixtures 보호
 
 ## 적용 대상
 - `tests/fixtures/**`
 - `schema/baseline_v1/**` (정본 — vendor별 회귀 기준선)
 - `tests/evidence/**`
-
-## 현재 관찰된 현실
-
-- tests/fixtures — 실장비 JSON 응답과 mock 회귀 입력
-- schema/baseline_v1 — vendor 별 정규화된 회귀 기준선
-- evidence (Round 검증 결과)
 
 ## 목표 규칙
 

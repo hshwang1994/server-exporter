@@ -19,6 +19,20 @@
 
 ---
 
+## DRIFT-025 (2026-10-12, resolved — 서술 정정)
+
+- **발견 위치**: `.claude/rules/00-core-repo.md` 빌드 명령 블록 · `13-output-schema-fields.md`(현실 절 · R1 Why · 테스트 포인트) · `22-fragment-philosophy.md` R2 Why · `23-communication-style.md` R2 표 ·
+  `24-completion-gate.md` R2 · `27-precheck-guard-first.md` R5 표 · `30-integration-redfish-vmware-os.md` 외부 시스템 표
+- **분류**: catalog-stale (rule 본문이 코드와 다름)
+- **설명**: Jenkins `Validate Schema`(Stage 3) · `Callback`(Stage 4) stage 는 2026-10-03 삭제됐고(rule 80 R1) 현재 `Jenkinsfile_portal` 은 `입력 확인` / `실행 위치 확인` / `서버 정보 수집` /
+  `결과 확인 및 전송` 4단계인데 규칙 6개가 옛 단계명으로 게이트 위치를 설명했다. rule 00 은 schema 검증 명령으로 `tests/scripts/conditional_review.py` 를 적었으나 그 스크립트는 실장비 raw
+  수집 도구다(CI gate 는 `tests/validate_field_dictionary.py` · `scripts/ai/hooks/output_schema_drift_check.py`). rule 23 은 field_dictionary 를 고정 개수(47/115/6/168)로 적었다(rule 00 "세어 놓은 수는
+  적지 않는다"). rule 30 은 Redfish 표준 계정 vault 를 `vault/<loc>/redfish/<vendor>.yml` 로 적었으나 표준 계정은 전역 `vault/common/redfish/standard.yml` 이고 loc×vendor 는 복구 계정이다(CLAUDE.md §6 · §8).
+- **영향**: 규칙 본문만. 수집 동작 · production tree 변화 없음.
+- **resolved (2026-10-12)**: 규칙 6개의 게이트 위치를 현 단계명 · CI gate(`scripts/ai/ci_gate.sh`) · shape gate(`scripts/finalize_gather_output.py`)로, rule 23 을 count-agnostic 으로, rule 30 을 두 축으로 고쳤다.
+  같은 커밋에서 `/doctor` 승인 정리(`docs/ai/decisions/ADR-2026-10-12-rules-path-scoping.md`).
+- **관련**: rule 00 · rule 70 R4/R8 · rule 80 R1 · CLAUDE.md §6 · §8 · §17
+
 ## DRIFT-024 (2026-10-10, resolved — 서술 정정)
 
 - **발견 위치**: `.claude/rules/12-adapter-vendor-boundary.md` R4 · `.claude/skills/add-vendor-no-lab/SKILL.md` 2절 · `docs/develop/03-adapter-system.md` 4절 Step 4 · 예시 주석

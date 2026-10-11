@@ -1,3 +1,10 @@
+---
+paths:
+  - "schema/**"
+  - "common/tasks/normalize/**"
+  - "callback_plugins/**"
+  - "docs/contract/**"
+---
 # Output Schema / Fields / Baseline 정합
 
 ## 적용 대상
@@ -11,8 +18,8 @@
 - field_dictionary.yml: 항목마다 `priority` 가 must / nice / skip 중 하나다 (개수는 세지 않는다 — rule 00 의 세는 명령 참조).
   **런타임 코드는 이 파일을 읽지 않는다** — 테스트·CI·훅 전용이다
 - baseline_v1: vendor별 회귀 기준선
-- Jenkins Stage 3 (Validate Schema) 가 FAIL 게이트, Stage 4 는 Callback (`Jenkinsfile_portal` 하나 — 정본은 rule 80 R1).
-  pytest 회귀(tests/e2e · tests/regression)는 2026-09-28 부터 Jenkins 단계가 아니라 커밋 전 로컬 검증이다
+- 수집 Job(`Jenkinsfile_portal` 하나 — 정본은 rule 80 R1)에는 schema 검증 단계가 없다. `Validate Schema` · `Callback` stage 는 2026-10-03 삭제됐고
+  schema 정합 FAIL 게이트는 CI gate(`scripts/ai/ci_gate.sh` — `tests/validate_field_dictionary.py` · `output_schema_drift_check.py`)다. pytest 회귀(tests/e2e · tests/regression)는 2026-09-28 부터 Jenkins 단계가 아니라 커밋 전 로컬 검증이다
 - DB schema 없음 — 본 출력 schema가 동등 역할
 
 ## 목표 규칙
@@ -25,7 +32,7 @@
   3. `schema/baseline_v1/{vendor}_baseline.json` (영향 vendor 전수)
 - **Allowed**: 1 vendor만 영향 받는 vendor-specific 필드는 그 vendor baseline만 갱신
 - **Forbidden**: sections.yml만 수정하고 field_dictionary 미갱신, 또는 그 반대
-- **Why**: 한쪽만 수정하면 Jenkins Stage 3 (정합 검증) FAIL
+- **Why**: 한쪽만 수정하면 CI gate(`scripts/ai/ci_gate.sh` 정합 검사) FAIL
 
 ### R2. Must 필드는 모든 vendor
 
@@ -125,7 +132,7 @@
 ## 테스트 포인트
 
 - `python scripts/ai/hooks/output_schema_drift_check.py` (exit 0)
-- Jenkins Stage 3 (Validate Schema) 통과
+- CI gate(`scripts/ai/ci_gate.sh`) 정합 검사 통과
 - 로컬 pytest 회귀 통과 (`pytest tests/e2e tests/regression`)
 - 영향 vendor baseline 회귀
 
