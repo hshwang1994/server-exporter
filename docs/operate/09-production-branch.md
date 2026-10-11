@@ -134,7 +134,12 @@ G20 은 원격 없이 돌면 PARTIAL(검증 안 됨)이고, 일부 원격만 보
   ⑦ 원복 조건 — `cj` 요청 준비 전에 코드가 먼저 나가 신규 요청이 실패하면 `git revert`(main) / `restore`(production) / 고객사 main 이전 tree 재적용으로 즉시 원복, 공급자 값 복귀는 담당 몫.
 - lab 의 임시 `cj` 라벨 + TEST-NET 실패 envelope 검증은 라우팅·실패 처리 smoke 이지 **청주 실장비 성공 수집이 아니다**.
 
-## 7. 현재 상태 (2026-10-10)
+## 7. 현재 상태 (2026-10-11)
+
+2026-10-11: 열두 번째 **P12 `410317a7`**(main `9a6ee77b` — adapter 43개의 미참조 절 제거 · 읽는 코드가 없던 파일(상태 규칙 데이터 · adapter 인덱스) 삭제 · vault 부트스트랩 수정, parent P11 `35b9ad5e`) 양 원격.
+COMPLETE_PASS(CI #45 집계 보고서 + G11~G15 · G18~G20 이 PC 재실행) · drift-check PROVENANCE · canary production #274 SUCCESS(os 3/3 · checkout P12) ·
+명부 #274~#279(Linux A · Linux B · Windows · ESXi 6 · Redfish 10) 전부 SUCCESS · Portal 200 · P11 명부(#233~#238)와 대상별 직접 대조 회귀 0(선언 사용 없음; 입력 원본 P10 빌드 대조도 회귀 0 — 선언 사용 D-03 (Windows) · LX-F04 · WIN-02 · WIN-DM).
+같은 runtime tree 의 앞 후보 `3b84b65f` 는 CI #44 의 G14(생성 tree 위 시험)에서 거부됐다 — 새 시험이 runtime tree 에 없는 운영자 도구를 읽었기 때문이며, 시험만 고친 `9a6ee77b` 로 승격했다. 기록 `tests/evidence/2026-10-10-full-audit.md` 9절.
 
 2026-10-10: 열한 번째 **P11 `35b9ad5e`**(main `c2d76de2` — 전체 감사 결함 묶음: Runner 기록 무결성 · Jenkinsfile 수집 루프 · Redfish/ESXi/Windows/Linux 결함 · FL-F01b,
 그리고 검수 후속 C1~C10, parent P10 `9ddc174a`) 양 원격. COMPLETE_PASS(CI #43 집계 보고서 + G11~G15 · G18~G20 이 PC 재실행) · drift-check PROVENANCE ·

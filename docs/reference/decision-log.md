@@ -37,7 +37,7 @@
 
 | 날짜 · 제목 |
 |---|
-| 2026-10-10~11 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-19 |
+| 2026-10-10~11 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-22 |
 | 2026-10-09 — 운영 로그 문구 정리 (수집 Job · 수집 스크립트 · CI) |
 | 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · production P8 |
 | 2026-10-07 (최종 마무리) — 로그 보관 전역화 · forks 50 · Windows vault 도메인 · Portal 재진입 4.1/4.2 · GP-64 확인 |
@@ -87,7 +87,7 @@
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
 
-## 2026-10-10~11 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-19
+## 2026-10-10~11 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-22
 
 ### 배경
 - 사용자 지시서 "ClovirONE Server Gathering 전체 감사 및 개선 실행 지시서"(2026-10-10): 전 저장소 탐색 · 결함 근본 수정 · 회귀 + 실제 Jenkins
@@ -137,6 +137,13 @@
     스크립트 5 · `verify_hpe_ilo7_fix.py` · `inject_summary_to_baselines.py` · `tests/redfish-probe/{validate_fields,probe_volumes}.py` · `tests/e2e_browser` · `adapters/registry.yml` ·
     `common/vars/status_rules.yml` · `verify_account_provision.sh` + 미등록 Job 정의 · 완료 ticket · 하네스 일회성 문서 3. 유지: `tests/evidence/2026-04-29-full-lab-sweep.md`
     (라운드 증거 보존 규칙) · AI 영역의 빈 impact 폴더 표식 · 미완 ticket 2. 고침: `bootstrap_vault_encrypt.sh` 가 현 vault 배치를 재귀로 찾고 0건이면 실패(시험 추가).
+20. **D-20 P12 성능 재측정 생략(2026-10-11)**: X6 의 runtime 변경은 코드가 읽지 않는 adapter 절과 읽는 코드가 없는 데이터 파일(`status_rules.yml`)의 제거라 수집 경로가 바뀌지
+    않는다(`capabilities.sections_supported` · `vendor_notes.manager_layout` 은 유지). P10→P11 전후 비교가 그대로 유효하며, P12 `410317a7` 는 명부 전수의 값 대조(회귀 0)로 확인한다.
+21. **D-21 PC 전체 suite 대체 · 시험 전용 후보의 overlay 확인(2026-10-11)**: X6 tip 의 PC 전체 pytest 가 작업 PC 저메모리로 2회 중단돼(Claude Code 가 유휴 중 백그라운드 셸을 정리) 재시작하지
+    않았다. X6 는 Windows task 파일 변경 0 이고 WSL ci_gate PASS · Runner CI Gate · 승격 gate G14(이 PC 의 test overlay, powershell.exe 포함)가 같은 집합을 실행한다. 그 G14 가 X6 의 CI #44 에서
+    새 시험 1파일을 잡아냈다(HC-T7 — manifest 가 제외한 운영자 도구를 읽는 시험은 `source_text` 표식 의무, 가드 시험 추가). 시험만 바꾼 후보도 승격 전 G14 overlay 를 한 번 거친다.
+22. **D-22 production 명부 대조 기준(2026-10-11)**: 승격 뒤 명부 대조는 둘 다 한다 — 입력을 준 원본 빌드(P10 #185~#197, 종전 방식)와 **직전 production 명부**(P11 #233~#238).
+    직전 명부와의 직접 대조는 선언된 변경이 이미 양쪽에 있어 선언 사용이 0 이어야 하고, 선언 밖 차이는 모두 회귀다. 입력이 같은 빌드끼리라 host 집합이 일치한다.
 - 사용자 결정(확정): BIOS 연구 패키지 폴더 삭제 · `tests/reference` 전부 유지 · Jenkins admin 자격은 채팅 전달만(어디에도 기록 금지) · §8 운영 정책 재논의 없음.
 
 ### 결과 · 범위 (코드)

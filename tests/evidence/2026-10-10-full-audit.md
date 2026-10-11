@@ -31,6 +31,8 @@
 | X2 `32d4e307` | **FAIL 1**(시험이 Windows 샌드박스 가정) | class B 0 · tree `20fb2094…` | — | — | — | 안 함 |
 | X2' `361d4484`(시험만 수정) | PASS(깨끗한 checkout · 4,879/182/7 · integration 333) | tree `20fb2094…`(X2 와 동일) | #454~#468 계약대로(T5 #456 → 재실행 #469 ABORTED) | 회귀 0 — 선언 D-03(Windows) · D-08 · WIN-02 · WIN-DM | **#42 SUCCESS · COMPLETE_PASS** | CLI dry-run 거부(PC G14 1건 HC-T6b) |
 | X3 `00cb1bf3` → X4 `c2d76de2`(시험 · 문서 · 하네스만) | PASS(각 4,909/153/7) · PC G14 overlay 4,739 통과 0 실패 | tree `20fb2094…`(동일) | #470~#484 계약대로(T5 #472 → 재실행 #485 ABORTED) | 회귀 0 — ENV-01(10.50.11.231 복구) 선언 뒤 | **#43 SUCCESS · COMPLETE_PASS**(Gate 4,909/153) | **P11 `35b9ad5e`** |
+| X6 `3b84b65f`(2026-10-11 — adapter 미참조 절 제거 · 삭제 묶음 · 문서, runtime tree 변경) | PASS(깨끗한 checkout 4,817/153/7 · integration 333; 첫 tip `0286a3ec` 는 adapter 계약 시험 1건 FAIL → 시험 수정) · PC 전체 suite 미완(저메모리 2회 중단, D-21) | class B 0 · tree `ab065f3d…` | #488~#503 계약대로(T5 #490 → 재실행 #503 ABORTED) | 회귀 0 — 선언 사용 D-03 (Windows) · D-08 · LX-F04 · WIN-02 · WIN-DM | **#44 FAILURE** — Prodgen Verify G14 2건(HC-T7: 새 시험이 manifest excluded 운영자 도구를 읽음) | 안 함 → X7 |
+| X7 `9a6ee77b`(시험 표식 · 가드 시험 · FAILURE_PATTERNS 만, tree 동일) | PASS(깨끗한 checkout) | tree `ab065f3d…`(X6 와 동일) | #504~#519 계약대로(T5 #506 → 재실행 #519 ABORTED) | 회귀 0 — 선언 사용 D-03 (Windows) · D-08 · LX-F04 · WIN-02 · WIN-DM | **#45 SUCCESS · COMPLETE_PASS**(Gate 4819/153 · Harness 54+23) | **P12 `410317a7`** |
 
 X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 90) Jenkins 가 아는 앞 시도의 연결 끊김 근거가 상태 파일에 전달되지 않아 앞 시도가
 `process_lost` 로 닫혔다(기대 `agent_disconnect`). 파이프라인 outcome(`prep_failed`)은 설계대로였다. X2 에서 `seClassifyAttempt(agentLost)` 로 고쳤다.
@@ -63,7 +65,11 @@ X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 9
 - 삭제(사용자 결정): `REDFISH_BIOS_GATHERING_PLAN_MODE_PACKAGE_00-11_2026-09-14/`(미추적 320K).
 - 삭제(참조 0 확인): `redfish-gather/tasks/normalize_{system,network,storage}.yml` · `esxi-gather/tasks/normalize_sections.yml` · `_endpoint_with_fallback`.
 - 유지(사용자 결정): `tests/reference` 전부.
-- 임시 Jenkins 자원(D-12): `se-audit-parity` · `se-audit-negative-control` · `se-audit-labprobe` Job, 브랜치 `audit/negative-control` — 감사 끝에 삭제하고 확인한다.
+- 임시 Jenkins 자원(D-12): `se-audit-parity` · `se-audit-negative-control` · `se-audit-labprobe` Job, 브랜치 `audit/negative-control` — 감사 끝에 삭제하고 확인했다(2026-10-11 재확인: REST 404 · ls-remote 0).
+- 삭제(2026-10-11 정리 묶음 D-19 — 참조 0 · 고유 내용 없음 확인 뒤): adapter 43개의 미참조 절(`collect` · `normalize` · `credentials` · `graceful_degradation` · `auth` · `diagnosis` · `channel`) ·
+  `adapters/registry.yml` · `common/vars/status_rules.yml` · `scripts/verify_account_provision.sh` + `jenkins/jobs/redfish-account-provision-verify/`(Jenkins 에 등록된 적 없음 — REST 확인) ·
+  `scripts/ai/promote_to_production.sh`(shim) · `scripts/ai/one_off/` · `scripts/ai/bug_tracker/` · vault 일회성 스크립트 5 · `tests/e2e_browser/` · `tests/redfish-probe/{validate_fields,probe_volumes}.py` ·
+  완료 ticket · 하네스 일회성 문서 3. 유지: `tests/evidence/2026-04-29-full-lab-sweep.md` · `tests/reference` 전부.
 
 ## 7. 결과 추가 (진행 중)
 
@@ -72,7 +78,8 @@ X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 9
 - [x] X2' · X4 push · WSL ci_gate · 매트릭스 · strict compare · CI(§3)
 - [x] 승격 · canary · 명부 전수(§9)
 - [x] 성능 전후(§9)
-- [ ] 정리 완료 확인 — 이 커밋 뒤 수행, 결과는 대장(`ledger.json` items cleanup-*)에 기록
+- [x] 정리 완료 확인 — 임시 Job 3 · scratch 브랜치 삭제(대장 cleanup-*, 2026-10-11 재확인)
+- [x] 2026-10-11 후속 집행: X6 `3b84b65f` push · WSL ci_gate · 매트릭스 #488~#503 · strict compare · CI #44(G14 FAIL → HC-T7) · X7 `9a6ee77b` · 매트릭스 #504~#519 · CI #45 · 승격 P12 `410317a7` · 명부 #274~#279 · P11 대조(§9)
 
 ## 8. 감사 중 발견한 하네스 맹점 · 문서 정정 (X3 — 시험 · 문서만, runtime 불변)
 
@@ -99,3 +106,22 @@ X1 의 Harness 불일치: 이어서 하는 시도가 begin 전에 끝나면(rc 9
   Jenkins 중앙값 초(전→후, Δ): PE1 62.3 → 63.1s(0.8) · PE6 68.6 → 77.4s(8.8) · PL1 52.4 → 54.9s(2.5) · PL4 62.7 → 60.4s(-2.3) · PLB 70.9 → 72.4s(1.5) · PR1 69.1 → 70.2s(1.1) · PR10 385.7 → 388.9s(3.2) · PW1 131.0 → 132.8s(1.8) · S3 205.6 → 210.8s(5.2)
   host `meta.duration_ms` 중앙값(전→후, Δ): PE1 25300 → 25689ms(389) · PE6 34007 → 37345ms(3338) · PL1 12887 → 13288ms(401) · PL4 19192 → 19643ms(451) · PLB 19076 → 19824ms(748) · PR1 34450 → 32298ms(-2152) · PR10 45598 → 44986ms(-612) · PW1 74592 → 74077ms(-515) · S3 52269 → 53473ms(1204)
 - **미해결 · 미검증**: lab 부재(AMD lscpu<2.34 L3 · multipath · ECMP/nhid · vCenter · VBS 물리 Windows · GPO Windows · CNA · RD-DOC partition · LX-F11 IB) — fixture 수준 · NEXT_ACTIONS.
+
+### 2026-10-11 — 후속 집행 X6 → X7 → production P12 (사용자 "계속 진행해라 모두 진행해라" · "모든 승인 하겠다")
+
+- **무엇을 바꿨나(X6 `3b84b65f`, runtime tree `ab065f3d…`)**: adapter 43개에서 코드가 읽지 않는 절 제거(D-17 · 설계 메모는 `vendor_notes.design_hints`) · 읽는 코드가 없는 `common/vars/status_rules.yml` ·
+  `adapters/registry.yml` · 미등록 계정 provision 검증 도구 삭제 · `bootstrap_vault_encrypt.sh` 현 vault 배치 재귀 탐색(0건 실패). 정적 확인: 플레이북이 읽는 adapter 키는 `adapter_id` ·
+  `capabilities.sections_supported` · `vendor_notes.manager_layout` · `version`(없음 → `meta.adapter_version` null 전후 동일) 뿐 — 제거한 키를 읽는 코드 0.
+- **X6 검증과 CI #44**: WSL ci_gate PASS(깨끗한 checkout; 첫 tip `0286a3ec` 는 신규 vendor adapter 시험이 옛 4키 계약을 고정해 1건 FAIL → 시험만 고친 `3b84b65f`) · prodgen build class B 0 ·
+  main Job #488~#503 15 시나리오 계약대로(T5 #490 → 재실행 #503 ABORTED, checkout 전부 `3b84b65f`) · strict compare 회귀 0(선언 사용 D-03 (Windows) · D-08 · LX-F04 · WIN-02 · WIN-DM) ·
+  **CI #44 FAILURE** — Gate 4,817/153 PASS 였지만 Prodgen Verify G14(생성 tree 위 tests overlay)에서 `test_bootstrap_vault_encrypt.py` 2건이 `FileNotFoundError`: 시험이 읽는
+  `scripts/bootstrap_vault_encrypt.sh` 를 `production_manifest.yml` 이 운영자 도구로 제외한다(HC-T7). 개발 tree 검사(WSL ci_gate · PC suite)로는 보이지 않는 종류다.
+  이 PC 의 전체 pytest 는 저메모리로 2회 중단돼 재시작하지 않았다(D-21).
+- **X7 `9a6ee77b`(시험 · FAILURE_PATTERNS 만)**: 시험에 `source_text` 표식(G14 가 제외하는 관례, 44건) + 가드 `tests/unit/test_overlay_excluded_paths_marked.py`(manifest excluded 경로를 쓰는 시험 파일은 표식 의무).
+  로컬 4 통과 · overlay 식으로 4 deselected · WSL ci_gate PASS(깨끗한 checkout) · prodgen tree `ab065f3d…`(X6 와 동일) · main Job #504~#519 15 시나리오 계약대로(T5 #506 → 재실행 #519 ABORTED) · strict compare 회귀 0(선언 사용 D-03 (Windows) · D-08 · LX-F04 · WIN-02 · WIN-DM) ·
+  **CI #45 SUCCESS**(필수 10단계 PASS · Gate 4819/153 · Harness 54/54 + 23/23 · Verify COMPLETE_PASS).
+- **승격**: X7 → **production P12 `410317a7`**(parent P11 `35b9ad5e`). CLI `prodgen promote`(CI #45 집계 보고서 재사용 · Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20 · COMPLETE_PASS) · origin(GitHub+GitLab) ·
+  internal · 로컬 동일 · drift-check PROVENANCE · trailer Main-SHA `9a6ee77b` / Tree-Hash `ab065f3d…` / Previous-Production `35b9ad5e` / CI-Build 45. 실 승격은 3차에 성공 — 1차는 PC 네트워크 단절(G13 Jenkins linter timeout · G20 ls-remote 실패), 2차는 PC 메모리 고갈(G14 PowerShell 시험 · G15/G19 WSL staging)로 gate 가 거부했고 원격 변경은 0 이었다.
+- **production 명부**(Job `clovirone-server-gather`, checkout == P12 전부, Portal HTTP 200 전부): canary #274 os 3/3 · Linux A #275 8/8 · Linux B #276 4 + 실패 3/7 · Windows #277 1/1 · ESXi #278 6/6 · Redfish #279 7 + 실패 3/10.
+  P11 빌드(#233~#238)와 대상별 직접 strict 대조: 회귀 0 — 선언 사용 없음. 입력 원본 P10 빌드(#185~#197)와의 대조도 회귀 0(선언 사용 D-03 (Windows) · LX-F04 · WIN-02 · WIN-DM). Portal 저장 확인은 계약 밖(2xx 만).
+- **성능**: 재측정 생략(D-20 — 수집 경로 불변, P10→P11 비교 유효).

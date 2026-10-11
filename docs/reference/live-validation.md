@@ -602,3 +602,8 @@ cycle 2026-05-07 M-K1 검증: 30/30 adapter origin 주석 일관성 PASS (verify
 
 production P11 `35b9ad5e`(main `c2d76de2`) 승격 직후 production Job #233~#238: canary os 3 · Linux A 8 · Linux B 7(미도달 3 기존) · Windows 1 · ESXi 6 · Redfish 10(실패 3 기존).
 checkout == P11 · Portal 200 · P10 대조 회귀 0 — 선언 사용 D-03 (Windows), LX-F04, WIN-02, WIN-DM. 정본 `tests/evidence/2026-10-10-full-audit.md` 9절.
+
+### 2026-10-11 production P12 명부 (실장비)
+
+production P12 `410317a7`(main `9a6ee77b` — adapter 미참조 절 제거, 수집 경로 불변) 승격 직후 production Job #274~#279: canary #274 os 3/3 · Linux A #275 8/8 · Linux B #276 4 + 실패 3/7 · Windows #277 1/1 · ESXi #278 6/6 · Redfish #279 7 + 실패 3/10.
+checkout == P12 · Portal 200 · P11 명부(#233~#238) 직접 대조 회귀 0 — 선언 사용 없음(입력 원본 P10 빌드 대조도 회귀 0 — 선언 사용 D-03 (Windows) · LX-F04 · WIN-02 · WIN-DM). 정본 `tests/evidence/2026-10-10-full-audit.md` 9절(2026-10-11).
