@@ -7,7 +7,7 @@
 2. _FALLBACK_VENDOR_MAP 의 4 신규 vendor entry 존재 (sync gate)
 3. _BMC_PRODUCT_HINTS 의 신규 BMC 시그니처 존재
 4. detect_vendor 함수가 4 신규 vendor 정규화
-5. adapter YAML 4 파일 (huawei_ibmc / inspur_isbmc / fujitsu_irmc / quanta_qct_bmc) 4 필수 키 존재
+5. adapter YAML 4 파일 (huawei_ibmc / inspur_isbmc / fujitsu_irmc / quanta_qct_bmc) 필수 키 존재 · 미참조 절 없음
 """
 from __future__ import annotations
 
@@ -92,13 +92,16 @@ def test_f44_f47_adapter_yaml_files_exist() -> None:
 
 
 def test_f44_f47_adapter_yaml_required_keys() -> None:
-    """4 신규 adapter 의 4 필수 키 (rule 12 R4) 존재."""
-    required = ["match", "capabilities", "collect", "normalize"]
+    """4 신규 adapter 의 필수 키 (rule 12 R4, 2026-10-11) — 코드가 읽는 절만: adapter_id · priority · match · capabilities.sections_supported.
+    그 밖의 최상위 절은 허용 집합 안이어야 한다(종전 collect/normalize/credentials/graceful_degradation 절은 제거됨)."""
+    allowed = {"adapter_id", "priority", "match", "capabilities", "generic", "vendor_notes", "metadata"}
     for name in NEW_ADAPTERS:
         path = ADAPTERS_DIR / f"{name}.yml"
         d = yaml.safe_load(path.read_text(encoding="utf-8"))
-        for key in required:
+        for key in ("adapter_id", "priority", "match", "capabilities"):
             assert key in d, f"{name}: 필수 키 '{key}' 부재"
+        assert d["capabilities"].get("sections_supported"), f"{name}: capabilities.sections_supported 부재"
+        assert set(d) <= allowed, f"{name}: 코드가 읽지 않는 최상위 절 {sorted(set(d) - allowed)}"
         assert d.get("priority") == 80, f"{name}: priority=80 (사용자 명시 — lab 부재)"
 
 
