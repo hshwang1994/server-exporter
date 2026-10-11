@@ -17,7 +17,9 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "bootstrap_vault_encrypt.sh"
 BASH = shutil.which("bash")
-pytestmark = pytest.mark.skipif(BASH is None, reason="bash 가 없다")
+# source_text: 이 스크립트는 운영자 도구라 production_manifest.yml 이 runtime tree 에서 제외한다(excluded) — prodgen G14 overlay 에는 없으므로
+# 거기서는 돌지 않는다(CI #44 2026-10-11 에서 FileNotFoundError 로 확인). 개발 tree(ci_gate · 로컬)에서만 실행한다.
+pytestmark = [pytest.mark.source_text, pytest.mark.skipif(BASH is None, reason="bash 가 없다")]
 
 
 def _fake_repo(tmp_path: Path, files: dict[str, str]) -> Path:
