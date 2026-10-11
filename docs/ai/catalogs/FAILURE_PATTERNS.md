@@ -20,6 +20,19 @@
 
 ---
 
+## 2026-10-11 — 새 단위 시험이 runtime tree 에 없는 운영자 도구를 읽어 prodgen G14 overlay 에서만 실패 (HC-T7)
+
+- 카테고리: convention-drift / harness-blind-spot
+- 발견 위치: `tests/unit/test_bootstrap_vault_encrypt.py`(X6 `e65aac7f`) — CI #44 `PRODGEN_VERIFY` G14 FAIL 2건(`FileNotFoundError: …/scripts/bootstrap_vault_encrypt.sh`)
+- 증상: 개발 tree 의 Gate(WSL ci_gate · Runner Gate 4,817 통과)는 PASS 인데, 생성된 runtime tree 에 tests/ 를 얹는 G14 에서 같은 시험 2건이 실패. Harness · Evidence 는 설계대로 SKIPPED, 승격 불가.
+- 원인: `production_manifest.yml` 이 `scripts/bootstrap_vault_encrypt.sh` 를 운영자 도구로 `excluded` 하는데, 시험이 그 파일을 저장소 루트 기준으로 복사한다. 이런 시험은 `pytest.mark.source_text`(G14 가 `-m "not source_text"` 로 제외, 44건)를 달아야 하는 관례를 새 시험이 따르지 않았고, 시험만 바뀐 후보에 대해 로컬 G14 overlay 를 돌리지 않았다.
+- 영향: X6 `3b84b65f` CI #44 FAILURE → 승격 후보 교체(시험만 고친 X7). runtime 영향 0.
+- 수정: 시험에 `source_text` 표식 + `tests/unit/test_overlay_excluded_paths_marked.py`(manifest `excluded` 경로를 쓰는 시험 파일은 표식 의무 — 이 사례를 개발 tree 에서 바로 잡는다).
+- 재발 방지: 위 가드 시험(ci_gate 에서 실행). 시험만 바꾼 후보도 G14 overlay 를 로컬에서 한 번 돌리는 것이 안전하다(prodgen verify G14 — `evidence-audit-2026-10-10` HC-T6b 와 같은 수법).
+- 관련 rule: rule 95 R3, rule 40 R6, rule 92 R3
+
+---
+
 ## 2026-06-09 — gather 엔진 외부 JSON 파싱 robustness gap (mutation 하네스로 검출)
 
 - 카테고리: external-contract-drift / production-crash
