@@ -7,7 +7,6 @@
     _rf_accounts: "{{ _cred_accounts | default([]) }}"
     _rf_vault_scope: "{{ _cred_scope | default('') }}"
     _rf_recovery_scope: "{{ _cred_recovery_scope | default('') }}"
-    _rf_vault_loaded: "{{ (_cred_standard_outcome | default('not_resolved')) == 'loaded' }}"
   no_log: true
 
 - name: "redfish | load_vault | warn vendor unresolved"

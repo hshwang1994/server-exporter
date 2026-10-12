@@ -282,11 +282,11 @@ def load_manifest(ws: Path):
     try:
         m = json.loads((ws / NAMES['manifest']).read_text(encoding='utf-8'))
     except (OSError, ValueError) as e:
-        raise StateError(f'manifest 를 읽지 못했다: {e}') from e
+        raise StateError(f'접수 목록(gather_manifest.json)을 읽지 못했습니다: {e}') from e
     channel = m.get('channel') if isinstance(m, dict) else None
     ips = [str(x) for x in (m.get('ips') or [])] if isinstance(m, dict) else []
     if channel not in ('os', 'esxi', 'redfish') or not ips:
-        raise StateError(f'manifest 내용 불량: channel={channel!r} ips={len(ips)}')
+        raise StateError(f'접수 목록(gather_manifest.json)의 내용이 올바르지 않습니다: channel={channel!r} ips={len(ips)}')
     return channel, ips
 
 
@@ -356,9 +356,9 @@ def load_state(ws: Path, gather_max: int | None = None) -> dict:
     try:
         st = json.loads(text)
     except ValueError as e:
-        raise StateError(f'gather_run.json 을 읽지 못했다: {e}') from e
+        raise StateError(f'실행 기록(gather_run.json)을 읽지 못했습니다: {e}') from e
     if not isinstance(st, dict) or st.get('schema') != 2 or not isinstance(st.get('attempts'), list):
-        raise StateError('gather_run.json 이 이 형식(schema 2)이 아니다')
+        raise StateError('실행 기록(gather_run.json)이 이 형식(schema 2)이 아닙니다')
     if gather_max:
         st['gather_max_sec'] = int(gather_max)
     return st
@@ -558,7 +558,7 @@ def end(ws: Path, *, rc: int, ssh_closed: int = 0, now: float | None = None, pro
     now = time.time() if now is None else now
     st = load_state(ws)
     if not st['attempts']:
-        raise StateError('시작 기록(begin)이 없다')
+        raise StateError('시작 기록(begin)이 없습니다')
     att = st['attempts'][-1]
     if att.get('state'):
         return att
@@ -626,7 +626,7 @@ def classify(ws: Path, *, agent_lost: bool = False, user_abort: bool = False, no
         save_state(ws, st)
     if user_abort and att.get('state') in ('aborted', 'runner_oom', 'process_lost', 'agent_disconnect') and not att.get('user_abort'):
         prev = f"{att.get('state')}: {att.get('evidence')}" if att.get('evidence') else att.get('state')
-        att.update(state='aborted', user_abort=True, evidence=f"Jenkins 사용자 취소(파이프라인 확인); 종전 판정 {prev}")
+        att.update(state='aborted', user_abort=True, evidence=f"Jenkins 빌드 중단(파이프라인 확인 — 사용자 취소 또는 그 밖의 중단); 종전 판정 {prev}")
         save_state(ws, st)
     channel, ips = load_manifest(ws)
     done, pre_failed = completed_hosts(ws, channel, ips)

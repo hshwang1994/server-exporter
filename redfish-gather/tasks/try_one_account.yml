@@ -60,8 +60,6 @@
           username: "{{ _try_account.username }}"
           label:    "{{ _try_account.label   | default('unlabeled') }}"
           role:     "{{ _try_account.role    | default('primary') }}"
-        _rf_used_account_role:     "{{ _try_account.role | default('primary') }}"
-        _rf_used_account_password: "{{ _try_account.password | default('') }}"
       no_log: true
 
     - name: "redfish | try_account | record failure evidence"

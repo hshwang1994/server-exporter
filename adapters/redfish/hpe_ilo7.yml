@@ -4,7 +4,7 @@ priority: 120
 
 match:
   vendor: ["HPE", "Hewlett Packard Enterprise"]
-  firmware_patterns: ["iLO.*7", "^\\d+\\.\\d+\\.\\d+", "^1\\.1[0-9]"]
+  firmware_patterns: ["iLO\\s*7\\b", "^\\d+\\.\\d+\\.\\d+", "^1\\.1[0-9]"]
   model_patterns:
     - "ProLiant DL360 Gen12"
     - "ProLiant DL380 Gen12"
@@ -15,7 +15,6 @@ match:
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -24,6 +23,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 vendor_notes:
   storage_controller_method: controllers_sublink

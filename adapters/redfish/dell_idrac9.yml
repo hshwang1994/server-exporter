@@ -4,11 +4,10 @@ priority: 100
 
 match:
   vendor: ["Dell", "Dell Inc.", "DELL"]
-  firmware_patterns: ["iDRAC.*9", "^[4-7]\\."]
+  firmware_patterns: ["iDRAC\\s*9\\b", "^[3-7]\\."]
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -17,6 +16,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 vendor_notes:
   design_hints:

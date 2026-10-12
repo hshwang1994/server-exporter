@@ -96,22 +96,22 @@
       {{ ((_w_hw_data.bios_serial | default('')) | dmi_sentinel_null('serial')
           | normalize_os_serial(_w_hw_vendor_hint, _w_hw_model_hint))
          or (_w_serial_val | default(none)) }}
-    _w_hw_ok: "{{ ((_w_hw_data.vendor | default('', true)) | string | trim | length > 0) or ((_w_hw_data.model | default('', true)) | string | trim | length > 0) or ((_w_hw_data.bios_version | default('', true)) | string | trim | length > 0) }}"
+    _w_hw_ok: "{{ (((_w_hw_data.vendor | default('', true)) | dmi_sentinel_null('vendor')) is not none) or (((_w_hw_data.model | default('', true)) | dmi_sentinel_null('model')) is not none) or (((_w_hw_data.bios_version | default('', true)) | dmi_sentinel_null('bios')) is not none) or ((_w_hw_serial | default(none)) is not none) }}"
   no_log: true
 
 - name: "windows | hardware | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
       hardware:
-        vendor:       "{{ _w_hw_data.vendor       | default(none, true) or none }}"
-        model:        "{{ _w_hw_data.model        | default(none, true) or none }}"
+        vendor:       "{{ (_w_hw_data.vendor       | default('', true)) | dmi_sentinel_null('vendor') }}"
+        model:        "{{ (_w_hw_data.model        | default('', true)) | dmi_sentinel_null('model') }}"
         serial:       "{{ _w_hw_serial | default(none) }}"
         uuid:         "{{ ((_w_hw_data.uuid | default(none, true)) or (_w_uuid_val | default(none))) | normalize_uuid }}"
         sku:          "{{ _w_hw_data.sku          | default(none, true) or none }}"
         asset_tag:    "{{ _w_hw_data.asset_tag    | default(none, true) or none }}"
         system_family: "{{ _w_hw_data.system_family | default(none, true) or none }}"
         chassis_type: "{{ _w_hw_data.chassis_type | default(none, true) or none }}"
-        bios_version: "{{ _w_hw_data.bios_version | default(none, true) or none }}"
+        bios_version: "{{ (_w_hw_data.bios_version | default('', true)) | dmi_sentinel_null('bios') }}"
         bios_vendor:  "{{ _w_hw_data.bios_vendor  | default(none, true) or none }}"
         bios_date:    "{{ _w_hw_data.bios_release | default(none, true) or none }}"
         total_memory_bytes: "{{ _w_hw_data.total_memory | default(none, true) or none }}"

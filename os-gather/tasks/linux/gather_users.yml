@@ -3,6 +3,7 @@
 - name: "linux | users | raw getent + last logins"
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
+    if command -v getent >/dev/null 2>&1; then echo "GETENT=present"; else echo "GETENT=absent"; fi
     pw=$(getent passwd 2>/dev/null)
     echo "PASSWD_START"
     [ -n "$pw" ] && printf '%s\n' "$pw"
@@ -117,16 +118,23 @@
   no_log: true
 
 - name: "linux | users | build fragment (raw)"
+  vars:
+    _l_users_marker_lines: "{{ _l_users_raw_result.stdout_lines | default([]) }}"
+    _l_users_getent_absent: "{{ 'GETENT=absent' in (_l_users_marker_lines | map('trim') | list) }}"
+    _l_users_ran: "{{ ('PASSWD_END' in (_l_users_marker_lines | map('trim') | list)) and ((_l_users_raw_result.rc | default(1)) == 0) }}"
+    _l_users_have: "{{ (_l_raw_passwd | default({}) | length) > 0 }}"
   ansible.builtin.set_fact:
     _data_fragment:
       users: "{{ _l_norm_users_list_raw }}"
     _sections_supported_fragment: ['users']
-    _sections_collected_fragment: >-
-      {{ ['users'] if (_l_raw_passwd | default({}) | length > 0) else [] }}
-    _sections_failed_fragment: []
-    _sections_unsupported_fragment: >-
-      {{ ['users'] if (_l_raw_passwd | default({}) | length == 0) else [] }}
-    _errors_fragment: []
+    _sections_collected_fragment: "{{ ['users'] if (_l_users_have | bool) else [] }}"
+    _sections_failed_fragment: "{{ [] if ((_l_users_have | bool) or (_l_users_getent_absent | bool)) else ['users'] }}"
+    _sections_unsupported_fragment: "{{ ['users'] if ((not (_l_users_have | bool)) and (_l_users_getent_absent | bool)) else [] }}"
+    _errors_fragment: >-
+      {{ [] if ((_l_users_have | bool) or (_l_users_getent_absent | bool)) else
+         [{'section': 'users',
+           'message': '사용자 계정 목록 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail': ('source=getent passwd; cause=' ~ ('no_output' if (_l_users_ran | bool) else 'command_failed') ~ '; rc=' ~ (_l_users_raw_result.rc | default('none')))}] }}
   no_log: true
 
 - name: "linux | users | merge fragment"

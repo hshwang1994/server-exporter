@@ -4,12 +4,11 @@ priority: 120
 
 match:
   vendor: ["Dell", "Dell Inc.", "DELL"]
-  firmware_patterns: ["iDRAC.*10", "^1\\.[0-9]+"]
+  firmware_patterns: ["iDRAC\\s*10\\b", "^1\\.[0-9]+"]
   model_patterns: ["PowerEdge R470", "PowerEdge R670", "PowerEdge R770", "PowerEdge R6715", "PowerEdge R6815", "PowerEdge R7715"]
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -18,6 +17,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 vendor_notes:
   design_hints:

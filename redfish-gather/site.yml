@@ -403,7 +403,7 @@
               {{ ((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default(''))
                  or ((_va | default({})).vendor_output_display | default({})).get(_rf_vendor | default(''), _rf_vendor | default(none)) }}
             _fail_sec_supported:    "{{ ((_selected_adapter | default({})).capabilities | default({})).sections_supported
-                                        | default(['system','hardware','bmc','cpu','memory',
+                                        | default(['hardware','bmc','cpu','memory',
                                                    'storage','network','firmware','power','thermal']) }}"
             _fail_error_section:    "redfish_gather"
             _fail_error_message:    "[task: {{ ansible_failed_task.name | default('unknown') }}] {{ ansible_failed_result.msg | default('Redfish 수집 예외') }}"
@@ -443,7 +443,7 @@
                        'collection_method': 'redfish_api',
                        'ip': _rf_ip | default(inventory_hostname),
                        'hostname': none,
-                       'vendor': (((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default('')) or ((_va | default({})).vendor_output_display | default({})).get(_rf_detected_vendor | default(''), _rf_detected_vendor | default(none))),
+                       'vendor': (((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default('')) or ((_va | default({})).vendor_output_display | default({})).get(_rf_detected_vendor | default(''), ((_rf_detected_vendor | default('')) if ((_rf_detected_vendor | default('')) not in ['', 'unknown']) else none))),
                        'status': 'failed',
                        'sections': {'system': 'failed', 'hardware': 'failed', 'bmc': 'failed', 'cpu': 'failed', 'memory': 'failed', 'storage': 'failed', 'network': 'failed', 'firmware': 'failed', 'users': 'not_supported', 'power': 'failed', 'thermal': 'failed'},
                        'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_catalog.output_build_failed.default, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},

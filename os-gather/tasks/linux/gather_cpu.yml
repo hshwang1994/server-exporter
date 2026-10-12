@@ -156,7 +156,6 @@
 
 - name: "linux | cpu | build fragment"
   ansible.builtin.set_fact:
-    _l_cpu_ok: "{{ (_l_cpu_model | default(none)) is not none or (_l_cpu_logical | default(none)) is not none }}"
     _data_fragment:
       cpu:
         sockets:         "{{ _l_cpu_sockets | default(none) }}"

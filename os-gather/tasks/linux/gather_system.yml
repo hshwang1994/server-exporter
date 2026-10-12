@@ -140,7 +140,7 @@
 - name: "linux | system | raw gather (os-release/uname/hostname/dmi)"
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
-    . /etc/os-release 2>/dev/null || true
+    if [ -r /etc/os-release ]; then . /etc/os-release 2>/dev/null; fi
     echo "OS_ID=${ID:-}"
     echo "OS_ID_LIKE=${ID_LIKE:-}"
     echo "OS_VERSION=${VERSION_ID:-}"
@@ -150,6 +150,8 @@
     echo "NODENAME=$(uname -n 2>/dev/null)"
     echo "DOMAIN=$(hostname -d 2>/dev/null)"
     echo "UPTIME=$(awk '{print int($1)}' /proc/uptime 2>/dev/null)"
+    echo "MEM_TOTAL_KB=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null)"
+    echo "MEM_AVAIL_KB=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null)"
     if command -v getenforce >/dev/null 2>&1; then
       echo "SELINUX=$(getenforce 2>/dev/null | tr '[:upper:]' '[:lower:]')"
     elif [ -f /etc/selinux/config ]; then

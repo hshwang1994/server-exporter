@@ -33,52 +33,52 @@
    "source_sha256": "199497218b903603b5c39f89819a291cadf00c6a43710ba44551d717b56dfba0"
   },
   "Jenkinsfile_portal": {
-   "bytes": 114987,
+   "bytes": 124668,
    "language": "groovy",
    "mode": "100644",
    "preserved": [
     {
-     "line": 512,
+     "line": 607,
      "rule": "shell.shebang",
      "text_sha256": "53ad80a69a847862721d6afd94894264e4cff23fef65cdff70b011ee5306312d"
     },
     {
-     "line": 630,
+     "line": 736,
      "rule": "shell.shebang",
      "text_sha256": "e931301b29007e7639eaf89f6c35ed2f7fd813fb64efd866e190efc7d06226cf"
     },
     {
-     "line": 1703,
+     "line": 1903,
      "rule": "shell.shebang",
      "text_sha256": "125af5e65259eeadd07ef65bdec365f6922e1b9c63c9d49ddba771df77c5f679"
     },
     {
-     "line": 1733,
+     "line": 1933,
      "rule": "shell.shebang",
      "text_sha256": "d033129c25a0b6aa7c3e0c1009092b884c39d88ccebfc24eab11f0230c5fcf75"
     },
     {
-     "line": 1762,
+     "line": 1962,
      "rule": "shell.shebang",
      "text_sha256": "b6e030dbc566f0295d420509f7c36be95e3b5cab3af2ac75bce079576b4a887a"
     },
     {
-     "line": 1778,
+     "line": 1978,
      "rule": "shell.shebang",
-     "text_sha256": "5ec9e3700f08019085a79ce8f727f253791fbc8c7da2255f00034b9606079e9c"
+     "text_sha256": "3e0ff201dbf6b7c2972a3029ac5f3d968304a42097752f9c01474713239769eb"
     },
     {
-     "line": 1851,
+     "line": 2057,
      "rule": "shell.shebang",
      "text_sha256": "5c82694ea345407d3186a2d6ae611cb818dbcc22ce926f334da5eb015ab914b4"
     }
    ],
    "python_kind": null,
-   "removed_lines": 331,
-   "removed_trailing": 21,
-   "sha256": "42bd4fd76595fb0103ca1d2774b0d6eb680ba8e867a6b723e0158eb6881e7914",
-   "source_blob": "42653ab3269f324cc09c38b98101f0ad0eae672f",
-   "source_sha256": "16b86484745edb8cee388a4259202868b240365b3a8ad563cca6413f3beeb274"
+   "removed_lines": 384,
+   "removed_trailing": 31,
+   "sha256": "753274b71939a688a35421e9e0511c39694367b8ecb782c1c7672fc2f48a6c01",
+   "source_blob": "e38dafc7316fdb1d53eae113c6e2f6dc680af78a",
+   "source_sha256": "1f8f601595f55a9775331ff45b65b6a4e1a49211b852c4c0dcaa6b7fd915cc4c"
   },
   "adapters/esxi/esxi_6x.yml": {
    "bytes": 448,
@@ -225,376 +225,376 @@
    "source_sha256": "ce39638eacd283bd6930b24d2deb09b88ec86c157c30f8314cd50a597809afd0"
   },
   "adapters/redfish/cisco_bmc.yml": {
-   "bytes": 734,
+   "bytes": 735,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 28,
    "removed_trailing": 0,
-   "sha256": "553e60a66440352394a179eb0d1b059c0906460f563349acb5bc74ea97a1cbc4",
-   "source_blob": "07d8eccf6ce30cc42f72c1ec2fccba47968ceae8",
-   "source_sha256": "a36014237fdec3ae074fa7e826ee67a0e4c449ef2c32c65d4738af0db5daf0ce"
+   "sha256": "bfa00c40dc65602c3e34a88b6e348ae60416a4ceb906724a330f88b7bb6643be",
+   "source_blob": "bf76356bd0c658de1ab9b5562a9ef05d86799a5e",
+   "source_sha256": "6b5ee9eaf74499b0d099ba51020e0690af898458f94abdd917bddf1b80c59e39"
   },
   "adapters/redfish/cisco_cimc.yml": {
-   "bytes": 980,
+   "bytes": 981,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 81,
    "removed_trailing": 2,
-   "sha256": "25b2b5d25f3464304a04863b354fc6dcb94a26a4d58c45c2a2ad5c1e1da32a8f",
-   "source_blob": "a09468091cf5ae3a18badad6a21f02d88eaccb9e",
-   "source_sha256": "9b56fa6bce19d4b37b0ae2550f3977bbe6b3e2525f2084502b6639573aad1879"
+   "sha256": "db451f11e00e452f39d82e7cc8770e86f4e54f3b031c38f0afeafa0915b586c9",
+   "source_blob": "a832b0637e552c2e6e95bd78da2fc803f756a9f9",
+   "source_sha256": "6673d1953db9513a0f9d6883ff1641f63e82d1d016e481d83fab6d4efcc82f53"
   },
   "adapters/redfish/cisco_ucs_xseries.yml": {
-   "bytes": 1016,
+   "bytes": 1017,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 29,
    "removed_trailing": 2,
-   "sha256": "e41e8f7668a5afc87d5312160f03b2be3281f937e1b09aec4fe7e90d71a45a5a",
-   "source_blob": "ad5b3982bbc748576a19cb6800c247bcd9585427",
-   "source_sha256": "ff553894f9ed67684559fccbd446a91631f848099b116a67a847070284e2a3a1"
+   "sha256": "ad8f2d9e214fe4fa7a4bdb74ffb927a3ed54977398263e61277e34ceaa2059c2",
+   "source_blob": "1fa1e1b033e525a54e38a76c68d12e9ba167baa9",
+   "source_sha256": "8a3ecd17787b31ad3a0662b826ba2ac34ebce2cab5eaca091cab5b0689088a40"
   },
   "adapters/redfish/dell_idrac.yml": {
-   "bytes": 763,
+   "bytes": 764,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 26,
    "removed_trailing": 0,
-   "sha256": "9cec46d665881062c4d259dced0254c9ac3a1177cbd1b8a0a5aba073f7ed849c",
-   "source_blob": "45f068a2c32623a636713c0159552940d685c95d",
-   "source_sha256": "53734a3688dc42e47bf42d4e12070a2c798b0179a9536eb917c38577c768cd92"
+   "sha256": "63292f4e3c90915dbcfb2907198cb26f07261e39e3bc82fd9822693ded596efc",
+   "source_blob": "3dc61bb8d52958e9307b944ab8fe08829e5017b7",
+   "source_sha256": "694376be01340e4ac022814bb2359b0f2496a772e6a62e25c26d8094d6f4ecaa"
   },
   "adapters/redfish/dell_idrac10.yml": {
-   "bytes": 965,
+   "bytes": 971,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 25,
    "removed_trailing": 0,
-   "sha256": "79b9ffe1642cbdc2fdd21a3549cdf7dbada2dedefb8401f50fca698cd10f1dd3",
-   "source_blob": "4868e5d4345f55bf25b033146aaf01d9538285a1",
-   "source_sha256": "280d2f39522da0250986595eccf6f9dbfd56de717c7710a6d12fe0058d1b987e"
+   "sha256": "3af56ba58a1275b163e16c1cce5d65e7a72aaafd3f9039507734bab375e4fb08",
+   "source_blob": "7793bf573ea6a7b9e73ba99ff946fe2d7856b57d",
+   "source_sha256": "52f4366220876c303db287b361c994fc3ba931a5e7bcc86e565a37fa2254e1d4"
   },
   "adapters/redfish/dell_idrac8.yml": {
-   "bytes": 784,
+   "bytes": 781,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 23,
    "removed_trailing": 1,
-   "sha256": "80ac0011f4bdd4e63dbe5c1d8722b6d5f547d80ef063d80e0ba47d2ea15dd2fe",
-   "source_blob": "ce38d246e7266216b11826427d14662bcbf83c66",
-   "source_sha256": "f1ac32477c3b61e4910b9cbb1672a7bc4be81e39f822a1c3f6b4f47a0cb26b49"
+   "sha256": "87dfafa233fe9ef6ad8598968d4c031cf2f462e23fe922c42f46465ba88bacca",
+   "source_blob": "77c57caa395912b9a9c912cc3e460c7e860f0f5b",
+   "source_sha256": "f658202c7e00f0ec13e0fa647ebaf4def21919c758f819dad0e30b714a336ad5"
   },
   "adapters/redfish/dell_idrac9.yml": {
-   "bytes": 771,
+   "bytes": 777,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 49,
    "removed_trailing": 0,
-   "sha256": "d673a4e95915a070b67b78f9fdcbe5eaa7ef132d95891658a75aa34a885bdccc",
-   "source_blob": "0d81b7c1f14c3810273de504a191790017794bd5",
-   "source_sha256": "72bb0f3e2e659f990fea24becf907b82cb1734ab29682f7cb903714bf04d9f63"
+   "sha256": "30748a729e3e3dd0dff381a625b01dd83f75fb45fe8e01d1d488456d52c155b8",
+   "source_blob": "7284cff54bcfc107cc1c1d6456bc55c96c32aa32",
+   "source_sha256": "a9f3002d52c11f663eeca8752f5c3c99df7c2fffe148e00ccfa915e6abf91a10"
   },
   "adapters/redfish/fujitsu_irmc.yml": {
-   "bytes": 2171,
+   "bytes": 2172,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 40,
    "removed_trailing": 6,
-   "sha256": "b88d75091b071167a390f113b894024492a380530fb752728cfac809f2f14eea",
-   "source_blob": "d3fb0ad2155923e6eaea8e65b09f947908a72933",
-   "source_sha256": "cc4a54e420cc8be91332004c64da1a154c3d6eff0ffb95ada5b33f47d4218b81"
+   "sha256": "ca3d80657bbceee31cc0c60c3f2ac6e3a38f542d8783b85c621c4cea87a9fb9e",
+   "source_blob": "bb77fe8c403e5f0e29d54831ae060ddf14e1e19c",
+   "source_sha256": "9d6cd5675d619315717877ec2a1dd93d0835cc756ee8e3b4cc82bc3f1edf2e48"
   },
   "adapters/redfish/hpe_csus_3200.yml": {
-   "bytes": 1891,
+   "bytes": 1892,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 90,
-   "removed_trailing": 26,
-   "sha256": "a5f9e5eeb45239253ffe73af4534928650dda411d26c79d63f406cda27650128",
-   "source_blob": "60ac28062f52e6a0edde852526e21fd26aa74ddd",
-   "source_sha256": "95b356d126be2e14fa75c59e8ec0a8b2671a1df24efa3f706c507c15782cc882"
+   "removed_trailing": 25,
+   "sha256": "07f356f116438add37ec5cf33a559eb93986f69c2a9d43de3381138bcd2b0eb2",
+   "source_blob": "197f7041f0f4c6765c2d183a59d830decc2f9d32",
+   "source_sha256": "58817c9aef490090275d3710decff7d0057e50b21e1658d9b46206920e3d1560"
   },
   "adapters/redfish/hpe_ilo.yml": {
-   "bytes": 785,
+   "bytes": 786,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 27,
    "removed_trailing": 0,
-   "sha256": "2aa03c86bcc1416db09f9a64ceeab082e519c06a1668e5c1a56cda3a917119ed",
-   "source_blob": "412d6d4828da85e407df6ee219feb3b049d02e60",
-   "source_sha256": "718a05b4474552f5b19dc05b38235dbbb9ec8466e77ca4d964d7a9949bb5ab48"
+   "sha256": "34c56ad1095ecc62d3b07afa7b0a6baf76a1683c04cd224f187f9d97e26df07e",
+   "source_blob": "738921efb2ff92c9a3683cde85f07e05d0c1d726",
+   "source_sha256": "b62debf919f075b3ffe2ac19eda7248f4f587aeec550f4643ec9deafbd1b5979"
   },
   "adapters/redfish/hpe_ilo4.yml": {
-   "bytes": 798,
+   "bytes": 804,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 26,
    "removed_trailing": 2,
-   "sha256": "2edf04eab6934ef57faa61a3ebc413b182360ae4e7cb63fbc34a193b174464e6",
-   "source_blob": "f0e9b5e1fbafbb73617eb32b5936d2487c452b0d",
-   "source_sha256": "1234d8e915dd90262fbe098037b8aac149c365b654b9ee5178834965114096af"
+   "sha256": "e457f93ac92457753a6bf7ca50b8a9df8315cadb869f17472706a98d4988dd6f",
+   "source_blob": "18d2dcf7d682423bef4756ee6a5aa6eec0a05846",
+   "source_sha256": "a578f3ae04bce13f9f8d4b51cdda2e123acaf1acf5fb1d23bb8ec535b7a182cf"
   },
   "adapters/redfish/hpe_ilo5.yml": {
-   "bytes": 771,
+   "bytes": 777,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 30,
    "removed_trailing": 0,
-   "sha256": "d1dc5a7bc5a164342ad14405fb2554b8441156eafdec885902c393dce65cd3a8",
-   "source_blob": "dee992ddc80a51ad8158ce90a49eea7cd4d2df23",
-   "source_sha256": "14acfa631c7af79fb8c39d7110a6cc785eb352c19235e38abef324ba1e59a627"
+   "sha256": "be6638f85db9d6248efe4a1350ec3a9168be57ea784e1551db6d379a808df21a",
+   "source_blob": "c1e9cb24b99f0999ef9791c0b830c176a37dd343",
+   "source_sha256": "4d1a25f0a93864454930a19a3acea6bee1a79c99894f65c8c66d40d7a55a79af"
   },
   "adapters/redfish/hpe_ilo6.yml": {
-   "bytes": 932,
+   "bytes": 938,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 42,
    "removed_trailing": 0,
-   "sha256": "6f0ef3dbefc9da1f6d9ae128bbc798a2c7fdb3b4ea3becbe345917a11b5a69e8",
-   "source_blob": "4c8753ccb9f7d35842e021c10002f19cc98de2a6",
-   "source_sha256": "2c67e120e3e93b298d47ca209fa1bf2f067970265bf1215f2267cf26c8b63cd6"
+   "sha256": "e59c6dd155bc5b324e1d380a01b9588366bd8b39ac126a5a13a88e68d26c6cda",
+   "source_blob": "0009b35ea7cd682c9a4bface14741e64a0dac493",
+   "source_sha256": "3f12406eab4b29f9dffba1f9071fde449bff6ee259f550171b6c904579cc9300"
   },
   "adapters/redfish/hpe_ilo7.yml": {
-   "bytes": 1227,
+   "bytes": 1233,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 51,
    "removed_trailing": 0,
-   "sha256": "30385610245fe08d720d3f52af62121360c4bb282c8abcf70b5880790c5b1570",
-   "source_blob": "e9b0d27ecd48ad34a00d14d7e1b2d2271c1bf901",
-   "source_sha256": "dd5b411f8866183febcc1aba03fad49af23a11371d3d954ea6963b1df3c9e9ec"
+   "sha256": "906b346a42e15055af0b6bfaec15a083d52bf063c365b5f503f848959197f813",
+   "source_blob": "82acd8f4471c3b7202deca92e09797ad9d597b1a",
+   "source_sha256": "5b520cb07d4f290511a154b0fc1f4f5a58e91237d23240820105ae55a9596de1"
   },
   "adapters/redfish/hpe_superdome_flex.yml": {
-   "bytes": 1404,
+   "bytes": 1410,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 36,
-   "removed_trailing": 16,
-   "sha256": "27a8b560d27982918c4eca007b1fb8366367e8b126be7429e39e0fe52b78a75c",
-   "source_blob": "eb2d50e65b8e5f68704fe6fcd025807b5f9a24f9",
-   "source_sha256": "55364a3114fa3a3b74782856f32c62c332377befc9aa11e632d7d8bbec8cf12d"
+   "removed_trailing": 15,
+   "sha256": "6c0e1e6518c50d8facb3a19dcde027b71307fb0919af1cdd33bfe52e6d3ae1b5",
+   "source_blob": "ecd55cefb28a60f1d572dbef08a1722e05daf6ec",
+   "source_sha256": "957e9eb9f006a8d3e7dd51b9b116d615d3f38f7b559850ceedb0774ff58cb096"
   },
   "adapters/redfish/huawei_ibmc.yml": {
-   "bytes": 2635,
+   "bytes": 2636,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 51,
    "removed_trailing": 8,
-   "sha256": "aa029693daaa8e92daa88c32b221822569a71a32d9dfd600cb1ac4d6c20e90bc",
-   "source_blob": "a7a0d8b29395e2f8b18f6d4036b9b867d89cd25a",
-   "source_sha256": "9ec41d393ca7bdee2070ab06b2dff2fd24566b4b339fd6372e71e9885ebc3753"
+   "sha256": "79b9f01d128445b9685ca3406b80d5a97e533dd0f44da32f2eedc3ae07d714c4",
+   "source_blob": "d1222fdd3c6e2ef6f9809d38e1664fc3a5abe8ed",
+   "source_sha256": "f8a7e1f18e11505bc40015eba93259d2c59da40522327b1a43461f0a628e9b47"
   },
   "adapters/redfish/inspur_isbmc.yml": {
-   "bytes": 1148,
+   "bytes": 1149,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 24,
    "removed_trailing": 0,
-   "sha256": "50e4f8486a37beb7fb42645069a59e5f07ec14d99aa06d8134a864c19556c657",
-   "source_blob": "a9146540feb59438defb8be44264b0c461221f21",
-   "source_sha256": "bf838ad28a1e92f3e936e8be44ea40280ae9247df637f68c62a62ea047e9a7b6"
+   "sha256": "9b1cbd6b1b5fecdfb271da99808a6999296d17789c77450d13b4e32f69eb6a14",
+   "source_blob": "d5bf937c9bf6317bef31683a4e546da2d6e08ad7",
+   "source_sha256": "f863ec57fb19c4698123790d45bcb23016a2dc94048042525da0c5b7663591d5"
   },
   "adapters/redfish/lenovo_bmc.yml": {
-   "bytes": 740,
+   "bytes": 741,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 27,
    "removed_trailing": 0,
-   "sha256": "26154d7485565671a98e3afda6b7d7aea92ccd0d15ee72d67bddfd95f7571ca0",
-   "source_blob": "59fe1b3c1457e141f6545bd7e48046345e8e1915",
-   "source_sha256": "7fad37214bccb48629b9ba7a43330dcb196a5b38a39537ab825c983addfb784f"
+   "sha256": "68faa739a1ae81cb1091e4170cbb30b407149a3343856756f0bd725b80cca975",
+   "source_blob": "d94e6d7efbda6042cd8cf6cdd5bb1087af387d1b",
+   "source_sha256": "1acc750fe9a4205d72fb74ec632c769490dbdc16ca5d88350a3f62392ae9c6d6"
   },
   "adapters/redfish/lenovo_imm2.yml": {
-   "bytes": 720,
+   "bytes": 721,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 30,
    "removed_trailing": 2,
-   "sha256": "135fe63f1026b7166471f0f8730ffdd38532a9d6ab16da7ad186a0c1b5887ac6",
-   "source_blob": "c8e630d49eaa69f4a9189d55c3fe4c64ec4caab3",
-   "source_sha256": "12d6f11b55210d8b209d44cde34490d02859e6eb530b2d6b38a1cdfba2bfdcfb"
+   "sha256": "24df1e6ff5be1eea83b5c6226cebd06516e373bae3730d12a0f9216a883e182b",
+   "source_blob": "cd08d15f5dccfd271cdb691c8f12dca61d04d0d2",
+   "source_sha256": "058cd01d3b110880096da123dc45d5a142aabeafd0f5cd74075a5a30378f4fbd"
   },
   "adapters/redfish/lenovo_xcc.yml": {
-   "bytes": 860,
+   "bytes": 861,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 41,
    "removed_trailing": 4,
-   "sha256": "1173996d593973a6bbe4cee70cfd75104a235d8c21052d2688b2fee3825f1a24",
-   "source_blob": "89cb455e82caf04b37cd9c1d36e503e9ae507813",
-   "source_sha256": "f95a4ffafa4dc3f664536487d61b042668cba74d447323b41e5bbd65de24bcf5"
+   "sha256": "d9218a1a42a9de942be6252ed7612d8816f3133f6fbc115023263cbe141932ba",
+   "source_blob": "44809a04d22be635f9d18791bc7fdd404363c1c4",
+   "source_sha256": "9dd8eaf8a81c42e63c212396f0510e2ba65b72c4a58dd931050c9639df33043a"
   },
   "adapters/redfish/lenovo_xcc3.yml": {
-   "bytes": 1151,
+   "bytes": 1149,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 46,
    "removed_trailing": 0,
-   "sha256": "fb07f2f18f05101a59fe89b12973244481b119b6173964336a128e75264985cd",
-   "source_blob": "8c9f0414fd9eef1cb9f30933a683130d35152c4b",
-   "source_sha256": "9a21d3f9dcf6782193293369cf39366f05bd17a168f2015541202568ed443444"
+   "sha256": "33628a2be811da7bb3404dffe519e96d74e57c048a38ef7743c8e33243d7d7c3",
+   "source_blob": "7910ff3024d5637f8a01412ee24177e41ae84055",
+   "source_sha256": "c31905958259b83357fb919bd47f802980e68abadf748854552d5942e081ec3e"
   },
   "adapters/redfish/quanta_qct_bmc.yml": {
-   "bytes": 1276,
+   "bytes": 1277,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 30,
    "removed_trailing": 4,
-   "sha256": "47139c74dc59a4bb701c75365cb57e982e9120403eb8c3b285eea2031837da21",
-   "source_blob": "f2f0b10cc5fca41b13b18d342cbefef620e5cebb",
-   "source_sha256": "8f21828c4d0d4a6b997a9bd066ba5484b8dd99b6e2c130303ebf0f2de364d6a8"
+   "sha256": "cd99592077be78ad3375b61bc990383b92feb38bffa82d112538a2382de60d03",
+   "source_blob": "51840c4d43229fb74d70f8857aa5da9c5b095c38",
+   "source_sha256": "756f7295e8fff11369168160fef8f1cb206793c1aec32512043d61867fe6f7dd"
   },
   "adapters/redfish/redfish_generic.yml": {
-   "bytes": 680,
+   "bytes": 681,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 10,
    "removed_trailing": 0,
-   "sha256": "8fc3da2774ecc13447dca2b50b6bafc1b9d9c0d7bf1a3c40b18e958457ab7abe",
-   "source_blob": "0645c8df39862db9ac893d391888cca5985ba2ea",
-   "source_sha256": "3bf75da6a00c29271a812923f55c8c27d4ebf1a8525960e7e8009cbfde9eadc2"
+   "sha256": "44a5503316750cdc8d10f19f4ba41dd8b51a65fe626961ad8c6f83942d87863a",
+   "source_blob": "168711d7f4be380c35e0c26bf6f29fb1864bff6a",
+   "source_sha256": "cd1fc90a5c0ac23d307cf667ba862db6786749d750aa2d452f6fc023e23e8c3c"
   },
   "adapters/redfish/supermicro_ars.yml": {
-   "bytes": 1172,
+   "bytes": 1173,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 26,
    "removed_trailing": 3,
-   "sha256": "f95f8457b179ac75cdfe391d4688a3a4c8ae95f8aec38de8d5a4cdba06b7d27a",
-   "source_blob": "5d99791263db508fb879c449a073bc221bd38bea",
-   "source_sha256": "a28dac629610b414f370900d0f69791c3cb3388ce0993b40908447d7bc069807"
+   "sha256": "ac598d7e2646a20334ee2e2086eb26a7465223caff5eb678396919889e79ff8c",
+   "source_blob": "c7a82269c37db5966f87580a75f475f544bf8df8",
+   "source_sha256": "22c5250a3315dd0ed203b03c1afdbf2550dcc6aa9d492c08628107562a8c93ff"
   },
   "adapters/redfish/supermicro_bmc.yml": {
-   "bytes": 811,
+   "bytes": 812,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 20,
    "removed_trailing": 0,
-   "sha256": "cb207291864b08fbe55ec8c4943f2696f31d15a5aa1221e6ffa5b18dae8ce192",
-   "source_blob": "91bb612ef7c07014e1e04b960e668f9972c4b02f",
-   "source_sha256": "e7df430c139111fc9c70e3176640b94d72f64b5e56b494a1ab0d65d269485d8d"
+   "sha256": "7928da04e031d4aa495a54f319921b244cc782e7f1bff0c56cb4099c577cf910",
+   "source_blob": "b01cfa0e1d457a0159be90a52775eb0840aaf9c1",
+   "source_sha256": "b5e0f1e970f4a7c30bd1d3cb73e08c51e91345333f18a4465a17664538abccfc"
   },
   "adapters/redfish/supermicro_x10.yml": {
-   "bytes": 1060,
+   "bytes": 1047,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 29,
    "removed_trailing": 0,
-   "sha256": "3491dd197ef04b7467b896fce3998db685129c1304c88654bea1afc00f009960",
-   "source_blob": "6895fc344f316071f2b4f8c9a3db5dc13809b596",
-   "source_sha256": "f94dbfd065f82484a15d4862b9fdc35a5614d53f0c7213e4c75f4532145f6b27"
+   "sha256": "951a6e94142ab44d965d43ace588e3c4d91792fba7aa53221d45306a72dca019",
+   "source_blob": "3a45e29905aa339cd4765469937df56a1446d825",
+   "source_sha256": "6a08931f55adf47626b012956b56ed764122cf9f0a745b159b3618b4ad2bd9a2"
   },
   "adapters/redfish/supermicro_x11.yml": {
-   "bytes": 815,
+   "bytes": 816,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 23,
    "removed_trailing": 0,
-   "sha256": "fd8d51108a2a7c02aed2b5975560159737f2bf72f9030e9d1a3eef473caa5fb3",
-   "source_blob": "ff8ce3ecfe294934734763ece88a53b7df6719a9",
-   "source_sha256": "7935af6bcbe4575ff1d15bcf0db8d14caa3e9817e108801d6b25d6ce96635d54"
+   "sha256": "e5b30dee08aa2230de9f808b0521112d637c0b15959eb12620707db00cda4ac7",
+   "source_blob": "7cc21ace7f733e8e64341ac5b3f3928a6db4fbc3",
+   "source_sha256": "807182872d1bb8981d372a9577950227d8d97d5b37524bce60f5dc1c9a4fd693"
   },
   "adapters/redfish/supermicro_x12.yml": {
-   "bytes": 1071,
+   "bytes": 1072,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 36,
    "removed_trailing": 2,
-   "sha256": "106a07de041c2ada0be010d0a808d39d033866dd3ac7182bc1945f17e35628e7",
-   "source_blob": "20d7b7bf903a354596d7f54ca8487cef8c55d66f",
-   "source_sha256": "e2ea5a9e4243b894d97e90b7f994076adb4427b1ab40c3ae442c94784f4b1fa1"
+   "sha256": "651427296022cb11f9062bf96b594d25bd8bbd1e090bb82659465e8ad174425d",
+   "source_blob": "f1bcbe5411b8c5fe47f4cec146b790a562f0539f",
+   "source_sha256": "be0fb9903551bbf5ba598d43b651808b320a67296160f3f5c098c57344cdc953"
   },
   "adapters/redfish/supermicro_x13.yml": {
-   "bytes": 1089,
+   "bytes": 1090,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 22,
    "removed_trailing": 2,
-   "sha256": "2470fcadadf72a7d00f14ecedd6bc495d67ef0169725e304bb3934d208b6ebb9",
-   "source_blob": "66995bf21c54307f6359a727a75c79bcd4b9af2d",
-   "source_sha256": "8c6aa393bc06780e7f13b61d48896e7b05f56f7277181564a4d1854aa17c6d57"
+   "sha256": "bcf88846a069678e2d81fac8ccd45f772e83407da3b08726ae280d9f5a16aae2",
+   "source_blob": "fd4393acecc30676ccf26f2ab64092201a876813",
+   "source_sha256": "f3b484f5190feabde4a4fb43d43d78c6093ee8ca698bbda40095ce6e03688c6a"
   },
   "adapters/redfish/supermicro_x14.yml": {
-   "bytes": 1153,
+   "bytes": 1154,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 29,
    "removed_trailing": 2,
-   "sha256": "e22d099f8c9786a0390166dc3c40abda9cbbf7de6aed4e950c41dfe27c138649",
-   "source_blob": "3475f93933f72b0f7b6e57f8c1642b8ce9a5f862",
-   "source_sha256": "45d62b7a07bde8290c4350c4732554a149c19a65f5a68de8350bcbaf5685ffd4"
+   "sha256": "1879f1e51b0adae15b7b3a29df93b47563deef288ae1b8e4bb53a69961806a71",
+   "source_blob": "7daf00e096c1c6e7e8e4b024c690475bd8becdd2",
+   "source_sha256": "977d146af631f573c276b3f3203509b8ebfed756297dffc52d12d07281b4f02b"
   },
   "adapters/redfish/supermicro_x9.yml": {
-   "bytes": 757,
+   "bytes": 744,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 21,
    "removed_trailing": 0,
-   "sha256": "0d81e20d96a3800d32455755e4efceb9b410369c2d363d0a74c149c38ba21c15",
-   "source_blob": "aa434ab4046cbd14c939d6edd2c991cebcdb5a17",
-   "source_sha256": "3718007fbbfd6b4c174909accc72419a22491d606e26d78b5b0e3784b10981f0"
+   "sha256": "783607e93dc6ee6f88b4035a97819ba4cdd951f4bb34aed919b86b74d967f6e6",
+   "source_blob": "8a525d5b9a2a2e3df4eec4146fa31cbabf99e61e",
+   "source_sha256": "e4f1df2e22d2ade2debdaa051c9e25ebe8d4289d7d18e4f6dfa10fb7ec6a7e2e"
   },
   "ansible.cfg": {
    "bytes": 871,
@@ -609,16 +609,16 @@
    "source_sha256": "82fced7acb56ddc2ae0188a9e97aecf4e8f93b0ad513dd3147a1dafe2c7644fb"
   },
   "callback_plugins/json_only.py": {
-   "bytes": 33745,
+   "bytes": 33859,
    "language": "python",
    "mode": "100644",
    "preserved": [],
    "python_kind": "plugin",
    "removed_lines": 125,
    "removed_trailing": 23,
-   "sha256": "2f26de4fb32a2f8014f14f8e6d6f685690fa817db3e4d4305dfee38b332413b2",
-   "source_blob": "390b29e23a43e9fd64dadc43fdf92d678d9ddf6d",
-   "source_sha256": "de10a21db75b04985f3f59b6a40193120dae59fbc0eb25ba8279b1ccf6d03280"
+   "sha256": "10a2dfe55bdaa1dbb3573fda96deab0676fa80f321b17d39f3edbb9d416f4d98",
+   "source_blob": "36046c8367fd95eeaaf7540807e367b4023dbe04",
+   "source_sha256": "fede69fd675ba2e350a9c75abda0e63d6eda94756d4b734e45af2d604917ab12"
   },
   "common/library/precheck_bundle.py": {
    "bytes": 34173,
@@ -819,16 +819,16 @@
    "source_sha256": "02301868fc169554519108b1beb6f992220d1c79d3f21a3b76cdbf8903cb2e1a"
   },
   "common/tasks/precheck/run_precheck.yml": {
-   "bytes": 2053,
+   "bytes": 2009,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 58,
+   "removed_lines": 57,
    "removed_trailing": 0,
-   "sha256": "b7b59ef05c3abd17a3ba37b00e7a85eced8d8e8e818a726ca2baf05a95150afa",
-   "source_blob": "ae060b593766824e7c2b32395ae4ed97f26c8c01",
-   "source_sha256": "4c6d1c61960805f8b4dcf7ce989516b21016fcf26c7223efb8dd7849dec6de93"
+   "sha256": "ccac23687cec91c832f5bfa21327d77acaa2ed9a1958e3da41c743b557cbfbbc",
+   "source_blob": "9e586ac7a7413d907fc949d4d92ca3ab60410100",
+   "source_sha256": "282aec5bc7fab6c4b4e9b375f2c65f9bf7521b7b416d087f2cf41f82b665391d"
   },
   "common/vars/failure_reasons.yml": {
    "bytes": 4815,
@@ -927,16 +927,16 @@
    "source_sha256": "3519b32c436ec8f62919c639ddc2c9af93a375476819b12fa0c0ef41aa129801"
   },
   "esxi-gather/site.yml": {
-   "bytes": 15151,
+   "bytes": 15122,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 94,
    "removed_trailing": 0,
-   "sha256": "fc09be98f474c87a5fc63206e3ab2d72e2909186fec7427b877d36c3c78ebfbc",
-   "source_blob": "7974346508836116930aebac837fb5d564d19896",
-   "source_sha256": "f191c791b65f6be73a04f18979991b0fcfaaf658f373068d886298e949df1a61"
+   "sha256": "bf2858a2f691302a797db455d29df19bb13c678884cf89891c9816f41940ce81",
+   "source_blob": "a6be68ead2a57e6d8991565f8008e563448fab83",
+   "source_sha256": "b2af3c0cd9a7d6182912a2e1842052f607a4deb6a4da3be56eee0c835bed9716"
   },
   "esxi-gather/tasks/collect_config.yml": {
    "bytes": 680,
@@ -1223,8 +1223,8 @@
    "removed_lines": 23,
    "removed_trailing": 4,
    "sha256": "648259c5a5c60b601ca87da057b50204d57b14b03404b4b3337ee63d2dfacfb5",
-   "source_blob": "8c1c3ad508202cd7e015b2b24e83f1f22b3fdf55",
-   "source_sha256": "53779c7cf7ad9887d30691547b1cc918c7b0048fffcaae87b94a1f4d6904881b"
+   "source_blob": "7b280d1f2af7add8b33d94cdb65536dc963ceb90",
+   "source_sha256": "687d084023f75b32067a309a277fcc5bfd7c96094a3fa35ca650cfe8ebeef49f"
   },
   "lookup_plugins/credential_resolver.py": {
    "bytes": 4326,
@@ -1305,28 +1305,28 @@
    "source_sha256": "65fa14f23f88f149c599cd1a090ce2cbe77e31069efa6f55ddde0445204e772e"
   },
   "os-gather/tasks/linux/build_identifier_diagnostics.yml": {
-   "bytes": 3822,
+   "bytes": 4702,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 22,
    "removed_trailing": 0,
-   "sha256": "72405eedbf2e152712e08efdaf09fdefce82b03168e003a5a6a50a9408ca61c7",
-   "source_blob": "54d602b636b4183ad78fe4e4497e7381e780502b",
-   "source_sha256": "822196462a5460333bc5cfd8df41c9f0232f9e9e4f8722d08f811b271b198f23"
+   "sha256": "13da2b6cd573b9409e4ce18f447417c5920b2610948a84f2f8449ed13a768704",
+   "source_blob": "9adc102a2fd9af2983916023ac4e68d06b229089",
+   "source_sha256": "de3d14d7c88925adcbe6d7b894bad0910134e513bbb24aadd046fe69ab6521ad"
   },
   "os-gather/tasks/linux/gather_cpu.yml": {
-   "bytes": 12197,
+   "bytes": 12083,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 42,
    "removed_trailing": 0,
-   "sha256": "c238cd34a4de4493d1b7140ff463052fda8819ef5152010e699e7b09215f5ab8",
-   "source_blob": "cfa40fac332e95a917a75266e617fd4bb0074064",
-   "source_sha256": "1aa73645e4a524a7f524b13e95705b94740947c767760186f2ac406d8ccee6dd"
+   "sha256": "68e911f329f216f0949891dbe8fb1b612a14a7657f3a2b0be355076dde165748",
+   "source_blob": "04a752795b772a097e680eeb9f6b892759cc5f75",
+   "source_sha256": "bcb754210e931202eb882263397b0399887104c0ebda99cdb7eb31924ffb9994"
   },
   "os-gather/tasks/linux/gather_hba_ib.yml": {
    "bytes": 9312,
@@ -1341,16 +1341,16 @@
    "source_sha256": "38a7caf09d340c8d17b8b30b4276a417edc460b6d337c9db83df38837b0c5d7b"
   },
   "os-gather/tasks/linux/gather_memory.yml": {
-   "bytes": 9211,
+   "bytes": 9568,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 39,
+   "removed_lines": 41,
    "removed_trailing": 0,
-   "sha256": "f9b6b97f6ef14589a83d4f312482f9c648ab2201304d109cb64fae48fda65329",
-   "source_blob": "b80c295d35c3710bf01ea345e692b5e443801cac",
-   "source_sha256": "488325233573ae795209515a73bc3806d0f76403ca3e23556a2f74c591ea0ca9"
+   "sha256": "3d21786471901e0c780560523c4f5892edf77a276fe91bb84159d281153bf6b1",
+   "source_blob": "90994149a8dfe8477800df4b5ec7985aa25cb485",
+   "source_sha256": "51d3dd183367d9a9ceaca04378632fca88c514b655b2e3c20e882c83bd7a23c9"
   },
   "os-gather/tasks/linux/gather_network.yml": {
    "bytes": 23026,
@@ -1365,52 +1365,52 @@
    "source_sha256": "645c88de26a78056697212c2ba889d733af99f602cb5ce7127e6ec8aee83fe56"
   },
   "os-gather/tasks/linux/gather_storage.yml": {
-   "bytes": 19672,
+   "bytes": 19524,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 59,
    "removed_trailing": 0,
-   "sha256": "612d4a6fe33fe43ee1aeb2842358b5720c7756fe31ff4543bfa16247579996e1",
-   "source_blob": "d6bd6a854110be06c4ee7e56d3b3ad7a02954920",
-   "source_sha256": "b23877f3558db0ba47633bd291cb7008e8f27d9cf6917cac91fd821eadcd5b63"
+   "sha256": "89c791d6628fd1ef007264b118ff63e3cd8f198cb52f980c31be9169832fb6af",
+   "source_blob": "bafa4fc423077ce35999cd003566b95394cab1c1",
+   "source_sha256": "62f05aea2433b6509a5472f7663faf27f2ed90bfcb82cbc959ecff9918ce8064"
   },
   "os-gather/tasks/linux/gather_system.yml": {
-   "bytes": 30478,
+   "bytes": 30674,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 123,
+   "removed_lines": 125,
    "removed_trailing": 2,
-   "sha256": "e19ca291279381fa769c182b6ab3c95dcdaea131988cdf2a5194efc47b25147a",
-   "source_blob": "897787238f86b4b5a4d54c2ce98698d5301f081e",
-   "source_sha256": "f4df33dd6af9f94c0223075fc96a5a0e671017e21a4aeae91481e02fb77aba39"
+   "sha256": "b3498c42bebed12da8886433baf69e048fe1236c84f17344425b1b4501afb855",
+   "source_blob": "d404617c1f305add7b00d3abe4da39a4ae077910",
+   "source_sha256": "8ad1716881c82789a5b66edc725081e518d16b7e4f05a540b90d68010679ef4c"
   },
   "os-gather/tasks/linux/gather_users.yml": {
-   "bytes": 5580,
+   "bytes": 6585,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 19,
+   "removed_lines": 22,
    "removed_trailing": 0,
-   "sha256": "29df29e11259d75e02cdc8f4d2238fa35353224ef388af13611baa72365f6bc3",
-   "source_blob": "ae145eb346c84067303be217a1532be5c07c2e9b",
-   "source_sha256": "f8eb777cc22e4281db68dd07a4388a59a9c1f9a825e371bfe06af700d165377e"
+   "sha256": "84c4631d88eaa7cf0b2c3fa7b20d72b26a96abc3a3a9855b477885a7cfcd80a2",
+   "source_blob": "dfa74489e55fb37bb0cee5362505687764212483",
+   "source_sha256": "64db2e15c37535d078d9961d7f30ccce4e696d84f175b0cccaf333eecfd98775"
   },
   "os-gather/tasks/linux/preflight.yml": {
-   "bytes": 2720,
+   "bytes": 2163,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 20,
+   "removed_lines": 13,
    "removed_trailing": 0,
-   "sha256": "1ff012141e0aa5b29546723d4d04a7297a85cb9d19f6750a0c9a56fe9bb80e6d",
-   "source_blob": "1c64af49bd9ab25686b44ee9b855676fa9ab4601",
-   "source_sha256": "028d4fad56eaa9821f4add564feba7f7dfa48be00fc89a19da6c16549ebbfee4"
+   "sha256": "46182431a5f0acc8268b8e4e47aace00323a184606baf69978269b8e8fff0664",
+   "source_blob": "53897bf139a0447abc0486fa5e84ac783d29ca8b",
+   "source_sha256": "d1d804cc14d05215f28cebf8c9c6cb52a37f09ee88272b4a781ac616de444650"
   },
   "os-gather/tasks/normalize/build_output.yml": {
    "bytes": 1017,
@@ -1461,16 +1461,16 @@
    "source_sha256": "91da9898f7263ae680b43653564f924fdd7f400a04a3d816ab7892189cfb4ff5"
   },
   "os-gather/tasks/windows/gather_hardware.yml": {
-   "bytes": 7606,
+   "bytes": 7759,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 25,
-   "removed_trailing": 0,
-   "sha256": "653900d55a62fe94d33735864fb2475dab5e84ff75bfaefa320371629f767c4e",
-   "source_blob": "2aec7e4a75725ab1cd2365a9edf06e0839e987df",
-   "source_sha256": "9e61b96b5968be2ea371ff6b362a9d9eadbb20a1a98a66639f84510eb4d35698"
+   "removed_lines": 26,
+   "removed_trailing": 1,
+   "sha256": "3c02a4f7bdaa5d4ea7b0851d812322b9cd81848c333457b6c0fb9bfba7d79f58",
+   "source_blob": "4b34a011114bc3a3e49c6f6135070c2b413e5948",
+   "source_sha256": "e5bc3c74183f43d82bb67a6a1cfcc8d65a9508cbe0d9ae81422a4fa006500236"
   },
   "os-gather/tasks/windows/gather_memory.yml": {
    "bytes": 12550,
@@ -1563,7 +1563,7 @@
    "source_sha256": "c9097d8d66b39d113fc2a6b20a302dabd82d28a32b61ad8d1347169a692d6041"
   },
   "redfish-gather/library/redfish_gather.py": {
-   "bytes": 242950,
+   "bytes": 243410,
    "language": "python",
    "mode": "100644",
    "preserved": [
@@ -1574,23 +1574,23 @@
     }
    ],
    "python_kind": "library",
-   "removed_lines": 1308,
+   "removed_lines": 1314,
    "removed_trailing": 320,
-   "sha256": "85ba81bab3abd18fa4bfb127b1377c34186a055586d5dedf0ee6c65688c7120c",
-   "source_blob": "430eee2ef0dcdb214cbc4d2c38a9cc5c665b1641",
-   "source_sha256": "7f80065c8c71b6271f457e3b88673c0dca8d1cc3087080ddd3bd2de896e365c2"
+   "sha256": "3fb4dc015064ee10e859186e38817428f10b63b3f2b340ba610937b0ba16d618",
+   "source_blob": "c682b3fe5729e70cd47b764cac3ddbd3ed427a6d",
+   "source_sha256": "c06def41eed1af6d47ce55a02ec4e56604ff495617dd5813c2c55364a0bdd6c4"
   },
   "redfish-gather/site.yml": {
-   "bytes": 27244,
+   "bytes": 27311,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 266,
    "removed_trailing": 0,
-   "sha256": "1cbd2e161e7e1e675bccaa74ff950d4b4dc5257dc57a18c825d01d2aa8aa1b73",
-   "source_blob": "8dc55cb59dad6bdde6e10acac45b5a67276f4155",
-   "source_sha256": "8f1576815e2c53654347ef7fb2bcb2803159e1b08ef70d1bf6e7ad1dbc3ff52d"
+   "sha256": "d2de2f5955f6190c81eb1d7184af7f093a5248e6e9bd26cb6e77d740b8119d1e",
+   "source_blob": "f2a54bd82f911389f7bbe323297253b12c46c418",
+   "source_sha256": "459fd7db8a1b3014c1356ff4ccc8e7a4482b2787b4c5d82bedf9f1a2c48aa9f3"
   },
   "redfish-gather/tasks/account_service.yml": {
    "bytes": 12429,
@@ -1617,16 +1617,16 @@
    "source_sha256": "8af485e17cde1dc58c813c33b8e6137fac31456d9fdc02b694758ec8b40caa38"
   },
   "redfish-gather/tasks/collect_standard.yml": {
-   "bytes": 5060,
+   "bytes": 5017,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 73,
    "removed_trailing": 1,
-   "sha256": "32c4368ee617623b373c59333959bc86ece51b8fc9717fa75a10ebe71bf736ba",
-   "source_blob": "faa0ae159e2c4239f33ade995faaf0426d602637",
-   "source_sha256": "c3fe51db1edf02b1e1ae3141c6dc01111a8a2cec0fbf8f5294f5cfc95568aecc"
+   "sha256": "75c641917a745538f48489a60ed081b29b00db76df5b713364b6bfc0aff371a9",
+   "source_blob": "e1f4c2e23d85b0c1cc27ca859b3082c0c1fd967f",
+   "source_sha256": "0681038cb894a4850c72bf4007d20849b947681b6eaf3cc28898d38e7242ec74"
   },
   "redfish-gather/tasks/detect_vendor.yml": {
    "bytes": 2246,
@@ -1641,28 +1641,28 @@
    "source_sha256": "1562110778d60dc2d4343fce084ba19699c2253744cc0ecb690c8d28d24cf49f"
   },
   "redfish-gather/tasks/load_vault.yml": {
-   "bytes": 2367,
+   "bytes": 2274,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 36,
+   "removed_lines": 35,
    "removed_trailing": 0,
-   "sha256": "1c7d2c60b9a060be65fc56ba7d20b43a2072e4a4d27b81e57d54d926688a67f9",
-   "source_blob": "1ec7432298aa5ace6d79a58f5a260c81c8718055",
-   "source_sha256": "9ac0b597a51d84ae5e3da249e87ab15216bc9c128d70b9197038bbe1a0395a8a"
+   "sha256": "85cd819fad2ea06b9f74e0e3267fd907936901fb51a77f340c26d89972b85b52",
+   "source_blob": "182cf101063c868d9b39aeb2788816dc53bc1622",
+   "source_sha256": "d19cf0f8cf0010f6375dcf410f6fb0e7e57675b09db6b401afc71971d7d18e3e"
   },
   "redfish-gather/tasks/normalize_standard.yml": {
-   "bytes": 29239,
+   "bytes": 29482,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 123,
-   "removed_trailing": 0,
-   "sha256": "d885ad90ca95fd4c2c00a036947e8958840bfe2f6b1da47746e6c742e3033714",
-   "source_blob": "ec59c81338659a52548ff249bab75e811d0c8414",
-   "source_sha256": "4d2da6e5c13f61a2967b94e6f119b09709eb09db027d3c62db0982e1708d1aa2"
+   "removed_trailing": 1,
+   "sha256": "9226c827f087fd94cd51d765fc941699bc28310fef30bfeac8dbd651c30ff0ba",
+   "source_blob": "97241700ea277cc695f320ae21dbb561121f9b13",
+   "source_sha256": "cd05dea8c2a74d95864ad95da94a28cfc6d17b0c6e9821dbf459d521bdd460ef"
   },
   "redfish-gather/tasks/reselect_adapter.yml": {
    "bytes": 2030,
@@ -1677,19 +1677,19 @@
    "source_sha256": "04d7d0958e888d9f108c1dc66f2e349811be2be22802acbd40e4c4e841ff3bf3"
   },
   "redfish-gather/tasks/try_one_account.yml": {
-   "bytes": 5014,
+   "bytes": 4853,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 73,
+   "removed_lines": 71,
    "removed_trailing": 1,
-   "sha256": "e408cdf5ff1be85f8eeaa7cd2eb9009398015ab6f845682d01ebc9564b784774",
-   "source_blob": "16eb370dbeef9a034582ebcdadf5ad0790ef924f",
-   "source_sha256": "41cbb8b3b75b2f67315b89edc11b03d1fe7caa23316e02902e0606d215480a54"
+   "sha256": "58a5aec4b4190e610b13b75ef9d8895470b1e36f8e7cdf8fcdbec2b7537a08c8",
+   "source_blob": "d8f5975180b3e05f529ed315ff7949d5b9b2b0b1",
+   "source_sha256": "4abc5aa24970cc9df427d2bd4b029b3a77a95f4b35936c49d50b3890db4bf5c0"
   },
   "scripts/activate_ansible_venv.sh": {
-   "bytes": 2612,
+   "bytes": 2583,
    "language": "shell",
    "mode": "100644",
    "preserved": [
@@ -1702,9 +1702,9 @@
    "python_kind": null,
    "removed_lines": 28,
    "removed_trailing": 0,
-   "sha256": "dd81f72922aec359bd773addbf72ef49c35511d049365ac8a63c90c265ee00bc",
-   "source_blob": "f38bd56992ace3c3053e9446f67f472d9a8f6277",
-   "source_sha256": "4c2f034895b198015fc3a575d01642f24767813596ced4381f5de18ea6c39fc2"
+   "sha256": "5d30bd9ad898b04a325126480c11a1414c78156d07da664d11676b69056eeb52",
+   "source_blob": "e769f9968c6eb49ff9f22fbdf2944b6cefa41a74",
+   "source_sha256": "7987794f7c10a8a04ec7bbe275f3f2daac107bad8ebc7ff884addad0b8788221"
   },
   "scripts/addon_askpass.sh": {
    "bytes": 156,
@@ -1725,7 +1725,7 @@
    "source_sha256": "92082a7d0c339746279b80583d68b0225d69eed5603388cbddedabbe635bf24b"
   },
   "scripts/addon_checkout.sh": {
-   "bytes": 2105,
+   "bytes": 2233,
    "language": "shell",
    "mode": "100755",
    "preserved": [
@@ -1738,9 +1738,9 @@
    "python_kind": null,
    "removed_lines": 19,
    "removed_trailing": 2,
-   "sha256": "7b692abbe3b1fecdd9b3c015fcfb9ba6ef8bd5a79962104ab3af0df252e66b55",
-   "source_blob": "a73d22db821bf2af7567768a4cfff7063c198681",
-   "source_sha256": "63b5a86e7846976b06f6786ec9d80f388fda769ad8c485fe249d9a30c1d9941b"
+   "sha256": "3b118980e409dfdf7b9b7f6d9cf2fb2e502e11359d2eeae9019b7d4e1aca845c",
+   "source_blob": "6072c2ab70a2248a1f81b0b74190f3c0c53afb81",
+   "source_sha256": "fc7015184c360cd4882a6f2eabad21cd2e7e82296f5dcd0bc6e1184a9a096b59"
   },
   "scripts/env_guard.sh": {
    "bytes": 708,
@@ -1773,7 +1773,7 @@
    "source_sha256": "728364f79fd0061487c310a0c4ab6faf5a036d6d21f7337c0319588a51e8fab1"
   },
   "scripts/gather_state.py": {
-   "bytes": 28808,
+   "bytes": 28978,
    "language": "python",
    "mode": "100644",
    "preserved": [
@@ -1786,9 +1786,9 @@
    "python_kind": "script",
    "removed_lines": 6,
    "removed_trailing": 3,
-   "sha256": "0166288d1dbf85b7f98d01fa1f911a6856dc20decab86fb189b537c20d586c46",
-   "source_blob": "b326a7ce1881ed9fc42e2810346c1692bc6a56c1",
-   "source_sha256": "1979814f5a838eadff2b3e5f6fa89704e957214fb520aa4a9b29cb72c949e2e8"
+   "sha256": "7f71d5b3d88cbf631c527344bc816dafb4d5cbd8dc14749408c0fa2f9b434fed",
+   "source_blob": "41a9c6437ae975f2aa7bf366658cfe60916d3977",
+   "source_sha256": "56f761532674b21c1c991ddf5b3de7290d2fdabbcb227db36ae129e852c024b0"
   },
   "scripts/jenkins/se_finalize.groovy": {
    "bytes": 8329,
@@ -1803,7 +1803,7 @@
    "source_sha256": "91b515673df0fe2aae78faba6c5b802ad64bf69f8b98667cd331e56ad2163b9f"
   },
   "scripts/run_gather.sh": {
-   "bytes": 10124,
+   "bytes": 11061,
    "language": "shell",
    "mode": "100644",
    "preserved": [
@@ -1814,11 +1814,11 @@
     }
    ],
    "python_kind": null,
-   "removed_lines": 46,
+   "removed_lines": 50,
    "removed_trailing": 0,
-   "sha256": "c0818ed299527423aaaba2dc44d384692fcb7ce7e846160ae5ebc5630dd52b87",
-   "source_blob": "a40e27c6eee27f4008ab46ecf042e2434c25450a",
-   "source_sha256": "55655af637be85dc2bb1ab6f38b33474ea18b5e5ee8a2204cad7a2c6a2bb1551"
+   "sha256": "5c3d96c656fbe92ece4fd073ea3c722ced5c3ccc7dfdf65967a53c78d07d1c8c",
+   "source_blob": "0a13d96a7589939fc359102edef729d262cbe49f",
+   "source_sha256": "2720194f1a3476ac39eb49050c10b7760419c2ec4f6500224c538d091051bc50"
   },
   "scripts/workspace_cleanup.py": {
    "bytes": 15257,
@@ -2524,7 +2524,6 @@
   "scripts/ai/verify_vendor_boundary.py",
   "tests/README.md",
   "tests/evidence/2026-04-29-full-lab-sweep/README.md",
-  "tests/expected/redfish/hpe_csus_3200/README.md",
   "tests/fixtures/README.md",
   "tests/fixtures/addon/README.md",
   "tests/fixtures/esxi/README.md",
@@ -2532,7 +2531,6 @@
   "tests/fixtures/os/README.md",
   "tests/fixtures/outputs/README.md",
   "tests/fixtures/redfish/README.md",
-  "tests/fixtures/redfish/cisco_bmc/README.md",
   "tests/fixtures/redfish/cisco_cimc_v2/README.md",
   "tests/fixtures/redfish/cisco_cimc_v3/README.md",
   "tests/fixtures/redfish/cisco_cimc_v4/README.md",
@@ -2548,7 +2546,6 @@
   "tests/fixtures/redfish/hpe_emulator_dl365_gen10plus/README.md",
   "tests/fixtures/redfish/hpe_emulator_dl380a/README.md",
   "tests/fixtures/redfish/hpe_emulator_dl380a_gen12/README.md",
-  "tests/fixtures/redfish/hpe_ilo/README.md",
   "tests/fixtures/redfish/hpe_ilo4/README.md",
   "tests/fixtures/redfish/hpe_ilo5/README.md",
   "tests/fixtures/redfish/hpe_ilo6/README.md",
@@ -2557,7 +2554,6 @@
   "tests/fixtures/redfish/huawei_ibmc_v2/README.md",
   "tests/fixtures/redfish/huawei_ibmc_v4/README.md",
   "tests/fixtures/redfish/inspur_isbmc/README.md",
-  "tests/fixtures/redfish/lenovo_bmc/README.md",
   "tests/fixtures/redfish/lenovo_imm2/README.md",
   "tests/fixtures/redfish/lenovo_xcc/README.md",
   "tests/fixtures/redfish/quanta_qct/README.md",
@@ -2576,9 +2572,9 @@
   "tests/reference/os/README.md",
   "tests/reference/redfish/README.md"
  ],
- "main_sha": "9a6ee77b77c05ba1cd6c0cad5fa1ccec22ab26ae",
- "main_tree": "7233ca530ee46e94262401341329318d38bd51ac",
- "manifest_sha256": "78b39746e89418c53929a50e8a7245953f1cecc9d72930883fcae4cdf2eaae58",
+ "main_sha": "46002a2b60cbf62e80a9a1a9e50977cdc6d4b5ab",
+ "main_tree": "4fabc4d191389d11a0a461b166674d111bf67efc",
+ "manifest_sha256": "f62078a590e77b867713ba03c0990984d1b2a48e8f792b88563e6c7cfc553ed2",
  "policy": {
   "eol": "lf",
   "jinja_trim_blocks": "ansible",
@@ -2593,5 +2589,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "ab065f3deb23e5ecdfac903cae63ab21862afc7839717ae13aef8aa5a5eca1dd"
+ "tree_hash": "3cf198ed969342544775ecf9e8f3cfbaee8c573516dfcb50751fe82bc57aba8d"
 }

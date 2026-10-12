@@ -19,10 +19,17 @@
 - name: "linux | memory | parse"
   ansible.builtin.set_fact:
     _l_mem_rp: >-
-      {{ dict(_l_mem_raw_result.stdout_lines | default([])
-              | select('search', '=')
-              | map('split', '=', 1)
-              | list) }}
+      {%- set rp = dict(_l_mem_raw_result.stdout_lines | default([])
+                        | select('search', '=')
+                        | map('split', '=', 1)
+                        | list) -%}
+      {%- set base = _l_raw_sys | default({}) -%}
+      {%- for k in ['MEM_TOTAL_KB', 'MEM_AVAIL_KB'] -%}
+        {%- if (((rp.get(k, '') | string) | trim) | length) == 0 and (((base.get(k, '') | string) | trim) | length) > 0 -%}
+          {%- set _ = rp.update({k: base.get(k)}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ rp }}
     _l_mem_raw_head: >-
       {{ (_l_mem_raw_result.stdout_lines | default([]))
          | select('match', '^MEM_RAW\|')
@@ -90,9 +97,6 @@
 
 - name: "linux | memory | build fragment"
   ansible.builtin.set_fact:
-    _l_mem_phys_ok: >-
-      {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
-      {{ phys.isdigit() and (phys | int) > 0 }}
     _data_fragment:
       memory:
         total_mb: >-
@@ -140,7 +144,7 @@
       {%- set handles = ((_l_mem_rp.MEM_HANDLE_TYPES | default('')) | trim) or 'unknown' -%}
       {%- set raw_head = (((_l_mem_raw_head | default([])) | join(' / '))[:600]) or 'none' -%}
       {%- if phys_ok -%}{{ [] if ((_l_mem_slots | default([])) | length) > 0 else [{'section':'memory','message':'메모리 모듈 상세 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('field=slots; source=dmidecode; dmidecode_rc=' ~ dmi_rc ~ '; records=' ~ records ~ '; installed_mb=' ~ phys ~ '; stderr=' ~ dmi_err ~ '; handles=' ~ handles ~ '; raw_head=' ~ raw_head)}] }}
-      {%- elif vis_ok -%}{{ [{'section':'memory','message':'메모리 총 용량을 물리 설치량이 아닌 운영체제 인식 값으로 수집했습니다. 수집 계정의 권한을 확인하세요.','detail':('field=total_basis; value=os_visible; source=dmidecode; state=' ~ (_l_mem_rp.DMIDECODE | default('unknown')) ~ '; rc=' ~ (_l_mem_raw_result.rc | default('none')) ~ '; dmidecode_rc=' ~ dmi_rc ~ '; records=' ~ records ~ '; stderr=' ~ dmi_err ~ '; handles=' ~ handles ~ '; raw_head=' ~ raw_head)}] }}
+      {%- elif vis_ok -%}{{ [{'section':'memory','message':'메모리 총 용량을 물리 설치량이 아닌 운영체제 인식 값으로 수집했습니다. 수집 계정의 권한을 확인하세요.','detail':('field=total_basis; value=os_visible; cause=' ~ ('privilege_failed' if ((_l_raw_priv_failed | default(false)) | bool) else 'dmidecode_unavailable') ~ '; source=dmidecode; state=' ~ (_l_mem_rp.DMIDECODE | default('unknown')) ~ '; rc=' ~ (_l_mem_raw_result.rc | default('none')) ~ '; dmidecode_rc=' ~ dmi_rc ~ '; records=' ~ records ~ '; stderr=' ~ dmi_err ~ '; handles=' ~ handles ~ '; raw_head=' ~ raw_head)}] }}
       {%- else -%}{{ [{'section':'memory','message':'메모리 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('source=/proc/meminfo,dmidecode; cause=no_output; rc=' ~ (_l_mem_raw_result.rc | default('none')))}] }}
       {%- endif -%}
   no_log: true

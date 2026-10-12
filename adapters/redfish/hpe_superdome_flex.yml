@@ -10,11 +10,10 @@ match:
     - ".*Superdome.*Flex.*"
   firmware_patterns:
     - "^[23]\\.[0-9]+\\..*"
-    - "iLO.*5"
+    - "iLO\\s*5\\b"
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -23,6 +22,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 vendor_notes:
   multi_partition: true

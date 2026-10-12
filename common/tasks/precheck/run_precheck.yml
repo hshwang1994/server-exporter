@@ -20,7 +20,6 @@
 
 - name: "precheck | 진단 결과 저장"
   ansible.builtin.set_fact:
-    _precheck_result: "{{ _precheck_raw }}"
     _precheck_ok: >-
       {{
         _precheck_raw.reachable | default(false) | bool

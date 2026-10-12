@@ -6,9 +6,9 @@ match:
   vendor: ["Lenovo", "LENOVO"]
   firmware_patterns:
     - "XCC"
-    - "AFBT*"
-    - "TAOT*"
-    - "USX*"
+    - "^AFBT"
+    - "^TAOT"
+    - "^USX"
   model_patterns:
     - "ThinkSystem.*V2"
     - "ThinkSystem.*V3"
@@ -16,7 +16,6 @@ match:
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -25,6 +24,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 vendor_notes:
   design_hints:

@@ -201,9 +201,12 @@
       {%- set ns = namespace(groups=[], seen={}) -%}
       {%- for p in (_rf_d_cpus | default([])) -%}
         {%- set m = p.model | default(none) -%}
+        {%- set cores = (p.total_cores | int) if ((p.total_cores | default(none)) is not none and ((p.total_cores | string) | trim | length) > 0) else none -%}
         {%- if m in ns.seen -%}
           {%- set idx = ns.seen[m] -%}
-          {%- set _ = ns.groups[idx].update({'sockets': ns.groups[idx].sockets + 1, 'total_cores': ns.groups[idx].total_cores + (p.total_cores | default(0) | int)}) -%}
+          {%- set known = ns.groups[idx].total_cores -%}
+          {%- set _ = ns.groups[idx].update({'sockets': ns.groups[idx].sockets + 1,
+                                              'total_cores': ((known if known is not none else 0) + cores) if (cores is not none) else known}) -%}
         {%- else -%}
           {%- set _ = ns.seen.update({m: ns.groups | length}) -%}
           {%- set _ = ns.groups.append({
@@ -212,8 +215,8 @@
             'max_speed_mhz': p.speed_mhz | default(none),
             'architecture': p.architecture | default(p.instruction_set | default(none)),
             'sockets': 1,
-            'cores_per_socket': p.total_cores | default(0) | int,
-            'total_cores': p.total_cores | default(0) | int
+            'cores_per_socket': cores,
+            'total_cores': cores
           }) -%}
         {%- endif -%}
       {%- endfor -%}
@@ -223,7 +226,7 @@
       {%- for s in (_rf_d_memory.slots | default([])) -%}
         {%- set cap_mb = s.capacity_mb | default(s.capacity_mib | default(s.size_mib | default(0))) | int -%}
         {%- if cap_mb > 0 -%}
-          {%- set cap_gb = (cap_mb / 1024) | round(0, 'floor') | int -%}
+          {%- set cap_gb = (cap_mb / 1024) | round(0, 'common') | int -%}
           {%- set t = s.memory_type | default(s.type | default(none)) -%}
           {%- set sp = s.speed_mhz | default(none) -%}
           {%- set mfr = s.manufacturer | default(none) -%}
@@ -406,7 +409,7 @@
         vendor:       "{{ _rf_d_system.manufacturer | default(none) }}"
         model:        "{{ _rf_d_system.model        | default(none) }}"
         serial:       "{{ _rf_d_system.serial       | default(none) }}"
-        uuid:         "{{ _rf_d_system.uuid         | default(none) }}"
+        uuid:         "{{ _rf_d_system.uuid         | default(none) | normalize_uuid }}"
         sku:          "{{ _rf_d_system.sku           | default(none) }}"
         bios_version: "{{ _rf_d_system.bios_version | default(none) }}"
         bios_date:    "{{ _rf_d_system.bios_date | default((_rf_d_system.oem | default({})).bios_release_date | default(none)) }}"

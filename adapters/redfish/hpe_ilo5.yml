@@ -4,11 +4,10 @@ priority: 90
 
 match:
   vendor: ["HPE", "Hewlett Packard Enterprise"]
-  firmware_patterns: ["iLO.*5", "^2\\.[0-9]"]
+  firmware_patterns: ["iLO\\s*5\\b", "^2\\.[0-9]"]
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -17,6 +16,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 vendor_notes:
   design_hints:

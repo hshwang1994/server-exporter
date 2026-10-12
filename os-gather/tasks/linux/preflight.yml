@@ -36,7 +36,6 @@
 
 - name: "linux | preflight | set python mode + command flags"
   ansible.builtin.set_fact:
-    _l_python_path:    "{{ (_l_pf.PY_PATH | default('none')) | trim }}"
     _l_python_version: "{{ (_l_pf.PY_VER  | default(''))     | trim }}"
     _l_python_mode: >-
       {%- set force_raw = lookup('env', 'SE_FORCE_LINUX_RAW_FALLBACK') | default('') | lower -%}
@@ -49,10 +48,4 @@
       {%- endif -%}
     _l_python: "{{ (_l_pf.PY_PATH | default('python3')) | trim }}"
     _l_distro_name: "{{ (_l_pf.OS_NAME | default('')) | trim }}"
-    _l_has_lsblk:   "{{ ((_l_pf.HAS_LSBLK    | default('0')) | trim) == '1' }}"
-    _l_has_dmi:     "{{ ((_l_pf.HAS_DMIDECODE | default('0')) | trim) == '1' }}"
-    _l_has_last:    "{{ ((_l_pf.HAS_LAST      | default('0')) | trim) == '1' }}"
-    _l_has_lastlog: "{{ ((_l_pf.HAS_LASTLOG   | default('0')) | trim) == '1' }}"
-    _l_has_lscpu:   "{{ ((_l_pf.HAS_LSCPU     | default('0')) | trim) == '1' }}"
-    _l_has_ip:      "{{ ((_l_pf.HAS_IP        | default('0')) | trim) == '1' }}"
   no_log: true

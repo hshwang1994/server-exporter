@@ -62,7 +62,6 @@
           username: ""
           label: "no-credential"
           role: "anonymous"
-        _rf_used_account_role: "anonymous"
       no_log: true
 
     - name: "redfish | collect_standard | record failure evidence (empty creds)"

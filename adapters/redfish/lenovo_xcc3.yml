@@ -4,7 +4,7 @@ priority: 120
 
 match:
   vendor: ["Lenovo", "LENOVO"]
-  firmware_patterns: ["XCC3", "XCC.*3"]
+  firmware_patterns: ["XCC\\s*3\\b"]
   model_patterns:
     - "ThinkSystem SR630 V4"
     - "ThinkSystem SR650 V4"
@@ -16,7 +16,6 @@ match:
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -25,6 +24,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 vendor_notes:
   generation: xcc3

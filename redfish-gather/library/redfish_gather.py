@@ -2864,7 +2864,7 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     ps_path = _p(chassis_uri) + '/PowerSubsystem'
     st, ps_data, perr = _get(bmc_ip, ps_path, username, password, timeout, verify_ssl)
     if perr or st != 200:
-        return {}, [_err('power', f'PowerSubsystem 미지원: {perr or st}')] if st != 404 else []
+        return {}, [_err('power', 'PowerSubsystem 미지원: ' + (f'HTTP {st}' if st else str(perr)))]
 
     psu_link = _safe(ps_data, 'PowerSupplies', '@odata.id')
     psus = []
@@ -3100,7 +3100,7 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
     ts_path = _p(chassis_uri) + '/ThermalSubsystem'
     st, ts, terr = _get(bmc_ip, ts_path, username, password, timeout, verify_ssl)
     if terr or st != 200:
-        return {}, ([] if st == 404 else [_err('thermal', f'ThermalSubsystem 미지원: {terr or st}')])
+        return {}, [_err('thermal', 'ThermalSubsystem 미지원: ' + (f'HTTP {st}' if st else str(terr)))]
 
     temps = []
     tm_link = _safe(ts, 'ThermalMetrics', '@odata.id')
@@ -3554,6 +3554,10 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
                                               username, password, timeout, verify_ssl)
             thm_data, thm_errs = gather_thermal(bmc_ip, m['uri'],
                                                 username, password, timeout, verify_ssl)
+            if pwr_errs and _is_404_only_error(pwr_errs):
+                pwr_errs = []
+            if thm_errs and _is_404_only_error(thm_errs):
+                thm_errs = []
         else:
             pwr_data, pwr_errs, thm_data, thm_errs = {}, [], {}, []
         out['chassis'].append({
@@ -3814,8 +3818,9 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     return sections
 
 
-def _compute_final_status(collected, failed, errors=None):
+def _compute_final_status(collected, failed, errors=None, first_auth_status=None):
     clean = [s for s in collected if s not in failed]
+    authenticated = isinstance(first_auth_status, int) and 200 <= first_auth_status < 300
 
     if errors:
         for e in errors:
@@ -3825,8 +3830,9 @@ def _compute_final_status(collected, failed, errors=None):
                 continue
             detail = str(e.get('detail') or '')
             msg = str(e.get('message') or '')
-            if ('HTTP 401' in detail or 'HTTP 403' in detail
-                    or 'HTTP 401' in msg or 'HTTP 403' in msg):
+            if 'HTTP 401' in detail or 'HTTP 401' in msg:
+                return 'failed', clean
+            if (not authenticated) and ('HTTP 403' in detail or 'HTTP 403' in msg):
                 return 'failed', clean
             if '401' in msg and 'auth' in msg.lower():
                 return 'failed', clean
@@ -5547,7 +5553,8 @@ def main():
     if isinstance(multi_node, dict):
         all_errors.extend(multi_node.get('errors') or [])
 
-    final_status, clean = _compute_final_status(collected, failed, all_errors)
+    final_status, clean = _compute_final_status(collected, failed, all_errors,
+                                                first_auth_status=auth_evidence().get('first_auth_status'))
 
     _exit(
         changed=False, status=final_status, vendor=vendor,
