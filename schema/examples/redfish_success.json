@@ -16,7 +16,8 @@
     "network": "success",
     "firmware": "success",
     "users": "not_supported",
-    "power": "success"
+    "power": "success",
+    "thermal": "success"
   },
   "diagnosis": {
     "reachable": true,
@@ -33,7 +34,8 @@
         443
       ],
       "selected_port": 443,
-      "redfish_version": "1.15.0"
+      "redfish_version": "1.15.0",
+      "hostname_source": "bmc"
     }
   },
   "meta": {
@@ -299,6 +301,10 @@
           "SystemRecovery_POSTWatchdogTimerValue": 5
         }
       }
+    },
+    "thermal": {
+      "temperatures": [],
+      "fans": []
     }
   }
 }

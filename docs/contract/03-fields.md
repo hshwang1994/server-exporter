@@ -102,7 +102,7 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 | `collection_method` | `agent` / `vsphere_api` / `redfish_api` | 실제로 쓴 방법. `target_type` 에 따라 자동으로 결정 |
 | `ip` | 문자열 | 호출자가 넘긴 대상 IP. Redfish 면 BMC IP, OS 면 서버 IP |
 | `hostname` | 문자열\|null | 풀어낸 호스트명. `system.hostname → system.fqdn → bmc.network_hostname → null` (IP fallback 안 함, 2026-06-16). 실패 envelope 과 `always` 최종 fallback 도 같은 체인 (2026-09-03). 2026-10-03 부터 **콜백이 보충하는 envelope 과 Redfish `always` fallback 도 같다** — `hostname=null`, `sections` 11 키(채널 지원 섹션은 `failed`, 나머지 `not_supported`), `meta` 6 키, `correlation` 4 키, `data` 빈 뼈대. 실패 종류에 따라 다른 모양을 보지 않는다. 상세: 8절 |
-| `vendor` | `dell` / `hp` / `hpCsus` / `lenovo` / `supermicro` / `cisco` / `null` | 호출자 노출 표시값. 내부 canonical(`hpe`)을 `vendor_output_display`/`adapter_output_display`(vendor_aliases.yml)로 매핑. HPE 계열→`hp`, HPE Compute Scale-up 패밀리(CSUS 3200 + Superdome Flex)→`hpCsus`(camelCase 예외, 2026-06-04 ADR). 대부분 소문자 한 단어 |
+| `vendor` | `dell` / `hp` / `hpCsus` / `lenovo` / `supermicro` / `cisco` / `huawei` / `inspur` / `fujitsu` / `quanta` / `vmware` / `qemu` / `microsoft` / `xen` / `null` | 호출자 노출 표시값. 가상 머신(OS 채널)은 DMI 제조사가 하이퍼바이저라 `vmware`·`qemu`·`microsoft`·`xen` 이 나갑니다(`common/tasks/normalize/resolve_vendor.yml`). 내부 canonical(`hpe`)을 `vendor_output_display`/`adapter_output_display`(vendor_aliases.yml)로 매핑. HPE 계열→`hp`, HPE Compute Scale-up 패밀리(CSUS 3200 + Superdome Flex)→`hpCsus`(camelCase 예외, 2026-06-04 ADR). 대부분 소문자 한 단어 |
 
 ### 그룹 B — 결과 (2개)
 
@@ -969,7 +969,7 @@ hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
 - **null (bmc fallback 도 null)**: Cisco CIMC — 실측(reference crawl). System.HostName 으로만 채워짐.
 - **lab 부재(미확인)**: Supermicro / Huawei / Inspur / Fujitsu / Quanta + 구세대(iDRAC8 / iLO4~6 /
   XCC2 등) — DMTF 표준상 가능하나 실측 미확인. 매트릭스:
-  `tests/evidence/2026-06-16-hostname-source-matrix.md` (lab 도입 후 검증 — NEXT_ACTIONS).
+  `tests/evidence/2026-06-16-hostname-source-matrix.md` (lab 도입 후 검증).
 
 구현은 **graceful**: 각 순위가 비면 다음으로, 전부 비면 null → 어느 벤더/세대든 안전.
 
@@ -1063,12 +1063,6 @@ hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
           "endpoints": [ { "id": "Endpoint0", "endpoint_protocol": "PCIe", "health": "OK" } ] }
       ]
     }
-  },
-  "diagnosis": {
-    "details": {
-      "multi_node_layout": "rmc_primary",
-      "rmc_activation_check": true
-    }
   }
 }
 ```
@@ -1085,7 +1079,7 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | `composition` | `CompositionService` + `ResourceBlocks` | `enabled`, `state/health`, `resource_block_count`, `resource_blocks[]` (id/types/composition_state/processor_count/memory_count/`chassis[]`/`computer_systems[]`) | nPartition 조합 구조. 각 ResourceBlock ↔ chassis 대응 (설명 모델). ServiceRoot 미노출 시 `null` |
 | `fabrics` | `Fabrics` + `Fabrics/{id}` (Switches/Endpoints) | `[]` of {id/fabric_type/health/`switch_count`/`endpoint_count`/`switches[]`/`endpoints[]`} | NUMAlink FlexGrid (Switches+Endpoints, Links/Zones 미사용 — 설명 모델). ServiceRoot 미노출 시 `null` |
 
-> **Lab 부재 주의**: 위 5종은 lab 부재 web sources (DMTF DSP0266 + HPE CSUS 3200 Admin Guide + Superdome Flex 상속) 합성 검증. `fabric_type` 은 DMTF enum 에 NUMAlink 가 없어 placeholder (`PCIe`) — 사이트 실측 시 정정 (NEXT_ACTIONS).
+> **Lab 부재 주의**: 위 5종은 lab 부재 web sources (DMTF DSP0266 + HPE CSUS 3200 Admin Guide + Superdome Flex 상속) 합성 검증. `fabric_type` 은 DMTF enum 에 NUMAlink 가 없어 placeholder (`PCIe`) — 사이트 실측 시 정정.
 
 ### 호출자 가이드
 
@@ -1094,9 +1088,9 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | 기존 호출자 (`data.system` / `data.bmc` 만 사용) | 변경 0 — Partition0 데이터로 동일 동작 |
 | 멀티-노드 인식 호출자 | `data.multi_node != null` 확인 후 `partitions[]` / `managers[]` / `chassis[]` 순회 |
 | 확장 컴포넌트 인식 호출자 | `multi_node.composition` / `multi_node.fabrics` (null 가드) + `partitions[].boot` / `chassis[].thermal` / `managers[].log_services` 순회 |
-| 활성화 미상 진단 | `diagnosis.details.rmc_activation_check == false` 시 사이트 RMC Redfish 서비스 / Subscription 라이선스 확인 (`docs/operate/06-rmc-activation.md`) |
+| RMC 응답 없음 | `diagnosis.failure_stage` 가 `protocol` 이면 사이트 RMC 의 Redfish 서비스가 꺼져 있을 수 있다 ([../operate/06-rmc-activation.md](../operate/06-rmc-activation.md)) |
 
-### Lab 부재 한계 (NEXT_ACTIONS C1~C8)
+### Lab 부재 한계
 - (2026-10-10) `multi_node.partitions[].network.summary` 는 빈 그룹, `memory.total_basis` 는 고정값이다 — CSUS lab 이 없어 파티션 단위 계산 근거를
   만들 수 없다. 두 값은 파티션 하위 섹션의 한계로 두고 지어내지 않는다.
 

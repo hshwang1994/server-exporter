@@ -3,7 +3,7 @@
   "target_type": "redfish",
   "collection_method": "redfish_api",
   "ip": "10.10.1.50",
-  "hostname": "10.10.1.50",
+  "hostname": null,
   "vendor": null,
   "status": "failed",
   "sections": {
@@ -16,7 +16,8 @@
     "network": "failed",
     "firmware": "failed",
     "users": "failed",
-    "power": "failed"
+    "power": "failed",
+    "thermal": "failed"
   },
   "diagnosis": {
     "reachable": true,
@@ -32,7 +33,8 @@
         443
       ],
       "selected_port": 443,
-      "probe_facts": {}
+      "probe_facts": {},
+      "hostname_source": "none"
     }
   },
   "meta": {
@@ -83,6 +85,7 @@
     },
     "users": [],
     "firmware": [],
-    "power": null
+    "power": null,
+    "thermal": null
   }
 }

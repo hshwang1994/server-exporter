@@ -123,7 +123,8 @@ fields:
 
   vendor:
     type: "string|null"
-    enum: ["dell", "hp", "hpCsus", "lenovo", "supermicro", "cisco", null]
+    enum: ["dell", "hp", "hpCsus", "lenovo", "supermicro", "cisco", "huawei", "inspur", "fujitsu", "quanta",
+           "vmware", "qemu", "microsoft", "xen", null]
     priority: must
     channel: [redfish, os, esxi]
     help_ko: >-
@@ -131,7 +132,9 @@ fields:
       vendor_output_display / adapter_output_display 로 매핑한 결과.
       HPE 계열 → 'hp', HPE Compute Scale-up Servers (Superdome Flex + CSUS 3200) → 'hpCsus'
       (camelCase 예외 — 2026-06-04 사용자 결정 + HPE 공식 분류 web 검증). OS 채널은 hardware 미수집 시 null.
-      ESXi 는 hosting hardware 벤더.
+      ESXi 는 hosting hardware 벤더. vendor_aliases.yml 의 canonical 벤더(huawei / inspur / fujitsu / quanta 포함)는
+      그 이름 그대로 나가고, OS 채널의 가상 머신은 DMI 제조사가 하이퍼바이저라 vmware / qemu / microsoft / xen 이 나간다
+      (common/tasks/normalize/resolve_vendor.yml). 등록되지 않은 제조사는 null.
     help_en: >-
       Caller-facing vendor display value: internal canonical (e.g. 'hpe') mapped
       via vendor_aliases.yml vendor_output_display / adapter_output_display.
@@ -247,6 +250,8 @@ fields:
           (어느 채널에서 멈췄는지. 같은 정보가 target_type 과 diagnosis.details.channel 에도 있다)
       이 밖에 Redfish 보조 데이터 이름 bios 가 올 수 있다 (2026-09-15 — BIOS Current Attributes
       조회 실패. 섹션이 아니므로 status / sections 판정에 관여하지 않는다).
+      추가 수집(Add-on)을 쓰는 환경에서는 addon 이 올 수 있다 (Add-on 경로 · 설정 · 실행 문제 — 어느 채널에서든,
+      sections / status 와 무관).
       값이 없으면 unknown.
     help_en: >-
       Area where the error occurred. One of three kinds.
