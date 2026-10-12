@@ -398,9 +398,6 @@
 
 - name: "linux | storage | build fragment"
   ansible.builtin.set_fact:
-    _l_stor_ok: >-
-      {{ ((_l_norm_physical_disks | default([])) | length > 0)
-         or ((_l_norm_filesystems | default([])) | length > 0) }}
     _data_fragment:
       storage:
         filesystems:     "{{ _l_norm_filesystems | default([]) }}"

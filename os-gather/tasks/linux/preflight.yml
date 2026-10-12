@@ -6,15 +6,8 @@
 #
 # 출력 변수:
 #   _l_python_mode    : str  — 'python_ok' | 'python_missing' | 'python_incompatible' | 'raw_forced'
-#   _l_python_path    : str  — Python 경로 (없으면 'none')
 #   _l_python_version : str  — Python 버전 문자열 (예: '3.9.16', 없으면 '')
 #   _l_python         : str  — setup 모듈이 사용할 Python 경로 (backward compat)
-#   _l_has_lsblk      : bool
-#   _l_has_dmi        : bool
-#   _l_has_last       : bool
-#   _l_has_lastlog    : bool
-#   _l_has_lscpu      : bool
-#   _l_has_ip         : bool
 
 - name: "linux | preflight | detect python + commands"
   ansible.builtin.raw: |
@@ -52,7 +45,6 @@
 
 - name: "linux | preflight | set python mode + command flags"
   ansible.builtin.set_fact:
-    _l_python_path:    "{{ (_l_pf.PY_PATH | default('none')) | trim }}"
     _l_python_version: "{{ (_l_pf.PY_VER  | default(''))     | trim }}"
     _l_python_mode: >-
       {%- set force_raw = lookup('env', 'SE_FORCE_LINUX_RAW_FALLBACK') | default('') | lower -%}
@@ -69,10 +61,4 @@
     #   ansible_distribution 은 이 시점 미정의 + "RedHat"(공백X) 형식이라 패턴("Red Hat") 불일치 → os-release NAME 사용.
     _l_distro_name: "{{ (_l_pf.OS_NAME | default('')) | trim }}"
     # 명령 존재 플래그
-    _l_has_lsblk:   "{{ ((_l_pf.HAS_LSBLK    | default('0')) | trim) == '1' }}"
-    _l_has_dmi:     "{{ ((_l_pf.HAS_DMIDECODE | default('0')) | trim) == '1' }}"
-    _l_has_last:    "{{ ((_l_pf.HAS_LAST      | default('0')) | trim) == '1' }}"
-    _l_has_lastlog: "{{ ((_l_pf.HAS_LASTLOG   | default('0')) | trim) == '1' }}"
-    _l_has_lscpu:   "{{ ((_l_pf.HAS_LSCPU     | default('0')) | trim) == '1' }}"
-    _l_has_ip:      "{{ ((_l_pf.HAS_IP        | default('0')) | trim) == '1' }}"
   no_log: true

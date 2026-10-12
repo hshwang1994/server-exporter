@@ -22,7 +22,6 @@
 #   _precheck_timeout_icmp:     ICMP Echo 1회 타임아웃 (기본 1.0). TCP 무응답 경로에서만 소비.
 #
 # 출력 변수:
-#   _precheck_result:  precheck_bundle 모듈 반환값
 #   _precheck_ok:      전체 진단 통과 여부 (bool)
 #   _diagnosis:        공통 diagnosis 딕셔너리
 #   _fail_error_detail: 진단 실패 시 원본 기술 오류 문자열 (없으면 none)
@@ -67,7 +66,6 @@
 # rule 95 R1 #5 ok: failure_stage 부재 = 진단 통과 (Jinja2 expression 안 주석은 syntax error 유발 — YAML 주석으로 분리)
 - name: "precheck | 진단 결과 저장"
   ansible.builtin.set_fact:
-    _precheck_result: "{{ _precheck_raw }}"
     # 2026-08-10 (Phase 3-A): protocol 확인을 **수행한 경우에만** protocol_supported 를 요구한다.
     #   probe_protocol=false (OS 채널) 로 부르면 protocol_checked=false 가 돌아오고,
     #   protocol_supported 는 "확인 안 함" 을 뜻하는 초기값 False 로 남는다. 이때까지

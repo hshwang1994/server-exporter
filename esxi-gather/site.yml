@@ -119,7 +119,7 @@
               사용 계정: {{ (_e_attempts_meta | default({})).used_label | default('?') }},
               시도 후보: {{ (_e_attempts_meta | default({})).attempted_count | default(0) }},
               자격 probe 통과: {{ _e_auth_ok | default(false) }}.
-              가능한 원인: (1) 계정의 vSphere 권한 부족 (Read-Only / System.View 필요), (2) ESXi 펌웨어 호환성 (지원: 6.7 / 7.x / 8.x), (3) 라이선스 만료, (4) lockdown 모드.
+              가능한 원인: (1) 계정의 vSphere 권한 부족 (Read-Only / System.View 필요), (2) ESXi 버전 호환성, (3) 라이선스 만료, (4) lockdown 모드.
           when: not (_e_facts_ok | bool)
 
         # BUG #1 fix (cycle production-audit 후속): vmware_host_vmnic_info / vmware_vswitch_info /
