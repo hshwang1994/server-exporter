@@ -2554,8 +2554,7 @@ pipeline {
                     //   (Classic JSON 파서 생성자는 sandbox 가 거부한다 — 2026-10-03 main #2.)
                     Map parsedInventory = seParseJsonStrict(params.inventory_json)
                     if (parsedInventory.error) {
-                        error "[입력 확인] inventory_json을 JSON으로 읽지 못했습니다.
-  오류: ${parsedInventory.error}"
+                        error "[입력 확인] inventory_json을 JSON으로 읽지 못했습니다.\n  오류: ${parsedInventory.error}"
                     }
                     def hosts = parsedInventory.value
 
