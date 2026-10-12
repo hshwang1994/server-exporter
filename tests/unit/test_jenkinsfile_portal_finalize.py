@@ -213,8 +213,8 @@ def test_runtime_groovy_uses_only_sandbox_whitelisted_apis():
     assert "JsonSlurperClassic" not in TEXT and "JsonSlurperClassic" not in LIB
     assert "new groovy.json.JsonSlurper()" in LIB
     # 2026-10-12 (P12): 입력 확인은 표준 JSON 만 받는 JsonSlurper(sandbox 허용)로 읽는다 — readJSON(json-lib) 은 비표준 입력을 받아들여 inventory.sh 와 어긋났다
-    assert "hosts = seParseJsonStrict(params.inventory_json)" in TEXT and "readJSON(text: params.inventory_json" not in TEXT
-    assert "new groovy.json.JsonSlurper().parseText(t)" in _method("Object seParseJsonStrict")
+    assert "Map parsedInventory = seParseJsonStrict(params.inventory_json)" in TEXT and "readJSON(text: params.inventory_json" not in TEXT
+    assert "new groovy.json.JsonSlurper().parseText(t)" in _method("Map seParseJsonStrict")
     show = _method("String seShowTime")
     iso = _method("String seIsoUtc")
     assert "new Date(ms).format('yyyy-MM-dd HH:mm:ss XXX')" in show and "'+00:00'" in show

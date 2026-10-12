@@ -144,15 +144,26 @@ def test_p11_synthetic_404_from_the_request_tool_is_not_a_refusal():
 
 
 def test_p12_validate_parses_standard_json_only_and_returns_serializable_values():
+    """P12: 입력 확인은 표준 JSON 만 받는 파서(JsonSlurper)를 쓰고, 결과는 CPS 가 직렬화할 수 있는 리터럴 컨테이너다. 거부 사유는 [error:] 로 돌려준다."""
     v = _stage("입력 확인")
-    assert "hosts = seParseJsonStrict(params.inventory_json)" in v
-    parser = _method("Object seParseJsonStrict")
+    assert "Map parsedInventory = seParseJsonStrict(params.inventory_json)" in v
+    assert "if (parsedInventory.error) {" in v and "def hosts = parsedInventory.value" in v
+    assert not any("readJSON(" in l for l in v.splitlines() if not l.strip().startswith("//")), "입력 확인의 코드 줄에 readJSON 없음"
+    parser = _method("Map seParseJsonStrict")
     plain = _method("Object seToPlainJson")
-    assert "new groovy.json.JsonSlurper().parseText(t)" in parser and "seToPlainJson(" in parser
-    assert "new LinkedHashMap()" in plain and "new ArrayList()" in plain
+    assert "new groovy.json.JsonSlurper().parseText(t)" in parser and "return [value: seToPlainJson(v)]" in parser
+    assert "[error:" in parser and "throw new" not in parser
+    assert "Map m = [:]" in plain and "List l = []" in plain
     assert "JsonSlurperClassic" not in TEXT
     # 실측(2026-10-12 임시 Job): JsonSlurper 는 첫 값 뒤의 내용을 무시하고 제어 문자를 받아들인다 — 그 둘은 직접 거부한다
     assert "!t.endsWith(']')" in parser and "c < 0x20 && c != 0x09 && c != 0x0A && c != 0x0D" in parser
+
+
+def test_sandbox_rejected_constructors_are_not_used():
+    """main #520(2026-10-12): sandbox 가 `new java.util.ArrayList` 를 거부해 입력 확인이 실패했다(격리 driver 는 입력 확인을 거치지 않아 보지 못했다).
+    Jenkinsfile 의 생성자 호출은 설치 Jenkins 에서 실행이 확인된 것(Date · JsonSlurper)만 허용한다 — 새 생성자는 실제 Job 실행으로 확인한 뒤 여기에 더한다."""
+    found = sorted(set(re.findall(r"new\s+([A-Za-z_][\w.]*)\s*\(", TEXT)))
+    assert set(found) <= {"Date", "groovy.json.JsonSlurper"}, found
 
 
 def test_p13_running_state_does_not_claim_the_attempt_preserved_results():

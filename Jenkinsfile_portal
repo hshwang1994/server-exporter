@@ -620,32 +620,39 @@ Map seFilterEnvelopeLines(List rawLines, String manifestJson) {
     return [lines: lines, missing: missing, dropped: dropped, counts: counts]
 }
 
-// 입력 JSON 엄격 파서 (2026-10-12 P12) — 표준 JSON 만 받는다. 결과는 CPS 가 직렬화할 수 있는 LinkedHashMap / ArrayList 로 바꿔 돌려준다.
+// 입력 JSON 엄격 파서 (2026-10-12 P12) — 표준 JSON 만 받는다. 반환은 [value: <CPS 가 직렬화할 수 있는 Map/List>] 또는 [error: <문장>] 이다.
 //   설치 Jenkins 실측(2026-10-12 임시 Job): readJSON(json-lib)은 홑따옴표 · 따옴표 없는 키 · 끝 쉼표를 받아들이고, JsonSlurper 는 그 셋을 거부하지만 첫 값 뒤의
 //   내용(주석 · 두 번째 값)은 무시한다 — 그래서 배열 입력은 ']' 로 끝나야 한다. 제어 문자(탭 · 줄바꿈 · 캐리지리턴 제외)는 표준 JSON 에 없으므로 거부한다.
 //   남는 차이(문자열 안의 탭 · 줄바꿈, 숫자의 앞자리 0)는 inventory.sh(Python json.loads)가 거부한다 — 대상 IP 문자열에는 해당하지 않는다.
+//   sandbox 가 허용하지 않는 생성자는 쓰지 않는다 — main #520(2026-10-12)에서 `new java.util.ArrayList` 가 거부돼 입력 확인이 실패했다. 컨테이너는 리터럴([:] · [])로
+//   만들고, 거부 사유는 예외 대신 [error:] 로 돌려 호출 측이 error step 으로 끝낸다(새 Script Approval 을 요구하지 않는다).
 @NonCPS
-Object seParseJsonStrict(String text) {
+Map seParseJsonStrict(String text) {
     String t = (text ?: '').trim()
     for (int i = 0; i < t.length(); i++) {
         int c = (int) t.charAt(i)
-        if (c < 0x20 && c != 0x09 && c != 0x0A && c != 0x0D) { throw new Exception("JSON에 쓸 수 없는 제어 문자가 있습니다 (위치 ${i})".toString()) }
+        if (c < 0x20 && c != 0x09 && c != 0x0A && c != 0x0D) { return [error: "JSON에 쓸 수 없는 제어 문자가 있습니다 (위치 ${i})".toString()] }
     }
-    Object v = new groovy.json.JsonSlurper().parseText(t)
-    if ((v instanceof List) && !t.endsWith(']')) { throw new Exception('JSON 배열 뒤에 다른 내용이 있습니다') }
-    if ((v instanceof Map) && !t.endsWith('}')) { throw new Exception('JSON 객체 뒤에 다른 내용이 있습니다') }
-    return seToPlainJson(v)
+    Object v
+    try {
+        v = new groovy.json.JsonSlurper().parseText(t)
+    } catch (Exception e) {
+        return [error: (e.message ?: 'JSON 구문 오류').toString()]
+    }
+    if ((v instanceof List) && !t.endsWith(']')) { return [error: 'JSON 배열 뒤에 다른 내용이 있습니다'] }
+    if ((v instanceof Map) && !t.endsWith('}')) { return [error: 'JSON 객체 뒤에 다른 내용이 있습니다'] }
+    return [value: seToPlainJson(v)]
 }
 
 @NonCPS
 Object seToPlainJson(Object v) {
     if (v instanceof Map) {
-        Map m = new LinkedHashMap()
+        Map m = [:]
         for (def e in ((Map) v).entrySet()) { m[e.key.toString()] = seToPlainJson(e.value) }
         return m
     }
     if (v instanceof List) {
-        List l = new ArrayList()
+        List l = []
         for (Object x in (List) v) { l << seToPlainJson(x) }
         return l
     }
@@ -2541,18 +2548,16 @@ pipeline {
                         error "[입력 확인] inventory_json이 비어 있습니다."
                     }
 
-                    def hosts
-                    try {
-                        // 2026-10-12 (P12): 표준 JSON 만 받는 파서(groovy.json.JsonSlurper — sandbox 허용, seFilterEnvelopeLines 와 같은 것)로 읽는다.
-                        //   종전 readJSON(json-lib)은 홑따옴표 · 따옴표 없는 키 · 주석 같은 비표준 입력도 받아들여, inventory.sh(Python json.loads)가 거부하는
-                        //   요청을 입력 확인이 접수했다 → 접수 뒤 전 대상이 실패 결과로 나갔다. 결과는 CPS 가 직렬화할 수 있는 LinkedHashMap / ArrayList 다.
-                        //   (Classic JSON 파서 생성자는 sandbox 가 거부한다 — 2026-10-03 main #2.)
-                        hosts = seParseJsonStrict(params.inventory_json)
-                    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                        throw fie
-                    } catch (Exception e) {
-                        error "[입력 확인] inventory_json을 JSON으로 읽지 못했습니다.\n  오류: ${e.message}"
+                    // 2026-10-12 (P12): 표준 JSON 만 받는 파서(groovy.json.JsonSlurper — sandbox 허용, seFilterEnvelopeLines 와 같은 것)로 읽는다.
+                    //   종전 readJSON(json-lib)은 홑따옴표 · 따옴표 없는 키 · 주석 같은 비표준 입력도 받아들여, inventory.sh(Python json.loads)가 거부하는
+                    //   요청을 입력 확인이 접수했다 → 접수 뒤 전 대상이 실패 결과로 나갔다. 거부 사유는 파서가 [error:] 로 돌려준다(예외 아님 — sandbox 생성자 회피).
+                    //   (Classic JSON 파서 생성자는 sandbox 가 거부한다 — 2026-10-03 main #2.)
+                    Map parsedInventory = seParseJsonStrict(params.inventory_json)
+                    if (parsedInventory.error) {
+                        error "[입력 확인] inventory_json을 JSON으로 읽지 못했습니다.
+  오류: ${parsedInventory.error}"
                     }
+                    def hosts = parsedInventory.value
 
                     // 접수 대상 — inventory.sh 와 같은 규칙(seAcceptTargets). 어긋나는 요청은 노드를 고르기 전에 전체 거부한다(F03).
                     Map acceptance = seAcceptTargets(hosts, params.target_type.trim())

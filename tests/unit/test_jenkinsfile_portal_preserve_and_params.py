@@ -142,10 +142,11 @@ def test_last_attempt_preserves_output_before_deleting_the_workspace():
 
 
 def test_inventory_shape_errors_are_explicit_without_new_rejections():
-    assert "hosts = seParseJsonStrict(params.inventory_json)" in VALIDATE, "표준 JSON 만 받는 파서 (2026-10-12 P12)"
+    assert "Map parsedInventory = seParseJsonStrict(params.inventory_json)" in VALIDATE, "표준 JSON 만 받는 파서 (2026-10-12 P12)"
     assert "JsonSlurperClassic" not in TEXT
-    parse = VALIDATE[VALIDATE.index("hosts = seParseJsonStrict("):]
-    assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in parse[:600]
+    parse = VALIDATE[VALIDATE.index("Map parsedInventory = seParseJsonStrict("):]
+    # 파서는 예외 대신 [error:] 를 돌려주고(sandbox 생성자 회피 — main #520), 입력 확인이 error step 으로 끝낸다
+    assert "if (parsedInventory.error) {" in parse[:400] and "def hosts = parsedInventory.value" in parse[:800]
     assert "seAcceptTargets(hosts, params.target_type.trim())" in VALIDATE
     assert "inventory_json 은 JSON 배열이어야 합니다" in TEXT
     assert "은 객체여야 합니다" in TEXT
