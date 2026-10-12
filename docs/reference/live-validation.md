@@ -436,3 +436,35 @@ checkout == P11 · Portal 200 · P10 대조 회귀 0 — 선언 사용 D-03 (Win
 
 production P12 `410317a7`(main `9a6ee77b` — adapter 미참조 절 제거, 수집 경로 불변) 승격 직후 production Job #274~#279: canary #274 os 3/3 · Linux A #275 8/8 · Linux B #276 4 + 실패 3/7 · Windows #277 1/1 · ESXi #278 6/6 · Redfish #279 7 + 실패 3/10.
 checkout == P12 · Portal 200 · P11 명부(#233~#238) 직접 대조 회귀 0 — 선언 사용 없음(입력 원본 P10 빌드 대조도 회귀 0 — 선언 사용 D-03 (Windows) · LX-F04 · WIN-02 · WIN-DM). 정본 `tests/evidence/2026-10-10-full-audit.md` 9절(2026-10-11).
+
+## 2026-10-12 독립 점검 — main 매트릭스 · production P13 명부 (실장비)
+
+실장비 BMC 에 인증 실패를 유발하는 시험은 하지 않았다(계정 쓰기 HOLD 유지). 수집 코드 변경(Redfish 403/404 판정 · adapter capabilities · 세대 토큰 · Linux memory/users · 정규화)의
+실장비 영향은 main Job 매트릭스와 production 명부를 P12 명부(#274~#279)와 대상별로 대조해 확인했다(휘발 값 제외 — 시각 · 사용률 · 전력 · 온도). 정본 `tests/evidence/2026-10-12-independent-audit.md` 3절.
+
+### main `46002a2b` 매트릭스 (main Job #528~#550, checkout 전부 == `46002a2b`)
+
+| 시나리오 | 빌드 | 결과 | 관측 |
+|---|---|---|---|
+| S1 canary os 3 | #528 | SUCCESS | 3/3 · Portal 200 · #274 대조 비휘발 차이 0 |
+| S3 Linux 12 | #530 | SUCCESS | 12/12 · Portal 200 |
+| S2 혼합(실호스트 4 + TEST-NET 2) | #549 | SUCCESS | 4 success + 2 `TARGET_UNREACHABLE` · Portal 200 · 보충 0 (Linux B 7대 #532 는 4 + 실패 3(기존 .135 .145 .165) · #276 대조 차이 0) |
+| Linux A 8 | #533 | SUCCESS | 8/8 · #275 대조: 파일시스템 사용률만 |
+| S4 Windows 1 | #534 | SUCCESS | 1/1 · #277 대조 차이 0 |
+| E2E-D ESXi 6 | #535 (#529 동일) | SUCCESS | 6/6 · #278 대조: datastore 사용률만 |
+| E2E-E Redfish 7 | #536 (#531 동일) | SUCCESS | 7/7 · #279 대조: 시각 · 전력 · `hardware.uuid` 소문자(의도한 정규화) |
+| Redfish 10 | #537 | SUCCESS | 7 success + 3 실패(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 · 10.50.11.231 `TARGET_UNREACHABLE`, 모두 기존) · Portal 200 · #279 대조: 실패 3대의 `sections.system` failed → not_supported(의도 — 채널 섹션 통일) · 시각 · 전력 · `hardware.uuid` 소문자 |
+| T2 TEST-NET 2 | #538 | SUCCESS | 2대 `TARGET_UNREACHABLE` 봉투 · Portal 200 1회 |
+| T6 Callback 거부 주소 | #539 | UNSTABLE | 전송 도구 상태 408(연결 거부) 3회(대기 10초 · 20초) · delivered=false · receipt uncertain · 거부 아님 · `callback_body.json` 보존 |
+| P11 실제 404 | #548 | UNSTABLE | controller loopback 의 임시 404 서버 — HTTP 404 · `refused=true` · 전송 1회 · 재전송 없음 · "Portal이 요청을 거부했습니다. HTTP 404." (시험용 Portal 은 없는 경로에 302 를 주어 #540 은 302 · 3회 실패 · 거부 아님. #545 GitLab https 는 TLS 예외, #547 Runner 호스트 포트는 NoRouteToHost 예외 — 둘 다 예외형 통신 실패로 재시도 3회) |
+| P11 이름 풀이 실패 | #541 | UNSTABLE | HTTP 404 + `transport=unknown_host`(플러그인 합성 404 식별) 3회 · 거부 아님 · receipt not_delivered · 기존 재시도 범위 그대로 |
+| E2E-A loc=cj | #542 | UNSTABLE | cj Runner 에서 실행 · 2대 실패 봉투 · Callback 408 3회 · delivered=false |
+| E2E-A2 loc=chj | #550 (#543 동일) | FAILURE | `[실행 위치] 등록되지 않은 Location: 'chj'` — 수집 없이 `OUTPUT_BUILD_FAILED` 봉투 2 · Portal 200 · fail-closed |
+| T5 사용자 중단 | #544 | ABORTED | `Aborted by admin` → `[수집] 중단됨: 빌드가 중단됐습니다(사용자 취소 또는 그 밖의 중단)` · 결과 보존 뒤 작업 폴더 유지(원인 미확정) · 12대 실패 봉투 · Portal 200 1회 · ABORTED 유지 |
+
+### production P13 명부
+
+production P13 `b86c5942`(main `46002a2b`) 승격 직후 production Job #280~#287: canary os 3 #280 · Linux A 8 #281 · Linux B 7 #282 · Windows 1 #283 · ESXi 6 #284 · Redfish 10 #285 · Redfish 10 재실행 #286(main #555 와 동시) · loopback 수신기 canary #287.
+checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테스트 수신 백엔드가 내려가 있어 #280~#286 은 서버가 돌려준 실제 404 를 확정 거부로 1회 기록했고(재전송 없음), Portal 200 은 저장소 `callback_sink.py` 를 controller loopback 에 띄운 임시 Job 으로 #287 에서 확인했다(수신 본문 sha256 == `callback_body.json`).
+오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
+호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).

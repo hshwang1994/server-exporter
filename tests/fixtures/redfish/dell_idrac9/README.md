@@ -1,6 +1,6 @@
 # Dell iDRAC 9 fixture (2026-05-07)
 
-> Round 11 lab 검증 (iDRAC9 7.x — `tests/fixtures/redfish/dell/`).
+> 실장비(iDRAC9 7.x)에서 받은 fixture 는 `tests/fixtures/redfish/dell/` 에 있습니다. 검증 기록은 `docs/reference/live-validation.md` 를 보세요.
 > 본 fixture 는 iDRAC9 5.x (PLDM RDE + standard dual) 변형 시뮬 — web sources only.
 
 ## 출처

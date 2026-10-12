@@ -65,7 +65,7 @@ OS / ESXi 채널은 별도다. Redfish 채널은 OS 안을 보지 않으므로 `
 | **HPE** | Superdome Flex / Flex 280 (RMC) | N/A | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
 | **Supermicro** | ARS (Ampere Altra, ARM) | N/A | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | OK★ | N/A | OK★ | OK★ |
 
-¹ thermal: 2026-10-10 production P11 명부(#238)와 main #483 에서 Dell iDRAC9 · HPE iLO6 · Lenovo XCC · Cisco CIMC 실장비가 `thermal: success` 를 냈다. baseline JSON 에는 아직 `thermal` 키가 없어(실측 재캡처 대상) `OK` 가 아니라 `OK★` 로 둔다.
+¹ thermal: 2026-10-10 production 빌드 #238 과 main 빌드 #483 에서 Dell iDRAC9, HPE iLO6, Lenovo XCC, Cisco CIMC 실장비가 `thermal: success` 를 냈다. baseline JSON 에는 아직 `thermal` 키가 없어(실측 재캡처 대상) `OK` 가 아니라 `OK★` 로 둔다.
 
 ## 칸 분포 — 한눈에
 

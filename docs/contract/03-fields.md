@@ -157,7 +157,7 @@ Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9�
 (2026-08-03: 400 도 미지원으로 보려다 되돌림 — 사이트 사례의 400 은 장비 미지원이 아니라 **수집 측 경로 오류**였다.
 400 을 미지원으로 분류하면 수집 측 버그가 `not_supported` 로 조용히 덮인다.)
 2026-09-03: `hardware` 를 OS 채널 정식 섹션으로 배선 — Linux 는 DMI(setup fact → `/sys/class/dmi/id`), Windows 는 `Win32_ComputerSystem`/`Win32_BIOS`. 종전에는 Windows 만 스키마 밖에서 냈고 Linux 는 모델·BIOS 를 버렸다.
-2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data.thermal` 만 채워지고 `sections.thermal` 누락 — Track4 미완. 이제 redfish 는 수집 성공 시 `success`, os/esxi 는 `not_supported`).
+2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data.thermal` 만 채워지고 `sections.thermal` 누락. 이제 redfish 는 수집 성공 시 `success`, os/esxi 는 `not_supported`).
 
 같은 서버라도 채널별로 채워지는 영역이 다르다는 게 핵심. 예를 들어:
 - Dell 서버를 **Redfish** 로 보면 `bmc` / `firmware` / `power` 가 풍부하고 OS 정보는 없다.
@@ -801,7 +801,7 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 
 ### 6.7 `data.thermal` (Redfish 전용)
 
-> 2026-06-14 (Track 4): 단일노드 thermal 수집 — 이전엔 multi_node(CSUS/Superdome) 경로만 수집했음.
+> 2026-06-14: 단일노드 thermal 수집 — 이전엔 multi_node(CSUS/Superdome) 경로만 수집했음.
 > Chassis/{id}/Thermal (신 펌웨어는 ThermalSubsystem). 미지원/미노출 벤더는 빈 `{temperatures:[], fans:[]}` (graceful).
 
 ```json

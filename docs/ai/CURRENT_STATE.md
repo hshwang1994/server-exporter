@@ -1,5 +1,23 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-12 — 독립 점검(지시서 2026-10-12): 결함 수정 P1~P15 · G1~G8 · 사람용 문서 재작성 · evidence 정리 · **main `46002a2b` → production P13 `b86c5942`**
+
+> 정본: `tests/evidence/2026-10-12-independent-audit.md` · `docs/reference/decision-log.md` 2026-10-12 · `docs/reference/live-validation.md` 2026-10-12 · `docs/operate/09-production-branch.md` 7절. 하네스 변경 0(검증 도구로만 사용).
+
+- **고친 것(production 반영)**: 파이프라인 — 중단 원인을 Jenkins 분류로만(`timeout` 경계의 비실제 중단 ↔ 실제 중단, P1) · 보존 1회(`seAttempt` handler, 빈 stash 금지, P2) · 준비 실패 단계 코드 93/94/95 와
+  새 시도 기록 없으면 앞 상태 재사용 금지(P3) · `report.kept` null 비교(P4) · rc 별 문구(P5) · 표식 쓰기 실패 구분(P6) · `callbackUrl` `?`/`#` 거부(P7) · Layer A 스크립트 부재 구분(P8) · `gather_state end` stderr(P9) ·
+  env 사본 요약(P10) · Portal 합성 404 구분(P11) · 입력 확인 엄격 파서(P12, sandbox 생성자 없음) · 상태별 문장(P13) · vault 안내 Secret text(P14) · `se_finalize.groovy` 필수(P15).
+  채널 — Redfish 첫 인증 2xx 뒤 403 은 partial(G1) · Linux memory 비특권(G2) · Power·Thermal 둘 다 404 → not_supported(G3) · adapter capabilities = 채널 섹션(G4) · users 실패/미지원 구분(G5) ·
+  세대 토큰 단어 경계(G6) · 정규화 6건(G7) · field_dictionary enum · examples(G8) · `/etc/os-release` dash 호환.
+- **정리**: 읽히지 않는 fact · Jenkinsfile dead code · 참조 0 파일(`tests/expected` · phase5 스크립트 · `identifier_verify.sh` · `remote_identifier_test.py` · `tests/evidence/manifest.json` · 빈 README 3) · `requirements-test.txt` 2건 ·
+  작업 진행 기록만 담은 evidence 25건.
+- **문서**: README · REQUIREMENTS · docs/overview · docs/operate 01~09(07 업데이트 · 되돌리기 신설, 운영망 캡처는 develop/08) · docs/contract · docs/develop · 채널 README · schema README · tests README 를
+  합니다체 · 현재 구성 기준으로 재작성(설치 문서 환경 표기 세 구분). 사람용 문서 내부 어휘 0 · 깨진 링크 0(`verify_docs_references.py` 통과).
+- **확인한 것**: WSL ci_gate PASS(4,878 · 333) · 설치 Jenkins 실측(probe Job) · 임시 격리 verify Job 7사례(agent_lost 실제 연결 해제 포함) · main #520~#522 입력 확인 · 매트릭스 #528~#550 계약대로 ·
+  P12 명부 대조 비휘발 차이 = 의도한 것만(`hardware.uuid` 소문자 · 실패 host 의 `system` not_supported) · CI #52 SUCCESS · COMPLETE_PASS(전 단계 PASS) · 승격 P13 `b86c5942` · production canary #280 · 명부 #281~#286 · loopback 수신기 canary #287(checkout 전부 == P13 · 결과 수 == 접수 수 · main 재수집 #551~#555 와 대조 비휘발 차이 0).
+- **못 한 것 · 남은 것**: production Job 에서 실제 Portal 200 미확인(승격 시점에 Portal 테스트 수신 백엔드가 내려가 있어 실제 404 확정 거부만 기록, 저장소 수신기 200 으로 대체) · 고아 잠금 대기 경로 실기 미검증 · 하네스 `attempt_limit_preserve` 는 실제 timeout 경로를 흉내내지 않음(보고만) · baseline `thermal` 키 · hpe baseline adapter 재캡처 ·
+  설계 결정 항목(ESXi storage · Windows IP 없는 NIC · `max_speed_mhz`) · lab 부재 vendor.
+
 ## 일자: 2026-10-12 — 하네스 정리(Claude Code `/doctor` 2026-10-11 점검, 사용자 "모두 정리" 승인) · runtime 불변 · production P12 `410317a7` 그대로
 
 > 정본: `docs/ai/decisions/ADR-2026-10-12-rules-path-scoping.md` · CONVENTION_DRIFT DRIFT-025. 제품 코드 변경 0 — production 승격 없음(runtime tree `ab065f3d…` 동일).

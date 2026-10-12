@@ -1,5 +1,18 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-12 — 독립 점검 후보 `46002a2b` · 승격 P13 · 명부
+
+| 구분 | 결과 |
+|---|---|
+| WSL ci_gate(후보 working tree) | PASS — corpus 20/20 · unit/e2e/regression 4,878 통과 · 153 건너뜀 · 7 xfail · integration 333 · 3채널 syntax-check · 스키마 정합 · vendor 경계 · 하네스 일관성 |
+| 새 재현 시험 | Redfish 인증 뒤 403 · Power/Thermal 404 · adapter 세대 토큰(64 사례 전후표) · adapter capabilities ⊆ 채널 섹션 · Linux 비특권 memory · users 실패/미지원 · Jenkinsfile P4/P7/P10/P12 · run_gather 준비 코드 — 전부 통과 |
+| 설치 Jenkins 실측(probe Job, 삭제) | timeout 경계 비실제 중단 → retry 재호출 · `/stop` 전파 · Agent 해제 5분 뒤 shell step 종료 · sandbox `new ArrayList` 거부 · readJSON/JsonSlurper 관대함 비교 |
+| 임시 격리 verify Job(삭제) | gather_limit · attempt_limit_hang · stop_during_gather · race_stop_at_limit · marker_write_fail · agent_lost_during_preserve(실제 연결 해제) PASS · attempt_limit_lockwait 는 고아 잠금 재현 실패(재개 흐름만 확인) |
+| main Job #520~#522 | 입력 확인 실측: #520 FAILURE(sandbox 생성자) · #521 FAILURE(Groovy 줄바꿈 이스케이프) → 수정 · #522 SUCCESS |
+| main Job #528~#550(후보 `46002a2b`) | 15 시나리오 + 명부 계약대로 · checkout 전부 후보 SHA · P12 명부(#274~#279) 대조 비휘발 차이 = 의도한 것만(`hardware.uuid` 소문자 · 실패 host `system` not_supported) |
+| CI #46 · #47 · #48 · #49 · #50 · #51 · #52 | #46 G14 FAIL(주석 의존 단언 → 수정) · #47 Harness `prep_failed_on_resume` FAIL(P10 env 사본 순서 → 수정) + `outer_timeout` controller fetch timeout · #48 ABORTED(같은 SHA 의 E2E 포함 실행 #49 로 대체) · #49 COMPLETE_PASS(승격 증거 검사: S2 혼합 배치 · E2E-A2 직접 바인딩 부족 → #549 · #550 보강) · #50 ABORTED(Controller 재시작으로 제한 초과) · #51 UNSTABLE(controller 의 일시적 이름 풀이 실패로 prodtree 하네스 2건이 checkout 에서 끝나 미판정, 나머지 전부 PASS) · #52 SUCCESS · COMPLETE_PASS(전 단계 PASS) |
+| 승격 P13 · production #280~#287 | 승격 `b86c5942`(두 원격 · drift-check PROVENANCE) · canary #280 2/3(10.100.64.161 전원 꺼짐) · 명부 #281~#285 결과 수 == 접수 수(Linux A 7/8 · Linux B 4/7 · Windows 1/1 · ESXi 6/6 · Redfish 8/10, 실패는 전부 기존 또는 꺼진 대상) · Portal 수신 백엔드 미배포로 실제 404 확정 거부 1회(P11 ①) · loopback 수신기 canary #287 HTTP 200(본문 sha256 일치) · main 재수집 대조 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286(동시) 비휘발 차이 0 · #552↔#282 사용률 1건 |
+
 ## 2026-10-12 — 하네스 정리(`/doctor` 후속) · runtime 불변
 
 | 구분 | 결과 |

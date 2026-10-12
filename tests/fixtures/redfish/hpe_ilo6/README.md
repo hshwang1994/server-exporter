@@ -1,6 +1,6 @@
 # HPE iLO 6 fixture (2026-05-07)
 
-> Round 11 lab 검증 (DL380 Gen11 — `tests/fixtures/redfish/hpe/`).
+> 실장비(DL380 Gen11)에서 받은 fixture 는 `tests/fixtures/redfish/hpe/` 에 있습니다. 검증 기록은 `docs/reference/live-validation.md` 를 보세요.
 > 본 fixture 는 Storage standard + SmartStorage fallback / PowerSubsystem dual 변형 시뮬.
 
 ## 출처

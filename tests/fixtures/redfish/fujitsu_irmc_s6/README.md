@@ -43,6 +43,6 @@
 
 ## 검증 포인트
 
-- adapter 선택: `redfish_fujitsu_irmc` (firmware_patterns: `iRMC*S6*` 매칭 — M-E1)
+- adapter 선택: `redfish_fujitsu_irmc` (firmware_patterns: `iRMC.*S6.*` 매칭)
 - PowerSubsystem 도입 — `capabilities.power_subsystem: "conditional"` 분기 활성
-- OEM namespace `Oem.ts_fujitsu` 추출 (M-E2)
+- OEM namespace `Oem.ts_fujitsu` 추출

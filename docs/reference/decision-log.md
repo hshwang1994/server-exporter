@@ -8,7 +8,7 @@
 
 > 최종 갱신: 2026-10-10
 
-## 현재 유효한 결정 — 주제별 요약 (2026-10-11 기준)
+## 현재 유효한 결정 — 주제별 요약 (2026-10-12 기준)
 
 아래 표는 지금 유효한 결정을 주제별로 한 줄씩 적고, 근거가 적힌 날짜 절을 가리킨다. 역사와 경위는 각 날짜 절에 그대로 있다(내용 삭제 없음).
 
@@ -17,26 +17,27 @@
 | 도달성 판정 | 관리 TCP 응답 OR ICMP Echo. ICMP 는 TCP 전 포트 무응답일 때 1회, Gate 가 아니다 | 2026-09-03 |
 | Redfish 자격 축 | 표준 수집 계정은 전역 1벌(`vault/common/redfish/standard.yml`), 복구 계정은 Location×Vendor(`vault/<loc>/redfish/<vendor>.yml`, `role: recovery`) | 2026-08-12 · 2026-10-11 D-17 |
 | 계정 쓰기 | 보류(GP-57). 실장비에 인증 실패 유발 금지. 쓰기 전제는 "표준 인증 시도 AND 구조화된 401 AND 복구 인증 성공" | 2026-08-12~13 |
-| status 판정 | 시나리오 A/B/C/D 매트릭스 — 실제 섹션 결과로 success/partial/failed, errors 수로 판단하지 않음 | 2026-05-06 |
+| status 판정 | 시나리오 A/B/C/D 매트릭스 — 실제 섹션 결과로 success/partial/failed, errors 수로 판단하지 않음. Redfish 는 첫 인증 2xx 뒤 하위 403 을 섹션 실패(partial)로, Power·Thermal 둘 다 404 는 not_supported 로 | 2026-05-06 · 2026-10-12 |
 | envelope | 13 필드 고정 · 새 키 추가는 호환성 작업 밖(사용자 승인) | 2026-05-01 · 2026-10-03 |
-| 시간 한계 | 실행 기반 대기 합 72h · 실제 수집 누적 6h · 결과 처리 1h, 빌드 · 단계 timeout 없음, 같은 Runner · 작업 폴더 재개 | 2026-10-05~07 |
-| 결과 전달 | 요청 1 = 결과 1, `post { always }` 전달, Portal 2xx 로 종결(저장 확인은 계약 밖), 회수 매체는 같은 검문으로 평가 | 2026-10-03 · 2026-10-05 · 2026-10-10 |
+| 시간 한계 | 실행 기반 대기 합 72h · 실제 수집 누적 6h · 결과 처리 1h, 빌드 · 단계 timeout 없음, 같은 Runner · 작업 폴더 재개. 중단 원인은 Jenkins 의 분류로만(경과시간 · 노드 상태로 확정 안 함), 보존은 handler 한 곳에서 1회 | 2026-10-05~07 · 2026-10-12 |
+| 결과 전달 | 요청 1 = 결과 1, `post { always }` 전달, Portal 2xx 로 종결(저장 확인은 계약 밖), 회수 매체는 같은 검문으로 평가. 404 는 서버가 돌려준 것만 확정 거부, 플러그인이 합성한 404(이름 풀이 실패)는 통신 실패 | 2026-10-03 · 2026-10-05 · 2026-10-10 · 2026-10-12 |
 | production | `prodgen` 생성 tree 만, 고정 main SHA, gate G01~G20 COMPLETE_PASS, 양 원격 동일, 승격 직후 canary | 2026-10-03 · 2026-10-04 |
 | Jenkinsfile 사본 | `Jenkinsfile_portal_Byid` 유지 · portal 과 동기화(시험 강제) | 2026-10-09 |
 | Add-on | 전역 `ADDON_REPO_URL` 하나로 켜고 빌드마다 받는다, 실패는 UNSTABLE + Add-on 없이 수집 | 2026-09-29 · 2026-09-30 |
 | Runner 선택 | `loc` 의 agent_label && target_type 능력 라벨, venv 는 `activate_ansible_venv.sh` 가 고른다 | 2026-09-28 · 2026-09-30 |
 | vendor 표시값 | 내부 canonical(`hpe`) ↔ 호출자 표시값(`hp` · `hpCsus`) 분리 | 2026-06-04 |
-| adapter | 코드가 읽는 절만(`match` · `capabilities.sections_supported` · `vendor_notes` …), 점수 `priority×1000 + specificity×10 + match` | 2026-05-11 · 2026-10-10 D-14 · 2026-10-11 D-17 |
+| adapter | 코드가 읽는 절만(`match` · `capabilities.sections_supported` · `vendor_notes` …), 점수 `priority×1000 + specificity×10 + match`. 세대 토큰은 단어 경계, 버전 숫자 패턴은 보조. `capabilities.sections_supported` 는 채널 섹션과 일치 | 2026-05-11 · 2026-10-10 D-14 · 2026-10-11 D-17 · 2026-10-12 |
 | 멀티-노드(RMC) | `data.multi_node` 컨테이너로 CSUS 3200 / Superdome Flex 전 Partition · Manager · Chassis 수집 | 2026-05-12 · 2026-06-09 |
 | 실패 문장 | `failure_code` + 대상 종류 + 세부 사유로 고르는 중앙 카탈로그, 사용자 문장에 기술값 금지 | 2026-08-12 · 2026-09-21 |
 | 식별자 · 단위 | DMI 자리표시자 집합 한 곳(`identity_normalizer`), JEDEC (bank, id) 표, firewall_state = 유효 정책 | 2026-10-10 D-03 · D-10 · LX-F12 |
 | ESXi | `vmware_host_config_info` 는 `esxi_hostname` 필수, vCenter 대상은 protocol 단계 거부 | 2026-10-10 D-01 · ESXI-03 |
-| 문서 · 하네스 | 사람용 문서는 `.claude`/`docs/ai` 를 참조하지 않는다, 세어 놓은 수는 적지 않는다, 삭제는 참조 0 · 고유 내용 확인 뒤 | 2026-08-13 · 2026-10-11 D-19 |
+| 문서 · 하네스 | 사람용 문서는 `.claude`/`docs/ai` 를 참조하지 않는다, 세어 놓은 수는 적지 않는다, 삭제는 참조 0 · 고유 내용 확인 뒤. 설치 문서의 환경 표기는 확인한 조합 / 필수 요구 / 선택 · 미확인 세 구분 | 2026-08-13 · 2026-10-11 D-19 · 2026-10-12 |
 
 ## 날짜별 결정 색인
 
 | 날짜 · 제목 |
 |---|
+| 2026-10-12 — 독립 점검: 중단 원인 판정 · 보존 1회 · Portal 합성 404 · Redfish 403/404 · 사람용 문서 재작성 · production P13 |
 | 2026-10-10~11 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-22 |
 | 2026-10-09 — 운영 로그 문구 정리 (수집 Job · 수집 스크립트 · CI) |
 | 2026-10-08 — CI 실행시간 개선(Harness 2-lane · 생성물 검증 선행 · 빌드별 격리 · 후보 고정) · production P8 |
@@ -86,6 +87,44 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-12 — 독립 점검: 중단 원인 판정 · 보존 1회 · Portal 합성 404 · Redfish 403/404 · 사람용 문서 재작성 · production P13
+
+### 배경
+- 사용자 지시서 "ClovirONE Gathering 독립 점검 및 개선 지시서"(2026-10-12)와 보정 지시 3건. 이전 대화의 결론을 작업 목록으로 쓰지 않고 현재 코드와 실행 결과로 결함을 확정했다.
+  하네스 개선 · 성능 관측은 범위 밖, `failure_reason` 문장 · 코드값 · JSON 구조 · Stage/Job 이름은 불변. 점검 기준은 main `c1f818cb`(runtime = production P12 `410317a7`).
+- 증거 정본: `tests/evidence/2026-10-12-independent-audit.md`(결함표 · 설치 Jenkins 실측 · 임시 격리 검증 · 빌드 번호 · 대조). 임시 Jenkins 자원(probe Job · verify Job ·
+  검증 전용 Agent `se-audit-tmp-agent`)은 증거를 저장소 밖에 확보한 뒤 삭제했다.
+
+### 결정 (작성자 결정 — 사용자 지시는 별도 표기)
+1. **중단 원인은 Jenkins 가 중단 예외에 실어 보내는 분류로만 판정한다**(사용자 보정 2 · 3): 경과시간 · Runner 상태 · `currentBuild.result` 는 어느 조합도 원인 확정에 쓰지 않는다(보조 기록).
+   `timeout` 블록 경계에서 "실제 중단 아님" 으로 표시된 예외는 조건 없는 `retry(count: 2)` 가 본문을 다시 부르는지로 식별해 `attempt_limit`, 그대로 던져지면 원인 미확인
+   `aborted`(문구 "빌드가 중단됐습니다(사용자 취소 또는 그 밖의 중단)"). Agent 장애는 기존 `retry(agent(), nonresumable())` 만 판정하고 그 재시도 사실을 특정 원인으로 적지 않는다.
+   설치 Jenkins 에서 동작을 먼저 실측(evidence 2-2 절)한 뒤 적용했고, 새 Script Approval · 내부 API 는 없다.
+2. **보존은 `seAttempt` 의 handler 한 곳에서 1회**: `seAttemptBody` 의 catch 는 끊긴 구간과 시각만 기록하고 다시 던진다. 전달할 파일이 없으면 stash 하지 않고(`allowEmpty: false`),
+   보관으로 보존이 확인되기 전 `deleteDir` 하지 않으며, 원인 미확정이면 작업 폴더를 유지한다. 보존 도중 Agent 가 끊기면 같은 작업 폴더에서 보존만 다시 한다(장애 전 확정 Host 재수집 없음).
+3. **준비 실패와 재시도**: `run_gather.sh` 준비 단계마다 종료 코드(93 chmod · 94 임시 파일 · 95 잠금)와 errno 문장을 남긴다. 파이프라인은 새 시도 기록이 없으면 앞 시도 상태를
+   재사용하지 않고, 확인된 준비 오류는 `prep_failed`, 원인 미확인 종료는 `failed_run` 이다. 재시도 상한을 두지 않으며 `sh` 가 예외로 끝나면 원본 예외를 기존 실행 기반 경로로 넘긴다.
+4. **표식(`.se_fin.json`) 쓰기 실패**: `FlowInterruptedException` 은 즉시 재전달. `IOException` 은 내부 원인(cause · suppressed)에 remoting/연결 종료가 없고 같은 폴더의 기존 step
+   (`fileExists`) 1회가 정상일 때만 경고 뒤 계속, 그 밖은 원본 예외 그대로 — 예외 클래스 이름만으로 가르지 않는다(사용자 보정 3).
+5. **Portal 404 세 경우**: 서버가 돌려준 404 = 확정 거부(재전송 없음, 기존) · http_request 플러그인이 이름 풀이 실패를 합성한 404(서버 헤더 없음 + 본문이 플러그인 고정 문구) =
+   통신 실패로 기존 재시도 범위 · 예외 = 기존 경로. 판별은 응답 형태로만 하고 플러그인 버전 번호는 쓰지 않는다. 실환경 재현: main #541(`portal.invalid`) · #548(실제 404).
+6. **입력 확인 파서**: `readJSON`(json-lib, 관대) 대신 `groovy.json.JsonSlurper` 기반 엄격 파서(제어 문자 · 첫 값 뒤 내용 거부). sandbox 가 거부하는 생성자를 쓰지 않는다
+   (`new ArrayList` → main #520 FAILURE 실측 뒤 리터럴로).
+7. **Redfish 상태 판정**: 첫 인증 응답이 2xx 면 하위 리소스 403 은 그 섹션 실패(partial)이고 수집한 데이터를 버리지 않는다(종전 host 전체 failed). 첫 인증 401/403 은 종전대로.
+   Power · PowerSubsystem(Thermal) 둘 다 404 는 오류로 돌려 `not_supported`(D-07 의 의도를 코드가 실제로는 `success` + null 로 내던 결함). adapter `capabilities.sections_supported` 는
+   채널 섹션(`system` 없음 · `thermal` 있음)과 일치하고 시험이 고정한다.
+8. **Linux memory · users**: memory 는 비특권 `/proc/meminfo` 로 채우고 특권 실패는 `errors[]`(`cause=privilege_failed`)로만 남긴다. users 는 `getent` 부재만 `not_supported`,
+   그 밖 실패는 `failed` + errors 1건.
+9. **어댑터 세대 매칭**: 세대 토큰(`iLO 6` · `iDRAC 9` · `XCC3`)은 단어 경계, 펌웨어 버전 숫자 패턴은 보조. fixture 64 사례 전후표에서 바뀐 것은 오탐 3건뿐이고 generic · vendor fallback 은
+   유지. 지원 범위는 좁히지 않았다(사용자 보정 1).
+10. **사람용 문서**: 설치 · 운영 가이드를 Controller(기존 명칭 Master) · Runner 기준으로 현재 코드와 실제 Jenkins 구성에 맞춰 재작성(합니다체). 환경 표기는 "확인한 조합 / 필수 요구(근거) /
+    선택 · 미확인" 세 구분이며 임의 CPU · 메모리 · timeout 권장값은 적지 않는다. 작업 진행 기록만 담은 evidence 25건은 삭제, 장비 거동 증거 · 계약 · 복구 절차는 보존.
+11. **production P13** = main `46002a2b` 승격 → `b86c5942`. 근거: 매트릭스 main #528~#550 · CI #52(COMPLETE_PASS) · production canary #280 · 명부 #281~#286 · loopback 수신기 canary #287. 승격 시점에 Portal 테스트 수신 백엔드가 내려가 있어 production 빌드는 실제 404 를 확정 거부로 기록했고(P11 ① 동작), 전송 200 은 저장소 `callback_sink.py` 수신기(#287)로, 데이터는 같은 대상의 main 재수집(#551~#555)과 대조해 확인했다.
+
+### 유지(변경하지 않음)
+- 72시간 실행 기반 대기 · 같은 Runner 작업 폴더 재개 · Runner 간 상태 이전 없음 · Precheck 실패는 그 Host 실패 확정 · 시간 한계 셋(2026-10-05~07).
+- 설계 결정이 필요한 항목은 보고만: ESXi storage 상태가 datastore 모듈에만 의존 · Windows IP 없는 NIC 제외 · `cpu.max_speed_mhz` 의미 채널 간 차이 · baseline JSON 의 `thermal` 키 부재.
 
 ## 2026-10-10~11 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-22
 

@@ -1,5 +1,15 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## 독립 점검 (2026-10-12) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-12-independent-audit.md` 5절. 수정 · 검증 · 승격(P13 `b86c5942`)은 끝났고 아래만 남는다.
+
+- [ ] **production Job 의 실제 Portal 200 재확인** — Portal 테스트 수신 백엔드(10.100.64.151:8080 의 `clovirone` 앱)가 다시 배포되면 production Job canary(os 3) 1회로 확인. 승격 시점에는 내려가 있어 저장소 `callback_sink.py` 수신기(#287)로 대체했다
+- [ ] **고아 잠금 대기 경로 실기 검증** — stub 이 이 환경에서 잠금을 쥔 고아를 만들지 못했다. 재현 수단이 생기면 임시 격리 Job 으로(운영 Runner 단절 금지)
+- [ ] **baseline `thermal` 키 · `hpe_baseline.json` adapter 재캡처** — 실측 캡처 뒤 갱신(실측 없이 고치지 않음)
+- [ ] **설계 결정 필요(변경 안 함)** — ESXi storage 상태의 datastore 모듈 의존 · Windows IP 없는 NIC 제외 · `cpu.max_speed_mhz` 의미 채널 간 차이
+- [ ] **하네스 보고(이번 범위에서 개선 금지)** — `attempt_limit_preserve` 시나리오가 실제 timeout 경로를 흉내내지 않음 · Agent 연결 해제 시나리오는 실제로 끊지 않음
+
 ## 전체 감사 (2026-10-10) — 남은 항목
 
 > 정본: `tests/evidence/2026-10-10-full-audit.md`. 지시서 §16 완료 조건 11개는 대장(`evidence-audit-2026-10-10/ledger.json` requirements)에 증거 ID 로 묶는다.

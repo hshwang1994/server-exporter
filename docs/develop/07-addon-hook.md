@@ -78,7 +78,7 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
 - `status` · `sections` · `diagnosis` 는 바뀌지 않는다. hook 은 조립이 끝난 뒤에 돌고 그 세 값에는 손대지 않는다 —
   `CHECKPOINT` 의 값이 그대로 OUTPUT 에 실린다 ([02-normalize-flow.md](02-normalize-flow.md)).
 - Add-on 이 실행 중 실패하면 rescue 가 격리한다. 그때까지의 중간 결과는 버리고 `errors[]` 1건만 남긴다.
-  2026-10-05 (8차 R3) 부터 hook 에는 시간 제한이 없다 — 오래 걸리는 Add-on 작업은 끝까지 기다린다. 끝나지 않는 Add-on 은 수집 실행 한계
+  2026-10-05 부터 hook 에는 시간 제한이 없다 — 오래 걸리는 Add-on 작업은 끝까지 기다린다. 끝나지 않는 Add-on 은 수집 실행 한계
   (최대 6시간)와 사용자 취소가 멈추고, 그 host 는 아래처럼 `CHECKPOINT` 로 복원된다(Add-on 오류 1건).
 - Add-on 결과를 `_output` 에 합치는 단계 자체가 실패해도 기본 결과는 그대로다. 결합은 자기 block 안에서 돌고, 실패하면
   "추가 수집 결과를 기본 결과에 합치지 못했습니다. 기본 수집 결과는 그대로입니다." 1건만 붙는다 (2026-10-05).
@@ -120,7 +120,7 @@ Ansible 이 짝 없는 surrogate 글자로 담는데, 그대로 돌려주면 콜
   `AnsibleParserError` 를 다시 던진다). 그래서 고객이 고치는 파일은 런타임에 읽는 설정 파일(`config/`)로
   두고, Add-on 사본의 `addon/tools/check_layout.py`(이 저장소 밖) 가 켜기 전에 태스크 YAML 과 설정 파일을 검사하며, Add-on 태스크 변경은
   Add-on 테스트를 통과한 뒤 `main` 에 올린다.
-- hook 자체의 시간 제한은 없다(2026-10-05 8차 R3 — 종전 태스크별 300 s `include_role … apply: timeout` 를 없앴다). Add-on 자체의 명령별 제한
+- hook 자체의 시간 제한은 없다(2026-10-05 — 종전 태스크별 300 s `include_role … apply: timeout` 를 없앴다). Add-on 자체의 명령별 제한
   (5분 — Linux 는 `timeout`, Windows 는 `async`)이 있다면 그것은 Add-on 의 설계다. 끝나지 않는 Add-on 은 수집 실행 한계(최대 6시간, `scripts/run_gather.sh`)가
   실행 전체를 INT 로 멈추고, 그 host 는 `CHECKPOINT` 로 복원된다 — 다른 host 의 결과는 그대로 전달된다. Linux 대상의 원격 명령은 그 실행의 SSH 연결을 닫아
   정리한다(`docs/operate/04-pipeline-runtime.md` "원격 명령 정리"). Add-on **준비**(`scripts/addon_checkout.sh`)의 제한은 다른 축이다: git 명령마다 30분,

@@ -1,6 +1,6 @@
 # Lenovo XCC (XCC1 + XCC2) fixture (2026-05-07)
 
-> Round 11 lab 검증 (XCC1 V2 — `tests/fixtures/redfish/lenovo/`).
+> 실장비(XCC1, ThinkSystem V2)에서 받은 fixture 는 `tests/fixtures/redfish/lenovo/` 에 있습니다. 검증 기록은 `docs/reference/live-validation.md` 를 보세요.
 > 본 fixture 는 XCC2 (ThinkSystem V3) 변형 시뮬 — web sources only.
 
 ## 출처

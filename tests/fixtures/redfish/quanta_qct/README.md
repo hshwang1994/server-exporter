@@ -46,7 +46,7 @@
 ## 검증 포인트
 
 - adapter 선택: `redfish_quanta_qct_bmc` (priority=80)
-- OEM 추출 우선순위: `Oem.Quanta_Computer_Inc` → `Oem.QCT` → `Oem.OpenBmc` (collect_oem.yml — M-F1)
+- OEM 추출 우선순위: `Oem.Quanta_Computer_Inc` → `Oem.QCT` → `Oem.OpenBmc` (collect_oem.yml)
 - Manager URI: `/redfish/v1/Managers/bmc` (OpenBMC 표준)
 - System URI: `/redfish/v1/Systems/system` (OpenBMC 표준)
 

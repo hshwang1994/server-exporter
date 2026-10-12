@@ -52,7 +52,7 @@
 ## 검증 포인트
 
 - adapter 선택: `redfish_hpe_superdome_flex` (priority=101, model_patterns: `^Superdome Flex.*` 매칭 — 2026-06-04 95→101, iLO6 catch-all 위로 상향)
-- OEM 추출 (M-G1 collect_oem.yml when 조건 매칭):
+- OEM 추출 (collect_oem.yml when 조건 매칭):
   - `_hpe_superdome_partition` → `Oem.Hpe.PartitionInfo` (Systems)
   - `_hpe_superdome_flex_node` → `Oem.Hpe.FlexNodeInfo` (Chassis)
   - `_hpe_superdome_global` → `Oem.Hpe.GlobalConfiguration` (Systems)

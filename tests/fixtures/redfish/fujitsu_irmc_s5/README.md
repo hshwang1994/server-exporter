@@ -43,7 +43,7 @@
 
 - vendor 감지: `Fujitsu` / `FUJITSU` → `fujitsu`
 - adapter 선택: `redfish_fujitsu_irmc` (priority=80)
-- OEM namespace: `Oem.ts_fujitsu` 추출 (collect_oem.yml — M-E2)
+- OEM namespace: `Oem.ts_fujitsu` 추출 (collect_oem.yml)
 - generation: iRMC S5 (대표 generation)
 - Power schema: legacy (S5 는 PowerSubsystem 미도입 — S6 에서 도입)
 
