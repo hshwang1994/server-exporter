@@ -1,523 +1,166 @@
-# 21. Vault 운영 — 자격증명 관리
+# 자격증명(Vault) 관리
 
-## 누가 읽나
+이 문서는 수집이 대상 서버(SSH, WinRM, vSphere, Redfish)에 접속할 때 쓰는 계정을 어디에 어떻게 두는지, 어떻게 고치고 확인하는지, 비밀번호를 바꿀 때 무엇을 해야 하는지 설명합니다.
+계정은 저장소 안의 `vault/` 디렉터리에 ansible-vault로 암호화해 두고, 복호화 비밀번호(마스터 비밀번호)는 Jenkins credential `server-gather-vault-password`(Secret text)에만 둡니다.
 
-server-exporter 가 SSH / WinRM / vSphere / Redfish 에 접속할 때 쓰는 **자격증명** 을 다루는 사람.
+## 1. 바뀐 값은 다음 실행부터 적용됩니다
 
-가장 자주 묻는 3가지:
+수집은 실행할 때마다 vault 파일을 디스크에서 읽어 복호화합니다. 결과를 fact 캐시나 다른 곳에 저장하지 않으므로, 파일을 고쳐 commit하고 Job이 그 커밋을 받으면 다음 빌드부터 새 값이 쓰입니다. 재기동이나 캐시 삭제는 필요 없습니다.
 
-1. vault 파일을 고쳤는데 다음 실행에 정말 반영되나?
-2. 정기 회전 (rotate) 어떻게 하나?
-3. 새 벤더 추가 시 vault 어떻게 만드나?
+이미 시작한 빌드는 시작할 때 읽은 값으로 끝까지 갑니다. 값을 바꾸는 작업은 진행 중인 빌드가 없을 때 하세요.
 
-이 문서를 끝까지 읽으면 다 푼다.
+## 2. 파일 배치
 
----
+수집은 요청의 `loc`(실행 위치)과 대상 종류로 파일 하나를 정해 엽니다. 다른 위치나 다른 벤더의 파일로 넘어가는 경로는 없습니다.
 
-## 1. "vault 고쳤는데 정말 반영됨?" — 한 줄 답
-
-**그렇다. 다음 `ansible-playbook` 실행부터 바로 적용된다.** 별도 캐시 무효화 작업 / 재기동 / 환경변수 갱신 필요 없다.
-
-이유: server-exporter 는 vault 결과를 어디에도 캐시하지 않는다. 매 실행마다 ansible-vault 가 디스크에서 읽어서 복호화한다.
-
-## 2. 의심될 때 직접 확인하는 3가지
-
-운영 중 "정말 반영된 게 맞나?" 가 의심되면 아래 §4.1 의 3 단서 (include_vars `cacheable` 부재 / `set_fact` host facts 부재 / vault decrypt 캐시 부재) 를 차례로 확인한다. 모두 "0 결과" 가 정상.
-
----
-
-## 3. Vault 종류
-
-### 3.1 현재 코드가 여는 경로 (2026-08-12~) — Location 축
-
-Credential 선택 Contract:
-
-```
-OS      = location + os_type   →  vault/<location>/os/<linux|windows>.yml
-ESXi    = location             →  vault/<location>/esxi.yml
-Redfish 표준 = 전역           →  vault/common/redfish/standard.yml      (수집에 쓰는 계정)
-Redfish 복구 = location+vendor →  vault/<location>/redfish/<vendor>.yml  (표준 계정 복구용)
-```
-
-Generation / Model / Firmware 는 **선택축이 아니다** (세대를 아는 시점이 인증 이후라 순환이다).
-
-디렉터리 깊이 = 선택축 개수. ESXi 만 평 파일인 이유는 2번째 축이 없기 때문이다.
-
-| 채널 | 경로 | 선택축 |
+| 채널 | 파일 | 결정 기준 |
 |---|---|---|
-| Linux | `vault/<loc>/os/linux.yml` | location + os_type |
-| Windows | `vault/<loc>/os/windows.yml` | location + os_type |
-| ESXi | `vault/<loc>/esxi.yml` | location |
-| Redfish (표준 수집) | `vault/common/redfish/standard.yml` | **없음 — 전역 1벌** |
-| Redfish (복구) | `vault/<loc>/redfish/<vendor>.yml` | location + vendor (canonical 9종) |
+| Linux | `vault/<loc>/os/linux.yml` | 위치 + OS 종류 |
+| Windows | `vault/<loc>/os/windows.yml` | 위치 + OS 종류 |
+| ESXi | `vault/<loc>/esxi.yml` | 위치 |
+| Redfish 표준 수집 계정 | `vault/common/redfish/standard.yml` | 없음. 모든 위치와 벤더에 공통인 파일 하나 |
+| Redfish 복구 계정 | `vault/<loc>/redfish/<vendor>.yml` | 위치 + 벤더 |
 
-- `<location>` 은 `common/vars/locations.yml` 에 등록된 ID 만 쓸 수 있다. Jenkins 가
-  `-e se_location=<id>` 로 전달한다. resolver 는 registry 에 없는 값이면 **경로를 만들지 않는다.**
-- `<vendor>` 는 `common/vars/vendor_aliases.yml` 의 canonical 키만 쓸 수 있다.
-- **다른 Location / 다른 Vendor 로 넘어가는 폴백 경로는 코드에 존재하지 않는다.**
-  `ic + dell` 이 실패해도 `cj + dell` 이나 `ic + hpe` 를 시도하지 않는다.
+- `<loc>`은 `common/vars/locations.yml`에 등록된 ID만 쓸 수 있습니다. 등록되지 않은 값이면 파일을 열지 않고 대상이 자격증명 단계 실패(`failure_code: CREDENTIAL_SET_UNAVAILABLE`)로 끝납니다.
+- `<vendor>`는 `common/vars/vendor_aliases.yml`의 대표 이름(`dell`, `hpe`, `lenovo`, `supermicro`, `cisco`, `huawei`, `inspur`, `fujitsu`, `quanta`)입니다.
+- Redfish는 계정이 둘입니다. 수집은 언제나 표준 계정으로 합니다. 복구 계정은 표준 계정이 BMC에서 거부됐을 때 표준 계정을 만들거나 비밀번호를 맞추는 데만 쓰고, 복구 계정으로 수집한 결과가 정상 결과로 나가는 경로는 없습니다. 벤더를 식별하지 못한 대상은 표준 계정 인증만 시도합니다.
+- `vault/.lab-credentials.yml`은 평문 참고 파일이며 `.gitignore`에 있어 commit되지 않고 수집도 읽지 않습니다.
 
-**vendor 9종**: dell / hpe / lenovo / supermicro / cisco / huawei / inspur / fujitsu / quanta
+### 위치 추가
 
-### 3.2 이전 flat 경로 (2026-08-12 삭제 완료)
+1. `common/vars/locations.yml`에 `<loc>: { agent_label: <라벨> }`을 추가합니다. ID는 `[a-z0-9_-]+`만 허용됩니다.
+2. `vault/<loc>/os/linux.yml`, `os/windows.yml`, `esxi.yml`, `redfish/<vendor>.yml`(필요한 벤더)을 만들어 암호화합니다(4절).
+3. Jenkins에 그 라벨과 수집할 대상 종류의 능력 라벨을 가진 Runner를 등록합니다([02-agent-node.md](02-agent-node.md) 8절).
 
-| 채널 | 이전 flat 경로 (2026-08-12 `adc99570` 에서 12 파일 삭제) | 지금 경로 (§3.1) |
-|---|---|---|
-| Linux | `vault/linux.yml` (삭제됨) | `vault/<loc>/os/linux.yml` |
-| Windows | `vault/windows.yml` (삭제됨) | `vault/<loc>/os/windows.yml` |
-| ESXi | `vault/esxi.yml` (삭제됨) | `vault/<loc>/esxi.yml` |
-| Redfish | `vault/redfish/<vendor>.yml` (9 vendor, 삭제됨) | 복구 `vault/<loc>/redfish/<vendor>.yml` + 표준 `vault/common/redfish/standard.yml` |
+코드는 바꾸지 않습니다.
 
-> 2026-10-10 정정: 이전 판의 이 표는 "이전 경로" 열에 **지금 경로**를 적고 있었다. 위 flat 경로가 `git log --diff-filter=D -- vault` 로 확인한 실제 삭제 목록이다.
+## 3. 파일 내용
 
-**현재 코드는 flat 경로를 읽지 않는다.** 런타임 폴백도 없다 — 신규 경로가 준비되지 않으면
-"조용히 옛 파일로 성공" 하는 대신 명시적으로 실패한다
-(`failure_code=CREDENTIAL_SET_UNAVAILABLE`). 이관 실패를 감추지 않기 위한 의도된 설계다.
-
-**2026-08-12 삭제 완료.** 실장비 6대 재검증 후 제거했다. 제거 후에도 정상 수집을 확인했다
-(`tests/evidence/2026-08-12-redfish-standard-account-separation.md`).
-`vault/.lab-credentials.yml` 은 resolver 대상이 아니라 유지한다.
-이전 동작 복원이 필요하면 git 이력에서 되살린다.
-
-### 3.3 Location 추가 절차
-
-1. `common/vars/locations.yml` 에 3줄 추가 (`<id>: { agent_label: <label> }`)
-2. `vault/<id>/...` 생성 + 암호화
-3. Jenkins 에 해당 label agent 등록
-
-**코드 수정 0줄.** Python / Playbook / Jenkinsfile 어느 것도 바뀌지 않는다.
-
-### 3.3.1 Redfish 는 계정 축이 둘이다 (2026-08-12)
-
-```
-vault/common/redfish/standard.yml   ← 표준 수집 계정 (role: primary 1개) — **전역 1벌**
-vault/<loc>/redfish/<vendor>.yml    ← 복구 계정 (role: recovery 만)
-```
-
-- **표준 수집 계정**: 모든 Location + 모든 Vendor 공통. 최종 Gathering 은 **반드시** 이
-  계정으로 수행된다. 이 파일 하나만 고치면 전 사이트·전 벤더에 반영된다.
-- **복구 계정**: 목적이 수집이 아니라 **표준 계정을 만들거나 되살리는 것**이다.
-  Location + Vendor 별로 다르다.
-- 복구 계정으로 수집한 결과가 정상 결과로 나가는 경로는 **없다.** 복구가 확인되면
-  표준 계정으로 재인증·재수집한다.
-- 복구 vault 에 `role: primary` 나 legacy `ansible_user` 를 두지 마라 — 표준 계정
-  중복이 되고 코드는 그것을 표준 대용으로 쓰지 않는다.
-
-OS / ESXi 는 축이 하나뿐이라 구조가 그대로다 (`<loc>/os/<type>`, `<loc>/esxi`).
-
-비밀번호를 바꿀 때: 표준 계정은 `vault/common/redfish/standard.yml` **1곳**,
-복구 계정은 해당 Location+Vendor 파일만 고친다.
-
-### 3.4 Location 별 운영 값 관리 (flat → Location 이관은 끝났다)
-
-> **상태 (2026-10-10 실측)**: 4 Location (`ic / cj / yi / git`) × 12 + 전역 표준 1 = **49 파일**. 전부 현재 마스터 키로 복호화되고
-> 구조 검사(`accounts[]` · role · label)를 통과한다. flat 12 파일은 2026-08-12 (`adc99570`) 에 삭제됐다 — **더 지울 파일은 없다.**
-> Location 별 복구 값은 이미 서로 다르다 (복호화 결과의 해시만 비교했다 — 값은 보지 않았다). 2026-08-12 Pilot 때 네 Location 에 같은 값을
-> 둔 것은 경로 분기(`loc` → agent label → `se_location` → vault 경로 → 복호화 → 인증) 검증이 목적이었던 당시 상태다.
->
-> **2026-10-10 정정**: 이전 판의 "4단계 — flat vault 제거" 는 삭제 대상으로 `vault/<loc>/os/linux.yml` · `vault/<loc>/os/windows.yml` ·
-> `vault/<loc>/esxi.yml` · `vault/<loc>/redfish/*.yml` 를 적고 있었다. 그 경로는 **현재 운영 경로**다 (§3.1). 그대로 따랐다면 운영 자격을 지웠을 것이다.
-> 실제 삭제됐던 flat 경로는 §3.2 표의 왼쪽 열이다.
-
-> **2026-10-04 — 청주 Location `chj` → `cj`**: registry 키·`agent_label`·`vault/cj/`(12 파일, 암호문 blob 동일 · 재암호화 없음) 만 바꿨다. alias 는 두지 않았으므로
-> `loc=chj` 요청은 미등록 Location 으로 **fail-closed** 다. 반영 순서: ① 요청 `loc` 값을 만드는 쪽(공급자) 확인 ② 실 청주 Runner 에 라벨 `cj`(기존 라벨 유지)
-> ③ 전환 시각 합의·진행 중 `chj` 빌드 완료 대기 ④ 코드 반영(main → 승격) ⑤ `cj` 빌드 Resolve 성공·`chj` 요청 0건 확인 ⑥ 원복 = `git revert`/`prodgen restore` + 공급자 값 복귀.
-> alias 가 없으므로 무중단은 약속하지 않는다. 고객사 전달 자료에도 같은 내용을 적는다 (docs/operate/09).
-
-**값을 바꾸거나 Location 별로 갈라 쓸 때** — 파일을 옮기거나 다른 Location 에서 복사하지 않는다. 다른 Location 의 값을 복사하는 것은
-잘못된 값을 그 Location 에 심는 일이다.
-
-**1단계 — 값 확정 · 편집** (운영 담당자)
-
-```bash
-# 있는 파일은 edit 다 (create 는 §3.3 의 새 Location 에만)
-ansible-vault edit vault/<loc>/os/linux.yml
-ansible-vault edit vault/<loc>/os/windows.yml
-ansible-vault edit vault/<loc>/esxi.yml
-ansible-vault edit vault/<loc>/redfish/dell.yml          # 복구 계정 — 필요한 vendor 만큼
-ansible-vault edit vault/common/redfish/standard.yml     # 표준 수집 계정 — 전역 1곳 (§3.3.1)
-```
-
-파일 내부 스키마는 바뀌지 않았다 (§7). `accounts` 배열 **순서 = 인증 시도 순서**다 — 코드가 재정렬하지 않는다.
-
-**2단계 — 구조 / 암호화 검증** (Secret 값은 출력하지 않는다)
-
-```bash
-# 어떤 경로가 비었는지 (복호화 없이)
-python scripts/ai/vault_decrypt_check.py --layout-only
-
-# 복호화 + accounts 스키마 + role + label 정합 — 마스터 키는 권한 600 임시 사본으로 넘기고 끝나면 지운다
-python scripts/ai/vault_decrypt_check.py --password-file <임시 사본>
-```
-
-> `scripts/ai/vault_decrypt_check.py` 는 저장소에 들어 있다 (2026-08-12 하드코딩 키 제거 뒤 추적). Windows 드라이브를 WSL 에서 열면
-> 파일마다 실행 비트가 붙어 `--vault-password-file` 이 키 파일을 **스크립트로 실행**하려다 `Exec format error` 로 실패한다 — WSL 쪽 경로에
-> 600 사본을 만들어 넘긴다.
-
-검사 항목: `$ANSIBLE_VAULT` 헤더 / 복호화 성공 / `accounts[]` 각 항목의
-`username·password·label·role` / `role ∈ {primary, recovery, secondary}` /
-`primary` 1개 이상 / Redfish label 이 vendor 허용 집합(§6.5)과 정합 /
-`accounts[0].role != primary` 경고.
-
-Location 별 값이 같은지 볼 때는 값이 아니라 해시를 비교한다:
-
-```bash
-for loc in ic cj yi git; do ansible-vault view --vault-password-file <임시 사본> vault/$loc/redfish/dell.yml | sha256sum; done
-```
-
-**3단계 — 실장비 확인**
-
-값을 바꾼 Location × 채널마다 1대씩 실제 수집을 돌려 확인한다:
-
-- `diagnosis.details.credential_scope` 가 기대 값인가 (`<loc>/os/linux` 등)
-- 요청 target 수 == 결과 envelope 수
-- 실패 경로: 없는 Location 으로 빌드 → `Resolve Location` 단계에서 즉시 실패 (agent 대기 없음)
-
-**Unit test 통과는 실장비 검증이 아니다.**
-
-## 4. Vault 변경이 다음 실행에 바로 반영되는 이유
-
-### 4.1 자동 반영 보장 3 단서
-
-vault 변경 시 다음 run 자동 반영을 보장하는 3 단서. 회전 후 / 의심 시 검증:
-
-#### 단서 1: include_vars cacheable 옵션 부재
-
-```bash
-grep -rn 'cacheable' common/tasks/credential/
-# 기대: 0 결과
-```
-
-- `cacheable: yes` 시 fact_cache (Redis) 에 host facts 로 저장 → 다음 run 에서도 stale vault 사용 위험
-- 정본: `common/tasks/credential/load_one.yml` (`include_vars` 호출에 `cacheable` 옵션 없음 — 매 run 디스크 read)
-
-#### 단서 2: set_fact host facts 미등록
-
-```bash
-grep -rn 'cacheable' common/tasks/credential/ redfish-gather/tasks/ common/tasks/normalize/
-# 기대: 0 결과
-```
-
-- `_cl_vault_data` / `_cred_accounts` / `_rf_accounts` 변수는 task scope 만
-- host facts (`ansible_facts.*`) 또는 `cacheable: yes` 등록 금지
-- 정본: `redfish-gather/tasks/load_vault.yml:64-81` (`set_fact` 에 `cacheable` 옵션 없음)
-
-#### 단서 3: ansible-vault decrypt 캐시 부재
-
-```bash
-grep -rn 'vault_password_file\|vault_identity\|VAULT_PASSWORD_FILE' ansible.cfg
-# 기대: vault_password_file 만 있어야 함 (decrypt 캐시 옵션 없음)
-```
-
-- Ansible 은 vault decrypt 결과 캐시 안 함 (default)
-- vault password file 만 있고 decrypt 결과 캐시 옵션 없으면 매 run 새로 decrypt
-
-### 4.2 자동 반영 처리 과정 (Mermaid)
-
-> 이 그림이 말하는 것: vault/<loc>/redfish/<vendor>.yml 파일을 매 ansible run 마다 새로 읽어 `_rf_accounts` 로 정규화한다. 캐시 없음 — 다음 run 자동 반영.
-
-```mermaid
-flowchart TD
-    EDIT([vault/<loc>/redfish/dell.yml<br/>password 변경]):::ok
-    RUN_END([현재 run 종료<br/>_rf_vault_data / _rf_accounts 폐기]):::default
-    NEW_RUN([ansible-playbook run N+1 시작]):::ok
-    INC[["include_vars<br/>vault/<loc>/redfish/dell.yml<br/>(디스크 read — 캐시 없음)"]]:::ext
-    DECRYPT[["ansible-vault decrypt<br/>(매 run 수행 — 캐시 없음)"]]:::ext
-    DATA[/"_rf_vault_data<br/>(task scope, no_log)"/]:::default
-    NORM["set_fact _rf_accounts<br/>= vault.accounts list<br/>(task scope, no host facts)"]:::default
-    USE([try_one_account.yml<br/>새 password 로 BMC 인증]):::ok
-
-    EDIT --> RUN_END --> NEW_RUN --> INC
-    INC --> DECRYPT --> DATA --> NORM --> USE
-
-    classDef ok fill:#dfd,stroke:#3c3,stroke-width:2px,color:#000
-    classDef default fill:#eee,stroke:#999,stroke-width:2px,color:#000
-    classDef ext fill:#def,stroke:#39c,stroke-width:2px,color:#000
-```
-
-### 4.3 단일 run 내 vault 변경 (반영 안 됨)
-
-- 한 run 시작 후 vault 파일을 mid-run 변경해도 같은 run 내 반영 안 됨 (이미 include_vars 한 후 task 변수 캐시)
-- 다음 run 부터 반영
-- → **회전은 ansible-playbook 종료 후 수행 권장**
-
-## 5. Vault 회전 시나리오
-
-상세 절차는 `rotate-vault` skill 참조. 본 절은 운영 요약.
-
-### 5.1 시나리오 A: ansible-vault password rekey (vault 자체 password 변경)
-
-```bash
-# 1. 백업
-cp vault/<loc>/redfish/dell.yml /tmp/dell-vault.bak
-
-# 2. 새 password 로 rekey
-ansible-vault rekey vault/<loc>/redfish/dell.yml
-
-# 3. Jenkins credentials 갱신 (server-gather-vault-password — Secret text)
-# 4. 검증
-ansible-vault view vault/<loc>/redfish/dell.yml
-```
-
-### 5.2 시나리오 B: 외부 BMC 사용자 자격증명 회전
-
-```bash
-# 1. 외부 시스템 (BMC iDRAC / iLO / XCC / CIMC) 에서 사용자 password 변경
-#    (BMC 운영자가 수행 — server-exporter 는 read-only)
-
-# 2. 새 자격증명으로 vault 다시 encrypt
-ansible-vault edit vault/<loc>/redfish/dell.yml
-#    안에서 vault_redfish_password 또는 accounts[].password 갱신
-
-# 3. 검증 — 다음 ansible run 에서 자동 반영
-ansible-playbook redfish-gather/site.yml \
-  -i ... -e "target_ip=10.x.x.1" \
-  --vault-password-file ~/.vault_pass
-
-# 4. evidence 기록
-echo "$(date +%Y-%m-%d): Dell vault rotation (BMC user 변경)" \
-  >> tests/evidence/vault-rotation-log.md   # 첫 회전 때 만든다 (아직 없다)
-```
-
-### 5.3 시나리오 C: 새 vendor vault 추가
-
-새 vendor 추가 절차([../develop/04-add-vendor.md](../develop/04-add-vendor.md)) 중 vault 단계.
-
-```bash
-ansible-vault create vault/<loc>/redfish/<vendor>.yml
-# 안에 입력:
-# accounts:
-#   - username: "infraops"
-#     password: "..."
-#     label: "primary"
-#     role: "primary"
-#   - username: "admin"
-#     password: "..."
-#     label: "recovery"
-#     role: "recovery"
-```
-
-## 6. 회전 주기 권고
-
-| Vault | 권장 주기 |
-|---|---|
-| ansible-vault password (마스터) | 분기 |
-| BMC / Linux / Windows / ESXi 자격증명 | 반기 또는 사고 시 |
-| 새 vendor vault | 추가 시점 |
-
-## 6.5. 9 vendor recovery 자격 매트릭스 (cycle 2026-05-11 — M-A1~A6)
-
-> 사용자 명시 (2026-05-11): vendor 공장 기본 자격으로 vault 임시 recovery 자격을 추가. primary `infraops` 비밀번호는 전 vendor 통일 (평문은 vault 안에만 — 2026-08-11 Phase 6-B 로 본 문서에서 제거).
->
-> 본 매트릭스는 **공장 기본 / 매뉴얼 default** 출처. 사이트 BMC 가 customer-specific 자격으로 변경되면 recovery 는 BMC reset 후 회복 시점에만 작동.
-
-### 9 vendor 통일 정책
-
-| 항목 | 값 |
-|---|---|
-| primary username | `infraops` (모든 vendor 통일) |
-| primary password | `<vault/<loc>/redfish/<vendor>.yml accounts[0].password>` (평문 미기재 — 2026-08-11 Phase 6-B) |
-| vault password (ansible-vault) | `<Jenkins Credential: server-gather-vault-password>` (평문 미기재 — 2026-08-11 Phase 6-B) |
-| recovery 정책 | vendor 공장 기본 자격 + (기존) lab/사이트 운영 자격 (Additive) |
-
-### vendor 별 recovery 자격 (공장 기본)
-
-| vendor | recovery 자격 | label | 출처 |
-|---|---|---|---|
-| **Dell** | root / calvin | `dell_fallback_2` | Dell PowerEdge / iDRAC 공식 매뉴얼 (역사적 default) |
-| **HPE** | admin / admin | `hpe_factory` | HPE iLO User Guide (legacy default — iLO5+ 첫 로그인 강제 변경) |
-| **Lenovo** | USERID / PASSW0RD | `lenovo_factory` | Lenovo XCC / IMM User Guide ('0' = 숫자 zero) |
-| **Supermicro** | ADMIN / ADMIN | `supermicro_factory` | Supermicro BMC User Guide (일부 펌웨어는 sticker 별도) |
-| **Cisco** | admin / password | `cisco_factory` | Cisco UCS / CIMC User Guide |
-| **Huawei** | Administrator / Admin@9000 | `huawei_factory` | Huawei iBMC Redfish API user guide |
-| **Inspur** | admin / admin | `inspur_factory` | Inspur server BMC user guide |
-| **Fujitsu** | admin / admin | `fujitsu_factory` | Fujitsu PRIMERGY iRMC user guide |
-| **Quanta** | admin / admin | `quanta_factory` | Quanta QCT server user guide |
-
-### 기존 vendor 의 다중 recovery (보존 — Additive only)
-
-5 사이트 검증 vendor 는 cycle 2026-04-29 ~ 2026-05-06 누적된 lab / 사이트 운영 자격이 보존됨:
-- **Dell**: 4 recovery (dell_fallback_1, dell_fallback_2, dell_current, lab_dell_root)
-- **HPE**: 3 recovery (hpe_fallback, hpe_current, hpe_factory)
-- **Lenovo**: 3 recovery (lenovo_fallback, lenovo_current, lenovo_factory)
-- **Supermicro**: 1 recovery (supermicro_factory — cycle 2026-05-11 신규)
-- **Cisco**: 2 recovery (cisco_current, cisco_factory)
-
-### vendor default 계정 자동 생성 메커니즘
-
-primary `infraops` 자격이 BMC 에 없으면 (= 사이트 BMC 초기 상태) recovery 자격으로 fallback → `account_service.yml` 가 자동으로 BMC 에 `infraops` 계정 + vault 의 비밀번호 + `Administrator` role 로 PATCH/POST.
-
-처리 순서:
-
-```text
-try_one_account.yml (accounts[0] primary 시도)
-  └─ 401 (BMC 에 infraops 없음) → _rf_auth_observations 에 {role:'primary', status:401} 기록
-       ↓
-try_one_account.yml (accounts[1+] recovery 시도)
-  └─ 200 (BMC 공장 기본 자격 → _rf_used_account.role='recovery')
-       ↓
-collect_standard.yml → _rf_primary_auth_rejected = true  (primary 관측이 401 일 때만)
-       ↓
-account_service.yml (진입 조건 — 정본은 redfish-gather/site.yml)
-  [정정 2026-08-13] 종전 4개 조건 서술은 stale 이다. 특히 1·2번은 현재 코드와 반대다 —
-  복구 계정으로 수집한 결과는 정상 결과가 될 수 없으므로 `_rf_used_account.role` 은
-  진입 조건이 아니고, `_rf_collect_ok` 는 **false** 일 때만 진입한다.
-
-  현재 정본 (site.yml `_rf_account_reconcile_allowed`):
-  1. _rf_collect_ok == false              ← 표준 계정으로 수집이 실패했다
-  2. _rf_primary_auth_rejected == true    ← 401 실증. timeout/TLS/5xx/403 은 진입 안 함
-  3. 해당 Location+Vendor 의 recovery 후보 1개 이상
-  └─ redfish_gather mode='account_provision'
-       target_username='infraops', target_password=<vault accounts[0].password>,
-       target_role='Administrator'
-       ↓
-BMC AccountService POST/PATCH → infraops 계정 생성/복구
-       ↓
-다음 ansible run: primary 자격 (infraops) 으로 정상 인증
-```
-
-→ **사이트 BMC 가 customer-specific 자격으로 변경된 경우**: recovery 매칭 안 됨 → BMC reset 필요 (사이트 운영자) → reset 후 공장 기본 자격 회복 시점에 자동 생성 작동.
-
-### dryrun 정책
-
-- `_rf_account_service_dryrun` — [정정 2026-08-13] 고정 기본값 `false` 가 아니다.
-  변수를 **주지 않으면** `not _rf_account_reconcile_allowed` 에서 파생된다. 즉
-  진입 조건이 성립했을 때만 실쓰기이고 그 외에는 시뮬레이션이다
-  (정본: `redfish-gather/tasks/account_service.yml` `_rf_account_service_dryrun_effective`).
-- override: `-e _rf_account_service_dryrun=true` (변수를 명시했을 때만 override 로 인정)
-- `ansible-playbook --check` 도 dryrun 으로 접힌다 (module.check_mode → dryrun)
-- 신규 사이트 BMC 1대 처음 적용 시 권장: dryrun ON 으로 시뮬레이션 1회 → dryrun OFF 로 실 적용
-
-## 6.6. 복구 계정 label 이름 규칙 (2026-05-11 도입 · 2026-10-11 정본 단일화)
-
-> 2026-05-11 에 adapter 와 vault 양쪽에 label 을 두고 맞췄다. 2026-10-11 부터 adapter 쪽 사본은 없다 — vault 가 유일한 정본이다.
-
-### 정본 = vault 하나 (2026-10-11)
-
-복구 계정의 정본은 vault(`vault/<loc>/redfish/<vendor>.yml`) 의 `accounts[*]` 다 — `role: recovery` 인 항목이 그 vendor 의 복구 후보이고 `label` 은 사람이 읽는 이름이다
-(`redfish-gather/tasks/account_service.yml` 이 role 로 고른다). 종전에는 adapter(`adapters/redfish/{vendor}_*.yml`) 의 `credentials.recovery_accounts[*].vault_label` 이
-같은 label 을 한 번 더 들고 있었고 시험이 둘을 맞췄는데, 그 절을 읽는 코드가 없어 2026-10-11 에 adapter 사본과 시험을 없앴다. label 이름 규칙(아래)은 vault 안에서 그대로 쓴다.
-
-### naming convention (cycle 2026-05-11 정착)
-
-| label 패턴 | 의미 | 보유 vendor |
-|---|---|---|
-| `{vendor}_factory` | 공장 기본 자격 (vendor 매뉴얼 default — BMC 초기 상태에서 사용) | 9 vendor 모두 (Dell 제외 — `dell_fallback_2` 로 표기) |
-| `{vendor}_current` | 현재 운영 자격 (cycle 2026-04-29 ~ 2026-05-06 누적된 사이트 운영 default) | Dell / HPE / Lenovo / Cisco |
-| `{vendor}_fallback` / `{vendor}_fallback_N` | 히스토리컬 fallback (이전 cycle 운영 자격 또는 다중 history 보존) | Dell (`fallback_1`, `fallback_2`) / HPE / Lenovo |
-| `lab_{vendor}_root` | lab 환경 root 자격 (사이트 외 lab 검증 전용) | Dell only (`lab_dell_root`) |
-
-### vendor 별 vault label (2026-05-11 정합 당시 — 지금은 vault 파일에서 `grep label` 로 센다)
-
-| vendor | label entries | 정본 |
-|---|---|---|
-| Dell | `dell_fallback_1`, `dell_fallback_2`, `dell_current`, `lab_dell_root` | §6.5 매트릭스 |
-| HPE | `hpe_fallback`, `hpe_current`, `hpe_factory` | §6.5 매트릭스 |
-| Lenovo | `lenovo_fallback`, `lenovo_current`, `lenovo_factory` | §6.5 매트릭스 |
-| Supermicro | `supermicro_factory` | §6.5 매트릭스 |
-| Cisco | `cisco_current`, `cisco_factory` | §6.5 매트릭스 |
-| Huawei | `huawei_factory` | §6.5 매트릭스 |
-| Inspur | `inspur_factory` | §6.5 매트릭스 |
-| Fujitsu | `fujitsu_factory` | §6.5 매트릭스 |
-| Quanta | `quanta_factory` | §6.5 매트릭스 |
-
-generic fallback(`redfish_generic.yml`)은 vendor 미상이라 복구 계정이 없다(vault 파일도 없다).
-
-### 변경 원칙 (추가만)
-
-vault `accounts` 변경은 **추가**를 원칙으로 한다:
-
-- **해도 된다**: 새 복구 항목 추가(`role: recovery` · 고유 `label`), 항목 순서 변경(시도 순서는 vault 순서 — 표준 계정은 `role: primary` 1개)
-- **하면 안 된다**: 기존 label 삭제 · 리네임(사이트 호환성 작업 밖에서), 같은 vendor 에 `role: primary` 둘, 결과 봉투 `data.bmc.account_service` 모양 변경
-  ([../contract/03-fields.md](../contract/03-fields.md))
-
-### 신규 vendor vault 추가 시 체크리스트
-
-1. `ansible-vault create vault/<loc>/redfish/<vendor>.yml` (5.3 절) — `accounts[*]` 에 `username` · `password` · `label` · `role`
-2. `role: recovery` 항목의 label 은 위 이름 규칙(`{vendor}_factory` · `{vendor}_current` · …)을 따른다
-3. 복구 계정 쓰기는 실장비에서 하지 않는다(계정 쓰기 보류 중 — 인증 실패 유발 금지). 복구 인증 경로는 단위 시험 · 모의 BMC 로만 확인한다
-4. (vendor 신규 시) §6.5 매트릭스 + 본 절 vendor 별 표 갱신
-
-## 7. accounts 정규화 (P1 cycle 2026-04-28)
-
-vault file 내 accounts list 순서 = multi-account fallback 시도 순서. 별도 role 정렬 없음.
+세 채널 모두 같은 형식입니다. `accounts` 배열의 순서가 인증 시도 순서이고, 코드는 순서를 바꾸지 않습니다.
 
 ```yaml
-# vault/<loc>/redfish/dell.yml (예시)
+# vault/<loc>/os/linux.yml 예시 (암호화 전)
 accounts:
-  - username: "infraops"
-    password: "..."
-    label: "primary"
-    role: "primary"      # provision target
-  - username: "admin"
-    password: "..."
-    label: "recovery"
-    role: "recovery"     # provision 진입용
+  - username: "<계정>"
+    password: "<비밀번호>"
+    label: "primary"          # 사람이 읽는 이름. 콘솔 요약과 진단에만 나옵니다
+    role: "primary"
+  - username: "<보조 계정>"
+    password: "<비밀번호>"
+    label: "fallback"
+    role: "recovery"
+ansible_become_password: "<sudo 비밀번호>"   # Linux만, 선택. 없으면 로그인 비밀번호로 sudo 합니다
 ```
 
-→ `_rf_accounts` 로 정규화. legacy 호환 (`ansible_user` / `ansible_password` → primary 1개).
+| 키 | 필수 | 뜻 |
+|---|---|---|
+| `accounts[].username`, `accounts[].password` | 필수 | 로그인 계정 |
+| `accounts[].label` | 권장 | 사람이 구분하는 이름. 콘솔 요약에 label만 나오고 비밀번호는 나오지 않습니다 |
+| `accounts[].role` | Redfish는 필수 | `primary` 또는 `recovery`. OS와 ESXi는 순서대로 시도할 뿐 role을 쓰지 않습니다 |
+| `ansible_become_password` | 선택 (Linux) | sudo 비밀번호가 로그인 비밀번호와 다를 때 |
 
-## 8. 의심 / 사고 대응
+Redfish 파일의 규칙입니다.
 
-### 8.1 자동 반영 안 되는 의심
+- `vault/common/redfish/standard.yml`에서는 `role: primary`인 항목만 표준 계정 후보가 됩니다. 다른 role은 버립니다.
+- `vault/<loc>/redfish/<vendor>.yml`에서는 `role: primary`인 항목을 버리고 나머지가 복구 후보가 됩니다. 복구 파일에 표준 계정을 넣어도 표준 계정 대용으로 쓰이지 않습니다.
+- 표준 계정을 만들거나 복구할 때 쓰는 사용자 이름, 비밀번호, 권한(Administrator)은 표준 파일의 `primary` 항목에서 가져옵니다.
+- 복구 계정 label은 `<vendor>_factory`(공장 기본 계정), `<vendor>_current`(사이트 운영 계정), `<vendor>_fallback`(이전 계정) 같은 이름을 씁니다. 값은 vault 안에만 두고 문서에 적지 않습니다.
 
-- 단서 3개 (4.1) 검증 → 0 결과 / 옵션 없음 확인
-- ansible run 1회 더 시도 (mid-run 변경은 반영 안 됨)
-- vault 파일 디스크 sync 확인 (`ls -la vault/<loc>/redfish/<vendor>.yml` → mtime 업데이트)
-- ansible-vault decrypt 명령 직접 실행 → 새 내용 read 가능 확인
+`accounts` 없이 `ansible_user`, `ansible_password`만 있는 옛 형식도 읽힙니다. 그 경우 `label: legacy_single`, `role: primary`인 계정 하나로 취급합니다.
 
-### 8.2 일부 host 인증 실패
+## 4. 편집과 암호화
 
-- BMC 측 password sync 안 됨 → 외부 시스템 운영자에게 escalate
-- multi-account fallback 의 recovery (`accounts[1+]`) 가 동작하는지 확인
-- evidence 기록
+작업 PC나 Runner처럼 ansible-vault가 있는 곳에서 저장소를 checkout해 작업합니다. 마스터 비밀번호 파일은 저장소 밖에 권한 600으로 두세요. 저장소 루트의 `.vault_pass`는 `.gitignore`에 있어 commit되지 않지만, 작업이 끝나면 지우는 편이 안전합니다.
 
-### 8.3 vault edit 도중 swap 파일 잔재
+```bash
+# 저장소 루트. <비밀번호 파일>은 마스터 비밀번호가 든 권한 600 파일
+ansible-vault edit   --vault-password-file <비밀번호 파일> vault/<loc>/os/linux.yml      # 있는 파일 수정
+ansible-vault create --vault-password-file <비밀번호 파일> vault/<loc>/redfish/<vendor>.yml   # 새 파일
+ansible-vault view   --vault-password-file <비밀번호 파일> vault/common/redfish/standard.yml   # 내용 확인 (화면에 비밀번호가 나옵니다)
+```
 
-- 편집 중 만들어지는 `.swp` 파일, `vault/<loc>/redfish/.{vendor}.yml.swp` 파일 잔재 시 절대 commit 금지
-- `.gitignore` 에 `*.swp` 등록 (이미 적용)
+WSL에서 Windows 드라이브의 비밀번호 파일을 쓰면 실행 비트가 붙어 ansible-vault가 그 파일을 스크립트로 실행하려다 실패합니다(`Exec format error`). 비밀번호 파일은 WSL 쪽 경로에 두세요.
 
-## 9. 검증 절차 (회전 후 의무)
+평문으로 처음 만든 파일을 한 번에 암호화할 때는 `scripts/bootstrap_vault_encrypt.sh`를 씁니다. 저장소 루트의 `.vault_pass`를 읽어 `vault/` 아래 아직 암호화되지 않은 `*.yml`을 암호화하고, 이미 암호화된 파일은 건너뜁니다.
 
-1. `ansible-vault view <vault>` — 새 password 로 read 가능
-2. dry-run: `ansible-playbook --syntax-check redfish-gather/site.yml`
-3. **자동 반영 3 단서 검증** — 4.1 명령 3개
-4. 실장비 1대 대상 본 수집 시도 (target_type별)
-5. callback 결과 envelope 최상위 `vendor` 값 정상
-6. console log 평문 password 노출 없음 확인
+```bash
+# 저장소 루트
+echo -n '<마스터 비밀번호>' > .vault_pass && chmod 600 .vault_pass
+bash scripts/bootstrap_vault_encrypt.sh
+rm .vault_pass
+```
 
-## 10. 보안 주의
+편집한 뒤 commit하기 전에 확인합니다.
 
-- 회전 절차 중 임시 평문 password 메모는 메모리 only (파일 / clipboard 제거)
-- Jenkins credentials 는 server-exporter 외부 (Jenkins controller 권한 최소)
-- 회전 이력 = `tests/evidence/vault-rotation-log.md` (첫 회전 때 만든다 — 아직 없다. 날짜 + 대상만, password 자체는 절대 기록 안 함)
-- ansible-vault password file (`~/.vault_pass`) 은 `chmod 600`
+```bash
+# 암호화됐는지 (첫 줄이 $ANSIBLE_VAULT 로 시작)
+head -c 14 vault/<loc>/os/linux.yml; echo
+# 복호화되고 구조가 맞는지 — label 과 role 만 출력하고 비밀번호는 출력하지 않습니다
+ansible-vault view --vault-password-file <비밀번호 파일> vault/<loc>/os/linux.yml \
+  | python3 -c 'import sys,yaml; d=yaml.safe_load(sys.stdin) or {}; print([(a.get("label"), a.get("role")) for a in d.get("accounts", [])])'
+```
 
-## 11. 관련 문서
+편집기가 남긴 `.swp` 같은 임시 파일을 commit하지 마세요.
 
-| 문서 | 용도 |
+## 5. 반영 확인
+
+값을 바꾼 위치와 채널마다 대상 한 대로 수집을 한 번 실행합니다.
+
+- 결과 봉투의 `diagnosis.details.credential_scope`가 기대한 파일과 맞는지 봅니다. OS는 `<loc>/os/linux` 같은 값, Redfish 표준 계정은 `common/redfish/standard`, Redfish 복구 범위는 `diagnosis.details.recovery_credential_scope`입니다.
+- 콘솔의 `credential_scope=... outcome=loaded accounts=N labels=[...]` 줄에서 파일을 열었고 계정 수가 맞는지 봅니다. `outcome`이 `credential_set_missing`이면 파일이 없고, `credential_set_undecryptable`이면 마스터 비밀번호가 맞지 않습니다.
+- 인증에 실패한 대상은 `failure_stage: auth`로 끝납니다. 어느 단계에서 막혔는지는 [../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md)를 보세요.
+
+## 6. Redfish 표준 계정 복구
+
+표준 계정 인증이 실패하면 코드가 다음 조건을 모두 만족할 때만 복구 계정으로 AccountService에 접근합니다.
+
+1. 표준 계정으로 수집이 실패했습니다.
+2. 표준 계정이 HTTP 401로 명시적으로 거부됐습니다. 403, timeout, TLS 오류, 5xx는 해당하지 않습니다.
+3. 그 위치와 벤더의 복구 계정이 한 개 이상 있습니다.
+
+조건이 맞으면 복구 계정을 파일 순서대로 시도해 BMC 계정 목록을 읽고, 표준 계정이 없으면 만들고 있으면 비밀번호를 표준 파일 값으로 맞춥니다. 계정 목록을 끝까지 읽지 못하면 쓰지 않습니다. 쓰기 뒤에는 표준 계정으로 다시 인증해 수집해야 성공이고, 결과는 `diagnosis.details.account_service`에 비밀번호 없이 남습니다. 조건이 맞지 않으면 시뮬레이션(dryrun)으로만 돌고 BMC를 바꾸지 않습니다.
+
+복구 계정이 없는데 표준 계정이 거부되면 `errors[]`에 `section: account_service` 항목이 남습니다. 이때 할 일은 그 위치와 벤더의 복구 파일을 두는 것이고, 복구 계정은 있는데 표준 계정이 계속 거부되면 표준 파일의 비밀번호를 BMC와 맞추는 것입니다.
+
+실장비에서 계정 쓰기까지 검증한 기록은 없습니다. 쓰기 경로는 단위 시험과 모의 BMC로만 확인했습니다. 새 사이트에 처음 적용할 때는 수집 명령에 `-e _rf_account_service_dryrun=true`를 붙여 시뮬레이션 결과를 먼저 보는 방법이 있습니다. Jenkins Job은 이 변수를 넘기지 않으므로 직접 실행([08-ansible-config.md](08-ansible-config.md) 5절)에서만 쓸 수 있습니다.
+
+## 7. 비밀번호 변경
+
+### 마스터 비밀번호(ansible-vault 비밀번호) 변경
+
+모든 vault 파일을 새 비밀번호로 다시 암호화하고 Jenkins credential을 바꿉니다. 두 작업 사이에 실행된 빌드는 복호화에 실패하므로 빌드가 없는 시간에 합니다.
+
+```bash
+# 저장소 루트. <현재 파일>, <새 파일> 은 각각 현재 · 새 마스터 비밀번호가 든 권한 600 파일
+find vault -type f -name '*.yml' ! -name '.*' -print0 \
+  | xargs -0 ansible-vault rekey --vault-password-file <현재 파일> --new-vault-password-file <새 파일>
+git add vault && git commit -m "chore: vault 마스터 비밀번호 교체"
+```
+
+그다음 Jenkins의 Manage Jenkins → Credentials에서 `server-gather-vault-password`의 Secret을 새 값으로 바꾸고, 커밋이 운영 브랜치에 반영된 뒤 수집을 한 번 실행해 `outcome=loaded`를 확인합니다. 사내처럼 `production` 브랜치를 쓰는 환경은 [09-production-branch.md](09-production-branch.md) 절차로 반영합니다.
+
+### 계정 비밀번호 변경
+
+대상 서버나 BMC에서 비밀번호를 바꾼 뒤 해당 파일만 `ansible-vault edit`로 고칩니다. Redfish 표준 계정은 `vault/common/redfish/standard.yml` 한 곳입니다. 바꾸는 동안 표준 계정이 BMC와 어긋나면 6절의 복구가 동작할 수 있으므로, BMC 쪽과 vault 쪽을 같은 작업 시간에 맞추세요.
+
+변경 기록은 날짜와 대상 파일만 남기고 비밀번호는 어디에도 적지 않습니다.
+
+## 8. 자주 막히는 곳
+
+| 증상 | 원인과 조치 |
 |---|---|
-| [../develop/04-add-vendor.md](../develop/04-add-vendor.md) | 새 vendor 추가 절차(vault 단계 포함) |
-| [../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md) | 인증 실패(`auth` 단계) 진단 |
-| `redfish-gather/tasks/load_vault.yml` | vault 로딩 정본 코드 |
-| `docs/operate/02-agent-node.md` | Agent 보안 설정 |
-| Ansible Vault 공식 문서 | ansible-vault 명령 reference |
-
----
+| 콘솔에 `outcome=credential_set_undecryptable` | Jenkins credential의 값과 파일을 암호화한 마스터 비밀번호가 다릅니다. credential 값을 확인하세요 |
+| 콘솔에 `outcome=credential_set_missing` | 그 위치, 채널의 파일이 없습니다. 2절 표의 경로에 파일을 추가하세요 |
+| 콘솔에 `outcome=empty_accounts` | 파일은 열렸는데 `accounts`가 비었거나 Redfish 파일에서 role이 맞는 항목이 없습니다 |
+| Jenkins 콘솔에 `Could not find credentials entry` | credential ID `server-gather-vault-password`가 Jenkins에 없습니다([03-job-registration.md](03-job-registration.md) 1절) |
+| `ansible-vault edit`에서 `Decryption failed` | 비밀번호 파일의 값이 다르거나 파일이 다른 비밀번호로 암호화돼 있습니다 |
+| 요청한 `loc`이 등록되지 않음 | Jenkins의 실행 위치 확인 단계에서 빌드가 바로 실패합니다. `common/vars/locations.yml`에 추가하세요 |
 
 ## 다음 단계
 
 | 다음 작업 | 문서 |
 |---|---|
-| Jenkins 마스터의 vault credential 등록 | [01-jenkins-master.md](01-jenkins-master.md) §7 |
-| Agent 노드 설치 (vault 패스워드 파일 배치) | [02-agent-node.md](02-agent-node.md) |
-| precheck 4단계 (인증 실패 단계 진단) | [../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md) |
-
-## 자주 막히는 곳
-
-| 증상 | 원인 / 해결 |
-|------|------------|
-| 새로 만든 vault 가 반영 안 됨 | `cacheable: yes` / fact_caching 충돌 의심 — 4.1 의 단서 3개 검증 |
-| `Decryption failed` | `.vault_pass` 파일의 패스워드와 vault 가 일치하지 않음 |
-| `Could not find credentials entry` | Jenkins Credentials 에 `server-gather-vault-password` 미등록 |
-| ansible-vault edit 실패 | 파일이 이미 평문이거나 다른 vault password 로 암호화됨 |
+| Jenkins credential 등록 | [03-job-registration.md](03-job-registration.md) |
+| Runner 라벨과 위치 | [02-agent-node.md](02-agent-node.md) |
+| 인증 실패 진단 | [../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md) |
+| 새 벤더 추가 | [../develop/04-add-vendor.md](../develop/04-add-vendor.md) |

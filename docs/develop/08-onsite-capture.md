@@ -1,102 +1,93 @@
-# 25. 운영망 Redfish 전수 캡처 런북 (1회 반입용)
+# 운영망 Redfish 원본 캡처
 
-> **언제 쓰나**: 실 BMC/RMC(특히 HPE CSUS 3200 / Superdome RMC)가 운영망에만 있고 그
-> 망은 접근이 제한돼 **딱 한 번만** 데이터를 빼올 수 있을 때. 인터넷망에는 장비가 없으니
-> 여기서 만든 캡처 도구를 운영망에 반입 → 전 트리 raw 를 뽑아 반출 → 다시 인터넷망에서
-> AI 로 개더링 코드를 완성한다.
+이 문서는 실제 BMC나 RMC가 접근이 제한된 운영망에만 있어 데이터를 한 번만 가져올 수 있을 때, Redfish 트리 전체를 파일로 떠 오는 절차를 설명합니다. 떠 온 파일은 개발 환경에서 오프라인으로 재생해 수집 코드와 fixture를 맞추는 데 씁니다. HPE CSUS 3200과 Superdome Flex의 RMC처럼 사내에 장비가 없는 대상이 주 용도입니다.
 
-## 핵심 원칙
+## 1. 원칙
 
-- **특정 경로를 지정하지 않는다.** 도구는 `/redfish/v1/` 부터 **장비가 실제로 주는
-  `@odata.id` 링크만 재귀로** 따라가 트리 전체를 떠온다(우리 수집 코드의 가정 경로 비의존).
-- **한 번뿐이라 전부 떠온다.** 향후 확장에 필요한 정보까지 남김없이. 부족하게 떠오면 못 돌아간다.
-- 도구는 **stdlib 단일 파일** — 운영망 무설치 실행(`python3`만 있으면 됨).
+- 특정 경로를 지정하지 않습니다. 도구는 `/redfish/v1/`에서 시작해 장비가 실제로 돌려준 `@odata.id` 링크만 재귀로 따라가 트리 전체를 저장합니다. 수집 코드가 가정하는 경로에 의존하지 않습니다.
+- 한 번뿐이므로 전부 떠 옵니다. 지금 수집하지 않는 리소스도 나중에 필요할 수 있습니다.
+- 도구는 표준 라이브러리만 쓰는 Python 파일 하나입니다. 운영망 서버에 `python3`만 있으면 설치 없이 실행됩니다.
 
-## 준비 (인터넷망에서, 반입 전)
+## 2. 준비 (개발 환경에서)
 
-1. 반입 파일 1개: `tests/redfish-probe/redfish_full_mirror.py`.
-2. dry-run 으로 도구 동작 확인(장비 없이):
+1. 반입할 파일은 `tests/redfish-probe/redfish_full_mirror.py` 하나입니다.
+2. 장비 없이 도구 동작을 확인합니다. 합성 CSUS 트리를 띄워 재귀, 페이지 나눔, 자동 발견, 오류 내성을 검사합니다.
+
    ```bash
+   # 저장소 루트
    python -m pytest tests/unit/test_full_mirror_dryrun.py -q
    ```
-   (합성 CSUS 트리를 라이브처럼 띄워 재귀·페이지네이션·자동발견·내성 검증)
-3. 계정 확보: **최고 권한** Redfish 계정(권한 낮으면 일부 리소스가 트리에서 가려져 누락).
-4. 선결 확인 항목 메모: RMC Redfish 활성화 + 라이선스(미활성 시 트리 자체가 빔 — docs RMC 활성화 가이드).
 
-## 운영망 현장 — 캡처
+3. 가장 높은 권한의 Redfish 계정을 확보하세요. 권한이 낮으면 일부 리소스가 트리에서 가려져 빠집니다.
+4. RMC 대상이면 Redfish 서비스가 켜져 있는지 먼저 확인하세요([../operate/06-rmc-activation.md](../operate/06-rmc-activation.md)). 꺼져 있으면 트리가 비어 있습니다.
+
+## 3. 운영망 현장에서 캡처
 
 ```bash
-python redfish_full_mirror.py -r <RMC_IP[:443]> -u <admin> -p <pw> -D csus_rmc_<fw>
+# 운영망 서버, BMC 에 닿는 계정. <라벨> 은 출력 폴더 이름 (예: csus_rmc_<펌웨어 버전>)
+python3 redfish_full_mirror.py -r <BMC 주소[:포트]> -u <계정> -p <비밀번호> -D <라벨>
 ```
 
-| 플래그 | 의미 |
+| 옵션 | 뜻 |
 |---|---|
-| `-r` | BMC/RMC 주소 `ip[:port]` |
-| `-u` / `-p` | 최고 권한 계정 |
-| `-D` | 출력 폴더 이름(아무거나 — `<fw>` 는 "어느 펌웨어 스냅샷인지" 라벨일 뿐, **캡처 범위와 무관**) |
+| `-r` | BMC 또는 RMC 주소. 포트를 생략하면 443 |
+| `-u`, `-p` | 계정과 비밀번호. 명령줄에 적은 비밀번호는 셸 기록에 남으므로 끝난 뒤 기록을 지우세요 |
+| `-D` | 출력 폴더 이름. 어느 펌웨어의 스냅샷인지 알 수 있게 붙입니다. 캡처 범위와는 무관합니다 |
 | `--scheme` | 기본 `https` |
-| (기본) | 인증서 검증 off(self-signed), `Accept`-only 헤더, Basic auth, 에러 내성, 자가진단 |
 
-### 산출물
+기본 동작은 인증서 검증 끔(자체 서명 인증서), `Accept` 헤더만 전송, Basic 인증, 오류가 나도 다음 리소스로 계속, 끝에 자가진단 요약 출력입니다.
 
+산출물입니다.
+
+```text
+<출력 폴더>/redfish/v1/.../index.json     리소스 본문 (@odata.id 그대로)
+<출력 폴더>/redfish/v1/.../headers.json   HTTP 상태와 응답 헤더
+<출력 폴더>/_manifest.json                크롤 요약과 자가진단
+<출력 폴더>/_serviceroot_noauth.json      무인증 서비스 루트
 ```
-<out>/redfish/v1/.../index.json     리소스 raw 본문 (@odata.id 보존)
-<out>/redfish/v1/.../headers.json   HTTP status + 응답 헤더
-<out>/_manifest.json                크롤 요약·자가진단
-<out>/_serviceroot_noauth.json      무인증 ServiceRoot
-```
 
-## 철수 전 완전성 검증 (못 돌아가니 필수)
+## 4. 철수 전 확인
 
-`_manifest.json`(또는 stdout 요약)에서 확인:
+다시 올 수 없으므로 `_manifest.json`(또는 화면의 요약)에서 다음을 확인하세요.
 
-- [ ] `reachable: true`, `auth_ok: true`
-- [ ] `root_product` 가 실제 모델로 찍힘 (예: `Compute Scale-up Server 3200`)
-- [ ] `fetched_ok` 가 충분히 큰 수
-- [ ] `failed` 가 대부분 **진짜 404**(미지원 sub-resource)이고 **401/403(권한 갭)이 아님**
-      → 401/403 多 = 계정 권한 부족, 더 높은 권한으로 재캡처
-- [ ] 멀티노드 다 잡혔나: 전 Partition / 전 Manager(RMC·PDHC·iLO) / 전 Chassis(Base·Expansion)
-- [ ] OEM 분기(`Oem.Hpe.*`) 디렉터리 존재
-- [ ] **펌웨어 버전 기록**(`_manifest.json`의 `firmware_versions` + `-D` 폴더명)
-- [ ] (여유 시) 별도 raw 덤프로 **이중화** + 압축 보관
+- `reachable`과 `auth_ok`가 `true`입니다.
+- `root_product`가 실제 모델명입니다(예: `Compute Scale-up Server 3200`).
+- `fetched_ok`가 장비 규모에 맞게 충분히 큽니다.
+- `failed`의 대부분이 404(장비가 지원하지 않는 하위 리소스)이고 401이나 403이 아닙니다. 401, 403이 많으면 계정 권한이 부족하므로 더 높은 권한으로 다시 캡처합니다.
+- 멀티 노드 장비면 모든 파티션, 모든 Manager(RMC, chassis 컨트롤러, 노드 iLO), 모든 chassis가 들어 있습니다.
+- OEM 리소스(`Oem.Hpe.*` 등) 디렉터리가 있습니다.
+- 펌웨어 버전이 `_manifest.json`의 `firmware_versions`와 폴더 이름에 남았습니다.
+- 가능하면 사본을 하나 더 만들어 압축해 보관합니다.
 
-## 반출 후 — 인터넷망에서 코드 완성
+## 5. 반출 뒤 개발 환경에서 재생
 
-1. 반출 트리를 그대로(= `redfish/v1/.../index.json` 트리) 인터넷망으로 가져온다.
-2. 실 raw 를 오프라인 재생 → 우리 코드가 어디서 틀렸는지 드러난다:
+1. 반출한 트리를 그대로 가져옵니다.
+2. 트리를 fixture로 변환해 오프라인으로 재생합니다. 멀티 노드 장비는 `--manager-layout`을 붙여야 `multi_node`가 채워집니다.
+
    ```bash
-   # CSUS = 멀티노드 → --manager-layout rmc_primary 필수.
-   # (안 붙이면 multi_node=None 으로 토폴로지(파티션/매니저/섀시)가 수집 안 됨)
+   # 저장소 루트
    python tests/integration/convert_dmtf_mockup.py \
-       --mockup-dir <반출트리>/redfish/v1 --name hpe_csus_3200_real \
+       --mockup-dir <반출 트리>/redfish/v1 --name hpe_csus_3200_real \
        --manager-layout rmc_primary --captured <YYYY-MM-DD>
    ```
-   - 산출 `expected_output.json` 의 `multi_node`(파티션/매니저/섀시) + `data`(섹션)를 확인.
-   - 주의: `test_csus_fixture_replay.py` 는 **납작한 fixture(`glob("*.json")`)** 를 읽으므로
-     크롤러 **트리를 직접 재생하지 못한다.** 트리 재생은 위 `convert_dmtf_mockup.py` 경로만 쓴다.
-   - 회귀 검증: `tests/unit/test_full_mirror_dryrun.py` 의 `test_e2e_crawler_tree_reconstructs_csus_multinode`
-     가 이 경로(트리→멀티노드 재구성)를 합성 데이터로 잠가 둔다.
-3. 드러난 불일치(ServiceRoot.Product 문자열 / Manager·System·Chassis ID 패턴 /
-   `Oem.Hpe.PartitionInfo`·`FlexNodeInfo` schema — NEXT_ACTIONS C5/C6/C7) 를 AI 로 수정 →
-   회귀 고정 → baseline 승격.
 
-> [!NOTE]
-> **알려진 미완(실 캡처 후 마무리 대상):** CSUS OEM 추출(`Oem.Hpe.PartitionInfo` /
-> `FlexNodeInfo` / `GlobalConfiguration`)은 현재 라이브러리 `_extract_oem_hpe`
-> 에만 있고 가드(`_rf_raw_collect.systems`)가 모듈 미emit 키라 **라이브에서도 안 돈다**
-> (2026-08~09 실측에서 확인 — [../reference/live-validation.md](../reference/live-validation.md)). 캡처한 raw 에는 이 필드들이 들어 있으므로 실 데이터로
-> Python 추출 경로를 마저 구현하는 것이 다음 단계다.
+   산출된 `expected_output.json`의 `data`(섹션)와 `multi_node`(파티션, Manager, chassis)를 확인합니다. `tests/unit/test_csus_fixture_replay.py`는 평평한 fixture 디렉터리를 읽으므로 크롤러 트리를 직접 재생하지 못합니다. 트리 재생은 위 변환 경로만 씁니다. 트리에서 멀티 노드를 재구성하는 경로는 `tests/unit/test_full_mirror_dryrun.py`가 합성 데이터로 고정합니다.
+3. 재생에서 드러난 차이(서비스 루트 제품 문자열, Manager와 System과 Chassis의 ID 형식, OEM 필드 구조)를 코드에 반영하고 회귀 시험을 추가한 뒤 기준선을 갱신합니다.
 
-## 한계 (read-only 스냅샷의 본질)
+CSUS의 OEM 필드(`Oem.Hpe.PartitionInfo`, `FlexNodeInfo`, `GlobalConfiguration`) 추출은 라이브러리에 있지만 실장비 응답으로 검증한 적이 없습니다. 실제 캡처가 들어오면 이 경로를 먼저 확인합니다.
 
-- 쓰기/Action(account_service POST/PATCH/DELETE, reset 등)은 스냅샷에 안 담김(라이브 전용).
-- 캡처 시점 펌웨어/휘발값 스냅샷 — 펌웨어 업그레이드 후 응답은 달라질 수 있음.
-- Basic auth 전용 — 장비가 Basic 막고 Session 만 받으면 `_manifest.json` 이 401 로 알려줌
-  (그 경우 Session 지원 추가 필요).
+## 6. 한계
+
+- 읽기 전용 스냅샷입니다. 계정 생성이나 전원 제어 같은 쓰기 동작은 담기지 않습니다.
+- 캡처 시점의 펌웨어와 상태입니다. 펌웨어를 올리면 응답이 달라질 수 있습니다.
+- Basic 인증만 씁니다. 장비가 Basic을 막고 세션 인증만 받으면 `_manifest.json`에 401로 남고 캡처되지 않습니다.
 
 ## 관련
 
-- 도구: `tests/redfish-probe/redfish_full_mirror.py`
-- dry-run 회귀: `tests/unit/test_full_mirror_dryrun.py`
-- 오프라인 재생: `tests/integration/convert_dmtf_mockup.py`, `tests/unit/test_csus_fixture_replay.py`
-- CSUS 합성 fixture / 미검증 항목: `tests/fixtures/redfish/hpe_csus_3200/README.md`
+| 내용 | 위치 |
+|---|---|
+| 캡처 도구 | `tests/redfish-probe/redfish_full_mirror.py` |
+| 도구 동작 시험 | `tests/unit/test_full_mirror_dryrun.py` |
+| 오프라인 재생 변환 | `tests/integration/convert_dmtf_mockup.py` |
+| CSUS 합성 fixture와 미검증 항목 | `tests/fixtures/redfish/hpe_csus_3200/README.md` |
+| RMC Redfish 확인 | [../operate/06-rmc-activation.md](../operate/06-rmc-activation.md) |

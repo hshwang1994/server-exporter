@@ -55,9 +55,9 @@ server-exporter 문서는 읽는 목적에 따라 다섯 갈래로 나뉜다. �
 - [04-pipeline-runtime.md](operate/04-pipeline-runtime.md) — 파이프라인이 실제로 하는 일
 - [05-vault.md](operate/05-vault.md) — 자격증명 보관과 회전
 - [06-rmc-activation.md](operate/06-rmc-activation.md) — HPE RMC Redfish 활성화
-- [07-onsite-capture.md](operate/07-onsite-capture.md) — 폐쇄망 반입 캡처
+- [07-update-and-rollback.md](operate/07-update-and-rollback.md) — 업데이트, 설정 보존, 되돌리기
 - [08-ansible-config.md](operate/08-ansible-config.md) — 프로젝트 Ansible 설정
-- [09-production-branch.md](operate/09-production-branch.md) — production 브랜치 생성 · 검증 · 반영 · 복구 (prodgen)
+- [09-production-branch.md](operate/09-production-branch.md) — production 브랜치 생성, 검증, 반영, 되돌리기 (사내)
 
 ### contract
 - [01-input.md](contract/01-input.md) — 호출자가 보내는 것
@@ -73,6 +73,7 @@ server-exporter 문서는 읽는 목적에 따라 다섯 갈래로 나뉜다. �
 - [05-field-mapping.md](develop/05-field-mapping.md) — 원본에서 필드까지의 매핑
 - [06-debugging.md](develop/06-debugging.md) — 어디부터 볼 것인가
 - [07-addon-hook.md](develop/07-addon-hook.md) — 고객별 추가 수집(Add-on) hook 계약
+- [08-onsite-capture.md](develop/08-onsite-capture.md) — 운영망 Redfish 원본 캡처
 
 ### reference
 - [compatibility-matrix.md](reference/compatibility-matrix.md) — 벤더 × 세대 × 섹션 지원표

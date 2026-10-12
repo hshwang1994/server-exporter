@@ -1,365 +1,199 @@
-# 03. Agent 노드 구성
+# Runner(Jenkins Agent) 구성
 
-> **이 문서는** Jenkins Agent 노드(실제로 ansible-playbook 이 실행되는 머신) 를 새로 구축할 때 따라가는 단계별 가이드입니다.
-> VM 사양 산정 → OS 패키지 → Python venv → Ansible / pywinrm / pyvmomi 설치 → Jenkins 마스터 등록까지 한 번에 다룹니다.
->
-> **언제 이 문서를 보는가?**
-> - 새 사이트 (이천 / 청주 / 용인 등) 에 Agent 를 처음 구축할 때
-> - 기존 Agent 가 노후화 / 장애로 재구축이 필요할 때
-> - ansible / 컬렉션을 업그레이드해야 할 때
+이 문서는 수집을 실제로 실행하는 Runner를 준비하는 운영자를 위한 안내입니다. Runner의 OS 계정과 경로, Ansible 실행환경과 의존성, Jenkins에 Runner를 연결하고 라벨을 붙이는 방법, 연결 확인 순서로 읽습니다.
+[01-jenkins-master.md](01-jenkins-master.md)의 Controller 설치가 끝난 상태를 전제합니다.
 
-> **사전 준비**
-> - 본 절차 전에 [01-jenkins-master.md](01-jenkins-master.md) (마스터 설치) 를 먼저 끝내야 합니다.
+환경 값은 [01-jenkins-master.md](01-jenkins-master.md) 2절의 기준(확인한 조합, 필수, 선택 또는 미확인)으로 적습니다.
 
-> [!NOTE]
-> **Redis 는 쓰지 않는다.** 프로젝트 `ansible.cfg` 는 `gathering = explicit` 이고 `fact_caching` 이 없다. Ansible 은 설정 파일을
-> 병합하지 않고 가장 먼저 찾은 하나만 읽으며, Jenkins 빌드에서는 그것이 저장소 루트의 `ansible.cfg` 다. 그래서 Agent 공통
-> `/etc/ansible/ansible.cfg` 에 fact 캐시를 적어도 이 파이프라인에는 적용되지 않는다. Redis 서버 · 클라이언트 · 6379 포트 개방은
-> 필요 없다 (2026-10-10 정정 — 이전 판은 Redis 설치 · 연결 시험 · 방화벽 행을 두고 있었다).
-> - Agent 노드는 마스터와 같은 사내망에 있어야 한다. 필요한 연결은 2절 표가 전부다. 마스터가 SSH 로 Agent 에 접속하므로
->   Agent → 마스터 방향 포트는 열지 않아도 된다.
+## 1. Runner가 하는 일
 
-> **검증 기준 환경 (참고)**: Ubuntu 24.04, Python 3.12, ansible-core 2.20, Java 21 (10.100.64.154 에서 2026-03-27 확인)
+Runner는 빌드마다 저장소를 받고(`git`), `scripts/run_gather.sh`가 Ansible 실행환경(venv)을 골라 `ansible-playbook`을 실행합니다. 수집이 끝나면 결과 파일을 Controller로 넘깁니다. 한 Runner가 세 종류(OS, ESXi, Redfish)를 모두 수집할 수 있고, 종류별로 Runner를 나눠도 됩니다.
 
-Jenkins Agent 는 로케이션 (이천 / 청주 / 용인) 별로 구성하며 개발 / 운영 마스터에는 각각 다른 Agent 를 연결합니다.
-각 Agent 노드마다 아래 절차를 반복합니다.
+### 확인한 조합(사내 검증 환경)
 
----
+| 항목 | 값 |
+|---|---|
+| OS | Red Hat Enterprise Linux 9.6 |
+| Agent OS 계정 | `jenkins` |
+| Agent 작업 폴더(remote root) | `/app/jenkins-agent/agent` |
+| Java | OpenJDK 21.0.10 (`/app/clovirone-agent-java` 경로를 노드 설정의 JavaPath로 지정) |
+| 시스템 `/usr/bin/python3` | 3.9.21 (동적 인벤토리 스크립트 실행용) |
+| Ansible 실행환경 | `/app/ansible-env` (Python 3.12.9, ansible-core 2.20.3, ansible 13.4.0) |
+| Ansible Collection | community.vmware 6.2.0, ansible.windows 3.3.0 (그 밖에 community.windows, ansible.posix, community.general, ansible.utils도 설치돼 있으나 파이프라인은 쓰지 않습니다) |
+| Python 패키지 | pywinrm 0.5.0, pyvmomi 9.0.0, requests 2.33.1, lxml 6.0.2 (jmespath, netaddr, pytest도 설치돼 있으나 수집은 쓰지 않습니다) |
+| git | 2.47.3 |
+| 연결 방식 | SSH (Controller → Runner 22), credential `master-to-runner-ssh` |
+| executor | 15 |
+| 라벨 | `git redfish windows linux cj esxi` (3번 Runner만 `cj` 없음) |
 
-## 1. VM 리소스 산정
+## 2. 통신 경로
 
-### Jenkins 마스터
+| 출발 | 목적지 | 포트 | 용도 | 근거 |
+|---|---|---|---|---|
+| Jenkins Controller | Runner | 22 (TCP) | SSH 방식 Agent 실행. inbound 방식이면 Runner → Controller의 Jenkins 포트와 TCP 50000(또는 설정한 Agent 포트) | 노드 설정 |
+| Runner | Git 저장소 | 443 (TCP) | 저장소 checkout | 수집 단계 |
+| Runner | Add-on 저장소 | 저장소 주소의 포트 | `ADDON_REPO_URL`을 켰을 때 빌드마다 받습니다 | `scripts/addon_checkout.sh` |
+| Runner | Linux 대상 | 22 (TCP) | SSH | `common/library/precheck_bundle.py`의 OS 후보 순서 `5986 → 5985 → 22` |
+| Runner | Windows 대상 | 5986, 5985 (TCP) | WinRM. HTTPS를 먼저 시도합니다 | 같은 후보 순서 |
+| Runner | ESXi 대상 | 443 (TCP) | vSphere API. ESXi에 SSH는 쓰지 않습니다 | `precheck_bundle.py`의 esxi 포트 `[443]` |
+| Runner | BMC | 443 (TCP) | Redfish API | `precheck_bundle.py`의 redfish 포트 `[443]` |
+| Runner | 대상 전체 | ICMP Echo | 도달 여부 보조 확인. 선택입니다 | `precheck_bundle.py` |
 
-| 항목 | 사양 |
-|------|------|
-| CPU | 8 core |
-| RAM | 32 GB (Jenkins 16 GB + 여유) |
-| Disk | 500 GB (빌드 로그, 히스토리 누적 고려) |
+ICMP는 관문이 아닙니다. 관리 포트 TCP가 아무 응답도 주지 않을 때만 Echo를 한 번 보내 "장비는 켜져 있는데 관리 포트만 막혔다"를 구분합니다. ICMP가 막혀 있어도 수집은 그대로 동작합니다.
 
-### Jenkins Agent
+Runner에서 Controller 방향으로 열 포트는 SSH 방식에서는 없습니다.
 
-| 항목 | 사양 |
-|------|------|
-| CPU | 8 core |
-| RAM | 16 GB |
-| Disk | 100 GB (Ansible 가상환경 + workspace) |
+## 3. OS 계정과 경로
 
----
+필수 사항입니다.
 
-## 2. 방화벽 오픈 목록
+- Agent용 OS 계정 1개. 이 계정으로 Agent 프로세스와 `ansible-playbook`이 실행됩니다.
+- Agent 작업 폴더(remote root). 이 계정이 쓸 수 있어야 합니다. 빌드마다 `<remote root>/workspace/<Job 폴더>/<Job 이름>-<빌드 번호>` 작업 폴더가 생깁니다.
+- `/tmp`에 쓰기 권한. 수집 실행마다 vault 비밀번호 임시 파일(`/tmp/se_vault.*`, 권한 600)과 SSH 다중화 폴더(`/tmp/se_cp.*`)를 만들고 끝나면 지웁니다.
 
-| 출발 | 목적지 | 포트 | 프로토콜 | 용도 | 근거 |
-|------|--------|------|----------|------|------|
-| 포털 | Jenkins 마스터 | Jenkins URL 의 포트 (기본 8080, HTTPS 구성이면 443) | TCP | Job 트리거 (REST) | [01-jenkins-master.md](01-jenkins-master.md) 5절 |
-| Jenkins 마스터 | Git 서버 (GitHub / GitLab) | 443 | TCP | Pipeline 정의(lightweight) 와 실행 위치 확인의 `readTrusted`(`common/vars/locations.yml`) — 마스터에서 저장소 전체를 받지 않는다 | `Jenkinsfile_portal` Resolve Location |
-| Jenkins 마스터 | Agent | 22 | TCP | Launch agents via SSH (8절). 원격 채널이 이 연결 위에서 동작한다 | 노드 설정 |
-| Jenkins 마스터 | 포털 | `callbackUrl` 의 포트 | TCP | 결과 전송 `httpRequest` POST — Agent 가 아니라 built-in 노드가 보낸다 | `Jenkinsfile_portal` seCallback |
-| Agent | Git 서버 (GitHub / GitLab) | 443 | TCP | 수집 단계 첫 시도의 저장소 checkout | `Jenkinsfile_portal` Gather |
-| Agent | Add-on 저장소 | 저장소 URL 의 포트 (보통 443) | TCP | 전역 환경변수 `ADDON_REPO_URL` 을 켰을 때만, 빌드마다 받는다 | `scripts/addon_checkout.sh` |
-| Agent | 대상 서버 Linux | 22 | TCP | SSH | `precheck_bundle.py` os 후보 `5986 → 5985 → 22` |
-| Agent | 대상 서버 Windows | 5986 / 5985 | TCP | WinRM — HTTPS 먼저, 다음 HTTP | 같은 후보 순서 |
-| Agent | 대상 서버 ESXi | 443 | TCP | vSphere API (`community.vmware`). ESXi 에 SSH 22 는 쓰지 않는다 | `precheck_bundle.py` esxi `[443]` |
-| Agent | 대상 BMC | 443 | TCP | Redfish API | `precheck_bundle.py` redfish `[443]` |
-| Agent | 대상 서버 전체 | — | ICMP Echo | 도달성 보조 확인 (선택) | `precheck_bundle.py` `_icmp_command` |
+```bash
+# Runner 서버 셸, root 또는 sudo
+useradd -m -s /bin/bash <Agent 계정>
+mkdir -p <remote root> && chown <Agent 계정>:<Agent 계정> <remote root>
+```
 
-> 2026-10-10 정정: 이전 판은 ESXi 를 22 로, Agent → 마스터 6379(Redis) 를 필수로 적고 마스터 → 포털(결과 전송) · Agent → Git 저장소 ·
-> Add-on 저장소 행이 없었다. 위 표는 사전 진단의 기본 포트(`CHANNEL_DEFAULT_PORTS`)와 `Jenkinsfile_portal` 의 실제 호출 위치에서 옮겼다.
->
-> ICMP 는 **선택**이다. 열려 있으면 관리 포트 TCP 가 방화벽에서 조용히 버려지는 구간에서
-> "장비는 살아 있고 관리 포트만 막혔다" 를 구분해 준다 (실패가 `reachable` 이 아니라 `port`
-> 단계가 되고, 안내 문장도 방화벽·관리 서비스를 가리킨다). 막혀 있어도 수집은 종전대로
-> 동작한다 — ICMP 는 관문이 아니라 보조 근거다.
+사내는 계정 `jenkins`, remote root `/app/jenkins-agent/agent`입니다. 계정 이름과 경로는 조직 방식대로 정해도 됩니다.
 
----
+## 4. 기본 패키지
 
-## 3. 기본 패키지 설치
+| 패키지 | 필수 여부 | 근거 |
+|---|---|---|
+| Java (Jenkins가 지원하는 버전) | 필수 | Agent 프로세스 실행. Controller와 같은 기준으로 고릅니다([01-jenkins-master.md](01-jenkins-master.md) 4.1절) |
+| `git` | 필수 | 수집 단계의 checkout과 Add-on 받기(`scripts/addon_checkout.sh`) |
+| `/usr/bin/python3` | 필수 | 세 채널의 동적 인벤토리 `*-gather/inventory.sh`가 이 경로로 실행됩니다(표준 라이브러리만 씁니다). 사내 확인 3.9.21 |
+| `bash`, `coreutils`의 `timeout`과 `nproc`, `util-linux`의 `flock` | 필수 | `scripts/run_gather.sh`가 수집 실행 한계와 작업 폴더 잠금에 씁니다 |
+| `iputils` (`ping`) | 선택 | ICMP 보조 확인. 없으면 도달 판정이 TCP만으로 돕니다 |
 
 ```bash
 # RHEL 계열
-yum install -y java-21-openjdk python3 git jq iputils
+dnf install -y java-21-openjdk git python3 util-linux coreutils iputils
 
 # Debian 계열
-apt update && apt install -y openjdk-21-jdk python3 python3-venv git jq iputils-ping
+apt update && apt install -y openjdk-21-jre git python3 util-linux coreutils iputils-ping
 ```
 
-> `iputils` / `iputils-ping` 은 도달성 보조 확인용 `ping` 이다. 사전 진단이 관리 포트 TCP 로
-> 아무 응답도 못 받았을 때만 Echo 를 1회 보낸다. 서비스 계정(비특권)으로 아래가 되면 준비 완료다.
->
-> ```bash
-> sudo -u {서비스계정} ping -c 1 -n -W 1 -w 1 <대상IP>; echo "rc=$?"
-> ```
->
-> 없거나 권한이 부족해도 수집은 그대로 동작한다 — 도달 판정이 종전처럼 TCP 전용이 되고,
-> 그 사실이 결과의 `errors[].detail` 에 `icmp: 확인 불가 ...` 로 남는다.
+## 5. Ansible 실행환경(venv)
 
----
+파이프라인은 `scripts/activate_ansible_venv.sh`로 venv를 고릅니다. 순서는 다음과 같고, 못 찾으면 시스템 Python으로 넘어가지 않고 수집이 실패합니다.
 
-## 4. 서비스 계정 생성
+1. 노드 환경변수 `SE_ANSIBLE_VENV`에 적힌 venv 루트. 값이 있는데 `bin/activate`가 없으면 다른 경로를 보지 않고 실패합니다.
+2. PATH의 `ansible-playbook` 실제 경로 옆에 `activate`가 있는 venv.
+3. 알려진 경로 `/app/ansible-env`, 그다음 `/opt/ansible-env`.
 
-```bash
-useradd -m -s /bin/bash {서비스계정}
-```
-
-> `{서비스계정}` 은 Jenkins Agent 전용 계정이다. 조직 정책에 맞는 이름을 사용한다.
-
----
-
-## 5. Ansible 가상환경 설치
-
-venv 위치는 설치 방식에 따라 다르다. 파이프라인은 어느 쪽이든 그대로 찾는다.
-
-| 설치 방식 | venv 루트 | 비고 |
+| 요구 | 값 | 근거 |
 |---|---|---|
-| 설치 자동화 `install-jenkins-runner` (RHEL 9, Agent 계정 `jenkins`) | `/app/ansible-env` | `/usr/local/bin/ansible-*` 이 venv 로 가는 링크로 함께 생긴다 |
-| 이 문서대로 직접 구축 | `/opt/ansible-env` | 아래 절차 |
-| 그 밖의 경로 | 임의 | 노드 환경변수 `SE_ANSIBLE_VENV=<venv 루트>` 를 등록한다 (9절) |
+| Python | 3.12 이상 3.14 미만 | `production_manifest.yml`의 runtime 범위 |
+| ansible-core | 2.16 이상 2.21 미만 | `production_manifest.yml`의 runtime 범위 |
+| Collection `community.vmware` | ESXi 수집에 필수 | `esxi-gather/tasks/*.yml`의 `vmware_host_*` 모듈 |
+| Collection `ansible.windows` | Windows 수집에 필수 | `os-gather/tasks/windows/*.yml`의 `win_shell`, `win_ping` |
+| Python 패키지 `pywinrm` | Windows 수집에 필수 | Ansible WinRM 연결 |
+| Python 패키지 `pyvmomi` | ESXi 수집에 필수 | `community.vmware`와 `esxi-gather/library/esxi_disks.py` |
 
-> 파이프라인의 Gather 는 저장소의 `scripts/activate_ansible_venv.sh` 를 source 한다.
-> 이 스크립트가 `SE_ANSIBLE_VENV` → PATH 의 `ansible-playbook` 이 가리키는 venv → 위 두 경로 순으로 찾고,
-> 못 찾으면 시스템 python 으로 넘어가지 않고 Stage 를 실패시킨다.
-
-### Python 패키지
-
-```bash
-VENV=/opt/ansible-env   # 직접 구축 기준. 설치 자동화 Runner 는 /app/ansible-env
-sudo python3 -m venv $VENV
-sudo $VENV/bin/pip install --upgrade pip
-sudo $VENV/bin/pip install 'ansible>=2.12'  # 검증 기준: ansible 13.4.0 (ansible-core 2.20.3)
-sudo $VENV/bin/pip install pywinrm          # 검증 기준: 0.5.0 — Windows WinRM 연결
-sudo $VENV/bin/pip install 'pyvmomi>=7.0'   # 검증 기준: 9.0.0 — VMware ESXi API (community.vmware 의존)
-sudo $VENV/bin/pip install jmespath         # 검증 기준: 1.1.0 — json_query 필터 (JSON 데이터 파싱)
-sudo $VENV/bin/pip install netaddr          # 검증 기준: 1.3.0 — ipaddr 필터 (IP/서브넷 연산)
-sudo $VENV/bin/pip install lxml             # 검증 기준: 6.0.2 — VMware 모듈 XML 파싱
-sudo $VENV/bin/pip install pytest           # 검증 기준: 9.0.2 — main 전용 CI Job(`Jenkinsfile_ci`)의 `scripts/ai/ci_gate.sh` 가 Runner 에서 돈다. 수집 Job 은 쓰지 않는다
-
-# 확인
-$VENV/bin/ansible --version
-```
-
-### Python 인터프리터 경로 확인
-
-Agent 서버에 `/usr/bin/python3` 경로로 Python 3.9 이상이 존재해야 한다 (검증 기준 Agent: 3.12.3).
-동적 인벤토리 `*-gather/inventory.sh` 가 이 경로로 실행된다 (표준 라이브러리만 쓴다). 수집 모듈은 venv 의 python 을 쓴다.
+Redfish 수집은 표준 라이브러리만 씁니다. Linux 수집도 추가 패키지가 없습니다.
 
 ```bash
-# 확인
-ls -la /usr/bin/python3
+# Runner 서버 셸, root 또는 sudo. 경로는 예시이며 조직 방식대로 바꿔도 됩니다
+VENV=/app/ansible-env
+python3.12 -m venv "$VENV"
+"$VENV/bin/pip" install --upgrade pip
+"$VENV/bin/pip" install 'ansible-core>=2.16,<2.21' pywinrm pyvmomi
+"$VENV/bin/ansible-galaxy" collection install community.vmware ansible.windows
 
-# 없으면 심볼릭 링크 생성
-sudo ln -sf $(which python3) /usr/bin/python3
+# 확인 (Agent 계정으로)
+"$VENV/bin/ansible" --version
+"$VENV/bin/ansible-galaxy" collection list | grep -E 'community.vmware|ansible.windows'
 ```
 
-대부분의 Linux 배포판(RHEL 8+, Ubuntu 20.04+, Rocky 8+)에는 기본으로 들어 있다.
+사내는 `ansible` 풀 패키지(13.4.0)를 설치해 위 두 Collection과 함께 다른 Collection도 들어 있습니다. 풀 패키지를 설치해도 되고, 위처럼 필요한 것만 설치해도 됩니다.
 
-### Ansible Collection
+venv를 알려진 경로 밖에 두면 노드 설정의 환경변수 `SE_ANSIBLE_VENV`에 그 루트를 적으세요(7절).
 
-`pip install ansible` (풀패키지) 로 설치하면 아래 Collection 이 기본으로 포함된다.
-`ansible-core` 만 설치했다면 직접 설치해야 한다.
+## 6. Jenkins에 Runner 등록
 
-```bash
-# 프로젝트에서 사용하는 Collection (검증 기준 Agent 버전 주석 참고)
-sudo $VENV/bin/ansible-galaxy collection install community.vmware    # 검증 기준: 6.2.0 — esxi-gather
-sudo $VENV/bin/ansible-galaxy collection install ansible.windows     # 검증 기준: 3.3.0 — Windows gather
-sudo $VENV/bin/ansible-galaxy collection install ansible.posix       # 검증 기준: 2.1.0 — Linux (cron, sysctl 등)
-sudo $VENV/bin/ansible-galaxy collection install community.general   # 검증 기준: 12.4.0 — 범용 (timezone 등)
-sudo $VENV/bin/ansible-galaxy collection install ansible.utils       # 검증 기준: 6.0.1 — 유틸리티 필터 (ipaddr 등)
-
-# 확인
-$VENV/bin/ansible-galaxy collection list
-```
-
-> venv 는 사용자 계정에 의존하지 않는 시스템 공용 경로에 둔다. Jenkins Agent 사용자에게 읽기+실행 권한만 있으면 동작한다.
-
-### Vault 패스워드 (Jenkinsfile_portal — 메인 Jenkinsfile 과 동일)
-
-> **2026-06-18 변경**: `Jenkinsfile_portal` 도 메인 `Jenkinsfile` 과 동일하게 Jenkins Credentials Store
-> 의 `server-gather-vault-password` (Secret text) 를 사용한다. 이전의 agent 로컬 `VAULT_PASS_FILE` 파일
-> 방식 / 임시 하드코딩은 폐기됐다 — **Agent 에 별도 vault 패스워드 파일을 배치할 필요가 없다.**
-
-`Jenkinsfile_portal` 의 Gather 단계는 `withCredentials([string(credentialsId: 'server-gather-vault-password',
-variable: 'VAULT_PASSWORD')])` 로 패스워드를 주입받는다(콘솔 마스킹). 이를 런타임 임시파일(`mktemp`, chmod 600)에
-써서 `--vault-password-file` 로 ansible-playbook 에 넘기고 빌드가 끝나면 `trap` 으로 임시파일을 삭제한다.
-
-- credential 등록 절차: [01-jenkins-master.md](01-jenkins-master.md) §7 (`server-gather-vault-password`, Secret text).
-  메인 `Jenkinsfile` 이 이미 같은 credential 을 쓰므로 추가 등록은 대개 필요 없다.
-- 패스워드 회전 절차: [05-vault.md](05-vault.md).
-- 보안: Credentials Store 가 콘솔 로그에서 패스워드를 마스킹한다. 운영 빌드는 `verbosity=0` 유지 권장
-  (`-vv` 이상 시 vault 변수 노출 가능).
-
----
-
-## 6. /etc/ansible/ansible.cfg 배치
-
-모든 계정에서 동일하게 적용되도록 `/etc/ansible/ansible.cfg` 에 배치한다.
-
-> **ansible.cfg 우선순위**: Ansible은 `ANSIBLE_CONFIG` 환경변수 → CWD의 `ansible.cfg` → `~/.ansible.cfg` → `/etc/ansible/ansible.cfg` 순으로 탐색한다.
-> Jenkins 빌드에서는 프로젝트 루트의 `ansible.cfg`가 CWD에 있으므로 아래 시스템 설정보다 우선 적용된다.
-> 여기서 설정하는 `/etc/ansible/ansible.cfg`는 프로젝트 외부에서 Ansible을 실행할 때의 기본값이다.
-
-```bash
-sudo mkdir -p /etc/ansible
-
-sudo tee /etc/ansible/ansible.cfg > /dev/null << 'EOF'
-[defaults]
-host_key_checking       = False
-bin_ansible_callbacks   = True
-retry_files_enabled     = False
-gathering               = smart
-interpreter_python      = auto
-forks                   = 20
-timeout                 = 60
-deprecation_warnings    = False
-
-[inventory]
-enable_plugins = script, auto
-
-[ssh_connection]
-pipelining = True
-
-[winrm]
-transport = ntlm
-EOF
-```
-
-> **범용 설정 원칙**: 이 파일은 Agent에서 실행하는 모든 프로젝트의 공통 기본값이다.
-> Ansible은 ansible.cfg를 병합하지 않고 우선순위 1개만 쓰므로
-> 프로젝트 루트에 `ansible.cfg`가 있으면 이 시스템 설정은 무시된다.
->
-> - **프로젝트 루트에 ansible.cfg가 있는 경우**: 해당 설정이 우선 적용된다
->   (예: `stdout_callback`, `gathering`, 커스텀 플러그인 경로 등).
-> - **프로젝트 루트에 ansible.cfg가 없는 경우**: 이 시스템 설정이 그대로 적용된다.
->
-> `[inventory] enable_plugins = script, auto` — 동적 인벤토리 스크립트(inventory.sh)를
-> INI 파서보다 먼저 인식시킨다. 이 설정이 없으면 Python 스크립트가 INI로 파싱되어 실패한다.
-
----
-
-## 7. 인벤토리 스크립트 실행 권한
-
-Windows 에서 커밋된 `.sh` 파일은 Git 에 실행 권한(100755)이 기록되지 않아
-Jenkins checkout 후 Ansible 동적 인벤토리가 동작하지 않는다.
-
-세 채널의 동적 인벤토리 스크립트(`os-gather/inventory.sh`, `esxi-gather/inventory.sh`, `redfish-gather/inventory.sh`)를 새로 추가했다면
-아래 명령으로 실행 권한을 Git 에 기록한 뒤 커밋한다.
-
-```bash
-# 프로젝트 clone 후
-git update-index --chmod=+x os-gather/inventory.sh esxi-gather/inventory.sh redfish-gather/inventory.sh
-git commit -m "fix: inventory 스크립트 실행 권한 추가"
-git push
-```
-
-> 한 번 커밋하면 이후 모든 clone / checkout 에서 실행 권한이 유지된다.
-
----
-
-## 8. Jenkins 노드 등록
-
-경로: Jenkins → Manage Jenkins → Nodes → New Node
-
-### 기본 설정
+경로: Manage Jenkins → Nodes → New Node → Permanent Agent
 
 | 항목 | 값 | 비고 |
-|------|-----|------|
-| Name | `agent-{loc}-{dev\|ops}` | 예: `agent-ic-ops`, `agent-cj-dev` |
-| Description | `{로케이션} {개발\|운영} Agent` | 예: `이천 운영 Agent` |
-| Number of executors | `2` | 동시 실행 잡 수. 서버 사양에 따라 조정 |
-| Remote root directory | `/home/{서비스계정}/jenkins-agent` | Agent 워크스페이스 경로. 설치 자동화 Runner 는 계정 `jenkins` · `/app/jenkins-agent/agent` |
-| Labels | 로케이션 코드 + 이 노드가 수집할 target_type 의 능력 라벨 | 아래 표 참조 |
-| Usage | `Only build jobs with label expressions matching this node` | 라벨 매칭 잡만 실행 |
-| Launch method | `Launch agents via SSH` | 아래 상세 참조 |
+|---|---|---|
+| Name | Runner 이름 (예: `agent-ic-01`) | 수집을 시작한 뒤 연결이 끊기면 파이프라인은 이 이름의 Runner가 돌아오기를 기다려 같은 작업 폴더에서 이어서 수집합니다. 빌드가 기다리는 중에는 이름, 라벨, remote root를 바꾸지 마세요 |
+| Remote root directory | 3절의 remote root | |
+| Labels | 7절의 Location 라벨과 능력 라벨 | 공백으로 구분 |
+| Usage | `Only build jobs with label expressions matching this node` | 선택. 사내 설정 |
+| Launch method | `Launch agents via SSH` (사내 방식) | Host는 Runner 주소, Credentials는 SSH Username with private key, Host Key Verification Strategy는 조직 정책대로. 사내는 Manually trusted key Verification Strategy에 첫 연결 수동 승인 없음 |
+| JavaPath (SSH 방식의 Advanced) | Runner의 java 경로 | 비우면 PATH의 java를 씁니다. 사내는 `/app/clovirone-agent-java` |
+| Number of executors | 동시에 실행할 빌드 수 | 선택. 사내 15 |
 | Availability | `Keep this agent online as much as possible` | |
 
-### Labels 설정
+inbound(JNLP) 방식으로 연결해도 파이프라인은 같습니다. 사내에서는 확인하지 않았습니다.
 
-`Jenkinsfile_portal` 은 `common/vars/locations.yml` 의 `agent_label`(Location 라벨)과 `target_type` 의 능력 라벨을 `&&` 로 이어
-노드를 고른다. 두 종류를 모두 가진 노드가 Jenkins 에 **하나도 등록돼 있지 않으면** 실행 위치 확인이 설정 오류로 FAILURE 다(접수된 대상마다 실패 결과는
-보낸다). 등록돼 있으면 지금 연결이 끊겼거나 executor 가 모두 사용 중이어도 수집 단계가 Jenkins queue 로 기다린다 — executor 를 잡지 않고 빌드 하나의
-실행 기반 대기 합 최대 72시간(2026-10-06 9차, [04-pipeline-runtime.md](04-pipeline-runtime.md) "실행 기반 대기와 같은 Runner 재개").
-수집을 시작한 뒤 연결이 끊기면 **그 노드**가 돌아오기를 기다려 같은 작업 폴더에서 끝나지 않은 대상만 이어서 수집한다 — 노드를 지우거나 이름을 바꾸면
-그 빌드는 이어 가지 못한다(`resume_impossible`). 빌드가 기다리는 중에는 노드의 라벨 · 작업 폴더 위치를 바꾸지 않는다.
+## 7. 라벨과 노드 환경변수
 
-| Location | Labels 값 |
-|-------------|----------|
-| 이천 | `ic` |
-| 청주 | `cj` (2026-10-04 까지 `chj`) |
-| 용인 | `yi` |
-| 사내 테스트 | `git` |
+파이프라인은 `common/vars/locations.yml`의 `agent_label`(Location 라벨)과 `target_type`의 능력 라벨을 `&&`로 이어 Runner를 고릅니다. 두 라벨을 모두 가진 Runner가 하나도 등록돼 있지 않으면 실행 위치 확인 단계가 설정 오류로 실패합니다. 등록돼 있으면 연결이 끊겨 있거나 바빠도 수집 단계가 기다립니다.
 
-| target_type | 노드에 있어야 하는 능력 라벨 | 뜻 |
+| Location (`loc` 값) | 라벨 |
+|---|---|
+| `ic` | `ic` |
+| `cj` | `cj` |
+| `yi` | `yi` |
+| `git` (사내 검증) | `git` |
+
+| `target_type` | Runner에 있어야 하는 능력 라벨 |
+|---|---|
+| `os` | `linux`와 `windows` 둘 다. 한 요청에 Linux와 Windows가 섞일 수 있습니다 |
+| `esxi` | `esxi` |
+| `redfish` | `redfish` |
+
+예를 들어 이천에서 세 종류를 모두 수집하는 Runner의 Labels는 `ic linux windows esxi redfish`입니다. Location을 추가하려면 `common/vars/locations.yml`에 키와 `agent_label`을 추가하고, 그 Location의 vault 파일을 만들고, 그 라벨을 가진 Runner를 등록합니다([05-vault.md](05-vault.md)).
+
+노드 환경변수(Node Properties → Environment variables)는 다음 두 가지만 씁니다. 둘 다 선택입니다.
+
+| 이름 | 값 | 언제 |
 |---|---|---|
-| `os` | `linux` 와 `windows` 둘 다 | 한 요청에 Linux · Windows 서버가 섞이므로 SSH 와 WinRM 수집이 모두 돼야 한다 |
-| `esxi` | `esxi` | vSphere API(443)로 ESXi 에 붙는다 |
-| `redfish` | `redfish` | BMC 망의 Redfish API(443)에 붙는다 |
+| `SE_ANSIBLE_VENV` | venv 루트 | venv가 `/app/ansible-env`, `/opt/ansible-env`가 아니고 PATH로도 찾을 수 없을 때 |
+| `SE_FORKS_CAP_OS` | 정수 | OS 수집의 동시 실행 수 상한을 기본값(50)과 다르게 둘 때 |
 
-예: 이천에서 세 종류를 모두 수집하는 노드의 Labels 는 `ic linux windows esxi redfish` 다. 능력 라벨이 없는 노드에는 수집이 배정되지 않는다.
+Add-on 관련 값은 노드에 두지 않습니다. 전역 환경변수 하나로 켭니다([03-job-registration.md](03-job-registration.md) 4절).
 
-### Launch method (SSH)
+## 8. 연결 확인
 
-| 항목 | 값 |
-|------|-----|
-| Host | Agent 노드 IP |
-| Credentials | `{서비스계정}` SSH 계정 (Jenkins Credentials 에 미리 등록) |
-| Host Key Verification Strategy | `Non verifying Verification Strategy` |
-
-> SSH Credentials 등록: Jenkins → Manage Jenkins → Credentials → Add Credentials
-> Kind: `SSH Username with private key`, Username: `{서비스계정}`, Private Key: 마스터에서 생성한 SSH 키
-
----
-
-## 9. Node Properties 설정
-
-경로: Jenkins → Manage Jenkins → Nodes → {노드} → Configure → Node Properties
-
-### Environment variables (선택)
-
-수집 파이프라인은 venv 를 `scripts/activate_ansible_venv.sh` 로 찾으므로 5절의 두 경로 중 하나에 venv 가 있으면
-노드 환경변수가 필요 없다. 다른 경로를 썼을 때만 등록한다.
-
-| Name | Value | 언제 |
-|------|-------|------|
-| `SE_ANSIBLE_VENV` | venv 루트 (예: `/data/ansible-env`) | venv 가 `/app/ansible-env` · `/opt/ansible-env` 가 아닐 때. 값이 있는데 그 안에 `bin/activate` 가 없으면 다른 경로로 넘어가지 않고 실패한다 |
-| `PATH+ANSIBLE` | venv 의 `bin` (예: `/opt/ansible-env/bin`) | 선택. Jenkins 가 기존 PATH 앞에 **추가**하는 문법이라 PATH 의 `ansible-playbook` 으로도 venv 를 찾게 된다 |
-
-고객별 추가 수집(Add-on)은 노드 설정이 필요 없다 — Jenkins 전역 환경변수 `ADDON_REPO_URL` 하나로 켜고, 파이프라인이
-빌드마다 저장소를 받아 간다 ([03-job-registration.md](03-job-registration.md) Add-on 절). 노드에 `ADDON_DIR` 을 두지 않는다.
-
-### Tool Locations
-
-| Tool | Home |
-|------|------|
-| Ansible (`ansible`) | Agent 의 venv `bin` (설치 자동화 Runner `/app/ansible-env/bin`, 직접 구축 `/opt/ansible-env/bin`) |
-
-> `ansiblePlaybook()` 스텝을 쓰는 파이프라인용이다. Jenkins → Manage Jenkins → Tools → Ansible 의 전역 값과
-> 다른 노드는 여기서 덮는다. 수집 파이프라인 `Jenkinsfile_portal` 은 이 값을 보지 않는다.
-
----
-
-## 10. 연결 확인
-
-노드를 등록한 뒤 Agent 서비스 계정으로 아래를 확인한다. 2절 표의 연결이 전부다.
+1. Manage Jenkins → Nodes에서 Runner가 online인지 확인하세요. SSH 방식은 노드의 Log 화면에 `Agent successfully connected and online`이 나옵니다.
+2. Runner 서버 셸에서 Agent 계정으로 저장소 접근과 venv를 확인하세요.
 
 ```bash
-# 1) 마스터 → Agent: Jenkins → Nodes 에서 노드가 online 인가 (SSH 접속 · Java 실행이 됐다는 뜻)
-
-# 2) Agent → Git 서버: Job 에 등록된 저장소 URL 로 (자격이 필요하면 Job credential 과 같은 것으로)
+# Runner 서버 셸, Agent 계정
 git ls-remote <저장소 URL> refs/heads/main
-
-# 3) venv: 파이프라인이 쓰는 선택 스크립트 그대로 (저장소 clone 안에서)
-. scripts/activate_ansible_venv.sh && ansible --version && ansible-galaxy collection list | grep -E 'community.vmware|ansible.windows'
-
-# 4) 대상 서버 포트: 사전 진단이 빌드마다 판정한다 — 결과의 diagnosis.details.checked_ports 를 본다. 미리 확인하려면
-#    (bash 내장) timeout 3 bash -c '</dev/tcp/<대상IP>/443' && echo open
-
-# 5) ICMP 보조 확인 (선택, 3절) — 없어도 수집은 동작한다
+git clone --depth 1 <저장소 URL> /tmp/se-check && cd /tmp/se-check
+. scripts/activate_ansible_venv.sh && ansible --version
+cd / && rm -rf /tmp/se-check
 ```
 
----
+`[venv] <경로> python=<버전> (source=env|path|known)` 한 줄이 나오면 파이프라인도 같은 venv를 씁니다.
 
-## 다음 단계
+3. 대상 포트는 빌드마다 사전 진단이 판정합니다. 미리 보려면 Runner에서 `timeout 3 bash -c '</dev/tcp/<대상 IP>/443' && echo open`처럼 확인하세요.
+4. 첫 수집 실행과 결과 확인은 [03-job-registration.md](03-job-registration.md) 5절을 따르세요.
 
-| 다음 작업 | 문서 |
+## 9. Runner 임시 폴더 정리
+
+수집 단계의 마지막 보존이 결과를 빌드에 보관했다고 확인하면 그 빌드의 작업 폴더를 바로 지웁니다. 남은 작업 폴더는 같은 Runner에서 하루에 한 번 `scripts/workspace_cleanup.py`가 정리합니다. 운영자가 따로 cron을 둘 필요가 없습니다.
+
+- 대상은 같은 Job의 `<Job 이름>-<빌드 번호>` 폴더이고, 소유 기록(`.se_workspace.json`)이 그 Job과 번호를 가리킬 때만 봅니다.
+- 끝난 지 7일이 지난 폴더 가운데 결과를 보관한 폴더와 결과 파일이 없는 폴더는 통째로 지웁니다.
+- 결과를 보관하지 못한 폴더는 결과 파일(`gather_*`, `callback_body.json`, `finalize_summary.json`, `gather_auth_evidence/`)만 남기고 저장소 사본과 Add-on 사본을 지웁니다. 남긴 목록은 `.se_kept_results.json`에 적고 콘솔 `[작업 폴더 정리]` 줄로 알립니다. 사람이 확인한 뒤 지우세요.
+- 실행 중일 수 있는 폴더(끝 기록이 없고 시작 뒤 83시간 이내)와 다른 Job의 폴더는 건드리지 않습니다.
+
+수집 셸이 끝 처리 없이 강제 종료되고 같은 작업 폴더에서 이어서 하는 시도가 없으면 `/tmp/se_vault.*`와 `/tmp/se_cp.*`가 남을 수 있습니다. 이어서 하는 시도가 있으면 그 시도가 지웁니다. 남은 것은 Agent 계정이 지워도 됩니다.
+
+## 자주 막히는 곳
+
+| 증상 | 원인과 조치 |
 |---|---|
-| Jenkins Job 등록 | [03-job-registration.md](03-job-registration.md) |
-| Vault 운영 / 패스워드 회전 | [05-vault.md](05-vault.md) |
-| Ansible 프로젝트 설정 (ansible.cfg / 환경변수) | [08-ansible-config.md](08-ansible-config.md) |
+| 콘솔 `[venv] Ansible 실행환경(venv)을 찾지 못했습니다.` | 5절의 세 경로 어디에도 venv가 없습니다. `SE_ANSIBLE_VENV`를 등록하거나 알려진 경로에 설치하세요 |
+| `[실행 위치] 라벨 '...'에 해당하는 Runner가 Jenkins에 등록돼 있지 않습니다.` | 7절의 Location 라벨과 능력 라벨을 모두 가진 Runner가 없습니다 |
+| 수집 단계가 `[실행 대기] 수집을 실행할 Runner를 기다립니다.`를 반복 | Runner가 offline이거나 executor가 모두 사용 중입니다. 노드 상태와 Log 화면을 보세요. 최대 72시간 기다린 뒤 실패 결과를 보냅니다 |
+| `git: command not found` | Runner에 git이 없습니다. 4절 |
+| Windows 대상만 실패하고 콘솔에 `winrm` 모듈 오류 | venv에 `pywinrm`이 없습니다. 5절 |
+| ESXi 대상만 실패하고 `pyvmomi` 또는 `community.vmware` 오류 | venv에 `pyvmomi`나 Collection이 없습니다. 5절 |

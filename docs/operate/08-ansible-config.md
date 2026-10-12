@@ -1,129 +1,103 @@
 # Ansible 프로젝트 설정
 
-> **이 문서는** server-exporter 저장소가 사용하는 Ansible 의 프로젝트 고유 설정을 정리한다.
-> ansible.cfg 의 의미, 커스텀 플러그인 경로, 환경변수, vault 사용 방법, 로컬 실행 예시 등을 다룬다.
->
-> Agent 노드 자체의 설치 / 컬렉션 / Python 패키지 절차는 본 문서가 아니라 `docs/operate/02-agent-node.md` 5절을 참고한다.
-> 버전 요건은 `REQUIREMENTS.md` 4절.
+이 문서는 이 저장소가 쓰는 Ansible 설정(`ansible.cfg`), 플러그인 경로, 수집 실행이 읽는 환경변수, vault 비밀번호 전달 방식, Jenkins 밖에서 직접 실행하는 방법을 설명합니다.
+Runner 자체의 설치는 [02-agent-node.md](02-agent-node.md), 환경 요건은 [../../REQUIREMENTS.md](../../REQUIREMENTS.md)에 있습니다.
 
----
+## 1. 프로젝트 `ansible.cfg`
 
-## 1. 프로젝트 ansible.cfg
+저장소 루트의 `ansible.cfg`가 정본입니다. Ansible은 설정 파일을 병합하지 않고 하나만 읽으며, 수집 실행은 `ANSIBLE_CONFIG`로 이 파일을 지정합니다. 그래서 Runner의 `/etc/ansible/ansible.cfg`는 수집에 적용되지 않습니다.
 
-프로젝트 루트의 `ansible.cfg` 설정:
+핵심 항목입니다. 전체는 파일을 직접 보세요.
 
 ```ini
 [defaults]
-lookup_plugins  = ./lookup_plugins         # adapter_loader
-filter_plugins  = ./filter_plugins         # diagnosis_mapper, jedec_mapper
-callback_plugins = ./callback_plugins       # json_only (단일 사본)
-library         = ./common/library:./redfish-gather/library
-module_utils    = ./module_utils           # adapter_common
-stdout_callback = json_only
+lookup_plugins   = ./lookup_plugins          ; adapter_loader
+filter_plugins   = ./filter_plugins          ; 정규화 필터
+callback_plugins = ./callback_plugins        ; json_only
+library          = ./common/library:./redfish-gather/library
+module_utils     = ./module_utils            ; adapter_common
+stdout_callback  = json_only
 callbacks_enabled = json_only
-gathering = explicit                        # gather_facts: no
-jinja2_native = True                        # JSON 출력 타입 보존 (int/bool 유지)
+gathering        = explicit                  ; gather_facts 는 playbook 이 명시적으로 호출
+jinja2_native    = True                      ; JSON 출력에서 int, bool 유지
 host_key_checking = False
 interpreter_python = auto
-forks = 50                                   # 2026-10-07: 200 → 50 (현재 운영 설정, 향후 변경 가능). 동적 forks·자원 차단 로직은 없다
-timeout = 60
-gather_timeout = 60
+forks            = 50
+timeout          = 60
+gather_timeout   = 60
 ```
 
-> 위 블록은 핵심 발췌다. 실제 `ansible.cfg` 에는 `[ssh_connection]`(pipelining + 레거시 `ssh_args`), `[winrm]`(`transport = ntlm`), `[inventory]` 섹션도 있다. 전체는 `ansible.cfg` 를 직접 본다.
-> 이 ansible.cfg는 CWD 우선순위로 `/etc/ansible/ansible.cfg`(시스템 설정)보다 우선 적용된다.
+`[ssh_connection]`(pipelining), `[winrm]`(`transport = ntlm`), `[inventory]`(스크립트 인벤토리 사용) 섹션도 있습니다. fact 캐시는 쓰지 않으므로 Redis 같은 캐시 서버는 필요 없습니다.
 
----
+`forks`는 Ansible의 동시 실행 상한입니다. 실제 동시 실행 수는 `scripts/gather_state.py`가 채널과 대상 수로 정해 `ansible-playbook -f`로 넘깁니다(OS는 최대 50 또는 노드 환경변수 `SE_FORKS_CAP_OS`, ESXi는 vCPU의 2배, Redfish는 vCPU의 4배).
 
-## 2. 커스텀 플러그인 경로
+## 2. 플러그인 경로
 
-| 플러그인 타입 | 경로 | 파일 |
-|-------------|------|------|
-| lookup | `./lookup_plugins/` | `adapter_loader.py` |
-| filter | `./filter_plugins/` | `diagnosis_mapper.py`, `jedec_mapper.py` |
-| callback | `./callback_plugins/` | `json_only.py` |
-| library | `./common/library/`, `./redfish-gather/library/` | `precheck_bundle.py`, `redfish_gather.py` |
-| module_utils | `./module_utils/` | `adapter_common.py` |
+| 종류 | 경로 | 파일 |
+|---|---|---|
+| lookup | `lookup_plugins/` | `adapter_loader.py` (어댑터 선택) |
+| filter | `filter_plugins/` | 진단, 식별자, 단위, 오류 문장 정규화 필터 |
+| callback | `callback_plugins/` | `json_only.py` (결과 봉투 출력과 진행 기록) |
+| library | `common/library/`, `redfish-gather/library/` | `precheck_bundle.py` (사전 진단), `redfish_gather.py` (Redfish 수집) |
+| module_utils | `module_utils/` | `adapter_common.py` (어댑터 매칭과 점수) |
 
-### 플러그인 발견 경로 우선순위
-
-1. `ansible.cfg`의 설정값
-2. 환경변수 (`ANSIBLE_LOOKUP_PLUGINS` 등)
-3. Playbook 인접 디렉토리 (각 채널의 `library/`, `callback_plugins/`)
-4. `~/.ansible/plugins/`
-
-> **주의**: `ansible.cfg` 없이 실행하면 채널별 `library/` (예: `redfish-gather/library/`)는 인식 안됨. `ansible.cfg` 필수.
-
----
+`ansible.cfg` 없이 실행하면 이 경로들이 인식되지 않습니다. 저장소 루트에서 실행하거나 `ANSIBLE_CONFIG`로 지정하세요.
 
 ## 3. 환경변수
 
-| 변수 | 필수 | 설명 | 설정 위치 |
-|------|------|------|----------|
-| `REPO_ROOT` | 필수 | 프로젝트 루트 경로 (adapter/vault 로딩) | Jenkinsfile: `${WORKSPACE}` |
-| `INVENTORY_JSON` | 필수 | 호출자가 전달하는 호스트 배열 JSON (os/esxi: `service_ip`, redfish: `bmc_ip`, fallback: `ip`) | Jenkinsfile: `${params.inventory_json}` |
-| `ANSIBLE_CONFIG` | 권장 | ansible.cfg 경로 (미설정 시 CWD 기준) | Jenkins workspace 루트 |
-| `SE_ANSIBLE_VENV` | 선택 | Ansible venv 루트를 명시한다. 없으면 `scripts/activate_ansible_venv.sh` 가 PATH 의 `ansible-playbook` → 알려진 경로(`/app/ansible-env`, `/opt/ansible-env`) 순으로 찾는다. 값이 있는데 `bin/activate` 가 없으면 다른 경로로 넘어가지 않고 실패한다 | Agent 노드 환경변수 ([02-agent-node.md](02-agent-node.md) 9절) |
-| `ADDON_DIR` | 파이프라인 내부 | 고객별 추가 수집(Add-on) 디렉터리 절대경로. 없으면 추가 수집을 하지 않는다. 설정했는데 `<경로>/tasks/main.yml` 이 없으면 기본 수집은 그대로 두고 `errors[]` 에 `section: addon` 1건을 남긴다 | Jenkinsfile Gather stage 가 `${WORKSPACE}/addon` 으로 ansible 실행에만 넘긴다 (전역 `ADDON_REPO_URL` 이 있을 때). 노드 환경변수로 두지 않는다 |
+수집 실행이 읽는 변수입니다. Jenkins에서는 `Jenkinsfile_portal`이 설정하고([04-pipeline-runtime.md](04-pipeline-runtime.md) 2절), 직접 실행할 때는 사람이 설정합니다.
 
-`ADDON_DIR` 의 동작과 Add-on 과의 약속은 [develop/07-addon-hook.md](../develop/07-addon-hook.md) 에 있다.
-Add-on 을 켜는 것은 Jenkins 전역 환경변수 `ADDON_REPO_URL` 이다 ([04-pipeline-runtime.md](04-pipeline-runtime.md) 3절) —
-Add-on 저장소를 빌드마다 받아 가므로 Agent 에 파일을 두거나 노드 환경변수를 등록하는 일이 없다. Jenkins 밖에서 직접
-실행할 때(엔진 테스트 · WSL)만 Add-on 디렉터리 절대경로를 `ADDON_DIR` 로 직접 export 한다.
+| 변수 | 필수 | 뜻 | Jenkins에서 |
+|---|---|---|---|
+| `REPO_ROOT` | 필수 | 저장소 루트. 공통 task, 어댑터, vault 경로의 기준 | `${WORKSPACE}` |
+| `ANSIBLE_CONFIG` | 권장 | `ansible.cfg` 경로 | `${WORKSPACE}/ansible.cfg` |
+| `INVENTORY_JSON_FILE` | 셋 중 하나 | 대상 목록 JSON 파일. `inventory.sh`가 가장 먼저 읽습니다 | `${WORKSPACE}/.inventory_input.json` |
+| `INVENTORY_JSON` 또는 `inventory_json` | 셋 중 하나 | 대상 목록 JSON 문자열. 작은 입력의 편의 경로 | 쓰지 않음 |
+| `$WORKSPACE/.inventory_input.json` 파일 | 셋 중 하나 | 변수가 없을 때 찾는 파일 | |
+| `ANSIBLE_JSON_OUTPUT_FILE` | 선택 | 결과 봉투를 한 줄씩 쓸 파일. 없으면 stdout만 | `${WORKSPACE}/gather_output.json` |
+| `ANSIBLE_JSON_PROGRESS_FILE`, `ANSIBLE_JSON_CHECKPOINT_FILE`, `ANSIBLE_JSON_MANIFEST_FILE` | 선택 | 진행 기록, Add-on 직전 조립본, 접수 목록 | 작업 폴더의 파일 |
+| `SE_AUTH_EVIDENCE_DIR` | 선택 | Redfish 인증 증거 파일 폴더 | `${WORKSPACE}/gather_auth_evidence` |
+| `ADDON_DIR` | 선택 | 추가 수집(Add-on) 디렉터리 절대 경로. 없으면 Add-on을 실행하지 않습니다. 있는데 `<경로>/tasks/main.yml`이 없으면 `errors[]`에 `section: addon` 1건을 남깁니다 | 검사를 통과한 빌드의 ansible 실행에만 `${WORKSPACE}/addon` |
+| `SE_ANSIBLE_VENV` | 선택 | Ansible 실행환경(venv) 루트. `scripts/activate_ansible_venv.sh`가 읽습니다 | Runner 노드 환경변수 |
 
----
+`se_location`은 환경변수가 아니라 playbook 변수입니다. `-e se_location=<loc>`로 넘기며, `common/vars/locations.yml`에 없는 값이면 세 채널 모두 대상이 자격증명 단계 실패 결과로 끝납니다.
 
-## 4. Vault 설정
+## 4. vault 비밀번호
 
-```bash
-# vault 비밀번호 파일 방식
-ansible-playbook --vault-password-file .vault_pass site.yml
+Jenkins에서는 credential `server-gather-vault-password`(Secret text)를 `withCredentials`로 주입하고, `scripts/run_gather.sh`가 임시 파일(권한 600)에 써서 `--vault-password-file`로 넘긴 뒤 실행이 끝나면 지웁니다. `ansible.cfg`에는 vault 비밀번호 파일 설정이 없습니다.
 
-# 환경변수 방식
-export ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass
+직접 실행할 때는 비밀번호 파일을 만들어 넘기세요. 파일은 저장소 밖에 두고 권한을 600으로 하세요.
 
-# Jenkins credentials binding 방식 (운영 — Jenkinsfile_portal Gather stage)
-# Secret text 'server-gather-vault-password' 를 mktemp 임시파일에 써서 넘기고 trap 으로 지운다.
-withCredentials([string(credentialsId: 'server-gather-vault-password', variable: 'VAULT_PASSWORD')]) {
-    sh '''
-        . "${WORKSPACE}/scripts/activate_ansible_venv.sh" || exit 1
-        VAULT_TMP="$(mktemp)"; trap 'rm -f "$VAULT_TMP"' EXIT
-        printf '%s' "$VAULT_PASSWORD" > "$VAULT_TMP"; chmod 600 "$VAULT_TMP"
-        ansible-playbook redfish-gather/site.yml -i redfish-gather/inventory.sh --vault-password-file="$VAULT_TMP"
-    '''
-}
-```
+## 5. Jenkins 밖에서 직접 실행
 
----
-
-## 5. 실행 명령 예시
-
-Jenkins 밖에서 직접 실행할 때도 Jenkins 가 넘기는 두 값을 함께 준다. `ansible.cfg` 의 vault 비밀번호 파일 설정은 꺼져 있어
-비밀번호 파일을 직접 줘야 하고, `se_location` 이 없거나 등록되지 않은 위치면 세 채널 모두 대상이 자격증명 단계 실패 결과로 끝난다.
+Runner와 같은 환경(venv, 대상으로 가는 통신 경로)이 있는 Linux에서 실행합니다.
 
 ```bash
-# Redfish gather
-cd ${REPO_ROOT}
-export REPO_ROOT=$(pwd)
-export INVENTORY_JSON='[{"ip":"10.50.11.232"}]'
-ansible-playbook redfish-gather/site.yml -i redfish-gather/inventory.sh \
-  --vault-password-file=<비밀번호 파일> -e se_location=<loc>
+# 저장소 루트, Runner 와 같은 계정
+export REPO_ROOT="$(pwd)"
+export ANSIBLE_CONFIG="$REPO_ROOT/ansible.cfg"
+export INVENTORY_JSON='[{"service_ip":"192.0.2.10"}]'      # redfish 는 bmc_ip
+. scripts/activate_ansible_venv.sh
 
-# OS gather
-ansible-playbook os-gather/site.yml -i os-gather/inventory.sh \
-  --vault-password-file=<비밀번호 파일> -e se_location=<loc>
-
-# ESXi gather
-ansible-playbook esxi-gather/site.yml -i esxi-gather/inventory.sh \
-  --vault-password-file=<비밀번호 파일> -e se_location=<loc>
+ansible-playbook os-gather/site.yml      -i os-gather/inventory.sh      --vault-password-file <비밀번호 파일> -e se_location=<loc>
+ansible-playbook esxi-gather/site.yml    -i esxi-gather/inventory.sh    --vault-password-file <비밀번호 파일> -e se_location=<loc>
+ansible-playbook redfish-gather/site.yml -i redfish-gather/inventory.sh --vault-password-file <비밀번호 파일> -e se_location=<loc>
 ```
 
----
+결과 봉투는 stdout에 서버마다 한 줄씩 나옵니다. `ANSIBLE_JSON_OUTPUT_FILE`을 설정하면 파일에도 씁니다. Jenkins의 수집 실행 한계와 재개는 `scripts/run_gather.sh`와 `scripts/gather_state.py`가 맡으므로, 직접 실행에서는 적용되지 않습니다. 같은 동작이 필요하면 `scripts/run_gather.sh`를 Jenkins와 같은 인자로 실행하세요.
+
+```bash
+# 인자: <playbook> <inventory> <loc> <Add-on 검사 통과 여부 true|false> <수집 실행 한계 초> [이전 시도 중 Runner 끊김 true|false]
+VAULT_PASSWORD='<값>' WORKSPACE="$REPO_ROOT" bash scripts/run_gather.sh redfish-gather/site.yml redfish-gather/inventory.sh <loc> false 21600
+```
+
+위 명령의 비밀번호는 셸 기록에 남을 수 있습니다. 운영에서는 Jenkins 경로를 쓰세요.
 
 ## 다음 단계
 
 | 다음 작업 | 문서 |
 |---|---|
-| Agent 노드 자체 설치 | [02-agent-node.md](02-agent-node.md) |
-| 환경 요건 | [REQUIREMENTS.md](../REQUIREMENTS.md) |
-| Vault 운영 | [05-vault.md](05-vault.md) |
+| Runner 설치 | [02-agent-node.md](02-agent-node.md) |
+| 환경 요건 | [../../REQUIREMENTS.md](../../REQUIREMENTS.md) |
+| vault 구조와 편집 | [05-vault.md](05-vault.md) |
+| 파이프라인이 주는 환경변수 전체 | [04-pipeline-runtime.md](04-pipeline-runtime.md) |
