@@ -23,9 +23,9 @@
 
 ```bash
 # 저장소 루트
-cp tests/inventory/supplemental.sample.ini tests/inventory/local/supplemental.ini
-vi tests/inventory/local/supplemental.ini          # 실제 계정 입력
-ansible-playbook redfish-gather/site.yml -i tests/inventory/local/supplemental.ini
+cp tests/inventory/supplemental.sample.ini tests/inventory/local/supplemental.ini   # local/ 은 .gitignore 에 있어 저장소에는 없다
+vi tests/inventory/local/supplemental.ini          # 실제 계정 입력 (저장소에는 없다)
+ansible-playbook redfish-gather/site.yml -i tests/inventory/local/supplemental.ini   # 저장소에는 없다
 ```
 
 ## 주의
