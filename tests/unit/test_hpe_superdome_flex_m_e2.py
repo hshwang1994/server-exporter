@@ -7,7 +7,7 @@ cycle 2026-05-06 M-E1 web 검색 (14 sources) + M-E2 adapter 추가.
 1. adapter YAML 4 필수 키 (rule 12 R4) + priority=101 (cycle 2026-06-04 95→101 — iLO 6(100) catch-all 위, iLO 7(120) 아래)
 2. match.model_patterns 에 Superdome Flex 280 / Superdome Flex 패턴 포함
 3. match.vendor = HPE (sub-line — M-E1 결정 (a))
-4. capabilities.sections_supported 9 sections (system/hardware/bmc/cpu/memory/storage/network/firmware/power)
+4. capabilities.sections_supported 9 sections (hardware/bmc/cpu/memory/storage/network/firmware/power/thermal)
 5. capabilities.sections_supported 에 users 미포함 (sections.yml channels=[os] 정합)
 6. 복구 계정은 vault(`vault/<loc>/redfish/hpe.yml`)가 정본 — adapter 에 credentials 절이 없다(2026-10-11)
 7. 멀티노드는 OEM task 가 아니라 `vendor_notes.manager_layout` 으로 라이브러리가 만든다
@@ -105,8 +105,9 @@ def test_m_e2_capabilities_9_sections_no_users() -> None:
     """capabilities.sections_supported 9 sections — users 미포함 (sections.yml channels=[os] 정합)."""
     d = yaml.safe_load(ADAPTER_PATH.read_text(encoding="utf-8"))
     sections = d["capabilities"]["sections_supported"]
-    expected_9 = {"system", "hardware", "bmc", "cpu", "memory",
-                  "storage", "network", "firmware", "power"}
+    # 2026-10-12: system 은 Redfish 성공 경로가 지원 목록에 넣지 않는 섹션이라 adapter capabilities 에서도 뺐다. power 와 함께 thermal 을 지원한다.
+    expected_9 = {"hardware", "bmc", "cpu", "memory",
+                  "storage", "network", "firmware", "power", "thermal"}
     assert set(sections) == expected_9, (
         f"capabilities.sections_supported 9 sections 일치 필요. "
         f"실제: {sorted(sections)}, 기대: {sorted(expected_9)}"

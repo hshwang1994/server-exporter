@@ -246,11 +246,18 @@ def test_thermal_subsystem_fallback(monkeypatch) -> None:
 
 
 def test_thermal_absent_returns_empty(monkeypatch) -> None:
-    """/Thermal + /ThermalSubsystem 모두 404 → {} (graceful, no error noise)."""
+    """/Thermal + /ThermalSubsystem 모두 404 → 데이터 없음 + 404 오류 1건 → section runner 가 not_supported 로 분류 (errors[] 에 남지 않는다).
+
+    2026-10-12 전에는 404 를 []로 삼켜 sections.thermal=success · 빈 데이터인 거짓 성공이 나갔다.
+    """
     _patch(monkeypatch)
     data, errs = rg.gather_thermal("10.0.0.1", "/redfish/v1/Chassis/Nope", *CREDS)
     assert data == {}
-    assert errs == []  # 404 는 noise 차단
+    assert len(errs) == 1 and errs[0]["section"] == "thermal" and rg._is_404_only_error(errs)
+    all_errors, collected, failed, unsupported = [], [], [], []
+    run = rg._make_section_runner(all_errors, collected, failed, unsupported)
+    run("thermal", rg.gather_thermal, "10.0.0.1", "/redfish/v1/Chassis/Nope", *CREDS)
+    assert unsupported == ["thermal"] and collected == [] and failed == [] and all_errors == []
 
 
 def test_thermal_no_uri(monkeypatch) -> None:

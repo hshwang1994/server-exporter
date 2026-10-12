@@ -7,8 +7,7 @@
     "power",
     "processors",
     "storage",
-    "system",
-    "thermal"
+    "system"
   ],
   "data": {
     "bios": {
@@ -367,7 +366,8 @@
   "probe_facts": {},
   "status": "success",
   "unsupported_sections": [
-    "network_adapters"
+    "network_adapters",
+    "thermal"
   ],
   "vendor": "unknown"
 }

@@ -8,8 +8,7 @@
     "power",
     "processors",
     "storage",
-    "system",
-    "thermal"
+    "system"
   ],
   "data": {
     "bios": {
@@ -1310,6 +1309,8 @@
     "model_hint": "HPE ProLiant Compute DL380a Gen12 -- SIMULATED"
   },
   "status": "success",
-  "unsupported_sections": [],
+  "unsupported_sections": [
+    "thermal"
+  ],
   "vendor": "hpe"
 }

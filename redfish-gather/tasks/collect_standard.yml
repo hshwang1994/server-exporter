@@ -106,7 +106,6 @@
           username: ""
           label: "no-credential"
           role: "anonymous"
-        _rf_used_account_role: "anonymous"
       no_log: true
 
     # 2026-08-12 (N41): 빈 자격 경로도 실패 근거를 남긴다 (후보 경로와 동일 형식).

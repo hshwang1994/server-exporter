@@ -37,11 +37,10 @@ priority: 100
 
 match:
   vendor: ["HPE", "Hewlett Packard Enterprise"]
-  firmware_patterns: ["iLO.*6", "^1\\.[5-9]"]
+  firmware_patterns: ["iLO\\s*6\\b", "^1\\.[5-9]"]
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -50,6 +49,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 # iLO 6 특이사항 (실장비 검증 2026-03-18):
 # - Storage: StorageControllers 인라인 배열 없음 → Controllers 서브링크 사용

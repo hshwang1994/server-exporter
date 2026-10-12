@@ -668,11 +668,11 @@
             _out_vendor: >-
               {{ ((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default(''))
                  or ((_va | default({})).vendor_output_display | default({})).get(_rf_vendor | default(''), _rf_vendor | default(none)) }}
-            # 2026-10-03 (N8/Q9): adapter 가 sections_supported 를 주면 그것, 없으면 채널 지원 섹션 전체
-            #   (common/vars/supported_sections.yml channel_sections.redfish — power/thermal 포함 10개).
-            #   종전 8개 기본값은 rescue 경로만 다른 목록을 내던 자리다.
+            # adapter 가 sections_supported 를 주면 그것, 없으면 성공 경로(normalize_standard.yml)와 같은 9개.
+            #   2026-10-12: 'system' 은 Redfish 가 지원하는 섹션이 아니다(BMC 는 OS 정보를 모른다 — 성공 경로도 not_supported).
+            #   종전에는 rescue 만 adapter 목록의 system 을 failed 로 냈다. adapter 30개의 capabilities 에서도 system 을 뺐다.
             _fail_sec_supported:    "{{ ((_selected_adapter | default({})).capabilities | default({})).sections_supported
-                                        | default(['system','hardware','bmc','cpu','memory',
+                                        | default(['hardware','bmc','cpu','memory',
                                                    'storage','network','firmware','power','thermal']) }}"
             _fail_error_section:    "redfish_gather"
             # 2026-05-11 debugging visibility: ansible_failed_task.name 포함 — json_only callback 으로
@@ -724,7 +724,7 @@
                        'collection_method': 'redfish_api',
                        'ip': _rf_ip | default(inventory_hostname),
                        'hostname': none,
-                       'vendor': (((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default('')) or ((_va | default({})).vendor_output_display | default({})).get(_rf_detected_vendor | default(''), _rf_detected_vendor | default(none))),
+                       'vendor': (((_va | default({})).adapter_output_display | default({})).get((_selected_adapter | default({})).adapter_id | default('')) or ((_va | default({})).vendor_output_display | default({})).get(_rf_detected_vendor | default(''), ((_rf_detected_vendor | default('')) if ((_rf_detected_vendor | default('')) not in ['', 'unknown']) else none))),
                        'status': 'failed',
                        'sections': {'system': 'failed', 'hardware': 'failed', 'bmc': 'failed', 'cpu': 'failed', 'memory': 'failed', 'storage': 'failed', 'network': 'failed', 'firmware': 'failed', 'users': 'not_supported', 'power': 'failed', 'thermal': 'failed'},
                        'diagnosis': {'reachable': none, 'port_open': none, 'protocol_supported': none, 'auth_success': none, 'failure_stage': 'fallback', 'failure_code': 'OUTPUT_BUILD_FAILED', 'failure_reason': _fr_catalog.output_build_failed.default, 'details': {'gather_mode': 'fallback', 'reason': '_output 미생성 (block/rescue 모두 실패)'}},

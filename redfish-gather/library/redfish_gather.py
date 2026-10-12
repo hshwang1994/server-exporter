@@ -4213,8 +4213,10 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     ps_path = _p(chassis_uri) + '/PowerSubsystem'
     st, ps_data, perr = _get(bmc_ip, ps_path, username, password, timeout, verify_ssl)
     if perr or st != 200:
-        # PowerSubsystem 도 없으면 진짜 미지원 — 호출자가 not_supported 분류
-        return {}, [_err('power', f'PowerSubsystem 미지원: {perr or st}')] if st != 404 else []
+        # PowerSubsystem 도 없으면 진짜 미지원. 404 도 오류로 돌려준다 — _make_section_runner 의 404-only 판정이 섹션을
+        # not_supported 로 분류한다(errors[] 에는 남지 않는다). 2026-10-12 전에는 404 를 []로 삼켜 sections.power=success ·
+        # data.power=null 인 거짓 성공이 나갔다.
+        return {}, [_err('power', 'PowerSubsystem 미지원: ' + (f'HTTP {st}' if st else str(perr)))]
 
     # PowerSubsystem.PowerSupplies 컬렉션 fetch
     psu_link = _safe(ps_data, 'PowerSupplies', '@odata.id')
@@ -4548,8 +4550,9 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
     ts_path = _p(chassis_uri) + '/ThermalSubsystem'
     st, ts, terr = _get(bmc_ip, ts_path, username, password, timeout, verify_ssl)
     if terr or st != 200:
-        # ThermalSubsystem 도 없으면 미지원 — 404 는 noise 차단 (_gather_power_subsystem 패턴)
-        return {}, ([] if st == 404 else [_err('thermal', f'ThermalSubsystem 미지원: {terr or st}')])
+        # ThermalSubsystem 도 없으면 미지원 — 404 도 오류로 돌려 _make_section_runner 가 not_supported 로 분류한다
+        # (_gather_power_subsystem 과 같은 규칙, 2026-10-12). envelope errors[] 에는 404-only 오류가 남지 않는다.
+        return {}, [_err('thermal', 'ThermalSubsystem 미지원: ' + (f'HTTP {st}' if st else str(terr)))]
 
     temps = []
     tm_link = _safe(ts, 'ThermalMetrics', '@odata.id')
@@ -5166,6 +5169,12 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
                                               username, password, timeout, verify_ssl)
             thm_data, thm_errs = gather_thermal(bmc_ip, m['uri'],
                                                 username, password, timeout, verify_ssl)
+            # 2026-10-12: Power/Thermal 과 신 schema 가 모두 404 인 chassis(RackGroup 등)는 그 리소스를 두지 않는 것이다 — 미지원이지 실패가 아니다.
+            #   섹션 runner 의 404-only 판정과 같은 규칙으로 errors 에 남기지 않는다(종전 {} 반환과 같은 결과). 그 밖의 오류는 그대로 남긴다.
+            if pwr_errs and _is_404_only_error(pwr_errs):
+                pwr_errs = []
+            if thm_errs and _is_404_only_error(thm_errs):
+                thm_errs = []
         else:
             pwr_data, pwr_errs, thm_data, thm_errs = {}, [], {}, []
         out['chassis'].append({
@@ -5522,7 +5531,7 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     return sections
 
 
-def _compute_final_status(collected, failed, errors=None):
+def _compute_final_status(collected, failed, errors=None, first_auth_status=None):
     """collected / failed list → final_status (success / partial / failed).
 
     cycle 2026-04-30: errors[]에 인증 실패 (HTTP 401/403) 흔적 발견 시 'failed' 강제.
@@ -5530,8 +5539,15 @@ def _compute_final_status(collected, failed, errors=None):
     loop가 'partial'을 success로 판정해 두 번째 자격증명으로 fallback 안 함 (Dell vault
     accounts 순서 사고). 인증 자체가 거부된 상태에서 partial로 emit하면 호출자도
     "데이터 일부 받음"으로 오해. auth fail 명시적으로 'failed'로 분류.
+
+    2026-10-12: first_auth_status 는 자격을 실은 **첫 응답**의 정수 HTTP status(auth_evidence) 다.
+    그 값이 2xx 면 인증은 통과한 것이므로, 그 뒤 하위 리소스가 돌려준 403 은 계정의 권한 부족으로
+    **그 섹션만** 실패(partial)로 둔다 — host 전체를 failed 로 돌려 이미 수집한 데이터를 버리지 않는다.
+    401 은 세션 만료 · 잠금처럼 인증 자체가 뒤집힌 신호라 종전대로 failed 다. first_auth_status 가
+    없거나(None) 2xx 가 아니면 종전 문자열 규칙(401/403 → failed)을 그대로 쓴다.
     """
     clean = [s for s in collected if s not in failed]
+    authenticated = isinstance(first_auth_status, int) and 200 <= first_auth_status < 300
 
     # 인증 실패 시그널이 errors[]에 있으면 partial/success로 끌어올리지 않음
     if errors:
@@ -5543,8 +5559,9 @@ def _compute_final_status(collected, failed, errors=None):
                 continue
             detail = str(e.get('detail') or '')  # Round 4 #11: 비-str detail(int 등) 'in' TypeError 방어
             msg = str(e.get('message') or '')
-            if ('HTTP 401' in detail or 'HTTP 403' in detail
-                    or 'HTTP 401' in msg or 'HTTP 403' in msg):  # Round 11 #2: msg 측 40x 도 감지
+            if 'HTTP 401' in detail or 'HTTP 401' in msg:  # Round 11 #2: msg 측 40x 도 감지
+                return 'failed', clean
+            if (not authenticated) and ('HTTP 403' in detail or 'HTTP 403' in msg):
                 return 'failed', clean
             if '401' in msg and 'auth' in msg.lower():
                 return 'failed', clean
@@ -8184,7 +8201,9 @@ def main():
     if isinstance(multi_node, dict):
         all_errors.extend(multi_node.get('errors') or [])
 
-    final_status, clean = _compute_final_status(collected, failed, all_errors)
+    # 2026-10-12: 자격을 실은 첫 응답(auth_evidence)을 넘긴다 — 인증 통과 뒤의 하위 리소스 403 은 섹션 실패로만 본다
+    final_status, clean = _compute_final_status(collected, failed, all_errors,
+                                                first_auth_status=auth_evidence().get('first_auth_status'))
 
     _exit(
         changed=False, status=final_status, vendor=vendor,

@@ -8,8 +8,7 @@
     "power",
     "processors",
     "storage",
-    "system",
-    "thermal"
+    "system"
   ],
   "data": {
     "bios": {
@@ -764,6 +763,8 @@
     "model_hint": "ProLiant DL365 Gen10 Plus -- SIMULATED"
   },
   "status": "success",
-  "unsupported_sections": [],
+  "unsupported_sections": [
+    "thermal"
+  ],
   "vendor": "hpe"
 }

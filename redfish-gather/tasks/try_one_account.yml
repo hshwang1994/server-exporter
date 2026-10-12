@@ -13,7 +13,6 @@
 #   _rf_raw_collect       : redfish_gather 결과
 #   _rf_collect_ok        : bool
 #   _rf_used_account      : { username, label, role }  (password 미포함, 보안)
-#   _rf_used_account_role : str ('primary' | 'secondary' | 'recovery')
 
 # 2026-10-06 (9차): include_tasks 의 loop when 은 반복을 시작하기 전에 한꺼번에 평가된다 — 앞 시도가 켠 중단 표식은 이 block 조건만 본다.
 - when:
@@ -90,8 +89,7 @@
     #       mismatch → AccountService GET 401 → recovered=False (사용자 보고 사고).
     # source: 사이트 실측 (Dell iDRAC — root 계정 중 한 entry 만 200, 나머지 3개 401).
     #         자격증명 원문은 vault 파일에만 둔다 (2026-08-11 Phase 6-B 평문 제거).
-    # fix: _rf_used_account_password 별도 set_fact (no_log:true 로 console 노출 차단).
-    #      account_service.yml 에서 본 변수 직접 사용 → vault re-lookup 불필요.
+    # 2026-10-12: 비밀번호를 담던 _rf_used_account_password 와 _rf_used_account_role 은 읽는 곳이 없어 없앴다 — 자격 원문은 vault 와 _try_account 에만 있다.
     - name: "redfish | try_account | promote on success"
       when: _rf_attempt_ok | bool
       ansible.builtin.set_fact:
@@ -101,8 +99,6 @@
           username: "{{ _try_account.username }}"
           label:    "{{ _try_account.label   | default('unlabeled') }}"
           role:     "{{ _try_account.role    | default('primary') }}"
-        _rf_used_account_role:     "{{ _try_account.role | default('primary') }}"
-        _rf_used_account_password: "{{ _try_account.password | default('') }}"
       no_log: true
 
     # cycle 2026-04-30: 실패 시 status / 첫 error 메시지를 advisory log에 노출 (디버깅 편의).

@@ -10,7 +10,7 @@
 #       _selected_adapter: >-
 #         {{ lookup('adapter_loader',
 #                   channel='redfish',
-#                   facts=_precheck_result.probe_facts,
+#                   facts=_precheck_raw.probe_facts,
 #                   repo_root=lookup('env','REPO_ROOT')) }}
 # ==============================================================================
 

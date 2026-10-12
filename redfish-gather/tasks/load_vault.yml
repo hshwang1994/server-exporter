@@ -34,7 +34,6 @@
 #   _rf_accounts          : 전체 후보 (진단/집계용)
 #   _rf_vault_scope       : 표준 scope — diagnosis.details.credential_scope 정본
 #   _rf_recovery_scope    : 복구 scope — diagnosis.details.recovery_credential_scope
-#   _rf_vault_loaded      : 표준 vault 로딩 성공 여부
 
 - name: "redfish | load_vault | adopt resolved credential sets"
   ansible.builtin.set_fact:
@@ -43,7 +42,6 @@
     _rf_accounts: "{{ _cred_accounts | default([]) }}"
     _rf_vault_scope: "{{ _cred_scope | default('') }}"
     _rf_recovery_scope: "{{ _cred_recovery_scope | default('') }}"
-    _rf_vault_loaded: "{{ (_cred_standard_outcome | default('not_resolved')) == 'loaded' }}"
   no_log: true
 
 - name: "redfish | load_vault | warn vendor unresolved"

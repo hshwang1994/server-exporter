@@ -43,7 +43,7 @@ match:
   vendor: ["Lenovo", "LENOVO"]
   # XCC3 펌웨어 — XCC1/XCC2 의 "AFBT" / "TAOT" 등과 다른 prefix 가능.
   # 안전하게 "XCC3" 시그니처 + ThinkSystem V4 model_patterns 로 분리.
-  firmware_patterns: ["XCC3", "XCC.*3"]
+  firmware_patterns: ["XCC\\s*3\\b"]
   model_patterns:
     - "ThinkSystem SR630 V4"
     - "ThinkSystem SR650 V4"
@@ -55,7 +55,6 @@ match:
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -64,6 +63,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 # XCC3 특이사항 (web sources 기반, lab 부재):
 # - OpenBMC 기반 — 표준 Redfish 우선, OEM 의존 감소

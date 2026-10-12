@@ -34,7 +34,6 @@ match:
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -43,6 +42,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
     # M-D3 W6 (cycle 2026-05-06): users 제거 — sections.yml channels=[os] 정의 정합 (Redfish 채널 미해당)
 
 vendor_notes:

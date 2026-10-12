@@ -51,11 +51,10 @@ priority: 100
 
 match:
   vendor: ["Dell", "Dell Inc.", "DELL"]
-  firmware_patterns: ["iDRAC.*9", "^[4-7]\\."]
+  firmware_patterns: ["iDRAC\\s*9\\b", "^[3-7]\\."]
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -64,6 +63,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 vendor_notes:
   # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전

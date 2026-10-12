@@ -36,7 +36,6 @@ match:
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -45,6 +44,7 @@ capabilities:
     - network
     - firmware
     - power    # M-D3 W5 (cycle 2026-05-06): A2 PowerSubsystem→Power fallback 적용 — Additive only
+    - thermal
 
 vendor_notes:
   # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전

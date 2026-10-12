@@ -42,11 +42,10 @@ match:
   # 펌웨어: RMC 2.x ~ 3.x (Superdome Flex) + iLO 5 2.x~3.x (per compute module)
   firmware_patterns:
     - "^[23]\\.[0-9]+\\..*"  # RMC firmware 2.x / 3.x
-    - "iLO.*5"               # per-node iLO 5 fallback signature
+    - "iLO\\s*5\\b"           # per-node iLO 5 fallback signature
 
 capabilities:
   sections_supported:
-    - system     # /Systems/Partition<N> — 전 partition 수집 (ADR-2026-05-12), top-level data.* 는 Partition0 representative
     - hardware   # /Chassis/<id> — RMC aggregation (Base + Expansion 최대 8)
     - bmc        # /Managers/<RMC_id> — RMC primary (per-node iLO 5 는 보조)
     - cpu        # Systems.Processors
@@ -55,6 +54,7 @@ capabilities:
     - network    # Systems.EthernetInterfaces
     - firmware   # UpdateService — complex/nPar firmware bundles 포함 (raw passthrough)
     - power      # Chassis.PowerSubsystem (DMTF 신 schema) → Power (legacy fallback)
+    - thermal
   # users (AccountService) — sections.yml channels=[os] 정의 따라 Redfish 채널 미해당. capabilities 명시 안 함.
 
 # Superdome Flex 특이사항 (lab 부재 — web sources 추정. 사이트 실측 시 정정)

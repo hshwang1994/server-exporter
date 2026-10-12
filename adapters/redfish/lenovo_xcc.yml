@@ -45,9 +45,9 @@ match:
   # M-H3 (cycle 2026-05-07) — XCC1 + XCC2 명시적 매트릭스 (Additive only — 새 adapter 신설 회피):
   firmware_patterns:
     - "XCC"          # XCC 모든 세대 (XCC1 + XCC2 cover. XCC3 는 lenovo_xcc3.yml 우선)
-    - "AFBT*"        # XCC1 ThinkSystem V2 시기 펌웨어 prefix (e.g., AFBT58B)
-    - "TAOT*"        # XCC2 ThinkSystem V3 시기 펌웨어 prefix
-    - "USX*"         # XCC2 일부 ThinkSystem V3 모델 시기 펌웨어 prefix
+    - "^AFBT"        # XCC1 ThinkSystem V2 시기 펌웨어 prefix (e.g., AFBT58B)
+    - "^TAOT"        # XCC2 ThinkSystem V3 시기 펌웨어 prefix
+    - "^USX"         # XCC2 일부 ThinkSystem V3 모델 시기 펌웨어 prefix
   model_patterns:
     - "ThinkSystem.*V2"
     - "ThinkSystem.*V3"
@@ -55,7 +55,6 @@ match:
 
 capabilities:
   sections_supported:
-    - system
     - hardware
     - bmc
     - cpu
@@ -64,6 +63,7 @@ capabilities:
     - network
     - firmware
     - power
+    - thermal
 
 vendor_notes:
   # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
