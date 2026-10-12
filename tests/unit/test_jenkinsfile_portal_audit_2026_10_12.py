@@ -130,6 +130,17 @@ def test_p10_env_copy_of_the_run_record_has_no_ip_lists_but_keeps_consumer_keys(
     assert "groovy.json.JsonOutput.toJson(run)" not in TEXT
 
 
+def test_p10_env_copy_is_taken_after_classify_closed_the_previous_attempt():
+    """CI #47 하네스 prep_failed_on_resume: classify 가 앞 시도를 agent_disconnect 로 닫은 뒤에 기록을 다시 읽어 env 사본을 만들어야 한다.
+    classify 전에 읽은 사본을 넘기면 finalize_summary.gather_run.attempts[].state 가 비어 앞 시도가 끊긴 이유가 사라진다."""
+    body = _method("def seAttemptBody")
+    i_cls = body.index("Map cls = seClassifyAttempt(lostPrev && recordKnown && !newAttempt)")
+    i_env = body.index("env.SE_GATHER_RUN = run ? seGatherRunForEnv(run) : ''")
+    assert i_cls < i_env
+    between = body[i_cls:i_env]
+    assert "run = seReadGatherRun() ?: run" in between, "classify 뒤에 기록을 다시 읽는다"
+
+
 def test_p11_synthetic_404_from_the_request_tool_is_not_a_refusal():
     """P11: http_request 1.25 는 이름 풀이 실패(UnknownHostException)를 서버 응답이 아닌 합성 404 로 돌려준다 — 종전에는 모든 404 를 Portal 의 확정 거부로 보고
     다시 보내지 않았다. 판별은 버전이 아니라 응답 형태(도구 고정 문구 + 헤더 없음)로 하고 본문은 기록하지 않는다."""

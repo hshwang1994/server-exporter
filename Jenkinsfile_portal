@@ -2405,8 +2405,11 @@ def seAttemptBody(Map C, Map st, Map r) {
     boolean newAttempt = recordKnown && attemptsAfter > attemptsBefore
     // begin 전에 끝난 시도(이번 기록 없음)는 앞 시도를 닫지 못했다 — Jenkins 가 아는 연결 끊김 근거를 classify 에 넘긴다 (FL-F01b)
     Map cls = seClassifyAttempt(lostPrev && recordKnown && !newAttempt)
+    // classify 가 앞 시도를 닫은(agent_disconnect 등) 뒤의 기록을 다시 읽는다 — 위의 읽기는 "이번 시도 기록이 새로 생겼는가" 를 보기 위한 것이었다.
+    //   먼저 읽은 사본을 넘기면 결과 확인 요약의 attempts[].state 가 비어 앞 시도가 왜 끊겼는지 사라진다 (하네스 prep_failed_on_resume 가 잡았다, CI #47).
+    run = seReadGatherRun() ?: run
     // 결과 확인 · 요약이 읽는 실행 기록 — 대상 IP 목록은 빼고 넘긴다(P10, 2026-10-12: 시도마다 전체 IP 목록이 실려 큰 배치에서 환경변수 한도 131,072 바이트를
-    //   넘기면 이후 모든 sh 가 실패한다). 결과 확인은 회수한 gather_run.json 파일을 우선 읽는다.
+    //   넘기면 이후 모든 sh 가 실패한다). 결과 확인은 env 사본을 먼저 읽고, 없으면 회수한 gather_run.json 파일을 읽는다.
     env.SE_GATHER_RUN = run ? seGatherRunForEnv(run) : ''
     if (run != null && (run.attempts instanceof List) && run.attempts) {
         // 첫 시도의 실행 한계(새 빌드면 6시간 그대로) — 증거 수집기가 운영 한계로 돌았는지 본다(full_limit)
