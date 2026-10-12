@@ -337,11 +337,11 @@ class CallbackModule(CallbackBase):
         try:
             data = _sanitize(data, stats)
         except Exception as e:                              # noqa: BLE001 - 정화 자체가 죽어도 원본으로 계속 간다
-            sys.stderr.write('[json_only] WARNING: 정화 실패, 원본 그대로 내보냄 ({})\n'.format(type(e).__name__))
+            sys.stderr.write('[json_only] WARNING: 결과 값 정화에 실패해 원본 그대로 내보냅니다 ({})\n'.format(type(e).__name__))
             stats = {}
         if stats:
             _note_sanitized(data, stats)
-            sys.stderr.write('[json_only] NOTICE: OUTPUT 값을 고쳤다 — surrogates={} non_finite={}\n'.format(
+            sys.stderr.write('[json_only] NOTICE: OUTPUT 값을 고쳤습니다. surrogates={} non_finite={}\n'.format(
                 stats.get('surrogates', 0), len(stats.get('non_finite', []))))
         try:
             line = json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
@@ -354,7 +354,7 @@ class CallbackModule(CallbackBase):
             print(line, file=target, flush=True)
         except (OSError, ValueError) as e:
             ok = False
-            sys.stderr.write('[json_only] WARNING: OUTPUT stdout 출력 실패: {}\n'.format(type(e).__name__))
+            sys.stderr.write('[json_only] WARNING: OUTPUT 을 stdout 으로 내보내지 못했습니다: {}\n'.format(type(e).__name__))
         # OUTPUT 결과를 파일로도 기록 (stdout target 일 때만, stderr 결과는 제외)
         if self._output_file and target is sys.stdout:
             try:
@@ -434,7 +434,7 @@ class CallbackModule(CallbackBase):
             with open(self._progress_file, 'a', encoding='utf-8') as fh:
                 fh.write(json.dumps(row, ensure_ascii=False, separators=(',', ':'), default=str) + '\n')
         except Exception as e:                              # noqa: BLE001
-            sys.stderr.write('[json_only] WARNING: progress 기록 실패 ({}): {}\n'.format(
+            sys.stderr.write('[json_only] WARNING: progress 기록 실패 — 진행 기록 파일에 쓰지 못했습니다 ({}): {}\n'.format(
                 self._progress_file, type(e).__name__))
 
     def _checkpoint(self, result):
@@ -462,7 +462,7 @@ class CallbackModule(CallbackBase):
                     fh.flush()
                     os.fsync(fh.fileno())
             except (OSError, IOError) as e:
-                sys.stderr.write('[json_only] WARNING: checkpoint 파일 쓰기 실패 ({}): {}\n'.format(
+                sys.stderr.write('[json_only] WARNING: checkpoint 파일에 쓰지 못했습니다 ({}): {}\n'.format(
                     self._checkpoint_file, type(e).__name__))
         if self._reconcile:
             try:

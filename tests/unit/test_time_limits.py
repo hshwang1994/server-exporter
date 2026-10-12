@@ -48,9 +48,9 @@ def test_execution_limits_start_only_after_a_node_is_acquired():
     attempt = PORTAL[PORTAL.index("def seAttempt(Map C, Map st, Map r) {"):]
     attempt = attempt[: attempt.index("\n}\n")]
     i_ws = attempt.index('ws("${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}") {')
-    i_t0 = attempt.index("long t0 = seNowMs()")
     i_to = attempt.index("timeout(time: limitSec, unit: 'SECONDS') {")
-    assert i_ws < i_t0 < i_to, "시도 하나의 실행 한계는 node · 작업 폴더를 얻은 뒤에만 센다"
+    assert i_ws < i_to, "시도 하나의 실행 한계는 node · 작업 폴더를 얻은 뒤에만 센다"
+    assert "seNowMs() - t0" not in attempt, "경과시간으로 중단 원인을 정하지 않는다 (2026-10-12)"
     assert "long limitSec = (C.GATHER_MAX as long) + (C.KILL_AFTER as long) + (C.ATTEMPT_MARGIN as long)" in attempt
     fin = PORTAL[PORTAL.index("def seFinalizeAndCallback() {"):]
     fin = fin[: fin.index("\n}\n")]

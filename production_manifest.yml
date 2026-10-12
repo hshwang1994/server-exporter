@@ -33,8 +33,7 @@ include:
   - path: scripts/jenkins/se_finalize.groovy
     language: groovy
     mode: "100644"
-    optional: true
-    note: present only if the finalizer is split out of Jenkinsfile_portal
+    note: Jenkinsfile_portal reads it with readTrusted on every build (seLoadFinalizeLib) — required
   - path: ansible.cfg
     language: ini
     mode: "100644"

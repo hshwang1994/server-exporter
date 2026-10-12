@@ -131,7 +131,8 @@ def test_last_attempt_preserves_output_before_deleting_the_workspace():
     stash = re.search(r"^\s*stash\(name: 'gather-output'", post, re.M).start()
     delete = post.index("deleteDir()")
     assert archive < stash < delete, "archive → stash → deleteDir"
-    assert "allowEmpty: true" in post
+    # 2026-10-12 (P2): 전달할 파일이 없으면 stash 하지 않는다 — 빈 stash 가 앞서 넘겨 둔 정상 결과를 덮고 "보존 완료" 로 기록되던 결함
+    assert "if (stashList) {" in post and "allowEmpty: false" in post and "allowEmpty: true" not in post
     snap = _method("def seSnapshotGatherOutput")
     assert "stash(name: 'gather-output'" in snap and "deleteDir" not in snap and "archiveArtifacts" not in snap, \
         "다시 시도하기 전에는 원본만 넘긴다 — 작업 폴더는 다음 시도가 쓴다"
@@ -141,9 +142,9 @@ def test_last_attempt_preserves_output_before_deleting_the_workspace():
 
 
 def test_inventory_shape_errors_are_explicit_without_new_rejections():
-    assert "hosts = readJSON(text: params.inventory_json, returnPojo: true)" in VALIDATE
+    assert "hosts = seParseJsonStrict(params.inventory_json)" in VALIDATE, "표준 JSON 만 받는 파서 (2026-10-12 P12)"
     assert "JsonSlurperClassic" not in TEXT
-    parse = VALIDATE[VALIDATE.index("hosts = readJSON("):]
+    parse = VALIDATE[VALIDATE.index("hosts = seParseJsonStrict("):]
     assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie)" in parse[:600]
     assert "seAcceptTargets(hosts, params.target_type.trim())" in VALIDATE
     assert "inventory_json 은 JSON 배열이어야 합니다" in TEXT

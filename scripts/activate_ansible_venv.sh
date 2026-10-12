@@ -33,7 +33,7 @@ _se_venv_select() {
     if [ -n "${SE_ANSIBLE_VENV:-}" ]; then
         _se_dir="${SE_ANSIBLE_VENV%/}"
         if [ ! -f "${_se_dir}/bin/activate" ]; then
-            echo "[venv] SE_ANSIBLE_VENV='${SE_ANSIBLE_VENV}' 안에 bin/activate 가 없습니다 — 노드 환경변수 값을 확인하십시오 (다른 경로로 넘어가지 않습니다)" >&2
+            echo "[venv] SE_ANSIBLE_VENV='${SE_ANSIBLE_VENV}' 안에 bin/activate 가 없습니다. 노드 환경변수 값을 확인하세요 (다른 경로로 넘어가지 않습니다)" >&2
             return 1
         fi
         _se_how=env
@@ -60,7 +60,7 @@ _se_venv_select() {
     fi
 
     if [ -z "${_se_dir}" ] || [ ! -f "${_se_dir}/bin/activate" ]; then
-        echo "[venv] Ansible 실행환경(venv)을 찾지 못했습니다 — Runner 설치(install-jenkins-runner)를 확인하거나 노드 환경변수 SE_ANSIBLE_VENV=<venv 루트> 를 등록하십시오" >&2
+        echo "[venv] Ansible 실행환경(venv)을 찾지 못했습니다. Runner 설치 상태를 확인하거나 노드 환경변수 SE_ANSIBLE_VENV=<venv 루트> 를 등록하세요" >&2
         echo "[venv]   SE_ANSIBLE_VENV='${SE_ANSIBLE_VENV:-}' | PATH 의 ansible-playbook='${_se_ap:-없음}' (실경로 '${_se_real:-}') | 후보='${_se_known}'" >&2
         echo "[venv]   PATH='${PATH:-}'" >&2
         return 1

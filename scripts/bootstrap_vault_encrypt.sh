@@ -5,7 +5,7 @@
 # 평문 vault/**/*.yml 을 ansible-vault 로 일괄 암호화한다 (vault/common/redfish/standard.yml + vault/<loc>/...).
 # 사용자 결정 (cycle 2026-04-28):
 #   - vault 처리 정책 = "ansible-vault encrypt 후 commit"
-#   - Jenkins credentials ID = "server-gather-vault-password" (Secret File)
+#   - Jenkins credentials ID = "server-gather-vault-password" (Secret text — Jenkinsfile_portal 이 string 으로 바인딩한다)
 #
 # 사용법:
 #   1. vault 마스터 password 를 결정 후 .vault_pass 파일에 저장
@@ -15,8 +15,8 @@
 #   2. 본 스크립트 실행
 #        bash scripts/bootstrap_vault_encrypt.sh
 #   3. 변경된 vault/*.yml 을 commit + push
-#   4. 동일한 .vault_pass 파일을 Jenkins credentials store 에 등록
-#        (Secret file, ID = server-gather-vault-password)
+#   4. 같은 비밀번호 값을 Jenkins credentials store 에 등록
+#        (Secret text, ID = server-gather-vault-password)
 #
 # 본 스크립트는 idempotent: 이미 암호화된 파일은 건너뛴다.
 # =============================================================================
@@ -79,7 +79,7 @@ cat <<EOF
 
 다음 단계:
   1. git diff vault/ 로 변경 확인
-  2. git add vault/ && git commit -m "feat: vault encrypt (P0)"
-  3. Jenkins credentials store 에 server-gather-vault-password (Secret File) 등록
+  2. git add vault/ && git commit
+  3. Jenkins credentials store 에 server-gather-vault-password (Secret text) 등록
      상세 절차: docs/operate/01-jenkins-master.md
 EOF

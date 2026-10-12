@@ -133,12 +133,10 @@ def seLoadCanon(def lib) {
         if (fr?._fr_catalog?.output_build_failed?.default) { canon.reason = fr._fr_catalog.output_build_failed.default }
         if (fr?._fr_catalog?.infra_unavailable?.default) { canon.infraReason = fr._fr_catalog.infra_unavailable.default }
         if (ss?.channel_sections) { canon.sections = ss.channel_sections; canon.all = ss.all_sections ?: canon.all }
-        canon.source = 'readTrusted'
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie      // 취소·timeout 은 정본 읽기 실패가 아니다 — 삼키지 않는다 (3차 §4-2)
     } catch (Exception e) {
         echo "[결과 확인] 오류 안내 파일을 읽지 못해 기본 메시지를 사용합니다.\n  파일: common/vars/failure_reasons.yml, common/vars/supported_sections.yml\n  오류: ${e.message}"
-        canon.source = 'fallback'
     }
     return canon
 }
@@ -191,10 +189,15 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
         seLog("[Portal 전송] ${attempt}번째 전송을 시작합니다.${seCallbackStartDetail(attempt == done + 1, endpoint, aborted, done, maxAttempts, (long) t, C.PORTAL_WAIT as long)}")
         Integer status = null
         String problem = null
+        boolean synthetic = false
         try {
             def resp = httpRequest(url: endpoint, httpMode: 'POST', contentType: 'APPLICATION_JSON', requestBody: body,
                                    timeout: t, validResponseCodes: '100:599', consoleLogResponseBody: false, quiet: true)
             status = resp.status
+            // 요청 도구(http_request)는 주소를 해석하지 못하면(UnknownHostException) 서버 응답이 아닌 합성 404 를 돌려준다 — 본문이 도구의 고정 문구 그대로이고
+            //   응답 헤더가 없다. 그 경우만 통신 실패로 본다(Portal 의 확정 거부가 아니다). 본문은 이 판별에만 쓰고 기록하지 않는다 (2026-10-12 P11,
+            //   설치 플러그인 1.25 소스와 실환경 재현으로 확인). 실제 서버의 404 는 종전대로 확정 거부다.
+            if (status == 404) { synthetic = seIsSyntheticNotFound(resp) }
         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
             rec.outcome = 'interrupted'      // 응답을 받지 못한 채 중단됐다 — 끝 · 응답 시각을 적지 않는다
             throw fie
@@ -218,7 +221,7 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
             seLog("[Portal 전송] HTTP ${code} 응답을 받았습니다. 소요 시간 ${took}.")
             break
         }
-        if (code ==~ /4\d\d/ && !(code in ['408', '429'])) {
+        if (code ==~ /4\d\d/ && !(code in ['408', '429']) && !synthetic) {
             rec.outcome = 'refused'
             state.reason = 'refused'
             state.refused = true          // 10차 마무리 4.1: 확정 거부 — 재진입해도 다시 보내지 않는다(408 · 429 는 재시도 대상이라 제외)
@@ -227,7 +230,10 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
         }
         rec.outcome = 'failed'
         state.reason = 'failed'
-        if (code) {
+        if (synthetic) {
+            rec.transport = 'unknown_host'   // 도구가 합성한 404 — 요청은 Portal 에 닿지 않았다
+            seLog("[Portal 전송] ${attempt}번째 전송에 실패했습니다.\n  Portal 주소를 해석하지 못했습니다(이름 풀이 실패). 요청은 Portal에 닿지 않았습니다.\n  전송 도구 상태: 404(합성)\n  소요 시간: ${took}")
+        } else if (code) {
             // http_request 는 연결 실패 · 응답 시간 초과도 408 로 돌려준다(quiet 라 도구의 설명 줄은 나오지 않는다) — 서버의 408 과 구분할 수 없어 도구 상태로 적는다
             String why = (code == '408') ? '연결하지 못했거나 응답을 받지 못했습니다.\n  전송 도구 상태: 408' : "HTTP ${code} 응답을 받았습니다."
             seLog("[Portal 전송] ${attempt}번째 전송에 실패했습니다.\n  ${why}\n  소요 시간: ${took}")
@@ -263,17 +269,82 @@ def seCallback(String body, long deadlineSec, Map C, Map state) {
     return state
 }
 
+// 요청 도구(http_request 플러그인)가 이름 풀이 실패를 합성한 404 인가 — 본문이 도구 소스의 고정 문구(UnknownHostException as 404 Not Found)와 같고
+//   서버 헤더가 없다. 본문은 비교에만 쓰고 돌려주지도 기록하지도 않는다. 판별할 수 없으면 일반 404(확정 거부)로 둔다 (2026-10-12 P11).
+@NonCPS
+boolean seIsSyntheticNotFound(Object resp) {
+    String content = null
+    try {
+        content = resp.content?.toString()
+    } catch (Exception e) {
+        return false
+    }
+    if (content == null || content.trim() != 'UnknownHostException as 404 Not Found') { return false }
+    try {
+        def headers = resp.headers
+        if (headers != null && !headers.isEmpty()) { return false }
+    } catch (Exception e) {
+        // 헤더를 읽을 수 없으면 고정 문구만으로 판정한다 — 실제 서버가 이 문구를 그대로 돌려주는 경우는 없다고 본다
+    }
+    return true
+}
+
 // 수집 종료 상태(outcome) · 실행 한계의 기준(limit_reason)을 사람이 읽는 말로. 코드 값은 finalize_summary.json 과 [기술 기록] 줄에 있다.
 @NonCPS
 String seOutcomeText(String outcome) {
     Map t = ['completed': '정상 종료', 'timeout': '누적 수집 실행 한계에 도달해 멈춤', 'timeout_killed': '누적 수집 실행 한계에 도달한 뒤 강제 종료됨',
-             'aborted': '사용자 취소로 중단', 'failed_run': 'Ansible 실행 실패', 'prep_failed': '실행 준비 실패(Ansible 환경 없음)',
+             'aborted': '빌드 중단으로 수집을 마치지 못함', 'failed_run': 'Ansible 실행 실패', 'prep_failed': '실행 준비 실패',
              'process_lost': '수집 프로세스가 끝 기록 없이 끝남(원인 미확인)',
              'infra_wait_expired': 'Runner가 대기 한도 안에 돌아오지 않음',
              'resume_impossible': '같은 Runner와 작업 폴더에서 이어서 수집할 수 없음',
              'attempt_limit': '시도 하나의 실행 한계에 도달함', 'config_error': '실행 위치 설정 오류(등록된 Runner 없음)',
              'interrupted_unknown': '수집 단계를 마치지 못함']
     return (t[outcome] ?: "기록 없음(${outcome})").toString()
+}
+
+// 실행 준비 실패(scripts/run_gather.sh 의 종료 코드 90~95)의 원인 — 코드는 "어느 단계" 만 말한다. 오류 원문은 수집 셸이 콘솔에 적었다 (2026-10-12)
+@NonCPS
+String sePrepFailText(Object rc) {
+    Map t = ['90': 'Ansible 실행 환경(venv)을 찾지 못했습니다', '91': '실행 기록(gather_run.json)을 준비하지 못했습니다',
+             '93': '접수 목록 실행 파일(inventory)에 실행 권한을 주지 못했습니다', '94': '임시 파일을 만들지 못했습니다',
+             '95': '작업 폴더의 잠금 파일을 쓰지 못했습니다']
+    return (t["${rc}".toString()] ?: "종료 코드 ${rc}").toString()
+}
+
+// 결과 확인 · 요약이 env 로 받는 실행 기록 — 대상 IP 목록(completed_ips · precheck_failed_ips · lost_ips)은 뺀다(P10). 그 밖의 키는 그대로다
+//   (finalize_summary.gather_run 을 읽는 하네스 · 증거 수집기의 키: rc · timed_out · limit_sec · attempts[].state · ran_sec).
+@NonCPS
+String seGatherRunForEnv(Map run) {
+    Map out = [:]
+    for (def e in run.entrySet()) {
+        if (e.key == 'attempts' && (e.value instanceof List)) {
+            List atts = []
+            for (Object a in (List) e.value) {
+                if (a instanceof Map) {
+                    Map m = [:]
+                    for (def ae in ((Map) a).entrySet()) {
+                        if (!(ae.key in ['completed_ips', 'precheck_failed_ips', 'lost_ips'])) { m[ae.key] = ae.value }
+                    }
+                    atts << m
+                } else {
+                    atts << a
+                }
+            }
+            out.attempts = atts
+        } else {
+            out[e.key] = e.value
+        }
+    }
+    return groovy.json.JsonOutput.toJson(out)
+}
+
+// 수집 종료 상태를 한 문장으로 — unstable 의 첫 줄처럼 문장이 필요한 자리에 쓴다(seOutcomeText 는 "상태: X" 자리의 명사형)
+@NonCPS
+String seOutcomeSentence(String outcome) {
+    Map t = ['failed_run': 'Ansible 실행이 비정상 종료했습니다.', 'process_lost': '수집 프로세스가 끝 기록 없이 끝났습니다(원인 미확인).',
+             'attempt_limit': '시도 하나의 실행 한계에 도달해 수집을 멈췄습니다.', 'aborted': '빌드가 중단돼 수집을 마치지 못했습니다.',
+             'interrupted_unknown': '수집 단계를 마치지 못했습니다.', 'resume_impossible': '같은 Runner와 작업 폴더에서 이어서 수집할 수 없습니다.']
+    return (t[outcome] ?: (seOutcomeText(outcome) + '.')).toString()
 }
 
 @NonCPS
@@ -407,7 +478,7 @@ String seAfterSendWarnText(List warnings, int filled, int checkpoint, String out
 // 마치지 못한 대상이 생긴 원인 — 수집 종료 상태(outcome)에서. 수집을 시작했는지는 SE_GATHER_STARTED_AT 기록으로 넘겨받는다
 @NonCPS
 String seUnfinishedCause(String outcome, boolean started) {
-    Map t = ['aborted': '사용자 취소로', 'timeout': '수집 실행 한계에 도달해', 'timeout_killed': '수집 실행 한계에 도달해',
+    Map t = ['aborted': '빌드가 중단돼', 'timeout': '수집 실행 한계에 도달해', 'timeout_killed': '수집 실행 한계에 도달해',
              'infra_wait_expired': 'Runner가 대기 한도 안에 돌아오지 않아', 'resume_impossible': '같은 Runner에서 이어서 수집할 수 없어',
              'attempt_limit': '시도 하나의 실행 한계에 도달해', 'process_lost': '수집 프로세스가 끝 기록 없이 끝나',
              'failed_run': 'ansible-playbook이 비정상 종료해', 'prep_failed': '실행 준비에 실패해', 'config_error': '등록된 Runner가 없어',
@@ -549,6 +620,38 @@ Map seFilterEnvelopeLines(List rawLines, String manifestJson) {
     return [lines: lines, missing: missing, dropped: dropped, counts: counts]
 }
 
+// 입력 JSON 엄격 파서 (2026-10-12 P12) — 표준 JSON 만 받는다. 결과는 CPS 가 직렬화할 수 있는 LinkedHashMap / ArrayList 로 바꿔 돌려준다.
+//   설치 Jenkins 실측(2026-10-12 임시 Job): readJSON(json-lib)은 홑따옴표 · 따옴표 없는 키 · 끝 쉼표를 받아들이고, JsonSlurper 는 그 셋을 거부하지만 첫 값 뒤의
+//   내용(주석 · 두 번째 값)은 무시한다 — 그래서 배열 입력은 ']' 로 끝나야 한다. 제어 문자(탭 · 줄바꿈 · 캐리지리턴 제외)는 표준 JSON 에 없으므로 거부한다.
+//   남는 차이(문자열 안의 탭 · 줄바꿈, 숫자의 앞자리 0)는 inventory.sh(Python json.loads)가 거부한다 — 대상 IP 문자열에는 해당하지 않는다.
+@NonCPS
+Object seParseJsonStrict(String text) {
+    String t = (text ?: '').trim()
+    for (int i = 0; i < t.length(); i++) {
+        int c = (int) t.charAt(i)
+        if (c < 0x20 && c != 0x09 && c != 0x0A && c != 0x0D) { throw new Exception("JSON에 쓸 수 없는 제어 문자가 있습니다 (위치 ${i})".toString()) }
+    }
+    Object v = new groovy.json.JsonSlurper().parseText(t)
+    if ((v instanceof List) && !t.endsWith(']')) { throw new Exception('JSON 배열 뒤에 다른 내용이 있습니다') }
+    if ((v instanceof Map) && !t.endsWith('}')) { throw new Exception('JSON 객체 뒤에 다른 내용이 있습니다') }
+    return seToPlainJson(v)
+}
+
+@NonCPS
+Object seToPlainJson(Object v) {
+    if (v instanceof Map) {
+        Map m = new LinkedHashMap()
+        for (def e in ((Map) v).entrySet()) { m[e.key.toString()] = seToPlainJson(e.value) }
+        return m
+    }
+    if (v instanceof List) {
+        List l = new ArrayList()
+        for (Object x in (List) v) { l << seToPlainJson(x) }
+        return l
+    }
+    return v
+}
+
 // 접수 대상 결정 (2026-10-05 F03) — 각 채널 inventory.sh 와 **같은 규칙**으로 고른다. 위반이 하나라도 있으면 요청 전체를 거부한다
 //   (inventory 가 같은 입력을 exit 1 로 거부하므로, 여기서 받아들인 대상 수 == inventory host 수). 종전 Validate 는 값을 문자열로 바꾸고
 //   비어 있지 않은지만 봐서, 중복 IP 를 접수 manifest 에 두 번 넣고 inventory 는 같은 요청을 거부했다.
@@ -596,14 +699,19 @@ Map seReadGatherRun() {
 //   작업 폴더는 **이 빌드의 필수 결과를 실제로 보관했을 때만** 지운다: 이 빌드의 접수 목록과 결과 파일이 있고, 지금 있는 결과 파일을
 //   이름으로 지정한 보관이 예외 없이 끝났을 때다. 빈 보관을 성공으로 치지 않는다(allowEmptyArchive: false).
 //   stash 는 전달 수단일 뿐이다(결과 확인 단계의 unstash → unarchive 가 덮는다). 취소 · 시간 한계(interruption)는 어느 단계에서도 삼키지 않는다.
+//   2026-10-12 (P2): 전달할 결과 파일이 하나도 없으면 stash 하지 않는다 — 종전에는 빈 stash 가 성공으로 기록돼(SE_FINAL_STASHED=true) 앞서 넘겨 둔
+//   정상 결과를 덮고 "보존 완료" 로 재시도를 막았다. 표식 SE_PRESERVE_KEEP_WS 가 'true' 면(중단 원인 미확정 경로 — seAttemptInterrupted) 보존을 확인해도 작업 폴더를 지우지 않는다.
 def sePreserveGatherOutput() {
     String outcome = env.SE_GATHER_OUTCOME ?: 'interrupted_unknown'
+    boolean keepWorkspace = ((env.SE_PRESERVE_KEEP_WS ?: '') == 'true')
     int layerA = -1
     try {
         layerA = sh(returnStatus: true, label: '수집 결과 정리', script: """#!/bin/bash
             set +e
             cd "\${WORKSPACE}"
             . "\${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
+            # 정리 스크립트가 없으면 3 — python 의 2(파일 없음)는 정리 결과 2(형태가 틀린 줄을 뺐다)와 겹친다 (2026-10-12)
+            if [ ! -f scripts/finalize_gather_output.py ]; then echo "[결과 보존] 결과 정리 스크립트가 작업 폴더에 없습니다: scripts/finalize_gather_output.py"; exit 3; fi
             python3 scripts/finalize_gather_output.py --workspace "\${WORKSPACE}" --repo-root "\${WORKSPACE}" --outcome "${outcome}" --limit-reason "${env.SE_GATHER_LIMIT_REASON ?: ''}"
             exit \$?
         """)
@@ -615,7 +723,8 @@ def sePreserveGatherOutput() {
     // 정리 결과 — 정상(0)은 [finalize] 줄이 이미 알렸다. 실행 자체를 못 했으면(-1) 위 줄이 알렸다
     if (layerA > 0) {
         echo((layerA == 2) ? '[결과 보존] 결과를 정리하면서 형태가 틀린 줄을 뺐습니다.'
-                           : "[결과 보존] 결과 정리를 하지 못했습니다. 결과 확인 단계에서 원본 결과로 다시 조립합니다.\n  종료 코드: ${layerA}")
+                           : "[결과 보존] 결과 정리를 하지 못했습니다. 결과 확인 단계에서 원본 결과로 다시 조립합니다.\n  종료 코드: ${layerA}" +
+                             ((layerA == 3) ? ' (결과 정리 스크립트 없음)' : ''))
     }
     seCleanOldWorkspaces()
     // 보관할 파일 — 지금 있는 것만 이름으로 지정한다. 첫 이름은 gather_output.json 이다(있으면).
@@ -662,14 +771,18 @@ def sePreserveGatherOutput() {
     // 마지막 보존의 전달 표식 (C1, 2026-10-10) — 이 stash 가 끝났을 때만 세운다. 결과 확인은 이 표식이 없으면 남아 있는 stash 를 중간 보존의
     //   오래된 사본일 수 있다고 보고 빌드에 저장된 결과 파일과 비교한다(seFinalizeIn ①).
     env.SE_FINAL_STASHED = ''
-    try {
-        stash(name: 'gather-output', includes: (stashList ? stashList.join(',') : 'gather_manifest.json'), allowEmpty: true)
-        stashed = true
-        env.SE_FINAL_STASHED = 'true'
-    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-        throw fie
-    } catch (Exception e) {
-        echo "[결과 보존] 결과를 다음 단계로 전달하지 못했습니다.\n  오류: ${e.message}"
+    if (stashList) {
+        try {
+            stash(name: 'gather-output', includes: stashList.join(','), allowEmpty: false)
+            stashed = true
+            env.SE_FINAL_STASHED = 'true'
+        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+            throw fie
+        } catch (Exception e) {
+            echo "[결과 보존] 결과를 다음 단계로 전달하지 못했습니다.\n  오류: ${e.message}"
+        }
+    } else {
+        echo '[결과 보존] 전달할 결과 파일이 없어 다음 단계로 넘기지 않았습니다. 앞서 넘겨 둔 결과가 있으면 그것이 남습니다.'
     }
     // 마지막 보존 표식 (10차 N1) — 이 빌드의 결과 파일을 보관(archive) 또는 전달(stash) 중 하나라도 넘겼으면, 뒤에 실행 기반 오류로 끊겨도
     //   다시 시도하지 않는다(결과 확인 단계가 그 수단으로 회수한다). 하나의 실패가 다른 유효한 수단을 무효로 하지 않는다.
@@ -681,7 +794,6 @@ def sePreserveGatherOutput() {
     env.SE_PRESERVE_STASHED   = "${stashed}"
     env.SE_PRESERVE_MANIFEST  = "${manifestOk}"
     env.SE_PRESERVE_HASRESULT = "${hasResult}"
-    env.SE_PRESERVE_FILES     = archived ? archiveList.join(',') : ''
     seLog("[결과 보존] ${sePreserveText(archived, stashed, manifestOk, hasResult)}")
     echo "[기술 기록] 결과 보존: archived=${archived} stashed=${stashed} manifestOk=${manifestOk} hasResult=${hasResult} files=${archiveList.join(',') ?: '-'}"
     // 작업 폴더 소유 기록에 끝 시각과 보존 여부를 적는다 — 이 폴더가 남으면 오래된 작업 폴더 정리가 이 기록으로 판단한다
@@ -692,7 +804,9 @@ def sePreserveGatherOutput() {
     } catch (Exception e) {
         echo "[결과 보존] 작업 폴더 소유 기록을 쓰지 못했습니다.\n  오류: ${e.message}"
     }
-    if (preserved) {
+    if (preserved && keepWorkspace) {
+        echo "[결과 보존] 결과는 보존했지만 중단 원인을 확정하지 않아 작업 폴더를 남겼습니다.\n  위치: ${env.NODE_NAME ?: 'Runner'}:${env.WORKSPACE}\n  오래된 작업 폴더 정리가 ${seConstants().KEEP_DAYS}일 뒤 지웁니다."
+    } else if (preserved) {
         deleteDir()
         // durable task 제어 폴더(<작업 폴더>@tmp) — 이 빌드의 sh 가 끝났으므로 같이 지운다(Jenkins 는 빈 폴더를 남긴다)
         dir("${env.WORKSPACE}@tmp") { deleteDir() }
@@ -716,10 +830,14 @@ def seSnapshotGatherOutput() {
         if (fileExists(n)) { present << n }
     }
     env.SE_FINAL_STASHED = ''
+    if (!present) {
+        echo '[결과 보존] 넘겨 둘 결과 파일이 아직 없습니다. 앞서 넘겨 둔 결과가 있으면 그것이 남습니다.'
+        return
+    }
     try {
-        stash(name: 'gather-output', includes: (present ? present.join(',') : 'gather_manifest.json'), allowEmpty: true)
+        stash(name: 'gather-output', includes: present.join(','), allowEmpty: false)
         env.SE_PRESERVE_STASHED = 'true'
-        echo "[결과 보존] 다시 시도하기 전에 지금까지의 결과를 결과 처리 단계로 넘겨 두었습니다.\n  파일: ${present ? present.join(', ') : '-'}"
+        echo "[결과 보존] 다시 시도하기 전에 지금까지의 결과를 결과 처리 단계로 넘겨 두었습니다.\n  파일: ${present.join(', ')}"
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         throw fie
     } catch (Exception e) {
@@ -901,11 +1019,45 @@ def seFinalizeAndCallback() {
 }
 
 // 결과 확인 폴더 기록(.se_fin.json) — 다음 빌드의 controller 정리가 읽는다(job · build · 시작 · 끝 · 보관 여부). 10차: 진입 수 · 전송 확인 여부도 적는다.
+//   2026-10-12 (P6): 표식은 다음 빌드의 정리를 위한 선택 기록이다 — 쓰기 실패가 결과 처리 자체(Portal 전송)를 끝내지 않게 한다. 종전에는 이 writeFile 의
+//   IOException(권한 · 디스크 · 같은 이름의 디렉터리)이 그대로 올라가 전송 없이 빌드가 끝났다. 계속하는 조건은 셋 모두다 — 예외 종류 이름 하나로 가르지 않는다:
+//     (a) 쓰기 오류(java.io.IOException)다 (b) 내부 원인(cause 사슬)에 Remoting 연결 종료가 없다 (c) 같은 폴더에서 기존 step(fileExists) 하나가 정상이다.
+//   하나라도 아니면 **원본 예외를 그대로** 다시 던져(유형 · 내부 원인 보존) 상위 retry(agent(), nonresumable()) 가 판정한다. 취소 · 시간 한계는 즉시 다시 던진다.
 def seFinMarker(Map fs, long tIn, Map extra) {
     Map m = [schema: 1, job: env.JOB_NAME, build: env.BUILD_NUMBER, started_epoch: tIn, archived: false,
              entries: fs.entries, delivered: (fs.cb?.delivered == true)]
     m.putAll(extra)
-    writeFile(file: '.se_fin.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson(m) + '\n')
+    try {
+        writeFile(file: '.se_fin.json', encoding: 'UTF-8', text: groovy.json.JsonOutput.toJson(m) + '\n')
+        fs.marker = 'written'
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+        throw fie
+    } catch (Exception e) {
+        if (!(e instanceof java.io.IOException) || seHasRemotingCause(e)) { throw e }   // 쓰기 오류가 아니거나 연결 종료가 든 예외 — 원본 그대로
+        try {
+            fileExists('.')
+        } catch (Throwable probe) {
+            throw e          // 실행 문맥(노드 · 폴더)이 응답하지 않는다 — 표식 쓰기 실패가 아니라 실행 기반 문제일 수 있다. 원본 예외를 그대로 넘긴다
+        }
+        fs.marker = 'failed'
+        echo "[결과 확인] 결과 작업 폴더의 기록 파일(.se_fin.json)을 쓰지 못했습니다. 결과 처리는 계속합니다.\n  이 폴더는 다음 빌드의 정리 대상에서 빠집니다(기록 없음).\n  오류: ${e.message}"
+    }
+}
+
+// 예외의 내부 원인(cause 사슬)에 Jenkins Remoting 연결 종료가 있는가 — 겉은 IOException 이어도 Runner 연결이 끊긴 것일 수 있다. 확인할 수 없으면 true(안전한 쪽).
+@NonCPS
+boolean seHasRemotingCause(Throwable t) {
+    try {
+        Throwable c = t
+        for (int i = 0; i < 12 && c != null; i++) {
+            String n = c.getClass().name
+            if (n.startsWith('hudson.remoting.') || n.contains('ClosedChannel') || n.contains('ChannelClosed') || n.contains('RequestAbortedException')) { return true }
+            c = c.getCause()
+        }
+        return false
+    } catch (Throwable ignored) {
+        return true
+    }
 }
 
 // Portal 전송 상태를 한 줄로 — 결과 확인을 마치지 못했을 때 무엇을 보냈는지 적는다
@@ -1199,7 +1351,7 @@ def seFinalizeIn(Map C, String manifestJson, List ips, String outcome, long tPos
     // 줄 수는 줄 집합이 확정된 직후 · 첫 사용 전에 한 번 읽어 둔다(R5). 아래에서 lines 를 비운 뒤 다시 부르면 NPE 가 난다.
     int lineCount = lines.size()
     int filled = (report.filled ?: 0) as int
-    int kept = (report.kept ?: (accepted - filled)) as int
+    int kept = (report.kept != null) ? (report.kept as int) : (accepted - filled)   // Elvis(?:) 는 0 을 거짓으로 봐 kept=0 을 접수 수로 바꿨다 (2026-10-12)
     Map bo = (report.by_origin instanceof Map) ? report.by_origin : null
     echo "[기술 기록] 결과 확인 처리: layerA=${layerA} layerB=${layerB} source=${source} kept=${kept} filled=${filled} dropped=${(report.dropped ?: []).size()} conflicts=${(report.conflicts ?: []).size()}${damage ? ' damage=' + damage.join(',') : ''}"
     // ③ 본문 — 호출자 계약(loc / deploymentEnvironmentId / eventUuid / gatherInfoJson[]) 불변. 문자열 escaping 은 JsonOutput 하나.
@@ -1433,7 +1585,7 @@ def seExplainGatherEnd(Map C, String outcome, Map summary, Map bo, int kept, int
         long l = (C.GATHER_MAX as long)
         why = "${seLimitText('gather_limit')} ${seDuration(l)}에 도달해 수집을 멈췄습니다" + (outcome == 'timeout_killed' ? '. 중단 신호를 보낸 뒤 정리 시간 90초가 지나 강제 종료했습니다' : '')
     } else if (outcome == 'aborted') {
-        why = '사용자 취소로 수집을 마치지 못했습니다'
+        why = '빌드가 중단돼 수집을 마치지 못했습니다(사용자 취소 또는 그 밖의 중단)'
     } else if (outcome == 'infra_wait_expired') {
         why = "Runner가 대기 한도 ${seDuration(((summary.infra?.budget_sec) ?: C.INFRA_WAIT) as long)} 안에 돌아오지 않아 수집을 마치지 못했습니다"
     } else if (outcome == 'resume_impossible') {
@@ -1494,7 +1646,7 @@ def seBuildSummary(Map fin) {
     String outcome = (env.SE_GATHER_OUTCOME ?: '').toString()
     def execSec = (fin?.gather_exec_sec != null) ? fin.gather_exec_sec : ((run != null) ? ((run.exec_used_sec != null) ? run.exec_used_sec : run.ran_sec) : null)
     int tries = (fin?.gather_attempts) ? (fin.gather_attempts as int) : (((run?.attempts) instanceof List) ? run.attempts.size() : 0)
-    String head = ((res == 'ABORTED' && outcome == 'aborted') ? '사용자 취소로 ' : '') + (names[res] ?: res)
+    String head = ((res == 'ABORTED' && outcome == 'aborted') ? '수집 중 빌드 중단으로 ' : '') + (names[res] ?: res)
     echo seSummaryText([head: head, res: res, took: took, waited: ((infra != null) ? ((infra.used_sec ?: 0) as long) : 0L), execSec: execSec, tries: tries,
                         fin: fin, outcome: outcome, started: ((env.SE_GATHER_STARTED_AT ?: '') != ''), manifest: ((env.SE_MANIFEST_JSON ?: '').trim() != ''),
                         channel: (params.target_type ?: '').toString().trim(), loc: (params.loc ?: '-').toString().trim(), recProblem: recProblem])
@@ -1680,22 +1832,24 @@ Map seCheckRunners(String label) {
 //   C(seConstants) 는 인자다 — 시험(Harness)은 같은 함수에 짧은 값을 넣는다. 운영 Job 파라미터 · 환경변수 스위치는 없다.
 def seGatherStage(Map C) {
     Map infra = seInfraLoad(C)
-    Map st = [attempts: 0, gather_started: false, pinned: null, agent_lost_prev: false, wait_from_ms: null, backoff: 0L,
+    Map st = [gather_started: false, pinned: null, agent_lost_prev: false, wait_from_ms: null, backoff: 0L,
               last: null, outcome: 'interrupted_unknown', limit_reason: '', final: false, preserve_only: false]
     env.SE_GATHER_OUTCOME = 'interrupted_unknown'
     env.SE_FINAL_PRESERVED = ''
     env.SE_FINAL_STASHED = ''
+    env.SE_PRESERVE_KEEP_WS = ''
     try {
         seGatherLoop(C, st, infra)
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
         // 사용자 취소 — Runner 연결 끊김은 seWithNode 의 retry(agent()) 가 받아 여기까지 오지 않는다. 다시 시도하지 않고 그대로 다시 던진다.
         if ((env.SE_GATHER_OUTCOME ?: 'interrupted_unknown') == 'interrupted_unknown') { env.SE_GATHER_OUTCOME = 'aborted' }
         env.SE_GATHER_INTERRUPTION = 'user_or_other'
-        if (st.user_abort != true) {
-            // 넘겨 둔 결과가 있을 때만 그렇게 적는다 — Runner 연결이 끊긴 채 기다리던 중이면 넘겨받은 것이 없을 수 있다(2026-10-06 se-probe L6)
+        if (st.abort_logged != true) {
+            // 넘겨 둔 결과가 있을 때만 그렇게 적는다 — Runner 연결이 끊긴 채 기다리던 중이면 넘겨받은 것이 없을 수 있다(2026-10-06 se-probe L6).
+            //   중단 원인(사용자 취소 · 그 밖)은 단정하지 않는다 (2026-10-12)
             String handed = (env.SE_PRESERVE_STASHED == 'true') ? '앞 시도에서 넘겨 둔 결과로 Portal 전송을 시도합니다.' :
                             (st.gather_started ? 'Runner에서 넘겨받은 결과가 없어 접수된 대상마다 실패 결과를 보냅니다.' : '수집을 시작하기 전이라 접수된 대상마다 실패 결과를 보냅니다.')
-            seLog("[수집] 중단됨: 사용자가 빌드를 취소했습니다.\n  " + handed)
+            seLog("[수집] 중단됨: 빌드가 중단됐습니다(사용자 취소 또는 그 밖의 중단).\n  " + handed)
         }
         if (st.gather_started && !(env.SE_GATHER_ENDED_AT ?: '')) { env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs()) }
         seInfraSave(infra)
@@ -1806,8 +1960,19 @@ List seGatherEnv() {
             "ANSIBLE_VERBOSITY=${params.verbosity ?: '0'}"]
 }
 
-// 시도 하나 (9차) — node 안. 같은 작업 폴더(<Job>-<빌드 번호>)를 잡는다. 시도 하나의 실행 한계는 node 를 얻은 뒤에만 센다
-//   (수집 누적 최대 + INT 뒤 정리 + 준비 · 보존 몫) — 기다린 시간은 넣지 않는다. 그 한계에 닿으면 멈춘 단계로 보고 끝낸다.
+// 시도 하나 (9차 · 2026-10-12 개정) — node 안. 같은 작업 폴더(<Job>-<빌드 번호>)를 잡는다. 시도 하나의 실행 한계는 node 를 얻은 뒤에만 센다
+//   (수집 누적 최대 + INT 뒤 정리 + 준비 · 보존 몫) — 기다린 시간은 넣지 않는다.
+//   중단 원인은 Jenkins 가 중단 예외에 실어 보내는 분류로만 가른다. 경과시간 · Runner 연결 상태 · currentBuild.result 는 어느 하나도, 어떤 조합도
+//   원인 확정에 쓰지 않는다. 근거(설치 Jenkins 2.528.3 에서 2026-10-12 임시 Job 으로 실측):
+//     ① timeout step 은 자기 블록의 한계로 끊은 예외가 블록 경계를 나갈 때 "실제 중단이 아님"(actualInterruption=false)으로 표시한다.
+//        catch 에서 받아 다시 던져도 같다.
+//     ② 조건 없는 retry 는 "실제 중단"(사용자 취소 등)은 다시 부르지 않고 그대로 던지며, "실제 중단이 아닌" 예외만 본문을 다시 부른다.
+//   그래서 timeout(한계){ 본문 } 을 조건 없는 retry(count: 2) 안에 두면 두 번째 호출이 일어났다는 사실이 "이 범위의 한계에 닿았다" 는 Jenkins 의 분류다.
+//   같은 분류로 올 수 있는 다른 예외는 Runner 제거(RemovedNodeCause)라, 두 번째 호출에서 Runner 연결 상태는 **경로만** 가른다: 연결돼 있으면
+//   attempt_limit, 아니면 원본 예외를 그대로 바깥 retry(agent(), nonresumable()) 로 넘긴다(원인은 기록하지 않는다 — 판정은 Jenkins 의 조건이 한다).
+//   "실제 중단" 은 원인을 확정하지 않고(사용자 취소 · 그 밖의 중단) Runner 가 응답하면 결과를 보존한 뒤 원본 예외를 기존 중단 경로(seGatherStage)로 넘긴다.
+//   보존 책임은 이 함수 한 곳이다 — seAttemptBody 는 끊긴 구간만 기록하고 다시 던진다. 종전에는 안쪽 catch 가 보존 · 삭제한 뒤 바깥이 빈 폴더에서
+//   보존을 반복해 빈 stash 가 정상 stash 를 덮고, 시도 한계의 timeout 을 사용자 취소로 적었다.
 def seAttempt(Map C, Map st, Map r) {
     ws("${env.JOB_BASE_NAME}-${env.BUILD_NUMBER}") {
         String wsPath = pwd()
@@ -1817,37 +1982,109 @@ def seAttempt(Map C, Map st, Map r) {
             echo "[수집] 작업 폴더를 아직 다른 실행이 쓰고 있어 잠시 뒤 다시 시도합니다.\n  작업 폴더: ${wsPath}"
             return
         }
-        st.attempts = (st.attempts as int) + 1
         long limitSec = (C.GATHER_MAX as long) + (C.KILL_AFTER as long) + (C.ATTEMPT_MARGIN as long)
-        long t0 = seNowMs()
+        // ex: 첫 호출이 남긴 예외와 그 뒤 처리 상태 — thrown(원본 예외) · plain(중단이 아닌 보통 오류) · handed(두 번째 호출이 바깥으로 넘김) · preserving(보존 중)
+        Map ex = [calls: 0, thrown: null, plain: false, handed: false, preserving: false]
         withEnv(seGatherEnv()) {
             try {
-                timeout(time: limitSec, unit: 'SECONDS') {
-                    seAttemptBody(C, st, r)
+                retry(count: 2) {
+                    ex.calls = (ex.calls as int) + 1
+                    if ((ex.calls as int) == 1) {
+                        try {
+                            timeout(time: limitSec, unit: 'SECONDS') {
+                                seAttemptBody(C, st, r)
+                            }
+                        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+                            ex.thrown = fie
+                            throw fie          // Jenkins 의 분류를 묻는다(②) — 다시 불리면 이 블록의 한계(또는 Runner 제거), 아니면 실제 중단
+                        } catch (Throwable t) {
+                            ex.thrown = t      // 중단이 아닌 보통 오류 — retry 에 묻지 않고 블록 뒤에서 그대로 던진다(다시 실행하지 않는다)
+                            ex.plain = true
+                        }
+                        return
+                    }
+                    // 두 번째 호출 — Jenkins 가 첫 호출의 중단 예외를 "실제 중단이 아님" 으로 분류했다(①②).
+                    if (!nodesByLabel(label: env.NODE_NAME)) {
+                        // Runner 가 연결돼 있지 않다. 이 한계의 timeout 인지 Runner 제거인지 여기서 정하지 않는다 — 원본 예외를 바깥 retry(agent()) 가 판정한다
+                        ex.handed = true
+                        seLog("[수집] Runner(${env.NODE_NAME})와 연결되지 않은 상태로 이번 시도가 끊겼습니다.\n  결과는 그 Runner의 작업 폴더에 그대로 둡니다. 다시 시도할지는 Jenkins의 판정에 따릅니다.")
+                        throw ex.thrown
+                    }
+                    ex.preserving = true
+                    seAttemptLimitReached(C, st, limitSec)
                 }
             } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-                if (seNowMs() - t0 < (limitSec - 10L) * 1000L) { throw fie }
-                // 시도 하나의 실행 한계 — 멈춘 step 이 빌드를 붙잡지 않게 하는 장치. Runner 가 끊긴 채면(끊김을 알리지 않는 옛 Jenkins) 실행 기반 장애로 본다.
-                if (!nodesByLabel(label: env.NODE_NAME)) {
-                    st.last = [state: 'agent_disconnect', progress: 0, evidence: "시도 실행 한계(${limitSec}초) 동안 Runner 응답 없음"]
-                    return
-                }
-                st.last = [state: 'attempt_limit', outcome: 'attempt_limit', limit_reason: '']
-                st.final = true
-                // FL-F12 (2026-10-10): 보존(Layer A 의 --outcome)이 읽는 env 를 여기서 맞춘다 — 종전에는 루프가 끝난 뒤에야 적혀 interrupted_unknown 으로 정리됐다
-                env.SE_GATHER_OUTCOME = 'attempt_limit'
-                env.SE_GATHER_LIMIT_REASON = ''
-                seLog("[수집] 시도 하나의 실행 한계(${seDuration(limitSec)})에 도달해 멈췄습니다.\n  지금까지 확보한 결과를 보존해 보냅니다.")
-                try {
-                    sePreserveGatherOutput()
-                } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie2) {
-                    // FL-F03 (2026-10-10): 보존 중 Runner 끊김 · 취소는 삼키지 않는다 — 상위 retry(agent()) 가 받아 같은 작업 폴더에서 보존만 다시 한다(st.final → preserve_only)
-                    throw fie2
-                } catch (Exception e) {
-                    echo "[결과 보존] 멈춘 시도의 결과 보존을 마치지 못했습니다.\n  오류: ${e}"
-                }
+                if (ex.handed == true || ex.preserving == true) { throw fie }   // 바깥으로 넘긴 원본 · 보존 중 끊김 — 다시 보존하지 않는다
+                // Jenkins 가 "실제 중단" 으로 분류한 예외(②) — 사용자 취소 · 그 밖의 중단. 원인은 확정하지 않는다
+                ex.preserving = true
+                seAttemptInterrupted(C, st)
+                throw fie
             }
         }
+        if (ex.plain == true) { throw ex.thrown }
+    }
+}
+
+// 시도 하나의 실행 한계에 닿았다 (Jenkins 분류 ①②, Runner 연결됨) — 마지막 시도다. 결과를 한 번 보존한다.
+//   FL-F12 (2026-10-10): 보존(Layer A 의 --outcome)이 읽는 env 를 보존 전에 맞춘다. 보존 중 Runner 끊김 · 취소는 삼키지 않는다(FL-F03) —
+//   상위 retry(agent()) 가 받아 같은 작업 폴더에서 보존만 다시 한다(st.final → preserve_only).
+def seAttemptLimitReached(Map C, Map st, long limitSec) {
+    st.last = [state: 'attempt_limit', outcome: 'attempt_limit', limit_reason: '']
+    st.final = true
+    env.SE_GATHER_OUTCOME = 'attempt_limit'
+    env.SE_GATHER_LIMIT_REASON = ''
+    if (!(env.SE_GATHER_ENDED_AT ?: '')) { env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs()) }
+    seLog("[수집] 시도 하나의 실행 한계(${seDuration(limitSec)})에 도달해 멈췄습니다.\n  멈춘 단계: ${st.phase ?: '-'}\n  지금까지 확보한 결과를 보존해 보냅니다.")
+    try {
+        sePreserveGatherOutput()
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie2) {
+        throw fie2
+    } catch (Exception e) {
+        echo "[결과 보존] 멈춘 시도의 결과 보존을 마치지 못했습니다.\n  오류: ${e}"
+    }
+}
+
+// Jenkins 가 "실제 중단" 으로 분류한 예외(②) — 사용자 취소 · 그 밖의 중단. 원인은 적지 않는다. 다시 시도하지 않는다.
+//   Runner 가 연결돼 있으면 수집 프로세스가 끝나기를(잠금이 풀리기를) 잠깐 기다린 뒤 결과를 정리해 보존한다. 작업 폴더는 지우지 않는다 —
+//   중단 원인을 확정하지 않았으므로 바깥 재시도가 같은 폴더를 써야 할 수 있다. 남은 폴더는 오래된 작업 폴더 정리가 맡는다.
+//   Runner 가 연결돼 있지 않으면 폴더를 건드리지 않고 돌아간다(상위 retry(agent()) 가 판정한다).
+def seAttemptInterrupted(Map C, Map st) {
+    if (!(env.SE_GATHER_ENDED_AT ?: '') && st.gather_started) { env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs()) }
+    if (!nodesByLabel(label: env.NODE_NAME)) {
+        seLog("[수집] Runner(${env.NODE_NAME})와 연결되지 않은 상태로 Jenkins가 수집 단계를 중단했습니다.\n  결과는 그 Runner의 작업 폴더에 그대로 둡니다.")
+        return
+    }
+    env.SE_GATHER_OUTCOME = 'aborted'
+    env.SE_GATHER_INTERRUPTION = 'user_or_other'
+    st.abort_logged = true
+    seLog("[수집] 중단됨: 빌드가 중단됐습니다(사용자 취소 또는 그 밖의 중단).\n  멈춘 단계: ${st.phase ?: '-'}\n  지금까지 확보한 결과를 저장하고 Portal 전송을 시도합니다.")
+    if (st.gather_started != true) {
+        return      // 수집을 시작하기 전(준비 · Add-on)에 중단됐다 — 보존할 결과가 없다
+    }
+    try {
+        Map cls = seClassifyAttempt()
+        for (int i = 0; i < 6 && cls.state == 'running'; i++) {
+            sleep(time: 5, unit: 'SECONDS')
+            cls = seClassifyAttempt()
+        }
+        if (cls.state != 'running') { seMarkUserAbort() }
+        Map run = seReadGatherRun()
+        env.SE_GATHER_RUN = run ? seGatherRunForEnv(run) : ''
+        if (cls.state == 'running') {
+            echo "[결과 보존] 수집 프로세스가 아직 끝나지 않아 지금까지의 원본 결과만 넘깁니다. 작업 폴더는 지우지 않습니다."
+            seSnapshotGatherOutput()
+        } else {
+            env.SE_PRESERVE_KEEP_WS = 'true'      // 중단 원인을 확정하지 않았다 — 보존은 하되 작업 폴더는 남긴다(오래된 작업 폴더 정리가 맡는다)
+            try {
+                sePreserveGatherOutput()
+            } finally {
+                env.SE_PRESERVE_KEEP_WS = ''
+            }
+        }
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie2) {
+        throw fie2
+    } catch (Exception e) {
+        echo "[결과 보존] 중단 뒤 결과 보존을 마치지 못했습니다.\n  오류: ${e.message}"
     }
 }
 
@@ -2049,7 +2286,7 @@ Map seClassifyAttempt(boolean agentLost = false) {
 
 // 사용자 취소로 확인한 시도를 실행 기록에서 aborted 로 확정한다 (10차 R5) — 같은 때의 OOM 카운터 증가는 관측으로만 남는다. 실패해도 취소 처리는 그대로다.
 def seMarkUserAbort() {
-    sh(returnStatus: true, label: '수집 시도 판정 (사용자 취소)', script: '''#!/bin/bash
+    sh(returnStatus: true, label: '수집 시도 판정 (빌드 중단)', script: '''#!/bin/bash
         cd "${WORKSPACE}"
         . "${WORKSPACE}/scripts/activate_ansible_venv.sh" >/dev/null 2>&1 || true
         python3 scripts/gather_state.py classify --ws "${WORKSPACE}" --user-abort >/dev/null 2>&1 || true
@@ -2062,8 +2299,10 @@ def seMarkUserAbort() {
 //   전체를 다시 수집하지 않고 재개 불가로 보고한다. 그다음 Add-on 준비 → scripts/run_gather.sh(남은 대상만) → 판정 →
 //   실행 기반 장애면 중간 보존(stash) 뒤 다시 시도, 끝이면 마지막 보존(결과 정리 · archive · stash · 작업 폴더 정리).
 //   마지막 보존이 끊겨 다시 들어왔으면(st.preserve_only) 수집하지 않고 보존만 다시 한다(N1).
+//   2026-10-12: 중단 예외는 끊긴 단계(st.phase)만 기록하고 그대로 던진다 — 원인 판정 · 보존은 seAttempt 가 Jenkins 의 분류로 한 번 한다.
 def seAttemptBody(Map C, Map st, Map r) {
     String targetType = params.target_type.trim()
+    st.phase = '작업 폴더 준비'
     Map rec = seReadJsonFile('.se_workspace.json')
     Map own = (rec.state == 'ok') ? (rec.data as Map) : null
     boolean sameNumber = (own != null && "${own.job}" == "${env.JOB_NAME}" && "${own.build}" == "${env.BUILD_NUMBER}")
@@ -2075,6 +2314,7 @@ def seAttemptBody(Map C, Map st, Map r) {
             return
         }
         seLog("[결과 보존] 마지막 결과 보존이 끊겨 같은 작업 폴더에서 보존만 다시 합니다.\n  수집 종료 상태: ${seOutcomeText(env.SE_GATHER_OUTCOME ?: 'interrupted_unknown')}")
+        st.phase = '결과 보존'
         sePreserveGatherOutput()
         return
     }
@@ -2120,6 +2360,7 @@ def seAttemptBody(Map C, Map st, Map r) {
         }
         seLog("[수집] 같은 Runner의 작업 폴더를 그대로 씁니다. 저장소는 다시 받지 않습니다.\n  작업 폴더: ${pwd()}\n  revision: ${head ?: '-'}")
     }
+    st.phase = 'Add-on 준비'
     String addonDir = seAddonPrepare(targetType, st)
     String playbook  = "${env.WORKSPACE}/${targetType}-gather/site.yml"
     String inventory = "${env.WORKSPACE}/${targetType}-gather/inventory.sh"
@@ -2127,6 +2368,10 @@ def seAttemptBody(Map C, Map st, Map r) {
     st.agent_lost_prev = false
     st.gather_started = true
     if (!(env.SE_GATHER_STARTED_AT ?: '')) { env.SE_GATHER_STARTED_AT = seIsoUtc(seNowMs()) }
+    // 수집 전 시도 기록 수 — 수집 셸이 끝난 뒤 새 기록이 생겼는지로 "이번 시도를 시작했는가" 를 판단한다(P3, 2026-10-12)
+    Map runBefore = seReadGatherRun()
+    int attemptsBefore = ((runBefore?.attempts) instanceof List) ? runBefore.attempts.size() : 0
+    st.phase = '서버 정보 수집 (ansible-playbook)'
     int rc = -99
     try {
         withCredentials([string(credentialsId: 'server-gather-vault-password', variable: 'VAULT_PASSWORD')]) {
@@ -2139,63 +2384,60 @@ def seAttemptBody(Map C, Map st, Map r) {
             }
         }
     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
+        // 끊긴 구간과 시각만 남기고 그대로 던진다 — 원인 판정 · 보존은 seAttempt 가 Jenkins 의 분류로 한 번 한다 (2026-10-12).
+        //   종전에는 여기서 Runner 연결 상태로 "사용자 취소" 를 확정하고 보존 · 삭제까지 했다 — 시도 한계의 timeout 도 사용자 취소로 적혔다.
         env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs())
-        if (!nodesByLabel(label: env.NODE_NAME)) {
-            // Runner 연결이 끊긴 지 5분이 지나 Jenkins 가 이 step 을 끝냈다 — seWithNode 의 retry(agent()) 가 이어받아 같은 Runner 를 다시 기다린다.
-            //   Runner 쪽 수집 프로세스는 계속 돌 수 있다(2026-10-06 se-probe 실측). 그 폴더는 건드리지 않는다.
-            seLog("[수집] Runner(${env.NODE_NAME})와 Jenkins의 연결이 끊긴 채 Jenkins가 수집 단계를 끝냈습니다.\n  결과는 그 Runner의 작업 폴더에 그대로 둡니다.")
-            throw fie
-        }
-        // Runner 가 연결돼 있다 — 사용자 취소다. 다시 시도하지 않는다. 수집 프로세스가 끝나기를(잠금이 풀리기를) 잠깐 기다린 뒤 결과를 정리해 보존한다.
-        env.SE_GATHER_OUTCOME = 'aborted'
-        env.SE_GATHER_INTERRUPTION = 'user_or_other'
-        seLog("[수집] 중단됨: 사용자가 빌드를 취소했습니다.\n  지금까지 확보한 결과를 저장하고 Portal 전송을 시도합니다.")
-        try {
-            Map cls = seClassifyAttempt()
-            for (int i = 0; i < 6 && cls.state == 'running'; i++) {
-                sleep(time: 5, unit: 'SECONDS')
-                cls = seClassifyAttempt()
-            }
-            if (cls.state != 'running') { seMarkUserAbort() }
-            Map run = seReadGatherRun()
-            env.SE_GATHER_RUN = run ? groovy.json.JsonOutput.toJson(run) : ''
-            if (cls.state == 'running') {
-                echo "[결과 보존] 수집 프로세스가 아직 끝나지 않아 지금까지의 원본 결과만 넘깁니다. 작업 폴더는 지우지 않습니다."
-                seSnapshotGatherOutput()
-            } else {
-                sePreserveGatherOutput()
-            }
-        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie2) {
-            throw fie2
-        } catch (Exception e) {
-            echo "[결과 보존] 취소 뒤 결과 보존을 마치지 못했습니다.\n  오류: ${e.message}"
-        }
-        st.user_abort = true
+        st.cut_at_ms = seNowMs()
         throw fie
     }
     env.SE_GATHER_ENDED_AT = seIsoUtc(seNowMs())
-    // begin 전에 끝난 시도(rc 90 · 91)는 앞 시도를 닫지 못했다 — Jenkins 가 아는 연결 끊김 근거를 classify 에 넘긴다 (FL-F01b)
-    Map cls = seClassifyAttempt(lostPrev && (rc in [90, 91]))
+    st.phase = '수집 시도 판정'
     Map run = seReadGatherRun()
-    env.SE_GATHER_RUN = run ? groovy.json.JsonOutput.toJson(run) : ''
+    boolean recordKnown = (run != null)
+    int attemptsAfter = ((run?.attempts) instanceof List) ? run.attempts.size() : 0
+    boolean newAttempt = recordKnown && attemptsAfter > attemptsBefore
+    // begin 전에 끝난 시도(이번 기록 없음)는 앞 시도를 닫지 못했다 — Jenkins 가 아는 연결 끊김 근거를 classify 에 넘긴다 (FL-F01b)
+    Map cls = seClassifyAttempt(lostPrev && recordKnown && !newAttempt)
+    // 결과 확인 · 요약이 읽는 실행 기록 — 대상 IP 목록은 빼고 넘긴다(P10, 2026-10-12: 시도마다 전체 IP 목록이 실려 큰 배치에서 환경변수 한도 131,072 바이트를
+    //   넘기면 이후 모든 sh 가 실패한다). 결과 확인은 회수한 gather_run.json 파일을 우선 읽는다.
+    env.SE_GATHER_RUN = run ? seGatherRunForEnv(run) : ''
     if (run != null && (run.attempts instanceof List) && run.attempts) {
         // 첫 시도의 실행 한계(새 빌드면 6시간 그대로) — 증거 수집기가 운영 한계로 돌았는지 본다(full_limit)
         env.SE_GATHER_LIMIT_SEC = "${run.attempts[0].limit_sec}"
         env.SE_GATHER_LIMIT_SOURCE = 'gather_limit'
     }
     String s = (cls.state ?: 'unknown').toString()
-    // D-11 (2026-10-10 FL-F01): 종료 코드 90(Ansible 환경 없음) · 91(실행 기록 준비 실패)은 begin 전에 끝난 것이라 이번 시도의 기록이 없다.
-    //   이어서 하는 시도에서는 classify 가 **앞 시도**를 닫아 돌려주므로 그 상태(process_lost 등)를 쓰면 이번 실패 원인이 가려진다 — rc 로 직접 확정한다.
-    if (rc in [90, 91]) { s = 'prep_failed' }
-    else if (s == 'not_started') { s = 'failed_run' }
+    String prepWhy = ''
+    // 이번 시도의 기록이 없으면(begin 전에 끝났다) classify 가 돌려준 것은 **앞 시도**의 상태다 — 이번 실패의 원인으로 쓰지 않는다 (D-11 · 2026-10-12 P3).
+    //   종전에는 rc 90 · 91 만 가려 그 밖의 준비 실패(잠금 · 임시 파일 · 권한)가 앞 시도의 실행 기반 상태로 분류돼 같은 실패를 끝없이 반복했다.
+    //   준비 단계 코드(scripts/run_gather.sh 90~95)는 prep_failed, 그 밖의 종료는 failed_run 이다. 원인이 확인되지 않은 종료를 OOM · 인증 · 설정 오류로 단정하지 않는다.
+    if (recordKnown && !newAttempt) {
+        if (rc in [90, 91, 93, 94, 95]) {
+            s = 'prep_failed'
+            prepWhy = sePrepFailText(rc)
+        } else {
+            s = 'failed_run'
+            prepWhy = (rc == 2) ? '실행 인자가 잘못됐습니다' : ''
+        }
+    } else if (!recordKnown && rc in [90, 91, 93, 94, 95]) {
+        s = 'prep_failed'
+        prepWhy = sePrepFailText(rc)
+    } else if (s == 'not_started') {
+        s = 'failed_run'
+    }
     // 기술 기록 한 줄 — 증거 수집기가 수집 단계가 Runner 위에서 돌았는지 본다(종전 Budget 줄의 자리)
-    echo "[기술 기록] 수집 시도 n=${cls.attempt ?: '-'} node=${env.NODE_NAME} rc=${rc} state=${s} evidence=${cls.evidence ?: '-'} exec_used=${cls.exec_used ?: 0} " +
+    echo "[기술 기록] 수집 시도 n=${cls.attempt ?: '-'} node=${env.NODE_NAME} rc=${rc} state=${s} new_record=${newAttempt} evidence=${cls.evidence ?: '-'} exec_used=${cls.exec_used ?: 0} " +
          "completed=${cls.completed ?: 0}/${cls.hosts_total ?: '-'} precheck_failed=${cls.precheck_failed ?: 0} pending=${cls.pending_left ?: 0} progress=${cls.progress ?: 0}"
     if (s in ['runner_oom', 'runner_restart', 'agent_disconnect', 'running']) {
-        st.last = [state: s, evidence: cls.evidence, progress: (cls.progress ?: 0), limit_left: cls.limit_left]
-        seLog("[수집] 이번 수집 시도가 끝났습니다: ${seStateText(s)}." + (cls.evidence ? "\n  근거: ${cls.evidence}" : '') +
-              "\n  처리 완료: ${cls.completed ?: 0}/${cls.hosts_total ?: '-'}대, 남은 대상: ${cls.pending_left ?: 0}대\n  끝난 대상의 결과는 보존했고 남은 대상은 이어서 수집합니다.")
-        seSnapshotGatherOutput()
+        st.last = [state: s, evidence: cls.evidence, progress: (cls.progress ?: 0)]
+        if (s == 'running') {
+            // 이전 수집 프로세스가 아직 돈다(Agent 연결만 끊겼던 동안 계속 돈 실행) — 이번 시도는 결과를 기다리지 않고 끝내고 잠시 뒤 다시 시도한다 (P13)
+            seLog("[수집] 이번 수집 시도가 끝났습니다: ${seStateText(s)}.\n  처리 완료: ${cls.completed ?: 0}/${cls.hosts_total ?: '-'}대, 남은 대상: ${cls.pending_left ?: 0}대\n  이전 수집이 끝나면 남은 대상을 이어서 수집합니다.")
+        } else {
+            seLog("[수집] 이번 수집 시도가 끝났습니다: ${seStateText(s)}." + (cls.evidence ? "\n  근거: ${cls.evidence}" : '') +
+                  "\n  처리 완료: ${cls.completed ?: 0}/${cls.hosts_total ?: '-'}대, 남은 대상: ${cls.pending_left ?: 0}대\n  남은 대상은 이어서 수집합니다.")
+        }
+        seSnapshotGatherOutput()      // 끝난 대상의 원본 결과를 넘겨 둔다 — 아래 줄이 그 결과를 알린다
         return
     }
     Map oc = seOutcomeFromState(s, cls.rc)
@@ -2209,9 +2451,14 @@ def seAttemptBody(Map C, Map st, Map r) {
         unstable("[수집] 일부 대상의 수집이 실패했거나 대상이 응답하지 않았습니다.\n  ansible-playbook 종료 코드: ${rc}")
     } else if (oc.limit_reason) {
         unstable("[수집] ${seLimitText(oc.limit_reason)} ${seDuration(C.GATHER_MAX as long)}에 도달해 수집을 멈췄습니다.\n  끝나지 않은 대상은 실패 결과로 보냅니다.\n  종료 코드: ${rc}")
+    } else if (s == 'prep_failed') {
+        unstable("[수집] 실행 준비에 실패해 이번 시도를 시작하지 못했습니다.\n  원인: ${prepWhy ?: '-'}\n  종료 코드: ${rc}\n  끝난 대상의 결과는 그대로 보내고 남은 대상은 실패 결과로 보냅니다.")
+    } else if (s == 'failed_run' && recordKnown && !newAttempt) {
+        unstable("[수집] 수집을 시작하지 못했습니다. 종료 코드 ${rc}.${prepWhy ? '\n  원인: ' + prepWhy : ''}\n  원인은 바로 위 수집 셸의 출력에 있습니다. 끝난 대상의 결과는 그대로 보내고 남은 대상은 실패 결과로 보냅니다.")
     } else if (s != 'completed') {
-        unstable("[수집] ${seOutcomeText(oc.outcome)}.\n  종료 코드: ${rc}")
+        unstable("[수집] ${seOutcomeSentence(oc.outcome)}\n  종료 코드: ${rc}")
     }
+    st.phase = '결과 보존'
     sePreserveGatherOutput()
 }
 
@@ -2296,10 +2543,11 @@ pipeline {
 
                     def hosts
                     try {
-                        // readJSON(returnPojo): Jenkins 스크립트 sandbox 가 허용하는 파서다 — 종전의 Classic JSON 파서 생성자(JsonSlurper 의 Classic 변형)는 sandbox 가 거부해
-                        //   2026-10-03 main #2 가 Validate 에서 끝났다(접수 manifest 없음 → Callback 0건). returnPojo 결과는 ArrayList /
-                        //   LinkedHashMap(Serializable) 이라 CPS 경계를 넘어도 안전하다.
-                        hosts = readJSON(text: params.inventory_json, returnPojo: true)
+                        // 2026-10-12 (P12): 표준 JSON 만 받는 파서(groovy.json.JsonSlurper — sandbox 허용, seFilterEnvelopeLines 와 같은 것)로 읽는다.
+                        //   종전 readJSON(json-lib)은 홑따옴표 · 따옴표 없는 키 · 주석 같은 비표준 입력도 받아들여, inventory.sh(Python json.loads)가 거부하는
+                        //   요청을 입력 확인이 접수했다 → 접수 뒤 전 대상이 실패 결과로 나갔다. 결과는 CPS 가 직렬화할 수 있는 LinkedHashMap / ArrayList 다.
+                        //   (Classic JSON 파서 생성자는 sandbox 가 거부한다 — 2026-10-03 main #2.)
+                        hosts = seParseJsonStrict(params.inventory_json)
                     } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
                         throw fie
                     } catch (Exception e) {
@@ -2326,6 +2574,10 @@ pipeline {
                     }
                     if (cbUrl.contains("'") || cbUrl.contains('"') || cbUrl.contains('`') || cbUrl.contains('\\') || cbUrl.replaceAll(/\s/, '') != cbUrl) {
                         error "[입력 확인] callbackUrl에 쓸 수 없는 문자(따옴표, 백틱, 역슬래시, 공백)가 있습니다.\n  입력값: ${cbUrl}"
+                    }
+                    // 전송 주소는 callbackUrl 뒤에 /api/jenkins/gather/<target_type> 을 붙여 만든다 — 질의 문자열(?)이나 조각(#)이 있으면 그 뒤에 경로가 붙어 깨진 주소가 된다 (2026-10-12)
+                    if (cbUrl.contains('?') || cbUrl.contains('#')) {
+                        error "[입력 확인] callbackUrl에는 질의 문자열(?)이나 조각(#)을 넣을 수 없습니다. 주소 뒤에 /api/jenkins/gather/<target_type>을 붙여 보냅니다.\n  입력값: ${cbUrl}"
                     }
                     if (!params.deploymentEnvironmentId?.trim()) {
                         error "[입력 확인] 필수 값이 없습니다: deploymentEnvironmentId"

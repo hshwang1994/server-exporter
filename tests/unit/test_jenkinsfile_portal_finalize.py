@@ -43,6 +43,8 @@ def _method(name: str) -> str:
 GATHER = _stage("서버 정보 수집")
 BODY = _method("def seAttemptBody")
 ATTEMPT = _method("def seAttempt(")
+LIMIT_REACHED = _method("def seAttemptLimitReached")     # 2026-10-12: 시도 한계 — 마지막 보존 1회
+INTERRUPTED = _method("def seAttemptInterrupted")        # 2026-10-12: Jenkins 가 "실제 중단" 으로 분류한 예외 — 원인 미확정 보존
 STAGE_FN = _method("def seGatherStage")
 LOOP = _method("def seGatherLoop")
 WITH_NODE = _method("def seWithNode")
@@ -210,7 +212,9 @@ def test_runtime_groovy_uses_only_sandbox_whitelisted_apis():
     """sandbox 허용 API 만 — JsonSlurperClassic 거부(2026-10-03 lab 실측), 시각은 Date.format(Groovy) · TimeZone.getTimeZone 만."""
     assert "JsonSlurperClassic" not in TEXT and "JsonSlurperClassic" not in LIB
     assert "new groovy.json.JsonSlurper()" in LIB
-    assert "readJSON(text: params.inventory_json, returnPojo: true)" in TEXT
+    # 2026-10-12 (P12): 입력 확인은 표준 JSON 만 받는 JsonSlurper(sandbox 허용)로 읽는다 — readJSON(json-lib) 은 비표준 입력을 받아들여 inventory.sh 와 어긋났다
+    assert "hosts = seParseJsonStrict(params.inventory_json)" in TEXT and "readJSON(text: params.inventory_json" not in TEXT
+    assert "new groovy.json.JsonSlurper().parseText(t)" in _method("Object seParseJsonStrict")
     show = _method("String seShowTime")
     iso = _method("String seIsoUtc")
     assert "new Date(ms).format('yyyy-MM-dd HH:mm:ss XXX')" in show and "'+00:00'" in show
@@ -242,7 +246,7 @@ def test_business_events_carry_time_in_the_line_body():
                    "전송을 확인하지 못했습니다", "Portal이 요청을 거부했습니다"):
         assert re.search(r"seLog\(\"\[Portal 전송\][^\n]*" + re.escape(marker), CALLBACK), marker
     assert 'seLog("[결과 확인] 접수 ${ips.size()}대의 결과를 확인합니다.")' in FINALIZE
-    assert re.search(r"seLog\(\"\[수집\] 중단됨:", BODY) and re.search(r"seLog\(\"\[수집\] 중단됨:", STAGE_FN), "중단도 시각과 함께"
+    assert re.search(r"seLog\(\"\[수집\] 중단됨:", INTERRUPTED) and re.search(r"seLog\(\"\[수집\] 중단됨:", STAGE_FN), "중단도 시각과 함께"
     assert 'seLog("[입력 확인] 요청을 접수했습니다.' in VALIDATE
     # 9차: 기다림 · 끊김 · 이어서 수집 · 재개 불가도 시각과 함께
     assert re.search(r"seLog\(\"\[실행 대기\]", _method("def seQueueTimer"))
@@ -324,11 +328,20 @@ def test_attempt_state_to_outcome_uses_the_run_record():
     assert "if (state == 'gather_limit') { return [outcome: (\"${rc}\" == '137' ? 'timeout_killed' : 'timeout'), limit_reason: 'gather_limit'] }" in fn
     assert "['prep_failed', 'process_lost', 'aborted', 'failed_run', 'resume_impossible', 'attempt_limit']" in fn
     assert "    return [outcome: 'interrupted_unknown', limit_reason: '']\n}" in fn
-    assert "Map cls = seClassifyAttempt()" in BODY and "Map oc = seOutcomeFromState(s, cls.rc)" in BODY
+    assert "Map cls = seClassifyAttempt(lostPrev && recordKnown && !newAttempt)" in BODY and "Map oc = seOutcomeFromState(s, cls.rc)" in BODY
     assert "env.SE_GATHER_OUTCOME = oc.outcome" in BODY and "env.SE_GATHER_LIMIT_REASON = oc.limit_reason" in BODY
     # D-11 (2026-10-10 FL-F01): run_gather.sh 의 종료 코드 90(venv) · 91(실행 기록 준비)은 begin 전이라 classify 의 상태(이어서 하는 시도에서는
     #   앞 시도를 닫은 결과)와 무관하게 prep_failed 다. 소비되는 값(종료 코드 계약)이라 글자로 고정한다.
-    assert "if (rc in [90, 91]) { s = 'prep_failed' }" in BODY and "else if (s == 'not_started') { s = 'failed_run' }" in BODY
+    # 2026-10-12 (P3): 수집 전후의 시도 기록 수로 "이번 시도를 시작했는가" 를 본다. 기록이 없으면 준비 단계 코드(90~95)는 prep_failed, 그 밖은 failed_run —
+    #   classify 가 돌려준 앞 시도의 상태(agent_disconnect 등)를 이번 실패의 원인으로 쓰지 않는다(종전 rc 90 · 91 만 가려 그 밖의 준비 실패가 끝없이 반복됐다)
+    assert "Map runBefore = seReadGatherRun()" in BODY and BODY.index("Map runBefore = seReadGatherRun()") < BODY.index("scripts/run_gather.sh")
+    assert "boolean newAttempt = recordKnown && attemptsAfter > attemptsBefore" in BODY
+    assert "if (recordKnown && !newAttempt) {\n        if (rc in [90, 91, 93, 94, 95]) {\n            s = 'prep_failed'" in BODY
+    assert "        } else {\n            s = 'failed_run'" in BODY and "} else if (s == 'not_started') {\n        s = 'failed_run'" in BODY
+    assert "prepWhy = sePrepFailText(rc)" in BODY and "실행 준비에 실패해 이번 시도를 시작하지 못했습니다" in BODY
+    pf = _method("String sePrepFailText")
+    for code in ("90", "91", "93", "94", "95"):
+        assert f"'{code}':" in pf
     assert "if (s == 'not_started') { s = (rc in [90, 91])" not in BODY, "rc 90/91 판정이 not_started 에 묶이면 재개 시도의 준비 실패가 앞 시도 상태로 가려진다"
     infra = BODY[BODY.index("if (s in ['runner_oom', 'runner_restart', 'agent_disconnect', 'running']) {"):BODY.index("Map oc = seOutcomeFromState")]
     assert "seSnapshotGatherOutput()" in infra and "return" in infra and "sePreserveGatherOutput" not in infra, \
@@ -367,25 +380,44 @@ def test_retry_rules_infra_only_with_backoff_and_pinned_runner():
 
 
 def test_interruptions_are_recorded_and_rethrown_not_swallowed():
+    """2026-10-12 (P1): 중단 원인은 Jenkins 의 분류로만 가른다. seAttemptBody 의 catch 는 끊긴 구간만 기록하고 다시 던지며(보존 · 삭제 없음),
+    seAttempt 가 timeout(한계){본문} 을 조건 없는 retry(count: 2) 안에 두고 두 번째 호출(= "실제 중단이 아님" 분류)에서만 attempt_limit 를 판정한다.
+    Runner 연결 상태는 경로만 가른다(원인 기록 없음). "실제 중단" 은 seAttemptInterrupted 가 원인을 확정하지 않고 보존한다(작업 폴더 유지)."""
     i_catch = BODY.index("} catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {")
     after = BODY[i_catch:]
     after = after[: after.index("\n    }\n")]
-    # 끊김 · 취소 구분: Runner 가 오프라인이면 Jenkins 가 끊긴 Runner 의 step 을 끝낸 것 — 폴더를 건드리지 않고 다시 던진다
-    assert after.index("if (!nodesByLabel(label: env.NODE_NAME)) {") < after.index("env.SE_GATHER_OUTCOME = 'aborted'")
-    lost = after[after.index("if (!nodesByLabel(label: env.NODE_NAME)) {"):after.index("env.SE_GATHER_OUTCOME = 'aborted'")]
-    assert "throw fie" in lost and "sePreserveGatherOutput" not in lost and "seSnapshotGatherOutput" not in lost
-    user = after[after.index("env.SE_GATHER_OUTCOME = 'aborted'"):]
-    assert "env.SE_GATHER_INTERRUPTION = 'user_or_other'" in user and user.rstrip().endswith("throw fie")
-    assert "cls.state == 'running'" in user and "seSnapshotGatherOutput()" in user and "sePreserveGatherOutput()" in user, \
-        "수집 프로세스가 아직 돌면 폴더를 지우지 않는다"
-    assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie2) {\n            throw fie2" in user
+    assert "st.cut_at_ms = seNowMs()" in after and after.rstrip().endswith("throw fie")
+    for forbidden in ("nodesByLabel", "sePreserveGatherOutput", "seSnapshotGatherOutput", "'aborted'", "seClassifyAttempt"):
+        assert forbidden not in after, f"seAttemptBody 의 catch 는 기록만 한다: {forbidden}"
+    # seAttempt — Jenkins 분류 질의 구조
+    assert "retry(count: 2) {" in ATTEMPT and "timeout(time: limitSec, unit: 'SECONDS') {" in ATTEMPT
+    assert ATTEMPT.index("retry(count: 2) {") < ATTEMPT.index("timeout(time: limitSec, unit: 'SECONDS') {")
+    assert "ex.thrown = fie\n                            throw fie" in ATTEMPT, "중단 예외는 retry 에 다시 던져 Jenkins 의 분류를 묻는다"
+    assert "ex.plain = true" in ATTEMPT and "if (ex.plain == true) { throw ex.thrown }" in ATTEMPT, "보통 오류는 retry 에 묻지 않고 블록 뒤에서 그대로 던진다"
+    second = ATTEMPT[ATTEMPT.index("// 두 번째 호출"):ATTEMPT.index("} catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {\n                if (ex.handed")]
+    assert "if (!nodesByLabel(label: env.NODE_NAME)) {" in second and "ex.handed = true" in second and "throw ex.thrown" in second
+    assert "seAttemptLimitReached(C, st, limitSec)" in second
+    assert "if (ex.handed == true || ex.preserving == true) { throw fie }" in ATTEMPT and "seAttemptInterrupted(C, st)" in ATTEMPT
+    for forbidden in ("seNowMs() - t0", "currentBuild.result", "limitSec - 10L"):
+        assert forbidden not in ATTEMPT, f"경과시간 · 빌드 결과로 원인을 정하지 않는다: {forbidden}"
+    assert "사용자가 빌드를 취소했습니다" not in TEXT, "중단 원인(사용자 취소)을 단정하는 문장은 없다"
+    # 실제 중단 — Runner 가 오프라인이면 폴더를 건드리지 않고 돌아간다(상위 retry 가 판정), 연결돼 있으면 보존하되 작업 폴더는 지우지 않는다
+    assert INTERRUPTED.index("if (!nodesByLabel(label: env.NODE_NAME)) {") < INTERRUPTED.index("env.SE_GATHER_OUTCOME = 'aborted'")
+    lost = INTERRUPTED[INTERRUPTED.index("if (!nodesByLabel(label: env.NODE_NAME)) {"):INTERRUPTED.index("env.SE_GATHER_OUTCOME = 'aborted'")]
+    assert "return" in lost and "sePreserveGatherOutput" not in lost and "seSnapshotGatherOutput" not in lost
+    user = INTERRUPTED[INTERRUPTED.index("env.SE_GATHER_OUTCOME = 'aborted'"):]
+    assert "env.SE_GATHER_INTERRUPTION = 'user_or_other'" in user
+    assert "cls.state == 'running'" in user and "seSnapshotGatherOutput()" in user and "env.SE_PRESERVE_KEEP_WS = 'true'" in user, \
+        "수집 프로세스가 아직 돌면 원본만 넘기고, 끝났으면 보존하되 작업 폴더는 지우지 않는다"
+    assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie2) {\n        throw fie2" in user
+    # 시도 한계 — 마지막 보존 1회, env 는 보존 전에
+    assert "env.SE_GATHER_OUTCOME = 'attempt_limit'" in LIMIT_REACHED and LIMIT_REACHED.index("env.SE_GATHER_OUTCOME = 'attempt_limit'") < LIMIT_REACHED.index("sePreserveGatherOutput()")
+    assert LIMIT_REACHED.count("sePreserveGatherOutput()") == 1
     stage = STAGE_FN[STAGE_FN.index("} catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {"):]
     assert "env.SE_GATHER_INTERRUPTION = 'user_or_other'" in stage and "throw fie" in stage
     with_node = WITH_NODE[WITH_NODE.index("} catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {"):]
     assert "if (r.state == 'expired') { return r }" in with_node and "seInfraClose(infra, ep, seNowMs(), 'interrupted')" in with_node
     assert "throw fie" in with_node
-    attempt = ATTEMPT[ATTEMPT.index("} catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {"):]
-    assert "if (seNowMs() - t0 < (limitSec - 10L) * 1000L) { throw fie }" in attempt, "시도 한계가 아니면 그대로 다시 던진다"
     assert "catchError(" not in TEXT, "node 안의 중단을 삼키는 catchError 는 없다"
     canon = _method("def seLoadCanon")
     assert canon.index("FlowInterruptedException fie") < canon.index("catch (Exception e)")
@@ -696,15 +728,19 @@ def test_abort_between_attempts_says_handed_results_only_when_there_are_some():
     stage = stage[:stage.index("\n}\n")]
     assert "String handed = (env.SE_PRESERVE_STASHED == 'true') ? '앞 시도에서 넘겨 둔 결과로 Portal 전송을 시도합니다.' :" in stage
     assert "(st.gather_started ? 'Runner에서 넘겨받은 결과가 없어 접수된 대상마다 실패 결과를 보냅니다.' : '수집을 시작하기 전이라 접수된 대상마다 실패 결과를 보냅니다.')" in stage
-    assert "seLog(\"[수집] 중단됨: 사용자가 빌드를 취소했습니다.\\n  \" + handed)" in stage
+    assert "seLog(\"[수집] 중단됨: 빌드가 중단됐습니다(사용자 취소 또는 그 밖의 중단).\\n  \" + handed)" in stage, "중단 원인을 단정하지 않는다 (2026-10-12)"
 
 
 def test_aborted_gather_still_reports_its_runtime():
     """2026-10-06 (main #245 관측) · 9차: 취소로 끊긴 수집도 실행 시간을 남긴다 — run_gather.sh 가 취소 신호에서 끝 기록을 쓰고(gather_state end),
     취소 경로는 그 기록(gather_run.json)을 읽어 넘긴다. 결과 확인은 env 로 받지 못했으면 회수한 gather_run.json 을 읽는다.
     수집을 시작하지 않은 빌드(실행 위치 확인 실패)는 "수집을 시작하지 않았습니다"."""
-    user = BODY[BODY.index("env.SE_GATHER_OUTCOME = 'aborted'"):]
-    assert "Map run = seReadGatherRun()" in user and "env.SE_GATHER_RUN = run ? groovy.json.JsonOutput.toJson(run) : ''" in user
+    user = INTERRUPTED[INTERRUPTED.index("env.SE_GATHER_OUTCOME = 'aborted'"):]
+    # 2026-10-12 (P10): env 로 넘기는 실행 기록에서 대상 IP 목록은 뺀다(환경변수 한도) — 결과 확인은 회수한 gather_run.json 파일을 우선 읽는다
+    assert "Map run = seReadGatherRun()" in user and "env.SE_GATHER_RUN = run ? seGatherRunForEnv(run) : ''" in user
+    assert "env.SE_GATHER_RUN = run ? seGatherRunForEnv(run) : ''" in BODY and "JsonOutput.toJson(run)" not in BODY
+    strip = _method("String seGatherRunForEnv")
+    assert "['completed_ips', 'precheck_failed_ips', 'lost_ips']" in strip
     assert "String runDir = ev.dir ?: (stashC.ok ? stashC.dir : ((archC?.got) ? archC.dir : null))" in FIN_IN
     assert "if (fileExists('gather_run.json')) { run = readJSON(file: 'gather_run.json', returnPojo: true) as Map }" in FIN_IN
     assert "'gather_run.json']" in FIN_IN, "보관본에서도 실행 기록을 회수한다"
@@ -753,7 +789,7 @@ def test_final_preservation_marker_stops_retrying_after_results_were_handed_over
     only = BODY[BODY.index("if (st.preserve_only == true) {"):BODY.index(main_branch)]
     assert "sePreserveGatherOutput()" in only and "run_gather" not in only, "보존만 다시 한다 — 다시 수집하지 않는다"
     assert BODY.index("st.final = true") < BODY.rindex("sePreserveGatherOutput()")
-    assert "st.final = true" in ATTEMPT, "시도 실행 한계로 끝난 시도도 마지막이다"
+    assert "st.final = true" in LIMIT_REACHED, "시도 실행 한계로 끝난 시도도 마지막이다"
     writer = _method("def seWriteOwner")
     assert "commit: (env.SE_WS_COMMIT ?: '')" in writer and "prepared: prepared" in writer and "rec.putAll(extra)" in writer
 
@@ -762,5 +798,5 @@ def test_user_abort_is_recorded_as_aborted_in_the_run_record():
     """10차 R5: 파이프라인이 사용자 취소로 확인한 시도는 실행 기록에서도 aborted 로 확정한다(같은 때의 OOM 은 관측으로만 남는다)."""
     mark = _method("def seMarkUserAbort")
     assert "gather_state.py classify --ws \"${WORKSPACE}\" --user-abort" in mark and "returnStatus: true" in mark
-    user = BODY[BODY.index("env.SE_GATHER_OUTCOME = 'aborted'"):]
+    user = INTERRUPTED[INTERRUPTED.index("env.SE_GATHER_OUTCOME = 'aborted'"):]
     assert "if (cls.state != 'running') { seMarkUserAbort() }" in user

@@ -33,8 +33,9 @@
 #
 # 인자: <playbook> <inventory> <location> <addon_validated:true|false> <수집 실행 한계 초> [이전 시도 중 Agent 끊김:true|false]
 # 출력: gather_run.json(시도 기록) · gather_rc.txt · .gather_limit_hosts · .gather_alive · gather_tail_fragments.jsonl(잘린 줄이 있었을 때)
-# 종료 코드: ansible-playbook 의 종료 코드(124 = 한계 도달 뒤 INT, 137 = KILL), 0 = 남은 대상 없음, 90 = 실행 준비 실패,
-#           91 = 실행 기록 준비 실패, 92 = 확정 결과가 사라져 재개 불가, 2 = 인자 불량, 143/130/129 = 취소 신호
+# 종료 코드: ansible-playbook 의 종료 코드(124 = 한계 도달 뒤 INT, 137 = KILL), 0 = 남은 대상 없음, 90 = 실행 준비 실패(Ansible 환경 없음),
+#           91 = 실행 기록 준비 실패, 92 = 확정 결과가 사라져 재개 불가, 93 = inventory 실행 권한 부여 실패, 94 = 임시 파일 생성 실패,
+#           95 = 잠금 파일 접근 실패, 2 = 인자 불량, 143/130/129 = 취소 신호. 90~95 는 begin 전에 끝나 이번 시도 기록이 없다
 set -eo pipefail
 set +x
 
@@ -126,6 +127,18 @@ se_alive_loop() {
 }
 
 # ── 1. 같은 작업 폴더의 수집은 한 번에 하나 — 잠금은 이 스크립트와 ansible 이 끝나면 풀린다(ssh 다중화 master 는 물려받지 않는다)
+# 준비 단계(잠금 · 환경 · 임시 파일)의 실패는 단계마다 종료 코드로 식별하고 원인(오류 원문)을 콘솔에 남긴다 (2026-10-12).
+#   코드만으로 영구 설정 오류인지 일시 장애인지 정하지 않는다 — 파이프라인은 이 코드를 "이번 시도를 시작하지 못했다" 로만 쓴다.
+se_prep_fail() {
+    local code="$1" what="$2" why="${3:-}"
+    echo "[$(se_show)] [수집] 수집을 시작하지 못했습니다: ${what}."
+    if [ -n "$why" ]; then echo "  원인: ${why}"; fi
+    echo "  종료 코드: ${code}"
+    exit "$code"
+}
+if ! lock_err="$( { : >>"$WS/.gather.lock"; } 2>&1 )"; then
+    se_prep_fail 95 "작업 폴더의 잠금 파일을 만들거나 열 수 없습니다" "${lock_err}"
+fi
 exec 9>>"$WS/.gather.lock"
 if ! flock -n 9; then
     echo "[$(se_show)] [수집] 이 빌드의 이전 수집이 아직 실행 중입니다. 끝나면 남은 대상을 이어서 수집합니다."
@@ -137,11 +150,18 @@ fi
 . "$WS/scripts/env_guard.sh" "$ADDON_OK"
 . "$WS/scripts/activate_ansible_venv.sh" || exit 90
 export ANSIBLE_INVENTORY_UNPARSED_FAILED=True
-chmod +x "$INVENTORY"
-VAULT_TMP="$(mktemp /tmp/se_vault.XXXXXXXXXX)"
-printf '%s' "${VAULT_PASSWORD:-}" > "$VAULT_TMP"
-chmod 600 "$VAULT_TMP"
-SE_CP_DIR="$(mktemp -d /tmp/se_cp.XXXXXX)"
+if ! chmod_err="$(chmod +x "$INVENTORY" 2>&1)"; then
+    se_prep_fail 93 "접수 목록 실행 파일(inventory)에 실행 권한을 주지 못했습니다" "${chmod_err}"
+fi
+if ! VAULT_TMP="$(mktemp /tmp/se_vault.XXXXXXXXXX 2>&1)"; then
+    se_prep_fail 94 "vault 비밀번호 임시 파일을 만들지 못했습니다" "${VAULT_TMP}"
+fi
+if ! vault_err="$( { printf '%s' "${VAULT_PASSWORD:-}" > "$VAULT_TMP" && chmod 600 "$VAULT_TMP"; } 2>&1 )"; then
+    se_prep_fail 94 "vault 비밀번호 임시 파일을 쓰지 못했습니다" "${vault_err}"
+fi
+if ! SE_CP_DIR="$(mktemp -d /tmp/se_cp.XXXXXX 2>&1)"; then
+    se_prep_fail 94 "SSH 다중화 임시 디렉터리를 만들지 못했습니다" "${SE_CP_DIR}"
+fi
 export ANSIBLE_SSH_CONTROL_PATH_DIR="$SE_CP_DIR"
 
 # ── 3. 남은 대상 · 이번 실행 한계 · 동시 실행 수 (scripts/gather_state.py begin)
@@ -235,7 +255,8 @@ se_close_ssh
 set -e
 
 # ── 7. 끝 기록
-RESULT="$(python3 "$WS/scripts/gather_state.py" end --ws "$WS" --rc "$rc" --ssh-closed "$SSH_CLOSED" 2>/dev/null \
+# 끝 기록의 오류([수집 기록] 줄)는 콘솔로 보낸다 — 종전에는 2>/dev/null 로 숨겨져 끝 기록 실패를 알 수 없었다 (2026-10-12)
+RESULT="$(python3 "$WS/scripts/gather_state.py" end --ws "$WS" --rc "$rc" --ssh-closed "$SSH_CLOSED" \
           | python3 -c 'import json, sys; a = json.load(sys.stdin); print((a.get("state") or "") + "|" + (a.get("evidence") or ""))' 2>/dev/null || echo "|")"
 STARTED=false
 STATE="${RESULT%%|*}"

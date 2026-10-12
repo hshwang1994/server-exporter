@@ -28,9 +28,9 @@ fail() {
 }
 
 [ -n "$repo" ] && [ -n "$ref" ] && [ -n "$dest" ] || fail "사용법: addon_checkout.sh <저장소 URL> <ref> <대상 디렉터리>"
-case "$repo" in -*) fail "저장소 URL 형식 오류: '$repo'";; esac
+case "$repo" in -*) fail "저장소 URL 형식 오류: '$repo' 는 쓸 수 없는 주소입니다";; esac
 case "$ref" in
-    -*|*..*|*' '*|*'	'*) fail "ref 형식 오류: '$ref' (브랜치 · refs/tags/<태그> · 40자 커밋 해시)";;
+    -*|*..*|*' '*|*'	'*) fail "ref 형식 오류: '$ref' 는 쓸 수 없는 ref 입니다 (브랜치, refs/tags/<태그>, 40자 커밋 해시만 받습니다)";;
 esac
 if printf '%s' "$ref" | grep -Eq '^[0-9a-fA-F]{4,39}$'; then
     fail "커밋은 40자 전체 해시로 적습니다: '$ref'"
@@ -56,11 +56,11 @@ reason() {   # git stderr 의 마지막 의미 있는 줄
 }
 
 rm -rf -- "$dest" && mkdir -p -- "$dest" || fail "디렉터리를 준비하지 못했습니다: $dest"
-git -C "$dest" init -q 2>"$err" || fail "git init 실패: $(reason)"
+git -C "$dest" init -q 2>"$err" || fail "git init 에 실패했습니다: $(reason)"
 git -C "$dest" remote add origin "$repo" 2>"$err" || fail "저장소 URL 을 등록하지 못했습니다: $(reason)"
 
 if "${tmo[@]}" git -C "$dest" "${opts[@]}" fetch -q --depth 1 origin "$ref" 2>"$err"; then
-    git -C "$dest" checkout -q --detach FETCH_HEAD 2>"$err" || fail "checkout 실패: $(reason)"
+    git -C "$dest" checkout -q --detach FETCH_HEAD 2>"$err" || fail "checkout 에 실패했습니다: $(reason)"
 else
     first="$(reason)"
     "${tmo[@]}" git -C "$dest" "${opts[@]}" fetch -q origin \
@@ -69,7 +69,7 @@ else
     sha="$(git -C "$dest" rev-parse --verify -q "${ref}^{commit}" \
         || git -C "$dest" rev-parse --verify -q "origin/${ref#refs/heads/}^{commit}")" \
         || fail "ref 를 찾지 못했습니다: '${ref}' (${first})"
-    git -C "$dest" checkout -q --detach "$sha" 2>"$err" || fail "checkout 실패: $(reason)"
+    git -C "$dest" checkout -q --detach "$sha" 2>"$err" || fail "checkout 에 실패했습니다: $(reason)"
 fi
 
 echo "[addon] ${repo}@${ref} $(git -C "$dest" rev-parse HEAD)"

@@ -237,6 +237,33 @@ def test_missing_manifest_is_a_record_failure(env):
     assert not (env["out"] / "args.txt").exists(), "ansible 을 실행하지 않는다"
 
 
+def test_missing_inventory_file_is_a_preparation_failure_with_its_own_code(env):
+    """2026-10-12 (P3): 준비 단계의 실패는 단계마다 종료 코드와 원인 원문을 남긴다 — 종전에는 set -e 의 묵시적 종료(rc 1)라 파이프라인이
+    앞 시도의 상태로 판정해 같은 실패를 반복했다."""
+    env["inv"].unlink()
+    r = _run(env)
+    assert r.returncode == 93, r.stdout + r.stderr
+    assert "[수집] 수집을 시작하지 못했습니다: 접수 목록 실행 파일(inventory)에 실행 권한을 주지 못했습니다." in r.stdout
+    assert "  원인: " in r.stdout and "  종료 코드: 93" in r.stdout
+    assert not (env["ws"] / "gather_run.json").exists(), "begin 전이라 이번 시도 기록이 없다"
+    assert not (env["out"] / "args.txt").exists(), "ansible 을 실행하지 않는다"
+
+
+def test_unwritable_workspace_is_a_lock_preparation_failure(env):
+    if os.geteuid() == 0:
+        pytest.skip("root 는 쓰기 권한 제한을 받지 않는다")
+    ws = env["ws"]
+    ws.chmod(0o555)
+    try:
+        r = _run(env)
+    finally:
+        ws.chmod(0o755)
+    assert r.returncode == 95, r.stdout + r.stderr
+    assert "[수집] 수집을 시작하지 못했습니다: 작업 폴더의 잠금 파일을 만들거나 열 수 없습니다." in r.stdout
+    assert "  원인: " in r.stdout and "  종료 코드: 95" in r.stdout
+    assert not (env["out"] / "args.txt").exists()
+
+
 @pytest.mark.parametrize("args", [[], ["site.yml"], ["site.yml", "inv", "git", "false", "0"], ["site.yml", "inv", "git", "false", "abc"]])
 def test_bad_arguments_exit_2(env, args):
     assert _run(env, args=args).returncode == 2
