@@ -1,6 +1,6 @@
-# Supermicro X14 mock fixture (cycle 2026-05-07 M-B4)
+# Supermicro X14 mock fixture (2026-05-07)
 
-## 출처 (rule 96 R1-A — lab 부재)
+## 출처 (lab 부재)
 
 - Supermicro X14/H14 BMC docs: `https://www.supermicro.com/manuals/other/BMC_IPMI_X14_H14.pdf`
 - Supermicro Redfish ref: `https://www.supermicro.com/manuals/other/RedfishUserGuide.pdf`

@@ -1,400 +1,178 @@
-# REQUIREMENTS — Server Exporter 환경 요건
+# 환경 요건
 
-> **이 문서를 보는 이유**
-> 수집을 시도하기 전에 "내 환경에서 정말 동작할까?" 를 빠르게 확인하기 위함이다.
-> **대상 서버 / Jenkins Agent / 네트워크** 세 측면에서 무엇이 필요한지 표로 정리한다.
+이 문서는 수집을 시도하기 전에 대상 서버, Runner(Jenkins Agent), Jenkins Controller, 네트워크에 무엇이 필요한지 정리합니다. 설치 절차는 [docs/operate/01-jenkins-master.md](docs/operate/01-jenkins-master.md)부터 이어지는 운영 문서에 있습니다.
 
-## 표를 읽는 법
+## 표기 구분
 
-각 절의 표는 다음 3가지 정보를 한 줄에 담는다.
+요건은 세 가지로 나눠 적습니다.
 
-| 컬럼 | 의미 |
-|------|------|
-| 최소 요구사항 | 이 값보다 낮으면 수집이 실패하거나 일부 필드가 `null` |
-| 검증 기준 (선택 컬럼) | 프로젝트 측이 실제로 검증한 환경 — "권장 운영" 의 의미 |
-| 미충족 시 동작 | 위반했을 때 호출자가 받게 될 결과 |
+| 구분 | 뜻 | 예 |
+|---|---|---|
+| 필수 | 코드나 공식 의존성에 근거가 있는 요구. 충족하지 않으면 수집이 되지 않습니다 | Runner의 Python 3.12 이상, 대상 Linux의 SSH |
+| 확인한 조합 | 사내 검증 환경에서 실제로 실행해 본 버전과 구성. 필수 조건이 아닙니다 | Runner RHEL 9.6, ESXi 7.0.3과 9.0.0 |
+| 미확인 | 코드가 막지 않지만 실장비로 확인하지 않은 범위. 지원 불가로 단정하지 않습니다 | ESXi 6.x, 8.x, Supermicro BMC |
 
-"미충족 시 동작" 은 보통 두 가지 중 하나다.
+요건을 충족하지 못했을 때의 결과는 둘 중 하나입니다. 수집 자체가 실패하면 `status: failed` 봉투가 오고, 일부 정보만 못 읽으면 해당 필드가 `null`이고 `errors[]`에 이유가 남습니다.
 
-1. **수집 자체 실패** — envelope `status: failed`. 호출자는 errors[] 만 받고 data 는 비어 있음.
-2. **부분 미수집** — 수집은 성공하지만 해당 필드가 `null`. 호출자는 다른 필드는 정상 사용 가능.
+약어: BMC는 서버 관리 컨트롤러, iDRAC(Dell), iLO(HPE), XCC(Lenovo), CIMC(Cisco), iBMC(Huawei), iRMC(Fujitsu)는 각 벤더의 BMC 이름입니다. WinRM은 Windows 원격 관리, DMI는 메인보드가 제공하는 시리얼과 UUID 정보입니다.
 
-## 약어 풀이
+## 1. 대상 서버
 
-| 약어 | 풀이 |
-|------|------|
-| BMC | Baseboard Management Controller (서버 관리 컨트롤러) |
-| iDRAC | Dell 의 BMC 브랜드 |
-| iLO | HPE 의 BMC 브랜드 |
-| XCC | Lenovo XClarity Controller |
-| CIMC | Cisco Integrated Management Controller |
-| WinRM | Windows Remote Management |
-| WMI / CIM | Windows Management Instrumentation / Common Information Model |
-| DMI | Desktop Management Interface (메인보드 시리얼 / UUID 등) |
-| DMTF | Distributed Management Task Force (Redfish 표준 단체) |
+### 1.1 Linux
 
----
+| 항목 | 구분 | 내용 |
+|---|---|---|
+| SSH | 필수 | TCP 22. 비밀번호 인증 계정 |
+| 셸과 기본 명령 | 필수 | POSIX sh, `awk`, `grep`, `cat`, `uname`. `/proc`, `/sys` 읽기 |
+| `ip` (iproute2) | 필수 | 네트워크 수집. 없으면 `ifconfig`로 일부만 읽습니다 |
+| `getent` (glibc) | 필수 | 사용자 수집. 없으면 `users`가 `not_supported` |
+| `lsblk`, `df` | 필수 | 스토리지 수집. `lsblk -J`가 안 되면 옛 형식으로 한 번 더 시도합니다 |
+| Python | 선택 | 대상에 Python 3.9 이상이 있으면 Ansible 모듈 경로, 없거나 낮으면 raw 경로로 수집합니다. 결과 형식은 같습니다 |
+| sudo | 선택 | DMI 시리얼과 UUID, `dmidecode` 메모리 슬롯 정보에 필요합니다. 없으면 시리얼과 UUID는 `null`, 메모리는 `/proc/meminfo` 값(`total_basis: os_visible`)으로 채우고 `errors[]`에 남깁니다 |
+| `dmidecode`, `lastlog` 또는 `last`, `getenforce`, `systemd-detect-virt`, `lscpu`, `lspci` | 선택 | 있으면 더 채웁니다. 없으면 해당 필드가 `null`입니다 |
 
-## 함께 읽으면 좋은 문서
+vault의 `ansible_become_password`를 따로 두면 sudo에 그 값을 쓰고, 없으면 로그인 비밀번호를 씁니다([docs/operate/05-vault.md](docs/operate/05-vault.md)).
 
-- 설치 절차: [docs/operate/01-jenkins-master.md](docs/operate/01-jenkins-master.md) (Jenkins 마스터) / [docs/operate/02-agent-node.md](docs/operate/02-agent-node.md) (Agent 노드)
-- 호출자 입력 형식: [docs/contract/01-input.md](docs/contract/01-input.md)
-- 호출자 출력 형식: [docs/contract/02-output-envelope.md](docs/contract/02-output-envelope.md)
+Python 상태별 경로는 `os-gather/tasks/linux/preflight.yml`이 정합니다. 사전 점검은 Python 없이 돌고 `python3`, `python` 순으로 찾아 버전을 봅니다. 어느 경로였는지는 결과의 `diagnosis.details.gather_mode`에 `python_ok`, `python_incompatible`, `python_missing`, `raw_forced` 중 하나로 남습니다.
 
----
-
-## 1. os-gather (Linux / Windows)
-
-### 1-1. Linux 대상 서버
-
-| 항목 | 최소 요구사항 | 미충족 시 동작 |
-|------|-------------|--------------|
-| **SSH 포트** | 22 오픈 | 연결 실패 → `status: failed` |
-| **Python** | 없어도 된다 (3.9 이상이면 모듈 경로, 그 밖에는 raw 경로) | Python 이 없거나 3.8 이하여도 같은 형식으로 수집한다 — 아래 "Python 상태별 수집 경로" |
-| **배포판** | 아래 참조 | 구버전은 제한 지원 또는 미지원 |
-| **계정 권한** | **sudo(become) 권한 권장** | 권한 없으면 serial_number, system_uuid 등 DMI 정보 `null` 반환 |
-| **커널** | 2.6.32+ | `ip` 명령 없으면 `/proc/net` fallback |
-| **ip 명령** | `iproute2` 패키지 (`ip addr`) | 네트워크 수집 실패 가능 |
-| **lsblk** | util-linux 2.19+ | 없으면 `df` fallback (물리 디스크 정보 제한) |
-| **getent** | glibc 포함 (기본 설치) | users 수집 실패 |
-| **lastlog / last** | shadow-utils (기본 설치) | `last_access_time` → `null` 반환 |
-| **Python3 경로** | PATH 의 `python3` → `python` 순으로 찾는다 | 찾은 Python 이 3.9 미만이거나 없으면 raw 경로로 수집 |
-
-> **Python 상태별 수집 경로** (`os-gather/tasks/linux/preflight.yml`, 2026-10-05 정정):
-> - 사전 점검은 Python 없이(`raw` 명령) 돈다. `python3` → `python` 순으로 찾아 버전을 보고 수집 경로를 정한다.
->   어느 경로였는지는 결과의 `diagnosis.details.gather_mode` 에 남는다.
-> - **모듈 경로 (`python_ok`)** — Python 3.9 이상. ansible-core 2.20 의 모듈 실행 요건이다. setup facts
->   (hardware · network · virtual · distribution)를 먼저 쓰고 셸 명령 결과로 보강한다.
-> - **raw 경로 (`python_incompatible` · `python_missing` · `raw_forced`)** — Python 이 3.8 이하이거나 없을 때.
->   같은 섹션을 셸 명령(`/etc/os-release` · `/proc` · `/sys/class/dmi/id` · `lsblk` · `ip` · `dmidecode` 등)으로 수집하고,
->   결과 형식(envelope · 섹션 · 필드)은 모듈 경로와 같다.
-> - raw 경로에서 달라지는 점: setup facts 가 없다. serial · uuid 를 못 읽었을 때의 보조 읽기(DMI direct-read)와
->   식별자 안내 문장(`errors[]`)은 모듈 경로에서만 만든다 — raw 경로에서는 그 값이 `null` 이고 안내 문장이 없다.
-> - raw 경로에 필요한 것: POSIX 셸과 기본 명령(`awk` · `grep` · `cat`), 위 표의 `iproute2` · `util-linux`,
->   DMI · 디스크 정보를 위한 sudo(become) 권한.
-> - 실장비 확인 범위: RHEL 8.10 + Python 3.6.8 (`python_incompatible`) → `success`
->   (`tests/evidence/2026-05-07-real-gather.md`, 2026-09-03 재확인). Python 이 아예 없는 대상(`python_missing`)은
->   실장비로 확인하지 않았다 — 같은 raw 경로를 `SE_FORCE_LINUX_RAW_FALLBACK=true`(`raw_forced`)로 Python 있는 장비에서 재현해 시험한다.
-
-> **계정 권한 기준:**
-> - 모든 섹션을 수집하려면 sudo(become) 권한이 있는 계정을 사용해야 한다.
-> - sudo 없이도 기본 수집(hostname, OS, CPU, memory, network)은 가능하다.
-> - serial_number, system_uuid 등 DMI 정보는 `/sys/class/dmi/id/` 읽기 권한이 필요하며 일반 사용자는 접근 불가한 경우가 많다.
-> - 권한 부족 시 해당 필드는 `null`로 반환되며 수집 자체는 실패하지 않는다 (non-fatal).
-> - vault에 `become_password`를 포함하면 자동으로 sudo 권한 사용.
-
-> **Python 버전으로 수집이 막히지는 않는다.** Python 3.8 이하(RHEL 8 기본 3.6 포함) · Python 없음은 raw 경로로 수집한다.
-
-**Linux 배포판 지원 수준:**
-
-| 수준 | 배포판 | 기본 Python | 수집 경로 · 비고 |
-|------|--------|------------|------|
-| 모듈 경로 | RHEL 9+, Rocky 9+, Ubuntu 22.04+, Debian 12+ | 3.9 이상 | 별도 조치 불필요 |
-| raw 경로 (실장비 확인) | RHEL 8 (8.10 확인), Rocky 8 | 3.6 | 별도 조치 불필요. python39 를 설치하면 모듈 경로로 바뀐다 |
-| raw 경로 (실장비 미확인) | Ubuntu 20.04 | 3.8 | 같은 raw 경로 — 이 배포판 실장비로는 확인하지 않았다 |
-| 모듈 경로 (실장비 미확인) | Debian 11 | 3.9 | 이 배포판 실장비로는 확인하지 않았다 |
-| 프로젝트 기준 밖 (별도 검증 필요) | RHEL 7, CentOS 7, Ubuntu 18.04, Debian 10 | 3.6 이하 | raw 경로로 시도는 하지만 명령 · 출력 형식을 검증하지 않았다 |
-| 미지원 | RHEL 6, CentOS 6, Ubuntu 14.04, Debian 8 | — | 지원 · 검증 대상이 아니다. raw 경로로 시도는 하지만 결과를 보장하지 않는다 |
-
----
-
-### 1-2. Windows 대상 서버
-
-| 항목 | 최소 요구사항 | 미충족 시 동작 |
-|------|-------------|--------------|
-| **WinRM** | 활성화 (5985 또는 5986 오픈) | 연결 실패 → `status: failed` |
-| **PowerShell** | **5.1 이상** | 하위 참고 |
-| **OS 버전** | **Windows Server 2016 이상** 권장 | 하위 참고 |
-| **WinRM 인증** | NTLM 활성화 | 인증 실패 → `status: failed` |
-| **CIM (WMI)** | 활성화 (기본) | 수집 실패 |
-
-**운영 기준:**
-
-| PowerShell | OS | 지원 내용 |
-|------------|---|---------|
-| 5.1 | Server 2016+ | `Get-LocalUser`, `Get-Volume`, `Get-NetIPAddress` 전체 cmdlet 지원 |
-
-**레거시 제한 지원:**
-
-| PowerShell | OS | 제한 사항 |
-|------------|---|---------|
-| 5.0 | Server 2012 R2 | `Get-LocalUser` 없음 → WMI fallback (`last_access_time: null`) |
-| 3.0–4.0 | Server 2012 | `Get-Volume` 없음 → WMI fallback |
-
-**미지원:**
-
-| PowerShell | OS | 이유 |
-|------------|---|------|
-| 2.0 이하 | Server 2008 R2 | WinRM NTLM 불안정, `Get-CimInstance` 없음 |
-
-> **계정 권한 기준:**
-> - 모든 섹션을 수집하려면 **관리자(Administrator) 권한**이 있는 계정을 사용해야 한다.
-> - 비관리자 계정으로도 기본 WMI 정보(hostname, OS, CPU, memory)는 수집 가능하다.
-> - `Get-LocalUser`, 디스크 상세, serial_number 등은 관리자 권한이 필요하다.
-> - 권한 부족 시 해당 필드는 `null`로 반환되며 수집 자체는 실패하지 않는다 (non-fatal).
-> - vault에 관리자 계정 정보를 포함하면 전체 수집 가능.
-
-> **미지원**: Windows Server 2008, Windows Server 2008 R2, Windows 7 이하
-
----
-
-### 1-3. hosting_type 필드 (OS 채널 전용)
-
-OS 채널은 `system.hosting_type` 필드를 제공한다.
-
-| 값 | 의미 |
+| 구분 | 배포판 |
 |---|---|
-| `virtual` | 가상머신 guest (VMware, KVM, Hyper-V 등) |
-| `baremetal` | 물리 서버에 직접 설치된 OS |
-| `unknown` | 판별 근거 부족 또는 신호 충돌 |
+| 확인한 조합 | RHEL 8.10 (Python 3.6, raw 경로), RHEL 9.2, RHEL 9.6, RHEL 10.2 (kernel 6.12), Ubuntu 24.04 (kernel 6.8) |
+| 미확인 | Rocky, Debian, Ubuntu 20.04와 22.04, SLES, RHEL 7 이하. 같은 경로로 시도하지만 명령 출력 형식을 확인하지 않았습니다 |
 
-적용 범위:
-- OS 채널 (Linux, Windows)에서만 제공한다
-- Redfish, ESXi 채널에는 적용하지 않는다
-- 물리 서버에 직접 설치된 OS는 그 위에서 KVM/Hyper-V host 역할을 하더라도 `baremetal`로 분류한다
+### 1.2 Windows
 
----
+| 항목 | 구분 | 내용 |
+|---|---|---|
+| WinRM | 필수 | TCP 5986(HTTPS) 또는 5985(HTTP). 5986을 먼저 시도합니다 |
+| 인증 | 필수 | NTLM (`ansible.cfg`의 `[winrm] transport = ntlm`). 로컬 또는 도메인 계정 |
+| PowerShell | 필수 | `Get-CimInstance`를 쓰므로 PowerShell 3.0 이상 |
+| 계정 권한 | 선택 | 관리자 권한이 없으면 디스크 상세, 로컬 사용자 일부, 일부 식별자가 `null`이고 `errors[]`에 남습니다 |
 
-### 1-4. Agent 노드 (Linux → Windows 수집 시)
+`Get-LocalUser`가 없는 버전은 `Win32_UserAccount`로 대신 읽고, `Get-Volume`이 실패하면 볼륨 정보를 비우고 `errors[]`에 남깁니다.
 
-| 항목 | 최소 요구사항 |
-|------|-------------|
-| **pywinrm** | 0.4.0 이상 (`pip install pywinrm`) |
-| **Ansible** | ansible-core 2.16 이상 (ansible.windows 컬렉션 포함) |
+| 구분 | OS |
+|---|---|
+| 확인한 조합 | Windows Server 2022 Standard (build 20348) |
+| 미확인 | Windows Server 2012 R2, 2016, 2019. 코드가 막지 않습니다 |
 
----
+### 1.3 ESXi
 
-## 2. esxi-gather (VMware ESXi)
+| 항목 | 구분 | 내용 |
+|---|---|---|
+| vSphere API | 필수 | TCP 443. ESXi 호스트 주소여야 합니다. vCenter 주소를 주면 자격증명을 보내지 않고 `protocol` 단계에서 멈춥니다 |
+| 계정 | 필수 | 호스트 정보를 읽을 수 있는 계정(읽기 권한) |
+| 사용하는 모듈 | 필수 | `community.vmware`의 host facts, host config, datastore, DNS, NTP, firewall, service, vmnic, vmhba, vswitch, portgroup 정보 모듈과 이 저장소의 `esxi_disks` 모듈(pyvmomi) |
 
-### 2-1. ESXi 대상 서버
+| 구분 | 버전 |
+|---|---|
+| 확인한 조합 | ESXi 7.0.3 (Cisco 서버 3대), ESXi 9.0.0 (Dell R760 3대) |
+| 미확인 | ESXi 6.x, 8.x. 어댑터(`adapters/esxi/`)는 있고 코드가 막지 않습니다. 무료 라이선스에서의 동작은 확인하지 않았습니다 |
 
-| 항목 | 최소 요구사항 | 미충족 시 동작 |
-|------|-------------|--------------|
-| **ESXi 버전** | **6.5 이상** | 하위 버전은 vSphere API 일부 미지원 |
-| **HTTPS 포트** | 443 오픈 (vSphere API) | 연결 실패 → `status: failed` |
-| **라이선스** | **유료 라이선스 필요** (Essentials 이상) | Free 라이선스는 API write access 없어 수집 불가 |
-| **관리자 계정** | 읽기 권한 이상 (`ReadOnly` role) | 인증 실패 → `status: failed` |
+### 1.4 Redfish (BMC)
 
-**ESXi 버전별 수집 가능 항목:**
+| 항목 | 구분 | 내용 |
+|---|---|---|
+| Redfish 서비스 | 필수 | TCP 443. `/redfish/v1/`이 무인증으로 응답해야 제조사를 감지합니다 |
+| 인증 | 필수 | Basic 인증. 표준 수집 계정은 전역 vault 한 벌입니다([docs/operate/05-vault.md](docs/operate/05-vault.md)) |
+| 계정 권한 | 필수 | Systems, Chassis, Managers, UpdateService 읽기. 표준 계정 복구를 쓰려면 복구 계정에 AccountService 쓰기 권한 |
+| Python 외부 라이브러리 | 없음 | `redfish-gather/library/redfish_gather.py`는 표준 라이브러리만 씁니다 |
 
-| ESXi 버전 | 수집 가능 여부 | 비고 |
-|----------|-------------|------|
-| 9.x | 완전 지원 | 2026-08-13 lab 실측 (9.0.0 3대). 6섹션 수집 확인 |
-| 8.x | 완전 지원 | |
-| 7.x | 완전 지원 | |
-| 6.7 | 완전 지원 | |
-| 6.5 | 대부분 지원 | 일부 항목 `null` 가능 |
-| 6.0 이하 | 미지원 | `community.vmware` 모듈 호환 안 됨 |
+어댑터가 있는 벤더와 세대, 그리고 확인 상태입니다. 어댑터가 없는 장비도 `redfish_generic` 어댑터로 표준 필드를 수집합니다.
 
-> **중요**: Free ESXi(vSphere Hypervisor)는 API write access 가 없어 `vmware_host_facts` 실행 시 오류 발생
+| 벤더 | 어댑터가 있는 세대 | 실장비 확인 |
+|---|---|---|
+| Dell | iDRAC 8, 9, 10과 벤더 기본 | iDRAC 9: PowerEdge R760 5대(사내 명부), PowerEdge R740 FW 4.00 (2026-03-18) |
+| HPE | iLO 4, 5, 6, 7과 벤더 기본. Superdome Flex, Compute Scale-up Server 3200 | iLO 6: ProLiant DL380 Gen11 FW 1.73 (2026-03-18). 사내 명부의 DL380 Gen11은 Runner 망에서 닿지 않습니다. Superdome Flex, CSUS 3200은 합성 fixture만 |
+| Lenovo | IMM2, XCC, XCC3와 벤더 기본 | XCC: ThinkSystem SR650 V2 FW 5.70 (2026-03-18), 사내 명부 XCC 1대 |
+| Cisco | CIMC(M4 이후), UCS X-Series와 벤더 기본 | CIMC: UCS C220 M4 1대(사내 명부). M5 이후는 미확인 |
+| Supermicro | X9, X10, X11, X12, X13, X14, ARS와 벤더 기본 | 미확인 |
+| Huawei, Inspur, Fujitsu, Quanta | 벤더별 1개 | 미확인. 벤더 공식 문서와 DMTF 표준으로 작성 |
 
----
+벤더와 세대별로 어느 섹션이 나오는지는 [docs/reference/compatibility-matrix.md](docs/reference/compatibility-matrix.md), 실장비 검증 기록은 [docs/reference/live-validation.md](docs/reference/live-validation.md)에 있습니다.
 
-### 2-2. Agent 노드
+### 1.5 `system.hosting_type` (OS 채널)
 
-| 항목 | 최소 요구사항 |
-|------|-------------|
-| **Python** | 3.12 이상 (Agent venv) |
-| **pyvmomi** | 7.0 이상 (`pip install pyvmomi`) |
-| **Ansible Collection** | `community.vmware` 3.0 이상 (`ansible-galaxy collection install community.vmware`) |
+OS 채널은 서버가 가상 머신인지 물리 서버인지를 `data.system.hosting_type`에 `virtual`, `baremetal`, `unknown`으로 냅니다. 물리 서버 위에서 KVM이나 Hyper-V 호스트 역할을 해도 `baremetal`입니다. ESXi와 Redfish 채널에는 이 필드가 없습니다.
 
----
+## 2. Runner (Jenkins Agent)
 
-## 3. redfish-gather (Dell / HPE / Lenovo / Supermicro / Cisco BMC)
+수집은 Runner에서 실행됩니다. 요건의 근거는 `production_manifest.yml`의 `toolchain`과 각 채널이 쓰는 모듈입니다.
 
-### 3-1. BMC 대상 서버
+| 항목 | 구분 | 내용 |
+|---|---|---|
+| OS | 필수 | Linux. `bash`, `git`, `flock`, `timeout`, `nproc`, `ping` 명령 |
+| Java | 필수 | 설치한 Jenkins 버전이 요구하는 Java. 버전 범위는 Jenkins 공식 문서를 보세요 |
+| 시스템 Python | 필수 | `/usr/bin/python3`. 각 채널의 `inventory.sh`가 이 경로로 실행됩니다 |
+| Ansible 실행환경(venv) | 필수 | Python 3.12 이상 3.14 미만, ansible-core 2.16 이상 2.21 미만. 위치는 `SE_ANSIBLE_VENV` 또는 `/app/ansible-env`, `/opt/ansible-env` ([docs/operate/02-agent-node.md](docs/operate/02-agent-node.md)) |
+| `ansible.windows` 컬렉션 | Windows 수집 시 필수 | `win_shell`, `win_ping` |
+| `pywinrm` | Windows 수집 시 필수 | WinRM 연결 |
+| `community.vmware` 컬렉션 | ESXi 수집 시 필수 | 1.3절의 정보 모듈 |
+| `pyvmomi` | ESXi 수집 시 필수 | `community.vmware`와 `esxi_disks` 모듈 |
+| 그 밖의 pip 패키지와 컬렉션 | 불필요 | `jmespath`, `netaddr`, `lxml`, `redis`, `community.windows`, `community.general`은 수집 코드가 쓰지 않습니다 |
 
-**공통 요구사항:**
+사내에서 확인한 Runner 조합(2026-10-12)입니다.
 
-| 항목 | 최소 요구사항 | 미충족 시 동작 |
-|------|-------------|--------------|
-| **HTTPS 포트** | 443 오픈 (Redfish API) | 연결 실패 → `status: failed` |
-| **Redfish 버전** | DSP0266 1.0 이상 | 하위 버전 미지원 |
-| **인증** | Basic Authentication 지원 | 인증 실패 → `status: failed` |
+| 항목 | 값 |
+|---|---|
+| OS | RHEL 9.6 |
+| Java | OpenJDK 21.0.10 |
+| 시스템 Python | 3.9.21 |
+| venv | `/app/ansible-env`: Python 3.12.9, ansible-core 2.20.3 (ansible 13.4.0) |
+| 컬렉션 | ansible.windows 3.3.0, community.vmware 6.2.0, ansible.posix 2.1.0, ansible.utils 6.0.1, community.general 12.4.0, community.windows 3.1.0 |
+| pip | pywinrm 0.5.0, pyvmomi 9.0.0.0, requests 2.33.1, jmespath 1.1.0, netaddr 1.3.0, lxml 6.0.2 |
+| git | 2.47.3 |
 
-**벤더별 최소 BMC 버전:**
+Runner 노드에는 실행 위치 라벨(`common/vars/locations.yml`의 `agent_label`)과 수집할 대상 종류의 능력 라벨(`linux`, `windows`, `esxi`, `redfish`)이 있어야 합니다.
 
-| 벤더 | BMC | 최소 버전 | Systems URI | Managers URI |
-|------|-----|---------|-------------|-------------|
-| **Dell** | iDRAC | **iDRAC 9** (FW 3.00+) | `Systems/System.Embedded.1` | `Managers/iDRAC.Embedded.1` |
-| **HPE** | iLO | **iLO 5** (FW 1.10+) | `Systems/1` | `Managers/1` |
-| **Lenovo** | XCC | **XCC** (FW 1.xx+, X11 이상) | `Systems/1` | `Managers/1` |
-| **Supermicro** | BMC | **X10 이상** (BMC FW 3.xx+) | `Systems/1` | `Managers/1` |
-| **Cisco** | CIMC | **CIMC** (UCS C-Series M4+) | 동적 탐색 (Members[0]) | `Managers/CIMC` |
+## 3. Jenkins Controller
 
-> [!NOTE]
-> 위 5개 벤더 외에 Huawei iBMC / Inspur ISBMC / Fujitsu iRMC / Quanta QCT BMC adapter 도 있다.
-> 이 4개는 lab 부재라 vendor 공식 문서와 DMTF 표준만 보고 작성했고 실장비로는 검증하지 않았다.
+| 항목 | 구분 | 내용 |
+|---|---|---|
+| Jenkins | 필수 | 파이프라인이 쓰는 플러그인: Pipeline, Git, Credentials Binding, Pipeline Utility Steps, Pipeline: Multibranch(`readTrusted`), HTTP Request. Timestamper는 선택 |
+| credential | 필수 | `server-gather-vault-password` (Secret text), 저장소 읽기 credential |
+| 결과 확인 실행 위치 | 필수 | 결과 확인 및 전송 단계는 Controller(built-in 노드)에서 실행되므로 built-in 노드에 executor가 1개 이상 있어야 합니다 |
+| 확인한 조합 | | Jenkins 2.528.3, Java 21 |
 
-**검증 기준 장비 (2026-03-18 직접 HTTPS 호출 검증):**
+상세는 [docs/operate/01-jenkins-master.md](docs/operate/01-jenkins-master.md)에 있습니다.
 
-| 벤더 | 모델 | BMC | FW 버전 | Redfish Version | 매칭 Adapter |
-|------|------|-----|---------|-----------------|-------------|
-| Dell | PowerEdge R740 | iDRAC 9 | 4.00 | 1.6.0 | redfish_dell_idrac9 (P100) |
-| HPE | ProLiant DL380 Gen11 | iLO 6 | 1.73 | 1.20.0 | redfish_hpe_ilo6 (P100) |
-| Lenovo | ThinkSystem SR650 V2 | XCC | 5.70 | 1.15.0 | redfish_lenovo_xcc (P100) |
-
-> 검증 기준 장비에서 확인된 Redfish Version 범위는 1.6.0 ~ 1.20.0 이다.
-> 이 범위는 지원 범위가 아니라 실장비 검증 시점에 확인된 값이다.
-> HPE iLO 6 은 전용 어댑터 `redfish_hpe_ilo6` (P100) 로 매칭된다 (`hpe_ilo` P10 은 미세대 fallback).
-
-**벤더별 지원/미지원 상세:**
-
-| 벤더 | 지원 | 미지원 | 실장비 검증 |
-|------|------|--------|-----------|
-| Dell | iDRAC 9 (PowerEdge 14G+) | iDRAC 7 — Redfish 미성숙 (iDRAC 8 은 FB 제한 수집) | 검증 완료 |
-| HPE | iLO 5 (ProLiant Gen10+), iLO 6 (Gen11) | iLO 3 이하 미지원. iLO 4 는 FB 제한 수집 (`Oem.Hp`) | 검증 완료 |
-| Lenovo | ThinkSystem (X11, SR/ST/SD 시리즈) | ThinkServer — Redfish 미지원 (IMM2 는 FB 제한 수집) | 검증 완료 |
-| Supermicro | X10/X11/X12/X13/H11/H12 이상 | X8 이하 미지원. X9 는 6 섹션 부분 수집 | 미검증 (어댑터만 존재) |
-| Cisco | UCS C-Series M4+ (CIMC Redfish 지원) | UCS C-Series M3 이하 — Redfish 미지원 | M4 partial lab 검증 (M5~M8 미검증) |
-
-> 코드는 Redfish 표준 API(DSP0266)를 동적 탐색(API Discovery)하므로,
-> 검증 기준 장비 및 유사한 Redfish 표준 구현에서 **표준 필드**가 정상 수집됐다.
-> OEM 확장 필드(`data.*.oem`)는 위 표의 BMC 버전에서 검증됐다.
-
----
-
-### 3-2. Agent 노드
-
-| 항목 | 최소 요구사항 |
-|------|-------------|
-| **Python** | **3.12 이상** (Agent venv) |
-| **외부 라이브러리** | **없음** — stdlib(urllib, ssl, socket) 만 사용 |
-
----
-
-## 4. Jenkins Agent 공통 요구사항
-
-> **검증 기준 Agent**: 10.100.64.154 (Ubuntu 24.04.4 LTS), 2026-03-27 확인.
-> 아래 "검증 기준" 컬럼은 해당 Agent에서 실측한 값이며 전체 운영 환경의 표준을 의미하지 않는다.
-> 설치 절차는 [docs/operate/02-agent-node.md](docs/operate/02-agent-node.md) 참조.
-
-### 4-1. 런타임 환경
-
-| 항목 | 최소 | 검증 기준 Agent | 비고 |
-|------|------|----------------|------|
-| **OS** | RHEL/CentOS 7+, Ubuntu 18.04+, Rocky 8+ | Ubuntu 24.04.4 LTS | |
-| **Python** | **3.12** | 3.12.3 | venv: 설치 자동화 Runner `/app/ansible-env/` · 직접 구축 `/opt/ansible-env/` — 파이프라인은 `scripts/activate_ansible_venv.sh` 가 고른다 |
-| **Java** | **21** | OpenJDK 21.0.10 | Jenkins Agent 실행 |
-| **ansible-core** | **2.16** | 2.20.3 | Python 3.12 필요 시 2.16+. `ansible.builtin` 최신 필터 사용 |
-| **ansible (package)** | — | 13.4.0 | 풀패키지 설치 시 core + bundled collections 포함 |
-
-### 4-2. pip 패키지
-
-| 패키지 | 최소 | 검증 기준 Agent | 용도 | 필수 여부 |
-|--------|------|----------------|------|----------|
-| **pywinrm** | 0.4.0 | 0.5.0 | Windows WinRM 연결 | Windows 수집 시 필수 |
-| **pyvmomi** | 7.0 | 9.0.0 | ESXi vSphere API | ESXi 수집 시 필수 |
-| **redis** | 4.0 | 7.3.0 | Ansible fact caching | fact caching 사용 시 필수 |
-| **jmespath** | — | 1.1.0 | json_query 필터 | json_query 사용 시 필수 |
-| **netaddr** | — | 1.3.0 | ipaddr 필터 | ipaddr 사용 시 필수 |
-| **lxml** | — | 6.0.2 | VMware XML 파싱 | ESXi 수집 시 필수 |
-| **requests** | — | 2.32.5 | HTTP 클라이언트 | pywinrm 의존 |
-
-### 4-3. Ansible Collections
-
-| Collection | 최소 | 검증 기준 Agent | 용도 | 필수 여부 |
-|-----------|------|----------------|------|----------|
-| **ansible.windows** | 1.x | 3.3.0 | Windows gather | Windows 수집 시 필수 |
-| **community.vmware** | 3.0 | 6.2.0 | ESXi gather | ESXi 수집 시 필수 |
-| **community.windows** | — | 3.1.0 | Windows 보조 모듈 | Windows 수집 시 권장 |
-| **ansible.posix** | — | 2.1.0 | Linux 모듈 | ansible 풀패키지에 포함 |
-| **community.general** | — | 12.4.0 | 범용 모듈 | ansible 풀패키지에 포함 |
-| **ansible.utils** | — | 6.0.1 | 유틸리티 필터 | ansible 풀패키지에 포함 |
-
-> 검증 기준 Agent에는 `vmware.vmware` (2.7.0), `vmware.vmware_rest` (4.10.0),
-> `dellemc.openmanage` (10.0.1) 등도 설치되어 있으나, 현재 프로젝트에서 직접 사용하지 않는다.
-
----
-
-## 5. 네트워크 요구사항
+## 4. 네트워크 경로
 
 | 방향 | 포트 | 용도 |
-|------|------|------|
-| Agent → Linux 대상 | TCP 22 | SSH |
-| Agent → Windows 대상 | TCP 5985 또는 5986 | WinRM HTTP / HTTPS |
-| Agent → ESXi 대상 | TCP 443 | vSphere API (HTTPS) |
-| Agent → BMC (Redfish) | TCP 443 | Redfish API (HTTPS) |
+|---|---|---|
+| 호출자 → Controller | 443 (또는 Jenkins 설정 포트) | Job 호출 |
+| Controller → Git 저장소 | 443 또는 22 | `Jenkinsfile_portal`과 변수 파일 읽기 |
+| Controller → Runner | 22 (SSH 연결) 또는 Runner → Controller 50000 (inbound 연결) | Agent 연결 |
+| Runner → Git 저장소 | 443 또는 22 | 수집 코드 checkout. Add-on을 쓰면 Add-on 저장소도 |
+| Runner → Linux 대상 | 22 | SSH |
+| Runner → Windows 대상 | 5986 또는 5985 | WinRM |
+| Runner → ESXi 대상 | 443 | vSphere API |
+| Runner → BMC | 443 | Redfish |
+| Controller → Portal | `callbackUrl`의 포트 | 결과 전송 |
 
----
+사전 진단은 관리 포트 TCP가 응답하지 않을 때만 ICMP Echo를 한 번 보냅니다. ICMP가 막혀 있어도 관리 포트가 응답하면 수집합니다.
 
-## 6. tasks/ 구조 개요
+## 5. 식별자 수집 (호출자의 교차 매칭용)
 
-3개 gather 모두 `tasks/` 디렉터리로 수집/정규화 로직이 분리되어 있다.
-상세 구조와 처리 과정은 [docs/develop/01-gather-structure.md](docs/develop/01-gather-structure.md) 참조.
-
-> `REPO_ROOT` 환경변수로 공통 태스크 경로를 참조하므로 Jenkins 에서 `REPO_ROOT=${WORKSPACE}` 설정 필수.
-
----
-
-## 7. 식별자 수집 정책 (호출자 cross-channel 매칭용)
-
-호출자 시스템이 같은 물리 서버를 OS 채널 응답과 Redfish 채널 응답에서 매칭하려면 식별자가 필요하다. 본 절은 그 식별자가 어떤 조건에서 채워지는지 정리한다.
-
-### 7-1. 채널별 식별자 필드
+호출자가 같은 물리 서버를 OS 결과와 Redfish 결과에서 맞추려면 식별자가 필요합니다.
 
 | 채널 | 필드 | 출처 | 권한 |
-|------|------|------|------|
-| OS (Linux) | `system.serial_number`, `system.system_uuid` | `/sys/class/dmi/id/` | sudo / become 권장 |
-| OS (Windows) | `system.serial_number`, `system.system_uuid` | WMI Win32_BIOS / Win32_ComputerSystemProduct | 관리자 권장 |
-| Redfish | `data.hardware.serial`, `data.system.uuid` | Redfish ComputerSystem | BMC 인증 |
-| ESXi | `data.hardware.serial` | vSphere API host facts | ESXi 관리자 권장 |
+|---|---|---|---|
+| OS Linux | `system.serial_number`, `system.system_uuid`, `hardware.serial`, `hardware.uuid` | `/sys/class/dmi/id/` | sudo 권장 |
+| OS Windows | `system.serial_number`, `system.system_uuid`, `hardware.serial`, `hardware.uuid` | `Win32_BIOS`, `Win32_ComputerSystemProduct` | 관리자 권장 |
+| ESXi | `hardware.serial`, `hardware.uuid` | vSphere host facts | 읽기 권한 |
+| Redfish | `hardware.serial`, `hardware.uuid` | `ComputerSystem` | BMC 계정 |
 
-### 7-2. 매칭 권장 키
+- 매칭은 `system_uuid`(또는 `hardware.uuid`)를 먼저 쓰고 `serial_number`를 보조로 씁니다. `hosting_type`이 `virtual`인 OS 결과는 물리 Redfish 결과와 맞추지 않습니다.
+- 식별자를 못 읽어도 수집은 실패하지 않습니다. 필드가 `null`이고 `errors[]`의 `detail`에 `cause=insufficient_privilege`(권한 부족) 또는 `cause=identifier_not_available`(출처가 값을 주지 않음)이 남습니다. `status`와 `sections`에는 영향이 없습니다.
+- 제조사 자리표시자(`To Be Filled By O.E.M.` 등)와 SMBIOS 공장 기본 UUID는 `null`로 정리합니다.
 
-호출자가 같은 서버를 두 채널에서 매칭할 때 이 순서로 시도한다.
+자세한 수집 경로는 [docs/develop/05-field-mapping.md](docs/develop/05-field-mapping.md)에 있습니다.
 
-1. `system_uuid` 우선 (OS ↔ Redfish 가장 신뢰 가능)
-2. `serial_number` (벤더 / 채널별 의미 차이가 있어 보조 키)
-3. `hosting_type == "virtual"` 인 OS 응답은 물리 Redfish 와 매칭 시도하지 않음
+## 6. 요약
 
-### 7-3. 권한 부족 시의 동작
-
-- 식별자 미수집은 gather 실패가 아니다. 수집 자체는 계속 진행된다 (non-fatal).
-- 식별자 필드는 `null` 로 반환되고 errors[] 에는 사유가 추가될 수 있다.
-  - `insufficient_privilege` — 권한 부족으로 DMI / WMI 접근 불가
-  - `identifier_not_available` — 출처 자체가 유효한 값을 제공하지 않음
-- envelope 의 `status` / `sections` 판정에는 영향 없음.
-
-### 7-4. 권장
-
-정확한 식별자 수집을 위해 다음 중 하나를 vault 에 포함하는 것을 권장한다.
-
-- Linux: `become_password` (sudo 권한)
-- Windows: 관리자 계정 비밀번호
-
-상세 구현 (수집 우선순위 / fallback / baseline 기준) 은 [docs/develop/05-field-mapping.md](docs/develop/05-field-mapping.md) "식별자 수집 경로" 절 참조.
-
----
-
-## 8. 한눈에 보는 차단 사유
-
-**완전 미지원** (수집 시도 자체 실패):
-
-| 환경 | 차단 사유 |
-|------|----------|
-| Windows Server 2008 / 2008 R2 | WinRM NTLM 불안정, PowerShell 2.0, CIM 미지원 |
-| ESXi 6.0 이하 | community.vmware 컬렉션 호환성 부재 |
-| ESXi Free 라이선스 | vSphere API write access 없음 |
-| Dell iDRAC 7 이하 | Redfish API 미성숙 — 일부 endpoint 자체가 응답 안 함 (iDRAC 8 은 8절 NOTE 의 FB 수집) |
-| HPE iLO 3 이하 | 옛 `Oem.Hp` 구조 (iLO 4 는 8절 NOTE 의 FB 수집) |
-| Lenovo ThinkServer | Redfish 자체 미지원 (ThinkSystem 만 지원) |
-| Supermicro X8 이하 | Redfish 미지원 (X9 는 6 섹션 부분 수집 — 8절 NOTE) |
-| Cisco UCS C-Series M3 이하 | Redfish 미지원 |
-| ~~Python 3.8 이하 (타겟 Linux)~~ | 2026-10-05 정정 — 미지원이 아니다. raw 경로로 수집한다 (1-1절 "Python 상태별 수집 경로") |
-| Python 3.11 이하 (Agent) | 프로젝트 검증 기준 외 |
-
-> [!NOTE]
-> 이 표는 "벤더별 최소 BMC 버전"(3-1절)에 못 미치는 세대를 모은 것이다.
-> 이 중 Dell iDRAC 8 / HPE iLO 4 / Lenovo IMM2 는 priority 50 fallback adapter 가 storage/power 까지 fallback 으로 수집한다 (cycle 2026-05-06 M-D3 — 일부 필드 `null` 가능). Supermicro X9 만 storage/firmware/power 를 `not_supported` 로 보고한다. 완전 차단은 adapter 자체가 없는 더 낮은 세대와 Redfish 미지원 장비(Lenovo ThinkServer 등)다.
-
-**제한 지원** (수집은 되지만 일부 필드 `null`):
-
-| 환경 | 어떤 필드가 빠지나 |
-|------|------------------|
-| Windows Server 2012 / 2012 R2 | `last_access_time` (Get-LocalUser 부재), 일부 볼륨 정보 (Get-Volume 부재) |
-| ESXi 6.5 | 일부 vSphere API 항목 |
-| Linux 에서 sudo 권한 없는 계정 | `serial_number`, `system_uuid` 등 DMI 정보 |
-| Windows 에서 비관리자 계정 | `serial_number`, 디스크 상세, 로컬 사용자 일부 |
-
-이 표의 "차단" 환경은 호출자에게 `status: failed` 가 반환되고 "제한 지원" 환경은 정상 응답 안에서 일부 필드만 `null` 로 보인다.
+| 환경 | 상태 |
+|---|---|
+| Linux RHEL 8, 9, 10과 Ubuntu 24.04, Windows Server 2022, ESXi 7.0.3과 9.0.0, Dell iDRAC 9, HPE iLO 6, Lenovo XCC, Cisco CIMC M4 | 실장비로 확인했습니다 |
+| 그 밖의 Linux 배포판, Windows Server 2012 R2부터 2019, ESXi 6.x와 8.x, 다른 BMC 세대, Supermicro, Huawei, Inspur, Fujitsu, Quanta | 코드와 어댑터는 있고 실장비로 확인하지 않았습니다 |
+| Redfish 서비스가 꺼진 BMC, vCenter 주소, SSH와 WinRM이 모두 닫힌 서버 | 실패 봉투가 옵니다. 실패 단계는 [docs/contract/04-failure-and-diagnosis.md](docs/contract/04-failure-and-diagnosis.md) |

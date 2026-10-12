@@ -1,308 +1,188 @@
-# 10. Adapter — 벤더 차이를 코드 밖으로 빼낸 장치
+# 어댑터: 벤더 차이를 코드 밖으로 빼낸 장치
 
-## 한 줄 요약
+새 벤더나 새 세대의 BMC가 들어와도 Python과 Ansible 코드는 고치지 않습니다. `adapters/` 아래에 YAML 파일을 추가하면 됩니다. 이 문서는 그것이 가능한 이유와 어떤 YAML이 어떻게 선택되는지를 설명합니다.
 
-새 벤더 / 새 세대 BMC 가 들어와도 **Python / Ansible 코드는 안 만진다.** `adapters/` 폴더에 YAML 파일 1~3장 추가하면 끝.
+## 1. 왜 어댑터가 필요한가
 
-이게 가능한 이유와 실제로 어떤 YAML 이 어떻게 매칭되는지를 풀어본다.
+같은 "서버 정보 수집"인데도 벤더마다 다음이 다릅니다.
 
----
+- BMC 응답 JSON의 OEM 구조 (`Oem.Dell`, `Oem.Hpe` 등)
+- 펌웨어 버전 표기
+- 세대별로 있는 리소스와 없는 리소스
 
-## 1. 왜 Adapter 가 필요한가
+이것을 전부 수집 코드에 `if vendor == "dell"` 분기로 넣으면 벤더가 늘 때마다 코드 깊숙이 손대야 합니다. 대신 벤더 차이만 떼어내 YAML 한 장에 적어 두고, 코드는 "어떤 YAML이 맞는지"만 정합니다. 수집 경로 자체는 세 채널 모두 `site.yml`에 고정되어 있고, 어댑터는 두 가지만 정합니다. 누구에게 맞는가(`match`)와 어떤 섹션을 지원하는가(`capabilities.sections_supported`)입니다.
 
-같은 "서버 정보 수집" 인데도 벤더마다 다음이 전부 다르다.
+## 2. 한 번의 호출 따라가기
 
-- BMC 응답 JSON 구조 (Dell `Oem.Dell.DellSystem`, HPE `Oem.Hpe.Bios`, …)
-- 펌웨어 버전 표기 형식
-- 일부 필드 존재 여부 (`storage.logical_volumes` 가 일부 세대에는 없다)
-- 필요한 호출 순서 (HPE Gen11 부터는 Controllers 링크를 따로 호출해야 함)
-
-이걸 전부 Python 코드에 `if vendor == "dell": ...` 분기로 박으면, 새 벤더 들어올 때마다 코드 깊숙이 손대야 한다. 5개 벤더면 어떻게든 버틴다. 9개, 12개 늘어나면 아무도 못 읽는다.
-
-대신 **벤더 차이만 떼어내서 YAML 한 장에 적어두는 식으로 분리**한다. Python 코드는 "어떤 YAML 이 매칭되는지" 만 결정하고 **그 YAML 에 적힌 경로대로** 호출한다.
-
----
-
-## 2. 실제 어떻게 동작하나 — 한 번의 호출 따라가기
-
-호출자가 Dell 서버 BMC IP 를 넘긴 시점부터 어떤 adapter 가 어떻게 선택되는지.
+호출자가 Dell 서버의 BMC IP를 넘겼을 때 어댑터가 어떻게 선택되는지입니다.
 
 ```text
-[ Step 1 ] precheck — 어디까지 닿는지 확인
-    ping(10.50.11.162) → OK
-    TCP 443 응답 → OK
-    HTTPS handshake → OK
-    Basic Auth → OK
-    │
-    이때 BMC 가 알려준 정보:
-       Manufacturer: "Dell Inc."
-       Product:      "Integrated Dell Remote Access Controller"
-       FirmwareVersion: "iDRAC 9 4.00.00.00"
-    │
-    ▼
-[ Step 2 ] vendor 정규화
-    "Dell Inc." → vendor_aliases.yml 조회 → "dell"
-    │
-    ▼
-[ Step 3 ] adapter_loader (Ansible lookup plugin) 실행
-    │
-    ├─ adapters/redfish/*.yml 31개 파일 모두 읽기
-    │
-    ├─ 각 파일의 match 조건 평가 (vendor / firmware / model 패턴)
-    │   - redfish_generic.yml      → 매칭 (모든 vendor 대상, 점수 낮음)
-    │   - dell_idrac.yml            → 매칭 (vendor=dell)
-    │   - dell_idrac9.yml           → 매칭 (vendor=dell + firmware ~ /iDRAC.*9/)
-    │   - dell_idrac8.yml           → 미매칭 (firmware 패턴 다름)
-    │   - hpe_*, lenovo_*, ...      → 미매칭
-    │
-    ├─ 매칭된 adapter 들에 점수 매기기 (3절 공식 참조)
-    │   - dell_idrac9.yml  = 100,345
-    │   - dell_idrac.yml   =  10,120
-    │   - redfish_generic  =    -400
-    │
-    └─ 최고 점수 → dell_idrac9.yml 선택
-    │
-    ▼
-[ Step 4 ] 선택된 adapter 에서 플레이북이 읽는 것 (2026-10-10 코드 대조)
-    - adapter_id → 결과 meta · 진단 adapter_candidate
-    - capabilities.sections_supported → 출력 sections 의 not_supported 기준
-    - vendor_notes.manager_layout → redfish_gather 모듈 인자(멀티-노드 토폴로지)
-    - 수집 · 정규화 task 경로는 site.yml 에 고정(collect_standard.yml · normalize_standard.yml).
-      adapter 에는 코드가 읽는 절만 있다(2026-10-11) — 설계 메모는 `vendor_notes.design_hints`(기록용).
-      복구 vault 는 감지된 vendor(canonical)로 고른다 — vault/<loc>/redfish/<vendor>.yml
+[ 1 ] 사전 진단 — TCP 443 → /redfish/v1/ 응답 확인 (무인증)
+      ServiceRoot 가 알려주는 것: Vendor "Dell Inc.", Product, RedfishVersion
+[ 2 ] 벤더 정규화 — "Dell Inc." → common/vars/vendor_aliases.yml → "dell"
+[ 3 ] adapter_loader (lookup 플러그인)
+      adapters/redfish/*.yml 을 모두 읽고 match 조건을 평가합니다
+        redfish_generic   매칭 (모든 벤더, 점수 낮음)
+        dell_idrac        매칭 (vendor = dell)
+        dell_idrac9       매칭 (vendor = dell, firmware 가 iDRAC 9 또는 3.x~7.x)
+        dell_idrac8       불일치 (firmware 패턴 다름)
+        hpe_*, lenovo_*   불일치
+      매칭된 어댑터에 점수를 매겨 가장 높은 것을 고릅니다 (3절)
+[ 4 ] 선택된 어댑터에서 플레이북이 읽는 것
+      adapter_id                       결과 meta.adapter_id 와 진단
+      capabilities.sections_supported  출력 sections 에서 not_supported 를 가르는 기준
+      vendor_notes.manager_layout      (Redfish 멀티 노드 장비만) 수집 모듈 인자
+[ 5 ] 복구 계정은 정규화된 벤더 이름으로 고릅니다 — vault/<loc>/redfish/dell.yml
 ```
 
-여기서 핵심: Ansible / Python 코드 **어디에도 "Dell" 이라는 단어가 없다.** 모든 분기가 YAML 안의 정보로 결정된다.
+표준 계정으로 인증해 모델과 펌웨어를 읽은 뒤 `tasks/reselect_adapter.yml`이 어댑터를 한 번 더 고릅니다. 무인증 서비스 루트만으로는 세대를 정하기 어려운 벤더(예: 서비스 루트의 Product가 BMC 이름인 Dell)가 있기 때문입니다. 수집 코드 어디에도 벤더 이름은 없고, 모든 분기는 YAML 안의 정보로 정해집니다.
 
----
+## 3. 점수 계산
 
-## 3. 점수 계산 — 누가 뽑히나
-
-매칭된 adapter 가 여러 개일 때 점수가 가장 높은 것이 뽑힌다.
-
-### 공식
+매칭된 어댑터가 여러 개일 때 점수가 가장 높은 것이 선택됩니다. 구현은 `module_utils/adapter_common.py`입니다.
 
 ```text
-score = priority × 1000  +  specificity × 10  +  match_score
-        (generic adapter 는 specificity 에 −40 이 포함 → 총점에 −400 기여)
+score = priority × 1000 + specificity × 10 + match_score
 ```
 
-### 각 요소
-
-| 요소 | 어디서 오나 | 보통 값 |
+| 요소 | 어디서 오나 | 값 |
 |---|---|---|
-| `priority` | YAML 의 `priority:` 값 | 0(generic) / 10(기본 vendor) / 50(세대별) / 100(최신 세대) |
-| `specificity` | match 조건 개수 / 종류 | vendor 만 = 10, vendor+firmware = 30 |
-| `match_score` | 실제 매칭 성공 보너스 | vendor +20, model +25, firmware +25 |
-| `generic` | YAML 의 `generic: true` 면 specificity 에 −40 | fallback 용이라 점수 낮춤 (총점 −400 기여) |
+| `priority` | YAML의 `priority` | 0 (generic), 10 (벤더 기본), 50 (구형 세대), 80~100 (주력 세대), 110~120 (최신 세대) |
+| `specificity` | `match`에 적은 조건의 종류 | vendor 10, model_patterns 20, firmware_patterns 20, version_patterns 15, distribution_patterns 15, os_type 5. `generic: true`면 40 감점 |
+| `match_score` | 실제로 맞은 조건 | vendor 20, model 25, firmware 25, version 15, distribution 15, os_type 5 |
 
-### 예시 — Dell iDRAC 9 vs Dell 기본
+패턴을 적었는데 장비가 그 값을 주지 않으면(예: 펌웨어 문자열이 비어 있음) 그 조건은 더하지도 빼지도 않습니다. 값을 줬는데 패턴과 맞지 않으면 그 어댑터는 거부됩니다.
 
-| adapter | priority | specificity | match | 합계 |
+예를 들어 Dell iDRAC 9 장비에서는 다음과 같이 갈립니다.
+
+| 어댑터 | priority | specificity | match | 합계 |
 |---|---:|---:|---:|---:|
-| `dell_idrac9.yml` | 100×1000 | (10+20)×10 | 20+25 | **100,345** |
-| `dell_idrac.yml` | 10×1000 | 10×10 | 20 | **10,120** |
-| `redfish_generic.yml` | 0×1000 | −40×10 | 0 | **−400** |
+| `dell_idrac9` | 100 × 1000 | (10 + 20) × 10 | 20 + 25 | 100,345 |
+| `dell_idrac` | 10 × 1000 | 10 × 10 | 20 | 10,120 |
+| `redfish_generic` | 0 | −40 × 10 | 0 | −400 |
 
-세대별 (`dell_idrac9`) 이 항상 기본 (`dell_idrac`) 보다 압도적으로 높게 나오게 priority 차등을 둔다. 이게 깨지면 (예: dell_idrac9 의 priority 를 5 로 두면) 기본이 뽑히는 이상 동작이 생긴다.
+세대별 어댑터가 벤더 기본보다 항상 높게 나오도록 `priority` 차이를 둡니다. 같은 점수가 나오면 파일 이름 순으로 정해지는데, 동률 자체가 priority와 specificity가 어긋났다는 신호이므로 `-vvv` 로그에 경고가 남습니다.
 
----
+### 3.1 priority 정책
 
-## 3.5. Priority 정책표
+| 분류 | priority | 예 |
+|---|---:|---|
+| generic fallback | 0 | `redfish_generic`, `linux_generic`, `windows_generic`, `esxi_generic` |
+| 벤더 기본 (세대 미특정) | 10 | `dell_idrac`, `hpe_ilo`, `lenovo_bmc`, `cisco_bmc`, `supermicro_bmc` |
+| 구형 세대 | 50 | `dell_idrac8`, `hpe_ilo4`, `lenovo_imm2`, `supermicro_x9` |
+| 주력 세대 | 75~100 | `supermicro_x10` (75), 실장비 없이 작성한 벤더 (`huawei_ibmc`, `inspur_isbmc`, `fujitsu_irmc`, `quanta_qct_bmc`, `supermicro_ars`: 80), `hpe_ilo5` (90), `dell_idrac9`, `hpe_ilo6`, `lenovo_xcc`, `cisco_cimc`, `supermicro_x11`~`x13` (100) |
+| 비표준 폼팩터 | 101~102 | `hpe_superdome_flex` (101), `hpe_csus_3200` (102) |
+| 최신 세대 | 110~120 | `cisco_ucs_xseries`, `supermicro_x14` (110), `dell_idrac10`, `hpe_ilo7`, `lenovo_xcc3` (120) |
 
-새 adapter 의 priority 결정 시 다음 정책 따른다 (rule 50 R3):
+OS와 ESXi 채널은 단순합니다. generic 0, 배포판과 Windows 버전과 ESXi 7.x는 50, ESXi 6.x는 30, ESXi 8.x와 9.x는 100입니다. 현재 값은 다음 명령으로 확인합니다.
 
-| 분류 | priority 범위 | 의미 | 예시 |
-|---|---:|---|---|
-| **generic fallback** | `0` | 모든 vendor 대상, 점수 매우 낮음 (`generic: true` 감점 -40) | `redfish_generic`, `linux_generic`, `windows_generic`, `esxi_generic` |
-| **vendor 기본** | `10` | vendor 정의는 됐으나 세대 / 모델 미특정. firmware probe 실패 시 fallback | `dell_idrac`, `hpe_ilo`, `lenovo_bmc`, `cisco_bmc`, `supermicro_bmc` |
-| **세대 (구형)** | `30~50` | 5+ 년 전 세대 (지원 종료 / 호환성 영역) | `esxi_6x`, `dell_idrac8`, `hpe_ilo4`, `lenovo_imm2`, `supermicro_x9` |
-| **세대 (메인)** | `80~100` | 운영 중 주력 세대 | `esxi_7x/8x`, `dell_idrac9`, `hpe_ilo5/6`, `lenovo_xcc`, `supermicro_x11~13`, `cisco_cimc`, lab 부재 신 vendor (`huawei_ibmc/inspur_isbmc/fujitsu_irmc/quanta_qct_bmc` = 80) |
-| **세대 (최신)** | `110~120` | 신 generation (cycle 2026-05-01 추가 — F41/F47/F55) | `dell_idrac10`, `hpe_ilo7`, `lenovo_xcc3`, `supermicro_x14`, `cisco_ucs_xseries` |
-| **특수 / lab 부재 보호** | `101` | 비표준 (Superdome / 비표준 폼팩터) — lab 없이 web sources 만 | `hpe_superdome_flex` |
+```bash
+# 저장소 루트
+grep -H '^priority:' adapters/redfish/*.yml adapters/os/*.yml adapters/esxi/*.yml
+```
 
-**OS / ESXi 채널** (세대 / vendor 분기 단순):
-- generic fallback: `0`
-- 메이저 버전 (linux_rhel / linux_ubuntu / linux_suse / windows_2019/2022 / esxi_7x): `50`
-- 최신 (esxi_8x): `100`
-- 구형 (esxi_6x): `30`
+새 세대를 추가할 때는 같은 벤더의 기존 최고 priority보다 20 높게 두고, `firmware_patterns`나 `model_patterns`로 specificity를 충분히 줍니다. 세대 토큰(`iLO 6`, `iDRAC 9`, `XCC3`)은 단어 경계(`\b`)로 정확히 맞추어 `iLO 5 v2.65`가 iLO 6 어댑터에 맞지 않게 합니다. 펌웨어 버전 숫자만으로 세대를 정하는 패턴은 모델이나 세대 토큰이 없을 때의 보조 조건으로만 둡니다.
 
-### 31 redfish adapter priority 매트릭스 (2026-06-08 기준)
+## 4. 어댑터 YAML 한 장
 
-| priority | adapter |
-|---:|---|
-| `120` | dell_idrac10, hpe_ilo7, lenovo_xcc3 |
-| `110` | cisco_ucs_xseries, supermicro_x14 |
-| `102` | hpe_csus_3200 (lab 부재 — Compute Scale-up Server) |
-| `101` | hpe_superdome_flex (lab 부재 — 비표준 폼팩터) |
-| `100` | cisco_cimc, dell_idrac9, hpe_ilo6, lenovo_xcc, supermicro_x11, supermicro_x12, supermicro_x13 |
-| `90` | hpe_ilo5 |
-| `80` | fujitsu_irmc, huawei_ibmc, inspur_isbmc, quanta_qct_bmc (lab 부재 신 vendor), supermicro_ars |
-| `75` | supermicro_x10 |
-| `50` | dell_idrac8, hpe_ilo4, lenovo_imm2, supermicro_x9 (구형) |
-| `10` | cisco_bmc, dell_idrac, hpe_ilo, lenovo_bmc, supermicro_bmc (vendor 기본) |
-| `0` | redfish_generic (`generic: true`) |
-
-### 새 세대 추가 시 priority 결정 절차
-
-1. 같은 vendor 의 기존 세대 priority 확인 (예: dell_idrac9 = 100, dell_idrac10 = 120)
-2. 신 세대는 기존 최고 priority + 20 (역전 방지 충분한 간격)
-3. specificity 가 충분한지 확인 (`firmware_patterns` + `model_patterns` 정의)
-4. 점수 동률 시 `-vvv` 로그가 경고 → priority 조정 검토
-5. lab 부재 vendor (rule 96 R1-A) 는 `80` 으로 시작, lab 도입 후 메인 세대 격상
-
-상세: rule 50 R2 9단계 + 단계 10 (lab 부재 처리), `docs/develop/04-add-vendor.md`.
-
----
-
-## 4. Adapter YAML 한 장 뜯어보기
-
-`adapters/redfish/dell_idrac9.yml` 같은 한 장에 들어가는 항목.
+코드가 읽는 키는 다음이 전부입니다. 그 밖의 설명은 `vendor_notes`에 메모로만 둡니다.
 
 ```yaml
-adapter_id: redfish_dell_idrac9       # 고유 ID. envelope 의 meta.adapter_id 에 찍힘
-channel:    redfish                   # 어떤 채널에서 쓸지 (redfish/os/esxi)
-priority:   100                       # 이 vendor 안에서의 우선순위
-version:    "1.0.0"
-generic:    false                     # true 면 fallback adapter (점수 −40)
+adapter_id: redfish_dell_idrac9       # 고유 ID. 결과의 meta.adapter_id 에 찍힙니다
+priority: 100                         # 3절의 정책
+generic: false                        # true 면 fallback 어댑터 (specificity 40 감점). 생략하면 false
 
-match:                                # ↓ 모두 만족해야 이 adapter 가 매칭됨
-  vendor:             ["Dell", "Dell Inc."]
-  firmware_patterns:  ["iDRAC.*9"]
-  model_patterns:     []
-  os_type:            linux           # OS 채널일 때만 사용
-  distribution_patterns: ["RHEL"]
-  version_patterns:   ["^7\\."]       # ESXi 채널일 때만 사용
+match:                                # 적은 조건을 모두 만족해야 매칭됩니다
+  vendor: ["Dell", "Dell Inc.", "DELL"]            # vendor_aliases.yml 로 정규화한 값과 비교
+  firmware_patterns: ["iDRAC\\s*9\\b", "^[3-7]\\."] # 정규식 (하나라도 맞으면 됨)
+  model_patterns: []                               # 정규식
+  os_type: linux                                   # OS 채널만 (linux, windows)
+  distribution_patterns: ["Red Hat", "RHEL"]       # OS 채널만
+  version_patterns: ["^9\\."]                      # ESXi 채널만
 
 capabilities:
-  sections_supported: [system, hardware, bmc, cpu, memory, storage,
-                       network, firmware, power]
-                                      # ← 출력 JSON 의 sections 에서
-                                      #   여기 없는 섹션은 자동으로 not_supported
+  sections_supported: [hardware, bmc, cpu, memory, storage, network, firmware, power, thermal]
+                                      # 여기 없는 섹션은 결과에서 not_supported. 채널이 지원하는 섹션 안에서만 고릅니다
 
-vendor_notes:                         # 기록용 — origin 주석과 설계 메모. 코드가 읽는 값은 redfish 의 manager_layout 하나(멀티-노드 토폴로지)
-  bmc_name: "iDRAC"
-  design_hints:                       # 2026-10-11 전까지 collect/graceful_degradation/auth/diagnosis 절이던 메모 — 코드가 읽지 않는다
-    collect_strategy: standard_only
-    graceful_degradation_critical_sections: [system, hardware]
+vendor_notes:                         # 기록용. Redfish 멀티 노드 장비는 manager_layout 하나만 코드가 읽습니다
+  manager_layout: rmc_primary
+  design_hints: {...}
 ```
 
-읽는 법: "**누구한테 매칭되는가(match) → 뭘 할 수 있는가(capabilities.sections_supported)**" 두 절이 동작을 정한다. 그 밖의 메모는 `vendor_notes` 에만 둔다(2026-10-11 — 코드가 읽지 않는 최상위 절은 없다).
+`capabilities.sections_supported`는 채널이 지원하는 섹션(`common/vars/supported_sections.yml`)의 부분집합이어야 합니다. Redfish 어댑터는 `system`을 넣지 않습니다. Redfish 채널은 `system` 섹션을 내지 않기 때문입니다. 시험 `tests/unit/test_adapter_capabilities_channel_sections.py`가 이 관계를 검사합니다.
 
----
+## 5. 새 벤더 추가
 
-## 5. 새 벤더 추가 — 정확히 3단계
+1. `common/vars/vendor_aliases.yml`에 BMC가 보고할 만한 제조사 표기를 모두 적습니다.
+2. `adapters/redfish/<vendor>_<generation>.yml`을 4절 구조로 만듭니다.
+3. 벤더만의 OEM 응답이 필요하면 `redfish-gather/library/redfish_gather.py`의 `_OEM_EXTRACTORS`에 추출 함수를 더합니다. 표준 필드만으로 충분하면 이 단계는 필요 없습니다.
 
-새 벤더 (예: Fujitsu) 를 붙일 때 만져야 하는 곳.
+`site.yml`은 수정하지 않습니다. `adapter_loader`가 디렉터리를 동적으로 읽습니다. 전체 절차와 검증은 [04-add-vendor.md](04-add-vendor.md)에 있습니다.
 
-### 1단계 — 별칭 추가
-
-`common/vars/vendor_aliases.yml` 에 BMC 가 보고할 만한 manufacturer 표기를 모두 적는다.
-
-```yaml
-fujitsu:
-  - "Fujitsu"
-  - "FUJITSU"
-  - "FUJITSU LIMITED"
-```
-
-### 2단계 — Adapter YAML 만들기
-
-`adapters/redfish/fujitsu_irmc.yml` 작성. 위 4절 구조 그대로.
-
-### 3단계 — (선택) OEM 태스크
-
-Fujitsu 만의 특이한 응답이 있으면 라이브러리 `_extract_oem_*` 에 vendor 분기를 넣는다.
-
-OEM 이 필요 없으면 표준 필드만으로 충분하다. 그 경우 adapter YAML 의 `collect.oem_tasks` 를 비우면 된다.
-
-**`site.yml` 은 수정하지 않는다.** adapter_loader 가 폴더를 동적으로 스캔한다.
-
----
-
-## 6. 새 OS / ESXi 도 같은 패턴
+## 6. 새 OS와 ESXi도 같은 패턴
 
 | 들어온 것 | 만들 YAML |
 |---|---|
-| 새 Linux 배포판 (예: Rocky) | `adapters/os/linux_rocky.yml` (distribution_patterns 에 "Rocky") |
-| 새 ESXi 메이저 버전 (예: 9.x) | `adapters/esxi/esxi_9x.yml` (version_patterns 에 `^9\.`) |
+| 새 Linux 배포판 | `adapters/os/linux_<이름>.yml` (`os_type: linux`, `distribution_patterns`) |
+| 새 Windows 버전 | `adapters/os/windows_<버전>.yml` (`os_type: windows`, `distribution_patterns`) |
+| 새 ESXi 메이저 버전 | `adapters/esxi/esxi_<N>x.yml` (`version_patterns: ["^N\\."]`) |
 
-벤더가 아니라 **운영체제 / 가상화 버전** 이 분기 키일 뿐, 구조는 동일하다.
+벤더가 아니라 OS 배포판이나 가상화 버전이 분기 키일 뿐 구조는 같습니다.
 
----
-
-## 7. Python 코드와 Adapter 의 역할 분리
-
-Adapter 가 모든 걸 해결하는 건 아니다. 세 계층이 각자 책임이 다르다.
+## 7. 코드와 어댑터의 역할
 
 | 계층 | 담당 |
 |---|---|
-| Python (`redfish_gather.py`) | HTTP 호출, 응답 파싱, 벤더 감지 (`_detect_vendor_from_service_root`) |
-| Adapter YAML | 어떤 task 를 부를지, 어떤 vault 를 쓸지, 어떤 섹션을 지원하는지 |
-| Normalize task | 응답 dict 를 envelope `data` 에 맞게 정리 |
+| Python (`redfish_gather.py`, `precheck_bundle.py`) | HTTP 호출, 응답 파싱, 벤더 감지, OEM 추출 |
+| 어댑터 YAML | 누구에게 맞는가, 어떤 섹션을 지원하는가 |
+| normalize 태스크 | 응답을 봉투 `data` 형식으로 정리 |
 
-Python 은 **"어떻게 가져오나"**, Adapter 는 **"누구에게 무엇을 할 수 있나"**, Normalize 는 **"어떻게 표준 JSON 으로 옮기나"**.
+Python은 "어떻게 가져오나", 어댑터는 "누구에게 무엇을 할 수 있나", normalize는 "어떻게 표준 JSON으로 옮기나"입니다.
 
-이렇게 나누면 Python 은 거의 안 바뀌고 (3년에 한 번 정도), Adapter 가 자주 바뀌어도 (분기 한 번에 1장씩) 충돌이 없다.
+## 8. 어느 어댑터가 뽑혔는지 보기
 
----
+결과 봉투의 `meta.adapter_id`를 봅니다. 점수까지 보려면 `-vvv`로 실행합니다.
 
-## 8. 디버깅 — 어느 adapter 가 뽑혔지?
-
-세 가지 방법.
-
-**(가) envelope 안 보기**
-```json
-"meta": { "adapter_id": "redfish_dell_idrac9", ... }
+```text
+adapter_loader: dell_idrac9 matched score=100345 (priority=100×1000 + specificity=30×10 + match=45)
+adapter_loader: dell_idrac matched score=10120 (priority=10×1000 + specificity=10×10 + match=20)
+adapter_loader: 후보 거부 — 28건
+  - hpe_ilo6 (match 조건 불일치)
+adapter_loader: top 3 candidates (score 내림차순):
+  #1 dell_idrac9 score=100345
+  #2 dell_idrac score=10120
+  #3 redfish_generic score=-400
+adapter_loader: 선택됨 — dell_idrac9 (score=100345)
 ```
 
-**(나) `-vvv` 로 ansible 실행해서 로그 보기**
-```bash
-ansible-playbook redfish-gather/site.yml -e target_ip=10.x.x.1 -vvv 2>&1 | grep -i adapter
-```
+직접 실행 방법은 [../operate/08-ansible-config.md](../operate/08-ansible-config.md) 5절에 있습니다.
 
-**(다) `score-adapter-match` 절차 (skill) 사용**
-점수 충돌이 의심될 때 각 adapter 의 점수를 풀어서 보여준다.
+## 9. 자주 마주치는 문제
 
----
-
-## 9. 자주 마주치는 사고
-
-**Q. 새 adapter 만들었는데 선택이 안 됨**
-match 조건이 실제 BMC 응답과 다른 경우가 90%. probe 로 raw 응답을 받아서 vendor / firmware / model 문자열을 직접 확인한다.
-
-**Q. 같은 vendor 의 다른 generation 이 잘못 뽑힘**
-priority 가 역전됐다 (세대별이 기본 보다 낮음). 또는 priority 는 같은데 specificity 가 비슷해서 정렬 결과가 불확정. **priority 를 100 / 50 / 10 / 0 으로 충분히 벌려놓는** 게 안전.
-
-**Q. capabilities.sections_supported 에 적었는데 출력에 not_supported 로 나옴**
-adapter 가 매칭은 됐는데 normalize task 가 그 섹션을 못 채운 경우. fragment 생성 단계의 raw 응답 / Jinja2 추출 / fragment merge 호출 누락을 차례로 점검.
-
----
-
-## 10. 더 보고 싶을 때
-
-| 보고 싶은 것 | 파일 |
+| 증상 | 확인할 것 |
 |---|---|
-| 벤더 / 세대 / 섹션 호환성 한 장 표 | `docs/reference/compatibility-matrix.md` |
-| 새 벤더 추가 절차 (전체 9단계) | `docs/develop/04-add-vendor.md` |
-| 실장비 검증 결과 | `docs/reference/live-validation.md` |
+| 새 어댑터를 만들었는데 선택되지 않음 | `match` 조건이 실제 응답과 다른 경우가 대부분입니다. 장비의 원본 응답에서 Vendor, Model, 펌웨어 문자열을 확인하세요 ([08-onsite-capture.md](08-onsite-capture.md)) |
+| 같은 벤더의 다른 세대가 뽑힘 | priority가 역전됐거나 세대 토큰 패턴이 다른 세대 문자열에도 맞는 경우입니다. `-vvv` 점수 내역을 보세요 |
+| `sections_supported`에 적었는데 `not_supported`로 나옴 | 어댑터는 매칭됐는데 normalize가 그 섹션을 못 채운 경우입니다. 원본 응답과 fragment 병합 호출을 확인하세요 |
+
+## 10. 실장비 확인 상태
+
+| 벤더 | 확인 장비 | 선택된 어댑터 |
+|---|---|---|
+| Dell | PowerEdge R760 (iDRAC 9) 5대, PowerEdge R740 (iDRAC 9 FW 4.00) | `redfish_dell_idrac9` |
+| HPE | ProLiant DL380 Gen11 (iLO 6 FW 1.73) | `redfish_hpe_ilo6` |
+| Lenovo | ThinkSystem SR650 V2 (XCC FW 5.70), 사내 명부 XCC 1대 | `redfish_lenovo_xcc` |
+| Cisco | UCS C220 M4 (CIMC) | `redfish_cisco_cimc` |
+| Supermicro, Huawei, Inspur, Fujitsu, Quanta | 없음 | 어댑터만 존재 |
+
+상세는 [../reference/live-validation.md](../reference/live-validation.md)에 있습니다.
+
+## 11. 더 보고 싶을 때
+
+| 보고 싶은 것 | 위치 |
+|---|---|
+| 벤더 × 세대 × 섹션 표 | [../reference/compatibility-matrix.md](../reference/compatibility-matrix.md) |
+| 새 벤더 추가 절차 | [04-add-vendor.md](04-add-vendor.md) |
 | 점수 계산 코드 | `module_utils/adapter_common.py` |
-| adapter 동적 로딩 | `lookup_plugins/adapter_loader.py` |
-| 벤더 별칭 사전 | `common/vars/vendor_aliases.yml` |
-
----
-
-## 검증 상태 (요약)
-
-| 벤더 | 검증 기준 장비 | 매칭 Adapter | 실장비 검증 |
-|---|---|---|---|
-| Dell | PowerEdge R740 (iDRAC 9, FW 4.00) | `redfish_dell_idrac9` (P100) | 완료 |
-| HPE | DL380 Gen11 (iLO 6, FW 1.73) | `redfish_hpe_ilo6` (P100) | 완료 |
-| Lenovo | SR650 V2 (XCC, FW 5.70) | `redfish_lenovo_xcc` (P100) | 완료 |
-| Supermicro | — | 어댑터만 존재 | 미검증 |
-| Cisco | UCS C220 M4 (CIMC 4.1(2g)) | `redfish_cisco_cimc` | M4 partial lab 검증 (M5~M8 미검증) |
-
-> [!NOTE]
-> 위 HPE 행은 현재 코드 기준 매칭이다. 커밋된 `schema/baseline_v1/hpe_baseline.json` 은 `redfish_hpe_ilo6` adapter 추가(2026-05-01) 이전 캡처라 `redfish_hpe_ilo5` 를 기록한다. baseline 재생성이 필요하다(후속 작업).
-
-상세는 `docs/reference/live-validation.md`.
+| 동적 로딩 | `lookup_plugins/adapter_loader.py` |
+| 벤더 별칭 | `common/vars/vendor_aliases.yml` |

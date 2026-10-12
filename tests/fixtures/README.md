@@ -1,143 +1,73 @@
-# Test Fixtures — Redfish 실장비 응답
+# tests/fixtures: 시험 입력
 
-> **이 폴더는** 실제 BMC 장비에서 받아온 Redfish API 의 raw JSON 응답을 모아둔 테스트 입력 자료입니다.
-> 회귀 테스트(pytest)와 어댑터 동작 검증의 입력으로 사용합니다.
->
-> 회귀 비교의 "정답지" (= 정규화된 출력) 는 본 폴더가 아니라 `schema/baseline_v1/` 에 있습니다.
-> - tests/fixtures = "이런 raw 응답이 들어올 때"
-> - schema/baseline_v1 = "이렇게 표준 JSON 으로 나와야 한다"
+시험이 읽는 입력 자료입니다. 회귀 비교의 "정답지"(정규화된 출력)는 이 폴더가 아니라 `schema/baseline_v1/`에 있습니다.
 
-> 수집일: 2026-03-18 | 수집 방식: Python urllib + Basic Auth
+- `tests/fixtures`: "이런 원본 응답이 들어올 때"
+- `schema/baseline_v1`: "이렇게 표준 JSON으로 나와야 한다"
 
-## 1. 디렉토리 구조
+## 디렉터리
 
-```text
-tests/fixtures/redfish/
-├── lenovo/                       # Lenovo ThinkSystem SR650 V2 (10.50.11.232)
-│   ├── service_root.json         # /redfish/v1/
-│   ├── systems_collection.json   # /redfish/v1/Systems
-│   ├── system.json               # /redfish/v1/Systems/1
-│   ├── managers_collection.json  # /redfish/v1/Managers
-│   ├── manager.json              # /redfish/v1/Managers/1
-│   ├── chassis_collection.json   # /redfish/v1/Chassis
-│   ├── chassis.json              # /redfish/v1/Chassis/1
-│   ├── system_processors.json    # /redfish/v1/Systems/1/Processors
-│   ├── system_processors_0.json  # /redfish/v1/Systems/1/Processors/1
-│   ├── system_processors_1.json  # /redfish/v1/Systems/1/Processors/2
-│   ├── system_memory.json        # /redfish/v1/Systems/1/Memory
-│   ├── system_memory_0.json      # /redfish/v1/Systems/1/Memory/1
-│   ├── system_storage.json       # /redfish/v1/Systems/1/Storage
-│   ├── system_storage_0.json     # /redfish/v1/Systems/1/Storage/RAID_Slot3
-│   ├── storage_RAID_Slot3.json   # 동일 (deep probe 저장)
-│   ├── drive_RAID_Slot3_*.json   # Drive 상세
-│   ├── system_ethernetinterfaces.json
-│   ├── system_ethernetinterfaces_0.json
-│   ├── chassis_power.json        # /redfish/v1/Chassis/1/Power
-│   ├── chassis_thermal.json      # /redfish/v1/Chassis/1/Thermal
-│   ├── update_service.json       # /redfish/v1/UpdateService
-│   ├── firmware_inventory.json   # /redfish/v1/UpdateService/FirmwareInventory
-│   ├── firmware_0.json           # FirmwareInventory 개별 항목
-│   └── memory_summary.json       # 계산된 메모리 요약
-│
-├── hpe/                          # HPE ProLiant DL380 Gen11 (10.50.11.231)
-│   └── (동일 구조)
-│
-├── dell/                         # Dell PowerEdge R740 (10.50.11.162)
-│   └── (동일 구조)
-│
-├── cisco/                        # Cisco TA-UNODE-G1 (10.100.15.2) — baseline v1 추가
-│   └── (동일 구조, 23개)
-│
-└── dell_r760/                    # Dell PowerEdge R760 (10.100.15.27) — 예외 장비군 raw
-    └── (동일 구조, 22개)
+| 위치 | 내용 |
+|---|---|
+| `redfish/` | BMC별 Redfish 응답. 디렉터리마다 README에 장비, 펌웨어, 출처가 있습니다 |
+| `os/` | Linux 네트워크 명령 출력 등 OS 채널 합성 입력 |
+| `esxi/` | ESXi 채널 입력 (`lab/`는 실장비 캡처, `synthetic/`은 합성) |
+| `outputs/` | 결과 봉투 예시 (e2e 시험 입력) |
+| `finalize_corpus/` | 결과 정리(Layer A)와 Groovy 보충의 동치 검증용 corpus |
+| `input_validation/` | `inventory_json` 입력 검사 사례 (Jenkins 입력 확인과 `inventory.sh` 대조) |
+| `addon/` | 추가 수집(Add-on) hook 시험용 합성 Add-on |
+| `prodgen/` | 배포본 생성기 시험 입력 |
 
-tests/fixtures/outputs/           # e2e representative output (raw fixture와 분리)
-└── dell_r760_output.json         # R760 대표 노드 e2e 전체 output
-```
+## Redfish fixture의 종류
 
-## 2. 파일명 규칙
+| 디렉터리 이름 | 종류 |
+|---|---|
+| `real_<vendor>_<model>/` | 실장비에서 캡처한 원본 응답 트리 (R740, DL380, SR650, CSUS 3200) |
+| `<vendor>/` (`dell/`, `hpe/`, `lenovo/`, `cisco/`, `dell_r760/`) | 2026-03-18과 그 뒤에 실장비에서 받은 리소스별 응답 |
+| `<vendor>_<generation>/` | 벤더 문서와 DMTF 스키마로 만든 세대별 합성 응답. 실장비가 없는 벤더(Supermicro, Huawei, Inspur, Fujitsu, Quanta)와 확인하지 않은 세대 |
+| `hpe_emulator_*/` | HPE iLO 에뮬레이터 응답 |
+| `dmtf_rackmount1/` | DMTF 공개 mockup |
+
+각 디렉터리의 README가 정본입니다. 실장비 캡처와 합성을 구분해 읽으세요. 합성 fixture 통과는 사이트 실측 통과가 아닙니다.
+
+## 파일 이름 규칙 (리소스별 응답)
 
 | 패턴 | 의미 |
-|------|------|
-| `service_root.json` | Service Root 응답 |
-| `system.json` | Systems 첫 번째 멤버 상세 |
-| `system_{section}.json` | Systems 하위 컬렉션 |
-| `system_{section}_{N}.json` | 컬렉션 N번째 멤버 상세 |
-| `storage_{id}.json` | Storage 컨트롤러별 상세 |
-| `drive_{controller}_{N}.json` | Drive 상세 |
-| `chassis_{section}.json` | Chassis 하위 (power, thermal) |
-| `firmware_{N}.json` | FirmwareInventory 개별 항목 |
-| `manager_{section}.json` | Manager 하위 |
+|---|---|
+| `service_root.json` | 서비스 루트 |
+| `system.json`, `system_<section>.json`, `system_<section>_<N>.json` | Systems 멤버와 하위 컬렉션, 멤버 |
+| `storage_<id>.json`, `drive_<controller>_<N>.json` | Storage 컨트롤러와 드라이브 |
+| `chassis_<section>.json` | Chassis 하위 (power, thermal) |
+| `firmware_<N>.json` | FirmwareInventory 항목 |
+| `manager_<section>.json` | Manager 하위 |
 
-## 3. 장비 정보
+실장비 캡처 트리(`real_*/`)는 `redfish/v1/.../index.json` 구조이며 변환 도구가 읽습니다 (`docs/develop/08-onsite-capture.md`).
 
-| 벤더 | 모델 | BMC | 시리얼 | Redfish Ver |
-|------|------|-----|--------|-------------|
-| Lenovo | ThinkSystem SR650 V2 | XCC 5.70 | J30AF7LC | 1.15.0 |
-| HPE | ProLiant DL380 Gen11 | iLO 6 1.73 | SGH504HNZK | 1.20.0 |
-| Dell | PowerEdge R740 | iDRAC 9 4.00 | 2BJ8033 (Service Tag) | 1.6.0 |
-| Cisco | TA-UNODE-G1 | CIMC 4.1(2g) | FCH2116V1V0 | 1.2.0 |
-| Dell (R760) | PowerEdge R760 | iDRAC (Gen16) | 64CXJ54 (Service Tag) | 1.20.1 |
+## 장비 정보 (실장비 캡처)
 
-## 4. Fixture 파일 수
+| 벤더 | 모델 | BMC | Redfish 버전 |
+|---|---|---|---|
+| Lenovo | ThinkSystem SR650 V2 | XCC 5.70 | 1.15.0 |
+| HPE | ProLiant DL380 Gen11 | iLO 6 1.73 | 1.20.0 |
+| Dell | PowerEdge R740 | iDRAC 9 4.00 | 1.6.0 |
+| Cisco | UCS C220 M4 | CIMC 4.1(2g) | 1.2.0 |
+| Dell | PowerEdge R760 | iDRAC 9 7.10 | 1.20.1 |
 
-벤더별 fixture 수는 캡처가 늘면서 자주 바뀐다. 하드코딩 대신 직접 센다.
+fixture 수는 세지 않습니다.
 
 ```bash
-# vendor 별 fixture(.json) 수
 for d in tests/fixtures/redfish/*/; do echo "$(find "$d" -name '*.json' | wc -l)  $d"; done
 ```
 
-## 5. Adapter 테스트 재사용 방법
+## 주의
 
-```python
-import json
+- fixture에는 실제 시리얼 번호와 MAC 주소가 들어 있습니다. 외부에 공개할 때는 마스킹하세요.
+- 펌웨어를 올리면 응답 구조가 달라질 수 있습니다. 캡처 날짜는 각 README에 있습니다.
 
-def load_fixture(vendor, name):
-    with open(f'tests/fixtures/redfish/{vendor}/{name}.json') as f:
-        return json.load(f)
-
-# 예: Dell system fixture로 gather_system 결과 검증
-dell_sys = load_fixture('dell', 'system')
-assert dell_sys['Manufacturer'] == 'Dell Inc.'
-assert dell_sys['Model'] == 'PowerEdge R740'
-```
-
-## 6. Expected Normalized Output 예시
-
-### Dell System Section (expected)
-```json
-{
-  "manufacturer": "Dell Inc.",
-  "model": "PowerEdge R740",
-  "serial": "2BJ8033",
-  "sku": "2BJ8033",
-  "uuid": "4c4c4544-0042-4a10-8038-b2c04f303333",
-  "hostname": "LENOVO01",
-  "power_state": "On",
-  "health": "Critical",
-  "state": "Enabled",
-  "led_state": "Off",
-  "bios_version": "2.21.2",
-  "cpu_summary": {"count": 2, "model": "Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz", "health": "OK"},
-  "memory_summary": {"total_gib": 640, "health": "OK"},
-  "oem": {"lifecycle_version": null}
-}
-```
-
-## 7. 주의사항
-
-- Fixture 파일에는 **실제 시리얼 넘버, MAC 주소** 등이 포함됩니다.
-- 외부 공개 시 민감 정보 마스킹 필요.
-- JSON 파일은 pretty-printed (indent=2).
-- 수집 시점: 2026-03-18 — BMC 펌웨어 업데이트 후 응답 구조가 변경될 수 있습니다.
-
----
-
-## 다음 단계
+## 다음
 
 | 다음 작업 | 문서 |
 |---|---|
-| 회귀 기준선 (정답지) | [`schema/baseline_v1/`](../../schema/baseline_v1/) |
-| 새 벤더 fixture 추가 | [docs/develop/04-add-vendor.md](../../docs/develop/04-add-vendor.md) |
-| 실장비 검증 라운드 | [docs/reference/live-validation.md](../../docs/reference/live-validation.md) |
+| 회귀 기준선 | `schema/baseline_v1/README.md` |
+| 새 벤더 fixture 추가 | `docs/develop/04-add-vendor.md` |
+| 실장비 검증 | `docs/reference/live-validation.md` |

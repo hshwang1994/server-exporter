@@ -1,6 +1,6 @@
 # real_hpe_dl380
 
-- **출처(origin, rule 21 R2 / rule 96 R1-A)**: 실 HPE ProLiant DL380 Gen12 iLO7 전수 미러. 2026-06 사이트 캡처.
+- **출처**: 실 HPE ProLiant DL380 Gen12 iLO7 전수 미러. 2026-06 사이트 캡처.
 - **vendor**: hpe
 - **manager_layout**: None
 - **생성**: `tests/integration/capture_mirror_fixture.py` 로 전수 미러를 gather 가 touch 한

@@ -1,6 +1,6 @@
 # real_hpe_csus3200
 
-- **출처(origin, rule 21 R2 / rule 96 R1-A)**: 실 HPE Compute Scale-up Server 3200 RMC(멀티노드) 전수 미러. 2026-06 사이트 캡처. MOCK baseline 대체용 실측.
+- **출처**: 실 HPE Compute Scale-up Server 3200 RMC(멀티노드) 전수 미러. 2026-06 사이트 캡처. MOCK baseline 대체용 실측.
 - **vendor**: hpe(csus)
 - **manager_layout**: rmc_primary
 - **생성**: `tests/integration/capture_mirror_fixture.py` 로 전수 미러를 gather 가 touch 한

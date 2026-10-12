@@ -1,58 +1,60 @@
-# tests/ — 테스트 / fixture / evidence
+# tests/: 시험, fixture, 검증 기록
 
-> pytest unit + e2e + regression + 실장비 probe + 사이트 fixture + Round 검증 evidence.
+이 디렉터리는 개발 저장소(`main`) 전용입니다. 배포본(production 브랜치)에는 들어가지 않고, CI의 Gate 단계와 생성 tree 검증이 여기의 시험을 실행합니다.
 
-## 디렉터리 역할 매트릭스
+## 디렉터리
 
-| 위치 | 역할 | 갱신 트리거 |
-|---|---|---|
-| `tests/unit/` | 단위 테스트 (특정 함수 / 분기 / 회귀) | 새 함수 / 버그 fix |
-| `tests/e2e/` | E2E 테스트 (envelope 13 필드 검증) | 새 baseline / schema 변경 |
-| `tests/regression/` | Cross-channel 회귀 (cycle 2026-05-07 추가) | baseline 추가 / envelope 변경 |
-| `tests/integration/` | 오프라인 회귀 하네스 (HPE iLO 에뮬레이터 + DMTF 표준 mockup replay + robustness round 회귀). Jenkins Stage 4 (`Jenkinsfile`) 가 `-m "not live"` 로 실행 | 펌웨어 robustness 라운드 / mutation 하네스 |
-| `tests/redfish-probe/` | 실장비 probe 스크립트 (probe_redfish + deep_probe) | 새 vendor / 펌웨어 |
-| `tests/fixtures/` | mock 회귀 입력 (실 BMC 응답 sanitize) | 사이트 사고 / capture-site-fixture skill |
-| `tests/scripts/` | 보조 검증 스크립트 (conditional_review 등) | Jenkins Stage 4 보조 |
-| `tests/evidence/` | Round 검증 결과 / cycle 사고 분석 (rule 70 보존) | Round / 사이트 사고 |
-| `tests/reference/` | 참조 자료 (개발 시 참고용 — production 미사용) | (정리 후보) |
+| 위치 | 역할 |
+|---|---|
+| `unit/` | 단위 시험. 필터, 모듈, Jinja 렌더, 파이프라인 파일의 글자 계약 |
+| `e2e/` | 채널별 봉투와 기준선(`schema/baseline_v1/`) 대조 |
+| `regression/` | 채널 간 봉투 일관성, 13 필드, 벤더 표시값 |
+| `integration/` | fixture 재생 (DMTF 표준 mockup, HPE 에뮬레이터, 실장비 캡처), Add-on hook 실제 playbook 실행. `live` 표식이 있는 시험은 실장비가 필요합니다 |
+| `redfish-probe/` | 실장비 probe 도구 (pytest 아님). `redfish_full_mirror.py`는 운영망 원본 캡처용 (`docs/develop/08-onsite-capture.md`) |
+| `fixtures/` | 시험 입력. Redfish 원본 응답, OS와 ESXi 합성 응답, 결과 정리 corpus, 입력 검증 사례 |
+| `scripts/` | 보조 도구. `conditional_review.py`(조건식 검토), `finalize_corpus_check.py`(결과 정리 corpus 대조), `junit_evidence_check.py`(CI JUnit 대조), `os_esxi_verify.sh`와 `diag_esxi_raw.yml`(실장비 수동 확인) |
+| `inventory/` | 보조 검증 장비 인벤토리 정책 (`inventory/README.md`) |
+| `evidence/` | 실장비 검증과 결함 수정의 기록 |
+| `jenkins/` | CI가 쓰는 Jenkins 하네스 (개발 저장소 전용) |
+| `reference/` | 실장비 원본 응답 참조 자료 (개발 저장소 전용) |
+| `validate_field_dictionary.py` | `schema/sections.yml`과 `schema/field_dictionary.yml` 정합 검사 |
+| `secret_guard.py`, `precheck_stub.py` | 비밀값 검사 보조, 사전 진단 stub |
 
-## baseline JSON 정본 위치
-
-`tests/baseline_v1/` 가 아니라 **`schema/baseline_v1/`** (rule 13 R4). 본 디렉터리는 fixture (mock) 만.
+기준선 JSON의 정본은 `tests/`가 아니라 `schema/baseline_v1/`입니다.
 
 ## 자주 쓰는 명령
 
-| 목적 | 명령 |
+```bash
+# 저장소 루트
+python -m pytest tests/unit tests/e2e tests/regression -q    # 단위, 종단, 회귀
+python -m pytest tests/integration -q -m "not live"          # fixture 재생 (Ansible 이 있는 Linux 또는 WSL)
+python -m pytest tests/ -q                                   # 전체
+python tests/validate_field_dictionary.py                    # 섹션과 필드 사전 정합
+python tests/redfish-probe/probe_redfish.py --vendor dell    # 실장비 probe (pytest 아님)
+```
+
+`pytest.ini`의 표식(`source_text`, `integration`, `live`)으로 골라 실행할 수 있습니다.
+
+## 회귀 보호 영역
+
+| 영역 | 위치 |
 |---|---|
-| 전체 회귀 | `pytest tests/` |
-| Cross-channel envelope 회귀 | `pytest tests/regression/` |
-| 단위 테스트만 | `pytest tests/unit/` |
-| 특정 vendor probe | `python tests/redfish-probe/probe_redfish.py --vendor dell` |
-| 신 펌웨어 프로파일링 | `python tests/redfish-probe/deep_probe_redfish.py --bmc-ip <ip>` |
-| Jenkins Stage 3 등가 | `python tests/validate_field_dictionary.py` |
+| 봉투 13 필드 | `regression/test_cross_channel_consistency.py` |
+| hostname이 IP로 대체되지 않음 | `regression/test_cross_channel_consistency.py` |
+| 벤더 표시값 | `regression/test_cross_channel_consistency.py` |
+| status와 sections 값 | `regression/test_cross_channel_consistency.py` |
+| 진단 4단계 키 | `regression/test_cross_channel_consistency.py` |
+| Linux raw 경로 (RHEL 8.10) | `e2e/test_os_output.py` |
+| 어댑터 세대 토큰과 채널 섹션 | `unit/test_adapter_generation_tokens.py`, `unit/test_adapter_capabilities_channel_sections.py` |
+| Redfish 403과 Power, Thermal 404 분류 | `unit/test_redfish_status_after_authenticated_403.py`, `unit/test_redfish_power_thermal_absent_not_supported.py` |
+| Jenkins 파이프라인의 중단 판정과 보존 | `unit/test_jenkinsfile_portal_audit_2026_10_12.py`, `unit/test_jenkinsfile_portal_finalize.py` |
 
-## 회귀 보호 영역 (cycle 2026-05-07 기준)
+## 새 fixture
 
-| 영역 | 위치 | 검증 항목 |
-|---|---|---|
-| envelope 13 필드 | `tests/regression/test_cross_channel_consistency.py::test_envelope_thirteen_fields_present` | rule 13 R5 |
-| hostname strict-null (≠ip) | `test_hostname_not_ip_fallback` | 2026-06-16 정책 / build_output.yml (IP fallback 폐지) |
-| vendor canonical | `test_vendor_canonical` | rule 50 R1 |
-| status enum (4 시나리오) | `test_status_enum` | rule 13 R8 |
-| sections enum | `test_sections_values_enum` | rule 13 R1 |
-| diagnosis 4-stage | `test_diagnosis_has_4stage_keys` | rule 27 |
-| Linux raw fallback (RHEL 8.10) | `tests/e2e/test_os_output.py` (rhel810_raw_fallback baseline 회귀) | rule 10 R4 |
-
-## 사이트 fixture 캡처 (rule 21 R2)
-
-사이트 호환성 사고 시 `capture-site-fixture` skill:
-- `tests/fixtures/redfish/{vendor}_{firmware}/` 에 sanitize 된 raw 응답 저장
-- `tests/evidence/<날짜>-<vendor>-<펌웨어>.md` 작성
-- `tests/regression/conftest.py` 의 BASELINE_REGISTRY 에 자동 추가 (rule 13 R4 실측 후)
+실장비 응답을 캡처해 `fixtures/redfish/<이름>/`에 두고 그 디렉터리의 README에 장비, 펌웨어, 캡처 날짜와 방법을 적습니다. 실장비가 없는 벤더는 벤더 문서 기준 합성 응답임을 README에 명시합니다. 캡처 절차는 `docs/develop/08-onsite-capture.md`에 있습니다.
 
 ## 관련 문서
 
-- `docs/reference/live-validation.md` — 실장비 검증 / Round
-- `docs/reference/compatibility-matrix.md` — 호환성 매트릭스
-- `docs/develop/06-debugging.md` — 디버깅 매트릭스
-- 내부 작업 절차 — 사이트 fixture 캡처 절차
+- `docs/reference/live-validation.md`: 실장비 검증
+- `docs/reference/compatibility-matrix.md`: 호환성 매트릭스
+- `docs/develop/06-debugging.md`: 디버깅 진입점

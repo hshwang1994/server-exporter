@@ -58,8 +58,8 @@ Redfish 채널 fixture. BMC 가 실제로 돌려준 JSON 응답을 그대로 저
 1. 어느 장비에서 떴는지 적는다 — vendor, 모델, 펌웨어 버전, 수집 날짜, 명령
 2. 자격증명·시리얼 등 민감값이 남아 있지 않은지 본다
    (`scripts/ai/verify_no_plaintext_secret.py` 가 커밋을 막는다)
-3. 해당 디렉터리 README 에 한 줄 추가 (rule 21 R2 — 출처 불명 fixture 금지)
-4. fixture 를 **고치는** 경우에는 영향 vendor baseline 회귀를 돌린다 (rule 21 R3)
+3. 해당 디렉터리 README 에 한 줄 추가 (출처 불명 fixture 금지)
+4. fixture 를 **고치는** 경우에는 영향 vendor baseline 회귀를 돌린다
 
 출처를 안 적으면 나중에 외부 계약이 바뀌었을 때 이 응답이 언제 기준인지 알 수 없다.
 그러면 회귀 판정을 못 한다.

@@ -4,7 +4,7 @@ Phase 4-B(2026-08-10)에서 ESXi Protocol Detection 을 `/sdk` HTTP status 기�
 **실제 vim25 SOAP 응답 확인**으로 바꾸면서 추가했다. `common/library/precheck_bundle.py`
 의 `parse_service_content()` 회귀 고정용이다.
 
-## 출처 (rule 21 R2)
+## 출처
 
 **저장소에 `/sdk` wire capture 는 없다.** 아래 두 종류를 구분해서 쓴다.
 

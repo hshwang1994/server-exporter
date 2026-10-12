@@ -1,326 +1,122 @@
-# 14. 새 Gather 추가하는 법 — 작업자 절차서
+# 벤더, 세대, 섹션 추가
 
-## 누가 읽나
+이 문서는 기존 세 채널에 새 벤더나 세대를 붙이거나, 새 섹션을 추가하는 절차입니다. 먼저 [01-gather-structure.md](01-gather-structure.md)(채널이 셋인 이유), [02-normalize-flow.md](02-normalize-flow.md)(자기 영역만 만지는 이유), [03-adapter-system.md](03-adapter-system.md)(벤더 차이를 어디에 두는지)를 읽으세요.
 
-새로운 수집 채널 (예: IPMI / SNMP) 이나 새로운 섹션 (예: thermal / GPU) 을 server-exporter 에 붙이려는 사람.
+## 1. 새 Redfish 벤더
 
-## 시작 전 체크
+| 단계 | 파일 | 필수 여부 |
+|---|---|---|
+| 1 | `common/vars/vendor_aliases.yml`에 제조사 표기 추가 | 필수. 없으면 벤더가 정규화되지 않아 어댑터와 복구 vault 를 찾지 못합니다 |
+| 2 | `adapters/redfish/<vendor>_<generation>.yml` | 필수. 없으면 `redfish_generic`으로 표준 필드만 수집합니다 |
+| 3 | `redfish-gather/library/redfish_gather.py`의 `_OEM_EXTRACTORS`와 `_extract_oem_<vendor>` | 선택. 벤더 OEM 영역(`Oem.<Vendor>`)에서 뽑을 값이 있을 때 |
+| 4 | `vault/<loc>/redfish/<vendor>.yml` (복구 계정) | 선택. 표준 계정 복구를 쓰는 환경만 ([../operate/05-vault.md](../operate/05-vault.md)) |
+| 5 | `tests/fixtures/redfish/<name>/` 원본 응답과 재생 시험 | 필수. 실장비가 없으면 벤더 문서 기준 합성 응답이라도 두고 README에 출처를 적습니다 |
+| 6 | `schema/baseline_v1/<vendor>_baseline.json` | 실장비 확인 뒤. 기준선은 실측으로만 만듭니다 |
+| 7 | [../reference/compatibility-matrix.md](../reference/compatibility-matrix.md), [../reference/live-validation.md](../reference/live-validation.md), [../reference/decision-log.md](../reference/decision-log.md) | 필수 |
 
-다음 3 문서를 먼저 본다. 본문에서 가정하는 개념들이다.
-
-- `docs/06` — 수집 구조 한눈에 (왜 채널이 셋인지)
-- `docs/07` — Fragment 정규화 과정 (왜 자기 영역만 만져야 하는지)
-- `docs/10` — Adapter 시스템 (벤더 차이를 어떻게 흡수하는지)
-
-이 절차를 그대로 따르면 Fragment 철학을 위반하지 않고 기존 3 채널에 영향 없이 새 수집 항목을 붙일 수 있다.
-
-## 절차
-
-### 1. 파일 생성
-
-```bash
-GATHER=ipmi
-mkdir -p ${GATHER}-gather/tasks
-cp os-gather/inventory.sh ${GATHER}-gather/inventory.sh
-echo -e "---\nansible_user: CHANGE_ME\nansible_password: CHANGE_ME" > vault/${GATHER}.yml
-# callback_plugins 복사 불필요 — ansible.cfg가 프로젝트 루트의 단일 사본을 참조
-```
-
-### 2. tasks/collect_standard.yml 작성 (수집)
+어댑터 YAML의 구조와 priority 결정은 [03-adapter-system.md](03-adapter-system.md) 3절과 4절에 있습니다. 벤더 별칭 예시입니다.
 
 ```yaml
-- name: "{gather} | collect raw data"
-  your_module:
-    host: "{{ _ip }}"
-    username: "{{ ansible_user }}"
-    password: "{{ ansible_password }}"
-  register: _raw_collect
-  failed_when: false
-  no_log: true
-
-- name: "{gather} | set collect status"
-  set_fact:
-    _collect_ok: "{{ _raw_collect is not failed }}"
-```
-
-### 3. tasks/normalize.yml 작성 (fragment 방식)
-
-```yaml
-- name: "{gather} | normalize | build fragment"
-  set_fact:
-    _data_fragment:
-      hardware:
-        vendor: "{{ _raw_collect.data.vendor | default(none) }}"
-        model:  "{{ _raw_collect.data.model  | default(none) }}"
-      cpu:
-        sockets:         "{{ _raw_collect.data.sockets | default(none) }}"
-        logical_threads: "{{ _raw_collect.data.threads | default(none) }}"
-        model:           null
-        cores_physical:  null
-        architecture:    null
-      memory:
-        total_mb:     "{{ _raw_collect.data.mem_mb | default(none) }}"
-        total_basis:  "physical_installed"
-        installed_mb: "{{ _raw_collect.data.mem_mb | default(none) }}"
-        visible_mb:   null
-        free_mb:      null
-        slots:        []
-    _sections_supported_fragment: ['hardware','cpu','memory']
-    _sections_collected_fragment: >-
-      {{ ['hardware','cpu','memory'] if _collect_ok | bool else [] }}
-    _sections_failed_fragment: >-
-      {{ [] if _collect_ok | bool else ['hardware','cpu','memory'] }}
-    _errors_fragment: []
-  no_log: true
-
-- include_tasks:
-    file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
-```
-
-### 4. site.yml 작성
-
-```yaml
-- name: "{gather}-gather"
-  hosts: all
-  gather_facts: no
-  connection: local
-
-  vars_files:
-    - "{{ lookup('env','REPO_ROOT') }}/vault/{gather}.yml"
-
-  vars:
-    _ip: "{{ ansible_host | default(inventory_hostname) }}"
-
-  tasks:
-    - name: "{gather} | gather"
-      block:
-        - include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/init_fragments.yml"
-        - include_tasks: tasks/collect_standard.yml
-        - include_tasks: tasks/normalize.yml
-        - include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_sections.yml"
-        - include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_status.yml"
-        - include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_errors.yml"
-        - set_fact:
-            _out_target_type:       "{gather}"
-            _out_collection_method: "{gather}_api"
-            _out_ip:                "{{ _ip }}"
-            _out_vendor:            null
-          no_log: true
-        - include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_output.yml"
-        - set_fact:
-            _output: "{{ _output | combine({'schema_version': '1'}) }}"
-          no_log: true
-
-      rescue:
-        - set_fact:
-            _out_target_type:       "{gather}"
-            _out_collection_method: "{gather}_api"
-            _out_ip:                "{{ _ip }}"
-            _out_vendor:            null
-            _fail_sec_supported:    ['hardware','cpu','memory']
-            _fail_error_section:    "{gather}_gather"
-            _fail_error_message:    "{{ ansible_failed_result.msg | default('수집 예외') }}"
-          no_log: true
-        - include_tasks:
-            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_failed_output.yml"
-        - set_fact:
-            _output: "{{ _output | combine({'schema_version': '1'}) }}"
-          no_log: true
-
-      always:
-        - name: OUTPUT
-          debug: msg="{{ _output | to_json }}"
-```
-
----
-
-## 체크리스트
-
-- [ ] `{gather}-gather/inventory.sh` — ip 만 처리
-- [ ] `vault/{gather}.yml` — 계정 placeholder
-- [ ] `tasks/collect_standard.yml` — `_raw_collect`, `_collect_ok`
-- [ ] `tasks/normalize.yml` — fragment 생성 + `merge_fragment` 호출
-- [ ] `site.yml` — `init_fragments` → collect → normalize → build_* → `schema_version` 주입
-- [ ] `OUTPUT` 태스크 — `name: OUTPUT` 유지 (절대 변경 금지)
-- [ ] rule 22 (fragment-philosophy) — 섹션 지원 현황 표 업데이트
-
----
-
-## 새 섹션 추가 (기존 gather 확장)
-
-기존 gather 에 완전히 새로운 데이터가 필요할 때:
-
-```yaml
-# 새 tasks/gather_sensors.yml 추가 예시
-- name: "linux | sensors | collect"
-  shell: ...
-  register: _raw_sensors
-
-- name: "linux | sensors | build fragment"
-  set_fact:
-    _data_fragment:
-      sensors:                         # 새 섹션 추가
-        temperatures:
-          - {name: CPU1, value_c: 48}
-    _sections_supported_fragment: ['sensors']
-    _sections_collected_fragment: ['sensors']
-    _sections_failed_fragment:    []
-    _errors_fragment:             []
-
-- include_tasks: "{{ REPO_ROOT }}/common/tasks/normalize/merge_fragment.yml"
-```
-
-그 다음 `site.yml` 에 `include_tasks: tasks/linux/gather_sensors.yml` 한 줄 추가.
-`build_sections.yml` 이 자동으로 `sensors: success` 를 생성한다.
-
----
-
-## 다음 단계
-
-| 다음 작업 | 문서 |
-|---|---|
-| 수집 구조 (왜 채널이 셋인가) | [01-gather-structure.md](01-gather-structure.md) |
-| Fragment 정규화 과정 (왜 자기 섹션만 만지나) | [02-normalize-flow.md](02-normalize-flow.md) |
-| Adapter 시스템 (점수 계산) | [03-adapter-system.md](03-adapter-system.md) |
-| 새 벤더 추가 시 검증 절차 | [../reference/live-validation.md](../reference/live-validation.md) |
-
-## 자주 막히는 곳
-
-| 증상 | 원인 / 해결 |
-|------|------------|
-| 새 섹션이 envelope 에 안 보임 | `merge_fragment.yml` 호출 누락 또는 `_sections_supported_fragment` 에 추가 안 함 |
-| 다른 채널에서 새 섹션이 `not_supported` 가 아닌 `failed` 로 보임 | 다른 채널 site.yml 의 supported_sections 에 영향이 가지 않도록 fragment 변수만 set_fact |
-| `output_schema_drift_check.py` FAIL | sections.yml + field_dictionary.yml + baseline JSON 3종 동반 갱신이 누락됨 |
-| 어댑터를 추가했는데 선택되지 않음 | match.manufacturer / model_patterns 가 실 응답과 일치하는지 raw fixture 비교 |
-
----
-
-## 절차 B — 새 벤더 / 새 세대 추가 (기존 redfish/os/esxi 채널 안 — cycle 2026-05-07 추가)
-
-> 우려 5 답변. 새 채널 (IPMI / SNMP) 가 아니라 **기존 redfish 채널에 신 vendor (예: Huawei) 또는 신 generation (예: dell_idrac10)** 을 추가할 때.
-
-### 5 파일 동시 수정 매트릭스
-
-| # | 파일 | 의무 | 누락 시 사고 |
-|---|---|---|---|
-| 1 | `common/vars/vendor_aliases.yml` | **의무** | vendor 정규화 실패 → adapter 매칭 실패 |
-| 2 | `adapters/{redfish,os,esxi}/{vendor}_*.yml` | **의무** | adapter_loader 가 본 vendor 인식 못 함 |
-| 3 | `redfish-gather/library/redfish_gather.py` `_OEM_EXTRACTORS` | 선택 (OEM 추출 시) | OEM 데이터 envelope `data.hardware.oem` 누락 |
-| 4 | 라이브러리 `_extract_oem_*` 에 vendor 분기 | 선택 (vendor 특이 OEM 필요 시) | vendor-specific OEM 미수집 |
-| 5 | `schema/baseline_v1/{vendor}_baseline.json` | **의무 (실측 후)** / lab 부재 시 NEXT_ACTIONS 등재 | 회귀 테스트 미보호 → drift 가능 |
-
-`vault/<loc>/redfish/<vendor>.yml` (자격증명) 도 의무다. AI 하네스를 쓰는 작업자는 AI 전용 영역의 벤더 노트도 함께 둔다(사람용 문서가 아니다).
-
-### 9 단계 (rule 50 R2 정본)
-
-1. `common/vars/vendor_aliases.yml` 매핑 추가
-2. `adapters/{channel}/{vendor}_*.yml` adapter 생성 (priority 정책표 — `docs/10` 3.5절)
-3. (선택) 라이브러리 `_extract_oem_*` 에 vendor 분기
-4. `vault/<loc>/redfish/<vendor>.yml` 생성 (ansible-vault encrypt) — lab 부재 시 placeholder + 사용자 명시 승인
-5. `schema/baseline_v1/{vendor}_baseline.json` 추가 (실장비 검증 후) — lab 부재 시 단계 10 등재
-6. (AI 하네스 사용 시) AI 전용 영역에 벤더 노트 추가
-7. 벤더 경계 정책 갱신
-8. `docs/reference/live-validation.md` Round 갱신
-9. `docs/reference/decision-log.md` ADR 추가
-
-### 단계 10 — lab 부재 vendor 처리 (rule 50 R2 단계 10 / rule 96 R1-A + R1-C)
-
-lab 환경에 vendor 장비 없을 때 (예: cycle 2026-05-01 Huawei/Inspur/Fujitsu/Quanta + cycle 2026-05-06 Superdome Flex):
-
-| 단계 | lab 부재 처리 |
-|---|---|
-| 4 (vault) | placeholder 사용자 명시 승인 — 실 운영 vault 결정 보류 |
-| 5 (baseline) | SKIP — 내부 후속 작업 목록 "사이트 fixture 캡처" + "baseline 추가" 등재 |
-| 8 (Round) | "lab 부재 — web sources" 표기. rule 96 R1-A web sources 4종 의무 (vendor docs / DMTF / GitHub / 사이트 실측) |
-
-`add-vendor-no-lab` skill 자동화 — lab 부재 vendor 추가 시 호출.
-
-### Priority 값 결정 절차
-
-```text
-신 vendor / 신 세대 priority 결정
-  ↓
-같은 vendor 의 기존 priority 확인
-  ├─ 기존 최고 priority + 20 (역전 방지 충분 간격)
-  ├─ specificity 충분 (firmware_patterns + model_patterns 정의)
-  └─ generic fallback (priority=0~10) 보다 항상 높음
-  ↓
-docs/10 3.5절 priority 정책표 매트릭스 참조
-  ├─ generic = 0
-  ├─ vendor 기본 = 10
-  ├─ 세대 (구형) = 30~50
-  ├─ 세대 (메인) = 80~100
-  ├─ 세대 (최신) = 110~120
-  └─ lab 부재 보호 = 101 (특수)
-  ↓
-ansible-playbook -vvv 로그에서 score 동률 경고 모니터링
-  └─ 동률 발견 시 priority 조정
-```
-
-### dell_idrac9 walkthrough (예시)
-
-다음은 Dell iDRAC 9 가 메인 세대로 추가될 때 수정한 5 파일 (cycle 2026-04-15 기준):
-
-```yaml
-# 1. common/vars/vendor_aliases.yml
+# common/vars/vendor_aliases.yml
 vendor_aliases:
-  dell:
-    - "Dell Inc."
-    - "Dell EMC"
-    - "Dell"
+  fujitsu:
+    - "Fujitsu"
+    - "FUJITSU"
+    - "Fujitsu Limited"
 ```
 
+실장비가 없는 벤더는 어댑터 파일 머리 주석에 참고한 벤더 문서나 DMTF 문서의 주소와 확인 날짜를 적고, 실장비 확인 전까지 문서에 "미확인"으로 표시합니다.
+
+## 2. 기존 벤더의 새 세대
+
+어댑터 YAML 하나를 추가합니다. OEM 구조가 같으면 코드는 바뀌지 않습니다.
+
+1. 같은 벤더의 기존 어댑터 priority를 봅니다(예: `dell_idrac9` 100, `dell_idrac10` 120).
+2. 새 세대는 기존 최고값보다 20 높게 둡니다.
+3. `firmware_patterns`에 세대 토큰을 단어 경계로 적습니다(예: `"iDRAC\\s*11\\b"`). 버전 숫자 패턴은 보조로만 씁니다.
+4. 기존 fixture 전체로 재생 시험을 돌려 다른 세대의 선택 결과가 바뀌지 않았는지 확인합니다(`tests/unit/test_adapter_generation_tokens.py`가 대표 사례를 고정합니다).
+
+## 3. 새 Linux 배포판, Windows 버전, ESXi 버전
+
+`adapters/os/`나 `adapters/esxi/`에 YAML을 추가합니다.
+
 ```yaml
-# 2. adapters/redfish/dell_idrac9.yml
-adapter_id: redfish_dell_idrac9
-channel:    redfish
-priority:   100                       # 메인 세대
+# adapters/os/linux_<이름>.yml 의 예
+adapter_id: os_linux_<이름>
+priority: 50
 match:
-  vendor:             ["Dell", "Dell Inc."]
-  firmware_patterns:  ["iDRAC.*9"]
+  os_type: linux
+  distribution_patterns: ["Rocky"]
 capabilities:
-  sections_supported: [system, hardware, bmc, cpu, memory, storage, network, firmware, power]
-collect:
-  standard_tasks: "redfish-gather/tasks/collect_standard.yml"
-normalize:
-  standard_tasks: "redfish-gather/tasks/normalize_standard.yml"
-credentials:
-  profile:           "dell"
-graceful_degradation:
-  critical_sections: [system, hardware]
-  optional_sections: [firmware, power]
+  sections_supported: [system, hardware, cpu, memory, storage, network, users]
 ```
 
-```python
-# 3. redfish-gather/library/redfish_gather.py
-_OEM_EXTRACTORS = {
-    'dell': _extract_oem_dell,        # ← 신 vendor 시 추가
-    'hpe':  _extract_oem_hpe,
-    'lenovo': _extract_oem_lenovo,
-    # ...
-}
-```
+수집 태스크는 배포판과 무관하게 같은 파일을 쓰므로, 어댑터는 결과의 `meta.adapter_id`와 지원 섹션 선언에만 영향을 줍니다. 배포판 고유 명령 차이는 `os-gather/tasks/linux/*.yml` 안에서 명령 존재 여부로 처리합니다.
 
-```yaml
-# 4. (선택) 라이브러리 _extract_oem_* 의 vendor 분기
-# vendor 특이 endpoint 수집 (예: /redfish/v1/Dell/...)
-```
+## 4. 기존 채널에 새 섹션
+
+예를 들어 Linux에 `sensors` 섹션을 더한다고 합시다.
+
+1. `os-gather/tasks/linux/gather_<섹션>.yml`(예: sensors)을 만듭니다. fragment 변수 5개를 채우고 `merge_fragment.yml`을 부릅니다.
+
+   ```yaml
+   - name: "linux | sensors | collect"
+     ansible.builtin.raw: "..."
+     register: _raw_sensors
+     changed_when: false
+     failed_when: false
+
+   - name: "linux | sensors | build fragment"
+     ansible.builtin.set_fact:
+       _data_fragment:
+         sensors: { temperatures: [...] }
+       _sections_supported_fragment: ['sensors']
+       _sections_collected_fragment: "{{ ['sensors'] if (_raw_sensors.rc | default(1)) == 0 else [] }}"
+       _sections_failed_fragment:    "{{ [] if (_raw_sensors.rc | default(1)) == 0 else ['sensors'] }}"
+       _errors_fragment: []
+     no_log: true
+
+   - ansible.builtin.include_tasks:
+       file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
+   ```
+
+2. `os-gather/site.yml`의 Linux 플레이에 `include_tasks` 한 줄을 추가합니다.
+3. 정의 파일을 함께 갱신합니다. `schema/sections.yml`(섹션 정의와 채널), `common/vars/supported_sections.yml`(채널별 지원 섹션), `schema/field_dictionary.yml`(필드 사전), `common/tasks/normalize/init_fragments.yml`(빈 뼈대), 해당 채널 어댑터의 `capabilities.sections_supported`, `docs/contract/03-fields.md`.
+4. 기준선 JSON(`schema/baseline_v1/`)과 회귀 시험을 갱신합니다.
+
+`build_output.yml`과 `merge_fragment.yml`은 고치지 않습니다. 다른 채널은 새 섹션을 지원 목록에 넣지 않으면 자동으로 `not_supported`가 됩니다.
+
+새 섹션은 호출자 계약의 변경입니다. 봉투 최상위 13 필드는 그대로이지만 `sections`와 `data`에 키가 늘어나므로 호출자와 합의한 뒤 진행합니다.
+
+## 5. 새 채널
+
+새 채널(예: SNMP)은 어댑터만으로 끝나지 않습니다. 다음이 함께 바뀝니다.
+
+- `<channel>-gather/site.yml`, `inventory.sh`, `tasks/`: 공통 골격([01-gather-structure.md](01-gather-structure.md) 3절)을 같은 순서로 둡니다. `OUTPUT` 태스크 이름은 그대로여야 합니다.
+- `Jenkinsfile_portal`의 `target_type` 허용값과 Runner 능력 라벨, `common/vars/supported_sections.yml`, `module_utils/credential_common.py`의 자격증명 범위 규칙, `vault/<loc>/<channel>.yml`.
+- 호출자 계약 문서와 `schema/`.
+
+범위가 커서 설계 결정이 먼저 필요합니다.
+
+## 6. 검증
+
+변경 범위에 맞게 다음을 돌립니다.
 
 ```bash
-# 5. schema/baseline_v1/dell_baseline.json
-# 실장비 (PowerEdge R740 iDRAC9 4.00) 캡처 후 추가
+# 저장소 루트. Ansible 이 있는 Linux 또는 WSL
+ansible-playbook --syntax-check redfish-gather/site.yml      # 바꾼 채널
+python -m pytest tests/unit tests/e2e tests/regression -q    # 단위, 종단, 회귀
+python -m pytest tests/integration -q -m "not live"          # fixture 재생
+python tests/validate_field_dictionary.py                    # 섹션, 필드 사전 정합
 ```
 
-### 회귀 검증 (PR 머지 전)
+어댑터 선택 결과는 재생 시험의 `meta.adapter_id`와 `-vvv` 로그로 봅니다. 실장비가 있으면 Jenkins Job으로 한 대를 수집해 결과 봉투를 확인하고 [../reference/live-validation.md](../reference/live-validation.md)에 기록합니다. 단위 시험 통과는 실장비 확인이 아닙니다.
 
-```bash
-pytest tests/regression/                       # 회귀 158 (cross-channel envelope 120 포함)
-pytest tests/redfish-probe/probe_redfish.py --vendor {vendor}
-python 내부 검증 스크립트    # vendor 경계 (rule 12)
-ansible-playbook --syntax-check redfish-gather/site.yml
-```
+## 7. 자주 막히는 곳
+
+| 증상 | 원인과 조치 |
+|---|---|
+| 새 섹션이 봉투에 안 보임 | `merge_fragment.yml` 호출 누락 또는 `_sections_supported_fragment`에 추가하지 않음 |
+| 다른 채널에서 새 섹션이 `failed`로 나옴 | 그 채널의 `supported_sections.yml` 목록에 넣지 않아야 `not_supported`가 됩니다 |
+| 필드 사전 검사 실패 | `sections.yml`, `field_dictionary.yml`, 기준선 JSON 중 하나만 갱신했습니다 |
+| 어댑터가 선택되지 않음 | `match`의 vendor, model_patterns, firmware_patterns가 실제 응답과 다릅니다. 원본 응답을 확인하세요 |

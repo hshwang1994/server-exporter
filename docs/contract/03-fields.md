@@ -67,7 +67,7 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 }
 ```
 
-> cycle 2026-06-15 (field_dictionary 134 entries): `firmware[].category` (bios/cpld/tpm/drive/
+> 2026-06-15: `firmware[].category` (bios/cpld/tpm/drive/
 > backplane/nic/storage_controller/psu/... id·name 추론) + `firmware[].pending` (적용 보류) 정식 등록.
 > `cpu.architecture` 는 redfish 채널도 emit (channel=[redfish,os,esxi]).
 >
@@ -102,7 +102,7 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
 | `collection_method` | `agent` / `vsphere_api` / `redfish_api` | 실제로 쓴 방법. `target_type` 에 따라 자동으로 결정 |
 | `ip` | 문자열 | 호출자가 넘긴 대상 IP. Redfish 면 BMC IP, OS 면 서버 IP |
 | `hostname` | 문자열\|null | 풀어낸 호스트명. `system.hostname → system.fqdn → bmc.network_hostname → null` (IP fallback 안 함, 2026-06-16). 실패 envelope 과 `always` 최종 fallback 도 같은 체인 (2026-09-03). 2026-10-03 부터 **콜백이 보충하는 envelope 과 Redfish `always` fallback 도 같다** — `hostname=null`, `sections` 11 키(채널 지원 섹션은 `failed`, 나머지 `not_supported`), `meta` 6 키, `correlation` 4 키, `data` 빈 뼈대. 실패 종류에 따라 다른 모양을 보지 않는다. 상세: 8절 |
-| `vendor` | `dell` / `hp` / `hpCsus` / `lenovo` / `supermicro` / `cisco` / `huawei` / `inspur` / `fujitsu` / `quanta` / `vmware` / `qemu` / `microsoft` / `xen` / `null` | 호출자 노출 표시값. 가상 머신(OS 채널)은 DMI 제조사가 하이퍼바이저라 `vmware`·`qemu`·`microsoft`·`xen` 이 나갑니다(`common/tasks/normalize/resolve_vendor.yml`). 내부 canonical(`hpe`)을 `vendor_output_display`/`adapter_output_display`(vendor_aliases.yml)로 매핑. HPE 계열→`hp`, HPE Compute Scale-up 패밀리(CSUS 3200 + Superdome Flex)→`hpCsus`(camelCase 예외, 2026-06-04 ADR). 대부분 소문자 한 단어 |
+| `vendor` | `dell` / `hp` / `hpCsus` / `lenovo` / `supermicro` / `cisco` / `huawei` / `inspur` / `fujitsu` / `quanta` / `vmware` / `qemu` / `microsoft` / `xen` / `null` | 호출자 노출 표시값. 가상 머신(OS 채널)은 DMI 제조사가 하이퍼바이저라 `vmware`·`qemu`·`microsoft`·`xen` 이 나갑니다(`common/tasks/normalize/resolve_vendor.yml`). 내부 canonical(`hpe`)을 `vendor_output_display`/`adapter_output_display`(vendor_aliases.yml)로 매핑. HPE 계열→`hp`, HPE Compute Scale-up 패밀리(CSUS 3200 + Superdome Flex)→`hpCsus`(camelCase 예외, 2026-06-04 결정). 대부분 소문자 한 단어 |
 
 ### 그룹 B — 결과 (2개)
 
@@ -157,7 +157,7 @@ Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9�
 (2026-08-03: 400 도 미지원으로 보려다 되돌림 — 사이트 사례의 400 은 장비 미지원이 아니라 **수집 측 경로 오류**였다.
 400 을 미지원으로 분류하면 수집 측 버그가 `not_supported` 로 조용히 덮인다.)
 2026-09-03: `hardware` 를 OS 채널 정식 섹션으로 배선 — Linux 는 DMI(setup fact → `/sys/class/dmi/id`), Windows 는 `Win32_ComputerSystem`/`Win32_BIOS`. 종전에는 Windows 만 스키마 밖에서 냈고 Linux 는 모델·BIOS 를 버렸다.
-cycle 2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data.thermal` 만 채워지고 `sections.thermal` 누락 — Track4 미완. 이제 redfish 는 수집 성공 시 `success`, os/esxi 는 `not_supported`).
+2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data.thermal` 만 채워지고 `sections.thermal` 누락 — Track4 미완. 이제 redfish 는 수집 성공 시 `success`, os/esxi 는 `not_supported`).
 
 같은 서버라도 채널별로 채워지는 영역이 다르다는 게 핵심. 예를 들어:
 - Dell 서버를 **Redfish** 로 보면 `bmc` / `firmware` / `power` 가 풍부하고 OS 정보는 없다.
@@ -507,7 +507,7 @@ for e in response["errors"]:
 }
 ```
 
-**Channel 매핑 (cycle 2026-05-11 field-channel-refinement)**:
+**Channel 매핑 (2026-05-11)**:
 - `installed_mb` channel: `[redfish, os]` — ESXi 는 ansible_memtotal_mb 만 (DIMM slot 미수집) → channel 제외
 - `visible_mb` channel: `[os, esxi]` — Redfish API spec 미정의 (`Memory.v1_*.json` 에 `VisibleMiB` 없음) → channel 제외
 - `free_mb` channel: `[os]` — OS 채널 전용
@@ -595,7 +595,7 @@ controllers[*].id  ────┤
 - OS Windows: `%SystemDrive%` → `Get-Partition.DiskNumber` (부재 시 WMI `Win32_DiskPartition.DiskIndex` fallback). `Win32_DiskDrive.Index` 와 매칭. hardware-RAID/단일디스크는 정확하나, **software-RAID/Storage Spaces/동적미러 OS 는 가상 DiskNumber 라 물리 Index 매칭이 0 → 전 디스크 `null`** (Linux 의 멤버 all-true 와 비대칭 — 거짓 false 대신 null).
 - **주의**: 기준은 **OS 루트**(`/`)이며 `/boot`·EFI 파티션이 다른 디스크에 있어도 그 디스크는 `false`. Dell BOSS-N1 같은 부팅 전용 NVMe 에 OS 가 있으면 대용량 데이터 디스크가 아니라 그 NVMe 가 `true` (예: `os_linux_baremetal_dell.jsonc`).
 
-#### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand (cycle 2026-05-29)
+#### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand (2026-05-29)
 
 전 채널 (Redfish / OS Linux·Windows / ESXi) 이 **동일 canonical 키** 로 emit 한다.
 호출자는 채널 무관하게 같은 키로 파싱하고, `wwpn` / `node_guid` 로 동일 물리 장치를
@@ -652,14 +652,14 @@ controllers[*].id  ────┤
   ],
   "dns_servers":      [],
   "default_gateways": [],
-  "bonds":            [],   // Linux 본딩 (cycle 2026-06-15) — bond 없으면 빈 []
+  "bonds":            [],   // Linux 본딩 (2026-06-15) — bond 없으면 빈 []
   "bridges":          [],   // Linux 브리지 — 없으면 빈 []
   "teams":            [],   // Windows 티밍(LBFO/SET) — 없으면 빈 []
   "summary":          { /* 같은 속도 NIC 묶은 집계 (slave NIC 미포함 — 기존과 동일) */ }
 }
 ```
 
-`link_status` 값 (cycle 2026-06-14 전 채널 통일 canonical — 이전 linkup/linkdown/none 폐기):
+`link_status` 값 (2026-06-14 전 채널 통일 canonical — 이전 linkup/linkdown/none 폐기):
 - `up` / `down` — 링크 활성 / 비활성(미연결·disabled·offline 포함)
 - `unknown` — 상태 미제공/판별 불가 (HPE iLO / Cisco System NIC 등에서 종종 발생)
 - `null` — 응답에 필드 자체가 없음
@@ -672,7 +672,7 @@ controllers[*].id  ────┤
 > 어댑터도 포함한다(Linux 와 같다). (5) ESXi 이름 서버 수집 실패 오류는 `dns_info` 가 실패했을 때만 남는다 — 종전에는 `config_info` 가 인자 오류로 늘
 > 실패해 이름 서버가 비어 있는 host 가 `partial` 이었다(lab 의 ESXi 는 이름 서버가 있어 결과가 바뀌지 않았다 — 매트릭스 E2E-D 확인). (6) Linux `lspci` 오류(권한 등)는 stdout 표식으로 읽어 `errors[]` 에 남는다(종전 조건은 참이 될 수 없었다).
 
-#### 6.4.1 본딩/티밍 토폴로지 (cycle 2026-06-15 — OS 채널, Additive)
+#### 6.4.1 본딩/티밍 토폴로지 (2026-06-15 — OS 채널, Additive)
 
 `data.network.bonds[]` (Linux). python_ok(shell)·raw fallback 두 경로 동일 수집
 (`/sys/class/net/*/bonding` + `/proc/net/bonding` + `ip -d link` 병합):
@@ -779,7 +779,7 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 
 ### 6.6 `data.bmc` (Redfish 전용)
 
-> cycle 2026-06-14 (DELL R740 BMC-1): bmc 하위 필드가 field_dictionary 에 문서화됨 (이전엔 `bmc.ip` 만).
+> 2026-06-14 (DELL R740 BMC-1): bmc 하위 필드가 field_dictionary 에 문서화됨 (이전엔 `bmc.ip` 만).
 
 ```json
 "bmc": {
@@ -801,7 +801,7 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 
 ### 6.7 `data.thermal` (Redfish 전용)
 
-> cycle 2026-06-14 (Track 4): 단일노드 thermal 수집 — 이전엔 multi_node(CSUS/Superdome) 경로만 수집했음.
+> 2026-06-14 (Track 4): 단일노드 thermal 수집 — 이전엔 multi_node(CSUS/Superdome) 경로만 수집했음.
 > Chassis/{id}/Thermal (신 펌웨어는 ThermalSubsystem). 미지원/미노출 벤더는 빈 `{temperatures:[], fans:[]}` (graceful).
 
 ```json
@@ -931,7 +931,7 @@ hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
 출처는 `diagnosis.details.hostname_source` (`system` | `bmc` | `none`) 로 표시한다.
 
 > **정책 변천**:
-> - cycle 2026-05-07: hostname 미해석 시 `ip` fallback.
+> - 2026-05-07: hostname 미해석 시 `ip` fallback.
 > - 2026-06-16 (사용자 지시): **IP fallback 폐지** ("없는 건 없는 것"). 단 IP 와 달리 장비에
 >   고정된 실명인 **BMC 관리 호스트명**(`Manager.NetworkProtocol.HostName/FQDN` — iLO/XCC/RMC
 >   이름)은 System.HostName 부재 시 fallback 허용. BMC 공장기본명(`ILOSGHD3KHHRP` 등)이 섞일 수
@@ -986,9 +986,9 @@ hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
 
 ## 9. RMC 멀티-노드 토폴로지 (`data.multi_node`)
 
-> cycle 2026-05-12 (ADR-2026-05-12) 추가. HPE Compute Scale-up Server 3200 / Superdome Flex 처럼 단일 RMC (Rack Management Controller) 가 N개 chassis × N개 nPartition × 다중 Manager 를 통합 노출하는 환경 정식 지원.
+> 2026-05-12 추가. HPE Compute Scale-up Server 3200 / Superdome Flex 처럼 단일 RMC (Rack Management Controller) 가 N개 chassis × N개 nPartition × 다중 Manager 를 통합 노출하는 환경 정식 지원.
 >
-> cycle 2026-06-09 (ADR-2026-06-09) 확장. CSUS 3200 Redfish 모델 검수 결과 누락분 5종 Additive 추가 — per-partition `boot` (부팅 순서), per-chassis `thermal` (온도/팬), per-manager `log_services` (LogServices), `multi_node.composition` (CompositionService/ResourceBlocks), `multi_node.fabrics` (Fabrics/FlexGrid Switches+Endpoints, NUMAlink). 모두 `data.multi_node` 내부 신 키 (envelope 13 필드 / 기존 9 section path 변경 0).
+> 2026-06-09 확장. CSUS 3200 Redfish 모델 검수 결과 누락분 5종 Additive 추가 — per-partition `boot` (부팅 순서), per-chassis `thermal` (온도/팬), per-manager `log_services` (LogServices), `multi_node.composition` (CompositionService/ResourceBlocks), `multi_node.fabrics` (Fabrics/FlexGrid Switches+Endpoints, NUMAlink). 모두 `data.multi_node` 내부 신 키 (envelope 13 필드 / 기존 9 section path 변경 0).
 
 ### 활성 조건
 
@@ -1000,7 +1000,7 @@ hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
 | HPE Superdome Flex | `hpe_superdome_flex.yml` | `rmc_primary_ilo_secondary` | YES |
 | 기타 13 vendor (HPE iLO 4~7 / Dell / Cisco / Lenovo / Supermicro / Huawei / Inspur / Fujitsu / Quanta) | — | (미정의) | NO — `data.multi_node = null` |
 
-### Envelope shape (Additive only — rule 92 R2 / 96 R1-B)
+### Envelope shape (기존 path 는 유지하고 추가만 한다)
 
 기존 9 section path (`data.system` / `data.bmc` / `data.cpu` / `data.memory` / `data.storage` / `data.network` / `data.firmware` / `data.power` / `data.hardware`) 는 **Partition0 representative** 로 그대로 유지. 호출자 시스템 파싱 변경 0.
 
@@ -1067,7 +1067,7 @@ hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
 }
 ```
 
-### 확장 컴포넌트 (cycle 2026-06-09 — ADR-2026-06-09)
+### 확장 컴포넌트 (2026-06-09)
 
 CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 내부 (Additive). Redfish 표준 리소스 미노출 시 graceful (boot/thermal=`{}`, log_services=`[]`, composition/fabrics=`null`).
 
@@ -1107,7 +1107,6 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | 벤더별 회귀 기준선 JSON | `schema/baseline_v1/{vendor}_baseline.json` |
 | 섹션 정의 원본 | `schema/sections.yml` |
 | 필드 사전 원본 | `schema/field_dictionary.yml` |
-| **필드 × baseline 사용 실태 매트릭스 (4 상태)** | **내부 필드 사용 매트릭스 (cycle 2026-05-11 신규, 측정 대상 #13)** |
 | 출력 조립 코드 | `common/tasks/normalize/build_output.yml` |
 | 채널 처리 과정 | `docs/develop/01-gather-structure.md`, `docs/develop/02-normalize-flow.md` |
 | 진단 단계 상세 | `docs/contract/04-failure-and-diagnosis.md` |

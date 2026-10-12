@@ -1,54 +1,42 @@
-# Test Inventory
+# tests/inventory: 보조 검증 장비 인벤토리
 
-> **이 폴더는** 회귀 테스트용 인벤토리 정책을 정리합니다.
-> "기준선이 되는 baseline 장비" 와 "추가 검증용 supplemental 장비" 를 분리해서 관리하는 이유와 방법을 설명합니다.
-> baseline 의 자격증명 / IP 변경은 회귀 의미를 깨뜨리므로 신중히 다룹니다.
+회귀 시험의 기준이 되는 장비(기준선)와 추가 검증용 장비(보조)를 나눠 다루는 이유와 방법입니다. 기준선 장비의 IP와 계정을 바꾸면 회귀의 의미가 깨지므로 신중히 다룹니다.
 
-## baseline vs supplemental 분리 원칙
+## 기준선 장비
 
-### Baseline 장비 (기준선)
-기존 `redfish-gather/inventory.sh` + `vault/<loc>/redfish/<vendor>.yml`(ansible-vault encrypted)로 관리.
-baseline credential 변경 금지.
+기준선 장비는 운영과 같은 방식으로 수집합니다. 계정은 `vault/common/redfish/standard.yml`(Redfish 표준 계정)과 `vault/<loc>/...`(OS, ESXi, Redfish 복구)에 있고, 기준선 계정은 바꾸지 않습니다.
 
-| 벤더 | vault 파일 | 비고 |
+| 벤더 | 장비 | 기준선 파일 |
 |---|---|---|
-| Lenovo | vault/<loc>/redfish/lenovo.yml | baseline 고정 |
-| HPE | vault/<loc>/redfish/hpe.yml | baseline 고정 |
-| Dell | vault/<loc>/redfish/dell.yml | baseline 고정 (R740 기준) |
-| Cisco | vault/<loc>/redfish/cisco.yml | baseline 고정 |
+| Lenovo | ThinkSystem SR650 V2 | `schema/baseline_v1/lenovo_baseline.json` |
+| HPE | ProLiant DL380 Gen11 | `schema/baseline_v1/hpe_baseline.json` |
+| Dell | PowerEdge R740 | `schema/baseline_v1/dell_baseline.json` |
+| Cisco | UCS C220 M4 | `schema/baseline_v1/cisco_baseline.json` |
 
-### Supplemental 장비 (추가 검증)
-추가 evidence 수집 전용. baseline 정책을 변경하는 근거로 사용하면 안 됨.
+## 보조 장비
 
-credential은 다음 방식으로만 관리:
-1. `tests/inventory/local/` 아래 supplemental ini (gitignored) — gitignored 로컬 파일이라 저장소에는 없다.
-   아래 사용 방법대로 샘플에서 복사해 만든다
-2. `tests/inventory/local/` 아래 ansible-vault 로 암호화한 yml (gitignored — 저장소에는 없다. 예전 문서의 `tests/vault/supplemental.yml` 은 존재하지 않는다)
-3. 일회성 `--extra-vars` (디버깅 용도 한정)
+추가 증거를 모으기 위한 장비입니다. 기준선 정책을 바꾸는 근거로 쓰지 않습니다. 계정은 다음 방식으로만 둡니다.
 
-### 사용 방법
+1. `tests/inventory/local/` 아래 보조 인벤토리 ini (`.gitignore`에 있어 저장소에 없습니다)
+2. `tests/inventory/local/` 아래 ansible-vault로 암호화한 yml (저장소에 없습니다)
+3. 일회성 `--extra-vars` (디버깅 용도)
+
 ```bash
-# 1. 샘플 파일을 local/로 복사
-cp tests/inventory/supplemental.sample.ini tests/inventory/local/supplemental.ini   # local/ 은 gitignored — 저장소에는 없다
-
-# 2. 실제 credential 입력 (에디터로 편집)
-vi tests/inventory/local/supplemental.ini   # 저장소에는 없다
-
-# 3. 실행
-ansible-playbook redfish-gather/site.yml -i tests/inventory/local/supplemental.ini   # 저장소에는 없다
+# 저장소 루트
+cp tests/inventory/supplemental.sample.ini tests/inventory/local/supplemental.ini
+vi tests/inventory/local/supplemental.ini          # 실제 계정 입력
+ansible-playbook redfish-gather/site.yml -i tests/inventory/local/supplemental.ini
 ```
 
-### 주의사항
-- 저장소에 commit 되는 파일에 평문 자격증명을 넣지 마세요.
-- Dell R760 자격증명이 Dell baseline 과 다르다고 해서 세대별로 vault 를 쪼개면 안 됩니다 (baseline 의 의미가 깨짐).
-- supplemental 장비는 baseline 정책을 변경하는 근거가 아니라, 추가 evidence 수집용입니다.
+## 주의
 
----
+- 저장소에 commit되는 파일에 평문 계정을 넣지 마세요.
+- 같은 벤더의 다른 세대 계정이 다르다고 해서 세대별로 vault를 쪼개지 마세요. 기준선의 의미가 깨집니다.
 
-## 다음 단계
+## 다음
 
 | 다음 작업 | 문서 |
 |---|---|
-| 정답지 (baseline) | [`schema/baseline_v1/`](../../schema/baseline_v1/) |
-| Vault 운영 (회전 / 검증) | [docs/operate/05-vault.md](../../docs/operate/05-vault.md) |
-| 실장비 검증 절차 | [docs/reference/live-validation.md](../../docs/reference/live-validation.md) |
+| 기준선 | `schema/baseline_v1/README.md` |
+| vault 운영 | `docs/operate/05-vault.md` |
+| 실장비 검증 | `docs/reference/live-validation.md` |

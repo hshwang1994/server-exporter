@@ -1,6 +1,6 @@
 # Fujitsu iRMC S5 mock fixture — PRIMERGY RX2540 M5
 
-> M-E3 cycle 2026-05-07-all-vendor-coverage — lab 부재 vendor mock fixture.
+> 2026-05-07 — lab 부재 vendor mock fixture.
 
 ## 메타
 
@@ -12,7 +12,7 @@
 | Firmware | iRMC S5 4.21F sdr 3.62 |
 | Redfish version | 1.8.0 |
 | OEM namespace | `Oem.ts_fujitsu` (primary) |
-| Lab | 부재 — web sources 기반 (rule 96 R1-A) |
+| Lab | 부재 — web sources 기반 |
 
 ## Sources
 

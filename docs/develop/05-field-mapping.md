@@ -1,4 +1,4 @@
-# 16. OS / ESXi raw → normalize → output 매핑 표
+# OS, ESXi 원본에서 출력 필드까지의 매핑
 
 > 이 문서는 OS (Linux / Windows) 와 ESXi 채널에서 원본(raw) 데이터가 표준 JSON 의 어느 필드로 들어가는지를 한 줄씩 매핑한 참조표다.
 >
@@ -171,17 +171,19 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 
 ---
 
-## Redfish와의 차이점
+## 채널별 섹션 (정상 수집 시)
 
-| 채널 | system | hardware | bmc | cpu | memory | storage | network | firmware | users | power |
-|------|--------|----------|-----|-----|--------|---------|---------|----------|-------|-------|
-| **Redfish** | not_supported | success | success | success | success | success | success | success | not_supported | success |
-| **OS** | success | not_supported | not_supported | success | success | success | success | not_supported | success | not_supported |
-| **ESXi** | success | success | not_supported | success | success | success | success | not_supported | not_supported | not_supported |
+| 채널 | system | hardware | bmc | cpu | memory | storage | network | firmware | users | power | thermal |
+|------|--------|----------|-----|-----|--------|---------|---------|----------|-------|-------|---------|
+| **Redfish** | not_supported | success | success | success | success | success | success | success | not_supported | success | success |
+| **OS** | success | success | not_supported | success | success | success | success | not_supported | success | not_supported | not_supported |
+| **ESXi** | success | success | not_supported | success | success | success | success | not_supported | not_supported | not_supported | not_supported |
+
+2026-10-11 production 명부 실행(`#275`~`#279`)에서 확인한 값입니다. `power`와 `thermal`은 BMC 가 해당 리소스를 주지 않으면 `not_supported` 입니다.
 
 ---
 
-## HBA / InfiniBand 채널 매핑 (cycle 2026-05-29)
+## HBA / InfiniBand 채널 매핑 (2026-05-29)
 
 `data.storage.hbas[]` (FC HBA) / `data.storage.infiniband[]` 는 전 채널 동일 canonical 키
 (`wwpn`/`wwnn`/`port_type`/`link_speed_gbps`/`source` 등). 채널별 수집원:
@@ -205,7 +207,7 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 |---|---|
 | envelope 13 필드 + field 의미 | [../contract/03-fields.md](../contract/03-fields.md) |
 | 채널별 실제 응답 예시 | [../contract/02-output-envelope.md](../contract/02-output-envelope.md) |
-| OS / ESXi 환경 요건 | [REQUIREMENTS.md](../REQUIREMENTS.md) |
+| OS / ESXi 환경 요건 | [REQUIREMENTS.md](../../REQUIREMENTS.md) |
 
 ---
 
@@ -240,11 +242,10 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 
 | 경로 | 추출 방식 |
 |------|----------|
-| Python 경로 | `ansible_default_ipv4.gateway` |
-| Raw 경로 | `ip route show default \| head -1` → 3번째 필드 (gateway IP) |
+| Python 경로와 raw 경로 공통 | `ip route show default`와 `ip -6 route show default`의 모든 기본 경로 (via, dev 토큰. ECMP nexthop 포함) |
 
-- 다중 default route 존재 시: metric 순으로 정렬된 **첫 번째만** 사용
-- IPv6 default gateway: 현재 미수집 (P3)
+- 기본 경로 전부를 `default_gateways[]`에 넣습니다 (IPv4 + IPv6, 중복 제거). 없으면 `[]`
+- primary 판정은 IPv4 기본 경로의 첫 줄 `dev`
 
 ### skip 패턴 (제외되는 가상 인터페이스)
 
@@ -291,9 +292,7 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 
 ### 현재 한계
 
-- IPv6 주소/gateway 미수집
 - policy routing (`ip rule`, `table`) 미반영
-- 다중 default route 중 첫 번째만 사용
 
 ### 배포판별 명령어 지원 매트릭스
 
@@ -310,7 +309,7 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 | `utmpdump` | util-linux | [OK] | [OK] | [OK] | [OK] | [OK] | users 3차 fallback | null |
 | `systemd-detect-virt` | systemd | [OK] | [OK] | [OK] | [OK] | [OK] | system.hosting_type | unknown |
 | `dmidecode` | dmidecode | [OK] | [OK] | [OK] | [OK] | [OK] | memory, serial/uuid | 권한 의존 — 실패 근거(rc · stderr 첫 줄)는 errors[].detail 로 (2026-10-03) |
-| `resolvectl` | systemd-resolved | [OK](8) | [NG](9) | [NG] | [OK] | [NG] | 미사용 (참고용) | — |
+| `resolvectl` | systemd-resolved | [OK] | [NG] | [NG] | [OK] | [NG] | 미사용 (참고용) | — |
 | `nmcli` | NetworkManager | [OK] | [OK] | [OK] | [NG] | [NG] | 미사용 | — |
 | `networkctl` | systemd | [NG] | [NG] | [NG] | [OK] | [NG] | 미사용 | — |
 | `/sys/class/net/*` | kernel sysfs | [OK] | [OK] | [OK] | [OK] | [OK] | network 핵심 (mac/mtu/speed/state/master) | — |
@@ -329,8 +328,8 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 | 데이터 | 1순위 | 2순위 | 3순위 | 미지원 시 |
 |--------|-------|-------|-------|----------|
 | IPv4 주소/프리픽스 | `ip -o -4 addr show` | — | — | 빈 addresses |
-| IPv6 주소 | — | — | — | **미수집 (P3)** |
-| default gateway | `ip route show default \| head -1` | — | — | 빈 default_gateways |
+| IPv6 주소 | `ip -o -6 addr show dev <dev>` | — | — | 빈 addresses (링크로컬, 글로벌 모두 수집, `::1` 제외) |
+| default gateway | `ip route show default` + `ip -6 route show default` | — | — | 빈 default_gateways |
 | primary 판정 | default route의 `dev` 필드 | — | — | 전체 is_primary=false |
 | DNS | `/etc/resolv.conf` nameserver 행 | — | — | 빈 dns_servers |
 | MAC | `/sys/class/net/*/address` | — | — | 인터페이스 제외 |

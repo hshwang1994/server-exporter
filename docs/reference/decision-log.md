@@ -50,7 +50,7 @@
 | 2026-10-04 (4차) — 최종 실행 지시: timeout 상한의 실제 범위 · 추정과 직접 증거의 구분 · forks 메모리 상수 · 자산 진단 · Portal 응답의 의미 |
 | 2026-10-04 (3차) — 재개 지시: 명부 전수 실수집 · S3 를 Redfish 로 · fail-closed 빌드의 revision 바인딩 · 승격 credential 경계 |
 | 2026-10-04 (2차) — 완료 보고 검토 C1~C6: 증거 계약 · baseline 기록 탐색 · 환경 미확인 재실행 · 배포 원격 집합 · interruption Harness · vault 복호화 증거 |
-| 2026-10-04 — 잔여 결함 R1~R7 · 승격 판정 모델 · 고객사 main 형태 실행 검증 · main 전용 Harness · CI 연결 (Astra 2~4차 검토 대응) |
+| 2026-10-04 — 잔여 결함 R1~R7 · 승격 판정 모델 · 고객사 main 형태 실행 검증 · main 전용 Harness · CI 연결 (외부 검토 2~4차 대응) |
 | 2026-10-04 — 청주 Location 키 `chj` → `cj` (사용자 결정, alias 없음) |
 | 2026-10-03 — Gathering 개선 Phase 2~4: 정확성 정정 · Redfish 호출 절감 · 시간 예산 · 마무리(finalization) · Callback 재설계 |
 | 2026-10-03 — 파이프라인 입구를 agent 없이: Validate → Resolve Location(`readTrusted`), 결과는 post{always} 에서 보존 |
@@ -139,7 +139,7 @@
     (라운드 증거 보존 규칙) · AI 영역의 빈 impact 폴더 표식 · 미완 ticket 2. 고침: `bootstrap_vault_encrypt.sh` 가 현 vault 배치를 재귀로 찾고 0건이면 실패(시험 추가).
 20. **D-20 P12 성능 재측정 생략(2026-10-11)**: X6 의 runtime 변경은 코드가 읽지 않는 adapter 절과 읽는 코드가 없는 데이터 파일(`status_rules.yml`)의 제거라 수집 경로가 바뀌지
     않는다(`capabilities.sections_supported` · `vendor_notes.manager_layout` 은 유지). P10→P11 전후 비교가 그대로 유효하며, P12 `410317a7` 는 명부 전수의 값 대조(회귀 0)로 확인한다.
-21. **D-21 PC 전체 suite 대체 · 시험 전용 후보의 overlay 확인(2026-10-11)**: X6 tip 의 PC 전체 pytest 가 작업 PC 저메모리로 2회 중단돼(Claude Code 가 유휴 중 백그라운드 셸을 정리) 재시작하지
+21. **D-21 PC 전체 suite 대체 · 시험 전용 후보의 overlay 확인(2026-10-11)**: X6 tip 의 PC 전체 pytest 가 작업 PC 저메모리로 2회 중단돼(작업 도구가 유휴 중 백그라운드 셸을 정리) 재시작하지
     않았다. X6 는 Windows task 파일 변경 0 이고 WSL ci_gate PASS · Runner CI Gate · 승격 gate G14(이 PC 의 test overlay, powershell.exe 포함)가 같은 집합을 실행한다. 그 G14 가 X6 의 CI #44 에서
     새 시험 1파일을 잡아냈다(HC-T7 — manifest 가 제외한 운영자 도구를 읽는 시험은 `source_text` 표식 의무, 가드 시험 추가). 시험만 바꾼 후보도 승격 전 G14 overlay 를 한 번 거친다.
 22. **D-22 production 명부 대조 기준(2026-10-11)**: 승격 뒤 명부 대조는 둘 다 한다 — 입력을 준 원본 빌드(P10 #185~#197, 종전 방식)와 **직전 production 명부**(P11 #233~#238).
@@ -190,7 +190,7 @@
 - 실제 확인: main Job #368~#380(13 시나리오, `2c6d71f3`) 콘솔 전수 · 같은 입력의 지난 빌드 13쌍과 대상별 결과 차이 0 · Harness `sink_close` #1033 PASS ·
   CI #37 SUCCESS(Harness 45 · 21, Evidence 78, Verify COMPLETE_PASS) · **production P9 `c69a0d33`** 양 원격 · canary #194 SUCCESS.
 - CI #37 의 Promote 는 Jenkins 에 GitLab push 자격증명(`se-gitlab-push`)이 없어 dry-run 만 했다 — 실제 승격은 P8 과 같은 세션 CLI 로 했다.
-- 수집 결과 · 판정 · 전송 · 보존 동작은 바뀌지 않았다. 기록: `tests/evidence/2026-10-09-log-wording.md`.
+- 수집 결과 · 판정 · 전송 · 보존 동작은 바뀌지 않았다. (당시 작업 기록은 2026-10-12 정리에서 삭제 — 빌드 번호는 위 본문에 있다.)
 - 후속(같은 날, 사용자 승인): `[json_only] NOTICE` 오경보 수정 — 실행마다 한 번, play 범위로 좁히기 전 전체 inventory 로 접수 목록과 대조(`a271fae1`,
   보호 경로 `json_only.py`). `Jenkinsfile_portal_Byid` 는 사본 유지 · portal 과 동기화(`ADR-2026-10-09-portal-byid-copy.md`, 시험으로 강제).
   CI #39 SUCCESS · **production P10 `9ddc174a`**(main `04a0d6c9`) 양 원격 · canary #197 SUCCESS.
@@ -215,7 +215,7 @@
 - 격리 시험 R1~R5(임시 Job): 동시 쌍 판정 = 순차 · 포트 · 기록 격리 · #34 결함 15.1분 FAILURE + SKIPPED · 부모 취소는 자기 자식만.
 - 승격: **P8 `347ab74e`**(parent P7 `61b9dd4a`, Main-SHA `21b24c0a`) COMPLETE_PASS · 양 원격 일치 · canary production #191 SUCCESS 3/3 · Portal 200.
 - 수집 runtime 은 바꾸지 않았다(생성 tree `8dac1eb2…` 가 `004a500e` 와 같다). P8 에 들어간 runtime 변화는 P7 뒤 main 에 들어온 다른 작업의 것이다.
-- 증거: `tests/evidence/2026-10-08-ci-speed-p8.md`.
+- 증거: 당시 작업 기록(2026-10-12 정리에서 삭제). 승격 P8 과 canary 빌드 번호는 위 본문에 있다.
 
 ## 2026-10-07 (최종 마무리) — 로그 보관 전역화 · forks 50 · Windows vault 도메인 · Portal 재진입 4.1/4.2 · GP-64 확인
 
@@ -226,7 +226,7 @@
 1. **로그 보관은 Jenkinsfile 이 아니라 Jenkins 전역 설정으로** — `Jenkinsfile_portal` · `Jenkinsfile_ci` 의 `buildDiscarder(logRotator(...))` 를 제거했다. 왜: 보관 정책을 Job 파일에 박아 두면 Job 마다·Jenkinsfile 마다 흩어진다. 전역 설정 한 곳에서 관리하는 편이 운영에 맞다(이번에 전역 설정 자체는 바꾸지 않음). 향후 보관 기간이 필요하면 Jenkinsfile 에 되넣지 말고 전역 정책으로 설정할지 사용자에게 먼저 확인한다.
 2. **ansible.cfg `forks` 200 → 50** — 현재 운영 설정. 향후 다시 바뀔 수 있다. 이 변경 때문에 CPU/메모리 계산·동적 forks·사전 차단 로직을 더하지 않았다(그런 자원 로직은 8차에 제거됐고 되살리지 않는다).
 3. **Windows vault 도메인 계정** — `vault/{yi,ic,cj}/os/windows.yml` 의 secondary(`windows_fallback`) username 만 `yimad\infraops` · `icmad\infraops` · `cjmad\infraops` 로. 왜: 해당 사이트의 Windows 폴백 로그인이 도메인 한정(`DOMAIN\user`) 형식이어야 한다. password·label·role·순서·primary 는 그대로. 전달 경로(vault → `_cred_accounts` → `_os_accounts` → `ansible_user`, NTLM)에서 YAML plain scalar 라 역슬래시가 그대로 전달됨을 확인. 실인증은 승인된 도메인 가입 시험 대상이 없고 반복 실패 시 운영 계정 잠금 위험이라 실기 미확인.
-4. **Portal 결과 처리 재진입 4.1 · 4.2** — Astra/지시서가 가리킨 두 틈:
+4. **Portal 결과 처리 재진입 4.1 · 4.2** — 외부 검토와 지시서가 가리킨 두 틈:
    - 4.1 확정 거부(HTTP 400/401/403 등, 408·429 제외)를 받은 뒤 결과 처리가 재진입하면 같은 요청을 다시 POST 할 수 있었다(거부 상태가 진입 사이에 유지되지 않음). `state.refused` 를 `state.delivered` 와 같이 진입 사이에 유지해 재진입 재전송을 막았다. 408·429 는 그대로 재시도 대상.
    - 4.2 요청을 보낸 뒤 응답 확인 전 중단(`outcome=interrupted`)된 경우 수신 여부를 알 수 없는데 `uncertain` 으로 분류되지 않았다(연결 실패·408 만 uncertain 으로 셌다). 중단도 `uncertain` 에 포함하고, 그 뒤 재진입에서 확정 거부(4xx)를 받아도 앞 전송이 전달됐을 수 있어 `uncertain` 으로 남긴다. 2xx 가 확인되면 `delivered`. `eventUuid`·본문·누적 시도·시간은 그대로, 새 전송 체계·시도 초기화는 없음.
 5. **GP-64(작업자 fork OOM) 확인** — Jenkins Agent·ansible 주 프로세스가 살아 있고 작업자만 OOM 인 경우는 직접 귀속 근거가 없다(작업자 PID 는 `run_gather.sh`·ansible 주 프로세스가 아니고 기록되지 않음). `classify_end` 는 이미 PID 연결이 있을 때만 `runner_oom`, 스스로 끝난 rc(1 등)는 OOM 관측이 있어도 `failed_run` 이다. 지시대로 공유 카운터·종료 코드만으로 추정하는 새 로직을 두지 않고 한계로 남겼다(회귀 1건 추가).
@@ -473,14 +473,14 @@
 
 - 2026-10-04 (뒤) 사용자가 §0 설정 검토·전체 작업 재개를 지시하고 X2 를 직접 push. 실호스트 트리거는 명시 승인 뒤 허용됐다(S5 · S1 · S4 · S2 실행, Portal 200). **Kernel 6.x DIMM 제보가 RHEL 10.2/kernel 6.12 VM 두 대에서 재현**(dmidecode rc 0 · slot 0) — 원본은 SSH 거부로 못 받았고, 수집 경로가 SLOT 0 일 때 raw 식별 줄과 handle 수를 detail 에 남기도록 바꿔(X3) 재수집으로 원인을 가린다.
 - 승격은 하지 않았다: S3 가 이 lab 에서 INVALID(최장 host 105 s < MIN_START 120 s), E2E-A/A' 는 라벨 변경 거부, 실호스트 Redfish 거부. CI #10 은 Verify COMPLETE_PASS 였으나 VAULT_DECRYPT(도구 미추적) 와 Promote dry-run(자격 미바인딩) 결함을 드러내 X3 에서 고쳤다.
-- 권한 진단(`tests/evidence/2026-10-04-auto-mode-config-proposal.md`): 세션은 auto 모드(v2.1.287), 프로젝트 `defaultMode: bypassPermissions` 는 터미널에서 무시, `~/.claude/settings.json` 에 `autoMode` 없음 → 설정안 제시(사용자 적용). 사용자 명시 승인 메시지 뒤 push·실호스트 트리거는 분류기가 허용했고(공식 문서의 "명시적 사용자 의도" 단계), 노드 설정 변경·Redfish 트리거·접속정보 읽기는 계속 거부됐다.
+- 권한 진단(당시 작업 기록, 2026-10-12 정리에서 삭제): 세션은 auto 모드(v2.1.287), 프로젝트 `defaultMode: bypassPermissions` 는 터미널에서 무시, `~/.claude/settings.json` 에 `autoMode` 없음 → 설정안 제시(사용자 적용). 사용자 명시 승인 메시지 뒤 push·실호스트 트리거는 분류기가 허용했고(공식 문서의 "명시적 사용자 의도" 단계), 노드 설정 변경·Redfish 트리거·접속정보 읽기는 계속 거부됐다.
 - **Kernel 6.x DIMM 제보 종결(실환경)**: 원인 = dmidecode 3.6 IEC 단위. kernel 6.8(Ubuntu, dmidecode 3.5) 베어메탈 R760 slot 8 정상 → kernel 가설 기각. 수정 X4 `34808480`, 확인 main #29. 베어메탈 RHEL 10 은 lab 에 없어 HBA/FC/WWPN/multipath/NVMe 노출 조건은 미검증으로 남긴다.
 
 ### 회귀
 
 - `tests/unit/prodgen/test_verdict_evidence.py`(계약 · 그룹 · digest · 환경 미확인) · `test_promotion_cycle.py`(B→P1→P2→R→P3 · 정책 · CI stage · G20 PARTIAL) · `tests/unit/test_jenkinsfile_ci.py`(vault 복호화 · ci-stage-results · bounded · GP-4) · `tests/unit/test_harness_tools.py`(interruption 시나리오 · PARTIAL/승인 · outcome).
 
-## 2026-10-04 — 잔여 결함 R1~R7 · 승격 판정 모델 · 고객사 main 형태 실행 검증 · main 전용 Harness · CI 연결 (Astra 2~4차 검토 대응)
+## 2026-10-04 — 잔여 결함 R1~R7 · 승격 판정 모델 · 고객사 main 형태 실행 검증 · main 전용 Harness · CI 연결 (외부 검토 2~4차 대응)
 
 ### 사용자 의심
 
@@ -505,14 +505,14 @@
 ### 영향
 
 - Jenkins 실측(2026-10-04): CI #5(`5d2a8c8e`) **Verify COMPLETE_PASS**(Runner · netrc · vault, G19 3채널 28.9 s). Harness normal_success PASS(#27/#28) → R5 실행 regression 충족. Harness 가 운영 결함 2건(한 mapping 의 `unarchive` 통째 실패 · `source` 의미)을 더 잡아 고쳤다(`0ccb89eb`). main #4/#5/#6 T2+T6: TEST-NET → `TARGET_UNREACHABLE`, Callback 연결 거부 관측, body 보존.
-- **승격하지 않았다**: 필수 E2E(S1·S2·S3·T5·E2E-A/A')는 노드 라벨 변경 + 실호스트·Portal 트리거가 자동 분류기에서 거부돼 HOLD/권한, GitLab push 자격(`se-gitlab-push`) 없음, `push-sync` 미실행. 재개 조건은 `tests/evidence/2026-10-04-live-e2e.md` §7.
+- **승격하지 않았다**: 필수 E2E(S1·S2·S3·T5·E2E-A/A')는 노드 라벨 변경 + 실호스트·Portal 트리거가 자동 분류기에서 거부돼 HOLD/권한, GitLab push 자격(`se-gitlab-push`) 없음, `push-sync` 미실행. 재개 조건은 당시 작업 기록(2026-10-12 정리에서 삭제)에 있었고, 그 뒤 같은 날 승격으로 해소됐다.
 - 환경: `se-jenkins-lint` 폴더 credential(새 API 토큰) 생성, CI Job 정의 갱신, Runner `pwsh 7.4.6` 사용자 권한 bootstrap. Runner 노드 라벨은 바꾸지 못했다(변경 0).
 - 문서: `docs/operate/09`(main-only 전제 · 상태표 · CLI · cj · 복구 경계) · `03` · `04` · `docs/ai/catalogs/JENKINS_PIPELINES.md`.
 
 ### 회귀
 
 - `tests/unit/prodgen/test_promotion_cycle.py`(B→P1→R→P2 · 거부 · 경쟁 · push-sync) · `test_verdict_evidence.py` · `test_gitstore_identity.py` · `test_jenkinsfile_ci.py`(30) · `test_jenkinsfile_portal_finalize.py`(lineCount · 기준점 · FIE 재전파 · bounded opt-in · 회수 매체) · `test_jenkinsfile_portal_preserve_and_params.py` · `test_gather_budget.py`(메모리 가드) · `test_harness_*`. 로컬 gate 4,070 passed(syntax-check 는 Windows 에 ansible 없음 → PARTIAL), CI Gate 3,999 passed(Runner).
-- 증거: `tests/evidence/2026-10-04-residual-r1-r7.md` · `-live-e2e.md` · `-location-cj.md`.
+- 증거: 당시 작업 기록 3건(2026-10-12 정리에서 삭제). 결정과 빌드 번호는 위 본문에 있다.
 
 ## 2026-10-04 — 청주 Location 키 `chj` → `cj` (사용자 결정, alias 없음)
 
@@ -527,7 +527,7 @@
 
 ### 배경
 
-2026-10-03 승인 Plan(Astra 3차 검토 조건부 통과)의 Phase 2(정확성) · 3(성능) · 4(timeout · partial failure · finalization · Callback) 를
+2026-10-03 승인 Plan(외부 검토 3차 조건부 통과)의 Phase 2(정확성) · 3(성능) · 4(timeout · partial failure · finalization · Callback) 를
 같은 날 구현했다. 대량 host 에서 (1) 결과 보존과 Callback 이 "정상 경로" 에만 있어 일부 실패가 전체 미전달로 번지고, (2) timeout 이 작업량과
 무관하게 고정돼 있으며, (3) 채널별 중복 호출과 침묵 실패가 있었다. 모든 변경은 오프라인(단위 · 렌더 · 재생 · WSL 실제 ansible 실행)으로
 검증했고 실장비 · Jenkins 실행은 하지 못했다(세션 실행 환경이 거부 — `docs/ai/NEXT_ACTIONS.md` GP-1~5).
@@ -539,7 +539,7 @@
   합산 제한 하나이고 node 진입 뒤 남은 시간으로 회수 · 조립 · Callback 예산을 다시 나눈다(단축 사다리: Layer A 생략 → unarchive 생략 → 시도 축소 → 미시도 기록).
 - **배치 제한은 셸 `timeout --signal=INT --kill-after=90`** 이고 집행값은 `ansible-playbook` **직전에 재계산**한다(`scripts/gather_budget.sh`:
   전체 150 분 − 마무리 예비 990 s, stage 잔여(115 분) − 유예 − post, host 수 · 채널 · forks 기반 상한, 검증 강제값 중 최소; 120 s 미만이면 시작하지
-  않는다). node 진입 시 값은 로그용 예상값일 뿐이다 (Astra 3차 acceptance ①). INT 는 ansible 이 자식을 정리하고 완료된 OUTPUT 줄이 남는다는 WSL 실측에 따른 선택.
+  않는다). node 진입 시 값은 로그용 예상값일 뿐이다 (외부 검토 3차 수용 조건 ①). INT 는 ansible 이 자식을 정리하고 완료된 OUTPUT 줄이 남는다는 WSL 실측에 따른 선택.
 - **2계층 마무리**: Layer A(`scripts/finalize_gather_output.py`, agent, Gather post) 가 OUTPUT → CHECKPOINT → 진행 기록 기반 합성 봉투로 접수 수 == 결과 수를
   맞추고 보고서를 남긴다. Layer B(Groovy `@NonCPS`, 컨트롤러)는 Layer A 결과를 우선 쓰고 없을 때만 최소 경로로 같은 수를 맞춘다(진행 기록 기반 stage
   분류는 하지 않는다 — 보고서에 남는 차이). 선택 규칙은 출처 우선순위(output > checkpoint > synthetic) → 같은 출처는 뒤 줄 우선, 상충 OUTPUT 은 conflicts 로 보고.
@@ -557,7 +557,7 @@
 - **Redfish task timeout 뒤 인증 3분류(D7)**: 모듈이 시도(attempt)마다 `<SE_AUTH_EVIDENCE_DIR>/<ip>/<attempt_id>.json` 을 시작 즉시 status null 로 새로
   만들고 첫 자격 응답에서 채운다(비밀값 없음 · 원자적 쓰기 · 5 s throttle). rescue 는 **현재 attempt 의 파일만** 읽어 401 → 기존 "표준 후보 전원 401" 규칙,
   2xx 뒤 정지 → `gather/GATHER_FAILED` + auth_success true, 증거 없음 · 익명 · 식별자 불일치 → `gather/GATHER_FAILED` + auth_success null(`stopped_before_auth`,
-  문장 gather_internal). 과거 시도의 401 로 현재 시도를 분류하지 않고, 표준 계정 timeout 은 recovery 에 들어가지 않는다 (Astra 3차 acceptance ②). 새 failure code 없음.
+  문장 gather_internal). 과거 시도의 401 로 현재 시도를 분류하지 않고, 표준 계정 timeout 은 recovery 에 들어가지 않는다 (외부 검토 3차 수용 조건 ②). 새 failure code 없음.
 - 온라인 Runner 부재는 접수 후 실행 실패(outcome `no_agent`) 로 분류해 전 host `OUTPUT_BUILD_FAILED` 합성 봉투를 Callback 한다 (Q2′ 기본 방향).
 
 ### 결정 — 정확성 · 성능 (Phase 2 · 3, 이미 commit 9f94c2ef · b935b20e · 6371ba57 · a38c6339 + 이번 Linux/ESXi)
@@ -2363,7 +2363,7 @@ cycle 2026-05-11 M-A1~A6 (vendor default 계정 자동 생성 path 보장) 후�
 
 ### 컨텍스트
 
-사용자 (hshwang1994) 명시 (2026-05-07):
+사용자 명시 (2026-05-07):
 
 > "실제 개더링할수있는 장비를 대상으로 개더링하고 그 값을 대상으로 json출력 예시를 업데이트해라. 만약 schema/baseline_v1이 json출력예시 디렉터리가 아니라면 별도로 디렉터리를 만들고 schema/baseline_v1에 생성한 파일은 지워라. 만약 의도가맞다면 업데이트만 해라. 그리고 한글로 할때 모든 json 키값에대한 설명을 주석으로 달아라."
 
@@ -2412,7 +2412,7 @@ cycle 2026-05-11 M-A1~A6 (vendor default 계정 자동 생성 path 보장) 후�
 
 ### 컨텍스트
 
-사용자 (hshwang1994) 의심 영역 (cycle 진입 시점 명시):
+사용자 의심 영역 (진입 시점 명시):
 
 > "스키마 검증 들어가자. 모든 값에 대한 스키마 검증해주되 특히 자세히 봐야할것은 개더링상태가 success failed partial 이렇게 3개로 나눠져있는것으로 보이는데, 이게 로직이 정상작동돼지않는듯함. 부분 성공이라고 하더라도 error 에는 로그가 찍히는데 success로 빠지는경우가 있음 이것은 왜이런지 확인해줘 의도된건지?"
 
@@ -2474,7 +2474,7 @@ AI 자율 진행 권한 적용 (cycle 진입 시 사용자 명시 — "사용자
 ## 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta)
 
 ### 컨텍스트
-사용자 (hshwang1994) 명시:
+사용자 명시:
 1. 2026-05-01 1차: "신규 장비 도입할 의향이 있다 다만 테스트할 lab 장비가 없다. 일단 vault는 만들지 말고 코드 생성에 대한 티켓은 만들어라"
 2. 2026-05-01 2차 (본 cycle): "신규 밴더 추가 승인하겠다"
 

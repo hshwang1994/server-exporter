@@ -1,6 +1,6 @@
 # real_dell_r740
 
-- **출처(origin, rule 21 R2 / rule 96 R1-A)**: 실 Dell PowerEdge R740 iDRAC9 전수 미러(redfish_full_mirror.py). 2026-06 사이트 캡처.
+- **출처**: 실 Dell PowerEdge R740 iDRAC9 전수 미러(redfish_full_mirror.py). 2026-06 사이트 캡처.
 - **vendor**: dell
 - **manager_layout**: None
 - **생성**: `tests/integration/capture_mirror_fixture.py` 로 전수 미러를 gather 가 touch 한
