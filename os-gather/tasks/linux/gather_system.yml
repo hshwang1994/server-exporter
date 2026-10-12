@@ -197,7 +197,8 @@
   #   읽을 수 있는 OS·커널·호스트명·제조사까지 모두 잃었다. 특권이 필요한 것(product_serial · product_uuid · dmidecode)은 아래 특권 태스크다.
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
-    . /etc/os-release 2>/dev/null || true
+    # /etc/os-release 가 없는 대상(RHEL 6 · SLES 11 계열)에서 POSIX sh 는 `.` 실패로 스크립트를 끝내므로 존재를 먼저 본다 (2026-10-12)
+    if [ -r /etc/os-release ]; then . /etc/os-release 2>/dev/null; fi
     echo "OS_ID=${ID:-}"
     echo "OS_ID_LIKE=${ID_LIKE:-}"
     echo "OS_VERSION=${VERSION_ID:-}"
@@ -209,6 +210,9 @@
     echo "NODENAME=$(uname -n 2>/dev/null)"
     echo "DOMAIN=$(hostname -d 2>/dev/null)"
     echo "UPTIME=$(awk '{print int($1)}' /proc/uptime 2>/dev/null)"
+    # OS 가 인식한 메모리(/proc/meminfo)는 권한 없이 읽힌다 — 특권 수집이 실패해도 memory 섹션의 총량은 남긴다(2026-10-12)
+    echo "MEM_TOTAL_KB=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null)"
+    echo "MEM_AVAIL_KB=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null)"
     if command -v getenforce >/dev/null 2>&1; then
       echo "SELINUX=$(getenforce 2>/dev/null | tr '[:upper:]' '[:lower:]')"
     elif [ -f /etc/selinux/config ]; then

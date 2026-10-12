@@ -16,6 +16,8 @@
 - name: "linux | users | raw getent + last logins"
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
+    # 명령 부재(getent 없음)와 실행 실패를 가른다 — 부재만 not_supported 다(2026-10-12)
+    if command -v getent >/dev/null 2>&1; then echo "GETENT=present"; else echo "GETENT=absent"; fi
     pw=$(getent passwd 2>/dev/null)
     echo "PASSWD_START"
     [ -n "$pw" ] && printf '%s\n' "$pw"
@@ -134,20 +136,29 @@
       {{ _su | sort(attribute='k') | map(attribute='u') | list }}
   no_log: true
 
-# F23 (cycle 2026-05-01): getent 명령 부재 시 _l_raw_passwd 빈 dict.
-# root 는 정상 환경이면 항상 응답 → 빈 결과 = 진짜 미지원 → 'not_supported' 분류
-# (errors[] noise 차단). graceful failure 와 구분.
+# 분류 (2026-10-12):
+#   - 계정이 1건 이상 → collected
+#   - getent 명령이 없음(GETENT=absent) → not_supported (Alpine · distroless 같은 환경, errors[] 없음)
+#   - 명령은 있는데 결과가 없음 · raw 실행 자체가 실패(연결 끊김 · rc≠0 · 표식 없음) → failed + errors[] 1건
+#   종전에는 어느 경우든 빈 결과를 not_supported 로 분류해 실행 실패가 "지원 안 함" 으로 가려졌다.
 - name: "linux | users | build fragment (raw)"
+  vars:
+    _l_users_marker_lines: "{{ _l_users_raw_result.stdout_lines | default([]) }}"
+    _l_users_getent_absent: "{{ 'GETENT=absent' in (_l_users_marker_lines | map('trim') | list) }}"
+    _l_users_ran: "{{ ('PASSWD_END' in (_l_users_marker_lines | map('trim') | list)) and ((_l_users_raw_result.rc | default(1)) == 0) }}"
+    _l_users_have: "{{ (_l_raw_passwd | default({}) | length) > 0 }}"
   ansible.builtin.set_fact:
     _data_fragment:
       users: "{{ _l_norm_users_list_raw }}"
     _sections_supported_fragment: ['users']
-    _sections_collected_fragment: >-
-      {{ ['users'] if (_l_raw_passwd | default({}) | length > 0) else [] }}
-    _sections_failed_fragment: []
-    _sections_unsupported_fragment: >-
-      {{ ['users'] if (_l_raw_passwd | default({}) | length == 0) else [] }}
-    _errors_fragment: []
+    _sections_collected_fragment: "{{ ['users'] if (_l_users_have | bool) else [] }}"
+    _sections_failed_fragment: "{{ [] if ((_l_users_have | bool) or (_l_users_getent_absent | bool)) else ['users'] }}"
+    _sections_unsupported_fragment: "{{ ['users'] if ((not (_l_users_have | bool)) and (_l_users_getent_absent | bool)) else [] }}"
+    _errors_fragment: >-
+      {{ [] if ((_l_users_have | bool) or (_l_users_getent_absent | bool)) else
+         [{'section': 'users',
+           'message': '사용자 계정 목록 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail': ('source=getent passwd; cause=' ~ ('no_output' if (_l_users_ran | bool) else 'command_failed') ~ '; rc=' ~ (_l_users_raw_result.rc | default('none')))}] }}
   no_log: true
 
 # =============================================================================

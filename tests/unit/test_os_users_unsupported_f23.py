@@ -29,14 +29,17 @@ def linux_python_classify(getent_passwd: dict | None) -> dict:
     }
 
 
-def linux_raw_classify(raw_passwd: dict | None) -> dict:
-    """Mirror gather_users.yml Raw mode build fragment 로직."""
+def linux_raw_classify(raw_passwd: dict | None, getent_absent: bool = True) -> dict:
+    """Mirror gather_users.yml build fragment 로직 (2026-10-12: 명령 부재만 not_supported, 그 밖의 빈 결과는 failed).
+
+    tests/unit/test_linux_users_failure_vs_unsupported.py 가 실제 YAML 을 렌더해 같은 규칙을 확인한다.
+    """
     raw_passwd = raw_passwd or {}
     has = len(raw_passwd) > 0
     return {
         'collected': ['users'] if has else [],
-        'failed': [],
-        'unsupported': [] if has else ['users'],
+        'failed': [] if (has or getent_absent) else ['users'],
+        'unsupported': ['users'] if (not has and getent_absent) else [],
     }
 
 

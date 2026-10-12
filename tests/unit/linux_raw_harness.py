@@ -396,9 +396,21 @@ def _when_ok(env: NativeEnvironment, cond: Any, ctx: dict[str, Any]) -> bool:
     return True
 
 
+def _task_ctx(env, task, ctx: dict[str, Any]) -> dict[str, Any]:
+    """태스크 수준 ``vars`` 를 Ansible 처럼 when · 인자 렌더에 앞서 적용한 문맥 (적힌 순서대로, 앞 항목을 뒤에서 참조 가능)."""
+    task_vars = task.get("vars")
+    if not isinstance(task_vars, dict):
+        return ctx
+    local = dict(ctx)
+    for key, value in task_vars.items():
+        local[key] = render_tree(env, value, local)
+    return local
+
+
 def _run_list(env, tasks, registers, run: TaskRun) -> None:
     for task in tasks:
-        if not _when_ok(env, task.get("when"), run.ctx):
+        tctx = _task_ctx(env, task, run.ctx)
+        if not _when_ok(env, task.get("when"), tctx):
             continue
         if "block" in task:
             try:
@@ -418,7 +430,7 @@ def _run_list(env, tasks, registers, run: TaskRun) -> None:
                 run.ctx[reg] = registers[reg]
         elif "ansible.builtin.set_fact" in task:
             args = task["ansible.builtin.set_fact"]
-            run.ctx.update({k: render_tree(env, v, run.ctx) for k, v in args.items()})
+            run.ctx.update({k: render_tree(env, v, tctx) for k, v in args.items()})
         elif "ansible.builtin.include_tasks" in task:
             continue                      # merge_fragment — 이 하네스의 대상 밖
         else:

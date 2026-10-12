@@ -99,9 +99,9 @@ def old_python_users(passwd: str, group: str, last: dict) -> list[dict]:
     return sorted(users, key=lambda u: int(u["uid"]))
 
 
-def users_raw_stdout(passwd: str, group: str, last: dict) -> str:
-    """raw 스크립트 출력 모양 (PASSWD / GROUP / LASTLOG marker)."""
-    lines = ["PASSWD_START", *passwd.splitlines(), "PASSWD_END", "GROUP_START", *group.splitlines(), "GROUP_END",
+def users_raw_stdout(passwd: str, group: str, last: dict, getent: str = "present") -> str:
+    """raw 스크립트 출력 모양 (GETENT / PASSWD / GROUP / LASTLOG marker). 2026-10-12: 명령 부재 표식(GETENT=absent)만 not_supported 다."""
+    lines = [f"GETENT={getent}", "PASSWD_START", *passwd.splitlines(), "PASSWD_END", "GROUP_START", *group.splitlines(), "GROUP_END",
              "LASTLOG_START", *[f"{u}:{v if v is not None else 'null'}" for u, v in last.items()], "LASTLOG_END"]
     return "".join(ln + "\n" for ln in lines)
 
@@ -155,7 +155,7 @@ def test_primary_group_with_duplicate_gid_is_the_last_one():
 
 
 def test_users_unsupported_when_getent_is_missing():
-    ctx = render_users(users_raw_stdout("", "", {}))
+    ctx = render_users(users_raw_stdout("", "", {}, getent="absent"))
     assert ctx["_data_fragment"]["users"] == []
     assert ctx["_sections_collected_fragment"] == []
     assert ctx["_sections_unsupported_fragment"] == ["users"]

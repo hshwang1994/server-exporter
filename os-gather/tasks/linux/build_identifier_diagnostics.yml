@@ -52,17 +52,24 @@
       {%- set uuid_na   = uuid_na and python_path -%}
       {%- set dmi_block_failed = (_l_dmi_fallback_failed | default(false)) | bool -%}
       {%- set serial_dmi_tried  = _l_dmi_serial_direct is defined -%}
-      {%- set serial_dmi_failed = serial_dmi_tried and (_l_dmi_serial_direct.rc | default(1)) != 0 -%}
+      {#- 2026-10-12: 파일 자체가 없으면(VM · ARM 등 DMI 미제공) 권한 문제가 아니다 — "대상이 제공하지 않음" 으로 적는다 -#}
+      {%- set serial_dmi_absent = serial_dmi_tried and (_l_dmi_serial_direct.rc | default(1)) != 0 and ('No such file' in (_l_dmi_serial_direct.stderr | default(''))) -%}
+      {%- set serial_dmi_failed = serial_dmi_tried and (_l_dmi_serial_direct.rc | default(1)) != 0 and not serial_dmi_absent -%}
       {%- set uuid_dmi_tried    = _l_dmi_uuid_direct is defined -%}
-      {%- set uuid_dmi_failed   = uuid_dmi_tried and (_l_dmi_uuid_direct.rc | default(1)) != 0 -%}
-      {%- if serial_na and (dmi_block_failed or serial_dmi_failed) -%}
+      {%- set uuid_dmi_absent   = uuid_dmi_tried and (_l_dmi_uuid_direct.rc | default(1)) != 0 and ('No such file' in (_l_dmi_uuid_direct.stderr | default(''))) -%}
+      {%- set uuid_dmi_failed   = uuid_dmi_tried and (_l_dmi_uuid_direct.rc | default(1)) != 0 and not uuid_dmi_absent -%}
+      {%- if serial_na and serial_dmi_absent -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_absent_serial,"detail":"field=serial_number; cause=identifier_not_available; tried=setup_fact,dmi_direct; dmi_file=absent"}) -%}
+      {%- elif serial_na and (dmi_block_failed or serial_dmi_failed) -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_serial,"detail":"field=serial_number; cause=insufficient_privilege; tried=setup_fact,dmi_direct"}) -%}
       {%- elif serial_na and not serial_dmi_tried -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_serial,"detail":"field=serial_number; cause=insufficient_privilege; tried=setup_fact"}) -%}
       {%- elif serial_na -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_absent_serial,"detail":"field=serial_number; cause=identifier_not_available; tried=setup_fact,dmi_direct"}) -%}
       {%- endif -%}
-      {%- if uuid_na and (dmi_block_failed or uuid_dmi_failed) -%}
+      {%- if uuid_na and uuid_dmi_absent -%}
+        {%- set _ = diags.append({"section":"system","message":_id_msg_absent_uuid,"detail":"field=system_uuid; cause=identifier_not_available; tried=setup_fact,dmi_direct; dmi_file=absent"}) -%}
+      {%- elif uuid_na and (dmi_block_failed or uuid_dmi_failed) -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_uuid,"detail":"field=system_uuid; cause=insufficient_privilege; tried=setup_fact,dmi_direct"}) -%}
       {%- elif uuid_na and not uuid_dmi_tried -%}
         {%- set _ = diags.append({"section":"system","message":_id_msg_privilege_uuid,"detail":"field=system_uuid; cause=insufficient_privilege; tried=setup_fact"}) -%}
