@@ -94,7 +94,8 @@ def test_p6_marker_write_failure_is_checked_with_an_existing_step_before_continu
     marker = _method("def seFinMarker")
     assert "writeFile(file: '.se_fin.json'" in marker
     assert "catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {\n        throw fie" in marker, "취소 · 한계는 즉시"
-    assert "fileExists('.')" in marker and "throw e          // 실행 문맥" in marker, "확인 step 도 실패하면 원본 예외를 그대로"
+    assert "fileExists('.')" in marker, "같은 폴더의 기존 step 으로 실행 문맥을 확인한다"
+    assert re.search(r"catch \(Throwable probe\) \{\s*throw e\b", marker), "확인 step 도 실패하면 원본 예외를 그대로"
     assert "fs.marker = 'failed'" in marker and "결과 처리는 계속합니다" in marker
     # 계속하는 조건은 셋 모두 — 쓰기 오류(IOException) · 내부 원인에 연결 종료 없음 · 같은 폴더의 기존 step 정상. 그 밖(하네스가 실행 기반 오류로 주입하는
     #   일반 Exception 포함)은 원본 그대로 다시 던진다 — 하네스 finalize_reentry 의 재진입 기대를 그대로 만족한다

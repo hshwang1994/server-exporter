@@ -394,7 +394,9 @@ def test_interruptions_are_recorded_and_rethrown_not_swallowed():
     assert ATTEMPT.index("retry(count: 2) {") < ATTEMPT.index("timeout(time: limitSec, unit: 'SECONDS') {")
     assert "ex.thrown = fie\n                            throw fie" in ATTEMPT, "중단 예외는 retry 에 다시 던져 Jenkins 의 분류를 묻는다"
     assert "ex.plain = true" in ATTEMPT and "if (ex.plain == true) { throw ex.thrown }" in ATTEMPT, "보통 오류는 retry 에 묻지 않고 블록 뒤에서 그대로 던진다"
-    second = ATTEMPT[ATTEMPT.index("// 두 번째 호출"):ATTEMPT.index("} catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {\n                if (ex.handed")]
+    i_second = ATTEMPT.index("if (!nodesByLabel(label: env.NODE_NAME)) {")
+    assert ATTEMPT.index("return\n") < i_second, "두 번째 호출 분기는 첫 호출의 return 뒤에 온다"
+    second = ATTEMPT[i_second:ATTEMPT.index("} catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {\n                if (ex.handed")]
     assert "if (!nodesByLabel(label: env.NODE_NAME)) {" in second and "ex.handed = true" in second and "throw ex.thrown" in second
     assert "seAttemptLimitReached(C, st, limitSec)" in second
     assert "if (ex.handed == true || ex.preserving == true) { throw fie }" in ATTEMPT and "seAttemptInterrupted(C, st)" in ATTEMPT
