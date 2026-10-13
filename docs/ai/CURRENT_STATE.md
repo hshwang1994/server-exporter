@@ -1,5 +1,18 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-13 — Linux sudo Vault 후보(잠금 예산) · OS Serial Number 필수(시나리오 E) · main `20f4ab6f`→`b203fd45` · jenkins-prod 실측 #556~#563 · **production P14 `604062c0`**
+
+> 정본: `docs/reference/decision-log.md` 2026-10-13 · `docs/ai/decisions/ADR-2026-10-13-sudo-vault-fallback-and-serial-required.md` · `tests/evidence/2026-10-13-sudo-fallback-serial-required.md`.
+
+- **고친 것(제품)**: `os-gather/tasks/linux/try_sudo.yml` + `try_one_sudo.yml`(root → NOPASSWD 확인(제출 0) → 로그인 비밀번호 → Vault `sudo_passwords`, 결과 구조만으로 거부/정책 거부/불가 구분, 프로브는 자체 block/rescue) ·
+  `preflight.yml` 잠금 정책 읽기 + `_l_sudo_max_rejections`(root 비잠금 3 · even_deny_root 면 deny−2 · 못 읽으면 1) · `gather_system.yml` become 4건 `_l_sudo_ok` 게이트 · `os-gather/tasks/normalize/require_serial.yml`(Serial null → failed, GATHER_FAILED, `serial_missing`,
+  `details.serial_number.cause`) · 로더 `_cred_sudo_candidates`(`normalize_sudo_passwords`) · field_dictionary `details.sudo` · `details.serial_number` · 4 Location vault `sudo_passwords`(git 2 · ic/yi/cj 1).
+- **확인한 것**: 전체 pytest 5,098 통과 · 3채널 syntax-check · jenkins-prod main #556~#563(시나리오 1·2·3·4·5·6·8·10·11) — 후보당 PAM 실패 1회, NOPASSWD 0회, 혼합 배치 host 격리, Serial 누락 host 만 failed(data 보존).
+  #558 에서 Runner ansible-core 2.20.3 의 become 예외 전파를 실측으로 잡아 `0ec559e4` 로 수정(버전 검사 없이 block/rescue).
+- **승격**: CI #53(`03a5637b`) Gate 가 add-on 통합 시험(include 경로)으로 FAIL → `b203fd45` 수정 후 매트릭스 #574~#583(S1 S2 S3 S4 T2 T5 T6 E2E-A E2E-A2 E2E-D) · CI #54 COMPLETE_PASS · 작업 PC `prodgen promote` → production P14 `604062c0` · canary #288. Jenkins 에 GitLab push 자격(`se-gitlab-push`)이 없어 CI Promote 는 dry-run — 실 승격은 작업 PC.
+- **문서**: REQUIREMENTS(sudo 필수) · operate/05-vault(`sudo_passwords`) · contract 02/03/04(시나리오 E · details.sudo · serial_number.cause) · develop 02/05/06 · CLAUDE.md §4 §6 · decision-log · ADR · evidence.
+- **남은 것**: Windows Serial 누락은 실장비 재현 불가(렌더 시험) · `targetpw` 서버의 15분 안 반복 수집 누적은 콘솔 advisory + 문서 · H12 경로(`gather_no_data`) 봉투의 errors[0]≠failure_reason 은 기존 결함(NEXT_ACTIONS) · `verify_no_plaintext_secret.py --vault-password-file` 는 Windows 에서 ansible import 불가로 미실행(WSL/CI 에서).
+
 ## 일자: 2026-10-12 — 독립 점검(지시서 2026-10-12): 결함 수정 P1~P15 · G1~G8 · 사람용 문서 재작성 · evidence 정리 · **main `46002a2b` → production P13 `b86c5942`**
 
 > 정본: `tests/evidence/2026-10-12-independent-audit.md` · `docs/reference/decision-log.md` 2026-10-12 · `docs/reference/live-validation.md` 2026-10-12 · `docs/operate/09-production-branch.md` 7절. 하네스 변경 0(검증 도구로만 사용).

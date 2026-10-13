@@ -1066,3 +1066,16 @@
 - 재발 방지: (1) 자식 프로세스를 띄우는 시험은 자식의 코덱을 env 로 고정하고 부모가 같은 코덱으로 읽는다 — 셸 환경을 가정하지 않는다. (2) "환경 의존" 수정은 그 환경 변수를
   **뺀** 셸에서 한 번 더 돌린다(`env -u PYTHONIOENCODING`). (3) 승격 전에 `prodgen promote --dry-run` 을 이 PC 에서 먼저 돌려 G14 를 본다 — 이번엔 그 순서가 사고를 승격 전에 잡았다.
 - 관련 rule: rule 24 R1 · rule 95 R2(자기 보고도 검증) · rule 93 R2 예외 2(승격 전제).
+
+## 2026-10-13 — 다른 playbook 이 include 하는 task 파일에 playbook_dir 기준 경로를 넣었다 (CI #53 Gate)
+
+- 카테고리: scope-miss (include path assumption)
+- 발견 위치: `os-gather/tasks/normalize/build_output.yml` 끝의 `require_serial.yml` include — Runner CI #53 Gate 에서 `tests/integration/test_addon_hook_playbook.py` 15건 ERROR
+  (`Could not find or access '…/tests/fixtures/addon/tasks/normalize/require_serial.yml'`). 같은 커밋의 jenkins-prod main Job 실측(#556~#573)은 전부 통과했다 — site.yml 이 playbook 일 때는 경로가 맞는다.
+- 원인: `{{ playbook_dir }}/tasks/normalize/require_serial.yml` 은 os-gather/site.yml 기준 경로다. build_output.yml 은 add-on 통합 시험의 harness playbook(`tests/fixtures/addon/harness.yml`)도 include 하고,
+  그 파일의 다른 include 는 전부 `lookup('env','REPO_ROOT')` 기준이었는데 새 줄만 관례를 벗어났다. Windows 로컬 pytest 는 ansible 이 없어 통합 시험이 skip 된다 — 로컬 5,098 통과가 이 경로를 한 번도 실행하지 않았다.
+- 수정(`b203fd45`): REPO_ROOT 기준으로 맞추고 단위 시험(`test_build_output_includes_the_rule_from_repo_root_not_playbook_dir`)이 build_output.yml 의 include 에 playbook_dir 사용을 막는다. WSL 에서 통합 시험 16 통과.
+- 비용: 승격 후보가 `03a5637b` → `b203fd45` 로 바뀌어 main Job 매트릭스 10 + CI 1회를 다시 돈다(prodgen 의 e2e 증거는 checkout == main_sha).
+- 재발 방지: (1) 여러 playbook 이 include 하는 공용 task 파일에서는 그 파일의 기존 include 관례(REPO_ROOT)를 따른다. (2) 커밋 전 WSL 에서 `pytest tests/integration -m "not live"` 를 한 번 돌린다 — Windows 는 통합 시험을 전부 skip 한다.
+  (3) 승격 전제는 CI Gate 를 먼저 보고 main Job 매트릭스를 돌린다 — 이번엔 순서가 반대라 매트릭스 10건을 다시 돌렸다.
+- 관련 rule: rule 24 R1(정적 검증) · rule 40 R6(`tests/integration -m "not live"`) · rule 91 R5.

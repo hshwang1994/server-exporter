@@ -1,5 +1,14 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## sudo Vault 후보 · Serial 필수 (2026-10-13) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-13-sudo-fallback-serial-required.md`. 구현 · 실측 · 승격은 끝났고 아래만 남는다.
+
+- [ ] **H12 정상 경로 `gather_no_data` 봉투의 `errors[0].message ≠ failure_reason`** — `common/tasks/normalize/build_output.yml` ensure-failed 가 문장만 채우고 `_norm_errors` 는 그대로다(`test_normal_path_failed_status_gets_failure_fields` 는 diagnosis 만 렌더). `require_serial.yml` 은 이 경로에서 문장을 유지하고 오류를 뒤에 붙인다. 별도 수정 대상
+- [ ] **`targetpw`/`rootpw` + `even_deny_root` 서버의 15분 안 반복 수집 누적** — 수집 1회로는 막을 수 없다(콘솔 advisory `[sudo] … password rejected N time(s)` + 05-vault 문서). 운영에서 그런 서버가 확인되면 NOPASSWD 또는 Vault Primary = root 비밀번호로
+- [ ] **Windows Serial 누락 실장비 재현** — 실 VM 에서 Serial 을 없앨 수 없어 렌더 시험만. 자리표시자 Serial 을 내는 장비가 생기면 `capture-site-fixture`
+- [ ] **`tests/integration/test_sudo_probe_live.py`(-m live)** — 계획 8.0 매트릭스의 자동화는 미작성(이번 실측은 Jenkins 빌드 #556~#562 + auth.log 로 대체). Ansible/sudo 를 올릴 때 같은 매트릭스를 다시 돌린다
+
 ## 독립 점검 (2026-10-12) — 남은 항목
 
 > 정본: `tests/evidence/2026-10-12-independent-audit.md` 5절. 수정 · 검증 · 승격(P13 `b86c5942`)은 끝났고 아래만 남는다.

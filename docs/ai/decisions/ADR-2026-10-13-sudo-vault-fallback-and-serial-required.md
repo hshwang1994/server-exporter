@@ -41,7 +41,7 @@
    거부 횟수가 예산에 닿으면 후보가 남아도 멈춘다. 남는 위험(targetpw + even_deny_root 서버의 15분 안 반복 수집)은 콘솔 advisory 와 문서로 안내한다.
 3. **Vault 스키마 확장** (`vault/<loc>/os/linux.yml`): `sudo_passwords: [{label, role, password}]`. 레거시 `ansible_become_password` 는 목록이 없을 때
    후보 1개. 정규화는 `module_utils/credential_common.normalize_sudo_passwords` 한 곳. 구성: git = Primary + Fallback 1 (2개), ic/yi/cj = Primary 1개.
-   세 번째 값(`vmware1!`)은 둘째 값의 대소문자 변형이고 근거가 없어 넣지 않았다.
+   세 번째 후보로 제시된 값은 둘째 값의 대소문자 변형이고 근거가 없어 넣지 않았다.
 4. **OS Serial Number 필수** (`os-gather/tasks/normalize/require_serial.yml`, 조립된 봉투 후처리 — 정상 경로 build_output 끝 · Linux/Windows rescue):
    `correlation.serial_number` 가 null(자리표시자 포함)이면 `status: failed`. `failure_reason` 이 비어 있으면 stage `gather` · code `GATHER_FAILED` ·
    문장 `serial_missing`(카탈로그 신설, `os` 채널) 을 채우고 대표 오류를 `errors[0]` 에 둔다. 이미 있으면(rescue · H12) 문장은 유지하고 status 만 failed.

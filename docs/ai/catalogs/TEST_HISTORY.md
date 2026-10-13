@@ -1,5 +1,18 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-13 — Linux sudo Vault 후보 · 잠금 예산 · OS Serial 필수 (`20f4ab6f` ~ `b203fd45`)
+
+| 구분 | 결과 |
+|---|---|
+| 전체 pytest(unit · e2e · regression, 변경 후) | 5,098 passed · 36 skipped · 7 xfailed · 0 failed |
+| 신규 시험 | `test_credential_sudo_passwords`(10) · `test_linux_sudo_probe`(분류 · 후보 순서 · 예산 매트릭스 11 · 게이트 · 배선 · block/rescue) · `test_status_serial_required_scenario_e`(정상/rescue/H12/auth 불변 · 원인 매트릭스 · fixture) |
+| 갱신 시험 | `test_linux_raw_scripts_shim`(원격 실행 python 13 · raw 12 · no_sysfs 15, 순서에 `try_sudo.yml`) · `test_credential_probe_classification`(linux-sudo 등록) · `test_credential_candidate_stop` · `test_errors_message_contract`(`serial_missing`) · `test_vault_check_no_secret_output` |
+| 정적 | 3채널 syntax-check(WSL 2.20.7) · harness consistency · vendor boundary · field_dictionary · schema drift · Jinja compile/namespace 훅 · plaintext digest 통과 |
+| jenkins-prod main Job | #556 NOPASSWD success · #557 로그인 비밀번호 sudo success · #558 **결함 발견**(2.20.3 become 예외 → rescue) · #559 Fallback 1 success(attempted 3 · rejected 2) · #560 Primary success · #561 전부 거부 → failed(serial_missing · budget_exhausted · data 보존) · #562 혼합 4대(접수 = 봉투, `.132` denied 만 failed, Windows `.120` success) · #563 명부 — 접수 13 = 봉투 13. Linux 11/12 success(Runner 4 · tanzu 2 · r760 2 · .156 은 mode=password used_label=login attempted 1 rejected 0, .162 .163 은 nopasswd) · Windows .120 success — serial 전부 있음. `.161` 만 failed(reachable · `TARGET_UNREACHABLE`, TCP 3포트 · ICMP 모두 무응답 — 수집 로직 무관, 승격 S3 는 .161 을 뺀 11대로 #564 재실행 · 11/11 success). PAM 실패 +0 · Portal 200 |
+| PAM 실측 | auth.log 후보당 `incorrect password attempt` 정확히 1회(합 7), NOPASSWD 확인 0, 잠금 0 |
+| CI | #53(`03a5637b`) Gate FAIL — `test_addon_hook_playbook.py` 15 ERROR(include 경로) → `b203fd45` 수정(WSL 통합 16 통과) · #54(`b203fd45`) COMPLETE_PASS |
+| 승격 | main `b203fd45` 매트릭스 #574~#583(S1 #581 · S2 #582 · S3 #574 · S4 #575 · T2 #577 · T5 #583 · T6 #578 · E2E-A #579 · E2E-A2 #580 · E2E-D #576) · production P14 `604062c0` · canary #288 |
+
 ## 2026-10-12 — 독립 점검 후보 `46002a2b` · 승격 P13 · 명부
 
 | 구분 | 결과 |
