@@ -747,16 +747,16 @@
    "source_sha256": "9b32c6d5a0b4723fbba4a9dfd37324dc27a213380880b35f9a3592e22ddda927"
   },
   "common/tasks/normalize/build_output.yml": {
-   "bytes": 2630,
+   "bytes": 4440,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 41,
+   "removed_lines": 47,
    "removed_trailing": 0,
-   "sha256": "4b15f81cb8575d1cff15888cd8ef5925c4e0a45577daf9f0f706eab2ac67fa07",
-   "source_blob": "2c49fa94c81e09dba38708ed45880353849d6143",
-   "source_sha256": "bb72de5190bc682eb57e43f8dfd6a51927d123c290e578f4bcad6e3832a36b4c"
+   "sha256": "b9917168a7d066a45f536406ba4ec5e3a2a9a3f1ac6eedc2e32addf688d23092",
+   "source_blob": "5b9fdefaeea9557356438702115672e96a064c81",
+   "source_sha256": "0e170a0d20937e995b2c513831457410705c5f84aa005df8d5673df92c772105"
   },
   "common/tasks/normalize/build_sections.yml": {
    "bytes": 1077,
@@ -2564,6 +2564,7 @@
   "tests/fixtures/addon/README.md",
   "tests/fixtures/esxi/README.md",
   "tests/fixtures/finalize_corpus/README.md",
+  "tests/fixtures/no_data/README.md",
   "tests/fixtures/os/README.md",
   "tests/fixtures/outputs/README.md",
   "tests/fixtures/redfish/README.md",
@@ -2600,6 +2601,7 @@
   "tests/fixtures/redfish/supermicro_x10/README.md",
   "tests/fixtures/redfish/supermicro_x12/README.md",
   "tests/fixtures/redfish/supermicro_x14/README.md",
+  "tests/fixtures/sudo_live/README.md",
   "tests/inventory/README.md",
   "tests/jenkins/harness/README.md",
   "tests/reference/README.md",
@@ -2608,8 +2610,8 @@
   "tests/reference/os/README.md",
   "tests/reference/redfish/README.md"
  ],
- "main_sha": "b203fd451d9bb15212cb1b48779fc2834eb961d5",
- "main_tree": "beb5e4e5c17d279d8f118a5041c9d6972ac29519",
+ "main_sha": "341433afb4efdca9fb4fcf20545af592e6ae345b",
+ "main_tree": "e55036a47283e3a82762f85420a4fc2fb9a90011",
  "manifest_sha256": "f62078a590e77b867713ba03c0990984d1b2a48e8f792b88563e6c7cfc553ed2",
  "policy": {
   "eol": "lf",
@@ -2625,5 +2627,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "6ddf2a0bfbb9b7a534a5ca9b25e283fa7c0cdb6275c5385c9cdcc02bbf1e9a44"
+ "tree_hash": "196c8615373b0ef530b42e7e3681fce577c8c3cdbfb62811fad1ae98f3ef1f24"
 }
