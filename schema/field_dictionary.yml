@@ -2297,6 +2297,40 @@ fields:
       only the selection axes. Use it to tell credential-placement problems apart
       from target-account problems.
 
+  "diagnosis.details.sudo":
+    type: "object|absent"
+    priority: nice
+    channel: [os]
+    # 2026-10-13 신설 (Linux 전용 — Windows 봉투에는 없다). sudo 확인(os-gather/tasks/linux/try_sudo.yml)의 결과.
+    #   mode: root | nopasswd | password | denied | rejected | unavailable, outcome, attempted_count, rejected_count,
+    #   max_rejections(잠금 예산), used_label(login | Vault label), fallback_used, policy(대상의 잠금 정책 — pam_files ·
+    #   lock_module · deny · even_deny_root · unlock_time · fail_interval), attempts[](label · rc · unreachable · verdict).
+    #   **Secret 이 아니다**: 비밀번호 · 원격 출력은 어떤 형태로도 포함되지 않는다. details 는 확장 영역이라 top-level 13 필드 불변.
+    help_ko: >-
+      Linux sudo 확인 결과. 어떤 방식으로 관리자 권한을 얻었는지(root / NOPASSWD / 비밀번호 후보) 또는
+      왜 얻지 못했는지(정책 거부 / 비밀번호 거부 / sudo 사용 불가)와 시도 횟수, 대상의 잠금 정책, 후보별 판정을 담는다.
+      비밀번호는 포함하지 않는다. Windows 봉투에는 이 키가 없다.
+    help_en: >-
+      Result of the Linux sudo check: how privilege was obtained (root / NOPASSWD / password candidate)
+      or why it was not (policy denied / password rejected / sudo unavailable), attempt counts, the host's
+      lockout policy and per-candidate verdicts. Contains no password. Absent on Windows envelopes.
+
+  "diagnosis.details.serial_number":
+    type: "object|absent"
+    priority: nice
+    channel: [os]
+    # 2026-10-13 신설. OS 채널 필수 식별자 규칙(os-gather/tasks/normalize/require_serial.yml, status 시나리오 E)이
+    #   Serial Number 를 얻지 못해 status=failed 로 확정했을 때만 있다: present=false, cause ∈ privilege_unavailable |
+    #   read_failed | not_provided | facts_failed | not_collected | unknown, sudo(Linux 의 sudo mode, Windows 는 null).
+    help_ko: >-
+      OS 채널에서 Serial Number 를 수집하지 못해 실패로 확정된 경우의 원인. 권한 없음(privilege_unavailable),
+      권한은 있었으나 읽기 실패(read_failed), 대상이 제공하지 않음 또는 자리표시자(not_provided),
+      Windows facts 실패(facts_failed), 식별자 단계 미실행(not_collected). Serial 을 수집한 봉투에는 없다.
+    help_en: >-
+      Why the OS channel could not collect the Serial Number when that failed the host: privilege_unavailable,
+      read_failed, not_provided (absent or placeholder), facts_failed (Windows), not_collected. Absent when
+      the serial was collected.
+
   "diagnosis.details.recovery_credential_scope":
     type: "string|null"
     priority: nice

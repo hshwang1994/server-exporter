@@ -241,6 +241,9 @@
 - name: "linux | system | raw gather (privileged dmi + dmidecode collector)"
   # LX-F01: 특권 수집(become). 실패해도 위 비특권 결과는 남고, 식별자(serial/uuid)·dmidecode 만 없다 — 그 사실은 errors[] 로 나간다.
   #   비특권 태스크가 이미 읽은 DMI 값은 아래 parse 가 특권 값(비어 있지 않은 것)으로만 덮는다.
+  # 2026-10-13: sudo 확인(try_sudo.yml)이 실패한 host 는 건너뛴다 — 건너뛴 register 는 DMI_PRODUCT_SERIAL= 줄이 없어 아래 판정이
+  #   그대로 '특권 수집 안 됨' 으로 떨어진다. 비밀번호를 다시 보내지 않으므로 추가 PAM 실패가 0 이다.
+  when: _l_sudo_ok | default(true) | bool
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
@@ -343,6 +346,7 @@
   #   firewalld 실행 중 → active. ufw → 'Status: active/inactive'. nftables / iptables → 입력 체인(hook input / INPUT)의 정책이 drop|reject
   #   이거나 규칙이 1개 이상이면 active, 정책 accept 이고 규칙이 없으면 inactive. (종전 iptables 는 `-L` 머리말만 보고 설치만 돼 있어도 active 였다.)
   #   Windows(ActiveStore) · ESXi(defaultPolicy) 와 같은 뜻. 규칙 조회는 root 가 필요하다 — become 이 실패하면 둘 다 null + errors[] 1건.
+  when: _l_sudo_ok | default(true) | bool   # 2026-10-13: sudo 확인 실패 host 는 건너뛴다 (FW_TOOL= 줄 없음 → 같은 판정)
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
@@ -502,6 +506,7 @@
 #   (skipped) — 그때 식별자는 raw 값이라 진단(build_identifier_diagnostics.yml)이 만들어지지 않는다.
 - name: "linux | system | DMI direct-read fallback"
   when: >
+    (_l_sudo_ok | default(true) | bool) and
     _l_python_mode == 'python_ok' and
     (((_l_serial_from_setup | default(none)) is none and (_l_raw_serial | default(none)) is none) or
      ((_l_uuid_from_setup | default(none)) is none and (_l_raw_uuid | default(none)) is none))

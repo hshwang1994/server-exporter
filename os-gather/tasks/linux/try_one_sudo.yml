@@ -1,0 +1,108 @@
+---
+# os-gather/tasks/linux/try_one_sudo.yml
+#
+# sudo 비밀번호 후보 1개 시도 (2026-10-13). try_sudo.yml 이 후보마다 include 한다.
+# include_tasks 의 loop when 은 반복 시작 전에 한꺼번에 평가되므로, 앞 시도가 켠 중단 표식과 잠금 예산은 이 block 조건이 본다
+# (os-gather/tasks/try_one_credential.yml 과 같은 구조).
+#
+# 입력: _try_sudo {password, label, role}, _l_sudo_max_rejections
+# 판정 (결과의 구조만 본다 — 문자열 파싱 없음):
+#   rc 0 + 출력 줄 '0'              → 통과 (root 로 id -u 가 돌았다)
+#   unreachable / rc 127 / rc 255    → sudo 를 쓸 수 없다 (대기 초과 · sudo 없음 · ssh 전송) — 중단
+#   그 밖의 rc ≠ 0                   → sudo 가 끝까지 돌아 정책으로 거부했다 (sudoers 부재 · 명령 불허) — 중단, 비밀번호는 더 보내지 않는다
+#   rc 없음 + 실패 메시지 있음        → 비밀번호 거부 — Ansible 이 prompt 단계에서 세션을 끊었다. 거부 1회 기록, 예산 안이면 다음 후보
+#   그 밖의 모양                      → 알 수 없는 결과 — 중단 (안전한 방향: 제출을 늘리지 않는다)
+
+- when:
+    - not (_l_sudo_ok | default(false) | bool)
+    - not (_l_sudo_stopped | default(false) | bool)
+    - (_l_sudo_rejections | default(0) | int) < (_l_sudo_max_rejections | default(1) | int)
+  block:
+
+    - name: "linux | try_one_sudo | count attempt"
+      ansible.builtin.set_fact:
+        _l_sudo_tries: "{{ (_l_sudo_tries | default(0) | int) + 1 }}"
+      no_log: true
+
+    - name: "linux | try_one_sudo | apply candidate"
+      ansible.builtin.set_fact:
+        ansible_become_pass: "{{ _try_sudo.password | string }}"
+      no_log: true
+
+    # -k: 캐시된 sudo 타임스탬프를 쓰지 않는다 (timestamp_type=global 환경에서 다른 세션의 인증이 통과로 보이지 않게).
+    # Ansible 은 비밀번호가 있으면 -n 을 빼고 prompt 에 응답한다 — 비밀번호는 명령줄 · 환경변수 · 파일에 놓이지 않는다.
+    - name: "linux | try_one_sudo | sudo probe"
+      become: true
+      vars:
+        ansible_become_flags: "-H -S -n -k"
+      ansible.builtin.raw: "id -u"
+      register: _l_sudo_probe
+      failed_when: false
+      changed_when: false
+      ignore_unreachable: true
+      no_log: true
+
+    - name: "linux | try_one_sudo | evaluate"
+      ansible.builtin.set_fact:
+        _l_sudo_probe_ok: >-
+          {{ (((_l_sudo_probe.rc | default(1)) | int) == 0)
+             and ('0' in ((_l_sudo_probe.stdout_lines | default([])) | map('trim') | list)) }}
+        _l_sudo_probe_rc: "{{ _l_sudo_probe.rc | default(none) }}"
+        _l_sudo_probe_unreachable: "{{ _l_sudo_probe.unreachable | default(false) | bool }}"
+        _l_sudo_probe_verdict: >-
+          {%- set rc = _l_sudo_probe.rc | default(none) -%}
+          {%- set unreachable = _l_sudo_probe.unreachable | default(false) | bool -%}
+          {%- set ok = (rc is not none) and ((rc | int) == 0) and ('0' in ((_l_sudo_probe.stdout_lines | default([])) | map('trim') | list)) -%}
+          {%- if ok -%}ok
+          {%- elif unreachable or (rc in [127, 255]) -%}unavailable
+          {%- elif rc is not none -%}denied
+          {%- elif _l_sudo_probe.msg is defined -%}rejected
+          {%- else -%}unknown_shape
+          {%- endif -%}
+      no_log: true
+
+    - name: "linux | try_one_sudo | record attempt"
+      ansible.builtin.set_fact:
+        _l_sudo_attempts: >-
+          {{ (_l_sudo_attempts | default([])) + [{'label': (_try_sudo.label | default('unlabeled')),
+                                                  'rc': (_l_sudo_probe_rc | default(none)),
+                                                  'unreachable': (_l_sudo_probe_unreachable | default(false) | bool),
+                                                  'verdict': (_l_sudo_probe_verdict | default('unknown_shape') | trim)}] }}
+        _l_sudo_rejections: >-
+          {{ (_l_sudo_rejections | default(0) | int) + (1 if ((_l_sudo_probe_verdict | default('') | trim) == 'rejected') else 0) }}
+      no_log: true
+
+    - name: "linux | try_one_sudo | promote on success"
+      when: (_l_sudo_probe_verdict | default('') | trim) == 'ok'
+      ansible.builtin.set_fact:
+        _l_sudo_ok: true
+        _l_sudo_mode: password
+        _l_sudo_outcome: password_accepted
+        _l_sudo_used_label: "{{ _try_sudo.label | default('unlabeled') }}"
+      no_log: true
+
+    - name: "linux | try_one_sudo | log failure (advisory)"
+      when: (_l_sudo_probe_verdict | default('') | trim) != 'ok'
+      ansible.builtin.debug:
+        msg: >-
+          sudo attempt failed - label={{ _try_sudo.label | default('unlabeled') }},
+          verdict={{ _l_sudo_probe_verdict | default('') | trim }},
+          rc={{ _l_sudo_probe_rc | default('none') }}, unreachable={{ _l_sudo_probe_unreachable | default(false) }}
+
+    # 마지막 태스크 — 켜지는 순간 같은 block 의 남은 태스크도 건너뛴다. 비밀번호 거부(rejected)만 다음 후보로 간다.
+    - name: "linux | try_one_sudo | stop candidates unless the password was rejected"
+      when: (_l_sudo_probe_verdict | default('') | trim) in ['unavailable', 'denied', 'unknown_shape']
+      ansible.builtin.set_fact:
+        _l_sudo_stopped: true
+        _l_sudo_mode: "{{ 'denied' if ((_l_sudo_probe_verdict | default('') | trim) == 'denied') else 'unavailable' }}"
+        _l_sudo_outcome: >-
+          {%- set v = (_l_sudo_probe_verdict | default('') | trim) -%}
+          {%- set rc = _l_sudo_probe_rc | default(none) -%}
+          {%- if v == 'denied' -%}policy_denied
+          {%- elif _l_sudo_probe_unreachable | default(false) | bool -%}prompt_timeout
+          {%- elif rc == 127 -%}sudo_absent
+          {%- elif rc == 255 -%}transport
+          {%- else -%}unknown_shape
+          {%- endif -%}
+        ansible_become_pass: ""
+      no_log: true

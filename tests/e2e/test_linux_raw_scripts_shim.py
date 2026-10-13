@@ -58,6 +58,8 @@ TASK_KEYS = {"name", "when", "register", "no_log", "changed_when", "failed_when"
              "ignore_unreachable"}
 
 BASE = {"_os_type": "linux", "_os_auth_ok": False, "_l_setup_ok": False,
+        # 2026-10-13: 정상 경로 = NOPASSWD (sudo 확인 1건, 후보 시도 0건, 특권 태스크는 돈다)
+        "_l_sudo_ok": True, "_l_sudo_mode": "nopasswd", "_l_sudo_stopped": False,
         "_l_serial_from_setup": None, "_l_uuid_from_setup": None,
         "_l_raw_serial": "SN-RAW", "_l_raw_uuid": "4c4c4544-0000-0000-0000-000000000000"}
 SCENARIOS = {
@@ -69,7 +71,8 @@ SCENARIOS = {
                             "_l_raw_serial": None, "_l_raw_uuid": None},
 }
 # 2026-10-10 (LX-F01): system raw 와 runtime 이 비특권/특권 둘로 나뉘어 host 당 원격 실행이 2건 늘었다 — become 실패가 비특권 값을 삼키지 않게.
-EXPECTED = {"python": 12, "raw": 11, "python_no_sysfs_dmi": 14}
+# 2026-10-13: sudo 확인(NOPASSWD probe, become 없는 raw 1건)이 host 당 원격 실행에 더해졌다 — try_sudo.yml.
+EXPECTED = {"python": 13, "raw": 12, "python_no_sysfs_dmi": 15}
 
 
 # ---------------------------------------------------------------------------
@@ -181,10 +184,11 @@ def test_linux_play_block_itself_runs_nothing_remote():
 
 def test_play_sequence_covers_every_linux_task_file():
     names = [p.name for p in linux_play_sequence()]
-    assert names == ["try_one_credential.yml", "preflight.yml", "gather_system.yml", "gather_cpu.yml",
+    assert names == ["try_one_credential.yml", "preflight.yml", "try_sudo.yml", "gather_system.yml", "gather_cpu.yml",
                      "gather_memory.yml", "gather_storage.yml", "gather_network.yml", "gather_users.yml",
                      "gather_hba_ib.yml"]
-    on_disk = {p.name for p in LINUX_TASKS.glob("*.yml")} - {"build_identifier_diagnostics.yml"}
+    # try_one_sudo.yml 은 try_sudo.yml 이 후보마다 include 한다 (간접 include — 순서 목록 밖)
+    on_disk = {p.name for p in LINUX_TASKS.glob("*.yml")} - {"build_identifier_diagnostics.yml", "try_one_sudo.yml"}
     assert on_disk <= set(names), on_disk - set(names)
 
 
@@ -196,9 +200,9 @@ def test_remote_execution_count_per_host(scenario):
 
 
 def test_remote_execution_targets_of_plan_8_2():
-    """Plan §8-2 목표 상한 — Python 12 · raw 9 (자격 probe 포함) + LX-F01 의 특권 분리 2건 (2026-10-10)."""
-    assert len(count_remote("python")) <= 14
-    assert len(count_remote("raw")) <= 11
+    """Plan §8-2 목표 상한 — Python 12 · raw 9 (자격 probe 포함) + LX-F01 의 특권 분리 2건 (2026-10-10) + sudo 확인 1건 (2026-10-13)."""
+    assert len(count_remote("python")) <= 15
+    assert len(count_remote("raw")) <= 12
 
 
 def test_python_and_raw_paths_differ_only_by_setup():
@@ -308,7 +312,8 @@ def shim_host(tmp_path: Path):
         'echo "unexpected dmidecode args: $*" >&2; exit 2\n'))
     sbx.shim_cmd("getent", SHIM_LOG + (
         'case "$1" in passwd) cat \'' + passwd + '\';; group) cat \'' + group + '\';; *) exit 2;; esac\n'))
-    sbx.shim_cmd("sudo", SHIM_LOG + '[ "$1" = "-n" ] && shift\nexec "$@"\n')
+    # sudo 확인(try_sudo.yml)은 `sudo -k -n /bin/sh -c 'id -u'` 를 부른다 — -k/-n 을 떼고 그대로 실행한다 (2026-10-13)
+    sbx.shim_cmd("sudo", SHIM_LOG + 'while [ "$1" = "-n" ] || [ "$1" = "-k" ]; do shift; done\nexec "$@"\n')
     # DMI sysfs 는 root 가 읽을 수 있는 상태 (raw gather 의 sudo -n cat 분기를 타지 않는다)
     dmi_id = sbx.root / "sys" / "class" / "dmi" / "id"
     for name, value in (("product_serial", "SN-RAW"), ("product_uuid", "4c4c4544-0000"),
@@ -339,7 +344,8 @@ def test_every_raw_script_runs_and_dmidecode_runs_once(shim_host):
     sbx, log, paths = shim_host
     entries = run_host(sbx, log, paths)
     assert _calls(entries, "dmidecode") == ["-t memory -t processor"]
-    assert _calls(entries, "sudo") == []          # root 정상 경로 — 재시도 없음
+    # 2026-10-13: sudo 호출은 NOPASSWD 확인 1건뿐 — dmidecode 의 sudo 재시도(root 정상 경로) · 비밀번호 후보 시도는 없다
+    assert _calls(entries, "sudo") == ["-k -n /bin/sh -c id -u"]
 
 
 def test_getent_runs_once_per_database(shim_host):

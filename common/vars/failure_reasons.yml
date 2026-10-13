@@ -122,6 +122,11 @@ _fr_catalog:
   # 대상에 계정 요청을 보내기 **전에** 수집기 안에서 멈췄다 (Redfish adapter 선택 등).
   gather_internal:
     default: "개더링 프로젝트에서 정보 수집 중 오류가 발생했습니다."
+  # OS 채널 필수 식별자 (2026-10-13 사용자 정책): 인증은 통과했는데 Serial Number 를 끝내 얻지 못했다.
+  #   os-gather/tasks/normalize/require_serial.yml 이 status=failed 로 확정하며 code 는 GATHER_FAILED, stage 는 gather 다.
+  #   세부 원인(권한 없음 / sudo 거부 / 미제공 / 읽기 실패)은 diagnosis.details.serial_number.cause 와 errors[].detail 이 가른다.
+  serial_missing:
+    os: "OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요."
 
   # ── 결과 조립 ──────────────────────────────────────────────────────────────
   # 결과 객체 자체를 만들지 못했다 (site.yml always / callback 최후 수단).
@@ -150,7 +155,7 @@ _fr_code_keys:
   AUTH_PROBE_FAILED:          [auth_unconfirmed, auth_rejected, loc_vault_no_account,
                                project_vault_no_account]
   GATHER_FAILED:              [gather_after_auth, gather_connection_lost, gather_no_data,
-                               gather_internal]
+                               gather_internal, serial_missing]
   OUTPUT_BUILD_FAILED:        [output_build_failed, infra_unavailable]
 
 # errors[] 가 10건을 넘어 잘랐을 때 남기는 행의 message (failure_reason 이 아니다).

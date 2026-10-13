@@ -1,0 +1,137 @@
+{
+  "target_type": "os",
+  "collection_method": "agent",
+  "ip": "192.0.2.132",
+  "hostname": "infra-test-vm",
+  "vendor": "vmware",
+  "status": "failed",
+  "sections": {
+    "system": "success",
+    "hardware": "success",
+    "bmc": "not_supported",
+    "cpu": "success",
+    "memory": "success",
+    "storage": "success",
+    "network": "success",
+    "firmware": "not_supported",
+    "users": "success",
+    "power": "not_supported",
+    "thermal": "not_supported"
+  },
+  "diagnosis": {
+    "reachable": true,
+    "port_open": true,
+    "protocol_supported": true,
+    "auth_success": true,
+    "failure_stage": "gather",
+    "failure_code": "GATHER_FAILED",
+    "failure_reason": "OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요.",
+    "details": {
+      "channel": "os",
+      "adapter_candidate": "linux_ubuntu",
+      "detected_os": "linux",
+      "credential_scope": "git/os/linux",
+      "selected_port": 22,
+      "checked_ports": [5986, 5985, 22],
+      "gather_mode": "python_ok",
+      "python_version": "3.12.3",
+      "auth": {"attempted_count": 1, "used_label": "linux_current", "used_role": "primary", "fallback_used": false},
+      "sudo": {
+        "ok": false,
+        "mode": "denied",
+        "outcome": "policy_denied",
+        "attempted_count": 1,
+        "rejected_count": 0,
+        "max_rejections": 3,
+        "used_label": null,
+        "fallback_used": false,
+        "policy": {"pam_files": 2, "lock_module": false, "deny": 3, "even_deny_root": false, "unlock_time": null, "fail_interval": null},
+        "attempts": [{"label": "login", "rc": 1, "unreachable": false, "verdict": "denied"}]
+      },
+      "hostname_source": "system",
+      "serial_number": {"present": false, "cause": "privilege_unavailable", "sudo": "denied"}
+    }
+  },
+  "meta": {
+    "started_at": "2026-10-13T05:00:00Z",
+    "finished_at": "2026-10-13T05:00:21Z",
+    "duration_ms": 21000,
+    "adapter_id": "linux_ubuntu",
+    "adapter_version": null,
+    "ansible_version": "2.20.3"
+  },
+  "correlation": {
+    "serial_number": null,
+    "system_uuid": null,
+    "bmc_ip": null,
+    "host_ip": "192.0.2.132"
+  },
+  "errors": [
+    {
+      "section": "linux_gather",
+      "message": "OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요.",
+      "detail": "field=serial_number; mandatory=true; cause=privilege_unavailable; evidence=insufficient_privilege; sudo=denied"
+    },
+    {
+      "section": "system",
+      "message": "시스템 제조번호를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요.",
+      "detail": "field=serial_number; cause=insufficient_privilege; tried=setup_fact"
+    },
+    {
+      "section": "system",
+      "message": "시스템 고유 식별자를 읽을 수 없습니다. 수집 계정의 권한을 확인하세요.",
+      "detail": "field=system_uuid; cause=insufficient_privilege; tried=setup_fact"
+    },
+    {
+      "section": "system",
+      "message": "서버 운영 정보 중 방화벽 상태를 수집하지 못했습니다. 수집 계정의 권한을 확인하세요.",
+      "detail": "field=runtime.firewall_tool,runtime.firewall_state; cause=privileged_read_failed; tried=become"
+    }
+  ],
+  "data": {
+    "system": {
+      "os_family": "Debian",
+      "distribution": "Ubuntu",
+      "version": "24.04",
+      "kernel": "6.8.0-146-generic",
+      "architecture": "x86_64",
+      "hostname": "infra-test-vm",
+      "fqdn": null,
+      "hosting_type": "virtual",
+      "uptime_seconds": 79500,
+      "selinux": null,
+      "serial_number": null,
+      "system_uuid": null,
+      "vendor": "VMware, Inc.",
+      "runtime": {
+        "timezone": "Etc/UTC",
+        "ntp_active": true,
+        "ntp_synchronized": true,
+        "firewall_tool": null,
+        "firewall_state": null,
+        "listening_ports": ["22"],
+        "swap_total_mb": 0,
+        "swap_used_mb": 0,
+        "swap_free_mb": 0
+      }
+    },
+    "hardware": {
+      "vendor": "VMware, Inc.",
+      "model": "VMware Virtual Platform",
+      "serial": null,
+      "uuid": null,
+      "bios_version": "VMW201.00V.24006586.B64.2406042154",
+      "bios_date": "2024-06-04"
+    },
+    "bmc": null,
+    "cpu": {"sockets": 2, "cores_physical": 2, "logical_threads": 2, "model": "Intel(R) Xeon(R) Gold 6338 CPU @ 2.00GHz"},
+    "memory": {"total_mb": 7937, "available_mb": 6200, "slots": []},
+    "storage": {"filesystems": [], "physical_disks": [], "datastores": [], "controllers": [], "logical_volumes": [], "hbas": [], "infiniband": [], "summary": {"groups": [], "grand_total_gb": 0}},
+    "network": {"dns_servers": [], "default_gateways": [], "interfaces": [], "adapters": [], "ports": [], "virtual_switches": [], "portgroups": [], "driver_map": [], "summary": {"groups": []}},
+    "users": [],
+    "firmware": [],
+    "power": null,
+    "thermal": {"temperatures": [], "fans": []}
+  },
+  "schema_version": "1"
+}

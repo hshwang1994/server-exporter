@@ -49,7 +49,14 @@ accounts:
     password: "<비밀번호>"
     label: "fallback"
     role: "recovery"
-ansible_become_password: "<sudo 비밀번호>"   # Linux만, 선택. 없으면 로그인 비밀번호로 sudo 합니다
+sudo_passwords:                              # Linux만, 선택. sudo 가 비밀번호를 요구하는 서버용 후보 — 순서가 시도 순서입니다
+  - label: "sudo_primary"
+    role: "primary"
+    password: "<sudo 비밀번호>"
+  - label: "sudo_fallback1"
+    role: "secondary"
+    password: "<이전 sudo 비밀번호>"
+ansible_become_password: "<sudo 비밀번호>"   # Linux만, 선택. 옛 형식 — sudo_passwords 가 없을 때 후보 1개로 읽습니다
 ```
 
 | 키 | 필수 | 뜻 |
@@ -57,7 +64,16 @@ ansible_become_password: "<sudo 비밀번호>"   # Linux만, 선택. 없으면 �
 | `accounts[].username`, `accounts[].password` | 필수 | 로그인 계정 |
 | `accounts[].label` | 권장 | 사람이 구분하는 이름. 콘솔 요약에 label만 나오고 비밀번호는 나오지 않습니다 |
 | `accounts[].role` | Redfish는 필수 | `primary` 또는 `recovery`. OS와 ESXi는 순서대로 시도할 뿐 role을 쓰지 않습니다 |
-| `ansible_become_password` | 선택 (Linux) | sudo 비밀번호가 로그인 비밀번호와 다를 때 |
+| `sudo_passwords[]` | 선택 (Linux) | sudo 가 비밀번호를 요구하는 서버의 후보 목록. `password` 필수, `label`/`role`(`primary`/`secondary`) 권장. 2026-10-13 신설 |
+| `ansible_become_password` | 선택 (Linux) | 옛 형식. `sudo_passwords` 가 없을 때만 후보 1개로 읽습니다 |
+
+Linux 의 sudo 는 이렇게 시도합니다(`os-gather/tasks/linux/try_sudo.yml`). root 로그인이면 건너뛰고, 먼저 NOPASSWD 인지 확인합니다(비밀번호를 보내지 않습니다).
+비밀번호가 필요하면 **로그인 비밀번호 → `sudo_passwords` 순서** 로 보냅니다. 표준 sudoers 는 호출 계정 자신의 비밀번호를 묻기 때문에 로그인 비밀번호가 먼저이고,
+`sudo_passwords` 는 root 비밀번호를 묻는 서버(`Defaults targetpw`/`rootpw`)나 다른 값을 쓰는 서버를 위한 것입니다. 같은 값은 한 번만 보냅니다.
+sudoers 에 없는 계정(정책 거부)이나 sudo 를 쓸 수 없는 서버는 첫 관측에서 멈추고, 비밀번호 거부는 대상의 잠금 정책(`faillock.conf`·`pam.d` 의 `deny`,
+`even_deny_root`)으로 계산한 예산 안에서만 이어집니다 — 한 번의 수집으로 계정이 잠기지 않게 하기 위해서입니다. 결과는 봉투의 `diagnosis.details.sudo` 에
+비밀번호 없이 남습니다. Serial Number 를 얻지 못한 서버는 `status: failed` 입니다([../contract/04-failure-and-diagnosis.md](../contract/04-failure-and-diagnosis.md)).
+후보 수는 위치마다 1~2개를 권장합니다 — 값이 틀릴수록 잠금 횟수만 늘어납니다.
 
 Redfish 파일의 규칙입니다.
 

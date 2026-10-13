@@ -177,6 +177,15 @@ Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9�
 | **B. 성공이지만 부속 문제 있음** | `success` | 비어있지 않음 | 모두 `success` 또는 `not_supported` | 수집은 다 됐는데, 장비 어딘가에 문제가 있어 **기록**만 errors[] 에 남김 |
 | **C. 부분 성공** | `partial` | 비어있지 않음 | 일부 `failed`, 나머지 `success`/`not_supported` | 인증은 됐는데 일부 섹션 응답이 안 옴 (예: firmware endpoint 만 timeout) |
 | **D. 실패** | `failed` | 비어있지 않음 | 거의 다 `failed` | precheck 4단계 어디서 막힘 (ping/port/protocol/auth) |
+| **E. 필수 식별자 누락 (OS 채널만)** | `failed` | 비어있지 않음 | `success` 가 섞여 있을 수 있음 | 인증은 통과했고 다른 섹션은 수집됐지만 **Serial Number 를 끝내 얻지 못함**. `data` 의 수집 값은 그대로 남는다 (2026-10-13 사용자 정책) |
+
+> **E 는 섹션 규칙 위에 얹힌 유일한 예외다 (2026-10-13).** OS 채널(Linux · Windows)에서 Serial Number 는 필수 식별자다.
+> `correlation.serial_number`(= `hardware.serial` → `system.serial_number`)가 `null` 이면 `os-gather/tasks/normalize/require_serial.yml` 이
+> 조립된 봉투의 `status` 를 `failed` 로 확정한다. `sections` · `data` · `hostname` · `meta` · `correlation` 은 바꾸지 않는다 — 호출자는
+> `status: failed` 인데 `sections.cpu: success` 이고 `data.cpu` 가 차 있는 봉투를 받을 수 있다. 원인은 `diagnosis.failure_code: GATHER_FAILED`
+> + `diagnosis.details.serial_number.cause`(`privilege_unavailable` · `read_failed` · `not_provided` · `facts_failed` · `not_collected`)
+> 와 Linux 의 `diagnosis.details.sudo` 로 가른다. 인증 단계에서 끝난 봉투(`failure_stage: auth`)에는 적용하지 않는다.
+> 사용자 문장은 하나다: "OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요."
 
 > **보조(OEM) 단계 실패는 D 가 아니다 (2026-06-16, redfish).** vendor OEM 수집/정규화는 표준 섹션 수집 **뒤**에 도는 보조 단계다.
 > 여기서 예외가 나도 표준 섹션은 그대로 `success` 로 유지되고, OEM 실패는 `errors[]` 에 `section: "oem"` 경고로만 남는다

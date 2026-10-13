@@ -67,6 +67,15 @@ def credential_accounts(vault_data):
     return _import_credential_common().normalize_accounts(vault_data)
 
 
+def credential_sudo_passwords(vault_data):
+    """OS Linux vault dict → sudo 비밀번호 후보 (순서 보존 · 같은 값 1회).
+
+    `sudo_passwords` 목록이 없으면 레거시 `ansible_become_password` 1개. 결과에 password 가
+    들어 있으므로 호출 task 는 반드시 `no_log: true` 다.
+    """
+    return _import_credential_common().normalize_sudo_passwords(vault_data)
+
+
 def credential_standard_accounts(vault_data):
     """표준 vault dict → 표준 수집 후보 (role=primary 만, 순서 보존)."""
     return _import_credential_common().standard_accounts_of(vault_data)
@@ -90,6 +99,7 @@ class FilterModule(object):
     def filters(self):
         return {
             "credential_accounts": credential_accounts,
+            "credential_sudo_passwords": credential_sudo_passwords,
             "credential_standard_accounts": credential_standard_accounts,
             "credential_recovery_accounts": credential_recovery_accounts,
             "credential_redfish_candidates": credential_redfish_candidates,

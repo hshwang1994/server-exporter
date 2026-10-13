@@ -40,7 +40,7 @@
 | `PROTOCOL_CHECK_FAILED` | 포트는 열렸는데 기대한 응답이 아니다 |
 | `AUTH_PROBE_FAILED` | 자격증명이 거부됐다 |
 | `CREDENTIAL_SET_UNAVAILABLE` | vault 파일이 없거나 못 열었다 |
-| `GATHER_FAILED` | 수집 중 실패 |
+| `GATHER_FAILED` | 수집 중 실패, 또는 OS 채널에서 필수 식별자인 Serial Number 를 수집하지 못함 |
 | `OUTPUT_BUILD_FAILED` | 봉투 조립 실패, 또는 실행 기반이 돌아오지 않아 수집을 마치지 못함 |
 
 `TARGET_UNREACHABLE`은 2026-09-03에 추가됐습니다. 그 전에는 `TCP_CONNECT_FAILED` 하나가 "아무 응답 없음"과 "관리 포트만 응답 없음"을 겸했습니다. `TCP_CONNECT_FAILED`와 `stage: reachable`로 분기하던 호출자는 `TARGET_UNREACHABLE`을 받도록 고쳐야 합니다.
@@ -59,6 +59,7 @@
 | 인증 실패, 원인 미확정 (OS) | 해당 위치(ic)의 Vault 계정으로 대상 OS에 로그인하지 못했습니다. |
 | 인증 거부 확인 (Redfish) | 대상 Redfish 계정과 개더링 표준 계정이 다르거나 권한이 없습니다. |
 | 인증 후 수집 실패 (ESXi) | 대상 ESXi에는 로그인했지만 정보를 가져오지 못했습니다. |
+| Serial Number 미수집 (OS) | OS 내부에서 Serial Number를 수집하지 못했습니다. Vault에 등록된 OS 계정의 권한 및 서버의 Serial Number 제공 여부를 확인하세요. |
 
 문장의 원칙입니다.
 
@@ -66,6 +67,27 @@
 - 거부의 주체를 단정하지 않습니다. 연결 거부는 중간 방화벽이 보낼 수도 있어서 "서버가 거부했다"고 쓰지 않습니다.
 - "계정이 다르거나 권한이 없다"는 확인된 경우에만 씁니다. 지금 확인할 수 있는 것은 Redfish 표준 계정 전원의 401뿐입니다. OS와 ESXi는 거부 사실이 오류 문자열로만 와서 확정하지 않습니다.
 - Redfish 표준 계정은 위치와 무관한 전역 vault입니다. 그래서 Redfish 문장은 "해당 위치의 Vault"가 아니라 "개더링 표준 계정"이라고 씁니다.
+
+## OS 채널의 Serial Number 와 sudo
+
+OS 채널(Linux, Windows)에서 Serial Number 는 필수입니다(2026-10-13). 인증은 됐는데 `correlation.serial_number` 가 `null` 이면 그 서버는 `status: failed`,
+`failure_stage: gather`, `failure_code: GATHER_FAILED` 이고 문장은 위 표의 "Serial Number 미수집" 입니다. 다른 섹션의 값은 `data` 에 그대로 남습니다.
+원인은 `diagnosis.details.serial_number.cause` 로 가릅니다.
+
+| `cause` | 뜻 | 할 일 |
+|---|---|---|
+| `privilege_unavailable` | 계정에 관리자 권한이 없거나(sudoers 에 없음) sudo 비밀번호가 모두 거부됐다. Linux 는 `details.sudo.mode` 가 `denied` 또는 `rejected` | 대상 서버에 NOPASSWD 를 주거나 vault 의 `sudo_passwords` 를 맞춘다 |
+| `read_failed` | 관리자 권한은 있었는데 DMI 값을 읽지 못했다 | 대상 서버의 `/sys/class/dmi/id/product_serial` 을 확인한다 |
+| `not_provided` | 서버가 Serial Number 를 제공하지 않거나 자리표시자(`To Be Filled By O.E.M.` 등)다 | 장비/가상화 설정 |
+| `facts_failed` | Windows 에서 facts 수집 자체가 실패했다 | 대상 상태와 수집 로그 |
+| `not_collected` | 식별자 단계가 돌지 않았다(그 전에 예외) | `errors[0]` 의 원인 |
+
+Linux 의 sudo 확인 순서는 root 로그인 → NOPASSWD 확인(비밀번호 제출 없음) → 로그인 비밀번호 → vault `sudo_passwords` 순서입니다. 같은 값은 한 번만 보내고,
+정책 거부(sudoers 에 없음)나 sudo 사용 불가가 관측되면 바로 멈춥니다. 비밀번호 거부는 대상의 잠금 정책(`pam_faillock`/`pam_tally2` 의 `deny`, `even_deny_root`)
+에서 계산한 예산(`details.sudo.max_rejections`)에 닿으면 멈춥니다 — 표준 sudoers 에서 로그인 비밀번호는 거부될 수 없으므로 SSH 계정의 잠금 횟수는 올라가지 않습니다.
+결과는 `diagnosis.details.sudo`(mode · outcome · 시도/거부 횟수 · 사용한 후보 label · 읽은 잠금 정책 · 후보별 판정)에 비밀번호 없이 남습니다.
+한계: `Defaults passwd_tries=1` 인 서버는 틀린 비밀번호도 정책 거부(`denied`)로 분류됩니다(더 일찍 멈추는 안전한 방향). 같은 서버를 15분 안에 여러 번 다시
+수집하면 거부 횟수가 누적될 수 있으므로, `rejected` 로 끝난 서버는 간격을 두고 다시 수집하세요.
 
 ## 진단이 실제로 무엇을 했나
 

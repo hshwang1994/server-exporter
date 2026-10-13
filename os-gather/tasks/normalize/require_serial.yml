@@ -1,0 +1,103 @@
+---
+# os-gather/tasks/normalize/require_serial.yml
+#
+# OS 채널 필수 식별자 규칙 (2026-10-13 사용자 정책, status 시나리오 E):
+#   조립이 끝난 _output 의 Serial Number 가 null 이면 그 host 는 status=failed 다. sections / data / hostname / meta / correlation 은
+#   그대로 둔다 — 이미 수집한 값은 보존한다. 인증 단계(auth) · 사전 점검 실패 봉투는 건드리지 않는다 (OS 내부에 접근한 적이
+#   없는데 "OS 내부에서 ... 수집하지 못했습니다" 라고 말하지 않는다).
+#
+# 입력: _output(조립된 봉투), _os_type, _fr_catalog, (있으면) _l_id_diagnostics / _w_id_diagnostics / _l_sudo_mode / _cred_location
+# 출력: _output — status · diagnosis.failure_* · diagnosis.details.serial_number · errors[]
+# 호출: os-gather/tasks/normalize/build_output.yml 끝(정상 경로) · site.yml linux/windows rescue 의 build_failed_output 뒤.
+#       CHECKPOINT 와 schema_version 주입보다 앞이어야 한다 — 콜백 · Layer A 가 CHECKPOINT 의 status 를 그대로 복원한다.
+#
+# 경로별 결과:
+#   failure_reason 이 비어 있음(정상 경로)  → stage=gather, code=GATHER_FAILED, reason=serial_missing 문장, 대표 오류를 errors[0] 에 둔다
+#   failure_reason 이 이미 있음(rescue / H12) → 문장 · errors[0] 은 그대로, status 만 failed 로 확정하고 Serial 오류 1건을 뒤에 붙인다
+#   failure_stage 가 auth 등 gather 이전       → 아무것도 하지 않는다
+#
+# 원인(details.serial_number.cause)은 식별자 진단 fragment(_l_id_diagnostics / _w_id_diagnostics)의 `field=serial_number; cause=<토큰>` 에서
+# 문자열 분할로 꺼낸다 — errors[] 상한에 잘리지 않고, 원격 stderr 를 파싱하지 않는다.
+#   privilege_unavailable : 권한 없음 (토큰 insufficient_privilege + sudo 가 denied / rejected / unavailable, Windows 는 토큰만으로)
+#   read_failed           : 권한은 있었는데 읽기 실패 (토큰 insufficient_privilege + sudo 가 root / nopasswd / password)
+#   not_provided          : 대상이 제공하지 않음 · 빈 값 · 자리표시자 (토큰 identifier_not_available)
+#   facts_failed          : Windows facts 수집 실패 (토큰 facts_failed)
+#   not_collected         : 식별자 단계가 돌지 않음 (진단 fragment 없음)
+#   unknown               : 진단은 있는데 토큰을 읽지 못함
+
+- name: "os | normalize | require_serial | observe"
+  ansible.builtin.set_fact:
+    _rs_serial: >-
+      {%- set o = _output if (_output is defined and _output is mapping) else {} -%}
+      {%- set co = o.correlation if ((o.correlation | default(none)) is mapping) else {} -%}
+      {%- set d = o.data if ((o.data | default(none)) is mapping) else {} -%}
+      {%- set hw = d.hardware if ((d.hardware | default(none)) is mapping) else {} -%}
+      {%- set sy = d.system if ((d.system | default(none)) is mapping) else {} -%}
+      {%- set v = (co.serial_number | default(none, true)) or (hw.serial | default(none, true)) or (sy.serial_number | default(none, true)) -%}
+      {{ ((v | default('', true)) | string) | dmi_sentinel_null('serial') }}
+    _rs_evidence: >-
+      {%- set diags = ((_l_id_diagnostics | default([])) | select('mapping') | list)
+                    + ((_w_id_diagnostics | default([])) | select('mapping') | list) -%}
+      {%- set hits = diags | selectattr('detail', 'defined') | map(attribute='detail') | map('string')
+                     | select('search', 'field=serial_number') | list -%}
+      {%- if (hits | length) > 0 and ('cause=' in hits[0]) -%}
+        {{ ((hits[0].split('cause=', 1)[1]).split(';')[0]) | trim }}
+      {%- elif (_l_id_diagnostics is defined) or (_w_id_diagnostics is defined) -%}
+        unknown
+      {%- else -%}
+        {{ none }}
+      {%- endif -%}
+    _rs_sudo: >-
+      {{ ((_l_sudo_mode | default('', true)) | string | trim | lower) if ((_os_type | default('')) == 'linux') else '' }}
+  no_log: true
+
+- name: "os | normalize | require_serial | derive cause"
+  ansible.builtin.set_fact:
+    _rs_cause: >-
+      {%- set c = _rs_evidence | default(none) -%}
+      {%- set s = _rs_sudo | default('') -%}
+      {%- if c is none -%}not_collected
+      {%- elif c == 'facts_failed' -%}facts_failed
+      {%- elif c == 'identifier_not_available' -%}not_provided
+      {%- elif c == 'insufficient_privilege' and (s in ['root', 'nopasswd', 'password']) -%}read_failed
+      {%- elif c == 'insufficient_privilege' -%}privilege_unavailable
+      {%- else -%}unknown
+      {%- endif -%}
+  no_log: true
+
+- name: "os | normalize | require_serial | enforce (scenario E)"
+  vars:
+    _rs_diag: "{{ _output.diagnosis if ((_output.diagnosis | default(none)) is mapping) else {} }}"
+    _rs_stage: "{{ _rs_diag.failure_stage | default(none) }}"
+    _rs_has_reason: "{{ ((_rs_diag.failure_reason | default('', true)) | string | trim | length) > 0 }}"
+    _rs_reason: >-
+      {{ (_rs_diag.failure_reason | string | trim) if (_rs_has_reason | bool)
+         else (_fr_catalog | failure_reason('serial_missing', 'os', _cred_location | default(se_location | default('')))) }}
+    _rs_error:
+      section: "{{ (_os_type | default('os')) ~ '_gather' }}"
+      message: "{{ _rs_reason }}"
+      detail: >-
+        {{ 'field=serial_number; mandatory=true; cause=' ~ _rs_cause
+           ~ (('; evidence=' ~ _rs_evidence) if ((_rs_evidence | default(none)) is not none) else '')
+           ~ (('; sudo=' ~ _rs_sudo) if (_rs_sudo | default('')) else '') }}
+    _rs_errors_cur: "{{ (_output.errors | default([])) if ((_output.errors | default([])) is not string) else [] }}"
+  ansible.builtin.set_fact:
+    _output: >-
+      {{ _output | combine({
+           'status': 'failed',
+           'diagnosis': (_rs_diag | combine({
+               'failure_stage':  (_rs_stage if (_rs_has_reason | bool) else 'gather'),
+               'failure_code':   ((_rs_diag.failure_code | default(none)) if (_rs_has_reason | bool) else 'GATHER_FAILED'),
+               'failure_reason': _rs_reason,
+               'details': ((_rs_diag.details if ((_rs_diag.details | default(none)) is mapping) else {})
+                           | combine({'serial_number': {'present': false, 'cause': _rs_cause,
+                                                        'sudo': (_rs_sudo if (_rs_sudo | default('')) else none)}}))
+             })),
+           'errors': ((([_rs_error] + (_rs_errors_cur | list)) if not (_rs_has_reason | bool)
+                       else ((_rs_errors_cur | list) + [_rs_error])) | normalize_errors)
+         }) }}
+  when:
+    - _output is defined
+    - _output is mapping
+    - (_rs_serial | default(none)) is none
+    - (_rs_stage | default(none)) in [none, 'gather']

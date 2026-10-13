@@ -28,10 +28,10 @@
 | `getent` (glibc) | 필수 | 사용자 수집. 없으면 `users`가 `not_supported` |
 | `lsblk`, `df` | 필수 | 스토리지 수집. `lsblk -J`가 안 되면 옛 형식으로 한 번 더 시도합니다 |
 | Python | 선택 | 대상에 Python 3.9 이상이 있으면 Ansible 모듈 경로, 없거나 낮으면 raw 경로로 수집합니다. 결과 형식은 같습니다 |
-| sudo | 선택 | DMI 시리얼과 UUID, `dmidecode` 메모리 슬롯 정보에 필요합니다. 없으면 시리얼과 UUID는 `null`, 메모리는 `/proc/meminfo` 값(`total_basis: os_visible`)으로 채우고 `errors[]`에 남깁니다 |
+| sudo | 필수 (Serial Number) | DMI 시리얼과 UUID, `dmidecode` 메모리 슬롯 정보에 필요합니다. NOPASSWD 가 아니면 로그인 비밀번호 → vault `sudo_passwords` 순서로 시도합니다. Serial Number 를 얻지 못한 서버는 `status: failed` 입니다(2026-10-13). UUID 는 `null`, 메모리는 `/proc/meminfo` 값(`total_basis: os_visible`)으로 채우고 `errors[]`에 남깁니다 |
 | `dmidecode`, `lastlog` 또는 `last`, `getenforce`, `systemd-detect-virt`, `lscpu`, `lspci` | 선택 | 있으면 더 채웁니다. 없으면 해당 필드가 `null`입니다 |
 
-vault의 `ansible_become_password`를 따로 두면 sudo에 그 값을 쓰고, 없으면 로그인 비밀번호를 씁니다([docs/operate/05-vault.md](docs/operate/05-vault.md)).
+sudo 는 root 로그인이면 쓰지 않고, NOPASSWD 를 먼저 확인한 뒤(비밀번호를 보내지 않습니다) 비밀번호가 필요하면 로그인 비밀번호 → vault `sudo_passwords`(옛 형식 `ansible_become_password` 는 후보 1개) 순서로 시도합니다. 같은 값은 한 번만 보내고, 정책 거부와 sudo 사용 불가는 즉시 멈추며, 비밀번호 거부는 대상의 잠금 정책에서 계산한 예산 안에서만 이어집니다([docs/operate/05-vault.md](docs/operate/05-vault.md)).
 
 Python 상태별 경로는 `os-gather/tasks/linux/preflight.yml`이 정합니다. 사전 점검은 Python 없이 돌고 `python3`, `python` 순으로 찾아 버전을 봅니다. 어느 경로였는지는 결과의 `diagnosis.details.gather_mode`에 `python_ok`, `python_incompatible`, `python_missing`, `raw_forced` 중 하나로 남습니다.
 
@@ -164,7 +164,7 @@ Runner 노드에는 실행 위치 라벨(`common/vars/locations.yml`의 `agent_l
 | Redfish | `hardware.serial`, `hardware.uuid` | `ComputerSystem` | BMC 계정 |
 
 - 매칭은 `system_uuid`(또는 `hardware.uuid`)를 먼저 쓰고 `serial_number`를 보조로 씁니다. `hosting_type`이 `virtual`인 OS 결과는 물리 Redfish 결과와 맞추지 않습니다.
-- 식별자를 못 읽어도 수집은 실패하지 않습니다. 필드가 `null`이고 `errors[]`의 `detail`에 `cause=insufficient_privilege`(권한 부족) 또는 `cause=identifier_not_available`(출처가 값을 주지 않음)이 남습니다. `status`와 `sections`에는 영향이 없습니다.
+- OS 채널에서 **Serial Number 는 필수**입니다(2026-10-13). `correlation.serial_number` 가 `null` 이면 그 서버는 `status: failed`(`failure_code: GATHER_FAILED`)이고 원인은 `diagnosis.details.serial_number.cause` 에 남습니다. 다른 섹션의 값과 `sections` 는 그대로입니다. UUID 를 못 읽는 것은 종전처럼 실패가 아닙니다 — 필드가 `null`이고 `errors[]`의 `detail`에 `cause=insufficient_privilege`(권한 부족) 또는 `cause=identifier_not_available`(출처가 값을 주지 않음)이 남습니다.
 - 제조사 자리표시자(`To Be Filled By O.E.M.` 등)와 SMBIOS 공장 기본 UUID는 `null`로 정리합니다.
 
 자세한 수집 경로는 [docs/develop/05-field-mapping.md](docs/develop/05-field-mapping.md)에 있습니다.

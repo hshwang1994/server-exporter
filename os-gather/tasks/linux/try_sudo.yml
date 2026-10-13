@@ -1,0 +1,153 @@
+---
+# os-gather/tasks/linux/try_sudo.yml
+#
+# Linux sudo 확인 (2026-10-13) — SSH 인증과 preflight 가 끝난 뒤, 특권 수집(제조번호 · UUID · dmidecode · 방화벽)에 앞서
+# sudo 가 되는지 한 번 확인하고, 비밀번호가 필요하면 후보를 순서대로 시도한다. 결과는 fact 로만 남긴다 (Secret 없음).
+#
+# 입력:
+#   ansible_user / ansible_password : try_credentials.yml 이 확정한 로그인 계정 (비밀번호 인증이 아니면 ansible_password 가 비어 있다)
+#   _cred_sudo_candidates           : Vault sudo_passwords 후보 [{password, label, role}] (common/tasks/credential/resolve_and_load.yml)
+#   _l_sudo_max_rejections          : 잠금 예산 (preflight.yml — 이 횟수의 거부에 닿으면 멈춘다)
+#
+# 출력:
+#   _l_sudo_ok   : bool — 특권 수집을 시도해도 되는가 (gather_system.yml 의 become 태스크가 본다)
+#   _l_sudo_mode : root | nopasswd | password | denied | rejected | unavailable
+#   _l_sudo_meta : { ok, mode, outcome, attempted_count, rejected_count, max_rejections, used_label, fallback_used, policy, attempts[] }
+#                  → diagnosis.details.sudo (label · 횟수 · rc 만 — 비밀번호 · 원격 출력은 싣지 않는다)
+#   ansible_become_pass : 통과한 비밀번호, 아니면 '' (뒤의 become 은 -n 으로 돌아 비밀번호를 제출하지 않는다 → PAM 실패 0)
+#
+# 순서와 중단 (CLAUDE.md §12 — 후보를 늘리지 않고 잠금을 막는다):
+#   0) root 로그인 → sudo 불필요 (Ansible 은 같은 사용자에 sudo 래퍼를 쓰지 않는다)
+#   1) NOPASSWD 확인 — become 없이 `sudo -k -n /bin/sh -c 'id -u'` (비밀번호 제출 0회, -k 로 캐시된 타임스탬프 무시)
+#   2) 후보 = 로그인 비밀번호(비밀번호 인증이었을 때) → Vault 순서. 같은 값은 한 번만. try_one_sudo.yml 이 하나씩 시도한다.
+#      비밀번호 거부 → 다음 후보 · 정책 거부 / sudo 없음 / 전송 실패 / 대기 초과 → 즉시 중단 · 거부 횟수가 예산에 닿으면 후보가 남아도 중단.
+#   판정은 결과의 구조(rc 유무와 값 · unreachable · 출력 줄 '0')만 본다 — 문자열 파싱 없음, Ansible 버전 가정 없음.
+#   표준 sudoers 에서 로그인 비밀번호는 방금 SSH 를 통과한 값이라 거부되지 않는다 → SSH 계정의 잠금 카운터는 올라가지 않는다.
+
+- name: "linux | sudo | init"
+  ansible.builtin.set_fact:
+    _l_sudo_ok: false
+    _l_sudo_mode: ""
+    _l_sudo_outcome: ""
+    _l_sudo_stopped: false
+    _l_sudo_tries: 0
+    _l_sudo_rejections: 0
+    _l_sudo_used_label: null
+    _l_sudo_attempts: []
+  no_log: true
+
+- name: "linux | sudo | root login needs no escalation"
+  when: (ansible_user | default('')) == 'root'
+  ansible.builtin.set_fact:
+    _l_sudo_ok: true
+    _l_sudo_mode: root
+    _l_sudo_outcome: root_login
+    ansible_become_pass: ""
+  no_log: true
+
+# become 을 쓰지 않는 평범한 raw — 결과에 언제나 rc 가 있다. -n 이라 비밀번호 요구 시 sudo 가 묻지 않고 끝난다(PAM 실패 0).
+- name: "linux | sudo | nopasswd probe"
+  when: (_l_sudo_mode | default('')) != 'root'
+  ansible.builtin.raw: "sudo -k -n /bin/sh -c 'id -u'"
+  register: _l_sudo_nopasswd
+  failed_when: false
+  changed_when: false
+  ignore_unreachable: true
+  no_log: true
+
+- name: "linux | sudo | classify nopasswd probe"
+  when: (_l_sudo_mode | default('')) != 'root'
+  ansible.builtin.set_fact:
+    _l_sudo_np_ok: >-
+      {{ (((_l_sudo_nopasswd.rc | default(1)) | int) == 0)
+         and ('0' in ((_l_sudo_nopasswd.stdout_lines | default([])) | map('trim') | list)) }}
+    _l_sudo_np_rc: "{{ _l_sudo_nopasswd.rc | default(none) }}"
+    _l_sudo_np_unreachable: "{{ _l_sudo_nopasswd.unreachable | default(false) | bool }}"
+  no_log: true
+
+- name: "linux | sudo | adopt nopasswd"
+  when:
+    - not (_l_sudo_ok | bool)
+    - _l_sudo_np_ok | default(false) | bool
+  ansible.builtin.set_fact:
+    _l_sudo_ok: true
+    _l_sudo_mode: nopasswd
+    _l_sudo_outcome: nopasswd
+    ansible_become_pass: ""
+  no_log: true
+
+# sudo 자체를 쓸 수 없는 대상 — 비밀번호를 보내 봐야 소용없다 (127 = sudo 없음, 255 = ssh 전송, unreachable = 대기 초과).
+- name: "linux | sudo | stop when sudo is unavailable"
+  when:
+    - not (_l_sudo_ok | bool)
+    - (_l_sudo_np_unreachable | default(false) | bool) or ((_l_sudo_np_rc | default(none)) in [127, 255])
+  ansible.builtin.set_fact:
+    _l_sudo_stopped: true
+    _l_sudo_mode: unavailable
+    _l_sudo_outcome: >-
+      {{ 'prompt_timeout' if (_l_sudo_np_unreachable | default(false) | bool)
+         else ('sudo_absent' if ((_l_sudo_np_rc | default(none)) == 127) else 'transport') }}
+    ansible_become_pass: ""
+  no_log: true
+
+# 후보: 로그인 비밀번호(있을 때) 먼저 → Vault 순서. 로그인 값과 같은 Vault 항목은 뺀다 (같은 값을 두 번 보내지 않는다).
+- name: "linux | sudo | build candidates"
+  when:
+    - not (_l_sudo_ok | bool)
+    - not (_l_sudo_stopped | bool)
+  ansible.builtin.set_fact:
+    _l_sudo_candidates: >-
+      {%- set login = (ansible_password | default('', true)) | string -%}
+      {%- set head = ([{'label': 'login', 'role': 'login', 'password': login}] if (login | length) > 0 else []) -%}
+      {%- set vault = (_cred_sudo_candidates | default([])) | rejectattr('password', 'equalto', login) | list -%}
+      {{ head + vault }}
+  no_log: true
+
+# include_tasks 의 loop when 은 반복 시작 전에 한꺼번에 평가된다 — 앞 시도가 켠 중단 표식과 예산은 try_one_sudo.yml 의 block 조건이 본다.
+- name: "linux | sudo | iterate candidates"
+  ansible.builtin.include_tasks: try_one_sudo.yml
+  loop: "{{ _l_sudo_candidates | default([]) }}"
+  loop_control:
+    loop_var: _try_sudo
+    label: "{{ _try_sudo.label | default('unlabeled') }}"
+  when:
+    - not (_l_sudo_ok | bool)
+    - not (_l_sudo_stopped | bool)
+    - (_l_sudo_candidates | default([])) | length > 0
+
+- name: "linux | sudo | classify when no candidate succeeded"
+  when:
+    - not (_l_sudo_ok | bool)
+    - not (_l_sudo_stopped | bool)
+  ansible.builtin.set_fact:
+    _l_sudo_mode: "{{ 'unavailable' if ((_l_sudo_tries | default(0) | int) == 0) else 'rejected' }}"
+    _l_sudo_outcome: >-
+      {{ 'no_candidate' if ((_l_sudo_tries | default(0) | int) == 0)
+         else ('budget_exhausted' if ((_l_sudo_rejections | default(0) | int) >= (_l_sudo_max_rejections | default(1) | int))
+               else 'password_rejected') }}
+    ansible_become_pass: ""
+  no_log: true
+
+- name: "linux | sudo | record meta"
+  ansible.builtin.set_fact:
+    _l_sudo_meta:
+      ok:              "{{ _l_sudo_ok | bool }}"
+      mode:            "{{ _l_sudo_mode }}"
+      outcome:         "{{ _l_sudo_outcome }}"
+      attempted_count: "{{ _l_sudo_tries | default(0) | int }}"
+      rejected_count:  "{{ _l_sudo_rejections | default(0) | int }}"
+      max_rejections:  "{{ _l_sudo_max_rejections | default(1) | int }}"
+      used_label:      "{{ _l_sudo_used_label | default(none) }}"
+      fallback_used:   "{{ (_l_sudo_ok | bool) and (_l_sudo_mode == 'password') and ((_l_sudo_used_label | default('', true)) != 'login') }}"
+      policy:          "{{ _l_sudo_policy | default({}) }}"
+      attempts:        "{{ _l_sudo_attempts | default([]) }}"
+  no_log: true
+
+# 운영자용 한 줄 — 거부가 쌓인 대상은 15분 안에 다시 수집하면 잠금 횟수가 누적될 수 있다 (label 과 횟수만, 비밀번호 없음).
+- name: "linux | sudo | log rejected candidates (advisory)"
+  when: _l_sudo_mode in ['rejected', 'denied']
+  ansible.builtin.debug:
+    msg: >-
+      [sudo] {{ ansible_host | default(inventory_hostname) }} - password rejected {{ _l_sudo_rejections | default(0) }} time(s)
+      (budget {{ _l_sudo_max_rejections | default(1) }}, attempts {{ _l_sudo_tries | default(0) }}, result {{ _l_sudo_mode }}/{{ _l_sudo_outcome }}).
+      Re-running against this host within 15 minutes may accumulate lockout counters.

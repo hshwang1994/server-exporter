@@ -29,6 +29,8 @@
 #   | B | 모두 success           | warnings | success  *     |
 #   | C | success + failed 혼재  | any      | partial        |
 #   | D | 모두 failed            | any      | failed         |
+#   | E | (OS 채널) 섹션과 무관  | any      | failed         |  ← 필수 식별자 Serial Number 누락. 이 파일이 아니라
+#         os-gather/tasks/normalize/require_serial.yml 이 조립 뒤에 확정한다 (2026-10-13 사용자 정책, docs/contract/03-fields.md §4)
 #
 # * 시나리오 B 는 의도된 동작이다. 사유:
 #   - 섹션 자체는 정상 수집 — 호출자가 데이터를 신뢰 가능

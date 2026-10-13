@@ -238,6 +238,7 @@
     _os_type: "linux"
     # SSH 비밀번호를 sudo 비밀번호로 전달 (DMI 식별자 읽기에 필요)
     # vault에 ansible_become_password 가 별도 정의되면 그 값이 우선됨
+    # 2026-10-13: 최종 값은 tasks/linux/try_sudo.yml 이 정한다 — NOPASSWD / 통과한 후보 / 실패 시 '' (뒤의 become 은 비밀번호 없이 -n).
     # 주: 실제 값은 후보마다 try_one_credential.yml 의 set_fact 가 같은 규칙(별도 become 값이 비어 있지 않으면 그 값, 아니면 그 로그인
     #     후보의 비밀번호)으로 정한다(2026-10-10 C10 — 종전에는 그 set_fact 가 언제나 로그인 비밀번호로 덮어썼다). 이 play var 는 후보 적용 전 기본값이다.
     ansible_become_pass: "{{ _cred_become_password | default(ansible_password | default(omit)) }}"
@@ -286,6 +287,11 @@
 
         - name: "linux | preflight"
           ansible.builtin.include_tasks: tasks/linux/preflight.yml
+
+        # 2026-10-13: sudo 확인 — root / NOPASSWD / 로그인 비밀번호 / Vault sudo 후보를 잠금 예산 안에서 (tasks/linux/try_sudo.yml).
+        #   결과 _l_sudo_ok 가 gather_system.yml 의 특권 태스크를 게이트하고, _l_sudo_meta 가 diagnosis.details.sudo 로 나간다.
+        - name: "linux | try sudo"
+          ansible.builtin.include_tasks: tasks/linux/try_sudo.yml
 
         - name: "linux | init fragments"
           ansible.builtin.include_tasks:
@@ -359,6 +365,8 @@
                 python_version:    "{{ _l_python_version | default('') }}"
                 # P1: meta.auth — 사용자 결정 #3 (fallback_used 노출)
                 auth:              "{{ _os_attempts_meta | default({}) }}"
+                # 2026-10-13: sudo 확인 결과 (mode · outcome · 횟수 · label · 잠금 정책 — 비밀번호 없음). tasks/linux/try_sudo.yml.
+                sudo:              "{{ _l_sudo_meta | default({}) }}"
 
         # ── meta & correlation ───────────────────────────────────────────
         # 2026-09-03: envelope.vendor 는 common/tasks/normalize/resolve_vendor.yml 한 곳에서
@@ -486,7 +494,8 @@
                               'credential_scope': (_cred_scope | default('')) or none,
                               'selected_port': 22,
                               'checked_ports': (_precheck_raw.checked_ports | default([5986, 5985, 22])),
-                              'auth': (_os_attempts_meta | default({}))}
+                              'auth': (_os_attempts_meta | default({})),
+                              'sudo': (_l_sudo_meta | default({}))}
                     | combine(((_diagnosis | default({}, true)).details | default({}))
                               if (((_diagnosis | default({}, true)).details | default({}))
                                   is mapping) else {})} }}
@@ -513,6 +522,10 @@
         - name: "linux | rescue | build_failed_output"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_failed_output.yml"
+
+        # 2026-10-13: OS 필수 식별자(Serial) 규칙 — status 가 partial 이어도 Serial 이 없으면 failed (시나리오 E). schema_version 앞.
+        - name: "linux | rescue | require serial"
+          ansible.builtin.include_tasks: tasks/normalize/require_serial.yml
 
         - name: "linux | rescue | inject schema_version"
           ansible.builtin.set_fact:
@@ -824,6 +837,10 @@
         - name: "windows | rescue | build_failed_output"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_failed_output.yml"
+
+        # 2026-10-13: OS 필수 식별자(Serial) 규칙 — Linux rescue 와 같다 (시나리오 E). schema_version 앞.
+        - name: "windows | rescue | require serial"
+          ansible.builtin.include_tasks: tasks/normalize/require_serial.yml
 
         - name: "windows | rescue | inject schema_version"
           ansible.builtin.set_fact:

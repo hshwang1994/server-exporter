@@ -65,6 +65,8 @@ def _render_bool(expr: str, **ctx) -> bool:
     ("esxi-gather/tasks/try_one_credential.yml", "_e_cred_stopped", "stop candidates when the port does not connect"),
     ("redfish-gather/tasks/try_one_account.yml", "_rf_candidates_stopped", "stop candidates unless explicitly rejected"),
     ("redfish-gather/tasks/account_service_try_one.yml", "_rf_acct_stopped", "stop recovery candidates unless explicitly rejected"),
+    # 2026-10-13: Linux sudo 후보 — 같은 구조 (block when 중단 표식 · 중단 태스크가 마지막)
+    ("os-gather/tasks/linux/try_one_sudo.yml", "_l_sudo_stopped", "stop candidates unless the password was rejected"),
 ])
 def test_stop_flag_guards_the_included_block_and_is_set_last(rel, flag, stop_name):
     """include_tasks 의 loop when 은 반복을 시작하기 전에 한꺼번에 평가된다(2026-10-06 WSL ansible-core 2.20.7 실측: loop when 만 두면

@@ -32,6 +32,8 @@ PROBE_FILES = {
     "linux/windows": "os-gather/tasks/try_one_credential.yml",
     "esxi": "esxi-gather/tasks/try_one_credential.yml",
     "redfish": "redfish-gather/tasks/try_one_account.yml",
+    # 2026-10-13: Linux sudo 후보 probe — 같은 규칙 (문자열 파싱 금지 · auth_success 미설정 · register 상한)
+    "linux-sudo": "os-gather/tasks/linux/try_one_sudo.yml",
 }
 
 # §18 — 인증 실패를 새로 확정하는 데 쓰면 안 되는 문자열 판정 패턴

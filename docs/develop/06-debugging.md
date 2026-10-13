@@ -60,10 +60,10 @@
 |---|---|---|
 | `reachable`, `port`, `protocol` | `common/library/precheck_bundle.py` (사전 진단) | `diagnosis.details.checked_ports`, `errors[].detail` |
 | `auth` | 채널의 `try_credentials.yml`, `try_one_credential.yml` (Redfish는 `try_one_account.yml`) | `diagnosis.details.credential_scope`, 콘솔의 `credential_scope=… outcome=…` 줄 |
-| `gather` | 채널의 수집 태스크 | `errors[].section`과 `detail` |
+| `gather` | 채널의 수집 태스크. OS 채널에서 Serial Number 미수집이면 `os-gather/tasks/normalize/require_serial.yml` | `errors[].section`과 `detail`, `diagnosis.details.serial_number.cause`, Linux 는 `diagnosis.details.sudo`(mode · attempts · policy) |
 | `fallback` | `common/tasks/normalize/build_failed_output.yml`, `callback_plugins/json_only.py`의 보충 | 실행이 결과 없이 끝난 서버입니다. `gather_progress.jsonl`과 콘솔 |
 
-`errors[].message`는 사용자 문장이고 기술 근거는 `errors[].detail`입니다. `detail`의 `cause=` 값(예: `insufficient_privilege`, `identifier_not_available`, `dmidecode_unavailable`, `command_failed`)이 분기 기준입니다.
+`errors[].message`는 사용자 문장이고 기술 근거는 `errors[].detail`입니다. `detail`의 `cause=` 값(예: `insufficient_privilege`, `identifier_not_available`, `dmidecode_unavailable`, `command_failed`, Serial 필수 규칙의 `privilege_unavailable` · `read_failed` · `not_provided`)이 분기 기준입니다.
 
 ## 3. fragment 정규화 과정
 

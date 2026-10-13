@@ -296,3 +296,89 @@ def normalize_accounts(vault_data, legacy_label="legacy_single"):
         }]
 
     return []
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Linux sudo 비밀번호 후보 (2026-10-13)
+# ──────────────────────────────────────────────────────────────────────────────
+# OS Linux vault 의 선택 키 `sudo_passwords` — sudo 가 비밀번호를 요구하는 서버에서
+# 로그인 비밀번호 **다음에** 순서대로 시도할 값들이다. username 이 없는 이유: sudo 는
+# 호출 계정 자신(표준 sudoers) 또는 root(targetpw/rootpw)의 비밀번호를 검증하므로
+# 계정을 고를 일이 없다. 목록이 없으면 레거시 단일 키 `ansible_become_password` 를 쓴다.
+#
+# 여기서도 Secret 을 해석하지 않는다 — 값은 그대로 옮기고 순서만 보존하며, 같은 값은
+# 한 번만 남긴다(같은 비밀번호를 두 번 보내 PAM 실패를 두 번 쌓지 않기 위해서다).
+SUDO_PASSWORDS_KEY = "sudo_passwords"
+SUDO_LEGACY_KEY = "ansible_become_password"
+SUDO_LEGACY_LABEL = "sudo_legacy"
+ROLE_SECONDARY = "secondary"
+
+
+def _secret_text(value):
+    """비밀번호 값 → str 또는 None. 다듬지(trim) 않는다 — 공백만 있는 값과 비-스칼라만 버린다.
+
+    YAML 이 따옴표 없는 값을 bool 로 읽었다면(yes/no/true/false) 그것은 비밀번호가 아니라
+    표기 실수이므로 버린다. 숫자는 글자 그대로 쓴다(0 도 값이다).
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return value if value.strip() else None
+    return None
+
+
+def _label_text(value, index):
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return "sudo_{0}".format(index)
+
+
+def normalize_sudo_passwords(vault_data, legacy_label=SUDO_LEGACY_LABEL):
+    """vault 내용 → Linux sudo 비밀번호 후보 list. **순서 보존 · 같은 값 1회 · 예외 없음.**
+
+    Args:
+        vault_data: include_vars 로 읽은 vault 내용(dict). dict 가 아니면 빈 list.
+        legacy_label: `ansible_become_password` 하나뿐일 때 붙이는 label.
+
+    Returns:
+        list[dict] — 각 항목 {password, label, role}. `sudo_passwords` 가 비어 있지 않은 list 면
+        그 목록만(항목은 {password, label?, role?} dict 또는 비밀번호 문자열), 아니면 레거시 키를
+        1개짜리 목록으로. role 기본값은 남은 첫 항목 primary · 나머지 secondary, label 기본값은
+        'sudo_<원본 순번>'(1부터). 값이 비었거나 비-스칼라인 항목은 버린다.
+    """
+    if not isinstance(vault_data, dict):
+        return []
+
+    raw = vault_data.get(SUDO_PASSWORDS_KEY)
+    items = []
+    if isinstance(raw, list) and raw:
+        for index, item in enumerate(raw, start=1):
+            if isinstance(item, dict):
+                password = _secret_text(item.get("password"))
+                label = _label_text(item.get("label"), index)
+                role = item.get("role")
+            else:
+                password = _secret_text(item)
+                label = _label_text(None, index)
+                role = None
+            if password is None:
+                continue
+            items.append((password, label, role))
+    else:
+        legacy = _secret_text(vault_data.get(SUDO_LEGACY_KEY))
+        if legacy is not None:
+            items.append((legacy, legacy_label, ROLE_PRIMARY))
+
+    out = []
+    seen = set()
+    for password, label, role in items:
+        if password in seen:
+            continue
+        seen.add(password)
+        if not (isinstance(role, str) and role.strip()):
+            role = ROLE_PRIMARY if not out else ROLE_SECONDARY
+        else:
+            role = role.strip()
+        out.append({"password": password, "label": label, "role": role})
+    return out

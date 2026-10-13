@@ -40,3 +40,8 @@
 - name: "os | normalize | build_output"
   ansible.builtin.include_tasks:
     file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_output.yml"
+
+# 2026-10-13: OS 필수 식별자(Serial Number) 규칙 — Serial 이 null 이면 status=failed (시나리오 E). Linux · Windows 공통.
+#   site.yml 의 CHECKPOINT · schema_version 주입보다 앞이다 (콜백 · Layer A 가 CHECKPOINT 의 status 를 그대로 복원한다).
+- name: "os | normalize | require serial"
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/normalize/require_serial.yml"

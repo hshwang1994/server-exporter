@@ -6,9 +6,9 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-10
+> 최종 갱신: 2026-10-13
 
-## 현재 유효한 결정 — 주제별 요약 (2026-10-12 기준)
+## 현재 유효한 결정 — 주제별 요약 (2026-10-13 기준)
 
 아래 표는 지금 유효한 결정을 주제별로 한 줄씩 적고, 근거가 적힌 날짜 절을 가리킨다. 역사와 경위는 각 날짜 절에 그대로 있다(내용 삭제 없음).
 
@@ -17,7 +17,9 @@
 | 도달성 판정 | 관리 TCP 응답 OR ICMP Echo. ICMP 는 TCP 전 포트 무응답일 때 1회, Gate 가 아니다 | 2026-09-03 |
 | Redfish 자격 축 | 표준 수집 계정은 전역 1벌(`vault/common/redfish/standard.yml`), 복구 계정은 Location×Vendor(`vault/<loc>/redfish/<vendor>.yml`, `role: recovery`) | 2026-08-12 · 2026-10-11 D-17 |
 | 계정 쓰기 | 보류(GP-57). 실장비에 인증 실패 유발 금지. 쓰기 전제는 "표준 인증 시도 AND 구조화된 401 AND 복구 인증 성공" | 2026-08-12~13 |
-| status 판정 | 시나리오 A/B/C/D 매트릭스 — 실제 섹션 결과로 success/partial/failed, errors 수로 판단하지 않음. Redfish 는 첫 인증 2xx 뒤 하위 403 을 섹션 실패(partial)로, Power·Thermal 둘 다 404 는 not_supported 로 | 2026-05-06 · 2026-10-12 |
+| status 판정 | 시나리오 A/B/C/D 매트릭스 — 실제 섹션 결과로 success/partial/failed, errors 수로 판단하지 않음. Redfish 는 첫 인증 2xx 뒤 하위 403 을 섹션 실패(partial)로, Power·Thermal 둘 다 404 는 not_supported 로. **예외 E(OS 채널)**: Serial Number 를 얻지 못한 host 는 섹션과 무관하게 failed (data · sections 보존) | 2026-05-06 · 2026-10-12 · 2026-10-13 |
+| Linux sudo | SSH 인증 뒤 sudo 확인: root → NOPASSWD(제출 0) → 로그인 비밀번호 → Vault `sudo_passwords`(같은 값 1회). 정책 거부·sudo 불가는 즉시 중단, 비밀번호 거부는 대상 잠금 정책에서 계산한 예산(`_l_sudo_max_rejections`) 안에서만. 분류는 결과 구조(rc 유무·값)만, Ansible 버전 가정 없음. 실패 host 는 특권 태스크 4개를 건너뛴다 | 2026-10-13 |
+| OS Serial Number | 필수 식별자. `correlation.serial_number` 가 null 이면 `require_serial.yml` 이 status=failed(GATHER_FAILED · `serial_missing` 문장), 원인은 `diagnosis.details.serial_number.cause`. 새 failure_code 없음 | 2026-10-13 |
 | envelope | 13 필드 고정 · 새 키 추가는 호환성 작업 밖(사용자 승인) | 2026-05-01 · 2026-10-03 |
 | 시간 한계 | 실행 기반 대기 합 72h · 실제 수집 누적 6h · 결과 처리 1h, 빌드 · 단계 timeout 없음, 같은 Runner · 작업 폴더 재개. 중단 원인은 Jenkins 의 분류로만(경과시간 · 노드 상태로 확정 안 함), 보존은 handler 한 곳에서 1회 | 2026-10-05~07 · 2026-10-12 |
 | 결과 전달 | 요청 1 = 결과 1, `post { always }` 전달, Portal 2xx 로 종결(저장 확인은 계약 밖), 회수 매체는 같은 검문으로 평가. 404 는 서버가 돌려준 것만 확정 거부, 플러그인이 합성한 404(이름 풀이 실패)는 통신 실패 | 2026-10-03 · 2026-10-05 · 2026-10-10 · 2026-10-12 |
@@ -87,6 +89,54 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-13 — Linux sudo Vault 후보 · 잠금 예산 · OS Serial Number 필수 (시나리오 E)
+
+### 사용자 의심 / 요구
+
+- NOPASSWD 를 허용하지 않는 고객 Linux 서버에서도 Vault 의 sudo 비밀번호(Primary → Fallback)로 수집해야 한다. 기존 NOPASSWD 방식은 유지한다.
+- Linux · Windows 모두 Serial Number 는 필수 — 수집하지 못하면 그 host 는 `failed`, 다른 섹션의 값은 보존, 원인은 기존 Diagnosis 구조로 구분.
+- 계정이 절대 잠기면 안 된다(faillock). 새 failure_code 를 만들지 않는다. 수집 로직에 Ansible/sudo 버전을 고정하지 않는다. Windows 인증 구조는 그대로.
+
+### 분석
+
+- 종전 코드는 sudo 비밀번호를 한 값(Vault `ansible_become_password` 또는 로그인 비밀번호)으로 고정했고 NOPASSWD 확인 · 후보 목록 · 거부 뒤 중단 장치가 없었다.
+  값이 틀리면 특권 태스크 4개(제조번호 · UUID · dmidecode · 방화벽)가 각각 `Incorrect sudo password` 로 끝나 host 당 PAM 실패 4회 — RHEL faillock 기본(deny=3)이면 잠금.
+- Serial 이 없어도 `hardware` 는 vendor/model 만으로 success 라 Serial null host 가 `status: success` 로 나갔다. 문서(REQUIREMENTS · 05-field-mapping)도 "non-fatal" 을 약속했다.
+- sudo 는 표준 sudoers 에서 호출 계정 자신의 비밀번호를 검증한다 → 방금 SSH 를 통과한 로그인 비밀번호는 거부될 수 없다. 로그인 비밀번호와 다른 sudo 비밀번호는
+  `Defaults targetpw/rootpw`(root 비밀번호) 서버에서만 존재한다. 이것이 후보 순서(로그인 먼저)와 잠금 예산(root 카운터 기준)의 근거다.
+- Ansible become 은 비밀번호가 비면 `-n` 을 유지하고, 비밀번호 거부는 prompt 단계에서 세션을 끊어 결과에 `rc` 가 없으며(PAM 실패 1회), 정책 거부는 `rc` 가 남는다 →
+  결과 구조만으로 "비밀번호 거부 / 권한 없음 / sudo 불가" 를 가른다(문자열 파싱 없음). task `timeout:` 은 `failed_when` 을 우회하므로 쓰지 않는다(rule 80 R1).
+- 10.100.64.132(사용자 지정 테스트 서버): Ubuntu 24.04 VM, cloviradmin NOPASSWD(`%sudo` 도 ALL), pam_faillock 미사용(예산 3), sudo 1.9.15p5.
+- 4개 Location Vault 의 `os/linux.yml` 은 모두 accounts 2개 · `ansible_become_password` 없음.
+
+### 결정
+
+1. `os-gather/tasks/linux/try_sudo.yml` + `try_one_sudo.yml`: root 생략 → NOPASSWD 확인(become 없는 raw `sudo -k -n /bin/sh -c 'id -u'`) → 후보 =
+   로그인 비밀번호 → Vault `sudo_passwords`(같은 값 1회). 판정은 구조만: 통과 / 거부(다음) / 정책 거부 · sudo 없음(127) · 전송(255) · 대기 초과 · 알 수 없는 모양(중단).
+   결과 `_l_sudo_ok` 가 `gather_system.yml` 의 become 4건을 게이트, `_l_sudo_meta` 가 `diagnosis.details.sudo` 로.
+2. 잠금 예산 `_l_sudo_max_rejections`(preflight 가 host 마다 비특권으로 `faillock.conf` · `pam.d` 를 읽어 계산): 잠금 모듈 없음/even_deny_root 없음 → 3,
+   even_deny_root → max(1, min(3, deny−2)), unlock_time=0 → 1 감산, 못 읽음 → 1. 거부 횟수가 예산에 닿으면 멈춘다. 콘솔 advisory 1줄.
+3. Vault `sudo_passwords: [{label, role, password}]` (git: Primary + Fallback 1, ic/yi/cj: Primary). 레거시 `ansible_become_password` 는 후보 1개. 정규화 `normalize_sudo_passwords` 한 곳.
+4. `os-gather/tasks/normalize/require_serial.yml`(조립 후처리, 정상 경로 build_output 끝 + Linux/Windows rescue): `correlation.serial_number` null → `status: failed`.
+   failure_reason 이 비면 gather / GATHER_FAILED / `serial_missing`(카탈로그 신설, os 채널) + errors[0]; 있으면 문장 유지 + status 만 failed. auth 이전 봉투는 불변.
+   원인 `diagnosis.details.serial_number.cause` ∈ privilege_unavailable · read_failed · not_provided · facts_failed · not_collected · unknown.
+5. 새 failure_code · stage · envelope 필드 없음. 버전 검사 · 고정 시험 없음(동작은 live 매트릭스 + 결과 모양 fixture).
+
+### 영향
+
+- Portal 은 `status: failed` + `sections.*: success` + `data` 보존 봉투(E)를 받을 수 있다(`docs/contract/03-fields.md` 4절 · `02-output-envelope.md` · `04-failure-and-diagnosis.md`).
+- host 당 원격 실행 +1(NOPASSWD 확인) ~ +1+후보 수. 권한 없는 host 의 PAM 실패 4회 → 0회.
+- `REQUIREMENTS.md` sudo "선택" → "필수(Serial Number)". UUID · 메모리 슬롯은 종전처럼 non-fatal.
+- 승격 전제(S1/S3/S4/S5 전 host success)에 Serial 이 포함된다.
+
+### 회귀
+
+- 단위: `tests/unit/test_credential_sudo_passwords.py` · `test_linux_sudo_probe.py`(분류 · 후보 순서 · 예산 매트릭스 · 게이트 · 배선) · `test_status_serial_required_scenario_e.py`
+  (정상/rescue/H12/auth 불변 · 원인 매트릭스 · fixture `tests/fixtures/outputs/status_failed_serial_missing.json`).
+- 갱신: `test_linux_raw_scripts_shim.py`(host 당 원격 실행 python 13 · raw 12 · no_sysfs 15, 순서에 `try_sudo.yml`), `test_credential_probe_classification.py`(새 probe 등록),
+  `test_credential_candidate_stop.py`, `test_errors_message_contract.py`(`serial_missing`), `test_vault_check_no_secret_output.py`.
+- 실장비: ADR `docs/ai/decisions/ADR-2026-10-13-sudo-vault-fallback-and-serial-required.md`, evidence `tests/evidence/2026-10-13-sudo-fallback-serial-required.md`.
 
 ## 2026-10-12 — 독립 점검: 중단 원인 판정 · 보존 1회 · Portal 합성 404 · Redfish 403/404 · 사람용 문서 재작성 · production P13
 

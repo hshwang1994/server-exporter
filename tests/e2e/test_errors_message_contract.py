@@ -302,6 +302,7 @@ _EXPECTED_KEYS = {
     "auth_unconfirmed", "auth_rejected",
     "gather_after_auth", "gather_connection_lost", "gather_no_data", "gather_internal",
     "output_build_failed",
+    "serial_missing",          # 2026-10-13: OS 필수 식별자 누락 (os-gather/tasks/normalize/require_serial.yml)
     # 2026-10-06 (9차 — 사용자 승인 실행계획 "결과 정리와 보충"): 실행 기반(Runner)이 대기 한도 안에 돌아오지 않았거나 같은 작업 폴더로
     #   이어 갈 수 없어 끝나지 않은 대상의 문장. failure_code 는 OUTPUT_BUILD_FAILED 그대로다(_fr_code_keys 의 변형).
     "infra_unavailable",
