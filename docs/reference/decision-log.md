@@ -122,6 +122,9 @@
    failure_reason 이 비면 gather / GATHER_FAILED / `serial_missing`(카탈로그 신설, os 채널) + errors[0]; 있으면 문장 유지 + status 만 failed. auth 이전 봉투는 불변.
    원인 `diagnosis.details.serial_number.cause` ∈ privilege_unavailable · read_failed · not_provided · facts_failed · not_collected · unknown.
 5. 새 failure_code · stage · envelope 필드 없음. 버전 검사 · 고정 시험 없음(동작은 live 매트릭스 + 결과 모양 fixture).
+6. **production P14** = main `b203fd45` 승격 → `604062c0`. 근거: 매트릭스 main #574~#583(S1 S2 S3 S4 T2 T5 T6 E2E-A E2E-A2 E2E-D, .161 전원 꺼짐으로 S3 는 11대) · CI #54(COMPLETE_PASS) ·
+   production canary #288. 1차 후보 `03a5637b` 는 CI #53 Gate(add-on 통합 시험 — include 경로)에서 떨어져 `b203fd45` 로 고쳤다. 승격은 작업 PC 의 `prodgen promote`
+   (CI 산출물 재사용, 환경 의존 gate 재실행) — Jenkins 에 GitLab push 자격이 없어 CI Promote 는 dry-run 이다.
 
 ### 영향
 

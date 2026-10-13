@@ -468,3 +468,28 @@ production P13 `b86c5942`(main `46002a2b`) 승격 직후 production Job #280~#28
 checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테스트 수신 백엔드가 내려가 있어 #280~#286 은 서버가 돌려준 실제 404 를 확정 거부로 1회 기록했고(재전송 없음), Portal 200 은 저장소 `callback_sink.py` 를 controller loopback 에 띄운 임시 Job 으로 #287 에서 확인했다(수신 본문 sha256 == `callback_body.json`).
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
+
+## 2026-10-13 Linux sudo Vault 후보 · OS Serial 필수 — main 매트릭스 · production P14 명부 (실장비)
+
+수집 코드 변경(Linux sudo 후보 · 잠금 예산 · Serial 필수 · `diagnosis.details.sudo`)의 실장비 증거는 `../../tests/evidence/2026-10-13-sudo-fallback-serial-required.md` 다
+(10.100.64.132 테스트 계정 시나리오 #556~#562 · 명부 #563). 승격 전제의 매트릭스는 최종 후보 main `b203fd45` 에서 돌렸다(1차 후보 `03a5637b` 의 매트릭스 #564~#573 은 CI Gate 실패로 증거에서 제외).
+.161 은 전원이 꺼져 있어 S3 명부에서 뺐다.
+
+### main `b203fd45` 매트릭스 (main Job #574~#583, checkout 전부 == `b203fd45`)
+
+| 시나리오 | 빌드 | 결과 | 관측 |
+|---|---|---|---|
+| S1 Linux 3 (.162 .163 .156) | #581 | SUCCESS | 3/3 success · serial 있음 · `details.sudo` nopasswd 2 · password(login) 1 · Portal 200 |
+| S2 혼합(실호스트 3 + TEST-NET 2) | #582 | SUCCESS | .132 .33 .34 success + 2 `TARGET_UNREACHABLE` · Portal 200 · 보충 0 |
+| S3 Linux 11 | #574 | SUCCESS | 11/11 success · serial 있음(password/login 9 · nopasswd 2) · Portal 200 |
+| S4 Windows 1 (.120) | #575 | SUCCESS | 1/1 · serial 있음 · Portal 200 |
+| T2 TEST-NET 2 | #577 | SUCCESS | 2대 `TARGET_UNREACHABLE` 봉투 · Portal 200 |
+| T5 사용자 중단 | #583 | ABORTED | 6대 수집 시작 15초 뒤 API stop → `[수집] 중단됨: 빌드가 중단됐습니다` · 6대 실패 봉투(gather / GATHER_FAILED) · Portal 200 · `callback_body.json` 보존 · ABORTED 유지 |
+| T6 Callback 거부 주소 | #578 | UNSTABLE | `http://127.0.0.1:9` 3회 실패(10초 · 20초 대기) · delivered=false · body 보존 |
+| E2E-A loc=cj | #579 | UNSTABLE | cj Runner 에서 실행 · 2대 실패 봉투 · Callback 3회 실패 |
+| E2E-A2 loc=chj | #580 | FAILURE | `[실행 위치] 등록되지 않은 Location: 'chj'` · 수집 없이 봉투 2 · Portal 200 · fail-closed · tip 관측(`git ls-remote` origin · internal 전후 모두 `b203fd45`) |
+| E2E-D ESXi 6 | #576 | SUCCESS | 6/6 · serial 있음 · Portal 200 |
+
+### production P14 명부
+
+production P14 `604062c0`(main `b203fd45`) 승격 직후 production Job: canary os 2 #288(.132 Linux NOPASSWD · .120 Windows — 2/2 success · serial 있음) · Linux 11 #289(11/11 success · sudo password/login 9 · nopasswd 2) · ESXi 6 #290(6/6) · Redfish 10 #291(8 success + 10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE` — P13 #285 와 같은 기존 실패). checkout 전부 == `604062c0`(`refs/remotes/origin/production`) · 결과 수 == 접수 수 · Portal 200 · Jenkins 결과 전부 SUCCESS

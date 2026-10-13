@@ -117,7 +117,7 @@ vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 끝나면 
 
 | 항목 | 값 |
 |---|---|
-| production | `b86c5942` (`main` `46002a2b`에서 생성, 2026-10-12) |
+| production | `604062c0` (`main` `b203fd45`에서 생성, 2026-10-13) |
 | 상태 | `PROVENANCE`, 두 원격 일치 |
 | 첫 production(baseline) | `4ce90a00` |
 
