@@ -31,16 +31,27 @@
 
     # -k: 캐시된 sudo 타임스탬프를 쓰지 않는다 (timestamp_type=global 환경에서 다른 세션의 인증이 통과로 보이지 않게).
     # Ansible 은 비밀번호가 있으면 -n 을 빼고 prompt 에 응답한다 — 비밀번호는 명령줄 · 환경변수 · 파일에 놓이지 않는다.
-    - name: "linux | try_one_sudo | sudo probe"
-      become: true
-      vars:
-        ansible_become_flags: "-H -S -n -k"
-      ansible.builtin.raw: "id -u"
-      register: _l_sudo_probe
-      failed_when: false
-      changed_when: false
-      ignore_unreachable: true
-      no_log: true
+    # 비밀번호 거부는 Ansible 이 prompt 단계에서 세션을 끊는 **예외** 로 올라온다. 어떤 버전은 그것을 failed_when 으로 지울 수 있는
+    #   실패 결과로 돌려주고, 어떤 버전(Runner ansible-core 2.20.3, 2026-10-13 main #558 실측)은 태스크 예외로 올려 block 을 끝낸다.
+    #   그래서 프로브를 자체 block/rescue 로 감싼다 — 어느 쪽이든 결과는 같은 모양(rc 없음 · msg 만)으로 _l_sudo_probe 에 남고,
+    #   바깥 play 의 rescue 로 떨어지지 않는다. 버전을 검사하지 않는다.
+    - name: "linux | try_one_sudo | probe with rescue"
+      block:
+        - name: "linux | try_one_sudo | sudo probe"
+          become: true
+          vars:
+            ansible_become_flags: "-H -S -n -k"
+          ansible.builtin.raw: "id -u"
+          register: _l_sudo_probe
+          failed_when: false
+          changed_when: false
+          ignore_unreachable: true
+          no_log: true
+      rescue:
+        - name: "linux | try_one_sudo | record probe exception"
+          ansible.builtin.set_fact:
+            _l_sudo_probe: "{{ {'failed': true, 'msg': ((ansible_failed_result | default({})).msg | default('become failed') | string)} }}"
+          no_log: true
 
     - name: "linux | try_one_sudo | evaluate"
       ansible.builtin.set_fact:

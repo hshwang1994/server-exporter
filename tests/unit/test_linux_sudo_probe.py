@@ -75,6 +75,24 @@ def test_nopasswd_probe_runs_without_become_and_candidate_probe_with_become():
     assert cand["ansible.builtin.raw"] == "id -u"
 
 
+def test_candidate_probe_is_wrapped_so_a_become_exception_cannot_abort_the_play():
+    """Runner ansible-core 2.20.3 실측(2026-10-13 main #558): 비밀번호 거부가 failed_when 으로 지울 수 없는 태스크 예외로 올라와 play 의
+    rescue 로 떨어졌다. 프로브는 자체 block/rescue 안에 있고, rescue 는 같은 모양(rc 없음 · msg 만)의 결과를 register 에 남긴다."""
+    outer = load_tasks(TRY_ONE)[-1]
+    wrapper = next(t for t in outer["block"] if "probe with rescue" in t.get("name", ""))
+    assert [t["name"] for t in wrapper["block"]] == ["linux | try_one_sudo | sudo probe"]
+    rescue = wrapper["rescue"]
+    assert len(rescue) == 1 and rescue[0]["no_log"] is True
+    recorded = _facts(rescue[0], {"ansible_failed_result": {"msg": "Task failed: Incorrect sudo password", "failed": True}})["_l_sudo_probe"]
+    assert "rc" not in recorded and recorded["msg"]
+    ctx = {"_l_sudo_probe": recorded, "_l_sudo_attempts": [], "_l_sudo_rejections": 0, "_try_sudo": {"label": "login", "password": "x"}}
+    ctx.update(_facts(_task(TRY_ONE, "evaluate"), ctx))
+    assert ctx["_l_sudo_probe_verdict"].strip() == "rejected"
+    assert "rc" not in _facts(rescue[0], {})["_l_sudo_probe"], "ansible_failed_result 가 없어도 죽지 않는다"
+    for key in ("stdout", "stderr", "password"):
+        assert key not in str(rescue[0]["ansible.builtin.set_fact"]), key
+
+
 def test_secret_handling_tasks_are_no_log():
     for name in ("build candidates", "record meta", "init"):
         assert _task(TRY_SUDO, name).get("no_log") is True, name
