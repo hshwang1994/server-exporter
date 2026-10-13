@@ -39,6 +39,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-10-13 — Linux sudo Vault 후보 · 잠금 예산 · OS Serial Number 필수 · H12 대표 오류 · production P14 · P15 |
 | 2026-10-12 — 독립 점검: 중단 원인 판정 · 보존 1회 · Portal 합성 404 · Redfish 403/404 · 사람용 문서 재작성 · production P13 |
 | 2026-10-10~11 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-22 |
 | 2026-10-09 — 운영 로그 문구 정리 (수집 Job · 수집 스크립트 · CI) |
@@ -125,6 +126,14 @@
 6. **production P14** = main `b203fd45` 승격 → `604062c0`. 근거: 매트릭스 main #574~#583(S1 S2 S3 S4 T2 T5 T6 E2E-A E2E-A2 E2E-D, .161 전원 꺼짐으로 S3 는 11대) · CI #54(COMPLETE_PASS) ·
    production canary #288. 1차 후보 `03a5637b` 는 CI #53 Gate(add-on 통합 시험 — include 경로)에서 떨어져 `b203fd45` 로 고쳤다. 승격은 작업 PC 의 `prodgen promote`
    (CI 산출물 재사용, 환경 의존 gate 재실행) — Jenkins 에 GitLab push 자격이 없어 CI Promote 는 dry-run 이다.
+7. **H12 후속 — 정상 경로 failed 봉투의 errors[0]** (`75ca57c2`): `common/tasks/normalize/build_output.yml` 에 "ensure representative error" 1 태스크. guard 가
+   `gather_no_data` 문장을 채운 뒤 `_norm_errors[0].message` 가 그 문장이 아니면 rescue(`build_failed_output.yml`)와 같은 규칙으로 대표 오류를 앞에 둔다
+   (채널 표시 `<linux|windows|esxi|redfish>_gather` · 섹션 결과 요약 detail · 완전히 같은 원소만 제외 · 상한 10 · 절단 표시 · 멱등). 문장 카탈로그 · status 로직 · envelope 불변.
+   실제 엔진 통합 시험 7건(`tests/fixtures/no_data/harness.yml`)이 4채널 표시 · 상한 · partial 대조군 · OS 의 Serial 오류 후속을 고정한다.
+8. **sudo live 매트릭스** (`341433af`): `tests/integration/test_sudo_probe_live.py`(-m live, 기본 skip). 틀린 비밀번호를 실 PAM 에 보내지 않는다 — 거부 · rc 1 · 무응답 · 부재는
+   가짜 sudo(`tests/fixtures/sudo_live/fake_sudo.sh`)로 Ansible 이 만드는 결과 모양을 재현하고, 통과 · 정책 거부 · NOPASSWD 는 실 sudo 로 본다. Ansible/sudo 를 올릴 때 다시 돌린다.
+9. **production P15** = main `341433af` 승격 → `6193660c`(직전 `604062c0`). 근거: 매트릭스 main #584~#593(S1 S2 S3 S4 T2 T5 T6 E2E-A E2E-A2 E2E-D, 봉투 38 위반 0) · CI #55(COMPLETE_PASS, PROMOTE dry-run) ·
+   작업 PC `prodgen promote`(CI 산출물 재사용 · 환경 의존 gate 재실행) · drift-check `PROVENANCE` · production canary #292~#295(os 2 · Linux 11 · ESXi 6 · Redfish 10 — 결과 수 == 접수 수 · Portal 200 · 실패는 Redfish 기존 2건).
 
 ### 영향
 
@@ -140,6 +149,8 @@
 - 갱신: `test_linux_raw_scripts_shim.py`(host 당 원격 실행 python 13 · raw 12 · no_sysfs 15, 순서에 `try_sudo.yml`), `test_credential_probe_classification.py`(새 probe 등록),
   `test_credential_candidate_stop.py`, `test_errors_message_contract.py`(`serial_missing`), `test_vault_check_no_secret_output.py`.
 - 실장비: ADR `docs/ai/decisions/ADR-2026-10-13-sudo-vault-fallback-and-serial-required.md`, evidence `tests/evidence/2026-10-13-sudo-fallback-serial-required.md`.
+- H12 후속 · sudo live(결정 7 · 8 · 9): `test_errors_message_contract.py` H12 블록(배선 · 대표 앞 · 멱등 · success/partial 불변 · 채널 표시 4종 · 상한 · 중복 · 비정상 입력) ·
+  `tests/integration/test_build_output_no_data_playbook.py`(실제 엔진 7) · `test_sudo_probe_live.py`(-m live 9, 10.100.64.132) · evidence `tests/evidence/2026-10-13-h12-representative-error-and-sudo-live.md`.
 
 ## 2026-10-12 — 독립 점검: 중단 원인 판정 · 보존 1회 · Portal 합성 404 · Redfish 403/404 · 사람용 문서 재작성 · production P13
 

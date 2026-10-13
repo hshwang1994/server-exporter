@@ -469,7 +469,7 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
-## 2026-10-13 Linux sudo Vault 후보 · OS Serial 필수 — main 매트릭스 · production P14 명부 (실장비)
+## 2026-10-13 Linux sudo Vault 후보 · OS Serial 필수 · H12 대표 오류 — main 매트릭스 · production P14 · P15 명부 (실장비)
 
 수집 코드 변경(Linux sudo 후보 · 잠금 예산 · Serial 필수 · `diagnosis.details.sudo`)의 실장비 증거는 `../../tests/evidence/2026-10-13-sudo-fallback-serial-required.md` 다
 (10.100.64.132 테스트 계정 시나리오 #556~#562 · 명부 #563). 승격 전제의 매트릭스는 최종 후보 main `b203fd45` 에서 돌렸다(1차 후보 `03a5637b` 의 매트릭스 #564~#573 은 CI Gate 실패로 증거에서 제외).
@@ -493,3 +493,27 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 ### production P14 명부
 
 production P14 `604062c0`(main `b203fd45`) 승격 직후 production Job: canary os 2 #288(.132 Linux NOPASSWD · .120 Windows — 2/2 success · serial 있음) · Linux 11 #289(11/11 success · sudo password/login 9 · nopasswd 2) · ESXi 6 #290(6/6) · Redfish 10 #291(8 success + 10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE` — P13 #285 와 같은 기존 실패). checkout 전부 == `604062c0`(`refs/remotes/origin/production`) · 결과 수 == 접수 수 · Portal 200 · Jenkins 결과 전부 SUCCESS
+
+### main `341433af` 매트릭스 — H12 대표 오류 · sudo live 시험 (main Job #584~#593, checkout 전부 == `341433af`)
+
+`75ca57c2`(정상 경로 failed 봉투의 errors[0] 대표 문장) + `341433af`(sudo live 매트릭스 시험) 의 승격 전제. 증거 `../../tests/evidence/2026-10-13-h12-representative-error-and-sudo-live.md`.
+
+| 시나리오 | 빌드 | 결과 | 관측 |
+|---|---|---|---|
+| S1 Linux 3 (.162 .163 .156) | #590 | SUCCESS | 3/3 success · serial 있음 · sudo nopasswd 2 · password(login) 1 · Portal 200 |
+| S2 혼합 (.132 .33 .34 + TEST-NET 2) | #591 | SUCCESS | 3 success(serial 있음) + 2 `TARGET_UNREACHABLE` · 봉투 5 = 접수 5 · Portal 200 |
+| S3 Linux 11 (.161 제외) | #584 | SUCCESS | 11/11 success · serial 전부 · sudo password(login) 9 · nopasswd 2 · Portal 200 |
+| S4 Windows .120 | #587 | SUCCESS | 1/1 success · serial 있음 · Portal 200 |
+| T2 TEST-NET 2 | #586 | SUCCESS | 2/2 `TARGET_UNREACHABLE` · Portal 200 |
+| T5 사용자 중단 (6대) | #592 | ABORTED | 수집 시작 15초 뒤 API stop · `[수집] 중단됨` · 6 봉투 GATHER_FAILED · Portal 200 · body 보존 |
+| T6 Callback 거부 주소 | #588 | UNSTABLE | `http://127.0.0.1:9` 3회 실패(10초 · 20초 대기) · delivered=false · body 보존 |
+| E2E-A loc=cj | #589 | UNSTABLE | cj Runner 에서 실행 · 2대 실패 봉투 · Callback 3회 실패 |
+| E2E-A2 loc=chj | #593 | FAILURE | `[실행 위치] 등록되지 않은 Location: 'chj'` · 수집 없이 봉투 2 · Portal 200 · fail-closed · tip 관측(origin · internal 전후 모두 `341433af`) |
+| E2E-D ESXi 6 | #585 | SUCCESS | 6/6 · serial 있음 · Portal 200 |
+
+봉투 38(실패 14) 전수: 13 필드 · enum · failed → `errors[0].message == failure_reason` · lab 자격 문자열 0건. 이 매트릭스에서 H12 경로(정상 경로 성공 섹션 0개)는 발생하지 않았다 —
+그 경로는 실제 엔진 통합 시험으로 검증했다.
+
+### production P15 명부
+
+production P15 `6193660c`(main `341433af`, 직전 `604062c0`) 승격 직후 production Job: canary os 2 #292(.132 Linux NOPASSWD · .120 Windows — 2/2 success · serial 있음) · Linux 11 #293(11/11 success · sudo password/login 9 · nopasswd 2) · ESXi 6 #294(6/6) · Redfish 10 #295(8 success + 10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE` — P14 #291 과 같은 기존 실패). checkout 전부 == `6193660c`(`refs/remotes/origin/production`) · 결과 수 == 접수 수 · Portal 200 · Jenkins 결과 전부 SUCCESS. 봉투 29 전수 계약 검사 위반 0 · 자격 문자열 0건 — `../../tests/evidence/2026-10-13-h12-representative-error-and-sudo-live.md` 7절.
