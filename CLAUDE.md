@@ -25,6 +25,7 @@ Server Exporter는 Jenkins + Ansible 기반 서버 정보 Gathering 프로젝트
 `merge_fragment.yml`과 Common Builder가 최종 Result를 조립한다.
 금지: 다른 Gather Section 침범, 누적 변수 직접 수정, Vendor Task에서 Common Normalize 규칙 임의 변경, 새 Section 하나 때문에 전체 Output Builder 재작성.
 Overall `status`는 Error 문자열 개수가 아니라 실제 Section 결과로 `success`, `partial`, `failed`를 판단한다. Partial을 임의로 Failed로 바꾸거나 대표 Failure Stage를 억지로 부여하지 않는다.
+예외는 하나다(2026-10-13 사용자 정책): OS 채널에서 Serial Number 를 얻지 못한 host 는 Section 결과와 무관하게 `failed` 다(`os-gather/tasks/normalize/require_serial.yml`, 시나리오 E). 이때도 수집한 `data`·`sections` 는 보존하고 원인은 `diagnosis.details.serial_number.cause` 로 가른다.
 
 ## 5. Adapter / Vendor Boundary
 Vendor/Generation 차이는 Adapter를 우선 사용한다. 공통 코드에 Vendor 이름 기반 분기를 추가하지 않는다.
@@ -40,6 +41,7 @@ OS: `TCP 5986 -> TCP 5985 -> TCP 22 -> Protocol Detection -> Credential -> Gathe
 - Windows: WinRM WS-Man Identify
 - Linux: SSH Identification
 - Linux는 Remote Python 상태에 따라 Standard 또는 Raw fallback 사용
+- Linux sudo: SSH 인증 뒤 `root → NOPASSWD 확인(제출 0) → 로그인 비밀번호 → Vault sudo_passwords` 순. 같은 값 1회, 정책 거부·sudo 불가는 즉시 중단, 비밀번호 거부는 대상 잠금 정책에서 계산한 예산 안에서만(`_l_sudo_max_rejections`). 분류는 결과 구조(rc 유무·값)만 쓰고 Ansible 버전을 가정하지 않는다
 - Raw fallback은 Python 부재/비호환 환경에서도 Standard Result Contract 유지
 ESXi: `TCP 443 -> vSphere RetrieveServiceContent -> Credential -> Gathering -> Normalize`
 Redfish: `TCP 443 -> ServiceRoot -> Vendor Detection -> Adapter Selection -> Credential Load(Standard 전역 + Recovery Location×Vendor) -> Standard Account Auth -> Reconciliation if needed -> Standard Account Gathering -> Normalize`

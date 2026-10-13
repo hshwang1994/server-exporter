@@ -43,6 +43,7 @@ _spec.loader.exec_module(_mod)
 _FAKE_USER = "zzz-canary-username-zzz"
 _FAKE_PASS = "zzz-canary-password-zzz"
 _FAKE_BECOME = "zzz-canary-become-zzz"
+_FAKE_SUDO = "zzz-canary-sudo-zzz"
 
 SAMPLE = f"""
 accounts:
@@ -55,13 +56,20 @@ accounts:
     label: "dell_fallback_1"
     role: "recovery"
 ansible_become_password: "{_FAKE_BECOME}"
+sudo_passwords:
+  - label: "sudo_primary"
+    role: "primary"
+    password: "{_FAKE_SUDO}"
+  - label: "sudo_fallback1"
+    role: "secondary"
+    password: "{_FAKE_SUDO}2"
 """
 
 
 def test_inspect_accounts_never_returns_secret_values():
     info = _mod.inspect_accounts(SAMPLE, vendor="dell")
     blob = json.dumps(info, ensure_ascii=False)
-    for canary in (_FAKE_USER, _FAKE_PASS, _FAKE_BECOME):
+    for canary in (_FAKE_USER, _FAKE_PASS, _FAKE_BECOME, _FAKE_SUDO):
         assert canary not in blob, f"검사 결과에 {canary!r} 유출"
 
 
@@ -72,6 +80,8 @@ def test_inspect_accounts_reports_structure_without_values():
     assert info["account_labels"] == ["dell_current", "dell_fallback_1"]
     assert info["account_username_present"] == [True, True]
     assert info["has_become_password"] is True
+    assert info["sudo_passwords_count"] == 2 and info["sudo_labels"] == ["sudo_primary", "sudo_fallback1"]
+    assert info["sudo_roles"] == ["primary", "secondary"] and info["sudo_password_present"] == [True, True]
     assert not info["problems"]
 
 

@@ -162,6 +162,27 @@ def inspect_accounts(plaintext: str, vendor: str | None = None,
         "has_become_password": bool(data.get("ansible_become_password")),
     }
 
+    # 2026-10-13: Linux sudo 비밀번호 후보 목록(sudo_passwords) — 개수 · label · role · 값 존재 여부만 (값은 담지 않는다)
+    sudo = data.get("sudo_passwords")
+    if isinstance(sudo, list):
+        result["sudo_passwords_count"] = len(sudo)
+        result["sudo_labels"] = [(e.get("label") if isinstance(e, dict) else None) for e in sudo]
+        result["sudo_roles"] = [(e.get("role") if isinstance(e, dict) else None) for e in sudo]
+        result["sudo_password_present"] = [
+            bool(e.get("password")) if isinstance(e, dict) else bool(e) for e in sudo
+        ]
+        for idx, entry in enumerate(sudo):
+            if isinstance(entry, dict):
+                if not entry.get("password"):
+                    problems.append(f"sudo_passwords[{idx}] password 가 비었다")
+                role = entry.get("role")
+                if role and role not in VALID_ROLES:
+                    problems.append(f"sudo_passwords[{idx}] role={role!r} 는 {sorted(VALID_ROLES)} 밖")
+            elif not entry:
+                problems.append(f"sudo_passwords[{idx}] 가 비었다")
+    elif sudo is not None:
+        problems.append("sudo_passwords 가 목록이 아니다")
+
     if isinstance(accounts, list) and accounts:
         labels = [(a.get("label") if isinstance(a, dict) else None) for a in accounts]
         roles = [(a.get("role") if isinstance(a, dict) else None) for a in accounts]
