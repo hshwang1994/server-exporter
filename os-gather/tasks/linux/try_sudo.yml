@@ -1,0 +1,124 @@
+---
+
+- name: "linux | sudo | init"
+  ansible.builtin.set_fact:
+    _l_sudo_ok: false
+    _l_sudo_mode: ""
+    _l_sudo_outcome: ""
+    _l_sudo_stopped: false
+    _l_sudo_tries: 0
+    _l_sudo_rejections: 0
+    _l_sudo_used_label: null
+    _l_sudo_attempts: []
+  no_log: true
+
+- name: "linux | sudo | root login needs no escalation"
+  when: (ansible_user | default('')) == 'root'
+  ansible.builtin.set_fact:
+    _l_sudo_ok: true
+    _l_sudo_mode: root
+    _l_sudo_outcome: root_login
+    ansible_become_pass: ""
+  no_log: true
+
+- name: "linux | sudo | nopasswd probe"
+  when: (_l_sudo_mode | default('')) != 'root'
+  ansible.builtin.raw: "sudo -k -n /bin/sh -c 'id -u'"
+  register: _l_sudo_nopasswd
+  failed_when: false
+  changed_when: false
+  ignore_unreachable: true
+  no_log: true
+
+- name: "linux | sudo | classify nopasswd probe"
+  when: (_l_sudo_mode | default('')) != 'root'
+  ansible.builtin.set_fact:
+    _l_sudo_np_ok: >-
+      {{ (((_l_sudo_nopasswd.rc | default(1)) | int) == 0)
+         and ('0' in ((_l_sudo_nopasswd.stdout_lines | default([])) | map('trim') | list)) }}
+    _l_sudo_np_rc: "{{ _l_sudo_nopasswd.rc | default(none) }}"
+    _l_sudo_np_unreachable: "{{ _l_sudo_nopasswd.unreachable | default(false) | bool }}"
+  no_log: true
+
+- name: "linux | sudo | adopt nopasswd"
+  when:
+    - not (_l_sudo_ok | bool)
+    - _l_sudo_np_ok | default(false) | bool
+  ansible.builtin.set_fact:
+    _l_sudo_ok: true
+    _l_sudo_mode: nopasswd
+    _l_sudo_outcome: nopasswd
+    ansible_become_pass: ""
+  no_log: true
+
+- name: "linux | sudo | stop when sudo is unavailable"
+  when:
+    - not (_l_sudo_ok | bool)
+    - (_l_sudo_np_unreachable | default(false) | bool) or ((_l_sudo_np_rc | default(none)) in [127, 255])
+  ansible.builtin.set_fact:
+    _l_sudo_stopped: true
+    _l_sudo_mode: unavailable
+    _l_sudo_outcome: >-
+      {{ 'prompt_timeout' if (_l_sudo_np_unreachable | default(false) | bool)
+         else ('sudo_absent' if ((_l_sudo_np_rc | default(none)) == 127) else 'transport') }}
+    ansible_become_pass: ""
+  no_log: true
+
+- name: "linux | sudo | build candidates"
+  when:
+    - not (_l_sudo_ok | bool)
+    - not (_l_sudo_stopped | bool)
+  ansible.builtin.set_fact:
+    _l_sudo_candidates: >-
+      {%- set login = (ansible_password | default('', true)) | string -%}
+      {%- set head = ([{'label': 'login', 'role': 'login', 'password': login}] if (login | length) > 0 else []) -%}
+      {%- set vault = (_cred_sudo_candidates | default([])) | rejectattr('password', 'equalto', login) | list -%}
+      {{ head + vault }}
+  no_log: true
+
+- name: "linux | sudo | iterate candidates"
+  ansible.builtin.include_tasks: try_one_sudo.yml
+  loop: "{{ _l_sudo_candidates | default([]) }}"
+  loop_control:
+    loop_var: _try_sudo
+    label: "{{ _try_sudo.label | default('unlabeled') }}"
+  when:
+    - not (_l_sudo_ok | bool)
+    - not (_l_sudo_stopped | bool)
+    - (_l_sudo_candidates | default([])) | length > 0
+
+- name: "linux | sudo | classify when no candidate succeeded"
+  when:
+    - not (_l_sudo_ok | bool)
+    - not (_l_sudo_stopped | bool)
+  ansible.builtin.set_fact:
+    _l_sudo_mode: "{{ 'unavailable' if ((_l_sudo_tries | default(0) | int) == 0) else 'rejected' }}"
+    _l_sudo_outcome: >-
+      {{ 'no_candidate' if ((_l_sudo_tries | default(0) | int) == 0)
+         else ('budget_exhausted' if ((_l_sudo_rejections | default(0) | int) >= (_l_sudo_max_rejections | default(1) | int))
+               else 'password_rejected') }}
+    ansible_become_pass: ""
+  no_log: true
+
+- name: "linux | sudo | record meta"
+  ansible.builtin.set_fact:
+    _l_sudo_meta:
+      ok:              "{{ _l_sudo_ok | bool }}"
+      mode:            "{{ _l_sudo_mode }}"
+      outcome:         "{{ _l_sudo_outcome }}"
+      attempted_count: "{{ _l_sudo_tries | default(0) | int }}"
+      rejected_count:  "{{ _l_sudo_rejections | default(0) | int }}"
+      max_rejections:  "{{ _l_sudo_max_rejections | default(1) | int }}"
+      used_label:      "{{ _l_sudo_used_label | default(none) }}"
+      fallback_used:   "{{ (_l_sudo_ok | bool) and (_l_sudo_mode == 'password') and ((_l_sudo_used_label | default('', true)) != 'login') }}"
+      policy:          "{{ _l_sudo_policy | default({}) }}"
+      attempts:        "{{ _l_sudo_attempts | default([]) }}"
+  no_log: true
+
+- name: "linux | sudo | log rejected candidates (advisory)"
+  when: _l_sudo_mode in ['rejected', 'denied']
+  ansible.builtin.debug:
+    msg: >-
+      [sudo] {{ ansible_host | default(inventory_hostname) }} - password rejected {{ _l_sudo_rejections | default(0) }} time(s)
+      (budget {{ _l_sudo_max_rejections | default(1) }}, attempts {{ _l_sudo_tries | default(0) }}, result {{ _l_sudo_mode }}/{{ _l_sudo_outcome }}).
+      Re-running against this host within 15 minutes may accumulate lockout counters.

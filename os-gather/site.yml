@@ -178,6 +178,9 @@
         - name: "linux | preflight"
           ansible.builtin.include_tasks: tasks/linux/preflight.yml
 
+        - name: "linux | try sudo"
+          ansible.builtin.include_tasks: tasks/linux/try_sudo.yml
+
         - name: "linux | init fragments"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/init_fragments.yml"
@@ -234,6 +237,7 @@
                 gather_mode:       "{{ _l_python_mode | default('python_ok') }}"
                 python_version:    "{{ _l_python_version | default('') }}"
                 auth:              "{{ _os_attempts_meta | default({}) }}"
+                sudo:              "{{ _l_sudo_meta | default({}) }}"
 
         - name: "linux | set output meta vars"
           ansible.builtin.set_fact:
@@ -312,7 +316,8 @@
                               'credential_scope': (_cred_scope | default('')) or none,
                               'selected_port': 22,
                               'checked_ports': (_precheck_raw.checked_ports | default([5986, 5985, 22])),
-                              'auth': (_os_attempts_meta | default({}))}
+                              'auth': (_os_attempts_meta | default({})),
+                              'sudo': (_l_sudo_meta | default({}))}
                     | combine(((_diagnosis | default({}, true)).details | default({}))
                               if (((_diagnosis | default({}, true)).details | default({}))
                                   is mapping) else {})} }}
@@ -335,6 +340,9 @@
         - name: "linux | rescue | build_failed_output"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_failed_output.yml"
+
+        - name: "linux | rescue | require serial"
+          ansible.builtin.include_tasks: tasks/normalize/require_serial.yml
 
         - name: "linux | rescue | inject schema_version"
           ansible.builtin.set_fact:
@@ -585,6 +593,9 @@
         - name: "windows | rescue | build_failed_output"
           ansible.builtin.include_tasks:
             file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_failed_output.yml"
+
+        - name: "windows | rescue | require serial"
+          ansible.builtin.include_tasks: tasks/normalize/require_serial.yml
 
         - name: "windows | rescue | inject schema_version"
           ansible.builtin.set_fact:

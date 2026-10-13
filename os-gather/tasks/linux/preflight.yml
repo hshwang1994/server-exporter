@@ -20,6 +20,26 @@
     echo "HAS_LSCPU=$(command -v lscpu >/dev/null 2>&1 && echo 1 || echo 0)"
     echo "HAS_IP=$(command -v ip >/dev/null 2>&1 && echo 1 || echo 0)"
     echo "OS_NAME=$( . /etc/os-release 2>/dev/null; echo "$NAME" )"
+    pamfiles=""
+    for f in /etc/pam.d/sudo /etc/pam.d/system-auth /etc/pam.d/password-auth /etc/pam.d/common-auth; do
+      [ -r "$f" ] && pamfiles="$pamfiles $f"
+    done
+    echo "LOCK_PAM_FILES=$(echo $pamfiles | wc -w)"
+    lockmod=""
+    [ -n "$pamfiles" ] && lockmod=$(grep -hE '^[^#]*pam_(faillock|tally2)\.so' $pamfiles 2>/dev/null | head -5)
+    echo "LOCK_MODULE=$( [ -n "$lockmod" ] && echo 1 || echo 0 )"
+    echo "LOCK_DENY_INLINE=$(printf '%s\n' "$lockmod" | grep -oE 'deny=[0-9]+' | head -1 | cut -d= -f2)"
+    echo "LOCK_ROOT_INLINE=$(printf '%s\n' "$lockmod" | grep -q 'even_deny_root' && echo 1 || echo 0)"
+    echo "LOCK_UNLOCK_INLINE=$(printf '%s\n' "$lockmod" | grep -oE 'unlock_time=[0-9]+' | head -1 | cut -d= -f2)"
+    if [ -r /etc/security/faillock.conf ]; then
+      echo "LOCK_CONF=1"
+      echo "LOCK_DENY_CONF=$(grep -E '^[[:space:]]*deny[[:space:]]*=' /etc/security/faillock.conf | tail -1 | cut -d= -f2 | tr -d ' \t')"
+      echo "LOCK_ROOT_CONF=$(grep -qE '^[[:space:]]*even_deny_root' /etc/security/faillock.conf && echo 1 || echo 0)"
+      echo "LOCK_UNLOCK_CONF=$(grep -E '^[[:space:]]*unlock_time[[:space:]]*=' /etc/security/faillock.conf | tail -1 | cut -d= -f2 | tr -d ' \t')"
+      echo "LOCK_INTERVAL_CONF=$(grep -E '^[[:space:]]*fail_interval[[:space:]]*=' /etc/security/faillock.conf | tail -1 | cut -d= -f2 | tr -d ' \t')"
+    else
+      echo "LOCK_CONF=0"
+    fi
   register: _l_preflight_raw
   changed_when: false
   failed_when: false
@@ -48,4 +68,42 @@
       {%- endif -%}
     _l_python: "{{ (_l_pf.PY_PATH | default('python3')) | trim }}"
     _l_distro_name: "{{ (_l_pf.OS_NAME | default('')) | trim }}"
+  no_log: true
+
+- name: "linux | preflight | sudo lockout policy"
+  ansible.builtin.set_fact:
+    _l_sudo_policy:
+      pam_files:      "{{ (_l_pf.LOCK_PAM_FILES | default('0')) | trim | int }}"
+      lock_module:    "{{ ((_l_pf.LOCK_MODULE | default('0')) | trim) == '1' }}"
+      deny: >-
+        {%- set i = (_l_pf.LOCK_DENY_INLINE | default('')) | trim -%}
+        {%- set c = (_l_pf.LOCK_DENY_CONF | default('')) | trim -%}
+        {{ (i | int) if i.isdigit() else ((c | int) if c.isdigit() else 3) }}
+      even_deny_root: "{{ (((_l_pf.LOCK_ROOT_INLINE | default('0')) | trim) == '1') or (((_l_pf.LOCK_ROOT_CONF | default('0')) | trim) == '1') }}"
+      unlock_time: >-
+        {%- set i = (_l_pf.LOCK_UNLOCK_INLINE | default('')) | trim -%}
+        {%- set c = (_l_pf.LOCK_UNLOCK_CONF | default('')) | trim -%}
+        {{ (i | int) if i.isdigit() else ((c | int) if c.isdigit() else none) }}
+      fail_interval: >-
+        {%- set c = (_l_pf.LOCK_INTERVAL_CONF | default('')) | trim -%}
+        {{ (c | int) if c.isdigit() else none }}
+  no_log: true
+
+- name: "linux | preflight | sudo max rejections"
+  ansible.builtin.set_fact:
+    _l_sudo_max_rejections: >-
+      {%- set pol = _l_sudo_policy | default({}) -%}
+      {%- set files = (pol.pam_files | default(0)) | int -%}
+      {%- set deny = (pol.deny | default(3)) | int -%}
+      {%- set unlock = pol.unlock_time | default(none) -%}
+      {%- if files == 0 -%}
+        {{ 1 }}
+      {%- elif not (pol.lock_module | default(false) | bool) -%}
+        {{ 3 }}
+      {%- elif not (pol.even_deny_root | default(false) | bool) -%}
+        {{ 3 }}
+      {%- else -%}
+        {%- set base = [1, [3, deny - 2] | min] | max -%}
+        {{ ([1, base - 1] | max) if (unlock is not none and (unlock | int) == 0) else base }}
+      {%- endif -%}
   no_log: true

@@ -177,6 +177,7 @@
   no_log: true
 
 - name: "linux | system | raw gather (privileged dmi + dmidecode collector)"
+  when: _l_sudo_ok | default(true) | bool
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
@@ -264,6 +265,7 @@
   no_log: true
 
 - name: "linux | system | gather runtime firewall (privileged)"
+  when: _l_sudo_ok | default(true) | bool
   become: true
   ansible.builtin.raw: |
     export LANG=C LC_ALL=C
@@ -398,6 +400,7 @@
 
 - name: "linux | system | DMI direct-read fallback"
   when: >
+    (_l_sudo_ok | default(true) | bool) and
     _l_python_mode == 'python_ok' and
     (((_l_serial_from_setup | default(none)) is none and (_l_raw_serial | default(none)) is none) or
      ((_l_uuid_from_setup | default(none)) is none and (_l_raw_uuid | default(none)) is none))

@@ -31,6 +31,10 @@ def credential_accounts(vault_data):
     return _import_credential_common().normalize_accounts(vault_data)
 
 
+def credential_sudo_passwords(vault_data):
+    return _import_credential_common().normalize_sudo_passwords(vault_data)
+
+
 def credential_standard_accounts(vault_data):
     return _import_credential_common().standard_accounts_of(vault_data)
 
@@ -50,6 +54,7 @@ class FilterModule(object):
     def filters(self):
         return {
             "credential_accounts": credential_accounts,
+            "credential_sudo_passwords": credential_sudo_passwords,
             "credential_standard_accounts": credential_standard_accounts,
             "credential_recovery_accounts": credential_recovery_accounts,
             "credential_redfish_candidates": credential_redfish_candidates,

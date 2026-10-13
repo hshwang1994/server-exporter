@@ -23,3 +23,7 @@
 - name: "os | normalize | build_output"
   ansible.builtin.include_tasks:
     file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/build_output.yml"
+
+- name: "os | normalize | require serial"
+  ansible.builtin.include_tasks:
+    file: "{{ lookup('env','REPO_ROOT') }}/os-gather/tasks/normalize/require_serial.yml"

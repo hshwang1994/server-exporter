@@ -161,3 +161,62 @@ def normalize_accounts(vault_data, legacy_label="legacy_single"):
         }]
 
     return []
+
+SUDO_PASSWORDS_KEY = "sudo_passwords"
+SUDO_LEGACY_KEY = "ansible_become_password"
+SUDO_LEGACY_LABEL = "sudo_legacy"
+ROLE_SECONDARY = "secondary"
+
+
+def _secret_text(value):
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return value if value.strip() else None
+    return None
+
+
+def _label_text(value, index):
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return "sudo_{0}".format(index)
+
+
+def normalize_sudo_passwords(vault_data, legacy_label=SUDO_LEGACY_LABEL):
+    if not isinstance(vault_data, dict):
+        return []
+
+    raw = vault_data.get(SUDO_PASSWORDS_KEY)
+    items = []
+    if isinstance(raw, list) and raw:
+        for index, item in enumerate(raw, start=1):
+            if isinstance(item, dict):
+                password = _secret_text(item.get("password"))
+                label = _label_text(item.get("label"), index)
+                role = item.get("role")
+            else:
+                password = _secret_text(item)
+                label = _label_text(None, index)
+                role = None
+            if password is None:
+                continue
+            items.append((password, label, role))
+    else:
+        legacy = _secret_text(vault_data.get(SUDO_LEGACY_KEY))
+        if legacy is not None:
+            items.append((legacy, legacy_label, ROLE_PRIMARY))
+
+    out = []
+    seen = set()
+    for password, label, role in items:
+        if password in seen:
+            continue
+        seen.add(password)
+        if not (isinstance(role, str) and role.strip()):
+            role = ROLE_PRIMARY if not out else ROLE_SECONDARY
+        else:
+            role = role.strip()
+        out.append({"password": password, "label": label, "role": role})
+    return out

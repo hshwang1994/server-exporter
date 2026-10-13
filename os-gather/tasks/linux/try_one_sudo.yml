@@ -1,0 +1,99 @@
+---
+
+- when:
+    - not (_l_sudo_ok | default(false) | bool)
+    - not (_l_sudo_stopped | default(false) | bool)
+    - (_l_sudo_rejections | default(0) | int) < (_l_sudo_max_rejections | default(1) | int)
+  block:
+
+    - name: "linux | try_one_sudo | count attempt"
+      ansible.builtin.set_fact:
+        _l_sudo_tries: "{{ (_l_sudo_tries | default(0) | int) + 1 }}"
+      no_log: true
+
+    - name: "linux | try_one_sudo | apply candidate"
+      ansible.builtin.set_fact:
+        ansible_become_pass: "{{ _try_sudo.password | string }}"
+      no_log: true
+
+    - name: "linux | try_one_sudo | probe with rescue"
+      block:
+        - name: "linux | try_one_sudo | sudo probe"
+          become: true
+          vars:
+            ansible_become_flags: "-H -S -n -k"
+          ansible.builtin.raw: "id -u"
+          register: _l_sudo_probe
+          failed_when: false
+          changed_when: false
+          ignore_unreachable: true
+          no_log: true
+      rescue:
+        - name: "linux | try_one_sudo | record probe exception"
+          ansible.builtin.set_fact:
+            _l_sudo_probe: "{{ {'failed': true, 'msg': ((ansible_failed_result | default({})).msg | default('become failed') | string)} }}"
+          no_log: true
+
+    - name: "linux | try_one_sudo | evaluate"
+      ansible.builtin.set_fact:
+        _l_sudo_probe_ok: >-
+          {{ (((_l_sudo_probe.rc | default(1)) | int) == 0)
+             and ('0' in ((_l_sudo_probe.stdout_lines | default([])) | map('trim') | list)) }}
+        _l_sudo_probe_rc: "{{ _l_sudo_probe.rc | default(none) }}"
+        _l_sudo_probe_unreachable: "{{ _l_sudo_probe.unreachable | default(false) | bool }}"
+        _l_sudo_probe_verdict: >-
+          {%- set rc = _l_sudo_probe.rc | default(none) -%}
+          {%- set unreachable = _l_sudo_probe.unreachable | default(false) | bool -%}
+          {%- set ok = (rc is not none) and ((rc | int) == 0) and ('0' in ((_l_sudo_probe.stdout_lines | default([])) | map('trim') | list)) -%}
+          {%- if ok -%}ok
+          {%- elif unreachable or (rc in [127, 255]) -%}unavailable
+          {%- elif rc is not none -%}denied
+          {%- elif _l_sudo_probe.msg is defined -%}rejected
+          {%- else -%}unknown_shape
+          {%- endif -%}
+      no_log: true
+
+    - name: "linux | try_one_sudo | record attempt"
+      ansible.builtin.set_fact:
+        _l_sudo_attempts: >-
+          {{ (_l_sudo_attempts | default([])) + [{'label': (_try_sudo.label | default('unlabeled')),
+                                                  'rc': (_l_sudo_probe_rc | default(none)),
+                                                  'unreachable': (_l_sudo_probe_unreachable | default(false) | bool),
+                                                  'verdict': (_l_sudo_probe_verdict | default('unknown_shape') | trim)}] }}
+        _l_sudo_rejections: >-
+          {{ (_l_sudo_rejections | default(0) | int) + (1 if ((_l_sudo_probe_verdict | default('') | trim) == 'rejected') else 0) }}
+      no_log: true
+
+    - name: "linux | try_one_sudo | promote on success"
+      when: (_l_sudo_probe_verdict | default('') | trim) == 'ok'
+      ansible.builtin.set_fact:
+        _l_sudo_ok: true
+        _l_sudo_mode: password
+        _l_sudo_outcome: password_accepted
+        _l_sudo_used_label: "{{ _try_sudo.label | default('unlabeled') }}"
+      no_log: true
+
+    - name: "linux | try_one_sudo | log failure (advisory)"
+      when: (_l_sudo_probe_verdict | default('') | trim) != 'ok'
+      ansible.builtin.debug:
+        msg: >-
+          sudo attempt failed - label={{ _try_sudo.label | default('unlabeled') }},
+          verdict={{ _l_sudo_probe_verdict | default('') | trim }},
+          rc={{ _l_sudo_probe_rc | default('none') }}, unreachable={{ _l_sudo_probe_unreachable | default(false) }}
+
+    - name: "linux | try_one_sudo | stop candidates unless the password was rejected"
+      when: (_l_sudo_probe_verdict | default('') | trim) in ['unavailable', 'denied', 'unknown_shape']
+      ansible.builtin.set_fact:
+        _l_sudo_stopped: true
+        _l_sudo_mode: "{{ 'denied' if ((_l_sudo_probe_verdict | default('') | trim) == 'denied') else 'unavailable' }}"
+        _l_sudo_outcome: >-
+          {%- set v = (_l_sudo_probe_verdict | default('') | trim) -%}
+          {%- set rc = _l_sudo_probe_rc | default(none) -%}
+          {%- if v == 'denied' -%}policy_denied
+          {%- elif _l_sudo_probe_unreachable | default(false) | bool -%}prompt_timeout
+          {%- elif rc == 127 -%}sudo_absent
+          {%- elif rc == 255 -%}transport
+          {%- else -%}unknown_shape
+          {%- endif -%}
+        ansible_become_pass: ""
+      no_log: true
