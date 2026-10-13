@@ -176,7 +176,7 @@ Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9�
 | **A. 완전 성공** | `success` | `[]` | 모두 `success` 또는 `not_supported` | 인증 통과 + 모든 지원 섹션 수집됨 |
 | **B. 성공이지만 부속 문제 있음** | `success` | 비어있지 않음 | 모두 `success` 또는 `not_supported` | 수집은 다 됐는데, 장비 어딘가에 문제가 있어 **기록**만 errors[] 에 남김 |
 | **C. 부분 성공** | `partial` | 비어있지 않음 | 일부 `failed`, 나머지 `success`/`not_supported` | 인증은 됐는데 일부 섹션 응답이 안 옴 (예: firmware endpoint 만 timeout) |
-| **D. 실패** | `failed` | 비어있지 않음 | 거의 다 `failed` | precheck 4단계 어디서 막힘 (ping/port/protocol/auth) |
+| **D. 실패** | `failed` | 비어있지 않음 (첫 원소 = 대표 사유) | 거의 다 `failed` | 사전 점검(도달/포트/프로토콜/인증)에서 막혔거나, 수집까지 갔는데 성공 섹션이 0개 |
 | **E. 필수 식별자 누락 (OS 채널만)** | `failed` | 비어있지 않음 | `success` 가 섞여 있을 수 있음 | 인증은 통과했고 다른 섹션은 수집됐지만 **Serial Number 를 끝내 얻지 못함**. `data` 의 수집 값은 그대로 남는다 (2026-10-13 사용자 정책) |
 
 > **E 는 섹션 규칙 위에 얹힌 유일한 예외다 (2026-10-13).** OS 채널(Linux · Windows)에서 Serial Number 는 필수 식별자다.
@@ -254,6 +254,12 @@ if response["data"]["hardware"].get("health") == "Critical":
 |---|---|---|
 | 전체 실패 | `failed` | 대표 문장 (아래 문장 카탈로그 중 하나). `errors[0].message == diagnosis.failure_reason` |
 | 섹션 부분 실패 | `partial` 또는 `success` | 섹션 의미를 유지한 문장. 예: `"CPU 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요."` — 이때 `diagnosis.failure_reason` 은 `null` 이다 |
+
+> `errors[0]` 규칙은 실패가 어디서 났든 같다 (2026-10-13). 예외로 끝난 봉투(rescue)뿐 아니라, 수집까지 갔는데 성공 섹션이
+> 0개라 `failed` 가 된 봉투(문장 "대상 서버에서 수집된 정보가 없습니다.")에서도 `errors[0]` 은 대표 오류다 — `section` 은 채널
+> 표시(`linux_gather` · `windows_gather` · `esxi_gather` · `redfish_gather`), `message` 는 `diagnosis.failure_reason` 과 같고,
+> `detail` 은 섹션 결과 요약(`success_sections=0; supported=…; failed=…`)이다. 섹션 단위 오류는 그 뒤에 그대로 남는다
+> (상한 10, 넘치면 절단 표시 1건). OS 채널은 그 뒤에 Serial Number 오류 1건이 더 붙을 수 있다 (4절 E).
 
 전체 실패 대표 문장 카탈로그 (정본: `common/vars/failure_reasons.yml` 의 `_fr_catalog`).
 

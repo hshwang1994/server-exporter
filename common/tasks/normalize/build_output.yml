@@ -49,6 +49,42 @@
     - (_out_status | default('')) == 'failed'
     - ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
+# 2026-10-13 (H12 후속): 위 guard 가 문장을 채워도 `_norm_errors` 는 섹션 오류 그대로라 errors[0].message ≠ failure_reason 이었다.
+#   Portal 실패 Grid 는 errors[].message 를 읽고, 계약은 "failed 봉투의 첫 원소는 대표 사유이며 message 는 diagnosis.failure_reason 과
+#   같다" (schema/field_dictionary.yml errors[] · docs/contract/03-fields.md 4-1 · 04). rescue 경로(build_failed_output.yml)와 같은
+#   규칙으로 대표 오류를 errors[0] 에 두고 섹션 오류는 뒤에 보존한다 — 완전히 같은 원소만 제외 · 상한 10 · 절단 표시.
+#   errors[0].message 가 이미 그 문장이면 아무것도 하지 않는다 (멱등). 채널 표시는 rescue 와 같다(<linux|windows|esxi|redfish>_gather).
+#   detail 에는 섹션 결과만 적는다 (비밀 · 원격 출력 없음). 문장은 여기서 새로 정의하지 않는다 — diagnosis.failure_reason 을 그대로 복사한다.
+- name: "normalize | build_output | ensure representative error"
+  vars:
+    _bo_diag: "{{ (_diagnosis | default({}, true)) if ((_diagnosis | default({}, true)) is mapping) else {} }}"
+    _bo_reason: "{{ (_bo_diag.failure_reason | default('', true)) | string | trim }}"
+    _bo_errors: "{{ ((_norm_errors | default([])) if ((_norm_errors | default([])) is not string) else []) | normalize_errors }}"
+    _bo_sections: "{{ _norm_sections if ((_norm_sections | default(none)) is mapping) else {} }}"
+    _bo_rep:
+      section: "{{ (_os_type | default(_out_target_type | default('gather', true), true)) ~ '_gather' }}"
+      message: "{{ _bo_reason }}"
+      detail: >-
+        {%- set supported = [] -%}
+        {%- set failed = [] -%}
+        {%- for s, v in _bo_sections.items() -%}
+          {%- if v != 'not_supported' -%}{%- set _ = supported.append(s) -%}{%- endif -%}
+          {%- if v == 'failed' -%}{%- set _ = failed.append(s) -%}{%- endif -%}
+        {%- endfor -%}
+        {{ 'success_sections=0; supported=' ~ ((supported | join(',')) if supported else '(none)')
+           ~ '; failed=' ~ ((failed | join(',')) if failed else '(none)') }}
+  ansible.builtin.set_fact:
+    _norm_errors: >-
+      {%- set merged = [_bo_rep] + (_bo_errors | reject('equalto', _bo_rep) | list) -%}
+      {%- set shown = merged[:10] -%}
+      {%- set dropped = (merged | length) - (shown | length) -%}
+      {{ shown + ([{'section': 'gather', 'message': _fr_errors_truncated,
+                    'detail': '표시하지 않은 오류 ' ~ dropped ~ '건 (수집 로그를 확인하세요)'}] if dropped > 0 else []) }}
+  when:
+    - (_out_status | default('')) == 'failed'
+    - (_bo_reason | length) > 0
+    - ((_bo_errors | length) == 0) or (((_bo_errors | first | default({})).message | default('')) != _bo_reason)
+
 # hostname 정책 (2026-06-16, 사용자 확정):
 #   우선순위: System.HostName(OS) → system.fqdn → BMC NetworkProtocol.HostName/FQDN → null.
 #   - IP fallback 금지 ("없는 건 없는 것"). 단 BMC 관리명(iLO/XCC/RMC)은 IP 와 달리 장비 고정

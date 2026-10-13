@@ -131,7 +131,7 @@ merge가 다 끝나면 누적 변수로 봉투의 각 필드를 만듭니다.
 
 ### 5.6 `build_output.yml`
 
-위 결과를 봉투 12개 필드로 조립하고, 각 채널의 `site.yml`이 마지막에 `schema_version`을 붙여 13개가 됩니다. OS 채널은 그 사이에 `os-gather/tasks/normalize/require_serial.yml`(Serial Number 필수 규칙, `CHECKPOINT` 앞)이 한 번 더 돕니다. `hostname`은 `data.system.hostname`, `data.system.fqdn`, `data.bmc.network_hostname` 순으로 찾고 셋 다 없으면 `null`입니다. IP로 대체하지 않습니다.
+위 결과를 봉투 12개 필드로 조립하고, 각 채널의 `site.yml`이 마지막에 `schema_version`을 붙여 13개가 됩니다. 조립 직전에 두 가지를 보정합니다. 정상 경로로 `status=failed`가 됐는데 사유가 비어 있으면(성공 섹션 0개) `gather` / `GATHER_FAILED` / "수집된 정보가 없다" 문장을 채우고, 그 뒤 `errors[0]`이 그 문장이 아니면 대표 오류를 앞에 둡니다(예외 경로의 `build_failed_output.yml`과 같은 규칙, 2026-10-13). OS 채널은 그 사이에 `os-gather/tasks/normalize/require_serial.yml`(Serial Number 필수 규칙, `CHECKPOINT` 앞)이 한 번 더 돕니다. `hostname`은 `data.system.hostname`, `data.system.fqdn`, `data.bmc.network_hostname` 순으로 찾고 셋 다 없으면 `null`입니다. IP로 대체하지 않습니다.
 
 ## 6. 이렇게 만든 이유
 

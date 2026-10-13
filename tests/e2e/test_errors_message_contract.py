@@ -700,3 +700,135 @@ def test_no_secrets_in_rendered_errors():
         blob = str(_render_error(_ctx(diag, message, detail)))
         for secret in ("password", "Passw0rd", "Authorization", "Cookie", "Basic ", "token"):
             assert secret not in blob, f"[{label}] 민감정보 노출: {secret}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# H12 후속 (2026-10-13) — 정상 경로 failed 봉투의 errors[0] 은 대표 문장이다
+#   build_output | ensure representative error: ensure failed diagnosis 가 문장을 채운 뒤 _norm_errors 의 첫 원소가
+#   그 문장이 아니면 대표 오류를 앞에 둔다 (rescue 의 build_failed_output 과 같은 규칙 — 완전히 같은 원소만 제외 · 상한 10 · 절단 표시).
+# ═══════════════════════════════════════════════════════════════════════════
+_REP_TASK = "build_output | ensure representative error"
+_NO_DATA_SECTIONS = {"system": "failed", "hardware": "not_supported", "bmc": "not_supported", "cpu": "failed",
+                     "memory": "failed", "storage": "failed", "network": "failed", "firmware": "not_supported",
+                     "users": "failed", "power": "not_supported", "thermal": "not_supported"}
+_NO_DATA_DETAIL = ("success_sections=0; supported=system,cpu,memory,storage,network,users; "
+                   "failed=system,cpu,memory,storage,network,users")
+_SECTION_ERRORS = [
+    {"section": "cpu", "message": "CPU 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요.", "detail": "lscpu rc=1"},
+    {"section": "memory", "message": "메모리 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요.", "detail": None},
+]
+_H12_DIAG = {"reachable": True, "port_open": True, "protocol_supported": True, "auth_success": True,
+             "failure_stage": "gather", "failure_code": "GATHER_FAILED", "failure_reason": None,
+             "details": {"channel": "os"}}
+
+
+def _rep_task() -> dict[str, Any]:
+    tasks = list(yaml.safe_load_all((REPO / _BUILD_OUTPUT).read_text(encoding="utf-8")))[0]
+    for task in _iter_tasks(tasks):
+        if _REP_TASK in (task.get("name") or ""):
+            return task
+    raise AssertionError(f"{_BUILD_OUTPUT} 에서 '{_REP_TASK}' 태스크를 찾지 못함")
+
+
+def _render_tree(env, node, ctx):
+    if isinstance(node, str):
+        return env.from_string(node).render(**ctx) if ("{{" in node or "{%" in node) else node
+    if isinstance(node, dict):
+        return {k: _render_tree(env, v, ctx) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_render_tree(env, v, ctx) for v in node]
+    return node
+
+
+def _render_rep(status, diag, norm_errors, sections, *, os_type=None, target_type="os"):
+    """태스크 vars → when → set_fact 순서로 렌더한다. when 이 거짓이면 None (태스크가 돌지 않는다)."""
+    sys.path.insert(0, str(REPO / "filter_plugins"))
+    from errors_normalizer import normalize_errors  # noqa: PLC0415
+
+    task = _rep_task()
+    env = _env()
+    env.filters["normalize_errors"] = normalize_errors
+    ctx: dict[str, Any] = {**FAILURE_REASONS, "_out_status": status, "_diagnosis": diag,
+                           "_norm_errors": norm_errors, "_norm_sections": sections,
+                           "_out_target_type": target_type}
+    if os_type is not None:
+        ctx["_os_type"] = os_type
+    for key, tpl in task["vars"].items():
+        ctx[key] = _render_tree(env, tpl, ctx)
+    for cond in task["when"]:
+        if env.from_string("{{ " + cond + " }}").render(**ctx) is not True:
+            return None
+    return env.from_string(task["ansible.builtin.set_fact"]["_norm_errors"]).render(**ctx)
+
+
+def test_representative_error_task_sits_between_guard_and_assembly():
+    names = [t.get("name") for t in yaml.safe_load((REPO / _BUILD_OUTPUT).read_text(encoding="utf-8"))]
+    guard = names.index("normalize | build_output | ensure failed diagnosis")
+    rep = names.index("normalize | build_output | ensure representative error")
+    assert guard < rep < names.index("normalize | build_output")
+
+
+def test_normal_path_failed_puts_the_representative_sentence_first():
+    """H12 경로(성공 섹션 0개 → gather_no_data): 종전에는 errors[0] 이 섹션 오류였다 (Portal Grid 와 failure_reason 이 다른 이야기)."""
+    reason = fr("gather_no_data")
+    out = _render_rep("failed", {**_H12_DIAG, "failure_reason": reason}, _SECTION_ERRORS, _NO_DATA_SECTIONS, os_type="linux")
+    assert out is not None
+    assert out[0] == {"section": "linux_gather", "message": reason, "detail": _NO_DATA_DETAIL}
+    _assert_grid_ready(out[0]["message"], "build_output/representative")
+    # 섹션 오류는 뒤에 그대로 남는다 (detail 보존)
+    assert out[1:] == _SECTION_ERRORS
+
+
+def test_representative_error_is_idempotent_when_already_first():
+    reason = fr("gather_no_data")
+    first = [{"section": "linux_gather", "message": reason, "detail": "already"}] + _SECTION_ERRORS
+    assert _render_rep("failed", {**_H12_DIAG, "failure_reason": reason}, first, _NO_DATA_SECTIONS, os_type="linux") is None
+
+
+@pytest.mark.parametrize("status", ["success", "partial"])
+def test_representative_error_leaves_success_and_partial_alone(status):
+    assert _render_rep(status, _SUCCESS_PATH_DIAG, _SECTION_ERRORS, _NO_DATA_SECTIONS, os_type="linux") is None
+
+
+def test_representative_error_waits_for_a_sentence():
+    """문장은 ensure failed diagnosis 가 채운다 — 아직 비어 있으면 돌지 않는다 (빈 message 를 만들지 않는다)."""
+    assert _render_rep("failed", _SUCCESS_PATH_DIAG, _SECTION_ERRORS, _NO_DATA_SECTIONS, os_type="linux") is None
+
+
+@pytest.mark.parametrize("os_type,target_type,expected", [
+    ("linux", "os", "linux_gather"),
+    ("windows", "os", "windows_gather"),
+    (None, "esxi", "esxi_gather"),
+    (None, "redfish", "redfish_gather"),
+])
+def test_representative_error_carries_the_channel_marker(os_type, target_type, expected):
+    reason = fr("gather_no_data")
+    out = _render_rep("failed", {**_H12_DIAG, "failure_reason": reason}, [], _NO_DATA_SECTIONS,
+                      os_type=os_type, target_type=target_type)
+    assert out == [{"section": expected, "message": reason, "detail": _NO_DATA_DETAIL}]
+
+
+def test_representative_error_caps_and_marks_truncation():
+    reason = fr("gather_no_data")
+    many = [{"section": "cpu", "message": f"항목 {i} 수집에 실패했습니다. 로그를 확인하세요.", "detail": None} for i in range(30)]
+    out = _render_rep("failed", {**_H12_DIAG, "failure_reason": reason}, many, _NO_DATA_SECTIONS, os_type="linux")
+    assert len(out) == 11, "상한 10건 + 절단 사실 1건"
+    assert out[0]["message"] == reason
+    assert out[-1]["message"] == FAILURE_REASONS["_fr_errors_truncated"]
+    assert "21건" in out[-1]["detail"]
+
+
+def test_representative_error_drops_only_an_exact_duplicate():
+    reason = fr("gather_no_data")
+    exact = {"section": "linux_gather", "message": reason, "detail": _NO_DATA_DETAIL}
+    same_message = {"section": "cpu", "message": reason, "detail": "EVIDENCE"}
+    out = _render_rep("failed", {**_H12_DIAG, "failure_reason": reason},
+                      [_SECTION_ERRORS[0], exact, same_message], _NO_DATA_SECTIONS, os_type="linux")
+    assert out == [exact, _SECTION_ERRORS[0], same_message]
+
+
+def test_representative_error_tolerates_messy_inputs():
+    reason = fr("gather_no_data")
+    out = _render_rep("failed", {**_H12_DIAG, "failure_reason": reason}, "not a list", "not a mapping", os_type="linux")
+    assert out == [{"section": "linux_gather", "message": reason,
+                    "detail": "success_sections=0; supported=(none); failed=(none)"}]

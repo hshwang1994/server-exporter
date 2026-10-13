@@ -1,0 +1,112 @@
+---
+# 정상 경로 status=failed(H12 — 성공 섹션 0개) 의 errors[0] 규칙 시험 harness — tests/integration/test_build_output_no_data_playbook.py 가 실행한다.
+#
+# 실제 공통 조립 코드(init_fragments → merge_fragment → build_sections → build_status → build_errors → build_output)와 json_only 콜백을
+# 그대로 태운다. 수집 대신 고정 fragment 를 넣고 연결은 local 이다. OS 사례는 운영과 같이 os-gather/tasks/normalize/build_output.yml
+# (require_serial 포함)을 지나고, ESXi · Redfish 사례는 common/tasks/normalize/build_output.yml 체인을 직접 지난다.
+# 사례는 `-e harness_case=<이름>` 으로 고른다 (아래 _hc_cases).
+- name: "no-data representative error harness"
+  hosts: all
+  gather_facts: false
+  connection: local
+  strategy: free
+
+  vars_files:
+    - "{{ lookup('env','REPO_ROOT') }}/common/vars/failure_reasons.yml"
+
+  vars:
+    _ip: "{{ ansible_host | default(inventory_hostname) }}"
+    harness_case: no_data
+    _hc_cases:
+      # 성공 섹션 0개 + 섹션 오류 2건 (Linux) — 대표 오류가 앞, 섹션 오류 보존, require_serial 이 뒤에 Serial 오류 1건
+      no_data:   {channel: os, os_type: linux, failed: [system, cpu], collected: [], errors: 2, serial: null}
+      # 성공 섹션 0개 + 섹션 오류 0건 — 대표 오류만
+      no_errors: {channel: os, os_type: linux, failed: [system, cpu], collected: [], errors: 0, serial: null}
+      # 섹션 오류 12건 — 상한 10 + 절단 표시, 그 뒤 Serial 오류
+      many:      {channel: os, os_type: linux, failed: [system, cpu], collected: [], errors: 12, serial: null}
+      # Windows 채널 표시
+      windows:   {channel: os, os_type: windows, failed: [system, cpu], collected: [], errors: 1, serial: null}
+      # 대조군: partial (Serial 있음) — 아무것도 바뀌지 않는다
+      partial:   {channel: os, os_type: linux, failed: [cpu], collected: [system], errors: 1, serial: HARNESS-SN}
+      # 다른 채널 — 채널 표시만 다르고 require_serial 은 없다
+      esxi:      {channel: esxi, os_type: '', failed: [system, cpu], collected: [], errors: 1, serial: null}
+      redfish:   {channel: redfish, os_type: '', failed: [system, cpu], collected: [], errors: 1, serial: null}
+    _hc: "{{ _hc_cases[harness_case] }}"
+
+  tasks:
+    - name: "harness | gather"
+      block:
+        - name: "harness | init fragments"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/init_fragments.yml"
+
+        - name: "harness | fixed gather fragment"
+          ansible.builtin.set_fact:
+            _data_fragment: "{{ {'system': {'hostname': 'harness-host', 'os_type': 'linux'}} if ('system' in _hc.collected) else {} }}"
+            _sections_supported_fragment: [system, cpu]
+            _sections_collected_fragment: "{{ _hc.collected }}"
+            _sections_failed_fragment: "{{ _hc.failed }}"
+            _sections_unsupported_fragment: []
+            _errors_fragment: >-
+              {%- set out = [] -%}
+              {%- for i in range(_hc.errors | int) -%}
+                {%- set _ = out.append({'section': 'cpu',
+                                        'message': 'CPU 정보 수집에 실패한 항목이 있습니다. 대상 상태와 수집 로그를 확인하세요.',
+                                        'detail': 'harness error ' ~ i}) -%}
+              {%- endfor -%}
+              {{ out }}
+
+        - name: "harness | merge gather fragment"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"
+
+        - name: "harness | diagnosis and meta (success shape — 정상 경로)"
+          ansible.builtin.set_fact:
+            _diagnosis:
+              reachable: true
+              port_open: true
+              protocol_supported: true
+              auth_success: true
+              failure_stage: null
+              failure_code: null
+              failure_reason: null
+              details:
+                channel: "{{ _hc.channel }}"
+            _meta:
+              adapter_id: harness
+              finished_at: null
+              duration_ms: null
+            _correlation:
+              host_ip: "{{ _ip }}"
+              serial_number: "{{ _hc.serial }}"
+            _out_target_type: "{{ _hc.channel }}"
+            _out_collection_method: agent
+            _out_ip: "{{ _ip }}"
+            _out_vendor: null
+
+        - name: "harness | os type (OS 채널만)"
+          when: _hc.channel == 'os'
+          ansible.builtin.set_fact:
+            _os_type: "{{ _hc.os_type }}"
+
+        # OS 채널 — 운영과 같은 진입점 (build_sections → build_status → build_errors → build_output → require_serial)
+        - name: "harness | build output (os)"
+          when: _hc.channel == 'os'
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/os-gather/tasks/normalize/build_output.yml"
+
+        # ESXi · Redfish 채널 — 공통 체인 직접 호출
+        - name: "harness | build chain (esxi · redfish)"
+          when: _hc.channel != 'os'
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/{{ item }}"
+          loop: [build_sections.yml, build_status.yml, build_errors.yml, build_output.yml]
+
+        - name: "harness | inject schema_version"
+          ansible.builtin.set_fact:
+            _output: "{{ _output | combine({'schema_version': '1'}) }}"
+
+      always:
+        - name: OUTPUT
+          ansible.builtin.debug:
+            msg: "{{ _output | default({'harness_error': 'no _output'}) | to_json }}"
