@@ -1,0 +1,66 @@
+---
+# Linux sudo 프로브 live harness — tests/integration/test_sudo_probe_live.py 가 실행한다 (-m live, 기본 skip).
+#
+# 운영 site.yml PLAY 2 와 같은 순서로 os-gather/tasks/linux/preflight.yml → try_sudo.yml 을 실 Linux 대상에서 태우고,
+# 결과 fact(_l_sudo_meta · _l_sudo_policy · _l_sudo_max_rejections — 비밀번호 · 원격 출력 없음)를 제어 노드의 파일(harness_result_file)에 적는다.
+# 가짜 sudo(fake_sudo.sh)는 harness_fake_sudo_mode 가 있을 때만 대상의 /tmp 에 올리고, 인벤토리의 ansible_become_exe 가 그 경로를 가리킨다.
+# 대상 계정 · 비밀번호는 인벤토리(테스트가 임시로 만드는 0600 파일)에만 있다.
+- name: "sudo probe live harness"
+  hosts: all
+  gather_facts: false
+  strategy: linear
+
+  vars:
+    harness_candidates: []
+    harness_fake_sudo_mode: ""
+    harness_fake_sudo_path: "/tmp/se_fake_sudo_{{ harness_fake_sudo_mode }}"
+    _cred_sudo_candidates: "{{ harness_candidates }}"
+
+  tasks:
+    - name: "harness | probe"
+      block:
+        - name: "harness | install fake sudo"
+          when: (harness_fake_sudo_mode | length) > 0
+          ansible.builtin.copy:
+            src: "{{ harness_fake_sudo_src }}"
+            dest: "{{ harness_fake_sudo_path }}"
+            mode: "0755"
+
+        - name: "harness | normalize fake sudo line endings and reset its log"
+          when: (harness_fake_sudo_mode | length) > 0
+          ansible.builtin.raw: "sed -i 's/\\r$//' {{ harness_fake_sudo_path }}; rm -f {{ harness_fake_sudo_path }}.log"
+          changed_when: false
+
+        - name: "harness | preflight (python mode + sudo lockout policy)"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/os-gather/tasks/linux/preflight.yml"
+
+        - name: "harness | try sudo"
+          ansible.builtin.include_tasks:
+            file: "{{ lookup('env','REPO_ROOT') }}/os-gather/tasks/linux/try_sudo.yml"
+
+      always:
+        # pkill 패턴은 스크립트 프로세스(`/bin/sh <경로> …`)에만 맞춘다 — 경로만 주면 이 raw 명령을 돌리는 셸 자신까지 죽여 연결이 끊긴다.
+        - name: "harness | collect fake sudo log and remove the script"
+          when: (harness_fake_sudo_mode | length) > 0
+          ansible.builtin.raw: >-
+            cat {{ harness_fake_sudo_path }}.log 2>/dev/null;
+            pkill -f "^/bin/sh {{ harness_fake_sudo_path }} " 2>/dev/null;
+            rm -f {{ harness_fake_sudo_path }} {{ harness_fake_sudo_path }}.log;
+            true
+          register: _harness_fake_log
+          changed_when: false
+          failed_when: false
+
+        - name: "harness | write result (no secrets)"
+          delegate_to: localhost
+          ansible.builtin.copy:
+            dest: "{{ harness_result_file }}"
+            mode: "0600"
+            content: >-
+              {{ {'sudo': (_l_sudo_meta | default({})),
+                  'policy': (_l_sudo_policy | default({})),
+                  'max_rejections': (_l_sudo_max_rejections | default(none)),
+                  'become_pass_empty': (((ansible_become_pass | default('', true)) | string | length) == 0),
+                  'python_mode': (_l_python_mode | default('')),
+                  'fake_sudo_log': (_harness_fake_log.stdout_lines | default([]))} | to_json }}
