@@ -1079,3 +1079,14 @@
 - 재발 방지: (1) 여러 playbook 이 include 하는 공용 task 파일에서는 그 파일의 기존 include 관례(REPO_ROOT)를 따른다. (2) 커밋 전 WSL 에서 `pytest tests/integration -m "not live"` 를 한 번 돌린다 — Windows 는 통합 시험을 전부 skip 한다.
   (3) 승격 전제는 CI Gate 를 먼저 보고 main Job 매트릭스를 돌린다 — 이번엔 순서가 반대라 매트릭스 10건을 다시 돌렸다.
 - 관련 rule: rule 24 R1(정적 검증) · rule 40 R6(`tests/integration -m "not live"`) · rule 91 R5.
+
+## 2026-10-13 — live 시험 harness 의 정리 명령 `pkill -f <경로>` 가 그 명령을 돌리는 셸 자신을 죽였다
+
+- 카테고리: scope-miss (self-inflicted, test harness)
+- 발견 위치: `tests/fixtures/sudo_live/harness.yml` always 블록의 raw `cat …; pkill -f /tmp/se_fake_sudo_<mode>; rm …` — 첫 live 실행에서 가짜 sudo 3사례(reject · rc1 · hang)가 결과 파일 없이
+  끝나고 ansible-playbook rc 4, json_only 콜백이 `gather_connection_lost` 봉투를 합성했다. 실 sudo 사례 5건은 통과.
+- 원인: `pkill -f` 는 프로세스 명령줄 전체를 보므로 raw 명령을 실행하는 `/bin/sh -c 'cat …; pkill -f /tmp/se_fake_sudo_hang …'` 자신이 패턴에 걸린다 → 셸이 죽어 ssh 세션이 끊기고 host 가
+  unreachable 이 된다. 정작 보려던 `ignore_unreachable`(hang 사례)은 문제가 없었다 — 패턴을 `^/bin/sh <경로> ` 로 좁히니 9/9 통과, hang 도 rc 0 으로 끝났다.
+- 재발 방지: (1) 원격 정리에 `pkill -f` 를 쓸 때는 패턴이 호출 셸의 명령줄에 걸리지 않게 앵커(`^`)와 실행 형태(`/bin/sh <경로>`)로 좁힌다. (2) "host 가 unreachable 로 끝났다" 는 관측은 어느 태스크에서
+  났는지(콘솔의 태스크 이름)부터 본다 — 시험 대상 태스크가 아니라 정리 태스크였다. (3) live 시험은 결과 파일 존재를 rc 보다 먼저 단언하지 않는다(원인이 가려진다).
+- 관련 rule: rule 25 R7-A(실측 검증) · rule 95 R2(자기 보고도 검증).

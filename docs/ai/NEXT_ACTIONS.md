@@ -4,16 +4,16 @@
 
 > 정본: `tests/evidence/2026-10-13-sudo-fallback-serial-required.md`. 구현 · 실측 · 승격은 끝났고 아래만 남는다.
 
-- [ ] **H12 정상 경로 `gather_no_data` 봉투의 `errors[0].message ≠ failure_reason`** — `common/tasks/normalize/build_output.yml` ensure-failed 가 문장만 채우고 `_norm_errors` 는 그대로다(`test_normal_path_failed_status_gets_failure_fields` 는 diagnosis 만 렌더). `require_serial.yml` 은 이 경로에서 문장을 유지하고 오류를 뒤에 붙인다. 별도 수정 대상
+- [x] **H12 정상 경로 `gather_no_data` 봉투의 `errors[0].message ≠ failure_reason`** — `75ca57c2` "ensure representative error"(build_output.yml, rescue 와 같은 규칙) · e2e 15 + 실제 엔진 통합 7 · `tests/evidence/2026-10-13-h12-representative-error-and-sudo-live.md`
 - [ ] **`targetpw`/`rootpw` + `even_deny_root` 서버의 15분 안 반복 수집 누적** — 수집 1회로는 막을 수 없다(콘솔 advisory `[sudo] … password rejected N time(s)` + 05-vault 문서). 운영에서 그런 서버가 확인되면 NOPASSWD 또는 Vault Primary = root 비밀번호로
 - [ ] **Windows Serial 누락 실장비 재현** — 실 VM 에서 Serial 을 없앨 수 없어 렌더 시험만. 자리표시자 Serial 을 내는 장비가 생기면 `capture-site-fixture`
-- [ ] **`tests/integration/test_sudo_probe_live.py`(-m live)** — 계획 8.0 매트릭스의 자동화는 미작성(이번 실측은 Jenkins 빌드 #556~#562 + auth.log 로 대체). Ansible/sudo 를 올릴 때 같은 매트릭스를 다시 돌린다
+- [x] **`tests/integration/test_sudo_probe_live.py`(-m live)** — `341433af` 작성 · 10.100.64.132 임시 계정으로 9/9(후보당 제출 1회 · PAM 실패 0 · 계정 삭제 확인). 틀린 비밀번호의 실 PAM 제출은 매트릭스에 없다(가짜 sudo) — 그 실측은 #558~#561 auth.log. Ansible/sudo 를 올릴 때 다시 돌린다
 
 ## 독립 점검 (2026-10-12) — 남은 항목
 
 > 정본: `tests/evidence/2026-10-12-independent-audit.md` 5절. 수정 · 검증 · 승격(P13 `b86c5942`)은 끝났고 아래만 남는다.
 
-- [ ] **production Job 의 실제 Portal 200 재확인** — Portal 테스트 수신 백엔드(10.100.64.151:8080 의 `clovirone` 앱)가 다시 배포되면 production Job canary(os 3) 1회로 확인. 승격 시점에는 내려가 있어 저장소 `callback_sink.py` 수신기(#287)로 대체했다
+- [x] **production Job 의 실제 Portal 200 재확인** — 2026-10-13 production P14 canary #288(os 2) · #289 · #290 · #291 전부 Portal 10.100.64.151:8080 HTTP 200 (`docs/reference/live-validation.md` "production P14 명부")
 - [ ] **고아 잠금 대기 경로 실기 검증** — stub 이 이 환경에서 잠금을 쥔 고아를 만들지 못했다. 재현 수단이 생기면 임시 격리 Job 으로(운영 Runner 단절 금지)
 - [ ] **baseline `thermal` 키 · `hpe_baseline.json` adapter 재캡처** — 실측 캡처 뒤 갱신(실측 없이 고치지 않음)
 - [ ] **설계 결정 필요(변경 안 함)** — ESXi storage 상태의 datastore 모듈 의존 · Windows IP 없는 NIC 제외 · `cpu.max_speed_mhz` 의미 채널 간 차이

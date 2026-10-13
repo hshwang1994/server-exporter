@@ -1,5 +1,18 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-13 (2차) — H12 대표 오류 · sudo live 매트릭스 (`75ca57c2` · `341433af`) · production P15
+
+| 구분 | 결과 |
+|---|---|
+| 전체 pytest(unit · e2e · regression, Windows Python 3.13) | 5,113 passed · 36 skipped · 7 xfailed · 0 failed (+15 = `test_errors_message_contract` H12 블록 수집 15) |
+| 신규 시험 | `test_errors_message_contract` H12 블록(배선 순서 · 대표 앞 · 멱등 · success/partial 불변 · 문장 없으면 미동작 · 채널 표시 4종 · 상한 11/절단 · 완전 중복만 제외 · 비정상 입력) · `tests/integration/test_build_output_no_data_playbook.py`(WSL 실제 엔진 7 — no_data/no_errors/many/windows/partial/esxi/redfish) · `tests/integration/test_sudo_probe_live.py`(-m live 9 — nopasswd/login/vault_dup/denied 실 sudo · reject/rc1/hang 가짜 sudo · absent) |
+| WSL 통합 | `test_build_output_no_data_playbook` 7 + `test_addon_hook_playbook` 16 = 23 통과 · 3채널 syntax-check(ansible-core 2.20.7) |
+| live(10.100.64.132) | 9/9 · 107초 · 임시 계정 2개(sudo 그룹 · sudo 없음) 생성 → `userdel` → "no such user" 확인 · auth.log `incorrect password` 7 → 7(PAM 실패 0) · 결과 JSON 비밀번호 문자열 0. 1차 실행은 YAML 인벤토리 미파싱(ansible.cfg `enable_plugins`) · 2차는 harness `pkill` 자기 종료 — 둘 다 시험 결함, 수정 뒤 9/9 |
+| 정적 | harness consistency · vendor boundary · field_dictionary · schema drift · docs references · PROJECT_MAP fingerprint · Jinja compile/namespace 훅 · additive-only 훅 통과 |
+| jenkins-prod main Job(`341433af`) | 매트릭스 #584~#593(S1 #590 · S2 #591 · S3 #584 · S4 #587 · T2 #586 · T5 #592 ABORTED · T6 #588 UNSTABLE · E2E-A #589 UNSTABLE · E2E-A2 #593 FAILURE · E2E-D #585) — 봉투 38(실패 14) 위반 0 · Portal 200 |
+| CI | #55(`341433af`) SUCCESS 59분 48초 · COMPLETE_PASS · gate 20 PASS · 전 stage PASS · PROMOTE DRY_RUN |
+| 승격 · canary | production P15 `6193660c`(작업 PC `prodgen promote` 13분) · drift-check PROVENANCE · production Job #292(os 2) · #293(Linux 11) · #294(ESXi 6) · #295(Redfish 10: 8 success + 기존 실패 2) — 봉투 29 위반 0 · Portal 200 ×4 |
+
 ## 2026-10-13 — Linux sudo Vault 후보 · 잠금 예산 · OS Serial 필수 (`20f4ab6f` ~ `b203fd45`)
 
 | 구분 | 결과 |

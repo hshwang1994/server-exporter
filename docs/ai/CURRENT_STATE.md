@@ -1,5 +1,18 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-13 (2차) — H12 후속(정상 경로 failed 봉투의 errors[0] 대표 문장) · sudo live 매트릭스 시험 · main `eb3ae9ee`→`341433af` · jenkins-prod 매트릭스 #584~#593 · CI #55 · **production P15 `6193660c`**
+
+> 정본: `docs/reference/decision-log.md` 2026-10-13 결정 7~9 · `tests/evidence/2026-10-13-h12-representative-error-and-sudo-live.md` · `docs/reference/live-validation.md` "main `341433af` 매트릭스" · "production P15 명부".
+
+- **고친 것(제품)**: `common/tasks/normalize/build_output.yml` "ensure representative error" 1 태스크(`75ca57c2`) — 정상 경로에서 성공 섹션 0개로 failed 가 됐을 때(`gather_no_data`) `errors[0]` 을 rescue 와 같은 규칙의 대표 오류(채널 표시 `<linux|windows|esxi|redfish>_gather` · message = failure_reason · detail = 섹션 요약)로 두고
+  섹션 오류는 뒤에 보존(완전 중복만 제외 · 상한 10 · 절단 표시 · 멱등). 문장 카탈로그 · status 로직 · envelope 13 필드 불변. `docs/contract/03-fields.md` §4 · `docs/develop/02-normalize-flow.md` §5.6 동반.
+- **시험(제품 코드 아님)**: `tests/integration/test_sudo_probe_live.py`(-m live, 기본 skip) + `tests/fixtures/sudo_live/`(harness · 가짜 sudo) — 실 Linux 대상에서 preflight → try_sudo 를 돌려 8 사례의 결과 모양을 재확인(`341433af`, 틀린 비밀번호는 실 PAM 에 보내지 않는다).
+  `tests/fixtures/no_data/harness.yml` + `test_build_output_no_data_playbook.py`(실제 엔진 통합 7 — 4채널 표시 · 상한 · partial 대조군 · OS Serial 오류 후속).
+- **확인한 것**: 전체 pytest 5,113 통과 · WSL 통합 23 · live 9/9(.132 임시 계정 2개 → 삭제 확인 · PAM 실패 0) · 3채널 syntax-check · 매트릭스 main #584~#593 봉투 38 위반 0(H12 경로는 실장비에서 미발생 — 통합 시험이 증거) ·
+  CI #55 COMPLETE_PASS(전 stage PASS · PROMOTE dry-run) · production P15 canary #292~#295 봉투 29 위반 0 · Portal 200.
+- **승격**: 작업 PC `prodgen promote` → production `6193660c`(parent `604062c0`, tree 194 파일) · drift-check `PROVENANCE` · 원격 origin · internal · 로컬 일치. Jenkins 에 `se-gitlab-push` 자격이 없어 CI Promote 는 dry-run(P13 · P14 와 같음).
+- **남은 것**: `docs/ai/NEXT_ACTIONS.md` 2026-10-13 절(targetpw+even_deny_root 반복 수집 누적 · Windows Serial 누락 실장비 재현) · 2026-10-12 절(고아 잠금 · baseline thermal · 설계 결정 3건) — 실장비 또는 사용자 결정 필요. ADR 이력의 비밀번호 노출은 history rewrite 금지라 사용자 결정 사항.
+
 ## 일자: 2026-10-13 — Linux sudo Vault 후보(잠금 예산) · OS Serial Number 필수(시나리오 E) · main `20f4ab6f`→`b203fd45` · jenkins-prod 실측 #556~#563 · **production P14 `604062c0`**
 
 > 정본: `docs/reference/decision-log.md` 2026-10-13 · `docs/ai/decisions/ADR-2026-10-13-sudo-vault-fallback-and-serial-required.md` · `tests/evidence/2026-10-13-sudo-fallback-serial-required.md`.
