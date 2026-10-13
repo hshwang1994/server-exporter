@@ -43,5 +43,8 @@
 
 # 2026-10-13: OS 필수 식별자(Serial Number) 규칙 — Serial 이 null 이면 status=failed (시나리오 E). Linux · Windows 공통.
 #   site.yml 의 CHECKPOINT · schema_version 주입보다 앞이다 (콜백 · Layer A 가 CHECKPOINT 의 status 를 그대로 복원한다).
+#   경로는 이 파일의 다른 include 와 같이 REPO_ROOT 기준이다 — playbook_dir 기준이면 이 파일을 다른 playbook(tests/fixtures/addon/harness.yml)이
+#   include 할 때 찾지 못한다 (2026-10-13 CI #53 Gate: tests/integration/test_addon_hook_playbook.py 15건 ERROR).
 - name: "os | normalize | require serial"
-  ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/normalize/require_serial.yml"
+  ansible.builtin.include_tasks:
+    file: "{{ lookup('env','REPO_ROOT') }}/os-gather/tasks/normalize/require_serial.yml"

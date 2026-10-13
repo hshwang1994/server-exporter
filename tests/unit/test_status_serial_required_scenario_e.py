@@ -209,6 +209,19 @@ def test_rule_never_fails_without_an_output():
     assert out == "not a mapping"
 
 
+# ── 배선: build_output.yml 의 include 경로 (2026-10-13 CI #53) ─────────────────────────────────────
+def test_build_output_includes_the_rule_from_repo_root_not_playbook_dir():
+    """os-gather/tasks/normalize/build_output.yml 은 다른 playbook(tests/fixtures/addon/harness.yml)도 include 한다 —
+    그 안의 include 는 playbook_dir 가 아니라 REPO_ROOT 기준이어야 한다 (CI #53 Gate: add-on 통합 시험 15건 ERROR, Windows 에서는 skip 되는 시험)."""
+    tasks = yaml.safe_load((REPO / "os-gather" / "tasks" / "normalize" / "build_output.yml").read_text(encoding="utf-8"))
+    includes = [t["ansible.builtin.include_tasks"] for t in tasks if isinstance(t, dict) and "ansible.builtin.include_tasks" in t]
+    targets = [i if isinstance(i, str) else i.get("file", "") for i in includes]
+    rule = [t for t in targets if "require_serial.yml" in t]
+    assert len(rule) == 1, targets
+    assert "lookup('env','REPO_ROOT')" in rule[0]
+    assert not [t for t in targets if "playbook_dir" in t], targets
+
+
 # ── fixture (synthetic) ────────────────────────────────────────────────────────────────────────────
 def _section_only_status(sections: dict[str, str]) -> str:
     supported = [v for v in sections.values() if v != "not_supported"]
