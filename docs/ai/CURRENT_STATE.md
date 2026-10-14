@@ -15,7 +15,12 @@
   `36745453`(parent P15 `6193660c`, Main-SHA `59bc3a19`, tree_hash `9b7f9a66…`, 194 파일)을 append 하고 origin(github+gitlab) · internal 에 ff push 했다. production 과의 차이는 `redfish-gather/library/redfish_gather.py` + `.production-provenance.json` 두 파일뿐(스크립트가 그 외 차이가 있으면 쓰지 않도록 가드).
   trailer 는 사실만 적었다: `Verdict: PARTIAL`(정적 G01~G10 · G16~G18 · G20 PASS, 라이브 G11~G15 · G19 SKIP) · `CI-Build: manual` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` · `Emergency-Promotion: user-instructed 2026-10-14`.
   승격 뒤 `drift-check` = **PROVENANCE ok**(tree hash 재계산 일치 · trailer 정합 · 기록된 생성기로 재생성 동일 · 세 ref 일치) — 다음 정상 승격은 막히지 않는다. 실행 환경의 자동 분류기가 Bash 를 두 번 막아(Production Deploy / Blind Apply) 사용자가 허용한 뒤 실행했다.
-  **이 승격은 정규 절차(CI · 매트릭스 · G11~G15 · G19)를 거치지 않았다** — `docs/ai/NEXT_ACTIONS.md` 2026-10-14 첫 항목(canary + 정규 재승격).
+  사용자가 production Job 으로 CSUS 3200 을 재수집해 **계정 생성 성공을 확인**했다(사용자 확인).
+- **정규 재승격 — production `338ed8d3` (P17, COMPLETE_PASS)**: 사용자 지시("핫픽스로 말고 전체 검증")로 정규 절차를 돌렸다. main Job 매트릭스 11건(#594~#605, checkout 전부 `fed0b9f1`:
+  S1 #598 · S2 #599 · S3 #594(11대) · S4 #605 · T2 #596 · T5 #603 ABORTED · T6 #597 UNSTABLE · E2E-A #601 UNSTABLE · E2E-A2 #604 FAILURE(fail-closed, tip 관측 직접 바인딩) · E2E-D #595 · E2E-E #602(Redfish 7 BMC, Account Write 0))
+  → CI #56(`fed0b9f1`, 59분, 11 stage 전부 PASS · Promote DRY_RUN · 집계 verdict COMPLETE_PASS) → 작업 PC `prodgen promote --verify-report --e2e-evidence --ci-stage-results --netrc --vault-password-file --push-remote origin,internal`
+  (G11~G15 · G18~G20 재실행 전부 PASS) → production `338ed8d3`(parent 긴급 `36745453`, tree_hash 동일 `9b7f9a66…`, `CI-Stages: verified`, `E2E-Evidence-SHA256` 기록) · drift-check PROVENANCE · 두 원격 일치.
+  S4 1차(#600)는 Runner 의 github fetch 타임아웃(일시 네트워크)으로 FAILURE → 재실행 #605 SUCCESS. 매트릭스 · CI 트리거는 실행 환경 분류기 차단 때문에 사용자 허용 뒤 `se_matrix.py` · `se_full_pipeline.py`(세션 임시 스크립트)로 수행했고 Jenkins 자격 · vault 비밀번호 임시 파일은 끝나고 지웠다.
 - **남은 것**(`docs/ai/NEXT_ACTIONS.md` 2026-10-14 절): RMC 실장비 canary(`{UserName, Password, RoleId}` 수락은 미확정) · CSUS AccountService 미러 · P2 403 MessageId 진단 문장 · P3 Lenovo Family hint(PWC-7) · cj Lenovo Vault 값 확인 · 05-vault 운영 안내 한 줄.
 
 ## 일자: 2026-10-13 (2차) — H12 후속(정상 경로 failed 봉투의 errors[0] 대표 문장) · sudo live 매트릭스 시험 · main `eb3ae9ee`→`341433af` · jenkins-prod 매트릭스 #584~#593 · CI #55 · **production P15 `6193660c`**

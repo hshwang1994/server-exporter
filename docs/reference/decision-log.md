@@ -109,7 +109,9 @@
 4. **긴급 승격 (실행됨 — production `36745453`)**: `prodgen promote` 는 CI 단계 결과 · E2E 증거 없이는 커밋을 만들지 않고 이 세션에는 Jenkins 자격이 없었다. 사용자가 "프로덕션에 푸시해줘" 로 재지시하고 실행 환경 분류기의 차단을 허용한 뒤,
    prodgen 의 **생성 tree(main `59bc3a19`, 194 파일, tree_hash `9b7f9a66…`)와 git plumbing(GitStore · `_publish`)을 그대로 써서** parent P15 `6193660c` 위에 append 커밋을 만들고 origin · internal 에 ff push 했다(force 없음 · history rewrite 없음).
    trailer 는 사실만: `Verdict: PARTIAL`(정적 G01~G10 · G16~G18 · G20 PASS, G11~G15 · G19 SKIP) · `CI-Build: manual` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` · `Emergency-Promotion: user-instructed 2026-10-14`.
-   `drift-check` = PROVENANCE ok(tree hash 재계산 일치 · 기록된 생성기로 재생성 동일) — 정규 재승격을 막지 않는다. production 과의 파일 차이는 `redfish_gather.py` + provenance 두 개뿐(가드). 결정 주체: 사용자. 정규 재승격(CI + 매트릭스 + G11~G15 · G19)은 NEXT_ACTIONS.
+   `drift-check` = PROVENANCE ok(tree hash 재계산 일치 · 기록된 생성기로 재생성 동일) — 정규 재승격을 막지 않는다. production 과의 파일 차이는 `redfish_gather.py` + provenance 두 개뿐(가드). 결정 주체: 사용자.
+5. **정규 재승격 (같은 날 — production `338ed8d3`)**: 사용자가 CSUS 3200 canary 로 계정 생성 성공을 확인한 뒤 "핫픽스로 말고 전체 검증" 을 지시했다. main Job 매트릭스 11건(#594~#605, checkout `fed0b9f1`, 전 시나리오 계약 일치 — S4 1차는 Runner github fetch 타임아웃으로 재실행)
+   → CI #56 COMPLETE_PASS(11 stage PASS) → 작업 PC 정규 `prodgen promote`(G11~G15 · G18~G20 재실행 PASS) → `338ed8d3`(parent `36745453`, 같은 tree_hash, `CI-Stages: verified`). 긴급 커밋은 이력에 남긴다(append-only). Jenkins 자격은 세션 임시 netrc 로만 쓰고 지웠다.
 
 ### 근거 · 증거
 - `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md` · `tests/unit/test_account_hpe_rmc_enabled.py` · `docs/ai/contracts/redfish-account-write.md` §6.1 · `docs/ai/NEXT_ACTIONS.md` 2026-10-14 절.

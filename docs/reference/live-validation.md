@@ -469,6 +469,30 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
+## 2026-10-14 HPE RMC(CSUS 3200) 표준 계정 생성 hotfix — main `fed0b9f1` 매트릭스 · production 긴급 `36745453` → 정규 `338ed8d3` (실장비)
+
+hotfix `5eec01d8`(HPE RMC 전용 Family `hpe_rmc` — 생성 POST 에 `Enabled` 미전송, 계정 레코드 `enabled` 3-상태). 사용자 사이트 CSUS 3200 에서 복구 계정으로 표준 계정이 만들어지지 않던 사고의 수정.
+증거 `../../tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md`. 사용자가 긴급 승격 `36745453` 으로 CSUS 3200 을 재수집해 계정 생성 성공을 확인한 뒤 정규 절차를 돌렸다.
+
+### main `fed0b9f1` 매트릭스 (main Job #594~#605, checkout 전부 == `fed0b9f1`)
+
+| 시나리오 | 빌드 | 결과 | 확인 |
+|---|---|---|---|
+| S1 Linux 3 (.162 .163 .156) | #598 | SUCCESS | 67 s · Portal 200 |
+| S2 혼합 (.132 .33 .34 + TEST-NET 2) | #599 | SUCCESS | 97 s · Portal 200 |
+| S3 Linux 11 (.161 제외) | #594 | SUCCESS | 126 s · Portal 200 |
+| S4 Windows (.120) | #605 | SUCCESS | 138 s · Portal 200 (1차 #600 은 Runner 의 github fetch 타임아웃 FAILURE — 코드 무관, 재실행) |
+| T2 TEST-NET 2 | #596 | SUCCESS | 82 s · Portal 200 |
+| T5 사용자 중단 (6대) | #603 | ABORTED | 수집 시작 15초 뒤 API stop · 49 s |
+| T6 Callback 거부 주소 | #597 | UNSTABLE | `http://127.0.0.1:9` · 111 s |
+| E2E-A loc=cj | #601 | UNSTABLE | cj Runner · TEST-NET 2 · Callback 거부 주소 · 229 s |
+| E2E-A2 loc=chj | #604 | FAILURE | fail-closed · 18 s · tip 관측 `fed0b9f1` 전후 동일(직접 바인딩) |
+| E2E-D ESXi 6 | #595 | SUCCESS | 80 s · Portal 200 |
+| **E2E-E Redfish 7 BMC** (Dell 5 · Cisco 1 · Lenovo 1) | #602 | SUCCESS | 498 s · 표준 계정 · **Account Write 0** · Portal 200 |
+
+CI #56(`fed0b9f1`) SUCCESS 59분 — 11 stage PASS · Promote DRY_RUN · 집계 verdict COMPLETE_PASS. 작업 PC `prodgen promote` → production `338ed8d3`(parent `36745453`, tree_hash `9b7f9a66…`, gate G01~G20 PASS, `CI-Stages: verified`).
+CSUS 3200 자체는 운영 사이트 장비라 매트릭스에 없다 — 사용자 canary(계정 생성 성공)가 그 증거다.
+
 ## 2026-10-13 Linux sudo Vault 후보 · OS Serial 필수 · H12 대표 오류 — main 매트릭스 · production P14 · P15 명부 (실장비)
 
 수집 코드 변경(Linux sudo 후보 · 잠금 예산 · Serial 필수 · `diagnosis.details.sudo`)의 실장비 증거는 `../../tests/evidence/2026-10-13-sudo-fallback-serial-required.md` 다

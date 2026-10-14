@@ -4,10 +4,8 @@
 
 > 정본: `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md`. hotfix(`hpe_rmc` Family · `enabled` 3-상태)는 main `5eec01d8`(문서 `29137b80` · `59bc3a19`)로 커밋·push 했고, 사용자 지시로 **production `36745453` 에 긴급 승격**(PROVENANCE, CI·E2E 증거 없음)했다.
 
-- [ ] **[CRIT / 사용자] production Job canary — CSUS 3200 1대 즉시** — checkout SHA `36745453` 확인, `diagnosis.details.account_service.family == hpe_rmc` · `recovered=true` · `verification=verified` · status success. 실패하면 `python -m scripts.ai.prodgen restore --to 6193660c --push-remote origin,internal`(append)로 되돌리고 `write_response` 를 evidence 에 추가.
-- [ ] **[HIGH / 사용자 — Jenkins 자격 필요] 정규 재승격으로 증거를 채운다** — 긴급 승격 `36745453` 은 trailer 에 `Verdict: PARTIAL` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` · `Emergency-Promotion` 을 남겼다(라이브 gate G11~G15 · G19 미실행). 같은 main `59bc3a19` 로 CI Job(`clovirone-cicd/clovirone-server-gather-ci`) 1회 + main Job 매트릭스(S1 S2 S3 T2 T5 T6 E2E-A E2E-A′ E2E-D) →
-      `prodgen e2e-evidence … --out e2e.json` → `prodgen verify --tree … --netrc … --vault-password-file … --remote origin --remote internal --report-out verify.json` → `evidence-aggregate` → `prodgen promote --sha 59bc3a19 --verify-report verify.agg.json --e2e-evidence e2e.json --ci-stage-results ci_stage_results.json --vault-password-file … --push-remote origin,internal`.
-      같은 tree 라 production 파일은 바뀌지 않고 provenance·trailer 만 정규 값으로 갱신된다(`docs/operate/09-production-branch.md` 3절).
+- [x] **production Job canary — CSUS 3200** — 사용자가 긴급 승격 `36745453` 으로 재수집, **계정 생성 성공 확인**(2026-10-14). 봉투의 `account_service` 값(family/recovered/verification)은 evidence 에 아직 없다 — 다음 CSUS 수집 봉투에서 `family=hpe_rmc` 를 캡처해 `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md` 5절을 닫는다.
+- [x] **정규 재승격** — main `fed0b9f1` 매트릭스 #594~#605 → CI #56 COMPLETE_PASS → production **`338ed8d3`**(G01~G20 PASS · CI-Stages verified · E2E 증거). 긴급 커밋 `36745453` 은 이력에 남는다(append).
 - [ ] **[HIGH / 실장비 — 사용자] CSUS 3200 production Job canary** — 재수집 뒤 `diagnosis.details.account_service.family == hpe_rmc` · `recovered=true` · `verification=verified` · status success 확인.
       RMC 가 `{UserName, Password, RoleId}` 를 수락하는지는 이 실행으로만 확정된다. 실패하면 `prodgen restore`(append) 로 되돌리고 응답 본문(`write_response`)을 evidence 에 추가.
 - [ ] **[MED / lab 부재] CSUS 3200 AccountService 읽기 전용 미러 캡처** — `/redfish/v1/AccountService` · `/Accounts` · `/Roles`(비밀 없음). `Enabled` 노출 여부로 `hpe_rmc` 의 repair 계약(현재 `unverified`)을 확정한다.
