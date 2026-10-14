@@ -6,9 +6,9 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-13
+> 최종 갱신: 2026-10-14
 
-## 현재 유효한 결정 — 주제별 요약 (2026-10-13 기준)
+## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
 아래 표는 지금 유효한 결정을 주제별로 한 줄씩 적고, 근거가 적힌 날짜 절을 가리킨다. 역사와 경위는 각 날짜 절에 그대로 있다(내용 삭제 없음).
 
@@ -16,7 +16,7 @@
 |---|---|---|
 | 도달성 판정 | 관리 TCP 응답 OR ICMP Echo. ICMP 는 TCP 전 포트 무응답일 때 1회, Gate 가 아니다 | 2026-09-03 |
 | Redfish 자격 축 | 표준 수집 계정은 전역 1벌(`vault/common/redfish/standard.yml`), 복구 계정은 Location×Vendor(`vault/<loc>/redfish/<vendor>.yml`, `role: recovery`) | 2026-08-12 · 2026-10-11 D-17 |
-| 계정 쓰기 | 보류(GP-57). 실장비에 인증 실패 유발 금지. 쓰기 전제는 "표준 인증 시도 AND 구조화된 401 AND 복구 인증 성공" | 2026-08-12~13 |
+| 계정 쓰기 | 보류(GP-57). 실장비에 인증 실패 유발 금지. 쓰기 전제는 "표준 인증 시도 AND 구조화된 401 AND 복구 인증 성공". HPE RMC(CSUS 3200/Superdome Flex)는 `hpe_rmc` Family — 생성 POST 에 `Enabled` 를 보내지 않는다(사이트 실측 거부). 계정 레코드 `enabled` 는 3-상태 | 2026-08-12~13 · 2026-10-14 |
 | status 판정 | 시나리오 A/B/C/D 매트릭스 — 실제 섹션 결과로 success/partial/failed, errors 수로 판단하지 않음. Redfish 는 첫 인증 2xx 뒤 하위 403 을 섹션 실패(partial)로, Power·Thermal 둘 다 404 는 not_supported 로. **예외 E(OS 채널)**: Serial Number 를 얻지 못한 host 는 섹션과 무관하게 failed (data · sections 보존) | 2026-05-06 · 2026-10-12 · 2026-10-13 |
 | Linux sudo | SSH 인증 뒤 sudo 확인: root → NOPASSWD(제출 0) → 로그인 비밀번호 → Vault `sudo_passwords`(같은 값 1회). 정책 거부·sudo 불가는 즉시 중단, 비밀번호 거부는 대상 잠금 정책에서 계산한 예산(`_l_sudo_max_rejections`) 안에서만. 분류는 결과 구조(rc 유무·값)만, Ansible 버전 가정 없음. 실패 host 는 특권 태스크 4개를 건너뛴다 | 2026-10-13 |
 | OS Serial Number | 필수 식별자. `correlation.serial_number` 가 null 이면 `require_serial.yml` 이 status=failed(GATHER_FAILED · `serial_missing` 문장), 원인은 `diagnosis.details.serial_number.cause`. 새 failure_code 없음 | 2026-10-13 |
@@ -39,6 +39,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-10-14 — HPE RMC(CSUS 3200) 표준 계정 생성 거부 hotfix(`hpe_rmc` · Enabled 미전송) · Lenovo 표준 계정 만료는 결함 아님 · 긴급 승격 |
 | 2026-10-13 — Linux sudo Vault 후보 · 잠금 예산 · OS Serial Number 필수 · H12 대표 오류 · production P14 · P15 |
 | 2026-10-12 — 독립 점검: 중단 원인 판정 · 보존 1회 · Portal 합성 404 · Redfish 403/404 · 사람용 문서 재작성 · production P13 |
 | 2026-10-10~11 — 전체 감사 (지시서 17절) · 결함 수정 묶음 · 작성자 결정 D-01~D-22 |
@@ -90,6 +91,25 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-14 — HPE RMC(CSUS 3200) 표준 계정 생성 거부 hotfix · Lenovo 표준 계정 만료 · 긴급 승격
+
+### 사용자 의심 / 요구
+- "Redfish 계정 선택에 버그가 있는가, 벤더마다 다른 계정인가" — Lenovo 는 BMC 에 계정이 있고 Vault 와 같은데 실패, HPE 는 복구 계정으로 표준 계정이 만들어지지 않았다. "최대한 빨리 production 반영".
+
+### 확인한 사실
+- 수집 계정은 전역 `infraops` 1개(`vault/common/redfish/standard.yml`). 벤더별 `vault/<loc>/redfish/<vendor>.yml` 은 복구 전용. 표준 계정 선택 경로에 결함 없음(코드 전수 + Vault 로컬 복호화 digest 비교).
+- Lenovo: 사람이 미리 만든 `infraops` 의 **비밀번호 만료**(사용자 확인) → 401 아닌 응답 → `auth_unconfirmed` 문장 · 계약(CLAUDE.md §8)대로 복구 미진입. 결함 아님. 원인(MessageId)을 결과에 남기지 않는 점은 후속(NEXT_ACTIONS P2).
+- HPE CSUS 3200(RMC): 표준 401 → 복구 인증 성공 → `infraops` 부재 → 생성 POST 의 `Enabled` 를 RMC 가 `Base.1.17.PropertyUnknown` 으로 거부 → 1회 쓰기 원칙으로 실패. 원인은 HPE RMC 가 `generic_collection_post`(기본 계약 Enabled writable)로 떨어진 것.
+
+### 결정
+1. **`hpe_rmc` Family 신설**(hint `csus`/`superdome`): `props.Enabled` create `unsupported` · repair `unverified`, evidence `unverified`(공식 RMC 계정 계약 미확보 — web 검색 4회 DOCUMENT-GAP). 거부가 실측된 속성만 뺀 최소 계약 — 사용자 사이트 실측이 1차 근거(rule 25 R7-A-1). 재시도 사다리는 만들지 않는다.
+2. **계정 레코드 `enabled` 3-상태**(`_bool_or_none`): 속성 없음 → None. 복구 PATCH 는 `Enabled` 를 full_body Family 또는 관측 False 일 때만 싣는다(종전 `is not True` 는 속성 없는 장비에도 보냈다).
+3. **403(비밀번호 만료·변경 요구) 자동 복구는 하지 않는다** — 계약 유지. 진단 문장 분리(P2)는 후속.
+4. **긴급 승격**: 사용자 지시로 이 hotfix 에 한해 "같은 SHA main Job 1회 성공" 전제를 대체하고 로컬 gate 통과 즉시 `prodgen promote`, 승격 직후 production Job canary(CSUS 3200 1대)를 사용자가 수행한다. 결정 주체: 사용자.
+
+### 근거 · 증거
+- `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md` · `tests/unit/test_account_hpe_rmc_enabled.py` · `docs/ai/contracts/redfish-account-write.md` §6.1 · `docs/ai/NEXT_ACTIONS.md` 2026-10-14 절.
 
 ## 2026-10-13 — Linux sudo Vault 후보 · 잠금 예산 · OS Serial Number 필수 (시나리오 E)
 

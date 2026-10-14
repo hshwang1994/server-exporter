@@ -426,7 +426,7 @@ Vendor × Family 매트릭스, `CURRENT_STATE.md`,
 | `hpe_ilo4` | [OK] | `Oem/Hp` namespace, `documented` |
 | `hpe_ilo5plus` | 🔧 **라벨만** | **분할하지 않는다.** `isolated_write_patch: True` **유지**(iLO5/6/7 전체 — Repository 안전 전략, HPE 공식 지원 동작). `props`: PCR `read_only`, AccountTypes `verify_only`(iLO6 1.64+/iLO7), Locked `unsupported` |
 | — Firmware Evidence | ➕ | iLO6 1.73 → `live_proven`/`proven`/advisory · iLO6 1.74 → `advisory_derived`/`documented`/advisory · iLO7 1.19·1.20 → `advisory_derived`/`documented`/advisory · **iLO5 / iLO6 1.75+ / iLO7 1.21+ → `safety_strategy`/`documented`/None** |
-| `generic`(CSUS/Superdome) | [HOLD] | 01 §16/§21 |
+| `hpe_rmc`(CSUS 3200/Superdome Flex) | ➕ **신설 2026-10-14 (hotfix)** | 사이트 CSUS 3200 실측: Accounts POST 의 `Enabled` → `Base.1.17.PropertyUnknown` 으로 요청 전체 거부(generic 기본 계약이 보내던 속성). `props.Enabled` create `unsupported` / repair `unverified`, 나머지 기본. evidence `unverified`(공식 RMC 계정 계약 미확보 — DOCUMENT-GAP, 사이트 실측이 1차 근거). 종전 `generic`(CSUS/Superdome) [HOLD] 01 §16/§21 을 대체. `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md` |
 
 **Vendor mandatory 로 표기하지 않는다.** Password-only PATCH 는 HPE 공식 문서가 지원하는 동작이며,
 "반드시 단독이어야 한다"는 공식 계약이 아니다(01 §15).
@@ -642,7 +642,7 @@ Fujitsu 는 API Pack 원문 확보 전 Family 추가 없음.
 | `hpe_ilo5plus` | iLO7 1.19/1.20 | Password 단독 PATCH | **advisory_derived** | UNVERIFIED | ADVISORY-DERIVED | a00159600en_us |
 | `hpe_ilo5plus` | iLO7 1.21+ | Password 단독 PATCH | **safety_strategy** | UNVERIFIED | DOCUMENTED | **fixed** |
 | `hpe_ilo4` | 전체 | POST + `Oem/Hp` | — | PARTIAL | DOCUMENTED | — |
-| `generic`(CSUS/Superdome) | — | — | — | UNVERIFIED | DOCUMENT-GAP | — |
+| `hpe_rmc`(CSUS 3200/Superdome Flex) | RMC 1.75.108 (Redfish 1.19) | Collection POST **Enabled 미전송** | — | UNVERIFIED(Create 수락 미확정) | **SITE-OBSERVED(거부)** + DOCUMENT-GAP | 2026-10-14 hotfix |
 
 동일 방식으로 Dell / Lenovo / Cisco / Supermicro / Inspur / Huawei / Quanta 를 채운다.
 

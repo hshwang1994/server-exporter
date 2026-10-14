@@ -1,5 +1,18 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-14 — HOTFIX HPE RMC(CSUS 3200) 표준 계정 생성 거부(`hpe_rmc` · Enabled 미전송) · Lenovo 표준 계정 만료는 결함 아님 · 긴급 승격
+
+> 정본: `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md` · `docs/reference/decision-log.md` 2026-10-14 · `docs/ai/NEXT_ACTIONS.md` 2026-10-14 절.
+
+- **보고 2건**: (1) Lenovo — "개더링 표준 계정으로 대상 Redfish에 인증하지 못했습니다"(`auth_unconfirmed`). 사용자 확인: 사람이 미리 만든 `infraops` 의 **비밀번호 만료** → BMC 가 401 아닌 응답 → 계약(§8)대로 복구 미진입. **결함 아님.**
+  (2) HPE CSUS 3200(RMC) — `auth_rejected` + `account_service.write_response` "The property **Enabled** is not in the list of valid properties for the resource"(`Base.1.17.GeneralError`). 표준 401 → 복구 인증 성공 → `infraops` 부재 → 생성 POST 가 `Enabled` 로 거부 → 재시도 금지 원칙으로 실패. **결함** — HPE RMC 가 `generic_collection_post`(기본 계약 Enabled create writable)로 떨어졌다.
+- **고친 것(제품, `redfish-gather/library/redfish_gather.py`, hotfix `5eec01d8`)**: `_ACCOUNT_FAMILIES['hpe_rmc']` 신설(hint `csus`/`superdome`; `props.Enabled` create `unsupported` · repair `unverified`; evidence `unverified` — 공식 RMC 계정 계약 미확보 DOCUMENT-GAP, 사이트 실측이 1차 근거) ·
+  계정 레코드 `enabled` 3-상태(`_bool_or_none`, 속성 없음 → None) · 복구 PATCH 의 `Enabled` 는 full_body Family 또는 관측 False 일 때만. 재시도 사다리 · 401 게이트 · 잠금 예산 · 재조회+재인증 검증 · envelope 13 필드 불변.
+- **확인한 것**: 계정 선택 경로(`credential_resolver` → `load_one.yml` → `resolve_and_load_redfish.yml` → `load_vault.yml` → `collect_standard.yml` → `try_one_account.yml`) 결함 없음 · Vault 로컬 복호화(digest 비교만): 표준 `infraops` 1개, Lenovo 복구 `USERID` 4 Location(ic=yi / cj / git 값 다름), `role: primary` 가 섞인 벤더 파일 0.
+  시험: `tests/unit/test_account_hpe_rmc_enabled.py`(신규) · `test_hpe_rmc_is_not_treated_as_ilo` 갱신 · 전체 결과는 TEST_HISTORY 2026-10-14. vendor boundary · schema drift · harness consistency 통과.
+- **승격**: 사용자 지시("최대한 빨리 production 반영")로 이 hotfix 에 한해 "같은 SHA main Job 1회 성공" 전제를 대체 — 로컬 gate 통과 즉시 `prodgen promote`, canary 는 production Job(CSUS 3200)으로 사용자가 수행. 승격 SHA 는 TEST_HISTORY 2026-10-14.
+- **남은 것**(`docs/ai/NEXT_ACTIONS.md` 2026-10-14 절): RMC 실장비 canary(`{UserName, Password, RoleId}` 수락은 미확정) · CSUS AccountService 미러 · P2 403 MessageId 진단 문장 · P3 Lenovo Family hint(PWC-7) · cj Lenovo Vault 값 확인 · 05-vault 운영 안내 한 줄.
+
 ## 일자: 2026-10-13 (2차) — H12 후속(정상 경로 failed 봉투의 errors[0] 대표 문장) · sudo live 매트릭스 시험 · main `eb3ae9ee`→`341433af` · jenkins-prod 매트릭스 #584~#593 · CI #55 · **production P15 `6193660c`**
 
 > 정본: `docs/reference/decision-log.md` 2026-10-13 결정 7~9 · `tests/evidence/2026-10-13-h12-representative-error-and-sudo-live.md` · `docs/reference/live-validation.md` "main `341433af` 매트릭스" · "production P15 명부".

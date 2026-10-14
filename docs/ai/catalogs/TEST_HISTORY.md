@@ -1,5 +1,16 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-14 — HOTFIX HPE RMC(CSUS 3200) 표준 계정 생성 거부 (`5eec01d8` hpe_rmc · Enabled 미전송)
+
+| 구분 | 결과 |
+|---|---|
+| 전체 pytest(unit · e2e · regression, Windows Python 3.13) | 5,135 passed · 36 skipped · 7 xfailed · 0 failed (15분 36초) |
+| 신규 시험 | `tests/unit/test_account_hpe_rmc_enabled.py` 14 — RMC Family 계약(hint 2종) · 사고 응답 해석(`PropertyUnknown(Enabled)` → 거부, generic payload 가 Enabled 를 보냈다는 전제) · RMC 생성 POST 1회 · Enabled 부재 · 재조회+재인증 verified · 거부 시 재시도 0 · repair 는 관측 False 일 때만 Enabled(generic) · hpe_rmc repair 는 Enabled 미전송 · Lenovo XCC2 full_body 불변 · discovery `enabled` 3-상태 4사례 · `_bool_or_none` |
+| 갱신 시험 | `test_account_family_and_write_contract.py::test_hpe_rmc_is_not_treated_as_ilo` — family `hpe_rmc` · evidence unverified · full_body False · Enabled create/repair 미기록 · create payload = {UserName, Password, RoleId} |
+| 계약 불변식 | `test_account_write_contract_invariants.py` 전수(Family 표에 `hpe_rmc` 추가 뒤) 통과 — 5-상태 · writable 게이트 · create payload · UNVERIFIED 규칙 · full_body 범위 |
+| 정적 | `py_compile` · vendor boundary(0건) · output schema drift(sections 11 · fd_paths 197) · harness consistency(rules 28 · skills 47 · agents 47 · policies 7) · PROJECT_MAP fingerprint 일치 · 평문 자격증명 digest(변경 8건 0) · docs references 통과 · envelope change advisory 지적 없음 |
+| 실장비 | **미실행** — RMC 가 `{UserName, Password, RoleId}` 를 수락하는지는 production Job canary(CSUS 3200, 사용자)로만 확정된다. `ansible-playbook --syntax-check` 는 Windows 로컬 불가(WSL/CI) |
+
 ## 2026-10-13 (2차) — H12 대표 오류 · sudo live 매트릭스 (`75ca57c2` · `341433af`) · production P15
 
 | 구분 | 결과 |

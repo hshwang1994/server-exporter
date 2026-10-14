@@ -1,5 +1,21 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## HPE RMC 표준 계정 생성 hotfix · Lenovo 표준 계정 만료 (2026-10-14) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md`. hotfix(`hpe_rmc` Family · `enabled` 3-상태)는 커밋·승격했고 아래만 남는다.
+
+- [ ] **[HIGH / 실장비 — 사용자] CSUS 3200 production Job canary** — 재수집 뒤 `diagnosis.details.account_service.family == hpe_rmc` · `recovered=true` · `verification=verified` · status success 확인.
+      RMC 가 `{UserName, Password, RoleId}` 를 수락하는지는 이 실행으로만 확정된다. 실패하면 `prodgen restore`(append) 로 되돌리고 응답 본문(`write_response`)을 evidence 에 추가.
+- [ ] **[MED / lab 부재] CSUS 3200 AccountService 읽기 전용 미러 캡처** — `/redfish/v1/AccountService` · `/Accounts` · `/Roles`(비밀 없음). `Enabled` 노출 여부로 `hpe_rmc` 의 repair 계약(현재 `unverified`)을 확정한다.
+      `tests/fixtures/redfish/hpe_csus_3200/` 에 AccountService 가 없다.
+- [ ] **[MED] P2 — 첫 자격 응답 403 의 이유(MessageId)를 결과에 남기고 문장 분리** — Lenovo 건(비밀번호 만료 → 403 → `auth_unconfirmed`)에서 사람이 BMC 를 뒤져야 했다.
+      `_record_auth_status` 에 `@Message.ExtendedInfo[].MessageId`(구조화 값) 보존 → `errors[].detail` `ids=` → `failure_reasons.yml` 에 `auth_password_change_required` · `auth_forbidden`(redfish) 신설(AUTH_PROBE_FAILED, auth_success null, 쓰기 0).
+      403 자동 복구(자기 계정 Password PATCH / 복구 게이트 확장)는 **하지 않는다** — 계약 변경이라 사용자 결정 + ADR 선행.
+- [ ] **[LOW] P3 — Lenovo 계정 Family hint 우선순위(PWC-7 연결)** — 1차 adapter 가 항상 `redfish_lenovo_xcc3`(priority) 이고 표준 인증 실패 시 reselect 가 서지 않아 복구 Family hint 가 항상 `xcc3`.
+      `resolve_account_family()` Lenovo 분기에서 Manager `FirmwareVersion`/`Model` 관측 → AccountTypes/HostBootstrap → hint 순으로 바꾼다. 이번 두 실패의 원인은 아니다.
+- [ ] **[운영 확인] `vault/cj/redfish/lenovo.yml` 의 USERID 비밀번호가 ic·yi 와 다르다** — cj Lenovo 실값 확인(코드 아님, 값은 문서에 적지 않는다).
+- [ ] **[운영 안내] 표준 계정을 사람이 미리 만들 때** — BMC 의 비밀번호 만료 · 첫 로그인 변경 요구를 끄거나 Vault 값과 같은 시각에 맞춘다(`docs/operate/05-vault.md` 3절에 한 줄 추가 — P2 와 함께).
+
 ## sudo Vault 후보 · Serial 필수 (2026-10-13) — 남은 항목
 
 > 정본: `tests/evidence/2026-10-13-sudo-fallback-serial-required.md`. 구현 · 실측 · 승격은 끝났고 아래만 남는다.
