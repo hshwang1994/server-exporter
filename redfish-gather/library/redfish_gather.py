@@ -5873,7 +5873,11 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
             'id':       _safe(acc_data, 'Id'),
             'username': _safe(acc_data, 'UserName', default=''),
             'role_id':  _safe(acc_data, 'RoleId',   default=''),
-            'enabled':  bool(_safe(acc_data, 'Enabled', default=False)),
+            # 2026-10-14 (hotfix): 3-상태 — 장비가 Enabled 를 노출하지 않으면 None, False(비활성)와 구분한다.
+            #   종전 bool(default=False) 은 "속성 없음" 을 "비활성" 으로 만들어, 복구 PATCH 가 그 장비에
+            #   Enabled:true 를 보냈다(HPE RMC 는 Enabled 를 모른다 — PropertyUnknown 거부, 사이트 실측).
+            #   _confirm_account_state 의 state['enabled'] 와 같은 규칙. bool 이 아닌 값은 '모름' 이다.
+            'enabled':  _bool_or_none(_safe(acc_data, 'Enabled', default=None)),
             'locked':   _safe(acc_data, 'Locked', default=None),
             # 2026-08-12: 최신 Lenovo XCC2/3 · Supermicro X13/X14 · Cisco BMC 는
             #   AccountTypes 에 'Redfish' 가 없으면 계정이 있어도 Redfish 인증이 막힌다.
@@ -5927,6 +5931,15 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
 
 # 표준 계정 이름이 보호 대상 Resource 와 겹쳤다. 자동으로 건드리지 않는다.
 PRESENCE_PROTECTED_CONFLICT = 'protected_conflict'
+
+
+def _bool_or_none(value):
+    """JSON boolean 만 그대로, 그 외(없음 · 문자열 · 숫자)는 None('모름').
+
+    계정 레코드의 `enabled` 처럼 "관측된 False" 와 "노출되지 않음" 을 구분해야 하는 값에 쓴다
+    (2026-10-14 hotfix — HPE RMC 는 ManagerAccount 에 Enabled 가 없다).
+    """
+    return value if isinstance(value, bool) else None
 
 
 def account_is_protected(account, family=None):
@@ -6230,6 +6243,21 @@ _ACCOUNT_FAMILIES = {                                                          #
                                      'AccountTypes': {'create': 'unsupported',
                                                       'repair': 'verify_only'},
                                  }},
+    # HPE RMC — Compute Scale-up Server 3200 / Superdome Flex (RackManager). iLO 가 아니다.
+    # 2026-10-14 (hotfix, 사이트 실측): 표준 계정 생성 POST /AccountService/Accounts 에 `Enabled` 를
+    #   실었더니 RMC(RedfishVersion 1.19 · Base 1.17 registry)가 `Base.1.17.GeneralError` +
+    #   `PropertyUnknown`("The property Enabled is not in the list of valid properties for the
+    #   resource")로 **요청 전체를 거부**했다. 종전에는 generic Family 라 기본 계약(Enabled create
+    #   writable)이 그 속성을 보냈다. 거부가 실측된 속성만 뺀 최소 계약이다 — UserName / Password /
+    #   RoleId 의 수락은 아직 실장비로 확정되지 않았으므로 evidence 는 unverified 그대로(한 번의 결정적
+    #   쓰기). Enabled 는 repair 에서도 보내지 않는다(RMC 계정 리소스가 그 속성을 노출하는지 미확인).
+    #   공식 RMC 계정 계약 문서는 확보하지 못했다(DOCUMENT-GAP — servermanagementportal 은 iLO 만,
+    #   sdflexutils 는 계정 API 없음). 사이트 실측이 1차 근거다(rule 25 R7-A-1).
+    # source: 사용자 사이트 CSUS 3200 응답(2026-10-14), tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md
+    'hpe_rmc':                  {'evidence': 'unverified',                     # nosec rule12-r1
+                                 'props': {
+                                     'Enabled': {'create': 'unsupported', 'repair': 'unverified'},
+                                 }},
     # Supermicro X12/H12 계열 — 공식 Reference Guide 의 /AccountService/Accounts POST
     # source: supermicro.com/manuals/other/redfish-ref-guide-html/.../account-service.htm
     'supermicro_legacy':        {'evidence': 'documented'},                    # nosec rule12-r1
@@ -6269,7 +6297,8 @@ _ACCOUNT_FAMILIES = {                                                          #
                                  }},
     # 공식 Write 계약 미확보 Family — 현행 동작(표준 POST + 400/405 retry 사다리)을 그대로 둔다.
     # 대상: Fujitsu iRMC S4/S5/S6, Quanta 전 세대, Cisco UCS X-Series, Lenovo IMM2,
-    #       Supermicro X9, Inspur M5/M7, HPE CSUS/Superdome RMC, 그리고 미식별 vendor.
+    #       Supermicro X9, Inspur M5/M7, 그리고 미식별 vendor.
+    #       (HPE CSUS/Superdome RMC 는 2026-10-14 부터 `hpe_rmc` — 사이트 실측 Enabled 거부.)
     # 공식 Write 계약 미확보 Family — **한 번의 결정적 쓰기**만 한다.
     #   2026-08-12 (rev.2): 종전의 400/405 후 PasswordChangeRequired 추가 재시도를
     #   제거했다. 이 Family 에 속한 Vendor 들이 바로 그 재시도를 금지한 대상이다.
@@ -6533,8 +6562,12 @@ def resolve_account_family(vendor, discovery, adapter_id=None):
 
     if v == 'hpe':                                                             # nosec rule12-r1
         if 'csus' in hint or 'superdome' in hint:
-            reasons.append('HPE RMC(CSUS/Superdome) — create payload 공식 근거 미확보 → generic 유지')  # nosec rule12-r1
-            return account_family('generic_collection_post'), reasons
+            # 2026-10-14 (hotfix): 사이트 CSUS 3200 실측 — RMC 는 Accounts POST 의 `Enabled` 를
+            #   PropertyUnknown 으로 거부했다(generic 기본 계약이 보내던 속성). 공식 RMC 계정 계약은
+            #   미확보(DOCUMENT-GAP)라 Family 는 unverified 로 두고, 거부가 실측된 속성만 빼는 최소
+            #   계약(`hpe_rmc`)을 쓴다. 실패 뒤 다른 payload 로 다시 쓰는 것이 아니라 쓰기 전에 정한다.
+            reasons.append('HPE RMC(CSUS/Superdome) — 사이트 실측 Enabled 미지원 → hpe_rmc (공식 계약 미확보)')  # nosec rule12-r1
+            return account_family('hpe_rmc'), reasons
         if 'ilo4' in hint:
             reasons.append('adapter hint ilo4 → Oem/Hp namespace')
             return account_family('hpe_ilo4'), reasons
@@ -7434,8 +7467,11 @@ def account_service_provision(
         body_full = {}
         if account_prop_writable(family, 'Password', 'repair'):
             body_full['Password'] = target_password
+        # 2026-10-14 (hotfix): 관측된 값이 **False 일 때만** 켠다. 속성을 노출하지 않는 장비(None —
+        #   HPE RMC 사이트 실측)에 Enabled 를 보내면 요청 전체가 PropertyUnknown 으로 거부된다.
+        #   종전 `is not True` 는 None 도 보냈다. full_body Family(Lenovo XCC2/3)는 종전대로 함께 싣는다.
         if account_prop_writable(family, 'Enabled', 'repair') \
-                and (full_body or existing.get('enabled') is not True):
+                and (full_body or existing.get('enabled') is False):
             body_full['Enabled'] = True
         # 2026-08-12: RoleId 문자열을 vendor 이름으로 추측하지 않는다. Roles Collection
         #   또는 기존 계정이 실제로 쓰는 값 중에서 고른다 (choose_role_id). Cisco IMC 는

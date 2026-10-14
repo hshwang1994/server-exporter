@@ -397,11 +397,23 @@ def test_supermicro_x9_has_no_redfish_evidence():
 
 
 def test_hpe_rmc_is_not_treated_as_ilo():
-    """CSUS 3200 / Superdome Flex 는 iLO 가 아니라 RMC 다 — iLO payload 를 쓰면 안 된다."""
+    """CSUS 3200 / Superdome Flex 는 iLO 가 아니라 RMC 다 — iLO payload 를 쓰면 안 된다.
+
+    2026-10-14 (hotfix): 사이트 CSUS 3200 이 Accounts POST 의 `Enabled` 를 `Base.1.17.PropertyUnknown`
+    으로 거부했다. generic 기본 계약이 보내던 속성이라 RMC 전용 Family(`hpe_rmc`)로 빼고 create 에서
+    Enabled 를 보내지 않는다. 공식 계약은 미확보 → evidence 는 unverified 그대로(한 번의 결정적 쓰기).
+    """
     for hint in ("redfish_hpe_csus_3200", "redfish_hpe_superdome_flex"):
-        fam, _ = rg.resolve_account_family("hpe", _disc(), hint)
-        assert fam["id"] == "generic_collection_post"
+        fam, reasons = rg.resolve_account_family("hpe", _disc(), hint)
+        assert fam["id"] == "hpe_rmc", reasons
         assert fam["oem_privileges_namespace"] is None
+        assert fam["evidence"] == "unverified"
+        assert fam["full_body_patch"] is False
+        assert rg.account_prop_writable(fam, "Enabled", "create") is False
+        assert rg.account_prop_writable(fam, "Enabled", "repair") is False
+        body = rg.build_create_payload(fam, "infraops", "<pw>", "Administrator")
+        assert "Enabled" not in body
+        assert set(body) == {"UserName", "Password", "RoleId"}
 
 
 def test_inspur_m6_requires_etag_and_oem_status():
