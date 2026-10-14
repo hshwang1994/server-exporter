@@ -2,8 +2,12 @@
 
 ## HPE RMC 표준 계정 생성 hotfix · Lenovo 표준 계정 만료 (2026-10-14) — 남은 항목
 
-> 정본: `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md`. hotfix(`hpe_rmc` Family · `enabled` 3-상태)는 커밋·승격했고 아래만 남는다.
+> 정본: `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md`. hotfix(`hpe_rmc` Family · `enabled` 3-상태)는 main `5eec01d8`(문서 `29137b80`)로 커밋·push 했고, **production 승격은 아래 첫 항목이 끝나야 가능**하다.
 
+- [ ] **[CRIT / 사용자 — Jenkins 자격 필요] production 승격 (main `29137b80`)** — `prodgen promote` 는 같은 main SHA 의 ① CI 빌드 `ci_stage_results.json`(필수 단계 PASS) ② main Job 시나리오 증거 `e2e.json`(S1 S2 S3 T2 T5 T6 E2E-A E2E-A′ + Harness) ③ gate G01~G20 COMPLETE_PASS(G13 Jenkins 린터 = netrc, G19 = vault 비밀번호 파일)가 없으면 **커밋을 만들지 않는다**(도구 계약 — `--skip-live` 는 `--dry-run` 전용).
+      2026-10-14 세션은 Jenkins 자격(netrc)이 없어 `build`(194 파일, 미분류 0) · `verify --skip-live`(정적 G01~G10 · G16 · G17 · G18 · G20 PASS, 라이브 6개 SKIP → PARTIAL) · `promote --dry-run --skip-live` 까지만 했다. 사용자 지시("main Job 전제 대체")는 도구가 요구하는 증거 입력 자체를 대체하지 못한다.
+      절차(작업 PC, `docs/operate/09-production-branch.md` 3절): CI Job `clovirone-cicd/clovirone-server-gather-ci` 를 `29137b80` 로 1회 → main Job 매트릭스(S1 S2 S3 T2 T5 T6 E2E-A E2E-A′ E2E-D) → `prodgen e2e-evidence … --out e2e.json` → `prodgen verify --tree … --netrc … --vault-password-file … --remote origin --remote internal --report-out verify.json` → `evidence-aggregate` → `prodgen promote --sha 29137b80 --verify-report verify.agg.json --e2e-evidence e2e.json --ci-stage-results ci_stage_results.json --vault-password-file … --push-remote origin,internal` → production Job canary(CSUS 3200 포함).
+      더 빠른 확인: main Job(`clovirone-server-gather-main`, main checkout)으로 CSUS 3200 1대를 지금 수집하면 수정 효과(`account_service.family=hpe_rmc` · `recovered=true`)를 승격 전에 볼 수 있고 그 빌드가 E2E 증거의 일부가 된다.
 - [ ] **[HIGH / 실장비 — 사용자] CSUS 3200 production Job canary** — 재수집 뒤 `diagnosis.details.account_service.family == hpe_rmc` · `recovered=true` · `verification=verified` · status success 확인.
       RMC 가 `{UserName, Password, RoleId}` 를 수락하는지는 이 실행으로만 확정된다. 실패하면 `prodgen restore`(append) 로 되돌리고 응답 본문(`write_response`)을 evidence 에 추가.
 - [ ] **[MED / lab 부재] CSUS 3200 AccountService 읽기 전용 미러 캡처** — `/redfish/v1/AccountService` · `/Accounts` · `/Roles`(비밀 없음). `Enabled` 노출 여부로 `hpe_rmc` 의 repair 계약(현재 `unverified`)을 확정한다.
