@@ -2610,8 +2610,8 @@
   "tests/reference/os/README.md",
   "tests/reference/redfish/README.md"
  ],
- "main_sha": "59bc3a19a0cb8ba268ace6f9d8f8e57822ceca78",
- "main_tree": "d0de334f90ffb1e00d455f99ae5b983ca06f7ac8",
+ "main_sha": "fed0b9f13c71db577658926cc205f95005ea3c45",
+ "main_tree": "7fe5727c69a72127857e59e6d76c2583572737fa",
  "manifest_sha256": "f62078a590e77b867713ba03c0990984d1b2a48e8f792b88563e6c7cfc553ed2",
  "policy": {
   "eol": "lf",
