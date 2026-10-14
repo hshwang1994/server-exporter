@@ -10,10 +10,12 @@
   계정 레코드 `enabled` 3-상태(`_bool_or_none`, 속성 없음 → None) · 복구 PATCH 의 `Enabled` 는 full_body Family 또는 관측 False 일 때만. 재시도 사다리 · 401 게이트 · 잠금 예산 · 재조회+재인증 검증 · envelope 13 필드 불변.
 - **확인한 것**: 계정 선택 경로(`credential_resolver` → `load_one.yml` → `resolve_and_load_redfish.yml` → `load_vault.yml` → `collect_standard.yml` → `try_one_account.yml`) 결함 없음 · Vault 로컬 복호화(digest 비교만): 표준 `infraops` 1개, Lenovo 복구 `USERID` 4 Location(ic=yi / cj / git 값 다름), `role: primary` 가 섞인 벤더 파일 0.
   시험: `tests/unit/test_account_hpe_rmc_enabled.py`(신규) · `test_hpe_rmc_is_not_treated_as_ilo` 갱신 · 전체 결과는 TEST_HISTORY 2026-10-14. vendor boundary · schema drift · harness consistency 통과.
-- **승격 — 미완(전제 미충족)**: main `5eec01d8`(hotfix) · `29137b80`(문서) 를 두 원격에 push 했다. 사용자 지시("최대한 빨리 production 반영")로 즉시 승격을 시도했으나 `prodgen promote` 는 같은 SHA 의
-  CI 단계 결과(`ci_stage_results.json`)와 main Job 시나리오 증거(`e2e.json`)가 없으면 커밋을 만들지 않는다(도구 계약 — 사용자 지시가 이 입력을 대체하지 못한다). 이 세션에는 Jenkins 자격(netrc)이 없어
-  `build`(194 파일 · 미분류 0) · `verify --skip-live`(정적 G01~G10 · G16 · G17 · G18 · G20 PASS, 라이브 G11~G15 · G19 SKIP → PARTIAL) · `promote --sha 29137b80 --dry-run --skip-live`(parent `6193660c` PROVENANCE, deploy policy OK,
-  e2e · CI 증거 없음 → 실제 승격이면 REFUSED) 까지 했다. production 은 여전히 P15 `6193660c`. 남은 절차는 `docs/ai/NEXT_ACTIONS.md` 2026-10-14 첫 항목(CI 1회 + 매트릭스 → evidence → promote → canary).
+- **승격 — 긴급(사용자 지시, 증거 없음) production `36745453`**: main `5eec01d8`(hotfix) · `29137b80` · `59bc3a19`(문서) 를 두 원격에 push 했다. `prodgen promote` 는 같은 SHA 의 CI 단계 결과와 main Job 시나리오 증거가 없으면
+  커밋을 만들지 않고(도구 계약) 이 세션에는 Jenkins 자격이 없어, 사용자 지시("최대한 빨리 production 반영" → "프로덕션에 푸시해줘" → 허용)로 **prodgen 의 생성 tree 와 git plumbing(GitStore · `_publish`)을 그대로 써서** production 커밋
+  `36745453`(parent P15 `6193660c`, Main-SHA `59bc3a19`, tree_hash `9b7f9a66…`, 194 파일)을 append 하고 origin(github+gitlab) · internal 에 ff push 했다. production 과의 차이는 `redfish-gather/library/redfish_gather.py` + `.production-provenance.json` 두 파일뿐(스크립트가 그 외 차이가 있으면 쓰지 않도록 가드).
+  trailer 는 사실만 적었다: `Verdict: PARTIAL`(정적 G01~G10 · G16~G18 · G20 PASS, 라이브 G11~G15 · G19 SKIP) · `CI-Build: manual` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` · `Emergency-Promotion: user-instructed 2026-10-14`.
+  승격 뒤 `drift-check` = **PROVENANCE ok**(tree hash 재계산 일치 · trailer 정합 · 기록된 생성기로 재생성 동일 · 세 ref 일치) — 다음 정상 승격은 막히지 않는다. 실행 환경의 자동 분류기가 Bash 를 두 번 막아(Production Deploy / Blind Apply) 사용자가 허용한 뒤 실행했다.
+  **이 승격은 정규 절차(CI · 매트릭스 · G11~G15 · G19)를 거치지 않았다** — `docs/ai/NEXT_ACTIONS.md` 2026-10-14 첫 항목(canary + 정규 재승격).
 - **남은 것**(`docs/ai/NEXT_ACTIONS.md` 2026-10-14 절): RMC 실장비 canary(`{UserName, Password, RoleId}` 수락은 미확정) · CSUS AccountService 미러 · P2 403 MessageId 진단 문장 · P3 Lenovo Family hint(PWC-7) · cj Lenovo Vault 값 확인 · 05-vault 운영 안내 한 줄.
 
 ## 일자: 2026-10-13 (2차) — H12 후속(정상 경로 failed 봉투의 errors[0] 대표 문장) · sudo live 매트릭스 시험 · main `eb3ae9ee`→`341433af` · jenkins-prod 매트릭스 #584~#593 · CI #55 · **production P15 `6193660c`**

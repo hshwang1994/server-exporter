@@ -10,6 +10,8 @@
 | 계약 불변식 | `test_account_write_contract_invariants.py` 전수(Family 표에 `hpe_rmc` 추가 뒤) 통과 — 5-상태 · writable 게이트 · create payload · UNVERIFIED 규칙 · full_body 범위 |
 | 정적 | `py_compile` · vendor boundary(0건) · output schema drift(sections 11 · fd_paths 197) · harness consistency(rules 28 · skills 47 · agents 47 · policies 7) · PROJECT_MAP fingerprint 일치 · 평문 자격증명 digest(변경 8건 0) · docs references 통과 · envelope change advisory 지적 없음 |
 | 실장비 | **미실행** — RMC 가 `{UserName, Password, RoleId}` 를 수락하는지는 production Job canary(CSUS 3200, 사용자)로만 확정된다. `ansible-playbook --syntax-check` 는 Windows 로컬 불가(WSL/CI) |
+| prodgen build · verify(`59bc3a19`) | build 194 파일 · 미분류 0 · tree_hash `9b7f9a66…`(hotfix `5eec01d8` 와 동일) · `verify --skip-live` PARTIAL: G01~G10 · G16 · G17 · G18(production `6193660c` PROVENANCE) · G20(ancestry) PASS, G11~G15 · G19 SKIP |
+| 승격(긴급) | production `36745453` ← parent `6193660c`, Main-SHA `59bc3a19`, origin(github+gitlab) · internal 일치. CI 단계 결과 · E2E 증거 **없음**(trailer `Verdict: PARTIAL` · `Emergency-Promotion`). `drift-check` PROVENANCE ok(C_tree_hash · D_trailers · A1 재생성 동일). production Job canary 미실행(사용자) |
 
 ## 2026-10-13 (2차) — H12 대표 오류 · sudo live 매트릭스 (`75ca57c2` · `341433af`) · production P15
 

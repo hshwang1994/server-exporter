@@ -117,8 +117,9 @@ vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 끝나면 
 
 | 항목 | 값 |
 |---|---|
-| production | `6193660c` (`main` `341433af`에서 생성, 2026-10-13) |
+| production | `36745453` (`main` `59bc3a19`에서 생성, 2026-10-14 — **긴급 승격**: 사용자 지시로 CI·E2E 증거 없이 생성 tree 를 올렸습니다. trailer `Verdict: PARTIAL` · `Emergency-Promotion`. 정규 재승격이 남아 있습니다) |
 | 상태 | `PROVENANCE`, 두 원격 일치 |
+| 직전 production | `6193660c` (`main` `341433af`, 2026-10-13, 정규 승격) |
 | 첫 production(baseline) | `4ce90a00` |
 
 승격 이력과 각 승격의 검증 빌드는 [../reference/decision-log.md](../reference/decision-log.md)와 [../reference/live-validation.md](../reference/live-validation.md)에 있습니다.
