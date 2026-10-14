@@ -4036,7 +4036,7 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
             'id':       _safe(acc_data, 'Id'),
             'username': _safe(acc_data, 'UserName', default=''),
             'role_id':  _safe(acc_data, 'RoleId',   default=''),
-            'enabled':  bool(_safe(acc_data, 'Enabled', default=False)),
+            'enabled':  _bool_or_none(_safe(acc_data, 'Enabled', default=None)),
             'locked':   _safe(acc_data, 'Locked', default=None),
             'account_types': [s for s in _as_list(acct_types) if isinstance(s, str)]
                              if acct_types is not None else None,
@@ -4077,6 +4077,10 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
 
 
 PRESENCE_PROTECTED_CONFLICT = 'protected_conflict'
+
+
+def _bool_or_none(value):
+    return value if isinstance(value, bool) else None
 
 
 def account_is_protected(account, family=None):
@@ -4218,6 +4222,10 @@ _ACCOUNT_FAMILIES = {
                                                                 'repair': 'read_only'},
                                      'AccountTypes': {'create': 'unsupported',
                                                       'repair': 'verify_only'},
+                                 }},
+    'hpe_rmc':                  {'evidence': 'unverified',
+                                 'props': {
+                                     'Enabled': {'create': 'unsupported', 'repair': 'unverified'},
                                  }},
     'supermicro_legacy':        {'evidence': 'documented'},
     'supermicro_split_account': {'account_types': ('Redfish',),
@@ -4400,8 +4408,8 @@ def resolve_account_family(vendor, discovery, adapter_id=None):
 
     if v == 'hpe':
         if 'csus' in hint or 'superdome' in hint:
-            reasons.append('HPE RMC(CSUS/Superdome) — create payload 공식 근거 미확보 → generic 유지')
-            return account_family('generic_collection_post'), reasons
+            reasons.append('HPE RMC(CSUS/Superdome) — 사이트 실측 Enabled 미지원 → hpe_rmc (공식 계약 미확보)')
+            return account_family('hpe_rmc'), reasons
         if 'ilo4' in hint:
             reasons.append('adapter hint ilo4 → Oem/Hp namespace')
             return account_family('hpe_ilo4'), reasons
@@ -4982,7 +4990,7 @@ def account_service_provision(
         if account_prop_writable(family, 'Password', 'repair'):
             body_full['Password'] = target_password
         if account_prop_writable(family, 'Enabled', 'repair') \
-                and (full_body or existing.get('enabled') is not True):
+                and (full_body or existing.get('enabled') is False):
             body_full['Enabled'] = True
         if account_prop_writable(family, 'RoleId', 'repair') \
                 and (full_body or (existing.get('role_id') or '') != role_id):

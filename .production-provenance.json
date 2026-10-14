@@ -1599,7 +1599,7 @@
    "source_sha256": "c9097d8d66b39d113fc2a6b20a302dabd82d28a32b61ad8d1347169a692d6041"
   },
   "redfish-gather/library/redfish_gather.py": {
-   "bytes": 243410,
+   "bytes": 243735,
    "language": "python",
    "mode": "100644",
    "preserved": [
@@ -1610,11 +1610,11 @@
     }
    ],
    "python_kind": "library",
-   "removed_lines": 1314,
-   "removed_trailing": 320,
-   "sha256": "3fb4dc015064ee10e859186e38817428f10b63b3f2b340ba610937b0ba16d618",
-   "source_blob": "c682b3fe5729e70cd47b764cac3ddbd3ed427a6d",
-   "source_sha256": "c06def41eed1af6d47ce55a02ec4e56604ff495617dd5813c2c55364a0bdd6c4"
+   "removed_lines": 1337,
+   "removed_trailing": 321,
+   "sha256": "f0fe86291f09efb388ffb34771b7189dd3503b47df9165fe939315058736248e",
+   "source_blob": "23488688c72b93b90002a7781c40f9248966979a",
+   "source_sha256": "209c8921f8484f2765f4ca49be3cfd3f06eb062d45db359a580d91e1d45117fe"
   },
   "redfish-gather/site.yml": {
    "bytes": 27311,
@@ -2610,8 +2610,8 @@
   "tests/reference/os/README.md",
   "tests/reference/redfish/README.md"
  ],
- "main_sha": "341433afb4efdca9fb4fcf20545af592e6ae345b",
- "main_tree": "e55036a47283e3a82762f85420a4fc2fb9a90011",
+ "main_sha": "59bc3a19a0cb8ba268ace6f9d8f8e57822ceca78",
+ "main_tree": "d0de334f90ffb1e00d455f99ae5b983ca06f7ac8",
  "manifest_sha256": "f62078a590e77b867713ba03c0990984d1b2a48e8f792b88563e6c7cfc553ed2",
  "policy": {
   "eol": "lf",
@@ -2627,5 +2627,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "196c8615373b0ef530b42e7e3681fce577c8c3cdbfb62811fad1ae98f3ef1f24"
+ "tree_hash": "9b7f9a6618dc6b96ff0e7a68ccb8aa3f886c61201a780e12bfcd20b564c69e68"
 }
