@@ -1,6 +1,6 @@
 # ADR-2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬
 
-- 상태: Accepted (긴급 승격 production `31f9b804` 로 반영, 정규 재승격 대기)
+- 상태: Accepted (긴급 승격 production `31f9b804` → 정규 재승격 `28c38c17`, 2026-10-15)
 - 일시: 2026-10-15
 - 결정 주체: 사용자(hshwang1994) — 정책 결정 · 승격 승인. AI(Claude) — 조사 · 구현 · 검증
 - 관련 rule: 12 R1 · R4, 13 R7, 22 R4, 92 R2, 96 R1 · R1-B, 70 R8(rule 본문 — adapter 가 코드에 주는 키 목록)
@@ -44,6 +44,7 @@ Redfish 는 `system.hostname` 을 내지 않았고, `system.fqdn` 에 System.Hos
 - CSUS 의 `diagnosis.details.hostname_source` 는 `system` 이다. 최종값이 `data.system.hostname` 에서 올라가기 때문이다. `bmc` 로 표시하려면 공통 builder 에 출처 힌트를 더해야 했다 — 하지 않았다(D2).
 - RMC 를 "<서버명>-RMC" 로 지은 사이트(node03 형)는 hostname 이 RMC 이름이 된다(D1 — 결정 1 을 그대로 적용).
 - 반영: 2026-10-15 긴급 승격 production `31f9b804`(main `fd7dfd6a`, HBA 수정 `846516e3` 포함). canary production Job #296(Redfish 3대) 기대값 일치 · Portal 200.
+  같은 날 정규 재승격 production `28c38c17`(main `2c709fe8` — main Job 매트릭스 #617~#627 · CI #58 COMPLETE_PASS · gate G01~G20 PASS · `CI-Stages: verified`). runtime tree 는 `31f9b804` 와 같다.
 
 ## 4. 대안 비교 (Considered)
 
@@ -61,3 +62,5 @@ Redfish 는 `system.hostname` 을 내지 않았고, `system.fqdn` 에 System.Hos
   신규 `tests/integration/test_redfish_hostname_policy_replay.py`(실 CSUS 녹화본 재생 → 실 adapter 점수 선택 → normalize → build_output, 사용자 사례 합성 변형 · RMC 이름 없음 변형 · Dell/HPE/Lenovo 무변화 · 키를 가진 adapter 는 CSUS 하나)
 - 전체 회귀(`fd7dfd6a`): unit · e2e · regression 5215 passed · 36 skipped · 7 xfailed · 0 failed / integration(not live) 336 passed · 6 skipped. WSL 3채널 syntax-check 통과.
 - 실장비: production Job #296 — checkout `31f9b804`, 접수 3 = 결과 3, Portal 200, Dell R760 · HPE iLO6 · Cisco 기대값 일치, HBA 수 #295 와 같음. **CSUS 실장비는 lab 부재 — 사이트 재수집으로 확인 필요.**
+- 정규 재승격: main Job 매트릭스 11건(#617~#627) 기대 결과 · CI #58 SUCCESS(집계 COMPLETE_PASS, E2E 증거 88/88) · 작업 PC promote 재실행 gate G11~G15 · G18~G20 PASS → `28c38c17` · drift-check PROVENANCE ·
+  세 원격 일치. canary 는 `docs/reference/live-validation.md` 2026-10-15 정규 재승격 절.

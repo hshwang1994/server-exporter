@@ -469,6 +469,40 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
+## 2026-10-15 정규 재승격 — main `2c709fe8` 매트릭스 #617~#627 · CI #58 · production `28c38c17` · canary #297 · #298 (실장비)
+
+main `2c709fe8`(CSUS hostname 정렬 + HBA 수정 + 두 세션 문서 · 하네스)로 정규 절차를 돌려 긴급 승격 `31f9b804` 의 증거를 채웠다. runtime tree 는 `31f9b804` 와 같다
+(tree_hash `5d48ac38…` — `fd7dfd6a` 뒤 runtime 경로 변경은 production 에서 지워지는 adapter 주석 1줄뿐이다). 결정 근거는 [decision-log.md](decision-log.md) 2026-10-15 결정 5.
+
+### main `2c709fe8` 매트릭스 (main Job #617~#627, checkout 전부 == `2c709fe8`)
+
+| 시나리오 | 빌드 | 결과 | 확인 |
+|---|---|---|---|
+| S1 Linux 3 | #619 | SUCCESS | 78 s |
+| S2 혼합 (실호스트 3 + TEST-NET 2) | #617 | SUCCESS | 108 s |
+| S3 Linux 11 | #620 | SUCCESS | 136 s · 첫 트리거는 crumb 동시 요청 403(빌드 생성 전)이라 다시 트리거 |
+| S4 Windows 1 | #618 | SUCCESS | 144 s |
+| T2 TEST-NET 2 | #621 | SUCCESS | 83 s |
+| T5 사용자 중단 (6대) | #622 | ABORTED | 수집 단계 시작 15초 뒤 API stop · 48 s |
+| T6 Callback 거부 주소 | #623 | UNSTABLE | `http://127.0.0.1:9` · 117 s |
+| E2E-A loc=cj | #624 | UNSTABLE | cj Runner · TEST-NET 2 · 106 s |
+| E2E-A2 loc=chj | #625 | FAILURE | fail-closed · 23 s · tip 관측 `2c709fe8` 전후 동일(직접 바인딩) |
+| E2E-D ESXi 6 | #626 | SUCCESS | 81 s |
+| **E2E-E Redfish 7 BMC** (Dell 5 · Cisco 1 · Lenovo 1) | #627 | SUCCESS | 407 s |
+
+CI #58(`2c709fe8`, PROMOTE_DRY_RUN=true): SUCCESS 58분 — 12 단계 전부 SUCCESS(Prodgen Promote 는 예행). E2E 증거 88건(Harness 77 · main Job 매트릭스 11) 전부 PASS ·
+집계 verdict COMPLETE_PASS(G01~G20 PASS, G14 4,847 passed). 작업 PC `prodgen promote`(환경이 달라 G11~G15 · G19 와 G18 · G20 재실행 — 전부 PASS) → production `28c38c17`
+(parent 긴급 `31f9b804`, tree_hash 동일, `CI-Stages: verified`, `E2E-Evidence-SHA256 eb9fa32c…`). drift-check PROVENANCE(tree hash 재계산 일치) · 세 원격(GitHub · GitLab · 로컬) 일치.
+
+production Job canary — 직전 production 빌드와 같은 입력(loc `git`, 같은 callback · deploymentEnvironmentId), 두 빌드 동시 실행:
+
+| 빌드 | 대상 | 결과 | 확인 |
+|---|---|---|---|
+| #297 | OS 2 (#292 와 같은 10.100.64.132 Linux · 10.100.64.120 Windows) | SUCCESS 172 s | checkout `28c38c17` · 2/2 success · Portal 200 · #292 대비 status · hostname · `system.hostname/fqdn` · `hardware.serial` 차이 0 |
+| #298 | Redfish 3 (#296 과 같은 Dell R760 · HPE iLO6 · Cisco) | SUCCESS 397 s | checkout `28c38c17` · 3/3 success · Portal 200 · #296 대비 hostname · `system.hostname/fqdn` · serial · `bmc.network_hostname` · HBA 수 차이 0 |
+
+→ 두 빌드의 callback 본문 · 콘솔 · 정리 요약에서 자격 문자열 0건. **CSUS 3200 은 lab 에 없어 실장비 미검증** — 사이트 재수집에서 `hostname = ycgsfaibap01` 을 확인해야 한다.
+
 ## 2026-10-15 CSUS 3200 hostname RMC 우선 · Redfish hostname 계약 — production 긴급 `31f9b804` · canary #296 (실장비)
 
 main `fd7dfd6a`(hostname 정렬 + HBA `846516e3`)를 사용자 지시로 긴급 승격했다(CI · E2E 증거 없음 — 정규 재승격 대기). 결정 근거는 [decision-log.md](decision-log.md) 2026-10-15.
@@ -518,6 +552,7 @@ Redfish 7대 HBA 관련 필드 대조 — main Job **#602**(수정 전 코드, `
 → 실장비 7대 모두 기존에 잡히던 HBA · 카드 · 포트 정보가 그대로다. 이 7대는 모두 섀시 1개 · NDF 정상 노출이라 새 경로(다중 섀시 · NDF 미노출 · 빈 목록)는 실장비에서 실행되지 않았다.
 
 CI #57(`9aa2f8b5`) SUCCESS 57.5분 — 12 단계 전부 SUCCESS(Prodgen Promote 는 예행). production 승격은 **아직 하지 않았다**(production `338ed8d3` 그대로) — 다른 세션의 합친 긴급 승격 계획은 철회돼 실행되지 않았다.
+→ 2026-10-15 갱신: 이 수정은 이후 긴급 `31f9b804` 에 들어갔고 정규 재승격 production `28c38c17` 로 증거를 채웠다(위 2026-10-15 정규 재승격 절).
 
 ## 2026-10-14 HPE RMC(CSUS 3200) 표준 계정 생성 hotfix — main `fed0b9f1` 매트릭스 · production 긴급 `36745453` → 정규 `338ed8d3` (실장비)
 

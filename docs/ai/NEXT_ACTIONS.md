@@ -2,11 +2,11 @@
 
 ## HPE CSUS 3200 hostname RMC 우선 · Redfish hostname 계약 · 긴급 승격 (2026-10-15) — 남은 항목
 
-> 정본: `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md`. production `31f9b804`(main `fd7dfd6a`, HBA `846516e3` 포함)는 **긴급 승격**이다 — CI · E2E 증거 없음.
-> 아래 HBA 절 첫 항목("production 승격 — main `9aa2f8b5`, 미완료")의 반영 자체는 이 긴급 승격에 포함됐다. 정규 증거는 아래 첫 항목이 채운다.
+> 정본: `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md`. 긴급 승격 `31f9b804`(main `fd7dfd6a`, HBA `846516e3` 포함)의 증거는 같은 날 정규 재승격
+> production `28c38c17`(main `2c709fe8`)이 채웠다. 아래 HBA 절 첫 항목("production 승격 — main `9aa2f8b5`")도 이 승격에 포함됐다.
 
-- [ ] **[HIGH] 정규 재승격** — 최종 main(두 세션 작업 + 이 문서 커밋)으로 main Job 매트릭스 11건(S1 · S2 · S3 · S4 · T2 · T5 · T6 · E2E-A · E2E-A2 · E2E-D · E2E-E) → CI(`clovirone-server-gather-ci`, E2E_MAIN_ENTRIES)
-      COMPLETE_PASS → 작업 PC `prodgen promote --verify-report --e2e-evidence --ci-stage-results --netrc --vault-password-file --push-remote origin,internal` → 승격 직후 production Job canary. 2026-10-14 `36745453` → `338ed8d3` 와 같은 순서.
+- [x] **[HIGH] 정규 재승격** — main `2c709fe8` 매트릭스 #617~#627(11건 기대 결과) → CI #58 COMPLETE_PASS → 작업 PC `prodgen promote`(G11~G15 · G18~G20 재실행 PASS) → production **`28c38c17`**
+      (parent 긴급 `31f9b804`, tree_hash 동일, `CI-Stages: verified`, E2E 증거 88건). drift-check PROVENANCE · 세 원격 일치. canary 는 `docs/reference/live-validation.md` 2026-10-15 정규 재승격 절.
 - [ ] **[HIGH / 사이트 — 사용자] CSUS 3200 재수집 확인** — production Job 으로 사이트 CSUS 를 다시 수집해 `hostname = ycgsfaibap01` · `data.system.hostname = ycgsfaibap01` · `data.system.fqdn = null` ·
       `multi_node.partitions[0].system.hostname = svu703327-net7` · `bmc.network_hostname = ycgsfaibap01` 를 확인한다. lab 에 CSUS 가 없어 이 단계만 실장비 확인이다.
 - [ ] **[MED / Portal 소비자] hostname 값 변화 안내** — 도메인이 붙은 System.HostName 장비(lab 의 Dell R760 · HPE iLO6)는 봉투 hostname 이 짧은 이름이 됐고, 도메인 없는 장비는 `data.system.fqdn` 이 null 이다.
@@ -15,12 +15,19 @@
 - [ ] **[LOW] 사전 누락 3건** — 코드가 내는 `bmc.serial` · `bmc.part_number` · `bmc.manufacturer` 가 `schema/field_dictionary.yml` 에 없다(이번에 `bmc.network_hostname` 만 추가).
 - [ ] **[LOW / 검토] CSUS `data.bmc` 는 Managers 첫 멤버** — 실측 CSUS 는 Manager 가 RMC 하나라 문제없다. PDHC 가 앞에 오는 펌웨어가 확인되면 RMC 선택 규칙을 검토.
 - [ ] **[검토만] Superdome Flex 의 hostname 원천** — 결정 범위 밖이라 `bmc_first` 를 두지 않았다. 사이트 요구가 생기면 adapter 키 한 줄.
+- [ ] **[LOW / 하네스] `prodgen` 결과 출력 인코딩** — Windows(cp949)에서 stdout 을 파일로 돌리면 결과 JSON 의 `—`(`scripts/ai/prodgen/promote.py` 커밋 메시지)를 못 써서 `cli._emit` 이
+      `UnicodeEncodeError` 로 끝난다(종료 코드 1). 실제 승격은 출력 전에 push 까지 끝나므로 원격은 바뀐 채 실패처럼 보인다 — 재실행하면 같은 tree 의 커밋이 하나 더 쌓인다
+      (provenance 에 시각이 없어 tree 가 같고, `promote()` 는 현재 production 과 같은 tree 인지 보지 않고 `commit_tree` 를 부른다).
+      2026-10-15 정규 재승격은 `PYTHONIOENCODING=utf-8` 로 실행해 피했고, 같은 출력을 흉내 낸 확인에서 오류를 재현했다(redirect 시 `sys.stdout.encoding = cp949`). 운영 문서 `docs/operate/09-production-branch.md` 3절에 주의를 적었다.
+      수정(`_emit` 을 UTF-8 로 고정 + 시험)은 하네스 작업으로 따로 한다 — AWC-8(`verify_no_plaintext_secret.py`)과 같은 부류.
 
 ## Redfish HBA 누락 보완 (2026-10-15) — 남은 항목
 
 > 정본: `tests/evidence/2026-10-15-redfish-hba-coverage.md`. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다. 아래는 이 환경에서 확인하지 못한 것이다.
 
-- [ ] **[HIGH] production 승격 — main `9aa2f8b5`** — 매트릭스 #606~#616 · CI #57(Evidence Aggregate 까지 SUCCESS)이 이 SHA 의 증거다. **production 승격: 미완료** — 사용자 지시("5분 안에 마무리")로 이 세션에서 멈췄다. 정규 승격은 둘 중 하나다: (a) 작업 PC `python -m scripts.ai.prodgen promote --sha 9aa2f8b59ca3c4bc0870a78ba73374617f754484 --verify-report <CI #57 prodgen_verify_report.aggregated.json> --e2e-evidence <CI #57 e2e_evidence.json> --ci-stage-results <CI #57 ci_stage_results.json> --netrc <jenkins netrc> --vault-password-file <vault 비밀번호 파일> --push-remote origin,internal` (환경 의존 gate 재실행 — vault 비밀번호 파일 필요), (b) main tip 이 승격할 SHA 와 같을 때 CI 를 PROMOTE_DRY_RUN=false 로 실행(Jenkins 자격 사용). 승격 직후 production Job canary(OS 1~3 + Redfish).
+- [x] **[HIGH] production 승격 — HBA 수정 반영됨 (2026-10-15 갱신)**: 이 수정(`846516e3`)은 main `fd7dfd6a` 긴급 승격 `31f9b804` 에 들어갔고, main `2c709fe8` 정규 재승격 production **`28c38c17`**
+      (CI #58 COMPLETE_PASS · gate G01~G20 PASS)로 증거를 채웠다 — 위 CSUS 절 첫 항목.
+      종전 기록(HBA 세션): 매트릭스 #606~#616 · CI #57(Evidence Aggregate 까지 SUCCESS)이 이 SHA 의 증거다. **production 승격: 미완료** — 사용자 지시("5분 안에 마무리")로 이 세션에서 멈췄다. 정규 승격은 둘 중 하나다: (a) 작업 PC `python -m scripts.ai.prodgen promote --sha 9aa2f8b59ca3c4bc0870a78ba73374617f754484 --verify-report <CI #57 prodgen_verify_report.aggregated.json> --e2e-evidence <CI #57 e2e_evidence.json> --ci-stage-results <CI #57 ci_stage_results.json> --netrc <jenkins netrc> --vault-password-file <vault 비밀번호 파일> --push-remote origin,internal` (환경 의존 gate 재실행 — vault 비밀번호 파일 필요), (b) main tip 이 승격할 SHA 와 같을 때 CI 를 PROMOTE_DRY_RUN=false 로 실행(Jenkins 자격 사용). 승격 직후 production Job canary(OS 1~3 + Redfish).
 - [ ] **[HIGH / 사이트 실측] 다중 섀시 응답 캡처** — `Links.Chassis` 가 2개 이상인 System(HPE CSUS 3200 · Superdome Flex 다중 섀시 파티션)의 NetworkAdapters 수집을 실 응답으로 확인한다.
       섀시 간 `adapter_id`(`PCIeCard{slot}`) 가 겹치는지, 다른 파티션이 같은 섀시를 연결하는 일이 있는지(소유 판정 규칙의 전제)를 함께 본다. `capture-site-fixture` 로 녹화본을 남긴다.
 - [ ] **[MED / 실장비] NDF 를 주지 않는 FC 장비 · FC 링크업 장비** — 링크 기술만 FC 인 포트 규칙(wwpn null)과 `link_status: up` 을 실장비로 확인한다(lab 녹화본 FC 는 모두 LinkDown).

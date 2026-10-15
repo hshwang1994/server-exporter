@@ -76,6 +76,8 @@ python -m scripts.ai.prodgen restore --to <이전 production 커밋> --push-remo
 - `--verify-report`는 바인딩(main SHA, tree hash, 생성기 해시, manifest 해시)이 같을 때만 재사용하고, 환경 식별자(Python, Ansible, PowerShell, Jenkins 버전 등)가 다르거나 비어 있으면 환경 의존 gate(G11 G12 G13 G14 G15 G19)를 다시 실행합니다. G18과 G20은 항상 다시 실행합니다. 어느 gate를 재사용했는지는 보고서의 `gates_reused`, `gates_rerun`과 커밋 trailer에 남습니다.
 - gate 구성: G01~G10, G16, G17 정적 검사. G11 syntax-check, G12 config dump, G15 module smoke. G13 Jenkins 린터. G14 생성 tree 위 pytest. G18 drift. G19 고객사 `main` 형태의 깨끗한 checkout에서 3채널 실제 실행. G20 조상과 두 원격 동일.
 
+- Windows 작업 PC에서 결과를 파일로 받으려면 `PYTHONIOENCODING=utf-8`을 붙입니다. 붙이지 않으면 결과 출력이 cp949로 인코딩되는데, 결과의 `—` 문자를 cp949로 쓸 수 없어 `UnicodeEncodeError`로 종료 코드 1이 납니다. 결과 출력은 승격과 push가 끝난 뒤에 하므로, 이 경우에도 원격은 이미 바뀌었을 수 있습니다. 다시 실행하기 전에 5절처럼 세 ref를 직접 확인하세요. G14는 이 변수를 pytest 자식 프로세스에 넘기지 않으므로 시험 결과는 달라지지 않습니다.
+
 vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 끝나면 지우세요.
 
 ## 4. 승격의 전제
@@ -117,9 +119,9 @@ vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 끝나면 
 
 | 항목 | 값 |
 |---|---|
-| production | `31f9b804` (`main` `fd7dfd6a`에서 생성, 2026-10-15 — **긴급 승격**: 사용자 지시로 CI·E2E 증거 없이 올린 커밋. trailer `Verdict: PARTIAL` · `CI-Stages: not-verified` · `Emergency-Promotion`. 정규 재승격 대기) |
+| production | `28c38c17` (`main` `2c709fe8`에서 생성, 2026-10-15, 정규 재승격 — CI #58 COMPLETE_PASS · gate G01~G20 PASS · main Job 매트릭스 11건 · `CI-Stages: verified`. runtime tree는 직전 긴급 승격 `31f9b804`와 같음) |
 | 상태 | `PROVENANCE`, 두 원격 일치 |
-| 직전 production | `338ed8d3` (`main` `fed0b9f1`, 2026-10-14, 정규 승격 — CI #56 COMPLETE_PASS · gate G01~G20 PASS · E2E 증거 11건) · 그 이전 `36745453` (`main` `59bc3a19`, 2026-10-14 긴급 승격) · `6193660c` (`main` `341433af`, 2026-10-13) |
+| 직전 production | `31f9b804` (`main` `fd7dfd6a`, 2026-10-15 긴급 승격 — CI·E2E 증거 없이 올린 커밋, trailer `Verdict: PARTIAL` · `Emergency-Promotion`) · 그 이전 `338ed8d3` (`main` `fed0b9f1`, 2026-10-14 정규 승격) · `36745453` (`main` `59bc3a19`, 2026-10-14 긴급 승격) |
 | 첫 production(baseline) | `4ce90a00` |
 
 승격 이력과 각 승격의 검증 빌드는 [../reference/decision-log.md](../reference/decision-log.md)와 [../reference/live-validation.md](../reference/live-validation.md)에 있습니다.

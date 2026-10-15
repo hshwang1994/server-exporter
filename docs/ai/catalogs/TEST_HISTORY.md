@@ -1,5 +1,16 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-15 (3) — 정규 재승격 main `2c709fe8` → production `28c38c17` (긴급 `31f9b804` 의 증거 채움)
+
+| 구분 | 결과 |
+|---|---|
+| main Job 매트릭스 | #617~#627 11건 — S1 · S2 · S3 · S4 · T2 SUCCESS · T5 ABORTED · T6 · E2E-A UNSTABLE · E2E-A2 FAILURE(fail-closed, tip 관측 전후 동일) · E2E-D · E2E-E SUCCESS. 전부 기대 결과 · checkout `2c709fe8`. S3 첫 트리거는 crumb 동시 요청 403 → 다시 트리거 |
+| CI #58 | SUCCESS 58분 · 12 단계 SUCCESS · stage 결과 GATE · CORPUS · BUDGET · HARNESS_MAIN · HARNESS_TREE · PRODGEN_BUILD · PRODGEN_DRIFT · PRODGEN_VERIFY · VAULT_DECRYPT · EVIDENCE PASS · PROMOTE DRY_RUN · 집계 verdict COMPLETE_PASS(G14 4,847 passed · 179 skipped · 7 xfailed) · E2E 증거 88/88 PASS |
+| 정규 promote (작업 PC — Windows Python 3.13.15 · WSL ansible-core 2.20.7 · pwsh 7.6.6) | 18:48~19:03(15분). 생성 tree 194 파일 · class B 0 · tree_hash `5d48ac38…`(긴급 `31f9b804` 와 동일). 보고서 재사용(binding 일치) · 환경 차이 6건(python · platform · ansible runtime/version · collections · pwsh)으로 G11~G15 · G19 재실행 + G18 · G20 재실행 → 전부 PASS · verdict COMPLETE_PASS → `28c38c17`(parent `31f9b804`) · origin push(GitHub + GitLab push URL) · internal 은 같은 URL 로 이미 반영 |
+| drift-check · 원격 | PROVENANCE ok(tree hash 재계산 · trailer 일치) · GitHub · GitLab · 로컬 production 모두 `28c38c17` |
+| canary | production Job #297 OS 2 SUCCESS(2/2 · Portal 200 · #292 대비 차이 0) · #298 Redfish 3 SUCCESS(3/3 · Portal 200 · #296 대비 hostname · HBA 수 차이 0) · checkout 둘 다 `28c38c17` · 자격 문자열 0건 |
+| 실장비 미검증 | CSUS 3200(lab 부재 — 사이트 재수집 필요) |
+
 ## 2026-10-15 (2) — CSUS hostname RMC 우선 · Redfish hostname 계약 (`fba865f6` → 원복 `581700c8` → 재적용 `fd7dfd6a`) · 긴급 production `31f9b804`
 
 | 구분 | 결과 |

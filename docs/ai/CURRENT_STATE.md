@@ -1,6 +1,6 @@
 # server-exporter 현재 상태
 
-## 일자: 2026-10-15 (2) — HPE CSUS 3200 hostname = RMC 이름 우선 · Redfish `system.hostname/fqdn` 계약 정렬 · 긴급 승격 production `31f9b804`
+## 일자: 2026-10-15 (2) — HPE CSUS 3200 hostname = RMC 이름 우선 · Redfish `system.hostname/fqdn` 계약 정렬 · 긴급 `31f9b804` → 정규 재승격 production `28c38c17`
 
 > 정본: `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md` · `docs/contract/03-fields.md` 8절 · `docs/reference/decision-log.md` 2026-10-15 · `docs/ai/NEXT_ACTIONS.md` 2026-10-15 CSUS 절.
 
@@ -16,7 +16,10 @@
 - **승격 — 긴급(사용자 지시 · 승인) production `31f9b804`**: main `fd7dfd6a`(HBA `846516e3` 포함) 생성 tree, parent `338ed8d3`, trailer `Verdict: PARTIAL` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` · `Emergency-Promotion`.
   실행 환경 분류기가 승격 · canary 를 막아 사용자가 직접 실행. drift-check PROVENANCE ok · 세 원격 일치. canary production Job #296(Redfish 3대 — Dell R760 · HPE iLO6 · Cisco): checkout `31f9b804` · 3/3 · Portal 200 · 기대값 일치 · HBA 수 #295 와 같음.
   경위: hotfix `fba865f6` → 사용자 지시 원복 `581700c8` → 승인 뒤 재적용 `fd7dfd6a`.
-- **남은 것**: 정규 재승격(main Job 매트릭스 11 → CI → promote) · CSUS 사이트 재수집 확인(`hostname=ycgsfaibap01`) — NEXT_ACTIONS.
+- **승격 — 정규 재승격 production `28c38c17`** (사용자 지시 "CI 부터 차근차근" · "정규 promote 해줘"): main `2c709fe8`(두 세션 코드 · 문서 · 하네스) 매트릭스 #617~#627 11건 기대 결과 →
+  CI #58 SUCCESS(12 단계 · 집계 COMPLETE_PASS · E2E 증거 88/88) → 작업 PC `prodgen promote`(G11~G15 · G18~G20 재실행 PASS) → `28c38c17`(parent `31f9b804`, tree_hash 동일 `5d48ac38…`, `CI-Stages: verified`).
+  drift-check PROVENANCE · 세 원격 일치. canary 는 live-validation 2026-10-15 정규 재승격 절.
+- **남은 것**: CSUS 사이트 재수집 확인(`hostname=ycgsfaibap01`) · Portal 에 hostname 값 변화 안내 — NEXT_ACTIONS.
 
 ## 일자: 2026-10-15 — Redfish `storage.hbas` 누락 보완 (링크 기술 FC · wwpn 추측 금지 · System 연결 섀시와 소유 확인 · 빈 목록과 미제공 구분)
 
@@ -33,6 +36,7 @@
 - **시험**: 신규 4파일 + 기존 2파일 보강 · 의도 변경 2건. 결과는 TEST_HISTORY 2026-10-15.
 - **실장비**: main Job 매트릭스 #606~#616 계약 일치 · Redfish 7대 HBA 관련 필드 #602 대비 차이 0 · CI #57 Evidence Aggregate 까지 SUCCESS. 다중 섀시 · 소유 판정 · NDF 미노출 FC 장비 · FC 링크업은 **미검증**.
 - **승격: 미완료** — 사용자 지시로 세션을 마무리했다. 남은 절차는 `docs/ai/NEXT_ACTIONS.md` 2026-10-15 절 첫 항목(정규 promote 명령).
+  → **2026-10-15 갱신(CSUS hostname 세션)**: 이 수정은 긴급 `31f9b804`(main `fd7dfd6a`)에 들어갔고, 정규 재승격 production `28c38c17`(main `2c709fe8`)로 증거를 채웠다(위 2026-10-15 (2) 절).
 
 ## 일자: 2026-10-14 — HOTFIX HPE RMC(CSUS 3200) 표준 계정 생성 거부(`hpe_rmc` · Enabled 미전송) · Lenovo 표준 계정 만료는 결함 아님 · 긴급 승격
 

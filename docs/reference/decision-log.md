@@ -41,6 +41,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬 · 긴급 승격 → 정규 재승격 |
 | 2026-10-15 — Redfish HBA 누락 보완 (링크 기술 FC · wwpn 추측 금지 · System 연결 섀시와 소유 확인 · 빈 목록과 미제공 구분) |
 | 2026-10-14 — HPE RMC(CSUS 3200) 표준 계정 생성 거부 hotfix(`hpe_rmc` · Enabled 미전송) · Lenovo 표준 계정 만료는 결함 아님 · 긴급 승격 |
 | 2026-10-13 — Linux sudo Vault 후보 · 잠금 예산 · OS Serial Number 필수 · H12 대표 오류 · production P14 · P15 |
@@ -95,7 +96,7 @@
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
 
-## 2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬 · 긴급 승격
+## 2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬 · 긴급 승격 → 정규 재승격
 
 ### 사용자 질문 / 요구
 - "CSUS 장비 JSON 에서 hostname · partitions[Partition0] 은 `svu703327-net7` 인데 bmc 의 dns_name · network_hostname 은 `ycgsfaibap01` 이다. 같은 문제인가?"
@@ -116,10 +117,14 @@
    git plumbing 으로 `338ed8d3` 위에 append(ff, force 없음). trailer: `Verdict: PARTIAL`(라이브 gate G11~G15 · G19 SKIP, 나머지 PASS) · `CI-Build: manual` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` ·
    `Emergency-Promotion: user-approved 2026-10-15`. 실행 환경 분류기가 승격 · canary 명령을 막아 **사용자가 직접 실행**했다. drift-check PROVENANCE ok · 세 원격 일치.
    경위: hotfix `fba865f6` → 사용자 지시로 원복 `581700c8` → 승인 뒤 재적용 `fd7dfd6a`(이력은 append 로 남긴다).
-5. 정규 재승격(main Job 매트릭스 → CI → `prodgen promote`)으로 증거를 채운다 — 후속.
+5. **정규 재승격 (실행됨 — production `28c38c17`)**: 사용자 지시("직전 세션과 지금 세션 작업 모두 CI 부터 차근차근", "정규 promote 해줘")로 main `2c709fe8`(두 세션의 코드 · 문서 · 하네스)에
+   main Job 매트릭스 11건(#617~#627, checkout 전부 `2c709fe8`) → CI #58 COMPLETE_PASS(12 단계 SUCCESS · Promote 예행) → 작업 PC 정규 `prodgen promote`(G11~G15 · G18~G20 재실행 PASS) →
+   `28c38c17`(parent 긴급 `31f9b804`, tree_hash 동일 `5d48ac38…`, `CI-Stages: verified`, `E2E-Evidence-SHA256` 기록). drift-check PROVENANCE · 세 원격 일치. 긴급 커밋은 이력에 남는다(append-only).
+   Jenkins 자격 · vault 비밀번호는 세션 임시 파일로만 쓰고 지웠다.
 
 ### 근거 · 증거
-- `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md` · `docs/contract/03-fields.md` 8절 · `tests/integration/test_redfish_hostname_policy_replay.py` · production Job #296(canary).
+- `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md` · `docs/contract/03-fields.md` 8절 · `tests/integration/test_redfish_hostname_policy_replay.py` · production Job #296(canary) ·
+  [live-validation.md](live-validation.md) 2026-10-15 정규 재승격 절(매트릭스 · CI #58 · canary).
 
 ## 2026-10-15 — Redfish HBA 누락 보완
 
