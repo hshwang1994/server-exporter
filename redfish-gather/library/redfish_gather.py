@@ -1172,16 +1172,23 @@ def _resolve_all_member_uris(bmc_ip, coll_uri, username, password, timeout, veri
 
 def _resolve_system_chassis_uri(bmc_ip, system_uri, default_chassis_uri,
                                 username, password, timeout, verify_ssl):
+    uris = _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl)
+    return uris[0] if uris else default_chassis_uri
+
+
+def _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl):
     if not system_uri:
-        return default_chassis_uri
+        return []
     st, data, err = _get(bmc_ip, _p(system_uri), username, password, timeout, verify_ssl)
     if err or st != 200 or not isinstance(data, dict):
-        return default_chassis_uri
+        return []
+    out, seen = [], set()
     for link in _dicts(_safe(data, 'Links', 'Chassis')):
         uri = _safe(link, '@odata.id')
-        if uri and isinstance(uri, str):
-            return uri
-    return default_chassis_uri
+        if uri and isinstance(uri, str) and _p(uri) not in seen:
+            seen.add(_p(uri))
+            out.append(uri)
+    return out
 
 
 def _classify_rmc_label(manager_uri, manager_id, manager_layout, is_first=True):
@@ -2451,10 +2458,9 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
             continue
         s2, nd, e2 = _get(bmc_ip, _p(u), username, password, timeout, verify_ssl)
         if e2 or s2 != 200 or not isinstance(nd, dict):
-            if s2 != 404:
-                errors.append(_err('network_adapters',
-                                   f'NetworkDeviceFunction {u} 실패: {e2 or s2}',
-                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            errors.append(_err('network_adapters',
+                               f'NetworkDeviceFunction {u} 실패: {e2 or s2}',
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         fc = _safe(nd, 'FibreChannel') or {}
         ib = _safe(nd, 'InfiniBand') or {}
@@ -2478,10 +2484,6 @@ def _make_fc_hba(adapter_id, adapter_info, port_id, cls, link_status, speed_gbps
                  primary_addr, ndf):
     wwpn = ndf.get('wwpn') if isinstance(ndf, dict) else None
     wwnn = ndf.get('wwnn') if isinstance(ndf, dict) else None
-    if not wwpn:
-        cand = _normalize_wwn(primary_addr)
-        if cand and len(cand.replace(':', '')) == 16:
-            wwpn = cand
     return {
         'adapter_id':      adapter_id,
         'adapter_model':   adapter_info.get('model'),
@@ -2526,40 +2528,153 @@ def _make_ib_port(adapter_id, adapter_info, port_id, link_status, speed_gbps, pd
     }
 
 
+def _chassis_linked_by_other_systems(bmc_ip, system_uri, chassis_uris, username, password, timeout,
+                                     verify_ssl, errors):
+    st, coll, err = _get(bmc_ip, 'Systems', username, password, timeout, verify_ssl)
+    if err or st != 200 or not isinstance(coll, dict):
+        errors.append(_err('network_adapters', f'Systems 목록 실패: {err or st}', _extended_info(coll),
+                           code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        return set(), False
+    members, state = _collection_walk(bmc_ip, 'Systems', coll, username, password, timeout, verify_ssl)
+    complete = state['cut'] is None
+    if not complete:
+        errors.append(_err('network_adapters', _walk_cut_text('Systems', state['cut']),
+                           code=_CODE_NON_BLOCKING_SUBRESOURCE))
+    me = _p(system_uri) if system_uri else None
+    targets = {_p(u) for u in chassis_uris}
+    shared = set()
+    for m in members:
+        u = _safe(m, '@odata.id')
+        if not isinstance(u, str) or not u or _p(u) == me:
+            continue
+        s2, sd, e2 = _get(bmc_ip, _p(u), username, password, timeout, verify_ssl)
+        if e2 or s2 != 200 or not isinstance(sd, dict):
+            errors.append(_err('network_adapters', f'System {u} 실패: {e2 or s2}',
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            complete = False
+            continue
+        for link in _dicts(_safe(sd, 'Links', 'Chassis')):
+            cu = _safe(link, '@odata.id')
+            if isinstance(cu, str) and _p(cu) in targets:
+                shared.add(_p(cu))
+    return shared, complete
+
+
+def _extra_chassis_adapter_collections(bmc_ip, system_uri, extra_chassis_uris, skip_paths,
+                                       username, password, timeout, verify_ssl, errors):
+    uris = _capped([u for u in (extra_chassis_uris or []) if isinstance(u, str) and u], 'network_adapters', errors)
+    if not uris:
+        return []
+    shared, complete = _chassis_linked_by_other_systems(bmc_ip, system_uri, uris, username, password, timeout,
+                                                        verify_ssl, errors)
+    found = []
+    for u in uris:
+        key = _p(u)
+        if not complete:
+            _notice('network_adapters', f'System 목록을 끝까지 읽지 못해 {key} 의 소유를 확인할 수 없음, '
+                                        f'네트워크 카드(FC HBA 포함) 미수집')
+            continue
+        if key in shared:
+            _notice('network_adapters', f'{key} 를 다른 System 도 연결함, 소유를 확인할 수 없어 '
+                                        f'네트워크 카드(FC HBA 포함) 미수집')
+            continue
+        st, cdata, cerr = _get(bmc_ip, key, username, password, timeout, verify_ssl)
+        if cerr or st != 200 or not isinstance(cdata, dict):
+            errors.append(_err('network_adapters', f'Chassis {u} 실패: {cerr or st}', _extended_info(cdata),
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        link = _safe(cdata, 'NetworkAdapters', '@odata.id')
+        if not isinstance(link, str) or not link:
+            continue
+        base = _p(link)
+        if base in skip_paths:
+            continue
+        skip_paths.add(base)
+        st2, coll, err2 = _get(bmc_ip, base, username, password, timeout, verify_ssl)
+        if err2 or st2 != 200:
+            errors.append(_err('network_adapters', f'NetworkAdapters {link} 실패: {err2 or st2}', _extended_info(coll),
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        found.append((base, coll))
+    return found
+
+
+def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris, username, password, timeout,
+                             verify_ssl, errors):
+    sources, tried, fails = [], [], []
+    state = {'empty': False}
+
+    def _accept(base, coll, origin):
+        members = _collection_members(bmc_ip, base, coll, username, password, timeout, verify_ssl,
+                                      'network_adapters', errors)
+        if members:
+            sources.append((origin, members))
+        else:
+            state['empty'] = True
+
+    def _probe(base, origin):
+        tried.append(base)
+        st, data, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
+        if not err and st == 200:
+            _accept(base, data, origin)
+        else:
+            fails.append((st, err or st, _extended_info(data)))
+
+    if chassis_uri:
+        _probe(_p(chassis_uri) + '/NetworkAdapters', 'primary')
+    if extra_chassis_uris:
+        for base, coll in _extra_chassis_adapter_collections(bmc_ip, system_uri, extra_chassis_uris, set(tried),
+                                                             username, password, timeout, verify_ssl, errors):
+            tried.append(base)
+            _accept(base, coll, 'extra')
+    if not sources and system_uri:
+        alt = _p(system_uri) + '/NetworkAdapters'
+        if alt not in tried:
+            _probe(alt, 'system')
+    return sources, tried, fails, state['empty']
+
+
 def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, timeout,
-                                    verify_ssl, system_uri=None):
+                                    verify_ssl, system_uri=None, extra_chassis_uris=None):
     out = {'adapters': [], 'ports': [], 'fc_hbas': [], 'infiniband': []}
     errors = []
     if not chassis_uri and not system_uri:
         return out, errors
 
-    candidates = []
-    if chassis_uri:
-        candidates.append(_p(chassis_uri) + '/NetworkAdapters')
-    if system_uri:
-        alt = _p(system_uri) + '/NetworkAdapters'
-        if alt not in candidates:
-            candidates.append(alt)
-
-    coll, first_fail = None, None
-    for base in candidates:
-        st, data, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
-        if not err and st == 200:
-            coll = data
-            break
-        if first_fail is None:
-            first_fail = (err or st, _extended_info(data))
-    if coll is None:
-        sig, ext = first_fail
-        detail = 'tried: ' + ' / '.join(candidates)
-        if ext:
-            detail += ' | ' + ext
-        errors.append(_err('network_adapters',
-                           f'NetworkAdapters 미지원 또는 실패: {sig}', detail))
+    sources, tried, fails, saw_empty = _network_adapter_sources(
+        bmc_ip, chassis_uri, system_uri, extra_chassis_uris, username, password, timeout, verify_ssl, errors)
+    if not sources:
+        if saw_empty:
+            _notice('network_adapters', 'NetworkAdapters 목록이 비어 있음, 네트워크 카드(FC HBA 포함) 정보 미확인')
+            return out, errors
+        if fails:
+            _st, sig, ext = fails[0]
+            detail = 'tried: ' + ' / '.join(tried)
+            if ext:
+                detail += ' | ' + ext
+            errors.append(_err('network_adapters',
+                               f'NetworkAdapters 미지원 또는 실패: {sig}', detail))
+        if _is_404_only_error(errors):
+            _notice('network_adapters', 'NetworkAdapters 리소스 404, 네트워크 카드(FC HBA 포함) 정보 미수집')
         return out, errors
 
-    for member in _collection_members(bmc_ip, base, coll, username, password, timeout, verify_ssl,
-                                      'network_adapters', errors):
+    if fails and sources[0][0] == 'extra':
+        _st, sig, ext = fails[0]
+        if _st != 404:
+            errors.append(_err('network_adapters', f'NetworkAdapters {tried[0]} 실패: {sig}', ext,
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+
+    items, seen_adapters, seen_ports = [], set(), set()
+    for origin, members in sources:
+        for m in members:
+            raw = _str(_safe(m, '@odata.id'))
+            if origin == 'extra' and (not raw or _p(raw) in seen_adapters):
+                continue
+            if raw:
+                seen_adapters.add(_p(raw))
+            items.append((origin, m))
+
+    for origin, member in _capped(items, 'network_adapters', errors):
         adp_uri = _safe(member, '@odata.id')
         if not adp_uri:
             continue
@@ -2584,13 +2699,19 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         if fw_ver:
                             break
         port_count = 0
+        ndf_count = 0
+        ctrl_linked = False
         if ctrls and isinstance(ctrls, list):
             for _ctrl in ctrls:
                 _caps = _safe(_ctrl, 'ControllerCapabilities') or {}
                 port_count += _safe_int(_safe(_caps, 'NetworkPortCount'), default=0) or 0
+                ndf_count += _safe_int(_safe(_caps, 'NetworkDeviceFunctionCount'), default=0) or 0
+                _clinks = _safe(_ctrl, 'Links') or {}
+                ctrl_linked = ctrl_linked or any(_dicts(_safe(_clinks, _k))
+                                                 for _k in ('NetworkDeviceFunctions', 'Ports', 'NetworkPorts'))
         mfr = _str(_safe(adata, 'Manufacturer')).strip()
         model = _str(_safe(adata, 'Model')).strip()
-        if port_count == 0 and not mfr and not model:
+        if port_count == 0 and ndf_count == 0 and not ctrl_linked and not mfr and not model:
             continue
         adapter_info = {
             'id':               adapter_id,
@@ -2631,6 +2752,9 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     p_uri = _safe(pmember, '@odata.id')
                     if not p_uri:
                         continue
+                    if origin == 'extra' and _p(p_uri) in seen_ports:
+                        continue
+                    seen_ports.add(_p(p_uri))
                     st4, pdata, perr2 = _get(bmc_ip, _p(p_uri), username, password, timeout, verify_ssl)
                     if perr2 or st4 != 200:
                         errors.append(_err('network_adapters', f'Port {p_uri} 실패: {perr2 or st4}',
@@ -2670,9 +2794,27 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     ndf = fc_ndfs[0] if fc_ndfs else (ndfs[cand[0]] if cand else None)
 
                     cls = _classify_port_protocol(port_protocol, link_tech, ndf, pdata)
+                    lt_fc = _str(link_tech).strip().lower() == 'fibrechannel'
+                    if cls is None and not cand and lt_fc:
+                        _pid = _str(port_id)
+                        if not (_pid and any(_str(n.get('id')).startswith(_pid + '-') for n in ndfs)):
+                            cls = 'FibreChannel'
 
                     if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
                         primary_addr = ndf['wwpn']
+
+                    port_hbas = []
+                    if cls in ('FibreChannel', 'FCoE'):
+                        for fndf in (fc_ndfs or [ndf]):
+                            port_hbas.append(_make_fc_hba(
+                                adapter_id, adapter_info, port_id, cls,
+                                normalized_link, speed_gbps, primary_addr, fndf))
+                    if origin == 'extra' and port_hbas:
+                        known = {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}
+                        fresh = [h for h in port_hbas if not (h.get('wwpn') and h['wwpn'] in known)]
+                        if not fresh:
+                            continue
+                        port_hbas = fresh
 
                     port_info = {
                         'adapter_id':              adapter_id,
@@ -2689,19 +2831,16 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     }
                     out['ports'].append(port_info)
                     cur = out['adapters'][adapter_idx]
-                    if cur.get('mac') is None and primary_addr and cls not in ('FibreChannel', 'FCoE', 'InfiniBand'):
+                    if (cur.get('mac') is None and primary_addr and cls not in ('FibreChannel', 'FCoE', 'InfiniBand')
+                            and not lt_fc):
                         cur['mac'] = primary_addr
                     if cur.get('link_status') == 'unknown' or (cur.get('link_status') != 'up' and normalized_link == 'up'):
                         cur['link_status'] = normalized_link
                     if cur.get('speed_mbps') is None and speed_mbps:
                         cur['speed_mbps'] = speed_mbps
 
-                    if cls in ('FibreChannel', 'FCoE'):
-                        for fndf in (fc_ndfs or [ndf]):
-                            out['fc_hbas'].append(_make_fc_hba(
-                                adapter_id, adapter_info, port_id, cls,
-                                normalized_link, speed_gbps,
-                                (fndf.get('wwpn') if isinstance(fndf, dict) and fndf.get('wwpn') else primary_addr), fndf))
+                    if port_hbas:
+                        out['fc_hbas'].extend(port_hbas)
                     elif cls == 'InfiniBand':
                         out['infiniband'].append(_make_ib_port(
                             adapter_id, adapter_info, port_id,
@@ -2721,9 +2860,11 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
             else:
                 cls = _classify_port_protocol(None, None, ndf, None)
             if cls in ('FibreChannel', 'FCoE'):
-                out['fc_hbas'].append(_make_fc_hba(
-                    adapter_id, adapter_info, ndf.get('id'), cls,
-                    'unknown', None, None, ndf))
+                hba = _make_fc_hba(adapter_id, adapter_info, ndf.get('id'), cls, 'unknown', None, None, ndf)
+                if origin == 'extra' and hba.get('wwpn') and hba['wwpn'] in {
+                        h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
+                    continue
+                out['fc_hbas'].append(hba)
             elif cls == 'InfiniBand':
                 out['infiniband'].append(_make_ib_port(
                     adapter_id, adapter_info, ndf.get('id'),
@@ -3795,8 +3936,9 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                           manager_layout=None, product_hint=None):
     _run = _make_section_runner(all_errors, collected, failed, unsupported)
     creds = (username, password, timeout, verify_ssl)
-    eff_chassis_uri = _resolve_system_chassis_uri(
-        bmc_ip, system_uri, chassis_uri, username, password, timeout, verify_ssl)
+    sys_chassis = _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl)
+    eff_chassis_uri = sys_chassis[0] if sys_chassis else chassis_uri
+    extra_chassis = [u for u in sys_chassis[1:] if _p(u) != _p(eff_chassis_uri)]
     bios_link = {}
     sections = {
         'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, eff_chassis_uri, product_hint, bios_link),
@@ -3810,7 +3952,7 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         'thermal':           _run('thermal',    gather_thermal,    bmc_ip, eff_chassis_uri,     *creds),
         'network_adapters':  _run('network_adapters',
                                    gather_network_adapters_chassis,
-                                   bmc_ip, eff_chassis_uri, *creds, system_uri),
+                                   bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis),
     }
     bios, bios_errors = gather_bios(bmc_ip, bios_link, *creds)
     all_errors.extend(bios_errors)

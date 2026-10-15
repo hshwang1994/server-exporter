@@ -393,6 +393,33 @@
     _rf_aux_sections: ['network_adapters']
   no_log: true
 
+- name: "redfish | normalize_standard | system hostname source"
+  ansible.builtin.set_fact:
+    _rf_sys_hostname_raw: >-
+      {%- set prio = (((_selected_adapter | default({})).vendor_notes | default({})).hostname_priority | default('', true)) | string | trim | lower -%}
+      {%- set sysh = _rf_d_system.hostname | default(none) -%}
+      {%- set sysh = (sysh | trim) if sysh is string else '' -%}
+      {%- set bmch = (_rf_d_bmc.network_hostname | default(none)) if _rf_d_bmc is mapping else none -%}
+      {%- set bmch = (bmch | trim) if bmch is string else '' -%}
+      {%- set raw = (bmch or sysh) if prio == 'bmc_first' else sysh -%}
+      {{ raw if raw else none }}
+  no_log: true
+
+- name: "redfish | normalize_standard | system hostname / fqdn"
+  ansible.builtin.set_fact:
+    _rf_sys_hostname_short: >-
+      {%- set h = _rf_sys_hostname_raw | default(none) -%}
+      {%- set h = (h | trim) if h is string else '' -%}
+      {%- set s = (h.split('.')[0] | trim) if h else '' -%}
+      {{ s if s else none }}
+    _rf_sys_fqdn: >-
+      {%- set h = _rf_sys_hostname_raw | default(none) -%}
+      {%- set h = (h | trim) if h is string else '' -%}
+      {%- set s = (h.split('.')[0] | trim) if h else '' -%}
+      {%- set d = (h.split('.', 1)[1] | trim) if ('.' in h) else '' -%}
+      {{ (s ~ '.' ~ d) if (s and d) else none }}
+  no_log: true
+
 - name: "redfish | normalize_standard | build standard fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -404,7 +431,8 @@
         architecture:   null
         uptime_seconds: null
         selinux:        null
-        fqdn:           "{{ _rf_d_system.hostname | default(none) }}"
+        hostname:       "{{ _rf_sys_hostname_short | default(none) }}"
+        fqdn:           "{{ _rf_sys_fqdn | default(none) }}"
       hardware:
         vendor:       "{{ _rf_d_system.manufacturer | default(none) }}"
         model:        "{{ _rf_d_system.model        | default(none) }}"

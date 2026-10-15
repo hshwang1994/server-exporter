@@ -30,6 +30,7 @@ vendor_notes:
   multi_node_support: true
   systems_id_pattern: "Partition*"
   manager_layout: "rmc_primary"
+  hostname_priority: "bmc_first"
   rmc_firmware_min: "1.0"
   npar_firmware_bundles: true
   socket_module: "4-socket"

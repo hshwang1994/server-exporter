@@ -321,16 +321,16 @@
    "source_sha256": "9d6cd5675d619315717877ec2a1dd93d0835cc756ee8e3b4cc82bc3f1edf2e48"
   },
   "adapters/redfish/hpe_csus_3200.yml": {
-   "bytes": 1892,
+   "bytes": 1925,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 90,
+   "removed_lines": 95,
    "removed_trailing": 25,
-   "sha256": "07f356f116438add37ec5cf33a559eb93986f69c2a9d43de3381138bcd2b0eb2",
-   "source_blob": "197f7041f0f4c6765c2d183a59d830decc2f9d32",
-   "source_sha256": "58817c9aef490090275d3710decff7d0057e50b21e1658d9b46206920e3d1560"
+   "sha256": "d941456d9261891758efd268415fbd4d54185b750a028e84c7b9e9478ffd3c11",
+   "source_blob": "d3749c378fc83429143e68004e09cb2ffc85feb5",
+   "source_sha256": "e64ecbcd3a6ddcaee86398e3705e84f60cad1d07c5e44aa2c22daa6b4cef9776"
   },
   "adapters/redfish/hpe_ilo.yml": {
    "bytes": 786,
@@ -1599,7 +1599,7 @@
    "source_sha256": "c9097d8d66b39d113fc2a6b20a302dabd82d28a32b61ad8d1347169a692d6041"
   },
   "redfish-gather/library/redfish_gather.py": {
-   "bytes": 243735,
+   "bytes": 251197,
    "language": "python",
    "mode": "100644",
    "preserved": [
@@ -1610,11 +1610,11 @@
     }
    ],
    "python_kind": "library",
-   "removed_lines": 1337,
-   "removed_trailing": 321,
-   "sha256": "f0fe86291f09efb388ffb34771b7189dd3503b47df9165fe939315058736248e",
-   "source_blob": "23488688c72b93b90002a7781c40f9248966979a",
-   "source_sha256": "209c8921f8484f2765f4ca49be3cfd3f06eb062d45db359a580d91e1d45117fe"
+   "removed_lines": 1354,
+   "removed_trailing": 323,
+   "sha256": "e1394887d8535f23d7beaddc59e8486ef109aedee53cec9b3c8cc165b7389180",
+   "source_blob": "445af0e47563ed7ce3ceee6ccd1c363b782b1cc0",
+   "source_sha256": "61c534a0f6211268fd53bd0ca01ad7d1cd3429572866155e3e5d79ddd01bac7a"
   },
   "redfish-gather/site.yml": {
    "bytes": 27311,
@@ -1689,16 +1689,16 @@
    "source_sha256": "d19cf0f8cf0010f6375dcf410f6fb0e7e57675b09db6b401afc71971d7d18e3e"
   },
   "redfish-gather/tasks/normalize_standard.yml": {
-   "bytes": 29482,
+   "bytes": 30895,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 123,
+   "removed_lines": 133,
    "removed_trailing": 1,
-   "sha256": "9226c827f087fd94cd51d765fc941699bc28310fef30bfeac8dbd651c30ff0ba",
-   "source_blob": "97241700ea277cc695f320ae21dbb561121f9b13",
-   "source_sha256": "cd05dea8c2a74d95864ad95da94a28cfc6d17b0c6e9821dbf459d521bdd460ef"
+   "sha256": "2f457d2c9a411f12cf9cadbf55d7745ab2d86243f3ba8ab07394b948feddaf64",
+   "source_blob": "d843eb397d8a9a28eafd0552b274c8b78eb33d85",
+   "source_sha256": "4f61d59b64f0b8bab698685a8f7c7aff4c028639f00bcd2ceb74bbd887a9ad8b"
   },
   "redfish-gather/tasks/reselect_adapter.yml": {
    "bytes": 2030,
@@ -2610,8 +2610,8 @@
   "tests/reference/os/README.md",
   "tests/reference/redfish/README.md"
  ],
- "main_sha": "fed0b9f13c71db577658926cc205f95005ea3c45",
- "main_tree": "7fe5727c69a72127857e59e6d76c2583572737fa",
+ "main_sha": "fd7dfd6a344d05129a6d346edc209d644252717f",
+ "main_tree": "a090592afc4f287377ef97aa45129b4c8c9f7b86",
  "manifest_sha256": "f62078a590e77b867713ba03c0990984d1b2a48e8f792b88563e6c7cfc553ed2",
  "policy": {
   "eol": "lf",
@@ -2627,5 +2627,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "9b7f9a6618dc6b96ff0e7a68ccb8aa3f886c61201a780e12bfcd20b564c69e68"
+ "tree_hash": "5d48ac38d4717de7fadb5a74be5274b2f78f7820bba579b84a14d2a95fd2a4a7"
 }
