@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-14
+> 최종 갱신: 2026-10-15
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -30,6 +30,7 @@
 | vendor 표시값 | 내부 canonical(`hpe`) ↔ 호출자 표시값(`hp` · `hpCsus`) 분리 | 2026-06-04 |
 | adapter | 코드가 읽는 절만(`match` · `capabilities.sections_supported` · `vendor_notes` …), 점수 `priority×1000 + specificity×10 + match`. 세대 토큰은 단어 경계, 버전 숫자 패턴은 보조. `capabilities.sections_supported` 는 채널 섹션과 일치 | 2026-05-11 · 2026-10-10 D-14 · 2026-10-11 D-17 · 2026-10-12 |
 | 멀티-노드(RMC) | `data.multi_node` 컨테이너로 CSUS 3200 / Superdome Flex 전 Partition · Manager · Chassis 수집 | 2026-05-12 · 2026-06-09 |
+| Redfish HBA | `storage.hbas[]` = FC 포트(기능)당 1건. System 이 연결한 섀시만 본다 — 추가 섀시는 다른 System 이 연결하지 않았을 때만, 링크를 따라간다. 카드를 하나도 못 얻으면(빈 목록 포함) Systems 경로. wwpn 은 NDF 의 WWPN 만(포트 주소 추측 금지), 링크 기술만 FC 인 포트도 HBA. 빈 목록 · 미제공은 notices, 실패는 errors[] — status 불변 | 2026-10-15 |
 | 실패 문장 | `failure_code` + 대상 종류 + 세부 사유로 고르는 중앙 카탈로그, 사용자 문장에 기술값 금지 | 2026-08-12 · 2026-09-21 |
 | 식별자 · 단위 | DMI 자리표시자 집합 한 곳(`identity_normalizer`), JEDEC (bank, id) 표, firewall_state = 유효 정책 | 2026-10-10 D-03 · D-10 · LX-F12 |
 | ESXi | `vmware_host_config_info` 는 `esxi_hostname` 필수, vCenter 대상은 protocol 단계 거부 | 2026-10-10 D-01 · ESXI-03 |
@@ -39,6 +40,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-10-15 — Redfish HBA 누락 보완 (링크 기술 FC · wwpn 추측 금지 · System 연결 섀시와 소유 확인 · 빈 목록과 미제공 구분) |
 | 2026-10-14 — HPE RMC(CSUS 3200) 표준 계정 생성 거부 hotfix(`hpe_rmc` · Enabled 미전송) · Lenovo 표준 계정 만료는 결함 아님 · 긴급 승격 |
 | 2026-10-13 — Linux sudo Vault 후보 · 잠금 예산 · OS Serial Number 필수 · H12 대표 오류 · production P14 · P15 |
 | 2026-10-12 — 독립 점검: 중단 원인 판정 · 보존 1회 · Portal 합성 404 · Redfish 403/404 · 사람용 문서 재작성 · production P13 |
@@ -91,6 +93,29 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-15 — Redfish HBA 누락 보완
+
+### 사용자 질문 / 요구
+- "Redfish storage HBA 의 Adapter 를 어떻게 가져오나, 누락은 없나, Link Status 는 그대로 가져오나, unknown 은 무엇인가."
+- 보완 범위는 사용자가 정했다(A 판정 신호 + B 다중 섀시 + C 문서). 요구: 표준 기반 공통 로직(제조사 예외 금지) · 200 빈 목록이면 다른 경로 검토 · 다중 섀시 누락/중복 방지와
+  System 연결 섀시만 · "HBA 없음" 과 "미제공/실패" 구분(Gathering 실패 처리 금지) · `unknown` 과 JSON 구조 유지 · WWPN/Link 추측 금지 · 실장비 미확인은 완료로 보고하지 않기.
+
+### 확인한 사실
+- HBA 는 NetworkAdapters 안에 있다(전용 API 없음). FC 판정은 NDF 에 기대고 있어, NDF 를 못 받은 FC 포트(실측 R740 은 링크 기술만 준다)가 빠졌다. 섀시는 `Links.Chassis[0]` 만 봤다.
+- 포트 주소의 뜻은 장비마다 다르다 — R740 NetworkPort 주소는 WWNN, HPE DL380 FC Port 의 `Ethernet.AssociatedMACAddresses` 는 WWPN.
+- 판정 함수에 링크 기술 신호를 넣는 원안은 녹화본 변형에서 WWNN 을 wwpn 으로 넣고 HBA 를 8건으로 중복시켰다(설계 검토 에이전트 지적 → 실측 확인).
+
+### 결정
+1. **판정 함수는 그대로**, 포트 루프에서 "연결된 NDF 없음 · 짝 없는 하위 NDF 없음 · 링크 기술 FibreChannel" 일 때만 FC 포트. wwpn 은 NDF 의 `WWPN`/`PermanentWWPN` 만 — 포트 주소 대체 경로(Round 1 #22)는 제거.
+2. **System 연결 섀시** — 추가 섀시는 다른 ComputerSystem 이 그 섀시를 연결하지 않았다는 것을 끝까지 확인했을 때만(CSUS 백서 "nPartition is a set of chassis"), 섀시 링크를 따라간다.
+   공유 · 확인 불가는 수집하지 않고 notice. **1순위 섀시는 종전 그대로** — DPU 같은 다른 System 이 같은 섀시를 연결할 때 기존 카드가 통째로 빠지는 위험을 피한다(잔여 위험으로 기록).
+3. **빈 목록** — 섀시에서 카드를 하나도 못 얻으면(200 빈 목록 포함) `Systems/{id}/NetworkAdapters` 를 본다. 두 목록은 섞지 않는다.
+4. **중복** — 추가 섀시에서 온 것만, 확인된 단위만(같은 카드 · 포트 리소스, null 이 아닌 같은 WWPN). `Id` · 시리얼로 판단하지 않는다.
+5. **구분** — 미제공(404)과 빈 목록은 `diagnosis.details.notices`(기존 배열), 실패는 errors[](section network). status · sections · envelope 13 필드 · data 키 변경 0 — 새 키 없음.
+
+### 근거 · 증거
+- `tests/evidence/2026-10-15-redfish-hba-coverage.md` · `docs/contract/03-fields.md` 6.3.2 · DMTF DSP8010 2026.1(`schema/redfish_dmtf_2026.1/`).
 
 ## 2026-10-14 — HPE RMC(CSUS 3200) 표준 계정 생성 거부 hotfix · Lenovo 표준 계정 만료 · 긴급 승격
 

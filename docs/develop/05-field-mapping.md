@@ -193,7 +193,7 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 | OS Linux | `/sys/class/fc_host/*` (port_name/node_name/driver/fw) | `/sys/class/infiniband/*` (node_guid/port GID/rate/fw) — **IB 정본** | raw fallback 양 모드. 속성 파일이 있는데 못 읽으면 `ERR|<path>` 마커 → storage errors[] 1건 (2026-10-03) |
 | OS Windows | `Get-InitiatorPort` (FC 만 필터) + `MSFC_*` WMI (model/vendor/driver/fw/speed) | `Get-NetAdapter` PhysicalMediaType=InfiniBand + `Get-PnpDevice VEN_15B3`. **node_guid=null** (표준 API 부재) | try/catch graceful |
 | ESXi | `vmware_host_vmhba_info` (type+driver 2-signal, FC/iSCSI 만 — SAS/RAID 제외) | native IB 미노출 → `nmlx` NIC best-effort 추론 (`note`) | **API-only** (SSH 미사용, D1) |
-| Redfish | `Chassis/NetworkAdapters/NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`) | `Port.LinkNetworkTechnology` / `NetworkDeviceFunction` IB GUID | 주류 BMC 는 add-in IB 거의 미노출 → OS 채널 정본 |
+| Redfish | System 에 연결된 섀시의 `NetworkAdapters` → `NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`, 기능이 없는 포트는 링크 기술 `FibreChannel`. `wwpn` 은 기능의 WWPN 만) | `Port.LinkNetworkTechnology` / `NetworkDeviceFunction` IB GUID | 주류 BMC 는 add-in IB 거의 미노출 → OS 채널 정본. 수집 범위 · 빈 목록의 뜻은 [03-fields 6.3.2](../contract/03-fields.md) |
 
 - `source` ∈ {redfish, os, esxi} 로 출처 식별. `wwpn`/`node_guid` 로 동일 장치 cross-channel 상관.
 - FC/IB 미보유 호스트 → 빈 list (graceful, error 아님). `port_type` ∈ {FibreChannel, FCoE, iSCSI}.

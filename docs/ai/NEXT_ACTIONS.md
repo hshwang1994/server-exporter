@@ -1,5 +1,18 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Redfish HBA 누락 보완 (2026-10-15) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-15-redfish-hba-coverage.md`. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다. 아래는 이 환경에서 확인하지 못한 것이다.
+
+- [ ] **[HIGH / 사이트 실측] 다중 섀시 응답 캡처** — `Links.Chassis` 가 2개 이상인 System(HPE CSUS 3200 · Superdome Flex 다중 섀시 파티션)의 NetworkAdapters 수집을 실 응답으로 확인한다.
+      섀시 간 `adapter_id`(`PCIeCard{slot}`) 가 겹치는지, 다른 파티션이 같은 섀시를 연결하는 일이 있는지(소유 판정 규칙의 전제)를 함께 본다. `capture-site-fixture` 로 녹화본을 남긴다.
+- [ ] **[MED / 실장비] NDF 를 주지 않는 FC 장비 · FC 링크업 장비** — 링크 기술만 FC 인 포트 규칙(wwpn null)과 `link_status: up` 을 실장비로 확인한다(lab 녹화본 FC 는 모두 LinkDown).
+- [ ] **[MED] 섀시 간 adapter Id 충돌 시 `network.summary`** — `_rf_summary_network` 의 `adp_map` 은 Id 기준이라 다중 섀시에서 Id 가 겹치면 카드 모델 조인이 틀릴 수 있다(HBA 데이터는 영향 없음). 실측 뒤 결정.
+- [ ] **[LOW] 1순위 섀시 소유 확인** — 다른 System 이 1순위 섀시를 연결하는 구조(근거 없음)에서는 종전처럼 전부 수집한다. DPU ComputerSystem 의 `Links.Chassis` 실측이 생기면 재검토.
+- [ ] **[LOW] CSUS mock baseline 의 FC `link_status: up`** — 실 녹화본(`real_hpe_csus3200`)은 Port 에 LinkStatus 가 없어 `unknown`. mock baseline 교체는 사이트 캡처와 함께(rule 13 R4).
+- [ ] **[검토만] NetworkInterfaces · PCIeDevices 교차 확인** — BMC 가 카드 목록에서 FC 카드를 빼는 경우를 잡을 수 있지만 모든 제조사의 요청 수가 바뀐다. 누락 실사례가 생기면 검토.
+- [ ] **[LOW] schema 예시의 `network.ports` · `network.adapters`** — hbas 처럼 실제 출력 모양으로 맞출지 결정(이번 범위 밖).
+
 ## HPE RMC 표준 계정 생성 hotfix · Lenovo 표준 계정 만료 (2026-10-14) — 남은 항목
 
 > 정본: `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md`. hotfix(`hpe_rmc` Family · `enabled` 3-상태)는 main `5eec01d8`(문서 `29137b80` · `59bc3a19`)로 커밋·push 했고, 사용자 지시로 **production `36745453` 에 긴급 승격**(PROVENANCE, CI·E2E 증거 없음)했다.

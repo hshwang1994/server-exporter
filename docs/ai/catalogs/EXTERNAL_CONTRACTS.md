@@ -2,6 +2,25 @@
 
 > 외부 시스템 (Redfish / IPMI / SSH / WinRM / vSphere) 계약 카탈로그. rule 28 #11 측정 대상 (TTL 90일). rule 96 origin 주석 정본.
 
+## 일자: 2026-10-15 — Redfish NetworkAdapters 의 FC 신호 · 섀시 범위 · 포트 주소의 뜻 (HBA 누락 보완)
+
+| 계약 | 정본 | server-exporter 적용 |
+|---|---|---|
+| `Port.LinkNetworkTechnology` | DSP8010 2026.1 `Port.v1_19_0` enum Ethernet/InfiniBand/**FibreChannel**/GenZ/PCIe | 연결된 NDF 가 없는 포트의 FC 판정(포트 루프 조건부 규칙) |
+| `NetworkPort.ActiveLinkTechnology` | `NetworkPort.v1_4_3` enum Ethernet/InfiniBand/**FibreChannel** | 같은 규칙(구 스키마) |
+| `NetworkPort.LinkStatus` | `NetworkPort.v1_4_3` enum Down/Up/Starting/Training | `_normalize_link_status` 에 이미 매핑 — 변경 없음 |
+| `ComputerSystem.Links.Chassis` | `ComputerSystem.v1_28_0` — "physical containers associated with this resource", 배열 · 순서 정의 없음 | [0] 은 종전 용도, 나머지는 network_adapters 가 소유 확인 뒤 사용 |
+| `ComputerSystem.NetworkAdapters` | **없음** — 표준 위치는 `Chassis.NetworkAdapters` | `Systems/{id}/NetworkAdapters` 는 일부 펌웨어(iDRAC8) 위치로만 마지막에 시도 |
+| `NetworkAdapter.Controllers[].Links` · `ControllerCapabilities.NetworkDeviceFunctionCount` | `NetworkAdapter.v1_14_0` | 빈 entry 필터의 표준 근거 |
+| nPartition 단위 | HPE CSUS 3200 백서 — "An nPartition is a set of … chassis"(2026-05-12 절 #5) | 다른 System 이 연결하지 않은 섀시만 이 System 의 카드로 본다 |
+
+실측(녹화본):
+- `real_dell_r740` FC `NetworkPort.AssociatedNetworkAddresses` = WWNN(`20:00:…`), NDF `FibreChannel.WWPN` = `21:00:…` → 포트 주소는 wwpn 이 아니다.
+- `real_hpe_dl380` FC Port `Ethernet.AssociatedMACAddresses` = WWPN, `FibreChannel: {}`, `LinkNetworkTechnology: FibreChannel`.
+- `real_hpe_csus3200` FC Port 에 `LinkStatus` 없음 → `unknown`. Partition0 `Links.Chassis` = [r001u01] 1개.
+- `real_lenovo_sr650` NDF 컬렉션은 200 빈 목록(FC 카드 없음 장비).
+- 다중 섀시(`Links.Chassis` 2개 이상) 실 응답은 **미보유** — 합성 자료로만 검증(`tests/integration/test_redfish_hba_coverage_replay.py`).
+
 ## 일자: 2026-08-12 — Dell iDRAC 비밀번호 정책 실측 (git 10.100.15.34 / 10.100.15.27)
 
 > 정본: `tests/evidence/2026-08-12-git-location-live-verification.md` §4

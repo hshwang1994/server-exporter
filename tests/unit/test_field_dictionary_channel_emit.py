@@ -112,3 +112,12 @@ def test_no_placeholder_zero_for_uptime_or_memory_totals():
             if re.search(r"(uptime_seconds|total_mb|free_mb|visible_mb|installed_mb):.*default\(0\)", line):
                 offenders.append(f"{path.relative_to(REPO)}:{i}")
     assert not offenders, ", ".join(offenders)
+
+
+def test_hba_link_status_is_declared_with_the_canonical_values():
+    """2026-10-15: storage.hbas[].link_status 는 세 채널이 내는 필드인데 사전에 항목이 없었다 — unknown 의 뜻을 계약으로 둔다."""
+    entry = FD["storage.hbas[].link_status"]
+    assert entry["enum"] == ["up", "down", "unknown"]
+    assert set(entry["channel"]) == {"redfish", "os", "esxi"}
+    assert "unknown" in entry["help_ko"] and "링크 장애가 아니다" in entry["help_ko"]
+    assert "PortType=FibreChannel" not in FD["storage.hbas[]"]["help_ko"], "Redfish 분류는 PortType 을 쓰지 않는다"

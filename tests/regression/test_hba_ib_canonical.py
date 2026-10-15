@@ -63,3 +63,19 @@ def test_multi_node_partition_hba_ib_shape(baseline_envelope: dict) -> None:
         assert "hbas" in st and "infiniband" in st, (
             f"[{label}] multi_node partition {p.get('id')} storage missing hbas/infiniband"
         )
+
+
+def test_schema_example_hbas_use_the_canonical_shape() -> None:
+    """2026-10-15: schema/examples/redfish_success.json 의 hbas 예시가 실제 출력과 같은 모양인지 (종전 예시는 SAS 컨트롤러 모양)."""
+    import json
+    from pathlib import Path
+
+    ex = json.loads((Path(__file__).resolve().parents[2] / "schema" / "examples" / "redfish_success.json")
+                    .read_text(encoding="utf-8"))
+    hbas = ex["data"]["storage"]["hbas"]
+    assert hbas, "예시는 비어 있지 않아야 형식을 보여 줄 수 있다"
+    for h in hbas:
+        for k in HBA_REQUIRED_KEYS + ("adapter_id", "adapter_model", "port_id"):
+            assert k in h, f"example hbas entry missing '{k}': {sorted(h)}"
+        assert h["port_type"] in VALID_PORT_TYPES and h["source"] == "redfish"
+        assert h["link_status"] in ("up", "down", "unknown")

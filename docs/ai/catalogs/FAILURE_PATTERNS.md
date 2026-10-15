@@ -1090,3 +1090,17 @@
 - 재발 방지: (1) 원격 정리에 `pkill -f` 를 쓸 때는 패턴이 호출 셸의 명령줄에 걸리지 않게 앵커(`^`)와 실행 형태(`/bin/sh <경로>`)로 좁힌다. (2) "host 가 unreachable 로 끝났다" 는 관측은 어느 태스크에서
   났는지(콘솔의 태스크 이름)부터 본다 — 시험 대상 태스크가 아니라 정리 태스크였다. (3) live 시험은 결과 파일 존재를 rc 보다 먼저 단언하지 않는다(원인이 가려진다).
 - 관련 rule: rule 25 R7-A(실측 검증) · rule 95 R2(자기 보고도 검증).
+
+## 2026-10-15 — Redfish HBA 가 조용히 빠지는 경로 4종 · 설계 검토가 잡은 원안의 회귀 2종
+
+- 카테고리: scope-miss / external-contract-drift
+- 발견 위치: `redfish-gather/library/redfish_gather.py` `gather_network_adapters_chassis` · `_make_fc_hba` (사용자 질문 "HBA 누락은 없는가" 조사)
+- 증상: (1) NDF 를 못 받은 FC 포트(실측 R740 형 — 링크 기술만 FC)가 HBA 목록에서 빠짐(오류 0) (2) `Links.Chassis[1:]` 섀시의 HBA 미수집 (3) 1순위 200 빈 목록이면 다른 경로 미조회
+  (4) NetworkAdapters 404/빈 목록이 "HBA 없음" 과 구분되지 않음. 덤으로 FC 카드 `network.adapters[].mac` 에 WWNN, NDF WWPN 이 없을 때 포트 주소(WWNN)를 wwpn 으로 추측.
+- 원인: FC 판정이 NDF 에 기댔고, 링크 기술(`LinkNetworkTechnology`/`ActiveLinkTechnology`)은 Ethernet · IB 신호로만 쓰였다. 섀시는 `Links.Chassis[0]` 만 봤다. 빈 목록과 미지원(404)은 결과에 흔적이 없었다.
+- 원안의 회귀(실측으로 잡음): 판정 함수에 신호를 넣는 원안은 녹화본 변형에서 wwpn 에 WWNN 을 넣고(4건), iDRAC8 형 짝 없는 NDF 구조에서 HBA 를 8건으로 중복시켰다 — 판정 함수가 RD-F15 의 기능별 판정과
+  짝 없는 NDF 경로에서 다시 불리기 때문이다. 설계 검토 에이전트의 지적을 녹화본 재현으로 확인한 뒤 포트 루프의 조건부 규칙으로 바꿨다.
+- 수정: 같은 날 `fix:` 커밋 — 조건부 FC 규칙 · wwpn 은 NDF 값만 · System 연결 섀시(소유 확인 · 링크 추적) · 빈 목록 시 Systems 경로 · 확인된 중복만 제거 · notices 2종 · NDF 멤버 404 기록.
+- 재발 방지: 시험 4파일(`test_fc_link_technology_hba` · `test_network_adapters_multi_chassis` · `test_network_adapters_absence_vs_failure` · `test_redfish_hba_coverage_replay`) + HEAD 대비 녹화본 전후 비교(차이 0 확인).
+  분류 신호를 판정 함수에 더할 때는 그 함수가 불리는 모든 자리(RD-F15 · 짝 없는 NDF)를 녹화본 변형으로 먼저 돌린다.
+- 관련 rule: rule 95 R1 #8 · rule 96 R1-A · rule 25 R7-A(에이전트 보고 실측 검증)

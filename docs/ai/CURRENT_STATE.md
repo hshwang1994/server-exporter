@@ -1,5 +1,20 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-15 — Redfish `storage.hbas` 누락 보완 (링크 기술 FC · wwpn 추측 금지 · System 연결 섀시와 소유 확인 · 빈 목록과 미제공 구분)
+
+> 정본: `tests/evidence/2026-10-15-redfish-hba-coverage.md` · `docs/contract/03-fields.md` 6.3.2 · `docs/reference/decision-log.md` 2026-10-15 · `docs/ai/NEXT_ACTIONS.md` 2026-10-15 절.
+
+- **계기**: 사용자 질문 — HBA Adapter 를 어떻게 가져오나 · 누락은 없나 · Link Status 는 그대로인가 · unknown 은 무엇인가. 조사에서 조용히 빠지거나 틀린 값이 들어가는 경로가 나왔다
+  (NDF 없는 FC 포트 · `Links.Chassis[1:]` · 200 빈 목록 · 빈 카드 필터 · 포트 주소를 wwpn 으로 추측 · FC 카드 mac 에 WWNN · 404/빈 목록이 "HBA 없음" 과 구분 불가).
+- **고친 것(제품, `redfish-gather/library/redfish_gather.py`)**: 포트 루프의 링크 기술 FC 규칙(판정 함수는 그대로 — 원안은 녹화본 변형에서 WWNN 을 wwpn 으로 넣고 HBA 8건 중복) ·
+  `_make_fc_hba` wwpn 은 NDF 값만 · `_resolve_system_chassis_uris` · `_network_adapter_sources`(1순위 섀시 → 소유 확인된 추가 섀시 → 카드 0 이면 Systems 경로) ·
+  `_extra_chassis_adapter_collections` / `_chassis_linked_by_other_systems`(다른 System 이 연결한 섀시 · 확인 불가는 미수집 + notice, 섀시 링크 추적) · 추가 섀시 중복은 리소스 · null 아닌 WWPN 단위로만 ·
+  빈 카드 필터의 표준 근거 · 목록에 있는데 404 인 NDF 기록 · notices 2종. 1순위 섀시는 종전 그대로(DPU 등 다른 System 이 같은 섀시를 연결할 때의 대량 누락 방지 — 잔여 위험).
+- **확인한 것**: HEAD `9f331cc8` 모듈과 같은 프로세스 비교 — 녹화본 9종 차이 0(요청 목록 포함), DMTF mockup notice +1, R740 변형 3종은 의도한 차이만(evidence 4절).
+  envelope 13 필드 · data 키 · status/sections 판정 · `link_status` 값 변경 0. vendor 이름 분기 0.
+- **시험**: 신규 4파일 + 기존 2파일 보강 · 의도 변경 2건. 결과는 TEST_HISTORY 2026-10-15.
+- **실장비**: 다중 섀시 · 소유 판정 · NDF 미노출 FC 장비 · FC 링크업은 **미검증**(합성 · 녹화본 변형 시험만). jenkins-prod 매트릭스 · CI · 승격은 evidence 7절에 기록한다.
+
 ## 일자: 2026-10-14 — HOTFIX HPE RMC(CSUS 3200) 표준 계정 생성 거부(`hpe_rmc` · Enabled 미전송) · Lenovo 표준 계정 만료는 결함 아님 · 긴급 승격
 
 > 정본: `tests/evidence/2026-10-14-hpe-rmc-account-create-enabled-rejected.md` · `docs/reference/decision-log.md` 2026-10-14 · `docs/ai/NEXT_ACTIONS.md` 2026-10-14 절.

@@ -155,9 +155,10 @@ GET https://<BMC_IP>/redfish/v1/Systems/{첫 멤버}
 `_collect_all_sections()` (`:4408-4451`):
 
 ```python
-# redfish_gather.py:4432-4435
-eff_chassis_uri = _resolve_system_chassis_uri(
-    bmc_ip, system_uri, chassis_uri, username, password, timeout, verify_ssl)
+# redfish_gather.py _collect_all_sections — 2026-10-15: Links.Chassis[] 를 한 번 읽어 [0] 과 나머지로 나눈다
+sys_chassis = _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl)
+eff_chassis_uri = sys_chassis[0] if sys_chassis else chassis_uri
+extra_chassis = [u for u in sys_chassis[1:] if _p(u) != _p(eff_chassis_uri)]   # network_adapters 만 사용
 return {
     'system': _run('system', gather_system, bmc_ip, system_uri, vendor, *creds,
                    eff_chassis_uri, product_hint),
@@ -553,7 +554,7 @@ Dell R740 (단일노드)   : Systems/System.Embedded.1 × 2, Chassis/System.Embe
 HPE CSUS (rmc_primary) : Systems/Partition0 × 5, Chassis/r001u01 × 3, Managers/RMC × 3
 ```
 
-`Systems/{id}` 가 단일노드에서 2회인 이유: `_resolve_system_chassis_uri:998` 1회 + `gather_system:1651` 1회.
+`Systems/{id}` 가 단일노드에서 2회인 이유: `_resolve_system_chassis_uris`(Links.Chassis 해석) 1회 + `gather_system` 1회 (2026-10-15 에도 같다).
 CSUS 5회: 위 2회 + 멀티노드 `gather_systems_multi` 의 `_resolve_system_chassis_uri:4030` + `gather_system:4031` + `gather_boot:3584`.
 
 ### 12-C. baseline JSON (실장비 회귀 기준선)

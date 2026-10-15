@@ -636,7 +636,7 @@ controllers[*].id  ────┤
 
 | 채널 | FC HBA 수집원 | InfiniBand 수집원 / 한계 |
 |---|---|---|
-| Redfish | `Chassis/NetworkAdapters/NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`, **PortType enum 아님**) | `Port.LinkNetworkTechnology`/`NetworkDeviceTechnology`. 주류 BMC(iDRAC/iLO/XCC) 는 add-in IB HCA 거의 미노출 → OS 채널 정본 |
+| Redfish | System 에 연결된 섀시의 `NetworkAdapters` → `Ports`/`NetworkPorts` + `NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`/`Port.FibreChannel` 블록, 기능이 연결되지 않은 포트는 링크 기술 `FibreChannel`. **PortType enum 아님**). 범위와 빈 목록의 뜻은 6.3.2 | `Port.LinkNetworkTechnology`/`NetworkDeviceTechnology`. 주류 BMC(iDRAC/iLO/XCC) 는 add-in IB HCA 거의 미노출 → OS 채널 정본 |
 | OS Linux | `/sys/class/fc_host/*` (wwpn/wwnn/driver/firmware) | `/sys/class/infiniband/*` (node_guid/port_guid/rate/fw) — **정본** |
 | OS Windows | `Get-InitiatorPort` + `MSFC_*` WMI (FC 만 필터) | `Get-NetAdapter` PhysicalMediaType=InfiniBand. **node_guid 표준 API 부재 → null** |
 | ESXi | `vmware_host_vmhba_info` (FC/iSCSI, SAS/RAID 제외) | native IB 미노출 (SR-IOV/passthrough 만) → `nmlx` NIC best-effort 추론 (`note` 포함) |
@@ -655,6 +655,42 @@ controllers[*].id  ────┤
   전무할 때만 쓴다. FCoE 를 실제로 설정한 장비는 `NetDevFuncType=FibreChannelOverEthernet` 을 주므로
   정상적으로 `port_type="FCoE"` 로 잡힌다.
 - 서브필드 정의는 `schema/field_dictionary.yml` (`storage.hbas[].*` / `storage.infiniband[].*`, Nice).
+
+#### 6.3.2 Redfish `hbas[]` — 어디서 읽나, 빈 목록과 `unknown` 의 뜻 (2026-10-15)
+
+항목 1개는 FC 포트(기능) 1개다. 2포트 카드면 2건이고, 소속 카드는 `adapter_id` / `adapter_model` 이다.
+
+**읽는 곳과 순서**
+
+1. System 의 `Links.Chassis` 첫 섀시의 `Chassis/{id}/NetworkAdapters`.
+2. `Links.Chassis` 의 나머지 섀시. **다른 System 이 그 섀시를 연결하지 않았다는 것을 확인했을 때만** 본다. 다른 System(다른 파티션)도 연결한 섀시이거나 System 목록을 끝까지 읽지 못했으면 그 섀시는 보지 않고 notice 를 남긴다. 섀시가 가리키는 `NetworkAdapters` 링크를 따라가며, 링크가 없는 섀시(랙 · 인클로저)는 건너뛴다. Chassis 컬렉션 전체는 보지 않는다.
+3. 위에서 카드를 하나도 얻지 못했을 때만(실패 또는 빈 목록) `Systems/{id}/NetworkAdapters`. 이 경로는 일부 펌웨어(iDRAC8)의 위치이고, 섀시 목록과 섞지 않는다.
+
+같은 카드가 두 섀시 목록에 다시 나오면(같은 리소스 주소) 한 번만 담는다. 다른 주소로 같은 WWPN 의 FC 포트가 다시 나오면 그 포트만 뺀다. WWPN 을 모르는 포트는 같은 포트인지 확인할 수 없어 남긴다. 섀시가 다르면 `adapter_id` 가 겹칠 수 있다 — 포트를 가리키는 고유 키는 `wwpn` 이다.
+
+**`wwpn` 은 기능(NetworkDeviceFunction)의 WWPN 만 쓴다.** 포트 주소는 장비에 따라 WWNN 이다(실측 Dell R740: `20:00:…`). 그래서 `wwpn` 으로 옮기지 않고 `network.ports[].associated_address` 에만 둔다. 기능을 받지 못한 FC 포트도 빠지지 않고 `wwpn: null` 항목으로 남는다.
+
+**빈 `hbas` 의 뜻**
+
+| `storage.hbas` | `errors[]` 중 `section: "network"` | `diagnosis.details.notices` 중 `section: "network_adapters"` | 뜻 |
+|---|---|---|---|
+| `[]` | 없음 | 없음 | 정상 수집. BMC 가 보여 준 카드에 FC 포트가 없다 |
+| `[]` | 없음 | `NetworkAdapters 리소스 404, …미수집` | BMC 가 네트워크 카드 정보를 주지 않는다. 이 채널로는 HBA 유무를 확인하지 못했다 |
+| `[]` | 없음 | `NetworkAdapters 목록이 비어 있음, …미확인` | BMC 가 빈 카드 목록을 줬다. HBA 유무를 확인하지 못했다 |
+| `[]` 또는 일부 | 있음 (detail 에 경로와 HTTP 상태) | — | 수집이 일부 또는 전부 실패했다. 목록이 불완전할 수 있다 |
+| 일부 | — | `…소유를 확인할 수 없어 …미수집` | 다른 System 도 연결한 섀시(또는 확인하지 못한 섀시)의 카드는 넣지 않았다 |
+
+어느 경우든 `status` 와 `sections` 는 바뀌지 않는다. HBA 수집은 보조 수집이고, HBA 가 없다는 이유로 수집이 실패가 되지 않는다.
+
+**`link_status`** — 포트의 `LinkStatus` 하나만 읽어 세 값으로 바꾼다.
+`up` 은 LinkUp · Up · Connected 이고, `down` 은 LinkDown · Down · NoLink · Starting · Training(협상 중) 이다.
+`unknown` 은 링크 장애가 아니라 **상태를 확인할 수 없다**는 뜻이다. 원인은 두 가지다.
+(a) 포트 응답에 `LinkStatus` 가 없거나 null / `Unknown` 이다(실측 HPE CSUS 3200 RMC).
+(b) FC 기능에 짝이 되는 포트 리소스가 없다. 이때는 `link_speed_gbps` 도 `null` 이다.
+실제 링크 상태가 필요하면 OS 채널 결과와 `wwpn` 으로 맞춰 본다.
+
+**남은 사각지대** — BMC 가 카드 목록에서 FC 카드 자체를 빼고 주면 이 채널로는 알 수 없다. 이때는 OS 채널(`source: "os"`)로 교차 확인한다.
+다중 섀시 수집과 소유 판정은 실장비의 다중 섀시 응답으로 아직 검증되지 않았다(합성 자료 시험만 통과).
 
 ### 6.4 `data.network`
 

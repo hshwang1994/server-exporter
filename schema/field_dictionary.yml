@@ -30,6 +30,8 @@
 #   nice — 설명이 있으면 좋고 없어도 사용에 지장 없음
 #   skip — 의미가 자명해서 본 사전에 등록하지 않음 (예: hostname)
 #
+# 변경 메모 (2026-10-15): +1 Nice — storage.hbas[].link_status (이미 나가던 필드의 뜻 보강) · storage.hbas[] / .wwpn /
+#   .port_type 설명을 코드에 맞게 정정. 항목 수는 적지 않는다(rule 00 — 필요하면 그때 센다). Additive, schema_version 유지.
 # 등록 현황 (2026-09-15 실측): Must 52 / Nice 137 / Skip 6 = 총 195 entries
 #   (2026-09-15 +3 Nice — Redfish BIOS Current Attributes 보조 데이터: bios / bios.current /
 #    bios.current.attributes. sections 에는 추가하지 않음. Additive, schema_version 유지.)
@@ -1964,13 +1966,21 @@ fields:
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      FC HBA 목록. wwpn/link_status/link_speed_gbps/port_type. Linux 는
-      /sys/class/fc_host, Windows 는 Get-InitiatorPort, ESXi 는 vmware_host_vmhba_info,
-      Redfish 는 NetworkPorts PortType=FibreChannel 분류.
+      FC HBA 목록. 항목 1개 = FC 포트(기능) 1개 — 2포트 카드는 2건이다.
+      wwpn/link_status/link_speed_gbps/port_type. Linux 는 /sys/class/fc_host,
+      Windows 는 Get-InitiatorPort, ESXi 는 vmware_host_vmhba_info. Redfish 는 System 에
+      연결된 섀시의 NetworkAdapters 에서 Port.PortProtocol / NetDevFuncType / Port.FibreChannel
+      블록, 기능이 연결되지 않은 포트는 링크 기술 FibreChannel 로 분류한다(PortType 은 쓰지 않는다).
+      Redfish 항목은 소속 카드를 adapter_id/adapter_model 로 담는다. 빈 목록이 "HBA 없음" 인지
+      "확인 못 함" 인지는 diagnosis.details.notices 와 errors[] 로 구분한다.
     help_en: >-
-      FC HBA list. wwpn/link_status/link_speed_gbps/port_type. Sources:
-      Linux=/sys/class/fc_host, Windows=Get-InitiatorPort, ESXi=vmware_host_vmhba_info,
-      Redfish=NetworkPorts PortType=FibreChannel classification.
+      FC HBA list; one entry per FC port (function), so a 2-port card gives 2 entries.
+      wwpn/link_status/link_speed_gbps/port_type. Sources: Linux=/sys/class/fc_host,
+      Windows=Get-InitiatorPort, ESXi=vmware_host_vmhba_info. Redfish reads NetworkAdapters of the
+      chassis linked to the System and classifies by Port.PortProtocol / NetDevFuncType /
+      Port.FibreChannel block, or link technology FibreChannel for a port without a function
+      (PortType is not used). Redfish entries name the card in adapter_id/adapter_model. Whether an
+      empty list means "no HBA" or "not determined" is told by diagnosis.details.notices and errors[].
 
   "storage.infiniband[]":
     type: "object[]"
@@ -1994,11 +2004,14 @@ fields:
     help_ko: >-
       FC HBA World Wide Port Name. 소문자 colon-hex 8-octet 정규화
       (cross-channel 매칭 키). 미연결/미노출 시 null.
-      Redfish=NetworkDeviceFunction.FibreChannel.WWPN, Linux=/sys/class/fc_host/*/port_name,
-      Windows=Get-InitiatorPort.PortAddress, ESXi=vmhba port_wwn.
+      Redfish=NetworkDeviceFunction.FibreChannel.WWPN(없으면 PermanentWWPN)만 쓴다 — 포트 주소는
+      장비에 따라 WWNN 이라 wwpn 으로 옮기지 않는다(그때 null, 원 주소는 network.ports[].associated_address).
+      Linux=/sys/class/fc_host/*/port_name, Windows=Get-InitiatorPort.PortAddress, ESXi=vmhba port_wwn.
     help_en: >-
       FC HBA World Wide Port Name. Normalized lowercase colon-hex 8-octet
-      (cross-channel match key). null when unlinked/unexposed.
+      (cross-channel match key). null when unlinked/unexposed. Redfish uses only
+      NetworkDeviceFunction.FibreChannel.WWPN (or PermanentWWPN); a port address is never promoted
+      because it can be the WWNN (it stays in network.ports[].associated_address).
 
   "storage.hbas[].wwnn":
     type: "string|null"
@@ -2015,11 +2028,31 @@ fields:
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      HBA 포트 유형. Redfish 는 Port.PortProtocol / NetDevFuncType 에서 도출
-      (PortType enum 아님 — FC/IB 값 없음). iSCSI 는 소프트/하드 initiator.
+      HBA 포트 유형. Redfish 는 Port.PortProtocol / NetDevFuncType 에서 도출하고, 기능(NDF)이
+      연결되지 않은 포트는 링크 기술(LinkNetworkTechnology / ActiveLinkTechnology)이 FibreChannel 이면
+      FibreChannel 이다 (PortType enum 아님 — FC/IB 값 없음). iSCSI 는 소프트/하드 initiator.
     help_en: >-
-      HBA port type. Redfish derives from Port.PortProtocol / NetDevFuncType
-      (NOT PortType enum — has no FC/IB members). iSCSI = soft/hw initiator.
+      HBA port type. Redfish derives from Port.PortProtocol / NetDevFuncType; a port with no function
+      attached is FibreChannel when its link technology (LinkNetworkTechnology / ActiveLinkTechnology)
+      is FibreChannel (NOT PortType enum — has no FC/IB members). iSCSI = soft/hw initiator.
+
+  "storage.hbas[].link_status":
+    type: "string"
+    enum: ["up", "down", "unknown"]
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      FC 포트 링크 상태 (전 채널 canonical). up=링크 활성, down=링크 없음 또는 비활성
+      (NoLink · LinkDown · 협상 중 포함), unknown=상태를 확인할 수 없음 — 링크 장애가 아니다.
+      Redfish 의 unknown 은 (a) 포트 응답에 LinkStatus 가 없거나 null/Unknown,
+      (b) FC 기능에 짝이 되는 포트 리소스가 없음(이때 link_speed_gbps 도 null) 두 경우다.
+      Redfish 가 위에 없는 장비 고유 값을 주면 소문자로 그대로 나올 수 있다.
+    help_en: >-
+      FC port link state (cross-channel canonical). up=link active, down=no link or inactive
+      (NoLink, LinkDown, negotiating), unknown=state could not be determined — not a link failure.
+      On Redfish, unknown means (a) the port has no LinkStatus (or null/Unknown), or (b) the FC
+      function has no matching port resource (link_speed_gbps is then null). An unrecognised vendor
+      value may pass through lowercased.
 
   "storage.hbas[].link_speed_gbps":
     type: "number|null"

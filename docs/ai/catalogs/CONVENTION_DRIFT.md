@@ -19,6 +19,17 @@
 
 ---
 
+## DRIFT-026 (2026-10-15, resolved — 서술 · 예시 정정)
+
+- **발견 위치**: `schema/field_dictionary.yml` `storage.hbas[]` · `.wwpn` · `.port_type` 설명 · `schema/examples/redfish_success.json` `data.storage.hbas[0]`
+- **분류**: catalog-stale (계약 문서 · 예시가 코드와 다름)
+- **설명**: `storage.hbas[]` 설명은 "Redfish 는 NetworkPorts PortType=FibreChannel 분류" 라고 적었으나 코드는 PortType 을 쓰지 않는다(DMTF PortType enum 에 FC 값이 없다 —
+  `_classify_port_protocol`). `.wwpn` 은 Redfish 출처를 NDF WWPN 으로만 적었지만 코드는 포트 주소(8옥텟)를 대체로 올렸고, 그 주소는 장비에 따라 WWNN 이었다(실측 R740).
+  `storage.hbas[].link_status` 는 세 채널이 내는 필드인데 사전 항목이 없어 `unknown` 의 뜻이 계약에 없었다. schema 예시의 hbas 는 SAS RAID 컨트롤러 모양(`id/vendor/model/firmware_version/ports/health`)이었다.
+- **영향**: 문서 · 예시만(호출자가 읽는 설명). 수집 동작은 같은 날 코드 변경으로 설명과 맞췄다(포트 주소를 wwpn 으로 올리지 않음).
+- **resolved (2026-10-15)**: 설명 3곳 정정 + `storage.hbas[].link_status`(nice) 추가 + 예시를 실제 출력(에뮬레이터 녹화본) 모양으로 교체. 시험 `test_field_dictionary_channel_emit` · `test_hba_ib_canonical`.
+- **관련**: rule 13 R7 · rule 70 R1 · `tests/evidence/2026-10-15-redfish-hba-coverage.md`
+
 ## DRIFT-025 (2026-10-12, resolved — 서술 정정)
 
 - **발견 위치**: `.claude/rules/00-core-repo.md` 빌드 명령 블록 · `13-output-schema-fields.md`(현실 절 · R1 Why · 테스트 포인트) · `22-fragment-philosophy.md` R2 Why · `23-communication-style.md` R2 표 ·
