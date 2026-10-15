@@ -502,6 +502,8 @@ Redfish 7대 HBA 관련 필드 대조 — main Job **#602**(수정 전 코드, `
 
 → 실장비 7대 모두 기존에 잡히던 HBA · 카드 · 포트 정보가 그대로다. 이 7대는 모두 섀시 1개 · NDF 정상 노출이라 새 경로(다중 섀시 · NDF 미노출 · 빈 목록)는 실장비에서 실행되지 않았다.
 
+CI #57(`9aa2f8b5`) SUCCESS 57.5분 — 12 단계 전부 SUCCESS(Prodgen Promote 는 예행). production 승격은 세션 `clovirone-server-gathering-1d` 가 CSUS hostname 핫픽스와 합쳐 긴급 승격으로 진행한다(사용자 지시 2026-10-15).
+
 ## 2026-10-14 HPE RMC(CSUS 3200) 표준 계정 생성 hotfix — main `fed0b9f1` 매트릭스 · production 긴급 `36745453` → 정규 `338ed8d3` (실장비)
 
 hotfix `5eec01d8`(HPE RMC 전용 Family `hpe_rmc` — 생성 POST 에 `Enabled` 미전송, 계정 레코드 `enabled` 3-상태). 사용자 사이트 CSUS 3200 에서 복구 계정으로 표준 계정이 만들어지지 않던 사고의 수정.
