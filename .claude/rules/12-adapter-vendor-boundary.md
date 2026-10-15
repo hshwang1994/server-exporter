@@ -58,7 +58,7 @@ paths:
 
 - **Default**: adapter 는 `adapter_id` · `priority` · `match` · `capabilities.sections_supported` 를 가진다. 코드가 읽는 것은 이것뿐이다 —
   로더(`module_utils/adapter_common.py` · `lookup_plugins/adapter_loader.py`)는 `match`(없으면 `{}` — 어느 장비에도 매칭되지 않음) · `adapter_id` · `priority` · `generic` 을
-  읽고 어떤 키도 강제하지 않는다. site.yml 은 `capabilities.sections_supported` 로 `not_supported` 를 정하고, redfish site.yml 은 `vendor_notes.manager_layout` 을 모듈에 넘기며, `build_meta.yml` 은 `version` 을 `meta.adapter_version` 에 적는다(현 adapter 들에는 없어 null).
+  읽고 어떤 키도 강제하지 않는다. site.yml 은 `capabilities.sections_supported` 로 `not_supported` 를 정하고, redfish site.yml 은 `vendor_notes.manager_layout` 을 모듈에 넘기고 `normalize_standard.yml` 은 `vendor_notes.hostname_priority`(2026-10-15 — `bmc_first` 는 CSUS 3200 만, `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md`)로 `data.system.hostname` 원천 순서를 정하며, `build_meta.yml` 은 `version` 을 `meta.adapter_version` 에 적는다(현 adapter 들에는 없어 null).
 - **Allowed**: `metadata` · `vendor_notes` 로 vendor / firmware / tested_against / oem_path 등 origin 주석 (rule 96 R1)과 설계 메모(`vendor_notes.design_hints` — 코드 미참조,
   2026-10-11 에 종전 `collect` · `graceful_degradation` · `auth` · `diagnosis` · `capabilities` 하위 값 중 경로 복제가 아닌 것을 옮겨 둔 곳). adapter 의 최상위 절은
   `adapter_id` · `priority` · `match` · `capabilities`(`sections_supported` 만) · `generic` · `vendor_notes` · `metadata` 뿐이다.
