@@ -18,7 +18,7 @@
   "target_type": "redfish",                             // 수집 채널 — "os" | "esxi" | "redfish"
   "collection_method": "redfish_api",                   // 수집 방식 — agent (SSH/WinRM) / vsphere_api / redfish_api (stdlib HTTP)
   "ip": "10.50.11.231",                                 // 대상 장비 IP (호출자 inventory_json 의 service_ip 또는 bmc_ip)
-  "hostname": "test0004.hynix.com",                        // HPE 가 보고하는 host FQDN
+  "hostname": "test0004",                                  // = data.system.hostname (System.HostName 첫 라벨, 2026-10-15)
   "vendor": "hp",                                          // 출력 표시값 — 내부 canonical 'hpe' → vendor_output_display → hp (2026-06-04)
   "status": "success",                                  // 전체 수집 결과 — success / partial / failed
   "sections": {                                         // 섹션별 수집 상태 dict — success / failed / not_supported
@@ -102,7 +102,8 @@
       "architecture": null,                             // CPU 아키텍처 (Linux="x86_64" / Redfish="x86")
       "uptime_seconds": null,                           // 부팅 후 경과 (초)
       "selinux": null,                                  // SELinux 상태 — enabled / disabled / null (Windows/ESXi)
-      "fqdn": "test0004.hynix.com"                      // FQDN (도메인 포함 hostname)
+      "hostname": "test0004",                           // System.HostName 첫 라벨
+      "fqdn": "test0004.hynix.com"                      // System.HostName 에 도메인이 붙어 있을 때만 전체
     },
     "network": {
       "default_gateways": [{"family": "ipv4", "address": "10.50.11.254"}],  // 기본 게이트웨이 list (IPv4 / IPv6)

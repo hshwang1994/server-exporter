@@ -1104,3 +1104,14 @@
 - 재발 방지: 시험 4파일(`test_fc_link_technology_hba` · `test_network_adapters_multi_chassis` · `test_network_adapters_absence_vs_failure` · `test_redfish_hba_coverage_replay`) + HEAD 대비 녹화본 전후 비교(차이 0 확인).
   분류 신호를 판정 함수에 더할 때는 그 함수가 불리는 모든 자리(RD-F15 · 짝 없는 NDF)를 녹화본 변형으로 먼저 돌린다.
 - 관련 rule: rule 95 R1 #8 · rule 96 R1-A · rule 25 R7-A(에이전트 보고 실측 검증)
+
+## 2026-10-15 — 3채널 계약을 2채널에만 적용 · "every channel" 시험이 한 채널을 빼고 통과
+
+- 카테고리: scope-miss
+- 발견 위치: `redfish-gather/tasks/normalize_standard.yml` `_data_fragment.system` · `tests/unit/test_field_dictionary_channel_emit.py` (사용자 질문 "CSUS hostname 에 버그가 있는가" 조사)
+- 증상: 2026-09-03 결정("`system.hostname` = 짧은 이름, `system.fqdn` = 도메인 있을 때만")이 OS · ESXi 에만 들어갔다. Redfish 는 `system.hostname` 을 내지 않았고 `fqdn` 에 원본을 넣었다.
+  시험 이름은 `..._emitted_by_every_channel` 인데 본문은 Linux · Windows · ESXi fragment 만 봤다. 계약 문서는 "3채널 모두" 라고 적었다.
+- 원인: 범위를 "이번은 OS/ESXi" 로 줄이면서(NEXT_ACTIONS GA-6) 사전 · 문서 · 시험 이름은 3채널 그대로 두었다. 시험이 선언(사전)과 emit(코드)을 채널별로 대조하지 않았다.
+- 수정: 같은 날 Redfish normalize 정렬 + 시험에 Redfish emit 추가 + 사전 · 문서 정정 (ADR-2026-10-15-csus-hostname-rmc-first).
+- 재발 방지: 범위를 줄인 결정은 사전 · 계약 문서 · 시험 이름에도 같은 범위를 적거나 남은 채널을 시험에 `xfail`(사유 포함)로 둔다. "모든 채널" 을 이름에 쓴 시험은 채널 목록을 코드 상수(사전 `channel`)에서 읽는다.
+- 관련 rule: rule 95 R1 · R3 · rule 13 R2 · rule 24 R2

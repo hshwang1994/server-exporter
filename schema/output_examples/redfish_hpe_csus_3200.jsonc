@@ -19,7 +19,7 @@
   "target_type": "redfish",                             // 수집 채널 — "os" | "esxi" | "redfish"
   "collection_method": "redfish_api",                   // 수집 방식 — agent / vsphere_api / redfish_api (stdlib HTTP)
   "ip": "10.50.11.999",                                 // 대상 BMC IP (mock — site 실측 시 정정)
-  "hostname": "csus-3200-mock",                         // RMC ServiceRoot / Manager.HostName 반환값 (mock)
+  "hostname": "csus-3200-mock",                         // = data.system.hostname. CSUS 3200 은 RMC NetworkProtocol 이름 우선, 없을 때만 Partition HostName (2026-10-15, mock)
   "vendor": "hpCsus",                                   // 출력 표시값 — 내부 canonical 'hpe' → CSUS 3200 adapter → hpCsus (2026-06-04)
   "status": "success",                                  // 전체 수집 결과 — success / partial / failed
   "sections": {                                         // 섹션별 수집 상태 — success / failed / not_supported
@@ -79,7 +79,8 @@
       "architecture": null,
       "uptime_seconds": null,
       "selinux": null,
-      "fqdn": "csus-p0"                                 // Partition0 representative hostname
+      "hostname": "csus-3200-mock",                     // RMC 이름 (bmc.network_hostname) — Partition0 원본(csus-p0)은 multi_node.partitions[].system.hostname
+      "fqdn": null                                      // 원천 이름에 도메인이 없으면 null (2026-10-15)
     },
     "hardware": {                                       // 하드웨어 (Partition0 + Base Chassis representative)
       "vendor": "HPE",
@@ -112,7 +113,8 @@
       "timezone": "UTC",
       "ip": null,                                       // mock — site 실측 시 RMC EthernetInterfaces 추출
       "mac_address": null,
-      "dns_name": null,
+      "dns_name": "csus-3200-mock",                     // RMC 자기 이름 (Manager NIC FQDN → HostName)
+      "network_hostname": "csus-3200-mock",             // RMC 자기 이름 (Manager.NetworkProtocol FQDN → HostName) — CSUS hostname 1순위 원천
       "datetime": "2026-05-12T12:00:00Z",
       "datetime_offset": "+00:00",
       "oem": {                                          // HPE Oem.Hpe (Firmware.Current.VersionString)

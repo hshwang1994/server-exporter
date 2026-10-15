@@ -1,5 +1,21 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## HPE CSUS 3200 hostname RMC 우선 · Redfish hostname 계약 · 긴급 승격 (2026-10-15) — 남은 항목
+
+> 정본: `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md`. production `31f9b804`(main `fd7dfd6a`, HBA `846516e3` 포함)는 **긴급 승격**이다 — CI · E2E 증거 없음.
+> 아래 HBA 절 첫 항목("production 승격 — main `9aa2f8b5`, 미완료")의 반영 자체는 이 긴급 승격에 포함됐다. 정규 증거는 아래 첫 항목이 채운다.
+
+- [ ] **[HIGH] 정규 재승격** — 최종 main(두 세션 작업 + 이 문서 커밋)으로 main Job 매트릭스 11건(S1 · S2 · S3 · S4 · T2 · T5 · T6 · E2E-A · E2E-A2 · E2E-D · E2E-E) → CI(`clovirone-server-gather-ci`, E2E_MAIN_ENTRIES)
+      COMPLETE_PASS → 작업 PC `prodgen promote --verify-report --e2e-evidence --ci-stage-results --netrc --vault-password-file --push-remote origin,internal` → 승격 직후 production Job canary. 2026-10-14 `36745453` → `338ed8d3` 와 같은 순서.
+- [ ] **[HIGH / 사이트 — 사용자] CSUS 3200 재수집 확인** — production Job 으로 사이트 CSUS 를 다시 수집해 `hostname = ycgsfaibap01` · `data.system.hostname = ycgsfaibap01` · `data.system.fqdn = null` ·
+      `multi_node.partitions[0].system.hostname = svu703327-net7` · `bmc.network_hostname = ycgsfaibap01` 를 확인한다. lab 에 CSUS 가 없어 이 단계만 실장비 확인이다.
+- [ ] **[MED / Portal 소비자] hostname 값 변화 안내** — 도메인이 붙은 System.HostName 장비(lab 의 Dell R760 · HPE iLO6)는 봉투 hostname 이 짧은 이름이 됐고, 도메인 없는 장비는 `data.system.fqdn` 이 null 이다.
+      Portal 이 hostname 을 매칭 키로 쓰면 영향이 있다. CSUS 는 RMC 이름으로 바뀐다(사용자 결정).
+- [ ] **[LOW / lab] Redfish baseline 의 `system.hostname`** — `schema/baseline_v1/*` Redfish 5건은 `system.hostname` 이 없고 `fqdn` 이 원본이다. 실장비 envelope 로 교체할 때 함께(rule 13 R4, GA-2 와 같은 결정).
+- [ ] **[LOW] 사전 누락 3건** — 코드가 내는 `bmc.serial` · `bmc.part_number` · `bmc.manufacturer` 가 `schema/field_dictionary.yml` 에 없다(이번에 `bmc.network_hostname` 만 추가).
+- [ ] **[LOW / 검토] CSUS `data.bmc` 는 Managers 첫 멤버** — 실측 CSUS 는 Manager 가 RMC 하나라 문제없다. PDHC 가 앞에 오는 펌웨어가 확인되면 RMC 선택 규칙을 검토.
+- [ ] **[검토만] Superdome Flex 의 hostname 원천** — 결정 범위 밖이라 `bmc_first` 를 두지 않았다. 사이트 요구가 생기면 adapter 키 한 줄.
+
 ## Redfish HBA 누락 보완 (2026-10-15) — 남은 항목
 
 > 정본: `tests/evidence/2026-10-15-redfish-hba-coverage.md`. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다. 아래는 이 환경에서 확인하지 못한 것이다.
@@ -271,7 +287,7 @@
 | GA-3 | ESXi `host_info` 파트 실장비 확인 | `[DONE 2026-09-03]` | esxi01/02 실측: gateway 10.100.64.254 + gatewayDevice→is_primary, pnic 제조사/모델, cpuInfo.hz 2195, uptime, dnsConfig.hostName 전부 값 확인 (#193/#195) |
 | GA-4 | Windows 시리얼 디코딩 조건 실측 | `[PARTIAL]` | #192: NAA 32-hex 시리얼(`6000c295…`) 이 변조 없이 보존됨을 확인. hex 인코딩 ASCII 시리얼을 내는 실제 드라이브 케이스는 lab 에 없어 미확인 |
 | GA-5 | Windows `Get-NetAdapterHardwareInfo` / `Get-PnpDevice` 권한 | `[DONE / 관리자 계정]` | #192: adapters[] 6개(PCI 주소·제조사·드라이버 버전) 수집. 비관리자 계정 케이스는 lab 계정이 관리자라 미확인 |
-| GA-6 | Redfish 채널 동일 검수 | `[TODO]` | 이번 범위는 OS/ESXi. Redfish `system.hostname/fqdn` 소스, `cpu.max_speed_mhz`(MaxSpeedMHz 의미), UUID 바이트 순서(uuid_equal 로 대조 가능) 를 같은 기준으로 본다 |
+| GA-6 | Redfish 채널 동일 검수 | `[PARTIAL 2026-10-15]` | `system.hostname/fqdn` 은 해소(첫 라벨 · 도메인 있을 때만, CSUS 는 RMC 이름 우선 — ADR-2026-10-15-csus-hostname-rmc-first). 남은 것: `cpu.max_speed_mhz`(MaxSpeedMHz 의미), UUID 바이트 순서(uuid_equal 로 대조 가능) |
 | GA-7 | pre-commit placeholder 가드 승격 | `[TODO / 하네스]` | `scripts/ai/hooks/pre_commit_placeholder_fallback_check.py` 는 advisory. 사이클 1회 무위반 확인 후 blocking 검토 |
 | GA-8 | lab 대상 목록 정정 | `[TODO / 운영자]` | `vault/.lab-credentials.yml`(gitignore) 의 `os_targets_linux` .167("ubuntu2404") / .169("rocky960") 는 실측상 .165 / .161 RHEL VM 의 bond1 IP 다. 실제 Ubuntu 24.04 / Rocky 9.6 호스트 IP 를 다시 받아야 GA-2 의 `ubuntu_baseline` 갱신이 가능 |
 

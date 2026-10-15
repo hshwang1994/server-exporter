@@ -21,9 +21,10 @@
 | Linux sudo | SSH 인증 뒤 sudo 확인: root → NOPASSWD(제출 0) → 로그인 비밀번호 → Vault `sudo_passwords`(같은 값 1회). 정책 거부·sudo 불가는 즉시 중단, 비밀번호 거부는 대상 잠금 정책에서 계산한 예산(`_l_sudo_max_rejections`) 안에서만. 분류는 결과 구조(rc 유무·값)만, Ansible 버전 가정 없음. 실패 host 는 특권 태스크 4개를 건너뛴다 | 2026-10-13 |
 | OS Serial Number | 필수 식별자. `correlation.serial_number` 가 null 이면 `require_serial.yml` 이 status=failed(GATHER_FAILED · `serial_missing` 문장), 원인은 `diagnosis.details.serial_number.cause`. 새 failure_code 없음 | 2026-10-13 |
 | envelope | 13 필드 고정 · 새 키 추가는 호환성 작업 밖(사용자 승인) | 2026-05-01 · 2026-10-03 |
+| hostname | `system.hostname → system.fqdn → bmc.network_hostname → null`, IP 대체 없음. 세 채널 모두 `system.hostname` = 첫 라벨 · `system.fqdn` = 도메인 있을 때만. Redfish 원천 순서는 adapter `vendor_notes.hostname_priority` — **HPE CSUS 3200 은 RMC 이름 우선**(없을 때만 Partition HostName), 그 밖은 System.HostName | 2026-06-16 · 2026-09-03 · 2026-10-15 |
 | 시간 한계 | 실행 기반 대기 합 72h · 실제 수집 누적 6h · 결과 처리 1h, 빌드 · 단계 timeout 없음, 같은 Runner · 작업 폴더 재개. 중단 원인은 Jenkins 의 분류로만(경과시간 · 노드 상태로 확정 안 함), 보존은 handler 한 곳에서 1회 | 2026-10-05~07 · 2026-10-12 |
 | 결과 전달 | 요청 1 = 결과 1, `post { always }` 전달, Portal 2xx 로 종결(저장 확인은 계약 밖), 회수 매체는 같은 검문으로 평가. 404 는 서버가 돌려준 것만 확정 거부, 플러그인이 합성한 404(이름 풀이 실패)는 통신 실패 | 2026-10-03 · 2026-10-05 · 2026-10-10 · 2026-10-12 |
-| production | `prodgen` 생성 tree 만, 고정 main SHA, gate G01~G20 COMPLETE_PASS, 양 원격 동일, 승격 직후 canary | 2026-10-03 · 2026-10-04 |
+| production | `prodgen` 생성 tree 만, 고정 main SHA, gate G01~G20 COMPLETE_PASS, 양 원격 동일, 승격 직후 canary. 사용자 지시 긴급 승격은 같은 생성 tree + 사실 trailer(`Emergency-Promotion`) 로 하고 정규 재승격으로 증거를 채운다 | 2026-10-03 · 2026-10-04 · 2026-10-14 · 2026-10-15 |
 | Jenkinsfile 사본 | `Jenkinsfile_portal_Byid` 유지 · portal 과 동기화(시험 강제) | 2026-10-09 |
 | Add-on | 전역 `ADDON_REPO_URL` 하나로 켜고 빌드마다 받는다, 실패는 UNSTABLE + Add-on 없이 수집 | 2026-09-29 · 2026-09-30 |
 | Runner 선택 | `loc` 의 agent_label && target_type 능력 라벨, venv 는 `activate_ansible_venv.sh` 가 고른다 | 2026-09-28 · 2026-09-30 |
@@ -93,6 +94,32 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬 · 긴급 승격
+
+### 사용자 질문 / 요구
+- "CSUS 장비 JSON 에서 hostname · partitions[Partition0] 은 `svu703327-net7` 인데 bmc 의 dns_name · network_hostname 은 `ycgsfaibap01` 이다. 같은 문제인가?"
+- 사용자 결정: **CSUS 3200 은 RMC Hostname 을 최우선으로 쓰고, 없을 때만 Partition Hostname.** Partition 원본 · RMC 원본은 유지, CSUS 외 장비 정책 불변,
+  Redfish `system.hostname`/`system.fqdn` 계약 정렬도 함께. 사이트 운영 사실(사용자 확인): CSUS 1대 = RMC 1개 = 파티션 1개 = OS 1개.
+
+### 확인한 사실
+- 두 값은 서로 다른 자원의 이름이다 — `Systems/Partition0.HostName`(OS) 과 `Managers/RMC` NIC · NetworkProtocol HostName(RMC 자기 이름). 코드는 섞지 않았다.
+- 2026-09-03 계약이 OS · ESXi 에만 적용돼 Redfish 는 `system.hostname` 을 내지 않고 `system.fqdn` 에 원본 HostName 을 넣었다(GA-6). "every channel" 시험은 Redfish 를 보지 않았다.
+- 코드가 내는 `bmc.network_hostname` 이 사전에 없었다. CSUS 출력 예시는 hostname 과 `data.system.fqdn` 이 서로 달랐다.
+
+### 결정
+1. Redfish `normalize_standard.yml` 이 원천 이름 하나를 골라 `system.hostname`(첫 라벨) · `system.fqdn`(도메인 있을 때만)을 만든다. 원천 순서는 adapter `vendor_notes.hostname_priority`(값만 본다 — vendor 분기 0).
+2. `hpe_csus_3200.yml` 만 `bmc_first`(RMC NetworkProtocol 이름 → 없으면 Partition). 공통 builder · `redfish_gather.py` · baseline 무변경. 결정 주체: 사용자.
+3. 값 변화(사용자 승인): 사용자 CSUS `svu703327-net7` → `ycgsfaibap01`, "<서버명>-RMC" 명명 CSUS 는 RMC 이름, 도메인이 붙은 HostName(Dell R760 · HPE iLO6)은 짧은 이름,
+   도메인 없는 장비의 `system.fqdn` 은 null. CSUS 의 `hostname_source` 는 `system`.
+4. **긴급 승격 (실행됨 — production `31f9b804`)**: 사용자 지시("핫픽스로 빠르게, 다른 세션 작업까지 같이 반영")로 main `fd7dfd6a`(HBA `846516e3` 포함)의 prodgen 생성 tree 를
+   git plumbing 으로 `338ed8d3` 위에 append(ff, force 없음). trailer: `Verdict: PARTIAL`(라이브 gate G11~G15 · G19 SKIP, 나머지 PASS) · `CI-Build: manual` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` ·
+   `Emergency-Promotion: user-approved 2026-10-15`. 실행 환경 분류기가 승격 · canary 명령을 막아 **사용자가 직접 실행**했다. drift-check PROVENANCE ok · 세 원격 일치.
+   경위: hotfix `fba865f6` → 사용자 지시로 원복 `581700c8` → 승인 뒤 재적용 `fd7dfd6a`(이력은 append 로 남긴다).
+5. 정규 재승격(main Job 매트릭스 → CI → `prodgen promote`)으로 증거를 채운다 — 후속.
+
+### 근거 · 증거
+- `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md` · `docs/contract/03-fields.md` 8절 · `tests/integration/test_redfish_hostname_policy_replay.py` · production Job #296(canary).
 
 ## 2026-10-15 — Redfish HBA 누락 보완
 

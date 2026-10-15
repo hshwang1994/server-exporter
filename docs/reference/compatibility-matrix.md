@@ -33,7 +33,7 @@
 
 ## 매트릭스 — Redfish 채널 (27 row × 11 col)
 
-OS / ESXi 채널은 별도다. Redfish 채널은 OS 안을 보지 않으므로 `system`(OS, 호스트명, 가동시간)과 `users`(로컬 계정)가 모든 행에서 `N/A` 다 — 결과에서는 `not_supported` 로 나온다. 호스트명은 `data.system.fqdn` 과 BMC 의 호스트명으로 봉투 `hostname` 을 채운다.
+OS / ESXi 채널은 별도다. Redfish 채널은 OS 안을 보지 않으므로 `system`(OS, 호스트명, 가동시간)과 `users`(로컬 계정)가 모든 행에서 `N/A` 다 — 결과에서는 `not_supported` 로 나온다. 호스트명은 `data.system.hostname`(System.HostName 첫 라벨, HPE CSUS 3200 은 RMC 이름 우선 — 2026-10-15) · `data.system.fqdn`(도메인이 있을 때만) · BMC 의 호스트명 순으로 봉투 `hostname` 을 채운다.
 
 | vendor | generation | system | hardware | bmc | cpu | memory | storage | network | firmware | users | power | thermal |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|

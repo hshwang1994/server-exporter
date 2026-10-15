@@ -19,6 +19,18 @@
 
 ---
 
+## DRIFT-027 (2026-10-15, resolved — Redfish hostname 계약 · 사전 · 예시)
+
+- **발견 위치**: `redfish-gather/tasks/normalize_standard.yml` `_data_fragment.system` · `schema/field_dictionary.yml` `system.hostname`/`system.fqdn`/(없던) `bmc.network_hostname` ·
+  `tests/unit/test_field_dictionary_channel_emit.py::test_system_hostname_declared_and_emitted_by_every_channel` · `schema/output_examples/redfish_hpe_csus_3200.jsonc` · `schema/examples/redfish_success.json`
+- **분류**: convention-violation (2026-09-03 계약이 3채널 중 2채널에만 적용) + catalog-stale (사전 · 예시)
+- **설명**: 사전은 `system.hostname` 을 must · redfish 포함으로 선언했지만 Redfish 는 내지 않았고 `system.fqdn` 에 System.HostName 원본(도메인 없는 짧은 이름 포함)을 넣었다.
+  "every channel" 시험은 OS · ESXi emit 만 검사했다. 코드가 내는 `bmc.network_hostname` 은 사전에 없었다. CSUS 예시는 hostname 과 `data.system.fqdn` 이 서로 달랐고 출처 주석이 틀렸다,
+  `redfish_success.json` 은 `data.system.fqdn` 이 있는데 `hostname_source=bmc` 였다.
+- **영향**: Redfish `data.system.hostname` 을 읽는 소비자는 값을 받지 못했고, `data.system.fqdn` 의 뜻이 채널마다 달랐다. 봉투 `hostname` 은 체인 덕분에 값이 있었다.
+- **resolved (2026-10-15)**: normalize 정렬(첫 라벨 · 도메인 있을 때만) + 시험이 Redfish emit 검사 + `bmc.network_hostname` 사전 항목 + 예시 6건 정합. CSUS 정책(RMC 이름 우선)은 같은 변경에 포함 — ADR-2026-10-15-csus-hostname-rmc-first.
+- **관련**: rule 13 R2 · R7 · rule 22 R7 · `docs/ai/NEXT_ACTIONS.md` GA-6
+
 ## DRIFT-026 (2026-10-15, resolved — 서술 · 예시 정정)
 
 - **발견 위치**: `schema/field_dictionary.yml` `storage.hbas[]` · `.wwpn` · `.port_type` 설명 · `schema/examples/redfish_success.json` `data.storage.hbas[0]`

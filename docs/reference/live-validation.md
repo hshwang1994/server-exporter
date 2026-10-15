@@ -469,6 +469,21 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
+## 2026-10-15 CSUS 3200 hostname RMC 우선 · Redfish hostname 계약 — production 긴급 `31f9b804` · canary #296 (실장비)
+
+main `fd7dfd6a`(hostname 정렬 + HBA `846516e3`)를 사용자 지시로 긴급 승격했다(CI · E2E 증거 없음 — 정규 재승격 대기). 결정 근거는 [decision-log.md](decision-log.md) 2026-10-15.
+
+production Job **#296**(Redfish 3대, loc `git`, 직전 production Redfish 빌드 #295 와 같은 callback · deploymentEnvironmentId): SUCCESS 369 s · checkout `31f9b804` · 접수 3 = 결과 3 · Portal HTTP 200.
+
+| 대상 | 장비 | #295 hostname | #296 hostname | #296 `system.hostname` / `fqdn` | HBA #295 → #296 |
+|---|---|---|---|---|---|
+| 10.100.15.27 | Dell PowerEdge R760 | `r760-1.gooddi.lab` | `r760-1` | `r760-1` / `r760-1.gooddi.lab` | 0 → 0 |
+| 10.50.11.231 | HPE iLO6 | `test0004.hynix.com` | `test0004` | `test0004` / `test0004.hynix.com` | 4 → 4 |
+| 10.100.15.2 | Cisco | `C220-FCH2116V1V0` | `C220-FCH2116V1V0` | `C220-FCH2116V1V0` / null | 4 → 4 |
+
+→ 세 장비 모두 hostname 계약대로 바뀌었고(source `system`), BMC 이름(`bmc.network_hostname`)과 HBA 수는 그대로다. **CSUS 3200 은 lab 에 없어 실장비 미검증** — 사이트 재수집에서
+`hostname = ycgsfaibap01`(RMC 이름) · `multi_node.partitions[0].system.hostname = svu703327-net7`(원본)을 확인해야 한다.
+
 ## 2026-10-15 Redfish HBA 누락 보완 — main `9aa2f8b5` 매트릭스 (실장비)
 
 수집 코드 변경(링크 기술 FC 규칙 · wwpn 추측 금지 · System 연결 섀시와 소유 확인 · 빈 목록 경로 · notices). 증거 `../../tests/evidence/2026-10-15-redfish-hba-coverage.md`.

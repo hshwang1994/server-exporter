@@ -35,7 +35,7 @@
       ],
       "selected_port": 443,
       "redfish_version": "1.15.0",
-      "hostname_source": "bmc"
+      "hostname_source": "system"
     }
   },
   "meta": {
@@ -62,7 +62,8 @@
       "architecture": null,
       "uptime_seconds": null,
       "selinux": null,
-      "fqdn": "XCC-7Z73-J30AF7LC"
+      "hostname": "XCC-7Z73-J30AF7LC",
+      "fqdn": null
     },
     "hardware": {
       "vendor": "Lenovo",

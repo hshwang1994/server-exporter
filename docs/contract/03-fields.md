@@ -61,7 +61,7 @@ Dell PowerEdge R740 한 대를 Redfish 로 수집한 결과 (요약). 실물 전
     "firmware": [ { "name": "BIOS", "version": "2.21.2", "component": "...", "updateable": true, "category": "bios", "pending": false }, ... ],
     "power":    { "power_supplies": [...], "power_control": {...} },
     "users":    [],
-    "system":   { "fqdn": "LENOVO01", ... }
+    "system":   { "hostname": "LENOVO01", "fqdn": null, ... }
   },
   "schema_version": "1"
 }
@@ -840,7 +840,8 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
   "health": "OK",                       // Manager.Status.Health (BMC 자체 — 장비 health 아님)
   "ip": "10.x.x.x",                     // BMC 관리 NIC (Manager 자체 EthernetInterface)
   "mac_address": "f4:02:70:...",        //  "  서버 OS NIC 아님
-  "dns_name": "iDRAC-<ServiceTag>",
+  "dns_name": "iDRAC-<ServiceTag>",       // BMC 자기 이름 (Manager NIC FQDN → HostName) — 서버 OS 이름 아님
+  "network_hostname": "iDRAC-<ServiceTag>", // BMC 자기 이름 (Manager.NetworkProtocol FQDN → HostName) — hostname 3순위 후보
   "uuid": "3330...",                    // Manager UUID — System UUID(hardware.uuid)와 다름!
   "datetime": "2026-06-12T01:42:11-05:00", "datetime_offset": "-05:00",
   "oem": { "idrac_url": "https://...", "idrac_ipmi_version": "2.0", ... }
@@ -848,6 +849,7 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 ```
 
 주의: `bmc.uuid` 는 **BMC 식별자**(Manager UUID)이고 `hardware.uuid` 는 **서버 식별자**(System UUID)다.
+`bmc.dns_name` · `bmc.network_hostname` 은 **BMC 자기 이름**이라 봉투 `hostname`(서버 이름)과 값이 달라도 정상이다 — 8절.
 `bmc.firmware_version` 은 Manager 가 직접 보고하는 BMC 펌웨어로, FirmwareInventory 의 BMC 항목(때로 stale)이 아니다.
 
 ### 6.7 `data.thermal` (Redfish 전용)
@@ -991,27 +993,37 @@ hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
 >   `system.fqdn` 은 3채널 모두 **hostname + 설정 도메인** 이며 도메인이 없으면 `null` — resolver(`getfqdn`)
 >   결과가 아니다. 실패 envelope(rescue) 과 `always` 최종 fallback 도 같은 체인 + `hostname_source` 를 낸다
 >   (종전에는 이 두 경로가 IP 를 넣었다).
+> - 2026-10-15 (사용자 결정): Redfish 도 같은 계약을 따른다 — `system.hostname` = 원천 이름의 첫 라벨(종전 Redfish 는 이 키를
+>   내지 않았다), `system.fqdn` = 도메인이 붙어 있을 때만 전체(종전에는 System.HostName 원본). 원천 순서는 adapter
+>   `vendor_notes.hostname_priority` 로 정한다. **HPE CSUS 3200 은 `bmc_first`** — CSUS 1대 = RMC 1개 = 파티션 1개 = OS 1개라
+>   RMC 이름이 서버 이름이다. RMC NetworkProtocol 이름을 쓰고, 없을 때만 Partition HostName 을 쓴다. 근거
+>   `../reference/decision-log.md` 2026-10-15.
 
 ### 우선순위
 
 | 순위 | 후보 | source | 출처 (채널/벤더) |
 |---:|---|---|---|
-| 1 | `data.system.hostname` | system | Linux `uname -n` 첫 라벨 / Windows `COMPUTERNAME`(DNSHostName) / ESXi `dnsConfig.hostName` / Redfish System.HostName |
-| 2 | `data.system.fqdn` | system | hostname + 설정 도메인 (Linux `uname -n` 도메인부·`hostname -d` / Windows AD 도메인·DNS 접미사 / ESXi `dnsConfig.domainName` / Redfish System.HostName 정규화). 도메인 없으면 null |
+| 1 | `data.system.hostname` | system | Linux `uname -n` 첫 라벨 / Windows `COMPUTERNAME`(DNSHostName) / ESXi `dnsConfig.hostName` / Redfish System.HostName 첫 라벨 (**HPE CSUS 3200: RMC NetworkProtocol 이름 → 없으면 Partition HostName**) |
+| 2 | `data.system.fqdn` | system | hostname + 설정 도메인 (Linux `uname -n` 도메인부·`hostname -d` / Windows AD 도메인·DNS 접미사 / ESXi `dnsConfig.domainName` / Redfish 원천 이름에 도메인이 붙어 있을 때 그 전체). 도메인 없으면 null |
 | 3 | `data.bmc.network_hostname` | bmc | Manager.NetworkProtocol.HostName/FQDN (**redfish 전용**) |
 | 4 | (없음) | none | 전부 비면 `null` — **IP fallback 안 함** |
 
-### 시나리오 (실측 2026-06-16)
+### 시나리오 (실측 2026-06-16, 2026-10-15 갱신)
 
-| 장비 | System.HostName | BMC NetworkProtocol | hostname | source |
-|---|---|---|---|---|
-| Dell R740 | `DELL01` | `iDRAC-J0KV603` | `DELL01` | system |
-| HPE DL380 | `""` | `ILOSGHD3KHHRP` | `ILOSGHD3KHHRP` | bmc |
-| Lenovo SR650 | (필드없음) | `XCC-7DGD-J902E57T` | `XCC-7DGD-J902E57T` | bmc |
-| CSUS node01 | `null` | `RMC7CA62A413692` | `RMC7CA62A413692` | bmc |
-| CSUS node03 | `m10mesdb11` | `M10MESDB11-RMC` | `m10mesdb11` | system |
-| Cisco C220 | `C220-FCH2116V1V0` | `null` | `C220-FCH2116V1V0` | system |
-| (System없음+BMC null) | `null` | `null` | **`null`** | none |
+| 장비 | System.HostName | BMC NetworkProtocol | hostname | `system.hostname` / `fqdn` | source |
+|---|---|---|---|---|---|
+| Dell R740 | `DELL01` | `iDRAC-J0KV603` | `DELL01` | `DELL01` / null | system |
+| Dell R760 (production #296) | `r760-1.gooddi.lab` | `idrac-64CXJ54` | `r760-1` (종전 FQDN 전체) | `r760-1` / `r760-1.gooddi.lab` | system |
+| HPE DL380 | `""` | `ILOSGHD3KHHRP` | `ILOSGHD3KHHRP` | null / null | bmc |
+| Lenovo SR650 | (필드없음) | `XCC-7DGD-J902E57T` | `XCC-7DGD-J902E57T` | null / null | bmc |
+| CSUS 사이트 장비 (2026-10-15) | `svu703327-net7` | `ycgsfaibap01` | **`ycgsfaibap01`** (종전 `svu703327-net7`) | `ycgsfaibap01` / null | system |
+| CSUS node01 | `null` | `RMC7CA62A413692` | `RMC7CA62A413692` | `RMC7CA62A413692` / null | system (종전 bmc) |
+| CSUS node03 | `m10mesdb11` | `M10MESDB11-RMC` | **`M10MESDB11-RMC`** (종전 `m10mesdb11`) | `M10MESDB11-RMC` / null | system |
+| Cisco C220 | `C220-FCH2116V1V0` | `null` | `C220-FCH2116V1V0` | `C220-FCH2116V1V0` / null | system |
+| (System없음+BMC null) | `null` | `null` | **`null`** | null / null | none |
+
+CSUS 3200 은 `data.system.hostname` 을 RMC 이름으로 정하므로 `hostname_source` 가 `system` 이다. 파티션별 원본은
+`data.multi_node.partitions[].system.hostname` 에 그대로 남고, `bmc.dns_name` · `bmc.network_hostname` 도 RMC 원본 그대로다.
 
 ### 벤더별 BMC fallback 동작 (중요 — 만능 아님)
 
@@ -1028,6 +1040,8 @@ hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
 
 - `hostname` 은 nullable. `hostname_source == 'bmc'` 면 그 값은 **서버 OS 호스트명이 아니라
   관리 컨트롤러(BMC) 이름** — 식별엔 쓰되 OS hostname 으로 단정 금지.
+- `hostname`(서버 이름)과 `bmc.dns_name` · `bmc.network_hostname`(BMC 자기 이름)은 다른 장치의 이름이라 값이 달라도 정상이다.
+  예외는 HPE CSUS 3200 — 서버 이름을 RMC 이름으로 정하므로 둘이 같아진다(위 표).
 - `hostname == ip` 는 금지(옛 ip-fallback 잔재). 회귀:
   `test_cross_channel_consistency.py::test_hostname_not_ip_fallback` +
   `test_hostname_fallback_chain.py` (체인 정본 + IP 미참조) +

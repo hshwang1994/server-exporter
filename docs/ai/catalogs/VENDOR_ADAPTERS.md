@@ -1,6 +1,8 @@
 # VENDOR_ADAPTERS — server-exporter
 
 > 9 vendor x 채널별 adapter 매트릭스 (rule 28 #3 측정 대상, TTL 14일).
+> 2026-10-15: `hpe_csus_3200.yml` `vendor_notes.hostname_priority: bmc_first` — CSUS 는 RMC NetworkProtocol 이름이 서버 이름(없을 때만 Partition HostName). 이 키를 가진 adapter 는 CSUS 하나(시험 고정). ADR-2026-10-15-csus-hostname-rmc-first.
+>
 > 실측 (`ls adapters/redfish/*.yml | wc -l`) — 2026-05-12 (cycle hpe-csus-rmc-multi-node).
 >
 > **cycle 2026-06-15 변경** (실 미러 캡처 검수 — adapter 카운트 변경 없음, 31 그대로):

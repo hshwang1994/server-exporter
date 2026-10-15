@@ -17,7 +17,7 @@
   "target_type": "redfish",                                // Redfish 채널
   "collection_method": "redfish_api",                      // stdlib (urllib + ssl + json)
   "ip": "10.100.15.27",                                    // BMC IP
-  "hostname": "r760-1.gooddi.lab",                         // Dell HostName / iDRAC dns_name
+  "hostname": "r760-1",                                    // = data.system.hostname (System.HostName 첫 라벨, 2026-10-15 — 종전 FQDN 전체)
   "vendor": "dell",                                        // 정규화 vendor (Dell Inc. → dell)
   "status": "success",                                  // 전체 수집 결과 — success / partial / failed
   "sections": {                                         // 섹션별 수집 상태 dict — success / failed / not_supported
@@ -296,7 +296,8 @@
       "architecture": null,
       "uptime_seconds": null,                           // 부팅 후 경과 (초)
       "selinux": null,                                  // SELinux 상태 — enabled / disabled / null (Windows/ESXi)
-      "fqdn": "r760-1.gooddi.lab"                          // BMC 가 보고하는 호스트 FQDN
+      "hostname": "r760-1",                                // System.HostName 첫 라벨
+      "fqdn": "r760-1.gooddi.lab"                          // System.HostName 에 도메인이 붙어 있을 때만 전체
     },
     "power": {                                             // Redfish 전용 — PowerSubsystem
       "power_supplies": [                                  // PSU list

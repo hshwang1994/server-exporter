@@ -19,7 +19,7 @@
   "target_type": "redfish",                             // 수집 채널 — "os" | "esxi" | "redfish"
   "collection_method": "redfish_api",                   // 수집 방식 — agent (SSH/WinRM) / vsphere_api / redfish_api (stdlib HTTP)
   "ip": "10.100.15.2",                                  // 대상 장비 IP (호출자 inventory_json 의 service_ip 또는 bmc_ip)
-  "hostname": "C220-FCH2116V1V0",                          // Cisco CIMC dns_name
+  "hostname": "C220-FCH2116V1V0",                          // = data.system.hostname (System.HostName 첫 라벨)
   "vendor": "cisco",                                    // 정규화 vendor (소문자) — dell / hpe / lenovo / supermicro / cisco / vmware / null
   "status": "success",                                  // 전체 수집 결과 — success / partial / failed
   "sections": {                                         // 섹션별 수집 상태 dict — success / failed / not_supported
@@ -206,7 +206,8 @@
       "architecture": null,
       "uptime_seconds": null,                           // 부팅 후 경과 (초)
       "selinux": null,                                  // SELinux 상태 — enabled / disabled / null (Windows/ESXi)
-      "fqdn": "C220-FCH2116V1V0"                        // FQDN (도메인 포함 hostname)
+      "hostname": "C220-FCH2116V1V0",                   // System.HostName 첫 라벨
+      "fqdn": null                                      // 도메인 없음 → null (2026-10-15 — 종전 HostName 원본)
     },
     "users": [],
     "power": {

@@ -1,5 +1,23 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-15 (2) — HPE CSUS 3200 hostname = RMC 이름 우선 · Redfish `system.hostname/fqdn` 계약 정렬 · 긴급 승격 production `31f9b804`
+
+> 정본: `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md` · `docs/contract/03-fields.md` 8절 · `docs/reference/decision-log.md` 2026-10-15 · `docs/ai/NEXT_ACTIONS.md` 2026-10-15 CSUS 절.
+
+- **계기**: 사용자 사이트 CSUS 3200 — 봉투 `hostname` · `partitions[Partition0]` = `svu703327-net7`, `bmc.dns_name` · `bmc.network_hostname` = `ycgsfaibap01`. 코드는 두 자원(Partition0 OS 이름 · RMC 자기 이름)을 섞지 않았다.
+  사용자 결정: CSUS 는 RMC 이름이 서버 이름(CSUS 1대 = RMC 1개 = 파티션 1개 = OS 1개 — 사용자 확인).
+- **고친 것(제품)**: `redfish-gather/tasks/normalize_standard.yml` — 태스크 2개("system hostname source" · "system hostname / fqdn")가 원천 이름을 골라 `system.hostname`(첫 라벨) · `system.fqdn`(도메인 있을 때만)을 만든다.
+  원천 순서 = adapter `vendor_notes.hostname_priority`(키 없음: System.HostName / `bmc_first`: RMC NetworkProtocol 이름 → 없으면 Partition). `adapters/redfish/hpe_csus_3200.yml` 에만 `bmc_first`.
+  공통 builder · `redfish_gather.py` · baseline 무변경. GA-6 의 hostname 부분 해소(종전 Redfish 는 `system.hostname` 미출력 · `fqdn` 에 원본).
+- **값 변화**: 사용자 CSUS `svu703327-net7` → `ycgsfaibap01` · CSUS node03 형 `m10mesdb11` → `M10MESDB11-RMC` · Dell R760 `r760-1.gooddi.lab` → `r760-1`(fqdn 은 그대로) · HPE iLO6 `test0004.hynix.com` → `test0004` ·
+  도메인 없는 장비 `data.system.fqdn` → null. CSUS `hostname_source` = system. 봉투 13필드 · 섹션 · status 무변경.
+- **시험**: Redfish 렌더 25 · 체인 새 모양 4 · emit/사전 2 · 신규 `tests/integration/test_redfish_hostname_policy_replay.py` 8(실 CSUS 녹화본 → 실 adapter 점수 → normalize → build_output).
+  전체 회귀(`fd7dfd6a`) unit·e2e·regression 5215 passed / integration 336 passed, 실패 0. WSL 3채널 syntax-check 통과.
+- **승격 — 긴급(사용자 지시 · 승인) production `31f9b804`**: main `fd7dfd6a`(HBA `846516e3` 포함) 생성 tree, parent `338ed8d3`, trailer `Verdict: PARTIAL` · `CI-Stages: not-verified` · `E2E-Evidence-SHA256: absent` · `Emergency-Promotion`.
+  실행 환경 분류기가 승격 · canary 를 막아 사용자가 직접 실행. drift-check PROVENANCE ok · 세 원격 일치. canary production Job #296(Redfish 3대 — Dell R760 · HPE iLO6 · Cisco): checkout `31f9b804` · 3/3 · Portal 200 · 기대값 일치 · HBA 수 #295 와 같음.
+  경위: hotfix `fba865f6` → 사용자 지시 원복 `581700c8` → 승인 뒤 재적용 `fd7dfd6a`.
+- **남은 것**: 정규 재승격(main Job 매트릭스 11 → CI → promote) · CSUS 사이트 재수집 확인(`hostname=ycgsfaibap01`) — NEXT_ACTIONS.
+
 ## 일자: 2026-10-15 — Redfish `storage.hbas` 누락 보완 (링크 기술 FC · wwpn 추측 금지 · System 연결 섀시와 소유 확인 · 빈 목록과 미제공 구분)
 
 > 정본: `tests/evidence/2026-10-15-redfish-hba-coverage.md` · `docs/contract/03-fields.md` 6.3.2 · `docs/reference/decision-log.md` 2026-10-15 · `docs/ai/NEXT_ACTIONS.md` 2026-10-15 절.

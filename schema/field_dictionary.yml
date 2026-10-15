@@ -117,11 +117,15 @@ fields:
       BMC NetworkProtocol.HostName/FQDN → null. IP fallback 안 함. 출처는
       diagnosis.details.hostname_source(system|bmc|none). source=bmc 면 OS 호스트명이 아니라
       BMC(iLO/XCC/RMC) 관리명. Cisco CIMC 등 NetworkProtocol.HostName=null 이면 system 또는 null.
+      2026-10-15: HPE CSUS 3200 은 RMC 이름이 서버 이름이다 — data.system.hostname 이 RMC NetworkProtocol 이름
+      (없을 때만 Partition HostName)으로 정해지고 source=system 으로 나온다 (adapter vendor_notes.hostname_priority=bmc_first).
     help_en: >-
       Resolved hostname (2026-06-16 policy). Priority: System.HostName -> system.fqdn ->
       BMC NetworkProtocol.HostName/FQDN -> null. No IP fallback. Origin in
       diagnosis.details.hostname_source (system|bmc|none); source=bmc means the BMC management
       name, not the OS hostname. Use the separate ip field for the address.
+      2026-10-15: on HPE CSUS 3200 the RMC name is the server name — data.system.hostname is set from the RMC
+      NetworkProtocol name (Partition HostName only when it is missing), so source=system.
 
   vendor:
     type: "string|null"
@@ -1315,8 +1319,21 @@ fields:
     type: "string|null"
     priority: nice
     channel: [redfish]
-    help_ko: "BMC 호스트명 (Manager NIC 의 HostName, 예: iDRAC-<ServiceTag>)."
-    help_en: "BMC hostname (Manager NIC HostName, e.g. iDRAC-<ServiceTag>)."
+    help_ko: "BMC 자기 호스트명 (Manager NIC 의 FQDN → HostName, 예: iDRAC-<ServiceTag>). 서버 OS 이름이 아니다."
+    help_en: "BMC's own hostname (Manager NIC FQDN -> HostName, e.g. iDRAC-<ServiceTag>). Not the server OS name."
+
+  bmc.network_hostname:
+    type: "string|null"
+    priority: nice
+    channel: [redfish]
+    help_ko: >-
+      BMC 자기 관리 호스트명 (Manager.NetworkProtocol 의 FQDN → HostName, 2026-06-16). 서버 OS 이름이 아니다 —
+      `hostname`(OS 이름)과 값이 달라도 정상이다. envelope.hostname 의 3순위 후보(System 이름이 없을 때).
+      HPE CSUS 3200 은 이 값을 data.system.hostname 의 1순위 원천으로 쓴다(2026-10-15, adapter hostname_priority=bmc_first).
+    help_en: >-
+      BMC's own management hostname (Manager.NetworkProtocol FQDN -> HostName, 2026-06-16). Not the server OS name —
+      it may differ from `hostname`. Third candidate for envelope.hostname (when the System name is missing).
+      HPE CSUS 3200 uses it as the first source of data.system.hostname (2026-10-15, adapter hostname_priority=bmc_first).
 
   bmc.datetime:
     type: "string|null"
@@ -2431,12 +2448,14 @@ fields:
     channel: [redfish, os, esxi]
     help_ko: >-
       짧은 호스트명 (첫 라벨). Linux uname -n / Windows COMPUTERNAME(DNSHostName) /
-      ESXi dnsConfig.hostName / Redfish System.HostName. 장비가 제공하지 않으면 null —
-      IP 로 대체하지 않는다. envelope.hostname 1순위 후보.
+      ESXi dnsConfig.hostName / Redfish System.HostName 의 첫 라벨(2026-10-15 — 종전 Redfish 는 이 키를 내지 않았다).
+      HPE CSUS 3200 은 RMC NetworkProtocol 이름이 먼저이고 없을 때만 Partition HostName (adapter hostname_priority=bmc_first).
+      장비가 제공하지 않으면 null — IP 로 대체하지 않는다. envelope.hostname 1순위 후보.
     help_en: >-
       Short host name (first label). Linux uname -n / Windows COMPUTERNAME / ESXi dnsConfig.hostName /
-      Redfish System.HostName. null when the target does not provide one — never the IP.
-      First candidate for envelope.hostname.
+      first label of Redfish System.HostName (2026-10-15 — Redfish did not emit this key before).
+      HPE CSUS 3200: the RMC NetworkProtocol name first, the Partition HostName only when it is missing.
+      null when the target does not provide one — never the IP. First candidate for envelope.hostname.
 
   system.fqdn:
     type: "string|null"
@@ -2444,10 +2463,12 @@ fields:
     channel: [redfish, os, esxi]
     help_ko: >-
       hostname + 설정된 도메인 (Linux hostname -d / uname -n 의 도메인부, Windows AD 도메인 또는 기본 DNS 접미사,
-      ESXi dnsConfig.domainName). 도메인이 없으면 null. resolver(getfqdn) 결과가 아니다 (2026-09-03 통일).
+      ESXi dnsConfig.domainName, Redfish 는 원천 이름에 도메인이 붙어 있을 때만 그 전체 — 2026-10-15). 도메인이 없으면 null.
+      resolver(getfqdn) 결과가 아니다 (2026-09-03 통일, Redfish 2026-10-15 — 종전 Redfish 는 System.HostName 원본을 넣었다).
     help_en: >-
       hostname + configured domain (Linux hostname -d / domain part of uname -n, Windows AD domain or primary
-      DNS suffix, ESXi dnsConfig.domainName). null when no domain is configured. Not a resolver (getfqdn) result.
+      DNS suffix, ESXi dnsConfig.domainName, Redfish: the whole source name only when it carries a domain — 2026-10-15).
+      null when no domain is configured. Not a resolver (getfqdn) result.
 
   system.vendor:
     type: "string|null"

@@ -61,6 +61,13 @@ def test_system_hostname_declared_and_emitted_by_every_channel():
     assert {"hostname", "fqdn"} <= set(_fragment_section(REDFISH_NORM, "system"))
 
 
+def test_bmc_network_hostname_declared():
+    """2026-10-15: redfish_gather 가 내는 bmc.network_hostname(BMC 자기 이름)이 사전에 없었다 — OS 이름과 다를 수 있다는 뜻을 계약으로 둔다."""
+    entry = FD["bmc.network_hostname"]
+    assert entry["channel"] == ["redfish"] and entry["priority"] == "nice"
+    assert "OS 이름이 아니다" in entry["help_ko"] and "bmc_first" in entry["help_ko"]
+
+
 def test_hosting_type_enum_covers_esxi_literal():
     assert "hypervisor" in FD["system.hosting_type"]["enum"]
     assert "esxi" in FD["system.hosting_type"]["channel"]

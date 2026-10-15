@@ -32,6 +32,7 @@
       adapter_id                       결과 meta.adapter_id 와 진단
       capabilities.sections_supported  출력 sections 에서 not_supported 를 가르는 기준
       vendor_notes.manager_layout      (Redfish 멀티 노드 장비만) 수집 모듈 인자
+      vendor_notes.hostname_priority   (Redfish, 2026-10-15) data.system.hostname 원천 순서. 지금은 CSUS 3200 만 bmc_first
 [ 5 ] 복구 계정은 정규화된 벤더 이름으로 고릅니다 — vault/<loc>/redfish/dell.yml
 ```
 
@@ -104,8 +105,11 @@ capabilities:
   sections_supported: [hardware, bmc, cpu, memory, storage, network, firmware, power, thermal]
                                       # 여기 없는 섹션은 결과에서 not_supported. 채널이 지원하는 섹션 안에서만 고릅니다
 
-vendor_notes:                         # 기록용. Redfish 멀티 노드 장비는 manager_layout 하나만 코드가 읽습니다
-  manager_layout: rmc_primary
+vendor_notes:                         # 기록용. 코드가 읽는 것은 아래 두 키뿐입니다 (Redfish)
+  manager_layout: rmc_primary         # 멀티 노드 장비 — 수집 모듈 인자
+  hostname_priority: bmc_first        # data.system.hostname 을 BMC NetworkProtocol 이름 → 없으면 System.HostName 순으로 고릅니다.
+                                      # 키가 없으면 System.HostName 만 봅니다(BMC 이름 대체는 봉투 hostname 체인이 합니다).
+                                      # HPE CSUS 3200 에만 둡니다 — RMC 1개 = 파티션 1개 = OS 1개라 RMC 이름이 서버 이름입니다 (2026-10-15)
   design_hints: {...}
 ```
 

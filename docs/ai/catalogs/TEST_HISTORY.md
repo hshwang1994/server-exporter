@@ -1,5 +1,18 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-15 (2) — CSUS hostname RMC 우선 · Redfish hostname 계약 (`fba865f6` → 원복 `581700c8` → 재적용 `fd7dfd6a`) · 긴급 production `31f9b804`
+
+| 구분 | 결과 |
+|---|---|
+| 신규 · 보강 시험 | `test_gather_identity_render` Redfish 25 · `test_hostname_fallback_chain` 새 모양 4 · `test_field_dictionary_channel_emit` Redfish emit + `bmc.network_hostname` 선언 · 신규 `tests/integration/test_redfish_hostname_policy_replay.py` 8 |
+| 대상 묶음(CSUS · HBA · hostname 관련 33파일) | 935 passed · 3 skipped · 7 xfailed · 0 failed (`fba865f6`). 재적용 `fd7dfd6a` 에서 13파일 297 passed |
+| 전체 회귀 (`fd7dfd6a`, Windows Python 3.13) | unit · e2e · regression 5215 passed · 36 skipped · 7 xfailed · 0 failed (19분 24초) / `tests/integration -m "not live"` 336 passed · 6 skipped |
+| 3채널 syntax-check | WSL — redfish · os · esxi PASS |
+| 정적 | vendor boundary · validate_field_dictionary PASS · output schema drift(fd_paths 198 → 199, `bmc.network_hostname`) · YAML parse · 예시 JSON/JSONC 파싱 6건 |
+| 긴급 승격 | prodgen 생성 tree(194 파일 · class B 0) · gate G01~G10 · G16~G18 · G20 PASS, G11~G15 · G19 SKIP(라이브) · PROVENANCE → `31f9b804`(parent `338ed8d3`) · drift-check PROVENANCE ok(tree hash 재계산 · 기록 생성기 재생성 일치) · 세 원격 일치. 실행 환경 분류기 차단으로 사용자가 직접 실행 |
+| canary | production Job #296 Redfish 3대 SUCCESS — checkout `31f9b804` · 3/3 · Portal 200 · hostname 기대값 일치 · HBA 수 #295 와 같음 (live-validation 2026-10-15) |
+| 실장비 미검증 | CSUS 3200(lab 부재 — 사이트 재수집 필요) · main Job 매트릭스 · CI (정규 재승격에서) |
+
 ## 2026-10-15 — Redfish HBA 누락 보완 (`846516e3` fix · `9aa2f8b5` docs)
 
 | 구분 | 결과 |

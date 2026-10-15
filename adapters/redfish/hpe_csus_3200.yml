@@ -121,6 +121,7 @@ vendor_notes:
   #   bmc_first: RMC NetworkProtocol 이름(bmc.network_hostname) → 없을 때만 Partition(System) HostName.
   #   origin: 사용자 정책 2026-10-15 + 사이트 실측(Systems/Partition0.HostName `svu703327-net7`,
   #           Managers/RMC/NetworkProtocol.HostName `ycgsfaibap01` → 최종 hostname `ycgsfaibap01`).
+  #   사이트 운영 사실(사용자 확인 2026-10-15): CSUS 1대 = RMC 1개 = 파티션 1개 = OS 1개 → RMC 이름이 서버 이름이다.
   #   근거: docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md
   hostname_priority: "bmc_first"
   rmc_firmware_min: "1.0"            # 실측 1.75.108 (2026-06-15) — RMC 1.x 대. 구 추정 3.0 정정 (문서용, 코드 미소비)
