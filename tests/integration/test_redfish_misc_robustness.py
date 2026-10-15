@@ -74,11 +74,15 @@ def test_fc_hba_mac_not_used_as_wwpn():
     assert hba["wwpn"] is None
 
 
-def test_fc_hba_real_wwpn_primary_addr_used():
-    """primary_addr 가 8-octet WWPN 이면 fallback 사용."""
+def test_fc_hba_port_address_is_not_used_as_wwpn():
+    """2026-10-15: 8-octet 포트 주소도 wwpn 으로 올리지 않는다 (종전 Round 1 #22 fallback 제거).
+
+    포트 주소의 뜻은 장비마다 다르다 — 실측 Dell R740 NetworkPort.AssociatedNetworkAddresses 는 WWNN(20:00:…)이고,
+    Port.FibreChannel.AssociatedWorldWideNames 는 [WWNN, WWPN] 순서일 수 있다(CSUS-R13). wwpn 은 NDF 의 WWPN 만 쓴다.
+    """
     hba = rg._make_fc_hba("A0", {"model": "HBA X"}, "1", "FibreChannel", "up", 32.0,
-                          "10:00:00:11:22:33:44:55", {})  # 8 octet WWPN
-    assert hba["wwpn"] == "10:00:00:11:22:33:44:55"
+                          "10:00:00:11:22:33:44:55", {})  # 8 octet 주소
+    assert hba["wwpn"] is None
 
 
 def test_fc_hba_ndf_wwpn_preferred():

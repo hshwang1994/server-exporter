@@ -300,14 +300,20 @@ def test_systems_fallback_collects_when_chassis_400(monkeypatch):
 
 
 def test_chassis_success_does_not_try_systems(monkeypatch):
-    """1순위가 200 이면 2순위는 아예 시도 안 함 — 기존 장비 동작/왕복 불변 (Additive)."""
+    """1순위가 카드가 있는 200 이면 2순위는 아예 시도 안 함 — 기존 장비 동작/왕복 불변 (Additive).
+
+    2026-10-15: 200 이지만 **빈 목록**이면 2순위를 본다 (빈 목록만으로 HBA 없음을 확정하지 않는다 —
+    tests/unit/test_network_adapters_absence_vs_failure.py). 이 시험은 카드가 있는 1순위로 의도를 유지한다.
+    """
     calls = []
+    item = CHASSIS + "/NetworkAdapters/NIC.Integrated.1"
     routes = {
-        CH_NA: (200, {"Members": []}, None),
+        CH_NA: (200, {"Members": [{"@odata.id": item}]}, None),
+        rg._p(item): (200, NA_ITEM, None),
     }
     monkeypatch.setattr(rg, "_get", _routed_get(routes, calls))
     rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, "u", "p", 30, False, SYSTEM)
-    assert calls == [CH_NA]
+    assert calls == [CH_NA, rg._p(item)]
     assert SYS_NA not in calls
 
 

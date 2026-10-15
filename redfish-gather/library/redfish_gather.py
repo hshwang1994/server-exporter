@@ -1729,16 +1729,30 @@ def _resolve_system_chassis_uri(bmc_ip, system_uri, default_chassis_uri,
     source (rule 96 R1-A): DMTF DSP0266 ComputerSystem.Links.Chassis (시스템이 속한 chassis).
     Returns: chassis_uri (str) — Links.Chassis[0] 또는 default_chassis_uri.
     """
+    uris = _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl)
+    return uris[0] if uris else default_chassis_uri
+
+
+def _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl):
+    """System.Links.Chassis[] 전체 — 응답 순서 그대로, `_p` 기준 중복 제거 (2026-10-15).
+
+    DMTF ComputerSystem.Links.Chassis 는 "physical containers associated with this resource" 배열이고 순서의 뜻은
+    정의돼 있지 않다 (schema/redfish_dmtf_2026.1/ComputerSystem.v1_28_0.json). [0] 은 종전처럼 power/thermal/system
+    과 network_adapters 1순위로 쓰고, 나머지는 network_adapters 가 소유를 확인한 뒤에만 쓴다
+    (_extra_chassis_adapter_collections). System 응답이 없거나 링크가 없으면 [] — 호출부가 종전 default 로 간다.
+    """
     if not system_uri:
-        return default_chassis_uri
+        return []
     st, data, err = _get(bmc_ip, _p(system_uri), username, password, timeout, verify_ssl)
     if err or st != 200 or not isinstance(data, dict):
-        return default_chassis_uri
+        return []
+    out, seen = [], set()
     for link in _dicts(_safe(data, 'Links', 'Chassis')):  # 비-list/비-dict 방어 (rule 95 R1 #2)
         uri = _safe(link, '@odata.id')
-        if uri and isinstance(uri, str):
-            return uri
-    return default_chassis_uri
+        if uri and isinstance(uri, str) and _p(uri) not in seen:
+            seen.add(_p(uri))
+            out.append(uri)
+    return out
 
 
 def _classify_rmc_label(manager_uri, manager_id, manager_layout, is_first=True):  # nosec rule12-r1
@@ -3627,6 +3641,8 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
     미지원/오류 시 빈 리스트 (graceful — Port 기반 분류로 fallback).
     2026-10-03 (C7): 404 가 아닌 실패는 errors(비차단 code) 로 드러낸다 — 종전에는 WWPN/WWNN 증거가
     조용히 사라졌다. 404 는 미노출(정상)이라 그대로 조용히 빈 리스트.
+    2026-10-15: 조용한 404 는 **컬렉션 자체**뿐이다. 컬렉션이 나열한 기능을 읽지 못하면(404 포함) 그 기능의 WWPN/WWNN 을
+    잃은 것이라 비차단 오류로 남긴다 (Port 의 C4 와 같은 규칙).
     """
     ndfs = []
     ndf_link = _safe(adata, 'NetworkDeviceFunctions', '@odata.id')
@@ -3648,10 +3664,9 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
             continue
         s2, nd, e2 = _get(bmc_ip, _p(u), username, password, timeout, verify_ssl)
         if e2 or s2 != 200 or not isinstance(nd, dict):
-            if s2 != 404:
-                errors.append(_err('network_adapters',
-                                   f'NetworkDeviceFunction {u} 실패: {e2 or s2}',
-                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            errors.append(_err('network_adapters',
+                               f'NetworkDeviceFunction {u} 실패: {e2 or s2}',
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
         fc = _safe(nd, 'FibreChannel') or {}
         ib = _safe(nd, 'InfiniBand') or {}
@@ -3673,15 +3688,17 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
 
 def _make_fc_hba(adapter_id, adapter_info, port_id, cls, link_status, speed_gbps,
                  primary_addr, ndf):
-    """canonical storage.hbas[] entry 생성 (전 채널 통일 shape — EXTERNAL-CONTRACTS §1)."""
+    """canonical storage.hbas[] entry 생성 (전 채널 통일 shape — EXTERNAL-CONTRACTS §1).
+
+    2026-10-15: wwpn 은 NetworkDeviceFunction.FibreChannel 의 WWPN / PermanentWWPN 에서만 채운다 (_fetch_ndf_index).
+      종전에는 그 값이 없을 때 포트 주소(8옥텟)를 wwpn 으로 올렸다(Round 1 #22). 포트 주소의 뜻은 장비마다 다르다 —
+      실측 Dell R740 의 NetworkPort.AssociatedNetworkAddresses 는 WWNN(20:00:…)이고, Port.FibreChannel.
+      AssociatedWorldWideNames 는 [WWNN, WWPN] 순서일 수 있다(CSUS-R13). 확인하지 못한 WWPN 은 추측하지 않고 null 로 둔다
+      (field_dictionary: 미노출 시 null). 포트 주소는 network.ports[].associated_address 에 그대로 남는다.
+      primary_addr 인자는 호출부 호환을 위해 남겨 두며 wwpn 에 쓰지 않는다.
+    """
     wwpn = ndf.get('wwpn') if isinstance(ndf, dict) else None
     wwnn = ndf.get('wwnn') if isinstance(ndf, dict) else None
-    if not wwpn:
-        # Round 1 #22: primary_addr 가 MAC(6 octet)일 수 있음 — FC WWPN(8 octet/16 hex)으로
-        # 정규화되는 경우에만 fallback. MAC 을 WWPN 으로 오기재하지 않음.
-        cand = _normalize_wwn(primary_addr)
-        if cand and len(cand.replace(':', '')) == 16:
-            wwpn = cand
     return {
         'adapter_id':      adapter_id,
         'adapter_model':   adapter_info.get('model'),
@@ -3727,8 +3744,143 @@ def _make_ib_port(adapter_id, adapter_info, port_id, link_status, speed_gbps, pd
     }
 
 
+def _chassis_linked_by_other_systems(bmc_ip, system_uri, chassis_uris, username, password, timeout,
+                                     verify_ssl, errors):
+    """chassis_uris 중 이 System 말고 다른 ComputerSystem 도 Links.Chassis 로 연결한 섀시 → (shared, complete) (2026-10-15).
+
+    다중 파티션 장비(HPE CSUS 3200 · Superdome Flex — "An nPartition is a set of … chassis", EXTERNAL_CONTRACTS 2026-05-12)는
+    파티션이 섀시 단위로 묶인다. 다른 System 도 연결한 섀시는 카드가 어느 System 것인지 확인할 수 없어 수집하지 않는다.
+    complete=False 는 System 목록이나 다른 System 응답을 끝까지 읽지 못해 공유 여부를 확정하지 못했다는 뜻이다
+    (호출부는 이때도 수집하지 않는다 — 소유를 임의로 판단하지 않는다). 컬렉션 경로는 DMTF 가 정한 /redfish/v1/Systems 다
+    (ComputerSystemCollection URI). System 이 이 System 하나뿐이면 추가 요청이 없다.
+    """
+    st, coll, err = _get(bmc_ip, 'Systems', username, password, timeout, verify_ssl)
+    if err or st != 200 or not isinstance(coll, dict):
+        errors.append(_err('network_adapters', f'Systems 목록 실패: {err or st}', _extended_info(coll),
+                           code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        return set(), False
+    members, state = _collection_walk(bmc_ip, 'Systems', coll, username, password, timeout, verify_ssl)
+    complete = state['cut'] is None
+    if not complete:
+        errors.append(_err('network_adapters', _walk_cut_text('Systems', state['cut']),
+                           code=_CODE_NON_BLOCKING_SUBRESOURCE))
+    me = _p(system_uri) if system_uri else None
+    targets = {_p(u) for u in chassis_uris}
+    shared = set()
+    for m in members:
+        u = _safe(m, '@odata.id')
+        if not isinstance(u, str) or not u or _p(u) == me:
+            continue
+        s2, sd, e2 = _get(bmc_ip, _p(u), username, password, timeout, verify_ssl)
+        if e2 or s2 != 200 or not isinstance(sd, dict):
+            errors.append(_err('network_adapters', f'System {u} 실패: {e2 or s2}',
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            complete = False
+            continue
+        for link in _dicts(_safe(sd, 'Links', 'Chassis')):
+            cu = _safe(link, '@odata.id')
+            if isinstance(cu, str) and _p(cu) in targets:
+                shared.add(_p(cu))
+    return shared, complete
+
+
+def _extra_chassis_adapter_collections(bmc_ip, system_uri, extra_chassis_uris, skip_paths,
+                                       username, password, timeout, verify_ssl, errors):
+    """System 이 연결한 1순위 밖 섀시의 NetworkAdapters 컬렉션 → [(base, collection)] (2026-10-15).
+
+    - 소유를 확인한 섀시만 본다: 그 섀시를 다른 System 이 연결하지 않았다는 것을 끝까지 확인했을 때. 공유 중이거나 확인하지
+      못한 섀시는 수집하지 않고 notice 로 남긴다 (다른 파티션의 HBA 를 이 System 에 섞지 않는다).
+    - 경로를 조립하지 않고 섀시가 가리키는 `NetworkAdapters.@odata.id` 링크를 따라간다. 링크가 없는 섀시(랙 · 인클로저 등)는
+      카드 목록을 두지 않는 것이라 조용히 건너뛴다. System 이 연결한 섀시나 섀시가 링크한 목록을 읽지 못하면 비차단 오류다
+      (나열된 것을 못 읽으면 근거를 남긴다 — Port C4 와 같은 규칙).
+    """
+    uris = _capped([u for u in (extra_chassis_uris or []) if isinstance(u, str) and u], 'network_adapters', errors)
+    if not uris:
+        return []
+    shared, complete = _chassis_linked_by_other_systems(bmc_ip, system_uri, uris, username, password, timeout,
+                                                        verify_ssl, errors)
+    found = []
+    for u in uris:
+        key = _p(u)
+        if not complete:
+            _notice('network_adapters', f'System 목록을 끝까지 읽지 못해 {key} 의 소유를 확인할 수 없음, '
+                                        f'네트워크 카드(FC HBA 포함) 미수집')
+            continue
+        if key in shared:
+            _notice('network_adapters', f'{key} 를 다른 System 도 연결함, 소유를 확인할 수 없어 '
+                                        f'네트워크 카드(FC HBA 포함) 미수집')
+            continue
+        st, cdata, cerr = _get(bmc_ip, key, username, password, timeout, verify_ssl)
+        if cerr or st != 200 or not isinstance(cdata, dict):
+            errors.append(_err('network_adapters', f'Chassis {u} 실패: {cerr or st}', _extended_info(cdata),
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        link = _safe(cdata, 'NetworkAdapters', '@odata.id')
+        if not isinstance(link, str) or not link:
+            continue
+        base = _p(link)
+        if base in skip_paths:
+            continue
+        skip_paths.add(base)
+        st2, coll, err2 = _get(bmc_ip, base, username, password, timeout, verify_ssl)
+        if err2 or st2 != 200:
+            errors.append(_err('network_adapters', f'NetworkAdapters {link} 실패: {err2 or st2}', _extended_info(coll),
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        found.append((base, coll))
+    return found
+
+
+def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris, username, password, timeout,
+                             verify_ssl, errors):
+    """NetworkAdapters 컬렉션 출처 결정 (2026-10-15) → (sources, tried, fails, saw_empty).
+
+    sources   : [(origin, members)] — origin 'primary' | 'extra' | 'system', 멤버가 1개 이상인 목록만
+    tried     : 조회한 컬렉션 경로 (오류 detail 용)
+    fails     : 조립 경로(1순위 섀시 · Systems)의 실패 [(status, signal, extended_info)]
+    saw_empty : 200 이지만 멤버가 0 인 목록을 봤는지
+
+    순서 — (1) 1순위 섀시 `Chassis/{id}/NetworkAdapters` (조립 경로, 종전과 같다)
+           (2) System 이 연결한 나머지 섀시 (소유를 확인한 섀시만 — _extra_chassis_adapter_collections)
+           (3) (1)(2) 에서 카드를 하나도 얻지 못했을 때만 `Systems/{id}/NetworkAdapters` (일부 펌웨어 위치 — iDRAC8).
+               200 빈 목록도 '얻지 못함' 이다 — 빈 목록만으로 HBA 없음을 확정하지 않는다.
+    Systems 목록은 System 전체 목록이라 섀시 목록과 섞지 않는다 (같은 카드가 두 경로로 중복될 수 있다).
+    """
+    sources, tried, fails = [], [], []
+    state = {'empty': False}
+
+    def _accept(base, coll, origin):
+        members = _collection_members(bmc_ip, base, coll, username, password, timeout, verify_ssl,
+                                      'network_adapters', errors)
+        if members:
+            sources.append((origin, members))
+        else:
+            state['empty'] = True
+
+    def _probe(base, origin):
+        tried.append(base)
+        st, data, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
+        if not err and st == 200:
+            _accept(base, data, origin)
+        else:
+            fails.append((st, err or st, _extended_info(data)))
+
+    if chassis_uri:
+        _probe(_p(chassis_uri) + '/NetworkAdapters', 'primary')
+    if extra_chassis_uris:
+        for base, coll in _extra_chassis_adapter_collections(bmc_ip, system_uri, extra_chassis_uris, set(tried),
+                                                             username, password, timeout, verify_ssl, errors):
+            tried.append(base)
+            _accept(base, coll, 'extra')
+    if not sources and system_uri:
+        alt = _p(system_uri) + '/NetworkAdapters'
+        if alt not in tried:
+            _probe(alt, 'system')
+    return sources, tried, fails, state['empty']
+
+
 def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, timeout,
-                                    verify_ssl, system_uri=None):
+                                    verify_ssl, system_uri=None, extra_chassis_uris=None):
     """NetworkAdapters 수집 + FC HBA / InfiniBand 분류.
 
     NetworkAdapters         → adapters[] (NIC 카드 모델/firmware)
@@ -3754,6 +3906,12 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
     Additive (rule 92 R2): 1순위가 200 인 장비는 2순위를 아예 시도하지 않아 동작 100% 불변.
     vendor 분기 없음 — 경로 후보 순회는 vendor-agnostic (rule 12 R1).
 
+    **2026-10-15 (HBA 누락 보완)** — 경로 결정은 _network_adapter_sources 가 한다.
+      - System 이 연결한 다른 섀시(`extra_chassis_uris` = Links.Chassis[1:])도 본다. 소유를 확인한 섀시만, 링크를 따라간다.
+      - 1순위가 200 이어도 **빈 목록**이면 2순위(Systems)를 본다. 카드가 1개 이상인 1순위 200 은 종전처럼 2순위를 시도하지 않는다.
+      - 카드를 하나도 얻지 못하면 diagnosis.details.notices 로 '목록이 비어 있음' / '리소스 404' 를 남긴다 — HBA 없음과 구분.
+      - 추가 섀시에서 온 것은 확인된 중복(같은 카드 · 포트 리소스, null 이 아닌 같은 WWPN)만 그 단위로 뺀다.
+
     분류 정본 (DMTF — cycle 2026-05-29 fix, EXTERNAL-CONTRACTS §1/§2):
       - FC : Port.PortProtocol ∈ {FC,FCP,FCoE} 또는 NDF.NetDevFuncType=FibreChannel(OverEthernet)
       - IB : Port.LinkNetworkTechnology=='InfiniBand' 또는 NDF.NetworkDeviceTechnology=='InfiniBand'
@@ -3762,41 +3920,55 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
 
     WWPN/WWNN/GUID 는 NetworkDeviceFunction 에서 추출 (Port 아님). Port 가 없는 FC/IB NDF 도
     식별만으로 emit. 일부 vendor (Cisco CIMC 등) 미지원 → 빈 결과 graceful degradation.
+    2026-10-15: 연결된 NDF 가 없는 포트는 링크 기술(Port.LinkNetworkTechnology / NetworkPort.ActiveLinkTechnology)이
+    FibreChannel 이면 FC 포트로 본다 (포트 루프의 lt_fc 규칙 — 판정 함수는 바꾸지 않는다).
     """
     out = {'adapters': [], 'ports': [], 'fc_hbas': [], 'infiniband': []}
     errors = []
     if not chassis_uri and not system_uri:
         return out, errors
 
-    candidates = []
-    if chassis_uri:
-        candidates.append(_p(chassis_uri) + '/NetworkAdapters')
-    if system_uri:
-        alt = _p(system_uri) + '/NetworkAdapters'
-        if alt not in candidates:
-            candidates.append(alt)
-
-    coll, first_fail = None, None
-    for base in candidates:
-        st, data, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
-        if not err and st == 200:
-            coll = data
-            break
-        if first_fail is None:
+    sources, tried, fails, saw_empty = _network_adapter_sources(
+        bmc_ip, chassis_uri, system_uri, extra_chassis_uris, username, password, timeout, verify_ssl, errors)
+    if not sources:
+        if saw_empty:
+            # 200 빈 목록 — 오류는 아니지만 HBA 가 없다고 확정할 근거도 아니다 (없음과 미확인을 구분해 남긴다)
+            _notice('network_adapters', 'NetworkAdapters 목록이 비어 있음, 네트워크 카드(FC HBA 포함) 정보 미확인')
+            return out, errors
+        if fails:
             # 표준(1순위) 경로의 실패 시그널을 보고 대상으로 삼는다 — message 문자열이
             # 기존과 동일해야 404-only 미지원 분류(_is_404_only_error)가 불변.
-            first_fail = (err or st, _extended_info(data))
-    if coll is None:
-        sig, ext = first_fail
-        detail = 'tried: ' + ' / '.join(candidates)
-        if ext:
-            detail += ' | ' + ext
-        errors.append(_err('network_adapters',
-                           f'NetworkAdapters 미지원 또는 실패: {sig}', detail))
+            _st, sig, ext = fails[0]
+            detail = 'tried: ' + ' / '.join(tried)
+            if ext:
+                detail += ' | ' + ext
+            errors.append(_err('network_adapters',
+                               f'NetworkAdapters 미지원 또는 실패: {sig}', detail))
+        if _is_404_only_error(errors):
+            # 섹션 runner 가 미지원으로 분류해 errors 를 버리는 경우 — 'HBA 없음' 과 구분되도록 사실을 남긴다
+            _notice('network_adapters', 'NetworkAdapters 리소스 404, 네트워크 카드(FC HBA 포함) 정보 미수집')
         return out, errors
 
-    for member in _collection_members(bmc_ip, base, coll, username, password, timeout, verify_ssl,
-                                      'network_adapters', errors):
+    # 1순위 섀시는 실패했지만 System 이 연결한 다른 섀시에서 카드를 얻었다 — 1순위 섀시의 카드를 잃었을 수 있어 근거를 남긴다.
+    # 404 는 그 섀시에 목록이 없는 것이라 조용히 둔다. Systems 경로가 쓰인 경우는 종전처럼 기록하지 않는다 (iDRAC8 불변).
+    if fails and sources[0][0] == 'extra':
+        _st, sig, ext = fails[0]
+        if _st != 404:
+            errors.append(_err('network_adapters', f'NetworkAdapters {tried[0]} 실패: {sig}', ext,
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+
+    # 추가 섀시 멤버는 이미 본 카드 리소스(@odata.id)면 건너뛴다. 1순위 · Systems 목록의 멤버 순서와 처리는 종전과 같다.
+    items, seen_adapters, seen_ports = [], set(), set()
+    for origin, members in sources:
+        for m in members:
+            raw = _str(_safe(m, '@odata.id'))
+            if origin == 'extra' and (not raw or _p(raw) in seen_adapters):
+                continue
+            if raw:
+                seen_adapters.add(_p(raw))
+            items.append((origin, m))
+
+    for origin, member in _capped(items, 'network_adapters', errors):
         adp_uri = _safe(member, '@odata.id')
         if not adp_uri:
             continue
@@ -3835,13 +4007,22 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         # Controllers[0] 만 읽으면 4포트 카드가 2로 과소 집계됨(실 미러 NetworkPorts 멤버=4 와 불일치).
         # 단일 Controller 카드는 합=그 값 → 결과 불변(Additive). NetworkPortCount=DMTF 컨트롤러별 포트 수.
         port_count = 0
+        ndf_count = 0
+        ctrl_linked = False
         if ctrls and isinstance(ctrls, list):
             for _ctrl in ctrls:
                 _caps = _safe(_ctrl, 'ControllerCapabilities') or {}
                 port_count += _safe_int(_safe(_caps, 'NetworkPortCount'), default=0) or 0
+                ndf_count += _safe_int(_safe(_caps, 'NetworkDeviceFunctionCount'), default=0) or 0
+                _clinks = _safe(_ctrl, 'Links') or {}
+                ctrl_linked = ctrl_linked or any(_dicts(_safe(_clinks, _k))
+                                                 for _k in ('NetworkDeviceFunctions', 'Ports', 'NetworkPorts'))
         mfr = _str(_safe(adata, 'Manufacturer')).strip()
         model = _str(_safe(adata, 'Model')).strip()
-        if port_count == 0 and not mfr and not model:
+        # 2026-10-15: 빈 entry 판정에 표준 근거(ControllerCapabilities.NetworkDeviceFunctionCount · Controllers[].Links 의
+        #   기능/포트 링크)를 더한다 — 제조사 · 모델 문자열이 비어 있어도 기능이나 포트를 밝힌 카드(FC HBA 포함)는 남긴다.
+        #   최상위 Ports 링크는 근거로 쓰지 않는다 (실측 CSUS 'Rmp' 처럼 Controllers 없는 빈 entry 도 링크를 둔다).
+        if port_count == 0 and ndf_count == 0 and not ctrl_linked and not mfr and not model:
             continue
         # 2026-04-29 fix B93: HPE iLO NetworkAdapter는 mac/link/speed 가 NetworkAdapter root에 없고
         # NetworkPorts/Ports collection에만 존재. adapter level에 fold-in (첫 번째 활성 port의 메타).
@@ -3895,6 +4076,9 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     p_uri = _safe(pmember, '@odata.id')
                     if not p_uri:
                         continue
+                    if origin == 'extra' and _p(p_uri) in seen_ports:
+                        continue   # 2026-10-15: 이미 수집한 포트 리소스 — 추가 섀시 중복
+                    seen_ports.add(_p(p_uri))
                     st4, pdata, perr2 = _get(bmc_ip, _p(p_uri), username, password, timeout, verify_ssl)
                     if perr2 or st4 != 200:
                         # 2026-10-10 (C4): 컬렉션이 나열한 Port 를 읽지 못했다(404 포함) — 그 포트의 데이터를 잃었으므로 근거를 남긴다.
@@ -3955,6 +4139,16 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     ndf = fc_ndfs[0] if fc_ndfs else (ndfs[cand[0]] if cand else None)
 
                     cls = _classify_port_protocol(port_protocol, link_tech, ndf, pdata)
+                    # 2026-10-15: 연결된 기능(NDF)이 하나도 없는 포트가 링크 기술로 FibreChannel 을 밝히면 FC 포트다
+                    #   (DMTF Port.LinkNetworkTechnology / NetworkPort.ActiveLinkTechnology). 실측 Dell R740 의 FC NetworkPort 는
+                    #   PortProtocol · FibreChannel 블록 없이 ActiveLinkTechnology 만 준다 — NDF 를 못 받으면 HBA 가 조용히 빠졌다.
+                    #   판정 함수에 넣지 않는다: 그 함수는 포트에 붙은 기능마다 다시 불려(RD-F15) Ethernet · iSCSI · 비활성 기능까지
+                    #   FC 로 바꾸고, 짝 없는 기능(<PortId>-n)이 따로 HBA 를 내는 구조에서는 같은 포트가 두 번 나온다(녹화본 재현 8건).
+                    lt_fc = _str(link_tech).strip().lower() == 'fibrechannel'
+                    if cls is None and not cand and lt_fc:
+                        _pid = _str(port_id)
+                        if not (_pid and any(_str(n.get('id')).startswith(_pid + '-') for n in ndfs)):
+                            cls = 'FibreChannel'
 
                     # CSUS-R13 (2026-06-15 실미러 검수): FC 포트의 associated_address 는 port WWN(WWPN)
                     # 이어야 한다. Port.FibreChannel.AssociatedWorldWideNames 가 [WWNN, WWPN] 다중 entry
@@ -3962,6 +4156,21 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     # (Ethernet/IB 포트는 기존 primary_addr 유지 — ndf.wwpn 없음)
                     if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
                         primary_addr = ndf['wwpn']
+
+                    port_hbas = []
+                    if cls in ('FibreChannel', 'FCoE'):
+                        for fndf in (fc_ndfs or [ndf]):   # RD-F15: FC 기능마다 hba 하나
+                            port_hbas.append(_make_fc_hba(
+                                adapter_id, adapter_info, port_id, cls,
+                                normalized_link, speed_gbps, primary_addr, fndf))
+                    if origin == 'extra' and port_hbas:
+                        # 2026-10-15: 추가 섀시의 FC 항목은 WWPN 이 null 이 아니고 이미 수집한 값일 때만 중복으로 뺀다(같은 FC 포트).
+                        #   포트의 FC 항목이 모두 이렇게 확인된 중복이면 그 포트도 이미 수집한 포트다. null WWPN 은 확인할 수 없어 남긴다.
+                        known = {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}
+                        fresh = [h for h in port_hbas if not (h.get('wwpn') and h['wwpn'] in known)]
+                        if not fresh:
+                            continue
+                        port_hbas = fresh
 
                     port_info = {
                         'adapter_id':              adapter_id,
@@ -3982,19 +4191,17 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                     # 2026-04-29 fix B93: adapter level에 ports의 첫 active 메타 fold-in.
                     # FC/IB 포트의 WWPN/GUID 는 NIC mac 이 아니므로 fold-in 제외.
                     cur = out['adapters'][adapter_idx]
-                    if cur.get('mac') is None and primary_addr and cls not in ('FibreChannel', 'FCoE', 'InfiniBand'):
+                    # 2026-10-15: 링크 기술이 FibreChannel 인 포트의 주소는 WWN 이다(실측 R740: WWNN) — MAC 으로 접지 않는다
+                    if (cur.get('mac') is None and primary_addr and cls not in ('FibreChannel', 'FCoE', 'InfiniBand')
+                            and not lt_fc):
                         cur['mac'] = primary_addr
                     if cur.get('link_status') == 'unknown' or (cur.get('link_status') != 'up' and normalized_link == 'up'):
                         cur['link_status'] = normalized_link
                     if cur.get('speed_mbps') is None and speed_mbps:
                         cur['speed_mbps'] = speed_mbps
 
-                    if cls in ('FibreChannel', 'FCoE'):
-                        for fndf in (fc_ndfs or [ndf]):   # RD-F15: FC 기능마다 hba 하나
-                            out['fc_hbas'].append(_make_fc_hba(
-                                adapter_id, adapter_info, port_id, cls,
-                                normalized_link, speed_gbps,
-                                (fndf.get('wwpn') if isinstance(fndf, dict) and fndf.get('wwpn') else primary_addr), fndf))
+                    if port_hbas:
+                        out['fc_hbas'].extend(port_hbas)
                     elif cls == 'InfiniBand':
                         out['infiniband'].append(_make_ib_port(
                             adapter_id, adapter_info, port_id,
@@ -4023,9 +4230,11 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
             else:
                 cls = _classify_port_protocol(None, None, ndf, None)
             if cls in ('FibreChannel', 'FCoE'):
-                out['fc_hbas'].append(_make_fc_hba(
-                    adapter_id, adapter_info, ndf.get('id'), cls,
-                    'unknown', None, None, ndf))
+                hba = _make_fc_hba(adapter_id, adapter_info, ndf.get('id'), cls, 'unknown', None, None, ndf)
+                if origin == 'extra' and hba.get('wwpn') and hba['wwpn'] in {
+                        h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
+                    continue   # 2026-10-15: 추가 섀시 중복 — 이미 수집한 WWPN
+                out['fc_hbas'].append(hba)
             elif cls == 'InfiniBand':
                 out['infiniband'].append(_make_ib_port(
                     adapter_id, adapter_info, ndf.get('id'),
@@ -5502,8 +5711,11 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     # 잡은 chassis_uri(Chassis 컬렉션 첫 멤버)는 multi-chassis RMC 환경에서 집계용 RackGroup
     # 이라 PowerSubsystem/ThermalSubsystem/NetworkAdapters 가 비어 false-success/소실을 유발.
     # 단일 chassis vendor 는 Links.Chassis[0] == 첫 멤버라 불변 (Additive, 회귀 안전).
-    eff_chassis_uri = _resolve_system_chassis_uri(
-        bmc_ip, system_uri, chassis_uri, username, password, timeout, verify_ssl)
+    # 2026-10-15: Links.Chassis[] 를 한 번만 읽어 [0](없으면 종전 default)과 나머지로 나눈다 — System GET 횟수는 그대로다.
+    #   나머지 섀시는 network_adapters 만 쓰고, 소유를 확인한 뒤에만 수집한다 (_extra_chassis_adapter_collections).
+    sys_chassis = _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl)
+    eff_chassis_uri = sys_chassis[0] if sys_chassis else chassis_uri
+    extra_chassis = [u for u in sys_chassis[1:] if _p(u) != _p(eff_chassis_uri)]
     # system 수집이 ComputerSystem 응답의 Bios 링크를 여기에 기록한다 (재조회 없음).
     bios_link = {}
     sections = {
@@ -5520,9 +5732,10 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         # P4 (cycle 2026-04-28): NIC 카드 + port-level + FC HBA / InfiniBand 분류
         # cycle 2026-08-03: system_uri 전달 — Chassis 경로 실패 시 Systems 경로 fallback
         # (펌웨어 세대별 NetworkAdapters 부모 리소스 차이. 상세는 함수 docstring).
+        # 2026-10-15: System 이 연결한 나머지 섀시 전달 — 소유를 확인한 섀시의 카드만 더한다.
         'network_adapters':  _run('network_adapters',
                                    gather_network_adapters_chassis,
-                                   bmc_ip, eff_chassis_uri, *creds, system_uri),
+                                   bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis),
     }
     # system 수집 뒤에 실행해야 bios_link 가 채워져 있다. _run 을 거치지 않는다.
     bios, bios_errors = gather_bios(bmc_ip, bios_link, *creds)
