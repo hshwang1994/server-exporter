@@ -117,6 +117,12 @@ vendor_notes:
   multi_node_support: true           # cycle 2026-05-12 — _collect_multi_node_topology 활성
   systems_id_pattern: "Partition*"   # /redfish/v1/Systems/Partition0 (실측 확인 2026-06-15 4노드)
   manager_layout: "rmc_primary"      # RMC = primary AccountService host. PDHC = per-chassis 보조 (실측 확인).
+  # hostname 원천 순서 (redfish-gather/tasks/normalize_standard.yml 이 읽는다 — 이 adapter 에만 둔다).
+  #   bmc_first: RMC NetworkProtocol 이름(bmc.network_hostname) → 없을 때만 Partition(System) HostName.
+  #   origin: 사용자 정책 2026-10-15 + 사이트 실측(Systems/Partition0.HostName `svu703327-net7`,
+  #           Managers/RMC/NetworkProtocol.HostName `ycgsfaibap01` → 최종 hostname `ycgsfaibap01`).
+  #   근거: docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md
+  hostname_priority: "bmc_first"
   rmc_firmware_min: "1.0"            # 실측 1.75.108 (2026-06-15) — RMC 1.x 대. 구 추정 3.0 정정 (문서용, 코드 미소비)
   npar_firmware_bundles: true        # complex/nPar firmware bundles (Superdome Flex 상속)
   socket_module: "4-socket"          # 4-socket × 1~4 chassis 모듈식 (최대 16-socket)

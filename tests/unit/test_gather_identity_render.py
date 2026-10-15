@@ -1,4 +1,4 @@
-"""OS(Linux/Windows) / ESXi 식별 필드 — production Jinja2 표현식 렌더 회귀 (2026-09-03).
+"""OS(Linux/Windows) / ESXi / Redfish 식별 필드 — production Jinja2 표현식 렌더 회귀 (2026-09-03, Redfish 2026-10-15).
 
 전수 검수(B-01/B-02/B-03/B-08/B-10/B-32/B-34)에서 확정한 계약을 **실제 task YAML 의 표현식**으로
 고정한다. 합성 fixture 가 아니라 gather 파일에서 템플릿을 추출해 렌더한다.
@@ -7,6 +7,8 @@
 ----
 - system.hostname = 짧은 호스트명(첫 라벨), system.fqdn = hostname + 설정 도메인, 도메인 없으면 null.
   IP / inventory_hostname 대체 금지.
+- Redfish 는 원천 순서를 adapter `vendor_notes.hostname_priority` 로 정한다 — 키 없음: System.HostName,
+  `bmc_first`(HPE CSUS 3200, 사용자 정책 2026-10-15): BMC NetworkProtocol 이름 → 없을 때만 System.HostName.
 - Windows kernel 은 "None" 문자열이 아니라 null, version 은 DisplayVersion → Version 순.
 - hosting_type 은 OEM 제조사 목록 없이 판정 (HypervisorPresent + Hyper-V 역할).
 - ESXi cpu.max_speed_mhz 는 cpuInfo.hz(정격) 우선, uptime 0 은 null, architecture 는 CPU 제조사로 추론.
@@ -403,3 +405,74 @@ def test_esxi_management_vmk_link_status_from_connection_evidence():
     assert out["vmk0"]["addresses"][1]["family"] == "ipv6" and out["vmk0"]["addresses"][1]["scope"] == "link"
     assert out["vmk1"]["link_status"] == "unknown" and out["vmk1"]["is_primary"] is False
     assert out["vmk1"]["addresses"][0]["gateway"] is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Redfish — hostname / fqdn (2026-10-15). 원천 순서는 adapter vendor_notes.hostname_priority
+# ═══════════════════════════════════════════════════════════════════════════
+REDFISH_NORM = REPO / "redfish-gather" / "tasks" / "normalize_standard.yml"
+CSUS_ADAPTER = {"adapter_id": "redfish_hpe_csus_3200", "vendor_notes": {"hostname_priority": "bmc_first"}}
+PLAIN_ADAPTER = {"adapter_id": "redfish_dell_idrac9", "vendor_notes": {}}
+
+
+def _redfish_identity(sys_hostname, bmc, adapter):
+    """normalize_standard.yml 의 두 태스크를 순서대로 렌더 → (system.hostname, system.fqdn)."""
+    ctx = {"_rf_d_system": {"hostname": sys_hostname}, "_rf_d_bmc": bmc, "_selected_adapter": adapter}
+    src = _task(REDFISH_NORM, "system hostname source")["ansible.builtin.set_fact"]
+    ctx["_rf_sys_hostname_raw"] = _render(src["_rf_sys_hostname_raw"], ctx)
+    ident = _task(REDFISH_NORM, "system hostname / fqdn")["ansible.builtin.set_fact"]
+    return _render(ident["_rf_sys_hostname_short"], ctx), _render(ident["_rf_sys_fqdn"], ctx)
+
+
+@pytest.mark.parametrize("sys_h,bmc_h,short,fqdn", [
+    # adapter 키가 없으면 System.HostName 만 본다 — BMC 이름 대체는 종전처럼 build_output 체인 몫
+    (None, "RMC7CA62A413692", None, None),
+    ("DELL01", "iDRAC-J0KV603", "DELL01", None),                          # Dell R740 실측 — 도메인 없음 → fqdn null
+    ("r760-1.gooddi.lab", None, "r760-1", "r760-1.gooddi.lab"),            # Dell R760 실측(tests/reference) — 도메인 포함
+    ("test0004.hynix.com", None, "test0004", "test0004.hynix.com"),        # HPE iLO6 실측(tests/reference)
+    ("", "ILOSGHD3KHHRP", None, None),                                     # HPE DL380 실측 — 빈 문자열
+    ("   ", None, None, None),
+    (" web01 ", None, "web01", None),
+    (123, None, None, None),                                               # 비문자열은 없는 값
+    ({"x": 1}, None, None, None),
+    ("host.", None, "host", None),                                         # 도메인부가 비면 fqdn null
+])
+def test_redfish_hostname_default_order(sys_h, bmc_h, short, fqdn):
+    assert _redfish_identity(sys_h, {"network_hostname": bmc_h}, PLAIN_ADAPTER) == (short, fqdn)
+
+
+@pytest.mark.parametrize("sys_h,bmc_h,short,fqdn", [
+    ("svu703327-net7", "ycgsfaibap01", "ycgsfaibap01", None),             # 사용자 사이트 실측 (2026-10-15)
+    ("svu703327-net7", "ycgsfaibap01.corp.example", "ycgsfaibap01", "ycgsfaibap01.corp.example"),  # RMC FQDN → 짧은 이름 + fqdn
+    ("svu703327-net7", None, "svu703327-net7", None),                      # RMC 이름 없음 → Partition 대체
+    ("svu703327-net7", "  ", "svu703327-net7", None),
+    (None, "RMC7CA62A413692", "RMC7CA62A413692", None),                    # 2026-06 캡처 node01 (Partition null)
+    ("m10mesdb11", "M10MESDB11-RMC", "M10MESDB11-RMC", None),              # 2026-06 캡처 node03 — Partition 값이 있어도 RMC 우선
+    (None, None, None, None),
+])
+def test_redfish_hostname_csus_bmc_first(sys_h, bmc_h, short, fqdn):
+    assert _redfish_identity(sys_h, {"network_hostname": bmc_h}, CSUS_ADAPTER) == (short, fqdn)
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("bmc_first", "ycgsfaibap01"), ("BMC_FIRST", "ycgsfaibap01"),
+    ("system_first", "svu703327-net7"), ("unknown", "svu703327-net7"), (None, "svu703327-net7"), ("", "svu703327-net7"),
+])
+def test_redfish_hostname_priority_values(value, expected):
+    adapter = {"adapter_id": "x", "vendor_notes": {"hostname_priority": value}}
+    assert _redfish_identity("svu703327-net7", {"network_hostname": "ycgsfaibap01"}, adapter)[0] == expected
+
+
+def test_redfish_hostname_bmc_first_without_bmc_section():
+    """bmc 수집 실패(`_rf_d_bmc` = None) · adapter 미선택이어도 깨지지 않고 Partition 이름으로 간다."""
+    assert _redfish_identity("svu703327-net7", None, CSUS_ADAPTER) == ("svu703327-net7", None)
+    assert _redfish_identity("svu703327-net7", {"network_hostname": "ycgsfaibap01"}, {}) == ("svu703327-net7", None)
+
+
+def test_redfish_fragment_wiring():
+    """요구 3 · 4 · 5: system.hostname/fqdn 은 정한 값, bmc 와 multi_node 는 원본 통과."""
+    frag = _task(REDFISH_NORM, "build standard fragment")["ansible.builtin.set_fact"]["_data_fragment"]
+    assert frag["system"]["hostname"] == "{{ _rf_sys_hostname_short | default(none) }}"
+    assert frag["system"]["fqdn"] == "{{ _rf_sys_fqdn | default(none) }}"
+    assert frag["bmc"] == "{{ _rf_d_bmc_clean }}"
+    assert frag["multi_node"] == "{{ _rf_raw_collect.multi_node | default(none) }}"

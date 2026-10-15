@@ -19,6 +19,7 @@ LINUX_SYS = REPO / "os-gather" / "tasks" / "linux" / "gather_system.yml"
 WIN_HW = REPO / "os-gather" / "tasks" / "windows" / "gather_hardware.yml"
 WIN_STOR = REPO / "os-gather" / "tasks" / "windows" / "gather_storage.yml"
 ESXI_SYS = REPO / "esxi-gather" / "tasks" / "normalize_system.yml"
+REDFISH_NORM = REPO / "redfish-gather" / "tasks" / "normalize_standard.yml"
 ESXI_RT = REPO / "esxi-gather" / "tasks" / "collect_runtime.yml"
 
 HW_KEYS = {"vendor", "model", "serial", "uuid", "bios_version", "bios_date"}
@@ -56,6 +57,8 @@ def test_system_hostname_declared_and_emitted_by_every_channel():
     assert {"hostname", "fqdn"} <= set(_fragment_section(LINUX_SYS, "system"))
     assert {"hostname", "fqdn"} <= set(_fragment_section(REPO / "os-gather" / "tasks" / "windows" / "gather_system.yml", "system"))
     assert {"hostname", "fqdn"} <= set(_fragment_section(ESXI_SYS, "system"))
+    # 2026-10-15: Redfish 도 같은 두 키를 낸다 (종전에는 fqdn 에 System.HostName 원본만 — NEXT_ACTIONS GA-6)
+    assert {"hostname", "fqdn"} <= set(_fragment_section(REDFISH_NORM, "system"))
 
 
 def test_hosting_type_enum_covers_esxi_literal():
