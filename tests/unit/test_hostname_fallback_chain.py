@@ -80,24 +80,3 @@ def test_hostname_never_ip():
     # System/BMC 둘 다 없을 때 ip 형태 문자열이 아니라 null 이어야 함
     host, source = _resolve(None, None)
     assert host is None and source == "none"
-
-
-# 2026-10-15: Redfish 도 system.hostname(첫 라벨)을 낸다. CSUS 3200 은 normalize 단계에서 그 값을 RMC 이름으로 정한다
-# (adapter vendor_notes.hostname_priority=bmc_first) — 체인은 그대로 system.hostname 을 먼저 쓴다.
-# (system.hostname, system.fqdn, bmc.network_hostname, expected_hostname, expected_source)
-SHAPE_CASES = [
-    ("ycgsfaibap01", None, "ycgsfaibap01", "ycgsfaibap01", "system"),       # 사용자 CSUS — normalize 가 RMC 이름을 고른 뒤
-    ("r760-1", "r760-1.gooddi.lab", "iDRAC-X", "r760-1", "system"),         # 도메인 포함 HostName → 짧은 이름
-    ("os-a", None, "bmc-b", "os-a", "system"),                              # OS 이름 ≠ BMC 이름 — 체인은 system 우선
-    (None, None, "XCC-7DGD-J902E57T", "XCC-7DGD-J902E57T", "bmc"),          # System 없음 → BMC 대체 (Lenovo SR650 실측)
-]
-
-
-@pytest.mark.parametrize("sys_h,sys_fqdn,bmc_h,exp_host,exp_src", SHAPE_CASES,
-                         ids=[c[3] or "null" for c in SHAPE_CASES])
-def test_hostname_chain_with_system_hostname(sys_h, sys_fqdn, bmc_h, exp_host, exp_src):
-    md = {"system": {"hostname": sys_h, "fqdn": sys_fqdn}, "bmc": {"network_hostname": bmc_h}}
-    host = _T_HOST.render(_merged_data=md).strip()
-    host = None if host == "None" else host
-    assert host == exp_host
-    assert _T_SRC.render(_merged_data=md).strip() == exp_src

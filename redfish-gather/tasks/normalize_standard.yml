@@ -472,43 +472,6 @@
     _rf_aux_sections: ['network_adapters']
   no_log: true
 
-# ── system.hostname / system.fqdn (2026-10-15) ────────────────────────────────
-# 계약은 OS · ESXi 와 같다(2026-09-03): system.hostname = 짧은 이름(첫 라벨), system.fqdn = 도메인이 붙어 있을 때만 전체, 없으면 null.
-# 종전 Redfish 는 system.hostname 을 내지 않고 fqdn 에 System.HostName 원본을 넣었다(NEXT_ACTIONS GA-6).
-# 원천 순서는 adapter `vendor_notes.hostname_priority` 값으로 정한다 — 값만 보고 vendor 이름으로 가르지 않는다(rule 12).
-#   키 없음(기본): System.HostName. BMC 이름 대체는 종전처럼 build_output 체인이 한다.
-#   bmc_first   : BMC NetworkProtocol 이름(bmc.network_hostname) → 없으면 System.HostName.
-#                 사용자 정책 2026-10-15 — HPE CSUS 3200 은 RMC 이름이 서버 이름이다
-#                 (사이트 실측: Partition0.HostName `svu703327-net7`, RMC NetworkProtocol.HostName `ycgsfaibap01` → `ycgsfaibap01`).
-# 문자열이 아니거나 공백뿐이면 없는 값이다. multi_node.partitions[].system.hostname 은 라이브러리 원본 그대로 둔다.
-- name: "redfish | normalize_standard | system hostname source"
-  ansible.builtin.set_fact:
-    _rf_sys_hostname_raw: >-
-      {%- set prio = (((_selected_adapter | default({})).vendor_notes | default({})).hostname_priority | default('', true)) | string | trim | lower -%}
-      {%- set sysh = _rf_d_system.hostname | default(none) -%}
-      {%- set sysh = (sysh | trim) if sysh is string else '' -%}
-      {%- set bmch = (_rf_d_bmc.network_hostname | default(none)) if _rf_d_bmc is mapping else none -%}
-      {%- set bmch = (bmch | trim) if bmch is string else '' -%}
-      {%- set raw = (bmch or sysh) if prio == 'bmc_first' else sysh -%}
-      {{ raw if raw else none }}
-  no_log: true
-
-# 첫 라벨 / `.` 뒤 전체가 도메인 — Linux os-gather/tasks/linux/gather_system.yml 의 _l_hostname_short · _l_fqdn 과 같은 규칙.
-- name: "redfish | normalize_standard | system hostname / fqdn"
-  ansible.builtin.set_fact:
-    _rf_sys_hostname_short: >-
-      {%- set h = _rf_sys_hostname_raw | default(none) -%}
-      {%- set h = (h | trim) if h is string else '' -%}
-      {%- set s = (h.split('.')[0] | trim) if h else '' -%}
-      {{ s if s else none }}
-    _rf_sys_fqdn: >-
-      {%- set h = _rf_sys_hostname_raw | default(none) -%}
-      {%- set h = (h | trim) if h is string else '' -%}
-      {%- set s = (h.split('.')[0] | trim) if h else '' -%}
-      {%- set d = (h.split('.', 1)[1] | trim) if ('.' in h) else '' -%}
-      {{ (s ~ '.' ~ d) if (s and d) else none }}
-  no_log: true
-
 # ── 표준 fragment 생성 ────────────────────────────────────────────────────────
 - name: "redfish | normalize_standard | build standard fragment"
   ansible.builtin.set_fact:
@@ -521,8 +484,7 @@
         architecture:   null
         uptime_seconds: null
         selinux:        null
-        hostname:       "{{ _rf_sys_hostname_short | default(none) }}"
-        fqdn:           "{{ _rf_sys_fqdn | default(none) }}"
+        fqdn:           "{{ _rf_d_system.hostname | default(none) }}"
       # cycle-016 Phase N: hardware 의 raw API 풍부 필드 추가 (asset_tag/system_type/part_number/last_reset/tpm)
       hardware:
         vendor:       "{{ _rf_d_system.manufacturer | default(none) }}"
