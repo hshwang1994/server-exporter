@@ -13,7 +13,8 @@
 - **확인한 것**: HEAD `9f331cc8` 모듈과 같은 프로세스 비교 — 녹화본 9종 차이 0(요청 목록 포함), DMTF mockup notice +1, R740 변형 3종은 의도한 차이만(evidence 4절).
   envelope 13 필드 · data 키 · status/sections 판정 · `link_status` 값 변경 0. vendor 이름 분기 0.
 - **시험**: 신규 4파일 + 기존 2파일 보강 · 의도 변경 2건. 결과는 TEST_HISTORY 2026-10-15.
-- **실장비**: 다중 섀시 · 소유 판정 · NDF 미노출 FC 장비 · FC 링크업은 **미검증**(합성 · 녹화본 변형 시험만). jenkins-prod 매트릭스 · CI · 승격은 evidence 7절에 기록한다.
+- **실장비**: main Job 매트릭스 #606~#616 계약 일치 · Redfish 7대 HBA 관련 필드 #602 대비 차이 0 · CI #57 Evidence Aggregate 까지 SUCCESS. 다중 섀시 · 소유 판정 · NDF 미노출 FC 장비 · FC 링크업은 **미검증**.
+- **승격: 미완료** — 사용자 지시로 세션을 마무리했다. 남은 절차는 `docs/ai/NEXT_ACTIONS.md` 2026-10-15 절 첫 항목(정규 promote 명령).
 
 ## 일자: 2026-10-14 — HOTFIX HPE RMC(CSUS 3200) 표준 계정 생성 거부(`hpe_rmc` · Enabled 미전송) · Lenovo 표준 계정 만료는 결함 아님 · 긴급 승격
 

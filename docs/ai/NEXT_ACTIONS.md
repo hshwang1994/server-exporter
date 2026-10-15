@@ -4,6 +4,7 @@
 
 > 정본: `tests/evidence/2026-10-15-redfish-hba-coverage.md`. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다. 아래는 이 환경에서 확인하지 못한 것이다.
 
+- [ ] **[HIGH] production 승격 — main `9aa2f8b5`** — 매트릭스 #606~#616 · CI #57(Evidence Aggregate 까지 SUCCESS)이 이 SHA 의 증거다. **production 승격: 미완료** — 사용자 지시("5분 안에 마무리")로 이 세션에서 멈췄다. 정규 승격은 둘 중 하나다: (a) 작업 PC `python -m scripts.ai.prodgen promote --sha 9aa2f8b59ca3c4bc0870a78ba73374617f754484 --verify-report <CI #57 prodgen_verify_report.aggregated.json> --e2e-evidence <CI #57 e2e_evidence.json> --ci-stage-results <CI #57 ci_stage_results.json> --netrc <jenkins netrc> --vault-password-file <vault 비밀번호 파일> --push-remote origin,internal` (환경 의존 gate 재실행 — vault 비밀번호 파일 필요), (b) main tip 이 승격할 SHA 와 같을 때 CI 를 PROMOTE_DRY_RUN=false 로 실행(Jenkins 자격 사용). 승격 직후 production Job canary(OS 1~3 + Redfish).
 - [ ] **[HIGH / 사이트 실측] 다중 섀시 응답 캡처** — `Links.Chassis` 가 2개 이상인 System(HPE CSUS 3200 · Superdome Flex 다중 섀시 파티션)의 NetworkAdapters 수집을 실 응답으로 확인한다.
       섀시 간 `adapter_id`(`PCIeCard{slot}`) 가 겹치는지, 다른 파티션이 같은 섀시를 연결하는 일이 있는지(소유 판정 규칙의 전제)를 함께 본다. `capture-site-fixture` 로 녹화본을 남긴다.
 - [ ] **[MED / 실장비] NDF 를 주지 않는 FC 장비 · FC 링크업 장비** — 링크 기술만 FC 인 포트 규칙(wwpn null)과 `link_status: up` 을 실장비로 확인한다(lab 녹화본 FC 는 모두 LinkDown).

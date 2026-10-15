@@ -1,5 +1,23 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-15 — Redfish HBA 누락 보완 (`846516e3` fix · `9aa2f8b5` docs)
+
+| 구분 | 결과 |
+|---|---|
+| 전체 pytest(unit · e2e · regression, Windows Python 3.13) | 5,186 passed · 36 skipped · 7 xfailed · 0 failed (21분 13초). 첫 실행은 WSL 게이트와 동시에 돌려 메모리 부족으로 Claude Code 가 중단(78% · 실패 0) → 단독 재실행 |
+| 통합(`tests/integration -m "not live"`) | Windows 317 passed · 6 skipped / WSL(Linux, 엔진 시험 포함) 351 passed · 4 skipped |
+| 신규 시험 | `test_fc_link_technology_hba` 11 · `test_network_adapters_multi_chassis` 27 · `test_network_adapters_absence_vs_failure` 11 · `test_redfish_hba_coverage_replay` 11 · `test_hba_ib_canonical` +1 · `test_field_dictionary_channel_emit` +1 |
+| 의도 변경 시험 | `test_chassis_success_does_not_try_systems`(카드가 있는 1순위 200) · `test_fc_hba_port_address_is_not_used_as_wwpn`(종전 Round 1 #22) |
+| 전후 비교(HEAD `9f331cc8` 모듈 대 수정 모듈, 같은 프로세스) | 녹화본 9종 차이 0(data 전 필드 · errors · unsupported · 요청 다중집합) · DMTF mockup notice +1 · R740 변형 3종 의도한 차이만 — evidence 4절 |
+| WSL `scripts/ai/ci_gate.sh`(HEAD clone) | 정적 단계 · 통합 · 3채널 syntax-check 통과. unit 76 failed — **수정 전 `9f331cc8` 에서도 같은 76건**(시험 ID 대조, 수정 후에만 실패 0): WSL 에 pwsh 가 없어 Windows PowerShell 시험 72 · prodgen 주석 제거 시험 4 가 실패하는 환경 문제. Linux 판정은 CI GATE(pwsh bootstrap) |
+| 정적 | `py_compile` · vendor boundary · output schema drift(fd_paths 198) · harness consistency · PROJECT_MAP fingerprint(갱신) · docs references · 평문 자격증명 0 · validate_field_dictionary PASS |
+| 3채널 syntax-check | WSL ansible-core 2.20.7 — os · esxi · redfish PASS |
+| jenkins-prod main Job 매트릭스(`9aa2f8b5`) | #606~#616 — S1 · S2 · S3(11) · S4 · T2 · E2E-D · E2E-E(Redfish 7) SUCCESS · T5 ABORTED · T6 · E2E-A UNSTABLE · E2E-A2 FAILURE(fail-closed, tip 관측). checkout 전부 `9aa2f8b5` |
+| Redfish 실장비 대조 | #602(수정 전) ↔ #616(수정 후) 7대 — hbas · adapters · ports · notices · network 오류 · status · sections **차이 0**(Cisco UCS VIC FC 4건 그대로) |
+| CI | CI #57(`9aa2f8b5`, PROMOTE_DRY_RUN=true · E2E 증거 11 · tip 관측): Checkout · Toolchain · Gate · Finalize Corpus · Time Limits · Prodgen Build · Prodgen Drift · Prodgen Verify · Harness Driver · Harness(prodtree) · Evidence Aggregate **SUCCESS** — 기록 시점에 Prodgen Promote(예행) 진행 중. |
+| 승격 | **production 승격: 미완료** — 사용자 지시("5분 안에 마무리")로 이 세션에서 멈췄다. 정규 승격은 둘 중 하나다: (a) 작업 PC `python -m scripts.ai.prodgen promote --sha 9aa2f8b59ca3c4bc0870a78ba73374617f754484 --verify-report <CI #57 prodgen_verify_report.aggregated.json> --e2e-evidence <CI #57 e2e_evidence.json> --ci-stage-results <CI #57 ci_stage_results.json> --netrc <jenkins netrc> --vault-password-file <vault 비밀번호 파일> --push-remote origin,internal` (환경 의존 gate 재실행 — vault 비밀번호 파일 필요), (b) main tip 이 승격할 SHA 와 같을 때 CI 를 PROMOTE_DRY_RUN=false 로 실행(Jenkins 자격 사용). 승격 직후 production Job canary(OS 1~3 + Redfish). |
+| 실장비 미검증 | 다중 섀시 · 소유 판정 · NDF 미노출 FC 장비 · FC 링크업(새 경로는 lab 7대에서 실행되지 않았다) |
+
 ## 2026-10-14 — HOTFIX HPE RMC(CSUS 3200) 표준 계정 생성 거부 (`5eec01d8` hpe_rmc · Enabled 미전송)
 
 | 구분 | 결과 |

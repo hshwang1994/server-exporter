@@ -469,6 +469,39 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
+## 2026-10-15 Redfish HBA 누락 보완 — main `9aa2f8b5` 매트릭스 (실장비)
+
+수집 코드 변경(링크 기술 FC 규칙 · wwpn 추측 금지 · System 연결 섀시와 소유 확인 · 빈 목록 경로 · notices). 증거 `../../tests/evidence/2026-10-15-redfish-hba-coverage.md`.
+
+### main `9aa2f8b5` 매트릭스 (main Job #606~#616, checkout 전부 == `9aa2f8b5`)
+
+| 시나리오 | 빌드 | 결과 | 확인 |
+|---|---|---|---|
+| S1 Linux 3 | #609 | SUCCESS | 74 s |
+| S2 혼합 (실호스트 3 + TEST-NET 2) | #606 | SUCCESS | 112 s |
+| S3 Linux 11 | #608 | SUCCESS | 139 s |
+| S4 Windows 1 | #607 | SUCCESS | 167 s |
+| T2 TEST-NET 2 | #610 | SUCCESS | 86 s |
+| T5 사용자 중단 (6대) | #611 | ABORTED | 수집 단계 시작 15초 뒤 API stop · 53 s |
+| T6 Callback 거부 주소 | #612 | UNSTABLE | `http://127.0.0.1:9` · 114 s |
+| E2E-A loc=cj | #613 | UNSTABLE | cj Runner · TEST-NET 2 · 105 s |
+| E2E-A2 loc=chj | #614 | FAILURE | fail-closed · 21 s · tip 관측 `9aa2f8b5` 전후 동일(직접 바인딩) |
+| E2E-D ESXi 6 | #615 | SUCCESS | 80 s |
+| **E2E-E Redfish 7 BMC** (Dell 5 · Cisco 1 · Lenovo 1) | #616 | SUCCESS | 388 s · 표준 계정 |
+
+Redfish 7대 HBA 관련 필드 대조 — main Job **#602**(수정 전 코드, `fed0b9f1`) ↔ **#616**(수정 후, `9aa2f8b5`), 같은 대상 · 같은 입력.
+대조 필드: `storage.hbas[]`(adapter_id · port_id · wwpn · wwnn · link_status · link_speed_gbps · port_type) · `network.adapters[]`(id · model · manufacturer · mac · link_status · port_count · firmware_version) ·
+`network.ports[]`(adapter_id · port_id · port_type · link_status · associated_address) · `diagnosis.details.notices`(section network_adapters) · `errors[]`(section network) · `status` · `sections`.
+
+| 대상 | 장비 | hbas | adapters | ports | 차이 |
+|---|---|---|---|---|---|
+| 10.100.15.2 | Cisco TA-UNODE-G1 | 4 → 4 (UCSC-PCIE-CSC-02 FC 기능 4 · link up 3 / down 1 · WWPN 있음) | 2 → 2 | 4 → 4 | **0** |
+| 10.100.15.27 · .28 · .31 · .33 | Dell PowerEdge R760 | 0 → 0 | 2 → 2 | 4 → 4 | **0** |
+| 10.100.15.34 | Dell PowerEdge R760 | 0 → 0 | 3 → 3 | 6 → 6 | **0** |
+| 10.50.11.232 | Lenovo ThinkSystem SR650 V2 | 0 → 0 | 1 → 1 | 4 → 4 | **0** |
+
+→ 실장비 7대 모두 기존에 잡히던 HBA · 카드 · 포트 정보가 그대로다. 이 7대는 모두 섀시 1개 · NDF 정상 노출이라 새 경로(다중 섀시 · NDF 미노출 · 빈 목록)는 실장비에서 실행되지 않았다.
+
 ## 2026-10-14 HPE RMC(CSUS 3200) 표준 계정 생성 hotfix — main `fed0b9f1` 매트릭스 · production 긴급 `36745453` → 정규 `338ed8d3` (실장비)
 
 hotfix `5eec01d8`(HPE RMC 전용 Family `hpe_rmc` — 생성 POST 에 `Enabled` 미전송, 계정 레코드 `enabled` 3-상태). 사용자 사이트 CSUS 3200 에서 복구 계정으로 표준 계정이 만들어지지 않던 사고의 수정.

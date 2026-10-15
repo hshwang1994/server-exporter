@@ -84,4 +84,43 @@ NDF 404 에서는 wwpn 에 WWNN 이 들어갔고(4건), iDRAC8 형 짝 없는 ND
 
 ## 7. 검증 결과
 
-(작성 중)
+### 7.1 로컬
+
+- 전체 pytest(unit · e2e · regression, Windows): 5,186 passed · 36 skipped · 7 xfailed · 0 failed (21분 13초).
+- 통합(`-m "not live"`): Windows 317 passed · 6 skipped / WSL 351 passed · 4 skipped.
+- WSL `scripts/ai/ci_gate.sh`(커밋 clone): 정적 · 통합 · 3채널 syntax-check 통과. unit 76 failed 는 수정 전 `9f331cc8` 에서도 시험 ID 가 같은 76건 — WSL 에 pwsh 가 없는 환경 문제(Windows PowerShell 시험 72 · prodgen 주석 제거 4). 수정 후에만 실패 0.
+- 정적: vendor boundary · output schema drift · harness consistency · PROJECT_MAP · docs references · 평문 자격증명 · validate_field_dictionary 통과.
+
+### 7.2 jenkins-prod main Job 매트릭스 (main `9aa2f8b5`, checkout 전부 == `9aa2f8b5` · E2E-A2 는 tip 관측)
+
+| 시나리오 | 빌드 | 결과 | 확인 |
+|---|---|---|---|
+| S1 Linux 3 | #609 | SUCCESS | 74 s |
+| S2 혼합 (실호스트 3 + TEST-NET 2) | #606 | SUCCESS | 112 s |
+| S3 Linux 11 | #608 | SUCCESS | 139 s |
+| S4 Windows 1 | #607 | SUCCESS | 167 s |
+| T2 TEST-NET 2 | #610 | SUCCESS | 86 s |
+| T5 사용자 중단 (6대) | #611 | ABORTED | 수집 단계 시작 15초 뒤 API stop · 53 s |
+| T6 Callback 거부 주소 | #612 | UNSTABLE | `http://127.0.0.1:9` · 114 s |
+| E2E-A loc=cj | #613 | UNSTABLE | cj Runner · TEST-NET 2 · 105 s |
+| E2E-A2 loc=chj | #614 | FAILURE | fail-closed · 21 s · tip 관측 `9aa2f8b5` 전후 동일(직접 바인딩) |
+| E2E-D ESXi 6 | #615 | SUCCESS | 80 s |
+| **E2E-E Redfish 7 BMC** (Dell 5 · Cisco 1 · Lenovo 1) | #616 | SUCCESS | 388 s · 표준 계정 |
+
+Redfish 7대 HBA 관련 필드 대조 — main Job **#602**(수정 전 코드, `fed0b9f1`) ↔ **#616**(수정 후, `9aa2f8b5`), 같은 대상 · 같은 입력.
+대조 필드: `storage.hbas[]`(adapter_id · port_id · wwpn · wwnn · link_status · link_speed_gbps · port_type) · `network.adapters[]`(id · model · manufacturer · mac · link_status · port_count · firmware_version) ·
+`network.ports[]`(adapter_id · port_id · port_type · link_status · associated_address) · `diagnosis.details.notices`(section network_adapters) · `errors[]`(section network) · `status` · `sections`.
+
+| 대상 | 장비 | hbas | adapters | ports | 차이 |
+|---|---|---|---|---|---|
+| 10.100.15.2 | Cisco TA-UNODE-G1 | 4 → 4 (UCSC-PCIE-CSC-02 FC 기능 4 · link up 3 / down 1 · WWPN 있음) | 2 → 2 | 4 → 4 | **0** |
+| 10.100.15.27 · .28 · .31 · .33 | Dell PowerEdge R760 | 0 → 0 | 2 → 2 | 4 → 4 | **0** |
+| 10.100.15.34 | Dell PowerEdge R760 | 0 → 0 | 3 → 3 | 6 → 6 | **0** |
+| 10.50.11.232 | Lenovo ThinkSystem SR650 V2 | 0 → 0 | 1 → 1 | 4 → 4 | **0** |
+
+→ 실장비 7대 모두 기존에 잡히던 HBA · 카드 · 포트 정보가 그대로다. 이 7대는 모두 섀시 1개 · NDF 정상 노출이라 새 경로(다중 섀시 · NDF 미노출 · 빈 목록)는 실장비에서 실행되지 않았다.
+
+### 7.3 CI · 승격
+
+- CI #57(`9aa2f8b5`, PROMOTE_DRY_RUN=true · E2E 증거 11 · tip 관측): Checkout · Toolchain · Gate · Finalize Corpus · Time Limits · Prodgen Build · Prodgen Drift · Prodgen Verify · Harness Driver · Harness(prodtree) · Evidence Aggregate **SUCCESS** — 기록 시점에 Prodgen Promote(예행) 진행 중.
+- **production 승격: 미완료** — 사용자 지시("5분 안에 마무리")로 이 세션에서 멈췄다. 정규 승격은 둘 중 하나다: (a) 작업 PC `python -m scripts.ai.prodgen promote --sha 9aa2f8b59ca3c4bc0870a78ba73374617f754484 --verify-report <CI #57 prodgen_verify_report.aggregated.json> --e2e-evidence <CI #57 e2e_evidence.json> --ci-stage-results <CI #57 ci_stage_results.json> --netrc <jenkins netrc> --vault-password-file <vault 비밀번호 파일> --push-remote origin,internal` (환경 의존 gate 재실행 — vault 비밀번호 파일 필요), (b) main tip 이 승격할 SHA 와 같을 때 CI 를 PROMOTE_DRY_RUN=false 로 실행(Jenkins 자격 사용). 승격 직후 production Job canary(OS 1~3 + Redfish).
