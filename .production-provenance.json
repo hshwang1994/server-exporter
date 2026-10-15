@@ -326,11 +326,11 @@
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 95,
+   "removed_lines": 96,
    "removed_trailing": 25,
    "sha256": "d941456d9261891758efd268415fbd4d54185b750a028e84c7b9e9478ffd3c11",
-   "source_blob": "d3749c378fc83429143e68004e09cb2ffc85feb5",
-   "source_sha256": "e64ecbcd3a6ddcaee86398e3705e84f60cad1d07c5e44aa2c22daa6b4cef9776"
+   "source_blob": "c9a9895a4194437ae33c03a0f0387dd66ba96b4b",
+   "source_sha256": "f94d5c5ca27dd681216bb46d8ba19f5151741d872a29bbc12643090097676244"
   },
   "adapters/redfish/hpe_ilo.yml": {
    "bytes": 786,
@@ -2610,8 +2610,8 @@
   "tests/reference/os/README.md",
   "tests/reference/redfish/README.md"
  ],
- "main_sha": "fd7dfd6a344d05129a6d346edc209d644252717f",
- "main_tree": "a090592afc4f287377ef97aa45129b4c8c9f7b86",
+ "main_sha": "2c709fe84d6dec860233c97ae57a0e80257652d4",
+ "main_tree": "9553f47ab009de8a6177bca74154415e22f53b00",
  "manifest_sha256": "f62078a590e77b867713ba03c0990984d1b2a48e8f792b88563e6c7cfc553ed2",
  "policy": {
   "eol": "lf",
