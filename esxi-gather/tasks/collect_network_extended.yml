@@ -12,7 +12,19 @@
 #   data.network.virtual_switches[] — vSwitch + portgroup
 #   data.network.vmkernels[]        — vmkernel adapter
 #   data.storage.hbas[]             — vmhba FC / iSCSI 만 (SAS/RAID 제외 — 2-signal type+driver)
-#   data.storage.infiniband[]       — nmlx NIC best-effort 추론 (ESXi native IB 미노출, D1=API-only)
+#   data.storage.infiniband[]       — 항상 [] (2026-10-17 — 아래 참조. 종전 nmlx NIC 드라이버명 추정은 제거)
+#
+# 2026-10-17 (InfiniBand 전면 검증 — docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md):
+#   ESXi 에는 실제 IB 포트를 확인할 원천이 없다. 네이티브 nmlx5 드라이버는 Ethernet 전용이고(NVIDIA ESXi 인박스 드라이버 RN —
+#   전 행 GbE), IB 는 SR-IOV/passthrough 로 VM 에만 간다(NVIDIA OFED for ESXi). IB 모드로 설정된 ConnectX 는 vmnic 없이 PCI
+#   "Infiniband controller"(class 0x0207) 로만 보인다(Broadcom KB 381748 — uplink 가 안 보이면 Ethernet 으로 바꾸라는 안내).
+#   vSphere API 의 HostRdmaDeviceCapability 도 roceV1/roceV2/iWarp 만 있고 IB 플래그가 없다. 그래서 종전 "vmnic 드라이버가
+#   nmlx/mlx 면 IB/RoCE-capable" 추정 항목(_e_ext_ib)은 **Mellanox 이더넷 NIC 를 IB 로 보고하는 오탐**이라 제거했고, 이 채널의
+#   storage.infiniband 는 항상 빈 목록이다 — "IB 없음" 의 확정 증거가 아니라 "이 채널은 수집하지 않는다" 는 뜻이다
+#   (docs/contract/03-fields.md 6.3.1). PCI 클래스로 컨트롤러 존재만 적는 안은 모듈 변경 + 새 필드가 필요해 보류(NEXT_ACTIONS).
+#   source: https://knowledge.broadcom.com/external/article/381748 (IB 모드 ConnectX 는 vmnic 미노출)
+#   source: https://networking-docs.nvidia.com/vmwareesxiinboxdriversrn (nmlx5 인박스 드라이버 — Ethernet 속도만)
+#   source: http://network.nvidia.com/products/adapter-software/vmware/exsi-server/ (ESXi 7.0+ IB = SR-IOV 모드)
 
 - block:
     - name: "esxi | extended | vmnic info"
@@ -114,7 +126,7 @@
         #   - 분류 2-signal: type + driver (lpfc/qlnativefc=FC, iscsi_vmk=iSCSI).
         #     SAS/RAID 컨트롤러 (nhpsa/lsi_mr3/smartpqi/vmw_ahci/nvme...) 는 hbas 제외 (storage controller 영역).
         #   - 구 'infiniband' in type 분기는 dead-code (vmhba type 에 InfiniBand 없음) → 제거.
-        #     IB 는 _e_ext_ib (nmlx NIC best-effort 추론) 로 별도 — 아래 build vswitch task.
+        #     IB 는 이 채널에서 수집하지 않는다 (2026-10-17 — 파일 헤더 참조. 종전 nmlx NIC 추론 _e_ext_ib 삭제).
         #   - 누락 필드 보강: port_type / link_speed_gbps (FC speed) / source. 빈 placeholder vmhba (device 없음) skip.
         #   source: community.vmware vmware_host_vmhba_info + Broadcom esxcli ref (EXTERNAL-CONTRACTS §3).
         _e_ext_hbas: >-
@@ -195,34 +207,6 @@
             {%- endfor -%}
           {%- endif -%}
           {{ out }}
-        # cycle 2026-05-29 (D1=API-only): InfiniBand best-effort 추론.
-        # ESXi 는 native IB 를 host adapter 로 노출하지 않음 (NVIDIA/VMware: SR-IOV/passthrough-to-VM 만).
-        # Mellanox nmlx/mlx 드라이버 NIC 존재 시 IB/RoCE-capable 로 informational 표기 (node_guid=null,
-        # note 명시 — false-positive 가능). 실 IB 포트 인벤토리는 OS 채널 (Linux ibstat/sysfs) 이 정본.
-        # source: NVIDIA ConnectX VPI on ESXi + VMware IB whitepaper (EXTERNAL-CONTRACTS §3).
-        _e_ext_ib: >-
-          {%- set ib = [] -%}
-          {%- for a in (_e_ext_adapters | default([])) -%}
-            {%- set adrv = (a.driver | default('')) | lower -%}
-            {%- if adrv.startswith('nmlx') or adrv.startswith('mlx') -%}
-              {%- set sp = a.speed_mbps | default(none) -%}
-              {%- set _ = ib.append({
-                'adapter':     a.name | default(none),
-                'port':        none,
-                'node_guid':   none,
-                'port_guid':   none,
-                'link_status': a.link_status | default(none),
-                'rate':        none,
-                'rate_gbps':   ((sp | int) / 1000) if (sp is number) else none,
-                'model':       a.model | default(none),
-                'vendor':      (a.manufacturer | default(none)) or 'Mellanox',
-                'firmware':    none,
-                'source':      'esxi',
-                'note':        'RoCE/IB-capable Mellanox NIC; ESXi exposes IB only via SR-IOV/passthrough (no native host IB port). OS channel (ibstat) is authoritative.',
-              }) -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ ib }}
       no_log: true
 
     # 2026-06-30: network.summary 를 pnic(_e_ext_adapters, 실 speed 보유) 기준으로 산출.
@@ -259,11 +243,12 @@
             summary:          "{{ _e_ext_summary | default({'groups': []}) }}"
           storage:
             hbas:             "{{ _e_ext_hbas | default([]) }}"
-            infiniband:       "{{ _e_ext_ib | default([]) }}"
+            # 2026-10-17: ESXi 는 IB 를 수집하지 않는다 (파일 헤더) — 자리만 둔다 (전 채널 공통 shape)
+            infiniband:       []
         _sections_supported_fragment: ['network', 'storage']
         _sections_collected_fragment: >-
           {{ (['network'] if (_e_ext_adapters | length > 0 or _e_ext_vswitches | length > 0) else [])
-             + (['storage'] if ((_e_ext_hbas | default([])) | length > 0 or (_e_ext_ib | default([])) | length > 0) else []) }}
+             + (['storage'] if ((_e_ext_hbas | default([])) | length > 0) else []) }}
         _sections_failed_fragment:    []
         # 2026-10-10 (C9): 모듈 조회 실패의 근거. failed_when: false 라 실패해도 `is failed` 는 거짓이다 — 실패는 **예상 결과 키가 없는 것**으로
         #   판정한다(msg 가 비어 있어도 실패, msg 는 원인 설명). 결과 키가 있고 비어 있으면(HBA 미설치 등) 정상이다. 섹션 상태 · 이미 확보한
