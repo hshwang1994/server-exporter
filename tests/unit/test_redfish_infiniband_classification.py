@@ -40,6 +40,10 @@ sys.modules.setdefault("ansible.module_utils.basic", _stub_basic)
 import redfish_gather as rg  # noqa: E402
 from identity_normalizer import normalize_ib_guid  # noqa: E402
 
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+from tests.regression.test_hba_ib_canonical import assert_ib_entry_canonical  # noqa: E402  — 시나리오 28 공통 계약
+
 CHASSIS = "/redfish/v1/Chassis/1"
 ADP = CHASSIS + "/NetworkAdapters/HCA0"
 MODEL = "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter"
@@ -184,6 +188,7 @@ def test_ib_port_with_ib_function_yields_one_entry_with_guids(monkeypatch):
     assert e == {"adapter": "HCA0", "adapter_model": MODEL, "model": MODEL, "port": "0", "node_guid": NODE, "port_guid": PORT0,
                  "link_status": "up", "rate": None, "rate_gbps": 200, "vendor": "MLNX", "firmware": "28.43.1014", "source": "redfish"}
     assert isinstance(e["rate_gbps"], int)
+    assert_ib_entry_canonical(e, "redfish ib")
     assert out["ports"][0]["port_type"] == "InfiniBand" and out["ports"][0]["port_id"] == "0"
     assert out["adapters"][0]["mac"] is None, "IB 포트의 주소는 MAC 이 아니다 — adapter.mac 으로 접지 않는다"
     assert out["adapters"][0]["speed_mbps"] == 200000 and out["adapters"][0]["port_count"] == 1
@@ -356,6 +361,8 @@ def test_ib_output_is_stable_across_runs_and_member_order(monkeypatch):
     reversed_members, n3, _, _ = _gather(monkeypatch, _routes(ports, list(reversed(ndfs))))
     assert first == second == reversed_members and n1 == n2 == n3 == []
     assert [e["link_status"] for e in first["infiniband"]] == ["up", "unknown"]
+    for i, e in enumerate(first["infiniband"]):
+        assert_ib_entry_canonical(e, f"redfish stable[{i}]")
 
 
 def test_ib_path_adds_no_http_requests(monkeypatch):

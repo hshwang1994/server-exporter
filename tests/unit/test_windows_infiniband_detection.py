@@ -30,7 +30,10 @@ STOR_YML = REPO / "os-gather" / "tasks" / "windows" / "gather_storage.yml"
 IB_TASK = "windows | storage | infiniband adapters (best-effort)"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 from test_windows_storage_enum_render import disk, run_storage  # noqa: E402
+from tests.regression.test_hba_ib_canonical import assert_ib_entry_canonical  # noqa: E402  — 시나리오 28 공통 계약
 
 IB_KEYS = {"adapter", "port", "node_guid", "port_guid", "link_status", "rate", "rate_gbps", "model", "vendor", "firmware",
            "source", "note"}
@@ -109,12 +112,14 @@ def test_ib_up_adapter_maps_all_fields():
     assert e["rate_gbps"] == 100 and isinstance(e["rate_gbps"], int)
     assert e["vendor"] == "Mellanox Technologies Ltd." and e["source"] == "os"
     assert "rule" not in e["note"]
+    assert_ib_entry_canonical(e, "windows up")
     assert out["collected"] == ["storage"] and out["errors"] == []
 
 
 def test_ib_disconnected_is_down_with_null_rate():
     e = _render({"ib": [_row(link_status="Disconnected", rate="0 bps", rx_bps=0)]})["storage"]["infiniband"][0]
     assert e["link_status"] == "down" and e["rate"] is None and e["rate_gbps"] is None
+    assert_ib_entry_canonical(e, "windows down")
 
 
 def test_ib_decimal_link_speed_is_2_5():

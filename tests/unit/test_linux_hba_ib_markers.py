@@ -196,6 +196,8 @@ def test_clean_sysfs_has_no_err_markers_and_no_errors(sbx):
     assert ib["firmware"] == "20.31.1014" and ib["source"] == "os"
     assert set(ib) == {"adapter", "port", "node_guid", "port_guid", "link_status", "rate", "rate_gbps",
                        "model", "vendor", "firmware", "source"}
+    from tests.regression.test_hba_ib_canonical import assert_ib_entry_canonical   # 시나리오 28 — 4채널 공통 계약
+    assert_ib_entry_canonical(ib, "linux clean")
     assert lspci_calls(calls) == [f"-mm -s {IB_PCI}"], "lspci 는 장치당 1회"
     assert run.ctx["_sections_collected_fragment"] == ["storage", "network"]
 
@@ -501,6 +503,9 @@ def test_same_input_twice_is_identical(sbx):
     first, _, _ = _ib_entries(sbx, root)
     second, _, _ = _ib_entries(sbx, root)
     assert first == second and len(first) == 2
+    from tests.regression.test_hba_ib_canonical import assert_ib_entry_canonical
+    for i, e in enumerate(first):
+        assert_ib_entry_canonical(e, f"linux stable[{i}]")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

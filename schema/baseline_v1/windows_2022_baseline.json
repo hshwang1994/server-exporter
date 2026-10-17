@@ -145,47 +145,7 @@
         ],
         "grand_total_gb": 198
       },
-      "infiniband": [
-        {
-          "adapter": "Microsoft Network Adapter Multiplexor Driver",
-          "port": "COMPOSITEBUS\\MS_IMPLAT_MP\\{929400CA-D444-44D5-9D5C-9EB4867D1CF1}",
-          "node_guid": null,
-          "port_guid": null,
-          "link_status": "up",
-          "rate": null,
-          "rate_gbps": null,
-          "vendor": "Mellanox",
-          "firmware": null,
-          "source": "os",
-          "note": "Windows: node_guid 표준 API 부재 → null (best-effort, rule 96 R1-A)."
-        },
-        {
-          "adapter": "Microsoft Network Adapter Multiplexor Driver #2",
-          "port": "COMPOSITEBUS\\MS_IMPLAT_MP\\{BFBFDE87-4CDD-46B2-BC45-E3C5A6971252}",
-          "node_guid": null,
-          "port_guid": null,
-          "link_status": "up",
-          "rate": null,
-          "rate_gbps": null,
-          "vendor": "Mellanox",
-          "firmware": null,
-          "source": "os",
-          "note": "Windows: node_guid 표준 API 부재 → null (best-effort, rule 96 R1-A)."
-        },
-        {
-          "adapter": "Microsoft Network Adapter Multiplexor Driver #3",
-          "port": "COMPOSITEBUS\\MS_IMPLAT_MP\\{CAFED635-7A35-4993-9DD4-27679F79DF6D}",
-          "node_guid": null,
-          "port_guid": null,
-          "link_status": "up",
-          "rate": null,
-          "rate_gbps": null,
-          "vendor": "Mellanox",
-          "firmware": null,
-          "source": "os",
-          "note": "Windows: node_guid 표준 API 부재 → null (best-effort, rule 96 R1-A)."
-        }
-      ]
+      "infiniband": []
     },
     "firmware": [],
     "users": [
