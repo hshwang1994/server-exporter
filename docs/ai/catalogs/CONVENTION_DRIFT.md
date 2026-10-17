@@ -19,6 +19,21 @@
 
 ---
 
+## DRIFT-028 (2026-10-17, resolved — InfiniBand 판정이 "현재 모드" 가 아닌 신호를 썼다 · 존재하지 않는 Redfish 속성 참조)
+
+- **발견 위치**: `redfish-gather/library/redfish_gather.py` `_fetch_ndf_index`(`NetworkDeviceTechnology` 읽기) · `_classify_port_protocol`(`Port.InfiniBand` 블록 존재 → IB, 충돌 시 IB 우선) ·
+  고아 NDF 루프(`port=<NDF Id>` 항목 생성) · `_make_ib_port`(`AssociatedNodeGUIDs[0]`) / `os-gather/tasks/linux/gather_hba_ib.yml`(`link_layer` 미확인 · `[^0-9]` 속도 파싱 ·
+  `'active' in state` · `MT`→Mellanox) / `os-gather/tasks/windows/gather_storage.yml`(PnP 서비스명 폴백 · note 규칙 번호) / `esxi-gather/tasks/collect_network_extended.yml`(`nmlx` 드라이버 → IB) ·
+  `schema/field_dictionary.yml`(IB 하위 키 4개만 정의) · `docs/contract/03-fields.md` 6.3.1 예시(`vendor: MT4125`) · `schema/baseline_v1/windows_2022_baseline.json`(오탐 3건)
+- **분류**: external-contract-drift (DMTF `NetworkDeviceTechnology` 는 속성이 아니라 열거형 이름 — 2026-06-08 DSP8010 대조 #3 이 놓침; Linux `/sys/class/infiniband` 에 RoCE/iWARP 도 등록됨;
+  ESXi 네이티브 드라이버는 Ethernet 전용) + catalog-stale (사전 · 예시 · baseline)
+- **설명**: 네 경로 모두 "IB 지원 가능" 과 "현재 IB 모드" 를 구분하지 않았다. Linux 는 RDMA 이더넷 포트가, ESXi 는 Mellanox 이더넷 NIC 가, Windows 는 팀 멀티플렉서(2026-06-22 사이트 캡처)가
+  IB 로 들어갔고, Redfish 는 효과 없는 속성과 블록 존재를 근거로 썼다. 속도 `2.5` 가 `25` 로, `ACTIVE_DEFER` 가 `up` 으로 읽혔다.
+- **영향**: 실장비 결과는 전부 `[]` 라 운영 영향 0(사이트 Windows 캡처 1건만 오탐). 호출자가 받는 IB 항목의 의미(포트 단위 · 현재 모드) 가 문서와 달랐다.
+- **resolved (2026-10-17)**: Linux `link_layer` 게이트 · 소수 속도 · 상태 완전일치 · lspci 이름 · `normalize_ib_guid`; Windows 매체/RdmaTechnology 만 · PnP 폴백 제거; Redfish `_ib_decision`(현재 모드 충돌은 notice) ·
+  `_select_ib_guids` · 고아 기능 항목 제거; ESXi 추정 제거(항상 `[]`); 사전 +7 · 계약 문서 6.3.1 · 6.3.3 · baseline IB 정정. 근거 ADR-2026-10-17-infiniband-port-decision. 실장비 미검증(lab 부재).
+- **관련**: rule 96 R1 · R1-A · R4 · rule 13 R7 · rule 21 R1 · `tests/evidence/2026-10-17-infiniband-synthetic-verification.md` · `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-17
+
 ## DRIFT-027 (2026-10-15, resolved — Redfish hostname 계약 · 사전 · 예시)
 
 - **발견 위치**: `redfish-gather/tasks/normalize_standard.yml` `_data_fragment.system` · `schema/field_dictionary.yml` `system.hostname`/`system.fqdn`/(없던) `bmc.network_hostname` ·

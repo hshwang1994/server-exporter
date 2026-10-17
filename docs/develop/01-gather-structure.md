@@ -79,7 +79,7 @@ server-exporter는 한 서버를 세 시점에서 봅니다.
     tasks/linux/gather_storage.yml           storage (lsblk, df, multipath)
     tasks/linux/gather_network.yml           network (ip, /sys/class/net, resolv.conf)
     tasks/linux/gather_users.yml             users (getent, lastlog)
-    tasks/linux/gather_hba_ib.yml            FC HBA, InfiniBand (storage 섹션 안)
+    tasks/linux/gather_hba_ib.yml            FC HBA, InfiniBand 포트 — link_layer 가 InfiniBand 인 포트만 (storage 섹션 안)
     build_* → CHECKPOINT → OUTPUT
 플레이 4  os-gather | windows       (hosts: _os_windows)
     tasks/windows/gather_system, gather_hardware, gather_cpu, gather_memory, gather_storage,

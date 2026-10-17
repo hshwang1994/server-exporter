@@ -1,5 +1,23 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기 확인
+
+> 정본: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md` · `docs/contract/03-fields.md` 6.3.1 · 6.3.3 · `docs/reference/decision-log.md` 2026-10-17 · `tests/evidence/2026-10-17-infiniband-synthetic-verification.md` · `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-17.
+
+- **계기**: 사용자 질문(OS 결과의 `storage.infiniband` 가 무엇인가) → 4경로 대조 → 지시서. lab 에 IB 장비 · IB 모드 BMC · IB OS/ESXi 없음 — 공식 자료 + 합성 데이터로 검증, **실장비 미검증**.
+- **고친 것(제품)**:
+  - Linux `os-gather/tasks/linux/gather_hba_ib.yml` — `ports/<n>/link_layer == InfiniBand` 포트만(RoCE/iWARP 제외), `state` 완전일치(ACTIVE/DOWN/그 외 unknown), 속도 소수 보존 + up 일 때만 `rate_gbps`, `device/uevent` → `lspci -mm -s`(pci.ids) 이름(없으면 vendor null · model `hca_type`), GUID `normalize_ib_guid`. raw task 1개 그대로. 13 필드 줄(앞 9 불변).
+  - Windows `os-gather/tasks/windows/gather_storage.yml` — `Get-NetAdapter -IncludeHidden` 1회에서 `NdisPhysicalMedium 11`/`Infiniband` + 2차 `Get-NetAdapterRdma` `RdmaTechnology == InfiniBand`, 팀 멀티플렉서 제외, PnP 서비스명 폴백 삭제, `ReceiveLinkSpeed`(bps) → `rate_gbps`, `port`=null, `note` 규칙 번호 제거. win_shell 11개 그대로.
+  - Redfish `redfish-gather/library/redfish_gather.py` — `_ib_decision`(포트 링크 기술 · PortProtocol + 연결 기능 NetDevFuncType, 충돌은 notice) 이 유일한 IB 판정, `_classify_port_protocol` 은 IB 를 판정하지 않음(None), `NetworkDeviceTechnology`(DMTF 에 없는 속성) 삭제, `_select_ib_guids`(기능 합의 → 배열 distinct 1개), `_normalize_ib_link_status`(Starting/Training → unknown, IB 항목만), 고아 IB 기능은 항목 없음(부모 IB 포트의 빈 GUID 만), `model` 키 추가(`adapter_model` 유지). 새 HTTP 요청 없음.
+  - ESXi `esxi-gather/tasks/collect_network_extended.yml` — `nmlx`/`mlx` 드라이버명 IB 추정(`_e_ext_ib`) 삭제 → 항상 `[]`, storage collected 는 HBA 만.
+  - 공통 `filter_plugins/identity_normalizer.py` `normalize_ib_guid` + Redfish stdlib 쌍둥이(drift guard).
+- **계약 · 문서**: `schema/field_dictionary.yml` +7(`storage.infiniband[].adapter/port/port_guid/link_status/model/vendor/firmware`, additive) + 기존 문구 정정, `03-fields.md` 6.3.1 정비 · 6.3.3 신설 · FAQ(Windows `version`), `05-field-mapping.md`, `01-gather-structure.md`, ticket `EXTERNAL-CONTRACTS.md` §2-4 추기, `EXTERNAL_CONTRACTS.md` 2026-10-17, DRIFT-028, FIELD_USAGE_MATRIX 재생성, PROJECT_MAP fingerprint.
+- **baseline**: `schema/baseline_v1/windows_2022_baseline.json` `data.storage.infiniband` 3건(2026-06-22 팀 멀티플렉서 오탐) → `[]` — 사용자 결정, 같은 호스트 2026-09-03 실측(build192) 근거, 원본 캡처 `tests/evidence/2026-06-22-windows-120-envelope.json` 보존.
+- **시험(실장비 아님)**: Linux 합성 sysfs + 실제 `sh`(`test_linux_hba_ib_markers` 54), Windows 가짜 cmdlet + 실제 powershell.exe(`test_windows_infiniband_detection` 28), Redfish route-dict(`test_redfish_infiniband_classification` 65) + 합성 recording `tests/fixtures/redfish/synthetic_ib_mode`(손 작성 기대값, `test_synthetic_ib_replay` 6), ESXi(`test_esxi_infiniband_not_inferred` 6), 4채널 공통 계약 `assert_ib_entry_canonical`. 실측 녹화본 10종 golden · 요청 예산 · HBA coverage notice 0 불변. 결과는 TEST_HISTORY 2026-10-17.
+- **CSUS 3200 시리얼(별도 commit)**: Redfish `hardware.serial` 에 OS 와 같은 `normalize_os_serial`(HPE alias + CSUS 3200 모델 + `-[0-9]{3}$` 세 조건) → `SGHD3TLNDD-000` → `SGHD3TLNDD`, `correlation.serial_number` 자동. `multi_node.partitions[].system.serial` 원문 유지. mock baseline/예시 2값 갱신. NEXT_ACTIONS CSUS-OS-3 종결.
+- **Windows `system.version`**: 변경 없음(사용자 결정) — 레지스트리 `DisplayVersion` 원문(`24H2`), `2025` 는 `distribution`. FAQ 에 기록.
+- **실장비에서만 확인 가능(미검증)**: Linux IB 포트 실값(DOWN rate · hca_type · lspci 이름), WinOF-2 IPoIB 의 매체/RdmaTechnology/설명 문자열, 실 BMC IB 모드 Port·NDF 페이로드, CSUS OS 측 DMI 시리얼 — NEXT_ACTIONS §2.4.
+
 ## 일자: 2026-10-15 (2) — HPE CSUS 3200 hostname = RMC 이름 우선 · Redfish `system.hostname/fqdn` 계약 정렬 · 긴급 `31f9b804` → 정규 재승격 production `28c38c17`
 
 > 정본: `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md` · `docs/contract/03-fields.md` 8절 · `docs/reference/decision-log.md` 2026-10-15 · `docs/ai/NEXT_ACTIONS.md` 2026-10-15 CSUS 절.

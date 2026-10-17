@@ -2,6 +2,34 @@
 
 > 외부 시스템 (Redfish / IPMI / SSH / WinRM / vSphere) 계약 카탈로그. rule 28 #11 측정 대상 (TTL 90일). rule 96 origin 주석 정본.
 
+## 일자: 2026-10-17 — InfiniBand "현재 모드" 판정 계약 (4채널 — `storage.infiniband[]` 전면 검증)
+
+> 정본: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md` · `docs/contract/03-fields.md` 6.3.1 · 6.3.3 · `tests/evidence/2026-10-17-infiniband-synthetic-verification.md`.
+> lab 에 IB 장비 · IB 모드 BMC · IB OS/ESXi 가 없다 — 아래는 공식 문서 대조 + 합성 데이터 모의 실행으로 확정한 것이고 **실장비 미검증**이다.
+
+| 계약 | 정본 | server-exporter 적용 |
+|---|---|---|
+| Linux `ports/<n>/link_layer` | kernel `Documentation/ABI/stable/sysfs-class-infiniband` ("Link layer type information (Infiniband or Ethernet type)"), `drivers/infiniband/core/sysfs.c link_layer_show` → `"InfiniBand"`/`"Ethernet"`/`"Unknown"` | IB 포트의 유일한 판정 근거. `/sys/class/infiniband` 에는 RoCE(mlx5 이더넷 모드) · iWARP 도 등록되고 `node_type` 은 mlx5 가 RoCE 도 `CA` 라 못 쓴다 |
+| Linux `state` / `rate` | `sysfs.c state_show "%d: %s"`(NOP 0 · DOWN 1 · INIT 2 · ARMED 3 · ACTIVE 4 · ACTIVE_DEFER 5, `include/rdma/ib_verbs.h`) / `rate_show "%d[.5] Gb/sec (%dX %s)"` — DOWN 특수처리 없음, 알 수 없는 속도는 SDR | `ACTIVE`→up · `DOWN`→down · 그 외 unknown(완전일치). `rate_gbps` 는 ACTIVE 일 때만(소수 보존), `rate` 는 원문 |
+| Linux Port GUID | RFC 4392 §1.2 (GID = 64-bit subnet prefix + 64-bit port GUID), rdma-core `libibumad/umad.c get_port()` 가 `gids/0` 의 `interface_id` 를 port_guid 로 씀. 별도 `port_guid` sysfs 파일 없음 | `port_guid` = `gids/0` 하위 4묶음(8묶음 4-hex 일 때만), all-zero → null |
+| Linux 제조사/모델 | `lspci -mm -s <addr>`(pci.ids), `device/uevent` 의 `PCI_SLOT_NAME`; mlx5 `hca_type "MT%d"`(PCI device id) | vendor/model = lspci 이름, 없으면 vendor null · model `hca_type`/`board_id`. 접두 `MT`→Mellanox 추정 제거 |
+| Windows `NdisPhysicalMedium` | MSFT_NetAdapter ValueMap `Infiniband (11)` · `802.3 (14)`; `NetAdapter.Types.ps1xml` 표시값 `11 {"Infiniband"}`; OID_GEN_PHYSICAL_MEDIUM `NdisPhysicalMediumInfiniband` | 1차 신호. 팀 멀티플렉서 INF(`ndisimplatformmp.inf`) 는 `*PhysicalMediaType=14` |
+| Windows `RdmaTechnology` | NDK `*NetworkDirectTechnology` iWARP=1 · InfiniBand=2 · RoCE=3 · RoCEv2=4 (`Get-NetAdapterRdma` `RdmaAdapterInfo.RdmaTechnology`) | 2차 신호(InfiniBand 만). RDMA Enabled 는 근거 아님. WinOF-2 가 이 값을 주는지 미확인 |
+| Windows 속도/상태 | MSFT_NetAdapter `ReceiveLinkSpeed`/`TransmitLinkSpeed` = bits per second; `LinkSpeed` 표시 문자열은 `Format-LinkSpeed`(`100 Gbps` · `0 bps`); `Status` 표시값 Up · Disconnected · Disabled · Not Present · … | `rate_gbps` = ReceiveLinkSpeed/1e9 (up 일 때만), `rate` = LinkSpeed(0 bps 면 null), Up→up · Disconnected→down · 그 외 unknown |
+| Windows 한계 | NVIDIA WinOF-2 Release Notes known issue 1702662 — WS2019 IPoIB NIC 물리 매체 802.3(권장 확인 `mlx5cmd -stat`) | 2차 신호 없으면 놓칠 수 있음 — 문서화, 벤더 도구 미사용 |
+| Redfish 포트 현재 모드 | `Port.v1_19_0` `LinkNetworkTechnology`("current link network technology for this port"; `LinkConfiguration[]` 의 것은 capability) · `PortProtocol`(Protocol enum: InfiniBand · Ethernet · RoCE · RoCEv2 · iWARP · FC …) · `NetworkPort.v1_4_3` `ActiveLinkTechnology`("configured link technology") | `_ib_port_mode` — 둘이 다르면 충돌 |
+| Redfish 기능 현재 모드 | `NetworkDeviceFunction.v1_11_1` `NetDevFuncType`("configured capability") vs `NetDevFuncCapabilities`("array of capabilities"). `NetworkDeviceTechnology` 는 **속성이 아니라 열거형 이름** | `NetDevFuncType == InfiniBand` 만 근거(Disabled 제외). 종전 코드의 `NetworkDeviceTechnology` 읽기 삭제(DRIFT-028) |
+| Redfish GUID | NDF `InfiniBand.NodeGUID/PortGUID`(할당 불가면 `Permanent*` 의 읽기 전용 별칭) · `Port.InfiniBand.AssociatedNodeGUIDs/AssociatedPortGUIDs`("lowest-numbered function 의 주소, configured but not active 주소, teaming 주소 … 포함") · 패턴 `^([0-9A-Fa-f]{4}[:-]){3}[0-9A-Fa-f]{4}$` | 기능 값 합의 → 배열은 distinct 1개일 때만. 소문자 4×4 정규화 |
+| Redfish 링크 상태 | `Port.LinkStatus` LinkUp · Starting("physical link established, not able to transfer data") · Training · LinkDown · NoLink; `NetworkPort.LinkStatus` Up · Down · Starting · Training; `LinkState` 는 희망 상태 | IB 항목 전용 `_normalize_ib_link_status`(Starting/Training → unknown). `network.ports[]` 는 종전 매핑 |
+| Redfish 속도 | `Port.CurrentSpeedGbps`("currently negotiated and running") vs `MaxSpeedGbps`; `NetworkPort.CurrentLinkSpeedMbps` | `rate_gbps` 는 up 일 때만 CurrentSpeedGbps(없으면 Mbps/1000) |
+| ESXi | NVIDIA ESXi 인박스 nmlx5 드라이버 RN(전 행 GbE — Ethernet 전용) · NVIDIA OFED for ESXi(IB = SR-IOV 모드로 VM 에) · Broadcom KB 381748(IB 모드 ConnectX = `Infiniband controller` PCI, vmnic 미노출) · pyVmomi `HostRdmaDeviceCapability`(roceV1/roceV2/iWarp 만) · `HostPciDevice.classId`(short, 0x0207 = 519) | `storage.infiniband[]` 항상 `[]`. vmnic 드라이버명 추정 제거 |
+| PCI 클래스 | pci.ids `C 02 07 Infiniband controller`(0x0207) · `C 0c 06 InfiniBand`(0x0C06) | 참고용 — 판정에 쓰지 않는다 |
+
+실측/합성 자료:
+- 실 Redfish 녹화본 10종(`real_*` 4 · `hpe_emulator_*` 5 · `dmtf_*` 1) 에는 `InfiniBand` 가 `NetDevFuncType`/`LinkNetworkTechnology`/`ActiveLinkTechnology`/`PortProtocol` 값으로 0건 — HPE 에뮬레이터 VPI 카드(MCX755106)는 Ethernet 모드(IB GUID · 지원 목록은 있음). 공개 IB 모드 mockup 0건.
+- 합성: `tests/fixtures/redfish/synthetic_ib_mode`(에뮬레이터 recording 4개 리소스 편집), Linux 합성 sysfs, Windows 가짜 cmdlet — 전부 실장비 아님.
+- 2026-06-22 사이트 Windows 캡처의 IB 오탐 3건(팀 멀티플렉서)은 PnP 폴백 경로였다 — 2026-10-17 폴백 제거 · baseline 정정.
+
 ## 일자: 2026-10-15 — Redfish NetworkAdapters 의 FC 신호 · 섀시 범위 · 포트 주소의 뜻 (HBA 누락 보완)
 
 | 계약 | 정본 | server-exporter 적용 |
@@ -229,6 +257,9 @@ HPE CSUS 3200 / Lenovo XCC3 / DMTF 표준 mockup)에서 **부모가 노출한 �
 | 10 | Power/PowerSubsystem (:2557) | `Power.json`/`PowerSubsystem.json`/`EnvironmentMetrics.json` props | MATCH — PowerControl/PowerSupplies/Voltages/PowerWatts 필드명 정확 |
 
 > 범위 외: `_normalize_jedec`(:303)는 JEDEC JEP106 출처(DMTF 아님) — 대조 대상 아님.
+> 2026-10-17 추기: #3 의 IB 분류는 `_classify_port_protocol` 에서 분리됐다(`_ib_decision` — 포트 현재 모드 + `NetDevFuncType`). 종전 코드가 함께 읽던
+> `NetworkDeviceTechnology` 는 DMTF 에 없는 속성(열거형 이름)이었다 — 2026-06-08 대조가 놓친 항목(DRIFT-028). #2 의 Starting/Training → down 매핑은
+> `network.ports[]` 에 그대로이고, IB 항목만 unknown 으로 본다(`_normalize_ib_link_status`). 위 2026-10-17 절 참조.
 
 ### 보정 (Additive only — rule 96 R1-B / rule 92 R2)
 

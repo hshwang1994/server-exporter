@@ -1023,7 +1023,7 @@
   - **C13**: per-partition `Boot.BootOrder` 실 표현
   - **C14**: (최적화) `gather_boot` / `gather_manager_logs` 재-GET 제거 — `gather_system`/`gather_bmc` raw 재사용 (현재 partition/manager 당 1회 추가 round-trip)
 
-### 2.4 HBA / InfiniBand 사이트 fixture (lab 부재 — cycle 2026-05-29)
+### 2.4 HBA / InfiniBand 사이트 fixture (lab 부재 — cycle 2026-05-29 · 2026-10-17 갱신)
 
 - **trigger**: FC HBA / IB HCA 보유 사이트 BMC/OS/ESXi 접근
 - **항목**:
@@ -1033,6 +1033,12 @@
   - ESXi FC SAN 호스트 → vmhba FC speed/wwnn 실측 (현 esxi_baseline 은 offline FC 2)
 - **ESXi esxcli-over-SSH fallback (D1-B 재평가)**: SSH 활성 운영·보안 결정 시 `esxcli storage san fc list` / `rdma device list` 보강
 - **절차**: `capture-site-fixture` skill + rule 13 R4 (실측 baseline) + EXTERNAL-CONTRACTS 갱신
+- **2026-10-17 InfiniBand 전면 검증 후속 (ADR-2026-10-17-infiniband-port-decision — 전부 실장비가 있어야 확인 가능)**:
+  - **IB-1 Linux 실측**: IB 모드 HCA 호스트에서 `/sys/class/infiniband/*/ports/*/{link_layer,state,rate,gids/0}` · `hca_type`/`board_id` · `lspci -mm -s` 원문 캡처 — DOWN 포트의 `rate` 문자열(코드 추론 `10 Gb/sec (4X SDR)`) · 실제 lspci 장치명 확인 → `test_linux_hba_ib_markers` 의 합성 입력을 실측값으로 보강. RoCE 모드 ConnectX 1대로 제외 경로도 실측
+  - **IB-2 Windows WinOF-2 실측**: IPoIB 어댑터의 `Get-NetAdapter` `NdisMedium`/`NdisPhysicalMedium`/`PhysicalMediaType`(WS2022/2025) · `Get-NetAdapterRdma` `RdmaTechnology` · `InterfaceDescription`(`(IPoIB)` 접미 여부) · MacAddress 길이(20바이트 IPoIB 주소면 port_guid 도출 가능성 — 지금은 null) · WS2019 의 known issue 1702662 재현 여부
+  - **IB-3 Redfish IB 모드 BMC 캡처**: 실 BMC 의 Port(`LinkNetworkTechnology`/`PortProtocol`/`InfiniBand` 배열) · NDF(`NetDevFuncType`/`InfiniBand` GUID) 페이로드 → `real_*` 캡처(`capture_mirror_fixture.py`)로 `synthetic_ib_mode` 와 대조. 공개 mockup 0건(2026-10-17 조사)
+  - **IB-4 ESXi PCI 컨트롤러 존재 표시(설계 보류)**: `esxi-gather/library/esxi_disks.py _build_host_info` 가 `HostPciDevice.classId`(0x0207=519 · 0x0C06=3078)를 내보내고 OS/ESXi 에 notices 경로를 두는 안 — 모듈 변경 + 새 필드(rule 96 R1-B)라 사용자 승인 필요. IB 모드 카드는 vmnic 없이 PCI 로만 보인다(Broadcom KB 381748)
+  - **IB-5 baseline**: 위 실측 뒤 `storage.infiniband` 가 채워진 실측 baseline 1개 이상(현재 전부 `[]`; `synthetic_ib_mode` 는 승격 금지)
 
 ### 2.5 에뮬레이터 하네스 CI 편입 [DONE 2026-06-08 — agent 검증만 대기]
 

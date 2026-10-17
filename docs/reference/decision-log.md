@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-15
+> 최종 갱신: 2026-10-17
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -32,6 +32,7 @@
 | adapter | 코드가 읽는 절만(`match` · `capabilities.sections_supported` · `vendor_notes` …), 점수 `priority×1000 + specificity×10 + match`. 세대 토큰은 단어 경계, 버전 숫자 패턴은 보조. `capabilities.sections_supported` 는 채널 섹션과 일치 | 2026-05-11 · 2026-10-10 D-14 · 2026-10-11 D-17 · 2026-10-12 |
 | 멀티-노드(RMC) | `data.multi_node` 컨테이너로 CSUS 3200 / Superdome Flex 전 Partition · Manager · Chassis 수집 | 2026-05-12 · 2026-06-09 |
 | Redfish HBA | `storage.hbas[]` = FC 포트(기능)당 1건. System 이 연결한 섀시만 본다 — 추가 섀시는 다른 System 이 연결하지 않았을 때만, 링크를 따라간다. 카드를 하나도 못 얻으면(빈 목록 포함) Systems 경로. wwpn 은 NDF 의 WWPN 만(포트 주소 추측 금지), 링크 기술만 FC 인 포트도 HBA. 빈 목록 · 미제공은 notices, 실패는 errors[] — status 불변 | 2026-10-15 |
+| InfiniBand | `storage.infiniband[]` 항목 1개 = **현재 IB 모드로 확인된 포트** 1개. 근거는 현재 모드 속성뿐(Linux `link_layer` · Windows NdisPhysicalMedium 11/RdmaTechnology · Redfish 링크 기술·PortProtocol + NetDevFuncType), 충돌은 미확정 + notice. ESXi 는 수집하지 않음(항상 `[]`). `rate_gbps` 는 up 일 때만, GUID 는 소문자 4×4, 추정값 금지 | 2026-10-17 |
 | 실패 문장 | `failure_code` + 대상 종류 + 세부 사유로 고르는 중앙 카탈로그, 사용자 문장에 기술값 금지 | 2026-08-12 · 2026-09-21 |
 | 식별자 · 단위 | DMI 자리표시자 집합 한 곳(`identity_normalizer`), JEDEC (bank, id) 표, firewall_state = 유효 정책 | 2026-10-10 D-03 · D-10 · LX-F12 |
 | ESXi | `vmware_host_config_info` 는 `esxi_hostname` 필수, vCenter 대상은 protocol 단계 거부 | 2026-10-10 D-01 · ESXI-03 |
@@ -41,6 +42,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행 · ESXi 추정 제거) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기 |
 | 2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬 · 긴급 승격 → 정규 재승격 |
 | 2026-10-15 — Redfish HBA 누락 보완 (링크 기술 FC · wwpn 추측 금지 · System 연결 섀시와 소유 확인 · 빈 목록과 미제공 구분) |
 | 2026-10-14 — HPE RMC(CSUS 3200) 표준 계정 생성 거부 hotfix(`hpe_rmc` · Enabled 미전송) · Lenovo 표준 계정 만료는 결함 아님 · 긴급 승격 |
@@ -95,6 +97,25 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행 · ESXi 추정 제거) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기
+
+> 정본: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md` · `docs/contract/03-fields.md` 6.3.1 · 6.3.3 · `tests/evidence/2026-10-17-infiniband-synthetic-verification.md`
+
+**계기** — 사용자 질문 "OS 수집 결과의 storage 아래 infiniband 는 무슨 값인가" → 4경로 대조 → 지시서(InfiniBand 전면 검증). lab 에는 IB 장비 · IB 모드 BMC · IB OS/ESXi 가 없다.
+
+**발견** — 어느 경로도 "IB 지원 가능" 과 "현재 IB 모드" 를 구분하지 않았다: Linux 는 RoCE/iWARP(이더넷 RDMA) 포트가, ESXi 는 Mellanox 이더넷 NIC 가, Windows 는 팀 멀티플렉서(2026-06-22 사이트 캡처 3건)가 IB 로
+들어갔고, Redfish 는 DMTF 에 없는 속성(`NetworkDeviceTechnology`)과 `Port.InfiniBand` 블록 존재를 근거로 썼다. `"2.5 Gb/sec"` 가 25, `ACTIVE_DEFER` 가 up.
+
+**결정** (사용자: 지시서 · Windows `system.version` 현행 유지 · baseline IB 만 정정 · CSUS 시리얼은 `hardware.serial`+`correlation` 만 / AI: 설계 — ADR 2절)
+1. 항목 1개 = 현재 IB 모드 포트 1개. 근거는 현재 모드 속성뿐 — Linux `ports/<n>/link_layer`, Windows `NdisPhysicalMedium 11` + 2차 `RdmaTechnology == InfiniBand`, Redfish `_ib_decision`(링크 기술 · PortProtocol + 연결 기능 `NetDevFuncType`, 충돌은 미확정 + notice), ESXi 는 수집하지 않음(항상 `[]`).
+2. `rate_gbps` 는 up 일 때만(소수 보존), `rate` 는 원문(Redfish null), `link_status` 중간 상태는 unknown, GUID 소문자 4×4(형식 오류 null), vendor/model 은 실제 속성(lspci · DriverProvider · Manufacturer)만.
+3. 공통 키 11 + Redfish `adapter_model`(호환) + Windows `note`(규칙 번호 없음). 사전 +7(additive). 기존 키 삭제 0.
+4. 검증은 정적 + 합성 데이터 모의 실행(Linux 실제 sh · Windows 실제 PowerShell · Redfish 합성 recording · ESXi 렌더) — 실장비 미검증을 그대로 보고.
+5. CSUS 3200 Redfish `hardware.serial` 에 OS 와 같은 `normalize_os_serial` 필터(세 조건) 적용 → `correlation.serial_number` 도 접미사 없이. `multi_node.partitions[].system.serial` 은 원문. (별도 절 — 아래)
+6. Windows `system.version` 은 레지스트리 `DisplayVersion` 원문(`24H2`) 그대로 — 사용자 결정으로 변경 없음, Portal 이 `distribution` 연도와 합성 표시(03-fields FAQ).
+
+**영향** — 봉투 · 섹션 · status 변경 0, 실장비 결과값 변화 0(전부 `[]`). Redfish 녹화본 10종 golden · 요청 집합 불변. 실장비에서만 확인 가능한 항목은 evidence §1 · NEXT_ACTIONS §2.4.
 
 ## 2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬 · 긴급 승격 → 정규 재승격
 

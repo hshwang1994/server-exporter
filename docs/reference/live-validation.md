@@ -404,7 +404,7 @@ ServiceRoot를 조회했으므로 chassis_uri를 함께 반환하면 HTTP 호출
 |---|---|---|
 | HPE CSUS 3200 | **mock baseline (미검증)** | 2026-05-29 에 전 공통 섹션 realistic mock 작성 (FC HBA + RAID1 SATA + DDR5 + 3 partition). web evidence (HPE Superdome Flex Admin Guide P/N 10-192008-Q123 등). 사이트 RMC 실측 시 정정한다 |
 | FC HBA (전 vendor) | **미검증** | redfish/os/windows baseline 은 lab FC 부재로 빈. esxi_baseline 은 offline FC 2 (Cisco UCS VIC) |
-| InfiniBand | **미검증** | Linux sysfs 가 정본 채널. lab IB HCA 부재 |
+| InfiniBand | **미검증** (2026-10-17: 판별 로직 정비 — 공식 자료 + 합성 데이터 모의 실행만) | Linux sysfs `link_layer` 가 정본 채널. lab IB HCA 부재. 실장비 결과는 전 채널 `[]`. 합성 fixture `tests/fixtures/redfish/synthetic_ib_mode` 는 승격 금지 |
 
 > mock/미검증 = pytest 통과 ≠ 사이트 실측 통과. 실장비 확보 시 원본 응답을 캡처해 실 baseline 으로 교체한다 ([../develop/08-onsite-capture.md](../develop/08-onsite-capture.md)).
 

@@ -570,7 +570,7 @@ for e in response["errors"]:
 | `filesystems[]` | OS 파일시스템 마운트 | OS-gather |
 | `datastores[]` | ESXi 데이터스토어 | ESXi-gather |
 | `hbas[]` | FC HBA (+ iSCSI) | 모든 채널 |
-| `infiniband[]` | InfiniBand 어댑터 | 모든 채널 (best-effort) |
+| `infiniband[]` | InfiniBand **포트** (현재 IB 모드로 확인된 포트만) | OS Linux · OS Windows · Redfish (ESXi 는 항상 빈 목록 — 6.3.1) |
 
 물리 디스크와 논리 볼륨 사이는 ID 로 묶인다.
 
@@ -610,7 +610,7 @@ controllers[*].id  ────┤
 - OS Windows: `%SystemDrive%` → `Get-Partition.DiskNumber` (부재 시 WMI `Win32_DiskPartition.DiskIndex` fallback). `Win32_DiskDrive.Index` 와 매칭. hardware-RAID/단일디스크는 정확하나, **software-RAID/Storage Spaces/동적미러 OS 는 가상 DiskNumber 라 물리 Index 매칭이 0 → 전 디스크 `null`** (Linux 의 멤버 all-true 와 비대칭 — 거짓 false 대신 null).
 - **주의**: 기준은 **OS 루트**(`/`)이며 `/boot`·EFI 파티션이 다른 디스크에 있어도 그 디스크는 `false`. Dell BOSS-N1 같은 부팅 전용 NVMe 에 OS 가 있으면 대용량 데이터 디스크가 아니라 그 NVMe 가 `true` (예: `os_linux_baremetal_dell.jsonc`).
 
-#### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand (2026-05-29)
+#### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand (2026-05-29, IB 는 2026-10-17 정비)
 
 전 채널 (Redfish / OS Linux·Windows / ESXi) 이 **동일 canonical 키** 로 emit 한다.
 호출자는 채널 무관하게 같은 키로 파싱하고, `wwpn` / `node_guid` 로 동일 물리 장치를
@@ -625,26 +625,43 @@ controllers[*].id  ────┤
       "source": "redfish" }
   ],
   "infiniband": [
-    { "adapter": "mlx5_0", "port": "1", "node_guid": "0011:...:6677", "port_guid": "...",
+    { "adapter": "mlx5_0", "port": "1", "node_guid": "0c42:a103:0012:3456", "port_guid": "0c42:a103:0012:3456",
       "link_status": "up", "rate": "200 Gb/sec (4X HDR)", "rate_gbps": 200,
-      "vendor": "MT4125", "firmware": "20.35.1012", "source": "os" }
+      "model": "MT28908 Family [ConnectX-6]", "vendor": "Mellanox Technologies", "firmware": "20.35.1012",
+      "source": "os" }
   ]
 }
 ```
 
+(위 값은 형식 설명용 합성 예시다 — 실장비 IB 수집 결과는 아직 없다. 2026-10-17 기준 실장비 결과는 모두 `"infiniband": []` 이다.)
+
+**`infiniband[]` 항목 1개 = 현재 InfiniBand 모드로 확인된 포트 1개** (2026-10-17). 2포트 카드는 IB 모드인 포트 수만큼이고,
+VPI 카드의 Ethernet 모드 포트는 들어가지 않는다. 판정 근거는 채널이 주는 "현재 모드" 속성뿐이다 — 제조사명(Mellanox) ·
+드라이버명(`mlx*`/`nmlx*`) · RDMA 지원 여부 · IB 지원 가능 목록 · GUID 존재 · 카드 이름으로 추정하지 않는다.
+공통 키 11개(`adapter` `port` `node_guid` `port_guid` `link_status` `rate` `rate_gbps` `model` `vendor` `firmware` `source`)에
+Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가진다. 값의 뜻은 `schema/field_dictionary.yml` `storage.infiniband[].*`.
+
 채널별 수집원 + 한계:
 
-| 채널 | FC HBA 수집원 | InfiniBand 수집원 / 한계 |
+| 채널 | FC HBA 수집원 | InfiniBand 수집원 / 판정 / 한계 |
 |---|---|---|
-| Redfish | System 에 연결된 섀시의 `NetworkAdapters` → `Ports`/`NetworkPorts` + `NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`/`Port.FibreChannel` 블록, 기능이 연결되지 않은 포트는 링크 기술 `FibreChannel`. **PortType enum 아님**). 범위와 빈 목록의 뜻은 6.3.2 | `Port.LinkNetworkTechnology`/`NetworkDeviceTechnology`. 주류 BMC(iDRAC/iLO/XCC) 는 add-in IB HCA 거의 미노출 → OS 채널 정본 |
-| OS Linux | `/sys/class/fc_host/*` (wwpn/wwnn/driver/firmware) | `/sys/class/infiniband/*` (node_guid/port_guid/rate/fw) — **정본** |
-| OS Windows | `Get-InitiatorPort` + `MSFC_*` WMI (FC 만 필터) | `Get-NetAdapter` PhysicalMediaType=InfiniBand. **node_guid 표준 API 부재 → null** |
-| ESXi | `vmware_host_vmhba_info` (FC/iSCSI, SAS/RAID 제외) | native IB 미노출 (SR-IOV/passthrough 만) → `nmlx` NIC best-effort 추론 (`note` 포함) |
+| Redfish | System 에 연결된 섀시의 `NetworkAdapters` → `Ports`/`NetworkPorts` + `NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`/`Port.FibreChannel` 블록, 기능이 연결되지 않은 포트는 링크 기술 `FibreChannel`. **PortType enum 아님**). 범위와 빈 목록의 뜻은 6.3.2 | 포트의 현재 모드(`Port.LinkNetworkTechnology` / `NetworkPort.ActiveLinkTechnology` / `Port.PortProtocol`)와 연결된 기능의 `NetDevFuncType` 이 `InfiniBand` 일 때. 둘이 다르면 IB 로 확정하지 않고 notice 1건. GUID 는 기능의 `InfiniBand.NodeGUID/PortGUID`, 없으면 `Port.InfiniBand.Associated*GUIDs` 가 한 값일 때만. 상세 6.3.3. 주류 BMC(iDRAC/iLO/XCC) 는 add-in IB HCA 거의 미노출 → OS 채널 정본 |
+| OS Linux | `/sys/class/fc_host/*` (wwpn/wwnn/driver/firmware) | `/sys/class/infiniband/<dev>/ports/<n>/` 중 **`link_layer == InfiniBand` 인 포트만** (RoCE·iWARP 는 `Ethernet` 이라 제외 — 같은 디렉터리에 등록되고 `rate` 도 IB 식으로 찍힌다). `node_guid` 파일 · `port_guid` = `gids/0` 하위 64비트 · `rate` 원문 · `rate_gbps` 는 `state` ACTIVE 일 때만(커널은 DOWN 포트에도 기본 SDR 값을 찍는다) · `model`/`vendor` 는 `lspci`(pci.ids) 이름(없으면 model=`hca_type`, vendor=null) · `firmware` = `fw_ver`. **정본** |
+| OS Windows | `Get-InitiatorPort` + `MSFC_*` WMI (FC 만 필터) | `Get-NetAdapter -IncludeHidden` 중 `NdisPhysicalMedium 11`(Infiniband) 또는 표시값 `Infiniband`; 2차로 `Get-NetAdapterRdma` 의 `RdmaTechnology == InfiniBand`(iWARP/RoCE 아님). 팀 멀티플렉서(`Multiplexor`/`MS_IMPLAT`) 제외. `rate` = `LinkSpeed`, `rate_gbps` = `ReceiveLinkSpeed`(bps)/1e9. **`port`·`node_guid`·`port_guid`·`firmware` 는 표준 API 가 없어 null** (`note` 에 그 뜻). WinOF-2 는 Windows Server 2019 에서 IPoIB 의 물리 매체를 802.3 으로 보고하는 알려진 이슈가 있어 2차 신호가 없으면 놓칠 수 있다(벤더 도구 `mlx5cmd` 는 쓰지 않는다) |
+| ESXi | `vmware_host_vmhba_info` (FC/iSCSI, SAS/RAID 제외) | **수집하지 않는다 — 항상 `[]`.** 네이티브 nmlx5 드라이버는 Ethernet 전용이고 IB 는 SR-IOV/passthrough 로 VM 에만 간다. IB 모드 카드는 vmnic 없이 PCI `Infiniband controller` 로만 보인다(Broadcom KB 381748). 종전 "`nmlx` 드라이버 NIC = IB" 추정은 이더넷 NIC 오탐이라 제거했다. 빈 목록은 "IB 없음" 의 증거가 아니라 "이 채널은 수집하지 않는다" 는 뜻이다 |
 
-- `wwpn`/`wwnn`/`link_speed_gbps`/`node_guid` 는 미연결·미노출 시 `null` (정상 — error 아님). 단 Linux 에서 sysfs 속성 파일이
+- `wwpn`/`wwnn`/`link_speed_gbps`/`node_guid`/`port_guid`/`rate_gbps` 는 미연결·미노출 시 `null` (정상 — error 아님). 단 Linux 에서 sysfs 속성 파일이
   **있는데 읽지 못하면**(권한 등) storage 섹션 오류 1건이 남는다 (detail: `scope=fc_host[,infiniband]; cause=attribute_unreadable;
-  count=; paths=` 최대 10개). 속성 파일 자체가 없는 것은 오류가 아니다 (2026-10-03).
+  count=; paths=` 최대 10개). 속성 파일 자체가 없는 것은 오류가 아니다 (2026-10-03). IB 포트의 `link_layer` 를 읽지 못하면 그 포트는
+  IB 로 추정하지 않고(제외) 같은 오류로 근거를 남긴다 (2026-10-17).
 - `port_type` ∈ {`FibreChannel`, `FCoE`, `iSCSI`}. `source` ∈ {`redfish`, `os`, `esxi`}.
+- **IB `link_status`** — `up` = 활성(Linux `ACTIVE` · Windows `Up` · Redfish `LinkUp`/`Up`), `down` = 명확한 링크 없음(`DOWN` · `Disconnected` ·
+  `LinkDown`/`NoLink`), `unknown` = 중간 상태 또는 미확인(Linux `INIT`/`ARMED`/`ACTIVE_DEFER` · Windows `Disabled`/`Not Present` · Redfish
+  `Starting`/`Training`/없음). **`rate_gbps` 는 `up` 일 때만 숫자**(정수는 int, 2.5 같은 소수는 그대로)이고 `rate` 는 원천의 속도 문자열 원문이다
+  (Redfish 는 문자열 원천이 없어 항상 null — 합성하지 않는다). GUID 는 소문자 `xxxx:xxxx:xxxx:xxxx` 로 통일하고 형식 오류·all-zero 는 null 이다.
+- **빈 `infiniband` 의 뜻** — 어느 채널이든 "IB 장치 없음" 의 확정 증거가 아니다. 드라이버 미적재(Linux) · 매체 오보고(Windows) · 미수집(ESXi) ·
+  BMC 미노출(Redfish) 이 모두 같은 모양이다. 조회 실패는 `errors[]`(Linux 속성 읽기 실패 · Redfish 하위 리소스 실패) 또는
+  `diagnosis.details.notices`(Redfish 충돌 · 연결되지 않은 기능) 로 구분한다.
 - **Windows `link_speed_gbps` (2026-10-10)**: `MSFC_FibrePortHBAAttributes.PortSpeed` 는 비트 값이다 — Microsoft SDK `hbaapi.h` 정의대로
   1 → 1, 2 → 2, 4 → 10, 8 → 4, 16 → 8, 32 → 16 Gbps. 0(미확인) · 0x8000(미협상)은 `null`. 64 · 128 처럼 Windows · 벤더 HBA 인터페이스 정의를 확인하지
   못한 코드는 **미상 코드**로 `null` 이다(오류가 아니다). 종전 표는 4 · 8 · 16 을 4 · 8 · 10 으로 잘못 바꿨다.
@@ -691,6 +708,51 @@ controllers[*].id  ────┤
 
 **남은 사각지대** — BMC 가 카드 목록에서 FC 카드 자체를 빼고 주면 이 채널로는 알 수 없다. 이때는 OS 채널(`source: "os"`)로 교차 확인한다.
 다중 섀시 수집과 소유 판정은 실장비의 다중 섀시 응답으로 아직 검증되지 않았다(합성 자료 시험만 통과).
+
+#### 6.3.3 Redfish `infiniband[]` — 판정 · GUID · 빈 목록의 뜻 (2026-10-17)
+
+항목 1개는 **현재 InfiniBand 모드로 확인된 포트 1개**다. 읽는 곳과 순서(섀시 · 소유 확인 · Systems 경로)는 6.3.2 와 같다 — 같은 카드 루프에서
+FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 없다.
+
+**판정 — 현재 모드만 본다**
+
+| 포트가 말하는 현재 모드 (`Port.LinkNetworkTechnology` / `NetworkPort.ActiveLinkTechnology` / `Port.PortProtocol`) | 포트에 연결된 기능의 `NetDevFuncType` | 결과 |
+|---|---|---|
+| `InfiniBand` | 없음 또는 전부 `InfiniBand` | IB 포트 — 항목 1개, `network.ports[].port_type = "InfiniBand"` |
+| `InfiniBand` | `Ethernet`/`FibreChannel`/… 섞임 | **충돌** — 항목 없음, notice 1건 |
+| `Ethernet` · `FibreChannel` · `RoCE` · `RoCEv2` · `iWARP` … | `InfiniBand` 있음 | **충돌** — 항목 없음, `port_type` 은 포트의 링크 기술, notice 1건 |
+| `Ethernet` · … | `InfiniBand` 없음 | IB 아님 (종전 FC/Ethernet 규칙) |
+| 없음 | 전부 `InfiniBand` | IB 포트 |
+| 없음 | `InfiniBand` + 다른 것 | 충돌 |
+| 없음 | `InfiniBand` 없음 | IB 아님 |
+
+- 링크 기술과 `PortProtocol` 이 서로 다르면 그것도 충돌이다. `Disabled` 기능은 근거로 세지 않는다.
+- **근거가 아닌 것**: `NetDevFuncCapabilities`(지원 가능 목록), `LinkConfiguration[].LinkNetworkTechnology`, `Port.InfiniBand` 블록의 존재, GUID 의 존재,
+  `PortType`(IB/FC 값이 없다), `LinkState`(관리자가 바라는 상태), 카드 이름("InfiniBand NDR200/Ethernet 200GbE" 같은 VPI 제품명).
+  HPE iLO 에뮬레이터의 MCX755106 VPI 카드는 이 모든 것을 가지고도 `NetDevFuncType: Ethernet` · `LinkNetworkTechnology: Ethernet` 이라 IB 가 아니다.
+- **포트에 연결되지 않은 IB 기능**(`Links.PhysicalNetworkPortAssignment` 없음)은 항목이 되지 않는다 — 기능은 포트가 아니다. Dell 식 `<PortId>-<n>` 이름으로
+  부모 포트를 찾을 수 있고 그 포트가 IB 항목이면 **비어 있는 GUID 만** 그 기능 값으로 채운다. 부모가 IB 가 아니면 충돌 notice, 부모를 못 찾으면
+  "연결되지 않음" notice.
+
+**GUID** — 연결된 IB 기능들의 `InfiniBand.NodeGUID` / `PortGUID`(없으면 `Permanent*`)가 하나로 일치할 때 그 값. 기능끼리 다르면 null(증거 충돌 —
+배열로 대체하지 않는다). 기능이 값을 전혀 주지 않을 때만 `Port.InfiniBand.AssociatedNodeGUIDs` / `AssociatedPortGUIDs` 를 보되 **서로 다른 값이 정확히
+하나일 때만** 쓴다. 이 배열은 DMTF 정의상 "lowest-numbered function 의 주소, configured but not active 주소, teaming 주소" 를 함께 담을 수 있어 첫 원소를
+무조건 쓰지 않는다. 표기는 소문자 `xxxx:xxxx:xxxx:xxxx`.
+
+**`link_status` · 속도** — IB 항목은 `LinkUp`/`Up` → `up`, `LinkDown`/`NoLink`/`Down` → `down`, `Starting`/`Training`/없음 → `unknown`.
+`network.ports[].link_status` 는 종전 규칙(협상 중 = `down`)이라 같은 포트가 training 중이면 둘이 다를 수 있다.
+`rate_gbps` 는 `up` 일 때만 `CurrentSpeedGbps`(없으면 `CurrentLinkSpeedMbps`/1000, 정수는 int)이고 `rate` 는 항상 null 이다.
+
+**빈 `infiniband` 의 뜻**
+
+| `storage.infiniband` | `diagnosis.details.notices` 중 `section: "network_adapters"` | 뜻 |
+|---|---|---|
+| `[]` | 없음 | 정상 수집. BMC 가 보여 준 카드에 IB 모드 포트가 없다 (또는 BMC 가 IB HCA 를 노출하지 않는다 — 6.3.2 의 카드 목록 notice 와 함께 본다) |
+| `[]` | `…포트 링크 기술과 기능 유형이 서로 달라 InfiniBand 여부를 확정할 수 없음…` | 현재 모드 신호가 충돌한다. IB 로 확정하지 않았다 |
+| `[]` | `…InfiniBand 기능 <id> 이(가) 어느 포트에도 연결되지 않음…` | IB 기능은 있으나 포트를 확인하지 못했다 |
+
+어느 경우든 `status` 와 `sections` 는 바뀌지 않는다. **실장비 IB 모드 BMC 응답으로는 아직 검증되지 않았다** — 공개 mockup 도 없어
+합성 fixture(`tests/fixtures/redfish/synthetic_ib_mode`, DMTF 스키마 기준)로만 재생했다.
 
 ### 6.4 `data.network`
 

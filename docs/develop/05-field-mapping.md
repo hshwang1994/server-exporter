@@ -188,16 +188,18 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 `data.storage.hbas[]` (FC HBA) / `data.storage.infiniband[]` 는 전 채널 동일 canonical 키
 (`wwpn`/`wwnn`/`port_type`/`link_speed_gbps`/`source` 등). 채널별 수집원:
 
-| 채널 | FC HBA 수집원 | InfiniBand 수집원 | 비고 |
+| 채널 | FC HBA 수집원 | InfiniBand 수집원 (2026-10-17: 항목 1개 = 현재 IB 모드 포트 1개) | 비고 |
 |---|---|---|---|
-| OS Linux | `/sys/class/fc_host/*` (port_name/node_name/driver/fw) | `/sys/class/infiniband/*` (node_guid/port GID/rate/fw) — **IB 정본** | raw fallback 양 모드. 속성 파일이 있는데 못 읽으면 `ERR|<path>` 마커 → storage errors[] 1건 (2026-10-03) |
-| OS Windows | `Get-InitiatorPort` (FC 만 필터) + `MSFC_*` WMI (model/vendor/driver/fw/speed) | `Get-NetAdapter` PhysicalMediaType=InfiniBand + `Get-PnpDevice VEN_15B3`. **node_guid=null** (표준 API 부재) | try/catch graceful |
-| ESXi | `vmware_host_vmhba_info` (type+driver 2-signal, FC/iSCSI 만 — SAS/RAID 제외) | native IB 미노출 → `nmlx` NIC best-effort 추론 (`note`) | **API-only** (SSH 미사용, D1) |
-| Redfish | System 에 연결된 섀시의 `NetworkAdapters` → `NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`, 기능이 없는 포트는 링크 기술 `FibreChannel`. `wwpn` 은 기능의 WWPN 만) | `Port.LinkNetworkTechnology` / `NetworkDeviceFunction` IB GUID | 주류 BMC 는 add-in IB 거의 미노출 → OS 채널 정본. 수집 범위 · 빈 목록의 뜻은 [03-fields 6.3.2](../contract/03-fields.md) |
+| OS Linux | `/sys/class/fc_host/*` (port_name/node_name/driver/fw) | `/sys/class/infiniband/<dev>/ports/<n>/` 중 `link_layer == InfiniBand` 만 (RoCE/iWARP 는 `Ethernet` → 제외). `node_guid` / `port_guid` = `gids/0` 하위 64비트 / `rate` 원문 · `rate_gbps` 는 `state` ACTIVE 일 때만 / `model`·`vendor` = `lspci -mm -s <PCI_SLOT_NAME>`(pci.ids), 없으면 `hca_type` · null / `firmware` = `fw_ver` — **IB 정본** | `gather_hba_ib.yml` raw 1회(fc_host + infiniband + 장치당 lspci 1회), raw fallback 양 모드 동일. 속성 파일이 있는데 못 읽으면 `ERR|<path>` 마커 → storage errors[] 1건 (2026-10-03); `link_layer` 를 못 읽은 포트는 제외 |
+| OS Windows | `Get-InitiatorPort` (FC 만 필터) + `MSFC_*` WMI (model/vendor/driver/fw/speed) | `Get-NetAdapter -IncludeHidden` 중 `NdisPhysicalMedium 11` / 표시값 `Infiniband` + 2차 `Get-NetAdapterRdma` `RdmaTechnology == InfiniBand`. 팀 멀티플렉서 제외. `rate` = `LinkSpeed`, `rate_gbps` = `ReceiveLinkSpeed`/1e9. **`port`·GUID·펌웨어 = null** (표준 API 부재). 종전 `Get-PnpDevice` 서비스명 폴백은 제거 | WinOF-2 WS2019 는 IPoIB 물리 매체를 802.3 으로 보고(알려진 이슈) — 2차 신호 없으면 놓칠 수 있음, 실장비 미확인 |
+| ESXi | `vmware_host_vmhba_info` (type+driver 2-signal, FC/iSCSI 만 — SAS/RAID 제외) | **수집하지 않음 — 항상 `[]`.** 네이티브 nmlx5 는 Ethernet 전용, IB 는 SR-IOV/passthrough 로 VM 에만. 종전 `nmlx` 드라이버 추정은 이더넷 NIC 오탐이라 제거 | **API-only** (SSH 미사용, D1). PCI `classId 0x0207` 로 컨트롤러 존재만 적는 안은 모듈 변경 + 새 필드 필요 — 보류 |
+| Redfish | System 에 연결된 섀시의 `NetworkAdapters` → `NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`, 기능이 없는 포트는 링크 기술 `FibreChannel`. `wwpn` 은 기능의 WWPN 만) | `_ib_decision`: 포트 현재 모드(`Port.LinkNetworkTechnology` / `NetworkPort.ActiveLinkTechnology` / `Port.PortProtocol`) + 연결 기능 `NetDevFuncType == InfiniBand`. 충돌 → 항목 없음 + notice. GUID = 기능 값 합의 → `Port.InfiniBand.Associated*GUIDs`(한 값일 때). 연결되지 않은 기능은 항목 아님. `rate` 항상 null, `rate_gbps` 는 up 일 때만 | 주류 BMC 는 add-in IB 거의 미노출 → OS 채널 정본. IB 경로가 읽는 리소스는 FC 와 같다(요청 예산 불변). 상세 [03-fields 6.3.3](../contract/03-fields.md) |
 
-- `source` ∈ {redfish, os, esxi} 로 출처 식별. `wwpn`/`node_guid` 로 동일 장치 cross-channel 상관.
-- FC/IB 미보유 호스트 → 빈 list (graceful, error 아님). `port_type` ∈ {FibreChannel, FCoE, iSCSI}.
-- 상세: [../contract/03-fields.md §6.3.1](../contract/03-fields.md), `schema/field_dictionary.yml`.
+- `source` ∈ {redfish, os, esxi} 로 출처 식별. `wwpn`/`node_guid` 로 동일 장치 cross-channel 상관. GUID 표기는 소문자 `xxxx:xxxx:xxxx:xxxx`
+  (`normalize_ib_guid` 필터 · `redfish_gather._normalize_ib_guid` — drift guard 로 동기).
+- FC/IB 미보유 호스트 → 빈 list (graceful, error 아님). `port_type` ∈ {FibreChannel, FCoE, iSCSI}. IB `link_status` 는 up/down/unknown — 중간 상태(INIT/ARMED/Starting/Training)는 unknown.
+- 판정에 쓰지 않는 것: 제조사명 · 드라이버명 · RDMA Enabled · `NetDevFuncCapabilities` · GUID 존재 · 카드 이름. 근거: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md`.
+- 상세: [../contract/03-fields.md §6.3.1 · 6.3.3](../contract/03-fields.md), `schema/field_dictionary.yml`.
 
 ---
 
