@@ -64,7 +64,7 @@
     "ansible_version": "2.20.3"                         // ansible-core
   },
   "correlation": {                                      // 상관관계 식별자 — 여러 채널 cross-correlation
-    "serial_number": "MOCK-CSUS-P0-001",                // mock — site 실측 시 정정
+    "serial_number": "MOCK-CSUS-P0",                // mock — site 실측 시 정정
     "system_uuid": "00000000-0000-4000-8000-000000000001",         // Partition0 representative
     "bmc_ip": "10.50.11.999",
     "host_ip": "10.50.11.999"
@@ -85,7 +85,7 @@
     "hardware": {                                       // 하드웨어 (Partition0 + Base Chassis representative)
       "vendor": "HPE",
       "model": "Compute Scale-up Server 3200",
-      "serial": "MOCK-CSUS-P0-001",
+      "serial": "MOCK-CSUS-P0",
       "uuid": "00000000-0000-4000-8000-000000000001",
       "sku": "P52345-B21",                              // HPE 파트 번호 — vendor 의미 다름 (Dell=서비스태그, Lenovo=CTO 주문번호)
       "bios_version": "U54 v3.10 (05/01/2026)",

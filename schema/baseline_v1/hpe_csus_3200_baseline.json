@@ -49,7 +49,7 @@
     "ansible_version": "2.20.3"
   },
   "correlation": {
-    "serial_number": "MOCK-CSUS-P0-001",
+    "serial_number": "MOCK-CSUS-P0",
     "system_uuid": "00000000-0000-4000-8000-000000000001",
     "bmc_ip": "10.50.11.999",
     "host_ip": "10.50.11.999"
@@ -69,7 +69,7 @@
     "hardware": {
       "vendor": "HPE",
       "model": "Compute Scale-up Server 3200",
-      "serial": "MOCK-CSUS-P0-001",
+      "serial": "MOCK-CSUS-P0",
       "uuid": "00000000-0000-4000-8000-000000000001",
       "sku": "P52345-B21",
       "bios_version": "U54 v3.10 (05/01/2026)",

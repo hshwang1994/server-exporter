@@ -28,9 +28,11 @@
 #
 # 적용 범위
 # ---------
-# **OS 채널(os-gather)의 시스템 시리얼만** 대상이다. Redfish / ESXi 채널은 건드리지
-# 않는다 (Redfish `data.hardware.serial` 은 `Systems/Partition0.SerialNumber` 원문 유지 —
-# docs/ai/contracts/serial-number.md 29-6).
+# OS 채널(os-gather)의 시스템 시리얼 + **Redfish 채널의 `data.hardware.serial`** (2026-10-17 사용자 결정 — CSUS 3200 만,
+# `redfish-gather/tasks/normalize_standard.yml`). 종전(2026-08-27)에는 OS 만이었고 Redfish 는 `Systems/Partition0.SerialNumber`
+# 원문(`SGHD3TLNDD-000`)을 유지해 두 채널의 시리얼이 달랐다 — 호출자(Portal 자산 매칭)가 채널 간 시리얼 매칭을 하므로 맞췄다.
+# Redfish 의 `multi_node.partitions[].system.serial` 은 파티션 원본을 유지한다. ESXi 는 건드리지 않는다.
+# 필터 이름의 `os_` 는 역사적 이름이다(판정 조건은 채널과 무관).
 #
 # 안전 장치 (셋을 **모두** 만족할 때만 접미사를 제거한다)
 # ------------------------------------------------------

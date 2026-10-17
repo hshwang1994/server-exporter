@@ -132,7 +132,7 @@
 - 통과하면 특권 raw(`product_serial` · `product_uuid` · dmidecode)와 방화벽 조회가 become 으로 돈다. 통과하지 못하면 그 4개 태스크를 건너뛰어 추가 PAM 실패가 없고, serial/uuid 는 null, `errors[]` 에 `cause=insufficient_privilege` 가 남는다.
 - **Serial Number 는 필수다.** null 이면 `os-gather/tasks/normalize/require_serial.yml` 이 `status: failed` 로 확정한다(시나리오 E — `docs/contract/03-fields.md` 4절). UUID 는 종전처럼 non-fatal 이다.
 
-### nPartition 시리얼 접미사 정규화 (OS 채널 전용)
+### nPartition 시리얼 접미사 정규화 (OS 채널 + Redfish `hardware.serial`)
 
 HPE Compute Scale-up Server 3200 은 파티션(nPartition) 장비다. OS 안에서 읽는 시스템
 시리얼에 파티션 번호가 접미사로 붙는다.
@@ -145,7 +145,7 @@ Partition0 의 OS DMI product_serial    SGHD3TLNDD-000
 자산 관리는 물리 장비 시리얼 기준이라, OS 채널은 이 접미사를 떼고 내보낸다.
 구현은 `filter_plugins/serial_normalizer.py` 의 `normalize_os_serial` 필터 하나뿐이고,
 `os-gather` 의 세 곳(Linux `system.serial_number`, Windows `system.serial_number`,
-Windows `hardware.serial`)이 이 필터를 부른다.
+Windows `hardware.serial`)과 **Redfish `normalize_standard.yml` 의 `hardware.serial`** (2026-10-17 부터) 이 이 필터를 부른다.
 
 **세 조건을 모두 만족할 때만** 값이 바뀐다.
 
@@ -165,9 +165,11 @@ Windows `hardware.serial`)이 이 필터를 부른다.
 | Dell / PowerEdge R760 / `ABCDEF-000` | `ABCDEF-000` (그대로) |
 | HPE / Compute Scale-up Server 3200 / `SGHD3TLNDD-ABC` | `SGHD3TLNDD-ABC` (그대로) |
 
-Redfish 채널은 이 정규화를 적용하지 않는다. Redfish `hardware.serial` 은
-`Systems/Partition0` 의 `SerialNumber` 원문(`SGHD3TLNDD-000`)을 유지한다. 같은 장비라도
-OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이다.
+Redfish 채널도 2026-10-17 부터 `data.hardware.serial` 에 같은 필터를 건다(사용자 결정 — CSUS 3200 만). 판정 값은
+모듈이 준 `manufacturer`(`HPE`) / `model`(`Compute Scale-up Server 3200`) 이고, `Systems/Partition0.SerialNumber`
+`SGHD3TLNDD-000` → `SGHD3TLNDD`. `correlation.serial_number` 는 `hardware.serial` 에서 파생되므로 함께 바뀐다.
+같은 장비를 OS 로 봐도 Redfish 로 봐도 `SGHD3TLNDD` 다. 파티션 원본은 `data.multi_node.partitions[].system.serial`
+(`SGHD3TLNDD-000`) 에 그대로 남는다. ESXi 는 적용하지 않는다(CSUS 가 ESXi 를 돌리지 않는다).
 
 ---
 
@@ -198,7 +200,7 @@ OS 채널과 Redfish 채널의 시리얼 표기가 다를 수 있다는 뜻이�
 - `source` ∈ {redfish, os, esxi} 로 출처 식별. `wwpn`/`node_guid` 로 동일 장치 cross-channel 상관. GUID 표기는 소문자 `xxxx:xxxx:xxxx:xxxx`
   (`normalize_ib_guid` 필터 · `redfish_gather._normalize_ib_guid` — drift guard 로 동기).
 - FC/IB 미보유 호스트 → 빈 list (graceful, error 아님). `port_type` ∈ {FibreChannel, FCoE, iSCSI}. IB `link_status` 는 up/down/unknown — 중간 상태(INIT/ARMED/Starting/Training)는 unknown.
-- 판정에 쓰지 않는 것: 제조사명 · 드라이버명 · RDMA Enabled · `NetDevFuncCapabilities` · GUID 존재 · 카드 이름. 근거: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md`.
+- 판정에 쓰지 않는 것: 제조사명 · 드라이버명 · RDMA Enabled · `NetDevFuncCapabilities` · GUID 존재 · 카드 이름. 근거와 빈 목록의 뜻은 [03-fields 6.3.1 · 6.3.3](../contract/03-fields.md).
 - 상세: [../contract/03-fields.md §6.3.1 · 6.3.3](../contract/03-fields.md), `schema/field_dictionary.yml`.
 
 ---

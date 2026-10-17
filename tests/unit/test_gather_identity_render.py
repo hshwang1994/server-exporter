@@ -58,6 +58,8 @@ def _combine(d, other, recursive=False):
 
 
 def _env():
+    from serial_normalizer import normalize_os_serial   # filter_plugins (sys.path) — Redfish hardware.serial 도 2026-10-17 부터 쓴다
+
     env = NativeEnvironment()
     env.filters["regex_search"] = _regex_search
     env.filters["bool"] = _bool
@@ -65,6 +67,7 @@ def _env():
     env.filters["normalize_uuid"] = normalize_uuid
     env.filters["normalize_mac"] = normalize_mac
     env.filters["dmi_sentinel_null"] = dmi_sentinel_null
+    env.filters["normalize_os_serial"] = normalize_os_serial
     env.filters["from_json"] = json.loads
     return env
 
@@ -476,3 +479,36 @@ def test_redfish_fragment_wiring():
     assert frag["system"]["fqdn"] == "{{ _rf_sys_fqdn | default(none) }}"
     assert frag["bmc"] == "{{ _rf_d_bmc_clean }}"
     assert frag["multi_node"] == "{{ _rf_raw_collect.multi_node | default(none) }}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Redfish — hardware.serial nPartition 접미사 (2026-10-17 사용자 결정, CSUS 3200 만 — OS 채널과 같은 필터 · 같은 세 조건)
+# ═══════════════════════════════════════════════════════════════════════════
+def _redfish_hardware_serial(system):
+    frag = _task(REDFISH_NORM, "build standard fragment")["ansible.builtin.set_fact"]["_data_fragment"]
+    return _render(frag["hardware"]["serial"], {"_rf_d_system": system})
+
+
+@pytest.mark.parametrize("system,expected", [
+    # real_hpe_csus3200 모듈 golden 의 data.system 값 (manufacturer HPE · model Compute Scale-up Server 3200 · serial SGHD3TLNDD-000)
+    ({"manufacturer": "HPE", "model": "Compute Scale-up Server 3200", "serial": "SGHD3TLNDD-000"}, "SGHD3TLNDD"),
+    ({"manufacturer": "HPE", "model": "Compute Scale-up Server 3200", "serial": "SGHD3TLNDD-001"}, "SGHD3TLNDD"),
+    ({"manufacturer": "Hewlett Packard Enterprise", "model": "HPE Compute Scale-up Server 3200", "serial": "SGHD3TLNDD-002"}, "SGHD3TLNDD"),
+    ({"manufacturer": "HPE", "model": "ProLiant DL380 Gen11", "serial": "CZ12345678-000"}, "CZ12345678-000"),   # ProLiant — 원문
+    ({"manufacturer": "HPE", "model": "Superdome Flex 280", "serial": "SGH0000000-000"}, "SGH0000000-000"),    # Superdome Flex — 결정 범위 밖
+    ({"manufacturer": "Dell Inc.", "model": "PowerEdge R760", "serial": "ABCDEF-000"}, "ABCDEF-000"),
+    ({"manufacturer": "Lenovo", "model": "ThinkSystem SR650", "serial": "J902E57T"}, "J902E57T"),
+    ({"model": "Compute Scale-up Server 3200", "serial": "SGHD3TLNDD-000"}, "SGHD3TLNDD-000"),                 # manufacturer 없음 → fail-safe
+    ({"manufacturer": "HPE", "serial": "SGHD3TLNDD-000"}, "SGHD3TLNDD-000"),                                    # model 없음 → fail-safe
+    ({"manufacturer": "HPE", "model": "Compute Scale-up Server 3200", "serial": "SGHD3TLNDD-ABC"}, "SGHD3TLNDD-ABC"),
+    ({"manufacturer": "HPE", "model": "Compute Scale-up Server 3200", "serial": None}, None),
+    ({"manufacturer": "HPE", "model": "Compute Scale-up Server 3200"}, None),
+])
+def test_redfish_hardware_serial_strips_csus_npar_suffix_only(system, expected):
+    assert _redfish_hardware_serial(system) == expected
+
+
+def test_redfish_hardware_serial_uses_the_os_filter():
+    frag = _task(REDFISH_NORM, "build standard fragment")["ansible.builtin.set_fact"]["_data_fragment"]
+    assert "normalize_os_serial(" in frag["hardware"]["serial"], "OS 채널과 같은 필터 하나로 — 별도 규칙을 두지 않는다"
+    assert frag["multi_node"] == "{{ _rf_raw_collect.multi_node | default(none) }}", "파티션 원본은 그대로"

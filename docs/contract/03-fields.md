@@ -1021,13 +1021,14 @@ Vendor·세대별 근거 수준은 `docs/reference/compatibility-matrix.md` 를 
 **Q. `correlation.bmc_ip` 와 `correlation.host_ip` 가 같다. 버그인가?**
 Redfish 채널은 둘이 같은 게 정상이다 (BMC 를 통해 수집). OS / ESXi 채널은 다를 수 있다 (서비스 IP 와 BMC IP 가 분리되어 있으면).
 
-**Q. 같은 장비인데 OS 채널과 Redfish 채널의 시리얼이 다르다. 버그인가?**
-HPE Compute Scale-up Server 3200 이라면 정상이다. 이 장비는 파티션(nPartition) 구조라 시스템
-시리얼이 `<물리 시리얼>-<파티션번호 3자리>` 형식이다 (`SGHD3TLNDD-000`). **OS 채널은 물리 장비
-시리얼 기준으로 맞추려고 이 접미사를 뗀 값(`SGHD3TLNDD`)** 을 내보내고, Redfish 채널은
-`Systems/Partition0` 의 원문(`SGHD3TLNDD-000`)을 그대로 유지한다. 그 외 장비는 두 채널 모두
-수집한 값을 손대지 않는다 — 접미사 제거는 제조사·모델·접미사 형식 세 조건을 모두 만족할 때만
-일어나므로, 시리얼에 하이픈이 정상적으로 들어간 다른 장비는 영향을 받지 않는다.
+**Q. HPE Compute Scale-up Server 3200 의 시리얼에 `-000` 이 붙는다 / OS 와 Redfish 가 다르다. 버그인가?**
+이 장비는 파티션(nPartition) 구조라 시스템 시리얼이 `<물리 시리얼>-<파티션번호 3자리>` 형식이다 (`SGHD3TLNDD-000`).
+자산 관리는 물리 장비 시리얼 기준이므로 **OS 채널(`system.serial_number`)과 Redfish 채널(`data.hardware.serial`, 2026-10-17 부터)
+모두 이 접미사를 뗀 값(`SGHD3TLNDD`)** 을 내보내고, `correlation.serial_number` 도 같은 값이다 — 같은 장비를 어느 채널로 봐도
+시리얼이 같다. Redfish 의 `data.multi_node.partitions[].system.serial` 은 파티션 원본(`SGHD3TLNDD-000`)을 그대로 둔다.
+그 외 장비는 수집한 값을 손대지 않는다 — 접미사 제거는 제조사(HPE)·모델(CSUS 3200)·접미사 형식 세 조건을 모두 만족할 때만
+일어나므로, 시리얼에 하이픈이 정상적으로 들어간 다른 장비(ProLiant · Superdome Flex · Dell …)는 영향을 받지 않는다.
+2026-10-17 이전 Redfish 결과는 `SGHD3TLNDD-000` 이었다(호출자가 저장한 값과 다를 수 있다).
 자세한 규칙은 `docs/develop/05-field-mapping.md` 의 "nPartition 시리얼 접미사 정규화" 절을 본다.
 
 **Q. Windows 의 `system.version` 이 `24H2` 로만 나온다. `2025-24H2` 가 아닌가? (2026-10-17)**

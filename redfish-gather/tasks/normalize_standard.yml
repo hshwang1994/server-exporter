@@ -527,7 +527,12 @@
       hardware:
         vendor:       "{{ _rf_d_system.manufacturer | default(none) }}"
         model:        "{{ _rf_d_system.model        | default(none) }}"
-        serial:       "{{ _rf_d_system.serial       | default(none) }}"
+        # 2026-10-17 (사용자 결정 — CSUS 3200 만): HPE CSUS 3200 의 Systems/Partition0.SerialNumber 는 "물리 시리얼-nPar 번호"(SGHD3TLNDD-000)다.
+        #   OS 채널과 같은 normalize_os_serial 필터(HPE alias 완전일치 + CSUS 3200 model 패턴 + `-[0-9]{3}$` 세 조건 모두)로 접미사를 떼어
+        #   같은 장비가 OS 와 Redfish 에서 같은 시리얼(SGHD3TLNDD)로 상관되게 한다. ProLiant · Superdome Flex · 다른 벤더는 원문 그대로.
+        #   correlation.serial_number 는 build_correlation.yml 이 hardware.serial 을 복사하므로 함께 바뀐다. multi_node.partitions[].system.serial
+        #   은 파티션 원본(-000)을 유지한다(ADR-2026-10-15 hostname 과 같은 원칙). 모듈(redfish_gather.py)·golden 은 바꾸지 않는다.
+        serial:       "{{ _rf_d_system.serial | default(none) | normalize_os_serial(_rf_d_system.manufacturer | default(none), _rf_d_system.model | default(none)) }}"
         uuid:         "{{ _rf_d_system.uuid         | default(none) | normalize_uuid }}"   # 2026-10-12: correlation.system_uuid 와 같은 표기(소문자 8-4-4-4-12)
         sku:          "{{ _rf_d_system.sku           | default(none) }}"
         bios_version: "{{ _rf_d_system.bios_version | default(none) }}"

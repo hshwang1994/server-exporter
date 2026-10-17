@@ -1258,6 +1258,8 @@ Dell 서버 시리얼은 필수값이므로 `null` 인 채로 success/partial �
 
 > [INFO] 2026-08-27 갱신 — Redfish 는 지금도 그대로 `SGHD3TLNDD-000` 이다. 다만 **OS 채널만**
 > 파티션 접미사를 떼도록 바뀌었다 (30절). 두 채널의 표기가 갈리는 것은 의도된 결과다.
+> [INFO] 2026-10-17 갱신 — 사용자 결정으로 Redfish `data.hardware.serial` 도 같은 필터를 탄다(CSUS 3200 만, 30-2 절).
+> 모듈(`_SERIAL_RESOLVERS`)은 그대로이고 `normalize_standard.yml` 의 envelope 단계에서 떼므로 모듈 golden 은 `-000` 그대로다.
 실미러 골든(`real_hpe_dl380` / `real_lenovo_sr650` / `real_hpe_csus3200`) 3종은 재생성 없이
 그대로 통과했고, 비-Dell baseline 9종도 무변경이다.
 
@@ -1334,14 +1336,15 @@ System Serial 이 `<물리 시리얼>-<파티션번호 3자리>` 형식이다.
 |---|---|---|
 | OS / Linux | `data.system.serial_number` | **적용** |
 | OS / Windows | `data.system.serial_number`, `data.hardware.serial` | **적용** |
-| Redfish | `data.hardware.serial` | **미적용** — `Systems/Partition0.SerialNumber` 원문 유지 |
+| Redfish | `data.hardware.serial` | **적용 (2026-10-17 부터, 사용자 결정)** — `normalize_standard.yml` 이 모듈 `data.system.serial` 에 같은 필터(판정 값 = 모듈 `manufacturer`/`model`). `multi_node.partitions[].system.serial` 은 원문(`-000`) 유지. 종전(2026-08-27~10-16)은 미적용 |
 | ESXi | `data.hardware.serial` | **미적용** |
 
 `correlation.serial_number` 는 `data.hardware.serial` → `data.system.serial_number` 순으로
-파생되므로(9절) OS 채널에서는 자동으로 정규화된 값을 받는다.
+파생되므로(9절) OS · Redfish 채널 모두 자동으로 정규화된 값을 받는다.
 
-> [WARN] 같은 장비를 OS 로 보면 `SGHD3TLNDD`, Redfish 로 보면 `SGHD3TLNDD-000` 이다.
-> 채널 간 시리얼 매칭을 하는 호출자는 이 차이를 알고 있어야 한다.
+> [INFO] 2026-10-17 부터 같은 장비를 OS 로 봐도 Redfish 로 봐도 `SGHD3TLNDD` 다. 종전 Redfish 결과(`SGHD3TLNDD-000`)를
+> 저장한 호출자는 값이 바뀐다는 점을 알아야 한다. mock baseline(`hpe_csus_3200_baseline.json`)·예시의 `hardware.serial` /
+> `correlation.serial_number` 는 `MOCK-CSUS-P0-001` → `MOCK-CSUS-P0` 로 같이 갱신했다(mock-derived — 실측 아님).
 
 ### 30-3. 발동 조건 (셋을 모두 만족할 때만)
 
