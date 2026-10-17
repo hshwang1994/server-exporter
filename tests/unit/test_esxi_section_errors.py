@@ -377,6 +377,7 @@ def _run_module(disks=None, controllers=None, ports=None, connect_fail=False):
     module.Disconnect = lambda si: None
     module._build_disks = disks or (lambda c: [{"id": "naa.1"}])
     module._build_controllers = controllers or (lambda c: [{"id": "vmhba0"}])
+    module._build_logical_volumes = lambda c: []   # 2026-10-18 (X6): 파트 추가 — 이 시험은 파트 격리만 본다
     module._build_listening_ports = ports or (lambda c: ["443"])
     # 2026-09-03: host_info 파트(dns/gateway/pnic/cpu) 는 별도 테스트 — 여기서는 항상 성공으로 스텁
     module._build_host_info = lambda c, h=None: {}
@@ -500,13 +501,16 @@ def _extended(failed_msg: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def test_extended_rescue_message_is_user_facing():
+    # 2026-10-18: HBA 도 이 블록에서 읽으므로 storage 1건이 더 남는다 (network · storage 순)
     out = _extended({"msg": "vmnic module crashed"})
-    assert len(out) == 1
-    _assert_section_error(out[0], "extended/rescue")
-    message = out[0]["message"]
-    for token in ("best-effort", "skip", "vmnic", "vmhba", "vSwitch", "portgroup"):
-        assert token not in message, f"개발자 용어가 남아 있다: {token!r} in {message!r}"
+    assert [e["section"] for e in out] == ["network", "storage"]
+    for i, entry in enumerate(out):
+        _assert_section_error(entry, f"extended/rescue[{i}]")
+        message = entry["message"]
+        for token in ("best-effort", "skip", "vmnic", "vmhba", "vSwitch", "portgroup"):
+            assert token not in message, f"개발자 용어가 남아 있다: {token!r} in {message!r}"
     assert out[0]["detail"] == "vmnic module crashed"
+    assert out[1]["detail"] == "scope=vmhba; cause=task_failed; msg=vmnic module crashed"
 
 
 def test_extended_rescue_section_is_schema_section():

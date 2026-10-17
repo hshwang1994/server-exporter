@@ -46,6 +46,8 @@
     _e_raw_disks: "{{ (_e_disks_result.physical_disks | default([])) if (_e_disks_shape_ok | bool) else [] }}"
     # 2026-06-22 T1: storage controllers + listening_ports (firewall) 도 동일 모듈에서 수집
     _e_raw_controllers:     "{{ _e_disks_result.controllers | default([]) }}"
+    # 2026-10-18 (X6): RAID 컨트롤러 뒤의 LUN = 논리 볼륨 (구버전 모듈은 키가 없어 빈 목록)
+    _e_raw_logical_volumes: "{{ _e_disks_result.logical_volumes | default([]) }}"
     _e_raw_listening_ports: "{{ _e_disks_result.listening_ports | default([]) }}"
     # 2026-09-03: 식별/네트워크/CPU 보강 (mapping 이 아니면 빈 dict — 구버전 모듈 호환)
     _e_raw_host: >-
@@ -82,7 +84,7 @@
     _errors_fragment: >-
       {%- set parts = _e_disks_failed_parts | default([]) -%}
       {%- set connect = ('connect' in parts) or ('host_select' in parts) or ('module' in parts) -%}  {# C8: host 선택 실패 · 8차 R5: 모듈 일반 실패도 연결 실패와 같이 #}
-      {%- set hit_storage = connect or ('physical_disks' in parts) or ('controllers' in parts) -%}
+      {%- set hit_storage = connect or ('physical_disks' in parts) or ('controllers' in parts) or ('logical_volumes' in parts) -%}
       {%- set hit_system  = connect or ('listening_ports' in parts) or ('host_info' in parts) -%}
       {%- set out = [] -%}
       {%- if hit_storage -%}

@@ -196,7 +196,8 @@ Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9�
 > **주** = 호스트 NIC/IP(`Systems/{id}/EthernetInterfaces`) → `data.network.interfaces[]` 등,
 > **보조** = NIC 카드 모델·펌웨어(`Chassis/{id}/NetworkAdapters`) → `data.network.adapters[]` / `ports[]`.
 > `sections.network` 는 **주 수집 결과만으로** 정해진다. 보조가 실패해도 주 수집이 됐으면 `success` 이고,
-> 사유는 `errors[]` 에 `section: "network_adapters"` 로 남는다 (→ 시나리오 B).
+> 사유는 `errors[]` 에 `section: "network"` 로 남는다 (→ 시나리오 B. 2026-10-18 정정 — 실제 코드(`normalize_standard.yml` 의 보조 수집 오류 정규화)는
+> `network` 로 적고, `network_adapters` 는 `diagnosis.details.notices[].section` 에만 쓴다).
 > 즉 호출자가 받는 `adapters[]` 가 비어 있어도 `sections.network` 는 `success` 일 수 있다 —
 > **NIC 카드 상세가 필요하면 `sections` 가 아니라 `data.network.adapters[]` 자체를 확인**해야 한다.
 > (과거엔 보조 실패가 주 성공을 덮어 `sections.network=failed` + `status=partial` 이 됐다.
@@ -566,7 +567,7 @@ for e in response["errors"]:
 |---|---|---|
 | `physical_disks[]` | 물리 디스크 (모든 컨트롤러 합쳐서 중복 제거) | 모든 채널 |
 | `controllers[].drives[]` | 컨트롤러별 드라이브 | Redfish |
-| `logical_volumes[]` | RAID 논리 볼륨 | Redfish |
+| `logical_volumes[]` | RAID 논리 볼륨 (OS/ESXi 는 RAID 컨트롤러 뒤 디스크 — 6.3.0b) | 모든 채널 (2026-10-18) |
 | `filesystems[]` | OS 파일시스템 마운트 | OS-gather |
 | `datastores[]` | ESXi 데이터스토어 | ESXi-gather |
 | `hbas[]` | FC HBA (+ iSCSI) | 모든 채널 |
@@ -610,6 +611,25 @@ controllers[*].id  ────┤
 - OS Windows: `%SystemDrive%` → `Get-Partition.DiskNumber` (부재 시 WMI `Win32_DiskPartition.DiskIndex` fallback). `Win32_DiskDrive.Index` 와 매칭. hardware-RAID/단일디스크는 정확하나, **software-RAID/Storage Spaces/동적미러 OS 는 가상 DiskNumber 라 물리 Index 매칭이 0 → 전 디스크 `null`** (Linux 의 멤버 all-true 와 비대칭 — 거짓 false 대신 null).
 - **주의**: 기준은 **OS 루트**(`/`)이며 `/boot`·EFI 파티션이 다른 디스크에 있어도 그 디스크는 `false`. Dell BOSS-N1 같은 부팅 전용 NVMe 에 OS 가 있으면 대용량 데이터 디스크가 아니라 그 NVMe 가 `true` (예: `os_linux_baremetal_dell.jsonc`).
 
+#### 6.3.0b `logical_volumes[]` — OS/ESXi 의 RAID 컨트롤러 뒤 디스크 (2026-10-18, 사용자 결정)
+
+Redfish 는 `/Storage/{id}/Volumes` 의 논리 볼륨을, OS/ESXi 는 종전에 빈 목록을 냈다. 같은 서버에서 Redfish 는 "물리 10 + 볼륨 3", Linux 는
+"물리 3(= RAID VD 2 + BOSS VD) + 볼륨 0" 으로 보여 두 채널을 맞춰 볼 수 없었다. 2026-10-18 부터 OS/ESXi 는 **RAID 컨트롤러 뒤에서 보이는 디스크**
+(= `physical_disks[]` 의 그 항목 — 그대로 남긴다, Additive)를 `logical_volumes[]` 에도 싣는다.
+
+| 채널 | 판정 | `controller_id` | `member_drive_ids` · `raid_level` |
+|---|---|---|---|
+| Linux | 디스크의 PCI 컨트롤러(`/sys/block/<dev>` 실경로의 마지막 PCI 주소, raw `DISKPCI` 줄)가 `controllers[]` 중 lspci 클래스 `RAID bus controller` 항목 | 그 PCI 주소(= `controllers[].id`) | `[]` · `null` (OS 는 RAID 뒤 물리 디스크를 못 본다) |
+| Windows | `physical_disks[].protocol == 'RAID'`(MSFT_PhysicalDisk BusType 8) | `null` (표준 API 가 볼륨 ↔ 컨트롤러를 주지 않는다) | `[]` · `null` |
+| ESXi | `storageDevice.scsiTopology` 로 LUN 이 붙은 어댑터를 찾아 `controller_type == 'RAID'`(드라이버 계열 lsi_mr3 · megaraid · smartpqi · hpsa · aacraid) | 그 vmhba(= `controllers[].id`) | `[]` · `null` |
+
+- 키는 Redfish 와 같다(`id` `name` `controller_id` `member_drive_ids` `raid_level` `total_mb` `health` `state` `boot_volume`). `name` 은 Linux/Windows 디스크 모델, ESXi 는 `displayName`.
+- ESXi 의 RAID 뒤 LUN 은 `physical_disks[].media_type` 이 `null` 이다 — `ScsiDisk.ssd` 는 컨트롤러 보고값이라 매체가 아니다(실측 esxi02: SSD RAID5 LUN 이 `HDD` 로 나왔다).
+- 들어오지 않는 것: BOSS 처럼 lspci 클래스가 `SATA controller` 인 RAID 카드의 볼륨(모델 문자열 `DELLBOSS VD` 로 추정하지 않는다). 한계: pass-through 디스크가 RAID 클래스
+  컨트롤러 뒤에 있으면 볼륨으로 보인다(컨트롤러 종류만 본다).
+- 개수 비교의 뜻: Redfish `physical_disks` 는 RAID 뒤 물리 디스크, OS/ESXi `physical_disks` 는 OS 가 보는 블록 장치(RAID 볼륨 포함)라 **수가 같을 필요가 없다**.
+  맞춰 볼 수 있는 것은 `logical_volumes` 의 수와 용량이다.
+
 #### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand (2026-05-29, IB 는 2026-10-17 정비)
 
 전 채널 (Redfish / OS Linux·Windows / ESXi) 이 **동일 canonical 키** 로 emit 한다.
@@ -645,10 +665,10 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 
 | 채널 | FC HBA 수집원 | InfiniBand 수집원 / 판정 / 한계 |
 |---|---|---|
-| Redfish | System 에 연결된 섀시의 `NetworkAdapters` → `Ports`/`NetworkPorts` + `NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`/`Port.FibreChannel` 블록, 기능이 연결되지 않은 포트는 링크 기술 `FibreChannel`. **PortType enum 아님**). 범위와 빈 목록의 뜻은 6.3.2 | 포트의 현재 모드(`Port.LinkNetworkTechnology` / `NetworkPort.ActiveLinkTechnology` / `Port.PortProtocol`)와 연결된 기능의 `NetDevFuncType` 이 `InfiniBand` 일 때. 둘이 다르면 IB 로 확정하지 않고 notice 1건. GUID 는 기능의 `InfiniBand.NodeGUID/PortGUID`, 없으면 `Port.InfiniBand.Associated*GUIDs` 가 한 값일 때만. 상세 6.3.3. 주류 BMC(iDRAC/iLO/XCC) 는 add-in IB HCA 거의 미노출 → OS 채널 정본 |
-| OS Linux | `/sys/class/fc_host/*` (wwpn/wwnn/driver/firmware) | `/sys/class/infiniband/<dev>/ports/<n>/` 중 **`link_layer == InfiniBand` 인 포트만** (RoCE·iWARP 는 `Ethernet` 이라 제외 — 같은 디렉터리에 등록되고 `rate` 도 IB 식으로 찍힌다). `node_guid` 파일 · `port_guid` = `gids/0` 하위 64비트 · `rate` 원문 · `rate_gbps` 는 `state` ACTIVE 일 때만(커널은 DOWN 포트에도 기본 SDR 값을 찍는다) · `model`/`vendor` 는 `lspci`(pci.ids) 이름(없으면 model=`hca_type`, vendor=null) · `firmware` = `fw_ver`. **정본** |
-| OS Windows | `Get-InitiatorPort` + `MSFC_*` WMI (FC 만 필터) | `Get-NetAdapter -IncludeHidden` 중 `NdisPhysicalMedium 11`(Infiniband) 또는 표시값 `Infiniband`; 2차로 `Get-NetAdapterRdma` 의 `RdmaTechnology == InfiniBand`(iWARP/RoCE 아님). 팀 멀티플렉서(`Multiplexor`/`MS_IMPLAT`) 제외. `rate` = `LinkSpeed`, `rate_gbps` = `ReceiveLinkSpeed`(bps)/1e9. **`port`·`node_guid`·`port_guid`·`firmware` 는 표준 API 가 없어 null** (`note` 에 그 뜻). WinOF-2 는 Windows Server 2019 에서 IPoIB 의 물리 매체를 802.3 으로 보고하는 알려진 이슈가 있어 2차 신호가 없으면 놓칠 수 있다(벤더 도구 `mlx5cmd` 는 쓰지 않는다) |
-| ESXi | `vmware_host_vmhba_info` (FC/iSCSI, SAS/RAID 제외) | **수집하지 않는다 — 항상 `[]`.** 네이티브 nmlx5 드라이버는 Ethernet 전용이고 IB 는 SR-IOV/passthrough 로 VM 에만 간다. IB 모드 카드는 vmnic 없이 PCI `Infiniband controller` 로만 보인다(Broadcom KB 381748). 종전 "`nmlx` 드라이버 NIC = IB" 추정은 이더넷 NIC 오탐이라 제거했다. 빈 목록은 "IB 없음" 의 증거가 아니라 "이 채널은 수집하지 않는다" 는 뜻이다 |
+| Redfish | System 에 연결된 섀시의 `NetworkAdapters` → `Ports`/`NetworkPorts` + `NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`/`Port.FibreChannel` 블록, 기능이 연결되지 않은 포트는 링크 기술 `FibreChannel`. **PortType enum 아님**). 2026-10-18 보완: FC 링크 기술 포트의 Ethernet 블록은 Ethernet 근거가 아니고, 짝 없는 기능은 이름으로 찾은 부모 포트의 링크·속도를 상속하며, 정수 Id · 카드 1장의 예외 · 이름 없는 카드가 섹션 전체를 지우지 않는다. 범위와 빈 목록의 뜻은 6.3.2 | 포트의 현재 모드(`Port.LinkNetworkTechnology` / `NetworkPort.ActiveLinkTechnology` / `Port.PortProtocol`)와 연결된 기능의 `NetDevFuncType` 이 `InfiniBand` 일 때. 둘이 다르면 IB 로 확정하지 않고 notice 1건. GUID 는 기능의 `InfiniBand.NodeGUID/PortGUID`, 없으면 `Port.InfiniBand.Associated*GUIDs` 가 한 값일 때만. 상세 6.3.3. 주류 BMC(iDRAC/iLO/XCC) 는 add-in IB HCA 거의 미노출 → OS 채널 정본 |
+| OS Linux | `/sys/class/fc_host/*`(port_name/node_name/port_state/port_type/speed) + `scsi_host/<host>/`(proc_name = 드라이버 · model_name/modelname · fw_version/fwrev · manufacturer) + PCI uevent → `lspci` 이름. NPIV 가상 포트 제외. link_status up/down/null (2026-10-18) | `/sys/class/infiniband/<dev>/ports/<n>/` 중 **`link_layer == InfiniBand` 인 포트만** (RoCE·iWARP 는 `Ethernet` 이라 제외 — 같은 디렉터리에 등록되고 `rate` 도 IB 식으로 찍힌다). `node_guid` 파일 · `port_guid` = `gids/0` 하위 64비트 · `rate` 원문 · `rate_gbps` 는 `state` ACTIVE 일 때만(커널은 DOWN 포트에도 기본 SDR 값을 찍는다) · `model`/`vendor` 는 `lspci`(pci.ids) 이름(없으면 model=`hca_type`, vendor=null) · `firmware` = `fw_ver`. **정본** |
+| OS Windows | `Get-InitiatorPort` + `MSFC_*` WMI (FC/iSCSI 만). 구성요소(initiator_ports · adapter_attrs · port_attrs) 성패를 적어 접근 거부 · 제공자 오류는 errors[] 1건, cmdlet · 클래스 부재는 "HBA 없음" 과 같은 환경. PortSpeed 비트 1~0x2000 → Gbps, PortState 보강 (2026-10-18) | `Get-NetAdapter -IncludeHidden` 중 `NdisPhysicalMedium 11`(Infiniband) 또는 표시값 `Infiniband`; 2차로 `Get-NetAdapterRdma` 의 `RdmaTechnology == InfiniBand`(iWARP/RoCE 아님). 팀 멀티플렉서(`Multiplexor`/`MS_IMPLAT`) 제외. `rate` = `LinkSpeed`, `rate_gbps` = `ReceiveLinkSpeed`(bps)/1e9. **`port`·`node_guid`·`port_guid`·`firmware` 는 표준 API 가 없어 null** (`note` 에 그 뜻). WinOF-2 는 Windows Server 2019 에서 IPoIB 의 물리 매체를 802.3 으로 보고하는 알려진 이슈가 있어 2차 신호가 없으면 놓칠 수 있다(벤더 도구 `mlx5cmd` 는 쓰지 않는다) |
+| ESXi | `vmware_host_vmhba_info` — type + driver 두 신호(FC/FCoE/iSCSI, 하드웨어 iSCSI 클래스 `InternetScsiHba` 포함, SAS/RAID 제외). 같은 (wwpn, wwnn) 1건(ESXi 7 FC-NVMe 쌍둥이), speed 자릿수 정규화, WWN 형식 검증(깨진 값은 null + errors[]) (2026-10-18) | **수집하지 않는다 — 항상 `[]`.** 네이티브 nmlx5 드라이버는 Ethernet 전용이고 IB 는 SR-IOV/passthrough 로 VM 에만 간다. IB 모드 카드는 vmnic 없이 PCI `Infiniband controller` 로만 보인다(Broadcom KB 381748). 종전 "`nmlx` 드라이버 NIC = IB" 추정은 이더넷 NIC 오탐이라 제거했다. 빈 목록은 "IB 없음" 의 증거가 아니라 "이 채널은 수집하지 않는다" 는 뜻이다 |
 
 - `wwpn`/`wwnn`/`link_speed_gbps`/`node_guid`/`port_guid`/`rate_gbps` 는 미연결·미노출 시 `null` (정상 — error 아님). 단 Linux 에서 sysfs 속성 파일이
   **있는데 읽지 못하면**(권한 등) storage 섹션 오류 1건이 남는다 (detail: `scope=fc_host[,infiniband]; cause=attribute_unreadable;
@@ -662,9 +682,21 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 - **빈 `infiniband` 의 뜻** — 어느 채널이든 "IB 장치 없음" 의 확정 증거가 아니다. 드라이버 미적재(Linux) · 매체 오보고(Windows) · 미수집(ESXi) ·
   BMC 미노출(Redfish) 이 모두 같은 모양이다. 조회 실패는 `errors[]`(Linux 속성 읽기 실패 · Redfish 하위 리소스 실패) 또는
   `diagnosis.details.notices`(Redfish 충돌 · 연결되지 않은 기능) 로 구분한다.
-- **Windows `link_speed_gbps` (2026-10-10)**: `MSFC_FibrePortHBAAttributes.PortSpeed` 는 비트 값이다 — Microsoft SDK `hbaapi.h` 정의대로
-  1 → 1, 2 → 2, 4 → 10, 8 → 4, 16 → 8, 32 → 16 Gbps. 0(미확인) · 0x8000(미협상)은 `null`. 64 · 128 처럼 Windows · 벤더 HBA 인터페이스 정의를 확인하지
-  못한 코드는 **미상 코드**로 `null` 이다(오류가 아니다). 종전 표는 4 · 8 · 16 을 4 · 8 · 10 으로 잘못 바꿨다.
+- **Windows `link_speed_gbps` (2026-10-10 · 2026-10-18)**: `MSFC_FibrePortHBAAttributes.PortSpeed` 는 비트 값이다 — Microsoft SDK `hbaapi.h` 정의대로
+  1 → 1, 2 → 2, 4 → 10, 8 → 4, 16 → 8, 32 → 16 Gbps. 2026-10-18(사용자 결정)부터 T11 FC-HBA / SNIA HBA API · Linux `scsi_transport_fc.h` 와 같은 비트로
+  64 → 32, 128 → 20, 256 → 40, 0x200 → 50, 0x400 → 100, 0x800 → 25, 0x1000 → 64, 0x2000 → 128 Gbps 도 바꾼다(Windows WMI 제공자가 같은 비트를 쓰는지는
+  실장비 미확인 — 32G 이상 HBA 사이트 실측 시 정정). 0(미확인) · 0x8000(미협상) · 그 밖은 `null`. 종전 표는 4 · 8 · 16 을 4 · 8 · 10 으로 잘못 바꿨다.
+- **HBA `link_status` (2026-10-18, 사용자 결정)** — 문자열은 `up` · `down` 둘뿐이고 **장비가 링크 상태 속성을 주지 않으면 `null`** 이다. 확인되지 않은 상태를
+  `down` 으로 적지 않고, 종전 `unknown` 문자열은 폐지했다(`link_speed_gbps` · `wwnn` 의 "미노출 → null" 과 같은 규칙). 채널별 매핑은 `schema/field_dictionary.yml`
+  `storage.hbas[].link_status` 가 정본이다: Redfish `LinkStatus`(없으면 null + notice `링크 상태 미제공`), Linux `port_state`(Online·Marginal → up / Offline·Linkdown·Error·
+  Blocked·Bypassed·Loopback·Diagnostics → down / Unknown·Deleted·없음 → null), Windows `OperationalStatus`(2 → up / 3~8 → down / 1·없음 → MSFC `PortState` → null),
+  ESXi `status`(online → up / offline → down / unbound·unknown·없음 → null). HPE CSUS 3200(RMC 1.75.108 · Redfish 1.19.0)은 FC Port 리소스에 `LinkStatus`·`Status`
+  키가 없어 Redfish 로는 항상 `null` 이다 — 전수 크롤(2,264 리소스) 어디에도 FC 링크 상태가 없고(PCIe 장치의 `H3Alert.1.7.LinkUp` 은 RAID 컨트롤러에도 있는 슬롯
+  링크다) 알림 로그 리소스도 없다(EventService 는 구독 전용). Portal 은 `wwpn` 으로 OS 채널 값을 조인해 보인다.
+- **개수 원칙 (2026-10-18)** — 네 채널 모두 항목 1개 = 물리 FC 포트 1개. Linux 는 NPIV 가상 포트(`port_type` 'NPIV VPORT')를 빼고, ESXi 는 같은 (wwpn, wwnn) 의
+  vmhba(ESXi 7 FC-NVMe: 포트당 SCSI vmhba + NVMe vmhba, 같은 WWPN)를 1건으로 접는다 — "ESXi 8 vs Redfish 4" 의 원인이었다. 그래도 Redfish(물리) ≥ OS/ESXi(논리) 일 수
+  있다: lab Cisco C220 은 CIMC 가 카드 2장의 vHBA 4개를 정의하지만 ESXi 는 카드 1장의 fnic 2개만 열거한다(코드 결함 아님). 교차 대조 키는 `wwpn` 이고
+  `tests/regression/test_cross_channel_same_server.py` 가 같은 서버 2쌍에서 "OS ⊆ Redfish" 를 고정한다.
 - **FCoE 지원 CNA 는 여기 안 들어온다 (2026-08-03)**: Broadcom 57800 같은 CNA 는 *이더넷* 기능에도
   MAC 파생 WWN 을 달고 나온다. WWN 이 있다는 이유로 HBA 로 잡으면 같은 물리 포트가
   `network.ports[]`=Ethernet / `storage.hbas[]`=FibreChannel 로 갈리는 모순이 생긴다.
@@ -673,7 +705,7 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
   정상적으로 `port_type="FCoE"` 로 잡힌다.
 - 서브필드 정의는 `schema/field_dictionary.yml` (`storage.hbas[].*` / `storage.infiniband[].*`, Nice).
 
-#### 6.3.2 Redfish `hbas[]` — 어디서 읽나, 빈 목록과 `unknown` 의 뜻 (2026-10-15)
+#### 6.3.2 Redfish `hbas[]` — 어디서 읽나, 빈 목록과 `null` 의 뜻 (2026-10-15 · 2026-10-18)
 
 항목 1개는 FC 포트(기능) 1개다. 2포트 카드면 2건이고, 소속 카드는 `adapter_id` / `adapter_model` 이다.
 
@@ -685,7 +717,10 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 
 같은 카드가 두 섀시 목록에 다시 나오면(같은 리소스 주소) 한 번만 담는다. 다른 주소로 같은 WWPN 의 FC 포트가 다시 나오면 그 포트만 뺀다. WWPN 을 모르는 포트는 같은 포트인지 확인할 수 없어 남긴다. 섀시가 다르면 `adapter_id` 가 겹칠 수 있다 — 포트를 가리키는 고유 키는 `wwpn` 이다.
 
-**`wwpn` 은 기능(NetworkDeviceFunction)의 WWPN 만 쓴다.** 포트 주소는 장비에 따라 WWNN 이다(실측 Dell R740: `20:00:…`). 그래서 `wwpn` 으로 옮기지 않고 `network.ports[].associated_address` 에만 둔다. 기능을 받지 못한 FC 포트도 빠지지 않고 `wwpn: null` 항목으로 남는다.
+**`wwpn` 은 기능(NetworkDeviceFunction)의 WWPN 이 첫째다.** 기능에 WWPN 이 없으면(2026-10-18) 포트의 FC 주소 목록 — 신 `Port.FibreChannel.AssociatedWorldWideNames`, 또는 FC 링크 기술
+포트의 `Ethernet.AssociatedMACAddresses` 중 8옥텟 값 — 에서 알려진 WWNN 을 뺀 값이 **정확히 1개 남을 때만** 그것을 쓴다. 구 `NetworkPort.AssociatedNetworkAddresses` 는 쓰지 않는다
+(실측 Dell R740: `20:00:…` = WWNN). 못 정하면 `wwpn: null` 로 행을 남기고 notice `WWPN 미확정` 을 적는다 — 행은 어떤 경우에도 빠지지 않는다. 2026-10-15~18 사이 운영 환경에
+`_make_fc_hba` 의 wwpn 에 포트 주소를 넣은 임시 조치가 있었는데 그 값은 장비에 따라 WWNN 이라 틀린 값이었다 — 위 규칙이 그 자리를 대신한다.
 
 **빈 `hbas` 의 뜻**
 
@@ -699,12 +734,16 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 
 어느 경우든 `status` 와 `sections` 는 바뀌지 않는다. HBA 수집은 보조 수집이고, HBA 가 없다는 이유로 수집이 실패가 되지 않는다.
 
-**`link_status`** — 포트의 `LinkStatus` 하나만 읽어 세 값으로 바꾼다.
-`up` 은 LinkUp · Up · Connected 이고, `down` 은 LinkDown · Down · NoLink · Starting · Training(협상 중) 이다.
-`unknown` 은 링크 장애가 아니라 **상태를 확인할 수 없다**는 뜻이다. 원인은 두 가지다.
-(a) 포트 응답에 `LinkStatus` 가 없거나 null / `Unknown` 이다(실측 HPE CSUS 3200 RMC).
-(b) FC 기능에 짝이 되는 포트 리소스가 없다. 이때는 `link_speed_gbps` 도 `null` 이다.
-실제 링크 상태가 필요하면 OS 채널 결과와 `wwpn` 으로 맞춰 본다.
+**`link_status`** — 포트의 `LinkStatus` 를 `up`(LinkUp · Up · Connected) / `down`(LinkDown · Down · NoLink · Starting · Training) 두 값으로 바꾸고, **키 자체가 없으면 `null`** 이다
+(2026-10-18 — 종전 `unknown` 폐지, 임의 `down` 금지). `null` 의 원인은 두 가지고 둘 다 notice `네트워크 카드 … 링크 상태 미제공` 으로 남는다.
+(a) 포트 응답에 `LinkStatus` 키가 없다 — 실측 HPE CSUS 3200 RMC 1.75.108: FC Port 리소스의 키는 `FibreChannel.AssociatedWorldWideNames` · `Id` · `Name` 셋뿐이고 다른 어느 리소스에도 FC 링크 상태가 없다.
+(b) FC 기능에 짝이 되는 포트 리소스가 없고 이름(`<PortId>-n`)으로 부모 포트도 못 찾았다 — 이때 `link_speed_gbps` 도 `null` 이다. 부모를 찾으면 그 포트의 링크 · 속도를 상속한다(iDRAC8 형).
+실제 링크 상태가 필요하면 OS 채널 결과와 `wwpn` 으로 맞춰 본다 — Portal 은 그렇게 표시한다.
+
+**조용히 빠지던 경로 (2026-10-18 보완)** — 녹화본 변형으로 재현해 고쳤다: FC 링크 기술 포트에 `Ethernet` 블록만 있어 Ethernet 으로 오분류(HBA 0건 · 오류 0건) · 포트 `Id` 가 정수이고
+짝 없는 기능이 있으면 TypeError 로 섹션 전체 소실 · 카드 목록은 200 인데 카드 GET 이 전부 404 면 흔적 없이 미지원 · 한 경로가 200 빈 목록이면 다른 경로의 5xx 가 묻힘 · 이름 · 컨트롤러
+근거 없는 카드가 FC 기능을 가져도 제외 · 짝 없는 기능의 부모 포트 링크 버림. 카드 1장의 예외는 그 카드에서 격리되고(errors[] 1건) 다른 카드는 남는다. 사이트에서 보고된 "HBA 누락"
+장비(벤더 미확정)는 이 중 어느 경로였는지 Redfish 덤프로 확정해야 한다.
 
 **남은 사각지대** — BMC 가 카드 목록에서 FC 카드 자체를 빼고 주면 이 채널로는 알 수 없다. 이때는 OS 채널(`source: "os"`)로 교차 확인한다.
 다중 섀시 수집과 소유 판정은 실장비의 다중 섀시 응답으로 아직 검증되지 않았다(합성 자료 시험만 통과).

@@ -419,7 +419,10 @@ def test_powershell_initiator_ports_render_without_adapter_leak(tmp_path):
 #   16/32 = 8/16 (Microsoft SDK hbaapi.h HBA_FCPHYSPEED_*). 0(미상) · 0x8000(미협상) · 64 · 128 은 Windows/벤더 정의를 확인하지 못한
 #   미상 코드라 null. 종전 표는 4→4 · 8→8 · 16→10 · 128→64 였다(숫자 크기로 추측). 32 → 16 한 사례만 보던 시험이 그 표를 놓쳤다.
 @needs_powershell
-@pytest.mark.parametrize("code,gbps", [(1, 1), (2, 2), (4, 10), (8, 4), (16, 8), (32, 16), (64, None), (0, None), (128, None), (32768, None)])
+# 2026-10-18 (사용자 결정 2026-10-17): 16G 넘는 비트도 매핑 — 64=32G · 128=20G · 256=40G · 512=50G · 1024=100G · 2048=25G · 4096=64G · 8192=128G
+#   (T11 FC-HBA / SNIA HBA API HBA_PORTSPEED_* = Linux scsi_transport_fc.h FC_PORTSPEED_*). 0 · 0x8000 · 그 밖은 여전히 null. Windows 실장비 미확인.
+@pytest.mark.parametrize("code,gbps", [(1, 1), (2, 2), (4, 10), (8, 4), (16, 8), (32, 16), (64, 32), (128, 20), (256, 40), (512, 50),
+                                       (1024, 100), (2048, 25), (4096, 64), (8192, 128), (0, None), (32768, None), (3, None)])
 def test_powershell_port_speed_code_to_canonical_link_speed(tmp_path, code, gbps):
     prelude = _HBA_SCRIPT_PRELUDE.replace("PortSpeed=[uint32]32;", f"PortSpeed=[uint32]{code};")
     assert prelude != _HBA_SCRIPT_PRELUDE or code == 32
@@ -429,3 +432,77 @@ def test_powershell_port_speed_code_to_canonical_link_speed(tmp_path, code, gbps
     out = run_storage([], hba=doc)
     matched = [h for h in out["storage"]["hbas"] if h["wwpn"] == "21:00:00:24:ff:01:02:03"]
     assert len(matched) == 1 and matched[0]["link_speed_gbps"] == gbps
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-10-18 (HBA 전수 점검 W1) — 구성요소 성패: absent(환경) 와 실패(접근 거부) 를 가르고, 부분 결과는 남긴다
+# ═══════════════════════════════════════════════════════════════════════════
+def _comps(doc):
+    comps = doc["components"]
+    comps = [comps] if isinstance(comps, dict) else comps
+    return {c["scope"]: c for c in comps}
+
+
+@needs_powershell
+def test_powershell_all_components_ok_records_ok(tmp_path):
+    doc = json.loads(_run_powershell(_HBA_SCRIPT_PRELUDE + _win_shell(HBA_TASK), tmp_path, "hba_ok")[0])
+    comps = _comps(doc)
+    assert set(comps) == {"initiator_ports", "adapter_attrs", "port_attrs"}
+    assert all(c["ok"] is True and c["absent"] is False and c["error"] is None for c in comps.values()), comps
+
+
+@needs_powershell
+def test_powershell_msfc_not_supported_is_absent_not_error(tmp_path):
+    """MSFC 클래스가 등록되지 않은 호스트(FC-HBA API 미지원 miniport · 클래스 없음) 는 환경 — 오류가 아니다."""
+    prelude = (_HBA_SCRIPT_PRELUDE
+               .replace("{ return $script:__adapters }", "{ throw 'Not supported ' }")
+               .replace("{ return $script:__pattrs }", "{ throw 'Invalid class ' }"))
+    doc = json.loads(_run_powershell(prelude + _win_shell(HBA_TASK), tmp_path, "hba_absent")[0])
+    comps = _comps(doc)
+    assert comps["initiator_ports"]["ok"] is True
+    assert (comps["adapter_attrs"]["ok"], comps["adapter_attrs"]["absent"]) == (False, True)
+    assert (comps["port_attrs"]["ok"], comps["port_attrs"]["absent"]) == (False, True)
+    out = run_storage([], hba=doc)
+    assert len(out["storage"]["hbas"]) == 4, "포트 목록은 그대로 — 어댑터 속성만 null"
+    assert [e for e in out["errors"] if "어댑터" in e["message"]] == []
+
+
+@needs_powershell
+def test_powershell_msfc_access_denied_is_a_component_error(tmp_path):
+    prelude = _HBA_SCRIPT_PRELUDE.replace("{ return $script:__adapters }", "{ throw 'Access denied' }")
+    doc = json.loads(_run_powershell(prelude + _win_shell(HBA_TASK), tmp_path, "hba_denied")[0])
+    comps = _comps(doc)
+    assert (comps["adapter_attrs"]["ok"], comps["adapter_attrs"]["absent"], comps["adapter_attrs"]["error"]) == (False, False, "Access denied")
+    assert comps["port_attrs"]["ok"] is True
+    out = run_storage([], hba=doc)
+    errs = [e for e in out["errors"] if "어댑터" in e["message"]]
+    assert len(errs) == 1 and "cause=component_failed" in errs[0]["detail"] and "parts=adapter_attrs" in errs[0]["detail"] \
+        and "Access denied" in errs[0]["detail"], out["errors"]
+    assert len(out["storage"]["hbas"]) == 4, "포트 목록은 남는다"
+
+
+@needs_powershell
+def test_powershell_initiator_port_enumeration_failure_keeps_partial_ports(tmp_path):
+    """Get-InitiatorPort 가 중간에 오류를 내면($ErrorActionPreference Stop) 그때까지 읽은 포트는 남기고 구성요소 실패를 적는다."""
+    prelude = _HBA_SCRIPT_PRELUDE.replace("function Get-InitiatorPort { $script:__ports }",
+                                          "function Get-InitiatorPort { $script:__ports[0]; Write-Error 'The RPC server is unavailable' }")
+    doc = json.loads(_run_powershell(prelude + _win_shell(HBA_TASK), tmp_path, "hba_rpc")[0])
+    comps = _comps(doc)
+    assert comps["initiator_ports"]["ok"] is False and comps["initiator_ports"]["absent"] is False
+    assert "RPC server" in comps["initiator_ports"]["error"]
+    ports = doc["ports"] if isinstance(doc["ports"], list) else [doc["ports"]]
+    assert len(ports) == 1
+    out = run_storage([], hba=doc)
+    assert len(out["storage"]["hbas"]) == 1
+    assert len([e for e in out["errors"] if "parts=initiator_ports" in e["detail"]]) == 1
+
+
+@needs_powershell
+def test_powershell_missing_initiator_port_cmdlet_is_absent(tmp_path):
+    prelude = _HBA_SCRIPT_PRELUDE.replace("function Get-InitiatorPort { $script:__ports }", "").replace(
+        "$script:__ports = @(", "$script:__ports = @(") + "\nfunction Get-Command { param([Parameter(Position=0)][string]$Name) if ($Name -eq 'Get-InitiatorPort') { return $null } ; [PSCustomObject]@{ Name = $Name } }\n"
+    doc = json.loads(_run_powershell(prelude + _win_shell(HBA_TASK), tmp_path, "hba_nocmd")[0])
+    comps = _comps(doc)
+    assert (comps["initiator_ports"]["ok"], comps["initiator_ports"]["absent"], comps["initiator_ports"]["type"]) == (False, True, "CommandNotFound")
+    out = run_storage([], hba=doc)
+    assert out["storage"]["hbas"] == [] and [e for e in out["errors"] if "어댑터" in e["message"]] == []

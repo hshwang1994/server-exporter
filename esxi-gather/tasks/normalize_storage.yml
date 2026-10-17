@@ -95,7 +95,8 @@
         datastores:      "{{ _e_norm_datastores }}"
         # 2026-06-22 T1: storage HBA/RAID 컨트롤러 (hostBusAdapter + pciDevice vendor)
         controllers:     "{{ _e_raw_controllers | default([]) }}"
-        logical_volumes: []
+        # 2026-10-18 (X6): RAID 컨트롤러 뒤의 LUN(= physical_disks 의 그 항목) 을 논리 볼륨으로도 싣는다 — Redfish 와 같은 키, member/raid_level 은 비움
+        logical_volumes: "{{ _e_raw_logical_volumes | default([]) }}"
         # 2026-09-03: physical_disks(LUN) 기반 summary — OS/Redfish 와 같은 기준 (B-21)
         summary:         "{{ _e_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
     _sections_supported_fragment: ['storage']

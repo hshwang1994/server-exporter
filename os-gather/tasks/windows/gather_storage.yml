@@ -429,16 +429,28 @@
 # MSFC_FibrePortHBAAttributes (root\WMI) = model/vendor/driver/firmware/speed (HBA miniport
 # driver 가 T11 FC-HBA API 등록 시만 — try/catch + 부재 시 graceful null). WWN 은 colon-hex 정규화.
 # source: MS docs MSFT_InitiatorPort / MSFC_* (EXTERNAL-CONTRACTS §4). lab 부재 — 사이트 실측 시 정정.
-# 2026-10-10 (C6) PortSpeed 값맵 — 근거가 확인된 코드만 Gbps 로 바꾼다(비트값이지 속도 숫자가 아니다):
+# 2026-10-10 (C6) PortSpeed 값맵 — 비트값이지 속도 숫자가 아니다. 근거:
 #   1=1G · 2=2G · 4=10G · 8=4G : learn.microsoft.com/windows-hardware/drivers/storage/msfc-hbaportattributesresults-wmi-class
 #                                (ValueMap 1,2,4,8 = 1,2,10,4 GBit/sec) · MS-VDS VDS_HBAPORT_SPEED_FLAG (확인 2026-10-10)
 #   16=8G · 32=16G             : Microsoft SDK hbaapi.h HBA_FCPHYSPEED_8GBIT=16 · HBA_FCPHYSPEED_16GBIT=32
 #                                (github.com/microsoft/win32metadata .../RecompiledIdlHeaders/shared/hbaapi.h, 확인 2026-10-10)
-#   미상 코드 → null           : 0(HBA_PORTSPEED_UNKNOWN) · 0x8000(NOT_NEGOTIATED) · 64 · 128 등 Windows/벤더 WMI 정의를 확인하지 못한 값.
-#                                64 는 SNIA libHBAAPI · Linux FC transport 에서 32G 지만 그 표를 WMI PortSpeed 에 그대로 쓰지 않는다.
-#   종전 표(4→4 · 8→8 · 16→10 · 128→64)는 숫자 크기로 추측한 값이었다(DRIFT — CONVENTION_DRIFT 참조).
+#   2026-10-18 (사용자 결정 2026-10-17 — 16G 넘는 코드도 매핑): 64=32G · 128=20G · 256=40G · 0x200=50G · 0x400=100G · 0x800=25G ·
+#                                0x1000=64G · 0x2000=128G — T11 FC-HBA / SNIA HBA API 의 HBA_PORTSPEED_* 비트와 Linux
+#                                include/uapi/scsi/scsi_transport_fc.h(FC_PORTSPEED_*) 가 같은 값이다. Windows WMI 제공자(벤더 miniport)가
+#                                같은 비트를 쓰는지는 실장비 미확인 — 32G 이상 HBA 사이트 실측 시 정정.
+#                                source: https://github.com/torvalds/linux/blob/master/include/scsi/scsi_transport_fc.h
+#   미상 코드 → null           : 0(HBA_PORTSPEED_UNKNOWN) · 0x8000(NOT_NEGOTIATED) · 그 밖.
+# 2026-10-18 (HBA 전수 점검 — 계약 docs/contract/03-fields.md 6.3.1):
+#   - $ErrorActionPreference = 'Stop' 으로 비종료 오류(접근 거부 등)도 catch 에 잡고, 구성요소(initiator_ports / adapter_attrs / port_attrs)마다
+#     { scope, ok, absent, type, code, error } 를 components[] 에 남긴다. 종전 빈 catch 는 "HBA 없음" 과 "읽기 실패" 를 글자까지 같게 냈다.
+#   - absent = 환경에 없는 것(Get-InitiatorPort cmdlet 없음 · MSFC 클래스/네임스페이스 미등록 · Not supported) — 오류가 아니다.
+#     그 밖(접근 거부 · 제공자 오류 · RPC)은 ok=false · absent=false → Jinja 가 storage errors[] 1건을 낸다(섹션 상태는 그대로).
+#   - PortState(MSFC_FibrePortHBAAttributes.Attributes.PortState, HBA_PORTSTATE_*: 1 Unknown 2 Online 3 Offline 4 Bypassed 5 Diagnostics
+#     6 LinkDown 7 Error 8 Loopback) 는 OperationalStatus 가 Unknown/없음일 때 link_status 보강에 쓴다.
+#   lab: FC HBA 부재 — tests/unit/test_windows_storage_powershell_static.py 의 가짜 cmdlet(실제 PowerShell)으로만 검증 (실장비 미검증).
 - name: "windows | storage | initiator ports + HBA attrs"
   ansible.windows.win_shell: |
+    $ErrorActionPreference = 'Stop'
     function Format-Wwn($v) {
       if (-not $v) { return $null }
       $s = ([string]$v).ToLower() -replace '0x','' -replace '[^0-9a-f]',''
@@ -449,6 +461,23 @@
       if (-not $b) { return $null }
       return (($b | ForEach-Object { '{0:x2}' -f [int]$_ }) -join ':')
     }
+    function Test-Absent($e) {
+      $code = ''
+      try { $code = [string]$e.Exception.NativeErrorCode } catch { $code = '' }
+      if (@('InvalidNamespace','InvalidClass','NotSupported') -contains $code) { return $true }
+      return (([string]$e.Exception.Message) -match '0x8004100E|0x80041010|0x8004100C|Invalid namespace|Invalid class|Not supported')
+    }
+    function New-Comp($scope, $ok, $e) {
+      $type = $null; $code = $null; $msg = $null; $absent = $false
+      if ($e) {
+        $type = $e.Exception.GetType().Name
+        try { $code = [string]$e.Exception.NativeErrorCode } catch { $code = $null }
+        $msg = (([string]$e.Exception.Message) -replace '[\r\n]+', ' ').Trim()
+        $absent = [bool](Test-Absent $e)
+      }
+      return [PSCustomObject]@{ scope = $scope; ok = [bool]$ok; absent = $absent; type = $type; code = $code; error = $msg }
+    }
+    $comps = @()
     $ports = @()
     if (Get-Command Get-InitiatorPort -ErrorAction SilentlyContinue) {
       try {
@@ -460,7 +489,10 @@
             oper_status = (([string[]]$_.OperationalStatus) -join ',')
           }
         }
-      } catch { }
+        $comps += New-Comp 'initiator_ports' $true $null
+      } catch { $comps += New-Comp 'initiator_ports' $false $_ }
+    } else {
+      $comps += [PSCustomObject]@{ scope = 'initiator_ports'; ok = $false; absent = $true; type = 'CommandNotFound'; code = $null; error = 'Get-InitiatorPort is not available on this host' }
     }
     $adapters = @()
     try {
@@ -473,14 +505,14 @@
           firmware     = [string]$_.FirmwareVersion
         }
       }
-    } catch { }
+      $comps += New-Comp 'adapter_attrs' $true $null
+    } catch { $comps += New-Comp 'adapter_attrs' $false $_ }
     $portattrs = @()
     try {
       Get-CimInstance -Namespace root\WMI -ClassName MSFC_FibrePortHBAAttributes -ErrorAction Stop | ForEach-Object {
         $a = $_.Attributes
         $spd = [int]$a.PortSpeed
-        # PortSpeed 는 비트값 — 근거가 확인된 코드만 Gbps(위 task 머리말의 출처). 그 밖은 미상 코드라 null.
-        $gbps = switch ($spd) { 1 {1} 2 {2} 4 {10} 8 {4} 16 {8} 32 {16} default {$null} }
+        $gbps = switch ($spd) { 1 {1} 2 {2} 4 {10} 8 {4} 16 {8} 32 {16} 64 {32} 128 {20} 256 {40} 512 {50} 1024 {100} 2048 {25} 4096 {64} 8192 {128} default {$null} }
         $portattrs += [PSCustomObject]@{
           port_wwn   = Wwn-FromBytes $a.PortWWN
           node_wwn   = Wwn-FromBytes $a.NodeWWN
@@ -488,8 +520,9 @@
           port_state = [int]$a.PortState
         }
       }
-    } catch { }
-    [PSCustomObject]@{ ports = $ports; adapters = $adapters; port_attrs = $portattrs } | ConvertTo-Json -Depth 6 -Compress
+      $comps += New-Comp 'port_attrs' $true $null
+    } catch { $comps += New-Comp 'port_attrs' $false $_ }
+    [PSCustomObject]@{ ports = $ports; adapters = $adapters; port_attrs = $portattrs; components = $comps } | ConvertTo-Json -Depth 6 -Compress
   register: _w_hba_raw
   changed_when: false
   failed_when: false
@@ -572,10 +605,32 @@
 #     이 표와 맞다. 다만 여러 값이 쉼표로 이어 붙으면("6,7") 완전일치 비교가 놓쳤으므로 값 단위로 본다.
 #   - 근거: CIM 스키마 ValueMap (root/Microsoft/Windows/Storage 의 MSFT_InitiatorPort) + Storage.types.ps1xml,
 #     learn.microsoft.com "MSFT_InitiatorPort class".
+# 2026-10-18 (Bug B 차단): rc != 0 이거나 stdout 이 JSON 객체 모양('{' … '}')이 아니면 from_json 을 부르지 않는다 — 종전에는 from_json 예외가
+#   이 파일(block/rescue 없음)을 벗어나 play rescue 로 가서 다른 섹션까지 비웠다. 그 사실은 _w_hba_script_failed / _w_ib_script_failed 로 남겨
+#   build fragment 가 storage errors[] 1건을 낸다(섹션 상태는 그대로). 빈 stdout + rc 0 은 종전처럼 빈 결과(오류 없음)다.
 - name: "windows | storage | parse HBA/IB raw json"
   ansible.builtin.set_fact:
-    _w_hba_parsed: "{{ (_w_hba_raw.stdout | default('') | trim | from_json) if (_w_hba_raw.stdout | default('') | trim) else {'ports': [], 'adapters': [], 'port_attrs': []} }}"
-    _w_ib_parsed:  "{{ (_w_ib_raw.stdout  | default('') | trim | from_json) if (_w_ib_raw.stdout  | default('') | trim) else {'ib': []} }}"
+    _w_hba_script_failed: >-
+      {%- set so = (_w_hba_raw.stdout | default('') | string | trim) -%}
+      {%- set rc = (_w_hba_raw.rc | default(0)) | int -%}
+      {{ (rc != 0) or (so != '' and not (so.startswith('{') and so.endswith('}'))) }}
+    _w_ib_script_failed: >-
+      {%- set so = (_w_ib_raw.stdout | default('') | string | trim) -%}
+      {%- set rc = (_w_ib_raw.rc | default(0)) | int -%}
+      {{ (rc != 0) or (so != '' and not (so.startswith('{') and so.endswith('}'))) }}
+    _w_hba_script_error: >-
+      {%- set rc = (_w_hba_raw.rc | default(0)) | int -%}
+      {%- set se = ((_w_hba_raw.stderr | default('') | string) | replace('\n', ' ') | replace('\r', ' ') | trim)[:160] -%}
+      {%- set so = ((_w_hba_raw.stdout | default('') | string) | replace('\n', ' ') | replace('\r', ' ') | trim)[:160] -%}
+      {{ 'rc=' ~ rc ~ '; stderr=' ~ (se or 'none') ~ '; stdout=' ~ (so or 'none') }}
+    _w_hba_parsed: >-
+      {%- set so = (_w_hba_raw.stdout | default('') | string | trim) -%}
+      {%- set rc = (_w_hba_raw.rc | default(0)) | int -%}
+      {{ (so | from_json) if (rc == 0 and so.startswith('{') and so.endswith('}')) else {'ports': [], 'adapters': [], 'port_attrs': [], 'components': []} }}
+    _w_ib_parsed: >-
+      {%- set so = (_w_ib_raw.stdout | default('') | string | trim) -%}
+      {%- set rc = (_w_ib_raw.rc | default(0)) | int -%}
+      {{ (so | from_json) if (rc == 0 and so.startswith('{') and so.endswith('}')) else {'ib': []} }}
   no_log: true
 
 - name: "windows | storage | build HBA/IB canonical lists"
@@ -611,7 +666,14 @@
           {%- set pa = (pa_by_wwpn.get(wwpn, {}) if wwpn else {}) -%}
           {%- set os = (p.oper_status | default('')) | string | lower -%}
           {%- set os_codes = os.split(',') | map('trim') | list -%}
-          {%- set link = 'up' if ('oper' in os or '2' in os_codes) else ('down' if ('down' in os or 'error' in os or '6' in os_codes or '7' in os_codes) else 'unknown') -%}
+          {# 2026-10-18: link_status 는 up / down / null. OperationalStatus 2 Operational → up; 3 User Offline · 4 Bypassed · 5 In diagnostics mode ·
+             6 Link Down · 7 Port Error · 8 Loopback → down; 1 Unknown/없음 → MSFC PortState(2 → up, 3~8 → down) 로 보강, 그래도 없으면 null —
+             확인되지 않은 상태를 down 으로 적지 않는다 (종전 'unknown' 문자열 폐지). #}
+          {%- set os_up = ('oper' in os) or ('2' in os_codes) -%}
+          {%- set os_down = (not os_up) and (('down' in os) or ('error' in os) or ('offline' in os) or ('bypass' in os) or ('diagnos' in os) or ('loopback' in os) or ((os_codes | select('in', ['3', '4', '5', '6', '7', '8']) | list | length) > 0)) -%}
+          {%- set ps_raw = pa.port_state | default(none) -%}
+          {%- set ps = (ps_raw | int) if (ps_raw is not none and (ps_raw | string | trim) != '') else none -%}
+          {%- set link = 'up' if os_up else ('down' if os_down else ('up' if ps == 2 else ('down' if (ps is not none and ps >= 3 and ps <= 8) else none))) -%}
           {%- set _ = out.append({
             'wwpn':            wwpn if is_fc else none,
             'wwnn':            wwnn if is_fc else none,
@@ -625,6 +687,19 @@
             'connection':      ('Fibre Channel' if ct == '1' else ('iSCSI' if ct == '2' else ct_raw)),
             'source':          'os',
           }) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+    # 2026-10-18 (W1): HBA 스크립트 구성요소(initiator_ports / adapter_attrs / port_attrs)별 성패 — absent(cmdlet · WMI 클래스 부재 = 환경)는
+    #   오류가 아니고, ok=false 이면서 absent 가 아닌 것(접근 거부 · 제공자 오류 · RPC)만 build fragment 의 storage errors[] 1건 근거다.
+    _w_hba_components_failed: >-
+      {%- set out = [] -%}
+      {%- set comps = _w_hba_parsed.components | default([]) -%}
+      {%- if comps is mapping -%}{%- set comps = [comps] -%}{%- endif -%}
+      {%- for c in comps -%}
+        {%- if c is mapping and ((c.ok | default(true)) is sameas false) and not ((c.absent | default(false)) is sameas true) -%}
+          {%- set _ = out.append({'scope': c.scope | default('unknown'), 'type': c.type | default(none), 'code': c.code | default(none),
+                                  'error': ((c.error | default('', true)) | string)[:160]}) -%}
         {%- endif -%}
       {%- endfor -%}
       {{ out }}
@@ -754,6 +829,17 @@
       {%- endfor -%}
       {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
     _w_stor_ok: "{{ ((_w_physical_disks | default([])) | length > 0) or ((_w_norm_filesystems | default([])) | length > 0) }}"
+    # 2026-10-18 (X6, 사용자 결정 2026-10-18): BusType RAID(protocol 'RAID') 디스크 = RAID 컨트롤러 뒤의 논리 볼륨 — physical_disks 에도 그대로
+    #   남긴다(Additive). Windows 표준 API 는 볼륨 ↔ 컨트롤러 · 멤버 디스크를 주지 않아 controller_id null · member_drive_ids [] · raid_level null.
+    _w_logical_volumes: >-
+      {%- set out = [] -%}
+      {%- for d in (_w_physical_disks | default([])) -%}
+        {%- if (d.protocol | default(none)) == 'RAID' -%}
+          {%- set _ = out.append({'id': d.id, 'name': d.model | default(none), 'controller_id': none, 'member_drive_ids': [], 'raid_level': none,
+                                  'total_mb': d.total_mb | default(none), 'health': d.health | default(none), 'state': none, 'boot_volume': none}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
   no_log: true
 
 # 2026-10-05 (최종 정비 §5 — 감사 C-6): 볼륨만 읽혀도 섹션이 성공하므로, 물리 디스크 쪽 구성요소(Win32_DiskDrive 조회 ·
@@ -785,7 +871,8 @@
         physical_disks:  "{{ _w_physical_disks }}"
         datastores:      []
         controllers:     []
-        logical_volumes: []
+        # 2026-10-18 (X6): BusType RAID 디스크를 논리 볼륨으로도 싣는다 (Redfish 와 같은 키)
+        logical_volumes: "{{ _w_logical_volumes | default([]) }}"
         # cycle-016 (2026-04-29): Win32_DiskDrive 기반 group summary
         summary:         "{{ _w_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
         # P4 (cycle 2026-04-29 → 2026-05-29): Get-InitiatorPort + MSFC_* FC HBA / Get-NetAdapter IB
@@ -816,7 +903,24 @@
            'section': 'storage',
            'message': '일부 디스크의 연결 인터페이스 종류를 분류하지 못해 해당 항목을 비워 두었습니다.',
            'detail':  ('source=Get-PhysicalDisk; cause=unmapped_bus_type; bus_type_raw=[' ~ ((_w_disk_bus_unmapped | default([])) | join(',')) ~ ']')}]
-            if ((_w_disk_bus_unmapped | default([])) | length > 0) else []) }}
+            if ((_w_disk_bus_unmapped | default([])) | length > 0) else [])
+         + ([{
+           'section': 'storage',
+           'message': '스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  ('source=Get-InitiatorPort,MSFC_FCAdapterHBAAttributes,MSFC_FibrePortHBAAttributes; cause=command_failed; ' ~ (_w_hba_script_error | default('', true)))}]
+            if (_w_hba_script_failed | default(false) | bool) else [])
+         + ([{
+           'section': 'storage',
+           'message': '스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  ('source=Get-InitiatorPort,MSFC_FCAdapterHBAAttributes,MSFC_FibrePortHBAAttributes; cause=component_failed; parts='
+                       ~ ((_w_hba_components_failed | default([])) | map(attribute='scope') | join(','))
+                       ~ '; error=' ~ ((((_w_hba_components_failed | default([])) | first | default({})).error) | default('none', true)))}]
+            if ((not (_w_hba_script_failed | default(false) | bool)) and ((_w_hba_components_failed | default([])) | length > 0)) else [])
+         + ([{
+           'section': 'storage',
+           'message': '스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',
+           'detail':  'source=Get-NetAdapter,Get-NetAdapterRdma; cause=command_failed; scope=infiniband'}]
+            if (_w_ib_script_failed | default(false) | bool) else []) }}
   no_log: true
 
 - name: "windows | storage | merge fragment"

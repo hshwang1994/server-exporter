@@ -26,7 +26,8 @@ SYNTH_IB = REPO / "tests" / "fixtures" / "redfish" / "synthetic_ib_mode" / "expe
 
 VALID_PORT_TYPES = frozenset({"FibreChannel", "FCoE", "iSCSI"})
 VALID_SOURCES = frozenset({"redfish", "os", "esxi"})
-VALID_LINK_STATUS = frozenset({"up", "down", "unknown"})
+VALID_LINK_STATUS = frozenset({"up", "down", "unknown"})          # storage.infiniband[] (종전 3값)
+VALID_HBA_LINK_STATUS = frozenset({"up", "down", None})           # storage.hbas[] — 2026-10-18 null = 장비 미제공 (unknown 문자열 폐지)
 
 # 전 채널 통일 canonical 코어 키 (channel-specific extra 는 추가 허용)
 HBA_REQUIRED_KEYS = ("wwpn", "wwnn", "link_status", "link_speed_gbps", "port_type", "source")
@@ -84,6 +85,9 @@ def test_hba_entries_canonical(baseline_envelope: dict) -> None:
         )
         assert h["source"] in VALID_SOURCES, (
             f"[{label}] hbas[{i}].source invalid: {h['source']!r}"
+        )
+        assert h["link_status"] in VALID_HBA_LINK_STATUS, (
+            f"[{label}] hbas[{i}].link_status invalid: {h['link_status']!r} (up / down / null)"
         )
 
 
@@ -144,4 +148,4 @@ def test_schema_example_hbas_use_the_canonical_shape() -> None:
         for k in HBA_REQUIRED_KEYS + ("adapter_id", "adapter_model", "port_id"):
             assert k in h, f"example hbas entry missing '{k}': {sorted(h)}"
         assert h["port_type"] in VALID_PORT_TYPES and h["source"] == "redfish"
-        assert h["link_status"] in ("up", "down", "unknown")
+        assert h["link_status"] in VALID_HBA_LINK_STATUS

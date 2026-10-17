@@ -414,8 +414,15 @@ fields:
     type: "string|null"
     priority: must
     channel: [os, esxi, redfish]
-    help_ko: "시스템 UUID (Redfish System.UUID). BMC UUID(bmc.uuid)와 다름 — 서버 본체 식별자."
-    help_en: "System UUID (Redfish System.UUID). Differs from BMC UUID (bmc.uuid) — server chassis identifier."
+    help_ko: >-
+      시스템 UUID (Redfish System.UUID / OS·ESXi SMBIOS). BMC UUID(bmc.uuid)와 다름 — 서버 본체 식별자. 소문자 8-4-4-4-12.
+      바이트 순서 (2026-10-18): OS·ESXi 는 SMBIOS 2.6 little-endian 표기이고 BMC 는 벤더에 따라 원시(network) 순서다 — adapter vendor_notes
+      uuid_byte_order: smbios_raw 가 선언된 BMC(실측 Cisco CIMC 4.1)는 normalize 가 앞 3필드를 바꿔 OS/ESXi 와 같은 값을 낸다. Dell 은 원래 같다.
+    help_en: >-
+      System UUID (Redfish System.UUID / OS·ESXi SMBIOS). Differs from BMC UUID (bmc.uuid) — server chassis identifier. Lowercase 8-4-4-4-12.
+      Byte order (2026-10-18): OS/ESXi use the SMBIOS 2.6 little-endian rendering while some BMCs emit raw (network) order — for adapters
+      declaring vendor_notes uuid_byte_order: smbios_raw (Cisco CIMC 4.1, lab-verified) normalize swaps the first three fields so the value
+      matches OS/ESXi. Dell already matches.
 
   hardware.bios_version:
     type: "string|null"
@@ -850,26 +857,29 @@ fields:
   "storage.logical_volumes[]":
     type: "array of object"
     priority: must
-    channel: [redfish]
+    channel: [redfish, os, esxi]
     help_ko: >-
-      RAID 논리 볼륨 목록. Redfish /Storage/{id}/Volumes에서 수집.
-      controllers[].id, physical_disks[].id와 관계를 형성:
-      logical_volumes[].controller_id → controllers[].id,
-      logical_volumes[].member_drive_ids → physical_disks[].id.
-      OS/ESXi 채널에서는 빈 배열 [].
-      HBA 모드(RAID 미구성) 서버에서도 빈 배열 [].
+      RAID 논리 볼륨 목록. Redfish 는 /Storage/{id}/Volumes 에서 수집하고 controllers[].id, physical_disks[].id 와 관계를 형성:
+      logical_volumes[].controller_id → controllers[].id, logical_volumes[].member_drive_ids → physical_disks[].id.
+      OS/ESXi (2026-10-18, 사용자 결정): RAID 컨트롤러 뒤에서 보이는 디스크(= physical_disks 의 그 항목, 그대로 남긴다) 를 논리 볼륨으로도
+      싣는다 — 같은 서버의 Redfish logical_volumes 와 맞춰 볼 수 있게. OS 는 RAID 뒤의 물리 디스크를 못 보므로 member_drive_ids 는 [],
+      raid_level 은 null 이다. 판정: Linux = 디스크의 PCI 컨트롤러(/sys/block 실경로) 가 lspci 클래스 'RAID bus controller' 인 controllers 항목,
+      Windows = BusType RAID(physical_disks[].protocol 'RAID', controller_id null), ESXi = scsiTopology 로 맞춘 어댑터의 controller_type RAID.
+      BOSS 처럼 SATA 클래스로 보이는 RAID 카드의 볼륨은 들어오지 않는다(모델 문자열로 추정하지 않는다). HBA 모드(RAID 미구성)·RAID 없는 서버는 [].
     help_en: >-
-      RAID logical volume list. Collected from Redfish /Storage/{id}/Volumes.
-      Forms relationships with controllers[].id and physical_disks[].id:
-      logical_volumes[].controller_id → controllers[].id,
-      logical_volumes[].member_drive_ids → physical_disks[].id.
-      Empty array [] for OS/ESXi channels and HBA-mode servers.
+      RAID logical volume list. Redfish collects /Storage/{id}/Volumes and relates controller_id → controllers[].id and
+      member_drive_ids → physical_disks[].id. OS/ESXi (2026-10-18, user decision): disks seen behind a RAID controller (the same
+      physical_disks entries, which stay) are also listed as logical volumes so they line up with the Redfish volumes of the same server;
+      the OS cannot see the member disks, so member_drive_ids is [] and raid_level null. Detection: Linux = the disk's PCI controller
+      (/sys/block real path) is a controllers entry of lspci class 'RAID bus controller'; Windows = BusType RAID (protocol 'RAID',
+      controller_id null); ESXi = adapter resolved through scsiTopology has controller_type RAID. Volumes of RAID cards that show as
+      SATA class (e.g. BOSS) are not included (no model-string guessing). [] for HBA-mode or RAID-less servers.
 
   "storage.logical_volumes[].raid_level":
     type: "string|null"
     enum: ["RAID0", "RAID1", "RAID5", "RAID6", "RAID10", "RAID50", "JBOD"]
     priority: must
-    channel: [redfish]
+    channel: [redfish, os, esxi]   # 2026-10-18: OS/ESXi 는 RAID 뒤 디스크를 볼륨으로 싣는다 (member/raid_level 은 비움)
     help_ko: >-
       RAID 레벨. 표준 RAIDType 필드 우선 사용.
       Dell 레거시 펌웨어에서 RAIDType 미제공 시 VolumeType으로 fallback
@@ -884,7 +894,7 @@ fields:
   "storage.logical_volumes[].member_drive_ids":
     type: "array of string"
     priority: must
-    channel: [redfish]
+    channel: [redfish, os, esxi]   # 2026-10-18: OS/ESXi 는 RAID 뒤 디스크를 볼륨으로 싣는다 (member/raid_level 은 비움)
     help_ko: >-
       이 논리 볼륨을 구성하는 물리 드라이브 Id 목록.
       physical_disks[].id와 매칭하여 물리↔논리 관계를 확인할 수 있음.
@@ -897,7 +907,7 @@ fields:
   "storage.logical_volumes[].controller_id":
     type: "string|null"
     priority: must
-    channel: [redfish]
+    channel: [redfish, os, esxi]   # 2026-10-18: OS/ESXi 는 RAID 뒤 디스크를 볼륨으로 싣는다 (member/raid_level 은 비움)
     help_ko: >-
       이 논리 볼륨이 속한 스토리지 컨트롤러의 Id.
       controllers[].id와 매칭하여 컨트롤러↔볼륨 관계를 확인할 수 있음.
@@ -908,7 +918,7 @@ fields:
   "storage.logical_volumes[].id":
     type: "string|null"
     priority: must
-    channel: [redfish]
+    channel: [redfish, os, esxi]   # 2026-10-18: OS/ESXi 는 RAID 뒤 디스크를 볼륨으로 싣는다 (member/raid_level 은 비움)
     help_ko: >-
       논리 볼륨 식별자. Redfish Volume의 Id.
       Dell: Disk.Virtual.0:RAID.Slot.6-1 형태.
@@ -923,14 +933,14 @@ fields:
   "storage.logical_volumes[].name":
     type: "string|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, os, esxi]   # 2026-10-18: OS/ESXi 는 RAID 뒤 디스크를 볼륨으로 싣는다 (member/raid_level 은 비움)
     help_ko: "논리 볼륨 이름 (예: Virtual Disk 0)."
     help_en: "Logical volume name (e.g., Virtual Disk 0)."
 
   "storage.logical_volumes[].total_mb":
     type: "integer|null"
     priority: must
-    channel: [redfish]
+    channel: [redfish, os, esxi]   # 2026-10-18: OS/ESXi 는 RAID 뒤 디스크를 볼륨으로 싣는다 (member/raid_level 은 비움)
     # cycle 2026-06-15 (RJ-1, 사용자 결정): 키 이름은 _mb 이나 값은 실제로 MiB(이진, ÷2^20)다.
     # rename/십진 MB 재계산은 호출자 계약 breaking(rule 13 R5) → 키/값 유지, 단위는 문서로만 명시.
     help_ko: >-
@@ -948,7 +958,7 @@ fields:
     type: "string|null"
     enum: ["OK", "Warning", "Critical"]
     priority: must
-    channel: [redfish]
+    channel: [redfish, os, esxi]   # 2026-10-18: OS/ESXi 는 RAID 뒤 디스크를 볼륨으로 싣는다 (member/raid_level 은 비움)
     help_ko: >-
       논리 볼륨 건강 상태.
       OK=정상, Warning=주의 필요, Critical=장애.
@@ -962,7 +972,7 @@ fields:
     type: "string|null"
     enum: ["Enabled", "Degraded", "Offline"]
     priority: must
-    channel: [redfish]
+    channel: [redfish, os, esxi]   # 2026-10-18: OS/ESXi 는 RAID 뒤 디스크를 볼륨으로 싣는다 (member/raid_level 은 비움)
     help_ko: >-
       논리 볼륨 동작 상태.
       Enabled=정상 동작, Degraded=성능 저하 (드라이브 장애 등),
@@ -975,7 +985,7 @@ fields:
   "storage.logical_volumes[].boot_volume":
     type: "boolean|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, os, esxi]   # 2026-10-18: OS/ESXi 는 RAID 뒤 디스크를 볼륨으로 싣는다 (member/raid_level 은 비움)
     help_ko: >-
       부트 볼륨 여부. Dell OEM(DellVolume.BootVolumeSource)에서만 판별 가능.
       기타 벤더에서는 null.
@@ -1575,8 +1585,14 @@ fields:
     enum: ["SSD", "HDD", "SCM"]
     priority: skip
     channel: [redfish, os, esxi]
-    help_ko: "디스크 유형. SSD, HDD 또는 SCM(저장 등급 메모리). Windows 는 MediaType 코드(3 HDD, 4 SSD, 5 SCM)와 문자열 모두 같은 표로 매핑하고, 알 수 없는 값은 null (2026-10-03)."
-    help_en: "Disk media type: SSD, HDD or SCM. Windows maps MediaType codes (3 HDD, 4 SSD, 5 SCM) and strings alike; unknown values are null (2026-10-03)."
+    help_ko: >-
+      디스크 유형. SSD, HDD 또는 SCM(저장 등급 메모리). Windows 는 MediaType 코드(3 HDD, 4 SSD, 5 SCM)와 문자열 모두 같은 표로 매핑하고,
+      알 수 없는 값은 null (2026-10-03). ESXi (2026-10-18): RAID 컨트롤러 뒤의 LUN(논리 볼륨)은 ssd 플래그가 컨트롤러 보고값이라 매체를 뜻하지
+      않아 null — 실측 esxi02 의 SSD RAID5 LUN 이 HDD 로 나왔다. 그 LUN 은 storage.logical_volumes 에도 있다.
+    help_en: >-
+      Disk media type: SSD, HDD or SCM. Windows maps MediaType codes (3 HDD, 4 SSD, 5 SCM) and strings alike; unknown values are
+      null (2026-10-03). ESXi (2026-10-18): a LUN behind a RAID controller (logical volume) gets null because its ssd flag is the
+      controller's report, not the media (esxi02 showed an SSD RAID5 LUN as HDD). Such LUNs also appear in storage.logical_volumes.
 
   "storage.physical_disks[].protocol":
     type: "string|null"
@@ -1990,21 +2006,27 @@ fields:
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      FC HBA 목록. 항목 1개 = FC 포트(기능) 1개 — 2포트 카드는 2건이다.
-      wwpn/link_status/link_speed_gbps/port_type. Linux 는 /sys/class/fc_host,
-      Windows 는 Get-InitiatorPort, ESXi 는 vmware_host_vmhba_info. Redfish 는 System 에
-      연결된 섀시의 NetworkAdapters 에서 Port.PortProtocol / NetDevFuncType / Port.FibreChannel
-      블록, 기능이 연결되지 않은 포트는 링크 기술 FibreChannel 로 분류한다(PortType 은 쓰지 않는다).
+      FC HBA 목록. 항목 1개 = **물리 FC 포트** 1개 — 2포트 카드는 2건이고 네 채널이 같은 기준이다 (2026-10-18):
+      Linux 는 NPIV 가상 포트(fc_host port_type 'NPIV VPORT')를 빼고, ESXi 는 같은 (wwpn, wwnn) 의 vmhba(ESXi 7 FC-NVMe 쌍둥이)를 1건으로,
+      Redfish 는 기능(NetworkDeviceFunction) 1개 = 1건(포트에 기능이 없으면 포트 1건). 그래도 Redfish(물리) ≥ OS/ESXi(논리) 일 수 있다 —
+      BMC 가 정의한 vHBA 를 OS 가 열거하지 않는 경우(실측 CIMC vHBA 4 vs ESXi fnic 2). 교차 대조 키는 wwpn.
+      wwpn/link_status/link_speed_gbps/port_type. Linux 는 /sys/class/fc_host, Windows 는 Get-InitiatorPort(+MSFC_*),
+      ESXi 는 vmware_host_vmhba_info. Redfish 는 System 에 연결된 섀시의 NetworkAdapters 에서 Port.PortProtocol / NetDevFuncType /
+      Port.FibreChannel 블록, 기능이 연결되지 않은 포트는 링크 기술 FibreChannel 로 분류한다(PortType 은 쓰지 않는다. FC 링크 기술 포트의
+      Ethernet 블록은 Ethernet 근거가 아니다 — 신 Port 스키마는 WWPN 을 거기 싣는다).
       Redfish 항목은 소속 카드를 adapter_id/adapter_model 로 담는다. 빈 목록이 "HBA 없음" 인지
-      "확인 못 함" 인지는 diagnosis.details.notices 와 errors[] 로 구분한다.
+      "확인 못 함" 인지는 diagnosis.details.notices 와 errors[] 로 구분한다 (Linux/Windows/ESXi 는 errors[] 만).
     help_en: >-
-      FC HBA list; one entry per FC port (function), so a 2-port card gives 2 entries.
-      wwpn/link_status/link_speed_gbps/port_type. Sources: Linux=/sys/class/fc_host,
-      Windows=Get-InitiatorPort, ESXi=vmware_host_vmhba_info. Redfish reads NetworkAdapters of the
-      chassis linked to the System and classifies by Port.PortProtocol / NetDevFuncType /
-      Port.FibreChannel block, or link technology FibreChannel for a port without a function
-      (PortType is not used). Redfish entries name the card in adapter_id/adapter_model. Whether an
-      empty list means "no HBA" or "not determined" is told by diagnosis.details.notices and errors[].
+      FC HBA list; one entry per **physical FC port** on every channel (2026-10-18): Linux drops NPIV virtual ports
+      (fc_host port_type 'NPIV VPORT'), ESXi collapses vmhbas sharing (wwpn, wwnn) (ESXi 7 FC-NVMe twins) into one,
+      Redfish emits one entry per NetworkDeviceFunction (or per port without a function). Redfish (physical) may still
+      list more than OS/ESXi (logical) when the BMC defines vHBAs the OS does not enumerate (CIMC 4 vs ESXi fnic 2).
+      Correlate across channels by wwpn. Sources: Linux=/sys/class/fc_host, Windows=Get-InitiatorPort (+MSFC_*),
+      ESXi=vmware_host_vmhba_info. Redfish reads NetworkAdapters of the chassis linked to the System and classifies by
+      Port.PortProtocol / NetDevFuncType / Port.FibreChannel block, or link technology FibreChannel for a port without a
+      function (PortType is not used; an Ethernet block on an FC-link port is not Ethernet evidence — the new Port schema
+      carries the WWPN there). Redfish entries name the card in adapter_id/adapter_model. Whether an empty list means
+      "no HBA" or "not determined" is told by diagnosis.details.notices and errors[].
 
   "storage.infiniband[]":
     type: "object[]"
@@ -2032,15 +2054,21 @@ fields:
     channel: [redfish, os, esxi]
     help_ko: >-
       FC HBA World Wide Port Name. 소문자 colon-hex 8-octet 정규화
-      (cross-channel 매칭 키). 미연결/미노출 시 null.
-      Redfish=NetworkDeviceFunction.FibreChannel.WWPN(없으면 PermanentWWPN)만 쓴다 — 포트 주소는
-      장비에 따라 WWNN 이라 wwpn 으로 옮기지 않는다(그때 null, 원 주소는 network.ports[].associated_address).
-      Linux=/sys/class/fc_host/*/port_name, Windows=Get-InitiatorPort.PortAddress, ESXi=vmhba port_wwn.
+      (cross-channel 매칭 키). 미연결/미노출 시 null. all-zero("0x0" 포함)는 null.
+      Redfish=NetworkDeviceFunction.FibreChannel.WWPN(없으면 PermanentWWPN). 기능에 WWPN 이 없으면(2026-10-18) 포트의 FC 주소 목록
+      (신 Port.FibreChannel.AssociatedWorldWideNames · FC 링크 기술 포트의 Ethernet.AssociatedMACAddresses 중 8옥텟 값)에서 알려진 WWNN 을
+      뺀 값이 정확히 1개일 때만 그것 — 구 NetworkPort.AssociatedNetworkAddresses 는 장비에 따라 WWNN 이라 쓰지 않는다(그때 null,
+      notice 'WWPN 미확정'; 원 주소는 network.ports[].associated_address). 행은 항상 남는다.
+      Linux=/sys/class/fc_host/*/port_name, Windows=Get-InitiatorPort.PortAddress, ESXi=vmhba port_wwn (8옥텟 colon-hex 가 아닌 값은
+      null + storage errors[] 1건).
     help_en: >-
       FC HBA World Wide Port Name. Normalized lowercase colon-hex 8-octet
-      (cross-channel match key). null when unlinked/unexposed. Redfish uses only
-      NetworkDeviceFunction.FibreChannel.WWPN (or PermanentWWPN); a port address is never promoted
-      because it can be the WWNN (it stays in network.ports[].associated_address).
+      (cross-channel match key). null when unlinked/unexposed; all-zero ("0x0") is null. Redfish uses
+      NetworkDeviceFunction.FibreChannel.WWPN (or PermanentWWPN); when the function has none (2026-10-18) the port's FC
+      address list (new Port.FibreChannel.AssociatedWorldWideNames, or Ethernet.AssociatedMACAddresses 8-octet values on an
+      FC-link port) minus the known WWNN is used only when exactly one value remains — legacy
+      NetworkPort.AssociatedNetworkAddresses is never used (it is the WWNN on some firmware; the row stays with wwpn null
+      and a 'WWPN undetermined' notice). ESXi values that are not 8-octet colon-hex are null + one storage error.
 
   "storage.hbas[].wwnn":
     type: "string|null"
@@ -2059,29 +2087,46 @@ fields:
     help_ko: >-
       HBA 포트 유형. Redfish 는 Port.PortProtocol / NetDevFuncType 에서 도출하고, 기능(NDF)이
       연결되지 않은 포트는 링크 기술(LinkNetworkTechnology / ActiveLinkTechnology)이 FibreChannel 이면
-      FibreChannel 이다 (PortType enum 아님 — FC/IB 값 없음). iSCSI 는 소프트/하드 initiator.
+      FibreChannel 이다 (PortType enum 아님 — FC/IB 값 없음). iSCSI 는 소프트/하드 initiator (ESXi 는 클래스 InternetScsiHba 도 iSCSI, 2026-10-18).
+      FCoE: Redfish NetDevFuncType FibreChannelOverEthernet / PortProtocol FCoE, ESXi 클래스 FibreChannelOverEthernetHba 또는 FCoE 드라이버
+      (qlnativefcoe · brcmfcoe · qfle3f · bnx2fc · qedf), Linux 소프트웨어/CNA FCoE 드라이버(fcoe · bnx2fc · qedf). Cisco VIC fnic/nfnic 은
+      세 채널 모두 FibreChannel 로 적는다 (같은 장비 같은 값).
     help_en: >-
       HBA port type. Redfish derives from Port.PortProtocol / NetDevFuncType; a port with no function
       attached is FibreChannel when its link technology (LinkNetworkTechnology / ActiveLinkTechnology)
-      is FibreChannel (NOT PortType enum — has no FC/IB members). iSCSI = soft/hw initiator.
+      is FibreChannel (NOT PortType enum — has no FC/IB members). iSCSI = soft/hw initiator (ESXi also maps the
+      InternetScsiHba class, 2026-10-18). FCoE: Redfish NetDevFuncType FibreChannelOverEthernet / PortProtocol FCoE, ESXi
+      FibreChannelOverEthernetHba class or FCoE drivers (qlnativefcoe, brcmfcoe, qfle3f, bnx2fc, qedf), Linux software/CNA
+      FCoE drivers (fcoe, bnx2fc, qedf). Cisco VIC fnic/nfnic is FibreChannel on all channels.
 
   "storage.hbas[].link_status":
-    type: "string"
-    enum: ["up", "down", "unknown"]
+    type: "string|null"
+    enum: ["up", "down"]
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      FC 포트 링크 상태 (전 채널 canonical). up=링크 활성, down=링크 없음 또는 비활성
-      (NoLink · LinkDown · 협상 중 포함), unknown=상태를 확인할 수 없음 — 링크 장애가 아니다.
-      Redfish 의 unknown 은 (a) 포트 응답에 LinkStatus 가 없거나 null/Unknown,
-      (b) FC 기능에 짝이 되는 포트 리소스가 없음(이때 link_speed_gbps 도 null) 두 경우다.
-      Redfish 가 위에 없는 장비 고유 값을 주면 소문자로 그대로 나올 수 있다.
+      FC 포트 링크 상태 (전 채널 canonical, 2026-10-18 사용자 결정). 문자열은 up · down 둘뿐이고 **장비가 링크 상태 속성을 주지 않으면 null**
+      이다 — 확인되지 않은 상태를 down 으로 적지 않고, 종전 'unknown' 문자열은 폐지했다(link_speed_gbps · wwnn 의 "미노출 → null" 과 같은 규칙).
+      up = 링크 활성, down = 링크 없음/비활성(NoLink · LinkDown · 협상 중 · 관리상 offline · 진단/루프백 포함).
+      Redfish: Port/NetworkPort.LinkStatus (LinkUp·Up·Connected → up / LinkDown·Down·NoLink·Starting·Training → down); 키 자체가 없으면
+      null + notice '링크 상태 미제공' (실측 HPE CSUS 3200 RMC 1.75 — FC Port 에 LinkStatus/Status 키 없음, OS 채널에만 있다). 짝 없는 기능은
+      이름으로 찾은 부모 포트 값을 상속하고, 부모도 없으면 null.
+      Linux fc_host port_state: Online·Marginal → up / Offline·Linkdown·Error·Blocked·Bypassed·Loopback·Diagnostics → down / Unknown·Deleted·없음 → null.
+      Windows MSFT_InitiatorPort.OperationalStatus: 2 → up / 3~8 → down / 1·없음 → MSFC PortState(2 → up, 3~8 → down) → null.
+      ESXi HostBusAdapter.status: online → up / offline → down / unbound·unknown·없음 → null.
+      Portal 은 null 인 Redfish 항목을 wwpn 으로 OS 채널 항목과 맞춰 링크 상태를 보인다.
     help_en: >-
-      FC port link state (cross-channel canonical). up=link active, down=no link or inactive
-      (NoLink, LinkDown, negotiating), unknown=state could not be determined — not a link failure.
-      On Redfish, unknown means (a) the port has no LinkStatus (or null/Unknown), or (b) the FC
-      function has no matching port resource (link_speed_gbps is then null). An unrecognised vendor
-      value may pass through lowercased.
+      FC port link state (cross-channel canonical, user decision 2026-10-18). The only strings are up and down; **null means the
+      device does not expose a link-state attribute** — an unverified state is never written as down, and the former 'unknown' string
+      is retired (same rule as link_speed_gbps/wwnn: unexposed → null). up = link active, down = no link/inactive (NoLink, LinkDown,
+      negotiating, administratively offline, diagnostics/loopback).
+      Redfish: Port/NetworkPort.LinkStatus (LinkUp/Up/Connected → up; LinkDown/Down/NoLink/Starting/Training → down); when the key is
+      absent → null + notice (HPE CSUS 3200 RMC 1.75 exposes no LinkStatus/Status on FC ports — only the OS channel has it). An
+      unlinked function inherits its name-matched parent port; no parent → null.
+      Linux fc_host port_state: Online/Marginal → up; Offline/Linkdown/Error/Blocked/Bypassed/Loopback/Diagnostics → down; Unknown/Deleted/absent → null.
+      Windows OperationalStatus: 2 → up; 3-8 → down; 1/absent → MSFC PortState (2 → up, 3-8 → down) → null.
+      ESXi HostBusAdapter.status: online → up; offline → down; unbound/unknown/absent → null.
+      The portal joins null Redfish entries to the OS channel entry by wwpn to show the link state.
 
   "storage.hbas[].link_speed_gbps":
     type: "number|null"
@@ -2596,19 +2641,25 @@ fields:
     channel: [redfish, os, esxi]
     help_ko: >-
       정격(base) 클럭 MHz — 3채널 공통 정의 (2026-09-03). Linux cpufreq base_frequency → 브랜드 문자열 "@ N.NNGHz",
-      Windows Win32_Processor.MaxClockSpeed, ESXi cpuInfo.hz, Redfish Processor.MaxSpeedMHz(벤더 보고값).
-      터보 최대 클럭은 cpu.turbo_max_mhz. 종전 Linux 는 lscpu 'CPU max MHz'(터보) 를 냈다.
+      Windows Win32_Processor.MaxClockSpeed, ESXi cpuInfo.hz. Redfish(2026-10-18 정정): Processor.BaseSpeedMHz → Oem.Hpe.RatedSpeedMHz →
+      브랜드 문자열 "@ N.NNGHz" → OperatingSpeedMHz → Oem.Lenovo.CurrentClockSpeedMHz, 모두 없으면 null — 종전 MaxSpeedMHz 는 터보 최대라
+      OS/ESXi 와 달랐다(실측 Dell 4000 vs 2400). 터보 최대 클럭은 cpu.turbo_max_mhz. 종전 Linux 는 lscpu 'CPU max MHz'(터보) 를 냈다.
     help_en: >-
       Rated (base) clock in MHz — one definition across channels (2026-09-03). Linux cpufreq base_frequency
-      then brand string "@ N.NNGHz", Windows Win32_Processor.MaxClockSpeed, ESXi cpuInfo.hz, Redfish
-      Processor.MaxSpeedMHz (vendor reported). Turbo max is cpu.turbo_max_mhz.
+      then brand string "@ N.NNGHz", Windows Win32_Processor.MaxClockSpeed, ESXi cpuInfo.hz. Redfish (corrected 2026-10-18):
+      Processor.BaseSpeedMHz → Oem.Hpe.RatedSpeedMHz → brand string → OperatingSpeedMHz → Oem.Lenovo.CurrentClockSpeedMHz, else null —
+      the former MaxSpeedMHz is the turbo ceiling and disagreed with OS/ESXi (Dell 4000 vs 2400). Turbo max is cpu.turbo_max_mhz.
 
   cpu.turbo_max_mhz:
     type: "integer|null"
     priority: nice
-    channel: [os, esxi]
-    help_ko: "터보/부스트 최대 클럭 MHz. Linux lscpu 'CPU max MHz' / cpufreq cpuinfo_max_freq. Windows/ESXi 는 API 가 제공하지 않아 null."
-    help_en: "Turbo/boost max clock in MHz. Linux lscpu 'CPU max MHz' / cpufreq cpuinfo_max_freq. null on Windows/ESXi (not exposed by the API)."
+    channel: [os, esxi, redfish]
+    help_ko: >-
+      터보/부스트 최대 클럭 MHz. Linux lscpu 'CPU max MHz' / cpufreq cpuinfo_max_freq. Redfish Processor.MaxSpeedMHz (2026-10-18 추가 —
+      BMC 는 스펙 시트 값이라 Linux 의 MSR 기반 값과 ±100MHz 차이가 날 수 있다, 실측 iDRAC 4000 vs lscpu 4100). Windows/ESXi 는 API 가 제공하지 않아 null.
+    help_en: >-
+      Turbo/boost max clock in MHz. Linux lscpu 'CPU max MHz' / cpufreq cpuinfo_max_freq. Redfish Processor.MaxSpeedMHz (added 2026-10-18;
+      the BMC reports the spec-sheet value, which may differ from the Linux MSR-based value by ~100 MHz — iDRAC 4000 vs lscpu 4100). null on Windows/ESXi.
 
   cpu.summary.groups[].l2_cache_kb:
     type: "integer|null"

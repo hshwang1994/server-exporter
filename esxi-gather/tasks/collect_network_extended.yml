@@ -11,7 +11,7 @@
 #   data.network.adapters[]         — vmnic (NIC HW)
 #   data.network.virtual_switches[] — vSwitch + portgroup
 #   data.network.vmkernels[]        — vmkernel adapter
-#   data.storage.hbas[]             — vmhba FC / iSCSI 만 (SAS/RAID 제외 — 2-signal type+driver)
+#   data.storage.hbas[]             — vmhba FC / FCoE / iSCSI 만 (SAS/RAID 제외 — type + driver 두 신호). 항목 1개 = 물리 FC 포트 1개
 #   data.storage.infiniband[]       — 항상 [] (2026-10-17 — 아래 참조. 종전 nmlx NIC 드라이버명 추정은 제거)
 #
 # 2026-10-17 (InfiniBand 전면 검증 — 계약은 docs/contract/03-fields.md 6.3.1, 결정 기록은 ADR-2026-10-17-infiniband-port-decision):
@@ -123,19 +123,38 @@
           {%- endfor -%}
           {{ out }}
         # cycle 2026-05-29 (hba-ib-csus, D1=API-only): FC/iSCSI HBA 만 hbas[] 로.
-        #   - 분류 2-signal: type + driver (lpfc/qlnativefc=FC, iscsi_vmk=iSCSI).
+        #   - 분류는 type + driver 두 신호: type(vSphere HostBusAdapter 하위 클래스 — 모듈이 'Fibre Channel' · 'iSCSI' · 'Block Adapter' ·
+        #     'Parallel SCSI' 로 바꾸거나 클래스 이름을 그대로 둔다) 또는 드라이버 계열(lpfc/qlnativefc/brcmnvmefc/bfa/fnic/nfnic = FC,
+        #     qlnativefcoe/brcmfcoe/qfle3f/bnx2fc/qedf = FCoE, iscsi_vmk = 소프트웨어 iSCSI).
         #     SAS/RAID 컨트롤러 (nhpsa/lsi_mr3/smartpqi/vmw_ahci/nvme...) 는 hbas 제외 (storage controller 영역).
         #   - 구 'infiniband' in type 분기는 dead-code (vmhba type 에 InfiniBand 없음) → 제거.
         #     IB 는 이 채널에서 수집하지 않는다 (2026-10-17 — 파일 헤더 참조. 종전 nmlx NIC 추론 _e_ext_ib 삭제).
         #   - 누락 필드 보강: port_type / link_speed_gbps (FC speed) / source. 빈 placeholder vmhba (device 없음) skip.
-        #   source: community.vmware vmware_host_vmhba_info + Broadcom esxcli ref (EXTERNAL-CONTRACTS §3).
+        #   2026-10-18 (HBA 전수 점검 — 계약 docs/contract/03-fields.md 6.3.1):
+        #     · 하드웨어 iSCSI(클래스 InternetScsiHba) 도 iSCSI 다 — 종전 'iscsi' 부분 문자열은 클래스 이름 'internetscsi' 에 없어 조용히 빠졌다.
+        #     · FCoE(클래스 FibreChannelOverEthernetHba · FCoE 드라이버) 는 port_type FCoE — 종전엔 FibreChannel 로 적었다(Redfish 는 FCoE 로 적는다).
+        #     · link_status 는 up / down / null: status online → up, offline → down, unbound · unknown · 없음 → null
+        #       (확인되지 않은 상태를 down 으로 적지 않는다 — 종전 'unknown' 문자열 폐지, 사용자 결정 2026-10-18).
+        #     · speed: vSphere HostFibreChannelHba.speed 는 "bits per second" 로 문서화됐지만 lab 값(링크 다운 = 0)으로 단위를 확인하지 못해
+        #       자릿수로 정규화한다 — ≥ 1e6 → /1e9(bps), ≥ 1e3 → /1e3(Mbps), 그 밖 그대로(Gbps); 0 · 없음 → null. 실장비 미검증(사용자 결정 2026-10-17).
+        #     · 같은 (wwpn, wwnn) 은 1건 — ESXi 7 FC-NVMe 는 포트당 SCSI vmhba + NVMe vmhba 둘을 같은 WWPN 으로 보인다. 항목 1개 = 물리 FC 포트 1개
+        #       (Redfish · Linux 와 같은 기준). 첫 vmhba 를 남긴다. wwpn 이 없는 항목(iSCSI 등)은 합치지 않는다.
+        #     · 8옥텟 colon-hex 가 아닌 WWN 은 wwpn/wwnn 을 null 로 두고 storage errors[] 1건(detail 에 원문) — 모듈의 WWN 문자열 변환은 자릿수가
+        #       홀수거나 int64 음수면 깨진 값을 그대로 낸다. 자리표시자 location 'PCI'/'N/A' · bus 음수 → null.
+        #   source: community.vmware vmware_host_vmhba_info (RETURN: device/driver/model/type/status/location/bus/node_wwn/port_wwn/speed) +
+        #           vSphere API HostHostBusAdapter.status ("online" · "offline" · "unbound" · "unknown") · HostFibreChannelHba.speed (bits per second)
+        #   source: https://docs.netapp.com/us-en/ontap-sanhost/nvme_esxi_7.html (FC-NVMe — 포트당 vmhba 2개, 같은 WWPN)
+        #   lab: FC 링크 up · FC-NVMe · 하드웨어 iSCSI · FCoE 부재 — tests/unit/test_esxi_hba_normalize.py 의 합성 모듈 결과로만 검증 (실장비 미검증).
         _e_ext_hbas: >-
           {%- set out = [] -%}
+          {%- set seen = [] -%}
           {%- set d = _e_vmhba.hosts_vmhbas_info | default({}) -%}
           {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
           {%- set vmhbas = (d.get(key, {}).get('vmhba_details', [])) if key else [] -%}
-          {%- set fc_drivers = ['lpfc', 'qlnativefc', 'brcmnvmefc', 'qlnativefcoe'] -%}
+          {%- set fc_drivers = ['lpfc', 'qlnativefc', 'brcmnvmefc', 'bfa', 'fnic', 'nfnic'] -%}
+          {%- set fcoe_drivers = ['qlnativefcoe', 'brcmfcoe', 'qfle3f', 'bnx2fc', 'qedf'] -%}
           {%- set iscsi_drivers = ['iscsi_vmk'] -%}
+          {%- set wwn_re = '^([0-9a-f]{2}:){7}[0-9a-f]{2}$' -%}
           {# 2026-09-03 (B-22): 같은 vmhba 의 controllers[].controller_manufacturer(pciDevice vendorName) 를 vendor 로 #}
           {%- set ctrl_vendor = {} -%}
           {%- for c in (_e_raw_controllers | default([])) -%}
@@ -145,30 +164,64 @@
             {%- set dev = h.device | default(none) -%}
             {%- set drv = (h.driver | default('')) | lower -%}
             {%- set atype = (h.type | default('')) | lower -%}
+            {%- set atype_c = atype | replace(' ', '') | replace('_', '') | replace('-', '') -%}
             {%- if dev -%}
-              {%- set is_fc = ('fibre' in atype) or (drv in fc_drivers) -%}
-              {%- set is_iscsi = ('iscsi' in atype) or (drv in iscsi_drivers) -%}
+              {%- set is_fcoe = ('fibrechanneloverethernet' in atype_c) or (drv in fcoe_drivers) -%}
+              {%- set is_fc = ('fibre' in atype) or (drv in fc_drivers) or is_fcoe -%}
+              {%- set is_iscsi = (not is_fc) and (('iscsi' in atype) or ('internetscsi' in atype_c) or (drv in iscsi_drivers)) -%}
               {%- if is_fc or is_iscsi -%}
-                {%- set raw_sp = h.speed | default(none) -%}
-                {%- set sp_gbps = (raw_sp | int) if (raw_sp is number) else none -%}
-                {%- set _ = out.append({
-                  'name':            dev,
-                  'driver':          h.driver | default(none),
-                  'model':           h.model | default(none),
-                  'vendor':          ctrl_vendor.get(dev, none),
-                  'firmware':        none,
-                  'adapter_type':    h.type | default(none),
-                  'link_status':     ('up' if (h.status | default('') | lower | trim) in ['connected','up','linkup','active','online'] else ('down' if (h.status | default('') | lower | trim) in ['disconnected','down','linkdown','offline','disabled','inactive'] else 'unknown')),
-                  'wwpn':            (h.port_wwn | default(none)) | normalize_wwn,
-                  'wwnn':            (h.node_wwn | default(none)) | normalize_wwn,
-                  'link_speed_gbps': sp_gbps,
-                  'port_type':       ('FibreChannel' if is_fc else 'iSCSI'),
-                  'pci':             h.location | default(none),
-                  'bus':             h.bus | default(none),
-                  'source':          'esxi',
-                }) -%}
+                {%- set wwpn_n = (h.port_wwn | default(none)) | normalize_wwn -%}
+                {%- set wwnn_n = (h.node_wwn | default(none)) | normalize_wwn -%}
+                {%- set wwpn = wwpn_n if (wwpn_n is none or (wwpn_n is match(wwn_re))) else none -%}
+                {%- set wwnn = wwnn_n if (wwnn_n is none or (wwnn_n is match(wwn_re))) else none -%}
+                {%- set dkey = (wwpn ~ '/' ~ (wwnn or '')) if wwpn else none -%}
+                {%- if dkey is none or dkey not in seen -%}
+                  {%- if dkey is not none -%}{%- set _ = seen.append(dkey) -%}{%- endif -%}
+                  {%- set raw_sp = h.speed | default(none) -%}
+                  {%- set sp_gbps = none -%}
+                  {%- if raw_sp is number and raw_sp > 0 -%}
+                    {%- set spf = raw_sp | float -%}
+                    {%- set spv = (spf / 1000000000) if spf >= 1000000 else ((spf / 1000) if spf >= 1000 else spf) -%}
+                    {%- set sp_gbps = (spv | int) if (spv == (spv | int)) else (spv | round(2)) -%}
+                  {%- endif -%}
+                  {%- set hs = (h.status | default('')) | string | lower | trim -%}
+                  {%- set loc = h.location | default(none) -%}
+                  {%- set bus = h.bus | default(none) -%}
+                  {%- set _ = out.append({
+                    'name':            dev,
+                    'driver':          h.driver | default(none),
+                    'model':           h.model | default(none),
+                    'vendor':          ctrl_vendor.get(dev, none),
+                    'firmware':        none,
+                    'adapter_type':    h.type | default(none),
+                    'link_status':     ('up' if hs in ['online', 'connected', 'up', 'linkup', 'active'] else ('down' if hs in ['offline', 'disconnected', 'down', 'linkdown', 'disabled', 'inactive'] else none)),
+                    'wwpn':            wwpn,
+                    'wwnn':            wwnn,
+                    'link_speed_gbps': sp_gbps,
+                    'port_type':       ('FCoE' if is_fcoe else ('FibreChannel' if is_fc else 'iSCSI')),
+                    'pci':             (loc if (loc is not none and (loc | string | trim) not in ['', 'PCI', 'N/A']) else none),
+                    'bus':             (bus if (bus is number and bus >= 0) else none),
+                    'source':          'esxi',
+                  }) -%}
+                {%- endif -%}
               {%- endif -%}
             {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+        # 2026-10-18: 8옥텟 colon-hex 가 아닌 WWN 원문 (위 목록에서는 null 로 둔 값) — merge fragment 가 storage errors[] 1건으로 남긴다.
+        _e_ext_hba_bad_wwn: >-
+          {%- set out = [] -%}
+          {%- set d = _e_vmhba.hosts_vmhbas_info | default({}) -%}
+          {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
+          {%- set vmhbas = (d.get(key, {}).get('vmhba_details', [])) if key else [] -%}
+          {%- set wwn_re = '^([0-9a-f]{2}:){7}[0-9a-f]{2}$' -%}
+          {%- for h in vmhbas -%}
+            {%- for k in ['port_wwn', 'node_wwn'] -%}
+              {%- set n = (h[k] | default(none)) | normalize_wwn -%}
+              {%- if n is not none and not (n is match(wwn_re)) -%}
+                {%- set _ = out.append((h.device | default('?')) ~ ':' ~ k ~ '=' ~ (h[k] | string)) -%}
+              {%- endif -%}
+            {%- endfor -%}
           {%- endfor -%}
           {{ out }}
         _e_ext_portgroups: >-
@@ -277,6 +330,12 @@
                                       'detail': ('scope=' ~ (scopes | join(',')) ~ '; cause=module_failed; msg=' ~ ((msgs | first | default('none'))[:160]))}) -%}
             {%- endif -%}
           {%- endfor -%}
+          {# 2026-10-18: 형식이 깨진 WWN(8옥텟 colon-hex 아님) — 항목의 wwpn/wwnn 은 null, 원문은 여기 #}
+          {%- set bad = _e_ext_hba_bad_wwn | default([]) -%}
+          {%- if (bad | length) > 0 -%}
+            {%- set _ = out.append({'section': 'storage', 'message': texts['storage'],
+                                    'detail': ('scope=vmhba; cause=malformed_wwn; count=' ~ (bad | length) ~ '; values=' ~ ((bad[:10]) | join(',')))}) -%}
+          {%- endif -%}
           {{ out }}
       no_log: true
   rescue:
@@ -301,12 +360,18 @@
         #   - message: 개발자 용어("best-effort skip")와 커널/하이퍼바이저 내부 명칭을 빼고
         #     사용자가 무엇을 못 받았고 무엇을 확인하면 되는지로 다시 썼다.
         #   - detail: 빈 문자열 대신 null. 기술 근거(실패 태스크 msg)는 그대로 여기에 둔다.
+        #   - 2026-10-18: HBA 도 이 블록에서 읽으므로 storage 에도 1건 — 종전엔 network 만 적어 hbas [] 가 "HBA 없음" 과 같았다.
         _errors_fragment:
           - section: network
             message: "네트워크 어댑터와 가상 스위치 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
             detail: >-
               {{ (ansible_failed_result.msg | default('', true) | string | trim)
                  | default(none, true) }}
+          - section: storage
+            message: "스토리지 어댑터 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+            detail: >-
+              {{ 'scope=vmhba; cause=task_failed; msg='
+                 ~ ((ansible_failed_result.msg | default('', true) | string | trim) or 'none') }}
       no_log: true
 
 - name: "esxi | extended | merge fragment"

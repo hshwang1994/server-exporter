@@ -34,12 +34,29 @@
 #   source: https://github.com/linux-rdma/rdma-core/blob/master/libibumad/umad.c get_port() (port_guid = gids/0 의 interface_id)
 #   source: https://www.rfc-editor.org/rfc/rfc4392 §1.2 (GID = 64-bit subnet prefix + 64-bit port GUID)
 #   lab: InfiniBand 장비 부재 — tests/unit/test_linux_hba_ib_markers.py 의 합성 sysfs 트리로만 검증했다 (실장비 미검증).
+#
+# 2026-10-18 (HBA 전수 점검 — 계약은 docs/contract/03-fields.md 6.3.1 · 6.3.2):
+#   - storage.hbas[] 항목 1개 = 물리 FC 포트 1개. NPIV 가상 포트(fc_host port_type 에 NPIV)는 별도 host 로 열거되므로 뺀다.
+#   - link_status 는 up / down / null — port_state 완전일치. 확인되지 않은 상태(Unknown · Deleted · 파일 없음)는 down 으로 적지 않는다
+#     (종전 'unknown' 문자열 폐지, 사용자 결정 2026-10-18).
+#   - driver 는 scsi_host/<host>/proc_name(드라이버 이름 — Scsi_Host 장치에는 driver 링크가 없어 종전 경로는 실장비에서 항상 비었다)
+#     → PCI 장치(device/..)의 driver 링크 → 종전 경로. 펌웨어/모델은 qla2xxx(model_name · fw_version) 와 lpfc(modelname · fwrev) ·
+#     bfa(model) 이름을 모두 본다. 제조사/모델 폴백은 PCI uevent 의 PCI_SLOT_NAME → lspci -mm (IB 구간과 같은 방식, 장치당 1회).
+#   - 값 안의 '|' 와 CR/LF 는 지운다(필드 밀림 방지). raw 자체가 실패(rc != 0)하면 storage errors[] 1건(cause=command_failed).
+#   - port_type: 소프트웨어/CNA FCoE 드라이버(fcoe · bnx2fc · qedf) 는 FCoE, 그 밖은 FibreChannel. Cisco fnic 은 OS 에 FC HBA 로 보이고
+#     ESXi · CIMC 도 FC 로 적으므로 FibreChannel 로 둔다 (채널 간 같은 값).
+#   source: https://github.com/torvalds/linux/blob/master/drivers/scsi/scsi_transport_fc.c (fc_port_state_names · fc_port_type_names "NPIV VPORT")
+#   source: https://github.com/torvalds/linux/blob/master/drivers/scsi/scsi_sysfs.c (scsi_host proc_name = hostt->proc_name; Scsi_Host 에 driver 링크 없음)
+#   source: https://github.com/torvalds/linux/blob/master/drivers/scsi/lpfc/lpfc_attr.c (modelname · fwrev · serialnum · lpfc_drvr_version)
+#   source: https://github.com/torvalds/linux/blob/master/drivers/scsi/qla2xxx/qla_attr.c (model_name · fw_version · driver_version · serial_num)
+#   lab: FC 호스트 부재 — 합성 sysfs 트리(평면 · 실 링크 모양 둘)로만 검증 (실장비 미검증).
 
 - block:
     # cycle 2026-05-29 (hba-ib-csus, D2): WWNN(node_name) + driver + firmware 보강.
     # 2026-09-03 (B-22/B-24): model 은 scsi_host 의 model_name(있을 때), 없으면 symbolic_name.
     #   manufacturer 가 sysfs 에 있으면 vendor 로. WWN 은 normalize_wwn 으로 소문자 colon-hex.
-    # delimiter '|' 11 필드: FC|host|wwpn|wwnn|symbolic|state|speed|driver|firmware|model_name|manufacturer
+    # delimiter '|' 15 필드 (앞 11 은 종전 그대로, 뒤 4 는 2026-10-18 추가):
+    #   FC|host|wwpn|wwnn|symbolic|state|speed|driver|firmware|model_name|manufacturer|port_type|pci_addr|pci_vendor|pci_device
     # 2026-10-03 (C7): 속성 파일이 있는데 읽지 못하면 빈 값으로 삼키지 않고 ERR|<경로> 를 남긴다
     #   (권한 / 장치 상태로 인한 증거 소실을 드러낸다). 파일이 없는 것은 드라이버가 그 속성을 내지
     #   않는 것이라 실패가 아니다. rd <경로> → $v (실패 시 빈 값 + ERR 줄).
@@ -50,6 +67,8 @@
           [ -e "$1" ] || return 0
           if v=$(cat "$1" 2>/dev/null); then :; else v=""; echo "ERR|$1"; fi
         }
+        # 2026-10-18: 값 안의 '|' 와 CR/LF 는 구분자 · 줄을 깨므로 지운다 (IB 구간의 tr -d 와 같은 규칙).
+        cl() { printf '%s' "$1" | tr -d '|\r\n'; }
         if [ -d /sys/class/fc_host ]; then
           for h in /sys/class/fc_host/host*; do
             [ -d "$h" ] || continue
@@ -59,26 +78,41 @@
             rd "$h/symbolic_name"; sym=$v
             rd "$h/port_state"; state=$v
             rd "$h/speed"; speed=$v
+            rd "$h/port_type"; ptype=$v
+            sh="$h/device/scsi_host/$host"
+            # 2026-10-18: driver = scsi_host proc_name(드라이버 이름) → PCI 장치(device/..) driver 링크 → 종전 경로(Scsi_Host 의 driver 링크 — 실장비엔 없다)
             drv=""
-            if [ -e "$h/device/driver" ]; then
-              if lnk=$(readlink -f "$h/device/driver" 2>/dev/null) && [ -n "$lnk" ]; then
-                drv=$(basename "$lnk" 2>/dev/null)
-              else
-                echo "ERR|$h/device/driver"
-              fi
+            if [ -f "$sh/proc_name" ]; then rd "$sh/proc_name"; drv=$v; fi
+            if [ -z "$drv" ]; then
+              for dl in "$h/device/../driver" "$h/device/driver"; do
+                [ -e "$dl" ] || continue
+                if lnk=$(readlink -f "$dl" 2>/dev/null) && [ -n "$lnk" ]; then drv=$(basename "$lnk" 2>/dev/null); else echo "ERR|$dl"; fi
+                [ -n "$drv" ] && break
+              done
             fi
+            # 펌웨어/모델/제조사: qla2xxx(fw_version · model_name) · lpfc(fwrev · modelname) · bfa(model) 속성명 — 빈 값이면 다음 후보
             fwver=""
-            for fwp in "$h/device/fw_version" "$h"/device/scsi_host/*/fw_version; do
-              if [ -f "$fwp" ]; then rd "$fwp"; fwver=$v; break; fi
+            for fwp in "$sh/fw_version" "$sh/fwrev" "$h"/device/scsi_host/*/fw_version "$h"/device/scsi_host/*/fwrev "$h/device/fw_version"; do
+              if [ -f "$fwp" ]; then rd "$fwp"; fwver=$v; [ -n "$fwver" ] && break; fi
             done
             mdl=""; mfr=""
-            for mp in "$h/device/scsi_host/$host/model_name" "$h"/device/scsi_host/*/model_name "$h/device/model_name"; do
-              if [ -f "$mp" ]; then rd "$mp"; mdl=$v; break; fi
+            for mp in "$sh/model_name" "$sh/modelname" "$sh/model" "$h"/device/scsi_host/*/model_name "$h"/device/scsi_host/*/modelname "$h/device/model_name"; do
+              if [ -f "$mp" ]; then rd "$mp"; mdl=$v; [ -n "$mdl" ] && break; fi
             done
-            for vp in "$h/device/scsi_host/$host/manufacturer" "$h"/device/scsi_host/*/manufacturer "$h/device/manufacturer"; do
-              if [ -f "$vp" ]; then rd "$vp"; mfr=$v; break; fi
+            for vp in "$sh/manufacturer" "$h"/device/scsi_host/*/manufacturer "$h/device/manufacturer"; do
+              if [ -f "$vp" ]; then rd "$vp"; mfr=$v; [ -n "$mfr" ] && break; fi
             done
-            echo "FC|$host|$wwpn|$wwnn|$sym|$state|$speed|$drv|$fwver|$mdl|$mfr"
+            # PCI 주소(Scsi_Host 의 부모 = PCI 장치의 uevent PCI_SLOT_NAME) → lspci -mm 제조사/장치명 (IB 구간과 같은 방식, 호스트당 1회)
+            pci=""; pvn=""; pdv=""
+            if [ -f "$h/device/../uevent" ]; then
+              rd "$h/device/../uevent"; pci=$(printf '%s\n' "$v" | sed -n 's/^PCI_SLOT_NAME=//p' | head -n 1 | tr -d '|\r')
+            fi
+            if [ -n "$pci" ] && command -v lspci >/dev/null 2>&1; then
+              pl=$(lspci -mm -s "$pci" 2>/dev/null | head -n 1)
+              pvn=$(printf '%s\n' "$pl" | awk -F'"' '{print $4}' | tr -d '|\r')
+              pdv=$(printf '%s\n' "$pl" | awk -F'"' '{print $6}' | tr -d '|\r')
+            fi
+            echo "FC|$host|$(cl "$wwpn")|$(cl "$wwnn")|$(cl "$sym")|$(cl "$state")|$(cl "$speed")|$(cl "$drv")|$(cl "$fwver")|$(cl "$mdl")|$(cl "$mfr")|$(cl "$ptype")|$pci|$pvn|$pdv"
           done
         fi
         # cycle 2026-05-29 (hba-ib-csus, D2): per-port GID(port_guid) + rate + fw_ver + hca 보강.
@@ -128,29 +162,39 @@
 
     - name: "linux | hba_ib | parse + build fragment"
       ansible.builtin.set_fact:
+        # 2026-10-18: link_status up/down/null (port_state 완전일치) · NPIV 가상 포트 제외 · FCoE 드라이버 → FCoE ·
+        #   vendor/model 폴백 = lspci(pci.ids) 이름 (자리표시자 "Vendor 1077" / "Device 2261" 은 빈 값으로 본다 — IB 구간과 같다).
         _l_hbas_list: >-
           {%- set out = [] -%}
           {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
             {%- set parts = line.split('|') -%}
-            {%- if parts | length >= 9 and parts[0] == 'FC' -%}
+            {%- set ptype = ((parts[11] | default('')) | trim | lower) if (parts | length >= 12) else '' -%}
+            {%- if parts | length >= 9 and parts[0] == 'FC' and 'npiv' not in ptype -%}
               {# speed 는 "16 Gbit" / "8 Gbit" 처럼 첫 숫자 토큰만 (여러 숫자가 붙는 문자열을 이어붙이지 않는다) #}
               {%- set spfirst = ((parts[6] | default('')) | trim).split(' ')[0] if (parts[6] | default('') | trim) else '' -%}
               {%- set spdig = spfirst | regex_replace('[^0-9]', '') -%}
-              {%- set st = (parts[5] | default('')) | lower -%}
+              {%- set st = (parts[5] | default('')) | trim | lower -%}
+              {%- set link = 'up' if st in ['online', 'marginal'] else ('down' if st in ['offline', 'linkdown', 'error', 'blocked', 'bypassed', 'loopback', 'diagnostics'] else none) -%}
+              {%- set drv = (parts[7] | trim) if (parts[7] | trim) else none -%}
+              {%- set ptp = 'FCoE' if ((drv or '') | lower) in ['fcoe', 'bnx2fc', 'qedf'] else 'FibreChannel' -%}
               {%- set mdl = (parts[9] | trim) if (parts | length >= 10 and (parts[9] | trim)) else none -%}
               {%- set mfr = (parts[10] | trim) if (parts | length >= 11 and (parts[10] | trim)) else none -%}
+              {%- set pvn_raw = (parts[13] | trim) if (parts | length >= 15 and (parts[13] | trim)) else '' -%}
+              {%- set pdv_raw = (parts[14] | trim) if (parts | length >= 15 and (parts[14] | trim)) else '' -%}
+              {%- set pvn = '' if (pvn_raw is match('^Vendor [0-9a-fA-F]{4}$')) else pvn_raw -%}
+              {%- set pdv = '' if (pdv_raw is match('^Device [0-9a-fA-F]{4}$')) else pdv_raw -%}
               {%- set _ = out.append({
                 'host':            parts[1],
                 'wwpn':            (parts[2] | normalize_wwn) if parts[2] else none,
                 'wwnn':            (parts[3] | normalize_wwn) if parts[3] else none,
-                'model':           mdl if mdl else (parts[4] if parts[4] else none),
+                'model':           mdl if mdl else (pdv if pdv else (parts[4] if parts[4] else none)),
                 'symbolic_name':   parts[4] if parts[4] else none,
-                'vendor':          mfr,
-                'driver':          parts[7] if parts[7] else none,
+                'vendor':          mfr if mfr else (pvn if pvn else none),
+                'driver':          drv,
                 'firmware':        parts[8] if parts[8] else none,
-                'link_status':     ('up' if 'online' in st else ('down' if ('offline' in st or 'linkdown' in st or 'down' in st) else 'unknown')),
+                'link_status':     link,
                 'link_speed_gbps': (spdig | int) if spdig else none,
-                'port_type':       'FibreChannel',
+                'port_type':       ptp,
                 'source':          'os',
               }) -%}
             {%- endif -%}
@@ -240,14 +284,21 @@
         _sections_failed_fragment:    []
         # 2026-10-03 (C7): fc_host / infiniband 속성을 읽지 못했으면 1건 (경로는 10개까지 + 나머지 수).
         #   섹션 판정은 종전 그대로 (목록이 있으면 collected) — 값이 빈 항목의 근거만 남긴다.
+        # 2026-10-18: raw 자체가 실패(rc != 0 — 셸 오류 · 전송 오류)했으면 1건 더 (cause=command_failed). 종전에는 빈 출력이 "HBA 없음" 과 같았다.
         _errors_fragment: >-
           {%- set paths = _l_hba_read_errors | default([]) -%}
-          {%- if (paths | length) == 0 -%}{{ [] }}
-          {%- else -%}
+          {%- set rc = (_l_hba_raw.rc | default(0)) | int -%}
+          {%- set out = [] -%}
+          {%- if rc != 0 -%}
+            {%- set se = (((_l_hba_raw.stderr | default('')) | string) | replace('\n', ' ') | replace('\r', ' ') | trim)[:160] -%}
+            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=fc_host,infiniband; cause=command_failed; rc=' ~ rc ~ '; stderr=' ~ (se or 'none'))}) -%}
+          {%- endif -%}
+          {%- if (paths | length) > 0 -%}
             {%- set scope = ((['fc_host'] if (paths | select('search', '/fc_host/') | list | length) > 0 else []) + (['infiniband'] if (paths | select('search', '/infiniband/') | list | length) > 0 else [])) | join(',') -%}
             {%- set more = (' 외 ' ~ ((paths | length) - 10) ~ '건') if (paths | length) > 10 else '' -%}
-            {{ [{'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=' ~ (scope or 'fc_host,infiniband') ~ '; cause=attribute_unreadable; count=' ~ (paths | length) ~ '; paths=' ~ (paths[:10] | join(',')) ~ more)}] }}
+            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=' ~ (scope or 'fc_host,infiniband') ~ '; cause=attribute_unreadable; count=' ~ (paths | length) ~ '; paths=' ~ (paths[:10] | join(',')) ~ more)}) -%}
           {%- endif -%}
+          {{ out }}
       no_log: true
   rescue:
     - name: "linux | hba_ib | rescue (best-effort skip)"

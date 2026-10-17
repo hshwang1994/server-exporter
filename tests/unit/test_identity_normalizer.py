@@ -68,10 +68,19 @@ def test_wwn_empty_or_zero_is_null():
     assert normalize_wwn(None) is None
     assert normalize_wwn("") is None
     assert normalize_wwn("0x0000000000000000") is None
+    # 2026-10-18: Linux fc_host 가 WWN 을 아직 못 읽은 포트에 내는 "0x0" 도 자리표시자 — 길이와 무관하게 null
+    assert normalize_wwn("0x0") is None
+    assert normalize_wwn("0") is None
+    assert normalize_wwn("00:00:00:00:00:00:00:00") is None
 
 
 def test_wwn_unexpected_length_kept_lowercase():
     assert normalize_wwn("eui.0025385a91b1c5d2") == "eui.0025385a91b1c5d2"
+
+
+def test_wwn_negative_rendering_is_not_regrouped():
+    """2026-10-18: ESXi 모듈이 int64 음수 WWN 을 "-3f:ff:…" 로 내면 부호를 떼고 묶은 16-hex 는 다른 값이다 — 원문 그대로(형식 검사가 걸러 낸다)."""
+    assert normalize_wwn("-3F:FF:FF:6F:05:E4:D3:C3") == "-3f:ff:ff:6f:05:e4:d3:c3"
 
 
 # ── IB GUID (2026-10-17) ─────────────────────────────────────────────────────

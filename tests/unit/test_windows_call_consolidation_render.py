@@ -708,7 +708,9 @@ INTENDED_ERRORS_OVERRIDE = {
                                         "detail": "source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=1; parts=script"}],
 }
 INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_errors_fragment"},
-                         ("storage", "windows | storage | build fragment"): {"_errors_fragment"},
+                         # 2026-10-18 (X6): logical_volumes 가 BusType RAID 디스크로 채워진다 (RAID 디스크 없는 시나리오는 종전과 같은 [])
+                         ("storage", "windows | storage | build fragment"): {"_errors_fragment", "_data_fragment"},
+                         ("storage", "windows | storage | compute summary groups"): {"_w_logical_volumes"},
                          # 8차 R5: vmms 조회 실패를 "역할 없음" 으로 보지 않는다 · setup 실패를 권한 문제로 적지 않는다 · setup 실패 시 메모리 오류
                          ("system", "windows | system | determine hosting_type"): {"_w_hosting_type"},
                          ("system", "windows | system | build identifier diagnostics"): {"_w_id_diagnostics"},
@@ -721,12 +723,16 @@ INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_err
                          ("network", "windows | network | build fragment"): {"_errors_fragment"},
                          # 2026-10-17 (InfiniBand 전면 검증): IB 항목 계약 변경 — port=null · rate_gbps 는 up 일 때만 · 소수 보존 ·
                          #   note 에 내부 규칙 번호 없음. _w_hbas 는 글자 그대로다.
-                         ("storage", "windows | storage | build HBA/IB canonical lists"): {"_w_ib"}}
+                         ("storage", "windows | storage | build HBA/IB canonical lists"): {"_w_ib", "_w_hbas", "_w_hba_components_failed"},
+                         # 2026-10-18 (HBA 전수 점검): Bug B 차단 — from_json 가드 + 스크립트 실패 사실(_w_*_script_failed/_w_hba_script_error);
+                         #   _w_hbas 는 link_status up/down/null(종전 unknown 폐지) + PortState 보강; 구성요소 성패 목록
+                         ("storage", "windows | storage | parse HBA/IB raw json"): {"_w_hba_parsed", "_w_ib_parsed", "_w_hba_script_failed",
+                                                                                  "_w_ib_script_failed", "_w_hba_script_error"}}
 # 태스크 단위로 바뀐 키(set_fact 밖) — 식별자 진단의 문장 변수(vars)에 setup 실패 문장 2개를 더했다
 INTENDED_CHANGED_TASK_KEYS = {("system", "windows | system | build identifier diagnostics"): {"vars"}}
 # 그대로 둔 win_shell 중 의도해서 고친 줄 — 그 줄(앞부분으로 찾는다)과 PowerShell 주석 줄만 다를 수 있고 나머지 스크립트는 글자 그대로다.
-#   2026-10-10 (C6): FC HBA PortSpeed 값맵 정정(4→10 · 8→4 · 16→8, 확인 못 한 64 · 128 은 null).
-INTENDED_SHELL_LINES = {("storage", "windows | storage | initiator ports + HBA attrs"): ("$gbps = switch ($spd)",)}
+#   (2026-10-18: FC HBA 스크립트는 구성요소 성패를 내도록 다시 썼다 — 아래 INTENDED_SHELL_REWRITES 로 옮김)
+INTENDED_SHELL_LINES = {}
 # 판별 방식을 통째로 바꾼 win_shell (2026-10-17 InfiniBand 전면 검증): 줄 단위 비교 대신 태스크 키(이름 · register · no_log …)가
 #   같고, 남아야 할 토큰이 있고 사라져야 할 토큰이 없는지 본다. 값 계약은 test_windows_infiniband_detection.py 가 본다.
 #   - keep: Get-NetAdapter 1회(-IncludeHidden) · NdisPhysicalMedium 11 · ReceiveLinkSpeed(bps 원천) · 팀 멀티플렉서 제외(MS_IMPLAT)
@@ -734,7 +740,14 @@ INTENDED_SHELL_LINES = {("storage", "windows | storage | initiator ports + HBA a
 INTENDED_SHELL_REWRITES = {("storage", "windows | storage | infiniband adapters (best-effort)"):
                            {"keep": ("Get-NetAdapter -IncludeHidden", "NdisPhysicalMedium -eq 11", "ReceiveLinkSpeed", "MS_IMPLAT",
                                      "RdmaTechnology"),
-                            "drop": ("Get-PnpDevice", "ibbus", "ibal", "ipoib", "VEN_15B3")}}
+                            "drop": ("Get-PnpDevice", "ibbus", "ibal", "ipoib", "VEN_15B3")},
+                           # 2026-10-18 (HBA 전수 점검 W1): $ErrorActionPreference Stop + 구성요소별 { scope, ok, absent, type, code, error } —
+                           #   종전 빈 catch("} catch { }")는 읽기 실패와 "HBA 없음" 을 글자까지 같게 냈다. 값 계약은 test_windows_storage_enum_render /
+                           #   test_windows_storage_powershell_static 이 본다.
+                           ("storage", "windows | storage | initiator ports + HBA attrs"):
+                           {"keep": ("$ErrorActionPreference = 'Stop'", "Get-InitiatorPort", "MSFC_FCAdapterHBAAttributes", "MSFC_FibrePortHBAAttributes",
+                                     "components = $comps", "Test-Absent", "$gbps = switch ($spd)"),
+                            "drop": ("} catch { }",)}}
 
 
 def _shell_without(script: str, prefixes) -> list:

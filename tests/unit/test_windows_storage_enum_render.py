@@ -78,7 +78,7 @@ def _render(tmpl, ctx):
     return _env().from_string(tmpl).render(**ctx)
 
 
-def run_storage(disks=(), volumes=(), hba=None, ib=None, disk_rc=0):
+def run_storage(disks=(), volumes=(), hba=None, ib=None, disk_rc=0, hba_raw=None, ib_raw=None):
     """PowerShell 등록 결과 → gather_storage.yml 의 set_fact 체인(파일 순서) → fragment.
 
     2026-10-03 (P4): volumes 와 physical disks 는 win_shell 하나(`_w_stor_doc_raw`, JSON 문서 1개) 로
@@ -89,8 +89,9 @@ def run_storage(disks=(), volumes=(), hba=None, ib=None, disk_rc=0):
            "disks": {"ok": True, "error": None, "rows": list(disks), "data": None}}
     ctx = {
         "_w_stor_doc_raw": {"stdout": json.dumps(doc), "rc": disk_rc},
-        "_w_hba_raw": {"stdout": json.dumps(hba) if hba is not None else ""},
-        "_w_ib_raw": {"stdout": json.dumps(ib) if ib is not None else ""},
+        # 2026-10-18: hba_raw / ib_raw 로 register 모양(stdout · rc · stderr)을 그대로 넣을 수 있다 (Bug B 시험)
+        "_w_hba_raw": hba_raw if hba_raw is not None else {"stdout": json.dumps(hba) if hba is not None else ""},
+        "_w_ib_raw": ib_raw if ib_raw is not None else {"stdout": json.dumps(ib) if ib is not None else ""},
     }
     frag = None
     for task in yaml.safe_load(STOR_YML.read_text(encoding="utf-8")):
@@ -320,9 +321,11 @@ def test_non_fc_non_iscsi_initiators_are_excluded(conn):
     ("Operational", "up"), ("2", "up"),
     ("Link Down", "down"), ("6", "down"),
     ("Port Error", "down"), ("7", "down"),
-    ("User Offline", "unknown"), ("3", "unknown"),
-    ("Loopback", "unknown"), ("8", "unknown"),
-    ("Unknown", "unknown"), ("1", "unknown"), ("", "unknown"),
+    # 2026-10-18: 3 User Offline · 4 Bypassed · 5 In diagnostics mode · 8 Loopback 도 링크 없음 → down
+    ("User Offline", "down"), ("3", "down"), ("Bypassed", "down"), ("4", "down"),
+    ("In diagnostics mode", "down"), ("5", "down"), ("Loopback", "down"), ("8", "down"),
+    # 1 Unknown / 빈 값 — 확인되지 않은 상태는 null (PortState 보강은 아래 시험)
+    ("Unknown", None), ("1", None), ("", None),
     # OperationalStatus 는 UInt16[] — 여러 값이면 PowerShell 이 쉼표로 이어 붙인다
     ("6,7", "down"), ("2,8", "up"), ("Operational,Loopback", "up"),
 ])
@@ -331,8 +334,122 @@ def test_oper_status_follows_initiator_port_valuemap(oper, link):
     assert out[0]["link_status"] == link
 
 
+HBA_MSG = "스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+
+
+def _hba_errors(out):
+    return [e for e in out["errors"] if e["message"] == HBA_MSG]
+
+
+def _pa(state, wwpn="21:00:00:24:ff:01:02:03"):
+    return {"port_wwn": wwpn, "node_wwn": "20:00:00:24:ff:01:02:03", "speed_gbps": 16, "port_state": state}
+
+
+@pytest.mark.parametrize("state,link", [(2, "up"), (3, "down"), (4, "down"), (6, "down"), (8, "down"), (1, None), (0, None), (None, None), ("", None)])
+def test_port_state_fills_in_when_operational_status_is_unknown(state, link):
+    """OperationalStatus 1(Unknown)/없음이면 MSFC PortState 로 보강 — 2 → up, 3~8 → down, 그 밖·없음 → null."""
+    out = hbas([port("20:00:00:24:ff:01:02:03", "21:00:00:24:ff:01:02:03", oper="1")], [_ADP_A], [_pa(state)])
+    assert out[0]["link_status"] == link
+
+
+def test_operational_status_wins_over_port_state():
+    assert hbas([port("20:00:00:24:ff:01:02:03", "21:00:00:24:ff:01:02:03", oper="6")], [_ADP_A], [_pa(2)])[0]["link_status"] == "down"
+    assert hbas([port("20:00:00:24:ff:01:02:03", "21:00:00:24:ff:01:02:03", oper="2")], [_ADP_A], [_pa(6)])[0]["link_status"] == "up"
+
+
+def _comp(scope, ok=True, absent=False, error=None, code=None):
+    return {"scope": scope, "ok": ok, "absent": absent, "type": None if ok else "CimException", "code": code, "error": error}
+
+
+def _hba_doc(components, ports=()):
+    return {"ports": list(ports), "adapters": [], "port_attrs": [], "components": components}
+
+
+def test_component_failure_is_recorded_as_one_storage_error():
+    """(W1) 접근 거부 같은 구성요소 실패는 storage errors[] 1건 — 읽은 포트는 남기고 섹션 상태는 그대로."""
+    comps = [_comp("initiator_ports"), _comp("adapter_attrs", ok=False, error="Access denied", code="AccessDenied"),
+             _comp("port_attrs", ok=False, error="Access denied", code="AccessDenied")]
+    out = run_storage([disk(0, protocol="SAS")], hba=_hba_doc(comps, [port("20:00:00:24:ff:01:02:03", "21:00:00:24:ff:01:02:03")]))
+    assert len(out["storage"]["hbas"]) == 1
+    errs = _hba_errors(out)
+    assert len(errs) == 1, out["errors"]
+    assert "cause=component_failed" in errs[0]["detail"] and "parts=adapter_attrs,port_attrs" in errs[0]["detail"] and "Access denied" in errs[0]["detail"]
+    assert out["collected"] == ["storage"] and out["failed"] == []
+
+
+def test_absent_components_are_not_errors():
+    """(W1) cmdlet · MSFC 클래스가 없는 환경(absent) 은 "HBA 없음" 과 같다 — 오류가 아니다."""
+    comps = [_comp("initiator_ports"), _comp("adapter_attrs", ok=False, absent=True, error="Not supported", code="NotSupported"),
+             _comp("port_attrs", ok=False, absent=True, error="Invalid class", code="InvalidClass")]
+    out = run_storage([disk(0, protocol="SAS")], hba=_hba_doc(comps))
+    assert out["storage"]["hbas"] == [] and _hba_errors(out) == []
+
+
+def test_single_component_object_is_wrapped():
+    """PS5.1 ConvertTo-Json 은 원소 1개 배열을 객체로 접는다."""
+    out = run_storage([disk(0, protocol="SAS")],
+                      hba={"ports": [], "adapters": [], "port_attrs": [], "components": _comp("initiator_ports", ok=False, error="boom")})
+    assert len(_hba_errors(out)) == 1
+
+
+def test_documents_without_components_are_unchanged():
+    out = run_storage([disk(0, protocol="SAS")], hba={"ports": [], "adapters": [], "port_attrs": []})
+    assert out["storage"]["hbas"] == [] and _hba_errors(out) == []
+
+
+def test_non_json_hba_output_does_not_raise_and_is_recorded():
+    """(Bug B) stdout 이 JSON 이 아니면(권한 오류 문구 등) from_json 을 부르지 않는다 — 종전엔 예외가 play rescue 로 가서 다른 섹션까지 비웠다."""
+    out = run_storage([disk(0, protocol="SAS")], hba_raw={"stdout": "Get-InitiatorPort : Access is denied.\r\nAt line:1 char:1", "rc": 0, "stderr": ""})
+    assert out["storage"]["hbas"] == []
+    errs = _hba_errors(out)
+    assert len(errs) == 1 and "cause=command_failed" in errs[0]["detail"] and "Access is denied" in errs[0]["detail"]
+    assert out["collected"] == ["storage"] and out["failed"] == []
+
+
+def test_nonzero_rc_is_recorded_even_with_json_stdout():
+    doc = json.dumps({"ports": [], "adapters": [], "port_attrs": [], "components": []})
+    out = run_storage([disk(0, protocol="SAS")], hba_raw={"stdout": doc, "rc": 1, "stderr": "The term 'Get-InitiatorPort' is not recognized"})
+    errs = _hba_errors(out)
+    assert len(errs) == 1 and "rc=1" in errs[0]["detail"] and "not recognized" in errs[0]["detail"]
+    assert out["storage"]["hbas"] == []
+
+
+def test_truncated_json_is_a_script_failure_not_an_exception():
+    out = run_storage([disk(0, protocol="SAS")], hba_raw={"stdout": '{"ports": [{"node_addr": "20:00', "rc": 0})
+    assert out["storage"]["hbas"] == [] and len(_hba_errors(out)) == 1
+
+
+def test_non_json_ib_output_does_not_raise_and_is_recorded():
+    out = run_storage([disk(0, protocol="SAS")], ib_raw={"stdout": "Get-NetAdapter : The RPC server is unavailable", "rc": 0})
+    assert out["storage"]["infiniband"] == []
+    errs = _hba_errors(out)
+    assert len(errs) == 1 and "scope=infiniband" in errs[0]["detail"]
+
+
+def test_empty_hba_output_with_rc_zero_is_still_no_hba_no_error():
+    out = run_storage([disk(0, protocol="SAS")], hba_raw={"stdout": "", "rc": 0})
+    assert out["storage"]["hbas"] == [] and _hba_errors(out) == []
+
+
 def test_port_speed_join_by_normalized_wwpn():
     pa = {"port_wwn": "21:00:00:24:ff:01:02:03", "node_wwn": "20:00:00:24:ff:01:02:03",
           "speed_gbps": 16, "port_state": 2}
     out = hbas([port("20:00:00:24:ff:01:02:03", "21:00:00:24:ff:01:02:03")], [_ADP_A], [pa])
     assert out[0]["link_speed_gbps"] == 16
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-10-18 (X6) — BusType RAID 디스크 = logical_volumes (physical_disks 는 그대로)
+# ═══════════════════════════════════════════════════════════════════════════
+def test_raid_bus_type_disks_are_also_logical_volumes():
+    out = run_storage([disk(0, protocol="RAID", model="PERC H755 Front"), disk(1, protocol="NVMe", media="SSD"), disk(2, protocol="RAID", model="PERC H755 Front")])
+    st = out["storage"]
+    assert [d["id"] for d in st["physical_disks"]] == [f"\\\\.\\PHYSICALDRIVE{i}" for i in range(3)]
+    assert [v["id"] for v in st["logical_volumes"]] == ["\\\\.\\PHYSICALDRIVE0", "\\\\.\\PHYSICALDRIVE2"]
+    assert st["logical_volumes"][0] == {"id": "\\\\.\\PHYSICALDRIVE0", "name": "PERC H755 Front", "controller_id": None, "member_drive_ids": [],
+                                        "raid_level": None, "total_mb": 1000204886016 // 1048576, "health": "OK", "state": None, "boot_volume": None}
+    assert out["collected"] == ["storage"]
+
+
+def test_no_raid_disks_means_empty_logical_volumes():
+    assert run_storage([disk(0, protocol="SATA"), disk(1, protocol="NVMe")])["storage"]["logical_volumes"] == []

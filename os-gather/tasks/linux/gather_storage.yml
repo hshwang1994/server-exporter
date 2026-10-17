@@ -72,6 +72,10 @@
       s=$(printf '%s\n' "$p" | sed -n 's/^ID_SERIAL_SHORT=//p' | head -1)
       w=$(printf '%s\n' "$p" | sed -n 's/^ID_WWN=//p' | head -1)
       echo "UDEV|/dev/$d|$s|$w"
+      # 2026-10-18 (X6): 디스크가 붙은 PCI 장치 — /sys/block/<dev> 실경로의 마지막 PCI 주소(RAID/SATA/SAS/NVMe 컨트롤러). CTRL| 의 pci 와
+      #   맞춰 RAID 컨트롤러 뒤의 디스크(= 논리 볼륨)를 logical_volumes 에도 싣는다. 경로가 없거나 PCI 주소가 없으면 빈 값 (오류 아님).
+      bp=$(readlink -f "/sys/block/$d" 2>/dev/null | grep -o '[0-9a-f]\{4\}:[0-9a-f]\{2\}:[0-9a-f]\{2\}\.[0-9a-f]' | tail -n 1)
+      echo "DISKPCI|/dev/$d|$bp"
     done
     # multipath (LX-F04, 2026-10-10): dm 장치(dm/uuid 가 mpath- 로 시작)의 경로 디스크 목록 — 같은 LUN 의 경로를 1개로 접는 근거.
     #   MPATH|<mpath 이름>|<member …> (sysfs 만 읽는다 — multipath 명령 · 권한 불필요)
@@ -396,6 +400,35 @@
       {{ out }}
   no_log: true
 
+# 2026-10-18 (X6, 사용자 결정 2026-10-18): RAID 컨트롤러(CTRL| 클래스 RAID) 뒤의 디스크 = 논리 볼륨 — physical_disks 에도 그대로 남긴다(Additive).
+#   OS 는 RAID 뒤의 물리 디스크를 못 보므로 member_drive_ids 는 비고 raid_level 은 null. 키는 Redfish logical_volumes[] 와 같다.
+#   controller_id = controllers[].id (PCI 주소). BOSS 처럼 lspci 클래스가 SATA 인 RAID 카드의 볼륨은 들어오지 않는다 — 컨트롤러 클래스만
+#   보고 모델 문자열("DELLBOSS VD")로 추정하지 않는다. 디스크 ↔ 컨트롤러는 raw 의 DISKPCI| 줄(/sys/block 실경로의 PCI 주소)로 맞춘다.
+- name: "linux | storage | normalize logical volumes"
+  ansible.builtin.set_fact:
+    _l_norm_logical_volumes: >-
+      {%- set out = [] -%}
+      {%- set raid_pci = [] -%}
+      {%- for c in (_l_norm_controllers | default([])) -%}
+        {%- if (c.controller_type | default(none)) == 'RAID' and (c.pci | default(none)) -%}{%- set _ = raid_pci.append(c.pci) -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set disk_pci = {} -%}
+      {%- for line in (_l_stor_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('DISKPCI|') -%}
+          {%- set p = line.split('|') -%}
+          {%- if (p | length) >= 3 and (p[2] | trim) -%}{%- set _ = disk_pci.update({(p[1] | trim): (p[2] | trim)}) -%}{%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- for d in (_l_norm_physical_disks | default([])) -%}
+        {%- set pci = disk_pci.get(d.id | default(''), none) -%}
+        {%- if pci and pci in raid_pci -%}
+          {%- set _ = out.append({'id': d.id, 'name': d.model | default(none), 'controller_id': pci, 'member_drive_ids': [], 'raid_level': none,
+                                  'total_mb': d.total_mb | default(none), 'health': d.health | default(none), 'state': none, 'boot_volume': none}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
+
 - name: "linux | storage | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -404,7 +437,7 @@
         physical_disks:  "{{ _l_norm_physical_disks | default([]) }}"
         datastores:      []
         controllers:     "{{ _l_norm_controllers | default([]) }}"
-        logical_volumes: []
+        logical_volumes: "{{ _l_norm_logical_volumes | default([]) }}"
         summary:         "{{ _l_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
     _sections_supported_fragment: ['storage']
     _sections_collected_fragment: "{{ ['storage'] if (((_l_norm_physical_disks | default([])) | length > 0) or ((_l_norm_filesystems | default([])) | length > 0)) else [] }}"

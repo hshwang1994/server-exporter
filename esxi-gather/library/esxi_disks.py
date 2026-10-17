@@ -86,17 +86,49 @@ def _decode_serial(lun):
     return None
 
 
+def _lun_controller_map(hs):
+    """ScsiLun key → (어댑터 device, controller_type) — storageDevice.scsiTopology 로 LUN 이 어느 어댑터에 붙었는지 (2026-10-18 X6/X7).
+
+    topology 가 없거나 깨져도 빈 dict — 디스크 수집을 막지 않는다. 어댑터 종류는 _build_controllers 와 같은 규칙(_controller_type).
+    source: vSphere API HostScsiTopology (adapter[].adapter = HostBusAdapter.key, target[].lun[].scsiLun = ScsiLun.key)
+    """
+    out = {}
+    try:
+        sd = getattr(hs.config, 'storageDevice', None)
+        hbas = {}
+        for hba in (getattr(sd, 'hostBusAdapter', None) or []):
+            key = getattr(hba, 'key', None)
+            if key:
+                hbas[key] = (getattr(hba, 'device', None), _controller_type(type(hba).__name__, getattr(hba, 'driver', None)))
+        topo = getattr(sd, 'scsiTopology', None)
+        for ad in (getattr(topo, 'adapter', None) or []):
+            info = hbas.get(getattr(ad, 'adapter', None))
+            if info is None:
+                continue
+            for tg in (getattr(ad, 'target', None) or []):
+                for lun in (getattr(tg, 'lun', None) or []):
+                    lk = getattr(lun, 'scsiLun', None)
+                    if lk and lk not in out:
+                        out[lk] = info
+    except Exception:
+        return {}
+    return out
+
+
+def _scsi_disks(hs):
+    ss = hs.configManager.storageSystem
+    if ss is None or ss.storageDeviceInfo is None:
+        return []
+    return [lun for lun in (ss.storageDeviceInfo.scsiLun or []) if isinstance(lun, vim.host.ScsiDisk)]
+
+
 def _build_disks(target):
     hs = _as_target(target).host()
     if hs is None:
         return []
     out = []
-    ss = hs.configManager.storageSystem
-    if ss is None or ss.storageDeviceInfo is None:
-        return []
-    for lun in (ss.storageDeviceInfo.scsiLun or []):
-        if not isinstance(lun, vim.host.ScsiDisk):
-            continue
+    ctl = _lun_controller_map(hs)
+    for lun in _scsi_disks(hs):
         cn = getattr(lun, 'canonicalName', None)
         cap = getattr(lun, 'capacity', None)
         total_mb = int((cap.block * cap.blockSize) / 1048576) if cap else None
@@ -105,6 +137,10 @@ def _build_disks(target):
         vendor = (getattr(lun, 'vendor', '') or '').strip() or None
         ssd = getattr(lun, 'ssd', None)
         full_model = (vendor + ' ' + model).strip() if (vendor and model) else (model or None)
+        # 2026-10-18 (X7): RAID 컨트롤러 뒤의 LUN(논리 볼륨)은 ssd 플래그가 컨트롤러 보고값이라 매체를 뜻하지 않는다(실측 esxi02:
+        #   SSD RAID5 LUN 이 HDD) → null. 다른 어댑터(SATA/SAS/NVMe/FC) 의 디스크는 종전 그대로.
+        _dev, ctype = ctl.get(getattr(lun, 'key', None), (None, None))
+        media = None if ctype == 'RAID' else (('SSD' if ssd else 'HDD') if ssd is not None else None)
         out.append({
             'id': cn,
             'device': cn,
@@ -112,11 +148,45 @@ def _build_disks(target):
             'serial': _decode_serial(lun),
             'wwn': wwn,
             'total_mb': total_mb,
-            'media_type': ('SSD' if ssd else 'HDD') if ssd is not None else None,
+            'media_type': media,
             'protocol': None,
             'health': None,
         })
     # canonicalName 기준 정렬(결정적 출력)
+    return sorted(out, key=lambda d: d.get('id') or '')
+
+
+def _build_logical_volumes(target):
+    """RAID 컨트롤러 뒤의 LUN = 논리 볼륨 (2026-10-18 X6, 사용자 결정 2026-10-18). physical_disks 에도 그대로 남는다(Additive).
+
+    ESXi 는 RAID 뒤의 물리 디스크를 못 보므로 member_drive_ids 는 비고 raid_level 은 null 이다. 키는 Redfish logical_volumes[] 와 같다
+    (id · name · controller_id · member_drive_ids · raid_level · total_mb · health · state · boot_volume). controller_id = controllers[].id (vmhba).
+    """
+    hs = _as_target(target).host()
+    if hs is None:
+        return []
+    ctl = _lun_controller_map(hs)
+    out = []
+    for lun in _scsi_disks(hs):
+        dev, ctype = ctl.get(getattr(lun, 'key', None), (None, None))
+        if ctype != 'RAID':
+            continue
+        cn = getattr(lun, 'canonicalName', None)
+        cap = getattr(lun, 'capacity', None)
+        model = (getattr(lun, 'model', '') or '').strip() or None
+        vendor = (getattr(lun, 'vendor', '') or '').strip() or None
+        name = (getattr(lun, 'displayName', '') or '').strip() or ((vendor + ' ' + model).strip() if (vendor and model) else (model or cn))
+        out.append({
+            'id': cn,
+            'name': name,
+            'controller_id': dev,
+            'member_drive_ids': [],
+            'raid_level': None,
+            'total_mb': int((cap.block * cap.blockSize) / 1048576) if cap else None,
+            'health': None,
+            'state': None,
+            'boot_volume': None,
+        })
     return sorted(out, key=lambda d: d.get('id') or '')
 
 
@@ -552,6 +622,7 @@ def main():
     content = None
     target = None
     disks, controllers, listening_ports, host_info = [], [], [], {}
+    logical_volumes = []   # 2026-10-18 (X6): RAID 뒤 LUN
 
     try:
         # 2026-10-03 (C8): pyVmomi 의 첫 요청(버전 탐색 GET /sdk/vimServiceVersions.xml)은 httpConnectionTimeout 을 받지 않아
@@ -578,6 +649,7 @@ def main():
             else:
                 disks = _safe_build('physical_disks', _build_disks, target, part_errors)
                 controllers = _safe_build('controllers', _build_controllers, target, part_errors)
+                logical_volumes = _safe_build('logical_volumes', _build_logical_volumes, target, part_errors)
                 listening_ports = _safe_build('listening_ports', _build_listening_ports,
                                               target, part_errors)
                 host_info = _safe_build('host_info', _build_host_info,
@@ -587,6 +659,7 @@ def main():
             changed=False,
             physical_disks=disks, disk_count=len(disks),
             controllers=controllers, listening_ports=listening_ports,
+            logical_volumes=logical_volumes,   # 2026-10-18 (X6): 추가만 한 키 — RAID 컨트롤러 뒤 LUN
             host_info=host_info,
             # 2026-08-12 (N36): 아래 3키는 **추가만** 한 것이다 (기존 키 삭제/리네임 없음).
             #   호출 task(collect_disks.yml)가 어느 섹션의 errors 로 올릴지 정하는 근거다.

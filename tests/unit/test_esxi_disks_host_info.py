@@ -97,6 +97,7 @@ def test_module_result_includes_host_info_and_isolated_failure():
     m.Disconnect = lambda si: None
     m._build_disks = lambda c: [{"id": "naa.1"}]
     m._build_controllers = lambda c: []
+    m._build_logical_volumes = lambda c: []   # 2026-10-18 (X6): 파트 추가
     m._build_listening_ports = lambda c: ["443"]
 
     def _boom(c, h=None):

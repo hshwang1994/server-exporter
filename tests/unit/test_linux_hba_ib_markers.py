@@ -60,8 +60,10 @@ FC_ATTRS = {
     "symbolic_name": "Emulex LPe32002-M2 FV12.8.351.0 DV12.8.0.5",
     "port_state": "Online",
     "speed": "16 Gbit",
+    "port_type": "NPort (fabric via point-to-point)",     # 2026-10-18: 물리 포트 (NPIV VPORT 가 아니다)
 }
-FC_SCSI_HOST = {"fw_version": "12.8.351.0", "model_name": "LPe32002-M2",
+# scsi_host/<host>/ 속성 — proc_name 은 드라이버 이름(scsi_sysfs.c). 모델 · 펌웨어 · 제조사 이름은 qla2xxx 식 (lpfc 식은 아래 시험)
+FC_SCSI_HOST = {"proc_name": "lpfc", "fw_version": "12.8.351.0", "model_name": "LPe32002-M2",
                 "manufacturer": "Emulex Corporation"}
 IB_ATTRS = {"node_guid": "0c42:a103:0012:3456", "fw_ver": "20.31.1014", "hca_type": "MT4123",
             "board_id": "MT_0000000223"}
@@ -125,21 +127,31 @@ def add_ib_device(root: Path, name: str, *, attrs: dict[str, str | None] | None 
     return adp
 
 
-def build_sysfs(sbx: Sandbox, *, fc: bool = True, ib: bool = True,
+def add_fc_host(root: Path, name: str, *, attrs: dict[str, str | None] | None = None,
+                scsi_host: dict[str, str | None] | None = None,
                 unreadable: tuple[str, ...] = (), absent: tuple[str, ...] = ()) -> Path:
+    """/sys/class/fc_host/<name> 하나 — 링크 없는 평면 모양: <host>/<attr> 와 <host>/device/scsi_host/<name>/<attr>.
+    (실 sysfs 는 class 항목과 device 가 심볼릭 링크다 — 그 모양은 _real_fc_layout 이 만든다.)"""
+    host = root / "fc_host" / name
+    host.mkdir(parents=True, exist_ok=True)
+    for key, value in (FC_ATTRS if attrs is None else attrs).items():
+        if f"fc:{key}" not in absent:
+            _attr(host / key, value, f"fc:{key}" in unreadable)
+    for key, value in (FC_SCSI_HOST if scsi_host is None else scsi_host).items():
+        if f"fc:{key}" not in absent:
+            _attr(host / "device" / "scsi_host" / name / key, value, f"fc:{key}" in unreadable)
+    return host
+
+
+def build_sysfs(sbx: Sandbox, *, fc: bool = True, ib: bool = True,
+                unreadable: tuple[str, ...] = (), absent: tuple[str, ...] = (),
+                fc_attrs: dict[str, str | None] | None = None,
+                fc_scsi_host: dict[str, str | None] | None = None) -> Path:
     """sysfs 모양 트리. unreadable / absent 는 'fc:speed', 'ib:rate', 'ib:hca_type', 'ib:link_layer', 'ib:uevent' 형식."""
     root = sbx.root / "sys" / "class"
     (root / "net" / "eth0").mkdir(parents=True, exist_ok=True)
     if fc:
-        host = root / "fc_host" / "host1"
-        host.mkdir(parents=True, exist_ok=True)
-        for name, value in FC_ATTRS.items():
-            if f"fc:{name}" not in absent:
-                _attr(host / name, value, f"fc:{name}" in unreadable)
-        (host / "device" / "driver").mkdir(parents=True, exist_ok=True)
-        for name, value in FC_SCSI_HOST.items():
-            if f"fc:{name}" not in absent:
-                _attr(host / "device" / "scsi_host" / "host1" / name, value, False)
+        add_fc_host(root, "host1", attrs=fc_attrs, scsi_host=fc_scsi_host, unreadable=unreadable, absent=absent)
     if ib:
         add_ib_device(root, "mlx5_0", unreadable=unreadable, absent=absent)
     return root
@@ -185,6 +197,8 @@ def test_clean_sysfs_has_no_err_markers_and_no_errors(sbx):
     assert hba["model"] == "LPe32002-M2"
     assert hba["vendor"] == "Emulex Corporation"
     assert hba["firmware"] == "12.8.351.0"
+    # 2026-10-18: driver 는 scsi_host/<host>/proc_name (종전 Scsi_Host 의 driver 링크는 실장비에 없어 항상 null 이었다)
+    assert hba["driver"] == "lpfc" and hba["port_type"] == "FibreChannel" and hba["source"] == "os"
     ib = run.ctx["_data_fragment"]["storage"]["infiniband"][0]
     assert (ib["adapter"], ib["port"], ib["link_status"], ib["rate_gbps"]) == ("mlx5_0", "1", "up", 100)
     assert isinstance(ib["rate_gbps"], int)
@@ -225,7 +239,7 @@ def test_unreadable_fc_attributes_emit_err_and_one_error(sbx):
 
     run = render(results)
     hba = run.ctx["_data_fragment"]["storage"]["hbas"][0]
-    assert hba["link_status"] == "unknown" and hba["link_speed_gbps"] is None
+    assert hba["link_status"] is None and hba["link_speed_gbps"] is None, "port_state 를 못 읽었으면 null — down 이 아니다 (2026-10-18)"
     errors = run.ctx["_errors_fragment"]
     assert len(errors) == 1
     err = errors[0]
@@ -716,3 +730,142 @@ def test_nic_block_without_ip_command_keeps_vlan_empty(tmp_path):
     res = sbx.run(script)
     rows = {r[0]: r[1:] for r in res.rows("NIC")}
     assert rows["bond0.64"][1] == "" and res.rc == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-10-18 — FC HBA 수집 보완 (HBA 전수 점검: driver · 속성명 · NPIV · 링크 상태 null · '|' · rc · lspci)
+# ═══════════════════════════════════════════════════════════════════════════
+def _fc_hba(run) -> dict:
+    hbas = run.ctx["_data_fragment"]["storage"]["hbas"]
+    assert len(hbas) == 1, hbas
+    return hbas[0]
+
+
+def test_lpfc_attribute_names_fill_model_and_firmware(sbx):
+    """Emulex lpfc 는 modelname · fwrev (qla2xxx 의 model_name · fw_version 과 다르다) — 종전에는 둘 다 비었다."""
+    root = build_sysfs(sbx, ib=False, fc_scsi_host={"proc_name": "lpfc", "modelname": "LPe32002-M2", "fwrev": "12.8.351.0, sli-4:2:c"})
+    results = run_all(sbx, root)
+    assert err_paths(results["_l_hba_raw"]) == []
+    hba = _fc_hba(render(results))
+    assert (hba["driver"], hba["model"], hba["firmware"]) == ("lpfc", "LPe32002-M2", "12.8.351.0, sli-4:2:c")
+    assert hba["vendor"] is None, "manufacturer 속성이 없고 PCI 주소를 모르면(lspci 미호출) 추정하지 않는다"
+
+
+def test_npiv_virtual_port_is_excluded_from_hbas(sbx):
+    """NPIV 가상 포트(port_type 'NPIV VPORT')는 별도 fc_host 로 열거된다 — 항목 1개 = 물리 포트 1개라 뺀다. raw 줄은 그대로 남긴다."""
+    root = build_sysfs(sbx, ib=False)
+    add_fc_host(root, "host2", attrs=dict(FC_ATTRS, port_name="0x10000090fa1b2c3e", port_type="NPIV VPORT"))
+    results = run_all(sbx, root)
+    assert len(results["_l_hba_raw"].rows("FC")) == 2, "raw 는 증거를 남긴다 — 판정은 Jinja"
+    hba = _fc_hba(render(results))
+    assert hba["host"] == "host1" and hba["wwpn"] == "10:00:00:90:fa:1b:2c:3d"
+
+
+@pytest.mark.parametrize("state, link", [
+    ("Online", "up"), ("Marginal", "up"),
+    ("Offline", "down"), ("Linkdown", "down"), ("Blocked", "down"), ("Bypassed", "down"), ("Error", "down"),
+    ("Loopback", "down"), ("Diagnostics", "down"),
+    ("Unknown", None), ("Deleted", None), ("", None), ("Not Present", None),
+])
+def test_port_state_maps_to_up_down_or_null(sbx, state, link):
+    """커널 fc_port_state_names 완전일치 — 확인되지 않은 상태(Unknown · Deleted · 빈 값)는 down 이 아니라 null."""
+    root = build_sysfs(sbx, ib=False, fc_attrs=dict(FC_ATTRS, port_state=state))
+    assert _fc_hba(render(run_all(sbx, root)))["link_status"] == link
+
+
+def test_missing_port_state_attribute_is_null_without_error(sbx):
+    root = build_sysfs(sbx, ib=False, absent=("fc:port_state",))
+    results = run_all(sbx, root)
+    assert err_paths(results["_l_hba_raw"]) == []
+    run = render(results)
+    assert _fc_hba(run)["link_status"] is None and run.ctx["_errors_fragment"] == []
+
+
+def test_pipe_in_symbolic_name_does_not_shift_fields(sbx):
+    root = build_sysfs(sbx, ib=False, fc_attrs=dict(FC_ATTRS, symbolic_name="QLE2692 FW:v8.08.231|DVR:v10.02.07.400-k"))
+    hba = _fc_hba(render(run_all(sbx, root)))
+    assert hba["symbolic_name"] == "QLE2692 FW:v8.08.231DVR:v10.02.07.400-k"
+    assert hba["link_status"] == "up" and hba["link_speed_gbps"] == 16 and hba["driver"] == "lpfc"
+
+
+@pytest.mark.parametrize("driver, port_type", [("fcoe", "FCoE"), ("bnx2fc", "FCoE"), ("qedf", "FCoE"),
+                                               ("fnic", "FibreChannel"), ("qla2xxx", "FibreChannel"), ("lpfc", "FibreChannel")])
+def test_fcoe_drivers_are_reported_as_fcoe(driver, port_type):
+    run = run_task_file(HBA_YML, {"_l_hba_raw": _reg([f"FC|host3|0x10000090fa1b2c3d|0x20000090fa1b2c3d|sym|Online|10 Gbit|{driver}|1.0|M|V"])},
+                        ctx={"_l_net_raw": _reg([])})
+    assert not run.rescued
+    assert run.ctx["_data_fragment"]["storage"]["hbas"][0]["port_type"] == port_type
+
+
+def test_zero_wwn_is_null():
+    """드라이버가 아직 WWN 을 못 읽은 포트는 0x0 을 낸다 — "0" 문자열이 아니라 null."""
+    run = run_task_file(HBA_YML, {"_l_hba_raw": _reg(["FC|host1|0x0|0x0|sym|Linkdown|unknown|qla2xxx|||"])}, ctx={"_l_net_raw": _reg([])})
+    hba = run.ctx["_data_fragment"]["storage"]["hbas"][0]
+    assert hba["wwpn"] is None and hba["wwnn"] is None and hba["link_status"] == "down" and hba["link_speed_gbps"] is None
+
+
+def test_raw_failure_is_recorded_as_command_failed():
+    """raw 자체가 실패(rc != 0)하면 빈 출력을 "HBA 없음" 으로 두지 않고 storage errors[] 1건을 남긴다."""
+    run = run_task_file(HBA_YML, {"_l_hba_raw": RunResult(2, "", "sh: 1: Syntax error").register()}, ctx={"_l_net_raw": _reg([])})
+    assert not run.rescued
+    assert run.ctx["_data_fragment"]["storage"]["hbas"] == []
+    errors = run.ctx["_errors_fragment"]
+    assert len(errors) == 1 and errors[0]["section"] == "storage" and errors[0]["message"] == HBA_MESSAGE
+    assert "cause=command_failed" in errors[0]["detail"] and "rc=2" in errors[0]["detail"] and "Syntax error" in errors[0]["detail"]
+    assert run.ctx["_sections_collected_fragment"] == [] and run.ctx["_sections_failed_fragment"] == []
+
+
+def test_old_eleven_field_fc_row_still_parses():
+    run = run_task_file(HBA_YML, {"_l_hba_raw": _reg(["FC|host1|0x10000090fa1b2c3d|0x20000090fa1b2c3d|sym|Online|16 Gbit|qla2xxx|8.08|QLE2692|QLogic"])},
+                        ctx={"_l_net_raw": _reg([])})
+    hba = run.ctx["_data_fragment"]["storage"]["hbas"][0]
+    assert (hba["driver"], hba["model"], hba["vendor"], hba["link_status"], hba["port_type"]) == ("qla2xxx", "QLE2692", "QLogic", "up", "FibreChannel")
+
+
+def test_lspci_placeholder_names_are_not_vendor_or_model():
+    row = "FC|host1|0x10000090fa1b2c3d|0x20000090fa1b2c3d|QLE2692 FW:v8.08|Online|16 Gbit|qla2xxx|8.08|||NPort|0000:04:00.0|Vendor 1077|Device 2261"
+    hba = run_task_file(HBA_YML, {"_l_hba_raw": _reg([row])}, ctx={"_l_net_raw": _reg([])}).ctx["_data_fragment"]["storage"]["hbas"][0]
+    assert hba["vendor"] is None and hba["model"] == "QLE2692 FW:v8.08", "자리표시자는 이름이 아니다 — symbolic_name 으로"
+
+
+QLA_PCI = "0000:04:00.0"
+QLA_LSPCI = '04:00.0 "Fibre Channel" "QLogic Corp." "ISP2722-based 16/32Gb Fibre Channel to PCIe Adapter" "QLogic Corp." "Device 02a7"'
+
+
+def _real_fc_layout(sbx: Sandbox) -> Path:
+    """실 sysfs 모양 — class 항목과 device 가 심볼릭 링크, driver 링크와 uevent 는 PCI 장치에 있다.
+    /sys/class/fc_host/host1 -> ../../devices/pci0000:00/0000:04:00.0/host1/fc_host/host1
+    .../host1/fc_host/host1/device -> ../../../host1 ; 0000:04:00.0/driver -> ../../../bus/pci/drivers/qla2xxx"""
+    if not _can_symlink(sbx.root):
+        pytest.skip("심볼릭 링크를 만들 수 없다 (Windows 개발자 모드/권한) — 실 sysfs 모양 시험은 Linux 에서 돈다")
+    sys_root = sbx.root / "sys"
+    cls = sys_root / "class"
+    (cls / "net" / "eth0").mkdir(parents=True, exist_ok=True)
+    pci_dev = sys_root / "devices" / "pci0000:00" / QLA_PCI
+    scsi_host = pci_dev / "host1" / "scsi_host" / "host1"
+    fc = pci_dev / "host1" / "fc_host" / "host1"
+    for d in (scsi_host, fc, cls / "fc_host"):
+        d.mkdir(parents=True, exist_ok=True)
+    drv_dir = sys_root / "bus" / "pci" / "drivers" / "qla2xxx"
+    drv_dir.mkdir(parents=True, exist_ok=True)
+    (pci_dev / "driver").symlink_to(drv_dir, target_is_directory=True)
+    _attr(pci_dev / "uevent", f"DRIVER=qla2xxx\nPCI_CLASS=C0400\nPCI_ID=1077:2261\nPCI_SLOT_NAME={QLA_PCI}", False)
+    for key, value in FC_ATTRS.items():
+        _attr(fc / key, value, False)
+    # proc_name · model_name · manufacturer 를 비워 PCI driver 링크와 lspci 이름 폴백을 본다
+    _attr(scsi_host / "fw_version", "8.08.231 (d0d5)", False)
+    (fc / "device").symlink_to(pci_dev / "host1", target_is_directory=True)
+    (cls / "fc_host" / "host1").symlink_to(fc, target_is_directory=True)
+    return cls
+
+
+def test_real_sysfs_layout_reads_pci_driver_uevent_and_lspci_names(sbx):
+    root = _real_fc_layout(sbx)
+    calls = lspci_shim(sbx, {f"-mm -s {QLA_PCI}": QLA_LSPCI})
+    results = run_all(sbx, root)
+    assert err_paths(results["_l_hba_raw"]) == []
+    hba = _fc_hba(render(results))
+    assert hba["driver"] == "qla2xxx", "proc_name 이 없으면 PCI 장치의 driver 링크(device/../driver)"
+    assert hba["vendor"] == "QLogic Corp." and hba["model"] == "ISP2722-based 16/32Gb Fibre Channel to PCIe Adapter"
+    assert hba["firmware"] == "8.08.231 (d0d5)" and hba["wwpn"] == "10:00:00:90:fa:1b:2c:3d" and hba["link_status"] == "up"
+    assert lspci_calls(calls) == [f"-mm -s {QLA_PCI}"], "lspci 는 호스트당 1회"

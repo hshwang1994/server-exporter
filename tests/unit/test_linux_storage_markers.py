@@ -461,3 +461,67 @@ def test_raw_script_never_masks_lsblk_failure():
     script = raw_script(STOR_YML, "raw gather")
     assert '{"blockdevices":[]}' not in script, "lsblk 실패를 빈 JSON 으로 가리면 안 된다"
     assert "df -l" not in script and "df -P -T -k -l" not in script, "NFS 포함 계약 (-l 금지)"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-10-18 (X6) — RAID 컨트롤러 뒤의 디스크 = logical_volumes (physical_disks 는 그대로)
+# ═══════════════════════════════════════════════════════════════════════════
+_CTRL_RAID = "CTRL|0000:18:00.0|RAID bus controller|Broadcom / LSI|MegaRAID SAS-3 3108 [Invader]|megaraid_sas|Dell|PERC H730P Adapter"
+_CTRL_NVME = "CTRL|0000:3b:00.0|Non-Volatile memory controller|Samsung Electronics Co Ltd|NVMe SSD Controller PM9A1|nvme||"
+_TWO_DISKS = json.dumps({"blockdevices": [
+    {"name": "sda", "size": 1919850381312, "type": "disk", "rota": False, "model": "PERC H730P Adp", "tran": None, "serial": "00c0a6e5", "wwn": "0x6d09466000000001"},
+    {"name": "nvme0n1", "size": 960197124096, "type": "disk", "rota": False, "model": "SAMSUNG MZQL2960HCJR-00A07", "tran": "nvme", "serial": "S64FNE0R", "wwn": "eui.3634463052"}]})
+
+
+def _storage(run):
+    return run.ctx["_data_fragment"]["storage"]
+
+
+def test_disks_behind_a_raid_controller_are_also_logical_volumes():
+    text = _lines("0", "", _TWO_DISKS, (_CTRL_RAID, _CTRL_NVME, "DISKPCI|/dev/sda|0000:18:00.0", "DISKPCI|/dev/nvme0n1|0000:3b:00.0"))
+    run = render(RunResult(0, text, ""))
+    st = _storage(run)
+    assert [d["id"] for d in st["physical_disks"]] == ["/dev/sda", "/dev/nvme0n1"], "physical_disks 는 그대로(Additive)"
+    assert st["logical_volumes"] == [{"id": "/dev/sda", "name": "PERC H730P Adp", "controller_id": "0000:18:00.0", "member_drive_ids": [],
+                                      "raid_level": None, "total_mb": 1919850381312 // 1048576, "health": None, "state": None, "boot_volume": None}]
+    assert {c["id"]: c["controller_type"] for c in st["controllers"]} == {"0000:18:00.0": "RAID", "0000:3b:00.0": "NVMe"}
+    assert storage_errors(run) == []
+
+
+def test_legacy_raw_without_diskpci_rows_yields_no_logical_volumes():
+    run = render(RunResult(0, _lines("0", "", _TWO_DISKS, (_CTRL_RAID,)), ""))
+    assert _storage(run)["logical_volumes"] == [] and len(_storage(run)["physical_disks"]) == 2
+
+
+def test_disk_on_a_non_raid_controller_is_not_a_logical_volume():
+    text = _lines("0", "", _TWO_DISKS, (_CTRL_RAID, _CTRL_NVME, "DISKPCI|/dev/sda|0000:3b:00.0", "DISKPCI|/dev/nvme0n1|", "DISKPCI|/dev/sdz|0000:18:00.0"))
+    run = render(RunResult(0, text, ""))
+    assert _storage(run)["logical_volumes"] == [], "PCI 가 RAID 컨트롤러가 아니거나 비었거나 목록에 없는 디스크는 아니다"
+
+
+def _can_symlink(base: Path) -> bool:
+    try:
+        (base / "_probe").symlink_to(base)
+        return True
+    except (OSError, NotImplementedError):
+        return False
+
+
+def test_raw_emits_the_controller_pci_address_from_the_sys_block_real_path(sbx):
+    """/sys/block/<dev> 실경로(…/0000:18:00.0/host0/…/block/sda)의 마지막 PCI 주소가 DISKPCI| 로 나온다."""
+    if not _can_symlink(sbx.root):
+        pytest.skip("심볼릭 링크를 만들 수 없다 (Windows 개발자 모드/권한) — Linux 에서 돈다")
+    install_lsblk(sbx, json_out=_ONE_DISK, names="sda\n")
+    sysblock = sbx.root / "sysblock"
+    sysblock.mkdir(parents=True, exist_ok=True)
+    real = sbx.root / "devices" / "pci0000:17" / "0000:17:00.0" / "0000:18:00.0" / "host0" / "target0:2:0" / "0:2:0:0" / "block" / "sda"
+    real.mkdir(parents=True, exist_ok=True)
+    (sysblock / "sda").symlink_to(real, target_is_directory=True)
+    res = run_raw(sbx)
+    assert "DISKPCI|/dev/sda|0000:18:00.0" in res.lines, [l for l in res.lines if l.startswith(("DISKPCI", "UDEV"))]
+
+
+def test_raw_emits_an_empty_pci_when_the_block_path_has_no_pci_segment(sbx):
+    install_lsblk(sbx, json_out=_ONE_DISK, names="sda\n")
+    res = run_raw(sbx)
+    assert "DISKPCI|/dev/sda|" in res.lines, [l for l in res.lines if l.startswith("DISKPCI")]

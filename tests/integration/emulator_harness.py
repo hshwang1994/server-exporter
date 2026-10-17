@@ -255,6 +255,45 @@ def make_replayer(recording):
     return get_impl, noauth_impl, realm_impl
 
 
+def make_crawl_recording(crawl_dir):
+    """전수 크롤 디렉터리(*.json = {"_meta": {"uri", "code"}, "_data": body}) → make_replayer 호환 recording (2026-10-18).
+
+    tests/reference/redfish/<vendor>/<ip>/ 의 크롤은 gather 가 touch 하는 것보다 훨씬 넓다(수백~수천 리소스) — 모두 넣어도 재생은
+    lookup 이라 비용이 없다. ServiceRoot(/redfish/v1) 은 path '' (get:: · noauth::) 로 둔다: rg._p 는 그 입력을 무효 path 로 바꾸므로
+    여기서 직접 매핑한다. 2xx 가 아닌 code 는 err 문자열로 — 모듈이 실패로 본다. _manifest.json 처럼 '_' 로 시작하는 파일은 메타다.
+    """
+    import json as _json
+    rec = {}
+    for p in sorted(Path(crawl_dir).glob("*.json")):
+        if p.name.startswith("_"):
+            continue
+        try:
+            doc = _json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for d in (doc if isinstance(doc, list) else [doc]):
+            if not isinstance(d, dict) or not isinstance(d.get("_meta"), dict):
+                continue
+            uri = str(d["_meta"].get("uri") or "")
+            if not uri:
+                continue
+            path = "" if uri.rstrip("/") == "/redfish/v1" else rg._p(uri)
+            if path == "__invalid_odata_id__":
+                continue
+            try:
+                code = int(d["_meta"].get("code", 200))
+            except (TypeError, ValueError):
+                code = 200
+            body = d.get("_data")
+            if not isinstance(body, (dict, list)):
+                body = {}
+            err = None if 200 <= code < 300 else "HTTP %d" % code
+            rec.setdefault("get::" + path, [code, body, err])
+            if path == "":
+                rec.setdefault("noauth::", [code, body, err])
+    return rec
+
+
 # golden 비교에서 strict equality 대상.
 #   - errors[] 리스트 자체(메시지 verbose)는 제외하되, error_count 는 포함해
 #     "에러 0건이 silent 하게 N건으로 늘어나는" 회귀를 잡는다 (HF-4 보강).

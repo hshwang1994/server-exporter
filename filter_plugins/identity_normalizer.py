@@ -97,17 +97,25 @@ def normalize_mac(value):
 
 
 def normalize_wwn(value):
-    """WWPN/WWNN → `20:00:00:27:e3:6c:a6:6e`. 16-hex 가 아니면 소문자 원문."""
+    """WWPN/WWNN → `20:00:00:27:e3:6c:a6:6e`. 16-hex 가 아니면 소문자 원문.
+
+    all-zero 는 길이와 무관하게 None (2026-10-18) — Linux fc_host 는 아직 WWN 을 못 읽은 포트에 `0x0` 을 내고,
+    종전에는 그것이 16-hex 가 아니라 "0" 문자열로 남았다. 0 만 있는 값은 어떤 길이든 식별자가 아니다.
+    """
     s = _clean(value)
     if s is None:
         return None
+    if s.startswith("-"):
+        # 2026-10-18: 음수 표기는 WWN 이 아니다 — ESXi 모듈이 int64 음수(최상위 비트가 1 인 WWN)를 "-3f:ff:…" 로 내면 부호를 떼고
+        # 16-hex 로 묶으면 다른(2의 보수) 값이 된다. 원문을 돌려 호출자가 형식 검사로 걸러 낼 수 있게 한다.
+        return s
     if s.startswith("0x"):
         s = s[2:]
     hexs = _hex_only(s)
+    if hexs and hexs == "0" * len(hexs):
+        return None
     if len(hexs) != 16:
         return s
-    if hexs == "0" * 16:
-        return None
     return _group(hexs)
 
 
