@@ -721,6 +721,99 @@ def _str(x):
     str 면 그대로, 아니면 '' (Round 8). `(x or '')` 와 str/None 입력에 동일 — golden 불변."""
     return x if isinstance(x, str) else ''
 
+_BRAND_GHZ_RE = re.compile(r'@\s*([0-9]+(?:\.[0-9]+)?)\s*GHz', re.IGNORECASE)
+_NIC_FW_MAC_SUFFIX_RE = re.compile(r'\s*-\s*(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\s*$')
+
+
+def _brand_base_mhz(text):
+    """CPU 브랜드 문자열의 "@ N.NNGHz" → 정격(base) MHz. 주파수가 없는 이름(AMD EPYC · Xeon 6 "6787P")은 None."""
+    if not isinstance(text, str):
+        return None
+    m = _BRAND_GHZ_RE.search(text)
+    if not m:
+        return None
+    try:
+        return int(round(float(m.group(1)) * 1000))
+    except (TypeError, ValueError):
+        return None
+
+
+def _cpu_base_speed_mhz(pdata):
+    """Processor 응답 → 정격(base) 클럭 MHz — cpu.max_speed_mhz 의 3채널 공통 정의 (2026-10-18 X2).
+
+    종전에는 MaxSpeedMHz 를 썼는데 그 값은 터보 최대라(실측 Dell R740 4000 · HPE 4000~4300 · Lenovo 4300) OS(cpufreq base · 브랜드
+    문자열) · ESXi(cpuInfo.hz) 의 정격과 달랐다. 원천 순서 (녹화본 10종 전수 — 어느 BMC 도 한 키만으로는 모두 덮지 못한다):
+      1. BaseSpeedMHz (DMTF Processor v1.10+, 실측 HPE CSUS 3200 RMC 3700)
+      2. Oem.Hpe.RatedSpeedMHz (실측 iLO5/6/7 — Intel · AMD 모두, 2000~3000)
+      3. 브랜드 문자열 "@ N.NNGHz" (실측 Dell "Platinum 8260 CPU @ 2.40GHz" · Cisco "@ 2.20GHz" · HPE "Silver 4310 CPU @ 2.10GHz")
+      4. OperatingSpeedMHz (DMTF v1.4+, "현재" 클럭 — 실측 Dell 2400 = 정격, DMTF 목업 2333)
+      5. Oem.Lenovo.CurrentClockSpeedMHz (실측 XCC 3600 = Xeon 6724P 정격)
+    모두 없으면 None — 터보 값(MaxSpeedMHz)을 정격 자리에 넣지 않는다. MaxSpeedMHz 는 max_speed_mhz → cpu.turbo_max_mhz 로 간다.
+    source: https://redfish.dmtf.org/schemas/v1/Processor.v1_20_0.json (BaseSpeedMHz · OperatingSpeedMHz · MaxSpeedMHz 정의)
+    """
+    for ks in (('BaseSpeedMHz',), ('Oem', 'Hpe', 'RatedSpeedMHz')):                        # nosec rule12-r1 — OEM 외부 계약
+        v = _safe_int(_safe(pdata, *ks))
+        if v:
+            return v
+    v = _brand_base_mhz(_safe(pdata, 'Model')) or _brand_base_mhz(_safe(pdata, 'Name'))
+    if v:
+        return v
+    for ks in (('OperatingSpeedMHz',), ('Oem', 'Lenovo', 'CurrentClockSpeedMHz')):           # nosec rule12-r1 — OEM 외부 계약
+        v = _safe_int(_safe(pdata, *ks))
+        if v:
+            return v
+    return None
+
+
+def _fill_adapter_models_from_firmware(netad, firmware):
+    """NetworkAdapter 의 Model 이 비면 같은 카드의 FirmwareInventory 이름으로 채운다 (2026-10-18 X9).
+
+    실측 Dell R760 iDRAC9: NetworkAdapters/NIC.Embedded.1 은 Model null 인데 FirmwareInventory 에는
+    "Broadcom NetXtreme Gigabit Ethernet (BCM5720) - 20:04:0F:FB:11:64" 가 Id/Component "…__NIC.Embedded.1-1-1" 로 있다(OS 는 'NetXtreme BCM5720').
+    매칭은 펌웨어 항목의 id / component 가 카드 Id 자체이거나 그 뒤에 '-' 가 붙은 하위 FQDD(포트 · 파티션)일 때만 — 벤더 이름은 보지 않는다.
+    이름 끝의 " - <MAC>" 은 포트 주소라 떼어 낸다. 같은 카드의 fc_hbas[].adapter_model · ports[].adapter_model 도 같이 채운다. notice 1건.
+    """
+    if not isinstance(netad, dict) or not isinstance(firmware, list):
+        return
+    for a in netad.get('adapters') or []:
+        if not isinstance(a, dict) or a.get('model'):
+            continue
+        aid = _id_text(a.get('id'))
+        if not aid:
+            continue
+        name = None
+        for f in firmware:
+            if not isinstance(f, dict) or not f.get('name'):
+                continue
+            for t in (_id_text(f.get('id')), _id_text(f.get('component'))):
+                if t and (t == aid or t.startswith(aid + '-') or t.endswith('__' + aid) or ('__' + aid + '-') in t):
+                    name = _NIC_FW_MAC_SUFFIX_RE.sub('', str(f['name'])).strip() or None
+                    break
+            if name:
+                break
+        if not name:
+            continue
+        a['model'] = name
+        for key in ('fc_hbas', 'ports'):
+            for e in netad.get(key) or []:
+                if isinstance(e, dict) and _id_text(e.get('adapter_id')) == aid and not e.get('adapter_model'):
+                    e['adapter_model'] = name
+        _notice('network_adapters', 'NetworkAdapter %s: Model 없음, 펌웨어 목록 이름(%s)으로 채움' % (aid, name))
+
+
+def _id_text(x):
+    """Redfish `Id` 를 문자열 연산(dict 키 · `<PortId>-` 접두 매칭)에 쓰기 위한 정규화 (2026-10-18, F3a).
+
+    str 은 그대로, int 는 str(x)(펌웨어가 "1" 대신 1 을 주는 경우 — `_str` 이면 '' 가 되어 `<PortId>-` 가드가 빠져 HBA 가
+    중복된다), 그 밖(None · bool · dict · list)은 ''. 종전 고아 기능 루프의 `nid.startswith(_pid + '-')` 가 int 키에서
+    TypeError 를 내 네트워크 카드 섹션 전체(adapters · ports · fc_hbas)를 None 으로 잃었다 — 출력 값(`port_id`)은 raw 그대로다.
+    """
+    if isinstance(x, str):
+        return x
+    if isinstance(x, int) and not isinstance(x, bool):
+        return str(x)
+    return ''
+
 # 내부 분류 code — errors[] 원소에 붙되 **envelope 으로는 나가지 않는다**
 # (common/tasks/normalize 의 정규화가 section/message/detail 3키만 뽑는다).
 # 사용자 문구를 제어 로직의 키로 쓰지 않기 위한 자리다 (2026-08-12).
@@ -2937,7 +3030,10 @@ def gather_processors(bmc_ip, system_uri, username, password, timeout, verify_ss
             'socket':            _safe(pdata, 'Socket'),
             'total_cores':       _safe_int(_safe(pdata, 'TotalCores')),
             'total_threads':     _safe_int(_safe(pdata, 'TotalThreads')),
-            'speed_mhz':         _safe_int(_safe(pdata, 'MaxSpeedMHz')),  # Round 3 #6: int 통일
+            # 2026-10-18 (X2): speed_mhz 는 정격(base) — _cpu_base_speed_mhz 의 원천 순서. 종전 MaxSpeedMHz 는 터보 최대라
+            #   OS/ESXi 의 cpu.max_speed_mhz(정격)와 달랐다(실측 Dell 4000 vs 2400). MaxSpeedMHz 는 max_speed_mhz → cpu.turbo_max_mhz.
+            'speed_mhz':         _cpu_base_speed_mhz(pdata),
+            'max_speed_mhz':     _safe_int(_safe(pdata, 'MaxSpeedMHz')),  # Round 3 #6: int 통일
             'health':            _safe(pdata, 'Status', 'Health'),
             'processor_type':    _safe(pdata, 'ProcessorType'),
             'architecture':      _safe(pdata, 'ProcessorArchitecture'),
@@ -3755,7 +3851,12 @@ def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
     # CSUS-R8 (2026-06-15 실미러 검수): Port.Ethernet dict 존재 → Ethernet (FC/IB dict-presence 와
     # 대칭). HPE CSUS Mellanox NIC(MCX631102)은 PortProtocol/NetDevFuncType 없이 Port.Ethernet.
     # AssociatedMACAddresses 만 노출 → 구 코드는 port_type=None(미분류). DMTF Port.Ethernet 표준 블록.
-    if isinstance(pdata, dict) and isinstance(pdata.get('Ethernet'), dict):
+    # 2026-10-18 (F2): 링크 기술이 FibreChannel 인 포트의 Ethernet 블록은 Ethernet 의 근거가 아니다 — 신 Port 스키마의
+    #   FC HBA 가 WWPN 을 Ethernet.AssociatedMACAddresses 에 담아 노출한다(실측 HPE iLO6 DL380: FC 포트 Ethernet 블록 = WWPN).
+    #   FibreChannel 블록까지 없는 변형에서는 이 분기가 'Ethernet' 을 돌려 포트 루프의 lt_fc 규칙(cls is None 요구)이 영원히
+    #   불발 → HBA 0건 · 오류 0건 · success 로 끝났다(녹화본 변형 재현). 여기서 None 을 돌려 lt_fc 규칙이 FC 포트로 보게 한다.
+    #   판정 함수는 여전히 링크 기술만으로 FC 를 **돌려주지 않는다** — 2026-10-15 에 폐기한 원안(중복 HBA)과 다르다.
+    if isinstance(pdata, dict) and isinstance(pdata.get('Ethernet'), dict) and lt != 'fibrechannel':
         return 'Ethernet'
     # CSUS-FC1 휴리스틱은 **명시 신호가 모두 없을 때만** 적용한다 (cycle 2026-08-03 강등).
     # WWPN 존재만으로 FC 로 확정하던 위치가 Ethernet 판정보다 위에 있어, FCoE 지원 CNA
@@ -3809,6 +3910,13 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
             continue
         fc = _safe(nd, 'FibreChannel') or {}
         ib = _safe(nd, 'InfiniBand') or {}
+        # 2026-10-18 (F1b): 두 링크(구 PhysicalPortAssignment → NetworkPorts/…, 신 PhysicalNetworkPortAssignment → Ports/…)를
+        #   모두 보존한다 — 어댑터가 어느 컬렉션을 노출하든 URI join 이 된다(실측 Dell R740 은 둘 다 노출). port_uri 는 종전 값.
+        port_uris = []
+        for _lk in ('PhysicalPortAssignment', 'PhysicalNetworkPortAssignment'):
+            _u2 = _safe(nd, 'Links', _lk, '@odata.id')
+            if isinstance(_u2, str) and _u2 and _p(_u2) not in port_uris:
+                port_uris.append(_p(_u2))
         port_uri = (_safe(nd, 'Links', 'PhysicalPortAssignment', '@odata.id')
                     or _safe(nd, 'Links', 'PhysicalNetworkPortAssignment', '@odata.id'))
         ndfs.append({
@@ -3821,8 +3929,59 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
             'node_guid':    _normalize_ib_guid(_safe(ib, 'NodeGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentNodeGUID')),
             'port_guid':    _normalize_ib_guid(_safe(ib, 'PortGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentPortGUID')),
             'port_uri':     _p(port_uri) if port_uri else None,
+            'port_uris':    port_uris,
         })
     return ndfs
+
+
+def _hba_link_status(pdata):
+    """storage.hbas[].link_status — 'up' / 'down' / None (2026-10-18 사용자 결정).
+
+    문자열은 up·down 둘뿐이다. 포트 응답에 `LinkStatus` 키가 **아예 없으면**(실측 HPE CSUS 3200 RMC 1.75.108 — FC Port 24개
+    모두 LinkStatus·Status 키 없음, RMC 자기 포트에는 있음) 장비가 링크 상태를 제공하지 않는 것이라 None(JSON null)이다 —
+    확인하지 못한 상태를 down 으로 적지 않는다(기존 계약의 미노출 → null 관례: link_speed_gbps · wwnn). 키가 있는데 값이
+    null · Unknown · 인식 못 하는 벤더 문자열이면 역시 None. network.ports[].link_status 는 종전 _normalize_link_status 그대로다.
+    """
+    if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
+        return None
+    v = _normalize_link_status(pdata.get('LinkStatus'))
+    return v if v in ('up', 'down') else None
+
+
+def _derive_port_wwpn(pdata, link_tech, ndf):
+    """기능(NDF)에 WWPN 이 없을 때 포트 주소에서 WWPN 을 정한다 — 추측이 아니라 배제로 (2026-10-18).
+
+    후보 = 신 Port 스키마의 `FibreChannel.AssociatedWWNs`/`AssociatedWorldWideNames` + 링크 기술이 FibreChannel 인 포트의
+    `Ethernet.AssociatedMACAddresses` 중 8옥텟 값(실측 HPE iLO6 DL380: FC 포트의 WWPN 을 이 배열에 둔다 — MAC 은 6옥텟이라
+    섞이지 않는다). 구 NetworkPort 의 `AssociatedNetworkAddresses` 는 쓰지 않는다(실측 Dell R740: WWNN).
+    알려진 WWNN(기능의 WWNN)을 후보에서 빼고 **정확히 하나** 남으면 그것이 WWPN. 후보가 하나뿐이고 WWNN 을 모르면 그 값
+    (실측 CSUS node01: 포트 목록 = [WWPN]). 그 밖(0개 · 2개 이상)은 None — 호출부가 notice 를 남기고 행은 유지한다.
+    종전(2026-10-15)에는 어떤 경우에도 null 로 두어 사이트에서 `primary_addr` 를 wwpn 에 넣는 임시 조치가 나왔다 — Dell 은
+    그 값이 WWNN 이라 틀린 값이 들어갔다. 이 규칙은 WWNN 을 배제한 값만 쓴다.
+    """
+    if not isinstance(pdata, dict):
+        return None
+    cands = []
+
+    def _add(values):
+        for v in _as_list(values):
+            n = _normalize_wwn(v)
+            if n and len(n) == 23 and n not in cands:        # 16-hex colon 형(8옥텟)만 — 6옥텟 MAC 은 제외
+                cands.append(n)
+
+    fc = pdata.get('FibreChannel')
+    if isinstance(fc, dict):
+        _add(fc.get('AssociatedWWNs'))
+        _add(fc.get('AssociatedWorldWideNames'))
+    if _str(link_tech).strip().lower() == 'fibrechannel':
+        eth = pdata.get('Ethernet')
+        if isinstance(eth, dict):
+            _add(eth.get('AssociatedMACAddresses'))
+    wwnn = ndf.get('wwnn') if isinstance(ndf, dict) else None
+    if wwnn:
+        rest = [c for c in cands if c != wwnn]
+        return rest[0] if len(rest) == 1 else None
+    return cands[0] if len(cands) == 1 else None
 
 
 def _make_fc_hba(adapter_id, adapter_info, port_id, cls, link_status, speed_gbps,
@@ -3835,6 +3994,8 @@ def _make_fc_hba(adapter_id, adapter_info, port_id, cls, link_status, speed_gbps
       AssociatedWorldWideNames 는 [WWNN, WWPN] 순서일 수 있다(CSUS-R13). 확인하지 못한 WWPN 은 추측하지 않고 null 로 둔다
       (field_dictionary: 미노출 시 null). 포트 주소는 network.ports[].associated_address 에 그대로 남는다.
       primary_addr 인자는 호출부 호환을 위해 남겨 두며 wwpn 에 쓰지 않는다.
+    2026-10-18: 기능에 WWPN 이 없으면 호출부가 _derive_port_wwpn(배제 규칙)으로 채운 ndf 를 넘긴다. link_status 는
+      _hba_link_status 의 'up' / 'down' / None — None 은 "장비가 링크 상태를 제공하지 않음" 이다.
     """
     wwpn = ndf.get('wwpn') if isinstance(ndf, dict) else None
     wwnn = ndf.get('wwnn') if isinstance(ndf, dict) else None
@@ -4012,7 +4173,7 @@ def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris
 
     sources   : [(origin, members)] — origin 'primary' | 'extra' | 'system', 멤버가 1개 이상인 목록만
     tried     : 조회한 컬렉션 경로 (오류 detail 용)
-    fails     : 조립 경로(1순위 섀시 · Systems)의 실패 [(status, signal, extended_info)]
+    fails     : 조립 경로(1순위 섀시 · Systems)의 실패 [(status, signal, extended_info, path)]
     saw_empty : 200 이지만 멤버가 0 인 목록을 봤는지
 
     순서 — (1) 1순위 섀시 `Chassis/{id}/NetworkAdapters` (조립 경로, 종전과 같다)
@@ -4038,7 +4199,7 @@ def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris
         if not err and st == 200:
             _accept(base, data, origin)
         else:
-            fails.append((st, err or st, _extended_info(data)))
+            fails.append((st, err or st, _extended_info(data), base))   # 2026-10-18 (F8): 어느 경로의 실패인지 함께 둔다
 
     if chassis_uri:
         _probe(_p(chassis_uri) + '/NetworkAdapters', 'primary')
@@ -4052,6 +4213,378 @@ def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris
         if alt not in tried:
             _probe(alt, 'system')
     return sources, tried, fails, state['empty']
+
+
+def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
+                                 username, password, timeout, verify_ssl):
+    """NetworkAdapter 1장 수집 — gather_network_adapters_chassis 의 카드 루프 본문을 그대로 뽑아낸 것 (2026-10-18, F3b).
+
+    반환: 'ok' | 'fetch_failed'(카드 GET 실패 — 비차단 오류 기록) | 'skipped'(빈 슬롯 등 조용히 제외).
+    out / errors / seen_ports / ib_idx_by_port 는 호출부의 것을 제자리에서 채운다. 예외는 밖으로 던지고 호출부가 카드 단위로
+    격리한다(이 카드의 부분 항목은 호출부가 되돌린다).
+
+    요청 순서 · 산출은 종전 루프 본문과 같다 — 2026-10-18 에 더해진 것: 링크 상태 null 규칙(_hba_link_status), WWPN 배제 규칙
+    (_derive_port_wwpn), 짝 없는 FC 기능의 부모 포트 링크 상속(F1), 이름 없는 카드의 기능 목록 1회 조회(F4), Id 문자열 정규화(F3a).
+    """
+    adp_uri = _safe(member, '@odata.id')
+    if not adp_uri:
+        return 'skipped'
+    st2, adata, aerr = _get(bmc_ip, _p(adp_uri), username, password, timeout, verify_ssl)
+    if aerr or st2 != 200:
+        errors.append(_err('network_adapters', f'NetworkAdapter {adp_uri} 실패: {aerr or st2}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        return 'fetch_failed'
+
+    adapter_id = _safe(adata, 'Id')
+    # FirmwareVersion: Controllers[0].FirmwarePackageVersion 또는 root
+    fw_ver = None
+    ctrls = _safe(adata, 'Controllers', default=[]) or []
+    if ctrls and isinstance(ctrls, list):
+        fw_ver = _safe(ctrls[0], 'FirmwarePackageVersion')
+        # CSUS-R16 (2026-06-15 실미러 검수): FirmwarePackageVersion 부재 펌웨어(HPE CSUS NetworkAdapter)
+        # 는 어댑터 펌웨어를 Controllers[0].Links.PCIeDevices[] 가 가리키는 PCIeDevice.FirmwareVersion
+        # 에 둔다(실측 Mellanox MCX631102="26.46.3048..."). 링크추적 fallback (Additive — 표준 위치
+        # 보유 vendor 불변, PCIeDevice 도 부재 시 None 유지).
+        if not fw_ver:
+            for _pd in _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices')):
+                _pd_uri = _safe(_pd, '@odata.id')
+                if not _pd_uri:
+                    continue
+                _ps, _pdata, _pe = _get(bmc_ip, _p(_pd_uri), username, password, timeout, verify_ssl)
+                if _ps == 200 and isinstance(_pdata, dict):
+                    fw_ver = _safe(_pdata, 'FirmwareVersion')
+                    if fw_ver:
+                        break
+    # 빈 placeholder NetworkAdapter 필터:
+    # 일부 BMC (실측 Lenovo XCC SR650 V2)는 PCIe slot 자체를 NetworkAdapters 컬렉션에
+    # 빈 entry 로 노출. Controllers[0].ControllerCapabilities.NetworkPortCount=0 또는
+    # manufacturer/model 모두 빈 문자열이면 실제 NIC 가 아니므로 skip.
+    # cycle 2026-06-14 (DELL R740 실 미러 검수 NET-1): port_count 를 Controllers[0] 하나가
+    # 아니라 *모든* Controller 의 NetworkPortCount 합으로 산출. Dell rNDC(예: 'BRCM GbE 4P
+    # 5720-t rNDC')는 NetworkAdapter 1개가 Controller 2개(각 NetworkPortCount=2)를 노출 —
+    # Controllers[0] 만 읽으면 4포트 카드가 2로 과소 집계됨(실 미러 NetworkPorts 멤버=4 와 불일치).
+    # 단일 Controller 카드는 합=그 값 → 결과 불변(Additive). NetworkPortCount=DMTF 컨트롤러별 포트 수.
+    port_count = 0
+    ndf_count = 0
+    ctrl_linked = False
+    if ctrls and isinstance(ctrls, list):
+        for _ctrl in ctrls:
+            _caps = _safe(_ctrl, 'ControllerCapabilities') or {}
+            port_count += _safe_int(_safe(_caps, 'NetworkPortCount'), default=0) or 0
+            ndf_count += _safe_int(_safe(_caps, 'NetworkDeviceFunctionCount'), default=0) or 0
+            _clinks = _safe(_ctrl, 'Links') or {}
+            ctrl_linked = ctrl_linked or any(_dicts(_safe(_clinks, _k))
+                                             for _k in ('NetworkDeviceFunctions', 'Ports', 'NetworkPorts'))
+    mfr = _str(_safe(adata, 'Manufacturer')).strip()
+    model = _str(_safe(adata, 'Model')).strip()
+    # 2026-10-15: 빈 entry 판정에 표준 근거(ControllerCapabilities.NetworkDeviceFunctionCount · Controllers[].Links 의
+    #   기능/포트 링크)를 더한다 — 제조사 · 모델 문자열이 비어 있어도 기능이나 포트를 밝힌 카드(FC HBA 포함)는 남긴다.
+    #   최상위 Ports 링크는 근거로 쓰지 않는다 (실측 CSUS 'Rmp' 처럼 Controllers 없는 빈 entry 도 링크를 둔다).
+    pre_ndfs = None
+    if port_count == 0 and ndf_count == 0 and not ctrl_linked and not mfr and not model:
+        # 2026-10-18 (F4): 이름 · 컨트롤러 근거가 없어도 최상위 NetworkDeviceFunctions 링크가 있으면 기능 목록을 한 번 읽어
+        #   기능이 1개 이상일 때만 카드로 남긴다(녹화본 변형 재현: FC 기능 2개 · WWPN 보유 카드가 빈 슬롯으로 조용히 제외됐다).
+        #   placeholder(실측 CSUS 'Rmp' — Ports 링크만, 기능 링크 없음)는 종전처럼 묻지 않고 제외해 요청 수가 늘지 않는다.
+        #   기능 0건 · 404 도 빈 슬롯 — 조용히 제외. 읽은 목록은 아래 ndfs 로 재사용한다(요청 증가 0).
+        if not _safe(adata, 'NetworkDeviceFunctions', '@odata.id'):
+            return 'skipped'
+        pre_ndfs = _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
+        if not pre_ndfs:
+            return 'skipped'
+        _notice('network_adapters', 'NetworkAdapter %s: 제조사 · 모델 정보 없음, 기능 목록 %d건으로 카드 유지'
+                % (adapter_id, len(pre_ndfs)))
+    # 2026-04-29 fix B93: HPE iLO NetworkAdapter는 mac/link/speed 가 NetworkAdapter root에 없고
+    # NetworkPorts/Ports collection에만 존재. adapter level에 fold-in (첫 번째 활성 port의 메타).
+    # Dell/Lenovo는 NetworkAdapter root에 정보 있어 그대로 보존.
+    adapter_info = {
+        'id':               adapter_id,
+        'name':             _safe(adata, 'Name'),
+        'manufacturer':     mfr or None,
+        'model':            model or None,
+        'part_number':      _safe(adata, 'PartNumber') or None,
+        'serial_number':    _safe(adata, 'SerialNumber') or None,
+        'firmware_version': fw_ver or None,
+        'mac':              None,  # ports fold-in으로 채워짐 (B93)
+        'link_status':      'unknown',  # 동일 (B93)
+        'speed_mbps':       None,
+        'port_count':       port_count,
+    }
+    out['adapters'].append(adapter_info)
+    adapter_idx = len(out['adapters']) - 1
+    _ports_before = len(out['ports'])  # CSUS-R6: port_count fallback 기준점
+
+    # NetworkDeviceFunctions — FC WWPN/WWNN + IB GUID 식별 (cycle 2026-05-29).
+    ndfs = pre_ndfs if pre_ndfs is not None else _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
+    # 2026-10-10 (RD-F15): 한 포트에 NDF 가 여럿(CNA 의 Ethernet 기능 + FCoE 기능)이면 **목록**으로 둔다 — 종전 dict 는 뒤 멤버가 앞을
+    #   덮어 멤버 순서에 따라 같은 포트가 Ethernet 으로도 FC 로도 분류됐다.
+    # 2026-10-18 (F1b): 기능이 가리키는 포트 링크 두 종류(NetworkPorts/… · Ports/…)를 모두 색인한다.
+    ndf_by_port = {}
+    for i, n in enumerate(ndfs):
+        for u in (n.get('port_uris') or ([n['port_uri']] if n.get('port_uri') else [])):
+            ndf_by_port.setdefault(u, []).append(i)
+    # CSUS-FC1 (2026-06-15 실미러 검수): NDF.Links.PhysicalPortAssignment 부재 펌웨어
+    # (HPE CSUS RMC — NDF 가 Links.PCIeFunction 만 노출)에서 NDF↔Port 매칭이 port_uri 로
+    # 안 되면 ID 일치(NDF.Id == Port.Id, 예: PCIeCard10Port1)로 fallback. 그래야 FC WWPN/WWNN
+    # (NDF.FibreChannel 에 존재)이 port 에 join 돼 fc_hbas[].wwpn 이 소실되지 않는다.
+    ndf_by_id = {_id_text(n.get('id')): i for i, n in enumerate(ndfs) if _id_text(n.get('id'))}
+    ndf_matched = set()
+    # cycle 2026-08-03: port 순회에서 모은 (PortProtocol, link_tech, raw port) 컨텍스트.
+    # Port 에 join 되지 않은 NDF 를 분류할 때 '부모 포트' 신호를 물려주는 데 쓴다 (아래 참조).
+    port_ctx_by_id = {}
+    # 2026-10-18: 링크 상태를 장비가 주지 않은 포트(hbas link_status null) · WWPN 을 정하지 못한 포트 — 카드당 notice 1건씩
+    link_missing, wwpn_missing, wwpn_derived = [], [], []
+
+    # NetworkPorts (Redfish 1.5 이전) 또는 Ports (1.6+)
+    ports_link = (_safe(adata, 'NetworkPorts', '@odata.id')
+                  or _safe(adata, 'Ports', '@odata.id'))
+    if ports_link:
+        st3, pcoll, perr = _get(bmc_ip, _p(ports_link), username, password, timeout, verify_ssl)
+        if perr or st3 != 200:
+            errors.append(_err('network_adapters',
+                               f'Ports {ports_link} 실패: {perr or st3}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        else:
+            for pmember in _collection_members(bmc_ip, _p(ports_link), pcoll, username, password,
+                                               timeout, verify_ssl, 'network_adapters', errors):
+                p_uri = _safe(pmember, '@odata.id')
+                if not p_uri:
+                    continue
+                if origin == 'extra' and _p(p_uri) in seen_ports:
+                    continue   # 2026-10-15: 이미 수집한 포트 리소스 — 추가 섀시 중복
+                seen_ports.add(_p(p_uri))
+                st4, pdata, perr2 = _get(bmc_ip, _p(p_uri), username, password, timeout, verify_ssl)
+                if perr2 or st4 != 200:
+                    # 2026-10-10 (C4): 컬렉션이 나열한 Port 를 읽지 못했다(404 포함) — 그 포트의 데이터를 잃었으므로 근거를 남긴다.
+                    #   network_adapters 는 보조 수집이라 network 섹션 상태에는 들어가지 않고 errors[] 로만 보인다(비차단 code).
+                    errors.append(_err('network_adapters', f'Port {p_uri} 실패: {perr2 or st4}',
+                                       code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                    continue
+                # 속도: 신 CurrentSpeedGbps(Gbps) 우선 > 구 CurrentLinkSpeedMbps/1000 (Round 17 #3)
+                speed_gbps, speed_mbps = _normalize_port_speed(pdata)
+                assoc = _safe(pdata, 'AssociatedNetworkAddresses', default=[]) or []
+                if not isinstance(assoc, list):  # rule 95 R1 #2: 비-list 방어 (Round 2 #14)
+                    assoc = []
+                # 신 Port resource(1.6+, `Ports`)는 구 NetworkPort 의 top-level
+                # AssociatedNetworkAddresses 대신 Ethernet.AssociatedMACAddresses /
+                # FibreChannel.AssociatedWWNs 에 주소를 둔다 (실측 HPE DL380 Gen12 iLO7:
+                # Port.Ethernet.AssociatedMACAddresses=["14:23:f3:b0:7a:40"], top-level
+                # AssociatedNetworkAddresses 부재 → 기존엔 adapter.mac / port.associated_address
+                # 전부 null 유실). 구 필드 우선(기존 동작·F48 테스트 보존) + 신 필드 fallback (Additive).
+                if not assoc:
+                    eth_macs = _safe(pdata, 'Ethernet', 'AssociatedMACAddresses')
+                    if isinstance(eth_macs, list) and eth_macs:
+                        assoc = eth_macs
+                    else:
+                        # CSUS-FC2 (2026-06-15 실미러 검수): Port.FibreChannel 의 WWN 필드명이
+                        # 펌웨어별로 AssociatedWWNs / AssociatedWorldWideNames 로 갈린다 (HPE CSUS
+                        # RMC 는 후자). 둘 다 읽어 WWPN 소실 차단 (DMTF Port.FibreChannel).
+                        fc_wwns = (_safe(pdata, 'FibreChannel', 'AssociatedWWNs')
+                                   or _safe(pdata, 'FibreChannel', 'AssociatedWorldWideNames'))
+                        if isinstance(fc_wwns, list) and fc_wwns:
+                            assoc = fc_wwns
+                # NET-2-1 (2026-06-15): MAC/WWN 을 소문자 정규화해 adapters[].mac /
+                # fc_hbas[].wwpn(_normalize_wwn 소문자) 와 case 일관성 확보. HPE iLO7 은 FC
+                # WWPN 을 Ethernet.AssociatedMACAddresses 에 대문자로 노출 → 정규화 없이는 같은
+                # 주소가 associated_address(대문자) vs wwpn(소문자) 로 갈려 호출자 join mismatch.
+                # raw 가 이미 colon-grouped hex 라 .lower() 로 wwpn 정규화 결과와 동일.
+                primary_addr = assoc[0] if assoc else None
+                if isinstance(primary_addr, str):
+                    primary_addr = primary_addr.lower()
+                raw_port_type = _safe(pdata, 'PortType') or ''
+                port_protocol = _safe(pdata, 'PortProtocol')
+                link_tech = (_safe(pdata, 'LinkNetworkTechnology')
+                             or _safe(pdata, 'ActiveLinkTechnology'))
+                # 2026-04-29 fix B13: ports의 link_status도 동일 enum 정규화.
+                normalized_link = _normalize_link_status(_safe(pdata, 'LinkStatus'))
+                port_id = _safe(pdata, 'Id')
+                pid_s = _id_text(port_id)      # 2026-10-18 (F3a): 문자열 연산 전용 — 출력 port_id 는 raw
+                if pid_s:
+                    port_ctx_by_id[pid_s] = (port_protocol, link_tech, pdata)
+
+                # NDF join (식별 정보) — port_uri(PhysicalPortAssignment) 우선, 부재 시 ID 매칭(CSUS-FC1)
+                cand = list(ndf_by_port.get(_p(p_uri), [])) if p_uri else []
+                if not cand and pid_s and pid_s in ndf_by_id:
+                    cand = [ndf_by_id[pid_s]]
+                ndf_matched.update(cand)
+                # RD-F15 (2026-10-10): 이 포트에 FC/FCoE 기능이 하나라도 있으면 그 포트는 FC 다 — Ethernet 기능이 분류를 뒤집지 않는다.
+                #   fc_hbas 는 FC 기능마다 하나씩(각자의 WWPN).
+                fc_ndfs = [ndfs[i] for i in cand
+                           if _classify_port_protocol(port_protocol, link_tech, ndfs[i], pdata) in ('FibreChannel', 'FCoE')]
+                ndf = fc_ndfs[0] if fc_ndfs else (ndfs[cand[0]] if cand else None)
+
+                cls = _classify_port_protocol(port_protocol, link_tech, ndf, pdata)
+                # 2026-10-15: 연결된 기능(NDF)이 하나도 없는 포트가 링크 기술로 FibreChannel 을 밝히면 FC 포트다
+                #   (DMTF Port.LinkNetworkTechnology / NetworkPort.ActiveLinkTechnology). 실측 Dell R740 의 FC NetworkPort 는
+                #   PortProtocol · FibreChannel 블록 없이 ActiveLinkTechnology 만 준다 — NDF 를 못 받으면 HBA 가 조용히 빠졌다.
+                #   판정 함수에 넣지 않는다: 그 함수는 포트에 붙은 기능마다 다시 불려(RD-F15) Ethernet · iSCSI · 비활성 기능까지
+                #   FC 로 바꾸고, 짝 없는 기능(<PortId>-n)이 따로 HBA 를 내는 구조에서는 같은 포트가 두 번 나온다(녹화본 재현 8건).
+                lt_fc = _str(link_tech).strip().lower() == 'fibrechannel'
+                # 2026-10-18: 포트에 붙은 기능이 없고 `<PortId>-n` 고아 기능이 있으면 그 포트의 HBA 는 고아 경로가 낸다(부모 포트의
+                #   링크 · 속도 상속, F1). 종전에는 lt_fc 규칙만 이 가드를 썼고, FibreChannel 블록 · PortProtocol 로 FC 가 된 포트는
+                #   포트 루프와 고아 루프가 같은 포트의 HBA 를 두 번 냈다(포트 쪽은 wwpn null) — 1 항목 = 물리 FC 포트 1개 위반.
+                prefixed_orphan = bool(pid_s) and any(_id_text(n.get('id')).startswith(pid_s + '-') for n in ndfs)
+                if cls is None and not cand and lt_fc and not prefixed_orphan:
+                    cls = 'FibreChannel'
+
+                # 2026-10-17: InfiniBand 는 _ib_decision 하나로 판정한다 (포트 현재 모드 + 연결 기능의 NetDevFuncType).
+                #   ib → port_type InfiniBand, HBA 없음. conflict → IB 로 확정하지 않고(항목 없음) 포트 자신의 링크 기술만
+                #   port_type 에 두며 notice 1건. not_ib → 종전 FC/Ethernet 경로 그대로 — IB 신호가 없는 장비(실측 recording 전부)는
+                #   이 분기에 닿지 않는다.
+                joined = [ndfs[i] for i in cand]
+                ib_dec = _ib_decision(link_tech, port_protocol, joined)
+                if ib_dec == 'ib':
+                    cls = 'InfiniBand'
+                elif ib_dec == 'conflict':
+                    cls = _link_tech_port_type(link_tech)
+                    _notice('network_adapters',
+                            '네트워크 카드 %s 포트 %s: 포트 링크 기술과 기능 유형이 서로 달라 InfiniBand 여부를 확정할 수 없음, '
+                            'storage.infiniband 미수집' % (adapter_id, port_id))
+
+                # CSUS-R13 (2026-06-15 실미러 검수): FC 포트의 associated_address 는 port WWN(WWPN)
+                # 이어야 한다. Port.FibreChannel.AssociatedWorldWideNames 가 [WWNN, WWPN] 다중 entry
+                # 면 assoc[0]=WWNN 오취득 → NDF.WWPN(=fc_hbas[].wwpn 과 동일)으로 교정해 일관성 확보.
+                # (Ethernet/IB 포트는 기존 primary_addr 유지 — ndf.wwpn 없음)
+                if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
+                    primary_addr = ndf['wwpn']
+
+                port_hbas = []
+                if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE') and not (not cand and prefixed_orphan):
+                    hba_link = _hba_link_status(pdata)   # 2026-10-18: up / down / None(장비 미제공)
+                    if hba_link is None:
+                        link_missing.append(_id_text(port_id) or _str(p_uri))
+                    for fndf in (fc_ndfs or [ndf]):   # RD-F15: FC 기능마다 hba 하나
+                        fx = fndf if isinstance(fndf, dict) else {}
+                        if not fx.get('wwpn'):
+                            # 2026-10-18: 기능에 WWPN 이 없으면 포트 주소에서 WWNN 을 배제한 값으로 정한다 (_derive_port_wwpn)
+                            derived = _derive_port_wwpn(pdata, link_tech, fx)
+                            if derived:
+                                fx = dict(fx, wwpn=derived)
+                                wwpn_derived.append(_id_text(port_id) or _str(p_uri))
+                                primary_addr = derived      # CSUS-R13 과 같은 규칙: FC 포트 주소는 WWPN 으로 교정
+                            else:
+                                wwpn_missing.append(_id_text(port_id) or _str(p_uri))
+                        port_hbas.append(_make_fc_hba(
+                            adapter_id, adapter_info, port_id, cls,
+                            hba_link, speed_gbps, primary_addr, fx))
+                if origin == 'extra' and port_hbas:
+                    # 2026-10-15: 추가 섀시의 FC 항목은 WWPN 이 null 이 아니고 이미 수집한 값일 때만 중복으로 뺀다(같은 FC 포트).
+                    #   포트의 FC 항목이 모두 이렇게 확인된 중복이면 그 포트도 이미 수집한 포트다. null WWPN 은 확인할 수 없어 남긴다.
+                    known = {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}
+                    fresh = [h for h in port_hbas if not (h.get('wwpn') and h['wwpn'] in known)]
+                    if not fresh:
+                        continue
+                    port_hbas = fresh
+
+                port_info = {
+                    'adapter_id':              adapter_id,
+                    'adapter_model':           adapter_info['model'],
+                    'port_id':                 port_id,
+                    'name':                    _safe(pdata, 'Name'),
+                    'physical_port_number':    _safe(pdata, 'PhysicalPortNumber'),
+                    'link_status':             normalized_link,
+                    'link_state':              _safe(pdata, 'LinkState'),
+                    'current_link_speed_mbps': speed_mbps,
+                    # port_type = 분류 결과 (FibreChannel/InfiniBand/Ethernet). 구 raw PortType
+                    # (Upstream 등 — FC/IB 무관) 대체. 미분류 시 raw 보존.
+                    'port_type':               cls or (raw_port_type or None),
+                    'health':                  _safe(pdata, 'Status', 'Health'),
+                    'associated_address':      primary_addr,
+                }
+                out['ports'].append(port_info)
+                # 2026-04-29 fix B93: adapter level에 ports의 첫 active 메타 fold-in.
+                # FC/IB 포트의 WWPN/GUID 는 NIC mac 이 아니므로 fold-in 제외.
+                cur = out['adapters'][adapter_idx]
+                # 2026-10-15: 링크 기술이 FibreChannel 인 포트의 주소는 WWN 이다(실측 R740: WWNN) — MAC 으로 접지 않는다
+                if (cur.get('mac') is None and primary_addr and cls not in ('FibreChannel', 'FCoE', 'InfiniBand')
+                        and not lt_fc):
+                    cur['mac'] = primary_addr
+                if cur.get('link_status') == 'unknown' or (cur.get('link_status') != 'up' and normalized_link == 'up'):
+                    cur['link_status'] = normalized_link
+                if cur.get('speed_mbps') is None and speed_mbps:
+                    cur['speed_mbps'] = speed_mbps
+
+                if port_hbas:
+                    out['fc_hbas'].extend(port_hbas)
+                elif ib_dec == 'ib':
+                    _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps,
+                                    [n for n in joined if _str(n.get('func_type')).strip().lower() == 'infiniband'])
+
+    # Port 가 없거나 Port 에 join 되지 않은 FC NetworkDeviceFunction 도 식별만으로 emit.
+    # (port-less HBA / 구 펌웨어 — link_status/speed 는 미상)
+    # 2026-10-17: InfiniBand 기능은 여기서 항목을 만들지 않는다 (기능 ≠ 포트) — 부모 포트별로 모아
+    #   _attach_orphan_ib_functions 가 부모 IB 항목의 빈 GUID 만 채우거나 notice 를 남긴다.
+    orphan_ib_by_parent = {}
+    orphan_ib_unlinked = []
+    for i, ndf in enumerate(ndfs):
+        if i in ndf_matched:
+            continue
+        # cycle 2026-08-03 (사이트 Dell R630 실측): join 실패한 NDF 도 '부모 포트' 신호를
+        # 물려받아 분류한다. Dell 은 NDF Id 를 `<PortId>-<funcIdx>` 로 매기는데(예: 포트
+        # NIC.Integrated.1-1 ↔ NDF NIC.Integrated.1-1-1) port_uri/ID-동일 매칭이 둘 다
+        # 빗나가 orphan 이 된다. 컨텍스트 없이 분류하면 FCoE 지원 CNA 의 이더넷 기능이
+        # (MAC 파생 WWN 때문에) FC HBA 로 잡힌다 — 같은 NIC 이 펌웨어 버전에 따라 갈리는
+        # 원인이었다(실측: NIC fw 15.20.13 은 WWN 노출, 15.15.08 은 미노출).
+        # 접두 매칭은 구분자 '-' 를 요구해 `...1-1` 이 `...1-10-1` 을 삼키지 않는다.
+        nid = _id_text(ndf.get('id'))
+        parent = None
+        parent_pid = None
+        for _pid, _ctx in port_ctx_by_id.items():
+            if nid.startswith(_pid + '-'):
+                parent = _ctx
+                parent_pid = _pid
+                break
+        if _str(ndf.get('func_type')).strip().lower() == 'infiniband':
+            if parent is None:
+                orphan_ib_unlinked.append(nid)
+            else:
+                orphan_ib_by_parent.setdefault(parent_pid, []).append(ndf)
+            continue
+        if parent is not None:
+            cls = _classify_port_protocol(parent[0], parent[1], ndf, parent[2])
+            # 2026-10-18 (F1): 이름(`<PortId>-n`)으로 부모 포트를 찾았으면 그 포트의 LinkStatus · 속도를 쓴다 — 짝 없는 기능도
+            #   포트 상태는 부모가 알고 있다(녹화본 변형 재현: 부모 LinkStatus Up · 16000 Mbps 가 unknown/None 으로 버려졌다).
+            #   port_id 는 종전처럼 기능 Id — 호출자 · 불변식 시험이 `<PortId>-` 접두로 포트와 맞춘다.
+            hba_link = _hba_link_status(parent[2])
+            hba_speed = _normalize_port_speed(parent[2])[0]
+        else:
+            cls = _classify_port_protocol(None, None, ndf, None)
+            hba_link, hba_speed = None, None
+        if cls in ('FibreChannel', 'FCoE'):
+            fx = ndf
+            if not ndf.get('wwpn'):
+                derived = _derive_port_wwpn(parent[2], parent[1], ndf) if parent is not None else None
+                if derived:
+                    fx = dict(ndf, wwpn=derived)
+                    wwpn_derived.append(nid)
+                else:
+                    wwpn_missing.append(nid)
+            if hba_link is None:
+                link_missing.append(nid)
+            hba = _make_fc_hba(adapter_id, adapter_info, ndf.get('id'), cls, hba_link, hba_speed, None, fx)
+            # 2026-10-15: 추가 섀시 중복 — 이미 수집한 WWPN. 2026-10-18: 같은 host 안에서도 같은 WWPN 이면 같은 FC 포트다
+            #   (포트 루프가 포트 주소로 WWPN 을 정한 뒤 짝 없는 기능이 같은 WWPN 을 들고 오는 경우) — 1 포트 = 1 항목.
+            if hba.get('wwpn') and hba['wwpn'] in {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
+                continue
+            out['fc_hbas'].append(hba)
+    _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
+
+    # 2026-10-18: 카드당 notice — 장비가 링크 상태를 주지 않은 FC 포트(hbas link_status null) · 포트 주소로 정한 WWPN · 못 정한 WWPN
+    if link_missing:
+        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 미제공 (storage.hbas link_status null)'
+                % (adapter_id, ', '.join(link_missing)))
+    if wwpn_derived:
+        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s WWPN 을 기능이 아니라 포트 주소에서 정함'
+                % (adapter_id, ', '.join(wwpn_derived)))
+    if wwpn_missing:
+        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s WWPN 미확정 (기능 · 포트 주소 모두 없음)'
+                % (adapter_id, ', '.join(wwpn_missing)))
+
+    # CSUS-R6 (2026-06-15 실미러 검수): ControllerCapabilities.NetworkPortCount 부재 펌웨어
+    # (HPE CSUS NetworkAdapter — Controllers 에 ControllerCapabilities 없음)에서 port_count=0
+    # 인데 실제 Ports 컬렉션은 2포트 → 잘못된 0. 이 어댑터에서 실제 수집된 ports 수로 보정.
+    # NetworkPortCount 보유 vendor(Dell rNDC 등)는 port_count>0 라 미발동 (Additive 회귀안전).
+    _ports_collected = len(out['ports']) - _ports_before
+    if out['adapters'][adapter_idx].get('port_count') in (0, None) and _ports_collected > 0:
+        out['adapters'][adapter_idx]['port_count'] = _ports_collected
+    return 'ok'
 
 
 def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, timeout,
@@ -4087,6 +4620,15 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
       - 카드를 하나도 얻지 못하면 diagnosis.details.notices 로 '목록이 비어 있음' / '리소스 404' 를 남긴다 — HBA 없음과 구분.
       - 추가 섀시에서 온 것은 확인된 중복(같은 카드 · 포트 리소스, null 이 아닌 같은 WWPN)만 그 단위로 뺀다.
 
+    **2026-10-18 (조용한 누락 · 예외 소실 보완)**:
+      - 카드 1장의 수집은 _collect_one_network_adapter 가 하고, 그 안의 예외는 카드 단위로 격리한다(F3b) — 한 카드의 응답 오염이
+        다른 카드의 adapters · ports · fc_hbas 를 지우지 않는다. 실패 카드의 부분 항목은 되돌리고 비차단 오류 1건만 남긴다.
+      - 카드 목록은 받았는데 카드를 하나도 읽지 못했고 실패가 전부 404 면 notice 를 남긴다(F7 — 섹션 runner 가 미지원으로 분류해
+        오류를 버리는 경로를 'HBA 없음' 과 구분).
+      - 어느 경로가 200 빈 목록이어도 다른 경로의 404 아닌 실패(5xx · timeout)는 비차단 오류로 남긴다(F8). 1순위 404 로 미지원
+        분류될 때 다른 경로의 실패는 notice 문장에 덧붙인다(F5).
+      - hbas link_status 는 up / down / None(장비 미제공) — _hba_link_status. WWPN 은 기능 → 포트 주소 배제 규칙(_derive_port_wwpn).
+
     분류 정본 (DMTF — cycle 2026-05-29 fix, EXTERNAL-CONTRACTS §1/§2):
       - FC : Port.PortProtocol ∈ {FC,FCP,FCoE} 또는 NDF.NetDevFuncType=FibreChannel(OverEthernet)
       - IB (2026-10-17): _ib_decision — 포트 현재 모드(Port.LinkNetworkTechnology / NetworkPort.ActiveLinkTechnology /
@@ -4110,13 +4652,19 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         bmc_ip, chassis_uri, system_uri, extra_chassis_uris, username, password, timeout, verify_ssl, errors)
     if not sources:
         if saw_empty:
+            # 2026-10-18 (F8): 한 경로가 200 빈 목록이어도 다른 경로의 404 아닌 실패(5xx · timeout · 401/403)는 비차단 오류로
+            #   남긴다 — 종전에는 사라져 '빈 목록' 으로 둔갑했다(status 는 보조 섹션이라 불변). 순수 404 는 종전처럼 조용하다.
+            for _st, sig, ext, base in fails:
+                if _st != 404:
+                    errors.append(_err('network_adapters', f'NetworkAdapters {base} 실패: {sig}', ext,
+                                       code=_CODE_NON_BLOCKING_SUBRESOURCE))
             # 200 빈 목록 — 오류는 아니지만 HBA 가 없다고 확정할 근거도 아니다 (없음과 미확인을 구분해 남긴다)
             _notice('network_adapters', 'NetworkAdapters 목록이 비어 있음, 네트워크 카드(FC HBA 포함) 정보 미확인')
             return out, errors
         if fails:
             # 표준(1순위) 경로의 실패 시그널을 보고 대상으로 삼는다 — message 문자열이
             # 기존과 동일해야 404-only 미지원 분류(_is_404_only_error)가 불변.
-            _st, sig, ext = fails[0]
+            _st, sig, ext, _base = fails[0]
             detail = 'tried: ' + ' / '.join(tried)
             if ext:
                 detail += ' | ' + ext
@@ -4124,13 +4672,19 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                                f'NetworkAdapters 미지원 또는 실패: {sig}', detail))
         if _is_404_only_error(errors):
             # 섹션 runner 가 미지원으로 분류해 errors 를 버리는 경우 — 'HBA 없음' 과 구분되도록 사실을 남긴다
-            _notice('network_adapters', 'NetworkAdapters 리소스 404, 네트워크 카드(FC HBA 포함) 정보 미수집')
+            msg = 'NetworkAdapters 리소스 404, 네트워크 카드(FC HBA 포함) 정보 미수집'
+            # 2026-10-18 (F5): 1순위 404 로 미지원 분류는 유지(2026-10-15 결정)하고, 다른 경로의 실패 사실만 문장에 덧붙인다.
+            #   순수 404 는 글자까지 종전과 같다.
+            others = ['%s: %s' % (base, sig) for _st, sig, _ext, base in fails if _st != 404]
+            if others:
+                msg += ' (다른 경로 실패: ' + ' / '.join(others) + ')'
+            _notice('network_adapters', msg)
         return out, errors
 
     # 1순위 섀시는 실패했지만 System 이 연결한 다른 섀시에서 카드를 얻었다 — 1순위 섀시의 카드를 잃었을 수 있어 근거를 남긴다.
     # 404 는 그 섀시에 목록이 없는 것이라 조용히 둔다. Systems 경로가 쓰인 경우는 종전처럼 기록하지 않는다 (iDRAC8 불변).
     if fails and sources[0][0] == 'extra':
-        _st, sig, ext = fails[0]
+        _st, sig, ext, _base = fails[0]
         if _st != 404:
             errors.append(_err('network_adapters', f'NetworkAdapters {tried[0]} 실패: {sig}', ext,
                                code=_CODE_NON_BLOCKING_SUBRESOURCE))
@@ -4147,308 +4701,37 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                 seen_adapters.add(_p(raw))
             items.append((origin, m))
 
+    card_fail = 0   # 2026-10-18 (F7): 목록에는 있는데 읽지 못한 카드 수
     for origin, member in _capped(items, 'network_adapters', errors):
-        adp_uri = _safe(member, '@odata.id')
-        if not adp_uri:
+        # 2026-10-18 (F3b): 카드 단위 예외 격리 — 응답 오염(dict/list Id · 비정상 타입)으로 한 카드가 예외를 내도 다른 카드의
+        #   adapters · ports · fc_hbas 는 남긴다. 이 카드가 남긴 부분 항목은 되돌리고(스냅샷 길이로 절단) 비차단 오류 1건만 남긴다.
+        #   종전에는 섹션 runner 가 예외를 잡아 네트워크 카드 섹션 전체를 None 으로 버렸다(storage.hbas · network.adapters 전부 []).
+        snap = {k: len(v) for k, v in out.items()}
+        ports_snap = set(seen_ports)
+        try:
+            result = _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
+                                                  username, password, timeout, verify_ssl)
+        except Exception as e:
+            sys.stderr.write("[redfish_gather] network_adapters 카드 예외: %s\n%s\n"
+                             % (type(e).__name__, traceback.format_exc(limit=3)))
+            for k, n in snap.items():
+                del out[k][n:]
+            for key in [k for k, idx in ib_idx_by_port.items() if idx >= snap['infiniband']]:
+                del ib_idx_by_port[key]
+            seen_ports.clear()
+            seen_ports.update(ports_snap)
+            errors.append(_err('network_adapters', 'NetworkAdapter %s 처리 예외' % _str(_safe(member, '@odata.id')),
+                               '%s: %s' % (type(e).__name__, str(e)[:200]), code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
-        st2, adata, aerr = _get(bmc_ip, _p(adp_uri), username, password, timeout, verify_ssl)
-        if aerr or st2 != 200:
-            errors.append(_err('network_adapters', f'NetworkAdapter {adp_uri} 실패: {aerr or st2}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
-            continue
+        if result == 'fetch_failed':
+            card_fail += 1
 
-        adapter_id = _safe(adata, 'Id')
-        # FirmwareVersion: Controllers[0].FirmwarePackageVersion 또는 root
-        fw_ver = None
-        ctrls = _safe(adata, 'Controllers', default=[]) or []
-        if ctrls and isinstance(ctrls, list):
-            fw_ver = _safe(ctrls[0], 'FirmwarePackageVersion')
-            # CSUS-R16 (2026-06-15 실미러 검수): FirmwarePackageVersion 부재 펌웨어(HPE CSUS NetworkAdapter)
-            # 는 어댑터 펌웨어를 Controllers[0].Links.PCIeDevices[] 가 가리키는 PCIeDevice.FirmwareVersion
-            # 에 둔다(실측 Mellanox MCX631102="26.46.3048..."). 링크추적 fallback (Additive — 표준 위치
-            # 보유 vendor 불변, PCIeDevice 도 부재 시 None 유지).
-            if not fw_ver:
-                for _pd in _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices')):
-                    _pd_uri = _safe(_pd, '@odata.id')
-                    if not _pd_uri:
-                        continue
-                    _ps, _pdata, _pe = _get(bmc_ip, _p(_pd_uri), username, password, timeout, verify_ssl)
-                    if _ps == 200 and isinstance(_pdata, dict):
-                        fw_ver = _safe(_pdata, 'FirmwareVersion')
-                        if fw_ver:
-                            break
-        # 빈 placeholder NetworkAdapter 필터:
-        # 일부 BMC (실측 Lenovo XCC SR650 V2)는 PCIe slot 자체를 NetworkAdapters 컬렉션에
-        # 빈 entry 로 노출. Controllers[0].ControllerCapabilities.NetworkPortCount=0 또는
-        # manufacturer/model 모두 빈 문자열이면 실제 NIC 가 아니므로 skip.
-        # cycle 2026-06-14 (DELL R740 실 미러 검수 NET-1): port_count 를 Controllers[0] 하나가
-        # 아니라 *모든* Controller 의 NetworkPortCount 합으로 산출. Dell rNDC(예: 'BRCM GbE 4P
-        # 5720-t rNDC')는 NetworkAdapter 1개가 Controller 2개(각 NetworkPortCount=2)를 노출 —
-        # Controllers[0] 만 읽으면 4포트 카드가 2로 과소 집계됨(실 미러 NetworkPorts 멤버=4 와 불일치).
-        # 단일 Controller 카드는 합=그 값 → 결과 불변(Additive). NetworkPortCount=DMTF 컨트롤러별 포트 수.
-        port_count = 0
-        ndf_count = 0
-        ctrl_linked = False
-        if ctrls and isinstance(ctrls, list):
-            for _ctrl in ctrls:
-                _caps = _safe(_ctrl, 'ControllerCapabilities') or {}
-                port_count += _safe_int(_safe(_caps, 'NetworkPortCount'), default=0) or 0
-                ndf_count += _safe_int(_safe(_caps, 'NetworkDeviceFunctionCount'), default=0) or 0
-                _clinks = _safe(_ctrl, 'Links') or {}
-                ctrl_linked = ctrl_linked or any(_dicts(_safe(_clinks, _k))
-                                                 for _k in ('NetworkDeviceFunctions', 'Ports', 'NetworkPorts'))
-        mfr = _str(_safe(adata, 'Manufacturer')).strip()
-        model = _str(_safe(adata, 'Model')).strip()
-        # 2026-10-15: 빈 entry 판정에 표준 근거(ControllerCapabilities.NetworkDeviceFunctionCount · Controllers[].Links 의
-        #   기능/포트 링크)를 더한다 — 제조사 · 모델 문자열이 비어 있어도 기능이나 포트를 밝힌 카드(FC HBA 포함)는 남긴다.
-        #   최상위 Ports 링크는 근거로 쓰지 않는다 (실측 CSUS 'Rmp' 처럼 Controllers 없는 빈 entry 도 링크를 둔다).
-        if port_count == 0 and ndf_count == 0 and not ctrl_linked and not mfr and not model:
-            continue
-        # 2026-04-29 fix B93: HPE iLO NetworkAdapter는 mac/link/speed 가 NetworkAdapter root에 없고
-        # NetworkPorts/Ports collection에만 존재. adapter level에 fold-in (첫 번째 활성 port의 메타).
-        # Dell/Lenovo는 NetworkAdapter root에 정보 있어 그대로 보존.
-        adapter_info = {
-            'id':               adapter_id,
-            'name':             _safe(adata, 'Name'),
-            'manufacturer':     mfr or None,
-            'model':            model or None,
-            'part_number':      _safe(adata, 'PartNumber') or None,
-            'serial_number':    _safe(adata, 'SerialNumber') or None,
-            'firmware_version': fw_ver or None,
-            'mac':              None,  # ports fold-in으로 채워짐 (B93)
-            'link_status':      'unknown',  # 동일 (B93)
-            'speed_mbps':       None,
-            'port_count':       port_count,
-        }
-        out['adapters'].append(adapter_info)
-        adapter_idx = len(out['adapters']) - 1
-        _ports_before = len(out['ports'])  # CSUS-R6: port_count fallback 기준점
-
-        # NetworkDeviceFunctions — FC WWPN/WWNN + IB GUID 식별 (cycle 2026-05-29).
-        ndfs = _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
-        # 2026-10-10 (RD-F15): 한 포트에 NDF 가 여럿(CNA 의 Ethernet 기능 + FCoE 기능)이면 **목록**으로 둔다 — 종전 dict 는 뒤 멤버가 앞을
-        #   덮어 멤버 순서에 따라 같은 포트가 Ethernet 으로도 FC 로도 분류됐다.
-        ndf_by_port = {}
-        for i, n in enumerate(ndfs):
-            if n.get('port_uri'):
-                ndf_by_port.setdefault(n['port_uri'], []).append(i)
-        # CSUS-FC1 (2026-06-15 실미러 검수): NDF.Links.PhysicalPortAssignment 부재 펌웨어
-        # (HPE CSUS RMC — NDF 가 Links.PCIeFunction 만 노출)에서 NDF↔Port 매칭이 port_uri 로
-        # 안 되면 ID 일치(NDF.Id == Port.Id, 예: PCIeCard10Port1)로 fallback. 그래야 FC WWPN/WWNN
-        # (NDF.FibreChannel 에 존재)이 port 에 join 돼 fc_hbas[].wwpn 이 소실되지 않는다.
-        ndf_by_id = {n['id']: i for i, n in enumerate(ndfs) if n.get('id')}
-        ndf_matched = set()
-        # cycle 2026-08-03: port 순회에서 모은 (PortProtocol, link_tech, raw port) 컨텍스트.
-        # Port 에 join 되지 않은 NDF 를 분류할 때 '부모 포트' 신호를 물려주는 데 쓴다 (아래 참조).
-        port_ctx_by_id = {}
-
-        # NetworkPorts (Redfish 1.5 이전) 또는 Ports (1.6+)
-        ports_link = (_safe(adata, 'NetworkPorts', '@odata.id')
-                      or _safe(adata, 'Ports', '@odata.id'))
-        if ports_link:
-            st3, pcoll, perr = _get(bmc_ip, _p(ports_link), username, password, timeout, verify_ssl)
-            if perr or st3 != 200:
-                errors.append(_err('network_adapters',
-                                   f'Ports {ports_link} 실패: {perr or st3}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
-            else:
-                for pmember in _collection_members(bmc_ip, _p(ports_link), pcoll, username, password,
-                                                   timeout, verify_ssl, 'network_adapters', errors):
-                    p_uri = _safe(pmember, '@odata.id')
-                    if not p_uri:
-                        continue
-                    if origin == 'extra' and _p(p_uri) in seen_ports:
-                        continue   # 2026-10-15: 이미 수집한 포트 리소스 — 추가 섀시 중복
-                    seen_ports.add(_p(p_uri))
-                    st4, pdata, perr2 = _get(bmc_ip, _p(p_uri), username, password, timeout, verify_ssl)
-                    if perr2 or st4 != 200:
-                        # 2026-10-10 (C4): 컬렉션이 나열한 Port 를 읽지 못했다(404 포함) — 그 포트의 데이터를 잃었으므로 근거를 남긴다.
-                        #   network_adapters 는 보조 수집이라 network 섹션 상태에는 들어가지 않고 errors[] 로만 보인다(비차단 code).
-                        errors.append(_err('network_adapters', f'Port {p_uri} 실패: {perr2 or st4}',
-                                           code=_CODE_NON_BLOCKING_SUBRESOURCE))
-                        continue
-                    # 속도: 신 CurrentSpeedGbps(Gbps) 우선 > 구 CurrentLinkSpeedMbps/1000 (Round 17 #3)
-                    speed_gbps, speed_mbps = _normalize_port_speed(pdata)
-                    assoc = _safe(pdata, 'AssociatedNetworkAddresses', default=[]) or []
-                    if not isinstance(assoc, list):  # rule 95 R1 #2: 비-list 방어 (Round 2 #14)
-                        assoc = []
-                    # 신 Port resource(1.6+, `Ports`)는 구 NetworkPort 의 top-level
-                    # AssociatedNetworkAddresses 대신 Ethernet.AssociatedMACAddresses /
-                    # FibreChannel.AssociatedWWNs 에 주소를 둔다 (실측 HPE DL380 Gen12 iLO7:
-                    # Port.Ethernet.AssociatedMACAddresses=["14:23:f3:b0:7a:40"], top-level
-                    # AssociatedNetworkAddresses 부재 → 기존엔 adapter.mac / port.associated_address
-                    # 전부 null 유실). 구 필드 우선(기존 동작·F48 테스트 보존) + 신 필드 fallback (Additive).
-                    if not assoc:
-                        eth_macs = _safe(pdata, 'Ethernet', 'AssociatedMACAddresses')
-                        if isinstance(eth_macs, list) and eth_macs:
-                            assoc = eth_macs
-                        else:
-                            # CSUS-FC2 (2026-06-15 실미러 검수): Port.FibreChannel 의 WWN 필드명이
-                            # 펌웨어별로 AssociatedWWNs / AssociatedWorldWideNames 로 갈린다 (HPE CSUS
-                            # RMC 는 후자). 둘 다 읽어 WWPN 소실 차단 (DMTF Port.FibreChannel).
-                            fc_wwns = (_safe(pdata, 'FibreChannel', 'AssociatedWWNs')
-                                       or _safe(pdata, 'FibreChannel', 'AssociatedWorldWideNames'))
-                            if isinstance(fc_wwns, list) and fc_wwns:
-                                assoc = fc_wwns
-                    # NET-2-1 (2026-06-15): MAC/WWN 을 소문자 정규화해 adapters[].mac /
-                    # fc_hbas[].wwpn(_normalize_wwn 소문자) 와 case 일관성 확보. HPE iLO7 은 FC
-                    # WWPN 을 Ethernet.AssociatedMACAddresses 에 대문자로 노출 → 정규화 없이는 같은
-                    # 주소가 associated_address(대문자) vs wwpn(소문자) 로 갈려 호출자 join mismatch.
-                    # raw 가 이미 colon-grouped hex 라 .lower() 로 wwpn 정규화 결과와 동일.
-                    primary_addr = assoc[0] if assoc else None
-                    if isinstance(primary_addr, str):
-                        primary_addr = primary_addr.lower()
-                    raw_port_type = _safe(pdata, 'PortType') or ''
-                    port_protocol = _safe(pdata, 'PortProtocol')
-                    link_tech = (_safe(pdata, 'LinkNetworkTechnology')
-                                 or _safe(pdata, 'ActiveLinkTechnology'))
-                    # 2026-04-29 fix B13: ports의 link_status도 동일 enum 정규화.
-                    normalized_link = _normalize_link_status(_safe(pdata, 'LinkStatus'))
-                    port_id = _safe(pdata, 'Id')
-                    if port_id:
-                        port_ctx_by_id[port_id] = (port_protocol, link_tech, pdata)
-
-                    # NDF join (식별 정보) — port_uri(PhysicalPortAssignment) 우선, 부재 시 ID 매칭(CSUS-FC1)
-                    cand = list(ndf_by_port.get(_p(p_uri), [])) if p_uri else []
-                    if not cand and port_id and port_id in ndf_by_id:
-                        cand = [ndf_by_id[port_id]]
-                    ndf_matched.update(cand)
-                    # RD-F15 (2026-10-10): 이 포트에 FC/FCoE 기능이 하나라도 있으면 그 포트는 FC 다 — Ethernet 기능이 분류를 뒤집지 않는다.
-                    #   fc_hbas 는 FC 기능마다 하나씩(각자의 WWPN).
-                    fc_ndfs = [ndfs[i] for i in cand
-                               if _classify_port_protocol(port_protocol, link_tech, ndfs[i], pdata) in ('FibreChannel', 'FCoE')]
-                    ndf = fc_ndfs[0] if fc_ndfs else (ndfs[cand[0]] if cand else None)
-
-                    cls = _classify_port_protocol(port_protocol, link_tech, ndf, pdata)
-                    # 2026-10-15: 연결된 기능(NDF)이 하나도 없는 포트가 링크 기술로 FibreChannel 을 밝히면 FC 포트다
-                    #   (DMTF Port.LinkNetworkTechnology / NetworkPort.ActiveLinkTechnology). 실측 Dell R740 의 FC NetworkPort 는
-                    #   PortProtocol · FibreChannel 블록 없이 ActiveLinkTechnology 만 준다 — NDF 를 못 받으면 HBA 가 조용히 빠졌다.
-                    #   판정 함수에 넣지 않는다: 그 함수는 포트에 붙은 기능마다 다시 불려(RD-F15) Ethernet · iSCSI · 비활성 기능까지
-                    #   FC 로 바꾸고, 짝 없는 기능(<PortId>-n)이 따로 HBA 를 내는 구조에서는 같은 포트가 두 번 나온다(녹화본 재현 8건).
-                    lt_fc = _str(link_tech).strip().lower() == 'fibrechannel'
-                    if cls is None and not cand and lt_fc:
-                        _pid = _str(port_id)
-                        if not (_pid and any(_str(n.get('id')).startswith(_pid + '-') for n in ndfs)):
-                            cls = 'FibreChannel'
-
-                    # 2026-10-17: InfiniBand 는 _ib_decision 하나로 판정한다 (포트 현재 모드 + 연결 기능의 NetDevFuncType).
-                    #   ib → port_type InfiniBand, HBA 없음. conflict → IB 로 확정하지 않고(항목 없음) 포트 자신의 링크 기술만
-                    #   port_type 에 두며 notice 1건. not_ib → 종전 FC/Ethernet 경로 그대로 — IB 신호가 없는 장비(실측 recording 전부)는
-                    #   이 분기에 닿지 않는다.
-                    joined = [ndfs[i] for i in cand]
-                    ib_dec = _ib_decision(link_tech, port_protocol, joined)
-                    if ib_dec == 'ib':
-                        cls = 'InfiniBand'
-                    elif ib_dec == 'conflict':
-                        cls = _link_tech_port_type(link_tech)
-                        _notice('network_adapters',
-                                '네트워크 카드 %s 포트 %s: 포트 링크 기술과 기능 유형이 서로 달라 InfiniBand 여부를 확정할 수 없음, '
-                                'storage.infiniband 미수집' % (adapter_id, port_id))
-
-                    # CSUS-R13 (2026-06-15 실미러 검수): FC 포트의 associated_address 는 port WWN(WWPN)
-                    # 이어야 한다. Port.FibreChannel.AssociatedWorldWideNames 가 [WWNN, WWPN] 다중 entry
-                    # 면 assoc[0]=WWNN 오취득 → NDF.WWPN(=fc_hbas[].wwpn 과 동일)으로 교정해 일관성 확보.
-                    # (Ethernet/IB 포트는 기존 primary_addr 유지 — ndf.wwpn 없음)
-                    if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
-                        primary_addr = ndf['wwpn']
-
-                    port_hbas = []
-                    if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE'):
-                        for fndf in (fc_ndfs or [ndf]):   # RD-F15: FC 기능마다 hba 하나
-                            port_hbas.append(_make_fc_hba(
-                                adapter_id, adapter_info, port_id, cls,
-                                normalized_link, speed_gbps, primary_addr, fndf))
-                    if origin == 'extra' and port_hbas:
-                        # 2026-10-15: 추가 섀시의 FC 항목은 WWPN 이 null 이 아니고 이미 수집한 값일 때만 중복으로 뺀다(같은 FC 포트).
-                        #   포트의 FC 항목이 모두 이렇게 확인된 중복이면 그 포트도 이미 수집한 포트다. null WWPN 은 확인할 수 없어 남긴다.
-                        known = {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}
-                        fresh = [h for h in port_hbas if not (h.get('wwpn') and h['wwpn'] in known)]
-                        if not fresh:
-                            continue
-                        port_hbas = fresh
-
-                    port_info = {
-                        'adapter_id':              adapter_id,
-                        'adapter_model':           adapter_info['model'],
-                        'port_id':                 port_id,
-                        'name':                    _safe(pdata, 'Name'),
-                        'physical_port_number':    _safe(pdata, 'PhysicalPortNumber'),
-                        'link_status':             normalized_link,
-                        'link_state':              _safe(pdata, 'LinkState'),
-                        'current_link_speed_mbps': speed_mbps,
-                        # port_type = 분류 결과 (FibreChannel/InfiniBand/Ethernet). 구 raw PortType
-                        # (Upstream 등 — FC/IB 무관) 대체. 미분류 시 raw 보존.
-                        'port_type':               cls or (raw_port_type or None),
-                        'health':                  _safe(pdata, 'Status', 'Health'),
-                        'associated_address':      primary_addr,
-                    }
-                    out['ports'].append(port_info)
-                    # 2026-04-29 fix B93: adapter level에 ports의 첫 active 메타 fold-in.
-                    # FC/IB 포트의 WWPN/GUID 는 NIC mac 이 아니므로 fold-in 제외.
-                    cur = out['adapters'][adapter_idx]
-                    # 2026-10-15: 링크 기술이 FibreChannel 인 포트의 주소는 WWN 이다(실측 R740: WWNN) — MAC 으로 접지 않는다
-                    if (cur.get('mac') is None and primary_addr and cls not in ('FibreChannel', 'FCoE', 'InfiniBand')
-                            and not lt_fc):
-                        cur['mac'] = primary_addr
-                    if cur.get('link_status') == 'unknown' or (cur.get('link_status') != 'up' and normalized_link == 'up'):
-                        cur['link_status'] = normalized_link
-                    if cur.get('speed_mbps') is None and speed_mbps:
-                        cur['speed_mbps'] = speed_mbps
-
-                    if port_hbas:
-                        out['fc_hbas'].extend(port_hbas)
-                    elif ib_dec == 'ib':
-                        _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps,
-                                        [n for n in joined if _str(n.get('func_type')).strip().lower() == 'infiniband'])
-
-        # Port 가 없거나 Port 에 join 되지 않은 FC NetworkDeviceFunction 도 식별만으로 emit.
-        # (port-less HBA / 구 펌웨어 — link_status/speed 는 미상)
-        # 2026-10-17: InfiniBand 기능은 여기서 항목을 만들지 않는다 (기능 ≠ 포트) — 부모 포트별로 모아
-        #   _attach_orphan_ib_functions 가 부모 IB 항목의 빈 GUID 만 채우거나 notice 를 남긴다.
-        orphan_ib_by_parent = {}
-        orphan_ib_unlinked = []
-        for i, ndf in enumerate(ndfs):
-            if i in ndf_matched:
-                continue
-            # cycle 2026-08-03 (사이트 Dell R630 실측): join 실패한 NDF 도 '부모 포트' 신호를
-            # 물려받아 분류한다. Dell 은 NDF Id 를 `<PortId>-<funcIdx>` 로 매기는데(예: 포트
-            # NIC.Integrated.1-1 ↔ NDF NIC.Integrated.1-1-1) port_uri/ID-동일 매칭이 둘 다
-            # 빗나가 orphan 이 된다. 컨텍스트 없이 분류하면 FCoE 지원 CNA 의 이더넷 기능이
-            # (MAC 파생 WWN 때문에) FC HBA 로 잡힌다 — 같은 NIC 이 펌웨어 버전에 따라 갈리는
-            # 원인이었다(실측: NIC fw 15.20.13 은 WWN 노출, 15.15.08 은 미노출).
-            # 접두 매칭은 구분자 '-' 를 요구해 `...1-1` 이 `...1-10-1` 을 삼키지 않는다.
-            nid = _str(ndf.get('id'))
-            parent = None
-            parent_pid = None
-            for _pid, _ctx in port_ctx_by_id.items():
-                if nid.startswith(_pid + '-'):
-                    parent = _ctx
-                    parent_pid = _pid
-                    break
-            if _str(ndf.get('func_type')).strip().lower() == 'infiniband':
-                if parent is None:
-                    orphan_ib_unlinked.append(nid)
-                else:
-                    orphan_ib_by_parent.setdefault(parent_pid, []).append(ndf)
-                continue
-            if parent is not None:
-                cls = _classify_port_protocol(parent[0], parent[1], ndf, parent[2])
-            else:
-                cls = _classify_port_protocol(None, None, ndf, None)
-            if cls in ('FibreChannel', 'FCoE'):
-                hba = _make_fc_hba(adapter_id, adapter_info, ndf.get('id'), cls, 'unknown', None, None, ndf)
-                if origin == 'extra' and hba.get('wwpn') and hba['wwpn'] in {
-                        h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
-                    continue   # 2026-10-15: 추가 섀시 중복 — 이미 수집한 WWPN
-                out['fc_hbas'].append(hba)
-        _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
-
-        # CSUS-R6 (2026-06-15 실미러 검수): ControllerCapabilities.NetworkPortCount 부재 펌웨어
-        # (HPE CSUS NetworkAdapter — Controllers 에 ControllerCapabilities 없음)에서 port_count=0
-        # 인데 실제 Ports 컬렉션은 2포트 → 잘못된 0. 이 어댑터에서 실제 수집된 ports 수로 보정.
-        # NetworkPortCount 보유 vendor(Dell rNDC 등)는 port_count>0 라 미발동 (Additive 회귀안전).
-        _ports_collected = len(out['ports']) - _ports_before
-        if out['adapters'][adapter_idx].get('port_count') in (0, None) and _ports_collected > 0:
-            out['adapters'][adapter_idx]['port_count'] = _ports_collected
-
+    # 2026-10-18 (F7): 목록은 200 인데 나열된 카드를 하나도 읽지 못했고 실패가 모두 404 면, 섹션 runner 는 결과가 비어 있다는
+    #   이유로 컬렉션 404 와 같은 모양(미지원)으로 분류해 오류를 버린다. 'HBA 없음' 과 구분되도록 사실을 notice 로 남긴다.
+    #   404 가 아닌 실패가 하나라도 있으면 오류가 errors[] 에 그대로 남으므로 notice 를 겹치지 않는다.
+    if items and card_fail and not out['adapters'] and _is_404_only_error(errors):
+        _notice('network_adapters', 'NetworkAdapters 목록 %d건 중 읽은 카드 0건(404 %d건), 네트워크 카드(FC HBA 포함) 정보 미수집'
+                % (len(items), card_fail))
     return out, errors
 
 
@@ -5938,6 +6221,8 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                                    gather_network_adapters_chassis,
                                    bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis),
     }
+    # 2026-10-18 (X9): NetworkAdapter 의 Model 이 비면 같은 카드의 FirmwareInventory 이름으로 채운다 (두 섹션이 다 끝난 뒤, 요청 0).
+    _fill_adapter_models_from_firmware(sections.get('network_adapters'), sections.get('firmware'))
     # system 수집 뒤에 실행해야 bios_link 가 채워져 있다. _run 을 거치지 않는다.
     bios, bios_errors = gather_bios(bmc_ip, bios_link, *creds)
     all_errors.extend(bios_errors)

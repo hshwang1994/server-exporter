@@ -128,7 +128,8 @@ def test_orphan_child_ndf_gives_exactly_one_hba(monkeypatch):
     out, errors = _run(monkeypatch, _dell_fc_routes(ndf="ok", orphan=True))
     assert errors == []
     assert [(h["port_id"], h["wwpn"]) for h in out["fc_hbas"]] == [("FC.Slot.1-1-1", WWPN.lower())]
-    assert out["fc_hbas"][0]["link_status"] == "unknown", "짝 없는 NDF 는 포트 상태를 모른다 — unknown"
+    # 2026-10-18 (F1): 이름(`<PortId>-1`)으로 부모 포트를 찾았으면 그 포트의 LinkStatus(fixture: Down)를 쓴다 — 종전 unknown.
+    assert out["fc_hbas"][0]["link_status"] == "down", "짝 없는 기능은 이름으로 찾은 부모 포트의 상태를 쓴다 (2026-10-18)"
     assert out["adapters"][0]["mac"] is None, "짝 없는 구조에서도 WWNN 을 mac 으로 접지 않는다"
 
 
@@ -164,13 +165,18 @@ def test_joined_ethernet_function_is_not_overridden_by_link_technology(monkeypat
     assert out["ports"][0]["port_type"] == "Ethernet"
 
 
-def test_link_status_absent_is_unknown(monkeypatch):
+def test_link_status_absent_is_null(monkeypatch):
+    """2026-10-18 사용자 결정: 문자열은 up/down 둘뿐 — 포트에 LinkStatus 가 없으면 null(장비 미제공)이고 down 으로 적지 않는다."""
+    rg._reset_notices()
     out, _errors = _run(monkeypatch, _dell_fc_routes(port_link_status=None))
-    assert out["fc_hbas"][0]["link_status"] == "unknown", "상태를 받지 못하면 unknown — 추측해서 up/down 을 넣지 않는다"
+    assert out["fc_hbas"][0]["link_status"] is None, "상태를 받지 못하면 null — 추측해서 up/down 을 넣지 않는다"
+    assert any("링크 상태 미제공" in n["message"] for n in rg.notices()), rg.notices()
 
 
-def test_wwpn_is_not_taken_from_port_addresses_when_ndf_has_none(monkeypatch):
-    """FC 블록 포트 + WWPN 없는 NDF — AssociatedWorldWideNames[0](WWNN 일 수 있다)를 wwpn 으로 올리지 않는다."""
+def test_wwpn_is_derived_from_the_single_port_wwn_when_ndf_has_none(monkeypatch):
+    """FC 블록 포트 + WWPN 없는 NDF (2026-10-18 배제 규칙): 포트 WWN 목록이 **하나**뿐이고 WWNN 을 모르면 그 값이 WWPN 이다
+    (실측 CSUS node01: 포트 목록 = [WWPN]). 2026-10-15 의 "항상 null" 은 사이트에서 포트 주소를 wwpn 에 넣는 임시 조치를 낳았다."""
+    rg._reset_notices()
     chassis = "/redfish/v1/Chassis/r001u01"
     adp = chassis + "/NetworkAdapters/PCIeCard10"
     routes = {
@@ -189,8 +195,62 @@ def test_wwpn_is_not_taken_from_port_addresses_when_ndf_has_none(monkeypatch):
     _install(monkeypatch, routes)
     out, errors = rg.gather_network_adapters_chassis("10.0.0.1", chassis, "u", "p", 30, False)
     assert errors == []
-    assert len(out["fc_hbas"]) == 1 and out["fc_hbas"][0]["wwpn"] is None
+    assert len(out["fc_hbas"]) == 1 and out["fc_hbas"][0]["wwpn"] == "50:01:43:80:12:34:56:79"
     assert out["ports"][0]["associated_address"] == "50:01:43:80:12:34:56:79"
+    assert any("포트 주소에서 정함" in n["message"] for n in rg.notices()), rg.notices()
+
+
+def test_wwpn_is_null_when_two_port_wwns_remain_and_wwnn_is_unknown(monkeypatch):
+    """포트 WWN 목록이 둘인데 기능이 WWNN 을 주지 않으면 어느 것이 WWPN 인지 모른다 — null + notice (추측 금지)."""
+    rg._reset_notices()
+    chassis = "/redfish/v1/Chassis/r001u01"
+    adp = chassis + "/NetworkAdapters/PCIeCard10"
+    routes = {
+        rg._p(chassis) + "/NetworkAdapters": (200, {"Members": [{"@odata.id": adp}]}, None),
+        rg._p(adp): (200, {"Id": "PCIeCard10", "Manufacturer": "HPE", "Model": "SN1100Q 16Gb 2P FC HBA",
+                           "Ports": {"@odata.id": adp + "/Ports"},
+                           "NetworkDeviceFunctions": {"@odata.id": adp + "/NetworkDeviceFunctions"}}, None),
+        rg._p(adp) + "/Ports": (200, {"Members": [{"@odata.id": adp + "/Ports/PCIeCard10Port1"}]}, None),
+        rg._p(adp) + "/Ports/PCIeCard10Port1": (200, {
+            "Id": "PCIeCard10Port1",
+            "FibreChannel": {"AssociatedWorldWideNames": ["51:40:2E:C0:20:82:EB:E9", "51:40:2E:C0:20:82:EB:E8"]}}, None),
+        rg._p(adp) + "/NetworkDeviceFunctions": (200, {"Members": [
+            {"@odata.id": adp + "/NetworkDeviceFunctions/PCIeCard10Port1"}]}, None),
+        rg._p(adp) + "/NetworkDeviceFunctions/PCIeCard10Port1": (200, {
+            "Id": "PCIeCard10Port1", "NetDevFuncType": "FibreChannel", "FibreChannel": {}}, None),
+    }
+    _install(monkeypatch, routes)
+    out, errors = rg.gather_network_adapters_chassis("10.0.0.1", chassis, "u", "p", 30, False)
+    assert errors == []
+    assert len(out["fc_hbas"]) == 1 and out["fc_hbas"][0]["wwpn"] is None
+    assert any("WWPN 미확정" in n["message"] for n in rg.notices()), rg.notices()
+
+
+def test_wwpn_is_derived_by_excluding_the_known_wwnn(monkeypatch):
+    """포트 WWN 목록 [WWNN, WWPN](실측 CSUS node03 순서) + 기능이 WWNN 만 줄 때 — WWNN 을 빼고 남은 하나가 WWPN."""
+    rg._reset_notices()
+    chassis = "/redfish/v1/Chassis/r001u01"
+    adp = chassis + "/NetworkAdapters/PCIeCard10"
+    routes = {
+        rg._p(chassis) + "/NetworkAdapters": (200, {"Members": [{"@odata.id": adp}]}, None),
+        rg._p(adp): (200, {"Id": "PCIeCard10", "Manufacturer": "HPE", "Model": "SN1100Q 16Gb 2P FC HBA",
+                           "Ports": {"@odata.id": adp + "/Ports"},
+                           "NetworkDeviceFunctions": {"@odata.id": adp + "/NetworkDeviceFunctions"}}, None),
+        rg._p(adp) + "/Ports": (200, {"Members": [{"@odata.id": adp + "/Ports/PCIeCard10Port1"}]}, None),
+        rg._p(adp) + "/Ports/PCIeCard10Port1": (200, {
+            "Id": "PCIeCard10Port1",
+            "FibreChannel": {"AssociatedWorldWideNames": ["51:40:2E:C0:20:82:EB:E9", "51:40:2E:C0:20:82:EB:E8"]}}, None),
+        rg._p(adp) + "/NetworkDeviceFunctions": (200, {"Members": [
+            {"@odata.id": adp + "/NetworkDeviceFunctions/PCIeCard10Port1"}]}, None),
+        rg._p(adp) + "/NetworkDeviceFunctions/PCIeCard10Port1": (200, {
+            "Id": "PCIeCard10Port1", "NetDevFuncType": "FibreChannel",
+            "FibreChannel": {"WWNN": "51:40:2E:C0:20:82:EB:E9"}}, None),
+    }
+    _install(monkeypatch, routes)
+    out, errors = rg.gather_network_adapters_chassis("10.0.0.1", chassis, "u", "p", 30, False)
+    assert errors == []
+    assert [(h["wwpn"], h["wwnn"]) for h in out["fc_hbas"]] == [("51:40:2e:c0:20:82:eb:e8", "51:40:2e:c0:20:82:eb:e9")]
+    assert out["ports"][0]["associated_address"] == "51:40:2e:c0:20:82:eb:e8", "FC 포트 주소도 정한 WWPN 으로 교정"
 
 
 def test_make_fc_hba_uses_only_the_function_wwpn():

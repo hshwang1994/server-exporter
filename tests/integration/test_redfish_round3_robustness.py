@@ -59,11 +59,13 @@ def test_resolve_all_non_str_odata_id(monkeypatch):
 def test_gather_processors_string_speed_to_int(monkeypatch):
     monkeypatch.setattr(rg, "_get", _fake_get({
         "Systems/1/Processors": {"Members": [{"@odata.id": "/redfish/v1/Systems/1/Processors/1"}]},
-        "Systems/1/Processors/1": {"Id": "1", "Model": "Xeon", "MaxSpeedMHz": "2400",
+        "Systems/1/Processors/1": {"Id": "1", "Model": "Xeon", "MaxSpeedMHz": "2400", "OperatingSpeedMHz": "2000",
                                    "TotalCores": "10", "ProcessorType": "CPU"},
     }))
     procs, errs = rg.gather_processors("1.2.3.4", "/redfish/v1/Systems/1", "u", "p", 5, False)
-    assert procs and procs[0]["speed_mhz"] == 2400 and isinstance(procs[0]["speed_mhz"], int)
+    # 2026-10-18 (X2): speed_mhz 는 정격(OperatingSpeedMHz 등), MaxSpeedMHz(터보) 는 max_speed_mhz — 둘 다 숫자 문자열을 int 로
+    assert procs and procs[0]["speed_mhz"] == 2000 and isinstance(procs[0]["speed_mhz"], int)
+    assert procs[0]["max_speed_mhz"] == 2400 and isinstance(procs[0]["max_speed_mhz"], int)
     assert procs[0]["total_cores"] == 10
 
 

@@ -106,6 +106,12 @@ capabilities:
     - thermal
 
 vendor_notes:
+  # 2026-10-18 (X1 — 채널 간 UUID 정합, normalize_standard 가 읽는 값): CIMC 는 System.UUID 를 SMBIOS 원시(network) 바이트 순서로 낸다 —
+  #   같은 서버의 OS/ESXi(SMBIOS 2.6 little-endian 표기: dmidecode · Windows WMI · vSphere)와 앞 3필드가 뒤집혀 보인다. normalize 가 이 값을
+  #   보고 앞 3필드를 바꾼다(uuid_byteswap). 실측: lab C220 M5 CIMC 4.1 Redfish B190019F-56CE-4ED4-A1DD-… ↔ ESXi esxi02 9f0190b1-ce56-d44e-a1dd-…
+  #   (같은 시리얼 FCH2116V1V0). source: SMBIOS Reference Specification 2.6+ §7.2.1 System Information — UUID 바이트 순서.
+  #   lab: C220 M5 1쌍만 실측 — 다른 CIMC 세대 · UCS X-Series(cisco_ucs_xseries.yml) · 3.x(cisco_bmc.yml) 는 미확인이라 적지 않았다.
+  uuid_byte_order: smbios_raw
   # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전
   # collect/graceful_degradation/auth/diagnosis/capabilities 하위 값 중 경로 복제가 아닌 것을 옮겨 두었다.
   design_hints:

@@ -122,6 +122,15 @@ def _netad_notices(result):
     return [n["message"] for n in result.get("notices") or [] if isinstance(n, dict) and n.get("section") == "network_adapters"]
 
 
+# 2026-10-18: 장비가 FC 포트에 LinkStatus 를 싣지 않으면(실측 HPE CSUS 3200 RMC 1.75 — 24개 FC Port 전부) hbas link_status 는 null 이고
+#   카드당 notice 1건이 남는다. 이 notice 는 녹화본 재생에서 '새로 생긴 오류' 가 아니라 장비 사실이라 아래 비교에서 뺀다.
+_LINK_MISSING = "링크 상태 미제공"
+
+
+def _netad_notices_except_link_missing(result):
+    return [m for m in _netad_notices(result) if _LINK_MISSING not in m]
+
+
 # ── 녹화본 그대로 ──────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("fixture", ["real_dell_r740", "real_hpe_dl380", "real_hpe_csus3200", "real_lenovo_sr650"])
@@ -130,7 +139,12 @@ def test_unmodified_recordings_get_no_new_network_adapter_notices_or_errors(monk
     r = _gather(monkeypatch, rec, layout)
     golden = json.loads((FIX / fixture / "expected_output.json").read_text(encoding="utf-8"))
     assert _netad(r)["fc_hbas"] == golden["data"]["network_adapters"]["fc_hbas"], "기존에 잡히던 HBA 는 그대로"
-    assert _netad_notices(r) == []
+    assert _netad_notices_except_link_missing(r) == []
+    if fixture == "real_hpe_csus3200":
+        assert len([m for m in _netad_notices(r) if _LINK_MISSING in m]) == 2, "CSUS: FC 카드 2장 모두 링크 상태 미제공 notice"
+        assert all(h["link_status"] is None for h in _netad(r)["fc_hbas"]), "CSUS FC 포트에는 LinkStatus 가 없다 → null"
+    else:
+        assert _netad_notices(r) == []
     assert not [e for e in r["errors"] if e.get("section") == "network_adapters"]
 
 
@@ -234,7 +248,7 @@ def test_csus_second_linked_chassis_with_other_cards_adds_their_hbas(monkeypatch
     assert [a["id"] for a in _netad(r)["adapters"]] == ["PCIeCard10", "PCIeCard15", "PCIeCard10", "PCIeCard15"], \
         "섀시가 달라도 같은 Id 가 나올 수 있다 — Id 로 중복을 판단하지 않는다 (고유 키는 wwpn)"
     assert "Chassis/r001u02/NetworkAdapters" in calls
-    assert _netad_notices(r) == [] and not [e for e in r["errors"] if e.get("section") == "network_adapters"]
+    assert _netad_notices_except_link_missing(r) == [] and not [e for e in r["errors"] if e.get("section") == "network_adapters"]
 
 
 def test_csus_second_linked_chassis_with_the_same_cards_adds_nothing(monkeypatch):
@@ -260,3 +274,142 @@ def test_csus_chassis_not_linked_to_the_system_is_never_queried(monkeypatch):
     r = _gather(monkeypatch, rec, layout, calls)
     assert len(_netad(r)["fc_hbas"]) == 4
     assert not [c for c in calls if c.startswith("Chassis/r001u03/NetworkAdapters")]
+
+
+# ── 2026-10-18: 조용한 누락 · 예외 소실 보완 변형 (F1 · F2 · F3 · F4 · F7 · F8) ────────────────────
+
+def _r740_mutated(mutate):
+    rec, layout = _load("real_dell_r740")
+    r = copy.deepcopy(rec)
+    mutate(r)
+    return r, layout
+
+
+def _r740_orphan(r):
+    for k in list(r):
+        if "/FC.Slot." not in k or "/NetworkDeviceFunctions" not in k:
+            continue
+        st, body = r[k][0], r[k][1]
+        if k.endswith("/NetworkDeviceFunctions") and isinstance(body, dict):
+            nb = dict(body)
+            nb["Members"] = [{"@odata.id": m["@odata.id"] + "-1"} for m in body.get("Members", [])]
+            r[k] = [st, nb, None]
+        elif isinstance(body, dict):
+            nb = dict(body)
+            nb["Id"] = nb["Id"] + "-1"
+            links = dict(nb.get("Links") or {})
+            links.pop("PhysicalPortAssignment", None)
+            links.pop("PhysicalNetworkPortAssignment", None)
+            nb["Links"] = links
+            r[k + "-1"] = [st, nb, None]
+            del r[k]
+
+
+def test_r740_orphan_functions_inherit_the_parent_port_link_state(monkeypatch):
+    """(F1) iDRAC8 형 짝 없는 기능 + FC.Slot.1-1 포트 Up · 16000 Mbps → 그 기능의 HBA 는 up · 16.0, 나머지는 down."""
+    def mutate(r):
+        _r740_orphan(r)
+        k = "get::Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkPorts/FC.Slot.1-1"
+        st, body = r[k][0], dict(r[k][1])
+        body["LinkStatus"] = "Up"
+        body["CurrentLinkSpeedMbps"] = 16000
+        r[k] = [st, body, None]
+    rec, layout = _r740_mutated(mutate)
+    r = _gather(monkeypatch, rec, layout)
+    hbas = {h["port_id"]: h for h in _netad(r)["fc_hbas"]}
+    assert sorted(hbas) == ["FC.Slot.1-1-1", "FC.Slot.1-2-1", "FC.Slot.7-1-1", "FC.Slot.7-2-1"]
+    assert (hbas["FC.Slot.1-1-1"]["link_status"], hbas["FC.Slot.1-1-1"]["link_speed_gbps"]) == ("up", 16.0)
+    assert all(hbas[p]["link_status"] == "down" and hbas[p]["link_speed_gbps"] is None for p in hbas if p != "FC.Slot.1-1-1")
+    sections, status, errors = _envelope(r)
+    assert status == "success" and not [e for e in errors if e["section"] == "network"]
+
+
+def test_r740_integer_port_id_does_not_lose_the_section(monkeypatch):
+    """(F3) FC.Slot.1-1 포트 Id → 1(int) + 그 기능을 `1-1` 고아로: 종전 TypeError → 섹션 None. 지금은 카드 7 · HBA 4."""
+    def mutate(r):
+        kp = "get::Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkPorts/FC.Slot.1-1"
+        st, body = r[kp][0], dict(r[kp][1])
+        body["Id"] = 1
+        r[kp] = [st, body, None]
+        kn = "get::Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.1/NetworkDeviceFunctions/FC.Slot.1-1"
+        st, nb = r[kn][0], dict(r[kn][1])
+        nb["Id"] = "1-1"
+        nb["Links"] = {}
+        r[kn] = [st, nb, None]
+    rec, layout = _r740_mutated(mutate)
+    r = _gather(monkeypatch, rec, layout)
+    assert r["data"]["network_adapters"] is not None and "network_adapters" not in r["failed_sections"]
+    assert len(_netad(r)["adapters"]) == 7 and len(_netad(r)["fc_hbas"]) == 4
+    assert not [e for e in r["errors"] if e.get("section") == "network_adapters"]
+
+
+def test_r740_headless_fc_card_is_kept_by_reading_its_functions_once(monkeypatch):
+    """(F4) FC.Slot.7 에서 Controllers · Manufacturer · Model 제거 → 카드 유지(기능 2건) · HBA 4 · notice 1 · 기능 목록 GET 1회."""
+    def mutate(r):
+        k = "get::Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7"
+        st, body = r[k][0], dict(r[k][1])
+        body.pop("Controllers", None)
+        body["Manufacturer"] = ""
+        body["Model"] = ""
+        r[k] = [st, body, None]
+    rec, layout = _r740_mutated(mutate)
+    calls = []
+    r = _gather(monkeypatch, rec, layout, calls)
+    assert len(_netad(r)["adapters"]) == 7 and len(_netad(r)["fc_hbas"]) == 4
+    assert calls.count("Chassis/System.Embedded.1/NetworkAdapters/FC.Slot.7/NetworkDeviceFunctions") == 1
+    assert [m for m in _netad_notices(r) if "카드 유지" in m and "FC.Slot.7" in m]
+
+
+def test_r740_all_cards_unreadable_is_unsupported_with_a_notice(monkeypatch):
+    """(F7) 카드 7장 GET 전부 404 → unsupported(오류 폐기)지만 notice 로 사실이 남는다 — 'HBA 없음' 과 구분."""
+    def mutate(r):
+        for k in list(r):
+            if k.startswith("get::Chassis/System.Embedded.1/NetworkAdapters/") and k.count("/") == 3:
+                r[k] = [404, {}, "HTTP 404: Not Found"]
+    rec, layout = _r740_mutated(mutate)
+    r = _gather(monkeypatch, rec, layout)
+    assert _netad(r)["fc_hbas"] == [] and _netad(r)["adapters"] == []
+    assert "network_adapters" in r["unsupported_sections"]
+    assert not [e for e in r["errors"] if e.get("section") == "network_adapters"]
+    assert [m for m in _netad_notices(r) if "목록 7건 중 읽은 카드 0건(404 7건)" in m], _netad_notices(r)
+    sections, status, _errors = _envelope(r)
+    assert status == "success"
+
+
+def test_r740_primary_failure_with_empty_fallback_is_recorded(monkeypatch):
+    """(F8) 1순위 섀시 503 + Systems 200 빈 목록 → errors[] 1건(section network) · notice '비어 있음' · status success."""
+    def mutate(r):
+        r["get::Chassis/System.Embedded.1/NetworkAdapters"] = [503, {}, "HTTP 503: Service Unavailable"]
+        r["get::Systems/System.Embedded.1/NetworkAdapters"] = [200, {"Members": [], "Members@odata.count": 0}, None]
+    rec, layout = _r740_mutated(mutate)
+    r = _gather(monkeypatch, rec, layout)
+    assert _netad(r)["fc_hbas"] == []
+    mod_errs = [e for e in r["errors"] if e.get("section") == "network_adapters"]
+    assert len(mod_errs) == 1 and "503" in mod_errs[0]["message"]
+    assert [m for m in _netad_notices(r) if "비어 있음" in m]
+    sections, status, errors = _envelope(r)
+    net = [e for e in errors if e["section"] == "network"]
+    assert status == "success" and len(net) == 1 and "503" in net[0]["detail"]
+
+
+def test_dl380_fc_ports_without_fibrechannel_block_and_without_functions_stay_hbas(monkeypatch):
+    """(F2) DL380 FC 포트(Ethernet 블록 = WWPN)에서 FibreChannel 블록을 빼고 기능 컬렉션을 404 로: 종전 HBA 0 · 오류 0 · success.
+    지금은 HBA 4(wwpn 은 포트 주소 배제 규칙으로 = 실측 기능 WWPN 과 같다) · FC 카드 mac null · notice 2."""
+    rec, layout = _load("real_hpe_dl380")
+    r = copy.deepcopy(rec)
+    for k in list(r):
+        if ("DE041000/Ports/" in k or "DE044000/Ports/" in k) and k.split("/")[-1] in ("1", "2"):
+            st, body = r[k][0], dict(r[k][1])
+            body.pop("FibreChannel", None)
+            r[k] = [st, body, None]
+        if k.endswith("DE041000/NetworkDeviceFunctions") or k.endswith("DE044000/NetworkDeviceFunctions"):
+            r[k] = [404, {}, "HTTP 404: Not Found"]
+    res = _gather(monkeypatch, r, layout)
+    hbas = _netad(res)["fc_hbas"]
+    assert sorted(h["wwpn"] for h in hbas) == sorted([
+        "51:40:2e:c0:20:8f:39:30", "51:40:2e:c0:20:8f:39:32", "51:40:2e:c0:20:8f:3b:dc", "51:40:2e:c0:20:8f:3b:de"])
+    assert all(h["port_type"] == "FibreChannel" and h["link_status"] == "down" for h in hbas)
+    fc_cards = [a for a in _netad(res)["adapters"] if a["id"] in ("DE041000", "DE044000")]
+    assert [a["mac"] for a in fc_cards] == [None, None]
+    assert len([m for m in _netad_notices(res) if "포트 주소에서 정함" in m]) == 2
+    assert not [e for e in res["errors"] if e.get("section") == "network_adapters"]

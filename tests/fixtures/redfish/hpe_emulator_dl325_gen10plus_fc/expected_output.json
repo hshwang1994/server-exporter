@@ -436,13 +436,14 @@
         "id": "1",
         "instruction_set": "x86-64",
         "manufacturer": "Advanced Micro Devices, Inc.",
+        "max_speed_mhz": 4100,
         "model": "AMD EPYC 7302P 16-Core Processor",
         "name": "Processors",
         "part_number": null,
         "processor_type": "CPU",
         "serial_number": "VUH7920997827",
         "socket": "Proc 1",
-        "speed_mhz": 4100,
+        "speed_mhz": 3000,
         "total_cores": 16,
         "total_threads": 32
       }

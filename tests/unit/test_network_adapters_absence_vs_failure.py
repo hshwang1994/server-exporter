@@ -182,9 +182,10 @@ def test_card_with_controller_port_links_is_kept_even_without_names(monkeypatch)
     assert [a["id"] for a in out["adapters"]] == ["slot"]
 
 
-# ── unknown 의 두 원인 (값 계약 고정) ──────────────────────────────────────────
+# ── null(장비 미제공)의 두 원인 (값 계약 고정 — 2026-10-18: 종전 'unknown' 문자열은 폐지) ─────────
 
-def test_link_status_unknown_has_two_causes_and_is_never_guessed(monkeypatch):
+def test_link_status_null_has_two_causes_and_is_never_guessed(monkeypatch):
+    rg._reset_notices()
     adp = CHASSIS + "/NetworkAdapters/FC1"
     routes = {
         CH_NA: (200, {"Members": [{"@odata.id": adp}]}, None),
@@ -206,5 +207,113 @@ def test_link_status_unknown_has_two_causes_and_is_never_guessed(monkeypatch):
     out, errors = rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, *CREDS)
     assert errors == []
     by_port = {h["port_id"]: h for h in out["fc_hbas"]}
-    assert by_port["1"]["link_status"] == "unknown" and by_port["1"]["wwpn"] == "10:00:00:90:fa:00:00:01"
-    assert by_port["9"]["link_status"] == "unknown" and by_port["9"]["link_speed_gbps"] is None
+    assert by_port["1"]["link_status"] is None and by_port["1"]["wwpn"] == "10:00:00:90:fa:00:00:01"
+    assert by_port["9"]["link_status"] is None and by_port["9"]["link_speed_gbps"] is None
+    assert all(h["link_status"] in ("up", "down", None) for h in out["fc_hbas"]), "문자열은 up/down 둘뿐 — unknown 없음"
+    assert any("링크 상태 미제공" in n["message"] and "1, 9" in n["message"] for n in rg.notices()), rg.notices()
+
+
+# ── 2026-10-18: 조용한 누락 · 가림 경로 보완 (F4 · F5 · F7 · F8) ────────────────────────────────
+
+def _nameless_card_with_functions(members, coll=(200, None, None)):
+    """Controllers 없음 · Manufacturer/Model 빈 문자열 — 최상위 NetworkDeviceFunctions 링크만 있는 카드."""
+    adp = CHASSIS + "/NetworkAdapters/slot"
+    routes = {CH_NA: (200, {"Members": [{"@odata.id": adp}]}, None),
+              rg._p(adp): (200, {"Id": "slot", "Manufacturer": "", "Model": "",
+                                 "NetworkDeviceFunctions": {"@odata.id": adp + "/NetworkDeviceFunctions"}}, None)}
+    st, body, err = coll
+    if body is None:
+        body = {"Members": [{"@odata.id": adp + "/NetworkDeviceFunctions/" + m} for m in members]}
+    routes[rg._p(adp) + "/NetworkDeviceFunctions"] = (st, body, err)
+    for i, m in enumerate(members):
+        routes[rg._p(adp) + "/NetworkDeviceFunctions/" + m] = (200, {
+            "Id": m, "NetDevFuncType": "FibreChannel", "FibreChannel": {"WWPN": "10:00:00:90:fa:1b:2c:%02x" % i}}, None)
+    return adp, routes
+
+
+def test_nameless_card_with_fc_functions_is_kept_with_one_extra_request(monkeypatch):
+    """(F4) 이름 · 컨트롤러 근거가 없어도 기능 목록에 FC 기능이 있으면 카드를 남긴다 — 기능 목록은 1회만 읽는다(재사용)."""
+    calls = []
+    adp, routes = _nameless_card_with_functions(["1", "2"])
+    _install(monkeypatch, routes, calls)
+    out, errors = rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, *CREDS)
+    assert errors == []
+    assert [a["id"] for a in out["adapters"]] == ["slot"] and out["adapters"][0]["model"] is None
+    assert len(out["fc_hbas"]) == 2 and all(h["link_status"] is None for h in out["fc_hbas"]), "포트 없는 기능 — 링크 상태 null"
+    assert calls.count(rg._p(adp) + "/NetworkDeviceFunctions") == 1, "기능 목록 조회는 1회(읽은 목록을 재사용)"
+    assert any("카드 유지" in m for m in _notices()), _notices()
+
+
+def test_nameless_card_with_an_empty_function_list_is_skipped_quietly(monkeypatch):
+    adp, routes = _nameless_card_with_functions([])
+    _install(monkeypatch, routes)
+    out, errors = rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, *CREDS)
+    assert out["adapters"] == [] and errors == [] and _notices() == [], "기능 0건은 진짜 빈 슬롯 — 종전처럼 조용히 제외"
+
+
+def test_nameless_card_whose_function_list_fails_is_skipped_with_an_error(monkeypatch):
+    adp, routes = _nameless_card_with_functions([], coll=(500, {}, "HTTP 500: Internal Server Error"))
+    _install(monkeypatch, routes)
+    out, errors = rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, *CREDS)
+    assert out["adapters"] == []
+    assert len(errors) == 1 and errors[0].get("code") == rg._CODE_NON_BLOCKING_SUBRESOURCE
+
+
+def test_primary_failure_is_not_hidden_by_an_empty_fallback_list(monkeypatch):
+    """(F8) 1순위 섀시 503 + Systems 경로 200 빈 목록 → 503 이 비차단 오류로 남고 notice 는 '비어 있음'. 섹션은 failed(미지원 아님)."""
+    routes = {CH_NA: (503, {}, "HTTP 503: Service Unavailable"), SYS_NA: (200, {"Members": []}, None)}
+    _install(monkeypatch, routes)
+    run, state = _runner()
+    val = run("network_adapters", rg.gather_network_adapters_chassis, "10.0.0.1", CHASSIS, *CREDS, SYSTEM, None)
+    assert val["fc_hbas"] == []
+    assert len(state["errors"]) == 1 and "503" in state["errors"][0]["message"] and CH_NA in state["errors"][0]["message"]
+    assert state["errors"][0].get("code") == rg._CODE_NON_BLOCKING_SUBRESOURCE
+    assert state["failed"] == ["network_adapters"] and state["unsupported"] == []
+    assert any("비어 있음" in m for m in _notices())
+    # envelope status 는 보조 섹션이라 바뀌지 않는다 — 녹화본 수준 확인은 test_redfish_hba_coverage_replay (F8 변형)
+
+
+def test_fallback_failure_is_not_hidden_by_an_empty_primary_list(monkeypatch):
+    routes = {CH_NA: (200, {"Members": []}, None), SYS_NA: (500, {}, "HTTP 500: Internal Server Error")}
+    _install(monkeypatch, routes)
+    _out, errors = rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, "u", "p", 30, False, SYSTEM, None)
+    assert len(errors) == 1 and SYS_NA in errors[0]["message"] and "500" in errors[0]["message"]
+
+
+def test_all_listed_cards_unreadable_leaves_a_notice_even_when_classified_unsupported(monkeypatch):
+    """(F7) 카드 목록은 200 인데 카드 GET 이 전부 404 → runner 는 미지원으로 분류해 오류를 버린다 — notice 로 사실을 남긴다."""
+    a1, a2 = CHASSIS + "/NetworkAdapters/c1", CHASSIS + "/NetworkAdapters/c2"
+    routes = {CH_NA: (200, {"Members": [{"@odata.id": a1}, {"@odata.id": a2}]}, None)}
+    _install(monkeypatch, routes)
+    run, state = _runner()
+    val = run("network_adapters", rg.gather_network_adapters_chassis, "10.0.0.1", CHASSIS, *CREDS)
+    assert val["adapters"] == [] and state["unsupported"] == ["network_adapters"] and state["errors"] == []
+    assert any("목록 2건 중 읽은 카드 0건(404 2건)" in m for m in _notices()), _notices()
+
+
+def test_one_unreadable_card_among_readable_ones_is_an_error_not_a_notice(monkeypatch):
+    a1, routes1 = _fc_card(CHASSIS, "c1")
+    a2 = CHASSIS + "/NetworkAdapters/c2"
+    routes = {CH_NA: (200, {"Members": [{"@odata.id": a1}, {"@odata.id": a2}]}, None)}
+    routes.update(routes1)
+    _install(monkeypatch, routes)
+    out, errors = rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, *CREDS)
+    assert [a["id"] for a in out["adapters"]] == ["c1"] and len(errors) == 1
+    assert not [m for m in _notices() if "읽은 카드 0건" in m]
+
+
+def test_other_path_failure_is_appended_to_the_404_notice(monkeypatch):
+    """(F5) 1순위 404 + Systems 500: 미지원 분류(2026-10-15 결정)는 그대로, 다른 경로의 실패 사실은 notice 문장에 덧붙인다."""
+    routes = {SYS_NA: (500, {}, "HTTP 500: Internal Server Error")}
+    _install(monkeypatch, routes)
+    run, state = _runner()
+    run("network_adapters", rg.gather_network_adapters_chassis, "10.0.0.1", CHASSIS, *CREDS, SYSTEM, None)
+    assert state["unsupported"] == ["network_adapters"]
+    hits = [m for m in _notices() if "리소스 404" in m]
+    assert len(hits) == 1 and "다른 경로 실패" in hits[0] and SYS_NA in hits[0] and "500" in hits[0], _notices()
+
+
+def test_pure_404_notice_text_is_unchanged(monkeypatch):
+    _install(monkeypatch, {})
+    rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, *CREDS, SYSTEM, None)
+    assert _notices() == ["NetworkAdapters 리소스 404, 네트워크 카드(FC HBA 포함) 정보 미수집"]
