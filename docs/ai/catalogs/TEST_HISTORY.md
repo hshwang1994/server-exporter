@@ -4,7 +4,7 @@
 
 | 구분 | 결과 |
 |---|---|
-| 전체 pytest(unit · e2e · regression, Windows Python 3.13.15 · powershell.exe 5.1) | 4 failed, 5597 passed, 44 skipped, 7 xfailed, 92 warnings in 1373.01s (0:22:53) |
+| 전체 pytest(unit · e2e · regression, Windows Python 3.13.15 · powershell.exe 5.1) | 1차 4 failed · 5597 passed · 44 skipped · 7 xfailed (22분 53초) — 4건은 기대값 갱신 대상 2파일(ESXi 파트 5개 · Windows HBA components)이었고 `fd6d8a02` 로 갱신한 뒤 그 2파일 69 passed. 전체 재실행은 작업 PC 메모리 부족으로 세션이 중단해 **미완료** — 다음 세션에서 `pytest tests/unit tests/e2e tests/regression` 재실행 |
 | 통합(`tests/integration -m "not live"`, Windows) | 355 passed, 6 skipped, 1 deselected in 9.15s |
 | `ansible-playbook --syntax-check` 3채널 (WSL ansible-core 2.20.7) | redfish · os · esxi 모두 통과 |
 | 정적 검사 | `verify_vendor_boundary.py` 통과 · `output_schema_drift_check.py` 통과(fd_paths 206) · `validate_field_dictionary.py` PASS · `verify_harness_consistency.py` 통과 · `envelope_change_check.py` advisory(기존 diagnosis 항목 — 이번 변경과 무관) |
