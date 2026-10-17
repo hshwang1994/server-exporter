@@ -56,5 +56,8 @@ WinOF-2 IPoIB 어댑터의 `NdisMedium` · `PhysicalMediaType`(WS2022/2025) · `
 | Redfish 단위 (`test_redfish_infiniband_classification.py` 65 + 기존 7 파일) | 254 passed |
 | `tests/integration/test_synthetic_ib_replay.py` + 불변식(새 폴더 포함) | 43 passed |
 | ESXi (`test_esxi_infiniband_not_inferred.py` + 기존 3 파일) | 89 passed |
+| 전체 `tests/unit tests/e2e tests/regression` (`30a92443`) | 5,376 passed · 41 skipped · 7 xfailed · 0 failed (21분 34초) |
+| `tests/integration -m "not live"` | 349 passed · 6 skipped |
+| 3채널 `ansible-playbook --syntax-check` (WSL ansible-core 2.20.7) | os · esxi · redfish PASS |
 
-전체 suite 결과는 `docs/ai/catalogs/TEST_HISTORY.md` 2026-10-17 항목에 기록한다.
+실장비 실행은 하지 않았다(1절). 전체 결과는 `docs/ai/catalogs/TEST_HISTORY.md` 2026-10-17 항목에 기록한다.

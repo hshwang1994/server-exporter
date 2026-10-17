@@ -1,5 +1,21 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-17 — InfiniBand 4채널 "현재 모드" 판정 · CSUS Redfish 시리얼 접미사 (`43cd4318` ~ `30a92443`)
+
+| 구분 | 결과 |
+|---|---|
+| 전체 pytest(unit · e2e · regression, Windows Python 3.13.15 · powershell.exe 5.1) | 5,376 passed · 41 skipped · 7 xfailed · 0 failed (21분 34초, `30a92443`) |
+| 통합(`tests/integration -m "not live"`, Windows) | 349 passed · 6 skipped |
+| 신규 시험(전부 합성 입력 — 실장비 아님) | Linux `test_linux_hba_ib_markers` 54(가짜 sysfs + 실제 `sh`, `lspci` shim) · `test_identity_normalizer` GUID 벡터 · Windows `test_windows_infiniband_detection` 28(가짜 cmdlet + 실제 powershell.exe) · Redfish `test_redfish_infiniband_classification` 65(판정표 · 시나리오 16~21 · 25 · 26 · drift guard · HTTP 요청 0 증가) · 합성 recording `tests/fixtures/redfish/synthetic_ib_mode` + `tests/integration/test_synthetic_ib_replay` 6(손 작성 기대값) · ESXi `test_esxi_infiniband_not_inferred` 6 · 공통 `test_hba_ib_canonical` 재작성(11키 · 형 · enum · GUID 형식, 전 baseline + 합성 fixture) · CSUS `test_gather_identity_render` +13 · `tests/integration/test_redfish_csus_serial_replay`(실측 녹화본 → `SGHD3TLNDD`, 파티션 원문) |
+| 갱신 시험 | `test_fcoe_cna_not_fc_hba` · `test_csus_mirror_audit_fixes` · `test_redfish_round3_robustness`(`_select_ib_guids`) · `test_port_classification_invariants` INV-3(IB 항목 `port/adapter` 폴백) · `test_windows_call_consolidation_render` 가드(`INTENDED_SHELL_REWRITES`) · PowerShell 모의 `Get-NetAdapterRdma` |
+| 불변 확인 | Redfish 실측 · 에뮬레이터 · DMTF 녹화본 10종 golden `data` · `error_count` · 요청 예산 · HBA coverage notice 0 그대로(133 passed · 3 skipped). 녹화본 전수에 `InfiniBand` 값(`NetDevFuncType` · `LinkNetworkTechnology` · `ActiveLinkTechnology` · `PortProtocol`) 0건 → IB 분기 미진입 |
+| baseline · 예시 | `windows_2022_baseline.json` `data.storage.infiniband` 3건(LBFO 멀티플렉서 오탐) → `[]` — 같은 호스트 2026-09-03 실측 `[]`, 원본은 `tests/evidence/2026-06-22-windows-120-envelope.json` 보존 · mock-derived `hpe_csus_3200_baseline.json` · `redfish_hpe_csus_3200.jsonc` 의 `hardware.serial` · `correlation.serial_number` `MOCK-CSUS-P0-001` → `MOCK-CSUS-P0`(파티션 원문 유지) |
+| 3채널 syntax-check | WSL ansible-core 2.20.7 — os · esxi · redfish PASS |
+| 정적 | `py_compile` · YAML parse(PyYAML — yamllint 미설치, 환경 제약) · Jinja2 compile · vendor boundary · harness consistency · docs references · validate_field_dictionary PASS · output schema drift(fd_paths 199 → 206, `storage.infiniband[].adapter/port/port_guid/link_status/model/vendor/firmware`) · additive-only 훅(문구 정정 commit 만 `ADDITIVE_SKIP_NEW_CYCLE=1`, 삭제 줄은 help 문구뿐) · docs20 sync · PROJECT_MAP fingerprint 갱신 · 평문 자격증명 0 |
+| 실장비 | **미실행** — lab 에 IB HCA · IB 모드 BMC 가 없다. 확정하지 못한 것: mlx5 DOWN 포트의 `rate` 원문 · `hca_type/board_id` 실값 · `lspci` 장치명 표기, WinOF-2 IPoIB 어댑터의 `NdisPhysicalMedium/PhysicalMediaType/RdmaTechnology`(WS2019 는 802.3 보고 known issue), 실 BMC 의 IB 모드 Port/NDF 페이로드, CSUS OS DMI 시리얼 표기(`docs/ai/NEXT_ACTIONS.md` §2.4 IB-1~IB-5) |
+| prodgen dry-run(`30a92443`, `--dry-run --skip-live`, 작업 PC) | build 194 파일 · class B 0 · tree_hash `742f8fe4…`(production `28c38c17` 의 `5d48ac38…` 과 다름 — runtime 변경 있음) · G01~G10 · G16 · G17 · G18 PASS, G11~G15 · G19 SKIP(라이브), G20 partial(원격 미지정) → verdict PARTIAL(예행 — 승격 아님) |
+| 승격 | 이 기록 시점 **미실행** — main Job 매트릭스 · CI · 정규 승격 · canary 는 뒤 항목에 기록 |
+
 ## 2026-10-15 (3) — 정규 재승격 main `2c709fe8` → production `28c38c17` (긴급 `31f9b804` 의 증거 채움)
 
 | 구분 | 결과 |
