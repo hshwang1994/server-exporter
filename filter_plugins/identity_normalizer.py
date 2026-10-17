@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # ==============================================================================
-# identity_normalizer.py — 채널 간 식별자 표기 정규화 필터 (MAC / WWN / UUID)
+# identity_normalizer.py — 채널 간 식별자 표기 정규화 필터 (MAC / WWN / UUID / IB GUID)
 # ==============================================================================
 # 존재 이유 (2026-09-03 OS/ESXi 전수 검수 B-06 / B-24 / B-26)
 # ---------------------------------------------------------------
@@ -19,6 +19,11 @@
 #   WWN  : 소문자, 콜론 구분 8 octet  `20:00:00:27:e3:6c:a6:6e`. `0x` 접두 제거.
 #   UUID : 소문자 8-4-4-4-12. 중괄호/대시 없는 32-hex 입력 허용. all-zero / all-f 는 null.
 #   원문이 예상 길이가 아니면 **바꾸지 않고 소문자·trim 만 한다** (값을 지어내지 않는다).
+#   IB GUID (2026-10-17): 소문자, 콜론 구분 4-hex 4묶음 `0c42:a103:0012:3456` — 커널 sysfs node_guid 의
+#          `%04x:%04x:%04x:%04x` 와 DMTF NetworkDeviceFunction.InfiniBand 의 `^([0-9A-Fa-f]{4}[:-]){3}[0-9A-Fa-f]{4}$`
+#          가 같은 모양이다. `0x` 접두 허용. 16-hex 가 아니거나 all-zero 면 **null** — 위 세 필터와 달리 원문을
+#          돌려주지 않는다. GUID 자리에 GUID 가 아닌 값(GID 전체, MAC, 자리표시자)을 두지 않기 위해서다.
+#          Redfish 모듈(stdlib 전용)은 같은 규칙을 _normalize_ib_guid 로 복제한다 — tests/unit 의 drift guard 가 막는다.
 #
 # SMBIOS 바이트 순서
 #   SMBIOS 2.6+ 의 UUID 는 앞 3 필드가 little-endian 으로 표시된다 (dmidecode / Windows WMI /
@@ -31,6 +36,7 @@
 #   mac:  "{{ raw_mac | normalize_mac }}"
 #   wwpn: "{{ raw_wwn | normalize_wwn }}"
 #   uuid: "{{ raw_uuid | normalize_uuid }}"
+#   node_guid: "{{ raw_guid | normalize_ib_guid }}"
 #   serial: "{{ raw_serial | dmi_sentinel_null('serial') }}"   — DMI 자리표시자('To Be Filled By O.E.M.' 등)는 None
 #
 # DMI/SMBIOS 자리표시자 (LX-F12, 2026-10-10)
@@ -105,6 +111,23 @@ def normalize_wwn(value):
     return _group(hexs)
 
 
+def normalize_ib_guid(value):
+    """InfiniBand Node/Port GUID → `0c42:a103:0012:3456` (소문자, 4-hex × 4). `0x` 접두 허용.
+
+    16-hex 가 아니거나 all-zero 면 None — normalize_wwn 과 달리 원문을 돌려주지 않는다
+    (GID 전체(32-hex) · MAC · 자리표시자가 GUID 자리에 남지 않게 한다).
+    """
+    s = _clean(value)
+    if s is None:
+        return None
+    if s.startswith("0x"):
+        s = s[2:]
+    hexs = _hex_only(s)
+    if len(hexs) != 16 or hexs == "0" * 16:
+        return None
+    return _group(hexs, width=4)
+
+
 def normalize_uuid(value):
     """UUID → 소문자 `8-4-4-4-12`. all-zero / all-f 는 None. 32-hex 가 아니면 소문자 원문."""
     s = _clean(value)
@@ -171,6 +194,7 @@ class FilterModule(object):
         return {
             "normalize_mac": normalize_mac,
             "normalize_wwn": normalize_wwn,
+            "normalize_ib_guid": normalize_ib_guid,
             "normalize_uuid": normalize_uuid,
             "uuid_byteswap": uuid_byteswap,
             "uuid_equal": uuid_equal,

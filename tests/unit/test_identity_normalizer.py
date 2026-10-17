@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPO / "filter_plugins"))
 
 from identity_normalizer import (  # noqa: E402
     FilterModule,
+    normalize_ib_guid,
     normalize_mac,
     normalize_uuid,
     normalize_wwn,
@@ -73,6 +74,41 @@ def test_wwn_unexpected_length_kept_lowercase():
     assert normalize_wwn("eui.0025385a91b1c5d2") == "eui.0025385a91b1c5d2"
 
 
+# ── IB GUID (2026-10-17) ─────────────────────────────────────────────────────
+# 입력은 커널 sysfs node_guid 표기(`%04x:%04x:%04x:%04x`), DMTF NetworkDeviceFunction.InfiniBand 패턴
+# (`[:-]` 구분, 대소문자 자유), ibstat 의 `0x%016x` 표기다. 실장비 IB 캡처는 없다 — 형식은 공식 문서 기준.
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("0c42:a103:0012:3456", "0c42:a103:0012:3456"),     # Linux sysfs node_guid — 불변
+        ("58A2:E103:0003:96F2", "58a2:e103:0003:96f2"),     # DMTF 패턴 대문자 (HPE 에뮬레이터 NDF.InfiniBand.NodeGUID 모양)
+        ("58a2-e103-0003-96f2", "58a2:e103:0003:96f2"),     # DMTF 패턴 대시 구분
+        ("0x58a2e103000396f2", "58a2:e103:0003:96f2"),      # ibstat `Port GUID: 0x...`
+        ("58a2e103000396f2", "58a2:e103:0003:96f2"),        # 구분자 없는 16-hex
+        (" 0C42:A103:0012:3456 ", "0c42:a103:0012:3456"),
+    ],
+)
+def test_ib_guid_normalized_to_lower_four_groups(raw, expected):
+    assert normalize_ib_guid(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        None, "", "   ",
+        "0000:0000:0000:0000",                                 # all-zero (예약 GID 항목 / 미할당)
+        "0x0000000000000000",
+        "fe80:0000:0000:0000:0c42:a103:0012:3456",             # GID 전체(32-hex) — GUID 가 아니다
+        "0c42:a103:0012:345",                                  # 15-hex
+        "zz:zz:zz:zz",
+        "0x0002c903",                                          # 8-hex
+        "00:50:56:84:c9:5f",                                   # MAC (12-hex)
+    ],
+)
+def test_ib_guid_invalid_or_zero_is_null_not_passthrough(raw):
+    assert normalize_ib_guid(raw) is None
+
+
 # ── UUID ────────────────────────────────────────────────────────────────────
 def test_uuid_windows_uppercase_lowercased():
     # baseline windows_2022 correlation.system_uuid
@@ -123,4 +159,4 @@ def test_byteswap_is_involution():
 
 def test_filter_module_exposes_all():
     names = set(FilterModule().filters())
-    assert {"normalize_mac", "normalize_wwn", "normalize_uuid", "uuid_byteswap", "uuid_equal"} <= names
+    assert {"normalize_mac", "normalize_wwn", "normalize_ib_guid", "normalize_uuid", "uuid_byteswap", "uuid_equal"} <= names

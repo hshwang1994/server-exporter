@@ -53,7 +53,7 @@ for _p in (str(REPO), str(REPO / "filter_plugins")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from identity_normalizer import dmi_sentinel_null, normalize_wwn  # noqa: E402
+from identity_normalizer import dmi_sentinel_null, normalize_ib_guid, normalize_wwn  # noqa: E402
 from jedec_mapper import jedec_to_vendor  # noqa: E402
 
 SH = shutil.which("sh")
@@ -345,6 +345,7 @@ def ansible_env() -> NativeEnvironment:
         "bool": _ansible_bool,
         "jedec_to_vendor": jedec_to_vendor,
         "normalize_wwn": normalize_wwn,
+        "normalize_ib_guid": normalize_ib_guid,
         "dmi_sentinel_null": dmi_sentinel_null,
     })
     env.tests["search"] = lambda value, pattern: re.search(pattern, str(value)) is not None
