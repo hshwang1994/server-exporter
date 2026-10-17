@@ -155,8 +155,8 @@
         }
       ],
       "datastores": [],                                 // ESXi datastore list (OS/Redfish 는 빈 list)
-      "hbas": [],                                       // HBA list (FC / iSCSI / SAS / AHCI). Linux OS 는 빈 list
-      "logical_volumes": [],                            // LVM/RAID 가상 볼륨 list
+      "hbas": [],                                       // FC HBA 목록 (FibreChannel / FCoE / iSCSI) — 전 채널, 항목 1개 = 물리 FC 포트 1개 (2026-10-18)
+      "logical_volumes": [],                            // RAID 논리 볼륨 — Redfish 는 Storage Volumes, OS/ESXi 는 RAID 컨트롤러 뒤 디스크 (2026-10-18)
       "infiniband": [],                                 // InfiniBand HCA list
       "filesystems": [                                  // 마운트된 파일시스템 list
         {

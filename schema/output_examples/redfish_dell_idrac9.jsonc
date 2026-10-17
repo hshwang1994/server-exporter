@@ -148,7 +148,7 @@
         {"id": "BOSS.SL.12-1", "name": "BOSS-N1 Monolithic", "health": "OK", "controller_model": "BOSS-N1 Monolithic", "controller_firmware": "2.1.13.2025", "controller_manufacturer": "DELL", "controller_health": "OK", "drives": [{"device": "NVMe 0", "model": "Dell EC NVMe ISE 7450 RI M.2 80 480GB", "total_mb": 457862, "media_type": "SSD", "protocol": "PCIe", "health": "OK"}]}
       ],
       "filesystems": [],                                // 마운트된 파일시스템 list
-      "hbas": [],                                       // HBA list (FC / iSCSI / SAS / AHCI). Linux OS 는 빈 list
+      "hbas": [],                                       // FC HBA 목록 (FibreChannel / FCoE / iSCSI) — 전 채널, 항목 1개 = 물리 FC 포트 1개 (2026-10-18)
       "summary": {
         "groups": [
           {"unit_capacity_gb": 447, "model": "Dell EC NVMe ISE 7450 RI M.2 80 480GB", "media_type": "SSD", "protocol": "PCIe", "quantity": 1, "group_total_gb": 447}
@@ -169,7 +169,7 @@
           "predicted_life_percent": 100                    // 남은 수명 (%) — Dell 전용 (cycle 2026-05-06 F49)
         }
       ],
-      "logical_volumes": [                              // LVM/RAID 가상 볼륨 list
+      "logical_volumes": [                              // RAID 논리 볼륨 — Redfish 는 Storage Volumes, OS/ESXi 는 RAID 컨트롤러 뒤 디스크 (2026-10-18)
         {
           "id": "Disk.Virtual.0:BOSS.SL.12-1",             // 가상 볼륨 식별자
           "name": "VD_0",                                  // 볼륨 이름

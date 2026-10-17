@@ -229,8 +229,8 @@
         {"id": "DE00C000", "name": "HPE MR416i-o Gen11", "health": "OK", "controller_model": "HPE MR416i-o Gen11", "controller_firmware": "52.32.3-6333", "controller_manufacturer": "HPE", "controller_health": "OK", "drives": [{"device": "1.92TB 6.0G SATA SSD", "model": "SAMSUNGMZ7L31T9HBLT-00A07", "total_mb": 1831420, "media_type": "SSD", "protocol": "SATA", "health": "OK"}, {"device": "1.92TB 6.0G SATA SSD", "model": "SAMSUNGMZ7L31T9HBLT-00A07", "total_mb": 1831420, "media_type": "SSD", "protocol": "SATA", "health": "OK"}, {"device": "1.92TB 6.0G SATA SSD", "model": "SAMSUNGMZ7L31T9HBLT-00A07", "total_mb": 1831420, "media_type": "SSD", "protocol": "SATA", "health": "OK"}, {"device": "1.92TB 6.0G SATA SSD", "model": "SAMSUNGMZ7L31T9HBLT-00A07", "total_mb": 1831420, "media_type": "SSD", "protocol": "SATA", "health": "OK"}]}
       ],
       "datastores": [],                                 // ESXi datastore list (OS/Redfish 는 빈 list)
-      "hbas": [],                                       // HBA list (FC / iSCSI / SAS / AHCI). Linux OS 는 빈 list
-      "logical_volumes": [                              // LVM/RAID 가상 볼륨 list
+      "hbas": [],                                       // FC HBA 목록 (FibreChannel / FCoE / iSCSI) — 전 채널, 항목 1개 = 물리 FC 포트 1개 (2026-10-18)
+      "logical_volumes": [                              // RAID 논리 볼륨 — Redfish 는 Storage Volumes, OS/ESXi 는 RAID 컨트롤러 뒤 디스크 (2026-10-18)
         {"id": "237", "name": "OS_DISK_RAID1", "controller_id": "DE00C000", "member_drive_ids": ["1", "2"], "raid_level": "RAID1", "total_mb": 1830880, "health": "OK", "state": "Enabled", "boot_volume": null},
         {"id": "238", "name": "DATA", "controller_id": "DE00C000", "member_drive_ids": ["0", "3"], "raid_level": "RAID1", "total_mb": 1830880, "health": "OK", "state": "Enabled", "boot_volume": null}
       ],

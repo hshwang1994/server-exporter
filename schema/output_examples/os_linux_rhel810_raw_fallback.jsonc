@@ -204,7 +204,7 @@
         "grand_total_gb": 100                              // 모든 디스크 합계
       },
       "datastores": [],                                    // ESXi datastore (OS 는 빈 list)
-      "logical_volumes": [],                               // LVM/RAID 가상 볼륨 (raw fallback 은 lvs 미실행 → 빈 list)
+      "logical_volumes": [],                               // RAID 논리 볼륨 — RAID 컨트롤러 뒤 디스크 (2026-10-18; raw fallback 도 같은 규칙)
       "controllers": [],                                   // RAID/HBA 컨트롤러 (Redfish 가 풍부)
       "hbas": [],                                          // FC HBA list
       "filesystems": [                                     // 마운트된 파일시스템 list

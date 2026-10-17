@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-17
+> 최종 갱신: 2026-10-18
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -31,7 +31,9 @@
 | vendor 표시값 | 내부 canonical(`hpe`) ↔ 호출자 표시값(`hp` · `hpCsus`) 분리 | 2026-06-04 |
 | adapter | 코드가 읽는 절만(`match` · `capabilities.sections_supported` · `vendor_notes` …), 점수 `priority×1000 + specificity×10 + match`. 세대 토큰은 단어 경계, 버전 숫자 패턴은 보조. `capabilities.sections_supported` 는 채널 섹션과 일치 | 2026-05-11 · 2026-10-10 D-14 · 2026-10-11 D-17 · 2026-10-12 |
 | 멀티-노드(RMC) | `data.multi_node` 컨테이너로 CSUS 3200 / Superdome Flex 전 Partition · Manager · Chassis 수집 | 2026-05-12 · 2026-06-09 |
-| Redfish HBA | `storage.hbas[]` = FC 포트(기능)당 1건. System 이 연결한 섀시만 본다 — 추가 섀시는 다른 System 이 연결하지 않았을 때만, 링크를 따라간다. 카드를 하나도 못 얻으면(빈 목록 포함) Systems 경로. wwpn 은 NDF 의 WWPN 만(포트 주소 추측 금지), 링크 기술만 FC 인 포트도 HBA. 빈 목록 · 미제공은 notices, 실패는 errors[] — status 불변 | 2026-10-15 |
+| HBA (4채널) | `storage.hbas[]` 항목 1개 = **물리 FC 포트** 1개(Linux NPIV 제외 · ESXi (wwpn,wwnn) 1건 · Redfish 기능당 1건). `link_status` 는 `up`/`down` + **`null`(장비 미제공 — 임의 down 금지, unknown 폐지)**. Redfish wwpn 은 NDF WWPN → 없으면 포트 FC 주소에서 WWNN 을 뺀 유일값(구 NetworkPort 주소는 쓰지 않음). System 이 연결한 섀시만, 빈 목록 · 미제공은 notices, 실패는 errors[] — status 불변. CSUS 3200 은 Redfish 로 FC 링크 상태 수집 불가(null) | 2026-10-15 · 2026-10-18 |
+| 채널 간 값 | 같은 뜻인데 다른 값은 버그, 뜻이 달라 다른 값은 기록만. 고친 것: Cisco CIMC UUID 바이트 순서(adapter `uuid_byte_order`), Redfish `cpu.max_speed_mhz` 정격(종전 MaxSpeedMHz 터보 → `turbo_max_mhz`), `cpu.logical_threads` 는 ProcessorSummary.LogicalProcessorCount 우선, NetworkAdapter Model 은 FirmwareInventory 이름 폴백. 교차 회귀 `test_cross_channel_same_server.py` | 2026-10-18 |
+| 논리 볼륨 | OS/ESXi 도 RAID 컨트롤러 뒤 디스크를 `storage.logical_volumes[]` 에 싣는다(physical_disks 는 그대로, member/raid_level 비움). ESXi RAID 뒤 LUN 의 `media_type` 은 null | 2026-10-18 |
 | InfiniBand | `storage.infiniband[]` 항목 1개 = **현재 IB 모드로 확인된 포트** 1개. 근거는 현재 모드 속성뿐(Linux `link_layer` · Windows NdisPhysicalMedium 11/RdmaTechnology · Redfish 링크 기술·PortProtocol + NetDevFuncType), 충돌은 미확정 + notice. ESXi 는 수집하지 않음(항상 `[]`). `rate_gbps` 는 up 일 때만, GUID 는 소문자 4×4, 추정값 금지 | 2026-10-17 |
 | 실패 문장 | `failure_code` + 대상 종류 + 세부 사유로 고르는 중앙 카탈로그, 사용자 문장에 기술값 금지 | 2026-08-12 · 2026-09-21 |
 | 식별자 · 단위 | DMI 자리표시자 집합 한 곳(`identity_normalizer`), JEDEC (bank, id) 표, firewall_state = 유효 정책 | 2026-10-10 D-03 · D-10 · LX-F12 |
@@ -42,6 +44,7 @@
 
 | 날짜 · 제목 |
 |---|
+| 2026-10-18 — HBA 4채널 전수 점검 · `link_status` up/down/null · 채널 간 값 정합(uuid · 정격 클럭 · 스레드 · NIC 모델) · RAID 논리 볼륨 OS/ESXi |
 | 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행 · ESXi 추정 제거) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기 |
 | 2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬 · 긴급 승격 → 정규 재승격 |
 | 2026-10-15 — Redfish HBA 누락 보완 (링크 기술 FC · wwpn 추측 금지 · System 연결 섀시와 소유 확인 · 빈 목록과 미제공 구분) |
@@ -97,6 +100,43 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-18 — HBA 4채널 전수 점검 · `link_status` up/down/null · 채널 간 값 정합 · RAID 논리 볼륨 OS/ESXi
+
+> 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/ai/decisions/ADR-2026-10-18-hba-link-status-null-and-os-logical-volumes.md` · `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2.
+
+### 사용자 의심
+
+- Redfish 가 HBA 를 어떻게 가져오고 예외처리 · 버그는 없는가. OS · ESXi 도. 논리(OS/ESXi) 와 물리(Redfish) 의 HBA 값 · 개수가 다르다(ESXi 8 vs Redfish 4). CSUS 는 전부 `unknown`.
+  "HBA 누락" 이 있어 운영에서 `_make_fc_hba` 의 wwpn 에 포트 주소를 넣는 임시 조치를 했다 — 왜 되는지 모르겠다. HBA 뿐 아니라 채널마다 다른 값 · 누락 · 버그를 전수조사해 고쳐라.
+
+### 분석
+
+- Redfish: 녹화본 변형으로 조용한 누락 경로 8종(F1~F8) 재현. 임시 조치는 저장소 어디에도 없고, 코드상 wwpn 값만 바꿔서는 행 수가 변할 수 없다(Portal 은 wwpn null 행도 표시 — 사용자 확인) —
+  누락은 수집 쪽 경로(F2 가 가장 유력 · 벤더 미확정)다. 포트 주소는 Dell 에서 WWNN 이라 그 값은 틀렸다.
+- CSUS 3200: 원본 완전 크롤(2,264 리소스) 전수 스캔 — FC Port 24개의 키는 `FibreChannel.AssociatedWorldWideNames` · `Id` · `Name` 셋뿐, 다른 경로 · OEM · 이벤트 로그 0건, 유일한 LinkUp 조건은 PCIe 슬롯(RAID 컨트롤러에도 있음).
+  Redfish 로는 수집 불가 — 2값 규칙을 그대로 쓰면 CSUS 는 항상 down(상시 거짓 경보).
+- 개수: ESXi 7 FC-NVMe 는 포트당 vmhba 2개(같은 WWPN, NetApp 가이드) · Linux NPIV 가상 포트 · lab Cisco 는 CIMC vHBA 4 vs ESXi fnic 2(사실 — 코드 아님).
+- 같은 물리 서버 2쌍(Cisco C220↔esxi02 · Dell R760-6↔Linux) 전 섹션 대조 17건 — 같은 뜻인데 다른 값 6, 뜻이 다른 값 7, 결정 필요 4.
+- Linux/Windows/ESXi 코드 정독 + 커널 · 모듈 소스 대조 — Linux driver 항상 null(Scsi_Host 에 driver 링크 없음) 등 채널별 결함 8/6/8.
+
+### 결정 (사용자, 2026-10-17 ~ 18)
+
+1. `storage.hbas[].link_status` 문자열은 `up` · `down` 둘뿐. **장비가 링크 상태 속성을 주지 않으면 `null`** — 확인되지 않은 상태를 down 으로 적지 않는다. `unknown` 폐지. CSUS 는 null, Portal 이 wwpn 으로 OS 값을 조인.
+2. 4채널 모두 보완. F3b(카드별 예외 격리) 포함. Windows PortSpeed 64 이상 매핑 추가. ESXi speed 자릿수 정규화 지금 적용.
+3. 같은 뜻인데 다른 값은 고치고(uuid 바이트 순서 · 정격 클럭 · 스레드 수 · NIC 모델 · hbas WWPN), 뜻이 달라 다른 값은 기록만(카드 vs PCI 기능 · DIMM locator · fqdn · 메모리 total 기준 · 펌웨어 표기).
+4. RAID LUN 은 `logical_volumes` 에도 싣는다(physical_disks 유지).
+5. 논리 = 물리 개수 원칙: ESXi (wwpn, wwnn) 중복 제거 · Linux NPIV 제외.
+
+### 영향
+
+- envelope 13 필드 · `sections` · `status` 불변. `data.storage.hbas[].link_status` 가 `null` 일 수 있음(호출자 안내). `cpu.max_speed_mhz` 가 Redfish 에서 정격으로(종전 터보), `cpu.turbo_max_mhz` Redfish 추가.
+  `storage.logical_volumes[]` 가 OS/ESXi 에서 채워짐. Cisco Redfish `hardware.uuid`/`correlation.system_uuid` 표기 변화. 전부 Additive(키 추가 0, 사전 안).
+- 운영의 임시 조치(wwpn=포트 주소)는 이번 규칙(`_derive_port_wwpn`)으로 대체 — 걷어내야 한다.
+
+### 회귀
+
+- 채널별 신규 시험 + 녹화본 변형 + 교차 회귀 `tests/regression/test_cross_channel_same_server.py`. 전체 수치 `docs/ai/catalogs/TEST_HISTORY.md` 2026-10-18. 승격은 미실행(Jenkins 자격 단계) — NEXT_ACTIONS.
 
 ## 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행 · ESXi 추정 제거) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기
 

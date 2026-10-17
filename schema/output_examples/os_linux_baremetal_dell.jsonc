@@ -124,9 +124,9 @@
       {"name": "cloviradmin", "uid": "1000", "groups": ["cloviradmin", "adm", "cdrom", "sudo", "dip", "plugdev", "lxd", "docker"], "home": "/home/cloviradmin", "last_access_time": "2026-05-06T23:46:42Z"}
     ],
     "storage": {
-      "logical_volumes": [],                            // LVM/RAID 가상 볼륨 list
+      "logical_volumes": [],                            // RAID 논리 볼륨 — Redfish 는 Storage Volumes, OS/ESXi 는 RAID 컨트롤러 뒤 디스크 (2026-10-18)
       "infiniband": [],                                 // InfiniBand HCA list
-      "hbas": [],                                       // HBA list (FC / iSCSI / SAS / AHCI). Linux OS 는 빈 list
+      "hbas": [],                                       // FC HBA 목록 (FibreChannel / FCoE / iSCSI) — 전 채널, 항목 1개 = 물리 FC 포트 1개 (2026-10-18)
       "filesystems": [                                  // 마운트된 파일시스템 list
         {"device": "/dev/mapper/ubuntu--vg-ubuntu--lv", "mount_point": "/", "filesystem": "ext4", "total_mb": 446438, "used_mb": 33966, "available_mb": 412472, "usage_percent": 7.6, "status": "mounted"},
         {"device": "/dev/nvme0n1p2", "mount_point": "/boot", "filesystem": "ext4", "total_mb": 1945, "used_mb": 315, "available_mb": 1630, "usage_percent": 16.2, "status": "mounted"},

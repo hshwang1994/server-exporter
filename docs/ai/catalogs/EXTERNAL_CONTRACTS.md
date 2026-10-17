@@ -2,6 +2,35 @@
 
 > 외부 시스템 (Redfish / IPMI / SSH / WinRM / vSphere) 계약 카탈로그. rule 28 #11 측정 대상 (TTL 90일). rule 96 origin 주석 정본.
 
+## 일자: 2026-10-18 — FC HBA 4채널 · 채널 간 값 정합 계약 (HBA 전수 점검)
+
+> 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2 ·
+> `docs/ai/decisions/ADR-2026-10-18-hba-link-status-null-and-os-logical-volumes.md`. lab 에 FC 링크 up 장비 · Linux/Windows FC 호스트 · 하드웨어 iSCSI ·
+> FC-NVMe 가 없다 — 아래는 공식 문서 · 커널/모듈 소스 · 실장비 크롤(링크 다운) 대조로 확정한 것이고 **실장비 미검증** 항목은 표에 표시했다.
+
+| 계약 | 정본 | server-exporter 적용 |
+|---|---|---|
+| Linux `fc_host/port_state` | `drivers/scsi/scsi_transport_fc.c fc_port_state_names`: Unknown · Online · Offline · Blocked · Bypassed · Diagnostics · Linkdown · Error · Loopback · Deleted (+ Marginal, 5.x) | Online·Marginal → up / Offline·Linkdown·Error·Blocked·Bypassed·Loopback·Diagnostics → down / 그 밖·없음 → null (완전일치) |
+| Linux `fc_host/port_type` | 같은 파일 `fc_port_type_names`: Unknown · Other · Not Present · NPort · NLPort · LPort · Point-To-Point · **NPIV VPORT** | `NPIV` 포함 host 는 hbas 에서 제외(가상 포트 — 물리 포트는 따로 host 가 있다) |
+| Linux FC 드라이버 이름 | `scsi_sysfs.c` scsi_host `proc_name = hostt->proc_name`; Scsi_Host 장치에는 `driver` 링크가 없다(`hosts.c`), PCI 부모(`device/..`)에 `driver` 링크 | driver = proc_name → `device/../driver` → 종전 경로. 종전 `device/driver` 는 실장비에서 항상 비었다 |
+| Linux lpfc · qla2xxx · bfa 속성 | `lpfc_attr.c`: modelname · modeldesc · fwrev · serialnum · lpfc_drvr_version / `qla_attr.c`: model_name · model_desc · fw_version · driver_version · serial_num / bfa: model · fw_version · driver_version | 모델 = model_name → modelname → model → lspci 이름 → symbolic_name; 펌웨어 = fw_version → fwrev |
+| Linux FC 속도 비트 | `include/uapi/scsi/scsi_transport_fc.h` FC_PORTSPEED_* (1=1G 2=2G 4=10G 8=4G 0x10=8G 0x20=16G 0x40=32G 0x80=20G 0x100=40G 0x200=50G 0x400=100G 0x800=25G 0x1000=64G 0x2000=128G) | Windows PortSpeed 표(아래)의 근거 — Linux 자체는 `speed` 문자열("16 Gbit")을 읽는다 |
+| Linux `fc_host/port_name` 미확정 | 드라이버가 아직 WWN 을 못 읽은 포트는 `0x0` | `normalize_wwn` all-zero(길이 무관) → null |
+| Windows `MSFT_InitiatorPort` | `OperationalStatus` ValueMap 1 Unknown 2 Operational 3 User Offline 4 Bypassed 5 In diagnostics mode 6 Link Down 7 Port Error 8 Loopback (UInt16[]); `ConnectionType` 0 Other 1 FC 2 iSCSI 3 SAS | 2 → up / 3~8 → down / 1·없음 → PortState 보강 |
+| Windows `MSFC_FibrePortHBAAttributes.Attributes` | `PortState`(HBA_PORTSTATE_*: 1 Unknown 2 Online 3 Offline 4 Bypassed 5 Diagnostics 6 LinkDown 7 Error 8 Loopback) · `PortSpeed` 비트(MS 문서 1·2·4·8 = 1·2·10·4 G, hbaapi.h 16=8G 32=16G) | PortState 2 → up / 3~8 → down; PortSpeed 64~0x2000 은 T11/SNIA 비트로 매핑(사용자 결정 2026-10-17, **Windows 실장비 미확인**) |
+| Windows MSFC 부재 vs 실패 | `Microsoft.Management.Infrastructure.NativeErrorCode`: InvalidNamespace · InvalidClass · NotSupported(HRESULT 0x8004100E · 0x80041010 · 0x8004100C) = 환경 부재; AccessDenied · Failed · RPC = 실패 | absent → 오류 아님, 실패 → storage errors[] 1건(component_failed). 종전 빈 catch 는 둘을 구분 못 했다 |
+| vSphere `HostBusAdapter.status` | API 문서: "online · offline · unbound · unknown" | online → up / offline → down / 그 밖 → null |
+| vSphere `HostFibreChannelHba.speed` | API 문서 "bits per second"; lab 실측은 전부 0(링크 다운) — 단위 미검증 | 자릿수 정규화(≥1e6 → /1e9, ≥1e3 → /1e3, 그 밖 Gbps), 0 → null (사용자 결정 2026-10-17) |
+| `vmware_host_vmhba_info` type | 클래스 → 'Fibre Channel' · 'iSCSI' · 'Block Adapter' · 'Parallel SCSI', 그 밖은 클래스 이름 그대로(`InternetScsiHba` · `FibreChannelOverEthernetHba` …) | `'iscsi' in type or 'internetscsi' in type`(공백 제거) · FCoE 클래스/드라이버 → FCoE (모듈 소스 미설치 환경 — RETURN 문서 기준, **실장비 미검증**) |
+| `vmware_host_vmhba_info` WWN 문자열 | 모듈이 int64 WWN 을 16진 문자열로 2자리씩 묶는다 — 홀수 자릿수 · 음수(최상위 비트 1)는 깨진 값 | 8옥텟 colon-hex 가 아니면 null + storage errors[] 1건(원문 detail); `normalize_wwn` 은 `-` 로 시작하는 값을 다시 묶지 않는다 |
+| ESXi 7 FC-NVMe | NetApp ESXi 7 NVMe/FC 호스트 가이드(`docs.netapp.com/us-en/ontap-sanhost/nvme_esxi_7.html`): FCP vmhba(vmhba1/2)와 NVMe vmhba(vmhba64/65)가 **같은 WWPN** 으로 따로 열거 | 같은 (wwpn, wwnn) 1건 — "ESXi 8 vs Redfish 4" 원인 |
+| vSphere `HostScsiTopology` | `adapter[].adapter`(= `HostBusAdapter.key`) · `target[].lun[].scsiLun`(= `ScsiLun.key`) | LUN ↔ 어댑터 → RAID 뒤 LUN = logical_volumes · media_type null |
+| HPE CSUS 3200 RMC 1.75.108 FC Port | `Chassis/r001u01/NetworkAdapters/PCIeCard*/Ports/*` 키 = `FibreChannel.AssociatedWorldWideNames` · `Id` · `Name` 셋 — `LinkStatus`·`Status` 없음(RMC 자기 포트 `Rmp/Ports/*` 에는 있음). NDF 키 = FibreChannel · Id · Links.PCIeFunction · Name · NetDevFuncCapabilities. 알림 로그 리소스 없음(EventService 구독 전용, `DCD_FCHBA_LINK_*` 0건). PCIe 장치 `H3Alert.1.7.LinkUp` 은 RAID 컨트롤러에도 있는 슬롯 링크. DCD 인벤토리가 있는 노드만 NDF WWNN 노출 | Redfish 로 FC 링크 상태 수집 불가 → `link_status: null` + notice. HPE 문의 항목(NEXT_ACTIONS) |
+| Cisco CIMC 4.1 `System.UUID` | SMBIOS 원시(network) 바이트 순서 — ESXi/dmidecode 는 SMBIOS 2.6 little-endian 표기(실측 B190019F-56CE-4ED4-… ↔ 9f0190b1-ce56-d44e-…) | adapter `cisco_cimc.yml` `vendor_notes.uuid_byte_order: smbios_raw` → normalize 앞 3필드 스왑. Dell 은 OS 와 같다(실측 .34 ↔ r760-6) |
+| Redfish Processor 클럭 | `MaxSpeedMHz`(최대 — 녹화본 10종 전부 터보 값) · `BaseSpeedMHz`(v1.10+, CSUS) · `OperatingSpeedMHz`(v1.4+, Dell · DMTF) · `Oem.Hpe.RatedSpeedMHz`(iLO 전 세대) · `Oem.Lenovo.CurrentClockSpeedMHz`(XCC) · 브랜드 문자열 "@ N.NNGHz"(Intel) | `cpu.max_speed_mhz` = 정격 원천 순서(Base → Hpe Rated → 브랜드 → Operating → Lenovo Current), `cpu.turbo_max_mhz` = MaxSpeedMHz |
+| Redfish `ProcessorSummary.LogicalProcessorCount` | Dell · DMTF 제공, iLO · XCC · CIMC 미제공. CIMC 4.1 per-processor `TotalThreads` 22 = 코어 수(ESXi 88 스레드) | 있으면 정본, 없으면 TotalThreads 합 |
+| Dell FirmwareInventory Id/Component | `Installed-27481-23.61.3__NIC.Embedded.1-1-1` — `__` 뒤 FQDD(포트 · 파티션), 이름 끝 ` - <MAC>` | NetworkAdapter Model null 폴백(X9): id/component 가 카드 Id 또는 `<Id>-` 하위일 때 이름(MAC 접미 제거) |
+
 ## 일자: 2026-10-17 — InfiniBand "현재 모드" 판정 계약 (4채널 — `storage.infiniband[]` 전면 검증)
 
 > 정본: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md` · `docs/contract/03-fields.md` 6.3.1 · 6.3.3 · `tests/evidence/2026-10-17-infiniband-synthetic-verification.md`.

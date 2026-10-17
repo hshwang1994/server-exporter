@@ -73,7 +73,7 @@
   "errors": [],                                            // 수집 중 errors (warning 수준이면 status=success 와 공존 가능 — rule 13 R8)
   "data": {                                                // 실제 수집된 데이터 (섹션별)
     "storage": {                                           // 디스크 / 파일시스템 / 컨트롤러
-      "logical_volumes": [],                               // LVM/RAID 가상 볼륨 (lvs/dmsetup)
+      "logical_volumes": [],                               // RAID 논리 볼륨 — RAID 컨트롤러 뒤 디스크 (2026-10-18; LVM 은 싣지 않는다)
       "physical_disks": [                                  // 물리 디스크 list
         {
           "id": "/dev/sda",                                // 디스크 식별자 (디바이스 경로)

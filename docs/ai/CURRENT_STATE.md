@@ -1,5 +1,32 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-18 — HBA 4채널 전수 점검 · `link_status` up/down/null · 채널 간 값 정합(uuid · 정격 클럭 · 스레드 · NIC 모델) · RAID 논리 볼륨 OS/ESXi
+
+> 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/ai/decisions/ADR-2026-10-18-hba-link-status-null-and-os-logical-volumes.md` ·
+> `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2 · `docs/reference/decision-log.md` 2026-10-18.
+
+- **승격**: **미실행** — Jenkins 자격을 파일에 쓰는 단계가 자동 모드 분류기에 막혔다. main Job 매트릭스 · CI · `prodgen promote` · canary 는 NEXT_ACTIONS 첫 항목(사용자/자격 세션).
+- **계기**: 사용자 조사 요청 — "Redfish 에서 HBA 를 어떻게 가져오나 · 예외처리 · 버그", 이어 "OS · ESXi 도", "논리(OS/ESXi) vs 물리(Redfish) HBA 값·개수가 다르다(ESXi 8 vs Redfish 4)",
+  "CSUS 가 전부 unknown", "HBA 누락 + 임시 hotfix(wwpn=포트 주소)", "HBA 외 전 섹션 불일치 전수조사". 결정: link_status 는 up/down + null(미제공, 임의 down 금지), 같은 뜻만 고친다, RAID LUN 은 logical_volumes 에도.
+- **고친 것(제품)**:
+  - Redfish `redfish-gather/library/redfish_gather.py` — F1 짝 없는 기능의 부모 포트 링크·속도 상속(+F1b 포트 링크 2종 색인) · F2 FC 링크 기술 포트의 Ethernet 블록 ≠ Ethernet · F3a `_id_text` 정수 Id ·
+    F3b 카드 1장 예외 격리(`_collect_one_network_adapter` 추출, 롤백 + errors[] 1건) · F4 이름 없는 카드도 기능 있으면 유지 · F5/F7/F8 404-only 둔갑 · 카드 전부 404 · 빈 목록 가림 → notice/errors ·
+    WWPN 배제 규칙(`_derive_port_wwpn`) · `_hba_link_status` up/down/None · FibreChannel 블록 포트 + `<PortId>-n` 고아 중복 제거 · X2 `speed_mhz` 정격(`_cpu_base_speed_mhz`) + `max_speed_mhz` ·
+    X9 `_fill_adapter_models_from_firmware`. normalize: X1 `vendor_notes.uuid_byte_order`(cisco_cimc) 스왑 · X3 `LogicalProcessorCount` 우선 · `cpu.turbo_max_mhz` 추가.
+  - Linux `gather_hba_ib.yml` — driver = scsi_host proc_name → PCI driver 링크, lpfc/bfa 속성명, lspci vendor/model 폴백, NPIV 제외, `|`/CR 제거, rc≠0 오류, port_state 완전일치 up/down/null, FCoE 드라이버.
+    `gather_storage.yml` — `DISKPCI` 줄 + RAID 컨트롤러 뒤 디스크 → `logical_volumes`. `identity_normalizer.normalize_wwn` all-zero(길이 무관)·`-`접두.
+  - Windows `gather_storage.yml` — HBA 스크립트 `$ErrorActionPreference Stop` + 구성요소 성패(absent/실패 구분) · PortSpeed 64~0x2000 · PortState 보강 · link up/down/null · `from_json` 가드(Bug B) ·
+    BusType RAID → `logical_volumes`.
+  - ESXi `collect_network_extended.yml` — 하드웨어 iSCSI · FCoE 클래스/드라이버 · speed 자릿수 · (wwpn,wwnn) 1건 · WWN 형식 검증(null + errors[]) · 자리표시자 null · link up/down/null · rescue storage 오류.
+    `esxi_disks.py` — `scsiTopology` 로 RAID 뒤 LUN → `media_type` null + `logical_volumes`.
+- **계약 · 문서**: 사전 `storage.hbas[].link_status` → `string|null` enum up/down, `cpu.turbo_max_mhz` +redfish, `logical_volumes[]`(+9 subkey) +os/esxi, help 갱신(hbas · wwpn · port_type · max_speed_mhz · uuid · media_type).
+  `03-fields.md` 6.3.0b 신설 · 6.3.1/6.3.2 갱신 · 199 `section: network` 정정, `05-field-mapping.md`, `output_examples/*.jsonc` 주석, EXTERNAL_CONTRACTS · CONVENTION_DRIFT · FAILURE_PATTERNS · NEXT_ACTIONS · decision-log.
+- **golden**: 녹화본 10종 `expected_output.json` — `processors[].speed_mhz` 정격 · `max_speed_mhz` 추가(X2 의도 변경만, 요청 예산 · 다른 키 동일). CSUS golden `fc_hbas[].link_status` unknown → null.
+- **시험(실장비 아님)**: Redfish 신규 3파일 + 변형 6건 · Linux 합성 sysfs(평면 + 실 링크 모양) · Windows 가짜 cmdlet 실제 powershell · ESXi 합성 모듈 결과 · 교차 회귀 `test_cross_channel_same_server.py`
+  (Cisco C220↔esxi02 · Dell R760-6↔Linux: serial · uuid · 소켓/코어 · 정격 1% · 터보 5% · hbas WWPN 부분집합). 전체 수치는 TEST_HISTORY 2026-10-18.
+- **실장비에서만 확인 가능(미검증)**: NEXT_ACTIONS 2026-10-18 절.
+
+
 ## 일자: 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기 확인 · **main `dd69aee1` → production `151cc395`**
 
 > 정본: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md` · `docs/contract/03-fields.md` 6.3.1 · 6.3.3 · `docs/reference/decision-log.md` 2026-10-17 · `tests/evidence/2026-10-17-infiniband-synthetic-verification.md` · `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-17 · 승격 · canary 는 `docs/reference/live-validation.md` 2026-10-17.

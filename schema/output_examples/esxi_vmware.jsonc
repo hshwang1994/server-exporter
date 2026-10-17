@@ -174,7 +174,7 @@
         "groups": [],
         "grand_total_gb": 16556                            // 16TB+
       },
-      "hbas": [                                            // ESXi 전용 — HBA list (Linux OS 는 빈 list)
+      "hbas": [                                            // FC/iSCSI HBA 목록 — 전 채널 공통 canonical 키 (2026-10-18)
         {
           "name": "vmhba0",                                // ESXi HBA 식별자
           "driver": "vmw_ahci",                            // ESXi HBA driver
@@ -205,7 +205,7 @@
       "physical_disks": [],                             // 물리 디스크 list
       "controllers": [],                                // RAID 컨트롤러 list
       "filesystems": [],                                // 마운트된 파일시스템 list
-      "logical_volumes": [],                            // LVM/RAID 가상 볼륨 list
+      "logical_volumes": [],                            // RAID 논리 볼륨 — Redfish 는 Storage Volumes, OS/ESXi 는 RAID 컨트롤러 뒤 디스크 (2026-10-18)
       "infiniband": []                                  // InfiniBand HCA list
     },
     "power": null,

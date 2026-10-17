@@ -1,5 +1,20 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-18 — HBA 4채널 전수 점검 · link_status up/down/null · 채널 간 값 정합 · RAID 논리 볼륨
+
+| 구분 | 결과 |
+|---|---|
+| 전체 pytest(unit · e2e · regression, Windows Python 3.13.15 · powershell.exe 5.1) | 4 failed, 5597 passed, 44 skipped, 7 xfailed, 92 warnings in 1373.01s (0:22:53) |
+| 통합(`tests/integration -m "not live"`, Windows) | 355 passed, 6 skipped, 1 deselected in 9.15s |
+| `ansible-playbook --syntax-check` 3채널 (WSL ansible-core 2.20.7) | redfish · os · esxi 모두 통과 |
+| 정적 검사 | `verify_vendor_boundary.py` 통과 · `output_schema_drift_check.py` 통과(fd_paths 206) · `validate_field_dictionary.py` PASS · `verify_harness_consistency.py` 통과 · `envelope_change_check.py` advisory(기존 diagnosis 항목 — 이번 변경과 무관) |
+| 신규 시험(전부 합성 입력 — 실장비 아님) | Redfish `test_fc_orphan_ndf_parent_port_link`(F1·F1b) · `test_fc_port_with_ethernet_block_only`(F2 + WWPN 규칙) · `test_network_adapters_id_type_robustness`(F3a·F3b) · `test_network_adapters_absence_vs_failure` +9(F4·F5·F7·F8) · `test_redfish_hba_coverage_replay` 변형 +6 · `test_cross_channel_value_fixes`(X1·X2·X3·X9) / Linux `test_linux_hba_ib_markers` +13(lpfc · NPIV · port_state 13종 · `|` · FCoE · 0x0 · rc · lspci · 실 sysfs 링크 모양) · `test_linux_storage_markers` +5(DISKPCI → logical_volumes) / Windows `test_windows_storage_enum_render` +13(PortState · components · Bug B · RAID 볼륨) · `test_windows_storage_powershell_static` +5(absent/실패/부분/cmdlet 부재) + PortSpeed 17 코드 / ESXi `test_esxi_hba_normalize` 20 · `test_esxi_raid_lun_logical_volumes` 6 / 교차 `tests/regression/test_cross_channel_same_server.py` 2쌍 × 9 |
+| 갱신 시험 | `test_fc_link_technology_hba`(F1 상속 · null · WWPN 배제) · `test_identity_normalizer`(0x0 · `-`접두) · `test_hba_ib_canonical`(hbas up/down/null) · `test_field_dictionary_channel_emit` · `test_esxi_section_errors`(rescue storage 1건 · 파트 stub) · `test_windows_call_consolidation_render`(의도 변경 등록) · `test_redfish_round3_robustness`(정격/터보) |
+| golden | 녹화본 10종 `expected_output.json` 재생성 — 차이는 `processors[].speed_mhz`(정격) · `max_speed_mhz`(추가) · CSUS 파티션 cpu 만(요청 예산 · 다른 키 동일). CSUS `fc_hbas[].link_status` unknown → null |
+| 승격 | **미실행** — Jenkins 자격을 파일에 쓰는 단계가 자동 모드 분류기에 막혔다(NEXT_ACTIONS 2026-10-18 첫 항목) |
+| 실장비 미검증 | FC 링크 up · Linux/Windows FC 호스트 · 하드웨어 iSCSI · FC-NVMe · ESXi speed 단위 · Windows PortSpeed 64+ · CSUS null · 사이트 누락 장비 · Cisco 다른 세대 UUID — NEXT_ACTIONS 2026-10-18 |
+
+
 ## 2026-10-17 (2) — 정규 승격 main `dd69aee1` → production `151cc395` (IB 4채널 판정 · CSUS Redfish 시리얼 반영)
 
 | 구분 | 결과 |

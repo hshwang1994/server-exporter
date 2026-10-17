@@ -1115,3 +1115,41 @@
 - 수정: 같은 날 Redfish normalize 정렬 + 시험에 Redfish emit 추가 + 사전 · 문서 정정 (ADR-2026-10-15-csus-hostname-rmc-first).
 - 재발 방지: 범위를 줄인 결정은 사전 · 계약 문서 · 시험 이름에도 같은 범위를 적거나 남은 채널을 시험에 `xfail`(사유 포함)로 둔다. "모든 채널" 을 이름에 쓴 시험은 채널 목록을 코드 상수(사전 `channel`)에서 읽는다.
 - 관련 rule: rule 95 R1 · R3 · rule 13 R2 · rule 24 R2
+
+## 2026-10-18 — 채널마다 HBA 가 조용히 비거나 틀리던 경로 (Redfish 8 · Linux 8 · Windows 6 · ESXi 8)
+
+- 카테고리: scope-miss / external-contract-drift
+- 발견 위치: `redfish_gather.py` NetworkAdapters 루프 · `gather_hba_ib.yml` · `gather_storage.yml`(Windows) · `collect_network_extended.yml` (사용자 조사 요청 "HBA 값이 채널마다 다르고 누락이 있다")
+- 증상: Redfish — FC 링크 기술 포트에 `Ethernet` 블록만 있으면 Ethernet 으로 오분류(HBA 0 · 오류 0 · success), 포트 `Id` 정수 + 짝 없는 기능이면 TypeError 로 섹션 전체 None,
+  카드 GET 전부 404 는 흔적 없이 미지원, 200 빈 목록이 다른 경로의 5xx 를 가림, 이름 없는 카드 제외, 짝 없는 기능의 부모 포트 링크 버림, FibreChannel 블록 포트 + `<PortId>-n` 고아가
+  같은 포트 HBA 2건. Linux — driver 항상 null(Scsi_Host 에 driver 링크 없음), lpfc 속성명 미대응, vendor 항상 null, `|` 필드 밀림, NPIV 가상 포트 과다, "0x0" WWN 이 "0" 문자열, rc≠0 무시.
+  Windows — 접근 거부와 "HBA 없음" 이 글자까지 같은 출력, `from_json` 예외가 play rescue 로 다른 섹션까지 비움(Bug B), PortSpeed 64+ null. ESXi — 하드웨어 iSCSI 조용히 제외,
+  speed 단위 가정, FC-NVMe 쌍둥이 2건, 깨진 WWN 통과, rescue 가 network 만 기록.
+- 원인: 분류 신호의 우선순위를 한 자리에서만 보고(Ethernet 블록 존재), 외부 계약(커널 sysfs 구조 · 모듈 RETURN 문자열 · CIM 오류 종류)을 코드 가정으로 대신했다. 실패와 부재를 같은 모양(빈 목록)으로 냈다.
+- 영향: 사이트 "HBA 누락" 보고(벤더 미확정) · CSUS 전부 unknown · ESXi 8 vs Redfish 4 개수 불일치 · 임시 hotfix(wwpn = 포트 주소 = WWNN) 발생.
+- 수정: 2026-10-18 `fix:` 커밋 묶음 — 채널별 결함 수정 + link_status up/down/null + 개수 원칙(NPIV 제외 · (wwpn,wwnn) 1건) + WWPN 배제 규칙 + 구성요소 성패/rc/비JSON 가드.
+- 재발 방지: 녹화본 변형(`test_redfish_hba_coverage_replay`) · 합성 sysfs 실 레이아웃(`test_linux_hba_ib_markers`) · 가짜 cmdlet 실제 powershell(`test_windows_storage_powershell_static`) ·
+  모듈 결과 합성(`test_esxi_hba_normalize`) · 같은 서버 교차 회귀(`tests/regression/test_cross_channel_same_server.py`). 분류 규칙을 바꾸면 그 규칙이 불리는 모든 자리를 변형으로 돌린다.
+- 관련 rule: rule 95 R1 #1 #5 #6 #7 #8 · rule 96 R1/R2 · rule 25 R7-A-1
+
+## 2026-10-18 — 2026-10-15 HBA 보완이 놓친 것: 변형 재생 범위가 "실측 모양" 에만 머물렀다
+
+- 카테고리: scope-miss
+- 발견 위치: `tests/integration/test_redfish_hba_coverage_replay.py` 2026-10-15 변형 집합 (사용자 재조사 요청)
+- 증상: 2026-10-15 의 변형은 실측 R740 모양(링크 기술만 FC)에 머물러 신 Port 스키마(DL380: Ethernet 블록 = WWPN)에서 FibreChannel 블록이 빠진 모양, 정수 Id, 카드 전부 404, 빈 목록 가림을 돌리지 않았다 —
+  그 네 경로가 2026-10-18 에 모두 재현됐다(F2 · F3 · F7 · F8).
+- 원인: 변형을 "실측에서 본 것" 으로만 만들고 판정 함수의 각 분기(Ethernet 블록 존재 · 문자열 연산 · 404 집계 · 빈 목록 분기)를 입력으로 역산하지 않았다.
+- 수정: 분기마다 변형 1개 이상(F1~F8) + 카드 1장 예외 격리(F3b).
+- 재발 방지: 분류/집계 함수를 고칠 때는 함수의 분기 목록을 먼저 적고 분기당 변형 1개를 녹화본으로 만든다(실측 모양만 돌리지 않는다).
+- 관련 rule: rule 95 R1 · R3 · rule 91 R7
+
+## 2026-10-18 — "같은 뜻, 다른 값" 과 "다른 뜻" 을 가르지 않으면 정합 작업이 산으로 간다
+
+- 카테고리: scope-miss
+- 발견 위치: 같은 물리 서버 2쌍 교차 대조(X1~X17, `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md`)
+- 증상: 17건 불일치 중 같은 뜻인데 다른 값은 6건(uuid 바이트 순서 · 정격 클럭 · 스레드 수 · NIC 모델 · hbas WWPN · link_status), 뜻이 달라 다른 값은 7건(카드 vs PCI 기능 · DIMM locator · fqdn ·
+  메모리 total 기준 · 펌웨어 표기 · vendor 표기 · bios_date 미제공), 결정 필요 4건. 처음 계획은 전부를 "불일치" 로 묶었다.
+- 원인: 비교 전에 각 필드의 정의(사전 help)를 읽지 않았다.
+- 수정: 사용자 결정(2026-10-18) — 같은 뜻만 고치고 다른 뜻은 문서에 기준을 적는다. 교차 회귀는 같은 뜻 필드만 단언한다(터보 최대는 BMC 스펙값 vs MSR 값이라 5% 허용).
+- 재발 방지: 채널 간 대조표에는 "같은 뜻인가" 열을 먼저 채운다.
+- 관련 rule: rule 13 R7 · rule 23 R1 · rule 92 R6

@@ -97,7 +97,7 @@
       "controllers": [                                  // RAID 컨트롤러 list
         {"id": "RAID_Slot3", "name": "ThinkSystem RAID 930-8i 2GB Flash PCIe 12Gb Adapter", "health": "OK", "controller_model": "SAS3508", "controller_firmware": "51.23.0-5631", "controller_manufacturer": "Lenovo", "controller_health": "OK", "drives": [{"device": "1.92TB 6Gbps SATA 2.5 SSD (SED)", "model": "MZ7L31T9HBLT-00A07", "total_mb": 1831420, "media_type": "SSD", "protocol": "SATA", "health": "OK"}, {"device": "1.92TB 6Gbps SATA 2.5 SSD (SED)", "model": "MZ7L31T9HBLT-00A07", "total_mb": 1831420, "media_type": "SSD", "protocol": "SATA", "health": "OK"}, {"device": "1.92TB 6Gbps SATA 2.5 SSD (SED)", "model": "MZ7L31T9HBLT-00A07", "total_mb": 1831420, "media_type": "SSD", "protocol": "SATA", "health": "OK"}, {"device": "1.92TB 6Gbps SATA 2.5 SSD (SED)", "model": "MZ7L31T9HBLT-00B7C", "total_mb": 1831420, "media_type": "SSD", "protocol": "SATA", "health": "OK"}]}
       ],
-      "logical_volumes": [                              // LVM/RAID 가상 볼륨 list
+      "logical_volumes": [                              // RAID 논리 볼륨 — Redfish 는 Storage Volumes, OS/ESXi 는 RAID 컨트롤러 뒤 디스크 (2026-10-18)
         {"id": "1", "name": "OS_DISK_RAID1", "controller_id": "RAID_Slot3", "member_drive_ids": ["Disk.0", "Disk.1"], "raid_level": "RAID1", "total_mb": 1830101, "health": "OK", "state": "Enabled", "boot_volume": null},
         {"id": "0", "name": "VD_1", "controller_id": "RAID_Slot3", "member_drive_ids": ["Disk.2", "Disk.3"], "raid_level": "RAID1", "total_mb": 1830101, "health": "OK", "state": "Enabled", "boot_volume": null}
       ],
@@ -114,7 +114,7 @@
         {"id": "Disk.2", "device": "1.92TB 6Gbps SATA 2.5 SSD (SED)", "model": "MZ7L31T9HBLT-00A07", "serial": "S6ESNN0X204291", "total_mb": 1831420, "media_type": "SSD", "protocol": "SATA", "health": "OK", "failure_predicted": false, "predicted_life_percent": 99},
         {"id": "Disk.3", "device": "1.92TB 6Gbps SATA 2.5 SSD (SED)", "model": "MZ7L31T9HBLT-00B7C", "serial": "S6KKNT0X248790", "total_mb": 1831420, "media_type": "SSD", "protocol": "SATA", "health": "OK", "failure_predicted": false, "predicted_life_percent": 99}
       ],
-      "hbas": [],                                       // HBA list (FC / iSCSI / SAS / AHCI). Linux OS 는 빈 list
+      "hbas": [],                                       // FC HBA 목록 (FibreChannel / FCoE / iSCSI) — 전 채널, 항목 1개 = 물리 FC 포트 1개 (2026-10-18)
       "filesystems": [],                                // 마운트된 파일시스템 list
       "datastores": []                                  // ESXi datastore list (OS/Redfish 는 빈 list)
     },

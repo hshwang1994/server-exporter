@@ -399,3 +399,19 @@
   - baseline JSON 추가 (4 generation × 1 vendor) — rule 13 R4
   - DRIFT-015 close trigger: 사이트 검증 후 firmware_patterns 일치 confirm
 - **관련**: rule 12 R2, rule 50 R3, rule 95 R1 #4 (adapter score 동률), rule 96 R1-A / R1-C, `module_utils/adapter_common.py:272-287`, `lookup_plugins/adapter_loader.py:232-237`
+
+## DRIFT-029 (2026-10-18, resolved — HBA 4채널 전수 점검 · 채널 간 값 정합)
+
+- **발견 위치**: `os-gather/tasks/linux/gather_hba_ib.yml` (driver 경로 · 속성명 · link 매핑) · `os-gather/tasks/windows/gather_storage.yml` (PortSpeed 표 · 빈 catch · from_json) ·
+  `esxi-gather/tasks/collect_network_extended.yml` (iSCSI 부분 문자열 · speed 단위 · 중복) · `redfish-gather/library/redfish_gather.py` (MaxSpeedMHz · Ethernet 블록 · 정수 Id) ·
+  `schema/field_dictionary.yml` (`storage.hbas[].link_status` enum · `logical_volumes[]` channel)
+- **분류**: 외부 계약 drift(rule 96) + 코드가 사전 정의와 다른 값(rule 13 R7)
+- **설명**: 사용자 조사 요청("Redfish/OS/ESXi 에서 HBA 값이 다르다 · 누락이 있다")으로 4채널 HBA 와 같은 물리 서버 2쌍의 전 섹션을 맞대어 본 결과.
+  (1) Linux `driver` 는 Scsi_Host 의 `device/driver` 를 읽어 실장비에서 항상 null — 커널 sysfs 에 그 링크가 없다(`scsi_sysfs.c`). lpfc 속성명(modelname · fwrev) 미대응.
+  (2) Windows PortSpeed 표가 16G 까지만(사용자 결정으로 T11/SNIA 비트 추가). 빈 catch 가 접근 거부와 "HBA 없음" 을 글자까지 같게 냈고 `from_json` 예외가 play rescue 로 번졌다(Bug B).
+  (3) ESXi 하드웨어 iSCSI(`InternetScsiHba`)가 'iscsi' 부분 문자열에 걸리지 않아 조용히 빠졌고, speed 를 Gbps 로 가정(API 는 bps), FC-NVMe 쌍둥이 vmhba 가 2건.
+  (4) Redfish `cpu.max_speed_mhz` 가 `MaxSpeedMHz`(터보) — 사전 정의(정격)와 달랐다(Dell 4000 vs Linux 2400). CIMC `System.UUID` 바이트 순서가 OS/ESXi 와 반대.
+  (5) `storage.hbas[].link_status` 의 `unknown` 문자열이 사전 enum 에 있었으나 사용자 결정으로 폐지 → `string|null`, enum up/down.
+- **resolved**: 같은 날 `fix:` 커밋 묶음(Redfish · OS/ESXi · 정합) + 사전 · `docs/contract/03-fields.md` 6.3.0b/6.3.1/6.3.2 · evidence. 시험: 채널별 신규 시험 + `tests/regression/test_cross_channel_same_server.py`.
+- **남은 것(NEXT_ACTIONS)**: Windows PortSpeed 64+ · ESXi speed 단위 · lpfc 속성 · FC 링크 up 장비 · 하드웨어 iSCSI · FC-NVMe 는 실장비 미검증. CIMC 다른 세대 UUID 순서 미확인.
+- **관련**: rule 13 R7, rule 92 R2(Additive), rule 96 R1/R1-A, rule 25 R7-A-1(사용자 실측 > spec), `docs/reference/decision-log.md` 2026-10-18

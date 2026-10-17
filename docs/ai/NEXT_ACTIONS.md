@@ -1,5 +1,30 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## HBA 4채널 전수 점검 · link_status up/down/null · 채널 간 값 정합 · RAID 논리 볼륨 (2026-10-18) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/ai/decisions/ADR-2026-10-18-hba-link-status-null-and-os-logical-volumes.md` ·
+> `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다.
+
+- [ ] **[HIGH] main Job 매트릭스 · CI · 정규 승격 · canary** — 이 세션은 Jenkins 자격을 파일에 쓰는 단계가 자동 모드 분류기에 막혀 수행하지 못했다. 사용자(또는 자격 파일이 있는 세션)가
+      `docs/operate/09-production-branch.md` 3절 순서대로: main tip 으로 main Job 시나리오(S1 · S2 · S3 · S4 · T2 · T5 · T6 · E2E-A · E2E-A2 · E2E-D · E2E-E) → CI(`PROMOTE_SHA`) →
+      `python -m scripts.ai.prodgen promote --sha <main sha> …` → production Job canary(OS 1~3 · Redfish · ESXi). 실측 확인 항목: Redfish 7대 `storage.hbas` 개수 · WWPN · `link_status`(up/down/null) ·
+      `cpu.max_speed_mhz`(정격) · `cpu.turbo_max_mhz` · Cisco `hardware.uuid`(ESXi 와 같아야 함) · `network.adapters[].model`(Dell 임베디드 NIC 채워짐) · Linux r760-6 `storage.logical_volumes`(PERC VD) ·
+      ESXi `storage.logical_volumes`/`physical_disks[].media_type`(RAID LUN null) · Windows RAID 디스크 볼륨.
+- [ ] **[HIGH / 사이트 — 사용자] "HBA 누락" 장비의 Redfish 덤프** — 벤더 미확정(Lenovo 로 전해 들었으나 불확실). `tests/redfish-probe/probe_redfish.py` 또는 크롤로 `Chassis/*/NetworkAdapters/*`,
+      `Ports|NetworkPorts/*`, `NetworkDeviceFunctions/*` 를 받아 F1~F8 중 어느 경로였는지 확정하고 녹화본 변형으로 고정한다. 운영 환경의 임시 조치(`_make_fc_hba` wwpn=포트 주소)는 이번 규칙으로 대체되므로 걷어낸다.
+- [ ] **[HIGH / 사이트 — 사용자] CSUS 3200 재수집** — `storage.hbas[].link_status` 가 `null`(종전 unknown) 이고 notice `링크 상태 미제공` 이 남는지, Portal 이 wwpn 으로 OS 값을 조인해 보이는지 확인.
+- [ ] **[MED / 외부 문의] HPE RMC** — CSUS 3200 RMC Redfish 가 FC `Port.LinkStatus` 를 내지 않는 것(1.75.108)의 펌웨어 로드맵, `DCD_FCHBA_LINK_UP/DOWN` 알림을 RMC CLI/SNMP 로 읽는 경로.
+- [ ] **[MED / 실장비 미검증 — lab 부재]** FC 링크 up 장비(전 채널 link up · speed 값), Linux/Windows FC 호스트(lpfc `modelname/fwrev` · qla2xxx `proc_name` · Windows PortSpeed 64+ ·
+      MSFC absent/실패 분류), 하드웨어 iSCSI(`InternetScsiHba`), ESXi FC-NVMe 쌍둥이 · `speed` 단위(bps/Mbps/Gbps), ESXi FCoE 클래스 문자열(`vmware_host_vmhba_info` 소스 미설치 환경에서 RETURN 문서로 적음),
+      Linux 실 sysfs 심볼릭 링크 모양 시험(`test_real_sysfs_layout_*` · `test_raw_emits_the_controller_pci_address_*`)은 Windows 개발 PC 에서 skip — Linux(WSL/CI)에서 돈다.
+- [ ] **[MED] Cisco 다른 세대 · UCS X-Series UUID 바이트 순서** — `uuid_byte_order: smbios_raw` 는 C220 M5 CIMC 4.1 1쌍 실측만. `cisco_bmc.yml` · `cisco_ucs_xseries.yml` 은 미확인이라 적지 않았다(OS 쌍 실측 뒤 결정).
+- [ ] **[MED / Portal 소비자] 안내** — `storage.hbas[].link_status` 가 `null` 일 수 있음(unknown 문자열 폐지) · `cpu.max_speed_mhz` 가 Redfish 에서 정격으로 바뀜(종전 터보) · `cpu.turbo_max_mhz` Redfish 추가 ·
+      `storage.logical_volumes[]` 가 OS/ESXi 에서도 채워짐 · `hardware.uuid` 가 Cisco Redfish 에서 OS 와 같은 표기로 바뀜.
+- [ ] **[LOW] `esxi_baseline.json` hbas 재캡처** — 현행 코드와 3필드 불일치(수작업 값 · 대문자 WWPN). 사이트/lab 실측으로 교체(rule 13 R4).
+- [ ] **[LOW] 사전 항목 부재** — 코드가 내는 `cpu.sockets` · `cpu.logical_threads` · `cpu.model` 이 `schema/field_dictionary.yml` 에 없다(이번 조사에서 확인). 사전 추가는 schema 작업으로 따로(rule 92 R5).
+- [ ] **[LOW / 검토] `storage.infiniband[].link_status`** — hbas 와 달리 `unknown` 3값 그대로(사용자 언급 없음). 같은 규칙(null)로 바꿀지 결정.
+
+
 ## InfiniBand 4채널 "현재 모드" 판정 · CSUS Redfish 시리얼 접미사 (2026-10-17) — 남은 항목
 
 > 정본: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md` · `tests/evidence/2026-10-17-infiniband-synthetic-verification.md`. 코드 · 합성 데이터 시험 · 정규 승격은 끝났고 실장비가 있어야 닫히는 항목만 남는다.
@@ -41,7 +66,7 @@
 - [ ] **[MED / 실장비] NDF 를 주지 않는 FC 장비 · FC 링크업 장비** — 링크 기술만 FC 인 포트 규칙(wwpn null)과 `link_status: up` 을 실장비로 확인한다(lab 녹화본 FC 는 모두 LinkDown).
 - [ ] **[MED] 섀시 간 adapter Id 충돌 시 `network.summary`** — `_rf_summary_network` 의 `adp_map` 은 Id 기준이라 다중 섀시에서 Id 가 겹치면 카드 모델 조인이 틀릴 수 있다(HBA 데이터는 영향 없음). 실측 뒤 결정.
 - [ ] **[LOW] 1순위 섀시 소유 확인** — 다른 System 이 1순위 섀시를 연결하는 구조(근거 없음)에서는 종전처럼 전부 수집한다. DPU ComputerSystem 의 `Links.Chassis` 실측이 생기면 재검토.
-- [ ] **[LOW] CSUS mock baseline 의 FC `link_status: up`** — 실 녹화본(`real_hpe_csus3200`)은 Port 에 LinkStatus 가 없어 `unknown`. mock baseline 교체는 사이트 캡처와 함께(rule 13 R4).
+- [ ] **[LOW] CSUS mock baseline 의 FC `link_status: up`** — 실 녹화본(`real_hpe_csus3200`)은 Port 에 LinkStatus 가 없어 `null`(2026-10-18 규칙 — 종전 unknown). mock baseline 교체는 사이트 캡처와 함께(rule 13 R4).
 - [ ] **[검토만] NetworkInterfaces · PCIeDevices 교차 확인** — BMC 가 카드 목록에서 FC 카드를 빼는 경우를 잡을 수 있지만 모든 제조사의 요청 수가 바뀐다. 누락 실사례가 생기면 검토.
 - [ ] **[LOW] schema 예시의 `network.ports` · `network.adapters`** — hbas 처럼 실제 출력 모양으로 맞출지 결정(이번 범위 밖).
 
