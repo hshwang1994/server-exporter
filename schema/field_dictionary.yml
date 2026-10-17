@@ -2007,11 +2007,16 @@ fields:
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      InfiniBand 어댑터 목록. node_guid/link_status/rate. 벤더/펌웨어 노출
-      여부에 따라 빈 list 가능 (best-effort).
+      InfiniBand **포트** 목록 — 항목 1개 = 현재 IB 모드로 확인된 포트 1개 (2026-10-17). 판정은 채널의 현재 모드 속성만
+      (Linux ports/<n>/link_layer · Windows NdisPhysicalMedium 11/RdmaTechnology · Redfish 링크 기술·PortProtocol + 연결 기능 NetDevFuncType).
+      VPI 카드의 Ethernet 모드 포트, RoCE/iWARP NIC, IB 지원 가능 목록만 있는 카드는 들어가지 않는다. ESXi 는 수집하지 않아 항상 [].
+      빈 목록은 "IB 없음" 의 확정 증거가 아니다(드라이버 미적재 · BMC 미노출 · 미수집이 같은 모양). 공통 키는 adapter/port/node_guid/
+      port_guid/link_status/rate/rate_gbps/model/vendor/firmware/source. 상세 docs/contract/03-fields.md 6.3.1 · 6.3.3.
     help_en: >-
-      InfiniBand adapter list. node_guid/link_status/rate. May be empty depending
-      on vendor/firmware exposure (best-effort).
+      InfiniBand **port** list — one entry per port confirmed to be in InfiniBand mode (2026-10-17). Decided only from the
+      channel's current-mode attributes (Linux link_layer, Windows NdisPhysicalMedium 11 / RdmaTechnology, Redfish link technology ·
+      PortProtocol + attached function NetDevFuncType). Ethernet-mode VPI ports, RoCE/iWARP NICs and capability-only cards are
+      excluded. ESXi does not collect it (always []). An empty list is not proof of absence. See 03-fields 6.3.1 / 6.3.3.
 
   # ── HBA / InfiniBand 서브필드 (cycle 2026-05-29 hba-ib-csus, Additive Nice) ──
   # 전 채널 통일 shape (canonical) — 호출자가 채널 무관하게 같은 키로 파싱.
@@ -2100,31 +2105,38 @@ fields:
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      InfiniBand HCA Node GUID. Redfish=NetworkDeviceFunction.InfiniBand.NodeGUID,
-      Linux=/sys/class/infiniband/*/node_guid. **Windows 는 표준 API 부재 → null**
-      (날조 금지 — best-effort). ESXi 는 native IB 미노출 → null.
+      InfiniBand HCA Node GUID — 소문자 4-hex 4묶음(0c42:a103:0012:3456), 형식 오류·all-zero 는 null. Linux=/sys/class/infiniband/<dev>/node_guid.
+      Redfish=포트에 연결된 기능의 InfiniBand.NodeGUID(없으면 PermanentNodeGUID)가 하나로 일치할 때, 기능 값이 없으면
+      Port.InfiniBand.AssociatedNodeGUIDs 가 한 값일 때만(여러 값이면 null — 첫 원소를 무조건 쓰지 않는다). **Windows 는 표준 API 부재 → null**
+      (날조 금지). ESXi 는 IB 를 수집하지 않는다(항상 []).
     help_en: >-
-      InfiniBand HCA Node GUID. Redfish/Linux expose it; Windows has no standard
-      API (null, best-effort); ESXi does not expose native IB (null).
+      InfiniBand HCA Node GUID, lowercase 4×4 hex; malformed/all-zero → null. Linux=sysfs node_guid. Redfish=the attached
+      function's InfiniBand.NodeGUID (or PermanentNodeGUID) when consistent, else Port.InfiniBand.AssociatedNodeGUIDs only when it
+      holds a single value. Windows has no standard API (null). ESXi does not collect IB.
 
   "storage.infiniband[].rate":
     type: "string|null"
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      IB 링크 속도 사람 표기 (예: "200 Gb/sec (4X HDR)"). 숫자 비교는 rate_gbps 사용.
+      IB 링크 속도 원문 (예: Linux sysfs rate "200 Gb/sec (4X HDR)", Windows LinkSpeed "100 Gbps"). 원천이 주는 문자열 그대로이며 0/없음이면 null.
+      Redfish 는 문자열 원천이 없어 항상 null (숫자로 합성하지 않는다). 숫자 비교는 rate_gbps 사용 — Linux 는 DOWN 포트에도 커널 기본값이
+      찍히므로 이 원문이 현재 협상 속도라는 뜻은 아니다.
     help_en: >-
-      Human-readable IB link rate (e.g., "200 Gb/sec (4X HDR)"). Use rate_gbps for numeric.
+      Raw IB link rate text as given by the source (Linux sysfs rate, Windows LinkSpeed); null when absent/zero. Always null on
+      Redfish (no text source — never synthesized). Use rate_gbps for numbers; on Linux the text is shown even for DOWN ports.
 
   "storage.infiniband[].rate_gbps":
     type: "number|null"
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      IB 링크 속도 숫자 (Gbps) — source-of-truth (200=HDR/NDR200, 400=NDR).
-      rate 문자열에서 파싱 또는 Redfish CurrentSpeedGbps.
+      IB 링크 현재 협상 속도 숫자 (Gbps) — source-of-truth (200=HDR/NDR200, 400=NDR). **link_status 가 up 일 때만** 값이 있고 그 외는 null —
+      DOWN/중간 상태의 커널 기본값(SDR) · Redfish CurrentSpeedGbps 0 은 현재 속도가 아니다. 정수는 int, 2.5 같은 소수는 보존(2026-10-17).
+      원천: Linux rate 첫 토큰, Windows ReceiveLinkSpeed(bps)/1e9, Redfish CurrentSpeedGbps(없으면 CurrentLinkSpeedMbps/1000).
     help_en: >-
-      Numeric IB link speed (Gbps) — source of truth (200=HDR/NDR200, 400=NDR).
+      Numeric negotiated IB link speed (Gbps) — source of truth (200=HDR/NDR200, 400=NDR). Present only when link_status is up,
+      otherwise null (kernel default rates on DOWN ports and Redfish 0 are not current speeds). Integers stay int, 2.5 stays float.
 
   "storage.infiniband[].source":
     type: "string"
@@ -2132,11 +2144,11 @@ fields:
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      이 IB 항목의 수집 출처 채널. 표준 서버의 IB 정본은 OS 채널 (ibstat/sysfs);
-      Redfish 는 NVIDIA BlueField BMC 등 한정. ESXi 는 nmlx NIC best-effort 추론.
+      이 IB 항목의 수집 출처 채널. 표준 서버의 IB 정본은 OS 채널 (Linux sysfs link_layer);
+      Redfish 는 BMC 가 IB 모드 포트를 노출할 때만. ESXi 는 2026-10-17부터 IB 를 수집하지 않아 esxi 값은 나오지 않는다(enum 은 유지).
     help_en: >-
-      Collection source channel for this IB entry. OS channel (ibstat/sysfs) is the
-      authoritative source for standard servers; Redfish limited to e.g. NVIDIA BlueField BMC.
+      Collection source channel for this IB entry. OS channel (Linux sysfs link_layer) is the
+      authoritative source; Redfish only when the BMC exposes IB-mode ports. ESXi no longer collects IB (enum value kept).
 
   # ── InfiniBand 항목 공통 키 보강 (2026-10-17 InfiniBand 전면 검증 — Additive Nice) ──
   # 항목 1개 = 실제 InfiniBand 포트 1개. 판정은 채널의 "현재 모드" 속성으로만 한다 — Linux ports/<n>/link_layer,

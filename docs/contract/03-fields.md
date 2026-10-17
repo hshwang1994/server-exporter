@@ -1030,6 +1030,13 @@ HPE Compute Scale-up Server 3200 이라면 정상이다. 이 장비는 파티션
 일어나므로, 시리얼에 하이픈이 정상적으로 들어간 다른 장비는 영향을 받지 않는다.
 자세한 규칙은 `docs/develop/05-field-mapping.md` 의 "nPartition 시리얼 접미사 정규화" 절을 본다.
 
+**Q. Windows 의 `system.version` 이 `24H2` 로만 나온다. `2025-24H2` 가 아닌가? (2026-10-17)**
+`system.version` 은 Windows 레지스트리 `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` 의 `DisplayVersion`(없으면 `ReleaseId`, 그것도 없으면
+`Win32_OperatingSystem.Version`)을 **자르지 않고 그대로** 낸 값이다. Windows Server 2025 는 `24H2`, 2022 는 `21H2` 를 준다(Microsoft 도 "Windows 11, version 24H2
+and Windows Server 2025" 로 묶어 적는다). 제품명과 연도(`Microsoft Windows Server 2025 Datacenter`)는 `system.distribution`, 빌드 번호(`26100`)는 `system.kernel` 에 있다.
+어떤 Windows API 도 `2025-24H2` 같은 합성 문자열을 주지 않으므로 수집기는 합성하지 않는다 — 그렇게 표시하려면 호출자가 `distribution` 의 연도와 `version` 을 합친다
+(2026-10-17 사용자 결정: 수집기 현행 유지).
+
 **Q. `schema_version` 이 바뀔 수 있나?**
 바뀐다. 하지만 envelope 13 필드의 의미가 깨지는 변경이면 `"2"` 로 올라가고, 사람이 명시 승인을 해야 한다. 이전 버전 호환은 보장되지 않으니 호출 시 항상 schema_version 을 같이 본다.
 
