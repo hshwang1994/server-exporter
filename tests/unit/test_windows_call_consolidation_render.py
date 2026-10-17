@@ -92,7 +92,8 @@ MERGED_TASK = {
     "runtime": "windows | runtime | timezone + NTP + firewall + ports + pagefile",
     "storage": "windows | storage | volumes + physical disks",
 }
-# 합치지 않고 그대로 둔 win_shell (종전 · 새 파일에 같은 이름 · 같은 스크립트)
+# 합치지 않고 그대로 둔 win_shell (종전 · 새 파일에 같은 이름). 스크립트는 같아야 한다 — 의도해서 고친 줄은
+#   INTENDED_SHELL_LINES, 판별 방식을 통째로 바꾼 스크립트는 INTENDED_SHELL_REWRITES (2026-10-17 IB) 에 적는다.
 UNCHANGED_SHELL = {
     "network": ("windows | network | teaming (LBFO + SET)",),
     "storage": ("windows | storage | initiator ports + HBA attrs",
@@ -717,12 +718,23 @@ INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_err
                          ("memory", "windows | memory | summary + totals"): {"_w_mem_phys_mb"},
                          # 2026-10-10 (LX-F12): 식별자 자리표시자 목록을 공용 필터(dmi_sentinel_null)로 — 값 의미는 같다(trim 추가)
                          ("system", "windows | system | resolve identifiers"): {"_w_serial_val", "_w_uuid_val"},
-                         ("network", "windows | network | build fragment"): {"_errors_fragment"}}
+                         ("network", "windows | network | build fragment"): {"_errors_fragment"},
+                         # 2026-10-17 (InfiniBand 전면 검증): IB 항목 계약 변경 — port=null · rate_gbps 는 up 일 때만 · 소수 보존 ·
+                         #   note 에 내부 규칙 번호 없음. _w_hbas 는 글자 그대로다.
+                         ("storage", "windows | storage | build HBA/IB canonical lists"): {"_w_ib"}}
 # 태스크 단위로 바뀐 키(set_fact 밖) — 식별자 진단의 문장 변수(vars)에 setup 실패 문장 2개를 더했다
 INTENDED_CHANGED_TASK_KEYS = {("system", "windows | system | build identifier diagnostics"): {"vars"}}
 # 그대로 둔 win_shell 중 의도해서 고친 줄 — 그 줄(앞부분으로 찾는다)과 PowerShell 주석 줄만 다를 수 있고 나머지 스크립트는 글자 그대로다.
 #   2026-10-10 (C6): FC HBA PortSpeed 값맵 정정(4→10 · 8→4 · 16→8, 확인 못 한 64 · 128 은 null).
 INTENDED_SHELL_LINES = {("storage", "windows | storage | initiator ports + HBA attrs"): ("$gbps = switch ($spd)",)}
+# 판별 방식을 통째로 바꾼 win_shell (2026-10-17 InfiniBand 전면 검증): 줄 단위 비교 대신 태스크 키(이름 · register · no_log …)가
+#   같고, 남아야 할 토큰이 있고 사라져야 할 토큰이 없는지 본다. 값 계약은 test_windows_infiniband_detection.py 가 본다.
+#   - keep: Get-NetAdapter 1회(-IncludeHidden) · NdisPhysicalMedium 11 · ReceiveLinkSpeed(bps 원천) · 팀 멀티플렉서 제외(MS_IMPLAT)
+#   - drop: Get-PnpDevice 서비스명 폴백(ibbus/ibal/ipoib · VEN_15B3) — 장치 상태 OK 를 링크 up 으로 적던 경로
+INTENDED_SHELL_REWRITES = {("storage", "windows | storage | infiniband adapters (best-effort)"):
+                           {"keep": ("Get-NetAdapter -IncludeHidden", "NdisPhysicalMedium -eq 11", "ReceiveLinkSpeed", "MS_IMPLAT",
+                                     "RdmaTechnology"),
+                            "drop": ("Get-PnpDevice", "ibbus", "ibal", "ipoib", "VEN_15B3")}}
 
 
 def _shell_without(script: str, prefixes) -> list:
@@ -805,6 +817,14 @@ def test_downstream_tasks_are_unchanged(section):
                     == {k: v for k, v in old[name].items() if k != "ansible.builtin.set_fact" and k not in task_changed}), name
             for k in task_changed:
                 assert isinstance(old[name].get(k), dict) and set(old[name][k].items()) <= set(new[name][k].items()), (name, k)
+            continue
+        rewrite = INTENDED_SHELL_REWRITES.get((section, name))
+        if rewrite:
+            code = "\n".join(l for l in new[name]["ansible.windows.win_shell"].splitlines() if not l.strip().startswith("#"))
+            assert all(tok in code for tok in rewrite["keep"]), f"{section}: {name!r} 에 남아야 할 토큰이 없다"
+            assert not any(tok in code for tok in rewrite["drop"]), f"{section}: {name!r} 에 사라져야 할 토큰이 남았다"
+            assert ({k: v for k, v in new[name].items() if k not in ("timeout", "ansible.windows.win_shell")}
+                    == {k: v for k, v in old[name].items() if k != "ansible.windows.win_shell"}), name
             continue
         lines = INTENDED_SHELL_LINES.get((section, name))
         if lines:

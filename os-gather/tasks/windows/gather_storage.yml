@@ -7,6 +7,7 @@
 #     종전 조건("hex 이고 '20' 을 포함") 은 NAA/RAID 계열 32-hex 시리얼을 의미 없는 짧은 문자열로 바꿨다 (B-19).
 #   - physical_disks[].health: OK / Warning / Critical / null (Redfish 와 같은 어휘 — B-18).
 #   - infiniband[].vendor: 드라이버 공급자 / PnP 제조사에서 읽는다 (종전 'Mellanox' 하드코딩 — B-23).
+#     2026-10-17: PnP 폴백 자체를 제거 — 판별은 NdisPhysicalMedium 11 / RdmaTechnology InfiniBand 만 (아래 IB 태스크 주석).
 #   - 디스크도 볼륨도 못 읽으면 섹션 failed + 사유 (종전 collected 하드코딩 — B-12).
 #
 # 2026-10-03 (Windows OS 채널 정합 Phase 2):
@@ -495,50 +496,57 @@
   no_log: true
 
 # P4 (cycle 2026-05-29 hba-ib-csus): Windows InfiniBand best-effort (구: hardcoded []).
-# Get-NetAdapter PhysicalMediaType=InfiniBand / NdisPhysicalMedium=11 (authoritative) +
-# Get-PnpDevice VEN_15B3 (Mellanox) fallback. node_guid 는 Windows 표준 API 부재 → null (날조 금지).
-# source: MS docs Get-NetAdapter / OID_GEN_PHYSICAL_MEDIUM (EXTERNAL-CONTRACTS §4). lab 부재.
-# 2026-09-03: vendor 는 DriverProvider(1차) / PnP Manufacturer(2차) 에서 읽는다. 2차 fallback 은
-#   PhysicalMediaType 이 InfiniBand 인 것만 남긴다 (Mellanox 이더넷 NIC 를 IB 로 세지 않는다 — B-23).
+# 2026-10-17 (InfiniBand 전면 검증 — docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md):
+#   - 1차 신호: Get-NetAdapter -IncludeHidden 중 NdisPhysicalMedium 11(Infiniband) 또는 PhysicalMediaType 표시값 'Infiniband'.
+#     MSFT_NetAdapter ValueMap 은 Infiniband (11) / 802.3 (14) — Mellanox 이더넷 모드(RoCE) · iWARP NIC 는 802.3 이라 제외된다.
+#   - 2차 신호: Get-NetAdapterRdma 의 RdmaAdapterInfo.RdmaTechnology 가 'InfiniBand' 인 어댑터만 추가한다 (NDK 기술 열거값
+#     iWARP=1 · InfiniBand=2 · RoCE=3 · RoCEv2=4). RDMA "지원 여부(Enabled)" 는 근거가 아니다. 두는 이유: NVIDIA WinOF-2 known
+#     issue 1702662 — Windows Server 2019 의 IPoIB NIC 는 물리 매체가 802.3 으로 보고된다. 이 신호는 실장비 미확인(lab 부재).
+#   - 제외: LBFO 팀 멀티플렉서(InterfaceDescription 'Multiplexor' · PnPDeviceID 'MS_IMPLAT'). INF 가 *PhysicalMediaType=14 라
+#     1차에 걸리지 않지만 방어로 둔다. 종전 Get-PnpDevice 서비스명(ibbus/ibal/ipoib) 폴백은 제거 — 장치 상태 'OK' 를 링크 up 으로
+#     적고 속도도 없는 값이었다(2026-06-22 사이트 오탐이 난 경로).
+#   - 속도: ReceiveLinkSpeed(bps, uint64) 가 숫자 원천이고 LinkSpeed 문자열은 원문이다. node_guid/port_guid/펌웨어/물리 포트 번호는
+#     표준 API 가 없어 Jinja 에서 null 로 둔다 (벤더 도구 mlx5cmd 는 쓰지 않는다 — 의존성 추가 금지).
+#   - Get-NetAdapter 는 1회만 부른다 (두 신호 모두 그 목록에서 고른다).
+#   source: https://learn.microsoft.com/en-us/windows/win32/fwp/wmi/netadaptercimprov/msft-netadapter (NdisPhysicalMedium ValueMap ·
+#           ReceiveLinkSpeed "bits per second")
+#   source: https://learn.microsoft.com/en-us/windows-hardware/drivers/network/oid-gen-physical-medium (NdisPhysicalMediumInfiniband)
+#   source: https://learn.microsoft.com/en-us/windows-hardware/drivers/network/inf-requirements-for-ndkpi (*NetworkDirectTechnology 2=InfiniBand)
+#   source: NVIDIA WinOF-2 Release Notes, known issue 1702662 (WS2019 IPoIB NdisPhysicalMedium=802.3)
+#   lab: 부재 — tests/unit/test_windows_infiniband_detection.py 의 가짜 cmdlet(실제 PowerShell)으로만 검증 (실장비 미검증)
 - name: "windows | storage | infiniband adapters (best-effort)"
   ansible.windows.win_shell: |
     $ib = @()
+    $all = @()
+    try { $all = @(Get-NetAdapter -IncludeHidden -ErrorAction Stop) } catch { $all = @() }
+    $cand = @($all | Where-Object {
+      ([string]$_.InterfaceDescription -notmatch 'Multiplexor') -and ([string]$_.PnPDeviceID -notmatch 'MS_IMPLAT')
+    })
+    $how = @{}
+    foreach ($a in $cand) {
+      if (($a.NdisPhysicalMedium -eq 11) -or ([string]$a.PhysicalMediaType -ieq 'Infiniband')) { $how[[string]$a.Name] = 'physical_medium' }
+    }
     try {
-      Get-NetAdapter -IncludeHidden -ErrorAction Stop | Where-Object {
-        (([string]$_.PhysicalMediaType -eq 'InfiniBand') -or ($_.NdisPhysicalMedium -eq 11)) -and
-        ([string]$_.InterfaceDescription -notmatch 'Multiplexor')
-      } | ForEach-Object {
-        $rdma = $null
-        try { $r = Get-NetAdapterRdma -Name $_.Name -ErrorAction Stop; if ($r) { $rdma = [bool]$r.Enabled } } catch { }
-        $ib += [PSCustomObject]@{
-          adapter     = [string]$_.InterfaceDescription
-          name        = [string]$_.Name
-          link_status = [string]$_.Status
-          rate        = [string]$_.LinkSpeed
-          rdma        = $rdma
-          vendor      = [string]$_.DriverProvider
-        }
+      foreach ($r in @(Get-NetAdapterRdma -ErrorAction Stop)) {
+        if ($null -eq $r) { continue }
+        $n = [string]$r.Name
+        if ((-not $how.ContainsKey($n)) -and ([string]$r.RdmaAdapterInfo.RdmaTechnology -ieq 'InfiniBand')) { $how[$n] = 'rdma_technology' }
       }
     } catch { }
-    if ($ib.Count -eq 0) {
-      try {
-        Get-PnpDevice -Class Net -ErrorAction Stop | Where-Object {
-          # VEN_15B3 = Mellanox PCI vendor ID. 구 '^(mlx|ibal|nd)' 의 'nd' 가 LBFO 팀 멀티플렉서 service
-          # 'NdisImPlatformMp' 를 오탐 (2026-06-26 site 10.100.64.120 실측 — 팀 3개를 Mellanox IB 로 보고).
-          # IB 전용 service(ibbus/ibal) 만 인정 — mlx 계열 이더넷 드라이버는 IB 근거가 아니다.
-          (([string]$_.Service -match '^(ibbus|ibal|ipoib)')) -and
-          ([string]$_.InstanceId -notmatch 'MS_IMPLAT')
-        } | ForEach-Object {
-          $ib += [PSCustomObject]@{
-            adapter     = [string]$_.FriendlyName
-            name        = [string]$_.InstanceId
-            link_status = [string]$_.Status
-            rate        = $null
-            rdma        = $null
-            vendor      = $(if ([string]$_.HardwareID -match 'VEN_15B3') { 'Mellanox' } else { [string]$_.Manufacturer })
-          }
-        }
-      } catch { }
+    foreach ($a in $cand) {
+      $n = [string]$a.Name
+      if (-not $how.ContainsKey($n)) { continue }
+      $rx = 0
+      try { $rx = [uint64]$a.ReceiveLinkSpeed } catch { $rx = 0 }
+      $ib += [PSCustomObject]@{
+        adapter     = [string]$a.InterfaceDescription
+        name        = $n
+        link_status = [string]$a.Status
+        rate        = [string]$a.LinkSpeed
+        rx_bps      = $rx
+        vendor      = [string]$a.DriverProvider
+        evidence    = [string]$how[$n]
+      }
     }
     [PSCustomObject]@{ ib = $ib } | ConvertTo-Json -Depth 5 -Compress
   register: _w_ib_raw
@@ -620,31 +628,33 @@
         {%- endif -%}
       {%- endfor -%}
       {{ out }}
+    # 2026-10-17 (InfiniBand 전면 검증): 항목 1개 = IB 어댑터 1개(물리 포트 번호는 표준 API 가 없어 port=null — 연결 이름을
+    #   포트 번호로 적지 않는다). link_status 는 Get-NetAdapter Status 표시값 Up→up · Disconnected→down · 그 외(Disabled ·
+    #   Not Present · Unknown …)→unknown. rate 는 LinkSpeed 원문(ReceiveLinkSpeed 가 0 이면 null), rate_gbps 는 up 일 때만
+    #   ReceiveLinkSpeed/1e9 (정수면 int, 아니면 2.5 같은 float). note 에 내부 규칙 번호를 적지 않는다.
     _w_ib: >-
       {%- set out = [] -%}
       {%- set ib_list = _w_ib_parsed.ib | default([]) -%}
       {%- if ib_list is mapping -%}{%- set ib_list = [ib_list] -%}{%- endif -%}
       {%- for a in ib_list -%}
-        {%- set raw_rate = a.rate | default(none) -%}
-        {%- set rate_gbps = none -%}
-        {%- if raw_rate and ('gbps' in (raw_rate | lower)) -%}
-          {%- set digits = raw_rate | regex_replace('[^0-9]', '') -%}
-          {%- if digits -%}{%- set rate_gbps = digits | int -%}{%- endif -%}
-        {%- endif -%}
-        {%- set ls = (a.link_status | default('')) | lower -%}
+        {%- set rx = (a.rx_bps | default(0, true)) | int -%}
+        {%- set ls = (a.link_status | default('', true)) | string | trim | lower -%}
+        {%- set link = 'up' if ls == 'up' else ('down' if ls == 'disconnected' else 'unknown') -%}
+        {%- set gb_raw = (rx / 1000000000) if (link == 'up' and rx > 0) else none -%}
+        {%- set gb = ((gb_raw | int) if (gb_raw is not none and gb_raw == (gb_raw | int)) else gb_raw) -%}
         {%- set _ = out.append({
           'adapter':     a.adapter | default(none),
-          'port':        a.name | default(none),
+          'port':        none,
           'node_guid':   none,
           'port_guid':   none,
-          'link_status': ('up' if ls in ['up', 'ok'] else ('down' if ls in ['disconnected', 'down'] else 'unknown')),
-          'rate':        raw_rate,
-          'rate_gbps':   rate_gbps,
+          'link_status': link,
+          'rate':        ((a.rate | default(none, true)) or none) if rx > 0 else none,
+          'rate_gbps':   gb,
           'model':       a.adapter | default(none),
           'vendor':      (a.vendor | default(none, true)) or none,
           'firmware':    none,
           'source':      'os',
-          'note':        'Windows: node_guid 표준 API 부재 → null (best-effort, rule 96 R1-A).',
+          'note':        'Windows 는 표준 API 로 node_guid/port_guid/펌웨어/물리 포트 번호를 제공하지 않아 null (best-effort).',
         }) -%}
       {%- endfor -%}
       {{ out }}

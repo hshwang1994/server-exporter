@@ -191,7 +191,7 @@ function Get-Volume { [CmdletBinding()] param() __Track 'Get-Volume'; $script:__
 function Get-PhysicalDisk { [CmdletBinding()] param() __Track 'Get-PhysicalDisk'; $script:__fx.pdisks }
 function Get-Partition { [CmdletBinding()] param([string]$DriveLetter) [PSCustomObject]@{ DiskNumber = $script:__fx.os_disk_number } }
 function Get-InitiatorPort { [CmdletBinding()] param() }
-function Get-NetAdapterRdma { [CmdletBinding()] param([string]$Name) }""",
+function Get-NetAdapterRdma { [CmdletBinding()] param([string]$Name) __Track 'Get-NetAdapterRdma'; @($script:__fx.rdma) | Where-Object { ($null -ne $_) -and ((-not $Name) -or ($_.Name -eq $Name)) } }""",
 }
 SECTION_SHADOWS = {
     "memory": ["Get-CimInstance"],
