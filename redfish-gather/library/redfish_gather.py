@@ -3635,7 +3635,7 @@ def _ib_port_mode(link_tech, port_protocol):
 def _ib_decision(link_tech, port_protocol, joined_ndfs):
     """포트 1개가 실제 InfiniBand 포트인가 — 'ib' / 'not_ib' / 'conflict'. storage.infiniband[] 의 유일한 판정 지점 (2026-10-17).
 
-    근거는 "현재 모드" 속성뿐이다 (DMTF — EXTERNAL-CONTRACTS §2 · docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md):
+    근거는 "현재 모드" 속성뿐이다 (DMTF — EXTERNAL-CONTRACTS §2 · docs/contract/03-fields.md 6.3.3 · ADR-2026-10-17-infiniband-port-decision):
       - 포트: Port.LinkNetworkTechnology / NetworkPort.ActiveLinkTechnology / Port.PortProtocol (= _ib_port_mode)
       - 기능: 포트에 연결된 NetworkDeviceFunction.NetDevFuncType("configured capability"). Disabled 는 근거 없음으로 본다.
     NetDevFuncCapabilities(지원 가능 목록) · Port.InfiniBand 블록 존재 · GUID 존재 · 카드 이름은 읽지 않는다 — VPI 카드가 Ethernet

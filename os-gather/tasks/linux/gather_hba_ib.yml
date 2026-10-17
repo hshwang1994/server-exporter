@@ -20,7 +20,7 @@
 #     이름(mlx4_core 등 ethtool 의 driver 와 다를 수 있다), master 는 bond 뿐 아니라 bridge 도 포함,
 #     목록은 lo 를 뺀 /sys/class/net 전부라 그 줄들로는 같은 값을 되살릴 수 없다.
 #
-# 2026-10-17 (InfiniBand 전면 검증 — docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md):
+# 2026-10-17 (InfiniBand 전면 검증 — 계약은 docs/contract/03-fields.md 6.3.1, 결정 기록은 ADR-2026-10-17-infiniband-port-decision):
 #   - storage.infiniband[] 항목 1개 = 실제 InfiniBand 포트 1개. ports/<n>/link_layer 가 InfiniBand 인 포트만 담는다 —
 #     /sys/class/infiniband 에는 RoCE(mlx5 이더넷 모드) · iWARP 장치도 등록되고 node_type 은 그것들도 CA 라 구분이 안 된다.
 #   - rate_gbps 는 state ACTIVE 일 때만 숫자(소수 보존). 커널 rate_show 는 DOWN 포트에도 기본값(SDR)을 찍으므로 그 값을

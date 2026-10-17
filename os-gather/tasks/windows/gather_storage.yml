@@ -496,7 +496,7 @@
   no_log: true
 
 # P4 (cycle 2026-05-29 hba-ib-csus): Windows InfiniBand best-effort (구: hardcoded []).
-# 2026-10-17 (InfiniBand 전면 검증 — docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md):
+# 2026-10-17 (InfiniBand 전면 검증 — 계약은 docs/contract/03-fields.md 6.3.1, 결정 기록은 ADR-2026-10-17-infiniband-port-decision):
 #   - 1차 신호: Get-NetAdapter -IncludeHidden 중 NdisPhysicalMedium 11(Infiniband) 또는 PhysicalMediaType 표시값 'Infiniband'.
 #     MSFT_NetAdapter ValueMap 은 Infiniband (11) / 802.3 (14) — Mellanox 이더넷 모드(RoCE) · iWARP NIC 는 802.3 이라 제외된다.
 #   - 2차 신호: Get-NetAdapterRdma 의 RdmaAdapterInfo.RdmaTechnology 가 'InfiniBand' 인 어댑터만 추가한다 (NDK 기술 열거값
