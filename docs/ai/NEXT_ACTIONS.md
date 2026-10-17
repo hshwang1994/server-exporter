@@ -1,5 +1,13 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## InfiniBand 4채널 "현재 모드" 판정 · CSUS Redfish 시리얼 접미사 (2026-10-17) — 남은 항목
+
+> 정본: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md` · `tests/evidence/2026-10-17-infiniband-synthetic-verification.md`. 코드 · 합성 데이터 시험 · 정규 승격은 끝났고 실장비가 있어야 닫히는 항목만 남는다.
+
+- [x] **[HIGH] 정규 승격** — main `dd69aee1` 매트릭스 #628~#638(11건 기대 결과 · 실호스트 봉투 33건 `infiniband: []`) → CI #59 COMPLETE_PASS → 작업 PC `prodgen promote`(G11~G15 · G18~G20 재실행 PASS) → production **`151cc395`**(parent `28c38c17`) → canary #300 OS · #301 Redfish · #302 ESXi SUCCESS(참조 대비 차이 0). 기록 `docs/reference/live-validation.md` 2026-10-17.
+- [ ] **[MED] IB 실장비 검증 IB-1 ~ IB-5** — lab 에 IB 모드 HCA · WinOF-2 IPoIB · IB 모드 BMC 가 들어오면 아래 §2.4 의 항목대로 실값 캡처 → 합성 입력 보강 → 실측 baseline. 그 전까지 `storage.infiniband` 의 비어 있지 않은 결과는 실장비에서 한 번도 확인되지 않았다.
+- [ ] **[LOW] CSUS 3200 Redfish `hardware.serial` 접미사 제거 실장비 확인** — lab 부재. 사이트 재수집 봉투에서 `hardware.serial == SGHD3TLNDD`(접미사 없음) · `multi_node.partitions[].system.serial` 원문 유지 확인(녹화본 재생 `tests/integration/test_redfish_csus_serial_replay.py` 만 통과).
+
 ## HPE CSUS 3200 hostname RMC 우선 · Redfish hostname 계약 · 긴급 승격 (2026-10-15) — 남은 항목
 
 > 정본: `docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md`. 긴급 승격 `31f9b804`(main `fd7dfd6a`, HBA `846516e3` 포함)의 증거는 같은 날 정규 재승격

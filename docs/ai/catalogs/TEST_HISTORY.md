@@ -1,5 +1,17 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-17 (2) — 정규 승격 main `dd69aee1` → production `151cc395` (IB 4채널 판정 · CSUS Redfish 시리얼 반영)
+
+| 구분 | 결과 |
+|---|---|
+| main Job 매트릭스 | #628~#638 11건 — S1 · S2 · S3 · S4 · T2 · E2E-D · E2E-E SUCCESS · T5 ABORTED(`정보 수집을 시작합니다` 약 11초 뒤 API stop, `[수집] 중단됨:` · outcome aborted · 6대 실패 봉투 · Portal 200) · T6 · E2E-A UNSTABLE · E2E-A2 FAILURE(fail-closed, tip 관측 `dd69aee1` 전후 동일). 전부 기대 결과 · checkout `dd69aee1` · 지난 매트릭스 #617~#627 과 같은 파라미터 |
+| IB 회귀 대조(실장비 — IB 장비 없음) | 실호스트 봉투 33건(S1 3 · S2 5 · S3 11 · S4 1 · E2E-D 6 · E2E-E 7)을 #617~#627 의 같은 봉투와 IP 로 대조: `storage.infiniband` 전부 `[]`, status · sections · errors 수 · hostname · `hardware.serial` · `storage.hbas` 수 · `network.adapters` 수 차이 0. **IB 판정 자체의 실장비 검증이 아니다**(lab 부재) |
+| CI #59 (`PROMOTE_SHA=dd69aee1` · dry-run · E2E 증거 11 · tip 관측) | SUCCESS 58분 · stage GATE · CORPUS · BUDGET · HARNESS_MAIN · HARNESS_TREE · PRODGEN_BUILD · PRODGEN_DRIFT · PRODGEN_VERIFY · VAULT_DECRYPT · EVIDENCE PASS · PROMOTE DRY_RUN · 집계 verdict COMPLETE_PASS(G01~G20 · `verify_mode: full`) · E2E 증거 88/88(`binding: direct`, Harness 77 + main 11) |
+| 정규 promote (작업 PC — Windows 11 Python 3.13.15 · WSL ansible-core 2.20.7 · pwsh 7.6.6) | 15:28~15:49(21분). 생성 tree 194 파일 · class B 0 · tree_hash `742f8fe4…`(직전 `5d48ac38…` 과 다름 — runtime 변경 반영). 보고서 재사용(binding 일치) · 환경 차이 6건으로 G11~G15 · G19 + G18 · G20 재실행 → 전부 PASS · COMPLETE_PASS → **`151cc395`**(parent `28c38c17`, `CI-Build` #59 · `CI-Stages: verified`) · origin accepted · internal 은 공유 push URL 로 동일 |
+| drift-check · 원격 | PROVENANCE ok(tree hash 재계산 · 기록 생성기 재생성 일치 · trailer 일치) · GitHub · GitLab · 로컬 production 모두 `151cc395` |
+| canary (production Job, checkout 전부 `151cc395`) | #300 OS 3 SUCCESS(63 s · 3/3 · Portal 200 · #299 대비 차이 0) · #301 Redfish 3 SUCCESS(390 s · 3/3 · Portal 200 · #298 대비 hostname · serial · HBA 수 차이 0) · #302 ESXi 6 SUCCESS(78 s · 6/6 · Portal 200 · #294 대비 차이 0 — IB 추정 경로가 지워진 채널이라 추가) · 봉투 12건 `infiniband: []` · 자격 문자열 0건 |
+| 실장비 미검증 | IB 실값(Linux DOWN `rate` · `hca_type` · lspci 이름, WinOF-2 IPoIB 매체/RdmaTechnology, IB 모드 BMC Port·NDF 페이로드) · CSUS 3200(lab 부재 — 시리얼 접미사 제거는 녹화본 재생만) — `docs/ai/NEXT_ACTIONS.md` §2.4 IB-1~IB-5 |
+
 ## 2026-10-17 — InfiniBand 4채널 "현재 모드" 판정 · CSUS Redfish 시리얼 접미사 (`43cd4318` ~ `30a92443`)
 
 | 구분 | 결과 |

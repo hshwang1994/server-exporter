@@ -1,8 +1,10 @@
 # server-exporter 현재 상태
 
-## 일자: 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기 확인
+## 일자: 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기 확인 · **main `dd69aee1` → production `151cc395`**
 
-> 정본: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md` · `docs/contract/03-fields.md` 6.3.1 · 6.3.3 · `docs/reference/decision-log.md` 2026-10-17 · `tests/evidence/2026-10-17-infiniband-synthetic-verification.md` · `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-17.
+> 정본: `docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md` · `docs/contract/03-fields.md` 6.3.1 · 6.3.3 · `docs/reference/decision-log.md` 2026-10-17 · `tests/evidence/2026-10-17-infiniband-synthetic-verification.md` · `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-17 · 승격 · canary 는 `docs/reference/live-validation.md` 2026-10-17.
+
+- **승격(정규)**: main `dd69aee1` → jenkins-prod main Job 매트릭스 #628~#638(11건 기대 결과 · 실호스트 봉투 33건 `infiniband: []` · 지난 매트릭스 대비 차이 0) → CI #59 SUCCESS · COMPLETE_PASS(G01~G20 · E2E 증거 88/88) → 작업 PC `prodgen promote`(보고서 재사용 · 환경 차이 6건으로 G11~G15 · G18~G20 재실행 PASS · 194 파일 · class B 0 · tree_hash `742f8fe4…`) → production **`151cc395`**(parent `28c38c17`, `CI-Build` #59 · `CI-Stages: verified`) · drift-check PROVENANCE · GitHub · GitLab · 로컬 일치 → canary #300 OS 3 · #301 Redfish 3 · #302 ESXi 6 SUCCESS(checkout `151cc395` · Portal 200 · 봉투 12건 참조 대비 차이 0 · 자격 문자열 0). vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 지웠다.
 
 - **계기**: 사용자 질문(OS 결과의 `storage.infiniband` 가 무엇인가) → 4경로 대조 → 지시서. lab 에 IB 장비 · IB 모드 BMC · IB OS/ESXi 없음 — 공식 자료 + 합성 데이터로 검증, **실장비 미검증**.
 - **고친 것(제품)**:

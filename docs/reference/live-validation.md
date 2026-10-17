@@ -469,6 +469,54 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
+## 2026-10-17 InfiniBand "현재 모드" 판정 · CSUS Redfish 시리얼 — main `dd69aee1` 매트릭스 #628~#638 · CI #59 · production `151cc395` · canary (실장비)
+
+main `dd69aee1`(IB 4채널 판정 정비 + CSUS 3200 Redfish `hardware.serial` 접미사 제거 + 문서 · 기록)로 정규 절차(매트릭스 → CI → 작업 PC `prodgen promote` → canary)를 돌렸다. 결정 근거는 [decision-log.md](decision-log.md) 2026-10-17.
+lab 에는 IB 장비가 없으므로 이 매트릭스와 canary 가 확인하는 것은 **회귀 없음**(전 봉투 `data.storage.infiniband == []` 유지 · 다른 섹션 불변)이지 IB 판정 자체의 실장비 검증이 아니다.
+
+### main `dd69aee1` 매트릭스 (main Job #628~#638, checkout 전부 == `dd69aee1` — 지난 매트릭스 #617~#627 과 같은 파라미터)
+
+| 시나리오 | 빌드 | 결과 | 확인 |
+|---|---|---|---|
+| S1 Linux 3 | #628 | SUCCESS | 73 s |
+| S2 혼합 (실호스트 3 + TEST-NET 2) | #629 | SUCCESS | 98 s |
+| S3 Linux 11 | #630 | SUCCESS | 120 s |
+| S4 Windows 1 | #631 | SUCCESS | 135 s |
+| T2 TEST-NET 2 | #632 | SUCCESS | 72 s |
+| T5 사용자 중단 (6대) | #637 | ABORTED | `정보 수집을 시작합니다` 약 11초 뒤 API stop · `[수집] 중단됨:` · outcome aborted · 6대 실패 봉투 · Portal 200 · 42 s |
+| T6 Callback 거부 주소 | #633 | UNSTABLE | `http://127.0.0.1:9` · delivered=false · 104 s |
+| E2E-A loc=cj | #634 | UNSTABLE | cj Runner · TEST-NET 2 · 101 s |
+| E2E-A2 loc=chj | #638 | FAILURE | fail-closed · 17 s · tip 관측 `dd69aee1` 전후 동일(`ls-remote` Job 원격, 직접 바인딩) |
+| E2E-D ESXi 6 | #635 | SUCCESS | 73 s |
+| **E2E-E Redfish 7 BMC** (Dell 5 · Cisco 1 · Lenovo 1) | #636 | SUCCESS | 393 s · 표준 계정 |
+
+실호스트 봉투 33건(S1 3 · S2 5 · S3 11 · S4 1 · E2E-D 6 · E2E-E 7)을 지난 매트릭스의 같은 시나리오 봉투와 IP 로 맞춰 대조: `storage.infiniband` 전부 `[]`, status · sections · errors 수 · hostname ·
+`hardware.serial` · `storage.hbas` 수 · `network.adapters` 수 **차이 0**(Cisco UCS VIC FC 4건 · ESXi HBA 그대로). CSUS 3200 은 lab 에 없어 시리얼 접미사 제거는 실장비 미검증(녹화본 재생만).
+
+### CI #59 (`PROMOTE_SHA=dd69aee1`, `PROMOTE_DRY_RUN=true`, 위 11건을 `E2E_MAIN_ENTRIES` 로 · E2E-A2 tip 관측 JSON)
+
+SUCCESS 58분(14:29~15:27). stage 결과 GATE · CORPUS · BUDGET · HARNESS_MAIN · HARNESS_TREE · PRODGEN_BUILD · PRODGEN_DRIFT · PRODGEN_VERIFY · VAULT_DECRYPT · EVIDENCE PASS · PROMOTE DRY_RUN.
+집계 보고서 verdict **COMPLETE_PASS**(G01~G20 전부 PASS · `verify_mode: full` · mandatory_missing 0). E2E 증거 88건(Harness 77 + main 매트릭스 11) 전부 `binding: direct` · checkout `dd69aee1`.
+PRODGEN_DRIFT 는 당시 production `28c38c17`(tree_hash `5d48ac38…`) 기준 PROVENANCE ok.
+
+### 정규 promote (작업 PC — Windows 11 · Python 3.13.15 · WSL ansible-core 2.20.7 · pwsh 7.6.6)
+
+15:28~15:49(21분). `prodgen promote --sha dd69aee1 --verify-report <CI #59 집계> --e2e-evidence <CI #59> --ci-stage-results <CI #59> --push-remote origin,internal`(vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 지웠다).
+생성 tree 194 파일 · class B 0 · tree_hash **`742f8fe4…`**(직전 production `5d48ac38…` 과 다름 — IB 4채널 runtime 변경 반영). 보고서 재사용(binding 일치) · 환경 차이 6건(python 3.12.9→3.13.15 · platform Linux→Windows · ansible runtime native→wsl · ansible 2.20.3→2.20.7 · collections · pwsh 7.4.6→7.6.6)으로
+G11~G15 · G19 재실행 + G18 · G20 재실행 → 전부 PASS · verdict COMPLETE_PASS → production **`151cc395`**(parent `28c38c17`, trailer `CI-Build` #59 · `CI-Stages: verified` · `E2E-Evidence-SHA256` CI #59 와 동일).
+push: origin(GitHub) accepted · internal 은 공유 push URL(GitLab)로 이미 같은 커밋. 직후 `git ls-remote` — GitHub · GitLab · 로컬 production 모두 `151cc395`. `prodgen drift-check --production origin/production` → PROVENANCE ok(tree hash 재계산 · 기록 생성기 재생성 `742f8fe4…` 일치 · trailer 일치).
+
+### production Job canary (`clovirone-cicd/clovirone-server-gather`, checkout 전부 `151cc395` — 직전 canary · 명부 빌드와 같은 파라미터 복사)
+
+| 빌드 | 대상 | 결과 | 확인 |
+|---|---|---|---|
+| #300 | OS 3 (10.100.64.161 · .162 · .163, 참조 #299) | SUCCESS | 63 s · 3/3 success · Portal 200 · outcome completed |
+| #301 | Redfish 3 (Cisco C220 10.100.15.2 · Dell R760 10.100.15.27 · HPE 10.50.11.231, 참조 #298) | SUCCESS | 390 s · 3/3 success · Portal 200 · 표준 계정 |
+| #302 | ESXi 6 (esxi01~03 · r760-1~3, 참조 #294) | SUCCESS | 78 s · 6/6 success · Portal 200 — ESXi 는 이번 승격에서 IB 추정 경로가 지워진 채널이라 추가 |
+
+세 빌드 봉투 12건을 참조 빌드(#299 · #298 · #294, production `28c38c17`)와 IP 로 대조: `storage.infiniband` 전부 `[]`, status · sections · errors 수 · hostname · `hardware.serial` · `storage.hbas` 수 · `network.adapters` 수 **차이 0**
+(Cisco C220 FC HBA 4 · HPE HBA 4 · ESXi HBA 1/2 그대로). 콘솔 · 본문에 자격 문자열 0건. 승격 뒤 production Job 의 저장소 · 브랜치(`refs/remotes/origin/production`) · checkout SHA 를 콘솔에서 확인했다.
+
 ## 2026-10-15 정규 재승격 — main `2c709fe8` 매트릭스 #617~#627 · CI #58 · production `28c38c17` · canary #297 · #298 (실장비)
 
 main `2c709fe8`(CSUS hostname 정렬 + HBA 수정 + 두 세션 문서 · 하네스)로 정규 절차를 돌려 긴급 승격 `31f9b804` 의 증거를 채웠다. runtime tree 는 `31f9b804` 와 같다

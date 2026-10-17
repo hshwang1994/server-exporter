@@ -61,3 +61,14 @@ WinOF-2 IPoIB 어댑터의 `NdisMedium` · `PhysicalMediaType`(WS2022/2025) · `
 | 3채널 `ansible-playbook --syntax-check` (WSL ansible-core 2.20.7) | os · esxi · redfish PASS |
 
 실장비 실행은 하지 않았다(1절). 전체 결과는 `docs/ai/catalogs/TEST_HISTORY.md` 2026-10-17 항목에 기록한다.
+
+## 6. 실장비 회귀 확인과 승격 (2026-10-17 — IB 장비가 없는 lab 이라 "회귀 없음" 확인이지 IB 판정의 실장비 검증이 아니다)
+
+| 단계 | 결과 |
+|---|---|
+| jenkins-prod main Job 매트릭스 #628~#638 (main `dd69aee1`) | 11건 전부 기대 결과. 실호스트 봉투 33건(Linux 14 · Windows 1 · ESXi 6 · Redfish 7 + 혼합) `storage.infiniband == []`, 지난 매트릭스 #617~#627 과 status · sections · errors 수 · hostname · serial · HBA 수 · adapters 수 차이 0 |
+| CI #59 | SUCCESS · 집계 COMPLETE_PASS(G01~G20) · E2E 증거 88/88 |
+| 정규 승격 | 작업 PC `prodgen promote` → production `151cc395`(parent `28c38c17`, tree_hash `742f8fe4…`) · drift-check PROVENANCE · 세 원격 일치 |
+| production Job canary | #300 OS 3 · #301 Redfish 3 · #302 ESXi 6 SUCCESS — checkout `151cc395` · Portal 200 · 봉투 12건 참조 빌드(#299 · #298 · #294) 대비 차이 0 · `infiniband: []` |
+
+상세는 `docs/reference/live-validation.md` 2026-10-17 절. 실장비에서만 확인할 수 있는 항목(1절 · `docs/ai/NEXT_ACTIONS.md` §2.4 IB-1~IB-5)은 그대로 남는다.

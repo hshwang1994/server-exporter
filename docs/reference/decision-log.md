@@ -117,6 +117,9 @@
 
 **영향** — 봉투 · 섹션 · status 변경 0, 실장비 결과값 변화 0(전부 `[]`). Redfish 녹화본 10종 golden · 요청 집합 불변. 실장비에서만 확인 가능한 항목은 evidence §1 · NEXT_ACTIONS §2.4.
 
+**승격** — main `dd69aee1` 매트릭스 #628~#638(11건 기대 결과 · 실호스트 봉투 33건 `infiniband: []` · 지난 매트릭스 대비 차이 0) → CI #59 COMPLETE_PASS(E2E 증거 88/88) → 작업 PC `prodgen promote`(환경 차이로 G11~G15 · G18~G20 재실행 PASS)
+→ production **`151cc395`**(parent `28c38c17`, tree_hash `742f8fe4…`, `CI-Stages: verified`) · drift-check PROVENANCE · 세 원격 일치 → canary #300 OS 3 · #301 Redfish 3 · #302 ESXi 6 SUCCESS(봉투 12건 참조 대비 차이 0). 기록은 [live-validation.md](live-validation.md) 2026-10-17.
+
 ## 2026-10-15 — HPE CSUS 3200 hostname 은 RMC 이름 우선 · Redfish system.hostname/fqdn 계약 정렬 · 긴급 승격 → 정규 재승격
 
 ### 사용자 질문 / 요구
