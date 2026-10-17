@@ -593,12 +593,34 @@ INTENDED_FRAGMENT_PS = {  # (section, name) → {fragment 변수: 종전 값 →
     ("network", "two_nics_one_team"): {"_data_fragment": _net_data_with_e3},
     ("network", "fail"): {"_data_fragment": _net_data_with_e3},
 }
+_HBA_COMPONENTS_OK = [{"scope": s, "ok": True, "absent": False, "type": None, "code": None, "error": None}
+                      for s in ("initiator_ports", "adapter_attrs", "port_attrs")]
+
+
+def _with_hba_components(parsed):
+    # 2026-10-18 (HBA 전수 점검 W1): HBA 스크립트가 구성요소 성패 components[] 를 더 낸다 — 가짜 cmdlet 은 전부 정상이라 세 구성요소 ok
+    return dict(parsed, components=copy.deepcopy(_HBA_COMPONENTS_OK))
+
+
+def _with_hba_components_raw(reg):
+    # 같은 변경의 register 모양 — stdout(ConvertTo-Json -Compress 한 줄) 에 components 가 붙는다. 줄끝은 종전 그대로 둔다.
+    text = reg["stdout"]
+    tail = text[len(text.rstrip()):]
+    doc = json.loads(text)
+    doc["components"] = copy.deepcopy(_HBA_COMPONENTS_OK)
+    line = json.dumps(doc, separators=(",", ":"))
+    return dict(reg, stdout=line + tail, stdout_lines=[line])
+
+
 INTENDED_CTX_PS = {  # (section, name) → {중간 변수: 종전 값 → 기대 값}
     ("network", "two_nics_one_team"): {"_w_driver_map": _with_e3_driver, "_w_driver_map_final": _with_e3_driver},
     ("network", "fail"): {"_w_driver_map": _with_e3_driver, "_w_driver_map_final": _with_e3_driver},
     ("system", "normal"): {"_w_hosting": _hosting_with_vbs},
     ("system", "domain_hyperv_host"): {"_w_hosting": _hosting_with_vbs},
     ("system", "fail"): {"_w_hosting": _hosting_with_vbs},
+    ("storage", "host_120"): {"_w_hba_parsed": _with_hba_components, "_w_hba_raw": _with_hba_components_raw},
+    ("storage", "single"): {"_w_hba_parsed": _with_hba_components, "_w_hba_raw": _with_hba_components_raw},
+    ("storage", "fail"): {"_w_hba_parsed": _with_hba_components, "_w_hba_raw": _with_hba_components_raw},
 }
 
 
