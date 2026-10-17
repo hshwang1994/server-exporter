@@ -380,39 +380,36 @@
 - name: "windows | storage | infiniband adapters (best-effort)"
   ansible.windows.win_shell: |
     $ib = @()
+    $all = @()
+    try { $all = @(Get-NetAdapter -IncludeHidden -ErrorAction Stop) } catch { $all = @() }
+    $cand = @($all | Where-Object {
+      ([string]$_.InterfaceDescription -notmatch 'Multiplexor') -and ([string]$_.PnPDeviceID -notmatch 'MS_IMPLAT')
+    })
+    $how = @{}
+    foreach ($a in $cand) {
+      if (($a.NdisPhysicalMedium -eq 11) -or ([string]$a.PhysicalMediaType -ieq 'Infiniband')) { $how[[string]$a.Name] = 'physical_medium' }
+    }
     try {
-      Get-NetAdapter -IncludeHidden -ErrorAction Stop | Where-Object {
-        (([string]$_.PhysicalMediaType -eq 'InfiniBand') -or ($_.NdisPhysicalMedium -eq 11)) -and
-        ([string]$_.InterfaceDescription -notmatch 'Multiplexor')
-      } | ForEach-Object {
-        $rdma = $null
-        try { $r = Get-NetAdapterRdma -Name $_.Name -ErrorAction Stop; if ($r) { $rdma = [bool]$r.Enabled } } catch { }
-        $ib += [PSCustomObject]@{
-          adapter     = [string]$_.InterfaceDescription
-          name        = [string]$_.Name
-          link_status = [string]$_.Status
-          rate        = [string]$_.LinkSpeed
-          rdma        = $rdma
-          vendor      = [string]$_.DriverProvider
-        }
+      foreach ($r in @(Get-NetAdapterRdma -ErrorAction Stop)) {
+        if ($null -eq $r) { continue }
+        $n = [string]$r.Name
+        if ((-not $how.ContainsKey($n)) -and ([string]$r.RdmaAdapterInfo.RdmaTechnology -ieq 'InfiniBand')) { $how[$n] = 'rdma_technology' }
       }
     } catch { }
-    if ($ib.Count -eq 0) {
-      try {
-        Get-PnpDevice -Class Net -ErrorAction Stop | Where-Object {
-          (([string]$_.Service -match '^(ibbus|ibal|ipoib)')) -and
-          ([string]$_.InstanceId -notmatch 'MS_IMPLAT')
-        } | ForEach-Object {
-          $ib += [PSCustomObject]@{
-            adapter     = [string]$_.FriendlyName
-            name        = [string]$_.InstanceId
-            link_status = [string]$_.Status
-            rate        = $null
-            rdma        = $null
-            vendor      = $(if ([string]$_.HardwareID -match 'VEN_15B3') { 'Mellanox' } else { [string]$_.Manufacturer })
-          }
-        }
-      } catch { }
+    foreach ($a in $cand) {
+      $n = [string]$a.Name
+      if (-not $how.ContainsKey($n)) { continue }
+      $rx = 0
+      try { $rx = [uint64]$a.ReceiveLinkSpeed } catch { $rx = 0 }
+      $ib += [PSCustomObject]@{
+        adapter     = [string]$a.InterfaceDescription
+        name        = $n
+        link_status = [string]$a.Status
+        rate        = [string]$a.LinkSpeed
+        rx_bps      = $rx
+        vendor      = [string]$a.DriverProvider
+        evidence    = [string]$how[$n]
+      }
     }
     [PSCustomObject]@{ ib = $ib } | ConvertTo-Json -Depth 5 -Compress
   register: _w_ib_raw
@@ -480,26 +477,24 @@
       {%- set ib_list = _w_ib_parsed.ib | default([]) -%}
       {%- if ib_list is mapping -%}{%- set ib_list = [ib_list] -%}{%- endif -%}
       {%- for a in ib_list -%}
-        {%- set raw_rate = a.rate | default(none) -%}
-        {%- set rate_gbps = none -%}
-        {%- if raw_rate and ('gbps' in (raw_rate | lower)) -%}
-          {%- set digits = raw_rate | regex_replace('[^0-9]', '') -%}
-          {%- if digits -%}{%- set rate_gbps = digits | int -%}{%- endif -%}
-        {%- endif -%}
-        {%- set ls = (a.link_status | default('')) | lower -%}
+        {%- set rx = (a.rx_bps | default(0, true)) | int -%}
+        {%- set ls = (a.link_status | default('', true)) | string | trim | lower -%}
+        {%- set link = 'up' if ls == 'up' else ('down' if ls == 'disconnected' else 'unknown') -%}
+        {%- set gb_raw = (rx / 1000000000) if (link == 'up' and rx > 0) else none -%}
+        {%- set gb = ((gb_raw | int) if (gb_raw is not none and gb_raw == (gb_raw | int)) else gb_raw) -%}
         {%- set _ = out.append({
           'adapter':     a.adapter | default(none),
-          'port':        a.name | default(none),
+          'port':        none,
           'node_guid':   none,
           'port_guid':   none,
-          'link_status': ('up' if ls in ['up', 'ok'] else ('down' if ls in ['disconnected', 'down'] else 'unknown')),
-          'rate':        raw_rate,
-          'rate_gbps':   rate_gbps,
+          'link_status': link,
+          'rate':        ((a.rate | default(none, true)) or none) if rx > 0 else none,
+          'rate_gbps':   gb,
           'model':       a.adapter | default(none),
           'vendor':      (a.vendor | default(none, true)) or none,
           'firmware':    none,
           'source':      'os',
-          'note':        'Windows: node_guid 표준 API 부재 → null (best-effort, rule 96 R1-A).',
+          'note':        'Windows 는 표준 API 로 node_guid/port_guid/펌웨어/물리 포트 번호를 제공하지 않아 null (best-effort).',
         }) -%}
       {%- endfor -%}
       {{ out }}

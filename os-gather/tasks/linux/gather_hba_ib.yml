@@ -47,13 +47,25 @@
             rd "$ib/fw_ver"; fwver=$v
             rd "$ib/hca_type"; hca=$v
             if [ -z "$hca" ]; then rd "$ib/board_id"; hca=$v; fi
+            rd "$ib/device/uevent"; pci=$(printf '%s\n' "$v" | sed -n 's/^PCI_SLOT_NAME=//p' | head -n 1 | tr -d '|\r')
+            pvn=""; pdv=""
+            if [ -n "$pci" ] && command -v lspci >/dev/null 2>&1; then
+              pl=$(lspci -mm -s "$pci" 2>/dev/null | head -n 1)
+              pvn=$(printf '%s\n' "$pl" | awk -F'"' '{print $4}' | tr -d '|\r')
+              pdv=$(printf '%s\n' "$pl" | awk -F'"' '{print $6}' | tr -d '|\r')
+            fi
             for p in "$ib"/ports/*; do
               [ -d "$p" ] || continue
               port=$(basename "$p")
+              rd "$p/link_layer"; ll=$(printf '%s\n' "$v" | sed -n '1p' | tr -d '|\r')
+              case "$ll" in
+                InfiniBand|Infiniband|infiniband|IB|ib) ;;
+                *) continue ;;
+              esac
               rd "$p/state"; state=$(printf '%s\n' "$v" | awk '{print $2}')
               rd "$p/rate"; rate=$v
               rd "$p/gids/0"; gid0=$(printf '%s\n' "$v" | sed -n '1p')
-              echo "IB|$adp|$port|$guid|$gid0|$state|$rate|$fwver|$hca"
+              echo "IB|$adp|$port|$guid|$gid0|$state|$rate|$fwver|$hca|$ll|$pci|$pvn|$pdv"
             done
           done
         fi
@@ -96,23 +108,32 @@
           {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
             {%- set parts = line.split('|') -%}
             {%- if parts | length >= 9 and parts[0] == 'IB' -%}
-              {%- set gidp = (parts[4] | default('')).split(':') -%}
-              {%- set pg = (gidp[-4:] | join(':')) if (gidp | length >= 8) else none -%}
-              {%- set rate = parts[6] | default('') -%}
-              {%- set rfirst = (rate.split(' ')[0]) if rate else '' -%}
-              {%- set rdig = rfirst | regex_replace('[^0-9]', '') -%}
-              {%- set st = (parts[5] | default('')) | lower -%}
+              {%- set st = (parts[5] | default('')) | trim | upper -%}
+              {%- set link = 'up' if st == 'ACTIVE' else ('down' if st == 'DOWN' else 'unknown') -%}
+              {%- set rate_raw = (parts[6] | default('')) | trim -%}
+              {%- set rfirst = rate_raw.split(' ')[0] if rate_raw else '' -%}
+              {%- set rvalid = rfirst is match('^[0-9]+(\\.[0-9]+)?$') -%}
+              {%- set rv = (rfirst | float) if rvalid else 0 -%}
+              {%- set rate = rate_raw if (rate_raw and not (rvalid and rv == 0)) else none -%}
+              {%- set rate_gbps = (((rv | int) if rv == (rv | int) else rv) if (rvalid and rv > 0 and link == 'up') else none) -%}
+              {%- set gidp = ((parts[4] | default('')) | trim).split(':') -%}
+              {%- set gid_ok = (gidp | length == 8) and ((gidp | select('match', '^[0-9a-fA-F]{4}$') | list | length) == 8) -%}
+              {%- set pg = ((gidp[-4:] | join(':')) | normalize_ib_guid) if gid_ok else none -%}
               {%- set hca = (parts[8] | trim) if parts[8] else none -%}
+              {%- set pvn_raw = (parts[11] | trim) if (parts | length >= 13 and (parts[11] | trim)) else '' -%}
+              {%- set pdv_raw = (parts[12] | trim) if (parts | length >= 13 and (parts[12] | trim)) else '' -%}
+              {%- set pvn = '' if (pvn_raw is match('^Vendor [0-9a-fA-F]{4}$')) else pvn_raw -%}
+              {%- set pdv = '' if (pdv_raw is match('^Device [0-9a-fA-F]{4}$')) else pdv_raw -%}
               {%- set _ = out.append({
                 'adapter':     parts[1],
                 'port':        parts[2],
-                'node_guid':   parts[3] if parts[3] else none,
+                'node_guid':   parts[3] | normalize_ib_guid,
                 'port_guid':   pg,
-                'link_status': ('up' if 'active' in st else ('down' if 'down' in st else 'unknown')),
-                'rate':        rate if rate else none,
-                'rate_gbps':   (rdig | int) if rdig else none,
-                'model':       hca,
-                'vendor':      ('Mellanox' if (hca and (hca | upper).startswith('MT')) else none),
+                'link_status': link,
+                'rate':        rate,
+                'rate_gbps':   rate_gbps,
+                'model':       pdv if pdv else hca,
+                'vendor':      pvn if pvn else none,
                 'firmware':    parts[7] if parts[7] else none,
                 'source':      'os',
               }) -%}

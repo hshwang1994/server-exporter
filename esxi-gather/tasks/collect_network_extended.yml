@@ -160,29 +160,6 @@
             {%- endfor -%}
           {%- endif -%}
           {{ out }}
-        _e_ext_ib: >-
-          {%- set ib = [] -%}
-          {%- for a in (_e_ext_adapters | default([])) -%}
-            {%- set adrv = (a.driver | default('')) | lower -%}
-            {%- if adrv.startswith('nmlx') or adrv.startswith('mlx') -%}
-              {%- set sp = a.speed_mbps | default(none) -%}
-              {%- set _ = ib.append({
-                'adapter':     a.name | default(none),
-                'port':        none,
-                'node_guid':   none,
-                'port_guid':   none,
-                'link_status': a.link_status | default(none),
-                'rate':        none,
-                'rate_gbps':   ((sp | int) / 1000) if (sp is number) else none,
-                'model':       a.model | default(none),
-                'vendor':      (a.manufacturer | default(none)) or 'Mellanox',
-                'firmware':    none,
-                'source':      'esxi',
-                'note':        'RoCE/IB-capable Mellanox NIC; ESXi exposes IB only via SR-IOV/passthrough (no native host IB port). OS channel (ibstat) is authoritative.',
-              }) -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ ib }}
       no_log: true
 
     - name: "esxi | extended | compute summary groups (pnic)"
@@ -216,11 +193,11 @@
             summary:          "{{ _e_ext_summary | default({'groups': []}) }}"
           storage:
             hbas:             "{{ _e_ext_hbas | default([]) }}"
-            infiniband:       "{{ _e_ext_ib | default([]) }}"
+            infiniband:       []
         _sections_supported_fragment: ['network', 'storage']
         _sections_collected_fragment: >-
           {{ (['network'] if (_e_ext_adapters | length > 0 or _e_ext_vswitches | length > 0) else [])
-             + (['storage'] if ((_e_ext_hbas | default([])) | length > 0 or (_e_ext_ib | default([])) | length > 0) else []) }}
+             + (['storage'] if ((_e_ext_hbas | default([])) | length > 0) else []) }}
         _sections_failed_fragment:    []
         _errors_fragment: >-
           {%- set mods = [('network', 'vmnic', _e_vmnic | default({}), 'hosts_vmnics_info'),

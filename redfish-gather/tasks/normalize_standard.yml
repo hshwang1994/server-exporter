@@ -436,7 +436,7 @@
       hardware:
         vendor:       "{{ _rf_d_system.manufacturer | default(none) }}"
         model:        "{{ _rf_d_system.model        | default(none) }}"
-        serial:       "{{ _rf_d_system.serial       | default(none) }}"
+        serial:       "{{ _rf_d_system.serial | default(none) | normalize_os_serial(_rf_d_system.manufacturer | default(none), _rf_d_system.model | default(none)) }}"
         uuid:         "{{ _rf_d_system.uuid         | default(none) | normalize_uuid }}"
         sku:          "{{ _rf_d_system.sku           | default(none) }}"
         bios_version: "{{ _rf_d_system.bios_version | default(none) }}"

@@ -2408,20 +2408,112 @@ def _normalize_wwn(value):
     return ':'.join(hexonly[i:i + 2] for i in range(0, 16, 2))
 
 
+def _normalize_ib_guid(value):
+    if value is None:
+        return None
+    s = str(value).strip().lower()
+    if not s:
+        return None
+    s = _removeprefix(s, '0x')
+    hexonly = ''.join(c for c in s if c in '0123456789abcdef')
+    if len(hexonly) != 16 or hexonly == '0' * 16:
+        return None
+    return ':'.join(hexonly[i:i + 4] for i in range(0, 16, 4))
+
+
+def _normalize_ib_link_status(value):
+    s = _str(value).strip().lower()
+    if s in ('linkup', 'up'):
+        return 'up'
+    if s in ('linkdown', 'nolink', 'down'):
+        return 'down'
+    return 'unknown'
+
+
+def _ib_port_mode(link_tech, port_protocol):
+    modes = set()
+    lt = _str(link_tech).strip().lower()
+    if lt:
+        modes.add('infiniband' if lt == 'infiniband' else 'other')
+    pp = _str(port_protocol).strip().lower()
+    if pp:
+        modes.add('infiniband' if pp == 'infiniband' else 'other')
+    if len(modes) > 1:
+        return 'conflict'
+    return modes.pop() if modes else None
+
+
+def _ib_decision(link_tech, port_protocol, joined_ndfs):
+    mode = _ib_port_mode(link_tech, port_protocol)
+    if mode == 'conflict':
+        return 'conflict'
+    types = set()
+    for n in (joined_ndfs or []):
+        if not isinstance(n, dict):
+            continue
+        t = _str(n.get('func_type')).strip().lower()
+        if t and t != 'disabled':
+            types.add(t)
+    has_ib = 'infiniband' in types
+    has_other = bool(types - {'infiniband'})
+    if mode == 'infiniband':
+        return 'conflict' if has_other else 'ib'
+    if mode == 'other':
+        return 'conflict' if has_ib else 'not_ib'
+    if has_ib and has_other:
+        return 'conflict'
+    return 'ib' if has_ib else 'not_ib'
+
+
+_LINK_TECH_PORT_TYPE = {'ethernet': 'Ethernet', 'infiniband': 'InfiniBand', 'fibrechannel': 'FibreChannel'}
+
+
+def _link_tech_port_type(link_tech):
+    return _LINK_TECH_PORT_TYPE.get(_str(link_tech).strip().lower())
+
+
+def _int_if_integral(x):
+    if isinstance(x, float) and x.is_integer():
+        return int(x)
+    return x
+
+
+def _agree_ib_guid(values):
+    seen = []
+    count = 0
+    for v in (values or []):
+        g = _normalize_ib_guid(v)
+        if g is None:
+            continue
+        count += 1
+        if g not in seen:
+            seen.append(g)
+    return (seen[0] if len(seen) == 1 else None), count
+
+
+def _select_ib_guids(ib_ndfs, pdata):
+    ndfs = [n for n in (ib_ndfs or []) if isinstance(n, dict)]
+    node, node_n = _agree_ib_guid([n.get('node_guid') for n in ndfs])
+    port, port_n = _agree_ib_guid([n.get('port_guid') for n in ndfs])
+    ib_raw = pdata.get('InfiniBand') if isinstance(pdata, dict) else None
+    ibobj = ib_raw if isinstance(ib_raw, dict) else {}
+    if node_n == 0:
+        node, _ = _agree_ib_guid(_as_list(ibobj.get('AssociatedNodeGUIDs')))
+    if port_n == 0:
+        port, _ = _agree_ib_guid(_as_list(ibobj.get('AssociatedPortGUIDs')))
+    return node, port
+
+
 def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
     pp = _str(port_protocol).strip().upper()
     lt = _str(link_tech).strip().lower()
     ndf_type = ''
-    ndf_tech = ''
     ndf_wwpn = None
     if isinstance(ndf, dict):
         ndf_type = _str(ndf.get('func_type')).strip().lower()
-        ndf_tech = _str(ndf.get('net_dev_tech')).strip().lower()
         ndf_wwpn = ndf.get('wwpn')
-    if lt == 'infiniband' or ndf_tech == 'infiniband' or ndf_type == 'infiniband':
-        return 'InfiniBand'
-    if isinstance(pdata, dict) and isinstance(pdata.get('InfiniBand'), dict):
-        return 'InfiniBand'
+    if lt == 'infiniband' or pp == 'INFINIBAND' or ndf_type == 'infiniband':
+        return None
     if pp == 'FCOE' or ndf_type == 'fibrechanneloverethernet':
         return 'FCoE'
     if pp in ('FC', 'FCP', 'FIBRECHANNEL') or ndf_type == 'fibrechannel':
@@ -2469,12 +2561,11 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
         ndfs.append({
             'id':           _safe(nd, 'Id'),
             'func_type':    _safe(nd, 'NetDevFuncType'),
-            'net_dev_tech': _safe(nd, 'NetworkDeviceTechnology'),
             'wwpn':         _normalize_wwn(_safe(fc, 'WWPN') or _safe(fc, 'PermanentWWPN')),
             'wwnn':         _normalize_wwn(_safe(fc, 'WWNN') or _safe(fc, 'PermanentWWNN')),
             'fc_id':        _safe(fc, 'FibreChannelId'),
-            'node_guid':    _safe(ib, 'NodeGUID') or _safe(ib, 'PermanentNodeGUID'),
-            'port_guid':    _safe(ib, 'PortGUID') or _safe(ib, 'PermanentPortGUID'),
+            'node_guid':    _normalize_ib_guid(_safe(ib, 'NodeGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentNodeGUID')),
+            'port_guid':    _normalize_ib_guid(_safe(ib, 'PortGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentPortGUID')),
             'port_uri':     _p(port_uri) if port_uri else None,
         })
     return ndfs
@@ -2501,31 +2592,51 @@ def _make_fc_hba(adapter_id, adapter_info, port_id, cls, link_status, speed_gbps
     }
 
 
-def _make_ib_port(adapter_id, adapter_info, port_id, link_status, speed_gbps, pdata, ndf):
-    node_guid = ndf.get('node_guid') if isinstance(ndf, dict) else None
-    port_guid = ndf.get('port_guid') if isinstance(ndf, dict) else None
-    if isinstance(pdata, dict):
-        ib_raw = pdata.get('InfiniBand')
-        ibobj = ib_raw if isinstance(ib_raw, dict) else {}
-        if not node_guid:
-            arr = _as_list(ibobj.get('AssociatedNodeGUIDs'))
-            node_guid = arr[0] if arr else None
-        if not port_guid:
-            arr = _as_list(ibobj.get('AssociatedPortGUIDs'))
-            port_guid = arr[0] if arr else None
+def _make_ib_port(adapter_id, adapter_info, port_id, link_status, rate_gbps, node_guid, port_guid):
     return {
         'adapter':       adapter_id,
         'adapter_model': adapter_info.get('model'),
+        'model':         adapter_info.get('model'),
         'port':          port_id,
         'node_guid':     node_guid,
         'port_guid':     port_guid,
         'link_status':   link_status,
         'rate':          None,
-        'rate_gbps':     speed_gbps,
+        'rate_gbps':     rate_gbps,
         'vendor':        adapter_info.get('manufacturer'),
         'firmware':      adapter_info.get('firmware_version'),
         'source':        'redfish',
     }
+
+
+def _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps, ib_ndfs):
+    key = (adapter_id, port_id)
+    if key in ib_idx_by_port:
+        return
+    link = _normalize_ib_link_status(_safe(pdata, 'LinkStatus'))
+    node_guid, port_guid = _select_ib_guids(ib_ndfs, pdata)
+    if origin == 'extra' and port_guid and port_guid in {e.get('port_guid') for e in out['infiniband'] if e.get('port_guid')}:
+        return
+    rate_gbps = _int_if_integral(speed_gbps) if link == 'up' else None
+    out['infiniband'].append(_make_ib_port(adapter_id, adapter_info, port_id, link, rate_gbps, node_guid, port_guid))
+    ib_idx_by_port[key] = len(out['infiniband']) - 1
+
+
+def _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, by_parent, unlinked):
+    for nid in unlinked:
+        _notice('network_adapters',
+                '네트워크 카드 %s 의 InfiniBand 기능 %s 이(가) 어느 포트에도 연결되지 않음, storage.infiniband 미수집' % (adapter_id, nid))
+    for pid, kin in by_parent.items():
+        idx = ib_idx_by_port.get((adapter_id, pid))
+        if idx is None:
+            _notice('network_adapters',
+                    '네트워크 카드 %s 포트 %s: 포트 링크 기술과 기능 유형이 서로 달라 InfiniBand 여부를 확정할 수 없음, '
+                    'storage.infiniband 미수집' % (adapter_id, pid))
+            continue
+        entry = out['infiniband'][idx]
+        for key in ('node_guid', 'port_guid'):
+            if entry.get(key) is None:
+                entry[key] = _agree_ib_guid([n.get(key) for n in kin])[0]
 
 
 def _chassis_linked_by_other_systems(bmc_ip, system_uri, chassis_uris, username, password, timeout,
@@ -2665,6 +2776,7 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                                code=_CODE_NON_BLOCKING_SUBRESOURCE))
 
     items, seen_adapters, seen_ports = [], set(), set()
+    ib_idx_by_port = {}
     for origin, members in sources:
         for m in members:
             raw = _str(_safe(m, '@odata.id'))
@@ -2800,11 +2912,21 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         if not (_pid and any(_str(n.get('id')).startswith(_pid + '-') for n in ndfs)):
                             cls = 'FibreChannel'
 
+                    joined = [ndfs[i] for i in cand]
+                    ib_dec = _ib_decision(link_tech, port_protocol, joined)
+                    if ib_dec == 'ib':
+                        cls = 'InfiniBand'
+                    elif ib_dec == 'conflict':
+                        cls = _link_tech_port_type(link_tech)
+                        _notice('network_adapters',
+                                '네트워크 카드 %s 포트 %s: 포트 링크 기술과 기능 유형이 서로 달라 InfiniBand 여부를 확정할 수 없음, '
+                                'storage.infiniband 미수집' % (adapter_id, port_id))
+
                     if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
                         primary_addr = ndf['wwpn']
 
                     port_hbas = []
-                    if cls in ('FibreChannel', 'FCoE'):
+                    if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE'):
                         for fndf in (fc_ndfs or [ndf]):
                             port_hbas.append(_make_fc_hba(
                                 adapter_id, adapter_info, port_id, cls,
@@ -2841,20 +2963,29 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
 
                     if port_hbas:
                         out['fc_hbas'].extend(port_hbas)
-                    elif cls == 'InfiniBand':
-                        out['infiniband'].append(_make_ib_port(
-                            adapter_id, adapter_info, port_id,
-                            normalized_link, speed_gbps, pdata, ndf))
+                    elif ib_dec == 'ib':
+                        _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps,
+                                        [n for n in joined if _str(n.get('func_type')).strip().lower() == 'infiniband'])
 
+        orphan_ib_by_parent = {}
+        orphan_ib_unlinked = []
         for i, ndf in enumerate(ndfs):
             if i in ndf_matched:
                 continue
             nid = _str(ndf.get('id'))
             parent = None
+            parent_pid = None
             for _pid, _ctx in port_ctx_by_id.items():
                 if nid.startswith(_pid + '-'):
                     parent = _ctx
+                    parent_pid = _pid
                     break
+            if _str(ndf.get('func_type')).strip().lower() == 'infiniband':
+                if parent is None:
+                    orphan_ib_unlinked.append(nid)
+                else:
+                    orphan_ib_by_parent.setdefault(parent_pid, []).append(ndf)
+                continue
             if parent is not None:
                 cls = _classify_port_protocol(parent[0], parent[1], ndf, parent[2])
             else:
@@ -2865,10 +2996,7 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
                     continue
                 out['fc_hbas'].append(hba)
-            elif cls == 'InfiniBand':
-                out['infiniband'].append(_make_ib_port(
-                    adapter_id, adapter_info, ndf.get('id'),
-                    'unknown', None, None, ndf))
+        _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
 
         _ports_collected = len(out['ports']) - _ports_before
         if out['adapters'][adapter_idx].get('port_count') in (0, None) and _ports_collected > 0:

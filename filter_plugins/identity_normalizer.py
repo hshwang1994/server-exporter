@@ -59,6 +59,18 @@ def normalize_wwn(value):
     return _group(hexs)
 
 
+def normalize_ib_guid(value):
+    s = _clean(value)
+    if s is None:
+        return None
+    if s.startswith("0x"):
+        s = s[2:]
+    hexs = _hex_only(s)
+    if len(hexs) != 16 or hexs == "0" * 16:
+        return None
+    return _group(hexs, width=4)
+
+
 def normalize_uuid(value):
     s = _clean(value)
     if s is None:
@@ -119,6 +131,7 @@ class FilterModule(object):
         return {
             "normalize_mac": normalize_mac,
             "normalize_wwn": normalize_wwn,
+            "normalize_ib_guid": normalize_ib_guid,
             "normalize_uuid": normalize_uuid,
             "uuid_byteswap": uuid_byteswap,
             "uuid_equal": uuid_equal,
