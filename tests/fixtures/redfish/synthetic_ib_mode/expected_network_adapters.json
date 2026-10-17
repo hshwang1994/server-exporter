@@ -1,0 +1,76 @@
+{
+  "adapters": [
+    {
+      "firmware_version": "28.43.1014",
+      "id": "DE081000",
+      "link_status": "up",
+      "mac": null,
+      "manufacturer": "MLNX",
+      "model": "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter",
+      "name": "NetworkAdapter",
+      "part_number": "P65324-001",
+      "port_count": 2,
+      "serial_number": "XRO9800842000",
+      "speed_mbps": 200000
+    }
+  ],
+  "fc_hbas": [],
+  "infiniband": [
+    {
+      "adapter": "DE081000",
+      "adapter_model": "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter",
+      "firmware": "28.43.1014",
+      "link_status": "up",
+      "model": "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter",
+      "node_guid": "58a2:e103:0003:96f2",
+      "port": "0",
+      "port_guid": "58a2:e103:0003:96f2",
+      "rate": null,
+      "rate_gbps": 200,
+      "source": "redfish",
+      "vendor": "MLNX"
+    },
+    {
+      "adapter": "DE081000",
+      "adapter_model": "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter",
+      "firmware": "28.43.1014",
+      "link_status": "down",
+      "model": "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter",
+      "node_guid": "58a2:e103:0003:96f2",
+      "port": "1",
+      "port_guid": "58a2:e103:0003:96f3",
+      "rate": null,
+      "rate_gbps": null,
+      "source": "redfish",
+      "vendor": "MLNX"
+    }
+  ],
+  "ports": [
+    {
+      "adapter_id": "DE081000",
+      "adapter_model": "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter",
+      "associated_address": null,
+      "current_link_speed_mbps": 200000,
+      "health": "OK",
+      "link_state": "Enabled",
+      "link_status": "up",
+      "name": "Port",
+      "physical_port_number": null,
+      "port_id": "0",
+      "port_type": "InfiniBand"
+    },
+    {
+      "adapter_id": "DE081000",
+      "adapter_model": "HPE InfiniBand NDR200/Ethernet 200GbE 2-port QSFP112 PCIe5 x16 MCX755106AC-HEAT Adapter",
+      "associated_address": null,
+      "current_link_speed_mbps": null,
+      "health": "OK",
+      "link_state": "Enabled",
+      "link_status": "down",
+      "name": "Port",
+      "physical_port_number": null,
+      "port_id": "1",
+      "port_type": "InfiniBand"
+    }
+  ]
+}

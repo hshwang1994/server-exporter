@@ -182,17 +182,18 @@ def test_fc_hba_wwpn_extracted_via_ndf_id_join(monkeypatch):
 
 def test_classify_port_protocol_ndf_wwpn_is_fc():
     """NDF.wwpn 존재 → FibreChannel (NetDevFuncType/PortProtocol 부재 펌웨어)."""
-    ndf = {"func_type": None, "net_dev_tech": None, "wwpn": "51:40:2e:c0:20:82:c2:2c",
+    ndf = {"func_type": None, "wwpn": "51:40:2e:c0:20:82:c2:2c",
            "wwnn": None, "node_guid": None, "port_guid": None}
     assert rg._classify_port_protocol(None, None, ndf, None) == "FibreChannel"
 
 
 def test_classify_port_protocol_ndf_guid_not_forced_ib():
     """ConnectX VPI 안전성: NDF 에 GUID 만 있고 ethernet func_type 이면 IB 로 강제 분류 안 함."""
-    ndf = {"func_type": "Ethernet", "net_dev_tech": "Ethernet", "wwpn": None,
+    ndf = {"func_type": "Ethernet", "wwpn": None,
            "wwnn": None, "node_guid": "0x0002c903", "port_guid": "0x0002c903"}
     # GUID 가 있어도 Ethernet 으로 분류돼야 함 (mac fold-in 보존)
     assert rg._classify_port_protocol(None, None, ndf, None) == "Ethernet"
+    assert rg._ib_decision(None, None, [ndf]) == "not_ib"      # 2026-10-17: IB 판정도 GUID 를 보지 않는다
 
 
 # ── CSUS-R3: multi_node partition system manufacturer/model ──────────────────

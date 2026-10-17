@@ -44,8 +44,8 @@ import redfish_gather as rg  # noqa: E402
 
 
 def _ndf(**kw):
-    base = {"func_type": None, "net_dev_tech": None, "wwpn": None, "wwnn": None,
-            "node_guid": None, "port_guid": None}
+    # 2026-10-17: 'net_dev_tech'(NetworkDeviceTechnology) 키는 DMTF 에 없는 속성이라 _fetch_ndf_index 에서 사라졌다.
+    base = {"func_type": None, "wwpn": None, "wwnn": None, "node_guid": None, "port_guid": None}
     base.update(kw)
     return base
 
@@ -54,8 +54,7 @@ def _ndf(**kw):
 
 def test_ethernet_func_type_with_wwpn_is_ethernet():
     """NetDevFuncType=Ethernet 인데 WWPN 이 있어도 Ethernet — 명시 신호가 이긴다."""
-    ndf = _ndf(func_type="Ethernet", net_dev_tech="Ethernet",
-               wwpn="20:01:90:b1:1c:1f:e2:8e")
+    ndf = _ndf(func_type="Ethernet", wwpn="20:01:90:b1:1c:1f:e2:8e")
     assert rg._classify_port_protocol(None, None, ndf, None) == "Ethernet"
 
 
@@ -97,9 +96,13 @@ def test_csus_wwpn_only_still_fc():
     assert rg._classify_port_protocol(None, None, ndf, None) == "FibreChannel"
 
 
-def test_infiniband_still_wins_over_wwpn():
-    ndf = _ndf(net_dev_tech="InfiniBand", wwpn="51:40:2e:c0:20:82:c2:2c")
-    assert rg._classify_port_protocol(None, None, ndf, None) == "InfiniBand"
+def test_infiniband_function_is_neither_fc_nor_ethernet():
+    """2026-10-17: InfiniBand 는 _classify_port_protocol 이 판정하지 않는다 — IB 기능은 WWPN 이 있어도 FC 로 떨어지지 않고(None),
+    IB 여부는 _ib_decision 이 정한다 (종전 'IB 가 WWPN 을 이긴다' 테스트의 후신)."""
+    ndf = _ndf(func_type="InfiniBand", wwpn="51:40:2e:c0:20:82:c2:2c")
+    assert rg._classify_port_protocol(None, None, ndf, None) is None
+    assert rg._classify_port_protocol(None, "InfiniBand", _ndf(wwpn="51:40:2e:c0:20:82:c2:2c"), None) is None
+    assert rg._ib_decision(None, None, [ndf]) == "ib"
 
 
 # ── end-to-end: 사이트 NIC 이 storage.hbas 에 들어가지 않는다 ────────────────

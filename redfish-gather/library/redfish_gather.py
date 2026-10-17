@@ -3576,25 +3576,165 @@ def _normalize_wwn(value):
     return ':'.join(hexonly[i:i + 2] for i in range(0, 16, 2))
 
 
-def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
-    """포트/디바이스펑션 → 'FibreChannel'|'FCoE'|'InfiniBand'|'Ethernet'|None.
+def _normalize_ib_guid(value):
+    """InfiniBand Node/Port GUID → `58a2:e103:0003:96f2` (소문자 4-hex×4) — 2026-10-17.
 
-    DMTF 정본 (EXTERNAL-CONTRACTS §1/§2 — cycle 2026-05-29):
+    filter_plugins/identity_normalizer.normalize_ib_guid 의 stdlib 복제다 (이 모듈은 외부 import 금지) —
+    tests/unit/test_redfish_infiniband_classification.py 의 drift guard 가 같은 벡터로 둘을 대조한다.
+    `0x` 접두 허용. 16-hex 가 아니거나 all-zero 면 None — _normalize_wwn 과 달리 원문을 돌려주지 않는다
+    (GID 전체 · MAC · 자리표시자를 GUID 자리에 두지 않는다). DMTF NetworkDeviceFunction.InfiniBand 의 패턴
+    `^([0-9A-Fa-f]{4}[:-]){3}[0-9A-Fa-f]{4}$` 와 커널 sysfs node_guid(`%04x:%04x:%04x:%04x`) 가 같은 모양이다.
+    """
+    if value is None:
+        return None
+    s = str(value).strip().lower()
+    if not s:
+        return None
+    s = _removeprefix(s, '0x')
+    hexonly = ''.join(c for c in s if c in '0123456789abcdef')
+    if len(hexonly) != 16 or hexonly == '0' * 16:
+        return None
+    return ':'.join(hexonly[i:i + 4] for i in range(0, 16, 4))
+
+
+def _normalize_ib_link_status(value):
+    """storage.infiniband[] 전용 링크 상태 (2026-10-17).
+
+    Port.LinkStatus(LinkUp / Starting / Training / LinkDown / NoLink — Port.v1_19_0) 와 NetworkPort.LinkStatus(Up / Down /
+    Starting / Training — NetworkPort.v1_4_3) 를 up / down / unknown 으로 — 명확한 up 과 down 만 확정하고 중간 상태(Starting /
+    Training) · 없음 · 그 밖의 값은 unknown 이다. network.ports[].link_status 는 종전 _normalize_link_status 그대로(협상 중 = down)
+    라 같은 포트가 training 중이면 ports=down / infiniband=unknown 으로 갈릴 수 있다 (docs/contract/03-fields.md 6.3.3).
+    """
+    s = _str(value).strip().lower()
+    if s in ('linkup', 'up'):
+        return 'up'
+    if s in ('linkdown', 'nolink', 'down'):
+        return 'down'
+    return 'unknown'
+
+
+def _ib_port_mode(link_tech, port_protocol):
+    """포트 리소스가 말하는 현재 모드 — 'infiniband' / 'other' / None(정보 없음) / 'conflict'(두 속성이 서로 다름).
+
+    link_tech = Port.LinkNetworkTechnology("current link network technology for this port") 또는
+    NetworkPort.ActiveLinkTechnology("configured link technology"), port_protocol = Port.PortProtocol(Protocol enum —
+    InfiniBand / Ethernet / RoCE / RoCEv2 / iWARP / FC …). RoCE·iWARP 는 이더넷 RDMA 라 'other' 다.
+    """
+    modes = set()
+    lt = _str(link_tech).strip().lower()
+    if lt:
+        modes.add('infiniband' if lt == 'infiniband' else 'other')
+    pp = _str(port_protocol).strip().lower()
+    if pp:
+        modes.add('infiniband' if pp == 'infiniband' else 'other')
+    if len(modes) > 1:
+        return 'conflict'
+    return modes.pop() if modes else None
+
+
+def _ib_decision(link_tech, port_protocol, joined_ndfs):
+    """포트 1개가 실제 InfiniBand 포트인가 — 'ib' / 'not_ib' / 'conflict'. storage.infiniband[] 의 유일한 판정 지점 (2026-10-17).
+
+    근거는 "현재 모드" 속성뿐이다 (DMTF — EXTERNAL-CONTRACTS §2 · docs/ai/decisions/ADR-2026-10-17-infiniband-port-decision.md):
+      - 포트: Port.LinkNetworkTechnology / NetworkPort.ActiveLinkTechnology / Port.PortProtocol (= _ib_port_mode)
+      - 기능: 포트에 연결된 NetworkDeviceFunction.NetDevFuncType("configured capability"). Disabled 는 근거 없음으로 본다.
+    NetDevFuncCapabilities(지원 가능 목록) · Port.InfiniBand 블록 존재 · GUID 존재 · 카드 이름은 읽지 않는다 — VPI 카드가 Ethernet
+    모드여도 그것들은 남기 때문이다 (tests/fixtures/redfish/hpe_emulator_dl380a 의 MCX755106 이 그 예).
+    규칙: 포트 모드가 infiniband 면 기능이 전부 InfiniBand(또는 없음)일 때 ib, 다른 기능이 섞이면 conflict.
+          포트 모드가 other(Ethernet / FC / RoCE …)면 InfiniBand 기능이 있을 때 conflict, 없으면 not_ib.
+          포트 모드가 없으면 기능만으로 — InfiniBand 만 ib, InfiniBand 와 다른 것이 섞이면 conflict, 그 밖에 not_ib.
+    conflict 는 IB 로 확정하지 않는다 — 호출부가 notice 1건을 남기고 항목을 만들지 않는다.
+    """
+    mode = _ib_port_mode(link_tech, port_protocol)
+    if mode == 'conflict':
+        return 'conflict'
+    types = set()
+    for n in (joined_ndfs or []):
+        if not isinstance(n, dict):
+            continue
+        t = _str(n.get('func_type')).strip().lower()
+        if t and t != 'disabled':
+            types.add(t)
+    has_ib = 'infiniband' in types
+    has_other = bool(types - {'infiniband'})
+    if mode == 'infiniband':
+        return 'conflict' if has_other else 'ib'
+    if mode == 'other':
+        return 'conflict' if has_ib else 'not_ib'
+    if has_ib and has_other:
+        return 'conflict'
+    return 'ib' if has_ib else 'not_ib'
+
+
+_LINK_TECH_PORT_TYPE = {'ethernet': 'Ethernet', 'infiniband': 'InfiniBand', 'fibrechannel': 'FibreChannel'}
+
+
+def _link_tech_port_type(link_tech):
+    """conflict 포트의 network.ports[].port_type — 포트 자신의 링크 기술(DMTF enum 값)만, 없으면 None."""
+    return _LINK_TECH_PORT_TYPE.get(_str(link_tech).strip().lower())
+
+
+def _int_if_integral(x):
+    """100.0 → 100 (storage.infiniband[].rate_gbps 표기 — OS 채널과 같게 정수는 int, 2.5 는 float 보존)."""
+    if isinstance(x, float) and x.is_integer():
+        return int(x)
+    return x
+
+
+def _agree_ib_guid(values):
+    """후보 GUID 들을 정규화해 **서로 다른 값이 정확히 하나**일 때만 그 값. 반환 (값 또는 None, non-null 후보 수)."""
+    seen = []
+    count = 0
+    for v in (values or []):
+        g = _normalize_ib_guid(v)
+        if g is None:
+            continue
+        count += 1
+        if g not in seen:
+            seen.append(g)
+    return (seen[0] if len(seen) == 1 else None), count
+
+
+def _select_ib_guids(ib_ndfs, pdata):
+    """IB 포트의 (node_guid, port_guid) — 2026-10-17.
+
+    1단계: 포트에 연결된 InfiniBand 기능들의 NodeGUID / PortGUID — 하나로 일치하면 채택, 서로 다르면 None (기능 간 불일치는 증거
+    충돌이라 배열로 대체하지 않는다). 2단계: 1단계에 값이 하나도 없을 때만 Port.InfiniBand.AssociatedNodeGUIDs / AssociatedPortGUIDs.
+    이 배열은 "lowest-numbered function 의 주소, configured but not active 주소, teaming 주소 등"을 함께 담을 수 있어
+    (Port.v1_19_0 longDescription) distinct non-null 이 정확히 1개일 때만 쓴다 — `[0]` 을 무조건 쓰지 않는다.
+    """
+    ndfs = [n for n in (ib_ndfs or []) if isinstance(n, dict)]
+    node, node_n = _agree_ib_guid([n.get('node_guid') for n in ndfs])
+    port, port_n = _agree_ib_guid([n.get('port_guid') for n in ndfs])
+    ib_raw = pdata.get('InfiniBand') if isinstance(pdata, dict) else None
+    ibobj = ib_raw if isinstance(ib_raw, dict) else {}       # Round 3 #2: 비-dict InfiniBand 방어
+    if node_n == 0:
+        node, _ = _agree_ib_guid(_as_list(ibobj.get('AssociatedNodeGUIDs')))
+    if port_n == 0:
+        port, _ = _agree_ib_guid(_as_list(ibobj.get('AssociatedPortGUIDs')))   # Round 4 #0: 비-list 방어
+    return node, port
+
+
+def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
+    """포트/디바이스펑션 → 'FibreChannel'|'FCoE'|'Ethernet'|None.
+
+    DMTF 정본 (EXTERNAL-CONTRACTS §1 — cycle 2026-05-29):
       - FC : Port.PortProtocol(Protocol enum) ∈ {FC,FCP,FCoE}
              또는 NetworkDeviceFunction.NetDevFuncType ∈ {FibreChannel,FibreChannelOverEthernet}
-      - IB : Port.LinkNetworkTechnology=='InfiniBand' (또는 ActiveLinkTechnology)
-             또는 NetworkDeviceFunction.NetworkDeviceTechnology=='InfiniBand'
+    2026-10-17: InfiniBand 는 이 함수가 판정하지 않는다 — _ib_decision 이 유일한 권위다 (포트와 기능의 현재 모드가 충돌할 때
+      한쪽을 임의로 고르지 않기 위해). IB 신호(링크 기술 / PortProtocol / NetDevFuncType = InfiniBand)가 보이는 포트·기능은
+      FC 도 Ethernet 도 아니므로 None 을 돌려준다 — 맨 끝 WWPN 휴리스틱도 IB 기능에는 닿지 않는다. 종전에 읽던
+      NetworkDeviceTechnology 는 DMTF 에 없는 속성(열거형 이름)이라 제거했고, Port.InfiniBand 블록 존재만으로 IB 로 보던
+      분기도 제거했다 (지원 가능 ≠ 현재 모드).
     PortType enum 에는 FC/IB 값이 없어 사용 금지 (구 코드 dead-code 원인).
     rule 12 R1 Allowed — DMTF Protocol/NetDevFuncType spec 직접 의존 (vendor 분기 아님).
     """
     pp = _str(port_protocol).strip().upper()
     lt = _str(link_tech).strip().lower()
     ndf_type = ''
-    ndf_tech = ''
     ndf_wwpn = None
     if isinstance(ndf, dict):
         ndf_type = _str(ndf.get('func_type')).strip().lower()
-        ndf_tech = _str(ndf.get('net_dev_tech')).strip().lower()
         # CSUS-FC1 (2026-06-15 실미러 검수): NetDevFuncType/PortProtocol 부재 펌웨어(HPE CSUS
         # RMC — NDF 에 NetDevFuncType 없이 FibreChannel.WWPN 만 노출)에서도 FC 식별.
         # cycle 2026-08-03: 이 휴리스틱은 함수 **맨 끝**(명시 신호 전무 시)로 강등됐다 —
@@ -3602,11 +3742,8 @@ def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
         # (Node/Port GUID 는 IB 시그널로 쓰지 않는다 — ConnectX VPI 가
         # Ethernet 모드에서도 GUID 를 노출해 Ethernet NIC 을 IB 로 오분류하기 때문.)
         ndf_wwpn = ndf.get('wwpn')
-    # IB 우선 (IB NDF 가 Ethernet 으로 오인되지 않도록)
-    if lt == 'infiniband' or ndf_tech == 'infiniband' or ndf_type == 'infiniband':
-        return 'InfiniBand'
-    if isinstance(pdata, dict) and isinstance(pdata.get('InfiniBand'), dict):
-        return 'InfiniBand'
+    if lt == 'infiniband' or pp == 'INFINIBAND' or ndf_type == 'infiniband':
+        return None
     if pp == 'FCOE' or ndf_type == 'fibrechanneloverethernet':
         return 'FCoE'
     if pp in ('FC', 'FCP', 'FIBRECHANNEL') or ndf_type == 'fibrechannel':
@@ -3635,9 +3772,11 @@ def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
 def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors=None):
     """NetworkAdapter.NetworkDeviceFunctions 수집 → 식별 dict 리스트.
 
-    각 entry: {id, func_type, net_dev_tech, wwpn, wwnn, fc_id, node_guid, port_guid, port_uri}.
+    각 entry: {id, func_type, wwpn, wwnn, fc_id, node_guid, port_guid, port_uri}.
     port_uri = Links.PhysicalPortAssignment / PhysicalNetworkPortAssignment (정규화) — Port join 용.
     WWPN/WWNN(FC) 와 Node/Port GUID(IB) 는 Port 가 아니라 NetworkDeviceFunction 에 존재 (DMTF).
+    2026-10-17: func_type = NetDevFuncType("configured capability") 만 읽는다 — 종전 'net_dev_tech'(NetworkDeviceTechnology)
+      는 DMTF 에 없는 속성이라 삭제. GUID 는 _normalize_ib_guid 로 정규화(형식 오류 · all-zero → None).
     미지원/오류 시 빈 리스트 (graceful — Port 기반 분류로 fallback).
     2026-10-03 (C7): 404 가 아닌 실패는 errors(비차단 code) 로 드러낸다 — 종전에는 WWPN/WWNN 증거가
     조용히 사라졌다. 404 는 미노출(정상)이라 그대로 조용히 빈 리스트.
@@ -3675,12 +3814,12 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
         ndfs.append({
             'id':           _safe(nd, 'Id'),
             'func_type':    _safe(nd, 'NetDevFuncType'),
-            'net_dev_tech': _safe(nd, 'NetworkDeviceTechnology'),
             'wwpn':         _normalize_wwn(_safe(fc, 'WWPN') or _safe(fc, 'PermanentWWPN')),
             'wwnn':         _normalize_wwn(_safe(fc, 'WWNN') or _safe(fc, 'PermanentWWNN')),
             'fc_id':        _safe(fc, 'FibreChannelId'),
-            'node_guid':    _safe(ib, 'NodeGUID') or _safe(ib, 'PermanentNodeGUID'),
-            'port_guid':    _safe(ib, 'PortGUID') or _safe(ib, 'PermanentPortGUID'),
+            # NodeGUID 는 할당 불가 펌웨어에서 PermanentNodeGUID 의 읽기 전용 별칭이다 (DMTF) — 현재값 먼저, 없거나 무효면 Permanent
+            'node_guid':    _normalize_ib_guid(_safe(ib, 'NodeGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentNodeGUID')),
+            'port_guid':    _normalize_ib_guid(_safe(ib, 'PortGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentPortGUID')),
             'port_uri':     _p(port_uri) if port_uri else None,
         })
     return ndfs
@@ -3716,32 +3855,68 @@ def _make_fc_hba(adapter_id, adapter_info, port_id, cls, link_status, speed_gbps
     }
 
 
-def _make_ib_port(adapter_id, adapter_info, port_id, link_status, speed_gbps, pdata, ndf):
-    """canonical storage.infiniband[] entry 생성 (전 채널 통일 shape — EXTERNAL-CONTRACTS §2)."""
-    node_guid = ndf.get('node_guid') if isinstance(ndf, dict) else None
-    port_guid = ndf.get('port_guid') if isinstance(ndf, dict) else None
-    if isinstance(pdata, dict):
-        ib_raw = pdata.get('InfiniBand')
-        ibobj = ib_raw if isinstance(ib_raw, dict) else {}  # Round 3 #2: 비-dict InfiniBand 방어
-        if not node_guid:
-            arr = _as_list(ibobj.get('AssociatedNodeGUIDs'))
-            node_guid = arr[0] if arr else None
-        if not port_guid:
-            arr = _as_list(ibobj.get('AssociatedPortGUIDs'))  # Round 4 #0: 비-list 방어 (위 AssociatedNodeGUIDs 가드와 일관)
-            port_guid = arr[0] if arr else None
+def _make_ib_port(adapter_id, adapter_info, port_id, link_status, rate_gbps, node_guid, port_guid):
+    """canonical storage.infiniband[] entry (전 채널 통일 shape — docs/contract/03-fields.md 6.3.1 · 6.3.3, 2026-10-17).
+
+    순수 생성자 — GUID 선택은 _select_ib_guids, 링크 상태는 _normalize_ib_link_status, 판정은 _ib_decision 이 한다.
+    adapter_model 은 종전 키(호환 유지), model 은 같은 값으로 추가한 공통 키. rate 는 Redfish 에 문자열 원천이 없어 항상 None
+    (합성하지 않는다). vendor 는 NetworkAdapter.Manufacturer 원문, firmware 는 Controllers[0].FirmwarePackageVersion.
+    """
     return {
         'adapter':       adapter_id,
         'adapter_model': adapter_info.get('model'),
+        'model':         adapter_info.get('model'),
         'port':          port_id,
         'node_guid':     node_guid,
         'port_guid':     port_guid,
         'link_status':   link_status,
         'rate':          None,
-        'rate_gbps':     speed_gbps,
+        'rate_gbps':     rate_gbps,
         'vendor':        adapter_info.get('manufacturer'),
         'firmware':      adapter_info.get('firmware_version'),
         'source':        'redfish',
     }
+
+
+def _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps, ib_ndfs):
+    """storage.infiniband[] 항목 1개 = IB 포트 1개 (2026-10-17).
+
+    같은 (카드, 포트) 는 한 번만, 추가 섀시(origin == 'extra')에서 온 같은 port_guid 도 한 번만 (FC 의 WWPN 규칙과 대칭 — CSUS 처럼
+    섀시를 공유하는 장비). rate_gbps 는 링크 up 일 때만 — down / 중간 상태의 협상 속도는 현재 속도가 아니다 (Port.CurrentSpeedGbps
+    는 "currently negotiated and running").
+    """
+    key = (adapter_id, port_id)
+    if key in ib_idx_by_port:
+        return
+    link = _normalize_ib_link_status(_safe(pdata, 'LinkStatus'))
+    node_guid, port_guid = _select_ib_guids(ib_ndfs, pdata)
+    if origin == 'extra' and port_guid and port_guid in {e.get('port_guid') for e in out['infiniband'] if e.get('port_guid')}:
+        return
+    rate_gbps = _int_if_integral(speed_gbps) if link == 'up' else None
+    out['infiniband'].append(_make_ib_port(adapter_id, adapter_info, port_id, link, rate_gbps, node_guid, port_guid))
+    ib_idx_by_port[key] = len(out['infiniband']) - 1
+
+
+def _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, by_parent, unlinked):
+    """포트에 연결되지 않은 InfiniBand 기능(NDF) 처리 (2026-10-17). 항목을 만들지 않는다 — 기능은 포트가 아니다.
+
+    부모 포트(`<PortId>-<n>` 접두 — Dell 명명)가 IB 항목이면 그 항목의 **비어 있는** GUID 만 기능들의 합의 값으로 채운다.
+    부모가 IB 항목이 아니면(Ethernet 포트에 InfiniBand 기능) 현재 모드 충돌 notice, 부모를 못 찾으면 '연결되지 않음' notice.
+    """
+    for nid in unlinked:
+        _notice('network_adapters',
+                '네트워크 카드 %s 의 InfiniBand 기능 %s 이(가) 어느 포트에도 연결되지 않음, storage.infiniband 미수집' % (adapter_id, nid))
+    for pid, kin in by_parent.items():
+        idx = ib_idx_by_port.get((adapter_id, pid))
+        if idx is None:
+            _notice('network_adapters',
+                    '네트워크 카드 %s 포트 %s: 포트 링크 기술과 기능 유형이 서로 달라 InfiniBand 여부를 확정할 수 없음, '
+                    'storage.infiniband 미수집' % (adapter_id, pid))
+            continue
+        entry = out['infiniband'][idx]
+        for key in ('node_guid', 'port_guid'):
+            if entry.get(key) is None:
+                entry[key] = _agree_ib_guid([n.get(key) for n in kin])[0]
 
 
 def _chassis_linked_by_other_systems(bmc_ip, system_uri, chassis_uris, username, password, timeout,
@@ -3914,11 +4089,14 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
 
     분류 정본 (DMTF — cycle 2026-05-29 fix, EXTERNAL-CONTRACTS §1/§2):
       - FC : Port.PortProtocol ∈ {FC,FCP,FCoE} 또는 NDF.NetDevFuncType=FibreChannel(OverEthernet)
-      - IB : Port.LinkNetworkTechnology=='InfiniBand' 또는 NDF.NetworkDeviceTechnology=='InfiniBand'
+      - IB (2026-10-17): _ib_decision — 포트 현재 모드(Port.LinkNetworkTechnology / NetworkPort.ActiveLinkTechnology /
+        Port.PortProtocol == InfiniBand) 와 연결 기능의 NetDevFuncType == InfiniBand. 둘이 충돌하면 IB 로 확정하지 않고
+        notice 1건. 지원 가능 목록(NetDevFuncCapabilities) · Port.InfiniBand 블록 · GUID 존재는 근거가 아니다.
+        포트에 연결되지 않은 IB 기능은 항목이 되지 않는다(_attach_orphan_ib_functions — 부모 IB 포트의 빈 GUID 만 채운다).
       - 구 코드의 PortType('fibrechannel'/'infiniband') 분류는 dead-code (PortType enum 에
         FC/IB 값 없음 → 실장비 영원히 미매치). 본 cycle 에서 protocol/technology 기반으로 정정.
 
-    WWPN/WWNN/GUID 는 NetworkDeviceFunction 에서 추출 (Port 아님). Port 가 없는 FC/IB NDF 도
+    WWPN/WWNN/GUID 는 NetworkDeviceFunction 에서 추출 (Port 아님). Port 가 없는 FC NDF 는
     식별만으로 emit. 일부 vendor (Cisco CIMC 등) 미지원 → 빈 결과 graceful degradation.
     2026-10-15: 연결된 NDF 가 없는 포트는 링크 기술(Port.LinkNetworkTechnology / NetworkPort.ActiveLinkTechnology)이
     FibreChannel 이면 FC 포트로 본다 (포트 루프의 lt_fc 규칙 — 판정 함수는 바꾸지 않는다).
@@ -3959,6 +4137,7 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
 
     # 추가 섀시 멤버는 이미 본 카드 리소스(@odata.id)면 건너뛴다. 1순위 · Systems 목록의 멤버 순서와 처리는 종전과 같다.
     items, seen_adapters, seen_ports = [], set(), set()
+    ib_idx_by_port = {}     # (adapter_id, port_id) → out['infiniband'] 색인 (2026-10-17: 포트당 1항목 · 고아 기능 GUID 보강)
     for origin, members in sources:
         for m in members:
             raw = _str(_safe(m, '@odata.id'))
@@ -4150,6 +4329,20 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         if not (_pid and any(_str(n.get('id')).startswith(_pid + '-') for n in ndfs)):
                             cls = 'FibreChannel'
 
+                    # 2026-10-17: InfiniBand 는 _ib_decision 하나로 판정한다 (포트 현재 모드 + 연결 기능의 NetDevFuncType).
+                    #   ib → port_type InfiniBand, HBA 없음. conflict → IB 로 확정하지 않고(항목 없음) 포트 자신의 링크 기술만
+                    #   port_type 에 두며 notice 1건. not_ib → 종전 FC/Ethernet 경로 그대로 — IB 신호가 없는 장비(실측 recording 전부)는
+                    #   이 분기에 닿지 않는다.
+                    joined = [ndfs[i] for i in cand]
+                    ib_dec = _ib_decision(link_tech, port_protocol, joined)
+                    if ib_dec == 'ib':
+                        cls = 'InfiniBand'
+                    elif ib_dec == 'conflict':
+                        cls = _link_tech_port_type(link_tech)
+                        _notice('network_adapters',
+                                '네트워크 카드 %s 포트 %s: 포트 링크 기술과 기능 유형이 서로 달라 InfiniBand 여부를 확정할 수 없음, '
+                                'storage.infiniband 미수집' % (adapter_id, port_id))
+
                     # CSUS-R13 (2026-06-15 실미러 검수): FC 포트의 associated_address 는 port WWN(WWPN)
                     # 이어야 한다. Port.FibreChannel.AssociatedWorldWideNames 가 [WWNN, WWPN] 다중 entry
                     # 면 assoc[0]=WWNN 오취득 → NDF.WWPN(=fc_hbas[].wwpn 과 동일)으로 교정해 일관성 확보.
@@ -4158,7 +4351,7 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         primary_addr = ndf['wwpn']
 
                     port_hbas = []
-                    if cls in ('FibreChannel', 'FCoE'):
+                    if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE'):
                         for fndf in (fc_ndfs or [ndf]):   # RD-F15: FC 기능마다 hba 하나
                             port_hbas.append(_make_fc_hba(
                                 adapter_id, adapter_info, port_id, cls,
@@ -4202,13 +4395,16 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
 
                     if port_hbas:
                         out['fc_hbas'].extend(port_hbas)
-                    elif cls == 'InfiniBand':
-                        out['infiniband'].append(_make_ib_port(
-                            adapter_id, adapter_info, port_id,
-                            normalized_link, speed_gbps, pdata, ndf))
+                    elif ib_dec == 'ib':
+                        _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps,
+                                        [n for n in joined if _str(n.get('func_type')).strip().lower() == 'infiniband'])
 
-        # Port 가 없거나 Port 에 join 되지 않은 FC/IB NetworkDeviceFunction 도 식별만으로 emit.
+        # Port 가 없거나 Port 에 join 되지 않은 FC NetworkDeviceFunction 도 식별만으로 emit.
         # (port-less HBA / 구 펌웨어 — link_status/speed 는 미상)
+        # 2026-10-17: InfiniBand 기능은 여기서 항목을 만들지 않는다 (기능 ≠ 포트) — 부모 포트별로 모아
+        #   _attach_orphan_ib_functions 가 부모 IB 항목의 빈 GUID 만 채우거나 notice 를 남긴다.
+        orphan_ib_by_parent = {}
+        orphan_ib_unlinked = []
         for i, ndf in enumerate(ndfs):
             if i in ndf_matched:
                 continue
@@ -4221,10 +4417,18 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
             # 접두 매칭은 구분자 '-' 를 요구해 `...1-1` 이 `...1-10-1` 을 삼키지 않는다.
             nid = _str(ndf.get('id'))
             parent = None
+            parent_pid = None
             for _pid, _ctx in port_ctx_by_id.items():
                 if nid.startswith(_pid + '-'):
                     parent = _ctx
+                    parent_pid = _pid
                     break
+            if _str(ndf.get('func_type')).strip().lower() == 'infiniband':
+                if parent is None:
+                    orphan_ib_unlinked.append(nid)
+                else:
+                    orphan_ib_by_parent.setdefault(parent_pid, []).append(ndf)
+                continue
             if parent is not None:
                 cls = _classify_port_protocol(parent[0], parent[1], ndf, parent[2])
             else:
@@ -4235,10 +4439,7 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                         h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
                     continue   # 2026-10-15: 추가 섀시 중복 — 이미 수집한 WWPN
                 out['fc_hbas'].append(hba)
-            elif cls == 'InfiniBand':
-                out['infiniband'].append(_make_ib_port(
-                    adapter_id, adapter_info, ndf.get('id'),
-                    'unknown', None, None, ndf))
+        _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
 
         # CSUS-R6 (2026-06-15 실미러 검수): ControllerCapabilities.NetworkPortCount 부재 펌웨어
         # (HPE CSUS NetworkAdapter — Controllers 에 ControllerCapabilities 없음)에서 port_count=0

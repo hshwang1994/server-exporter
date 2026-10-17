@@ -50,8 +50,14 @@ Redfish 채널 fixture. BMC 가 실제로 돌려준 JSON 응답을 그대로 저
 | `supermicro_x10/` | 12 | 있음 |
 | `supermicro_x12/` | 12 | 있음 |
 | `supermicro_x14/` | 12 | 있음 |
+| `synthetic_ib_mode/` | 2 | 있음 — **합성**(실장비 아님). `hpe_emulator_dl380a` 에서 파생, VPI 카드를 InfiniBand 모드로 |
 
 루트 직속 JSON 0건은 특정 vendor 에 매이지 않는 표준·경계 케이스다.
+
+디렉터리 접두의 뜻: `real_*` = 실장비 미러 캡처(baseline 승격 가능), `hpe_emulator_*` = HPE 공식 에뮬레이터 캡처,
+`dmtf_*` = DMTF 공개 mockup 변환, `synthetic_*` = DMTF 스키마에 맞춰 손으로 구성한 합성 데이터(2026-10-17 —
+실장비·에뮬레이터에 없는 모드를 재현. 기대값은 코드 출력 스냅샷이 아니라 README 에 도출 근거를 적은 손 작성 파일이며,
+baseline 으로 승격하지 않는다).
 
 ## 새 fixture 를 넣을 때
 

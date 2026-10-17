@@ -67,9 +67,9 @@ def test_gather_processors_string_speed_to_int(monkeypatch):
     assert procs[0]["total_cores"] == 10
 
 
-# ── #2 _make_ib_port 비-dict InfiniBand ──
-def test_make_ib_port_non_dict_infiniband():
+# ── #2 비-dict InfiniBand 블록 방어 (2026-10-17: GUID 선택이 _select_ib_guids 로 분리됐다 — 같은 방어를 거기서 본다) ──
+def test_select_ib_guids_non_dict_infiniband():
     # pdata.InfiniBand 가 문자열 → ibobj.get crash 방어
-    hba = rg._make_ib_port("A0", {"model": "IB X"}, "1", "up", 200.0,
-                           None, {"InfiniBand": "not_a_dict"})
-    assert isinstance(hba, dict)  # 가드 전: str.get AttributeError
+    assert rg._select_ib_guids([], {"InfiniBand": "not_a_dict"}) == (None, None)
+    entry = rg._make_ib_port("A0", {"model": "IB X"}, "1", "up", 200, None, None)
+    assert isinstance(entry, dict) and entry["model"] == entry["adapter_model"] == "IB X" and entry["rate"] is None

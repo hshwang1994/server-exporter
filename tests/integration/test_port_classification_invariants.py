@@ -97,8 +97,12 @@ def _check_invariants(label, ports, hbas, ibs):
     for ib in (ibs or []):
         if not isinstance(ib, dict):
             continue
-        pid = ib.get("port_id")
-        mapped = _resolve_port(ib.get("adapter_id"), pid, ports_by_key)
+        # 2026-10-17: Redfish IB 항목의 키는 공통 계약(adapter / port)이고 그 값이 network.ports[] 의 adapter_id / port_id 와 같다.
+        #   OS 항목(adapter=mlx5_0, port="1")은 network.ports 와 무관하므로 source=redfish 일 때만 그 키로 포트를 찾는다.
+        from_redfish = ib.get("source") == "redfish"
+        pid = ib.get("port_id") or (ib.get("port") if from_redfish else None)
+        aid = ib.get("adapter_id") or (ib.get("adapter") if from_redfish else None)
+        mapped = _resolve_port(aid, pid, ports_by_key)
         if mapped is not None and mapped != "InfiniBand":  # INV-3
             bad.append(f"{label}: infiniband[{ib.get('adapter_id')}/{pid}] 가 {mapped!r} "
                        f"포트에 매핑됨 — 자기모순")
