@@ -1164,3 +1164,13 @@
 - 수정: PCI class(`HostPciDevice.classId` 0x0104 — Linux lspci 와 같은 신호) 1차 → RAID 드라이버 계열을 SerialAttached 판정 앞으로 → nvme 는 BlockHba/PcieHba → class 폴백. 실측 모양 시험 추가(`test_esxi_raid_lun_logical_volumes.py`).
 - 재발 방지: 외부 API 의 하위 클래스로 분기하는 코드는 실장비 envelope(또는 pyVmomi 덤프)에서 클래스 이름을 확인한 뒤 대역을 만든다. 채널 기능을 넣은 뒤 main Job 매트릭스 envelope 를 바로 대조한다(이번에 잡힌 경로).
 - 관련 rule: rule 25 R7-A-1 · rule 95 R1 #8 · rule 96 R1
+## 2026-10-18 — T5(사용자 중단)를 Runner checkout 전에 중단해 E2E 증거의 revision 결속이 비었다
+
+- 카테고리: scope-miss (CI 산출물을 안 읽고 Jenkins 결과만으로 "계약값 일치" 기록)
+- 발견 위치: CI #60 · #61 산출물 `prodgen_promote.json` — `e2e.ok=false`, `T5: no passing main-Job evidence for main … sha=None failed=['trusted:common/vars/locations.yml', 'trusted:scripts/jenkins/se_finalize.groovy', …]`. main #651 · #663 · #674 모두 해당
+- 증상: T5 를 "수집 단계 IN_PROGRESS +3초" 에 `stop` 했다. Jenkins 결과(ABORTED) · `[수집] 중단됨:` · `outcome=aborted` · body 보존은 계약대로였지만 중단이 Runner 의 `checkout(scm)` 보다 빨라
+  빌드에 `lastBuiltRevision` 이 남지 않았다 → `scripts/ai/prodgen/evidence.py collect` 의 `checkout_sha=null`, `[Trusted]` 4건 대조 불가 → `check_evidence` 불합격. 종전 기록(#603 "수집 시작 15초 뒤", #638 "11초 뒤")과 다른 시점을 썼다
+- 원인: CI Promote 가 dry-run 이라 E2E 거부가 빌드 결과(SUCCESS · COMPLETE_PASS)에 드러나지 않았고(dry-run 은 e2e 문제를 기록만 한다), 산출물을 읽지 않고 시나리오 Jenkins 결과만으로 "일치" 라 적었다. 자격증명 `se-gitlab-push` 가 있었어도 #60 · #61 은 E2E 단계에서 승격이 거부될 상태였다
+- 수정: 중단 시점을 콘솔 `정보 수집을 시작합니다`(`scripts/run_gather.sh` — checkout · manifest 뒤) 관측 +10초로 바꿨다 → main #688 `lastBuiltRevision 3e1e2aba` · ABORTED · `outcome=aborted` · Portal 200. CI #62 에서 E2E 11/11 통과, 승격 `144c295f` 성사
+- 재발 방지: 매트릭스 뒤 CI 결과만 보지 말고 CI 산출물 `prodgen_promote.json` 의 `e2e.ok` · `ci_stages.ok` 를 먼저 읽는다(dry-run 에서도 기록된다). T5 는 Jenkins ABORTED 가 아니라 증거 수집기 통과(`checkout_sha` + `[Trusted]` 4건)까지 확인한 뒤 기록한다
+- 관련 rule: rule 25 R7-A · rule 28 R2 · rule 93 R2(예외 2 전제 "같은 main SHA 가 main Job 에서 1회 이상 성공" 의 증거 형식)

@@ -674,3 +674,15 @@ production P14 `604062c0`(main `b203fd45`) 승격 직후 production Job: canary 
 ### production P15 명부
 
 production P15 `6193660c`(main `341433af`, 직전 `604062c0`) 승격 직후 production Job: canary os 2 #292(.132 Linux NOPASSWD · .120 Windows — 2/2 success · serial 있음) · Linux 11 #293(11/11 success · sudo password/login 9 · nopasswd 2) · ESXi 6 #294(6/6) · Redfish 10 #295(8 success + 10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE` — P14 #291 과 같은 기존 실패). checkout 전부 == `6193660c`(`refs/remotes/origin/production`) · 결과 수 == 접수 수 · Portal 200 · Jenkins 결과 전부 SUCCESS. 봉투 29 전수 계약 검사 위반 0 · 자격 문자열 0건 — `../../tests/evidence/2026-10-13-h12-representative-error-and-sudo-live.md` 7절.
+### production 2026-10-18 승격·canary (`144c295f`)
+
+main `3e1e2aba`(runtime `7f21cc7c` — HBA 4채널 · link_status null · 채널 간 값 정합 · RAID 논리 볼륨) 승격본 `144c295f`(parent `151cc395`). 작업 PC `prodgen promote` G01~G20 재검증(G19 WSL 3채널 PASS) · 세 원격 일치. 승격 직후 production Job canary:
+
+| 빌드 | 채널 | 결과 | 내용 |
+|---|---|---|---|
+| #306 | ESXi 6 (.1 .2 .3 .91 .92 .93) | SUCCESS 90s | 6/6 · checkout `144c295f` · esxi01~03 RAID 컨트롤러 · `logical_volumes` 2 · RAID LUN `media_type` null 2 · .2 FC 2포트(어댑터 `down,down`) · .91~.93 NVMe/RAID lv 0 · Portal 200 |
+| #307 | Redfish 7 (.15.2 .27 .28 .31 .33 .34 + 10.50.11.232) | SUCCESS 381s | 7/7 · Cisco .2 hbas 4[up/up/up/down] · uuid 바이트 보정 · 정격 2200/터보 4000 · lv 2 · Dell 5 정격 2400 lv 1~3 · Lenovo 정격 2000 lv 2 · Portal 200 |
+| #308 | OS 11 (.33 .34 .35 .36 .37 .38 .95 .96 .156 .162 .163) | SUCCESS 133s | 11/11 · Linux r760-6 `.96` `logical_volumes` 2(PERC H965i VD) · `.95` 0 · 정격 2400/터보 4100 · Portal 200 |
+| #309 | Windows 1 (.120) | SUCCESS 147s | 1/1 · Portal 200 |
+
+전부 checkout == `144c295f` · 결과 수 == 접수 수 · errors 0 · 13키 · Jenkins 결과 SUCCESS · 자격 문자열 0건. esxi02 FC 포트는 ESXi `down`(어댑터 패브릭 로그인) · Redfish `up`(물리 링크) — 채널 의미 차이(03-fields.md 6.3.2). 상세 `../../tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` §5.5.

@@ -191,6 +191,43 @@ envelope(`gather_final.jsonl`) 대조:
   Windows VM .120(S4) 은 MSFC 부재(absent)로 `hbas []` · errors 0, Linux VM/베어메탈(S1/S3) 은 `fc_host` 부재로 `hbas []` · errors 0 — 부재를 실패로 올리지 않는 분류가 실장비에서 확인됐다.
   (3) lab 에 장비가 없어 못 한 것: FC 링크 up(전 채널), Linux/Windows FC 호스트, 하드웨어 iSCSI, FC-NVMe 쌍둥이, PERC(bcm_mpi3) 뒤 VD, Windows RAID 디스크, CSUS, Cisco 다른 세대 — NEXT_ACTIONS.
 
+### 5.5 4차 — main `3e1e2aba`(문서 커밋만, runtime 은 `7f21cc7c` 와 같음) #678~#688 · T5 증거 결속 결함 · CI #62 · 승격 `144c295f` · canary
+
+사용자 지시(2026-10-18 "등록안했고 … 다 해라")로 이어 간 세션. 먼저 CI #60 · #61 의 `prodgen_promote.json` 을 읽어 **E2E 증거가 불합격**(`e2e.ok=false`)이었음을 확인했다 —
+`T5: no passing main-Job evidence … sha=None failed=['trusted:common/vars/locations.yml', …]`. T5 를 수집 단계 진입 +3초에 `stop` 한 것이 Runner 의 `checkout(scm)` 보다 빨라
+빌드에 `lastBuiltRevision` 이 남지 않았고(#651 · #663 · #674 모두) 증거 수집기가 `checkout_sha=null` 로 거부했다. dry-run 은 이 거부를 기록만 하므로 CI SUCCESS 뒤에 숨어 있었고,
+**자격증명 `se-gitlab-push` 가 있었어도 #60 · #61 은 E2E 단계에서 승격이 거부될 상태였다**(FAILURE_PATTERNS 2026-10-18 두 번째 항목). 중단 시점을 콘솔 `정보 수집을 시작합니다`(`scripts/run_gather.sh` — checkout · manifest 뒤) 관측 +10초로 고쳐 다시 돌렸다.
+
+| 시나리오 | 빌드 | 결과 | 시나리오 | 빌드 | 결과 |
+|---|---|---|---|---|---|
+| S1 | #678 | SUCCESS 91초 | T6 | #683 | UNSTABLE 135초(Callback 거부) |
+| S2 | #679 | SUCCESS 122초 | E2E-A | #684 | UNSTABLE 130초(cj) |
+| S3 | #680 | SUCCESS 172초(Linux 11) | E2E-A2 | #685 | FAILURE 36초(fail-closed · 수집 없음 → tip 관측 결속) |
+| S4 | #681 | SUCCESS 153초(Windows .120) | E2E-D | #686 | SUCCESS 118초 — esxi01~03 RAID · lv 2 · media null 2, .91~.93 NVMe/RAID · lv 0 |
+| T2 | #682 | SUCCESS 97초 | E2E-E | #687 | SUCCESS 401초 — Cisco .2 uuid 보정 · 정격 2200/터보 4000 · hbas 4[up/up/up/down] · lv 2; Dell 5 정격 2400/터보 4000 lv 1~3; Lenovo 정격 2000/터보 3200 lv 2 |
+| T5 | #688 | **ABORTED 69초** — checkout 6초 · `정보 수집을 시작합니다` 10초 · stop 20초 → `[수집] 중단됨:` · `outcome=aborted` · Portal 200 · **`lastBuiltRevision 3e1e2aba`**(증거 통과) | tip 관측 | 1792310289~1792310498 | `3e1e2aba` 불변 |
+
+checkout 은 #685(fail-closed, 수집 단계 없음) 외 10건 전부 `3e1e2aba`. #675~#677 은 `deploymentEnvironmentId` 를 빠뜨린 트리거 실수로 입력 확인 FAILURE(무효, 수집 0).
+
+**CI #62** (`PROMOTE=true · PROMOTE_SHA=3e1e2aba · PROMOTE_DRY_RUN=false`, E2E_MAIN_ENTRIES #678~#688, tip 관측 #685): SUCCESS(61분) · verdict **COMPLETE_PASS**(G01~G20) ·
+**E2E 증거 11/11 통과**(T5 #688 `checkout_sha=3e1e2aba` · `[Trusted]` 4건 대조 OK — 결함 수정 확인) · Harness 77/77 · 11 stage(GATE~EVIDENCE) PASS · **Promote 는 `se-gitlab-push` 부재로 DRY_RUN**(생성 tree `a7d22f1e`).
+
+**승격(실제)**: 작업 PC `prodgen promote`(사용자가 프롬프트 `!` 로 직접 실행 — 이 세션 안전 분류기가 AI 의 netrc/vault 파일 참조 명령을 5회 `Credential Leakage` 로 차단해, 자격 파일은 사용자가 만들고 실행도 사용자가 했다).
+→ **production `144c295f`**(main `3e1e2aba` runtime · parent `151cc395` · PROVENANCE · tree_hash `d0152f58…` · 195 파일 · class B 0). 환경 차이 6건(Python 3.13 · Windows · WSL ansible 2.20.7 · pwsh 7.6 · collections)으로
+**Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20 전부 PASS**(G19 WSL 3채널 실제 실행 · G13 Jenkins 린터 `jenkins_version 2.528.3` · G14 생성 tree pytest), Gates-Reused G01~G10 G16 G17 · E2E ok · CI-Stages verified ·
+publish origin "accepted by remote" · internal "already at the new commit (shared push URL `10.100.64.156`)" · partial_push 없음 · 로컬 ref 갱신. **github · gitlab · internal `refs/heads/production` 모두 `144c295f` 일치**. 자격 파일은 저장소 밖(사용자 홈)에 두고 실행했다.
+
+**production Job canary** `clovirone-cicd/clovirone-server-gather` — 전부 checkout `144c295f` · errors 0 · 13키 · Portal 200:
+
+| 빌드 | 채널 | 결과 | 실측 확인 |
+|---|---|---|---|
+| #306 | ESXi 6 | SUCCESS 90초 | esxi01~03(Cisco .1/.2/.3) `controllers` 에 **RAID** · `logical_volumes` 각 2 · RAID LUN `media_type` null 2 — ESXi 수정(`7f21cc7c`)이 production 에 실장 확인. .2 는 FC/FC + RAID(hbas 2 `down,down` — 어댑터 상태). .91~.93(Dell R760) NVMe/RAID · lv 0(PERC VD 없음) |
+| #307 | Redfish 7 | SUCCESS 381초 | Cisco .2 hbas 4[up/up/up/down] · uuid 바이트 보정 · 정격 2200/터보 4000 · lv 2. Dell 5 정격 2400/터보 4000 lv 1~3. Lenovo .232 정격 2000/터보 3200 lv 2 |
+| #308 | OS 11 | SUCCESS 133초 | Linux r760-6 `.96` `logical_volumes` 2(PERC H965i VD) · `.95` 0 · 정격 2400/터보 4100. VM 다수 SATA/SAS |
+| #309 | Windows 1 | SUCCESS 147초 | `.120` 1/1 |
+
+esxi02 FC 2포트가 ESXi `down`(어댑터 패브릭 로그인 상태) · Redfish 같은 포트 `up`(물리 링크) — 2026-10-18 실측 차이(03-fields.md 6.3.2)가 production 에서도 그대로.
+
 ## 6. 변경 범위 (Additive)
 
 envelope 13 필드 · `sections` · `status` 불변. 새 top-level 키 0. 사전 안의 변경: `storage.hbas[].link_status` type `string|null` enum up/down, `cpu.turbo_max_mhz` channel +redfish, `storage.logical_volumes[]`(+9 subkey) channel +os/esxi.

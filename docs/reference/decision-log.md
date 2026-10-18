@@ -136,7 +136,7 @@
 
 ### 회귀
 
-- 채널별 신규 시험 + 녹화본 변형 + 교차 회귀 `tests/regression/test_cross_channel_same_server.py`. 전체 수치 `docs/ai/catalogs/TEST_HISTORY.md` 2026-10-18. 승격은 미실행(Jenkins 자격 단계) — NEXT_ACTIONS.
+- 채널별 신규 시험 + 녹화본 변형 + 교차 회귀 `tests/regression/test_cross_channel_same_server.py`. 전체 수치 `docs/ai/catalogs/TEST_HISTORY.md` 2026-10-18. 승격 완료 — production **`144c295f`**(main `3e1e2aba`, runtime `7f21cc7c`): 4차 매트릭스 #678~#688 → CI #62 COMPLETE_PASS · E2E 11/11(T5 증거 결속 결함 수정) → 작업 PC `prodgen promote`(사용자 `!` 직접 실행) → canary production Job #306~#309 4채널 SUCCESS · 세 원격 일치. ESXi RAID·logical_volumes·media null 실장 확인. 상세 `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` §5.5.
 
 ## 2026-10-17 — InfiniBand 수집 전면 검증 (4채널 "현재 모드" 판정 · 합성 데이터 모의 실행 · ESXi 추정 제거) · CSUS Redfish 시리얼 접미사 · Windows OS 버전 표기
 
