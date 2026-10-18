@@ -4,14 +4,14 @@
 
 | 구분 | 결과 |
 |---|---|
-| 전체 pytest(unit · e2e · regression, Windows Python 3.13.15 · powershell.exe 5.1) | 1차 4 failed · 5597 passed · 44 skipped · 7 xfailed (22분 53초) — 4건은 기대값 갱신 대상 2파일(ESXi 파트 5개 · Windows HBA components)이었고 `fd6d8a02` 로 갱신한 뒤 그 2파일 69 passed. 전체 재실행은 작업 PC 메모리 부족으로 세션이 중단해 **미완료** — 다음 세션에서 `pytest tests/unit tests/e2e tests/regression` 재실행 |
+| 전체 pytest(unit · e2e · regression, Windows Python 3.13.15 · powershell.exe 5.1) | 1차 4 failed · 5597 passed · 44 skipped · 7 xfailed (22분 53초) — 4건은 기대값 갱신 대상 2파일(ESXi 파트 5개 · Windows HBA components)이었고 `fd6d8a02` 로 갱신한 뒤 그 2파일 69 passed. 전체 재실행(`fd6d8a02` 이후 트리): **5601 passed, 44 skipped, 7 xfailed, 92 warnings in 1699.21s (0:28:19)** (첫 재실행은 메모리 부족으로 중단돼 다시 돌렸다) |
 | 통합(`tests/integration -m "not live"`, Windows) | 355 passed, 6 skipped, 1 deselected in 9.15s |
 | `ansible-playbook --syntax-check` 3채널 (WSL ansible-core 2.20.7) | redfish · os · esxi 모두 통과 |
 | 정적 검사 | `verify_vendor_boundary.py` 통과 · `output_schema_drift_check.py` 통과(fd_paths 206) · `validate_field_dictionary.py` PASS · `verify_harness_consistency.py` 통과 · `envelope_change_check.py` advisory(기존 diagnosis 항목 — 이번 변경과 무관) |
 | 신규 시험(전부 합성 입력 — 실장비 아님) | Redfish `test_fc_orphan_ndf_parent_port_link`(F1·F1b) · `test_fc_port_with_ethernet_block_only`(F2 + WWPN 규칙) · `test_network_adapters_id_type_robustness`(F3a·F3b) · `test_network_adapters_absence_vs_failure` +9(F4·F5·F7·F8) · `test_redfish_hba_coverage_replay` 변형 +6 · `test_cross_channel_value_fixes`(X1·X2·X3·X9) / Linux `test_linux_hba_ib_markers` +13(lpfc · NPIV · port_state 13종 · `|` · FCoE · 0x0 · rc · lspci · 실 sysfs 링크 모양) · `test_linux_storage_markers` +5(DISKPCI → logical_volumes) / Windows `test_windows_storage_enum_render` +13(PortState · components · Bug B · RAID 볼륨) · `test_windows_storage_powershell_static` +5(absent/실패/부분/cmdlet 부재) + PortSpeed 17 코드 / ESXi `test_esxi_hba_normalize` 20 · `test_esxi_raid_lun_logical_volumes` 6 / 교차 `tests/regression/test_cross_channel_same_server.py` 2쌍 × 9 |
 | 갱신 시험 | `test_fc_link_technology_hba`(F1 상속 · null · WWPN 배제) · `test_identity_normalizer`(0x0 · `-`접두) · `test_hba_ib_canonical`(hbas up/down/null) · `test_field_dictionary_channel_emit` · `test_esxi_section_errors`(rescue storage 1건 · 파트 stub) · `test_windows_call_consolidation_render`(의도 변경 등록) · `test_redfish_round3_robustness`(정격/터보) |
 | golden | 녹화본 10종 `expected_output.json` 재생성 — 차이는 `processors[].speed_mhz`(정격) · `max_speed_mhz`(추가) · CSUS 파티션 cpu 만(요청 예산 · 다른 키 동일). CSUS `fc_hbas[].link_status` unknown → null |
-| 승격 | **미실행** — Jenkins 자격을 파일에 쓰는 단계가 자동 모드 분류기에 막혔다(NEXT_ACTIONS 2026-10-18 첫 항목) |
+| 승격 | **미실행** — Jenkins 자격을 파일에 쓰는 단계가 자동 모드 분류기에 막혔다(NEXT_ACTIONS 2026-10-18 첫 항목). `prodgen promote --sha 8a9f98de --dry-run`: 생성 tree `b0760a96…` 195 파일 · parent `151cc395`(PROVENANCE) · G01~G12 · G14~G18 · G20 PASS, G13(Jenkins 린터) · G19(실장비 3채널) SKIP → PARTIAL(자격 없는 예행의 예상 결과) · G14 생성 tree 위 pytest PASS |
 | 실장비 미검증 | FC 링크 up · Linux/Windows FC 호스트 · 하드웨어 iSCSI · FC-NVMe · ESXi speed 단위 · Windows PortSpeed 64+ · CSUS null · 사이트 누락 장비 · Cisco 다른 세대 UUID — NEXT_ACTIONS 2026-10-18 |
 
 
