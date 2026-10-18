@@ -5,7 +5,9 @@
 > 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/ai/decisions/ADR-2026-10-18-hba-link-status-null-and-os-logical-volumes.md` ·
 > `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2 · `docs/reference/decision-log.md` 2026-10-18.
 
-- **승격**: **미실행** — Jenkins 자격을 파일에 쓰는 단계가 자동 모드 분류기에 막혔다. main Job 매트릭스 · CI · `prodgen promote` · canary 는 NEXT_ACTIONS 첫 항목(사용자/자격 세션).
+- **승격**: **미반영(사용자 결정 대기)** — main `7f21cc7c` 로 main Job 매트릭스 2차(#652~#663) · CI #60 SUCCESS(61분) · verdict **COMPLETE_PASS** · gate G01~G20 전부 PASS(G19 실장비 3채널 포함) · Evidence Aggregate 통과 · **Prodgen Promote 는 Jenkins 자격증명 `se-gitlab-push`(GitLab push) 부재로 dry-run(원격 변경 0)** — `Jenkinsfile_ci` 의 `dryRun = PROMOTE_DRY_RUN || !haveGitlab`. production github · gitlab(origin push 2개) · internal 모두 **`151cc395` 그대로(승격 미반영)** — 2026-10-17 승격본(main `dd69aee1`). 남은 경로(Jenkins 자격증명 `se-gitlab-push` 등록 뒤 CI 재실행 / 작업 PC prodgen promote)는 NEXT_ACTIONS 첫 항목.
+- **2차 수정(`7f21cc7c`, 실장비 보정)**: `esxi_disks.py` `_controller_type` — `HostPciDevice.classId` 0x0104(RAID) 1차 신호 · RAID 드라이버 계열을 SerialAttached 판정 앞으로 · nvme 는 PcieHba 포함. ESXi 7 이 MegaRAID(lsi_mr3)·PERC H965i(bcm_mpi3)를
+  `HostSerialAttachedHba` 로 노출해 SAS 로 분류됐고 X6/X7 이 실장비에서 0번 발동했다(FAILURE_PATTERNS 2026-10-18). 수정 뒤 esxi01~03 RAID LUN → logical_volumes 2건 · media_type null(Redfish Cisco lv 와 total_mb 일치).
 - **계기**: 사용자 조사 요청 — "Redfish 에서 HBA 를 어떻게 가져오나 · 예외처리 · 버그", 이어 "OS · ESXi 도", "논리(OS/ESXi) vs 물리(Redfish) HBA 값·개수가 다르다(ESXi 8 vs Redfish 4)",
   "CSUS 가 전부 unknown", "HBA 누락 + 임시 hotfix(wwpn=포트 주소)", "HBA 외 전 섹션 불일치 전수조사". 결정: link_status 는 up/down + null(미제공, 임의 down 금지), 같은 뜻만 고친다, RAID LUN 은 logical_volumes 에도.
 - **고친 것(제품)**:

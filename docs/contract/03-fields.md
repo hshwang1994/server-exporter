@@ -692,7 +692,8 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
   `down` 으로 적지 않고, 종전 `unknown` 문자열은 폐지했다(`link_speed_gbps` · `wwnn` 의 "미노출 → null" 과 같은 규칙). 채널별 매핑은 `schema/field_dictionary.yml`
   `storage.hbas[].link_status` 가 정본이다: Redfish `LinkStatus`(없으면 null + notice `링크 상태 미제공`), Linux `port_state`(Online·Marginal → up / Offline·Linkdown·Error·
   Blocked·Bypassed·Loopback·Diagnostics → down / Unknown·Deleted·없음 → null), Windows `OperationalStatus`(2 → up / 3~8 → down / 1·없음 → MSFC `PortState` → null),
-  ESXi `status`(online → up / offline → down / unbound·unknown·없음 → null). HPE CSUS 3200(RMC 1.75.108 · Redfish 1.19.0)은 FC Port 리소스에 `LinkStatus`·`Status`
+  ESXi `status`(online → up / offline → down / unbound·unknown·없음 → null; `HostBusAdapter.status` 는 어댑터(패브릭 로그인) 상태라 Redfish 포트
+  `LinkStatus`(물리/업링크 링크)와 다를 수 있다 — 실측 2026-10-18 Jenkins #647·#648 연속 빌드에서 esxi02 FC 2포트가 ESXi `down` · CIMC `up`). HPE CSUS 3200(RMC 1.75.108 · Redfish 1.19.0)은 FC Port 리소스에 `LinkStatus`·`Status`
   키가 없어 Redfish 로는 항상 `null` 이다 — 전수 크롤(2,264 리소스) 어디에도 FC 링크 상태가 없고(PCIe 장치의 `H3Alert.1.7.LinkUp` 은 RAID 컨트롤러에도 있는 슬롯
   링크다) 알림 로그 리소스도 없다(EventService 는 구독 전용). Portal 은 `wwpn` 으로 OS 채널 값을 조인해 보인다.
 - **개수 원칙 (2026-10-18)** — 네 채널 모두 항목 1개 = 물리 FC 포트 1개. Linux 는 NPIV 가상 포트(`port_type` 'NPIV VPORT')를 빼고, ESXi 는 같은 (wwpn, wwnn) 의

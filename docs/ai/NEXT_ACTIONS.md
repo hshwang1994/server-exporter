@@ -5,7 +5,11 @@
 > 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/ai/decisions/ADR-2026-10-18-hba-link-status-null-and-os-logical-volumes.md` ·
 > `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다.
 
-- [ ] **[HIGH] main Job 매트릭스 · CI · 정규 승격 · canary** — 이 세션은 Jenkins 자격을 파일에 쓰는 단계가 자동 모드 분류기에 막혀 수행하지 못했다. 사용자(또는 자격 파일이 있는 세션)가
+- [ ] **[HIGH] 정규 승격 `7f21cc7c` → production (사용자 결정 1건 대기)** — 2026-10-18 진행: 1차 `b0817907` 매트릭스 → ESXi RAID 판정 결함 발견·수정(`7f21cc7c`) → 2차 매트릭스 #652~#663 계약값 일치 → CI #60 **COMPLETE_PASS(G01~G20)**.
+      그러나 CI Promote 단계가 Jenkins 자격증명 `se-gitlab-push`(GitLab push) 부재로 **dry-run** 으로 떨어져 production 은 `151cc395` 그대로다. 사용자 선택: (a) Jenkins 자격증명 `se-gitlab-push` 등록 → main Job 매트릭스(그때 main tip) 재실행 →
+      CI `PROMOTE_DRY_RUN=false` → Jenkins 자체 승격 (이후 자동 승격 경로가 열린다, 권장) / (b) 작업 PC `prodgen promote --sha 7f21cc7c` + CI #60 보고서 3종 + 사용자 자격 파일(`docs/operate/09-production-branch.md` 3절). 승격 직후 production Job canary(OS 3 · Redfish 7 · ESXi 6) · 세 원격 `production` 일치.
+      실측 확인 항목 중 "Windows RAID 디스크 볼륨" 과 "PERC(bcm_mpi3) 뒤 LUN" 은 lab 에 해당 디스크가 없어 미실측(아래 LOW 항목).
+      (종전 메모) 이 세션은 Jenkins 자격을 파일에 쓰는 단계가 자동 모드 분류기에 막혀 수행하지 못했다. 사용자(또는 자격 파일이 있는 세션)가
       `docs/operate/09-production-branch.md` 3절 순서대로: main tip 으로 main Job 시나리오(S1 · S2 · S3 · S4 · T2 · T5 · T6 · E2E-A · E2E-A2 · E2E-D · E2E-E) → CI(`PROMOTE_SHA`) →
       `python -m scripts.ai.prodgen promote --sha <main sha> …` → production Job canary(OS 1~3 · Redfish · ESXi). 실측 확인 항목: Redfish 7대 `storage.hbas` 개수 · WWPN · `link_status`(up/down/null) ·
       `cpu.max_speed_mhz`(정격) · `cpu.turbo_max_mhz` · Cisco `hardware.uuid`(ESXi 와 같아야 함) · `network.adapters[].model`(Dell 임베디드 NIC 채워짐) · Linux r760-6 `storage.logical_volumes`(PERC VD) ·
@@ -20,6 +24,7 @@
 - [ ] **[MED] Cisco 다른 세대 · UCS X-Series UUID 바이트 순서** — `uuid_byte_order: smbios_raw` 는 C220 M5 CIMC 4.1 1쌍 실측만. `cisco_bmc.yml` · `cisco_ucs_xseries.yml` 은 미확인이라 적지 않았다(OS 쌍 실측 뒤 결정).
 - [ ] **[MED / Portal 소비자] 안내** — `storage.hbas[].link_status` 가 `null` 일 수 있음(unknown 문자열 폐지) · `cpu.max_speed_mhz` 가 Redfish 에서 정격으로 바뀜(종전 터보) · `cpu.turbo_max_mhz` Redfish 추가 ·
       `storage.logical_volumes[]` 가 OS/ESXi 에서도 채워짐 · `hardware.uuid` 가 Cisco Redfish 에서 OS 와 같은 표기로 바뀜.
+- [ ] **[LOW / lab] ESXi PERC(bcm_mpi3) 뒤 LUN 실측** — .91/.92/.93 은 PERC 에 VD 가 없어 `logical_volumes` 가 `[]` 다. VD 가 있는 PERC 호스트(또는 r760 ESXi 재구성)에서 RAID 뒤 LUN → logical_volumes · media_type null 을 확인한다. MegaRAID(lsi_mr3) 경로는 esxi01~03 에서 확인됐다(2026-10-18 #661).
 - [ ] **[LOW] `esxi_baseline.json` hbas 재캡처** — 현행 코드와 3필드 불일치(수작업 값 · 대문자 WWPN). 사이트/lab 실측으로 교체(rule 13 R4).
 - [ ] **[LOW] 사전 항목 부재** — 코드가 내는 `cpu.sockets` · `cpu.logical_threads` · `cpu.model` 이 `schema/field_dictionary.yml` 에 없다(이번 조사에서 확인). 사전 추가는 schema 작업으로 따로(rule 92 R5).
 - [ ] **[LOW / 검토] `storage.infiniband[].link_status`** — hbas 와 달리 `unknown` 3값 그대로(사용자 언급 없음). 같은 규칙(null)로 바꿀지 결정.

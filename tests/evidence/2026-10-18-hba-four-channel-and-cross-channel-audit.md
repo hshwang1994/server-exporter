@@ -138,7 +138,37 @@ envelope(`gather_final.jsonl`) 대조:
   .91 BOSS-N1(`nvme_pcie`) 은 `null`. 원인: `_controller_type` 이 `SerialAttached → SAS` 를 드라이버 확인보다 먼저 돌려보냈고(ESXi 7 은 MegaRAID 를 `HostSerialAttachedHba` 로 노출), `bcm_mpi3` 는 HBA·RAID 겸용이라 드라이버로 못 가른다.
   수정: `HostPciDevice.classId` 0x0104(RAID, Linux lspci 와 같은 신호) 1차 → RAID 드라이버 계열 → SerialAttached=SAS → nvme(BlockHba/PcieHba) → class 폴백. `FAILURE_PATTERNS.md` 2026-10-18 항목.
 
-### 5.2 2차 — 수정 commit 이후 (아래에 기록)
+### 5.2 2차 — 수정 commit `7f21cc7c` (#652~#663, checkout SHA 확인 · 원격 tip 관측 1792294635~1792295220 불변)
+
+| 시나리오 | 빌드 | 결과 | 비고 |
+|---|---|---|---|
+| S1 | #652 | SUCCESS | Linux VM 3대 |
+| S2 | #653 | SUCCESS | 혼합 배치 |
+| S3 | #654 | SUCCESS | Linux 11대 |
+| S4 | #655 | SUCCESS | Windows .120 |
+| T2 | #656 | SUCCESS | 빠른 실패 |
+| T6 | #657 | UNSTABLE | Callback 실패(계약값) |
+| E2E-A | #658 | UNSTABLE | cj routing smoke |
+| E2E-E | #659 | SUCCESS | Redfish 7대 — 1차와 같은 값(정격/터보/hbas/lv) |
+| E2E-A2 | #660 | FAILURE | 폐기 Location fail-closed(계약값) |
+| E2E-D | #661 | SUCCESS | ESXi 6대 (.1 .2 .3 .91 .92 .93) |
+| T5 | #663 | ABORTED | 수집 단계 진입 +3초에 `stop` API — `[요약] 수집 중 빌드 중단으로 중단 (ABORTED)`. #662 는 수집이 먼저 끝난 무효 시도(SUCCESS) |
+
+- 1차 결함의 실측 확인(#661): esxi01/02/03 `controllers[] lsi_mr3 → RAID`, RAID LUN `physical_disks[].media_type` null, `logical_volumes` 각 2건(6,099,700 MB · 10,986,327 MB) —
+  **Redfish Cisco .2 의 `logical_volumes` Volume 0(RAID5) · Volume 1(RAID0) total_mb 와 일치**. .91/.92/.93(R760): `bcm_mpi3 → RAID`(PCI class) · `nvme_pcie → NVMe`; PERC 뒤 VD 가 없어 logical_volumes 는 `[]`,
+  physical_disks 는 BOSS-N1(SSD) 1개 — PERC(bcm_mpi3) 뒤 LUN 경로는 lab 에서 미실측(VD 가 있는 호스트 필요).
+- Redfish(#659) · Linux · Windows 는 1차와 같은 코드(수정은 `esxi_disks.py` 만)라 값이 같다.
+
+### 5.3 CI · 승격 상태
+
+- CI `clovirone-cicd/clovirone-server-gather-ci` #60 (61분) — `PROMOTE=true · PROMOTE_SHA=7f21cc7c · PROMOTE_DRY_RUN=false`, E2E_MAIN_ENTRIES 2차 11건, E2E_TIP_OBSERVATIONS_JSON(#660, before 1792294635 · after 1792295220, sha 불변).
+  결과 SUCCESS(61분) · verdict **COMPLETE_PASS** · gate G01~G20 전부 PASS(G19 실장비 3채널 포함) · Evidence Aggregate 통과 · **Prodgen Promote 는 Jenkins 자격증명 `se-gitlab-push`(GitLab push) 부재로 dry-run(원격 변경 0)** — `Jenkinsfile_ci` 의 `dryRun = PROMOTE_DRY_RUN || !haveGitlab`.
+- production: github · gitlab(origin push 2개) · internal 모두 **`151cc395` 그대로(승격 미반영)** — 2026-10-17 승격본(main `dd69aee1`).
+- production Job `clovirone-cicd/clovirone-server-gather` #303 OS(3대) · #304 Redfish(7대) · #305 ESXi(6대) SUCCESS — checkout `151cc395` 이므로 **승격 전 production 상태 확인이며 `7f21cc7c` canary 가 아니다**(승격 뒤 다시 돈다).
+- 전체 pytest 재실행(`7f21cc7c`, unit · e2e · regression): 5608 passed, 44 skipped, 7 xfailed, 92 warnings in 1560.40s (0:26:00) · 통합(`-m "not live"`) 355 passed 6 skipped.
+- **남은 승격 경로(사용자 결정)** — (a) Jenkins 에 GitLab push 자격증명 `se-gitlab-push`(username/password) 를 등록한 뒤 CI 를 `PROMOTE_DRY_RUN=false` 로 다시 돌리면 Jenkins 가 스스로 승격한다(main tip 이 그때의 PROMOTE_SHA 와 같아야 하므로 main Job 매트릭스 1회 재실행 — API 로 약 15분);
+  (b) 작업 PC 에서 `docs/operate/09-production-branch.md` 3절의 `prodgen promote --sha 7f21cc7c --verify-report <CI #60 prodgen_verify_report.aggregated.json> --e2e-evidence <CI #60 e2e_evidence.json> --ci-stage-results <CI #60 ci_stage_results.json> --netrc … --vault-password-file … --push-remote origin,internal`
+  — 자격 파일은 사용자가 만든다(AI 는 자격을 파일에 쓰지 않는다). 승격 직후 production Job canary(OS 3 · Redfish 7 · ESXi 6) 와 세 원격 `production` 일치 확인.
 
 
 ## 6. 변경 범위 (Additive)
