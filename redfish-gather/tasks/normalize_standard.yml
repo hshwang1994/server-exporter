@@ -437,7 +437,10 @@
         vendor:       "{{ _rf_d_system.manufacturer | default(none) }}"
         model:        "{{ _rf_d_system.model        | default(none) }}"
         serial:       "{{ _rf_d_system.serial | default(none) | normalize_os_serial(_rf_d_system.manufacturer | default(none), _rf_d_system.model | default(none)) }}"
-        uuid:         "{{ _rf_d_system.uuid         | default(none) | normalize_uuid }}"
+        uuid: >-
+          {%- set _u = _rf_d_system.uuid | default(none) | normalize_uuid -%}
+          {%- set _ord = (((_selected_adapter | default({})).vendor_notes | default({})).uuid_byte_order | default('', true)) | string | trim | lower -%}
+          {{ (_u | uuid_byteswap) if (_u and _ord == 'smbios_raw') else _u }}
         sku:          "{{ _rf_d_system.sku           | default(none) }}"
         bios_version: "{{ _rf_d_system.bios_version | default(none) }}"
         bios_date:    "{{ _rf_d_system.bios_date | default((_rf_d_system.oem | default({})).bios_release_date | default(none)) }}"
@@ -457,13 +460,16 @@
           {%- set s = (_rf_d_cpus | map(attribute='total_cores') | select | list | sum) if _rf_d_cpus else 0 -%}
           {{ s if s else (_rf_d_system.cpu_summary | default({})).core_count | default(none) }}
         logical_threads: >-
+          {%- set lpc = (_rf_d_system.cpu_summary | default({})).logical_processor_count | default(none) -%}
           {%- set s = (_rf_d_cpus | map(attribute='total_threads') | select | list | sum) if _rf_d_cpus else 0 -%}
-          {{ s if s else (_rf_d_system.cpu_summary | default({})).logical_processor_count | default(none) }}
+          {{ lpc if (lpc is not none and (lpc | int) > 0) else (s if s else none) }}
         model: >-
           {%- set _m = _rf_d_cpus | map(attribute='model') | select | list | first | default(none) -%}
           {{ _m if _m else (_rf_d_system.cpu_summary | default({})).model | default(none) }}
         max_speed_mhz: >-
           {{ _rf_d_cpus | map(attribute='speed_mhz') | select | list | first | default(none) }}
+        turbo_max_mhz: >-
+          {{ _rf_d_cpus | map(attribute='max_speed_mhz', default=none) | select | list | first | default(none) }}
         architecture: >-
           {{ _rf_d_cpus | map(attribute='architecture') | select | list | first | default(_rf_d_cpus | map(attribute='instruction_set') | select | list | first | default(none)) }}
         summary: "{{ _rf_summary_cpu | default({'groups': []}) }}"

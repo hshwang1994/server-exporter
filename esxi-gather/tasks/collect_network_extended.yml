@@ -86,11 +86,14 @@
           {{ out }}
         _e_ext_hbas: >-
           {%- set out = [] -%}
+          {%- set seen = [] -%}
           {%- set d = _e_vmhba.hosts_vmhbas_info | default({}) -%}
           {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
           {%- set vmhbas = (d.get(key, {}).get('vmhba_details', [])) if key else [] -%}
-          {%- set fc_drivers = ['lpfc', 'qlnativefc', 'brcmnvmefc', 'qlnativefcoe'] -%}
+          {%- set fc_drivers = ['lpfc', 'qlnativefc', 'brcmnvmefc', 'bfa', 'fnic', 'nfnic'] -%}
+          {%- set fcoe_drivers = ['qlnativefcoe', 'brcmfcoe', 'qfle3f', 'bnx2fc', 'qedf'] -%}
           {%- set iscsi_drivers = ['iscsi_vmk'] -%}
+          {%- set wwn_re = '^([0-9a-f]{2}:){7}[0-9a-f]{2}$' -%}
           {%- set ctrl_vendor = {} -%}
           {%- for c in (_e_raw_controllers | default([])) -%}
             {%- if c.id | default(none) -%}{%- set _ = ctrl_vendor.update({c.id: c.controller_manufacturer | default(none)}) -%}{%- endif -%}
@@ -99,30 +102,63 @@
             {%- set dev = h.device | default(none) -%}
             {%- set drv = (h.driver | default('')) | lower -%}
             {%- set atype = (h.type | default('')) | lower -%}
+            {%- set atype_c = atype | replace(' ', '') | replace('_', '') | replace('-', '') -%}
             {%- if dev -%}
-              {%- set is_fc = ('fibre' in atype) or (drv in fc_drivers) -%}
-              {%- set is_iscsi = ('iscsi' in atype) or (drv in iscsi_drivers) -%}
+              {%- set is_fcoe = ('fibrechanneloverethernet' in atype_c) or (drv in fcoe_drivers) -%}
+              {%- set is_fc = ('fibre' in atype) or (drv in fc_drivers) or is_fcoe -%}
+              {%- set is_iscsi = (not is_fc) and (('iscsi' in atype) or ('internetscsi' in atype_c) or (drv in iscsi_drivers)) -%}
               {%- if is_fc or is_iscsi -%}
-                {%- set raw_sp = h.speed | default(none) -%}
-                {%- set sp_gbps = (raw_sp | int) if (raw_sp is number) else none -%}
-                {%- set _ = out.append({
-                  'name':            dev,
-                  'driver':          h.driver | default(none),
-                  'model':           h.model | default(none),
-                  'vendor':          ctrl_vendor.get(dev, none),
-                  'firmware':        none,
-                  'adapter_type':    h.type | default(none),
-                  'link_status':     ('up' if (h.status | default('') | lower | trim) in ['connected','up','linkup','active','online'] else ('down' if (h.status | default('') | lower | trim) in ['disconnected','down','linkdown','offline','disabled','inactive'] else 'unknown')),
-                  'wwpn':            (h.port_wwn | default(none)) | normalize_wwn,
-                  'wwnn':            (h.node_wwn | default(none)) | normalize_wwn,
-                  'link_speed_gbps': sp_gbps,
-                  'port_type':       ('FibreChannel' if is_fc else 'iSCSI'),
-                  'pci':             h.location | default(none),
-                  'bus':             h.bus | default(none),
-                  'source':          'esxi',
-                }) -%}
+                {%- set wwpn_n = (h.port_wwn | default(none)) | normalize_wwn -%}
+                {%- set wwnn_n = (h.node_wwn | default(none)) | normalize_wwn -%}
+                {%- set wwpn = wwpn_n if (wwpn_n is none or (wwpn_n is match(wwn_re))) else none -%}
+                {%- set wwnn = wwnn_n if (wwnn_n is none or (wwnn_n is match(wwn_re))) else none -%}
+                {%- set dkey = (wwpn ~ '/' ~ (wwnn or '')) if wwpn else none -%}
+                {%- if dkey is none or dkey not in seen -%}
+                  {%- if dkey is not none -%}{%- set _ = seen.append(dkey) -%}{%- endif -%}
+                  {%- set raw_sp = h.speed | default(none) -%}
+                  {%- set sp_gbps = none -%}
+                  {%- if raw_sp is number and raw_sp > 0 -%}
+                    {%- set spf = raw_sp | float -%}
+                    {%- set spv = (spf / 1000000000) if spf >= 1000000 else ((spf / 1000) if spf >= 1000 else spf) -%}
+                    {%- set sp_gbps = (spv | int) if (spv == (spv | int)) else (spv | round(2)) -%}
+                  {%- endif -%}
+                  {%- set hs = (h.status | default('')) | string | lower | trim -%}
+                  {%- set loc = h.location | default(none) -%}
+                  {%- set bus = h.bus | default(none) -%}
+                  {%- set _ = out.append({
+                    'name':            dev,
+                    'driver':          h.driver | default(none),
+                    'model':           h.model | default(none),
+                    'vendor':          ctrl_vendor.get(dev, none),
+                    'firmware':        none,
+                    'adapter_type':    h.type | default(none),
+                    'link_status':     ('up' if hs in ['online', 'connected', 'up', 'linkup', 'active'] else ('down' if hs in ['offline', 'disconnected', 'down', 'linkdown', 'disabled', 'inactive'] else none)),
+                    'wwpn':            wwpn,
+                    'wwnn':            wwnn,
+                    'link_speed_gbps': sp_gbps,
+                    'port_type':       ('FCoE' if is_fcoe else ('FibreChannel' if is_fc else 'iSCSI')),
+                    'pci':             (loc if (loc is not none and (loc | string | trim) not in ['', 'PCI', 'N/A']) else none),
+                    'bus':             (bus if (bus is number and bus >= 0) else none),
+                    'source':          'esxi',
+                  }) -%}
+                {%- endif -%}
               {%- endif -%}
             {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+        _e_ext_hba_bad_wwn: >-
+          {%- set out = [] -%}
+          {%- set d = _e_vmhba.hosts_vmhbas_info | default({}) -%}
+          {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
+          {%- set vmhbas = (d.get(key, {}).get('vmhba_details', [])) if key else [] -%}
+          {%- set wwn_re = '^([0-9a-f]{2}:){7}[0-9a-f]{2}$' -%}
+          {%- for h in vmhbas -%}
+            {%- for k in ['port_wwn', 'node_wwn'] -%}
+              {%- set n = (h[k] | default(none)) | normalize_wwn -%}
+              {%- if n is not none and not (n is match(wwn_re)) -%}
+                {%- set _ = out.append((h.device | default('?')) ~ ':' ~ k ~ '=' ~ (h[k] | string)) -%}
+              {%- endif -%}
+            {%- endfor -%}
           {%- endfor -%}
           {{ out }}
         _e_ext_portgroups: >-
@@ -223,6 +259,11 @@
                                       'detail': ('scope=' ~ (scopes | join(',')) ~ '; cause=module_failed; msg=' ~ ((msgs | first | default('none'))[:160]))}) -%}
             {%- endif -%}
           {%- endfor -%}
+          {%- set bad = _e_ext_hba_bad_wwn | default([]) -%}
+          {%- if (bad | length) > 0 -%}
+            {%- set _ = out.append({'section': 'storage', 'message': texts['storage'],
+                                    'detail': ('scope=vmhba; cause=malformed_wwn; count=' ~ (bad | length) ~ '; values=' ~ ((bad[:10]) | join(',')))}) -%}
+          {%- endif -%}
           {{ out }}
       no_log: true
   rescue:
@@ -245,6 +286,11 @@
             detail: >-
               {{ (ansible_failed_result.msg | default('', true) | string | trim)
                  | default(none, true) }}
+          - section: storage
+            message: "스토리지 어댑터 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
+            detail: >-
+              {{ 'scope=vmhba; cause=task_failed; msg='
+                 ~ ((ansible_failed_result.msg | default('', true) | string | trim) or 'none') }}
       no_log: true
 
 - name: "esxi | extended | merge fragment"

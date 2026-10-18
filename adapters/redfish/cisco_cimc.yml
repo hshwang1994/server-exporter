@@ -27,6 +27,7 @@ capabilities:
     - thermal
 
 vendor_notes:
+  uuid_byte_order: smbios_raw
   design_hints:
     collect_strategy: standard_only
     graceful_degradation_on_section_fail: continue

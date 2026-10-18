@@ -8,6 +8,7 @@
           [ -e "$1" ] || return 0
           if v=$(cat "$1" 2>/dev/null); then :; else v=""; echo "ERR|$1"; fi
         }
+        cl() { printf '%s' "$1" | tr -d '|\r\n'; }
         if [ -d /sys/class/fc_host ]; then
           for h in /sys/class/fc_host/host*; do
             [ -d "$h" ] || continue
@@ -17,26 +18,38 @@
             rd "$h/symbolic_name"; sym=$v
             rd "$h/port_state"; state=$v
             rd "$h/speed"; speed=$v
+            rd "$h/port_type"; ptype=$v
+            sh="$h/device/scsi_host/$host"
             drv=""
-            if [ -e "$h/device/driver" ]; then
-              if lnk=$(readlink -f "$h/device/driver" 2>/dev/null) && [ -n "$lnk" ]; then
-                drv=$(basename "$lnk" 2>/dev/null)
-              else
-                echo "ERR|$h/device/driver"
-              fi
+            if [ -f "$sh/proc_name" ]; then rd "$sh/proc_name"; drv=$v; fi
+            if [ -z "$drv" ]; then
+              for dl in "$h/device/../driver" "$h/device/driver"; do
+                [ -e "$dl" ] || continue
+                if lnk=$(readlink -f "$dl" 2>/dev/null) && [ -n "$lnk" ]; then drv=$(basename "$lnk" 2>/dev/null); else echo "ERR|$dl"; fi
+                [ -n "$drv" ] && break
+              done
             fi
             fwver=""
-            for fwp in "$h/device/fw_version" "$h"/device/scsi_host/*/fw_version; do
-              if [ -f "$fwp" ]; then rd "$fwp"; fwver=$v; break; fi
+            for fwp in "$sh/fw_version" "$sh/fwrev" "$h"/device/scsi_host/*/fw_version "$h"/device/scsi_host/*/fwrev "$h/device/fw_version"; do
+              if [ -f "$fwp" ]; then rd "$fwp"; fwver=$v; [ -n "$fwver" ] && break; fi
             done
             mdl=""; mfr=""
-            for mp in "$h/device/scsi_host/$host/model_name" "$h"/device/scsi_host/*/model_name "$h/device/model_name"; do
-              if [ -f "$mp" ]; then rd "$mp"; mdl=$v; break; fi
+            for mp in "$sh/model_name" "$sh/modelname" "$sh/model" "$h"/device/scsi_host/*/model_name "$h"/device/scsi_host/*/modelname "$h/device/model_name"; do
+              if [ -f "$mp" ]; then rd "$mp"; mdl=$v; [ -n "$mdl" ] && break; fi
             done
-            for vp in "$h/device/scsi_host/$host/manufacturer" "$h"/device/scsi_host/*/manufacturer "$h/device/manufacturer"; do
-              if [ -f "$vp" ]; then rd "$vp"; mfr=$v; break; fi
+            for vp in "$sh/manufacturer" "$h"/device/scsi_host/*/manufacturer "$h/device/manufacturer"; do
+              if [ -f "$vp" ]; then rd "$vp"; mfr=$v; [ -n "$mfr" ] && break; fi
             done
-            echo "FC|$host|$wwpn|$wwnn|$sym|$state|$speed|$drv|$fwver|$mdl|$mfr"
+            pci=""; pvn=""; pdv=""
+            if [ -f "$h/device/../uevent" ]; then
+              rd "$h/device/../uevent"; pci=$(printf '%s\n' "$v" | sed -n 's/^PCI_SLOT_NAME=//p' | head -n 1 | tr -d '|\r')
+            fi
+            if [ -n "$pci" ] && command -v lspci >/dev/null 2>&1; then
+              pl=$(lspci -mm -s "$pci" 2>/dev/null | head -n 1)
+              pvn=$(printf '%s\n' "$pl" | awk -F'"' '{print $4}' | tr -d '|\r')
+              pdv=$(printf '%s\n' "$pl" | awk -F'"' '{print $6}' | tr -d '|\r')
+            fi
+            echo "FC|$host|$(cl "$wwpn")|$(cl "$wwnn")|$(cl "$sym")|$(cl "$state")|$(cl "$speed")|$(cl "$drv")|$(cl "$fwver")|$(cl "$mdl")|$(cl "$mfr")|$(cl "$ptype")|$pci|$pvn|$pdv"
           done
         fi
         if [ -d /sys/class/infiniband ]; then
@@ -80,24 +93,32 @@
           {%- set out = [] -%}
           {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
             {%- set parts = line.split('|') -%}
-            {%- if parts | length >= 9 and parts[0] == 'FC' -%}
+            {%- set ptype = ((parts[11] | default('')) | trim | lower) if (parts | length >= 12) else '' -%}
+            {%- if parts | length >= 9 and parts[0] == 'FC' and 'npiv' not in ptype -%}
               {%- set spfirst = ((parts[6] | default('')) | trim).split(' ')[0] if (parts[6] | default('') | trim) else '' -%}
               {%- set spdig = spfirst | regex_replace('[^0-9]', '') -%}
-              {%- set st = (parts[5] | default('')) | lower -%}
+              {%- set st = (parts[5] | default('')) | trim | lower -%}
+              {%- set link = 'up' if st in ['online', 'marginal'] else ('down' if st in ['offline', 'linkdown', 'error', 'blocked', 'bypassed', 'loopback', 'diagnostics'] else none) -%}
+              {%- set drv = (parts[7] | trim) if (parts[7] | trim) else none -%}
+              {%- set ptp = 'FCoE' if ((drv or '') | lower) in ['fcoe', 'bnx2fc', 'qedf'] else 'FibreChannel' -%}
               {%- set mdl = (parts[9] | trim) if (parts | length >= 10 and (parts[9] | trim)) else none -%}
               {%- set mfr = (parts[10] | trim) if (parts | length >= 11 and (parts[10] | trim)) else none -%}
+              {%- set pvn_raw = (parts[13] | trim) if (parts | length >= 15 and (parts[13] | trim)) else '' -%}
+              {%- set pdv_raw = (parts[14] | trim) if (parts | length >= 15 and (parts[14] | trim)) else '' -%}
+              {%- set pvn = '' if (pvn_raw is match('^Vendor [0-9a-fA-F]{4}$')) else pvn_raw -%}
+              {%- set pdv = '' if (pdv_raw is match('^Device [0-9a-fA-F]{4}$')) else pdv_raw -%}
               {%- set _ = out.append({
                 'host':            parts[1],
                 'wwpn':            (parts[2] | normalize_wwn) if parts[2] else none,
                 'wwnn':            (parts[3] | normalize_wwn) if parts[3] else none,
-                'model':           mdl if mdl else (parts[4] if parts[4] else none),
+                'model':           mdl if mdl else (pdv if pdv else (parts[4] if parts[4] else none)),
                 'symbolic_name':   parts[4] if parts[4] else none,
-                'vendor':          mfr,
-                'driver':          parts[7] if parts[7] else none,
+                'vendor':          mfr if mfr else (pvn if pvn else none),
+                'driver':          drv,
                 'firmware':        parts[8] if parts[8] else none,
-                'link_status':     ('up' if 'online' in st else ('down' if ('offline' in st or 'linkdown' in st or 'down' in st) else 'unknown')),
+                'link_status':     link,
                 'link_speed_gbps': (spdig | int) if spdig else none,
-                'port_type':       'FibreChannel',
+                'port_type':       ptp,
                 'source':          'os',
               }) -%}
             {%- endif -%}
@@ -180,12 +201,18 @@
         _sections_failed_fragment:    []
         _errors_fragment: >-
           {%- set paths = _l_hba_read_errors | default([]) -%}
-          {%- if (paths | length) == 0 -%}{{ [] }}
-          {%- else -%}
+          {%- set rc = (_l_hba_raw.rc | default(0)) | int -%}
+          {%- set out = [] -%}
+          {%- if rc != 0 -%}
+            {%- set se = (((_l_hba_raw.stderr | default('')) | string) | replace('\n', ' ') | replace('\r', ' ') | trim)[:160] -%}
+            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=fc_host,infiniband; cause=command_failed; rc=' ~ rc ~ '; stderr=' ~ (se or 'none'))}) -%}
+          {%- endif -%}
+          {%- if (paths | length) > 0 -%}
             {%- set scope = ((['fc_host'] if (paths | select('search', '/fc_host/') | list | length) > 0 else []) + (['infiniband'] if (paths | select('search', '/infiniband/') | list | length) > 0 else [])) | join(',') -%}
             {%- set more = (' 외 ' ~ ((paths | length) - 10) ~ '건') if (paths | length) > 10 else '' -%}
-            {{ [{'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=' ~ (scope or 'fc_host,infiniband') ~ '; cause=attribute_unreadable; count=' ~ (paths | length) ~ '; paths=' ~ (paths[:10] | join(',')) ~ more)}] }}
+            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=' ~ (scope or 'fc_host,infiniband') ~ '; cause=attribute_unreadable; count=' ~ (paths | length) ~ '; paths=' ~ (paths[:10] | join(',')) ~ more)}) -%}
           {%- endif -%}
+          {{ out }}
       no_log: true
   rescue:
     - name: "linux | hba_ib | rescue (best-effort skip)"

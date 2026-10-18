@@ -80,7 +80,7 @@
         physical_disks:  "{{ _e_raw_disks | default([]) }}"
         datastores:      "{{ _e_norm_datastores }}"
         controllers:     "{{ _e_raw_controllers | default([]) }}"
-        logical_volumes: []
+        logical_volumes: "{{ _e_raw_logical_volumes | default([]) }}"
         summary:         "{{ _e_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
     _sections_supported_fragment: ['storage']
     _sections_collected_fragment: >-

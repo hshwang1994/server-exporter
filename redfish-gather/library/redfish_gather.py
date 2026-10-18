@@ -517,6 +517,73 @@ def _dicts(x):
 def _str(x):
     return x if isinstance(x, str) else ''
 
+_BRAND_GHZ_RE = re.compile(r'@\s*([0-9]+(?:\.[0-9]+)?)\s*GHz', re.IGNORECASE)
+_NIC_FW_MAC_SUFFIX_RE = re.compile(r'\s*-\s*(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\s*$')
+
+
+def _brand_base_mhz(text):
+    if not isinstance(text, str):
+        return None
+    m = _BRAND_GHZ_RE.search(text)
+    if not m:
+        return None
+    try:
+        return int(round(float(m.group(1)) * 1000))
+    except (TypeError, ValueError):
+        return None
+
+
+def _cpu_base_speed_mhz(pdata):
+    for ks in (('BaseSpeedMHz',), ('Oem', 'Hpe', 'RatedSpeedMHz')):
+        v = _safe_int(_safe(pdata, *ks))
+        if v:
+            return v
+    v = _brand_base_mhz(_safe(pdata, 'Model')) or _brand_base_mhz(_safe(pdata, 'Name'))
+    if v:
+        return v
+    for ks in (('OperatingSpeedMHz',), ('Oem', 'Lenovo', 'CurrentClockSpeedMHz')):
+        v = _safe_int(_safe(pdata, *ks))
+        if v:
+            return v
+    return None
+
+
+def _fill_adapter_models_from_firmware(netad, firmware):
+    if not isinstance(netad, dict) or not isinstance(firmware, list):
+        return
+    for a in netad.get('adapters') or []:
+        if not isinstance(a, dict) or a.get('model'):
+            continue
+        aid = _id_text(a.get('id'))
+        if not aid:
+            continue
+        name = None
+        for f in firmware:
+            if not isinstance(f, dict) or not f.get('name'):
+                continue
+            for t in (_id_text(f.get('id')), _id_text(f.get('component'))):
+                if t and (t == aid or t.startswith(aid + '-') or t.endswith('__' + aid) or ('__' + aid + '-') in t):
+                    name = _NIC_FW_MAC_SUFFIX_RE.sub('', str(f['name'])).strip() or None
+                    break
+            if name:
+                break
+        if not name:
+            continue
+        a['model'] = name
+        for key in ('fc_hbas', 'ports'):
+            for e in netad.get(key) or []:
+                if isinstance(e, dict) and _id_text(e.get('adapter_id')) == aid and not e.get('adapter_model'):
+                    e['adapter_model'] = name
+        _notice('network_adapters', 'NetworkAdapter %s: Model 없음, 펌웨어 목록 이름(%s)으로 채움' % (aid, name))
+
+
+def _id_text(x):
+    if isinstance(x, str):
+        return x
+    if isinstance(x, int) and not isinstance(x, bool):
+        return str(x)
+    return ''
+
 _CODE_VENDOR_UNRESOLVED = 'vendor_unresolved'
 _CODE_BIOS_NON_BLOCKING = 'bios_non_blocking'
 _CODE_NON_BLOCKING_SUBRESOURCE = 'subresource_non_blocking'
@@ -1925,7 +1992,8 @@ def gather_processors(bmc_ip, system_uri, username, password, timeout, verify_ss
             'socket':            _safe(pdata, 'Socket'),
             'total_cores':       _safe_int(_safe(pdata, 'TotalCores')),
             'total_threads':     _safe_int(_safe(pdata, 'TotalThreads')),
-            'speed_mhz':         _safe_int(_safe(pdata, 'MaxSpeedMHz')),
+            'speed_mhz':         _cpu_base_speed_mhz(pdata),
+            'max_speed_mhz':     _safe_int(_safe(pdata, 'MaxSpeedMHz')),
             'health':            _safe(pdata, 'Status', 'Health'),
             'processor_type':    _safe(pdata, 'ProcessorType'),
             'architecture':      _safe(pdata, 'ProcessorArchitecture'),
@@ -2522,7 +2590,7 @@ def _classify_port_protocol(port_protocol, link_tech, ndf, pdata=None):
         return 'FibreChannel'
     if pp == 'ETHERNET' or lt == 'ethernet' or ndf_type == 'ethernet':
         return 'Ethernet'
-    if isinstance(pdata, dict) and isinstance(pdata.get('Ethernet'), dict):
+    if isinstance(pdata, dict) and isinstance(pdata.get('Ethernet'), dict) and lt != 'fibrechannel':
         return 'Ethernet'
     if ndf_wwpn:
         return 'FibreChannel'
@@ -2556,6 +2624,11 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
             continue
         fc = _safe(nd, 'FibreChannel') or {}
         ib = _safe(nd, 'InfiniBand') or {}
+        port_uris = []
+        for _lk in ('PhysicalPortAssignment', 'PhysicalNetworkPortAssignment'):
+            _u2 = _safe(nd, 'Links', _lk, '@odata.id')
+            if isinstance(_u2, str) and _u2 and _p(_u2) not in port_uris:
+                port_uris.append(_p(_u2))
         port_uri = (_safe(nd, 'Links', 'PhysicalPortAssignment', '@odata.id')
                     or _safe(nd, 'Links', 'PhysicalNetworkPortAssignment', '@odata.id'))
         ndfs.append({
@@ -2567,8 +2640,42 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
             'node_guid':    _normalize_ib_guid(_safe(ib, 'NodeGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentNodeGUID')),
             'port_guid':    _normalize_ib_guid(_safe(ib, 'PortGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentPortGUID')),
             'port_uri':     _p(port_uri) if port_uri else None,
+            'port_uris':    port_uris,
         })
     return ndfs
+
+
+def _hba_link_status(pdata):
+    if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
+        return None
+    v = _normalize_link_status(pdata.get('LinkStatus'))
+    return v if v in ('up', 'down') else None
+
+
+def _derive_port_wwpn(pdata, link_tech, ndf):
+    if not isinstance(pdata, dict):
+        return None
+    cands = []
+
+    def _add(values):
+        for v in _as_list(values):
+            n = _normalize_wwn(v)
+            if n and len(n) == 23 and n not in cands:
+                cands.append(n)
+
+    fc = pdata.get('FibreChannel')
+    if isinstance(fc, dict):
+        _add(fc.get('AssociatedWWNs'))
+        _add(fc.get('AssociatedWorldWideNames'))
+    if _str(link_tech).strip().lower() == 'fibrechannel':
+        eth = pdata.get('Ethernet')
+        if isinstance(eth, dict):
+            _add(eth.get('AssociatedMACAddresses'))
+    wwnn = ndf.get('wwnn') if isinstance(ndf, dict) else None
+    if wwnn:
+        rest = [c for c in cands if c != wwnn]
+        return rest[0] if len(rest) == 1 else None
+    return cands[0] if len(cands) == 1 else None
 
 
 def _make_fc_hba(adapter_id, adapter_info, port_id, cls, link_status, speed_gbps,
@@ -2729,7 +2836,7 @@ def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris
         if not err and st == 200:
             _accept(base, data, origin)
         else:
-            fails.append((st, err or st, _extended_info(data)))
+            fails.append((st, err or st, _extended_info(data), base))
 
     if chassis_uri:
         _probe(_p(chassis_uri) + '/NetworkAdapters', 'primary')
@@ -2745,6 +2852,267 @@ def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris
     return sources, tried, fails, state['empty']
 
 
+def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
+                                 username, password, timeout, verify_ssl):
+    adp_uri = _safe(member, '@odata.id')
+    if not adp_uri:
+        return 'skipped'
+    st2, adata, aerr = _get(bmc_ip, _p(adp_uri), username, password, timeout, verify_ssl)
+    if aerr or st2 != 200:
+        errors.append(_err('network_adapters', f'NetworkAdapter {adp_uri} 실패: {aerr or st2}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        return 'fetch_failed'
+
+    adapter_id = _safe(adata, 'Id')
+    fw_ver = None
+    ctrls = _safe(adata, 'Controllers', default=[]) or []
+    if ctrls and isinstance(ctrls, list):
+        fw_ver = _safe(ctrls[0], 'FirmwarePackageVersion')
+        if not fw_ver:
+            for _pd in _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices')):
+                _pd_uri = _safe(_pd, '@odata.id')
+                if not _pd_uri:
+                    continue
+                _ps, _pdata, _pe = _get(bmc_ip, _p(_pd_uri), username, password, timeout, verify_ssl)
+                if _ps == 200 and isinstance(_pdata, dict):
+                    fw_ver = _safe(_pdata, 'FirmwareVersion')
+                    if fw_ver:
+                        break
+    port_count = 0
+    ndf_count = 0
+    ctrl_linked = False
+    if ctrls and isinstance(ctrls, list):
+        for _ctrl in ctrls:
+            _caps = _safe(_ctrl, 'ControllerCapabilities') or {}
+            port_count += _safe_int(_safe(_caps, 'NetworkPortCount'), default=0) or 0
+            ndf_count += _safe_int(_safe(_caps, 'NetworkDeviceFunctionCount'), default=0) or 0
+            _clinks = _safe(_ctrl, 'Links') or {}
+            ctrl_linked = ctrl_linked or any(_dicts(_safe(_clinks, _k))
+                                             for _k in ('NetworkDeviceFunctions', 'Ports', 'NetworkPorts'))
+    mfr = _str(_safe(adata, 'Manufacturer')).strip()
+    model = _str(_safe(adata, 'Model')).strip()
+    pre_ndfs = None
+    if port_count == 0 and ndf_count == 0 and not ctrl_linked and not mfr and not model:
+        if not _safe(adata, 'NetworkDeviceFunctions', '@odata.id'):
+            return 'skipped'
+        pre_ndfs = _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
+        if not pre_ndfs:
+            return 'skipped'
+        _notice('network_adapters', 'NetworkAdapter %s: 제조사 · 모델 정보 없음, 기능 목록 %d건으로 카드 유지'
+                % (adapter_id, len(pre_ndfs)))
+    adapter_info = {
+        'id':               adapter_id,
+        'name':             _safe(adata, 'Name'),
+        'manufacturer':     mfr or None,
+        'model':            model or None,
+        'part_number':      _safe(adata, 'PartNumber') or None,
+        'serial_number':    _safe(adata, 'SerialNumber') or None,
+        'firmware_version': fw_ver or None,
+        'mac':              None,
+        'link_status':      'unknown',
+        'speed_mbps':       None,
+        'port_count':       port_count,
+    }
+    out['adapters'].append(adapter_info)
+    adapter_idx = len(out['adapters']) - 1
+    _ports_before = len(out['ports'])
+
+    ndfs = pre_ndfs if pre_ndfs is not None else _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
+    ndf_by_port = {}
+    for i, n in enumerate(ndfs):
+        for u in (n.get('port_uris') or ([n['port_uri']] if n.get('port_uri') else [])):
+            ndf_by_port.setdefault(u, []).append(i)
+    ndf_by_id = {_id_text(n.get('id')): i for i, n in enumerate(ndfs) if _id_text(n.get('id'))}
+    ndf_matched = set()
+    port_ctx_by_id = {}
+    link_missing, wwpn_missing, wwpn_derived = [], [], []
+
+    ports_link = (_safe(adata, 'NetworkPorts', '@odata.id')
+                  or _safe(adata, 'Ports', '@odata.id'))
+    if ports_link:
+        st3, pcoll, perr = _get(bmc_ip, _p(ports_link), username, password, timeout, verify_ssl)
+        if perr or st3 != 200:
+            errors.append(_err('network_adapters',
+                               f'Ports {ports_link} 실패: {perr or st3}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+        else:
+            for pmember in _collection_members(bmc_ip, _p(ports_link), pcoll, username, password,
+                                               timeout, verify_ssl, 'network_adapters', errors):
+                p_uri = _safe(pmember, '@odata.id')
+                if not p_uri:
+                    continue
+                if origin == 'extra' and _p(p_uri) in seen_ports:
+                    continue
+                seen_ports.add(_p(p_uri))
+                st4, pdata, perr2 = _get(bmc_ip, _p(p_uri), username, password, timeout, verify_ssl)
+                if perr2 or st4 != 200:
+                    errors.append(_err('network_adapters', f'Port {p_uri} 실패: {perr2 or st4}',
+                                       code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                    continue
+                speed_gbps, speed_mbps = _normalize_port_speed(pdata)
+                assoc = _safe(pdata, 'AssociatedNetworkAddresses', default=[]) or []
+                if not isinstance(assoc, list):
+                    assoc = []
+                if not assoc:
+                    eth_macs = _safe(pdata, 'Ethernet', 'AssociatedMACAddresses')
+                    if isinstance(eth_macs, list) and eth_macs:
+                        assoc = eth_macs
+                    else:
+                        fc_wwns = (_safe(pdata, 'FibreChannel', 'AssociatedWWNs')
+                                   or _safe(pdata, 'FibreChannel', 'AssociatedWorldWideNames'))
+                        if isinstance(fc_wwns, list) and fc_wwns:
+                            assoc = fc_wwns
+                primary_addr = assoc[0] if assoc else None
+                if isinstance(primary_addr, str):
+                    primary_addr = primary_addr.lower()
+                raw_port_type = _safe(pdata, 'PortType') or ''
+                port_protocol = _safe(pdata, 'PortProtocol')
+                link_tech = (_safe(pdata, 'LinkNetworkTechnology')
+                             or _safe(pdata, 'ActiveLinkTechnology'))
+                normalized_link = _normalize_link_status(_safe(pdata, 'LinkStatus'))
+                port_id = _safe(pdata, 'Id')
+                pid_s = _id_text(port_id)
+                if pid_s:
+                    port_ctx_by_id[pid_s] = (port_protocol, link_tech, pdata)
+
+                cand = list(ndf_by_port.get(_p(p_uri), [])) if p_uri else []
+                if not cand and pid_s and pid_s in ndf_by_id:
+                    cand = [ndf_by_id[pid_s]]
+                ndf_matched.update(cand)
+                fc_ndfs = [ndfs[i] for i in cand
+                           if _classify_port_protocol(port_protocol, link_tech, ndfs[i], pdata) in ('FibreChannel', 'FCoE')]
+                ndf = fc_ndfs[0] if fc_ndfs else (ndfs[cand[0]] if cand else None)
+
+                cls = _classify_port_protocol(port_protocol, link_tech, ndf, pdata)
+                lt_fc = _str(link_tech).strip().lower() == 'fibrechannel'
+                prefixed_orphan = bool(pid_s) and any(_id_text(n.get('id')).startswith(pid_s + '-') for n in ndfs)
+                if cls is None and not cand and lt_fc and not prefixed_orphan:
+                    cls = 'FibreChannel'
+
+                joined = [ndfs[i] for i in cand]
+                ib_dec = _ib_decision(link_tech, port_protocol, joined)
+                if ib_dec == 'ib':
+                    cls = 'InfiniBand'
+                elif ib_dec == 'conflict':
+                    cls = _link_tech_port_type(link_tech)
+                    _notice('network_adapters',
+                            '네트워크 카드 %s 포트 %s: 포트 링크 기술과 기능 유형이 서로 달라 InfiniBand 여부를 확정할 수 없음, '
+                            'storage.infiniband 미수집' % (adapter_id, port_id))
+
+                if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
+                    primary_addr = ndf['wwpn']
+
+                port_hbas = []
+                if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE') and not (not cand and prefixed_orphan):
+                    hba_link = _hba_link_status(pdata)
+                    if hba_link is None:
+                        link_missing.append(_id_text(port_id) or _str(p_uri))
+                    for fndf in (fc_ndfs or [ndf]):
+                        fx = fndf if isinstance(fndf, dict) else {}
+                        if not fx.get('wwpn'):
+                            derived = _derive_port_wwpn(pdata, link_tech, fx)
+                            if derived:
+                                fx = dict(fx, wwpn=derived)
+                                wwpn_derived.append(_id_text(port_id) or _str(p_uri))
+                                primary_addr = derived
+                            else:
+                                wwpn_missing.append(_id_text(port_id) or _str(p_uri))
+                        port_hbas.append(_make_fc_hba(
+                            adapter_id, adapter_info, port_id, cls,
+                            hba_link, speed_gbps, primary_addr, fx))
+                if origin == 'extra' and port_hbas:
+                    known = {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}
+                    fresh = [h for h in port_hbas if not (h.get('wwpn') and h['wwpn'] in known)]
+                    if not fresh:
+                        continue
+                    port_hbas = fresh
+
+                port_info = {
+                    'adapter_id':              adapter_id,
+                    'adapter_model':           adapter_info['model'],
+                    'port_id':                 port_id,
+                    'name':                    _safe(pdata, 'Name'),
+                    'physical_port_number':    _safe(pdata, 'PhysicalPortNumber'),
+                    'link_status':             normalized_link,
+                    'link_state':              _safe(pdata, 'LinkState'),
+                    'current_link_speed_mbps': speed_mbps,
+                    'port_type':               cls or (raw_port_type or None),
+                    'health':                  _safe(pdata, 'Status', 'Health'),
+                    'associated_address':      primary_addr,
+                }
+                out['ports'].append(port_info)
+                cur = out['adapters'][adapter_idx]
+                if (cur.get('mac') is None and primary_addr and cls not in ('FibreChannel', 'FCoE', 'InfiniBand')
+                        and not lt_fc):
+                    cur['mac'] = primary_addr
+                if cur.get('link_status') == 'unknown' or (cur.get('link_status') != 'up' and normalized_link == 'up'):
+                    cur['link_status'] = normalized_link
+                if cur.get('speed_mbps') is None and speed_mbps:
+                    cur['speed_mbps'] = speed_mbps
+
+                if port_hbas:
+                    out['fc_hbas'].extend(port_hbas)
+                elif ib_dec == 'ib':
+                    _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps,
+                                    [n for n in joined if _str(n.get('func_type')).strip().lower() == 'infiniband'])
+
+    orphan_ib_by_parent = {}
+    orphan_ib_unlinked = []
+    for i, ndf in enumerate(ndfs):
+        if i in ndf_matched:
+            continue
+        nid = _id_text(ndf.get('id'))
+        parent = None
+        parent_pid = None
+        for _pid, _ctx in port_ctx_by_id.items():
+            if nid.startswith(_pid + '-'):
+                parent = _ctx
+                parent_pid = _pid
+                break
+        if _str(ndf.get('func_type')).strip().lower() == 'infiniband':
+            if parent is None:
+                orphan_ib_unlinked.append(nid)
+            else:
+                orphan_ib_by_parent.setdefault(parent_pid, []).append(ndf)
+            continue
+        if parent is not None:
+            cls = _classify_port_protocol(parent[0], parent[1], ndf, parent[2])
+            hba_link = _hba_link_status(parent[2])
+            hba_speed = _normalize_port_speed(parent[2])[0]
+        else:
+            cls = _classify_port_protocol(None, None, ndf, None)
+            hba_link, hba_speed = None, None
+        if cls in ('FibreChannel', 'FCoE'):
+            fx = ndf
+            if not ndf.get('wwpn'):
+                derived = _derive_port_wwpn(parent[2], parent[1], ndf) if parent is not None else None
+                if derived:
+                    fx = dict(ndf, wwpn=derived)
+                    wwpn_derived.append(nid)
+                else:
+                    wwpn_missing.append(nid)
+            if hba_link is None:
+                link_missing.append(nid)
+            hba = _make_fc_hba(adapter_id, adapter_info, ndf.get('id'), cls, hba_link, hba_speed, None, fx)
+            if hba.get('wwpn') and hba['wwpn'] in {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
+                continue
+            out['fc_hbas'].append(hba)
+    _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
+
+    if link_missing:
+        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 미제공 (storage.hbas link_status null)'
+                % (adapter_id, ', '.join(link_missing)))
+    if wwpn_derived:
+        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s WWPN 을 기능이 아니라 포트 주소에서 정함'
+                % (adapter_id, ', '.join(wwpn_derived)))
+    if wwpn_missing:
+        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s WWPN 미확정 (기능 · 포트 주소 모두 없음)'
+                % (adapter_id, ', '.join(wwpn_missing)))
+
+    _ports_collected = len(out['ports']) - _ports_before
+    if out['adapters'][adapter_idx].get('port_count') in (0, None) and _ports_collected > 0:
+        out['adapters'][adapter_idx]['port_count'] = _ports_collected
+    return 'ok'
+
+
 def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, timeout,
                                     verify_ssl, system_uri=None, extra_chassis_uris=None):
     out = {'adapters': [], 'ports': [], 'fc_hbas': [], 'infiniband': []}
@@ -2756,21 +3124,29 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         bmc_ip, chassis_uri, system_uri, extra_chassis_uris, username, password, timeout, verify_ssl, errors)
     if not sources:
         if saw_empty:
+            for _st, sig, ext, base in fails:
+                if _st != 404:
+                    errors.append(_err('network_adapters', f'NetworkAdapters {base} 실패: {sig}', ext,
+                                       code=_CODE_NON_BLOCKING_SUBRESOURCE))
             _notice('network_adapters', 'NetworkAdapters 목록이 비어 있음, 네트워크 카드(FC HBA 포함) 정보 미확인')
             return out, errors
         if fails:
-            _st, sig, ext = fails[0]
+            _st, sig, ext, _base = fails[0]
             detail = 'tried: ' + ' / '.join(tried)
             if ext:
                 detail += ' | ' + ext
             errors.append(_err('network_adapters',
                                f'NetworkAdapters 미지원 또는 실패: {sig}', detail))
         if _is_404_only_error(errors):
-            _notice('network_adapters', 'NetworkAdapters 리소스 404, 네트워크 카드(FC HBA 포함) 정보 미수집')
+            msg = 'NetworkAdapters 리소스 404, 네트워크 카드(FC HBA 포함) 정보 미수집'
+            others = ['%s: %s' % (base, sig) for _st, sig, _ext, base in fails if _st != 404]
+            if others:
+                msg += ' (다른 경로 실패: ' + ' / '.join(others) + ')'
+            _notice('network_adapters', msg)
         return out, errors
 
     if fails and sources[0][0] == 'extra':
-        _st, sig, ext = fails[0]
+        _st, sig, ext, _base = fails[0]
         if _st != 404:
             errors.append(_err('network_adapters', f'NetworkAdapters {tried[0]} 실패: {sig}', ext,
                                code=_CODE_NON_BLOCKING_SUBRESOURCE))
@@ -2786,222 +3162,31 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
                 seen_adapters.add(_p(raw))
             items.append((origin, m))
 
+    card_fail = 0
     for origin, member in _capped(items, 'network_adapters', errors):
-        adp_uri = _safe(member, '@odata.id')
-        if not adp_uri:
+        snap = {k: len(v) for k, v in out.items()}
+        ports_snap = set(seen_ports)
+        try:
+            result = _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
+                                                  username, password, timeout, verify_ssl)
+        except Exception as e:
+            sys.stderr.write("[redfish_gather] network_adapters 카드 예외: %s\n%s\n"
+                             % (type(e).__name__, traceback.format_exc(limit=3)))
+            for k, n in snap.items():
+                del out[k][n:]
+            for key in [k for k, idx in ib_idx_by_port.items() if idx >= snap['infiniband']]:
+                del ib_idx_by_port[key]
+            seen_ports.clear()
+            seen_ports.update(ports_snap)
+            errors.append(_err('network_adapters', 'NetworkAdapter %s 처리 예외' % _str(_safe(member, '@odata.id')),
+                               '%s: %s' % (type(e).__name__, str(e)[:200]), code=_CODE_NON_BLOCKING_SUBRESOURCE))
             continue
-        st2, adata, aerr = _get(bmc_ip, _p(adp_uri), username, password, timeout, verify_ssl)
-        if aerr or st2 != 200:
-            errors.append(_err('network_adapters', f'NetworkAdapter {adp_uri} 실패: {aerr or st2}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
-            continue
+        if result == 'fetch_failed':
+            card_fail += 1
 
-        adapter_id = _safe(adata, 'Id')
-        fw_ver = None
-        ctrls = _safe(adata, 'Controllers', default=[]) or []
-        if ctrls and isinstance(ctrls, list):
-            fw_ver = _safe(ctrls[0], 'FirmwarePackageVersion')
-            if not fw_ver:
-                for _pd in _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices')):
-                    _pd_uri = _safe(_pd, '@odata.id')
-                    if not _pd_uri:
-                        continue
-                    _ps, _pdata, _pe = _get(bmc_ip, _p(_pd_uri), username, password, timeout, verify_ssl)
-                    if _ps == 200 and isinstance(_pdata, dict):
-                        fw_ver = _safe(_pdata, 'FirmwareVersion')
-                        if fw_ver:
-                            break
-        port_count = 0
-        ndf_count = 0
-        ctrl_linked = False
-        if ctrls and isinstance(ctrls, list):
-            for _ctrl in ctrls:
-                _caps = _safe(_ctrl, 'ControllerCapabilities') or {}
-                port_count += _safe_int(_safe(_caps, 'NetworkPortCount'), default=0) or 0
-                ndf_count += _safe_int(_safe(_caps, 'NetworkDeviceFunctionCount'), default=0) or 0
-                _clinks = _safe(_ctrl, 'Links') or {}
-                ctrl_linked = ctrl_linked or any(_dicts(_safe(_clinks, _k))
-                                                 for _k in ('NetworkDeviceFunctions', 'Ports', 'NetworkPorts'))
-        mfr = _str(_safe(adata, 'Manufacturer')).strip()
-        model = _str(_safe(adata, 'Model')).strip()
-        if port_count == 0 and ndf_count == 0 and not ctrl_linked and not mfr and not model:
-            continue
-        adapter_info = {
-            'id':               adapter_id,
-            'name':             _safe(adata, 'Name'),
-            'manufacturer':     mfr or None,
-            'model':            model or None,
-            'part_number':      _safe(adata, 'PartNumber') or None,
-            'serial_number':    _safe(adata, 'SerialNumber') or None,
-            'firmware_version': fw_ver or None,
-            'mac':              None,
-            'link_status':      'unknown',
-            'speed_mbps':       None,
-            'port_count':       port_count,
-        }
-        out['adapters'].append(adapter_info)
-        adapter_idx = len(out['adapters']) - 1
-        _ports_before = len(out['ports'])
-
-        ndfs = _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
-        ndf_by_port = {}
-        for i, n in enumerate(ndfs):
-            if n.get('port_uri'):
-                ndf_by_port.setdefault(n['port_uri'], []).append(i)
-        ndf_by_id = {n['id']: i for i, n in enumerate(ndfs) if n.get('id')}
-        ndf_matched = set()
-        port_ctx_by_id = {}
-
-        ports_link = (_safe(adata, 'NetworkPorts', '@odata.id')
-                      or _safe(adata, 'Ports', '@odata.id'))
-        if ports_link:
-            st3, pcoll, perr = _get(bmc_ip, _p(ports_link), username, password, timeout, verify_ssl)
-            if perr or st3 != 200:
-                errors.append(_err('network_adapters',
-                                   f'Ports {ports_link} 실패: {perr or st3}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
-            else:
-                for pmember in _collection_members(bmc_ip, _p(ports_link), pcoll, username, password,
-                                                   timeout, verify_ssl, 'network_adapters', errors):
-                    p_uri = _safe(pmember, '@odata.id')
-                    if not p_uri:
-                        continue
-                    if origin == 'extra' and _p(p_uri) in seen_ports:
-                        continue
-                    seen_ports.add(_p(p_uri))
-                    st4, pdata, perr2 = _get(bmc_ip, _p(p_uri), username, password, timeout, verify_ssl)
-                    if perr2 or st4 != 200:
-                        errors.append(_err('network_adapters', f'Port {p_uri} 실패: {perr2 or st4}',
-                                           code=_CODE_NON_BLOCKING_SUBRESOURCE))
-                        continue
-                    speed_gbps, speed_mbps = _normalize_port_speed(pdata)
-                    assoc = _safe(pdata, 'AssociatedNetworkAddresses', default=[]) or []
-                    if not isinstance(assoc, list):
-                        assoc = []
-                    if not assoc:
-                        eth_macs = _safe(pdata, 'Ethernet', 'AssociatedMACAddresses')
-                        if isinstance(eth_macs, list) and eth_macs:
-                            assoc = eth_macs
-                        else:
-                            fc_wwns = (_safe(pdata, 'FibreChannel', 'AssociatedWWNs')
-                                       or _safe(pdata, 'FibreChannel', 'AssociatedWorldWideNames'))
-                            if isinstance(fc_wwns, list) and fc_wwns:
-                                assoc = fc_wwns
-                    primary_addr = assoc[0] if assoc else None
-                    if isinstance(primary_addr, str):
-                        primary_addr = primary_addr.lower()
-                    raw_port_type = _safe(pdata, 'PortType') or ''
-                    port_protocol = _safe(pdata, 'PortProtocol')
-                    link_tech = (_safe(pdata, 'LinkNetworkTechnology')
-                                 or _safe(pdata, 'ActiveLinkTechnology'))
-                    normalized_link = _normalize_link_status(_safe(pdata, 'LinkStatus'))
-                    port_id = _safe(pdata, 'Id')
-                    if port_id:
-                        port_ctx_by_id[port_id] = (port_protocol, link_tech, pdata)
-
-                    cand = list(ndf_by_port.get(_p(p_uri), [])) if p_uri else []
-                    if not cand and port_id and port_id in ndf_by_id:
-                        cand = [ndf_by_id[port_id]]
-                    ndf_matched.update(cand)
-                    fc_ndfs = [ndfs[i] for i in cand
-                               if _classify_port_protocol(port_protocol, link_tech, ndfs[i], pdata) in ('FibreChannel', 'FCoE')]
-                    ndf = fc_ndfs[0] if fc_ndfs else (ndfs[cand[0]] if cand else None)
-
-                    cls = _classify_port_protocol(port_protocol, link_tech, ndf, pdata)
-                    lt_fc = _str(link_tech).strip().lower() == 'fibrechannel'
-                    if cls is None and not cand and lt_fc:
-                        _pid = _str(port_id)
-                        if not (_pid and any(_str(n.get('id')).startswith(_pid + '-') for n in ndfs)):
-                            cls = 'FibreChannel'
-
-                    joined = [ndfs[i] for i in cand]
-                    ib_dec = _ib_decision(link_tech, port_protocol, joined)
-                    if ib_dec == 'ib':
-                        cls = 'InfiniBand'
-                    elif ib_dec == 'conflict':
-                        cls = _link_tech_port_type(link_tech)
-                        _notice('network_adapters',
-                                '네트워크 카드 %s 포트 %s: 포트 링크 기술과 기능 유형이 서로 달라 InfiniBand 여부를 확정할 수 없음, '
-                                'storage.infiniband 미수집' % (adapter_id, port_id))
-
-                    if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
-                        primary_addr = ndf['wwpn']
-
-                    port_hbas = []
-                    if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE'):
-                        for fndf in (fc_ndfs or [ndf]):
-                            port_hbas.append(_make_fc_hba(
-                                adapter_id, adapter_info, port_id, cls,
-                                normalized_link, speed_gbps, primary_addr, fndf))
-                    if origin == 'extra' and port_hbas:
-                        known = {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}
-                        fresh = [h for h in port_hbas if not (h.get('wwpn') and h['wwpn'] in known)]
-                        if not fresh:
-                            continue
-                        port_hbas = fresh
-
-                    port_info = {
-                        'adapter_id':              adapter_id,
-                        'adapter_model':           adapter_info['model'],
-                        'port_id':                 port_id,
-                        'name':                    _safe(pdata, 'Name'),
-                        'physical_port_number':    _safe(pdata, 'PhysicalPortNumber'),
-                        'link_status':             normalized_link,
-                        'link_state':              _safe(pdata, 'LinkState'),
-                        'current_link_speed_mbps': speed_mbps,
-                        'port_type':               cls or (raw_port_type or None),
-                        'health':                  _safe(pdata, 'Status', 'Health'),
-                        'associated_address':      primary_addr,
-                    }
-                    out['ports'].append(port_info)
-                    cur = out['adapters'][adapter_idx]
-                    if (cur.get('mac') is None and primary_addr and cls not in ('FibreChannel', 'FCoE', 'InfiniBand')
-                            and not lt_fc):
-                        cur['mac'] = primary_addr
-                    if cur.get('link_status') == 'unknown' or (cur.get('link_status') != 'up' and normalized_link == 'up'):
-                        cur['link_status'] = normalized_link
-                    if cur.get('speed_mbps') is None and speed_mbps:
-                        cur['speed_mbps'] = speed_mbps
-
-                    if port_hbas:
-                        out['fc_hbas'].extend(port_hbas)
-                    elif ib_dec == 'ib':
-                        _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps,
-                                        [n for n in joined if _str(n.get('func_type')).strip().lower() == 'infiniband'])
-
-        orphan_ib_by_parent = {}
-        orphan_ib_unlinked = []
-        for i, ndf in enumerate(ndfs):
-            if i in ndf_matched:
-                continue
-            nid = _str(ndf.get('id'))
-            parent = None
-            parent_pid = None
-            for _pid, _ctx in port_ctx_by_id.items():
-                if nid.startswith(_pid + '-'):
-                    parent = _ctx
-                    parent_pid = _pid
-                    break
-            if _str(ndf.get('func_type')).strip().lower() == 'infiniband':
-                if parent is None:
-                    orphan_ib_unlinked.append(nid)
-                else:
-                    orphan_ib_by_parent.setdefault(parent_pid, []).append(ndf)
-                continue
-            if parent is not None:
-                cls = _classify_port_protocol(parent[0], parent[1], ndf, parent[2])
-            else:
-                cls = _classify_port_protocol(None, None, ndf, None)
-            if cls in ('FibreChannel', 'FCoE'):
-                hba = _make_fc_hba(adapter_id, adapter_info, ndf.get('id'), cls, 'unknown', None, None, ndf)
-                if origin == 'extra' and hba.get('wwpn') and hba['wwpn'] in {
-                        h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
-                    continue
-                out['fc_hbas'].append(hba)
-        _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
-
-        _ports_collected = len(out['ports']) - _ports_before
-        if out['adapters'][adapter_idx].get('port_count') in (0, None) and _ports_collected > 0:
-            out['adapters'][adapter_idx]['port_count'] = _ports_collected
-
+    if items and card_fail and not out['adapters'] and _is_404_only_error(errors):
+        _notice('network_adapters', 'NetworkAdapters 목록 %d건 중 읽은 카드 0건(404 %d건), 네트워크 카드(FC HBA 포함) 정보 미수집'
+                % (len(items), card_fail))
     return out, errors
 
 
@@ -4082,6 +4267,7 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                                    gather_network_adapters_chassis,
                                    bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis),
     }
+    _fill_adapter_models_from_firmware(sections.get('network_adapters'), sections.get('firmware'))
     bios, bios_errors = gather_bios(bmc_ip, bios_link, *creds)
     all_errors.extend(bios_errors)
     sections['bios'] = bios

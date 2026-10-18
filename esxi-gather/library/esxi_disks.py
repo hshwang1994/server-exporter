@@ -37,17 +37,46 @@ def _decode_serial(lun):
     return None
 
 
+def _lun_controller_map(hs):
+    out = {}
+    try:
+        sd = getattr(hs.config, 'storageDevice', None)
+        _vendor, pci_class = _pci_maps(hs)
+        hbas = {}
+        for hba in (getattr(sd, 'hostBusAdapter', None) or []):
+            key = getattr(hba, 'key', None)
+            if key:
+                hbas[key] = (getattr(hba, 'device', None),
+                             _controller_type(type(hba).__name__, getattr(hba, 'driver', None), pci_class.get(getattr(hba, 'pci', None))))
+        topo = getattr(sd, 'scsiTopology', None)
+        for ad in (getattr(topo, 'adapter', None) or []):
+            info = hbas.get(getattr(ad, 'adapter', None))
+            if info is None:
+                continue
+            for tg in (getattr(ad, 'target', None) or []):
+                for lun in (getattr(tg, 'lun', None) or []):
+                    lk = getattr(lun, 'scsiLun', None)
+                    if lk and lk not in out:
+                        out[lk] = info
+    except Exception:
+        return {}
+    return out
+
+
+def _scsi_disks(hs):
+    ss = hs.configManager.storageSystem
+    if ss is None or ss.storageDeviceInfo is None:
+        return []
+    return [lun for lun in (ss.storageDeviceInfo.scsiLun or []) if isinstance(lun, vim.host.ScsiDisk)]
+
+
 def _build_disks(target):
     hs = _as_target(target).host()
     if hs is None:
         return []
     out = []
-    ss = hs.configManager.storageSystem
-    if ss is None or ss.storageDeviceInfo is None:
-        return []
-    for lun in (ss.storageDeviceInfo.scsiLun or []):
-        if not isinstance(lun, vim.host.ScsiDisk):
-            continue
+    ctl = _lun_controller_map(hs)
+    for lun in _scsi_disks(hs):
         cn = getattr(lun, 'canonicalName', None)
         cap = getattr(lun, 'capacity', None)
         total_mb = int((cap.block * cap.blockSize) / 1048576) if cap else None
@@ -56,6 +85,8 @@ def _build_disks(target):
         vendor = (getattr(lun, 'vendor', '') or '').strip() or None
         ssd = getattr(lun, 'ssd', None)
         full_model = (vendor + ' ' + model).strip() if (vendor and model) else (model or None)
+        _dev, ctype = ctl.get(getattr(lun, 'key', None), (None, None))
+        media = None if ctype == 'RAID' else (('SSD' if ssd else 'HDD') if ssd is not None else None)
         out.append({
             'id': cn,
             'device': cn,
@@ -63,31 +94,89 @@ def _build_disks(target):
             'serial': _decode_serial(lun),
             'wwn': wwn,
             'total_mb': total_mb,
-            'media_type': ('SSD' if ssd else 'HDD') if ssd is not None else None,
+            'media_type': media,
             'protocol': None,
             'health': None,
         })
     return sorted(out, key=lambda d: d.get('id') or '')
 
 
-def _controller_type(type_name, driver):
+def _build_logical_volumes(target):
+    hs = _as_target(target).host()
+    if hs is None:
+        return []
+    ctl = _lun_controller_map(hs)
+    out = []
+    for lun in _scsi_disks(hs):
+        dev, ctype = ctl.get(getattr(lun, 'key', None), (None, None))
+        if ctype != 'RAID':
+            continue
+        cn = getattr(lun, 'canonicalName', None)
+        cap = getattr(lun, 'capacity', None)
+        model = (getattr(lun, 'model', '') or '').strip() or None
+        vendor = (getattr(lun, 'vendor', '') or '').strip() or None
+        name = (getattr(lun, 'displayName', '') or '').strip() or ((vendor + ' ' + model).strip() if (vendor and model) else (model or cn))
+        out.append({
+            'id': cn,
+            'name': name,
+            'controller_id': dev,
+            'member_drive_ids': [],
+            'raid_level': None,
+            'total_mb': int((cap.block * cap.blockSize) / 1048576) if cap else None,
+            'health': None,
+            'state': None,
+            'boot_volume': None,
+        })
+    return sorted(out, key=lambda d: d.get('id') or '')
+
+
+_PCI_CLASS_RAID = 0x0104
+_PCI_CLASS_TYPE = {0x0106: 'SATA', 0x0107: 'SAS', 0x0108: 'NVMe'}
+_RAID_DRIVER_KEYS = ('lsi_mr3', 'megaraid', 'smartpqi', 'hpsa', 'aacraid')
+
+
+def _pci_class_int(value):
+    try:
+        return int(value) & 0xFFFF
+    except (TypeError, ValueError):
+        return None
+
+
+def _pci_maps(hs):
+    vendor, cls = {}, {}
+    try:
+        for pd in (hs.hardware.pciDevice or []):
+            pid = getattr(pd, 'id', None)
+            if not pid:
+                continue
+            vendor[pid] = (getattr(pd, 'vendorName', '') or '').strip() or None
+            c = _pci_class_int(getattr(pd, 'classId', None))
+            if c is not None:
+                cls[pid] = c
+    except Exception:
+        pass
+    return vendor, cls
+
+
+def _controller_type(type_name, driver, pci_class=None):
     t = type_name or ''
     d = (driver or '').strip().lower()
+    cls = _pci_class_int(pci_class)
+    if cls == _PCI_CLASS_RAID:
+        return 'RAID'
     if 'FibreChannel' in t:
         return 'FC'
     if 'InternetScsi' in t:
         return 'iSCSI'
+    if any(k in d for k in _RAID_DRIVER_KEYS):
+        return 'RAID'
     if 'SerialAttached' in t:
         return 'SAS'
-    if 'BlockHba' in t:
-        if d.startswith('nvme'):
-            return 'NVMe'
-        if any(k in d for k in ('lsi_mr3', 'megaraid', 'smartpqi', 'hpsa', 'aacraid')):
-            return 'RAID'
-        if 'ahci' in d:
-            return 'SATA'
-        return None
-    return None
+    if d.startswith('nvme') and ('BlockHba' in t or 'PcieHba' in t):
+        return 'NVMe'
+    if 'BlockHba' in t and 'ahci' in d:
+        return 'SATA'
+    return _PCI_CLASS_TYPE.get(cls)
 
 
 def _build_controllers(target):
@@ -95,13 +184,7 @@ def _build_controllers(target):
     if hs is None:
         return []
     out = []
-    pci_vendor = {}
-    try:
-        for pd in (hs.hardware.pciDevice or []):
-            if getattr(pd, 'id', None):
-                pci_vendor[pd.id] = (getattr(pd, 'vendorName', '') or '').strip() or None
-    except Exception:
-        pass
+    pci_vendor, pci_class = _pci_maps(hs)
     sd = getattr(hs.config, 'storageDevice', None)
     if sd is None:
         return []
@@ -109,7 +192,7 @@ def _build_controllers(target):
         model = (getattr(hba, 'model', '') or '').strip() or None
         pci = getattr(hba, 'pci', None)
         tname = type(hba).__name__
-        ctype = _controller_type(tname, getattr(hba, 'driver', None))
+        ctype = _controller_type(tname, getattr(hba, 'driver', None), pci_class.get(pci))
         out.append({
             'id': getattr(hba, 'device', None),
             'name': model,
@@ -420,6 +503,7 @@ def main():
     content = None
     target = None
     disks, controllers, listening_ports, host_info = [], [], [], {}
+    logical_volumes = []
 
     try:
         _prev_default_timeout = socket.getdefaulttimeout()
@@ -441,6 +525,7 @@ def main():
             else:
                 disks = _safe_build('physical_disks', _build_disks, target, part_errors)
                 controllers = _safe_build('controllers', _build_controllers, target, part_errors)
+                logical_volumes = _safe_build('logical_volumes', _build_logical_volumes, target, part_errors)
                 listening_ports = _safe_build('listening_ports', _build_listening_ports,
                                               target, part_errors)
                 host_info = _safe_build('host_info', _build_host_info,
@@ -450,6 +535,7 @@ def main():
             changed=False,
             physical_disks=disks, disk_count=len(disks),
             controllers=controllers, listening_ports=listening_ports,
+            logical_volumes=logical_volumes,
             host_info=host_info,
             connect_ok=connect_ok,
             failed_parts=sorted(part_errors.keys()),

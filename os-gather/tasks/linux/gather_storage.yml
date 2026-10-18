@@ -41,6 +41,8 @@
       s=$(printf '%s\n' "$p" | sed -n 's/^ID_SERIAL_SHORT=//p' | head -1)
       w=$(printf '%s\n' "$p" | sed -n 's/^ID_WWN=//p' | head -1)
       echo "UDEV|/dev/$d|$s|$w"
+      bp=$(readlink -f "/sys/block/$d" 2>/dev/null | grep -o '[0-9a-f]\{4\}:[0-9a-f]\{2\}:[0-9a-f]\{2\}\.[0-9a-f]' | tail -n 1)
+      echo "DISKPCI|/dev/$d|$bp"
     done
     for dm in /sys/block/dm-*; do
       [ -d "$dm" ] || continue
@@ -339,6 +341,31 @@
       {{ out }}
   no_log: true
 
+- name: "linux | storage | normalize logical volumes"
+  ansible.builtin.set_fact:
+    _l_norm_logical_volumes: >-
+      {%- set out = [] -%}
+      {%- set raid_pci = [] -%}
+      {%- for c in (_l_norm_controllers | default([])) -%}
+        {%- if (c.controller_type | default(none)) == 'RAID' and (c.pci | default(none)) -%}{%- set _ = raid_pci.append(c.pci) -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set disk_pci = {} -%}
+      {%- for line in (_l_stor_raw.stdout_lines | default([])) -%}
+        {%- if line.startswith('DISKPCI|') -%}
+          {%- set p = line.split('|') -%}
+          {%- if (p | length) >= 3 and (p[2] | trim) -%}{%- set _ = disk_pci.update({(p[1] | trim): (p[2] | trim)}) -%}{%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- for d in (_l_norm_physical_disks | default([])) -%}
+        {%- set pci = disk_pci.get(d.id | default(''), none) -%}
+        {%- if pci and pci in raid_pci -%}
+          {%- set _ = out.append({'id': d.id, 'name': d.model | default(none), 'controller_id': pci, 'member_drive_ids': [], 'raid_level': none,
+                                  'total_mb': d.total_mb | default(none), 'health': d.health | default(none), 'state': none, 'boot_volume': none}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
+
 - name: "linux | storage | build fragment"
   ansible.builtin.set_fact:
     _data_fragment:
@@ -347,7 +374,7 @@
         physical_disks:  "{{ _l_norm_physical_disks | default([]) }}"
         datastores:      []
         controllers:     "{{ _l_norm_controllers | default([]) }}"
-        logical_volumes: []
+        logical_volumes: "{{ _l_norm_logical_volumes | default([]) }}"
         summary:         "{{ _l_stor_summary | default({'groups': [], 'grand_total_gb': 0}) }}"
     _sections_supported_fragment: ['storage']
     _sections_collected_fragment: "{{ ['storage'] if (((_l_norm_physical_disks | default([])) | length > 0) or ((_l_norm_filesystems | default([])) | length > 0)) else [] }}"

@@ -49,13 +49,15 @@ def normalize_wwn(value):
     s = _clean(value)
     if s is None:
         return None
+    if s.startswith("-"):
+        return s
     if s.startswith("0x"):
         s = s[2:]
     hexs = _hex_only(s)
+    if hexs and hexs == "0" * len(hexs):
+        return None
     if len(hexs) != 16:
         return s
-    if hexs == "0" * 16:
-        return None
     return _group(hexs)
 
 
