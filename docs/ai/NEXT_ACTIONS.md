@@ -5,7 +5,10 @@
 > 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/ai/decisions/ADR-2026-10-18-hba-link-status-null-and-os-logical-volumes.md` ·
 > `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다.
 
-- [ ] **[HIGH] 정규 승격 `7f21cc7c` → production (사용자 결정 1건 대기)** — 2026-10-18 진행: 1차 `b0817907` 매트릭스 → ESXi RAID 판정 결함 발견·수정(`7f21cc7c`) → 2차 매트릭스 #652~#663 계약값 일치 → CI #60 **COMPLETE_PASS(G01~G20)**.
+- [ ] **[HIGH / 사용자 작업 1건] Jenkins 자격증명 `se-gitlab-push` 등록 → 승격 → canary** — 2026-10-18 상태: main `84e5b656`(runtime = `7f21cc7c`) 매트릭스 #664~#674 계약값 일치 · CI #61 **COMPLETE_PASS** 까지 끝났고, Promote 만 자격증명 부재로 dry-run(#60 `7f21cc7c` · #61 `84e5b656` 2회). 폴더 `clovirone-cicd`(`hshwang token` · `se-jenkins-lint` 가 있는 곳) 또는 전역에 Username with password · ID `se-gitlab-push`(`http://10.100.64.156/root/server-expoter.git` push 권한)를 등록한 뒤:
+      (a) main tip 에서 매트릭스 1회(API, 약 10분; CI 는 PROMOTE_SHA = tip 증거를 요구) → CI `PROMOTE_DRY_RUN=false` → Jenkins 자체 승격 → production Job canary(OS 11 · Windows 1 · Redfish 7 · ESXi 6) · 세 원격 `production` 일치 → TEST_HISTORY/CURRENT_STATE 기록. 등록 없이는
+      (b) 작업 PC `prodgen promote --sha 84e5b656 --verify-report <CI #61 prodgen_verify_report.aggregated.json> --e2e-evidence <CI #61 e2e_evidence.json> --ci-stage-results <CI #61 ci_stage_results.json> --netrc … --vault-password-file … --push-remote origin,internal`(자격 파일은 사용자). production 은 `151cc395`.
+- [ ] **[HIST] 정규 승격 `7f21cc7c` → production (사용자 결정 1건 대기)** — 2026-10-18 진행: 1차 `b0817907` 매트릭스 → ESXi RAID 판정 결함 발견·수정(`7f21cc7c`) → 2차 매트릭스 #652~#663 계약값 일치 → CI #60 **COMPLETE_PASS(G01~G20)**.
       그러나 CI Promote 단계가 Jenkins 자격증명 `se-gitlab-push`(GitLab push) 부재로 **dry-run** 으로 떨어져 production 은 `151cc395` 그대로다. 사용자 선택: (a) Jenkins 자격증명 `se-gitlab-push` 등록 → main Job 매트릭스(그때 main tip) 재실행 →
       CI `PROMOTE_DRY_RUN=false` → Jenkins 자체 승격 (이후 자동 승격 경로가 열린다, 권장) / (b) 작업 PC `prodgen promote --sha 7f21cc7c` + CI #60 보고서 3종 + 사용자 자격 파일(`docs/operate/09-production-branch.md` 3절). 승격 직후 production Job canary(OS 3 · Redfish 7 · ESXi 6) · 세 원격 `production` 일치.
       실측 확인 항목 중 "Windows RAID 디스크 볼륨" 과 "PERC(bcm_mpi3) 뒤 LUN" 은 lab 에 해당 디스크가 없어 미실측(아래 LOW 항목).

@@ -171,6 +171,26 @@ envelope(`gather_final.jsonl`) 대조:
   — 자격 파일은 사용자가 만든다(AI 는 자격을 파일에 쓰지 않는다). 승격 직후 production Job canary(OS 3 · Redfish 7 · ESXi 6) 와 세 원격 `production` 일치 확인.
 
 
+### 5.4 3차 — main `84e5b656`(문서·하네스 커밋 포함, runtime 은 `7f21cc7c` 와 같음) #664~#674 · CI #61 · 승격 · canary
+
+사용자 지시(2026-10-18 "CI 끝났으면 canary 돌리고 기록까지 이어서 해라 랩실측까지 모두 진행하고")로 main tip 에서 매트릭스를 다시 돌렸다(CI 경로는 PROMOTE_SHA = main tip 의 증거를 요구한다).
+
+| 시나리오 | 빌드 | 결과 | 시나리오 | 빌드 | 결과 |
+|---|---|---|---|---|---|
+| S1 | #664 | SUCCESS | T6 | #669 | UNSTABLE |
+| S2 | #665 | SUCCESS | E2E-A | #670 | UNSTABLE |
+| S3 | #666 | SUCCESS | E2E-A2 | #671 | FAILURE(fail-closed) |
+| S4 | #667 | SUCCESS | E2E-D | #672 | SUCCESS — esxi01~03 lsi_mr3 RAID · lv 2 · media null, .91~.93 bcm_mpi3 RAID · nvme_pcie NVMe |
+| T2 | #668 | SUCCESS | E2E-E | #673 | SUCCESS |
+| T5 | #674 | ABORTED(수집 단계 +3초 stop) | 원격 tip 관측 | 1792300668~1792301422 | `84e5b656` 불변 |
+
+- CI #61: `PROMOTE=true · PROMOTE_SHA=84e5b656 · PROMOTE_DRY_RUN=false`, E2E_MAIN_ENTRIES #664~#674, tip 관측(#671, 1792300668~1792301422) → SUCCESS(61분) · verdict **COMPLETE_PASS** · 단계 GATE·CORPUS·BUDGET·HARNESS_MAIN·PRODGEN_BUILD·HARNESS_TREE·PRODGEN_DRIFT·PRODGEN_VERIFY·VAULT_DECRYPT·EVIDENCE 전부 PASS · **PROMOTE: DRY_RUN** — `se-gitlab-push` 가 폴더·전역 어디에도 없어(#60 과 같은 사유) 원격 변경 0.
+- production: github · gitlab · internal 모두 **`151cc395` 그대로(승격 미반영)**.
+- production Job canary: **미실행** — 승격이 반영되지 않아 신코드가 올라간 production 이 없다(production Job #303~#305 는 `151cc395` 상태 확인). 승격 뒤 OS 11대 · Windows 1대 · Redfish 7대 · ESXi 6대로 돈다.
+- 추가 랩 실측(이 세션): (1) Windows 에서 skip 되던 Linux 전용 sysfs 심볼릭 링크 시험을 WSL 에서 실행 — `test_linux_hba_ib_markers.py` + `test_linux_storage_markers.py` 124 passed(skip 0). (2) FC 카드가 없는 실 호스트의 "부재" 경로 —
+  Windows VM .120(S4) 은 MSFC 부재(absent)로 `hbas []` · errors 0, Linux VM/베어메탈(S1/S3) 은 `fc_host` 부재로 `hbas []` · errors 0 — 부재를 실패로 올리지 않는 분류가 실장비에서 확인됐다.
+  (3) lab 에 장비가 없어 못 한 것: FC 링크 up(전 채널), Linux/Windows FC 호스트, 하드웨어 iSCSI, FC-NVMe 쌍둥이, PERC(bcm_mpi3) 뒤 VD, Windows RAID 디스크, CSUS, Cisco 다른 세대 — NEXT_ACTIONS.
+
 ## 6. 변경 범위 (Additive)
 
 envelope 13 필드 · `sections` · `status` 불변. 새 top-level 키 0. 사전 안의 변경: `storage.hbas[].link_status` type `string|null` enum up/down, `cpu.turbo_max_mhz` channel +redfish, `storage.logical_volumes[]`(+9 subkey) channel +os/esxi.
