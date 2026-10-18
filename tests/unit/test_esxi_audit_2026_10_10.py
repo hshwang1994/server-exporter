@@ -67,6 +67,10 @@ def test_datastore_capacity_bytes_path_unchanged():
     ("vim.host.BlockHba", None, None),
     ("vim.host.FibreChannelHba", "lpfc", "FC"),
     ("vim.host.SerialAttachedHba", "lsi_msgpt3", "SAS"),
+    ("vim.host.SerialAttachedHba", "lsi_mr3", "RAID"),      # 2026-10-18 실측 esxi02 — ESXi 7 은 MegaRAID 를 SerialAttachedHba 로 노출
+    ("vim.host.SerialAttachedHba", "bcm_mpi3", "SAS"),      # HBA·RAID 겸용 드라이버 — PCI class 없이는 어댑터 종류대로
+    ("vim.host.PcieHba", "nvme_pcie", "NVMe"),              # 2026-10-18 실측 .91 BOSS-N1 — BlockHba 가 아니라 null 이었다
+    ("vim.host.PcieHba", None, None),
     ("vim.host.InternetScsiHba", "iscsi_vmk", "iSCSI"),
 ])
 def test_controller_type_by_hba_kind_and_driver(tname, driver, expected):

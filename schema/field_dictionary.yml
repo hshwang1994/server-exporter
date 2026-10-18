@@ -821,10 +821,14 @@ fields:
     channel: [os, esxi]
     help_ko: >-
       컨트롤러 종류. RAID/SAS/SATA/NVMe/SCSI/FC.
-      OS(Linux): lspci 클래스. ESXi: hostBusAdapter 타입(Block=SATA/Serial=SAS/FibreChannel=FC).
+      OS(Linux): lspci 클래스. ESXi(2026-10-18): PCI class 0x0104=RAID 우선 → hostBusAdapter 타입+드라이버
+      (FibreChannel=FC · InternetScsi=iSCSI · RAID 드라이버 계열=RAID · Serial=SAS · nvme=NVMe · Block+ahci=SATA) → PCI class(SATA/SAS/NVMe) → null.
+      ESXi 7 은 MegaRAID(lsi_mr3)·PERC H965i(bcm_mpi3)를 SerialAttachedHba 로 노출한다(실측).
     help_en: >-
       Controller type. RAID/SAS/SATA/NVMe/SCSI/FC.
-      OS(Linux): lspci class. ESXi: hostBusAdapter type (Block=SATA/Serial=SAS/FibreChannel=FC).
+      OS(Linux): lspci class. ESXi (2026-10-18): PCI class 0x0104=RAID first, then hostBusAdapter type+driver
+      (FibreChannel=FC, InternetScsi=iSCSI, RAID driver family=RAID, Serial=SAS, nvme=NVMe, Block+ahci=SATA), then PCI class (SATA/SAS/NVMe), else null.
+      ESXi 7 exposes MegaRAID (lsi_mr3) and PERC H965i (bcm_mpi3) as SerialAttachedHba (measured).
 
   "storage.controllers[].driver":
     type: "string|null"

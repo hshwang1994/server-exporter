@@ -558,7 +558,9 @@ for e in response["errors"]:
 > 접고 `id`/`device` 는 `/dev/mapper/<이름>`(구성원 정보가 없으면 첫 경로)이다 — 종전에는 경로마다 1개라 디스크 수와 `summary` 합계가 경로 수만큼
 > 부풀었다. ESXi 의 `physical_disks[]` 는 종전대로 **LUN 단위**다(2026-09-03 결정 유지). (2) Windows `total_mb` 는 `MSFT_PhysicalDisk.Size` 가 우선이고
 > `Win32_DiskDrive.Size`(디스크 기하값 계산이라 실제보다 작다)는 없을 때만 쓴다. (3) ESXi `controllers[].controller_type` 은 BlockHba 를 전부 SATA 로
-> 적지 않고 드라이버 계열(`vmw_ahci`=SATA · `lsi_mr3`/`megaraid`/`smartpqi`=RAID · `nvme`=NVMe)로 정하며 모르면 `null` 이다. (4) ESXi `datastores[]` 의
+> 적지 않고 드라이버 계열(`vmw_ahci`=SATA · `lsi_mr3`/`megaraid`/`smartpqi`=RAID · `nvme`=NVMe)로 정하며 모르면 `null` 이다. **2026-10-18** — PCI class
+> (`HostPciDevice.classId` 0x0104 = RAID, Linux lspci 와 같은 신호)를 1차로 보고, RAID 드라이버 계열은 어댑터 종류(SerialAttached=SAS) 판정보다 앞에 둔다 —
+> 실측(Jenkins #647)에서 ESXi 7 이 MegaRAID(lsi_mr3)·PERC H965i(bcm_mpi3)를 `HostSerialAttachedHba` 로 노출해 `SAS` 가 됐고, BOSS-N1(nvme_pcie, PcieHba)은 `null` 이었다. (4) ESXi `datastores[]` 의
 > 문자열 용량은 TB · GB · MB 단위를 모두 읽는다(종전에는 TB 만 보고 MB 를 GB 로 읽었다).
 
 스토리지는 다음 하위 list 가 있다.
@@ -621,7 +623,7 @@ Redfish 는 `/Storage/{id}/Volumes` 의 논리 볼륨을, OS/ESXi 는 종전에 
 |---|---|---|---|
 | Linux | 디스크의 PCI 컨트롤러(`/sys/block/<dev>` 실경로의 마지막 PCI 주소, raw `DISKPCI` 줄)가 `controllers[]` 중 lspci 클래스 `RAID bus controller` 항목 | 그 PCI 주소(= `controllers[].id`) | `[]` · `null` (OS 는 RAID 뒤 물리 디스크를 못 본다) |
 | Windows | `physical_disks[].protocol == 'RAID'`(MSFT_PhysicalDisk BusType 8) | `null` (표준 API 가 볼륨 ↔ 컨트롤러를 주지 않는다) | `[]` · `null` |
-| ESXi | `storageDevice.scsiTopology` 로 LUN 이 붙은 어댑터를 찾아 `controller_type == 'RAID'`(드라이버 계열 lsi_mr3 · megaraid · smartpqi · hpsa · aacraid) | 그 vmhba(= `controllers[].id`) | `[]` · `null` |
+| ESXi | `storageDevice.scsiTopology` 로 LUN 이 붙은 어댑터를 찾아 `controller_type == 'RAID'`(PCI class 0x0104 우선 → 드라이버 계열 lsi_mr3 · megaraid · smartpqi · hpsa · aacraid — 2026-10-18 실측 보정: ESXi 7 은 MegaRAID·PERC H965i 를 SerialAttachedHba 로 노출한다) | 그 vmhba(= `controllers[].id`) | `[]` · `null` |
 
 - 키는 Redfish 와 같다(`id` `name` `controller_id` `member_drive_ids` `raid_level` `total_mb` `health` `state` `boot_volume`). `name` 은 Linux/Windows 디스크 모델, ESXi 는 `displayName`.
 - ESXi 의 RAID 뒤 LUN 은 `physical_disks[].media_type` 이 `null` 이다 — `ScsiDisk.ssd` 는 컨트롤러 보고값이라 매체가 아니다(실측 esxi02: SSD RAID5 LUN 이 `HDD` 로 나왔다).

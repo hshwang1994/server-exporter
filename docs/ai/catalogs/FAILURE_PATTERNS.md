@@ -1153,3 +1153,14 @@
 - 수정: 사용자 결정(2026-10-18) — 같은 뜻만 고치고 다른 뜻은 문서에 기준을 적는다. 교차 회귀는 같은 뜻 필드만 단언한다(터보 최대는 BMC 스펙값 vs MSR 값이라 5% 허용).
 - 재발 방지: 채널 간 대조표에는 "같은 뜻인가" 열을 먼저 채운다.
 - 관련 rule: rule 13 R7 · rule 23 R1 · rule 92 R6
+
+## 2026-10-18 — 합성 대역(fake)의 어댑터 클래스가 실 vSphere 와 달라 X6/X7 이 실장비에서 0번 발동했다
+
+- 카테고리: ai-hallucination (외부 API 모양 가정)
+- 발견 위치: Jenkins main #647(ESXi 5대, main b0817907) envelope — esxi02 · .91/.92 `controllers[].controller_type == 'SAS'`, `logical_volumes == []`, RAID LUN `media_type == 'HDD'`
+- 증상: `_controller_type` 이 `SerialAttached → 'SAS'` 를 드라이버 확인보다 먼저 돌려보냈다. 단위 시험의 대역은 MegaRAID(lsi_mr3)를 `BlockHba` 로 만들었지만 ESXi 7 은 `HostSerialAttachedHba` 로 노출한다.
+  PERC H965i(bcm_mpi3)는 드라이버 목록에도 없고 HBA·RAID 겸용이라 드라이버로 가를 수 없다. BOSS-N1(nvme_pcie)은 BlockHba 가 아니어서 null.
+- 원인: 2026-10-10 ESXI-12 의 "BlockHba 안에서 드라이버로 가른다" 가정을 실장비 hostBusAdapter 클래스로 확인하지 않았고, 2026-10-18 X6/X7 도 같은 대역 위에 쌓였다(합성 통과 ≠ 실측, rule 25 R7-A-1).
+- 수정: PCI class(`HostPciDevice.classId` 0x0104 — Linux lspci 와 같은 신호) 1차 → RAID 드라이버 계열을 SerialAttached 판정 앞으로 → nvme 는 BlockHba/PcieHba → class 폴백. 실측 모양 시험 추가(`test_esxi_raid_lun_logical_volumes.py`).
+- 재발 방지: 외부 API 의 하위 클래스로 분기하는 코드는 실장비 envelope(또는 pyVmomi 덤프)에서 클래스 이름을 확인한 뒤 대역을 만든다. 채널 기능을 넣은 뒤 main Job 매트릭스 envelope 를 바로 대조한다(이번에 잡힌 경로).
+- 관련 rule: rule 25 R7-A-1 · rule 95 R1 #8 · rule 96 R1

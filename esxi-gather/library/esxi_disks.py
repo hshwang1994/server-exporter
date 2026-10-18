@@ -95,11 +95,13 @@ def _lun_controller_map(hs):
     out = {}
     try:
         sd = getattr(hs.config, 'storageDevice', None)
+        _vendor, pci_class = _pci_maps(hs)
         hbas = {}
         for hba in (getattr(sd, 'hostBusAdapter', None) or []):
             key = getattr(hba, 'key', None)
             if key:
-                hbas[key] = (getattr(hba, 'device', None), _controller_type(type(hba).__name__, getattr(hba, 'driver', None)))
+                hbas[key] = (getattr(hba, 'device', None),
+                             _controller_type(type(hba).__name__, getattr(hba, 'driver', None), pci_class.get(getattr(hba, 'pci', None))))
         topo = getattr(sd, 'scsiTopology', None)
         for ad in (getattr(topo, 'adapter', None) or []):
             info = hbas.get(getattr(ad, 'adapter', None))
@@ -190,30 +192,71 @@ def _build_logical_volumes(target):
     return sorted(out, key=lambda d: d.get('id') or '')
 
 
-def _controller_type(type_name, driver):
-    """ESXI-12 (2026-10-10): hostBusAdapter 종류 + 드라이버 계열 → controller_type.
+# PCI-SIG base class 01h(mass storage) subclass — vSphere HostPciDevice.classId(short) = (base << 8) | subclass. Linux lspci 클래스와 같은 값이라
+# OS 채널(lspci 'RAID bus controller')과 같은 근거로 RAID 를 가른다. source: PCI Code and ID Assignment Specification r1.11 §1 (class 01h).
+_PCI_CLASS_RAID = 0x0104
+_PCI_CLASS_TYPE = {0x0106: 'SATA', 0x0107: 'SAS', 0x0108: 'NVMe'}
+# VMware inbox RAID 드라이버 계열 (VMware HCL 이름). bcm_mpi3 · lsi_msgpt3x 는 HBA 와 RAID 양쪽을 몰아 드라이버만으로 못 가른다 → PCI class.
+_RAID_DRIVER_KEYS = ('lsi_mr3', 'megaraid', 'smartpqi', 'hpsa', 'aacraid')
+
+
+def _pci_class_int(value):
+    """HostPciDevice.classId → 0..0xFFFF 정수. 숫자가 아니면 None (판정에서 빠진다)."""
+    try:
+        return int(value) & 0xFFFF
+    except (TypeError, ValueError):
+        return None
+
+
+def _pci_maps(hs):
+    """hardware.pciDevice → (id → vendorName, id → classId). 목록이 깨져도 빈 dict — 수집을 막지 않는다.
+
+    source: vSphere API HostPciDevice.id("0000:18:00.0" — HostBusAdapter.pci 와 같은 표기) · vendorName · classId.
+    """
+    vendor, cls = {}, {}
+    try:
+        for pd in (hs.hardware.pciDevice or []):
+            pid = getattr(pd, 'id', None)
+            if not pid:
+                continue
+            vendor[pid] = (getattr(pd, 'vendorName', '') or '').strip() or None
+            c = _pci_class_int(getattr(pd, 'classId', None))
+            if c is not None:
+                cls[pid] = c
+    except Exception:
+        pass
+    return vendor, cls
+
+
+def _controller_type(type_name, driver, pci_class=None):
+    """ESXI-12 (2026-10-10) + 2026-10-18 실장비 보정: PCI class → hostBusAdapter 종류 + 드라이버 계열 → controller_type.
 
     종전에는 BlockHba 를 전부 'SATA' 로 적었다 — RAID 컨트롤러(lsi_mr3 · megaraid_sas · smartpqi · hpsa · aacraid)와 NVMe 도 BlockHba 로
-    노출되므로 틀린 값이었다. 드라이버로 갈리지 않으면 null (추측하지 않는다). 드라이버 이름 근거: VMware HCL 의 inbox 드라이버 이름
-    (vmw_ahci · lsi_mr3 · smartpqi · nvme_pcie 등).
+    노출되므로 틀린 값이었다. 2026-10-18 Jenkins #647 실측(main b0817907)에서 두 가지가 더 드러났다:
+      - ESXi 7 은 MegaRAID(lsi_mr3, esxi02 Cisco UCSC-MRAID12G)와 PERC H965i(bcm_mpi3, esxi .91)를 HostSerialAttachedHba 로 노출한다 —
+        종전 순서(SerialAttached → 'SAS' 선판정)라 RAID 가 'SAS' 로 나왔고 X6/X7(RAID 뒤 LUN) 이 실장비에서 한 번도 발동하지 않았다.
+      - BOSS-N1(nvme_pcie) 어댑터는 BlockHba 가 아니어서(vSphere 6.5+ PcieHba) null 이었다.
+    순서: PCI class 0x0104(RAID) → FC → iSCSI → RAID 드라이버 계열 → SerialAttached=SAS → nvme 드라이버(BlockHba/PcieHba)=NVMe →
+    BlockHba+ahci=SATA → PCI class(SATA/SAS/NVMe) → null (추측하지 않는다). 드라이버 이름 근거: VMware HCL 의 inbox 드라이버 이름.
     """
     t = type_name or ''
     d = (driver or '').strip().lower()
+    cls = _pci_class_int(pci_class)
+    if cls == _PCI_CLASS_RAID:
+        return 'RAID'
     if 'FibreChannel' in t:
         return 'FC'
     if 'InternetScsi' in t:
         return 'iSCSI'
+    if any(k in d for k in _RAID_DRIVER_KEYS):
+        return 'RAID'
     if 'SerialAttached' in t:
         return 'SAS'
-    if 'BlockHba' in t:
-        if d.startswith('nvme'):
-            return 'NVMe'
-        if any(k in d for k in ('lsi_mr3', 'megaraid', 'smartpqi', 'hpsa', 'aacraid')):
-            return 'RAID'
-        if 'ahci' in d:
-            return 'SATA'
-        return None
-    return None
+    if d.startswith('nvme') and ('BlockHba' in t or 'PcieHba' in t):
+        return 'NVMe'
+    if 'BlockHba' in t and 'ahci' in d:
+        return 'SATA'
+    return _PCI_CLASS_TYPE.get(cls)
 
 
 def _build_controllers(target):
@@ -222,23 +265,17 @@ def _build_controllers(target):
     if hs is None:
         return []
     out = []
-    # pci(addr) → vendorName 맵
-    pci_vendor = {}
-    try:
-        for pd in (hs.hardware.pciDevice or []):
-            if getattr(pd, 'id', None):
-                pci_vendor[pd.id] = (getattr(pd, 'vendorName', '') or '').strip() or None
-    except Exception:
-        pass
+    # pci(addr) → vendorName · classId 맵 (2026-10-18: classId 는 controller_type 의 1차 신호)
+    pci_vendor, pci_class = _pci_maps(hs)
     sd = getattr(hs.config, 'storageDevice', None)
     if sd is None:
         return []
     for hba in (sd.hostBusAdapter or []):
         model = (getattr(hba, 'model', '') or '').strip() or None
         pci = getattr(hba, 'pci', None)
-        # type + driver → controller_type (ESXI-12)
+        # PCI class → type + driver → controller_type (ESXI-12 · 2026-10-18 실측 보정)
         tname = type(hba).__name__
-        ctype = _controller_type(tname, getattr(hba, 'driver', None))
+        ctype = _controller_type(tname, getattr(hba, 'driver', None), pci_class.get(pci))
         out.append({
             'id': getattr(hba, 'device', None),
             'name': model,

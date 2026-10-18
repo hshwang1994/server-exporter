@@ -33,6 +33,14 @@ class FibreChannelHba(BlockHba):
     pass
 
 
+class SerialAttachedHba(BlockHba):
+    """HostSerialAttachedHba 대역 — ESXi 7 은 MegaRAID(lsi_mr3)·PERC H965i(bcm_mpi3)를 이 클래스로 노출한다 (실측 2026-10-18 Jenkins #647)."""
+
+
+class PcieHba(BlockHba):
+    """HostPcieHba 대역 — NVMe 어댑터(nvme_pcie)."""
+
+
 def _module():
     m = _load_module()
     m = importlib.reload(m)
@@ -111,6 +119,58 @@ def test_broken_topology_object_does_not_break_disk_collection():
     host = _host([SATA_LUN], [BlockHba(SATA_KEY, "vmhba0", "vmw_ahci", "SATA")], NS(adapter="not-a-list"))
     assert m._lun_controller_map(host) == {}
     assert [d["media_type"] for d in m._build_disks(_content([host]))] == ["SSD"]
+
+
+def _host_with_pci(disks, hbas, topo, pci):
+    h = _host(disks, hbas, topo)
+    h.hardware = NS(pciDevice=pci)
+    return h
+
+
+MEGARAID_KEY = "key-vim.host.SerialAttachedHba-vmhba4"
+PERC_KEY = "key-vim.host.SerialAttachedHba-vmhba1"
+
+
+def test_real_esxi7_megaraid_is_serial_attached_hba_but_still_raid():
+    """esxi02 실측(2026-10-18 #647): MegaRAID SAS Invader(lsi_mr3) 가 HostSerialAttachedHba 로 와도 RAID — 드라이버 계열이 어댑터 종류보다 앞.
+
+    종전 순서(SerialAttached → 'SAS' 선판정)에서는 'SAS' 가 되어 X6/X7 이 실장비에서 한 번도 발동하지 않았다.
+    """
+    m = _module()
+    hba = SerialAttachedHba(MEGARAID_KEY, "vmhba4", "lsi_mr3", "MegaRAID SAS Invader Controller")
+    host = _host([RAID_LUN], [hba], _topology({MEGARAID_KEY: [RAID_LUN.key]}))   # pciDevice 비어 있음 — class 없이도
+    assert m._controller_type("HostSerialAttachedHba", "lsi_mr3") == "RAID"
+    assert [c["controller_type"] for c in m._build_controllers(_content([host]))] == ["RAID"]
+    assert m._build_disks(_content([host]))[0]["media_type"] is None
+    assert [v["controller_id"] for v in m._build_logical_volumes(_content([host]))] == ["vmhba4"]
+
+
+def test_dual_use_driver_is_decided_by_pci_class():
+    """PERC H965i(bcm_mpi3, esxi .91 실측): 드라이버는 HBA·RAID 겸용 → HostPciDevice.classId 0x0104 가 RAID 를 가른다; 0x0107 이면 SAS."""
+    m = _module()
+    hba = SerialAttachedHba(PERC_KEY, "vmhba1", "bcm_mpi3", "PERC H965i Front")
+    topo = _topology({PERC_KEY: [RAID_LUN.key]})
+    raid = _host_with_pci([RAID_LUN], [hba], topo, [NS(id="0000:18:00.0", vendorName="Broadcom / LSI", classId=0x0104)])
+    assert [(c["controller_type"], c["controller_manufacturer"]) for c in m._build_controllers(_content([raid]))] == [("RAID", "Broadcom / LSI")]
+    assert m._build_disks(_content([raid]))[0]["media_type"] is None
+    assert len(m._build_logical_volumes(_content([raid]))) == 1
+    sas = _host_with_pci([RAID_LUN], [hba], topo, [NS(id="0000:18:00.0", vendorName="Broadcom / LSI", classId=0x0107)])
+    assert [c["controller_type"] for c in m._build_controllers(_content([sas]))] == ["SAS"]
+    assert m._build_disks(_content([sas]))[0]["media_type"] == "HDD", "RAID 가 아니면 종전 규칙(ssd 플래그)"
+    assert m._build_logical_volumes(_content([sas])) == []
+
+
+def test_pci_class_fills_nvme_and_tolerates_bad_values():
+    m = _module()
+    assert m._controller_type("HostPcieHba", "nvme_pcie") == "NVMe"
+    assert m._controller_type("HostPcieHba", None, 0x0108) == "NVMe"
+    assert m._controller_type("HostPcieHba", None) is None
+    assert m._controller_type("HostBlockHba", "some_unknown_drv", "0x0106") is None, "int() 실패한 class 는 판정에서 빠진다"
+    assert m._controller_type("HostBlockHba", "some_unknown_drv", "262") == "SATA", "숫자 문자열(0x0106)은 받는다"
+    assert m._controller_type("HostSerialAttachedHba", "bcm_mpi3", 0x10104) == "RAID", "short 범위 밖 비트는 버린다"
+    assert m._pci_maps(NS(hardware=None)) == ({}, {}), "pciDevice 를 못 읽어도 빈 맵 — 수집을 막지 않는다"
+    broken = NS(hardware=NS(pciDevice=[NS(id="0000:18:00.0", vendorName=" X ", classId="bad"), NS(id=None, classId=1)]))
+    assert m._pci_maps(broken) == ({"0000:18:00.0": "X"}, {})
 
 
 def test_volume_name_falls_back_to_vendor_model_then_canonical_name():

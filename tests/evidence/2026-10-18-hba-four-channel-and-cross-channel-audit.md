@@ -104,9 +104,42 @@ PCIe 장치 `H3Alert.1.7.LinkUp` 은 RAID 컨트롤러 포함 9개 장치 전부
 - 신규/갱신 시험 목록은 TEST_HISTORY 같은 절. 교차 회귀 `tests/regression/test_cross_channel_same_server.py`: 2쌍 × (serial · uuid · vendor/소켓/코어 · 정격 1% · 터보 5% · 스레드 · hbas WWPN 부분집합 · link_status 값).
 - golden 10종 재생성: 차이는 `processors[].speed_mhz`(정격) · `max_speed_mhz`(추가) · CSUS 파티션 cpu 만. 요청 예산 · 다른 키 동일.
 
-## 5. 승격
+## 5. 실장비(Jenkins main Job) 검증과 승격
 
-**미실행.** Jenkins 자격을 파일에 쓰는 단계가 자동 모드 분류기에 막혀 main Job 매트릭스 · CI · `prodgen promote` · canary 를 이 세션에서 돌리지 못했다. 절차와 확인 항목은 `docs/ai/NEXT_ACTIONS.md` 2026-10-18 첫 항목.
+사용자 승인(2026-10-18, Jenkins 직접 조작 포함)으로 Chrome 의 Jenkins UI 에서 매트릭스를 돌렸다. 자격 값은 파일에 적지 않는다.
+
+### 5.1 1차 — main `b0817907` (Job `clovirone-cicd/clovirone-server-gather-main` #639~#651, checkout SHA 확인)
+
+| 시나리오 | 빌드 | 결과 | 비고 |
+|---|---|---|---|
+| S1 | #639 | SUCCESS | Linux VM 3대 (.162 .163 .156) |
+| S2 | #640 | SUCCESS | 혼합 배치 |
+| S3 | #641 | SUCCESS | Linux 10대+ (베어메탈 r760-6 .96 포함) |
+| S4 | #642 | SUCCESS | Windows .120 |
+| T2 | #643 | SUCCESS | 빠른 실패 |
+| T6 | #644 | UNSTABLE | Callback 실패(계약값) |
+| E2E-A | #645 | UNSTABLE | cj routing smoke |
+| E2E-A2 | #646 | FAILURE | 폐기 Location fail-closed(계약값) |
+| E2E-D | #647 | SUCCESS | ESXi 5대 (.1 .2 .3 .91 .92) |
+| E2E-E | #648 | SUCCESS | Redfish 7대 (Cisco .2 · Dell .27 .28 .31 .33 .34 · Lenovo 10.50.11.232) |
+| T5 | #651 | ABORTED | 사용자 중단 — `[finalize] outcome=aborted`. #649 · #650 은 중단 시점을 놓친 무효 시도(SUCCESS) |
+
+envelope(`gather_final.jsonl`) 대조:
+
+- Redfish 7대 전부 `success` · errors 0. Cisco .2: `hardware.uuid` 9f0190b1-… (ESXi .2 와 같음 — X1 교정 확인), 정격 2200(브랜드) · 터보 4000 · 스레드 44(CIMC TotalThreads — ESXi 88, 문서대로 다름),
+  hbas 4(…6e up · …6f up · …8f up · …90 down), logical_volumes 2(RAID5 · RAID0). Dell ×5: 정격 2400 · 터보 4000 · `NIC.Embedded.1` 모델을 펌웨어 이름(BCM5720)으로 채움(notice 1, X9) · logical_volumes 1~3.
+  Lenovo: 정격 2000 · 터보 3200 · lv 2.
+- Linux r760-6 .96: 소켓/코어/스레드 2/24/48 · 정격 2400(Redfish .34 와 같음, X2) · 터보 4100(Redfish MaxSpeedMHz 4000 — cpufreq vs BMC 스펙값, 교차 회귀 5% 허용 안) · uuid 4c4c4544… 같음 ·
+  `logical_volumes` 2(/dev/sda 10.98TB · /dev/sdb 1.7TB, controller 0000:52:00.0 PERC H965i) — Redfish .34 의 3개 중 PERC 2개와 대응(BOSS-N1 VD 는 NVMe 클래스라 OS 에서는 제외, 문서대로) · hbas [] (FC 카드 없음).
+- Windows .120(VM): success · hbas [] · lv [].
+- ESXi 5대 success. esxi02 .2 hbas 2(FC down · down, WWPN …6e · …6f ⊆ Redfish 4) — **Redfish 는 같은 두 포트를 up** 으로 보고(연속 빌드, 수분 간격): CIMC `Port.LinkStatus` 는 vHBA/업링크 링크,
+  ESXi `HostBusAdapter.status` 는 어댑터(패브릭 로그인) 상태 → 뜻이 다른 값(§2.5 X11 의 "시점 차" 추정은 틀렸다 — 계약 문서에 채널별 기준으로 적음). .1 은 소프트웨어 iSCSI 어댑터 1(up).
+- **결함 발견**: esxi02(MegaRAID SAS Invader, `lsi_mr3`) · .91/.92(PERC H965i, `bcm_mpi3`) 의 `controllers[].controller_type` 이 `SAS` → RAID 뒤 LUN 이 `logical_volumes` 0건, `media_type` HDD 그대로(X6/X7 미발동).
+  .91 BOSS-N1(`nvme_pcie`) 은 `null`. 원인: `_controller_type` 이 `SerialAttached → SAS` 를 드라이버 확인보다 먼저 돌려보냈고(ESXi 7 은 MegaRAID 를 `HostSerialAttachedHba` 로 노출), `bcm_mpi3` 는 HBA·RAID 겸용이라 드라이버로 못 가른다.
+  수정: `HostPciDevice.classId` 0x0104(RAID, Linux lspci 와 같은 신호) 1차 → RAID 드라이버 계열 → SerialAttached=SAS → nvme(BlockHba/PcieHba) → class 폴백. `FAILURE_PATTERNS.md` 2026-10-18 항목.
+
+### 5.2 2차 — 수정 commit 이후 (아래에 기록)
+
 
 ## 6. 변경 범위 (Additive)
 
