@@ -98,7 +98,7 @@
               {%- set spfirst = ((parts[6] | default('')) | trim).split(' ')[0] if (parts[6] | default('') | trim) else '' -%}
               {%- set spdig = spfirst | regex_replace('[^0-9]', '') -%}
               {%- set st = (parts[5] | default('')) | trim | lower -%}
-              {%- set link = 'up' if st in ['online', 'marginal'] else ('down' if st in ['offline', 'linkdown', 'error', 'blocked', 'bypassed', 'loopback', 'diagnostics'] else none) -%}
+              {%- set link = 'up' if st in ['online', 'marginal'] else 'down' -%}
               {%- set drv = (parts[7] | trim) if (parts[7] | trim) else none -%}
               {%- set ptp = 'FCoE' if ((drv or '') | lower) in ['fcoe', 'bnx2fc', 'qedf'] else 'FibreChannel' -%}
               {%- set mdl = (parts[9] | trim) if (parts | length >= 10 and (parts[9] | trim)) else none -%}

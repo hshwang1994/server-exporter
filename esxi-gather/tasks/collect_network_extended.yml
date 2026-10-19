@@ -86,7 +86,6 @@
           {{ out }}
         _e_ext_hbas: >-
           {%- set out = [] -%}
-          {%- set seen = [] -%}
           {%- set d = _e_vmhba.hosts_vmhbas_info | default({}) -%}
           {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
           {%- set vmhbas = (d.get(key, {}).get('vmhba_details', [])) if key else [] -%}
@@ -112,36 +111,32 @@
                 {%- set wwnn_n = (h.node_wwn | default(none)) | normalize_wwn -%}
                 {%- set wwpn = wwpn_n if (wwpn_n is none or (wwpn_n is match(wwn_re))) else none -%}
                 {%- set wwnn = wwnn_n if (wwnn_n is none or (wwnn_n is match(wwn_re))) else none -%}
-                {%- set dkey = (wwpn ~ '/' ~ (wwnn or '')) if wwpn else none -%}
-                {%- if dkey is none or dkey not in seen -%}
-                  {%- if dkey is not none -%}{%- set _ = seen.append(dkey) -%}{%- endif -%}
-                  {%- set raw_sp = h.speed | default(none) -%}
-                  {%- set sp_gbps = none -%}
-                  {%- if raw_sp is number and raw_sp > 0 -%}
-                    {%- set spf = raw_sp | float -%}
-                    {%- set spv = (spf / 1000000000) if spf >= 1000000 else ((spf / 1000) if spf >= 1000 else spf) -%}
-                    {%- set sp_gbps = (spv | int) if (spv == (spv | int)) else (spv | round(2)) -%}
-                  {%- endif -%}
-                  {%- set hs = (h.status | default('')) | string | lower | trim -%}
-                  {%- set loc = h.location | default(none) -%}
-                  {%- set bus = h.bus | default(none) -%}
-                  {%- set _ = out.append({
-                    'name':            dev,
-                    'driver':          h.driver | default(none),
-                    'model':           h.model | default(none),
-                    'vendor':          ctrl_vendor.get(dev, none),
-                    'firmware':        none,
-                    'adapter_type':    h.type | default(none),
-                    'link_status':     ('up' if hs in ['online', 'connected', 'up', 'linkup', 'active'] else ('down' if hs in ['offline', 'disconnected', 'down', 'linkdown', 'disabled', 'inactive'] else none)),
-                    'wwpn':            wwpn,
-                    'wwnn':            wwnn,
-                    'link_speed_gbps': sp_gbps,
-                    'port_type':       ('FCoE' if is_fcoe else ('FibreChannel' if is_fc else 'iSCSI')),
-                    'pci':             (loc if (loc is not none and (loc | string | trim) not in ['', 'PCI', 'N/A']) else none),
-                    'bus':             (bus if (bus is number and bus >= 0) else none),
-                    'source':          'esxi',
-                  }) -%}
+                {%- set raw_sp = h.speed | default(none) -%}
+                {%- set sp_gbps = none -%}
+                {%- if raw_sp is number and raw_sp > 0 -%}
+                  {%- set spf = raw_sp | float -%}
+                  {%- set spv = (spf / 1000000000) if spf >= 1000000 else ((spf / 1000) if spf >= 1000 else spf) -%}
+                  {%- set sp_gbps = (spv | int) if (spv == (spv | int)) else (spv | round(2)) -%}
                 {%- endif -%}
+                {%- set hs = (h.status | default('')) | string | lower | trim -%}
+                {%- set loc = h.location | default(none) -%}
+                {%- set bus = h.bus | default(none) -%}
+                {%- set _ = out.append({
+                  'name':            dev,
+                  'driver':          h.driver | default(none),
+                  'model':           h.model | default(none),
+                  'vendor':          ctrl_vendor.get(dev, none),
+                  'firmware':        none,
+                  'adapter_type':    h.type | default(none),
+                  'link_status':     ('up' if hs in ['online', 'connected', 'up', 'linkup', 'active'] else 'down'),
+                  'wwpn':            wwpn,
+                  'wwnn':            wwnn,
+                  'link_speed_gbps': sp_gbps,
+                  'port_type':       ('FCoE' if is_fcoe else ('FibreChannel' if is_fc else 'iSCSI')),
+                  'pci':             (loc if (loc is not none and (loc | string | trim) not in ['', 'PCI', 'N/A']) else none),
+                  'bus':             (bus if (bus is number and bus >= 0) else none),
+                  'source':          'esxi',
+                }) -%}
               {%- endif -%}
             {%- endif -%}
           {%- endfor -%}

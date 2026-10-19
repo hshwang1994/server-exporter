@@ -2647,9 +2647,21 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
 
 def _hba_link_status(pdata):
     if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
+        return 'down'
+    return 'up' if _normalize_link_status(pdata.get('LinkStatus')) == 'up' else 'down'
+
+
+def _hba_link_missing(pdata):
+    return not isinstance(pdata, dict) or 'LinkStatus' not in pdata
+
+
+def _hba_link_unresolved(pdata):
+    if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
         return None
-    v = _normalize_link_status(pdata.get('LinkStatus'))
-    return v if v in ('up', 'down') else None
+    raw = pdata.get('LinkStatus')
+    if _normalize_link_status(raw) in ('up', 'down'):
+        return None
+    return 'null' if raw is None else str(raw).strip()
 
 
 def _derive_port_wwpn(pdata, link_tech, ndf):
@@ -2924,7 +2936,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
     ndf_by_id = {_id_text(n.get('id')): i for i, n in enumerate(ndfs) if _id_text(n.get('id'))}
     ndf_matched = set()
     port_ctx_by_id = {}
-    link_missing, wwpn_missing, wwpn_derived = [], [], []
+    link_missing, link_unresolved, wwpn_missing, wwpn_derived = [], [], [], []
 
     ports_link = (_safe(adata, 'NetworkPorts', '@odata.id')
                   or _safe(adata, 'Ports', '@odata.id'))
@@ -3003,8 +3015,12 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                 port_hbas = []
                 if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE') and not (not cand and prefixed_orphan):
                     hba_link = _hba_link_status(pdata)
-                    if hba_link is None:
+                    if _hba_link_missing(pdata):
                         link_missing.append(_id_text(port_id) or _str(p_uri))
+                    else:
+                        _unres = _hba_link_unresolved(pdata)
+                        if _unres is not None:
+                            link_unresolved.append('%s=%s' % (_id_text(port_id) or _str(p_uri), _unres))
                     for fndf in (fc_ndfs or [ndf]):
                         fx = fndf if isinstance(fndf, dict) else {}
                         if not fx.get('wwpn'):
@@ -3079,7 +3095,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
             hba_speed = _normalize_port_speed(parent[2])[0]
         else:
             cls = _classify_port_protocol(None, None, ndf, None)
-            hba_link, hba_speed = None, None
+            hba_link, hba_speed = 'down', None
         if cls in ('FibreChannel', 'FCoE'):
             fx = ndf
             if not ndf.get('wwpn'):
@@ -3089,8 +3105,12 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                     wwpn_derived.append(nid)
                 else:
                     wwpn_missing.append(nid)
-            if hba_link is None:
+            if parent is None or _hba_link_missing(parent[2]):
                 link_missing.append(nid)
+            else:
+                _unres = _hba_link_unresolved(parent[2])
+                if _unres is not None:
+                    link_unresolved.append('%s=%s' % (nid, _unres))
             hba = _make_fc_hba(adapter_id, adapter_info, ndf.get('id'), cls, hba_link, hba_speed, None, fx)
             if hba.get('wwpn') and hba['wwpn'] in {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
                 continue
@@ -3098,8 +3118,11 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
     _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
 
     if link_missing:
-        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 미제공 (storage.hbas link_status null)'
+        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 미제공, down 으로 기록 (storage.hbas link_status)'
                 % (adapter_id, ', '.join(link_missing)))
+    if link_unresolved:
+        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 값 미확정, down 으로 기록 (storage.hbas link_status)'
+                % (adapter_id, ', '.join(link_unresolved)))
     if wwpn_derived:
         _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s WWPN 을 기능이 아니라 포트 주소에서 정함'
                 % (adapter_id, ', '.join(wwpn_derived)))

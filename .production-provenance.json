@@ -999,16 +999,16 @@
    "source_sha256": "61af6abcfe4d718bab0bc62d9e193a536f922b8c8ccbf06e633dc31f2775b6c2"
   },
   "esxi-gather/tasks/collect_network_extended.yml": {
-   "bytes": 15820,
+   "bytes": 15380,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 74,
+   "removed_lines": 75,
    "removed_trailing": 0,
-   "sha256": "a789694aee44b94d9e04867f993053d58959b76554ee814eb8be234af154f22e",
-   "source_blob": "cb8341146c95e7d75a4ca9fafd95dde924b36eac",
-   "source_sha256": "856345d4a2bfcc1e4b77c0402d93e797f8a2d6527274241e598b27f6af2551a9"
+   "sha256": "c3a68473163ef427d3c1ad5409e495b5b59a1282575f9cb3f47991e75b6fefb2",
+   "source_blob": "182dbc91b40eb1c2317cc78e4166f2e7a2ec6524",
+   "source_sha256": "a91756e2b6abbb92c49cee8949f44cb4eee5551155367cf5a1ccc510076e0d59"
   },
   "esxi-gather/tasks/collect_runtime.yml": {
    "bytes": 6846,
@@ -1329,16 +1329,16 @@
    "source_sha256": "bcb754210e931202eb882263397b0399887104c0ebda99cdb7eb31924ffb9994"
   },
   "os-gather/tasks/linux/gather_hba_ib.yml": {
-   "bytes": 13344,
+   "bytes": 13240,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 88,
+   "removed_lines": 89,
    "removed_trailing": 0,
-   "sha256": "13289220e3d3e5ec998151d520ceafb1d6a7e2b99395fd1dcd4c75add98dffdc",
-   "source_blob": "f88202088f6fc16c6b3b4d50a8b4f964af555f23",
-   "source_sha256": "6fc2fd9cda41ec57027f637520098002463bd86371f4f251d57d5ea24e62c996"
+   "sha256": "82ac59351288690f772ad0767ab1bd4dfcc5936089e2d9c09dcb56b74860d4bc",
+   "source_blob": "34902c0800ef1f9cd315da12f066ae123e100296",
+   "source_sha256": "120f42fda58350b03e2121ced1345b90dfbf5b18af472a6c05b4700b0254813a"
   },
   "os-gather/tasks/linux/gather_memory.yml": {
    "bytes": 9568,
@@ -1545,28 +1545,28 @@
    "source_sha256": "5aa3fbda2ecaea1914f166aa54d27a40a5d8afb9eec6e9ce3d80e888a50d1a71"
   },
   "os-gather/tasks/windows/gather_storage.yml": {
-   "bytes": 34107,
+   "bytes": 34036,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
    "removed_lines": 187,
    "removed_trailing": 0,
-   "sha256": "3ddb015ffaeeb124ba2fb910aa682970a92d3c62b5f1049080f5525fe1fe2219",
-   "source_blob": "875305cd1f6709371dc0e6bfa46277d01362b406",
-   "source_sha256": "c7bc4b54ff3789090fbd36bf5b97d9d5ab5ecb85c27d19673f65ee7cec638c38"
+   "sha256": "00e868b2dd6dbc8abad237367d34c8731ab9bddc06f46011bd6e8ba0db113fab",
+   "source_blob": "f6db1518e6bcba526ece36e514bce09f6e89ac07",
+   "source_sha256": "267dcfb55de0e78f79f9e91039ca2459eda5c3eceb047970f3cc629df3b90e27"
   },
   "os-gather/tasks/windows/gather_system.yml": {
-   "bytes": 15851,
+   "bytes": 16151,
    "language": "yaml",
    "mode": "100644",
    "preserved": [],
    "python_kind": null,
-   "removed_lines": 75,
+   "removed_lines": 79,
    "removed_trailing": 0,
-   "sha256": "49ed85fe7258d13fcc72a4bc827eb213543a9d5bc9dd3d44f54ecfe0ae70030e",
-   "source_blob": "a7891ef25f7d92f0e54e9c35264964fb50e3c799",
-   "source_sha256": "dd76a80469f8485a129fc05b54390ec82ba700130ac0a46d932ccaba4dc145e9"
+   "sha256": "6d27d1e095745917dfe03a0fa4db085bfdbd9b188d2e777eb14ab42bbdeb657d",
+   "source_blob": "7b1e9ae464933a51f0739c74ac49e78d44937e3a",
+   "source_sha256": "a5c8e0429878dcdd7fb7160ec14d8afbff1baeca0816372a77bb4783c54e9690"
   },
   "os-gather/tasks/windows/gather_users.yml": {
    "bytes": 7442,
@@ -1599,7 +1599,7 @@
    "source_sha256": "c9097d8d66b39d113fc2a6b20a302dabd82d28a32b61ad8d1347169a692d6041"
   },
   "redfish-gather/library/redfish_gather.py": {
-   "bytes": 263826,
+   "bytes": 264927,
    "language": "python",
    "mode": "100644",
    "preserved": [
@@ -1610,11 +1610,11 @@
     }
    ],
    "python_kind": "library",
-   "removed_lines": 1396,
-   "removed_trailing": 331,
-   "sha256": "927a0e90cb0750e57e762a93cca9e88895d5b9ce06084b46c3b31dac1919cc41",
-   "source_blob": "e63b5de4738d5b0c03987585ec0de0002c139925",
-   "source_sha256": "d03db7acab2205e17fa20022a13f9f62b28450ab19168d2f0d3bb845327fb9ec"
+   "removed_lines": 1398,
+   "removed_trailing": 332,
+   "sha256": "cbb06c6fa6a6b2bb892aa54162827f0d77fa733caeaa6715893914ca493d6888",
+   "source_blob": "4b6d5032c844c60a689fcdf6f18a4ee1f22c9402",
+   "source_sha256": "e9db90dcfc2d95b7ebe57c2de5fe787dff50545e1541511ba5aabd7ef0969dbc"
   },
   "redfish-gather/site.yml": {
    "bytes": 27311,
@@ -2611,8 +2611,8 @@
   "tests/reference/os/README.md",
   "tests/reference/redfish/README.md"
  ],
- "main_sha": "3e1e2aba9fa8b283f099af7dd03f2d785e0b1505",
- "main_tree": "10a6cf47f8733bd7f1739bad83cbf218c6acdba8",
+ "main_sha": "27c4b39338c499e7909df87a0ce52e6bdd414169",
+ "main_tree": "326d181b920caa431a8f480fcf05c74f19c2831b",
  "manifest_sha256": "f62078a590e77b867713ba03c0990984d1b2a48e8f792b88563e6c7cfc553ed2",
  "policy": {
   "eol": "lf",
@@ -2628,5 +2628,5 @@
  },
  "rules_version": "2026.10.03",
  "schema": 1,
- "tree_hash": "d0152f58b5bbf3f6085746351eede591284e8ea0d41a27774fff7ccd5de5ceff"
+ "tree_hash": "3d9c6c8c334b6fd60063f1d802b2393251bc81b52ecba34902ce5151c3cc111a"
 }
