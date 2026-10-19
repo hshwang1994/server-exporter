@@ -1,0 +1,110 @@
+# tests/reference/os/coverage_allowlist.yml — OS 전수 덤프 명령 vs os-gather 사용 명령 허용 목록 (2026-10-19)
+#
+# tests/reference/os/<distro>/<ip>/cmd_*.txt 가 보여 주는 "장비에서 뜰 수 있는 명령" 가운데 os-gather 가 호출하지 않는 것을 사유와 함께
+# 고정한다. 시험: tests/regression/test_os_command_coverage.py
+#
+#   linux.commands:   Linux 덤프 헤더(`# command: …`)에서 뽑은 실행 파일 이름 또는 읽는 파일 경로 가운데
+#                     os-gather/tasks/linux/*.yml (+ os-gather/files/*) 에 없는 것 → 사유
+#   linux.aliases:    같은 정보를 다른 명령/파일로 읽는 경우 → 코드에 실제로 있는 토큰 (시험이 실존을 확인)
+#   windows.commands: Windows 덤프 파일 이름(cmd_<name>.txt 의 <name>) 가운데 os-gather/tasks/windows/*.yml 에
+#                     (밑줄/대소문자 무시, 단·복수 허용) 대응 토큰이 없는 것 → 사유
+#   windows.aliases:  같은 정보를 다른 CIM 클래스/cmdlet 으로 읽는 경우 → 코드 토큰
+#
+# [판단 필요] 는 인벤토리성 정보를 담지만 현재 호출하지 않는 명령이다. 호출을 시작하면 시험이 "허용 목록에서 지워라" 고 한다.
+
+linux:
+  commands:
+    # --- BMC/펌웨어 도구 (OS 채널은 BMC 를 직접 묻지 않는다 — Redfish 채널의 영역) ---
+    ipmitool: "BMC 센서/FRU/SEL/LAN — OS 채널은 BMC 를 묻지 않는다, Redfish 채널이 담당 (ipmitool 설치·권한도 사이트마다 다름)"
+    racadm: "Dell iDRAC CLI — 벤더 전용 도구라 OS 채널 범위 밖, Redfish 채널이 담당"
+    biosdecode: "BIOS 진입점 테이블 — dmidecode -t bios 로 BIOS 버전/날짜를 읽는다"
+    # --- 하드웨어 종합 도구 ([판단 필요]: 설치 보장이 없어 dmidecode/lspci/lsblk 조합으로 대체) ---
+    lshw: "[판단 필요] 하드웨어 트리(JSON) — 기본 설치가 아니고 느리다, dmidecode/lspci/lsblk/ethtool 조합으로 같은 정보를 읽는다"
+    inxi: "시스템 요약 도구 — 비표준 설치, 범위 밖"
+    hwinfo: "SUSE 계열 하드웨어 도구 — 비표준 설치, 범위 밖"
+    lsusb: "USB 장치 — 사용자 지시(2026-10-19)로 범위 밖"
+    # --- 스토리지 상세 ([판단 필요]) ---
+    smartctl: "[판단 필요] 디스크 SMART/시리얼/펌웨어 — lsblk -O(SERIAL·MODEL·REV) 와 nvme list 로 식별, SMART 상태는 범위 밖"
+    storcli: "[판단 필요] MegaRAID/PERC 컨트롤러·VD·PD — 벤더 CLI 설치 보장이 없어 RAID 상세는 Redfish 채널이 담당"
+    hdparm: "ATA 디스크 식별 — lsblk -O 로 모델/시리얼을 읽는다"
+    nvme: "[판단 필요] nvme list 미호출 — lsblk -O(TRAN=nvme · MODEL · SERIAL · REV) 와 udevadm 으로 NVMe 디스크를 식별한다; nvme CLI 가 주는 네임스페이스/펌웨어 상세는 읽지 않는다"
+    blkid: "파일시스템 UUID/LABEL — lsblk -O 의 UUID·FSTYPE·LABEL 로 읽는다"
+    multipath: "multipath -ll 미호출 — lsblk 트리의 TYPE=mpath 멤버 관계로 멀티패스 LUN 을 한 디스크로 접는다 (LX-F04)"
+    lvs: "LVM 논리 볼륨 — lsblk 트리(TYPE=lvm)로 블록 계층만 읽고 LVM 메타는 범위 밖"
+    lvdisplay: "LVM 논리 볼륨 상세 — lvs 와 같다"
+    pvs: "LVM 물리 볼륨 — lsblk 트리로 블록 계층만 읽는다"
+    pvdisplay: "LVM 물리 볼륨 상세 — pvs 와 같다"
+    vgs: "LVM 볼륨 그룹 — lsblk 트리로 블록 계층만 읽는다"
+    vgdisplay: "LVM 볼륨 그룹 상세 — vgs 와 같다"
+    /proc/mdstat: "소프트웨어 RAID(md) 상태 — lsblk 트리(TYPE=raid*)로 구성원만 읽고 동기화 상태는 범위 밖"
+    swapon: "스왑 장치 — free 로 스왑 총량을 읽는다"
+    # --- 네트워크 상세/상태 ---
+    bridge: "브리지 포트/VLAN — ip -j link 로 인터페이스 종류만 읽고 브리지 VLAN 표는 범위 밖"
+    nmcli: "NetworkManager 장치/연결 프로필 — ip -j addr/link 로 실제 상태를 읽는다"
+    /etc/hosts: "정적 호스트 매핑 — 범위 밖"
+    /etc/nsswitch.conf: "이름 해석 순서 — 범위 밖"
+    /etc/ssh/sshd_config: "SSH 서버 설정 — 보안 설정이라 수집하지 않는다"
+    # --- 커널/모듈/부팅 ---
+    lsmod: "적재 모듈 — 드라이버는 ethtool -i 로 NIC 드라이버만 읽는다"
+    dmesg: "커널 로그 — 로그는 범위 밖"
+    journalctl: "systemd 저널 — 로그는 범위 밖"
+    /proc/cmdline: "커널 부팅 인자 — 범위 밖"
+    /sys/firmware/efi/efivars: "EFI 변수 목록 — 부팅 모드만 필요하면 /sys/firmware/efi 존재로 판정, 변수 목록은 범위 밖"
+    sysctl: "커널 파라미터 — 설정값이라 범위 밖"
+    /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq: "현재 CPU 주파수 — 순간값이라 범위 밖, 정격/최대 클럭은 lscpu·cpuinfo_max_freq·dmidecode 로"
+    vmstat: "메모리/CPU 순간 통계 — 범위 밖"
+    # --- 패키지/컨테이너/서비스 ---
+    rpm: "설치 패키지 목록 — 소프트웨어 인벤토리는 범위 밖"
+    dpkg: "설치 패키지 목록 — 소프트웨어 인벤토리는 범위 밖"
+    yum: "저장소 목록 — 범위 밖"
+    dnf: "저장소 목록 — 범위 밖"
+    /etc/apt/sources.list: "APT 저장소 — 범위 밖"
+    /etc/apt/sources.list.d/: "APT 저장소 디렉터리 — 범위 밖"
+    docker: "컨테이너 런타임 — 범위 밖"
+    podman: "컨테이너 런타임 — 범위 밖"
+    kubectl: "쿠버네티스 클라이언트 — 범위 밖"
+    ps: "프로세스 목록 — 범위 밖"
+    crontab: "크론 작업 — 범위 밖"
+    /etc/cron.*: "크론 디렉터리 — 범위 밖"
+    # --- 계정/보안/로그인 ---
+    /etc/sudoers: "sudo 정책 — 보안 설정이라 수집하지 않는다"
+    /etc/sudoers.d/: "sudo 정책 디렉터리 — 보안 설정이라 수집하지 않는다"
+    who: "현재 로그인 세션 — 마지막 로그인은 lastlog(없으면 last -F -n 1) 로 읽는다"
+    w: "현재 로그인 세션/부하 — who 와 같다"
+    aa-status: "AppArmor 상태 — SELinux 모드만 getenforce 로 읽고 AppArmor 는 범위 밖"
+    # --- 시간/로케일/식별 ---
+    chronyc: "NTP 동기 상태 — timedatectl 로 시간대/NTP 사용 여부만 읽는다"
+    ntpq: "NTP 피어 — chronyc 와 같다"
+    locale: "로케일 — 범위 밖"
+    /etc/locale.conf: "로케일 파일 — 범위 밖"
+    hostnamectl: "호스트명/칙 정보 — uname -n 과 /etc/os-release 로 읽는다"
+    /etc/machine-id: "systemd machine-id — 서버 식별은 dmidecode UUID/시리얼로 한다"
+    virt-what: "가상화 종류 — systemd-detect-virt 와 dmidecode system Manufacturer/Product 로 판별한다"
+    # --- 로그 파일 ---
+    /var/log/messages: "시스템 로그 — 로그는 범위 밖"
+    /var/log/syslog: "시스템 로그 — 로그는 범위 밖"
+  aliases:
+    # 같은 정보를 다른 토큰으로 읽는다 — 토큰은 os-gather/tasks/linux 코드에 실제로 있어야 한다
+    /etc/redhat-release: [/etc/os-release]
+    iptables-save: [iptables]
+    sestatus: [getenforce]
+    uptime: [/proc/uptime]          # uptime 명령 대신 /proc/uptime 을 직접 읽어 초 단위로 쓴다
+
+windows:
+  commands:
+    baseboard: "[판단 필요] 메인보드(Win32_BaseBoard) 제조사/제품/시리얼 — 시스템 식별은 Win32_ComputerSystemProduct·Win32_BIOS 로 읽고 보드 자체는 읽지 않는다"
+    hotfix: "설치된 핫픽스 — 패치 목록은 범위 밖"
+    installed_features: "Windows 기능 목록 — 소프트웨어 인벤토리는 범위 밖"
+    powercfg: "전원 구성표 — 설정이라 범위 밖"
+    system_info: "systeminfo 텍스트 요약 — 같은 항목을 CIM 클래스(Win32_OperatingSystem/ComputerSystem/BIOS)로 구조화해 읽는다"
+    video_controller: "그래픽 컨트롤러 — OS 채널 범위 밖(현재)"
+    winrm_config: "WinRM 설정 — 연결 수단 자체라 인벤토리 아님"
+    env: "환경 변수 덤프 — 범위 밖 (코드의 $env: 참조와 이름이 겹치지만 덤프 내용은 전체 환경 변수다)"
+  aliases:
+    memory_module: [Win32_PhysicalMemory]
+    network_adapter: [Get-NetAdapter]
+    ip_config: [Get-NetIPAddress]
+    ipconfig_all: [Get-NetIPAddress, Get-DnsClientServerAddress]
+    route_print: [Get-NetRoute]
+    netstat_ano: [Get-NetTCPConnection]
+    os_caption: [Win32_OperatingSystem]

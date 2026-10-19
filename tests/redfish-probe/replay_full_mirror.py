@@ -123,7 +123,7 @@ def install_fakes(response_map: dict):
     rg._get_noauth = fake_get_noauth
 
 
-def run(mirror_dir: Path, manager_layout=None):
+def run(mirror_dir: Path, manager_layout=None, firmware_scope=None):
     response_map, service_root, stats = build_response_map(mirror_dir)
     install_fakes(response_map)
 
@@ -151,6 +151,7 @@ def run(mirror_dir: Path, manager_layout=None):
         *creds, all_errors, collected, failed, unsupported,
         manager_layout=manager_layout,
         product_hint=rg._safe(root, "Product"),
+        firmware_scope=firmware_scope,
     )
 
     multi_node = rg._collect_multi_node_topology(
@@ -175,6 +176,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="full mirror → gather 오프라인 재생")
     ap.add_argument("mirror_dir", help="redfish_full_mirror.py -D 산출물 디렉터리")
     ap.add_argument("--layout", default=None, help="manager_layout (예: rmc_primary)")
+    ap.add_argument("--firmware-scope", default=None,
+                    help="adapter vendor_notes.firmware_inventory_scope (예: complex_only — CSUS 3200 / Superdome Flex)")
     ap.add_argument("--out", default=None, help="envelope JSON 저장 경로")
     args = ap.parse_args()
 
@@ -183,7 +186,7 @@ def main() -> int:
         print(f"[FAIL] mirror_dir 없음: {mirror_dir}", file=sys.stderr)
         return 2
 
-    envelope, stats, uris = run(mirror_dir, manager_layout=args.layout)
+    envelope, stats, uris = run(mirror_dir, manager_layout=args.layout, firmware_scope=args.firmware_scope)
 
     out_json = json.dumps(envelope, indent=2, ensure_ascii=False, sort_keys=True)
     if args.out:

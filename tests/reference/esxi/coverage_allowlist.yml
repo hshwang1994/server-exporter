@@ -1,0 +1,68 @@
+# tests/reference/esxi/coverage_allowlist.yml — ESXi pyvmomi 속성 그룹 커버리지 허용 목록 (2026-10-19)
+#
+# tests/reference/esxi/<ip>/pyvmomi_host_dump.json 의 1단계 키(비-dict) 와 2단계 키(dict 자식) 를 "노출 속성 그룹" 으로 보고,
+# esxi-gather/**/*.py · esxi-gather/tasks/*.yml · site.yml 텍스트(주석 제거)에 그 leaf 이름(원형·소문자·snake_case)이 있으면
+# "소비" 로 친다. 시험: tests/regression/test_esxi_property_coverage.py
+#
+#   groups:  소비하지 않는 그룹 → 사유. 읽기 시작하면(코드에 leaf 가 나타나면) 시험이 "허용 목록에서 지워라" 고 한다.
+#   aliases: community.vmware 모듈이 다른 이름으로 전달해 코드가 그 이름으로 소비하는 그룹 → 코드에 실제로 있는 토큰 목록.
+#            시험이 토큰의 실존을 확인하므로 stale alias 는 실패한다.
+#
+# 한계: leaf 가 일반 단어(name·vendor·model·version·build·host·config…)인 그룹은 텍스트 일치가 과대평가될 수 있다 — 그런 그룹은
+# 여기 나타나지 않는다. 덤프 1단계 키 ↔ pyvmomi 속성명 대응(network_pnic→pnic 등)은 시험 모듈의 TOP_LEVEL_TOKENS 에 있다.
+
+groups:
+  # --- runtime (HostRuntimeInfo) — 운영 상태, 인벤토리 아님 ---
+  runtime.healthSystemRuntime: "하드웨어 센서/상태(systemHealthInfo.numericSensorInfo) — ESXi 채널 센서 수집은 결정 보류"
+  runtime.vsanRuntimeInfo: "vSAN 런타임 상태 — vSAN 미수집(결정 보류)"
+  runtime.networkRuntimeInfo: "네트워크 런타임 상태(NetStack 인스턴스 상태) — 상태값이라 범위 밖"
+  runtime.bootTime: "부팅 시각 — uptime 은 summary.quickStats.uptime 으로 읽는다"
+  runtime.powerState: "전원 상태 — 연결된 호스트는 항상 poweredOn, 상태값이라 범위 밖"
+  runtime.connectionState: "vCenter 연결 상태 — standalone 직접 연결이라 의미 없음"
+  runtime.inMaintenanceMode: "유지보수 모드 — 운영 상태라 범위 밖"
+  runtime.inQuarantineMode: "격리 모드 — 운영 상태라 범위 밖"
+  runtime.partialMaintenanceMode: "부분 유지보수 모드 — 운영 상태라 범위 밖"
+  runtime.standbyMode: "대기 모드 — 운영 상태라 범위 밖"
+  runtime.dasHostState: "HA(DAS) 상태 — 클러스터 운영 상태라 범위 밖"
+  runtime.cryptoState: "호스트 암호화 상태 — 보안 설정이라 범위 밖"
+  runtime.cryptoKeyId: "호스트 암호화 키 ID — 보안 자료라 수집하지 않는다"
+  runtime.stateEncryption: "구성 암호화 상태 — 보안 설정이라 범위 밖"
+  runtime.tpmPcrValues: "TPM PCR 값 — 보안 자료라 수집하지 않는다"
+  runtime.statelessNvdsMigrationReady: "NVDS 마이그레이션 준비 상태 — 운영 상태라 범위 밖"
+  runtime.hostMaxVirtualDiskCapacity: "가상 디스크 최대 용량 한도 — 제품 한도값, 인벤토리 아님"
+  runtime.vFlashResourceRuntimeInfo: "vFlash 리소스 상태 — 사용 안 함"
+  # --- host_summary (HostListSummary) — 대부분 상태/정책 ---
+  host_summary.overallStatus: "전체 상태 색(green/yellow/red) — 상태값이라 범위 밖"
+  host_summary.rebootRequired: "재부팅 필요 플래그 — 운영 상태라 범위 밖"
+  host_summary.managementServerIp: "관리 vCenter IP — standalone 직접 수집이라 범위 밖"
+  host_summary.currentEVCModeKey: "EVC 모드 — 클러스터 CPU 호환성 정책, 인벤토리 아님"
+  host_summary.currentEVCGraphicsModeKey: "EVC 그래픽 모드 — 클러스터 정책, 인벤토리 아님"
+  host_summary.maxEVCModeKey: "지원 최대 EVC 모드 — 클러스터 정책, 인벤토리 아님"
+  host_summary.customValue: "사용자 정의 속성 값 — 사이트별 임의 값이라 범위 밖"
+  host_summary.tpmAttestation: "TPM 증명 결과 — 보안 자료라 수집하지 않는다"
+  host_summary.trustAuthorityAttestationInfos: "Trust Authority 증명 정보 — 보안 자료라 수집하지 않는다"
+  # --- config_product (AboutInfo) — distribution/version/build 3값 외는 쓰지 않음 ---
+  config_product.fullName: "fullName 은 distribution(name)/version/build 3값으로 분해해 쓴다"
+  config_product.apiType: "API 종류(HostAgent) — 항상 같은 값"
+  config_product.apiVersion: "vSphere API 버전 — 제품 버전(version/build)으로 충분"
+  config_product.instanceUuid: "vCenter 인스턴스 UUID — standalone 호스트에는 의미 없음"
+  config_product.licenseProductName: "라이선스 제품명 — 라이선스는 범위 밖"
+  config_product.licenseProductVersion: "라이선스 제품 버전 — 라이선스는 범위 밖"
+  config_product.localeBuild: "로케일 빌드 — 범위 밖"
+  config_product.localeVersion: "로케일 버전 — 범위 밖"
+  config_product.osType: "osType(vmnix-x86) — 항상 같은 값"
+  config_product.patchLevel: "패치 레벨 — build 번호로 대신한다"
+  config_product.productLineId: "제품 라인 ID(embeddedEsx) — 항상 같은 값"
+  # --- hardware (HostHardwareSummary) ---
+  hardware_systemInfo.otherIdentifyingInfo: "[판단 필요] 시리얼 태그 묶음(ServiceTag·SerialNumberTag·EnclosureSerialNumberTag·AssetTag) — 대표 시리얼은 ansible_product_serial 로 읽고 태그 묶음 자체는 읽지 않는다"
+  hardware_systemInfo.numHBAs: "HBA 개수 — vmware_host_vmhba_info 로 HBA 를 하나씩 열거하므로 개수만 따로 쓰지 않는다"
+  hardware_systemInfo.numNics: "NIC 개수 — vmware_host_vmnic_info 로 NIC 를 하나씩 열거하므로 개수만 따로 쓰지 않는다"
+  # --- dns_config (HostDnsConfig) ---
+  dns_config.virtualNicDevice: "DNS 설정의 VMkernel NIC 디바이스명 — DNS 서버/도메인/검색 도메인만 쓴다"
+  dns_config.ipv6VirtualNicDevice: "IPv6 DNS 용 VMkernel NIC 디바이스명 — IPv6 미수집"
+
+aliases:
+  # 그룹 → 코드에 실제로 나타나는 토큰 (community.vmware 가 이름을 바꿔 전달)
+  hardware_systemInfo.memorySize: [ansible_memtotal_mb]            # vmware_host_facts: memorySize → ansible_memtotal_mb
+  hardware_systemInfo.numCpuPkgs: [ansible_processor_count, numCpuPackages]   # vmware_host_facts: numCpuPkgs → ansible_processor_count · esxi_disks: cpuInfo.numCpuPackages
+  filesystem: [datastore, vmware_datastore_info]                   # config.fileSystemVolume.mountInfo 의 VMFS/NFS 볼륨은 datastore 로 읽는다

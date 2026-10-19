@@ -736,8 +736,41 @@ def _system_version_with_server_year(frag):
     return frag
 
 
+def _network_groups_counting_speedless(interfaces):
+    """2026-10-19 (B-3): 종전 체인의 interfaces 에 새 summary 규칙을 적용한 groups — speed 를 못 읽은 NIC(null/0)도
+    speed_mbps=null 그룹 하나로 세고 link_up_count 를 센다. VLAN tNIC / 팀 member 제외와 그룹 순서(첫 등장 순)는 종전 그대로."""
+    groups, seen = [], {}
+    for n in interfaces or []:
+        if n.get("vlan_id") is not None or n.get("team_role") == "member":
+            continue
+        sp = n.get("speed_mbps")
+        sp = sp if (sp is not None and int(sp) > 0) else None
+        up = 1 if str(n.get("link_status") or "").lower() in ("up", "linkup") else 0
+        key = str(sp)
+        if key in seen:
+            groups[seen[key]]["quantity"] += 1
+            groups[seen[key]]["link_up_count"] += up
+        else:
+            seen[key] = len(groups)
+            groups.append({"speed_mbps": sp, "link_type": None, "quantity": 1, "link_up_count": up})
+    return groups
+
+
+def _network_fragment_with_speedless_group(frag):
+    frag = copy.deepcopy(frag)
+    net = frag.get("network") if isinstance(frag, dict) else None
+    if isinstance(net, dict) and isinstance(net.get("summary"), dict):
+        net["summary"] = {"groups": _network_groups_counting_speedless(net.get("interfaces"))}
+    return frag
+
+
 # (section, scenario 이름 또는 "*") → {fragment 변수: 종전 값 → 기대 값}. 의도한 값 변경은 여기 날짜와 함께 적는다.
-INTENDED_FRAGMENT_FIX = {("system", "*"): {"_data_fragment": _system_version_with_server_year}}
+INTENDED_FRAGMENT_FIX = {("system", "*"): {"_data_fragment": _system_version_with_server_year},
+                         # 2026-10-19 (B-3): network.summary — speed 없는 NIC 의 null 그룹 (net_no_team 의 어댑터 없는 주소)
+                         ("network", "*"): {"_data_fragment": _network_fragment_with_speedless_group}}
+# (section, scenario 이름 또는 "*") → {중간 변수: (종전 값, 종전 ctx) → 기대 값} — fragment 가 아닌 set_fact 변수의 의도한 변경
+INTENDED_CTX_FIX = {("network", "*"): {"_w_net_summary": lambda _old, ctx: {
+    "groups": _network_groups_counting_speedless((ctx.get("_w_net_topo") or {}).get("interfaces"))}}}
 
 
 # 2026-10-19: system build fragment 의 _data_fragment — version 식(Server 연도 접두)
@@ -751,10 +784,13 @@ INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_err
                          ("memory", "windows | memory | build fragment"): {"_errors_fragment", "_data_fragment"},
                          # 2026-10-10 (C8): DIMM 조회의 공급자 오류 — 조회 실패 표시 · 일부 합계를 설치량으로 확정하지 않음 · 합계 미확정
                          ("memory", "windows | memory | parse slots + grouping"): {"_w_mem_read_failed", "_w_mem_read_error"},
-                         ("memory", "windows | memory | summary + totals"): {"_w_mem_phys_mb"},
+                         # 2026-10-19 (B-10): 512 MiB 이하 DIMM(GB 반올림 0)은 그룹·합계 제외 — _w_mem_summary 식 변경 (값은 그 DIMM 이 있을 때만 다르다)
+                         ("memory", "windows | memory | summary + totals"): {"_w_mem_phys_mb", "_w_mem_summary"},
                          # 2026-10-10 (LX-F12): 식별자 자리표시자 목록을 공용 필터(dmi_sentinel_null)로 — 값 의미는 같다(trim 추가)
                          ("system", "windows | system | resolve identifiers"): {"_w_serial_val", "_w_uuid_val"},
                          ("network", "windows | network | build fragment"): {"_errors_fragment"},
+                         # 2026-10-19 (B-3): speed 를 못 읽은 NIC 도 speed_mbps=null 그룹으로 센다 — _w_net_summary 식 변경 (vlan/team 제외는 그대로)
+                         ("network", "windows | network | compute summary groups"): {"_w_net_summary"},
                          # 2026-10-17 (InfiniBand 전면 검증): IB 항목 계약 변경 — port=null · rate_gbps 는 up 일 때만 · 소수 보존 ·
                          #   note 에 내부 규칙 번호 없음. _w_hbas 는 글자 그대로다.
                          ("storage", "windows | storage | build HBA/IB canonical lists"): {"_w_ib", "_w_hbas", "_w_hba_components_failed"},
@@ -818,7 +854,11 @@ def test_old_and_new_chains_render_identical_fragments(section, scenario):
     for key in shared:
         if key in FRAGMENT_KEYS:
             continue  # 위에서 (의도한 차이를 넣어) 비교했다
-        assert new_ctx[key] == old_ctx[key], f"{section}/{scenario.__name__}: 중간 변수 {key} 가 종전과 다르다"
+        expected = old_ctx[key]
+        fix = (INTENDED_CTX_FIX.get((section, scenario.__name__)) or INTENDED_CTX_FIX.get((section, "*")) or {}).get(key)
+        if fix is not None:
+            expected = fix(expected, old_ctx)
+        assert new_ctx[key] == expected, f"{section}/{scenario.__name__}: 중간 변수 {key} 가 종전과 다르다"
 
 
 def test_every_old_task_maps_to_exactly_one_component():

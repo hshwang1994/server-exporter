@@ -27,7 +27,9 @@ def _load(p: Path):
 
 def _replay_counts(case_dir: Path):
     rec = _load(case_dir / "recording.json")
-    layout = _load(case_dir / "meta.json").get("manager_layout") if (case_dir / "meta.json").is_file() else None
+    meta = _load(case_dir / "meta.json") if (case_dir / "meta.json").is_file() else {}
+    layout = meta.get("manager_layout")
+    scope = meta.get("firmware_inventory_scope")   # 2026-10-19 A-9 (CSUS 만 complex_only)
     g, n, r = H.make_replayer(rec)
     calls = collections.Counter()
 
@@ -39,7 +41,7 @@ def _replay_counts(case_dir: Path):
         calls["noauth::" + path] += 1
         return n(bmc_ip, path, t, v)
 
-    H.run_gather(gw, nw, realm_impl=r, manager_layout=layout)
+    H.run_gather(gw, nw, realm_impl=r, manager_layout=layout, firmware_scope=scope)
     return calls
 
 
@@ -70,4 +72,8 @@ def test_budget_file_is_self_consistent(case_dir):
     assert budget["baseline_http_calls"] - total == (
         sum(int(e.rsplit(" x", 1)[1]) for e in budget["path_set_delta"]["removed"])
         - sum(int(e.rsplit(" x", 1)[1]) for e in budget["path_set_delta"]["added"])), "delta 가 baseline 과 현재의 차이를 설명한다"
-    assert budget["path_set_delta"]["added"] == [], "2026-10-03 Phase 3 는 요청을 추가하지 않는다 (추가가 생기면 사유를 적고 이 단언을 갱신)"
+    # 2026-10-19: 요청 추가는 fixture 의 `added_reason`(비어 있지 않은 문장)이 있을 때만 허용한다 — 암묵적 증가 금지는 그대로다.
+    #   (real_hpe_csus3200: A-9 PCIeDevices · A-10 Chassis/Drives — "특정 것만 수집하지 말 것" 사용자 지시에 따른 의도된 증가)
+    if budget["path_set_delta"]["added"]:
+        reason = budget.get("added_reason")
+        assert isinstance(reason, str) and reason.strip(),             f"{case_dir.name}: 요청이 추가됐으면 request_budget.json 에 added_reason(사유)을 적는다"

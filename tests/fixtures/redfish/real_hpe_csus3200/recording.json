@@ -427,6 +427,18 @@
     },
     null
   ],
+  "get::Chassis/r001u01/Drives": [
+    200,
+    {
+      "@odata.etag": "\"2b0c8cea8bb746a9b76f143647463ce3\"",
+      "@odata.id": "/redfish/v1/Chassis/r001u01/Drives",
+      "@odata.type": "#DriveCollection.DriveCollection",
+      "Members": [],
+      "Members@odata.count": 0,
+      "Name": "Chassis r001u01 Drive Collection"
+    },
+    null
+  ],
   "get::Chassis/r001u01/EnvironmentMetrics": [
     404,
     {},
@@ -776,6 +788,178 @@
     },
     null
   ],
+  "get::Chassis/r001u01/PCIeDevices": [
+    200,
+    {
+      "@odata.etag": "\"90ca7b608e8661cc49bcff6f92531d33\"",
+      "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices",
+      "@odata.type": "#PCIeDeviceCollection.PCIeDeviceCollection",
+      "Members": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/1"
+        },
+        {
+          "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/3"
+        },
+        {
+          "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/5"
+        },
+        {
+          "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/9"
+        },
+        {
+          "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/10"
+        },
+        {
+          "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/13"
+        },
+        {
+          "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/15"
+        }
+      ],
+      "Members@odata.count": 7,
+      "Name": "Chassis r001u01 PCIe Device Collection"
+    },
+    null
+  ],
+  "get::Chassis/r001u01/PCIeDevices/1": [
+    200,
+    {
+      "@odata.etag": "\"d6ec072c9e2274bde4eae468709fc826\"",
+      "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/1",
+      "@odata.type": "#PCIeDevice.v1_12_0.PCIeDevice",
+      "Assembly": {
+        "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/1/Assembly"
+      },
+      "FirmwareVersion": null,
+      "Id": "1",
+      "Manufacturer": null,
+      "Model": null,
+      "Name": "PCIe Device rack1/chassis_u1/cpu1/io_slot1",
+      "Oem": {
+        "Hpe": {
+          "@odata.type": "#HpeH3PcieDevice.v1_0_0.HpeH3PcieDevice",
+          "PhysicalLocationString": "rack1/chassis_u1/cpu1/io_slot1",
+          "Physloc": "0001000101010005"
+        }
+      },
+      "PCIeFunctions": {
+        "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/1/PCIeFunctions"
+      },
+      "PartNumber": null,
+      "SKU": null,
+      "SerialNumber": null,
+      "Slot": {
+        "Location": {
+          "PartLocation": {
+            "ServiceLabel": "rack1/chassis_u1/cpu1/io_slot1"
+          },
+          "Placement": {
+            "Rack": "1",
+            "RackOffset": 1,
+            "RackOffsetUnits": "EIA_310"
+          }
+        }
+      },
+      "SparePartNumber": null,
+      "Status": {
+        "Conditions": [
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceReallocated",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceReconfigured",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceAcquitted",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.LinkUp",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.PcieErrorIsolationExited",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.PcieCardHasCpu",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.PciePerformanceOk",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.NotBlockedByOtherDisabled",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.PcieLinkTrainingOk",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.ABMCPowerOnSuccess",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu1/io_slot1"
+            ],
+            "MessageId": "H3Alert.1.7.ABMCReady",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          }
+        ],
+        "Health": "OK",
+        "HealthRollup": "OK",
+        "State": "Enabled"
+      }
+    },
+    null
+  ],
   "get::Chassis/r001u01/PCIeDevices/10": [
     200,
     {
@@ -914,6 +1098,144 @@
     },
     null
   ],
+  "get::Chassis/r001u01/PCIeDevices/13": [
+    200,
+    {
+      "@odata.etag": "\"6abad415ef63ee5ba1a462a620bc2eb0\"",
+      "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/13",
+      "@odata.type": "#PCIeDevice.v1_12_0.PCIeDevice",
+      "Assembly": {
+        "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/13/Assembly"
+      },
+      "FirmwareVersion": null,
+      "Id": "13",
+      "Manufacturer": null,
+      "Model": null,
+      "Name": "PCIe Device rack1/chassis_u1/cpu2/io_slot13",
+      "Oem": {
+        "Hpe": {
+          "@odata.type": "#HpeH3PcieDevice.v1_0_0.HpeH3PcieDevice",
+          "PhysicalLocationString": "rack1/chassis_u1/cpu2/io_slot13",
+          "Physloc": "000D000101000105"
+        }
+      },
+      "PCIeFunctions": {
+        "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/13/PCIeFunctions"
+      },
+      "PartNumber": null,
+      "SKU": null,
+      "SerialNumber": null,
+      "Slot": {
+        "Location": {
+          "PartLocation": {
+            "ServiceLabel": "rack1/chassis_u1/cpu2/io_slot13"
+          },
+          "Placement": {
+            "Rack": "1",
+            "RackOffset": 1,
+            "RackOffsetUnits": "EIA_310"
+          }
+        }
+      },
+      "SparePartNumber": null,
+      "Status": {
+        "Conditions": [
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceReallocated",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceReconfigured",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceAcquitted",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.LinkUp",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.PcieErrorIsolationExited",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.PcieCardHasCpu",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.PciePerformanceOk",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.NotBlockedByOtherDisabled",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.PcieLinkTrainingOk",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.ABMCPowerOnSuccess",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu2/io_slot13"
+            ],
+            "MessageId": "H3Alert.1.7.ABMCReady",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          }
+        ],
+        "Health": "OK",
+        "HealthRollup": "OK",
+        "State": "Enabled"
+      }
+    },
+    null
+  ],
   "get::Chassis/r001u01/PCIeDevices/15": [
     200,
     {
@@ -1039,6 +1361,420 @@
           {
             "MessageArgs": [
               "rack1/chassis_u1/cpu2/io_slot15"
+            ],
+            "MessageId": "H3Alert.1.7.ABMCReady",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          }
+        ],
+        "Health": "OK",
+        "HealthRollup": "OK",
+        "State": "Enabled"
+      }
+    },
+    null
+  ],
+  "get::Chassis/r001u01/PCIeDevices/3": [
+    200,
+    {
+      "@odata.etag": "\"8d3c90a1f6dd76e96ad51319c3fee05a\"",
+      "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/3",
+      "@odata.type": "#PCIeDevice.v1_12_0.PCIeDevice",
+      "Assembly": {
+        "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/3/Assembly"
+      },
+      "FirmwareVersion": null,
+      "Id": "3",
+      "Manufacturer": null,
+      "Model": null,
+      "Name": "PCIe Device rack1/chassis_u1/cpu0/io_slot3",
+      "Oem": {
+        "Hpe": {
+          "@odata.type": "#HpeH3PcieDevice.v1_0_0.HpeH3PcieDevice",
+          "PhysicalLocationString": "rack1/chassis_u1/cpu0/io_slot3",
+          "Physloc": "0003000101000005"
+        }
+      },
+      "PCIeFunctions": {
+        "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/3/PCIeFunctions"
+      },
+      "PartNumber": null,
+      "SKU": null,
+      "SerialNumber": null,
+      "Slot": {
+        "Location": {
+          "PartLocation": {
+            "ServiceLabel": "rack1/chassis_u1/cpu0/io_slot3"
+          },
+          "Placement": {
+            "Rack": "1",
+            "RackOffset": 1,
+            "RackOffsetUnits": "EIA_310"
+          }
+        }
+      },
+      "SparePartNumber": null,
+      "Status": {
+        "Conditions": [
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceReallocated",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceReconfigured",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceAcquitted",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.LinkUp",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.PcieErrorIsolationExited",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.PcieCardHasCpu",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.PciePerformanceOk",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.NotBlockedByOtherDisabled",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.PcieLinkTrainingOk",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.ABMCPowerOnSuccess",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot3"
+            ],
+            "MessageId": "H3Alert.1.7.ABMCReady",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          }
+        ],
+        "Health": "OK",
+        "HealthRollup": "OK",
+        "State": "Enabled"
+      }
+    },
+    null
+  ],
+  "get::Chassis/r001u01/PCIeDevices/5": [
+    200,
+    {
+      "@odata.etag": "\"2c7efb99985f063d84462441a720c964\"",
+      "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/5",
+      "@odata.type": "#PCIeDevice.v1_12_0.PCIeDevice",
+      "Assembly": {
+        "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/5/Assembly"
+      },
+      "FirmwareVersion": null,
+      "Id": "5",
+      "Manufacturer": null,
+      "Model": null,
+      "Name": "PCIe Device rack1/chassis_u1/cpu0/io_slot5",
+      "Oem": {
+        "Hpe": {
+          "@odata.type": "#HpeH3PcieDevice.v1_0_0.HpeH3PcieDevice",
+          "PhysicalLocationString": "rack1/chassis_u1/cpu0/io_slot5",
+          "Physloc": "0005000101000005"
+        }
+      },
+      "PCIeFunctions": {
+        "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/5/PCIeFunctions"
+      },
+      "PartNumber": null,
+      "SKU": null,
+      "SerialNumber": null,
+      "Slot": {
+        "Location": {
+          "PartLocation": {
+            "ServiceLabel": "rack1/chassis_u1/cpu0/io_slot5"
+          },
+          "Placement": {
+            "Rack": "1",
+            "RackOffset": 1,
+            "RackOffsetUnits": "EIA_310"
+          }
+        }
+      },
+      "SparePartNumber": null,
+      "Status": {
+        "Conditions": [
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceReallocated",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceReconfigured",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceAcquitted",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.LinkUp",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.PcieErrorIsolationExited",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.PcieCardHasCpu",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.PciePerformanceOk",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.NotBlockedByOtherDisabled",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.PcieLinkTrainingOk",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.ABMCPowerOnSuccess",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu0/io_slot5"
+            ],
+            "MessageId": "H3Alert.1.7.ABMCReady",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          }
+        ],
+        "Health": "OK",
+        "HealthRollup": "OK",
+        "State": "Enabled"
+      }
+    },
+    null
+  ],
+  "get::Chassis/r001u01/PCIeDevices/9": [
+    200,
+    {
+      "@odata.etag": "\"a412c975aee27e5e95bfe73d2e0947b7\"",
+      "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/9",
+      "@odata.type": "#PCIeDevice.v1_12_0.PCIeDevice",
+      "Assembly": {
+        "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/9/Assembly"
+      },
+      "FirmwareVersion": null,
+      "Id": "9",
+      "Manufacturer": null,
+      "Model": null,
+      "Name": "PCIe Device rack1/chassis_u1/cpu3/io_slot9",
+      "Oem": {
+        "Hpe": {
+          "@odata.type": "#HpeH3PcieDevice.v1_0_0.HpeH3PcieDevice",
+          "PhysicalLocationString": "rack1/chassis_u1/cpu3/io_slot9",
+          "Physloc": "0009000101010105"
+        }
+      },
+      "PCIeFunctions": {
+        "@odata.id": "/redfish/v1/Chassis/r001u01/PCIeDevices/9/PCIeFunctions"
+      },
+      "PartNumber": null,
+      "SKU": null,
+      "SerialNumber": null,
+      "Slot": {
+        "Location": {
+          "PartLocation": {
+            "ServiceLabel": "rack1/chassis_u1/cpu3/io_slot9"
+          },
+          "Placement": {
+            "Rack": "1",
+            "RackOffset": 1,
+            "RackOffsetUnits": "EIA_310"
+          }
+        }
+      },
+      "SparePartNumber": null,
+      "Status": {
+        "Conditions": [
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceReallocated",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceReconfigured",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
+            ],
+            "MessageId": "H3Alert.1.7.ResourceAcquitted",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
+            ],
+            "MessageId": "H3Alert.1.7.LinkUp",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
+            ],
+            "MessageId": "H3Alert.1.7.PcieErrorIsolationExited",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
+            ],
+            "MessageId": "H3Alert.1.7.PcieCardHasCpu",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
+            ],
+            "MessageId": "H3Alert.1.7.PciePerformanceOk",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
+            ],
+            "MessageId": "H3Alert.1.7.NotBlockedByOtherDisabled",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
+            ],
+            "MessageId": "H3Alert.1.7.PcieLinkTrainingOk",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
+            ],
+            "MessageId": "H3Alert.1.7.ABMCPowerOnSuccess",
+            "Severity": "OK",
+            "Timestamp": "2026-05-07T04:08:08Z"
+          },
+          {
+            "MessageArgs": [
+              "rack1/chassis_u1/cpu3/io_slot9"
             ],
             "MessageId": "H3Alert.1.7.ABMCReady",
             "Severity": "OK",
@@ -6333,6 +7069,106 @@
       "VirtualMediaConfig": {
         "ServiceEnabled": true
       }
+    },
+    null
+  ],
+  "get::Systems/Partition0/Bios": [
+    200,
+    {
+      "@Redfish.Settings": {
+        "@odata.type": "#Settings.v1_3_5.Settings",
+        "SettingsObject": {
+          "@odata.id": "/redfish/v1/Systems/Partition0/Bios/Settings"
+        }
+      },
+      "@odata.etag": "\"4f9522486385c595aa6bb6f5da89b538\"",
+      "@odata.id": "/redfish/v1/Systems/Partition0/Bios",
+      "@odata.type": "#Bios.v1_2_1.Bios",
+      "Actions": {
+        "#Bios.ResetBios": {
+          "target": "/redfish/v1/Systems/Partition0/Bios/Actions/Bios.ResetBios"
+        }
+      },
+      "AttributeRegistry": "BiosAttributes.v9.36.2",
+      "Attributes": {
+        "AdjSecPrefetch": "Enabled",
+        "AdvancedMemProtection": "ADDDC",
+        "AllowPcieSlotOpRoms": "Enabled",
+        "AutoCreateHddBootOptions": "Disabled",
+        "BootFailurePolicy": "MenuAfterFailedBoot",
+        "BootRetryCount": 0,
+        "DcuIpPrefetcher": "Enabled",
+        "DcuStreamPrefetcher": "Enabled",
+        "Dhcpv4": "Disabled",
+        "DmaProtection": "Enabled",
+        "DynamicIntelSpeedSelectMode": "Disabled",
+        "EdpcRecovery": "Enabled",
+        "EistCoordType": "HW_ALL",
+        "EmbeddedUefiShell": "Enabled",
+        "EmbeddedVideoResolution": "HighestSupported",
+        "EnabledCoresPerProc": 0,
+        "EnergyEfficientTurbo": "Enabled",
+        "EnergyPerfBias": "BalancedPerf",
+        "EppProfile": "Disabled",
+        "ErrorInjection": "Disabled",
+        "HThread": "Enabled",
+        "HomelessPrefetch": "Auto",
+        "HwPrefetcher": "Enabled",
+        "IntelPriorityBaseFreq": "Disabled",
+        "IntelPriorityCorePower": "Disabled",
+        "IntelProcVt": "Enabled",
+        "IntelSpeedSelectConfigLevel": "Base",
+        "IntelVmdSupport": "Disabled",
+        "IntelVrocSupport": "None",
+        "Ipv4Address": "",
+        "Ipv4Gateway": "",
+        "Ipv4PrimaryDNS": "",
+        "Ipv4PxeServerAddress": "",
+        "Ipv4SecondaryDNS": "",
+        "Ipv4SubnetMask": "",
+        "Ipv6Address": "",
+        "Ipv6ConfigPolicy": "Automatic",
+        "Ipv6Gateway": "",
+        "Ipv6PrimaryDNS": "",
+        "Ipv6SecondaryDNS": "",
+        "LlcDeadLineAlloc": "Enabled",
+        "LlcPrefetch": "Disabled",
+        "MemOfflineTestRepair": "Disabled",
+        "MemPatrolScrubbing": "Enabled",
+        "MemPprType": "HardPpr",
+        "MemRefreshRate": "Refreshx1",
+        "MinProcIdlePower": "C6",
+        "NumaGroupSizeOpt": "Clustered",
+        "OcpSlotOpRom": "Enabled",
+        "OsbRemoteRead": "Enabled",
+        "PagePolicy": "Closed",
+        "PcieIsolation": "Enabled",
+        "PcieLinkTrainingDelay": 0,
+        "PcieSlotConfigType": "16slot",
+        "PcieSlotOpRomA": "3",
+        "PcieSlotOpRomB": "None",
+        "PcieSlotOpRomC": "None",
+        "PcieSlotOpRomD": "None",
+        "PowerRegulator": "OsControl",
+        "ProcTurbo": "Enabled",
+        "SciRasSupport": "Ghesv2Support",
+        "SmartTestKey": "0x00000000",
+        "SmmExceptionLogging": "Verbose",
+        "Sriov": "Enabled",
+        "ThermalMonStatusFilter": "Disabled",
+        "Tme": "Disabled",
+        "UncoreFreqScaling": "Auto",
+        "UrlBootFile": "",
+        "UrlBootFile2": "",
+        "UsbControl": "UsbEnabled",
+        "VirtualNuma": "Disabled",
+        "WorkloadProfile": "MC",
+        "XncDataForwarding": "Enabled",
+        "XncSrvLvlPollingThreshold": 0,
+        "XptPrefetch": "Disabled"
+      },
+      "Id": "Bios",
+      "Name": "nPartition 0 BIOS attributes"
     },
     null
   ],

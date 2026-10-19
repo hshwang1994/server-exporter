@@ -9,7 +9,8 @@ Type 1 System Serial 에 파티션 번호가 접미사로 붙는다.
     Partition0 의 OS DMI product_serial : SGHD3TLNDD-000
 
 자산 관리 시스템은 물리 장비 시리얼로 서버를 관리하므로, 접미사가 붙은 채로 내보내면
-같은 서버가 서로 다른 시리얼로 판정된다. OS 채널에서만 접미사를 뗀다.
+같은 서버가 서로 다른 시리얼로 판정된다. 접미사는 OS · Redfish(2026-10-17) · ESXi(2026-10-19) 세 채널에서 뗀다.
+2026-10-19: 같은 hpCsus 패밀리 Superdome Flex 모델도 대상이다 (adapter 패턴 미러).
 
 이 테스트가 지키는 것
 --------------------
@@ -46,8 +47,11 @@ sys.path.insert(0, str(REPO / "module_utils"))
 from serial_normalizer import (  # noqa: E402
     CSUS3200_MODEL_PATTERNS,
     CSUS3200_VENDOR_ALIASES,
+    SUPERDOME_FLEX_MODEL_PATTERNS,
     FilterModule,
     is_csus_3200,
+    is_scaleup_npar,
+    is_superdome_flex,
     normalize_os_serial,
 )
 
@@ -140,7 +144,6 @@ def test_csus_model_variants_are_recognized(model):
     [
         "ProLiant DL380 Gen11",
         "ProLiant DL360 Gen10 Plus",
-        "Superdome Flex 280",  # 다른 scale-up 라인 — 이번 범위 아님
         "Compute Scale-up Server 3000",  # 3200 아님
         "",
         None,
@@ -148,6 +151,20 @@ def test_csus_model_variants_are_recognized(model):
 )
 def test_non_csus_model_never_normalized(model):
     assert normalize_os_serial("SGHD3TLNDD-000", "HPE", model) == "SGHD3TLNDD-000"
+
+
+@pytest.mark.parametrize(
+    "model",
+    ["Superdome Flex 280", "Superdome Flex", "HPE Superdome Flex 280", "superdome flex 280"],
+)
+def test_superdome_flex_model_is_normalized_too(model):
+    """2026-10-19 사용자 결정 — 같은 hpCsus 패밀리(Superdome Flex)에도 같은 접미사 규칙 (lab 부재, 패턴은 adapter 미러)."""
+    assert normalize_os_serial("SGHD3TLNDD-000", "HPE", model) == "SGHD3TLNDD"
+    assert is_superdome_flex("HPE", model) and not is_csus_3200("HPE", model) and is_scaleup_npar("HPE", model)
+
+
+def test_superdome_flex_requires_hpe_vendor():
+    assert normalize_os_serial("SGHD3TLNDD-000", "Dell Inc.", "Superdome Flex 280") == "SGHD3TLNDD-000"
 
 
 def test_model_missing_is_fail_safe():
@@ -237,6 +254,17 @@ def test_model_pattern_mirror_matches_adapter_yaml():
     assert tuple(adapter["match"]["model_patterns"]) == CSUS3200_MODEL_PATTERNS, (
         "adapter 의 model_patterns 가 바뀌었다 — "
         "filter_plugins/serial_normalizer.py :: CSUS3200_MODEL_PATTERNS 동반 갱신 필요"
+    )
+
+
+def test_superdome_model_pattern_mirror_matches_adapter_yaml():
+    """필터의 Superdome Flex pattern 미러가 adapters/redfish/hpe_superdome_flex.yml 정본과 일치 (2026-10-19)."""
+    adapter = yaml.safe_load(
+        (REPO / "adapters" / "redfish" / "hpe_superdome_flex.yml").read_text(encoding="utf-8")
+    )
+    assert tuple(adapter["match"]["model_patterns"]) == SUPERDOME_FLEX_MODEL_PATTERNS, (
+        "adapter 의 model_patterns 가 바뀌었다 — "
+        "filter_plugins/serial_normalizer.py :: SUPERDOME_FLEX_MODEL_PATTERNS 동반 갱신 필요"
     )
 
 

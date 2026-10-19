@@ -517,7 +517,7 @@ def _redfish_hardware_serial(system):
     ({"manufacturer": "HPE", "model": "Compute Scale-up Server 3200", "serial": "SGHD3TLNDD-001"}, "SGHD3TLNDD"),
     ({"manufacturer": "Hewlett Packard Enterprise", "model": "HPE Compute Scale-up Server 3200", "serial": "SGHD3TLNDD-002"}, "SGHD3TLNDD"),
     ({"manufacturer": "HPE", "model": "ProLiant DL380 Gen11", "serial": "CZ12345678-000"}, "CZ12345678-000"),   # ProLiant — 원문
-    ({"manufacturer": "HPE", "model": "Superdome Flex 280", "serial": "SGH0000000-000"}, "SGH0000000-000"),    # Superdome Flex — 결정 범위 밖
+    ({"manufacturer": "HPE", "model": "Superdome Flex 280", "serial": "SGH0000000-000"}, "SGH0000000"),        # Superdome Flex — 2026-10-19 사용자 결정으로 같은 규칙
     ({"manufacturer": "Dell Inc.", "model": "PowerEdge R760", "serial": "ABCDEF-000"}, "ABCDEF-000"),
     ({"manufacturer": "Lenovo", "model": "ThinkSystem SR650", "serial": "J902E57T"}, "J902E57T"),
     ({"model": "Compute Scale-up Server 3200", "serial": "SGHD3TLNDD-000"}, "SGHD3TLNDD-000"),                 # manufacturer 없음 → fail-safe

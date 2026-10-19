@@ -1,0 +1,365 @@
+# tests/reference/redfish/coverage_allowlist.yml — Redfish 커버리지 감사 허용 목록 (2026-10-19)
+#
+# 수집기(redfish_gather.py)가 전수 크롤 위에서 한 번도 GET 하지 않는 리소스를 @odata.type 별로 분류한다.
+# 시험: tests/regression/test_redfish_coverage_audit.py · 도구: scripts/ai/redfish_coverage_diff.py
+#
+#   types:         의도적으로 읽지 않는 타입 → 사유. 여기 있는 타입이 미읽음이어도 정상이다.
+#   conditional:   표준 path 에 데이터가 없을 때만(404 fallback · 인라인 부재 · 멀티노드 layout) 읽는 타입 → 사유.
+#                  표준 path 가 데이터를 주는 크롤(Dell/HPE/Lenovo/Cisco)에서는 미읽음으로 남는 것이 정상이다.
+#   path_patterns: 타입은 읽지만 특정 인스턴스를 GET 전에 거르는 경우 → path 정규식(re.search) → 사유.
+#                  types/conditional 에 없는 타입의 path 에만 적용된다.
+#
+# 타입 이름은 @odata.type 에서 '#' 과 버전을 뗀 마지막 토큰 ('#Sensor.v1_2_0.Sensor' → 'Sensor').
+# 새 타입이 미읽음으로 잡히면: 읽기 시작했거나(코드) 여기에 사유를 적어라(목록). 사유 없는 항목은 시험이 거부한다.
+# `_reasons` 는 공유 사유의 YAML anchor 모음이다 — 로더는 types / conditional / path_patterns 만 읽는다.
+#
+# [판단 필요] 표시는 인벤토리성 정보를 담고 있지만 현재 읽지 않는 항목이다. 읽기로 결정하면 이 목록에서 지워라.
+
+_reasons:
+  sensor: &sensor "센서 읽기값(온도·전압·회전수) — 인벤토리가 아니라 상태다. Fan RPM 역색인에 필요한 fan 센서만 Thermal 수집기가 선택적으로 읽는다"
+  metrics: &metrics "*Metrics 리소스 — 순간 측정값/누적 통계라 인벤토리 범위 밖"
+  telemetry: &telemetry "TelemetryService 하위 — 메트릭 정의/보고/트리거라 인벤토리 범위 밖"
+  logs: &logs "로그 항목/로그 서비스 — 이벤트 이력이라 인벤토리 범위 밖 (SEL/LC/IML 은 크기도 매우 크다)"
+  certs: &certs "인증서·서명·키·SecureBoot 데이터베이스 — 보안 자료라 수집하지 않는다"
+  schema: &schema "JSON schema / 메시지 레지스트리 파일 — 서버가 노출하는 스키마 정의일 뿐 장비 정보가 아니다"
+  accounts: &accounts "계정·역할·권한·세션 — gather 는 읽지 않는다 (Account Reconcile 경로만 AccountService 를 다룬다)"
+  tasks: &tasks "Task/Job 서비스 — 비동기 작업 상태라 인벤토리 범위 밖"
+  events: &events "이벤트 구독/전달 — 알림 설정이라 인벤토리 범위 밖"
+  media: &media "VirtualMedia · HostInterface(NC-SI/USB NIC) · SerialInterface — BMC 콘솔/매체 설정이라 인벤토리 범위 밖"
+  assembly: &assembly "Assembly(FRU 세부 조립 정보) — 상위 리소스(Chassis/Processor/Memory)의 식별 필드로 충분하다"
+  bootopt: &bootopt "UEFI 부트 항목/부트 소스 — 부팅 설정이라 인벤토리 범위 밖"
+  license: &license "라이선스 — 하드웨어 인벤토리 아님"
+  updateservice: &updateservice "UpdateService 본문은 읽지 않고 FirmwareInventory 컬렉션으로 바로 간다 (경로가 표준이라 링크를 따를 필요가 없다)"
+  misc_service: &misc_service "서비스/설정 리소스 — 장비 구성 정보가 아니라 BMC 기능 설정이다"
+  pools: &pools "StoragePools(Swordfish 풀/용량원/할당 볼륨) — RAID 볼륨은 Storage/Volumes 로 읽고 풀 모델은 범위 밖"
+  dell_mirror: &dell_mirror "Dell OEM 거울 — 같은 정보를 표준 리소스(ComputerSystem/Chassis/Storage/UpdateService) 본문의 Oem.Dell 인라인 또는 표준 컬렉션에서 이미 읽는다"
+  dell_detail: &dell_detail "[판단 필요] Dell OEM 상세(제조일·슬롯·PCI ID·NIC 모드·트랜시버·배터리 등) — 표준 리소스로 식별·용량·펌웨어는 얻지만 이 OEM 상세는 읽지 않는다"
+  dell_sensor: &dell_sensor "Dell OEM 센서/롤업 상태 — 상태값이라 인벤토리 범위 밖"
+  dell_service: &dell_service "Dell OEM 서비스/작업/인증서/라이선스 리소스 — BMC 기능이라 인벤토리 범위 밖"
+  hpe_inventory: &hpe_inventory "[판단 필요] HPE OEM 장치/PCI 인벤토리(Chassis/1/Devices · Systems/1/PCIDevices · PCISlots) — 표준 PCIeDevices 가 비었을 때의 OEM 대안이 될 수 있으나 현재 읽지 않는다"
+  hpe_update: &hpe_update "HPE 업데이트 저장소/설치 세트/보고서 — 올라온 업데이트 패키지라 설치된 펌웨어(FirmwareInventory)와 다르다"
+  hpe_service: &hpe_service "HPE iLO 기능 설정(보안·SNMP·연합·백업·SSO·원격지원·라이선스 등) — 인벤토리 범위 밖"
+  hpe_metrics: &hpe_metrics "HPE 전력 계측/성능 조언 — 측정값이라 인벤토리 범위 밖"
+  hpe_usb: &hpe_usb "USB 포트/장치 — 사용자 지시(2026-10-19)로 범위 밖"
+  lenovo_slot: &lenovo_slot "[판단 필요] Lenovo OEM 슬롯 점유 정보 — 표준 PCIeSlots 와 같은 성격이며 현재 읽지 않는다"
+  lenovo_state: &lenovo_state "Lenovo OEM LED/이력 메트릭/워치독/예약 전원 — 상태·설정이라 인벤토리 범위 밖"
+  lenovo_service: &lenovo_service "Lenovo OEM 서비스(DNS·LDAP·SMTP·SNMP·원격제어·부트·FoD·보안·프로필·서비스데이터) — BMC 기능이라 인벤토리 범위 밖"
+  compose: &compose "CompositionService 조립 단위/액션 정보 — 멀티노드 토폴로지는 ResourceBlock 본문으로 읽고 조립 템플릿은 범위 밖"
+
+types:
+  # --- DMTF: 센서/메트릭/텔레메트리 ---
+  Sensor: *sensor
+  SensorCollection: *sensor
+  Control: "전력 제한 Control(CPU/시스템 PowerLimit) — 제어 설정이라 인벤토리 범위 밖"
+  ControlCollection: "Control 컬렉션 — 위와 같다"
+  MemoryMetrics: *metrics
+  ProcessorMetrics: *metrics
+  PortMetrics: *metrics
+  EnvironmentMetrics: *metrics
+  PowerSupplyMetrics: *metrics
+  ThermalMetrics: *metrics
+  NetworkAdapterMetrics: *metrics
+  NetworkDeviceFunctionMetrics: *metrics
+  StorageControllerMetrics: *metrics
+  TelemetryService: *telemetry
+  MetricDefinition: *telemetry
+  MetricDefinitionCollection: *telemetry
+  MetricReport: *telemetry
+  MetricReportCollection: *telemetry
+  MetricReportDefinition: *telemetry
+  MetricReportDefinitionCollection: *telemetry
+  Triggers: *telemetry
+  TriggersCollection: *telemetry
+  # --- DMTF: 로그 ---
+  LogEntry: *logs
+  LogEntryCollection: *logs
+  LogService: *logs
+  LogServiceCollection: *logs
+  ManagerDiagnosticData: "BMC 자체 진단 데이터(메모리/CPU 통계) — 인벤토리 범위 밖"
+  # --- DMTF: 보안 ---
+  Certificate: *certs
+  CertificateCollection: *certs
+  CertificateLocations: *certs
+  CertificateService: *certs
+  Signature: *certs
+  SignatureCollection: *certs
+  KeyCollection: *certs
+  SecureBoot: *certs
+  SecureBootDatabase: *certs
+  SecureBootDatabaseCollection: *certs
+  TrustedComponent: "TPM/신뢰 구성요소 — 보안 자료라 수집하지 않는다"
+  TrustedComponentCollection: "TrustedComponent 컬렉션 — 위와 같다"
+  ComponentIntegrity: "구성요소 무결성 측정(SPDM/TPM) — 보안 자료라 수집하지 않는다"
+  ComponentIntegrityCollection: "ComponentIntegrity 컬렉션 — 위와 같다"
+  SecurityPolicy: "TLS/SPDM 보안 정책 — 설정이라 인벤토리 범위 밖"
+  PrivilegeRegistry: *accounts
+  # --- DMTF: 스키마/레지스트리 ---
+  JsonSchemaFile: *schema
+  JsonSchemaFileCollection: *schema
+  MessageRegistryFile: *schema
+  MessageRegistryFileCollection: *schema
+  # --- DMTF: 계정/세션/작업/이벤트 ---
+  AccountService: *accounts
+  ManagerAccount: *accounts
+  ManagerAccountCollection: *accounts
+  Role: *accounts
+  RoleCollection: *accounts
+  Session: *accounts
+  SessionCollection: *accounts
+  SessionService: *accounts
+  Task: *tasks
+  TaskCollection: *tasks
+  TaskService: *tasks
+  Job: *tasks
+  JobCollection: *tasks
+  JobService: *tasks
+  EventService: *events
+  EventDestination: *events
+  EventDestinationCollection: *events
+  # --- DMTF: 매체/인터페이스/기타 ---
+  VirtualMedia: *media
+  VirtualMediaCollection: *media
+  HostInterface: *media
+  HostInterfaceCollection: *media
+  SerialInterface: *media
+  SerialInterfaceCollection: *media
+  Assembly: *assembly
+  BootOption: *bootopt
+  BootOptionCollection: *bootopt
+  License: *license
+  LicenseCollection: *license
+  LicenseService: *license
+  UpdateService: *updateservice
+  ServiceConditions: "서비스 전체 상태 롤업 — 상태값이라 인벤토리 범위 밖"
+  RegisteredClient: "등록된 관리 클라이언트(OneView 등) — 인벤토리 범위 밖"
+  RegisteredClientCollection: "RegisteredClient 컬렉션 — 위와 같다"
+  ActionInfo: *compose
+  MemoryDomainCollection: "메모리 도메인/인터리브 세트 — DIMM 인벤토리는 Memory 컬렉션으로 읽는다"
+  PumpCollection: "액체 냉각 펌프 — 범위 밖 (현재 lab 장비에 실제 펌프 없음)"
+  BatteryCollection: "섀시 배터리(RAID 캐시 배터리 등) — 상태성 정보라 범위 밖"
+  StoragePool: *pools
+  StoragePoolCollection: *pools
+  CapacitySource: *pools
+  # --- Dell OEM ---
+  DellSystem: *dell_mirror
+  DellChassis: *dell_mirror
+  DellChassisCollection: *dell_mirror
+  DellEnclosure: *dell_mirror
+  DellSoftwareInventory: *dell_mirror
+  DellAssembly: *assembly
+  DellMemory: *dell_detail
+  DellProcessor: *dell_detail
+  DellNIC: *dell_detail
+  DellNICCapabilities: *dell_detail
+  DellNetworkTransceiver: *dell_detail
+  DellController: *dell_detail
+  DellControllerBattery: *dell_detail
+  DellPhysicalDisk: *dell_detail
+  DellVirtualDisk: *dell_detail
+  DellPowerSupply: *dell_detail
+  DellPowerSupplyView: *dell_detail
+  DellVideo: *dell_detail
+  DellVideoCollection: *dell_detail
+  DellSlot: *dell_detail
+  DellSlotCollection: *dell_detail
+  DellAttributes: "Dell 속성 레지스트리 인스턴스(iDRAC/System/LC/Network attributes) — BIOS/BMC 설정값이라 인벤토리 범위 밖"
+  DellBootSources: *bootopt
+  DellSensor: *dell_sensor
+  DellSensorCollection: *dell_sensor
+  DellNumericSensor: *dell_sensor
+  DellNumericSensorCollection: *dell_sensor
+  DellPSNumericSensor: *dell_sensor
+  DellPSNumericSensorCollection: *dell_sensor
+  DellGPUSensor: *dell_sensor
+  DellGPUSensorCollection: *dell_sensor
+  DellPresenceAndStatusSensorCollection: *dell_sensor
+  DellRollupStatus: *dell_sensor
+  DellRollupStatusCollection: *dell_sensor
+  DellNICPortMetrics: *metrics
+  DellMetricService: *telemetry
+  DellD4D: *telemetry
+  DellSwitchConnection: "Dell NIC-스위치 연결(LLDP 이웃) — 네트워크 토폴로지라 서버 인벤토리 범위 밖"
+  DellSwitchConnectionCollection: "DellSwitchConnection 컬렉션 — 위와 같다"
+  DellSwitchConnectionService: "DellSwitchConnection 서비스 — 위와 같다"
+  DellJob: *dell_service
+  DellJobCollection: *dell_service
+  DellJobService: *dell_service
+  DellLCService: *dell_service
+  DellBIOSService: *dell_service
+  DellOSDeploymentService: *dell_service
+  DellTimeService: *dell_service
+  DellSoftwareInstallationService: *dell_service
+  DellRaidService: *dell_service
+  DellPersistentStorageService: *dell_service
+  DellSystemManagementService: *dell_service
+  DelliDRACCardService: *dell_service
+  DelliDRACCard: "iDRAC 카드 OEM 정보 — Manager 본문의 Oem.Dell 과 FirmwareInventory 로 BMC 모델/펌웨어를 이미 읽는다"
+  DellLicense: *license
+  DellLicenseCollection: *license
+  DellLicenseManagementService: *license
+  DellLicensableDevice: *license
+  DellLicensableDeviceCollection: *license
+  DellCertificate: *certs
+  DellCertificateCollection: *certs
+  DellCertificateStoreCollection: *certs
+  DellFirmwareImageHash: *certs
+  DellFirmwareImageHashCollection: *certs
+  DellOpaqueManagementDataCollection: *dell_service
+  DellUSBDeviceCollection: *hpe_usb
+  DellvFlashCollection: "iDRAC vFlash SD 매체 — BMC 매체라 인벤토리 범위 밖"
+  DellSystemQuickSyncCollection: *dell_service
+  DellVideoNetworkCollection: *dell_service
+  # --- HPE OEM ---
+  HpeServerDevice: *hpe_inventory
+  HpeServerDeviceCollection: *hpe_inventory
+  HpeServerPciDevice: *hpe_inventory
+  HpeServerPciDeviceCollection: *hpe_inventory
+  HpeServerPCISlot: *hpe_inventory
+  HpeServerPCISlotCollection: *hpe_inventory
+  HpeUSBPort: *hpe_usb
+  HpeUSBPortsCollection: *hpe_usb
+  HpeUSBDevicesCollection: *hpe_usb
+  HpeComponent: *hpe_update
+  HpeComponentCollection: *hpe_update
+  HpeComponentInstallSet: *hpe_update
+  HpeComponentInstallSetCollection: *hpe_update
+  HpeComponentUpdateEntryCollection: *hpe_update
+  HpeComponentUpdateTaskQueueCollection: *hpe_update
+  HpeInvalidImageCollection: *hpe_update
+  HpeMaintenanceWindowCollection: *hpe_update
+  HpeBundleUpdateReport: *hpe_update
+  HpeBundleUpdateReportCollection: *hpe_update
+  SUT: *hpe_update
+  SUTSystemInventory: *hpe_update
+  SUTTaskSettings: *hpe_update
+  HpeBaseConfigs: "BIOS 기본 구성 세트 — 설정 템플릿이라 인벤토리 범위 밖"
+  HpeBiosMapping: "BIOS 속성 매핑 — 설정 메타라 인벤토리 범위 밖"
+  HpeServerBootSettings: *bootopt
+  HpeServerConfigLock: *hpe_service
+  HpeTlsConfig: *hpe_service
+  HpeKmsConfig: *hpe_service
+  HpeESKM: *hpe_service
+  HpeNvmeOfSoftwareInitiator: "NVMe-oF 소프트웨어 이니시에이터 설정 — 부트/연결 설정이라 범위 밖"
+  HpeiSCSISoftwareInitiator: "iSCSI 소프트웨어 이니시에이터 설정 — 부트/연결 설정이라 범위 밖"
+  HpePowerMeter: *hpe_metrics
+  HpeWorkloadPerformanceAdvisor: *hpe_metrics
+  HpeWorkloadPerformanceAdvisorCollection: *hpe_metrics
+  HpeFallbackSensorCollection: *sensor
+  HpeiLOSecurityParam: *hpe_service
+  HpeiLOSecurityParamCollection: *hpe_service
+  HpeiLOSecurityDashboard: *hpe_service
+  HpeSecurityService: *hpe_service
+  HpeCertAuth: *certs
+  HpeHttpsCert: *certs
+  HpeAutomaticCertEnrollment: *certs
+  HpeCertificateCollection: *certs
+  HpeiLOAccountCertificateMap: *certs
+  HpeiLOAccountCertificateMapCollection: *certs
+  HpeDirectoryTest: *hpe_service
+  HpeRemoteSupport: *hpe_service
+  HpeSNMPAlertDestinationCollection: *hpe_service
+  HpeSNMPUsersCollection: *hpe_service
+  HpeiLOSnmpService: *hpe_service
+  HpeSecureEraseReportCollection: *hpe_service
+  HpeSecureEraseReportService: *hpe_service
+  HpeiLOActiveHealthSystem: *logs
+  HpeiLOBackupFileCollection: *hpe_service
+  HpeiLOBackupRestoreService: *hpe_service
+  HpeiLODateTime: *hpe_service
+  HpeiLOEmbeddedMedia: "iLO 내장 매체(SD/NAND) 상태 — BMC 매체라 인벤토리 범위 밖"
+  HpeiLOFederatedGroupCapping: *hpe_service
+  HpeiLOFederationGroup: *hpe_service
+  HpeiLOFederationGroupCollection: *hpe_service
+  HpeiLOFederationPeers: *hpe_service
+  HpeiLOFederationPeersCollection: *hpe_service
+  HpeiLOGUIService: *hpe_service
+  HpeiLOLicense: *license
+  HpeiLOLicenseCollection: *license
+  HpeiLOResourceDirectory: "iLO 리소스 디렉터리(전체 URI 색인) — 수집기는 표준 링크를 따르므로 색인이 필요 없다"
+  HpeiLOSSO: *hpe_service
+  HpeH3DebugLogCollection: *logs
+  # --- Lenovo OEM ---
+  LenovoSlot: *lenovo_slot
+  LenovoSlotCollection: *lenovo_slot
+  LenovoLED: *lenovo_state
+  LenovoLEDCollection: *lenovo_state
+  LenovoHistoryMetricValue: *lenovo_state
+  LenovoHistoryMetricValueContainer: *lenovo_state
+  LenovoHistoryMetricValueContainerCollection: *lenovo_state
+  LenovoHistoryMemRecovery: *lenovo_state
+  LenovoWatchdog: *lenovo_state
+  LenovoWatchdogCollection: *lenovo_state
+  LenovoScheduledPowerAction: *lenovo_state
+  LenovoScheduledPowerActionCollection: *lenovo_state
+  LenovoPortForwarding: *lenovo_service
+  LenovoPortForwardingMap: *lenovo_service
+  LenovoPortForwardingMapCollection: *lenovo_service
+  LenovoBootManager: *bootopt
+  LenovoBootManagerCollection: *bootopt
+  LenovoFoDKey: *license
+  LenovoFoDKeyCollection: *license
+  LenovoFoDService: *license
+  LenovoAlertRecipientCollection: *events
+  LenovoConfigurationService: *lenovo_service
+  LenovoDNS: *lenovo_service
+  LenovoDateTimeService: *lenovo_service
+  LenovoFirmwareService: *hpe_update
+  LenovoFirmwareServiceCollection: *hpe_update
+  LenovoLDAPClient: *lenovo_service
+  LenovoRemoteControlService: *lenovo_service
+  LenovoRemoteControlSession: *lenovo_service
+  LenovoRemoteControlSessionCollection: *lenovo_service
+  LenovoRemoteMapMediaCollection: *media
+  LenovoRemoteMapService: *media
+  LenovoRemoteMountMediaCollection: *media
+  LenovoSMTPClient: *lenovo_service
+  LenovoSNMPProtocol: *lenovo_service
+  LenovoSecureKeyLifecycle: *certs
+  LenovoSecurityService: *lenovo_service
+  LenovoServerProfileService: *lenovo_service
+  LenovoServiceData: *logs
+
+conditional:
+  # 표준 path 에 데이터가 없을 때만 읽는다 — 표준 path 가 채워진 크롤에서는 미읽음이 정상이다.
+  PCIeDevice: "2026-10-19 A-8: StorageControllers/Controllers 가 없는데 드라이브가 있는 Storage 멤버의 컨트롤러 정체를 섀시 PCIeDevices 에서 찾을 때만 읽는다"
+  PCIeDeviceCollection: "PCIeDevice 와 같은 조건(A-8)에서만 섀시 Chassis.PCIeDevices 링크를 따라 읽는다"
+  PCIeFunction: "[판단 필요] PCIe 기능(DeviceClass/VendorId/DeviceId) — 현재 코드는 PCIeDevices 까지만 조건부로 읽고 Functions 는 따라가지 않는다"
+  PCIeFunctionCollection: "PCIeFunction 과 같다 — 조건부 PCIeDevice 읽기에서도 Functions 컬렉션은 따라가지 않는다"
+  PCIeSlots: "[판단 필요] PCIe 슬롯 점유표 — 슬롯 라벨은 PCIeDevice.Slot 으로 조건부 확보, 빈 슬롯 목록은 읽지 않는다"
+  NetworkInterface: "2026-10-19 A-5: 섀시 NetworkAdapters 에서 카드를 하나도 얻지 못했을 때만 Systems/{id}/NetworkInterfaces 의 Links.NetworkAdapter 를 따라간다"
+  NetworkInterfaceCollection: "NetworkInterface 와 같은 조건(A-5)에서만 읽는다"
+  DriveCollection: "섀시 수준 Chassis/{id}/Drives — Storage 멤버가 Drives 를 주지 않을 때의 fallback 이며 StoragePools 하위 ProvidingDrives 는 범위 밖"
+  Chassis: "System 이 링크하지 않는 드라이브 백플레인/컨트롤러 엔클로저 섀시(Enclosure.Internal.* · DE00C000 · Chassis/3) — 1순위 섀시에 카드/드라이브가 없을 때만 다른 섀시를 읽는다"
+  PowerSubsystem: "DMTF 2020.4 신 schema — legacy Chassis/Power 가 404 일 때만 fallback 으로 읽는다 (CSUS RMC 에서 실제 사용)"
+  PowerSupply: "PowerSubsystem/PowerSupplies/* — legacy Power 의 PowerSupplies[] 인라인이 있으면 읽지 않는다"
+  PowerSupplyCollection: "PowerSubsystem fallback 경로에서만 읽는다"
+  ThermalSubsystem: "DMTF 2020.4 신 schema — legacy Chassis/Thermal 이 404 일 때만 fallback 으로 읽는다"
+  Fan: "ThermalSubsystem/Fans/* — legacy Thermal 의 Fans[] 인라인이 있으면 읽지 않는다 (RPM 은 Chassis/Sensors 의 fan 센서로 보강)"
+  FanCollection: "ThermalSubsystem fallback 경로에서만 읽는다"
+  SimpleStorage: "Storage → SimpleStorage → SmartStorage 순 fallback — 표준 Storage 가 있으면 읽지 않는다"
+  SimpleStorageCollection: "SimpleStorage fallback 경로에서만 읽는다"
+  StorageController: "Storage 본문의 StorageControllers[] 인라인이 없을 때만 Controllers 서브링크를 읽는다 (HPE iLO6 은 인라인이 없어 실제로 읽는다)"
+  StorageControllerCollection: "StorageController 와 같은 조건에서만 읽는다"
+  Port: "NetworkAdapter 의 Ports(신 schema)는 legacy NetworkPorts 가 없을 때만 읽는다(HPE iLO6 은 읽는다); CPU UPI 포트·Fabric/Switch 포트·RMC 관리 포트는 인벤토리 범위 밖"
+  PortCollection: "Port 와 같다"
+  Fabric: "Fabrics 는 CSUS/Superdome 멀티노드 토폴로지(manager_layout=rmc_primary)에서만 읽는다 — 단일노드의 PCIe/스토리지 Fabric 은 범위 밖"
+  FabricCollection: "Fabric 과 같다"
+  Switch: "Fabric 과 같다 — 멀티노드 토폴로지에서만 읽는다"
+  SwitchCollection: "Fabric 과 같다"
+
+path_patterns:
+  # 타입은 읽지만 특정 인스턴스는 GET 전에 거른다 (types/conditional 에 없는 타입에만 적용).
+  "(?i)/(Settings|Pending)/?$": "@Redfish.Settings 대기 리소스(Bios/Settings · Systems/{id}/Settings|Pending · NetworkAdapter/Port/NDF/Volume/Controller Settings) — 적용 전 설정값이라 읽지 않는다 (redfish_gather 2733행)"
+  "/UpdateService/FirmwareInventory/(Installed|Current|Previous|Available|Rollback)-": "Dell FirmwareInventory 의 status 접두사 중복 표현 — 같은 컴포넌트·같은 버전은 GET 전 URI tail 로 dedup(first-seen), Previous- 는 비활성 이전 버전이라 GET 하지 않는다"
+  "/UpdateService/SoftwareInventory(/|$)": "펌웨어가 아닌 소프트웨어 인벤토리 컬렉션(Cisco DeviceConnector 등) — firmware 섹션은 FirmwareInventory 만 읽는다"
+  "/Systems/[^/]+/NetworkInterfaces/": "Systems/{id}/NetworkInterfaces 하위 트리(NetworkPorts·NetworkDeviceFunctions)는 섀시 NetworkAdapters 하위와 같은 자원의 거울 — A-5 fallback 에서도 Links.NetworkAdapter 만 따라간다"
+  "/Volumes/Capabilities/?$": "볼륨 생성 capability 템플릿 — 실제 볼륨이 아니다"
+  "/Systems/Capabilities/?$": "CompositionService 조립 capability 템플릿 — 실제 System 이 아니다"
+  "/CompositionService/ResourceBlocks/[^/]+/Systems/": "ResourceBlock 안의 노드 System 거울(및 그 Processors/SubProcessors/UPI Ports/Memory/EthernetInterfaces) — 파티션 System(Systems/Partition0) 과 ResourceBlock 본문으로 같은 정보를 읽는다"
+  "/SubProcessors(/|$)": "코어/스레드 단위 SubProcessor — Processor 본문의 TotalCores/TotalThreads 로 충분하다"
+  "/Chassis/[^/]+/Processors(/|$)": "섀시 측 Processors 컬렉션(CSUS) — System 측 Processors 로 읽는다"
+  "/StoragePools/": "StoragePools 하위(AllocatedVolumes · CapacitySources · ProvidingDrives) — Swordfish 풀 모델은 범위 밖, RAID 볼륨은 Storage/Volumes 로 읽는다"
+  "/HostInterfaces/": "HostInterface 하위(HostEthernetInterfaces) — NC-SI/USB NIC 설정이라 범위 밖"
+  "/Oem/Dell/(PowerMetrics|ThermalMetrics)/?$": "Dell GPU(Video.Slot.*) OEM 전력·온도 메트릭 — @odata.type 만 Power/Thermal 이고 내용은 측정값이다"
+  "/NetworkAdapters/[^/]+/NetworkDeviceFunctions/?$": "어댑터 본문에 NetworkDeviceFunctions 링크가 없는 카드(HPE iLO6 BCM5719 OCP DA000000 — 리소스 디렉터리로만 열거)의 NDF 컬렉션 — 수집기는 어댑터 본문의 링크만 따른다. 링크가 있는 카드의 컬렉션·멤버는 읽는다(타입 NetworkDeviceFunction 이 가드)"
+  "/NetworkAdapters/slot-[0-9]+/NetworkPorts/?$": "Lenovo XCC 는 빈 PCIe 슬롯도 NetworkAdapter(slot-N · Manufacturer/Model 공백 · 포트 0개)로 노출한다 — 수집기는 빈 슬롯 카드를 제외하므로 그 NetworkPorts 컬렉션을 따라가지 않는다 (카드가 있는 slot-9 는 읽는다)"

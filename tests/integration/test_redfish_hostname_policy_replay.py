@@ -80,9 +80,11 @@ def _replay(case, patch=None):
         recording = copy.deepcopy(recording)
         patch(recording)
     meta = FIXTURES / case / "meta.json"
-    layout = json.loads(meta.read_text(encoding="utf-8")).get("manager_layout") if meta.is_file() else None
+    meta_d = json.loads(meta.read_text(encoding="utf-8")) if meta.is_file() else {}
     get_impl, noauth_impl, realm_impl = H.make_replayer(recording)
-    return H.run_gather(get_impl, noauth_impl, realm_impl=realm_impl, manager_layout=layout)
+    # 2026-10-19 (A-9): meta.json 의 firmware_inventory_scope(CSUS 만 complex_only)도 넘긴다 — 운영 모듈 인자와 같은 조건으로 재생
+    return H.run_gather(get_impl, noauth_impl, realm_impl=realm_impl, manager_layout=meta_d.get("manager_layout"),
+                        firmware_scope=meta_d.get("firmware_inventory_scope"))
 
 
 def _envelope_hostname(result, adapter):

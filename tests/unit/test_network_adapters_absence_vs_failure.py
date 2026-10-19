@@ -82,7 +82,8 @@ def test_empty_chassis_list_falls_back_to_the_systems_path(monkeypatch):
     calls = []
     _install(monkeypatch, routes, calls)
     out, errors = rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, *CREDS, SYSTEM)
-    assert calls[:2] == [CH_NA, SYS_NA]
+    # 2026-10-19 (A-5): 섀시 목록이 비면 Systems/{id}/NetworkInterfaces(표준 링크)를 먼저 묻고(여기선 404), 그다음 iDRAC8 경로다.
+    assert calls[:3] == [CH_NA, rg._p(SYSTEM) + "/NetworkInterfaces", SYS_NA]
     assert errors == [] and [h["wwpn"] for h in out["fc_hbas"]] == ["10:00:00:90:fa:1b:2c:3d"]
     assert _notices() == []
 

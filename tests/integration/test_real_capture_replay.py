@@ -50,6 +50,14 @@ def _layout(case_dir: Path):
     return None
 
 
+def _firmware_scope(case_dir: Path):
+    """meta.json firmware_inventory_scope — adapter vendor_notes.firmware_inventory_scope 와 같다 (2026-10-19 A-9, CSUS 만 complex_only)."""
+    mp = case_dir / "meta.json"
+    if mp.is_file():
+        return _load(mp).get("firmware_inventory_scope")
+    return None
+
+
 @pytest.fixture(params=CASES, ids=CASE_IDS)
 def replay_case(request):
     case_dir = request.param
@@ -58,7 +66,7 @@ def replay_case(request):
     get_impl, noauth_impl, realm_impl = H.make_replayer(recording)
     result = H.run_gather(
         get_impl, noauth_impl, realm_impl=realm_impl,
-        manager_layout=_layout(case_dir),
+        manager_layout=_layout(case_dir), firmware_scope=_firmware_scope(case_dir),
     )
     return result, golden, case_dir
 

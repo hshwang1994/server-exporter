@@ -38,7 +38,7 @@ import emulator_harness as H  # noqa: E402
 FIXTURE_ROOT = REPO / "tests" / "fixtures" / "redfish"
 
 
-def build(mirror_dir: Path, manager_layout=None):
+def build(mirror_dir: Path, manager_layout=None, firmware_scope=None):
     """미러 → recording + golden. golden 은 test 와 동일한 H.run_gather 로 생성해
     (collected 정렬 등) 산출 경로를 1:1 일치시킨다 — golden flakiness 0."""
     response_map, service_root, stats = RFM.build_response_map(mirror_dir)
@@ -62,7 +62,7 @@ def build(mirror_dir: Path, manager_layout=None):
 
     # test(make_replayer + run_gather)와 동일 함수로 산출 → golden strict 일치 보장.
     result = H.run_gather(rec_get, rec_noauth, realm_impl=rec_realm,
-                          manager_layout=manager_layout)
+                          manager_layout=manager_layout, firmware_scope=firmware_scope)
     golden = {k: json.loads(json.dumps(result[k], ensure_ascii=False, sort_keys=True))
               for k in H.GOLDEN_KEYS}
     return recording, golden, stats, result["vendor"], result["status"]
@@ -73,6 +73,8 @@ def main() -> int:
     ap.add_argument("mirror_dir")
     ap.add_argument("fixture_name")
     ap.add_argument("--layout", default=None)
+    ap.add_argument("--firmware-scope", default=None,
+                    help="adapter vendor_notes.firmware_inventory_scope (meta.json firmware_inventory_scope 와 같게)")
     args = ap.parse_args()
 
     mirror_dir = Path(args.mirror_dir)
@@ -80,7 +82,8 @@ def main() -> int:
         print(f"[FAIL] mirror_dir 없음: {mirror_dir}", file=sys.stderr)
         return 2
 
-    recording, golden, stats, vendor, status = build(mirror_dir, manager_layout=args.layout)
+    recording, golden, stats, vendor, status = build(mirror_dir, manager_layout=args.layout,
+                                                      firmware_scope=args.firmware_scope)
     out_dir = FIXTURE_ROOT / args.fixture_name
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "recording.json", "w", encoding="utf-8", newline="\n") as f:

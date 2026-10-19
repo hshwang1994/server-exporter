@@ -1,9 +1,10 @@
 {
-  "generated": "2026-10-03",
+  "generated": "2026-10-19",
   "baseline_sha": "a45ba808",
   "baseline_http_calls": 218,
-  "http_calls_budget": 134,
-  "note": "Phase 3 (Plan §8-1·§10-1): expected_http_calls 는 현재 코드의 HTTP 요청 다중집합(캐시 hit 제외, noauth 포함). 바뀌면 사유와 함께 이 파일을 갱신한다 — 암묵적 감소·증가 모두 FAIL. path_set_delta 는 a45ba808 대비 명시적 변경 목록.",
+  "http_calls_budget": 141,
+  "note": "Phase 3 (Plan §8-1·§10-1): expected_http_calls 는 현재 코드의 HTTP 요청 다중집합(캐시 hit 제외, noauth 포함). 바뀌면 사유와 함께 이 파일을 갱신한다 — 암묵적 감소·증가 모두 FAIL. path_set_delta 는 a45ba808 대비 명시적 변경 목록. 2026-10-19: A-7~A-10 — 섀시 Drives 컬렉션(드라이브 0건 폴백) · PCIeDevices(firmware_inventory_scope=complex_only 보충) 요청이 추가됐다. 사유는 added_reason.",
+  "added_reason": "2026-10-19 CSUS 단일 서버 정합: (A-10) Storage 에 드라이브 0건 → Chassis/r001u01/Drives 1회, (A-9) adapter firmware_inventory_scope=complex_only → Chassis/r001u01/PCIeDevices 컬렉션 + 미캐시 장치(NIC/FC 카드는 network_adapters 가 뒤에서 캐시 hit). 사용자 지시 \"특정 것만 수집하지 말 것\" 에 따른 의도된 증가.",
   "path_set_delta": {
     "removed": [
       "Chassis x1",
@@ -86,7 +87,15 @@
       "TelemetryService/MetricReports x1",
       "TelemetryService/MetricReports/Chassisr001u01_TotalPowerConsumedWatts x1"
     ],
-    "added": []
+    "added": [
+      "Chassis/r001u01/Drives x1",
+      "Chassis/r001u01/PCIeDevices x1",
+      "Chassis/r001u01/PCIeDevices/1 x1",
+      "Chassis/r001u01/PCIeDevices/13 x1",
+      "Chassis/r001u01/PCIeDevices/3 x1",
+      "Chassis/r001u01/PCIeDevices/5 x1",
+      "Chassis/r001u01/PCIeDevices/9 x1"
+    ]
   },
   "expected_http_calls": [
     "Chassis x1",
@@ -101,6 +110,7 @@
     "Chassis/RackGroup/Thermal x1",
     "Chassis/RackGroup/ThermalSubsystem x1",
     "Chassis/r001u01 x1",
+    "Chassis/r001u01/Drives x1",
     "Chassis/r001u01/EnvironmentMetrics x2",
     "Chassis/r001u01/NetworkAdapters x1",
     "Chassis/r001u01/NetworkAdapters/PCIeCard10 x1",
@@ -118,8 +128,14 @@
     "Chassis/r001u01/NetworkAdapters/PCIeCard15/Ports/PCIeCard15Port1 x1",
     "Chassis/r001u01/NetworkAdapters/PCIeCard15/Ports/PCIeCard15Port2 x1",
     "Chassis/r001u01/NetworkAdapters/Rmp x1",
+    "Chassis/r001u01/PCIeDevices x1",
+    "Chassis/r001u01/PCIeDevices/1 x1",
     "Chassis/r001u01/PCIeDevices/10 x1",
+    "Chassis/r001u01/PCIeDevices/13 x1",
     "Chassis/r001u01/PCIeDevices/15 x1",
+    "Chassis/r001u01/PCIeDevices/3 x1",
+    "Chassis/r001u01/PCIeDevices/5 x1",
+    "Chassis/r001u01/PCIeDevices/9 x1",
     "Chassis/r001u01/Power x2",
     "Chassis/r001u01/PowerSubsystem x1",
     "Chassis/r001u01/PowerSubsystem/PowerSupplies x1",

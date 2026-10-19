@@ -62,12 +62,14 @@ _REPLAY_MISS = (404, {}, "HTTP 404: Not Found (replay-miss: path not in recordin
 
 def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
                user="root", pw="root_password", timeout=30, verify_ssl=False,
-               manager_layout=None):
+               manager_layout=None, firmware_scope=None):
     """main() gather mode 흐름을 1:1 미러링해 모듈 산출 snapshot 을 반환.
 
     manager_layout: rg._collect_all_sections / _collect_multi_node_topology 에 전달.
         CSUS/Superdome 캡처를 멀티노드로 재생하려면 'rmc_primary' 를 넘긴다. 기본 None →
         단일노드(기존 DMTF/표준 mockup 동작 불변, multi_node=None).
+    firmware_scope (2026-10-19 A-9): adapter vendor_notes.firmware_inventory_scope — main() 의 모듈 인자
+        firmware_inventory_scope 와 같다. 'complex_only' 면 PCIe 장치 · PSU 펌웨어를 firmware[] 에 보충한다. 기본 None.
 
     get_impl / noauth_impl: rg._get_impl / rg._get_noauth 를 대체할 transport (2026-10-03: _get 은 캐시 wrapper).
         (record 시 passthrough+기록, replay 시 lookup)
@@ -147,6 +149,7 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
             all_errors, collected, failed, unsupported,
             manager_layout=manager_layout,
             product_hint=rg._safe(service_root, "Product"),
+            firmware_scope=firmware_scope,
         )
 
         # main() 미러링: 대표 시리얼 확정 + 실을 자리가 없으면 정상 결과로 반환하지 않는다.

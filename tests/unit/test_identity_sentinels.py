@@ -148,8 +148,10 @@ def test_windows_identity_templates_use_the_shared_filter():
 
 
 def test_esxi_identity_templates_null_the_na_placeholder():
+    from serial_normalizer import normalize_os_serial   # 2026-10-19 (A-1-ESXi): ESXi serial 템플릿도 OS/Redfish 와 같은 필터를 쓴다
+
     env = NativeEnvironment()
-    env.filters.update({"dmi_sentinel_null": dmi_sentinel_null, "normalize_uuid": normalize_uuid})
+    env.filters.update({"dmi_sentinel_null": dmi_sentinel_null, "normalize_uuid": normalize_uuid, "normalize_os_serial": normalize_os_serial})
     tasks = yaml.safe_load((REPO / "esxi-gather" / "tasks" / "normalize_system.yml").read_text(encoding="utf-8"))
     frag = next(t for t in tasks if isinstance(t, dict) and "_data_fragment" in (t.get("ansible.builtin.set_fact") or {}))["ansible.builtin.set_fact"]["_data_fragment"]
     facts = {"ansible_product_serial": "NA", "ansible_system_vendor": "VMware, Inc.", "ansible_product_name": "VMware Virtual Platform",

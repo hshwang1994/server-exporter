@@ -332,4 +332,5 @@ def test_duplicate_uri_not_requested_twice(monkeypatch):
     calls = []
     monkeypatch.setattr(rg, "_get", _routed_get({}, calls))
     rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, "u", "p", 30, False, CHASSIS)
-    assert calls == [CH_NA]
+    # 2026-10-19 (A-5): NetworkInterfaces 는 다른 경로라 1회 묻는다(404). 같은 경로(NetworkAdapters)는 여전히 한 번만.
+    assert calls == [CH_NA, rg._p(CHASSIS) + "/NetworkInterfaces"]

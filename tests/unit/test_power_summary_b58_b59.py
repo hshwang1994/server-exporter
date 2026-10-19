@@ -62,12 +62,14 @@ def build_summary(power_data: dict) -> dict:
     pc_list = power_data.get("PowerControl") or []
     pc0 = pc_list[0] if isinstance(pc_list, list) and pc_list else {}
     consumed = pc0.get("PowerConsumedWatts") if isinstance(pc0, dict) else None
-    consumed_pct = round((consumed or 0) * 100 / cap_total, 1) if cap_total > 0 else 0
+    # 2026-10-19 (A-3): 용량을 아는 PSU 가 0개면 total 은 None(0 은 거짓 값), pct 는 total/consumed 를 모르면 None.
+    cap_known = (psu_total - cap_unknown) > 0
+    consumed_pct = round(consumed * 100 / cap_total, 1) if (cap_known and cap_total > 0 and consumed is not None) else None
     return {
         "psu_count": psu_total,
         "psu_active": psu_active,
         "redundant": psu_total >= 2,
-        "total_capacity_w": cap_total,
+        "total_capacity_w": cap_total if cap_known else None,
         "capacity_unknown_count": cap_unknown,
         "critical_count": critical,
         "warning_count": warning,
@@ -149,4 +151,42 @@ class TestB59CapacityUnknown:
         # After fallback, total_capacity_w > 0 expected if any PSU has either
         # PowerCapacityWatts or InputRanges fallback
         assert s["psu_count"] >= 1
-        assert s["total_capacity_w"] >= 0
+        assert s["total_capacity_w"] is None or s["total_capacity_w"] >= 0
+
+
+# --------------------------------------------------------------------------- #
+# A-3 (2026-10-19): 용량을 아는 PSU 가 하나도 없으면 total/pct 는 null — 실측 HPE CSUS 3200 (PSU 4개 전부 PowerCapacityWatts 미제공)
+# --------------------------------------------------------------------------- #
+
+class TestA3UnknownCapacityIsNull:
+    def test_all_unknown_capacity_gives_null_total_and_pct(self):
+        power = {"PowerSupplies": [{"Name": f"PSU{i}", "PowerCapacityWatts": None, "Status": {"Health": "OK", "State": "Enabled"}}
+                                   for i in range(4)],
+                 "PowerControl": [{"PowerConsumedWatts": 591}]}
+        s = build_summary(power)
+        assert s["psu_count"] == 4 and s["capacity_unknown_count"] == 4
+        assert s["total_capacity_w"] is None and s["consumed_capacity_pct"] is None
+        assert s["consumed_watts"] == 591
+
+    def test_partial_capacity_keeps_partial_total(self):
+        power = {"PowerSupplies": [{"Name": "PSU0", "PowerCapacityWatts": 800, "Status": {"Health": "OK", "State": "Enabled"}},
+                                   {"Name": "PSU1", "PowerCapacityWatts": None, "Status": {"Health": "OK", "State": "Enabled"}}],
+                 "PowerControl": [{"PowerConsumedWatts": 400}]}
+        s = build_summary(power)
+        assert s["total_capacity_w"] == 800 and s["capacity_unknown_count"] == 1 and s["consumed_capacity_pct"] == 50.0
+
+    def test_real_template_matches_mirror_for_all_unknown(self):
+        """운영 템플릿(_rf_power_summary) 자체도 같은 답을 낸다 — 미러와 템플릿의 drift 가드."""
+        import ast
+        import jinja2
+        import yaml
+        norm = REPO / "redfish-gather" / "tasks" / "normalize_standard.yml"
+        tpl = None
+        for t in yaml.safe_load(norm.read_text(encoding="utf-8")):
+            sf = t.get("ansible.builtin.set_fact") or {}
+            if "_rf_power_summary" in sf:
+                tpl = sf["_rf_power_summary"]
+        psus = [{"name": f"PSU{i}", "power_capacity_w": None, "health": "OK", "state": "Enabled"} for i in range(4)]
+        out = ast.literal_eval(jinja2.Environment().from_string(tpl).render(
+            _rf_d_power={"power_supplies": psus, "power_control": {"power_consumed_watts": 591}}).strip())
+        assert out["total_capacity_w"] is None and out["consumed_capacity_pct"] is None and out["consumed_watts"] == 591

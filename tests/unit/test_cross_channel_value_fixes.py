@@ -14,6 +14,7 @@ import types
 from pathlib import Path
 
 import pytest
+import yaml
 
 yaml = pytest.importorskip("yaml")
 from jinja2.nativetypes import NativeEnvironment  # noqa: E402
@@ -122,6 +123,34 @@ def test_logical_threads_prefers_processor_summary(cpus, lpc, expected):
     cpu = _fragment()["cpu"]
     system = {"cpu_summary": {"logical_processor_count": lpc}} if lpc is not None else {"cpu_summary": {}}
     assert _render(cpu["logical_threads"], _rf_d_cpus=cpus, _rf_d_system=system) == expected
+
+
+# ── A-2 (2026-10-19): adapter 가 LogicalProcessorCount 를 "코어 수" 라고 밝힌 펌웨어(HPE CSUS 3200 RMC — 실측 4노드 Bios HThread=Enabled,
+#   LogicalProcessorCount == Count × TotalCores, TotalThreads == 2 × TotalCores)는 per-processor 합이 우선이다. 다른 adapter 는 X3 그대로.
+CORES_FLAG = {"vendor_notes": {"processor_summary_logical_count": "cores"}}
+
+
+@pytest.mark.parametrize("cpus, lpc, adapter, expected", [
+    ([{"total_threads": 16}] * 4, 32, CORES_FLAG, 64),             # CSUS node01 실측: 요약 32(코어) → 합 64
+    ([{"total_threads": 32}] * 4, 64, CORES_FLAG, 128),            # CSUS node03 실측
+    ([], 32, CORES_FLAG, 32),                                      # per-processor 를 못 읽었으면 요약값으로 폴백
+    ([{"total_threads": 16}] * 4, 32, {"vendor_notes": {}}, 32),   # 플래그 없음 → X3 그대로(요약 우선)
+    ([{"total_threads": 16}] * 4, 32, {}, 32),
+])
+def test_logical_threads_adapter_flag_cores(cpus, lpc, adapter, expected):
+    cpu = _fragment()["cpu"]
+    system = {"cpu_summary": {"logical_processor_count": lpc}}
+    assert _render(cpu["logical_threads"], _rf_d_cpus=cpus, _rf_d_system=system, _selected_adapter=adapter) == expected
+
+
+def test_only_scaleup_adapters_declare_cores_flag():
+    """플래그는 실측 근거가 있는 CSUS 3200 과, 사용자 지시로 같은 패밀리인 Superdome Flex 두 adapter 에만 있다."""
+    flagged = set()
+    for p in sorted((REPO / "adapters" / "redfish").glob("*.yml")):
+        a = yaml.safe_load(p.read_text(encoding="utf-8"))
+        if ((a.get("vendor_notes") or {}).get("processor_summary_logical_count") or "") == "cores":
+            flagged.add(a["adapter_id"])
+    assert flagged == {"redfish_hpe_csus_3200", "redfish_hpe_superdome_flex"}
 
 
 # ── X1: UUID 바이트 순서 ───────────────────────────────────────────────────────────────────

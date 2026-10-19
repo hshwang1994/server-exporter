@@ -1,3 +1,4 @@
 {
-  "manager_layout": "rmc_primary"
+  "manager_layout": "rmc_primary",
+  "firmware_inventory_scope": "complex_only"
 }

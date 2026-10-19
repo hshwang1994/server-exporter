@@ -277,6 +277,55 @@ def test_csus_chassis_not_linked_to_the_system_is_never_queried(monkeypatch):
     assert not [c for c in calls if c.startswith("Chassis/r001u03/NetworkAdapters")]
 
 
+# ── 2026-10-19 (A-5): 섀시 NetworkAdapters 가 404 · 빈 목록이면 Systems/{id}/NetworkInterfaces 의 Links.NetworkAdapter 로 카드를 찾는다 ──
+# 실 녹화본(node01)은 섀시 경로가 카드를 주므로 NetworkInterfaces 는 요청되지 않는다. 변형은 미러의 실제 NetworkInterface 모양
+# (CompositionService/ResourceBlocks/r001u01/Systems/1/NetworkInterfaces/NetworkIfPCIeCard10 → Links.NetworkAdapter) 을 Systems 경로에 합성한다.
+
+def _csus_without_chassis_adapters(mode):
+    rec, layout = _load("real_hpe_csus3200")
+    r = copy.deepcopy(rec)
+    k = "get::Chassis/r001u01/NetworkAdapters"
+    if mode == "404":
+        r[k] = [404, {}, "HTTP 404: Not Found"]
+    else:
+        body = copy.deepcopy(rec[k][1])
+        body["Members"] = []
+        body["Members@odata.count"] = 0
+        r[k] = [200, body, None]
+    ni = "/redfish/v1/Systems/Partition0/NetworkInterfaces"
+    r["get::Systems/Partition0/NetworkInterfaces"] = [200, {"@odata.id": ni, "Members": [
+        {"@odata.id": ni + "/NetworkIfPCIeCard10"}, {"@odata.id": ni + "/NetworkIfPCIeCard15"}]}, None]
+    for card in ("PCIeCard10", "PCIeCard15"):
+        r[f"get::Systems/Partition0/NetworkInterfaces/NetworkIf{card}"] = [200, {
+            "@odata.id": f"{ni}/NetworkIf{card}", "Id": f"NetworkIf{card}",
+            "Links": {"NetworkAdapter": {"@odata.id": f"/redfish/v1/Chassis/r001u01/NetworkAdapters/{card}"}}}, None]
+    return r, layout
+
+
+@pytest.mark.parametrize("mode", ["404", "empty"])
+def test_csus_hbas_recovered_through_system_network_interfaces_when_chassis_path_is_empty(monkeypatch, mode):
+    rec, layout = _csus_without_chassis_adapters(mode)
+    calls = []
+    r = _gather(monkeypatch, rec, layout, calls)
+    hbas = _netad(r)["fc_hbas"]
+    assert len(hbas) == 4 and len({h["wwpn"] for h in hbas}) == 4
+    assert [a["id"] for a in _netad(r)["adapters"]] == ["PCIeCard10", "PCIeCard15"]
+    assert "Systems/Partition0/NetworkInterfaces" in calls
+    assert "Systems/Partition0/NetworkAdapters" not in calls, "NetworkInterfaces 로 찾았으면 iDRAC8 경로는 묻지 않는다"
+    assert any("NetworkInterfaces 링크로 네트워크 카드 2장 수집" in m for m in _netad_notices(r)), _netad_notices(r)
+    assert not [e for e in r["errors"] if e.get("section") == "network_adapters"]
+    sections, status, _ = _envelope(r)
+    assert status == "success" and sections["network"] == "success"
+
+
+def test_csus_recording_as_is_never_asks_network_interfaces(monkeypatch):
+    rec, layout = _load("real_hpe_csus3200")
+    calls = []
+    r = _gather(monkeypatch, rec, layout, calls)
+    assert len(_netad(r)["fc_hbas"]) == 4
+    assert "Systems/Partition0/NetworkInterfaces" not in calls, "섀시 경로가 카드를 주면 요청 0건 증가"
+
+
 # ── 2026-10-18: 조용한 누락 · 예외 소실 보완 변형 (F1 · F2 · F3 · F4 · F7 · F8) ────────────────────
 
 def _r740_mutated(mutate):

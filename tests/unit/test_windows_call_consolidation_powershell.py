@@ -46,6 +46,7 @@ from test_windows_call_consolidation_render import (  # noqa: E402
     MERGED_TASK,
     PRE_P4_SHA,
     _evidence,
+    _network_groups_counting_speedless,
     iter_tasks,
     new_text,
     old_text,
@@ -584,6 +585,14 @@ def _net_data_with_e3(data):
     return data
 
 
+def _net_data_with_e3_and_speedless_group(data):
+    # 2026-10-19 (B-3): speed 를 못 읽은 NIC 도 speed_mbps=null 그룹으로 센다 — NET_TEAM 의 어댑터 없는 주소(vEthernet (internal),
+    #   InterfaceIndex 33: speed/status null) 가 그룹 1개로 더해진다. VLAN tNIC / 팀 member 제외는 그대로.
+    data = _net_data_with_e3(data)
+    data["network"]["summary"] = {"groups": _network_groups_counting_speedless(data["network"]["interfaces"])}
+    return data
+
+
 def _hosting_with_vbs(hosting):
     # 2026-10-10 (D-02): hosting 원시 문서에 VbsStatus(Win32_DeviceGuard) 가 들어간다 — fixture 에 그 클래스가 없으니 ''(조회 실패 = 판정에 쓰지 않음)
     return dict(hosting, VbsStatus="")
@@ -603,7 +612,7 @@ def _sys_version_with_server_year(frag):
 
 
 INTENDED_FRAGMENT_PS = {  # (section, name) → {fragment 변수: 종전 값 → 기대 값}
-    ("network", "two_nics_one_team"): {"_data_fragment": _net_data_with_e3},
+    ("network", "two_nics_one_team"): {"_data_fragment": _net_data_with_e3_and_speedless_group},
     ("network", "fail"): {"_data_fragment": _net_data_with_e3},
     ("system", "normal"): {"_data_fragment": _sys_version_with_server_year},
     ("system", "domain_hyperv_host"): {"_data_fragment": _sys_version_with_server_year},
@@ -638,6 +647,11 @@ INTENDED_CTX_PS = {  # (section, name) → {중간 변수: 종전 값 → 기대
     ("storage", "single"): {"_w_hba_parsed": _with_hba_components, "_w_hba_raw": _with_hba_components_raw},
     ("storage", "fail"): {"_w_hba_parsed": _with_hba_components, "_w_hba_raw": _with_hba_components_raw},
 }
+INTENDED_CTX_FROM_OLD_PS = {  # (section, name) → {중간 변수: 종전 ctx → 기대 값} — 다른 종전 변수로 다시 계산해야 하는 의도한 변경
+    # 2026-10-19 (B-3): network.summary — speed 를 못 읽은 NIC(NET_TEAM 의 vEthernet (internal), InterfaceIndex 33)도 null 그룹으로 센다
+    ("network", "two_nics_one_team"): {"_w_net_summary": lambda ctx: {
+        "groups": _network_groups_counting_speedless((ctx.get("_w_net_topo") or {}).get("interfaces"))}},
+}
 
 
 @pytest.mark.parametrize("section,name", list(SCENARIOS))
@@ -665,6 +679,9 @@ def test_old_and_new_powershell_render_identical_fragments(runs, section, name):
         fix = INTENDED_CTX_PS.get((section, name), {}).get(key)
         if fix is not None:
             expected = fix(expected)
+        fix_from_old = INTENDED_CTX_FROM_OLD_PS.get((section, name), {}).get(key)
+        if fix_from_old is not None:
+            expected = fix_from_old(old["ctx"])
         assert new["ctx"][key] == expected, f"{section}/{name}: 중간 변수 {key} 가 종전과 다르다"
 
 

@@ -85,6 +85,31 @@ def test_at1_hpe_dl380_summary_recovers_model_manufacturer():
     assert summary["port_count"] == 6
 
 
+def test_a4_adapter_count_skips_fc_only_cards_csus_node01_shape():
+    """2026-10-19 (A-4): 실측 HPE CSUS 3200 node01 — FC HBA 카드 2장 · NIC 0장 → adapter_count 0 (종전 2). port_count 는 host EthernetInterface 수(0)."""
+    netad = {
+        "adapters": [{"id": "PCIeCard10", "model": "HPE SN1100Q 16Gb 2P FC HBA", "manufacturer": "HPE"},
+                     {"id": "PCIeCard15", "model": "HPE SN1100Q 16Gb 2P FC HBA", "manufacturer": "HPE"}],
+        "ports": [{"adapter_id": "PCIeCard10", "associated_address": "51:40:2e:c0:20:82:c2:2c", "port_type": "FibreChannel"},
+                  {"adapter_id": "PCIeCard10", "associated_address": "51:40:2e:c0:20:82:c2:2e", "port_type": "FibreChannel"},
+                  {"adapter_id": "PCIeCard15", "associated_address": "51:40:2e:c0:20:82:c2:94", "port_type": "FibreChannel"},
+                  {"adapter_id": "PCIeCard15", "associated_address": "51:40:2e:c0:20:82:c2:96", "port_type": "FibreChannel"}],
+    }
+    summary = _render_summary(netad, [])
+    assert summary["adapter_count"] == 0 and summary["port_count"] == 0 and summary["groups"] == []
+
+
+def test_a4_adapter_count_dell_r740_shape_counts_nics_only():
+    """Dell R740 실측 모양: NIC 5 + FC 2 → 5. 포트 정보가 없는 카드는 센다(모르면 뺄 근거가 없다)."""
+    adapters = [{"id": f"NIC.Slot.{i}", "model": "BRCM", "manufacturer": "Broadcom"} for i in range(5)]
+    adapters += [{"id": "FC.Slot.1", "model": "QLogic FC16", "manufacturer": "QLogic"}, {"id": "FC.Slot.7", "model": "QLogic FC16", "manufacturer": "QLogic"}]
+    ports = [{"adapter_id": f"NIC.Slot.{i}", "associated_address": f"aa:bb:cc:dd:ee:0{i}", "port_type": "Ethernet"} for i in range(4)]
+    ports += [{"adapter_id": "FC.Slot.1", "associated_address": "21:00:00:24:ff:8b:1a:01", "port_type": "FibreChannel"},
+              {"adapter_id": "FC.Slot.7", "associated_address": "21:00:00:24:ff:8b:1a:03", "port_type": "FibreChannel"}]
+    summary = _render_summary({"adapters": adapters, "ports": ports}, [])
+    assert summary["adapter_count"] == 5, "NIC.Slot.4 는 포트 정보가 없지만 센다"
+
+
 def test_at1_id_regex_match_still_works_when_no_mac():
     """id-regex 가 매치하는 vendor 형식(iface id 에 adapter id 내포)은 불변 (Additive 보존).
 
