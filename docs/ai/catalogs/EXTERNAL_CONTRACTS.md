@@ -2,6 +2,25 @@
 
 > 외부 시스템 (Redfish / IPMI / SSH / WinRM / vSphere) 계약 카탈로그. rule 28 #11 측정 대상 (TTL 90일). rule 96 origin 주석 정본.
 
+## 일자: 2026-10-19 — HPE CSUS 3200 RMC 1.75.108 인벤토리 위치 · 펌웨어 의미 차이 (실 4노드 전수 미러) · ESXi LUN 프로토콜
+
+> 정본: `tests/evidence/2026-10-19-csus-single-server-summary-audit.md` · `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md`. 미러 `C:\github\서버mock데이터\HPE_CSUS3200\01~04`(RMC 가 노출한 전 리소스). Superdome Flex 는 미러 없음 — CSUS 와 같다고 본 사용자 지시(**실장비 미검증**).
+
+| 계약 | 정본 | server-exporter 적용 |
+|---|---|---|
+| RMC `ProcessorSummary.LogicalProcessorCount` | Partition0: `Count 4 · LogicalProcessorCount 32`, `Processors/*` `TotalCores 8 · TotalThreads 16`, `Bios.Attributes.HThread Enabled` → 이 필드는 **코어 수**(Dell/DMTF/CIMC 는 스레드 — 2026-10-18 행) | adapter `vendor_notes.processor_summary_logical_count: cores` → `cpu.logical_threads` = per-processor `TotalThreads` 합(64/128). 플래그 없는 adapter 는 X3 그대로 |
+| RMC PSU | `Chassis/r001u01/Power.PowerSupplies[0..3]` 키 = Model · Version · Status · Name — `PowerCapacityWatts` 없음; `PowerControl.PowerConsumedWatts` 있음(591~1000 W) | `power.summary.total_capacity_w null · consumed_capacity_pct null · capacity_unknown_count 4`; PSU 펌웨어 = `Version`(`firmware[]` `PowerSupply.<idx>`) |
+| RMC Storage | `Systems/Partition0/Storage/1` = `Name "Npar 0 Storage"`, `StorageControllers` 없음, `Drives` 0(node01/02) 또는 2(node03/04 SAS SSD `MO001600PXMTN`), `Volumes` 없음 | 빈 컨테이너 제거(A-6); 드라이브 있으면 PCIe 장치로 컨트롤러 식별(A-8) |
+| RMC RAID 컨트롤러 | `Chassis/r001u01/PCIeDevices/3`: Model `HPE SR3258p-16i/e PCIe4 Controller` · Manufacturer `Adaptec` · FirmwareVersion `03.01.44.040-0` · SKU `R9P58A` · `Slot.Location.PartLocation.ServiceLabel rack1/chassis_u1/cpu0/io_slot3`; 드라이브 `PhysicalLocation.PartLocation.ServiceLabel …/io_slot3/box1/drive_bay1` | 드라이브 위치 ⊂ 슬롯 위치, 후보 1개일 때만 `controller_model/manufacturer/firmware/health` 채움 |
+| RMC FirmwareInventory | `UpdateService/FirmwareInventory` 멤버 2(`ComplexFW` · `Partition0_FW`) — NIC(Mellanox `26.46.3048`) · FC HBA(`9.15.05 (d0d5)`) · RAID 펌웨어는 `PCIeDevices/*.FirmwareVersion` 에만 | adapter `firmware_inventory_scope: complex_only` → `firmware[]` 에 `PCIeDevice.<Id>`(name=Model · component=슬롯 라벨) · `PowerSupply.<idx>` 보충; category 는 id/name 토큰(`controller` → storage_controller · `gbe` → nic · FC HBA → other) |
+| RMC PartNumber | `Systems/Partition0` 에 없음, `Chassis/r001u01.PartNumber R9N70A` | `hardware.part_number` 섀시 폴백(A-7, manufacturer/model 과 같은 규칙) |
+| RMC NetworkInterfaces | `Systems/Partition0/NetworkInterfaces/NetworkIfPCIeCard10.Links.NetworkAdapter → Chassis/r001u01/NetworkAdapters/PCIeCard10` (DMTF 표준 링크) | 섀시 `NetworkAdapters` 가 비거나 실패할 때만 이 링크로 카드 수집(A-5, notice) |
+| RMC Chassis Drives | `Chassis/r001u01/Drives` 컬렉션(node03 멤버 2 = Storage/1.Drives, node01 빈 목록) | Storage 전체 드라이브 0건일 때만 폴백(A-10) — 4노드는 두 목록이 같아 미발동 |
+| RMC Links.Chassis | 4노드 전부 1개(r001u01) — 2섀시(8소켓 이상) 응답 없음 | A-11 다중 섀시 Power/Thermal 합산은 합성 시험만(**실장비 미검증**) |
+| RMC 노출 vs 요청 | node03 637 리소스 중 요청 207(미요청 441 = Sensor 72 · SubProcessors 64 · UPI/패브릭 Port 57 · JsonSchema 28 · Task 20 · ActionInfo 19 · LogEntry 11 · Assembly 10 …) | 허용 목록 `tests/reference/redfish/coverage_allowlist.yml`(사유) · `tests/regression/test_redfish_coverage_audit.py` |
+| vSphere `ScsiLun` ↔ 어댑터 종류 | `HostScsiTopology` 로 LUN 의 어댑터(`HostFibreChannelHba` · `HostInternetScsiHba` · `HostSerialAttachedHba` · `HostBlockHba(vmw_ahci)` · nvme) — 2026-10-18 행의 `controller_type` 판정 재사용 | ESXi `physical_disks[].protocol` = FibreChannel · iSCSI · SAS · SATA · NVMe; RAID 뒤 LUN · 미상 → null |
+| vSphere datastore `summary.freeSpace` | 미제공(None)일 수 있다 — 0(가득 찬 datastore)과 구분 | `free_mb/used_mb/usage_percent null`(0 은 0) |
+
 ## 일자: 2026-10-18 — FC HBA 4채널 · 채널 간 값 정합 계약 (HBA 전수 점검)
 
 > 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2 ·

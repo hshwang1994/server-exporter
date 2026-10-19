@@ -1260,6 +1260,9 @@ Dell 서버 시리얼은 필수값이므로 `null` 인 채로 success/partial �
 > 파티션 접미사를 떼도록 바뀌었다 (30절). 두 채널의 표기가 갈리는 것은 의도된 결과다.
 > [INFO] 2026-10-17 갱신 — 사용자 결정으로 Redfish `data.hardware.serial` 도 같은 필터를 탄다(CSUS 3200 만, 30-2 절).
 > 모듈(`_SERIAL_RESOLVERS`)은 그대로이고 `normalize_standard.yml` 의 envelope 단계에서 떼므로 모듈 golden 은 `-000` 그대로다.
+> [INFO] 2026-10-19 갱신 — ESXi 채널(`esxi-gather/tasks/normalize_system.yml` 의 `system.serial_number` · `hardware.serial`)에도 같은 필터를 걸고, 모델 조건에 Superdome Flex 를 더했다
+> (`serial_normalizer.is_scaleup_npar`; 사용자 결정 — `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md`). 세 채널이 `SGHD3TLNDD` 로 같다.
+> 모듈 golden · `multi_node.partitions[].system.serial` 은 여전히 `-000` 그대로(multi_node 는 사용자 결정으로 유지).
 실미러 골든(`real_hpe_dl380` / `real_lenovo_sr650` / `real_hpe_csus3200`) 3종은 재생성 없이
 그대로 통과했고, 비-Dell baseline 9종도 무변경이다.
 

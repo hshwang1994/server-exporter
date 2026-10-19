@@ -22,6 +22,7 @@
 | OS Serial Number | 필수 식별자. `correlation.serial_number` 가 null 이면 `require_serial.yml` 이 status=failed(GATHER_FAILED · `serial_missing` 문장), 원인은 `diagnosis.details.serial_number.cause`. 새 failure_code 없음 | 2026-10-13 |
 | envelope | 13 필드 고정 · 새 키 추가는 호환성 작업 밖(사용자 승인) | 2026-05-01 · 2026-10-03 |
 | hostname | `system.hostname → system.fqdn → bmc.network_hostname → null`, IP 대체 없음. 세 채널 모두 `system.hostname` = 첫 라벨 · `system.fqdn` = 도메인 있을 때만. Redfish 원천 순서는 adapter `vendor_notes.hostname_priority` — **HPE CSUS 3200 은 RMC 이름 우선**(없을 때만 Partition HostName), 그 밖은 System.HostName | 2026-06-16 · 2026-09-03 · 2026-10-15 |
+| CSUS 3200 단일 서버 · summary 거짓 값 | CSUS 3200 은 Partition0 = 서버(다른 x86 과 같은 JSON), `multi_node` 는 유지, 시리얼 `-NNN` 제거는 OS · Redfish · **ESXi** · **Superdome Flex** 까지. `power.summary` 용량 모르면 null, `adapter_count` 는 FC 전용 카드 제외, RMC 의 `LogicalProcessorCount` 는 코어 수(adapter 플래그), Redfish 는 정보가 없을 때만 PCIeDevices · 섀시 Drives · NetworkInterfaces · 다중 섀시 Power/Thermal 을 읽는다. "노출 vs 요청" 범위 감사 회귀 3종 상시 | 2026-10-19 (2) |
 | 시간 한계 | 실행 기반 대기 합 72h · 실제 수집 누적 6h · 결과 처리 1h, 빌드 · 단계 timeout 없음, 같은 Runner · 작업 폴더 재개. 중단 원인은 Jenkins 의 분류로만(경과시간 · 노드 상태로 확정 안 함), 보존은 handler 한 곳에서 1회 | 2026-10-05~07 · 2026-10-12 |
 | 결과 전달 | 요청 1 = 결과 1, `post { always }` 전달, Portal 2xx 로 종결(저장 확인은 계약 밖), 회수 매체는 같은 검문으로 평가. 404 는 서버가 돌려준 것만 확정 거부, 플러그인이 합성한 404(이름 풀이 실패)는 통신 실패 | 2026-10-03 · 2026-10-05 · 2026-10-10 · 2026-10-12 |
 | production | `prodgen` 생성 tree 만, 고정 main SHA, gate G01~G20 COMPLETE_PASS, 양 원격 동일, 승격 직후 canary. 사용자 지시 긴급 승격은 같은 생성 tree + 사실 trailer(`Emergency-Promotion`) 로 하고 정규 재승격으로 증거를 채운다 | 2026-10-03 · 2026-10-04 · 2026-10-14 · 2026-10-15 |
@@ -100,6 +101,35 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-19 (2) — HPE CSUS 3200 단일 서버 정합 · Redfish 수집 범위 보완 · 3채널 summary 거짓 값 · "노출 vs 요청" 범위 감사
+
+> 정본: `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md` · `tests/evidence/2026-10-19-csus-single-server-summary-audit.md` · `docs/contract/03-fields.md` 6.1 · 6.2 · 6.3 · 6.3.2 · 6.4 · 6.5 · 6.7 · 8 · FAQ.
+
+### 사용자 질문 · 지시
+
+- "CSUS 는 파티션을 1개만 쓰기로 협약했다 — 다른 x86 서버와 같은 JSON, Partition0 이 곧 서버. 시리얼 `-000` 제거는 지켜라(없애면 안 된다)." · "디스크 구성 · 합계가 보이는 장비는 hbas 가 없고, 안 보이는 장비는 hbas 가 보인다"(운영 중인 서로 다른 장비 2대, JSON 반출 불가) · "다른 모든 장비 summary 도 버그 검토" · "내가 놓친 부분까지".
+- "특정 것만 수집해서 빠지는 것 아닌가?" · "다른 채널도 아는 것만 부르나? 전체 mock · 전체 API 를 대조하나?" → CSUS node03 노출 637 중 205 요청 등 전수 대조 결과를 보고하고 상시 감사 시험을 두기로.
+
+### 결정 (사용자, 2026-10-19)
+
+1. `data.multi_node` 는 **그대로**(삭제 · 내부 시리얼 변경 없음). 2. 시리얼 `-NNN` 제거를 **ESXi 채널**과 **Superdome Flex** 모델에도 적용. 3. 증상의 두 장비는 미러 4노드와 다른 장비 → 코드는 수집 경로 추가 + notice + 사이트 체크리스트로 대응.
+
+### 확정 사실과 처리 (AI 실측 → 결정)
+
+| 사실 (실 4노드 미러 RMC 1.75.108 · 실제 Templar 렌더) | 처리 |
+|---|---|
+| 디스크(node03/04 SAS SSD 2)와 HBA(8)는 함께 나온다 — 상호배제 재현 안 됨 | A-5 `Systems/{id}/NetworkInterfaces → Links.NetworkAdapter`(섀시 경로가 비거나 실패할 때만) · notice · 체크리스트(6.3.2) |
+| RMC `ProcessorSummary.LogicalProcessorCount` = 코어 수(HThread Enabled, TotalThreads 2×) → 2026-10-18 X3 가 과소집계(32/64, 실제 64/128) | adapter `vendor_notes.processor_summary_logical_count: cores` → per-processor 합 우선(값으로 가른다, 벤더 이름 아님) |
+| PSU 4개 전부 용량 미제공인데 `total_capacity_w 0 · consumed_capacity_pct 0` | 용량을 아는 PSU 0개 → null(전 벤더) |
+| FC HBA 카드가 `network.summary.adapter_count` 에 들어감(NIC 0장인데 2) | 포트가 전부 FC/FCoE/IB 인 카드 제외(hbas/infiniband 로 요약) |
+| "Npar 0 Storage" 빈 컨테이너 · `part_number` 는 섀시에만 · RAID 컨트롤러 정체는 `Chassis/PCIeDevices/3` 에만 · NIC/HBA/RAID/PSU 펌웨어는 PCIe 장치 · PSU 에만 · 섀시 `Drives` · 2번째 섀시 Power/Thermal 미요청 | A-6 빈 컨테이너 제거 · A-7 섀시 폴백 · A-8 드라이브 위치 ⊂ 슬롯 위치(후보 1개) · A-9 adapter `firmware_inventory_scope: complex_only` 보충 · A-10 드라이브 0건이면 섀시 Drives · A-11 다중 섀시 합산 — 전부 "정보가 없을 때만", 정보를 주는 벤더는 요청 · 골든 불변 |
+| OS/ESXi summary: Linux 총량 모르면 0 · VLAN 중복 · 다운 포트 누락 · ESXi protocol null · datastore free None → 100% · KB/PB 오독 · hostname IP 옥텟 · zram 디스크 · 0 GB 그룹 · cores_per_socket 뜻 · bad_wwn 범위 | B-1~B-12(ADR 결정 8) |
+| 저장소 기록상 "노출 vs 수집" 전수 대조는 처음 | `scripts/ai/redfish_coverage_diff.py` + 회귀 3종(`tests/regression/test_*coverage*.py`) + 허용 목록(사유) — 새 원천은 결정 항목(NEXT_ACTIONS) |
+
+### 바뀌지 않는 것
+
+`hostname` RMC 우선(2026-10-15) · 출력 vendor `hpCsus` · hbas `link_status` 항상 down + notice(2026-10-19 첫 절) · `multi_node.partitions[].system.serial` 원문 · envelope 13 필드 · `sections` · `status` 판정.
 
 ## 2026-10-19 — `storage.hbas[].link_status` up/down 둘뿐 · ESXi hbas 그대로 · Windows `system.version` `2025-24H2` (긴급 반영)
 

@@ -1,5 +1,22 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-19 (2) — HPE CSUS 3200 단일 서버 정합 · Redfish 수집 범위 보완 · 3채널 summary 거짓 값 · "노출 vs 요청" 범위 감사
+
+> 정본: `tests/evidence/2026-10-19-csus-single-server-summary-audit.md` · `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md`. 전부 합성 입력 · 실장비 미러 재생 — **실장비(Jenkins 매트릭스) 미실행, production 미승격**.
+
+| 구분 | 결과 |
+|---|---|
+| 단위 pytest (Windows Python 3.13.15) — 전체를 한 번에 돌린 실행은 하네스가 시스템 메모리 부족으로 44% 지점(그때까지 실패 0)에서 중단했고 재시작하지 않았다. 대신 겹치지 않는 3분할로 전부 실행 | Redfish · CSUS · summary · 시리얼 · 어댑터 선택(`-k redfish or csus or network_summary or power_summary or partition_normalize or identity_render or firmware_category or cross_channel or hba or storage or serial or adapter or full_mirror or superdome or classify or resolve_all`): **1788 passed, 4 skipped** (11분 50초) · 나머지 `test_[a-l]*`: **1810 passed, 4 skipped** (6분 42초) · 나머지 `test_[m-z]*`: **997 passed, 24 skipped** (1분 06초) |
+| 신규 · 갱신 파일 직접 실행 | OS 신규 3파일 39 passed · ESXi 신규 6파일 77 passed · `test_redfish_csus_single_server.py` + `test_redfish_csus_single_server_render.py` + `test_redfish_audit_2026_10_10.py` 43 passed(`'gbe'` → nic 추가 뒤 재실행) · 범위 감사 3파일 24 passed · 위 11파일 재확인(`test_identity_sentinels` · `test_windows_call_consolidation_powershell` 포함) 통과 |
+| e2e / regression | `tests/e2e` **868 passed, 6 skipped** (1분 17초) · `tests/regression` **217 passed, 6 skipped, 7 xfailed** (1분 22초) |
+| 통합(`tests/integration -m "not live"`) | **366 passed, 6 skipped, 1 deselected** (신규 `test_redfish_csus_single_server_render.py` 5 + 다른 벤더 3 포함) |
+| `ansible-playbook --syntax-check` 3채널 (WSL ansible-core 2.20.7) | os · esxi · redfish 통과 |
+| 정적 검사 | `verify_vendor_boundary.py` 통과(Jinja 주석의 벤더 이름 2건 고친 뒤) · `verify_harness_consistency.py` 통과(rules 28 · skills 47 · agents 47) · `verify_docs_references.py` 통과 · `check_project_map_drift.py` 일치 · `output_schema_drift_check.py` 통과(fd_paths 206) · `validate_field_dictionary.py` PASS · 편집 YAML 18 파일 parse · Python 4 파일 compile |
+| 실장비 미러 재생 + 실제 Templar 렌더 (CSUS 4노드, RMC 1.75.108) | `hardware.serial` 접미사 없음 · `part_number R9N70A` · `logical_threads` 64/128 · `cores_per_socket` 8/16 · `power.summary.total_capacity_w null` · `adapter_count` 0/4 · `controllers` 0/0/1/1(node03/04 `HPE SR3258p-16i/e` · Adaptec · `03.01.44.040-0`) · `firmware` 6/6/15/15 · hbas 4/4/8/8 · sections 전부 success · errors 0 — evidence 3절 표 |
+| golden · 예산 | `real_hpe_csus3200` 미러 01 재캡처: `system.part_number` null → `R9N70A` · `firmware` 2 → 6 · 요청 134 → 141(`path_set_delta.added` 7 + `added_reason`) · `meta.json` `firmware_inventory_scope: complex_only`. `real_dell_r740` · `real_hpe_dl380` · `real_lenovo_sr650` 골든 · 예산 불변 |
+| 범위 감사 CLI | `scripts/ai/redfish_coverage_diff.py` CSUS node03 미러: exposed 637 · requested 207 distinct(210 GET) · untouched 441 · UNLISTED 0; dell/10_100_15_27 크롤: 2338 / 72 / 2266 / UNLISTED 0 |
+| 실장비 미검증 | OS/ESXi summary 변경의 실호스트 값(main Job 매트릭스 S1~S4 · E2E-D · E2E-E) · CSUS 사이트 2대 체크리스트 · A-5/A-8/A-10/A-11 실발동 · Superdome Flex · ESXi baseline(`link_type` · `protocol`) — NEXT_ACTIONS 2026-10-19 둘째 절 |
+
 ## 2026-10-19 — link_status up/down 둘뿐 · ESXi hbas 그대로 · Windows system.version 연도 접두 (긴급 반영)
 
 | 구분 | 결과 |

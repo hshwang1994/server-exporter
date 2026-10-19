@@ -94,7 +94,7 @@
       "health": "OK",                                   // BMC rollup — Warning/Critical 시 하드웨어 장애 (수집 성공과 별개)
       "asset_tag": "lab-mock",
       "system_type": "Physical",
-      "part_number": "P52345-001",
+      "part_number": "P52345-001",                      // System.PartNumber — 없으면 첫 섀시 Chassis.PartNumber (2026-10-19 A-7; 실측 Partition0 없음 → r001u01 "R9N70A")
       "last_reset_time": null,
       "boot_progress": null,
       "tpm": null,
@@ -124,7 +124,7 @@
     "cpu": {                                            // Partition0 CPU summary (4-socket × Intel Xeon Platinum 8480+)
       "sockets": 4,                                     // Partition0 만 — 전체는 data.multi_node.partitions[].cpu 참조
       "cores_physical": 224,                            // 56 cores × 4 sockets
-      "logical_threads": 448,                           // HT 활성
+      "logical_threads": 448,                           // HT 활성 — adapter processor_summary_logical_count: cores → per-CPU TotalThreads 합 (RMC LogicalProcessorCount 는 코어 수, 2026-10-19 A-2)
       "model": "Intel(R) Xeon(R) Platinum 8480+",
       "max_speed_mhz": null,                            // mock — site 실측 시 ProcessorMaxSpeedMHz
       "architecture": null,
@@ -152,7 +152,7 @@
       "filesystems": [],
       "physical_disks": [],
       "datastores": [],
-      "controllers": [],
+      "controllers": [],                                // 빈 Storage 컨테이너("Npar 0 Storage")는 제외, 드라이브가 있으면 PCIeDevices 로 RAID 컨트롤러 식별 (2026-10-19 A-6/A-8)
       "logical_volumes": [],
       "summary": {
         "groups": [],
@@ -171,8 +171,8 @@
       "adapters": [],                                   // P4 (cycle 2026-04-28) — NetworkAdapters / NetworkPorts
       "ports": []
     },
-    "firmware": [],                                     // UpdateService FirmwareInventory (mock 비어있음 — 실측 시 BMC/BIOS/NIC firmware list)
-    "power": null,                                      // Chassis.PowerSubsystem (mock — site 실측 시 PSU / power_supplies)
+    "firmware": [],                                     // UpdateService FirmwareInventory(complex/nPar 번들 2건) + adapter complex_only → PCIeDevice.* · PowerSupply.* 보충 (2026-10-19 A-9; mock 비어있음)
+    "power": null,                                      // Chassis.PowerSubsystem (mock). 실측: PSU 4 · 용량 미제공 → summary.total_capacity_w null · consumed_capacity_pct null (2026-10-19 A-3)
     "users": [],                                        // AccountService Accounts list. Redfish 채널은 일반적으로 빈 list (rule 12 capability)
     "multi_node": {                                     // cycle 2026-05-12 (ADR-2026-05-12) — RMC primary 시스템 전수 수집 컨테이너 (Additive)
       "enabled": true,                                  // manager_layout 정의 vendor 만 true — null 시 비-RMC vendor

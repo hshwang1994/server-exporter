@@ -1,5 +1,32 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## HPE CSUS 3200 단일 서버 정합 · 수집 범위 감사 · 3채널 summary (2026-10-19, 둘째) — 남은 항목
+
+> 정본: `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md` · `tests/evidence/2026-10-19-csus-single-server-summary-audit.md` · `docs/contract/03-fields.md` 6.3.2 체크리스트. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다(승격은 아래 첫 항목).
+
+- [ ] **[HIGH / 승격 — 사용자 Jenkins] main Job 매트릭스 → `prodgen promote` → production canary** — OS/ESXi summary 값이 실호스트에서 바뀐다(ESXi `network.summary.groups[]` 에 `speed_mbps null` 그룹 · `link_type ethernet` · `physical_disks[].protocol` 채움, Linux VLAN 제외 · `grand_total_gb` null).
+      S1~S4 · E2E-D · E2E-E 봉투에서 기대값 확인 뒤 `python -m scripts.ai.prodgen promote --sha <main sha>`(자격 파일은 사용자 보관 — 2026-10-18 항목). 승격 전까지 production 은 `027409f4`.
+- [ ] **[HIGH / 사이트 — 사용자] CSUS "디스크 있음 · hbas 없음" 장비 2대 체크리스트** — 장비 JSON 에서 ① `data.network.adapters[].model` 에 FC HBA 카드 유무 ② `diagnosis.details.notices` 의 `section: network_adapters`(404 / 빈 목록 / 소유 미확인 / NetworkInterfaces 링크) ③ `errors[]` `section: network`
+      ④ `data.multi_node.summary.chassis_count` ⑤ production 체크아웃 SHA(2026-10-15~18 빌드면 재수집). 실 4노드 미러에서는 디스크 · hbas 가 함께 나와 코드로 재현되지 않았다. 결과를 알려 주면 그 경로를 고친다.
+- [ ] **[HIGH / 실장비 — lab 부재] CSUS 재수집 확인** — `cpu.logical_threads` 64/128 · `hardware.part_number R9N70A` · `power.summary.total_capacity_w null` · `network.summary.adapter_count` 0/4 · `storage.controllers[]`(디스크 있는 장비는 RAID 모델 채움, 없는 장비는 []) · `firmware[]` 6/15 · 요청 수 +7/+2.
+- [ ] **[MED / Portal 소비자] 안내** — 전 벤더 `power.summary.total_capacity_w` · `consumed_capacity_pct` 0 → null(용량 미제공 장비) · `network.summary.adapter_count` 감소(FC 카드 보유 장비) · OS/ESXi `network.summary.groups` 에 `speed_mbps: null` 그룹 추가 · ESXi `physical_disks[].protocol` 값 ·
+      Linux `memory.summary.grand_total_gb` 0 → null · ESXi/Superdome 시리얼 `-NNN` 제거 · ESXi datastore `free_mb/used_mb/usage_percent` null 가능 · ESXi `hostname` IPv4 꼴 → null.
+- [ ] **[MED / baseline — 실장비 라운드] `schema/baseline_v1/esxi_baseline.json`** — `network.summary.groups[].link_type`(null → ethernet) · `physical_disks[].protocol`(null → 값)은 다음 실장비 실행에서 바뀐다(rule 40 R2 — AI 임의 편집 금지). Linux/Windows baseline 은 shape 비교라 영향 없음(전체 pytest 로 확인).
+- [ ] **[MED / 결정 — 사용자] 새 데이터 원천 (범위 감사가 드러낸 "읽지 않는 인벤토리" — 허용 목록 `[판단 필요]` 항목)**
+      | 항목 | 근거 | 영향 |
+      |---|---|---|
+      | ESXi power/thermal ← `runtime.healthSystemRuntime` 센서 | 덤프 3대: 온도 28 · 팬 12 · 전력 12 | adapter `sections_supported` 에 power/thermal 추가 → ESXi `sections.power/thermal` not_supported → success (호출자 계약 변화) |
+      | Linux iSCSI 이니시에이터 → `storage.hbas[]`(iSCSI) | Windows/ESXi 는 iSCSI 를 hbas 에 넣는데 Linux 만 fc_host | `/sys/class/iscsi_host` · `iscsiadm -m session`(root 불필요) |
+      | RAID 뒤 물리 디스크 (Linux storcli/ssacli/perccli · Windows 벤더 WMI) | OS 는 VD 만 — Redfish 와 `physical_disks` 수가 다름(문서화된 한계) | 벤더 CLI 설치 · root 전제 |
+      | OS power/thermal ← `ipmitool sensor` | 덤프에 있음 | root + ipmitool, BMC 채널과 중복 — 기본은 Redfish 유지 권장 |
+      | Linux `nvme list/id-ctrl` · `multipath -ll` 직접 호출 | 덤프에 있음 — 현재 lsblk TRAN/udev 로 대체 | 추가 가치 낮음(NVMe 펌웨어 · 네임스페이스 정도) |
+      | Redfish `PCIeFunction` · `PCIeSlots` · HPE OEM `HpeServerDevice/HpeServerPciDevice/HpeServerPCISlot` · Dell OEM `DellNIC/DellMemory/DellProcessor/DellController/DellPhysicalDisk/DellSlot` · `LenovoSlot` | 전수 크롤에서 미요청(인벤토리성) | 슬롯 점유표 · PCI ID · 제조일 등 — 새 필드라 schema 결정 필요(rule 92 R5) |
+      | Windows `Win32_BaseBoard` · ESXi `otherIdentifyingInfo(SerialNumberTag/EnclosureSerialNumberTag)` | 미읽음 | 보드 시리얼 — `hardware.serial` 과 다른 식별자(계약 결정) |
+- [ ] **[LOW / 결정] CSUS 를 OS 채널로 수집하면 `vendor` 가 `hp`(Redfish 는 `hpCsus`)** — 채널 간 vendor 표시 불일치. 어느 쪽으로 맞출지 사용자 결정.
+- [ ] **[LOW / 결정] CSUS mock baseline(`schema/baseline_v1/hpe_csus_3200_baseline.json`, 3파티션 합성)을 실측으로 교체(BASE-01)** — 실 봉투는 WSL ansible + 미러 서빙 + vault 비밀번호가 있어야 만든다(사용자 몫).
+- [ ] **[LOW / 기록만] 채널 간 뜻 차이(변경 없음)** — OS `network.summary` 는 논리 NIC, Redfish 는 물리 포트/카드(계약 문서 기재). Windows `physical_disks[].model` PnP 접미사(" SCSI Disk Device") · ESXi 모델 vendor 접두 — 그룹 model 불일치. AMD L3 폴백 · DIMM type 다단어 절단 · Windows multipath 미접기.
+- [ ] **[LOW / 실장비 미검증] Superdome Flex** — `-NNN` 제거 · `processor_summary_logical_count: cores` · `firmware_inventory_scope: complex_only` 는 CSUS 와 같다고 본 사용자 지시(lab · 미러 없음). 실측 시 정정. A-11 다중 섀시 Power/Thermal 도 합성 시험만.
+
 ## link_status up/down 둘뿐 · ESXi hbas 그대로 · Windows `system.version` 연도 접두 (2026-10-19) — 남은 항목
 
 > 정본: `docs/ai/decisions/ADR-2026-10-19-hba-link-status-two-values-esxi-raw-and-windows-version.md` · `tests/evidence/2026-10-19-hba-link-status-two-values-esxi-raw-windows-version.md`. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다.

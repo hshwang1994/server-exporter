@@ -1174,3 +1174,14 @@
 - 수정: 중단 시점을 콘솔 `정보 수집을 시작합니다`(`scripts/run_gather.sh` — checkout · manifest 뒤) 관측 +10초로 바꿨다 → main #688 `lastBuiltRevision 3e1e2aba` · ABORTED · `outcome=aborted` · Portal 200. CI #62 에서 E2E 11/11 통과, 승격 `144c295f` 성사
 - 재발 방지: 매트릭스 뒤 CI 결과만 보지 말고 CI 산출물 `prodgen_promote.json` 의 `e2e.ok` · `ci_stages.ok` 를 먼저 읽는다(dry-run 에서도 기록된다). T5 는 Jenkins ABORTED 가 아니라 증거 수집기 통과(`checkout_sha` + `[Trusted]` 4건)까지 확인한 뒤 기록한다
 - 관련 rule: rule 25 R7-A · rule 28 R2 · rule 93 R2(예외 2 전제 "같은 main SHA 가 main Job 에서 1회 이상 성공" 의 증거 형식)
+
+## 2026-10-19 — 한 펌웨어 계열의 실측으로 세운 규칙(X3 `LogicalProcessorCount` 우선)이 다른 펌웨어에서 뜻이 달라 과소집계 · "아는 경로만 요청" 해서 인벤토리가 빠졌다
+
+- 카테고리: external-contract-drift (같은 표준 필드의 뜻이 펌웨어마다 다름) · scope-miss (노출 자원 전수 대조 없이 아는 경로만 수집 · 모르는 값을 0 으로 적음)
+- 발견 위치: `redfish-gather/tasks/normalize_standard.yml` `cpu.logical_threads`(2026-10-18 X3) · `power.summary` · `network.summary` · `redfish_gather.py` 수집 경로 — 실 4노드 미러 `C:\github\서버mock데이터\HPE_CSUS3200` 전수 대조(`scripts/ai/redfish_coverage_diff.py`)
+- 증상: CSUS `cpu.logical_threads` 32/64(실제 64/128) — 같은 봉투의 `multi_node.partitions[0].cpu.logical_threads` 와도 불일치. `storage.controllers[0].controller_model` null(RAID 정체는 `Chassis/PCIeDevices/3` 에만), `firmware[]` 2건(NIC/HBA/RAID/PSU 펌웨어는 PCIe 장치 · PSU 리소스에만), `part_number` null(섀시에만), `power.summary.total_capacity_w 0`(PSU 용량 전부 미제공), `adapter_count` 에 FC 카드 포함. Linux `grand_total_gb 0`, OS/ESXi 다운 포트 summary 누락
+- 원인: (1) X3 는 Dell/DMTF/CIMC 실측(`LogicalProcessorCount` = 스레드)으로 세웠고 RMC 는 같은 필드에 코어 수를 넣는다 — 표준 필드라도 펌웨어마다 뜻이 다를 수 있는데 "있으면 정본" 으로 고정했다. (2) 수집기는 DMTF 트리 가운데 "알고 있는" 경로만 요청했고, 노출된 637개 리소스 중 무엇을 안 읽는지 대조한 적이 없었다(종전 감사는 "내보낸 값 ← raw" 방향만). (3) summary 산식 세 곳이 모르는 값을 0 으로 적었다
+- 영향: CSUS 전 장비(4노드 + 사이트) `logical_threads` · `controllers` · `firmware` · `part_number`; 전 벤더 `power.summary` 0 · `adapter_count`; OS/ESXi summary
+- 수정: adapter 플래그 `processor_summary_logical_count: cores`(값으로 가름) · A-5~A-11 조건부 수집 경로 · null 규칙(A-3 · B-1) · FC 카드 제외(A-4) · B-2~B-12 — `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md`
+- 재발 방지: (1) 펌웨어 의미 차이는 adapter `vendor_notes` 값으로 선언하고 common 코드는 값으로 가른다(rule 12). (2) `tests/regression/test_redfish_coverage_audit.py` · `test_esxi_property_coverage.py` · `test_os_command_coverage.py` — 노출 자원 중 허용 목록(사유 포함)에 없는 미요청 인벤토리가 생기면 실패. 새 미러 · 크롤 · 덤프를 들일 때 먼저 이 대조를 돌린다(`scripts/ai/redfish_coverage_diff.py <mirror|crawl> [--layout]`). (3) summary 산식은 "모르면 null" 을 전 채널 공통 규칙으로(rule 13 "unknown → null, never 0")
+- 관련 rule: rule 12 R1 · rule 25 R7-A-1(사용자 실측 > spec) · rule 95 R1 #11 · rule 96 R1 · R4

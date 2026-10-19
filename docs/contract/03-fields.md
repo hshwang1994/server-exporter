@@ -497,6 +497,10 @@ for e in response["errors"]:
 > all-0 · all-f 와 같이 `uuid` / `system_uuid` 를 `null` 로 둔다 — 보드 공장값은 장비 식별자가 아니다.
 > (2) Linux 는 수집을 비특권(OS · 호스트명 · 읽을 수 있는 DMI: vendor · model · bios)과 특권(serial · uuid · dmidecode)으로 나눠 실행한다. sudo 가
 > 실패하면 특권 값만 `null` 이고 `errors[]` 에 권한 문장(시스템 제조번호 · 고유 식별자)이 남는다 — 종전에는 섹션 전체가 비었다.
+> **2026-10-19** — Redfish `part_number` 는 System 에 없으면 System 이 연결한 첫 섀시의 `PartNumber` 다(manufacturer/model 과 같은 Additive 폴백 —
+> 실측 HPE CSUS 3200 은 Partition0 에 없고 Chassis r001u01 에 `R9N70A`). 둘 다 없으면 `null`. 시리얼의 nPartition 접미사 제거는 ESXi 채널과 Superdome Flex
+> 모델에도 적용된다 — 7절 FAQ · `docs/develop/05-field-mapping.md`. HPE CSUS 3200 은 사이트 협약(파티션 1개)에 따라 **다른 x86 서버와 같은 JSON 모양**이어야 하고
+> Partition0 이 서버다(`docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md`); `data.multi_node` 는 그대로 남는다(사용자 결정).
 
 ### 6.2 `data.memory`
 
@@ -542,6 +546,12 @@ for e in response["errors"]:
 > **2026-10-10 (Windows DIMM 조회 일부 실패)**: `Win32_PhysicalMemory` 조회가 공급자 오류를 내면서 일부 DIMM 행만 돌려주면, 받은 슬롯 · 그룹은 그대로 두되
 > 설치량을 확정하지 않는다 — `total_mb` = OS 가시량, `total_basis` = `os_visible`, `installed_mb` = `null`, `summary.grand_total_gb` = `null`(일부 슬롯 합을 전체
 > 합계로 쓰지 않는다), memory 섹션 경고 1건(`cause=read_failed` · 받은 슬롯 수 · 오류 원문). 섹션은 성공이다. 슬롯을 하나도 받지 못하면 종전 fallback(가시량 기준 합계) 그대로.
+> **2026-10-19** — (1) `summary.grand_total_gb` 는 총량을 모르면 `null` 이다(종전 Linux 0 · Redfish 0 — "메모리 0 GB" 라는 거짓 값; Windows · ESXi 는 이미 null).
+> Linux 는 DMI 슬롯 합 → 물리 메모리(`MEM_PHYS_MB`) → `MemTotal` 순이고 셋 다 없으면 null. Redfish 는 슬롯 합이 0 이면 `total_mb` 와 같은 원천(모듈 총량 → `System.MemorySummary`)을
+> GB 로 반올림한 값, 그것도 없으면 null. (2) GB 반올림(half-even)이 0 이 되는 DIMM(512 MiB 이하)은 세 채널 모두 `unit_capacity_gb: 0` 그룹을 만들지 않고 합계에도 넣지 않는다(storage summary 와 같은 규칙).
+> (3) `cpu.summary.groups[].cores_per_socket` 은 세 채널 모두 `total_cores // sockets` 다(Redfish 는 종전 첫 소켓 값 — 동질 CPU 는 같은 값). `cpu.logical_threads`(Redfish) 는 `ProcessorSummary.LogicalProcessorCount` 가 정본이되,
+> adapter 가 `vendor_notes.processor_summary_logical_count: cores` 라고 밝힌 펌웨어(HPE CSUS 3200 · Superdome Flex RMC — 실측 4노드: `LogicalProcessorCount == 코어 수`, Bios `HThread: Enabled`, per-CPU `TotalThreads == 2 × TotalCores`)는
+> per-processor `TotalThreads` 합을 우선한다. 실측 CSUS: 32 → 64 · 64 → 128 (같은 봉투의 `multi_node.partitions[0].cpu.logical_threads` 와 같아진다).
 
 ### 6.3 `data.storage`
 
@@ -562,6 +572,14 @@ for e in response["errors"]:
 > (`HostPciDevice.classId` 0x0104 = RAID, Linux lspci 와 같은 신호)를 1차로 보고, RAID 드라이버 계열은 어댑터 종류(SerialAttached=SAS) 판정보다 앞에 둔다 —
 > 실측(Jenkins #647)에서 ESXi 7 이 MegaRAID(lsi_mr3)·PERC H965i(bcm_mpi3)를 `HostSerialAttachedHba` 로 노출해 `SAS` 가 됐고, BOSS-N1(nvme_pcie, PcieHba)은 `null` 이었다. (4) ESXi `datastores[]` 의
 > 문자열 용량은 TB · GB · MB 단위를 모두 읽는다(종전에는 TB 만 보고 MB 를 GB 로 읽었다).
+> **2026-10-19** — (1) Redfish `controllers[]`: 컨트롤러 정체(모델 · 펌웨어 · 제조사 · health) · 드라이브 · 볼륨이 전부 없는 Storage 멤버는 뺀다(실측 HPE CSUS 3200 node01/02 "Npar 0 Storage" — 빈 컨테이너).
+> 정체는 없는데 드라이브가 있으면 System 이 연결한 섀시의 `PCIeDevices` 가운데 **드라이브 위치(`PhysicalLocation.PartLocation.ServiceLabel`)를 슬롯 위치(`Slot.Location.PartLocation.ServiceLabel`)가 포함하는 장치가 정확히 1개일 때**
+> 그 장치의 Model/Manufacturer/FirmwareVersion/Status 를 컨트롤러로 채운다(실측 node03: `HPE SR3258p-16i/e PCIe4 Controller` · Adaptec · `03.01.44.040-0`). 후보가 0 · 2개 이상이면 null + notice — 모델 · 벤더 이름으로 추정하지 않는다.
+> Storage 전체에 드라이브가 0건이고 섀시에 `Drives` 컬렉션이 있으면 그 드라이브를 `Chassis.<id>` 컨테이너(`<Chassis.Name> Drives`)에 담고 notice 를 남긴다. 셋 다 "정보가 없을 때만" 발동 — 정보를 주는 벤더(Dell PERC · HPE MR · Lenovo RAID)는 요청 수 · 값 불변.
+> (2) ESXi `physical_disks[].protocol` 은 LUN 이 붙은 어댑터 종류로 채운다(FC → `FibreChannel` · `iSCSI` · `SAS` · `SATA` · `NVMe`) — 종전에는 항상 null 이어서 `summary.groups[].protocol` 이 다른 채널과 맞지 않았다.
+> RAID 컨트롤러 뒤 LUN(논리 볼륨) · 어댑터 미상은 null(Linux 의 RAID 가상 디스크와 같다). (3) ESXi `datastores[]` 의 `freeSpace` 가 없으면(None) `free_mb` · `used_mb` · `usage_percent` 는 null 이다(종전 0 → 사용률 100%);
+> 0 은 진짜 0 으로 둔다. 문자열 용량은 B/KB/MB/GB/TB/PB(IEC `TiB` 포함)를 모두 읽는다(종전 KB · PB · Bytes 를 GB 로 읽었다). (4) Linux 는 lsblk 가 `disk` 로 내는 가상 블록 장치(`zram*` · `nbd*` · `drbd*` · `ram*` · `fd*`)를
+> `physical_disks[]` 와 summary 에서 뺀다(pmem 은 실제 장치라 남긴다). (5) Redfish `hbas[]` 수집 경로에 System `NetworkInterfaces` 링크가 추가됐다 — 6.3.2.
 
 스토리지는 다음 하위 list 가 있다.
 
@@ -720,7 +738,10 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 
 1. System 의 `Links.Chassis` 첫 섀시의 `Chassis/{id}/NetworkAdapters`.
 2. `Links.Chassis` 의 나머지 섀시. **다른 System 이 그 섀시를 연결하지 않았다는 것을 확인했을 때만** 본다. 다른 System(다른 파티션)도 연결한 섀시이거나 System 목록을 끝까지 읽지 못했으면 그 섀시는 보지 않고 notice 를 남긴다. 섀시가 가리키는 `NetworkAdapters` 링크를 따라가며, 링크가 없는 섀시(랙 · 인클로저)는 건너뛴다. Chassis 컬렉션 전체는 보지 않는다.
-3. 위에서 카드를 하나도 얻지 못했을 때만(실패 또는 빈 목록) `Systems/{id}/NetworkAdapters`. 이 경로는 일부 펌웨어(iDRAC8)의 위치이고, 섀시 목록과 섞지 않는다.
+3. 위에서 카드를 하나도 얻지 못했을 때만(실패 또는 빈 목록) `Systems/{id}/NetworkInterfaces` 의 멤버가 가리키는 `Links.NetworkAdapter` (DMTF 표준 링크 — 2026-10-19 추가. 실측 HPE CSUS 3200:
+   `NetworkIfPCIeCard10 → Chassis/r001u01/NetworkAdapters/PCIeCard10`). 카드를 얻으면 notice `NetworkInterfaces 링크로 네트워크 카드 N장 수집 (섀시 NetworkAdapters 경로 비어 있음 또는 실패)` 를 남긴다.
+   섀시 경로에서 카드를 얻은 장비는 이 경로를 요청하지 않는다(실 녹화본 4종 요청 예산 불변).
+4. 그래도 없을 때만 `Systems/{id}/NetworkAdapters`. 이 경로는 일부 펌웨어(iDRAC8)의 위치이고, 섀시 목록과 섞지 않는다.
 
 같은 카드가 두 섀시 목록에 다시 나오면(같은 리소스 주소) 한 번만 담는다. 다른 주소로 같은 WWPN 의 FC 포트가 다시 나오면 그 포트만 뺀다. WWPN 을 모르는 포트는 같은 포트인지 확인할 수 없어 남긴다. 섀시가 다르면 `adapter_id` 가 겹칠 수 있다 — 포트를 가리키는 고유 키는 `wwpn` 이다.
 
@@ -736,6 +757,7 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 | `[]` | 없음 | 없음 | 정상 수집. BMC 가 보여 준 카드에 FC 포트가 없다 |
 | `[]` | 없음 | `NetworkAdapters 리소스 404, …미수집` | BMC 가 네트워크 카드 정보를 주지 않는다. 이 채널로는 HBA 유무를 확인하지 못했다 |
 | `[]` | 없음 | `NetworkAdapters 목록이 비어 있음, …미확인` | BMC 가 빈 카드 목록을 줬다. HBA 유무를 확인하지 못했다 |
+| 값 있음 | 없음 | `NetworkInterfaces 링크로 네트워크 카드 N장 수집 …` | 섀시 `NetworkAdapters` 가 비거나 실패해 System 의 `NetworkInterfaces` 링크로 카드를 찾았다(2026-10-19). 결과는 정상이고 경로만 다르다 |
 | `[]` 또는 일부 | 있음 (detail 에 경로와 HTTP 상태) | — | 수집이 일부 또는 전부 실패했다. 목록이 불완전할 수 있다 |
 | 일부 | — | `…소유를 확인할 수 없어 …미수집` | 다른 System 도 연결한 섀시(또는 확인하지 못한 섀시)의 카드는 넣지 않았다 |
 
@@ -756,6 +778,12 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 
 **남은 사각지대** — BMC 가 카드 목록에서 FC 카드 자체를 빼고 주면 이 채널로는 알 수 없다. 이때는 OS 채널(`source: "os"`)로 교차 확인한다.
 다중 섀시 수집과 소유 판정은 실장비의 다중 섀시 응답으로 아직 검증되지 않았다(합성 자료 시험만 통과).
+
+**사이트에서 "디스크 구성 · 합계는 있는데 `hbas` 가 없다" 는 CSUS 장비를 볼 때 (2026-10-19 보고 — 운영 중인 서로 다른 장비 2대, JSON 반출 불가)** — 그 장비 JSON 에서 차례로 본다:
+① `data.network.adapters[].model` 에 FC HBA 카드가 있는가(없으면 BMC 가 FC 카드를 보여 주지 않은 것 — 결함이 아닐 수 있다, OS 채널 `source: "os"` 로 교차 확인)
+② `diagnosis.details.notices` 중 `section: "network_adapters"` — 위 표의 어느 줄인가 ③ `errors[]` 중 `section: "network"` ④ `data.multi_node.summary.chassis_count`(섀시 2개 이상이면 소유 판정 notice 유무)
+⑤ `meta` 의 수집 시각과 production 체크아웃 SHA — 2026-10-15~18 사이 빌드면 `027409f4` 이후 코드로 재수집한다. 실 4노드 전수 미러(RMC 1.75.108)에서는 디스크와 HBA 가 **함께** 나와 코드로는 재현되지 않았다
+(`tests/evidence/2026-10-19-csus-single-server-summary-audit.md`).
 
 #### 6.3.3 Redfish `infiniband[]` — 판정 · GUID · 빈 목록의 뜻 (2026-10-17)
 
@@ -816,7 +844,7 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
   "bonds":            [],   // Linux 본딩 (2026-06-15) — bond 없으면 빈 []
   "bridges":          [],   // Linux 브리지 — 없으면 빈 []
   "teams":            [],   // Windows 티밍(LBFO/SET) — 없으면 빈 []
-  "summary":          { /* 같은 속도 NIC 묶은 집계 (slave NIC 미포함 — 기존과 동일) */ }
+  "summary":          { /* 같은 속도 NIC 묶은 집계 — 채널마다 세는 단위가 다르다 (아래 2026-10-19 주석) */ }
 }
 ```
 
@@ -832,6 +860,13 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 > 호스트 OS 값은 Redfish 로 얻을 수 없다). (4) Windows `dns_servers` 에서 IPv6 스택 자리표시자 `fec0:0:0:ffff::1~3` 은 뺀다. `driver_map[]` 은 연결이 끊긴
 > 어댑터도 포함한다(Linux 와 같다). (5) ESXi 이름 서버 수집 실패 오류는 `dns_info` 가 실패했을 때만 남는다 — 종전에는 `config_info` 가 인자 오류로 늘
 > 실패해 이름 서버가 비어 있는 host 가 `partial` 이었다(lab 의 ESXi 는 이름 서버가 있어 결과가 바뀌지 않았다 — 매트릭스 E2E-D 확인). (6) Linux `lspci` 오류(권한 등)는 stdout 표식으로 읽어 `errors[]` 에 남는다(종전 조건은 참이 될 수 없었다).
+> **2026-10-19 (`summary`)** — (1) 세는 단위: Redfish 는 호스트 `EthernetInterfaces`(포트 — `port_count`)와 `NetworkAdapters`(카드 — `adapter_count`), OS 는 **논리 NIC**(bond/team master 는 집계 속도로 1개,
+> VLAN 하위 인터페이스 · bond slave · bridge/team member 는 제외 — Linux 는 2026-10-19 부터 Windows 와 같은 규칙; 종전에는 토폴로지 정규화 전 목록을 세어 `eno1.100` 이 부모와 함께 세어졌다), ESXi 는 vmnic 이다.
+> `model` · `manufacturer` · `adapter_count` · `port_count` · `primary_speed_mbps` 는 **Redfish 만** 낸다 — OS/ESXi 그룹 키는 `speed_mbps` · `link_type` · `quantity` · `link_up_count` 다(사전 `network.summary` 정정).
+> (2) `adapter_count`(Redfish) 는 `network.adapters[]` 가운데 **포트가 전부 FC/FCoE/InfiniBand 인 카드를 뺀 수**다 — 그 카드는 `storage.hbas` / `storage.infiniband` 로 요약된다(포트 정보가 없는 카드는 센다).
+> `network.adapters[]` 목록은 그대로다. 실측 HPE CSUS 3200 node01: NIC 0장 · FC 카드 2장 → `adapter_count 0`(종전 2), node03: Mellanox 4 + FC 4 → 4(종전 8). Dell R740(NIC + FC) 도 FC 카드 수만큼 줄어든다.
+> (3) 속도를 못 읽은 NIC(링크 다운 · 가상 NIC)도 OS/ESXi summary 에 `speed_mbps: null` 그룹으로 들어가고 `link_up_count` 를 센다 — 종전에는 빼서 `link_up_count == quantity` 가 늘 참이었고 다운 NIC 가 보이지 않았다.
+> (4) ESXi vmnic 그룹의 `link_type` 은 `ethernet` 이다(종전 null); OS 는 그대로 null(Ethernet 임을 단정하지 않는다).
 
 #### 6.4.1 본딩/티밍 토폴로지 (2026-06-15 — OS 채널, Additive)
 
@@ -937,6 +972,12 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 > legacy `Power.PowerControl.PowerCapacityWatts`(장비 예산값)와 `PowerSubsystem` 경로의 PSU 용량 합 — 같은 장비에서 값이 다를 수 있다.
 > Power 와 Thermal 이 모두 404 면 `sections.power/thermal = not_supported` 다. PSU 컬렉션 · 멤버 조회가 404 가 아닌 오류로 끝나면 `errors[]` 에 남고
 > "PSU 0" 처럼 성공으로 보이지 않는다.
+> **2026-10-19** — (1) `power.summary`(`psu_count` · `redundant` · `total_capacity_w` · `capacity_unknown_count` · `consumed_watts` · `consumed_capacity_pct` 등): 용량을 아는 PSU 가 하나도 없으면 `total_capacity_w` 는 **`null`**
+> 이다(종전 0 — "용량 0 W" 라는 거짓 값. 실측 HPE CSUS 3200 RMC 1.75.108: PSU 4개 전부 `PowerCapacityWatts` 미제공). 일부만 알면 부분 합이고 `capacity_unknown_count` 가 모르는 수다. `consumed_capacity_pct` 는 용량 · 소비전력을
+> 둘 다 알 때만 값이 있다(종전 0). `redundant` 는 종전대로 설치(Absent 제외) PSU 수 ≥ 2 — 수량이지 이중화 정책이 아니다. 용량을 주는 벤더(Dell · iLO · XCC)는 값이 바뀌지 않는다.
+> (2) System 이 `Links.Chassis` 로 섀시를 **2개 이상** 연결하면 Power 를 섀시마다 읽어 합친다 — `power_supplies[]` 는 이어 붙이고, `power_consumed_watts` · `power_capacity_watts` 는 전 섀시 값이 있을 때만 합(하나라도 모르면 null),
+> min/avg/max 는 null, Power 가 없는(404) 섀시는 건너뛰고 notice(`섀시 … Power 리소스 없음 — 합산에서 제외` · `System 이 연결한 섀시 N개의 PSU · 소비전력을 합침`). 1섀시 장비(실측 전 벤더 · CSUS 4노드)는 종전 경로 그대로다.
+> 다중 섀시 실 응답은 아직 없다(합성 시험만).
 
 ### 6.6 `data.bmc` (Redfish 전용)
 
@@ -982,6 +1023,8 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 
 `reading_units` 는 `RPM`(legacy /Thermal) 또는 `Percent`(신 ThermalSubsystem.SpeedPercent). 팬 속도 비교 시
 `reading_units` 를 반드시 확인. `upper_critical` 은 legacy 경로에서만 채워지고 신 schema 경로는 null.
+> **2026-10-19** — System 이 `Links.Chassis` 로 섀시를 2개 이상 연결하면 Thermal 을 섀시마다 읽어 `temperatures[]` · `fans[]` 를 이어 붙인다(Thermal 이 없는 섀시는 건너뛰고 notice). 1섀시 장비는 종전과 같다.
+> 다중 섀시 실 응답은 아직 없다(합성 시험만) — 6.5 (2).
 
 ### 6.8 `data.bios` (Redfish 전용 보조 데이터, 2026-09-15)
 
@@ -1071,12 +1114,13 @@ Redfish 채널은 둘이 같은 게 정상이다 (BMC 를 통해 수집). OS / E
 
 **Q. HPE Compute Scale-up Server 3200 의 시리얼에 `-000` 이 붙는다 / OS 와 Redfish 가 다르다. 버그인가?**
 이 장비는 파티션(nPartition) 구조라 시스템 시리얼이 `<물리 시리얼>-<파티션번호 3자리>` 형식이다 (`SGHD3TLNDD-000`).
-자산 관리는 물리 장비 시리얼 기준이므로 **OS 채널(`system.serial_number`)과 Redfish 채널(`data.hardware.serial`, 2026-10-17 부터)
-모두 이 접미사를 뗀 값(`SGHD3TLNDD`)** 을 내보내고, `correlation.serial_number` 도 같은 값이다 — 같은 장비를 어느 채널로 봐도
-시리얼이 같다. Redfish 의 `data.multi_node.partitions[].system.serial` 은 파티션 원본(`SGHD3TLNDD-000`)을 그대로 둔다.
-그 외 장비는 수집한 값을 손대지 않는다 — 접미사 제거는 제조사(HPE)·모델(CSUS 3200)·접미사 형식 세 조건을 모두 만족할 때만
-일어나므로, 시리얼에 하이픈이 정상적으로 들어간 다른 장비(ProLiant · Superdome Flex · Dell …)는 영향을 받지 않는다.
-2026-10-17 이전 Redfish 결과는 `SGHD3TLNDD-000` 이었다(호출자가 저장한 값과 다를 수 있다).
+자산 관리는 물리 장비 시리얼 기준이므로 **OS 채널(`system.serial_number`) · Redfish 채널(`data.hardware.serial`, 2026-10-17 부터) · ESXi 채널
+(`system.serial_number` · `hardware.serial`, 2026-10-19 부터) 모두 이 접미사를 뗀 값(`SGHD3TLNDD`)** 을 내보내고, `correlation.serial_number` 도 같은 값이다 —
+같은 장비를 어느 채널로 봐도 시리얼이 같다. Redfish 의 `data.multi_node.partitions[].system.serial` 은 파티션 원본(`SGHD3TLNDD-000`)을 그대로 둔다
+(`data.multi_node` 자체도 그대로 — 2026-10-19 사용자 결정).
+그 외 장비는 수집한 값을 손대지 않는다 — 접미사 제거는 제조사(HPE)·모델(CSUS 3200 **또는 Superdome Flex** — 같은 nPartition 계보, 2026-10-19 사용자 지시)·
+접미사 형식 세 조건을 모두 만족할 때만 일어나므로, 시리얼에 하이픈이 정상적으로 들어간 다른 장비(ProLiant · Dell …)는 영향을 받지 않는다.
+2026-10-17 이전 Redfish 결과와 2026-10-19 이전 ESXi 결과는 `SGHD3TLNDD-000` 이었다(호출자가 저장한 값과 다를 수 있다).
 자세한 규칙은 `docs/develop/05-field-mapping.md` 의 "nPartition 시리얼 접미사 정규화" 절을 본다.
 
 **Q. Windows 의 `system.version` 은 어떤 모양인가? `24H2` 인가 `2025-24H2` 인가? (2026-10-17 · 2026-10-19 재결정)**
@@ -1117,6 +1161,8 @@ hostname = system.hostname  OR  system.fqdn  OR  bmc.network_hostname  OR  null
 >   `vendor_notes.hostname_priority` 로 정한다. **HPE CSUS 3200 은 `bmc_first`** — CSUS 1대 = RMC 1개 = 파티션 1개 = OS 1개라
 >   RMC 이름이 서버 이름이다. RMC NetworkProtocol 이름을 쓰고, 없을 때만 Partition HostName 을 쓴다. 근거
 >   `../reference/decision-log.md` 2026-10-15.
+> - 2026-10-19: ESXi 의 이름 후보(`dnsConfig.hostName` → `ansible_hostname`)가 IPv4 리터럴(`10.100.64.2`)이면 이름이 없는 것으로 보아 `system.hostname` · `system.fqdn` 이 모두 `null` 이다
+>   (종전에는 첫 라벨 `10` · fqdn `10.100.64.2` 가 나갔다 — "IP 는 hostname 이 아니다" 정책이 빠뜨린 경로).
 
 ### 우선순위
 

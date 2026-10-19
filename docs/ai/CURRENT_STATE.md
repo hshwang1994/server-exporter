@@ -1,5 +1,24 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-19 (2) — HPE CSUS 3200 단일 서버 정합 · Redfish 수집 범위 보완 · 3채널 summary 거짓 값 정비 · "노출 vs 요청" 범위 감사 상시화
+
+> 정본: `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md` · `tests/evidence/2026-10-19-csus-single-server-summary-audit.md` · `docs/contract/03-fields.md` 6.1 · 6.2 · 6.3 · 6.3.2 · 6.4 · 6.5 · 6.7 · 8 · FAQ · `docs/reference/decision-log.md` 2026-10-19 (2).
+
+- **계기**: 사용자 — CSUS 3200 은 파티션 1개 협약이므로 다른 x86 과 같은 JSON(Partition0 = 서버), 시리얼 `-000` 제거 유지, "디스크 있는 CSUS 는 hbas 없음 / 디스크 없는 CSUS 는 hbas 있음"(사이트 2대, JSON 반출 불가), 전 장비 summary 버그, 이어 "특정 것만 수집해서 빠지는 것 아닌가 · 다른 채널도 아는 것만 부르나".
+  실 4노드 전수 미러 재생 + 실제 Templar 렌더로 확정: 상호배제는 재현 안 됨 / `power.summary` 0 거짓 값 · `adapter_count` 에 FC 카드 포함 · `logical_threads` 과소(RMC `LogicalProcessorCount` = 코어 수) · 빈 Storage 컨테이너 · `part_number` null · 노출 637 중 205 요청(PCIeDevices · Chassis Drives · NetworkInterfaces · 2번째 섀시 Power/Thermal 미요청).
+- **사용자 결정**: `data.multi_node` 그대로 · ESXi 에도 `-000` 제거 · Superdome Flex 동일 적용 · 상호배제 증상은 서로 다른 운영 장비 2대(JSON 반출 불가 → 체크리스트).
+- **고친 것(제품 — Redfish)**: `redfish_gather.py` A-5 `Systems/{id}/NetworkInterfaces → Links.NetworkAdapter` 카드 출처(섀시 경로가 비거나 실패할 때만, notice) · A-7 `part_number`/`sku` 섀시 폴백 · A-8 드라이브 위치 ⊂ PCIe 슬롯 위치로 컨트롤러 정체(후보 1개일 때만) ·
+  A-9 adapter `firmware_inventory_scope: complex_only` 면 PCIe 장치 · PSU 펌웨어 보충(`PCIeDevice.<Id>` · `PowerSupply.<idx>`) · A-10 Storage 드라이브 0건이면 섀시 `Drives` 폴백(`Chassis.<id>` 컨테이너) · A-11 `Links.Chassis` 2개 이상이면 Power/Thermal 합산(모르면 null). 모듈 인자 `firmware_inventory_scope`(site.yml → try_one_account/collect_standard).
+  `normalize_standard.yml` A-2 `vendor_notes.processor_summary_logical_count: cores` → per-processor 합 · A-3 `total_capacity_w`/`consumed_capacity_pct` 모르면 null · A-4 `adapter_count` FC/FCoE/IB 전용 카드 제외 · A-6 빈 컨테이너 제거 · B-1 memory grand_total null/폴백 · B-10 `cap_gb > 0` · B-11 `cores_per_socket = total // sockets` · firmware `'controller'` → storage_controller · `'gbe'` → nic.
+  adapter `hpe_csus_3200.yml` · `hpe_superdome_flex.yml`: `processor_summary_logical_count: cores` · `firmware_inventory_scope: complex_only`(origin 주석).
+- **고친 것(제품 — OS · ESXi)**: `filter_plugins/serial_normalizer.py` `is_scaleup_npar`(CSUS + Superdome Flex 패턴 미러) · ESXi `normalize_system.yml` 시리얼 2곳 + hostname IPv4 리터럴 → null · `collect_network_extended.yml` summary 다운 포트 null 그룹 · `link_type ethernet` · bad_wwn 검사를 남긴 hbas 로 한정 · `normalize_storage.yml` `freeSpace None` → null · 단위표 B~PB ·
+  `esxi_disks.py` `protocol` ← 어댑터 종류 · Linux `gather_memory.yml` 총량 모르면 null + 0 GB 그룹 금지 · `gather_network.yml` summary 를 토폴로지 뒤로(VLAN · slave · member 제외, 다운 포트 null 그룹) · `gather_storage.yml` zram/nbd/drbd/ram/fd 제외 · Windows `gather_memory.yml` 0 GB 그룹 금지 · `gather_network.yml` 다운 포트 null 그룹.
+- **범위 감사(신규, 하네스)**: `scripts/ai/redfish_coverage_diff.py` + `tests/regression/test_redfish_coverage_audit.py` · `test_esxi_property_coverage.py` · `test_os_command_coverage.py` + `tests/reference/{redfish,esxi,os}/coverage_allowlist.yml`(항목마다 사유 · `[판단 필요]` 는 NEXT_ACTIONS 결정 항목).
+- **계약 · 문서**: 사전 `hardware.serial` · `hardware.part_number` · `storage.controllers[]` · `firmware[].category` · `cpu.summary` · `memory.summary` · `network.summary` · `storage.physical_disks[].protocol`; `03-fields.md` 6.1/6.2/6.3/6.3.2(NetworkInterfaces 경로 · 사이트 체크리스트)/6.4/6.5/6.7/8/FAQ; `05-field-mapping.md` 시리얼 절(ESXi · Superdome); `docs/ai/contracts/serial-number.md` 메모; `output_examples/redfish_hpe_csus_3200.jsonc` 주석; ADR 신규 · decision-log · EXTERNAL_CONTRACTS · FAILURE_PATTERNS · NEXT_ACTIONS.
+- **golden**: `real_hpe_csus3200` 미러 01 재캡처 — `system.part_number` R9N70A · `firmware` 2 → 6 · 요청 134 → 141(`request_budget.json` added 7건 + 사유) · `meta.json` `firmware_inventory_scope`. Dell/HPE/Lenovo 녹화본 불변.
+- **시험(실장비 아님)**: Redfish 신규 2파일(단위 헬퍼 · 실 녹화본 렌더) + 갱신 9파일, OS 신규 3파일, ESXi 신규 6파일, 범위 감사 3파일. 수치는 TEST_HISTORY 2026-10-19 (2).
+- **승격**: 미실행 — OS/ESXi 변경이 실호스트 summary 값을 바꾸므로 main Job 매트릭스(S1~S4 · E2E-D · E2E-E) 통과 뒤 `prodgen promote`(NEXT_ACTIONS 첫 항목). production 은 `027409f4` 그대로. ESXi baseline(`link_type` · `protocol`)은 실장비 라운드로 갱신.
+
 ## 일자: 2026-10-19 — `storage.hbas[].link_status` up/down 둘뿐 · ESXi hbas vmhba 그대로 · Windows `system.version` `연도-DisplayVersion` (긴급 반영)
 
 > 정본: `docs/ai/decisions/ADR-2026-10-19-hba-link-status-two-values-esxi-raw-and-windows-version.md` · `tests/evidence/2026-10-19-hba-link-status-two-values-esxi-raw-windows-version.md` · `docs/contract/03-fields.md` 6.3.1 · 6.3.2 · FAQ · `docs/reference/decision-log.md` 2026-10-19.

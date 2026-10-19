@@ -132,27 +132,30 @@
 - 통과하면 특권 raw(`product_serial` · `product_uuid` · dmidecode)와 방화벽 조회가 become 으로 돈다. 통과하지 못하면 그 4개 태스크를 건너뛰어 추가 PAM 실패가 없고, serial/uuid 는 null, `errors[]` 에 `cause=insufficient_privilege` 가 남는다.
 - **Serial Number 는 필수다.** null 이면 `os-gather/tasks/normalize/require_serial.yml` 이 `status: failed` 로 확정한다(시나리오 E — `docs/contract/03-fields.md` 4절). UUID 는 종전처럼 non-fatal 이다.
 
-### nPartition 시리얼 접미사 정규화 (OS 채널 + Redfish `hardware.serial`)
+### nPartition 시리얼 접미사 정규화 (OS · Redfish · ESXi 세 채널)
 
-HPE Compute Scale-up Server 3200 은 파티션(nPartition) 장비다. OS 안에서 읽는 시스템
-시리얼에 파티션 번호가 접미사로 붙는다.
+HPE Compute Scale-up Server 3200 (과 같은 nPartition 계보인 Superdome Flex) 은 파티션(nPartition) 장비다. OS 안에서 읽는 시스템
+시리얼에 파티션 번호가 접미사로 붙는다. 사이트는 파티션을 1개만 구성해 쓰기로 협약했으므로 이 장비도 다른 x86 서버와 같은 JSON 모양으로,
+Partition0 을 서버 그 자체로 취급한다(2026-10-19 사용자 결정 — `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md`).
 
 ```
 물리 장비 시리얼                       SGHD3TLNDD
 Partition0 의 OS DMI product_serial    SGHD3TLNDD-000
 ```
 
-자산 관리는 물리 장비 시리얼 기준이라, OS 채널은 이 접미사를 떼고 내보낸다.
+자산 관리는 물리 장비 시리얼 기준이라, 세 채널 모두 이 접미사를 떼고 내보낸다.
 구현은 `filter_plugins/serial_normalizer.py` 의 `normalize_os_serial` 필터 하나뿐이고,
 `os-gather` 의 세 곳(Linux `system.serial_number`, Windows `system.serial_number`,
-Windows `hardware.serial`)과 **Redfish `normalize_standard.yml` 의 `hardware.serial`** (2026-10-17 부터) 이 이 필터를 부른다.
+Windows `hardware.serial`), **Redfish `normalize_standard.yml` 의 `hardware.serial`** (2026-10-17 부터),
+**ESXi `normalize_system.yml` 의 `system.serial_number` · `hardware.serial`** (2026-10-19 부터) 이 이 필터를 부른다.
+`correlation.serial_number` 는 `hardware.serial` 에서 파생되므로 함께 바뀐다.
 
 **세 조건을 모두 만족할 때만** 값이 바뀐다.
 
 | 조건 | 판정에 쓰는 값 |
 |------|----------------|
-| 제조사가 HPE 계열 | Linux `/sys/class/dmi/id/sys_vendor`, Windows `Win32_ComputerSystem.Manufacturer` |
-| 모델이 Compute Scale-up Server 3200 계열 | Linux `/sys/class/dmi/id/product_name`, Windows `Win32_ComputerSystem.Model` |
+| 제조사가 HPE 계열 | Linux `/sys/class/dmi/id/sys_vendor`, Windows `Win32_ComputerSystem.Manufacturer`, ESXi `ansible_system_vendor`, Redfish `manufacturer` |
+| 모델이 Compute Scale-up Server 3200 **또는 Superdome Flex** 계열 (패턴은 `adapters/redfish/hpe_csus_3200.yml` · `hpe_superdome_flex.yml` 의 `match.model_patterns` 미러 — 시험이 drift 를 막는다) | Linux `/sys/class/dmi/id/product_name`, Windows `Win32_ComputerSystem.Model`, ESXi `ansible_product_name`, Redfish `model` |
 | 시리얼이 하이픈 + 숫자 3자리로 끝남 | `-000`, `-001` … |
 
 하나라도 어긋나면 시리얼을 **글자 그대로** 돌려준다. 하이픈만 보고 뒤를 자르는 일은 없다.
@@ -160,16 +163,19 @@ Windows `hardware.serial`)과 **Redfish `normalize_standard.yml` 의 `hardware.s
 | 입력 (제조사 / 모델 / 시리얼) | 출력 |
 |---|---|
 | HPE / Compute Scale-up Server 3200 / `SGHD3TLNDD-000` | `SGHD3TLNDD` |
+| HPE / Superdome Flex 280 / `SGH0000000-001` | `SGH0000000` (2026-10-19 부터 — 같은 nPartition 계보, 사용자 지시; 실측 시 정정) |
 | HPE / ProLiant DL380 Gen11 / `CZ12345678` | `CZ12345678` (그대로) |
 | HPE / ProLiant DL360 Gen10 / `ABC-123` | `ABC-123` (그대로) |
 | Dell / PowerEdge R760 / `ABCDEF-000` | `ABCDEF-000` (그대로) |
 | HPE / Compute Scale-up Server 3200 / `SGHD3TLNDD-ABC` | `SGHD3TLNDD-ABC` (그대로) |
 
-Redfish 채널도 2026-10-17 부터 `data.hardware.serial` 에 같은 필터를 건다(사용자 결정 — CSUS 3200 만). 판정 값은
+Redfish 채널은 2026-10-17 부터 `data.hardware.serial` 에 같은 필터를 건다. 판정 값은
 모듈이 준 `manufacturer`(`HPE`) / `model`(`Compute Scale-up Server 3200`) 이고, `Systems/Partition0.SerialNumber`
-`SGHD3TLNDD-000` → `SGHD3TLNDD`. `correlation.serial_number` 는 `hardware.serial` 에서 파생되므로 함께 바뀐다.
-같은 장비를 OS 로 봐도 Redfish 로 봐도 `SGHD3TLNDD` 다. 파티션 원본은 `data.multi_node.partitions[].system.serial`
-(`SGHD3TLNDD-000`) 에 그대로 남는다. ESXi 는 적용하지 않는다(CSUS 가 ESXi 를 돌리지 않는다).
+`SGHD3TLNDD-000` → `SGHD3TLNDD`. 파티션 원본은 `data.multi_node.partitions[].system.serial`
+(`SGHD3TLNDD-000`) 에 그대로 남는다(`data.multi_node` 는 2026-10-19 사용자 결정으로 그대로 둔다).
+ESXi 채널은 2026-10-19 부터 적용한다(사용자 결정 — 종전 "CSUS 가 ESXi 를 돌리지 않는다" 는 가정은 버렸다). 판정 값은
+`ansible_system_vendor` / `ansible_product_name` 이다. 같은 날 Superdome Flex 모델도 조건에 들어갔다(`is_scaleup_npar`;
+`is_csus_3200` 은 CSUS 패턴만 보는 호환 함수로 남아 있다). 같은 장비를 OS · Redfish · ESXi 어느 채널로 봐도 `SGHD3TLNDD` 다.
 
 ---
 

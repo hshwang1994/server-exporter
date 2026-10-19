@@ -399,16 +399,18 @@ fields:
       단 Dell 은 예외 — System.SerialNumber 가 보드 제조 시리얼(CNIVC…)이라 OS SMBIOS Type 1 값과
       달라서, ServiceRoot.Oem.Dell.ServiceTag (Dell Service Tag) 를 쓴다. Dell 은 이 값을 필수로
       보고 확보하지 못하면 다른 후보로 대체하지 않고 수집을 실패시킨다 (2026-08-11 교정).
-      HPE CSUS 3200 은 nPartition 접미사(`SGHD3TLNDD-000`)를 뗀 물리 시리얼(`SGHD3TLNDD`)이다 — OS 채널과 같은
-      normalize_os_serial 세 조건(HPE · CSUS 3200 모델 · `-NNN`), Redfish 는 2026-10-17 부터. 파티션 원본은 multi_node.partitions[].system.serial.
+      HPE CSUS 3200 · Superdome Flex 는 nPartition 접미사(`SGHD3TLNDD-000`)를 뗀 물리 시리얼(`SGHD3TLNDD`)이다 — 세 채널(OS · Redfish 2026-10-17 ·
+      ESXi 2026-10-19)이 같은 normalize_os_serial 세 조건(HPE · CSUS 3200/Superdome Flex 모델 · `-NNN`)을 쓴다. 파티션 원본은
+      multi_node.partitions[].system.serial (그대로 — 2026-10-19 사용자 결정).
     help_en: >-
       Representative server serial. Default source is Redfish System.SerialNumber; empty string
       normalized to null. Dell is the exception — its System.SerialNumber is a board manufacturing
       serial (CNIVC…) that differs from the OS SMBIOS Type 1 value, so ServiceRoot.Oem.Dell.ServiceTag
       (Dell Service Tag) is used. For Dell this value is mandatory: if it cannot be obtained the
       collection fails rather than falling back to another candidate (corrected 2026-08-11).
-      HPE CSUS 3200: the nPartition suffix (`SGHD3TLNDD-000`) is stripped to the physical serial (`SGHD3TLNDD`) on both the OS
-      channel and, since 2026-10-17, Redfish (same three-condition filter); the partition value stays in multi_node.partitions[].system.serial.
+      HPE CSUS 3200 / Superdome Flex: the nPartition suffix (`SGHD3TLNDD-000`) is stripped to the physical serial (`SGHD3TLNDD`) on all three
+      channels (OS, Redfish since 2026-10-17, ESXi since 2026-10-19) by the same three-condition filter (HPE, CSUS 3200/Superdome Flex model,
+      `-NNN`); the partition value stays in multi_node.partitions[].system.serial.
 
   hardware.uuid:
     type: "string|null"
@@ -456,8 +458,12 @@ fields:
     type: "string|null"
     priority: nice
     channel: [redfish]
-    help_ko: "서버 파트 번호 (Redfish System.PartNumber). 미제공 벤더는 null."
-    help_en: "Server part number (Redfish System.PartNumber). null for vendors that omit it."
+    help_ko: >-
+      서버 파트 번호 (Redfish System.PartNumber). System 에 없으면 System 이 연결한 첫 섀시의 Chassis.PartNumber 를 쓴다
+      (2026-10-19 — manufacturer/model 과 같은 Additive 폴백. 실측 HPE CSUS 3200: Partition0 에 없고 Chassis r001u01 에 `R9N70A`). 둘 다 없으면 null.
+    help_en: >-
+      Server part number (Redfish System.PartNumber). When the System omits it, the first linked Chassis.PartNumber is used
+      (2026-10-19, same additive fallback as manufacturer/model; HPE CSUS 3200 exposes it only on the chassis). null when neither has it.
 
   hardware.last_reset_time:
     type: "string|null"
@@ -805,12 +811,20 @@ fields:
     help_ko: >-
       스토리지 컨트롤러 (RAID/SAS/SATA/NVMe/HBA) 목록.
       Redfish: StorageControllers (model/firmware/health/drives).
+      Redfish 2026-10-19: Storage 멤버에 StorageControllers 가 없고 드라이브가 있으면 섀시 PCIeDevices 중 드라이브 위치(ServiceLabel)를 포함하는
+      슬롯의 장치가 정확히 1개일 때 그것을 컨트롤러로 삼아 controller_model/manufacturer/firmware/health 를 채운다(0 · 2개 이상이면 null + notice,
+      이름으로 추정하지 않는다). 컨트롤러 정체 · 드라이브 · 볼륨이 전부 없는 빈 컨테이너(실측 CSUS 3200 "Npar 0 Storage")는 controllers[] 에서 뺀다.
+      Storage 전체에 드라이브가 0건이면 섀시 Drives 컬렉션을 `Chassis.<id>` 컨테이너로 담는다. 정보를 주는 벤더(Dell/HPE/Lenovo)는 요청 · 값 불변.
       OS(Linux): lspci (id=pci, controller_model=칩, driver, controller_type).
       OS(Windows): 현재 미수집([]) — Storage Spaces 도입 시 (NEXT_ACTIONS).
       ESXi: hostBusAdapter + pciDevice vendor (id=vmhba, driver, controller_type).
     help_en: >-
       Storage controllers (RAID/SAS/SATA/NVMe/HBA).
       Redfish: StorageControllers (model/firmware/health/drives).
+      Redfish 2026-10-19: when a Storage member has no StorageControllers but has drives, the single chassis PCIeDevice whose slot
+      ServiceLabel contains the drive location is used as the controller (0 or 2+ candidates: null + notice; no name guessing).
+      Containers with no controller identity, drives or volumes (CSUS 3200 "Npar 0 Storage") are dropped. If Storage has zero drives
+      overall, the chassis Drives collection is wrapped in a `Chassis.<id>` container. Vendors that already expose the data are unchanged.
       OS(Linux): lspci (id=pci, controller_model=chip, driver, controller_type).
       OS(Windows): not collected yet ([]) — pending Storage Spaces (NEXT_ACTIONS).
       ESXi: hostBusAdapter + pciDevice vendor (id=vmhba, driver, controller_type).
@@ -1133,10 +1147,16 @@ fields:
       펌웨어 컴포넌트 분류 (id/name 추론). 값:
       bios/cpld/tpm/diagnostic/lifecycle/driver_pack/backplane/drive/
       service_module/bmc/nic/storage_controller/psu/other 중 하나.
+      2026-10-19: id/name 에 'controller' 가 있으면(nic · psu 판정 뒤) storage_controller, 'gbe'(10/25GbE 류 NIC 이름)는 nic. FC HBA 는 enum 에 없어 other 다(enum 확장은 별도 계약 결정).
+      adapter vendor_notes.firmware_inventory_scope 가 complex_only(HPE CSUS 3200 · Superdome Flex — FirmwareInventory 가 complex/nPar 번들만 노출)면
+      섀시 PCIeDevices(`PCIeDevice.<Id>`, name=Model, component=슬롯 ServiceLabel) · PSU(`PowerSupply.<idx>`) 펌웨어가 firmware[] 에 보충된다. 다른 adapter 는 불변.
     help_en: >-
       Inferred firmware component category (from id/name). One of:
       bios/cpld/tpm/diagnostic/lifecycle/driver_pack/backplane/drive/
       service_module/bmc/nic/storage_controller/psu/other.
+      2026-10-19: a 'controller' token (after nic/psu) maps to storage_controller and a 'gbe' token (10/25GbE-style NIC names) to nic; FC HBAs stay other (no enum extension). When the adapter
+      declares vendor_notes.firmware_inventory_scope: complex_only (HPE CSUS 3200 / Superdome Flex, whose FirmwareInventory lists only the
+      complex/nPar bundles) chassis PCIeDevices (`PCIeDevice.<Id>`) and PSUs (`PowerSupply.<idx>`) are appended to firmware[]. Other adapters are unchanged.
 
   "firmware[].pending":
     type: "boolean"
@@ -1603,8 +1623,14 @@ fields:
     enum: ["SATA", "SAS", "NVMe", "SCSI", "USB", "RAID", "iSCSI", "FibreChannel", "IDE", "SD", "MMC", "HDC", "1394"]
     priority: skip
     channel: [redfish, os, esxi]
-    help_ko: "디스크 연결 프로토콜. enum 밖의 값(예: Windows BusType ATAPI/ATA/SSA/Virtual/File Backed Virtual/Storage Spaces/SCM/UFS)은 null 로 두고 원값은 storage 섹션 오류의 detail 에 남긴다 (2026-10-03). enum 확장은 별도 계약 결정."
-    help_en: "Disk connection protocol."
+    help_ko: >-
+      디스크 연결 프로토콜. enum 밖의 값(예: Windows BusType ATAPI/ATA/SSA/Virtual/File Backed Virtual/Storage Spaces/SCM/UFS)은 null 로 두고 원값은
+      storage 섹션 오류의 detail 에 남긴다 (2026-10-03). enum 확장은 별도 계약 결정.
+      ESXi (2026-10-19): LUN 이 붙은 어댑터 종류로 채운다 — FC → FibreChannel · iSCSI · SAS · SATA · NVMe. RAID 컨트롤러 뒤 LUN(논리 볼륨) · 어댑터 미상은 null(종전 항상 null).
+    help_en: >-
+      Disk connection protocol. Values outside the enum are null (raw value kept in the storage section error detail, 2026-10-03).
+      ESXi (2026-10-19): derived from the adapter the LUN hangs off (FC → FibreChannel, iSCSI, SAS, SATA, NVMe); LUNs behind a RAID controller
+      or with an unknown adapter stay null (previously always null).
 
   cpu.architecture:
     type: "string|null"
@@ -1660,9 +1686,16 @@ fields:
     help_ko: >-
       CPU 그룹 summary. groups[]={model, sockets, cores_per_socket, total_cores}.
       같은 model 의 socket 들을 합쳐 보여준다 — 운영 가시성용.
+      cores_per_socket 은 세 채널 모두 total_cores // sockets (Redfish 는 2026-10-19 부터 — 종전 첫 소켓 값; 동질 CPU 는 값이 같다).
+      cpu.logical_threads (Redfish): ProcessorSummary.LogicalProcessorCount 가 정본이되, adapter vendor_notes.processor_summary_logical_count 가
+      cores 인 펌웨어(HPE CSUS 3200 · Superdome Flex RMC — 실측 LogicalProcessorCount == 코어 수, Bios HThread Enabled)는 per-processor TotalThreads 합을 우선한다.
     help_en: >-
       CPU group summary. groups[]={model, sockets, cores_per_socket, total_cores}.
       Aggregates sockets sharing the same model for operational visibility.
+      cores_per_socket is total_cores // sockets on all channels (Redfish since 2026-10-19; previously the first socket's value).
+      cpu.logical_threads (Redfish): ProcessorSummary.LogicalProcessorCount is authoritative unless the adapter declares
+      vendor_notes.processor_summary_logical_count: cores (HPE CSUS 3200 / Superdome Flex RMC report the core count there), in which
+      case the per-processor TotalThreads sum wins.
 
   "memory.summary":
     type: "object"
@@ -1671,9 +1704,13 @@ fields:
     help_ko: >-
       메모리 그룹 summary. groups[]={unit_capacity_gb, type, quantity, group_total_gb}
       + grand_total_gb. 같은 단위 용량 DIMM 의 수량 + 총량 + 전체 총량.
+      2026-10-19: grand_total_gb 는 총량을 모르면 null(0 금지 — Linux 는 DMI 합 → MEM_PHYS_MB → MemTotal, Redfish 는 슬롯 합 → total_mb 원천).
+      GB 반올림이 0 이 되는 DIMM(512 MiB 이하)은 세 채널 모두 unit_capacity_gb 0 그룹을 만들지 않는다.
     help_en: >-
       Memory group summary. groups[]={unit_capacity_gb, type, quantity, group_total_gb}
       + grand_total_gb. Quantity, group total, and grand total of DIMMs by capacity.
+      2026-10-19: grand_total_gb is null when the total is unknown (never 0 — Linux: DMI sum → MEM_PHYS_MB → MemTotal; Redfish: slot sum → total_mb source).
+      DIMMs that round to 0 GB (≤ 512 MiB) never form a unit_capacity_gb 0 group on any channel.
 
   "storage.summary":
     type: "object"
@@ -1695,11 +1732,19 @@ fields:
       + adapter_count + port_count + primary_speed_mbps.
       주의 (NETAD-1): summary.port_count 는 host EthernetInterface(=network.interfaces) 수이며,
       network.ports[] 길이(NetworkPorts, FC 포함 물리 포트)와 다를 수 있다 — 동일시 금지.
+      2026-10-19: model/manufacturer/adapter_count/port_count/primary_speed_mbps 는 Redfish 만 낸다 — OS/ESXi 그룹 키는 speed_mbps/link_type/quantity/link_up_count.
+      adapter_count 는 network.adapters[] 중 포트가 전부 FC/FCoE/InfiniBand 인 카드를 뺀 수(그 카드는 storage.hbas/infiniband 로 요약; 포트 정보 없는 카드는 센다).
+      세는 단위: Redfish 는 호스트 포트 · 카드, OS 는 논리 NIC(VLAN 하위 · bond slave · bridge/team member 제외), ESXi 는 vmnic(link_type 'ethernet').
+      속도를 모르는 NIC(링크 다운 · 가상 NIC)도 speed_mbps null 그룹으로 세고 link_up_count 를 센다.
     help_en: >-
       NIC group summary. groups[]={speed_mbps, model, manufacturer, link_type, quantity, link_up_count}
       + adapter_count + port_count + primary_speed_mbps.
       Note (NETAD-1): summary.port_count counts host EthernetInterfaces (=network.interfaces),
       which may differ from len(network.ports[]) (physical NetworkPorts incl. FC) — do not equate.
+      2026-10-19: model/manufacturer/adapter_count/port_count/primary_speed_mbps are Redfish-only; OS/ESXi groups carry speed_mbps/link_type/quantity/link_up_count.
+      adapter_count excludes network.adapters[] whose ports are all FC/FCoE/InfiniBand (those are summarised under storage.hbas/infiniband; cards without port info are counted).
+      Unit counted: Redfish host ports/cards, OS logical NICs (VLAN children, bond slaves, bridge/team members excluded), ESXi vmnics (link_type 'ethernet').
+      NICs with unknown speed (link down, virtual) are counted in a speed_mbps null group with link_up_count.
 
   # ──────────────────────────────────────────────────────────────────────────
   # NIC / HBA / InfiniBand 깊이 (어댑터 단위 / 포트 단위 정보)
