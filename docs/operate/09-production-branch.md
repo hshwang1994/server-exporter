@@ -119,9 +119,9 @@ vault 비밀번호 파일은 실행 중에만 저장소 밖에 두고 끝나면 
 
 | 항목 | 값 |
 |---|---|
-| production | `151cc395` (`main` `dd69aee1`에서 생성, 2026-10-17, 정규 승격 — CI #59 COMPLETE_PASS · gate G01~G20 PASS · main Job 매트릭스 11건(#628~#638) · `CI-Stages: verified`. runtime tree `742f8fe4…` — InfiniBand 4채널 "현재 모드" 판정 · CSUS 3200 Redfish `hardware.serial` 접미사 제거 반영. 승격 직후 production Job canary #300 OS · #301 Redfish · #302 ESXi SUCCESS) |
+| production | `027409f4` (`main` `27c4b393`에서 생성, 2026-10-19, 정규 승격 — CI #63 COMPLETE_PASS · gate G01~G20 PASS · main Job 매트릭스 11건(#689~#699) · `CI-Stages: verified`. runtime tree `3d9c6c8c…` — `storage.hbas[].link_status` up/down 둘뿐 · ESXi hbas vmhba 그대로 · Windows `system.version` 연도 접두 반영. 승격 직후 production Job canary #310 ESXi · #311 Redfish · #312 OS · #313 Windows SUCCESS) |
 | 상태 | `PROVENANCE`, 두 원격 일치 |
-| 직전 production | `28c38c17` (`main` `2c709fe8`, 2026-10-15 정규 재승격) · 그 이전 `31f9b804` (`main` `fd7dfd6a`, 2026-10-15 긴급 승격 — CI·E2E 증거 없이 올린 커밋, trailer `Verdict: PARTIAL` · `Emergency-Promotion`) · `338ed8d3` (`main` `fed0b9f1`, 2026-10-14 정규 승격) · `36745453` (`main` `59bc3a19`, 2026-10-14 긴급 승격) |
+| 직전 production | `144c295f` (`main` `3e1e2aba`, 2026-10-18 정규 승격 — HBA 4채널 · link_status null · RAID 논리 볼륨) · `151cc395` (`main` `dd69aee1`, 2026-10-17 정규 승격 — InfiniBand 4채널 · CSUS 시리얼 접미사) · `28c38c17` (`main` `2c709fe8`, 2026-10-15 정규 재승격) · 그 이전 `31f9b804` (`main` `fd7dfd6a`, 2026-10-15 긴급 승격 — CI·E2E 증거 없이 올린 커밋, trailer `Verdict: PARTIAL` · `Emergency-Promotion`) · `338ed8d3` (`main` `fed0b9f1`, 2026-10-14 정규 승격) · `36745453` (`main` `59bc3a19`, 2026-10-14 긴급 승격) |
 | 첫 production(baseline) | `4ce90a00` |
 
 승격 이력과 각 승격의 검증 빌드는 [../reference/decision-log.md](../reference/decision-log.md)와 [../reference/live-validation.md](../reference/live-validation.md)에 있습니다.

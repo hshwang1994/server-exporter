@@ -4,12 +4,14 @@
 
 > 정본: `docs/ai/decisions/ADR-2026-10-19-hba-link-status-two-values-esxi-raw-and-windows-version.md` · `tests/evidence/2026-10-19-hba-link-status-two-values-esxi-raw-windows-version.md`. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다.
 
+- [x] **[DONE 2026-10-19] 승격 → canary 완료 — production `027409f4`(main `27c4b393`)**. 매트릭스 #689~#699 → CI #63 COMPLETE_PASS → 작업 PC `prodgen promote`(사용자 `!` 실행, `C:\Users\hshwa\promote_ci63.sh` — 자격 경로를 인자로 받는 보조 스크립트, 값 없음) →
+      세 원격 일치 → production Job #310~#313 SUCCESS. 첫 붙여넣기가 줄바꿈으로 끊기며 vault 비밀번호가 터미널에 노출됐다 — **vault 비밀번호 교체 여부는 사용자 결정**(하면 `prodgen_vault_pw.txt` 만 바꾸면 된다).
 - [ ] **[HIGH / Portal 소비자] 안내** — (1) `storage.hbas[].link_status` 는 이제 `null` 이 없다(항상 up/down; 사전 type `string`). Redfish 미제공(CSUS 등)은 down + notice `링크 상태 미제공`, 값 미확정은 down + notice `링크 상태 값 미확정` — Portal 은 wwpn 으로 OS 값을 조인해 실제 상태를 보인다.
       (2) ESXi `storage.hbas[]` 는 vmhba 그대로(FC-NVMe 호스트는 포트당 2건). (3) Windows Server `system.version` 이 `2022-21H2` · `2025-24H2` 형으로 바뀜(클라이언트 Windows 는 그대로).
 - [ ] **[HIGH / 사이트 — 사용자] CSUS 3200 재수집** — Redfish `storage.hbas[].link_status` 가 전부 `down` 이고 notice `링크 상태 미제공, down 으로 기록` 이 카드당 1건 남는지, Portal 이 wwpn 으로 OS 값을 조인해 보이는지 확인(2026-10-18 항목의 "null" 기대는 폐기).
 - [ ] **[MED / 실장비 미검증 — lab 부재]** Unknown · null 값 `LinkStatus` 를 주는 FC 포트(Redfish 값 미확정 notice 경로), ESXi FC-NVMe 쌍둥이 2건 출력, Windows Server 2025 실장비의 `2025-24H2`(lab 은 2022 만), Linux `port_state` Unknown/Deleted 실값.
 - [ ] **[LOW / 검토] `storage.infiniband[].link_status`** — 2026-10-19 사용자 결정은 hbas 만이었다. IB 는 `unknown` 3값 그대로(`network.*.link_status` 도 그대로). 같은 2값 규칙으로 바꿀지 별도 결정.
-- [ ] **[LOW] `windows_2022_baseline.json` `system.version`** — canary(.120) 실측 `2022-21H2` 로 갱신(rule 13 R4 — 실측 뒤). 승격 뒤 canary 결과는 evidence 2026-10-19.
+- [x] **[DONE 2026-10-19] `windows_2022_baseline.json` `system.version`** — 실측(main S4 #692 · production canary #313) `2022-21H2` 로 갱신.
 
 ## HBA 4채널 전수 점검 · link_status up/down/null · 채널 간 값 정합 · RAID 논리 볼륨 (2026-10-18) — 남은 항목
 

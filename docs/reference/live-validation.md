@@ -686,3 +686,16 @@ main `3e1e2aba`(runtime `7f21cc7c` — HBA 4채널 · link_status null · 채널
 | #309 | Windows 1 (.120) | SUCCESS 147s | 1/1 · Portal 200 |
 
 전부 checkout == `144c295f` · 결과 수 == 접수 수 · errors 0 · 13키 · Jenkins 결과 SUCCESS · 자격 문자열 0건. esxi02 FC 포트는 ESXi `down`(어댑터 패브릭 로그인) · Redfish `up`(물리 링크) — 채널 의미 차이(03-fields.md 6.3.2). 상세 `../../tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` §5.5.
+
+### production 2026-10-19 승격·canary (`027409f4`)
+
+main `27c4b393`(link_status up/down 둘뿐 · ESXi hbas vmhba 그대로 · Windows `system.version` 연도 접두) 승격본 `027409f4`(parent `144c295f`). main Job 매트릭스 #689~#699 11건 계약값 → CI #63 COMPLETE_PASS(E2E 11/11 · tree `3d9c6c8c`) → 작업 PC `prodgen promote` G01~G20(Gates-Rerun G11~G15 · G18~G20 PASS) · 세 원격 일치. 승격 직후 production Job canary:
+
+| 빌드 | 채널 | 결과 | 확인 |
+|---|---|---|---|
+| #310 | ESXi 6 (.1 .2 .3 .91 .92 .93) | SUCCESS 88초 | 6/6 · checkout `027409f4` · esxi02 FC 2건 `down/down`(WWPN …6e/…6f) · esxi01 iSCSI `up` · `logical_volumes` 2,2,2,0,0,0 · link_status null 0 · 13키 · Portal 2xx |
+| #311 | Redfish 7 (.15.2 .27 .28 .31 .33 .34 + 10.50.11.232) | SUCCESS 403초 | 7/7 · Cisco .2 hbas 4 `up/up/up/down` · null 0 · `logical_volumes` 2,1,1,1,1,3,2 · errors 0 · Portal 2xx |
+| #312 | OS 11 (.33 .34 .35 .36 .37 .38 .95 .96 .156 .162 .163) | SUCCESS 133초 | 11/11 · r760-6 `.96` `logical_volumes` 2 · hbas [] · errors 0 · Portal 2xx |
+| #313 | Windows 1 (.120) | SUCCESS 144초 | 1/1 · **`system.version` = `2022-21H2`** · errors 0 · Portal 2xx |
+
+전부 checkout == `027409f4` · 결과 수 == 접수 수 · errors 0 · 13키 · Portal 2xx · 자격 문자열 0건. `storage.hbas[].link_status` 는 어느 봉투에도 null 이 없고, Windows `.120` 만 `system.version` 이 `21H2` → `2022-21H2` 로 바뀌었다. 상세 `../../tests/evidence/2026-10-19-hba-link-status-two-values-esxi-raw-windows-version.md`.

@@ -11,7 +11,11 @@
 | 정적 검사 | `validate_field_dictionary.py` PASS · `output_schema_drift_check.py` 통과(fd_paths 206) · `verify_vendor_boundary.py` 통과 · `verify_harness_consistency.py` 통과 · `check_project_map_drift.py` 일치 |
 | golden | 녹화본 11종 재생(`H.run_gather` 동일 산출식) — `real_hpe_csus3200` fc_hbas[0~3].link_status null → down 4건만, 나머지 차이 0 |
 | 갱신 시험 | `test_esxi_hba_normalize`(unbound·unknown·없음 → down · 쌍둥이 4건 유지) · `test_linux_hba_ib_markers`(Unknown·Deleted·''·없음·읽기 실패 → down) · `test_windows_storage_powershell_static`(+FC 포트 3: OperationalStatus 1 · 없음 · 1+PortState 2) · `test_windows_storage_enum_render` · `test_network_adapters_absence_vs_failure`(미제공 down+notice · 신규 값 미확정 3케이스) · `test_fc_link_technology_hba` · `test_fc_orphan_ndf_parent_port_link`(+Unknown 상속) · `test_redfish_pure_helpers`(+헬퍼 4) · `test_hba_ib_canonical` · `test_cross_channel_same_server` · `test_field_dictionary_channel_emit` · `test_redfish_hba_coverage_replay`(CSUS down) · `test_gather_identity_render`(+version 8케이스) · `test_windows_call_consolidation_render/powershell`(version 의도 변경 훅 · `regex_search` shim) |
-| 실장비 · 승격 | evidence `tests/evidence/2026-10-19-hba-link-status-two-values-esxi-raw-windows-version.md` 5절 (main Job 매트릭스 → CI → promote → canary) |
+| main Job 매트릭스(실장비, Chrome Jenkins 세션 `buildWithParameters`) | main `27c4b393` #689~#699 11건 전부 계약값 — S1 · S2 · S3 · S4 · T2 · E2E-D · E2E-E SUCCESS, T6 · E2E-A UNSTABLE, E2E-A2 FAILURE(fail-closed, tip 관측 결속), T5 ABORTED(마커 +11초 stop · `lastBuiltRevision 27c4b393`). envelope: Windows `.120` `system.version` `2022-21H2` · Cisco .2 hbas `up/up/up/down` · esxi02 `down/down` · 33 봉투 link_status null 0 |
+| CI #63 (`PROMOTE_SHA=27c4b393` · `PROMOTE_DRY_RUN=false` · E2E 11건 · tip 관측) | SUCCESS 62분 · 12 stage 전부 SUCCESS · 집계 COMPLETE_PASS(G01~G20 PASS · tree `3d9c6c8c`) · `e2e.ok=true` · `ci_stages.ok=true` · Promote 는 자격증명 부재로 dry-run |
+| 승격 · canary | 작업 PC `prodgen promote`(사용자 실행) → **production `027409f4`**(Gates-Rerun G11~G15 · G18~G20 PASS · CI-Stages verified · 세 원격 일치). production Job #310 ESXi 6 · #311 Redfish 7 · #312 OS 11 · #313 Windows 1 전부 SUCCESS · checkout `027409f4` · errors 0 · Portal 2xx · Windows `2022-21H2` |
+| baseline | `windows_2022_baseline.json` `system.version` `21H2` → `2022-21H2`(실측 main #692 · production #313) |
+| 실장비 미검증 | Unknown 값 FC 포트(값 미확정 notice) · ESXi FC-NVMe 쌍둥이 2건 · Windows Server 2025 `2025-24H2` · Linux port_state Unknown/Deleted · CSUS 사이트 재수집 — NEXT_ACTIONS 2026-10-19 |
 
 ## 2026-10-18 — HBA 4채널 전수 점검 · link_status up/down/null · 채널 간 값 정합 · RAID 논리 볼륨
 

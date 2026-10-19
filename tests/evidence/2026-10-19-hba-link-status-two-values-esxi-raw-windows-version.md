@@ -48,7 +48,47 @@
 
 ## 5. 실장비(Jenkins main Job 매트릭스) · CI · 승격 · canary
 
-(이 절은 매트릭스 실행 뒤 채운다 — 빌드 번호 · 결과 · envelope 대조 · CI 번호 · production SHA · canary.)
+### 5.1 main Job 매트릭스 — main `27c4b393`(`clovirone-cicd/clovirone-server-gather-main` #689~#699, Chrome 의 Jenkins 세션에서 `buildWithParameters` POST, 사용자 승인 2026-10-19)
+
+입력은 2026-10-18 4차(#678~#688)와 같은 집합(loc · target_type · inventory · callbackUrl · deploymentEnvironmentId=1), eventUuid 만 `…-20261019e0NN`. 11건 동시 투입(Jenkins 가 Runner 에 분산), T5 는 콘솔 `정보 수집을 시작합니다` 관측 +11초에 `stop`.
+
+| 시나리오 | 빌드 | 결과 | 비고 |
+|---|---|---|---|
+| S1 | #689 | SUCCESS 75초 | Linux VM 3대(.162 .163 .156) |
+| S2 | #690 | SUCCESS 119초 | 혼합(.132 .33 .34 + TEST-NET 2) |
+| S3 | #691 | SUCCESS 150초 | Linux 11대 |
+| S4 | #692 | SUCCESS 162초 | Windows .120 — **`system.version` = `2022-21H2`**(distribution `Microsoft Windows Server 2022 Standard`, kernel 20348) |
+| T2 | #693 | SUCCESS 103초 | TEST-NET 2 빠른 실패 |
+| T6 | #694 | UNSTABLE 133초 | Callback 닫힌 포트(계약값) |
+| E2E-A | #695 | UNSTABLE 133초 | loc=cj smoke |
+| E2E-A2 | #698 | FAILURE 19초 | loc=chj fail-closed — tip 관측 before 1792375982 · after 1792376105, sha `27c4b393` 불변 |
+| E2E-D | #696 | SUCCESS 110초 | ESXi 6대 — esxi02 hbas 2(`vmhba2`/`vmhba3` FC **down/down**, WWPN …6e/…6f), esxi01 iSCSI `up`, RAID 뒤 logical_volumes 2(esxi01~03), link_status null 0 |
+| E2E-E | #697 | SUCCESS 389초 | Redfish 7대 — Cisco .2 hbas 4 **`up/up/up/down`** · link_status null 0 · 링크 상태 notice 0(CIMC 는 LinkStatus 제공), Dell 5 · Lenovo 1 hbas [] |
+| T5 | #699 | ABORTED 74초 | `[수집] 중단됨:` · outcome aborted · Portal 200 · **`lastBuiltRevision 27c4b393`**(증거 결속 OK) |
+
+checkout 은 #698(fail-closed, 수집 단계 없음) 외 10건 전부 `27c4b393`. OS 봉투 19건(S1 · S2 · S3) + Windows 1건 + ESXi 6건 + Redfish 7건에서 `storage.hbas[].link_status` null **0건**.
+lab 에는 FC-NVMe 쌍둥이 · Unknown 값 FC 포트 · Windows Server 2025 가 없어 ESXi 중복 제거 폐지 · 값 미확정 notice · `2025-24H2` 는 이번 매트릭스로 확인되지 않는다(6절).
+
+### 5.2 CI #63 · 승격 `027409f4` · canary
+
+- **CI** `clovirone-cicd/clovirone-server-gather-ci` #63 — `PROMOTE=true · PROMOTE_SHA=27c4b393 · PROMOTE_DRY_RUN=false`, `E2E_MAIN_ENTRIES` 11건(#689~#699), `E2E_TIP_OBSERVATIONS_JSON`(#698, before 1792375982 · after 1792376105, sha 불변).
+  SUCCESS 62분 · 12 stage 전부 SUCCESS(Checkout · Toolchain · Gate · Finalize Corpus · Time Limits Self-test · Prodgen Build · Prodgen Drift · Prodgen Verify · Harness Driver · Harness(prodtree) · Evidence Aggregate · Prodgen Promote) ·
+  집계 verdict **COMPLETE_PASS**(G01~G20 전부 PASS, main_sha `27c4b393`, tree `3d9c6c8c`) · `prodgen_promote.json` `e2e.ok=true` · `ci_stages.ok=true` · **Promote 는 `se-gitlab-push` 부재로 dry-run**(종전과 같음).
+- **승격(실제)** — 작업 PC(`promote_ci63.sh`: CI #63 산출물 3개 netrc 로 내려받기 → `prodgen promote --sha 27c4b393 … --push-remote origin,internal`, 사용자가 `!` 로 실행 · 자격 파일은 사용자 보관 경로).
+  → **production `027409f4`**(parent `144c295f` · Main-SHA `27c4b393` · Tree-Hash `3d9c6c8c…` · 195 파일 · Verdict COMPLETE_PASS · Gates G01~G20 PASS · Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20 · CI-Stages verified · Generated-At 2026-10-19T03:56:07Z).
+  publish origin "accepted by remote" · internal "already at the new commit (shared push URL)" · 로컬 ref 갱신. **github · gitlab · 로컬 `production` 모두 `027409f4`.**
+  (붙여넣기 줄바꿈으로 첫 시도가 끊기며 vault 비밀번호 파일이 셸에 실행돼 값이 터미널에 찍혔다 — 저장소 · 문서에는 적지 않았고, 비밀번호 교체는 사용자 결정으로 남겼다.)
+- **production Job canary** `clovirone-cicd/clovirone-server-gather`(전부 checkout `027409f4`, 결과 수 == 접수 수, errors 0, 13키):
+
+| 빌드 | 채널 | 결과 | 확인 |
+|---|---|---|---|
+| #310 | ESXi 6 (.1 .2 .3 .91 .92 .93) | SUCCESS 88초 | 6/6 · checkout `027409f4` · esxi02 FC 2건 `down/down`(WWPN …6e/…6f) · esxi01 iSCSI `up` · `logical_volumes` 2,2,2,0,0,0 · link_status null 0 · 13키 · Portal 2xx |
+| #311 | Redfish 7 (.15.2 .27 .28 .31 .33 .34 + 10.50.11.232) | SUCCESS 403초 | 7/7 · Cisco .2 hbas 4 `up/up/up/down` · null 0 · `logical_volumes` 2,1,1,1,1,3,2 · errors 0 · Portal 2xx |
+| #312 | OS 11 (.33 .34 .35 .36 .37 .38 .95 .96 .156 .162 .163) | SUCCESS 133초 | 11/11 · r760-6 `.96` `logical_volumes` 2 · hbas [] · errors 0 · Portal 2xx |
+| #313 | Windows 1 (.120) | SUCCESS 144초 | 1/1 · **`system.version` = `2022-21H2`** · errors 0 · Portal 2xx |
+
+2026-10-18 승격본(`144c295f`) 과 비교해 바뀐 값은 Windows `.120` `system.version`(`21H2` → `2022-21H2`) 뿐이다. hbas 값(esxi02 `down/down` · Cisco `up/up/up/down`)은 그대로이고 null 은 어디에도 없다.
+`schema/baseline_v1/windows_2022_baseline.json` 의 `system.version` 을 이 실측(main S4 #692 · production #313)으로 `2022-21H2` 로 갱신했다(rule 13 R4).
 
 기대값: Redfish Cisco .2 hbas `up/up/up/down`(불변) · esxi02 FC 2건 `down/down`(불변 — 쌍둥이 없음) · Windows .120 `system.version == "2022-21H2"`(변경) · 전 채널 `storage.hbas[].link_status` null 0건.
 

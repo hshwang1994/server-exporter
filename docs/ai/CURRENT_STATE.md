@@ -15,7 +15,8 @@
 - **계약 · 문서**: 사전 `storage.hbas[].link_status` type `string` + help 재작성, `storage.hbas[]` help(ESXi 그대로), `03-fields.md` 6.3.1 · 6.3.2 · FAQ(Windows version), `05-field-mapping.md`, `os_windows2022.jsonc` version 예시, EXTERNAL_CONTRACTS(ESXi status · FC-NVMe 행), ADR 신규 + ADR-2026-10-18 머리말 개정 표기, decision-log, DRIFT-030, NEXT_ACTIONS.
 - **golden**: `real_hpe_csus3200/expected_output.json` fc_hbas link_status 4건 null → down(다른 9종 차이 0).
 - **시험(실장비 아님)**: 4채널 link 시험 기대값 갱신 + Redfish 신규(값 미확정 notice · 헬퍼 벡터) + Windows version 8 케이스 + 통합 체인 비교 시험에 version 의도 변경 훅. 수치는 TEST_HISTORY 2026-10-19.
-- **승격 · 실장비**: evidence 2026-10-19 (정규 경로 — 매트릭스 → CI → promote → canary).
+- **승격(완료 2026-10-19)**: main `27c4b393` 매트릭스 #689~#699(11건 계약값) → CI #63 COMPLETE_PASS(E2E 11/11 · tree `3d9c6c8c`) → 작업 PC `prodgen promote`(사용자 실행) → **production `027409f4`**(parent `144c295f`, Gates-Rerun G11~G15 · G18~G20 PASS, CI-Stages verified, github · gitlab · 로컬 일치) →
+  production Job canary #310 ESXi 6 · #311 Redfish 7 · #312 OS 11 · #313 Windows 1 SUCCESS(checkout `027409f4` · errors 0 · link_status null 0 · Windows `2022-21H2`). `windows_2022_baseline.json` version 실측 갱신. 상세 evidence 5절.
 
 ## 일자: 2026-10-18 — HBA 4채널 전수 점검 · `link_status` up/down/null · 채널 간 값 정합(uuid · 정격 클럭 · 스레드 · NIC 모델) · RAID 논리 볼륨 OS/ESXi
 

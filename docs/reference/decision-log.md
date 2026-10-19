@@ -123,7 +123,7 @@
 
 - envelope 13 필드 · sections · status 불변. 사전 `storage.hbas[].link_status` type `string|null` → `string`(enum 그대로). golden 은 CSUS fc_hbas link_status 4건 null → down 만.
 - CSUS 3200 은 Redfish 에서 항상 down(notice `링크 상태 미제공`) — Portal 은 wwpn 으로 OS 값을 조인. lab 값 변화는 Windows .120 `system.version` `2022-21H2` 만(canary 확인 뒤 baseline 갱신).
-- 검증 · 승격 · canary 결과는 evidence 와 TEST_HISTORY 2026-10-19.
+- 검증 · 승격 · canary 결과는 evidence 와 TEST_HISTORY 2026-10-19 — 같은 날 **production `027409f4`**(CI #63 COMPLETE_PASS · 작업 PC promote · canary #310~#313 SUCCESS)로 반영 완료.
 
 ## 2026-10-18 — HBA 4채널 전수 점검 · `link_status` up/down/null · 채널 간 값 정합 · RAID 논리 볼륨 OS/ESXi
 
