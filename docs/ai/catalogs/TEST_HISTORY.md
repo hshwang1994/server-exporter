@@ -1,5 +1,20 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-19 (3) — ESXi 전원·온도·팬(vSphere 하드웨어 센서) · Linux iSCSI 이니시에이터 (사용자 승인)
+
+> 정본: `tests/evidence/2026-10-19-esxi-sensors-linux-iscsi.md` · `docs/ai/decisions/ADR-2026-10-19-esxi-sensors-and-linux-iscsi.md`. 합성 입력 · 실 호스트 덤프 재생 — **실장비(Jenkins 매트릭스)는 이 뒤에 돈다(evidence 5절)**.
+
+| 구분 | 결과 |
+|---|---|
+| 단위 pytest (Windows Python 3.13.15) — 한 번에 돌린 실행은 메모리 부족으로 하네스가 두 번째 분할 도중 중단(실패 0)했고 재시작하지 않았다. 파일 이름 7분할을 전부 전경에서 실행 | `test_[a-e]*` **1506 passed** · `test_[f-i]*` **723 passed, 4 skipped** · `test_[j-m]*` **515 passed, 4 skipped** · `test_[n-q]*` **519 passed** · `test_redfish_[a-m]*` **226 passed** · `test_redfish_[n-z]*`+`test_re[e-z]*`+`test_r[f-z]*` **328 passed, 23 skipped** · `test_[s-z]*` **809 passed, 1 skipped** — 합 4626 passed, 실패 0 |
+| 고치며 잡은 것(모두 시험 기대값 · 미러 표) | `test_esxi_section_errors` · `test_esxi_disks_host_info` · `test_esxi_disks_host_select`(새 sensors 파트 — 스텁 · 여섯 파트) · `test_windows_storage_enum_render`(iqn) · `test_windows_call_consolidation_render`(hbas iqn 의도 변경) · `test_linux_hba_ib_markers`(sysfs 치환기에 iscsi_host) · `test_json_only_fallback_shape` · `test_finalize_gather_output` · `test_jenkinsfile_portal_finalize`(esxi 섹션 목록 = supported_sections.yml) · `test_finalize_corpus`(corpus 3건 재생성) |
+| 신규 | `tests/unit/test_esxi_sensors.py` 32 passed · `tests/unit/test_linux_iscsi_hba.py` 7 passed |
+| e2e / regression / integration | `tests/e2e tests/regression` **1093 passed, 12 skipped, 7 xfailed** (json_only · groovy 표 갱신 뒤 재실행) · `tests/integration -m "not live"` 366 passed, 6 skipped, 1 deselected |
+| `ansible-playbook --syntax-check` 3채널 (WSL ansible-core 2.20.7) | os · esxi · redfish 통과 |
+| 정적 검사 | `verify_vendor_boundary.py` 통과 · `verify_harness_consistency.py` 통과 · `verify_docs_references.py` 통과 · `check_project_map_drift.py` 일치(`--update` — tests 신규 파일) · `output_schema_drift_check.py` 통과(fd_paths 207) · `validate_field_dictionary.py` PASS · `py_compile` 4 파일 · YAML parse 18 파일 |
+| 실 호스트 덤프 재생 (tests/reference/esxi 3대) | 센서 126 → 온도 28 · 팬 12 · PSU 2 · `power_consumed_watts` 472/432/456 · summary `total_capacity_w null` |
+| 실장비 미검증 | ESXi 실호스트 `sections.power/thermal` · 센서 healthState 분포 · Dell/HPE ESXi 센서 이름 · Linux iSCSI 전부 — 매트릭스(evidence 5절)와 NEXT_ACTIONS 2026-10-19 셋째 절 |
+
 ## 2026-10-19 (2) — HPE CSUS 3200 단일 서버 정합 · Redfish 수집 범위 보완 · 3채널 summary 거짓 값 · "노출 vs 요청" 범위 감사
 
 > 정본: `tests/evidence/2026-10-19-csus-single-server-summary-audit.md` · `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md`. 전부 합성 입력 · 실장비 미러 재생 — **실장비(Jenkins 매트릭스) 미실행, production 미승격**.

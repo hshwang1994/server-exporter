@@ -1,5 +1,16 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## ESXi 전원·온도·팬 · Linux iSCSI (2026-10-19, 셋째) — 남은 항목
+
+> 정본: `docs/ai/decisions/ADR-2026-10-19-esxi-sensors-and-linux-iscsi.md` · `tests/evidence/2026-10-19-esxi-sensors-linux-iscsi.md`. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다.
+
+- [ ] **[HIGH / 승격] main Job 매트릭스 → CI → `prodgen promote` → canary** — 둘째 · 셋째 변경을 함께 승격한다(사용자 지시 "production 반영까지"). 기대값: ESXi 6대 `sections.power` · `sections.thermal` success(센서 공급자 있는 호스트), `data.power.summary.psu_count` ≥ 1 · `total_capacity_w null`,
+      `data.thermal.temperatures/fans` 수 > 0; Linux 호스트 hbas 는 iSCSI 세션이 없어 불변; Windows .120 hbas 불변(iSCSI 포트 없음). 승격 뒤 production Job canary ESXi 6 · Redfish 7 · OS 11 · Windows 1.
+- [ ] **[HIGH / baseline — 실장비] `schema/baseline_v1/esxi_baseline.json`** — 매트릭스 E2E-D 봉투로 갱신: `sections.power/thermal`(not_supported → success, `thermal` 키 추가), `data.power` · `data.thermal` 값, 둘째 변경의 `network.summary.groups[].link_type` · `physical_disks[].protocol`. 실측 evidence 와 함께(rule 21 R1).
+- [ ] **[MED / Portal 소비자] 안내** — ESXi 봉투에 `power` · `thermal` 섹션이 success 로 들어오고 `data.power`(PSU · 소비전력 · summary) · `data.thermal`(온도 · 팬)이 채워진다. Linux `storage.hbas[]` 에 iSCSI 항목(`port_type iSCSI`, `iqn`, `session_count`) 이 생기고 Windows iSCSI 항목에 `iqn` 키가 추가된다.
+- [ ] **[LOW / 후속] ESXi iSCSI `iqn`** — `vmware_host_vmhba_info` 가 iSCSI 이름을 주지 않는다. `esxi_disks.py` 컨트롤러 파트에서 `HostInternetScsiHba.iScsiName` 을 읽어 `_e_ext_hbas` 에 조인하면 채널 간 같은 키가 된다.
+- [ ] **[LOW / 실장비 미검증]** ESXi 센서 `healthState.key` 값 분포(덤프에서 잘려 있음) · Dell/HPE ESXi 호스트의 센서 이름 체계(PSU 묶기 · 소비전력 1개 규칙이 Cisco 1종 실측) · Linux iSCSI(lab 에 세션 없음 — 소프트웨어 iSCSI 세션 묶기 · 오프로드 카드). 실측 시 `power_sensors[]`(모듈 결과)로 규칙을 넓힌다.
+
 ## HPE CSUS 3200 단일 서버 정합 · 수집 범위 감사 · 3채널 summary (2026-10-19, 둘째) — 남은 항목
 
 > 정본: `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md` · `tests/evidence/2026-10-19-csus-single-server-summary-audit.md` · `docs/contract/03-fields.md` 6.3.2 체크리스트. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다(승격은 아래 첫 항목).
@@ -15,8 +26,8 @@
 - [ ] **[MED / 결정 — 사용자] 새 데이터 원천 (범위 감사가 드러낸 "읽지 않는 인벤토리" — 허용 목록 `[판단 필요]` 항목)**
       | 항목 | 근거 | 영향 |
       |---|---|---|
-      | ESXi power/thermal ← `runtime.healthSystemRuntime` 센서 | 덤프 3대: 온도 28 · 팬 12 · 전력 12 | adapter `sections_supported` 에 power/thermal 추가 → ESXi `sections.power/thermal` not_supported → success (호출자 계약 변화) |
-      | Linux iSCSI 이니시에이터 → `storage.hbas[]`(iSCSI) | Windows/ESXi 는 iSCSI 를 hbas 에 넣는데 Linux 만 fc_host | `/sys/class/iscsi_host` · `iscsiadm -m session`(root 불필요) |
+      | ~~ESXi power/thermal ← `runtime.healthSystemRuntime` 센서~~ **[DONE 2026-10-19 (3) — 사용자 승인 · 구현]** | 덤프 3대: 온도 28 · 팬 12 · 전력 12 | ADR-2026-10-19-esxi-sensors-and-linux-iscsi |
+      | ~~Linux iSCSI 이니시에이터 → `storage.hbas[]`(iSCSI)~~ **[DONE 2026-10-19 (3) — 사용자 승인 · 구현, sysfs 만(iscsiadm 미사용)]** | Windows/ESXi 는 iSCSI 를 hbas 에 넣는데 Linux 만 fc_host | 같은 ADR |
       | RAID 뒤 물리 디스크 (Linux storcli/ssacli/perccli · Windows 벤더 WMI) | OS 는 VD 만 — Redfish 와 `physical_disks` 수가 다름(문서화된 한계) | 벤더 CLI 설치 · root 전제 |
       | OS power/thermal ← `ipmitool sensor` | 덤프에 있음 | root + ipmitool, BMC 채널과 중복 — 기본은 Redfish 유지 권장 |
       | Linux `nvme list/id-ctrl` · `multipath -ll` 직접 호출 | 덤프에 있음 — 현재 lsblk TRAN/udev 로 대체 | 추가 가치 낮음(NVMe 펌웨어 · 네임스페이스 정도) |

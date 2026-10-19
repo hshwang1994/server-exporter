@@ -108,6 +108,7 @@ site.yml (플레이 하나)
     tasks/normalize_system.yml           system, hardware, cpu, memory fragment
     tasks/normalize_network.yml          network fragment
     tasks/normalize_storage.yml          storage fragment (datastore, 볼륨 포함)
+    tasks/normalize_power_thermal.yml    power · thermal fragment — esxi_disks sensors 파트(vSphere 하드웨어 센서, 2026-10-19)
     tasks/collect_network_extended.yml   vmnic, vswitch, portgroup, vmhba 상세 보강
     tasks/collect_runtime.yml            NTP, 방화벽, 서비스 상태 보강
     build_* → CHECKPOINT → OUTPUT

@@ -22,6 +22,7 @@
 | OS Serial Number | 필수 식별자. `correlation.serial_number` 가 null 이면 `require_serial.yml` 이 status=failed(GATHER_FAILED · `serial_missing` 문장), 원인은 `diagnosis.details.serial_number.cause`. 새 failure_code 없음 | 2026-10-13 |
 | envelope | 13 필드 고정 · 새 키 추가는 호환성 작업 밖(사용자 승인) | 2026-05-01 · 2026-10-03 |
 | hostname | `system.hostname → system.fqdn → bmc.network_hostname → null`, IP 대체 없음. 세 채널 모두 `system.hostname` = 첫 라벨 · `system.fqdn` = 도메인 있을 때만. Redfish 원천 순서는 adapter `vendor_notes.hostname_priority` — **HPE CSUS 3200 은 RMC 이름 우선**(없을 때만 Partition HostName), 그 밖은 System.HostName | 2026-06-16 · 2026-09-03 · 2026-10-15 |
+| ESXi 전원·온도·팬 · Linux iSCSI | ESXi 는 vSphere 하드웨어 센서(`numericSensorInfo`)로 `power` · `thermal` 을 낸다(센서 공급자 없으면 not_supported) — `sections.power/thermal` 이 success 로 바뀌는 계약 변화(승인). Linux 는 `/sys/class/iscsi_host`(sysfs 만)로 iSCSI 이니시에이터를 `storage.hbas[]` 에 넣는다(`iqn`, 세션 묶음 1건). `power.summary` 는 공통 필터 | 2026-10-19 (3) |
 | CSUS 3200 단일 서버 · summary 거짓 값 | CSUS 3200 은 Partition0 = 서버(다른 x86 과 같은 JSON), `multi_node` 는 유지, 시리얼 `-NNN` 제거는 OS · Redfish · **ESXi** · **Superdome Flex** 까지. `power.summary` 용량 모르면 null, `adapter_count` 는 FC 전용 카드 제외, RMC 의 `LogicalProcessorCount` 는 코어 수(adapter 플래그), Redfish 는 정보가 없을 때만 PCIeDevices · 섀시 Drives · NetworkInterfaces · 다중 섀시 Power/Thermal 을 읽는다. "노출 vs 요청" 범위 감사 회귀 3종 상시 | 2026-10-19 (2) |
 | 시간 한계 | 실행 기반 대기 합 72h · 실제 수집 누적 6h · 결과 처리 1h, 빌드 · 단계 timeout 없음, 같은 Runner · 작업 폴더 재개. 중단 원인은 Jenkins 의 분류로만(경과시간 · 노드 상태로 확정 안 함), 보존은 handler 한 곳에서 1회 | 2026-10-05~07 · 2026-10-12 |
 | 결과 전달 | 요청 1 = 결과 1, `post { always }` 전달, Portal 2xx 로 종결(저장 확인은 계약 밖), 회수 매체는 같은 검문으로 평가. 404 는 서버가 돌려준 것만 확정 거부, 플러그인이 합성한 404(이름 풀이 실패)는 통신 실패 | 2026-10-03 · 2026-10-05 · 2026-10-10 · 2026-10-12 |
@@ -101,6 +102,28 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-19 (3) — ESXi 전원·온도·팬(vSphere 하드웨어 센서) · Linux iSCSI 이니시에이터 (사용자 승인)
+
+> 정본: `docs/ai/decisions/ADR-2026-10-19-esxi-sensors-and-linux-iscsi.md` · `tests/evidence/2026-10-19-esxi-sensors-linux-iscsi.md` · `docs/contract/03-fields.md` 6.3.1 · 6.5 · 6.7.
+
+### 사용자 지시
+
+- "ESXi 전원·온도·팬 수집, Linux iSCSI HBA 수집 구현 승인하겠습니다. 그리고 끝나면 production 반영까지 모두 다 해주세요." — 같은 날 범위 감사가 올린 결정 항목 2건 중 2건 승인.
+  (나머지 결정 항목 — RAID 뒤 물리 디스크 CLI · OS ipmitool · Redfish OEM 인벤토리 · CSUS OS vendor 표기 · 보드 시리얼 — 은 그대로 대기.)
+
+### 결정
+
+1. ESXi `power`/`thermal` 원천 = `runtime.healthSystemRuntime.systemHealthInfo.numericSensorInfo`(`esxi_disks` 모듈 sensors 파트, 연결 1회 재사용). 항목 모양은 Redfish 와 같다.
+   PSU 는 "Power Supply N" 이름의 power 센서 묶음(식별 · 용량 null), 소비전력은 PSU 가 아닌 Watts 센서가 정확히 1개일 때만. systemHealthInfo 없음 → not_supported, 파트 실패 → failed.
+2. ESXi adapter 5종 `sections_supported` 에 power · thermal. `sections.yml` · `supported_sections.yml` · 사전 channel 에 esxi. 새 태스크 `normalize_power_thermal.yml`.
+3. `power.summary` 는 공통 필터 `filter_plugins/power_summary.py`(Redfish Jinja 와 같은 규칙, 시험이 대조).
+4. Linux iSCSI 는 sysfs 만(`/sys/class/iscsi_host`, root 불필요). 항목 1개 = 이니시에이터 포트 1개 — 소프트웨어 iSCSI 세션 host 들은 (driver, iqn, hwaddress, netdev) 로 묶는다. 키 `iqn` 추가(Windows 도).
+5. `schema/baseline_v1/esxi_baseline.json` 은 실장비 매트릭스 봉투로 갱신(AI 임의 편집 금지).
+
+### 바뀌지 않는 것
+
+envelope 13 필드 · `status` 판정 · Redfish power/thermal 코드 · FC HBA 규칙 · ESXi hbas(iqn 없음, 후속).
 
 ## 2026-10-19 (2) — HPE CSUS 3200 단일 서버 정합 · Redfish 수집 범위 보완 · 3채널 summary 거짓 값 · "노출 vs 요청" 범위 감사
 

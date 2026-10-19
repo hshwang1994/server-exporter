@@ -1,5 +1,22 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-19 (3) — ESXi 전원·온도·팬(vSphere 하드웨어 센서) · Linux iSCSI 이니시에이터 → `storage.hbas[]` (사용자 승인)
+
+> 정본: `docs/ai/decisions/ADR-2026-10-19-esxi-sensors-and-linux-iscsi.md` · `tests/evidence/2026-10-19-esxi-sensors-linux-iscsi.md` · `docs/contract/03-fields.md` 6.3.1 · 6.5 · 6.7 · `docs/reference/decision-log.md` 2026-10-19 (3).
+
+- **계기**: 사용자 승인 — 같은 날 범위 감사의 결정 항목 2건(ESXi 센서 · Linux iSCSI). "끝나면 production 반영까지".
+- **고친 것(제품 — ESXi)**: `esxi_disks.py` `_build_sensors`(sensors 파트 — temperatures/fans/power_supplies/power_control/power_sensors, available) · `collect_disks.yml` `_e_raw_sensors` ·
+  신규 `tasks/normalize_power_thermal.yml`(success / not_supported / failed 세 갈래, `power_summary` 필터) · `site.yml` include · adapter 5종 `sections_supported` + power · thermal ·
+  `common/vars/supported_sections.yml` · `schema/sections.yml` · 사전 power/thermal channel + esxi · 신규 `filter_plugins/power_summary.py`(Redfish `_rf_power_summary` 미러).
+- **고친 것(제품 — OS)**: Linux `gather_hba_ib.yml` raw 에 `/sys/class/iscsi_host` 구간(ISCSI| 14 필드) + 파서 `_l_iscsi_list`(묶음 · link up/down · iqn · session_count) → `hbas` 에 합침,
+  오류 scope 에 iscsi_host. Windows `gather_storage.yml` iSCSI 항목 `iqn`(NodeAddress). 사전 `storage.hbas[].iqn`(os) 신설 · `storage.hbas[]` help.
+- **시험**: 신규 `test_esxi_sensors.py`(덤프 3대 재생 · YAML 렌더 · 필터 ↔ Jinja 대조 · 배선) · `test_linux_iscsi_hba.py`(합성 sysfs 실제 sh). 갱신 `test_esxi_section_errors`(sensors 스텁) ·
+  `test_windows_storage_enum_render`(iqn) · `test_windows_call_consolidation_render`(hbas iqn 의도 변경) · `test_linux_hba_ib_markers`(sysfs 치환기). ESXi 범위 감사 허용 목록에서 `runtime.healthSystemRuntime` 삭제(이제 읽는다).
+- **실패 봉투 모양표(함께 바뀜)**: `callback_plugins/json_only.py` · `scripts/jenkins/se_finalize.groovy` 의 esxi 섹션 목록에 power · thermal(`supported_sections.yml` 과 같아야 하는 세 사본), `tests/fixtures/finalize_corpus` 기대 3건 재생성 — ESXi 합성 · rescue 실패 봉투의 `sections.power/thermal` 은 이제 `failed`(종전 `not_supported`).
+- **문서**: `03-fields.md` 6.3.1(iSCSI 항목) · 6.5 · 6.7(ESXi) · 4절 thermal 문장, `01-gather-structure.md` ESXi 태스크, `esxi_vmware.jsonc` 주석, EXTERNAL_CONTRACTS 3행, ADR 신규, decision-log, NEXT_ACTIONS, TEST_HISTORY, evidence.
+- **운영 영향(승인된 계약 변화)**: ESXi 봉투 `sections.power/thermal` not_supported → success(센서 있는 호스트) + `data.power/thermal`. Linux `storage.hbas[]` 에 iSCSI 항목(lab 은 세션 없음 → 불변 예상), Windows iSCSI 항목 `iqn` 키.
+  `esxi_baseline.json` 은 매트릭스 봉투로 갱신 예정. 실장비 확인 · 승격은 NEXT_ACTIONS 첫 항목.
+
 ## 일자: 2026-10-19 (2) — HPE CSUS 3200 단일 서버 정합 · Redfish 수집 범위 보완 · 3채널 summary 거짓 값 정비 · "노출 vs 요청" 범위 감사 상시화
 
 > 정본: `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md` · `tests/evidence/2026-10-19-csus-single-server-summary-audit.md` · `docs/contract/03-fields.md` 6.1 · 6.2 · 6.3 · 6.3.2 · 6.4 · 6.5 · 6.7 · 8 · FAQ · `docs/reference/decision-log.md` 2026-10-19 (2).
