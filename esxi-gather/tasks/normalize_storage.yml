@@ -9,27 +9,38 @@
     # 와 "용량 미수집" 구분 불가). cap=0 인 datastore name 은 _e_unsized_ds 에 누적 후
     # errors_fragment 로 emit.
     _e_norm_datastores: >-
+      {#- 2026-10-19 (B-7): 문자열 용량의 단위 → GB 배수 (1024 배수). 종전(ESXI-09)은 TB·MB 만 알아 KB·PB·Bytes 를 GB 로 읽었다.
+          단위는 숫자 뒤 첫 알파벳 묶음으로 읽고 IEC 표기('TiB') 는 'TB' 로 접는다. 표에 없는 단위·단위 없음 → 종전처럼 GB -#}
+      {%- set unit_gb = {'B': 1 / 1073741824, 'BYTES': 1 / 1073741824, 'KB': 1 / 1048576, 'MB': 1 / 1024, 'GB': 1, 'TB': 1024, 'PB': 1048576} -%}
       {%- set out = [] -%}
       {%- for ds in (_e_raw_ds | default([])) -%}
         {%- if ds.capacity is defined -%}
           {%- set cap  = ds.capacity  | int -%}
-          {%- set free = ds.freeSpace | default(ds.free_space | default(0)) | int -%}
+          {#- 2026-10-19 (B-6): freeSpace 가 None(미제공) 이면 모르는 값이다 — 0 으로 바꾸지 않는다. 종전 default 는 None 을 못 잡아
+              free 0 · usage 100% 가 나갔다. 0 은 진짜 0(가득 찬 datastore) 으로 그대로 둔다 (default(…, true) 는 0 도 지우므로 쓰지 않는다) -#}
+          {%- set free_raw = ds.freeSpace | default(ds.free_space | default(none)) -%}
+          {%- set free = (free_raw | int) if (free_raw is not none and (free_raw | string | trim) != '') else none -%}
         {%- else -%}
           {%- set tr   = ds.total | default('0 GB', boolean=true) | string -%}
-          {%- set fr   = ds.free  | default('0 GB', boolean=true) | string -%}
-          {#- ESXI-09 (2026-10-10): 단위 접미사 일반 처리 (GB 기준) — TB x1024 · MB /1024. 종전에는 TB 만 보고 MB 를 GB 로 읽었다 -#}
-          {%- set tu   = tr | upper -%}
-          {%- set fu   = fr | upper -%}
-          {%- set tmul = 1024 if 'TB' in tu else (0.0009765625 if 'MB' in tu else 1) -%}
-          {%- set fmul = 1024 if 'TB' in fu else (0.0009765625 if 'MB' in fu else 1) -%}
+          {%- set fr   = ds.free  | default(none, boolean=true) -%}
+          {%- set tu   = (tr | upper | regex_replace('^[^A-Z]*([A-Z]+).*$', '\\1')) | replace('IB', 'B') -%}
+          {%- set tmul = unit_gb.get(tu, 1) -%}
           {%- set tg   = (tr|regex_replace('[^0-9.]','')|default('0', boolean=true)|float)*tmul -%}
-          {%- set fg   = (fr|regex_replace('[^0-9.]','')|default('0', boolean=true)|float)*fmul -%}
           {%- set cap  = (tg*1073741824)|int -%}
-          {%- set free = (fg*1073741824)|int -%}
+          {#- 2026-10-19 (B-6): free 문자열이 없으면(None/'') 모르는 값 → null (종전 '0 GB' 대체 금지) -#}
+          {%- if fr is not none -%}
+            {%- set fr_s = fr | string -%}
+            {%- set fu   = (fr_s | upper | regex_replace('^[^A-Z]*([A-Z]+).*$', '\\1')) | replace('IB', 'B') -%}
+            {%- set fmul = unit_gb.get(fu, 1) -%}
+            {%- set fg   = (fr_s|regex_replace('[^0-9.]','')|default('0', boolean=true)|float)*fmul -%}
+            {%- set free = (fg*1073741824)|int -%}
+          {%- else -%}
+            {%- set free = none -%}
+          {%- endif -%}
         {%- endif -%}
         {%- set total_mb = (cap /1048576)|round(0,'floor')|int -%}
-        {%- set free_mb  = (free/1048576)|round(0,'floor')|int -%}
-        {%- set used_mb  = total_mb - free_mb -%}
+        {%- set free_mb  = ((free/1048576)|round(0,'floor')|int) if (free is not none) else none -%}
+        {%- set used_mb  = (total_mb - free_mb) if (free_mb is not none) else none -%}
         {%- set sized = total_mb > 0 -%}
         {%- set _ = out.append({
           'name':          ds.name,
@@ -37,7 +48,7 @@
           'total_mb':      total_mb if sized else none,
           'free_mb':       free_mb  if sized else none,
           'used_mb':       used_mb  if sized else none,
-          'usage_percent': (used_mb/total_mb*100)|round(1) if sized else none,
+          'usage_percent': (used_mb/total_mb*100)|round(1) if (sized and used_mb is not none) else none,
           'accessible':    ds.accessible | default(none)
         }) -%}
       {%- endfor -%}

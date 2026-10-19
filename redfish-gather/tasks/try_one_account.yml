@@ -39,6 +39,8 @@
         timeout:        "{{ _rf_timeout }}"
         verify_ssl:     false
         manager_layout: "{{ _rf_adapter_manager_layout | default('') }}"
+        # 2026-10-19 (A-9): adapter 의 FirmwareInventory 범위 — complex_only 면 PCIe 장치 · PSU 펌웨어 보충 (site.yml 추출값)
+        firmware_inventory_scope: "{{ _rf_adapter_firmware_scope | default('') }}"
         attempt:
           evidence_dir: "{{ lookup('env', 'SE_AUTH_EVIDENCE_DIR') }}"
           id:           "{{ _rf_attempt_id }}"

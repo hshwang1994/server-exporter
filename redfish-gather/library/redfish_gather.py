@@ -2698,6 +2698,14 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
             _cmod = _strip_or_none(_safe(chassis_data, 'Model'))
             if _cmod is not None:
                 result['model'] = _cmod
+        # 2026-10-19 (CSUS 단일 서버 정합 — A-7): System 에 PartNumber/SKU 가 없으면 System 이 속한 섀시의 값으로 보충한다
+        #   (manufacturer/model 과 같은 Additive 규칙 — None 일 때만). 실측 HPE CSUS 3200: Partition0 에 PartNumber 없음, Chassis/r001u01
+        #   PartNumber "R9N70A". Dell/Lenovo 는 System 에 이미 있고 HPE DL380 Chassis 는 PartNumber 가 없어 다른 벤더 값은 바뀌지 않는다.
+        for _k, _ck in (('part_number', 'PartNumber'), ('sku', 'SKU')):
+            if result.get(_k) is None:
+                _cv = _strip_or_none(_safe(chassis_data, _ck))
+                if isinstance(_cv, str) and _cv:
+                    result[_k] = _cv
 
     # 주요 필드 누락은 경고 수준 — 수집 자체는 성공으로 처리.
     # errors에 추가하지 않아 _run()에서 failed로 분류되지 않음.
@@ -3359,11 +3367,16 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
     return volumes, errors
 
 
-def _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl):
-    """Storage 정규경로 — 컨트롤러 → 드라이브 → 볼륨 계층."""
+def _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl, chassis_uris=None):
+    """Storage 정규경로 — 컨트롤러 → 드라이브 → 볼륨 계층.
+
+    2026-10-19 (A-8): StorageControllers/Controllers 가 없고 드라이브가 있는 멤버는 섀시 PCIeDevices 에서 컨트롤러 정체를 찾는다
+    (_identify_controller_from_pcie — 드라이브 위치 ⊂ PCIe 슬롯 위치). chassis_uris 가 없으면 종전과 같다.
+    """
     controllers = []
     volumes = []
     errors = []
+    pcie_cache = None   # 섀시 PCIeDevices 는 멤버마다 다시 읽지 않는다
     for member in members:
         uri = _safe(member, '@odata.id')
         if not uri:
@@ -3386,6 +3399,14 @@ def _gather_standard_storage(bmc_ip, members, username, password, timeout, verif
             'drives': drives,
         }
         ctrl_entry.update(ctrl_info)
+        # 2026-10-19 (A-8): 컨트롤러 정체가 비어 있고 드라이브가 있으면 섀시 PCIeDevices 로 식별 (CSUS "Npar 0 Storage" 컨테이너)
+        if (drives and chassis_uris
+                and not any(ctrl_info.get(k) for k in ('controller_name', 'controller_model',
+                                                        'controller_firmware', 'controller_manufacturer'))):
+            if pcie_cache is None:
+                pcie_cache = _pcie_devices_for_chassis(bmc_ip, chassis_uris, username, password, timeout, verify_ssl,
+                                                       'storage', errors)
+            _identify_controller_from_pcie(ctrl_entry, sdata, pcie_cache, bmc_ip, username, password, timeout, verify_ssl)
         controllers.append(ctrl_entry)
         vols, v_errs = _extract_storage_volumes(sdata, _safe(sdata, 'Id'), bmc_ip, username, password, timeout, verify_ssl)
         volumes.extend(vols)
@@ -3491,12 +3512,162 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
     return controllers, [], errors
 
 
-def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
+def _pcie_devices_for_chassis(bmc_ip, chassis_uris, username, password, timeout, verify_ssl, section, errors):
+    """System 이 연결한 섀시들의 PCIeDevices → [{id, uri, model, manufacturer, firmware, health, serial, part_number, slot_label}] (2026-10-19).
+
+    Chassis 응답의 `PCIeDevices.@odata.id` 링크를 따라간다(경로 조립 없음). 링크가 없는 섀시(RackGroup · Rack)는 건너뛴다.
+    같은 요청은 모듈 캐시(_get)가 흡수한다 — storage 단계(A-8) · firmware 보충(A-9) · network_adapters(CSUS-R16) 가 같은 장치를 읽어도
+    요청은 1회다. 404 는 조용히(미노출), 그 밖의 실패는 비차단 오류. 실측 HPE CSUS 3200 node03: 9장(Mellanox 4 · FC HBA 4 · Adaptec RAID 1).
+    """
+    out, seen = [], set()
+    for cu in _capped([u for u in (chassis_uris or []) if isinstance(u, str) and u], section, errors):
+        st, cdata, cerr = _get(bmc_ip, _p(cu), username, password, timeout, verify_ssl)
+        if cerr or st != 200 or not isinstance(cdata, dict):
+            if st != 404:
+                errors.append(_err(section, f'Chassis {cu} 실패: {cerr or st}', _extended_info(cdata),
+                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        link = _safe(cdata, 'PCIeDevices', '@odata.id')
+        if not isinstance(link, str) or not link:
+            continue
+        st2, coll, err2 = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
+        if err2 or st2 != 200 or not isinstance(coll, dict):
+            if st2 != 404:
+                errors.append(_err(section, f'PCIeDevices {link} 실패: {err2 or st2}', _extended_info(coll),
+                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        for m in _collection_members(bmc_ip, _p(link), coll, username, password, timeout, verify_ssl, section, errors):
+            du = _safe(m, '@odata.id')
+            if not isinstance(du, str) or not du or _p(du) in seen:
+                continue
+            seen.add(_p(du))
+            st3, ddata, err3 = _get(bmc_ip, _p(du), username, password, timeout, verify_ssl)
+            if err3 or st3 != 200 or not isinstance(ddata, dict):
+                errors.append(_err(section, f'PCIeDevice {du} 실패: {err3 or st3}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                continue
+            out.append({
+                'id':           _safe(ddata, 'Id'),
+                'uri':          du,
+                'model':        _strip_or_none(_safe(ddata, 'Model')),
+                'manufacturer': _strip_or_none(_safe(ddata, 'Manufacturer')),
+                'firmware':     _strip_or_none(_safe(ddata, 'FirmwareVersion')),
+                'health':       _safe(ddata, 'Status', 'Health'),
+                'serial':       _strip_or_none(_safe(ddata, 'SerialNumber')),
+                'part_number':  _strip_or_none(_safe(ddata, 'PartNumber')),
+                'slot_label':   _strip_or_none(_safe(ddata, 'Slot', 'Location', 'PartLocation', 'ServiceLabel')),
+            })
+    return out
+
+
+def _drive_service_labels(sdata, bmc_ip, username, password, timeout, verify_ssl):
+    """Storage 멤버 Drives[] 각 드라이브의 PhysicalLocation.PartLocation.ServiceLabel — 이미 읽은 응답(캐시 hit, 요청 0)."""
+    labels = []
+    for d_member in _dicts(_safe(sdata, 'Drives')):
+        d_uri = _safe(d_member, '@odata.id')
+        if not isinstance(d_uri, str) or not d_uri:
+            continue
+        st, ddata, err = _get(bmc_ip, _p(d_uri), username, password, timeout, verify_ssl)
+        if err or st != 200 or not isinstance(ddata, dict):
+            continue
+        lab = _strip_or_none(_safe(ddata, 'PhysicalLocation', 'PartLocation', 'ServiceLabel'))
+        if isinstance(lab, str) and lab:
+            labels.append(lab)
+    return labels
+
+
+def _identify_controller_from_pcie(ctrl_entry, sdata, pcie_devices, bmc_ip, username, password, timeout, verify_ssl):
+    """Storage 멤버에 컨트롤러 정보가 없을 때 드라이브 위치로 PCIe 장치를 찾아 컨트롤러 정체를 채운다 (2026-10-19, A-8).
+
+    실측 HPE CSUS 3200 RMC 1.75.108: Systems/Partition0/Storage/1 은 StorageControllers · Controllers 없는 컨테이너("Npar 0 Storage")이고
+    RAID 컨트롤러는 Chassis/r001u01/PCIeDevices/3 (Model "HPE SR3258p-16i/e PCIe4 Controller", Manufacturer Adaptec, fw 03.01.44.040-0) 로만
+    노출된다. 드라이브 ServiceLabel `rack1/chassis_u1/cpu0/io_slot3/box1/drive_bay1` 이 PCIe 장치 Slot ServiceLabel
+    `rack1/chassis_u1/cpu0/io_slot3` 아래 경로라는 **위치 포함 관계**만 쓴다 — 모델 이름 · 벤더 이름으로 추정하지 않는다(rule 12).
+    후보가 정확히 하나일 때만 채우고(controller_name/model/manufacturer/firmware/health · name), 0개 · 2개 이상이면 notice 만 남긴다.
+    StorageControllers 를 주는 벤더(Dell PERC · HPE MR · Lenovo RAID)는 호출되지 않아 불변이다.
+    """
+    sid = _safe(sdata, 'Id')
+    labels = _drive_service_labels(sdata, bmc_ip, username, password, timeout, verify_ssl)
+    if not labels:
+        _notice('storage', 'Storage %s: 컨트롤러 정보 없음 — 드라이브 위치(ServiceLabel) 도 없어 PCIe 장치로 식별 불가' % sid)
+        return False
+    matched = {}
+    for dev in pcie_devices or []:
+        slot = dev.get('slot_label')
+        if not isinstance(slot, str) or not slot:
+            continue
+        prefix = slot.rstrip('/') + '/'
+        if any(lab == slot or lab.startswith(prefix) for lab in labels):
+            matched[dev.get('uri')] = dev
+    if len(matched) != 1:
+        _notice('storage', 'Storage %s: 컨트롤러 정보 없음 — 드라이브 위치에 맞는 PCIe 장치 %d개(1개가 아니면 채우지 않음)'
+                % (sid, len(matched)))
+        return False
+    dev = next(iter(matched.values()))
+    ctrl_entry.update({
+        'controller_name':         dev.get('model'),
+        'controller_model':        dev.get('model'),
+        'controller_firmware':     dev.get('firmware'),
+        'controller_manufacturer': dev.get('manufacturer'),
+        'controller_health':       ctrl_entry.get('controller_health') or dev.get('health'),
+    })
+    if dev.get('model'):
+        ctrl_entry['name'] = dev['model']
+    _notice('storage', 'Storage %s: 컨트롤러 정보 없음 — 드라이브 위치로 PCIe 장치 %s(%s) 를 컨트롤러로 식별'
+            % (sid, _id_text(dev.get('id')) or dev.get('uri'), dev.get('model')))
+    return True
+
+
+def _chassis_drives_fallback(bmc_ip, chassis_uris, username, password, timeout, verify_ssl):
+    """Storage 에 드라이브가 0건이면 System 이 연결한 섀시의 `Drives` 컬렉션을 본다 (2026-10-19, A-10).
+
+    DMTF Chassis.Drives 는 그 섀시에 물리적으로 든 드라이브다. 실측 HPE CSUS 3200 4노드는 Storage/1.Drives 와 같은 목록(0 또는 2건)이라 결과가
+    바뀌지 않지만, Storage 컨테이너가 드라이브를 가리키지 않는 펌웨어에서 디스크가 통째로 빠지는 것을 막는다. 섀시 단위 컨테이너
+    (id=`Chassis.<id>`, name=`<Chassis.Name> Drives`)로 담고 notice 를 남긴다. 드라이브를 가진 벤더는 호출되지 않는다(요청 0건).
+    """
+    controllers, errors = [], []
+    for cu in _capped([u for u in (chassis_uris or []) if isinstance(u, str) and u], 'storage', errors):
+        st, cdata, cerr = _get(bmc_ip, _p(cu), username, password, timeout, verify_ssl)
+        if cerr or st != 200 or not isinstance(cdata, dict):
+            if st != 404:
+                errors.append(_err('storage', f'Chassis {cu} 실패: {cerr or st}', _extended_info(cdata),
+                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        link = _safe(cdata, 'Drives', '@odata.id')
+        if not isinstance(link, str) or not link:
+            continue
+        st2, coll, err2 = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
+        if err2 or st2 != 200 or not isinstance(coll, dict):
+            if st2 != 404:
+                errors.append(_err('storage', f'Chassis Drives {link} 실패: {err2 or st2}', _extended_info(coll),
+                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        members = _collection_members(bmc_ip, _p(link), coll, username, password, timeout, verify_ssl, 'storage', errors)
+        if not members:
+            continue
+        drives, d_errs = _extract_storage_drives({'Drives': members}, bmc_ip, username, password, timeout, verify_ssl)
+        errors.extend(d_errs)
+        if not drives:
+            continue
+        cid = _id_text(_safe(cdata, 'Id')) or _p(cu).rstrip('/').rsplit('/', 1)[-1]
+        controllers.append({
+            'id':     'Chassis.%s' % cid,
+            'name':   '%s Drives' % (_strip_or_none(_safe(cdata, 'Name')) or cid),
+            'health': _safe(cdata, 'Status', 'Health') or _safe(cdata, 'Status', 'HealthRollup'),
+            'drives': drives,
+        })
+        _notice('storage', 'Storage 에 드라이브 0건 — 섀시 %s 의 Drives %d건 사용' % (cid, len(drives)))
+    return controllers, errors
+
+
+def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, chassis_uris=None):
     """Storage 진입 — Storage → SimpleStorage → SmartStorage fallback dispatcher.
 
     cycle 2026-05-07 M-I1: SmartStorage (HPE iLO4) fallback chain 추가 — Additive.
     기존 Storage / SimpleStorage 분기 변경 0. SmartStorage 는 iLO4 legacy path 라
     표준 / SimpleStorage 둘 다 404 일 때만 시도.
+
+    2026-10-19 (chassis_uris — System 이 연결한 섀시, 선택): 표준 경로에서 (A-8) 컨트롤러 정보 없는 Storage 멤버의 정체를 섀시 PCIeDevices 로,
+    (A-10) 드라이브가 0건이면 섀시 Drives 컬렉션으로 보충한다. 둘 다 "정보가 없을 때만" 발동해 컨트롤러 정보·드라이브를 주는 벤더는 요청 0건 증가.
     """
     path = _p(system_uri) + '/Storage'
     st, coll, err = _get(bmc_ip, path, username, password, timeout, verify_ssl)
@@ -3539,8 +3710,14 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             errors.append(_err('storage',
                                'SimpleStorage 경로가 응답했지만 디스크 정보가 비어 있음'))
         return {'controllers': controllers, 'volumes': []}, errors
-    controllers, volumes, sub_errors = _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl)
+    controllers, volumes, sub_errors = _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl,
+                                                                chassis_uris=chassis_uris)
     errors.extend(sub_errors)
+    # 2026-10-19 (A-10): Storage 가 드라이브를 하나도 가리키지 않으면 섀시 Drives 컬렉션으로 보충 (실측 CSUS 는 같은 목록 — 결과 불변)
+    if chassis_uris and not any((c.get('drives') if isinstance(c, dict) else None) for c in controllers):
+        extra_ctrls, extra_errs = _chassis_drives_fallback(bmc_ip, chassis_uris, username, password, timeout, verify_ssl)
+        controllers.extend(extra_ctrls)
+        errors.extend(extra_errs)
     return {'controllers': controllers, 'volumes': volumes}, errors
 
 
@@ -4183,18 +4360,51 @@ def _extra_chassis_adapter_collections(bmc_ip, system_uri, extra_chassis_uris, s
     return found
 
 
+def _system_interface_adapter_members(bmc_ip, system_uri, username, password, timeout, verify_ssl, tried, fails, errors):
+    """`Systems/{id}/NetworkInterfaces` 멤버의 `Links.NetworkAdapter` 를 따라간 NetworkAdapter 목록 (2026-10-19, A-5).
+
+    DMTF ComputerSystem.NetworkInterfaces → NetworkInterface.Links.NetworkAdapter 는 섀시 NetworkAdapters 와 독립인 표준 링크다
+    (실측 HPE CSUS 3200: NetworkIfPCIeCard10 → Chassis/r001u01/NetworkAdapters/PCIeCard10). 섀시 경로가 404 · 빈 목록 · 실패로 카드를
+    하나도 주지 않을 때만 호출된다(카드가 이미 있으면 요청 0건). 반환은 `_accept` 가 먹는 컬렉션 멤버 모양 [{'@odata.id': …}] 이다.
+    컬렉션 실패는 fails 에(404 포함 — 1순위 404 와 함께 미지원 분류를 바꾸지 않는다), 멤버 실패는 비차단 오류로 남긴다.
+    """
+    base = _p(system_uri) + '/NetworkInterfaces'
+    tried.append(base)
+    st, coll, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
+    if err or st != 200 or not isinstance(coll, dict):
+        fails.append((st, err or st, _extended_info(coll), base))
+        return []
+    out, seen = [], set()
+    for m in _collection_members(bmc_ip, base, coll, username, password, timeout, verify_ssl, 'network_adapters', errors):
+        iu = _safe(m, '@odata.id')
+        if not isinstance(iu, str) or not iu:
+            continue
+        st2, idata, err2 = _get(bmc_ip, _p(iu), username, password, timeout, verify_ssl)
+        if err2 or st2 != 200 or not isinstance(idata, dict):
+            errors.append(_err('network_adapters', f'NetworkInterface {iu} 실패: {err2 or st2}',
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        au = _safe(idata, 'Links', 'NetworkAdapter', '@odata.id')
+        if isinstance(au, str) and au and _p(au) not in seen:
+            seen.add(_p(au))
+            out.append({'@odata.id': au})
+    return out
+
+
 def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris, username, password, timeout,
                              verify_ssl, errors):
     """NetworkAdapters 컬렉션 출처 결정 (2026-10-15) → (sources, tried, fails, saw_empty).
 
-    sources   : [(origin, members)] — origin 'primary' | 'extra' | 'system', 멤버가 1개 이상인 목록만
+    sources   : [(origin, members)] — origin 'primary' | 'extra' | 'system_interfaces' | 'system', 멤버가 1개 이상인 목록만
     tried     : 조회한 컬렉션 경로 (오류 detail 용)
-    fails     : 조립 경로(1순위 섀시 · Systems)의 실패 [(status, signal, extended_info, path)]
+    fails     : 조립 경로(1순위 섀시 · NetworkInterfaces · Systems)의 실패 [(status, signal, extended_info, path)]
     saw_empty : 200 이지만 멤버가 0 인 목록을 봤는지
 
     순서 — (1) 1순위 섀시 `Chassis/{id}/NetworkAdapters` (조립 경로, 종전과 같다)
            (2) System 이 연결한 나머지 섀시 (소유를 확인한 섀시만 — _extra_chassis_adapter_collections)
-           (3) (1)(2) 에서 카드를 하나도 얻지 못했을 때만 `Systems/{id}/NetworkAdapters` (일부 펌웨어 위치 — iDRAC8).
+           (2.5) (1)(2) 에서 카드를 하나도 얻지 못했을 때 `Systems/{id}/NetworkInterfaces` 의 `Links.NetworkAdapter`
+                 (2026-10-19 A-5 — DMTF 표준 링크. 섀시 경로가 비거나 깨진 펌웨어에서 HBA 소실을 막는다)
+           (3) 그래도 없으면 `Systems/{id}/NetworkAdapters` (일부 펌웨어 위치 — iDRAC8).
                200 빈 목록도 '얻지 못함' 이다 — 빈 목록만으로 HBA 없음을 확정하지 않는다.
     Systems 목록은 System 전체 목록이라 섀시 목록과 섞지 않는다 (같은 카드가 두 경로로 중복될 수 있다).
     """
@@ -4224,6 +4434,11 @@ def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris
                                                              username, password, timeout, verify_ssl, errors):
             tried.append(base)
             _accept(base, coll, 'extra')
+    if not sources and system_uri:
+        ni_members = _system_interface_adapter_members(bmc_ip, system_uri, username, password, timeout, verify_ssl,
+                                                       tried, fails, errors)
+        if ni_members:
+            sources.append(('system_interfaces', ni_members))
     if not sources and system_uri:
         alt = _p(system_uri) + '/NetworkAdapters'
         if alt not in tried:
@@ -4710,13 +4925,17 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
             _notice('network_adapters', msg)
         return out, errors
 
-    # 1순위 섀시는 실패했지만 System 이 연결한 다른 섀시에서 카드를 얻었다 — 1순위 섀시의 카드를 잃었을 수 있어 근거를 남긴다.
-    # 404 는 그 섀시에 목록이 없는 것이라 조용히 둔다. Systems 경로가 쓰인 경우는 종전처럼 기록하지 않는다 (iDRAC8 불변).
-    if fails and sources[0][0] == 'extra':
+    # 1순위 섀시는 실패했지만 System 이 연결한 다른 섀시(또는 NetworkInterfaces 링크)에서 카드를 얻었다 — 1순위 섀시의 카드를 잃었을 수
+    # 있어 근거를 남긴다. 404 는 그 섀시에 목록이 없는 것이라 조용히 둔다. Systems 경로가 쓰인 경우는 종전처럼 기록하지 않는다 (iDRAC8 불변).
+    if fails and sources[0][0] in ('extra', 'system_interfaces'):
         _st, sig, ext, _base = fails[0]
         if _st != 404:
             errors.append(_err('network_adapters', f'NetworkAdapters {tried[0]} 실패: {sig}', ext,
                                code=_CODE_NON_BLOCKING_SUBRESOURCE))
+    # 2026-10-19 (A-5): 섀시 경로에서 카드를 못 얻어 System 의 NetworkInterfaces 링크로 찾았다 — 어느 경로였는지 남긴다.
+    if sources[0][0] == 'system_interfaces':
+        _notice('network_adapters', 'NetworkInterfaces 링크로 네트워크 카드 %d장 수집 (섀시 NetworkAdapters 경로 비어 있음 또는 실패)'
+                % len(sources[0][1]))
 
     # 추가 섀시 멤버는 이미 본 카드 리소스(@odata.id)면 건너뛴다. 1순위 · Systems 목록의 멤버 순서와 처리는 종전과 같다.
     items, seen_adapters, seen_ports = [], set(), set()
@@ -5802,7 +6021,7 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
         sys_data, sys_errs = gather_system(bmc_ip, m['uri'], vendor, *creds, part_chassis, product_hint)
         cpu_data, cpu_errs = gather_processors(bmc_ip, m['uri'], *creds)
         mem_data, mem_errs = gather_memory(bmc_ip, m['uri'], *creds)
-        sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds)
+        sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds, [part_chassis] if part_chassis else None)  # 2026-10-19 A-8/A-10 동일 적용
         net_data, net_errs = gather_network(bmc_ip, m['uri'], *creds)
         # cycle 2026-06-09: per-partition boot order (설명 모델 "부팅 순서").
         boot_data, boot_errs = gather_boot(bmc_ip, m['uri'], *creds)
@@ -6197,10 +6416,130 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
     }
 
 
+def _supplement_firmware_from_pcie_psu(bmc_ip, fw_list, chassis_uris, power_section, username, password, timeout,
+                                       verify_ssl, errors):
+    """adapter `vendor_notes.firmware_inventory_scope: complex_only` 일 때 — PCIe 장치(NIC · FC HBA · RAID)와 PSU 펌웨어를 firmware[] 에 덧붙인다 (2026-10-19, A-9).
+
+    실측 HPE CSUS 3200 RMC 1.75.108: UpdateService/FirmwareInventory 는 ComplexFW · Partition0_FW 2건뿐이고, 카드 펌웨어는
+    Chassis/r001u01/PCIeDevices/*.FirmwareVersion(Mellanox 26.46.3048 · FC HBA 9.15.05 · Adaptec RAID 03.01.44.040-0), PSU 펌웨어는
+    PowerSupply.Version("Release -0005", FirmwareVersion 부재 — CSUS-R9) 에만 있다. Dell/iLO 는 FirmwareInventory 가 이미 그 항목을 담으므로
+    켜지 않는다(중복 방지) — adapter 값이 없으면 호출되지 않아 종전과 완전히 같다.
+    항목 모양은 gather_firmware 와 같다(id / name / version / updateable / component / pending). 이미 있는 id 는 건너뛴다.
+    """
+    out = [f for f in (fw_list or []) if isinstance(f, dict)]
+    existing = {f.get('id') for f in out}
+    added_pcie = added_psu = 0
+    for dev in _pcie_devices_for_chassis(bmc_ip, chassis_uris, username, password, timeout, verify_ssl, 'firmware', errors):
+        if not dev.get('firmware'):
+            continue
+        tail = _id_text(dev.get('id')) or _p(dev.get('uri') or '').rstrip('/').rsplit('/', 1)[-1]
+        fid = 'PCIeDevice.%s' % tail
+        if fid in existing:
+            continue
+        existing.add(fid)
+        added_pcie += 1
+        out.append({
+            'id':         fid,
+            'name':       dev.get('model') or fid,
+            'version':    dev['firmware'],
+            'updateable': None,
+            'component':  dev.get('slot_label') or fid,
+            'pending':    False,
+        })
+    psus = power_section.get('power_supplies') if isinstance(power_section, dict) else None
+    for idx, psu in enumerate(psus or []):
+        if not isinstance(psu, dict) or not psu.get('firmware_version'):
+            continue
+        fid = 'PowerSupply.%d' % idx
+        if fid in existing:
+            continue
+        existing.add(fid)
+        added_psu += 1
+        out.append({
+            'id':         fid,
+            'name':       psu.get('model') or psu.get('name') or fid,
+            'version':    psu['firmware_version'],
+            'updateable': None,
+            'component':  psu.get('name') or fid,
+            'pending':    False,
+        })
+    if added_pcie or added_psu:
+        _notice('firmware', 'FirmwareInventory 범위 complex_only — PCIe 장치 %d건 · PSU %d건 펌웨어를 firmware[] 에 보충'
+                % (added_pcie, added_psu))
+    return out
+
+
+def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl):
+    """System 이 연결한 섀시가 2개 이상이면 섀시마다 gather_power 를 돌려 합친다 (2026-10-19, A-11). 1개(실측 전 벤더 · CSUS 4노드)면 종전 gather_power 와 같다.
+
+    합치는 규칙: power_supplies 는 이어 붙인다(섀시별 PSU). power_control 의 소비·용량은 모든 섀시 값이 있을 때만 합(하나라도 None 이면 None —
+    지어내지 않는다), min/avg/max 는 섀시 간 합이 뜻이 없어 None, interval 은 첫 섀시 값. Power 리소스가 없는 섀시(404 만)는 건너뛰고 notice.
+    다중 섀시 실 응답은 아직 없다(NEXT_ACTIONS) — 합성 시험으로만 검증.
+    """
+    uris = [u for u in (chassis_uris or []) if isinstance(u, str) and u]
+    if len(uris) <= 1:
+        return gather_power(bmc_ip, (uris[0] if uris else default_uri), username, password, timeout, verify_ssl)
+    psus, errors, pcs, used = [], [], [], []
+    for cu in _capped(uris, 'power', errors):
+        d, e = gather_power(bmc_ip, cu, username, password, timeout, verify_ssl)
+        if not d and _is_404_only_error(e):
+            _notice('power', '섀시 %s: Power 리소스 없음 — 합산에서 제외' % _p(cu))
+            continue
+        errors.extend(e)
+        if not isinstance(d, dict) or not d:
+            continue
+        used.append(cu)
+        psus.extend(d.get('power_supplies') or [])
+        if isinstance(d.get('power_control'), dict):
+            pcs.append(d['power_control'])
+    if not used:
+        return {}, errors
+
+    def _sum_all(key):
+        vals = [pc.get(key) for pc in pcs]
+        if len(vals) != len(used) or any(v is None for v in vals):
+            return None
+        return sum(vals)
+
+    power_control = ({
+        'power_consumed_watts': _sum_all('power_consumed_watts'),
+        'power_capacity_watts': _sum_all('power_capacity_watts'),
+        'interval_in_min':      pcs[0].get('interval_in_min'),
+        'min_consumed_watts':   None,
+        'avg_consumed_watts':   None,
+        'max_consumed_watts':   None,
+    } if pcs else None)
+    _notice('power', 'System 이 연결한 섀시 %d개의 PSU · 소비전력을 합침' % len(used))
+    return {'power_supplies': psus, 'power_control': power_control}, errors
+
+
+def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl):
+    """System 이 연결한 섀시가 2개 이상이면 섀시마다 gather_thermal 을 돌려 온도·팬을 이어 붙인다 (2026-10-19, A-11). 1개면 종전과 같다."""
+    uris = [u for u in (chassis_uris or []) if isinstance(u, str) and u]
+    if len(uris) <= 1:
+        return gather_thermal(bmc_ip, (uris[0] if uris else default_uri), username, password, timeout, verify_ssl)
+    temps, fans, errors, used = [], [], [], []
+    for cu in _capped(uris, 'thermal', errors):
+        d, e = gather_thermal(bmc_ip, cu, username, password, timeout, verify_ssl)
+        if not d and _is_404_only_error(e):
+            _notice('thermal', '섀시 %s: Thermal 리소스 없음 — 합산에서 제외' % _p(cu))
+            continue
+        errors.extend(e)
+        if not isinstance(d, dict) or not d:
+            continue
+        used.append(cu)
+        temps.extend(d.get('temperatures') or [])
+        fans.extend(d.get('fans') or [])
+    if not used:
+        return {}, errors
+    _notice('thermal', 'System 이 연결한 섀시 %d개의 온도 · 팬을 합침' % len(used))
+    return {'temperatures': temps, 'fans': fans}, errors
+
+
 def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                           username, password, timeout, verify_ssl,
                           all_errors, collected, failed, unsupported=None,
-                          manager_layout=None, product_hint=None):
+                          manager_layout=None, product_hint=None, firmware_scope=None):
     """10개 섹션 dispatch (system / bmc / processors / memory / storage / network /
     firmware / power / thermal / network_adapters[P4]).
 
@@ -6216,6 +6555,11 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
 
     2026-09-15: 반환 dict 에 `bios` 1키 추가 (BIOS Current Attributes, 보조 데이터).
     collected / failed / unsupported 에는 넣지 않는다 — 11 섹션·status 계약 불변.
+
+    2026-10-19 (CSUS 단일 서버 정합 · 수집 범위 보완 — 전부 "정보가 없을 때만" 발동):
+      - storage 에 System 의 섀시 목록을 넘긴다 (A-8 PCIe 컨트롤러 식별 · A-10 섀시 Drives 폴백).
+      - power/thermal 은 System 이 연결한 섀시 전체(2개 이상일 때 합산 — A-11). 1개면 종전과 같은 호출.
+      - firmware_scope == 'complex_only' (adapter vendor_notes.firmware_inventory_scope) 면 PCIe 장치 · PSU 펌웨어를 firmware[] 에 보충 (A-9).
     """
     _run = _make_section_runner(all_errors, collected, failed, unsupported)
     creds = (username, password, timeout, verify_ssl)
@@ -6229,6 +6573,8 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     sys_chassis = _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl)
     eff_chassis_uri = sys_chassis[0] if sys_chassis else chassis_uri
     extra_chassis = [u for u in sys_chassis[1:] if _p(u) != _p(eff_chassis_uri)]
+    # 2026-10-19: storage(A-8/A-10) · firmware 보충(A-9) 이 보는 "System 의 섀시" — Links.Chassis 전체, 없으면 종전 default 1개
+    sys_chassis_all = sys_chassis or ([eff_chassis_uri] if eff_chassis_uri else [])
     # system 수집이 ComputerSystem 응답의 Bios 링크를 여기에 기록한다 (재조회 없음).
     bios_link = {}
     sections = {
@@ -6236,12 +6582,13 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout),
         'processors':        _run('processors', gather_processors, bmc_ip, system_uri,          *creds),
         'memory':            _run('memory',     gather_memory,     bmc_ip, system_uri,          *creds),
-        'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds),
+        'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds, sys_chassis_all),
         'network':           _run('network',    gather_network,    bmc_ip, system_uri,          *creds),
         'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds),
-        'power':             _run('power',      gather_power,      bmc_ip, eff_chassis_uri,     *creds),
+        # 2026-10-19 (A-11): System 이 연결한 섀시 전체 — 1개면 종전 gather_power(eff_chassis_uri) 와 같은 호출
+        'power':             _run('power',      _gather_power_for_system,   bmc_ip, sys_chassis, eff_chassis_uri, *creds),
         # cycle 2026-06-14 (Track 4): 단일노드 thermal (온도 센서 + 팬). 미지원 벤더는 {} graceful.
-        'thermal':           _run('thermal',    gather_thermal,    bmc_ip, eff_chassis_uri,     *creds),
+        'thermal':           _run('thermal',    _gather_thermal_for_system, bmc_ip, sys_chassis, eff_chassis_uri, *creds),
         # P4 (cycle 2026-04-28): NIC 카드 + port-level + FC HBA / InfiniBand 분류
         # cycle 2026-08-03: system_uri 전달 — Chassis 경로 실패 시 Systems 경로 fallback
         # (펌웨어 세대별 NetworkAdapters 부모 리소스 차이. 상세는 함수 docstring).
@@ -6252,6 +6599,10 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     }
     # 2026-10-18 (X9): NetworkAdapter 의 Model 이 비면 같은 카드의 FirmwareInventory 이름으로 채운다 (두 섹션이 다 끝난 뒤, 요청 0).
     _fill_adapter_models_from_firmware(sections.get('network_adapters'), sections.get('firmware'))
+    # 2026-10-19 (A-9): adapter 가 FirmwareInventory 범위를 complex_only 로 밝힌 장비만 — PCIe 장치 · PSU 펌웨어 보충 (섹션 status 불변)
+    if (_str(firmware_scope).strip().lower() == 'complex_only') and isinstance(sections.get('firmware'), list):
+        sections['firmware'] = _supplement_firmware_from_pcie_psu(
+            bmc_ip, sections['firmware'], sys_chassis_all, sections.get('power'), *creds, all_errors)
     # system 수집 뒤에 실행해야 bios_link 가 채워져 있다. _run 을 거치지 않는다.
     bios, bios_errors = gather_bios(bmc_ip, bios_link, *creds)
     all_errors.extend(bios_errors)
@@ -8766,6 +9117,9 @@ def main():
             attempt         = dict(type='dict', default=None, required=False),
             # 2026-10-10 (RA-F05): 이 run 에서 표준 계정으로 이미 난 실패 인증 횟수(복구를 촉발한 401) — 잠금 예산을 그만큼 먼저 쓴다.
             prior_auth_failures = dict(type='int', default=0, required=False),
+            # 2026-10-19 (A-9): adapter vendor_notes.firmware_inventory_scope — 'complex_only' 면 PCIe 장치 · PSU 펌웨어를 firmware[] 에
+            #   보충한다(실측 HPE CSUS 3200: FirmwareInventory 가 complex/nPar 번들 2건만). None/'' 은 종전과 같다.
+            firmware_inventory_scope = dict(type='str', default=None, required=False),
         ),
         supports_check_mode=True,
     )
@@ -8933,6 +9287,7 @@ def main():
         manager_layout=manager_layout,
         # A1b (2026-06-04): ServiceRoot.Product 를 hardware.model fallback 로 전달 (check_redfish 동일).
         product_hint=_safe(service_root, 'Product'),
+        firmware_scope=(p.get('firmware_inventory_scope') or None),
     )
 
     # 대표 시리얼 확정. gather_system 의 SerialNumber 값을 마지막에 덮어쓴다.

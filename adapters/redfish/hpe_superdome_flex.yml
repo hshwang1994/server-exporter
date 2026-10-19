@@ -63,6 +63,10 @@ vendor_notes:
   multi_node_support: true          # cycle 2026-05-12 — _collect_multi_node_topology 활성
   systems_id_pattern: "Partition*"  # /redfish/v1/Systems/Partition0 (sdflexutils 실측)
   manager_layout: "rmc_primary_ilo_secondary"
+  # 2026-10-19 (사용자 지시 — CSUS 3200 과 같은 hpCsus 패밀리 동일 적용, lab 부재 · 실측 시 정정): 뜻은 hpe_csus_3200.yml 의 같은 키 참조.
+  #   RMC 계보가 같아 ProcessorSummary.LogicalProcessorCount 의 의미(코어 수)와 FirmwareInventory 범위(complex 번들만)를 같다고 본다.
+  processor_summary_logical_count: cores
+  firmware_inventory_scope: complex_only
   rmc_firmware_min: "2.0"
   ilo5_firmware_min: "2.0"
   npar_firmware_bundles: true       # complex/nPar firmware bundles (sdflex-ironic-driver wiki)

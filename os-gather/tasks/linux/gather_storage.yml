@@ -155,7 +155,12 @@
 # Round 16: lsblk 가 virtio/일부 가상 disk 에 "model": null 방출 → truthy 체크로 None/''/undefined 를 none 으로.
 # 2026-10-03 (C2): JSON 장치가 없으면 구형 util-linux 용 LSBLK_TXT 줄로 만든다. serial / wwn 은
 #   JSON 경로와 같은 udev 보강값(있을 때만), protocol 은 TRAN 열이 없어 null.
+# 2026-10-19 (B-9): lsblk 가 type=disk 로 내는 가상 블록 장치는 물리 디스크가 아니다 — 이름이 아래 _l_stor_pseudo_disk_re 에 맞으면
+#   JSON · LSBLK_TXT 두 경로 모두에서 뺀다(physical_disks · summary 합계에 들어가지 않는다). pmem(영구 메모리)은 실제 장치라 남긴다.
 - name: "linux | storage | normalize physical disks"
+  vars:
+    # zram(압축 swap) · nbd(network block device) · drbd(복제 블록 장치) · ram(brd RAM disk) · fd(floppy). 이름 앞부분 일치(match).
+    _l_stor_pseudo_disk_re: '^(zram|nbd|drbd|ram|fd)\d*'
   ansible.builtin.set_fact:
     _l_norm_physical_disks: >-
       {%- set out = [] -%}
@@ -191,7 +196,8 @@
       {%- set seen_wwn = {} -%}
       {%- if (devs | length) > 0 -%}
         {%- for dev in devs -%}
-          {%- if (dev.type | default('')) in ['disk'] and ((dev.size | default(0)) | int) > 0 -%}
+          {%- if (dev.type | default('')) in ['disk'] and ((dev.size | default(0)) | int) > 0
+                 and not (((dev.name | default('')) | string) is match(_l_stor_pseudo_disk_re)) -%}
             {%- set _dev_path = '/dev/' ~ dev.name -%}
             {%- set _tran = (dev.tran | default('') | string | lower) -%}
             {%- set _proto = none -%}
@@ -246,7 +252,8 @@
           {%- if line.startswith('LSBLK_TXT|') -%}
             {%- set p = line.split('|') -%}
             {%- set _size = (p[2] | default('')) | trim -%}
-            {%- if (p | length) >= 6 and (p[3] | trim) == 'disk' and _size.isdigit() and (_size | int) > 0 -%}
+            {%- if (p | length) >= 6 and (p[3] | trim) == 'disk' and _size.isdigit() and (_size | int) > 0
+                   and not ((p[1] | trim) is match(_l_stor_pseudo_disk_re)) -%}
               {%- set _dev_path = '/dev/' ~ (p[1] | trim) -%}
               {%- set _rota = (p[4] | trim) | lower -%}
               {%- set _u = udev.get(_dev_path, {}) -%}

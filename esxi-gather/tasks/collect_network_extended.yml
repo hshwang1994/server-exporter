@@ -11,6 +11,7 @@
 #   data.network.adapters[]         — vmnic (NIC HW)
 #   data.network.virtual_switches[] — vSwitch + portgroup
 #   data.network.vmkernels[]        — vmkernel adapter
+#   data.network.summary            — vmnic 속도별 그룹. 속도 null/0(링크 다운) 도 speed_mbps null 그룹으로 센다 · link_type 'ethernet' (2026-10-19 B-3/B-5)
 #   data.storage.hbas[]             — vmhba FC / FCoE / iSCSI 만 (SAS/RAID 제외 — type + driver 두 신호). vmhba 1개 = 항목 1개, 중복 제거 없음(2026-10-19)
 #   data.storage.infiniband[]       — 항상 [] (2026-10-17 — 아래 참조. 종전 nmlx NIC 드라이버명 추정은 제거)
 #
@@ -204,14 +205,26 @@
             {%- endif -%}
           {%- endfor -%}
           {{ out }}
-        # 2026-10-18: 8옥텟 colon-hex 가 아닌 WWN 원문 (위 목록에서는 null 로 둔 값) — merge fragment 가 storage errors[] 1건으로 남긴다.
+        _e_ext_portgroups: >-
+          {%- set d = _e_portgroup.hosts_portgroup_info | default({}) -%}
+          {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
+          {{ (d.get(key, [])) if key else [] }}
+      no_log: true
+
+    # 2026-10-18: 8옥텟 colon-hex 가 아닌 WWN 원문 (hbas[] 에서는 null 로 둔 값) — merge fragment 가 storage errors[] 1건으로 남긴다.
+    # 2026-10-19 (B-12): _e_ext_hbas 가 남긴 vmhba(FC/FCoE/iSCSI) 만 본다 — 종전에는 모든 vmhba 를 훑어 hbas[] 에 들어가지도 않는 SAS/RAID
+    #   어댑터의 WWN 으로 storage 오류(malformed_wwn) 가 났다. 분류 조건을 복제하지 않고 _e_ext_hbas[].name 집합을 그대로 쓴다
+    #   (같은 set_fact 안에서는 다른 키를 참조할 수 없어 별도 task).
+    - name: "esxi | extended | hba malformed wwn (kept vmhba only)"
+      ansible.builtin.set_fact:
         _e_ext_hba_bad_wwn: >-
           {%- set out = [] -%}
+          {%- set kept = (_e_ext_hbas | default([])) | map(attribute='name') | list -%}
           {%- set d = _e_vmhba.hosts_vmhbas_info | default({}) -%}
           {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
           {%- set vmhbas = (d.get(key, {}).get('vmhba_details', [])) if key else [] -%}
           {%- set wwn_re = '^([0-9a-f]{2}:){7}[0-9a-f]{2}$' -%}
-          {%- for h in vmhbas -%}
+          {%- for h in vmhbas if (h.device | default(none)) in kept -%}
             {%- for k in ['port_wwn', 'node_wwn'] -%}
               {%- set n = (h[k] | default(none)) | normalize_wwn -%}
               {%- if n is not none and not (n is match(wwn_re)) -%}
@@ -220,10 +233,6 @@
             {%- endfor -%}
           {%- endfor -%}
           {{ out }}
-        _e_ext_portgroups: >-
-          {%- set d = _e_portgroup.hosts_portgroup_info | default({}) -%}
-          {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
-          {{ (d.get(key, [])) if key else [] }}
       no_log: true
 
     # vswitch 는 dict-of-dict 구조라 별도 task — _e_ext_portgroups 에 의존 (vswitch 별 portgroups join)
@@ -260,23 +269,24 @@
 
     # 2026-06-30: network.summary 를 pnic(_e_ext_adapters, 실 speed 보유) 기준으로 산출.
     #   normalize_network 의 vmk 기반 summary(speed=none) 를 merge 시 덮어쓴다 (null 누출 정정).
-    #   null/0 speed(down NIC) 가드 — Windows/Linux 동일 패턴.
+    # 2026-10-19 (B-3/B-5): 속도 null/0(링크 다운) 인 vmnic 도 speed_mbps null 그룹(키 'None') 으로 센다 — 종전에는 빼서 down NIC 가
+    #   summary 에서 사라지고 link_up_count == quantity 가 항상 참이었다. vmnic 은 전부 Ethernet 이라 link_type 은 'ethernet' (종전 none).
+    #   그룹 키는 속도만 (모델/제조사는 넣지 않는다). link_up_count 는 종전처럼 link_status 로 센다.
     - name: "esxi | extended | compute summary groups (pnic)"
       ansible.builtin.set_fact:
         _e_ext_summary: >-
           {%- set ns = namespace(groups=[], seen={}) -%}
           {%- for n in (_e_ext_adapters | default([])) -%}
-            {%- set sp = n.speed_mbps | default(none) -%}
-            {%- if sp is not none and (sp | int) > 0 -%}
-              {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
-              {%- set key = sp | string -%}
-              {%- if key in ns.seen -%}
-                {%- set idx = ns.seen[key] -%}
-                {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
-              {%- else -%}
-                {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-                {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': none, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
-              {%- endif -%}
+            {%- set raw_sp = n.speed_mbps | default(none) -%}
+            {%- set sp = (raw_sp | int) if (raw_sp is not none and (raw_sp | int) > 0) else none -%}
+            {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
+            {%- set key = sp | string -%}
+            {%- if key in ns.seen -%}
+              {%- set idx = ns.seen[key] -%}
+              {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
+            {%- else -%}
+              {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
+              {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': 'ethernet', 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
             {%- endif -%}
           {%- endfor -%}
           {{ {'groups': ns.groups} }}

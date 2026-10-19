@@ -466,28 +466,6 @@
       {{ out }}
   no_log: true
 
-# network.summary group 산출 (speed_mbps 기준). speed 미보고(가상 NIC/bond) 는 집계 제외.
-- name: "linux | network | compute summary groups (raw)"
-  ansible.builtin.set_fact:
-    _l_net_summary_r: >-
-      {%- set ns = namespace(groups=[], seen={}) -%}
-      {%- for n in (_l_norm_interfaces_raw | default([])) -%}
-        {%- set sp = n.speed_mbps | default(none) -%}
-        {%- if sp is not none and (sp | int) > 0 -%}
-          {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
-          {%- set key = sp | string -%}
-          {%- if key in ns.seen -%}
-            {%- set idx = ns.seen[key] -%}
-            {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
-          {%- else -%}
-            {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-            {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': none, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
-          {%- endif -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ {'groups': ns.groups} }}
-  no_log: true
-
 # N12 (2026-08-12): 수집 성공 판정을 한 곳에서 결정한다 — collected / failed / errors 세 자리가 이 변수를 본다.
 - name: "linux | network | raw 수집 성공 판정"
   ansible.builtin.set_fact:
@@ -504,6 +482,43 @@
       {{ ((_l_norm_interfaces_raw | default([]))
           | merge_linux_addresses(_l_net_raw.stdout_lines | default([])))
          | build_linux_network(_l_net_raw.stdout_lines | default([])) }}
+  no_log: true
+
+# network.summary group 산출 (speed_mbps 기준) — 논리 NIC 1개당 1회 (Windows 와 같은 규칙).
+# 2026-10-19 (B-2 / B-3): 토폴로지 정규화 **뒤**의 interfaces 를 기준으로 센다 — 그래서 이 태스크는 "normalize topology (raw)" 뒤에 있다.
+#   종전에는 정규화 전 목록(_l_norm_interfaces_raw)을 세어 VLAN 하위 인터페이스(eno1.100 / bond0.64)가 부모와 함께 세어졌다.
+#   - VLAN 하위 인터페이스(vlan_id 보유)는 부모와 같은 물리 대역 → 제외.
+#   - bond slave(bond_role=slave) · bridge/team member(bridges[].members / teams[].members)는 master 집계에 이미 들어 있다 → 제외.
+#   - speed 를 못 읽은 NIC(가상 NIC · link down 의 sysfs -1)도 speed_mbps=null 그룹 하나로 세고 link_up_count 를 센다 (종전: 집계 제외).
+#     link_type 은 그대로 null — OS 수집은 Ethernet 임을 단정하지 못한다.
+- name: "linux | network | compute summary groups (raw)"
+  ansible.builtin.set_fact:
+    _l_net_summary_r: >-
+      {%- set topo = _l_net_topo_raw | default({}) -%}
+      {%- set members = [] -%}
+      {%- for grp in ((topo.bridges | default([])) + (topo.teams | default([]))) -%}
+        {%- for m in (grp.members | default([])) -%}{%- set _ = members.append(m.name if m is mapping else m) -%}{%- endfor -%}
+      {%- endfor -%}
+      {%- set ns = namespace(groups=[], seen={}) -%}
+      {%- for n in (topo.interfaces | default([])) -%}
+        {%- set raw_sp = n.speed_mbps | default(none) -%}
+        {%- set sp = raw_sp if (raw_sp is not none and (raw_sp | int) > 0) else none -%}
+        {%- if (n.vlan_id | default(none)) is none
+               and (n.bond_role | default('')) != 'slave'
+               and (n.team_role | default('')) != 'member'
+               and (n.name | default(n.id | default(''))) not in members -%}
+          {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
+          {%- set key = sp | string -%}
+          {%- if key in ns.seen -%}
+            {%- set idx = ns.seen[key] -%}
+            {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
+          {%- else -%}
+            {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
+            {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': none, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ {'groups': ns.groups} }}
   no_log: true
 
 - name: "linux | network | build fragment (raw)"

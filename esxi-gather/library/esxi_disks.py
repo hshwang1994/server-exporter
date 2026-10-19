@@ -124,7 +124,19 @@ def _scsi_disks(hs):
     return [lun for lun in (ss.storageDeviceInfo.scsiLun or []) if isinstance(lun, vim.host.ScsiDisk)]
 
 
+# 2026-10-19 (B-4): LUN 이 붙은 어댑터의 controller_type → physical_disks[].protocol. 표기는 field_dictionary enum
+#   (storage.physical_disks[].protocol) 과 Linux(lsblk TRAN) · Windows(BusType) 와 같다 — FC 어댑터는 'FibreChannel'.
+#   RAID 뒤 LUN 은 논리 볼륨이라 매체 프로토콜을 알 수 없다 → None (Linux 도 RAID 가상 디스크는 null). 어댑터를 못 맞춘 LUN ·
+#   종류 미상(None) → None (추측하지 않는다).
+_LUN_PROTOCOL_BY_CONTROLLER = {'FC': 'FibreChannel', 'iSCSI': 'iSCSI', 'SAS': 'SAS', 'NVMe': 'NVMe', 'SATA': 'SATA'}
+
+
 def _build_disks(target):
+    """physical_disks[] — ScsiDisk LUN 을 OS/Redfish 와 같은 canonical 키로 (id · device · model · serial · wwn · total_mb · media_type · protocol · health).
+
+    protocol 은 LUN 이 붙은 어댑터(_lun_controller_map) 의 종류를 _LUN_PROTOCOL_BY_CONTROLLER 로 옮긴 값이다 (2026-10-19 B-4) —
+    종전에는 항상 None 이었다. media_type 규칙(2026-10-18 X7: RAID 뒤 LUN 은 null) 은 그대로다.
+    """
     hs = _as_target(target).host()
     if hs is None:
         return []
@@ -151,7 +163,7 @@ def _build_disks(target):
             'wwn': wwn,
             'total_mb': total_mb,
             'media_type': media,
-            'protocol': None,
+            'protocol': _LUN_PROTOCOL_BY_CONTROLLER.get(ctype),
             'health': None,
         })
     # canonicalName 기준 정렬(결정적 출력)

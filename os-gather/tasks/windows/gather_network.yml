@@ -451,16 +451,18 @@
 #     (site 10.100.64.120 실측: LabTeam1 + 'LabTeam1 - VLAN 100' 둘 다 20G / 같은 팀 LabTeam1).
 #   - team member 는 팀 aggregate(20G)에 이미 포함 → 중복 방지로 제외.
 #   field_dictionary: summary = 'NIC 그룹' → 논리 NIC 1개당 1회. (teaming 정규화 후 vlan_id/team_role 필요)
+# 2026-10-19 (B-3): speed 를 못 읽은 NIC(Speed 0/null — 끊긴 어댑터 · 어댑터 없는 주소)도 speed_mbps=null 그룹 하나로 세고
+#   link_up_count 를 센다 (종전: 집계 제외 → NIC 수가 줄어 보였다). VLAN tNIC / 팀 member 제외는 그대로. link_type 은 그대로 null.
 - name: "windows | network | compute summary groups"
   ansible.builtin.set_fact:
     _w_net_summary: >-
       {%- set ns = namespace(groups=[], seen={}) -%}
       {%- for n in (_w_net_topo.interfaces | default([])) -%}
-        {%- set sp = n.speed_mbps | default(none) -%}
-        {# VLAN tNIC(같은 물리 대역) / 팀 member(aggregate 중복) / speed 없는 NIC 제외 #}
+        {%- set raw_sp = n.speed_mbps | default(none) -%}
+        {%- set sp = raw_sp if (raw_sp is not none and (raw_sp | int) > 0) else none -%}
+        {# VLAN tNIC(같은 물리 대역) / 팀 member(aggregate 중복) 제외 — speed 없는 NIC 는 null 그룹으로 센다 (2026-10-19 B-3) #}
         {%- if (n.vlan_id | default(none)) is none
-               and (n.team_role | default('')) != 'member'
-               and sp is not none and (sp | int) > 0 -%}
+               and (n.team_role | default('')) != 'member' -%}
           {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
           {%- set key = sp | string -%}
           {%- if key in ns.seen -%}

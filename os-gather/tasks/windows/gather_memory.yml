@@ -171,14 +171,16 @@
       {{ out }}
   no_log: true
 
+# 2026-10-19 (B-10): GB 반올림(round half-even)이 0 이 되는 DIMM(512 MiB 이하)은 unit_capacity_gb 0 그룹을 만들지 않고 합계에도 넣지 않는다
+#   (Linux · storage summary 와 같은 규칙 — 종전에는 capacity_mb > 0 만 봐서 0 GB 그룹이 생겼다).
 - name: "windows | memory | summary + totals"
   ansible.builtin.set_fact:
     _w_mem_summary: >-
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
       {%- for s in (_w_mem_slots | default([])) -%}
         {%- set cap_mb = s.capacity_mb | default(none) -%}
-        {%- if cap_mb is not none and (cap_mb | int) > 0 -%}
-          {%- set cap_gb = ((cap_mb | int) / 1024) | round(0, 'common') | int -%}
+        {%- set cap_gb = (((cap_mb | int) / 1024) | round(0, 'common') | int) if (cap_mb is not none and (cap_mb | int) > 0) else 0 -%}
+        {%- if cap_gb > 0 -%}
           {%- set t = s.type | default(none) -%}
           {%- set sp = s.speed_mhz | default(none) -%}
           {%- set mfr = s.manufacturer | default(none) -%}

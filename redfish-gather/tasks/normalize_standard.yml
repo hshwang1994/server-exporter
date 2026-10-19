@@ -154,11 +154,20 @@
   no_log: true
 
 # ── storage ───────────────────────────────────────────────────────────────────
+# 2026-10-19 (A-6, CSUS 단일 서버 정합): 컨트롤러 정체(model/firmware/manufacturer/health) · 드라이브 · 볼륨이 전부 없는 Storage 멤버는
+#   정보가 0 인 빈 컨테이너라 controllers[] 에서 뺀다 (실측 HPE CSUS 3200 node01/02 "Npar 0 Storage" — SAN boot). Dell AHCI(모델 있음) ·
+#   드라이브가 달린 CSUS node03 컨테이너는 그대로다. physical_disks / logical_volumes 에는 영향이 없다(컨트롤러에 드라이브·볼륨이 없으니).
 - name: "redfish | normalize_standard | controllers"
   ansible.builtin.set_fact:
     _rf_norm_controllers: >-
       {%- set out = [] -%}
+      {%- set vol_ctrl_ids = (_rf_d_storage.volumes | default([])) | map(attribute='controller_id', default=none) | select | list -%}
       {%- for ctrl in (_rf_d_storage.controllers | default([])) -%}
+        {%- set _has_identity = (ctrl.controller_model | default(none)) or (ctrl.controller_firmware | default(none))
+                                or (ctrl.controller_manufacturer | default(none)) or (ctrl.controller_health | default(none))
+                                or (ctrl.health | default(none)) -%}
+        {%- set _has_payload = ((ctrl.drives | default([])) | length) > 0 or ((ctrl.id | default(none)) in vol_ctrl_ids) -%}
+        {%- if _has_identity or _has_payload -%}
         {%- set drives = [] -%}
         {%- for drv in (ctrl.drives | default([])) -%}
           {%- set _ = drives.append({
@@ -181,6 +190,7 @@
           'controller_health':       ctrl.controller_health|default(none),
           'drives':                  drives
         }) -%}
+        {%- endif -%}
       {%- endfor -%}
       {{ out }}
     _rf_norm_physical_disks: >-
@@ -243,8 +253,11 @@
         {%- if m in ns.seen -%}
           {%- set idx = ns.seen[m] -%}
           {%- set known = ns.groups[idx].total_cores -%}
-          {%- set _ = ns.groups[idx].update({'sockets': ns.groups[idx].sockets + 1,
-                                              'total_cores': ((known if known is not none else 0) + cores) if (cores is not none) else known}) -%}
+          {%- set _new_total = ((known if known is not none else 0) + cores) if (cores is not none) else known -%}
+          {%- set _new_sockets = ns.groups[idx].sockets + 1 -%}
+          {#- 2026-10-19 (B-11): cores_per_socket 은 그룹 평균(total // sockets) — Windows · Python _normalize_cpu_raw 와 같은 뜻. 동질 CPU 는 값 불변 -#}
+          {%- set _ = ns.groups[idx].update({'sockets': _new_sockets, 'total_cores': _new_total,
+                                              'cores_per_socket': (_new_total // _new_sockets) if _new_total is not none else none}) -%}
         {%- else -%}
           {%- set _ = ns.seen.update({m: ns.groups | length}) -%}
           {%- set _ = ns.groups.append({
@@ -264,8 +277,9 @@
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
       {%- for s in (_rf_d_memory.slots | default([])) -%}
         {%- set cap_mb = s.capacity_mb | default(s.capacity_mib | default(s.size_mib | default(0))) | int -%}
-        {%- if cap_mb > 0 -%}
-          {%- set cap_gb = (cap_mb / 1024) | round(0, 'common') | int -%}   {#- 2026-10-12: 세 채널 공통 반올림(common) -#}
+        {%- set cap_gb = ((cap_mb / 1024) | round(0, 'common') | int) if cap_mb > 0 else 0 -%}   {#- 2026-10-12: 세 채널 공통 반올림(common) -#}
+        {#- 2026-10-19 (B-10): 512 MiB 미만 DIMM 은 반올림하면 0 GB — unit_capacity_gb 0 그룹을 만들지 않는다 (storage 와 같은 규칙) -#}
+        {%- if cap_gb > 0 -%}
           {%- set t = s.memory_type | default(s.type | default(none)) -%}
           {%- set sp = s.speed_mhz | default(none) -%}
           {%- set mfr = s.manufacturer | default(none) -%}
@@ -282,7 +296,13 @@
           {%- set ns.total = ns.total + cap_gb -%}
         {%- endif -%}
       {%- endfor -%}
-      {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
+      {#- 2026-10-19 (B-1): DIMM 합이 0 이면 memory.total_mb 와 같은 원천(모듈 total_mib → System.MemorySummary)으로 총량을 적고,
+          그것도 모르면 null — 0 은 "메모리 0 GB" 라는 거짓 값이다(Windows · ESXi 는 이미 null). -#}
+      {%- set _tm = _rf_d_memory.total_mib | default(none) -%}
+      {%- set _ms_gib = (_rf_d_system.memory_summary | default({})).total_gib | default(none) -%}
+      {%- set _fb = ((_tm | int) / 1024) | round(0, 'common') | int if (_tm is not none and (_tm | int) > 0)
+                    else ((_ms_gib | int) if (_ms_gib is not none and (_ms_gib | int) > 0) else none) -%}
+      {{ {'groups': ns.groups, 'grand_total_gb': (ns.total if ns.total > 0 else _fb)} }}
     # cycle-016 Phase L: storage groups 에 model 추가 (디스크 모델 분류)
     _rf_summary_storage: >-
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
@@ -315,20 +335,32 @@
     #   port.associated_address(MAC)→소속 adapter 매핑(adp_mac_map)을 추가하고, id-regex 매칭
     #   실패({}) 시 nic_mac 으로 fallback join. id-regex 가 매치하던 vendor(Dell 등)는 불변(Additive).
     _rf_summary_network: >-
-      {%- set ns = namespace(groups=[], seen={}, adp_map={}, adp_mac_map={}, port_lt={}, primary_sp=none) -%}
+      {%- set ns = namespace(groups=[], seen={}, adp_map={}, adp_mac_map={}, port_lt={}, primary_sp=none, adp_lts={}) -%}
       {%- for a in (_rf_d_netad.adapters | default([])) -%}
         {%- set _ = ns.adp_map.update({a.id: a}) -%}
       {%- endfor -%}
       {%- for p in (_rf_d_netad.ports | default([])) -%}
         {%- set pt = (p.port_type | default('') | string | trim | lower) -%}
         {%- set lt = 'ethernet' -%}
-        {%- if 'fibre' in pt or pt == 'fc' -%}{%- set lt = 'fibrechannel' -%}
+        {%- if 'fibre' in pt or pt == 'fc' or 'fcoe' in pt -%}{%- set lt = 'fibrechannel' -%}
         {%- elif 'infin' in pt or pt == 'ib' -%}{%- set lt = 'infiniband' -%}
         {%- elif 'ether' in pt -%}{%- set lt = 'ethernet' -%}{%- endif -%}
         {%- set addr = (p.associated_address | default('') | string | upper | replace(':','') | replace('-','')) -%}
         {%- if addr -%}{%- set _ = ns.port_lt.update({addr: lt}) -%}{%- endif -%}
         {%- set _padp = ns.adp_map.get(p.adapter_id | default(''), {}) -%}
         {%- if addr and _padp -%}{%- set _ = ns.adp_mac_map.update({addr: _padp}) -%}{%- endif -%}
+        {#- 2026-10-19 (A-4): 카드별 포트 링크 종류 — FC/IB 포트만 가진 카드는 네트워크 어댑터 수에서 뺀다 -#}
+        {%- set _aid = p.adapter_id | default('') -%}
+        {%- set _ = ns.adp_lts.update({_aid: (ns.adp_lts.get(_aid, []) + [lt])}) -%}
+      {%- endfor -%}
+      {#- 2026-10-19 (A-4): adapter_count = 이더넷 포트가 하나라도 있거나 포트 정보가 없는 카드 수. FC HBA · IB 전용 카드는 storage.hbas /
+          storage.infiniband 로 요약되므로 여기서 세지 않는다 (실측 CSUS 3200 RMC node01: FC HBA 2장 · NIC 0장 → 종전 2, 이제 0). -#}
+      {%- set ns.adapter_count = 0 -%}
+      {%- for a in (_rf_d_netad.adapters | default([])) -%}
+        {%- set _lts = ns.adp_lts.get(a.id, []) -%}
+        {%- if (_lts | length) == 0 or (_lts | reject('in', ['fibrechannel', 'infiniband']) | list | length) > 0 -%}
+          {%- set ns.adapter_count = ns.adapter_count + 1 -%}
+        {%- endif -%}
       {%- endfor -%}
       {%- for n in (_rf_norm_interfaces | default([])) -%}
         {%- set sp = n.speed_mbps | default(none) -%}
@@ -354,7 +386,7 @@
       {%- endfor -%}
       {{ {
         'groups': ns.groups,
-        'adapter_count': (_rf_d_netad.adapters | default([])) | length,
+        'adapter_count': ns.adapter_count,
         'port_count': (_rf_norm_interfaces | default([])) | length,
         'primary_speed_mbps': ns.primary_sp
       } }}
@@ -387,8 +419,13 @@
         {%- elif 'idrac' in lid or 'ilo' in lid or 'xcc' in lid or 'cimc' in lid or 'bmc' in lid -%}{%- set cat = 'bmc' -%}{# nosec rule12-r1: BMC 표시명 substring (Redfish firmware naming, vendor 분기 아님) #}
         {#- RD-FW1 (2026-10-10): RAID 토큰이 NIC 보다 먼저 — Broadcom MegaRAID 컨트롤러가 'broadcom' 으로 nic 이 되던 것 -#}
         {%- elif 'raid' in lid or 'perc' in lid or 'megaraid' in lid -%}{%- set cat = 'storage_controller' -%}
-        {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid -%}{%- set cat = 'nic' -%}
+        {#- 2026-10-19 (A-9): 'gbe' — PCIe 장치 이름이 "10/25GbE" 류일 때(실측 CSUS PCIeDevice 'MLX MCX631102 10/25GbE 2p SFP28 Adptr' 에는
+            nic/ethernet/제조사 토큰이 없다). FC HBA 이름은 '16Gb' 라 걸리지 않는다 -#}
+        {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid or 'gbe' in lid -%}{%- set cat = 'nic' -%}
         {%- elif 'psu' in lid or 'power supply' in lid -%}{%- set cat = 'psu' -%}
+        {#- 2026-10-19 (A-9): 위 토큰에 안 걸린 '… Controller' 는 저장 컨트롤러로 본다 (실측 CSUS PCIe 'HPE SR3258p-16i/e PCIe4 Controller').
+            BMC(관리 컨트롤러 이름들) · lifecycle · backplane · 이더넷 컨트롤러는 앞 분기가 먼저 잡는다. FC HBA 는 enum 에 없어 other 로 남는다. -#}
+        {%- elif 'controller' in lid -%}{%- set cat = 'storage_controller' -%}
         {%- endif -%}
         {%- set _ = out.append(fw | combine({'category': cat})) -%}
       {%- endfor -%}
@@ -422,19 +459,24 @@
         {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
+      {#- 2026-10-19 (A-3): 용량을 아는 PSU 가 하나도 없으면 total_capacity_w 는 null (0 은 "용량 0 W" 라는 거짓 값 — 실측 HPE CSUS 3200
+          PSU 4개 전부 PowerCapacityWatts 미제공). 일부만 알면 부분 합을 두고 capacity_unknown_count 가 그 사실을 적는다.
+          consumed_capacity_pct 는 total_capacity_w 가 0 이거나 모르거나 소비전력을 모르면 null. redundant 는 종전처럼 설치 PSU 수 ≥ 2 (정책이 아니라 수량). -#}
+      {%- set _cap_known = (ns.psu_total - ns.cap_unknown) > 0 -%}
+      {%- set _consumed = ((_rf_d_power | default({})).power_control | default({})).power_consumed_watts | default(none) -%}
       {{ {
         'psu_count': ns.psu_total,
         'psu_active': ns.psu_active,
         'redundant': ns.psu_total >= 2,
-        'total_capacity_w': ns.cap_total,
+        'total_capacity_w': ns.cap_total if _cap_known else none,
         'capacity_unknown_count': ns.cap_unknown,
         'critical_count': ns.critical,
         'warning_count': ns.warning,
         'ok_count': ns.ok,
         'unknown_health_count': ns.unknown_health,
         'health_rollup': ('Critical' if ns.critical > 0 else ('Warning' if ns.warning > 0 else ('OK' if ns.ok > 0 else 'Unknown'))),
-        'consumed_watts': ((_rf_d_power | default({})).power_control | default({})).power_consumed_watts | default(none),
-        'consumed_capacity_pct': ((((_rf_d_power | default({})).power_control | default({})).power_consumed_watts | default(0) | int) * 100 / ns.cap_total) | round(1) if ns.cap_total > 0 else 0
+        'consumed_watts': _consumed,
+        'consumed_capacity_pct': (((_consumed | int) * 100 / ns.cap_total) | round(1)) if (_cap_known and ns.cap_total > 0 and _consumed is not none) else none
       } }}
   no_log: true
 
@@ -529,7 +571,8 @@
         model:        "{{ _rf_d_system.model        | default(none) }}"
         # 2026-10-17 (사용자 결정 — CSUS 3200 만): HPE CSUS 3200 의 Systems/Partition0.SerialNumber 는 "물리 시리얼-nPar 번호"(SGHD3TLNDD-000)다.
         #   OS 채널과 같은 normalize_os_serial 필터(HPE alias 완전일치 + CSUS 3200 model 패턴 + `-[0-9]{3}$` 세 조건 모두)로 접미사를 떼어
-        #   같은 장비가 OS 와 Redfish 에서 같은 시리얼(SGHD3TLNDD)로 상관되게 한다. ProLiant · Superdome Flex · 다른 벤더는 원문 그대로.
+        #   같은 장비가 OS 와 Redfish 에서 같은 시리얼(SGHD3TLNDD)로 상관되게 한다. ProLiant · 다른 벤더는 원문 그대로.
+        #   2026-10-19 (사용자 결정): 같은 hpCsus 패밀리인 Superdome Flex 모델 패턴도 필터에 더했고 ESXi 채널에도 같은 필터를 건다 — 세 채널 동일.
         #   correlation.serial_number 는 build_correlation.yml 이 hardware.serial 을 복사하므로 함께 바뀐다. multi_node.partitions[].system.serial
         #   은 파티션 원본(-000)을 유지한다(ADR-2026-10-15 hostname 과 같은 원칙). 모듈(redfish_gather.py)·golden 은 바꾸지 않는다.
         serial:       "{{ _rf_d_system.serial | default(none) | normalize_os_serial(_rf_d_system.manufacturer | default(none), _rf_d_system.model | default(none)) }}"
@@ -571,10 +614,19 @@
           {{ s if s else (_rf_d_system.cpu_summary | default({})).core_count | default(none) }}
         # 2026-10-18 (X3): System.ProcessorSummary.LogicalProcessorCount 가 있으면 정본 — per-processor TotalThreads 합은 일부 펌웨어에서
         #   코어 수로 보인다(실측 Cisco CIMC 4.1: 22/소켓 → 44, ESXi 88). 없으면(실측 iLO · XCC · CIMC) 종전처럼 합산.
+        # 2026-10-19 (A-2): 반대 펌웨어도 있다 — HPE CSUS 3200 RMC 1.75.108 은 LogicalProcessorCount 가 **코어 수**다(실측 4노드:
+        #   LogicalProcessorCount == Count × TotalCores, per-CPU TotalThreads == 2 × TotalCores, Bios HThread=Enabled → X3 규칙이 32/64 로 과소집계,
+        #   같은 봉투의 multi_node.partitions[].cpu.logical_threads(합산) 와도 불일치). adapter vendor_notes.processor_summary_logical_count 가
+        #   'cores' 면 per-processor 합을 우선하고 합을 모를 때만 요약값. 값으로 가르고 vendor 이름으로 가르지 않는다(rule 12).
         logical_threads: >-
           {%- set lpc = (_rf_d_system.cpu_summary | default({})).logical_processor_count | default(none) -%}
           {%- set s = (_rf_d_cpus | map(attribute='total_threads') | select | list | sum) if _rf_d_cpus else 0 -%}
+          {%- set _lpc_means = (((_selected_adapter | default({})).vendor_notes | default({})).processor_summary_logical_count | default('', true)) | string | trim | lower -%}
+          {%- if _lpc_means == 'cores' -%}
+          {{ s if s else (lpc if (lpc is not none and (lpc | int) > 0) else none) }}
+          {%- else -%}
           {{ lpc if (lpc is not none and (lpc | int) > 0) else (s if s else none) }}
+          {%- endif -%}
         # BUG-C fix (2026-06-04, HP CSUS 3200): per-processor list 가 비면 (Superdome/CSUS
         # partition System 은 /Processors drill-in 부재 — sdflexutils system.json 실측:
         # Processors/Memory/Storage/EthernetInterfaces sub-collection 부재, ProcessorSummary 만 존재)

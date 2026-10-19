@@ -129,6 +129,11 @@
           ansible.builtin.set_fact:
             _rf_adapter_manager_layout: >-
               {{ ((_selected_adapter | default({})).vendor_notes | default({})).manager_layout | default('') }}
+            # 2026-10-19 (A-9): adapter vendor_notes.firmware_inventory_scope → 모듈 firmware_inventory_scope.
+            #   'complex_only'(HPE CSUS 3200 · Superdome Flex — FirmwareInventory 가 complex/nPar 번들만) 면 모듈이 섀시 PCIeDevices · PSU
+            #   펌웨어를 firmware[] 에 보충한다. 값이 없는 adapter 는 '' → 모듈이 None 처리(종전과 같다). vendor 이름으로 가르지 않는다(rule 12).
+            _rf_adapter_firmware_scope: >-
+              {{ ((_selected_adapter | default({})).vendor_notes | default({})).firmware_inventory_scope | default('') }}
 
         # ── Phase 1: 표준 수집 계정으로 수집 ─────────────────────────────
         # 표준 계정은 전역 1개다 (vault/common/redfish/standard.yml).

@@ -124,6 +124,15 @@ vendor_notes:
   #   사이트 운영 사실(사용자 확인 2026-10-15): CSUS 1대 = RMC 1개 = 파티션 1개 = OS 1개 → RMC 이름이 서버 이름이다.
   #   근거: docs/ai/decisions/ADR-2026-10-15-csus-hostname-rmc-first.md
   hostname_priority: "bmc_first"
+  # 2026-10-19 (실 4노드 미러 재검수 · 사용자 "단일 서버 취급" 지시) — redfish-gather/tasks/normalize_standard.yml 이 읽는다.
+  #   processor_summary_logical_count: RMC 1.75.108 의 System.ProcessorSummary.LogicalProcessorCount 는 **코어 수**다
+  #     (실측 4노드: LogicalProcessorCount == Count × TotalCores, per-CPU TotalThreads == 2 × TotalCores, Bios Attributes HThread=Enabled).
+  #     값 `cores` 면 cpu.logical_threads 는 per-processor TotalThreads 합을 쓴다(2026-10-18 X3 규칙은 그 값을 우선해 32/64 로 과소집계했다).
+  #   firmware_inventory_scope: UpdateService/FirmwareInventory 가 complex/nPar 번들(ComplexFW · Partition0_FW) 2건만 노출한다(실측).
+  #     값 `complex_only` 면 모듈이 섀시 PCIeDevices 의 FirmwareVersion(NIC · FC HBA · RAID) 과 PSU Version 을 firmware[] 에 덧붙인다
+  #     (redfish_gather.py `_supplement_firmware_from_pcie_psu`). 다른 adapter 는 값이 없어 종전과 같다.
+  processor_summary_logical_count: cores
+  firmware_inventory_scope: complex_only
   rmc_firmware_min: "1.0"            # 실측 1.75.108 (2026-06-15) — RMC 1.x 대. 구 추정 3.0 정정 (문서용, 코드 미소비)
   npar_firmware_bundles: true        # complex/nPar firmware bundles (Superdome Flex 상속)
   socket_module: "4-socket"          # 4-socket × 1~4 chassis 모듈식 (최대 16-socket)

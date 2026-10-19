@@ -8,14 +8,21 @@
 #   - cpu.max_speed_mhz = cpuInfo.hz(정격). 종전에는 브랜드 문자열 "@ N.NGHz" 파싱 (B-10).
 #   - uptime_seconds / architecture / cores 는 모르면 null — 0 / 'x86_64' 리터럴 대체 금지 (B-32/B-35).
 #   - 채널 공통 cpu.summary.groups 키 (turbo_max_mhz / l2_cache_kb / l3_cache_kb) 를 null 로 노출.
+#
+# 2026-10-19:
+#   - hostname 후보가 IPv4 리터럴이면 hostname/fqdn 은 null (B-8 — IP 를 hostname 으로 쓰지 않는다).
+#   - system.serial_number / hardware.serial 에 OS·Redfish 와 같은 nPar 접미사 제거 필터(normalize_os_serial) 적용 (A-1-ESXi).
 
 - name: "esxi | normalize system | derive identity"
   ansible.builtin.set_fact:
     # short hostname: dnsConfig.hostName → ansible_hostname → null.  "a.b.c" 형태면 첫 라벨만.
+    # 2026-10-19 (B-8): IPv4 리터럴은 호스트 이름이 아니다 — 종전에는 ansible_hostname 이 '10.100.64.2' 면 hostname '10' · fqdn '10.100.64.2'
+    #   가 나갔다. 후보 문자열이 IPv4 꼴(^[0-9]{1,3}([.][0-9]{1,3}){3}$)이면 없는 것으로 보아 null 이다. dnsConfig.hostName 우선순위는 그대로다.
     _e_sys_short: >-
       {%- set h = (_e_raw_host | default({})).hostname | default(none) -%}
       {%- set h = h if h else (_e_raw_facts.ansible_hostname | default(none)) -%}
       {%- set h = (h | string | trim) if h else '' -%}
+      {%- set h = '' if (h | regex_search('^[0-9]{1,3}([.][0-9]{1,3}){3}$')) else h -%}
       {{ (h.split('.')[0]) if h else none }}
     # 도메인: dnsConfig.domainName → dns_info.domain_name → ansible_hostname 의 '.' 뒷부분 → null
     _e_sys_domain: >-
@@ -29,6 +36,8 @@
       {%- endif -%}
       {%- if not d -%}
         {%- set h = (_e_raw_facts.ansible_hostname | default('') | string | trim) -%}
+        {#- 2026-10-19 (B-8): IPv4 리터럴('10.100.64.2') 의 '.' 뒷부분은 도메인이 아니다 → null -#}
+        {%- set h = '' if (h | regex_search('^[0-9]{1,3}([.][0-9]{1,3}){3}$')) else h -%}
         {%- set d = h.split('.', 1)[1] if ('.' in h) else none -%}
       {%- endif -%}
       {{ (d | string | trim) if d else none }}
@@ -98,7 +107,9 @@
         fqdn:           "{{ _e_sys_fqdn | default(none) }}"
         hosting_type:   "hypervisor"
         # LX-F12 / ESXI-02 (2026-10-10): 자리표시자('NA' 등)는 식별자가 아니다 — identity_normalizer.DMI_SENTINELS (OS 채널과 같은 집합)
-        serial_number:  "{{ (_e_raw_facts.ansible_product_serial | default('')) | dmi_sentinel_null('serial') }}"
+        # 2026-10-19 사용자 결정 — ESXi 도 CSUS 3200/Superdome Flex nPar 접미사 제거(세 조건 모두 맞을 때만 동작, 다른 서버 불변).
+        #   OS/Redfish 와 같은 필터 하나(filter_plugins/serial_normalizer.py) — vendor/model 은 같은 facts 의 system_vendor/product_name.
+        serial_number:  "{{ (_e_raw_facts.ansible_product_serial | default('')) | dmi_sentinel_null('serial') | normalize_os_serial((_e_raw_facts.ansible_system_vendor | default(none)), (_e_raw_facts.ansible_product_name | default(none))) }}"
         system_uuid:    "{{ (_e_raw_facts.ansible_uuid | default(none)) | normalize_uuid }}"
         vendor:         "{{ (_e_raw_facts.ansible_system_vendor | default('')) | dmi_sentinel_null('vendor') }}"
         runtime:
@@ -117,7 +128,9 @@
       hardware:
         vendor:       "{{ (_e_raw_facts.ansible_system_vendor  | default('')) | dmi_sentinel_null('vendor') }}"
         model:        "{{ (_e_raw_facts.ansible_product_name   | default('')) | dmi_sentinel_null('model') }}"
-        serial:       "{{ (_e_raw_facts.ansible_product_serial | default('')) | dmi_sentinel_null('serial') }}"
+        # 2026-10-19 사용자 결정 — ESXi 도 CSUS 3200/Superdome Flex nPar 접미사 제거(세 조건 모두 맞을 때만 동작, 다른 서버 불변).
+        #   correlation.serial_number 는 이 값을 복사한다 (common/tasks/normalize/build_correlation.yml).
+        serial:       "{{ (_e_raw_facts.ansible_product_serial | default('')) | dmi_sentinel_null('serial') | normalize_os_serial((_e_raw_facts.ansible_system_vendor | default(none)), (_e_raw_facts.ansible_product_name | default(none))) }}"
         uuid:         "{{ (_e_raw_facts.ansible_uuid | default(none)) | normalize_uuid }}"
         bios_version: "{{ (_e_raw_facts.ansible_bios_version   | default('')) | dmi_sentinel_null('bios') }}"
         # 2026-06-30: field_dictionary 계약 = "ISO 8601 YYYY-MM-DD 정규화". vSphere 는
