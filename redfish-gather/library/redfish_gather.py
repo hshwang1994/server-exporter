@@ -1766,6 +1766,11 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
             _cmod = _strip_or_none(_safe(chassis_data, 'Model'))
             if _cmod is not None:
                 result['model'] = _cmod
+        for _k, _ck in (('part_number', 'PartNumber'), ('sku', 'SKU')):
+            if result.get(_k) is None:
+                _cv = _strip_or_none(_safe(chassis_data, _ck))
+                if isinstance(_cv, str) and _cv:
+                    result[_k] = _cv
 
 
     return result, errors
@@ -2247,10 +2252,11 @@ def _extract_storage_volumes(sdata, controller_id, bmc_ip, username, password, t
     return volumes, errors
 
 
-def _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl):
+def _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl, chassis_uris=None):
     controllers = []
     volumes = []
     errors = []
+    pcie_cache = None
     for member in members:
         uri = _safe(member, '@odata.id')
         if not uri:
@@ -2271,6 +2277,13 @@ def _gather_standard_storage(bmc_ip, members, username, password, timeout, verif
             'drives': drives,
         }
         ctrl_entry.update(ctrl_info)
+        if (drives and chassis_uris
+                and not any(ctrl_info.get(k) for k in ('controller_name', 'controller_model',
+                                                        'controller_firmware', 'controller_manufacturer'))):
+            if pcie_cache is None:
+                pcie_cache = _pcie_devices_for_chassis(bmc_ip, chassis_uris, username, password, timeout, verify_ssl,
+                                                       'storage', errors)
+            _identify_controller_from_pcie(ctrl_entry, sdata, pcie_cache, bmc_ip, username, password, timeout, verify_ssl)
         controllers.append(ctrl_entry)
         vols, v_errs = _extract_storage_volumes(sdata, _safe(sdata, 'Id'), bmc_ip, username, password, timeout, verify_ssl)
         volumes.extend(vols)
@@ -2356,7 +2369,132 @@ def _gather_smart_storage(bmc_ip, system_uri, username, password, timeout, verif
     return controllers, [], errors
 
 
-def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
+def _pcie_devices_for_chassis(bmc_ip, chassis_uris, username, password, timeout, verify_ssl, section, errors):
+    out, seen = [], set()
+    for cu in _capped([u for u in (chassis_uris or []) if isinstance(u, str) and u], section, errors):
+        st, cdata, cerr = _get(bmc_ip, _p(cu), username, password, timeout, verify_ssl)
+        if cerr or st != 200 or not isinstance(cdata, dict):
+            if st != 404:
+                errors.append(_err(section, f'Chassis {cu} 실패: {cerr or st}', _extended_info(cdata),
+                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        link = _safe(cdata, 'PCIeDevices', '@odata.id')
+        if not isinstance(link, str) or not link:
+            continue
+        st2, coll, err2 = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
+        if err2 or st2 != 200 or not isinstance(coll, dict):
+            if st2 != 404:
+                errors.append(_err(section, f'PCIeDevices {link} 실패: {err2 or st2}', _extended_info(coll),
+                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        for m in _collection_members(bmc_ip, _p(link), coll, username, password, timeout, verify_ssl, section, errors):
+            du = _safe(m, '@odata.id')
+            if not isinstance(du, str) or not du or _p(du) in seen:
+                continue
+            seen.add(_p(du))
+            st3, ddata, err3 = _get(bmc_ip, _p(du), username, password, timeout, verify_ssl)
+            if err3 or st3 != 200 or not isinstance(ddata, dict):
+                errors.append(_err(section, f'PCIeDevice {du} 실패: {err3 or st3}', code=_CODE_NON_BLOCKING_SUBRESOURCE))
+                continue
+            out.append({
+                'id':           _safe(ddata, 'Id'),
+                'uri':          du,
+                'model':        _strip_or_none(_safe(ddata, 'Model')),
+                'manufacturer': _strip_or_none(_safe(ddata, 'Manufacturer')),
+                'firmware':     _strip_or_none(_safe(ddata, 'FirmwareVersion')),
+                'health':       _safe(ddata, 'Status', 'Health'),
+                'serial':       _strip_or_none(_safe(ddata, 'SerialNumber')),
+                'part_number':  _strip_or_none(_safe(ddata, 'PartNumber')),
+                'slot_label':   _strip_or_none(_safe(ddata, 'Slot', 'Location', 'PartLocation', 'ServiceLabel')),
+            })
+    return out
+
+
+def _drive_service_labels(sdata, bmc_ip, username, password, timeout, verify_ssl):
+    labels = []
+    for d_member in _dicts(_safe(sdata, 'Drives')):
+        d_uri = _safe(d_member, '@odata.id')
+        if not isinstance(d_uri, str) or not d_uri:
+            continue
+        st, ddata, err = _get(bmc_ip, _p(d_uri), username, password, timeout, verify_ssl)
+        if err or st != 200 or not isinstance(ddata, dict):
+            continue
+        lab = _strip_or_none(_safe(ddata, 'PhysicalLocation', 'PartLocation', 'ServiceLabel'))
+        if isinstance(lab, str) and lab:
+            labels.append(lab)
+    return labels
+
+
+def _identify_controller_from_pcie(ctrl_entry, sdata, pcie_devices, bmc_ip, username, password, timeout, verify_ssl):
+    sid = _safe(sdata, 'Id')
+    labels = _drive_service_labels(sdata, bmc_ip, username, password, timeout, verify_ssl)
+    if not labels:
+        _notice('storage', 'Storage %s: 컨트롤러 정보 없음 — 드라이브 위치(ServiceLabel) 도 없어 PCIe 장치로 식별 불가' % sid)
+        return False
+    matched = {}
+    for dev in pcie_devices or []:
+        slot = dev.get('slot_label')
+        if not isinstance(slot, str) or not slot:
+            continue
+        prefix = slot.rstrip('/') + '/'
+        if any(lab == slot or lab.startswith(prefix) for lab in labels):
+            matched[dev.get('uri')] = dev
+    if len(matched) != 1:
+        _notice('storage', 'Storage %s: 컨트롤러 정보 없음 — 드라이브 위치에 맞는 PCIe 장치 %d개(1개가 아니면 채우지 않음)'
+                % (sid, len(matched)))
+        return False
+    dev = next(iter(matched.values()))
+    ctrl_entry.update({
+        'controller_name':         dev.get('model'),
+        'controller_model':        dev.get('model'),
+        'controller_firmware':     dev.get('firmware'),
+        'controller_manufacturer': dev.get('manufacturer'),
+        'controller_health':       ctrl_entry.get('controller_health') or dev.get('health'),
+    })
+    if dev.get('model'):
+        ctrl_entry['name'] = dev['model']
+    _notice('storage', 'Storage %s: 컨트롤러 정보 없음 — 드라이브 위치로 PCIe 장치 %s(%s) 를 컨트롤러로 식별'
+            % (sid, _id_text(dev.get('id')) or dev.get('uri'), dev.get('model')))
+    return True
+
+
+def _chassis_drives_fallback(bmc_ip, chassis_uris, username, password, timeout, verify_ssl):
+    controllers, errors = [], []
+    for cu in _capped([u for u in (chassis_uris or []) if isinstance(u, str) and u], 'storage', errors):
+        st, cdata, cerr = _get(bmc_ip, _p(cu), username, password, timeout, verify_ssl)
+        if cerr or st != 200 or not isinstance(cdata, dict):
+            if st != 404:
+                errors.append(_err('storage', f'Chassis {cu} 실패: {cerr or st}', _extended_info(cdata),
+                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        link = _safe(cdata, 'Drives', '@odata.id')
+        if not isinstance(link, str) or not link:
+            continue
+        st2, coll, err2 = _get(bmc_ip, _p(link), username, password, timeout, verify_ssl)
+        if err2 or st2 != 200 or not isinstance(coll, dict):
+            if st2 != 404:
+                errors.append(_err('storage', f'Chassis Drives {link} 실패: {err2 or st2}', _extended_info(coll),
+                                   code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        members = _collection_members(bmc_ip, _p(link), coll, username, password, timeout, verify_ssl, 'storage', errors)
+        if not members:
+            continue
+        drives, d_errs = _extract_storage_drives({'Drives': members}, bmc_ip, username, password, timeout, verify_ssl)
+        errors.extend(d_errs)
+        if not drives:
+            continue
+        cid = _id_text(_safe(cdata, 'Id')) or _p(cu).rstrip('/').rsplit('/', 1)[-1]
+        controllers.append({
+            'id':     'Chassis.%s' % cid,
+            'name':   '%s Drives' % (_strip_or_none(_safe(cdata, 'Name')) or cid),
+            'health': _safe(cdata, 'Status', 'Health') or _safe(cdata, 'Status', 'HealthRollup'),
+            'drives': drives,
+        })
+        _notice('storage', 'Storage 에 드라이브 0건 — 섀시 %s 의 Drives %d건 사용' % (cid, len(drives)))
+    return controllers, errors
+
+
+def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl, chassis_uris=None):
     path = _p(system_uri) + '/Storage'
     st, coll, err = _get(bmc_ip, path, username, password, timeout, verify_ssl)
     errors = []
@@ -2389,8 +2527,13 @@ def gather_storage(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             errors.append(_err('storage',
                                'SimpleStorage 경로가 응답했지만 디스크 정보가 비어 있음'))
         return {'controllers': controllers, 'volumes': []}, errors
-    controllers, volumes, sub_errors = _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl)
+    controllers, volumes, sub_errors = _gather_standard_storage(bmc_ip, members, username, password, timeout, verify_ssl,
+                                                                chassis_uris=chassis_uris)
     errors.extend(sub_errors)
+    if chassis_uris and not any((c.get('drives') if isinstance(c, dict) else None) for c in controllers):
+        extra_ctrls, extra_errs = _chassis_drives_fallback(bmc_ip, chassis_uris, username, password, timeout, verify_ssl)
+        controllers.extend(extra_ctrls)
+        errors.extend(extra_errs)
     return {'controllers': controllers, 'volumes': volumes}, errors
 
 
@@ -2829,6 +2972,30 @@ def _extra_chassis_adapter_collections(bmc_ip, system_uri, extra_chassis_uris, s
     return found
 
 
+def _system_interface_adapter_members(bmc_ip, system_uri, username, password, timeout, verify_ssl, tried, fails, errors):
+    base = _p(system_uri) + '/NetworkInterfaces'
+    tried.append(base)
+    st, coll, err = _get(bmc_ip, base, username, password, timeout, verify_ssl)
+    if err or st != 200 or not isinstance(coll, dict):
+        fails.append((st, err or st, _extended_info(coll), base))
+        return []
+    out, seen = [], set()
+    for m in _collection_members(bmc_ip, base, coll, username, password, timeout, verify_ssl, 'network_adapters', errors):
+        iu = _safe(m, '@odata.id')
+        if not isinstance(iu, str) or not iu:
+            continue
+        st2, idata, err2 = _get(bmc_ip, _p(iu), username, password, timeout, verify_ssl)
+        if err2 or st2 != 200 or not isinstance(idata, dict):
+            errors.append(_err('network_adapters', f'NetworkInterface {iu} 실패: {err2 or st2}',
+                               code=_CODE_NON_BLOCKING_SUBRESOURCE))
+            continue
+        au = _safe(idata, 'Links', 'NetworkAdapter', '@odata.id')
+        if isinstance(au, str) and au and _p(au) not in seen:
+            seen.add(_p(au))
+            out.append({'@odata.id': au})
+    return out
+
+
 def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris, username, password, timeout,
                              verify_ssl, errors):
     sources, tried, fails = [], [], []
@@ -2857,6 +3024,11 @@ def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris
                                                              username, password, timeout, verify_ssl, errors):
             tried.append(base)
             _accept(base, coll, 'extra')
+    if not sources and system_uri:
+        ni_members = _system_interface_adapter_members(bmc_ip, system_uri, username, password, timeout, verify_ssl,
+                                                       tried, fails, errors)
+        if ni_members:
+            sources.append(('system_interfaces', ni_members))
     if not sources and system_uri:
         alt = _p(system_uri) + '/NetworkAdapters'
         if alt not in tried:
@@ -3168,11 +3340,14 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
             _notice('network_adapters', msg)
         return out, errors
 
-    if fails and sources[0][0] == 'extra':
+    if fails and sources[0][0] in ('extra', 'system_interfaces'):
         _st, sig, ext, _base = fails[0]
         if _st != 404:
             errors.append(_err('network_adapters', f'NetworkAdapters {tried[0]} 실패: {sig}', ext,
                                code=_CODE_NON_BLOCKING_SUBRESOURCE))
+    if sources[0][0] == 'system_interfaces':
+        _notice('network_adapters', 'NetworkInterfaces 링크로 네트워크 카드 %d장 수집 (섀시 NetworkAdapters 경로 비어 있음 또는 실패)'
+                % len(sources[0][1]))
 
     items, seen_adapters, seen_ports = [], set(), set()
     ib_idx_by_port = {}
@@ -3970,7 +4145,7 @@ def gather_systems_multi(bmc_ip, systems_coll_uri, vendor, username, password,
         sys_data, sys_errs = gather_system(bmc_ip, m['uri'], vendor, *creds, part_chassis, product_hint)
         cpu_data, cpu_errs = gather_processors(bmc_ip, m['uri'], *creds)
         mem_data, mem_errs = gather_memory(bmc_ip, m['uri'], *creds)
-        sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds)
+        sto_data, sto_errs = gather_storage(bmc_ip, m['uri'], *creds, [part_chassis] if part_chassis else None)
         net_data, net_errs = gather_network(bmc_ip, m['uri'], *creds)
         boot_data, boot_errs = gather_boot(bmc_ip, m['uri'], *creds)
         out['partitions'].append({
@@ -4266,31 +4441,140 @@ def _collect_multi_node_topology(bmc_ip, vendor, service_root,
     }
 
 
+def _supplement_firmware_from_pcie_psu(bmc_ip, fw_list, chassis_uris, power_section, username, password, timeout,
+                                       verify_ssl, errors):
+    out = [f for f in (fw_list or []) if isinstance(f, dict)]
+    existing = {f.get('id') for f in out}
+    added_pcie = added_psu = 0
+    for dev in _pcie_devices_for_chassis(bmc_ip, chassis_uris, username, password, timeout, verify_ssl, 'firmware', errors):
+        if not dev.get('firmware'):
+            continue
+        tail = _id_text(dev.get('id')) or _p(dev.get('uri') or '').rstrip('/').rsplit('/', 1)[-1]
+        fid = 'PCIeDevice.%s' % tail
+        if fid in existing:
+            continue
+        existing.add(fid)
+        added_pcie += 1
+        out.append({
+            'id':         fid,
+            'name':       dev.get('model') or fid,
+            'version':    dev['firmware'],
+            'updateable': None,
+            'component':  dev.get('slot_label') or fid,
+            'pending':    False,
+        })
+    psus = power_section.get('power_supplies') if isinstance(power_section, dict) else None
+    for idx, psu in enumerate(psus or []):
+        if not isinstance(psu, dict) or not psu.get('firmware_version'):
+            continue
+        fid = 'PowerSupply.%d' % idx
+        if fid in existing:
+            continue
+        existing.add(fid)
+        added_psu += 1
+        out.append({
+            'id':         fid,
+            'name':       psu.get('model') or psu.get('name') or fid,
+            'version':    psu['firmware_version'],
+            'updateable': None,
+            'component':  psu.get('name') or fid,
+            'pending':    False,
+        })
+    if added_pcie or added_psu:
+        _notice('firmware', 'FirmwareInventory 범위 complex_only — PCIe 장치 %d건 · PSU %d건 펌웨어를 firmware[] 에 보충'
+                % (added_pcie, added_psu))
+    return out
+
+
+def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl):
+    uris = [u for u in (chassis_uris or []) if isinstance(u, str) and u]
+    if len(uris) <= 1:
+        return gather_power(bmc_ip, (uris[0] if uris else default_uri), username, password, timeout, verify_ssl)
+    psus, errors, pcs, used = [], [], [], []
+    for cu in _capped(uris, 'power', errors):
+        d, e = gather_power(bmc_ip, cu, username, password, timeout, verify_ssl)
+        if not d and _is_404_only_error(e):
+            _notice('power', '섀시 %s: Power 리소스 없음 — 합산에서 제외' % _p(cu))
+            continue
+        errors.extend(e)
+        if not isinstance(d, dict) or not d:
+            continue
+        used.append(cu)
+        psus.extend(d.get('power_supplies') or [])
+        if isinstance(d.get('power_control'), dict):
+            pcs.append(d['power_control'])
+    if not used:
+        return {}, errors
+
+    def _sum_all(key):
+        vals = [pc.get(key) for pc in pcs]
+        if len(vals) != len(used) or any(v is None for v in vals):
+            return None
+        return sum(vals)
+
+    power_control = ({
+        'power_consumed_watts': _sum_all('power_consumed_watts'),
+        'power_capacity_watts': _sum_all('power_capacity_watts'),
+        'interval_in_min':      pcs[0].get('interval_in_min'),
+        'min_consumed_watts':   None,
+        'avg_consumed_watts':   None,
+        'max_consumed_watts':   None,
+    } if pcs else None)
+    _notice('power', 'System 이 연결한 섀시 %d개의 PSU · 소비전력을 합침' % len(used))
+    return {'power_supplies': psus, 'power_control': power_control}, errors
+
+
+def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl):
+    uris = [u for u in (chassis_uris or []) if isinstance(u, str) and u]
+    if len(uris) <= 1:
+        return gather_thermal(bmc_ip, (uris[0] if uris else default_uri), username, password, timeout, verify_ssl)
+    temps, fans, errors, used = [], [], [], []
+    for cu in _capped(uris, 'thermal', errors):
+        d, e = gather_thermal(bmc_ip, cu, username, password, timeout, verify_ssl)
+        if not d and _is_404_only_error(e):
+            _notice('thermal', '섀시 %s: Thermal 리소스 없음 — 합산에서 제외' % _p(cu))
+            continue
+        errors.extend(e)
+        if not isinstance(d, dict) or not d:
+            continue
+        used.append(cu)
+        temps.extend(d.get('temperatures') or [])
+        fans.extend(d.get('fans') or [])
+    if not used:
+        return {}, errors
+    _notice('thermal', 'System 이 연결한 섀시 %d개의 온도 · 팬을 합침' % len(used))
+    return {'temperatures': temps, 'fans': fans}, errors
+
+
 def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                           username, password, timeout, verify_ssl,
                           all_errors, collected, failed, unsupported=None,
-                          manager_layout=None, product_hint=None):
+                          manager_layout=None, product_hint=None, firmware_scope=None):
     _run = _make_section_runner(all_errors, collected, failed, unsupported)
     creds = (username, password, timeout, verify_ssl)
     sys_chassis = _resolve_system_chassis_uris(bmc_ip, system_uri, username, password, timeout, verify_ssl)
     eff_chassis_uri = sys_chassis[0] if sys_chassis else chassis_uri
     extra_chassis = [u for u in sys_chassis[1:] if _p(u) != _p(eff_chassis_uri)]
+    sys_chassis_all = sys_chassis or ([eff_chassis_uri] if eff_chassis_uri else [])
     bios_link = {}
     sections = {
         'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, eff_chassis_uri, product_hint, bios_link),
         'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout),
         'processors':        _run('processors', gather_processors, bmc_ip, system_uri,          *creds),
         'memory':            _run('memory',     gather_memory,     bmc_ip, system_uri,          *creds),
-        'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds),
+        'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds, sys_chassis_all),
         'network':           _run('network',    gather_network,    bmc_ip, system_uri,          *creds),
         'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds),
-        'power':             _run('power',      gather_power,      bmc_ip, eff_chassis_uri,     *creds),
-        'thermal':           _run('thermal',    gather_thermal,    bmc_ip, eff_chassis_uri,     *creds),
+        'power':             _run('power',      _gather_power_for_system,   bmc_ip, sys_chassis, eff_chassis_uri, *creds),
+        'thermal':           _run('thermal',    _gather_thermal_for_system, bmc_ip, sys_chassis, eff_chassis_uri, *creds),
         'network_adapters':  _run('network_adapters',
                                    gather_network_adapters_chassis,
                                    bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis),
     }
     _fill_adapter_models_from_firmware(sections.get('network_adapters'), sections.get('firmware'))
+    if (_str(firmware_scope).strip().lower() == 'complex_only') and isinstance(sections.get('firmware'), list):
+        sections['firmware'] = _supplement_firmware_from_pcie_psu(
+            bmc_ip, sections['firmware'], sys_chassis_all, sections.get('power'), *creds, all_errors)
     bios, bios_errors = gather_bios(bmc_ip, bios_link, *creds)
     all_errors.extend(bios_errors)
     sections['bios'] = bios
@@ -5879,6 +6163,7 @@ def main():
             adapter_id      = dict(type='str',  default=None, required=False),
             attempt         = dict(type='dict', default=None, required=False),
             prior_auth_failures = dict(type='int', default=0, required=False),
+            firmware_inventory_scope = dict(type='str', default=None, required=False),
         ),
         supports_check_mode=True,
     )
@@ -6015,6 +6300,7 @@ def main():
         all_errors, collected, failed, unsupported,
         manager_layout=manager_layout,
         product_hint=_safe(service_root, 'Product'),
+        firmware_scope=(p.get('firmware_inventory_scope') or None),
     )
 
     if _serial_resolver is not None:

@@ -13,6 +13,8 @@ capabilities:
     - memory
     - storage
     - network
+    - power
+    - thermal
 
 vendor_notes:
   design_hints:

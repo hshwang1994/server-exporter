@@ -139,8 +139,8 @@
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
       {%- for s in (_w_mem_slots | default([])) -%}
         {%- set cap_mb = s.capacity_mb | default(none) -%}
-        {%- if cap_mb is not none and (cap_mb | int) > 0 -%}
-          {%- set cap_gb = ((cap_mb | int) / 1024) | round(0, 'common') | int -%}
+        {%- set cap_gb = (((cap_mb | int) / 1024) | round(0, 'common') | int) if (cap_mb is not none and (cap_mb | int) > 0) else 0 -%}
+        {%- if cap_gb > 0 -%}
           {%- set t = s.type | default(none) -%}
           {%- set sp = s.speed_mhz | default(none) -%}
           {%- set mfr = s.manufacturer | default(none) -%}

@@ -512,6 +512,7 @@
             'link_status':     link,
             'link_speed_gbps': pa.speed_gbps | default(none),
             'port_type':       'FibreChannel' if is_fc else 'iSCSI',
+            'iqn':             ((p.node_addr | default(none)) if is_iscsi else none),
             'connection':      ('Fibre Channel' if ct == '1' else ('iSCSI' if ct == '2' else ct_raw)),
             'source':          'os',
           }) -%}

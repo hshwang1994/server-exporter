@@ -29,6 +29,8 @@ vendor_notes:
   multi_node_support: true
   systems_id_pattern: "Partition*"
   manager_layout: "rmc_primary_ilo_secondary"
+  processor_summary_logical_count: cores
+  firmware_inventory_scope: complex_only
   rmc_firmware_min: "2.0"
   ilo5_firmware_min: "2.0"
   npar_firmware_bundles: true

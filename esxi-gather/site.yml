@@ -120,6 +120,9 @@
         - name: "esxi | normalize storage"
           ansible.builtin.include_tasks: tasks/normalize_storage.yml
 
+        - name: "esxi | normalize power/thermal"
+          ansible.builtin.include_tasks: tasks/normalize_power_thermal.yml
+
         - name: "esxi | collect network extended (P4)"
           ansible.builtin.include_tasks: tasks/collect_network_extended.yml
 

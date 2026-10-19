@@ -25,6 +25,9 @@
     _e_raw_controllers:     "{{ _e_disks_result.controllers | default([]) }}"
     _e_raw_logical_volumes: "{{ _e_disks_result.logical_volumes | default([]) }}"
     _e_raw_listening_ports: "{{ _e_disks_result.listening_ports | default([]) }}"
+    _e_raw_sensors: >-
+      {{ (_e_disks_result.sensors | default({}))
+         if ((_e_disks_result.sensors | default({})) is mapping) else {} }}
     _e_raw_host: >-
       {{ (_e_disks_result.host_info | default({}))
          if ((_e_disks_result.host_info | default({})) is mapping) else {} }}

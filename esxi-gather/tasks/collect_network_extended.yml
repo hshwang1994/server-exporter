@@ -141,13 +141,22 @@
             {%- endif -%}
           {%- endfor -%}
           {{ out }}
+        _e_ext_portgroups: >-
+          {%- set d = _e_portgroup.hosts_portgroup_info | default({}) -%}
+          {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
+          {{ (d.get(key, [])) if key else [] }}
+      no_log: true
+
+    - name: "esxi | extended | hba malformed wwn (kept vmhba only)"
+      ansible.builtin.set_fact:
         _e_ext_hba_bad_wwn: >-
           {%- set out = [] -%}
+          {%- set kept = (_e_ext_hbas | default([])) | map(attribute='name') | list -%}
           {%- set d = _e_vmhba.hosts_vmhbas_info | default({}) -%}
           {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
           {%- set vmhbas = (d.get(key, {}).get('vmhba_details', [])) if key else [] -%}
           {%- set wwn_re = '^([0-9a-f]{2}:){7}[0-9a-f]{2}$' -%}
-          {%- for h in vmhbas -%}
+          {%- for h in vmhbas if (h.device | default(none)) in kept -%}
             {%- for k in ['port_wwn', 'node_wwn'] -%}
               {%- set n = (h[k] | default(none)) | normalize_wwn -%}
               {%- if n is not none and not (n is match(wwn_re)) -%}
@@ -156,10 +165,6 @@
             {%- endfor -%}
           {%- endfor -%}
           {{ out }}
-        _e_ext_portgroups: >-
-          {%- set d = _e_portgroup.hosts_portgroup_info | default({}) -%}
-          {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
-          {{ (d.get(key, [])) if key else [] }}
       no_log: true
 
     - name: "esxi | extended | build vswitch list"
@@ -198,17 +203,16 @@
         _e_ext_summary: >-
           {%- set ns = namespace(groups=[], seen={}) -%}
           {%- for n in (_e_ext_adapters | default([])) -%}
-            {%- set sp = n.speed_mbps | default(none) -%}
-            {%- if sp is not none and (sp | int) > 0 -%}
-              {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
-              {%- set key = sp | string -%}
-              {%- if key in ns.seen -%}
-                {%- set idx = ns.seen[key] -%}
-                {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
-              {%- else -%}
-                {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
-                {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': none, 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
-              {%- endif -%}
+            {%- set raw_sp = n.speed_mbps | default(none) -%}
+            {%- set sp = (raw_sp | int) if (raw_sp is not none and (raw_sp | int) > 0) else none -%}
+            {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
+            {%- set key = sp | string -%}
+            {%- if key in ns.seen -%}
+              {%- set idx = ns.seen[key] -%}
+              {%- set _ = ns.groups[idx].update({'quantity': ns.groups[idx].quantity + 1, 'link_up_count': ns.groups[idx].link_up_count + (1 if link_up else 0)}) -%}
+            {%- else -%}
+              {%- set _ = ns.seen.update({key: ns.groups | length}) -%}
+              {%- set _ = ns.groups.append({'speed_mbps': sp, 'link_type': 'ethernet', 'quantity': 1, 'link_up_count': 1 if link_up else 0}) -%}
             {%- endif -%}
           {%- endfor -%}
           {{ {'groups': ns.groups} }}

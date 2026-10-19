@@ -42,3 +42,5 @@ channel_sections:
     - memory
     - storage
     - network
+    - power
+    - thermal

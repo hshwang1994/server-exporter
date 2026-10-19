@@ -1,0 +1,38 @@
+---
+
+- name: "esxi | normalize power/thermal | classify"
+  ansible.builtin.set_fact:
+    _e_pt_failed: >-
+      {{ ((_e_disks_failed_parts | default([])) | select('in', ['connect', 'host_select', 'module', 'sensors']) | list | length) > 0 }}
+    _e_pt_available: "{{ ((_e_raw_sensors | default({})).available | default(false)) | bool }}"
+  no_log: true
+
+- name: "esxi | normalize power/thermal | build fragment"
+  ansible.builtin.set_fact:
+    _data_fragment: >-
+      {%- set s = _e_raw_sensors | default({}) -%}
+      {%- if (_e_pt_failed | bool) or not (_e_pt_available | bool) -%}
+        {{ {} }}
+      {%- else -%}
+        {%- set ps = s.power_supplies | default([]) -%}
+        {%- set pc = s.power_control | default(none) -%}
+        {{ {'power': {'power_supplies': ps, 'power_control': pc,
+                      'summary': ({'power_supplies': ps, 'power_control': pc} | power_summary)},
+            'thermal': {'temperatures': s.temperatures | default([]), 'fans': s.fans | default([])}} }}
+      {%- endif -%}
+    _sections_supported_fragment: ['power', 'thermal']
+    _sections_collected_fragment: "{{ [] if ((_e_pt_failed | bool) or not (_e_pt_available | bool)) else ['power', 'thermal'] }}"
+    _sections_failed_fragment:    "{{ ['power', 'thermal'] if (_e_pt_failed | bool) else [] }}"
+    _sections_unsupported_fragment: "{{ ['power', 'thermal'] if ((not (_e_pt_failed | bool)) and not (_e_pt_available | bool)) else [] }}"
+    _errors_fragment: >-
+      {%- if _e_pt_failed | bool -%}
+        {{ [{'section': 'power',   'message': '전원 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',    'detail': _e_disks_err | default(none)},
+            {'section': 'thermal', 'message': '온도/팬 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': _e_disks_err | default(none)}] }}
+      {%- else -%}
+        {{ [] }}
+      {%- endif -%}
+  no_log: true
+
+- name: "esxi | normalize power/thermal | merge fragment"
+  ansible.builtin.include_tasks:
+    file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"

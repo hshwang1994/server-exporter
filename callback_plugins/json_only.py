@@ -34,7 +34,7 @@ _ALL_SECTIONS = ('system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'netwo
                  'firmware', 'users', 'power', 'thermal')
 _CHANNEL_SECTIONS = {
     'os':      ('system', 'hardware', 'cpu', 'memory', 'storage', 'network', 'users'),
-    'esxi':    ('system', 'hardware', 'cpu', 'memory', 'storage', 'network'),
+    'esxi':    ('system', 'hardware', 'cpu', 'memory', 'storage', 'network', 'power', 'thermal'),
     'redfish': ('system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network',
                 'firmware', 'power', 'thermal'),
 }

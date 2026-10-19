@@ -6,7 +6,7 @@ Map seFallbackCanon() {
     return [
         reason  : '개더링 프로젝트에서 수집 결과를 만들지 못했습니다.',
         sections: ['os'     : ['system', 'hardware', 'cpu', 'memory', 'storage', 'network', 'users'],
-                   'esxi'   : ['system', 'hardware', 'cpu', 'memory', 'storage', 'network'],
+                   'esxi'   : ['system', 'hardware', 'cpu', 'memory', 'storage', 'network', 'power', 'thermal'],
                    'redfish': ['system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network', 'firmware', 'power', 'thermal']],
         all     : ['system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network', 'firmware', 'users', 'power', 'thermal'],
         meta    : ['started_at', 'finished_at', 'duration_ms', 'adapter_id', 'adapter_version', 'ansible_version'],

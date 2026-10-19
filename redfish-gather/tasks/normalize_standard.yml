@@ -126,7 +126,13 @@
   ansible.builtin.set_fact:
     _rf_norm_controllers: >-
       {%- set out = [] -%}
+      {%- set vol_ctrl_ids = (_rf_d_storage.volumes | default([])) | map(attribute='controller_id', default=none) | select | list -%}
       {%- for ctrl in (_rf_d_storage.controllers | default([])) -%}
+        {%- set _has_identity = (ctrl.controller_model | default(none)) or (ctrl.controller_firmware | default(none))
+                                or (ctrl.controller_manufacturer | default(none)) or (ctrl.controller_health | default(none))
+                                or (ctrl.health | default(none)) -%}
+        {%- set _has_payload = ((ctrl.drives | default([])) | length) > 0 or ((ctrl.id | default(none)) in vol_ctrl_ids) -%}
+        {%- if _has_identity or _has_payload -%}
         {%- set drives = [] -%}
         {%- for drv in (ctrl.drives | default([])) -%}
           {%- set _ = drives.append({
@@ -149,6 +155,7 @@
           'controller_health':       ctrl.controller_health|default(none),
           'drives':                  drives
         }) -%}
+        {%- endif -%}
       {%- endfor -%}
       {{ out }}
     _rf_norm_physical_disks: >-
@@ -205,8 +212,10 @@
         {%- if m in ns.seen -%}
           {%- set idx = ns.seen[m] -%}
           {%- set known = ns.groups[idx].total_cores -%}
-          {%- set _ = ns.groups[idx].update({'sockets': ns.groups[idx].sockets + 1,
-                                              'total_cores': ((known if known is not none else 0) + cores) if (cores is not none) else known}) -%}
+          {%- set _new_total = ((known if known is not none else 0) + cores) if (cores is not none) else known -%}
+          {%- set _new_sockets = ns.groups[idx].sockets + 1 -%}
+          {%- set _ = ns.groups[idx].update({'sockets': _new_sockets, 'total_cores': _new_total,
+                                              'cores_per_socket': (_new_total // _new_sockets) if _new_total is not none else none}) -%}
         {%- else -%}
           {%- set _ = ns.seen.update({m: ns.groups | length}) -%}
           {%- set _ = ns.groups.append({
@@ -225,8 +234,8 @@
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
       {%- for s in (_rf_d_memory.slots | default([])) -%}
         {%- set cap_mb = s.capacity_mb | default(s.capacity_mib | default(s.size_mib | default(0))) | int -%}
-        {%- if cap_mb > 0 -%}
-          {%- set cap_gb = (cap_mb / 1024) | round(0, 'common') | int -%}
+        {%- set cap_gb = ((cap_mb / 1024) | round(0, 'common') | int) if cap_mb > 0 else 0 -%}
+        {%- if cap_gb > 0 -%}
           {%- set t = s.memory_type | default(s.type | default(none)) -%}
           {%- set sp = s.speed_mhz | default(none) -%}
           {%- set mfr = s.manufacturer | default(none) -%}
@@ -243,7 +252,11 @@
           {%- set ns.total = ns.total + cap_gb -%}
         {%- endif -%}
       {%- endfor -%}
-      {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
+      {%- set _tm = _rf_d_memory.total_mib | default(none) -%}
+      {%- set _ms_gib = (_rf_d_system.memory_summary | default({})).total_gib | default(none) -%}
+      {%- set _fb = ((_tm | int) / 1024) | round(0, 'common') | int if (_tm is not none and (_tm | int) > 0)
+                    else ((_ms_gib | int) if (_ms_gib is not none and (_ms_gib | int) > 0) else none) -%}
+      {{ {'groups': ns.groups, 'grand_total_gb': (ns.total if ns.total > 0 else _fb)} }}
     _rf_summary_storage: >-
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
       {%- for d in (_rf_norm_physical_disks | default([])) -%}
@@ -266,20 +279,29 @@
       {%- endfor -%}
       {{ {'groups': ns.groups, 'grand_total_gb': ns.total} }}
     _rf_summary_network: >-
-      {%- set ns = namespace(groups=[], seen={}, adp_map={}, adp_mac_map={}, port_lt={}, primary_sp=none) -%}
+      {%- set ns = namespace(groups=[], seen={}, adp_map={}, adp_mac_map={}, port_lt={}, primary_sp=none, adp_lts={}) -%}
       {%- for a in (_rf_d_netad.adapters | default([])) -%}
         {%- set _ = ns.adp_map.update({a.id: a}) -%}
       {%- endfor -%}
       {%- for p in (_rf_d_netad.ports | default([])) -%}
         {%- set pt = (p.port_type | default('') | string | trim | lower) -%}
         {%- set lt = 'ethernet' -%}
-        {%- if 'fibre' in pt or pt == 'fc' -%}{%- set lt = 'fibrechannel' -%}
+        {%- if 'fibre' in pt or pt == 'fc' or 'fcoe' in pt -%}{%- set lt = 'fibrechannel' -%}
         {%- elif 'infin' in pt or pt == 'ib' -%}{%- set lt = 'infiniband' -%}
         {%- elif 'ether' in pt -%}{%- set lt = 'ethernet' -%}{%- endif -%}
         {%- set addr = (p.associated_address | default('') | string | upper | replace(':','') | replace('-','')) -%}
         {%- if addr -%}{%- set _ = ns.port_lt.update({addr: lt}) -%}{%- endif -%}
         {%- set _padp = ns.adp_map.get(p.adapter_id | default(''), {}) -%}
         {%- if addr and _padp -%}{%- set _ = ns.adp_mac_map.update({addr: _padp}) -%}{%- endif -%}
+        {%- set _aid = p.adapter_id | default('') -%}
+        {%- set _ = ns.adp_lts.update({_aid: (ns.adp_lts.get(_aid, []) + [lt])}) -%}
+      {%- endfor -%}
+      {%- set ns.adapter_count = 0 -%}
+      {%- for a in (_rf_d_netad.adapters | default([])) -%}
+        {%- set _lts = ns.adp_lts.get(a.id, []) -%}
+        {%- if (_lts | length) == 0 or (_lts | reject('in', ['fibrechannel', 'infiniband']) | list | length) > 0 -%}
+          {%- set ns.adapter_count = ns.adapter_count + 1 -%}
+        {%- endif -%}
       {%- endfor -%}
       {%- for n in (_rf_norm_interfaces | default([])) -%}
         {%- set sp = n.speed_mbps | default(none) -%}
@@ -305,7 +327,7 @@
       {%- endfor -%}
       {{ {
         'groups': ns.groups,
-        'adapter_count': (_rf_d_netad.adapters | default([])) | length,
+        'adapter_count': ns.adapter_count,
         'port_count': (_rf_norm_interfaces | default([])) | length,
         'primary_speed_mbps': ns.primary_sp
       } }}
@@ -328,8 +350,9 @@
         {%- elif 'service' in lid -%}{%- set cat = 'service_module' -%}
         {%- elif 'idrac' in lid or 'ilo' in lid or 'xcc' in lid or 'cimc' in lid or 'bmc' in lid -%}{%- set cat = 'bmc' -%}
         {%- elif 'raid' in lid or 'perc' in lid or 'megaraid' in lid -%}{%- set cat = 'storage_controller' -%}
-        {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid -%}{%- set cat = 'nic' -%}
+        {%- elif 'nic' in lid or 'ethernet' in lid or 'broadcom' in lid or 'mellanox' in lid or 'gbe' in lid -%}{%- set cat = 'nic' -%}
         {%- elif 'psu' in lid or 'power supply' in lid -%}{%- set cat = 'psu' -%}
+        {%- elif 'controller' in lid -%}{%- set cat = 'storage_controller' -%}
         {%- endif -%}
         {%- set _ = out.append(fw | combine({'category': cat})) -%}
       {%- endfor -%}
@@ -357,19 +380,21 @@
         {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
+      {%- set _cap_known = (ns.psu_total - ns.cap_unknown) > 0 -%}
+      {%- set _consumed = ((_rf_d_power | default({})).power_control | default({})).power_consumed_watts | default(none) -%}
       {{ {
         'psu_count': ns.psu_total,
         'psu_active': ns.psu_active,
         'redundant': ns.psu_total >= 2,
-        'total_capacity_w': ns.cap_total,
+        'total_capacity_w': ns.cap_total if _cap_known else none,
         'capacity_unknown_count': ns.cap_unknown,
         'critical_count': ns.critical,
         'warning_count': ns.warning,
         'ok_count': ns.ok,
         'unknown_health_count': ns.unknown_health,
         'health_rollup': ('Critical' if ns.critical > 0 else ('Warning' if ns.warning > 0 else ('OK' if ns.ok > 0 else 'Unknown'))),
-        'consumed_watts': ((_rf_d_power | default({})).power_control | default({})).power_consumed_watts | default(none),
-        'consumed_capacity_pct': ((((_rf_d_power | default({})).power_control | default({})).power_consumed_watts | default(0) | int) * 100 / ns.cap_total) | round(1) if ns.cap_total > 0 else 0
+        'consumed_watts': _consumed,
+        'consumed_capacity_pct': (((_consumed | int) * 100 / ns.cap_total) | round(1)) if (_cap_known and ns.cap_total > 0 and _consumed is not none) else none
       } }}
   no_log: true
 
@@ -462,7 +487,12 @@
         logical_threads: >-
           {%- set lpc = (_rf_d_system.cpu_summary | default({})).logical_processor_count | default(none) -%}
           {%- set s = (_rf_d_cpus | map(attribute='total_threads') | select | list | sum) if _rf_d_cpus else 0 -%}
+          {%- set _lpc_means = (((_selected_adapter | default({})).vendor_notes | default({})).processor_summary_logical_count | default('', true)) | string | trim | lower -%}
+          {%- if _lpc_means == 'cores' -%}
+          {{ s if s else (lpc if (lpc is not none and (lpc | int) > 0) else none) }}
+          {%- else -%}
           {{ lpc if (lpc is not none and (lpc | int) > 0) else (s if s else none) }}
+          {%- endif -%}
         model: >-
           {%- set _m = _rf_d_cpus | map(attribute='model') | select | list | first | default(none) -%}
           {{ _m if _m else (_rf_d_system.cpu_summary | default({})).model | default(none) }}

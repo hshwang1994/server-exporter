@@ -52,6 +52,40 @@
             echo "FC|$host|$(cl "$wwpn")|$(cl "$wwnn")|$(cl "$sym")|$(cl "$state")|$(cl "$speed")|$(cl "$drv")|$(cl "$fwver")|$(cl "$mdl")|$(cl "$mfr")|$(cl "$ptype")|$pci|$pvn|$pdv"
           done
         fi
+        if [ -d /sys/class/iscsi_host ]; then
+          for ih in /sys/class/iscsi_host/host*; do
+            [ -d "$ih" ] || continue
+            host=$(basename "$ih")
+            rd "$ih/initiatorname"; iqn=$v
+            rd "$ih/ipaddress"; ip=$v
+            rd "$ih/hwaddress"; hw=$v
+            rd "$ih/netdev"; nd=$v
+            rd "$ih/port_state"; pst=$v
+            rd "$ih/port_speed"; psp=$v
+            drv=""
+            if [ -f "$ih/device/scsi_host/$host/proc_name" ]; then rd "$ih/device/scsi_host/$host/proc_name"; drv=$v; fi
+            scnt=0; lcnt=0; siqn=""
+            for s in "$ih"/device/session*; do
+              [ -d "$s" ] || continue
+              sid=$(basename "$s")
+              scnt=$((scnt + 1))
+              rd "$s/iscsi_session/$sid/state"; sst=$v
+              case "$sst" in LOGGED_IN*) lcnt=$((lcnt + 1)) ;; esac
+              if [ -z "$siqn" ]; then rd "$s/iscsi_session/$sid/initiatorname"; siqn=$v; fi
+            done
+            case "$iqn" in ""|"<empty>"|"(null)") iqn=$siqn ;; esac
+            pci=""; pvn=""; pdv=""
+            if [ -f "$ih/device/../uevent" ]; then
+              rd "$ih/device/../uevent"; pci=$(printf '%s\n' "$v" | sed -n 's/^PCI_SLOT_NAME=//p' | head -n 1 | tr -d '|\r')
+            fi
+            if [ -n "$pci" ] && command -v lspci >/dev/null 2>&1; then
+              pl=$(lspci -mm -s "$pci" 2>/dev/null | head -n 1)
+              pvn=$(printf '%s\n' "$pl" | awk -F'"' '{print $4}' | tr -d '|\r')
+              pdv=$(printf '%s\n' "$pl" | awk -F'"' '{print $6}' | tr -d '|\r')
+            fi
+            echo "ISCSI|$host|$(cl "$iqn")|$(cl "$ip")|$(cl "$hw")|$(cl "$nd")|$(cl "$pst")|$(cl "$psp")|$(cl "$drv")|$scnt|$lcnt|$pci|$pvn|$pdv"
+          done
+        fi
         if [ -d /sys/class/infiniband ]; then
           for ib in /sys/class/infiniband/*; do
             [ -d "$ib" ] || continue
@@ -124,6 +158,58 @@
             {%- endif -%}
           {%- endfor -%}
           {{ out }}
+        _l_iscsi_list: >-
+          {%- set groups = {} -%}
+          {%- set order = [] -%}
+          {%- set ph = ['', '<empty>', '(null)'] -%}
+          {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
+            {%- set parts = line.split('|') -%}
+            {%- if parts | length >= 11 and parts[0] == 'ISCSI' -%}
+              {%- set iqn = (parts[2] | trim) if ((parts[2] | trim | lower) not in ph) else none -%}
+              {%- set ip = (parts[3] | trim) if ((parts[3] | trim | lower) not in ph) else none -%}
+              {%- set hw = (parts[4] | trim | lower) if ((parts[4] | trim | lower) not in ph) else none -%}
+              {%- set nd = (parts[5] | trim) if ((parts[5] | trim | lower) not in ph) else none -%}
+              {%- set pst = parts[6] | trim | upper -%}
+              {%- set spfirst = ((parts[7] | trim).split(' ')[0]) if (parts[7] | trim) else '' -%}
+              {%- set spdig = spfirst | regex_replace('[^0-9]', '') -%}
+              {%- set drv = (parts[8] | trim) if (parts[8] | trim) else none -%}
+              {%- set scnt = ((parts[9] | trim) | int) if ((parts[9] | trim) | regex_replace('[^0-9]', '')) else 0 -%}
+              {%- set lcnt = ((parts[10] | trim) | int) if ((parts[10] | trim) | regex_replace('[^0-9]', '')) else 0 -%}
+              {%- set pvn_raw = (parts[12] | trim) if (parts | length >= 14 and (parts[12] | trim)) else '' -%}
+              {%- set pdv_raw = (parts[13] | trim) if (parts | length >= 14 and (parts[13] | trim)) else '' -%}
+              {%- set pvn = '' if (pvn_raw is match('^Vendor [0-9a-fA-F]{4}$')) else pvn_raw -%}
+              {%- set pdv = '' if (pdv_raw is match('^Device [0-9a-fA-F]{4}$')) else pdv_raw -%}
+              {%- set key = (drv | string) ~ '|' ~ (iqn | string) ~ '|' ~ (hw | string) ~ '|' ~ (nd | string) -%}
+              {%- if key not in groups -%}
+                {%- set _ = order.append(key) -%}
+                {%- set _ = groups.update({key: {
+                  'host':            parts[1],
+                  'iqn':             iqn,
+                  'wwpn':            none,
+                  'wwnn':            none,
+                  'model':           pdv if pdv else none,
+                  'vendor':          pvn if pvn else none,
+                  'driver':          drv,
+                  'firmware':        none,
+                  'link_status':     'down',
+                  'link_speed_gbps': (spdig | int) if spdig else none,
+                  'port_type':       'iSCSI',
+                  'ip_address':      ip,
+                  'mac_address':     hw,
+                  'netdev':          nd,
+                  'session_count':   0,
+                  'source':          'os',
+                }}) -%}
+              {%- endif -%}
+              {%- set g = groups[key] -%}
+              {%- set up = (pst == 'LINK UP') or (lcnt > 0) -%}
+              {%- set _ = g.update({'session_count': g.session_count + scnt,
+                                    'link_status': 'up' if (up or g.link_status == 'up') else 'down'}) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- set out = [] -%}
+          {%- for key in order -%}{%- set _ = out.append(groups[key]) -%}{%- endfor -%}
+          {{ out }}
         _l_ib_list: >-
           {%- set out = [] -%}
           {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
@@ -190,13 +276,13 @@
       ansible.builtin.set_fact:
         _data_fragment:
           storage:
-            hbas:       "{{ _l_hbas_list }}"
+            hbas:       "{{ _l_hbas_list + _l_iscsi_list }}"
             infiniband: "{{ _l_ib_list }}"
           network:
             driver_map: "{{ _l_nic_drivers }}"
         _sections_supported_fragment: ['storage', 'network']
         _sections_collected_fragment: >-
-          {{ (['storage'] if _l_hbas_list or _l_ib_list else [])
+          {{ (['storage'] if _l_hbas_list or _l_iscsi_list or _l_ib_list else [])
              + (['network'] if _l_nic_drivers else []) }}
         _sections_failed_fragment:    []
         _errors_fragment: >-
@@ -205,12 +291,12 @@
           {%- set out = [] -%}
           {%- if rc != 0 -%}
             {%- set se = (((_l_hba_raw.stderr | default('')) | string) | replace('\n', ' ') | replace('\r', ' ') | trim)[:160] -%}
-            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=fc_host,infiniband; cause=command_failed; rc=' ~ rc ~ '; stderr=' ~ (se or 'none'))}) -%}
+            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=fc_host,iscsi_host,infiniband; cause=command_failed; rc=' ~ rc ~ '; stderr=' ~ (se or 'none'))}) -%}
           {%- endif -%}
           {%- if (paths | length) > 0 -%}
-            {%- set scope = ((['fc_host'] if (paths | select('search', '/fc_host/') | list | length) > 0 else []) + (['infiniband'] if (paths | select('search', '/infiniband/') | list | length) > 0 else [])) | join(',') -%}
+            {%- set scope = ((['fc_host'] if (paths | select('search', '/fc_host/') | list | length) > 0 else []) + (['iscsi_host'] if (paths | select('search', '/iscsi_host/') | list | length) > 0 else []) + (['infiniband'] if (paths | select('search', '/infiniband/') | list | length) > 0 else [])) | join(',') -%}
             {%- set more = (' 외 ' ~ ((paths | length) - 10) ~ '건') if (paths | length) > 10 else '' -%}
-            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=' ~ (scope or 'fc_host,infiniband') ~ '; cause=attribute_unreadable; count=' ~ (paths | length) ~ '; paths=' ~ (paths[:10] | join(',')) ~ more)}) -%}
+            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=' ~ (scope or 'fc_host,iscsi_host,infiniband') ~ '; cause=attribute_unreadable; count=' ~ (paths | length) ~ '; paths=' ~ (paths[:10] | join(',')) ~ more)}) -%}
           {%- endif -%}
           {{ out }}
       no_log: true
@@ -230,7 +316,7 @@
           - section: storage
             message: "스토리지 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
             detail: >-
-              {{ 'scope=fc_host,infiniband,nic_driver_map; cause=task_failed; msg='
+              {{ 'scope=fc_host,iscsi_host,infiniband,nic_driver_map; cause=task_failed; msg='
                  ~ ((ansible_failed_result.msg | default('') | string | trim) or 'none') }}
       no_log: true
 

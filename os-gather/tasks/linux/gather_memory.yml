@@ -70,8 +70,9 @@
     _l_mem_summary: >-
       {%- set ns = namespace(groups=[], seen={}, total=0) -%}
       {%- for s in (_l_mem_slots | default([])) -%}
-        {%- if (s.capacity_mb | default(0)) and (s.capacity_mb | int) > 0 -%}
-          {%- set cap_gb = ((s.capacity_mb | int) / 1024) | round(0, 'common') | int -%}
+        {%- set cap_mb = s.capacity_mb | default(none) -%}
+        {%- set cap_gb = (((cap_mb | int) / 1024) | round(0, 'common') | int) if (cap_mb is not none and (cap_mb | int) > 0) else 0 -%}
+        {%- if cap_gb > 0 -%}
           {%- set t = s.type | default(none) -%}
           {%- set sp = s.speed_mhz | default(none) -%}
           {%- set mfr = s.manufacturer | default(none) -%}
@@ -90,8 +91,8 @@
       {%- endfor -%}
       {%- set phys = (_l_mem_rp.MEM_PHYS_MB | default('')) | trim -%}
       {%- set vis_kb = (_l_mem_rp.MEM_TOTAL_KB | default('')) | trim -%}
-      {%- set fb_mb = (phys | int) if (phys.isdigit() and (phys | int) > 0) else (((vis_kb | int) / 1024) if vis_kb.isdigit() else 0) -%}
-      {%- set fallback_total = (fb_mb / 1024) | round(0, 'common') | int -%}
+      {%- set fb_mb = (phys | int) if (phys.isdigit() and (phys | int) > 0) else (((vis_kb | int) / 1024) if (vis_kb.isdigit() and (vis_kb | int) > 0) else none) -%}
+      {%- set fallback_total = ((fb_mb / 1024) | round(0, 'common') | int) if fb_mb is not none else none -%}
       {{ {'groups': ns.groups, 'grand_total_gb': ns.total if ns.total > 0 else fallback_total} }}
   no_log: true
 

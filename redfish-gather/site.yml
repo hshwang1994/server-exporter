@@ -83,6 +83,8 @@
           ansible.builtin.set_fact:
             _rf_adapter_manager_layout: >-
               {{ ((_selected_adapter | default({})).vendor_notes | default({})).manager_layout | default('') }}
+            _rf_adapter_firmware_scope: >-
+              {{ ((_selected_adapter | default({})).vendor_notes | default({})).firmware_inventory_scope | default('') }}
 
         - name: "redfish | collect standard"
           ansible.builtin.include_tasks: tasks/collect_standard.yml

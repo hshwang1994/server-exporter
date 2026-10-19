@@ -382,10 +382,10 @@
     _w_net_summary: >-
       {%- set ns = namespace(groups=[], seen={}) -%}
       {%- for n in (_w_net_topo.interfaces | default([])) -%}
-        {%- set sp = n.speed_mbps | default(none) -%}
+        {%- set raw_sp = n.speed_mbps | default(none) -%}
+        {%- set sp = raw_sp if (raw_sp is not none and (raw_sp | int) > 0) else none -%}
         {%- if (n.vlan_id | default(none)) is none
-               and (n.team_role | default('')) != 'member'
-               and sp is not none and (sp | int) > 0 -%}
+               and (n.team_role | default('')) != 'member' -%}
           {%- set link_up = (n.link_status | default('') | lower) in ['up','linkup'] -%}
           {%- set key = sp | string -%}
           {%- if key in ns.seen -%}

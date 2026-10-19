@@ -31,6 +31,8 @@ vendor_notes:
   systems_id_pattern: "Partition*"
   manager_layout: "rmc_primary"
   hostname_priority: "bmc_first"
+  processor_summary_logical_count: cores
+  firmware_inventory_scope: complex_only
   rmc_firmware_min: "1.0"
   npar_firmware_bundles: true
   socket_module: "4-socket"

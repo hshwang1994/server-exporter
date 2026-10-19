@@ -4,6 +4,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import inspect
+import re
 import socket
 import ssl
 import traceback
@@ -70,6 +71,9 @@ def _scsi_disks(hs):
     return [lun for lun in (ss.storageDeviceInfo.scsiLun or []) if isinstance(lun, vim.host.ScsiDisk)]
 
 
+_LUN_PROTOCOL_BY_CONTROLLER = {'FC': 'FibreChannel', 'iSCSI': 'iSCSI', 'SAS': 'SAS', 'NVMe': 'NVMe', 'SATA': 'SATA'}
+
+
 def _build_disks(target):
     hs = _as_target(target).host()
     if hs is None:
@@ -95,7 +99,7 @@ def _build_disks(target):
             'wwn': wwn,
             'total_mb': total_mb,
             'media_type': media,
-            'protocol': None,
+            'protocol': _LUN_PROTOCOL_BY_CONTROLLER.get(ctype),
             'health': None,
         })
     return sorted(out, key=lambda d: d.get('id') or '')
@@ -450,6 +454,131 @@ def _build_host_info(target, hostname=None):
     return info
 
 
+_SENSOR_HEALTH = {'green': 'OK', 'yellow': 'Warning', 'red': 'Critical'}
+_HEALTH_RANK = {'Critical': 3, 'Warning': 2, 'OK': 1}
+_PSU_NAME_RE = re.compile(r'^\s*power\s+supply\s+(\d+)\b', re.IGNORECASE)
+_PHYSICAL_CONTEXT = (('memory module', 'Memory'), ('disk or disk bay', 'StorageDevice'), ('power supply', 'PowerSupply'),
+                     ('system board', 'SystemBoard'), ('processor', 'CPU'), ('memory', 'Memory'), ('disk', 'StorageDevice'),
+                     ('fan', 'Fan'), ('chassis', 'Chassis'))
+
+
+def _sensor_reading(sensor):
+    raw = getattr(sensor, 'currentReading', None)
+    if raw is None:
+        return None
+    try:
+        mod = int(getattr(sensor, 'unitModifier', 0) or 0)
+        val = float(raw) * (10 ** mod)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    rounded = round(val)
+    return int(rounded) if abs(val - rounded) < 1e-9 else round(val, 3)
+
+
+def _sensor_health(sensor):
+    hs = getattr(sensor, 'healthState', None)
+    key = hs.get('key') if isinstance(hs, dict) else getattr(hs, 'key', None)
+    return _SENSOR_HEALTH.get(_s(key).lower()) if _s(key) else None
+
+
+def _worst_health(values):
+    ranked = [v for v in values if v in _HEALTH_RANK]
+    return max(ranked, key=lambda v: _HEALTH_RANK[v]) if ranked else None
+
+
+def _physical_context(name):
+    low = (_s(name) or '').lower()
+    for prefix, ctx in _PHYSICAL_CONTEXT:
+        if low.startswith(prefix):
+            return ctx
+    return None
+
+
+def _fan_units(base_units):
+    u = (_s(base_units) or '').lower()
+    if u == 'rpm':
+        return 'RPM'
+    if u in ('percent', 'percentage', '%'):
+        return 'Percent'
+    return _s(base_units)
+
+
+def _build_sensors(target):
+    tgt = _as_target(target)
+    hs = tgt.host()
+    out = {'available': False, 'sensor_count': 0, 'temperatures': [], 'fans': [], 'power_supplies': [],
+           'power_control': None, 'power_sensors': []}
+    if hs is None:
+        return out
+    runtime = getattr(hs, 'runtime', None)
+    health = getattr(runtime, 'healthSystemRuntime', None) if runtime is not None else None
+    info = getattr(health, 'systemHealthInfo', None) if health is not None else None
+    if info is None:
+        return out
+    sensors = list(getattr(info, 'numericSensorInfo', None) or [])
+    out['available'] = True
+    out['sensor_count'] = len(sensors)
+    psus = {}
+    other_watts = []
+    for sensor in sensors:
+        stype = (_s(getattr(sensor, 'sensorType', None)) or '').lower()
+        name = _s(getattr(sensor, 'name', None))
+        units = _s(getattr(sensor, 'baseUnits', None)) or ''
+        health_v = _sensor_health(sensor)
+        reading = _sensor_reading(sensor)
+        if stype == 'temperature':
+            out['temperatures'].append({
+                'name': name,
+                'reading_celsius': int(round(reading)) if reading is not None else None,
+                'health': health_v,
+                'state': 'Enabled',
+                'upper_critical': None,
+                'physical_context': _physical_context(name),
+            })
+            continue
+        if stype == 'fan':
+            out['fans'].append({
+                'name': name,
+                'reading': int(round(reading)) if reading is not None else None,
+                'reading_units': _fan_units(units),
+                'health': health_v,
+                'state': 'Enabled',
+            })
+            continue
+        if stype != 'power':
+            continue
+        m = _PSU_NAME_RE.match(name or '')
+        if m is not None:
+            psu = psus.setdefault(int(m.group(1)), {'healths': []})
+            psu['healths'].append(health_v)
+        if units.lower() == 'watts' and reading is not None:
+            out['power_sensors'].append({'name': name, 'watts': reading, 'health': health_v,
+                                         'psu': int(m.group(1)) if m is not None else None})
+            if m is None:
+                other_watts.append(reading)
+    for idx in sorted(psus):
+        out['power_supplies'].append({
+            'name': 'Power Supply %d' % idx,
+            'model': None, 'serial': None, 'manufacturer': None, 'part_number': None,
+            'power_capacity_w': None, 'firmware_version': None,
+            'health': _worst_health(psus[idx]['healths']),
+            'state': 'Enabled',
+        })
+    consumed = other_watts[0] if len(other_watts) == 1 else None
+    if len(other_watts) > 1:
+        tgt.notice('power', 'PSU 가 아닌 전력(Watts) 센서가 %d개 — 소비전력을 고르지 않음(null)' % len(other_watts))
+    if out['power_supplies'] or consumed is not None:
+        out['power_control'] = {
+            'power_consumed_watts': consumed,
+            'power_capacity_watts': None,
+            'interval_in_min': None,
+            'min_consumed_watts': None,
+            'avg_consumed_watts': None,
+            'max_consumed_watts': None,
+        }
+    return out
+
+
 def _safe_build(part, fn, target, part_errors, default=None):
     try:
         return fn(target)
@@ -504,6 +633,7 @@ def main():
     target = None
     disks, controllers, listening_ports, host_info = [], [], [], {}
     logical_volumes = []
+    sensors = {}
 
     try:
         _prev_default_timeout = socket.getdefaulttimeout()
@@ -530,6 +660,7 @@ def main():
                                               target, part_errors)
                 host_info = _safe_build('host_info', _build_host_info,
                                         target, part_errors, default={})
+                sensors = _safe_build('sensors', _build_sensors, target, part_errors, default={})
 
         result = dict(
             changed=False,
@@ -537,6 +668,7 @@ def main():
             controllers=controllers, listening_ports=listening_ports,
             logical_volumes=logical_volumes,
             host_info=host_info,
+            sensors=sensors,
             connect_ok=connect_ok,
             failed_parts=sorted(part_errors.keys()),
             part_errors=part_errors,
