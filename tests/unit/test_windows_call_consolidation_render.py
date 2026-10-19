@@ -152,6 +152,21 @@ FILTERS = {
 _JINJA_MARKERS = ("{{", "{%", "{#")
 
 
+def _regex_search(value, pattern, *groups, **_kw):
+    """ansible.builtin.regex_search 최소 호환 (test_gather_identity_render 와 같은 shim) — 2026-10-19: Windows system.version 의
+    `Server 20xx` 연도 추출이 쓴다. 미매치는 None, '\1' 인자가 있으면 그룹 list."""
+    import re as _re
+    m = _re.search(pattern, str(value))
+    if not m:
+        return None
+    if groups:
+        return [m.group(int(g.lstrip("\\"))) for g in groups]
+    return m.group(0)
+
+
+FILTERS.setdefault("regex_search", _regex_search)
+
+
 def _native_env() -> NativeEnvironment:
     env = NativeEnvironment()
     env.filters.update(FILTERS)
@@ -707,7 +722,26 @@ INTENDED_ERRORS_OVERRIDE = {
     ("network", "net_script_failed"): [{"section": "network", "message": "네트워크 정보 수집에 실패했습니다. 대상 상태와 수집 로그를 확인하세요.",
                                         "detail": "source=Get-NetIPAddress,Get-NetAdapter; cause=no_output; rc=1; parts=script"}],
 }
-INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_errors_fragment"},
+def _system_version_with_server_year(frag):
+    """2026-10-19 (사용자 결정 — 2026-10-17 "현행 유지" 를 뒤집음): Windows Server 의 system.version 은 caption 연도 + DisplayVersion
+    (`2022-21H2` · `2019-1809`). 종전 체인은 DisplayVersion 그대로였으니 기대값에 같은 변환을 건다. 연도가 없으면(클라이언트 Windows) 그대로."""
+    frag = copy.deepcopy(frag)
+    sysd = frag.get("system") if isinstance(frag, dict) else None
+    if not isinstance(sysd, dict):
+        return frag
+    m = re.search(r"Server +(20[0-9]{2})", str(sysd.get("distribution") or ""))
+    v = sysd.get("version")
+    if m and v not in (None, ""):
+        sysd["version"] = f"{m.group(1)}-{v}"
+    return frag
+
+
+# (section, scenario 이름 또는 "*") → {fragment 변수: 종전 값 → 기대 값}. 의도한 값 변경은 여기 날짜와 함께 적는다.
+INTENDED_FRAGMENT_FIX = {("system", "*"): {"_data_fragment": _system_version_with_server_year}}
+
+
+# 2026-10-19: system build fragment 의 _data_fragment — version 식(Server 연도 접두)
+INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_errors_fragment", "_data_fragment"},
                          # 2026-10-18 (X6): logical_volumes 가 BusType RAID 디스크로 채워진다 (RAID 디스크 없는 시나리오는 종전과 같은 [])
                          ("storage", "windows | storage | build fragment"): {"_errors_fragment", "_data_fragment"},
                          ("storage", "windows | storage | compute summary groups"): {"_w_logical_volumes"},
@@ -725,7 +759,7 @@ INTENDED_CHANGED_KEYS = {("system", "windows | system | build fragment"): {"_err
                          #   note 에 내부 규칙 번호 없음. _w_hbas 는 글자 그대로다.
                          ("storage", "windows | storage | build HBA/IB canonical lists"): {"_w_ib", "_w_hbas", "_w_hba_components_failed"},
                          # 2026-10-18 (HBA 전수 점검): Bug B 차단 — from_json 가드 + 스크립트 실패 사실(_w_*_script_failed/_w_hba_script_error);
-                         #   _w_hbas 는 link_status up/down/null(종전 unknown 폐지) + PortState 보강; 구성요소 성패 목록
+                         #   _w_hbas 는 link_status up/down 둘뿐(2026-10-19 — null 도 폐지) + PortState 보강; 구성요소 성패 목록
                          ("storage", "windows | storage | parse HBA/IB raw json"): {"_w_hba_parsed", "_w_ib_parsed", "_w_hba_script_failed",
                                                                                   "_w_ib_script_failed", "_w_hba_script_error"}}
 # 태스크 단위로 바뀐 키(set_fact 밖) — 식별자 진단의 문장 변수(vars)에 setup 실패 문장 2개를 더했다
@@ -775,6 +809,9 @@ def test_old_and_new_chains_render_identical_fragments(section, scenario):
         if key == "_errors_fragment":
             expected = list(expected or []) + INTENDED_EXTRA_ERRORS.get((section, scenario.__name__), [])
             expected = INTENDED_ERRORS_OVERRIDE.get((section, scenario.__name__), expected)
+        fix = (INTENDED_FRAGMENT_FIX.get((section, scenario.__name__)) or INTENDED_FRAGMENT_FIX.get((section, "*")) or {}).get(key)
+        if fix is not None:
+            expected = fix(expected)
         assert new_frag[key] == expected, f"{section}/{scenario.__name__}: {key} 가 종전과 다르다"
     shared = shared_facts(old_ctx, new_ctx, facts)
     assert shared, "비교할 중간 변수가 없다 — 하네스가 체인을 끝까지 돌리지 못했다"
@@ -868,6 +905,7 @@ def test_new_chain_reproduces_120_system():
     s = sys_120()
     frag, _ = render_new("system", s["comps"], s["facts"])
     ev = {k: v for k, v in _evidence()["system"].items() if k != "runtime"}
+    ev = _system_version_with_server_year({"system": ev})["system"]   # 2026-10-19: 실측 '21H2' → '2022-21H2' (canary 로 재확인)
     got = frag["_data_fragment"]["system"]
     # NativeEnvironment 는 숫자뿐인 문자열을 숫자로 읽는다 (kernel) — 값 계약만 본다
     got = dict(got, kernel=str(got["kernel"]))

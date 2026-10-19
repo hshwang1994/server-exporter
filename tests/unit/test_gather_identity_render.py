@@ -158,10 +158,32 @@ def test_windows_identity_from_reference_capture():
     assert _render(frag["fqdn"], ctx) == "horizon-cs.gooddi.lab"
     # NativeEnvironment 는 단일 숫자 문자열을 literal_eval 한다 — 값 계약만 본다 (production 은 `| string` 로 문자열 고정)
     assert str(_render(frag["kernel"], ctx)) == "20348"
-    assert _render(frag["version"], ctx) == "21H2"
+    assert _render(frag["version"], ctx) == "2022-21H2", "2026-10-19: Windows Server 는 caption 의 연도 + DisplayVersion"
     assert _render(frag["architecture"], ctx) == "x86_64"
     assert _render(frag["uptime_seconds"], ctx) == 574
     assert ctx["_w_sys_ok"] is True
+
+
+@pytest.mark.parametrize("caption, rel_id, version, expected", [
+    ("Microsoft Windows Server 2025 Datacenter", "24H2", "10.0.26100", "2025-24H2"),
+    ("Microsoft Windows Server 2022 Standard Evaluation", "21H2", "10.0.20348", "2022-21H2"),
+    ("Microsoft Windows Server 2019 Datacenter", "1809", "10.0.17763", "2019-1809"),
+    ("Microsoft Hyper-V Server 2019", "1809", "10.0.17763", "2019-1809"),
+    ("Microsoft Windows 10 Home", "22H2", "10.0.19045", "22H2"),
+    ("Microsoft Windows 11 Pro", "24H2", "10.0.26100", "24H2"),
+    (None, "21H2", "10.0.20348", "21H2"),
+    ("Microsoft Windows Server 2022 Standard", None, "10.0.20348", "10.0.20348"),
+])
+def test_windows_version_prefixes_the_server_year(caption, rel_id, version, expected):
+    """2026-10-19 사용자 결정(2026-10-17 "현행 유지" 를 뒤집음): Windows Server 는 `연도-DisplayVersion`(2025-24H2 · 2022-21H2 · 2019-1809).
+    연도가 없는 클라이언트 Windows 는 DisplayVersion 그대로, DisplayVersion/ReleaseId 가 없으면 종전 폴백(Win32 Version) 그대로 — 합성하지 않는다."""
+    ctx = _win_resolve({
+        "_w_os_data": {"caption": caption, "hostname": "WIN-X", "domain": None, "build": "20348",
+                       "rel_id": rel_id, "version": version, "arch": "64-bit"},
+        "ansible_hostname": "WIN-X", "ansible_fqdn": "WIN-X", "ansible_architecture": "64-bit",
+    })
+    frag = _win_system_fragment()
+    assert _render(frag["version"], ctx) == expected
 
 
 def test_windows_identity_nulls_are_null_not_placeholders():

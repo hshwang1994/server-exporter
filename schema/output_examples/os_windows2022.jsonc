@@ -217,7 +217,7 @@
       "architecture": "x86_64",                         // CPU 아키텍처 (Linux="x86_64" / Redfish="x86")
       "distribution": "Microsoft Windows Server 2022 Standard Evaluation",  // Windows 는 풀 이름
       "os_family": "Windows",                           // OS family — RedHat / Debian / Windows / VMware ESXi
-      "version": "21H2",                                   // Windows release ID
+      "version": "2022-21H2",                              // Windows Server: <Caption 연도>-<DisplayVersion> (2026-10-19). 클라이언트 Windows 는 DisplayVersion 그대로
       "hosting_type": "virtual",                        // physical / virtual / hypervisor / container / baremetal
       "uptime_seconds": 732923,                         // 부팅 후 경과 (초)
       "serial_number": "VMware-42 34 e4 39 a7 73 eb 5a-e4 72 c8 37 fe e7 55 10",

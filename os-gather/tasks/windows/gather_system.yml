@@ -315,12 +315,19 @@
       system:
         os_family:      "Windows"
         distribution:   "{{ (_w_os_data.caption | default(none, true)) or (ansible_distribution | default(none)) }}"
-        # DisplayVersion(21H2 등) → ReleaseId → Win32_OperatingSystem.Version. rel_id 가 null 이면
+        # DisplayVersion(24H2 · 21H2 등) → ReleaseId → Win32_OperatingSystem.Version. rel_id 가 null 이면
         # 종전 `default()` 는 발동하지 않았다 (정의된 null) — 명시 분기.
+        # 2026-10-19 (사용자 결정 — 2026-10-17 "현행 유지(24H2 그대로)" 를 뒤집음): Windows Server 는 caption 의 제품 연도를 앞에 붙여
+        #   `2025-24H2` · `2022-21H2` · `2019-1809` 로 낸다. 연도는 caption(없으면 ansible_distribution)의 `Server 20xx` 토큰에서만 읽는다
+        #   (Hyper-V Server 포함). 클라이언트 Windows(10/11 — 연도 없음)는 DisplayVersion 그대로, rel_id 가 없으면 종전 폴백(Win32 Version) 그대로다 —
+        #   추정으로 합성하지 않는다. regex_search 는 미매치에 None 을 주므로 결과를 바로 조건에 쓰지 않는다(rule 95 #12).
         version: >-
           {%- set r = (_w_os_data.rel_id | default('', true)) | string | trim -%}
           {%- set v = (_w_os_data.version | default('', true)) | string | trim -%}
-          {{ r if r else (v if v else (ansible_distribution_version | default(none))) }}
+          {%- set cap = ((_w_os_data.caption | default('', true)) or (ansible_distribution | default('', true))) | string -%}
+          {%- set ym = cap | regex_search('Server +20[0-9]{2}') -%}
+          {%- set yr = ym[-4:] if (ym is not none and ym) else '' -%}
+          {{ (yr ~ '-' ~ r) if (r and yr) else (r if r else (v if v else (ansible_distribution_version | default(none)))) }}
         # 커널 = 빌드 번호. 값이 없으면 null (종전 `| string` 이 "None" 문자열을 냈다).
         kernel: >-
           {%- set b = (_w_os_data.build | default('', true)) | string | trim -%}

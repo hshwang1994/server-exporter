@@ -589,9 +589,25 @@ def _hosting_with_vbs(hosting):
     return dict(hosting, VbsStatus="")
 
 
+def _sys_version_with_server_year(frag):
+    # 2026-10-19 (사용자 결정): Windows Server 의 system.version 은 caption 연도 + DisplayVersion (`2022-21H2` · `2019-1809`) — 종전 체인은 DisplayVersion 그대로
+    import re as _re
+    frag = copy.deepcopy(frag)
+    sysd = frag.get("system") if isinstance(frag, dict) else None
+    if isinstance(sysd, dict):
+        m = _re.search(r"Server +(20[0-9]{2})", str(sysd.get("distribution") or ""))
+        v = sysd.get("version")
+        if m and v not in (None, ""):
+            sysd["version"] = f"{m.group(1)}-{v}"
+    return frag
+
+
 INTENDED_FRAGMENT_PS = {  # (section, name) → {fragment 변수: 종전 값 → 기대 값}
     ("network", "two_nics_one_team"): {"_data_fragment": _net_data_with_e3},
     ("network", "fail"): {"_data_fragment": _net_data_with_e3},
+    ("system", "normal"): {"_data_fragment": _sys_version_with_server_year},
+    ("system", "domain_hyperv_host"): {"_data_fragment": _sys_version_with_server_year},
+    ("system", "fail"): {"_data_fragment": _sys_version_with_server_year},
 }
 _HBA_COMPONENTS_OK = [{"scope": s, "ok": True, "absent": False, "type": None, "code": None, "error": None}
                       for s in ("initiator_ports", "adapter_attrs", "port_attrs")]
