@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-18
+> 최종 갱신: 2026-10-19
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -31,7 +31,7 @@
 | vendor 표시값 | 내부 canonical(`hpe`) ↔ 호출자 표시값(`hp` · `hpCsus`) 분리 | 2026-06-04 |
 | adapter | 코드가 읽는 절만(`match` · `capabilities.sections_supported` · `vendor_notes` …), 점수 `priority×1000 + specificity×10 + match`. 세대 토큰은 단어 경계, 버전 숫자 패턴은 보조. `capabilities.sections_supported` 는 채널 섹션과 일치 | 2026-05-11 · 2026-10-10 D-14 · 2026-10-11 D-17 · 2026-10-12 |
 | 멀티-노드(RMC) | `data.multi_node` 컨테이너로 CSUS 3200 / Superdome Flex 전 Partition · Manager · Chassis 수집 | 2026-05-12 · 2026-06-09 |
-| HBA (4채널) | `storage.hbas[]` 항목 1개 = **물리 FC 포트** 1개(Linux NPIV 제외 · ESXi (wwpn,wwnn) 1건 · Redfish 기능당 1건). `link_status` 는 `up`/`down` + **`null`(장비 미제공 — 임의 down 금지, unknown 폐지)**. Redfish wwpn 은 NDF WWPN → 없으면 포트 FC 주소에서 WWNN 을 뺀 유일값(구 NetworkPort 주소는 쓰지 않음). System 이 연결한 섀시만, 빈 목록 · 미제공은 notices, 실패는 errors[] — status 불변. CSUS 3200 은 Redfish 로 FC 링크 상태 수집 불가(null) | 2026-10-15 · 2026-10-18 |
+| HBA (4채널) | `storage.hbas[]` — Redfish 기능당 1건 · Linux NPIV 제외 · **ESXi 는 vmhba 그대로 전부(중복 제거 없음, 2026-10-19)**. `link_status` 는 **항상 `up`/`down`(null · unknown 없음 — 미제공 · 미확정도 down, Redfish 는 notice 로 구분, 2026-10-19)**. Redfish wwpn 은 NDF WWPN → 없으면 포트 FC 주소에서 WWNN 을 뺀 유일값(구 NetworkPort 주소는 쓰지 않음). System 이 연결한 섀시만, 빈 목록 · 미제공은 notices, 실패는 errors[] — status 불변. CSUS 3200 은 Redfish 로 FC 링크 상태 수집 불가 → down + notice | 2026-10-15 · 2026-10-18 · 2026-10-19 |
 | 채널 간 값 | 같은 뜻인데 다른 값은 버그, 뜻이 달라 다른 값은 기록만. 고친 것: Cisco CIMC UUID 바이트 순서(adapter `uuid_byte_order`), Redfish `cpu.max_speed_mhz` 정격(종전 MaxSpeedMHz 터보 → `turbo_max_mhz`), `cpu.logical_threads` 는 ProcessorSummary.LogicalProcessorCount 우선, NetworkAdapter Model 은 FirmwareInventory 이름 폴백. 교차 회귀 `test_cross_channel_same_server.py` | 2026-10-18 |
 | 논리 볼륨 | OS/ESXi 도 RAID 컨트롤러 뒤 디스크를 `storage.logical_volumes[]` 에 싣는다(physical_disks 는 그대로, member/raid_level 비움). ESXi RAID 뒤 LUN 의 `media_type` 은 null | 2026-10-18 |
 | InfiniBand | `storage.infiniband[]` 항목 1개 = **현재 IB 모드로 확인된 포트** 1개. 근거는 현재 모드 속성뿐(Linux `link_layer` · Windows NdisPhysicalMedium 11/RdmaTechnology · Redfish 링크 기술·PortProtocol + NetDevFuncType), 충돌은 미확정 + notice. ESXi 는 수집하지 않음(항상 `[]`). `rate_gbps` 는 up 일 때만, GUID 는 소문자 4×4, 추정값 금지 | 2026-10-17 |
@@ -101,7 +101,33 @@
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
 
+## 2026-10-19 — `storage.hbas[].link_status` up/down 둘뿐 · ESXi hbas 그대로 · Windows `system.version` `2025-24H2` (긴급 반영)
+
+> 정본: `docs/ai/decisions/ADR-2026-10-19-hba-link-status-two-values-esxi-raw-and-windows-version.md` · `tests/evidence/2026-10-19-hba-link-status-two-values-esxi-raw-windows-version.md` · `docs/contract/03-fields.md` 6.3.1 · 6.3.2 · FAQ.
+
+### 사용자 질문 · 지시
+
+- "unknown 을 없애는 작업은 모두 완료한 거지? CSUS null 말고 link status up 상태를 모르는 것은 모두 down 으로" → 현재 코드(2026-10-18 D2)는 키 없음 · 정규화 실패 둘 다 null 임을 보고.
+- "CSUS 시리얼 `-숫자` 제거도 모두 한 거지? production 에 모두 반영된 거지?" → `f30aaeaf`(2026-10-17) 로 완료, production `144c295f`(main `3e1e2aba`) 에 HBA · IB · 시리얼 커밋 전부 포함, github/gitlab 원격 일치(ls-remote).
+- "Windows 빌드에 날짜 추가" = `system.version` `24H2` → `2025-24H2`. "빨리 반영돼야 한다 — production 급함."
+- "link status 가 null 이더라도 그냥 down 으로 통일 — 무조건 값이 들어가도록, up down 둘만 존재." · "ESXi hbas 중복 제거는 없애고 있는 그대로 다 나오도록."
+
+### 결정 (사용자, 2026-10-19)
+
+1. `storage.hbas[].link_status` 는 **항상 up 또는 down** — null · unknown 없음. 미제공(키/파일 없음) · 미확정 값(Unknown · null 값 · unbound · 미인식)도 down. Redfish 는 notice 2종(`링크 상태 미제공` · `링크 상태 값 미확정`)으로 구분. ADR-2026-10-18 결정 1 폐기.
+2. ESXi `storage.hbas[]` 는 모듈이 준 vmhba 를 있는 그대로 전부 — 2026-10-18 의 (wwpn, wwnn) 1건 접기 폐지(ESXi 7 FC-NVMe 는 포트당 2건). 교차 대조는 wwpn 집합.
+3. Windows `system.version` 은 Server 연도 + DisplayVersion(`2025-24H2` · `2022-21H2` · `2019-1809`). 연도 없는 클라이언트 Windows 는 DisplayVersion 그대로, 폴백 값은 합성하지 않음. 2026-10-17 6항 폐기.
+4. 범위 밖: `storage.infiniband[]` · `network.*` 의 `unknown` 은 그대로(사용자 선택). 승격은 정규 경로(매트릭스 → CI → promote → canary).
+
+### 영향
+
+- envelope 13 필드 · sections · status 불변. 사전 `storage.hbas[].link_status` type `string|null` → `string`(enum 그대로). golden 은 CSUS fc_hbas link_status 4건 null → down 만.
+- CSUS 3200 은 Redfish 에서 항상 down(notice `링크 상태 미제공`) — Portal 은 wwpn 으로 OS 값을 조인. lab 값 변화는 Windows .120 `system.version` `2022-21H2` 만(canary 확인 뒤 baseline 갱신).
+- 검증 · 승격 · canary 결과는 evidence 와 TEST_HISTORY 2026-10-19.
+
 ## 2026-10-18 — HBA 4채널 전수 점검 · `link_status` up/down/null · 채널 간 값 정합 · RAID 논리 볼륨 OS/ESXi
+
+> **2026-10-19 개정**: 아래 결정 1(미확정 → null) 과 결정 5 의 ESXi 부분(같은 (wwpn, wwnn) 1건) 은 하루 뒤 사용자 재결정으로 폐기됐다 — 위 2026-10-19 절.
 
 > 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/ai/decisions/ADR-2026-10-18-hba-link-status-null-and-os-logical-volumes.md` · `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2.
 

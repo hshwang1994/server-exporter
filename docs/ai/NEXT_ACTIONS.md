@@ -1,6 +1,19 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## link_status up/down 둘뿐 · ESXi hbas 그대로 · Windows `system.version` 연도 접두 (2026-10-19) — 남은 항목
+
+> 정본: `docs/ai/decisions/ADR-2026-10-19-hba-link-status-two-values-esxi-raw-and-windows-version.md` · `tests/evidence/2026-10-19-hba-link-status-two-values-esxi-raw-windows-version.md`. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다.
+
+- [ ] **[HIGH / Portal 소비자] 안내** — (1) `storage.hbas[].link_status` 는 이제 `null` 이 없다(항상 up/down; 사전 type `string`). Redfish 미제공(CSUS 등)은 down + notice `링크 상태 미제공`, 값 미확정은 down + notice `링크 상태 값 미확정` — Portal 은 wwpn 으로 OS 값을 조인해 실제 상태를 보인다.
+      (2) ESXi `storage.hbas[]` 는 vmhba 그대로(FC-NVMe 호스트는 포트당 2건). (3) Windows Server `system.version` 이 `2022-21H2` · `2025-24H2` 형으로 바뀜(클라이언트 Windows 는 그대로).
+- [ ] **[HIGH / 사이트 — 사용자] CSUS 3200 재수집** — Redfish `storage.hbas[].link_status` 가 전부 `down` 이고 notice `링크 상태 미제공, down 으로 기록` 이 카드당 1건 남는지, Portal 이 wwpn 으로 OS 값을 조인해 보이는지 확인(2026-10-18 항목의 "null" 기대는 폐기).
+- [ ] **[MED / 실장비 미검증 — lab 부재]** Unknown · null 값 `LinkStatus` 를 주는 FC 포트(Redfish 값 미확정 notice 경로), ESXi FC-NVMe 쌍둥이 2건 출력, Windows Server 2025 실장비의 `2025-24H2`(lab 은 2022 만), Linux `port_state` Unknown/Deleted 실값.
+- [ ] **[LOW / 검토] `storage.infiniband[].link_status`** — 2026-10-19 사용자 결정은 hbas 만이었다. IB 는 `unknown` 3값 그대로(`network.*.link_status` 도 그대로). 같은 2값 규칙으로 바꿀지 별도 결정.
+- [ ] **[LOW] `windows_2022_baseline.json` `system.version`** — canary(.120) 실측 `2022-21H2` 로 갱신(rule 13 R4 — 실측 뒤). 승격 뒤 canary 결과는 evidence 2026-10-19.
+
 ## HBA 4채널 전수 점검 · link_status up/down/null · 채널 간 값 정합 · RAID 논리 볼륨 (2026-10-18) — 남은 항목
+
+> **2026-10-19 개정**: link_status 의 null 규칙과 ESXi (wwpn, wwnn) 접기는 폐기됐다(위 절). 아래 항목의 "null" 기대는 "down + notice" 로 읽는다.
 
 > 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/ai/decisions/ADR-2026-10-18-hba-link-status-null-and-os-logical-volumes.md` ·
 > `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다.
@@ -21,7 +34,7 @@
       ESXi `storage.logical_volumes`/`physical_disks[].media_type`(RAID LUN null) · Windows RAID 디스크 볼륨.
 - [ ] **[HIGH / 사이트 — 사용자] "HBA 누락" 장비의 Redfish 덤프** — 벤더 미확정(Lenovo 로 전해 들었으나 불확실). `tests/redfish-probe/probe_redfish.py` 또는 크롤로 `Chassis/*/NetworkAdapters/*`,
       `Ports|NetworkPorts/*`, `NetworkDeviceFunctions/*` 를 받아 F1~F8 중 어느 경로였는지 확정하고 녹화본 변형으로 고정한다. 운영 환경의 임시 조치(`_make_fc_hba` wwpn=포트 주소)는 이번 규칙으로 대체되므로 걷어낸다.
-- [ ] **[HIGH / 사이트 — 사용자] CSUS 3200 재수집** — `storage.hbas[].link_status` 가 `null`(종전 unknown) 이고 notice `링크 상태 미제공` 이 남는지, Portal 이 wwpn 으로 OS 값을 조인해 보이는지 확인.
+- [x] **[대체 2026-10-19] CSUS 3200 재수집(null 기대)** — 규칙이 바뀌어 위 2026-10-19 절의 항목(down + notice 기대)으로 대체.
 - [ ] **[MED / 외부 문의] HPE RMC** — CSUS 3200 RMC Redfish 가 FC `Port.LinkStatus` 를 내지 않는 것(1.75.108)의 펌웨어 로드맵, `DCD_FCHBA_LINK_UP/DOWN` 알림을 RMC CLI/SNMP 로 읽는 경로.
 - [ ] **[MED / 실장비 미검증 — lab 부재]** FC 링크 up 장비(전 채널 link up · speed 값), Linux/Windows FC 호스트(lpfc `modelname/fwrev` · qla2xxx `proc_name` · Windows PortSpeed 64+ ·
       MSFC absent/실패 분류), 하드웨어 iSCSI(`InternetScsiHba`), ESXi FC-NVMe 쌍둥이 · `speed` 단위(bps/Mbps/Gbps), ESXi FCoE 클래스 문자열(`vmware_host_vmhba_info` 소스 미설치 환경에서 RETURN 문서로 적음),
@@ -32,7 +45,7 @@
 - [ ] **[LOW / lab] ESXi PERC(bcm_mpi3) 뒤 LUN 실측** — .91/.92/.93 은 PERC 에 VD 가 없어 `logical_volumes` 가 `[]` 다. VD 가 있는 PERC 호스트(또는 r760 ESXi 재구성)에서 RAID 뒤 LUN → logical_volumes · media_type null 을 확인한다. MegaRAID(lsi_mr3) 경로는 esxi01~03 에서 확인됐다(2026-10-18 #661).
 - [ ] **[LOW] `esxi_baseline.json` hbas 재캡처** — 현행 코드와 3필드 불일치(수작업 값 · 대문자 WWPN). 사이트/lab 실측으로 교체(rule 13 R4).
 - [ ] **[LOW] 사전 항목 부재** — 코드가 내는 `cpu.sockets` · `cpu.logical_threads` · `cpu.model` 이 `schema/field_dictionary.yml` 에 없다(이번 조사에서 확인). 사전 추가는 schema 작업으로 따로(rule 92 R5).
-- [ ] **[LOW / 검토] `storage.infiniband[].link_status`** — hbas 와 달리 `unknown` 3값 그대로(사용자 언급 없음). 같은 규칙(null)로 바꿀지 결정.
+- [x] **[대체 2026-10-19] `storage.infiniband[].link_status`** — 위 2026-10-19 절의 LOW 항목으로 대체(hbas 는 up/down 둘뿐이 됐고 IB 는 미결).
 
 
 ## InfiniBand 4채널 "현재 모드" 판정 · CSUS Redfish 시리얼 접미사 (2026-10-17) — 남은 항목

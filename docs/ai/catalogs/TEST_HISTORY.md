@@ -1,5 +1,18 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-19 — link_status up/down 둘뿐 · ESXi hbas 그대로 · Windows system.version 연도 접두 (긴급 반영)
+
+| 구분 | 결과 |
+|---|---|
+| 전체 pytest(unit · e2e · regression, Windows Python 3.13.15 · powershell.exe 5.1) | **5624 passed, 44 skipped, 7 xfailed, 92 warnings in 1532.24s (0:25:32)** — 모든 수정 뒤 재실행. (그 전 1차 실행은 Windows 시험 6파일을 고치기 전에 시작해 57 failed · 42 errors — 전부 그 6파일, 이후 수정으로 0) |
+| 통합(`tests/integration -m "not live"`, Windows) | 355 passed, 6 skipped, 1 deselected in 8.08s |
+| 변경 영역 선택 실행 | Redfish · Linux · ESXi · 공통 10파일 338 passed 9 skipped(skip 은 Linux 전용 sysfs 링크 시험 — Windows PC) · Windows 7파일 339 passed(통합 체인 비교 · PowerShell 정적 · enum 렌더 · 감춰진 실패 · 감사) · enum+static 재확인 126 passed |
+| `ansible-playbook --syntax-check` 3채널 (WSL ansible-core 2.20.7) | os · esxi · redfish 통과 |
+| 정적 검사 | `validate_field_dictionary.py` PASS · `output_schema_drift_check.py` 통과(fd_paths 206) · `verify_vendor_boundary.py` 통과 · `verify_harness_consistency.py` 통과 · `check_project_map_drift.py` 일치 |
+| golden | 녹화본 11종 재생(`H.run_gather` 동일 산출식) — `real_hpe_csus3200` fc_hbas[0~3].link_status null → down 4건만, 나머지 차이 0 |
+| 갱신 시험 | `test_esxi_hba_normalize`(unbound·unknown·없음 → down · 쌍둥이 4건 유지) · `test_linux_hba_ib_markers`(Unknown·Deleted·''·없음·읽기 실패 → down) · `test_windows_storage_powershell_static`(+FC 포트 3: OperationalStatus 1 · 없음 · 1+PortState 2) · `test_windows_storage_enum_render` · `test_network_adapters_absence_vs_failure`(미제공 down+notice · 신규 값 미확정 3케이스) · `test_fc_link_technology_hba` · `test_fc_orphan_ndf_parent_port_link`(+Unknown 상속) · `test_redfish_pure_helpers`(+헬퍼 4) · `test_hba_ib_canonical` · `test_cross_channel_same_server` · `test_field_dictionary_channel_emit` · `test_redfish_hba_coverage_replay`(CSUS down) · `test_gather_identity_render`(+version 8케이스) · `test_windows_call_consolidation_render/powershell`(version 의도 변경 훅 · `regex_search` shim) |
+| 실장비 · 승격 | evidence `tests/evidence/2026-10-19-hba-link-status-two-values-esxi-raw-windows-version.md` 5절 (main Job 매트릭스 → CI → promote → canary) |
+
 ## 2026-10-18 — HBA 4채널 전수 점검 · link_status up/down/null · 채널 간 값 정합 · RAID 논리 볼륨
 
 | 구분 | 결과 |

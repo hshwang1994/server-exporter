@@ -1,6 +1,7 @@
 # ADR-2026-10-18 — `storage.hbas[].link_status` 는 up/down + null · OS/ESXi 도 RAID 뒤 디스크를 `logical_volumes` 에 싣는다
 
-- 상태: Accepted (사용자 결정 2026-10-17 · 2026-10-18)
+- 상태: Accepted (사용자 결정 2026-10-17 · 2026-10-18) — **결정 1(미확정 → null) 과 결정 2 의 ESXi 부분(같은 (wwpn, wwnn) 1건) 은 2026-10-19 사용자 재결정으로 폐기**
+  → `ADR-2026-10-19-hba-link-status-two-values-esxi-raw-and-windows-version.md`. 결정 2 의 Linux NPIV 제외 · Redfish 기능당 1건, 결정 3~5 는 그대로 유효.
 - 범위: 4채널 `storage.hbas[]` · `storage.logical_volumes[]` · `storage.physical_disks[].media_type`(ESXi) · 채널 간 정합(`hardware.uuid` · `cpu.max_speed_mhz` · `cpu.turbo_max_mhz` · `cpu.logical_threads` · `network.adapters[].model`)
 - 정본: `docs/contract/03-fields.md` 6.3.0b · 6.3.1 · 6.3.2 · `schema/field_dictionary.yml` · `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md`
 

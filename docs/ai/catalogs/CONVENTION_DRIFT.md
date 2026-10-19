@@ -415,3 +415,14 @@
 - **resolved**: 같은 날 `fix:` 커밋 묶음(Redfish · OS/ESXi · 정합) + 사전 · `docs/contract/03-fields.md` 6.3.0b/6.3.1/6.3.2 · evidence. 시험: 채널별 신규 시험 + `tests/regression/test_cross_channel_same_server.py`.
 - **남은 것(NEXT_ACTIONS)**: Windows PortSpeed 64+ · ESXi speed 단위 · lpfc 속성 · FC 링크 up 장비 · 하드웨어 iSCSI · FC-NVMe 는 실장비 미검증. CIMC 다른 세대 UUID 순서 미확인.
 - **관련**: rule 13 R7, rule 92 R2(Additive), rule 96 R1/R1-A, rule 25 R7-A-1(사용자 실측 > spec), `docs/reference/decision-log.md` 2026-10-18
+
+## DRIFT-030 (2026-10-19, resolved — link_status 2값 · ESXi hbas 그대로 · Windows version 연도 접두: 하루 전 결정의 재결정)
+
+- **발견 위치**: `schema/field_dictionary.yml` `storage.hbas[].link_status`(`string|null`) · 4채널 link 판정식 · `esxi-gather/tasks/collect_network_extended.yml` `_e_ext_hbas` `seen` · `os-gather/tasks/windows/gather_system.yml` version · `docs/contract/03-fields.md` FAQ(Windows version)
+- **분류**: 사용자 결정 변경(rule 23 R3 — 결정 주체 사용자) + 사전/계약 문구 drift(rule 13 R7)
+- **설명**: 2026-10-18 D2(미확정 → null) · D5(ESXi (wwpn, wwnn) 1건) 과 2026-10-17 "Windows version 현행 유지" 가 2026-10-19 사용자 질문·지시로 뒤집혔다 —
+  link_status 는 항상 up/down(미제공 · 미확정도 down, Redfish 는 notice 2종으로 구분), ESXi 는 vmhba 그대로, Windows Server `system.version` 은 `연도-DisplayVersion`.
+  코드 · 사전 · 계약 문서 · 시험 · golden(CSUS 4건) 을 같은 날 함께 고쳤다. ADR-2026-10-18 머리말에 개정 표기.
+- **resolved**: `fix:` 커밋 3건 + `docs:` 커밋(ADR-2026-10-19 · evidence · 기록). 시험 수치는 TEST_HISTORY 2026-10-19.
+- **남은 것(NEXT_ACTIONS 2026-10-19)**: Portal 안내 · CSUS 재수집(down + notice) · IB `unknown` 결정 · Windows baseline version 실측 갱신 · Unknown 값 포트 · FC-NVMe · Server 2025 실장비.
+- **관련**: rule 13 R7, rule 23 R3, rule 70 R8(ADR), `docs/reference/decision-log.md` 2026-10-19

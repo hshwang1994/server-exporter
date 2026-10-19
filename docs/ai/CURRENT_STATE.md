@@ -1,5 +1,22 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-19 — `storage.hbas[].link_status` up/down 둘뿐 · ESXi hbas vmhba 그대로 · Windows `system.version` `연도-DisplayVersion` (긴급 반영)
+
+> 정본: `docs/ai/decisions/ADR-2026-10-19-hba-link-status-two-values-esxi-raw-and-windows-version.md` · `tests/evidence/2026-10-19-hba-link-status-two-values-esxi-raw-windows-version.md` · `docs/contract/03-fields.md` 6.3.1 · 6.3.2 · FAQ · `docs/reference/decision-log.md` 2026-10-19.
+
+- **계기**: 사용자 질문 "unknown 제거 완료? CSUS null 말고 up 모르면 down" · "CSUS 시리얼 -숫자 제거 · production 반영?" · "Windows 빌드에 날짜(`2025-24H2`)?" · "production 급함" →
+  확인(시리얼 `f30aaeaf` 완료 · production `144c295f` 에 전부 포함) + 재결정 3건: link_status 는 **항상 up/down**(null · unknown 없음, 미제공 · 미확정도 down), **ESXi hbas 중복 제거 폐지**(vmhba 그대로),
+  Windows `system.version` = **Server 연도 + DisplayVersion**. ADR-2026-10-18 결정 1 · 결정 2(ESXi) 와 2026-10-17 "version 현행 유지" 를 뒤집는다.
+- **고친 것(제품)**:
+  - Redfish `redfish-gather/library/redfish_gather.py` — `_hba_link_status` up/down 둘뿐 + `_hba_link_missing` · `_hba_link_unresolved`(키 없음 / 값 미확정 분리) → 카드당 notice 2종(`링크 상태 미제공, down 으로 기록` · `링크 상태 값 미확정, down 으로 기록`). 고아 기능 부모 없음 → down + 미제공 notice.
+  - Linux `gather_hba_ib.yml` — port_state Online·Marginal → up, 그 밖(없음 · 읽기 실패 포함) → down. Windows `gather_storage.yml` — OperationalStatus 2 → up, 3~8 → down, 1/없음은 PortState 2 만 up, 그 밖 down.
+    ESXi `collect_network_extended.yml` — status online → up, 그 밖 → down; `_e_ext_hbas` 의 (wwpn, wwnn) `seen` 중복 제거 삭제(vmhba 1개 = 1건).
+  - Windows `gather_system.yml` — `system.version` = caption `Server 20xx` 연도 + DisplayVersion(`2022-21H2`), 연도 없으면 DisplayVersion 그대로, rel_id 없으면 종전 폴백.
+- **계약 · 문서**: 사전 `storage.hbas[].link_status` type `string` + help 재작성, `storage.hbas[]` help(ESXi 그대로), `03-fields.md` 6.3.1 · 6.3.2 · FAQ(Windows version), `05-field-mapping.md`, `os_windows2022.jsonc` version 예시, EXTERNAL_CONTRACTS(ESXi status · FC-NVMe 행), ADR 신규 + ADR-2026-10-18 머리말 개정 표기, decision-log, DRIFT-030, NEXT_ACTIONS.
+- **golden**: `real_hpe_csus3200/expected_output.json` fc_hbas link_status 4건 null → down(다른 9종 차이 0).
+- **시험(실장비 아님)**: 4채널 link 시험 기대값 갱신 + Redfish 신규(값 미확정 notice · 헬퍼 벡터) + Windows version 8 케이스 + 통합 체인 비교 시험에 version 의도 변경 훅. 수치는 TEST_HISTORY 2026-10-19.
+- **승격 · 실장비**: evidence 2026-10-19 (정규 경로 — 매트릭스 → CI → promote → canary).
+
 ## 일자: 2026-10-18 — HBA 4채널 전수 점검 · `link_status` up/down/null · 채널 간 값 정합(uuid · 정격 클럭 · 스레드 · NIC 모델) · RAID 논리 볼륨 OS/ESXi
 
 > 정본: `tests/evidence/2026-10-18-hba-four-channel-and-cross-channel-audit.md` · `docs/ai/decisions/ADR-2026-10-18-hba-link-status-null-and-os-logical-volumes.md` ·
