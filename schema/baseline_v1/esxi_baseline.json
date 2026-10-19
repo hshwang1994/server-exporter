@@ -15,7 +15,8 @@
     "network": "success",
     "firmware": "not_supported",
     "users": "not_supported",
-    "power": "not_supported"
+    "power": "success",
+    "thermal": "success"
   },
   "diagnosis": {
     "reachable": true,
@@ -27,25 +28,30 @@
     "failure_reason": null,
     "details": {
       "channel": "esxi",
-      "adapter_candidate": "esxi_generic",
+      "adapter_candidate": "esxi_7x",
       "checked_ports": [
         443
       ],
       "selected_port": 443,
       "vsphere_endpoint": "https://10.100.64.2:443/sdk",
+      "credential_scope": "git/esxi",
       "auth": {
-        "attempted_count": 2,
-        "used_label": "esxi_legacy",
+        "attempted_count": 1,
+        "used_label": "esxi_current",
         "used_role": "primary",
         "fallback_used": false
-      }
+      },
+      "esxi_version": "7.0.3",
+      "esxi_build": "20842708",
+      "product": "VMware ESXi",
+      "hostname_source": "system"
     }
   },
   "meta": {
-    "started_at": "2026-04-29T08:16:22.374082Z",
-    "finished_at": "2026-04-29T08:16:38.408051Z",
-    "duration_ms": 16000,
-    "adapter_id": "esxi_generic",
+    "started_at": "2026-10-19T23:15:59.013332Z",
+    "finished_at": "2026-10-19T23:16:37.955832Z",
+    "duration_ms": 38908,
+    "adapter_id": "esxi_7x",
     "adapter_version": null,
     "ansible_version": "2.20.3"
   },
@@ -57,188 +63,132 @@
   },
   "errors": [],
   "data": {
-    "cpu": {
-      "sockets": 2,
-      "cores_physical": 44,
-      "logical_threads": 88,
-      "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
-      "max_speed_mhz": 2200,
-      "architecture": "x86_64",
-      "summary": {
-        "groups": [
-          {
-            "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
-            "manufacturer": "Intel",
-            "max_speed_mhz": 2200,
-            "architecture": "x86_64",
-            "sockets": 2,
-            "cores_per_socket": 22,
-            "total_cores": 44
-          }
-        ]
-      }
-    },
-    "power": null,
-    "hardware": {
-      "vendor": "Cisco Systems Inc",
-      "model": "TA-UNODE-G1",
-      "serial": "FCH2116V1V0",
-      "uuid": "9f0190b1-ce56-d44e-a1dd-6571daaedad7",
-      "bios_version": "C220M4.4.1.2c.0.0202211901",
-      "bios_date": "2021-02-02T00:00:00+00:00"
-    },
-    "network": {
-      "virtual_switches": [
-        {
-          "name": "vSwitch0",
-          "num_ports": 128,
-          "mtu": 9000,
-          "pnics": [
-            "vmnic4",
-            "vmnic3"
-          ],
-          "portgroups": [
-            "10.100.64.0/24",
-            "VM Network",
-            "Trunk",
-            "Management Network"
-          ]
-        }
-      ],
-      "dns_servers": [
-        "10.100.64.251"
-      ],
-      "interfaces": [
-        {
-          "id": "vmk0",
-          "name": "vmk0",
-          "kind": "vmkernel",
-          "mac": "00:27:e3:6c:a6:6d",
-          "mtu": 1500,
-          "speed_mbps": null,
-          "link_status": "unknown",
-          "is_primary": false,
-          "addresses": [
-            {
-              "family": "ipv4",
-              "address": "10.100.64.2",
-              "prefix_length": 24,
-              "subnet_mask": "255.255.255.0",
-              "gateway": null
-            }
-          ]
-        }
-      ],
-      "adapters": [
-        {
-          "name": "vmnic0",
-          "driver": "igbn",
-          "mac": "00:27:e3:88:75:cc",
-          "link_status": "up",
-          "speed_mbps": 1000,
-          "duplex": "Full Duplex",
-          "pci": "0000:01:00.0",
-          "adapter": "Intel(R) I350 Gigabit Network Connection"
-        },
-        {
-          "name": "vmnic1",
-          "driver": "igbn",
-          "mac": "00:27:e3:88:75:cd",
-          "link_status": "down",
-          "speed_mbps": null,
-          "duplex": null,
-          "pci": "0000:01:00.1",
-          "adapter": "Intel(R) I350 Gigabit Network Connection"
-        },
-        {
-          "name": "vmnic2",
-          "driver": "nenic",
-          "mac": "00:27:e3:6c:a6:6c",
-          "link_status": "down",
-          "speed_mbps": null,
-          "duplex": null,
-          "pci": "0000:0b:00.0",
-          "adapter": "Cisco Systems Inc Cisco VIC Ethernet NIC"
-        },
-        {
-          "name": "vmnic3",
-          "driver": "nenic",
-          "mac": "00:27:e3:6c:a6:6d",
-          "link_status": "up",
-          "speed_mbps": 10000,
-          "duplex": "Full Duplex",
-          "pci": "0000:0c:00.0",
-          "adapter": "Cisco Systems Inc Cisco VIC Ethernet NIC"
-        },
-        {
-          "name": "vmnic4",
-          "driver": "nenic",
-          "mac": "00:27:e3:6c:dc:8d",
-          "link_status": "up",
-          "speed_mbps": 10000,
-          "duplex": "Full Duplex",
-          "pci": "0000:86:00.0",
-          "adapter": "Cisco Systems Inc Cisco VIC Ethernet NIC"
-        },
-        {
-          "name": "vmnic5",
-          "driver": "nenic",
-          "mac": "00:27:e3:6c:dc:8e",
-          "link_status": "down",
-          "speed_mbps": null,
-          "duplex": null,
-          "pci": "0000:87:00.0",
-          "adapter": "Cisco Systems Inc Cisco VIC Ethernet NIC"
-        }
-      ],
-      "summary": {
-        "groups": [
-          {
-            "speed_mbps": null,
-            "link_type": null,
-            "quantity": 1,
-            "link_up_count": 0
-          }
-        ]
-      },
-      "portgroups": [
-        {
-          "portgroup": "10.100.64.0/24",
-          "vlan_id": 64,
-          "vswitch": "vSwitch0"
-        },
-        {
-          "portgroup": "VM Network",
-          "vlan_id": 64,
-          "vswitch": "vSwitch0"
-        },
-        {
-          "portgroup": "Trunk",
-          "vlan_id": 4095,
-          "vswitch": "vSwitch0"
-        },
-        {
-          "portgroup": "Management Network",
-          "vlan_id": 64,
-          "vswitch": "vSwitch0"
-        }
-      ],
-      "default_gateways": []
-    },
-    "bmc": null,
-    "firmware": [],
-    "users": [],
-    "memory": {
-      "total_mb": 1048464,
-      "total_basis": "hypervisor_visible",
-      "visible_mb": 1048464,
-      "slots": [],
-      "summary": {
-        "groups": [],
-        "grand_total_gb": 1023
-      }
-    },
     "storage": {
+      "hbas": [
+        {
+          "name": "vmhba2",
+          "driver": "nfnic",
+          "model": "Cisco UCS VIC Fnic Controller",
+          "vendor": "Cisco Corporation",
+          "firmware": null,
+          "adapter_type": "Fibre Channel",
+          "link_status": "down",
+          "wwpn": "20:00:00:27:e3:6c:a6:6e",
+          "wwnn": "10:00:00:27:e3:6c:a6:6e",
+          "link_speed_gbps": null,
+          "port_type": "FibreChannel",
+          "pci": "0000:0d:00.0",
+          "bus": 13,
+          "source": "esxi"
+        },
+        {
+          "name": "vmhba3",
+          "driver": "nfnic",
+          "model": "Cisco UCS VIC Fnic Controller",
+          "vendor": "Cisco Corporation",
+          "firmware": null,
+          "adapter_type": "Fibre Channel",
+          "link_status": "down",
+          "wwpn": "20:00:00:27:e3:6c:a6:6f",
+          "wwnn": "10:00:00:27:e3:6c:a6:6f",
+          "link_speed_gbps": null,
+          "port_type": "FibreChannel",
+          "pci": "0000:0e:00.0",
+          "bus": 14,
+          "source": "esxi"
+        }
+      ],
+      "logical_volumes": [
+        {
+          "id": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
+          "name": "Local Cisco Disk (naa.6f80bcbeac326eb02f7f66c81ba3c352)",
+          "controller_id": "vmhba4",
+          "member_drive_ids": [],
+          "raid_level": null,
+          "total_mb": 6099700,
+          "health": null,
+          "state": null,
+          "boot_volume": null
+        },
+        {
+          "id": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
+          "name": "Local Cisco Disk (naa.6f80bcbeac326eb02f7f66fd1ece98e3)",
+          "controller_id": "vmhba4",
+          "member_drive_ids": [],
+          "raid_level": null,
+          "total_mb": 10986327,
+          "health": null,
+          "state": null,
+          "boot_volume": null
+        }
+      ],
+      "datastores": [
+        {
+          "name": "ESXi02-Local-RAID5",
+          "type": "VMFS",
+          "total_mb": 5968384,
+          "free_mb": 850837,
+          "used_mb": 5117547,
+          "usage_percent": 85.7,
+          "accessible": true
+        },
+        {
+          "name": "ESXi02-Local-RAID0",
+          "type": "VMFS",
+          "total_mb": 10986240,
+          "free_mb": 549249,
+          "used_mb": 10436991,
+          "usage_percent": 95.0,
+          "accessible": true
+        }
+      ],
+      "physical_disks": [
+        {
+          "id": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
+          "device": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
+          "model": "Cisco UCSC-MRAID12G",
+          "serial": "0052c3a31bc8667f2fb06e32acbebc80",
+          "wwn": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
+          "total_mb": 6099700,
+          "media_type": null,
+          "protocol": null,
+          "health": null
+        },
+        {
+          "id": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
+          "device": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
+          "model": "Cisco UCSC-MRAID12G",
+          "serial": "00e398ce1efd667f2fb06e32acbebc80",
+          "wwn": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
+          "total_mb": 10986327,
+          "media_type": null,
+          "protocol": null,
+          "health": null
+        }
+      ],
+      "filesystems": [],
+      "infiniband": [],
+      "summary": {
+        "groups": [
+          {
+            "unit_capacity_gb": 5956,
+            "model": "Cisco UCSC-MRAID12G",
+            "media_type": null,
+            "protocol": null,
+            "quantity": 1,
+            "group_total_gb": 5956
+          },
+          {
+            "unit_capacity_gb": 10728,
+            "model": "Cisco UCSC-MRAID12G",
+            "media_type": null,
+            "protocol": null,
+            "quantity": 1,
+            "group_total_gb": 10728
+          }
+        ],
+        "grand_total_gb": 16684
+      },
       "controllers": [
         {
           "id": "vmhba0",
@@ -290,119 +240,632 @@
           "controller_model": "MegaRAID SAS Invader Controller",
           "controller_manufacturer": "Broadcom",
           "driver": "lsi_mr3",
-          "controller_type": "SAS",
+          "controller_type": "RAID",
           "pci": "0000:05:00.0",
           "health": null,
           "drives": []
         }
-      ],
-      "datastores": [
+      ]
+    },
+    "system": {
+      "runtime": {
+        "timezone": "UTC",
+        "ntp_active": false,
+        "ntp_synchronized": null,
+        "firewall_tool": "esxi_firewall",
+        "firewall_state": "active",
+        "listening_ports": [
+          "22",
+          "68",
+          "80",
+          "161",
+          "443",
+          "902",
+          "5988",
+          "5989",
+          "8000",
+          "8300",
+          "8301",
+          "8302",
+          "9080"
+        ],
+        "swap_total_mb": null,
+        "swap_used_mb": null,
+        "swap_free_mb": null,
+        "ntp_servers": []
+      },
+      "kernel": "20842708",
+      "fqdn": null,
+      "uptime_seconds": 662792,
+      "hosting_type": "hypervisor",
+      "system_uuid": "9f0190b1-ce56-d44e-a1dd-6571daaedad7",
+      "vendor": "Cisco Systems Inc",
+      "selinux": null,
+      "serial_number": "FCH2116V1V0",
+      "distribution": "VMware ESXi",
+      "os_family": "VMware ESXi",
+      "architecture": "x86_64",
+      "hostname": "esxi02",
+      "version": "7.0.3"
+    },
+    "thermal": {
+      "fans": [
         {
-          "name": "ESXi02-Local-RAID5",
-          "type": "VMFS",
-          "total_mb": 5968384,
-          "free_mb": 626472,
-          "used_mb": 5341912,
-          "usage_percent": 89.5,
-          "accessible": true
+          "name": "Fan Device 6 FAN6_TACH2",
+          "reading": 11400,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
         },
         {
-          "name": "ESXi02-Local-RAID0",
-          "type": "VMFS",
-          "total_mb": 10986240,
-          "free_mb": 458387,
-          "used_mb": 10527853,
-          "usage_percent": 95.8,
-          "accessible": true
+          "name": "Fan Device 6 FAN6_TACH1",
+          "reading": 9600,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Fan Device 5 FAN5_TACH2",
+          "reading": 11400,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Fan Device 5 FAN5_TACH1",
+          "reading": 10000,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Fan Device 4 FAN4_TACH2",
+          "reading": 11400,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Fan Device 4 FAN4_TACH1",
+          "reading": 10000,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Fan Device 3 FAN3_TACH2",
+          "reading": 11400,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Fan Device 3 FAN3_TACH1",
+          "reading": 10000,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Fan Device 2 FAN2_TACH2",
+          "reading": 11400,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Fan Device 2 FAN2_TACH1",
+          "reading": 9600,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Fan Device 1 FAN1_TACH2",
+          "reading": 11400,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Fan Device 1 FAN1_TACH1",
+          "reading": 10000,
+          "reading_units": "RPM",
+          "health": "OK",
+          "state": "Enabled"
         }
       ],
-      "infiniband": [],
-      "logical_volumes": [],
-      "hbas": [
+      "temperatures": [
         {
-          "name": "vmhba2",
-          "driver": "nfnic",
-          "model": "Cisco UCS VIC Fnic Controller",
-          "vendor": null,
-          "firmware": null,
-          "adapter_type": "Fibre Channel",
-          "link_status": "down",
-          "wwpn": "20:00:00:27:E3:6C:A6:6E",
-          "wwnn": "10:00:00:27:E3:6C:A6:6E",
-          "link_speed_gbps": null,
-          "port_type": "FibreChannel",
-          "pci": "0000:0d:00.0",
-          "bus": 13,
-          "source": "esxi"
+          "name": "System Board 4 RISER2_OUTLETTMP",
+          "reading_celsius": 42,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "SystemBoard"
         },
         {
-          "name": "vmhba3",
-          "driver": "nfnic",
-          "model": "Cisco UCS VIC Fnic Controller",
-          "vendor": null,
-          "firmware": null,
-          "adapter_type": "Fibre Channel",
-          "link_status": "down",
-          "wwpn": "20:00:00:27:E3:6C:A6:6F",
-          "wwnn": "10:00:00:27:E3:6C:A6:6F",
-          "link_speed_gbps": null,
-          "port_type": "FibreChannel",
-          "pci": "0000:0e:00.0",
-          "bus": 14,
-          "source": "esxi"
+          "name": "System Board 3 RISER2_INLET_TMP",
+          "reading_celsius": 42,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "SystemBoard"
+        },
+        {
+          "name": "System Board 2 RISER1_OUTLETTMP",
+          "reading_celsius": 36,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "SystemBoard"
+        },
+        {
+          "name": "System Board 9 RISER1_INLET_TMP",
+          "reading_celsius": 35,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "SystemBoard"
+        },
+        {
+          "name": "System Board 0 PCH_TEMP_SENS",
+          "reading_celsius": 38,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "SystemBoard"
+        },
+        {
+          "name": "Power Supply 2 PSU2_TEMP",
+          "reading_celsius": 32,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "PowerSupply"
+        },
+        {
+          "name": "Power Supply 1 PSU1_TEMP",
+          "reading_celsius": 40,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "PowerSupply"
+        },
+        {
+          "name": "Processor 2 P2_TEMP_SENS",
+          "reading_celsius": 53,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "CPU"
+        },
+        {
+          "name": "Processor 1 P1_TEMP_SENS",
+          "reading_celsius": 48,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "CPU"
+        },
+        {
+          "name": "Memory Module 22 DDR4_P2_H2_TEMP",
+          "reading_celsius": 44,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 21 DDR4_P2_H1_TEMP",
+          "reading_celsius": 45,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 19 DDR4_P2_G2_TEMP",
+          "reading_celsius": 45,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 18 DDR4_P2_G1_TEMP",
+          "reading_celsius": 47,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 16 DDR4_P2_F2_TEMP",
+          "reading_celsius": 44,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 15 DDR4_P2_F1_TEMP",
+          "reading_celsius": 45,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 13 DDR4_P2_E2_TEMP",
+          "reading_celsius": 45,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 12 DDR4_P2_E1_TEMP",
+          "reading_celsius": 47,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 10 DDR4_P1_D2_TEMP",
+          "reading_celsius": 38,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 9 DDR4_P1_D1_TEMP",
+          "reading_celsius": 39,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 7 DDR4_P1_C2_TEMP",
+          "reading_celsius": 44,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 6 DDR4_P1_C1_TEMP",
+          "reading_celsius": 46,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 4 DDR4_P1_B2_TEMP",
+          "reading_celsius": 37,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 3 DDR4_P1_B1_TEMP",
+          "reading_celsius": 37,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 1 DDR4_P1_A2_TEMP",
+          "reading_celsius": 37,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Memory Module 0 DDR4_P1_A1_TEMP",
+          "reading_celsius": 37,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": "Memory"
+        },
+        {
+          "name": "Front Panel Board 1 FP_TEMP_SENSOR",
+          "reading_celsius": 21,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": null
+        },
+        {
+          "name": "Add-in Card 8 VIC_SLOT2_TMP",
+          "reading_celsius": 43,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": null
+        },
+        {
+          "name": "Add-in Card 7 VIC_SLOT1_TMP",
+          "reading_celsius": 38,
+          "health": "OK",
+          "state": "Enabled",
+          "upper_critical": null,
+          "physical_context": null
+        }
+      ]
+    },
+    "network": {
+      "default_gateways": [
+        {
+          "family": "ipv4",
+          "address": "10.100.64.254"
         }
       ],
-      "physical_disks": [
+      "ports": [],
+      "driver_map": [],
+      "interfaces": [
         {
-          "id": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
-          "device": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
-          "model": "Cisco UCSC-MRAID12G",
-          "serial": "0052c3a31bc8667f2fb06e32acbebc80",
-          "wwn": "naa.6f80bcbeac326eb02f7f66c81ba3c352",
-          "total_mb": 6099700,
-          "media_type": "HDD",
-          "protocol": null,
-          "health": null
+          "id": "vmk0",
+          "name": "vmk0",
+          "kind": "vmkernel",
+          "mac": "00:27:e3:6c:a6:6d",
+          "mtu": 1500,
+          "speed_mbps": null,
+          "link_status": "up",
+          "is_primary": true,
+          "addresses": [
+            {
+              "family": "ipv4",
+              "address": "10.100.64.2",
+              "prefix_length": 24,
+              "subnet_mask": "255.255.255.0",
+              "gateway": "10.100.64.254"
+            }
+          ]
+        }
+      ],
+      "adapters": [
+        {
+          "id": "0000:01:00.0",
+          "name": "vmnic0",
+          "manufacturer": "Intel(R)",
+          "model": "I350 Gigabit Network Connection",
+          "driver": "igbn",
+          "firmware_version": null,
+          "pci": "0000:01:00.0",
+          "mac": "00:27:e3:88:75:cc",
+          "link_status": "down",
+          "speed_mbps": null,
+          "duplex": null
         },
         {
-          "id": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
-          "device": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
-          "model": "Cisco UCSC-MRAID12G",
-          "serial": "00e398ce1efd667f2fb06e32acbebc80",
-          "wwn": "naa.6f80bcbeac326eb02f7f66fd1ece98e3",
-          "total_mb": 10986327,
-          "media_type": "HDD",
-          "protocol": null,
-          "health": null
+          "id": "0000:01:00.1",
+          "name": "vmnic1",
+          "manufacturer": "Intel(R)",
+          "model": "I350 Gigabit Network Connection",
+          "driver": "igbn",
+          "firmware_version": null,
+          "pci": "0000:01:00.1",
+          "mac": "00:27:e3:88:75:cd",
+          "link_status": "down",
+          "speed_mbps": null,
+          "duplex": null
+        },
+        {
+          "id": "0000:0b:00.0",
+          "name": "vmnic2",
+          "manufacturer": "Cisco Systems Inc",
+          "model": "Cisco VIC Ethernet NIC",
+          "driver": "nenic",
+          "firmware_version": null,
+          "pci": "0000:0b:00.0",
+          "mac": "00:27:e3:6c:a6:6c",
+          "link_status": "up",
+          "speed_mbps": 10000,
+          "duplex": "Full Duplex"
+        },
+        {
+          "id": "0000:0c:00.0",
+          "name": "vmnic3",
+          "manufacturer": "Cisco Systems Inc",
+          "model": "Cisco VIC Ethernet NIC",
+          "driver": "nenic",
+          "firmware_version": null,
+          "pci": "0000:0c:00.0",
+          "mac": "00:27:e3:6c:a6:6d",
+          "link_status": "up",
+          "speed_mbps": 10000,
+          "duplex": "Full Duplex"
+        },
+        {
+          "id": "0000:86:00.0",
+          "name": "vmnic4",
+          "manufacturer": "Cisco Systems Inc",
+          "model": "Cisco VIC Ethernet NIC",
+          "driver": "nenic",
+          "firmware_version": null,
+          "pci": "0000:86:00.0",
+          "mac": "00:27:e3:6c:dc:8d",
+          "link_status": "up",
+          "speed_mbps": 10000,
+          "duplex": "Full Duplex"
+        },
+        {
+          "id": "0000:87:00.0",
+          "name": "vmnic5",
+          "manufacturer": "Cisco Systems Inc",
+          "model": "Cisco VIC Ethernet NIC",
+          "driver": "nenic",
+          "firmware_version": null,
+          "pci": "0000:87:00.0",
+          "mac": "00:27:e3:6c:dc:8e",
+          "link_status": "down",
+          "speed_mbps": null,
+          "duplex": null
+        }
+      ],
+      "portgroups": [
+        {
+          "portgroup": "Trunk",
+          "vlan_id": 4095,
+          "vswitch": "vSwitch0"
+        },
+        {
+          "portgroup": "10.100.64.0/24",
+          "vlan_id": 64,
+          "vswitch": "vSwitch0"
+        },
+        {
+          "portgroup": "VM Network",
+          "vlan_id": 64,
+          "vswitch": "vSwitch0"
+        },
+        {
+          "portgroup": "Management Network",
+          "vlan_id": 64,
+          "vswitch": "vSwitch0"
         }
       ],
       "summary": {
-        "groups": [],
-        "grand_total_gb": 16556
+        "groups": [
+          {
+            "speed_mbps": null,
+            "link_type": "ethernet",
+            "quantity": 3,
+            "link_up_count": 0
+          },
+          {
+            "speed_mbps": 10000,
+            "link_type": "ethernet",
+            "quantity": 3,
+            "link_up_count": 3
+          }
+        ]
       },
-      "filesystems": []
+      "dns_servers": [
+        "10.100.64.251"
+      ],
+      "virtual_switches": [
+        {
+          "name": "vSwitch0",
+          "num_ports": 128,
+          "mtu": 9000,
+          "pnics": [
+            "vmnic4",
+            "vmnic3"
+          ],
+          "portgroups": [
+            "Trunk",
+            "10.100.64.0/24",
+            "VM Network",
+            "Management Network"
+          ]
+        }
+      ]
     },
-    "system": {
-      "os_family": "VMware ESXi",
-      "distribution": "VMware ESXi",
-      "version": "7.0.3",
-      "kernel": "20842708",
+    "users": [],
+    "hardware": {
+      "vendor": "Cisco Systems Inc",
+      "model": "TA-UNODE-G1",
+      "serial": "FCH2116V1V0",
+      "uuid": "9f0190b1-ce56-d44e-a1dd-6571daaedad7",
+      "bios_version": "C220M4.4.1.2c.0.0202211901",
+      "bios_date": "2021-02-02"
+    },
+    "firmware": [],
+    "bmc": null,
+    "power": {
+      "power_supplies": [
+        {
+          "name": "Power Supply 1",
+          "model": null,
+          "serial": null,
+          "manufacturer": null,
+          "part_number": null,
+          "power_capacity_w": null,
+          "firmware_version": null,
+          "health": "OK",
+          "state": "Enabled"
+        },
+        {
+          "name": "Power Supply 2",
+          "model": null,
+          "serial": null,
+          "manufacturer": null,
+          "part_number": null,
+          "power_capacity_w": null,
+          "firmware_version": null,
+          "health": "OK",
+          "state": "Enabled"
+        }
+      ],
+      "power_control": {
+        "power_consumed_watts": 432,
+        "power_capacity_watts": null,
+        "interval_in_min": null,
+        "min_consumed_watts": null,
+        "avg_consumed_watts": null,
+        "max_consumed_watts": null
+      },
+      "summary": {
+        "psu_count": 2,
+        "psu_active": 2,
+        "redundant": true,
+        "total_capacity_w": null,
+        "capacity_unknown_count": 2,
+        "critical_count": 0,
+        "warning_count": 0,
+        "ok_count": 2,
+        "unknown_health_count": 0,
+        "health_rollup": "OK",
+        "consumed_watts": 432,
+        "consumed_capacity_pct": null
+      }
+    },
+    "memory": {
+      "total_mb": 1048464,
+      "total_basis": "hypervisor_visible",
+      "installed_mb": null,
+      "visible_mb": 1048464,
+      "free_mb": 580226,
+      "slots": [],
+      "summary": {
+        "groups": [],
+        "grand_total_gb": 1024
+      }
+    },
+    "cpu": {
+      "sockets": 2,
+      "cores_physical": 44,
+      "logical_threads": 88,
+      "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+      "manufacturer": "Intel",
+      "max_speed_mhz": 2195,
+      "turbo_max_mhz": null,
       "architecture": "x86_64",
-      "uptime_seconds": 12377407,
-      "selinux": null,
-      "hostname": "esxi02",
-      "fqdn": "esxi02",
-      "hosting_type": "hypervisor",
-      "runtime": {
-        "timezone": null,
-        "ntp_active": null,
-        "ntp_synchronized": null,
-        "firewall_tool": "esxi_firewall",
-        "firewall_state": null,
-        "listening_ports": [],
-        "swap_total_mb": null,
-        "swap_used_mb": null,
-        "swap_free_mb": null
+      "summary": {
+        "groups": [
+          {
+            "model": "Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz",
+            "manufacturer": "Intel",
+            "max_speed_mhz": 2195,
+            "turbo_max_mhz": null,
+            "l2_cache_kb": null,
+            "l3_cache_kb": null,
+            "architecture": "x86_64",
+            "sockets": 2,
+            "cores_per_socket": 22,
+            "total_cores": 44
+          }
+        ]
       }
     }
   },

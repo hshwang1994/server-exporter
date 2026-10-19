@@ -4,7 +4,7 @@
   1. 공통 JSON 구조 (최상위 키, schema_version, meta.adapter_id)
   2. 수집된 섹션 존재 (system 포함)
   3. 핵심 필드 존재 (system.fqdn, system.os_family)
-  4. adapter_id == esxi_generic
+  4. adapter_id == esxi_7x (2026-10-20 실측 baseline — esxi02 는 ESXi 7.x)
   5. correlation 필드 (키 존재 + UUID 형식)
 
 baseline 필드 확인 결과:
@@ -33,7 +33,8 @@ class TestEsxiBaseline:
         assert_common_structure(esxi_baseline)
 
     def test_adapter_id(self, esxi_baseline):
-        assert esxi_baseline["meta"]["adapter_id"] == "esxi_generic"
+        # 2026-10-20: baseline 을 production d464de4b canary #314 의 esxi02(ESXi 7.x) 실측 봉투로 갱신 — adapter 는 version_patterns 로 esxi_7x
+        assert esxi_baseline["meta"]["adapter_id"] == "esxi_7x"
 
     def test_critical_fields(self, esxi_baseline):
         assert_channel_critical_fields(
