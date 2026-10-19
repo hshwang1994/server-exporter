@@ -4,10 +4,12 @@
 
 > 정본: `docs/ai/decisions/ADR-2026-10-19-esxi-sensors-and-linux-iscsi.md` · `tests/evidence/2026-10-19-esxi-sensors-linux-iscsi.md`. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다.
 
-- [ ] **[HIGH / 승격] main Job 매트릭스 → CI → `prodgen promote` → canary** — 둘째 · 셋째 변경을 함께 승격한다(사용자 지시 "production 반영까지"). 기대값: ESXi 6대 `sections.power` · `sections.thermal` success(센서 공급자 있는 호스트), `data.power.summary.psu_count` ≥ 1 · `total_capacity_w null`,
-      `data.thermal.temperatures/fans` 수 > 0; Linux 호스트 hbas 는 iSCSI 세션이 없어 불변; Windows .120 hbas 불변(iSCSI 포트 없음). 승격 뒤 production Job canary ESXi 6 · Redfish 7 · OS 11 · Windows 1.
-- [ ] **[HIGH / baseline — 실장비] `schema/baseline_v1/esxi_baseline.json`** — 매트릭스 E2E-D 봉투로 갱신: `sections.power/thermal`(not_supported → success, `thermal` 키 추가), `data.power` · `data.thermal` 값, 둘째 변경의 `network.summary.groups[].link_type` · `physical_disks[].protocol`. 실측 evidence 와 함께(rule 21 R1).
+- [x] **[DONE 2026-10-20] 승격 → canary 완료 — production `d464de4b`(main `447b6af7`)**. 매트릭스 #709~#719 → CI #65 COMPLETE_PASS → 작업 PC `prodgen promote`(사용자 `!` 실행) → production Job #314~#317 전부 SUCCESS · checkout `d464de4b` · errors 0 · ESXi 6대 power/thermal success. (아래는 경과 기록)
+- [x] **[DONE — 경과] main Job 매트릭스 → CI → `prodgen promote` → canary** — 둘째 · 셋째 변경을 함께 승격한다(사용자 지시 "production 반영까지"). **매트릭스 완료(2026-10-19, #709~#719, 11건 계약값 — evidence 5.1)**: ESXi 6대 `sections.power/thermal` success · Cisco 소비전력 448/424/400 W · Dell 소비전력 null(규칙) · Linux hbas 불변 · Windows 불변.
+      **CI #65 COMPLETE_PASS → 승격 완료: production `d464de4b`(parent `027409f4`, 2026-10-19T22:31Z, 세 원격 일치)**. 남은 것: production Job canary(`canary_runner.py` — ESXi 6 · Redfish 7 · OS 11 · Windows 1, checkout `d464de4b` · errors 0 · ESXi power/thermal success 확인) → evidence 5.3 · `esxi_baseline.json` 실측 갱신.
+- [x] **[DONE 2026-10-20] `schema/baseline_v1/esxi_baseline.json`** — production canary #314 esxi02 봉투로 교체(adapter `esxi_7x` · `sections.power/thermal success` · `thermal` 키 · hbas/logical_volumes/network.summary 의 다른 라운드 변경 포함). `test_esxi_output.py::test_adapter_id` esxi_generic → esxi_7x. evidence 5.4.
 - [ ] **[MED / Portal 소비자] 안내** — ESXi 봉투에 `power` · `thermal` 섹션이 success 로 들어오고 `data.power`(PSU · 소비전력 · summary) · `data.thermal`(온도 · 팬)이 채워진다. Linux `storage.hbas[]` 에 iSCSI 항목(`port_type iSCSI`, `iqn`, `session_count`) 이 생기고 Windows iSCSI 항목에 `iqn` 키가 추가된다.
+- [ ] **[LOW / 검토] `network.summary.adapter_count` 와 통합 카드(Cisco UCS VIC)** — 실측 E2E-E Cisco .2: VIC 1225 ×2 의 Redfish NetworkPorts 4개가 전부 FibreChannel 이라 둘째 라운드 A-4 규칙(FC 전용 카드 제외)으로 `adapter_count 0`, 반면 호스트 EthernetInterfaces 6개(`port_count 6`). vNIC 를 NetworkPorts 에 노출하지 않는 통합 카드를 어떻게 셀지(카드 수 2 로 둘지) 결정 필요 — 값은 규칙대로이며 결함은 아니다.
 - [ ] **[LOW / 후속] ESXi iSCSI `iqn`** — `vmware_host_vmhba_info` 가 iSCSI 이름을 주지 않는다. `esxi_disks.py` 컨트롤러 파트에서 `HostInternetScsiHba.iScsiName` 을 읽어 `_e_ext_hbas` 에 조인하면 채널 간 같은 키가 된다.
 - [ ] **[LOW / 실장비 미검증]** ESXi 센서 `healthState.key` 값 분포(덤프에서 잘려 있음) · Dell/HPE ESXi 호스트의 센서 이름 체계(PSU 묶기 · 소비전력 1개 규칙이 Cisco 1종 실측) · Linux iSCSI(lab 에 세션 없음 — 소프트웨어 iSCSI 세션 묶기 · 오프로드 카드). 실측 시 `power_sensors[]`(모듈 결과)로 규칙을 넓힌다.
 
@@ -22,7 +24,7 @@
 - [ ] **[HIGH / 실장비 — lab 부재] CSUS 재수집 확인** — `cpu.logical_threads` 64/128 · `hardware.part_number R9N70A` · `power.summary.total_capacity_w null` · `network.summary.adapter_count` 0/4 · `storage.controllers[]`(디스크 있는 장비는 RAID 모델 채움, 없는 장비는 []) · `firmware[]` 6/15 · 요청 수 +7/+2.
 - [ ] **[MED / Portal 소비자] 안내** — 전 벤더 `power.summary.total_capacity_w` · `consumed_capacity_pct` 0 → null(용량 미제공 장비) · `network.summary.adapter_count` 감소(FC 카드 보유 장비) · OS/ESXi `network.summary.groups` 에 `speed_mbps: null` 그룹 추가 · ESXi `physical_disks[].protocol` 값 ·
       Linux `memory.summary.grand_total_gb` 0 → null · ESXi/Superdome 시리얼 `-NNN` 제거 · ESXi datastore `free_mb/used_mb/usage_percent` null 가능 · ESXi `hostname` IPv4 꼴 → null.
-- [ ] **[MED / baseline — 실장비 라운드] `schema/baseline_v1/esxi_baseline.json`** — `network.summary.groups[].link_type`(null → ethernet) · `physical_disks[].protocol`(null → 값)은 다음 실장비 실행에서 바뀐다(rule 40 R2 — AI 임의 편집 금지). Linux/Windows baseline 은 shape 비교라 영향 없음(전체 pytest 로 확인).
+- [x] **[DONE 2026-10-20] `schema/baseline_v1/esxi_baseline.json`** — 셋째 라운드 canary #314 봉투로 갱신하면서 `link_type ethernet` · `protocol`(esxi02 는 RAID LUN null) 도 실측값이 됐다. Linux/Windows baseline 은 shape 비교라 영향 없음.
 - [ ] **[MED / 결정 — 사용자] 새 데이터 원천 (범위 감사가 드러낸 "읽지 않는 인벤토리" — 허용 목록 `[판단 필요]` 항목)**
       | 항목 | 근거 | 영향 |
       |---|---|---|

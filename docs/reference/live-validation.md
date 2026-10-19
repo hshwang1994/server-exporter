@@ -469,6 +469,46 @@ checkout 전부 == P13 · 결과 수 == 접수 수. 승격 시점에 Portal 테�
 오전 main 매트릭스와의 차이는 대상 쪽 변화(10.100.64.161 전원 꺼짐 · 커널 업그레이드 재부팅 · Windows VM NIC 교체 · ESXi .2 물리 NIC 링크 · Dell BMC 재시작)이며, 같은 대상을 main Job 으로 다시 수집한 #551↔#281 · #553↔#283 · #554↔#284 · #555↔#286 은 비휘발 차이 0, #552↔#282 는 파일시스템 사용률 1건이다.
 호스트별 상태: Linux A 7/8 · Linux B 4/7(기존 .135 .145 .165) · Windows 1/1 · ESXi 6/6 · Redfish 8/10(10.100.15.1 `PROTOCOL_CHECK_FAILED` · 10.100.15.3 `TARGET_UNREACHABLE`).
 
+## 2026-10-19 ESXi 전원·온도·팬 · Linux iSCSI · CSUS 단일 서버 · 3채널 summary — main `447b6af7` 매트릭스 #709~#719 · CI #65 · production `d464de4b` · canary (실장비)
+
+main `447b6af7`(2026-10-19 둘째 · 셋째 라운드 — CSUS 3200 단일 서버 정합 · Redfish 수집 범위 보완 · 3채널 summary 거짓 값 정비 · ESXi vSphere 하드웨어 센서 power/thermal · Linux iSCSI 이니시에이터)로
+정규 절차(매트릭스 → CI → 작업 PC `prodgen promote` → canary)를 돌렸다. 결정 근거는 [decision-log.md](decision-log.md) 2026-10-19 (2) · (3), 상세 증거는 `tests/evidence/2026-10-19-csus-single-server-summary-audit.md` ·
+`tests/evidence/2026-10-19-esxi-sensors-linux-iscsi.md`. lab 에 CSUS · iSCSI 세션은 없으므로 이 매트릭스가 확인하는 것은 **ESXi power/thermal 의 실호스트 값과 나머지 채널의 회귀 없음**이다.
+매트릭스 · CI · canary 투입은 스크래치 스크립트를 사용자가 `!` 로 실행했다(이 세션의 자동 모드 분류기가 AI 의 Jenkins POST 를 거부).
+
+### main `447b6af7` 매트릭스 (main Job #709~#719, checkout 전부 == `447b6af7` — #689~#699 와 같은 파라미터)
+
+| 시나리오 | 빌드 | 결과 | 확인 |
+|---|---|---|---|
+| S1 Linux 3 | #709 | SUCCESS | 84 s |
+| S2 혼합 (실호스트 3 + TEST-NET 2) | #710 | SUCCESS | 119 s |
+| S3 Linux 11 | #711 | SUCCESS | 151 s · 11/11 success · errors 0 · `hbas []`(iSCSI 세션 없음) · `network.summary.groups` 에 `speed_mbps null` 그룹(.95 .96 — 다운 포트, 둘째 라운드 B-3) |
+| S4 Windows 1 | #712 | SUCCESS | 148 s · `system.version 2022-21H2` · hbas [] |
+| T2 TEST-NET 2 | #713 | SUCCESS | 85 s |
+| T5 사용자 중단 (6대) | #719 | ABORTED | `정보 수집을 시작합니다` 관측 +10초 API stop · `lastBuiltRevision 447b6af7` · 63 s |
+| T6 Callback 거부 주소 | #714 | UNSTABLE | `http://127.0.0.1:9` · 123 s |
+| E2E-A loc=cj | #715 | UNSTABLE | TEST-NET 2 · 123 s |
+| E2E-A2 loc=chj | #716 | FAILURE | fail-closed · 30 s · tip 관측 `447b6af7` 전후 동일(`ls-remote` origin, before 1792417503 · after 1792418013) |
+| E2E-D ESXi 6 | #717 | SUCCESS | 100 s · **6대 `sections.power/thermal` success** — Cisco TA-UNODE-G1 ×3: PSU 2 · 소비전력 448/424/400 W · `total_capacity_w null` · 온도 28 · 팬 12 · esxi01 iSCSI up · esxi02 FC down/down; Dell R760 ×3: PSU 2 · 소비전력 null(규칙) · 온도 5/4/4 · 팬 7 · physical_disks protocol NVMe. errors 0 |
+| E2E-E Redfish 7 | #718 | SUCCESS | 425 s · errors 0 · Dell ×5 `total_capacity_w 800 · consumed_capacity_pct 30.5~39.8 · adapter_count 2/3 · part_number 0024FGA04`, Lenovo `750 · 29.3`, Cisco .2 `1540 · 27.0 · adapter_count 0(VIC NetworkPorts 전부 FC) · hbas 4` |
+
+### CI #65 · 승격
+
+- CI `clovirone-cicd/clovirone-server-gather-ci` #65(`PROMOTE_SHA=447b6af7 · PROMOTE_DRY_RUN=false`, E2E_MAIN_ENTRIES 11건 + tip 관측): SUCCESS 62분 · 12 stage SUCCESS · 집계 **COMPLETE_PASS** · `e2e.ok` · `ci_stages.ok` true · Promote 는 자격 부재로 dry-run.
+- 작업 PC `prodgen promote --sha 447b6af7`(CI 산출물 3개 · 사용자 자격 파일) → **production `d464de4b`**(parent `027409f4` · 197 파일 · Gates-Rerun G11 G12 G13 G14 G15 G18 G19 G20 PASS · CI-Stages verified · 2026-10-19T22:31Z) · github · gitlab · 로컬 일치 · drift-check PROVENANCE.
+
+### production `d464de4b` canary (production Job #314~#317, 2026-10-20)
+
+| 빌드 | 채널 | 결과 | 확인 (checkout 전부 `d464de4b` · 결과 수 == 접수 수 · errors 0 · 13키) |
+|---|---|---|---|
+| #314 | ESXi 6 (.1 .2 .3 .91 .92 .93) | SUCCESS 82초 | 6/6 success · **`sections.power/thermal` 전부 success**. Cisco TA-UNODE-G1 ×3(adapter esxi_7x): PSU 2 · 소비전력 384/432/400 W · 온도 28 · 팬 12 · esxi01 iSCSI up · esxi02 FC down/down · RAID LUN protocol null. Dell R760 ×3(adapter **esxi_9x**): PSU 2 · 소비전력 null(PSU 외 Watts 센서 1개 규칙) · 온도 5/4/4 · 팬 7 · physical_disks protocol NVMe |
+| #315 | Redfish 7 | SUCCESS 393초 | 7/7 success · Dell ×5 `total_capacity_w 800 · pct 29.9~40.9 · adapter_count 2(.34 는 3) · controllers 4 · lt 48 · part_number 0024FGA04` · Lenovo `750 · 33.1 · 1 · 1 · 128 · SB27A75070` · Cisco .2 `1540 · 26.5 · adapter_count 0 · ctrl 2 · lt 44` — 매트릭스 #718 과 같은 값(소비전력만 시각차) |
+| #316 | OS 11 | SUCCESS 126초 | 11/11 success · hbas 0(iSCSI 세션 없음) · `memory.summary.grand_total_gb` 8/8/8/8/4/4/256/128/4/8/8 · .95 `speed_mbps null` 그룹 2 · .96 null 그룹 3(다운 포트 실측) · RHEL 9.6/9.2/10.2 · Ubuntu 24.04 |
+| #317 | Windows 1 (.120) | SUCCESS 135초 | 1/1 success · `system.version 2022-21H2` · hbas 0 · memGB 8 · 네트워크 그룹 20000×2 · 10000×2 |
+
+2026-10-19 승격본(`027409f4`)과 비교해 바뀐 값: ESXi 6대 `sections.power/thermal` not_supported → success + `data.power` · `data.thermal`, ESXi `network.summary.groups` 다운 포트 null 그룹 · `link_type ethernet`, Dell ESXi `physical_disks[].protocol NVMe`,
+Linux .95/.96 `network.summary` 다운 포트 null 그룹, Redfish 는 `adapter_count`(Cisco .2 2 → 0 — VIC NetworkPorts 전부 FC) 외 불변. `schema/baseline_v1/esxi_baseline.json` 은 #314 esxi02 봉투로 갱신(adapter `esxi_7x`).
+
 ## 2026-10-17 InfiniBand "현재 모드" 판정 · CSUS Redfish 시리얼 — main `dd69aee1` 매트릭스 #628~#638 · CI #59 · production `151cc395` · canary (실장비)
 
 main `dd69aee1`(IB 4채널 판정 정비 + CSUS 3200 Redfish `hardware.serial` 접미사 제거 + 문서 · 기록)로 정규 절차(매트릭스 → CI → 작업 PC `prodgen promote` → canary)를 돌렸다. 결정 근거는 [decision-log.md](decision-log.md) 2026-10-17.

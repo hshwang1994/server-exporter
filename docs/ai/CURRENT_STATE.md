@@ -16,6 +16,9 @@
 - **문서**: `03-fields.md` 6.3.1(iSCSI 항목) · 6.5 · 6.7(ESXi) · 4절 thermal 문장, `01-gather-structure.md` ESXi 태스크, `esxi_vmware.jsonc` 주석, EXTERNAL_CONTRACTS 3행, ADR 신규, decision-log, NEXT_ACTIONS, TEST_HISTORY, evidence.
 - **운영 영향(승인된 계약 변화)**: ESXi 봉투 `sections.power/thermal` not_supported → success(센서 있는 호스트) + `data.power/thermal`. Linux `storage.hbas[]` 에 iSCSI 항목(lab 은 세션 없음 → 불변 예상), Windows iSCSI 항목 `iqn` 키.
   `esxi_baseline.json` 은 매트릭스 봉투로 갱신 예정. 실장비 확인 · 승격은 NEXT_ACTIONS 첫 항목.
+- **승격(2026-10-19~20)**: main `447b6af7` 매트릭스 #709~#719(11건 계약값 — 사용자가 스크래치 `matrix_runner.py` 를 `!` 로 실행, AI 브라우저 POST 는 분류기 거부) → CI #65 COMPLETE_PASS(E2E · CI-Stages ok) → 작업 PC `promote_ci65.py`(사용자 실행) →
+  **production `d464de4b`**(parent `027409f4`, Gates-Rerun G11~G15 · G18~G20 PASS, 197 파일, github · gitlab · 로컬 일치, drift-check PROVENANCE). E2E-D 실측: ESXi 6대 `sections.power/thermal` success(Cisco 448/424/400 W · Dell 소비전력 null).
+  **canary 완료(2026-10-20)**: production Job #314 ESXi 6 · #315 Redfish 7 · #316 OS 11 · #317 Windows 1 전부 SUCCESS · checkout `d464de4b` · errors 0 · ESXi 6대 power/thermal success. `esxi_baseline.json` 을 #314 esxi02 봉투로 실측 갱신(adapter `esxi_7x`). 상세 evidence 5.3 · 5.4, `docs/reference/live-validation.md` 2026-10-19.
 
 ## 일자: 2026-10-19 (2) — HPE CSUS 3200 단일 서버 정합 · Redfish 수집 범위 보완 · 3채널 summary 거짓 값 정비 · "노출 vs 요청" 범위 감사 상시화
 
