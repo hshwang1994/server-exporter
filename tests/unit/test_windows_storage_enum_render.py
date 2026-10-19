@@ -274,6 +274,8 @@ def test_iscsi_initiator_never_inherits_fc_adapter_attributes():
     out = hbas([port("iqn.1991-05.com.microsoft:host01", "iscsi any port", conn="iSCSI")], [_ADP_A])
     assert out[0]["port_type"] == "iSCSI"
     assert [out[0][k] for k in _ATTRS] == [None, None, None, None]
+    # 2026-10-19: iSCSI 포트의 NodeAddress 는 IQN — iqn 키로 낸다 (Linux iSCSI 항목과 같은 키). wwpn/wwnn 은 iSCSI 에 없어 None.
+    assert out[0]["iqn"] == "iqn.1991-05.com.microsoft:host01" and out[0]["wwpn"] is None and out[0]["wwnn"] is None
 
 
 def test_adapter_key_matches_regardless_of_case():

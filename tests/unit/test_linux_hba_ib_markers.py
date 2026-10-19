@@ -158,7 +158,7 @@ def build_sysfs(sbx: Sandbox, *, fc: bool = True, ib: bool = True,
 
 
 def _sysfs(script: str, sbx: Sandbox, root: Path) -> str:
-    for cls in ("fc_host", "infiniband", "net"):
+    for cls in ("fc_host", "iscsi_host", "infiniband", "net"):     # iscsi_host: 2026-10-19 (tests/unit/test_linux_iscsi_hba.py 가 트리를 만든다)
         script = script.replace(f"/sys/class/{cls}", sbx.p(root / cls))
     assert "/sys/class/" not in script.replace(sbx.p(root), ""), "치환되지 않은 sysfs 경로"
     return script

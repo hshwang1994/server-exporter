@@ -99,6 +99,7 @@ def test_module_result_includes_host_info_and_isolated_failure():
     m._build_controllers = lambda c: []
     m._build_logical_volumes = lambda c: []   # 2026-10-18 (X6): 파트 추가
     m._build_listening_ports = lambda c: ["443"]
+    m._build_sensors = lambda c: {}   # 2026-10-19: sensors 파트(power/thermal) — test_esxi_sensors.py 가 본다, 여기서는 성공 스텁
 
     def _boom(c, h=None):
         raise RuntimeError("no dns")

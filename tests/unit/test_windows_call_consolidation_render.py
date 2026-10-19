@@ -764,13 +764,36 @@ def _network_fragment_with_speedless_group(frag):
     return frag
 
 
+def _hbas_with_iqn(hbas):
+    """2026-10-19 (Linux iSCSI 와 같은 키): hbas[] 항목에 iqn 이 추가됐다 — FC 는 None, iSCSI 는 MSFT_InitiatorPort.NodeAddress(IQN).
+    체인 비교 시나리오의 HBA 는 FC 1개(stor_physical_mixed)라 None 만 생긴다. iSCSI 포트 시나리오를 더하면 (section, 시나리오) 키로 IQN 값을 적는다.
+    iSCSI 값 자체는 test_windows_storage_enum_render 가 본다."""
+    out = []
+    for h in hbas or []:
+        h = dict(h)
+        h.setdefault("iqn", None)
+        out.append(h)
+    return out
+
+
+def _storage_fragment_with_iqn(frag):
+    frag = copy.deepcopy(frag)
+    st = frag.get("storage") if isinstance(frag, dict) else None
+    if isinstance(st, dict) and isinstance(st.get("hbas"), list):
+        st["hbas"] = _hbas_with_iqn(st["hbas"])
+    return frag
+
+
 # (section, scenario 이름 또는 "*") → {fragment 변수: 종전 값 → 기대 값}. 의도한 값 변경은 여기 날짜와 함께 적는다.
 INTENDED_FRAGMENT_FIX = {("system", "*"): {"_data_fragment": _system_version_with_server_year},
                          # 2026-10-19 (B-3): network.summary — speed 없는 NIC 의 null 그룹 (net_no_team 의 어댑터 없는 주소)
-                         ("network", "*"): {"_data_fragment": _network_fragment_with_speedless_group}}
+                         ("network", "*"): {"_data_fragment": _network_fragment_with_speedless_group},
+                         # 2026-10-19: storage.hbas[].iqn (iSCSI 이니시에이터 식별자 — FC 는 None)
+                         ("storage", "*"): {"_data_fragment": _storage_fragment_with_iqn}}
 # (section, scenario 이름 또는 "*") → {중간 변수: (종전 값, 종전 ctx) → 기대 값} — fragment 가 아닌 set_fact 변수의 의도한 변경
 INTENDED_CTX_FIX = {("network", "*"): {"_w_net_summary": lambda _old, ctx: {
-    "groups": _network_groups_counting_speedless((ctx.get("_w_net_topo") or {}).get("interfaces"))}}}
+    "groups": _network_groups_counting_speedless((ctx.get("_w_net_topo") or {}).get("interfaces"))}},
+                    ("storage", "*"): {"_w_hbas": lambda old, _ctx: _hbas_with_iqn(old)}}
 
 
 # 2026-10-19: system build fragment 의 _data_fragment — version 식(Server 연도 접두)

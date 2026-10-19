@@ -347,12 +347,12 @@ def test_g_container_view_is_created_once_with_many_hosts():
 
 
 def test_g_view_failure_is_reported_per_part_after_a_single_attempt():
-    """목록 조회 예외는 종전처럼 파트 각각의 사유로 남는다 — 단, 시도는 1번이다. (2026-10-18: logical_volumes 파트 추가 — 다섯 파트)"""
+    """목록 조회 예외는 종전처럼 파트 각각의 사유로 남는다 — 단, 시도는 1번이다. (2026-10-18: logical_volumes 파트 추가 · 2026-10-19: sensors 파트 추가 — 여섯 파트)"""
     content = _Content([], fail="NoPermission: System.View")
     got = _run(content, esxi_hostname="esxi01")
     assert content.views == 1, "실패한 view 생성을 파트마다 다시 시도했다"
     assert got["connect_ok"] is True
-    assert got["failed_parts"] == ["controllers", "host_info", "listening_ports", "logical_volumes", "physical_disks"]
+    assert got["failed_parts"] == ["controllers", "host_info", "listening_ports", "logical_volumes", "physical_disks", "sensors"]
     assert all("NoPermission" in v for v in got["part_errors"].values()), got["part_errors"]
 
 

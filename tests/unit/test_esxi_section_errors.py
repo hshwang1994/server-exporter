@@ -381,6 +381,8 @@ def _run_module(disks=None, controllers=None, ports=None, connect_fail=False):
     module._build_listening_ports = ports or (lambda c: ["443"])
     # 2026-09-03: host_info 파트(dns/gateway/pnic/cpu) 는 별도 테스트 — 여기서는 항상 성공으로 스텁
     module._build_host_info = lambda c, h=None: {}
+    # 2026-10-19: sensors 파트(power/thermal) 는 test_esxi_sensors.py 가 본다 — 여기서는 항상 성공으로 스텁 (파트 격리만 본다)
+    module._build_sensors = lambda c: {}
     try:
         module.main()
     except _ExitJson as exc:

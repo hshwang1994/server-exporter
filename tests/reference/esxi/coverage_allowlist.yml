@@ -13,7 +13,6 @@
 
 groups:
   # --- runtime (HostRuntimeInfo) — 운영 상태, 인벤토리 아님 ---
-  runtime.healthSystemRuntime: "하드웨어 센서/상태(systemHealthInfo.numericSensorInfo) — ESXi 채널 센서 수집은 결정 보류"
   runtime.vsanRuntimeInfo: "vSAN 런타임 상태 — vSAN 미수집(결정 보류)"
   runtime.networkRuntimeInfo: "네트워크 런타임 상태(NetStack 인스턴스 상태) — 상태값이라 범위 밖"
   runtime.bootTime: "부팅 시각 — uptime 은 summary.quickStats.uptime 으로 읽는다"
