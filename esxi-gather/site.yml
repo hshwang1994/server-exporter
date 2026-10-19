@@ -169,6 +169,10 @@
         - name: "esxi | normalize storage"
           ansible.builtin.include_tasks: tasks/normalize_storage.yml
 
+        # 2026-10-19 (사용자 승인): power / thermal ← esxi_disks 모듈 sensors 파트 (vSphere 하드웨어 센서). collect_disks 뒤 · build_sections 앞.
+        - name: "esxi | normalize power/thermal"
+          ansible.builtin.include_tasks: tasks/normalize_power_thermal.yml
+
         # P4 (cycle 2026-04-29): vmnic/vmhba/vSwitch/portgroup 확장
         - name: "esxi | collect network extended (P4)"
           ansible.builtin.include_tasks: tasks/collect_network_extended.yml

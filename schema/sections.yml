@@ -116,7 +116,8 @@ sections:
     key: power
     display_name: "전원 정보"
     description: "전원 공급 장치(PSU) 상태 및 전력 정보"
-    channels: [redfish]
+    # 2026-10-19 (사용자 승인): ESXi 도 vSphere 하드웨어 센서(numericSensorInfo)로 PSU · 소비전력을 낸다 (용량 · 모델은 센서에 없어 null).
+    channels: [redfish, esxi]
     empty_value: null
 
   thermal:
@@ -125,7 +126,8 @@ sections:
     description: "온도 센서(Temperatures) + 팬(Fans) 상태 — Chassis/Thermal"
     # cycle 2026-06-14 (Track 4): 단일노드 thermal 수집 (이전엔 multi_node 경로만).
     # 미지원/미노출 벤더는 빈 {temperatures:[], fans:[]} (graceful).
-    channels: [redfish]
+    # 2026-10-19 (사용자 승인): ESXi 도 vSphere 하드웨어 센서(sensorType temperature / fan)로 낸다.
+    channels: [redfish, esxi]
     empty_value:
       temperatures: []
       fans: []

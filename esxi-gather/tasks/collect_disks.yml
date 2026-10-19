@@ -17,6 +17,9 @@
 #   vnic IPv6 / pnic 제조사·모델 / cpuInfo.hz / quickStats.uptime. normalize_system /
 #   normalize_network / collect_network_extended 가 _e_raw_host 로 읽는다.
 #
+# 2026-10-19 (사용자 승인): sensors 파트 추가 — power / thermal 은 tasks/normalize_power_thermal.yml 이 _e_raw_sensors 로 만든다.
+#   파트 실패('sensors' · connect · host_select · module)의 섹션 판정 · errors 도 그 태스크가 한다 (여기서는 storage / system 만).
+#
 # 2026-10-05 (8차 R5): 모듈이 결과를 정상 모양으로 돌려주지 못한 경우(fail_json · traceback · 잘못된 결과 형태)는
 #   error · failed_parts 가 없어 실패 파트가 빈 목록이 됐고, 물리 디스크 · 컨트롤러 · 포트 · 호스트 정보가 기록 없이 비었다.
 #   physical_disks 가 목록으로 오지 않으면 실패 파트 'module' 로 보고 연결 실패와 같이 storage · system 오류로 남긴다.
@@ -49,6 +52,10 @@
     # 2026-10-18 (X6): RAID 컨트롤러 뒤의 LUN = 논리 볼륨 (구버전 모듈은 키가 없어 빈 목록)
     _e_raw_logical_volumes: "{{ _e_disks_result.logical_volumes | default([]) }}"
     _e_raw_listening_ports: "{{ _e_disks_result.listening_ports | default([]) }}"
+    # 2026-10-19: power / thermal 센서 (mapping 이 아니면 빈 dict — 구버전 모듈 호환). normalize_power_thermal.yml 이 읽는다.
+    _e_raw_sensors: >-
+      {{ (_e_disks_result.sensors | default({}))
+         if ((_e_disks_result.sensors | default({})) is mapping) else {} }}
     # 2026-09-03: 식별/네트워크/CPU 보강 (mapping 이 아니면 빈 dict — 구버전 모듈 호환)
     _e_raw_host: >-
       {{ (_e_disks_result.host_info | default({}))

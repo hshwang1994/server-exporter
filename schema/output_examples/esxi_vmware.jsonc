@@ -5,7 +5,8 @@
 // 채널      : esxi-gather (vSphere API via pyvmomi 9.0.0 + community.vmware 6.2.0)
 // 특이사항  : ESXi hypervisor — vendor 는 hosting hardware 의 BIOS DMI (Cisco)
 //             - ESXi 전용: virtual_switches / portgroups / vmkernel interfaces / datastores
-//             - sections: not_supported = bmc / firmware / users / power (ESXi 채널은 BMC 미접근)
+//             - sections: not_supported = bmc / firmware / users (ESXi 채널은 BMC 미접근). power · thermal 은 2026-10-19 부터 vSphere 하드웨어 센서로
+//               success — 이 예시 호스트는 센서 공급자(CIM/IPMI)가 없는 경우라 not_supported 로 둔다 (docs/contract/03-fields.md 6.5 · 6.7)
 //             - hbas[] (FC HBA / iSCSI HBA) 풍부
 // 캡처 일시 : 2026-05-07
 // =============================================================================
@@ -26,7 +27,8 @@
     "network": "success",                               // 네트워크 (NIC / IP / DNS / 라우팅)
     "firmware": "not_supported",                        // 펌웨어 inventory. Redfish 채널만 success, OS/ESXi 는 not_supported
     "users": "not_supported",                           // 사용자 list. OS 채널만 success, Redfish/ESXi 는 not_supported
-    "power": "not_supported"                            // 전력 (PSU / 소비). Redfish 채널만 success
+    "power": "not_supported",                           // 전력 (PSU / 소비). Redfish · ESXi(2026-10-19, vSphere 센서 — 센서 공급자 없는 호스트는 not_supported)
+    "thermal": "not_supported"                          // 온도 / 팬. Redfish · ESXi(2026-10-19) — 센서 있는 호스트는 success + data.thermal {temperatures[], fans[]}
   },
   "diagnosis": {                                        // 4단계 진단 (precheck) 결과 + 채널별 추가 정보
     "reachable": true,                                  // ICMP 또는 TCP SYN 도달성
@@ -208,7 +210,7 @@
       "logical_volumes": [],                            // RAID 논리 볼륨 — Redfish 는 Storage Volumes, OS/ESXi 는 RAID 컨트롤러 뒤 디스크 (2026-10-18)
       "infiniband": []                                  // InfiniBand HCA list
     },
-    "power": null,
+    "power": null,                                       // 센서 있는 호스트(2026-10-19): {power_supplies[{name "Power Supply 1", health, state Enabled, 용량·모델 null}], power_control{power_consumed_watts}, summary{}} — 6.5
     "hardware": {                                          // ESXi 가 보고하는 hosting hardware 정보 (BIOS DMI)
       "vendor": "Cisco Systems Inc",
       "model": "TA-UNODE-G1",

@@ -78,7 +78,7 @@ _ALL_SECTIONS = ('system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'netwo
                  'firmware', 'users', 'power', 'thermal')
 _CHANNEL_SECTIONS = {
     'os':      ('system', 'hardware', 'cpu', 'memory', 'storage', 'network', 'users'),
-    'esxi':    ('system', 'hardware', 'cpu', 'memory', 'storage', 'network'),
+    'esxi':    ('system', 'hardware', 'cpu', 'memory', 'storage', 'network', 'power', 'thermal'),   # 2026-10-19: vSphere 하드웨어 센서 (common/vars/supported_sections.yml 과 같다)
     'redfish': ('system', 'hardware', 'bmc', 'cpu', 'memory', 'storage', 'network',
                 'firmware', 'power', 'thermal'),
 }

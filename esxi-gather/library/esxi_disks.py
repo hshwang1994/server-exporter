@@ -7,6 +7,7 @@
 #   - controllers (storage HBA/RAID) ← hostBusAdapter + pciDevice vendor (2026-06-22 T1)
 #   - listening_ports (str[])        ← firewall.ruleset enabled inbound (2026-06-22 T1)
 #   - host_info (식별/네트워크/CPU)   ← dnsConfig / ipRouteConfig / vnic / pnic / cpuInfo (2026-09-03)
+#   - sensors (power / thermal)       ← runtime.healthSystemRuntime.systemHealthInfo.numericSensorInfo (2026-10-19, 사용자 승인)
 #
 # (구) 물리 디스크 전용 → 호스트 정보 수집기로 확장. 연결 1회 재사용.
 #
@@ -50,6 +51,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import inspect
+import re
 import socket
 import ssl
 import traceback
@@ -596,6 +598,155 @@ def _build_host_info(target, hostname=None):
     return info
 
 
+# ── 2026-10-19 (사용자 승인 — ADR-2026-10-19-esxi-sensors-and-linux-iscsi): power / thermal 센서 파트 ──────────────────────
+# source: vSphere API HostNumericSensorInfo (runtime.healthSystemRuntime.systemHealthInfo.numericSensorInfo) —
+#   name · healthState(ElementDescription, key = HostNumericSensorHealthState green/yellow/red/unknown) · currentReading × 10^unitModifier ·
+#   baseUnits('degrees C' · 'RPM' · 'Watts' · 'Volts' · 'Amps' · 'unspecified' …) · sensorType(HostNumericSensorType fan/power/temperature/voltage/
+#   other/processor/memory/storage/systemBoard/battery/bios/cable/watchdog). 임계값은 없다 (upper_critical 은 null).
+#   https://developer.vmware.com/apis/vi-json/latest/data-structures/HostNumericSensorInfo/ (확인 2026-10-19,
+#   tests/reference/esxi/10_100_64_{1,2,3}/pyvmomi_host_dump.json 대조 — Cisco TA-UNODE-G1 · ESXi 7: 센서 126 = 온도 28 · 팬 12 · 전력 12 · 전압 33 …)
+#   센서 이름은 BMC(IPMI/CIM 엔티티) 표기다 — "Power Supply 2 PSU2_PIN" · "Fan Device 6 FAN6_TACH2" · "Processor 1 P1_TEMP_SENS".
+#   이름을 보는 곳은 둘뿐이다: PSU 묶기(앞머리 "Power Supply N") 와 physical_context(엔티티 접두 → DMTF PhysicalContext 어휘).
+#   소비전력은 PSU 가 아닌 Watts 센서가 정확히 1개일 때만 그 값이다(실측 "System Board 0 POWER_USAGE") — 여럿이면 고르지 않고 null + notice.
+_SENSOR_HEALTH = {'green': 'OK', 'yellow': 'Warning', 'red': 'Critical'}   # unknown / 없음 → None
+_HEALTH_RANK = {'Critical': 3, 'Warning': 2, 'OK': 1}
+_PSU_NAME_RE = re.compile(r'^\s*power\s+supply\s+(\d+)\b', re.IGNORECASE)
+# 엔티티 접두 → DMTF PhysicalContext (Redfish thermal.temperatures[].physical_context 와 같은 어휘). 긴 접두가 먼저다.
+_PHYSICAL_CONTEXT = (('memory module', 'Memory'), ('disk or disk bay', 'StorageDevice'), ('power supply', 'PowerSupply'),
+                     ('system board', 'SystemBoard'), ('processor', 'CPU'), ('memory', 'Memory'), ('disk', 'StorageDevice'),
+                     ('fan', 'Fan'), ('chassis', 'Chassis'))
+
+
+def _sensor_reading(sensor):
+    """currentReading × 10^unitModifier → 숫자 (정수면 int). 값이 없거나 숫자가 아니면 None."""
+    raw = getattr(sensor, 'currentReading', None)
+    if raw is None:
+        return None
+    try:
+        mod = int(getattr(sensor, 'unitModifier', 0) or 0)
+        val = float(raw) * (10 ** mod)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    rounded = round(val)
+    return int(rounded) if abs(val - rounded) < 1e-9 else round(val, 3)
+
+
+def _sensor_health(sensor):
+    """healthState.key(green/yellow/red/unknown) → OK/Warning/Critical/None. dict 모양(테스트 · 덤프 재생)도 받는다."""
+    hs = getattr(sensor, 'healthState', None)
+    key = hs.get('key') if isinstance(hs, dict) else getattr(hs, 'key', None)
+    return _SENSOR_HEALTH.get(_s(key).lower()) if _s(key) else None
+
+
+def _worst_health(values):
+    ranked = [v for v in values if v in _HEALTH_RANK]
+    return max(ranked, key=lambda v: _HEALTH_RANK[v]) if ranked else None
+
+
+def _physical_context(name):
+    low = (_s(name) or '').lower()
+    for prefix, ctx in _PHYSICAL_CONTEXT:
+        if low.startswith(prefix):
+            return ctx
+    return None
+
+
+def _fan_units(base_units):
+    u = (_s(base_units) or '').lower()
+    if u == 'rpm':
+        return 'RPM'
+    if u in ('percent', 'percentage', '%'):
+        return 'Percent'
+    return _s(base_units)
+
+
+def _build_sensors(target):
+    """power / thermal — runtime.healthSystemRuntime.systemHealthInfo.numericSensorInfo (2026-10-19).
+
+    돌려주는 모양 (Redfish gather_power / gather_thermal 항목과 같은 키):
+      available        : systemHealthInfo 가 있는가. False 면 센서 공급자(CIM/IPMI)가 없는 호스트 — 태스크가 not_supported 로 분류한다.
+      temperatures[]   : {name, reading_celsius, health, state, upper_critical(None), physical_context}
+      fans[]           : {name, reading, reading_units, health, state}
+      power_supplies[] : {name, model, serial, manufacturer, part_number, power_capacity_w, firmware_version, health, state} —
+                         "Power Supply N" 이름의 power 센서를 PSU 1개로 묶는다. 식별 · 용량은 센서에 없어 None.
+      power_control    : {power_consumed_watts, power_capacity_watts(None), interval_in_min(None), min/avg/max(None)} — PSU 가 아닌 Watts 센서 1개일 때만 값.
+      power_sensors[]  : Watts 단위 센서 원문 {name, watts, health, psu} — 소비전력 유도 근거 (envelope 에는 나가지 않는다).
+    """
+    tgt = _as_target(target)
+    hs = tgt.host()
+    out = {'available': False, 'sensor_count': 0, 'temperatures': [], 'fans': [], 'power_supplies': [],
+           'power_control': None, 'power_sensors': []}
+    if hs is None:
+        return out
+    runtime = getattr(hs, 'runtime', None)
+    health = getattr(runtime, 'healthSystemRuntime', None) if runtime is not None else None
+    info = getattr(health, 'systemHealthInfo', None) if health is not None else None
+    if info is None:
+        return out
+    sensors = list(getattr(info, 'numericSensorInfo', None) or [])
+    out['available'] = True
+    out['sensor_count'] = len(sensors)
+    psus = {}
+    other_watts = []
+    for sensor in sensors:
+        stype = (_s(getattr(sensor, 'sensorType', None)) or '').lower()
+        name = _s(getattr(sensor, 'name', None))
+        units = _s(getattr(sensor, 'baseUnits', None)) or ''
+        health_v = _sensor_health(sensor)
+        reading = _sensor_reading(sensor)
+        if stype == 'temperature':
+            out['temperatures'].append({
+                'name': name,
+                'reading_celsius': int(round(reading)) if reading is not None else None,
+                'health': health_v,
+                'state': 'Enabled',
+                'upper_critical': None,
+                'physical_context': _physical_context(name),
+            })
+            continue
+        if stype == 'fan':
+            out['fans'].append({
+                'name': name,
+                'reading': int(round(reading)) if reading is not None else None,
+                'reading_units': _fan_units(units),
+                'health': health_v,
+                'state': 'Enabled',
+            })
+            continue
+        if stype != 'power':
+            continue
+        m = _PSU_NAME_RE.match(name or '')
+        if m is not None:
+            psu = psus.setdefault(int(m.group(1)), {'healths': []})
+            psu['healths'].append(health_v)
+        if units.lower() == 'watts' and reading is not None:
+            out['power_sensors'].append({'name': name, 'watts': reading, 'health': health_v,
+                                         'psu': int(m.group(1)) if m is not None else None})
+            if m is None:
+                other_watts.append(reading)
+    for idx in sorted(psus):
+        out['power_supplies'].append({
+            'name': 'Power Supply %d' % idx,
+            'model': None, 'serial': None, 'manufacturer': None, 'part_number': None,
+            'power_capacity_w': None, 'firmware_version': None,
+            'health': _worst_health(psus[idx]['healths']),
+            'state': 'Enabled',
+        })
+    consumed = other_watts[0] if len(other_watts) == 1 else None
+    if len(other_watts) > 1:
+        tgt.notice('power', 'PSU 가 아닌 전력(Watts) 센서가 %d개 — 소비전력을 고르지 않음(null)' % len(other_watts))
+    if out['power_supplies'] or consumed is not None:
+        out['power_control'] = {
+            'power_consumed_watts': consumed,
+            'power_capacity_watts': None,
+            'interval_in_min': None,
+            'min_consumed_watts': None,
+            'avg_consumed_watts': None,
+            'max_consumed_watts': None,
+        }
+    return out
+
+
 def _safe_build(part, fn, target, part_errors, default=None):
     """빌더 하나의 실패가 나머지 파트까지 삼키지 않게 격리한다.
 
@@ -672,6 +823,7 @@ def main():
     target = None
     disks, controllers, listening_ports, host_info = [], [], [], {}
     logical_volumes = []   # 2026-10-18 (X6): RAID 뒤 LUN
+    sensors = {}           # 2026-10-19: power / thermal 센서 (available · temperatures · fans · power_supplies · power_control)
 
     try:
         # 2026-10-03 (C8): pyVmomi 의 첫 요청(버전 탐색 GET /sdk/vimServiceVersions.xml)은 httpConnectionTimeout 을 받지 않아
@@ -703,6 +855,7 @@ def main():
                                               target, part_errors)
                 host_info = _safe_build('host_info', _build_host_info,
                                         target, part_errors, default={})
+                sensors = _safe_build('sensors', _build_sensors, target, part_errors, default={})
 
         result = dict(
             changed=False,
@@ -710,6 +863,7 @@ def main():
             controllers=controllers, listening_ports=listening_ports,
             logical_volumes=logical_volumes,   # 2026-10-18 (X6): 추가만 한 키 — RAID 컨트롤러 뒤 LUN
             host_info=host_info,
+            sensors=sensors,   # 2026-10-19: 추가만 한 키 — normalize_power_thermal.yml 이 읽는다 (구버전 모듈 호환: 없으면 빈 dict)
             # 2026-08-12 (N36): 아래 3키는 **추가만** 한 것이다 (기존 키 삭제/리네임 없음).
             #   호출 task(collect_disks.yml)가 어느 섹션의 errors 로 올릴지 정하는 근거다.
             #   connect_ok   : 접속 자체가 됐는지 (false 면 네 파트 모두 미수집)

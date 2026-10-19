@@ -157,7 +157,7 @@ Redfish `data` 에는 섹션이 아닌 보조 키도 있다 — `multi_node`(9�
 (2026-08-03: 400 도 미지원으로 보려다 되돌림 — 사이트 사례의 400 은 장비 미지원이 아니라 **수집 측 경로 오류**였다.
 400 을 미지원으로 분류하면 수집 측 버그가 `not_supported` 로 조용히 덮인다.)
 2026-09-03: `hardware` 를 OS 채널 정식 섹션으로 배선 — Linux 는 DMI(setup fact → `/sys/class/dmi/id`), Windows 는 `Win32_ComputerSystem`/`Win32_BIOS`. 종전에는 Windows 만 스키마 밖에서 냈고 Linux 는 모델·BIOS 를 버렸다.
-2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data.thermal` 만 채워지고 `sections.thermal` 누락. 이제 redfish 는 수집 성공 시 `success`, os/esxi 는 `not_supported`).
+2026-06-15: `thermal` 을 `sections` 맵에 정식 배선 (이전엔 `data.thermal` 만 채워지고 `sections.thermal` 누락. 이제 redfish 는 수집 성공 시 `success`, os 는 `not_supported`, esxi 는 2026-10-19 부터 vSphere 하드웨어 센서로 `success`(센서 공급자 없는 호스트만 `not_supported`)).
 
 같은 서버라도 채널별로 채워지는 영역이 다르다는 게 핵심. 예를 들어:
 - Dell 서버를 **Redfish** 로 보면 `bmc` / `firmware` / `power` 가 풍부하고 OS 정보는 없다.
@@ -650,7 +650,7 @@ Redfish 는 `/Storage/{id}/Volumes` 의 논리 볼륨을, OS/ESXi 는 종전에 
 - 개수 비교의 뜻: Redfish `physical_disks` 는 RAID 뒤 물리 디스크, OS/ESXi `physical_disks` 는 OS 가 보는 블록 장치(RAID 볼륨 포함)라 **수가 같을 필요가 없다**.
   맞춰 볼 수 있는 것은 `logical_volumes` 의 수와 용량이다.
 
-#### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA / InfiniBand (2026-05-29, IB 는 2026-10-17 정비)
+#### 6.3.1 `hbas[]` / `infiniband[]` — FC HBA · iSCSI 이니시에이터 / InfiniBand (2026-05-29, IB 는 2026-10-17 정비, Linux iSCSI 는 2026-10-19)
 
 전 채널 (Redfish / OS Linux·Windows / ESXi) 이 **동일 canonical 키** 로 emit 한다.
 호출자는 채널 무관하게 같은 키로 파싱하고, `wwpn` / `node_guid` 로 동일 물리 장치를
@@ -686,7 +686,7 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 | 채널 | FC HBA 수집원 | InfiniBand 수집원 / 판정 / 한계 |
 |---|---|---|
 | Redfish | System 에 연결된 섀시의 `NetworkAdapters` → `Ports`/`NetworkPorts` + `NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`/`Port.FibreChannel` 블록, 기능이 연결되지 않은 포트는 링크 기술 `FibreChannel`. **PortType enum 아님**). 2026-10-18 보완: FC 링크 기술 포트의 Ethernet 블록은 Ethernet 근거가 아니고, 짝 없는 기능은 이름으로 찾은 부모 포트의 링크·속도를 상속하며, 정수 Id · 카드 1장의 예외 · 이름 없는 카드가 섹션 전체를 지우지 않는다. 범위와 빈 목록의 뜻은 6.3.2 | 포트의 현재 모드(`Port.LinkNetworkTechnology` / `NetworkPort.ActiveLinkTechnology` / `Port.PortProtocol`)와 연결된 기능의 `NetDevFuncType` 이 `InfiniBand` 일 때. 둘이 다르면 IB 로 확정하지 않고 notice 1건. GUID 는 기능의 `InfiniBand.NodeGUID/PortGUID`, 없으면 `Port.InfiniBand.Associated*GUIDs` 가 한 값일 때만. 상세 6.3.3. 주류 BMC(iDRAC/iLO/XCC) 는 add-in IB HCA 거의 미노출 → OS 채널 정본 |
-| OS Linux | `/sys/class/fc_host/*`(port_name/node_name/port_state/port_type/speed) + `scsi_host/<host>/`(proc_name = 드라이버 · model_name/modelname · fw_version/fwrev · manufacturer) + PCI uevent → `lspci` 이름. NPIV 가상 포트 제외. link_status up/down 둘뿐 (2026-10-19) | `/sys/class/infiniband/<dev>/ports/<n>/` 중 **`link_layer == InfiniBand` 인 포트만** (RoCE·iWARP 는 `Ethernet` 이라 제외 — 같은 디렉터리에 등록되고 `rate` 도 IB 식으로 찍힌다). `node_guid` 파일 · `port_guid` = `gids/0` 하위 64비트 · `rate` 원문 · `rate_gbps` 는 `state` ACTIVE 일 때만(커널은 DOWN 포트에도 기본 SDR 값을 찍는다) · `model`/`vendor` 는 `lspci`(pci.ids) 이름(없으면 model=`hca_type`, vendor=null) · `firmware` = `fw_ver`. **정본** |
+| OS Linux | `/sys/class/fc_host/*`(port_name/node_name/port_state/port_type/speed) + `scsi_host/<host>/`(proc_name = 드라이버 · model_name/modelname · fw_version/fwrev · manufacturer) + PCI uevent → `lspci` 이름. NPIV 가상 포트 제외. link_status up/down 둘뿐 (2026-10-19). **iSCSI**(2026-10-19): `/sys/class/iscsi_host/*` + host 아래 세션 — 아래 "iSCSI 이니시에이터" | `/sys/class/infiniband/<dev>/ports/<n>/` 중 **`link_layer == InfiniBand` 인 포트만** (RoCE·iWARP 는 `Ethernet` 이라 제외 — 같은 디렉터리에 등록되고 `rate` 도 IB 식으로 찍힌다). `node_guid` 파일 · `port_guid` = `gids/0` 하위 64비트 · `rate` 원문 · `rate_gbps` 는 `state` ACTIVE 일 때만(커널은 DOWN 포트에도 기본 SDR 값을 찍는다) · `model`/`vendor` 는 `lspci`(pci.ids) 이름(없으면 model=`hca_type`, vendor=null) · `firmware` = `fw_ver`. **정본** |
 | OS Windows | `Get-InitiatorPort` + `MSFC_*` WMI (FC/iSCSI 만). 구성요소(initiator_ports · adapter_attrs · port_attrs) 성패를 적어 접근 거부 · 제공자 오류는 errors[] 1건, cmdlet · 클래스 부재는 "HBA 없음" 과 같은 환경. PortSpeed 비트 1~0x2000 → Gbps, PortState 보강 (2026-10-18) | `Get-NetAdapter -IncludeHidden` 중 `NdisPhysicalMedium 11`(Infiniband) 또는 표시값 `Infiniband`; 2차로 `Get-NetAdapterRdma` 의 `RdmaTechnology == InfiniBand`(iWARP/RoCE 아님). 팀 멀티플렉서(`Multiplexor`/`MS_IMPLAT`) 제외. `rate` = `LinkSpeed`, `rate_gbps` = `ReceiveLinkSpeed`(bps)/1e9. **`port`·`node_guid`·`port_guid`·`firmware` 는 표준 API 가 없어 null** (`note` 에 그 뜻). WinOF-2 는 Windows Server 2019 에서 IPoIB 의 물리 매체를 802.3 으로 보고하는 알려진 이슈가 있어 2차 신호가 없으면 놓칠 수 있다(벤더 도구 `mlx5cmd` 는 쓰지 않는다) |
 | ESXi | `vmware_host_vmhba_info` — type + driver 두 신호(FC/FCoE/iSCSI, 하드웨어 iSCSI 클래스 `InternetScsiHba` 포함, SAS/RAID 제외). vmhba 를 있는 그대로 전부(2026-10-19 — 2026-10-18 의 "같은 (wwpn, wwnn) 1건" 폐지; ESXi 7 FC-NVMe 쌍둥이는 2건), speed 자릿수 정규화, WWN 형식 검증(깨진 값은 null + errors[]) (2026-10-18) | **수집하지 않는다 — 항상 `[]`.** 네이티브 nmlx5 드라이버는 Ethernet 전용이고 IB 는 SR-IOV/passthrough 로 VM 에만 간다. IB 모드 카드는 vmnic 없이 PCI `Infiniband controller` 로만 보인다(Broadcom KB 381748). 종전 "`nmlx` 드라이버 NIC = IB" 추정은 이더넷 NIC 오탐이라 제거했다. 빈 목록은 "IB 없음" 의 증거가 아니라 "이 채널은 수집하지 않는다" 는 뜻이다 |
 
@@ -695,6 +695,15 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
   count=; paths=` 최대 10개). 속성 파일 자체가 없는 것은 오류가 아니다 (2026-10-03). IB 포트의 `link_layer` 를 읽지 못하면 그 포트는
   IB 로 추정하지 않고(제외) 같은 오류로 근거를 남긴다 (2026-10-17).
 - `port_type` ∈ {`FibreChannel`, `FCoE`, `iSCSI`}. `source` ∈ {`redfish`, `os`, `esxi`}.
+- **iSCSI 이니시에이터 (2026-10-19, 사용자 승인)** — Linux 도 Windows · ESXi 처럼 iSCSI 를 `hbas[]` 에 넣는다(`port_type: "iSCSI"`). Linux 는 `/sys/class/iscsi_host/*`
+  (initiatorname · ipaddress · hwaddress · netdev · port_state · port_speed, `scsi_host/<host>/proc_name` = 드라이버, host 아래 `session*/iscsi_session/<id>/{state,targetname,initiatorname}`)만 읽는다 —
+  `iscsiadm` 과 `/etc/iscsi/initiatorname.iscsi` 는 root 가 필요하고 sysfs 는 누구나 읽는다. **항목 1개 = 이니시에이터 포트 1개**: 소프트웨어 iSCSI(`iscsi_tcp`)는 세션마다 Scsi_Host 가 생기므로
+  (driver, iqn, hwaddress, netdev) 가 같은 host 를 1건으로 묶고 `session_count` 에 세션 수를 적는다; 하드웨어 오프로드(bnx2i · qla4xxx · be2iscsi · cxgb4i)는 포트(hwaddress)마다 1건.
+  키는 canonical 6개 + `iqn`(이니시에이터 IQN — iSCSI 의 식별자, FC 의 `wwpn` 자리) + Linux 전용 `host` · `ip_address` · `mac_address` · `netdev` · `session_count`. `wwpn`/`wwnn` 은 iSCSI 에 없어 null.
+  `link_status` 는 `port_state == "LINK UP"` 또는 로그인된 세션(`LOGGED_IN`) 1개 이상이면 `up`, 그 밖 `down`. `link_speed_gbps` 는 `port_speed`("10 Gbps")의 첫 숫자(소프트웨어 iSCSI 는 null).
+  `model`/`vendor` 는 오프로드 카드의 PCI 장치 이름(lspci, 소프트웨어 iSCSI 는 null). sysfs 속성이 **있는데 읽지 못하면** FC 와 같은 storage 오류 1건(`scope=iscsi_host`).
+  Windows 도 같은 날부터 iSCSI 포트에 `iqn`(`MSFT_InitiatorPort.NodeAddress` — iSCSI 에서는 IQN 문자열)을 낸다. ESXi 는 `vmware_host_vmhba_info` 가 iSCSI 이름을 주지 않아 `iqn` 키가 없다(후속).
+  lab 호스트에는 iSCSI 세션이 없어 합성 sysfs 시험까지다(`tests/evidence/2026-10-19-esxi-sensors-linux-iscsi.md`).
 - **IB `link_status`** — `up` = 활성(Linux `ACTIVE` · Windows `Up` · Redfish `LinkUp`/`Up`), `down` = 명확한 링크 없음(`DOWN` · `Disconnected` ·
   `LinkDown`/`NoLink`), `unknown` = 중간 상태 또는 미확인(Linux `INIT`/`ARMED`/`ACTIVE_DEFER` · Windows `Disabled`/`Not Present` · Redfish
   `Starting`/`Training`/없음). **`rate_gbps` 는 `up` 일 때만 숫자**(정수는 int, 2.5 같은 소수는 그대로)이고 `rate` 는 원천의 속도 문자열 원문이다
@@ -949,7 +958,14 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 - **검증**: Linux 실장비 10.100.64.161(RHEL 8.10 raw) / 10.100.64.165(RHEL 9.6 python) — `tests/evidence/2026-06-17-bond-alias-collection.md`.
   Windows 실장비 10.100.64.120(Server 2022) — `tests/evidence/2026-06-26-windows-net-ib-driver-team-vlan.md`.
 
-### 6.5 `data.power` (Redfish 전용)
+### 6.5 `data.power` (Redfish · ESXi — ESXi 는 2026-10-19 부터)
+
+> **2026-10-19 (ESXi, 사용자 승인)** — ESXi 도 vSphere 하드웨어 센서(`runtime.healthSystemRuntime.systemHealthInfo.numericSensorInfo`, `esxi_disks` 모듈 sensors 파트)로 `power` 를 낸다.
+> 모양은 Redfish 와 같다: `power_supplies[]` 는 이름이 "Power Supply N" 인 power 센서를 PSU 1개로 묶은 것(`health` 는 그 센서들의 최악값, `state: Enabled`; 모델 · 시리얼 · 용량은 센서에 없어 null),
+> `power_control.power_consumed_watts` 는 PSU 가 아닌 Watts 센서가 **정확히 1개**일 때만 그 값(실측 Cisco ESXi 7 "System Board 0 POWER_USAGE" 432~472 W; 여럿이면 null — 추정하지 않는다), 그 밖 `power_control` 값은 null,
+> `summary` 는 Redfish 와 같은 규칙(`filter_plugins/power_summary.py` — 용량 모르면 `total_capacity_w null` · `consumed_capacity_pct null`). 센서 공급자(CIM/IPMI)가 없는 호스트는 `sections.power/thermal = not_supported`,
+> 모듈 파트 실패는 `failed` + errors[] 2건. ESXi 봉투의 `sections.power` 가 `not_supported` → `success` 로 바뀌는 호출자 계약 변화다(사용자 승인 — `docs/ai/decisions/ADR-2026-10-19-esxi-sensors-and-linux-iscsi.md`).
+> 같은 이유로 ESXi **실패 봉투**(수집 자체가 실패한 rescue · 합성 fallback)의 `sections.power/thermal` 도 `failed` 다(종전 `not_supported`) — 4절 시나리오 D 의 "지원 섹션" 집합에 두 섹션이 들어갔기 때문이다.
 
 ```json
 "power": {
@@ -1003,10 +1019,13 @@ PSU 한 대만 fault 여도 `hardware.health` 가 `Critical` 로 올라간다. �
 `bmc.dns_name` · `bmc.network_hostname` 은 **BMC 자기 이름**이라 봉투 `hostname`(서버 이름)과 값이 달라도 정상이다 — 8절.
 `bmc.firmware_version` 은 Manager 가 직접 보고하는 BMC 펌웨어로, FirmwareInventory 의 BMC 항목(때로 stale)이 아니다.
 
-### 6.7 `data.thermal` (Redfish 전용)
+### 6.7 `data.thermal` (Redfish · ESXi — ESXi 는 2026-10-19 부터)
 
 > 2026-06-14: 단일노드 thermal 수집 — 이전엔 multi_node(CSUS/Superdome) 경로만 수집했음.
 > Chassis/{id}/Thermal (신 펌웨어는 ThermalSubsystem). 미지원/미노출 벤더는 빈 `{temperatures:[], fans:[]}` (graceful).
+> **2026-10-19 (ESXi, 사용자 승인)** — ESXi 는 numericSensorInfo 의 sensorType `temperature` → `temperatures[]`(`reading_celsius` = currentReading×10^unitModifier 반올림, `health` green/yellow/red →
+> OK/Warning/Critical(unknown → null), `state: Enabled`, `upper_critical: null`(임계값 미제공), `physical_context` 는 센서 이름 앞 엔티티 — Processor→CPU · Memory Module→Memory · System Board→SystemBoard ·
+> Power Supply→PowerSupply · Disk→StorageDevice), `fan` → `fans[]`(`reading`, `reading_units: RPM`). 전압 · 메모리 ECC · 프로세서 상태 센서는 계약에 없어 내지 않는다. 실측 덤프 3대(ESXi 7): 온도 28 · 팬 12.
 
 ```json
 "thermal": {

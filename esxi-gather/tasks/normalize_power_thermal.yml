@@ -1,0 +1,52 @@
+---
+# esxi-gather/tasks/normalize_power_thermal.yml
+# data.power / data.thermal ← esxi_disks 모듈의 sensors 파트 (2026-10-19, 사용자 승인 — ADR-2026-10-19-esxi-sensors-and-linux-iscsi).
+#
+# 원천: vSphere runtime.healthSystemRuntime.systemHealthInfo.numericSensorInfo (HostNumericSensorInfo). 모듈이 Redfish gather_power /
+#   gather_thermal 과 같은 항목 모양(temperatures[] · fans[] · power_supplies[] · power_control)으로 돌려주고(collect_disks.yml → _e_raw_sensors),
+#   여기서는 fragment 와 power.summary 만 만든다. summary 는 공통 필터 power_summary(filter_plugins/power_summary.py) — Redfish
+#   normalize_standard.yml 의 _rf_power_summary 와 같은 규칙(용량 모르면 null · Absent 제외 · redundant 는 수량). 시험이 두 구현을 대조한다.
+#
+# 판정 (rule 22 — 이 태스크는 power · thermal 두 섹션만 만든다):
+#   - 모듈 파트 실패(connect · host_select · module · sensors) → 두 섹션 failed + errors[] 2건(detail 은 collect_disks 의 모듈 사유)
+#   - available=false (systemHealthInfo 없음 — 센서 공급자 CIM/IPMI 부재) → not_supported (_sections_unsupported_fragment)
+#   - 그 밖 → success. 센서가 0건이어도 빈 목록으로 success (Redfish 의 graceful 과 같다)
+# 조건부 발동이 아니다 — adapter sections_supported 에 power · thermal 이 있는 ESXi 전 adapter(5종)가 이 경로를 탄다.
+
+- name: "esxi | normalize power/thermal | classify"
+  ansible.builtin.set_fact:
+    _e_pt_failed: >-
+      {{ ((_e_disks_failed_parts | default([])) | select('in', ['connect', 'host_select', 'module', 'sensors']) | list | length) > 0 }}
+    _e_pt_available: "{{ ((_e_raw_sensors | default({})).available | default(false)) | bool }}"
+  no_log: true
+
+- name: "esxi | normalize power/thermal | build fragment"
+  ansible.builtin.set_fact:
+    _data_fragment: >-
+      {%- set s = _e_raw_sensors | default({}) -%}
+      {%- if (_e_pt_failed | bool) or not (_e_pt_available | bool) -%}
+        {{ {} }}
+      {%- else -%}
+        {%- set ps = s.power_supplies | default([]) -%}
+        {%- set pc = s.power_control | default(none) -%}
+        {{ {'power': {'power_supplies': ps, 'power_control': pc,
+                      'summary': ({'power_supplies': ps, 'power_control': pc} | power_summary)},
+            'thermal': {'temperatures': s.temperatures | default([]), 'fans': s.fans | default([])}} }}
+      {%- endif -%}
+    _sections_supported_fragment: ['power', 'thermal']
+    _sections_collected_fragment: "{{ [] if ((_e_pt_failed | bool) or not (_e_pt_available | bool)) else ['power', 'thermal'] }}"
+    _sections_failed_fragment:    "{{ ['power', 'thermal'] if (_e_pt_failed | bool) else [] }}"
+    _sections_unsupported_fragment: "{{ ['power', 'thermal'] if ((not (_e_pt_failed | bool)) and not (_e_pt_available | bool)) else [] }}"
+    # 사용자 문장 + 기술 근거(detail) — collect_disks.yml 의 storage / system 오류와 같은 꼴
+    _errors_fragment: >-
+      {%- if _e_pt_failed | bool -%}
+        {{ [{'section': 'power',   'message': '전원 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.',    'detail': _e_disks_err | default(none)},
+            {'section': 'thermal', 'message': '온도/팬 정보를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.', 'detail': _e_disks_err | default(none)}] }}
+      {%- else -%}
+        {{ [] }}
+      {%- endif -%}
+  no_log: true
+
+- name: "esxi | normalize power/thermal | merge fragment"
+  ansible.builtin.include_tasks:
+    file: "{{ lookup('env','REPO_ROOT') }}/common/tasks/normalize/merge_fragment.yml"

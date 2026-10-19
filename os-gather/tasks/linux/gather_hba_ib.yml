@@ -8,7 +8,7 @@
 #   errors[] 1건 (section=storage, 경로 10개까지). 읽기 실패가 없으면 종전처럼 errors 없음.
 #
 # 출력 sub-key:
-#   data.storage.hbas[]       — FC HBA (WWPN, link state, speed)
+#   data.storage.hbas[]       — FC HBA (WWPN, link state, speed) + iSCSI 이니시에이터 (2026-10-19 — iqn · 세션 수 · port_type iSCSI, /sys/class/iscsi_host)
 #   data.storage.infiniband[] — InfiniBand 어댑터 (node_guid, link state, rate)
 #   data.network.driver_map   — interface → driver 매핑 (P5 NIC 깊이)
 #
@@ -116,6 +116,47 @@
             echo "FC|$host|$(cl "$wwpn")|$(cl "$wwnn")|$(cl "$sym")|$(cl "$state")|$(cl "$speed")|$(cl "$drv")|$(cl "$fwver")|$(cl "$mdl")|$(cl "$mfr")|$(cl "$ptype")|$pci|$pvn|$pdv"
           done
         fi
+        # 2026-10-19 (사용자 승인 — ADR-2026-10-19-esxi-sensors-and-linux-iscsi): iSCSI 이니시에이터 → storage.hbas[] (port_type iSCSI).
+        #   /sys/class/iscsi_host 만 읽는다 (kernel drivers/scsi/scsi_transport_iscsi.c 의 iscsi_host 클래스 속성: initiatorname · ipaddress ·
+        #   hwaddress · netdev · port_state("LINK UP"/"LINK DOWN"/"Unknown!") · port_speed) — iscsiadm 과 /etc/iscsi/initiatorname.iscsi 는 root 가
+        #   필요하고 sysfs 는 누구나 읽는다. 세션은 host 아래 session*/iscsi_session/<id>/{state,targetname,initiatorname}.
+        #   소프트웨어 iSCSI(iscsi_tcp)는 세션마다 host 가 하나씩 생기고 host 속성은 "<empty>" 라 IQN 은 세션의 initiatorname 에서 보충한다 —
+        #   파서가 (driver, iqn, hwaddress, netdev) 로 묶어 1건으로 만든다. 하드웨어 오프로드(bnx2i · qla4xxx · be2iscsi · cxgb4i)는 포트마다 host 1개.
+        #   ISCSI|host|iqn|ipaddress|hwaddress|netdev|port_state|port_speed|driver|session_count|logged_in_count|pci|pvn|pdv
+        if [ -d /sys/class/iscsi_host ]; then
+          for ih in /sys/class/iscsi_host/host*; do
+            [ -d "$ih" ] || continue
+            host=$(basename "$ih")
+            rd "$ih/initiatorname"; iqn=$v
+            rd "$ih/ipaddress"; ip=$v
+            rd "$ih/hwaddress"; hw=$v
+            rd "$ih/netdev"; nd=$v
+            rd "$ih/port_state"; pst=$v
+            rd "$ih/port_speed"; psp=$v
+            drv=""
+            if [ -f "$ih/device/scsi_host/$host/proc_name" ]; then rd "$ih/device/scsi_host/$host/proc_name"; drv=$v; fi
+            scnt=0; lcnt=0; siqn=""
+            for s in "$ih"/device/session*; do
+              [ -d "$s" ] || continue
+              sid=$(basename "$s")
+              scnt=$((scnt + 1))
+              rd "$s/iscsi_session/$sid/state"; sst=$v
+              case "$sst" in LOGGED_IN*) lcnt=$((lcnt + 1)) ;; esac
+              if [ -z "$siqn" ]; then rd "$s/iscsi_session/$sid/initiatorname"; siqn=$v; fi
+            done
+            case "$iqn" in ""|"<empty>"|"(null)") iqn=$siqn ;; esac
+            pci=""; pvn=""; pdv=""
+            if [ -f "$ih/device/../uevent" ]; then
+              rd "$ih/device/../uevent"; pci=$(printf '%s\n' "$v" | sed -n 's/^PCI_SLOT_NAME=//p' | head -n 1 | tr -d '|\r')
+            fi
+            if [ -n "$pci" ] && command -v lspci >/dev/null 2>&1; then
+              pl=$(lspci -mm -s "$pci" 2>/dev/null | head -n 1)
+              pvn=$(printf '%s\n' "$pl" | awk -F'"' '{print $4}' | tr -d '|\r')
+              pdv=$(printf '%s\n' "$pl" | awk -F'"' '{print $6}' | tr -d '|\r')
+            fi
+            echo "ISCSI|$host|$(cl "$iqn")|$(cl "$ip")|$(cl "$hw")|$(cl "$nd")|$(cl "$pst")|$(cl "$psp")|$(cl "$drv")|$scnt|$lcnt|$pci|$pvn|$pdv"
+          done
+        fi
         # cycle 2026-05-29 (hba-ib-csus, D2): per-port GID(port_guid) + rate + fw_ver + hca 보강.
         # 2026-10-17 (InfiniBand 전면 검증): delimiter '|' 13 필드 — 앞 9 는 종전 그대로, 뒤 4 는 추가:
         #   IB|adapter|port|node_guid|gid0|state|rate|firmware|hca|link_layer|pci_addr|pci_vendor|pci_device
@@ -201,6 +242,62 @@
             {%- endif -%}
           {%- endfor -%}
           {{ out }}
+        # 2026-10-19 (사용자 승인): iSCSI 이니시에이터 — ISCSI| 줄을 (driver, iqn, hwaddress, netdev) 로 묶어 1건 (소프트웨어 iSCSI 는 세션마다 host 가 생긴다).
+        #   link_status 는 up/down 둘뿐: port_state "LINK UP" 또는 로그인된 세션 1개 이상 → up, 그 밖 → down. wwpn/wwnn 은 iSCSI 에 없어 null,
+        #   iqn 이 식별자다. link_speed_gbps 는 port_speed("10 Gbps") 첫 숫자. vendor/model 은 하드웨어 오프로드의 PCI 장치(lspci) 이름 — 소프트웨어 iSCSI 는 null.
+        #   "<empty>"/"(null)" 자리표시자는 null. session_count 는 묶인 host 의 세션 합.
+        _l_iscsi_list: >-
+          {%- set groups = {} -%}
+          {%- set order = [] -%}
+          {%- set ph = ['', '<empty>', '(null)'] -%}
+          {%- for line in (_l_hba_raw.stdout_lines | default([])) -%}
+            {%- set parts = line.split('|') -%}
+            {%- if parts | length >= 11 and parts[0] == 'ISCSI' -%}
+              {%- set iqn = (parts[2] | trim) if ((parts[2] | trim | lower) not in ph) else none -%}
+              {%- set ip = (parts[3] | trim) if ((parts[3] | trim | lower) not in ph) else none -%}
+              {%- set hw = (parts[4] | trim | lower) if ((parts[4] | trim | lower) not in ph) else none -%}
+              {%- set nd = (parts[5] | trim) if ((parts[5] | trim | lower) not in ph) else none -%}
+              {%- set pst = parts[6] | trim | upper -%}
+              {%- set spfirst = ((parts[7] | trim).split(' ')[0]) if (parts[7] | trim) else '' -%}
+              {%- set spdig = spfirst | regex_replace('[^0-9]', '') -%}
+              {%- set drv = (parts[8] | trim) if (parts[8] | trim) else none -%}
+              {%- set scnt = ((parts[9] | trim) | int) if ((parts[9] | trim) | regex_replace('[^0-9]', '')) else 0 -%}
+              {%- set lcnt = ((parts[10] | trim) | int) if ((parts[10] | trim) | regex_replace('[^0-9]', '')) else 0 -%}
+              {%- set pvn_raw = (parts[12] | trim) if (parts | length >= 14 and (parts[12] | trim)) else '' -%}
+              {%- set pdv_raw = (parts[13] | trim) if (parts | length >= 14 and (parts[13] | trim)) else '' -%}
+              {%- set pvn = '' if (pvn_raw is match('^Vendor [0-9a-fA-F]{4}$')) else pvn_raw -%}
+              {%- set pdv = '' if (pdv_raw is match('^Device [0-9a-fA-F]{4}$')) else pdv_raw -%}
+              {%- set key = (drv | string) ~ '|' ~ (iqn | string) ~ '|' ~ (hw | string) ~ '|' ~ (nd | string) -%}
+              {%- if key not in groups -%}
+                {%- set _ = order.append(key) -%}
+                {%- set _ = groups.update({key: {
+                  'host':            parts[1],
+                  'iqn':             iqn,
+                  'wwpn':            none,
+                  'wwnn':            none,
+                  'model':           pdv if pdv else none,
+                  'vendor':          pvn if pvn else none,
+                  'driver':          drv,
+                  'firmware':        none,
+                  'link_status':     'down',
+                  'link_speed_gbps': (spdig | int) if spdig else none,
+                  'port_type':       'iSCSI',
+                  'ip_address':      ip,
+                  'mac_address':     hw,
+                  'netdev':          nd,
+                  'session_count':   0,
+                  'source':          'os',
+                }}) -%}
+              {%- endif -%}
+              {%- set g = groups[key] -%}
+              {%- set up = (pst == 'LINK UP') or (lcnt > 0) -%}
+              {%- set _ = g.update({'session_count': g.session_count + scnt,
+                                    'link_status': 'up' if (up or g.link_status == 'up') else 'down'}) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- set out = [] -%}
+          {%- for key in order -%}{%- set _ = out.append(groups[key]) -%}{%- endfor -%}
+          {{ out }}
         # 2026-10-17: IB 줄은 raw 가 link_layer 로 이미 걸렀다(InfiniBand 포트만). 13 필드 미만(구 형식)은 PCI 값 없음으로 본다.
         #   link_status 는 state 토큰 완전일치 (ACTIVE→up, DOWN→down, INIT/ARMED/ACTIVE_DEFER/없음→unknown).
         #   rate 첫 토큰은 숫자 형식을 검증한 뒤 float 로 읽는다 — Jinja float 필터는 쓰레기를 0.0 으로 삼킨다.
@@ -274,13 +371,13 @@
       ansible.builtin.set_fact:
         _data_fragment:
           storage:
-            hbas:       "{{ _l_hbas_list }}"
+            hbas:       "{{ _l_hbas_list + _l_iscsi_list }}"
             infiniband: "{{ _l_ib_list }}"
           network:
             driver_map: "{{ _l_nic_drivers }}"
         _sections_supported_fragment: ['storage', 'network']
         _sections_collected_fragment: >-
-          {{ (['storage'] if _l_hbas_list or _l_ib_list else [])
+          {{ (['storage'] if _l_hbas_list or _l_iscsi_list or _l_ib_list else [])
              + (['network'] if _l_nic_drivers else []) }}
         _sections_failed_fragment:    []
         # 2026-10-03 (C7): fc_host / infiniband 속성을 읽지 못했으면 1건 (경로는 10개까지 + 나머지 수).
@@ -292,12 +389,12 @@
           {%- set out = [] -%}
           {%- if rc != 0 -%}
             {%- set se = (((_l_hba_raw.stderr | default('')) | string) | replace('\n', ' ') | replace('\r', ' ') | trim)[:160] -%}
-            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=fc_host,infiniband; cause=command_failed; rc=' ~ rc ~ '; stderr=' ~ (se or 'none'))}) -%}
+            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=fc_host,iscsi_host,infiniband; cause=command_failed; rc=' ~ rc ~ '; stderr=' ~ (se or 'none'))}) -%}
           {%- endif -%}
           {%- if (paths | length) > 0 -%}
-            {%- set scope = ((['fc_host'] if (paths | select('search', '/fc_host/') | list | length) > 0 else []) + (['infiniband'] if (paths | select('search', '/infiniband/') | list | length) > 0 else [])) | join(',') -%}
+            {%- set scope = ((['fc_host'] if (paths | select('search', '/fc_host/') | list | length) > 0 else []) + (['iscsi_host'] if (paths | select('search', '/iscsi_host/') | list | length) > 0 else []) + (['infiniband'] if (paths | select('search', '/infiniband/') | list | length) > 0 else [])) | join(',') -%}
             {%- set more = (' 외 ' ~ ((paths | length) - 10) ~ '건') if (paths | length) > 10 else '' -%}
-            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=' ~ (scope or 'fc_host,infiniband') ~ '; cause=attribute_unreadable; count=' ~ (paths | length) ~ '; paths=' ~ (paths[:10] | join(',')) ~ more)}) -%}
+            {%- set _ = out.append({'section':'storage','message':'스토리지 어댑터 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요.','detail':('scope=' ~ (scope or 'fc_host,iscsi_host,infiniband') ~ '; cause=attribute_unreadable; count=' ~ (paths | length) ~ '; paths=' ~ (paths[:10] | join(',')) ~ more)}) -%}
           {%- endif -%}
           {{ out }}
       no_log: true
@@ -320,7 +417,7 @@
           - section: storage
             message: "스토리지 정보 중 일부를 수집하지 못했습니다. 대상 상태와 수집 로그를 확인하세요."
             detail: >-
-              {{ 'scope=fc_host,infiniband,nic_driver_map; cause=task_failed; msg='
+              {{ 'scope=fc_host,iscsi_host,infiniband,nic_driver_map; cause=task_failed; msg='
                  ~ ((ansible_failed_result.msg | default('') | string | trim) or 'none') }}
       no_log: true
 

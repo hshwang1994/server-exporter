@@ -20,6 +20,11 @@ capabilities:
     - memory
     - storage
     - network
+    # 2026-10-19 (사용자 승인 — ADR-2026-10-19-esxi-sensors-and-linux-iscsi): vSphere runtime.healthSystemRuntime.systemHealthInfo.numericSensorInfo
+    #   (HostNumericSensorInfo — vSphere API 전 버전) → power(PSU · 소비전력) · thermal(온도 · 팬). 센서 공급자(CIM/IPMI)가 없는 호스트는
+    #   모듈이 available=false 를 돌려주고 두 섹션은 not_supported 가 된다. 실측: tests/reference/esxi 덤프 3대(ESXi 7, 센서 126).
+    - power
+    - thermal
 
 vendor_notes:
   # design_hints: 기록용 설계 메모 — 코드가 읽지 않는다. 2026-10-11 adapter 절 정리(ADR-2026-10-11-adapter-key-cleanup)에서 종전

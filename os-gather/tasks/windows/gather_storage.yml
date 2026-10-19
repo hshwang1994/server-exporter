@@ -592,6 +592,7 @@
 #   - FC/iSCSI 만 hbas[] (SAS/Other initiator 제외 — storage controller 영역).
 #   - MSFC_* 보강 join (node_wwn → vendor/model/driver/firmware ; port_wwn → speed).
 #   - canonical 키 (wwpn/wwnn/model/vendor/driver/firmware/link_status/link_speed_gbps/port_type/source).
+#   - 2026-10-19: iSCSI 포트는 iqn(MSFT_InitiatorPort.NodeAddress — iSCSI 에서는 IQN 문자열, FC 에서는 WWNN) 을 더 낸다. Linux iSCSI 항목과 같은 키.
 # 2026-10-03 (C3):
 #   - node WWN 이 맞는 어댑터가 없으면 model/vendor/driver/firmware 는 null. 종전에는 첫 번째 어댑터
 #     (adapters[0]) 값을 붙여 다른 HBA 나 iSCSI initiator 에 엉뚱한 모델/펌웨어가 보고됐다. 포트 자체는 남긴다.
@@ -684,6 +685,7 @@
             'link_status':     link,
             'link_speed_gbps': pa.speed_gbps | default(none),
             'port_type':       'FibreChannel' if is_fc else 'iSCSI',
+            'iqn':             ((p.node_addr | default(none)) if is_iscsi else none),
             'connection':      ('Fibre Channel' if ct == '1' else ('iSCSI' if ct == '2' else ct_raw)),
             'source':          'os',
           }) -%}

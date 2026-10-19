@@ -56,3 +56,5 @@ channel_sections:
     - memory
     - storage
     - network
+    - power          # 2026-10-19 (사용자 승인): vSphere 하드웨어 센서 (esxi_disks sensors 파트)
+    - thermal        # 2026-10-19 (사용자 승인): 온도 · 팬 센서

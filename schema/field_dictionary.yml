@@ -1042,7 +1042,7 @@ fields:
   "power.power_supplies[].state":
     type: "string|null"
     priority: must
-    channel: [redfish]
+    channel: [redfish, esxi]
     help_ko: >-
       PSU 동작 상태.
       Enabled=전원 공급 중이며 정상 동작,
@@ -1053,18 +1053,25 @@ fields:
       Enabled=powered and operating,
       UnavailableOffline=no power input or fault.
       Separate from health (OK/Warning/Critical).
+      ESXi (2026-10-19): vSphere runtime.healthSystemRuntime numericSensorInfo — "Power Supply N" 이름의 power 센서를 PSU 1개로 묶는다.
+      센서가 보고하는 PSU 는 Enabled(부재 PSU 는 센서가 없어 목록에 없다), health 는 그 센서들 중 최악(green/yellow/red → OK/Warning/Critical),
+      model · serial · power_capacity_w 는 센서에 없어 null. power_control.power_consumed_watts 는 PSU 가 아닌 Watts 센서가 정확히 1개일 때만 그 값.
 
   # ──────────────────────────────────────────────────────────────────────────
-  # thermal (cycle 2026-06-14 Track 4) — 온도 센서 + 팬 (Chassis/Thermal)
+  # thermal (cycle 2026-06-14 Track 4) — 온도 센서 + 팬 (Chassis/Thermal · 2026-10-19 부터 ESXi 하드웨어 센서도)
   # ──────────────────────────────────────────────────────────────────────────
 
   "thermal.temperatures[]":
     type: "array of object"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, esxi]
     help_ko: >-
       온도 센서 목록. Chassis/{id}/Thermal.Temperatures (또는 신 펌웨어
       ThermalSubsystem.ThermalMetrics.TemperatureReadingsCelsius). 미노출 시 빈 [].
+      ESXi (2026-10-19): vSphere runtime.healthSystemRuntime.systemHealthInfo.numericSensorInfo 의 sensorType temperature —
+      reading_celsius = currentReading×10^unitModifier 반올림, health = green/yellow/red → OK/Warning/Critical(unknown → null), state 'Enabled',
+      upper_critical null(임계값 미제공), physical_context 는 센서 이름 앞 엔티티(Processor→CPU · Memory Module→Memory · System Board→SystemBoard ·
+      Power Supply→PowerSupply · Disk→StorageDevice). 센서 공급자가 없는 호스트는 sections.thermal not_supported.
     help_en: >-
       Temperature sensor list. From Chassis/{id}/Thermal.Temperatures (or new-firmware
       ThermalSubsystem.ThermalMetrics.TemperatureReadingsCelsius). Empty [] when unexposed.
@@ -1072,37 +1079,39 @@ fields:
   "thermal.temperatures[].reading_celsius":
     type: "integer|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, esxi]
     help_ko: "현재 온도 (°C, Temperature.ReadingCelsius). 문자열 응답은 int 정규화."
     help_en: "Current temperature (°C, Temperature.ReadingCelsius). String responses normalized to int."
 
   "thermal.temperatures[].upper_critical":
     type: "integer|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, esxi]
     help_ko: "상한 critical 임계값 (°C, UpperThresholdCritical). 신 schema 경로는 null."
     help_en: "Upper critical threshold (°C, UpperThresholdCritical). null on new-schema path."
 
   "thermal.temperatures[].physical_context":
     type: "string|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, esxi]
     help_ko: "센서 물리 위치 (PhysicalContext, 예: CPU/Intake/Exhaust/SystemBoard)."
     help_en: "Sensor physical context (PhysicalContext, e.g. CPU/Intake/Exhaust/SystemBoard)."
 
   "thermal.fans[]":
     type: "array of object"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, esxi]
     help_ko: >-
       팬 목록. Chassis/{id}/Thermal.Fans (신 펌웨어는 ThermalSubsystem.Fans). 미노출 시 빈 [].
+      ESXi (2026-10-19): numericSensorInfo 의 sensorType fan — reading = currentReading×10^unitModifier, reading_units = baseUnits(RPM), state 'Enabled'.
     help_en: >-
       Fan list. From Chassis/{id}/Thermal.Fans (new firmware: ThermalSubsystem.Fans). Empty [] when unexposed.
+      ESXi (2026-10-19): numericSensorInfo entries of sensorType fan — reading = currentReading×10^unitModifier, reading_units = baseUnits (RPM).
 
   "thermal.fans[].reading":
     type: "integer|null"
     priority: nice
-    channel: [redfish]
+    channel: [redfish, esxi]
     help_ko: "팬 속도 수치 (Reading 또는 ReadingRPM; 신 schema 는 SpeedPercent). reading_units 와 함께 해석."
     help_en: "Fan speed value (Reading or ReadingRPM; new schema SpeedPercent). Interpret with reading_units."
 
@@ -1110,7 +1119,7 @@ fields:
     type: "string|null"
     enum: ["RPM", "Percent", null]
     priority: nice
-    channel: [redfish]
+    channel: [redfish, esxi]
     help_ko: "팬 속도 단위 (RPM 또는 Percent). reading 값의 단위."
     help_en: "Fan speed unit (RPM or Percent) for the reading value."
 
@@ -2055,7 +2064,7 @@ fields:
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      FC HBA 목록. Redfish · Linux · Windows 는 항목 1개 = **물리 FC 포트** 1개 — 2포트 카드는 2건이다 (2026-10-18):
+      FC HBA + iSCSI 이니시에이터 목록(iSCSI: Windows · ESXi, Linux 는 2026-10-19 부터 — port_type 'iSCSI', 식별자는 iqn). FC 는 Redfish · Linux · Windows 가 항목 1개 = **물리 FC 포트** 1개 — 2포트 카드는 2건이다 (2026-10-18):
       Linux 는 NPIV 가상 포트(fc_host port_type 'NPIV VPORT')를 빼고, Redfish 는 기능(NetworkDeviceFunction) 1개 = 1건(포트에 기능이 없으면 포트 1건).
       ESXi 는 모듈이 준 vmhba 를 **있는 그대로 전부** 낸다(2026-10-19 사용자 결정 — 중복 제거 없음; ESXi 7 FC-NVMe 는 포트당 SCSI/NVMe vmhba 2건이
       같은 WWPN 으로 나온다). 그래도 Redfish(물리) ≥ OS/ESXi(논리) 일 수 있다 —
@@ -2066,8 +2075,11 @@ fields:
       Ethernet 블록은 Ethernet 근거가 아니다 — 신 Port 스키마는 WWPN 을 거기 싣는다).
       Redfish 항목은 소속 카드를 adapter_id/adapter_model 로 담는다. 빈 목록이 "HBA 없음" 인지
       "확인 못 함" 인지는 diagnosis.details.notices 와 errors[] 로 구분한다 (Linux/Windows/ESXi 는 errors[] 만).
+      Linux iSCSI (2026-10-19): /sys/class/iscsi_host 만 읽는다(root 불필요). 항목 1개 = 이니시에이터 포트 1개 — 소프트웨어 iSCSI(iscsi_tcp)는 세션마다 생기는 host 를
+      (driver, iqn, hwaddress, netdev) 로 묶고 session_count 를 적는다. 추가 키 iqn · host · ip_address · mac_address · netdev · session_count; wwpn/wwnn 은 null;
+      link_status 는 port_state LINK UP 또는 LOGGED_IN 세션 ≥ 1 → up. Windows iSCSI 항목도 iqn(NodeAddress)을 낸다. ESXi 는 iqn 없음(모듈 미제공).
     help_en: >-
-      FC HBA list; Redfish, Linux and Windows emit one entry per **physical FC port** (2026-10-18): Linux drops NPIV virtual ports
+      FC HBA + iSCSI initiator list (iSCSI: Windows, ESXi, and Linux since 2026-10-19 — port_type 'iSCSI', identified by iqn). For FC, Redfish, Linux and Windows emit one entry per **physical FC port** (2026-10-18): Linux drops NPIV virtual ports
       (fc_host port_type 'NPIV VPORT'), Redfish emits one entry per NetworkDeviceFunction (or per port without a function).
       ESXi emits every vmhba the module returns **as is** (2026-10-19 user decision, no de-duplication; ESXi 7 FC-NVMe shows two vmhbas
       per port with the same WWPN). Redfish (physical) may still
@@ -2078,6 +2090,17 @@ fields:
       function (PortType is not used; an Ethernet block on an FC-link port is not Ethernet evidence — the new Port schema
       carries the WWPN there). Redfish entries name the card in adapter_id/adapter_model. Whether an empty list means
       "no HBA" or "not determined" is told by diagnosis.details.notices and errors[].
+
+  "storage.hbas[].iqn":
+    type: "string|null"
+    priority: nice
+    channel: [os]
+    help_ko: >-
+      iSCSI 이니시에이터 IQN (2026-10-19). Linux 는 /sys/class/iscsi_host/<host>/initiatorname(소프트웨어 iSCSI 는 "<empty>" 라 세션의 initiatorname 으로 보충),
+      Windows 는 MSFT_InitiatorPort.NodeAddress(iSCSI 포트에서 IQN 문자열). FC 항목은 null. ESXi 는 vmware_host_vmhba_info 가 iSCSI 이름을 주지 않아 키 없음.
+    help_en: >-
+      iSCSI initiator IQN (2026-10-19). Linux: /sys/class/iscsi_host/<host>/initiatorname (software iSCSI reports "<empty>" so the session's initiatorname is used),
+      Windows: MSFT_InitiatorPort.NodeAddress (an IQN string on iSCSI ports). null on FC entries. ESXi has no key (the module does not expose the iSCSI name).
 
   "storage.infiniband[]":
     type: "object[]"
