@@ -3935,17 +3935,33 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
 
 
 def _hba_link_status(pdata):
-    """storage.hbas[].link_status — 'up' / 'down' / None (2026-10-18 사용자 결정).
+    """storage.hbas[].link_status — 'up' / 'down' 둘뿐 (2026-10-19 사용자 결정).
 
-    문자열은 up·down 둘뿐이다. 포트 응답에 `LinkStatus` 키가 **아예 없으면**(실측 HPE CSUS 3200 RMC 1.75.108 — FC Port 24개
-    모두 LinkStatus·Status 키 없음, RMC 자기 포트에는 있음) 장비가 링크 상태를 제공하지 않는 것이라 None(JSON null)이다 —
-    확인하지 못한 상태를 down 으로 적지 않는다(기존 계약의 미노출 → null 관례: link_speed_gbps · wwnn). 키가 있는데 값이
-    null · Unknown · 인식 못 하는 벤더 문자열이면 역시 None. network.ports[].link_status 는 종전 _normalize_link_status 그대로다.
+    2026-10-18 에는 포트 응답에 `LinkStatus` 키가 없으면(실측 HPE CSUS 3200 RMC 1.75.108 — FC Port 24개 전부) None(JSON null)을 두고
+    "확인되지 않은 상태를 down 으로 적지 않는다" 였다. 2026-10-19 사용자 재결정: 값은 항상 들어가야 하고 up · down 둘만 존재한다 —
+    링크 활성이 확인된 경우(LinkUp · Up · Connected 등 → 'up')만 up 이고, 그 밖(키 없음 · 값 null · Unknown · 미인식 벤더 문자열 ·
+    LinkDown · NoLink · Starting · Training)은 전부 down 이다. 키 없음(_hba_link_missing)과 키는 있는데 up/down 으로 정규화되지
+    않은 값(_hba_link_unresolved)은 호출부가 카드당 notice 로 남겨 "장비가 안 줘서 down" 과 "장비가 down 이라 해서 down" 을
+    diagnosis.details.notices 에서 가를 수 있게 한다. network.ports[].link_status 는 종전 _normalize_link_status 그대로다.
     """
     if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
+        return 'down'
+    return 'up' if _normalize_link_status(pdata.get('LinkStatus')) == 'up' else 'down'
+
+
+def _hba_link_missing(pdata):
+    """포트 응답에 `LinkStatus` 키 자체가 없는가 — 장비가 링크 상태를 제공하지 않음(값은 down, 사실은 notice `링크 상태 미제공`)."""
+    return not isinstance(pdata, dict) or 'LinkStatus' not in pdata
+
+
+def _hba_link_unresolved(pdata):
+    """`LinkStatus` 키는 있는데 up/down 으로 정규화되지 않은 값(null · Unknown · 미인식 문자열)의 원문. 그런 값이 아니면 None."""
+    if not isinstance(pdata, dict) or 'LinkStatus' not in pdata:
         return None
-    v = _normalize_link_status(pdata.get('LinkStatus'))
-    return v if v in ('up', 'down') else None
+    raw = pdata.get('LinkStatus')
+    if _normalize_link_status(raw) in ('up', 'down'):
+        return None
+    return 'null' if raw is None else str(raw).strip()
 
 
 def _derive_port_wwpn(pdata, link_tech, ndf):
@@ -3995,7 +4011,7 @@ def _make_fc_hba(adapter_id, adapter_info, port_id, cls, link_status, speed_gbps
       (field_dictionary: 미노출 시 null). 포트 주소는 network.ports[].associated_address 에 그대로 남는다.
       primary_addr 인자는 호출부 호환을 위해 남겨 두며 wwpn 에 쓰지 않는다.
     2026-10-18: 기능에 WWPN 이 없으면 호출부가 _derive_port_wwpn(배제 규칙)으로 채운 ndf 를 넘긴다. link_status 는
-      _hba_link_status 의 'up' / 'down' / None — None 은 "장비가 링크 상태를 제공하지 않음" 이다.
+      _hba_link_status 의 'up' / 'down' — 2026-10-19 부터 None 은 없다(미제공 · 미확정도 down, 사실은 notice).
     """
     wwpn = ndf.get('wwpn') if isinstance(ndf, dict) else None
     wwnn = ndf.get('wwnn') if isinstance(ndf, dict) else None
@@ -4223,7 +4239,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
     out / errors / seen_ports / ib_idx_by_port 는 호출부의 것을 제자리에서 채운다. 예외는 밖으로 던지고 호출부가 카드 단위로
     격리한다(이 카드의 부분 항목은 호출부가 되돌린다).
 
-    요청 순서 · 산출은 종전 루프 본문과 같다 — 2026-10-18 에 더해진 것: 링크 상태 null 규칙(_hba_link_status), WWPN 배제 규칙
+    요청 순서 · 산출은 종전 루프 본문과 같다 — 2026-10-18 에 더해진 것: 링크 상태 규칙(_hba_link_status — 2026-10-19 부터 up/down 둘뿐), WWPN 배제 규칙
     (_derive_port_wwpn), 짝 없는 FC 기능의 부모 포트 링크 상속(F1), 이름 없는 카드의 기능 목록 1회 조회(F4), Id 문자열 정규화(F3a).
     """
     adp_uri = _safe(member, '@odata.id')
@@ -4330,8 +4346,9 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
     # cycle 2026-08-03: port 순회에서 모은 (PortProtocol, link_tech, raw port) 컨텍스트.
     # Port 에 join 되지 않은 NDF 를 분류할 때 '부모 포트' 신호를 물려주는 데 쓴다 (아래 참조).
     port_ctx_by_id = {}
-    # 2026-10-18: 링크 상태를 장비가 주지 않은 포트(hbas link_status null) · WWPN 을 정하지 못한 포트 — 카드당 notice 1건씩
-    link_missing, wwpn_missing, wwpn_derived = [], [], []
+    # 2026-10-18: 링크 상태를 장비가 주지 않은 포트 · WWPN 을 정하지 못한 포트 — 카드당 notice 1건씩.
+    # 2026-10-19: link_status 는 up/down 둘뿐이라 미제공(link_missing) · 값 미확정(link_unresolved) 포트도 down 이다 — 그 사실은 notice 로만 남는다.
+    link_missing, link_unresolved, wwpn_missing, wwpn_derived = [], [], [], []
 
     # NetworkPorts (Redfish 1.5 이전) 또는 Ports (1.6+)
     ports_link = (_safe(adata, 'NetworkPorts', '@odata.id')
@@ -4447,9 +4464,13 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
 
                 port_hbas = []
                 if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE') and not (not cand and prefixed_orphan):
-                    hba_link = _hba_link_status(pdata)   # 2026-10-18: up / down / None(장비 미제공)
-                    if hba_link is None:
+                    hba_link = _hba_link_status(pdata)   # 2026-10-19: up / down 둘뿐 — 미제공 · 미확정은 down + notice
+                    if _hba_link_missing(pdata):
                         link_missing.append(_id_text(port_id) or _str(p_uri))
+                    else:
+                        _unres = _hba_link_unresolved(pdata)
+                        if _unres is not None:
+                            link_unresolved.append('%s=%s' % (_id_text(port_id) or _str(p_uri), _unres))
                     for fndf in (fc_ndfs or [ndf]):   # RD-F15: FC 기능마다 hba 하나
                         fx = fndf if isinstance(fndf, dict) else {}
                         if not fx.get('wwpn'):
@@ -4508,7 +4529,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                                     [n for n in joined if _str(n.get('func_type')).strip().lower() == 'infiniband'])
 
     # Port 가 없거나 Port 에 join 되지 않은 FC NetworkDeviceFunction 도 식별만으로 emit.
-    # (port-less HBA / 구 펌웨어 — link_status/speed 는 미상)
+    # (port-less HBA / 구 펌웨어 — 포트 정보가 없으니 link_status 는 down(2026-10-19: 값은 항상 up/down) + 미제공 notice, speed 는 null)
     # 2026-10-17: InfiniBand 기능은 여기서 항목을 만들지 않는다 (기능 ≠ 포트) — 부모 포트별로 모아
     #   _attach_orphan_ib_functions 가 부모 IB 항목의 빈 GUID 만 채우거나 notice 를 남긴다.
     orphan_ib_by_parent = {}
@@ -4546,7 +4567,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
             hba_speed = _normalize_port_speed(parent[2])[0]
         else:
             cls = _classify_port_protocol(None, None, ndf, None)
-            hba_link, hba_speed = None, None
+            hba_link, hba_speed = 'down', None     # 2026-10-19: 부모 포트가 없으면 링크 상태를 알 길이 없다 → down + 미제공 notice
         if cls in ('FibreChannel', 'FCoE'):
             fx = ndf
             if not ndf.get('wwpn'):
@@ -4556,8 +4577,12 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                     wwpn_derived.append(nid)
                 else:
                     wwpn_missing.append(nid)
-            if hba_link is None:
+            if parent is None or _hba_link_missing(parent[2]):
                 link_missing.append(nid)
+            else:
+                _unres = _hba_link_unresolved(parent[2])
+                if _unres is not None:
+                    link_unresolved.append('%s=%s' % (nid, _unres))
             hba = _make_fc_hba(adapter_id, adapter_info, ndf.get('id'), cls, hba_link, hba_speed, None, fx)
             # 2026-10-15: 추가 섀시 중복 — 이미 수집한 WWPN. 2026-10-18: 같은 host 안에서도 같은 WWPN 이면 같은 FC 포트다
             #   (포트 루프가 포트 주소로 WWPN 을 정한 뒤 짝 없는 기능이 같은 WWPN 을 들고 오는 경우) — 1 포트 = 1 항목.
@@ -4566,10 +4591,14 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
             out['fc_hbas'].append(hba)
     _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
 
-    # 2026-10-18: 카드당 notice — 장비가 링크 상태를 주지 않은 FC 포트(hbas link_status null) · 포트 주소로 정한 WWPN · 못 정한 WWPN
+    # 2026-10-18: 카드당 notice — 장비가 링크 상태를 주지 않은 FC 포트 · 포트 주소로 정한 WWPN · 못 정한 WWPN.
+    # 2026-10-19: 값은 down 으로 적되(up/down 둘뿐) 미제공 · 값 미확정 사실을 notice 로 가른다 — Portal 은 wwpn 으로 OS 채널 값을 조인한다.
     if link_missing:
-        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 미제공 (storage.hbas link_status null)'
+        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 미제공, down 으로 기록 (storage.hbas link_status)'
                 % (adapter_id, ', '.join(link_missing)))
+    if link_unresolved:
+        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 값 미확정, down 으로 기록 (storage.hbas link_status)'
+                % (adapter_id, ', '.join(link_unresolved)))
     if wwpn_derived:
         _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s WWPN 을 기능이 아니라 포트 주소에서 정함'
                 % (adapter_id, ', '.join(wwpn_derived)))
@@ -4627,7 +4656,7 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         오류를 버리는 경로를 'HBA 없음' 과 구분).
       - 어느 경로가 200 빈 목록이어도 다른 경로의 404 아닌 실패(5xx · timeout)는 비차단 오류로 남긴다(F8). 1순위 404 로 미지원
         분류될 때 다른 경로의 실패는 notice 문장에 덧붙인다(F5).
-      - hbas link_status 는 up / down / None(장비 미제공) — _hba_link_status. WWPN 은 기능 → 포트 주소 배제 규칙(_derive_port_wwpn).
+      - hbas link_status 는 up / down 둘뿐(2026-10-19 — 미제공 · 미확정도 down, notice 로 구분) — _hba_link_status. WWPN 은 기능 → 포트 주소 배제 규칙(_derive_port_wwpn).
 
     분류 정본 (DMTF — cycle 2026-05-29 fix, EXTERNAL-CONTRACTS §1/§2):
       - FC : Port.PortProtocol ∈ {FC,FCP,FCoE} 또는 NDF.NetDevFuncType=FibreChannel(OverEthernet)

@@ -2010,9 +2010,10 @@ fields:
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      FC HBA 목록. 항목 1개 = **물리 FC 포트** 1개 — 2포트 카드는 2건이고 네 채널이 같은 기준이다 (2026-10-18):
-      Linux 는 NPIV 가상 포트(fc_host port_type 'NPIV VPORT')를 빼고, ESXi 는 같은 (wwpn, wwnn) 의 vmhba(ESXi 7 FC-NVMe 쌍둥이)를 1건으로,
-      Redfish 는 기능(NetworkDeviceFunction) 1개 = 1건(포트에 기능이 없으면 포트 1건). 그래도 Redfish(물리) ≥ OS/ESXi(논리) 일 수 있다 —
+      FC HBA 목록. Redfish · Linux · Windows 는 항목 1개 = **물리 FC 포트** 1개 — 2포트 카드는 2건이다 (2026-10-18):
+      Linux 는 NPIV 가상 포트(fc_host port_type 'NPIV VPORT')를 빼고, Redfish 는 기능(NetworkDeviceFunction) 1개 = 1건(포트에 기능이 없으면 포트 1건).
+      ESXi 는 모듈이 준 vmhba 를 **있는 그대로 전부** 낸다(2026-10-19 사용자 결정 — 중복 제거 없음; ESXi 7 FC-NVMe 는 포트당 SCSI/NVMe vmhba 2건이
+      같은 WWPN 으로 나온다). 그래도 Redfish(물리) ≥ OS/ESXi(논리) 일 수 있다 —
       BMC 가 정의한 vHBA 를 OS 가 열거하지 않는 경우(실측 CIMC vHBA 4 vs ESXi fnic 2). 교차 대조 키는 wwpn.
       wwpn/link_status/link_speed_gbps/port_type. Linux 는 /sys/class/fc_host, Windows 는 Get-InitiatorPort(+MSFC_*),
       ESXi 는 vmware_host_vmhba_info. Redfish 는 System 에 연결된 섀시의 NetworkAdapters 에서 Port.PortProtocol / NetDevFuncType /
@@ -2021,9 +2022,10 @@ fields:
       Redfish 항목은 소속 카드를 adapter_id/adapter_model 로 담는다. 빈 목록이 "HBA 없음" 인지
       "확인 못 함" 인지는 diagnosis.details.notices 와 errors[] 로 구분한다 (Linux/Windows/ESXi 는 errors[] 만).
     help_en: >-
-      FC HBA list; one entry per **physical FC port** on every channel (2026-10-18): Linux drops NPIV virtual ports
-      (fc_host port_type 'NPIV VPORT'), ESXi collapses vmhbas sharing (wwpn, wwnn) (ESXi 7 FC-NVMe twins) into one,
-      Redfish emits one entry per NetworkDeviceFunction (or per port without a function). Redfish (physical) may still
+      FC HBA list; Redfish, Linux and Windows emit one entry per **physical FC port** (2026-10-18): Linux drops NPIV virtual ports
+      (fc_host port_type 'NPIV VPORT'), Redfish emits one entry per NetworkDeviceFunction (or per port without a function).
+      ESXi emits every vmhba the module returns **as is** (2026-10-19 user decision, no de-duplication; ESXi 7 FC-NVMe shows two vmhbas
+      per port with the same WWPN). Redfish (physical) may still
       list more than OS/ESXi (logical) when the BMC defines vHBAs the OS does not enumerate (CIMC 4 vs ESXi fnic 2).
       Correlate across channels by wwpn. Sources: Linux=/sys/class/fc_host, Windows=Get-InitiatorPort (+MSFC_*),
       ESXi=vmware_host_vmhba_info. Redfish reads NetworkAdapters of the chassis linked to the System and classifies by
@@ -2104,33 +2106,37 @@ fields:
       FCoE drivers (fcoe, bnx2fc, qedf). Cisco VIC fnic/nfnic is FibreChannel on all channels.
 
   "storage.hbas[].link_status":
-    type: "string|null"
+    type: "string"
     enum: ["up", "down"]
     priority: nice
     channel: [redfish, os, esxi]
     help_ko: >-
-      FC 포트 링크 상태 (전 채널 canonical, 2026-10-18 사용자 결정). 문자열은 up · down 둘뿐이고 **장비가 링크 상태 속성을 주지 않으면 null**
-      이다 — 확인되지 않은 상태를 down 으로 적지 않고, 종전 'unknown' 문자열은 폐지했다(link_speed_gbps · wwnn 의 "미노출 → null" 과 같은 규칙).
-      up = 링크 활성, down = 링크 없음/비활성(NoLink · LinkDown · 협상 중 · 관리상 offline · 진단/루프백 포함).
-      Redfish: Port/NetworkPort.LinkStatus (LinkUp·Up·Connected → up / LinkDown·Down·NoLink·Starting·Training → down); 키 자체가 없으면
-      null + notice '링크 상태 미제공' (실측 HPE CSUS 3200 RMC 1.75 — FC Port 에 LinkStatus/Status 키 없음, OS 채널에만 있다). 짝 없는 기능은
-      이름으로 찾은 부모 포트 값을 상속하고, 부모도 없으면 null.
-      Linux fc_host port_state: Online·Marginal → up / Offline·Linkdown·Error·Blocked·Bypassed·Loopback·Diagnostics → down / Unknown·Deleted·없음 → null.
-      Windows MSFT_InitiatorPort.OperationalStatus: 2 → up / 3~8 → down / 1·없음 → MSFC PortState(2 → up, 3~8 → down) → null.
-      ESXi HostBusAdapter.status: online → up / offline → down / unbound·unknown·없음 → null.
-      Portal 은 null 인 Redfish 항목을 wwpn 으로 OS 채널 항목과 맞춰 링크 상태를 보인다.
+      FC 포트 링크 상태 (전 채널 canonical, 2026-10-19 사용자 결정). 값은 **항상 up 또는 down** 이다 — null 도 'unknown' 도 없다.
+      up = 장비가 링크 활성을 보고한 경우만. down = 그 밖 전부: 명시적 링크 없음(NoLink · LinkDown · offline), 협상 중(Starting · Training),
+      관리상 offline · 진단/루프백, 그리고 **장비가 링크 상태를 주지 않거나(키/파일 없음) 값을 up/down 으로 정규화하지 못한 경우**(Unknown · null 값 ·
+      unbound · 미인식 문자열)까지 down 이다. 2026-10-18 의 "미제공 → null" 규칙은 폐지했다(사용자 재결정).
+      Redfish: Port/NetworkPort.LinkStatus (LinkUp·Up·Connected → up / 그 밖 → down); 키 자체가 없으면(실측 HPE CSUS 3200 RMC 1.75 — FC Port 에
+      LinkStatus/Status 키 없음) down + notice '링크 상태 미제공, down 으로 기록', 키는 있는데 값이 null·Unknown·미인식이면 down + notice
+      '링크 상태 값 미확정, down 으로 기록'(원문 포함). 짝 없는 기능은 이름으로 찾은 부모 포트 값을 상속하고, 부모도 없으면 down + 미제공 notice.
+      Linux fc_host port_state: Online·Marginal → up / 그 밖(Offline·Linkdown·Error·Blocked·Bypassed·Loopback·Diagnostics·Unknown·Deleted·없음·읽기 실패) → down.
+      Windows MSFT_InitiatorPort.OperationalStatus: 2 → up / 3~8 → down / 1·없음 → MSFC PortState 2 → up, 그 밖 → down.
+      ESXi HostBusAdapter.status: online → up / 그 밖(offline·unbound·unknown·없음) → down.
+      Redfish 가 미제공으로 down 을 적은 포트(CSUS 등)는 notice 로 구분되며, Portal 은 wwpn 으로 OS 채널 항목과 맞춰 실제 링크 상태를 보인다.
     help_en: >-
-      FC port link state (cross-channel canonical, user decision 2026-10-18). The only strings are up and down; **null means the
-      device does not expose a link-state attribute** — an unverified state is never written as down, and the former 'unknown' string
-      is retired (same rule as link_speed_gbps/wwnn: unexposed → null). up = link active, down = no link/inactive (NoLink, LinkDown,
-      negotiating, administratively offline, diagnostics/loopback).
-      Redfish: Port/NetworkPort.LinkStatus (LinkUp/Up/Connected → up; LinkDown/Down/NoLink/Starting/Training → down); when the key is
-      absent → null + notice (HPE CSUS 3200 RMC 1.75 exposes no LinkStatus/Status on FC ports — only the OS channel has it). An
-      unlinked function inherits its name-matched parent port; no parent → null.
-      Linux fc_host port_state: Online/Marginal → up; Offline/Linkdown/Error/Blocked/Bypassed/Loopback/Diagnostics → down; Unknown/Deleted/absent → null.
-      Windows OperationalStatus: 2 → up; 3-8 → down; 1/absent → MSFC PortState (2 → up, 3-8 → down) → null.
-      ESXi HostBusAdapter.status: online → up; offline → down; unbound/unknown/absent → null.
-      The portal joins null Redfish entries to the OS channel entry by wwpn to show the link state.
+      FC port link state (cross-channel canonical, user decision 2026-10-19). The value is **always up or down** — never null, never 'unknown'.
+      up only when the device reports an active link. down for everything else: explicit no-link (NoLink, LinkDown, offline), negotiating
+      (Starting, Training), administratively offline, diagnostics/loopback, **and when the device exposes no link-state attribute (key/file
+      absent) or the value cannot be normalized to up/down** (Unknown, null value, unbound, unrecognized string). The 2026-10-18 rule
+      "unexposed → null" is retired (user re-decision).
+      Redfish: Port/NetworkPort.LinkStatus (LinkUp/Up/Connected → up; anything else → down); when the key is absent (HPE CSUS 3200 RMC 1.75
+      exposes no LinkStatus/Status on FC ports) → down + notice 'link state not provided, recorded as down'; when the key exists but the value
+      is null/Unknown/unrecognized → down + notice 'link state value unresolved, recorded as down' (raw value included). An unlinked function
+      inherits its name-matched parent port; no parent → down + not-provided notice.
+      Linux fc_host port_state: Online/Marginal → up; anything else (Offline/Linkdown/Error/Blocked/Bypassed/Loopback/Diagnostics/Unknown/Deleted/absent/unreadable) → down.
+      Windows OperationalStatus: 2 → up; 3-8 → down; 1/absent → MSFC PortState 2 → up, otherwise down.
+      ESXi HostBusAdapter.status: online → up; anything else (offline/unbound/unknown/absent) → down.
+      Ports Redfish recorded as down because nothing was provided (CSUS etc.) are told apart by the notice; the portal joins them to the OS
+      channel entry by wwpn to show the real link state.
 
   "storage.hbas[].link_speed_gbps":
     type: "number|null"

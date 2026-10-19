@@ -164,4 +164,4 @@ def test_os_hbas_are_a_subset_of_redfish_hbas_by_wwpn(pair):
 def test_hba_link_status_uses_only_the_canonical_values(pair):
     label, redfish, live, _ = pair
     for h in redfish["hbas"] + list(live["data"]["storage"].get("hbas") or []):
-        assert h.get("link_status") in ("up", "down", None), (label, h)
+        assert h.get("link_status") in ("up", "down"), (label, h)

@@ -27,7 +27,7 @@ SYNTH_IB = REPO / "tests" / "fixtures" / "redfish" / "synthetic_ib_mode" / "expe
 VALID_PORT_TYPES = frozenset({"FibreChannel", "FCoE", "iSCSI"})
 VALID_SOURCES = frozenset({"redfish", "os", "esxi"})
 VALID_LINK_STATUS = frozenset({"up", "down", "unknown"})          # storage.infiniband[] (종전 3값)
-VALID_HBA_LINK_STATUS = frozenset({"up", "down", None})           # storage.hbas[] — 2026-10-18 null = 장비 미제공 (unknown 문자열 폐지)
+VALID_HBA_LINK_STATUS = frozenset({"up", "down"})                 # storage.hbas[] — 2026-10-19 값은 항상 up/down (null · unknown 없음)
 
 # 전 채널 통일 canonical 코어 키 (channel-specific extra 는 추가 허용)
 HBA_REQUIRED_KEYS = ("wwpn", "wwnn", "link_status", "link_speed_gbps", "port_type", "source")
@@ -87,7 +87,7 @@ def test_hba_entries_canonical(baseline_envelope: dict) -> None:
             f"[{label}] hbas[{i}].source invalid: {h['source']!r}"
         )
         assert h["link_status"] in VALID_HBA_LINK_STATUS, (
-            f"[{label}] hbas[{i}].link_status invalid: {h['link_status']!r} (up / down / null)"
+            f"[{label}] hbas[{i}].link_status invalid: {h['link_status']!r} (up / down)"
         )
 
 

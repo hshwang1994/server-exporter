@@ -199,6 +199,31 @@ def test_normalize_link_status_unknown_vendor_value_preserved(rfg):
     assert rfg._normalize_link_status("WeirdState") == "weirdstate"
 
 
+# ── _hba_link_status / _hba_link_missing / _hba_link_unresolved (2026-10-19: storage.hbas[].link_status 는 up/down 둘뿐) ──
+def test_hba_link_status_is_up_only_for_an_active_link(rfg):
+    for v in ("LinkUp", "Up", "Connected", "enabled", "active"):
+        assert rfg._hba_link_status({"LinkStatus": v}) == "up", v
+
+
+def test_hba_link_status_everything_else_is_down(rfg):
+    for pdata in ({"LinkStatus": "LinkDown"}, {"LinkStatus": "NoLink"}, {"LinkStatus": "Starting"}, {"LinkStatus": "Training"},
+                  {"LinkStatus": None}, {"LinkStatus": "Unknown"}, {"LinkStatus": "WeirdState"}, {"Id": "1"}, {}, None):
+        assert rfg._hba_link_status(pdata) == "down", pdata
+
+
+def test_hba_link_missing_is_key_absence_only(rfg):
+    assert rfg._hba_link_missing({"Id": "1"}) is True and rfg._hba_link_missing(None) is True
+    assert rfg._hba_link_missing({"LinkStatus": None}) is False and rfg._hba_link_missing({"LinkStatus": "Unknown"}) is False
+
+
+def test_hba_link_unresolved_returns_the_raw_value_only_when_not_up_or_down(rfg):
+    assert rfg._hba_link_unresolved({"LinkStatus": None}) == "null"
+    assert rfg._hba_link_unresolved({"LinkStatus": "Unknown"}) == "Unknown"
+    assert rfg._hba_link_unresolved({"LinkStatus": " WeirdState "}) == "WeirdState"
+    for pdata in ({"LinkStatus": "LinkUp"}, {"LinkStatus": "LinkDown"}, {"LinkStatus": "Training"}, {"Id": "1"}, None):
+        assert rfg._hba_link_unresolved(pdata) is None, pdata
+
+
 # ── _normalize_port_speed (Round 17 #3) ──────────────────────────────────────
 # 신 Port resource(1.6+, Ports)는 CurrentSpeedGbps 만, 구 NetworkPort 는
 # CurrentLinkSpeedMbps 만 준다. Mbps 미제공 시 Gbps 에서 역산해야 유실 없음.

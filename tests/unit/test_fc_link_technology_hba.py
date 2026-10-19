@@ -10,7 +10,7 @@
       NetworkPort.ActiveLinkTechnology)로 FibreChannel 을 밝히면 FC 포트다. 판정 함수(_classify_port_protocol)는 그대로다 —
       함수에 넣으면 RD-F15 의 기능별 판정과 짝 없는 NDF 경로에서 같은 포트가 두 번 나온다(녹화본 재현 8건).
     - wwpn 은 NDF 의 WWPN / PermanentWWPN 에서만 채운다. 포트 주소는 wwpn 으로 올리지 않는다(장비마다 WWNN 일 수 있다).
-    - link_status 는 Port.LinkStatus 정규화 결과다 — 필드가 없으면 `unknown`.
+    - link_status 는 Port.LinkStatus 정규화 결과다 — up 이 아니면(필드 없음 포함) down (2026-10-19: 값은 항상 up/down).
 """
 from __future__ import annotations
 
@@ -165,12 +165,12 @@ def test_joined_ethernet_function_is_not_overridden_by_link_technology(monkeypat
     assert out["ports"][0]["port_type"] == "Ethernet"
 
 
-def test_link_status_absent_is_null(monkeypatch):
-    """2026-10-18 사용자 결정: 문자열은 up/down 둘뿐 — 포트에 LinkStatus 가 없으면 null(장비 미제공)이고 down 으로 적지 않는다."""
+def test_link_status_absent_is_down_with_notice(monkeypatch):
+    """2026-10-19 사용자 결정: 값은 up/down 둘뿐 — 포트에 LinkStatus 가 없으면 down 이고 '미제공' notice 로 그 사실을 남긴다(2026-10-18 은 null 이었다)."""
     rg._reset_notices()
     out, _errors = _run(monkeypatch, _dell_fc_routes(port_link_status=None))
-    assert out["fc_hbas"][0]["link_status"] is None, "상태를 받지 못하면 null — 추측해서 up/down 을 넣지 않는다"
-    assert any("링크 상태 미제공" in n["message"] for n in rg.notices()), rg.notices()
+    assert out["fc_hbas"][0]["link_status"] == "down", "상태를 받지 못하면 down — up 으로 추측하지 않는다"
+    assert any("링크 상태 미제공" in n["message"] and "down 으로 기록" in n["message"] for n in rg.notices()), rg.notices()
 
 
 def test_wwpn_is_derived_from_the_single_port_wwn_when_ndf_has_none(monkeypatch):

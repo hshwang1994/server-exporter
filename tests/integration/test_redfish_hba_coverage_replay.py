@@ -122,8 +122,9 @@ def _netad_notices(result):
     return [n["message"] for n in result.get("notices") or [] if isinstance(n, dict) and n.get("section") == "network_adapters"]
 
 
-# 2026-10-18: 장비가 FC 포트에 LinkStatus 를 싣지 않으면(실측 HPE CSUS 3200 RMC 1.75 — 24개 FC Port 전부) hbas link_status 는 null 이고
-#   카드당 notice 1건이 남는다. 이 notice 는 녹화본 재생에서 '새로 생긴 오류' 가 아니라 장비 사실이라 아래 비교에서 뺀다.
+# 2026-10-18: 장비가 FC 포트에 LinkStatus 를 싣지 않으면(실측 HPE CSUS 3200 RMC 1.75 — 24개 FC Port 전부) 카드당 notice 1건이 남는다.
+#   2026-10-19 (사용자 결정): 그 포트의 hbas link_status 는 null 이 아니라 down 이다(값은 항상 up/down) — notice 는 그대로.
+#   이 notice 는 녹화본 재생에서 '새로 생긴 오류' 가 아니라 장비 사실이라 아래 비교에서 뺀다.
 _LINK_MISSING = "링크 상태 미제공"
 
 
@@ -142,7 +143,7 @@ def test_unmodified_recordings_get_no_new_network_adapter_notices_or_errors(monk
     assert _netad_notices_except_link_missing(r) == []
     if fixture == "real_hpe_csus3200":
         assert len([m for m in _netad_notices(r) if _LINK_MISSING in m]) == 2, "CSUS: FC 카드 2장 모두 링크 상태 미제공 notice"
-        assert all(h["link_status"] is None for h in _netad(r)["fc_hbas"]), "CSUS FC 포트에는 LinkStatus 가 없다 → null"
+        assert all(h["link_status"] == "down" for h in _netad(r)["fc_hbas"]), "CSUS FC 포트에는 LinkStatus 가 없다 → down(2026-10-19) + 미제공 notice"
     else:
         assert _netad_notices(r) == []
     assert not [e for e in r["errors"] if e.get("section") == "network_adapters"]

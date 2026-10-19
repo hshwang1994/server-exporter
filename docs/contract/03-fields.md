@@ -668,9 +668,9 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 | 채널 | FC HBA 수집원 | InfiniBand 수집원 / 판정 / 한계 |
 |---|---|---|
 | Redfish | System 에 연결된 섀시의 `NetworkAdapters` → `Ports`/`NetworkPorts` + `NetworkDeviceFunctions` (FC=`PortProtocol`/`NetDevFuncType`/`Port.FibreChannel` 블록, 기능이 연결되지 않은 포트는 링크 기술 `FibreChannel`. **PortType enum 아님**). 2026-10-18 보완: FC 링크 기술 포트의 Ethernet 블록은 Ethernet 근거가 아니고, 짝 없는 기능은 이름으로 찾은 부모 포트의 링크·속도를 상속하며, 정수 Id · 카드 1장의 예외 · 이름 없는 카드가 섹션 전체를 지우지 않는다. 범위와 빈 목록의 뜻은 6.3.2 | 포트의 현재 모드(`Port.LinkNetworkTechnology` / `NetworkPort.ActiveLinkTechnology` / `Port.PortProtocol`)와 연결된 기능의 `NetDevFuncType` 이 `InfiniBand` 일 때. 둘이 다르면 IB 로 확정하지 않고 notice 1건. GUID 는 기능의 `InfiniBand.NodeGUID/PortGUID`, 없으면 `Port.InfiniBand.Associated*GUIDs` 가 한 값일 때만. 상세 6.3.3. 주류 BMC(iDRAC/iLO/XCC) 는 add-in IB HCA 거의 미노출 → OS 채널 정본 |
-| OS Linux | `/sys/class/fc_host/*`(port_name/node_name/port_state/port_type/speed) + `scsi_host/<host>/`(proc_name = 드라이버 · model_name/modelname · fw_version/fwrev · manufacturer) + PCI uevent → `lspci` 이름. NPIV 가상 포트 제외. link_status up/down/null (2026-10-18) | `/sys/class/infiniband/<dev>/ports/<n>/` 중 **`link_layer == InfiniBand` 인 포트만** (RoCE·iWARP 는 `Ethernet` 이라 제외 — 같은 디렉터리에 등록되고 `rate` 도 IB 식으로 찍힌다). `node_guid` 파일 · `port_guid` = `gids/0` 하위 64비트 · `rate` 원문 · `rate_gbps` 는 `state` ACTIVE 일 때만(커널은 DOWN 포트에도 기본 SDR 값을 찍는다) · `model`/`vendor` 는 `lspci`(pci.ids) 이름(없으면 model=`hca_type`, vendor=null) · `firmware` = `fw_ver`. **정본** |
+| OS Linux | `/sys/class/fc_host/*`(port_name/node_name/port_state/port_type/speed) + `scsi_host/<host>/`(proc_name = 드라이버 · model_name/modelname · fw_version/fwrev · manufacturer) + PCI uevent → `lspci` 이름. NPIV 가상 포트 제외. link_status up/down 둘뿐 (2026-10-19) | `/sys/class/infiniband/<dev>/ports/<n>/` 중 **`link_layer == InfiniBand` 인 포트만** (RoCE·iWARP 는 `Ethernet` 이라 제외 — 같은 디렉터리에 등록되고 `rate` 도 IB 식으로 찍힌다). `node_guid` 파일 · `port_guid` = `gids/0` 하위 64비트 · `rate` 원문 · `rate_gbps` 는 `state` ACTIVE 일 때만(커널은 DOWN 포트에도 기본 SDR 값을 찍는다) · `model`/`vendor` 는 `lspci`(pci.ids) 이름(없으면 model=`hca_type`, vendor=null) · `firmware` = `fw_ver`. **정본** |
 | OS Windows | `Get-InitiatorPort` + `MSFC_*` WMI (FC/iSCSI 만). 구성요소(initiator_ports · adapter_attrs · port_attrs) 성패를 적어 접근 거부 · 제공자 오류는 errors[] 1건, cmdlet · 클래스 부재는 "HBA 없음" 과 같은 환경. PortSpeed 비트 1~0x2000 → Gbps, PortState 보강 (2026-10-18) | `Get-NetAdapter -IncludeHidden` 중 `NdisPhysicalMedium 11`(Infiniband) 또는 표시값 `Infiniband`; 2차로 `Get-NetAdapterRdma` 의 `RdmaTechnology == InfiniBand`(iWARP/RoCE 아님). 팀 멀티플렉서(`Multiplexor`/`MS_IMPLAT`) 제외. `rate` = `LinkSpeed`, `rate_gbps` = `ReceiveLinkSpeed`(bps)/1e9. **`port`·`node_guid`·`port_guid`·`firmware` 는 표준 API 가 없어 null** (`note` 에 그 뜻). WinOF-2 는 Windows Server 2019 에서 IPoIB 의 물리 매체를 802.3 으로 보고하는 알려진 이슈가 있어 2차 신호가 없으면 놓칠 수 있다(벤더 도구 `mlx5cmd` 는 쓰지 않는다) |
-| ESXi | `vmware_host_vmhba_info` — type + driver 두 신호(FC/FCoE/iSCSI, 하드웨어 iSCSI 클래스 `InternetScsiHba` 포함, SAS/RAID 제외). 같은 (wwpn, wwnn) 1건(ESXi 7 FC-NVMe 쌍둥이), speed 자릿수 정규화, WWN 형식 검증(깨진 값은 null + errors[]) (2026-10-18) | **수집하지 않는다 — 항상 `[]`.** 네이티브 nmlx5 드라이버는 Ethernet 전용이고 IB 는 SR-IOV/passthrough 로 VM 에만 간다. IB 모드 카드는 vmnic 없이 PCI `Infiniband controller` 로만 보인다(Broadcom KB 381748). 종전 "`nmlx` 드라이버 NIC = IB" 추정은 이더넷 NIC 오탐이라 제거했다. 빈 목록은 "IB 없음" 의 증거가 아니라 "이 채널은 수집하지 않는다" 는 뜻이다 |
+| ESXi | `vmware_host_vmhba_info` — type + driver 두 신호(FC/FCoE/iSCSI, 하드웨어 iSCSI 클래스 `InternetScsiHba` 포함, SAS/RAID 제외). vmhba 를 있는 그대로 전부(2026-10-19 — 2026-10-18 의 "같은 (wwpn, wwnn) 1건" 폐지; ESXi 7 FC-NVMe 쌍둥이는 2건), speed 자릿수 정규화, WWN 형식 검증(깨진 값은 null + errors[]) (2026-10-18) | **수집하지 않는다 — 항상 `[]`.** 네이티브 nmlx5 드라이버는 Ethernet 전용이고 IB 는 SR-IOV/passthrough 로 VM 에만 간다. IB 모드 카드는 vmnic 없이 PCI `Infiniband controller` 로만 보인다(Broadcom KB 381748). 종전 "`nmlx` 드라이버 NIC = IB" 추정은 이더넷 NIC 오탐이라 제거했다. 빈 목록은 "IB 없음" 의 증거가 아니라 "이 채널은 수집하지 않는다" 는 뜻이다 |
 
 - `wwpn`/`wwnn`/`link_speed_gbps`/`node_guid`/`port_guid`/`rate_gbps` 는 미연결·미노출 시 `null` (정상 — error 아님). 단 Linux 에서 sysfs 속성 파일이
   **있는데 읽지 못하면**(권한 등) storage 섹션 오류 1건이 남는다 (detail: `scope=fc_host[,infiniband]; cause=attribute_unreadable;
@@ -688,18 +688,22 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
   1 → 1, 2 → 2, 4 → 10, 8 → 4, 16 → 8, 32 → 16 Gbps. 2026-10-18(사용자 결정)부터 T11 FC-HBA / SNIA HBA API · Linux `scsi_transport_fc.h` 와 같은 비트로
   64 → 32, 128 → 20, 256 → 40, 0x200 → 50, 0x400 → 100, 0x800 → 25, 0x1000 → 64, 0x2000 → 128 Gbps 도 바꾼다(Windows WMI 제공자가 같은 비트를 쓰는지는
   실장비 미확인 — 32G 이상 HBA 사이트 실측 시 정정). 0(미확인) · 0x8000(미협상) · 그 밖은 `null`. 종전 표는 4 · 8 · 16 을 4 · 8 · 10 으로 잘못 바꿨다.
-- **HBA `link_status` (2026-10-18, 사용자 결정)** — 문자열은 `up` · `down` 둘뿐이고 **장비가 링크 상태 속성을 주지 않으면 `null`** 이다. 확인되지 않은 상태를
-  `down` 으로 적지 않고, 종전 `unknown` 문자열은 폐지했다(`link_speed_gbps` · `wwnn` 의 "미노출 → null" 과 같은 규칙). 채널별 매핑은 `schema/field_dictionary.yml`
-  `storage.hbas[].link_status` 가 정본이다: Redfish `LinkStatus`(없으면 null + notice `링크 상태 미제공`), Linux `port_state`(Online·Marginal → up / Offline·Linkdown·Error·
-  Blocked·Bypassed·Loopback·Diagnostics → down / Unknown·Deleted·없음 → null), Windows `OperationalStatus`(2 → up / 3~8 → down / 1·없음 → MSFC `PortState` → null),
-  ESXi `status`(online → up / offline → down / unbound·unknown·없음 → null; `HostBusAdapter.status` 는 어댑터(패브릭 로그인) 상태라 Redfish 포트
-  `LinkStatus`(물리/업링크 링크)와 다를 수 있다 — 실측 2026-10-18 Jenkins #647·#648 연속 빌드에서 esxi02 FC 2포트가 ESXi `down` · CIMC `up`). HPE CSUS 3200(RMC 1.75.108 · Redfish 1.19.0)은 FC Port 리소스에 `LinkStatus`·`Status`
-  키가 없어 Redfish 로는 항상 `null` 이다 — 전수 크롤(2,264 리소스) 어디에도 FC 링크 상태가 없고(PCIe 장치의 `H3Alert.1.7.LinkUp` 은 RAID 컨트롤러에도 있는 슬롯
-  링크다) 알림 로그 리소스도 없다(EventService 는 구독 전용). Portal 은 `wwpn` 으로 OS 채널 값을 조인해 보인다.
-- **개수 원칙 (2026-10-18)** — 네 채널 모두 항목 1개 = 물리 FC 포트 1개. Linux 는 NPIV 가상 포트(`port_type` 'NPIV VPORT')를 빼고, ESXi 는 같은 (wwpn, wwnn) 의
-  vmhba(ESXi 7 FC-NVMe: 포트당 SCSI vmhba + NVMe vmhba, 같은 WWPN)를 1건으로 접는다 — "ESXi 8 vs Redfish 4" 의 원인이었다. 그래도 Redfish(물리) ≥ OS/ESXi(논리) 일 수
-  있다: lab Cisco C220 은 CIMC 가 카드 2장의 vHBA 4개를 정의하지만 ESXi 는 카드 1장의 fnic 2개만 열거한다(코드 결함 아님). 교차 대조 키는 `wwpn` 이고
-  `tests/regression/test_cross_channel_same_server.py` 가 같은 서버 2쌍에서 "OS ⊆ Redfish" 를 고정한다.
+- **HBA `link_status` (2026-10-19, 사용자 결정 — 2026-10-18 의 null 규칙을 뒤집음)** — 값은 **항상 `up` 또는 `down`** 이다. `null` 도 `unknown` 도 없다.
+  `up` 은 장비가 링크 활성을 보고한 경우만이고, 그 밖은 전부 `down` 이다 — 명시적 링크 없음 · 협상 중 · 관리상 offline · 진단/루프백뿐 아니라 **장비가 링크 상태를
+  주지 않거나(키/파일 없음) 값을 up/down 으로 정규화하지 못한 경우**(Unknown · null 값 · unbound · 미인식 문자열)도 `down` 이다. 채널별 매핑은 `schema/field_dictionary.yml`
+  `storage.hbas[].link_status` 가 정본이다: Redfish `LinkStatus`(LinkUp·Up·Connected → up / 그 밖 → down; 키가 없으면 down + notice `링크 상태 미제공, down 으로 기록`,
+  키는 있는데 값이 null·Unknown·미인식이면 down + notice `링크 상태 값 미확정, down 으로 기록`), Linux `port_state`(Online·Marginal → up / 그 밖·없음·읽기 실패 → down),
+  Windows `OperationalStatus`(2 → up / 3~8 → down / 1·없음 → MSFC `PortState` 2 → up, 그 밖 → down), ESXi `status`(online → up / 그 밖·없음 → down;
+  `HostBusAdapter.status` 는 어댑터(패브릭 로그인) 상태라 Redfish 포트 `LinkStatus`(물리/업링크 링크)와 다를 수 있다 — 실측 2026-10-18 Jenkins #647·#648 연속 빌드에서
+  esxi02 FC 2포트가 ESXi `down` · CIMC `up`). HPE CSUS 3200(RMC 1.75.108 · Redfish 1.19.0)은 FC Port 리소스에 `LinkStatus`·`Status` 키가 없어 Redfish 로는 **항상 `down`**
+  으로 나온다(전수 크롤 2,264 리소스 어디에도 FC 링크 상태가 없고, PCIe 장치의 `H3Alert.1.7.LinkUp` 은 RAID 컨트롤러에도 있는 슬롯 링크다; 알림 로그 리소스도 없다) —
+  notice `링크 상태 미제공` 이 그 사실을 남기고, Portal 은 `wwpn` 으로 OS 채널 값을 조인해 실제 링크 상태를 보인다. 2026-10-18 의 "미제공 → null" 은 하루 만에
+  사용자 재결정으로 폐지됐다(ADR-2026-10-19).
+- **개수 원칙 (2026-10-18 · ESXi 는 2026-10-19 예외)** — Redfish · Linux · Windows 는 항목 1개 = 물리 FC 포트 1개. Linux 는 NPIV 가상 포트(`port_type` 'NPIV VPORT')를
+  뺀다. **ESXi 는 모듈이 준 vmhba 를 있는 그대로 전부 낸다**(사용자 결정 2026-10-19 — 2026-10-18 의 "같은 (wwpn, wwnn) 1건" 접기 폐지): ESXi 7 FC-NVMe 는 포트당
+  SCSI vmhba + NVMe vmhba 가 같은 WWPN 으로 2건이다("ESXi 8 vs Redfish 4" 는 그 결과이며 결함이 아니다). Redfish(물리) ≥ OS(논리) 일 수도 있다: lab Cisco C220 은
+  CIMC 가 카드 2장의 vHBA 4개를 정의하지만 ESXi 는 카드 1장의 fnic 2개만 열거한다. 교차 대조 키는 `wwpn` **집합** 이고 `tests/regression/test_cross_channel_same_server.py`
+  가 같은 서버 2쌍에서 "OS ⊆ Redfish" 를 고정한다.
 - **FCoE 지원 CNA 는 여기 안 들어온다 (2026-08-03)**: Broadcom 57800 같은 CNA 는 *이더넷* 기능에도
   MAC 파생 WWN 을 달고 나온다. WWN 이 있다는 이유로 HBA 로 잡으면 같은 물리 포트가
   `network.ports[]`=Ethernet / `storage.hbas[]`=FibreChannel 로 갈리는 모순이 생긴다.
@@ -737,10 +741,12 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 
 어느 경우든 `status` 와 `sections` 는 바뀌지 않는다. HBA 수집은 보조 수집이고, HBA 가 없다는 이유로 수집이 실패가 되지 않는다.
 
-**`link_status`** — 포트의 `LinkStatus` 를 `up`(LinkUp · Up · Connected) / `down`(LinkDown · Down · NoLink · Starting · Training) 두 값으로 바꾸고, **키 자체가 없으면 `null`** 이다
-(2026-10-18 — 종전 `unknown` 폐지, 임의 `down` 금지). `null` 의 원인은 두 가지고 둘 다 notice `네트워크 카드 … 링크 상태 미제공` 으로 남는다.
-(a) 포트 응답에 `LinkStatus` 키가 없다 — 실측 HPE CSUS 3200 RMC 1.75.108: FC Port 리소스의 키는 `FibreChannel.AssociatedWorldWideNames` · `Id` · `Name` 셋뿐이고 다른 어느 리소스에도 FC 링크 상태가 없다.
-(b) FC 기능에 짝이 되는 포트 리소스가 없고 이름(`<PortId>-n`)으로 부모 포트도 못 찾았다 — 이때 `link_speed_gbps` 도 `null` 이다. 부모를 찾으면 그 포트의 링크 · 속도를 상속한다(iDRAC8 형).
+**`link_status`** — 포트의 `LinkStatus` 가 `up`(LinkUp · Up · Connected) 으로 정규화되면 `up`, 그 밖은 전부 `down` 이다 (2026-10-19 사용자 결정 — 값은 항상 들어가고
+`null` · `unknown` 은 없다; 2026-10-18 의 "키 없음 → null" 은 폐지). `down` 가운데 "장비가 down 이라 한 것" 과 구분해야 하는 두 경우는 notice 로 남는다.
+(a) **미제공** — notice `네트워크 카드 … 링크 상태 미제공, down 으로 기록`: 포트 응답에 `LinkStatus` 키가 없다(실측 HPE CSUS 3200 RMC 1.75.108: FC Port 리소스의 키는
+`FibreChannel.AssociatedWorldWideNames` · `Id` · `Name` 셋뿐이고 다른 어느 리소스에도 FC 링크 상태가 없다), 또는 FC 기능에 짝이 되는 포트 리소스가 없고 이름(`<PortId>-n`)으로
+부모 포트도 못 찾았다(이때 `link_speed_gbps` 는 `null`). 부모를 찾으면 그 포트의 링크 · 속도를 상속한다(iDRAC8 형).
+(b) **값 미확정** — notice `네트워크 카드 … 링크 상태 값 미확정, down 으로 기록`(포트=원문): 키는 있는데 값이 `null` · `Unknown` · 미인식 벤더 문자열이다.
 실제 링크 상태가 필요하면 OS 채널 결과와 `wwpn` 으로 맞춰 본다 — Portal 은 그렇게 표시한다.
 
 **조용히 빠지던 경로 (2026-10-18 보완)** — 녹화본 변형으로 재현해 고쳤다: FC 링크 기술 포트에 `Ethernet` 블록만 있어 Ethernet 으로 오분류(HBA 0건 · 오류 0건) · 포트 `Id` 가 정수이고
@@ -1073,12 +1079,13 @@ Redfish 채널은 둘이 같은 게 정상이다 (BMC 를 통해 수집). OS / E
 2026-10-17 이전 Redfish 결과는 `SGHD3TLNDD-000` 이었다(호출자가 저장한 값과 다를 수 있다).
 자세한 규칙은 `docs/develop/05-field-mapping.md` 의 "nPartition 시리얼 접미사 정규화" 절을 본다.
 
-**Q. Windows 의 `system.version` 이 `24H2` 로만 나온다. `2025-24H2` 가 아닌가? (2026-10-17)**
-`system.version` 은 Windows 레지스트리 `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` 의 `DisplayVersion`(없으면 `ReleaseId`, 그것도 없으면
-`Win32_OperatingSystem.Version`)을 **자르지 않고 그대로** 낸 값이다. Windows Server 2025 는 `24H2`, 2022 는 `21H2` 를 준다(Microsoft 도 "Windows 11, version 24H2
-and Windows Server 2025" 로 묶어 적는다). 제품명과 연도(`Microsoft Windows Server 2025 Datacenter`)는 `system.distribution`, 빌드 번호(`26100`)는 `system.kernel` 에 있다.
-어떤 Windows API 도 `2025-24H2` 같은 합성 문자열을 주지 않으므로 수집기는 합성하지 않는다 — 그렇게 표시하려면 호출자가 `distribution` 의 연도와 `version` 을 합친다
-(2026-10-17 사용자 결정: 수집기 현행 유지).
+**Q. Windows 의 `system.version` 은 어떤 모양인가? `24H2` 인가 `2025-24H2` 인가? (2026-10-17 · 2026-10-19 재결정)**
+2026-10-19 부터 Windows **Server** 는 **`<제품 연도>-<DisplayVersion>`** 이다 — `2025-24H2` · `2022-21H2` · `2019-1809`. 연도는 `Win32_OperatingSystem.Caption`
+(`Microsoft Windows Server 2025 Datacenter`; 없으면 `ansible_distribution`)의 `Server 20xx` 토큰에서 읽고(Hyper-V Server 포함), 뒤는 레지스트리 `DisplayVersion`(없으면
+`ReleaseId`)이다. 연도가 없는 클라이언트 Windows(10/11)는 DisplayVersion 그대로(`24H2`), DisplayVersion/ReleaseId 가 둘 다 없으면 종전 폴백 `Win32_OperatingSystem.Version`
+그대로다(연도를 붙이지 않는다 — 추정으로 합성하지 않는다). 제품명은 `system.distribution`, 빌드 번호(`26100`)는 `system.kernel` 에 그대로 있다.
+2026-10-17 에는 "어떤 Windows API 도 합성 문자열을 주지 않으니 수집기는 그대로 낸다(호출자가 합친다)" 였으나, 사용자가 2026-10-19 에 수집기가 합성하도록 결정했다
+(`docs/ai/decisions/ADR-2026-10-19-hba-link-status-two-values-esxi-raw-and-windows-version.md`). Linux(`9.6`) · ESXi(`7.0.3`) 는 바뀌지 않았다.
 
 **Q. `schema_version` 이 바뀔 수 있나?**
 바뀐다. 하지만 envelope 13 필드의 의미가 깨지는 변경이면 `"2"` 로 올라가고, 사람이 명시 승인을 해야 한다. 이전 버전 호환은 보장되지 않으니 호출 시 항상 schema_version 을 같이 본다.

@@ -6,7 +6,7 @@
     'unknown', link_speed_gbps 는 None 으로 하드코딩했다 — 포트가 Up · 16000 Mbps 라도 버려졌다(녹화본 변형 재현).
 
 규칙:
-    - 부모 포트를 찾았으면 그 포트의 LinkStatus(_hba_link_status: up / down / None) 와 속도(_normalize_port_speed)를 쓴다.
+    - 부모 포트를 찾았으면 그 포트의 LinkStatus(_hba_link_status: up / down — 2026-10-19 부터 둘뿐) 와 속도(_normalize_port_speed)를 쓴다.
     - port_id 는 종전처럼 기능 Id — 호출자 · 불변식 시험이 `<PortId>-` 접두로 포트와 맞춘다.
     - 부모를 못 찾으면 종전처럼 link None(장비 미제공 — 'unknown' 문자열은 폐지) · speed None.
     - (F1b) 기능의 PhysicalPortAssignment(→ NetworkPorts/…)와 PhysicalNetworkPortAssignment(→ Ports/…)를 모두 색인해
@@ -87,17 +87,25 @@ def test_orphan_function_inherits_parent_port_link_down(monkeypatch):
     assert [(h["link_status"], h["link_speed_gbps"]) for h in out["fc_hbas"]] == [("down", None)]
 
 
-def test_orphan_function_is_null_when_parent_port_has_no_link_status(monkeypatch):
-    """부모 포트에 LinkStatus 키가 없으면 장비가 링크 상태를 주지 않는 것 — null + notice (down 으로 적지 않는다)."""
+def test_orphan_function_is_down_when_parent_port_has_no_link_status(monkeypatch):
+    """부모 포트에 LinkStatus 키가 없으면 장비가 링크 상태를 주지 않는 것 — down + '미제공' notice (2026-10-19: 값은 항상 up/down)."""
     out, _errors = _run(monkeypatch, _routes(port_link_status=None))
-    assert [h["link_status"] for h in out["fc_hbas"]] == [None]
+    assert [h["link_status"] for h in out["fc_hbas"]] == ["down"]
     assert any("링크 상태 미제공" in n["message"] and "FC.Slot.1-1-1" in n["message"] for n in rg.notices()), rg.notices()
 
 
-def test_orphan_function_without_any_parent_stays_null(monkeypatch):
+def test_orphan_function_inherits_unresolved_parent_value_as_down_with_notice(monkeypatch):
+    """부모 포트의 LinkStatus 가 Unknown 처럼 up/down 으로 정규화되지 않으면 down 이고 '값 미확정' notice 에 원문이 남는다 (2026-10-19)."""
+    rg._reset_notices()
+    out, _errors = _run(monkeypatch, _routes(port_link_status="Unknown"))
+    assert [h["link_status"] for h in out["fc_hbas"]] == ["down"]
+    assert any("값 미확정" in n["message"] and "FC.Slot.1-1-1=Unknown" in n["message"] for n in rg.notices()), rg.notices()
+
+
+def test_orphan_function_without_any_parent_is_down(monkeypatch):
     out, _errors = _run(monkeypatch, _routes(port_link_status="Up", speed_mbps=16000, orphan_id="9"))
     hbas = {h["port_id"]: h for h in out["fc_hbas"]}
-    assert hbas["9"]["link_status"] is None and hbas["9"]["link_speed_gbps"] is None, "부모를 못 찾으면 상속할 포트가 없다"
+    assert hbas["9"]["link_status"] == "down" and hbas["9"]["link_speed_gbps"] is None, "부모를 못 찾으면 상속할 포트가 없다 — down + 미제공 notice"
     # 포트 쪽: 기능이 안 붙었고 `FC.Slot.1-1-` 접두의 고아도 없으니 lt_fc 규칙으로 FC 포트 — HBA 1건(wwpn 은 WWNN 이라 null)
     assert hbas["FC.Slot.1-1"]["wwpn"] is None and hbas["FC.Slot.1-1"]["link_status"] == "up"
 

@@ -125,12 +125,12 @@ def test_no_placeholder_zero_for_uptime_or_memory_totals():
 
 
 def test_hba_link_status_is_declared_with_the_canonical_values():
-    """2026-10-15: storage.hbas[].link_status 는 세 채널이 내는 필드인데 사전에 항목이 없었다. 2026-10-18 (사용자 결정): 문자열은 up · down 둘뿐이고
-    장비가 링크 상태 속성을 주지 않으면 null — 'unknown' 문자열은 폐지, 확인되지 않은 상태를 down 으로 적지 않는다."""
+    """2026-10-15: storage.hbas[].link_status 는 세 채널이 내는 필드인데 사전에 항목이 없었다. 2026-10-18: up · down + null(미제공).
+    2026-10-19 (사용자 재결정): 값은 항상 up 또는 down — null 도 'unknown' 도 없다(미제공 · 미확정은 down, Redfish 는 notice 로 구분)."""
     entry = FD["storage.hbas[].link_status"]
-    assert entry["enum"] == ["up", "down"] and entry["type"] == "string|null"
+    assert entry["enum"] == ["up", "down"] and entry["type"] == "string"
     assert set(entry["channel"]) == {"redfish", "os", "esxi"}
-    assert "null" in entry["help_ko"] and "down 으로 적지 않" in entry["help_ko"] and "unknown" in entry["help_ko"]
+    assert "항상 up 또는 down" in entry["help_ko"] and "null" in entry["help_ko"] and "unknown" in entry["help_ko"]
     assert "PortType=FibreChannel" not in FD["storage.hbas[]"]["help_ko"], "Redfish 분류는 PortType 을 쓰지 않는다"
     assert set(FD["cpu.turbo_max_mhz"]["channel"]) == {"redfish", "os", "esxi"}, "2026-10-18: Redfish 도 MaxSpeedMHz 를 turbo_max_mhz 로 낸다"
     assert set(FD["storage.logical_volumes[]"]["channel"]) == {"redfish", "os", "esxi"}, "2026-10-18: OS/ESXi 도 RAID 뒤 디스크를 볼륨으로 싣는다"

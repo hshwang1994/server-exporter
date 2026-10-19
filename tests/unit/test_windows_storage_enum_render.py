@@ -324,8 +324,8 @@ def test_non_fc_non_iscsi_initiators_are_excluded(conn):
     # 2026-10-18: 3 User Offline · 4 Bypassed · 5 In diagnostics mode · 8 Loopback 도 링크 없음 → down
     ("User Offline", "down"), ("3", "down"), ("Bypassed", "down"), ("4", "down"),
     ("In diagnostics mode", "down"), ("5", "down"), ("Loopback", "down"), ("8", "down"),
-    # 1 Unknown / 빈 값 — 확인되지 않은 상태는 null (PortState 보강은 아래 시험)
-    ("Unknown", None), ("1", None), ("", None),
+    # 1 Unknown / 빈 값 — 2026-10-19 (사용자 결정): 값은 항상 up/down. PortState 가 없으면 down (PortState 보강은 아래 시험)
+    ("Unknown", "down"), ("1", "down"), ("", "down"),
     # OperationalStatus 는 UInt16[] — 여러 값이면 PowerShell 이 쉼표로 이어 붙인다
     ("6,7", "down"), ("2,8", "up"), ("Operational,Loopback", "up"),
 ])
@@ -345,9 +345,9 @@ def _pa(state, wwpn="21:00:00:24:ff:01:02:03"):
     return {"port_wwn": wwpn, "node_wwn": "20:00:00:24:ff:01:02:03", "speed_gbps": 16, "port_state": state}
 
 
-@pytest.mark.parametrize("state,link", [(2, "up"), (3, "down"), (4, "down"), (6, "down"), (8, "down"), (1, None), (0, None), (None, None), ("", None)])
+@pytest.mark.parametrize("state,link", [(2, "up"), (3, "down"), (4, "down"), (6, "down"), (8, "down"), (1, "down"), (0, "down"), (None, "down"), ("", "down")])
 def test_port_state_fills_in_when_operational_status_is_unknown(state, link):
-    """OperationalStatus 1(Unknown)/없음이면 MSFC PortState 로 보강 — 2 → up, 3~8 → down, 그 밖·없음 → null."""
+    """OperationalStatus 1(Unknown)/없음이면 MSFC PortState 로 보강 — 2 → up, 그 밖(1 Unknown · 0 · 3~8 · 없음) → down (2026-10-19: null 폐지)."""
     out = hbas([port("20:00:00:24:ff:01:02:03", "21:00:00:24:ff:01:02:03", oper="1")], [_ADP_A], [_pa(state)])
     assert out[0]["link_status"] == link
 

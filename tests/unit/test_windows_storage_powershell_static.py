@@ -375,13 +375,17 @@ $script:__ports = @(
   [PSCustomObject]@{ NodeAddress='20000024FF999999'; PortAddress='21000024FF999999'; ConnectionType='Fibre Channel'; OperationalStatus=[string[]]@('Link Down') },
   [PSCustomObject]@{ NodeAddress='iqn.1991-05.com.microsoft:host01'; PortAddress='ISCSI ANY PORT'; ConnectionType=[uint16]2; OperationalStatus=[uint16[]]@(2) },
   [PSCustomObject]@{ NodeAddress='5000000000000001'; PortAddress='5000000000000002'; ConnectionType=[uint16]3; OperationalStatus=[uint16[]]@(2) },
-  [PSCustomObject]@{ NodeAddress='20000024FF0A0B0C'; PortAddress='21000024FF0A0B0C'; ConnectionType=[int]1; OperationalStatus=[uint16[]]@(6,7) }
+  [PSCustomObject]@{ NodeAddress='20000024FF0A0B0C'; PortAddress='21000024FF0A0B0C'; ConnectionType=[int]1; OperationalStatus=[uint16[]]@(6,7) },
+  [PSCustomObject]@{ NodeAddress='20000024FF111111'; PortAddress='21000024FF111111'; ConnectionType=[uint16]1; OperationalStatus=[uint16[]]@(1) },
+  [PSCustomObject]@{ NodeAddress='20000024FF222222'; PortAddress='21000024FF222222'; ConnectionType=[uint16]1; OperationalStatus=[uint16[]]@(1) },
+  [PSCustomObject]@{ NodeAddress='20000024FF333333'; PortAddress='21000024FF333333'; ConnectionType=[uint16]1; OperationalStatus=[uint16[]]@() }
 )
 $script:__adapters = @(
   [PSCustomObject]@{ NodeWWN=[byte[]](0x20,0x00,0x00,0x24,0xFF,0x01,0x02,0x03); Manufacturer='Acme'; Model='FC-A'; DriverName='acmefc.sys'; FirmwareVersion='9.1' }
 )
 $script:__pattrs = @(
-  [PSCustomObject]@{ Attributes = [PSCustomObject]@{ PortSpeed=[uint32]32; PortWWN=[byte[]](0x21,0x00,0x00,0x24,0xFF,0x01,0x02,0x03); NodeWWN=[byte[]](0x20,0x00,0x00,0x24,0xFF,0x01,0x02,0x03); PortState=[uint32]2 } }
+  [PSCustomObject]@{ Attributes = [PSCustomObject]@{ PortSpeed=[uint32]32; PortWWN=[byte[]](0x21,0x00,0x00,0x24,0xFF,0x01,0x02,0x03); NodeWWN=[byte[]](0x20,0x00,0x00,0x24,0xFF,0x01,0x02,0x03); PortState=[uint32]2 } },
+  [PSCustomObject]@{ Attributes = [PSCustomObject]@{ PortSpeed=[uint32]0; PortWWN=[byte[]](0x21,0x00,0x00,0x24,0xFF,0x22,0x22,0x22); NodeWWN=[byte[]](0x20,0x00,0x00,0x24,0xFF,0x22,0x22,0x22); PortState=[uint32]2 } }
 )
 """
 
@@ -399,7 +403,10 @@ def test_powershell_initiator_ports_render_without_adapter_leak(tmp_path):
     assert set(got) == {("FibreChannel", "21:00:00:24:ff:01:02:03"),
                         ("FibreChannel", "21:00:00:24:ff:99:99:99"),
                         ("iSCSI", None),
-                        ("FibreChannel", "21:00:00:24:ff:0a:0b:0c")}, "SAS initiator 는 빠지고 나머지는 남는다"
+                        ("FibreChannel", "21:00:00:24:ff:0a:0b:0c"),
+                        ("FibreChannel", "21:00:00:24:ff:11:11:11"),
+                        ("FibreChannel", "21:00:00:24:ff:22:22:22"),
+                        ("FibreChannel", "21:00:00:24:ff:33:33:33")}, "SAS initiator 는 빠지고 나머지는 남는다"
     matched = got[("FibreChannel", "21:00:00:24:ff:01:02:03")]
     assert (matched["model"], matched["vendor"], matched["driver"], matched["firmware"]) == \
         ("FC-A", "Acme", "acmefc.sys", "9.1")
@@ -411,6 +418,11 @@ def test_powershell_initiator_ports_render_without_adapter_leak(tmp_path):
         assert (h["model"], h["vendor"], h["driver"], h["firmware"]) == (None, None, None, None), h
     assert got[("FibreChannel", "21:00:00:24:ff:99:99:99")]["link_status"] == "down"
     assert got[("FibreChannel", "21:00:00:24:ff:0a:0b:0c")]["link_status"] == "down"
+    # 2026-10-19 (사용자 결정): 값은 항상 up/down — OperationalStatus 1(Unknown) · 없음은 PortState 2(Online) 일 때만 up, 그 밖은 down(null 폐지)
+    assert got[("FibreChannel", "21:00:00:24:ff:11:11:11")]["link_status"] == "down", "OperationalStatus 1 + PortState 없음 → down"
+    assert got[("FibreChannel", "21:00:00:24:ff:22:22:22")]["link_status"] == "up", "OperationalStatus 1 이어도 MSFC PortState 2 면 up"
+    assert got[("FibreChannel", "21:00:00:24:ff:33:33:33")]["link_status"] == "down", "OperationalStatus 없음 + PortState 없음 → down"
+    assert all(h["link_status"] in ("up", "down") for h in out["storage"]["hbas"])
     assert got[("iSCSI", None)]["connection"] == "iSCSI"
 
 
@@ -428,7 +440,8 @@ def test_powershell_port_speed_code_to_canonical_link_speed(tmp_path, code, gbps
     assert prelude != _HBA_SCRIPT_PRELUDE or code == 32
     lines = _run_powershell(prelude + _win_shell(HBA_TASK), tmp_path, f"hba_{code}")
     doc = json.loads(lines[0])
-    assert [p["speed_gbps"] for p in doc["port_attrs"]] == [gbps]
+    speeds = [p["speed_gbps"] for p in doc["port_attrs"]]
+    assert speeds[0] == gbps and speeds[1:] == [None], "첫 항목이 치환 대상, 둘째(PortSpeed 0 — link_status 시험용 fixture)는 null"
     out = run_storage([], hba=doc)
     matched = [h for h in out["storage"]["hbas"] if h["wwpn"] == "21:00:00:24:ff:01:02:03"]
     assert len(matched) == 1 and matched[0]["link_speed_gbps"] == gbps
@@ -463,7 +476,7 @@ def test_powershell_msfc_not_supported_is_absent_not_error(tmp_path):
     assert (comps["adapter_attrs"]["ok"], comps["adapter_attrs"]["absent"]) == (False, True)
     assert (comps["port_attrs"]["ok"], comps["port_attrs"]["absent"]) == (False, True)
     out = run_storage([], hba=doc)
-    assert len(out["storage"]["hbas"]) == 4, "포트 목록은 그대로 — 어댑터 속성만 null"
+    assert len(out["storage"]["hbas"]) == 7, "포트 목록은 그대로(FC 6 + iSCSI 1 — SAS 제외) — 어댑터 속성만 null"
     assert [e for e in out["errors"] if "어댑터" in e["message"]] == []
 
 
@@ -478,7 +491,7 @@ def test_powershell_msfc_access_denied_is_a_component_error(tmp_path):
     errs = [e for e in out["errors"] if "어댑터" in e["message"]]
     assert len(errs) == 1 and "cause=component_failed" in errs[0]["detail"] and "parts=adapter_attrs" in errs[0]["detail"] \
         and "Access denied" in errs[0]["detail"], out["errors"]
-    assert len(out["storage"]["hbas"]) == 4, "포트 목록은 남는다"
+    assert len(out["storage"]["hbas"]) == 7, "포트 목록은 남는다(FC 6 + iSCSI 1)"
 
 
 @needs_powershell

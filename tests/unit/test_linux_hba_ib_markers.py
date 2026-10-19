@@ -239,7 +239,7 @@ def test_unreadable_fc_attributes_emit_err_and_one_error(sbx):
 
     run = render(results)
     hba = run.ctx["_data_fragment"]["storage"]["hbas"][0]
-    assert hba["link_status"] is None and hba["link_speed_gbps"] is None, "port_state 를 못 읽었으면 null — down 이 아니다 (2026-10-18)"
+    assert hba["link_status"] == "down" and hba["link_speed_gbps"] is None, "port_state 를 못 읽었으면 down (2026-10-19 — 값은 항상 up/down; 읽기 실패는 errors[] 로 남는다)"
     errors = run.ctx["_errors_fragment"]
     assert len(errors) == 1
     err = errors[0]
@@ -765,20 +765,20 @@ def test_npiv_virtual_port_is_excluded_from_hbas(sbx):
     ("Online", "up"), ("Marginal", "up"),
     ("Offline", "down"), ("Linkdown", "down"), ("Blocked", "down"), ("Bypassed", "down"), ("Error", "down"),
     ("Loopback", "down"), ("Diagnostics", "down"),
-    ("Unknown", None), ("Deleted", None), ("", None), ("Not Present", None),
+    ("Unknown", "down"), ("Deleted", "down"), ("", "down"), ("Not Present", "down"),
 ])
-def test_port_state_maps_to_up_down_or_null(sbx, state, link):
-    """커널 fc_port_state_names 완전일치 — 확인되지 않은 상태(Unknown · Deleted · 빈 값)는 down 이 아니라 null."""
+def test_port_state_maps_to_up_or_down(sbx, state, link):
+    """커널 fc_port_state_names — Online · Marginal 만 up, 그 밖(Unknown · Deleted · 빈 값 포함)은 down (2026-10-19 사용자 결정: 값은 항상 up/down)."""
     root = build_sysfs(sbx, ib=False, fc_attrs=dict(FC_ATTRS, port_state=state))
     assert _fc_hba(render(run_all(sbx, root)))["link_status"] == link
 
 
-def test_missing_port_state_attribute_is_null_without_error(sbx):
+def test_missing_port_state_attribute_is_down_without_error(sbx):
     root = build_sysfs(sbx, ib=False, absent=("fc:port_state",))
     results = run_all(sbx, root)
     assert err_paths(results["_l_hba_raw"]) == []
     run = render(results)
-    assert _fc_hba(run)["link_status"] is None and run.ctx["_errors_fragment"] == []
+    assert _fc_hba(run)["link_status"] == "down" and run.ctx["_errors_fragment"] == [], "속성 파일이 없으면 down(2026-10-19) — 오류는 아니다"
 
 
 def test_pipe_in_symbolic_name_does_not_shift_fields(sbx):

@@ -3,9 +3,9 @@
 종전 결함 (코드 정독 + 모듈 RETURN 계약 — lab 에 FC 링크 up · FC-NVMe · 하드웨어 iSCSI · FCoE 가 없어 합성 입력으로 재현):
   - 하드웨어 iSCSI 클래스 'InternetScsiHba' 에 'iscsi' 부분 문자열이 없어 조용히 빠졌다.
   - FCoE 를 FibreChannel 로 적었다 (Redfish 는 FCoE).
-  - link_status 가 up/down/unknown 3값이었고, unbound/unknown/없음이 'unknown' 문자열이었다 → null (사용자 결정 2026-10-18).
+  - link_status 가 up/down/unknown 3값이었다 → 2026-10-18 null, 2026-10-19 사용자 재결정으로 up/down 둘뿐(unbound·unknown·없음 → down).
   - speed 를 Gbps 로 가정했다 (vSphere API 문서는 bits per second) → 자릿수 정규화, 0 → null.
-  - 같은 WWPN 의 vmhba 둘(ESXi 7 FC-NVMe 쌍둥이)이 2건으로 나와 "ESXi 8 vs Redfish 4" 가 났다 → (wwpn, wwnn) 1건.
+  - 같은 WWPN 의 vmhba 둘(ESXi 7 FC-NVMe 쌍둥이) — 2026-10-18 에 (wwpn, wwnn) 1건으로 접었으나 2026-10-19 사용자 결정으로 폐지: 있는 그대로 전부 낸다.
   - 모듈의 깨진 WWN 문자열(홀수 자릿수 · int64 음수) 이 그대로 나갔다 → null + storage errors[] 1건(원문은 detail).
   - location 'PCI' / bus -1 자리표시자가 값으로 나갔다 → null.
   - rescue 가 network 오류만 남겨 hbas [] 가 "HBA 없음" 과 같았다 → storage 1건 추가.
@@ -55,9 +55,9 @@ def test_fc_online_entry_shape_is_the_canonical_one():
     assert set(HBA_REQUIRED_KEYS) <= set(hbas[0])
 
 
-@pytest.mark.parametrize("status, link", [("online", "up"), ("offline", "down"), ("unbound", None), ("unknown", None), (None, None), ("", None)])
-def test_link_status_is_up_down_or_null(status, link):
-    """vSphere HostHostBusAdapter.status 는 online · offline · unbound · unknown — 확인되지 않은 상태는 down 이 아니라 null."""
+@pytest.mark.parametrize("status, link", [("online", "up"), ("offline", "down"), ("unbound", "down"), ("unknown", "down"), (None, "down"), ("", "down")])
+def test_link_status_is_always_up_or_down(status, link):
+    """vSphere HostHostBusAdapter.status 는 online · offline · unbound · unknown — online 만 up, 그 밖(없음 포함)은 down (2026-10-19 사용자 결정)."""
     d = dict(FC_UP)
     if status is None:
         d.pop("status")
@@ -122,11 +122,13 @@ def test_sas_raid_nvme_controllers_are_not_hbas():
     assert hbas == [] and ctx["_errors_fragment"] == [] and ctx["_sections_collected_fragment"] == ["network"]
 
 
-def test_fc_nvme_twin_vmhba_is_collapsed_to_one_entry():
-    """ESXi 7 FC-NVMe: 포트당 SCSI vmhba + NVMe vmhba 가 같은 WWPN/WWNN 으로 보인다 — 1 항목 = 물리 포트 1개. 첫 vmhba 를 남긴다."""
+def test_fc_nvme_twin_vmhbas_are_all_kept():
+    """ESXi 7 FC-NVMe: 포트당 SCSI vmhba + NVMe vmhba 가 같은 WWPN/WWNN 으로 보인다 — 2026-10-19 사용자 결정: 접지 않고 있는 그대로 전부 낸다
+    (2026-10-18 의 (wwpn, wwnn) 1건 규칙 폐지). 교차 대조는 wwpn 집합으로 한다."""
     twins = [FC_UP, dict(FC_UP, device="vmhba64"), FC_PORT2, dict(FC_PORT2, device="vmhba65")]
     hbas, ctx = _hbas(twins)
-    assert [h["name"] for h in hbas] == ["vmhba2", "vmhba3"]
+    assert [h["name"] for h in hbas] == ["vmhba2", "vmhba64", "vmhba3", "vmhba65"]
+    assert [h["wwpn"] for h in hbas] == ["10:00:00:90:fa:1b:2c:3d"] * 2 + ["10:00:00:90:fa:1b:2c:3e"] * 2
     assert ctx["_errors_fragment"] == []
 
 

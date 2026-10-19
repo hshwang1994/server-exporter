@@ -11,7 +11,7 @@
 #   data.network.adapters[]         — vmnic (NIC HW)
 #   data.network.virtual_switches[] — vSwitch + portgroup
 #   data.network.vmkernels[]        — vmkernel adapter
-#   data.storage.hbas[]             — vmhba FC / FCoE / iSCSI 만 (SAS/RAID 제외 — type + driver 두 신호). 항목 1개 = 물리 FC 포트 1개
+#   data.storage.hbas[]             — vmhba FC / FCoE / iSCSI 만 (SAS/RAID 제외 — type + driver 두 신호). vmhba 1개 = 항목 1개, 중복 제거 없음(2026-10-19)
 #   data.storage.infiniband[]       — 항상 [] (2026-10-17 — 아래 참조. 종전 nmlx NIC 드라이버명 추정은 제거)
 #
 # 2026-10-17 (InfiniBand 전면 검증 — 계약은 docs/contract/03-fields.md 6.3.1, 결정 기록은 ADR-2026-10-17-infiniband-port-decision):
@@ -133,12 +133,13 @@
         #   2026-10-18 (HBA 전수 점검 — 계약 docs/contract/03-fields.md 6.3.1):
         #     · 하드웨어 iSCSI(클래스 InternetScsiHba) 도 iSCSI 다 — 종전 'iscsi' 부분 문자열은 클래스 이름 'internetscsi' 에 없어 조용히 빠졌다.
         #     · FCoE(클래스 FibreChannelOverEthernetHba · FCoE 드라이버) 는 port_type FCoE — 종전엔 FibreChannel 로 적었다(Redfish 는 FCoE 로 적는다).
-        #     · link_status 는 up / down / null: status online → up, offline → down, unbound · unknown · 없음 → null
-        #       (확인되지 않은 상태를 down 으로 적지 않는다 — 종전 'unknown' 문자열 폐지, 사용자 결정 2026-10-18).
+        #     · link_status 는 up / down 둘뿐(사용자 결정 2026-10-19): status online(connected · up · linkup · active) → up, 그 밖(offline · unbound ·
+        #       unknown · 없음) → down. 2026-10-18 의 "unbound · unknown · 없음 → null" 은 폐지 — 값은 항상 들어간다.
         #     · speed: vSphere HostFibreChannelHba.speed 는 "bits per second" 로 문서화됐지만 lab 값(링크 다운 = 0)으로 단위를 확인하지 못해
         #       자릿수로 정규화한다 — ≥ 1e6 → /1e9(bps), ≥ 1e3 → /1e3(Mbps), 그 밖 그대로(Gbps); 0 · 없음 → null. 실장비 미검증(사용자 결정 2026-10-17).
-        #     · 같은 (wwpn, wwnn) 은 1건 — ESXi 7 FC-NVMe 는 포트당 SCSI vmhba + NVMe vmhba 둘을 같은 WWPN 으로 보인다. 항목 1개 = 물리 FC 포트 1개
-        #       (Redfish · Linux 와 같은 기준). 첫 vmhba 를 남긴다. wwpn 이 없는 항목(iSCSI 등)은 합치지 않는다.
+        #     · 중복 제거 없음(사용자 결정 2026-10-19 — 2026-10-18 의 "같은 (wwpn, wwnn) 1건" 폐지): 모듈이 준 vmhba 를 있는 그대로 전부 낸다.
+        #       ESXi 7 FC-NVMe 는 포트당 SCSI vmhba + NVMe vmhba 둘을 같은 WWPN 으로 보이므로 그 포트는 2건이다(Redfish · Linux 의 "물리 포트 1개 = 1건" 과
+        #       다름 — 교차 대조는 wwpn 집합으로 한다).
         #     · 8옥텟 colon-hex 가 아닌 WWN 은 wwpn/wwnn 을 null 로 두고 storage errors[] 1건(detail 에 원문) — 모듈의 WWN 문자열 변환은 자릿수가
         #       홀수거나 int64 음수면 깨진 값을 그대로 낸다. 자리표시자 location 'PCI'/'N/A' · bus 음수 → null.
         #   source: community.vmware vmware_host_vmhba_info (RETURN: device/driver/model/type/status/location/bus/node_wwn/port_wwn/speed) +
@@ -147,7 +148,6 @@
         #   lab: FC 링크 up · FC-NVMe · 하드웨어 iSCSI · FCoE 부재 — tests/unit/test_esxi_hba_normalize.py 의 합성 모듈 결과로만 검증 (실장비 미검증).
         _e_ext_hbas: >-
           {%- set out = [] -%}
-          {%- set seen = [] -%}
           {%- set d = _e_vmhba.hosts_vmhbas_info | default({}) -%}
           {%- set key = _e_hostname if (_e_hostname in d) else ((d.keys() | list | first) if d else none) -%}
           {%- set vmhbas = (d.get(key, {}).get('vmhba_details', [])) if key else [] -%}
@@ -174,36 +174,32 @@
                 {%- set wwnn_n = (h.node_wwn | default(none)) | normalize_wwn -%}
                 {%- set wwpn = wwpn_n if (wwpn_n is none or (wwpn_n is match(wwn_re))) else none -%}
                 {%- set wwnn = wwnn_n if (wwnn_n is none or (wwnn_n is match(wwn_re))) else none -%}
-                {%- set dkey = (wwpn ~ '/' ~ (wwnn or '')) if wwpn else none -%}
-                {%- if dkey is none or dkey not in seen -%}
-                  {%- if dkey is not none -%}{%- set _ = seen.append(dkey) -%}{%- endif -%}
-                  {%- set raw_sp = h.speed | default(none) -%}
-                  {%- set sp_gbps = none -%}
-                  {%- if raw_sp is number and raw_sp > 0 -%}
-                    {%- set spf = raw_sp | float -%}
-                    {%- set spv = (spf / 1000000000) if spf >= 1000000 else ((spf / 1000) if spf >= 1000 else spf) -%}
-                    {%- set sp_gbps = (spv | int) if (spv == (spv | int)) else (spv | round(2)) -%}
-                  {%- endif -%}
-                  {%- set hs = (h.status | default('')) | string | lower | trim -%}
-                  {%- set loc = h.location | default(none) -%}
-                  {%- set bus = h.bus | default(none) -%}
-                  {%- set _ = out.append({
-                    'name':            dev,
-                    'driver':          h.driver | default(none),
-                    'model':           h.model | default(none),
-                    'vendor':          ctrl_vendor.get(dev, none),
-                    'firmware':        none,
-                    'adapter_type':    h.type | default(none),
-                    'link_status':     ('up' if hs in ['online', 'connected', 'up', 'linkup', 'active'] else ('down' if hs in ['offline', 'disconnected', 'down', 'linkdown', 'disabled', 'inactive'] else none)),
-                    'wwpn':            wwpn,
-                    'wwnn':            wwnn,
-                    'link_speed_gbps': sp_gbps,
-                    'port_type':       ('FCoE' if is_fcoe else ('FibreChannel' if is_fc else 'iSCSI')),
-                    'pci':             (loc if (loc is not none and (loc | string | trim) not in ['', 'PCI', 'N/A']) else none),
-                    'bus':             (bus if (bus is number and bus >= 0) else none),
-                    'source':          'esxi',
-                  }) -%}
+                {%- set raw_sp = h.speed | default(none) -%}
+                {%- set sp_gbps = none -%}
+                {%- if raw_sp is number and raw_sp > 0 -%}
+                  {%- set spf = raw_sp | float -%}
+                  {%- set spv = (spf / 1000000000) if spf >= 1000000 else ((spf / 1000) if spf >= 1000 else spf) -%}
+                  {%- set sp_gbps = (spv | int) if (spv == (spv | int)) else (spv | round(2)) -%}
                 {%- endif -%}
+                {%- set hs = (h.status | default('')) | string | lower | trim -%}
+                {%- set loc = h.location | default(none) -%}
+                {%- set bus = h.bus | default(none) -%}
+                {%- set _ = out.append({
+                  'name':            dev,
+                  'driver':          h.driver | default(none),
+                  'model':           h.model | default(none),
+                  'vendor':          ctrl_vendor.get(dev, none),
+                  'firmware':        none,
+                  'adapter_type':    h.type | default(none),
+                  'link_status':     ('up' if hs in ['online', 'connected', 'up', 'linkup', 'active'] else 'down'),
+                  'wwpn':            wwpn,
+                  'wwnn':            wwnn,
+                  'link_speed_gbps': sp_gbps,
+                  'port_type':       ('FCoE' if is_fcoe else ('FibreChannel' if is_fc else 'iSCSI')),
+                  'pci':             (loc if (loc is not none and (loc | string | trim) not in ['', 'PCI', 'N/A']) else none),
+                  'bus':             (bus if (bus is number and bus >= 0) else none),
+                  'source':          'esxi',
+                }) -%}
               {%- endif -%}
             {%- endif -%}
           {%- endfor -%}

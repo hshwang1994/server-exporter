@@ -666,14 +666,14 @@
           {%- set pa = (pa_by_wwpn.get(wwpn, {}) if wwpn else {}) -%}
           {%- set os = (p.oper_status | default('')) | string | lower -%}
           {%- set os_codes = os.split(',') | map('trim') | list -%}
-          {# 2026-10-18: link_status 는 up / down / null. OperationalStatus 2 Operational → up; 3 User Offline · 4 Bypassed · 5 In diagnostics mode ·
-             6 Link Down · 7 Port Error · 8 Loopback → down; 1 Unknown/없음 → MSFC PortState(2 → up, 3~8 → down) 로 보강, 그래도 없으면 null —
-             확인되지 않은 상태를 down 으로 적지 않는다 (종전 'unknown' 문자열 폐지). #}
+          {# 2026-10-19 (사용자 결정): link_status 는 up / down 둘뿐 — 값은 항상 들어간다. OperationalStatus 2 Operational → up; 3 User Offline ·
+             4 Bypassed · 5 In diagnostics mode · 6 Link Down · 7 Port Error · 8 Loopback → down; 1 Unknown/없음이면 MSFC PortState 2(Online) 만 up 으로
+             보강하고 그 밖(PortState 1 · 3~8 · 둘 다 없음)은 down. 2026-10-18 의 null(미제공) 은 폐지. #}
           {%- set os_up = ('oper' in os) or ('2' in os_codes) -%}
           {%- set os_down = (not os_up) and (('down' in os) or ('error' in os) or ('offline' in os) or ('bypass' in os) or ('diagnos' in os) or ('loopback' in os) or ((os_codes | select('in', ['3', '4', '5', '6', '7', '8']) | list | length) > 0)) -%}
           {%- set ps_raw = pa.port_state | default(none) -%}
           {%- set ps = (ps_raw | int) if (ps_raw is not none and (ps_raw | string | trim) != '') else none -%}
-          {%- set link = 'up' if os_up else ('down' if os_down else ('up' if ps == 2 else ('down' if (ps is not none and ps >= 3 and ps <= 8) else none))) -%}
+          {%- set link = 'up' if (os_up or ((not os_down) and ps == 2)) else 'down' -%}
           {%- set _ = out.append({
             'wwpn':            wwpn if is_fc else none,
             'wwnn':            wwnn if is_fc else none,

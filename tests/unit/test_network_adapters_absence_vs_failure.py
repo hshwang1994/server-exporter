@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import pytest
 import sys
 import types
 from pathlib import Path
@@ -182,9 +183,9 @@ def test_card_with_controller_port_links_is_kept_even_without_names(monkeypatch)
     assert [a["id"] for a in out["adapters"]] == ["slot"]
 
 
-# ── null(장비 미제공)의 두 원인 (값 계약 고정 — 2026-10-18: 종전 'unknown' 문자열은 폐지) ─────────
+# ── 미제공(키 없음 · 포트 없음)은 down + notice (값 계약 고정 — 2026-10-19: 값은 항상 up/down, null · 'unknown' 폐지) ─────────
 
-def test_link_status_null_has_two_causes_and_is_never_guessed(monkeypatch):
+def test_link_status_not_provided_is_down_with_notice_and_never_guessed_up(monkeypatch):
     rg._reset_notices()
     adp = CHASSIS + "/NetworkAdapters/FC1"
     routes = {
@@ -207,10 +208,37 @@ def test_link_status_null_has_two_causes_and_is_never_guessed(monkeypatch):
     out, errors = rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, *CREDS)
     assert errors == []
     by_port = {h["port_id"]: h for h in out["fc_hbas"]}
-    assert by_port["1"]["link_status"] is None and by_port["1"]["wwpn"] == "10:00:00:90:fa:00:00:01"
-    assert by_port["9"]["link_status"] is None and by_port["9"]["link_speed_gbps"] is None
-    assert all(h["link_status"] in ("up", "down", None) for h in out["fc_hbas"]), "문자열은 up/down 둘뿐 — unknown 없음"
-    assert any("링크 상태 미제공" in n["message"] and "1, 9" in n["message"] for n in rg.notices()), rg.notices()
+    assert by_port["1"]["link_status"] == "down" and by_port["1"]["wwpn"] == "10:00:00:90:fa:00:00:01"
+    assert by_port["9"]["link_status"] == "down" and by_port["9"]["link_speed_gbps"] is None
+    assert all(h["link_status"] in ("up", "down") for h in out["fc_hbas"]), "값은 up/down 둘뿐 — null · unknown 없음"
+    assert any("링크 상태 미제공" in n["message"] and "1, 9" in n["message"] and "down 으로 기록" in n["message"]
+               for n in rg.notices()), rg.notices()
+    assert not any("값 미확정" in n["message"] for n in rg.notices()), "키 없음은 '미제공' — '값 미확정' 이 아니다"
+
+
+@pytest.mark.parametrize("raw, shown", [(None, "null"), ("Unknown", "Unknown"), ("WeirdState", "WeirdState")])
+def test_link_status_unresolved_value_is_down_with_its_own_notice(monkeypatch, raw, shown):
+    """키는 있는데 up/down 으로 정규화되지 않는 값(null · Unknown · 미인식) — down 이고, '미제공' 과 다른 notice 에 원문을 남긴다 (2026-10-19)."""
+    rg._reset_notices()
+    adp = CHASSIS + "/NetworkAdapters/FC1"
+    routes = {
+        CH_NA: (200, {"Members": [{"@odata.id": adp}]}, None),
+        rg._p(adp): (200, {"Id": "FC1", "Manufacturer": "Vendor", "Model": "FC HBA",
+                           "Ports": {"@odata.id": adp + "/Ports"},
+                           "NetworkDeviceFunctions": {"@odata.id": adp + "/NetworkDeviceFunctions"}}, None),
+        rg._p(adp) + "/Ports": (200, {"Members": [{"@odata.id": adp + "/Ports/1"}]}, None),
+        rg._p(adp) + "/Ports/1": (200, {"Id": "1", "LinkStatus": raw, "FibreChannel": {}}, None),
+        rg._p(adp) + "/NetworkDeviceFunctions": (200, {"Members": [{"@odata.id": adp + "/NetworkDeviceFunctions/1"}]}, None),
+        rg._p(adp) + "/NetworkDeviceFunctions/1": (200, {"Id": "1", "NetDevFuncType": "FibreChannel",
+                                                          "FibreChannel": {"WWPN": "10:00:00:90:fa:00:00:01"}}, None),
+    }
+    _install(monkeypatch, routes)
+    out, errors = rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, *CREDS)
+    assert errors == []
+    assert [h["link_status"] for h in out["fc_hbas"]] == ["down"]
+    assert any("값 미확정" in n["message"] and ("1=%s" % shown) in n["message"] and "down 으로 기록" in n["message"]
+               for n in rg.notices()), rg.notices()
+    assert not any("링크 상태 미제공" in n["message"] for n in rg.notices()), "키가 있으면 '미제공' 이 아니다"
 
 
 # ── 2026-10-18: 조용한 누락 · 가림 경로 보완 (F4 · F5 · F7 · F8) ────────────────────────────────
@@ -239,7 +267,7 @@ def test_nameless_card_with_fc_functions_is_kept_with_one_extra_request(monkeypa
     out, errors = rg.gather_network_adapters_chassis("10.0.0.1", CHASSIS, *CREDS)
     assert errors == []
     assert [a["id"] for a in out["adapters"]] == ["slot"] and out["adapters"][0]["model"] is None
-    assert len(out["fc_hbas"]) == 2 and all(h["link_status"] is None for h in out["fc_hbas"]), "포트 없는 기능 — 링크 상태 null"
+    assert len(out["fc_hbas"]) == 2 and all(h["link_status"] == "down" for h in out["fc_hbas"]), "포트 없는 기능 — 링크 상태 down(미제공, 2026-10-19)"
     assert calls.count(rg._p(adp) + "/NetworkDeviceFunctions") == 1, "기능 목록 조회는 1회(읽은 목록을 재사용)"
     assert any("카드 유지" in m for m in _notices()), _notices()
 
