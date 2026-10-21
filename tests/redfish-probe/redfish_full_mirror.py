@@ -16,7 +16,8 @@
        일시 오류(5xx/429/408/timeout/TLS)는 backoff + Retry-After 로 재시도하고 마지막에 한 번 더 훑는다.
     4. 오류 판정 - 장비가 링크는 냈지만 실제로 없는 경로(404), 페이로드 없는 응답(204),
        GET 불가 주소(405), 요청 거절(400/406/...), 계정 권한 밖(401/403)은 오류가 아니다.
-       받을 수 있는 것은 전부 받았다면 RESULT=COMPLETE 다.
+       받을 수 있는 것은 전부 받았다면 RESULT=COMPLETE 다. 반대로 장비가 지속적으로 5xx 를 주거나 크기 상한으로
+       받지 못한 것은 정보가 아니라 미수집이므로 COMPLETE 로 표시하지 않는다 (INCOMPLETE + 원인 기록).
     5. 잠금 방지 - 401/403 은 재시도하지 않는다. 자격 거절은 신호 2개가 모두 거절일 때만 단정하고
        요청 1~2회 만에 중단한다. 비밀번호는 argv 대신 환경변수/파일로 받을 수 있고 어떤 파일에도 쓰지 않는다.
 
@@ -26,8 +27,10 @@
     not_gettable             405/501 - GET 불가 (액션 주소 등)
     rejected                 400/406/409/415/422/그 외 4xx - 장비가 요청을 거절 (재시도 안 함)
     outside_account          401/403 - 계정 권한 밖 (재시도 안 함)
-    device_error             재시도·최종 sweep 뒤에도 같은 5xx/무응답이지만 다른 요청은 정상 (장비 측 결함)
-    unresolved               재시도 뒤에도 남았고 장비/망이 불안정 - 유일한 미완료 사유 (--resume 으로 수렴)
+    device_error             재시도·최종 sweep 뒤에도 같은 5xx/무응답이지만 다른 요청은 정상 (장비 측 결함) - 못 받았으므로 INCOMPLETE
+    oversize                 크기 상한(--max-bytes-per-resource)을 넘어 받지 않은 첨부 - INCOMPLETE (상한을 올리거나 0 으로 --resume)
+    unresolved               장비/망이 불안정하거나 저장/내부 오류로 못 받음 - INCOMPLETE (--resume 으로 수렴)
+    모든 실패 항목에는 origin(device / device_or_network / storage / tool / interrupted)이 붙어 장비 문제와 도구 문제를 가른다.
 
 인증:
     --auth auto(기본)   세션(POST SessionService/Sessions -> X-Auth-Token) 우선, 미지원이면 Basic.
@@ -49,7 +52,8 @@
     python3 redfish_full_mirror.py -r <IP> -u <계정> -D <출력폴더> --resume   # 중단/INCOMPLETE 이어받기
     python3 redfish_full_mirror.py --summarize <출력폴더> [<출력폴더> ...]   # 여러 호스트 manifest 요약
 
-종료코드: 0=COMPLETE 1=INCOMPLETE 2=EMPTY(2xx 0건) 3=인증/세션 중단 4=도달 불가 130=중단(Ctrl-C/SIGTERM)
+종료코드: 0=COMPLETE 1=INCOMPLETE 2=EMPTY(2xx 0건) 3=인증/세션 중단 4=도달 불가 5=같은 폴더/BMC 에 이미 실행 중
+          130=중단(Ctrl-C/SIGTERM)
 
 stdlib 전용(urllib / ssl / json / base64), Python 3.6+ (RHEL/Rocky 8 기본 python3 포함).
 """
@@ -63,10 +67,12 @@ import io
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import ssl
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -77,7 +83,7 @@ import zlib
 from collections import OrderedDict, deque
 from email.utils import parsedate_to_datetime
 
-TOOL_VERSION = "2.0.0"
+TOOL_VERSION = "2.1.0"
 MANIFEST_SCHEMA = 2
 
 JSON_ACCEPT = "application/json"
@@ -89,6 +95,7 @@ EXIT_INCOMPLETE = 1
 EXIT_EMPTY = 2
 EXIT_AUTH = 3
 EXIT_UNREACHABLE = 4
+EXIT_LOCKED = 5
 EXIT_INTERRUPTED = 130
 
 AUTH_ABORTS = ("credentials_rejected", "session_unsupported", "session_limit_exceeded", "auth_lost")
@@ -104,6 +111,9 @@ RELOGIN_MIN_INTERVAL = 30.0  # 세션 재로그인 최소 간격
 LOGIN_LIMIT_RETRIES = 3      # 세션 한도 초과(SessionLimitExceeded) 로그인 재시도 횟수
 ERROR_BODY_CAP = 1 << 20     # 오류 응답 본문 보존 상한 1 MiB
 HEALTH_CACHE_SECONDS = 15.0  # 장비 불안정 판정 재사용 시간
+RESUME_HASH_MAX = 64 << 20        # --resume 이 raw 파일 해시까지 검증하는 최대 크기 (더 큰 파일은 크기만 본다)
+MEMORY_SPILL_BYTES = 64 << 20  # 텍스트 본문이 이보다 커지면 메모리 대신 디스크로 흘려보낸다
+STORAGE_ABORT_STREAK = 10    # 저장 실패가 연속 이만큼이면 중단 (디스크가 찼는데 BMC 만 계속 두드리지 않는다)
 
 # 파일시스템(특히 Windows)에서 디렉터리명에 못 쓰는 문자. 본문 @odata.id 는 보존하고 디스크 경로명만
 # 치환하므로, 재생 시 키잉(본문 @odata.id 기준)에는 영향 없다. (\x5c = 백슬래시)
@@ -249,6 +259,14 @@ def _clip_bytes(text, limit):
     if len(raw) <= limit:
         return text
     return raw[:limit].decode("utf-8", "ignore")
+
+
+def _sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _hash8(text, n=8):
@@ -485,6 +503,17 @@ def _make_ctx(verify, legacy_tls=False):
     return ctx
 
 
+class SpoolError(Exception):
+    """스풀 파일(디스크) 쓰기 실패 - 네트워크 오류가 아니므로 재시도 대상이 아니다."""
+
+
+def _spool(fn, *args):
+    try:
+        return fn(*args)
+    except OSError as exc:
+        raise SpoolError(str(exc))
+
+
 class Resp(object):
     """단일 HTTP 호출 결과. status 0=전송 실패(timeout/TLS/연결), -1=잘못된 URL."""
 
@@ -499,6 +528,7 @@ class Resp(object):
         self.error = ""
         self.kind = ""                 # timeout | tls | conn | url | stream | redirect
         self.oversize = False
+        self.sha256 = None             # 디스크로 흘려보낸 본문의 SHA-256
         self.location = None
 
 
@@ -599,6 +629,12 @@ class Net(object):
             resp.status = getattr(r, "status", None) or r.getcode()
             self._fill_headers(resp, r.headers)
             self._read_body(resp, r, max_bytes, spool_dir)
+        except SpoolError as e:
+            self._drop_part()
+            resp.body = None
+            resp.raw_path = None
+            resp.kind = "storage"
+            resp.error = ("spool: %s" % e)[:300]
         except Exception as e:  # noqa: BLE001 - 본문 읽기 중 timeout/연결 끊김
             self._drop_part()
             resp.body = None
@@ -660,46 +696,59 @@ class Net(object):
             return
         deadline = time.time() + max(self.timeout * 4, 120)
         texty = (not ct) or any(t in ct for t in ("json", "xml", "text", "html"))
-        if texty or spool_dir is None:
-            buf = bytearray()
-            while True:
-                chunk = r.read(65536)
-                if not chunk:
-                    break
-                buf.extend(chunk)
-                if cap and len(buf) > cap:
-                    resp.oversize, resp.size = True, len(buf)
-                    return
-                if time.time() > deadline:
-                    raise socket.timeout("total read deadline exceeded")
-            resp.body = _decode_body(bytes(buf), resp.h.get("content-encoding"))
-            resp.size = len(resp.body)
-            self.bytes_total += resp.size
-            return
-        # 바이너리: 디스크로 스트리밍 (메모리에 올리지 않는다)
-        self._seq += 1
-        part = os.path.join(spool_dir, ".dl-%d.part" % self._seq)
-        self._cur_part = part
-        total = 0
-        with open(part, "wb") as f:
+        to_disk = spool_dir is not None and not texty        # 바이너리는 처음부터 디스크로 스트리밍
+        buf, digest, fh, part, total = bytearray(), hashlib.sha256(), None, None, 0
+        try:
             while True:
                 chunk = r.read(65536)
                 if not chunk:
                     break
                 total += len(chunk)
                 if cap and total > cap:
-                    resp.oversize = True
+                    resp.oversize, resp.size = True, total   # 하한값: 상한을 넘은 시점까지 읽은 크기
                     break
-                f.write(chunk)
                 if time.time() > deadline:
                     raise socket.timeout("total read deadline exceeded")
+                if not to_disk and spool_dir is not None and len(buf) + len(chunk) > MEMORY_SPILL_BYTES:
+                    to_disk = True                           # 큰 본문을 메모리에 올리지 않는다
+                if not to_disk:
+                    buf.extend(chunk)
+                    continue
+                if fh is None:
+                    self._seq += 1
+                    part = os.path.join(spool_dir, ".dl-%d.part" % self._seq)
+                    self._cur_part = part
+                    fh = _spool(open, part, "wb")
+                    if buf:
+                        _spool(fh.write, bytes(buf))
+                        digest.update(bytes(buf))
+                        buf = bytearray()
+                _spool(fh.write, chunk)
+                digest.update(chunk)
+            if fh is not None and not resp.oversize:
+                _spool(fh.close)
+                fh = None
+        except BaseException:
+            if fh is not None:
+                try:
+                    fh.close()
+                except OSError:
+                    pass
+            raise
+        if fh is not None:                                   # oversize 로 중단: 받다 만 파일은 남기지 않는다
+            fh.close()
         if resp.oversize:
-            resp.size = total
             self._drop_part()
             return
-        self._cur_part = None
-        resp.raw_path, resp.size = part, total
-        self.bytes_total += total
+        if clen is not None and total != clen:               # 잘린 응답을 정상 저장으로 취급하지 않는다
+            raise http.client.IncompleteRead(b"", clen - total)
+        if part is not None:
+            self._cur_part = None
+            resp.raw_path, resp.size, resp.sha256 = part, total, digest.hexdigest()
+        else:
+            resp.body = _decode_body(bytes(buf), resp.h.get("content-encoding"))
+            resp.size = len(resp.body)
+        self.bytes_total += resp.size
 
     @staticmethod
     def _fill_exc(resp, e):
@@ -808,10 +857,36 @@ class AuthState(object):
 # ================================================================================================
 
 _LIST_NAMES = ("absent", "not_gettable", "rejected", "outside_account", "device_error", "unresolved",
-               "excluded", "skipped", "rehosted", "action_targets", "non_json", "binary",
+               "oversize", "excluded", "skipped", "rehosted", "action_targets", "non_json", "binary",
                "count_mismatch", "accept_fallback", "wellknown")
 _LIST_CAP = 5000
 _PROBE_PREFER = ("Managers", "Systems", "Chassis", "AccountService", "SessionService", "UpdateService")
+
+
+_STALE_TMP_STEMS = frozenset(["index.json", "headers.json", "_manifest.json", "_fsmap.json", "_links.json",
+                              "_serviceroot_noauth.json"])
+
+
+def _lock_path(host):
+    return os.path.join(tempfile.gettempdir(), "redfish_mirror_%s.lock" % re.sub(r"[^A-Za-z0-9_.-]", "_", host))
+
+
+def _try_lock(path):
+    """flock 으로 배타 잠금을 잡는다. (fd, True)=잡음, (None, True)=잠금 미지원 환경(Windows 등), (None, False)=이미 사용 중."""
+    try:
+        import fcntl
+    except ImportError:
+        return None, True
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    except OSError:
+        return None, True            # 잠금 파일을 못 만들면 잠금 없이 진행한다 (읽기 전용 임시 폴더 등)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (IOError, OSError):
+        os.close(fd)
+        return None, False
+    return fd, True
 
 
 class Outcome(object):
@@ -827,6 +902,8 @@ class Outcome(object):
 def _bucket(resp):
     """HTTP 결과 -> 판정 버킷. transient 만 재시도 대상이다."""
     st = resp.status
+    if resp.kind == "storage":
+        return "save_failed"
     if resp.kind == "stream":
         return "not_gettable"
     if 200 <= st < 300:
@@ -873,6 +950,10 @@ class Crawler(object):
         self.processed = 0
         self.truncated = 0
         self.n_wellknown = 0
+        self.storage_streak = 0
+        self.locks = []
+        self.disk_free_start = None
+        self.integrity = {}
         self.exit_code = EXIT_COMPLETE
         self.t0 = time.time()
         self.started = _utcnow_iso()
@@ -1029,6 +1110,8 @@ class Crawler(object):
 
     def _startup(self):
         os.makedirs(self.out, exist_ok=True)
+        self._cleanup_stale()
+        self._check_disk()
         # 0) 무인증 ServiceRoot - detect/auth 경로 재구성용. 자격증명을 보내지 않으므로 잠금과 무관.
         out = self.fetch_resource(self.root, JSON_ACCEPT, auth="none", gate=False)
         resp = out.resp
@@ -1205,16 +1288,33 @@ class Crawler(object):
         return ok
 
     def _finalize_failure(self, d):
-        """재시도와 최종 sweep 뒤에도 실패한 리소스. 장비가 다른 요청에는 정상이면 장비 측 결함(device_error),
-        장비/망이 불안정하면 unresolved(미완료)로 가른다."""
+        """재시도와 최종 sweep 뒤에도 실패한 리소스. 어느 쪽이든 못 받은 것이므로 INCOMPLETE 사유다.
+        장비가 다른 요청에는 정상이면 장비 측 결함(device_error), 장비/망이 불안정하면 unresolved 로 가르고
+        origin 으로 장비(device / device_or_network)와 도구(interrupted)를 구별해 기록한다."""
         resp = d["resp"]
-        entry = {"path": d["path"], "status": resp.status, "kind": resp.kind or "http",
+        cause = ("http_%d" % resp.status) if resp.status > 0 else (resp.kind or "error")
+        entry = {"path": d["path"], "status": resp.status, "kind": resp.kind or "http", "cause": cause,
                  "error": (resp.error or "")[:300], "attempts": d["attempts"], "referrer": d["ref"]}
         detail = _error_detail(resp)
         if detail and detail != entry["error"]:
             entry["detail"] = detail
-        stable = (not self.abort_reason) and (not self.interrupted) and self._healthy()
-        self._add("device_error" if stable else "unresolved", entry)
+        if self.abort_reason or self.interrupted:
+            entry["origin"] = "interrupted"
+            self._add("unresolved", entry)
+        elif self._healthy():
+            entry["origin"] = "device"
+            self._add("device_error", entry)
+        else:
+            entry["origin"] = "device_or_network"
+            self._add("unresolved", entry)
+
+    def _save_failure(self, path, ref, status, error):
+        """디스크 쓰기 실패(용량 부족, 권한, 경로 길이). 도구/환경 문제이므로 origin=storage 로 기록한다."""
+        self._add("unresolved", {"path": path, "status": status, "kind": "save", "cause": "save_failed",
+                                 "origin": "storage", "error": error[:300], "referrer": ref})
+        self.storage_streak += 1
+        if self.storage_streak >= STORAGE_ABORT_STREAK:
+            self.abort("storage_error", "저장 실패가 연속 %d회 (마지막: %s)" % (self.storage_streak, error[:120]))
 
     # ---- 리소스 한 건 처리 --------------------------------------------------------------------------
     def _process(self, item):
@@ -1231,12 +1331,16 @@ class Crawler(object):
         if kind == "wellknown":
             self.n_wellknown += 1
             saved = self._handle_ok(path, kind, key, ref, resp) if bucket == "ok" else False
+            if bucket == "save_failed":
+                self._save_failure(path, ref, resp.status, resp.error)
             self._add("wellknown", {"path": path, "status": resp.status, "bucket": bucket, "saved": saved})
             return
         if kind == "target":
             self._add("action_targets", {"path": path, "status": resp.status, "bucket": bucket})
         if bucket == "ok":
             self._handle_ok(path, kind, key, ref, resp)
+        elif bucket == "save_failed":
+            self._save_failure(path, ref, resp.status, resp.error)
         elif bucket == "transient":
             d = {"path": path, "kind": kind, "key": key, "ref": ref, "accept": accept,
                  "resp": resp, "attempts": prior + out.attempts}
@@ -1282,6 +1386,7 @@ class Crawler(object):
         adir = self._abs(rel)
         os.makedirs(adir, exist_ok=True)
         index = os.path.join(adir, "index.json")
+        raw_info = None
         if saved_type == "json":
             _write_json(index, data)
         elif saved_type == "empty":
@@ -1292,27 +1397,31 @@ class Crawler(object):
             stub = OrderedDict([("_non_json", True), ("_path", path), ("_content_type", content_type),
                                 ("_raw_file", name)])
             if resp.raw_path is not None:
-                size = resp.size
+                size, digest = resp.size, resp.sha256
                 os.replace(resp.raw_path, dest)
                 resp.raw_path = None
                 if resp.h.get("content-encoding"):
                     stub["_content_encoding"] = resp.h.get("content-encoding")
             else:
                 _write_atomic(dest, body or b"")
-                size = len(body or b"")
-            stub["_bytes"] = size
+                size, digest = len(body or b""), hashlib.sha256(body or b"").hexdigest()
+            stub["_bytes"], stub["_sha256"] = size, digest
+            raw_info = {"file": name, "bytes": size, "sha256": digest}
             _write_json(index, stub)
         _write_json(os.path.join(adir, "headers.json"), self._headers_obj(resp))
-        return rel
+        return rel, raw_info
 
     def _handle_ok(self, path, kind, key, ref, resp):
         """2xx 응답을 저장하고 링크를 큐에 넣는다. 저장하면 True."""
         wk = (kind == "wellknown")
+        ct = resp.h.get("content-type", "")
         if resp.oversize:
-            self._add("excluded", {"link": path, "reason": "oversize", "bytes": resp.size,
+            clen = resp.h.get("content-length")
+            self._add("oversize", {"path": path, "reason": "size_limit", "origin": "policy", "content_type": ct,
+                                   "content_length": int(clen) if (clen or "").isdigit() else None,
+                                   "bytes": resp.size, "bytes_is_lower_bound": not (clen or "").isdigit(),
                                    "limit": self.a.max_bytes, "referrer": ref})
             return False
-        ct = resp.h.get("content-type", "")
         body, data, saved_type = resp.body, None, None
         if resp.raw_path is not None and resp.size <= (16 << 20):
             # Content-Type 이 거짓말인 JSON 구제: 바이너리로 받았어도 JSON 이면 링크를 따라간다.
@@ -1338,13 +1447,16 @@ class Crawler(object):
                 else:
                     saved_type = "raw"
         try:
-            rel = self._save(path, saved_type, data, body, resp, ct)
+            rel, raw_info = self._save(path, saved_type, data, body, resp, ct)
         except (OSError, UnicodeError) as exc:
             self._remove(resp.raw_path)
             resp.raw_path = None
-            self._add("unresolved", {"path": path, "status": resp.status, "kind": "save",
-                                     "error": "save: %s" % exc, "referrer": ref})
+            self._save_failure(path, ref, resp.status, "save: %s" % exc)
+            if saved_type == "json":          # 저장은 못 해도 링크는 계속 따라간다 - 하위 리소스를 조용히 놓치지 않게
+                for value, lkind, lkey in _collect_links(data):
+                    self.enqueue(value, lkind, lkey, path)
             return False
+        self.storage_streak = 0
         self.saved[path] = {"dir": rel, "type": saved_type}
         self.cnt["files"] += 1
         links = []
@@ -1352,7 +1464,8 @@ class Crawler(object):
             links.extend(_collect_links(data))
         links.extend((t, "link_header", "Link") for t in _link_header_targets(resp.links))
         if saved_type == "raw":
-            self._add("non_json", {"path": path, "content_type": ct, "bytes": resp.size or len(body or b"")})
+            self._add("non_json", {"path": path, "content_type": ct, "file": raw_info["file"],
+                                   "bytes": raw_info["bytes"], "sha256": raw_info["sha256"]})
             if wk and key == "$metadata" and body:
                 text = body[:(20 << 20)].decode("utf-8", "replace")
                 links.extend((u, "metadata_ref", "Uri") for u in _XML_URI_ATTR.findall(text))
@@ -1429,8 +1542,10 @@ class Crawler(object):
                     entries = data["paths"]
             except OSError:
                 entries = {}
-        if not entries:
-            entries = self._scan_tree()
+        on_disk = sum(1 for _r, _d, files in os.walk(self.out) for f in files if f == "index.json")
+        if len(entries) < on_disk:        # _fsmap.json 이 없거나 뒤처졌다 (v1 산출물, 강제 종료, resume 없이 재실행)
+            for path, ent in self._scan_tree().items():
+                entries.setdefault(path, ent)
         good = {}
         for path, ent in entries.items():
             if not isinstance(ent, dict) or not isinstance(ent.get("dir"), str):
@@ -1462,6 +1577,12 @@ class Crawler(object):
             rawf = os.path.join(adir, str(data.get("_raw_file", "")))
             if not os.path.isfile(rawf) or os.path.getsize(rawf) != data.get("_bytes", -1):
                 return False
+            if data.get("_sha256") and os.path.getsize(rawf) <= RESUME_HASH_MAX:   # 손상본은 재사용하지 않고 다시 받는다
+                try:
+                    if _sha256_file(rawf) != data["_sha256"]:
+                        return False
+                except OSError:
+                    return False
             saved_type = "raw"
         elif empty:
             saved_type = "empty"
@@ -1514,8 +1635,8 @@ class Crawler(object):
             self._tick()
 
     def _internal_error(self, item, exc):
-        self._add("unresolved", {"path": item[0], "status": 0, "kind": "internal",
-                                 "error": "internal: %s: %s" % (type(exc).__name__, exc),
+        self._add("unresolved", {"path": item[0], "status": 0, "kind": "internal", "cause": "internal_error",
+                                 "origin": "tool", "error": "internal: %s: %s" % (type(exc).__name__, exc),
                                  "referrer": item[3]})
         tag = type(exc).__name__
         if ("reported", tag) not in self._dedupe:
@@ -1561,7 +1682,83 @@ class Crawler(object):
         except OSError:
             pass
 
+    # ---- 중복 실행 방지 / 정리 / 정합성 ------------------------------------------------------------------
+    def _acquire_locks(self):
+        """같은 출력 폴더나 같은 BMC 를 두 프로세스가 동시에 두드리지 못하게 한다 (파일 손상, 세션 한도·잠금 카운터 공유)."""
+        os.makedirs(self.out, exist_ok=True)
+        for label, path in (("출력 폴더", os.path.join(self.out, "_mirror.lock")),
+                            ("BMC %s" % self.a.host, _lock_path(self.a.host))):
+            fd, ok = _try_lock(path)
+            if not ok:
+                _emit("[CRIT] %s 에서 다른 미러가 이미 실행 중입니다 (%s). 끝난 뒤 다시 실행하세요." % (label, path),
+                      sys.stderr)
+                self._release_locks()
+                return False
+            if fd is not None:
+                self.locks.append((fd, path))
+        return True
+
+    def _release_locks(self):
+        for fd, path in self.locks:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            if path.startswith(self.out):
+                self._remove(path)
+        self.locks = []
+
+    def _cleanup_stale(self):
+        """강제 종료로 남은 임시 파일(.dl-*.part, <산출물>.tmp)을 지운다. 정상 저장본(raw.tmp 같은 이름 포함)은 건드리지 않는다."""
+        for root, _dirs, files in os.walk(self.out):
+            for name in files:
+                stem = name[:-4]
+                stale_tmp = name.endswith(".tmp") and (stem in _STALE_TMP_STEMS or stem.startswith("raw."))
+                if stale_tmp or (root == self.out and name.startswith(".dl-") and name.endswith(".part")):
+                    self._remove(os.path.join(root, name))
+
+    def _check_disk(self):
+        try:
+            free = shutil.disk_usage(self.out).free
+        except (OSError, AttributeError):
+            return
+        self.disk_free_start = free
+        if free < (1 << 30):
+            _emit("[WARN] 출력 폴더의 여유 공간이 %d MiB 뿐입니다. 부족하면 저장 실패로 기록하고 연속 %d회면 중단합니다."
+                  % (free >> 20, STORAGE_ABORT_STREAK), sys.stderr)
+
+    def _verify_integrity(self):
+        """manifest 가 말하는 저장본이 실제 디스크에 있고 온전한지 확인한다. 어긋난 항목은 미완료(origin=storage)로 기록한다."""
+        missing = []
+        for path, ent in self.saved.items():
+            adir = self._abs(ent["dir"])
+            if not (os.path.isfile(os.path.join(adir, "index.json")) and os.path.isfile(os.path.join(adir, "headers.json"))):
+                missing.append((path, "index.json/headers.json 없음"))
+            elif ent["type"] == "raw":
+                try:
+                    with open(os.path.join(adir, "index.json"), "rb") as f:
+                        ok, stub = _parse_json(f.read())
+                    rawf = os.path.join(adir, str(stub.get("_raw_file", "")))
+                    if not os.path.isfile(rawf) or os.path.getsize(rawf) != stub.get("_bytes"):
+                        missing.append((path, "raw 파일 없음 또는 크기 불일치"))
+                except (OSError, AttributeError):
+                    missing.append((path, "index.json 읽기 실패"))
+        on_disk = sum(1 for _r, _d, files in os.walk(self.out) for f in files if f == "index.json")
+        self.integrity = {"files_expected": len(self.saved), "files_on_disk": on_disk,
+                          "missing_count": len(missing), "missing": [list(m) for m in missing[:50]],
+                          "unaccounted": max(on_disk - len(self.saved), 0)}
+        for path, why in missing:
+            self._add("unresolved", {"path": path, "status": 0, "kind": "integrity", "cause": "integrity",
+                                     "origin": "storage", "error": why, "referrer": None})
+
     def run(self):
+        try:
+            locked = self._acquire_locks()
+        except OSError as exc:
+            _emit("[CRIT] 출력 폴더를 만들 수 없습니다 (%s): %s" % (self.out, exc), sys.stderr)
+            return EXIT_INCOMPLETE
+        if not locked:
+            return EXIT_LOCKED
         self._install_signals()
         try:
             self._startup()
@@ -1587,7 +1784,12 @@ class Crawler(object):
                 self.auth.logout()
             except Exception:  # noqa: BLE001
                 pass
+            try:
+                self._verify_integrity()
+            except Exception as exc:  # noqa: BLE001
+                self.integrity = {"error": "%s: %s" % (type(exc).__name__, exc)}
             manifest = self._write_outputs()
+            self._release_locks()
         _print_summary(manifest, self.out)
         return self.exit_code
 
@@ -1595,8 +1797,24 @@ class Crawler(object):
     def _fetched_ok(self):
         return self.cnt["ok"] + self.cnt["ok_empty"] + self.cnt["ok_raw"]
 
+    def _incomplete_reasons(self):
+        """COMPLETE 로 표시할 수 없는 사유. 기본 모드에서 지속적인 수집 실패(device_error)와 크기 상한으로 못 받은
+        첨부(oversize)는 정상 완료가 아니다. --strict 는 계정/장비가 내주지 않은 항목까지 엄격하게 본다."""
+        n, reasons = self.counts, []
+        for key in ("unresolved", "device_error", "oversize"):
+            if n[key]:
+                reasons.append("%s=%d" % (key, n[key]))
+        if self.truncated:
+            reasons.append("truncated=%d" % self.truncated)
+        if self.a.strict:
+            for key in ("outside_account", "rejected", "count_mismatch"):
+                if n[key]:
+                    reasons.append("strict:%s=%d" % (key, n[key]))
+        return reasons
+
     def _verdict(self):
-        """(result, exit_code). unresolved 와 truncated 만 미완료 사유다. 나머지 버킷은 정보다."""
+        """(result, exit_code). 못 받은 항목(unresolved · device_error · oversize · truncated)이 있으면 INCOMPLETE 다.
+        absent · not_gettable · rejected · outside_account 는 정보이며 --strict 일 때만 미완료로 센다."""
         if self.abort_reason in AUTH_ABORTS:
             return "ABORT", EXIT_AUTH
         if self.abort_reason == "unreachable":
@@ -1607,8 +1825,7 @@ class Crawler(object):
             return "INCOMPLETE", EXIT_INTERRUPTED
         if self._fetched_ok() == 0:
             return "EMPTY", EXIT_EMPTY
-        strict_fail = bool(self.a.strict) and self.counts["device_error"] > 0
-        if self.counts["unresolved"] > 0 or self.truncated > 0 or strict_fail:
+        if self._incomplete_reasons():
             return "INCOMPLETE", EXIT_INCOMPLETE
         return "COMPLETE", EXIT_COMPLETE
 
@@ -1629,11 +1846,16 @@ class Crawler(object):
         result, code = self._verdict()
         self.exit_code = code
         longest = max([len(v) for v in self.fs.by_path.values()] or [0])
+        origins = {}
+        for name in ("unresolved", "device_error", "oversize"):
+            for e in lists[name]:
+                origins[e.get("origin", "unknown")] = origins.get(e.get("origin", "unknown"), 0) + 1
         summary = OrderedDict([
             ("ok", c["ok"]), ("ok_empty", c["ok_empty"]), ("ok_raw", c["ok_raw"]),
             ("absent", n["absent"]), ("not_gettable", n["not_gettable"]), ("rejected", n["rejected"]),
             ("outside_account", n["outside_account"]), ("device_error", n["device_error"]),
-            ("unresolved", n["unresolved"]), ("excluded", n["excluded"]), ("rehosted", n["rehosted"]),
+            ("unresolved", n["unresolved"]), ("oversize", n["oversize"]),
+            ("excluded", n["excluded"]), ("rehosted", n["rehosted"]),
             ("skipped", n["skipped"]), ("redirected", len(self.net.redirected)),
             ("resumed_from_disk", c["resumed"]), ("requests", self.net.requests), ("retries", c["retries"]),
             ("bytes_total", self.net.bytes_total), ("count_mismatch", n["count_mismatch"]),
@@ -1661,7 +1883,9 @@ class Crawler(object):
             "basic_probe": self.probe_info,
             "result": result, "exit_code": code, "abort_reason": self.abort_reason,
             "abort_detail": self.abort_detail, "interrupted": self.interrupted,
-            "complete_with_exclusions": result == "COMPLETE" and (n["excluded"] > 0 or n["device_error"] > 0),
+            "complete_with_exclusions": result == "COMPLETE" and n["excluded"] > 0,
+            "incomplete_reasons": self._incomplete_reasons(),
+            "failure_origins": origins, "integrity": self.integrity, "disk_free_start": self.disk_free_start,
             "tls_hint": self.info["tls_hint"],
             "discovered": len(self.seen) - self.n_wellknown, "fetched_ok": self._fetched_ok(),
             "truncated": self.truncated, "firmware_versions": self.firmware_versions,
@@ -1698,6 +1922,7 @@ _ABORT_HELP = {
     "auth_lost": "크롤 도중 세션을 되살리지 못했습니다. 계정 상태를 확인한 뒤 같은 -D 로 --resume 하세요.",
     "unreachable": "도달/방화벽/포트(443)를 확인하세요.",
     "internal_error": "도구 내부 오류입니다. stderr 의 traceback 을 공유해 주세요.",
+    "storage_error": "저장 공간/권한을 확인하세요 (df -h). 비운 뒤 같은 -D 로 --resume 하면 받은 곳은 재사용합니다.",
 }
 
 
@@ -1720,8 +1945,10 @@ def _print_summary(m, out_dir):
     say("  not_gettable (405/501): %-5d [INFO] 액션 주소 등 GET 불가 - 정상" % s["not_gettable"])
     say("  rejected (400/406/..) : %-5d [INFO] 장비가 요청을 거절 - 재시도하지 않음" % s["rejected"])
     say("  outside_account       : %-5d [INFO] 계정 권한 밖(401/403) - 재시도하지 않음" % s["outside_account"])
-    say("  device_error          : %-5d [INFO] 장비가 반복해서 5xx/무응답 (다른 요청은 정상) - 장비 측 결함 후보"
-        % s["device_error"])
+    say("  device_error          : %-5d %s 장비가 반복해서 5xx/무응답 (다른 요청은 정상) - 장비 측 결함, 못 받은 항목"
+        % (s["device_error"], "[OK]" if not s["device_error"] else "[FAIL]"))
+    say("  oversize              : %-5d %s 크기 상한을 넘어 받지 않은 첨부 (--max-bytes-per-resource)"
+        % (s["oversize"], "[OK]" if not s["oversize"] else "[FAIL]"))
     say("  unresolved            : %-5d %s" % (s["unresolved"], "[OK]" if not s["unresolved"] else "[FAIL]"))
     say("  excluded / skipped    : %d / %d   (정책 제외, cross-host 등)   rehosted: %d   redirected: %d" % (
         s["excluded"], s["skipped"], s["rehosted"], s["redirected"]))
@@ -1736,21 +1963,27 @@ def _print_summary(m, out_dir):
     if m["abort_reason"]:
         say("  [CRIT] 중단: %s - %s" % (m["abort_reason"], m["abort_detail"]))
         say("         %s" % _ABORT_HELP.get(m["abort_reason"], ""))
-    if m["unresolved"]:
-        say("  [FAIL] 미해결 %d건 (상위 10건):" % len(m["unresolved"]))
-        for r in m["unresolved"][:10]:
-            say("      %s  %s  (%s)" % (r.get("status"), r.get("path"), r.get("error")))
-        say("         같은 -D 로 --resume 을 붙여 다시 실행하면 이 항목만 다시 시도합니다.")
+    pending = m["unresolved"] + m["device_error"] + m["oversize"]
+    if pending:
+        origins = ", ".join("%s=%d" % kv for kv in sorted(m["failure_origins"].items()))
+        say("  [FAIL] 못 받은 항목 %d건 (상위 10건) - 원인 구분(origin): %s" % (len(pending), origins))
+        for r in pending[:10]:
+            say("      %-4s %s  [%s/%s] %s" % (r.get("status", ""), r.get("path"), r.get("origin"),
+                                              r.get("cause") or r.get("reason"), r.get("error") or ""))
+        say("         같은 -D 로 --resume 을 붙여 다시 실행하면 이 항목만 다시 시도합니다."
+            + (" oversize 는 --max-bytes-per-resource 0 도 함께 주세요." if m["oversize"] else ""))
+    ig = m.get("integrity") or {}
+    if ig.get("unaccounted"):
+        say("  [WARN] 출력 폴더에 이번 실행이 만들지 않은 index.json 이 %d개 있습니다 (이전 실행 잔여일 수 있음)."
+            % ig["unaccounted"])
     if m["truncated"]:
         say("  [WARN] 큐에 %d개가 남은 채 끝났습니다 (--max 상한/중단). --resume 으로 이어받으세요." % m["truncated"])
-    if s["device_error"] and not m["abort_reason"]:
-        say("  [INFO] device_error 는 오류로 보지 않습니다. 의심되면 --resume 으로 이 항목만 다시 시도하세요.")
     if result == "COMPLETE":
         say("  [OK] RESULT=COMPLETE - 이 계정으로 닿는 모든 GET 리소스를 저장했습니다.")
     elif result == "EMPTY":
         say("  [FAIL] RESULT=EMPTY - 2xx 응답 0건. 도달/인증/Redfish 활성화(RMC 라이선스)부터 확인하세요.")
     elif result == "INCOMPLETE":
-        say("  [FAIL] RESULT=INCOMPLETE - 위 항목을 처리한 뒤 --resume 으로 다시 실행하세요.")
+        say("  [FAIL] RESULT=INCOMPLETE - 미완료 사유: %s" % ", ".join(m["incomplete_reasons"] or ["interrupted"]))
     else:
         say("  [FAIL] RESULT=ABORT")
 
@@ -1758,8 +1991,9 @@ def _print_summary(m, out_dir):
 def summarize(dirs):
     """여러 호스트의 _manifest.json 을 표 하나로 요약한다. 모두 COMPLETE 면 0, 아니면 1."""
     totals = OrderedDict([("COMPLETE", 0), ("INCOMPLETE", 0), ("EMPTY", 0), ("ABORT", 0), ("NO_MANIFEST", 0)])
-    fmt = "  %-24s %-11s %7s %7s %8s %8s %8s %9s %-9s"
-    _emit(fmt % ("host", "RESULT", "fetched", "absent", "not_get", "reject", "outside", "unresolv", "auth"))
+    fmt = "  %-24s %-11s %7s %7s %8s %8s %8s %8s %8s %9s %-9s"
+    _emit(fmt % ("host", "RESULT", "fetched", "absent", "not_get", "reject", "outside", "dev_err", "oversize",
+                 "unresolv", "auth"))
     for d in dirs:
         try:
             with open(os.path.join(d, "_manifest.json"), "rb") as f:
@@ -1768,7 +2002,7 @@ def summarize(dirs):
             ok, m = False, None
         if not ok or not isinstance(m, dict):
             totals["NO_MANIFEST"] += 1
-            _emit(fmt % (d[-24:], "NO_MANIFEST", "-", "-", "-", "-", "-", "-", "-"))
+            _emit(fmt % (d[-24:], "NO_MANIFEST", "-", "-", "-", "-", "-", "-", "-", "-", "-"))
             continue
         s = m.get("summary") or {}
         res = m.get("result")
@@ -1777,7 +2011,8 @@ def summarize(dirs):
         totals[res] = totals.get(res, 0) + 1
         _emit(fmt % (str(m.get("host") or d)[-24:], res, m.get("fetched_ok", 0),
                      s.get("absent", "-"), s.get("not_gettable", "-"), s.get("rejected", "-"),
-                     s.get("outside_account", "-"), s.get("unresolved", len(m.get("failed") or [])),
+                     s.get("outside_account", "-"), s.get("device_error", "-"), s.get("oversize", "-"),
+                     s.get("unresolved", len(m.get("failed") or [])),
                      m.get("auth_mode", "-")))
         if m.get("abort_reason"):
             _emit("      [CRIT] %s - %s" % (m.get("abort_reason"), m.get("abort_detail")))
@@ -1809,11 +2044,11 @@ def build_parser():
     ap.add_argument("--exclude", action="append", default=[], metavar="REGEX", help="경로 제외 정규식 (반복 가능)")
     ap.add_argument("--no-action-targets", action="store_true", help="Actions target 주소를 GET 하지 않음")
     ap.add_argument("--resume", action="store_true", help="같은 -D 의 2xx 저장본을 재사용하고 빈 곳만 받음")
-    ap.add_argument("--strict", action="store_true", help="device_error 도 INCOMPLETE 로 취급")
+    ap.add_argument("--strict", action="store_true", help="outside_account / rejected / count_mismatch 도 INCOMPLETE 로 취급 (기본은 정보)")
     ap.add_argument("--progress", type=int, default=100, help="N개마다 진행 상황을 stderr 로 (0=끔)")
     ap.add_argument("--quiet", action="store_true", help="진행 상황 출력 끔")
-    ap.add_argument("--max-bytes-per-resource", dest="max_bytes", type=int, default=64 * 1024 * 1024,
-                    help="리소스 1건 최대 바이트 (0=무제한). 초과분은 받지 않고 excluded 로 기록 (펌웨어 이미지 등)")
+    ap.add_argument("--max-bytes-per-resource", dest="max_bytes", type=int, default=256 * 1024 * 1024,
+                    help="리소스 1건 최대 바이트 (기본 256 MiB, 0=무제한). 초과분은 받지 않고 oversize 로 기록하며 INCOMPLETE")
     ap.add_argument("--max-rel-path", type=int, default=200, help="출력 상대경로 최대 글자 수 (Windows MAX_PATH 대비)")
     ap.add_argument("--use-env-proxy", action="store_true", help="환경변수 프록시 사용 (기본은 무시)")
     ap.add_argument("--summarize", nargs="+", metavar="DIR", help="여러 출력 폴더의 manifest 를 표로 요약하고 종료")
@@ -1891,7 +2126,12 @@ def main(argv=None):
     ctx = _make_ctx(args.verify, args.legacy_tls) if args.scheme == "https" else None
     net = Net(args.scheme, args.host, ctx, args.timeout, use_env_proxy=args.use_env_proxy)
     auth = AuthState(net, args.user, password, None, "default")
-    return Crawler(args, net, auth, source).run()
+    old_umask = os.umask(0o077) if hasattr(os, "umask") else None   # 캡처에는 IP/시리얼/계정명 등이 있다 - 소유자만 읽게
+    try:
+        return Crawler(args, net, auth, source).run()
+    finally:
+        if old_umask is not None:
+            os.umask(old_umask)
 
 
 if __name__ == "__main__":

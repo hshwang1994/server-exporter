@@ -17,9 +17,11 @@
 #   MIRROR_PY     크롤러 경로 (기본: 이 스크립트 옆 redfish_full_mirror.py)
 #
 # 호스트별 로그는 <출력폴더>/_crawl.log, 종료코드는 <출력폴더>/_exit_code 에 남는다.
+# 캡처 파일에는 IP / 시리얼 / 계정명이 들어 있으므로 소유자만 읽도록 umask 077 로 만든다.
 # 종료코드: 0 = 전부 COMPLETE, 1 = 그 외가 하나라도 있음, 2 = 사용법/환경 오류, 130 = 중단.
 # bash 4.2+ 호환 (wait -n / mapfile -d 를 쓰지 않는다). xargs 도 필요 없다 (Rocky 8 최소 이미지).
 set -u
+umask 077
 
 here=$(cd "$(dirname "$0")" && pwd)
 targets=${1:-targets.txt}
@@ -97,7 +99,7 @@ while IFS= read -r line || [ -n "$line" ]; do
   echo "[START] $ip -> $out (auth=$auth, pid=$pid)"
 done < "$targets"
 
-for pid in "${all_pids[@]}"; do
+for pid in ${all_pids[@]+"${all_pids[@]}"}; do
   wait "$pid"
   echo $? > "${pid_out[$pid]}/_exit_code"
 done
@@ -106,6 +108,12 @@ if [ "${#outdirs[@]}" -eq 0 ]; then echo "[CRIT] 실행할 대상이 없습니�
 echo
 "$PYTHON" "$MIRROR_PY" --summarize "${outdirs[@]}"
 rc=$?
+for pid in ${all_pids[@]+"${all_pids[@]}"}; do
+  if [ "$(cat "${pid_out[$pid]}/_exit_code" 2>/dev/null)" = "5" ]; then
+    echo "  [WARN] ${pid_out[$pid]}: 같은 출력 폴더/BMC 에서 다른 미러가 이미 실행 중이라 건너뛰었습니다 (_crawl.log 참고)"
+    rc=1
+  fi
+done
 [ "$skipped" -gt 0 ] && { echo "  [WARN] 형식 오류로 건너뛴 줄: $skipped"; rc=1; }
 [ "$interrupted" -eq 1 ] && exit 130
 exit $rc
