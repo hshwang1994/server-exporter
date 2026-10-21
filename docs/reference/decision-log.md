@@ -104,6 +104,36 @@
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
 
+## 2026-10-22 (2) — 미러 도구 2.2: `--no-binary` 옵션 (바이너리 첨부를 받지 않음)
+
+> 정본: `docs/develop/08-onsite-capture.md` · `tests/redfish-probe/redfish_full_mirror.py`(2.2.0) · `tests/unit/test_full_mirror_dryrun.py`. 제품 수집 코드 변경 0.
+
+### 사용자 지시
+
+- "`--no-binary` 옵션을 추가해줘." - 직전 질의("바이너리 수집을 제외하고싶다면")에서 전용 스위치가 없고 `--exclude` 경로 패턴으로만 가능하다고 답한 뒤, 응답의 Content-Type 으로 판단하는 전용 옵션을 제안했고 그대로 요청받음.
+
+### 결정
+
+1. `--no-binary`: GET 의 2xx 응답 중 Content-Type 이 `json`, `xml`, `text`, `html` 을 포함하지 않는 것(기존 "바이너리" 판정 그대로)은 본문을 받지 않고 `excluded[]` 에 `reason: no-binary`(경로 · Content-Type · Content-Length · 참조한 곳 · 키)로 기록한다. 오류가 아니므로 결과는 COMPLETE 이고 `complete_with_exclusions` 가 켜진다. `summary.no_binary_skipped` 와 콘솔 요약 한 줄이 개수를 보여 준다.
+2. 크기와 무관하다: 상한(`--max-bytes-per-resource`) 검사보다 먼저 판단하므로 바이너리는 `oversize` 가 되지 않는다. 텍스트 본문은 건너뛰지 않고 크기 상한이 그대로 적용된다.
+3. Content-Type 이 거짓인 JSON 을 놓치지 않는다: 기존 `_handle_ok` 의 "JSON 구제"를 보존하려고, 바이너리 타입 응답의 앞 64 KiB 를 보고 `{` 또는 `[` 로 시작할 때만 계속 읽는다(`JSON_RESCUE_MAX` 16 MiB 이하). JSON 이 아니거나 한도를 넘으면 받은 조각을 버리고 `no-binary` 로 기록한다. 그 밖의 바이너리는 앞 64 KiB 만 읽고 닫으며, 길이 헤더가 16 MiB 를 넘으면 본문을 한 바이트도 읽지 않는다.
+4. 로그인 POST 등 GET 이 아닌 요청과 스풀 폴더가 없는 탐침에는 적용하지 않는다. 장비로 보내는 요청 종류는 늘지 않는다(GET 만, HEAD 는 쓰지 않음).
+
+### 근거 (실측)
+
+- 실측 미러 7개(CSUS ×4 · DL380 · SR650 · Dell R740)의 `headers.json` 에서 2xx 응답 Content-Type 을 전수 대조: 바이너리로 판정되는 이미 받은 리소스는 0건이다. `--no-binary` 가 정상 수집분을 건드릴 일이 없다. 같은 기종 링크 모양으로는 첨부 링크 138개(CSUS 126 · DL380 3 · SR650 9)가 바이너리 후보다.
+- 변형 검증: 건너뛰기를 끄면 새 시험 5건 중 4건이, JSON 확인을 끄면 구제 시험이 실패한다. Python 3.6.8 에서 새 시험 5건 통과.
+
+### 대안 (Considered)
+
+- 링크 키(`AdditionalDataURI` · `BinaryDataURI` · `ComponentUri` · `DownloadURI`)로 요청 전에 제외: 장비에 요청을 아예 안 보내는 장점이 있으나 텍스트 첨부까지 건너뛰어 "바이너리만" 이라는 요청과 다르고, 키 목록이 장비마다 달라 놓치는 첨부가 생겨 기각. 응답 Content-Type 기준으로 하고, 요청 전 제외는 기존 `--exclude` 로 남김.
+- HEAD 요청으로 먼저 확인: 비-GET 은 세션 POST/DELETE 뿐이라는 도구 계약(시험이 강제)을 깨고 HEAD 미지원 BMC 가 있어 기각.
+- Content-Type 만 보고 무조건 건너뜀: 거짓 Content-Type 의 JSON 에서 하위 링크가 조용히 빠질 수 있어 기각(앞부분 확인으로 보완).
+
+### 남은 것
+
+- 용인 실장비에서의 동작(연결을 일찍 닫을 때의 BMC 반응, 실제 첨부 Content-Type)은 미검증이다. 첫 실행 후 `excluded[]` 의 `no-binary` 항목과 `find <폴더> -name 'raw.*' -size +100k` 로 건너뛴 것과 남은 것을 확인한다.
+
 ## 2026-10-22 — 미러 도구 최종 정책 확정: 못 받은 것은 INCOMPLETE · 256 MiB 복원 · 재생 도구 2건 수정
 
 > 정본: `docs/develop/08-onsite-capture.md` · `tests/redfish-probe/redfish_full_mirror.py`(2.1.0) · `replay_full_mirror.py` · `tests/integration/convert_dmtf_mockup.py` · `tests/unit/test_mirror_replay_tools.py`. 제품 수집 코드 변경 0.

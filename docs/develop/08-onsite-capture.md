@@ -46,6 +46,7 @@ python3 redfish_full_mirror.py -r <BMC 주소[:포트]> -u <계정> -D <라벨>
 | `--legacy-tls` | TLS 1.0, 1.1만 되는 구형 BMC용. OS의 암호 정책이 막으면 효과가 없습니다 |
 | `--exclude <정규식>` | 받지 않을 경로. 여러 번 줄 수 있습니다 |
 | `--no-action-targets` | `Actions`의 `target` 주소를 GET으로 확인하지 않습니다 |
+| `--no-binary` | 바이너리 첨부(2xx인데 Content-Type이 json, xml, text, html이 아닌 응답)는 본문을 받지 않고 `excluded`에 `reason: no-binary`로 기록합니다(오류 아님, 결과는 `COMPLETE` 유지). 응답 헤더와 본문 앞부분(최대 64 KiB)만 보고 연결을 닫으므로 크기가 얼마든 나머지는 내려받지 않고, `--max-bytes-per-resource`와도 무관합니다. 다만 Content-Type이 거짓인 JSON은 놓치지 않도록 본문이 `{`나 `[`로 시작하면 16 MiB까지만 읽어 JSON이면 저장합니다. 텍스트 본문은 건너뛰지 않으며 크기 상한이 그대로 적용됩니다 |
 | `--max-bytes-per-resource` | 리소스 하나의 최대 크기(기본 256 MiB, 0은 무제한). 넘는 첨부는 받지 않고 `oversize`에 URI, Content-Type, 크기, 원인과 함께 기록하며 결과는 `INCOMPLETE`입니다. 바이너리는 디스크로 스트리밍하므로 메모리를 쓰지 않습니다 |
 | `--strict` | 기본 판정에 더해 `outside_account`, `rejected`, `Members@odata.count` 불일치도 `INCOMPLETE`로 취급합니다 |
 | `--scheme` | 기본 `https` |
@@ -64,6 +65,10 @@ python3 redfish_full_mirror.py -r <BMC 주소[:포트]> -u <계정> -D <라벨>
 <출력 폴더>/_fsmap.json                  경로와 디스크 폴더의 대응 (충돌, 예약어, 길이 축약 기록. --resume 이 읽습니다)
 <출력 폴더>/_serviceroot_noauth.json     무인증 서비스 루트
 ```
+
+### 바이너리 첨부를 받지 않기
+
+펌웨어 이미지(`/fwrepo`), 디버그 로그 묶음(`.tar.zst`), 라이선스 키 같은 바이너리 첨부가 필요 없으면 `--no-binary`를 줍니다. 러너에서는 `MIRROR_ARGS="--no-binary" bash mirror_many.sh targets.txt`입니다. 건너뛴 첨부는 `_manifest.json`의 `excluded[]`에서 `reason`이 `no-binary`인 항목(경로, Content-Type, 크기, 참조한 곳)으로 확인합니다. `--resume`으로 이어받아도 같습니다. 이미 받아 둔 바이너리는 지우지 않습니다.
 
 ### 크기 제한 없이 받기 (용인 현장 권장)
 
@@ -113,7 +118,7 @@ MIRROR_ARGS="--resume" bash mirror_many.sh targets.txt   # 크롤러에 넘길 �
 - `incomplete_reasons`가 비어 있고 `unresolved`, `device_error`, `oversize`가 모두 0입니다(`COMPLETE`이면 이미 그렇습니다).
 - 오류가 아닌 항목의 의미를 압니다. `absent`는 장비가 링크는 냈지만 없던 경로(참조한 곳이 함께 기록됨), `not_gettable`은 GET이 안 되는 액션 주소, `rejected`는 장비가 요청을 거절한 경우, `outside_account`는 계정 권한 밖입니다. `outside_account`가 많으면 일부 리소스가 가려진 것이므로 더 높은 권한 계정으로 다시 캡처합니다.
 - `INCOMPLETE`의 `device_error`는 재시도와 마지막 재확인 뒤에도 같은 5xx 또는 무응답이지만 다른 요청은 정상인 경우입니다(`origin: device`). 장비가 그 경로를 제대로 내주지 않는 것이라 도구가 성공으로 바꾸지 않습니다. 시간을 두고 `--resume`으로 다시 시도하고, 시간 초과(`cause: timeout`)였다면 `--timeout`을 올립니다. 끝내 안 되는 경로는 `device_error[]`의 경로, 상태, 시도 횟수를 근거로 보고합니다.
-- `excluded`는 사용자가 정한 제외(`--exclude`, `--no-action-targets`)와 정책 제외(`ServerSentEventUri`와 `.../SSE`는 GET하면 스트림이 끝나지 않아 요청하지 않음)이며 미완료로 세지 않습니다. 크기 상한으로 못 받은 첨부는 `oversize`에 URI, Content-Type, 크기, 원인과 함께 따로 있고 `INCOMPLETE`입니다.
+- `excluded`는 사용자가 정한 제외(`--exclude`, `--no-action-targets`, `--no-binary`)와 정책 제외(`ServerSentEventUri`와 `.../SSE`는 GET하면 스트림이 끝나지 않아 요청하지 않음)이며 미완료로 세지 않습니다. 크기 상한으로 못 받은 첨부는 `oversize`에 URI, Content-Type, 크기, 원인과 함께 따로 있고 `INCOMPLETE`입니다.
 - 멀티 노드 장비면 모든 파티션, 모든 Manager(RMC, chassis 컨트롤러, 노드 iLO), 모든 chassis가 들어 있습니다.
 - OEM 리소스(`Oem.Hpe.*` 등) 디렉터리가 있습니다.
 - 펌웨어 버전이 `_manifest.json`의 `firmware_versions`와 폴더 이름에 남았습니다.
