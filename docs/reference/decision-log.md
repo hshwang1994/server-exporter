@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-21
+> 최종 갱신: 2026-10-22
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -41,7 +41,7 @@
 | 식별자 · 단위 | DMI 자리표시자 집합 한 곳(`identity_normalizer`), JEDEC (bank, id) 표, firewall_state = 유효 정책 | 2026-10-10 D-03 · D-10 · LX-F12 |
 | ESXi | `vmware_host_config_info` 는 `esxi_hostname` 필수, vCenter 대상은 protocol 단계 거부 | 2026-10-10 D-01 · ESXI-03 |
 | 문서 · 하네스 | 사람용 문서는 `.claude`/`docs/ai` 를 참조하지 않는다, 세어 놓은 수는 적지 않는다, 삭제는 참조 0 · 고유 내용 확인 뒤. 설치 문서의 환경 표기는 확인한 조합 / 필수 요구 / 선택 · 미확인 세 구분 | 2026-08-13 · 2026-10-11 D-19 · 2026-10-12 |
-| 운영망 Redfish 원본 캡처 | 링크로 닿는 모든 GET 을 저장. 404·405·400류·401/403 은 오류가 아니라 정보(`absent`/`not_gettable`/`rejected`/`outside_account`), 미완료는 `unresolved` 뿐. 재시도 뒤에도 같은 5xx/무응답이나 장비가 정상이면 `device_error`(정보, `--strict` 로 미완료화). 인증은 세션 우선 + Basic 교차 확인(자격 요청 ≤2회, 401/403 재시도 없음) | 2026-10-21 |
+| 운영망 Redfish 원본 캡처 | 링크로 닿는 모든 GET 을 저장. 404·405·400류·401/403 은 오류가 아니라 정보(`absent`/`not_gettable`/`rejected`/`outside_account`)이고, 받지 못한 것(`unresolved` · 재시도 뒤에도 계속 5xx/무응답인 `device_error` · 크기 상한 `oversize` · 저장 실패)은 `INCOMPLETE`. 실패 항목마다 `origin`(device/storage/tool 등)으로 장비 문제와 도구 문제를 구별. 기본 크기 상한 256 MiB(0=무제한). 인증은 세션 우선 + Basic 교차 확인(자격 요청 ≤2회, 401/403 재시도 없음). 재생 도구는 요청 경로 기반 키 + 페이지 사슬 + HTTP 상태 보존 | 2026-10-22 |
 
 ## 날짜별 결정 색인
 
@@ -104,6 +104,41 @@
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
 
+## 2026-10-22 — 미러 도구 최종 정책 확정: 못 받은 것은 INCOMPLETE · 256 MiB 복원 · 재생 도구 2건 수정
+
+> 정본: `docs/develop/08-onsite-capture.md` · `tests/redfish-probe/redfish_full_mirror.py`(2.1.0) · `replay_full_mirror.py` · `tests/integration/convert_dmtf_mockup.py` · `tests/unit/test_mirror_replay_tools.py`. 제품 수집 코드 변경 0.
+
+### 사용자 지시
+
+- "`device_error` 분류 자체는 유지... 장비가 특정 URI 에 지속적으로 HTTP 500 을 반환한다고 해서 해당 리소스의 수집이 완료된 것은 아닙니다... device_error 가 남으면 기본 결과는 INCOMPLETE". 장비 문제와 수집 도구 문제를 manifest 에서 구별, 장비가 잘못된 응답을 줘도 임의로 성공 처리하거나 데이터를 만들지 않음.
+- "기본 크기 제한을 원래 계획인 256MiB 로 복원"하고 `--max-bytes-per-resource 0` 은 유지. 크기 제한에 걸린 리소스가 남았다면 COMPLETE 금지. 용인은 크기 제한 없이 받는 방법을 README 에 안내.
+- 후속 과제 2건(재생기 페이지네이션 · 변환기가 `headers.json` 상태 무시)을 이번에 처리. 최종 번들을 만들고 이전 번들은 폐기.
+
+### 결정
+
+1. 미완료 = `unresolved` + `device_error` + `oversize` + 큐 잔량(`truncated`) + manifest 와 디스크가 어긋난 항목(`integrity`). 하나라도 있으면 INCOMPLETE. 정보(`absent` · `not_gettable` · `rejected` · `outside_account`)는 그대로이고 `--strict` 일 때만 `outside_account` · `rejected` · `count_mismatch` 도 미완료로 센다. `incomplete_reasons` 에 사유를 적는다.
+2. 실패 항목마다 `origin`(device · device_or_network · storage · tool · interrupted)과 `cause`(http_500 · conn · save_failed · internal_error · integrity ...)를 적고 `failure_origins` 로 집계한다 - 장비 문제와 도구·저장소 문제를 manifest 에서 가른다.
+3. 크기 상한 기본 256 MiB 복원. 상한을 넘는 첨부는 받지 않고 `oversize`(URI · Content-Type · Content-Length · 크기 · 상한 · 원인)에 기록, INCOMPLETE. 바이너리는 디스크로 스트리밍(`.part` -> `Content-Length` 와 같을 때만 정식 이름), 64 MiB 를 넘는 텍스트 본문도 디스크로 흘려보내 메모리에 올리지 않는다. 잘린 응답은 정상 저장이 아니라 재시도 대상, 디스크 쓰기 실패는 `origin=storage` 로 재시도 없이 기록하고 연속 10회면 BMC 를 더 두드리지 않고 중단(`storage_error`). 저장 실패한 JSON 의 하위 링크는 계속 따라간다.
+4. 저장 무결성: raw 파일 SHA-256 을 안내 파일과 manifest 에 기록, `--resume` 은 크기(64 MiB 이하는 해시까지) 가 맞는 저장본만 재사용한다. 같은 폴더에 `--resume` 없이 다시 실행해 어떤 항목이 실패해도 정상 저장본을 지우거나 덮지 않으며, 디스크가 `_fsmap.json` 보다 많으면 트리를 스캔해 병합한다. 실행 끝에 저장본이 디스크에 있는지 검증(`integrity`).
+5. 같은 출력 폴더 / 같은 BMC 의 중복 실행은 `flock` 으로 막고(종료 5), 캡처 파일은 `umask 077` 로 만든다. 러너는 `umask 077` 과 종료 5 호스트 안내를 더했다.
+6. 재생기: v2 트리는 `_fsmap.json` 의 요청 경로로 키잉(폴더는 소문자 기준 조회 - Windows NTFS 에서 중간 폴더 대소문자가 합쳐져도 별칭 경로가 살아남음), v1 트리는 본문 id 로 키잉하고 `nextLink` 사슬로 후속 페이지 키를 복원. 페이지 수 · 멤버 수가 `Members@odata.count` 와 다르거나 사슬이 끊기면 `stats` 에 기록. `headers.json` 상태를 보존하고(오류 본문을 200 으로 올리지 않음) v2 manifest 의 상태도 본문 없이 복원, status 0 은 HTTP 상태가 아니라 제외, `/redfish/v1` 밖의 경로는 키로 삼지 않는다. 변환기는 같은 로더(`load_mockup_records`)를 쓴다.
+
+### 근거 (실측)
+
+- 실측 미러 7개 재생: 봉투 해시 7/7 불변, 삭제 0, Dell 은 페이지 키 59개(= 이전 분석의 59 페이지)와 `Lclog/Entries` · `DellSensors` · `DellSlots` 머리가 마지막 페이지가 아니라 1페이지로 정정. `DellSensors` 는 2페이지 62개로 선언과 일치, `Lclog/Entries` 는 58페이지 2851개 대 선언 2841 로 불일치가 기록됨(크롤 도중 로그가 늘어난 실제 사례).
+- 커밋된 실측 fixture 4종을 옛 재생기와 새 재생기로 각각 재생성해 recording · golden 이 바이트 단위로 동일(변경 영향 0). 커밋된 fixture 와의 차이는 fixture 가 현재 gather 보다 오래된 기존 상태다.
+- 캡처 -> 재생 맵 -> HTTP Mock -> 재크롤 왕복: v2 에뮬레이터 트리 3개(DL360 1807 · DL380a 2163 · DL325 1270)는 누락 0 · 본문 차이 0 · 비정상 상태 보존. v1 실측 미러는 CSUS 4 · DL380 · Lenovo 가 일치하고 Dell 은 별칭 경로 62개(링크가 가리킨 경로와 본문 `@odata.id` 가 다름)가 v1 트리에서 복원 불가 - 새 도구 트리는 영향 없음.
+- Windows 반출 검증 중 발견: NTFS 에서 폴더 대소문자가 합쳐지면 `_fsmap.json` 과 디스크 폴더 이름의 대소문자가 어긋나 별칭 경로 5개가 사라지던 문제를 재생기에서 수정.
+
+### 대안 (Considered)
+
+- `device_error` 를 정보로 두고 `--strict` 일 때만 미완료: 사용자 지시와 반대라 기각. 크기 상한 초과를 `excluded`(정보) 로 둠: 요구 범위의 미수집이라 기각(별도 `oversize`).
+- v1 트리의 별칭 경로를 링크 그래프로 복원: 새 도구 트리에는 불필요하고 v1 은 이미 fixture 로 변환된 상태라 한계로 문서화.
+
+### 남은 것
+
+- 용인 11대 실장비 캡처와 실장비 미검증 항목(세션 성공 경로 · `device_error` 실례 · `--legacy-tls` · 크기 제한 없는 대용량 첨부 · CSUS RMC Basic 전용 가정)은 사용자 몫 - NEXT_ACTIONS.
+
 ## 2026-10-21 — Redfish 전수 미러 도구 v2: 받을 수 있는 것은 전부, 오류는 못 받은 것만
 
 > 정본: `docs/develop/08-onsite-capture.md` · `tests/redfish-probe/redfish_full_mirror.py` · `tests/redfish-probe/mirror_many.sh`. 제품 수집 코드 변경 0.
@@ -116,12 +151,12 @@
 
 ### 결정
 
-1. 판정 버킷: 2xx(`ok` · `ok_empty` · `ok_raw`) / 오류 아님(`absent` 404·410, `not_gettable` 405·501, `rejected` 400·406·409·415·422 등, `outside_account` 401·403) / 미완료 `unresolved` 하나. `result` = COMPLETE · INCOMPLETE · EMPTY · ABORT. 종료코드 0 · 1 · 2 · 3(인증/세션) · 4(도달 불가) · 130.
-2. **`device_error` 추가(승인된 계획 대비 구현 중 변경 — 요확인)**: 승인된 계획은 5xx/timeout 이 재시도 뒤에도 남으면 모두 `unresolved` 였다. 그러면 장비가 특정 리소스에 항상 500 을 주는 경우(실측 DL380 `ComponentIntegrity/TPM-1` 전송 timeout 류)
+1. 판정 버킷: 2xx(`ok` · `ok_empty` · `ok_raw`) / 오류 아님(`absent` 404·410, `not_gettable` 405·501, `rejected` 400·406·409·415·422 등, `outside_account` 401·403) / 미완료 `unresolved` 하나(→ 2026-10-22 에 `device_error` · `oversize` 도 미완료로 변경). `result` = COMPLETE · INCOMPLETE · EMPTY · ABORT. 종료코드 0 · 1 · 2 · 3(인증/세션) · 4(도달 불가) · 130.
+2. **`device_error` 추가(승인된 계획 대비 구현 중 변경 → 2026-10-22 에 사용자가 분류는 유지하되 INCOMPLETE 로 확정)**: 승인된 계획은 5xx/timeout 이 재시도 뒤에도 남으면 모두 `unresolved` 였다. 그러면 장비가 특정 리소스에 항상 500 을 주는 경우(실측 DL380 `ComponentIntegrity/TPM-1` 전송 timeout 류)
    `--resume` 으로도 0 이 되지 않아 "최종 결과에 error 0" 지시와 충돌한다. 그래서 재시도와 마지막 sweep 뒤에도 실패한 항목은 이미 받은 리소스 1건을 다시 요청해 장비가 정상이면 `device_error`(정보), 불안정하면 `unresolved` 로 가른다. `--strict` 면 `device_error` 도 미완료, 목록은 manifest 에 남고 `--resume` 이 그 항목만 다시 시도한다.
 3. 인증 = 잠금 방지가 최우선: 401/403 재시도 없음 · 자격 거절은 세션 POST 와 Basic 확인, 두 신호가 모두 거절일 때만 단정(호스트당 자격 요청 ≤ 2회) · Basic 전용 RMC 가 세션 POST 에 401 을 주는 정상 경우를 오판하지 않는다(`--auth basic` 으로 POST 생략 가능) ·
    세션 401 은 이미 받은 리소스를 다시 요청(canary)해 토큰 만료로 확인된 뒤에만 재로그인 · 신호를 받아도 `finally` 로 세션 DELETE.
-4. 크기 상한을 넘는 바이너리는 잘린 파일을 남기지 않고 받지 않은 채 `excluded`(크기 기록)로 둔다 — 잘린 펌웨어 이미지는 쓸모없고, `truncated`(= 미완료)로 세면 "error 0" 과 충돌한다. 기본 상한 64 MiB(승인된 계획의 256 MiB 에서 구현 중 낮춤 — 요확인: DL380 `/fwrepo` 펌웨어 이미지 수백 MB 는 mock 데이터로 쓸모없고 BMC 전송 속도로 호스트당 수십 분을 먹는다), `--max-bytes-per-resource 0` 이면 무제한.
+4. 크기 상한을 넘는 바이너리는 잘린 파일을 남기지 않고 받지 않은 채 `excluded`(크기 기록)로 둔다 — 잘린 펌웨어 이미지는 쓸모없고, `truncated`(= 미완료)로 세면 "error 0" 과 충돌한다. 기본 상한 64 MiB(→ 2026-10-22 에 사용자가 256 MiB 로 되돌리고 oversize 를 INCOMPLETE 로 확정. 당시 근거: DL380 `/fwrepo` 펌웨어 이미지 수백 MB 는 mock 데이터로 쓸모없고 BMC 전송 속도로 호스트당 수십 분을 먹는다), `--max-bytes-per-resource 0` 이면 무제한.
 5. `ServerSentEventUri` 와 `.../SSE` 는 정책 제외(GET 하면 스트림이 멈춰 일시 장애로 오분류되고 재시도만 반복). 비-2xx 본문은 저장하지 않는다(404 가 200 저장본을 덮어쓰고, `convert_dmtf_mockup` 이 `@odata.id` 있는 본문을 200 으로 되살린다).
 
 ### 근거 (실측)
