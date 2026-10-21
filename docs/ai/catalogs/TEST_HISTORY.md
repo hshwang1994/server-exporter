@@ -1,6 +1,26 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-22 — redfish_full_mirror 2.1 (못 받으면 INCOMPLETE · 256 MiB 복원 · 재생 도구 2건) — 도구 시험 100건 · Python 3.6.8 · 에뮬레이터 3대 · 실측 미러 7개 재생
+
+> 정본: `docs/develop/08-onsite-capture.md` · `tests/unit/test_full_mirror_dryrun.py` · `tests/unit/test_mirror_replay_tools.py`. 합성 서비스 · iLO 에뮬레이터 · 저장소 밖 실측 미러(`C:\github\서버mock데이터`) 재생 — **용인 11대 실장비 캡처는 하지 않았다(사용자가 현장에서 돌린다, NEXT_ACTIONS 첫 항목)**. 제품 수집 코드 변경 0. 판정 `READY_FOR_FIELD` (`FIELD_VERIFIED` 아님).
+
+| 구분 | 결과 |
+|---|---|
+| 도구 시험 (Windows Python 3.13.15) | `test_full_mirror_dryrun.py` + 신규 `test_mirror_replay_tools.py` **99 passed, 1 skipped** (55.5 s, 커밋된 코드로 재실행). skip 1 은 POSIX `flock` 시험(Windows 에서는 의미 없음). 10-21 의 48건에서 늘어난 것: 못 받은 것 = INCOMPLETE 판정 · origin/cause · oversize · 무제한 · 잘린 다운로드 · resume 복구 · 디스크 가득 참/저장 실패 중단 · integrity · 잠금 · 비-GET 정적+동적 검사 · 캡처 -> 재생 -> 재크롤 왕복 + 재생 도구 22건 |
+| 소비자 · 통합 | `tests/integration -m "not live"` + `test_hpe_dl380_audit_fixes.py` + `test_pre_commit_docs20_sync_check.py` + `test_redfish_coverage_audit.py` **394 passed, 6 skipped, 1 deselected** |
+| e2e / regression | `tests/e2e tests/regression` **1094 passed, 12 skipped, 6 xfailed** (73.5 s, 커밋된 코드) — 변경 전 기준선과 같은 수. 맞추려고 시험을 약화하지 않았다: 옛 정책(`device_error` 는 정보, 64 MiB 초과는 제외)을 단언하던 시험 2건은 새 정책(INCOMPLETE · `oversize`)에 맞춰 **더 엄격하게** 다시 썼다 |
+| Python 3.6.8 (Rocky 8 컨테이너, C 로캘) | 도구 시험 중 3.6 에서 의미 있는 부분 **72 passed**, 6 deselected (개발용 변환기 · `ast feature_version` · 재생기를 쓰는 시험) |
+| HTTPS 에뮬레이터 크롤 (Python 3.6.8) | DL360 **1806** · DL380a Gen12 **2162** · DL325 Gen10+ FC **1269** 리소스 모두 `COMPLETE`. 산출물 권한 폴더 700 / 파일 600 · 잔여물(`.part` / `.tmp`) 0 · `--resume` 요청 111회 1.8 s · SIGTERM -> 종료 130 후 이어받기 `COMPLETE` · 같은 BMC / 같은 폴더 중복 실행 -> 종료 5 · 틀린 비밀번호 -> 3~4 요청 안에 ABORT. DL360 Gen12 에뮬레이터는 에뮬레이터가 기동 중 죽어 대상에서 뺐다(도구 문제 아님) |
+| 최종 번들 (tar.gz) | 새 Rocky 8 컨테이너에서 체크섬 OK · README 의 무제한 실행(`MIRROR_ARGS="--max-bytes-per-resource 0" MIRROR_JOBS=2`) 3/3 `COMPLETE` · resume 2.5 s · 틀린 비밀번호 ABORT(종료 1) · 잠금 종료 5 · SIGTERM -> resume 정상. 그 뒤 README 문구 2곳만 고쳐 다시 만들었다 — 도구 2파일은 커밋된 HEAD 블롭과 바이트 동일, 압축 해제 diff 0, `bash -n` · `py_compile` 통과. 도구 파일이 그대로라 동작 시험은 되풀이하지 않았다 |
+| 실측 미러 7개 재생 (저장소 밖) | 재생 봉투 해시 **7/7 불변** · 제거된 키 0 · Dell 은 페이지 키 +59(+403 2건) 가 늘고 `Lclog/Entries` · `DellSensors` · `DellSlots` 의 머리가 1쪽으로 교정됨 · `DellSensors` 2쪽 / 62 멤버 일치(예전엔 마지막 쪽 12 만 남음) · `Lclog/Entries` 58쪽 2851 vs 선언 2841 은 `page_mismatch` 로 기록(20분 크롤 중 로그가 자람 - 조용히 넘기지 않음). 커밋된 실측 fixture 4종을 옛 / 새 재생기로 각각 재생성해 **바이트 동일 4/4** |
+| 왕복 (캡처 -> 재생 맵 -> HTTP Mock -> v2 재크롤) | 실측 v1 미러: CSUS ×4 · DL380 · Lenovo 는 2xx 본문 동일 · 비-2xx 상태 보존. Dell 은 `FirmwareInventory/<id>/Oem/Dell/DellSoftwareInventory/...` 62건의 별칭 요청 경로를 v1 트리가 담고 있지 않아 되살리지 못함(v1 한계 - 문서화). v2 에뮬레이터 트리 3개(DL360 1807 · DL380a 2163 · DL325 1270): 누락 0 · 본문 차이 0 · 상태 보존 |
+| 정적 검사 | `py_compile` · `bash -n` · AST 미정의 이름 / 미사용 임포트 clean · `verify_harness_consistency.py` 통과 · `verify_vendor_boundary.py` 통과 · `verify_docs_references.py` 통과(387 파일) · `check_project_map_drift.py` 일치(`--update` - tests 지문: 신규 시험 파일) |
+| 고치며 잡은 것 (전부 도구 결함) | `--resume` 이 `_fsmap.json` 이 뒤처진 상태에서 좋은 파일을 재사용하지 못함 -> 디스크 트리 스캔 병합 · 루트 JSON 저장이 실패하면 그 링크를 따라가지 않아 크롤이 멈춤 -> 저장 실패해도 링크는 계속 · 재생기가 v1 `status 0`(전송 실패)을 응답으로 되살림 -> 제외, v1 manifest 의 `failed` / `auth_failures` 미반영 -> 반영 · NTFS 대소문자 무시로 `_fsmap.json` 폴더명이 디스크와 어긋나 별칭 경로 유실 -> 소문자 조회, 키는 `/redfish/v1` 경로만 허용 |
+| 실행하지 않은 것 | `prodgen` gate G01~G20 / `--dry-run`(이전에 시간 초과 - **통과로 기록하지 않는다**; 변경 경로가 `production_manifest.yml` 의 `runtime_roots` 밖이라 승격 해당 없음) · `tests/unit` 전체를 한 프로세스로 돌리는 실행(10-19 이후 메모리 / 정체 문제 - 닿는 범위만 분할) · `ansible-playbook --syntax-check`(제품 코드 변경 0) · 용인 실장비(접근하지 않음) · 대용량 첨부 무제한 실수집의 저장 공간 / BMC 부하 |
+
 ## 2026-10-21 — redfish_full_mirror v2 (운영망 원본 캡처 도구) — 단위 48건 · Python 3.6.8 · HTTPS 에뮬레이터 3대
+
+> 2026-10-22 에 정책이 바뀌어(못 받은 것 = INCOMPLETE, 상한 256 MiB 복원) 이 절의 시험 수 48건과 `device_error` 표현은 2026-10-22 절로 갱신됐다. 아래는 그날 시점의 기록이다.
 
 > 정본: `docs/develop/08-onsite-capture.md` · `tests/unit/test_full_mirror_dryrun.py`. 합성 서비스와 iLO 에뮬레이터(HPE CSM Redfish Interface Emulator) 재생 — **실장비(용인 11대)는 사용자가 현장에서 돌린다(NEXT_ACTIONS 첫 항목)**.
 

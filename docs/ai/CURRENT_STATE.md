@@ -1,5 +1,20 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-22 — 미러 도구 v2.1 최종 마무리 (못 받은 것은 INCOMPLETE · 256 MiB 복원 · 재생 도구 2건 · 최종 번들) — READY_FOR_FIELD
+
+> 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-22 · `tests/redfish-probe/redfish_full_mirror.py`(2.1.0) · `replay_full_mirror.py` · `tests/integration/convert_dmtf_mockup.py` · `tests/unit/test_mirror_replay_tools.py`.
+
+- **계기**: 사용자 - 10-21 보고의 요확인 2건(`device_error` 를 정보로 둠, 크기 상한 64 MiB)에 대한 확정 지시: `device_error` 분류는 유지하되 남으면 INCOMPLETE, 상한 256 MiB 복원, 상한 초과도 COMPLETE 금지, 후속 2건(재생기 페이지네이션 · 변환기 상태 무시) 처리, 최종 번들.
+- **확정 정책(도구)**: 못 받은 것(`unresolved` · `device_error` · `oversize` · 큐 잔량 · manifest 와 디스크가 어긋난 `integrity`)이 하나라도 있으면 INCOMPLETE. 정보(`absent` · `not_gettable` · `rejected` · `outside_account`)는 그대로, `--strict` 는 거기에 `outside_account` · `rejected` · `count_mismatch` 를 더한다.
+  실패 항목마다 `origin`(device · device_or_network · storage · tool · interrupted)과 `cause` 로 장비 문제와 도구·저장소 문제를 구별(`failure_origins`). 정상 저장본은 재시도 실패로 덮이지 않는다.
+- **바이너리**: 256 MiB 복원(`0`=무제한), 초과는 `oversize`(URI · Content-Type · 크기 · 상한 · 원인). 디스크 스트리밍(`.part` -> `Content-Length` 일치 시에만 정식 이름), 64 MiB 넘는 텍스트도 디스크로, 잘린 응답은 재시도, 디스크 쓰기 실패는 `origin=storage`(연속 10회면 `storage_error` 중단, 저장 실패한 JSON 의 하위 링크는 계속 따라감), SHA-256 기록, `--resume` 은 크기(64 MiB 이하는 해시)가 맞는 저장본만 재사용.
+- **안전**: 같은 출력 폴더 / 같은 BMC 중복 실행은 `flock` 으로 차단(종료 5), 캡처 파일 `umask 077`, 강제 종료 잔여물(`.dl-*.part` · `<산출물>.tmp`) 정리(정상 `raw.tmp` 는 보존), 시작 시 디스크 여유 경고, 비-GET 요청은 세션 POST/DELETE 뿐임을 소스 정적 검사 + 요청 로그로 고정.
+- **재생 도구 2건**: `replay_full_mirror.build_response_map` - v2 `_fsmap.json` 요청 경로 키(소문자 폴더 조회 - NTFS), v1 `nextLink` 사슬로 후속 페이지 복원, 페이지/멤버 수 대조(`pages` · `page_mismatch`), 헤더 상태 + manifest 상태 보존(status 0 제외, `/redfish/v1` 밖 경로 제외). `convert_dmtf_mockup._load_mockup` 은 같은 로더(`load_mockup_records`).
+- **검증(실장비 아님)**: 도구 시험 100건(99 통과 + Windows 전용 skip 1) · 소비자·통합 394 통과 · `tests/e2e tests/regression` 1094 / 12 skipped / 6 xfailed(이전과 동일) · Python 3.6.8(Rocky 8) 도구 시험 72 통과 · 에뮬레이터 3대 HTTPS 크롤 COMPLETE ·
+  실측 미러 7개 재생 봉투 해시 7/7 불변 · 커밋된 실측 fixture 4종을 옛/새 재생기로 재생성해 바이트 동일 · 캡처 -> 재생 맵 -> HTTP Mock -> 재크롤 왕복: v2 에뮬레이터 트리 3개 누락 0. 수치와 한계는 TEST_HISTORY 2026-10-22.
+- **번들**: `redfish_mirror_bundle.tar.gz`(4파일 + `.sha256`)를 원래 이름으로 저장소 밖 `C:\github\서버mock데이터\_capture_bundle\` 와 작업 경로에 두고 이전 번들은 삭제. 용인 11대 `targets.txt`(CSUS 3 `basic`, 나머지 `auto`), README 에 크기 제한 없이 받는 법 · 교체 안내.
+- **판정**: 개발 환경에서 재현 가능한 시험은 모두 통과했고 번들이 준비됐다 = READY_FOR_FIELD. 용인 실장비 캡처를 하지 않았으므로 FIELD_VERIFIED 가 아니다. production 승격 해당 없음(변경 경로가 `runtime_roots` 밖), `prodgen` gate 는 실행하지 않았다(통과로 기록하지 않음).
+
 ## 일자: 2026-10-21 — Redfish 전수 미러 도구 v2 (운영망 원본 캡처: 누락 0 · 오류 판정 정리 · 세션 인증 · 병렬 러너)
 
 > 정본: `docs/develop/08-onsite-capture.md` · `tests/redfish-probe/redfish_full_mirror.py` · `tests/redfish-probe/mirror_many.sh` · `tests/unit/test_full_mirror_dryrun.py` · `docs/reference/decision-log.md` 2026-10-21.
@@ -10,13 +25,13 @@
 - **사용자 결정(2026-10-21)**: 저장소에 반영 · 인증 "세션 우선, 실패 시 Basic" · 범위 = 표준 고정 주소 3 + 레지스트리·스키마 본문 + 액션 주소 GET + 바이너리 첨부 전부 · "받을 수 있는 것을 다 받았으면 성공(error 0)".
 - **바꾼 것(도구만 — 제품 수집 코드 변경 0)**: `redfish_full_mirror.py` v2 전면 재작성(stdlib · Python 3.6+). 링크 발견 확장(Actions `target` · `*Uri`/`url`/`href` 키 · `/redfish/` 문자열 · 응답 `Link` 헤더 · `$metadata` 의 로컬 스키마) ·
   비-JSON/바이너리를 `raw.<ext>` 로 전체 저장(스텁 `index.json` 은 `@odata.id` 없는 유효 JSON — 소비자 호환) · 판정 버킷(`ok`/`ok_empty`/`ok_raw` · 오류 아님: `absent` 404/410 · `not_gettable` 405/501 · `rejected` 4xx · `outside_account` 401/403 ·
-  `device_error` 재시도 뒤에도 같은 5xx/무응답이나 다른 요청은 정상 · 미완료 사유는 `unresolved` 뿐) · 일시 오류 backoff + Retry-After + 마지막 sweep · `--resume` · `//` 접기 · Windows 예약어/대소문자 충돌/긴 경로 안전 매핑(`_fsmap.json`) ·
+  `device_error` 재시도 뒤에도 같은 5xx/무응답이나 다른 요청은 정상 · 미완료 사유는 `unresolved` 뿐 → 2026-10-22 에 device_error · oversize 도 미완료로 확정) · 일시 오류 backoff + Retry-After + 마지막 sweep · `--resume` · `//` 접기 · Windows 예약어/대소문자 충돌/긴 경로 안전 매핑(`_fsmap.json`) ·
   원자적 기록 · lone surrogate 안전 · SSE 정책 제외 · 같은 호스트 리다이렉트만 추종(토큰 유출 차단) · 환경 프록시 무시.
   신규 `mirror_many.sh`(호스트당 프로세스 1 · 같은 IP 직렬화 · 비밀번호는 `BMC_PW` → `--password-env`) · `--summarize`.
 - **잠금 방지(인증 설계)**: 401/403 재시도 없음 · 자격 거절은 신호 2개(세션 POST + Basic 확인)가 모두 거절일 때만 단정 → 호스트당 자격 요청 ≤ 2회에 중단 · Basic 전용 RMC 의 세션 POST 401 을 오판하지 않음(`--auth basic` 지정 가능) ·
   세션 401 은 canary GET 으로 만료를 확인한 뒤에만 재로그인 · 신호(SIGTERM/SIGHUP) 포함 `finally` 로 세션 DELETE 보장 · 비밀번호/토큰은 어떤 파일에도 기록하지 않음.
 - **호환**: CLI 플래그 전부 유지 · manifest v1 키 유지(`failed` = `unresolved`, `auth_failures` = `outside_account` 별칭). **의미 변경**: 404 는 더 이상 `failed` 에 들어가지 않는다(`absent`). 시험 1건(`test_resilient_to_dead_links`) 단언 갱신.
-- **시험(실장비 아님)**: 단위 48건(기존 7 + 신규 41 — 세션 · 토큰 만료 · 잠금 방지 · 재시도 · 장애→`--resume` 수렴 · 바이너리 · 파일명 안전 · py3.6 구문 가드 · 소비자 호환) · Rocky 8 컨테이너(Python 3.6.8, C 로캘) HTTPS 에뮬레이터 3대 크롤 COMPLETE ·
+- **시험(실장비 아님)**: 단위 48건(기존 7 + 신규 41, 2026-10-22 에 계속 늘림 - 세션 · 토큰 만료 · 잠금 방지 · 재시도 · 장애→`--resume` 수렴 · 바이너리 · 파일명 안전 · py3.6 구문 가드 · 소비자 호환) · Rocky 8 컨테이너(Python 3.6.8, C 로캘) HTTPS 에뮬레이터 3대 크롤 COMPLETE ·
   에뮬레이터 정답지 mockup 대조 누락 0 · `replay_full_mirror` · `convert_dmtf_mockup` · `redfish_coverage_diff` 소비 정상 · 러너 bash 4.4 / xargs 없음. 수치는 TEST_HISTORY 2026-10-21.
 - **운영 영향**: 제품 수집 경로(Jenkins · Ansible · gather) 영향 0. `tests/**` 는 production 제외 경로라 승격 해당 없음. **용인 실장비 캡처는 사용자가 현장에서 실행** — 실장비 검증 전(NEXT_ACTIONS).
 

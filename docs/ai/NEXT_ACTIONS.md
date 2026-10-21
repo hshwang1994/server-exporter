@@ -1,16 +1,18 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
-## Redfish 전수 미러 v2 (2026-10-21) — 남은 항목
+## Redfish 전수 미러 v2.1 (2026-10-22) — 남은 항목
 
-> 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-21. 도구 · 시험 · 문서는 같은 날 main 에 들어갔다 (`tests/**` 는 production 제외 경로 — 승격 해당 없음).
+> 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-22. 도구 · 시험 · 문서는 같은 날 main 에 들어갔다 (`tests/**` 는 production 제외 경로 — 승격 해당 없음. `production_manifest.yml` 의 `runtime_roots` 에 닿지 않음).
 
-- [ ] **[HIGH / 사이트 — 사용자] 용인 11대 실장비 캡처** — 번들(`redfish_mirror_bundle.tar.gz` — 저장소 밖 scratchpad 에서 생성)을 운영망 서버에 풀어 `bash mirror_many.sh targets.txt`. HPE CSUS RMC 3대는 targets 4번째 열을 `basic` 으로.
-      끝나면 호스트별 `RESULT` 가 `COMPLETE` 인지, `outside_account` · `device_error` · `excluded` 목록을 확인한다(08-onsite-capture.md 5절). `INCOMPLETE` 면 같은 폴더에 `MIRROR_ARGS=--resume` 으로 재실행. 결과 트리는 `C:\github\서버mock데이터` 에 보관 후 `convert_dmtf_mockup.py` 재생.
-- [ ] **[MED / 실장비 미검증]** 세션 로그인 경로(에뮬레이터는 세션 POST 에 401 을 줘서 Basic 으로 갔다 — 세션 성공 경로는 합성 서비스로만 검증) · `device_error` 분류 · `--legacy-tls` ·
-      대용량 바이너리(DL380 `/fwrepo` 펌웨어 이미지 수백 MB — 기본 상한 64 MiB 로 제외되고 `excluded` 에 크기가 남는다) · CSUS RMC Basic 전용 가정. 첫 실장비 결과의 manifest `session` · `basic_probe` 로 확인한다.
-- [ ] **[LOW / 판단] `--max-bytes-per-resource` 기본 64 MiB**(승인된 계획은 256 MiB — 펌웨어 이미지 시간 부담으로 낮춤) — 첫 실캡처의 `excluded`(oversize) 목록을 보고 필요한 첨부가 빠졌으면 `MIRROR_ARGS="--max-bytes-per-resource 0"` 로 해당 호스트만 다시 받는다.
-- [ ] **[LOW / 후속] `replay_full_mirror.build_response_map` 페이지네이션** — 페이지를 컬렉션 `@odata.id` 로 키잉해 마지막 페이지만 남는다(DellSensors 12/62). 캡처 파일에는 모든 페이지가 있다.
-- [ ] **[LOW / 후속] `convert_dmtf_mockup._load_mockup` 이 `headers.json._status` 를 무시** — `@odata.id` 가 있는 모든 dict 를 200 으로 되살린다. v2 트리는 비-2xx 본문을 저장하지 않아 무해하지만 v1 트리(404 본문 저장)와 섞이면 영향이 있다.
+- [ ] **[HIGH / 사이트 — 사용자] 용인 11대 실장비 캡처 (READY_FOR_FIELD — 실장비 검증 전)** — 최종 번들 `redfish_mirror_bundle.tar.gz`(+ `.sha256`, 저장소 밖 `C:\github\서버mock데이터\_capture_bundle\`)을 운영망 서버에 풀어
+      `MIRROR_ARGS="--max-bytes-per-resource 0" MIRROR_JOBS=2 bash mirror_many.sh targets.txt`. HPE CSUS RMC 3대는 targets 4번째 열 `basic`. 호스트별 `RESULT` 가 `COMPLETE` 인지, 아니면 `incomplete_reasons` · `failure_origins` 로 원인을 가르고 같은 폴더에 `MIRROR_ARGS="--resume ..."` 로 재실행한다(08-onsite-capture.md 5절).
+      결과 트리는 `C:\github\서버mock데이터` 에 보관(소유자만 읽기 권한)하고, fixture 로 쓰기 전에 08-onsite-capture.md 8절의 민감정보 점검을 한다.
+- [ ] **[MED / 실장비 미검증]** 세션 로그인 성공 경로(에뮬레이터는 세션 POST 에 401 을 줘서 Basic 으로 갔다 — 합성 서비스로만 검증) · `device_error` 실례(장비가 특정 URI 에 계속 5xx) · `--legacy-tls` ·
+      크기 제한 없는 대용량 첨부(DL380 `/fwrepo` 펌웨어 이미지 수백 MB — 저장 공간과 BMC 부하 실측) · CSUS RMC Basic 전용 가정. 첫 실장비 결과의 manifest `session` · `basic_probe` · `failure_origins` 로 확인한다.
+- [x] **[DONE 2026-10-22] `replay_full_mirror.build_response_map` 페이지네이션** — 요청 경로(`_fsmap.json`) 기반 키 + v1 `nextLink` 사슬 복원 + 페이지/멤버 수 대조 기록. `DellSensors` 62개 전부 재생, `Lclog/Entries` 58페이지 2851개 대 선언 2841 불일치 기록. `tests/unit/test_mirror_replay_tools.py`.
+- [x] **[DONE 2026-10-22] `convert_dmtf_mockup._load_mockup` 의 `headers.json._status` 무시** — 재생기와 같은 로더를 써 HTTP 상태 보존(오류 본문을 200 으로 올리지 않음), v1/v2 manifest · DMTF mockup 호환, 비-JSON 안내 파일 건너뜀.
+- [ ] **[LOW / 관찰] 커밋된 실측 fixture(`real_dell_r740` · `real_hpe_dl380` · `real_lenovo_sr650`)가 현재 gather 보다 오래됨** — 같은 미러에서 `capture_mirror_fixture.py` 로 다시 생성하면 recording/golden 이 달라진다(옛·새 재생기로는 동일하므로 이번 변경과 무관). 다시 생성할지는 제품 동작 결정이라 보류. `real_hpe_csus3200` 은 동일.
+- [ ] **[LOW / 한계] v1 트리의 별칭 요청 경로** — 링크가 가리킨 경로와 본문 `@odata.id` 가 다른 별칭(Dell `FirmwareInventory/<id>/Oem/Dell/DellSoftwareInventory/...` 62개)은 요청 경로가 기록되지 않은 v1 트리에서 복원할 수 없다. 새 도구 트리는 영향 없음.
 
 ## ESXi 전원·온도·팬 · Linux iSCSI (2026-10-19, 셋째) — 남은 항목
 
