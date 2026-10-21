@@ -15,6 +15,7 @@
 """
 import base64
 import glob
+import hashlib
 import json
 import os
 import re
@@ -258,12 +259,13 @@ def make_handler(resources, **opts):
     """resources(키 -> 본문)를 서빙하는 핸들러 클래스와 상태(state)를 만든다.
 
     opts: user/password/sessions/basic/login_status/session_limit/expire_after/status/flaky/
-          retry_after/raw/headers/trip/slow/accept_json_406/session_slash
+          retry_after/raw/headers/trip/slow/accept_json_406/session_slash/empty/truncate
     state: log=[(method, path, 인증종류)], deleted=[세션번호], tokens, authed_gets, down
     """
     cfg = {"user": "x", "password": "y", "sessions": True, "basic": True, "login_status": None,
            "session_limit": False, "expire_after": None, "status": {}, "flaky": {}, "retry_after": {},
-           "raw": {}, "headers": {}, "trip": {}, "slow": {}, "accept_json_406": (), "session_slash": False}
+           "raw": {}, "headers": {}, "trip": {}, "slow": {}, "accept_json_406": (), "session_slash": False,
+           "empty": {}, "truncate": {}}
     cfg.update(opts)
     state = {"tokens": {}, "next": 1, "authed_gets": 0, "log": [], "deleted": [], "down": False,
              "flaky": dict((k, list(v)) for k, v in cfg["flaky"].items()),
@@ -327,7 +329,21 @@ def make_handler(resources, **opts):
                 return self._send(code, {"error": {"message": "forced %d" % code}}, hdr)
             if key in cfg["accept_json_406"] and self.headers.get("Accept") == "application/json":
                 return self._send(406, {"error": {"message": "not acceptable"}})
+            if key in cfg["empty"]:                       # 204 / 본문 없는 2xx
+                self.send_response(cfg["empty"][key])
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             extra = cfg["headers"].get(key, {})
+            if key in cfg["truncate"]:                    # Content-Length 는 전체, 실제로는 일부만 보내고 끊는다
+                ctype, data = cfg["raw"][key]
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data[:cfg["truncate"][key]])
+                self.wfile.flush()
+                return
             if key in cfg["raw"]:
                 ctype, data = cfg["raw"][key]
                 return self._send(200, None, extra, raw=data, ctype=ctype)
@@ -579,22 +595,68 @@ def test_retry_after_parsing():
     assert f(formatdate(time.time() + 3600, usegmt=True), 60) == 60.0
 
 
-def test_persistent_500_on_healthy_device_is_device_error_not_failure(tmp_path, fast):
+def test_persistent_500_is_device_error_and_incomplete(tmp_path, fast):
+    """장비가 특정 URI 에 계속 500 을 주면 수집이 끝난 것이 아니다: device_error 로 원인을 남기고 기본 결과는 INCOMPLETE."""
     res = _tree("/redfish/v1/Broken", "/redfish/v1/Fine")
-    cls, st = make_handler(res, status={"/redfish/v1/Broken": 500})
     out = str(tmp_path / "m")
+    cls, st = make_handler(res, status={"/redfish/v1/Broken": 500})
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 1
+    man = _manifest(out)
+    assert man["result"] == "INCOMPLETE" and man["incomplete_reasons"] == ["device_error=1"]
+    [entry] = man["device_error"]
+    assert (entry["path"], entry["status"], entry["origin"], entry["cause"]) == (
+        "/redfish/v1/Broken", 500, "device", "http_500")
+    assert entry["attempts"] >= 4 and man["unresolved"] == [] and man["failed"] == []
+    assert man["failure_origins"] == {"device": 1} and man["complete_with_exclusions"] is False
+    assert man["fetched_ok"] == 2                                  # root + Fine - 다른 리소스는 영향을 받지 않는다
+    assert os.path.isfile(os.path.join(out, "redfish", "v1", "Fine", "index.json"))
+    assert not os.path.exists(os.path.join(out, "redfish", "v1", "Broken", "index.json"))
+    out2 = str(tmp_path / "strict")
+    cls, st = make_handler(res, status={"/redfish/v1/Broken": 500})
+    with _serve_cls(cls) as port:
+        assert _run(port, out2, "--strict") == 1                   # --strict 는 기본보다 느슨해지지 않는다
+    # 장비가 회복하면 같은 폴더에 --resume 으로 빈 곳만 받아 COMPLETE
+    cls, st = make_handler(res)
+    with _serve_cls(cls) as port:
+        assert _run(port, out, "--resume") == 0
+    man = _manifest(out)
+    assert man["result"] == "COMPLETE" and man["device_error"] == [] and man["fetched_ok"] == 3
+
+
+def test_strict_also_counts_permission_and_rejected_gaps(tmp_path, fast):
+    res = _tree("/redfish/v1/Secret", "/redfish/v1/Odd")
+    kw = {"status": {"/redfish/v1/Secret": 403, "/redfish/v1/Odd": 400}}
+    cls, st = make_handler(res, **kw)
+    with _serve_cls(cls) as port:
+        assert _run(port, str(tmp_path / "default")) == 0           # 기본: 정보일 뿐 미완료가 아니다
+    cls, st = make_handler(res, **kw)
+    with _serve_cls(cls) as port:
+        assert _run(port, str(tmp_path / "strict"), "--strict") == 1
+    assert _manifest(str(tmp_path / "strict"))["incomplete_reasons"] == [
+        "strict:outside_account=1", "strict:rejected=1"]
+
+
+def test_failed_retry_never_overwrites_good_saved_data(tmp_path, fast):
+    """정상 저장본은 같은 폴더에서 다시 받다 실패해도 지워지거나 덮이지 않는다. 디스크에 남은 잔여는 manifest 가 알린다."""
+    res = _tree("/redfish/v1/A", "/redfish/v1/B")
+    out = str(tmp_path / "m")
+    cls, st = make_handler(res)
     with _serve_cls(cls) as port:
         assert _run(port, out) == 0
-    man = _manifest(out)
-    assert man["result"] == "COMPLETE" and man["complete_with_exclusions"] is True
-    assert [e["path"] for e in man["device_error"]] == ["/redfish/v1/Broken"]
-    assert man["unresolved"] == [] and man["failed"] == []
-    out2 = str(tmp_path / "m2")
-    cls, st = make_handler(res, status={"/redfish/v1/Broken": 500})
+    a_index = os.path.join(out, "redfish", "v1", "A", "index.json")
+    before = _read(a_index)
+    cls, st = make_handler(res, status={"/redfish/v1/A": 500})
     with _serve_cls(cls) as port:
-        assert _run(port, out2, "--strict") == 1                   # --strict 는 device_error 도 미완료
-    assert _manifest(out2)["result"] == "INCOMPLETE"
-
+        assert _run(port, out) == 1                                 # --resume 없이 같은 폴더에 다시 실행
+    assert _read(a_index) == before                                 # 실패 응답이 정상 저장본을 덮지 않았다
+    man = _manifest(out)
+    assert [e["path"] for e in man["device_error"]] == ["/redfish/v1/A"]
+    assert man["integrity"]["unaccounted"] == 1                     # 이번 실행이 만들지 않은 저장본이 디스크에 있음을 알린다
+    cls, st = make_handler(res, status={"/redfish/v1/A": 500})
+    with _serve_cls(cls) as port:
+        assert _run(port, out, "--resume") == 0                     # --resume 은 디스크의 정상 저장본을 재사용한다
+    assert _read(a_index) == before and _manifest(out)["result"] == "COMPLETE"
 
 def test_outage_is_unresolved_and_resume_converges(tmp_path, fast):
     """장비가 도중에 불안정해지면 unresolved(INCOMPLETE). 같은 -D 로 --resume 하면 빈 곳만 받아 COMPLETE."""
@@ -701,17 +763,33 @@ def test_metadata_xml_saved_raw_and_local_schema_followed(tmp_path, fast):
     assert man["fetched_ok"] == 2                       # root + Foo (wellknown 은 fetched_ok 에 불포함)
 
 
-def test_oversize_binary_is_excluded_not_failing(tmp_path, fast):
+def test_oversize_binary_is_recorded_incomplete_and_resumable_unlimited(tmp_path, fast):
+    """크기 상한으로 못 받은 첨부는 URI / Content-Type / 크기 / 원인을 남기고 COMPLETE 가 아니다. 상한 해제 + --resume 으로 받는다."""
+    blob = bytes(bytearray(range(256))) * 20                        # 5120 bytes
     res = {"/redfish/v1": _root(DownloadURI="/redfish/v1/Big")}
-    cls, st = make_handler(res, raw={"/redfish/v1/Big": ("application/octet-stream", b"x" * 5000)})
+    raw = {"/redfish/v1/Big": ("application/octet-stream", blob)}
     out = str(tmp_path / "m")
+    cls, st = make_handler(res, raw=raw)
     with _serve_cls(cls) as port:
-        assert _run(port, out, "--max-bytes-per-resource", "2000") == 0
+        assert _run(port, out, "--max-bytes-per-resource", "2000") == 1
     man = _manifest(out)
-    assert man["result"] == "COMPLETE" and man["complete_with_exclusions"] is True
-    assert [(e["reason"], e["bytes"]) for e in man["excluded"]] == [("oversize", 5000)]
+    assert man["result"] == "INCOMPLETE" and man["incomplete_reasons"] == ["oversize=1"]
+    [entry] = man["oversize"]
+    assert (entry["path"], entry["content_type"], entry["content_length"], entry["bytes"], entry["limit"]) == (
+        "/redfish/v1/Big", "application/octet-stream", len(blob), len(blob), 2000)
+    assert entry["reason"] == "size_limit" and entry["origin"] == "policy" and man["excluded"] == []
     assert not os.path.exists(os.path.join(out, "redfish", "v1", "Big"))
-
+    assert not [f for f in os.listdir(out) if f.endswith(".part")]
+    cls, st = make_handler(res, raw=raw)
+    with _serve_cls(cls) as port:
+        assert _run(port, out, "--max-bytes-per-resource", "0", "--resume") == 0
+    man = _manifest(out)
+    assert man["result"] == "COMPLETE" and man["oversize"] == [] and man["summary"]["ok_raw"] == 1
+    d = os.path.join(out, "redfish", "v1", "Big")
+    stub = json.loads(_read(os.path.join(d, "index.json")).decode("utf-8"))
+    assert _read(os.path.join(d, "raw.bin")) == blob
+    assert stub["_bytes"] == len(blob) and stub["_sha256"] == hashlib.sha256(blob).hexdigest()
+    assert man["non_json"][0]["sha256"] == stub["_sha256"]
 
 def test_action_target_405_is_not_an_error(tmp_path, fast):
     act = "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset"
@@ -1030,3 +1108,373 @@ def test_interrupt_still_logs_out_and_writes_outputs(tmp_path, fast, monkeypatch
     assert rc == 130 and man["interrupted"] is True and man["result"] == "INCOMPLETE"
     assert st["deleted"] == [1] and man["truncated"] > 0
     assert os.path.isfile(os.path.join(out, "_fsmap.json"))
+
+
+# ================================================================================================
+# v2.1 시험 E - 정책 확정: 상태 분류 / 빈 응답 / 잘린 다운로드 / 저장 무결성
+# ================================================================================================
+
+def _token_gets(state, path):
+    return [e for e in state["log"] if e[0] == "GET" and e[1] == path and e[2] == "token"]
+
+
+@pytest.mark.parametrize("code,bucket", [(404, "absent"), (410, "absent"), (405, "not_gettable"),
+                                         (501, "not_gettable"), (400, "rejected"), (409, "rejected"),
+                                         (415, "rejected"), (422, "rejected"), (401, "outside_account"),
+                                         (403, "outside_account")])
+def test_informational_statuses_are_requested_once_and_are_not_errors(tmp_path, fast, code, bucket):
+    cls, st = make_handler(_tree("/redfish/v1/X", "/redfish/v1/Ok"), status={"/redfish/v1/X": code})
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 0
+    man = _manifest(out)
+    assert man["result"] == "COMPLETE" and man["incomplete_reasons"] == []
+    assert [(e["path"], e["status"]) for e in man[bucket]] == [("/redfish/v1/X", code)]
+    assert len(_token_gets(st, "/redfish/v1/X")) == 1                      # 재시도 없음 (잠금 위험 / 무의미한 부하)
+    assert man["unresolved"] == [] and man["device_error"] == [] and man["fetched_ok"] == 2
+
+
+@pytest.mark.parametrize("code", [500, 502, 503, 504, 408, 429])
+def test_transient_statuses_are_retried_then_incomplete_device_error(tmp_path, fast, code):
+    cls, st = make_handler(_tree("/redfish/v1/X", "/redfish/v1/Ok"), status={"/redfish/v1/X": code})
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 1
+    man = _manifest(out)
+    assert man["result"] == "INCOMPLETE" and man["incomplete_reasons"] == ["device_error=1"]
+    assert man["device_error"][0]["cause"] == "http_%d" % code and man["device_error"][0]["origin"] == "device"
+    assert len(_token_gets(st, "/redfish/v1/X")) >= 4                      # 인라인 재시도 + 마지막 sweep
+
+
+def test_empty_responses_are_ok_empty(tmp_path, fast):
+    res = {"/redfish/v1": _root(A={"@odata.id": "/redfish/v1/Nothing"}, B={"@odata.id": "/redfish/v1/Blank"})}
+    cls, st = make_handler(res, empty={"/redfish/v1/Nothing": 204, "/redfish/v1/Blank": 200})
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 0
+    man = _manifest(out)
+    assert man["result"] == "COMPLETE" and man["summary"]["ok_empty"] == 2 and man["absent"] == []
+    for name, status in (("Nothing", 204), ("Blank", 200)):
+        d = os.path.join(out, "redfish", "v1", name)
+        assert json.loads(_read(os.path.join(d, "index.json")).decode("utf-8")) == {
+            "_empty": True, "_path": "/redfish/v1/" + name}
+        assert json.loads(_read(os.path.join(d, "headers.json")).decode("utf-8"))["_status"] == status
+
+
+def test_truncated_download_is_never_saved_as_complete(tmp_path, fast):
+    """Content-Length 보다 짧게 끊긴 응답(바이너리 / JSON)은 정상 저장본이 아니다: 재시도 후 device_error, 파일 잔여물 없음."""
+    blob = bytes(bytearray(range(256))) * 40
+    body = json.dumps({"@odata.id": "/redfish/v1/Data", "Name": "x" * 400}).encode("utf-8")
+    res = {"/redfish/v1": _root(DownloadURI="/redfish/v1/Bin", D={"@odata.id": "/redfish/v1/Data"})}
+    raw = {"/redfish/v1/Bin": ("application/octet-stream", blob), "/redfish/v1/Data": ("application/json", body)}
+    out = str(tmp_path / "m")
+    cls, st = make_handler(res, raw=raw, truncate={"/redfish/v1/Bin": 3000, "/redfish/v1/Data": 10})
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 1
+    man = _manifest(out)
+    assert sorted(e["path"] for e in man["device_error"]) == ["/redfish/v1/Bin", "/redfish/v1/Data"]
+    assert all(e["cause"] == "conn" and "IncompleteRead" in e["error"] for e in man["device_error"])
+    assert not os.path.exists(os.path.join(out, "redfish", "v1", "Bin"))
+    assert not os.path.exists(os.path.join(out, "redfish", "v1", "Data"))
+    assert not [f for f in os.listdir(out) if f.endswith(".part")]
+    cls, st = make_handler(res, raw=raw)                                    # 장비가 정상 응답하면 resume 으로 채운다
+    with _serve_cls(cls) as port:
+        assert _run(port, out, "--resume") == 0
+    assert _read(os.path.join(out, "redfish", "v1", "Bin", "raw.bin")) == blob
+    assert _manifest(out)["result"] == "COMPLETE"
+
+
+def test_resume_redownloads_corrupted_raw_and_cleans_only_stale_temp_files(tmp_path, fast):
+    blob = bytes(bytearray(range(256))) * 40
+    res = {"/redfish/v1": _root(A={"@odata.id": "/redfish/v1/Weird.tmp"}, B={"@odata.id": "/redfish/v1/Bin"})}
+    raw = {"/redfish/v1/Bin": ("application/octet-stream", blob),
+           "/redfish/v1/Weird.tmp": ("application/octet-stream", b"keep-me" * 30)}
+    out = str(tmp_path / "m")
+    cls, st = make_handler(res, raw=raw)
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 0
+    binf = os.path.join(out, "redfish", "v1", "Bin", "raw.bin")
+    legit = os.path.join(out, "redfish", "v1", "Weird.tmp", "raw.tmp")          # 이름이 .tmp 로 끝나는 정상 저장본
+    assert os.path.isfile(legit)
+    with open(binf, "r+b") as f:                                              # 크기는 같고 내용만 바뀐 손상
+        f.seek(100)
+        f.write(b"\xff\xff")
+    for stale in (os.path.join(out, ".dl-9.part"), os.path.join(out, "redfish", "v1", "Bin", "index.json.tmp")):
+        with open(stale, "wb") as f:
+            f.write(b"junk")
+    cls, st = make_handler(res, raw=raw)
+    with _serve_cls(cls) as port:
+        assert _run(port, out, "--resume") == 0
+    assert _read(binf) == blob                                                # 해시 불일치로 다시 받았다
+    assert len(_token_gets(st, "/redfish/v1/Bin")) == 1 and not _token_gets(st, "/redfish/v1/Weird.tmp")
+    assert os.path.isfile(legit)                                              # 정상 저장본은 지우지 않고 재사용
+    assert not os.path.exists(os.path.join(out, ".dl-9.part"))
+    assert not os.path.exists(os.path.join(out, "redfish", "v1", "Bin", "index.json.tmp"))
+
+
+def _fail_disk(monkeypatch, suffixes):
+    """저장 경로가 가득 찬 디스크처럼 ENOSPC 로 실패하게 한다 (module 의 open / _write_json 을 가로챈다)."""
+    real_open, real_write_json = open, mirror._write_json
+
+    def failing_open(path, mode="r", *a, **k):
+        if "w" in mode and str(path).endswith(".part"):
+            raise OSError(28, "No space left on device")
+        return real_open(path, mode, *a, **k)
+
+    def failing_write_json(path, obj):
+        if os.path.basename(path) in suffixes:
+            raise OSError(28, "No space left on device")
+        return real_write_json(path, obj)
+
+    monkeypatch.setattr(mirror, "open", failing_open, raising=False)
+    monkeypatch.setattr(mirror, "_write_json", failing_write_json)
+
+
+def test_disk_full_while_streaming_is_storage_failure_and_others_continue(tmp_path, fast, monkeypatch):
+    blob = bytes(bytearray(range(256))) * 40
+    res = {"/redfish/v1": _root(DownloadURI="/redfish/v1/Bin", K={"@odata.id": "/redfish/v1/Keep"}),
+           "/redfish/v1/Keep": {"@odata.id": "/redfish/v1/Keep"}}
+    cls, st = make_handler(res, raw={"/redfish/v1/Bin": ("application/octet-stream", blob)})
+    _fail_disk(monkeypatch, ())
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 1
+    man = _manifest(out)
+    [entry] = man["unresolved"]
+    assert (entry["path"], entry["origin"], entry["cause"]) == ("/redfish/v1/Bin", "storage", "save_failed")
+    assert len(_token_gets(st, "/redfish/v1/Bin")) == 1                    # 디스크 문제는 재시도로 낫지 않는다
+    assert os.path.isfile(os.path.join(out, "redfish", "v1", "Keep", "index.json"))   # 다른 리소스는 계속 받는다
+    assert man["failure_origins"] == {"storage": 1} and not [f for f in os.listdir(out) if f.endswith(".part")]
+
+
+def test_repeated_storage_failures_abort_instead_of_hammering_the_bmc(tmp_path, fast, monkeypatch):
+    paths = ["/redfish/v1/R%d" % i for i in range(40)]
+    cls, st = make_handler(_tree(*paths))
+    _fail_disk(monkeypatch, ("index.json",))
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 1
+    man = _manifest(out)
+    assert man["result"] == "ABORT" and man["abort_reason"] == "storage_error"
+    assert len(_calls(st, "GET", ("token",))) < len(paths)                  # 끝까지 두드리지 않았다
+    assert all(e["origin"] == "storage" for e in man["unresolved"])
+
+
+def test_failure_origin_separates_device_tool_and_storage(tmp_path, fast, monkeypatch):
+    blob = bytes(bytearray(range(256))) * 10
+    res = {"/redfish/v1": _root(DownloadURI="/redfish/v1/Disk", D={"@odata.id": "/redfish/v1/Dev"},
+                                T={"@odata.id": "/redfish/v1/Tool"})}
+    res["/redfish/v1/Dev"] = {"@odata.id": "/redfish/v1/Dev"}
+    res["/redfish/v1/Tool"] = {"@odata.id": "/redfish/v1/Tool"}
+    cls, st = make_handler(res, status={"/redfish/v1/Dev": 500},
+                           raw={"/redfish/v1/Disk": ("application/octet-stream", blob)})
+    _fail_disk(monkeypatch, ())
+    original = mirror.Crawler._process
+
+    def process(self, item):
+        if item[0] == "/redfish/v1/Tool":
+            raise ValueError("simulated tool bug")
+        return original(self, item)
+
+    monkeypatch.setattr(mirror.Crawler, "_process", process)
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 1
+    man = _manifest(out)
+    by_path = dict((e["path"], (e["origin"], e["cause"])) for e in man["unresolved"] + man["device_error"])
+    assert by_path == {"/redfish/v1/Dev": ("device", "http_500"),
+                       "/redfish/v1/Tool": ("tool", "internal_error"),
+                       "/redfish/v1/Disk": ("storage", "save_failed")}
+    assert man["failure_origins"] == {"device": 1, "tool": 1, "storage": 1}
+
+
+def test_manifest_matches_files_on_disk(tmp_path, fast):
+    blob = b"<Schema/>" * 50
+    res = {"/redfish/v1": _root(E={"@odata.id": "/redfish/v1/E"}, Dl="/redfish/v1/Bin"),
+           "/redfish/v1/E": {"@odata.id": "/redfish/v1/E"}}
+    raw = {"/redfish/v1/Bin": ("application/octet-stream", blob), "/redfish/v1/$metadata": ("application/xml", blob)}
+    cls, st = make_handler(res, raw=raw, empty={"/redfish/v1/odata": 204})
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 0
+    man = _manifest(out)
+    fsmap = json.loads(_read(os.path.join(out, "_fsmap.json")).decode("utf-8"))["paths"]
+    on_disk = [r for r, _d, files in os.walk(out) for f in files if f == "index.json"]
+    assert man["summary"]["files_expected"] == len(fsmap) == len(on_disk) == man["integrity"]["files_on_disk"]
+    assert man["integrity"]["missing_count"] == 0 and man["integrity"]["unaccounted"] == 0
+    for path, ent in fsmap.items():
+        d = os.path.join(out, *ent["dir"].split("/"))
+        assert os.path.isfile(os.path.join(d, "headers.json")), path
+        if ent["type"] == "raw":
+            stub = json.loads(_read(os.path.join(d, "index.json")).decode("utf-8"))
+            data = _read(os.path.join(d, stub["_raw_file"]))
+            assert len(data) == stub["_bytes"] and hashlib.sha256(data).hexdigest() == stub["_sha256"]
+
+
+def test_saved_but_missing_file_is_reported_as_integrity_failure(tmp_path, fast, monkeypatch):
+    cls, st = make_handler(_tree("/redfish/v1/Skip", "/redfish/v1/Fine"))
+    real = mirror._write_json
+
+    def lossy(path, obj):
+        if os.path.basename(path) == "headers.json" and os.path.basename(os.path.dirname(path)) == "Skip":
+            return                                                         # headers.json 이 조용히 사라진 상황
+        return real(path, obj)
+
+    monkeypatch.setattr(mirror, "_write_json", lossy)
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 1
+    man = _manifest(out)
+    assert man["integrity"]["missing_count"] == 1 and man["integrity"]["missing"][0][0] == "/redfish/v1/Skip"
+    assert [(e["cause"], e["origin"]) for e in man["unresolved"]] == [("integrity", "storage")]
+    assert man["result"] == "INCOMPLETE"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="flock 은 POSIX 전용")
+def test_second_run_on_same_output_or_same_bmc_is_blocked(tmp_path, fast):
+    cls, st = make_handler(_tree("/redfish/v1/A"))
+    out = str(tmp_path / "m")
+    os.makedirs(out)
+    with _serve_cls(cls) as port:
+        fd, ok = mirror._try_lock(os.path.join(out, "_mirror.lock"))
+        assert ok and fd is not None
+        try:
+            assert _run(port, out) == mirror.EXIT_LOCKED                     # 같은 출력 폴더
+        finally:
+            os.close(fd)
+        fd, ok = mirror._try_lock(mirror._lock_path("127.0.0.1:%d" % port))
+        assert ok and fd is not None
+        try:
+            assert _run(port, str(tmp_path / "other")) == mirror.EXIT_LOCKED   # 다른 폴더여도 같은 BMC
+        finally:
+            os.close(fd)
+        assert _run(port, out) == 0                                          # 잠금이 풀리면 정상 실행
+    assert not os.path.exists(os.path.join(out, "_mirror.lock"))
+
+
+def _request_methods_in_source():
+    import ast
+    src = open(os.path.join(PROBE, "redfish_full_mirror.py"), encoding="utf-8").read()
+    used = {}
+    for fn in ast.walk(ast.parse(src)):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        for call in ast.walk(fn):
+            is_req = (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+                      and call.func.attr == "request" and call.args)
+            if not is_req:
+                continue
+            first = call.args[0]
+            method = first.value if hasattr(first, "value") else getattr(first, "s", None)   # 3.6: ast.Str
+            if isinstance(method, str):
+                used.setdefault(method, set()).add(fn.name)
+    return used
+
+
+def test_only_get_and_session_requests_are_ever_sent(tmp_path, fast):
+    """Actions target 같은 탐색 경로가 있어도 비-GET 요청은 세션 생성 POST / 종료 DELETE 뿐이다 (설정 변경 0)."""
+    used = _request_methods_in_source()
+    assert set(used) == {"GET", "POST", "DELETE"} and used["POST"] == {"login"} and used["DELETE"] == {"logout"}
+    res = srv.load(CSUS_FIXT)                                                # 실제 트리 + 액션이 있는 리소스를 합친다
+    acts = ["/redfish/v1/ActionHost/Actions/X.Reset", "/redfish/v1/ActionHost/Actions/X.ClearLog",
+            "/redfish/v1/ActionHost/Actions/Oem/Y.ResetToDefaults"]
+    res["/redfish/v1"] = dict(res["/redfish/v1"], ActionHost={"@odata.id": "/redfish/v1/ActionHost"})
+    res["/redfish/v1/ActionHost"] = {"@odata.id": "/redfish/v1/ActionHost", "Actions": {
+        "#X.Reset": {"target": acts[0]}, "#X.ClearLog": {"target": acts[1]}, "Oem": {"#Y.ResetToDefaults": {"target": acts[2]}}}}
+    cls, st = make_handler(res, status=dict((a, 405) for a in acts))
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out) == 0
+    assert set(e[0] for e in st["log"]) == {"GET", "POST", "DELETE"}
+    assert all(e[1] == SESSIONS for e in _calls(st, "POST"))
+    assert all(e[1].startswith(SESSIONS + "/") for e in _calls(st, "DELETE")) and len(_calls(st, "DELETE")) == 1
+    for target in acts:                                                      # 액션 주소는 GET 으로만 확인했다
+        assert [e[0] for e in st["log"] if e[1] == target] == ["GET"]
+    assert sorted(a["path"] for a in _manifest(out)["action_targets"]) == sorted(acts)
+
+
+# ================================================================================================
+# v2.1 시험 F - 캡처 -> Mock 변환 -> HTTP 재생 -> 데이터 비교 (왕복)
+# ================================================================================================
+
+def _snapshot(out):
+    """저장된 JSON 리소스를 요청 경로 -> (HTTP 상태, 본문) 으로 읽는다 (raw / 안내 파일 제외)."""
+    fsmap = json.loads(_read(os.path.join(out, "_fsmap.json")).decode("utf-8"))["paths"]
+    snap = {}
+    for path, ent in fsmap.items():
+        d = os.path.join(out, *ent["dir"].split("/"))
+        body = json.loads(_read(os.path.join(d, "index.json")).decode("utf-8"))
+        if not (isinstance(body, dict) and body.get("_non_json") is True):
+            snap[path] = (json.loads(_read(os.path.join(d, "headers.json")).decode("utf-8"))["_status"], body)
+    return snap
+
+
+def _serve_args_from_map(rmap):
+    """재생 맵(build_response_map)을 HTTP Mock 서버 설정으로 되돌린다: 2xx 는 본문, 204 는 빈 응답, 그 외는 상태만."""
+    resources, status, empty = {}, {}, {}
+    for key, (code, body, _err) in rmap.items():
+        path = "/redfish/v1" if key == "" else "/redfish/v1/" + key
+        if code == 204:
+            empty[path] = 204
+        elif 200 <= code < 300:
+            resources[path] = body
+        else:
+            status[path] = code
+    return resources, status, empty
+
+
+def _roundtrip(tmp_path, fast, handler_args, expect_rc):
+    import replay_full_mirror as rep
+    cls, st = make_handler(*handler_args[0], **handler_args[1])
+    out_a = str(tmp_path / "a")
+    with _serve_cls(cls) as port:
+        assert _run(port, out_a, "--retries", "1") == expect_rc
+    rmap, _root, stats = rep.build_response_map(Path(out_a))
+    resources, status, empty = _serve_args_from_map(rmap)
+    cls_b, st_b = make_handler(resources, status=status, empty=empty)
+    out_b = str(tmp_path / "b")
+    with _serve_cls(cls_b) as port:
+        assert _run(port, out_b, "--retries", "1") == expect_rc
+    return out_a, out_b, stats
+
+
+def test_roundtrip_capture_convert_http_replay_preserves_data_and_statuses(tmp_path, fast):
+    sensors = "/redfish/v1/Chassis/1/Sensors"
+    page2 = sensors + "?$skip=50&$top=50"
+    res = {"/redfish/v1": _root(
+        Chassis={"@odata.id": "/redfish/v1/Chassis"}, S={"@odata.id": sensors}, N={"@odata.id": "/redfish/v1/Nothing"},
+        G={"@odata.id": "/redfish/v1/Gone"}, F={"@odata.id": "/redfish/v1/Secret"}, O={"@odata.id": "/redfish/v1/Odd"},
+        A={"@odata.id": "/redfish/v1/Act"}, D={"@odata.id": "/redfish/v1/Dev"}, Al={"@odata.id": "/redfish/v1/Alias/Item"}),
+        "/redfish/v1/Chassis": {"@odata.id": "/redfish/v1/Chassis", "Members": [{"@odata.id": "/redfish/v1/Chassis/1"}]},
+        "/redfish/v1/Chassis/1": {"@odata.id": "/redfish/v1/Chassis/1", "Name": "c1"},
+        sensors: {"@odata.id": sensors, "Members@odata.count": 62, "Members": [{"@odata.id": "%s/S%d" % (sensors, i)}
+                  for i in range(50)], "Members@odata.nextLink": page2},
+        page2: {"@odata.id": sensors, "Members@odata.count": 62, "Members": [{"@odata.id": "%s/S%d" % (sensors, i)}
+                for i in range(50, 62)]}}
+    for i in range(62):
+        res["%s/S%d" % (sensors, i)] = {"@odata.id": "%s/S%d" % (sensors, i), "Reading": i}
+    res["/redfish/v1/Act"] = {"@odata.id": "/redfish/v1/Act", "Actions": {"#A.Reset": {"target": "/redfish/v1/Act/Reset"}}}
+    res["/redfish/v1/Alias/Item"] = {"@odata.id": "/redfish/v1/Canon/Item", "Name": "alias"}   # 요청 경로와 본문 id 가 다른 별칭
+    statuses = {"/redfish/v1/Secret": 403, "/redfish/v1/Odd": 400, "/redfish/v1/Act/Reset": 405, "/redfish/v1/Dev": 500}
+    out_a, out_b, stats = _roundtrip(tmp_path, fast, ((res,), {"status": statuses, "empty": {"/redfish/v1/Nothing": 204}}), 1)
+    snap_a, snap_b = _snapshot(out_a), _snapshot(out_b)
+    assert snap_a == snap_b                                                # 저장 경로, HTTP 상태, 본문이 전부 같다
+    assert len(snap_a) == 1 + 1 + 1 + 1 + 1 + 62 + 1 + 1 + 1                # root Chassis C1 Sensors page2 members Nothing Act Alias
+    assert snap_a["/redfish/v1/Nothing"][0] == 204 and snap_a[page2][0] == 200
+    assert snap_b["/redfish/v1/Alias/Item"][1]["@odata.id"] == "/redfish/v1/Canon/Item"   # 별칭 요청 경로가 재생에서도 산다
+    assert stats["pages"][0]["members"] == 62 and stats["page_mismatch"] == []
+    man_a, man_b = _manifest(out_a), _manifest(out_b)
+    for bucket in ("absent", "outside_account", "not_gettable", "rejected", "device_error"):
+        assert sorted((e["path"], e["status"]) for e in man_a[bucket]) == sorted(
+            (e["path"], e["status"]) for e in man_b[bucket]), bucket
+    assert [e["status"] for e in man_a["device_error"]] == [500] and man_b["result"] == man_a["result"] == "INCOMPLETE"
+
+
+def test_roundtrip_of_the_csus_fixture_tree_is_lossless(tmp_path, fast):
+    out_a, out_b, stats = _roundtrip(tmp_path, fast, ((srv.load(CSUS_FIXT),), {}), 0)
+    snap_a, snap_b = _snapshot(out_a), _snapshot(out_b)
+    assert snap_a == snap_b and len(snap_a) >= 36
+    assert [p for p in snap_a if snap_a[p][0] != 200] == []
+    man_a, man_b = _manifest(out_a), _manifest(out_b)
+    assert man_a["fetched_ok"] == man_b["fetched_ok"] and man_b["result"] == "COMPLETE"
+    assert sorted(e["path"] for e in man_a["absent"]) == sorted(e["path"] for e in man_b["absent"])
