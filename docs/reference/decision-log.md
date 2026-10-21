@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-19
+> 최종 갱신: 2026-10-21
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -41,6 +41,7 @@
 | 식별자 · 단위 | DMI 자리표시자 집합 한 곳(`identity_normalizer`), JEDEC (bank, id) 표, firewall_state = 유효 정책 | 2026-10-10 D-03 · D-10 · LX-F12 |
 | ESXi | `vmware_host_config_info` 는 `esxi_hostname` 필수, vCenter 대상은 protocol 단계 거부 | 2026-10-10 D-01 · ESXI-03 |
 | 문서 · 하네스 | 사람용 문서는 `.claude`/`docs/ai` 를 참조하지 않는다, 세어 놓은 수는 적지 않는다, 삭제는 참조 0 · 고유 내용 확인 뒤. 설치 문서의 환경 표기는 확인한 조합 / 필수 요구 / 선택 · 미확인 세 구분 | 2026-08-13 · 2026-10-11 D-19 · 2026-10-12 |
+| 운영망 Redfish 원본 캡처 | 링크로 닿는 모든 GET 을 저장. 404·405·400류·401/403 은 오류가 아니라 정보(`absent`/`not_gettable`/`rejected`/`outside_account`), 미완료는 `unresolved` 뿐. 재시도 뒤에도 같은 5xx/무응답이나 장비가 정상이면 `device_error`(정보, `--strict` 로 미완료화). 인증은 세션 우선 + Basic 교차 확인(자격 요청 ≤2회, 401/403 재시도 없음) | 2026-10-21 |
 
 ## 날짜별 결정 색인
 
@@ -102,6 +103,41 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-21 — Redfish 전수 미러 도구 v2: 받을 수 있는 것은 전부, 오류는 못 받은 것만
+
+> 정본: `docs/develop/08-onsite-capture.md` · `tests/redfish-probe/redfish_full_mirror.py` · `tests/redfish-probe/mirror_many.sh`. 제품 수집 코드 변경 0.
+
+### 사용자 지시
+
+- "만약 api 경로가 정말 없거나 실제 페이로드가 없으면 error 가 아니잖아?" · "모든 api 를 들고와야함. 누락되는거없이 정말 하~~나도 빠짐없이" ·
+  "결과적으로 최종 결과에 error가 아무것도 없도록 해줘. 예를어서 infraops 계정으로 찾을 수 있는 모든 경로에서 찾으면 그냥 성공이니깐."
+- 승인한 범위(2026-10-21): 저장소에 반영 · 인증은 세션 우선, 실패 시 Basic · 표준 고정 주소 + 레지스트리·스키마 본문 + 액션 주소 GET + 바이너리 첨부 전부.
+
+### 결정
+
+1. 판정 버킷: 2xx(`ok` · `ok_empty` · `ok_raw`) / 오류 아님(`absent` 404·410, `not_gettable` 405·501, `rejected` 400·406·409·415·422 등, `outside_account` 401·403) / 미완료 `unresolved` 하나. `result` = COMPLETE · INCOMPLETE · EMPTY · ABORT. 종료코드 0 · 1 · 2 · 3(인증/세션) · 4(도달 불가) · 130.
+2. **`device_error` 추가(승인된 계획 대비 구현 중 변경 — 요확인)**: 승인된 계획은 5xx/timeout 이 재시도 뒤에도 남으면 모두 `unresolved` 였다. 그러면 장비가 특정 리소스에 항상 500 을 주는 경우(실측 DL380 `ComponentIntegrity/TPM-1` 전송 timeout 류)
+   `--resume` 으로도 0 이 되지 않아 "최종 결과에 error 0" 지시와 충돌한다. 그래서 재시도와 마지막 sweep 뒤에도 실패한 항목은 이미 받은 리소스 1건을 다시 요청해 장비가 정상이면 `device_error`(정보), 불안정하면 `unresolved` 로 가른다. `--strict` 면 `device_error` 도 미완료, 목록은 manifest 에 남고 `--resume` 이 그 항목만 다시 시도한다.
+3. 인증 = 잠금 방지가 최우선: 401/403 재시도 없음 · 자격 거절은 세션 POST 와 Basic 확인, 두 신호가 모두 거절일 때만 단정(호스트당 자격 요청 ≤ 2회) · Basic 전용 RMC 가 세션 POST 에 401 을 주는 정상 경우를 오판하지 않는다(`--auth basic` 으로 POST 생략 가능) ·
+   세션 401 은 이미 받은 리소스를 다시 요청(canary)해 토큰 만료로 확인된 뒤에만 재로그인 · 신호를 받아도 `finally` 로 세션 DELETE.
+4. 크기 상한을 넘는 바이너리는 잘린 파일을 남기지 않고 받지 않은 채 `excluded`(크기 기록)로 둔다 — 잘린 펌웨어 이미지는 쓸모없고, `truncated`(= 미완료)로 세면 "error 0" 과 충돌한다. 기본 상한 64 MiB(승인된 계획의 256 MiB 에서 구현 중 낮춤 — 요확인: DL380 `/fwrepo` 펌웨어 이미지 수백 MB 는 mock 데이터로 쓸모없고 BMC 전송 속도로 호스트당 수십 분을 먹는다), `--max-bytes-per-resource 0` 이면 무제한.
+5. `ServerSentEventUri` 와 `.../SSE` 는 정책 제외(GET 하면 스트림이 멈춰 일시 장애로 오분류되고 재시도만 반복). 비-2xx 본문은 저장하지 않는다(404 가 200 저장본을 덮어쓰고, `convert_dmtf_mockup` 이 `@odata.id` 있는 본문을 200 으로 되살린다).
+
+### 근거 (실측)
+
+- v1 실손실(실 미러 7개 오프라인 재시뮬레이션): 레지스트리·스키마 본문 0건 저장 · CSUS OEM 로그 4종 · `RawConfigUri` 2 · Lenovo `//` 링크 404 덮어쓰기 · `$metadata` 미요청 · Windows MAX_PATH 로 Dell 4건 유실 전례.
+- 에뮬레이터 정답지 대조(Rocky 8 Python 3.6.8, HTTPS): DL360 1806 · DL380a Gen12 2162 · DL325 1269 리소스 COMPLETE, 원본 mockup 과의 차이는 에뮬레이터가 노출하지 않는 녹화 세션 레코드와 에뮬레이터가 404 를 주는 링크뿐(`absent` 로 기록) → 링크로 닿는 것 누락 0.
+- 같은 에뮬레이터가 세션 POST 에 401 을 줘서 Basic 으로 교차 확인한 경로가 실제로 동작함을 확인(오판 방지 설계의 실증).
+
+### 대안 (Considered)
+
+- 5xx 전부 `unresolved`: 위 2번 이유로 기각(영구 INCOMPLETE). 세션 POST 401 을 즉시 자격 거절로 단정: Basic 전용 RMC 3대가 통째로 실패하므로 기각. 비-2xx 본문 저장: 위 5번 이유로 기각.
+- 비밀번호를 `-p` 로만 받기: `ps` 노출 — 환경변수/파일을 추가하고 `-p` 는 경고만 낸다.
+
+### 남은 것
+
+- 용인 11대 실장비 캡처와 세션 성공 경로·`device_error`·`--legacy-tls`·대용량 바이너리의 실장비 확인은 사용자 몫(NEXT_ACTIONS). 재생 도구의 페이지네이션 병합과 변환기의 `headers.json` 무시는 후속.
 
 ## 2026-10-19 (3) — ESXi 전원·온도·팬(vSphere 하드웨어 센서) · Linux iSCSI 이니시에이터 (사용자 승인)
 

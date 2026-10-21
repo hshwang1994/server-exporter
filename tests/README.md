@@ -10,7 +10,7 @@
 | `e2e/` | 채널별 봉투와 기준선(`schema/baseline_v1/`) 대조 |
 | `regression/` | 채널 간 봉투 일관성, 13 필드, 벤더 표시값 |
 | `integration/` | fixture 재생 (DMTF 표준 mockup, HPE 에뮬레이터, 실장비 캡처), Add-on hook 실제 playbook 실행. `live` 표식이 있는 시험은 실장비가 필요합니다 |
-| `redfish-probe/` | 실장비 probe 도구 (pytest 아님). `redfish_full_mirror.py`는 운영망 원본 캡처용 (`docs/develop/08-onsite-capture.md`) |
+| `redfish-probe/` | 실장비 probe 도구 (pytest 아님). `redfish_full_mirror.py`는 운영망 원본 캡처용, `mirror_many.sh`는 여러 대 병렬 실행용 (`docs/develop/08-onsite-capture.md`) |
 | `fixtures/` | 시험 입력. Redfish 원본 응답, OS와 ESXi 합성 응답, 결과 정리 corpus, 입력 검증 사례 |
 | `scripts/` | 보조 도구. `conditional_review.py`(조건식 검토), `finalize_corpus_check.py`(결과 정리 corpus 대조), `junit_evidence_check.py`(CI JUnit 대조), `os_esxi_verify.sh`와 `diag_esxi_raw.yml`(실장비 수동 확인) |
 | `inventory/` | 보조 검증 장비 인벤토리 정책 (`inventory/README.md`) |

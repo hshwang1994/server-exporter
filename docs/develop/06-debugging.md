@@ -128,8 +128,9 @@ adapter_loader: 선택됨 — dell_idrac9 (score=100345)
 # Redfish — Runner 나 작업 PC 에서. 무인증 서비스 루트와 인증 조회
 curl -k -s -w '\n%{http_code}\n' https://<BMC 주소>/redfish/v1/
 curl -k -s -u '<계정>:<비밀번호>' https://<BMC 주소>/redfish/v1/Systems
-# 전체 트리 캡처 (개발 환경 재생용)
-python tests/redfish-probe/redfish_full_mirror.py -r <BMC 주소> -u <계정> -p <비밀번호> -D <라벨>
+# 전체 트리 캡처 (개발 환경 재생용). 비밀번호는 환경변수로 전달합니다 (자세한 사용은 08-onsite-capture.md)
+read -rs -p "BMC password: " BMC_PASSWORD; export BMC_PASSWORD
+python tests/redfish-probe/redfish_full_mirror.py -r <BMC 주소> -u <계정> -D <라벨>
 ```
 
 SSH와 WinRM은 `verbosity`를 올린 빌드의 콘솔에서 연결 오류를 봅니다. ESXi는 `community.vmware` 모듈의 오류 문장이 `errors[].detail`에 남습니다.
