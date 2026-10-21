@@ -1,5 +1,21 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-21 — redfish_full_mirror v2 (운영망 원본 캡처 도구) — 단위 48건 · Python 3.6.8 · HTTPS 에뮬레이터 3대
+
+> 정본: `docs/develop/08-onsite-capture.md` · `tests/unit/test_full_mirror_dryrun.py`. 합성 서비스와 iLO 에뮬레이터(HPE CSM Redfish Interface Emulator) 재생 — **실장비(용인 11대)는 사용자가 현장에서 돌린다(NEXT_ACTIONS 첫 항목)**.
+
+| 구분 | 결과 |
+|---|---|
+| 단위 pytest (Windows Python 3.13.15) | `tests/unit/test_full_mirror_dryrun.py` **48 passed** (기존 7 — 1건은 404 가 `failed` 가 아니라 `absent` 로 가는 의미 변경으로 단언 갱신 + 신규 41) |
+| Python 3.6.8 (Rocky 8 컨테이너, C 로캘) | 같은 시험 **44 passed** · 4 deselected (개발용 변환기를 쓰는 3건과 `ast feature_version` 가드 1건 — 3.6 비호환). 실행 중 잡은 것: `--help` 한글 출력이 3.6 + C 로캘에서 `UnicodeEncodeError`(3.6 에는 `reconfigure` 가 없다) → `_prepare_stdio` 수정 |
+| HTTPS 에뮬레이터 크롤 (Python 3.6.8, 자체 서명 인증서) | DL360 **1806** · DL380a Gen12 **2162** · DL325 Gen10+ **1269** 리소스 모두 `COMPLETE` (absent 103 / 131 / 95 · not_gettable 2 · unresolved 0 · 11.7 ~ 23.9 s). 세션 POST 가 401 인 에뮬레이터를 Basic 으로 교차 확인해 정상 수집(오판 방지 설계의 실증) |
+| 정답지 대조 | 에뮬레이터 원본 mockup 과 크롤의 `@odata.id` 집합 비교 — 차이는 녹화돼 있던 과거 세션 레코드(에뮬레이터가 노출하지 않음)와 에뮬레이터가 404 를 주는 링크(`Volumes/Capabilities` · `Subscriptions/114`, `absent` 에 참조원과 함께 기록)뿐 → 링크로 닿는 것 누락 0 |
+| `--resume` | 1806 중 1806 디스크 재사용 · 요청 111회 · 1.8 s (최초 20.0 s). `--auth session` 명시 + 거절 → 요청 3회(자격 요청 1회)에 중단, 종료코드 3 |
+| 러너 `mirror_many.sh` (Rocky 8 bash 4.4, xargs 없음) | CRLF · 주석 · 열 부족 · 잘못된 auth 줄 처리 · 같은 IP 직렬화 · 틀린 비밀번호 → ABORT 행 + 종료 1 + 총 요청 4 · `BMC_PW` 없음 → 종료 2 · `--resume` 재실행 호스트당 ~2 s |
+| 소비자 호환 | `replay_full_mirror` 3개 트리 `status success · errors 0` · `convert_dmtf_mockup._load_mockup` 정상(스텁 skip) · `redfish_coverage_diff` `format=mirror` · `tests/regression/test_redfish_coverage_audit.py` + `test_hpe_dl380_audit_fixes.py` + `test_pre_commit_docs20_sync_check.py` **28 passed** · `tests/integration/test_dmtf_mockup_replay.py` + `test_real_capture_replay.py` **29 passed** |
+| 정적 검사 | `py_compile` · AST 미정의 이름/미사용 임포트 점검 clean · `bash -n` · `verify_harness_consistency.py` 통과 · `verify_vendor_boundary.py` 통과 · `verify_docs_references.py` 통과(죽은 경로 없음) |
+| 실행하지 않은 것 | `tests/unit` 전체를 한 프로세스로 돌리는 실행은 점 51개에서 정체해 중단(이전 기록과 같은 규모 문제) — 변경과 닿는 범위만 분할 실행했다. 제품 코드 변경 0 이라 `ansible-playbook --syntax-check` 는 해당 없음 |
+
 ## 2026-10-19 (3) — ESXi 전원·온도·팬(vSphere 하드웨어 센서) · Linux iSCSI 이니시에이터 (사용자 승인)
 
 > 정본: `tests/evidence/2026-10-19-esxi-sensors-linux-iscsi.md` · `docs/ai/decisions/ADR-2026-10-19-esxi-sensors-and-linux-iscsi.md`. 합성 입력 · 실 호스트 덤프 재생 — **실장비(Jenkins 매트릭스)는 이 뒤에 돈다(evidence 5절)**.

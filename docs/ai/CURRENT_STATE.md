@@ -1,5 +1,25 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-21 — Redfish 전수 미러 도구 v2 (운영망 원본 캡처: 누락 0 · 오류 판정 정리 · 세션 인증 · 병렬 러너)
+
+> 정본: `docs/develop/08-onsite-capture.md` · `tests/redfish-probe/redfish_full_mirror.py` · `tests/redfish-probe/mirror_many.sh` · `tests/unit/test_full_mirror_dryrun.py` · `docs/reference/decision-log.md` 2026-10-21.
+
+- **계기**: 사용자 — 용인 11대(HPE CSUS3200 3 · DL380 Gen12 4 · Lenovo SR650 V4 4)를 한 번에 캡처할 번들을 "모든 API 를 하나도 빠짐없이, 최종 결과에 error 가 없게" 개선.
+  실 미러 7개를 오프라인 재시뮬레이션해 v1 의 실손실을 확정: 레지스트리·스키마 본문(`Location[].Uri`) 전부 미저장 · CSUS OEM 로그 4종과 `RawConfigUri` 2 미추적 · Lenovo `//` 링크의 404 가 정상 200 저장본을 덮어씀 ·
+  DL380 `ComponentIntegrity/TPM-1` 전송 timeout · `$metadata` 미요청 · 404 36건이 `failed` 로 집계 · `from __future__ import annotations` 로 Rocky 8(Python 3.6) 기동 불가.
+- **사용자 결정(2026-10-21)**: 저장소에 반영 · 인증 "세션 우선, 실패 시 Basic" · 범위 = 표준 고정 주소 3 + 레지스트리·스키마 본문 + 액션 주소 GET + 바이너리 첨부 전부 · "받을 수 있는 것을 다 받았으면 성공(error 0)".
+- **바꾼 것(도구만 — 제품 수집 코드 변경 0)**: `redfish_full_mirror.py` v2 전면 재작성(stdlib · Python 3.6+). 링크 발견 확장(Actions `target` · `*Uri`/`url`/`href` 키 · `/redfish/` 문자열 · 응답 `Link` 헤더 · `$metadata` 의 로컬 스키마) ·
+  비-JSON/바이너리를 `raw.<ext>` 로 전체 저장(스텁 `index.json` 은 `@odata.id` 없는 유효 JSON — 소비자 호환) · 판정 버킷(`ok`/`ok_empty`/`ok_raw` · 오류 아님: `absent` 404/410 · `not_gettable` 405/501 · `rejected` 4xx · `outside_account` 401/403 ·
+  `device_error` 재시도 뒤에도 같은 5xx/무응답이나 다른 요청은 정상 · 미완료 사유는 `unresolved` 뿐) · 일시 오류 backoff + Retry-After + 마지막 sweep · `--resume` · `//` 접기 · Windows 예약어/대소문자 충돌/긴 경로 안전 매핑(`_fsmap.json`) ·
+  원자적 기록 · lone surrogate 안전 · SSE 정책 제외 · 같은 호스트 리다이렉트만 추종(토큰 유출 차단) · 환경 프록시 무시.
+  신규 `mirror_many.sh`(호스트당 프로세스 1 · 같은 IP 직렬화 · 비밀번호는 `BMC_PW` → `--password-env`) · `--summarize`.
+- **잠금 방지(인증 설계)**: 401/403 재시도 없음 · 자격 거절은 신호 2개(세션 POST + Basic 확인)가 모두 거절일 때만 단정 → 호스트당 자격 요청 ≤ 2회에 중단 · Basic 전용 RMC 의 세션 POST 401 을 오판하지 않음(`--auth basic` 지정 가능) ·
+  세션 401 은 canary GET 으로 만료를 확인한 뒤에만 재로그인 · 신호(SIGTERM/SIGHUP) 포함 `finally` 로 세션 DELETE 보장 · 비밀번호/토큰은 어떤 파일에도 기록하지 않음.
+- **호환**: CLI 플래그 전부 유지 · manifest v1 키 유지(`failed` = `unresolved`, `auth_failures` = `outside_account` 별칭). **의미 변경**: 404 는 더 이상 `failed` 에 들어가지 않는다(`absent`). 시험 1건(`test_resilient_to_dead_links`) 단언 갱신.
+- **시험(실장비 아님)**: 단위 48건(기존 7 + 신규 41 — 세션 · 토큰 만료 · 잠금 방지 · 재시도 · 장애→`--resume` 수렴 · 바이너리 · 파일명 안전 · py3.6 구문 가드 · 소비자 호환) · Rocky 8 컨테이너(Python 3.6.8, C 로캘) HTTPS 에뮬레이터 3대 크롤 COMPLETE ·
+  에뮬레이터 정답지 mockup 대조 누락 0 · `replay_full_mirror` · `convert_dmtf_mockup` · `redfish_coverage_diff` 소비 정상 · 러너 bash 4.4 / xargs 없음. 수치는 TEST_HISTORY 2026-10-21.
+- **운영 영향**: 제품 수집 경로(Jenkins · Ansible · gather) 영향 0. `tests/**` 는 production 제외 경로라 승격 해당 없음. **용인 실장비 캡처는 사용자가 현장에서 실행** — 실장비 검증 전(NEXT_ACTIONS).
+
 ## 일자: 2026-10-19 (3) — ESXi 전원·온도·팬(vSphere 하드웨어 센서) · Linux iSCSI 이니시에이터 → `storage.hbas[]` (사용자 승인)
 
 > 정본: `docs/ai/decisions/ADR-2026-10-19-esxi-sensors-and-linux-iscsi.md` · `tests/evidence/2026-10-19-esxi-sensors-linux-iscsi.md` · `docs/contract/03-fields.md` 6.3.1 · 6.5 · 6.7 · `docs/reference/decision-log.md` 2026-10-19 (3).

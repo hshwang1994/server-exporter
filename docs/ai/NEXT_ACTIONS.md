@@ -1,5 +1,17 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Redfish 전수 미러 v2 (2026-10-21) — 남은 항목
+
+> 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-21. 도구 · 시험 · 문서는 같은 날 main 에 들어갔다 (`tests/**` 는 production 제외 경로 — 승격 해당 없음).
+
+- [ ] **[HIGH / 사이트 — 사용자] 용인 11대 실장비 캡처** — 번들(`redfish_mirror_bundle.tar.gz` — 저장소 밖 scratchpad 에서 생성)을 운영망 서버에 풀어 `bash mirror_many.sh targets.txt`. HPE CSUS RMC 3대는 targets 4번째 열을 `basic` 으로.
+      끝나면 호스트별 `RESULT` 가 `COMPLETE` 인지, `outside_account` · `device_error` · `excluded` 목록을 확인한다(08-onsite-capture.md 5절). `INCOMPLETE` 면 같은 폴더에 `MIRROR_ARGS=--resume` 으로 재실행. 결과 트리는 `C:\github\서버mock데이터` 에 보관 후 `convert_dmtf_mockup.py` 재생.
+- [ ] **[MED / 실장비 미검증]** 세션 로그인 경로(에뮬레이터는 세션 POST 에 401 을 줘서 Basic 으로 갔다 — 세션 성공 경로는 합성 서비스로만 검증) · `device_error` 분류 · `--legacy-tls` ·
+      대용량 바이너리(DL380 `/fwrepo` 펌웨어 이미지 수백 MB — 기본 상한 64 MiB 로 제외되고 `excluded` 에 크기가 남는다) · CSUS RMC Basic 전용 가정. 첫 실장비 결과의 manifest `session` · `basic_probe` 로 확인한다.
+- [ ] **[LOW / 판단] `--max-bytes-per-resource` 기본 64 MiB**(승인된 계획은 256 MiB — 펌웨어 이미지 시간 부담으로 낮춤) — 첫 실캡처의 `excluded`(oversize) 목록을 보고 필요한 첨부가 빠졌으면 `MIRROR_ARGS="--max-bytes-per-resource 0"` 로 해당 호스트만 다시 받는다.
+- [ ] **[LOW / 후속] `replay_full_mirror.build_response_map` 페이지네이션** — 페이지를 컬렉션 `@odata.id` 로 키잉해 마지막 페이지만 남는다(DellSensors 12/62). 캡처 파일에는 모든 페이지가 있다.
+- [ ] **[LOW / 후속] `convert_dmtf_mockup._load_mockup` 이 `headers.json._status` 를 무시** — `@odata.id` 가 있는 모든 dict 를 200 으로 되살린다. v2 트리는 비-2xx 본문을 저장하지 않아 무해하지만 v1 트리(404 본문 저장)와 섞이면 영향이 있다.
+
 ## ESXi 전원·온도·팬 · Linux iSCSI (2026-10-19, 셋째) — 남은 항목
 
 > 정본: `docs/ai/decisions/ADR-2026-10-19-esxi-sensors-and-linux-iscsi.md` · `tests/evidence/2026-10-19-esxi-sensors-linux-iscsi.md`. 코드 · 시험 · 문서는 같은 날 main 에 들어갔다.
