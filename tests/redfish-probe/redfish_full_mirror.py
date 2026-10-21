@@ -30,6 +30,7 @@
     device_error             재시도·최종 sweep 뒤에도 같은 5xx/무응답이지만 다른 요청은 정상 (장비 측 결함) - 못 받았으므로 INCOMPLETE
     oversize                 크기 상한(--max-bytes-per-resource)을 넘어 받지 않은 첨부 - INCOMPLETE (상한을 올리거나 0 으로 --resume)
     unresolved               장비/망이 불안정하거나 저장/내부 오류로 못 받음 - INCOMPLETE (--resume 으로 수렴)
+    excluded                 일부러 받지 않은 항목 - 정책 제외(SSE 등) / --exclude / --no-binary (오류 아님, 사유는 excluded[].reason)
     모든 실패 항목에는 origin(device / device_or_network / storage / tool / interrupted)이 붙어 장비 문제와 도구 문제를 가른다.
 
 인증:
@@ -50,6 +51,7 @@
     export BMC_PASSWORD='...'                     # 또는 --password-env VAR / --password-file PATH
     python3 redfish_full_mirror.py -r <IP[:443]> -u <계정> -D <출력폴더>
     python3 redfish_full_mirror.py -r <IP> -u <계정> -D <출력폴더> --resume   # 중단/INCOMPLETE 이어받기
+    python3 redfish_full_mirror.py -r <IP> -u <계정> -D <출력폴더> --no-binary   # 바이너리 첨부(펌웨어 이미지/디버그 로그 등)는 받지 않음
     python3 redfish_full_mirror.py --summarize <출력폴더> [<출력폴더> ...]   # 여러 호스트 manifest 요약
 
 종료코드: 0=COMPLETE 1=INCOMPLETE 2=EMPTY(2xx 0건) 3=인증/세션 중단 4=도달 불가 5=같은 폴더/BMC 에 이미 실행 중
@@ -83,7 +85,7 @@ import zlib
 from collections import OrderedDict, deque
 from email.utils import parsedate_to_datetime
 
-TOOL_VERSION = "2.1.0"
+TOOL_VERSION = "2.2.0"
 MANIFEST_SCHEMA = 2
 
 JSON_ACCEPT = "application/json"
@@ -114,6 +116,8 @@ HEALTH_CACHE_SECONDS = 15.0  # 장비 불안정 판정 재사용 시간
 RESUME_HASH_MAX = 64 << 20        # --resume 이 raw 파일 해시까지 검증하는 최대 크기 (더 큰 파일은 크기만 본다)
 MEMORY_SPILL_BYTES = 64 << 20  # 텍스트 본문이 이보다 커지면 메모리 대신 디스크로 흘려보낸다
 STORAGE_ABORT_STREAK = 10    # 저장 실패가 연속 이만큼이면 중단 (디스크가 찼는데 BMC 만 계속 두드리지 않는다)
+JSON_RESCUE_MAX = 16 << 20   # Content-Type 이 거짓인 JSON 을 구제하는 본문 크기 상한 (--no-binary 도 이 크기까지만 JSON 후보로 읽는다)
+JSON_SNIFF_BYTES = 65536     # --no-binary: 바이너리 타입 응답이 JSON 으로 시작하는지 보려고 먼저 읽는 앞부분 크기
 
 # 파일시스템(특히 Windows)에서 디렉터리명에 못 쓰는 문자. 본문 @odata.id 는 보존하고 디스크 경로명만
 # 치환하므로, 재생 시 키잉(본문 @odata.id 기준)에는 영향 없다. (\x5c = 백슬래시)
@@ -443,6 +447,14 @@ def _parse_json(raw):
         return False, None
 
 
+_JSON_LEAD = bytes(bytearray([0xEF, 0xBB, 0xBF, 0x20, 0x09, 0x0D, 0x0A]))   # UTF-8 BOM + 공백류
+
+
+def _looks_like_json(head):
+    """본문 앞부분이 JSON 처럼 시작하는가 (BOM/공백 뒤 '{' 또는 '[')."""
+    return head.lstrip(_JSON_LEAD)[:1] in (b"{", b"[")
+
+
 def _error_detail(resp, limit=240):
     """오류 응답 본문에서 사람이 읽을 한 줄을 뽑는다 (Redfish error.message / ExtendedInfo)."""
     body = resp.body
@@ -528,6 +540,8 @@ class Resp(object):
         self.error = ""
         self.kind = ""                 # timeout | tls | conn | url | stream | redirect
         self.oversize = False
+        self.binary_skipped = False    # --no-binary: 바이너리 본문을 읽지 않고 건너뜀
+        self.sniffed = False           # --no-binary: 바이너리 타입이지만 JSON 으로 시작해 계속 읽은 응답
         self.sha256 = None             # 디스크로 흘려보낸 본문의 SHA-256
         self.location = None
 
@@ -582,6 +596,7 @@ class Net(object):
         self.redirected = []
         self._seq = 0
         self._cur_part = None
+        self.skip_binary = False      # --no-binary (자원 GET 에만 적용)
         handlers = []
         if not use_env_proxy:
             handlers.append(urllib.request.ProxyHandler({}))
@@ -628,7 +643,8 @@ class Net(object):
         try:
             resp.status = getattr(r, "status", None) or r.getcode()
             self._fill_headers(resp, r.headers)
-            self._read_body(resp, r, max_bytes, spool_dir)
+            self._read_body(resp, r, max_bytes, spool_dir,
+                            self.skip_binary and method == "GET" and spool_dir is not None)
         except SpoolError as e:
             self._drop_part()
             resp.body = None
@@ -639,7 +655,7 @@ class Net(object):
             self._drop_part()
             resp.body = None
             resp.raw_path = None
-            resp.oversize = False
+            resp.oversize = resp.binary_skipped = resp.sniffed = False
             self._fill_exc(resp, e)
         finally:
             try:
@@ -680,7 +696,7 @@ class Net(object):
             except OSError:
                 pass
 
-    def _read_body(self, resp, r, max_bytes, spool_dir):
+    def _read_body(self, resp, r, max_bytes, spool_dir, skip_binary=False):
         ct = resp.h.get("content-type", "").lower()
         if "text/event-stream" in ct:       # 끝나지 않는 스트림 - 읽지 않는다
             resp.kind = "stream"
@@ -691,21 +707,37 @@ class Net(object):
             clen = int(resp.h.get("content-length", ""))
         except ValueError:
             clen = None
-        if cap and clen is not None and clen > cap:
+        texty = (not ct) or any(t in ct for t in ("json", "xml", "text", "html"))
+        pending = []
+        if skip_binary and not texty:
+            # --no-binary: 바이너리 첨부는 본문을 읽지 않는다 (크기가 얼마든 oversize 가 아니다). 다만 Content-Type 이
+            # 거짓인 JSON 은 _handle_ok 에 구제 경로가 있으므로, 앞부분이 JSON 으로 시작하고 JSON_RESCUE_MAX 이하일 때만 계속 읽는다.
+            if clen is not None and clen > JSON_RESCUE_MAX:
+                resp.binary_skipped, resp.size = True, clen
+                return
+            first = r.read(JSON_SNIFF_BYTES)
+            if first and not _looks_like_json(first):
+                resp.binary_skipped, resp.size = True, clen or 0
+                return
+            pending, resp.sniffed = [first], True
+            cap = min(cap, JSON_RESCUE_MAX) if cap else JSON_RESCUE_MAX
+        elif cap and clen is not None and clen > cap:
             resp.oversize, resp.size = True, clen
             return
         deadline = time.time() + max(self.timeout * 4, 120)
-        texty = (not ct) or any(t in ct for t in ("json", "xml", "text", "html"))
         to_disk = spool_dir is not None and not texty        # 바이너리는 처음부터 디스크로 스트리밍
         buf, digest, fh, part, total = bytearray(), hashlib.sha256(), None, None, 0
         try:
             while True:
-                chunk = r.read(65536)
+                chunk = pending.pop() if pending else r.read(65536)
                 if not chunk:
                     break
                 total += len(chunk)
                 if cap and total > cap:
-                    resp.oversize, resp.size = True, total   # 하한값: 상한을 넘은 시점까지 읽은 크기
+                    if resp.sniffed:                          # JSON 구제 상한을 넘음 -> 바이너리로 보고 건너뜀
+                        resp.binary_skipped, resp.size = True, total
+                    else:
+                        resp.oversize, resp.size = True, total   # 하한값: 상한을 넘은 시점까지 읽은 크기
                     break
                 if time.time() > deadline:
                     raise socket.timeout("total read deadline exceeded")
@@ -725,7 +757,7 @@ class Net(object):
                         buf = bytearray()
                 _spool(fh.write, chunk)
                 digest.update(chunk)
-            if fh is not None and not resp.oversize:
+            if fh is not None and not (resp.oversize or resp.binary_skipped):
                 _spool(fh.close)
                 fh = None
         except BaseException:
@@ -737,7 +769,7 @@ class Net(object):
             raise
         if fh is not None:                                   # oversize 로 중단: 받다 만 파일은 남기지 않는다
             fh.close()
-        if resp.oversize:
+        if resp.oversize or resp.binary_skipped:
             self._drop_part()
             return
         if clen is not None and total != clen:               # 잘린 응답을 정상 저장으로 취급하지 않는다
@@ -925,6 +957,7 @@ class Crawler(object):
     def __init__(self, args, net, auth, password_source="none"):
         self.a = args
         self.net = net
+        self.net.skip_binary = bool(getattr(args, "no_binary", False))
         self.auth = auth
         self.password_source = password_source
         self.out = args.out
@@ -963,7 +996,7 @@ class Crawler(object):
         self._dedupe = set()
         self.lists = dict((k, []) for k in _LIST_NAMES)
         self.counts = dict((k, 0) for k in _LIST_NAMES)
-        self.cnt = {"ok": 0, "ok_empty": 0, "ok_raw": 0, "resumed": 0, "retries": 0, "files": 0}
+        self.cnt = {"ok": 0, "ok_empty": 0, "ok_raw": 0, "resumed": 0, "retries": 0, "files": 0, "no_binary": 0}
         self.info = {"reachable": None, "auth_ok": None, "root_product": None,
                      "root_redfish_version": None, "realm": None, "tls_hint": False}
         self.firmware_versions = []
@@ -1411,10 +1444,21 @@ class Crawler(object):
         _write_json(os.path.join(adir, "headers.json"), self._headers_obj(resp))
         return rel, raw_info
 
+    def _skip_binary(self, path, key, ref, resp):
+        """--no-binary: 바이너리 첨부를 받지 않았다. 오류가 아니라 일부러 제외한 항목으로 기록한다."""
+        clen = resp.h.get("content-length", "")
+        self.cnt["no_binary"] += 1
+        self._add("excluded", {"link": path, "reason": "no-binary", "referrer": ref, "key": key,
+                               "content_type": resp.h.get("content-type", ""),
+                               "content_length": int(clen) if clen.isdigit() else None})
+
     def _handle_ok(self, path, kind, key, ref, resp):
         """2xx 응답을 저장하고 링크를 큐에 넣는다. 저장하면 True."""
         wk = (kind == "wellknown")
         ct = resp.h.get("content-type", "")
+        if resp.binary_skipped:
+            self._skip_binary(path, key, ref, resp)
+            return False
         if resp.oversize:
             clen = resp.h.get("content-length")
             self._add("oversize", {"path": path, "reason": "size_limit", "origin": "policy", "content_type": ct,
@@ -1423,7 +1467,7 @@ class Crawler(object):
                                    "limit": self.a.max_bytes, "referrer": ref})
             return False
         body, data, saved_type = resp.body, None, None
-        if resp.raw_path is not None and resp.size <= (16 << 20):
+        if resp.raw_path is not None and resp.size <= JSON_RESCUE_MAX:
             # Content-Type 이 거짓말인 JSON 구제: 바이너리로 받았어도 JSON 이면 링크를 따라간다.
             try:
                 with open(resp.raw_path, "rb") as f:
@@ -1446,6 +1490,11 @@ class Crawler(object):
                     saved_type, data = "json", val
                 else:
                     saved_type = "raw"
+        if resp.sniffed and saved_type == "raw":      # --no-binary: JSON 후보였지만 JSON 이 아니었다 -> 바이너리로 보고 버린다
+            self._remove(resp.raw_path)
+            resp.raw_path = None
+            self._skip_binary(path, key, ref, resp)
+            return False
         try:
             rel, raw_info = self._save(path, saved_type, data, body, resp, ct)
         except (OSError, UnicodeError) as exc:
@@ -1859,7 +1908,8 @@ class Crawler(object):
             ("skipped", n["skipped"]), ("redirected", len(self.net.redirected)),
             ("resumed_from_disk", c["resumed"]), ("requests", self.net.requests), ("retries", c["retries"]),
             ("bytes_total", self.net.bytes_total), ("count_mismatch", n["count_mismatch"]),
-            ("files_expected", c["files"]), ("max_rel_path_chars", longest)])
+            ("no_binary_skipped", c["no_binary"]), ("files_expected", c["files"]),
+            ("max_rel_path_chars", longest)])
         m = {
             "manifest_schema": MANIFEST_SCHEMA, "tool_version": TOOL_VERSION,
             "python_version": sys.version.split()[0], "platform": sys.platform,
@@ -1870,7 +1920,8 @@ class Crawler(object):
                         "verify": bool(a.verify), "legacy_tls": bool(a.legacy_tls), "max": a.max,
                         "max_bytes_per_resource": a.max_bytes, "max_rel_path": a.max_rel_path,
                         "max_relogin": a.max_relogin, "exclude": list(a.exclude or []),
-                        "no_action_targets": bool(a.no_action_targets), "resume": bool(a.resume),
+                        "no_action_targets": bool(a.no_action_targets), "no_binary": bool(getattr(a, "no_binary", False)),
+                        "resume": bool(a.resume),
                         "strict": bool(a.strict), "use_env_proxy": bool(a.use_env_proxy),
                         "user": a.user, "password_source": self.password_source},
             "reachable": self.info["reachable"], "auth_ok": self.info["auth_ok"],
@@ -1952,6 +2003,9 @@ def _print_summary(m, out_dir):
     say("  unresolved            : %-5d %s" % (s["unresolved"], "[OK]" if not s["unresolved"] else "[FAIL]"))
     say("  excluded / skipped    : %d / %d   (정책 제외, cross-host 등)   rehosted: %d   redirected: %d" % (
         s["excluded"], s["skipped"], s["rehosted"], s["redirected"]))
+    if (m.get("options") or {}).get("no_binary"):
+        say("  no-binary 건너뜀      : %-5d [INFO] 바이너리 첨부는 받지 않음 - 오류 아님 (excluded[] reason=no-binary)"
+            % s.get("no_binary_skipped", 0))
     if s["count_mismatch"]:
         say("  [INFO] Members@odata.count 불일치 컬렉션 %d건 - manifest count_mismatch 참조" % s["count_mismatch"])
     say("  requests / retries    : %d / %d   duration: %ss   bytes: %d" % (
@@ -2043,6 +2097,9 @@ def build_parser():
     ap.add_argument("--legacy-tls", action="store_true", help="TLS 1.0/1.1 만 되는 구형 BMC 허용")
     ap.add_argument("--exclude", action="append", default=[], metavar="REGEX", help="경로 제외 정규식 (반복 가능)")
     ap.add_argument("--no-action-targets", action="store_true", help="Actions target 주소를 GET 하지 않음")
+    ap.add_argument("--no-binary", action="store_true",
+                    help="바이너리 첨부(2xx 인데 Content-Type 이 json/xml/text/html 이 아닌 응답)는 본문을 받지 않고 "
+                         "excluded 로 기록 (오류 아님). JSON 으로 시작하는 본문은 계속 받음")
     ap.add_argument("--resume", action="store_true", help="같은 -D 의 2xx 저장본을 재사용하고 빈 곳만 받음")
     ap.add_argument("--strict", action="store_true", help="outside_account / rejected / count_mismatch 도 INCOMPLETE 로 취급 (기본은 정보)")
     ap.add_argument("--progress", type=int, default=100, help="N개마다 진행 상황을 stderr 로 (0=끔)")

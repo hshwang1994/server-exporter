@@ -12,7 +12,8 @@
 # 환경변수:
 #   BMC_PW        (필수) 비밀번호 - 자식 프로세스에는 --password-env 로만 전달한다 (ps 에 노출되지 않음)
 #   MIRROR_JOBS   동시 실행 수 (기본 4)
-#   MIRROR_ARGS   크롤러에 그대로 넘길 추가 인자 (예: "--resume --retries 5")
+#   MIRROR_ARGS   크롤러에 그대로 넘길 추가 인자 (예: "--resume --retries 5", 바이너리 첨부를 받지 않으려면 "--no-binary").
+#                 값은 공백으로만 쪼개 넘기므로 따옴표를 넣지 말고 공백/* ? [ 가 든 인자는 쓰지 않는다
 #   PYTHON        파이썬 (기본 python3, 없으면 /usr/libexec/platform-python)
 #   MIRROR_PY     크롤러 경로 (기본: 이 스크립트 옆 redfish_full_mirror.py)
 #
