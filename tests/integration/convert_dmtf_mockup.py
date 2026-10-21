@@ -43,47 +43,24 @@ from pathlib import Path
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "redfish-probe"))
 import emulator_harness as H  # noqa: E402  (rg import + ansible stub + _p)
+import replay_full_mirror as RFM  # noqa: E402  (미러 트리 로더 - 상태 보존 · 페이지네이션 · v1/v2 호환)
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = REPO / "tests" / "fixtures" / "redfish"
 
 
 def _load_mockup(mockup_dir: Path) -> tuple[dict[str, list], int, int]:
-    """mockup 트리의 모든 index.json → {'get::<path>': [200, body, None], ...}.
+    """mockup 트리의 모든 index.json -> {'get::<path>': [status, body, err], ...}, (index.json 수, 건너뛴 수).
 
-    key 는 _p(@odata.id) — 엔진이 _get(path) 로 요청하는 path 와 동일. ServiceRoot
-    (@odata.id '/redfish/v1')는 _p 가 '__invalid_odata_id__' 를 주므로(Round 1 #23
-    hardening — '' 미반환) _p 전에 직접 'noauth::' + 'get::' 양쪽 등재(엔진은
-    ServiceRoot 를 _get_noauth 우선 조회).
+    로더는 replay_full_mirror.build_response_map 과 같다 (두 도구가 갈라지지 않게 한 곳에서 처리한다):
+      - key 는 엔진이 _get(path) 로 요청하는 path 와 같다. ServiceRoot 는 'noauth::' + 'get::' 양쪽 등재(엔진은 noauth 우선).
+      - status 는 headers.json 의 _status 를 그대로 둔다. 2xx 가 아닌 본문을 200 으로 되살리지 않는다 (err = 'HTTP n: 사유').
+      - 페이지로 나뉜 컬렉션은 페이지마다 ?쿼리 키를 갖는다. v2 의 _fsmap.json / manifest 상태도 쓰며 v1 트리와 DMTF mockup 도 읽는다.
+      - raw.<확장자> 로 저장된 XML / 바이너리 안내 파일(@odata.id 없음)은 건너뛴다.
     """
-    full: dict[str, list] = {}
-    files = sorted(mockup_dir.rglob("index.json"))
-    skipped = 0
-    for f in files:
-        try:
-            with open(f, encoding="utf-8") as fh:
-                body = json.load(fh)
-        except (json.JSONDecodeError, OSError):
-            skipped += 1
-            continue
-        if not isinstance(body, dict):
-            skipped += 1
-            continue
-        odata_id = body.get("@odata.id")
-        if not isinstance(odata_id, str):
-            skipped += 1
-            continue
-        # ServiceRoot('/redfish/v1[/]')는 rg._p()가 '__invalid_odata_id__'를 돌려주므로
-        # (Round 1 #23 hardening — '' 미반환) _p 전에 직접 처리한다. 엔진은 ServiceRoot를
-        # _get_noauth 우선 조회하고 noauth 실패 시 _get('')로도 재시도 → 양쪽 키 등재.
-        if odata_id.rstrip("/") == "/redfish/v1":
-            full["noauth::"] = [200, body, None]
-            full["get::"] = [200, body, None]
-            continue
-        key = H.rg._p(odata_id)
-        full[f"get::{key}"] = [200, body, None]
-    return full, len(files), skipped
+    return RFM.load_mockup_records(mockup_dir)
 
 
 def _instrumented_replayer(full: dict):
