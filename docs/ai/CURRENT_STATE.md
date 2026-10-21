@@ -1,5 +1,16 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-22 (2) — 미러 도구 2.2: `--no-binary` (바이너리 첨부를 받지 않음)
+
+> 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-22 (2) · `tests/redfish-probe/redfish_full_mirror.py`(2.2.0) · `tests/unit/test_full_mirror_dryrun.py`.
+
+- **계기**: 사용자 - 바이너리 수집을 빼는 방법을 물은 뒤(전용 스위치 없음, `--exclude` 경로 패턴만 가능) 전용 옵션 `--no-binary` 추가를 요청. 제품 수집 코드 변경 0.
+- **동작**: 2xx 응답의 Content-Type 이 json/xml/text/html 이 아니면(기존 바이너리 판정 그대로) 본문을 받지 않고 `excluded[]` 에 `reason: no-binary`(경로 · Content-Type · 크기 · 참조한 곳 · 키)로 기록한다. 오류가 아니므로 COMPLETE 를 유지하고(`complete_with_exclusions`), `summary.no_binary_skipped` 와 호스트 로그의 "no-binary 건너뜀" 줄이 개수를 보여 준다. 크기 상한(`oversize`)보다 먼저 판단해 크기와 무관하다. 텍스트 본문은 건너뛰지 않고 상한이 그대로 적용된다.
+- **JSON 구제 보존**: Content-Type 이 거짓인 JSON 에서 링크가 조용히 빠지지 않게, 바이너리 타입 응답의 앞 64 KiB 가 `{` 또는 `[` 로 시작할 때만 16 MiB(`JSON_RESCUE_MAX`)까지 읽어 JSON 이면 저장하고 링크를 따라간다. 아니면 받은 조각을 버리고 no-binary 로 기록한다. GET 자원 요청에만 적용되고(로그인 POST 등 제외) 장비로 보내는 요청 종류는 늘지 않는다.
+- **검증(실장비 아님)**: 새 시험 5건(도구 시험 104 통과 + Windows skip 1) · 건너뛰기를 끄면 4건이, JSON 확인을 끄면 구제 시험이 실패함을 확인 · Python 3.6.8 에서 새 시험 통과 · 번들을 Rocky 8 에서 실행해 8 MiB 첨부를 받지 않음(수신 845 B, 출력 96 KB 대 8,316 KB) · 실측 미러 7개의 2xx 응답은 전부 텍스트 계열이라 이미 받은 리소스 중 건너뛸 것 0건. 수치는 TEST_HISTORY 2026-10-22 (2).
+- **번들**: 새 기능이 들어가 `redfish_mirror_bundle.tar.gz` 를 다시 만들어 같은 이름으로 교체했다(도구 2.2.0, 해시 변경). 2.1.0 번들은 폐기 대상(README [0]).
+- **판정**: 개발 환경 시험은 통과했고 번들이 준비됐다 = READY_FOR_FIELD. 용인 실장비 캡처 전이라 FIELD_VERIFIED 가 아니다. production 승격 해당 없음(변경 경로가 `runtime_roots` 밖).
+
 ## 일자: 2026-10-22 — 미러 도구 v2.1 최종 마무리 (못 받은 것은 INCOMPLETE · 256 MiB 복원 · 재생 도구 2건 · 최종 번들) — READY_FOR_FIELD
 
 > 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-22 · `tests/redfish-probe/redfish_full_mirror.py`(2.1.0) · `replay_full_mirror.py` · `tests/integration/convert_dmtf_mockup.py` · `tests/unit/test_mirror_replay_tools.py`.

@@ -1,5 +1,21 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-22 (2) — redfish_full_mirror 2.2 (`--no-binary`) — 도구 시험 105건 · Python 3.6.8 · 번들 실행 · 실측 Content-Type 전수 대조
+
+> 정본: `docs/develop/08-onsite-capture.md` · `tests/unit/test_full_mirror_dryrun.py`. 합성 서비스 · 저장소 밖 실측 미러 재생 — **용인 11대 실장비 캡처는 하지 않았다(NEXT_ACTIONS)**. 제품 수집 코드 변경 0. 판정 `READY_FOR_FIELD` (`FIELD_VERIFIED` 아님).
+
+| 구분 | 결과 |
+|---|---|
+| 도구 시험 (Windows Python 3.13.15) | `test_full_mirror_dryrun.py` + `test_mirror_replay_tools.py` **104 passed, 1 skipped** (59.0 s). 2.1 의 99 에서 신규 5건: 바이너리 건너뛰기(8 MiB 를 받지 않음 · `excluded` 기록 · 텍스트/XML/JSON 은 저장) · Content-Type 이 거짓인 JSON 구제와 JSON 이 아닌 본문 폐기 · 구제 상한(길이 헤더 있음/없음) · `--resume` 안정성과 옵션 없을 때의 저장 · 큰 텍스트는 건너뛰지 않고 상한 적용. 하네스에 길이 헤더 없는 응답(`nolen`) 추가 |
+| 시험이 실제로 잡는지 (변형 검증) | 건너뛰기를 끄면 새 시험 5건 중 **4건 실패**(나머지 1건은 텍스트 경계 확인), JSON 확인을 끄면 구제 시험 **실패** - 시험이 기능을 고정한다 |
+| 소비자 · 통합 | `tests/integration -m "not live"` + `test_hpe_dl380_audit_fixes.py` + `test_pre_commit_docs20_sync_check.py` + `test_redfish_coverage_audit.py` **394 passed, 6 skipped, 1 deselected** (변화 없음) |
+| e2e / regression | `tests/e2e tests/regression` **1094 passed, 12 skipped, 6 xfailed** (76.1 s, 변화 없음) |
+| Python 3.6.8 (Rocky 8 컨테이너, C 로캘) | `test_full_mirror_dryrun.py` **77 passed**, 6 failed - 6건은 3.6 에서 실행할 수 없는 개발용 도구(재생기 · 변환기의 `from __future__ import annotations`, `ast feature_version`)를 쓰는 시험이라 3.6 대상이 아니고 호스트(3.13)에서는 통과한다. 신규 5건은 3.6 에서 통과 |
+| 번들 실행 (Rocky 8, Python 3.6.8, 합성 Redfish 서비스) | 압축을 푼 번들의 `mirror_many.sh` + `MIRROR_ARGS="--scheme http --no-binary"`: `COMPLETE` · 5건 저장 · 8 MiB 옥텟 스트림과 zip 2건은 `excluded`(`no-binary`, 키 `AdditionalDataURI` / `DownloadURI`) · 거짓 Content-Type 의 JSON 은 구제되어 하위 링크까지 저장 · 수신 845 B · 출력 96 KB. 같은 서비스를 옵션 없이 받으면 7건 저장 · 출력 8,316 KB |
+| 실측 미러 7개 Content-Type 전수 대조 | CSUS ×4 · DL380 · SR650 · Dell R740 의 2xx 응답 헤더: 바이너리 타입 **0건**(CSUS 2,256 · DL380 2,022 · SR650 2,900 · Dell 6,131 전부 텍스트 계열) - 이미 받은 리소스가 `--no-binary` 로 빠질 일이 없다. 같은 기종의 첨부 링크 모양 138개(CSUS 126 · DL380 3 · SR650 9)는 바이너리 후보 |
+| 정적 검사 | `py_compile` · `bash -n` · AST 미사용 임포트 0 · `verify_harness_consistency.py` 통과 · `verify_vendor_boundary.py` 통과 · `verify_docs_references.py` 통과 · `check_project_map_drift.py` 일치 |
+| 실행하지 않은 것 | `prodgen` gate G01~G20 / `--dry-run`(**통과로 기록하지 않는다**; 변경 경로가 `runtime_roots` 밖이라 승격 해당 없음) · `tests/unit` 전체 단일 프로세스 실행 · HTTPS 에뮬레이터 크롤(이번 변경은 바이너리 응답 처리에 한정) · `ansible-playbook --syntax-check`(제품 코드 변경 0) · 용인 실장비(접근하지 않음) - 연결을 일찍 닫을 때의 BMC 반응과 실제 첨부 Content-Type 은 미검증 |
+
 ## 2026-10-22 — redfish_full_mirror 2.1 (못 받으면 INCOMPLETE · 256 MiB 복원 · 재생 도구 2건) — 도구 시험 100건 · Python 3.6.8 · 에뮬레이터 3대 · 실측 미러 7개 재생
 
 > 정본: `docs/develop/08-onsite-capture.md` · `tests/unit/test_full_mirror_dryrun.py` · `tests/unit/test_mirror_replay_tools.py`. 합성 서비스 · iLO 에뮬레이터 · 저장소 밖 실측 미러(`C:\github\서버mock데이터`) 재생 — **용인 11대 실장비 캡처는 하지 않았다(사용자가 현장에서 돌린다, NEXT_ACTIONS 첫 항목)**. 제품 수집 코드 변경 0. 판정 `READY_FOR_FIELD` (`FIELD_VERIFIED` 아님).

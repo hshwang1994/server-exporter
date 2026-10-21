@@ -1,6 +1,6 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
-## Redfish 전수 미러 v2.1 (2026-10-22) — 남은 항목
+## Redfish 전수 미러 v2.2 (2026-10-22) — 남은 항목
 
 > 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-22. 도구 · 시험 · 문서는 같은 날 main 에 들어갔다 (`tests/**` 는 production 제외 경로 — 승격 해당 없음. `production_manifest.yml` 의 `runtime_roots` 에 닿지 않음).
 
@@ -9,6 +9,7 @@
       결과 트리는 `C:\github\서버mock데이터` 에 보관(소유자만 읽기 권한)하고, fixture 로 쓰기 전에 08-onsite-capture.md 8절의 민감정보 점검을 한다.
 - [ ] **[MED / 실장비 미검증]** 세션 로그인 성공 경로(에뮬레이터는 세션 POST 에 401 을 줘서 Basic 으로 갔다 — 합성 서비스로만 검증) · `device_error` 실례(장비가 특정 URI 에 계속 5xx) · `--legacy-tls` ·
       크기 제한 없는 대용량 첨부(DL380 `/fwrepo` 펌웨어 이미지 수백 MB — 저장 공간과 BMC 부하 실측) · CSUS RMC Basic 전용 가정. 첫 실장비 결과의 manifest `session` · `basic_probe` · `failure_origins` 로 확인한다.
+- [ ] **[MED / 실장비 미검증] `--no-binary` (2.2.0, 2026-10-22 추가)** — 바이너리 첨부(응답 Content-Type 이 json/xml/text/html 이 아닌 2xx)를 앞 64 KiB 만 보고 닫고 `excluded[]` 에 `reason: no-binary` 로 남긴다. 합성 서비스 시험 5건과 Python 3.6.8 로만 검증했다. 사용자가 이 옵션으로 용인을 돌리면 연결을 일찍 닫을 때 BMC 가 어떻게 반응하는지, 실제 첨부(CSUS `/RawFruData/` · `Config/Files/` · `Logs/`, DL380 `/fwrepo/`, SR650 `/attach/`)의 Content-Type 이 바이너리로 잡히는지 첫 결과의 `excluded[]` 와 `find <폴더> -name 'raw.*' -size +100k` 로 확인한다 (옵션 없이 받은 트리에는 이미 받은 바이너리가 남는다).
 - [x] **[DONE 2026-10-22] `replay_full_mirror.build_response_map` 페이지네이션** — 요청 경로(`_fsmap.json`) 기반 키 + v1 `nextLink` 사슬 복원 + 페이지/멤버 수 대조 기록. `DellSensors` 62개 전부 재생, `Lclog/Entries` 58페이지 2851개 대 선언 2841 불일치 기록. `tests/unit/test_mirror_replay_tools.py`.
 - [x] **[DONE 2026-10-22] `convert_dmtf_mockup._load_mockup` 의 `headers.json._status` 무시** — 재생기와 같은 로더를 써 HTTP 상태 보존(오류 본문을 200 으로 올리지 않음), v1/v2 manifest · DMTF mockup 호환, 비-JSON 안내 파일 건너뜀.
 - [ ] **[LOW / 관찰] 커밋된 실측 fixture(`real_dell_r740` · `real_hpe_dl380` · `real_lenovo_sr650`)가 현재 gather 보다 오래됨** — 같은 미러에서 `capture_mirror_fixture.py` 로 다시 생성하면 recording/golden 이 달라진다(옛·새 재생기로는 동일하므로 이번 변경과 무관). 다시 생성할지는 제품 동작 결정이라 보류. `real_hpe_csus3200` 은 동일.
