@@ -259,13 +259,13 @@ def make_handler(resources, **opts):
     """resources(키 -> 본문)를 서빙하는 핸들러 클래스와 상태(state)를 만든다.
 
     opts: user/password/sessions/basic/login_status/session_limit/expire_after/status/flaky/
-          retry_after/raw/headers/trip/slow/accept_json_406/session_slash/empty/truncate
+          retry_after/raw/headers/trip/slow/accept_json_406/session_slash/empty/truncate/nolen
     state: log=[(method, path, 인증종류)], deleted=[세션번호], tokens, authed_gets, down
     """
     cfg = {"user": "x", "password": "y", "sessions": True, "basic": True, "login_status": None,
            "session_limit": False, "expire_after": None, "status": {}, "flaky": {}, "retry_after": {},
            "raw": {}, "headers": {}, "trip": {}, "slow": {}, "accept_json_406": (), "session_slash": False,
-           "empty": {}, "truncate": {}}
+           "empty": {}, "truncate": {}, "nolen": ()}
     cfg.update(opts)
     state = {"tokens": {}, "next": 1, "authed_gets": 0, "log": [], "deleted": [], "down": False,
              "flaky": dict((k, list(v)) for k, v in cfg["flaky"].items()),
@@ -343,6 +343,13 @@ def make_handler(resources, **opts):
                 self.end_headers()
                 self.wfile.write(data[:cfg["truncate"][key]])
                 self.wfile.flush()
+                return
+            if key in cfg["nolen"]:                       # Content-Length 없이 보내고 연결을 닫는다 (HTTP/1.0)
+                ctype, data = cfg["raw"][key]
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.end_headers()
+                self.wfile.write(data)
                 return
             if key in cfg["raw"]:
                 ctype, data = cfg["raw"][key]
@@ -1478,3 +1485,124 @@ def test_roundtrip_of_the_csus_fixture_tree_is_lossless(tmp_path, fast):
     man_a, man_b = _manifest(out_a), _manifest(out_b)
     assert man_a["fetched_ok"] == man_b["fetched_ok"] and man_b["result"] == "COMPLETE"
     assert sorted(e["path"] for e in man_a["absent"]) == sorted(e["path"] for e in man_b["absent"])
+
+
+# ================================================================================================
+# v2.2 시험 - --no-binary (바이너리 첨부를 받지 않고 excluded 로만 남긴다)
+# ================================================================================================
+
+def _bytes(*vals):
+    return bytes(bytearray(vals))
+
+
+def test_no_binary_skips_binary_attachments_without_downloading_them(tmp_path, fast, capsys):
+    """바이너리 첨부는 본문을 받지 않고 excluded(reason=no-binary)로만 남긴다. 오류가 아니라 COMPLETE, 텍스트/XML/JSON 은 저장."""
+    big = _bytes(*range(256)) * 32768                                     # 8 MiB
+    zipped = _bytes(0x50, 0x4B, 3, 4) + _bytes(*range(256)) * 4
+    res = {"/redfish/v1": _root(AdditionalDataURI="/redfish/v1/Bin", DownloadURI="/redfish/v1/Zip",
+                                LogUri="/redfish/v1/TextLog", Child={"@odata.id": "/redfish/v1/Child"}),
+           "/redfish/v1/Child": {"@odata.id": "/redfish/v1/Child", "Name": "child"}}
+    raw = {"/redfish/v1/Bin": ("application/octet-stream", big), "/redfish/v1/Zip": ("application/zip", zipped),
+           "/redfish/v1/TextLog": ("text/plain", b"line1" + _bytes(10) + b"line2"),
+           "/redfish/v1/$metadata": ("application/xml", b"<edmx:Edmx/>")}
+    cls, st = make_handler(res, raw=raw)
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out, "--no-binary") == 0
+    man = _manifest(out)
+    assert man["result"] == "COMPLETE" and man["incomplete_reasons"] == [] and man["options"]["no_binary"] is True
+    skipped = dict((e["link"], e) for e in man["excluded"] if e["reason"] == "no-binary")
+    assert sorted(skipped) == ["/redfish/v1/Bin", "/redfish/v1/Zip"]
+    assert (skipped["/redfish/v1/Bin"]["content_type"], skipped["/redfish/v1/Bin"]["content_length"],
+            skipped["/redfish/v1/Bin"]["referrer"], skipped["/redfish/v1/Bin"]["key"]) == (
+        "application/octet-stream", len(big), "/redfish/v1", "AdditionalDataURI")
+    assert man["summary"]["no_binary_skipped"] == 2 and man["complete_with_exclusions"] is True
+    assert man["fetched_ok"] == 3                                         # root + Child + TextLog
+    for name in ("Bin", "Zip"):
+        assert not os.path.exists(os.path.join(out, "redfish", "v1", name))
+    log_dir = os.path.join(out, "redfish", "v1", "TextLog")
+    assert glob.glob(os.path.join(log_dir, "raw.*")) and os.path.isfile(os.path.join(log_dir, "index.json"))
+    assert os.path.isfile(os.path.join(out, "redfish", "v1", "Child", "index.json"))
+    assert glob.glob(os.path.join(out, "redfish", "v1", "$metadata", "raw.*"))
+    assert not [f for f in os.listdir(out) if f.endswith(".part")]
+    assert man["summary"]["bytes_total"] < len(big) // 4                  # 8 MiB 짜리를 내려받지 않았다
+    assert len([e for e in _calls(st, "GET", ("token",)) if e[1] == "/redfish/v1/Bin"]) == 1
+    assert "no-binary" in capsys.readouterr().out
+
+
+def test_no_binary_still_rescues_json_with_a_wrong_content_type(tmp_path, fast):
+    """Content-Type 이 바이너리여도 본문이 JSON 이면 구제해 링크를 따라간다. JSON 처럼 시작해도 JSON 이 아니면 버린다."""
+    odd = json.dumps({"@odata.id": "/redfish/v1/Odd", "Next": {"@odata.id": "/redfish/v1/Odd/Next"}}).encode("utf-8")
+    log_like = b"[INFO] not json at all" + _bytes(10)
+    res = {"/redfish/v1": _root(A={"@odata.id": "/redfish/v1/Odd"}, B={"@odata.id": "/redfish/v1/Log"}),
+           "/redfish/v1/Odd/Next": {"@odata.id": "/redfish/v1/Odd/Next", "Name": "next"}}
+    raw = {"/redfish/v1/Odd": ("application/octet-stream", odd), "/redfish/v1/Log": ("application/octet-stream", log_like * 200)}
+    cls, st = make_handler(res, raw=raw)
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out, "--no-binary") == 0
+    man = _manifest(out)
+    saved = json.loads(_read(os.path.join(out, "redfish", "v1", "Odd", "index.json")).decode("utf-8"))
+    assert saved["@odata.id"] == "/redfish/v1/Odd"
+    assert os.path.isfile(os.path.join(out, "redfish", "v1", "Odd", "Next", "index.json"))   # 구제한 JSON 의 링크를 따라갔다
+    assert [(e["link"], e["reason"]) for e in man["excluded"]] == [("/redfish/v1/Log", "no-binary")]
+    assert not os.path.exists(os.path.join(out, "redfish", "v1", "Log"))
+    assert not [f for f in os.listdir(out) if f.endswith(".part")]
+    assert man["result"] == "COMPLETE" and man["summary"]["no_binary_skipped"] == 1
+
+
+def test_no_binary_json_candidate_is_bounded_by_the_rescue_limit(tmp_path, fast, monkeypatch):
+    """JSON 구제 후보도 JSON_RESCUE_MAX 를 넘으면 읽다 말고 건너뛴다 (길이 헤더가 있든 없든). oversize 가 아니다."""
+    monkeypatch.setattr(mirror, "JSON_RESCUE_MAX", 2048)
+    monkeypatch.setattr(mirror, "JSON_SNIFF_BYTES", 512)                  # 앞부분을 읽은 뒤에도 본문 읽기 루프를 타게 한다
+    body = json.dumps({"@odata.id": "/redfish/v1/Huge", "Pad": "x" * 6000}).encode("utf-8")
+    res = {"/redfish/v1": _root(A={"@odata.id": "/redfish/v1/Huge"}, B={"@odata.id": "/redfish/v1/Stream"})}
+    raw = {"/redfish/v1/Huge": ("application/octet-stream", body), "/redfish/v1/Stream": ("application/octet-stream", body)}
+    cls, st = make_handler(res, raw=raw, nolen=("/redfish/v1/Stream",))
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out, "--no-binary") == 0
+    man = _manifest(out)
+    got = dict((e["link"], e) for e in man["excluded"])
+    assert sorted(got) == ["/redfish/v1/Huge", "/redfish/v1/Stream"] and all(e["reason"] == "no-binary" for e in got.values())
+    assert got["/redfish/v1/Huge"]["content_length"] == len(body) and got["/redfish/v1/Stream"]["content_length"] is None
+    assert man["result"] == "COMPLETE" and man["oversize"] == []
+    for name in ("Huge", "Stream"):
+        assert not os.path.exists(os.path.join(out, "redfish", "v1", name))
+    assert not [f for f in os.listdir(out) if f.endswith(".part")]
+
+
+def test_no_binary_is_stable_across_resume_and_off_by_default(tmp_path, fast):
+    """--resume 으로 다시 돌려도 같은 결과이고, 옵션이 없으면 같은 트리에서 바이너리를 저장한다."""
+    res = {"/redfish/v1": _root(AdditionalDataURI="/redfish/v1/Bin", Child={"@odata.id": "/redfish/v1/Child"}),
+           "/redfish/v1/Child": {"@odata.id": "/redfish/v1/Child", "Name": "child"}}
+    raw = {"/redfish/v1/Bin": ("application/octet-stream", _bytes(*range(256)) * 40)}
+    out = str(tmp_path / "m")
+    for extra in ((), ("--resume",)):
+        cls, st = make_handler(res, raw=raw)
+        with _serve_cls(cls) as port:
+            assert _run(port, out, "--no-binary", *extra) == 0
+        man = _manifest(out)
+        assert man["result"] == "COMPLETE" and man["summary"]["no_binary_skipped"] == 1
+        assert not os.path.exists(os.path.join(out, "redfish", "v1", "Bin"))
+    assert man["summary"]["resumed_from_disk"] == 2                       # 루트와 Child 는 디스크 재사용
+    plain = str(tmp_path / "plain")
+    cls, st = make_handler(res, raw=raw)
+    with _serve_cls(cls) as port:
+        assert _run(port, plain) == 0
+    man = _manifest(plain)
+    assert man["summary"]["ok_raw"] == 1 and man["summary"]["no_binary_skipped"] == 0 and man["options"]["no_binary"] is False
+    assert glob.glob(os.path.join(plain, "redfish", "v1", "Bin", "raw.*"))
+    assert not [e for e in man["excluded"] if e["reason"] == "no-binary"]
+
+
+def test_no_binary_does_not_skip_large_text_bodies(tmp_path, fast):
+    """텍스트 본문은 바이너리가 아니다 - --no-binary 여도 받고, 크기 상한은 그대로 적용된다 (초과면 oversize -> INCOMPLETE)."""
+    res = {"/redfish/v1": _root(LogUri="/redfish/v1/Txt")}
+    cls, st = make_handler(res, raw={"/redfish/v1/Txt": ("text/plain", b"x" * 5000)})
+    out = str(tmp_path / "m")
+    with _serve_cls(cls) as port:
+        assert _run(port, out, "--no-binary", "--max-bytes-per-resource", "2000") == 1
+    man = _manifest(out)
+    assert man["result"] == "INCOMPLETE" and man["incomplete_reasons"] == ["oversize=1"]
+    assert [e["path"] for e in man["oversize"]] == ["/redfish/v1/Txt"] and man["summary"]["no_binary_skipped"] == 0
