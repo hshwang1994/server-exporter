@@ -1,5 +1,22 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-22 (3) — sanitize_mirror 1.0 (반출용 IP·호스트 이름 치환) — 시험 19건 · Python 3.6.8 · 실측 미러 7개 · 번들 실행
+
+> 정본: `docs/develop/08-onsite-capture.md` 9절 · `tests/unit/test_sanitize_mirror.py`. 합성 데이터와 저장소 밖의 기존 실측 미러 재생 — **용인 11대 데이터로는 돌려 보지 않았다(NEXT_ACTIONS)**. 제품 수집 코드 변경 0. 판정 `READY_FOR_FIELD` (`FIELD_VERIFIED` 아님).
+
+| 구분 | 결과 |
+|---|---|
+| 도구 시험 (Windows Python 3.13.15) | `test_sanitize_mirror.py` **19 passed**. 세 도구 시험 파일 합계 **123 passed, 1 skipped** (64.3 s). 내용: 실제 값 0 · 대체값 형식(IPv4 사설, `host-xxxxxx`, `.test`) · 같은 /24 유지 · 호스트 간 일관 · 이스케이프 직후 주소 · 버전/ID/마스크/공개 URL 보존 · IPv6와 WWN/MAC/시각 구분 · 인증서와 바이너리 처리 · 결정적 재실행과 대응표 재사용 · JSON 형식 보존 · 파일/폴더 이름 · 입력 여럿 · 누출 감지(`--verify`) · 거부 경로 · 보고서에 실제 값 없음 · 옵션 · 흔한 단어 · 매퍼 단사성 · Python 3.6 문법 · 게더링 결과 동등성(합성 CSUS 크롤 -> 치환 -> 재생) |
+| 시험이 실제로 잡는지 (변형 검증 5종) | 버전 보호를 끄면 **3건**, /24 묶음을 끄면 **13건**, 호스트 이름 학습을 끄면 **6건**, 인증서 삭제를 끄면 **11건**, 이스케이프 경계를 끄면 **11건** 실패 |
+| 소비자 · 통합 | `tests/integration -m "not live"` + `test_hpe_dl380_audit_fixes.py` + `test_pre_commit_docs20_sync_check.py` + `test_redfish_coverage_audit.py` **394 passed, 6 skipped, 1 deselected** (변화 없음) |
+| e2e / regression | `tests/e2e tests/regression` **1094 passed, 12 skipped, 6 xfailed** (134.7 s, 변화 없음) |
+| Python 3.6.8 (Rocky 8 컨테이너, C 로캘) | `test_sanitize_mirror.py` **17 passed, 2 skipped** (`ast feature_version` 은 3.8+, 재생기는 3.7+). CLI 실행 정상, 권한: 대응표 600 · 사본 폴더 700 · 파일 600 |
+| 번들 실행 (Rocky 8, Python 3.6.8, 합성 Redfish 서비스) | 압축을 푼 번들의 `mirror_many.sh` + `--no-binary` 로 캡처 `COMPLETE` -> `sanitize_mirror.py --dry-run`(아무것도 쓰지 않음) -> 본 실행(IPv4 8곳 · 서로 다른 4개 · 호스트 이름 6 · `FirmwareVersion` 보존) -> 사본에 실제 값이 든 파일 0개 -> `--verify` PASS |
+| 실측 미러 7개 치환 (저장소 밖 기존 캡처: CSUS ×4 · DL380 · SR650 · Dell R740) | JSON 26,716개, 약 3분(Windows 개발 PC): IPv4 **2,526곳**(서로 다른 27개) · IPv6 18 · 호스트 이름 56 · 인증서 본문 138. 그대로 둔 IPv4: 버전 키 156 · 마스크 27 · 특수 주소 700. 바꾸지 않은 식별자: 계정 46 · MAC 836 · 시리얼 652 · UUID 52 · WWN 268. 검증: 실제 IPv4/IPv6/호스트 이름/인증서 **0건**, 의심 값 **0건** |
+| 게더링 동등성 (같은 7개) | 원본과 사본에 게더링을 재생해(벤더 · 상태 · 키 수 동일, 전부 success) 원본 결과에 같은 대응표를 적용한 것과 사본 결과를 비교: golden 차이 **0곳**, recording 차이 **0곳**. 실제로 바뀐 필드(공허하지 않음): `bmc.ip` · `bmc.dns_name` · `bmc.network_hostname` · `bmc._network_meta.ipv4_gateways` · `system.hostname` · `bmc.oem.idrac_url` (+ CSUS `multi_node.managers[].bmc.*`) |
+| 고치며 잡은 것 | 입력 폴더가 여럿일 때 같은 이름의 호스트 폴더(`01`)가 서로 덮어써져 파일 773개가 사라지던 결함 -> 입력 폴더 이름 유지와 충돌 거부 · `--dry-run` 이 출력 경로 없음으로 죽던 결함 · 시험 작성 중 Bash 전달 과정에서 백슬래시가 풀려 정규식이 깨진 것을 `chr(92)` 로 우회 |
+| 실행하지 않은 것 | `prodgen` gate G01~G20 / `--dry-run`(**통과로 기록하지 않는다**; 변경 경로가 `runtime_roots` 밖이라 승격 해당 없음) · `tests/unit` 전체 단일 프로세스 실행 · 용인 11대 데이터(캡처 전) · Windows 개발 PC 의 긴 경로(MAX_PATH 260) 처리 - 실측 Dell 은 짧은 출력 경로를 써야 했다(운영 Linux 에는 영향 없음) |
+
 ## 2026-10-22 (2) — redfish_full_mirror 2.2 (`--no-binary`) — 도구 시험 105건 · Python 3.6.8 · 번들 실행 · 실측 Content-Type 전수 대조
 
 > 정본: `docs/develop/08-onsite-capture.md` · `tests/unit/test_full_mirror_dryrun.py`. 합성 서비스 · 저장소 밖 실측 미러 재생 — **용인 11대 실장비 캡처는 하지 않았다(NEXT_ACTIONS)**. 제품 수집 코드 변경 0. 판정 `READY_FOR_FIELD` (`FIELD_VERIFIED` 아님).

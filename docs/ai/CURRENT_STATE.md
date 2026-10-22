@@ -1,5 +1,16 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-22 (3) — 반출용 IP·호스트 이름 치환 도구 `sanitize_mirror.py`
+
+> 정본: `docs/develop/08-onsite-capture.md` 9절 · `docs/reference/decision-log.md` 2026-10-22 (4) · `tests/redfish-probe/sanitize_mirror.py`(1.0.0) · `tests/unit/test_sanitize_mirror.py`.
+
+- **계기**: 사용자 - 폐쇄망 밖으로 mock 을 가져갈 때 호스트 이름과 IP 가 유출되면 안 되고, null 로 지우면 게더링에 문제가 되니 실제 값이 아닌 대체값으로 바꿀 수 있는지 문의. 제품 수집 코드 변경 0.
+- **동작**: 폐쇄망 안에서 반출 전에 캡처 폴더를 읽어 **형식이 유효한 대체값**으로 바꾼 사본을 만든다(원본 그대로). IPv4 -> 사설 대역(같은 /24 와 /16 묶음 유지, 마스크·`0.0.0.0`·루프백·링크 로컬은 그대로), IPv6 -> 링크 로컬/ULA, 호스트 이름 -> `host-xxxxxx`, 도메인 -> `dom-xxxx.test`, 인증서 PEM 본문 -> `REDACTED`, 파일·폴더 이름도 같은 규칙. 같은 실제 값은 대응표(`--map`, 실제 값 포함 - 반출 금지)로 모든 호스트와 실행에서 같은 가짜 값. 펌웨어 버전처럼 IPv4 모양인 값은 키/문맥으로 보호. 끝에 자동 `--verify`(누출 시 종료 코드 1, 값은 출력하지 않음).
+- **한계**: MAC, 시리얼, 자산 태그, UUID, 계정 이름은 바꾸지 않고 보고서에 개수만 센다. 바이너리 첨부는 사본에 넣지 않는다. 폴더 이름은 치환되지 않아 번들 `targets.txt` 의 출력 폴더 이름을 IP 마지막 자리 없이 일련번호로 바꿨다. 익명화를 보증하지 않는다.
+- **검증(용인 데이터 아님)**: 새 시험 19건(도구 시험 124건 중 123 통과 + Windows 전용 skip 1) · 변형 검증 5종에서 시험이 실패함 · Python 3.6.8(Rocky 8, C 로캘) 통과와 CLI 실행(권한 대응표 600, 폴더 700, 파일 600) · 저장소 밖 기존 실측 미러 7개(JSON 26,716개) 치환 뒤 검증 통과(실제 값 0, 의심 값 0)와 게더링 결과 대조 차이 0곳. 수치는 TEST_HISTORY 2026-10-22 (3).
+- **번들**: `sanitize_mirror.py` 를 네 번째 파일로 넣어 `redfish_mirror_bundle.tar.gz` 를 다시 만들었다(README 는 계속 없음, 해시 변경).
+- **판정**: 개발 환경 시험은 통과했고 번들이 준비됐다 = READY_FOR_FIELD. 용인 데이터로는 아직 돌려 보지 않았으므로 FIELD_VERIFIED 가 아니다. production 승격 해당 없음(변경 경로가 `runtime_roots` 밖).
+
 ## 일자: 2026-10-22 (2) — 미러 도구 2.2: `--no-binary` (바이너리 첨부를 받지 않음)
 
 > 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-22 (2) · `tests/redfish-probe/redfish_full_mirror.py`(2.2.0) · `tests/unit/test_full_mirror_dryrun.py`.
