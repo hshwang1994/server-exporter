@@ -8,7 +8,7 @@
 - **동작**: 2xx 응답의 Content-Type 이 json/xml/text/html 이 아니면(기존 바이너리 판정 그대로) 본문을 받지 않고 `excluded[]` 에 `reason: no-binary`(경로 · Content-Type · 크기 · 참조한 곳 · 키)로 기록한다. 오류가 아니므로 COMPLETE 를 유지하고(`complete_with_exclusions`), `summary.no_binary_skipped` 와 호스트 로그의 "no-binary 건너뜀" 줄이 개수를 보여 준다. 크기 상한(`oversize`)보다 먼저 판단해 크기와 무관하다. 텍스트 본문은 건너뛰지 않고 상한이 그대로 적용된다.
 - **JSON 구제 보존**: Content-Type 이 거짓인 JSON 에서 링크가 조용히 빠지지 않게, 바이너리 타입 응답의 앞 64 KiB 가 `{` 또는 `[` 로 시작할 때만 16 MiB(`JSON_RESCUE_MAX`)까지 읽어 JSON 이면 저장하고 링크를 따라간다. 아니면 받은 조각을 버리고 no-binary 로 기록한다. GET 자원 요청에만 적용되고(로그인 POST 등 제외) 장비로 보내는 요청 종류는 늘지 않는다.
 - **검증(실장비 아님)**: 새 시험 5건(도구 시험 104 통과 + Windows skip 1) · 건너뛰기를 끄면 4건이, JSON 확인을 끄면 구제 시험이 실패함을 확인 · Python 3.6.8 에서 새 시험 통과 · 번들을 Rocky 8 에서 실행해 8 MiB 첨부를 받지 않음(수신 845 B, 출력 96 KB 대 8,316 KB) · 실측 미러 7개의 2xx 응답은 전부 텍스트 계열이라 이미 받은 리소스 중 건너뛸 것 0건. 수치는 TEST_HISTORY 2026-10-22 (2).
-- **번들**: 새 기능이 들어가 `redfish_mirror_bundle.tar.gz` 를 다시 만들어 같은 이름으로 교체했다(도구 2.2.0, 해시 변경). 2.1.0 번들은 폐기 대상(README [0]).
+- **번들**: 새 기능이 들어가 `redfish_mirror_bundle.tar.gz` 를 다시 만들어 같은 이름으로 교체했다(도구 2.2.0, 해시 변경). 사용자 지시(2026-10-22)로 번들에서 README 를 뺐다 - 3파일(`redfish_full_mirror.py` · `mirror_many.sh` · `targets.txt`) + 바깥 `.sha256`. 사용법은 `docs/develop/08-onsite-capture.md` · `mirror_many.sh` 머리말 · `--help` 에 있다. 2.1.0 번들은 폐기 대상.
 - **판정**: 개발 환경 시험은 통과했고 번들이 준비됐다 = READY_FOR_FIELD. 용인 실장비 캡처 전이라 FIELD_VERIFIED 가 아니다. production 승격 해당 없음(변경 경로가 `runtime_roots` 밖).
 
 ## 일자: 2026-10-22 — 미러 도구 v2.1 최종 마무리 (못 받은 것은 INCOMPLETE · 256 MiB 복원 · 재생 도구 2건 · 최종 번들) — READY_FOR_FIELD
@@ -23,7 +23,7 @@
 - **재생 도구 2건**: `replay_full_mirror.build_response_map` - v2 `_fsmap.json` 요청 경로 키(소문자 폴더 조회 - NTFS), v1 `nextLink` 사슬로 후속 페이지 복원, 페이지/멤버 수 대조(`pages` · `page_mismatch`), 헤더 상태 + manifest 상태 보존(status 0 제외, `/redfish/v1` 밖 경로 제외). `convert_dmtf_mockup._load_mockup` 은 같은 로더(`load_mockup_records`).
 - **검증(실장비 아님)**: 도구 시험 100건(99 통과 + Windows 전용 skip 1) · 소비자·통합 394 통과 · `tests/e2e tests/regression` 1094 / 12 skipped / 6 xfailed(이전과 동일) · Python 3.6.8(Rocky 8) 도구 시험 72 통과 · 에뮬레이터 3대 HTTPS 크롤 COMPLETE ·
   실측 미러 7개 재생 봉투 해시 7/7 불변 · 커밋된 실측 fixture 4종을 옛/새 재생기로 재생성해 바이트 동일 · 캡처 -> 재생 맵 -> HTTP Mock -> 재크롤 왕복: v2 에뮬레이터 트리 3개 누락 0. 수치와 한계는 TEST_HISTORY 2026-10-22.
-- **번들**: `redfish_mirror_bundle.tar.gz`(4파일 + `.sha256`)를 원래 이름으로 저장소 밖 `C:\github\서버mock데이터\_capture_bundle\` 와 작업 경로에 두고 이전 번들은 삭제. 용인 11대 `targets.txt`(CSUS 3 `basic`, 나머지 `auto`), README 에 크기 제한 없이 받는 법 · 교체 안내.
+- **번들**: `redfish_mirror_bundle.tar.gz`(4파일 + `.sha256`)를 원래 이름으로 저장소 밖 `C:\github\서버mock데이터\_capture_bundle\` 와 작업 경로에 두고 이전 번들은 삭제. 용인 11대 `targets.txt`(CSUS 3 `basic`, 나머지 `auto`), README 에 크기 제한 없이 받는 법 · 교체 안내 (2026-10-22 (2) 에서 README 를 뺀 3파일로 바뀜).
 - **판정**: 개발 환경에서 재현 가능한 시험은 모두 통과했고 번들이 준비됐다 = READY_FOR_FIELD. 용인 실장비 캡처를 하지 않았으므로 FIELD_VERIFIED 가 아니다. production 승격 해당 없음(변경 경로가 `runtime_roots` 밖), `prodgen` gate 는 실행하지 않았다(통과로 기록하지 않음).
 
 ## 일자: 2026-10-21 — Redfish 전수 미러 도구 v2 (운영망 원본 캡처: 누락 0 · 오류 판정 정리 · 세션 인증 · 병렬 러너)

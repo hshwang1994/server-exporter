@@ -104,6 +104,23 @@
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
 
+## 2026-10-22 (3) — 현장 번들에서 README 제외
+
+> 정본: `docs/develop/08-onsite-capture.md`. 도구·시험 변경 없음(패키징만 바뀜). 제품 수집 코드 변경 0.
+
+### 사용자 지시
+
+- "redfish_mirror_bundle.tar.gz 파일에 readme는 빼라 그냥". 이전(2026-10-22) 지시의 "README 에 크기 제한 없이 받는 방법을 안내"는 번들 안의 README 를 뜻했으나, 이번 지시로 번들에는 README 를 넣지 않는다.
+
+### 결정
+
+1. 번들은 3파일(`redfish_full_mirror.py` · `mirror_many.sh` · `targets.txt`)이다. `.sha256` 은 압축 파일 바깥에 둔다. 도구 파일은 커밋된 HEAD 와 바이트 동일하게 유지한다.
+2. 사용법의 정본은 저장소 `docs/develop/08-onsite-capture.md` 이고, 현장에서는 `mirror_many.sh` 머리말과 `python3 redfish_full_mirror.py --help` 를 쓴다. 도구 코드에는 README 를 가리키는 문구가 없다(확인함).
+
+### 영향
+
+- 번들 해시가 바뀐다(체크섬으로 이전 번들과 구분). 현장에서 이전 번들을 지우고 이 번들만 쓰는 것은 그대로다.
+
 ## 2026-10-22 (2) — 미러 도구 2.2: `--no-binary` 옵션 (바이너리 첨부를 받지 않음)
 
 > 정본: `docs/develop/08-onsite-capture.md` · `tests/redfish-probe/redfish_full_mirror.py`(2.2.0) · `tests/unit/test_full_mirror_dryrun.py`. 제품 수집 코드 변경 0.
