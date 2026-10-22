@@ -165,7 +165,39 @@ CSUS의 OEM 필드(`Oem.Hpe.PartitionInfo`, `FlexNodeInfo`, `GlobalConfiguration
 캡처 파일은 장비가 준 원본이라 관리 IP와 MAC, 호스트 이름, 시리얼 번호와 자산 태그, 계정 이름과 역할(`AccountService`), 인증서, 알림·원격 로그·SNMP 수신 대상과 일부 장비의 SNMP 커뮤니티 문자열, 라이선스 키, 디버그 로그 묶음(`AdditionalDataURI`) 안의 내부 정보가 들어 있을 수 있습니다. 도구는 비밀번호와 세션 토큰을 저장하지 않지만 장비가 본문에 담아 돌려주는 값까지 걸러 주지는 않습니다.
 
 - 보관: 도구와 러너는 캡처를 소유자만 읽도록(`umask 077`) 만듭니다. 반출용 압축은 접근을 제한한 곳에만 두고, 반출이 끝나면 현장 서버의 원본 폴더를 지웁니다. 옮기거나 풀 때 권한이 넓어지지 않게 하세요.
-- 저장소에 넣기 전 점검: 캡처 원본은 저장소에 커밋하지 않습니다. fixture나 외부에 공유할 mock으로 쓰려면 (1) 이름에 `Password`, `Community`, `Secret`, `Token`, `Key`, `Cert`가 들어간 키의 값을 검색해 지우거나 가상 값으로 바꾸고, (2) 실제 관리 IP, 호스트 이름, 시리얼, MAC, 계정 이름을 가상 값으로 치환한 사본을 만들고, (3) `raw.*` 첨부(디버그 로그, 라이선스)는 mock에 넣지 않습니다. 치환 뒤 같은 검색을 다시 하고, 저장소에 들어가는 파일은 `python scripts/ai/verify_no_plaintext_secret.py`(알려진 운영 자격증명을 다이제스트로 대조)를 통과해야 합니다.
+- 저장소에 넣기 전 점검: 캡처 원본은 저장소에 커밋하지 않습니다. fixture나 외부에 공유할 mock으로 쓰려면 (1) 이름에 `Password`, `Community`, `Secret`, `Token`, `Key`, `Cert`가 들어간 키의 값을 검색해 지우거나 가상 값으로 바꾸고, (2) 관리 IP와 호스트 이름은 `sanitize_mirror.py`(9절)로 가상 값으로 치환한 사본을 만들고 시리얼, MAC, 계정 이름은 따로 치환하고, (3) `raw.*` 첨부(디버그 로그, 라이선스)는 mock에 넣지 않습니다. 치환 뒤 같은 검색을 다시 하고, 저장소에 들어가는 파일은 `python scripts/ai/verify_no_plaintext_secret.py`(알려진 운영 자격증명을 다이제스트로 대조)를 통과해야 합니다.
+
+## 9. 반출 전 호스트 이름과 IP 치환 (`sanitize_mirror.py`)
+
+폐쇄망 밖으로 mock을 가져가야 하는데 관리 IP와 호스트 이름이 나가면 안 될 때, 캡처 폴더를 읽어 두 값을 **형식이 유효한 가짜 값**으로 바꾼 사본을 만듭니다. 값을 null로 지우지 않는 이유는 게더링 결과에 이 값을 담는 필드(`bmc.ip`, `bmc.dns_name`, `bmc.network_hostname`, `bmc._network_meta.ipv4_gateways`, `system.hostname`)가 있고 코드가 IPv4와 FQDN 형식을 전제하기 때문입니다. **폐쇄망 안에서, 반출 전에** 실행합니다. 표준 라이브러리만 쓰고 Python 3.6에서 돕니다.
+
+```
+python3 sanitize_mirror.py /home/infraops/mock --out /home/infraops/mock_clean      # 사본 만들기 (끝에 자동 검증)
+python3 sanitize_mirror.py --verify /home/infraops/mock_clean                       # 반출 직전에 한 번 더
+tar czf mock_clean.tar.gz -C /home/infraops mock_clean                              # 반출은 사본만
+```
+
+| 대상 | 바뀌는 값 |
+|---|---|
+| IPv4 | 사설 대역(10.x 등)의 가짜 주소. 같은 실제 /24는 같은 가짜 /24, 같은 /16은 같은 가짜 /16이라 게이트웨이와 DNS가 같은 서브넷에 남습니다. 서브넷 마스크, `0.0.0.0`, `127.x`, `169.254.x`, 멀티캐스트, 문서용 대역은 그대로 둡니다 |
+| IPv6 | 링크 로컬은 링크 로컬로, 나머지는 ULA(`fd..`)로. 루프백과 멀티캐스트, 파이버채널 WWN, MAC, 시각은 건드리지 않습니다 |
+| 호스트 이름 | `host-xxxxxx`, FQDN은 `host-xxxxxx.dom-xxxx.test`(예약 최상위 도메인이라 해석되지 않음). 대문자 이름은 대문자로 |
+| 인증서 PEM | 본문을 `REDACTED`로(안의 CN/SAN에 이름이 들어 있음) |
+| 파일·폴더 이름 | 같은 규칙으로 |
+
+- 호스트 이름은 `HostName`/`FQDN`/`DomainName` 류 키의 값, NTP·DNS·syslog·SMTP·LDAP 서버 키, URL의 호스트(공개 도메인 제외)에서 찾고, `--extra-host`/`--extra-domain`으로 더할 수 있습니다. 찾은 이름은 모든 호스트와 모든 파일의 본문(로그 메시지 포함)에서 같이 바뀝니다.
+- 펌웨어 버전처럼 IPv4 모양인 값은 그대로 둡니다: `Version`/`Firmware` 류 키의 값, `version 1.2.3.4`처럼 앞에 버전 단어가 있는 문장, 앞뒤에 문자·숫자·`-`·`_`가 붙은 ID. 더 지키려면 `--protect-key`, `--protect-text`를 씁니다.
+- 같은 실제 값은 호스트, 파일, 실행이 달라도 같은 가짜 값이 됩니다. 이를 위한 대응표(`--map`, 기본 `~/.redfish_sanitize_map.json`)에는 **실제 값이 들어 있으니 반출하지 말고** 사본 폴더 안에는 둘 수 없습니다. 호스트를 더 받아 같은 대응표로 돌리면 먼저 만든 사본과 값이 이어집니다. 이미 처리한 사본을 다시 입력하면 거부합니다.
+- 반출 전 검사(`--verify`)는 대응표의 실제 IP, IPv6, 호스트 이름, 인증서 본문이 사본에 남았는지와 버전이 아닌데 대응표에 없는 IPv4 모양 값이 있는지 봅니다. 남았으면 위치(파일, 키)만 보여 주고(값은 출력하지 않음) 종료 코드 1입니다.
+
+**한계(반드시 읽으세요):** 이 도구는 IP와 호스트 이름만 바꾸며 익명화를 보증하지 않습니다.
+
+- MAC, 시리얼, 자산 태그, UUID, 계정 이름은 그대로입니다(보고서 `_sanitize_report.json`의 `other_identifiers_not_replaced`가 개수를 셉니다). 필요하면 따로 치환하세요.
+- 바이너리 첨부(`raw.bin` 등)는 안을 알 수 없어 사본에 넣지 않습니다(`--keep-binary`로 넣으면 안의 값은 못 바꿈). 반출할 캡처는 `--no-binary`로 받는 것이 안전합니다.
+- 캡처 폴더 이름(예: `csus3200_24`)에 IP 마지막 자리가 들어 있으면 그대로 남습니다(폴더 이름 끝이 그 호스트 IP의 마지막 자리와 같으면 도구가 경고합니다). `targets.txt`의 출력 폴더 이름은 IP와 무관하게(예: `csus3200_01`) 정하세요.
+- 로그 문장 속에 도메인 없는 짧은 이름만 나오는 경우는 못 찾습니다. 그런 이름은 `--extra-host`로 줍니다. 반출 전에 `--verify`와 사람의 훑어보기를 모두 거치세요.
+
+**확인한 것(2026-10-22):** 저장소 밖에 있는 기존 실측 미러 7개(CSUS ×4, DL380, SR650, Dell R740, JSON 26,716개)에 돌려 실제 IP와 호스트 이름이 0건 남는 것을 확인했습니다. 같은 미러로 게더링을 돌리면 사본의 결과가 원본 결과에 같은 대응표를 적용한 것과 필드 단위로 같았고(차이 0곳), 달라진 필드는 `bmc.ip`, `bmc.dns_name`, `bmc.network_hostname`, `bmc._network_meta.ipv4_gateways`, `system.hostname`, `bmc.oem.idrac_url`뿐이었습니다. 용인 11대는 아직 캡처 전이라 그 데이터로는 확인하지 않았습니다.
 
 ## 관련
 
@@ -175,6 +207,8 @@ CSUS의 OEM 필드(`Oem.Hpe.PartitionInfo`, `FlexNodeInfo`, `GlobalConfiguration
 | 여러 대 병렬 실행 | `tests/redfish-probe/mirror_many.sh` |
 | 도구 동작 시험 | `tests/unit/test_full_mirror_dryrun.py` |
 | 재생·변환 도구 시험 | `tests/unit/test_mirror_replay_tools.py` |
+| 반출용 IP·호스트 이름 치환 도구 | `tests/redfish-probe/sanitize_mirror.py` |
+| 치환 도구 시험 | `tests/unit/test_sanitize_mirror.py` |
 | 오프라인 재생기 | `tests/redfish-probe/replay_full_mirror.py` |
 | 오프라인 재생 변환 | `tests/integration/convert_dmtf_mockup.py` |
 | CSUS 합성 fixture와 미검증 항목 | `tests/fixtures/redfish/hpe_csus_3200/README.md` |
