@@ -18,6 +18,9 @@
 #   MIRROR_PY     크롤러 경로 (기본: 이 스크립트 옆 redfish_full_mirror.py)
 #
 # 호스트별 로그는 <출력폴더>/_crawl.log, 종료코드는 <출력폴더>/_exit_code 에 남는다.
+# 폐쇄망 밖으로 반출할 때: 끝난 뒤 python3 sanitize_mirror.py <출력 상위 폴더> --out <사본 폴더> 로 IP 와 호스트 이름을 대체값으로
+#   바꾼 사본을 만든다 (--help 참고). 반출할 캡처는 MIRROR_ARGS="--no-binary" 로 받는 것이 안전하다 (바이너리 첨부 안은 치환할 수 없다).
+#   출력 폴더 이름(targets.txt 3열)에는 IP 마지막 자리를 넣지 않는다 - 폴더 이름은 치환되지 않는다.
 # 캡처 파일에는 IP / 시리얼 / 계정명이 들어 있으므로 소유자만 읽도록 umask 077 로 만든다.
 # 종료코드: 0 = 전부 COMPLETE, 1 = 그 외가 하나라도 있음, 2 = 사용법/환경 오류, 130 = 중단.
 # bash 4.2+ 호환 (wait -n / mapfile -d 를 쓰지 않는다). xargs 도 필요 없다 (Rocky 8 최소 이미지).
