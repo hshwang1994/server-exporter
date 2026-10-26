@@ -1,0 +1,1442 @@
+{
+ "csus3200_01": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw RMC 1.77.30; BIOS HThread=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 32/32; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 128 == ΣTotalThreads 128, PS.LPC 128, BIOS HThread=Enabled — 02-cpu-002: 1.77.30 LPC=ΣTotalThreads(ADR 전제 불성립, 출력은 동일)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: BaseSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 4 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=1048576 == MemorySummary.TotalSystemMemoryGiB×1024(1024×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-002: OperatingSpeedMhz 3200 = 실클럭(Oem.Hpe.Label PC5-6400B = 6400 MT/s) vs iLO/XCC 는 MT/s · 02-memory-004: rank_count/error_correction null(raw 키 없음, Label '1Rx4' 에 rank). locator=ServiceLabel 정상, manufacturer 정규화 정상"
+   },
+   "summary": {
+    "state": "ISSUE",
+    "evidence": "groups[].speed_mhz 3200 (02-memory-002 와 같은 원천) — 수량·단위용량·grand_total_gb 는 정확"
+   }
+  }
+ },
+ "csus3200_02": {
+  "_area": {
+   "cpu": {
+    "state": "ISSUE",
+    "evidence": "fw RMC 1.77.30; BIOS HThread=Disabled (Bios/Settings 도 Disabled); manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 16/16; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=112 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-001: T1 224 = ΣTotalThreads 224 (PS.LPC 224) 인데 BIOS HThread=Disabled (Bios/Settings 도 Disabled) → 기대 112 (추정: OS 실측 없음)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2000 — 원천: BaseSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 4 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 3500 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=524288 == MemorySummary.TotalSystemMemoryGiB×1024(512×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-002: OperatingSpeedMhz 3200 = 실클럭(Oem.Hpe.Label PC5-6400B = 6400 MT/s) vs iLO/XCC 는 MT/s · 02-memory-004: rank_count/error_correction null(raw 키 없음, Label '1Rx4' 에 rank). locator=ServiceLabel 정상, manufacturer 정규화 정상"
+   },
+   "summary": {
+    "state": "ISSUE",
+    "evidence": "groups[].speed_mhz 3200 (02-memory-002 와 같은 원천) — 수량·단위용량·grand_total_gb 는 정확"
+   }
+  }
+ },
+ "csus3200_03": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw RMC 1.77.30; BIOS HThread=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 16/16; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 128 == ΣTotalThreads 128, PS.LPC 128, BIOS HThread=Enabled — 02-cpu-002: 1.77.30 LPC=ΣTotalThreads(ADR 전제 불성립, 출력은 동일)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: BaseSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 4 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=524288 == MemorySummary.TotalSystemMemoryGiB×1024(512×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-002: OperatingSpeedMhz 3200 = 실클럭(Oem.Hpe.Label PC5-6400B = 6400 MT/s) vs iLO/XCC 는 MT/s · 02-memory-004: rank_count/error_correction null(raw 키 없음, Label '1Rx4' 에 rank). locator=ServiceLabel 정상, manufacturer 정규화 정상"
+   },
+   "summary": {
+    "state": "ISSUE",
+    "evidence": "groups[].speed_mhz 3200 (02-memory-002 와 같은 원천) — 수량·단위용량·grand_total_gb 는 정확"
+   }
+  }
+ },
+ "dl380_gen12_01": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw iLO 1.24.00; BIOS ProcHyperthreading=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 16/32; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 128 == ΣTotalThreads 128, PS.LPC None, BIOS ProcHyperthreading=Enabled"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: Oem.Hpe.RatedSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=1572864 == MemorySummary.TotalSystemMemoryGiB×1024(1536×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "PASS",
+    "evidence": "present 16/32 (Absent 제외) · 15키 전부 raw 일치 · Manufacturer 'Hynix'/'Micron'/'Hynix Semiconductor' → 정규화 정상"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 수량×단위 = grand_total_gb(1536) == total_mb/1024 — 1차 DL380 은 Samsung 14 + SK hynix 2 로 2그룹(정상)"
+   }
+  }
+ },
+ "dl380_gen12_02": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw iLO 1.24.00; BIOS ProcHyperthreading=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 8/32; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 128 == ΣTotalThreads 128, PS.LPC None, BIOS ProcHyperthreading=Enabled"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: Oem.Hpe.RatedSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=262144 == MemorySummary.TotalSystemMemoryGiB×1024(256×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "PASS",
+    "evidence": "present 8/32 (Absent 제외) · 15키 전부 raw 일치 · Manufacturer 'Hynix'/'Micron'/'Hynix Semiconductor' → 정규화 정상"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 수량×단위 = grand_total_gb(256) == total_mb/1024 — 1차 DL380 은 Samsung 14 + SK hynix 2 로 2그룹(정상)"
+   }
+  }
+ },
+ "dl380_gen12_03": {
+  "_area": {
+   "cpu": {
+    "state": "ISSUE",
+    "evidence": "fw iLO 1.24.00; BIOS ProcHyperthreading=Disabled (Bios/Settings 도 Disabled), PowerState Off; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 32/32; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-001: T1 128 = ΣTotalThreads 128 (PS.LPC None) 인데 BIOS ProcHyperthreading=Disabled (Bios/Settings 도 Disabled), PowerState Off → 기대 64 (추정: OS 실측 없음)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: Oem.Hpe.RatedSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=524288 == MemorySummary.TotalSystemMemoryGiB×1024(512×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-001: Status 키 없는 빈 슬롯 16개(CapacityMiB 0 · Oem.Hpe.DIMMStatus 'Other' · PowerState Off)가 slots 에 포함 → 32 (장착 16)"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 수량×단위 = grand_total_gb(512) == total_mb/1024 — 1차 DL380 은 Samsung 14 + SK hynix 2 로 2그룹(정상)"
+   }
+  }
+ },
+ "dl380_gen12_04": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw iLO 1.24.00; BIOS ProcHyperthreading=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 8/32; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 128 == ΣTotalThreads 128, PS.LPC None, BIOS ProcHyperthreading=Enabled"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: Oem.Hpe.RatedSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=262144 == MemorySummary.TotalSystemMemoryGiB×1024(256×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "PASS",
+    "evidence": "present 8/32 (Absent 제외) · 15키 전부 raw 일치 · Manufacturer 'Hynix'/'Micron'/'Hynix Semiconductor' → 정규화 정상"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 수량×단위 = grand_total_gb(256) == total_mb/1024 — 1차 DL380 은 Samsung 14 + SK hynix 2 로 2그룹(정상)"
+   }
+  }
+ },
+ "sr650_v4_01": {
+  "_area": {
+   "cpu": {
+    "state": "ISSUE",
+    "evidence": "fw XCC IHX438R 2.97; BIOS Processors_Hyper_Threading=Disabled (Bios/Pending 도 Disabled); manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 2/32; ΣCap==MemorySummary; 02-memory-003 LOW 만"
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-001: T1 128 = ΣTotalThreads 128 (PS.LPC 128) 인데 BIOS Processors_Hyper_Threading=Disabled (Bios/Pending 도 Disabled) → 기대 64 (추정: OS 실측 없음)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: Oem.Lenovo.CurrentClockSpeedMHz(5순위) — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=131072 == MemorySummary.TotalSystemMemoryGiB×1024(128×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-003(LOW): locator='<Slot>'(예 '32') — Location.PartLocation.ServiceLabel 'DIMM 32' 미사용. Absent 슬롯 제외·용량/속도/제조사/PN/rank/폭/ECC/health raw 일치"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 수량×단위 = grand_total_gb(128) == total_mb/1024 — 1차 DL380 은 Samsung 14 + SK hynix 2 로 2그룹(정상)"
+   }
+  }
+ },
+ "sr650_v4_02": {
+  "_area": {
+   "cpu": {
+    "state": "ISSUE",
+    "evidence": "fw XCC IHX438R 2.97; BIOS Processors_Hyper_Threading=Disabled (Bios/Pending 도 Disabled); manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 2/32; ΣCap==MemorySummary; 02-memory-003 LOW 만"
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-001: T1 128 = ΣTotalThreads 128 (PS.LPC 128) 인데 BIOS Processors_Hyper_Threading=Disabled (Bios/Pending 도 Disabled) → 기대 64 (추정: OS 실측 없음)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: Oem.Lenovo.CurrentClockSpeedMHz(5순위) — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=131072 == MemorySummary.TotalSystemMemoryGiB×1024(128×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-003(LOW): locator='<Slot>'(예 '32') — Location.PartLocation.ServiceLabel 'DIMM 32' 미사용. Absent 슬롯 제외·용량/속도/제조사/PN/rank/폭/ECC/health raw 일치"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 수량×단위 = grand_total_gb(128) == total_mb/1024 — 1차 DL380 은 Samsung 14 + SK hynix 2 로 2그룹(정상)"
+   }
+  }
+ },
+ "sr650_v4_03": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw XCC IHX438R 2.97; BIOS Processors_Hyper_Threading=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 16/32; ΣCap==MemorySummary; 02-memory-003 LOW 만"
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 128 == ΣTotalThreads 128, PS.LPC 128, BIOS Processors_Hyper_Threading=Enabled"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: Oem.Lenovo.CurrentClockSpeedMHz(5순위) — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=1048576 == MemorySummary.TotalSystemMemoryGiB×1024(1024×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-003(LOW): locator='<Slot>'(예 '32') — Location.PartLocation.ServiceLabel 'DIMM 32' 미사용. Absent 슬롯 제외·용량/속도/제조사/PN/rank/폭/ECC/health raw 일치"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 수량×단위 = grand_total_gb(1024) == total_mb/1024 — 1차 DL380 은 Samsung 14 + SK hynix 2 로 2그룹(정상)"
+   }
+  }
+ },
+ "sr650_v4_04": {
+  "_area": {
+   "cpu": {
+    "state": "ISSUE",
+    "evidence": "fw XCC IHX438R 2.97; BIOS Processors_Hyper_Threading=Disabled (Bios/Pending 도 Disabled); manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 8/32; ΣCap==MemorySummary; 02-memory-003 LOW 만"
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-001: T1 128 = ΣTotalThreads 128 (PS.LPC 128) 인데 BIOS Processors_Hyper_Threading=Disabled (Bios/Pending 도 Disabled) → 기대 64 (추정: OS 실측 없음)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: Oem.Lenovo.CurrentClockSpeedMHz(5순위) — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=262144 == MemorySummary.TotalSystemMemoryGiB×1024(256×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-003(LOW): locator='<Slot>'(예 '32') — Location.PartLocation.ServiceLabel 'DIMM 32' 미사용. Absent 슬롯 제외·용량/속도/제조사/PN/rank/폭/ECC/health raw 일치"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "32GB×8 이 part_number 접미사(' 3SFF' 5 / ' 2XCC' 3)로 2그룹 — 02-memory-005 관찰; 합계 256 정확"
+   }
+  }
+ },
+ "r1_DELL_R740_01": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw iDRAC 7.00.00.184; BIOS LogicalProc=Enabled, ProcessorSummary.ThreadingEnabled=true; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 8/8; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=48 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 96 == ΣTotalThreads 96, PS.LPC 96, BIOS LogicalProc=Enabled, ProcessorSummary.ThreadingEnabled=true"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2400 — 원천: 브랜드 문자열 '@ 2.40GHz'(=OperatingSpeedMHz 2400) — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=262144 == MemorySummary.TotalSystemMemoryGiB×1024(256×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "PASS",
+    "evidence": "present 8/8 (Absent 제외) · 15키 전부 raw 일치 · Manufacturer 'Hynix'/'Micron'/'Hynix Semiconductor' → 정규화 정상"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 수량×단위 = grand_total_gb(256) == total_mb/1024 — 1차 DL380 은 Samsung 14 + SK hynix 2 로 2그룹(정상)"
+   }
+  }
+ },
+ "r1_HPE_CSUS3200_01": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw RMC 1.75.108; BIOS HThread=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 16/16; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=32 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 64 == ΣTotalThreads 64, PS.LPC 32, BIOS HThread=Enabled — 1.75.108 LPC=코어 수(ADR 전제 성립)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 3700 — 원천: BaseSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 4 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4100 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=524288 == MemorySummary.TotalSystemMemoryGiB×1024(512×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-002: OperatingSpeedMhz 2400 = 실클럭(Oem.Hpe.Label PC5-4800B = 4800 MT/s) vs iLO/XCC 는 MT/s · 02-memory-004: rank_count/error_correction null(raw 키 없음, Label '1Rx4' 에 rank). locator=ServiceLabel 정상, manufacturer 정규화 정상"
+   },
+   "summary": {
+    "state": "ISSUE",
+    "evidence": "groups[].speed_mhz 2400 (02-memory-002 와 같은 원천) — 수량·단위용량·grand_total_gb 는 정확"
+   }
+  }
+ },
+ "r1_HPE_CSUS3200_02": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw RMC 1.75.108; BIOS HThread=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 16/16; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=32 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 64 == ΣTotalThreads 64, PS.LPC 32, BIOS HThread=Enabled — 1.75.108 LPC=코어 수(ADR 전제 성립)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 3700 — 원천: BaseSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 4 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4100 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=524288 == MemorySummary.TotalSystemMemoryGiB×1024(512×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-002: OperatingSpeedMhz 2400 = 실클럭(Oem.Hpe.Label PC5-4800B = 4800 MT/s) vs iLO/XCC 는 MT/s · 02-memory-004: rank_count/error_correction null(raw 키 없음, Label '1Rx4' 에 rank). locator=ServiceLabel 정상, manufacturer 정규화 정상"
+   },
+   "summary": {
+    "state": "ISSUE",
+    "evidence": "groups[].speed_mhz 2400 (02-memory-002 와 같은 원천) — 수량·단위용량·grand_total_gb 는 정확"
+   }
+  }
+ },
+ "r1_HPE_CSUS3200_03": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw RMC 1.75.108; BIOS HThread=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 32/32; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 128 == ΣTotalThreads 128, PS.LPC 64, BIOS HThread=Enabled — 1.75.108 LPC=코어 수(ADR 전제 성립)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: BaseSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 4 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=1048576 == MemorySummary.TotalSystemMemoryGiB×1024(1024×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-002: OperatingSpeedMhz 2400 = 실클럭(Oem.Hpe.Label PC5-4800B = 4800 MT/s) vs iLO/XCC 는 MT/s · 02-memory-004: rank_count/error_correction null(raw 키 없음, Label '1Rx4' 에 rank). locator=ServiceLabel 정상, manufacturer 정규화 정상"
+   },
+   "summary": {
+    "state": "ISSUE",
+    "evidence": "groups[].speed_mhz 2400 (02-memory-002 와 같은 원천) — 수량·단위용량·grand_total_gb 는 정확"
+   }
+  }
+ },
+ "r1_HPE_CSUS3200_04": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw RMC 1.75.108; BIOS HThread=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "ISSUE",
+    "evidence": "present 32/32; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=64 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 128 == ΣTotalThreads 128, PS.LPC 64, BIOS HThread=Enabled — 1.75.108 LPC=코어 수(ADR 전제 성립)"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 2900 — 원천: BaseSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 4 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=1048576 == MemorySummary.TotalSystemMemoryGiB×1024(1024×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-002: OperatingSpeedMhz 2400 = 실클럭(Oem.Hpe.Label PC5-4800B = 4800 MT/s) vs iLO/XCC 는 MT/s · 02-memory-004: rank_count/error_correction null(raw 키 없음, Label '1Rx4' 에 rank). locator=ServiceLabel 정상, manufacturer 정규화 정상"
+   },
+   "summary": {
+    "state": "ISSUE",
+    "evidence": "groups[].speed_mhz 2400 (02-memory-002 와 같은 원천) — 수량·단위용량·grand_total_gb 는 정확"
+   }
+  }
+ },
+ "r1_HPE_DL380_01": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw iLO 1.20.00; BIOS ProcHyperthreading=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 16/32; ΣCap==MemorySummary; "
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=48 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 96 == ΣTotalThreads 96, PS.LPC None, BIOS ProcHyperthreading=Enabled"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 3000 — 원천: Oem.Hpe.RatedSpeedMHz — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4000 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=1048576 == MemorySummary.TotalSystemMemoryGiB×1024(1024×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "PASS",
+    "evidence": "present 16/32 (Absent 제외) · 15키 전부 raw 일치 · Manufacturer 'Hynix'/'Micron'/'Hynix Semiconductor' → 정규화 정상"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 수량×단위 = grand_total_gb(1024) == total_mb/1024 — 1차 DL380 은 Samsung 14 + SK hynix 2 로 2그룹(정상)"
+   }
+  }
+ },
+ "r1_Lenovo_SR650_01": {
+  "_area": {
+   "cpu": {
+    "state": "PASS",
+    "evidence": "fw XCC IHX414J 1.22; BIOS Processors_Hyper_Threading=Enabled; manufacturer 미발행(02-cpu-003)은 전 서버 공통"
+   },
+   "memory": {
+    "state": "PASS",
+    "evidence": "present 16/32; ΣCap==MemorySummary; 02-memory-003 LOW 만"
+   }
+  },
+  "cpu": {
+   "architecture": {
+    "state": "PASS",
+    "evidence": "raw ProcessorArchitecture 'x86' (InstructionSet 'x86-64' 미사용) → T1 'x86'. 02-cpu-004 관찰(OS/ESXi 'x86_64' 와 표기 다름)"
+   },
+   "cores_physical": {
+    "state": "PASS",
+    "evidence": "ΣTotalCores=32 == T1 (TotalEnabledCores/CoresEnabled 도 동일 — 02-cpu-006 잠재)"
+   },
+   "logical_threads": {
+    "state": "PASS",
+    "evidence": "T1 64 == ΣTotalThreads 64, PS.LPC None, BIOS Processors_Hyper_Threading=Enabled"
+   },
+   "max_speed_mhz": {
+    "state": "PASS",
+    "evidence": "T1 3600 — 원천: Oem.Lenovo.CurrentClockSpeedMHz(5순위) — Intel 공개 사양 base 와 일치"
+   },
+   "model": {
+    "state": "PASS",
+    "evidence": "raw Model 그대로(strip 만) — 공백/상표 정리 로직 없음, 값 자체는 깨끗함"
+   },
+   "sockets": {
+    "state": "PASS",
+    "evidence": "ProcessorType 전부 'CPU', Status Enabled → 2 == T1; SubProcessors(Core)는 별도 컬렉션이라 미포함"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 1개(model/manufacturer='Intel(R) Corporation' raw/max_speed/arch/sockets/cores_per_socket=total//sockets/total_cores) 모두 raw 와 일치 — 02-cpu-003(manufacturer 비정규화) · §5(l2/l3_cache_kb 보충 가능)"
+   },
+   "turbo_max_mhz": {
+    "state": "PASS",
+    "evidence": "MaxSpeedMHz 4300 == T1 (Intel 사양 turbo 와 일치; Dell 8260 은 BMC 4000 vs 사양 3900)"
+   },
+   "manufacturer(사전 선언·미발행)": {
+    "state": "ISSUE",
+    "evidence": "02-cpu-003: field_dictionary cpu.manufacturer channel=[redfish,os,esxi] 인데 Redfish envelope 에 키 없음(18/18)"
+   }
+  },
+  "memory": {
+   "free_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw 에 가용 메모리 값 없음(MemorySummary·MemoryMetrics·Telemetry 확인) — 계약 6.2 channel=[os] → null 정상"
+   },
+   "visible_mb": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "Memory/MemorySummary 에 가시 용량 없음 — 계약 channel=[os,esxi] → null 정상"
+   },
+   "total_mb": {
+    "state": "PASS",
+    "evidence": "ΣCapacityMiB(present)=1048576 == MemorySummary.TotalSystemMemoryGiB×1024(1024×1024) == T1"
+   },
+   "installed_mb": {
+    "state": "PASS",
+    "evidence": "total_mb 와 같은 식 — 동일 값"
+   },
+   "total_basis": {
+    "state": "PASS",
+    "evidence": "'physical_installed' 고정 — DIMM 합과 MemorySummary 가 일치해 의미 정확(02-memory-006 관찰)"
+   },
+   "slots[]": {
+    "state": "ISSUE",
+    "evidence": "02-memory-003(LOW): locator='<Slot>'(예 '32') — Location.PartLocation.ServiceLabel 'DIMM 32' 미사용. Absent 슬롯 제외·용량/속도/제조사/PN/rank/폭/ECC/health raw 일치"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups 수량×단위 = grand_total_gb(1024) == total_mb/1024 — 1차 DL380 은 Samsung 14 + SK hynix 2 로 2그룹(정상)"
+   }
+  }
+ }
+}
