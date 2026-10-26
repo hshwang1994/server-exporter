@@ -41,7 +41,8 @@ label: 2차는 서버 이름, 1차는 `r1_DELL_R740_01`, `r1_HPE_CSUS3200_01..04
 | `pytest tests/integration -m "not live"` | 366 passed, 6 skipped, 1 deselected (`tier0/pytest_integration_notlive_windows.log`) |
 | WSL(Ubuntu) `test_build_output_no_data_playbook.py` + `test_addon_hook_playbook.py` (Windows 에서는 skip 되는 엔진 테스트) | 23 passed (`tier0/pytest_engine_wsl.log`) |
 | `pytest tests/unit tests/e2e tests/regression` 를 **한 프로세스**로 | 36 failed, 5930 passed, 45 skipped, 6 xfailed (`tier0/pytest_unit_e2e_regression.log`). 실패 36건 중 표본 8건은 단독 실행 시 통과 → 모듈 전역 상태(캐시·인증 관측·재생 seam) 오염으로 보이는 **테스트 격리 결함 후보**(ISSUES 에 기록). 프로젝트 문서의 실행 단위는 `tests/e2e tests/regression` 과 `tests/unit` 분리 |
-| `pytest tests/e2e tests/regression` / `pytest tests/unit` (분리 실행) | `tier0/pytest_e2e_regression.log`, `tier0/pytest_unit.log` 참조 (실행 후 갱신) |
+| `pytest tests/e2e tests/regression` (분리 실행, 프로젝트 문서의 실행 단위) | **1094 passed, 12 skipped, 6 xfailed** (73.6 s) — TEST_HISTORY 2026-10-22 기록과 같다 (`tier0/pytest_e2e_regression.log`) |
+| `pytest tests/unit` (분리 실행) | **19 failed, 4853 passed, 33 skipped** (24.8 min, `tier0/pytest_unit.log`). 실패 19건은 `test_redfish_audit_2026_10_10.py`(3) · `test_redfish_bios_current.py`(8) · `test_redfish_phase3_contracts.py`(6) · `test_redfish_redirect_boundary.py`(1) · `test_sanitize_mirror.py`(1) — 표본 단독 실행은 통과. 쌍 실행으로 재현: `pytest tests/unit/test_full_mirror_dryrun.py tests/unit/test_redfish_bios_current.py` → 8 failed (`test_mirror_replay_tools.py`·`test_csus_fixture_replay.py` 와의 쌍은 통과) — `test_full_mirror_dryrun.py` 가 남기는 전역 상태(모듈 seam/캐시)가 뒤 테스트를 오염시키는 **테스트 격리 결함**(순서 의존). ISSUES 에 기록, 수정은 하지 않음 |
 
 ## 검증 한계 (재생이 흉내 내지 못한 것 — 이슈가 아니라 미확정)
 

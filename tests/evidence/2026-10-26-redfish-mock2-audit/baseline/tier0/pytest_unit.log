@@ -1,1 +1,569 @@
-........................................................
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+........................................................................ [ 11%]
+........................................................................ [ 13%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 20%]
+........................................................................ [ 22%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 26%]
+........................................................................ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+................................................................s....... [ 39%]
+........................................................................ [ 41%]
+..............................................................ss........ [ 42%]
+..............................ss........................................ [ 44%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+.s..s.............................s..................................... [ 57%]
+........................................................................ [ 58%]
+.......s................................................................ [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+...........................................................FFF.......... [ 71%]
+........................................................................ [ 73%]
+..............F..........FFFFFFF........................................ [ 74%]
+........................................................................ [ 76%]
+............FFF.F.FF.................................................... [ 77%]
+........F............................................................... [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+.....................sssssssssssssssssssssss..................F......... [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 91%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 98%]
+........................................................................ [ 99%]
+......s..                                                                [100%]
+================================== FAILURES ===================================
+____ test_read_helpers_turn_a_broken_response_into_a_transport_error[exc0] ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFEA40750>
+exc = IncompleteRead(7 bytes read)
+
+    @pytest.mark.parametrize("exc", [http.client.IncompleteRead(b"partial"), http.client.BadStatusLine("garbage"),
+                                     http.client.RemoteDisconnected("closed")])
+    def test_read_helpers_turn_a_broken_response_into_a_transport_error(monkeypatch, exc):
+        def boom(*a, **k):
+            raise exc
+        monkeypatch.setattr(rg, "_urlopen", boom)
+        for fn, args in ((rg._get_impl, ("10.0.0.1", "Systems/1", "u", "p", 5, False)), (rg._get_noauth, ("10.0.0.1", "", 5, False))):
+            code, data, err = fn(*args)
+>           assert code == 0 and data == {} and err.startswith("Response lost: "), (fn.__name__, code, err)
+E           AssertionError: ('fake_get_noauth', 200, None)
+E           assert (200 == 0)
+
+tests\unit\test_redfish_audit_2026_10_10.py:55: AssertionError
+____ test_read_helpers_turn_a_broken_response_into_a_transport_error[exc1] ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFE4BD400>
+exc = BadStatusLine('garbage')
+
+    @pytest.mark.parametrize("exc", [http.client.IncompleteRead(b"partial"), http.client.BadStatusLine("garbage"),
+                                     http.client.RemoteDisconnected("closed")])
+    def test_read_helpers_turn_a_broken_response_into_a_transport_error(monkeypatch, exc):
+        def boom(*a, **k):
+            raise exc
+        monkeypatch.setattr(rg, "_urlopen", boom)
+        for fn, args in ((rg._get_impl, ("10.0.0.1", "Systems/1", "u", "p", 5, False)), (rg._get_noauth, ("10.0.0.1", "", 5, False))):
+            code, data, err = fn(*args)
+>           assert code == 0 and data == {} and err.startswith("Response lost: "), (fn.__name__, code, err)
+E           AssertionError: ('fake_get_noauth', 200, None)
+E           assert (200 == 0)
+
+tests\unit\test_redfish_audit_2026_10_10.py:55: AssertionError
+____ test_read_helpers_turn_a_broken_response_into_a_transport_error[exc2] ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFE4BE820>
+exc = RemoteDisconnected('closed')
+
+    @pytest.mark.parametrize("exc", [http.client.IncompleteRead(b"partial"), http.client.BadStatusLine("garbage"),
+                                     http.client.RemoteDisconnected("closed")])
+    def test_read_helpers_turn_a_broken_response_into_a_transport_error(monkeypatch, exc):
+        def boom(*a, **k):
+            raise exc
+        monkeypatch.setattr(rg, "_urlopen", boom)
+        for fn, args in ((rg._get_impl, ("10.0.0.1", "Systems/1", "u", "p", 5, False)), (rg._get_noauth, ("10.0.0.1", "", 5, False))):
+            code, data, err = fn(*args)
+>           assert code == 0 and data == {} and err.startswith("Response lost: "), (fn.__name__, code, err)
+E           AssertionError: ('fake_get_noauth', 200, None)
+E           assert (200 == 0)
+
+tests\unit\test_redfish_audit_2026_10_10.py:55: AssertionError
+______________ test_bios_response_does_not_change_auth_evidence _______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFEA9EAC0>
+
+    def test_bios_response_does_not_change_auth_evidence(monkeypatch):
+        """첫 인증 응답만 기록한다 — BIOS 401 이 표준 계정 거부 판정(auth_evidence)을 만들지 않는다."""
+        calls = []
+        routes = {SYS_PATH: (200, _system_body(), None), BIOS_PATH: (401, {}, "HTTP 401: Unauthorized")}
+        monkeypatch.setattr(rg, "_get_impl", _routed_get(routes, calls))
+        all_errors, collected, failed, unsupported = [], [], [], []
+        rg._collect_all_sections(IP, "generic", SYSTEM, None, None, *CREDS,
+                                 all_errors, collected, failed, unsupported)
+    
+>       assert calls[0] == SYS_PATH and BIOS_PATH in calls
+               ^^^^^^^^
+E       IndexError: list index out of range
+
+tests\unit\test_redfish_bios_current.py:520: IndexError
+_______________ test_real_recording_baseline_is_a_full_success ________________
+
+real_baseline = ({'vendor': 'dell', 'status': 'success', 'collected': ['bmc', 'power', 'system', 'thermal'], 'failed_sections': [], ...}, [])
+
+    def test_real_recording_baseline_is_a_full_success(real_baseline):
+        base, calls = real_baseline
+        assert base["status"] == "success" and base["failed_sections"] == []
+        assert base["error_count"] == 0
+        # 녹화에는 Bios 본문이 없다 → 링크로 1회 조회 → replay 404 → notice (errors 불변)
+        assert base["data"]["bios"] == {"current": {"attributes": None}}
+>       assert calls.count(REAL_BIOS_PATH) == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <built-in method count of list object at 0x000002DE8162BB00>('Systems/System.Embedded.1/Bios')
+E        +    where <built-in method count of list object at 0x000002DE8162BB00> = [].count
+
+tests\unit\test_redfish_bios_current.py:583: AssertionError
+_______________ test_real_recording_bios_success_adds_only_bios _______________
+
+real_baseline = ({'vendor': 'dell', 'status': 'success', 'collected': ['bmc', 'power', 'system', 'thermal'], 'failed_sections': [], ...}, [])
+
+    def test_real_recording_bios_success_adds_only_bios(real_baseline):
+        base, base_calls = real_baseline
+        source = copy.deepcopy(PRESERVE_SAMPLE)
+    
+        def mutate(rec):
+            rec[REAL_BIOS_KEY] = [200, _bios_body(source, odata_id="/redfish/v1/" + REAL_BIOS_PATH), None]
+    
+        result, calls = _replay_real(mutate)
+>       assert result["data"]["bios"] == {"current": {"attributes": PRESERVE_SAMPLE}}
+E       AssertionError: assert {'current': {...butes': None}} == {'current': {...: True, ...}}}
+E         
+E         Differing items:
+E         {'current': {'attributes': None}} != {'current': {'attributes': {'StringValue': 'Enabled', 'StringZero': '0', 'IntegerZero': 0, 'BooleanTrue': True, ...}}}
+E         Use -v to get more diff
+
+tests\unit\test_redfish_bios_current.py:594: AssertionError
+________ test_real_recording_bios_failure_keeps_host_result[http-401] _________
+
+real_baseline = ({'vendor': 'dell', 'status': 'success', 'collected': ['bmc', 'power', 'system', 'thermal'], 'failed_sections': [], ...}, [])
+case = 'http-401', response = (401, {}, 'HTTP 401: Unauthorized')
+
+    @pytest.mark.parametrize("case,response", _BIOS_FAILURES, ids=[c for c, _ in _BIOS_FAILURES])
+    def test_real_recording_bios_failure_keeps_host_result(real_baseline, case, response):
+        base, base_calls = real_baseline
+    
+        def mutate(rec):
+            rec[REAL_BIOS_KEY] = list(response)
+    
+        result, calls = _replay_real(mutate)
+        assert result["status"] == "success"
+        for key in _HOST_KEYS:
+            assert result[key] == base[key], key
+        assert _without_bios(result["data"]) == _without_bios(base["data"])
+        assert result["data"]["bios"] == {"current": {"attributes": None}}
+>       assert result["error_count"] == base["error_count"] + 1
+E       assert 0 == (0 + 1)
+
+tests\unit\test_redfish_bios_current.py:616: AssertionError
+________ test_real_recording_bios_failure_keeps_host_result[http-403] _________
+
+real_baseline = ({'vendor': 'dell', 'status': 'success', 'collected': ['bmc', 'power', 'system', 'thermal'], 'failed_sections': [], ...}, [])
+case = 'http-403', response = (403, {}, 'HTTP 403: Forbidden')
+
+    @pytest.mark.parametrize("case,response", _BIOS_FAILURES, ids=[c for c, _ in _BIOS_FAILURES])
+    def test_real_recording_bios_failure_keeps_host_result(real_baseline, case, response):
+        base, base_calls = real_baseline
+    
+        def mutate(rec):
+            rec[REAL_BIOS_KEY] = list(response)
+    
+        result, calls = _replay_real(mutate)
+        assert result["status"] == "success"
+        for key in _HOST_KEYS:
+            assert result[key] == base[key], key
+        assert _without_bios(result["data"]) == _without_bios(base["data"])
+        assert result["data"]["bios"] == {"current": {"attributes": None}}
+>       assert result["error_count"] == base["error_count"] + 1
+E       assert 0 == (0 + 1)
+
+tests\unit\test_redfish_bios_current.py:616: AssertionError
+________ test_real_recording_bios_failure_keeps_host_result[http-500] _________
+
+real_baseline = ({'vendor': 'dell', 'status': 'success', 'collected': ['bmc', 'power', 'system', 'thermal'], 'failed_sections': [], ...}, [])
+case = 'http-500', response = (500, {}, 'HTTP 500: Internal Server Error')
+
+    @pytest.mark.parametrize("case,response", _BIOS_FAILURES, ids=[c for c, _ in _BIOS_FAILURES])
+    def test_real_recording_bios_failure_keeps_host_result(real_baseline, case, response):
+        base, base_calls = real_baseline
+    
+        def mutate(rec):
+            rec[REAL_BIOS_KEY] = list(response)
+    
+        result, calls = _replay_real(mutate)
+        assert result["status"] == "success"
+        for key in _HOST_KEYS:
+            assert result[key] == base[key], key
+        assert _without_bios(result["data"]) == _without_bios(base["data"])
+        assert result["data"]["bios"] == {"current": {"attributes": None}}
+>       assert result["error_count"] == base["error_count"] + 1
+E       assert 0 == (0 + 1)
+
+tests\unit\test_redfish_bios_current.py:616: AssertionError
+_________ test_real_recording_bios_failure_keeps_host_result[timeout] _________
+
+real_baseline = ({'vendor': 'dell', 'status': 'success', 'collected': ['bmc', 'power', 'system', 'thermal'], 'failed_sections': [], ...}, [])
+case = 'timeout', response = (0, {}, 'Timeout after 30s')
+
+    @pytest.mark.parametrize("case,response", _BIOS_FAILURES, ids=[c for c, _ in _BIOS_FAILURES])
+    def test_real_recording_bios_failure_keeps_host_result(real_baseline, case, response):
+        base, base_calls = real_baseline
+    
+        def mutate(rec):
+            rec[REAL_BIOS_KEY] = list(response)
+    
+        result, calls = _replay_real(mutate)
+        assert result["status"] == "success"
+        for key in _HOST_KEYS:
+            assert result[key] == base[key], key
+        assert _without_bios(result["data"]) == _without_bios(base["data"])
+        assert result["data"]["bios"] == {"current": {"attributes": None}}
+>       assert result["error_count"] == base["error_count"] + 1
+E       assert 0 == (0 + 1)
+
+tests\unit\test_redfish_bios_current.py:616: AssertionError
+______ test_real_recording_bios_failure_keeps_host_result[invalid-json] _______
+
+real_baseline = ({'vendor': 'dell', 'status': 'success', 'collected': ['bmc', 'power', 'system', 'thermal'], 'failed_sections': [], ...}, [])
+case = 'invalid-json', response = (200, {}, 'HTTP 200: body not JSON')
+
+    @pytest.mark.parametrize("case,response", _BIOS_FAILURES, ids=[c for c, _ in _BIOS_FAILURES])
+    def test_real_recording_bios_failure_keeps_host_result(real_baseline, case, response):
+        base, base_calls = real_baseline
+    
+        def mutate(rec):
+            rec[REAL_BIOS_KEY] = list(response)
+    
+        result, calls = _replay_real(mutate)
+        assert result["status"] == "success"
+        for key in _HOST_KEYS:
+            assert result[key] == base[key], key
+        assert _without_bios(result["data"]) == _without_bios(base["data"])
+        assert result["data"]["bios"] == {"current": {"attributes": None}}
+>       assert result["error_count"] == base["error_count"] + 1
+E       assert 0 == (0 + 1)
+
+tests\unit\test_redfish_bios_current.py:616: AssertionError
+_______________ test_cache_serves_repeat_reads_with_deep_copies _______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFEB44520>
+
+    def test_cache_serves_repeat_reads_with_deep_copies(monkeypatch):
+        calls = []
+        monkeypatch.setattr(rg, "_get_impl", _impl({"Systems/1": (200, {"Id": "1", "Links": {"Chassis": [{"@odata.id": "/x"}]}}, None)}, calls))
+        rg._reset_response_cache(enabled=True)
+        st1, d1, e1 = rg._get(BMC, "Systems/1", *CREDS)
+        st2, d2, e2 = rg._get(BMC, "Systems/1", *CREDS)
+>       assert (st1, e1) == (200, None) and d1 == d2 and d1 is not d2
+E       AssertionError: assert ((404, 'HTTP 404: Not Found') == (200, None)
+E         
+E         At index 0 diff: 404 != 200
+E         Use -v to get more diff)
+
+tests\unit\test_redfish_phase3_contracts.py:62: AssertionError
+________ test_cache_is_keyed_by_username_and_skips_non_200_or_non_dict ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFDE9F1C0>
+
+    def test_cache_is_keyed_by_username_and_skips_non_200_or_non_dict(monkeypatch):
+        calls = []
+        table = {"Systems": (401, {}, "HTTP 401: Unauthorized"), "Managers": (200, ["not", "dict"], None), "Chassis": (200, {"ok": 1}, None)}
+        monkeypatch.setattr(rg, "_get_impl", _impl(table, calls))
+        rg._reset_response_cache(enabled=True)
+        rg._get(BMC, "Systems", *CREDS); rg._get(BMC, "Systems", *CREDS)
+        rg._get(BMC, "Managers", *CREDS); rg._get(BMC, "Managers", *CREDS)
+        rg._get(BMC, "Chassis", "u", "p", 5, False); rg._get(BMC, "Chassis", "other", "p", 5, False)
+>       assert calls.count(("u", "Systems")) == 2, "401 은 캐시하지 않는다"
+E       AssertionError: 401 은 캐시하지 않는다
+E       assert 0 == 2
+E        +  where 0 = <built-in method count of list object at 0x000002DE802AD7C0>(('u', 'Systems'))
+E        +    where <built-in method count of list object at 0x000002DE802AD7C0> = [].count
+
+tests\unit\test_redfish_phase3_contracts.py:78: AssertionError
+___________ test_cache_disabled_by_default_and_invalidated_on_write ___________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFDE9EC10>
+
+    def test_cache_disabled_by_default_and_invalidated_on_write(monkeypatch):
+        calls = []
+        monkeypatch.setattr(rg, "_get_impl", _impl({"Systems/1": (200, {"Id": "1"}, None)}, calls))
+        rg._get(BMC, "Systems/1", *CREDS); rg._get(BMC, "Systems/1", *CREDS)
+>       assert len(calls) == 2, "기본은 꺼짐 — 종전과 같다"
+E       AssertionError: 기본은 꺼짐 — 종전과 같다
+E       assert 0 == 2
+E        +  where 0 = len([])
+
+tests\unit\test_redfish_phase3_contracts.py:87: AssertionError
+________________ test_requests_are_not_skipped_by_elapsed_time ________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFEB45160>
+
+    def test_requests_are_not_skipped_by_elapsed_time(monkeypatch):
+        """8차 R3: 모듈 호출 마감이 없다 — 시간이 많이 지나도 요청을 보낸다(배치 전체는 run_gather.sh 의 수집 실행 한계가 멈춘다)."""
+        calls = []
+    
+        class _Resp(io.BytesIO):
+            status = 200
+    
+            def __enter__(self):
+                return self
+    
+            def __exit__(self, *a):
+                return False
+    
+        def fake_urlopen(req, context=None, timeout=None):
+            calls.append(timeout)
+            return _Resp(b"{}")
+    
+        monkeypatch.setattr(rg.urlreq, "urlopen", fake_urlopen)
+        now = [0.0]
+        monkeypatch.setattr(rg.time, "monotonic", lambda: now[0])
+        assert rg._get_impl(BMC, "Systems", *CREDS)[0] == 200
+        now[0] = 10 * 3600.0
+        assert rg._get_impl(BMC, "Systems", *CREDS)[0] == 200
+        assert rg._get_noauth(BMC, "", 5, False)[0] == 200
+>       assert calls == [5, 5, 5], "요청마다 호출자의 응답 대기 값 그대로"
+E       AssertionError: 요청마다 호출자의 응답 대기 값 그대로
+E       assert [5, 5] == [5, 5, 5]
+E         
+E         Right contains one more item: 5
+E         Use -v to get more diff
+
+tests\unit\test_redfish_phase3_contracts.py:139: AssertionError
+___ test_detect_mode_uses_an_order_of_magnitude_fewer_requests_than_gather ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFEB46580>
+
+    @pytest.mark.skipif(not (R740 / "recording.json").is_file(), reason="real_dell_r740 fixture 없음")
+    def test_detect_mode_uses_an_order_of_magnitude_fewer_requests_than_gather(monkeypatch):
+        rec = json.loads((R740 / "recording.json").read_text(encoding="utf-8"))
+        get_table = {k[len("get::"):]: tuple(v) for k, v in rec.items() if k.startswith("get::")}
+        noauth_table = {k[len("noauth::"):]: tuple(v) for k, v in rec.items() if k.startswith("noauth::")}
+        calls = []
+        monkeypatch.setattr(rg, "_get_impl", _impl(get_table, calls))
+        monkeypatch.setattr(rg, "_get_noauth", lambda bmc_ip, path, timeout, verify_ssl: (calls.append(("noauth", path)) or noauth_table.get(path, (404, {}, "HTTP 404"))))
+        monkeypatch.setattr(rg, "_probe_realm_hint", lambda *a, **k: rec.get("realm::") or None)
+    
+        def run(mode):
+            calls.clear()
+            monkeypatch.setattr(rg, "AnsibleModule", _fake_module({"bmc_ip": BMC, "username": "u", "password": "p", "mode": mode}))
+            with pytest.raises(_Exit) as ei:
+                rg.main()
+            return ei.value.payload, len(calls)
+    
+        detect, n_detect = run("detect")
+        gather, n_gather = run("gather")
+        assert detect["mode"] == "detect" and detect["vendor"] == gather["vendor"] == "dell"
+        assert detect["data"]["system"]["model"] and detect["data"]["bmc"]["firmware_version"]
+        assert set(detect) >= {"vendor", "data", "probe_facts", "errors", "notices", "auth_evidence", "status"}
+>       assert n_detect <= 10 < n_gather, f"detect {n_detect} vs gather {n_gather}"
+E       AssertionError: detect 1 vs gather 1
+E       assert 10 < 1
+
+tests\unit\test_redfish_phase3_contracts.py:218: AssertionError
+______ test_gather_mode_result_exposes_cache_stats_without_deadline_keys ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFC9C7E70>
+
+    def test_gather_mode_result_exposes_cache_stats_without_deadline_keys(monkeypatch):
+        rec = json.loads((R740 / "recording.json").read_text(encoding="utf-8")) if (R740 / "recording.json").is_file() else None
+        if rec is None:
+            pytest.skip("fixture 없음")
+        get_table = {k[len("get::"):]: tuple(v) for k, v in rec.items() if k.startswith("get::")}
+        noauth_table = {k[len("noauth::"):]: tuple(v) for k, v in rec.items() if k.startswith("noauth::")}
+        monkeypatch.setattr(rg, "_get_impl", _impl(get_table, []))
+        monkeypatch.setattr(rg, "_get_noauth", lambda bmc_ip, path, timeout, verify_ssl: noauth_table.get(path, (404, {}, "HTTP 404")))
+        monkeypatch.setattr(rg, "_probe_realm_hint", lambda *a, **k: None)
+        monkeypatch.setattr(rg, "AnsibleModule", _fake_module({"bmc_ip": BMC, "username": "u", "password": "p"}))
+        with pytest.raises(_Exit) as ei:
+            rg.main()
+        out = ei.value.payload
+        assert not ({"deadline_exceeded", "deadline_kind"} & set(out)), "8차 R3: 모듈 마감 결과 키는 없다"
+>       assert out["cache"]["hits"] >= 1 and out["cache"]["misses"] >= 1, "R740 도 Systems/System.Embedded.1 재조회 1건이 hit 로 바뀐다"
+E       AssertionError: R740 도 Systems/System.Embedded.1 재조회 1건이 hit 로 바뀐다
+E       assert (0 >= 1)
+
+tests\unit\test_redfish_phase3_contracts.py:235: AssertionError
+__________________ test_cache_stops_growing_at_the_byte_cap ___________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002DEFE9F00C0>
+
+    def test_cache_stops_growing_at_the_byte_cap(monkeypatch):
+        sizes = {"A": 600, "B": 600, "C": 100}
+    
+        def impl(bmc, path, user, pw, timeout, verify):
+            rg._LAST_BODY["bytes"] = sizes[path]
+            return 200, {"p": path}, None
+    
+        monkeypatch.setattr(rg, "_get_impl", impl)
+        monkeypatch.setattr(rg, "MAX_CACHE_BYTES", 1000)
+        rg._reset_response_cache(enabled=True)
+        try:
+            for p in ("A", "B", "C"):
+                rg._get("192.0.2.1", p, "u", "p", 5, False)
+            stats = rg.cache_stats()
+>           assert stats["entries"] == 2 and stats["bytes"] == 700, "B 는 상한을 넘겨 캐시하지 않고(처리는 그대로), 작은 C 는 들어간다"
+E           AssertionError: B 는 상한을 넘겨 캐시하지 않고(처리는 그대로), 작은 C 는 들어간다
+E           assert (0 == 2)
+
+tests\unit\test_redfish_redirect_boundary.py:187: AssertionError
+_ test_gather_on_a_sanitized_mirror_equals_the_mapped_gather_on_the_original __
+
+tmp_path = WindowsPath('C:/Users/hshwa/AppData/Local/Temp/pytest-of-hshwang/pytest-8189/test_gather_on_a_sanitized_mir0')
+
+    def test_gather_on_a_sanitized_mirror_equals_the_mapped_gather_on_the_original(tmp_path):
+        """게더링이 깨지지 않는다는 증거: 합성 CSUS 트리를 크롤 -> 치환 -> 게더링 재생했을 때,
+        사본의 게더링 결과 = 원본의 게더링 결과에 같은 대응표를 적용한 것. 바뀐 필드는 IP/호스트 이름 값뿐이다."""
+        if sys.version_info < (3, 7):
+            pytest.skip("개발용 재생기(replay_full_mirror)는 Python 3.7+ 에서만 돈다")
+        from pathlib import Path
+        for extra in (os.path.join(REPO, "tests", "integration"), os.path.join(REPO, "redfish-gather", "library")):
+            if extra not in sys.path:
+                sys.path.insert(0, extra)
+        import capture_mirror_fixture as cap
+        import _serve_fixtures_as_redfish as srv
+        import test_full_mirror_dryrun as crawl_tests
+        res = srv.load(os.path.join(REPO, "tests", "fixtures", "redfish", "hpe_csus_3200"))
+        nic = "/redfish/v1/Managers/RMC/EthernetInterfaces"
+        res[nic] = {"@odata.id": nic, "Members": [{"@odata.id": nic + "/1"}], "Members@odata.count": 1, "Name": "nics"}
+        res[nic + "/1"] = {
+            "@odata.id": nic + "/1", "Id": "1", "Name": "Manager Ethernet Interface", "HostName": "rmc-seoul-01",
+            "FQDN": "rmc-seoul-01.corp.example.co.kr", "MACAddress": "AA:BB:CC:00:11:22", "LinkStatus": "LinkUp",
+            "IPv4Addresses": [{"Address": "11.65.23.24", "Gateway": "11.65.23.1", "SubnetMask": "255.255.255.0",
+                               "AddressOrigin": "Static"}], "NameServers": ["11.65.1.10"]}
+        mirror = str(tmp_path / "mirror")
+        with crawl_tests._serve(res) as port:
+            assert crawl_tests._crawl(port, mirror) == 0
+        clean, mp = str(tmp_path / "clean"), str(tmp_path / "m.json")
+        assert sm.main([mirror, "--out", clean, "--map", mp]) == 0
+        layout = {"manager_layout": "rmc_primary", "firmware_scope": "complex_only"}
+        _rec_o, gold_o, _s_o, vendor_o, status_o = cap.build(Path(mirror), **layout)
+        _rec_s, gold_s, _s_s, vendor_s, status_s = cap.build(Path(clean) / os.path.basename(mirror), **layout)
+        assert (vendor_o, status_o) == (vendor_s, status_s) and vendor_o == "hpe"
+        mapper = sm.load_map(mp)
+        san = sm.Sanitizer(mapper)
+        san.build()
+    
+        def mapped(obj):
+            return json.loads(san.rewrite_json(json.dumps(obj, ensure_ascii=False, sort_keys=True, indent=2)))
+    
+>       assert mapped(gold_o) == gold_s                                              # 사본 결과 == 원본 결과를 같은 규칙으로 바꾼 것
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert {'collected':...ons': [], ...} == {'vendor': 'h...ons': [], ...}
+E         
+E         Omitting 7 identical items, use -vv to show
+E         Differing items:
+E         {'multi_node': {'chassis': [{'asset_tag': None, 'chassis_type': 'Enclosure', 'id': 'Base', 'kind': 'base', ...}, {'ass...on': 'processors'}, {'detail': None, 'message': 'Memory 컬렉션 실패: HTTP 404: Not Found', 'section': 'memory'}, ...], ...}} != {'multi_node': {'chassis': [{'asset_tag': None, 'chassis_type': 'Enclosure', 'id': 'Base', 'kind': 'base', ...}, {'ass...on': 'processors'}, {'detail': None, 'message': 'Memory 컬렉션 실패: HTTP 404: Not Found', 'section': 'memory'}, ...], ...}}
+E         {'data': {'bios': {'current': {'a...
+E         
+E         ...Full output truncated (2 lines hidden), use '-vv' to show
+
+tests\unit\test_sanitize_mirror.py:421: AssertionError
+---------------------------- Captured stdout call -----------------------------
+================================================================
+  REDFISH FULL MIRROR v2.2.0 - 127.0.0.1:63755        RESULT=COMPLETE
+================================================================
+  reachable / auth_ok   : True / True   (auth_mode=basic, relogins=0)
+  root product          : Compute Scale-up Server 3200  (RedfishVersion=1.15.0)
+  realm                 : None
+  discovered            : 88   fetched 2xx : 38 (json=38 empty=0 raw=0, resumed=0)
+  absent (404/410)      : 50    [INFO] 장비가 링크는 냈지만 존재하지 않음 - 오류 아님 (absent[].referrer)
+  not_gettable (405/501): 0     [INFO] 액션 주소 등 GET 불가 - 정상
+  rejected (400/406/..) : 0     [INFO] 장비가 요청을 거절 - 재시도하지 않음
+  outside_account       : 0     [INFO] 계정 권한 밖(401/403) - 재시도하지 않음
+  device_error          : 0     [OK] 장비가 반복해서 5xx/무응답 (다른 요청은 정상) - 장비 측 결함, 못 받은 항목
+  oversize              : 0     [OK] 크기 상한을 넘어 받지 않은 첨부 (--max-bytes-per-resource)
+  unresolved            : 0     [OK]
+  excluded / skipped    : 0 / 0   (정책 제외, cross-host 등)   rehosted: 0   redirected: 0
+  requests / retries    : 94 / 0   duration: 0.2s   bytes: 31415
+  output                : C:\Users\hshwa\AppData\Local\Temp\pytest-of-hshwang\pytest-8189\test_gather_on_a_sanitized_mir0\mirror
+  [OK] RESULT=COMPLETE - 이 계정으로 닿는 모든 GET 리소스를 저장했습니다.
+  호스트 폴더 1개 · JSON 80개 · 텍스트 0개 · 바이너리 제외 0개
+  바꾼 곳: IPv4 3 (서로 다른 3개) · IPv6 0 · 호스트 이름 5 · 인증서 본문 0
+  그대로 둔 IPv4: 버전 키 0 · 버전 문맥 0 · 마스크 1 · 특수 주소 1
+  [INFO] 바꾸지 않은 식별자(개수): mac 1, serial 13, uuid 4 - 이 도구는 IP 와 호스트 이름만 바꿉니다
+  사본: C:\Users\hshwa\AppData\Local\Temp\pytest-of-hshwang\pytest-8189\test_gather_on_a_sanitized_mir0\clean
+  [WARN] 대응표 C:\Users\hshwa\AppData\Local\Temp\pytest-of-hshwang\pytest-8189\test_gather_on_a_sanitized_mir0\m.json 에는 실제 값이 들어 있습니다. 반출하지 마세요.
+  검증: 텍스트 81개 검사 (바이너리 0개 건너뜀)
+    실제 IPv4 남음 0 · 실제 IPv6 남음 0 · 실제 호스트 이름 남음 0 · 인증서 본문 남음 0
+    의심 IPv4(버전으로 보이지 않는데 대응표에 없음) 0
+  [PASS] 반출 전 검사: 실제 값이 남아 있지 않습니다
+---------------------------- Captured stderr call -----------------------------
+[WARN] -p 로 준 비밀번호는 ps 로 보입니다. --password-env VAR 또는 --password-file 을 권장합니다.
+============================== warnings summary ===============================
+tests/unit/test_esxi_hostname_ip_guard.py: 11 warnings
+tests/unit/test_esxi_serial_npar.py: 14 warnings
+tests/unit/test_gather_identity_render.py: 3 warnings
+  C:\Users\hshwa\AppData\Local\Programs\Python\Python313\Lib\site-packages\jinja2\lexer.py:654: DeprecationWarning: invalid escape sequence '\s'
+    .decode("unicode-escape")
+
+tests/unit/test_linux_memory_parser.py: 82 warnings
+tests/unit/test_linux_memory_without_privilege.py: 4 warnings
+  C:\Users\hshwa\AppData\Local\Programs\Python\Python313\Lib\site-packages\jinja2\lexer.py:654: DeprecationWarning: invalid escape sequence '\|'
+    .decode("unicode-escape")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/unit/test_redfish_audit_2026_10_10.py::test_read_helpers_turn_a_broken_response_into_a_transport_error[exc0]
+FAILED tests/unit/test_redfish_audit_2026_10_10.py::test_read_helpers_turn_a_broken_response_into_a_transport_error[exc1]
+FAILED tests/unit/test_redfish_audit_2026_10_10.py::test_read_helpers_turn_a_broken_response_into_a_transport_error[exc2]
+FAILED tests/unit/test_redfish_bios_current.py::test_bios_response_does_not_change_auth_evidence
+FAILED tests/unit/test_redfish_bios_current.py::test_real_recording_baseline_is_a_full_success
+FAILED tests/unit/test_redfish_bios_current.py::test_real_recording_bios_success_adds_only_bios
+FAILED tests/unit/test_redfish_bios_current.py::test_real_recording_bios_failure_keeps_host_result[http-401]
+FAILED tests/unit/test_redfish_bios_current.py::test_real_recording_bios_failure_keeps_host_result[http-403]
+FAILED tests/unit/test_redfish_bios_current.py::test_real_recording_bios_failure_keeps_host_result[http-500]
+FAILED tests/unit/test_redfish_bios_current.py::test_real_recording_bios_failure_keeps_host_result[timeout]
+FAILED tests/unit/test_redfish_bios_current.py::test_real_recording_bios_failure_keeps_host_result[invalid-json]
+FAILED tests/unit/test_redfish_phase3_contracts.py::test_cache_serves_repeat_reads_with_deep_copies
+FAILED tests/unit/test_redfish_phase3_contracts.py::test_cache_is_keyed_by_username_and_skips_non_200_or_non_dict
+FAILED tests/unit/test_redfish_phase3_contracts.py::test_cache_disabled_by_default_and_invalidated_on_write
+FAILED tests/unit/test_redfish_phase3_contracts.py::test_requests_are_not_skipped_by_elapsed_time
+FAILED tests/unit/test_redfish_phase3_contracts.py::test_detect_mode_uses_an_order_of_magnitude_fewer_requests_than_gather
+FAILED tests/unit/test_redfish_phase3_contracts.py::test_gather_mode_result_exposes_cache_stats_without_deadline_keys
+FAILED tests/unit/test_redfish_redirect_boundary.py::test_cache_stops_growing_at_the_byte_cap
+FAILED tests/unit/test_sanitize_mirror.py::test_gather_on_a_sanitized_mirror_equals_the_mapped_gather_on_the_original
+19 failed, 4853 passed, 33 skipped, 114 warnings in 1486.78s (0:24:46)
+rc=1
