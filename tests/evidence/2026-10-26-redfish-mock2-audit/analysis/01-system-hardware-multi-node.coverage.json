@@ -1,0 +1,2942 @@
+{
+ "csus3200_01": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yicdspdb01\" source=system; System.HostName=\"yicdspdb01\"; Manager.NetworkProtocol FQDN/HostName=null/\"yicdspdb01\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=\"yicdspdb01\" (첫 라벨 규칙); 원천=bmc_first(RMC NetworkProtocol)"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"yicdspdb01\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=\"yicdspdb01\""
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish); Oem.Hpe.HostOS=\"Red Hat Enterprise Linux 9.6 (Plow)\" 미활용"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System null → Chassis.Manufacturer 폴백(A1)"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Compute Scale-up Server 3200\" / raw=\"Compute Scale-up Server 3200\" — System null → ServiceRoot.Product 폴백(A1b)"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD4MGNLH\" / raw=\"SGHD4MGNLH-000\" — normalize_os_serial 이 -NNN 제거; Chassis r001u01/RackGroup/Manager.SerialNumber=\"SGHD4MGNLH\" 과 일치"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"cafbcc6e-82e0-5ad2-9804-dfff88b919a4\" / raw=\"cafbcc6e-82e0-5ad2-9804-dfff88b919a4\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"1.77.30-20260911_061319\" / raw=\"1.77.30-20260911_061319\" — System.BiosVersion; RMC 복합 번들 버전과 동일(관찰)"
+  },
+  "hardware.bios_date": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "OEM 날짜 없음(#HpeH3Npar) · FirmwareInventory ComplexFW/Partition0_FW ReleaseDate=null"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OK\" / raw=\"OK\" — Status.Health (HealthRollup=\"OK\")"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"PhysicallyPartitioned\" / raw=\"PhysicallyPartitioned\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"R9N70A\" / raw=\"R9N70A\" — Chassis.PartNumber 폴백(A-7)"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-10-22T14:35:51Z\" / raw=\"2026-10-22T14:35:51Z\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSRunning\" / raw=\"OSRunning\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"0x00010303\", \"state\": \"Enabled\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"0x00010303\", \"State\": \"Enabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeH3Npar.v1_3_0.HpeH3Npar\" → keys=[\"console_routing\", \"console_routing_current_boot\", \"dcd_version\", \"host_os_description\", \"host_os_name\", \"host_os_version\", \"product_id\"]"
+  },
+  "_area_hardware": {
+   "state": "PASS",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node.enabled_layout": {
+   "state": "PASS",
+   "evidence": "enabled=True layout=rmc_primary (adapter hpe_csus_3200 manager_layout=rmc_primary)"
+  },
+  "multi_node.summary": {
+   "state": "PASS",
+   "evidence": "{\"partition_count\": 1, \"manager_count\": 1, \"chassis_count\": 3, \"representative_partition\": \"Partition0\", \"resource_block_count\": 1, \"fabric_count\": 1} == 컬렉션 멤버 수(Systems 1 / Managers 1 / Chassis 3 / ResourceBlocks 1 / Fabrics 1)"
+  },
+  "multi_node.partitions": {
+   "state": "PASS",
+   "evidence": "Partition0 system.serial=\"SGHD4MGNLH-000\"(원문 유지) hostname=\"yicdspdb01\"(Partition0.HostName 원문) boot.boot_order=[\"Boot0003\", \"Boot0001\"] == raw Boot.BootOrder=[\"Boot0003\", \"Boot0001\"]"
+  },
+  "multi_node.managers": {
+   "state": "PASS",
+   "evidence": "RMC role=primary name=RMC log_services=[\"IDC\", \"Debug\", \"RCU\", \"CrashLogging\", \"FabricTest\", \"RmcConfig\", \"NparConfig\"] == Managers/RMC/LogServices 멤버 7"
+  },
+  "multi_node.chassis": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-006: RackGroup/Rack1 에 Power/PowerSubsystem/Thermal/ThermalSubsystem 고정 경로 8건 + r001u01 Power/Thermal/EnvironmentMetrics 3건 = 404 요청 11건(server_access.jsonl); 값 자체는 raw 일치 — r001u01 sn=\"SGHD4MGNLH\" pn=\"R9N70A\" uuid=\"0b6a653a-5841-511d-b0f7-836beeaae433\" kind=\"rackmount\" oem.physical_location=\"rack1/chassis_u1\"; RackGroup/Rack1 power/thermal={}(미러에 없는 경로 → MOCK_LIMITATION)"
+  },
+  "multi_node.composition": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-007: resource_blocks[0] processor_count=0 memory_count=0 — raw ResourceBlocks/r001u01 에 Processors/Memory 배열 없음(null) 인데 0 으로 표기; 그 외(id/types/composition_state/chassis/computer_systems) raw 일치"
+  },
+  "multi_node.fabrics": {
+   "state": "PASS",
+   "evidence": "FlexGrid fabric_type=null(raw 없음) switches=2(HARP0/HARP1) endpoints=0(Endpoints 링크 없음) — raw 충실; baseline/계약 예시의 PCIe/endpoint 2 는 mock(01-multi_node-003)"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "Tier1=\"rmc_primary\""
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "Tier1=true (수집 성공)"
+  },
+  "_area_multi_node": {
+   "state": "ISSUE",
+   "evidence": "구조(1 partition/1 manager/3 chassis/1 RB/1 fabric) raw 일치; 이슈는 고정 경로 404 11건(LOW) · composition 0 표기(LOW) · mock baseline 드리프트(MED, 01-multi_node-003)"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hpCsus\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD4MGNLH\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"cafbcc6e-82e0-5ad2-9804-dfff88b919a4\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.24\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\", \"11.65.23.24\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"Compute Scale-up Server 3200\", firmware=\"1.77.30-20260911_061319\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"Compute Scale-up Server 3200\" == ServiceRoot.Product \"Compute Scale-up Server 3200\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"yicdspdb01\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=\"yicdspdb01\""
+  }
+ },
+ "csus3200_02": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yicgsfabap01\" source=system; System.HostName=\"yicgsfabap01\"; Manager.NetworkProtocol FQDN/HostName=null/\"yicgsfabap01\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=\"yicgsfabap01\" (첫 라벨 규칙); 원천=bmc_first(RMC NetworkProtocol)"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"yicgsfabap01\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=\"yicgsfabap01\""
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish); Oem.Hpe.HostOS=\"Red Hat Enterprise Linux 9.6 (Plow)\" 미활용"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System null → Chassis.Manufacturer 폴백(A1)"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Compute Scale-up Server 3200\" / raw=\"Compute Scale-up Server 3200\" — System null → ServiceRoot.Product 폴백(A1b)"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD4MGJMN\" / raw=\"SGHD4MGJMN-000\" — normalize_os_serial 이 -NNN 제거; Chassis r001u01/RackGroup/Manager.SerialNumber=\"SGHD4MGJMN\" 과 일치"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"020831ba-9244-5267-a798-a65f75a0efa6\" / raw=\"020831ba-9244-5267-a798-a65f75a0efa6\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"1.77.30-20260911_061319\" / raw=\"1.77.30-20260911_061319\" — System.BiosVersion; RMC 복합 번들 버전과 동일(관찰)"
+  },
+  "hardware.bios_date": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "OEM 날짜 없음(#HpeH3Npar) · FirmwareInventory ComplexFW/Partition0_FW ReleaseDate=null"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OK\" / raw=\"OK\" — Status.Health (HealthRollup=\"OK\")"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"PhysicallyPartitioned\" / raw=\"PhysicallyPartitioned\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"R9N70A\" / raw=\"R9N70A\" — Chassis.PartNumber 폴백(A-7)"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-10-19T14:44:37Z\" / raw=\"2026-10-19T14:44:37Z\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSRunning\" / raw=\"OSRunning\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"0x00010303\", \"state\": \"Enabled\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"0x00010303\", \"State\": \"Enabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeH3Npar.v1_3_0.HpeH3Npar\" → keys=[\"console_routing\", \"console_routing_current_boot\", \"dcd_version\", \"host_os_description\", \"host_os_name\", \"host_os_version\", \"product_id\"]"
+  },
+  "_area_hardware": {
+   "state": "PASS",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node.enabled_layout": {
+   "state": "PASS",
+   "evidence": "enabled=True layout=rmc_primary (adapter hpe_csus_3200 manager_layout=rmc_primary)"
+  },
+  "multi_node.summary": {
+   "state": "PASS",
+   "evidence": "{\"partition_count\": 1, \"manager_count\": 1, \"chassis_count\": 3, \"representative_partition\": \"Partition0\", \"resource_block_count\": 1, \"fabric_count\": 1} == 컬렉션 멤버 수(Systems 1 / Managers 1 / Chassis 3 / ResourceBlocks 1 / Fabrics 1)"
+  },
+  "multi_node.partitions": {
+   "state": "PASS",
+   "evidence": "Partition0 system.serial=\"SGHD4MGJMN-000\"(원문 유지) hostname=\"yicgsfabap01\"(Partition0.HostName 원문) boot.boot_order=[\"Boot0003\", \"Boot0001\"] == raw Boot.BootOrder=[\"Boot0003\", \"Boot0001\"]"
+  },
+  "multi_node.managers": {
+   "state": "PASS",
+   "evidence": "RMC role=primary name=RMC log_services=[\"IDC\", \"Debug\", \"RCU\", \"CrashLogging\", \"FabricTest\", \"RmcConfig\", \"NparConfig\"] == Managers/RMC/LogServices 멤버 7"
+  },
+  "multi_node.chassis": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-006: RackGroup/Rack1 에 Power/PowerSubsystem/Thermal/ThermalSubsystem 고정 경로 8건 + r001u01 Power/Thermal/EnvironmentMetrics 3건 = 404 요청 11건(server_access.jsonl); 값 자체는 raw 일치 — r001u01 sn=\"SGHD4MGJMN\" pn=\"R9N70A\" uuid=\"c7d32de8-70ff-5b69-b289-1bf078fa8b94\" kind=\"rackmount\" oem.physical_location=\"rack1/chassis_u1\"; RackGroup/Rack1 power/thermal={}(미러에 없는 경로 → MOCK_LIMITATION)"
+  },
+  "multi_node.composition": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-007: resource_blocks[0] processor_count=0 memory_count=0 — raw ResourceBlocks/r001u01 에 Processors/Memory 배열 없음(null) 인데 0 으로 표기; 그 외(id/types/composition_state/chassis/computer_systems) raw 일치"
+  },
+  "multi_node.fabrics": {
+   "state": "PASS",
+   "evidence": "FlexGrid fabric_type=null(raw 없음) switches=2(HARP0/HARP1) endpoints=0(Endpoints 링크 없음) — raw 충실; baseline/계약 예시의 PCIe/endpoint 2 는 mock(01-multi_node-003)"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "Tier1=\"rmc_primary\""
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "Tier1=true (수집 성공)"
+  },
+  "_area_multi_node": {
+   "state": "ISSUE",
+   "evidence": "구조(1 partition/1 manager/3 chassis/1 RB/1 fabric) raw 일치; 이슈는 고정 경로 404 11건(LOW) · composition 0 표기(LOW) · mock baseline 드리프트(MED, 01-multi_node-003)"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hpCsus\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD4MGJMN\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"020831ba-9244-5267-a798-a65f75a0efa6\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.31\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\", \"11.65.23.31\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"Compute Scale-up Server 3200\", firmware=\"1.77.30-20260911_061319\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"Compute Scale-up Server 3200\" == ServiceRoot.Product \"Compute Scale-up Server 3200\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"yicgsfabap01\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=\"yicgsfabap01\""
+  }
+ },
+ "csus3200_03": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yicgsfabdb01\" source=system; System.HostName=\"yicgsfabdb01\"; Manager.NetworkProtocol FQDN/HostName=null/\"yicgsfabdb01\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=\"yicgsfabdb01\" (첫 라벨 규칙); 원천=bmc_first(RMC NetworkProtocol)"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"yicgsfabdb01\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=\"yicgsfabdb01\""
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish); Oem.Hpe.HostOS=\"Red Hat Enterprise Linux 9.6 (Plow)\" 미활용"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System null → Chassis.Manufacturer 폴백(A1)"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Compute Scale-up Server 3200\" / raw=\"Compute Scale-up Server 3200\" — System null → ServiceRoot.Product 폴백(A1b)"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD4MGRSV\" / raw=\"SGHD4MGRSV-000\" — normalize_os_serial 이 -NNN 제거; Chassis r001u01/RackGroup/Manager.SerialNumber=\"SGHD4MGRSV\" 과 일치"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"3960680c-0a2a-5fc6-93f7-9815a8ea6f8e\" / raw=\"3960680c-0a2a-5fc6-93f7-9815a8ea6f8e\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"1.77.30-20260911_061319\" / raw=\"1.77.30-20260911_061319\" — System.BiosVersion; RMC 복합 번들 버전과 동일(관찰)"
+  },
+  "hardware.bios_date": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "OEM 날짜 없음(#HpeH3Npar) · FirmwareInventory ComplexFW/Partition0_FW ReleaseDate=null"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OK\" / raw=\"OK\" — Status.Health (HealthRollup=\"OK\")"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"PhysicallyPartitioned\" / raw=\"PhysicallyPartitioned\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"R9N70A\" / raw=\"R9N70A\" — Chassis.PartNumber 폴백(A-7)"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-10-21T17:14:54Z\" / raw=\"2026-10-21T17:14:54Z\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSRunning\" / raw=\"OSRunning\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"0x00010303\", \"state\": \"Enabled\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"0x00010303\", \"State\": \"Enabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeH3Npar.v1_3_0.HpeH3Npar\" → keys=[\"console_routing\", \"console_routing_current_boot\", \"dcd_version\", \"host_os_description\", \"host_os_name\", \"host_os_version\", \"product_id\"]"
+  },
+  "_area_hardware": {
+   "state": "PASS",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node.enabled_layout": {
+   "state": "PASS",
+   "evidence": "enabled=True layout=rmc_primary (adapter hpe_csus_3200 manager_layout=rmc_primary)"
+  },
+  "multi_node.summary": {
+   "state": "PASS",
+   "evidence": "{\"partition_count\": 1, \"manager_count\": 1, \"chassis_count\": 3, \"representative_partition\": \"Partition0\", \"resource_block_count\": 1, \"fabric_count\": 1} == 컬렉션 멤버 수(Systems 1 / Managers 1 / Chassis 3 / ResourceBlocks 1 / Fabrics 1)"
+  },
+  "multi_node.partitions": {
+   "state": "PASS",
+   "evidence": "Partition0 system.serial=\"SGHD4MGRSV-000\"(원문 유지) hostname=\"yicgsfabdb01\"(Partition0.HostName 원문) boot.boot_order=[\"Boot0003\", \"Boot0001\"] == raw Boot.BootOrder=[\"Boot0003\", \"Boot0001\"]"
+  },
+  "multi_node.managers": {
+   "state": "PASS",
+   "evidence": "RMC role=primary name=RMC log_services=[\"IDC\", \"Debug\", \"RCU\", \"CrashLogging\", \"FabricTest\", \"RmcConfig\", \"NparConfig\"] == Managers/RMC/LogServices 멤버 7"
+  },
+  "multi_node.chassis": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-006: RackGroup/Rack1 에 Power/PowerSubsystem/Thermal/ThermalSubsystem 고정 경로 8건 + r001u01 Power/Thermal/EnvironmentMetrics 3건 = 404 요청 11건(server_access.jsonl); 값 자체는 raw 일치 — r001u01 sn=\"SGHD4MGRSV\" pn=\"R9N70A\" uuid=\"77729fe4-5fe2-55f3-b9fa-a7961b0a2975\" kind=\"rackmount\" oem.physical_location=\"rack1/chassis_u1\"; RackGroup/Rack1 power/thermal={}(미러에 없는 경로 → MOCK_LIMITATION)"
+  },
+  "multi_node.composition": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-007: resource_blocks[0] processor_count=0 memory_count=0 — raw ResourceBlocks/r001u01 에 Processors/Memory 배열 없음(null) 인데 0 으로 표기; 그 외(id/types/composition_state/chassis/computer_systems) raw 일치"
+  },
+  "multi_node.fabrics": {
+   "state": "PASS",
+   "evidence": "FlexGrid fabric_type=null(raw 없음) switches=2(HARP0/HARP1) endpoints=0(Endpoints 링크 없음) — raw 충실; baseline/계약 예시의 PCIe/endpoint 2 는 mock(01-multi_node-003)"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "Tier1=\"rmc_primary\""
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "Tier1=true (수집 성공)"
+  },
+  "_area_multi_node": {
+   "state": "ISSUE",
+   "evidence": "구조(1 partition/1 manager/3 chassis/1 RB/1 fabric) raw 일치; 이슈는 고정 경로 404 11건(LOW) · composition 0 표기(LOW) · mock baseline 드리프트(MED, 01-multi_node-003)"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hpCsus\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD4MGRSV\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"3960680c-0a2a-5fc6-93f7-9815a8ea6f8e\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.28\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\", \"11.65.23.28\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"Compute Scale-up Server 3200\", firmware=\"1.77.30-20260911_061319\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"Compute Scale-up Server 3200\" == ServiceRoot.Product \"Compute Scale-up Server 3200\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"yicgsfabdb01\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=\"yicgsfabdb01\""
+  }
+ },
+ "dl380_gen12_01": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yicesxmgmt05\" source=system; System.HostName=\"yicesxmgmt05.yimad.net\"; Manager.NetworkProtocol FQDN/HostName=\"\"/\"yicesxmgmt05\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=\"yicesxmgmt05\" (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=\"yicesxmgmt05.yimad.net\" (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=system"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE ProLiant Compute DL380 Gen12\" / raw=\"HPE ProLiant Compute DL380 Gen12\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD48K272\" / raw=\"SGHD48K272\" — System.SerialNumber"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"32333750-3238-4753-4844-34384b323732\" / raw=\"32333750-3238-4753-4844-34384B323732\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"P73282-B21\" / raw=\"P73282-B21\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"U68 v1.82 (06/26/2026)\" / raw=\"U68 v1.82 (06/26/2026)\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-06-26\" / raw=\"06/26/2026\" — Oem.Hpe.Bios.Current.Date hoist → ISO"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-002: Tier1=\"Warning\"=Status.Health; HealthRollup=\"Warning\"; Oem AggregateServerHealth=\"Critical\" — 사전 '롤업' 설명과 출처 불일치"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null"
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSBootStarted\" / raw=\"OSBootStarted\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"9.256\", \"state\": \"Enabled\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"9.256\", \"State\": \"Enabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeComputerSystemExt.v2_20_0.HpeComputerSystemExt\" → keys=[\"aggregate_server_health\", \"fan_redundancy\", \"post_state\", \"psu_redundancy\", \"server_signature\", \"subsystem_health\"]"
+  },
+  "_area_hardware": {
+   "state": "ISSUE",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hp\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD48K272\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"32333750-3238-4753-4844-34384b323732\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.95\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/1/EthernetInterfaces/1\", \"11.65.23.95\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_ilo7\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"HPE ProLiant Compute DL380 Gen12\", firmware=\"1.24.00 Aug 01 2026\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_ilo7\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems/\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems/\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"HPE ProLiant Compute DL380 Gen12\" == ServiceRoot.Product \"HPE ProLiant Compute DL380 Gen12\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=system"
+  }
+ },
+ "dl380_gen12_02": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yicad04\" source=bmc; System.HostName=\"\"; Manager.NetworkProtocol FQDN/HostName=\"\"/\"yicad04\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=null (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE ProLiant Compute DL380 Gen12\" / raw=\"HPE ProLiant Compute DL380 Gen12\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD49KSSM\" / raw=\"SGHD49KSSM\" — System.SerialNumber"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"32333750-3238-4753-4844-34394b53534d\" / raw=\"32333750-3238-4753-4844-34394B53534D\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"P73282-B21\" / raw=\"P73282-B21\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"U68 v1.90 (08/20/2026)\" / raw=\"U68 v1.90 (08/20/2026)\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-08-20\" / raw=\"08/20/2026\" — Oem.Hpe.Bios.Current.Date hoist → ISO"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-002: Tier1=\"Warning\"=Status.Health; HealthRollup=\"Warning\"; Oem AggregateServerHealth=\"Critical\" — 사전 '롤업' 설명과 출처 불일치"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null"
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSBootStarted\" / raw=\"OSBootStarted\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"9.256\", \"state\": \"Enabled\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"9.256\", \"State\": \"Enabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeComputerSystemExt.v2_20_0.HpeComputerSystemExt\" → keys=[\"aggregate_server_health\", \"fan_redundancy\", \"post_state\", \"psu_redundancy\", \"server_signature\", \"subsystem_health\"]"
+  },
+  "_area_hardware": {
+   "state": "ISSUE",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hp\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD49KSSM\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"32333750-3238-4753-4844-34394b53534d\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.201\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/1/EthernetInterfaces/1\", \"11.65.23.201\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_ilo7\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"HPE ProLiant Compute DL380 Gen12\", firmware=\"1.24.00 Aug 01 2026\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_ilo7\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems/\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems/\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"HPE ProLiant Compute DL380 Gen12\" == ServiceRoot.Product \"HPE ProLiant Compute DL380 Gen12\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  }
+ },
+ "dl380_gen12_03": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yicossemul03\" source=bmc; System.HostName=\"\"; Manager.NetworkProtocol FQDN/HostName=\"\"/\"yicossemul03\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=null (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE ProLiant Compute DL380 Gen12\" / raw=\"HPE ProLiant Compute DL380 Gen12\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD49KSP1\" / raw=\"SGHD49KSP1\" — System.SerialNumber"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"32333750-3238-4753-4844-34394b535031\" / raw=\"32333750-3238-4753-4844-34394B535031\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"P73282-B21\" / raw=\"P73282-B21\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"U68 v1.82 (06/26/2026)\" / raw=\"U68 v1.82 (06/26/2026)\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-06-26\" / raw=\"06/26/2026\" — Oem.Hpe.Bios.Current.Date hoist → ISO"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Off\" / raw=\"Off\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Warning\" / raw=\"Warning\" — Status.Health (HealthRollup=\"Warning\")"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null"
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"None\" / raw=\"None\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"9.256\", \"state\": \"Enabled\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"9.256\", \"State\": \"Enabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeComputerSystemExt.v2_20_0.HpeComputerSystemExt\" → keys=[\"aggregate_server_health\", \"fan_redundancy\", \"post_state\", \"psu_redundancy\", \"server_signature\", \"subsystem_health\"]"
+  },
+  "_area_hardware": {
+   "state": "PASS",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hp\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD49KSP1\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"32333750-3238-4753-4844-34394b535031\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.55\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/1/EthernetInterfaces/1\", \"11.65.23.55\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_ilo7\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"HPE ProLiant Compute DL380 Gen12\", firmware=\"1.24.00 Aug 01 2026\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_ilo7\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems/\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems/\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"HPE ProLiant Compute DL380 Gen12\" == ServiceRoot.Product \"HPE ProLiant Compute DL380 Gen12\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  }
+ },
+ "dl380_gen12_04": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yicinposdb02\" source=bmc; System.HostName=\"\"; Manager.NetworkProtocol FQDN/HostName=\"\"/\"yicinposdb02\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=null (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE ProLiant Compute DL380 Gen12\" / raw=\"HPE ProLiant Compute DL380 Gen12\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD49KSTF\" / raw=\"SGHD49KSTF\" — System.SerialNumber"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"32333750-3238-4753-4844-34394b535446\" / raw=\"32333750-3238-4753-4844-34394B535446\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"P73282-B21\" / raw=\"P73282-B21\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"U68 v1.82 (06/26/2026)\" / raw=\"U68 v1.82 (06/26/2026)\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-06-26\" / raw=\"06/26/2026\" — Oem.Hpe.Bios.Current.Date hoist → ISO"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-002: Tier1=\"Warning\"=Status.Health; HealthRollup=\"Warning\"; Oem AggregateServerHealth=\"Critical\" — 사전 '롤업' 설명과 출처 불일치"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null"
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSBootStarted\" / raw=\"OSBootStarted\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"9.256\", \"state\": \"Enabled\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"9.256\", \"State\": \"Enabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeComputerSystemExt.v2_20_0.HpeComputerSystemExt\" → keys=[\"aggregate_server_health\", \"fan_redundancy\", \"post_state\", \"psu_redundancy\", \"server_signature\", \"subsystem_health\"]"
+  },
+  "_area_hardware": {
+   "state": "ISSUE",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hp\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD49KSTF\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"32333750-3238-4753-4844-34394b535446\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.52\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/1/EthernetInterfaces/1\", \"11.65.23.52\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_ilo7\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"HPE ProLiant Compute DL380 Gen12\", firmware=\"1.24.00 Aug 01 2026\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_ilo7\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems/\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems/\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"HPE ProLiant Compute DL380 Gen12\" == ServiceRoot.Product \"HPE ProLiant Compute DL380 Gen12\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  }
+ },
+ "r1_DELL_R740_01": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"DELL01\" source=system; System.HostName=\"DELL01\"; Manager.NetworkProtocol FQDN/HostName=\"\"/\"iDRAC-J0KV603\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=\"DELL01\" (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=system"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Dell Inc.\" / raw=\"Dell Inc.\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"PowerEdge R740\" / raw=\"PowerEdge R740\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"J0KV603\" / raw=\"J0KV603\" — ServiceRoot.Oem.Dell.ServiceTag(_SERIAL_RESOLVERS); System.SerialNumber=\"CNIVC0098G0600\" 는 보드 시리얼"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"4c4c4544-0030-4b10-8056-cac04f363033\" / raw=\"4c4c4544-0030-4b10-8056-cac04f363033\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"J0KV603\" / raw=\"J0KV603\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2.26.1\" / raw=\"2.26.1\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-01-28\" / raw=\"01/28/2026\" — Oem.Dell.DellSystem.BIOSReleaseDate hoist → ISO"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OK\" / raw=\"OK\" — Status.Health (HealthRollup=\"OK\")"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"01YM03A03\" / raw=\"01YM03A03\" — System.PartNumber"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-06-11T06:10:51-05:00\" / raw=\"2026-06-11T06:10:51-05:00\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OEM\" / raw=\"OEM\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": null, \"firmware_version\": \"Unknown\", \"state\": \"Disabled\"} / raw={\"InterfaceType\": null, \"FirmwareVersion\": \"Unknown\", \"State\": \"Disabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Dell @odata.type=\"#DellOem.v1_3_0.DellOemResources\" → keys=[\"battery_rollup_status\", \"bios_release_date\", \"chassis_service_tag\", \"cpu_rollup_status\", \"current_rollup_status\", \"estimated_exhaust_temp\", \"express_service_code\", \"fan_rollup_status\", \"intrusion_rollup_status\", \"lifecycle_version\", \"storage_rollup_status\"]"
+  },
+  "_area_hardware": {
+   "state": "PASS",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — dell_idrac9.yml; Systems 멤버 1개(/redfish/v1/Systems/System.Embedded.1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — dell_idrac9.yml; Systems 멤버 1개(/redfish/v1/Systems/System.Embedded.1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"dell\" ← canonical \"Dell Inc.\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"J0KV603\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"4c4c4544-0030-4b10-8056-cac04f363033\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"10.173.12.159\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/iDRAC.Embedded.1/EthernetInterfaces/NIC.1\", \"10.173.12.159\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "1차 \"redfish_dell_idrac10\"(priority 독식) → 재선택 \"redfish_dell_idrac9\" — facts firmware=\"7.00.00.184\" 가 idrac9 '^[3-7]\\.' 일치, idrac10 model_patterns 불일치 실격 (같은 규칙의 정상 사례)"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "\"redfish_dell_idrac10\" (무인증 probe 가 model/firmware 를 못 얻어 priority 로 결정 — 설계상 알려진 한계)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_dell_idrac9\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"Integrated Dell Remote Access Controller\" == ServiceRoot.Product \"Integrated Dell Remote Access Controller\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=system"
+  }
+ },
+ "r1_HPE_CSUS3200_01": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"RMC7CA62A413692\" source=system; System.HostName=null; Manager.NetworkProtocol FQDN/HostName=null/\"RMC7CA62A413692\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=\"RMC7CA62A413692\" (첫 라벨 규칙); 원천=bmc_first(RMC NetworkProtocol)"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"RMC7CA62A413692\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=null"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish); Oem.Hpe.HostOS=null 미활용"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System null → Chassis.Manufacturer 폴백(A1)"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Compute Scale-up Server 3200\" / raw=\"Compute Scale-up Server 3200\" — System null → ServiceRoot.Product 폴백(A1b)"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD3TLNDD\" / raw=\"SGHD3TLNDD-000\" — normalize_os_serial 이 -NNN 제거; Chassis r001u01/RackGroup/Manager.SerialNumber=\"SGHD3TLNDD\" 과 일치"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"0489d5ac-e865-5817-8527-66491e7540c7\" / raw=\"0489d5ac-e865-5817-8527-66491e7540c7\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"1.75.108-20260408_164726\" / raw=\"1.75.108-20260408_164726\" — System.BiosVersion; RMC 복합 번들 버전과 동일(관찰)"
+  },
+  "hardware.bios_date": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "OEM 날짜 없음(#HpeH3Npar) · FirmwareInventory ComplexFW/Partition0_FW ReleaseDate=null"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OK\" / raw=\"OK\" — Status.Health (HealthRollup=\"OK\")"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"PhysicallyPartitioned\" / raw=\"PhysicallyPartitioned\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"R9N70A\" / raw=\"R9N70A\" — Chassis.PartNumber 폴백(A-7)"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-06-10T05:23:36Z\" / raw=\"2026-06-10T05:23:36Z\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSBootStarted\" / raw=\"OSBootStarted\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"0x00010200\", \"state\": \"StandbyOffline\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"0x00010200\", \"State\": \"StandbyOffline\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeH3Npar.v1_3_0.HpeH3Npar\" → keys=[\"console_routing\", \"console_routing_current_boot\", \"dcd_version\", \"host_os_description\", \"host_os_name\", \"host_os_version\", \"product_id\"]"
+  },
+  "_area_hardware": {
+   "state": "PASS",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node.enabled_layout": {
+   "state": "PASS",
+   "evidence": "enabled=True layout=rmc_primary (adapter hpe_csus_3200 manager_layout=rmc_primary)"
+  },
+  "multi_node.summary": {
+   "state": "PASS",
+   "evidence": "{\"partition_count\": 1, \"manager_count\": 1, \"chassis_count\": 3, \"representative_partition\": \"Partition0\", \"resource_block_count\": 1, \"fabric_count\": 1} == 컬렉션 멤버 수(Systems 1 / Managers 1 / Chassis 3 / ResourceBlocks 1 / Fabrics 1)"
+  },
+  "multi_node.partitions": {
+   "state": "PASS",
+   "evidence": "Partition0 system.serial=\"SGHD3TLNDD-000\"(원문 유지) hostname=null(Partition0.HostName 원문) boot.boot_order=[\"Boot0003\", \"Boot0001\", \"Boot0002\"] == raw Boot.BootOrder=[\"Boot0003\", \"Boot0001\", \"Boot0002\"]"
+  },
+  "multi_node.managers": {
+   "state": "PASS",
+   "evidence": "RMC role=primary name=RMC log_services=[\"IDC\", \"Debug\", \"RCU\", \"CrashLogging\", \"FabricTest\", \"RmcConfig\", \"NparConfig\"] == Managers/RMC/LogServices 멤버 7"
+  },
+  "multi_node.chassis": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-006: RackGroup/Rack1 에 Power/PowerSubsystem/Thermal/ThermalSubsystem 고정 경로 8건 + r001u01 Power/Thermal/EnvironmentMetrics 3건 = 404 요청 11건(server_access.jsonl); 값 자체는 raw 일치 — r001u01 sn=\"SGHD3TLNDD\" pn=\"R9N70A\" uuid=\"a82d9c43-13eb-53c3-b029-206a0b390301\" kind=\"rackmount\" oem.physical_location=\"rack1/chassis_u1\"; RackGroup/Rack1 power/thermal={}(미러에 없는 경로 → MOCK_LIMITATION)"
+  },
+  "multi_node.composition": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-007: resource_blocks[0] processor_count=0 memory_count=0 — raw ResourceBlocks/r001u01 에 Processors/Memory 배열 없음(null) 인데 0 으로 표기; 그 외(id/types/composition_state/chassis/computer_systems) raw 일치"
+  },
+  "multi_node.fabrics": {
+   "state": "PASS",
+   "evidence": "FlexGrid fabric_type=null(raw 없음) switches=2(HARP0/HARP1) endpoints=0(Endpoints 링크 없음) — raw 충실; baseline/계약 예시의 PCIe/endpoint 2 는 mock(01-multi_node-003)"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "Tier1=\"rmc_primary\""
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "Tier1=true (수집 성공)"
+  },
+  "_area_multi_node": {
+   "state": "ISSUE",
+   "evidence": "구조(1 partition/1 manager/3 chassis/1 RB/1 fabric) raw 일치; 이슈는 고정 경로 404 11건(LOW) · composition 0 표기(LOW) · mock baseline 드리프트(MED, 01-multi_node-003)"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hpCsus\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD3TLNDD\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"0489d5ac-e865-5817-8527-66491e7540c7\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"10.173.22.101\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\", \"10.173.22.101\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"Compute Scale-up Server 3200\", firmware=\"1.75.108-20260408_164726\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"Compute Scale-up Server 3200\" == ServiceRoot.Product \"Compute Scale-up Server 3200\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"RMC7CA62A413692\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=null"
+  }
+ },
+ "r1_HPE_CSUS3200_02": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"RMC7CA62A418172\" source=system; System.HostName=null; Manager.NetworkProtocol FQDN/HostName=null/\"RMC7CA62A418172\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=\"RMC7CA62A418172\" (첫 라벨 규칙); 원천=bmc_first(RMC NetworkProtocol)"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"RMC7CA62A418172\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=null"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish); Oem.Hpe.HostOS=null 미활용"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System null → Chassis.Manufacturer 폴백(A1)"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Compute Scale-up Server 3200\" / raw=\"Compute Scale-up Server 3200\" — System null → ServiceRoot.Product 폴백(A1b)"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD3VFL1S\" / raw=\"SGHD3VFL1S-000\" — normalize_os_serial 이 -NNN 제거; Chassis r001u01/RackGroup/Manager.SerialNumber=\"SGHD3VFL1S\" 과 일치"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"b31b6245-8189-5d9f-8861-c5b413c1a64e\" / raw=\"b31b6245-8189-5d9f-8861-c5b413c1a64e\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"1.75.108-20260408_164726\" / raw=\"1.75.108-20260408_164726\" — System.BiosVersion; RMC 복합 번들 버전과 동일(관찰)"
+  },
+  "hardware.bios_date": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "OEM 날짜 없음(#HpeH3Npar) · FirmwareInventory ComplexFW/Partition0_FW ReleaseDate=null"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OK\" / raw=\"OK\" — Status.Health (HealthRollup=\"OK\")"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"PhysicallyPartitioned\" / raw=\"PhysicallyPartitioned\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"R9N70A\" / raw=\"R9N70A\" — Chassis.PartNumber 폴백(A-7)"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-06-10T05:22:47Z\" / raw=\"2026-06-10T05:22:47Z\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSBootStarted\" / raw=\"OSBootStarted\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"0x00010200\", \"state\": \"StandbyOffline\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"0x00010200\", \"State\": \"StandbyOffline\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeH3Npar.v1_3_0.HpeH3Npar\" → keys=[\"console_routing\", \"console_routing_current_boot\", \"dcd_version\", \"host_os_description\", \"host_os_name\", \"host_os_version\", \"product_id\"]"
+  },
+  "_area_hardware": {
+   "state": "PASS",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node.enabled_layout": {
+   "state": "PASS",
+   "evidence": "enabled=True layout=rmc_primary (adapter hpe_csus_3200 manager_layout=rmc_primary)"
+  },
+  "multi_node.summary": {
+   "state": "PASS",
+   "evidence": "{\"partition_count\": 1, \"manager_count\": 1, \"chassis_count\": 3, \"representative_partition\": \"Partition0\", \"resource_block_count\": 1, \"fabric_count\": 1} == 컬렉션 멤버 수(Systems 1 / Managers 1 / Chassis 3 / ResourceBlocks 1 / Fabrics 1)"
+  },
+  "multi_node.partitions": {
+   "state": "PASS",
+   "evidence": "Partition0 system.serial=\"SGHD3VFL1S-000\"(원문 유지) hostname=null(Partition0.HostName 원문) boot.boot_order=[\"Boot0003\", \"Boot0001\", \"Boot0002\"] == raw Boot.BootOrder=[\"Boot0003\", \"Boot0001\", \"Boot0002\"]"
+  },
+  "multi_node.managers": {
+   "state": "PASS",
+   "evidence": "RMC role=primary name=RMC log_services=[\"IDC\", \"Debug\", \"RCU\", \"CrashLogging\", \"FabricTest\", \"RmcConfig\", \"NparConfig\"] == Managers/RMC/LogServices 멤버 7"
+  },
+  "multi_node.chassis": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-006: RackGroup/Rack1 에 Power/PowerSubsystem/Thermal/ThermalSubsystem 고정 경로 8건 + r001u01 Power/Thermal/EnvironmentMetrics 3건 = 404 요청 11건(server_access.jsonl); 값 자체는 raw 일치 — r001u01 sn=\"SGHD3VFL1S\" pn=\"R9N70A\" uuid=\"78ebf40b-effd-5caa-8354-64ee4455ee1e\" kind=\"rackmount\" oem.physical_location=\"rack1/chassis_u1\"; RackGroup/Rack1 power/thermal={}(미러에 없는 경로 → MOCK_LIMITATION)"
+  },
+  "multi_node.composition": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-007: resource_blocks[0] processor_count=0 memory_count=0 — raw ResourceBlocks/r001u01 에 Processors/Memory 배열 없음(null) 인데 0 으로 표기; 그 외(id/types/composition_state/chassis/computer_systems) raw 일치"
+  },
+  "multi_node.fabrics": {
+   "state": "PASS",
+   "evidence": "FlexGrid fabric_type=null(raw 없음) switches=2(HARP0/HARP1) endpoints=0(Endpoints 링크 없음) — raw 충실; baseline/계약 예시의 PCIe/endpoint 2 는 mock(01-multi_node-003)"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "Tier1=\"rmc_primary\""
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "Tier1=true (수집 성공)"
+  },
+  "_area_multi_node": {
+   "state": "ISSUE",
+   "evidence": "구조(1 partition/1 manager/3 chassis/1 RB/1 fabric) raw 일치; 이슈는 고정 경로 404 11건(LOW) · composition 0 표기(LOW) · mock baseline 드리프트(MED, 01-multi_node-003)"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hpCsus\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD3VFL1S\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"b31b6245-8189-5d9f-8861-c5b413c1a64e\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"10.173.22.102\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\", \"10.173.22.102\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"Compute Scale-up Server 3200\", firmware=\"1.75.108-20260408_164726\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"Compute Scale-up Server 3200\" == ServiceRoot.Product \"Compute Scale-up Server 3200\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"RMC7CA62A418172\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=null"
+  }
+ },
+ "r1_HPE_CSUS3200_03": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"M10MESDB11-RMC\" source=system; System.HostName=\"m10mesdb11\"; Manager.NetworkProtocol FQDN/HostName=null/\"M10MESDB11-RMC\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=\"M10MESDB11-RMC\" (첫 라벨 규칙); 원천=bmc_first(RMC NetworkProtocol)"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"M10MESDB11-RMC\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=\"m10mesdb11\""
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish); Oem.Hpe.HostOS=\"Red Hat Enterprise Linux 8.10 (Ootpa)\" 미활용"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System null → Chassis.Manufacturer 폴백(A1)"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Compute Scale-up Server 3200\" / raw=\"Compute Scale-up Server 3200\" — System null → ServiceRoot.Product 폴백(A1b)"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD3QHLDT\" / raw=\"SGHD3QHLDT-000\" — normalize_os_serial 이 -NNN 제거; Chassis r001u01/RackGroup/Manager.SerialNumber=\"SGHD3QHLDT\" 과 일치"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"76776656-4c86-5e95-b027-0945404917ba\" / raw=\"76776656-4c86-5e95-b027-0945404917ba\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"1.75.108-20260408_164726\" / raw=\"1.75.108-20260408_164726\" — System.BiosVersion; RMC 복합 번들 버전과 동일(관찰)"
+  },
+  "hardware.bios_date": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "OEM 날짜 없음(#HpeH3Npar) · FirmwareInventory ComplexFW/Partition0_FW ReleaseDate=null"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OK\" / raw=\"OK\" — Status.Health (HealthRollup=\"OK\")"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"PhysicallyPartitioned\" / raw=\"PhysicallyPartitioned\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"R9N70A\" / raw=\"R9N70A\" — Chassis.PartNumber 폴백(A-7)"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-06-10T13:31:54Z\" / raw=\"2026-06-10T13:31:54Z\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSRunning\" / raw=\"OSRunning\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"0x00010200\", \"state\": \"Enabled\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"0x00010200\", \"State\": \"Enabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeH3Npar.v1_3_0.HpeH3Npar\" → keys=[\"console_routing\", \"console_routing_current_boot\", \"dcd_version\", \"host_os_description\", \"host_os_name\", \"host_os_version\", \"product_id\"]"
+  },
+  "_area_hardware": {
+   "state": "PASS",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node.enabled_layout": {
+   "state": "PASS",
+   "evidence": "enabled=True layout=rmc_primary (adapter hpe_csus_3200 manager_layout=rmc_primary)"
+  },
+  "multi_node.summary": {
+   "state": "PASS",
+   "evidence": "{\"partition_count\": 1, \"manager_count\": 1, \"chassis_count\": 3, \"representative_partition\": \"Partition0\", \"resource_block_count\": 1, \"fabric_count\": 1} == 컬렉션 멤버 수(Systems 1 / Managers 1 / Chassis 3 / ResourceBlocks 1 / Fabrics 1)"
+  },
+  "multi_node.partitions": {
+   "state": "PASS",
+   "evidence": "Partition0 system.serial=\"SGHD3QHLDT-000\"(원문 유지) hostname=\"m10mesdb11\"(Partition0.HostName 원문) boot.boot_order=[\"Boot0003\", \"Boot0001\"] == raw Boot.BootOrder=[\"Boot0003\", \"Boot0001\"]"
+  },
+  "multi_node.managers": {
+   "state": "PASS",
+   "evidence": "RMC role=primary name=RMC log_services=[\"IDC\", \"Debug\", \"RCU\", \"CrashLogging\", \"FabricTest\", \"RmcConfig\", \"NparConfig\"] == Managers/RMC/LogServices 멤버 7"
+  },
+  "multi_node.chassis": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-006: RackGroup/Rack1 에 Power/PowerSubsystem/Thermal/ThermalSubsystem 고정 경로 8건 + r001u01 Power/Thermal/EnvironmentMetrics 3건 = 404 요청 11건(server_access.jsonl); 값 자체는 raw 일치 — r001u01 sn=\"SGHD3QHLDT\" pn=\"R9N70A\" uuid=\"2f38b239-1d95-5a9c-8514-995ee1573e68\" kind=\"rackmount\" oem.physical_location=\"rack1/chassis_u1\"; RackGroup/Rack1 power/thermal={}(미러에 없는 경로 → MOCK_LIMITATION)"
+  },
+  "multi_node.composition": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-007: resource_blocks[0] processor_count=0 memory_count=0 — raw ResourceBlocks/r001u01 에 Processors/Memory 배열 없음(null) 인데 0 으로 표기; 그 외(id/types/composition_state/chassis/computer_systems) raw 일치"
+  },
+  "multi_node.fabrics": {
+   "state": "PASS",
+   "evidence": "FlexGrid fabric_type=null(raw 없음) switches=2(HARP0/HARP1) endpoints=0(Endpoints 링크 없음) — raw 충실; baseline/계약 예시의 PCIe/endpoint 2 는 mock(01-multi_node-003)"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "Tier1=\"rmc_primary\""
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "Tier1=true (수집 성공)"
+  },
+  "_area_multi_node": {
+   "state": "ISSUE",
+   "evidence": "구조(1 partition/1 manager/3 chassis/1 RB/1 fabric) raw 일치; 이슈는 고정 경로 404 11건(LOW) · composition 0 표기(LOW) · mock baseline 드리프트(MED, 01-multi_node-003)"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hpCsus\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD3QHLDT\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"76776656-4c86-5e95-b027-0945404917ba\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"10.173.22.80\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\", \"10.173.22.80\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"Compute Scale-up Server 3200\", firmware=\"1.75.108-20260408_164726\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"Compute Scale-up Server 3200\" == ServiceRoot.Product \"Compute Scale-up Server 3200\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"M10MESDB11-RMC\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=\"m10mesdb11\""
+  }
+ },
+ "r1_HPE_CSUS3200_04": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"M10APCDB11-RMC\" source=system; System.HostName=\"m10apcdb11\"; Manager.NetworkProtocol FQDN/HostName=null/\"M10APCDB11-RMC\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=\"M10APCDB11-RMC\" (첫 라벨 규칙); 원천=bmc_first(RMC NetworkProtocol)"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"M10APCDB11-RMC\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=\"m10apcdb11\""
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish); Oem.Hpe.HostOS=\"Red Hat Enterprise Linux 8.10 (Ootpa)\" 미활용"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System null → Chassis.Manufacturer 폴백(A1)"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Compute Scale-up Server 3200\" / raw=\"Compute Scale-up Server 3200\" — System null → ServiceRoot.Product 폴백(A1b)"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD3QHLN3\" / raw=\"SGHD3QHLN3-000\" — normalize_os_serial 이 -NNN 제거; Chassis r001u01/RackGroup/Manager.SerialNumber=\"SGHD3QHLN3\" 과 일치"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"8c205597-b54a-527b-bcda-c74b550a09e7\" / raw=\"8c205597-b54a-527b-bcda-c74b550a09e7\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"1.75.108-20260408_164726\" / raw=\"1.75.108-20260408_164726\" — System.BiosVersion; RMC 복합 번들 버전과 동일(관찰)"
+  },
+  "hardware.bios_date": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "OEM 날짜 없음(#HpeH3Npar) · FirmwareInventory ComplexFW/Partition0_FW ReleaseDate=null"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OK\" / raw=\"OK\" — Status.Health (HealthRollup=\"OK\")"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"PhysicallyPartitioned\" / raw=\"PhysicallyPartitioned\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"R9N70A\" / raw=\"R9N70A\" — Chassis.PartNumber 폴백(A-7)"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-06-10T13:48:13Z\" / raw=\"2026-06-10T13:48:13Z\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSRunning\" / raw=\"OSRunning\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"0x00010200\", \"state\": \"Enabled\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"0x00010200\", \"State\": \"Enabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeH3Npar.v1_3_0.HpeH3Npar\" → keys=[\"console_routing\", \"console_routing_current_boot\", \"dcd_version\", \"host_os_description\", \"host_os_name\", \"host_os_version\", \"product_id\"]"
+  },
+  "_area_hardware": {
+   "state": "PASS",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node.enabled_layout": {
+   "state": "PASS",
+   "evidence": "enabled=True layout=rmc_primary (adapter hpe_csus_3200 manager_layout=rmc_primary)"
+  },
+  "multi_node.summary": {
+   "state": "PASS",
+   "evidence": "{\"partition_count\": 1, \"manager_count\": 1, \"chassis_count\": 3, \"representative_partition\": \"Partition0\", \"resource_block_count\": 1, \"fabric_count\": 1} == 컬렉션 멤버 수(Systems 1 / Managers 1 / Chassis 3 / ResourceBlocks 1 / Fabrics 1)"
+  },
+  "multi_node.partitions": {
+   "state": "PASS",
+   "evidence": "Partition0 system.serial=\"SGHD3QHLN3-000\"(원문 유지) hostname=\"m10apcdb11\"(Partition0.HostName 원문) boot.boot_order=[\"Boot0003\", \"Boot0001\"] == raw Boot.BootOrder=[\"Boot0003\", \"Boot0001\"]"
+  },
+  "multi_node.managers": {
+   "state": "PASS",
+   "evidence": "RMC role=primary name=RMC log_services=[\"IDC\", \"Debug\", \"RCU\", \"CrashLogging\", \"FabricTest\", \"RmcConfig\", \"NparConfig\"] == Managers/RMC/LogServices 멤버 7"
+  },
+  "multi_node.chassis": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-006: RackGroup/Rack1 에 Power/PowerSubsystem/Thermal/ThermalSubsystem 고정 경로 8건 + r001u01 Power/Thermal/EnvironmentMetrics 3건 = 404 요청 11건(server_access.jsonl); 값 자체는 raw 일치 — r001u01 sn=\"SGHD3QHLN3\" pn=\"R9N70A\" uuid=\"c4f41e32-adc0-5c0d-87c2-30516ecb3d5b\" kind=\"rackmount\" oem.physical_location=\"rack1/chassis_u1\"; RackGroup/Rack1 power/thermal={}(미러에 없는 경로 → MOCK_LIMITATION)"
+  },
+  "multi_node.composition": {
+   "state": "ISSUE",
+   "evidence": "01-multi_node-007: resource_blocks[0] processor_count=0 memory_count=0 — raw ResourceBlocks/r001u01 에 Processors/Memory 배열 없음(null) 인데 0 으로 표기; 그 외(id/types/composition_state/chassis/computer_systems) raw 일치"
+  },
+  "multi_node.fabrics": {
+   "state": "PASS",
+   "evidence": "FlexGrid fabric_type=null(raw 없음) switches=2(HARP0/HARP1) endpoints=0(Endpoints 링크 없음) — raw 충실; baseline/계약 예시의 PCIe/endpoint 2 는 mock(01-multi_node-003)"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "Tier1=\"rmc_primary\""
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "Tier1=true (수집 성공)"
+  },
+  "_area_multi_node": {
+   "state": "ISSUE",
+   "evidence": "구조(1 partition/1 manager/3 chassis/1 RB/1 fabric) raw 일치; 이슈는 고정 경로 404 11건(LOW) · composition 0 표기(LOW) · mock baseline 드리프트(MED, 01-multi_node-003)"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hpCsus\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD3QHLN3\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"8c205597-b54a-527b-bcda-c74b550a09e7\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"10.173.22.91\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/RMC/EthernetInterfaces/1\", \"10.173.22.91\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"Compute Scale-up Server 3200\", firmware=\"1.75.108-20260408_164726\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_csus_3200\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"Compute Scale-up Server 3200\" == ServiceRoot.Product \"Compute Scale-up Server 3200\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "ISSUE",
+   "evidence": "01-system-009: 값은 RMC 이름(\"M10APCDB11-RMC\")인데 source=system — ADR-2026-10-15 D2 가 인정한 의미 불일치. Partition0.HostName=\"m10apcdb11\""
+  }
+ },
+ "r1_HPE_DL380_01": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"ILOSGHD3KHHRP\" source=bmc; System.HostName=\"\"; Manager.NetworkProtocol FQDN/HostName=\"\"/\"ILOSGHD3KHHRP\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=null (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE\" / raw=\"HPE\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"HPE ProLiant Compute DL380 Gen12\" / raw=\"HPE ProLiant Compute DL380 Gen12\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SGHD3KHHRP\" / raw=\"SGHD3KHHRP\" — System.SerialNumber"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"32333750-3238-4753-4844-334b48485250\" / raw=\"32333750-3238-4753-4844-334B48485250\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"P73282-B21\" / raw=\"P73282-B21\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"U68 v1.46 (08/08/2025)\" / raw=\"U68 v1.46 (08/08/2025)\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2025-08-08\" / raw=\"08/08/2025\" — Oem.Hpe.Bios.Current.Date hoist → ISO"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OK\" / raw=\"OK\" — Status.Health (HealthRollup=\"OK\")"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null — System/Chassis 모두 없음 → null"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null"
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"None\" / raw=\"None\""
+  },
+  "hardware.tpm": {
+   "state": "PASS",
+   "evidence": "Tier1={\"interface_type\": \"TPM2_0\", \"firmware_version\": \"9.256\", \"state\": \"Enabled\"} / raw={\"InterfaceType\": \"TPM2_0\", \"FirmwareVersion\": \"9.256\", \"State\": \"Enabled\"} — TrustedModules[0]"
+  },
+  "hardware.oem": {
+   "state": "PASS",
+   "evidence": "Oem.Hpe @odata.type=\"#HpeComputerSystemExt.v2_17_0.HpeComputerSystemExt\" → keys=[\"aggregate_server_health\", \"fan_redundancy\", \"post_state\", \"psu_redundancy\", \"server_signature\", \"subsystem_health\"]"
+  },
+  "_area_hardware": {
+   "state": "PASS",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — hpe_ilo7.yml; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"hp\" ← canonical \"HPE\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"SGHD3KHHRP\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"32333750-3238-4753-4844-334b48485250\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"10.173.12.149\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/1/EthernetInterfaces/1\", \"10.173.12.149\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_ilo7\" — 1차(ServiceRoot.Product/Oem.Hpe.Manager hint) 와 재선택(model=\"HPE ProLiant Compute DL380 Gen12\", firmware=\"1.20.00 Feb 12 2026\") 동일"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "PASS",
+   "evidence": "null (변경 없음)"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "PASS",
+   "evidence": "\"redfish_hpe_ilo7\""
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems/\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems/\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "\"HPE ProLiant Compute DL380 Gen12\" == ServiceRoot.Product \"HPE ProLiant Compute DL380 Gen12\""
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  }
+ },
+ "r1_Lenovo_SR650_01": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"XCC-7DGD-J902E57T\" source=bmc; System.HostName=null; Manager.NetworkProtocol FQDN/HostName=\"XCC-7DGD-J902E57T\"/\"XCC-7DGD-J902E57T\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=null (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Lenovo\" / raw=\"Lenovo\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"ThinkSystem SR650 V4\" / raw=\"ThinkSystem SR650 V4\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"J902E57T\" / raw=\"J902E57T\" — System.SerialNumber"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"343afaa2-321b-11f0-911b-c4efbb1d4346\" / raw=\"343AFAA2-321B-11F0-911B-C4EFBB1D4346\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"7DGDCTO1WW\" / raw=\"7DGDCTO1WW\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"IHE110U\" / raw=\"IHE110U\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-004: null 이지만 UpdateService/FirmwareInventory/UEFI.ReleaseDate 가 있다 (XCC3 — 기존 필드로 채울 수 있음)"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-002: Tier1=\"Warning\"=Status.Health; HealthRollup=\"OK\"; Oem AggregateServerHealth=null — 사전 '롤업' 설명과 출처 불일치"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SB27B69948\" / raw=\"SB27B69948\" — System.PartNumber"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-06-11T09:25:51+00:00\" / raw=\"2026-06-11T09:25:51+00:00\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=null"
+  },
+  "hardware.tpm": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "System.TrustedModules null — XCC3 는 TPM 을 Bios Attributes(TrustedComputingGroup_*) 로만 노출(관찰)"
+  },
+  "hardware.oem": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-005: 9키 중 7키 null(fru_serial/machine_type/machine_level/product_id/system_id/health_summary/led_indicator) — raw Chassis.Oem.Lenovo keys=[\"BIOSVendor\", \"BaseBoardManufacturer\", \"FanSpeedBoost\", \"FruPartNumber\", \"LEDs\", \"ProductName\", \"SolutionServiceEnabled\", \"SysEncloseSerialNum\", \"SysEncloseVersion\", \"SystemBoardSerialNumber\", \"SystemEncloseManufacturer\", \"SysvpdSettings\"]; System.SubModel=\"7DGD\" IndicatorLED=\"Off\""
+  },
+  "_area_hardware": {
+   "state": "ISSUE",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"lenovo\" ← canonical \"Lenovo\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"J902E57T\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"343afaa2-321b-11f0-911b-c4efbb1d4346\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"10.173.12.150\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/1/EthernetInterfaces/NIC\", \"10.173.12.150\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: Tier1 meta.adapter_id=\"redfish_lenovo_bmc\" first_pass=\"redfish_lenovo_xcc3\"; 인증 후 facts model=\"ThinkSystem SR650 V4\" firmware=\"IHX414J 1.22 20250402\" (Manager.Model=\"Lenovo Xclarity Controller 3\") → lenovo_xcc3/xcc/imm2 firmware_patterns 전부 불일치 → -9999 실격, lenovo_bmc(priority 10) 잔존"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: 정답(redfish_lenovo_xcc3)이 '1차 값' 으로, 틀린 값(redfish_lenovo_bmc)이 최종으로 기록됨"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: redfish_lenovo_bmc (기대 redfish_lenovo_xcc3)"
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "null == ServiceRoot.Product null (Lenovo 는 Product 없음 → null; 1차 선택 facts 비어 priority 결정)"
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  }
+ },
+ "sr650_v4_01": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yicad01\" source=bmc; System.HostName=null; Manager.NetworkProtocol FQDN/HostName=\"yicad01\"/\"yicad01\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=null (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Lenovo\" / raw=\"Lenovo\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"ThinkSystem SR650 V4\" / raw=\"ThinkSystem SR650 V4\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"J90312WM\" / raw=\"J90312WM\" — System.SerialNumber"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"f7c9a8fe-3cd6-11f1-b22a-183d2da5cfb8\" / raw=\"F7C9A8FE-3CD6-11F1-B22A-183D2DA5CFB8\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"7DGDCTO1WW\" / raw=\"7DGDCTO1WW\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"IHE120L\" / raw=\"IHE120L\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-004: null 이지만 UpdateService/FirmwareInventory/UEFI.ReleaseDate 가 있다 (XCC3 — 기존 필드로 채울 수 있음)"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Critical\" / raw=\"Critical\" — Status.Health (HealthRollup=null)"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SB27C33739\" / raw=\"SB27C33739\" — System.PartNumber"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-10-20T14:28:23+09:00\" / raw=\"2026-10-20T14:28:23+09:00\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSRunning\" / raw=\"OSRunning\""
+  },
+  "hardware.tpm": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "System.TrustedModules null — XCC3 는 TPM 을 Bios Attributes(TrustedComputingGroup_*) 로만 노출(관찰)"
+  },
+  "hardware.oem": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-005: 9키 중 7키 null(fru_serial/machine_type/machine_level/product_id/system_id/health_summary/led_indicator) — raw Chassis.Oem.Lenovo keys=[\"BIOSVendor\", \"BaseBoardManufacturer\", \"FanSpeedBoost\", \"FruPartNumber\", \"LEDs\", \"ProductName\", \"SolutionServiceEnabled\", \"SysEncloseSerialNum\", \"SysEncloseVersion\", \"SystemBoardSerialNumber\", \"SystemEncloseManufacturer\", \"SysvpdSettings\"]; System.SubModel=\"7DGD\" IndicatorLED=\"Off\""
+  },
+  "_area_hardware": {
+   "state": "ISSUE",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"lenovo\" ← canonical \"Lenovo\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"J90312WM\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"f7c9a8fe-3cd6-11f1-b22a-183d2da5cfb8\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.87\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/1/EthernetInterfaces/NIC\", \"11.65.23.87\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: Tier1 meta.adapter_id=\"redfish_lenovo_bmc\" first_pass=\"redfish_lenovo_xcc3\"; 인증 후 facts model=\"ThinkSystem SR650 V4\" firmware=\"IHX438R 2.97 20260910\" (Manager.Model=\"Lenovo XClarity Controller 3\") → lenovo_xcc3/xcc/imm2 firmware_patterns 전부 불일치 → -9999 실격, lenovo_bmc(priority 10) 잔존"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: 정답(redfish_lenovo_xcc3)이 '1차 값' 으로, 틀린 값(redfish_lenovo_bmc)이 최종으로 기록됨"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: redfish_lenovo_bmc (기대 redfish_lenovo_xcc3)"
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "null == ServiceRoot.Product null (Lenovo 는 Product 없음 → null; 1차 선택 facts 비어 priority 결정)"
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  }
+ },
+ "sr650_v4_02": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yicbringup01\" source=bmc; System.HostName=null; Manager.NetworkProtocol FQDN/HostName=\"yicbringup01\"/\"yicbringup01\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=null (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Lenovo\" / raw=\"Lenovo\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"ThinkSystem SR650 V4\" / raw=\"ThinkSystem SR650 V4\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"J90312WP\" / raw=\"J90312WP\" — System.SerialNumber"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"7105b5c4-3cd7-11f1-bfe9-183d2da5cad6\" / raw=\"7105B5C4-3CD7-11F1-BFE9-183D2DA5CAD6\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"7DGDCTO1WW\" / raw=\"7DGDCTO1WW\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"IHE120L\" / raw=\"IHE120L\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-004: null 이지만 UpdateService/FirmwareInventory/UEFI.ReleaseDate 가 있다 (XCC3 — 기존 필드로 채울 수 있음)"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Critical\" / raw=\"Critical\" — Status.Health (HealthRollup=null)"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SB27C33739\" / raw=\"SB27C33739\" — System.PartNumber"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-10-17T17:28:25+09:00\" / raw=\"2026-10-17T17:28:25+09:00\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSRunning\" / raw=\"OSRunning\""
+  },
+  "hardware.tpm": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "System.TrustedModules null — XCC3 는 TPM 을 Bios Attributes(TrustedComputingGroup_*) 로만 노출(관찰)"
+  },
+  "hardware.oem": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-005: 9키 중 7키 null(fru_serial/machine_type/machine_level/product_id/system_id/health_summary/led_indicator) — raw Chassis.Oem.Lenovo keys=[\"BIOSVendor\", \"BaseBoardManufacturer\", \"FanSpeedBoost\", \"FruPartNumber\", \"LEDs\", \"ProductName\", \"SolutionServiceEnabled\", \"SysEncloseSerialNum\", \"SysEncloseVersion\", \"SystemBoardSerialNumber\", \"SystemEncloseManufacturer\", \"SysvpdSettings\"]; System.SubModel=\"7DGD\" IndicatorLED=\"Off\""
+  },
+  "_area_hardware": {
+   "state": "ISSUE",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"lenovo\" ← canonical \"Lenovo\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"J90312WP\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"7105b5c4-3cd7-11f1-bfe9-183d2da5cad6\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.88\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/1/EthernetInterfaces/NIC\", \"11.65.23.88\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: Tier1 meta.adapter_id=\"redfish_lenovo_bmc\" first_pass=\"redfish_lenovo_xcc3\"; 인증 후 facts model=\"ThinkSystem SR650 V4\" firmware=\"IHX438R 2.97 20260910\" (Manager.Model=\"Lenovo XClarity Controller 3\") → lenovo_xcc3/xcc/imm2 firmware_patterns 전부 불일치 → -9999 실격, lenovo_bmc(priority 10) 잔존"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: 정답(redfish_lenovo_xcc3)이 '1차 값' 으로, 틀린 값(redfish_lenovo_bmc)이 최종으로 기록됨"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: redfish_lenovo_bmc (기대 redfish_lenovo_xcc3)"
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "null == ServiceRoot.Product null (Lenovo 는 Product 없음 → null; 1차 선택 facts 비어 priority 결정)"
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  }
+ },
+ "sr650_v4_03": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yicinfesx001\" source=bmc; System.HostName=null; Manager.NetworkProtocol FQDN/HostName=\"yicinfesx001\"/\"yicinfesx001\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=null (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Lenovo\" / raw=\"Lenovo\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"ThinkSystem SR650 V4\" / raw=\"ThinkSystem SR650 V4\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"J9031BV4\" / raw=\"J9031BV4\" — System.SerialNumber"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"a6313ddb-4003-11f1-8241-183d2da5d1ac\" / raw=\"A6313DDB-4003-11F1-8241-183D2DA5D1AC\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"7DGDCTO1WW\" / raw=\"7DGDCTO1WW\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"IHE120P\" / raw=\"IHE120P\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-004: null 이지만 UpdateService/FirmwareInventory/UEFI.ReleaseDate 가 있다 (XCC3 — 기존 필드로 채울 수 있음)"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Critical\" / raw=\"Critical\" — Status.Health (HealthRollup=null)"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SB27C33739\" / raw=\"SB27C33739\" — System.PartNumber"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-10-21T08:09:31+09:00\" / raw=\"2026-10-21T08:09:31+09:00\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSRunning\" / raw=\"OSRunning\""
+  },
+  "hardware.tpm": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "System.TrustedModules null — XCC3 는 TPM 을 Bios Attributes(TrustedComputingGroup_*) 로만 노출(관찰)"
+  },
+  "hardware.oem": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-005: 9키 중 7키 null(fru_serial/machine_type/machine_level/product_id/system_id/health_summary/led_indicator) — raw Chassis.Oem.Lenovo keys=[\"BIOSVendor\", \"BaseBoardManufacturer\", \"FanSpeedBoost\", \"FruPartNumber\", \"LEDs\", \"ProductName\", \"SolutionServiceEnabled\", \"SysEncloseSerialNum\", \"SysEncloseVersion\", \"SystemBoardSerialNumber\", \"SystemEncloseManufacturer\", \"SysvpdSettings\"]; System.SubModel=\"7DGD\" IndicatorLED=\"Off\""
+  },
+  "_area_hardware": {
+   "state": "ISSUE",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"lenovo\" ← canonical \"Lenovo\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"J9031BV4\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"a6313ddb-4003-11f1-8241-183d2da5d1ac\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.76\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/1/EthernetInterfaces/NIC\", \"11.65.23.76\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: Tier1 meta.adapter_id=\"redfish_lenovo_bmc\" first_pass=\"redfish_lenovo_xcc3\"; 인증 후 facts model=\"ThinkSystem SR650 V4\" firmware=\"IHX438R 2.97 20260910\" (Manager.Model=\"Lenovo XClarity Controller 3\") → lenovo_xcc3/xcc/imm2 firmware_patterns 전부 불일치 → -9999 실격, lenovo_bmc(priority 10) 잔존"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: 정답(redfish_lenovo_xcc3)이 '1차 값' 으로, 틀린 값(redfish_lenovo_bmc)이 최종으로 기록됨"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: redfish_lenovo_bmc (기대 redfish_lenovo_xcc3)"
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "null == ServiceRoot.Product null (Lenovo 는 Product 없음 → null; 1차 선택 facts 비어 priority 결정)"
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  }
+ },
+ "sr650_v4_04": {
+  "hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname=\"yichtwinap09\" source=bmc; System.HostName=null; Manager.NetworkProtocol FQDN/HostName=\"yichtwinap09\"/\"yichtwinap09\""
+  },
+  "system.hostname": {
+   "state": "PASS",
+   "evidence": "Tier1 system.hostname=null (첫 라벨 규칙); 원천=System.HostName"
+  },
+  "system.fqdn": {
+   "state": "PASS",
+   "evidence": "Tier1 system.fqdn=null (도메인 있을 때만)"
+  },
+  "hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  },
+  "sections.system": {
+   "state": "ISSUE",
+   "evidence": "01-system-008: sections.system=not_supported 인데 data.system.hostname/fqdn 을 낸다(사전 must·redfish)"
+  },
+  "_area_system": {
+   "state": "ISSUE",
+   "evidence": "hostname 체인 PASS; 계약(sections.system not_supported ↔ system.hostname emit) 과 CSUS source 의미는 결정 항목(LOW)"
+  },
+  "hardware.vendor": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Lenovo\" / raw=\"Lenovo\" — System.Manufacturer"
+  },
+  "hardware.model": {
+   "state": "PASS",
+   "evidence": "Tier1=\"ThinkSystem SR650 V4\" / raw=\"ThinkSystem SR650 V4\" — System.Model"
+  },
+  "hardware.serial": {
+   "state": "PASS",
+   "evidence": "Tier1=\"J90319RE\" / raw=\"J90319RE\" — System.SerialNumber"
+  },
+  "hardware.uuid": {
+   "state": "PASS",
+   "evidence": "Tier1=\"5b3c5915-3f3e-11f1-bbea-183d2da5eee4\" / raw=\"5B3C5915-3F3E-11F1-BBEA-183D2DA5EEE4\" — normalize_uuid 소문자; uuid_byte_order 미선언(스왑 없음)"
+  },
+  "hardware.uuid_byte_order_vs_os": {
+   "state": "MOCK_LIMITATION",
+   "evidence": "같은 장비의 OS/ESXi 캡처가 없어 바이트 순서 대조 불가 — correlation 은 uuid_equal 로 양쪽 대조"
+  },
+  "hardware.sku": {
+   "state": "PASS",
+   "evidence": "Tier1=\"7DGDCTO1WW\" / raw=\"7DGDCTO1WW\" — System.SKU"
+  },
+  "hardware.bios_version": {
+   "state": "PASS",
+   "evidence": "Tier1=\"IHE120L\" / raw=\"IHE120L\" — System.BiosVersion"
+  },
+  "hardware.bios_date": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-004: null 이지만 UpdateService/FirmwareInventory/UEFI.ReleaseDate 가 있다 (XCC3 — 기존 필드로 채울 수 있음)"
+  },
+  "hardware.power_state": {
+   "state": "PASS",
+   "evidence": "Tier1=\"On\" / raw=\"On\""
+  },
+  "hardware.health": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Critical\" / raw=\"Critical\" — Status.Health (HealthRollup=null)"
+  },
+  "hardware.asset_tag": {
+   "state": "PASS",
+   "evidence": "Tier1=null / raw=\"\" — '' → null"
+  },
+  "hardware.system_type": {
+   "state": "PASS",
+   "evidence": "Tier1=\"Physical\" / raw=\"Physical\""
+  },
+  "hardware.part_number": {
+   "state": "PASS",
+   "evidence": "Tier1=\"SB27C33739\" / raw=\"SB27C33739\" — System.PartNumber"
+  },
+  "hardware.last_reset_time": {
+   "state": "PASS",
+   "evidence": "Tier1=\"2026-10-17T16:33:54+09:00\" / raw=\"2026-10-17T16:33:54+09:00\""
+  },
+  "hardware.boot_progress": {
+   "state": "PASS",
+   "evidence": "Tier1=\"OSRunning\" / raw=\"OSRunning\""
+  },
+  "hardware.tpm": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "System.TrustedModules null — XCC3 는 TPM 을 Bios Attributes(TrustedComputingGroup_*) 로만 노출(관찰)"
+  },
+  "hardware.oem": {
+   "state": "ISSUE",
+   "evidence": "01-hardware-005: 9키 중 7키 null(fru_serial/machine_type/machine_level/product_id/system_id/health_summary/led_indicator) — raw Chassis.Oem.Lenovo keys=[\"BIOSVendor\", \"BaseBoardManufacturer\", \"FanSpeedBoost\", \"FruPartNumber\", \"LEDs\", \"ProductName\", \"SolutionServiceEnabled\", \"SysEncloseSerialNum\", \"SysEncloseVersion\", \"SystemBoardSerialNumber\", \"SystemEncloseManufacturer\", \"SysvpdSettings\"]; System.SubModel=\"7DGD\" IndicatorLED=\"Off\""
+  },
+  "_area_hardware": {
+   "state": "ISSUE",
+   "evidence": "raw 1:1 대조 — 식별 필드(vendor/model/serial/uuid/sku/bios_version/power_state/system_type/part_number/asset_tag/last_reset/boot_progress) 전부 일치; ISSUE 는 개선 후보(health 출처 문서, bios_date, Lenovo oem)"
+  },
+  "multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "diagnosis.multi_node_layout": {
+   "state": "PASS",
+   "evidence": "null (layout 없음) — Tier1=null"
+  },
+  "diagnosis.rmc_activation_check": {
+   "state": "PASS",
+   "evidence": "null — Tier1=null"
+  },
+  "_area_multi_node": {
+   "state": "NOT_APPLICABLE",
+   "evidence": "adapter 가 vendor_notes.manager_layout 을 주지 않음 — lenovo_bmc.yml(재선택)·lenovo_xcc3.yml 모두 없음; Systems 멤버 1개(/redfish/v1/Systems/1) · Managers 1개 — 다중 노드 구조 아님 → data.multi_node=null 정상"
+  },
+  "vendor": {
+   "state": "PASS",
+   "evidence": "Tier1 vendor=\"lenovo\" ← canonical \"Lenovo\"→ vendor_output_display/adapter_output_display (ADR-2026-06-04)"
+  },
+  "correlation.serial_number": {
+   "state": "PASS",
+   "evidence": "\"J90319RE\" == hardware.serial"
+  },
+  "correlation.system_uuid": {
+   "state": "PASS",
+   "evidence": "\"5b3c5915-3f3e-11f1-bbea-183d2da5eee4\" == hardware.uuid (normalize_uuid)"
+  },
+  "correlation.bmc_ip": {
+   "state": "PASS",
+   "evidence": "\"11.65.23.37\" == 첫 IPv4 NIC [\"/redfish/v1/Managers/1/EthernetInterfaces/NIC\", \"11.65.23.37\"] (host_ip=127.0.0.1 는 재생 한계 #9; 01-correlation-010 문서화 제안)"
+  },
+  "meta.adapter_id": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: Tier1 meta.adapter_id=\"redfish_lenovo_bmc\" first_pass=\"redfish_lenovo_xcc3\"; 인증 후 facts model=\"ThinkSystem SR650 V4\" firmware=\"IHX438R 2.97 20260910\" (Manager.Model=\"Lenovo XClarity Controller 3\") → lenovo_xcc3/xcc/imm2 firmware_patterns 전부 불일치 → -9999 실격, lenovo_bmc(priority 10) 잔존"
+  },
+  "diagnosis.adapter_first_pass": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: 정답(redfish_lenovo_xcc3)이 '1차 값' 으로, 틀린 값(redfish_lenovo_bmc)이 최종으로 기록됨"
+  },
+  "diagnosis.adapter_candidate": {
+   "state": "ISSUE",
+   "evidence": "01-adapter-001: redfish_lenovo_bmc (기대 redfish_lenovo_xcc3)"
+  },
+  "diagnosis.systems_uri": {
+   "state": "PASS",
+   "evidence": "\"/redfish/v1/Systems\" == ServiceRoot.Systems.@odata.id \"/redfish/v1/Systems\" (precheck_bundle 원문; 후행 슬래시는 장비 표기)"
+  },
+  "diagnosis.product": {
+   "state": "PASS",
+   "evidence": "null == ServiceRoot.Product null (Lenovo 는 Product 없음 → null; 1차 선택 facts 비어 priority 결정)"
+  },
+  "diagnosis.hostname_source": {
+   "state": "PASS",
+   "evidence": "Tier1 hostname_source=bmc"
+  }
+ }
+}
