@@ -1,0 +1,398 @@
+[
+ {
+  "label": "csus3200_01",
+  "mirror": "C:/github/ClovirONE/mock2-audit-20261026/extract/csus3200_01",
+  "tag": "adapter",
+  "layout": "rmc_primary",
+  "firmware_scope": "complex_only",
+  "elapsed_s": 1.9,
+  "exception": null,
+  "mirror_stats": {
+   "files": 2023,
+   "keyed": 2004,
+   "non_json": 16,
+   "skipped": 2,
+   "from_manifest": 62,
+   "statuses": {
+    "200": 2003,
+    "201": 1,
+    "204": 1,
+    "404": 57,
+    "500": 5
+   }
+  },
+  "hang": [
+   "Managers/RMC/LogServices/RmcConfig/RawConfig"
+  ],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "Compute Scale-up Server 3200"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": "dict"
+ },
+ {
+  "label": "csus3200_02",
+  "mirror": "C:/github/ClovirONE/mock2-audit-20261026/extract/csus3200_02",
+  "tag": "adapter",
+  "layout": "rmc_primary",
+  "firmware_scope": "complex_only",
+  "elapsed_s": 1.9,
+  "exception": null,
+  "mirror_stats": {
+   "files": 1977,
+   "keyed": 1960,
+   "non_json": 14,
+   "skipped": 2,
+   "from_manifest": 65,
+   "statuses": {
+    "200": 1959,
+    "204": 1,
+    "201": 1,
+    "404": 57,
+    "500": 8
+   }
+  },
+  "hang": [
+   "Managers/RMC/LogServices/RmcConfig/RawConfig"
+  ],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "Compute Scale-up Server 3200"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": "dict"
+ },
+ {
+  "label": "csus3200_03",
+  "mirror": "C:/github/ClovirONE/mock2-audit-20261026/extract/csus3200_03",
+  "tag": "adapter",
+  "layout": "rmc_primary",
+  "firmware_scope": "complex_only",
+  "elapsed_s": 2.2,
+  "exception": null,
+  "mirror_stats": {
+   "files": 1988,
+   "keyed": 1969,
+   "non_json": 16,
+   "skipped": 2,
+   "from_manifest": 62,
+   "statuses": {
+    "200": 1968,
+    "204": 1,
+    "201": 1,
+    "404": 57,
+    "500": 5
+   }
+  },
+  "hang": [
+   "Managers/RMC/LogServices/RmcConfig/RawConfig"
+  ],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "Compute Scale-up Server 3200"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": "dict"
+ },
+ {
+  "label": "r1_HPE_CSUS3200_01",
+  "mirror": "C:/github/서버mock데이터/1차/HPE_CSUS3200/01",
+  "tag": "adapter",
+  "layout": "rmc_primary",
+  "firmware_scope": "complex_only",
+  "elapsed_s": 0.6,
+  "exception": null,
+  "mirror_stats": {
+   "files": 490,
+   "keyed": 489,
+   "non_json": 0,
+   "skipped": 0,
+   "from_manifest": 0,
+   "statuses": {
+    "200": 490
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "Compute Scale-up Server 3200"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": "dict"
+ },
+ {
+  "label": "r1_HPE_CSUS3200_02",
+  "mirror": "C:/github/서버mock데이터/1차/HPE_CSUS3200/02",
+  "tag": "adapter",
+  "layout": "rmc_primary",
+  "firmware_scope": "complex_only",
+  "elapsed_s": 0.7,
+  "exception": null,
+  "mirror_stats": {
+   "files": 493,
+   "keyed": 492,
+   "non_json": 0,
+   "skipped": 0,
+   "from_manifest": 0,
+   "statuses": {
+    "200": 493
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "Compute Scale-up Server 3200"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": "dict"
+ },
+ {
+  "label": "r1_HPE_CSUS3200_03",
+  "mirror": "C:/github/서버mock데이터/1차/HPE_CSUS3200/03",
+  "tag": "adapter",
+  "layout": "rmc_primary",
+  "firmware_scope": "complex_only",
+  "elapsed_s": 1.0,
+  "exception": null,
+  "mirror_stats": {
+   "files": 637,
+   "keyed": 636,
+   "non_json": 0,
+   "skipped": 0,
+   "from_manifest": 0,
+   "statuses": {
+    "200": 637
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "Compute Scale-up Server 3200"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": "dict"
+ },
+ {
+  "label": "r1_HPE_CSUS3200_04",
+  "mirror": "C:/github/서버mock데이터/1차/HPE_CSUS3200/04",
+  "tag": "adapter",
+  "layout": "rmc_primary",
+  "firmware_scope": "complex_only",
+  "elapsed_s": 0.8,
+  "exception": null,
+  "mirror_stats": {
+   "files": 636,
+   "keyed": 635,
+   "non_json": 0,
+   "skipped": 0,
+   "from_manifest": 0,
+   "statuses": {
+    "200": 636
+   }
+  },
+  "hang": [],
+  "status": "success",
+  "vendor": "hpe",
+  "collected": [
+   "bmc",
+   "firmware",
+   "memory",
+   "network",
+   "network_adapters",
+   "power",
+   "processors",
+   "storage",
+   "system",
+   "thermal"
+  ],
+  "failed_sections": [],
+  "unsupported_sections": [],
+  "error_count": 0,
+  "probe_facts": {
+   "model_hint": "Compute Scale-up Server 3200"
+  },
+  "data_sections": {
+   "system": "dict",
+   "bmc": "dict",
+   "processors": "list",
+   "memory": "dict",
+   "storage": "dict",
+   "network": "list",
+   "firmware": "list",
+   "power": "dict",
+   "thermal": "dict",
+   "network_adapters": "dict",
+   "bios": "dict"
+  },
+  "multi_node": "dict"
+ }
+]

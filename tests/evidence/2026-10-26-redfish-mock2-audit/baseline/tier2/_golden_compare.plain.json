@@ -1,0 +1,69 @@
+{
+ "r1_DELL_R740_01": {
+  "golden": "real_dell_r740",
+  "golden_meta": {
+   "manager_layout": null
+  },
+  "diff_count": 1,
+  "diffs": [
+   [
+    "data.bios.current.attributes",
+    "{'AcPwrRcvry': 'Last', 'AcPwrRcvryDelay': 'Immediate', 'AcPw",
+    "None"
+   ]
+  ]
+ },
+ "r1_HPE_DL380_01": {
+  "golden": "real_hpe_dl380",
+  "golden_meta": {
+   "manager_layout": null
+  },
+  "diff_count": 1,
+  "diffs": [
+   [
+    "data.bios.current.attributes",
+    "{'AccessControlService': 'Enabled', 'AcpiHpet': 'Enabled', '",
+    "None"
+   ]
+  ]
+ },
+ "r1_Lenovo_SR650_01": {
+  "golden": "real_lenovo_sr650",
+  "golden_meta": {
+   "manager_layout": null
+  },
+  "diff_count": 1,
+  "diffs": [
+   [
+    "data.bios.current.attributes",
+    "{'AdvancedRAS_DIMMDisablePolicy': 'DisableFaultyDIMMPersiste",
+    "None"
+   ]
+  ]
+ },
+ "r1_HPE_CSUS3200_01": {
+  "golden": "real_hpe_csus3200",
+  "golden_meta": {
+   "manager_layout": "rmc_primary",
+   "firmware_inventory_scope": "complex_only"
+  },
+  "diff_count": 3,
+  "diffs": [
+   [
+    "data.bmc.name",
+    "'iLO'",
+    "'RMC'"
+   ],
+   [
+    "data.firmware",
+    "len 2",
+    "len 6"
+   ],
+   [
+    "multi_node",
+    "None",
+    "{'chassis': [{'asset_tag': None, 'chassis_type': 'RackGroup'"
+   ]
+  ]
+ }
+}

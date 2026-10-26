@@ -1,0 +1,1264 @@
+{
+  "allowlist": "C:\\github\\ClovirONE\\clovirone-server-gathering\\tests\\reference\\redfish\\coverage_allowlist.yml",
+  "classification": {
+    "allowed": {
+      "AccountService": 1,
+      "ActionInfo": 7,
+      "BootOption": 7,
+      "BootOptionCollection": 1,
+      "Certificate": 1,
+      "CertificateCollection": 4,
+      "CertificateLocations": 1,
+      "CertificateService": 1,
+      "Control": 1,
+      "ControlCollection": 1,
+      "EnvironmentMetrics": 1,
+      "EventDestinationCollection": 1,
+      "EventService": 1,
+      "HostInterface": 1,
+      "HostInterfaceCollection": 1,
+      "Job": 3,
+      "JobCollection": 1,
+      "JobService": 1,
+      "JsonSchemaFile": 346,
+      "JsonSchemaFileCollection": 1,
+      "KeyCollection": 2,
+      "LenovoAlertRecipientCollection": 1,
+      "LenovoConfigurationService": 1,
+      "LenovoDNS": 1,
+      "LenovoDateTimeService": 1,
+      "LenovoHistoryMetricValueContainer": 13,
+      "LenovoHistoryMetricValueContainerCollection": 1,
+      "LenovoLDAPClient": 1,
+      "LenovoLED": 60,
+      "LenovoLEDCollection": 1,
+      "LenovoPortForwarding": 1,
+      "LenovoPortForwardingMap": 15,
+      "LenovoPortForwardingMapCollection": 1,
+      "LenovoRemoteControlService": 1,
+      "LenovoSMTPClient": 1,
+      "LenovoSNMPProtocol": 1,
+      "LenovoSecureKeyLifecycle": 1,
+      "LenovoSecurityService": 1,
+      "LenovoWatchdog": 3,
+      "LenovoWatchdogCollection": 1,
+      "License": 1,
+      "LicenseCollection": 1,
+      "LicenseService": 1,
+      "LogEntry": 2060,
+      "LogEntryCollection": 6,
+      "LogService": 7,
+      "LogServiceCollection": 1,
+      "ManagerAccount": 2,
+      "ManagerAccountCollection": 1,
+      "MessageRegistryFile": 12,
+      "MessageRegistryFileCollection": 1,
+      "MetricDefinition": 4,
+      "MetricDefinitionCollection": 1,
+      "MetricReport": 7,
+      "MetricReportCollection": 1,
+      "MetricReportDefinition": 14,
+      "MetricReportDefinitionCollection": 1,
+      "PowerSupplyMetrics": 2,
+      "ProcessorMetrics": 2,
+      "Role": 3,
+      "RoleCollection": 1,
+      "SecureBoot": 1,
+      "SecurityPolicy": 1,
+      "Sensor": 42,
+      "SensorCollection": 1,
+      "SerialInterface": 1,
+      "SerialInterfaceCollection": 1,
+      "Session": 3,
+      "SessionCollection": 1,
+      "SessionService": 1,
+      "StoragePool": 1,
+      "StoragePoolCollection": 2,
+      "Task": 5,
+      "TaskCollection": 1,
+      "TaskService": 1,
+      "TelemetryService": 1,
+      "ThermalMetrics": 1,
+      "UpdateService": 1,
+      "VirtualMedia": 10,
+      "VirtualMediaCollection": 1
+    },
+    "allowlist_unused": [
+      "Assembly",
+      "BatteryCollection",
+      "CapacitySource",
+      "ComponentIntegrity",
+      "ComponentIntegrityCollection",
+      "DellAssembly",
+      "DellAttributes",
+      "DellBIOSService",
+      "DellBootSources",
+      "DellCertificate",
+      "DellCertificateCollection",
+      "DellCertificateStoreCollection",
+      "DellChassis",
+      "DellChassisCollection",
+      "DellController",
+      "DellControllerBattery",
+      "DellD4D",
+      "DellEnclosure",
+      "DellFirmwareImageHash",
+      "DellFirmwareImageHashCollection",
+      "DellGPUSensor",
+      "DellGPUSensorCollection",
+      "DellJob",
+      "DellJobCollection",
+      "DellJobService",
+      "DellLCService",
+      "DellLicensableDevice",
+      "DellLicensableDeviceCollection",
+      "DellLicense",
+      "DellLicenseCollection",
+      "DellLicenseManagementService",
+      "DellMemory",
+      "DellMetricService",
+      "DellNIC",
+      "DellNICCapabilities",
+      "DellNICPortMetrics",
+      "DellNetworkTransceiver",
+      "DellNumericSensor",
+      "DellNumericSensorCollection",
+      "DellOSDeploymentService",
+      "DellOpaqueManagementDataCollection",
+      "DellPSNumericSensor",
+      "DellPSNumericSensorCollection",
+      "DellPersistentStorageService",
+      "DellPhysicalDisk",
+      "DellPowerSupply",
+      "DellPowerSupplyView",
+      "DellPresenceAndStatusSensorCollection",
+      "DellProcessor",
+      "DellRaidService",
+      "DellRollupStatus",
+      "DellRollupStatusCollection",
+      "DellSensor",
+      "DellSensorCollection",
+      "DellSlot",
+      "DellSlotCollection",
+      "DellSoftwareInstallationService",
+      "DellSoftwareInventory",
+      "DellSwitchConnection",
+      "DellSwitchConnectionCollection",
+      "DellSwitchConnectionService",
+      "DellSystem",
+      "DellSystemManagementService",
+      "DellSystemQuickSyncCollection",
+      "DellTimeService",
+      "DellUSBDeviceCollection",
+      "DellVideo",
+      "DellVideoCollection",
+      "DellVideoNetworkCollection",
+      "DellVirtualDisk",
+      "DelliDRACCard",
+      "DelliDRACCardService",
+      "DellvFlashCollection",
+      "EventDestination",
+      "Fabric",
+      "FabricCollection",
+      "HpeAutomaticCertEnrollment",
+      "HpeBaseConfigs",
+      "HpeBiosMapping",
+      "HpeBundleUpdateReport",
+      "HpeBundleUpdateReportCollection",
+      "HpeCertAuth",
+      "HpeCertificateCollection",
+      "HpeComponent",
+      "HpeComponentCollection",
+      "HpeComponentInstallSet",
+      "HpeComponentInstallSetCollection",
+      "HpeComponentUpdateEntryCollection",
+      "HpeComponentUpdateTaskQueueCollection",
+      "HpeDirectoryTest",
+      "HpeESKM",
+      "HpeFallbackSensorCollection",
+      "HpeH3DebugLogCollection",
+      "HpeHttpsCert",
+      "HpeInvalidImageCollection",
+      "HpeKmsConfig",
+      "HpeMaintenanceWindowCollection",
+      "HpeNvmeOfSoftwareInitiator",
+      "HpePowerMeter",
+      "HpeRemoteSupport",
+      "HpeSNMPAlertDestinationCollection",
+      "HpeSNMPUsersCollection",
+      "HpeSecureEraseReportCollection",
+      "HpeSecureEraseReportService",
+      "HpeSecurityService",
+      "HpeServerBootSettings",
+      "HpeServerConfigLock",
+      "HpeServerDevice",
+      "HpeServerDeviceCollection",
+      "HpeServerPCISlot",
+      "HpeServerPCISlotCollection",
+      "HpeServerPciDevice",
+      "HpeServerPciDeviceCollection",
+      "HpeTlsConfig",
+      "HpeUSBDevicesCollection",
+      "HpeUSBPort",
+      "HpeUSBPortsCollection",
+      "HpeWorkloadPerformanceAdvisor",
+      "HpeWorkloadPerformanceAdvisorCollection",
+      "HpeiLOAccountCertificateMap",
+      "HpeiLOAccountCertificateMapCollection",
+      "HpeiLOActiveHealthSystem",
+      "HpeiLOBackupFileCollection",
+      "HpeiLOBackupRestoreService",
+      "HpeiLODateTime",
+      "HpeiLOEmbeddedMedia",
+      "HpeiLOFederatedGroupCapping",
+      "HpeiLOFederationGroup",
+      "HpeiLOFederationGroupCollection",
+      "HpeiLOFederationPeers",
+      "HpeiLOFederationPeersCollection",
+      "HpeiLOGUIService",
+      "HpeiLOLicense",
+      "HpeiLOLicenseCollection",
+      "HpeiLOResourceDirectory",
+      "HpeiLOSSO",
+      "HpeiLOSecurityDashboard",
+      "HpeiLOSecurityParam",
+      "HpeiLOSecurityParamCollection",
+      "HpeiLOSnmpService",
+      "HpeiSCSISoftwareInitiator",
+      "LenovoBootManager",
+      "LenovoBootManagerCollection",
+      "LenovoFirmwareService",
+      "LenovoFirmwareServiceCollection",
+      "LenovoFoDKey",
+      "LenovoFoDKeyCollection",
+      "LenovoFoDService",
+      "LenovoHistoryMemRecovery",
+      "LenovoHistoryMetricValue",
+      "LenovoRemoteControlSession",
+      "LenovoRemoteControlSessionCollection",
+      "LenovoRemoteMapMediaCollection",
+      "LenovoRemoteMapService",
+      "LenovoRemoteMountMediaCollection",
+      "LenovoScheduledPowerAction",
+      "LenovoScheduledPowerActionCollection",
+      "LenovoServerProfileService",
+      "LenovoServiceData",
+      "LenovoSlot",
+      "LenovoSlotCollection",
+      "ManagerDiagnosticData",
+      "MemoryDomainCollection",
+      "MemoryMetrics",
+      "NetworkAdapterMetrics",
+      "NetworkDeviceFunctionMetrics",
+      "PortMetrics",
+      "PrivilegeRegistry",
+      "PumpCollection",
+      "RegisteredClient",
+      "RegisteredClientCollection",
+      "SUT",
+      "SUTSystemInventory",
+      "SUTTaskSettings",
+      "SecureBootDatabase",
+      "SecureBootDatabaseCollection",
+      "ServiceConditions",
+      "Signature",
+      "SignatureCollection",
+      "SimpleStorage",
+      "SimpleStorageCollection",
+      "StorageController",
+      "StorageControllerCollection",
+      "StorageControllerMetrics",
+      "Switch",
+      "SwitchCollection",
+      "Triggers",
+      "TriggersCollection",
+      "TrustedComponent",
+      "TrustedComponentCollection"
+    ],
+    "conditional": {
+      "Chassis": [
+        "/redfish/v1/Chassis/Drive_Backplane_L1HF53C000G",
+        "/redfish/v1/Chassis/Drive_Backplane_L1HF53C0086",
+        "/redfish/v1/Chassis/Drive_Backplane_L4HF62A025D",
+        "/redfish/v1/Chassis/IO_Board",
+        "/redfish/v1/Chassis/PCIe_Riser_11XM51R0011",
+        "/redfish/v1/Chassis/PCIe_Riser_11XM51R001B",
+        "/redfish/v1/Chassis/PCIe_Riser_11XM51R001J",
+        "/redfish/v1/Chassis/PCIe_Riser_11XM53Z00BD",
+        "/redfish/v1/Chassis/PCIe_Riser_11XM53Z00BW",
+        "/redfish/v1/Chassis/PCIe_Riser_11XM53Z00C2",
+        "/redfish/v1/Chassis/PCIe_Riser_11XM53Z00CM",
+        "/redfish/v1/Chassis/PCIe_Riser_11XM543005G",
+        "/redfish/v1/Chassis/PCIe_Riser_L1HF489008J"
+      ],
+      "DriveCollection": [
+        "/redfish/v1/Systems/1/Storage/controller_slot25/StoragePools/Pool_25_0/CapacitySources/1/ProvidingDrives"
+      ],
+      "Fan": [
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan1_Front_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan1_Rear_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan2_Front_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan2_Rear_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan3_Front_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan3_Rear_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan4_Front_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan4_Rear_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan5_Front_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan5_Rear_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan6_Front_Tach",
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan6_Rear_Tach"
+      ],
+      "FanCollection": [
+        "/redfish/v1/Chassis/1/ThermalSubsystem/Fans"
+      ],
+      "NetworkInterface": [
+        "/redfish/v1/Systems/1/NetworkInterfaces/1",
+        "/redfish/v1/Systems/1/NetworkInterfaces/2",
+        "/redfish/v1/Systems/1/NetworkInterfaces/3"
+      ],
+      "NetworkInterfaceCollection": [
+        "/redfish/v1/Systems/1/NetworkInterfaces"
+      ],
+      "PCIeDevice": [
+        "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot1_0x590000",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot25_0x230000",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000"
+      ],
+      "PCIeDeviceCollection": [
+        "/redfish/v1/Chassis/1/PCIeDevices"
+      ],
+      "PCIeFunction": [
+        "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.00",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.01",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.02",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.03",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot1_0x590000/PCIeFunctions/slot_1.00",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot25_0x230000/PCIeFunctions/slot_25.00",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000/PCIeFunctions/slot_4.00",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000/PCIeFunctions/slot_4.01",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000/PCIeFunctions/slot_4.02",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000/PCIeFunctions/slot_4.03",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000/PCIeFunctions/slot_6.00",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000/PCIeFunctions/slot_6.01",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000/PCIeFunctions/slot_6.02",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000/PCIeFunctions/slot_6.03"
+      ],
+      "PCIeFunctionCollection": [
+        "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot1_0x590000/PCIeFunctions",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot25_0x230000/PCIeFunctions",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000/PCIeFunctions",
+        "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000/PCIeFunctions"
+      ],
+      "PCIeSlots": [
+        "/redfish/v1/Chassis/1/PCIeSlots"
+      ],
+      "Port": [
+        "/redfish/v1/Managers/1/DedicatedNetworkPorts/nic1"
+      ],
+      "PortCollection": [
+        "/redfish/v1/Managers/1/DedicatedNetworkPorts"
+      ],
+      "PowerSubsystem": [
+        "/redfish/v1/Chassis/1/PowerSubsystem"
+      ],
+      "PowerSupply": [
+        "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU1",
+        "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU2"
+      ],
+      "PowerSupplyCollection": [
+        "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies"
+      ],
+      "ThermalSubsystem": [
+        "/redfish/v1/Chassis/1/ThermalSubsystem"
+      ]
+    },
+    "pattern": {
+      "(?i)/(Settings|Pending)/?$": [
+        "/redfish/v1/Systems/1/Bios/Pending",
+        "/redfish/v1/Systems/1/Pending"
+      ],
+      "/HostInterfaces/": [
+        "/redfish/v1/Managers/1/HostInterfaces/1/HostEthernetInterfaces"
+      ],
+      "/StoragePools/": [
+        "/redfish/v1/Systems/1/Storage/controller_slot25/StoragePools/Pool_25_0/AllocatedVolumes"
+      ]
+    },
+    "unlisted": {
+      "FastAccuratePowerService": [
+        "/redfish/v1/Chassis/1/PowerSubsystem/Oem/Lenovo/FastAccuratePowerService"
+      ],
+      "LenovoBmc": [
+        "/redfish/v1/Managers/1/Oem/Lenovo/BMCSettings"
+      ],
+      "LenovoBuiltInImageService": [
+        "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService/DRVLNService",
+        "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService/DRVWNService",
+        "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService/LXPMService",
+        "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService/LXUMService"
+      ],
+      "LenovoLocalImageManagementService": [
+        "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService"
+      ],
+      "LenovoSNMPv3TrapUserCollection": [
+        "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SNMP/SNMPv3TrapUsers"
+      ],
+      "LenovoSysSysVpd": [
+        "/redfish/v1/Chassis/1/Oem/Lenovo/SysvpdSettings"
+      ],
+      "LenovoSystemGuardService": [
+        "/redfish/v1/Managers/1/Oem/Lenovo/SystemGuard"
+      ],
+      "LenovoSystemGuardSnapshotCollection": [
+        "/redfish/v1/Managers/1/Oem/Lenovo/SystemGuard/Snapshots"
+      ],
+      "LenovoWorkPartitionService": [
+        "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService/WorkPartitionService"
+      ]
+    }
+  },
+  "collected": [
+    "bmc",
+    "firmware",
+    "memory",
+    "network",
+    "network_adapters",
+    "power",
+    "processors",
+    "storage",
+    "system",
+    "thermal"
+  ],
+  "error_count": 0,
+  "exposed_by_type": {
+    "AccountService": 1,
+    "ActionInfo": 7,
+    "Bios": 2,
+    "BootOption": 7,
+    "BootOptionCollection": 1,
+    "Certificate": 1,
+    "CertificateCollection": 4,
+    "CertificateLocations": 1,
+    "CertificateService": 1,
+    "Chassis": 14,
+    "ChassisCollection": 1,
+    "ComputerSystem": 2,
+    "ComputerSystemCollection": 1,
+    "Control": 1,
+    "ControlCollection": 1,
+    "Drive": 4,
+    "DriveCollection": 1,
+    "EnvironmentMetrics": 1,
+    "EthernetInterface": 15,
+    "EthernetInterfaceCollection": 3,
+    "EventDestinationCollection": 1,
+    "EventService": 1,
+    "Fan": 12,
+    "FanCollection": 1,
+    "FastAccuratePowerService": 1,
+    "HostInterface": 1,
+    "HostInterfaceCollection": 1,
+    "Job": 3,
+    "JobCollection": 1,
+    "JobService": 1,
+    "JsonSchemaFile": 346,
+    "JsonSchemaFileCollection": 1,
+    "KeyCollection": 2,
+    "LenovoAlertRecipientCollection": 1,
+    "LenovoBmc": 1,
+    "LenovoBuiltInImageService": 4,
+    "LenovoConfigurationService": 1,
+    "LenovoDNS": 1,
+    "LenovoDateTimeService": 1,
+    "LenovoHistoryMetricValueContainer": 13,
+    "LenovoHistoryMetricValueContainerCollection": 1,
+    "LenovoLDAPClient": 1,
+    "LenovoLED": 60,
+    "LenovoLEDCollection": 1,
+    "LenovoLocalImageManagementService": 1,
+    "LenovoPortForwarding": 1,
+    "LenovoPortForwardingMap": 15,
+    "LenovoPortForwardingMapCollection": 1,
+    "LenovoRemoteControlService": 1,
+    "LenovoSMTPClient": 1,
+    "LenovoSNMPProtocol": 1,
+    "LenovoSNMPv3TrapUserCollection": 1,
+    "LenovoSecureKeyLifecycle": 1,
+    "LenovoSecurityService": 1,
+    "LenovoSysSysVpd": 1,
+    "LenovoSystemGuardService": 1,
+    "LenovoSystemGuardSnapshotCollection": 1,
+    "LenovoWatchdog": 3,
+    "LenovoWatchdogCollection": 1,
+    "LenovoWorkPartitionService": 1,
+    "License": 1,
+    "LicenseCollection": 1,
+    "LicenseService": 1,
+    "LogEntry": 2060,
+    "LogEntryCollection": 6,
+    "LogService": 7,
+    "LogServiceCollection": 1,
+    "Manager": 1,
+    "ManagerAccount": 2,
+    "ManagerAccountCollection": 1,
+    "ManagerCollection": 1,
+    "ManagerNetworkProtocol": 1,
+    "Memory": 32,
+    "MemoryCollection": 1,
+    "MessageRegistryFile": 12,
+    "MessageRegistryFileCollection": 1,
+    "MetricDefinition": 4,
+    "MetricDefinitionCollection": 1,
+    "MetricReport": 7,
+    "MetricReportCollection": 1,
+    "MetricReportDefinition": 14,
+    "MetricReportDefinitionCollection": 1,
+    "NetworkAdapter": 3,
+    "NetworkAdapterCollection": 1,
+    "NetworkDeviceFunctionCollection": 3,
+    "NetworkInterface": 3,
+    "NetworkInterfaceCollection": 1,
+    "PCIeDevice": 5,
+    "PCIeDeviceCollection": 1,
+    "PCIeFunction": 14,
+    "PCIeFunctionCollection": 5,
+    "PCIeSlots": 1,
+    "Port": 13,
+    "PortCollection": 4,
+    "Power": 1,
+    "PowerSubsystem": 1,
+    "PowerSupply": 2,
+    "PowerSupplyCollection": 1,
+    "PowerSupplyMetrics": 2,
+    "Processor": 2,
+    "ProcessorCollection": 1,
+    "ProcessorMetrics": 2,
+    "Role": 3,
+    "RoleCollection": 1,
+    "SecureBoot": 1,
+    "SecurityPolicy": 1,
+    "Sensor": 42,
+    "SensorCollection": 1,
+    "SerialInterface": 1,
+    "SerialInterfaceCollection": 1,
+    "ServiceRoot": 1,
+    "Session": 3,
+    "SessionCollection": 1,
+    "SessionService": 1,
+    "SoftwareInventory": 26,
+    "SoftwareInventoryCollection": 1,
+    "Storage": 2,
+    "StorageCollection": 1,
+    "StoragePool": 1,
+    "StoragePoolCollection": 2,
+    "Task": 5,
+    "TaskCollection": 1,
+    "TaskService": 1,
+    "TelemetryService": 1,
+    "Thermal": 1,
+    "ThermalMetrics": 1,
+    "ThermalSubsystem": 1,
+    "UpdateService": 1,
+    "VirtualMedia": 10,
+    "VirtualMediaCollection": 1,
+    "Volume": 1,
+    "VolumeCollection": 3
+  },
+  "exposed_readable": 2898,
+  "exposed_unreadable": 8,
+  "failed_sections": [],
+  "format": "mirror",
+  "manager_layout": null,
+  "noauth_requests": {
+    "": 1
+  },
+  "requested_distinct": 123,
+  "requested_hit": 123,
+  "requested_missing": [],
+  "requested_total": 123,
+  "source": "C:\\github\\서버mock데이터\\1차\\Lenovo_SR650\\01",
+  "source_stats": {
+    "dupes": 0,
+    "files": 2907,
+    "fragments_folded": 0,
+    "keyed": 2904
+  },
+  "status": "success",
+  "unreadable_by_status": {
+    "404": 8
+  },
+  "unsupported_sections": [],
+  "untouched": 2775,
+  "untouched_by_type": {
+    "AccountService": 1,
+    "ActionInfo": 7,
+    "Bios": 1,
+    "BootOption": 7,
+    "BootOptionCollection": 1,
+    "Certificate": 1,
+    "CertificateCollection": 4,
+    "CertificateLocations": 1,
+    "CertificateService": 1,
+    "Chassis": 13,
+    "ComputerSystem": 1,
+    "Control": 1,
+    "ControlCollection": 1,
+    "DriveCollection": 1,
+    "EnvironmentMetrics": 1,
+    "EthernetInterfaceCollection": 1,
+    "EventDestinationCollection": 1,
+    "EventService": 1,
+    "Fan": 12,
+    "FanCollection": 1,
+    "FastAccuratePowerService": 1,
+    "HostInterface": 1,
+    "HostInterfaceCollection": 1,
+    "Job": 3,
+    "JobCollection": 1,
+    "JobService": 1,
+    "JsonSchemaFile": 346,
+    "JsonSchemaFileCollection": 1,
+    "KeyCollection": 2,
+    "LenovoAlertRecipientCollection": 1,
+    "LenovoBmc": 1,
+    "LenovoBuiltInImageService": 4,
+    "LenovoConfigurationService": 1,
+    "LenovoDNS": 1,
+    "LenovoDateTimeService": 1,
+    "LenovoHistoryMetricValueContainer": 13,
+    "LenovoHistoryMetricValueContainerCollection": 1,
+    "LenovoLDAPClient": 1,
+    "LenovoLED": 60,
+    "LenovoLEDCollection": 1,
+    "LenovoLocalImageManagementService": 1,
+    "LenovoPortForwarding": 1,
+    "LenovoPortForwardingMap": 15,
+    "LenovoPortForwardingMapCollection": 1,
+    "LenovoRemoteControlService": 1,
+    "LenovoSMTPClient": 1,
+    "LenovoSNMPProtocol": 1,
+    "LenovoSNMPv3TrapUserCollection": 1,
+    "LenovoSecureKeyLifecycle": 1,
+    "LenovoSecurityService": 1,
+    "LenovoSysSysVpd": 1,
+    "LenovoSystemGuardService": 1,
+    "LenovoSystemGuardSnapshotCollection": 1,
+    "LenovoWatchdog": 3,
+    "LenovoWatchdogCollection": 1,
+    "LenovoWorkPartitionService": 1,
+    "License": 1,
+    "LicenseCollection": 1,
+    "LicenseService": 1,
+    "LogEntry": 2060,
+    "LogEntryCollection": 6,
+    "LogService": 7,
+    "LogServiceCollection": 1,
+    "ManagerAccount": 2,
+    "ManagerAccountCollection": 1,
+    "MessageRegistryFile": 12,
+    "MessageRegistryFileCollection": 1,
+    "MetricDefinition": 4,
+    "MetricDefinitionCollection": 1,
+    "MetricReport": 7,
+    "MetricReportCollection": 1,
+    "MetricReportDefinition": 14,
+    "MetricReportDefinitionCollection": 1,
+    "NetworkInterface": 3,
+    "NetworkInterfaceCollection": 1,
+    "PCIeDevice": 5,
+    "PCIeDeviceCollection": 1,
+    "PCIeFunction": 14,
+    "PCIeFunctionCollection": 5,
+    "PCIeSlots": 1,
+    "Port": 1,
+    "PortCollection": 1,
+    "PowerSubsystem": 1,
+    "PowerSupply": 2,
+    "PowerSupplyCollection": 1,
+    "PowerSupplyMetrics": 2,
+    "ProcessorMetrics": 2,
+    "Role": 3,
+    "RoleCollection": 1,
+    "SecureBoot": 1,
+    "SecurityPolicy": 1,
+    "Sensor": 42,
+    "SensorCollection": 1,
+    "SerialInterface": 1,
+    "SerialInterfaceCollection": 1,
+    "Session": 3,
+    "SessionCollection": 1,
+    "SessionService": 1,
+    "StoragePool": 1,
+    "StoragePoolCollection": 2,
+    "Task": 5,
+    "TaskCollection": 1,
+    "TaskService": 1,
+    "TelemetryService": 1,
+    "ThermalMetrics": 1,
+    "ThermalSubsystem": 1,
+    "UpdateService": 1,
+    "VirtualMedia": 10,
+    "VirtualMediaCollection": 1,
+    "VolumeCollection": 1
+  },
+  "untouched_examples": {
+    "AccountService": [
+      "/redfish/v1/AccountService"
+    ],
+    "ActionInfo": [
+      "/redfish/v1/Managers/1/ResetActionInfo",
+      "/redfish/v1/Systems/1/Bios/ChangePasswordActionInfo",
+      "/redfish/v1/Systems/1/ResetActionInfo"
+    ],
+    "Bios": [
+      "/redfish/v1/Systems/1/Bios/Pending"
+    ],
+    "BootOption": [
+      "/redfish/v1/Systems/1/BootOptions/Boot0001",
+      "/redfish/v1/Systems/1/BootOptions/Boot0002",
+      "/redfish/v1/Systems/1/BootOptions/Boot0003"
+    ],
+    "BootOptionCollection": [
+      "/redfish/v1/Systems/1/BootOptions"
+    ],
+    "Certificate": [
+      "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates/1"
+    ],
+    "CertificateCollection": [
+      "/redfish/v1/AccountService/LDAP/Certificates",
+      "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates",
+      "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService/ServerCertificate"
+    ],
+    "CertificateLocations": [
+      "/redfish/v1/CertificateService/CertificateLocations"
+    ],
+    "CertificateService": [
+      "/redfish/v1/CertificateService"
+    ],
+    "Chassis": [
+      "/redfish/v1/Chassis/Drive_Backplane_L1HF53C000G",
+      "/redfish/v1/Chassis/Drive_Backplane_L1HF53C0086",
+      "/redfish/v1/Chassis/Drive_Backplane_L4HF62A025D"
+    ],
+    "ComputerSystem": [
+      "/redfish/v1/Systems/1/Pending"
+    ],
+    "Control": [
+      "/redfish/v1/Chassis/1/Controls/PowerLimit"
+    ],
+    "ControlCollection": [
+      "/redfish/v1/Chassis/1/Controls"
+    ],
+    "DriveCollection": [
+      "/redfish/v1/Systems/1/Storage/controller_slot25/StoragePools/Pool_25_0/CapacitySources/1/ProvidingDrives"
+    ],
+    "EnvironmentMetrics": [
+      "/redfish/v1/Chassis/1/EnvironmentMetrics"
+    ],
+    "EthernetInterfaceCollection": [
+      "/redfish/v1/Managers/1/HostInterfaces/1/HostEthernetInterfaces"
+    ],
+    "EventDestinationCollection": [
+      "/redfish/v1/EventService/Subscriptions"
+    ],
+    "EventService": [
+      "/redfish/v1/EventService"
+    ],
+    "Fan": [
+      "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan1_Front_Tach",
+      "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan1_Rear_Tach",
+      "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan2_Front_Tach"
+    ],
+    "FanCollection": [
+      "/redfish/v1/Chassis/1/ThermalSubsystem/Fans"
+    ],
+    "FastAccuratePowerService": [
+      "/redfish/v1/Chassis/1/PowerSubsystem/Oem/Lenovo/FastAccuratePowerService"
+    ],
+    "HostInterface": [
+      "/redfish/v1/Managers/1/HostInterfaces/1"
+    ],
+    "HostInterfaceCollection": [
+      "/redfish/v1/Managers/1/HostInterfaces"
+    ],
+    "Job": [
+      "/redfish/v1/JobService/Jobs/PowerOff",
+      "/redfish/v1/JobService/Jobs/PowerOn",
+      "/redfish/v1/JobService/Jobs/Restart"
+    ],
+    "JobCollection": [
+      "/redfish/v1/JobService/Jobs"
+    ],
+    "JobService": [
+      "/redfish/v1/JobService"
+    ],
+    "JsonSchemaFile": [
+      "/redfish/v1/JsonSchemas/AccountService",
+      "/redfish/v1/JsonSchemas/AccountService.v1_16_0",
+      "/redfish/v1/JsonSchemas/ActionInfo"
+    ],
+    "JsonSchemaFileCollection": [
+      "/redfish/v1/JsonSchemas"
+    ],
+    "KeyCollection": [
+      "/redfish/v1/AccountService/Accounts/1/Keys",
+      "/redfish/v1/AccountService/Accounts/2/Keys"
+    ],
+    "LenovoAlertRecipientCollection": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/Recipients"
+    ],
+    "LenovoBmc": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/BMCSettings"
+    ],
+    "LenovoBuiltInImageService": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService/DRVLNService",
+      "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService/DRVWNService",
+      "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService/LXPMService"
+    ],
+    "LenovoConfigurationService": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/Configuration"
+    ],
+    "LenovoDNS": [
+      "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/DNS"
+    ],
+    "LenovoDateTimeService": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/DateTimeService"
+    ],
+    "LenovoHistoryMetricValueContainer": [
+      "/redfish/v1/Systems/1/Oem/Lenovo/Metrics/CPUSubsystemPerformance",
+      "/redfish/v1/Systems/1/Oem/Lenovo/Metrics/CPUSubsystemPower",
+      "/redfish/v1/Systems/1/Oem/Lenovo/Metrics/IOSubsystemPerformance"
+    ],
+    "LenovoHistoryMetricValueContainerCollection": [
+      "/redfish/v1/Systems/1/Oem/Lenovo/Metrics"
+    ],
+    "LenovoLDAPClient": [
+      "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/LDAPClient"
+    ],
+    "LenovoLED": [
+      "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs/BATTERY",
+      "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs/CPU1",
+      "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs/CPU2"
+    ],
+    "LenovoLEDCollection": [
+      "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs"
+    ],
+    "LenovoLocalImageManagementService": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService"
+    ],
+    "LenovoPortForwarding": [
+      "/redfish/v1/Managers/1/EthernetInterfaces/ToHost/Oem/Lenovo/PortForwarding"
+    ],
+    "LenovoPortForwardingMap": [
+      "/redfish/v1/Managers/1/EthernetInterfaces/ToHost/Oem/Lenovo/PortForwarding/PortForwardingMap/1",
+      "/redfish/v1/Managers/1/EthernetInterfaces/ToHost/Oem/Lenovo/PortForwarding/PortForwardingMap/10",
+      "/redfish/v1/Managers/1/EthernetInterfaces/ToHost/Oem/Lenovo/PortForwarding/PortForwardingMap/11"
+    ],
+    "LenovoPortForwardingMapCollection": [
+      "/redfish/v1/Managers/1/EthernetInterfaces/ToHost/Oem/Lenovo/PortForwarding/PortForwardingMap"
+    ],
+    "LenovoRemoteControlService": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl"
+    ],
+    "LenovoSMTPClient": [
+      "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SMTPClient"
+    ],
+    "LenovoSNMPProtocol": [
+      "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SNMP"
+    ],
+    "LenovoSNMPv3TrapUserCollection": [
+      "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SNMP/SNMPv3TrapUsers"
+    ],
+    "LenovoSecureKeyLifecycle": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService"
+    ],
+    "LenovoSecurityService": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/Security"
+    ],
+    "LenovoSysSysVpd": [
+      "/redfish/v1/Chassis/1/Oem/Lenovo/SysvpdSettings"
+    ],
+    "LenovoSystemGuardService": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/SystemGuard"
+    ],
+    "LenovoSystemGuardSnapshotCollection": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/SystemGuard/Snapshots"
+    ],
+    "LenovoWatchdog": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs/LoaderWatchDog",
+      "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs/OSWatchDog",
+      "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs/PowerOffDelay"
+    ],
+    "LenovoWatchdogCollection": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs"
+    ],
+    "LenovoWorkPartitionService": [
+      "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService/WorkPartitionService"
+    ],
+    "License": [
+      "/redfish/v1/LicenseService/Licenses/BMC_Platinum"
+    ],
+    "LicenseCollection": [
+      "/redfish/v1/LicenseService/Licenses"
+    ],
+    "LicenseService": [
+      "/redfish/v1/LicenseService"
+    ],
+    "LogEntry": [
+      "/redfish/v1/Systems/1/LogServices/ActiveLog/Entries/1597",
+      "/redfish/v1/Systems/1/LogServices/AuditLog/Entries/3135",
+      "/redfish/v1/Systems/1/LogServices/AuditLog/Entries/3138"
+    ],
+    "LogEntryCollection": [
+      "/redfish/v1/Systems/1/LogServices/ActiveLog/Entries",
+      "/redfish/v1/Systems/1/LogServices/AuditLog/Entries",
+      "/redfish/v1/Systems/1/LogServices/DiagnosticLog/Entries"
+    ],
+    "LogService": [
+      "/redfish/v1/Systems/1/LogServices/ActiveLog",
+      "/redfish/v1/Systems/1/LogServices/AuditLog",
+      "/redfish/v1/Systems/1/LogServices/DiagnosticLog"
+    ],
+    "LogServiceCollection": [
+      "/redfish/v1/Systems/1/LogServices"
+    ],
+    "ManagerAccount": [
+      "/redfish/v1/AccountService/Accounts/1",
+      "/redfish/v1/AccountService/Accounts/2"
+    ],
+    "ManagerAccountCollection": [
+      "/redfish/v1/AccountService/Accounts"
+    ],
+    "MessageRegistryFile": [
+      "/redfish/v1/Registries/Base.1.16.0",
+      "/redfish/v1/Registries/BiosAttributeRegistry.1.0.0",
+      "/redfish/v1/Registries/EventRegistry.1.0.0"
+    ],
+    "MessageRegistryFileCollection": [
+      "/redfish/v1/Registries"
+    ],
+    "MetricDefinition": [
+      "/redfish/v1/TelemetryService/MetricDefinitions/AverageCPUUtilization",
+      "/redfish/v1/TelemetryService/MetricDefinitions/AverageMemoryUtilization",
+      "/redfish/v1/TelemetryService/MetricDefinitions/AveragePowerSupplyInput"
+    ],
+    "MetricDefinitionCollection": [
+      "/redfish/v1/TelemetryService/MetricDefinitions"
+    ],
+    "MetricReport": [
+      "/redfish/v1/TelemetryService/MetricReports/CPUPowerMetrics",
+      "/redfish/v1/TelemetryService/MetricReports/CPUTemp",
+      "/redfish/v1/TelemetryService/MetricReports/CPUUtilizationStats"
+    ],
+    "MetricReportCollection": [
+      "/redfish/v1/TelemetryService/MetricReports"
+    ],
+    "MetricReportDefinition": [
+      "/redfish/v1/TelemetryService/MetricReportDefinitions/CPUPowerMetrics",
+      "/redfish/v1/TelemetryService/MetricReportDefinitions/CPUPowerMetricsEvent",
+      "/redfish/v1/TelemetryService/MetricReportDefinitions/CPUTemp"
+    ],
+    "MetricReportDefinitionCollection": [
+      "/redfish/v1/TelemetryService/MetricReportDefinitions"
+    ],
+    "NetworkInterface": [
+      "/redfish/v1/Systems/1/NetworkInterfaces/1",
+      "/redfish/v1/Systems/1/NetworkInterfaces/2",
+      "/redfish/v1/Systems/1/NetworkInterfaces/3"
+    ],
+    "NetworkInterfaceCollection": [
+      "/redfish/v1/Systems/1/NetworkInterfaces"
+    ],
+    "PCIeDevice": [
+      "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000",
+      "/redfish/v1/Chassis/1/PCIeDevices/slot1_0x590000",
+      "/redfish/v1/Chassis/1/PCIeDevices/slot25_0x230000"
+    ],
+    "PCIeDeviceCollection": [
+      "/redfish/v1/Chassis/1/PCIeDevices"
+    ],
+    "PCIeFunction": [
+      "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.00",
+      "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.01",
+      "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.02"
+    ],
+    "PCIeFunctionCollection": [
+      "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions",
+      "/redfish/v1/Chassis/1/PCIeDevices/slot1_0x590000/PCIeFunctions",
+      "/redfish/v1/Chassis/1/PCIeDevices/slot25_0x230000/PCIeFunctions"
+    ],
+    "PCIeSlots": [
+      "/redfish/v1/Chassis/1/PCIeSlots"
+    ],
+    "Port": [
+      "/redfish/v1/Managers/1/DedicatedNetworkPorts/nic1"
+    ],
+    "PortCollection": [
+      "/redfish/v1/Managers/1/DedicatedNetworkPorts"
+    ],
+    "PowerSubsystem": [
+      "/redfish/v1/Chassis/1/PowerSubsystem"
+    ],
+    "PowerSupply": [
+      "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU1",
+      "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU2"
+    ],
+    "PowerSupplyCollection": [
+      "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies"
+    ],
+    "PowerSupplyMetrics": [
+      "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU1/Metrics",
+      "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU2/Metrics"
+    ],
+    "ProcessorMetrics": [
+      "/redfish/v1/Systems/1/Processors/1/ProcessorMetrics",
+      "/redfish/v1/Systems/1/Processors/2/ProcessorMetrics"
+    ],
+    "Role": [
+      "/redfish/v1/AccountService/Roles/Administrator",
+      "/redfish/v1/AccountService/Roles/Operator",
+      "/redfish/v1/AccountService/Roles/ReadOnly"
+    ],
+    "RoleCollection": [
+      "/redfish/v1/AccountService/Roles"
+    ],
+    "SecureBoot": [
+      "/redfish/v1/Systems/1/SecureBoot"
+    ],
+    "SecurityPolicy": [
+      "/redfish/v1/Managers/1/SecurityPolicy"
+    ],
+    "Sensor": [
+      "/redfish/v1/Chassis/1/Sensors/airflow_System_Airflow",
+      "/redfish/v1/Chassis/1/Sensors/fantach_Fan1_Front_Tach",
+      "/redfish/v1/Chassis/1/Sensors/fantach_Fan1_Rear_Tach"
+    ],
+    "SensorCollection": [
+      "/redfish/v1/Chassis/1/Sensors"
+    ],
+    "SerialInterface": [
+      "/redfish/v1/Managers/1/SerialInterfaces/1"
+    ],
+    "SerialInterfaceCollection": [
+      "/redfish/v1/Managers/1/SerialInterfaces"
+    ],
+    "Session": [
+      "/redfish/v1/SessionService/Sessions/M1x2n45X5e",
+      "/redfish/v1/SessionService/Sessions/gFjb2RwlJG",
+      "/redfish/v1/SessionService/Sessions/y4FB6Pi8nO"
+    ],
+    "SessionCollection": [
+      "/redfish/v1/SessionService/Sessions"
+    ],
+    "SessionService": [
+      "/redfish/v1/SessionService"
+    ],
+    "StoragePool": [
+      "/redfish/v1/Systems/1/Storage/controller_slot25/StoragePools/Pool_25_0"
+    ],
+    "StoragePoolCollection": [
+      "/redfish/v1/Systems/1/Storage/controller_slot1/StoragePools",
+      "/redfish/v1/Systems/1/Storage/controller_slot25/StoragePools"
+    ],
+    "Task": [
+      "/redfish/v1/TaskService/Tasks/1",
+      "/redfish/v1/TaskService/Tasks/2",
+      "/redfish/v1/TaskService/Tasks/3"
+    ],
+    "TaskCollection": [
+      "/redfish/v1/TaskService/Tasks"
+    ],
+    "TaskService": [
+      "/redfish/v1/TaskService"
+    ],
+    "TelemetryService": [
+      "/redfish/v1/TelemetryService"
+    ],
+    "ThermalMetrics": [
+      "/redfish/v1/Chassis/1/ThermalSubsystem/ThermalMetrics"
+    ],
+    "ThermalSubsystem": [
+      "/redfish/v1/Chassis/1/ThermalSubsystem"
+    ],
+    "UpdateService": [
+      "/redfish/v1/UpdateService"
+    ],
+    "VirtualMedia": [
+      "/redfish/v1/Systems/1/VirtualMedia/EXT1",
+      "/redfish/v1/Systems/1/VirtualMedia/EXT2",
+      "/redfish/v1/Systems/1/VirtualMedia/EXT3"
+    ],
+    "VirtualMediaCollection": [
+      "/redfish/v1/Systems/1/VirtualMedia"
+    ],
+    "VolumeCollection": [
+      "/redfish/v1/Systems/1/Storage/controller_slot25/StoragePools/Pool_25_0/AllocatedVolumes"
+    ]
+  },
+  "untouched_linked_by_type": {
+    "AccountService": 1,
+    "Bios": 1,
+    "BootOptionCollection": 1,
+    "CertificateCollection": 1,
+    "CertificateService": 1,
+    "Chassis": 13,
+    "ComputerSystem": 1,
+    "ControlCollection": 1,
+    "EnvironmentMetrics": 1,
+    "EventService": 1,
+    "Fan": 12,
+    "HostInterface": 1,
+    "HostInterfaceCollection": 1,
+    "JobService": 1,
+    "JsonSchemaFileCollection": 1,
+    "LenovoAlertRecipientCollection": 1,
+    "LenovoBmc": 1,
+    "LenovoConfigurationService": 1,
+    "LenovoDNS": 1,
+    "LenovoDateTimeService": 1,
+    "LenovoHistoryMetricValueContainerCollection": 1,
+    "LenovoLDAPClient": 1,
+    "LenovoLEDCollection": 1,
+    "LenovoLocalImageManagementService": 1,
+    "LenovoPortForwarding": 1,
+    "LenovoRemoteControlService": 1,
+    "LenovoSMTPClient": 1,
+    "LenovoSNMPProtocol": 1,
+    "LenovoSecureKeyLifecycle": 1,
+    "LenovoSecurityService": 1,
+    "LenovoSysSysVpd": 1,
+    "LenovoSystemGuardService": 1,
+    "LenovoWatchdogCollection": 1,
+    "LicenseService": 1,
+    "LogServiceCollection": 1,
+    "MessageRegistryFileCollection": 1,
+    "NetworkInterfaceCollection": 1,
+    "PCIeDevice": 5,
+    "PCIeDeviceCollection": 1,
+    "PCIeFunction": 14,
+    "PCIeSlots": 1,
+    "PortCollection": 1,
+    "PowerSubsystem": 1,
+    "PowerSupply": 2,
+    "ProcessorMetrics": 2,
+    "SecureBoot": 1,
+    "SecurityPolicy": 1,
+    "SensorCollection": 1,
+    "SerialInterfaceCollection": 1,
+    "SessionCollection": 1,
+    "SessionService": 1,
+    "StoragePoolCollection": 2,
+    "TaskService": 1,
+    "TelemetryService": 1,
+    "ThermalSubsystem": 1,
+    "UpdateService": 1,
+    "VirtualMediaCollection": 1
+  },
+  "untouched_linked_paths": [
+    "/redfish/v1/AccountService",
+    "/redfish/v1/CertificateService",
+    "/redfish/v1/Chassis/1/Controls",
+    "/redfish/v1/Chassis/1/EnvironmentMetrics",
+    "/redfish/v1/Chassis/1/Oem/Lenovo/LEDs",
+    "/redfish/v1/Chassis/1/Oem/Lenovo/SysvpdSettings",
+    "/redfish/v1/Chassis/1/PCIeDevices",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.00",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.01",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.02",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot13_0xc0000/PCIeFunctions/slot_13.03",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot1_0x590000",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot1_0x590000/PCIeFunctions/slot_1.00",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot25_0x230000",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot25_0x230000/PCIeFunctions/slot_25.00",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000/PCIeFunctions/slot_4.00",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000/PCIeFunctions/slot_4.01",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000/PCIeFunctions/slot_4.02",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot4_0x330000/PCIeFunctions/slot_4.03",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000/PCIeFunctions/slot_6.00",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000/PCIeFunctions/slot_6.01",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000/PCIeFunctions/slot_6.02",
+    "/redfish/v1/Chassis/1/PCIeDevices/slot6_0xa20000/PCIeFunctions/slot_6.03",
+    "/redfish/v1/Chassis/1/PCIeSlots",
+    "/redfish/v1/Chassis/1/PowerSubsystem",
+    "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU1",
+    "/redfish/v1/Chassis/1/PowerSubsystem/PowerSupplies/PSU2",
+    "/redfish/v1/Chassis/1/Sensors",
+    "/redfish/v1/Chassis/1/ThermalSubsystem",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan1_Front_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan1_Rear_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan2_Front_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan2_Rear_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan3_Front_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan3_Rear_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan4_Front_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan4_Rear_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan5_Front_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan5_Rear_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan6_Front_Tach",
+    "/redfish/v1/Chassis/1/ThermalSubsystem/Fans/fantach_Fan6_Rear_Tach",
+    "/redfish/v1/Chassis/Drive_Backplane_L1HF53C000G",
+    "/redfish/v1/Chassis/Drive_Backplane_L1HF53C0086",
+    "/redfish/v1/Chassis/Drive_Backplane_L4HF62A025D",
+    "/redfish/v1/Chassis/IO_Board",
+    "/redfish/v1/Chassis/PCIe_Riser_11XM51R0011",
+    "/redfish/v1/Chassis/PCIe_Riser_11XM51R001B",
+    "/redfish/v1/Chassis/PCIe_Riser_11XM51R001J",
+    "/redfish/v1/Chassis/PCIe_Riser_11XM53Z00BD",
+    "/redfish/v1/Chassis/PCIe_Riser_11XM53Z00BW",
+    "/redfish/v1/Chassis/PCIe_Riser_11XM53Z00C2",
+    "/redfish/v1/Chassis/PCIe_Riser_11XM53Z00CM",
+    "/redfish/v1/Chassis/PCIe_Riser_11XM543005G",
+    "/redfish/v1/Chassis/PCIe_Riser_L1HF489008J",
+    "/redfish/v1/EventService",
+    "/redfish/v1/JobService",
+    "/redfish/v1/JsonSchemas",
+    "/redfish/v1/LicenseService",
+    "/redfish/v1/Managers/1/DedicatedNetworkPorts",
+    "/redfish/v1/Managers/1/EthernetInterfaces/ToHost/Oem/Lenovo/PortForwarding",
+    "/redfish/v1/Managers/1/HostInterfaces",
+    "/redfish/v1/Managers/1/HostInterfaces/1",
+    "/redfish/v1/Managers/1/NetworkProtocol/HTTPS/Certificates",
+    "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/DNS",
+    "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/LDAPClient",
+    "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SMTPClient",
+    "/redfish/v1/Managers/1/NetworkProtocol/Oem/Lenovo/SNMP",
+    "/redfish/v1/Managers/1/Oem/Lenovo/BMCSettings",
+    "/redfish/v1/Managers/1/Oem/Lenovo/Configuration",
+    "/redfish/v1/Managers/1/Oem/Lenovo/DateTimeService",
+    "/redfish/v1/Managers/1/Oem/Lenovo/LocalImageManagementService",
+    "/redfish/v1/Managers/1/Oem/Lenovo/Recipients",
+    "/redfish/v1/Managers/1/Oem/Lenovo/RemoteControl",
+    "/redfish/v1/Managers/1/Oem/Lenovo/SecureKeyLifecycleService",
+    "/redfish/v1/Managers/1/Oem/Lenovo/Security",
+    "/redfish/v1/Managers/1/Oem/Lenovo/SystemGuard",
+    "/redfish/v1/Managers/1/Oem/Lenovo/Watchdogs",
+    "/redfish/v1/Managers/1/SecurityPolicy",
+    "/redfish/v1/Managers/1/SerialInterfaces",
+    "/redfish/v1/Registries",
+    "/redfish/v1/SessionService",
+    "/redfish/v1/SessionService/Sessions",
+    "/redfish/v1/Systems/1/Bios/Pending",
+    "/redfish/v1/Systems/1/BootOptions",
+    "/redfish/v1/Systems/1/LogServices",
+    "/redfish/v1/Systems/1/NetworkInterfaces",
+    "/redfish/v1/Systems/1/Oem/Lenovo/Metrics",
+    "/redfish/v1/Systems/1/Pending",
+    "/redfish/v1/Systems/1/Processors/1/ProcessorMetrics",
+    "/redfish/v1/Systems/1/Processors/2/ProcessorMetrics",
+    "/redfish/v1/Systems/1/SecureBoot",
+    "/redfish/v1/Systems/1/Storage/controller_slot1/StoragePools",
+    "/redfish/v1/Systems/1/Storage/controller_slot25/StoragePools",
+    "/redfish/v1/Systems/1/VirtualMedia",
+    "/redfish/v1/TaskService",
+    "/redfish/v1/TelemetryService",
+    "/redfish/v1/UpdateService"
+  ],
+  "untouched_ratio": 0.9575569358178054,
+  "vendor": "lenovo"
+}

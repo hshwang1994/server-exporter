@@ -1,0 +1,477 @@
+{
+ "csus3200_01": {
+  "source": "noauth",
+  "product": "Compute Scale-up Server 3200",
+  "redfish": "1.19.0",
+  "hints": {
+   "model_hint": "Compute Scale-up Server 3200"
+  },
+  "facts": {
+   "vendor": "hpe",
+   "model": "Compute Scale-up Server 3200",
+   "firmware": ""
+  },
+  "selected": [
+   102545,
+   "redfish_hpe_csus_3200",
+   "hpe_csus_3200.yml"
+  ],
+  "top5": [
+   [
+    102545,
+    "redfish_hpe_csus_3200",
+    "hpe_csus_3200.yml"
+   ],
+   [
+    100320,
+    "redfish_hpe_ilo6",
+    "hpe_ilo6.yml"
+   ],
+   [
+    90320,
+    "redfish_hpe_ilo5",
+    "hpe_ilo5.yml"
+   ],
+   [
+    50320,
+    "redfish_hpe_ilo4",
+    "hpe_ilo4.yml"
+   ],
+   [
+    10120,
+    "redfish_hpe_ilo",
+    "hpe_ilo.yml"
+   ]
+  ]
+ },
+ "csus3200_02": {
+  "source": "noauth",
+  "product": "Compute Scale-up Server 3200",
+  "redfish": "1.19.0",
+  "hints": {
+   "model_hint": "Compute Scale-up Server 3200"
+  },
+  "facts": {
+   "vendor": "hpe",
+   "model": "Compute Scale-up Server 3200",
+   "firmware": ""
+  },
+  "selected": [
+   102545,
+   "redfish_hpe_csus_3200",
+   "hpe_csus_3200.yml"
+  ],
+  "top5": [
+   [
+    102545,
+    "redfish_hpe_csus_3200",
+    "hpe_csus_3200.yml"
+   ],
+   [
+    100320,
+    "redfish_hpe_ilo6",
+    "hpe_ilo6.yml"
+   ],
+   [
+    90320,
+    "redfish_hpe_ilo5",
+    "hpe_ilo5.yml"
+   ],
+   [
+    50320,
+    "redfish_hpe_ilo4",
+    "hpe_ilo4.yml"
+   ],
+   [
+    10120,
+    "redfish_hpe_ilo",
+    "hpe_ilo.yml"
+   ]
+  ]
+ },
+ "csus3200_03": {
+  "source": "noauth",
+  "product": "Compute Scale-up Server 3200",
+  "redfish": "1.19.0",
+  "hints": {
+   "model_hint": "Compute Scale-up Server 3200"
+  },
+  "facts": {
+   "vendor": "hpe",
+   "model": "Compute Scale-up Server 3200",
+   "firmware": ""
+  },
+  "selected": [
+   102545,
+   "redfish_hpe_csus_3200",
+   "hpe_csus_3200.yml"
+  ],
+  "top5": [
+   [
+    102545,
+    "redfish_hpe_csus_3200",
+    "hpe_csus_3200.yml"
+   ],
+   [
+    100320,
+    "redfish_hpe_ilo6",
+    "hpe_ilo6.yml"
+   ],
+   [
+    90320,
+    "redfish_hpe_ilo5",
+    "hpe_ilo5.yml"
+   ],
+   [
+    50320,
+    "redfish_hpe_ilo4",
+    "hpe_ilo4.yml"
+   ],
+   [
+    10120,
+    "redfish_hpe_ilo",
+    "hpe_ilo.yml"
+   ]
+  ]
+ },
+ "dl380_gen12_01": {
+  "source": "noauth",
+  "product": "HPE ProLiant Compute DL380 Gen12",
+  "redfish": "1.22.1",
+  "hints": {
+   "model_hint": "HPE ProLiant Compute DL380 Gen12",
+   "firmware_hint": "1.24.00",
+   "manager_type": "iLO 7"
+  },
+  "facts": {
+   "vendor": "hpe",
+   "model": "HPE ProLiant Compute DL380 Gen12",
+   "firmware": "1.24.00"
+  },
+  "selected": [
+   120570,
+   "redfish_hpe_ilo7",
+   "hpe_ilo7.yml"
+  ],
+  "top5": [
+   [
+    120570,
+    "redfish_hpe_ilo7",
+    "hpe_ilo7.yml"
+   ],
+   [
+    50345,
+    "redfish_hpe_ilo4",
+    "hpe_ilo4.yml"
+   ],
+   [
+    10120,
+    "redfish_hpe_ilo",
+    "hpe_ilo.yml"
+   ],
+   [
+    -400,
+    "redfish_generic",
+    "redfish_generic.yml"
+   ]
+  ]
+ },
+ "dl380_gen12_02": {
+  "source": "noauth",
+  "product": "HPE ProLiant Compute DL380 Gen12",
+  "redfish": "1.22.1",
+  "hints": {
+   "model_hint": "HPE ProLiant Compute DL380 Gen12",
+   "firmware_hint": "1.24.00",
+   "manager_type": "iLO 7"
+  },
+  "facts": {
+   "vendor": "hpe",
+   "model": "HPE ProLiant Compute DL380 Gen12",
+   "firmware": "1.24.00"
+  },
+  "selected": [
+   120570,
+   "redfish_hpe_ilo7",
+   "hpe_ilo7.yml"
+  ],
+  "top5": [
+   [
+    120570,
+    "redfish_hpe_ilo7",
+    "hpe_ilo7.yml"
+   ],
+   [
+    50345,
+    "redfish_hpe_ilo4",
+    "hpe_ilo4.yml"
+   ],
+   [
+    10120,
+    "redfish_hpe_ilo",
+    "hpe_ilo.yml"
+   ],
+   [
+    -400,
+    "redfish_generic",
+    "redfish_generic.yml"
+   ]
+  ]
+ },
+ "dl380_gen12_03": {
+  "source": "noauth",
+  "product": "HPE ProLiant Compute DL380 Gen12",
+  "redfish": "1.22.1",
+  "hints": {
+   "model_hint": "HPE ProLiant Compute DL380 Gen12",
+   "firmware_hint": "1.24.00",
+   "manager_type": "iLO 7"
+  },
+  "facts": {
+   "vendor": "hpe",
+   "model": "HPE ProLiant Compute DL380 Gen12",
+   "firmware": "1.24.00"
+  },
+  "selected": [
+   120570,
+   "redfish_hpe_ilo7",
+   "hpe_ilo7.yml"
+  ],
+  "top5": [
+   [
+    120570,
+    "redfish_hpe_ilo7",
+    "hpe_ilo7.yml"
+   ],
+   [
+    50345,
+    "redfish_hpe_ilo4",
+    "hpe_ilo4.yml"
+   ],
+   [
+    10120,
+    "redfish_hpe_ilo",
+    "hpe_ilo.yml"
+   ],
+   [
+    -400,
+    "redfish_generic",
+    "redfish_generic.yml"
+   ]
+  ]
+ },
+ "dl380_gen12_04": {
+  "source": "noauth",
+  "product": "HPE ProLiant Compute DL380 Gen12",
+  "redfish": "1.22.1",
+  "hints": {
+   "model_hint": "HPE ProLiant Compute DL380 Gen12",
+   "firmware_hint": "1.24.00",
+   "manager_type": "iLO 7"
+  },
+  "facts": {
+   "vendor": "hpe",
+   "model": "HPE ProLiant Compute DL380 Gen12",
+   "firmware": "1.24.00"
+  },
+  "selected": [
+   120570,
+   "redfish_hpe_ilo7",
+   "hpe_ilo7.yml"
+  ],
+  "top5": [
+   [
+    120570,
+    "redfish_hpe_ilo7",
+    "hpe_ilo7.yml"
+   ],
+   [
+    50345,
+    "redfish_hpe_ilo4",
+    "hpe_ilo4.yml"
+   ],
+   [
+    10120,
+    "redfish_hpe_ilo",
+    "hpe_ilo.yml"
+   ],
+   [
+    -400,
+    "redfish_generic",
+    "redfish_generic.yml"
+   ]
+  ]
+ },
+ "sr650_v4_01": {
+  "source": "noauth",
+  "product": null,
+  "redfish": "1.22.0",
+  "hints": {},
+  "facts": {
+   "vendor": "lenovo",
+   "model": "",
+   "firmware": ""
+  },
+  "selected": [
+   120520,
+   "redfish_lenovo_xcc3",
+   "lenovo_xcc3.yml"
+  ],
+  "top5": [
+   [
+    120520,
+    "redfish_lenovo_xcc3",
+    "lenovo_xcc3.yml"
+   ],
+   [
+    100520,
+    "redfish_lenovo_xcc",
+    "lenovo_xcc.yml"
+   ],
+   [
+    50320,
+    "redfish_lenovo_imm2",
+    "lenovo_imm2.yml"
+   ],
+   [
+    10120,
+    "redfish_lenovo_bmc",
+    "lenovo_bmc.yml"
+   ],
+   [
+    -400,
+    "redfish_generic",
+    "redfish_generic.yml"
+   ]
+  ]
+ },
+ "sr650_v4_02": {
+  "source": "noauth",
+  "product": null,
+  "redfish": "1.22.0",
+  "hints": {},
+  "facts": {
+   "vendor": "lenovo",
+   "model": "",
+   "firmware": ""
+  },
+  "selected": [
+   120520,
+   "redfish_lenovo_xcc3",
+   "lenovo_xcc3.yml"
+  ],
+  "top5": [
+   [
+    120520,
+    "redfish_lenovo_xcc3",
+    "lenovo_xcc3.yml"
+   ],
+   [
+    100520,
+    "redfish_lenovo_xcc",
+    "lenovo_xcc.yml"
+   ],
+   [
+    50320,
+    "redfish_lenovo_imm2",
+    "lenovo_imm2.yml"
+   ],
+   [
+    10120,
+    "redfish_lenovo_bmc",
+    "lenovo_bmc.yml"
+   ],
+   [
+    -400,
+    "redfish_generic",
+    "redfish_generic.yml"
+   ]
+  ]
+ },
+ "sr650_v4_03": {
+  "source": "noauth",
+  "product": null,
+  "redfish": "1.22.0",
+  "hints": {},
+  "facts": {
+   "vendor": "lenovo",
+   "model": "",
+   "firmware": ""
+  },
+  "selected": [
+   120520,
+   "redfish_lenovo_xcc3",
+   "lenovo_xcc3.yml"
+  ],
+  "top5": [
+   [
+    120520,
+    "redfish_lenovo_xcc3",
+    "lenovo_xcc3.yml"
+   ],
+   [
+    100520,
+    "redfish_lenovo_xcc",
+    "lenovo_xcc.yml"
+   ],
+   [
+    50320,
+    "redfish_lenovo_imm2",
+    "lenovo_imm2.yml"
+   ],
+   [
+    10120,
+    "redfish_lenovo_bmc",
+    "lenovo_bmc.yml"
+   ],
+   [
+    -400,
+    "redfish_generic",
+    "redfish_generic.yml"
+   ]
+  ]
+ },
+ "sr650_v4_04": {
+  "source": "noauth",
+  "product": null,
+  "redfish": "1.22.0",
+  "hints": {},
+  "facts": {
+   "vendor": "lenovo",
+   "model": "",
+   "firmware": ""
+  },
+  "selected": [
+   120520,
+   "redfish_lenovo_xcc3",
+   "lenovo_xcc3.yml"
+  ],
+  "top5": [
+   [
+    120520,
+    "redfish_lenovo_xcc3",
+    "lenovo_xcc3.yml"
+   ],
+   [
+    100520,
+    "redfish_lenovo_xcc",
+    "lenovo_xcc.yml"
+   ],
+   [
+    50320,
+    "redfish_lenovo_imm2",
+    "lenovo_imm2.yml"
+   ],
+   [
+    10120,
+    "redfish_lenovo_bmc",
+    "lenovo_bmc.yml"
+   ],
+   [
+    -400,
+    "redfish_generic",
+    "redfish_generic.yml"
+   ]
+  ]
+ }
+}
