@@ -1,0 +1,933 @@
+{
+ "_meta": {
+  "report": "03-network-storage",
+  "date": "2026-10-26",
+  "model": "claude-fable-5-1",
+  "states": [
+   "PASS",
+   "ISSUE",
+   "NOT_APPLICABLE",
+   "MOCK_LIMITATION",
+   "NOT_CHECKED"
+  ],
+  "issues": {
+   "HIGH": 0,
+   "MED": 2,
+   "LOW": 8
+  },
+  "issue_ids": [
+   "03-network-001",
+   "03-storage-001",
+   "03-network-002",
+   "03-network-003",
+   "03-network-004",
+   "03-network-005",
+   "03-network-006",
+   "03-network-007",
+   "03-storage-002",
+   "03-storage-003"
+  ]
+ },
+ "csus3200_01": {
+  "network": {
+   "interfaces": {
+    "state": "PASS",
+    "evidence": "8건 — raw Systems/Partition0/EthernetInterfaces 멤버(CompositionService ResourceBlocks 경로) 키 Id/MACAddress/Name 뿐 → link unknown·speed null 이 raw 그대로"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "6건 — Chassis/r001u01/NetworkAdapters (Rmp placeholder 제외), fw 는 Controllers[0].Links.PCIeDevices→PCIeDevices/N.FirmwareVersion (CSUS-R16)"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "12건 — Ethernet 주소 Ethernet.AssociatedMACAddresses, FC 주소 NDF WWPN; LinkStatus 키 없음 → unknown"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — raw Managers/RMC/EthernetInterfaces/1 NameServers [] / StaticNameServers [null,null,null]"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — raw Managers/RMC/EthernetInterfaces/1 IPv4Addresses[0].Gateway"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups MCX631102, adapter_count FC 카드 제외(A-4), port_count = interfaces 수"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "PASS",
+    "evidence": "1건 — raw Systems/Partition0/Storage/1 'Npar 0 Storage' 는 Drives 만 → A-8 로 Chassis/r001u01/PCIeDevices/3 (HPE SR3258p-16i/e PCIe4 Controller, Adaptec, 03.01.50.032-0) 식별 + notice"
+   },
+   "physical_disks": {
+    "state": "PASS",
+    "evidence": "4건 — MO001600PYHRE×2·PZWSH×2, SAS SSD, CapacityBytes 1600321314816 → total_mb 1526185, serial 있음, FailurePredicted/life 키 없음 → null"
+   },
+   "logical_volumes": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw Storage/1 에 Volumes 링크 없음(RAID 구성 비노출) → []"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "4건 — SN1100Q: wwpn/wwnn = NDF FibreChannel.WWPN/WWNN, fw/vendor 채움, link down(Port 에 LinkStatus 키 없음 → notice, ADR-2026-10-19)"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "1490 GiB × 4"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2(controllers 포함) 동일"
+   }
+  }
+ },
+ "csus3200_02": {
+  "network": {
+   "interfaces": {
+    "state": "PASS",
+    "evidence": "4건 — raw Systems/Partition0/EthernetInterfaces 멤버(CompositionService ResourceBlocks 경로) 키 Id/MACAddress/Name 뿐 → link unknown·speed null 이 raw 그대로"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "2건 — Chassis/r001u01/NetworkAdapters (Rmp placeholder 제외), fw 는 Controllers[0].Links.PCIeDevices→PCIeDevices/N.FirmwareVersion (CSUS-R16)"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "4건 — Ethernet 주소 Ethernet.AssociatedMACAddresses, FC 주소 NDF WWPN; LinkStatus 키 없음 → unknown"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — raw Managers/RMC/EthernetInterfaces/1 NameServers [] / StaticNameServers [null,null,null]"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — raw Managers/RMC/EthernetInterfaces/1 IPv4Addresses[0].Gateway"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups MCX631102, adapter_count FC 카드 제외(A-4), port_count = interfaces 수"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "PASS",
+    "evidence": "1건 — raw Systems/Partition0/Storage/1 'Npar 0 Storage' 는 Drives 만 → A-8 로 Chassis/r001u01/PCIeDevices/3 (HPE SR3258p-16i/e PCIe4 Controller, Adaptec, 03.01.50.032-0) 식별 + notice"
+   },
+   "physical_disks": {
+    "state": "PASS",
+    "evidence": "4건 — MO001600PZWSH×4, SAS SSD, CapacityBytes 1600321314816 → total_mb 1526185, serial 있음, FailurePredicted/life 키 없음 → null"
+   },
+   "logical_volumes": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw Storage/1 에 Volumes 링크 없음(RAID 구성 비노출) → []"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "0건 — FC 카드 없음(PCIeDevices 1·3·9 = Mellanox·RAID·Mellanox)"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "1490 GiB × 4"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2(controllers 포함) 동일"
+   }
+  }
+ },
+ "csus3200_03": {
+  "network": {
+   "interfaces": {
+    "state": "PASS",
+    "evidence": "8건 — raw Systems/Partition0/EthernetInterfaces 멤버(CompositionService ResourceBlocks 경로) 키 Id/MACAddress/Name 뿐 → link unknown·speed null 이 raw 그대로"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "6건 — Chassis/r001u01/NetworkAdapters (Rmp placeholder 제외), fw 는 Controllers[0].Links.PCIeDevices→PCIeDevices/N.FirmwareVersion (CSUS-R16)"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "12건 — Ethernet 주소 Ethernet.AssociatedMACAddresses, FC 주소 NDF WWPN; LinkStatus 키 없음 → unknown"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — raw Managers/RMC/EthernetInterfaces/1 NameServers [] / StaticNameServers [null,null,null]"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — raw Managers/RMC/EthernetInterfaces/1 IPv4Addresses[0].Gateway"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups MCX631102, adapter_count FC 카드 제외(A-4), port_count = interfaces 수"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "PASS",
+    "evidence": "1건 — raw Systems/Partition0/Storage/1 'Npar 0 Storage' 는 Drives 만 → A-8 로 Chassis/r001u01/PCIeDevices/3 (HPE SR3258p-16i/e PCIe4 Controller, Adaptec, 03.01.50.032-0) 식별 + notice"
+   },
+   "physical_disks": {
+    "state": "PASS",
+    "evidence": "4건 — MO001600PYHRE×4, SAS SSD, CapacityBytes 1600321314816 → total_mb 1526185, serial 있음, FailurePredicted/life 키 없음 → null"
+   },
+   "logical_volumes": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "raw Storage/1 에 Volumes 링크 없음(RAID 구성 비노출) → []"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "4건 — SN1100Q: wwpn/wwnn = NDF FibreChannel.WWPN/WWNN, fw/vendor 채움, link down(Port 에 LinkStatus 키 없음 → notice, ADR-2026-10-19)"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "1490 GiB × 4"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2(controllers 포함) 동일"
+   }
+  }
+ },
+ "dl380_gen12_01": {
+  "network": {
+   "interfaces": {
+    "state": "PASS",
+    "evidence": "10건 — raw Systems/1/EthernetInterfaces Name '' → id, SpeedMbps null, LinkStatus 는 up 일 때만 'LinkUp'(나머지 null→unknown); link_up 4 (03-network-002 개선안 해당)"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "7건 — DE04x000 카드, Manufacturer/Model/PartNumber/SerialNumber/FirmwarePackageVersion 전부 raw 에 있음; FC 카드 mac null"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "14건 — FC: LinkNetworkTechnology FibreChannel + Ethernet.AssociatedMACAddresses=[WWPN] + FibreChannel:{} → FibreChannel; NIC Ethernet; down 포트 speed null"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — raw Managers/1/EthernetInterfaces/1 NameServers [], StaticNameServers 0.0.0.0/:: 자리표시자, Oem.Hpe.IPv4.DNSServers 0.0.0.0"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — raw Managers/1/EthernetInterfaces/1 IPv4Addresses[0].Gateway"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups BCM57414 MAC join, adapter_count FC 2장 제외, port_count = interfaces 수"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "PASS",
+    "evidence": "1건 — Storage/DE00B000 → Controllers/0 HPE MR416i-o Gen11 fw 52.36.3-6584 (CacheSummary 는 계약 밖)"
+   },
+   "physical_disks": {
+    "state": "PASS",
+    "evidence": "2건 — Drives 8 중 'Empty Bay'(State Absent, CapacityBytes 없음) 필터; life 100.0→100; Identifiers NAA 미사용(03-storage-003)"
+   },
+   "logical_volumes": {
+    "state": "PASS",
+    "evidence": "1 ('OS') — RAIDType RAID1, total_mb 1525664, member_drive_ids Links.Drives, boot_volume null(BootVolume 키 없음)"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "4건 — SN1610Q×2: wwpn/wwnn NDF, 포트1 up 32 Gbps · 포트2 down(LinkState Disabled)"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "1490 GiB × 2"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일"
+   }
+  }
+ },
+ "dl380_gen12_02": {
+  "network": {
+   "interfaces": {
+    "state": "PASS",
+    "evidence": "8건 — raw Systems/1/EthernetInterfaces Name '' → id, SpeedMbps null, LinkStatus 는 up 일 때만 'LinkUp'(나머지 null→unknown); link_up 2 (03-network-002 개선안 해당)"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "6건 — DE04x000 카드, Manufacturer/Model/PartNumber/SerialNumber/FirmwarePackageVersion 전부 raw 에 있음; FC 카드 mac null"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "12건 — FC: LinkNetworkTechnology FibreChannel + Ethernet.AssociatedMACAddresses=[WWPN] + FibreChannel:{} → FibreChannel; NIC Ethernet; down 포트 speed null"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — raw Managers/1/EthernetInterfaces/1 NameServers [], StaticNameServers 0.0.0.0/:: 자리표시자, Oem.Hpe.IPv4.DNSServers 0.0.0.0"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — raw Managers/1/EthernetInterfaces/1 IPv4Addresses[0].Gateway"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups BCM57414 MAC join, adapter_count FC 2장 제외, port_count = interfaces 수"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "PASS",
+    "evidence": "1건 — Storage/DE00B000 → Controllers/0 HPE MR416i-o Gen11 fw 52.36.3-6584 (CacheSummary 는 계약 밖)"
+   },
+   "physical_disks": {
+    "state": "PASS",
+    "evidence": "4건 — Drives 8 중 'Empty Bay'(State Absent, CapacityBytes 없음) 필터; life 100.0→100; Identifiers NAA 미사용(03-storage-003); Drive 0·3 State StandbyOffline(볼륨 미소속)은 health OK 로만 보임(O-9)"
+   },
+   "logical_volumes": {
+    "state": "PASS",
+    "evidence": "1 ('MR Volume 239') — RAIDType RAID1, total_mb 1525664, member_drive_ids Links.Drives, boot_volume null(BootVolume 키 없음)"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "4건 — 전부 down"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "1490 GiB × 4"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일"
+   }
+  }
+ },
+ "dl380_gen12_03": {
+  "network": {
+   "interfaces": {
+    "state": "PASS",
+    "evidence": "4건 faithful — raw LinkStatus 전부 null → unknown (호스트 PowerState Off)"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "2건 faithful — DA000004/DA000007: Manufacturer ''·PartNumber ''·NDF 링크 없음 → manufacturer null, Model 은 raw 값"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "4건 faithful — LinkStatus/CurrentSpeedGbps 없음 → unknown/null, LinkNetworkTechnology Ethernet"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — BMC NIC NameServers 비어 있음"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — BMC NIC gateway"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "adapter_count 2, port_count 4, link_up 0"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "ISSUE",
+    "evidence": "03-storage-001(교차) — 전원 Off 로 카드 정보가 축약됐는데 network_adapters notice 없음"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "ISSUE",
+    "evidence": "03-storage-001 — [] : raw Systems/1/Storage Members 0(200), StorageEnclosure 섀시 없음, 그러나 Chassis/1/PCIeDevices/276 = HPE MR416i-o Gen11 (MassStorageController) 존재; System PowerState Off; notice 0"
+   },
+   "physical_disks": {
+    "state": "ISSUE",
+    "evidence": "03-storage-001 — 0건 (실제 미장착이 아니라 전원 Off 로 인벤토리 미제공 — 가설)"
+   },
+   "logical_volumes": {
+    "state": "ISSUE",
+    "evidence": "03-storage-001 — [] 같은 원인"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "0건 — FC 카드 없음 확정(PCIeDevices 269 Video·271/274 NIC·276 RAID)"
+   },
+   "summary": {
+    "state": "ISSUE",
+    "evidence": "03-storage-001 — grand_total_gb 0"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "ISSUE",
+    "evidence": "03-storage-001"
+   }
+  }
+ },
+ "dl380_gen12_04": {
+  "network": {
+   "interfaces": {
+    "state": "PASS",
+    "evidence": "8건 — raw Systems/1/EthernetInterfaces Name '' → id, SpeedMbps null, LinkStatus 는 up 일 때만 'LinkUp'(나머지 null→unknown); link_up 8 (03-network-002 개선안 해당)"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "6건 — DE04x000 카드, Manufacturer/Model/PartNumber/SerialNumber/FirmwarePackageVersion 전부 raw 에 있음; FC 카드 mac null"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "12건 — FC: LinkNetworkTechnology FibreChannel + Ethernet.AssociatedMACAddresses=[WWPN] + FibreChannel:{} → FibreChannel; NIC Ethernet; down 포트 speed null"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — raw Managers/1/EthernetInterfaces/1 NameServers [], StaticNameServers 0.0.0.0/:: 자리표시자, Oem.Hpe.IPv4.DNSServers 0.0.0.0"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — raw Managers/1/EthernetInterfaces/1 IPv4Addresses[0].Gateway"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "groups BCM57414 MAC join, adapter_count FC 2장 제외, port_count = interfaces 수"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "PASS",
+    "evidence": "1건 — Storage/DE00B000 → Controllers/0 HPE MR416i-o Gen11 fw 52.36.3-6584 (CacheSummary 는 계약 밖)"
+   },
+   "physical_disks": {
+    "state": "PASS",
+    "evidence": "4건 — Drives 8 중 'Empty Bay'(State Absent, CapacityBytes 없음) 필터; life 100.0→100; Identifiers NAA 미사용(03-storage-003)"
+   },
+   "logical_volumes": {
+    "state": "PASS",
+    "evidence": "1 ('OS') — RAIDType RAID1, total_mb 1525664, member_drive_ids Links.Drives, boot_volume null(BootVolume 키 없음)"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "4건 — 포트1 up ×2"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "1490 GiB × 4"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일"
+   }
+  }
+ },
+ "sr650_v4_01": {
+  "network": {
+   "interfaces": {
+    "state": "PASS",
+    "evidence": "5건 — NIC1~4 + ToManager(Links.HostInterface, 03-network-005); 호스트 NIC 에 LinkStatus 키 없음 → 전부 unknown(03-network-002), SpeedMbps 25600/0 원문(03-network-003)"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "2건 — E810 OCP, fw FirmwarePackageVersion, mac/link/speed 는 포트 fold-in"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "4건 — LinkUp/LinkDown·CurrentSpeedGbps 25 → 25000/null"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — raw Managers/1/EthernetInterfaces/NIC NameServers [], StaticNameServers 자리표시자"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — raw Managers/1/EthernetInterfaces/NIC IPv4Addresses[0].Gateway"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "adapter_count 2, port_count = interfaces 수(ToManager 포함), link_up 0 은 002 의 결과"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "PASS",
+    "evidence": "1건 — 인라인 StorageControllers[0] Name 'ThinkSystem RAID 940-16i 8GB Flash…' Model SAS3916 fw 52.36.0-6553 → name=Name, controller_model=Model"
+   },
+   "physical_disks": {
+    "state": "PASS",
+    "evidence": "4건 — SAMSUNG SAS SSD, life 100, FailurePredicted false, Oem.Lenovo DriveStatus 는 계약 밖"
+   },
+   "logical_volumes": {
+    "state": "PASS",
+    "evidence": "1 ('OS') — RAIDType RAID1, boot_volume null(IsBootCapable 는 부팅 가능 여부라 근거 아님)"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "0건 — FC PCIe 없음"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "GiB 집계 정확"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일"
+   }
+  }
+ },
+ "sr650_v4_02": {
+  "network": {
+   "interfaces": {
+    "state": "ISSUE",
+    "evidence": "03-network-001 — 9건 중 NIC3/4/7/8 은 QLE2772 FC 포트(raw MACAddress 8옥텟 = WWPN, SpeedMbps 32768/0) 가 kind server_nic 로 들어감"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "4건 — E810 + QLE2772, FC 카드 mac null"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "8건 — FC: PortProtocol FC + LinkNetworkTechnology FibreChannel + FibreChannel.AssociatedWorldWideNames=[WWPN] → FibreChannel, LinkStatus 실값"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — BMC NIC NameServers 비어 있음"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — BMC NIC gateway"
+   },
+   "summary": {
+    "state": "ISSUE",
+    "evidence": "03-network-001 — port_count 9(FC 포함), groups 에 link_type fibrechannel 그룹"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "ISSUE",
+    "evidence": "03-network-001"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "PASS",
+    "evidence": "1건 — 인라인 StorageControllers[0] Name 'ThinkSystem RAID 940-16i 8GB Flash…' Model SAS3916 fw 52.36.0-6553 → name=Name, controller_model=Model"
+   },
+   "physical_disks": {
+    "state": "PASS",
+    "evidence": "4건 — SAMSUNG SAS SSD, life 100, FailurePredicted false, Oem.Lenovo DriveStatus 는 계약 밖"
+   },
+   "logical_volumes": {
+    "state": "PASS",
+    "evidence": "2 ('OS', Name '' → 'Volume 238') — RAIDType RAID1, boot_volume null(IsBootCapable 는 부팅 가능 여부라 근거 아님)"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "4건 — QLE2772×2: NDF 컬렉션 0건 → wwpn 은 Port AssociatedWorldWideNames 단일값 도출 + notice, wwnn null(원천 없음), 전부 down"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "GiB 집계 정확"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일"
+   }
+  }
+ },
+ "sr650_v4_03": {
+  "network": {
+   "interfaces": {
+    "state": "ISSUE",
+    "evidence": "03-network-001 — 15건 중 NIC5~8 은 QLE2772 FC 포트(raw MACAddress 8옥텟 = WWPN, SpeedMbps 32768/0) 가 kind server_nic 로 들어감"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "7건 — E810 + QLE2772, FC 카드 mac null"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "14건 — FC: PortProtocol FC + LinkNetworkTechnology FibreChannel + FibreChannel.AssociatedWorldWideNames=[WWPN] → FibreChannel, LinkStatus 실값"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — BMC NIC NameServers 비어 있음"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — BMC NIC gateway"
+   },
+   "summary": {
+    "state": "ISSUE",
+    "evidence": "03-network-001 — port_count 15(FC 포함), groups 에 link_type fibrechannel 그룹"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "ISSUE",
+    "evidence": "03-network-001"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "PASS",
+    "evidence": "1건 — 인라인 StorageControllers[0] Name 'ThinkSystem RAID 940-16i 8GB Flash…' Model SAS3916 fw 52.36.0-6553 → name=Name, controller_model=Model"
+   },
+   "physical_disks": {
+    "state": "PASS",
+    "evidence": "2건 — SAMSUNG SAS SSD, life 100, FailurePredicted false, Oem.Lenovo DriveStatus 는 계약 밖"
+   },
+   "logical_volumes": {
+    "state": "PASS",
+    "evidence": "1 ('OS') — RAIDType RAID1, boot_volume null(IsBootCapable 는 부팅 가능 여부라 근거 아님)"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "4건 — 포트1 up 32.0 Gbps · 포트2 down, wwpn 도출 notice 2건"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "GiB 집계 정확"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일"
+   }
+  }
+ },
+ "sr650_v4_04": {
+  "network": {
+   "interfaces": {
+    "state": "PASS",
+    "evidence": "5건 — NIC1~4 + ToManager(Links.HostInterface, 03-network-005); 호스트 NIC 에 LinkStatus 키 없음 → 전부 unknown(03-network-002), SpeedMbps 25600/0 원문(03-network-003)"
+   },
+   "adapters": {
+    "state": "PASS",
+    "evidence": "2건 — E810 OCP, fw FirmwarePackageVersion, mac/link/speed 는 포트 fold-in"
+   },
+   "ports": {
+    "state": "PASS",
+    "evidence": "4건 — LinkUp/LinkDown·CurrentSpeedGbps 25 → 25000/null"
+   },
+   "dns_servers": {
+    "state": "PASS",
+    "evidence": "[] — raw Managers/1/EthernetInterfaces/NIC NameServers [], StaticNameServers 자리표시자"
+   },
+   "default_gateways": {
+    "state": "PASS",
+    "evidence": "11.65.23.1 — raw Managers/1/EthernetInterfaces/NIC IPv4Addresses[0].Gateway"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "adapter_count 2, port_count = interfaces 수(ToManager 포함), link_up 0 은 002 의 결과"
+   },
+   "driver_map": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 키 — Redfish 는 [] 계약 (ns.yml 664-679)"
+   },
+   "portgroups": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "virtual_switches": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 키 — Redfish 는 [] 계약"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일, errors 0"
+   }
+  },
+  "storage": {
+   "controllers": {
+    "state": "PASS",
+    "evidence": "1건 — 인라인 StorageControllers[0] Name 'ThinkSystem RAID 940-16i 8GB Flash…' Model SAS3916 fw 52.36.0-6553 → name=Name, controller_model=Model"
+   },
+   "physical_disks": {
+    "state": "PASS",
+    "evidence": "6건 — SAMSUNG SAS SSD, life 100, FailurePredicted false, Oem.Lenovo DriveStatus 는 계약 밖; bay 4·5 UnconfiguredGood(볼륨 미소속)"
+   },
+   "logical_volumes": {
+    "state": "PASS",
+    "evidence": "2 ('OS' 1524925 + 'Volume 238' 3051757 MiB) — RAIDType RAID1, boot_volume null(IsBootCapable 는 부팅 가능 여부라 근거 아님)"
+   },
+   "hbas": {
+    "state": "PASS",
+    "evidence": "0건 — FC PCIe 없음"
+   },
+   "summary": {
+    "state": "PASS",
+    "evidence": "GiB 집계 정확"
+   },
+   "datastores": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "ESXi 전용 — Redfish 는 [] 계약"
+   },
+   "filesystems": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "OS 전용 — Redfish 는 [] 계약"
+   },
+   "infiniband": {
+    "state": "NOT_APPLICABLE",
+    "evidence": "IB 신호 0건 — NDF NetDevFuncType/Capabilities 에 InfiniBand 없음, Port LinkNetworkTechnology Ethernet/FibreChannel 뿐, Port.InfiniBand 블록 없음 → [] + notice 0"
+   },
+   "_area": {
+    "state": "PASS",
+    "evidence": "Tier1=Tier2 동일"
+   }
+  }
+ }
+}
