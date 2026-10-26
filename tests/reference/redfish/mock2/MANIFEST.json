@@ -1,0 +1,1425 @@
+{
+ "source": "C:\\github\\서버mock데이터\\2차",
+ "created": "2026-10-26T15:53:01",
+ "tool": "make_archive.py (zipfile deflate 6)",
+ "servers": {
+  "csus3200_01": {
+   "zip": "csus3200_01.zip",
+   "zip_sha256": "7b239fa729980bf39b7c90c8476bd4ff6018e81ef2afc66c03341425160032ac",
+   "zip_bytes": 3347455,
+   "files": 4068,
+   "bytes": 8739418,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "auth_mode": "basic",
+   "root_product": "Compute Scale-up Server 3200",
+   "root_redfish_version": "1.19.0",
+   "started": "2026-10-22T05:51:00Z",
+   "finished": "2026-10-22T06:13:00Z",
+   "duration_s": 1319.9,
+   "discovered": 2083,
+   "fetched_ok": 2020,
+   "counts": {
+    "absent": 57,
+    "not_gettable": 0,
+    "rejected": 0,
+    "outside_account": 0,
+    "device_error": 6,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 1,
+    "skipped": 229,
+    "non_json": 16,
+    "accept_fallback": 0,
+    "action_targets": 47
+   },
+   "incomplete_reasons": [
+    "device_error=6"
+   ],
+   "device_error_paths": [
+    "/redfish/v1/Managers/RMC/LogServices/RmcConfig/RawConfig",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT1",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT3",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT8",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT9",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT16"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Complex Firmware",
+     "version": "1.77.30-20260911_061319"
+    },
+    {
+     "name": "Npar 0 Current Firmware",
+     "version": "1.77.30-20260911_061319"
+    }
+   ],
+   "integrity": {
+    "files_expected": 2023,
+    "files_on_disk": 2023,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  },
+  "csus3200_02": {
+   "zip": "csus3200_02.zip",
+   "zip_sha256": "156d61cc53c4ef32284923245482484032d4f84e51a48b6dd9b52a8c7e967b65",
+   "zip_bytes": 3332422,
+   "files": 3974,
+   "bytes": 9323680,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "auth_mode": "basic",
+   "root_product": "Compute Scale-up Server 3200",
+   "root_redfish_version": "1.19.0",
+   "started": "2026-10-22T05:51:00Z",
+   "finished": "2026-10-22T06:13:20Z",
+   "duration_s": 1340.3,
+   "discovered": 2040,
+   "fetched_ok": 1974,
+   "counts": {
+    "absent": 57,
+    "not_gettable": 0,
+    "rejected": 0,
+    "outside_account": 0,
+    "device_error": 9,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 1,
+    "skipped": 229,
+    "non_json": 14,
+    "accept_fallback": 0,
+    "action_targets": 47
+   },
+   "incomplete_reasons": [
+    "device_error=9"
+   ],
+   "device_error_paths": [
+    "/redfish/v1/TaskService/Tasks/bab3bef6f86b43fbbb0e17534ebe497a/Monitor",
+    "/redfish/v1/TaskService/Tasks/7d2077aa8eac43318ecbbd797039bcee/Monitor",
+    "/redfish/v1/TaskService/Tasks/7aae16ed3a4a413f9309862f0cc19ca2/Monitor",
+    "/redfish/v1/TaskService/Tasks/9efba28dc57347ef8af05994580c491f/Monitor",
+    "/redfish/v1/TaskService/Tasks/285c98658ca14dba83d662becbb72127/Monitor",
+    "/redfish/v1/Managers/RMC/LogServices/RmcConfig/RawConfig",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT1",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT3",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT9"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Complex Firmware",
+     "version": "1.77.30-20260911_061319"
+    },
+    {
+     "name": "Npar 0 Current Firmware",
+     "version": "1.77.30-20260911_061319"
+    }
+   ],
+   "integrity": {
+    "files_expected": 1977,
+    "files_on_disk": 1977,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  },
+  "csus3200_03": {
+   "zip": "csus3200_03.zip",
+   "zip_sha256": "b1f7c4963075a012ee1339c3587df66d84626d12b69ccf0011791d295de4661c",
+   "zip_bytes": 3293521,
+   "files": 3998,
+   "bytes": 8555403,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "auth_mode": "basic",
+   "root_product": "Compute Scale-up Server 3200",
+   "root_redfish_version": "1.19.0",
+   "started": "2026-10-22T06:13:01Z",
+   "finished": "2026-10-22T06:34:34Z",
+   "duration_s": 1293.5,
+   "discovered": 2048,
+   "fetched_ok": 1985,
+   "counts": {
+    "absent": 57,
+    "not_gettable": 0,
+    "rejected": 0,
+    "outside_account": 0,
+    "device_error": 6,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 1,
+    "skipped": 229,
+    "non_json": 16,
+    "accept_fallback": 0,
+    "action_targets": 47
+   },
+   "incomplete_reasons": [
+    "device_error=6"
+   ],
+   "device_error_paths": [
+    "/redfish/v1/Managers/RMC/LogServices/RmcConfig/RawConfig",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT1",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT3",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT8",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT9",
+    "/redfish/v1/RawFruData/r001u01/PCIE_SLOT16"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Complex Firmware",
+     "version": "1.77.30-20260911_061319"
+    },
+    {
+     "name": "Npar 0 Current Firmware",
+     "version": "1.77.30-20260911_061319"
+    }
+   ],
+   "integrity": {
+    "files_expected": 1988,
+    "files_on_disk": 1988,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  },
+  "dl380_gen12_01": {
+   "zip": "dl380_gen12_01.zip",
+   "zip_sha256": "9dbc6523298f1a5723b91f6f02b55f0aa854f9af7e956387f7a726ed437091ff",
+   "zip_bytes": 2392158,
+   "files": 3551,
+   "bytes": 6675113,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "COMPLETE",
+   "exit_code": 0,
+   "auth_mode": "session",
+   "root_product": "HPE ProLiant Compute DL380 Gen12",
+   "root_redfish_version": "1.22.1",
+   "started": "2026-10-22T06:13:21Z",
+   "finished": "2026-10-22T06:25:36Z",
+   "duration_s": 735.5,
+   "discovered": 2321,
+   "fetched_ok": 1777,
+   "counts": {
+    "absent": 263,
+    "not_gettable": 3,
+    "rejected": 278,
+    "outside_account": 0,
+    "device_error": 0,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 0,
+    "skipped": 110,
+    "non_json": 9,
+    "accept_fallback": 276,
+    "action_targets": 120
+   },
+   "incomplete_reasons": [],
+   "device_error_paths": [],
+   "firmware_versions": [
+    {
+     "name": "iLO 7",
+     "version": "1.24.00 Aug 01 2026"
+    },
+    {
+     "name": "PCIe Riser 2 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "PCIe Riser 3 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "TPM Firmware",
+     "version": "9.256"
+    },
+    {
+     "name": "HPE MR416i-o Gen11",
+     "version": "52.36.3-6584"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "System ROM",
+     "version": "U68 v1.82 (06/26/2026)"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Embedded Video Controller",
+     "version": "2.7"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD0"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD0"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "Intelligent Platform Abstraction Data",
+     "version": "2.17.0 Build 23"
+    },
+    {
+     "name": "System Programmable Logic Device",
+     "version": "0x15"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Intelligent Provisioning",
+     "version": "5.03.5"
+    },
+    {
+     "name": "HPE Smart Storage Energy Pack 1 Firmware",
+     "version": "0.70"
+    },
+    {
+     "name": "PCIe Riser 1 Programmable Logic Device",
+     "version": "10"
+    }
+   ],
+   "integrity": {
+    "files_expected": 1780,
+    "files_on_disk": 1780,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  },
+  "dl380_gen12_02": {
+   "zip": "dl380_gen12_02.zip",
+   "zip_sha256": "4e48f847fdcb22a5fd137eb4c49bd8f766a82d14f2328670e647e1e84662e8ca",
+   "zip_bytes": 2037039,
+   "files": 3009,
+   "bytes": 5871305,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "COMPLETE",
+   "exit_code": 0,
+   "auth_mode": "session",
+   "root_product": "HPE ProLiant Compute DL380 Gen12",
+   "root_redfish_version": "1.22.1",
+   "started": "2026-10-22T06:25:37Z",
+   "finished": "2026-10-22T06:35:39Z",
+   "duration_s": 601.9,
+   "discovered": 1907,
+   "fetched_ok": 1501,
+   "counts": {
+    "absent": 127,
+    "not_gettable": 3,
+    "rejected": 276,
+    "outside_account": 0,
+    "device_error": 0,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 0,
+    "skipped": 110,
+    "non_json": 4,
+    "accept_fallback": 276,
+    "action_targets": 120
+   },
+   "incomplete_reasons": [],
+   "device_error_paths": [],
+   "firmware_versions": [
+    {
+     "name": "iLO 7",
+     "version": "1.24.00 Aug 01 2026"
+    },
+    {
+     "name": "PCIe Riser 2 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "TPM Firmware",
+     "version": "9.256"
+    },
+    {
+     "name": "HPE MR416i-o Gen11",
+     "version": "52.36.3-6584"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Embedded Video Controller",
+     "version": "2.7"
+    },
+    {
+     "name": "System ROM",
+     "version": "U68 v1.90 (08/20/2026)"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD0"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD0"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "Intelligent Platform Abstraction Data",
+     "version": "2.18.0 Build 23"
+    },
+    {
+     "name": "System Programmable Logic Device",
+     "version": "0x15"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Intelligent Provisioning",
+     "version": "5.03.5"
+    },
+    {
+     "name": "HPE Smart Storage Energy Pack 1 Firmware",
+     "version": "0.70"
+    },
+    {
+     "name": "PCIe Riser 1 Programmable Logic Device",
+     "version": "10"
+    }
+   ],
+   "integrity": {
+    "files_expected": 1504,
+    "files_on_disk": 1504,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  },
+  "dl380_gen12_03": {
+   "zip": "dl380_gen12_03.zip",
+   "zip_sha256": "575f8392eb029de63a3f5ef6d1ae43aa3fb119b1dc8ff0492260872f390573cd",
+   "zip_bytes": 1589007,
+   "files": 2413,
+   "bytes": 3314962,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "COMPLETE",
+   "exit_code": 0,
+   "auth_mode": "session",
+   "root_product": "HPE ProLiant Compute DL380 Gen12",
+   "root_redfish_version": "1.22.1",
+   "started": "2026-10-22T06:34:35Z",
+   "finished": "2026-10-22T06:49:45Z",
+   "duration_s": 910.6,
+   "discovered": 1583,
+   "fetched_ok": 1208,
+   "counts": {
+    "absent": 91,
+    "not_gettable": 3,
+    "rejected": 281,
+    "outside_account": 0,
+    "device_error": 0,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 0,
+    "skipped": 110,
+    "non_json": 9,
+    "accept_fallback": 276,
+    "action_targets": 88
+   },
+   "incomplete_reasons": [],
+   "device_error_paths": [],
+   "firmware_versions": [
+    {
+     "name": "iLO 7",
+     "version": "1.24.00 Aug 01 2026"
+    },
+    {
+     "name": "HPE MR416i-o Gen11",
+     "version": "52.36.3-6584"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Embedded Video Controller",
+     "version": "2.7"
+    },
+    {
+     "name": "System ROM",
+     "version": "U68 v1.82 (06/26/2026)"
+    },
+    {
+     "name": "Intelligent Platform Abstraction Data",
+     "version": "2.17.0 Build 23"
+    },
+    {
+     "name": "System Programmable Logic Device",
+     "version": "0x15"
+    },
+    {
+     "name": "Intelligent Provisioning",
+     "version": "5.03.5"
+    },
+    {
+     "name": "HPE Smart Storage Energy Pack 1 Firmware",
+     "version": "0.70"
+    },
+    {
+     "name": "PCIe Riser 1 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "PCIe Riser 2 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "TPM Firmware",
+     "version": "9.256"
+    }
+   ],
+   "integrity": {
+    "files_expected": 1211,
+    "files_on_disk": 1211,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  },
+  "dl380_gen12_04": {
+   "zip": "dl380_gen12_04.zip",
+   "zip_sha256": "c35fea8e943971f00218045b2f5d2d569d0907ef70e721c64336e9c24363bde6",
+   "zip_bytes": 2442502,
+   "files": 3575,
+   "bytes": 6701515,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "COMPLETE",
+   "exit_code": 0,
+   "auth_mode": "session",
+   "root_product": "HPE ProLiant Compute DL380 Gen12",
+   "root_redfish_version": "1.22.1",
+   "started": "2026-10-22T06:35:40Z",
+   "finished": "2026-10-22T06:47:26Z",
+   "duration_s": 706.2,
+   "discovered": 2214,
+   "fetched_ok": 1790,
+   "counts": {
+    "absent": 144,
+    "not_gettable": 3,
+    "rejected": 277,
+    "outside_account": 0,
+    "device_error": 0,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 0,
+    "skipped": 110,
+    "non_json": 10,
+    "accept_fallback": 276,
+    "action_targets": 119
+   },
+   "incomplete_reasons": [],
+   "device_error_paths": [],
+   "firmware_versions": [
+    {
+     "name": "iLO 7",
+     "version": "1.24.00 Aug 01 2026"
+    },
+    {
+     "name": "PCIe Riser 2 Programmable Logic Device",
+     "version": "10"
+    },
+    {
+     "name": "TPM Firmware",
+     "version": "9.256"
+    },
+    {
+     "name": "HPE MR416i-o Gen11",
+     "version": "52.36.3-6584"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "HPE SN1610Q 32Gb 2p FC HBA",
+     "version": "2.11.14"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Broadcom P225p NetXtreme-E Dual-port 10Gb/25Gb Ethernet PCIe Adapter - NIC",
+     "version": "237.1.148.0"
+    },
+    {
+     "name": "Embedded Video Controller",
+     "version": "2.7"
+    },
+    {
+     "name": "System ROM",
+     "version": "U68 v1.82 (06/26/2026)"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "1.60TB 22.5G SAS SSD",
+     "version": "HPD4"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "8 SFF 24G x1NVMe/SAS UBM6 BC BP",
+     "version": "1.06"
+    },
+    {
+     "name": "Intelligent Platform Abstraction Data",
+     "version": "2.17.0 Build 23"
+    },
+    {
+     "name": "System Programmable Logic Device",
+     "version": "0x15"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Power Supply Firmware",
+     "version": "2.00"
+    },
+    {
+     "name": "Intelligent Provisioning",
+     "version": "5.03.5"
+    },
+    {
+     "name": "HPE Smart Storage Energy Pack 1 Firmware",
+     "version": "0.70"
+    },
+    {
+     "name": "PCIe Riser 1 Programmable Logic Device",
+     "version": "10"
+    }
+   ],
+   "integrity": {
+    "files_expected": 1793,
+    "files_on_disk": 1793,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  },
+  "sr650_v4_01": {
+   "zip": "sr650_v4_01.zip",
+   "zip_sha256": "9c4ef49fc9deb5210bde06a2adf89524e4f39affd1c7effc6d47525895285f43",
+   "zip_bytes": 9579858,
+   "files": 4506,
+   "bytes": 34283257,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "auth_mode": "session",
+   "root_product": null,
+   "root_redfish_version": "1.22.0",
+   "started": "2026-10-22T06:47:27Z",
+   "finished": "2026-10-22T06:56:39Z",
+   "duration_s": 552.5,
+   "discovered": 3122,
+   "fetched_ok": 2130,
+   "counts": {
+    "absent": 894,
+    "not_gettable": 97,
+    "rejected": 0,
+    "outside_account": 0,
+    "device_error": 1,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 1,
+    "skipped": 3,
+    "non_json": 234,
+    "accept_fallback": 0,
+    "action_targets": 96
+   },
+   "incomplete_reasons": [
+    "device_error=1"
+   ],
+   "device_error_paths": [
+    "/redfish/v1/LicenseService/Licenses/{LicenseId}"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Firmware:UEFI",
+     "version": "20L-1.50"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": ""
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": "06N-4.42"
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": ""
+    },
+    {
+     "name": "Firmware:UEFI",
+     "version": ""
+    },
+    {
+     "name": "Firmware:LXPM",
+     "version": "10S-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-WindowsDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-LinuxDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXUM",
+     "version": "06M-1.15"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter",
+     "version": "52.36.0-6553"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware-PSoC:0xBB",
+     "version": "26"
+    },
+    {
+     "name": "POWER-PSU1",
+     "version": "04"
+    },
+    {
+     "name": "POWER-PSU2",
+     "version": "04"
+    },
+    {
+     "name": "Firmware:SCM-FPGA",
+     "version": "02R-2.48"
+    }
+   ],
+   "integrity": {
+    "files_expected": 2133,
+    "files_on_disk": 2133,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  },
+  "sr650_v4_02": {
+   "zip": "sr650_v4_02.zip",
+   "zip_sha256": "cb33624d2967c8319b8981d9d9cacfe7955ba768d821a1342b1d2fe82c92090e",
+   "zip_bytes": 9994781,
+   "files": 4730,
+   "bytes": 35279947,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "auth_mode": "session",
+   "root_product": null,
+   "root_redfish_version": "1.22.0",
+   "started": "2026-10-22T06:49:46Z",
+   "finished": "2026-10-22T06:54:13Z",
+   "duration_s": 267.1,
+   "discovered": 3235,
+   "fetched_ok": 2242,
+   "counts": {
+    "absent": 894,
+    "not_gettable": 98,
+    "rejected": 0,
+    "outside_account": 0,
+    "device_error": 1,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 1,
+    "skipped": 3,
+    "non_json": 234,
+    "accept_fallback": 0,
+    "action_targets": 97
+   },
+   "incomplete_reasons": [
+    "device_error=1"
+   ],
+   "device_error_paths": [
+    "/redfish/v1/LicenseService/Licenses/{LicenseId}"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Firmware:UEFI",
+     "version": "20L-1.50"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": ""
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": "06N-4.42"
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": ""
+    },
+    {
+     "name": "Firmware:UEFI",
+     "version": ""
+    },
+    {
+     "name": "Firmware:LXPM",
+     "version": "10S-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-WindowsDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-LinuxDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXUM",
+     "version": "06M-1.15"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter",
+     "version": "52.36.0-6553"
+    },
+    {
+     "name": "Firmware:DEVICE-QLogic QLE2772 32Gb 2-Port PCIe Fibre Channel Adapter",
+     "version": "4.09.04"
+    },
+    {
+     "name": "Firmware:DEVICE-QLogic QLE2772 32Gb 2-Port PCIe Fibre Channel Adapter",
+     "version": "4.09.04"
+    },
+    {
+     "name": "Firmware-PSoC:0xBB",
+     "version": "26"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "POWER-PSU1",
+     "version": "04"
+    },
+    {
+     "name": "POWER-PSU2",
+     "version": "04"
+    },
+    {
+     "name": "Firmware:SCM-FPGA",
+     "version": "02R-2.48"
+    }
+   ],
+   "integrity": {
+    "files_expected": 2245,
+    "files_on_disk": 2245,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  },
+  "sr650_v4_03": {
+   "zip": "sr650_v4_03.zip",
+   "zip_sha256": "021a4314f1e8a71976faef597941e05f8a50f95e914a6d90d8573220aa3f598c",
+   "zip_bytes": 11091029,
+   "files": 5684,
+   "bytes": 38103696,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "auth_mode": "session",
+   "root_product": null,
+   "root_redfish_version": "1.22.0",
+   "started": "2026-10-22T06:54:14Z",
+   "finished": "2026-10-22T07:03:25Z",
+   "duration_s": 550.9,
+   "discovered": 3710,
+   "fetched_ok": 2719,
+   "counts": {
+    "absent": 894,
+    "not_gettable": 96,
+    "rejected": 0,
+    "outside_account": 0,
+    "device_error": 1,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 1,
+    "skipped": 3,
+    "non_json": 234,
+    "accept_fallback": 0,
+    "action_targets": 95
+   },
+   "incomplete_reasons": [
+    "device_error=1"
+   ],
+   "device_error_paths": [
+    "/redfish/v1/LicenseService/Licenses/{LicenseId}"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Firmware:UEFI",
+     "version": "20P-1.51"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": ""
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": "06N-4.42"
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": ""
+    },
+    {
+     "name": "Firmware:UEFI",
+     "version": ""
+    },
+    {
+     "name": "Firmware:LXPM",
+     "version": "10S-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-WindowsDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-LinuxDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXUM",
+     "version": "06M-1.15"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "4.90 (0x80021365)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "4.90 (0x80021365)"
+    },
+    {
+     "name": "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter",
+     "version": "52.36.0-6553"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "4.90 (0x80021362)"
+    },
+    {
+     "name": "Firmware:DEVICE-QLogic QLE2772 32Gb 2-Port PCIe Fibre Channel Adapter",
+     "version": "4.09.02"
+    },
+    {
+     "name": "Firmware:DEVICE-QLogic QLE2772 32Gb 2-Port PCIe Fibre Channel Adapter",
+     "version": "4.09.02"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "4.90 (0x80021362)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "4.90 (0x80021362)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "096A1365.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010F3900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "096A1365.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010F3900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "096A1362.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "010F3900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "00000004.00000004.50000001.00000157.0000"
+    },
+    {
+     "name": "Firmware-PSoC:0xBB",
+     "version": "26"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "096A1362.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "010F3900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "00000004.00000004.50000001.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "096A1362.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "010F3900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port PCIe Ethernet Adapter",
+     "version": "00000004.00000004.50000001.00000157.0000"
+    },
+    {
+     "name": "POWER-PSU1",
+     "version": "04"
+    },
+    {
+     "name": "POWER-PSU2",
+     "version": "04"
+    },
+    {
+     "name": "Firmware:SCM-FPGA",
+     "version": "02R-2.48"
+    }
+   ],
+   "integrity": {
+    "files_expected": 2722,
+    "files_on_disk": 2722,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  },
+  "sr650_v4_04": {
+   "zip": "sr650_v4_04.zip",
+   "zip_sha256": "9aaeb9ef4ef5575e9ca2e4ad4560fc87964c15d2bafac268bc3f7d85de1f3966",
+   "zip_bytes": 9560667,
+   "files": 4426,
+   "bytes": 34110745,
+   "mirror_tool_version": "2.2.0",
+   "manifest_schema": 2,
+   "result": "INCOMPLETE",
+   "exit_code": 1,
+   "auth_mode": "session",
+   "root_product": null,
+   "root_redfish_version": "1.22.0",
+   "started": "2026-10-22T06:56:40Z",
+   "finished": "2026-10-22T07:06:18Z",
+   "duration_s": 577.9,
+   "discovered": 3083,
+   "fetched_ok": 2090,
+   "counts": {
+    "absent": 894,
+    "not_gettable": 98,
+    "rejected": 0,
+    "outside_account": 0,
+    "device_error": 1,
+    "oversize": 0,
+    "unresolved": 0,
+    "excluded": 1,
+    "skipped": 3,
+    "non_json": 234,
+    "accept_fallback": 0,
+    "action_targets": 97
+   },
+   "incomplete_reasons": [
+    "device_error=1"
+   ],
+   "device_error_paths": [
+    "/redfish/v1/LicenseService/Licenses/{LicenseId}"
+   ],
+   "firmware_versions": [
+    {
+     "name": "Firmware:UEFI",
+     "version": "20L-1.50"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": "38R-2.97"
+    },
+    {
+     "name": "Firmware:BMC",
+     "version": ""
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": "06N-4.42"
+    },
+    {
+     "name": "Firmware:HPM-FPGA",
+     "version": ""
+    },
+    {
+     "name": "Firmware:UEFI",
+     "version": ""
+    },
+    {
+     "name": "Firmware:LXPM",
+     "version": "10S-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-WindowsDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXPM-LinuxDrivers",
+     "version": "10P-5.03.01"
+    },
+    {
+     "name": "Firmware:LXUM",
+     "version": "06M-1.15"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG1T6HCJR-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG3T2HCLS-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG3T2HCLS-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG3T2HCLS-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:Drive-MZILG3T2HCLS-V7",
+     "version": "CA01"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "5.00 (0x80021D15)"
+    },
+    {
+     "name": "Firmware:DEVICE-ThinkSystem RAID 940-16i 8GB Flash PCIe Gen4 12Gb Adapter",
+     "version": "52.36.0-6553"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "0A021D15.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "010FA900.0000000D"
+    },
+    {
+     "name": "Firmware:DEVICE-Intel(R) E810-DA2 10/25GbE SFP28 2-Port OCP Ethernet Adapter",
+     "version": "00000004.00000004.50000002.00000157.0000"
+    },
+    {
+     "name": "Firmware-PSoC:0xBB",
+     "version": "26"
+    },
+    {
+     "name": "POWER-PSU1",
+     "version": "04"
+    },
+    {
+     "name": "POWER-PSU2",
+     "version": "04"
+    },
+    {
+     "name": "Firmware:SCM-FPGA",
+     "version": "02R-2.48"
+    }
+   ],
+   "integrity": {
+    "files_expected": 2093,
+    "files_on_disk": 2093,
+    "missing": [],
+    "missing_count": 0,
+    "unaccounted": 0
+   }
+  }
+ }
+}

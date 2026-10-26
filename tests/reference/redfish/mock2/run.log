@@ -1,0 +1,26 @@
+nohup: ignoring input
+[START] 11.65.23.24 -> /home/infraops/mock/csus3200_01 (auth=basic, pid=443106)
+[START] 11.65.23.31 -> /home/infraops/mock/csus3200_02 (auth=basic, pid=443111)
+[START] 11.65.23.28 -> /home/infraops/mock/csus3200_03 (auth=basic, pid=458741)
+[START] 11.65.23.95 -> /home/infraops/mock/dl380_gen12_01 (auth=auto, pid=458986)
+[START] 11.65.23.201 -> /home/infraops/mock/dl380_gen12_02 (auth=auto, pid=468066)
+[START] 11.65.23.55 -> /home/infraops/mock/dl380_gen12_03 (auth=auto, pid=474016)
+[START] 11.65.23.52 -> /home/infraops/mock/dl380_gen12_04 (auth=auto, pid=474910)
+[START] 11.65.23.87 -> /home/infraops/mock/sr650_v4_01 (auth=auto, pid=484356)
+[START] 11.65.23.88 -> /home/infraops/mock/sr650_v4_02 (auth=auto, pid=485860)
+[START] 11.65.23.76 -> /home/infraops/mock/sr650_v4_03 (auth=auto, pid=488989)
+[START] 11.65.23.37 -> /home/infraops/mock/sr650_v4_04 (auth=auto, pid=491375)
+
+  host                     RESULT      fetched  absent  not_get   reject  outside  dev_err oversize  unresolv auth     
+  11.65.23.24              INCOMPLETE     2020      57        0        0        0        6        0         0 basic    
+  11.65.23.31              INCOMPLETE     1974      57        0        0        0        9        0         0 basic    
+  11.65.23.28              INCOMPLETE     1985      57        0        0        0        6        0         0 basic    
+  11.65.23.95              COMPLETE       1777     263        3      278        0        0        0         0 session  
+  11.65.23.201             COMPLETE       1501     127        3      276        0        0        0         0 session  
+  11.65.23.55              COMPLETE       1208      91        3      281        0        0        0         0 session  
+  11.65.23.52              COMPLETE       1790     144        3      277        0        0        0         0 session  
+  11.65.23.87              INCOMPLETE     2130     894       97        0        0        1        0         0 session  
+  11.65.23.88              INCOMPLETE     2242     894       98        0        0        1        0         0 session  
+  11.65.23.76              INCOMPLETE     2719     894       96        0        0        1        0         0 session  
+  11.65.23.37              INCOMPLETE     2090     894       98        0        0        1        0         0 session  
+  전체: COMPLETE 4 / INCOMPLETE 7 / EMPTY 0 / ABORT 0 / NO_MANIFEST 0

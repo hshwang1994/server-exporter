@@ -3,6 +3,7 @@
 | 수집 일자 | 사용자 | 비고 |
 |---|---|---|
 | 2026-04-28 | hshwang1994 | Round 11 reference collection 1차 |
+| 2026-10-22 | hshwang1994 | Redfish 2차 전수 미러 11대 (용인: CSUS 3200 ×3, DL380 Gen12 ×4, SR650 V4 ×4) — `redfish/mock2/` 에 서버당 zip 으로 보관 (2026-10-26 반영) |
 
 > 이 카탈로그는 2026-04-28 수집분에서 멈춰 있다. 그 뒤로 reference 를 새로 뜬 적이
 > 없어서 갱신할 내용이 없었다 — 낡은 게 아니라 그 시점이 마지막이다.
@@ -29,6 +30,10 @@
 | Cisco | 10.100.15.3 | **FAIL** | — | 연결 timeout (BMC 도달 불가) |
 
 **합계**: 9 vendor 수집 OK / 2 환경 이슈 / 1 vendor 미상. 15089 redfish 파일 / 108MB.
+
+### Redfish 2차 전수 미러 (2026-10-22 수집, `redfish/mock2/`)
+
+용인 11대(CSUS 3200 ×3, DL380 Gen12 ×4, SR650 V4 ×4)를 `redfish_full_mirror.py` 2.2.0 으로 떠온 전수 미러를 서버당 zip 으로 보관한다 (치환 없음, 2026-10-26 사용자 결정). 서버별 상태·무결성·사용 절차는 `redfish/mock2/README.md`, 기계 판독 요약은 `redfish/mock2/MANIFEST.json`.
 
 ### OS
 
