@@ -1,0 +1,1686 @@
+{
+  "csus3200_01": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem+Sensors 경로 정상 (CSUS-R11 역참조 2차에서도 성립)"
+      },
+      "power": {
+        "state": "PASS",
+        "evidence": "실측 PowerSubsystem 경로 정상. LOW 관찰: 05-power-004(불필요 요청) · 05-power-006(사전) · 05-power-007(소비전력 정의)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "ThermalMetrics.TemperatureReadingsCelsius 63 = Sensors Temperature 63 (63 은 DIMM 32장: P*-DIMM{B,D,F,H}0 16건 추가, 47 은 DIMM 16장) — 누락/중복 0"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float → 반올림 int (P0_TEMP 73.8→74); P*_THROT_OFFSET 4건은 음수 마진값(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw ThermalMetrics 항목 키 = DataSourceUri/DeviceName/PhysicalContext/Reading, Sensors 에도 Status 없음 → null 구조적"
+      },
+      "temperatures[].upper_critical": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "ThermalMetrics·Sensors 모두 Thresholds 없음 → null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "CPU 8 · ASIC 8 · Board 10 · Front 1 · Memory 16/32 · null 4(PCIE_RISER*_TEMP raw null)"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem/Fans 10 = 출력 10 (PSU 팬 4 · AUTOFAN_ZONE 2 는 Fan 리소스가 아니라 Sensors 에만 — 관찰)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "SpeedPercent 없음 → Sensors Rotational RelatedItem 역참조로 RPM (chassis_fan0 5040 = Sensors CHASSIS_FAN0 5040.0)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Fan 리소스 Status Enabled/OK 10/10"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success — ThermalSubsystem 200 (legacy Thermal 404)"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "PowerSubsystem/PowerSupplies 4 멤버 = 출력 4 (name/model/serial/manufacturer/part_number CSU2400AP-3-500 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "PASS",
+        "evidence": "raw Status Enabled/OK 4/4 = 출력 (LineInputStatus Normal 은 미수집 — 필드 없음)"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw PowerSupply 에 PowerCapacityWatts 키 없음(RMC 1.77.30 도 1.75.108 과 같음) → null 계약대로"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "FirmwareVersion 없음 → Version 'Release -0005' 폴백 (CSUS-R9)"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "'CRPS: Common Redundant Power Supply' raw 그대로"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "TelemetryService Chassisr001u01_TotalPowerConsumedWatts 903 = Σ PSU Metrics.OutputPowerWatts 근사(05-power-007 LOW 관찰)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem.CapacityWatts 없음 + PSU 용량 없음 → null"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem 경로에 PowerMetrics 창 없음(EnvironmentMetrics 404) → null"
+      },
+      "summary": {
+        "state": "PASS",
+        "evidence": "psu_count 4 · total_capacity_w null · capacity_unknown_count 4 · consumed_capacity_pct null (ADR-2026-10-19 A-3 대로)"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success — PowerSubsystem 200"
+      },
+      "multi_node.chassis[].power/thermal": {
+        "state": "PASS",
+        "evidence": "r001u01 = top-level 과 동일값(psu 4 · consumed 903 · temps 63 · fans 10); RackGroup/Rack1 {} + multi_node.errors [] — 집계 섀시 8건 + r001u01 404 재요청 3건은 05-power-004 LOW · 실장비 상태 MOCK_LIMITATION"
+      }
+    }
+  },
+  "csus3200_02": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem+Sensors 경로 정상 (CSUS-R11 역참조 2차에서도 성립)"
+      },
+      "power": {
+        "state": "PASS",
+        "evidence": "실측 PowerSubsystem 경로 정상. LOW 관찰: 05-power-004(불필요 요청) · 05-power-006(사전) · 05-power-007(소비전력 정의)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "ThermalMetrics.TemperatureReadingsCelsius 47 = Sensors Temperature 47 (63 은 DIMM 32장: P*-DIMM{B,D,F,H}0 16건 추가, 47 은 DIMM 16장) — 누락/중복 0"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float → 반올림 int (P0_TEMP 73.8→74); P*_THROT_OFFSET 4건은 음수 마진값(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw ThermalMetrics 항목 키 = DataSourceUri/DeviceName/PhysicalContext/Reading, Sensors 에도 Status 없음 → null 구조적"
+      },
+      "temperatures[].upper_critical": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "ThermalMetrics·Sensors 모두 Thresholds 없음 → null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "CPU 8 · ASIC 8 · Board 10 · Front 1 · Memory 16/32 · null 4(PCIE_RISER*_TEMP raw null)"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem/Fans 10 = 출력 10 (PSU 팬 4 · AUTOFAN_ZONE 2 는 Fan 리소스가 아니라 Sensors 에만 — 관찰)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "SpeedPercent 없음 → Sensors Rotational RelatedItem 역참조로 RPM (chassis_fan0 5040 = Sensors CHASSIS_FAN0 5040.0)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Fan 리소스 Status Enabled/OK 10/10"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success — ThermalSubsystem 200 (legacy Thermal 404)"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "PowerSubsystem/PowerSupplies 4 멤버 = 출력 4 (name/model/serial/manufacturer/part_number CSU2400AP-3-500 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "PASS",
+        "evidence": "raw Status Enabled/OK 4/4 = 출력 (LineInputStatus Normal 은 미수집 — 필드 없음)"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw PowerSupply 에 PowerCapacityWatts 키 없음(RMC 1.77.30 도 1.75.108 과 같음) → null 계약대로"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "FirmwareVersion 없음 → Version 'Release -0005' 폴백 (CSUS-R9)"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "'CRPS: Common Redundant Power Supply' raw 그대로"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "TelemetryService Chassisr001u01_TotalPowerConsumedWatts 815 = Σ PSU Metrics.OutputPowerWatts 근사(05-power-007 LOW 관찰)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem.CapacityWatts 없음 + PSU 용량 없음 → null"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem 경로에 PowerMetrics 창 없음(EnvironmentMetrics 404) → null"
+      },
+      "summary": {
+        "state": "PASS",
+        "evidence": "psu_count 4 · total_capacity_w null · capacity_unknown_count 4 · consumed_capacity_pct null (ADR-2026-10-19 A-3 대로)"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success — PowerSubsystem 200"
+      },
+      "multi_node.chassis[].power/thermal": {
+        "state": "PASS",
+        "evidence": "r001u01 = top-level 과 동일값(psu 4 · consumed 815 · temps 47 · fans 10); RackGroup/Rack1 {} + multi_node.errors [] — 집계 섀시 8건 + r001u01 404 재요청 3건은 05-power-004 LOW · 실장비 상태 MOCK_LIMITATION"
+      }
+    }
+  },
+  "csus3200_03": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem+Sensors 경로 정상 (CSUS-R11 역참조 2차에서도 성립)"
+      },
+      "power": {
+        "state": "PASS",
+        "evidence": "실측 PowerSubsystem 경로 정상. LOW 관찰: 05-power-004(불필요 요청) · 05-power-006(사전) · 05-power-007(소비전력 정의)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "ThermalMetrics.TemperatureReadingsCelsius 47 = Sensors Temperature 47 (63 은 DIMM 32장: P*-DIMM{B,D,F,H}0 16건 추가, 47 은 DIMM 16장) — 누락/중복 0"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float → 반올림 int (P0_TEMP 73.8→74); P*_THROT_OFFSET 4건은 음수 마진값(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw ThermalMetrics 항목 키 = DataSourceUri/DeviceName/PhysicalContext/Reading, Sensors 에도 Status 없음 → null 구조적"
+      },
+      "temperatures[].upper_critical": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "ThermalMetrics·Sensors 모두 Thresholds 없음 → null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "CPU 8 · ASIC 8 · Board 10 · Front 1 · Memory 16/32 · null 4(PCIE_RISER*_TEMP raw null)"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem/Fans 10 = 출력 10 (PSU 팬 4 · AUTOFAN_ZONE 2 는 Fan 리소스가 아니라 Sensors 에만 — 관찰)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "SpeedPercent 없음 → Sensors Rotational RelatedItem 역참조로 RPM (chassis_fan0 5040 = Sensors CHASSIS_FAN0 5040.0)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Fan 리소스 Status Enabled/OK 10/10"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success — ThermalSubsystem 200 (legacy Thermal 404)"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "PowerSubsystem/PowerSupplies 4 멤버 = 출력 4 (name/model/serial/manufacturer/part_number CSU2400AP-3-500 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "PASS",
+        "evidence": "raw Status Enabled/OK 4/4 = 출력 (LineInputStatus Normal 은 미수집 — 필드 없음)"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw PowerSupply 에 PowerCapacityWatts 키 없음(RMC 1.77.30 도 1.75.108 과 같음) → null 계약대로"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "FirmwareVersion 없음 → Version 'Release -0005' 폴백 (CSUS-R9)"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "'CRPS: Common Redundant Power Supply' raw 그대로"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "TelemetryService Chassisr001u01_TotalPowerConsumedWatts 867 = Σ PSU Metrics.OutputPowerWatts 근사(05-power-007 LOW 관찰)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem.CapacityWatts 없음 + PSU 용량 없음 → null"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem 경로에 PowerMetrics 창 없음(EnvironmentMetrics 404) → null"
+      },
+      "summary": {
+        "state": "PASS",
+        "evidence": "psu_count 4 · total_capacity_w null · capacity_unknown_count 4 · consumed_capacity_pct null (ADR-2026-10-19 A-3 대로)"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success — PowerSubsystem 200"
+      },
+      "multi_node.chassis[].power/thermal": {
+        "state": "PASS",
+        "evidence": "r001u01 = top-level 과 동일값(psu 4 · consumed 867 · temps 47 · fans 10); RackGroup/Rack1 {} + multi_node.errors [] — 집계 섀시 8건 + r001u01 404 재요청 3건은 05-power-004 LOW · 실장비 상태 MOCK_LIMITATION"
+      }
+    }
+  },
+  "dl380_gen12_01": {
+    "_area": {
+      "thermal": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 (MED)"
+      },
+      "power": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 (MED)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 — legacy Thermal 56 중 State Absent 슬롯 7건(Exp Bay/OCP/PCI 슬롯)이 ReadingCelsius 0 으로 포함; Sensors 컬렉션 44 와의 차이는 SFP 광모듈 하위센서('37.2-PCI 2-SFP28' 류)"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 — Absent 7건 reading_celsius 0; Enabled 건은 raw 정수 그대로"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK + Absent/null raw 그대로"
+      },
+      "temperatures[].upper_critical": {
+        "state": "PASS",
+        "evidence": "UpperThresholdCritical (42/107 …) raw; Absent 건 null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "Intake 1 · CPU 6 · Memory 4 · SystemBoard · PowerSupply 5"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "Thermal.Fans 6 = 출력 6"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "Reading %% · ReadingUnits Percent raw (ThermalSubsystem SpeedPercent 와 동일 의미)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 6/6"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "legacy Power.PowerSupplies 2 = 출력 2 (model P38997-B21 · serial · manufacturer LTEON · fw 2.00 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — PSU #2 UnavailableOffline/Critical = Oem.Hpe.PowerSupplyStatus.State 'ACPowerLost' · LineInputVoltage 0 · PowerSupplyType Unknown (AC 입력 없음, 고장 아님) — 봉투에서 구분 불가"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "PASS",
+        "evidence": "1600/1600 raw PowerCapacityWatts"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "'2.00' raw"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "P38997-B21 (PartNumber 는 raw null → part_number null; SparePartNumber P39384-001 미수집 — 필드 없음)"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "516 = PowerControl[0].PowerConsumedWatts (EnvironmentMetrics.PowerWatts 와 ±6 W 시점차)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "1600 = PowerControl.PowerCapacityWatts — iLO 는 AC 잃은 PSU 를 빼고 센다(1차 DL380 양호 시 3200); summary.total_capacity_w 3200 과 다름(05-power-002 근거 · 05-power-005 관찰)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "PowerMetrics Min/Avg/Max · IntervalInMin 20 raw"
+      },
+      "summary": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — psu_active 1 · health_rollup Critical · total_capacity_w 3200(AC 잃은 PSU 포함) vs power_control 1600"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    }
+  },
+  "dl380_gen12_02": {
+    "_area": {
+      "thermal": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 (MED)"
+      },
+      "power": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 (MED)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 — legacy Thermal 44 중 State Absent 슬롯 8건(Exp Bay/OCP/PCI 슬롯)이 ReadingCelsius 0 으로 포함; Sensors 컬렉션 44 와의 차이는 SFP 광모듈 하위센서('37.2-PCI 2-SFP28' 류)"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 — Absent 8건 reading_celsius 0; Enabled 건은 raw 정수 그대로"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK + Absent/null raw 그대로"
+      },
+      "temperatures[].upper_critical": {
+        "state": "PASS",
+        "evidence": "UpperThresholdCritical (42/107 …) raw; Absent 건 null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "Intake 1 · CPU 6 · Memory 4 · SystemBoard · PowerSupply 5"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "Thermal.Fans 6 = 출력 6"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "Reading %% · ReadingUnits Percent raw (ThermalSubsystem SpeedPercent 와 동일 의미)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 6/6"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "legacy Power.PowerSupplies 2 = 출력 2 (model P38997-B21 · serial · manufacturer LTEON · fw 2.00 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — PSU #2 UnavailableOffline/Critical = Oem.Hpe.PowerSupplyStatus.State 'ACPowerLost' · LineInputVoltage 0 · PowerSupplyType Unknown (AC 입력 없음, 고장 아님) — 봉투에서 구분 불가"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "PASS",
+        "evidence": "1600/1600 raw PowerCapacityWatts"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "'2.00' raw"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "P38997-B21 (PartNumber 는 raw null → part_number null; SparePartNumber P39384-001 미수집 — 필드 없음)"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "446 = PowerControl[0].PowerConsumedWatts (EnvironmentMetrics.PowerWatts 와 ±6 W 시점차)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "1600 = PowerControl.PowerCapacityWatts — iLO 는 AC 잃은 PSU 를 빼고 센다(1차 DL380 양호 시 3200); summary.total_capacity_w 3200 과 다름(05-power-002 근거 · 05-power-005 관찰)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "PowerMetrics Min/Avg/Max · IntervalInMin 20 raw"
+      },
+      "summary": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — psu_active 1 · health_rollup Critical · total_capacity_w 3200(AC 잃은 PSU 포함) vs power_control 1600"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    }
+  },
+  "dl380_gen12_03": {
+    "_area": {
+      "thermal": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-002 (MED)"
+      },
+      "power": {
+        "state": "ISSUE",
+        "evidence": "05-power-001 (MED)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-002 — 42 전부 State UnavailableOffline · ReadingCelsius 0 (호스트 Off placeholder) 가 값처럼 나감"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-002 — 42건 모두 0 (TemperatureSummaryCelsius Ambient/Exhaust/Internal 도 0)"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "health null · state UnavailableOffline raw 그대로 (신호는 있음)"
+      },
+      "temperatures[].upper_critical": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-002 — CPU 등 일부 0 (01-Inlet 42) placeholder"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "Intake/CPU/Memory/SystemBoard/PowerSupply raw"
+      },
+      "fans[]": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-002 — 6건 UnavailableOffline · Reading 0 Percent"
+      },
+      "fans[].reading/reading_units": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-002 — 0 / Percent"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "null / UnavailableOffline raw"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success — Thermal 200 (데이터는 placeholder, notice 없음)"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "ISSUE",
+        "evidence": "05-power-001 — PowerState Off: 2 슬롯이 State Absent · model/serial null · PowerCapacityWatts 0 · FirmwareVersion '0.00' · Oem.Hpe.PowerSupplyStatus.State Unknown 으로 와서 '0 W · 0.00' 이 값처럼 나감"
+      },
+      "power_supplies[].state/health": {
+        "state": "ISSUE",
+        "evidence": "05-power-001 — Absent/Warning (hardware.oem.psu_redundancy 는 'Redundant' — 자기모순)"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "ISSUE",
+        "evidence": "05-power-001 — 0 (null 이어야 할 자리; _safe_int(0)=0)"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "ISSUE",
+        "evidence": "05-power-001 — '0.00' placeholder 통과"
+      },
+      "power_supplies[].model": {
+        "state": "ISSUE",
+        "evidence": "05-power-001 — null (raw null)"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "0 — raw PowerControl.PowerConsumedWatts 0 (호스트 Off, EnvironmentMetrics.PowerWatts 0.0 과 일치)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "1600 raw 그대로 (PSU 가 Absent 인데 1600 — iLO 자기모순, 05-power-001 근거)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "0/0/0, interval 20 raw 그대로"
+      },
+      "summary": {
+        "state": "ISSUE",
+        "evidence": "05-power-001 — psu_count 0 · redundant false · health_rollup Unknown · consumed_watts 0: 도달 가능한 서버가 'PSU 0개' 로 보임"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success — Power 200 (데이터는 placeholder)"
+      }
+    }
+  },
+  "dl380_gen12_04": {
+    "_area": {
+      "thermal": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 (MED)"
+      },
+      "power": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 (MED)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 — legacy Thermal 54 중 State Absent 슬롯 8건(Exp Bay/OCP/PCI 슬롯)이 ReadingCelsius 0 으로 포함; Sensors 컬렉션 44 와의 차이는 SFP 광모듈 하위센서('37.2-PCI 2-SFP28' 류)"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 — Absent 8건 reading_celsius 0; Enabled 건은 raw 정수 그대로"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK + Absent/null raw 그대로"
+      },
+      "temperatures[].upper_critical": {
+        "state": "PASS",
+        "evidence": "UpperThresholdCritical (42/107 …) raw; Absent 건 null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "Intake 1 · CPU 6 · Memory 4 · SystemBoard · PowerSupply 5"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "Thermal.Fans 6 = 출력 6"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "Reading %% · ReadingUnits Percent raw (ThermalSubsystem SpeedPercent 와 동일 의미)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 6/6"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "legacy Power.PowerSupplies 2 = 출력 2 (model P38997-B21 · serial · manufacturer LTEON · fw 2.00 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — PSU #2 UnavailableOffline/Critical = Oem.Hpe.PowerSupplyStatus.State 'ACPowerLost' · LineInputVoltage 0 · PowerSupplyType Unknown (AC 입력 없음, 고장 아님) — 봉투에서 구분 불가"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "PASS",
+        "evidence": "1600/1600 raw PowerCapacityWatts"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "'2.00' raw"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "P38997-B21 (PartNumber 는 raw null → part_number null; SparePartNumber P39384-001 미수집 — 필드 없음)"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "482 = PowerControl[0].PowerConsumedWatts (EnvironmentMetrics.PowerWatts 와 ±6 W 시점차)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "1600 = PowerControl.PowerCapacityWatts — iLO 는 AC 잃은 PSU 를 빼고 센다(1차 DL380 양호 시 3200); summary.total_capacity_w 3200 과 다름(05-power-002 근거 · 05-power-005 관찰)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "PowerMetrics Min/Avg/Max · IntervalInMin 20 raw"
+      },
+      "summary": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — psu_active 1 · health_rollup Critical · total_capacity_w 3200(AC 잃은 PSU 포함) vs power_control 1600"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    }
+  },
+  "sr650_v4_01": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "legacy Thermal 경로 정상"
+      },
+      "power": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 (MED) · 05-power-003 (LOW)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "legacy Thermal 8 = Sensors Temperature 8 (고정 6: Ambient · CPU1/2 DTS TMargin · CPU1/2 Die · exhaust + 장착 DIMM 수) — 8/8/22/14 차이는 DIMM 2/2/16/8 장"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float 반올림; 'CPUn DTS TMargin' 은 음수 마진(-54 …) raw 그대로(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 전부"
+      },
+      "temperatures[].upper_critical": {
+        "state": "PASS",
+        "evidence": "UpperThresholdCritical raw (3건 raw 없음 → null, TMargin 은 0)"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "Board 2 · CPU 4 · Memory N"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "Thermal.Fans 6 = 출력 6 (V4 는 Front Tach 6, 1차 V2 는 Front+Rear 12 — raw 차이)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "Reading RPM raw (Sensors fantach 와 같은 값대)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "legacy Power.PowerSupplies 2 = 출력 2 (serial · part_number SP57B68396 · fw '04' raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — PSU1 Enabled/Critical 인데 raw PowerInputWatts 0 · PowerOutputWatts 0 · Sensors power_PSU1_Input_Power 0 (AC 입력 없음); XCC3 는 State 를 Enabled 로 둠 → psu_active 2"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "PASS",
+        "evidence": "1300/1300 raw"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "'04' raw"
+      },
+      "power_supplies[].model": {
+        "state": "ISSUE",
+        "evidence": "05-power-003 — 'CRPS1300D5    ' (raw 패딩 공백 미제거)"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "376 = PowerControl[0] 'Server Power Control' (PowerControl 3건 중 [0] 이 서버 전체 — CPU/Memory Sub-system 은 [1][2])"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "1300 = PowerControl.PowerCapacityWatts = PowerSubsystem.CapacityWatts (Oem.Lenovo PowerRedundancySettings MaxPowerLimitWatts 1300 · RedundantWithThrottling) — PSU 합 2600 과 다름(05-power-005 관찰)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "PowerMetrics · IntervalInMin 1 raw"
+      },
+      "summary": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — psu_active 2(입력 0 W PSU 포함) · health_rollup Critical"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    }
+  },
+  "sr650_v4_02": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "legacy Thermal 경로 정상"
+      },
+      "power": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 (MED) · 05-power-003 (LOW)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "legacy Thermal 8 = Sensors Temperature 8 (고정 6: Ambient · CPU1/2 DTS TMargin · CPU1/2 Die · exhaust + 장착 DIMM 수) — 8/8/22/14 차이는 DIMM 2/2/16/8 장"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float 반올림; 'CPUn DTS TMargin' 은 음수 마진(-54 …) raw 그대로(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 전부"
+      },
+      "temperatures[].upper_critical": {
+        "state": "PASS",
+        "evidence": "UpperThresholdCritical raw (3건 raw 없음 → null, TMargin 은 0)"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "Board 2 · CPU 4 · Memory N"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "Thermal.Fans 6 = 출력 6 (V4 는 Front Tach 6, 1차 V2 는 Front+Rear 12 — raw 차이)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "Reading RPM raw (Sensors fantach 와 같은 값대)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "legacy Power.PowerSupplies 2 = 출력 2 (serial · part_number SP57B68396 · fw '04' raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — PSU1 Enabled/Critical 인데 raw PowerInputWatts 0 · PowerOutputWatts 0 · Sensors power_PSU1_Input_Power 0 (AC 입력 없음); XCC3 는 State 를 Enabled 로 둠 → psu_active 2"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "PASS",
+        "evidence": "1300/1300 raw"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "'04' raw"
+      },
+      "power_supplies[].model": {
+        "state": "ISSUE",
+        "evidence": "05-power-003 — 'CRPS1300D5    ' (raw 패딩 공백 미제거)"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "403 = PowerControl[0] 'Server Power Control' (PowerControl 3건 중 [0] 이 서버 전체 — CPU/Memory Sub-system 은 [1][2])"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "1300 = PowerControl.PowerCapacityWatts = PowerSubsystem.CapacityWatts (Oem.Lenovo PowerRedundancySettings MaxPowerLimitWatts 1300 · RedundantWithThrottling) — PSU 합 2600 과 다름(05-power-005 관찰)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "PowerMetrics · IntervalInMin 1 raw"
+      },
+      "summary": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — psu_active 2(입력 0 W PSU 포함) · health_rollup Critical"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    }
+  },
+  "sr650_v4_03": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "legacy Thermal 경로 정상"
+      },
+      "power": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 (MED) · 05-power-003 (LOW)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "legacy Thermal 22 = Sensors Temperature 22 (고정 6: Ambient · CPU1/2 DTS TMargin · CPU1/2 Die · exhaust + 장착 DIMM 수) — 8/8/22/14 차이는 DIMM 2/2/16/8 장"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float 반올림; 'CPUn DTS TMargin' 은 음수 마진(-54 …) raw 그대로(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 전부"
+      },
+      "temperatures[].upper_critical": {
+        "state": "PASS",
+        "evidence": "UpperThresholdCritical raw (3건 raw 없음 → null, TMargin 은 0)"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "Board 2 · CPU 4 · Memory N"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "Thermal.Fans 6 = 출력 6 (V4 는 Front Tach 6, 1차 V2 는 Front+Rear 12 — raw 차이)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "Reading RPM raw (Sensors fantach 와 같은 값대)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "legacy Power.PowerSupplies 2 = 출력 2 (serial · part_number SP57B68396 · fw '04' raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — PSU1 Enabled/Critical 인데 raw PowerInputWatts 0 · PowerOutputWatts 0 · Sensors power_PSU1_Input_Power 0 (AC 입력 없음); XCC3 는 State 를 Enabled 로 둠 → psu_active 2"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "PASS",
+        "evidence": "1300/1300 raw"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "'04' raw"
+      },
+      "power_supplies[].model": {
+        "state": "ISSUE",
+        "evidence": "05-power-003 — 'CRPS1300D5    ' (raw 패딩 공백 미제거)"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "525 = PowerControl[0] 'Server Power Control' (PowerControl 3건 중 [0] 이 서버 전체 — CPU/Memory Sub-system 은 [1][2])"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "1300 = PowerControl.PowerCapacityWatts = PowerSubsystem.CapacityWatts (Oem.Lenovo PowerRedundancySettings MaxPowerLimitWatts 1300 · RedundantWithThrottling) — PSU 합 2600 과 다름(05-power-005 관찰)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "PowerMetrics · IntervalInMin 1 raw"
+      },
+      "summary": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — psu_active 2(입력 0 W PSU 포함) · health_rollup Critical"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    }
+  },
+  "sr650_v4_04": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "legacy Thermal 경로 정상"
+      },
+      "power": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 (MED) · 05-power-003 (LOW)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "legacy Thermal 14 = Sensors Temperature 14 (고정 6: Ambient · CPU1/2 DTS TMargin · CPU1/2 Die · exhaust + 장착 DIMM 수) — 8/8/22/14 차이는 DIMM 2/2/16/8 장"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float 반올림; 'CPUn DTS TMargin' 은 음수 마진(-54 …) raw 그대로(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 전부"
+      },
+      "temperatures[].upper_critical": {
+        "state": "PASS",
+        "evidence": "UpperThresholdCritical raw (3건 raw 없음 → null, TMargin 은 0)"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "Board 2 · CPU 4 · Memory N"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "Thermal.Fans 6 = 출력 6 (V4 는 Front Tach 6, 1차 V2 는 Front+Rear 12 — raw 차이)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "Reading RPM raw (Sensors fantach 와 같은 값대)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "legacy Power.PowerSupplies 2 = 출력 2 (serial · part_number SP57B68396 · fw '04' raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — PSU1 Enabled/Critical 인데 raw PowerInputWatts 0 · PowerOutputWatts 0 · Sensors power_PSU1_Input_Power 0 (AC 입력 없음); XCC3 는 State 를 Enabled 로 둠 → psu_active 2"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "PASS",
+        "evidence": "1300/1300 raw"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "'04' raw"
+      },
+      "power_supplies[].model": {
+        "state": "ISSUE",
+        "evidence": "05-power-003 — 'CRPS1300D5    ' (raw 패딩 공백 미제거)"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "409 = PowerControl[0] 'Server Power Control' (PowerControl 3건 중 [0] 이 서버 전체 — CPU/Memory Sub-system 은 [1][2])"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "1300 = PowerControl.PowerCapacityWatts = PowerSubsystem.CapacityWatts (Oem.Lenovo PowerRedundancySettings MaxPowerLimitWatts 1300 · RedundantWithThrottling) — PSU 합 2600 과 다름(05-power-005 관찰)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "PowerMetrics · IntervalInMin 1 raw"
+      },
+      "summary": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — psu_active 2(입력 0 W PSU 포함) · health_rollup Critical"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    }
+  },
+  "r1_DELL_R740_01": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "1차 golden 과 동일"
+      },
+      "power": {
+        "state": "PASS",
+        "evidence": "1차 golden 과 Tier 1/2 동일 (PowerLimit 203 W HardPowerOff · PowerRequestedWatts 는 계약 밖 관찰)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "Thermal.Temperatures 4 = 출력 4"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "raw 정수"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK"
+      },
+      "temperatures[].upper_critical": {
+        "state": "PASS",
+        "evidence": "104 raw"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "CPU 2 · SystemBoard 2"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "6"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "RPM 5640~5880 raw"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "2 (PWR SPLY,750W · part 0PJMDNA02 · fw 00.1B.53) raw 일치"
+      },
+      "power_supplies[].state/health": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 2/2"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "PASS",
+        "evidence": "750/750 (InputRanges[0].OutputWattage 750 과 같음 — 폴백 미발동)"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "'00.1B.53'"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "raw"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "314 = PowerControl[0] (PSU 입력 합 314.25)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "1050 (raw 1050.0 float → int; PSU 합 1500 과 다름 — 05-power-005 관찰)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "267/320/476 · interval 1"
+      },
+      "summary": {
+        "state": "PASS",
+        "evidence": "psu_count 2 · total 1500 · pct 20.9"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    }
+  },
+  "r1_HPE_CSUS3200_01": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem+Sensors 경로 정상 (CSUS-R11 역참조 2차에서도 성립)"
+      },
+      "power": {
+        "state": "PASS",
+        "evidence": "실측 PowerSubsystem 경로 정상. LOW 관찰: 05-power-004(불필요 요청) · 05-power-006(사전) · 05-power-007(소비전력 정의)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "ThermalMetrics.TemperatureReadingsCelsius 47 = Sensors Temperature 47 (63 은 DIMM 32장: P*-DIMM{B,D,F,H}0 16건 추가, 47 은 DIMM 16장) — 누락/중복 0"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float → 반올림 int (P0_TEMP 73.8→74); P*_THROT_OFFSET 4건은 음수 마진값(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw ThermalMetrics 항목 키 = DataSourceUri/DeviceName/PhysicalContext/Reading, Sensors 에도 Status 없음 → null 구조적"
+      },
+      "temperatures[].upper_critical": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "ThermalMetrics·Sensors 모두 Thresholds 없음 → null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "CPU 8 · ASIC 8 · Board 10 · Front 1 · Memory 16/32 · null 4(PCIE_RISER*_TEMP raw null)"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem/Fans 10 = 출력 10 (PSU 팬 4 · AUTOFAN_ZONE 2 는 Fan 리소스가 아니라 Sensors 에만 — 관찰)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "SpeedPercent 없음 → Sensors Rotational RelatedItem 역참조로 RPM (chassis_fan0 5040 = Sensors CHASSIS_FAN0 5040.0)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Fan 리소스 Status Enabled/OK 10/10"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success — ThermalSubsystem 200 (legacy Thermal 404)"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "PowerSubsystem/PowerSupplies 4 멤버 = 출력 4 (name/model/serial/manufacturer/part_number CSU2400AP-3-500 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "PASS",
+        "evidence": "raw Status Enabled/OK 4/4 = 출력 (LineInputStatus Normal 은 미수집 — 필드 없음)"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw PowerSupply 에 PowerCapacityWatts 키 없음(RMC 1.77.30 도 1.75.108 과 같음) → null 계약대로"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "FirmwareVersion 없음 → Version 'Release -0005' 폴백 (CSUS-R9)"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "'CRPS: Common Redundant Power Supply' raw 그대로"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "TelemetryService Chassisr001u01_TotalPowerConsumedWatts 591 = Σ PSU Metrics.OutputPowerWatts 근사(05-power-007 LOW 관찰)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem.CapacityWatts 없음 + PSU 용량 없음 → null"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem 경로에 PowerMetrics 창 없음(EnvironmentMetrics 404) → null"
+      },
+      "summary": {
+        "state": "PASS",
+        "evidence": "psu_count 4 · total_capacity_w null · capacity_unknown_count 4 · consumed_capacity_pct null (ADR-2026-10-19 A-3 대로)"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success — PowerSubsystem 200"
+      },
+      "multi_node.chassis[].power/thermal": {
+        "state": "PASS",
+        "evidence": "r001u01 = top-level 과 동일값(psu 4 · consumed 591 · temps 47 · fans 10); RackGroup/Rack1 {} + multi_node.errors [] — 집계 섀시 8건 + r001u01 404 재요청 3건은 05-power-004 LOW · 실장비 상태 MOCK_LIMITATION"
+      }
+    }
+  },
+  "r1_HPE_CSUS3200_02": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem+Sensors 경로 정상 (CSUS-R11 역참조 2차에서도 성립)"
+      },
+      "power": {
+        "state": "PASS",
+        "evidence": "실측 PowerSubsystem 경로 정상. LOW 관찰: 05-power-004(불필요 요청) · 05-power-006(사전) · 05-power-007(소비전력 정의)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "ThermalMetrics.TemperatureReadingsCelsius 47 = Sensors Temperature 47 (63 은 DIMM 32장: P*-DIMM{B,D,F,H}0 16건 추가, 47 은 DIMM 16장) — 누락/중복 0"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float → 반올림 int (P0_TEMP 73.8→74); P*_THROT_OFFSET 4건은 음수 마진값(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw ThermalMetrics 항목 키 = DataSourceUri/DeviceName/PhysicalContext/Reading, Sensors 에도 Status 없음 → null 구조적"
+      },
+      "temperatures[].upper_critical": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "ThermalMetrics·Sensors 모두 Thresholds 없음 → null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "CPU 8 · ASIC 8 · Board 10 · Front 1 · Memory 16/32 · null 4(PCIE_RISER*_TEMP raw null)"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem/Fans 10 = 출력 10 (PSU 팬 4 · AUTOFAN_ZONE 2 는 Fan 리소스가 아니라 Sensors 에만 — 관찰)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "SpeedPercent 없음 → Sensors Rotational RelatedItem 역참조로 RPM (chassis_fan0 5040 = Sensors CHASSIS_FAN0 5040.0)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Fan 리소스 Status Enabled/OK 10/10"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success — ThermalSubsystem 200 (legacy Thermal 404)"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "PowerSubsystem/PowerSupplies 4 멤버 = 출력 4 (name/model/serial/manufacturer/part_number CSU2400AP-3-500 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "PASS",
+        "evidence": "raw Status Enabled/OK 4/4 = 출력 (LineInputStatus Normal 은 미수집 — 필드 없음)"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw PowerSupply 에 PowerCapacityWatts 키 없음(RMC 1.77.30 도 1.75.108 과 같음) → null 계약대로"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "FirmwareVersion 없음 → Version 'Release -0005' 폴백 (CSUS-R9)"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "'CRPS: Common Redundant Power Supply' raw 그대로"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "TelemetryService Chassisr001u01_TotalPowerConsumedWatts 600 = Σ PSU Metrics.OutputPowerWatts 근사(05-power-007 LOW 관찰)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem.CapacityWatts 없음 + PSU 용량 없음 → null"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem 경로에 PowerMetrics 창 없음(EnvironmentMetrics 404) → null"
+      },
+      "summary": {
+        "state": "PASS",
+        "evidence": "psu_count 4 · total_capacity_w null · capacity_unknown_count 4 · consumed_capacity_pct null (ADR-2026-10-19 A-3 대로)"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success — PowerSubsystem 200"
+      },
+      "multi_node.chassis[].power/thermal": {
+        "state": "PASS",
+        "evidence": "r001u01 = top-level 과 동일값(psu 4 · consumed 600 · temps 47 · fans 10); RackGroup/Rack1 {} + multi_node.errors [] — 집계 섀시 8건 + r001u01 404 재요청 3건은 05-power-004 LOW · 실장비 상태 MOCK_LIMITATION"
+      }
+    }
+  },
+  "r1_HPE_CSUS3200_03": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem+Sensors 경로 정상 (CSUS-R11 역참조 2차에서도 성립)"
+      },
+      "power": {
+        "state": "PASS",
+        "evidence": "실측 PowerSubsystem 경로 정상. LOW 관찰: 05-power-004(불필요 요청) · 05-power-006(사전) · 05-power-007(소비전력 정의)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "ThermalMetrics.TemperatureReadingsCelsius 63 = Sensors Temperature 63 (63 은 DIMM 32장: P*-DIMM{B,D,F,H}0 16건 추가, 47 은 DIMM 16장) — 누락/중복 0"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float → 반올림 int (P0_TEMP 73.8→74); P*_THROT_OFFSET 4건은 음수 마진값(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw ThermalMetrics 항목 키 = DataSourceUri/DeviceName/PhysicalContext/Reading, Sensors 에도 Status 없음 → null 구조적"
+      },
+      "temperatures[].upper_critical": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "ThermalMetrics·Sensors 모두 Thresholds 없음 → null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "CPU 8 · ASIC 8 · Board 10 · Front 1 · Memory 16/32 · null 4(PCIE_RISER*_TEMP raw null)"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem/Fans 10 = 출력 10 (PSU 팬 4 · AUTOFAN_ZONE 2 는 Fan 리소스가 아니라 Sensors 에만 — 관찰)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "SpeedPercent 없음 → Sensors Rotational RelatedItem 역참조로 RPM (chassis_fan0 5040 = Sensors CHASSIS_FAN0 5040.0)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Fan 리소스 Status Enabled/OK 10/10"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success — ThermalSubsystem 200 (legacy Thermal 404)"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "PowerSubsystem/PowerSupplies 4 멤버 = 출력 4 (name/model/serial/manufacturer/part_number CSU2400AP-3-500 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "PASS",
+        "evidence": "raw Status Enabled/OK 4/4 = 출력 (LineInputStatus Normal 은 미수집 — 필드 없음)"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw PowerSupply 에 PowerCapacityWatts 키 없음(RMC 1.77.30 도 1.75.108 과 같음) → null 계약대로"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "FirmwareVersion 없음 → Version 'Release -0005' 폴백 (CSUS-R9)"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "'CRPS: Common Redundant Power Supply' raw 그대로"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "TelemetryService Chassisr001u01_TotalPowerConsumedWatts 1000 = Σ PSU Metrics.OutputPowerWatts 근사(05-power-007 LOW 관찰)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem.CapacityWatts 없음 + PSU 용량 없음 → null"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem 경로에 PowerMetrics 창 없음(EnvironmentMetrics 404) → null"
+      },
+      "summary": {
+        "state": "PASS",
+        "evidence": "psu_count 4 · total_capacity_w null · capacity_unknown_count 4 · consumed_capacity_pct null (ADR-2026-10-19 A-3 대로)"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success — PowerSubsystem 200"
+      },
+      "multi_node.chassis[].power/thermal": {
+        "state": "PASS",
+        "evidence": "r001u01 = top-level 과 동일값(psu 4 · consumed 1000 · temps 63 · fans 10); RackGroup/Rack1 {} + multi_node.errors [] — 집계 섀시 8건 + r001u01 404 재요청 3건은 05-power-004 LOW · 실장비 상태 MOCK_LIMITATION"
+      }
+    }
+  },
+  "r1_HPE_CSUS3200_04": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem+Sensors 경로 정상 (CSUS-R11 역참조 2차에서도 성립)"
+      },
+      "power": {
+        "state": "PASS",
+        "evidence": "실측 PowerSubsystem 경로 정상. LOW 관찰: 05-power-004(불필요 요청) · 05-power-006(사전) · 05-power-007(소비전력 정의)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "ThermalMetrics.TemperatureReadingsCelsius 63 = Sensors Temperature 63 (63 은 DIMM 32장: P*-DIMM{B,D,F,H}0 16건 추가, 47 은 DIMM 16장) — 누락/중복 0"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float → 반올림 int (P0_TEMP 73.8→74); P*_THROT_OFFSET 4건은 음수 마진값(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw ThermalMetrics 항목 키 = DataSourceUri/DeviceName/PhysicalContext/Reading, Sensors 에도 Status 없음 → null 구조적"
+      },
+      "temperatures[].upper_critical": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "ThermalMetrics·Sensors 모두 Thresholds 없음 → null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "CPU 8 · ASIC 8 · Board 10 · Front 1 · Memory 16/32 · null 4(PCIE_RISER*_TEMP raw null)"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "ThermalSubsystem/Fans 10 = 출력 10 (PSU 팬 4 · AUTOFAN_ZONE 2 는 Fan 리소스가 아니라 Sensors 에만 — 관찰)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "SpeedPercent 없음 → Sensors Rotational RelatedItem 역참조로 RPM (chassis_fan0 5040 = Sensors CHASSIS_FAN0 5040.0)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Fan 리소스 Status Enabled/OK 10/10"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success — ThermalSubsystem 200 (legacy Thermal 404)"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "PowerSubsystem/PowerSupplies 4 멤버 = 출력 4 (name/model/serial/manufacturer/part_number CSU2400AP-3-500 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "PASS",
+        "evidence": "raw Status Enabled/OK 4/4 = 출력 (LineInputStatus Normal 은 미수집 — 필드 없음)"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "raw PowerSupply 에 PowerCapacityWatts 키 없음(RMC 1.77.30 도 1.75.108 과 같음) → null 계약대로"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "FirmwareVersion 없음 → Version 'Release -0005' 폴백 (CSUS-R9)"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "'CRPS: Common Redundant Power Supply' raw 그대로"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "TelemetryService Chassisr001u01_TotalPowerConsumedWatts 945 = Σ PSU Metrics.OutputPowerWatts 근사(05-power-007 LOW 관찰)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem.CapacityWatts 없음 + PSU 용량 없음 → null"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "NOT_APPLICABLE",
+        "evidence": "PowerSubsystem 경로에 PowerMetrics 창 없음(EnvironmentMetrics 404) → null"
+      },
+      "summary": {
+        "state": "PASS",
+        "evidence": "psu_count 4 · total_capacity_w null · capacity_unknown_count 4 · consumed_capacity_pct null (ADR-2026-10-19 A-3 대로)"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success — PowerSubsystem 200"
+      },
+      "multi_node.chassis[].power/thermal": {
+        "state": "PASS",
+        "evidence": "r001u01 = top-level 과 동일값(psu 4 · consumed 945 · temps 63 · fans 10); RackGroup/Rack1 {} + multi_node.errors [] — 집계 섀시 8건 + r001u01 404 재요청 3건은 05-power-004 LOW · 실장비 상태 MOCK_LIMITATION"
+      }
+    }
+  },
+  "r1_HPE_DL380_01": {
+    "_area": {
+      "thermal": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 (MED)"
+      },
+      "power": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 (MED)"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 — legacy Thermal 52 중 State Absent 슬롯 9건(Exp Bay/OCP/PCI 슬롯)이 ReadingCelsius 0 으로 포함; Sensors 컬렉션 44 와의 차이는 SFP 광모듈 하위센서('37.2-PCI 2-SFP28' 류)"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "ISSUE",
+        "evidence": "05-thermal-001 — Absent 9건 reading_celsius 0; Enabled 건은 raw 정수 그대로"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK + Absent/null raw 그대로"
+      },
+      "temperatures[].upper_critical": {
+        "state": "PASS",
+        "evidence": "UpperThresholdCritical (42/107 …) raw; Absent 건 null"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "Intake 1 · CPU 6 · Memory 4 · SystemBoard · PowerSupply 5"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "Thermal.Fans 6 = 출력 6"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "Reading %% · ReadingUnits Percent raw (ThermalSubsystem SpeedPercent 와 동일 의미)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 6/6"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "legacy Power.PowerSupplies 2 = 출력 2 (model P38997-B21 · serial · manufacturer LTEON · fw 2.00 raw 일치)"
+      },
+      "power_supplies[].state/health": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — PSU #2 UnavailableOffline/Critical = Oem.Hpe.PowerSupplyStatus.State 'ACPowerLost' · LineInputVoltage 0 · PowerSupplyType Unknown (AC 입력 없음, 고장 아님) — 봉투에서 구분 불가"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "PASS",
+        "evidence": "1600/1600 raw PowerCapacityWatts"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "'2.00' raw"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "P38997-B21 (PartNumber 는 raw null → part_number null; SparePartNumber P39384-001 미수집 — 필드 없음)"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "417 = PowerControl[0].PowerConsumedWatts (EnvironmentMetrics.PowerWatts 와 ±6 W 시점차)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "1600 = PowerControl.PowerCapacityWatts — iLO 는 AC 잃은 PSU 를 빼고 센다(1차 DL380 양호 시 3200); summary.total_capacity_w 3200 과 다름(05-power-002 근거 · 05-power-005 관찰)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "PowerMetrics Min/Avg/Max · IntervalInMin 20 raw"
+      },
+      "summary": {
+        "state": "ISSUE",
+        "evidence": "05-power-002 — psu_active 1 · health_rollup Critical · total_capacity_w 3200(AC 잃은 PSU 포함) vs power_control 1600"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    }
+  },
+  "r1_Lenovo_SR650_01": {
+    "_area": {
+      "thermal": {
+        "state": "PASS",
+        "evidence": "legacy Thermal 경로 정상"
+      },
+      "power": {
+        "state": "PASS",
+        "evidence": "1차 golden 과 Tier 1/2 동일"
+      }
+    },
+    "thermal": {
+      "temperatures[]": {
+        "state": "PASS",
+        "evidence": "legacy Thermal 22 = Sensors Temperature 22 (고정 6: Ambient · CPU1/2 DTS TMargin · CPU1/2 Die · exhaust + 장착 DIMM 수) — 8/8/22/14 차이는 DIMM 2/2/16/8 장"
+      },
+      "temperatures[].reading_celsius": {
+        "state": "PASS",
+        "evidence": "float 반올림; 'CPUn DTS TMargin' 은 음수 마진(-54 …) raw 그대로(05-thermal-004 관찰)"
+      },
+      "temperatures[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 전부"
+      },
+      "temperatures[].upper_critical": {
+        "state": "PASS",
+        "evidence": "UpperThresholdCritical raw (3건 raw 없음 → null, TMargin 은 0)"
+      },
+      "temperatures[].physical_context": {
+        "state": "PASS",
+        "evidence": "Board 2 · CPU 4 · Memory N"
+      },
+      "fans[]": {
+        "state": "PASS",
+        "evidence": "Thermal.Fans 12 = 출력 12 (V4 는 Front Tach 6, 1차 V2 는 Front+Rear 12 — raw 차이)"
+      },
+      "fans[].reading/reading_units": {
+        "state": "PASS",
+        "evidence": "Reading RPM raw (Sensors fantach 와 같은 값대)"
+      },
+      "fans[].health/state": {
+        "state": "PASS",
+        "evidence": "Enabled/OK"
+      },
+      "sections.thermal": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    },
+    "power": {
+      "power_supplies[]": {
+        "state": "PASS",
+        "evidence": "2 (FSP006-EL0G · 2000 W · fw 3.50) raw 일치"
+      },
+      "power_supplies[].state/health": {
+        "state": "PASS",
+        "evidence": "Enabled/OK 2/2 (PowerInputWatts 189/197)"
+      },
+      "power_supplies[].power_capacity_w": {
+        "state": "PASS",
+        "evidence": "2000/2000"
+      },
+      "power_supplies[].firmware_version": {
+        "state": "PASS",
+        "evidence": "'3.50'"
+      },
+      "power_supplies[].model": {
+        "state": "PASS",
+        "evidence": "'FSP006-EL0G' (패딩 없음)"
+      },
+      "power_control.power_consumed_watts": {
+        "state": "PASS",
+        "evidence": "386 = PowerControl[0] (PSU 입력 합 386 과 일치)"
+      },
+      "power_control.power_capacity_watts": {
+        "state": "PASS",
+        "evidence": "2400 raw (PSU 합 4000 과 다름 — 05-power-005 관찰)"
+      },
+      "power_control.min/avg/max/interval": {
+        "state": "PASS",
+        "evidence": "raw"
+      },
+      "summary": {
+        "state": "PASS",
+        "evidence": "psu_count 2 · total 4000 · pct 9.7"
+      },
+      "sections.power": {
+        "state": "PASS",
+        "evidence": "success"
+      }
+    }
+  }
+}
