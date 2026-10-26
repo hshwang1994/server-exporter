@@ -45,6 +45,7 @@ server-exporter/
 │   ├── evidence/            # Round 검증 결과
 │   ├── scripts/             # conditional_review.py + os_esxi_verify.sh
 │   └── reference/           # ★ Round 11 (2026-04-28): 실장비 종합 raw reference (회귀 input 아님)
+│       └── redfish/mock2/   # 2026-10-22 2차 전수 미러 11대 zip (CSUS 3200 ×3 · DL380 Gen12 ×4 · SR650 V4 ×4, 2026-10-26 보관)
 │       ├── README.md, INDEX.md
 │       ├── redfish/<vendor>/<ip>/  # 재귀 endpoint crawl 전수
 │       ├── os/<distro>/<ip>/       # ansible setup + ~80 sh 명령
