@@ -1,5 +1,15 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-26 — Redfish 2차 Mock 11대 전수 분석 Round (분석 단계 · 제품 코드 변경 0) — ANALYSIS_DONE
+
+> 정본: `tests/evidence/2026-10-26-redfish-mock2-audit/`(SUMMARY · ISSUES · coverage · baseline · analysis 01~06, 브랜치 `docs/redfish-mock2-audit-20261026`) · `docs/ai/tickets/2026-10-26-redfish-mock2-fix-plan/INDEX.md` · `tests/reference/redfish/mock2/README.md`(main `7c22ca4a`)
+
+- **계기**: 사용자 지시서 — 용인 2차 전수 미러 11대(CSUS 3200 ×3 · DL380 Gen12 ×4 · SR650 V4 ×4)와 1차 7대로 기존 Gathering 코드·테스트·ADR 을 교차 검증하고 수정 계획을 만든다. 검증 기준은 Mock 실측(코드의 현재 동작을 정답으로 두지 않음), JSON 스키마 고정. 모델 정책: 분석·구현·회귀·최종 독립 검증 모두 Fable 5.1 / effort=max.
+- **Mock 보관**: `tests/reference/redfish/mock2/` 서버당 zip 11 + README/MANIFEST/SHA256SUMS/run.log(치환·제외 없음 — 사용자 결정: 반출 전 더미화된 자료). 재추출 대조 11대 누락 0·차이 0, 추출본 재생 = 원본 재생 11/11, 비밀값 4종 0건. 1차 전체 미러는 외부 읽기 전용 유지.
+- **기준선(수정 전)**: Tier 1 = 실제 `ansible-playbook`(WSL ansible-core 2.20.7, 실제 vault) + 미러 재생 HTTPS 서버(분석 도구) — 설정 주입 0, 18 label(2차 11 + 1차 7) status success; Tier 2 모듈 재생 18/18; Tier 0 `tests/e2e tests/regression` 1094 passed · 통합 366 · WSL 엔진 23 · `tests/unit` 전체 **19 failed**(순서 의존 — `replay_full_mirror.install_fakes` 미복원, 04-test-001).
+- **결과**: 132칸(11대 × 12영역) 전부 판정(ISSUE 75 · PASS 49 · N/A 8), 이슈 72건(HIGH 2 · MED 18 · LOW 51 · 관찰 1), 클러스터 11개. **HIGH**: Lenovo XCC3 로그인 후 adapter 재선택이 `redfish_lenovo_bmc` 로 강등(01-adapter-001, 확정 — 공통 실격 규칙 + 재선택 facts), HT 비활성 5대의 `cpu.logical_threads` 가 코어의 2배(02-cpu-001, 추정 — OS 실측 필요; ADR-2026-10-18/19 전제 정정). **MED 대표**: 전원 Off 호스트 placeholder(저장 0·빈 DIMM·PSU Absent·센서 0), 펌웨어 category 오분류(UEFI·MegaRAID·백플레인·비디오), XCC3 FC 포트가 EthernetInterfaces 에, iLO Absent 센서 0 °C, AC 입력 없는 PSU, RMC 1.77.30 LPC 의미 변화, `hardware.health` 문서 오류, account family 가 adapter 이름 의존.
+- **판정**: ANALYSIS_DONE. 구현은 별도 세션 — 티켓 §4 작업 묶음 WP1~WP11(공통 로직 → 기능별), 사용자 결정 11건(ISSUES §7 + 병합 방식) 선행. 분석 브랜치는 main 미병합.
+
 ## 일자: 2026-10-22 (3) — 반출용 IP·호스트 이름 치환 도구 `sanitize_mirror.py`
 
 > 정본: `docs/develop/08-onsite-capture.md` 9절 · `docs/reference/decision-log.md` 2026-10-22 (4) · `tests/redfish-probe/sanitize_mirror.py`(1.0.0) · `tests/unit/test_sanitize_mirror.py`.

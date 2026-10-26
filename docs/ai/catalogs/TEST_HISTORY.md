@@ -1,5 +1,20 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-26 — Redfish 2차 Mock 11대 전수 분석 Round — 수정 전 기준선 (코드 변경 0)
+
+> 정본: `tests/evidence/2026-10-26-redfish-mock2-audit/baseline/README.md`(한계 목록 포함). 실행 환경 Windows Python 3.13.15 + WSL Ubuntu(ansible-core 2.20.7, 운영 2.20.3 과 다름).
+
+| 구분 | 결과 |
+|---|---|
+| `pytest tests/e2e tests/regression` | **1094 passed, 12 skipped, 6 xfailed** (73.6 s, 2026-10-22 기록과 같음) |
+| `pytest tests/integration -m "not live"` | **366 passed, 6 skipped, 1 deselected** |
+| WSL `test_build_output_no_data_playbook.py` + `test_addon_hook_playbook.py`(Windows 에서는 skip 되는 엔진 테스트) | **23 passed** |
+| `pytest tests/unit` 전체 | **19 failed, 4853 passed, 33 skipped** — 순서 의존: `replay_full_mirror.install_fakes` 가 `rg._get`/`_get_noauth` 를 복원 없이 교체(04-test-001). `test_full_mirror_dryrun.py::test_v2_tree_is_consumed_by_replay_and_convert` 1개 + `test_redfish_bios_current.py` 쌍으로 8 failed 재현, 단독 통과. 수정하지 않음 |
+| `tests/unit tests/e2e tests/regression` 한 프로세스 | 36 failed, 5930 passed, 45 skipped, 6 xfailed (같은 원인) |
+| Tier 1 — 실제 `ansible-playbook`(`redfish-gather/site.yml`, 실제 vault, 설정 주입 0) + 미러 재생 HTTPS 서버 | 18 label(2차 11 + 1차 7) rc=0 · status success · errors 0. Lenovo 5 label 은 adapter 재선택 강등 관측(01-adapter-001) |
+| Tier 2 — `emulator_harness.run_gather` 모듈 재생 | 18/18 success; 1차 4 golden ↔ 전체 미러 재생 차이 = bios 1건(golden 이 `gather_bios` 이전), CSUS adapter 모드 차이 0; zip 추출본 재생 = 원본 11/11 |
+| 아카이브 대조 | zip 11 재추출 ↔ 원본 파일 수·경로·sha256 누락 0·차이 0, SHA256SUMS 일치, 비밀값 4종 0건 |
+
 ## 2026-10-22 (3) — sanitize_mirror 1.0 (반출용 IP·호스트 이름 치환) — 시험 19건 · Python 3.6.8 · 실측 미러 7개 · 번들 실행
 
 > 정본: `docs/develop/08-onsite-capture.md` 9절 · `tests/unit/test_sanitize_mirror.py`. 합성 데이터와 저장소 밖의 기존 실측 미러 재생 — **용인 11대 데이터로는 돌려 보지 않았다(NEXT_ACTIONS)**. 제품 수집 코드 변경 0. 판정 `READY_FOR_FIELD` (`FIELD_VERIFIED` 아님).

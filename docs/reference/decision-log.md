@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-22
+> 최종 갱신: 2026-10-26
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -42,6 +42,7 @@
 | ESXi | `vmware_host_config_info` 는 `esxi_hostname` 필수, vCenter 대상은 protocol 단계 거부 | 2026-10-10 D-01 · ESXI-03 |
 | 문서 · 하네스 | 사람용 문서는 `.claude`/`docs/ai` 를 참조하지 않는다, 세어 놓은 수는 적지 않는다, 삭제는 참조 0 · 고유 내용 확인 뒤. 설치 문서의 환경 표기는 확인한 조합 / 필수 요구 / 선택 · 미확인 세 구분 | 2026-08-13 · 2026-10-11 D-19 · 2026-10-12 |
 | 운영망 Redfish 원본 캡처 | 링크로 닿는 모든 GET 을 저장. 404·405·400류·401/403 은 오류가 아니라 정보(`absent`/`not_gettable`/`rejected`/`outside_account`)이고, 받지 못한 것(`unresolved` · 재시도 뒤에도 계속 5xx/무응답인 `device_error` · 크기 상한 `oversize` · 저장 실패)은 `INCOMPLETE`. 실패 항목마다 `origin`(device/storage/tool 등)으로 장비 문제와 도구 문제를 구별. 기본 크기 상한 256 MiB(0=무제한). 인증은 세션 우선 + Basic 교차 확인(자격 요청 ≤2회, 401/403 재시도 없음). 재생 도구는 요청 경로 기반 키 + 페이지 사슬 + HTTP 상태 보존 | 2026-10-22 |
+| Redfish 2차 Mock 분석 | 분석만(코드 변경 0). Mock 은 zip 으로 main 보관, 구현은 사용자 결정 11건 뒤 별도 세션(Fable 5.1 / max). HIGH 2 · MED 18 · LOW 51 | 2026-10-26 |
 
 ## 날짜별 결정 색인
 
@@ -103,6 +104,14 @@
 | 2026-05-07 — schema/output_examples/ 신설 + baseline_v1 annotated 정리 (실 장비 개더링) |
 | 2026-05-06 (cycle 2026-05-06-multi-session-compatibility) — status 의도 결정 (Case A 채택) |
 | 2026-05-01 (cycle-019) — 신규 vendor 4종 도입 (Huawei / Inspur / Fujitsu / Quanta) |
+
+## 2026-10-26 — Redfish 2차 Mock 11대 전수 분석 Round (분석 단계 — 코드 변경 0)
+
+- **무엇**: 용인 2차 전수 미러 11대(CSUS 3200 ×3 · DL380 Gen12 ×4 · SR650 V4 ×4)와 1차 7대로 기존 Gathering 코드·테스트·ADR 을 교차 검증했다. 제품 소스·ADR·기존 테스트·Mock 원본 변경 0. 산출물 `tests/evidence/2026-10-26-redfish-mock2-audit/`(브랜치 `docs/redfish-mock2-audit-20261026`), 구현 계획 `docs/ai/tickets/2026-10-26-redfish-mock2-fix-plan/INDEX.md`.
+- **결정(사용자)**: (1) 2차 Mock 은 치환·제외 없이 서버당 zip 으로 `tests/reference/redfish/mock2/` 에 보관하고 origin(GitHub 공개 + GitLab)에 Push 한다 — 반출 전 더미화된 자료(main `7c22ca4a`); (2) 1차 전체 미러는 저장소에 두지 않는다(외부 읽기 전용); (3) 검증 기준은 Mock 실측이며 코드·테스트·ADR 은 검증 대상, JSON 스키마는 고정; (4) 분석·구현·회귀·최종 독립 검증 모두 Fable 5.1 / effort=max.
+- **결정(절차)**: 실제 Gathering 경로 검증은 `ansible-playbook`(WSL) + 미러 재생 HTTPS 서버(분석 단계 도구, 저장소 편입은 결정 항목)로 하고 설정 주입 0 — adapter 가 고른 값이 틀리면 이슈로 기록. 재생 한계(익명 허용 범위·비밀번호 검증·timeout·미기록 경로·v1 비-2xx)는 '검증 불가' 로 표기한다.
+- **핵심 발견**: 01-adapter-001(HIGH 확정) Lenovo XCC3 로그인 후 adapter 재선택이 범용 `redfish_lenovo_bmc` 로 강등(공통 실격 규칙 + 재선택 facts); 02-cpu-001(HIGH 추정) HT 비활성 5대의 `cpu.logical_threads` 가 코어의 2배, ADR-2026-10-18 X3·ADR-2026-10-19 A-2 전제(RMC LPC = 코어 수)가 RMC 1.77.30 에서 불성립; 전원 Off 호스트 placeholder(C2); firmware category 오분류(C9); XCC3 모양(C4); iLO Absent 센서 0 °C·AC 입력 없는 PSU(C10); 계약·사전 drift(C6); `replay_full_mirror.install_fakes` 미복원으로 `tests/unit` 전체 19 failed(04-test-001).
+- **ADR 정정 제안(원문 미수정)**: ISSUES.md §5 — ADR-2026-10-18 X3, ADR-2026-10-19 결정 3·A-2·대안 비교·A-9, ADR-2026-05-12 결정 6(미이행), ADR-2026-06-09(섀시 Power/Thermal 가정), ADR-2026-10-15(문서 보강). 유지 확인: ADR-2026-05-29·2026-10-17·2026-10-18/19(hba link)·2026-06-04 ×2.
 
 ## 2026-10-22 (4) — 반출용 IP·호스트 이름 치환 도구 `sanitize_mirror.py`
 

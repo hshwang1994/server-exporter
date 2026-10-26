@@ -1,5 +1,19 @@
 # server-exporter 다음 작업 (NEXT_ACTIONS)
 
+## Redfish 2차 Mock 전수 분석 (2026-10-26) — 남은 항목
+
+> 정본: `tests/evidence/2026-10-26-redfish-mock2-audit/ISSUES.md`(§7 사용자 결정) · `docs/ai/tickets/2026-10-26-redfish-mock2-fix-plan/INDEX.md`(작업 묶음 WP1~WP11). 분석 산출물은 브랜치 `docs/redfish-mock2-audit-20261026`(main 미병합), Mock 은 main `7c22ca4a`. 제품 코드 변경 0.
+
+- [x] **[DONE 2026-10-22 캡처 · 2026-10-26 보관] 용인 11대 전수 미러** — 아래 절의 HIGH 항목 완료. `tests/reference/redfish/mock2/`(zip 11, 치환 없음 — 사용자 결정).
+- [ ] **[사용자 결정 11건 — 구현 전] ISSUES.md §7** — HT 규칙 적용 전 OS/ESXi 실측(5대) · `cpu.manufacturer` 구현 vs 사전 · CSUS DIMM 속도 단위 · `data.system` 섹션 정합 · CSUS baseline 교체 · composition null · category enum · 재생 서버/2차 fixture 편입 · golden 갱신 범위 · `data.users` · 분석 브랜치 병합 방식.
+- [ ] **[HIGH / 구현 — Fable 5.1·max 별도 세션] WP2 adapter 재선택 규칙 (01-adapter-001)** — `adapter_common` 실격 규칙 B + `lenovo_xcc3.yml` 실측 펌웨어 패턴 + 18 label 선택 전수 회귀(CLAUDE.md §5).
+- [ ] **[HIGH / 실측 뒤 구현] WP9 CPU HT 규칙 (02-cpu-001/002)** — `ProcessorSummary.ThreadingEnabled` → BIOS HT 속성 값 → 종전; ADR-2026-10-18/19 정정. OS 실측 없이는 적용 금지(추정).
+- [ ] **[MED / 구현] WP1 테스트 기반** — `replay_full_mirror.install_fakes` 복원(04-test-001: `tests/unit` 전체 19 failed 의 원인), 2차 11대 축약 fixture(`real_*`) + 수정 전 golden, Tier 1 도구 편입 결정.
+- [ ] **[MED / 구현] WP3 전원 Off 공통 처리 · WP4 firmware category · WP5 XCC3 모양 · WP6 전원·온도 의미 · WP7 CSUS 섀시 gating · WP11 bmc/diagnosis** — 티켓 §4 순서, 묶음마다 3단 검증(구현 → 회귀 → 최종 독립).
+- [ ] **[MED / 문서] WP8 계약·사전 drift 묶음 + ADR 정정 제안(ISSUES §5)** — ADR 원문 수정 여부는 사용자 결정, 아니면 decision-log 기록만.
+- [ ] **[LOW / 구현] WP10 기존 필드 보강** — link/speed·mtu·wwn·bios_date·rank·캐시(요청 추가 0~최소).
+- [ ] **[LOW / 정리] 분석 임시물** — 추출본 `C:\github\ClovirONE\mock2-audit-20261026\extract\`, WSL `/root/se_mirrors`·`/root/se_mirror_tls`, WSL `~/.se_vault_pass`(600 사본), 로컬 `git config core.longpaths true` 정리 여부.
+
 ## Redfish 전수 미러 v2.2 (2026-10-22) — 남은 항목
 
 > 정본: `docs/develop/08-onsite-capture.md` · `docs/reference/decision-log.md` 2026-10-22. 도구 · 시험 · 문서는 같은 날 main 에 들어갔다 (`tests/**` 는 production 제외 경로 — 승격 해당 없음. `production_manifest.yml` 의 `runtime_roots` 에 닿지 않음).
