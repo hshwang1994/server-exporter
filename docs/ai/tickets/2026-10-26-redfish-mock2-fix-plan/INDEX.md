@@ -28,7 +28,7 @@ Redfish 2차 Mock 분석 결과 구현 cycle 진입 — Fable 5.1 / effort=max.
 5. 각 작업 묶음에 해당하는 analysis/0N-*.md 의 §4 이슈 본문(파일:라인·수정 제안·회귀 테스트 제안)
 
 진입 조건:
-- 사용자 결정 항목(ISSUES.md §7)의 답을 받은 것만 구현한다. 답이 없는 항목(C3 HT 규칙, cpu.manufacturer, DIMM 속도 보정, baseline 교체, enum 확장, users)은 건너뛰고 티켓에 [HOLD] 로 남긴다.
+- 사용자 결정 항목(ISSUES.md §7)의 답을 받은 것만 구현한다. 답이 없는 항목(C3 HT 규칙, cpu.manufacturer, DIMM 속도 보정, baseline 교체, enum 확장, users, CSUS HBA 카드 조건 매핑 — 결정 11)은 건너뛰고 티켓에 [HOLD] 로 남긴다.
 - 작업 묶음 순서는 §4. 묶음마다 branch 1개(`fix/mock2-<묶음>`), 커밋은 rule 90, 코드와 문서는 별도 커밋.
 - 모든 변경은 Additive(rule 92 R2): 기존 path 유지, envelope 13 필드·data.<section>.<field> 모양 변경 0, `scripts/ai/hooks/envelope_change_check.py` 통과.
 - 묶음마다 §5 의 3단 검증(구현 → 회귀 → 최종 독립 검증)을 마친 뒤 다음 묶음으로.
@@ -48,7 +48,7 @@ Redfish 2차 Mock 분석 결과 구현 cycle 진입 — Fable 5.1 / effort=max.
 | 1 | 2차 Mock 11대 zip 이 main 에 있음 | [OK] `7c22ca4a` |
 | 2 | 수정 전 기준선(Tier 0/1/2) 기록 | [OK] 분석 브랜치 `baseline/` |
 | 3 | HT Disabled 5대의 OS/ESXi 논리 CPU 실측 (C3 확정용) | [HOLD] 사용자/현장 몫 — 없으면 C3 는 '추정' 상태로 보류 |
-| 4 | 사용자 결정 10건(ISSUES.md §7) | [HOLD] |
+| 4 | 사용자 결정 11건(ISSUES.md §7) | [HOLD] |
 | 5 | golden 갱신 승인(rule 21 R3: `real_hpe_dl380` temps, `real_lenovo_sr650` -Pending, 1차 bios None) | [HOLD] — 묶음 WP1 에서 요청 |
 | 6 | Tier 1 재생 서버·2차 축약 fixture 의 저장소 편입 여부 | [HOLD] — WP1 전제 |
 | 7 | 실장비 접속 | 불필요(전 묶음 오프라인 검증). 단 C2 전원 Off 인과·C3 기대값은 실장비/OS 실측이 있어야 '확정' |
@@ -112,12 +112,12 @@ Redfish 2차 Mock 분석 결과 구현 cycle 진입 — Fable 5.1 / effort=max.
 - 완료 조건: 위 + ESXi 채널 의미("목록에 있음 = 장착·측정") 와의 정합을 계약 문장으로.
 
 ### WP7. CSUS 3200 / RMC 섀시 순회·composition (C5 중 코드 부분)
-- 범위: `01-multi_node-006` ≡ `05-power-004` — `_collect_multi_node_topology`/`gather_chassis_multi`·`_gather_power_for_system`·`_gather_thermal_for_system` 의 섀시 Power/Thermal 요청을 Chassis 본문의 navigation property 유무로 gating(링크 없으면 요청 0, notice 유지) — 404 재요청(캐시 미적중) 3경로 2회 해소; `01-multi_node-007` composition `processor_count/memory_count` 원천 배열 없으면 null(사용자 결정 6); `02-cpu-005` partition cpu 모양은 결정 후.
-- 파일: `redfish_gather.py`(:6337 이하 multi-node, :6472/:6516 power/thermal per system), `tests/unit/test_hpe_csus_multi_node.py`, `test_csus_*`, 2차 CSUS fixture 케이스.
+- 범위: `01-multi_node-006` ≡ `05-power-004` — `_collect_multi_node_topology`/`gather_chassis_multi`·`_gather_power_for_system`·`_gather_thermal_for_system` 의 섀시 Power/Thermal 요청을 Chassis 본문의 navigation property 유무로 gating(링크 없으면 요청 0, notice 유지) — 404 재요청(캐시 미적중) 3경로 2회 해소; `01-multi_node-007` composition `processor_count/memory_count` 원천 배열 없으면 null(사용자 결정 6); `02-cpu-005` partition cpu 모양은 결정 후; `03-storage-004`(2026-10-27 추가, `analysis/07-main-addendum-csus-hba-link.md`) — adapter `hpe_csus_3200.yml` vendor_notes 에 카드 조건 등록부 접두(`H3Alert`) 선언 → 카드 루프(`redfish_gather.py:4454-4830`, `Controllers[0].Links.PCIeDevices[]` 응답 재사용 — 추가 요청 0)에서 `PCIeDevices.Status.Conditions[].MessageId` `<prefix>.LinkUp/LinkDown`(+Timestamp) 추출 → Port `LinkStatus` 없을 때 `_hba_link_status` 폴백은 **사용자 결정 11** 의 (a)/(b) 대로, notice 에 카드 조건·시각 기록. 공통 코드에 vendor 이름 분기 금지(플래그 값으로만).
+- 파일: `redfish_gather.py`(:6337 이하 multi-node, :6472/:6516 power/thermal per system; 03-storage-004 는 :4454-4830 카드 루프·`_hba_link_status` :4114 호출부), `adapters/redfish/hpe_csus_3200.yml`(03-storage-004 플래그), `tests/unit/test_hpe_csus_multi_node.py`, `test_csus_*`, 2차 CSUS fixture 케이스.
 - 규모: 함수 3곳 ±15줄.
 - 계약 영향: 없음. DL380/SR650 은 legacy 경로 링크가 실재해 요청 집합 변화 0 이어야 함.
 - 모델별 예외 근거: 없음(링크 존재 여부라는 구조 신호).
-- 회귀 기대값: csus3200_01..03·1차 CSUS 4대 Tier 1 요청 수 -11(distinct)·-14(총), `multi_node`·`power`·`thermal` 값 불변; DL380/SR650 요청 집합 바이트 동일.
+- 회귀 기대값: csus3200_01..03·1차 CSUS 4대 Tier 1 요청 수 -11(distinct)·-14(총), `multi_node`·`power`·`thermal` 값 불변; DL380/SR650 요청 집합 바이트 동일. 03-storage-004: csus3200_01/03·1차 CSUS 4대 recording 에서 카드 조건 LinkUp 추출 고정(LinkDown·조건 없음은 합성 변형 — 실측 대체 아님 명시), 값 변화는 결정 11 에 따름, DL380/SR650/Dell golden 바이트 동일.
 - 완료 조건: 위 + ADR-2026-06-09 가정 정정 기록(ADR 원문 수정 여부는 사용자 결정).
 
 ### WP8. 계약·사전·문서 drift 묶음 (C6 + 각 보고서 §6, 스키마 변경 없음)

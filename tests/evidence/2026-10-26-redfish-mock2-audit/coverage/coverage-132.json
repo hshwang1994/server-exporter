@@ -70,19 +70,22 @@
     }
    },
    "storage": {
-    "state": "PASS",
-    "evidence": "Tier1=Tier2(controllers 포함) 동일",
+    "state": "ISSUE",
+    "evidence": "Tier1=Tier2(controllers 포함) 동일; hbas: 03-storage-004 카드 단위 링크 조건 미활용 (2026-10-27 메인 추가 검증, analysis/07)",
     "report": "03-network-storage.coverage.json",
     "fields": {
      "controllers": "PASS",
      "physical_disks": "PASS",
      "logical_volumes": "NOT_APPLICABLE",
-     "hbas": "PASS",
+     "hbas": "ISSUE",
      "summary": "PASS",
      "datastores": "NOT_APPLICABLE",
      "filesystems": "NOT_APPLICABLE",
      "infiniband": "NOT_APPLICABLE"
-    }
+    },
+    "issues": [
+     "03-storage-004"
+    ]
    },
    "memory": {
     "state": "ISSUE",
@@ -500,19 +503,22 @@
     }
    },
    "storage": {
-    "state": "PASS",
-    "evidence": "Tier1=Tier2(controllers 포함) 동일",
+    "state": "ISSUE",
+    "evidence": "Tier1=Tier2(controllers 포함) 동일; hbas: 03-storage-004 카드 단위 링크 조건 미활용 (2026-10-27 메인 추가 검증, analysis/07)",
     "report": "03-network-storage.coverage.json",
     "fields": {
      "controllers": "PASS",
      "physical_disks": "PASS",
      "logical_volumes": "NOT_APPLICABLE",
-     "hbas": "PASS",
+     "hbas": "ISSUE",
      "summary": "PASS",
      "datastores": "NOT_APPLICABLE",
      "filesystems": "NOT_APPLICABLE",
      "infiniband": "NOT_APPLICABLE"
-    }
+    },
+    "issues": [
+     "03-storage-004"
+    ]
    },
    "memory": {
     "state": "ISSUE",
@@ -2322,8 +2328,8 @@
   }
  },
  "counts": {
-  "ISSUE": 75,
-  "PASS": 49,
+  "ISSUE": 77,
+  "PASS": 47,
   "MOCK_LIMITATION": 0,
   "NOT_APPLICABLE": 8,
   "NOT_CHECKED": 0

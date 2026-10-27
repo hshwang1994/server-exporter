@@ -1185,3 +1185,14 @@
 - 수정: adapter 플래그 `processor_summary_logical_count: cores`(값으로 가름) · A-5~A-11 조건부 수집 경로 · null 규칙(A-3 · B-1) · FC 카드 제외(A-4) · B-2~B-12 — `docs/ai/decisions/ADR-2026-10-19-csus-single-server-and-summary-fixes.md`
 - 재발 방지: (1) 펌웨어 의미 차이는 adapter `vendor_notes` 값으로 선언하고 common 코드는 값으로 가른다(rule 12). (2) `tests/regression/test_redfish_coverage_audit.py` · `test_esxi_property_coverage.py` · `test_os_command_coverage.py` — 노출 자원 중 허용 목록(사유 포함)에 없는 미요청 인벤토리가 생기면 실패. 새 미러 · 크롤 · 덤프를 들일 때 먼저 이 대조를 돌린다(`scripts/ai/redfish_coverage_diff.py <mirror|crawl> [--layout]`). (3) summary 산식은 "모르면 null" 을 전 채널 공통 규칙으로(rule 13 "unknown → null, never 0")
 - 관련 rule: rule 12 R1 · rule 25 R7-A-1(사용자 실측 > spec) · rule 95 R1 #11 · rule 96 R1 · R4
+
+## 2026-10-27 — "표준 리소스에 키가 없다" 에서 조사를 멈춰 같은 신호의 OEM 조건·OEM 로그를 놓쳤다 (CSUS FC HBA 링크)
+
+- 카테고리: scope-miss (표준 경로 1곳만 보고 "미제공" 확정 · 값 역추적·어휘 전수 스캔 생략) · ADR 전제를 검증 대상이 아니라 사실로 사용
+- 발견 위치: 사용자 질문(2026-10-27 "FC Port 밖 어느 곳에서나 절대 찾을 수 없나, 유추할 수 있는 어떤 값도") → `tests/evidence/2026-10-26-redfish-mock2-audit/analysis/07-main-addendum-csus-hba-link.md`
+- 증상: 작업자 03 보고서 §6 와 메인 교차 검증이 "CSUS FC Port 키가 FibreChannel/Id/Name 뿐 → ADR-2026-10-19 대로 down + notice, 일치" 로 종결했다. 실제로는 같은 카드의 `Chassis/r001u01/PCIeDevices/{N}.Status.Conditions` 에 HPE 등록부 `H3Alert.1.8.LinkUp/LinkDown`("external Ethernet or Fibre Channel HBA port link", 카드 단위)이 1차 4대·2차 3대 전부에 있고, 2차 OEM `LogService/Oem/Iel` 의 `DCD_FCHBA_LINK_UP/DOWN` 이벤트 시각이 그 Timestamp 와 초 단위로 일치했다. 그 PCIeDevices 응답은 Tier 1 수집이 이미 요청하고 있었다(펌웨어 보강 CSUS-R16)
+- 원인: (1) ADR-2026-10-18 의 "RMC 는 FC Port 에 링크 상태 속성 자체가 없어 Redfish 로는 수집할 수 없었다" 를 검증 대상이 아니라 전제로 썼다(지시서 2026-10-26 수정 1 "코드·테스트·ADR 은 모두 검증 대상" 위반). (2) 조사 단위가 "출력 필드 ← 표준 리소스" 1홉이라 `Status.Conditions`·OEM 로그·등록부(`Registries/*`) 메시지 정의를 보지 않았다. (3) WWN·슬롯 라벨로 같은 장치를 가리키는 다른 리소스를 역추적하지 않았다
+- 영향: 분석 산출물(ISSUES 72 → 73건, coverage csus3200_01·03 storage PASS → ISSUE), ADR-2026-10-18 전제 정정 제안·사용자 결정 11 추가. 제품 코드 변경 0(구현은 결정 뒤 WP7)
+- 수정: `analysis/07` addendum, ISSUES `03-storage-004`(MED) + §5 행 + §7 결정 11, coverage-132·SUMMARY·CURRENT_STATE·decision-log·티켓 WP7·NEXT_ACTIONS 갱신(2026-10-27)
+- 재발 방지: "장비가 주지 않는다 → 미제공" 으로 판정하기 전 3단계를 거친다 — (1) 식별값(WWN·MAC·시리얼·슬롯 라벨)을 미러 전 파일에서 역추적해 같은 장치를 가리키는 리소스를 모은다, (2) 링크·상태 어휘를 바이너리·로그까지 전 파일 스캔한다, (3) `Status.Conditions`·OEM 로그·등록부 메시지 정의를 읽어 뜻을 확정한다. ADR 의 "장비가 안 준다" 문장은 새 미러가 들어올 때마다 재검증 항목으로 등록한다
+- 관련 rule: rule 25 R7-B(추정 → 실측 격상 금지) · rule 95 R1 #8(single-vendor silent) · rule 96 R2(외부 계약 질의 우선) · 지시서 검증 기준(2026-10-26 사용자 수정 1)

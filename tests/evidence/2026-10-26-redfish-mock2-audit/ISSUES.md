@@ -1,6 +1,6 @@
 # 통합 이슈 목록 — Redfish 2차 Mock 11대 전수 분석 (2026-10-26)
 
-보고서 6개(`analysis/01~06`)의 §4 이슈를 기계 추출(`tools/extract_issues.py`)해 ID·심각도·확실성을 그대로 두고, 메인이 공통 원인별 클러스터(C1~C11)와 처리 유형을 붙였다. 합계 72건 — HIGH 2 · MED 18 · LOW 51 · 미분류 1. 같은 원인의 중복은 §4 에 표시했고 ID 는 삭제하지 않았다(보고서 추적성). 심각도·확실성은 작업자 판정이며 메인이 표본을 Mock 원본·Tier 1 봉투로 재검증한 항목은 '메인 검증' 열에 적었다.
+보고서 6개(`analysis/01~06`)의 §4 이슈를 기계 추출(`tools/extract_issues.py`)해 ID·심각도·확실성을 그대로 두고, 메인이 공통 원인별 클러스터(C1~C11)와 처리 유형을 붙였다. 합계 73건 — HIGH 2 · MED 19 · LOW 51 · 미분류 1(2026-10-27 메인 추가 검증 `analysis/07-main-addendum-csus-hba-link.md` 의 `03-storage-004` 포함). 같은 원인의 중복은 §4 에 표시했고 ID 는 삭제하지 않았다(보고서 추적성). 심각도·확실성은 작업자 판정이며 메인이 표본을 Mock 원본·Tier 1 봉투로 재검증한 항목은 '메인 검증' 열에 적었다.
 
 처리 유형: `code-common` 공통 로직 수정 / `code-oem` OEM 분기·adapter 수정 / `category` 펌웨어 분류 규칙 / `docs` 문서·사전 정정(스키마 변경 아님) / `test` 테스트·재생 도구 / `decision` 사용자 결정 필요 / `observe` 관찰(변경 제안 없음).
 
@@ -15,7 +15,7 @@
 | 5 | C4 Lenovo XCC3 모양 | 03-network-001·04-firmware-006 MED | code-common | 주소 형식·구조 신호 기반, vendor 분기 없음 |
 | 6 | C10 전원·온도 의미 | 05-thermal-001·05-power-002 MED | code-common | Absent 제외, 입력 0 W notice, golden 갱신 |
 | 7 | C7 테스트·재생 | 04-test-001 MED + 구조적 공백 | test | install_fakes 복원, 2차 fixture, Tier 1 재생 편입 결정 |
-| 8 | C5 CSUS/RMC | 02-memory-002·01-multi_node-003 MED | decision/docs/test | 섀시 링크 gating(코드), 속도 단위·baseline 교체(결정) |
+| 8 | C5 CSUS/RMC | 02-memory-002·01-multi_node-003·03-storage-004 MED | decision/docs/test/code-oem | 섀시 링크 gating(코드), 속도 단위·baseline 교체(결정), FC HBA 카드 단위 링크 조건 폴백(결정 11) |
 | 9 | C6 계약·사전 drift | 01-hardware-002·02-cpu-003 MED | docs(+Additive 2건) | 한 묶음으로 처리 |
 | 10 | C8 기존 필드 보강 | LOW 다수 | code-common | C1~C5 뒤 |
 | 11 | C11 bmc/users | 06 보고서 | — | 취합 후 갱신 |
@@ -64,12 +64,12 @@
 
 ### C5. HPE Compute Scale-up Server 3200 / RMC 1.77.30
 
-이슈: `01-multi_node-003`(MED), `02-memory-002`(MED), `01-multi_node-006`(LOW), `01-multi_node-007`(LOW), `01-system-008`(LOW), `01-system-009`(LOW), `02-cpu-005`(LOW), `04-bios-003`(LOW), `04-firmware-007`(LOW), `04-firmware-011`(LOW), `05-power-004`(LOW), `05-power-007`(LOW)
+이슈: `01-multi_node-003`(MED), `02-memory-002`(MED), `03-storage-004`(MED, 2026-10-27 메인 추가 검증), `01-multi_node-006`(LOW), `01-multi_node-007`(LOW), `01-system-008`(LOW), `01-system-009`(LOW), `02-cpu-005`(LOW), `04-bios-003`(LOW), `04-firmware-007`(LOW), `04-firmware-011`(LOW), `05-power-004`(LOW), `05-power-007`(LOW)
 
-- **공통 원인**: RMC 의 Redfish 모델이 표준과 다른 곳 — DIMM `OperatingSpeedMhz` 가 I/O 클럭(3200, Label `PC5-6400B`), 집합 섀시(RackGroup/Rack1)에는 Power/Thermal 리소스가 없고 r001u01 만 PowerSubsystem/ThermalSubsystem(legacy `Power`/`Thermal` 404), `LogicalProcessorCount` 의미가 펌웨어 버전(1.75.108 코어 / 1.77.30 스레드)에 따라 다름, FirmwareInventory 가 complex 번들 2건(`Partition0_FW`·`ComplexFW` → category other), `Bios` 는 Partition0 수준(76 속성), `multi_node.composition` 의 count 가 원천 배열 없이 0.
-- **개별 증상**: 02-memory-002(MED), 01-multi_node-003(MED: baseline/계약 예시가 mock 구조), 01-multi_node-006 ≡ 05-power-004(LOW: 고정 경로 404 11개·14건, r001u01 3경로 2회 — `_get` 은 200 만 캐시), 01-multi_node-007, 02-cpu-005, 01-system-008/009, 05-power-007, 04-firmware-011, 04-firmware-007, 04-bios-003.
-- **권장 수정 위치**: (1) 섀시 순회는 Chassis 본문의 navigation property(`Power`/`Thermal`/`PowerSubsystem`/`ThermalSubsystem`/`EnvironmentMetrics` 링크 키)가 있을 때만 요청(공통 로직; DL380/SR650 은 legacy 경로가 실재해 영향 0) — 404 재요청도 사라짐, (2) `OperatingSpeedMhz` 는 계약에 "HPE H3(RMC) 는 I/O 클럭" 명시(+선택: `Oem.Hpe.Label` 의 `PC5-NNNN` 이 있고 ×2 와 같을 때만 MT/s 보정 — 숫자만 보고 ×2 금지), (3) `composition.*_count` 는 원천 없으면 null(사용자 결정), (4) baseline `hpe_csus_3200_baseline.json` 과 `03-fields.md §9` 예시를 실 캡처로 교체(ADR-2026-05-12 결정 6 이행 — 사용자 결정), (5) category 규칙은 C9.
-- **회귀 검증**: 2차 CSUS 3대 + 1차 4대 recording 으로 요청 집합(고정 경로 0건)·multi_node 구조·DIMM 속도·category 고정.
+- **공통 원인**: RMC 의 Redfish 모델이 표준과 다른 곳 — DIMM `OperatingSpeedMhz` 가 I/O 클럭(3200, Label `PC5-6400B`), 집합 섀시(RackGroup/Rack1)에는 Power/Thermal 리소스가 없고 r001u01 만 PowerSubsystem/ThermalSubsystem(legacy `Power`/`Thermal` 404), `LogicalProcessorCount` 의미가 펌웨어 버전(1.75.108 코어 / 1.77.30 스레드)에 따라 다름, FirmwareInventory 가 complex 번들 2건(`Partition0_FW`·`ComplexFW` → category other), `Bios` 는 Partition0 수준(76 속성), `multi_node.composition` 의 count 가 원천 배열 없이 0, FC HBA 링크 상태가 Port 리소스가 아니라 **카드 단위 조건**(`PCIeDevices/{N}.Status.Conditions` 의 `H3Alert.1.8.LinkUp/LinkDown`)에만 있다(`analysis/07-main-addendum-csus-hba-link.md`).
+- **개별 증상**: 02-memory-002(MED), 01-multi_node-003(MED: baseline/계약 예시가 mock 구조), 03-storage-004(MED: `hbas[].link_status` 항상 down — 카드 조건 LinkUp(+Timestamp)이 이미 요청한 PCIeDevices 응답에 있는데 읽지 않음, 2차 Iel `DCD_FCHBA_LINK_*` 이벤트 시각과 일치), 01-multi_node-006 ≡ 05-power-004(LOW: 고정 경로 404 11개·14건, r001u01 3경로 2회 — `_get` 은 200 만 캐시), 01-multi_node-007, 02-cpu-005, 01-system-008/009, 05-power-007, 04-firmware-011, 04-firmware-007, 04-bios-003.
+- **권장 수정 위치**: (1) 섀시 순회는 Chassis 본문의 navigation property(`Power`/`Thermal`/`PowerSubsystem`/`ThermalSubsystem`/`EnvironmentMetrics` 링크 키)가 있을 때만 요청(공통 로직; DL380/SR650 은 legacy 경로가 실재해 영향 0) — 404 재요청도 사라짐, (2) `OperatingSpeedMhz` 는 계약에 "HPE H3(RMC) 는 I/O 클럭" 명시(+선택: `Oem.Hpe.Label` 의 `PC5-NNNN` 이 있고 ×2 와 같을 때만 MT/s 보정 — 숫자만 보고 ×2 금지), (3) `composition.*_count` 는 원천 없으면 null(사용자 결정), (4) baseline `hpe_csus_3200_baseline.json` 과 `03-fields.md §9` 예시를 실 캡처로 교체(ADR-2026-05-12 결정 6 이행 — 사용자 결정), (5) category 규칙은 C9, (6) 03-storage-004: adapter `hpe_csus_3200.yml` 플래그 + 라이브러리 OEM 조건 추출(`Status.Conditions[].MessageId` `<prefix>.LinkUp/LinkDown`) → Port `LinkStatus` 없을 때 `_hba_link_status` 폴백(매핑은 결정 11, 요청 추가 0, 공통 코드에 vendor 이름 분기 없음).
+- **회귀 검증**: 2차 CSUS 3대 + 1차 4대 recording 으로 요청 집합(고정 경로 0건)·multi_node 구조·DIMM 속도·category·FC 카드 조건 추출(실측 LinkUp 7대, LinkDown·조건 없음은 합성 변형으로 — 실측 대체 아님 명시) 고정.
 
 ### C6. 계약·사전(field_dictionary)·문서 drift (스키마 변경 아님)
 
@@ -136,6 +136,7 @@
 | 02-memory-002 | MED | - | C5 | decision | CSUS `slots[].speed_mhz`/`summary.groups[].speed_mhz` 가 실클럭(MHz), 다른 벤더는 MT/s | 02-cpu-memory.md:151 | 메인 재현: CSUS OperatingSpeedMhz 3200(Label PC5-6400B) vs iLO/XCC 6400 |
 | 03-network-001 | MED | 확정 | C4 | code-common | Lenovo XCC3 가 FC HBA 포트를 호스트 `EthernetInterfaces` 로 노출 → `network.interfaces[]`/`summary` 에 FC 포트가 섞임 | 03-network-storage.md:82 | 메인 재현: sr650_v4_02 EthernetInterfaces NIC3/4/7/8 MAC 8옥텟, envelope interfaces 9 중 FC 4 |
 | 03-storage-001 | MED | - | C2 | code-common | 전원 Off 호스트(dl380_gen12_03): Storage 컬렉션 0건·NIC 정보 축약인데 envelope 의 storage/network 에 아무 신호가 없다 | 03-network-storage.md:96 | 메인 재현: dl380_gen12_03 Storage Members 0, PCIeDevices/276 = HPE MR416i-o Gen11 |
+| 03-storage-004 | MED | 확정(원천)·추정(포트 매핑) | C5 | code-oem + decision | CSUS FC HBA `link_status` 가 항상 down — 카드 단위 링크 조건(`PCIeDevices.Status.Conditions` `H3Alert.1.8.LinkUp/LinkDown`)과 2차 OEM Iel `DCD_FCHBA_LINK_*` 이벤트를 읽지 않는다(2026-10-27 메인 추가) | 07-main-addendum-csus-hba-link.md:§2·§6 | 메인 실측: 7대 59 카드 전부 LinkUp(LinkDown 0), csus3200_03 Iel UP 시각 == 조건 Timestamp(초 단위), PCIeDevices/11·14 는 Tier 1 요청 200건 안에 이미 있음 |
 | 04-firmware-001 | MED | 확정 | C9 | category | Lenovo BIOS(`UEFI`) · CSUS `Partition0_FW` 가 `category: other` | 04-firmware-bios.md:89 | - |
 | 04-firmware-002 | MED | 확정 | C9 | category | HPE RAID 컨트롤러 `other`, `Embedded Video Controller` 가 `storage_controller` | 04-firmware-bios.md:102 | 메인 재현: dl380_gen12_01 firmware[] MR416i-o → other, Embedded Video Controller → storage_controller |
 | 04-firmware-003 | MED | 확정 | C9 | category | Lenovo 드라이브 백플레인 PSoC 가 `drive` | 04-firmware-bios.md:115 | - |
@@ -226,6 +227,8 @@
 | `docs/contract/03-fields.md` 6.2·6.3·6.4·6.7, `schema/field_dictionary.yml`, `EXTERNAL_CONTRACTS.md:11,54,15` | (각 보고서 §6 표) | (각 보고서 §6 표) | C6 문서 묶음 | 02/03/04/05 §6 |
 | `docs/ai/catalogs/VENDOR_ADAPTERS.md:72,212`, `adapters/redfish/lenovo_xcc3.yml` 주석 | XCC3 사이트 검증 PASS | 1차 선택만 검증, 재선택은 강등 | 정정 | 01-adapter-011 |
 
+| ADR-2026-10-18(hba link null) 11·29행 / ADR-2026-10-19(two values) 결정 1 | "RMC 는 FC Port 에 링크 상태 속성이 없어 Redfish 로 수집 불가" · 키 없음 → down + notice · "HPE 문의" | Port 에는 없지만 같은 카드 `PCIeDevices` 의 `H3Alert.1.8.LinkUp/LinkDown`(카드 단위)이 1.75.108·1.77.30 7대 전부에 있고 2차 Iel 이벤트 시각과 일치 | 전제를 "포트 단위 없음 · 카드 단위 있음" 으로 정정, 폴백 매핑은 결정 11 | 03-storage-004 |
+
 ## 6. 미확정·검증 불가 (실장비·OS 실측 또는 사용자 결정 필요)
 
 - 02-cpu-001 의 '기대 = 코어 수' — HT Disabled 5대(csus3200_02, dl380_gen12_03, sr650_v4_01/02/04)의 OS/ESXi 논리 CPU 실측이 없다.
@@ -235,6 +238,7 @@
 - 1차 축약 fixture 의 Lenovo `-Pending`·DL380 Absent 0 °C 는 golden 이 '정상' 으로 고정 — 수정 시 golden 갱신 필요(사용자 승인, rule 21 R3).
 - Superdome Flex(`hpe_superdome_flex.yml`) 는 실측 0 — CSUS 플래그 복제의 타당성 미확인.
 - `hardware.uuid` 바이트 순서 vs OS/ESXi 같은 장비 캡처 없음(MOCK_LIMITATION).
+- 03-storage-004 카드 단위 조건의 판별력 — Mock 7대 59 카드 관측이 전부 `LinkUp`(OK), `LinkDown` 0, NIC·RAID 카드도 LinkUp. 미결선 카드/포트의 실장비 거동(LinkDown 발생 여부, 포트 1개만 결선 시 값)을 확인하기 전에는 포트 단위 매핑이 추정이다.
 
 ## 7. 사용자 결정 항목
 
@@ -248,3 +252,4 @@
 8. Tier 1 미러 재생 HTTPS 서버·2차 축약 fixture(`real_*` 자동 등록)의 저장소 편입.
 9. golden 갱신 범위(`real_hpe_dl380` temps 52→43, `real_lenovo_sr650` -Pending 2건, 1차 bios None).
 10. `data.users` 를 BMC 계정으로 채울지(계약·의미 변경 — 06 보고서 관찰, 기본은 유지).
+11. `03-storage-004` CSUS FC HBA 카드 단위 링크 조건(`H3Alert.LinkUp/LinkDown`)의 반영 방식 — (a) 값 `down` 유지 + notice 에 카드 조건·Timestamp / (b) 카드 LinkUp → 그 카드 포트 전부 up, LinkDown·조건 없음 → down / (c) 실장비 미결선 거동 확인 뒤 결정(`analysis/07` §7). 제가(AI) 초안 제안: (c) 확인 전까지 (a).

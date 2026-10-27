@@ -13,7 +13,7 @@ tests/evidence/2026-10-26-redfish-mock2-audit/
 ├── inventory/           ← 2차 11대 자원 단위 인벤토리(jsonl, 서버당 1파일) + INVENTORY.md 요약 + _summaries.json
 ├── baseline/            ← 수정 전 기준선: tier0(기존 회귀) · tier1(실제 playbook 경로) · tier2(모듈 수준 재생) · coverage(노출 vs 요청) · adapter 선택
 ├── tools/               ← 이 Round 에서 쓴 재생·인벤토리 스크립트 (분석 단계 산출물 — 제품 코드 아님, 저장소 편입 여부는 구현 계획의 결정 항목)
-├── analysis/            ← 분석 작업자 6개의 영역별 보고서 01~06 (+ coverage.json)
+├── analysis/            ← 분석 작업자 6개의 영역별 보고서 01~06 (+ coverage.json) + 07 메인 추가 검증(2026-10-27, CSUS FC HBA 링크 유추 원천)
 ├── coverage/            ← 11대 × 12 영역 = 132칸 판정표
 ├── ISSUES.md            ← 통합 이슈 목록 (중복 제거 · 고유 ID · 공통 원인 → 증상 → 영향 → 수정 위치 → 회귀)
 └── SUMMARY.md           ← 최종 요약

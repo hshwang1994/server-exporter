@@ -6,7 +6,7 @@
 > 검증 라운드(Round) 결과, 사용자 의심 분석, 정책 변경 같은 큰 결정은 모두 이 문서에 시간순으로 추가된다.
 > 코드만 읽고는 알 수 없는 맥락(왜 이 fallback 이 있는지 등)이 여기 있다.
 
-> 최종 갱신: 2026-10-26
+> 최종 갱신: 2026-10-27
 
 ## 현재 유효한 결정 — 주제별 요약 (2026-10-14 기준)
 
@@ -42,7 +42,7 @@
 | ESXi | `vmware_host_config_info` 는 `esxi_hostname` 필수, vCenter 대상은 protocol 단계 거부 | 2026-10-10 D-01 · ESXI-03 |
 | 문서 · 하네스 | 사람용 문서는 `.claude`/`docs/ai` 를 참조하지 않는다, 세어 놓은 수는 적지 않는다, 삭제는 참조 0 · 고유 내용 확인 뒤. 설치 문서의 환경 표기는 확인한 조합 / 필수 요구 / 선택 · 미확인 세 구분 | 2026-08-13 · 2026-10-11 D-19 · 2026-10-12 |
 | 운영망 Redfish 원본 캡처 | 링크로 닿는 모든 GET 을 저장. 404·405·400류·401/403 은 오류가 아니라 정보(`absent`/`not_gettable`/`rejected`/`outside_account`)이고, 받지 못한 것(`unresolved` · 재시도 뒤에도 계속 5xx/무응답인 `device_error` · 크기 상한 `oversize` · 저장 실패)은 `INCOMPLETE`. 실패 항목마다 `origin`(device/storage/tool 등)으로 장비 문제와 도구 문제를 구별. 기본 크기 상한 256 MiB(0=무제한). 인증은 세션 우선 + Basic 교차 확인(자격 요청 ≤2회, 401/403 재시도 없음). 재생 도구는 요청 경로 기반 키 + 페이지 사슬 + HTTP 상태 보존 | 2026-10-22 |
-| Redfish 2차 Mock 분석 | 분석만(코드 변경 0). Mock 은 zip 으로 main 보관, 구현은 사용자 결정 11건 뒤 별도 세션(Fable 5.1 / max). HIGH 2 · MED 18 · LOW 51 | 2026-10-26 |
+| Redfish 2차 Mock 분석 | 분석만(코드 변경 0). Mock 은 zip 으로 main 보관, 구현은 사용자 결정 11건 뒤 별도 세션(Fable 5.1 / max). HIGH 2 · MED 19 · LOW 51(2026-10-27 추가 검증 03-storage-004 포함) | 2026-10-26 |
 
 ## 날짜별 결정 색인
 
@@ -112,6 +112,7 @@
 - **결정(절차)**: 실제 Gathering 경로 검증은 `ansible-playbook`(WSL) + 미러 재생 HTTPS 서버(분석 단계 도구, 저장소 편입은 결정 항목)로 하고 설정 주입 0 — adapter 가 고른 값이 틀리면 이슈로 기록. 재생 한계(익명 허용 범위·비밀번호 검증·timeout·미기록 경로·v1 비-2xx)는 '검증 불가' 로 표기한다.
 - **핵심 발견**: 01-adapter-001(HIGH 확정) Lenovo XCC3 로그인 후 adapter 재선택이 범용 `redfish_lenovo_bmc` 로 강등(공통 실격 규칙 + 재선택 facts); 02-cpu-001(HIGH 추정) HT 비활성 5대의 `cpu.logical_threads` 가 코어의 2배, ADR-2026-10-18 X3·ADR-2026-10-19 A-2 전제(RMC LPC = 코어 수)가 RMC 1.77.30 에서 불성립; 전원 Off 호스트 placeholder(C2); firmware category 오분류(C9); XCC3 모양(C4); iLO Absent 센서 0 °C·AC 입력 없는 PSU(C10); 계약·사전 drift(C6); `replay_full_mirror.install_fakes` 미복원으로 `tests/unit` 전체 19 failed(04-test-001).
 - **ADR 정정 제안(원문 미수정)**: ISSUES.md §5 — ADR-2026-10-18 X3, ADR-2026-10-19 결정 3·A-2·대안 비교·A-9, ADR-2026-05-12 결정 6(미이행), ADR-2026-06-09(섀시 Power/Thermal 가정), ADR-2026-10-15(문서 보강). 유지 확인: ADR-2026-05-29·2026-10-17·2026-10-18/19(hba link)·2026-06-04 ×2.
+- **추가 검증 2026-10-27**: 사용자 질문("FC Port 밖 어디에도 유추할 값이 없나")으로 CSUS FC HBA 링크 상태의 원천을 7대 미러 전 파일에서 재조사했다. Port 리소스에는 없지만 같은 카드 `PCIeDevices/{N}.Status.Conditions` 의 HPE 등록부 `H3Alert.1.8.LinkUp/LinkDown`("external Ethernet or FC HBA port link", 카드 단위)이 1차 4대·2차 3대 전부에 있고, 2차 OEM Iel `DCD_FCHBA_LINK_UP/DOWN` 이벤트 시각이 그 Timestamp 와 초 단위로 일치했다. 그 응답은 수집기가 이미 요청하고 있다(펌웨어 보강). 이슈 `03-storage-004`(MED)·사용자 결정 11 추가, ADR-2026-10-18 전제("Redfish 로 수집 불가") 정정 제안, 분석 누락은 FAILURE_PATTERNS 2026-10-27 에 기록. 코드·ADR 변경 0 — `tests/evidence/2026-10-26-redfish-mock2-audit/analysis/07-main-addendum-csus-hba-link.md`.
 
 ## 2026-10-22 (4) — 반출용 IP·호스트 이름 치환 도구 `sanitize_mirror.py`
 

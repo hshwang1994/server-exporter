@@ -1,14 +1,14 @@
 # 11대 x 12 영역 = 132칸 판정표 (2026-10-26)
 
-집계: ISSUE 75, PASS 49, MOCK_LIMITATION 0, NOT_APPLICABLE 8, NOT_CHECKED 0 / 총 132칸
+집계: ISSUE 77, PASS 47, MOCK_LIMITATION 0, NOT_APPLICABLE 8, NOT_CHECKED 0 / 총 132칸 (2026-10-27 갱신: csus3200_01·03 storage PASS → ISSUE, `03-storage-004` — `analysis/07-main-addendum-csus-hba-link.md`)
 
 상태: PASS=실측과 일치 / ISSUE=이슈 있음(보고서 ID 참조) / NOT_APPLICABLE=계약·adapter 상 해당 없음 / MOCK_LIMITATION=Mock·재생 한계로 판정 불가 / NOT_CHECKED=미검토
 
 | server | cpu | system | network | storage | memory | firmware | bios | thermal | hardware | bmc | power | multi_node |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| csus3200_01 | PASS | ISSUE | PASS | PASS | ISSUE | ISSUE | ISSUE | PASS | PASS | ISSUE | PASS | ISSUE |
+| csus3200_01 | PASS | ISSUE | PASS | ISSUE | ISSUE | ISSUE | ISSUE | PASS | PASS | ISSUE | PASS | ISSUE |
 | csus3200_02 | ISSUE | ISSUE | PASS | PASS | ISSUE | ISSUE | ISSUE | PASS | PASS | ISSUE | PASS | ISSUE |
-| csus3200_03 | PASS | ISSUE | PASS | PASS | ISSUE | ISSUE | ISSUE | PASS | PASS | ISSUE | PASS | ISSUE |
+| csus3200_03 | PASS | ISSUE | PASS | ISSUE | ISSUE | ISSUE | ISSUE | PASS | PASS | ISSUE | PASS | ISSUE |
 | dl380_gen12_01 | PASS | ISSUE | PASS | PASS | PASS | ISSUE | PASS | ISSUE | ISSUE | ISSUE | ISSUE | NOT_APPLICABLE |
 | dl380_gen12_02 | PASS | ISSUE | PASS | PASS | PASS | ISSUE | PASS | ISSUE | ISSUE | ISSUE | ISSUE | NOT_APPLICABLE |
 | dl380_gen12_03 | ISSUE | ISSUE | ISSUE | ISSUE | ISSUE | ISSUE | PASS | ISSUE | PASS | ISSUE | ISSUE | NOT_APPLICABLE |
@@ -60,9 +60,9 @@
 - **sr650_v4_04** [PASS] (03-network-storage.coverage.json) Tier1=Tier2 동일, errors 0 — 필드: interfaces:PASS, adapters:PASS, ports:PASS, dns_servers:PASS, default_gateways:PASS, summary:PASS, driver_map:NOT_APPLICABLE, portgroups:NOT_APPLICABLE, virtual_switches:NOT_APPLICABLE
 
 ### storage
-- **csus3200_01** [PASS] (03-network-storage.coverage.json) Tier1=Tier2(controllers 포함) 동일 — 필드: controllers:PASS, physical_disks:PASS, logical_volumes:NOT_APPLICABLE, hbas:PASS, summary:PASS, datastores:NOT_APPLICABLE, filesystems:NOT_APPLICABLE, infiniband:NOT_APPLICABLE
+- **csus3200_01** [ISSUE] (03-network-storage.coverage.json) Tier1=Tier2(controllers 포함) 동일; hbas link_status 는 카드 단위 조건(`PCIeDevices` H3Alert LinkUp) 미활용 — 03-storage-004(2026-10-27, analysis/07) — 필드: controllers:PASS, physical_disks:PASS, logical_volumes:NOT_APPLICABLE, hbas:ISSUE, summary:PASS, datastores:NOT_APPLICABLE, filesystems:NOT_APPLICABLE, infiniband:NOT_APPLICABLE
 - **csus3200_02** [PASS] (03-network-storage.coverage.json) Tier1=Tier2(controllers 포함) 동일 — 필드: controllers:PASS, physical_disks:PASS, logical_volumes:NOT_APPLICABLE, hbas:PASS, summary:PASS, datastores:NOT_APPLICABLE, filesystems:NOT_APPLICABLE, infiniband:NOT_APPLICABLE
-- **csus3200_03** [PASS] (03-network-storage.coverage.json) Tier1=Tier2(controllers 포함) 동일 — 필드: controllers:PASS, physical_disks:PASS, logical_volumes:NOT_APPLICABLE, hbas:PASS, summary:PASS, datastores:NOT_APPLICABLE, filesystems:NOT_APPLICABLE, infiniband:NOT_APPLICABLE
+- **csus3200_03** [ISSUE] (03-network-storage.coverage.json) Tier1=Tier2(controllers 포함) 동일; hbas link_status 는 카드 단위 조건(`PCIeDevices` H3Alert LinkUp) 미활용 — 03-storage-004(2026-10-27, analysis/07) — 필드: controllers:PASS, physical_disks:PASS, logical_volumes:NOT_APPLICABLE, hbas:ISSUE, summary:PASS, datastores:NOT_APPLICABLE, filesystems:NOT_APPLICABLE, infiniband:NOT_APPLICABLE
 - **dl380_gen12_01** [PASS] (03-network-storage.coverage.json) Tier1=Tier2 동일 — 필드: controllers:PASS, physical_disks:PASS, logical_volumes:PASS, hbas:PASS, summary:PASS, datastores:NOT_APPLICABLE, filesystems:NOT_APPLICABLE, infiniband:NOT_APPLICABLE
 - **dl380_gen12_02** [PASS] (03-network-storage.coverage.json) Tier1=Tier2 동일 — 필드: controllers:PASS, physical_disks:PASS, logical_volumes:PASS, hbas:PASS, summary:PASS, datastores:NOT_APPLICABLE, filesystems:NOT_APPLICABLE, infiniband:NOT_APPLICABLE
 - **dl380_gen12_03** [ISSUE] (03-network-storage.coverage.json) 03-storage-001 — 필드: controllers:ISSUE, physical_disks:ISSUE, logical_volumes:ISSUE, hbas:PASS, summary:ISSUE, datastores:NOT_APPLICABLE, filesystems:NOT_APPLICABLE, infiniband:NOT_APPLICABLE
