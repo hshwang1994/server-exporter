@@ -35,3 +35,11 @@
 
 - G-09~G-12 검증: 15 fixture 전부 재생 → 바뀐 경로는 Lenovo 5세트의 위 네 묶음뿐(CSUS 4 · DL380 5 · Dell 1 차이 0). 요청 예산 불변. 호스트 EthernetInterfaces 의 FC 제외(03-network-001)는 normalize 층이라 모듈 golden 에 없다 — Tier 1 봉투(`tier1-after-WP5/`)와 INV-5 로 확인.
 | G-13 | WP5 | `dmtf_rackmount1`(DMTF 공개 mockup, baseline 아님) | `data.memory.slots[0..2].locator` | `"1"`, `"2"`, `"3"` (Slot) | `"DIMM 1"`, `"DIMM 2"`, `"DIMM 3"` | recording `Systems/437XR1138R2/Memory/DIMM1..3`: `DeviceLocator` 없음, `Location.PartLocation.ServiceLabel "DIMM n"`, `MemoryLocation.Slot n` | G-10 과 같은 규칙(ServiceLabel 우선) — 표준 mockup 도 같은 순서를 따른다 |
+
+### WP6 (C10 — 전원·온도 의미) — 2026-10-27
+
+| # | WP | fixture / baseline | 경로 | before | after | 원천 | 원인 |
+|---|---|---|---|---|---|---|---|
+| G-14 | WP6 | `real_hpe_dl380`(1차) · `real_hpe_dl380_gen12_01/02/04` | `data.thermal.temperatures[]` | 52 · 56 · 44 · 54 항목 (State Absent 9 · 7 · 8 · 8 건은 WP3 이후 `reading_celsius null`) | **43 · 49 · 36 · 46** 항목 (Absent 항목 제외, 그 밖 항목 값 불변 — 인덱스 이동) | recording `Chassis/1/Thermal.Temperatures[]` `Status.State Absent` (iLO 7 미장착 슬롯 센서, `ReadingCelsius 0`) | 미장착 슬롯 센서는 항목이 아니다 → 제외 + notice "Absent 센서 N건 제외 (온도 N · 팬 0) — 미장착 슬롯" (05-thermal-001). gen12_03(UnavailableOffline) · CSUS(Status 없음) · Lenovo · Dell 불변 |
+
+- G-14 검증: 15 fixture 전부 재생 → 바뀐 경로는 DL380 4세트의 `data.thermal.temperatures[*]` 뿐. 요청 예산 불변. PSU 입력 0 관측·소비전력 폴백 순서·ThermalSubsystem 폴백은 모듈 golden 을 바꾸지 않는다(notice 는 GOLDEN_KEYS 밖, 18 label 에서 폴백 미발동).

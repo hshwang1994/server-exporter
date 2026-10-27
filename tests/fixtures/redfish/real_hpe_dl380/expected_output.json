@@ -1430,36 +1430,12 @@
           "upper_critical": 72
         },
         {
-          "health": null,
-          "name": "12-Exp Bay Drive",
-          "physical_context": "SystemBoard",
-          "reading_celsius": null,
-          "state": "Absent",
-          "upper_critical": null
-        },
-        {
-          "health": null,
-          "name": "13-ExpBayBoot",
-          "physical_context": "SystemBoard",
-          "reading_celsius": null,
-          "state": "Absent",
-          "upper_critical": null
-        },
-        {
           "health": "OK",
           "name": "14-Stor Batt",
           "physical_context": "SystemBoard",
           "reading_celsius": 14,
           "state": "Enabled",
           "upper_critical": 60
-        },
-        {
-          "health": null,
-          "name": "17-Exp Bay Rear",
-          "physical_context": "SystemBoard",
-          "reading_celsius": null,
-          "state": "Absent",
-          "upper_critical": null
         },
         {
           "health": "OK",
@@ -1508,54 +1484,6 @@
           "reading_celsius": 90,
           "state": "Enabled",
           "upper_critical": 0
-        },
-        {
-          "health": null,
-          "name": "29-OCP Box2Bay9",
-          "physical_context": "SystemBoard",
-          "reading_celsius": null,
-          "state": "Absent",
-          "upper_critical": null
-        },
-        {
-          "health": null,
-          "name": "30-OCP Box2Bay11",
-          "physical_context": "SystemBoard",
-          "reading_celsius": null,
-          "state": "Absent",
-          "upper_critical": null
-        },
-        {
-          "health": null,
-          "name": "32-OCP B",
-          "physical_context": "SystemBoard",
-          "reading_celsius": null,
-          "state": "Absent",
-          "upper_critical": null
-        },
-        {
-          "health": null,
-          "name": "45-PCI 6",
-          "physical_context": "SystemBoard",
-          "reading_celsius": null,
-          "state": "Absent",
-          "upper_critical": null
-        },
-        {
-          "health": null,
-          "name": "47-PCI 7",
-          "physical_context": "SystemBoard",
-          "reading_celsius": null,
-          "state": "Absent",
-          "upper_critical": null
-        },
-        {
-          "health": null,
-          "name": "49-PCI 8",
-          "physical_context": "SystemBoard",
-          "reading_celsius": null,
-          "state": "Absent",
-          "upper_critical": null
         },
         {
           "health": "OK",
