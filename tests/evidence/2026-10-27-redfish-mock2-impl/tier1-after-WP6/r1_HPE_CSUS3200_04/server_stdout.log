@@ -1,0 +1,1 @@
+READY {"mirror": "/root/se_mirrors/mock1/HPE_CSUS3200/04", "keys": 636, "raw": 0, "hang": [], "realm": "Basic realm=\"redfish\"", "noauth_root": true, "statuses": {"200": 636}, "load_s": 0.6, "pid": 3021}
