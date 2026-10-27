@@ -3172,7 +3172,7 @@ def _memory_rank_count(mdata):
     rc = _safe_int(_safe(mdata, 'RankCount'))
     if rc is not None:
         return rc
-    label = _safe(mdata, 'Oem', 'Hpe', 'Label')
+    label = _safe(mdata, 'Oem', 'Hpe', 'Label')                               # nosec rule12-r1 — OEM 외부 계약(HPE DIMM Label '<n>Rx<m>', 02-memory-004)
     if isinstance(label, str):
         m = re.search(r'(?<![\w.])(\d+)Rx\d+(?![\w])', label)
         if m:
