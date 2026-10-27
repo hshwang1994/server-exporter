@@ -75,3 +75,11 @@
 | G-23 | WP10 | `dmtf_rackmount1`(DMTF 공개 mockup, 4건) · `hpe_emulator_dl325_gen10plus_fc`(2건) | `data.network[*].ipv6[]` | 키 없음 | `[{address, prefix_length, address_origin}]` | mockup `Systems/437XR1138R2/EthernetInterfaces/*.IPv6Addresses` (`fe80::…`) · 에뮬레이터 동일 | 03-network-006 — 값이 있을 때만 `ipv6` 키(실측 18대는 전부 빈 목록이라 불변). normalize 가 `interfaces[].addresses[]` family ipv6 로 싣는다 |
 
 - G-18~G-23 검증: `expected_output.json` + `recording.json` 이 있는 fixture 21세트 전부 재생해 평탄 비교 — 바뀐 경로가 위 6 묶음뿐(요청 예산 15/15 불변, 에뮬레이터 요청 집합 불변). 모듈 raw 호스트 NIC `mtu` 는 그대로(NDF MTU 는 data 밖 aux `ndf_mtu_by_mac` → normalize 층이 `interfaces[].mtu` 를 채움 — golden 밖, Tier 1 로 확인).
+
+### WP11 (C11 — bmc · diagnosis) — 2026-10-27
+
+| # | WP | fixture / baseline | 경로 | before | after | 원천 | 원인 |
+|---|---|---|---|---|---|---|---|
+| G-24 | WP11 | `real_hpe_dl380`(1차) · `real_hpe_dl380_gen12_01/02/03/04` | `data.bmc.timezone` | `null` | `GMT-0` · `JST-9:00` ×4 | 전수 미러 `Managers/1/DateTime`(`#HpeiLODateTime.v2_1_0`, `TimeZone {Index, Name, UtcOffset, Value}`) 를 recording 에 **추가**(`get::Managers/1/DateTime`, 1차 `C:\github\서버mock데이터\1차\HPE_DL380\01`, 2차 extract) — Manager 본문은 `TimeZoneName` 없음 · `Oem.Hpe.Links.DateTimeService` 링크 | 06-bmc-003 — 링크가 있고 TimeZoneName 이 없을 때만 +1 GET, `TimeZone.Value`(POSIX 꼴 — iDRAC `CST6CDT` 와 같은 계열) → 없으면 `Name`. 요청 예산 5세트 +1(`added_reason`), 그 밖 10 fixture 불변 |
+
+- G-24 검증: 21 fixture 재생 → 바뀐 golden 은 DL380 5세트의 `data.bmc.timezone` 뿐. HPE 에뮬레이터 5세트는 같은 링크가 있어 GET 1회가 더 나가지만 recording 에 리소스가 없어(replay-miss 404) null 그대로 — golden 불변(예산 파일 없음). 06-bmc-005(NIC 선택) · 06-bmc-006(이름 폴백) · 06-bmc-001(family) · 06-bmc-002(writable) · 06-bmc-010(auth_success) 은 모듈 golden 을 바꾸지 않는다(18 label 값 불변 — Tier 1 로 확인).

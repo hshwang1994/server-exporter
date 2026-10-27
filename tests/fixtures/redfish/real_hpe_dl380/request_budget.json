@@ -1,14 +1,16 @@
 {
-  "generated": "2026-10-03",
+  "generated": "2026-10-27",
   "baseline_sha": "a45ba808",
   "baseline_http_calls": 132,
-  "http_calls_budget": 131,
+  "http_calls_budget": 132,
   "note": "Phase 3 (Plan §8-1·§10-1): expected_http_calls 는 현재 코드의 HTTP 요청 다중집합(캐시 hit 제외, noauth 포함). 바뀌면 사유와 함께 이 파일을 갱신한다 — 암묵적 감소·증가 모두 FAIL. path_set_delta 는 a45ba808 대비 명시적 변경 목록.",
   "path_set_delta": {
     "removed": [
       "Systems/1 x1"
     ],
-    "added": []
+    "added": [
+      "Managers/1/DateTime x1"
+    ]
   },
   "expected_http_calls": [
     "Chassis x1",
@@ -61,6 +63,7 @@
     "Chassis/DE00B000/Drives/64520 x1",
     "Managers x1",
     "Managers/1 x1",
+    "Managers/1/DateTime x1",
     "Managers/1/EthernetInterfaces x1",
     "Managers/1/EthernetInterfaces/1 x1",
     "Managers/1/EthernetInterfaces/2 x1",
@@ -142,5 +145,6 @@
     "UpdateService/FirmwareInventory/9 x1",
     "noauth:: x1",
     "systems/1/bios x1"
-  ]
+  ],
+  "added_reason": "WP11 2026-10-27 (06-bmc-003): Manager 에 TimeZoneName 이 없는 iLO 7 — Oem.Hpe.Links.DateTimeService 1회 GET 으로 bmc.timezone(TimeZone.Value) 채움 (+1 GET, iLO 만)"
 }

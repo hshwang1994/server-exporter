@@ -338,7 +338,7 @@
       "power_state": null,
       "serial": null,
       "state": "Enabled",
-      "timezone": null,
+      "timezone": "GMT-0",
       "uuid": "5001b72b-c76e-5898-8d1e-d9c65ebc69a5"
     },
     "firmware": [
