@@ -733,6 +733,8 @@
         "health": "OK",
         "id": "1",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 65536,
+        "l3_cache_kb": 163840,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "INTEL(R) XEON(R) GOLD 6530",
@@ -750,6 +752,8 @@
         "health": "OK",
         "id": "2",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 65536,
+        "l3_cache_kb": 163840,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "INTEL(R) XEON(R) GOLD 6530",
@@ -818,7 +822,8 @@
               "name": "6.40TB 64G NVMe SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "S70XNN0XC13973"
+              "serial": "S70XNN0XC13973",
+              "wwn": "eui.f3:57:71:41:1c:38:25:00"
             },
             {
               "capacity_bytes": 6401252745216,
@@ -832,7 +837,8 @@
               "name": "6.40TB 64G NVMe SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "S70XNN0XC14056"
+              "serial": "S70XNN0XC14056",
+              "wwn": "eui.46:58:71:41:1c:38:25:00"
             },
             {
               "capacity_bytes": 6401252745216,
@@ -846,7 +852,8 @@
               "name": "6.40TB 64G NVMe SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "S70XNN0XC14051"
+              "serial": "S70XNN0XC14051",
+              "wwn": "eui.41:58:71:41:1c:38:25:00"
             },
             {
               "capacity_bytes": 6401252745216,
@@ -860,7 +867,8 @@
               "name": "6.40TB 64G NVMe SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "S70XNN0XC14012"
+              "serial": "S70XNN0XC14012",
+              "wwn": "eui.1a:58:71:41:1c:38:25:00"
             }
           ],
           "health": "OK",
@@ -886,7 +894,8 @@
               "name": "6.40TB 64G NVMe SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "S70XNN0XC14054"
+              "serial": "S70XNN0XC14054",
+              "wwn": "eui.44:58:71:41:1c:38:25:00"
             },
             {
               "capacity_bytes": 1600321314816,
@@ -900,7 +909,8 @@
               "name": "1.60TB 64G NVMe SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "8E10A08401C3"
+              "serial": "8E10A08401C3",
+              "wwn": "eui.73:c8:2b:03:e3:8e:e3:8c"
             },
             {
               "capacity_bytes": 1600321314816,
@@ -914,7 +924,8 @@
               "name": "1.60TB 64G NVMe SSD",
               "predicted_life_percent": 100,
               "protocol": "NVMe",
-              "serial": "8E10A08901C3"
+              "serial": "8E10A08901C3",
+              "wwn": "eui.b8:c9:2b:03:e3:8e:e3:8c"
             }
           ],
           "health": "OK",

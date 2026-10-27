@@ -145,11 +145,12 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
                     "error_count": len(all_errors),
                 }
 
+        aux = {}   # 2026-10-27: data 밖 구조 근거(firmware_links · ndf_mtu_by_mac) — GOLDEN_KEYS 밖, 테스트가 읽는다
         data = rg._collect_all_sections(
             ip, vendor, system_uri, manager_uri, chassis_uri,
             user, pw, timeout, verify_ssl,
             all_errors, collected, failed, unsupported,
-            manager_layout=manager_layout,
+            manager_layout=manager_layout, aux_out=aux,
             product_hint=rg._safe(service_root, "Product"),
             firmware_scope=firmware_scope,
             pcie_link_registries=pcie_link_registries,
@@ -201,6 +202,7 @@ def run_gather(get_impl, noauth_impl, realm_impl=None, ip="127.0.0.1",
             "multi_node": multi_node,
             "probe_facts": probe_facts,
             "error_count": len(all_errors),
+            "aux": aux,
         }
     finally:
         rg._get_impl, rg._get_noauth = saved_get, saved_noauth

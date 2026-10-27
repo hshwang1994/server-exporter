@@ -523,7 +523,7 @@
           "adapter_id": "DE081000",
           "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
           "associated_address": "5d:c8:ee:a5:7d:85:65:a0",
-          "current_link_speed_mbps": 0,
+          "current_link_speed_mbps": null,
           "health": null,
           "link_state": null,
           "link_status": "down",
@@ -536,7 +536,7 @@
           "adapter_id": "DE081000",
           "adapter_model": "HPE SN1610Q 32Gb 2p FC HBA",
           "associated_address": "62:73:87:4f:3e:1a:0b:e4",
-          "current_link_speed_mbps": 0,
+          "current_link_speed_mbps": null,
           "health": null,
           "link_state": null,
           "link_status": "down",
@@ -613,6 +613,8 @@
         "health": "OK",
         "id": "1",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 8192,
+        "l3_cache_kb": 131072,
         "manufacturer": "Advanced Micro Devices, Inc.",
         "max_speed_mhz": 4100,
         "model": "AMD EPYC 7313 16-Core Processor",
@@ -630,6 +632,8 @@
         "health": "OK",
         "id": "2",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 8192,
+        "l3_cache_kb": 131072,
         "manufacturer": "Advanced Micro Devices, Inc.",
         "max_speed_mhz": 4100,
         "model": "AMD EPYC 7313 16-Core Processor",
@@ -664,7 +668,8 @@
               "name": "1.6TB 12G SAS SSD",
               "predicted_life_percent": 100,
               "protocol": "SAS",
-              "serial": "S5KWNA0T800477"
+              "serial": "S5KWNA0T800477",
+              "wwn": "naa.50000f0b0280c680"
             },
             {
               "capacity_bytes": 1600321314816,
@@ -678,7 +683,8 @@
               "name": "1.6TB 12G SAS SSD",
               "predicted_life_percent": 100,
               "protocol": "SAS",
-              "serial": "S5KWNA0T800474"
+              "serial": "S5KWNA0T800474",
+              "wwn": "naa.50000f0b0280c650"
             }
           ],
           "health": "OK",

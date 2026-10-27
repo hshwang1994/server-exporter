@@ -1771,6 +1771,8 @@
         "health": "OK",
         "id": "2",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 65536,
+        "l3_cache_kb": 147456,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) 6737P",
@@ -1788,6 +1790,8 @@
         "health": "OK",
         "id": "1",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 65536,
+        "l3_cache_kb": 147456,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) 6737P",
@@ -1905,7 +1909,7 @@
     },
     "system": {
       "asset_tag": null,
-      "bios_date": null,
+      "bios_date": "2026-05-11",
       "bios_version": "IHE120L",
       "boot_progress": "OSRunning",
       "cpu_summary": {

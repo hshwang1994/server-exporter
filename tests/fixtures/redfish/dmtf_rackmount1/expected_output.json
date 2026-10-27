@@ -141,6 +141,13 @@
             "subnet_mask": "255.255.252.0"
           }
         ],
+        "ipv6": [
+          {
+            "address": "fe80::1ec1:deff:fe6f:1e24",
+            "address_origin": "Static",
+            "prefix_length": 64
+          }
+        ],
         "link_status": "up",
         "mac": "12:44:6a:3b:04:11",
         "mtu": null,
@@ -156,6 +163,13 @@
             "address_origin": "Static",
             "gateway": "192.168.0.1",
             "subnet_mask": "255.255.255.0"
+          }
+        ],
+        "ipv6": [
+          {
+            "address": "fe80::1ec1:deff:fe6f:1e33",
+            "address_origin": "Static",
+            "prefix_length": 64
           }
         ],
         "link_status": "up",
@@ -175,6 +189,13 @@
             "subnet_mask": "255.255.252.0"
           }
         ],
+        "ipv6": [
+          {
+            "address": "fe80::1ec1:deff:fe6f:1e24",
+            "address_origin": "Static",
+            "prefix_length": 64
+          }
+        ],
         "link_status": "up",
         "mac": "12:44:6a:3b:04:11",
         "mtu": null,
@@ -190,6 +211,13 @@
             "address_origin": "Static",
             "gateway": "192.168.20.1",
             "subnet_mask": "255.255.255.0"
+          }
+        ],
+        "ipv6": [
+          {
+            "address": "fe80::1ec1:deff:fe6f:1e25",
+            "address_origin": "Static",
+            "prefix_length": 64
           }
         ],
         "link_status": "unknown",

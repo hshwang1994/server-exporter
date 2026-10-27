@@ -1323,6 +1323,8 @@
         "health": "OK",
         "id": "1",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 65536,
+        "l3_cache_kb": 147456,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) 6737P",
@@ -1340,6 +1342,8 @@
         "health": "OK",
         "id": "2",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 65536,
+        "l3_cache_kb": 147456,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) 6737P",
@@ -1374,7 +1378,8 @@
               "name": "1.60TB 22.5G SAS SSD",
               "predicted_life_percent": 100,
               "protocol": "SAS",
-              "serial": "S7R1NE0YB01554"
+              "serial": "S7R1NE0YB01554",
+              "wwn": "naa.50000f0005b29261"
             },
             {
               "capacity_bytes": 1600321314816,
@@ -1388,7 +1393,8 @@
               "name": "1.60TB 22.5G SAS SSD",
               "predicted_life_percent": 100,
               "protocol": "SAS",
-              "serial": "S7R1NE0YB01553"
+              "serial": "S7R1NE0YB01553",
+              "wwn": "naa.50000f0005b29251"
             }
           ],
           "health": "OK",

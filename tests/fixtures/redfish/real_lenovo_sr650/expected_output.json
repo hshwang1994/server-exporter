@@ -2118,6 +2118,8 @@
         "health": "OK",
         "id": "2",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 32768,
+        "l3_cache_kb": 73728,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4300,
         "model": "Intel(R) Xeon(R) 6724P",
@@ -2135,6 +2137,8 @@
         "health": "OK",
         "id": "1",
         "instruction_set": "x86-64",
+        "l2_cache_kb": 32768,
+        "l3_cache_kb": 73728,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4300,
         "model": "Intel(R) Xeon(R) 6724P",
@@ -2250,7 +2254,7 @@
     },
     "system": {
       "asset_tag": null,
-      "bios_date": null,
+      "bios_date": "2025-03-15",
       "bios_version": "IHE110U",
       "boot_progress": null,
       "cpu_summary": {

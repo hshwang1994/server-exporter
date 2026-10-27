@@ -245,7 +245,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu0/dimmA0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C27EBE",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -262,7 +262,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu2/dimmA0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28157",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -279,7 +279,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu1/dimmA0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28526",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -296,7 +296,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu3/dimmA0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28233",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -313,7 +313,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu0/dimmB0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C284C5",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -330,7 +330,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu2/dimmB0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C2855D",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -347,7 +347,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu1/dimmB0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28156",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -364,7 +364,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu3/dimmB0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C27F70",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -381,7 +381,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu0/dimmC0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28575",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -398,7 +398,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu2/dimmC0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28169",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -415,7 +415,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu1/dimmC0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28548",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -432,7 +432,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu3/dimmC0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C27F71",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -449,7 +449,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu0/dimmD0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C285BB",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -466,7 +466,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu2/dimmD0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28546",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -483,7 +483,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu1/dimmD0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28154",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -500,7 +500,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu3/dimmD0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28635",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -517,7 +517,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu0/dimmE0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C278FF",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -534,7 +534,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu2/dimmE0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C2812B",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -551,7 +551,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu1/dimmE0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C27F53",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -568,7 +568,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu3/dimmE0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C27F6E",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -585,7 +585,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu0/dimmF0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C27859",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -602,7 +602,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu2/dimmF0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28155",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -619,7 +619,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu1/dimmF0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28533",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -636,7 +636,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu3/dimmF0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28592",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -653,7 +653,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu0/dimmG0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28216",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -670,7 +670,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu2/dimmG0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C285C7",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -687,7 +687,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu1/dimmG0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C2851D",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -704,7 +704,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu3/dimmG0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C278FC",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -721,7 +721,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu0/dimmH0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28235",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -738,7 +738,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu2/dimmH0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C28153",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -755,7 +755,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu1/dimmH0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C284FC",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -772,7 +772,7 @@
           "manufacturer": "Samsung",
           "name": "rack1/chassis_u1/cpu3/dimmH0",
           "part_number": "M321R4GA0EB2-CCPKC",
-          "rank_count": null,
+          "rank_count": 1,
           "serial": "0x01C2816A",
           "speed_mhz": 3200,
           "type": "DDR5"
@@ -1227,6 +1227,7 @@
         "health": "OK",
         "id": "0",
         "instruction_set": "x86-64",
+        "l3_cache_kb": 46080,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
@@ -1244,6 +1245,7 @@
         "health": "OK",
         "id": "1",
         "instruction_set": "x86-64",
+        "l3_cache_kb": 46080,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
@@ -1261,6 +1263,7 @@
         "health": "OK",
         "id": "2",
         "instruction_set": "x86-64",
+        "l3_cache_kb": 46080,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
@@ -1278,6 +1281,7 @@
         "health": "OK",
         "id": "3",
         "instruction_set": "x86-64",
+        "l3_cache_kb": 46080,
         "manufacturer": "Intel(R) Corporation",
         "max_speed_mhz": 4000,
         "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
@@ -2878,7 +2882,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu0/dimmA0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C27EBE",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -2895,7 +2899,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu2/dimmA0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28157",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -2912,7 +2916,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu1/dimmA0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28526",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -2929,7 +2933,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu3/dimmA0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28233",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -2946,7 +2950,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu0/dimmB0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C284C5",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -2963,7 +2967,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu2/dimmB0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C2855D",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -2980,7 +2984,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu1/dimmB0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28156",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -2997,7 +3001,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu3/dimmB0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C27F70",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3014,7 +3018,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu0/dimmC0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28575",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3031,7 +3035,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu2/dimmC0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28169",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3048,7 +3052,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu1/dimmC0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28548",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3065,7 +3069,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu3/dimmC0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C27F71",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3082,7 +3086,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu0/dimmD0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C285BB",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3099,7 +3103,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu2/dimmD0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28546",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3116,7 +3120,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu1/dimmD0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28154",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3133,7 +3137,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu3/dimmD0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28635",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3150,7 +3154,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu0/dimmE0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C278FF",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3167,7 +3171,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu2/dimmE0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C2812B",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3184,7 +3188,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu1/dimmE0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C27F53",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3201,7 +3205,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu3/dimmE0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C27F6E",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3218,7 +3222,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu0/dimmF0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C27859",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3235,7 +3239,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu2/dimmF0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28155",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3252,7 +3256,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu1/dimmF0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28533",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3269,7 +3273,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu3/dimmF0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28592",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3286,7 +3290,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu0/dimmG0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28216",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3303,7 +3307,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu2/dimmG0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C285C7",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3320,7 +3324,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu1/dimmG0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C2851D",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3337,7 +3341,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu3/dimmG0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C278FC",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3354,7 +3358,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu0/dimmH0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28235",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3371,7 +3375,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu2/dimmH0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C28153",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3388,7 +3392,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu1/dimmH0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C284FC",
               "speed_mhz": 3200,
               "type": "DDR5"
@@ -3405,7 +3409,7 @@
               "manufacturer": "Samsung",
               "name": "rack1/chassis_u1/cpu3/dimmH0",
               "part_number": "M321R4GA0EB2-CCPKC",
-              "rank_count": null,
+              "rank_count": 1,
               "serial": "0x01C2816A",
               "speed_mhz": 3200,
               "type": "DDR5"
