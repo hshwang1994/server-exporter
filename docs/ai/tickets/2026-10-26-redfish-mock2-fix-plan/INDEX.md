@@ -3,6 +3,22 @@
 > 2026-10-26 분석 Round(`tests/evidence/2026-10-26-redfish-mock2-audit/`)의 결론을 **구현 세션**이 그대로 집어들 수 있게 적은 cold-start 티켓이다.
 > 분석 단계에서는 제품 소스·ADR·기존 테스트·Mock 을 한 글자도 바꾸지 않았다. 여기 적힌 수정은 전부 **제안**이며, 구현은 사용자가 별도 지시서로 시작한다.
 > 모델 정책(사용자 2026-10-26): 구현·회귀 검증·최종 독립 검증 모두 **Fable 5.1 / effort=max**. 종전 "Opus 5.5 구현 계획" 표현은 쓰지 않는다.
+>
+> **2026-10-27 사용자 지시서 2 정정(구현 세션, Fable 5.1 / max)** — 이 티켓의 제안 중 아래 항목은 사용자 FIX 1~11 과 2·3차 검토로 **대체**됐다. 구현 정본은 승인된 실행 Plan 과 `tests/evidence/2026-10-27-redfish-mock2-impl/` 이다. §1~§6 원문은 분석 시점 기록으로 보존한다(수정하지 않음).
+>
+> | 티켓 원문 | 정정(2026-10-27) |
+> |---|---|
+> | §2 "묶음마다 branch 1개(`fix/mock2-<묶음>`)" | 단일 통합 브랜치 `fix/redfish-mock2-20261027`(분석 브랜치 HEAD `b8985826` 분기), WP 직렬·WP별 코드/테스트/문서 커밋(FIX 11). `main` 병합·`production` 승격은 독립 검증 세션 뒤 별도 승인 |
+> | §2 "답이 없는 항목(…)은 [HOLD]" · §3 4행 "사용자 결정 11건 [HOLD]" | 결정 1~10 = FIX 1~10 확정, 결정 11 = A안 확정 → HOLD 0건(03-storage-001 (b) controllers 보강만 HOLD) |
+> | §3 3행 "HT Disabled 5대 OS/ESXi 실측 [HOLD]" · WP9 "ThreadingEnabled → BIOS HT → logical_threads 계산" | **폐기** — FIX 1: Redfish `data.cpu.logical_threads` 키를 최종 출력에서 제거(결과 스키마 유일 예외), HT 추정 로직 신설 금지, OS/ESXi 불변 |
+> | §3 5·6행 golden 갱신·Tier 1 도구 편입 [HOLD] | FIX 8(HTTPS 재생 서버·Tier 1 도구·2차 11대 축약 fixture 를 `tests/` 편입) · FIX 9(검증된 golden 만 항목별 근거로 정정) |
+> | WP2 "규칙 B — 모델 일치 adapter 는 펌웨어 불일치로 실격시키지 않음" | opt-in 매치 키 `bmc_model_patterns`(원천 `Manager.Model`)로 대체 — 선언하지 않은 adapter 의 점수 불변, 다른 제조사 선택 변화 0 을 회귀로 증명 |
+> | WP4 "`uefi` 토큰·`Partition<N>_FW` → bios" | 구조 근거(`Bios/Manager.Links.ActiveSoftwareImage`, `RelatedItem→…/Bios`) 1순위, 근거 없는 CSUS 번들(`Partition0_FW`·`ComplexFW`)은 `other` 유지, enum 확장 없음(FIX 7), 전 category 긍정·부정 테스트 |
+> | WP7 03-storage-004 "결정 11 매핑 정책대로" | A안: 값 불변(Port `LinkStatus` 있으면 사용, 없으면 `down`), 카드 조건(`LinkUp/LinkDown`+Timestamp)은 3중 판별(FC HBA 장치·NetworkAdapter→PCIeDevice 링크·adapter 선언 등록부) 통과 시 기존 notice 참고 기록만, 요청/필드 추가 0, `LogService/Oem/Iel` 미사용 |
+> | WP8 "`cpu.manufacturer` 구현 vs 사전 정정(결정 2)" | FIX 2: 구현(`Processor.Manufacturer` → Intel/AMD 정규화) |
+> | WP7 "composition 0 → null(결정 6)" · "baseline 교체(결정 5)" · "DIMM 속도(결정 3)" | FIX 6 null · FIX 5 2차 csus3200_01 실측 envelope 로 교체 · FIX 3 `OperatingSpeedMhz` 원값 유지(계약 문서) |
+> | WP11 "`data.users`(결정 10)" · §3 "sections.system(결정 4)" | FIX 10 `data.users` 불변 · FIX 4 `sections.system = not_supported` 유지 + hostname/fqdn 각주 |
+> | §5 "최종 독립 검증 = 구현에 관여하지 않은 세션" | 유지 — 구현 세션은 push 뒤 멈추고 새 Fable 세션이 Tier 0/1/2 를 직접 재실행 |
 
 ---
 
