@@ -1,5 +1,22 @@
 # TEST_HISTORY — server-exporter
 
+## 2026-10-27 — Redfish 2차 Mock 구현 Round WP0~WP1 — 기준선 재측정 · 테스트 격리 뒤 재실행 (제품 코드 변경 0)
+
+> 정본: `tests/evidence/2026-10-27-redfish-mock2-impl/00-baseline-recheck.md`(수치·bisect·Tier 1/2) · `01-fixtures-origin.md`. 실행 환경 Windows Python 3.13.15 / pytest 9.1.1 + WSL Ubuntu ansible-core 2.20.7 / pytest 9.0.3.
+
+| 구분 | 수정 전(WP0 재측정) | WP1(a) seam 복원 뒤 |
+|---|---|---|
+| `pytest tests/e2e tests/regression` | 1094 passed · 12 skipped · 6 xfailed | 1094 passed · 12 skipped · 6 xfailed (같음) |
+| `pytest tests/integration -m "not live"` | 366 passed · 6 skipped · 1 deselected | **496 passed** · 6 skipped · 1 deselected (2차 fixture 11세트 자동 등록 + 개수 정합·zip 재생 시험 추가) |
+| `pytest tests/unit` 전체 | **19 failed** · 4853 passed · 33 skipped | **4915 passed · 33 skipped · 1 failed(= WP1(d) 로 바뀐 fixture 를 가정한 기대값 1건, 갱신 뒤 PASS — seam 누출 19 → 0)** |
+| `tests/unit tests/e2e tests/regression` 한 프로세스 | **36 failed** · 5930 passed · 45 skipped · 6 xfailed | **6009 passed · 45 skipped · 6 xfailed · 1 failed(같은 1건 — seam 누출 36 → 0)** |
+| 쌍 실행 bisect (오염원 1 + 실패 파일 8) | 8 파일 전부 재현(합 36) — 단일 원인 | 8/8 PASS |
+| WSL 엔진 2파일 | 23 passed | 23 passed |
+| `ansible-playbook --syntax-check` 3채널 | 3/3 OK | — |
+| Tier 1 (편입판 runner, 18 label) | 18/18 success · 분석 Round 기준선과 봉투·요청 차이 0 | — |
+| Tier 2 (편입판 replay, 18 label) | 18/18 success · golden 15세트 차이 0 | — |
+| 개수 정합 (`inventory_parity.py`, 18 label 전수 미러 × Tier 1 봉투) | 18/18 PASS (UNEXPLAINED 0) | — |
+
 ## 2026-10-26 — Redfish 2차 Mock 11대 전수 분석 Round — 수정 전 기준선 (코드 변경 0)
 
 > 정본: `tests/evidence/2026-10-26-redfish-mock2-audit/baseline/README.md`(한계 목록 포함). 실행 환경 Windows Python 3.13.15 + WSL Ubuntu(ansible-core 2.20.7, 운영 2.20.3 과 다름).

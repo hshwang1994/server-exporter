@@ -43,9 +43,23 @@
 
 Tier 1/2 영향 0: 둘 다 `replay_full_mirror.run()` 을 쓰지 않는다(Tier 1 은 실제 playbook + HTTPS 서버, Tier 2 는 `emulator_harness.run_gather`). `mirror_policy.py` 가 import 하는 비공개 헬퍼(`_load_entries`·`_load_fsmap`·`_restore_pages`·`_read_json`·`_key_of`·`_err_of`·`_MANIFEST_STATUS_LISTS`)는 그대로다.
 
-### 1.3 WP1 끝 전체 재실행
+### 1.3 WP1 끝 전체 재실행 (WP1(a)~(f) 전부 반영, 제품 코드 변경 0)
 
-(실행 뒤 기록)
+| 실행 | 결과 | 로그 |
+|---|---|---|
+| `tests/unit` (분리) | **1 failed** · 4915 passed · 33 skipped — 실패 1 = `test_redfish_bios_current.py::test_real_recording_baseline_is_a_full_success`: WP1(d)(G-01) 로 `real_dell_r740` 녹화에 Bios 본문이 생겨 "replay 404 → None" 기대값이 더는 맞지 않음(코드 결함 아님). 기대값을 "Attributes 380개·Key 이름순" 으로 갱신한 뒤 파일 단독 + 종전 오염원 쌍 실행 79 passed. **seam 누출 실패 19 → 0** | `tier0/pytest_unit_after_wp1a.log` |
+| 한 프로세스 `tests/unit tests/e2e tests/regression` | **1 failed** · 6009 passed · 45 skipped · 6 xfailed — 같은 1건. **seam 누출 실패 36 → 0** | `tier0/pytest_unit_e2e_regression_after_wp1a.log` |
+| `tests/e2e tests/regression` (분리) · `tests/integration -m "not live"` | §1.4 | `tier0/pytest_e2e_regression_after_wp1.log` · `tier0/pytest_integration_notlive_after_wp1.log` |
+| WSL 엔진 2파일 | 23 passed | `tier0/pytest_engine_wsl_after_wp1.log` |
+
+두 전체 실행은 WP1(d) 커밋(`ad89563a`) 뒤 시작됐고 그 fixture 변경을 가정한 시험 1건만 걸렸다 — 갱신 커밋 뒤 전체 재실행은 WP2 끝(제품 코드 첫 변경)의 전수 실행이 겸한다(수치는 거기서 다시 센다).
+
+### 1.4 WP1 끝 e2e/regression · integration (G-01 기대값 갱신 `16485033` 뒤)
+
+| 실행 | 결과 | 로그 |
+|---|---|---|
+| `tests/e2e tests/regression` (분리) | 1094 passed · 12 skipped · 6 xfailed, rc 0 (수정 전과 같음) | `tier0/pytest_e2e_regression_after_wp1.log` |
+| `tests/integration -m "not live"` | **496 passed** · 6 skipped · 1 deselected, rc 0 (366 → 496: 2차 fixture 11세트 자동 등록 + 개수 정합·mirror_replay zip 재생 시험) | `tier0/pytest_integration_notlive_after_wp1.log` |
 
 ## 2. Tier 1 기준선 (WP1(e)) — 편입판 도구, 제품 코드 변경 0
 

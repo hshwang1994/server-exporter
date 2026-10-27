@@ -1,5 +1,19 @@
 # server-exporter 현재 상태
 
+## 일자: 2026-10-27 — Redfish 2차 Mock 11대 구현 Round (지시서 2) · WP0~WP1 완료 — 테스트 기반 (제품 코드 변경 0)
+
+> 정본: `tests/evidence/2026-10-27-redfish-mock2-impl/`(00-baseline-recheck · 01-fixtures-origin · golden-changes · inventory-parity-before · tier0/tier1-before/tier2-before) · Plan `C:\Users\hshwa\.claude\plans\pasted-content-id-5561-silly-river.md`(세션 로컬) · 브랜치 `fix/redfish-mock2-20261027`(분기점 `b8985826`, main 미병합 — 병합·production 은 사용자 별도 승인).
+
+- **계기**: 사용자 지시서 2 — 분석 Round(2026-10-26) 73건을 FIX 1~11 로 확정해 단일 브랜치에서 WP0~WP12 직렬 구현, 끝나면 새 Fable 세션이 독립 검증. 이 항목은 **WP0~WP1(테스트 기반)** 까지다 — 제품 코드(`redfish-gather/**`·`module_utils/**`·`adapters/**`·`schema/**`)는 아직 0 변경.
+- **WP0 기준선 재측정**: 분석 Round 수치를 같은 코드에서 다시 쟀다(Tier 0 4종 일치: e2e+regression 1094 · integration 366 · unit 19 failed · 한 프로세스 36 failed; 엔진 23; syntax 3/3). 36 failed 는 쌍 실행 bisect 로 **단일 원인**(`replay_full_mirror.install_fakes` 의 seam 영구 교체, 04-test-001) 확인.
+- **WP1(a) 테스트 격리**: `install_fakes` → `installed_fakes` context manager(`_get_impl`/`_get_noauth`/`_probe_realm_hint` seam + 전역 복원), 루트 `tests/conftest.py` 가 모듈 경계마다 seam 누출을 teardown 오류로 표면화(자기 시험 pytester subprocess). 쌍 실행 8/8 PASS · `tests/unit` 4915 passed · 33 skipped · 1 failed(= WP1(d) 로 바뀐 fixture 를 가정한 기대값 1건, 갱신 뒤 PASS — seam 누출 19 → 0) · 한 프로세스 6009 passed · 45 skipped · 6 xfailed · 1 failed(같은 1건 — seam 누출 36 → 0).
+- **WP1(b) 2차 fixture 11세트**: `tests/fixtures/redfish/real_{hpe_csus3200_01..03, hpe_dl380_gen12_01..04, lenovo_sr650_v4_01..04}` — zip 과 동일한 추출본에서 `capture_mirror_fixture.py` 로 생성(golden = **수정 전 기준선**), meta/README/request_budget(생성기 `tests/scripts/gen_request_budget.py`). 등록 테스트 7종 523 passed, 평문 자격증명 0건.
+- **WP1(c) 도구 편입(FIX 8)**: `tests/redfish-probe/mirror_replay/`(HTTPS 미러 서버 · Tier 1 runner · Tier 2 replay · diff) — 개인 경로·비밀 0, 운영과 같은 `redfish-gather/inventory.sh`+`bmc_ip` 호출, production 제외(`tests/**`). Git Bash 에서는 `MSYS_NO_PATHCONV=1` 필수(미러 경로 변환 사고 → runner 가 검증).
+- **WP1(d) 1차 fixture Bios 보강(FIX 9 G-01~03)**: `real_{dell_r740,hpe_dl380,lenovo_sr650}` recording 에 전수 미러의 Bios 응답 1개씩 추가, golden 은 `data.bios` 만 변화(요청 예산 불변).
+- **WP1(e) Tier 1/2 기준선**: 편입판으로 18 label Tier 1 18/18 success — 분석 기준선과 봉투·요청 집합 **차이 0**; Tier 2 18/18, golden 15세트 차이 0. 이후 WP 의 expected diff 의 before.
+- **WP1(f) 개수 정합(사용자 3차 지시)**: `tests/scripts/inventory_parity.py` + `tests/integration/test_inventory_count_parity.py` — 노출 디스크·FC 포트 수 vs 수집 수, 18 label PASS(판별기의 Dell 이중 노출 집계 결함 1건 수정).
+- **판정**: WP1 완료(테스트 기반). 다음은 WP2(Lenovo XCC3 재선택 — opt-in `bmc_model_patterns`) 부터 제품 코드 변경. production 승격 해당 없음(변경 경로 전부 `tests/**`·`docs/**`).
+
 ## 일자: 2026-10-26 — Redfish 2차 Mock 11대 전수 분석 Round (분석 단계 · 제품 코드 변경 0) — ANALYSIS_DONE
 
 > 정본: `tests/evidence/2026-10-26-redfish-mock2-audit/`(SUMMARY · ISSUES · coverage · baseline · analysis 01~06, 브랜치 `docs/redfish-mock2-audit-20261026`) · `docs/ai/tickets/2026-10-26-redfish-mock2-fix-plan/INDEX.md` · `tests/reference/redfish/mock2/README.md`(main `7c22ca4a`)

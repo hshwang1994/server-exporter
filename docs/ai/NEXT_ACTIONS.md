@@ -6,9 +6,9 @@
 
 - [x] **[DONE 2026-10-22 캡처 · 2026-10-26 보관] 용인 11대 전수 미러** — 아래 절의 HIGH 항목 완료. `tests/reference/redfish/mock2/`(zip 11, 치환 없음 — 사용자 결정).
 - [ ] **[사용자 결정 12건 — 구현 전] ISSUES.md §7** — HT 규칙 적용 전 OS/ESXi 실측(5대) · `cpu.manufacturer` 구현 vs 사전 · CSUS DIMM 속도 단위 · `data.system` 섹션 정합 · CSUS baseline 교체 · composition null · category enum · 재생 서버/2차 fixture 편입 · golden 갱신 범위 · `data.users` · CSUS FC HBA 카드 단위 링크 조건 반영 방식(03-storage-004, 결정 11 — 2026-10-27 추가) · 분석 브랜치 병합 방식.
-- [ ] **[HIGH / 구현 — Fable 5.1·max 별도 세션] WP2 adapter 재선택 규칙 (01-adapter-001)** — `adapter_common` 실격 규칙 B + `lenovo_xcc3.yml` 실측 펌웨어 패턴 + 18 label 선택 전수 회귀(CLAUDE.md §5).
+- [ ] **[HIGH / 구현 중 — 브랜치 `fix/redfish-mock2-20261027`] WP2 adapter 재선택 규칙 (01-adapter-001)** — 사용자 2차 검토(2026-10-27)로 공통 실격 규칙 B 는 기각, **opt-in `match.bmc_model_patterns`**(facts `bmc_model` = `Manager.Model`, 선언한 adapter 만 평가) + `lenovo_xcc3.yml` 의 실 펌웨어에 없는 `XCC\s*3\b` 제거 + 18 label 선택 전수 회귀 + 미선언 31 adapter 점수 불변 증명(CLAUDE.md §5).
 - [ ] **[HIGH / 실측 뒤 구현] WP9 CPU HT 규칙 (02-cpu-001/002)** — `ProcessorSummary.ThreadingEnabled` → BIOS HT 속성 값 → 종전; ADR-2026-10-18/19 정정. OS 실측 없이는 적용 금지(추정).
-- [ ] **[MED / 구현] WP1 테스트 기반** — `replay_full_mirror.install_fakes` 복원(04-test-001: `tests/unit` 전체 19 failed 의 원인), 2차 11대 축약 fixture(`real_*`) + 수정 전 golden, Tier 1 도구 편입 결정.
+- [x] **[DONE 2026-10-27] WP1 테스트 기반** — `installed_fakes` context manager + 루트 `tests/conftest.py` seam 누출 가드(04-test-001 해소: `tests/unit` 4915 passed · 33 skipped · 1 failed(= WP1(d) 로 바뀐 fixture 를 가정한 기대값 1건, 갱신 뒤 PASS — seam 누출 19 → 0) · 한 프로세스 6009 passed · 45 skipped · 6 xfailed · 1 failed(같은 1건 — seam 누출 36 → 0)), 2차 11대 축약 fixture(`real_*_0N`, golden = 수정 전 기준선) + 1차 3세트 Bios 보강(FIX 9 G-01~03), Tier 1/2 도구 `tests/redfish-probe/mirror_replay/` 편입(FIX 8), 개수 정합 판별기(사용자 3차 지시). evidence `tests/evidence/2026-10-27-redfish-mock2-impl/`.
 - [ ] **[MED / 구현] WP3 전원 Off 공통 처리 · WP4 firmware category · WP5 XCC3 모양 · WP6 전원·온도 의미 · WP7 CSUS 섀시 gating(+03-storage-004 카드 조건 폴백, 결정 11 뒤) · WP11 bmc/diagnosis** — 티켓 §4 순서, 묶음마다 3단 검증(구현 → 회귀 → 최종 독립).
 - [ ] **[MED / 문서] WP8 계약·사전 drift 묶음 + ADR 정정 제안(ISSUES §5)** — ADR 원문 수정 여부는 사용자 결정, 아니면 decision-log 기록만.
 - [ ] **[LOW / 구현] WP10 기존 필드 보강** — link/speed·mtu·wwn·bios_date·rank·캐시(요청 추가 0~최소).
