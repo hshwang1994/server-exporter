@@ -2857,6 +2857,13 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     # 동일 source. 단일 노드(manager_id=None)는 응답 body Id 사용 (기존 동작 보존).
     _mid = manager_id if manager_id is not None else _safe(data, 'Id')
     rmc_label = _classify_rmc_label(manager_uri, _mid, manager_layout, is_first)
+    # 2026-10-27 (06-bmc-006): layout 선언이 없어도 장비가 ManagerType 으로 집합 관리자(RackManager · EnclosureManager)임을 밝히면 vendor 라벨
+    #   대신 그 Id(짧은 토큰) 또는 ManagerType 을 쓴다 — DMTF enum 값으로만 가른다(실측 CSUS RMC `Id RMC` · `ManagerType RackManager`, plain 재생에서
+    #   종전 'iLO' 로 나오던 것). layout 이 있는 경로와 BMC 형 Manager 는 불변(18 label 값 불변).
+    if rmc_label is None and _safe(data, 'ManagerType') in ('RackManager', 'EnclosureManager'):
+        _mid_s = _str(_safe(data, 'Id')).strip()
+        rmc_label = (_mid_s if (0 < len(_mid_s) <= 16 and _mid_s.replace('-', '').replace('_', '').isalnum())
+                     else _str(_safe(data, 'ManagerType')))
     # cycle-016 Phase M/N: BMC 운영 정보 강화 — datetime / dns / mac / uuid / last_reset / timezone / power_state
     result = {
         'name':             rmc_label or bmc_names.get(vendor, 'BMC'),
@@ -2886,6 +2893,7 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         'datetime_offset':  _safe(data, 'DateTimeLocalOffset'),
         'oem': {},
     }
+    nic_cands = []   # 2026-10-27 (06-bmc-005): IPv4 를 가진 Manager NIC 후보 — 루프 뒤에 규칙으로 고른다
 
     # Manager EthernetInterfaces에서 BMC IP / MAC / FQDN + NameServers / Gateway 추출
     # 2026-04-29 cisco-critical-review: BMC NIC 의 NameServers / IPv4Addresses[*].Gateway
@@ -2918,9 +2926,11 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
                 # IPv4 — 첫 매칭만 result['ip']/['mac_address']/['dns_name'] 에 사용,
                 # 모든 NIC 의 Gateway 는 누적 (멀티 NIC: dedicated + shared 등 대비)
                 nic_first_ip = None
+                nic_ips = []
                 for addr in _dicts(_safe(ndata, 'IPv4Addresses')):  # Round 3 #4: 비-list/비-dict 방어
                     ip = _safe(addr, 'Address')
                     if ip and isinstance(ip, str) and ip not in ('0.0.0.0', ''):  # Round 7 #3: 비-str Address 방어
+                        nic_ips.append(ip)
                         if nic_first_ip is None:
                             nic_first_ip = ip
                         gw = _safe(addr, 'Gateway')
@@ -2936,20 +2946,27 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
                 for ns in _as_list(_safe(ndata, 'StaticNameServers')):
                     if isinstance(ns, str) and ns and ns not in _ns_placeholders and ns not in bmc_static_name_servers:  # Round 9 #1
                         bmc_static_name_servers.append(ns)
-                # MAC + FQDN — IP 가 있는 첫 NIC 에서 추출 (기존 동작 유지)
+                # 2026-10-27 (06-bmc-005): IP 가 있는 NIC 을 후보로 모은다 — 종전 "첫 NIC" 은 아래 선택 규칙의 ③ 이다.
+                #   XC-4 (2026-06-15): MAC 소문자 정규화 — _normalize_wwn/ports[].associated_address 와 동일 canonical case
+                #   (HPE iLO 는 Manager NIC MAC 을 대문자로 노출). raw 가 colon-grouped hex 라 .lower() 무손실.
                 if nic_first_ip:
-                    if not result['ip']:
-                        result['ip'] = nic_first_ip
-                    if not result['mac_address']:
-                        _mac = _safe(ndata, 'MACAddress') or _safe(ndata, 'PermanentMACAddress')
-                        # XC-4 (2026-06-15): MAC 소문자 정규화 — _normalize_wwn/ports[].associated_address
-                        # (NET-2-1) 와 동일 canonical case. HPE iLO 는 Manager NIC MAC 을 대문자로
-                        # 노출(7C:A6:..) 하나 System/Chassis NIC 은 소문자 → bmc.mac_address 만 case 이탈.
-                        # raw 가 colon-grouped hex 라 .lower() 무손실 (cross-channel MAC dedup/매칭 일관).
-                        result['mac_address'] = _mac.lower() if isinstance(_mac, str) else None  # Round 14 #2: 비-str MAC 방어
-                    if not result['dns_name']:
-                        result['dns_name'] = _safe(ndata, 'FQDN') or _safe(ndata, 'HostName')
+                    _mac = _safe(ndata, 'MACAddress') or _safe(ndata, 'PermanentMACAddress')
+                    nic_cands.append({
+                        'ips': nic_ips, 'ip': nic_first_ip,
+                        'mac': _mac.lower() if isinstance(_mac, str) else None,  # Round 14 #2: 비-str MAC 방어
+                        'dns': _safe(ndata, 'FQDN') or _safe(ndata, 'HostName'),
+                        'host_if': _safe(ndata, 'Links', 'HostInterface') is not None,
+                        'enabled': _safe(ndata, 'InterfaceEnabled'),
+                    })
 
+    # 2026-10-27 (06-bmc-005): ① 대상 IP(bmc_ip)와 같은 주소를 가진 NIC → ② Links.HostInterface 가 없고 InterfaceEnabled 가 False 가 아닌 NIC
+    #   → ③ 첫 NIC(종전). 실측 18 label 은 전용 관리 NIC 이 첫 멤버라 값 불변; iLO 7 의 USB 가상 NIC(16.1.15.1, Links.HostInterface) 가 앞에
+    #   나열돼도 ② 가 거른다. NAT/VIP(대상 IP 가 어느 NIC 에도 없음)는 ②/③ 으로 종전과 같다. mac_address · dns_name 은 같은 NIC 에서 뽑는다.
+    if nic_cands:
+        _pick = (next((c for c in nic_cands if bmc_ip in c['ips']), None)
+                 or next((c for c in nic_cands if not c['host_if'] and c['enabled'] is not False), None)
+                 or nic_cands[0])
+        result['ip'], result['mac_address'], result['dns_name'] = _pick['ip'], _pick['mac'], _pick['dns']
     # envelope 비노출 — normalize_standard.yml 의 _rf_d_bmc_clean 단계에서 제거된다.
     result['_network_meta'] = {
         'name_servers':        bmc_name_servers,
@@ -2986,6 +3003,16 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
         result['oem'] = {
             'ilo_version': _safe(oem, 'Firmware', 'Current', 'VersionString'),
         }
+        # 2026-10-27 (06-bmc-003, 실측 iLO 7 5대): Manager 에 TimeZoneName 이 없고 Oem.Hpe.Links.DateTimeService 가 있으면 그 리소스를 1회 GET 해
+        #   TimeZone.Value(POSIX 꼴 "JST-9:00" — iDRAC TimeZoneName "CST6CDT" 와 같은 계열) → 없으면 TimeZone.Name 을 timezone 에 넣는다.
+        #   실패 · 404 는 조용히 null(+1 GET, iLO 만 — 다른 벤더는 링크가 없다). RMC 는 TimeZoneName 이 있어 미발동.
+        if result.get('timezone') is None:
+            _dt_link = _safe(oem, 'Links', 'DateTimeService', '@odata.id')
+            if isinstance(_dt_link, str) and _dt_link.strip():
+                _st_dt, _dt, _e_dt = _get(bmc_ip, _p(_dt_link), username, password, timeout, verify_ssl)
+                if _st_dt == 200 and isinstance(_dt, dict):
+                    _tz = _safe(_dt, 'TimeZone', 'Value') or _safe(_dt, 'TimeZone', 'Name')
+                    result['timezone'] = _strip_or_none(_tz) if isinstance(_tz, str) else None
     elif vendor == 'supermicro':                                              # nosec rule12-r1
         oem = _safe(data, 'Oem', 'Supermicro') or {}                          # nosec rule12-r1
         result['oem'] = {'bmc_ip': _safe(oem, 'BMCIPv4Address')}
@@ -7382,6 +7409,10 @@ def account_service_discover(bmc_ip, username, password, timeout, verify_ssl,
             'host_bootstrap': _safe(acc_data, 'HostBootstrapAccount', default=None),
             # Huawei 고유 축 — 계정별 Redfish 접근 스위치 (읽기 전용, 07 §10).
             'login_interfaces': _account_login_interfaces(acc_data),
+            # 2026-10-27 (06-bmc-002, 실측 HPE RMC 7대 `@Redfish.WriteableProperties: ["Password"]`): 장비가 DMTF annotation 으로 선언한
+            #   쓰기 가능 속성 목록. 없으면 None(선언 없음 — iLO 7 · XCC 3 · iDRAC). repair 는 선언이 있을 때 그 밖의 속성을 보내지 않는다.
+            'writable': ([s for s in _as_list(_safe(acc_data, '@Redfish.WriteableProperties')) if isinstance(s, str)]
+                         if _safe(acc_data, '@Redfish.WriteableProperties') is not None else None),
         })
     out['member_read'] = len(out['accounts'])
 
@@ -8025,19 +8056,29 @@ def resolve_account_family(vendor, discovery, adapter_id=None):
         if 'imm2' in hint:
             reasons.append('IMM2 는 Redfish AccountService 근거 미확보 → generic 유지')
             return account_family('generic_collection_post'), reasons
+        # (0) 2026-10-27 (06-bmc-001, 2차 Mock 실측): 장비가 준 Manager.Model 이 세대 근거 1순위다 — Dell 분기와 같은 원칙(hint 는 마지막).
+        #     hint(adapter_id)는 무인증 1차 선택값이라 priority 독식 결과일 수 있다(XCC3 5대가 lenovo_xcc3 로 뽑힌 것은 우연이고, 무인증 facts 가
+        #     채워지면 lenovo_bmc 로 강등돼 hint 에 xcc3 가 없다). 실측: XCC3 "Lenovo XClarity Controller 3"(2차 5대) · "Lenovo Xclarity Controller 3"(1차),
+        #     XCC(1/2) "Lenovo XClarity Controller"(참조 미러 AFBT58B 5.70) — 숫자가 없으면 XCC2 계열. 모델이 없을 때만 hint 가 세대를 말한다.
+        mdl = (mgr.get('model') or '').lower()
+        m_gen = re.search(r'xclarity controller\s*(\d+)?', mdl)                       # nosec rule12-r1
+        model_gen = (int(m_gen.group(1)) if m_gen.group(1) else 2) if m_gen else None
         # (1) 장비가 실제로 노출한 AccountTypes — XCC2/XCC3 의 서명이다.
         exposes_account_types = any(a.get('account_types') for a in accounts)
         # (2) HostBootstrapAccount 는 XCC2/XCC3 계열에만 나타나는 표준 Property 다.
         has_bootstrap = any(a.get('host_bootstrap') is not None for a in accounts)
-        if exposes_account_types or has_bootstrap or 'xcc3' in hint or 'xcc2' in hint:
-            # XCC2 와 XCC3 는 PasswordChangeRequired 계약이 다르다. XCC3 근거가 있을 때만
-            # XCC3 로 좁히고, 그 외에는 XCC2(더 넓은 Property 집합) 를 쓴다.
-            if 'xcc3' in hint:
-                reasons.append('adapter hint xcc3 → PasswordChangeRequired 미지원 Family')  # nosec rule12-r1
+        if exposes_account_types or has_bootstrap or model_gen is not None or 'xcc3' in hint or 'xcc2' in hint:
+            # XCC2 와 XCC3 는 PasswordChangeRequired 계약이 다르다. 세대는 Manager.Model 이 먼저 말하고,
+            # 모델이 세대를 밝히지 않을 때만 hint 를 본다. 그 외에는 XCC2(더 넓은 Property 집합) 를 쓴다.
+            if model_gen is not None and model_gen >= 3:
+                reasons.append(f'Manager.Model={mdl!r} → XCC{model_gen} (PasswordChangeRequired 미지원 Family; hint={hint!r} 는 참고)')  # nosec rule12-r1
+                return account_family('lenovo_xcc3_accounttypes'), reasons
+            if model_gen is None and 'xcc3' in hint:
+                reasons.append('Manager.Model 없음 · adapter hint xcc3 → PasswordChangeRequired 미지원 Family')  # nosec rule12-r1
                 return account_family('lenovo_xcc3_accounttypes'), reasons
             reasons.append(                                                        # nosec rule12-r1
-                f'AccountTypes 관측={exposes_account_types} HostBootstrap 관측={has_bootstrap} '
-                f'hint={hint!r} → AccountTypes 지원 XCC family')  # nosec rule12-r1
+                f'Manager.Model={mdl!r} model_gen={model_gen} AccountTypes 관측={exposes_account_types} '
+                f'HostBootstrap 관측={has_bootstrap} hint={hint!r} → AccountTypes 지원 XCC family')  # nosec rule12-r1
             return account_family('lenovo_xcc2_accounttypes'), reasons
         # (3) Purley 만 pre-populated empty slot PATCH 로 계정을 만든다. Whitley/AMD 는 POST 라
         #     hint 가 그쪽을 가리키면 slot 관측이 있어도 Purley 로 보지 않는다.
@@ -8986,6 +9027,16 @@ def account_service_provision(
         # Locked 가 read-only 인 Family(HPE iLO / Lenovo XCC)에서는 보내지 않는다.
         if existing.get('locked') is True and account_prop_writable(family, 'Locked', 'repair'):
             body_full['Locked'] = False
+        # 2026-10-27 (06-bmc-002): 장비가 `@Redfish.WriteableProperties` 로 쓸 수 있는 속성을 선언했으면 그 밖의 속성은 보내지 않는다
+        #   (read_only 강등 — Family 계약보다 장비 선언이 좁을 때만, vendor 이름 분기 없음). 쓰기 전에 정한다 — 추측성 재시도가 아니다.
+        #   실측 HPE RMC(CSUS 3200) 계정: ["Password"] → RoleId drift 가 있어도 Password 만 쓴다. 선언이 없는 장비(iLO · XCC · iDRAC)는 종전과 같다.
+        _declared = existing.get('writable')
+        if isinstance(_declared, list) and _declared:
+            _demoted = sorted(k for k in list(body_full) if k not in _declared)
+            for _k in _demoted:
+                body_full.pop(_k, None)
+            if _demoted:
+                out['write_demoted_by_device'] = _demoted
         patch_headers = None
         if account_if_match(family, 'repair'):
             # Inspur M6 공식 계약: GET 으로 ETag 를 받고 PATCH 에 If-Match 로 실어야 한다.

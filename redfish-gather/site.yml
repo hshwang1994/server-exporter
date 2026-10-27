@@ -343,9 +343,11 @@
             # 주의: 아래 `>-` 는 YAML folded block scalar 다. 그 안에서 `#` 는 주석이 아니라
             #   **Jinja 표현식 본문**이 되어 템플릿 컴파일이 통째로 깨진다. 설명은 반드시
             #   이 자리(표현식 밖)에 쓴다.
+            # 2026-10-27 (06-bmc-010): auth_success 는 실제 자격으로 인증했을 때만 true 다(CLAUDE.md §9). vendor 미식별 장비의
+            #   익명(빈 자격) 수집이 성공하면 _rf_used_account.role 이 anonymous 라 인증 성공을 관측한 것이 아니므로 null 로 둔다.
             _diagnosis: >-
               {{ _diagnosis | combine({
-                   'auth_success': true,
+                   'auth_success': (none if (((_rf_used_account | default({})).role | default('primary')) == 'anonymous') else true),
                    'details': ((_diagnosis | default({}, true)).details | default({})
                                 if (((_diagnosis | default({}, true)).details | default({}))
                                     is mapping) else {}) | combine({
