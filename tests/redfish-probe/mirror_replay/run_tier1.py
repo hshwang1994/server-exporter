@@ -142,6 +142,14 @@ def main():
         print("wsl 없음 — Tier 1 은 WSL(또는 Linux) 에서만 돌릴 수 있다", file=sys.stderr)
         return 3
     only = set(a.only.split(",")) if a.only else None
+    for t in a.targets:
+        label, _, mirror_lin = t.partition("=")
+        if mirror_lin and not mirror_lin.startswith("/"):
+            # 2026-10-27: Git Bash(MSYS) 는 label=/root/... 의 경로 부분을 C:/Program Files/Git/root/... 로 바꿔 넘긴다 →
+            # 서버가 빈 미러(keys 0)를 띄우고 18/18 이 404 로 실패했다. 배포판 안 절대 경로만 받고, 아니면 바로 멈춘다.
+            print(f"[ERR] {label}: 미러 경로는 배포판 안의 절대 경로(/...)여야 한다 — 받은 값 {mirror_lin!r}. "
+                  f"Git Bash 에서는 MSYS_NO_PATHCONV=1 을 붙여 실행한다", file=sys.stderr)
+            return 2
     out_root = Path(a.out_root).resolve()
     out_root.mkdir(parents=True, exist_ok=True)
 
@@ -178,6 +186,13 @@ def main():
             rec = {"label": label, "mirror": mirror_lin, "loc": a.loc, "server": info, "build_id": build_id}
             if info is None:
                 rec["error"] = "server did not become ready (server_stdout.log 참조)"
+                stop_server(a.server_distro, out_lin_srv, p)
+                summary.append(rec)
+                print(json.dumps(rec, ensure_ascii=False), flush=True)
+                continue
+            if not info.get("keys"):
+                # 미러 디렉터리가 비었거나 잘못된 경로 — playbook 을 돌려도 전부 404 라 기준선 가치가 없다
+                rec["error"] = f"mirror loaded 0 keys ({info.get('mirror')}) — playbook 생략"
                 stop_server(a.server_distro, out_lin_srv, p)
                 summary.append(rec)
                 print(json.dumps(rec, ensure_ascii=False), flush=True)
@@ -223,7 +238,7 @@ def main():
     finally:
         if tls_tmp:
             wsl(a.server_distro, f"rm -rf '{tls_tmp}'")
-    bad = [s["label"] for s in summary if s.get("playbook_rc") not in (0,) or s.get("status") != "success"]
+    bad = [s["label"] for s in summary if s.get("error") or s.get("playbook_rc") not in (0,) or s.get("status") != "success"]
     print(f"done: {len(summary)} label, not-success: {bad}", flush=True)
     return 1 if bad else 0
 
