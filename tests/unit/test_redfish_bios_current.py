@@ -354,14 +354,15 @@ def test_gather_system_is_identical_with_or_without_link_out(monkeypatch, vendor
     assert with_link == plain
     assert calls_link == calls_plain, "요청 수·순서가 같아야 한다 (ComputerSystem 재조회 없음)"
     assert calls_link.count(SYS_PATH) == 1
-    assert link_out == {"retrieved": True, "link": BIOS}
+    # 2026-10-27 (WP3): 같은 응답의 PowerState 도 out dict 에 기록한다 (_collect_all_sections 의 전원 Off notice 용)
+    assert link_out == {"retrieved": True, "link": BIOS, "power_state": _system_body().get("PowerState")}
 
 
 def test_gather_system_without_bios_property_records_no_link(monkeypatch):
     monkeypatch.setattr(rg, "_get", _routed_get({SYS_PATH: (200, _system_body(None), None)}, []))
     link_out = {}
     rg.gather_system(IP, SYSTEM, "generic", *CREDS, bios_link_out=link_out)
-    assert link_out == {"retrieved": True, "link": None}
+    assert link_out == {"retrieved": True, "link": None, "power_state": _system_body(None).get("PowerState")}
 
 
 @pytest.mark.parametrize("response", [

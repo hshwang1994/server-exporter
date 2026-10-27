@@ -689,7 +689,9 @@ def test_memory_present_capacity_unchanged(monkeypatch):
             {"@odata.id": "/redfish/v1/Systems/X/Memory/D1"},
             {"@odata.id": "/redfish/v1/Systems/X/Memory/D2"}]}, None),
         "Systems/X/Memory/D1": (200, {"Id": "D1", "CapacityMiB": 32768}, None),
-        "Systems/X/Memory/D2": (200, {"Id": "D2", "CapacityMiB": 0}, None),
+        # 2026-10-27 (WP3): Status 없음 · CapacityMiB 0 · 제조사/부품/시리얼 전부 없음 은 빈 슬롯(실측 iLO 7 전원 Off)이라 제외된다 —
+        # "실측 0 보존" 은 장비가 식별 정보를 준 DIMM 에 대한 것이므로 제조사를 둔다 (test_redfish_power_off_host.py 가 경계를 고정).
+        "Systems/X/Memory/D2": (200, {"Id": "D2", "CapacityMiB": 0, "Manufacturer": "Samsung"}, None),
     })
     out, errs = rg.gather_memory("ip", "/redfish/v1/Systems/X", *CREDS)
     caps = {s["id"]: s["capacity_mb"] for s in out["slots"]}
