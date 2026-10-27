@@ -506,6 +506,9 @@ for e in response["errors"]:
 > 틀렸다 — DMTF 에서 `Health` 는 리소스 자체, `HealthRollup` 은 하위 포함이고 둘은 다를 수 있다(1차 SR650: Health `Warning` · HealthRollup `OK`). PSU 장애가 어떤 등급으로 반영되는지는
 > 벤더가 정한다: iLO 7(DL380 Gen12 3대)은 PSU `Critical`(입력 없음)인데 `Warning` 이고 `Critical` 은 `hardware.oem.aggregate_server_health` 에만 있다; XCC 3(SR650 V4)는 `Critical` 이다.
 > `hardware.health` 만 보고 PSU 상태를 추정하지 않는다 — `power.summary.health_rollup` 과 `power_supplies[].health/state` 를 본다.
+> **2026-10-27 (01-hardware-004 ≡ 04-bios-001)** — Redfish `bios_date` 는 System/OEM 날짜(iLO `Oem.Hpe.Bios.Current.Date` · iDRAC `BIOSReleaseDate`)가 먼저이고, 없을 때만 구조 근거
+> (`Bios.Links.ActiveSoftwareImage` · 멤버 `RelatedItem → …/Bios`)로 확정한 FirmwareInventory 항목의 `ReleaseDate`(날짜 부분)를 쓴다 — 실측 Lenovo XCC 3 UEFI `2026-05-11`. 연도 `0000`
+> 자리표시자(iLO System ROM)는 쓰지 않고, 채웠으면 `system` notice `BIOS 날짜를 FirmwareInventory <id> 의 ReleaseDate 로 채움` 1건이 남는다. HPE CSUS(근거 없음)는 null.
 
 **OS 채널(2026-09-03)**: Linux / Windows 도 `hardware` 를 낸다 — `vendor` / `model` / `serial` / `uuid` / `bios_version` / `bios_date`
 (Windows 는 `sku` / `asset_tag` / `chassis_type` / `system_family` / `bios_vendor` 추가). `health` / `power_state` 는 OS 에서 알 수 없어 키가 없다.
@@ -582,6 +585,9 @@ for e in response["errors"]:
 > **2026-10-27 (FIX 2 — 02-cpu-003)** — Redfish 도 `cpu.manufacturer` 를 낸다: `Processor.Manufacturer` 를 OS/ESXi 와 같은 표로 정규화(`Intel(R) Corporation` · `Intel` → `Intel`,
 > `Advanced Micro Devices, Inc.` · `AMD` → `AMD`, 그 밖은 원문 strip, 없으면 null). `cpu.summary.groups[].manufacturer` 도 같은 값이다(종전 원문 `Intel(R) Corporation`).
 > `cpu.architecture` 는 채널마다 어휘가 다르다(Redfish DMTF enum `x86`, OS/ESXi `x86_64`) — 문자열 동일성을 가정하지 않는다(02-cpu-004, 표기 통일은 결정 항목).
+> **2026-10-27 (C8)** — Redfish 도 `cpu.summary.groups[].l2_cache_kb` · `l3_cache_kb`(소켓당 KB)를 낸다: Processor OEM 캐시(iLO `Oem.Hpe.Cache[]` · XCC `Oem.Lenovo.CacheInfo[]` ·
+> iDRAC `DellProcessor.Cache{N}InstalledSizeKB` · HPE RMC `Oem.Hpe.L3CacheSize` "22.50 MB" → KB) — 실측 6737P `65536`/`147456`, 없으면 null(RMC 는 L3 만). `memory.slots[].rank_count` 는
+> `RankCount` 가 없는 HPE RMC 에서 OEM Label `1Rx4` 의 `1` 로 채운다(02-memory-004). DIMM 속도는 FIX 3 메모.
 
 ### 6.3 `data.storage`
 
@@ -640,10 +646,10 @@ controllers[*].id  ────┤
 | 필드 | 채널 | 수집원 |
 |---|---|---|
 | `serial` | Redfish, OS, ESXi | Redfish=`Drive.SerialNumber` / OS Linux=`lsblk SERIAL`(빈값 시 `udevadm ID_SERIAL_SHORT`) / OS Windows=`Get-PhysicalDisk.SerialNumber`(빈값 시 `Win32_DiskDrive.SerialNumber`, hex/공백 정규화) / ESXi=`ScsiLun.alternateName[SERIALNUM]` |
-| `wwn` | OS, ESXi | OS Linux=`lsblk WWN`(udev `ID_WWN`; SATA/SAS=NAA `0x...`, NVMe=`eui.`) / OS Windows=`Get-PhysicalDisk.UniqueId` (UniqueIdFormat 이 EUI64/FCPHName/SCSI Name String 일 때만) / ESXi=`ScsiLun.canonicalName`(naa.*) |
+| `wwn` | Redfish(2026-10-27), OS, ESXi | Redfish=`Drive.Identifiers` 의 NAA/EUI DurableName → `naa.<hex>`/`eui.<hex>`(소문자; Identifiers 가 없는 XCC 3 · HPE RMC 는 null) / OS Linux=`lsblk WWN`(udev `ID_WWN`; SATA/SAS=NAA `0x...`, NVMe=`eui.`) / OS Windows=`Get-PhysicalDisk.UniqueId` (UniqueIdFormat 이 EUI64/FCPHName/SCSI Name String 일 때만) / ESXi=`ScsiLun.canonicalName`(naa.*) |
 
 - **`null` 정상 케이스**: virtio 가상디스크 / 로컬 SATA(특히 Windows WWN) / RAID 가상 디스크 일부 → best-effort.
-- redfish 는 `serial` 만 emit (디스크 `wwn` 미수집). **ESXi 는 2026-06-22부터 `physical_disks` 수집**
+- redfish 는 2026-10-27 부터 `wwn` 도 낸다(`Drive.Identifiers` NAA/EUI 가 있을 때 — 실측 iLO 7 Gen12 · iDRAC9; XCC 3 · RMC 는 null). 채널 간 조인은 접두(`naa.` · `0x`)를 뗀 hex 로 한다. **ESXi 는 2026-06-22부터 `physical_disks` 수집**
   (`esxi_disks` pyvmomi 모듈 — id/device/wwn=canonicalName naa.*, serial=SERIALNUM, model=vendor+model, media_type=ssd flag).
 
 #### 6.3.0a `physical_disks[].is_os_disk` — OS 설치 디스크 여부 (2026-07-02)
@@ -879,6 +885,10 @@ FC 와 IB 를 함께 판정하고, IB 경로가 추가로 읽는 리소스는 �
 합성 fixture(`tests/fixtures/redfish/synthetic_ib_mode`, DMTF 스키마 기준)로만 재생했다.
 
 ### 6.4 `data.network`
+
+> **2026-10-27 (C8 03-network-004/006/007)** — Redfish: (1) `ports[].current_link_speed_mbps` 는 링크가 없는 포트에서 `null` 이다(iDRAC9 `NetworkPorts` 의 `0` 도 — 종전 0; Gbps 경로와 같은 규칙).
+> 호스트 NIC `interfaces[].speed_mbps` 의 `0` 은 원문 그대로다. (2) `interfaces[].mtu` 는 호스트 EthernetInterface 에 `MTUSize` 가 없으면 같은 MAC 의 NetworkDeviceFunction `Ethernet.MTUSize` 로 채운다
+> (실측 XCC 3 · iLO 7 일부 1500, 요청 0 증가, 모듈 raw 는 그대로). (3) `IPv6Addresses` 도 `addresses[]` 에 `family: ipv6`(`prefix_length` · `origin`)로 들어간다 — 실측 18대는 전부 비어 있어 DMTF mockup 으로 검증.
 
 ```json
 "network": {

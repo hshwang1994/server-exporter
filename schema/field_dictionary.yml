@@ -445,6 +445,8 @@ fields:
     type: "string|null"
     priority: nice
     channel: [os, esxi, redfish]
+    # 2026-10-27 (C8 01-hardware-004 ≡ 04-bios-001): Redfish 는 System/OEM 날짜가 없을 때만 FirmwareInventory 의 BIOS 항목(Bios.Links.ActiveSoftwareImage ·
+    #   RelatedItem /Bios 로 확정) ReleaseDate 를 쓴다 — 실측 Lenovo XCC3 UEFI. 연도 0000 자리표시자(iLO System ROM)는 쓰지 않는다. notice 1건.
     help_ko: "BIOS 릴리스 날짜 (ISO 8601 YYYY-MM-DD 정규화). 벤더 OEM(예: HPE Oem.Hpe.Bios.Current.Date)에서 hoist. 미제공 시 null."
     help_en: "BIOS release date (ISO 8601 YYYY-MM-DD). Hoisted from vendor OEM (e.g. HPE Oem.Hpe.Bios.Current.Date). null when absent."
 
@@ -637,8 +639,8 @@ fields:
     type: "integer|null"
     priority: nice
     channel: [redfish]
-    help_ko: "DIMM rank 수 (Memory.RankCount)."
-    help_en: "DIMM rank count (Memory.RankCount)."
+    help_ko: "DIMM rank 수 (Memory.RankCount). 2026-10-27 (02-memory-004): RankCount 가 없는 펌웨어(실측 HPE RMC — 키 자체가 없다)는 HPE OEM Label('32GB 1Rx4 PC5-6400B-RC1')의 '<n>Rx<m>' 에서 n. 둘 다 없으면 null."
+    help_en: "DIMM rank count (Memory.RankCount). 2026-10-27 (02-memory-004): when the firmware has no RankCount (HPE RMC — key absent) the n of '<n>Rx<m>' in the HPE OEM Label ('32GB 1Rx4 PC5-6400B-RC1') is used; null when neither exists."
 
   "memory.slots[].data_width_bits":
     type: "integer|null"
@@ -741,15 +743,19 @@ fields:
   "storage.physical_disks[].wwn":
     type: "string|null"
     priority: nice
-    channel: [os, esxi]
+    channel: [redfish, os, esxi]
     help_ko: >-
       물리 디스크 WWN (World Wide Name).
+      Redfish(2026-10-27, 03-storage-003): `Drive.Identifiers` 의 NAA/EUI DurableName → `naa.<hex>` / `eui.<hex>`(소문자 — ESXi canonicalName 과 같은 꼴; Linux 는 `0x` 접두라
+      채널 간 조인은 접두를 뗀 hex 로). Identifiers 가 없는 펌웨어(실측 XCC 3 · HPE RMC)는 null, 있는 펌웨어(iLO 7 Gen12 · iDRAC9)는 값.
       OS(Linux): lsblk WWN (udev ID_WWN; SATA/SAS=NAA `0x...`, NVMe=`eui.`).
       OS(Windows): Get-PhysicalDisk.UniqueId (UniqueIdFormat 이 EUI64/FCPHName/SCSI Name String 일 때만).
       ESXi: ScsiLun.canonicalName (naa.*).
       로컬 SATA · virtio 는 null 정상 (best-effort).
     help_en: >-
       Physical disk WWN (World Wide Name).
+      Redfish (2026-10-27, 03-storage-003): NAA/EUI DurableName from `Drive.Identifiers` → `naa.<hex>` / `eui.<hex>` (lower case, same shape as the ESXi
+      canonicalName; Linux uses a `0x` prefix, so join across channels on the bare hex). null when the firmware exposes no Identifiers (XCC 3, HPE RMC).
       OS(Linux): lsblk WWN (udev ID_WWN; SATA/SAS NAA `0x...`, NVMe `eui.`).
       OS(Windows): Get-PhysicalDisk.UniqueId when UniqueIdFormat is EUI64/FCPHName/SCSI Name String.
       ESXi: ScsiLun.canonicalName (naa.*).
@@ -2333,6 +2339,17 @@ fields:
   # --- addresses[] alias/secondary 메타 (Linux OS, ip -j/-o addr · ifconfig 다중 소스) ---
   # 기존 5 키(family/address/prefix_length/subnet_mask/gateway)에 Additive 로 추가.
   # bonds[].addresses[] 도 동일 키 (bond master 인터페이스 addresses 미러).
+  "network.interfaces[].mtu":
+    type: "integer|null"
+    priority: nice
+    channel: [redfish, os, esxi]
+    help_ko: >-
+      인터페이스 MTU(바이트). Linux ip link mtu, Windows NetIPInterface NlMtu, ESXi vmknic mtu. Redfish(2026-10-27, 03-network-007): 호스트 EthernetInterface 의 MTUSize —
+      없으면(실측 18대 전부) 같은 MAC 의 NetworkDeviceFunction `Ethernet.MTUSize`(실측 XCC 3 · iLO 7 일부 1500, 요청 0 증가)로 채우고, 그것도 없으면 null.
+    help_en: >-
+      Interface MTU in bytes. Linux ip link mtu, Windows NetIPInterface NlMtu, ESXi vmknic mtu. Redfish (2026-10-27, 03-network-007): the host EthernetInterface MTUSize —
+      when absent (all 18 mock labels) the NetworkDeviceFunction `Ethernet.MTUSize` of the same MAC (XCC 3 / some iLO 7: 1500, no extra request), else null.
+
   "network.interfaces[].addresses[].label":
     type: "string|null"
     priority: nice
@@ -3280,16 +3297,16 @@ fields:
   cpu.summary.groups[].l2_cache_kb:
     type: "integer|null"
     priority: nice
-    channel: [os]
-    help_ko: "소켓당 L2 캐시 KB (2026-09-03 통일). Linux lscpu 합계(util-linux 2.34 이상 — '(N instances)' 문구 유무와 무관)는 소켓 수로 나누고, 2.33 이하 인스턴스당 값은 코어 수를 곱한다. 버전을 알 수 없으면 null. 0 이나 미보고는 null."
-    help_en: "L2 cache per socket in KB (unified 2026-09-03). Linux lscpu totals (util-linux 2.34+, with or without '(N instances)') are divided by socket count; per-instance values from util-linux 2.33 and older are multiplied by cores. null when the lscpu version is unknown. 0 or unreported is null."
+    channel: [redfish, os]
+    help_ko: "소켓당 L2 캐시 KB (2026-09-03 통일). Redfish(2026-10-27): Processor OEM 캐시 — iLO Oem.Hpe.Cache[] L2-Cache · XCC Oem.Lenovo.CacheInfo[] L2 · iDRAC DellProcessor Cache{N}Level L2 — 의 InstalledSize KB(소켓당), 없으면 null(HPE RMC 는 L3 만 준다). Linux lscpu 합계(util-linux 2.34 이상 — '(N instances)' 문구 유무와 무관)는 소켓 수로 나누고, 2.33 이하 인스턴스당 값은 코어 수를 곱한다. 버전을 알 수 없으면 null. 0 이나 미보고는 null."
+    help_en: "L2 cache per socket in KB (unified 2026-09-03). Redfish (2026-10-27): per-socket InstalledSize KB from the Processor OEM cache list (iLO Oem.Hpe.Cache[] L2-Cache, XCC Oem.Lenovo.CacheInfo[] L2, iDRAC DellProcessor Cache{N}Level L2); null when absent (HPE RMC exposes L3 only). Linux lscpu totals (util-linux 2.34+, with or without '(N instances)') are divided by socket count; per-instance values from util-linux 2.33 and older are multiplied by cores. null when the lscpu version is unknown. 0 or unreported is null."
 
   cpu.summary.groups[].l3_cache_kb:
     type: "integer|null"
     priority: nice
-    channel: [os]
-    help_ko: "소켓당 L3 캐시 KB. Linux lscpu 합계(util-linux 2.34 이상)는 소켓 수로 나누고, 2.33 이하는 값 그대로(소켓당). lscpu 버전을 알 수 없거나 lscpu 가 없으면 /proc/cpuinfo cache size."
-    help_en: "L3 cache per socket in KB. Linux lscpu totals (util-linux 2.34+) are divided by socket count; util-linux 2.33 and older already report per socket. Fallback /proc/cpuinfo cache size when the lscpu version is unknown or lscpu is absent."
+    channel: [redfish, os]
+    help_ko: "소켓당 L3 캐시 KB. Redfish(2026-10-27): Processor OEM 캐시(iLO Oem.Hpe.Cache[] L3-Cache · XCC CacheInfo[] L3 · iDRAC Cache{N}Level L3 · HPE RMC Oem.Hpe.L3CacheSize \"22.50 MB\" → KB) 소켓당, 없으면 null. Linux lscpu 합계(util-linux 2.34 이상)는 소켓 수로 나누고, 2.33 이하는 값 그대로(소켓당). lscpu 버전을 알 수 없거나 lscpu 가 없으면 /proc/cpuinfo cache size."
+    help_en: "L3 cache per socket in KB. Redfish (2026-10-27): per-socket value from the Processor OEM cache (iLO Oem.Hpe.Cache[] L3-Cache, XCC CacheInfo[] L3, iDRAC Cache{N}Level L3, HPE RMC Oem.Hpe.L3CacheSize \"22.50 MB\" → KB); null when absent. Linux lscpu totals (util-linux 2.34+) are divided by socket count; util-linux 2.33 and older already report per socket. Fallback /proc/cpuinfo cache size when the lscpu version is unknown or lscpu is absent."
 
   network.interfaces[].description:
     type: "string|null"
