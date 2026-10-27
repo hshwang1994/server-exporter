@@ -109,6 +109,28 @@ def _check_invariants(label, ports, hbas, ibs):
     return bad
 
 
+def _hex(addr):
+    return "".join(ch for ch in str(addr or "").upper() if ch in "0123456789ABCDEF")
+
+
+def _check_interfaces_not_fc(label, interfaces, ports):
+    """INV-5 (2026-10-27, C4 03-network-001): 최종 봉투 network.interfaces[] 는 서버 NIC 만 — MAC 은 6옥텟이고 network.ports[] 의
+    FC/IB 포트 주소와 겹치지 않는다(Lenovo XCC3 는 FC HBA 포트를 호스트 EthernetInterfaces 에 8옥텟 주소로 함께 노출한다).
+    모듈 raw 가 아니라 normalize 를 거친 봉투(baseline · Tier 1 산출)에만 적용한다."""
+    bad = []
+    fc_addrs = {_hex(p.get("associated_address")) for p in (ports or []) if isinstance(p, dict)
+                and p.get("port_type") in (FC_LIKE | {"InfiniBand"}) and p.get("associated_address")}
+    for i in (interfaces or []):
+        if not isinstance(i, dict) or not i.get("mac"):
+            continue
+        h = _hex(i.get("mac"))
+        if len(h) != 12:
+            bad.append(f"{label}: interfaces[{i.get('id')}].mac={i.get('mac')!r} — 6옥텟이 아님 (FC/IB 포트 주소가 interfaces 에 남음)")
+        elif h in fc_addrs:
+            bad.append(f"{label}: interfaces[{i.get('id')}].mac={i.get('mac')!r} — network.ports 의 FC/IB 포트 주소와 같음")
+    return bad
+
+
 # ── (a) replay fixture 전수 (실미러 + 에뮬레이터 + DMTF) ─────────────────────
 
 REPLAY_CASES = sorted(
@@ -154,7 +176,18 @@ def test_baseline_port_classification_is_self_consistent(path):
     sto = data.get("storage") if isinstance(data.get("storage"), dict) else {}
     bad = _check_invariants(path.stem, net.get("ports"),
                             sto.get("hbas"), sto.get("infiniband"))
+    bad += _check_interfaces_not_fc(path.stem, net.get("interfaces"), net.get("ports"))   # INV-5 (2026-10-27)
     assert not bad, "\n".join(bad)
+
+
+def test_inv5_detects_fc_or_ib_port_addresses_left_in_interfaces():
+    ports = [{"adapter_id": "a", "port_id": "1", "port_type": "FibreChannel", "associated_address": "21:00:f4:c7:aa:a4:6f:fe"},
+             {"adapter_id": "b", "port_id": "1", "port_type": "InfiniBand", "associated_address": "00:11:22:33:44:55"},
+             {"adapter_id": "c", "port_id": "1", "port_type": "Ethernet", "associated_address": "aa:bb:cc:dd:ee:01"}]
+    ok = [{"id": "NIC1", "mac": "aa:bb:cc:dd:ee:01"}, {"id": "NIC2", "mac": None}]
+    assert _check_interfaces_not_fc("x", ok, ports) == []
+    bad = _check_interfaces_not_fc("x", [{"id": "NIC3", "mac": "21:00:f4:c7:aa:a4:6f:fe"}, {"id": "NIC4", "mac": "00:11:22:33:44:55"}], ports)
+    assert len(bad) == 2 and "6옥텟" in bad[0] and "FC/IB 포트 주소와 같음" in bad[1]
 
 
 # ── (c) 조립 경로 ↔ 노출 링크 일치 가드 (세대 이동 조기 경보) ────────────────
