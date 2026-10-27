@@ -1,0 +1,47 @@
+=== ALONE tests/unit/test_redfish_audit_2026_10_10.py
+...............                                                          [100%]
+15 passed in 0.63s
+=== PAIR polluter + tests/unit/test_redfish_audit_2026_10_10.py
+FAILED tests/unit/test_redfish_audit_2026_10_10.py::test_read_helpers_turn_a_broken_response_into_a_transport_error[exc2]
+3 failed, 13 passed in 2.11s
+=== ALONE tests/unit/test_redfish_bios_current.py
+......                                                                   [100%]
+78 passed in 0.41s
+=== PAIR polluter + tests/unit/test_redfish_bios_current.py
+>       assert result["error_count"] == base["error_count"] + 1
+8 failed, 71 passed in 3.53s
+=== ALONE tests/unit/test_redfish_phase3_contracts.py
+........                                                                 [100%]
+8 passed in 0.32s
+=== PAIR polluter + tests/unit/test_redfish_phase3_contracts.py
+        assert set(detect) >= {"vendor", "data", "probe_facts", "errors", "notices", "auth_evidence", "status"}
+6 failed, 3 passed in 1.69s
+=== ALONE tests/unit/test_redfish_redirect_boundary.py
+.................                                                        [100%]
+17 passed in 7.36s
+=== PAIR polluter + tests/unit/test_redfish_redirect_boundary.py
+1 failed, 17 passed in 8.73s
+=== ALONE tests/unit/test_sanitize_mirror.py
+...................                                                      [100%]
+19 passed in 4.94s
+=== PAIR polluter + tests/unit/test_sanitize_mirror.py
+  device_error          : 0     [OK] 장비가 반복해서 5xx/무응답 (다른 요청은 정상) - 장비 측 결함, 못 받은 항목
+1 failed, 19 passed in 5.84s
+=== ALONE tests/e2e/test_redfish_multi_credential_auth.py
+................................                                         [100%]
+32 passed in 3.75s
+=== PAIR polluter + tests/e2e/test_redfish_multi_credential_auth.py
+2 failed, 31 passed in 5.48s
+=== ALONE tests/regression/test_cross_channel_same_server.py
+..........s.......                                                       [100%]
+17 passed, 1 skipped in 6.24s
+=== PAIR polluter + tests/regression/test_cross_channel_same_server.py
+pair = ('cisco/10_100_15_2', {'serial': 'MOCK-CSUS-P0', 'uuid': 'csus-3200-partition0-uuid', 'vendor': 'HPE', 'model': 'Compu...vendor': 'cisco', 'status': 'success', 'collected': ['bmc', 'power', 'system', 'thermal'], 'failed_sections': [], ...})
+11 failed, 7 passed, 1 skipped in 8.57s
+=== ALONE tests/regression/test_redfish_coverage_audit.py
+......                                                                   [100%]
+6 passed in 3.12s
+=== PAIR polluter + tests/regression/test_redfish_coverage_audit.py
+            f"failed={report['failed_sections']}) — 크롤 재생이 깨졌다. 커버리지 판정 이전 문제.")
+4 failed, 3 passed in 4.61s
+done

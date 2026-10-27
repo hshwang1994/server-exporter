@@ -1,0 +1,3794 @@
+{
+ "collected": [
+  "bmc",
+  "firmware",
+  "memory",
+  "network",
+  "network_adapters",
+  "power",
+  "processors",
+  "storage",
+  "system",
+  "thermal"
+ ],
+ "data": {
+  "bios": {
+   "current": {
+    "attributes": {
+     "AdjSecPrefetch": "Enabled",
+     "AdvancedMemProtection": "ADDDC",
+     "AllowPcieSlotOpRoms": "Enabled",
+     "AutoCreateHddBootOptions": "Disabled",
+     "BootFailurePolicy": "MenuAfterFailedBoot",
+     "BootRetryCount": 0,
+     "DcuIpPrefetcher": "Enabled",
+     "DcuStreamPrefetcher": "Enabled",
+     "Dhcpv4": "Enabled",
+     "DmaProtection": "Enabled",
+     "DynamicIntelSpeedSelectMode": "Disabled",
+     "EdpcRecovery": "Enabled",
+     "EistCoordType": "HW_ALL",
+     "EmbeddedUefiShell": "Enabled",
+     "EmbeddedVideoResolution": "HighestSupported",
+     "EnabledCoresPerProc": 0,
+     "EnergyEfficientTurbo": "Enabled",
+     "EnergyPerfBias": "BalancedPerf",
+     "EppProfile": "Disabled",
+     "ErrorInjection": "Disabled",
+     "HThread": "Enabled",
+     "HomelessPrefetch": "Auto",
+     "HwPrefetcher": "Enabled",
+     "IntelPriorityBaseFreq": "Disabled",
+     "IntelPriorityCorePower": "Disabled",
+     "IntelProcVt": "Enabled",
+     "IntelSpeedSelectConfigLevel": "Base",
+     "IntelVmdSupport": "Disabled",
+     "IntelVrocSupport": "None",
+     "Ipv4Address": "",
+     "Ipv4Gateway": "",
+     "Ipv4PrimaryDNS": "",
+     "Ipv4PxeServerAddress": "",
+     "Ipv4SecondaryDNS": "",
+     "Ipv4SubnetMask": "",
+     "Ipv6Address": "",
+     "Ipv6ConfigPolicy": "Automatic",
+     "Ipv6Gateway": "",
+     "Ipv6PrimaryDNS": "",
+     "Ipv6SecondaryDNS": "",
+     "LlcDeadLineAlloc": "Enabled",
+     "LlcPrefetch": "Disabled",
+     "MemOfflineTestRepair": "Disabled",
+     "MemPatrolScrubbing": "Enabled",
+     "MemPprType": "HardPpr",
+     "MemRefreshRate": "Refreshx1",
+     "MinProcIdlePower": "C6",
+     "NumaGroupSizeOpt": "Clustered",
+     "OcpSlotOpRom": "Enabled",
+     "OsbRemoteRead": "Enabled",
+     "PagePolicy": "Closed",
+     "PcieIsolation": "Enabled",
+     "PcieLinkTrainingDelay": 0,
+     "PcieSlotConfigType": "16slot",
+     "PcieSlotOpRomA": "3",
+     "PcieSlotOpRomB": "None",
+     "PcieSlotOpRomC": "None",
+     "PcieSlotOpRomD": "None",
+     "PowerRegulator": "OsControl",
+     "ProcTurbo": "Enabled",
+     "SciRasSupport": "Ghesv2Support",
+     "SmartTestKey": "0x00000000",
+     "SmmExceptionLogging": "Verbose",
+     "Sriov": "Enabled",
+     "ThermalMonStatusFilter": "Disabled",
+     "Tme": "Disabled",
+     "UncoreFreqScaling": "Auto",
+     "UrlBootFile": "",
+     "UrlBootFile2": "",
+     "UsbControl": "UsbEnabled",
+     "VirtualNuma": "Disabled",
+     "WorkloadProfile": "MC",
+     "XncDataForwarding": "Enabled",
+     "XncSrvLvlPollingThreshold": 0,
+     "XptPrefetch": "Disabled"
+    }
+   }
+  },
+  "bmc": {
+   "_network_meta": {
+    "ipv4_gateways": [
+     "10.173.22.1"
+    ],
+    "name_servers": [],
+    "static_name_servers": []
+   },
+   "datetime": "2026-06-12T09:33:34+09:00",
+   "datetime_offset": "+09:00",
+   "dns_name": "M10MESDB11-RMC",
+   "firmware_version": "1.75.108-20260408_164726",
+   "health": "OK",
+   "ip": "10.173.22.80",
+   "last_reset_time": null,
+   "mac_address": "7c:a6:2a:41:74:b8",
+   "manager_type": "RackManager",
+   "manufacturer": "HPE",
+   "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
+   "name": "RMC",
+   "network_hostname": "M10MESDB11-RMC",
+   "oem": {
+    "ilo_version": null
+   },
+   "part_number": "R9N70A",
+   "power_state": null,
+   "serial": "SGHD3QHLDT",
+   "state": "Enabled",
+   "timezone": "Asia/Seoul",
+   "uuid": null
+  },
+  "firmware": [
+   {
+    "component": "5820866B-E4ED-42CD-84DE-D2AAC50FC489",
+    "id": "ComplexFW",
+    "name": "Complex Firmware",
+    "pending": false,
+    "updateable": true,
+    "version": "1.75.108-20260408_164726"
+   },
+   {
+    "component": "Partition0_FW",
+    "id": "Partition0_FW",
+    "name": "Npar 0 Current Firmware",
+    "pending": false,
+    "updateable": false,
+    "version": "1.75.108-20260408_164726"
+   },
+   {
+    "component": "rack1/chassis_u1/cpu1/io_slot1",
+    "id": "PCIeDevice.1",
+    "name": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+    "pending": false,
+    "updateable": null,
+    "version": "26.46.3048 (MT_0000000575)"
+   },
+   {
+    "component": "rack1/chassis_u1/cpu1/io_slot2",
+    "id": "PCIeDevice.2",
+    "name": "HPE SN1100Q 16Gb 2p FC HBA",
+    "pending": false,
+    "updateable": null,
+    "version": "9.15.05 (d0d5)"
+   },
+   {
+    "component": "rack1/chassis_u1/cpu0/io_slot3",
+    "id": "PCIeDevice.3",
+    "name": "HPE SR3258p-16i/e PCIe4 Controller",
+    "pending": false,
+    "updateable": null,
+    "version": "03.01.44.040-0"
+   },
+   {
+    "component": "rack1/chassis_u1/cpu0/io_slot5",
+    "id": "PCIeDevice.5",
+    "name": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+    "pending": false,
+    "updateable": null,
+    "version": "26.46.3048 (MT_0000000575)"
+   },
+   {
+    "component": "rack1/chassis_u1/cpu0/io_slot7",
+    "id": "PCIeDevice.7",
+    "name": "HPE SN1100Q 16Gb 2p FC HBA",
+    "pending": false,
+    "updateable": null,
+    "version": "9.15.05 (d0d5)"
+   },
+   {
+    "component": "rack1/chassis_u1/cpu3/io_slot9",
+    "id": "PCIeDevice.9",
+    "name": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+    "pending": false,
+    "updateable": null,
+    "version": "26.46.3048 (MT_0000000575)"
+   },
+   {
+    "component": "rack1/chassis_u1/cpu3/io_slot10",
+    "id": "PCIeDevice.10",
+    "name": "HPE SN1100Q 16Gb 2p FC HBA",
+    "pending": false,
+    "updateable": null,
+    "version": "9.15.05 (d0d5)"
+   },
+   {
+    "component": "rack1/chassis_u1/cpu2/io_slot13",
+    "id": "PCIeDevice.13",
+    "name": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+    "pending": false,
+    "updateable": null,
+    "version": "26.46.3048 (MT_0000000575)"
+   },
+   {
+    "component": "rack1/chassis_u1/cpu2/io_slot15",
+    "id": "PCIeDevice.15",
+    "name": "HPE SN1100Q 16Gb 2p FC HBA",
+    "pending": false,
+    "updateable": null,
+    "version": "9.15.05 (d0d5)"
+   },
+   {
+    "component": "rack1/chassis_u1/psu0",
+    "id": "PowerSupply.0",
+    "name": "CRPS: Common Redundant Power Supply",
+    "pending": false,
+    "updateable": null,
+    "version": "Release -0005"
+   },
+   {
+    "component": "rack1/chassis_u1/psu1",
+    "id": "PowerSupply.1",
+    "name": "CRPS: Common Redundant Power Supply",
+    "pending": false,
+    "updateable": null,
+    "version": "Release -0005"
+   },
+   {
+    "component": "rack1/chassis_u1/psu2",
+    "id": "PowerSupply.2",
+    "name": "CRPS: Common Redundant Power Supply",
+    "pending": false,
+    "updateable": null,
+    "version": "Release -0005"
+   },
+   {
+    "component": "rack1/chassis_u1/psu3",
+    "id": "PowerSupply.3",
+    "name": "CRPS: Common Redundant Power Supply",
+    "pending": false,
+    "updateable": null,
+    "version": "Release -0005"
+   }
+  ],
+  "memory": {
+   "slots": [
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0000000101000074",
+     "locator": "rack1/chassis_u1/cpu0/dimmA0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu0/dimmA0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A40",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0000000101000174",
+     "locator": "rack1/chassis_u1/cpu2/dimmA0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu2/dimmA0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B89EA",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0000000101010074",
+     "locator": "rack1/chassis_u1/cpu1/dimmA0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu1/dimmA0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A6E",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0000000101010174",
+     "locator": "rack1/chassis_u1/cpu3/dimmA0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu3/dimmA0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B89E6",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0001000101000074",
+     "locator": "rack1/chassis_u1/cpu0/dimmB0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu0/dimmB0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A68",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0001000101000174",
+     "locator": "rack1/chassis_u1/cpu2/dimmB0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu2/dimmB0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A6F",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0001000101010074",
+     "locator": "rack1/chassis_u1/cpu1/dimmB0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu1/dimmB0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A71",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0001000101010174",
+     "locator": "rack1/chassis_u1/cpu3/dimmB0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu3/dimmB0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B89DC",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0002010101000074",
+     "locator": "rack1/chassis_u1/cpu0/dimmC0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu0/dimmC0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A49",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0002010101000174",
+     "locator": "rack1/chassis_u1/cpu2/dimmC0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu2/dimmC0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A77",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0002010101010074",
+     "locator": "rack1/chassis_u1/cpu1/dimmC0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu1/dimmC0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A3C",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0002010101010174",
+     "locator": "rack1/chassis_u1/cpu3/dimmC0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu3/dimmC0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B89E4",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0003010101000074",
+     "locator": "rack1/chassis_u1/cpu0/dimmD0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu0/dimmD0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A22",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0003010101000174",
+     "locator": "rack1/chassis_u1/cpu2/dimmD0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu2/dimmD0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A69",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0003010101010074",
+     "locator": "rack1/chassis_u1/cpu1/dimmD0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu1/dimmD0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A01",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0003010101010174",
+     "locator": "rack1/chassis_u1/cpu3/dimmD0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu3/dimmD0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A1D",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0004020101000074",
+     "locator": "rack1/chassis_u1/cpu0/dimmE0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu0/dimmE0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A66",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0004020101000174",
+     "locator": "rack1/chassis_u1/cpu2/dimmE0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu2/dimmE0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A70",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0004020101010074",
+     "locator": "rack1/chassis_u1/cpu1/dimmE0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu1/dimmE0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A6A",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0004020101010174",
+     "locator": "rack1/chassis_u1/cpu3/dimmE0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu3/dimmE0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B89FA",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0005020101000074",
+     "locator": "rack1/chassis_u1/cpu0/dimmF0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu0/dimmF0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8FCB",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0005020101000174",
+     "locator": "rack1/chassis_u1/cpu2/dimmF0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu2/dimmF0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8FC8",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0005020101010074",
+     "locator": "rack1/chassis_u1/cpu1/dimmF0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu1/dimmF0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8F7F",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0005020101010174",
+     "locator": "rack1/chassis_u1/cpu3/dimmF0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu3/dimmF0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A00",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0006030101000074",
+     "locator": "rack1/chassis_u1/cpu0/dimmG0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu0/dimmG0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A32",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0006030101000174",
+     "locator": "rack1/chassis_u1/cpu2/dimmG0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu2/dimmG0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B89E2",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0006030101010074",
+     "locator": "rack1/chassis_u1/cpu1/dimmG0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu1/dimmG0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B89E3",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0006030101010174",
+     "locator": "rack1/chassis_u1/cpu3/dimmG0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu3/dimmG0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8F82",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0007030101000074",
+     "locator": "rack1/chassis_u1/cpu0/dimmH0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu0/dimmH0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8A0B",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0007030101000174",
+     "locator": "rack1/chassis_u1/cpu2/dimmH0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu2/dimmH0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8FC3",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0007030101010074",
+     "locator": "rack1/chassis_u1/cpu1/dimmH0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu1/dimmH0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B8FB3",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    },
+    {
+     "base_module_type": "RDIMM",
+     "bus_width_bits": 80,
+     "capacity_mb": 32768,
+     "data_width_bits": 64,
+     "error_correction": null,
+     "health": "OK",
+     "id": "0007030101010174",
+     "locator": "rack1/chassis_u1/cpu3/dimmH0",
+     "manufacturer": "SK hynix",
+     "name": "rack1/chassis_u1/cpu3/dimmH0",
+     "part_number": "HMCG84AEBRA107N",
+     "rank_count": null,
+     "serial": "0x889B89F8",
+     "speed_mhz": 2400,
+     "type": "DDR5"
+    }
+   ],
+   "total_mib": 1048576
+  },
+  "network": [
+   {
+    "health": null,
+    "id": "PCIeCard1Eth0",
+    "ipv4": [],
+    "link_status": "unknown",
+    "mac": "60:5e:65:21:6e:d4",
+    "mtu": null,
+    "name": "rack1/chassis_u1/cpu1/io_slot1 Ethernet Port 0",
+    "speed_mbps": null
+   },
+   {
+    "health": null,
+    "id": "PCIeCard1Eth1",
+    "ipv4": [],
+    "link_status": "unknown",
+    "mac": "60:5e:65:21:6e:d5",
+    "mtu": null,
+    "name": "rack1/chassis_u1/cpu1/io_slot1 Ethernet Port 1",
+    "speed_mbps": null
+   },
+   {
+    "health": null,
+    "id": "PCIeCard5Eth0",
+    "ipv4": [],
+    "link_status": "unknown",
+    "mac": "60:5e:65:21:6d:f0",
+    "mtu": null,
+    "name": "rack1/chassis_u1/cpu0/io_slot5 Ethernet Port 0",
+    "speed_mbps": null
+   },
+   {
+    "health": null,
+    "id": "PCIeCard5Eth1",
+    "ipv4": [],
+    "link_status": "unknown",
+    "mac": "60:5e:65:21:6d:f1",
+    "mtu": null,
+    "name": "rack1/chassis_u1/cpu0/io_slot5 Ethernet Port 1",
+    "speed_mbps": null
+   },
+   {
+    "health": null,
+    "id": "PCIeCard9Eth0",
+    "ipv4": [],
+    "link_status": "unknown",
+    "mac": "60:5e:65:21:6e:0c",
+    "mtu": null,
+    "name": "rack1/chassis_u1/cpu3/io_slot9 Ethernet Port 0",
+    "speed_mbps": null
+   },
+   {
+    "health": null,
+    "id": "PCIeCard9Eth1",
+    "ipv4": [],
+    "link_status": "unknown",
+    "mac": "60:5e:65:21:6e:0d",
+    "mtu": null,
+    "name": "rack1/chassis_u1/cpu3/io_slot9 Ethernet Port 1",
+    "speed_mbps": null
+   },
+   {
+    "health": null,
+    "id": "PCIeCard13Eth0",
+    "ipv4": [],
+    "link_status": "unknown",
+    "mac": "60:5e:65:21:7d:6c",
+    "mtu": null,
+    "name": "rack1/chassis_u1/cpu2/io_slot13 Ethernet Port 0",
+    "speed_mbps": null
+   },
+   {
+    "health": null,
+    "id": "PCIeCard13Eth1",
+    "ipv4": [],
+    "link_status": "unknown",
+    "mac": "60:5e:65:21:7d:6d",
+    "mtu": null,
+    "name": "rack1/chassis_u1/cpu2/io_slot13 Ethernet Port 1",
+    "speed_mbps": null
+   }
+  ],
+  "network_adapters": {
+   "adapters": [
+    {
+     "firmware_version": "26.46.3048 (MT_0000000575)",
+     "id": "PCIeCard1",
+     "link_status": "unknown",
+     "mac": "60:5e:65:21:6e:d4",
+     "manufacturer": "Mellanox Technologies",
+     "model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "name": "rack1/chassis_u1/cpu1/io_slot1 Network Adapter",
+     "part_number": "P42044-B21",
+     "port_count": 2,
+     "serial_number": "1I054202H3",
+     "speed_mbps": null
+    },
+    {
+     "firmware_version": "9.15.05 (d0d5)",
+     "id": "PCIeCard2",
+     "link_status": "unknown",
+     "mac": null,
+     "manufacturer": "Hewlett Packard Enterprise",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "name": "rack1/chassis_u1/cpu1/io_slot2 Network Adapter",
+     "part_number": "P9D94A",
+     "port_count": 2,
+     "serial_number": "MY5504027Z",
+     "speed_mbps": null
+    },
+    {
+     "firmware_version": "26.46.3048 (MT_0000000575)",
+     "id": "PCIeCard5",
+     "link_status": "unknown",
+     "mac": "60:5e:65:21:6d:f0",
+     "manufacturer": "Mellanox Technologies",
+     "model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "name": "rack1/chassis_u1/cpu0/io_slot5 Network Adapter",
+     "part_number": "P42044-B21",
+     "port_count": 2,
+     "serial_number": "1I054202DS",
+     "speed_mbps": null
+    },
+    {
+     "firmware_version": "9.15.05 (d0d5)",
+     "id": "PCIeCard7",
+     "link_status": "unknown",
+     "mac": null,
+     "manufacturer": "Hewlett Packard Enterprise",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "name": "rack1/chassis_u1/cpu0/io_slot7 Network Adapter",
+     "part_number": "P9D94A",
+     "port_count": 2,
+     "serial_number": "MY55040267",
+     "speed_mbps": null
+    },
+    {
+     "firmware_version": "26.46.3048 (MT_0000000575)",
+     "id": "PCIeCard9",
+     "link_status": "unknown",
+     "mac": "60:5e:65:21:6e:0c",
+     "manufacturer": "Mellanox Technologies",
+     "model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "name": "rack1/chassis_u1/cpu3/io_slot9 Network Adapter",
+     "part_number": "P42044-B21",
+     "port_count": 2,
+     "serial_number": "1I054202F5",
+     "speed_mbps": null
+    },
+    {
+     "firmware_version": "9.15.05 (d0d5)",
+     "id": "PCIeCard10",
+     "link_status": "unknown",
+     "mac": null,
+     "manufacturer": "Hewlett Packard Enterprise",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "name": "rack1/chassis_u1/cpu3/io_slot10 Network Adapter",
+     "part_number": "P9D94A",
+     "port_count": 2,
+     "serial_number": "MY5504025V",
+     "speed_mbps": null
+    },
+    {
+     "firmware_version": "26.46.3048 (MT_0000000575)",
+     "id": "PCIeCard13",
+     "link_status": "unknown",
+     "mac": "60:5e:65:21:7d:6c",
+     "manufacturer": "Mellanox Technologies",
+     "model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "name": "rack1/chassis_u1/cpu2/io_slot13 Network Adapter",
+     "part_number": "P42044-B21",
+     "port_count": 2,
+     "serial_number": "1I054203T1",
+     "speed_mbps": null
+    },
+    {
+     "firmware_version": "9.15.05 (d0d5)",
+     "id": "PCIeCard15",
+     "link_status": "unknown",
+     "mac": null,
+     "manufacturer": "Hewlett Packard Enterprise",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "name": "rack1/chassis_u1/cpu2/io_slot15 Network Adapter",
+     "part_number": "P9D94A",
+     "port_count": 2,
+     "serial_number": "MY5504026L",
+     "speed_mbps": null
+    }
+   ],
+   "fc_hbas": [
+    {
+     "adapter_id": "PCIeCard2",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "driver": null,
+     "firmware": "9.15.05 (d0d5)",
+     "link_speed_gbps": null,
+     "link_status": "down",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "port_id": "PCIeCard2Port1",
+     "port_type": "FibreChannel",
+     "source": "redfish",
+     "vendor": "Hewlett Packard Enterprise",
+     "wwnn": "51:40:2e:c0:20:82:ec:65",
+     "wwpn": "51:40:2e:c0:20:82:ec:64"
+    },
+    {
+     "adapter_id": "PCIeCard2",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "driver": null,
+     "firmware": "9.15.05 (d0d5)",
+     "link_speed_gbps": null,
+     "link_status": "down",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "port_id": "PCIeCard2Port2",
+     "port_type": "FibreChannel",
+     "source": "redfish",
+     "vendor": "Hewlett Packard Enterprise",
+     "wwnn": "51:40:2e:c0:20:82:ec:67",
+     "wwpn": "51:40:2e:c0:20:82:ec:66"
+    },
+    {
+     "adapter_id": "PCIeCard7",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "driver": null,
+     "firmware": "9.15.05 (d0d5)",
+     "link_speed_gbps": null,
+     "link_status": "down",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "port_id": "PCIeCard7Port1",
+     "port_type": "FibreChannel",
+     "source": "redfish",
+     "vendor": "Hewlett Packard Enterprise",
+     "wwnn": "51:40:2e:c0:20:82:ec:01",
+     "wwpn": "51:40:2e:c0:20:82:ec:00"
+    },
+    {
+     "adapter_id": "PCIeCard7",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "driver": null,
+     "firmware": "9.15.05 (d0d5)",
+     "link_speed_gbps": null,
+     "link_status": "down",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "port_id": "PCIeCard7Port2",
+     "port_type": "FibreChannel",
+     "source": "redfish",
+     "vendor": "Hewlett Packard Enterprise",
+     "wwnn": "51:40:2e:c0:20:82:ec:03",
+     "wwpn": "51:40:2e:c0:20:82:ec:02"
+    },
+    {
+     "adapter_id": "PCIeCard10",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "driver": null,
+     "firmware": "9.15.05 (d0d5)",
+     "link_speed_gbps": null,
+     "link_status": "down",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "port_id": "PCIeCard10Port1",
+     "port_type": "FibreChannel",
+     "source": "redfish",
+     "vendor": "Hewlett Packard Enterprise",
+     "wwnn": "51:40:2e:c0:20:82:eb:e9",
+     "wwpn": "51:40:2e:c0:20:82:eb:e8"
+    },
+    {
+     "adapter_id": "PCIeCard10",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "driver": null,
+     "firmware": "9.15.05 (d0d5)",
+     "link_speed_gbps": null,
+     "link_status": "down",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "port_id": "PCIeCard10Port2",
+     "port_type": "FibreChannel",
+     "source": "redfish",
+     "vendor": "Hewlett Packard Enterprise",
+     "wwnn": "51:40:2e:c0:20:82:eb:eb",
+     "wwpn": "51:40:2e:c0:20:82:eb:ea"
+    },
+    {
+     "adapter_id": "PCIeCard15",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "driver": null,
+     "firmware": "9.15.05 (d0d5)",
+     "link_speed_gbps": null,
+     "link_status": "down",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "port_id": "PCIeCard15Port1",
+     "port_type": "FibreChannel",
+     "source": "redfish",
+     "vendor": "Hewlett Packard Enterprise",
+     "wwnn": "51:40:2e:c0:20:82:ec:19",
+     "wwpn": "51:40:2e:c0:20:82:ec:18"
+    },
+    {
+     "adapter_id": "PCIeCard15",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "driver": null,
+     "firmware": "9.15.05 (d0d5)",
+     "link_speed_gbps": null,
+     "link_status": "down",
+     "model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "port_id": "PCIeCard15Port2",
+     "port_type": "FibreChannel",
+     "source": "redfish",
+     "vendor": "Hewlett Packard Enterprise",
+     "wwnn": "51:40:2e:c0:20:82:ec:1b",
+     "wwpn": "51:40:2e:c0:20:82:ec:1a"
+    }
+   ],
+   "infiniband": [],
+   "ports": [
+    {
+     "adapter_id": "PCIeCard1",
+     "adapter_model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "associated_address": "60:5e:65:21:6e:d4",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu1/io_slot1 Port 1",
+     "physical_port_number": null,
+     "port_id": "PCIeCard1Port1",
+     "port_type": "Ethernet"
+    },
+    {
+     "adapter_id": "PCIeCard1",
+     "adapter_model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "associated_address": "60:5e:65:21:6e:d5",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu1/io_slot1 Port 2",
+     "physical_port_number": null,
+     "port_id": "PCIeCard1Port2",
+     "port_type": "Ethernet"
+    },
+    {
+     "adapter_id": "PCIeCard2",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "associated_address": "51:40:2e:c0:20:82:ec:64",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu1/io_slot2 Port 1",
+     "physical_port_number": null,
+     "port_id": "PCIeCard2Port1",
+     "port_type": "FibreChannel"
+    },
+    {
+     "adapter_id": "PCIeCard2",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "associated_address": "51:40:2e:c0:20:82:ec:66",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu1/io_slot2 Port 2",
+     "physical_port_number": null,
+     "port_id": "PCIeCard2Port2",
+     "port_type": "FibreChannel"
+    },
+    {
+     "adapter_id": "PCIeCard5",
+     "adapter_model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "associated_address": "60:5e:65:21:6d:f0",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu0/io_slot5 Port 1",
+     "physical_port_number": null,
+     "port_id": "PCIeCard5Port1",
+     "port_type": "Ethernet"
+    },
+    {
+     "adapter_id": "PCIeCard5",
+     "adapter_model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "associated_address": "60:5e:65:21:6d:f1",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu0/io_slot5 Port 2",
+     "physical_port_number": null,
+     "port_id": "PCIeCard5Port2",
+     "port_type": "Ethernet"
+    },
+    {
+     "adapter_id": "PCIeCard7",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "associated_address": "51:40:2e:c0:20:82:ec:00",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu0/io_slot7 Port 1",
+     "physical_port_number": null,
+     "port_id": "PCIeCard7Port1",
+     "port_type": "FibreChannel"
+    },
+    {
+     "adapter_id": "PCIeCard7",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "associated_address": "51:40:2e:c0:20:82:ec:02",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu0/io_slot7 Port 2",
+     "physical_port_number": null,
+     "port_id": "PCIeCard7Port2",
+     "port_type": "FibreChannel"
+    },
+    {
+     "adapter_id": "PCIeCard9",
+     "adapter_model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "associated_address": "60:5e:65:21:6e:0c",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu3/io_slot9 Port 1",
+     "physical_port_number": null,
+     "port_id": "PCIeCard9Port1",
+     "port_type": "Ethernet"
+    },
+    {
+     "adapter_id": "PCIeCard9",
+     "adapter_model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "associated_address": "60:5e:65:21:6e:0d",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu3/io_slot9 Port 2",
+     "physical_port_number": null,
+     "port_id": "PCIeCard9Port2",
+     "port_type": "Ethernet"
+    },
+    {
+     "adapter_id": "PCIeCard10",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "associated_address": "51:40:2e:c0:20:82:eb:e8",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu3/io_slot10 Port 1",
+     "physical_port_number": null,
+     "port_id": "PCIeCard10Port1",
+     "port_type": "FibreChannel"
+    },
+    {
+     "adapter_id": "PCIeCard10",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "associated_address": "51:40:2e:c0:20:82:eb:ea",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu3/io_slot10 Port 2",
+     "physical_port_number": null,
+     "port_id": "PCIeCard10Port2",
+     "port_type": "FibreChannel"
+    },
+    {
+     "adapter_id": "PCIeCard13",
+     "adapter_model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "associated_address": "60:5e:65:21:7d:6c",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu2/io_slot13 Port 1",
+     "physical_port_number": null,
+     "port_id": "PCIeCard13Port1",
+     "port_type": "Ethernet"
+    },
+    {
+     "adapter_id": "PCIeCard13",
+     "adapter_model": "MLX MCX631102 10/25GbE 2p SFP28 Adptr",
+     "associated_address": "60:5e:65:21:7d:6d",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu2/io_slot13 Port 2",
+     "physical_port_number": null,
+     "port_id": "PCIeCard13Port2",
+     "port_type": "Ethernet"
+    },
+    {
+     "adapter_id": "PCIeCard15",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "associated_address": "51:40:2e:c0:20:82:ec:18",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu2/io_slot15 Port 1",
+     "physical_port_number": null,
+     "port_id": "PCIeCard15Port1",
+     "port_type": "FibreChannel"
+    },
+    {
+     "adapter_id": "PCIeCard15",
+     "adapter_model": "HPE SN1100Q 16Gb 2p FC HBA",
+     "associated_address": "51:40:2e:c0:20:82:ec:1a",
+     "current_link_speed_mbps": null,
+     "health": null,
+     "link_state": null,
+     "link_status": "unknown",
+     "name": "rack1/chassis_u1/cpu2/io_slot15 Port 2",
+     "physical_port_number": null,
+     "port_id": "PCIeCard15Port2",
+     "port_type": "FibreChannel"
+    }
+   ]
+  },
+  "power": {
+   "power_control": {
+    "avg_consumed_watts": null,
+    "interval_in_min": null,
+    "max_consumed_watts": null,
+    "min_consumed_watts": null,
+    "power_capacity_watts": null,
+    "power_consumed_watts": 1000
+   },
+   "power_supplies": [
+    {
+     "firmware_version": "Release -0005",
+     "health": "OK",
+     "manufacturer": "Artesyn",
+     "model": "CRPS: Common Redundant Power Supply",
+     "name": "rack1/chassis_u1/psu0",
+     "part_number": "CSU2400AP-3-500",
+     "power_capacity_w": null,
+     "serial": "R65897004EBJP",
+     "state": "Enabled"
+    },
+    {
+     "firmware_version": "Release -0005",
+     "health": "OK",
+     "manufacturer": "Artesyn",
+     "model": "CRPS: Common Redundant Power Supply",
+     "name": "rack1/chassis_u1/psu1",
+     "part_number": "CSU2400AP-3-500",
+     "power_capacity_w": null,
+     "serial": "R65897002BBJP",
+     "state": "Enabled"
+    },
+    {
+     "firmware_version": "Release -0005",
+     "health": "OK",
+     "manufacturer": "Artesyn",
+     "model": "CRPS: Common Redundant Power Supply",
+     "name": "rack1/chassis_u1/psu2",
+     "part_number": "CSU2400AP-3-500",
+     "power_capacity_w": null,
+     "serial": "R65898000FBJP",
+     "state": "Enabled"
+    },
+    {
+     "firmware_version": "Release -0005",
+     "health": "OK",
+     "manufacturer": "Artesyn",
+     "model": "CRPS: Common Redundant Power Supply",
+     "name": "rack1/chassis_u1/psu3",
+     "part_number": "CSU2400AP-3-500",
+     "power_capacity_w": null,
+     "serial": "R65898000ABJP",
+     "state": "Enabled"
+    }
+   ]
+  },
+  "processors": [
+   {
+    "architecture": "x86",
+    "health": "OK",
+    "id": "0",
+    "instruction_set": "x86-64",
+    "manufacturer": "Intel(R) Corporation",
+    "max_speed_mhz": 4000,
+    "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
+    "name": "rack1/chassis_u1/cpu0",
+    "part_number": "PK80713",
+    "processor_type": "CPU",
+    "serial_number": "0x625581BED517AD54",
+    "socket": null,
+    "speed_mhz": 2900,
+    "total_cores": 16,
+    "total_threads": 32
+   },
+   {
+    "architecture": "x86",
+    "health": "OK",
+    "id": "1",
+    "instruction_set": "x86-64",
+    "manufacturer": "Intel(R) Corporation",
+    "max_speed_mhz": 4000,
+    "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
+    "name": "rack1/chassis_u1/cpu1",
+    "part_number": "PK80713",
+    "processor_type": "CPU",
+    "serial_number": "0x625323C0CDC26D6D",
+    "socket": null,
+    "speed_mhz": 2900,
+    "total_cores": 16,
+    "total_threads": 32
+   },
+   {
+    "architecture": "x86",
+    "health": "OK",
+    "id": "2",
+    "instruction_set": "x86-64",
+    "manufacturer": "Intel(R) Corporation",
+    "max_speed_mhz": 4000,
+    "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
+    "name": "rack1/chassis_u1/cpu2",
+    "part_number": "PK80713",
+    "processor_type": "CPU",
+    "serial_number": "0x6254BFC04AD7FB03",
+    "socket": null,
+    "speed_mhz": 2900,
+    "total_cores": 16,
+    "total_threads": 32
+   },
+   {
+    "architecture": "x86",
+    "health": "OK",
+    "id": "3",
+    "instruction_set": "x86-64",
+    "manufacturer": "Intel(R) Corporation",
+    "max_speed_mhz": 4000,
+    "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
+    "name": "rack1/chassis_u1/cpu3",
+    "part_number": "PK80713",
+    "processor_type": "CPU",
+    "serial_number": "0x6254E0C06D4F4F4B",
+    "socket": null,
+    "speed_mhz": 2900,
+    "total_cores": 16,
+    "total_threads": 32
+   }
+  ],
+  "storage": {
+   "controllers": [
+    {
+     "controller_firmware": "03.01.44.040-0",
+     "controller_health": "OK",
+     "controller_manufacturer": "Adaptec",
+     "controller_model": "HPE SR3258p-16i/e PCIe4 Controller",
+     "controller_name": "HPE SR3258p-16i/e PCIe4 Controller",
+     "drives": [
+      {
+       "capacity_bytes": 1600321314816,
+       "capacity_gb": 1600.32,
+       "failure_predicted": null,
+       "health": "OK",
+       "id": "DriveSlot1InPCIeSlot3Box1",
+       "manufacturer": "HPE",
+       "media_type": "SSD",
+       "model": "MO001600PXMTN",
+       "name": "Drive rack1/chassis_u1/cpu0/io_slot3/box1/drive_bay1",
+       "predicted_life_percent": null,
+       "protocol": "SAS",
+       "serial": "YFN0A0SP0T83"
+      },
+      {
+       "capacity_bytes": 1600321314816,
+       "capacity_gb": 1600.32,
+       "failure_predicted": null,
+       "health": "OK",
+       "id": "DriveSlot2InPCIeSlot3Box1",
+       "manufacturer": "HPE",
+       "media_type": "SSD",
+       "model": "MO001600PXMTN",
+       "name": "Drive rack1/chassis_u1/cpu0/io_slot3/box1/drive_bay2",
+       "predicted_life_percent": null,
+       "protocol": "SAS",
+       "serial": "YFN0A0SR0T83"
+      }
+     ],
+     "health": null,
+     "id": "1",
+     "name": "HPE SR3258p-16i/e PCIe4 Controller"
+    }
+   ],
+   "volumes": []
+  },
+  "system": {
+   "asset_tag": null,
+   "bios_date": null,
+   "bios_version": "1.75.108-20260408_164726",
+   "boot_progress": "OSRunning",
+   "cpu_summary": {
+    "core_count": null,
+    "count": 4,
+    "health": "OK",
+    "logical_processor_count": 64,
+    "model": "Intel(R) Xeon(R)"
+   },
+   "health": "OK",
+   "hostname": "m10mesdb11",
+   "last_reset_time": "2026-06-10T13:31:54Z",
+   "led_state": null,
+   "manufacturer": "HPE",
+   "memory_summary": {
+    "health": "OK",
+    "total_gib": 1024
+   },
+   "model": "Compute Scale-up Server 3200",
+   "oem": {
+    "console_routing": "default",
+    "console_routing_current_boot": "default",
+    "dcd_version": "5.0-7.1",
+    "host_os_description": "Red Hat Enterprise Linux 8.10 (Ootpa)",
+    "host_os_name": "Red Hat Enterprise Linux",
+    "host_os_version": "8.10 (Ootpa)",
+    "product_id": "1590PID03030201"
+   },
+   "part_number": "R9N70A",
+   "power_state": "On",
+   "serial": "SGHD3QHLDT-000",
+   "sku": null,
+   "state": "Enabled",
+   "system_type": "PhysicallyPartitioned",
+   "tpm": {
+    "firmware_version": "0x00010200",
+    "interface_type": "TPM2_0",
+    "state": "Enabled"
+   },
+   "uuid": "76776656-4c86-5e95-b027-0945404917ba"
+  },
+  "thermal": {
+   "fans": [
+    {
+     "health": "OK",
+     "name": "rack1/chassis_u1/chassis_fan0",
+     "reading": 4320,
+     "reading_units": "RPM",
+     "state": "Enabled"
+    },
+    {
+     "health": "OK",
+     "name": "rack1/chassis_u1/harp_fan0",
+     "reading": 10800,
+     "reading_units": "RPM",
+     "state": "Enabled"
+    },
+    {
+     "health": "OK",
+     "name": "rack1/chassis_u1/chassis_fan1",
+     "reading": 4350,
+     "reading_units": "RPM",
+     "state": "Enabled"
+    },
+    {
+     "health": "OK",
+     "name": "rack1/chassis_u1/harp_fan1",
+     "reading": 10800,
+     "reading_units": "RPM",
+     "state": "Enabled"
+    },
+    {
+     "health": "OK",
+     "name": "rack1/chassis_u1/chassis_fan2",
+     "reading": 4320,
+     "reading_units": "RPM",
+     "state": "Enabled"
+    },
+    {
+     "health": "OK",
+     "name": "rack1/chassis_u1/chassis_fan3",
+     "reading": 4380,
+     "reading_units": "RPM",
+     "state": "Enabled"
+    },
+    {
+     "health": "OK",
+     "name": "rack1/chassis_u1/chassis_fan4",
+     "reading": 4350,
+     "reading_units": "RPM",
+     "state": "Enabled"
+    },
+    {
+     "health": "OK",
+     "name": "rack1/chassis_u1/chassis_fan5",
+     "reading": 4350,
+     "reading_units": "RPM",
+     "state": "Enabled"
+    },
+    {
+     "health": "OK",
+     "name": "rack1/chassis_u1/chassis_fan6",
+     "reading": 4380,
+     "reading_units": "RPM",
+     "state": "Enabled"
+    },
+    {
+     "health": "OK",
+     "name": "rack1/chassis_u1/chassis_fan7",
+     "reading": 4410,
+     "reading_units": "RPM",
+     "state": "Enabled"
+    }
+   ],
+   "temperatures": [
+    {
+     "health": null,
+     "name": "P0_TEMP",
+     "physical_context": "CPU",
+     "reading_celsius": 69,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P1_TEMP",
+     "physical_context": "CPU",
+     "reading_celsius": 66,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P2_TEMP",
+     "physical_context": "CPU",
+     "reading_celsius": 66,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P3_TEMP",
+     "physical_context": "CPU",
+     "reading_celsius": 68,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P0_THROT_OFFSET",
+     "physical_context": "CPU",
+     "reading_celsius": -28,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P1_THROT_OFFSET",
+     "physical_context": "CPU",
+     "reading_celsius": -31,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P2_THROT_OFFSET",
+     "physical_context": "CPU",
+     "reading_celsius": -31,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P3_THROT_OFFSET",
+     "physical_context": "CPU",
+     "reading_celsius": -29,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "HARP0_TEMP0",
+     "physical_context": "ASIC",
+     "reading_celsius": 73,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "HARP0_TEMP1",
+     "physical_context": "ASIC",
+     "reading_celsius": 73,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "HARP1_TEMP0",
+     "physical_context": "ASIC",
+     "reading_celsius": 75,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "HARP1_TEMP1",
+     "physical_context": "ASIC",
+     "reading_celsius": 75,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "BASEIO_TEMP1",
+     "physical_context": "Board",
+     "reading_celsius": 39,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "BASEIO_TEMP2",
+     "physical_context": "Board",
+     "reading_celsius": 38,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "FP_INLET",
+     "physical_context": "Front",
+     "reading_celsius": 17,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "MLB_INLET",
+     "physical_context": "Board",
+     "reading_celsius": 23,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "MLB_OUTLET",
+     "physical_context": "Board",
+     "reading_celsius": 41,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "CPU0_INLET",
+     "physical_context": "Board",
+     "reading_celsius": 43,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "CPU2_INLET",
+     "physical_context": "Board",
+     "reading_celsius": 40,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "HARP0_INLET",
+     "physical_context": "ASIC",
+     "reading_celsius": 31,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "HARP0_OUTLET",
+     "physical_context": "ASIC",
+     "reading_celsius": 47,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "HARP1_INLET",
+     "physical_context": "ASIC",
+     "reading_celsius": 31,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "HARP1_OUTLET",
+     "physical_context": "ASIC",
+     "reading_celsius": 46,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "PWRB_TEMP1",
+     "physical_context": "Board",
+     "reading_celsius": 35,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "PWRB_TEMP2",
+     "physical_context": "Board",
+     "reading_celsius": 35,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "PWRB_TEMP3",
+     "physical_context": "Board",
+     "reading_celsius": 29,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "PWRB_TEMP4",
+     "physical_context": "Board",
+     "reading_celsius": 27,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "PCIE_RISER0_TEMP",
+     "physical_context": null,
+     "reading_celsius": 26,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "PCIE_RISER1_TEMP",
+     "physical_context": null,
+     "reading_celsius": 25,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "PCIE_RISER2_TEMP",
+     "physical_context": null,
+     "reading_celsius": 26,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "PCIE_RISER3_TEMP",
+     "physical_context": null,
+     "reading_celsius": 24,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P0-DIMMA0",
+     "physical_context": "Memory",
+     "reading_celsius": 42,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P0-DIMMB0",
+     "physical_context": "Memory",
+     "reading_celsius": 39,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P0-DIMMC0",
+     "physical_context": "Memory",
+     "reading_celsius": 37,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P0-DIMMD0",
+     "physical_context": "Memory",
+     "reading_celsius": 37,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P0-DIMME0",
+     "physical_context": "Memory",
+     "reading_celsius": 47,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P0-DIMMF0",
+     "physical_context": "Memory",
+     "reading_celsius": 44,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P0-DIMMG0",
+     "physical_context": "Memory",
+     "reading_celsius": 41,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P0-DIMMH0",
+     "physical_context": "Memory",
+     "reading_celsius": 37,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P1-DIMMA0",
+     "physical_context": "Memory",
+     "reading_celsius": 36,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P1-DIMMB0",
+     "physical_context": "Memory",
+     "reading_celsius": 32,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P1-DIMMC0",
+     "physical_context": "Memory",
+     "reading_celsius": 31,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P1-DIMMD0",
+     "physical_context": "Memory",
+     "reading_celsius": 30,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P1-DIMME0",
+     "physical_context": "Memory",
+     "reading_celsius": 35,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P1-DIMMF0",
+     "physical_context": "Memory",
+     "reading_celsius": 31,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P1-DIMMG0",
+     "physical_context": "Memory",
+     "reading_celsius": 30,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P1-DIMMH0",
+     "physical_context": "Memory",
+     "reading_celsius": 30,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P2-DIMMA0",
+     "physical_context": "Memory",
+     "reading_celsius": 44,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P2-DIMMB0",
+     "physical_context": "Memory",
+     "reading_celsius": 39,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P2-DIMMC0",
+     "physical_context": "Memory",
+     "reading_celsius": 37,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P2-DIMMD0",
+     "physical_context": "Memory",
+     "reading_celsius": 34,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P2-DIMME0",
+     "physical_context": "Memory",
+     "reading_celsius": 46,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P2-DIMMF0",
+     "physical_context": "Memory",
+     "reading_celsius": 41,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P2-DIMMG0",
+     "physical_context": "Memory",
+     "reading_celsius": 39,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P2-DIMMH0",
+     "physical_context": "Memory",
+     "reading_celsius": 38,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P3-DIMMA0",
+     "physical_context": "Memory",
+     "reading_celsius": 36,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P3-DIMMB0",
+     "physical_context": "Memory",
+     "reading_celsius": 32,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P3-DIMMC0",
+     "physical_context": "Memory",
+     "reading_celsius": 30,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P3-DIMMD0",
+     "physical_context": "Memory",
+     "reading_celsius": 30,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P3-DIMME0",
+     "physical_context": "Memory",
+     "reading_celsius": 37,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P3-DIMMF0",
+     "physical_context": "Memory",
+     "reading_celsius": 33,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P3-DIMMG0",
+     "physical_context": "Memory",
+     "reading_celsius": 31,
+     "state": null,
+     "upper_critical": null
+    },
+    {
+     "health": null,
+     "name": "P3-DIMMH0",
+     "physical_context": "Memory",
+     "reading_celsius": 29,
+     "state": null,
+     "upper_critical": null
+    }
+   ]
+  }
+ },
+ "error_count": 0,
+ "failed_sections": [],
+ "multi_node": {
+  "chassis": [
+   {
+    "asset_tag": null,
+    "chassis_type": "RackGroup",
+    "id": "RackGroup",
+    "kind": "rackgroup",
+    "manufacturer": "HPE",
+    "model": "Compute Scale-up Server 3200",
+    "oem": {},
+    "part_number": "R9N70A",
+    "power": {},
+    "power_state": null,
+    "serial_number": "SGHD3QHLDT",
+    "thermal": {},
+    "uri": "/redfish/v1/Chassis/RackGroup",
+    "uuid": null
+   },
+   {
+    "asset_tag": null,
+    "chassis_type": "Rack",
+    "id": "Rack1",
+    "kind": "rack",
+    "manufacturer": null,
+    "model": null,
+    "oem": {},
+    "part_number": null,
+    "power": {},
+    "power_state": null,
+    "serial_number": null,
+    "thermal": {},
+    "uri": "/redfish/v1/Chassis/Rack1",
+    "uuid": null
+   },
+   {
+    "asset_tag": null,
+    "chassis_type": "RackMount",
+    "id": "r001u01",
+    "kind": "rackmount",
+    "manufacturer": "HPE",
+    "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
+    "oem": {
+     "oem_chassis_type": "Base",
+     "physical_location": "rack1/chassis_u1",
+     "physloc": "FFFF010101FFFF62",
+     "processors_compatibility_key": "PK8071305075101",
+     "processors_compatible": true
+    },
+    "part_number": "R9N70A",
+    "power": {
+     "power_control": {
+      "avg_consumed_watts": null,
+      "interval_in_min": null,
+      "max_consumed_watts": null,
+      "min_consumed_watts": null,
+      "power_capacity_watts": null,
+      "power_consumed_watts": 1000
+     },
+     "power_supplies": [
+      {
+       "firmware_version": "Release -0005",
+       "health": "OK",
+       "manufacturer": "Artesyn",
+       "model": "CRPS: Common Redundant Power Supply",
+       "name": "rack1/chassis_u1/psu0",
+       "part_number": "CSU2400AP-3-500",
+       "power_capacity_w": null,
+       "serial": "R65897004EBJP",
+       "state": "Enabled"
+      },
+      {
+       "firmware_version": "Release -0005",
+       "health": "OK",
+       "manufacturer": "Artesyn",
+       "model": "CRPS: Common Redundant Power Supply",
+       "name": "rack1/chassis_u1/psu1",
+       "part_number": "CSU2400AP-3-500",
+       "power_capacity_w": null,
+       "serial": "R65897002BBJP",
+       "state": "Enabled"
+      },
+      {
+       "firmware_version": "Release -0005",
+       "health": "OK",
+       "manufacturer": "Artesyn",
+       "model": "CRPS: Common Redundant Power Supply",
+       "name": "rack1/chassis_u1/psu2",
+       "part_number": "CSU2400AP-3-500",
+       "power_capacity_w": null,
+       "serial": "R65898000FBJP",
+       "state": "Enabled"
+      },
+      {
+       "firmware_version": "Release -0005",
+       "health": "OK",
+       "manufacturer": "Artesyn",
+       "model": "CRPS: Common Redundant Power Supply",
+       "name": "rack1/chassis_u1/psu3",
+       "part_number": "CSU2400AP-3-500",
+       "power_capacity_w": null,
+       "serial": "R65898000ABJP",
+       "state": "Enabled"
+      }
+     ]
+    },
+    "power_state": "On",
+    "serial_number": "SGHD3QHLDT",
+    "thermal": {
+     "fans": [
+      {
+       "health": "OK",
+       "name": "rack1/chassis_u1/chassis_fan0",
+       "reading": 4320,
+       "reading_units": "RPM",
+       "state": "Enabled"
+      },
+      {
+       "health": "OK",
+       "name": "rack1/chassis_u1/harp_fan0",
+       "reading": 10800,
+       "reading_units": "RPM",
+       "state": "Enabled"
+      },
+      {
+       "health": "OK",
+       "name": "rack1/chassis_u1/chassis_fan1",
+       "reading": 4350,
+       "reading_units": "RPM",
+       "state": "Enabled"
+      },
+      {
+       "health": "OK",
+       "name": "rack1/chassis_u1/harp_fan1",
+       "reading": 10800,
+       "reading_units": "RPM",
+       "state": "Enabled"
+      },
+      {
+       "health": "OK",
+       "name": "rack1/chassis_u1/chassis_fan2",
+       "reading": 4320,
+       "reading_units": "RPM",
+       "state": "Enabled"
+      },
+      {
+       "health": "OK",
+       "name": "rack1/chassis_u1/chassis_fan3",
+       "reading": 4380,
+       "reading_units": "RPM",
+       "state": "Enabled"
+      },
+      {
+       "health": "OK",
+       "name": "rack1/chassis_u1/chassis_fan4",
+       "reading": 4350,
+       "reading_units": "RPM",
+       "state": "Enabled"
+      },
+      {
+       "health": "OK",
+       "name": "rack1/chassis_u1/chassis_fan5",
+       "reading": 4350,
+       "reading_units": "RPM",
+       "state": "Enabled"
+      },
+      {
+       "health": "OK",
+       "name": "rack1/chassis_u1/chassis_fan6",
+       "reading": 4380,
+       "reading_units": "RPM",
+       "state": "Enabled"
+      },
+      {
+       "health": "OK",
+       "name": "rack1/chassis_u1/chassis_fan7",
+       "reading": 4410,
+       "reading_units": "RPM",
+       "state": "Enabled"
+      }
+     ],
+     "temperatures": [
+      {
+       "health": null,
+       "name": "P0_TEMP",
+       "physical_context": "CPU",
+       "reading_celsius": 69,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P1_TEMP",
+       "physical_context": "CPU",
+       "reading_celsius": 66,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P2_TEMP",
+       "physical_context": "CPU",
+       "reading_celsius": 66,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P3_TEMP",
+       "physical_context": "CPU",
+       "reading_celsius": 68,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P0_THROT_OFFSET",
+       "physical_context": "CPU",
+       "reading_celsius": -28,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P1_THROT_OFFSET",
+       "physical_context": "CPU",
+       "reading_celsius": -31,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P2_THROT_OFFSET",
+       "physical_context": "CPU",
+       "reading_celsius": -31,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P3_THROT_OFFSET",
+       "physical_context": "CPU",
+       "reading_celsius": -29,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "HARP0_TEMP0",
+       "physical_context": "ASIC",
+       "reading_celsius": 73,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "HARP0_TEMP1",
+       "physical_context": "ASIC",
+       "reading_celsius": 73,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "HARP1_TEMP0",
+       "physical_context": "ASIC",
+       "reading_celsius": 75,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "HARP1_TEMP1",
+       "physical_context": "ASIC",
+       "reading_celsius": 75,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "BASEIO_TEMP1",
+       "physical_context": "Board",
+       "reading_celsius": 39,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "BASEIO_TEMP2",
+       "physical_context": "Board",
+       "reading_celsius": 38,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "FP_INLET",
+       "physical_context": "Front",
+       "reading_celsius": 17,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "MLB_INLET",
+       "physical_context": "Board",
+       "reading_celsius": 23,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "MLB_OUTLET",
+       "physical_context": "Board",
+       "reading_celsius": 41,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "CPU0_INLET",
+       "physical_context": "Board",
+       "reading_celsius": 43,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "CPU2_INLET",
+       "physical_context": "Board",
+       "reading_celsius": 40,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "HARP0_INLET",
+       "physical_context": "ASIC",
+       "reading_celsius": 31,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "HARP0_OUTLET",
+       "physical_context": "ASIC",
+       "reading_celsius": 47,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "HARP1_INLET",
+       "physical_context": "ASIC",
+       "reading_celsius": 31,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "HARP1_OUTLET",
+       "physical_context": "ASIC",
+       "reading_celsius": 46,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "PWRB_TEMP1",
+       "physical_context": "Board",
+       "reading_celsius": 35,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "PWRB_TEMP2",
+       "physical_context": "Board",
+       "reading_celsius": 35,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "PWRB_TEMP3",
+       "physical_context": "Board",
+       "reading_celsius": 29,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "PWRB_TEMP4",
+       "physical_context": "Board",
+       "reading_celsius": 27,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "PCIE_RISER0_TEMP",
+       "physical_context": null,
+       "reading_celsius": 26,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "PCIE_RISER1_TEMP",
+       "physical_context": null,
+       "reading_celsius": 25,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "PCIE_RISER2_TEMP",
+       "physical_context": null,
+       "reading_celsius": 26,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "PCIE_RISER3_TEMP",
+       "physical_context": null,
+       "reading_celsius": 24,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P0-DIMMA0",
+       "physical_context": "Memory",
+       "reading_celsius": 42,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P0-DIMMB0",
+       "physical_context": "Memory",
+       "reading_celsius": 39,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P0-DIMMC0",
+       "physical_context": "Memory",
+       "reading_celsius": 37,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P0-DIMMD0",
+       "physical_context": "Memory",
+       "reading_celsius": 37,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P0-DIMME0",
+       "physical_context": "Memory",
+       "reading_celsius": 47,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P0-DIMMF0",
+       "physical_context": "Memory",
+       "reading_celsius": 44,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P0-DIMMG0",
+       "physical_context": "Memory",
+       "reading_celsius": 41,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P0-DIMMH0",
+       "physical_context": "Memory",
+       "reading_celsius": 37,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P1-DIMMA0",
+       "physical_context": "Memory",
+       "reading_celsius": 36,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P1-DIMMB0",
+       "physical_context": "Memory",
+       "reading_celsius": 32,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P1-DIMMC0",
+       "physical_context": "Memory",
+       "reading_celsius": 31,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P1-DIMMD0",
+       "physical_context": "Memory",
+       "reading_celsius": 30,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P1-DIMME0",
+       "physical_context": "Memory",
+       "reading_celsius": 35,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P1-DIMMF0",
+       "physical_context": "Memory",
+       "reading_celsius": 31,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P1-DIMMG0",
+       "physical_context": "Memory",
+       "reading_celsius": 30,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P1-DIMMH0",
+       "physical_context": "Memory",
+       "reading_celsius": 30,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P2-DIMMA0",
+       "physical_context": "Memory",
+       "reading_celsius": 44,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P2-DIMMB0",
+       "physical_context": "Memory",
+       "reading_celsius": 39,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P2-DIMMC0",
+       "physical_context": "Memory",
+       "reading_celsius": 37,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P2-DIMMD0",
+       "physical_context": "Memory",
+       "reading_celsius": 34,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P2-DIMME0",
+       "physical_context": "Memory",
+       "reading_celsius": 46,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P2-DIMMF0",
+       "physical_context": "Memory",
+       "reading_celsius": 41,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P2-DIMMG0",
+       "physical_context": "Memory",
+       "reading_celsius": 39,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P2-DIMMH0",
+       "physical_context": "Memory",
+       "reading_celsius": 38,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P3-DIMMA0",
+       "physical_context": "Memory",
+       "reading_celsius": 36,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P3-DIMMB0",
+       "physical_context": "Memory",
+       "reading_celsius": 32,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P3-DIMMC0",
+       "physical_context": "Memory",
+       "reading_celsius": 30,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P3-DIMMD0",
+       "physical_context": "Memory",
+       "reading_celsius": 30,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P3-DIMME0",
+       "physical_context": "Memory",
+       "reading_celsius": 37,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P3-DIMMF0",
+       "physical_context": "Memory",
+       "reading_celsius": 33,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P3-DIMMG0",
+       "physical_context": "Memory",
+       "reading_celsius": 31,
+       "state": null,
+       "upper_critical": null
+      },
+      {
+       "health": null,
+       "name": "P3-DIMMH0",
+       "physical_context": "Memory",
+       "reading_celsius": 29,
+       "state": null,
+       "upper_critical": null
+      }
+     ]
+    },
+    "uri": "/redfish/v1/Chassis/r001u01",
+    "uuid": "2f38b239-1d95-5a9c-8514-995ee1573e68"
+   }
+  ],
+  "composition": {
+   "enabled": true,
+   "health": "OK",
+   "resource_block_count": 1,
+   "resource_blocks": [
+    {
+     "chassis": [
+      "/redfish/v1/Chassis/r001u01"
+     ],
+     "composition_state": "Composed",
+     "computer_systems": [
+      "/redfish/v1/Systems/Partition0"
+     ],
+     "health": "OK",
+     "id": "r001u01",
+     "memory_count": 0,
+     "name": "Compute Resource Block rack1/chassis_u1",
+     "processor_count": 0,
+     "resource_block_types": [
+      "ComputerSystem"
+     ],
+     "state": "Enabled"
+    }
+   ],
+   "state": "Enabled"
+  },
+  "enabled": true,
+  "errors": [],
+  "fabrics": [
+   {
+    "endpoint_count": 0,
+    "endpoints": [],
+    "fabric_type": null,
+    "health": "OK",
+    "id": "FlexGrid",
+    "name": "Flex Grid",
+    "state": "Enabled",
+    "switch_count": 2,
+    "switches": [
+     {
+      "health": "OK",
+      "id": "r001u01_HARP0",
+      "name": "rack1/chassis_u1/harp0",
+      "state": "Enabled",
+      "switch_type": null
+     },
+     {
+      "health": "OK",
+      "id": "r001u01_HARP1",
+      "name": "rack1/chassis_u1/harp1",
+      "state": "Enabled",
+      "switch_type": null
+     }
+    ]
+   }
+  ],
+  "layout": "rmc_primary",
+  "managers": [
+   {
+    "bmc": {
+     "datetime": "2026-06-12T09:33:34+09:00",
+     "datetime_offset": "+09:00",
+     "dns_name": "M10MESDB11-RMC",
+     "firmware_version": "1.75.108-20260408_164726",
+     "health": "OK",
+     "ip": "10.173.22.80",
+     "last_reset_time": null,
+     "mac_address": "7c:a6:2a:41:74:b8",
+     "manager_type": "RackManager",
+     "manufacturer": "HPE",
+     "model": "Compute Scale-up Server 3200, 4S XNC Base Chassis",
+     "name": "RMC",
+     "network_hostname": "M10MESDB11-RMC",
+     "oem": {
+      "ilo_version": null
+     },
+     "part_number": "R9N70A",
+     "power_state": null,
+     "serial": "SGHD3QHLDT",
+     "state": "Enabled",
+     "timezone": "Asia/Seoul",
+     "uuid": null
+    },
+    "id": "RMC",
+    "log_services": [
+     {
+      "date_time": null,
+      "id": "IDC",
+      "log_entry_type": "OEM",
+      "name": "IDC Log Service",
+      "overwrite_policy": "WrapsWhenFull",
+      "service_enabled": true
+     },
+     {
+      "date_time": null,
+      "id": "Debug",
+      "log_entry_type": "OEM",
+      "name": "Debug Log Service",
+      "overwrite_policy": "NeverOverWrites",
+      "service_enabled": true
+     },
+     {
+      "date_time": null,
+      "id": "RCU",
+      "log_entry_type": "OEM",
+      "name": "RCU Log Service",
+      "overwrite_policy": "WrapsWhenFull",
+      "service_enabled": true
+     },
+     {
+      "date_time": null,
+      "id": "CrashLogging",
+      "log_entry_type": null,
+      "name": "Crashlog Log Service",
+      "overwrite_policy": null,
+      "service_enabled": true
+     },
+     {
+      "date_time": null,
+      "id": "FabricTest",
+      "log_entry_type": "OEM",
+      "name": "Fabric Test Log Service",
+      "overwrite_policy": "WrapsWhenFull",
+      "service_enabled": true
+     },
+     {
+      "date_time": null,
+      "id": "RmcConfig",
+      "log_entry_type": "OEM",
+      "name": "RMC Config Log Service",
+      "overwrite_policy": null,
+      "service_enabled": true
+     },
+     {
+      "date_time": null,
+      "id": "NparConfig",
+      "log_entry_type": "OEM",
+      "name": "Npar Config Log Service",
+      "overwrite_policy": null,
+      "service_enabled": true
+     }
+    ],
+    "role": "primary",
+    "uri": "/redfish/v1/Managers/RMC"
+   }
+  ],
+  "partitions": [
+   {
+    "boot": {
+     "boot_next": null,
+     "boot_order": [
+      "Boot0003",
+      "Boot0001"
+     ],
+     "boot_source_override_enabled": "Disabled",
+     "boot_source_override_mode": "UEFI",
+     "boot_source_override_target": "None",
+     "uefi_target": null
+    },
+    "cpu": {
+     "architecture": "x86",
+     "cores_physical": 64,
+     "logical_threads": 128,
+     "max_speed_mhz": 2900,
+     "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
+     "sockets": 4,
+     "summary": {
+      "groups": [
+       {
+        "architecture": "x86",
+        "cores_per_socket": 16,
+        "manufacturer": "Intel(R) Corporation",
+        "max_speed_mhz": 2900,
+        "model": "Intel(R) Xeon(R) Platinum 8444H Processor",
+        "sockets": 4,
+        "total_cores": 64
+       }
+      ]
+     }
+    },
+    "id": "Partition0",
+    "memory": {
+     "free_mb": null,
+     "installed_mb": 1048576,
+     "slots": [
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0000000101000074",
+       "locator": "rack1/chassis_u1/cpu0/dimmA0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu0/dimmA0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A40",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0000000101000174",
+       "locator": "rack1/chassis_u1/cpu2/dimmA0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu2/dimmA0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B89EA",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0000000101010074",
+       "locator": "rack1/chassis_u1/cpu1/dimmA0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu1/dimmA0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A6E",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0000000101010174",
+       "locator": "rack1/chassis_u1/cpu3/dimmA0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu3/dimmA0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B89E6",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0001000101000074",
+       "locator": "rack1/chassis_u1/cpu0/dimmB0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu0/dimmB0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A68",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0001000101000174",
+       "locator": "rack1/chassis_u1/cpu2/dimmB0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu2/dimmB0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A6F",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0001000101010074",
+       "locator": "rack1/chassis_u1/cpu1/dimmB0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu1/dimmB0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A71",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0001000101010174",
+       "locator": "rack1/chassis_u1/cpu3/dimmB0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu3/dimmB0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B89DC",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0002010101000074",
+       "locator": "rack1/chassis_u1/cpu0/dimmC0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu0/dimmC0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A49",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0002010101000174",
+       "locator": "rack1/chassis_u1/cpu2/dimmC0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu2/dimmC0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A77",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0002010101010074",
+       "locator": "rack1/chassis_u1/cpu1/dimmC0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu1/dimmC0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A3C",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0002010101010174",
+       "locator": "rack1/chassis_u1/cpu3/dimmC0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu3/dimmC0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B89E4",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0003010101000074",
+       "locator": "rack1/chassis_u1/cpu0/dimmD0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu0/dimmD0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A22",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0003010101000174",
+       "locator": "rack1/chassis_u1/cpu2/dimmD0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu2/dimmD0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A69",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0003010101010074",
+       "locator": "rack1/chassis_u1/cpu1/dimmD0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu1/dimmD0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A01",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0003010101010174",
+       "locator": "rack1/chassis_u1/cpu3/dimmD0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu3/dimmD0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A1D",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0004020101000074",
+       "locator": "rack1/chassis_u1/cpu0/dimmE0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu0/dimmE0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A66",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0004020101000174",
+       "locator": "rack1/chassis_u1/cpu2/dimmE0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu2/dimmE0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A70",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0004020101010074",
+       "locator": "rack1/chassis_u1/cpu1/dimmE0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu1/dimmE0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A6A",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0004020101010174",
+       "locator": "rack1/chassis_u1/cpu3/dimmE0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu3/dimmE0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B89FA",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0005020101000074",
+       "locator": "rack1/chassis_u1/cpu0/dimmF0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu0/dimmF0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8FCB",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0005020101000174",
+       "locator": "rack1/chassis_u1/cpu2/dimmF0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu2/dimmF0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8FC8",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0005020101010074",
+       "locator": "rack1/chassis_u1/cpu1/dimmF0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu1/dimmF0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8F7F",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0005020101010174",
+       "locator": "rack1/chassis_u1/cpu3/dimmF0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu3/dimmF0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A00",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0006030101000074",
+       "locator": "rack1/chassis_u1/cpu0/dimmG0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu0/dimmG0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A32",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0006030101000174",
+       "locator": "rack1/chassis_u1/cpu2/dimmG0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu2/dimmG0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B89E2",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0006030101010074",
+       "locator": "rack1/chassis_u1/cpu1/dimmG0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu1/dimmG0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B89E3",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0006030101010174",
+       "locator": "rack1/chassis_u1/cpu3/dimmG0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu3/dimmG0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8F82",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0007030101000074",
+       "locator": "rack1/chassis_u1/cpu0/dimmH0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu0/dimmH0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8A0B",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0007030101000174",
+       "locator": "rack1/chassis_u1/cpu2/dimmH0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu2/dimmH0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8FC3",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0007030101010074",
+       "locator": "rack1/chassis_u1/cpu1/dimmH0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu1/dimmH0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B8FB3",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      },
+      {
+       "base_module_type": "RDIMM",
+       "bus_width_bits": 80,
+       "capacity_mb": 32768,
+       "data_width_bits": 64,
+       "error_correction": null,
+       "health": "OK",
+       "id": "0007030101010174",
+       "locator": "rack1/chassis_u1/cpu3/dimmH0",
+       "manufacturer": "SK hynix",
+       "name": "rack1/chassis_u1/cpu3/dimmH0",
+       "part_number": "HMCG84AEBRA107N",
+       "rank_count": null,
+       "serial": "0x889B89F8",
+       "speed_mhz": 2400,
+       "type": "DDR5"
+      }
+     ],
+     "summary": {
+      "grand_total_gb": 1024,
+      "groups": [
+       {
+        "group_total_gb": 1024,
+        "manufacturer": "SK hynix",
+        "part_number": "HMCG84AEBRA107N",
+        "quantity": 32,
+        "speed_mhz": 2400,
+        "type": "DDR5",
+        "unit_capacity_gb": 32
+       }
+      ]
+     },
+     "total_basis": "physical_installed",
+     "total_mb": 1048576,
+     "visible_mb": null
+    },
+    "network": {
+     "adapters": [],
+     "default_gateways": [],
+     "dns_servers": [],
+     "interfaces": [
+      {
+       "addresses": [],
+       "id": "PCIeCard1Eth0",
+       "is_primary": false,
+       "kind": "server_nic",
+       "link_status": "unknown",
+       "mac": "60:5e:65:21:6e:d4",
+       "mtu": null,
+       "name": "rack1/chassis_u1/cpu1/io_slot1 Ethernet Port 0",
+       "speed_mbps": null
+      },
+      {
+       "addresses": [],
+       "id": "PCIeCard1Eth1",
+       "is_primary": false,
+       "kind": "server_nic",
+       "link_status": "unknown",
+       "mac": "60:5e:65:21:6e:d5",
+       "mtu": null,
+       "name": "rack1/chassis_u1/cpu1/io_slot1 Ethernet Port 1",
+       "speed_mbps": null
+      },
+      {
+       "addresses": [],
+       "id": "PCIeCard5Eth0",
+       "is_primary": false,
+       "kind": "server_nic",
+       "link_status": "unknown",
+       "mac": "60:5e:65:21:6d:f0",
+       "mtu": null,
+       "name": "rack1/chassis_u1/cpu0/io_slot5 Ethernet Port 0",
+       "speed_mbps": null
+      },
+      {
+       "addresses": [],
+       "id": "PCIeCard5Eth1",
+       "is_primary": false,
+       "kind": "server_nic",
+       "link_status": "unknown",
+       "mac": "60:5e:65:21:6d:f1",
+       "mtu": null,
+       "name": "rack1/chassis_u1/cpu0/io_slot5 Ethernet Port 1",
+       "speed_mbps": null
+      },
+      {
+       "addresses": [],
+       "id": "PCIeCard9Eth0",
+       "is_primary": false,
+       "kind": "server_nic",
+       "link_status": "unknown",
+       "mac": "60:5e:65:21:6e:0c",
+       "mtu": null,
+       "name": "rack1/chassis_u1/cpu3/io_slot9 Ethernet Port 0",
+       "speed_mbps": null
+      },
+      {
+       "addresses": [],
+       "id": "PCIeCard9Eth1",
+       "is_primary": false,
+       "kind": "server_nic",
+       "link_status": "unknown",
+       "mac": "60:5e:65:21:6e:0d",
+       "mtu": null,
+       "name": "rack1/chassis_u1/cpu3/io_slot9 Ethernet Port 1",
+       "speed_mbps": null
+      },
+      {
+       "addresses": [],
+       "id": "PCIeCard13Eth0",
+       "is_primary": false,
+       "kind": "server_nic",
+       "link_status": "unknown",
+       "mac": "60:5e:65:21:7d:6c",
+       "mtu": null,
+       "name": "rack1/chassis_u1/cpu2/io_slot13 Ethernet Port 0",
+       "speed_mbps": null
+      },
+      {
+       "addresses": [],
+       "id": "PCIeCard13Eth1",
+       "is_primary": false,
+       "kind": "server_nic",
+       "link_status": "unknown",
+       "mac": "60:5e:65:21:7d:6d",
+       "mtu": null,
+       "name": "rack1/chassis_u1/cpu2/io_slot13 Ethernet Port 1",
+       "speed_mbps": null
+      }
+     ],
+     "ports": [],
+     "summary": {
+      "groups": []
+     }
+    },
+    "storage": {
+     "controllers": [
+      {
+       "controller_firmware": "03.01.44.040-0",
+       "controller_health": "OK",
+       "controller_manufacturer": "Adaptec",
+       "controller_model": "HPE SR3258p-16i/e PCIe4 Controller",
+       "drives": [
+        {
+         "device": "Drive rack1/chassis_u1/cpu0/io_slot3/box1/drive_bay1",
+         "health": "OK",
+         "media_type": "SSD",
+         "model": "MO001600PXMTN",
+         "protocol": "SAS",
+         "total_mb": 1526185
+        },
+        {
+         "device": "Drive rack1/chassis_u1/cpu0/io_slot3/box1/drive_bay2",
+         "health": "OK",
+         "media_type": "SSD",
+         "model": "MO001600PXMTN",
+         "protocol": "SAS",
+         "total_mb": 1526185
+        }
+       ],
+       "health": null,
+       "id": "1",
+       "name": "HPE SR3258p-16i/e PCIe4 Controller"
+      }
+     ],
+     "datastores": [],
+     "filesystems": [],
+     "hbas": [],
+     "infiniband": [],
+     "logical_volumes": [],
+     "physical_disks": [
+      {
+       "device": "Drive rack1/chassis_u1/cpu0/io_slot3/box1/drive_bay1",
+       "failure_predicted": null,
+       "health": "OK",
+       "id": "DriveSlot1InPCIeSlot3Box1",
+       "media_type": "SSD",
+       "model": "MO001600PXMTN",
+       "predicted_life_percent": null,
+       "protocol": "SAS",
+       "serial": "YFN0A0SP0T83",
+       "total_mb": 1526185
+      },
+      {
+       "device": "Drive rack1/chassis_u1/cpu0/io_slot3/box1/drive_bay2",
+       "failure_predicted": null,
+       "health": "OK",
+       "id": "DriveSlot2InPCIeSlot3Box1",
+       "media_type": "SSD",
+       "model": "MO001600PXMTN",
+       "predicted_life_percent": null,
+       "protocol": "SAS",
+       "serial": "YFN0A0SR0T83",
+       "total_mb": 1526185
+      }
+     ],
+     "summary": {
+      "grand_total_gb": 2980,
+      "groups": [
+       {
+        "group_total_gb": 2980,
+        "media_type": "SSD",
+        "model": "MO001600PXMTN",
+        "protocol": "SAS",
+        "quantity": 2,
+        "unit_capacity_gb": 1490
+       }
+      ]
+     }
+    },
+    "system": {
+     "asset_tag": null,
+     "bios_date": null,
+     "bios_version": "1.75.108-20260408_164726",
+     "boot_progress": "OSRunning",
+     "cpu_summary": {
+      "core_count": null,
+      "count": 4,
+      "health": "OK",
+      "logical_processor_count": 64,
+      "model": "Intel(R) Xeon(R)"
+     },
+     "health": "OK",
+     "hostname": "m10mesdb11",
+     "last_reset_time": "2026-06-10T13:31:54Z",
+     "led_state": null,
+     "manufacturer": "HPE",
+     "memory_summary": {
+      "health": "OK",
+      "total_gib": 1024
+     },
+     "model": "Compute Scale-up Server 3200",
+     "oem": {
+      "console_routing": "default",
+      "console_routing_current_boot": "default",
+      "dcd_version": "5.0-7.1",
+      "host_os_description": "Red Hat Enterprise Linux 8.10 (Ootpa)",
+      "host_os_name": "Red Hat Enterprise Linux",
+      "host_os_version": "8.10 (Ootpa)",
+      "product_id": "1590PID03030201"
+     },
+     "part_number": "R9N70A",
+     "power_state": "On",
+     "serial": "SGHD3QHLDT-000",
+     "sku": null,
+     "state": "Enabled",
+     "system_type": "PhysicallyPartitioned",
+     "tpm": {
+      "firmware_version": "0x00010200",
+      "interface_type": "TPM2_0",
+      "state": "Enabled"
+     },
+     "uuid": "76776656-4c86-5e95-b027-0945404917ba"
+    },
+    "system_uri": "/redfish/v1/Systems/Partition0"
+   }
+  ],
+  "summary": {
+   "chassis_count": 3,
+   "fabric_count": 1,
+   "manager_count": 1,
+   "partition_count": 1,
+   "representative_partition": "Partition0",
+   "resource_block_count": 1
+  }
+ },
+ "probe_facts": {
+  "model_hint": "Compute Scale-up Server 3200"
+ },
+ "status": "success",
+ "unsupported_sections": [],
+ "vendor": "hpe"
+}
