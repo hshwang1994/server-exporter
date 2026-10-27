@@ -514,6 +514,10 @@ for e in response["errors"]:
 > **2026-10-10 (JEDEC)** — `slots[].manufacturer` 의 JEDEC 코드 해석은 bank(continuation 바이트 수)를 본다. 같은 7-bit ID 가 bank 마다 다른 제조사라
 > (0x18: bank 1 = Kingston, bank 0 = Toshiba/Kioxia) 종전 byte 전용 표는 bank 0 의 0x98 도 Kingston 으로 적었다. 표는 JEP106BE 기준이며 모르는 코드는
 > 원문 그대로 둔다(지어내지 않는다). 종전 표의 `0B → Intel` 은 오류였다(0x0B 는 Intersil, Intel 은 0x89/0x09). OS 채널과 Redfish 채널이 같은 표를 쓴다.
+> **2026-10-27 (FIX 3 — 2차 Mock 실측)** — Redfish `slots[].speed_mhz` 는 `OperatingSpeedMhz` **원값**이며 단위를 바꾸거나 보정하지 않는다. 벤더마다 뜻이 다르다:
+> iLO 7 · XCC 3 · iDRAC 는 전송률(MT/s — 예: DDR5 5600 모듈이 5600 또는 동작 4400), HPE Compute Scale-up Server 3200 RMC(H3) 는 **I/O 버스 클럭**이라
+> PC5-6400B 모듈이 `3200` 으로 나온다(실측 2026-10-21 csus3200_01/03 + 1차 4대). 값을 2배로 "보정" 하지 않는다 — 호출자가 장비 간 비교를 할 때는 `vendor`/`bmc.model` 을 함께 본다
+> (`docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-27 행).
 
 ```json
 "memory": {
@@ -779,6 +783,15 @@ Redfish 는 호환 키 `adapter_model`(=`model`), Windows 는 `note` 를 더 가
 부모 포트도 못 찾았다(이때 `link_speed_gbps` 는 `null`). 부모를 찾으면 그 포트의 링크 · 속도를 상속한다(iDRAC8 형).
 (b) **값 미확정** — notice `네트워크 카드 … 링크 상태 값 미확정, down 으로 기록`(포트=원문): 키는 있는데 값이 `null` · `Unknown` · 미인식 벤더 문자열이다.
 실제 링크 상태가 필요하면 OS 채널 결과와 `wwpn` 으로 맞춰 본다 — Portal 은 그렇게 표시한다.
+
+**카드 단위 조건은 포트 상태가 아니다 (2026-10-27, 03-storage-004 — 사용자 결정 11 A안)** — HPE CSUS 3200 RMC 는 FC 링크를 Port 가 아니라
+`Chassis/{id}/PCIeDevices/{n}.Status.Conditions[]` 의 OEM 메시지(`H3Alert.1.x.LinkUp` / `LinkDown`, `MessageArgs` = 슬롯 라벨, `Timestamp`)로만 적고, 같은 메시지가
+Mellanox NIC · RAID 컨트롤러 슬롯에도 붙는다(PCIe 슬롯 단위 조건). 그래서 (a) 의 `down` 폴백은 **실제 링크 단절을 확인한 값이 아니며**, 카드 조건을 포트 `link_status` 로 바꾸지 않는다.
+대신 다음 셋이 모두 성립할 때만 (a) notice 끝에 `— 링크 단절을 확인한 값 아님; 카드 <슬롯 라벨> 조건 LinkUp(<Timestamp>, 카드 단위)` 를 덧붙인다:
+① 그 카드가 FC 전용(구조 신호로 FC 로 분류돼 `hbas[]` 가 생겼고 이더넷 포트 0) ② PCIeDevice 본문이 바로 그 카드의 `Controllers[].Links.PCIeDevices`(정확히 1건)로 받은 응답
+(섀시 `PCIeDevices` 열거 · 캐시는 쓰지 않음 — RAID 는 어떤 NetworkAdapter 도 가리키지 않아 걸러진다) ③ `MessageId` 의 등록부 접두가 adapter `vendor_notes.pcie_port_link_condition_registries`
+(CSUS 3200: `H3Alert`)에 선언돼 있고 마지막 세그먼트가 `LinkUp`/`LinkDown`(`PcieLinkTrainingOk` 등 PCIe 자체 링크 메시지는 제외). 새 필드 · 추가 요청 0, `LogService/Oem/Iel` 은 쓰지 않는다.
+선언 없는 벤더 · Port `LinkStatus` 가 있는 장비(iLO 7 · XCC 3 · iDRAC)는 종전 문장 · 값 그대로다. 정본 `docs/ai/catalogs/EXTERNAL_CONTRACTS.md` 2026-10-27 행 · `tests/evidence/2026-10-27-redfish-mock2-impl/07-csus-chassis-fc.md`.
 
 **조용히 빠지던 경로 (2026-10-18 보완)** — 녹화본 변형으로 재현해 고쳤다: FC 링크 기술 포트에 `Ethernet` 블록만 있어 Ethernet 으로 오분류(HBA 0건 · 오류 0건) · 포트 `Id` 가 정수이고
 짝 없는 기능이 있으면 TypeError 로 섹션 전체 소실 · 카드 목록은 200 인데 카드 GET 이 전부 404 면 흔적 없이 미지원 · 한 경로가 200 빈 목록이면 다른 경로의 5xx 가 묻힘 · 이름 · 컨트롤러
@@ -1325,7 +1338,7 @@ CSUS 3200 Redfish 모델 검수 결과 추가된 5종. 모두 `data.multi_node` 
 | `partitions[].boot` | `Systems/{id}.Boot` | `boot_order[]`, `boot_source_override_enabled/target/mode`, `boot_next`, `uefi_target` | nPartition 별 부팅 순서 (설명 모델 요구). 미노출 시 `{}` |
 | `chassis[].thermal` | `Chassis/{id}/Thermal` (404 시 `/ThermalSubsystem` DMTF 2020.4 fallback) | `temperatures[]` (name/reading_celsius/health/upper_critical), `fans[]` (name/reading/reading_units/health) | chassis 별 온도/팬. `power` 와 쌍 (설명 모델). 미노출 시 `{}` |
 | `managers[].log_services` | `Managers/{id}/LogServices` | `id`, `name`, `overwrite_policy`, `service_enabled`, `log_entry_type`, `date_time` | RMC 의 Services/Logs (설명 모델). 로그 엔트리 자체는 범위 외. 미노출 시 `[]` |
-| `composition` | `CompositionService` + `ResourceBlocks` | `enabled`, `state/health`, `resource_block_count`, `resource_blocks[]` (id/types/composition_state/processor_count/memory_count/`chassis[]`/`computer_systems[]`) | nPartition 조합 구조. 각 ResourceBlock ↔ chassis 대응 (설명 모델). ServiceRoot 미노출 시 `null` |
+| `composition` | `CompositionService` + `ResourceBlocks` | `enabled`, `state/health`, `resource_block_count`, `resource_blocks[]` (id/types/composition_state/processor_count/memory_count/`chassis[]`/`computer_systems[]`) | nPartition 조합 구조. 각 ResourceBlock ↔ chassis 대응 (설명 모델). ServiceRoot 미노출 시 `null`. **2026-10-27 (FIX 6)**: ResourceBlock 본문에 `Processors`/`Memory` 배열이 없으면 `processor_count`/`memory_count` 는 `null`(0 으로 적지 않는다 — 실측 CSUS 3200 RMC `ResourceBlocks/r001u01` 은 두 배열이 없다; 위 예시의 4/8 은 설명 모델) |
 | `fabrics` | `Fabrics` + `Fabrics/{id}` (Switches/Endpoints) | `[]` of {id/fabric_type/health/`switch_count`/`endpoint_count`/`switches[]`/`endpoints[]`} | NUMAlink FlexGrid (Switches+Endpoints, Links/Zones 미사용 — 설명 모델). ServiceRoot 미노출 시 `null` |
 
 > **Lab 부재 주의**: 위 5종은 lab 부재 web sources (DMTF DSP0266 + HPE CSUS 3200 Admin Guide + Superdome Flex 상속) 합성 검증. `fabric_type` 은 DMTF enum 에 NUMAlink 가 없어 placeholder (`PCIe`) — 사이트 실측 시 정정.

@@ -1,0 +1,57 @@
+[
+ {
+  "labels": [
+   "csus3200_01",
+   "csus3200_02",
+   "csus3200_03",
+   "r1_HPE_CSUS3200_01",
+   "r1_HPE_CSUS3200_02",
+   "r1_HPE_CSUS3200_03",
+   "r1_HPE_CSUS3200_04"
+  ],
+  "request_re": "^Chassis/(RackGroup|Rack1)/(Power|PowerSubsystem|Thermal|ThermalSubsystem)$",
+  "issue": "C5 (05-power-00x 고정 경로 404)",
+  "note": "섀시 본문에 navigation property 없음 → 요청하지 않음 (종전 404 ×8)"
+ },
+ {
+  "labels": [
+   "csus3200_01",
+   "csus3200_02",
+   "csus3200_03",
+   "r1_HPE_CSUS3200_01",
+   "r1_HPE_CSUS3200_02",
+   "r1_HPE_CSUS3200_03",
+   "r1_HPE_CSUS3200_04"
+  ],
+  "request_re": "^Chassis/r001u01/(Power|Thermal|EnvironmentMetrics)$",
+  "issue": "C5 (05-power-00x 고정 경로 404)",
+  "note": "r001u01 은 PowerSubsystem/ThermalSubsystem 링크만 → legacy·EnvironmentMetrics GET 생략 (종전 404 ×3, system·chassis_multi 경로 각 1회)"
+ },
+ {
+  "labels": [
+   "csus3200_01",
+   "csus3200_02",
+   "csus3200_03",
+   "r1_HPE_CSUS3200_01",
+   "r1_HPE_CSUS3200_02",
+   "r1_HPE_CSUS3200_03",
+   "r1_HPE_CSUS3200_04"
+  ],
+  "path_prefix": "data.multi_node.composition.resource_blocks",
+  "issue": "FIX 6",
+  "note": "processor_count/memory_count 0 → null (ResourceBlock 본문에 Processors/Memory 배열 없음)"
+ },
+ {
+  "labels": [
+   "csus3200_01",
+   "csus3200_03",
+   "r1_HPE_CSUS3200_01",
+   "r1_HPE_CSUS3200_02",
+   "r1_HPE_CSUS3200_03",
+   "r1_HPE_CSUS3200_04"
+  ],
+  "path_prefix": "diagnosis.details.notices",
+  "issue": "03-storage-004 (결정 11 A안)",
+  "note": "FC HBA '링크 상태 미제공' notice 끝에 카드 조건 참고 문구 — csus3200_02(FC 없음) 는 허용 밖(불변이어야 함)"
+ }
+]
