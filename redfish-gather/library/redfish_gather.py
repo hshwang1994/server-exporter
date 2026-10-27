@@ -5198,6 +5198,8 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     psus = []
     psu_input_total = 0          # CSUS-R10: PSU 입력전력 합 (소비전력 fallback)
     psu_input_seen = False
+    psu_output_total = 0         # 2026-10-27 (C10 05-power-007): PSU 출력전력(DC) 합 — Telemetry 다음, 입력 합보다 앞선 폴백
+    psu_output_seen = False
     if psu_link:
         st_c, coll, _err_c = _get(bmc_ip, _p(psu_link), username, password, timeout, verify_ssl)
         if st_c != 200:
@@ -5245,6 +5247,15 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                         if ipw is not None:
                             psu_input_total += ipw
                             psu_input_seen = True
+                        opw = _safe_int(_safe(mm, 'OutputPowerWatts', 'Reading'))
+                        if opw is not None:
+                            psu_output_total += opw
+                            psu_output_seen = True
+                        # 2026-10-27 (C10 05-power-002): 신 경로의 입력 0 W/0 V 관측 (키가 있을 때만, Absent 제외)
+                        if _str(m_state).strip().lower() != 'absent':
+                            _psu_zero_input_notice(_safe(mdata, 'Name'), _safe(mdata, 'Id'),
+                                                   ipw if isinstance(_safe(mm, 'InputPowerWatts'), dict) else None,
+                                                   _safe_int(_safe(mm, 'InputVoltage', 'Reading')) if isinstance(_safe(mm, 'InputVoltage'), dict) else None)
 
     # PowerControl 은 PowerSubsystem 표준에 없음 — chassis-level 합산 또는 None
     pc_capacity = None
@@ -5283,14 +5294,17 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                     power_control['max_consumed_watts'] = pc_max
         # interval_in_min / avg_consumed_watts: EnvironmentMetrics 표준에 없음 — None 유지
         # CSUS-R14 (2026-06-15 실미러 검수): EnvironmentMetrics 부재 시 장비 자신의 권위 소비전력
-        # (TelemetryService TotalPowerConsumedWatts, 591.5W)을 우선 사용 — PSU 입력전력 합(731W,
-        # AC 입력이라 ~24% 높음)보다 장비의 '소비' 정의에 충실. 표준 경로(EnvironmentMetrics) 보유
-        # vendor 는 위에서 이미 채워져 미발동.
+        # (TelemetryService TotalPowerConsumedWatts)을 우선 사용. 표준 경로(EnvironmentMetrics) 보유 vendor 는 위에서 이미 채워져 미발동.
+        # 2026-10-27 (C10 05-power-007 정정): 폴백 순서는 Telemetry(장비의 '소비' 정의) → PSU Metrics.OutputPowerWatts 합(DC 출력 — 소비에
+        #   가장 가깝다) → PSU Metrics.InputPowerWatts 합(AC 입력 — 변환 손실만큼 높은 근사값). 종전 주석의 "~24% 높음" 은 CSUS 1대의
+        #   한 시점 비교였고 비율은 부하·효율에 따라 다르다 — 정의 차이만 적는다.
         if power_control['power_consumed_watts'] is None:
             tpc = _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
             if tpc is not None:
                 power_control['power_consumed_watts'] = tpc
-        # CSUS-R10: TelemetryService 도 없으면 PSU 입력전력 합으로 마지막 fallback (AC 입력 — 근사값).
+        if power_control['power_consumed_watts'] is None and psu_output_seen:
+            power_control['power_consumed_watts'] = psu_output_total
+        # CSUS-R10: 출력도 없으면 PSU 입력전력 합으로 마지막 fallback (AC 입력 — 근사값).
         if power_control['power_consumed_watts'] is None and psu_input_seen:
             power_control['power_consumed_watts'] = psu_input_total
 
@@ -5380,6 +5394,11 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
                 psu_capacity = _safe_int(ranges[0].get('OutputWattage'))
         psu_state = _safe(psu, 'Status', 'State')
         psu_capacity, psu_fw = _psu_absent_placeholders_to_none(psu_state, psu_capacity, _safe(psu, 'FirmwareVersion'))
+        # 2026-10-27 (C10 05-power-002): 키가 있고 0 일 때만 관측 notice (Absent 슬롯은 제외 — 미장착은 입력이 없는 게 당연하다)
+        if _str(psu_state).strip().lower() != 'absent':
+            _psu_zero_input_notice(_safe(psu, 'Name'), _safe(psu, 'MemberId'),
+                                   _safe_int(psu.get('PowerInputWatts')) if 'PowerInputWatts' in psu else None,
+                                   _safe_int(psu.get('LineInputVoltage')) if 'LineInputVoltage' in psu else None)
         psus.append({
             'name':             _safe(psu, 'Name'),
             # 2026-10-27 (C4 05-power-003, 실측 XCC3 'CRPS1300D5    '): 문자열 양끝 공백 제거 (비면 null)
@@ -5437,6 +5456,37 @@ def _psu_absent_placeholders_to_none(state, capacity_w, firmware_version):
     return capacity_w, firmware_version
 
 
+def _sensor_is_absent(entry):
+    """2026-10-27 (C10 05-thermal-001, 실측 iLO 7): `Status.State == Absent` 인 센서/팬은 미장착 슬롯이다 — 항목 자체를 두지 않는다
+    (값은 placeholder 0). 호출부가 제외 건수를 notice 1건으로 남긴다. Status 가 없는 응답(CSUS ThermalMetrics)은 Absent 가 아니다."""
+    state = _safe(entry, 'Status', 'State')
+    return isinstance(state, str) and state.strip().lower() == 'absent'
+
+
+def _notice_absent_sensors(absent_temps, absent_fans):
+    if absent_temps or absent_fans:
+        _notice('thermal', 'Absent 센서 %d건 제외 (온도 %d · 팬 %d) — 미장착 슬롯' % (absent_temps + absent_fans, absent_temps, absent_fans))
+
+
+def _psu_zero_input_notice(name, member_id, input_watts, input_volts):
+    """2026-10-27 (C10 05-power-002, 실측 iLO 7 PSU#2 UnavailableOffline · XCC3 PSU1 Critical): 장비가 입력 전력/전압 키를 주었는데 값이 0 이면
+    관측 사실로만 notice 1건 — 'AC 입력 없음' 같은 인과는 적지 않는다(계약 문서 03-fields 6.5). 키가 없거나 null 이면 아무것도 하지 않는다.
+    psu_active · state 는 바꾸지 않는다."""
+    zero_w = input_watts == 0
+    zero_v = input_volts == 0
+    if not (zero_w or zero_v):
+        return
+    label = '%s' % (name or 'PSU')
+    if member_id not in (None, ''):
+        label = '%s[%s]' % (label, member_id)
+    parts = []
+    if zero_w:
+        parts.append('입력 전력 0 W')
+    if zero_v:
+        parts.append('입력 전압 0 V')
+    _notice('power', '전원 공급 장치 %s: %s 관측' % (label, ' / '.join(parts)))
+
+
 def _sensor_reading_if_enabled(entry, reading):
     """2026-10-27 (C2 05-thermal): Status.State 가 있고 'Enabled' 가 아니면(UnavailableOffline · Absent · Disabled …) 그 reading 은 측정값이
     아니라 placeholder 다(실측 iLO 7: 전원 Off 호스트의 42 센서 전부 0 °C · 미장착 슬롯 0 °C) → null. state 는 그대로 남긴다.
@@ -5477,7 +5527,11 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
         return {}, [_err('thermal', f'Thermal 정보 실패: {terr or st}')]
 
     temps = []
+    absent_temps, absent_fans = 0, 0
     for t in _dicts(_safe(tdata, 'Temperatures')):  # 비-list/dict 방어 (rule 95 R1 #2)
+        if _sensor_is_absent(t):            # 2026-10-27 (C10 05-thermal-001): 미장착 슬롯 센서는 항목을 두지 않는다
+            absent_temps += 1
+            continue
         temps.append({
             'name':             _safe(t, 'Name'),
             # 2026-06-16 감사 G1: 절삭(_safe_int) → 반올림(_safe_round_int). 44.7→45.
@@ -5490,6 +5544,9 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
         })
     fans = []
     for f in _dicts(_safe(tdata, 'Fans')):
+        if _sensor_is_absent(f):            # 2026-10-27 (C10)
+            absent_fans += 1
+            continue
         # 펌웨어별 Reading / ReadingRPM 혼재 (legacy schema)
         reading = _safe(f, 'Reading')
         if reading is None:
@@ -5501,6 +5558,7 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
             'health':        _safe(f, 'Status', 'Health'),
             'state':         _safe(f, 'Status', 'State'),
         })
+    _notice_absent_sensors(absent_temps, absent_fans)
     return {'temperatures': temps, 'fans': fans}, errors
 
 
@@ -5562,13 +5620,19 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
         return {}, [_err('thermal', 'ThermalSubsystem 미지원: ' + (f'HTTP {st}' if st else str(terr)))]
 
     temps = []
+    absent_temps, absent_fans = 0, 0
     tm_link = _safe(ts, 'ThermalMetrics', '@odata.id')
     if tm_link:
         mst, tm, _e = _get(bmc_ip, _p(tm_link), username, password, timeout, verify_ssl)
         if mst == 200:
             for tr in _dicts(_safe(tm, 'TemperatureReadingsCelsius')):
+                if _sensor_is_absent(tr):   # 2026-10-27 (C10)
+                    absent_temps += 1
+                    continue
+                # 2026-10-27 (C10 05-thermal-003): DeviceName·Name 이 없으면 DataSourceUri 의 마지막 세그먼트(센서 Id) — 18 label 미발동, 합성만
+                _ds = _str(_safe(tr, 'DataSourceUri')).rstrip('/').split('/')[-1] if _safe(tr, 'DataSourceUri') else None
                 temps.append({
-                    'name':             _safe(tr, 'DeviceName') or _safe(tr, 'Name'),
+                    'name':             _safe(tr, 'DeviceName') or _safe(tr, 'Name') or _ds or None,
                     # 2026-06-16 감사 G1: 절삭 → 반올림. ThermalMetrics.Reading 은 float (39.3906).
                     'reading_celsius':  _sensor_reading_if_enabled(tr, _safe_round_int(_safe(tr, 'Reading'))),   # 2026-10-27 (C2)
                     'health':           _safe(tr, 'Status', 'Health'),
@@ -5590,10 +5654,16 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
                 fst2, fdata, _e2 = _get(bmc_ip, _p(furi), username, password, timeout, verify_ssl)
                 if fst2 != 200:
                     continue
+                if _sensor_is_absent(fdata):   # 2026-10-27 (C10)
+                    absent_fans += 1
+                    continue
+                # 2026-10-27 (C10 05-thermal-003): SpeedPercent.Reading 이 없고 SpeedPercent.SpeedRPM 이 있으면 RPM 으로 (18 label 미발동, 합성만)
+                _sp_reading = _safe_int(_safe(fdata, 'SpeedPercent', 'Reading'))
+                _sp_rpm = _safe_int(_safe(fdata, 'SpeedPercent', 'SpeedRPM')) if _sp_reading is None else None
                 fans.append({
                     'name':          _safe(fdata, 'Name'),
-                    'reading':       _sensor_reading_if_enabled(fdata, _safe_int(_safe(fdata, 'SpeedPercent', 'Reading'))),   # 2026-10-27 (C2)
-                    'reading_units': 'Percent' if _safe(fdata, 'SpeedPercent') else None,
+                    'reading':       _sensor_reading_if_enabled(fdata, _sp_reading if _sp_reading is not None else _sp_rpm),   # 2026-10-27 (C2/C10)
+                    'reading_units': ('Percent' if _sp_reading is not None else ('RPM' if _sp_rpm is not None else None)) if _safe(fdata, 'SpeedPercent') else None,
                     'health':        _safe(fdata, 'Status', 'Health'),
                     'state':         _safe(fdata, 'Status', 'State'),
                 })
@@ -5610,6 +5680,7 @@ def _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, 
                     hit = rpm_map.get(fan_uris[i])
                     if hit:
                         f['reading'], f['reading_units'] = hit[0], hit[1]
+    _notice_absent_sensors(absent_temps, absent_fans)
     if not temps and not fans:
         return {}, errors
     return {'temperatures': temps, 'fans': fans}, errors
