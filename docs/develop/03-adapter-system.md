@@ -49,8 +49,8 @@ score = priority × 1000 + specificity × 10 + match_score
 | 요소 | 어디서 오나 | 값 |
 |---|---|---|
 | `priority` | YAML의 `priority` | 0 (generic), 10 (벤더 기본), 50 (구형 세대), 80~100 (주력 세대), 110~120 (최신 세대) |
-| `specificity` | `match`에 적은 조건의 종류 | vendor 10, model_patterns 20, firmware_patterns 20, version_patterns 15, distribution_patterns 15, os_type 5. `generic: true`면 40 감점 |
-| `match_score` | 실제로 맞은 조건 | vendor 20, model 25, firmware 25, version 15, distribution 15, os_type 5 |
+| `specificity` | `match`에 적은 조건의 종류 | vendor 10, model_patterns 20, firmware_patterns 20, bmc_model_patterns 20, version_patterns 15, distribution_patterns 15, os_type 5. `generic: true`면 40 감점 |
+| `match_score` | 실제로 맞은 조건 | vendor 20, model 25, firmware 25, bmc_model 25, version 15, distribution 15, os_type 5 |
 
 패턴을 적었는데 장비가 그 값을 주지 않으면(예: 펌웨어 문자열이 비어 있음) 그 조건은 더하지도 빼지도 않습니다. 값을 줬는데 패턴과 맞지 않으면 그 어댑터는 거부됩니다.
 
@@ -83,6 +83,7 @@ grep -H '^priority:' adapters/redfish/*.yml adapters/os/*.yml adapters/esxi/*.ym
 ```
 
 새 세대를 추가할 때는 같은 벤더의 기존 최고 priority보다 20 높게 두고, `firmware_patterns`나 `model_patterns`로 specificity를 충분히 줍니다. 세대 토큰(`iLO 6`, `iDRAC 9`, `XCC3`)은 단어 경계(`\b`)로 정확히 맞추어 `iLO 5 v2.65`가 iLO 6 어댑터에 맞지 않게 합니다. 펌웨어 버전 숫자만으로 세대를 정하는 패턴은 모델이나 세대 토큰이 없을 때의 보조 조건으로만 둡니다.
+펌웨어 문자열에 세대 토큰이 **없는** 벤더에 그 토큰을 `firmware_patterns`로 적으면 인증 후 재선택에서 "알려진 값 불일치"로 실격돼 벤더 기본 어댑터로 떨어집니다(2026-10-27, Lenovo XCC3 `IHX438R 2.97 20260910`). 세대를 `Manager.Model`에 적는 벤더(Lenovo "Lenovo XClarity Controller 3")는 `bmc_model_patterns`로 맞춥니다 — 선언한 어댑터에서만 평가되는 선택 키라 다른 어댑터의 점수는 바뀌지 않습니다.
 
 ## 4. 어댑터 YAML 한 장
 
@@ -97,6 +98,7 @@ match:                                # 적은 조건을 모두 만족해야 매
   vendor: ["Dell", "Dell Inc.", "DELL"]            # vendor_aliases.yml 로 정규화한 값과 비교
   firmware_patterns: ["iDRAC\\s*9\\b", "^[3-7]\\."] # 정규식 (하나라도 맞으면 됨)
   model_patterns: []                               # 정규식
+  bmc_model_patterns: []                           # 정규식 — Manager.Model (인증 후 facts bmc_model). 선언한 어댑터에서만 평가
   os_type: linux                                   # OS 채널만 (linux, windows)
   distribution_patterns: ["Red Hat", "RHEL"]       # OS 채널만
   version_patterns: ["^9\\."]                      # ESXi 채널만
