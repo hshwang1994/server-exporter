@@ -1,10 +1,9 @@
 {
-  "generated": "2026-10-19",
+  "generated": "2026-10-27",
   "baseline_sha": "a45ba808",
   "baseline_http_calls": 218,
-  "http_calls_budget": 141,
-  "note": "Phase 3 (Plan §8-1·§10-1): expected_http_calls 는 현재 코드의 HTTP 요청 다중집합(캐시 hit 제외, noauth 포함). 바뀌면 사유와 함께 이 파일을 갱신한다 — 암묵적 감소·증가 모두 FAIL. path_set_delta 는 a45ba808 대비 명시적 변경 목록. 2026-10-19: A-7~A-10 — 섀시 Drives 컬렉션(드라이브 0건 폴백) · PCIeDevices(firmware_inventory_scope=complex_only 보충) 요청이 추가됐다. 사유는 added_reason.",
-  "added_reason": "2026-10-19 CSUS 단일 서버 정합: (A-10) Storage 에 드라이브 0건 → Chassis/r001u01/Drives 1회, (A-9) adapter firmware_inventory_scope=complex_only → Chassis/r001u01/PCIeDevices 컬렉션 + 미캐시 장치(NIC/FC 카드는 network_adapters 가 뒤에서 캐시 hit). 사용자 지시 \"특정 것만 수집하지 말 것\" 에 따른 의도된 증가.",
+  "http_calls_budget": 127,
+  "note": "WP7 2026-10-27 (C5 · 결정 11 A안): 섀시 본문 navigation property gating — RackGroup/Rack1 의 Power·PowerSubsystem·Thermal·ThermalSubsystem(8) + r001u01 의 Power·Thermal·EnvironmentMetrics(각 ×2: system 경로·chassis_multi 경로) 요청 제거(-11 distinct / -14 total). 추가 요청 0",
   "path_set_delta": {
     "removed": [
       "Chassis x1",
@@ -85,7 +84,18 @@
       "Systems/Partition0/Storage x1",
       "Systems/Partition0/Storage/1 x1",
       "TelemetryService/MetricReports x1",
-      "TelemetryService/MetricReports/Chassisr001u01_TotalPowerConsumedWatts x1"
+      "TelemetryService/MetricReports/Chassisr001u01_TotalPowerConsumedWatts x1",
+      "Chassis/Rack1/Power x1",
+      "Chassis/Rack1/PowerSubsystem x1",
+      "Chassis/Rack1/Thermal x1",
+      "Chassis/Rack1/ThermalSubsystem x1",
+      "Chassis/RackGroup/Power x1",
+      "Chassis/RackGroup/PowerSubsystem x1",
+      "Chassis/RackGroup/Thermal x1",
+      "Chassis/RackGroup/ThermalSubsystem x1",
+      "Chassis/r001u01/EnvironmentMetrics x2",
+      "Chassis/r001u01/Power x2",
+      "Chassis/r001u01/Thermal x2"
     ],
     "added": [
       "Chassis/r001u01/Drives x1",
@@ -100,18 +110,9 @@
   "expected_http_calls": [
     "Chassis x1",
     "Chassis/Rack1 x1",
-    "Chassis/Rack1/Power x1",
-    "Chassis/Rack1/PowerSubsystem x1",
-    "Chassis/Rack1/Thermal x1",
-    "Chassis/Rack1/ThermalSubsystem x1",
     "Chassis/RackGroup x1",
-    "Chassis/RackGroup/Power x1",
-    "Chassis/RackGroup/PowerSubsystem x1",
-    "Chassis/RackGroup/Thermal x1",
-    "Chassis/RackGroup/ThermalSubsystem x1",
     "Chassis/r001u01 x1",
     "Chassis/r001u01/Drives x1",
-    "Chassis/r001u01/EnvironmentMetrics x2",
     "Chassis/r001u01/NetworkAdapters x1",
     "Chassis/r001u01/NetworkAdapters/PCIeCard10 x1",
     "Chassis/r001u01/NetworkAdapters/PCIeCard10/NetworkDeviceFunctions x1",
@@ -136,7 +137,6 @@
     "Chassis/r001u01/PCIeDevices/3 x1",
     "Chassis/r001u01/PCIeDevices/5 x1",
     "Chassis/r001u01/PCIeDevices/9 x1",
-    "Chassis/r001u01/Power x2",
     "Chassis/r001u01/PowerSubsystem x1",
     "Chassis/r001u01/PowerSubsystem/PowerSupplies x1",
     "Chassis/r001u01/PowerSubsystem/PowerSupplies/0 x1",
@@ -164,7 +164,6 @@
     "Chassis/r001u01/Sensors/PSU1_FAN0 x1",
     "Chassis/r001u01/Sensors/PSU2_FAN0 x1",
     "Chassis/r001u01/Sensors/PSU3_FAN0 x1",
-    "Chassis/r001u01/Thermal x2",
     "Chassis/r001u01/ThermalSubsystem x1",
     "Chassis/r001u01/ThermalSubsystem/Fans x1",
     "Chassis/r001u01/ThermalSubsystem/Fans/ChassisFan0 x1",
@@ -236,5 +235,6 @@
     "UpdateService/FirmwareInventory/ComplexFW x1",
     "UpdateService/FirmwareInventory/Partition0_FW x1",
     "noauth:: x1"
-  ]
+  ],
+  "added_reason": "2026-10-19 CSUS 단일 서버 정합: (A-10) Storage 에 드라이브 0건 → Chassis/r001u01/Drives 1회, (A-9) adapter firmware_inventory_scope=complex_only → Chassis/r001u01/PCIeDevices 컬렉션 + 미캐시 장치(NIC/FC 카드는 network_adapters 가 뒤에서 캐시 hit). 사용자 지시 \"특정 것만 수집하지 말 것\" 에 따른 의도된 증가."
 }

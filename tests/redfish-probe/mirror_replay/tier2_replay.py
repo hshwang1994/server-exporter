@@ -45,13 +45,13 @@ def make_impls(mirror: Mirror):
     return get_impl, noauth_impl, realm_impl
 
 
-def replay_one(mirror_dir, layout=None, firmware_scope=None):
+def replay_one(mirror_dir, layout=None, firmware_scope=None, pcie_link_registries=None):
     """미러 1대 -> (모듈 산출 dict | None, 예외 문자열 | None, Mirror)."""
     mirror = Mirror(mirror_dir)
     g, n, r = make_impls(mirror)
     try:
         res = H.run_gather(g, n, r, ip="127.0.0.1", user="infraops", pw="x", timeout=30, verify_ssl=False,
-                           manager_layout=layout, firmware_scope=firmware_scope)
+                           manager_layout=layout, firmware_scope=firmware_scope, pcie_link_registries=pcie_link_registries)
         return res, None, mirror
     except Exception as e:  # 재생 자체가 죽으면 가짜 성공 대신 기록
         return None, f"{type(e).__name__}: {e}", mirror
@@ -63,6 +63,8 @@ def main():
     ap.add_argument("targets", nargs="+", help="label=mirror_dir")
     ap.add_argument("--layout", default=None)
     ap.add_argument("--firmware-scope", default=None)
+    ap.add_argument("--pcie-link-registries", default=None,
+                    help="adapter vendor_notes.pcie_port_link_condition_registries (쉼표 구분; notice 만 영향 — GOLDEN_KEYS 밖)")
     ap.add_argument("--tag", default="plain")
     a = ap.parse_args()
     out = Path(a.out_dir)
@@ -71,7 +73,8 @@ def main():
     for t in a.targets:
         label, _, mdir = t.partition("=")
         t0 = time.time()
-        res, err, mirror = replay_one(mdir, a.layout, a.firmware_scope)
+        res, err, mirror = replay_one(mdir, a.layout, a.firmware_scope,
+                                      [x.strip() for x in (a.pcie_link_registries or "").split(",") if x.strip()] or None)
         rec = {"label": label, "mirror": mdir, "tag": a.tag, "layout": a.layout, "firmware_scope": a.firmware_scope,
                "elapsed_s": round(time.time() - t0, 1), "exception": err,
                "mirror_stats": {k: v for k, v in mirror.stats.items()

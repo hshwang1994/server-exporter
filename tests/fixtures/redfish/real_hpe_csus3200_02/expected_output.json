@@ -1880,9 +1880,9 @@
           ],
           "health": "OK",
           "id": "r001u01",
-          "memory_count": 0,
+          "memory_count": null,
           "name": "Compute Resource Block rack1/chassis_u1",
-          "processor_count": 0,
+          "processor_count": null,
           "resource_block_types": [
             "ComputerSystem"
           ],

@@ -43,3 +43,11 @@
 | G-14 | WP6 | `real_hpe_dl380`(1차) · `real_hpe_dl380_gen12_01/02/04` | `data.thermal.temperatures[]` | 52 · 56 · 44 · 54 항목 (State Absent 9 · 7 · 8 · 8 건은 WP3 이후 `reading_celsius null`) | **43 · 49 · 36 · 46** 항목 (Absent 항목 제외, 그 밖 항목 값 불변 — 인덱스 이동) | recording `Chassis/1/Thermal.Temperatures[]` `Status.State Absent` (iLO 7 미장착 슬롯 센서, `ReadingCelsius 0`) | 미장착 슬롯 센서는 항목이 아니다 → 제외 + notice "Absent 센서 N건 제외 (온도 N · 팬 0) — 미장착 슬롯" (05-thermal-001). gen12_03(UnavailableOffline) · CSUS(Status 없음) · Lenovo · Dell 불변 |
 
 - G-14 검증: 15 fixture 전부 재생 → 바뀐 경로는 DL380 4세트의 `data.thermal.temperatures[*]` 뿐. 요청 예산 불변. PSU 입력 0 관측·소비전력 폴백 순서·ThermalSubsystem 폴백은 모듈 golden 을 바꾸지 않는다(notice 는 GOLDEN_KEYS 밖, 18 label 에서 폴백 미발동).
+
+### WP7 (C5 — CSUS 섀시 링크 gating · composition · FC HBA 카드 조건) — 2026-10-27
+
+| # | WP | fixture / baseline | 경로 | before | after | 원천 | 원인 |
+|---|---|---|---|---|---|---|---|
+| G-15 | WP7 | `real_hpe_csus3200`(1차) · `real_hpe_csus3200_01/02/03` | `multi_node.composition.resource_blocks[0].processor_count` · `memory_count` | `0` · `0` | `null` · `null` | recording `CompositionService/ResourceBlocks/r001u01`: 본문에 `Processors`/`Memory` 키 자체가 없음(키 목록 `CompositionStatus · ComputerSystems · Links · ResourceBlockType · Status …`) | 원천 배열이 없으면 세지 않는다 — 0 은 "장착 0" 이 아니라 "집계 원천 없음" (FIX 6). 다른 composition 키 불변 |
+
+- G-15 검증: 15 real_* fixture 전부 재생(`test_real_capture_replay` · `test_request_budget`) → 바뀐 golden 은 CSUS 4세트의 위 두 경로뿐(DL380 5 · Lenovo 5 · Dell 1 차이 0). 요청 예산은 CSUS 4세트만 **-11 distinct / -14 total**(`request_budget.json` `path_set_delta.removed` 11 경로 · note 기재): RackGroup/Rack1 의 `Power·PowerSubsystem·Thermal·ThermalSubsystem`(8, 종전 404) + r001u01 의 `Power·Thermal·EnvironmentMetrics`(각 ×2 — system 경로·chassis_multi 경로, 종전 404) — 섀시 본문에 그 navigation property 가 없어 요청하지 않는다. 추가 요청 0. FC HBA 카드 조건은 notice 라 golden 밖.

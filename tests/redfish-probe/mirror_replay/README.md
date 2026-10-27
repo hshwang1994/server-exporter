@@ -47,7 +47,8 @@ python tests/redfish-probe/mirror_replay/run_tier1.py \
 
 ```bash
 python tests/redfish-probe/mirror_replay/tier2_replay.py <out_dir> dl380_gen12_01=<mirror dir> ...            # plain
-python tests/redfish-probe/mirror_replay/tier2_replay.py <out_dir> csus3200_01=<mirror dir> --layout rmc_primary --firmware-scope complex_only --tag adapter
+python tests/redfish-probe/mirror_replay/tier2_replay.py <out_dir> csus3200_01=<mirror dir> --layout rmc_primary --firmware-scope complex_only --pcie-link-registries H3Alert --tag adapter
+# --pcie-link-registries = adapter vendor_notes.pcie_port_link_condition_registries (2026-10-27, notice 만 영향 — GOLDEN_KEYS 밖)
 ```
 Tier 2 통과만으로 실제 Ansible 경로(재선택 · 정규화 · category · hostname 정책 · serial 접미사)를 검증했다고 말하지 않는다.
 
