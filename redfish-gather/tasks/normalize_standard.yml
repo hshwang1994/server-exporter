@@ -64,15 +64,33 @@
   no_log: true
 
 # ── network ──────────────────────────────────────────────────────────────────
-- name: "redfish | normalize_standard | interfaces"
+- name: "redfish | normalize_standard | interfaces (bundle)"
   ansible.builtin.set_fact:
     # 2026-04-29 hpe-critical-review: is_primary 가 항상 false (이전: hardcoded false).
     # 첫 LinkUp + IPv4 가 있는 NIC 1건을 primary 로 표시. IPv4 가 모두 비어 있는
     # 환경 (HPE iLO host NIC 한계) 에서는 첫 LinkUp NIC 만으로 fallback.
     # ns.primary_marked: 한 번만 true 부여 보장.
-    _rf_norm_interfaces: >-
-      {%- set ns = namespace(out=[], primary_marked=false) -%}
+    # 2026-10-27 (C4 03-network-001, 실측 Lenovo XCC3 SR650 V4): 호스트 EthernetInterfaces 가 FC HBA 포트를 8옥텟 "MAC"(=WWPN) 으로
+    #   함께 노출한다(sr650_v4_02/03 각 4건). 주소가 8옥텟이거나 network_adapters.ports[] 의 FC/IB 포트 주소와 같으면 서버 NIC 이
+    #   아니므로 interfaces 에서 뺀다(storage.hbas / storage.infiniband 가 그 포트를 요약한다). 모듈 raw(data.network)는 그대로다.
+    #   같은 루프에서 03-network-002: link_status 가 unknown 이고 speed 가 null 인 NIC 만, MAC 이 같은 Ethernet 포트의 link/speed 로 보충한다.
+    #   제외 수는 번들에 담아 다음 task 가 facts 로 풀고 normalize notice 에 쓴다.
+    _rf_norm_interfaces_bundle: >-
+      {%- set ns = namespace(out=[], primary_marked=false, fc_excluded=0, fc_addrs=[], eth_ports={}) -%}
+      {%- for p in (_rf_d_netad.ports | default([])) -%}
+        {%- set pt = (p.port_type | default('') | string | trim | lower) -%}
+        {%- set paddr = (p.associated_address | default('') | string | upper | replace(':','') | replace('-','')) -%}
+        {%- if paddr and ('fibre' in pt or pt == 'fc' or 'fcoe' in pt or 'infin' in pt or pt == 'ib') -%}
+          {%- set _ = ns.fc_addrs.append(paddr) -%}
+        {%- elif paddr -%}
+          {%- set _ = ns.eth_ports.update({paddr: p}) -%}
+        {%- endif -%}
+      {%- endfor -%}
       {%- for nic in (_rf_d_network | default([])) -%}
+        {%- set nic_hex = (nic.mac | default('') | string | upper | replace(':','') | replace('-','')) -%}
+        {%- if (nic_hex | length) == 16 or (nic_hex and nic_hex in ns.fc_addrs) -%}
+          {%- set ns.fc_excluded = ns.fc_excluded + 1 -%}
+        {%- else -%}
         {%- set addrs = [] -%}
         {%- for a in (nic.ipv4 | default([])) -%}
           {%- if a.address is defined and a.address not in [none,'0.0.0.0',''] -%}
@@ -84,6 +102,13 @@
           {%- endif -%}
         {%- endfor -%}
         {%- set link = (nic.link_status|lower) if nic.link_status is defined and nic.link_status is not none else 'unknown' -%}
+        {%- set speed = nic.speed_mbps|default(none) -%}
+        {%- set eport = ns.eth_ports.get(nic_hex, none) if nic_hex else none -%}
+        {%- if eport is not none and link == 'unknown' and speed is none -%}
+          {%- set plink = (eport.link_status | default('') | string | lower) -%}
+          {%- if plink in ['up', 'down'] -%}{%- set link = plink -%}{%- endif -%}
+          {%- set speed = eport.current_link_speed_mbps | default(none) -%}
+        {%- endif -%}
         {%- set is_pri = false -%}
         {%- if not ns.primary_marked and link in ['linkup','up'] and addrs|length > 0 -%}
           {%- set is_pri = true -%}
@@ -95,11 +120,12 @@
           'kind':        'server_nic',
           'mac':         nic.mac|default(none),
           'mtu':         nic.mtu|default(none),
-          'speed_mbps':  nic.speed_mbps|default(none),
+          'speed_mbps':  speed,
           'link_status': link,
           'is_primary':  is_pri,
           'addresses':   addrs
         }) -%}
+        {%- endif -%}
       {%- endfor -%}
       {#- IPv4 가 전혀 없는 환경 (HPE host NIC 한계) fallback: 첫 LinkUp NIC 1건 -#}
       {%- if not ns.primary_marked -%}
@@ -110,7 +136,20 @@
           {%- endif -%}
         {%- endfor -%}
       {%- endif -%}
-      {{ ns.out }}
+      {{ {'interfaces': ns.out, 'fc_excluded': ns.fc_excluded} }}
+  no_log: true
+
+- name: "redfish | normalize_standard | interfaces"
+  ansible.builtin.set_fact:
+    _rf_norm_interfaces: "{{ _rf_norm_interfaces_bundle.interfaces }}"
+    _rf_norm_iface_fc_excluded: "{{ _rf_norm_interfaces_bundle.fc_excluded | int }}"
+    # 2026-10-27: normalize 층이 남기는 notice — site.yml 이 모듈 notices 뒤에 이어 붙인다 (관측만, 인과 해석 없음)
+    _rf_norm_notices: >-
+      {%- set n = [] -%}
+      {%- if (_rf_norm_interfaces_bundle.fc_excluded | int) > 0 -%}
+        {%- set _ = n.append({'section': 'network', 'message': ('호스트 EthernetInterfaces ' ~ (_rf_norm_interfaces_bundle.fc_excluded | int) ~ '건은 FC/IB 포트 주소(8옥텟 또는 network_adapters.ports 의 FC/IB 주소)라 network.interfaces 에서 제외 (storage.hbas/infiniband 로 요약)')}) -%}
+      {%- endif -%}
+      {{ n }}
   no_log: true
 
 - name: "redfish | normalize_standard | aggregate gateways + dns_servers"

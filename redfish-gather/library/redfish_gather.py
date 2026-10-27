@@ -2259,12 +2259,14 @@ def _extract_oem_lenovo(data, chassis_data=None):                             # 
         'product_name':         product_name,
         'system_status':        _safe(sys_oem, 'SystemStatus'),
         'fru_serial':           _safe(cha_oem, 'FruSerialNumber'),
-        'machine_type':         _safe(cha_oem, 'MachineType'),
+        # 2026-10-27 (C4, 실측 XCC3 V4: Chassis.Oem.Lenovo 에 MachineType/LEDIndicators 없음): System.SubModel('7DGD' = 4자리 machine type) ·
+        # System.IndicatorLED 로 채운다. chassis OEM 값이 있으면(XCC1/2) 그대로다.
+        'machine_type':         _safe(cha_oem, 'MachineType') or _safe(data, 'SubModel'),
         'machine_level':        _safe(cha_oem, 'MachineLevel'),
         'product_id':           _safe(cha_oem, 'ProductId'),
         'system_id':            _safe(cha_oem, 'SystemId'),
         'health_summary':       _safe(sys_oem, 'HealthSummary'),
-        'led_indicator':        _safe(cha_oem, 'LEDIndicators') or _safe(cha_oem, 'IndicatorLED'),
+        'led_indicator':        _safe(cha_oem, 'LEDIndicators') or _safe(cha_oem, 'IndicatorLED') or _safe(data, 'IndicatorLED'),
     }
 
 
@@ -3127,8 +3129,10 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             # LOCATOR-STR (2026-06-15 cross-device 일관성): field_dictionary 계약 = "string|null".
             # Lenovo(DeviceLocator 부재 + Slot=32 truthy int)는 구 코드가 int 32 누출(같은 slot id 는 str '32' 와 불일치).
             # truthy Slot 만 str cast → Lenovo 32→'32', CSUS Slot=0 은 falsy 유지(ServiceLabel 폴백 보존), Dell/DL380 DeviceLocator 불변.
+            # 2026-10-27 (C4 02-memory-003, 실측 XCC3 'DIMM 23' vs Slot 23): 사람이 읽는 위치 이름이 번호보다 먼저다 —
+            # DeviceLocator → Location.PartLocation.ServiceLabel → str(MemoryLocation.Slot). Dell/iLO(DeviceLocator)·CSUS(Slot 0 → ServiceLabel)
+            # 는 결과 불변, Lenovo 만 '23' → 'DIMM 23'. LOCATOR-STR(문자열 계약)은 유지.
             'locator':         (_safe(mdata, 'DeviceLocator')
-                                or (str(_mloc_slot) if _mloc_slot else None)
                                 or _safe(mdata, 'Location', 'PartLocation', 'ServiceLabel')
                                 or (str(_mloc_slot) if _mloc_slot is not None else None)),
             'capacity_mb':     cap_int,
@@ -5102,6 +5106,11 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl, links_out=N
                 _notice('firmware', f'{fw_id or member_uri}: Version 비어 있음(N/A) — 목록에서 제외')   # RD-FW2 (2026-10-10): 조용히 버리지 않는다
                 continue
             ver = None
+        # 2026-10-27 (C4 04-firmware-006, 실측 Lenovo XCC3): Status.State=Disabled 이고 Version 이 빈 '-Pending' 멤버는 예정된 업데이트가 없는
+        # 자리(placeholder)다 → 제외 + notice. Version 이 있으면 종전대로 pending: true 로 보존한다.
+        if ver is None and _str(_safe(member, 'Status', 'State')).strip().lower() == 'disabled':
+            _notice('firmware', f'{fw_id or member_uri}: Disabled · Version 없음(예정된 업데이트 없음) — 목록에서 제외')
+            continue
         # Q-13: SoftwareId가 문자열 "null"이면 Python None으로 변환
         component = _safe(member, 'SoftwareId')
         if isinstance(component, str) and component.lower() == 'null':
@@ -5216,11 +5225,11 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
                     _safe(mdata, 'FirmwareVersion') or _safe(mdata, 'Version'))
                 psus.append({
                     'name':             _safe(mdata, 'Name'),
-                    'model':            _safe(mdata, 'Model'),
-                    'serial':           _safe(mdata, 'SerialNumber'),
-                    'manufacturer':     _safe(mdata, 'Manufacturer'),
+                    'model':            _strip_or_none(_safe(mdata, 'Model')),          # 2026-10-27 (C4): strip
+                    'serial':           _strip_or_none(_safe(mdata, 'SerialNumber')),
+                    'manufacturer':     _strip_or_none(_safe(mdata, 'Manufacturer')),
                     # 2026-06-16 감사 G4 (Additive): CSUS PSU raw PartNumber=CSU2400AP-3-500 미수집이었음.
-                    'part_number':      _safe(mdata, 'PartNumber'),
+                    'part_number':      _strip_or_none(_safe(mdata, 'PartNumber')),
                     'power_capacity_w': m_cap,
                     'firmware_version': m_fw,
                     'health':           _safe(mdata, 'Status', 'Health'),
@@ -5373,10 +5382,11 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
         psu_capacity, psu_fw = _psu_absent_placeholders_to_none(psu_state, psu_capacity, _safe(psu, 'FirmwareVersion'))
         psus.append({
             'name':             _safe(psu, 'Name'),
-            'model':            _safe(psu, 'Model'),
-            'serial':           _safe(psu, 'SerialNumber'),
-            'manufacturer':     _safe(psu, 'Manufacturer'),
-            'part_number':      _safe(psu, 'PartNumber'),  # 2026-06-16 감사 G4 (Additive)
+            # 2026-10-27 (C4 05-power-003, 실측 XCC3 'CRPS1300D5    '): 문자열 양끝 공백 제거 (비면 null)
+            'model':            _strip_or_none(_safe(psu, 'Model')),
+            'serial':           _strip_or_none(_safe(psu, 'SerialNumber')),
+            'manufacturer':     _strip_or_none(_safe(psu, 'Manufacturer')),
+            'part_number':      _strip_or_none(_safe(psu, 'PartNumber')),  # 2026-06-16 감사 G4 (Additive)
             'power_capacity_w': psu_capacity,
             'firmware_version': psu_fw,
             'health':           _safe(psu, 'Status', 'Health'),

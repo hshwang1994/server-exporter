@@ -355,7 +355,7 @@
                      'auth': _rf_attempts_meta | default({}),
                      'account_service': _rf_account_service_meta | default({}),
                      'multi_node_layout': (_rf_adapter_manager_layout | default('')) or none,
-                     'notices': ((_rf_raw_collect | default({})).notices | default([])),
+                     'notices': (((_rf_raw_collect | default({})).notices | default([])) + (_rf_norm_notices | default([]))),
                      'rmc_activation_check':
                        (true if ((_rf_adapter_manager_layout | default('')) in ['rmc_primary', 'rmc_primary_ilo_secondary']
                                  and (_rf_collect_ok | default(false) | bool))
@@ -658,7 +658,8 @@
                                                   'account_service':
                                                     _rf_account_service_meta | default({}),
                                                   'notices':
-                                           ((_rf_raw_collect | default({})).notices | default([]))})}) }}
+                                           (((_rf_raw_collect | default({})).notices | default([]))
+                                            + (_rf_norm_notices | default([])))})}) }}
           when: ((_diagnosis | default({}, true)).failure_reason | default(none)) is none
 
         - name: "redfish | rescue | set failed vars"
