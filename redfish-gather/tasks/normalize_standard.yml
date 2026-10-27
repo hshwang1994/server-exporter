@@ -18,6 +18,8 @@
     _rf_d_netad:   "{{ _rf_raw_collect.data.network_adapters | default({'adapters':[],'ports':[],'fc_hbas':[],'infiniband':[]}) }}"
     # 2026-10-27 (C9 FIX 7): 모듈 최상위 firmware_links — firmware[].id → {bios|bmc} 구조 근거 (Bios/Manager Links.ActiveSoftwareImage, RelatedItem /Bios)
     _rf_fw_links:  "{{ _rf_raw_collect.firmware_links | default({}) }}"
+    # 2026-10-27 (C8 03-network-007): 모듈 최상위 ndf_mtu_by_mac — MAC(대문자 hex) → NDF Ethernet.MTUSize. interfaces[].mtu 가 null 일 때만 채운다.
+    _rf_ndf_mtu:   "{{ _rf_raw_collect.ndf_mtu_by_mac | default({}) }}"
   no_log: true
 
 # 2026-04-29 fix B01: ProcessorType=='CPU' 필터링 — Dell r760 Tesla T4 같은 GPU/Accelerator/FPGA/DSP가
@@ -101,6 +103,19 @@
               'origin':a.address_origin|default(none)}) -%}
           {%- endif -%}
         {%- endfor -%}
+        {#- 2026-10-27 (C8 03-network-006): 모듈이 값이 있을 때만 두는 ipv6 목록 — 같은 addresses[] 모양(family ipv6, prefix_length) -#}
+        {%- for a in (nic.ipv6 | default([])) -%}
+          {%- if a.address is defined and a.address not in [none,'::',''] -%}
+            {%- set _ = addrs.append({
+              'family':'ipv6','address':a.address,'prefix_length':a.prefix_length|default(none),
+              'subnet_mask':none,'gateway':none,'origin':a.address_origin|default(none)}) -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {#- 2026-10-27 (C8 03-network-007): 호스트 NIC 에 MTUSize 가 없으면 같은 MAC 의 기능 MTU(모듈 aux ndf_mtu_by_mac)로 채운다 -#}
+        {%- set mtu = nic.mtu|default(none) -%}
+        {%- if mtu is none and nic_hex and (_rf_ndf_mtu | default({})).get(nic_hex) is not none -%}
+          {%- set mtu = (_rf_ndf_mtu | default({})).get(nic_hex) -%}
+        {%- endif -%}
         {%- set link = (nic.link_status|lower) if nic.link_status is defined and nic.link_status is not none else 'unknown' -%}
         {%- set speed = nic.speed_mbps|default(none) -%}
         {%- set eport = ns.eth_ports.get(nic_hex, none) if nic_hex else none -%}
@@ -119,7 +134,7 @@
           'name':        nic.name|default(none),
           'kind':        'server_nic',
           'mac':         nic.mac|default(none),
-          'mtu':         nic.mtu|default(none),
+          'mtu':         mtu,
           'speed_mbps':  speed,
           'link_status': link,
           'is_primary':  is_pri,
@@ -247,6 +262,7 @@
               'device':     drv.name|default(none),
               'model':      drv.model|default(none),
               'serial':     drv.serial|default(none),
+              'wwn':        drv.wwn|default(none),
               'total_mb':   ((drv.capacity_bytes|int)/1048576)|round(0,'floor')|int
                             if drv.capacity_bytes else none,
               'media_type': drv.media_type|default(none),
@@ -311,6 +327,8 @@
             'manufacturer': _mf,
             'max_speed_mhz': p.speed_mhz | default(none),
             'architecture': p.architecture | default(p.instruction_set | default(none)),
+            'l2_cache_kb': p.l2_cache_kb | default(none),
+            'l3_cache_kb': p.l3_cache_kb | default(none),
             'sockets': 1,
             'cores_per_socket': cores,
             'total_cores': cores

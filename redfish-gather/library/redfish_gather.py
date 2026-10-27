@@ -131,6 +131,10 @@ def _normalize_port_speed(pdata):
     # int() OverflowError/ValueError 차단), int 는 int, **fractional float(2.5GbE)는 float 보존**.
     cur_gbps_num = _safe_num(cur_gbps)
     speed_mbps = _safe_int(_safe(pdata, 'CurrentLinkSpeedMbps'))  # Round 3 #17: mbps int 통일
+    # 2026-10-27 (C8 03-network-004, 실측 iDRAC9 R740 NetworkPorts): 0 Mbps 는 '0 으로 협상' 이 아니라 링크 없음 — Gbps 쪽(SCHEMA-02)과
+    #   같이 None 으로 통일한다(ports 전용; 호스트 NIC interfaces[].speed_mbps 의 0 은 원문 그대로). 양수는 영향 없음.
+    if speed_mbps == 0:
+        speed_mbps = None
     if speed_mbps is None and cur_gbps_num:
         # round: fractional Gbps(2.5→2500) 정확 변환 + float 정밀도 truncation 방지
         speed_mbps = _safe_int(round(cur_gbps_num * MBPS_PER_GBPS))
@@ -3012,6 +3016,59 @@ def gather_bmc(bmc_ip, manager_uri, vendor, username, password, timeout, verify_
     return result, errors
 
 
+def _cache_string_kb(value):
+    """'22.50 MB' / '45 MB' / '1024 KB' / 숫자(KB) → KB int. 모르는 꼴 · 0 이하는 None (HPE RMC Oem.Hpe.L3CacheSize 문자열)."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value) if value > 0 else None
+    m = re.match(r'^\s*([\d.]+)\s*(KB|MB|GB)?\s*$', str(value), re.I)
+    if not m:
+        return None
+    try:
+        kb = float(m.group(1)) * {'KB': 1, 'MB': 1024, 'GB': 1024 * 1024}[(m.group(2) or 'KB').upper()]
+    except ValueError:
+        return None
+    return int(round(kb)) if kb > 0 else None
+
+
+def _processor_cache_kb(pdata):
+    """소켓당 L2/L3 캐시 KB — Processor OEM 네임스페이스에서만(라이브러리 OEM 추출 분기, 값이 있을 때만) (2026-10-27 C8, 2차 Mock 02-cpu §5).
+    iLO `Oem.Hpe.Cache[]{Name 'L2-Cache'/'L3-Cache', InstalledSizeKB}` · XCC `Oem.Lenovo.CacheInfo[]{CacheLevel, InstalledSizeKByte}` ·
+    iDRAC `Oem.Dell.DellProcessor.Cache{N}Level / Cache{N}InstalledSizeKB` · RMC `Oem.Hpe.L2CacheSize/L3CacheSize`("22.50 MB" 문자열 → KB).
+    vendor 이름으로 가르지 않고 OEM 키의 존재로 가른다. 없으면 (None, None)."""
+    oem = _safe(pdata, 'Oem')
+    if not isinstance(oem, dict):
+        return None, None
+    found = {}
+    for o in oem.values():
+        if not isinstance(o, dict):
+            continue
+        for c in _dicts(o.get('Cache')):                                   # HPE iLO
+            name = _str(c.get('Name')).strip().upper()
+            lvl = 'L2' if name.startswith('L2') else ('L3' if name.startswith('L3') else None)
+            kb = _safe_int(c.get('InstalledSizeKB'))
+            if lvl and kb:
+                found.setdefault(lvl, kb)
+        for c in _dicts(o.get('CacheInfo')):                               # Lenovo XCC
+            lvl = _str(c.get('CacheLevel')).strip().upper()
+            kb = _safe_int(c.get('InstalledSizeKByte'))
+            if lvl in ('L2', 'L3') and kb:
+                found.setdefault(lvl, kb)
+        dp = o.get('DellProcessor')                                        # Dell iDRAC
+        if isinstance(dp, dict):
+            for n in range(1, 5):
+                lvl = _str(dp.get('Cache%dLevel' % n)).strip().upper()
+                kb = _safe_int(dp.get('Cache%dInstalledSizeKB' % n))
+                if lvl in ('L2', 'L3') and kb:
+                    found.setdefault(lvl, kb)
+        for lvl, key in (('L2', 'L2CacheSize'), ('L3', 'L3CacheSize')):   # HPE RMC(문자열)
+            kb = _cache_string_kb(o.get(key))
+            if kb:
+                found.setdefault(lvl, kb)
+    return found.get('L2'), found.get('L3')
+
+
 def gather_processors(bmc_ip, system_uri, username, password, timeout, verify_ssl):
     """cpu 섹션 수집 (Redfish endpoints).
 
@@ -3068,12 +3125,32 @@ def gather_processors(bmc_ip, system_uri, username, password, timeout, verify_ss
             'serial_number':     _ne_p('SerialNumber'),
             'part_number':       _ne_p('PartNumber'),
         })
+        # 2026-10-27 (C8): 소켓당 L2/L3 캐시 KB — OEM 에 값이 있을 때만 키를 둔다(새 발행 키, 원천 있을 때만). normalize 가 groups 에 싣는다.
+        _l2, _l3 = _processor_cache_kb(pdata)
+        if _l2 is not None:
+            processors[-1]['l2_cache_kb'] = _l2
+        if _l3 is not None:
+            processors[-1]['l3_cache_kb'] = _l3
     # Round 15: 멤버는 있었으나 전부 Absent/Disabled → 펌웨어 오류/미장착 가능. collected=[] 가
     # 컬렉션 GET 실패와 구분되도록 warning 명시 (gather_memory total_mib=0 구분 철학과 일관).
     if not processors and _absent > 0:
         errors.append(_err('processors',
                            f'모든 CPU({_absent})가 Absent/Disabled (펌웨어 오류 또는 미장착 가능)'))
     return processors, errors
+
+
+def _memory_rank_count(mdata):
+    """RankCount(DMTF) → 없으면 HPE OEM Label('32GB 1Rx4 PC5-6400B-RC1')의 '<n>Rx<m>' (2026-10-27 C8 02-memory-004 — 실측 CSUS RMC 는
+    RankCount 키가 없다). OEM 네임스페이스 존재로 가른다(vendor 이름 분기 아님). 둘 다 없으면 None — 값을 지어내지 않는다."""
+    rc = _safe_int(_safe(mdata, 'RankCount'))
+    if rc is not None:
+        return rc
+    label = _safe(mdata, 'Oem', 'Hpe', 'Label')
+    if isinstance(label, str):
+        m = re.search(r'(?<![\w.])(\d+)Rx\d+(?![\w])', label)
+        if m:
+            return int(m.group(1))
+    return None
 
 
 def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
@@ -3150,7 +3227,7 @@ def gather_memory(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             'serial':          _strip_or_none(_safe(mdata, 'SerialNumber')),
             # 2026-04-30: Cisco 등 trailing whitespace 정규화.
             'part_number':     _strip_or_none(_safe(mdata, 'PartNumber')),
-            'rank_count':      _safe_int(_safe(mdata, 'RankCount')),  # Round 4 #8/#14: int 통일
+            'rank_count':      _memory_rank_count(mdata),  # Round 4 #8/#14: int 통일 · 2026-10-27 HPE OEM Label 폴백(02-memory-004)
             'data_width_bits': _safe_int(_safe(mdata, 'DataWidthBits')),
             'bus_width_bits':  _safe_int(_safe(mdata, 'BusWidthBits')),
             'error_correction': _safe(mdata, 'ErrorCorrection'),
@@ -3263,6 +3340,22 @@ def _extract_storage_controller_info(sdata, bmc_ip, username, password, timeout,
     }, errors
 
 
+def _drive_wwn(ddata):
+    """Drive.Identifiers 의 NAA/EUI DurableName → 'naa.<hex>' / 'eui.<hex>'(소문자 — ESXi canonicalName 과 같은 꼴; Linux 는 '0x' 접두라
+    조인은 접두를 뗀 hex 로 한다). 없으면 None (2026-10-27 C8 03-storage-003 — 실측 iLO 7 Gen12 · iDRAC9 Drive.Identifiers NAA)."""
+    for ident in _dicts(_safe(ddata, 'Identifiers')):
+        fmt = _str(ident.get('DurableNameFormat')).strip().upper()
+        dn = _str(ident.get('DurableName')).strip().lower()
+        if fmt not in ('NAA', 'EUI') or not dn:
+            continue
+        for pre in ('naa.', 'eui.', '0x'):
+            if dn.startswith(pre):
+                dn = dn[len(pre):]
+        if dn:
+            return ('naa.' if fmt == 'NAA' else 'eui.') + dn
+    return None
+
+
 def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_ssl):
     """Drives 추출 — Empty Bay 필터링 + 정규화."""
     drives = []
@@ -3300,6 +3393,10 @@ def _extract_storage_drives(sdata, bmc_ip, username, password, timeout, verify_s
             'failure_predicted':      _safe(ddata, 'FailurePredicted'),
             'predicted_life_percent': life_pct,
         })
+        # 2026-10-27 (C8 03-storage-003): Identifiers 의 NAA/EUI 가 있을 때만 wwn 키(새 발행 키 — 원천 있을 때만).
+        _wwn = _drive_wwn(ddata)
+        if _wwn:
+            drives[-1]['wwn'] = _wwn
     return drives, errors
 
 
@@ -3775,6 +3872,13 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             for a in _dicts(_safe(ndata, 'IPv4Addresses'))
             if a.get('Address') not in (None, '0.0.0.0', '')
         ]
+        # 2026-10-27 (C8 03-network-006): IPv6Addresses 도 같은 모양으로 — 값이 있을 때만 'ipv6' 키를 둔다(실측 18대 전부 빈 목록 — 합성 검증).
+        ipv6_addrs = [
+            {'address': a.get('Address').strip(), 'prefix_length': _safe_int(a.get('PrefixLength')),
+             'address_origin': a.get('AddressOrigin')}
+            for a in _dicts(_safe(ndata, 'IPv6Addresses'))
+            if isinstance(a.get('Address'), str) and a.get('Address').strip() not in ('', '::')
+        ]
         # 2026-04-29 fix B13: link_status enum 정규화 — Dell linkup/linkdown / HPE NoLink / Cisco Connected/Disconnected → up/down/unknown
         # cycle 2026-06-15 (Lenovo SR650 V4 실미러 검수): MAC 소문자 정규화 — bmc.mac_address /
         # network_adapters.*.mac / ports.associated_address 와 case 일관(라이브러리 lowercase 규약,
@@ -3790,6 +3894,8 @@ def gather_network(bmc_ip, system_uri, username, password, timeout, verify_ssl):
             'health': _safe(ndata, 'Status', 'Health'),
             'ipv4': ipv4_addrs,
         })
+        if ipv6_addrs:
+            nics[-1]['ipv6'] = ipv6_addrs
     return nics, errors
 
 
@@ -4137,6 +4243,12 @@ def _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, err
             'port_guid':    _normalize_ib_guid(_safe(ib, 'PortGUID')) or _normalize_ib_guid(_safe(ib, 'PermanentPortGUID')),
             'port_uri':     _p(port_uri) if port_uri else None,
             'port_uris':    port_uris,
+            # 2026-10-27 (C8 03-network-007): 기능의 Ethernet.MTUSize 와 MAC — 호스트 NIC interfaces[].mtu 가 null 일 때 MAC 으로 채우는
+            #   근거(요청 0). 모듈은 data 밖 aux(ndf_mtu_by_mac)로 넘기고 normalize 층이 채운다. 실측 MTU 보유: XCC3 · iLO 7 일부 NDF.
+            'mtu':          _safe_int(_safe(nd, 'Ethernet', 'MTUSize')),
+            'macs':         [m.strip().upper().replace(':', '').replace('-', '')
+                             for m in (_safe(nd, 'Ethernet', 'MACAddress'), _safe(nd, 'Ethernet', 'PermanentMACAddress'))
+                             if isinstance(m, str) and m.strip()],
         })
     return ndfs
 
@@ -4496,7 +4608,7 @@ def _pcie_port_link_condition(pcie_body, registries):
 
 
 def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
-                                 username, password, timeout, verify_ssl, pcie_link_registries=None):
+                                 username, password, timeout, verify_ssl, pcie_link_registries=None, mtu_out=None):
     """NetworkAdapter 1장 수집 — gather_network_adapters_chassis 의 카드 루프 본문을 그대로 뽑아낸 것 (2026-10-18, F3b).
 
     반환: 'ok' | 'fetch_failed'(카드 GET 실패 — 비차단 오류 기록) | 'skipped'(빈 슬롯 등 조용히 제외).
@@ -4600,6 +4712,12 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
 
     # NetworkDeviceFunctions — FC WWPN/WWNN + IB GUID 식별 (cycle 2026-05-29).
     ndfs = pre_ndfs if pre_ndfs is not None else _fetch_ndf_index(bmc_ip, adata, username, password, timeout, verify_ssl, errors)
+    # 2026-10-27 (C8 03-network-007): 기능 MTU 를 MAC(대문자 hex, 구분자 없음) 별로 모은다 — data 밖 aux, 첫 값 유지.
+    if isinstance(mtu_out, dict):
+        for _nd in ndfs:
+            if isinstance(_nd, dict) and _nd.get('mtu'):
+                for _m in (_nd.get('macs') or []):
+                    mtu_out.setdefault(_m, _nd['mtu'])
     # 2026-10-10 (RD-F15): 한 포트에 NDF 가 여럿(CNA 의 Ethernet 기능 + FCoE 기능)이면 **목록**으로 둔다 — 종전 dict 는 뒤 멤버가 앞을
     #   덮어 멤버 순서에 따라 같은 포트가 Ethernet 으로도 FC 로도 분류됐다.
     # 2026-10-18 (F1b): 기능이 가리키는 포트 링크 두 종류(NetworkPorts/… · Ports/…)를 모두 색인한다.
@@ -4904,7 +5022,8 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
 
 
 def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, timeout,
-                                    verify_ssl, system_uri=None, extra_chassis_uris=None, pcie_link_registries=None):
+                                    verify_ssl, system_uri=None, extra_chassis_uris=None, pcie_link_registries=None,
+                                    mtu_out=None):
     """NetworkAdapters 수집 + FC HBA / InfiniBand 분류.
 
     NetworkAdapters         → adapters[] (NIC 카드 모델/firmware)
@@ -5031,7 +5150,7 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         try:
             result = _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
                                                   username, password, timeout, verify_ssl,
-                                                  pcie_link_registries=pcie_link_registries)
+                                                  pcie_link_registries=pcie_link_registries, mtu_out=mtu_out)
         except Exception as e:
             sys.stderr.write("[redfish_gather] network_adapters 카드 예외: %s\n%s\n"
                              % (type(e).__name__, traceback.format_exc(limit=3)))
@@ -5073,7 +5192,7 @@ def _is_pending_fw_id(fw_id):
     return bool(isinstance(fw_id, str) and 'pending' in fw_id.lower())
 
 
-def gather_firmware(bmc_ip, username, password, timeout, verify_ssl, links_out=None):
+def gather_firmware(bmc_ip, username, password, timeout, verify_ssl, links_out=None, dates_out=None):
     """
     UpdateService/FirmwareInventory — 벤더 공통
     Members 에 상세 필드 없으면 개별 URI 조회 (Dell/HPE/Supermicro 모두 해당)
@@ -5176,6 +5295,9 @@ def gather_firmware(bmc_ip, username, password, timeout, verify_ssl, links_out=N
                 isinstance(ri, dict) and _str(ri.get('@odata.id')).rstrip('/').lower().endswith('/bios')
                 for ri in _dicts(_safe(member, 'RelatedItem'))):
             links_out.setdefault(_fw_dedup_key(fw_id), {})['bios'] = True
+        # 2026-10-27 (C8 01-hardware-004): ReleaseDate 는 발행 키가 아니라 dedup key 별 내부 맵(dates_out)에만 둔다 — hardware.bios_date 폴백 근거.
+        if isinstance(dates_out, dict) and _safe(member, 'ReleaseDate') is not None:
+            dates_out.setdefault(_fw_dedup_key(fw_id), _safe(member, 'ReleaseDate'))
         fw_list.append({
             'id':         fw_id,
             'name':       _safe(member, 'Name'),
@@ -6108,6 +6230,11 @@ def _normalize_network_raw(raw_nics):
                 addrs.append({'family': 'ipv4', 'address': addr, 'prefix_length': None,
                               'subnet_mask': a.get('subnet_mask'), 'gateway': a.get('gateway'),
                               'origin': a.get('address_origin')})
+        for a in _as_list(nic.get('ipv6')):   # 2026-10-27 (03-network-006): partitions 도 같은 모양
+            addr = a.get('address') if isinstance(a, dict) else None
+            if addr and addr not in ('::', ''):
+                addrs.append({'family': 'ipv6', 'address': addr, 'prefix_length': a.get('prefix_length'),
+                              'subnet_mask': None, 'gateway': None, 'origin': a.get('address_origin')})
         interfaces.append({
             'id': nic.get('id') or nic.get('name'), 'name': nic.get('name'),
             'kind': 'server_nic', 'mac': nic.get('mac'), 'mtu': nic.get('mtu'),
@@ -6805,6 +6932,7 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
     bios_link = {}
     # 2026-10-27 (C9): 구조 근거 수집용 out dict — bmc 는 Manager.Links.ActiveSoftwareImage, firmware 는 멤버 RelatedItem(/Bios). 요청 0.
     bmc_links, fw_links_by_key = {}, {}
+    fw_release_dates, ndf_mtu = {}, {}   # 2026-10-27 (C8): FirmwareInventory ReleaseDate(dedup key) · NDF MTU(MAC) — data 밖 내부 근거
     sections = {
         'system':            _run('system',     gather_system,     bmc_ip, system_uri, vendor, *creds, eff_chassis_uri, product_hint, bios_link),
         'bmc':               _run('bmc',        gather_bmc,        bmc_ip, manager_uri, vendor, *creds, manager_layout, links_out=bmc_links),
@@ -6812,7 +6940,8 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         'memory':            _run('memory',     gather_memory,     bmc_ip, system_uri,          *creds),
         'storage':           _run('storage',    gather_storage,    bmc_ip, system_uri,          *creds, sys_chassis_all),
         'network':           _run('network',    gather_network,    bmc_ip, system_uri,          *creds),
-        'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds, links_out=fw_links_by_key),
+        'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds, links_out=fw_links_by_key,
+                                   dates_out=fw_release_dates),
         # 2026-10-19 (A-11): System 이 연결한 섀시 전체 — 1개면 종전 gather_power(eff_chassis_uri) 와 같은 호출
         'power':             _run('power',      _gather_power_for_system,   bmc_ip, sys_chassis, eff_chassis_uri, *creds,
                                    chassis_bodies=bios_link.get('chassis_bodies')),   # 2026-10-27 (C5): system 이 받은 섀시 본문 재사용
@@ -6826,7 +6955,8 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         'network_adapters':  _run('network_adapters',
                                    gather_network_adapters_chassis,
                                    bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis,
-                                   pcie_link_registries=pcie_link_registries),   # 2026-10-27 (결정 11 A안): adapter 선언 등록부
+                                   pcie_link_registries=pcie_link_registries,   # 2026-10-27 (결정 11 A안): adapter 선언 등록부
+                                   mtu_out=ndf_mtu),                             # 2026-10-27 (C8 03-network-007): NDF MTU(MAC) aux
     }
     # 2026-10-18 (X9): NetworkAdapter 의 Model 이 비면 같은 카드의 FirmwareInventory 이름으로 채운다 (두 섹션이 다 끝난 뒤, 요청 0).
     _fill_adapter_models_from_firmware(sections.get('network_adapters'), sections.get('firmware'))
@@ -6844,10 +6974,26 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         _notice('system', '호스트 전원 Off 관측 — 저장/메모리/전원/온도 인벤토리가 비어 있거나 placeholder 일 수 있음')
     # 2026-10-27 (C9 FIX 7): 구조 근거 firmware_links — 최종 firmware[].id 로 키잉. data 밖(모듈 최상위 firmware_links)으로 나가고
     # normalize 의 category 가 1순위로 쓴다. 발행 키·요청 수는 늘지 않는다.
+    _fw_links_final = _firmware_links_by_id(
+        sections.get('firmware'), fw_links_by_key,
+        bios_link.get('active_software_image'), bmc_links.get('active_software_image'))
+    # 2026-10-27 (C8 01-hardware-004 ≡ 04-bios-001, 실측 Lenovo XCC3 UEFI.ReleaseDate): System · OEM 에 BIOS 날짜가 없으면 구조 근거
+    #   (firmware_links bios — Bios.Links.ActiveSoftwareImage · RelatedItem /Bios)로 잡힌 FirmwareInventory 항목의 ReleaseDate 를
+    #   hardware.bios_date 에 넣는다 — 기존 키 · 요청 0. 연도 0000 자리표시자(iLO System ROM)는 ISO 가 아니라 쓰지 않는다. OEM 날짜가 있는
+    #   벤더(iLO · iDRAC)는 불변(Dell 은 두 날짜가 같음 — 교차 확인). 어느 항목을 썼는지 notice 로 남긴다.
+    _sysd = sections.get('system')
+    if isinstance(_sysd, dict) and _sysd.get('bios_date') is None:
+        for _fid, _hit in _fw_links_final.items():
+            if not (isinstance(_hit, dict) and _hit.get('bios')):
+                continue
+            _d = _normalize_bios_date(fw_release_dates.get(_fw_dedup_key(_fid)))
+            if isinstance(_d, str) and _valid_iso_date(_d) and not _d.startswith('0000'):
+                _sysd['bios_date'] = _d
+                _notice('system', 'BIOS 날짜를 FirmwareInventory %s 의 ReleaseDate 로 채움 (System · OEM 에 날짜 없음)' % _fid)
+                break
     if aux_out is not None:
-        aux_out['firmware_links'] = _firmware_links_by_id(
-            sections.get('firmware'), fw_links_by_key,
-            bios_link.get('active_software_image'), bmc_links.get('active_software_image'))
+        aux_out['firmware_links'] = _fw_links_final
+        aux_out['ndf_mtu_by_mac'] = ndf_mtu
     return sections
 
 
@@ -9600,6 +9746,8 @@ def main():
         multi_node=multi_node, auth_evidence=auth_evidence(), notices=notices(),
         # 2026-10-27 (C9): firmware[].id → 구조 근거 {bios|bmc} — normalize 의 category 1순위. data 밖이라 GOLDEN/envelope 키 불변.
         firmware_links=aux.get('firmware_links') or {},
+        # 2026-10-27 (C8 03-network-007): NDF Ethernet.MTUSize(MAC 별) — normalize 가 interfaces[].mtu 가 null 인 NIC 만 채운다. data 밖.
+        ndf_mtu_by_mac=aux.get('ndf_mtu_by_mac') or {},
         # 2026-10-03 (P2): 모듈 내부 관측값 — envelope 13 필드에는 들어가지 않는다 (normalize 가 뽑지 않음).
         cache=cache_stats(),
     )
