@@ -134,6 +134,10 @@
             #   펌웨어를 firmware[] 에 보충한다. 값이 없는 adapter 는 '' → 모듈이 None 처리(종전과 같다). vendor 이름으로 가르지 않는다(rule 12).
             _rf_adapter_firmware_scope: >-
               {{ ((_selected_adapter | default({})).vendor_notes | default({})).firmware_inventory_scope | default('') }}
+            # 2026-10-27 (03-storage-004 결정 11 A안): adapter vendor_notes.pcie_port_link_condition_registries → 모듈 pcie_port_link_condition_registries.
+            #   선언이 없는 adapter 는 [] → 모듈이 None 처리(카드 조건 문구 없음). vendor 이름으로 가르지 않는다(rule 12).
+            _rf_adapter_pcie_link_registries: >-
+              {{ ((_selected_adapter | default({})).vendor_notes | default({})).pcie_port_link_condition_registries | default([]) }}
 
         # ── Phase 1: 표준 수집 계정으로 수집 ─────────────────────────────
         # 표준 계정은 전역 1개다 (vault/common/redfish/standard.yml).

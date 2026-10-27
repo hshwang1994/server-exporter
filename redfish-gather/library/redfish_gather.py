@@ -2587,6 +2587,9 @@ def gather_system(bmc_ip, system_uri, vendor, username, password, timeout, verif
         cst, cdata, _cerr = _get(bmc_ip, _p(chassis_uri), username, password, timeout, verify_ssl)
         if not _cerr and cst == 200:
             chassis_data = cdata
+            # 2026-10-27 (C5 05-power-004): 이미 받은 섀시 본문을 power/thermal 이 navigation property 확인에 재사용한다 (요청 0).
+            if bios_link_out is not None and isinstance(cdata, dict):
+                bios_link_out.setdefault('chassis_bodies', {})[_p(chassis_uri)] = cdata
 
     # HostName: HPE는 빈 문자열("") 반환 가능 → None으로 변환
     hostname = _safe(data, 'HostName')
@@ -4469,8 +4472,27 @@ def _network_adapter_sources(bmc_ip, chassis_uri, system_uri, extra_chassis_uris
     return sources, tried, fails, state['empty']
 
 
+def _pcie_port_link_condition(pcie_body, registries):
+    """PCIeDevice.Status.Conditions[] 에서 **선언된 등록부**(adapter vendor_notes.pcie_port_link_condition_registries)의 LinkUp/LinkDown
+    메시지 1건을 (상태, Timestamp, MessageArgs[0]) 로 돌려준다 (2026-10-27 결정 11 A안 · 사용자 3차 검토).
+    - 등록부 접두(MessageId 의 첫 세그먼트)가 선언 목록에 없으면 None — 벤더 이름으로 가르지 않는다(선언 없는 벤더는 문구 없음).
+    - 마지막 세그먼트가 LinkUp/LinkDown 이 아닌 것(PcieLinkTrainingOk 등 PCIe 자체 링크)은 보지 않는다.
+    - 카드 단위 조건이다 — 호출부는 포트 link_status 값을 바꾸지 않고 notice 참고 정보로만 쓴다."""
+    regs = {str(r).strip() for r in (registries or []) if str(r).strip()}
+    if not regs or not isinstance(pcie_body, dict):
+        return None
+    for c in _dicts(_safe(pcie_body, 'Status', 'Conditions')):
+        mid = _str(c.get('MessageId')).strip()
+        parts = mid.split('.')
+        if len(parts) < 2 or parts[0] not in regs or parts[-1] not in ('LinkUp', 'LinkDown'):
+            continue
+        args = c.get('MessageArgs') if isinstance(c.get('MessageArgs'), list) else []
+        return (parts[-1], _str(c.get('Timestamp')).strip() or None, _str(args[0]).strip() if args else None)
+    return None
+
+
 def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
-                                 username, password, timeout, verify_ssl):
+                                 username, password, timeout, verify_ssl, pcie_link_registries=None):
     """NetworkAdapter 1장 수집 — gather_network_adapters_chassis 의 카드 루프 본문을 그대로 뽑아낸 것 (2026-10-18, F3b).
 
     반환: 'ok' | 'fetch_failed'(카드 GET 실패 — 비차단 오류 기록) | 'skipped'(빈 슬롯 등 조용히 제외).
@@ -4489,6 +4511,8 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
         return 'fetch_failed'
 
     adapter_id = _safe(adata, 'Id')
+    r16_pcie_body = None                    # 2026-10-27 (결정 11 A안): 이 어댑터 링크로 받은 PCIeDevice 본문 (정확히 1건일 때만)
+    out_fc_added = False                    # 이 카드에서 storage.hbas 가 생성됐는가
     # FirmwareVersion: Controllers[0].FirmwarePackageVersion 또는 root
     fw_ver = None
     ctrls = _safe(adata, 'Controllers', default=[]) or []
@@ -4499,12 +4523,16 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
         # 에 둔다(실측 Mellanox MCX631102="26.46.3048..."). 링크추적 fallback (Additive — 표준 위치
         # 보유 vendor 불변, PCIeDevice 도 부재 시 None 유지).
         if not fw_ver:
-            for _pd in _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices')):
+            _r16_links = _dicts(_safe(ctrls[0], 'Links', 'PCIeDevices'))
+            for _pd in _r16_links:
                 _pd_uri = _safe(_pd, '@odata.id')
                 if not _pd_uri:
                     continue
                 _ps, _pdata, _pe = _get(bmc_ip, _p(_pd_uri), username, password, timeout, verify_ssl)
                 if _ps == 200 and isinstance(_pdata, dict):
+                    # 2026-10-27 (결정 11 A안): 바로 이 어댑터의 링크로 받은 본문만 카드 조건 근거로 쓴다 (섀시 PCIeDevices 열거·캐시는 쓰지 않음)
+                    if len(_r16_links) == 1 and r16_pcie_body is None:
+                        r16_pcie_body = _pdata
                     fw_ver = _safe(_pdata, 'FirmwareVersion')
                     if fw_ver:
                         break
@@ -4587,6 +4615,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
     # 2026-10-18: 링크 상태를 장비가 주지 않은 포트 · WWPN 을 정하지 못한 포트 — 카드당 notice 1건씩.
     # 2026-10-19: link_status 는 up/down 둘뿐이라 미제공(link_missing) · 값 미확정(link_unresolved) 포트도 down 이다 — 그 사실은 notice 로만 남는다.
     link_missing, link_unresolved, wwpn_missing, wwpn_derived = [], [], [], []
+    fc_port_n, eth_port_n = 0, 0            # 2026-10-27 (결정 11 A안): 카드 종류 판별용 — FC 전용 카드(이더넷 포트 0)만 카드 조건을 붙인다
 
     # NetworkPorts (Redfish 1.5 이전) 또는 Ports (1.6+)
     ports_link = (_safe(adata, 'NetworkPorts', '@odata.id')
@@ -4700,6 +4729,10 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
                 if cls in ('FibreChannel', 'FCoE') and isinstance(ndf, dict) and ndf.get('wwpn'):
                     primary_addr = ndf['wwpn']
 
+                if cls in ('FibreChannel', 'FCoE'):
+                    fc_port_n += 1
+                elif cls == 'Ethernet':
+                    eth_port_n += 1
                 port_hbas = []
                 if ib_dec == 'not_ib' and cls in ('FibreChannel', 'FCoE') and not (not cand and prefixed_orphan):
                     hba_link = _hba_link_status(pdata)   # 2026-10-19: up / down 둘뿐 — 미제공 · 미확정은 down + notice
@@ -4762,6 +4795,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
 
                 if port_hbas:
                     out['fc_hbas'].extend(port_hbas)
+                    out_fc_added = True             # 2026-10-27 (결정 11 A안): 포트 경로로 만든 hbas 도 '이 카드가 FC HBA' 근거
                 elif ib_dec == 'ib':
                     _append_ib_port(out, ib_idx_by_port, origin, adapter_id, adapter_info, port_id, pdata, speed_gbps,
                                     [n for n in joined if _str(n.get('func_type')).strip().lower() == 'infiniband'])
@@ -4827,13 +4861,24 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
             if hba.get('wwpn') and hba['wwpn'] in {h.get('wwpn') for h in out['fc_hbas'] if h.get('wwpn')}:
                 continue
             out['fc_hbas'].append(hba)
+            out_fc_added = True
     _attach_orphan_ib_functions(out, ib_idx_by_port, adapter_id, orphan_ib_by_parent, orphan_ib_unlinked)
 
     # 2026-10-18: 카드당 notice — 장비가 링크 상태를 주지 않은 FC 포트 · 포트 주소로 정한 WWPN · 못 정한 WWPN.
     # 2026-10-19: 값은 down 으로 적되(up/down 둘뿐) 미제공 · 값 미확정 사실을 notice 로 가른다 — Portal 은 wwpn 으로 OS 채널 값을 조인한다.
     if link_missing:
-        _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 미제공, down 으로 기록 (storage.hbas link_status)'
-                % (adapter_id, ', '.join(link_missing)))
+        _lm_msg = ('네트워크 카드 %s: FC 포트 %s 링크 상태 미제공, down 으로 기록 (storage.hbas link_status)'
+                   % (adapter_id, ', '.join(link_missing)))
+        # 2026-10-27 (03-storage-004 결정 11 A안, 사용자 3차 검토 3중 판별): (1) 이 카드가 FC 전용(hbas 생성 ∧ 이더넷 포트 0) ∧
+        #   (2) PCIeDevice 본문이 바로 이 어댑터의 Controllers[0].Links.PCIeDevices(정확히 1건)로 CSUS-R16 경로에서 받은 것 ∧
+        #   (3) MessageId 등록부가 adapter 가 선언한 값(pcie_port_link_condition_registries)이고 마지막 세그먼트가 LinkUp/LinkDown —
+        #   셋 다 성립할 때만 **카드 단위** 조건을 참고로 덧붙인다. 포트 값(down)은 바꾸지 않는다. RAID/NIC 카드는 (1)(2) 에서 걸러진다.
+        _cond = (_pcie_port_link_condition(r16_pcie_body, pcie_link_registries)
+                 if (out_fc_added and eth_port_n == 0 and r16_pcie_body is not None) else None)
+        if _cond is not None:
+            _lm_msg += (' — 링크 단절을 확인한 값 아님; 카드 %s 조건 %s(%s, 카드 단위)'
+                        % (_cond[2] or _str(adapter_id), _cond[0], _cond[1] or 'Timestamp 없음'))
+        _notice('network_adapters', _lm_msg)
     if link_unresolved:
         _notice('network_adapters', '네트워크 카드 %s: FC 포트 %s 링크 상태 값 미확정, down 으로 기록 (storage.hbas link_status)'
                 % (adapter_id, ', '.join(link_unresolved)))
@@ -4855,7 +4900,7 @@ def _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports
 
 
 def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, timeout,
-                                    verify_ssl, system_uri=None, extra_chassis_uris=None):
+                                    verify_ssl, system_uri=None, extra_chassis_uris=None, pcie_link_registries=None):
     """NetworkAdapters 수집 + FC HBA / InfiniBand 분류.
 
     NetworkAdapters         → adapters[] (NIC 카드 모델/firmware)
@@ -4981,7 +5026,8 @@ def gather_network_adapters_chassis(bmc_ip, chassis_uri, username, password, tim
         ports_snap = set(seen_ports)
         try:
             result = _collect_one_network_adapter(bmc_ip, origin, member, out, errors, seen_ports, ib_idx_by_port,
-                                                  username, password, timeout, verify_ssl)
+                                                  username, password, timeout, verify_ssl,
+                                                  pcie_link_registries=pcie_link_registries)
         except Exception as e:
             sys.stderr.write("[redfish_gather] network_adapters 카드 예외: %s\n%s\n"
                              % (type(e).__name__, traceback.format_exc(limit=3)))
@@ -5175,8 +5221,10 @@ def _telemetry_total_power(bmc_ip, chassis_uri, username, password, timeout, ver
     return None
 
 
-def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
+def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=None):
     """DMTF 2020.4 (Redfish 1.13+) PowerSubsystem fallback parser.
+
+    chassis_body (선택, 2026-10-27 C5): 섀시 본문을 알면 EnvironmentMetrics 링크가 없을 때 그 GET 을 건너뛴다.
 
     cycle 2026-05-01: 신 펌웨어 (HPE iLO 6 / Lenovo XCC2-3 / Dell iDRAC9 5.x+ /
     Supermicro X14+) 가 /Power 대신 /PowerSubsystem 응답. 기본 PSU 정보는 공통.
@@ -5279,7 +5327,10 @@ def _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, ve
     # PowerWatts.Reading / ReadingRangeMin/Max 가 PowerControl 대응.
     if power_control is not None:
         em_path = _p(chassis_uri) + '/EnvironmentMetrics'
-        st_em, em_data, _err_em = _get(bmc_ip, em_path, username, password, timeout, verify_ssl)
+        if _chassis_has_link(chassis_body, 'EnvironmentMetrics') is False:
+            st_em, em_data, _err_em = 404, {}, 'HTTP 404: Not Found (섀시 본문에 EnvironmentMetrics 링크 없음 — 요청 생략)'
+        else:
+            st_em, em_data, _err_em = _get(bmc_ip, em_path, username, password, timeout, verify_ssl)
         if st_em == 200 and isinstance(em_data, dict):
             pw = em_data.get('PowerWatts') if isinstance(em_data.get('PowerWatts'), dict) else None
             if pw:
@@ -5354,8 +5405,20 @@ def _merge_power_dual(legacy_result, subsystem_result):    # nosec rule12-r1
     return {'power_supplies': merged_psus, 'power_control': pc}
 
 
-def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
+def _chassis_has_link(chassis_body, name):
+    """섀시 본문에 navigation property(name)가 있는가 — 본문을 모르면 None(종전 동작), 알면 True/False (2026-10-27 C5 05-power-004)."""
+    if not isinstance(chassis_body, dict):
+        return None
+    link = chassis_body.get(name)
+    return isinstance(link, dict) and bool(_safe(link, '@odata.id'))
+
+
+def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=None):
     """Chassis/{id}/Power — PSU 정보. chassis_uri는 detect_vendor()에서 전달.
+
+    chassis_body (선택, 2026-10-27 C5 05-power-004 — 실측 HPE CSUS RackGroup/Rack1 은 Power·PowerSubsystem 링크가 없고 r001u01 은
+      PowerSubsystem 만 있다): 호출자가 이미 받은 섀시 본문. 주면 navigation property 가 없는 경로는 요청하지 않는다 —
+      둘 다 없으면 404 와 같은 미지원 오류(요청 0), Power 없이 PowerSubsystem 만 있으면 신 경로로 바로 간다. 본문을 모르면 종전과 같다.
 
     cycle 2026-05-01: /Power 404 시 /PowerSubsystem fallback (DMTF 2020.4 신 schema).
     Storage SimpleStorage fallback 패턴 따름 (gather_storage 참조).
@@ -5370,12 +5433,18 @@ def gather_power(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
         errors.append(_err('power', 'chassis_uri 없음 (detect_vendor 에서 Chassis 미발견)'))
         return {}, errors
 
+    # 2026-10-27 (C5 05-power-004): 섀시 본문을 알면 링크 없는 경로를 요청하지 않는다
+    has_legacy, has_new = _chassis_has_link(chassis_body, 'Power'), _chassis_has_link(chassis_body, 'PowerSubsystem')
+    if has_legacy is False and has_new is False:
+        return {}, [_err('power', 'Power/PowerSubsystem 미지원: HTTP 404 (섀시 본문에 링크 없음 — 요청 생략)')]
+    if has_legacy is False and has_new:
+        return _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=chassis_body)
     power_path = _p(chassis_uri) + '/Power'
     st, pdata, perr = _get(bmc_ip, power_path, username, password, timeout, verify_ssl)
 
     # cycle 2026-05-01: 404 = 신 펌웨어 가능 → PowerSubsystem fallback
     if st == 404:
-        return _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
+        return _gather_power_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=chassis_body)
 
     if perr or st != 200:
         errors.append(_err('power', f'Power 정보 실패: {perr or st}'))
@@ -5497,8 +5566,11 @@ def _sensor_reading_if_enabled(entry, reading):
     return reading
 
 
-def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl):
+def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl, chassis_body=None):
     """Chassis/{id}/Thermal — 온도 센서 + 팬 정보 (cycle 2026-06-09, ADR-2026-06-09).
+
+    chassis_body (선택, 2026-10-27 C5 05-power-004): gather_power 와 같은 gating — 섀시 본문에 Thermal·ThermalSubsystem 링크가
+      둘 다 없으면 요청 없이 미지원, Thermal 없이 ThermalSubsystem 만 있으면 신 경로로 바로 간다.
 
     gather_power 패턴 mirror. /Thermal (legacy) 404 시 /ThermalSubsystem fallback
     (DMTF 2020.4 / Redfish 1.13+ 신 schema). HPE Compute Scale-up Server 3200 /
@@ -5516,6 +5588,11 @@ def gather_thermal(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
     if not chassis_uri:
         return {}, [_err('thermal', 'chassis_uri 없음')]
 
+    has_legacy, has_new = _chassis_has_link(chassis_body, 'Thermal'), _chassis_has_link(chassis_body, 'ThermalSubsystem')
+    if has_legacy is False and has_new is False:
+        return {}, [_err('thermal', 'Thermal/ThermalSubsystem 미지원: HTTP 404 (섀시 본문에 링크 없음 — 요청 생략)')]
+    if has_legacy is False and has_new:
+        return _gather_thermal_subsystem(bmc_ip, chassis_uri, username, password, timeout, verify_ssl)
     thermal_path = _p(chassis_uri) + '/Thermal'
     st, tdata, terr = _get(bmc_ip, thermal_path, username, password, timeout, verify_ssl)
 
@@ -6243,10 +6320,11 @@ def gather_chassis_multi(bmc_ip, chassis_coll_uri, username, password,
         # 실패 chassis 에 doomed sub-GET (2 round-trip) + 중복 error noise 차단 — 멤버는
         # append (chassis_count 보존). 설명 모델 "Power 와 Thermal".
         if get_ok:
+            # 2026-10-27 (C5 05-power-004): 이미 받은 섀시 본문으로 링크 없는 Power/Thermal 경로를 요청하지 않는다 (RackGroup/Rack1 8건 · r001u01 3건)
             pwr_data, pwr_errs = gather_power(bmc_ip, m['uri'],
-                                              username, password, timeout, verify_ssl)
+                                              username, password, timeout, verify_ssl, chassis_body=cdata)
             thm_data, thm_errs = gather_thermal(bmc_ip, m['uri'],
-                                                username, password, timeout, verify_ssl)
+                                                username, password, timeout, verify_ssl, chassis_body=cdata)
             # 2026-10-12: Power/Thermal 과 신 schema 가 모두 404 인 chassis(RackGroup 등)는 그 리소스를 두지 않는 것이다 — 미지원이지 실패가 아니다.
             #   섹션 runner 의 404-only 판정과 같은 규칙으로 errors 에 남기지 않는다(종전 {} 반환과 같은 결과). 그 밖의 오류는 그대로 남긴다.
             if pwr_errs and _is_404_only_error(pwr_errs):
@@ -6352,8 +6430,10 @@ def gather_composition_service(bmc_ip, service_root, username, password, timeout
                     # 표준 ResourceBlock = Processors/Memory idRef 배열 (DMTF). 비-표준
                     # collection-link(dict) 펌웨어면 0 으로 under-count — lab 부재, 사이트
                     # fixture 확인 시 정정 (NEXT_ACTIONS C9, rule 96 R1-A).
-                    'processor_count':      len(_dicts(_safe(bd, 'Processors'))),
-                    'memory_count':         len(_dicts(_safe(bd, 'Memory'))),
+                    # 2026-10-27 (FIX 6, 실측 CSUS RMC: ResourceBlock 의 Processors/Memory 가 idRef 배열이 아니라 컬렉션 링크(dict)):
+                    #   배열이 아니면 0 으로 날조하지 않고 null — 세지 못한 것과 0개는 다르다.
+                    'processor_count':      (len(_dicts(_safe(bd, 'Processors'))) if isinstance(_safe(bd, 'Processors'), list) else None),
+                    'memory_count':         (len(_dicts(_safe(bd, 'Memory'))) if isinstance(_safe(bd, 'Memory'), list) else None),
                     'chassis':              chassis_links,
                     'computer_systems':     systems_links,
                 })
@@ -6606,7 +6686,7 @@ def _supplement_firmware_from_pcie_psu(bmc_ip, fw_list, chassis_uris, power_sect
     return out
 
 
-def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl):
+def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl, chassis_bodies=None):
     """System 이 연결한 섀시가 2개 이상이면 섀시마다 gather_power 를 돌려 합친다 (2026-10-19, A-11). 1개(실측 전 벤더 · CSUS 4노드)면 종전 gather_power 와 같다.
 
     합치는 규칙: power_supplies 는 이어 붙인다(섀시별 PSU). power_control 의 소비·용량은 모든 섀시 값이 있을 때만 합(하나라도 None 이면 None —
@@ -6615,10 +6695,12 @@ def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, passwo
     """
     uris = [u for u in (chassis_uris or []) if isinstance(u, str) and u]
     if len(uris) <= 1:
-        return gather_power(bmc_ip, (uris[0] if uris else default_uri), username, password, timeout, verify_ssl)
+        _cu = uris[0] if uris else default_uri
+        return gather_power(bmc_ip, _cu, username, password, timeout, verify_ssl,
+                            chassis_body=(chassis_bodies or {}).get(_p(_cu)) if _cu else None)   # 2026-10-27 (C5)
     psus, errors, pcs, used = [], [], [], []
     for cu in _capped(uris, 'power', errors):
-        d, e = gather_power(bmc_ip, cu, username, password, timeout, verify_ssl)
+        d, e = gather_power(bmc_ip, cu, username, password, timeout, verify_ssl, chassis_body=(chassis_bodies or {}).get(_p(cu)))
         if not d and _is_404_only_error(e):
             _notice('power', '섀시 %s: Power 리소스 없음 — 합산에서 제외' % _p(cu))
             continue
@@ -6650,14 +6732,16 @@ def _gather_power_for_system(bmc_ip, chassis_uris, default_uri, username, passwo
     return {'power_supplies': psus, 'power_control': power_control}, errors
 
 
-def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl):
+def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, password, timeout, verify_ssl, chassis_bodies=None):
     """System 이 연결한 섀시가 2개 이상이면 섀시마다 gather_thermal 을 돌려 온도·팬을 이어 붙인다 (2026-10-19, A-11). 1개면 종전과 같다."""
     uris = [u for u in (chassis_uris or []) if isinstance(u, str) and u]
     if len(uris) <= 1:
-        return gather_thermal(bmc_ip, (uris[0] if uris else default_uri), username, password, timeout, verify_ssl)
+        _cu = uris[0] if uris else default_uri
+        return gather_thermal(bmc_ip, _cu, username, password, timeout, verify_ssl,
+                              chassis_body=(chassis_bodies or {}).get(_p(_cu)) if _cu else None)   # 2026-10-27 (C5)
     temps, fans, errors, used = [], [], [], []
     for cu in _capped(uris, 'thermal', errors):
-        d, e = gather_thermal(bmc_ip, cu, username, password, timeout, verify_ssl)
+        d, e = gather_thermal(bmc_ip, cu, username, password, timeout, verify_ssl, chassis_body=(chassis_bodies or {}).get(_p(cu)))
         if not d and _is_404_only_error(e):
             _notice('thermal', '섀시 %s: Thermal 리소스 없음 — 합산에서 제외' % _p(cu))
             continue
@@ -6676,7 +6760,8 @@ def _gather_thermal_for_system(bmc_ip, chassis_uris, default_uri, username, pass
 def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
                           username, password, timeout, verify_ssl,
                           all_errors, collected, failed, unsupported=None,
-                          manager_layout=None, product_hint=None, firmware_scope=None, aux_out=None):
+                          manager_layout=None, product_hint=None, firmware_scope=None, aux_out=None,
+                          pcie_link_registries=None):
     """10개 섹션 dispatch (system / bmc / processors / memory / storage / network /
     firmware / power / thermal / network_adapters[P4]).
 
@@ -6725,16 +6810,19 @@ def _collect_all_sections(bmc_ip, vendor, system_uri, manager_uri, chassis_uri,
         'network':           _run('network',    gather_network,    bmc_ip, system_uri,          *creds),
         'firmware':          _run('firmware',   gather_firmware,   bmc_ip,                      *creds, links_out=fw_links_by_key),
         # 2026-10-19 (A-11): System 이 연결한 섀시 전체 — 1개면 종전 gather_power(eff_chassis_uri) 와 같은 호출
-        'power':             _run('power',      _gather_power_for_system,   bmc_ip, sys_chassis, eff_chassis_uri, *creds),
+        'power':             _run('power',      _gather_power_for_system,   bmc_ip, sys_chassis, eff_chassis_uri, *creds,
+                                   chassis_bodies=bios_link.get('chassis_bodies')),   # 2026-10-27 (C5): system 이 받은 섀시 본문 재사용
         # cycle 2026-06-14 (Track 4): 단일노드 thermal (온도 센서 + 팬). 미지원 벤더는 {} graceful.
-        'thermal':           _run('thermal',    _gather_thermal_for_system, bmc_ip, sys_chassis, eff_chassis_uri, *creds),
+        'thermal':           _run('thermal',    _gather_thermal_for_system, bmc_ip, sys_chassis, eff_chassis_uri, *creds,
+                                   chassis_bodies=bios_link.get('chassis_bodies')),
         # P4 (cycle 2026-04-28): NIC 카드 + port-level + FC HBA / InfiniBand 분류
         # cycle 2026-08-03: system_uri 전달 — Chassis 경로 실패 시 Systems 경로 fallback
         # (펌웨어 세대별 NetworkAdapters 부모 리소스 차이. 상세는 함수 docstring).
         # 2026-10-15: System 이 연결한 나머지 섀시 전달 — 소유를 확인한 섀시의 카드만 더한다.
         'network_adapters':  _run('network_adapters',
                                    gather_network_adapters_chassis,
-                                   bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis),
+                                   bmc_ip, eff_chassis_uri, *creds, system_uri, extra_chassis,
+                                   pcie_link_registries=pcie_link_registries),   # 2026-10-27 (결정 11 A안): adapter 선언 등록부
     }
     # 2026-10-18 (X9): NetworkAdapter 의 Model 이 비면 같은 카드의 FirmwareInventory 이름으로 채운다 (두 섹션이 다 끝난 뒤, 요청 0).
     _fill_adapter_models_from_firmware(sections.get('network_adapters'), sections.get('firmware'))
@@ -9291,6 +9379,9 @@ def main():
             # 2026-10-19 (A-9): adapter vendor_notes.firmware_inventory_scope — 'complex_only' 면 PCIe 장치 · PSU 펌웨어를 firmware[] 에
             #   보충한다(실측 HPE CSUS 3200: FirmwareInventory 가 complex/nPar 번들 2건만). None/'' 은 종전과 같다.
             firmware_inventory_scope = dict(type='str', default=None, required=False),
+            # 2026-10-27 (03-storage-004 결정 11 A안): adapter vendor_notes.pcie_port_link_condition_registries — PCIeDevice.Status.Conditions 의
+            #   MessageId 등록부 접두(예 H3Alert)를 선언한 adapter 에서만 FC HBA 링크 미제공 notice 에 카드 단위 LinkUp/LinkDown 조건을 덧붙인다.
+            pcie_port_link_condition_registries = dict(type='list', elements='str', default=None, required=False),
         ),
         supports_check_mode=True,
     )
@@ -9460,6 +9551,7 @@ def main():
         # A1b (2026-06-04): ServiceRoot.Product 를 hardware.model fallback 로 전달 (check_redfish 동일).
         product_hint=_safe(service_root, 'Product'),
         firmware_scope=(p.get('firmware_inventory_scope') or None),
+        pcie_link_registries=(p.get('pcie_port_link_condition_registries') or None),
     )
 
     # 대표 시리얼 확정. gather_system 의 SerialNumber 값을 마지막에 덮어쓴다.

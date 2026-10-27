@@ -133,6 +133,14 @@ vendor_notes:
   #     (redfish_gather.py `_supplement_firmware_from_pcie_psu`). 다른 adapter 는 값이 없어 종전과 같다.
   processor_summary_logical_count: cores
   firmware_inventory_scope: complex_only
+  # 2026-10-27 (03-storage-004 결정 11 A안 — redfish_gather.py `_pcie_port_link_condition` 이 읽는다): RMC 의 PCIeDevice.Status.Conditions[] 는
+  #   Message 본문 없이 MessageId(H3Alert.1.7/1.8.LinkUp · LinkDown · PcieLinkTrainingOk …)·MessageArgs(ServiceLabel)·Severity·Timestamp 만 준다.
+  #   등록부 정의(요청하지 않는 RegistryStore/Registries/en/H3Alert.json, 1.8): LinkUp/LinkDown = "An Ethernet or Fibre Channel Host Bus Adapter (HBA)
+  #   port link on a PCIe device …" — 카드 단위 조건이며 포트 LinkStatus 가 아니다. 실측(2026-10-21 용인 csus3200_01/03 · 1차 4대 2026-05-07):
+  #   FC HBA(PCIeDevices/11·14) 뿐 아니라 Mellanox NIC·RAID 에도 LinkUp 이 붙는다 → 모듈은 FC 전용 카드 ∧ 어댑터 자신의 Controllers[].Links.PCIeDevices
+  #   1건 ∧ 이 등록부 접두 일치일 때만 "링크 상태 미제공" notice 에 참고로 덧붙인다. hbas[].link_status 값은 바꾸지 않는다(A안).
+  #   evidence: tests/evidence/2026-10-27-redfish-mock2-impl/07-csus-chassis-fc.md · 2026-10-26 addendum 07.
+  pcie_port_link_condition_registries: ["H3Alert"]
   rmc_firmware_min: "1.0"            # 실측 1.75.108 (2026-06-15) — RMC 1.x 대. 구 추정 3.0 정정 (문서용, 코드 미소비)
   npar_firmware_bundles: true        # complex/nPar firmware bundles (Superdome Flex 상속)
   socket_module: "4-socket"          # 4-socket × 1~4 chassis 모듈식 (최대 16-socket)
